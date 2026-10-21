@@ -9,7 +9,7 @@ import (
 
 // This package holds the shared exact polynomial and root-isolation machinery
 // used by clearance, mesh boolean, and spline proofs. The P4/P8 stationarity
-// polynomials of docs/clearance-design.md §4/§5 are isolated by Sturm
+// polynomials of agent-docs/clearance-design.md §4/§5 are isolated by Sturm
 // sequences built over math/big.Rat on float coefficients taken exactly. Every real root lands
 // in an interval that cannot lie, and a bracket on a critical VALUE follows
 // from the isolated parameter interval plus a proven Lipschitz bound — the

@@ -149,7 +149,7 @@ func TestSweepMitredTreeUnionChain(t *testing.T) {
 	require.Equal(t, 1, br.Topology.Lumps)
 }
 
-// TestSweepMitredCrossingUnion is docs/sweep-design.md §16.10's M2 row: two
+// TestSweepMitredCrossingUnion is agent-docs/sweep-design.md §16.10's M2 row: two
 // branches that cross union into one lump whose volume lies within its bound
 // of V1 + V2 − overlap. The second branch is turned to run along x and
 // shifted half a millimetre in y, so no two walls are coplanar and the
@@ -670,7 +670,7 @@ func clusteredBranchUnion(t *testing.T, branches int) *decad.Body {
 }
 
 // TestSweepMitredClusteredBranchUnionChain reaches union 14, where a rounded
-// rim vertex once broke the mesh facet cutter (docs/evaluator-design.md §9).
+// rim vertex once broke the mesh facet cutter (agent-docs/evaluator-design.md §9).
 // It checks each union's volume and lump count, then verifies the final mesh.
 func TestSweepMitredClusteredBranchUnionChain(t *testing.T) {
 	t.Parallel()

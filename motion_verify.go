@@ -10,12 +10,12 @@ import (
 	"github.com/lestrrat-3d/decad/report"
 )
 
-// This file is Document.VerifyMotion's gate (docs/motion-check-design.md §3,
+// This file is Document.VerifyMotion's gate (agent-docs/motion-check-design.md §3,
 // §5-§8): it validates the moving set, the motion and the options and hands
 // the nodes to internal/motionengine, the engine VerifyLinkage and
-// VerifyJointBox share (docs/linkage-check-design.md §6).
+// VerifyJointBox share (agent-docs/linkage-check-design.md §6).
 
-// resolveMovers validates the moving set (docs/motion-check-design.md §3, §8).
+// resolveMovers validates the moving set (agent-docs/motion-check-design.md §3, §8).
 func (d *Document) resolveMovers(moving []*Body) error {
 	if len(moving) == 0 {
 		return fmt.Errorf(`%w: an empty moving set moves nothing`, ErrDegenerate)
@@ -37,7 +37,7 @@ func (d *Document) resolveMovers(moving []*Body) error {
 }
 
 // VerifyMotion checks whether the rigid set moving, carried along m, meets
-// any other live body of d anywhere on the path (docs/motion-check-design.md).
+// any other live body of d anywhere on the path (agent-docs/motion-check-design.md).
 // It never changes the document: each pose re-evaluates a mover's payload
 // under the composed motion as a transient body that is never committed, so
 // Document.Bodies(), every body's live state and the next producer identity

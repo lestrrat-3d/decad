@@ -15,7 +15,7 @@ import (
 func ChainsFromEdges(edges []*topo.Edge) ([]Chain, error) {
 	for _, e := range edges {
 		if len(e.Faces) != 1 {
-			return nil, fmt.Errorf(`%w: PatchEdges selection holds an edge that is not free (docs/surface-design.md Table R row R4)`, decaderr.ErrDegenerate)
+			return nil, fmt.Errorf(`%w: PatchEdges selection holds an edge that is not free (agent-docs/surface-design.md Table R row R4)`, decaderr.ErrDegenerate)
 		}
 	}
 	refs := make([]EdgeRef[*topo.Edge, *topo.Vertex], len(edges))

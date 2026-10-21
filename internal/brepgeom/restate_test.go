@@ -17,7 +17,7 @@ func xyFrame(t *testing.T) r3.Frame {
 	return f
 }
 
-// TestPlanarFrame pins docs/brep-modify-design.md §5.2's frame: for every
+// TestPlanarFrame pins agent-docs/brep-modify-design.md §5.2's frame: for every
 // reference axis and both signs, the normal is that axis scaled by the sign,
 // the embed lands the local normal there, and AxisFrame and StackedWallFrame
 // build the same frame for the cases they name. Shown to fail with the
@@ -49,7 +49,7 @@ func TestPlanarFrame(t *testing.T) {
 	}
 }
 
-// TestRestate pins docs/brep-modify-design.md §5.2 on S1's x = 0 wall: the
+// TestRestate pins agent-docs/brep-modify-design.md §5.2 on S1's x = 0 wall: the
 // XY-frame wall walking (0, 20) → (0, 0) over z ∈ [0, 20], material on its
 // left at x > 0. Its rectangle lies in the plane x = 0 with the outward
 // normal −x (u along z, v along y), through (0, 20), (0, 0), (20, 0),

@@ -25,12 +25,12 @@ func exactnessOf(bound float64) measurement.Exactness {
 
 // Area returns the recorded region's net area — the outer loop minus its
 // holes — as a [measurement.Measurement] of Kind Area (mm²): a computed quantity carries
-// its Exactness and Bound (docs/api-design.md §6). Each boundary segment
+// its Exactness and Bound (agent-docs/api-design.md §6). Each boundary segment
 // contributes its Green's-theorem integral in walk order, so a hole's clockwise
 // walk subtracts without a special case.
 //
 // Line and Tier A free-form contributions — a spline, a closed spline, a
-// NURBS whose weights are all equal, and a fit spline (docs/spline-design.md
+// NURBS whose weights are all equal, and a fit spline (agent-docs/spline-design.md
 // Table F) — integrate to exact rationals. A region built only from them is reported as the whole
 // region's rational rounded ONCE, so its bound is that single rounding: zero,
 // hence Exact, exactly when the rational is representable in float64, and never
@@ -42,7 +42,7 @@ func exactnessOf(bound float64) measurement.Exactness {
 // rational rounds to, with that rounding as the bound — Approximate, never a
 // refusal. A region whose area is genuinely zero or negative is [ErrDegenerate].
 //
-// The remaining free-form kinds are [ErrUnsupported] (docs/spline-design.md
+// The remaining free-form kinds are [ErrUnsupported] (agent-docs/spline-design.md
 // Table R) — never approximated: an ellipse, a conic and a rational NURBS have
 // no exact rational moments yet, and an elliptical arc's record is
 // self-inconsistent. So is a Tier A
@@ -65,7 +65,7 @@ func (r Profile) Area() (measurement.Measurement, error) {
 
 // Centroid returns the recorded region's centroid from its bounded first
 // moments, as a [measurement.VecMeasurement] — a computed coordinate is a measurement
-// (docs/api-design.md §6). The Value is PLANE-LOCAL: (u, v, 0) in the
+// (agent-docs/api-design.md §6). The Value is PLANE-LOCAL: (u, v, 0) in the
 // region's own plane coordinates, millimetres (§5.2), not a world position —
 // lift it through the profile's PlaneRecord to place it in space.
 //
@@ -115,7 +115,7 @@ func (r Profile) Centroid() (measurement.VecMeasurement, error) {
 
 // ExactCentroid divides the region's exact first moments by its exact area over
 // rationals and rounds each quotient ONCE, which is the same single-rounding
-// rule PublishExact applies to the moments themselves (docs/spline-design.md
+// rule PublishExact applies to the moments themselves (agent-docs/spline-design.md
 // §3). It reports whether the region has such an accumulator at all.
 //
 // It is what keeps the answer from being refused when it is already in hand.
@@ -189,7 +189,7 @@ type Integrals struct {
 	// re-referencing applied over rationals too. It stays alive only while
 	// every contribution so far has had an exact rational, and when it does the
 	// published float is that region-level rational rounded ONCE
-	// (docs/spline-design.md §3/§5.2). Rounding per segment instead would make
+	// (agent-docs/spline-design.md §3/§5.2). Rounding per segment instead would make
 	// the held float a sum of roundings, so a multi-segment region would miss
 	// the single-rounding property a one-segment region has.
 	Exact freeform.ExactMoments
@@ -439,7 +439,7 @@ func (ig *Integrals) AddFor(segment CurveSegment, plan Plan, anchor Point2, orde
 // PublishExact replaces the per-segment float accumulation with the region's
 // own exact rational rounded ONCE, and the bound with that single rounding —
 // zero, hence Exact, exactly when the rational is representable
-// (docs/spline-design.md §3). It is a no-op once any contribution lacked an
+// (agent-docs/spline-design.md §3). It is a no-op once any contribution lacked an
 // exact rational.
 //
 // Each field is published INDEPENDENTLY, and it must be: a field's value and

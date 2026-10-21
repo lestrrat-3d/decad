@@ -24,7 +24,7 @@ import (
 // compose from.
 type Mesh struct {
 	Verts []r3.Vec
-	// VertexBound is β(v) per held vertex (docs/faceted-vertex-bounds-design.md
+	// VertexBound is β(v) per held vertex (agent-docs/faceted-vertex-bounds-design.md
 	// §2, §4.1).
 	VertexBound []float64
 	Tris        [][3]int
@@ -102,7 +102,7 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 		return nil, nil, 0, fmt.Errorf(`%w: a faceted payload carries %d vertex bounds for %d vertices`, decaderr.ErrBooleanFailed, len(in.VertexBound), len(verts))
 	}
 	// facetDelta is each held facet's δ(t), the largest of its corners' β
-	// (docs/faceted-vertex-bounds-design.md §2).
+	// (agent-docs/faceted-vertex-bounds-design.md §2).
 	facetDelta := facetproof.FacetDeltas(tris, in.VertexBound)
 
 	for _, s := range in.Src {
@@ -244,7 +244,7 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 
 	// Per-face area bounds: the smaller of two proven geometric terms — the
 	// §4 shape, the face's own displacement times its own bounding edges, and
-	// docs/faceted-vertex-bounds-design.md §4.2's sum of each facet's
+	// agent-docs/faceted-vertex-bounds-design.md §4.2's sum of each facet's
 	// perturbation at its own δ(t) — plus the operands' chord-length slack, the
 	// PROVEN slop of the float sum that produced the area, and each facet's own
 	// evaluation charge. The perimeter the first multiplies is the UPPER one:

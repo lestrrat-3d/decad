@@ -8,7 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 )
 
-// maxFacetsPerMesh, maxFacetWorkPerCall are docs/tessellation-design.md §3's
+// maxFacetsPerMesh, maxFacetWorkPerCall are agent-docs/tessellation-design.md §3's
 // two per-call facet ceilings, beside internal/proofbound/budget.go's proofbound.MaxFacetPairTestsPerCall.
 // Every one of them is checked with unsigned integer arithmetic BEFORE the
 // allocation or audit it governs, so an over-budget request refuses rather
@@ -29,7 +29,7 @@ type FacetLoops interface {
 // FacetWork counts all facets and facet pairs charged by refinement attempts.
 type FacetWork struct{ Facets, Pairs uint64 }
 
-// PreflightFacets charges docs/tessellation-design.md §3's per-mesh and
+// PreflightFacets charges agent-docs/tessellation-design.md §3's per-mesh and
 // cumulative facet ceilings with unsigned integer arithmetic, BEFORE a single
 // facet is allocated. work must not be nil. The cap triangles are counted from Euler's own identity
 // for a polygon with holes — n + 2h − 2 triangles for n boundary samples and h
@@ -39,7 +39,7 @@ type FacetWork struct{ Facets, Pairs uint64 }
 // a refinement retry, so a sequence of attempts is charged the sum of what each
 // of them asked for.
 //
-// sheet omits the cap charge for a PARTIAL sweep, docs/surface-design.md
+// sheet omits the cap charge for a PARTIAL sweep, agent-docs/surface-design.md
 // §4.1's own build never triangulates one: charging it anyway would refuse a
 // sheet at a finer tolerance than its own mesh actually needs. A full
 // revolution already charges no cap for a solid, so sheet changes nothing

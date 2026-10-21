@@ -64,7 +64,7 @@ func RadSinCosSpan(x RatInterval) (RatInterval, RatInterval, bool) {
 
 // RadTanSpan encloses tan(x) over a rational radian interval: RadSinCosSpan's
 // sine enclosure divided by its cosine enclosure over exact rationals
-// (docs/draft-design.md §8.1). ok is false where either enclosure cannot be
+// (agent-docs/draft-design.md §8.1). ok is false where either enclosure cannot be
 // built or the cosine enclosure reaches zero, since no box then encloses the
 // quotient.
 func RadTanSpan(x RatInterval) (RatInterval, bool) {

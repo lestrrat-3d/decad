@@ -6,7 +6,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the extent vocabulary of docs/api-design.md §8.1 — the linear
+// This file is the extent vocabulary of agent-docs/api-design.md §8.1 — the linear
 // set Extrude takes and the angular set Revolve takes, two deliberately
 // disjoint sealed tiers: illegal states are unrepresentable structurally, not
 // rejected at runtime. A magnitude is non-negative and sense is carried ONLY
@@ -65,7 +65,7 @@ type Distance struct {
 // body with material beyond the sketch plane in the travel sense — the lateral
 // footprint is not consulted, so a body off to the side still counts. Extent
 // only; each such body is resolved at the call and remains live
-// (docs/evaluator-design.md §5).
+// (agent-docs/evaluator-design.md §5).
 type ThroughAll struct {
 	Dir Direction `json:"dir"`
 }

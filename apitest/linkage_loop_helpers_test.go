@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file builds the closed-loop scenes of docs/linkage-check-design.md
+// This file builds the closed-loop scenes of agent-docs/linkage-check-design.md
 // §15.10 and the closed forms they are checked against: the four-bar's
 // two-circle construction. Every link sits in its own layer along Z, so the
 // layer exclusion settles every link-link pair.
@@ -130,7 +130,7 @@ func (fb fourBar) crankDrive(to units.Value) decad.Drive {
 }
 
 // foldStatement matches the fold a refusal states in the driver's own terms
-// (docs/linkage-check-design.md §15.6): the driver's link, the interval its
+// (agent-docs/linkage-check-design.md §15.6): the driver's link, the interval its
 // value at the fold lies in, and the value it is said never to pass.
 var foldStatement = regexp.MustCompile(`link (\d+)'s joint turns back at a value in \[(-?[0-9.]+), (-?[0-9.]+)\] (rad|mm), and driven from the zero pose without reversing it never passes (-?[0-9.]+) (rad|mm)`)
 

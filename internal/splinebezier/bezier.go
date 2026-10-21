@@ -68,7 +68,7 @@ func FreeformEndpointBounds(spans []freeform.BezierSpan, reversed bool, start, e
 }
 func Point2Of(point freeform.RatPoint) (Point2, bool) { return point2Of(point) }
 
-// This file is docs/spline-design.md §5.1's exact reduction: a recorded
+// This file is agent-docs/spline-design.md §5.1's exact reduction: a recorded
 // free-form curve becomes piecewise polynomial Bézier control points over
 // math/big.Rat, with no rounding anywhere along the way. Control coordinates
 // and knots are floats, so they are exact rationals, and knot insertion is a

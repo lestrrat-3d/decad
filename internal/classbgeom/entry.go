@@ -15,7 +15,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is class B of docs/general-boolean-design.md §3: an operand X read
+// This file is class B of agent-docs/general-boolean-design.md §3: an operand X read
 // through its face view (§4.1) — a prism, a stacked prism or a brep body — and
 // a prism Y whose axes are signed axes of X's reference frame. Every reading
 // is taken in X's reference frame, the first face's: d is the reference axis
@@ -53,7 +53,7 @@ type Pair struct {
 func (cp Pair) d() int { return cp.axis[2] }
 
 // OfPayloads is class B's entry over two payloads and the one placement
-// both are stated under (docs/modify-general-design.md §3.3 step 4). It
+// both are stated under (agent-docs/modify-general-design.md §3.3 step 4). It
 // builds no Body and touches no document, so a caller that needs a boolean's
 // record alone (a private cut) reaches it without one. ok=false (err nil) is
 // a silent miss. A non-nil err is a refusal past the point of no return
@@ -64,7 +64,7 @@ func (cp Pair) d() int { return cp.axis[2] }
 //
 // delta is a displacement the caller charges every face of both operands
 // afterwards, beyond what their records state (route S's offsets,
-// docs/modify-general-design.md §3.3 step 4); a class-B boolean passes zero.
+// agent-docs/modify-general-design.md §3.3 step 4); a class-B boolean passes zero.
 // A positive delta widens every box B7 and the through reach compare by it,
 // and refuses the crossing reach, which charges the crossings it cuts no
 // angle for a displacement its records do not carry.
@@ -134,7 +134,7 @@ func classBFaceView(ctx context.Context, payload topo.Payload) (breprecord.Paylo
 		return bp, true, nil
 	case breprecord.Payload:
 		// A route L body's band patches are no face of its record, so the
-		// record is no face view of the body (docs/modify-general-design.md
+		// record is no face view of the body (agent-docs/modify-general-design.md
 		// Table DG's DG4): the pair takes the mesh path.
 		if len(p.LoopBands) > 0 || p.BossShell != nil || p.PocketShell != nil {
 			return breprecord.Payload{}, false, nil

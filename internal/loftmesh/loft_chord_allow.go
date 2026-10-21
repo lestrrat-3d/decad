@@ -17,7 +17,7 @@ import (
 // assembled Assembly fields. anchor is the accumulator's own anchor (p0's
 // placed plane origin), read by the exact first-moment correction.
 //
-// matchedDelta is docs/loft-design.md §5.2's own matchedDelta term, already
+// matchedDelta is agent-docs/loft-design.md §5.2's own matchedDelta term, already
 // COMPOSED by loftrecord.Build as proofbound.AbsSumUpper(sectionDelta, delta) over that table's
 // sectionDelta and delta rows — the build-wide PARAMETER-MATCHED displacement.
 // The skirt leg reads it. delta is that same table's delta row on its own —
@@ -34,7 +34,7 @@ import (
 // composition). Only such a cell's held triangle pair IS the boundary §5 gives
 // it, so it has nothing to contribute to the chorded legs, and its own vertex
 // displacement is the accumulator's sweptVolumeAllow and perturbAreaSum,
-// charged once (docs/loft-gear-bounds-design.md §2, step 2).
+// charged once (agent-docs/loft-gear-bounds-design.md §2, step 2).
 //
 // Every other cell is charged, whatever its departure: a circular or
 // free-form cell stands for a bilinear ruled patch through its four held
@@ -166,7 +166,7 @@ func computeLoftChordedAllow(
 				continue
 			}
 
-			// docs/loft-design.md §5.2's matchedDelta row, at THIS cell:
+			// agent-docs/loft-design.md §5.2's matchedDelta row, at THIS cell:
 			// the cell's own chord-to-curve half composed with the held
 			// vertex displacement delta, which is what makes the bound a
 			// claim about the chord the build actually DREW rather than the

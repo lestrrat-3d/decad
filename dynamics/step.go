@@ -36,7 +36,7 @@ const (
 	Undecided
 )
 
-// StepReason classifies why a step stopped (docs/multibody-dynamics-design.md
+// StepReason classifies why a step stopped (agent-docs/multibody-dynamics-design.md
 // §12).
 type StepReason int
 
@@ -58,7 +58,7 @@ const (
 )
 
 // StepDiagnostic says why a step is Undecided; its typed fields are
-// docs/multibody-dynamics-design.md §12.
+// agent-docs/multibody-dynamics-design.md §12.
 type StepDiagnostic struct {
 	Code StepReason
 	// Pair is the responsible pair, when one is.
@@ -128,7 +128,7 @@ type ContactSolverReport struct {
 	AngularUpper        units.Value
 	Iterations          int
 	// The island solver also publishes the largest attained value of each certificate gate
-	// (docs/multibody-dynamics-design.md §6.3): the linear and angular law
+	// (agent-docs/multibody-dynamics-design.md §6.3): the linear and angular law
 	// residuals, the kinetic-energy change's upper end, and the island's
 	// linear and angular momentum residuals about the world origin. Its
 	// AngularUpper bounds the largest published post-solve angular speed.
@@ -200,7 +200,7 @@ func setVelocityComponent(v *QuantityVec, axis int, value units.Value) {
 // Step drifts every body from event to event on
 // paths whose candidate pairs the broad phase selects and SweepPair certifies;
 // at each event time it solves the touching and impacting pairs as certified
-// Coulomb islands and continues (docs/multibody-dynamics-design.md §5,
+// Coulomb islands and continues (agent-docs/multibody-dynamics-design.md §5,
 // §6). Its Undecided report carries typed diagnostics and the certified prefix
 // in its Trace.
 func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.Value) (*StepReport, error) {
@@ -316,7 +316,7 @@ func outwardSum(values ...float64) float64 {
 }
 
 // sweepRequest is the request of every SweepPair the step runs. RestSpeed is
-// VelocityResidual (docs/multibody-dynamics-design.md §10.8): §6.3 leaves a
+// VelocityResidual (agent-docs/multibody-dynamics-design.md §10.8): §6.3 leaves a
 // resting point's normal speed within that residual of zero, so a lifted
 // vertex the solve just rested is held on both sides of the support plane on
 // the next slice, while one that arrives faster still ends its band track a

@@ -20,8 +20,8 @@ import (
 	"github.com/lestrrat-go/option/v3"
 )
 
-// This file is the revolve of docs/evaluator-design.md §6: the
-// sealed Axis vocabulary of docs/api-design.md §6.2, the §6 axis-contact
+// This file is the revolve of agent-docs/evaluator-design.md §6: the
+// sealed Axis vocabulary of agent-docs/api-design.md §6.2, the §6 axis-contact
 // gates, angular-extent resolution to a sweep interval (the body-relative
 // ToFaceAngular stop resolves through stops.go and leaves its body live), and the analytic revolve
 // evaluator — Cylinder, Cone, planar-annulus, Sphere and Torus side faces
@@ -34,7 +34,7 @@ import (
 // handles the profile and axis, internal/revolveplan/build.go builds the body, and internal/revolveplan/extent.go
 // answers the extent questions asked of the result.
 
-// Axis is what a revolve may spin about (docs/api-design.md §6.2). Sealed:
+// Axis is what a revolve may spin about (agent-docs/api-design.md §6.2). Sealed:
 // the variants are SketchLine, ConstructionAxis and EdgeAxis.
 type Axis interface{ axis() }
 
@@ -112,7 +112,7 @@ func normalizeAxis(a Axis) (Axis, error) {
 	}
 }
 
-// RevolveOption configures Revolve. WithSurfaceResult (docs/surface-design.md
+// RevolveOption configures Revolve. WithSurfaceResult (agent-docs/surface-design.md
 // §4) is the one option today: it omits the two caps a partial sweep would
 // otherwise close with and publishes a sheet instead of a solid. A full
 // revolution mints no closing face to omit, so there the option changes no
@@ -139,29 +139,29 @@ type RevolveOption interface {
 // through the region's interior: the region lies in one closed half-plane of
 // the axis, and boundary contact is allowed in exactly two forms — a segment
 // endpoint on the axis, and a whole line segment lying along it; anything
-// else is ErrDegenerate (docs/evaluator-design.md §6). A fitted-spline or
+// else is ErrDegenerate (agent-docs/evaluator-design.md §6). A fitted-spline or
 // other Tier A free-form boundary requires proven strict clearance from the
 // axis; a free-form contact is ErrUnsupported. WithSurfaceResult() omits the
 // two caps a partial sweep closes with and publishes a sheet instead of a
 // solid; a full revolution already closes with no cap to omit, so the option
-// there yields a closed sheet rather than a refusal (docs/surface-design.md
+// there yields a closed sheet rather than a refusal (agent-docs/surface-design.md
 // §4, Table W).
 //
 // A chain section MUST be a chain of s and a current, unaltered snapshot,
 // with the same sentinels (ErrForeignProfile, ErrStaleProfile,
-// ErrInvalidProfile, ErrUnrecordableProfile; docs/sketch-seam-design.md
+// ErrInvalidProfile, ErrUnrecordableProfile; agent-docs/sketch-seam-design.md
 // §2.2). The axis rules are the profile's, applied to the walk: it lies in
 // one closed half-plane of the axis. One free end may lie on the resolved
 // axis when its incident wall leaves the axis; it sweeps to a pole rather than
 // a rim. Both free ends on the axis, or an on-axis free end whose incident
 // walk lies along the axis, are ErrUnsupported (Table R, R22). The result is
 // always a sheet — Kind() == BodySheet — one swept wall per off-axis recorded
-// segment (docs/surface-design.md §13.4, Table G), with no cap and no closing
+// segment (agent-docs/surface-design.md §13.4, Table G), with no cap and no closing
 // face. A full revolution of the chain is still OPEN: each off-axis free end
 // sweeps one free circle, so a chain with one pole has one free rim. A chain
 // section therefore returns ErrUnsupported for [WithSurfaceResult], which has
 // no solid to toggle. That refusal follows the chain's seam gate and precedes
-// the axis, extent and build work (docs/surface-design.md §13.2).
+// the axis, extent and build work (agent-docs/surface-design.md §13.2).
 //
 // A nil context, document, sketch or section returns ErrDegenerate. The
 // context is checked at entry, between recording the section, resolving the
@@ -180,8 +180,8 @@ func Revolve[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec 
 	}
 }
 
-// revolveProfile is the profile-fed Revolve body (docs/evaluator-design.md
-// §6, docs/surface-design.md §4). Its refusals run in this order: the record
+// revolveProfile is the profile-fed Revolve body (agent-docs/evaluator-design.md
+// §6, agent-docs/surface-design.md §4). Its refusals run in this order: the record
 // and its seam gates, the recorded-area falsifier, the options, then the axis
 // and extent gates.
 func revolveProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis, a AngularExtent,
@@ -218,7 +218,7 @@ func revolveProfileBuild(ctx context.Context, d *Document, s *sketch.Sketch, p *
 	// ONE free-form work counter for this whole operation over this record: the
 	// area falsifier's preflight opens it, the axis gates and the revolve build's
 	// own preflight continue it, and every walkOf under them spends what is left
-	// (docs/spline-design.md §5.2).
+	// (agent-docs/spline-design.md §5.2).
 	work := freeform.NewFreeformWork()
 	if _, err := profile.FalsifyRecordedArea(profileArea, work); err != nil {
 		return nil, err
@@ -381,7 +381,7 @@ const angFullEps = 1e-12
 
 // resolveAngularExtent turns an angular extent into the signed sweep
 // interval [phi0, phi1] about the axis, radians, Along positive
-// (docs/evaluator-design.md §6), reports whether the sweep is a full
+// (agent-docs/evaluator-design.md §6), reports whether the sweep is a full
 // revolution, and returns the exact angle each end DENOTES (§6, the angular
 // twin of extrude's axial displacement) beside the private producer identities
 // of the bodies the extent's stops resolved against — in extent order,
@@ -516,14 +516,14 @@ func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float
 	}
 }
 
-// This section is the chain-fed Revolve of docs/surface-design.md §13: the open
+// This section is the chain-fed Revolve of agent-docs/surface-design.md §13: the open
 // sketch chain's own spin into a shell with no cap. It reuses
 // revolve.go's axis resolution and internal/revolveplan's per-kind wall
 // construction and extent readings unchanged — the same
 // evaluator Revolve runs, over an open rather than a closed walk — and reads
 // its recorded walk through recordChain (seam.go) rather than sectioncert.RecordProfile.
 
-// revolveChain is the chain-fed Revolve body (docs/surface-design.md §13).
+// revolveChain is the chain-fed Revolve body (agent-docs/surface-design.md §13).
 // Its refusals run in this order: the nil-option check, the seam gates, the
 // option refusal, then the axis and extent gates.
 func revolveChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.Chain, axis Axis, a AngularExtent,
@@ -587,7 +587,7 @@ func revolveChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	}
 
 	// ONE free-form work counter for this whole call, exactly as Revolve
-	// opens for its own profile-fed build (docs/spline-design.md §5.2): the
+	// opens for its own profile-fed build (agent-docs/spline-design.md §5.2): the
 	// axis gates below, the chain wall build and the final bounds reading all
 	// spend from the same ceiling.
 	work := freeform.NewFreeformWork()
@@ -647,7 +647,7 @@ func refuseChainRevolveOptions(opts []RevolveOption) error {
 // This file holds axisInPlane, the axisFrame alias,
 // and the wall constants used by root callers. The profile gates live in
 // revolveplan.ResolveAxisSide
-// (internal/revolveplan/axis_side.go). See docs/evaluator-design.md §6.
+// (internal/revolveplan/axis_side.go). See agent-docs/evaluator-design.md §6.
 
 // axisInPlane reads the public axis variant and resolves its coordinates
 // through revolveaxis.AxisInPlane.

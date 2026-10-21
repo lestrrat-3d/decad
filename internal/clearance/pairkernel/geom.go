@@ -17,7 +17,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is the clearance kernel's boundary model (docs/clearance-design.md
+// This file is the clearance kernel's boundary model (agent-docs/clearance-design.md
 // §2/§3): every proven-solid body reduces to trimmed carrier faces read off
 // the evaluator's own payload (the same source the surveys read), plus the
 // topology's exact edges and vertices. Trim membership on the shipped faces
@@ -33,8 +33,8 @@ import (
 //
 // delta is a proven upper bound on how far every carrier point, direction and
 // axis this model reads may sit from the exact boundary the body's payload
-// denotes (docs/clearance-design.md §2's payload-adapter displacement,
-// docs/payload-verification-design.md §2.3's delta(X)). The prism and revolve
+// denotes (agent-docs/clearance-design.md §2's payload-adapter displacement,
+// agent-docs/payload-verification-design.md §2.3's delta(X)). The prism and revolve
 // carrier builders fold in the payload's own frame/placement point-rounding
 // (the largest clearance.CFace.LiftRound its carriers recorded, each measured
 // exactly per lifted point, the same charge the root Vertex.Position takes),

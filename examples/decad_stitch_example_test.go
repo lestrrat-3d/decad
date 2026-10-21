@@ -10,7 +10,7 @@ import (
 )
 
 // Stitch is the one operation that turns a boundary into a solid
-// (docs/surface-design.md §6): weld a surface-extruded wall set to a patch
+// (agent-docs/surface-design.md §6): weld a surface-extruded wall set to a patch
 // at each open end, and the box closes into a BodySolid with an exact
 // volume — every coordinate in it is stated rather than computed, so every
 // welded rim edge and its matching patch edge hold the same float64 values

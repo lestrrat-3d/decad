@@ -199,7 +199,7 @@ func TestThreeBodyTwoDynamicSphereZeroRestitutionImpact(t *testing.T) {
 	report, err := world.Step(t.Context(), start,
 		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.4))
 	require.NoError(t, err)
-	// Known limit (docs/multibody-dynamics-design.md §6.6): the zero-
+	// Known limit (agent-docs/multibody-dynamics-design.md §6.6): the zero-
 	// restitution impact at 0.3 s is certified, and the pair then moves on
 	// at a shared 50 mm/s in persistent touch, but the root package's
 	// sphere-pair persistent replay needs the corrected centers to stay

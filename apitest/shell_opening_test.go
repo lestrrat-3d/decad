@@ -13,7 +13,7 @@ import (
 )
 
 // polygonPrism extrudes a polygon on XY by 10 along +z, the sweep of every
-// docs/shell-opening-design.md §9 fixture.
+// agent-docs/shell-opening-design.md §9 fixture.
 func polygonPrism(t *testing.T, pts [][2]float64) (*decad.Document, *decad.Body) {
 	t.Helper()
 	s, p := polygonSketch(t, pts)
@@ -119,7 +119,7 @@ func requireHole(t *testing.T, b *decad.Body, lo, hi r3.Vec) {
 // uChannelBox is the U-channel fixture's 40×20 section.
 var uChannelBox = [][2]float64{{0, 0}, {40, 0}, {40, 20}, {0, 20}}
 
-// TestShellSideOpeningUChannel is docs/shell-opening-design.md §9's U-channel:
+// TestShellSideOpeningUChannel is agent-docs/shell-opening-design.md §9's U-channel:
 // the box x∈[0,40], y∈[0,20], z∈[0,10] with its x = 0 face removed, t = 2.
 // Inward with both caps kept the cavity is (0,38)×(2,18)×(2,8): 8000 − 3648,
 // the area 2704 + 1768, 11 faces, the x = 0 plane one face whose hole is the
@@ -479,7 +479,7 @@ func facesOnPlane(t *testing.T, b *decad.Body, n, p r3.Vec) (int, int) {
 // obliqueTriangle is §9's right triangle with legs 12 and 9.
 var obliqueTriangle = [][2]float64{{0, 0}, {12, 0}, {0, 9}}
 
-// TestShellSideOpeningOblique is docs/shell-opening-design.md §9's oblique
+// TestShellSideOpeningOblique is agent-docs/shell-opening-design.md §9's oblique
 // fixtures, each 10 tall with both caps kept, inward unless named, every
 // oblique cut a float solve whose displacement the faces carry:
 //
@@ -702,7 +702,7 @@ func dClosedForm(base, p, a, r int64, high bool) *big.Rat {
 	return v.Add(v, bracket("4.58257569495584000658804719372800848898445657676797", "4.58257569495584000658804719372800848898445657676798", r))
 }
 
-// TestShellSideOpeningArcs is docs/shell-opening-design.md §9's D section, 10
+// TestShellSideOpeningArcs is agent-docs/shell-opening-design.md §9's D section, 10
 // tall, both caps kept, inward. Removing the chord at t = 1 keeps the arc: its
 // offset is the radius-4 arc, the cuts the exact feet (0, ±4), and the cavity
 // the half-disc of radius 4 over [1, 9]: 125π − 8π·8 = 61π. Removing the arc
@@ -1032,7 +1032,7 @@ func halfLensSection(s *sketch.Sketch) {
 	s.CreateLine(r, p)
 }
 
-// TestShellSideOpeningCircleJunctions covers docs/shell-opening-design.md
+// TestShellSideOpeningCircleJunctions covers agent-docs/shell-opening-design.md
 // §4.3's junctions at one recorded point, each fixture 10 tall:
 //
 //   - two arcs at an end corner: notchSection without every walk but its
@@ -1222,7 +1222,7 @@ func notchEndSection(s *sketch.Sketch) {
 }
 
 // TestShellSideOpeningArcExtension covers a kept arc whose offset runs past
-// its own end to the rim cut (docs/shell-opening-design.md §2.4's consumption
+// its own end to the rim cut (agent-docs/shell-opening-design.md §2.4's consumption
 // row), each fixture 10 tall and shelled outward with every walk but the
 // concave arc removed:
 //

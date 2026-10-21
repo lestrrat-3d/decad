@@ -17,7 +17,7 @@ import (
 )
 
 // This file owns the public mesh, tessellation dispatch, and prism mesh handle
-// adapter (core §11, docs/evaluator-design.md §9).
+// adapter (core §11, agent-docs/evaluator-design.md §9).
 // A boolean-faceted body restates its held mesh here; the exact-predicate
 // mesh boolean that produces it lives in boolean_mesh.go.
 
@@ -40,7 +40,7 @@ func (m *Mesh) Vertices() []r3.Vec { return append([]r3.Vec(nil), m.n.Vertices..
 // Triangles returns the facets as index triples into Vertices, wound
 // counter-clockwise seen from outside the body. On a [BodySheet] there is no
 // "outside": the winding is counter-clockwise seen from the shell's own
-// positive side (docs/surface-design.md §2.3) — the same side [Face.NormalAt]
+// positive side (agent-docs/surface-design.md §2.3) — the same side [Face.NormalAt]
 // answers on for a wall the solid the sheet came from would have carried. The
 // indices describe the mesh's own connectivity; they are not selectors
 // (core §3 invariant #3).
@@ -58,7 +58,7 @@ func (m *Mesh) Triangles() [][3]int { return append([][3]int(nil), m.n.Triangles
 
 // SourceFaces returns, parallel to Triangles, the analytic face each facet
 // approximates — the provenance the mesh boolean groups its output by
-// (docs/evaluator-design.md §9). The elements are the body's live faces.
+// (agent-docs/evaluator-design.md §9). The elements are the body's live faces.
 func (m *Mesh) SourceFaces() []*Face { return faceHandles(m.n.Source) }
 
 // Bound returns the proven deviation bound: no point of the body's boundary
@@ -88,13 +88,13 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.n.Bound) }
 // of their shared edge — so the mesh is watertight and consistently oriented by
 // construction, and Bound carries the complete displacement actually taken. A
 // free-form (Tier A NURBS) boundary is chorded by exact dyadic bisection of its
-// own Bézier chain, measured against docs/spline-design.md §6.2.1's sagitta,
+// own Bézier chain, measured against agent-docs/spline-design.md §6.2.1's sagitta,
 // and refuses rather than coarsen when its exact arithmetic passes the fixed
 // free-form work budget or when the chain would carry more chords than one
 // curve may.
 //
 // Two things follow from the chording sagitta being PROVEN rather than tight
-// (docs/tessellation-design.md §3 derives it; tessellation.ChordSagitta implements it).
+// (agent-docs/tessellation-design.md §3 derives it; tessellation.ChordSagitta implements it).
 // First, the chording component of [Mesh.Bound] sits above the deviation the
 // chords take by the factor (x/sin x)² at x = a chord's own quarter angle —
 // at most π²/9, about 9.66% high, at the coarsest chording a closed walk
@@ -112,7 +112,7 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.n.Bound) }
 // profile stations across its spans and maps each facet to the body's live
 // face. A solid composite mesh carries an occupied-volume proof; a sheet
 // mesh does not. Composite free-form profile walks and meridian poles are
-// [ErrUnsupported] (docs/sweep-design.md Table D row D2).
+// [ErrUnsupported] (agent-docs/sweep-design.md Table D row D2).
 // A revolved body meshes its meridian section and one GLOBAL angular sequence,
 // so every generator face shares its whole latitude edge and a full turn
 // closes with no seam; its two coordinate stages — the construction that computes each sample
@@ -137,7 +137,7 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.n.Bound) }
 // an operand; a band with a mitered circular wall or a reflex corner carries
 // no such proof, and that mesh serves export while the booleans refuse it.
 //
-// A tapered extrude (a draft body, docs/draft-design.md) meshes as that same
+// A tapered extrude (a draft body, agent-docs/draft-design.md) meshes as that same
 // band with no straight slab: one ruled wall per section walk between the near
 // cap's rim and the far section, a sharp miter at every line-line corner,
 // convex or reflex, and both caps triangulated. Where every circular wall
@@ -152,7 +152,7 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.n.Bound) }
 // finer tol is [ErrUnsupported], because the analytic identity is gone and no
 // finer mesh can be proven. A prism the analytic prism boolean assembled holds
 // its section within a proven displacement of the section it denotes
-// (docs/prism-boolean-design.md §7); that displacement is reserved from tol
+// (agent-docs/prism-boolean-design.md §7); that displacement is reserved from tol
 // before any chord is chosen, so a tol it exhausts is [ErrUnsupported] too.
 // A body this evaluator did not build at all is also [ErrUnsupported].
 //
@@ -162,7 +162,7 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.n.Bound) }
 // sheet, omit both caps: no cap triangulation runs and no cap face appears
 // in SourceFaces. A full-turn revolve mints no cap in either kind, so its
 // sheet mesh is bit-identical to the solid's and carries no free edge at
-// all. The mandatory audit runs docs/tessellation-design.md §1.2's
+// all. The mandatory audit runs agent-docs/tessellation-design.md §1.2's
 // manifold-with-boundary check in place of the closed-mesh audit a solid
 // takes, over the same directed-edge structure — with no free edge, the two
 // audits agree with no arm of their own. The signed-volume orientation
@@ -171,7 +171,7 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.n.Bound) }
 // anchor-dependent and decides nothing. A sheet's areaSlack drops the cap
 // terms it no longer carries, and it publishes no occupied-volume proof at
 // all — [Union], [Cut] and [Intersect] refuse a sheet operand outright
-// (docs/surface-design.md Table X), so the absence costs nothing a caller
+// (agent-docs/surface-design.md Table X), so the absence costs nothing a caller
 // reaches through this method. Export still succeeds: export.STL and
 // export.OBJ write a sheet's mesh exactly as they write a solid's.
 //
@@ -207,7 +207,7 @@ func (b *Body) Tessellate(ctx context.Context, tol units.Value, opts ...Tessella
 // entry. It builds only an unowned Mesh and never touches document state.
 //
 // It is also the one writer of the mesh's boundaryOK reading and the one place
-// a level below VerifyAll withholds docs/tessellation-design.md §2's area and
+// a level below VerifyAll withholds agent-docs/tessellation-design.md §2's area and
 // volume proofs. Both live here rather than in each payload path so the
 // contract holds for every path by construction: a path that skipped some
 // terms of a proof cannot publish the rest of it, and a path that runs no

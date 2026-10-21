@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is the tapered extrude's fixture set (docs/draft-design.md §11,
+// This file is the tapered extrude's fixture set (agent-docs/draft-design.md §11,
 // F1–F9 and the Extrude refusals of Table SD). Every closed form is written
 // here from §8's polynomials in 256-bit arithmetic, with d = h·tan α evaluated
 // from the exact angle the stated taper denotes — the stated magnitude times
@@ -920,7 +920,7 @@ func TestTaperPlacedEquivalence(t *testing.T) {
 }
 
 // TestTaperFarCornerChargesTheTangentSpan pins the offset amount's span in
-// the far corners (docs/draft-design.md §8.1). A 2 mm square's far corner
+// the far corners (agent-docs/draft-design.md §8.1). A 2 mm square's far corner
 // a/2 − d is a Sterbenz subtraction, so the held corner is the exact corner of
 // the held d and the corner's whole displacement is the gap between the held d
 // and the d the stated taper denotes. Shown to fail first: with the span
@@ -971,7 +971,7 @@ func TestTaperVerify(t *testing.T) {
 	}
 }
 
-// TestTaperRefusals is every Table SD row Extrude can reach (docs/draft-design.md
+// TestTaperRefusals is every Table SD row Extrude can reach (agent-docs/draft-design.md
 // §11): each returns its sentinel and leaves the document unchanged.
 func TestTaperRefusals(t *testing.T) {
 	t.Parallel()
@@ -1051,7 +1051,7 @@ func TestTaperRefusals(t *testing.T) {
 }
 
 // TestTaperDownstreamRefusals pins what stays refused on a draft body
-// (docs/draft-design.md Table DD): the modify ops refuse it by name (DD14),
+// (agent-docs/draft-design.md Table DD): the modify ops refuse it by name (DD14),
 // each leaving the body live. Placement and mirroring build (DD12);
 // tessellation and the readings on it are draft_mesh_test.go's.
 func TestTaperDownstreamRefusals(t *testing.T) {

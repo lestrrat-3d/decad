@@ -20,7 +20,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file proves the bounds docs/linkage-check-design.md §5 builds its
+// This file proves the bounds agent-docs/linkage-check-design.md §5 builds its
 // interval certificate from, every one over exact rationals so that no float
 // rounding sits between a bound and the claim it supports:
 //
@@ -64,7 +64,7 @@ func linkageFrames[B comparable](spec *linkageSpec[B]) ([]motionbound.MotionFram
 	return frames, true
 }
 
-// jointReach is m_i of docs/linkage-check-design.md §5.2: the farthest joint
+// jointReach is m_i of agent-docs/linkage-check-design.md §5.2: the farthest joint
 // i's value reaches from 0 over the drive, the largest |w| over its
 // waypoints — radians with π at its upper enclosure for an angle, millimetres
 // exactly for a length, and 0 for an unlisted joint. q(s) is linear within
@@ -83,7 +83,7 @@ func jointParam[B comparable](jt linkJoint[B], s *big.Rat) motionbound.MotionPar
 	return seg.FromP.Lerp(seg.ToP, t)
 }
 
-// jointSpan is |Δq_i| of docs/linkage-check-design.md §5.2 while the
+// jointSpan is |Δq_i| of agent-docs/linkage-check-design.md §5.2 while the
 // fraction runs between sa and sb: a proven upper bound on the joint's total
 // variation, the sum of motionbound.MotionParam.SpanUpper over the pieces
 // that every waypoint strictly inside the interval cuts it into. A joint that
@@ -119,7 +119,7 @@ func (s reachSource[B]) RestBox(i int) (motionbound.RatVec, motionbound.RatVec, 
 }
 func (s reachSource[B]) Reach(i int) *big.Rat { return jointReach(s.spec.joints[i]) }
 
-// chainTravel is τ^(L)_k of docs/linkage-check-design.md §5.2: a proven upper
+// chainTravel is τ^(L)_k of agent-docs/linkage-check-design.md §5.2: a proven upper
 // bound on how far any point of link k moves, relative to the links at and
 // above its ancestor L, while the fraction runs from a to b — the telescoping
 // sum over the joints on its path strictly below L of ρ_{ik}·|Δq_i| for a
@@ -138,7 +138,7 @@ func chainTravel[B comparable](spec *linkageSpec[B], b linkBound, below int, sa,
 }
 
 // idealPosesAt is every link's ideal pose at the exact fraction s
-// (docs/linkage-check-design.md §5.1): its joint's ideal motion at the exact
+// (agent-docs/linkage-check-design.md §5.1): its joint's ideal motion at the exact
 // joint value, then its parent's ideal pose, composed over rational
 // intervals; a link under the ground takes its joint's ideal motion alone.
 func idealPosesAt[B comparable](spec *linkageSpec[B], frames []motionbound.MotionFrame, s *big.Rat) []motionbound.IdealPose {
@@ -165,13 +165,13 @@ func idealPosesOf[B comparable](spec *linkageSpec[B], frames []motionbound.Motio
 }
 
 // linkageBoundsError is the refusal for a box or axis the exact reader cannot
-// form (docs/linkage-check-design.md §5.3).
+// form (agent-docs/linkage-check-design.md §5.3).
 func linkageBoundsError() error {
 	return fmt.Errorf(`%w: a link's bounds or a joint's axis cannot be read exactly`, decaderr.ErrNotFinite)
 }
 
 // linkStanding is a link's standing over a drive
-// (docs/linkage-check-design.md §6 step 2).
+// (agent-docs/linkage-check-design.md §6 step 2).
 type linkStanding int
 
 const (
@@ -264,7 +264,7 @@ func jointStep[B comparable](jt linkJoint[B], sa, sb *big.Rat) (proofbound.RatIn
 }
 
 // bodySymmetryAxis is the exact axis line of a body that every rotation
-// about that line carries onto itself (docs/linkage-check-design.md §5.2):
+// about that line carries onto itself (agent-docs/linkage-check-design.md §5.2):
 // a point on it and its direction, as exact rationals. It admits only bodies
 // whose geometry is exact under a cardinal frame and a placement that
 // permutes and signs the coordinate axes — a solid prism whose profile is one
@@ -310,7 +310,7 @@ func bodySymmetryAxis(b *topo.Body) (point, dir motionbound.RatVec, ok bool) {
 }
 
 // symmetricAboutJoint reports whether body b, a body of link jt, does not
-// move under its own joint (docs/linkage-check-design.md §5.2): jt is a
+// move under its own joint (agent-docs/linkage-check-design.md §5.2): jt is a
 // revolute whose axis is exactly parallel to b's symmetry axis and whose
 // centre lies exactly on that axis line.
 func symmetricAboutJoint[B comparable](b *topo.Body, jt linkJoint[B], f motionbound.MotionFrame) bool {

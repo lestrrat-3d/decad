@@ -28,7 +28,7 @@ func linkageBlock(tb testing.TB, doc *decad.Document, x0, y0, x1, y1, z0, h floa
 	return body
 }
 
-// threeJointArm is docs/linkage-check-design.md §10's benchmark: three
+// threeJointArm is agent-docs/linkage-check-design.md §10's benchmark: three
 // stacked 50 mm links, x ∈ [0, 50], [50, 100], [100, 150], y ∈ [−10, 10],
 // on z ∈ [0, 10], [10, 20], [20, 30], each turning 0° → 90° about Z through
 // its own root, the two elbow contacts declared. Two posts, x ∈ [160, 180]

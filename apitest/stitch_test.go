@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md's T3/T4-shaped public tests for
+// This file is agent-docs/surface-design.md's T3/T4-shaped public tests for
 // Stitch, plus Table R's R12/R13/R14/R17 rows and the pair-relation
 // refusal a stitched solid pins. The internal fixtures for Table R's R7 rows (a
 // non-orientable set and a non-manifold one) and R9 live in
@@ -24,7 +24,7 @@ import (
 // TestStitchSphereRevolveSheetClosesToABall.
 
 // stitchBoxSheets builds T1's rectangle walls plus a patch at each end —
-// docs/surface-design.md's worked box example — and returns the three
+// agent-docs/surface-design.md's worked box example — and returns the three
 // live sheet bodies ready to hand to Stitch. topHeight lets a caller draw
 // the top patch off the wall's own rim (T4's displaced-patch fixture).
 func stitchBoxSheets(t *testing.T, doc *decad.Document, topHeight float64) (walls, bottom, top *decad.Body) {
@@ -53,7 +53,7 @@ func stitchBoxSheets(t *testing.T, doc *decad.Document, topHeight float64) (wall
 	return walls, bottom, top
 }
 
-// TestStitchClosesBoxFromThreeSheets is docs/surface-design.md's T3: T1's
+// TestStitchClosesBoxFromThreeSheets is agent-docs/surface-design.md's T3: T1's
 // walls plus a patch at each end, stitched.
 func TestStitchClosesBoxFromThreeSheets(t *testing.T) {
 	t.Parallel()
@@ -133,7 +133,7 @@ func stitchBoxSheetsAtOffset(t *testing.T, doc *decad.Document, x0, y0, x1, y1, 
 	return walls, bottom, top
 }
 
-// TestStitchRefusesTwoBoxesPinchedAtOneVertex is docs/surface-design.md's
+// TestStitchRefusesTwoBoxesPinchedAtOneVertex is agent-docs/surface-design.md's
 // T76: T1's box (x∈[0,100], y∈[0,60], z∈[0,10]) and a second, otherwise
 // disjoint box (x∈[100,200], y∈[60,120], z∈[10,20]) sharing exactly ONE
 // corner — (100,60,10) — with no edge at all joining the two boxes there.
@@ -159,7 +159,7 @@ func TestStitchRefusesTwoBoxesPinchedAtOneVertex(t *testing.T) {
 	require.Len(t, doc.Bodies(), 6)
 }
 
-// TestStitchTwoDisjointBoxesFormATwoLumpSolid is docs/surface-design.md's
+// TestStitchTwoDisjointBoxesFormATwoLumpSolid is agent-docs/surface-design.md's
 // T77, T76's own narrowing companion: the identical two boxes translated
 // apart so NO vertex is shared at all. Without this test, a change that
 // refused every multi-body Stitch (rather than only a pinched one) would
@@ -183,7 +183,7 @@ func TestStitchTwoDisjointBoxesFormATwoLumpSolid(t *testing.T) {
 	decadtest.IsSound(t, doc)
 }
 
-// TestStitchRefusesNestedBoxes is docs/surface-design.md's T120: a small
+// TestStitchRefusesNestedBoxes is agent-docs/surface-design.md's T120: a small
 // inner box (`stitchBoxSheetsAtOffset`, x∈[20,40], y∈[20,40], z∈[2,3])
 // wholly inside T1's own outer box (x∈[0,100], y∈[0,60], z∈[0,10]), sharing
 // no vertex, no edge and no face with it — every weld and closure leg above
@@ -203,7 +203,7 @@ func TestStitchRefusesNestedBoxes(t *testing.T) {
 	require.Len(t, doc.Bodies(), 6)
 }
 
-// TestStitchRefusesNestedBoxesWithAGap is docs/surface-design.md's T121, the
+// TestStitchRefusesNestedBoxesWithAGap is agent-docs/surface-design.md's T121, the
 // sharper leg of T120: the inner box shrunk 1 mm off every wall of the
 // outer box (98×58×8 inside 100×60×10) rather than sitting arbitrarily deep
 // inside it. Without the lump-separation gate this fixture publishes
@@ -223,7 +223,7 @@ func TestStitchRefusesNestedBoxesWithAGap(t *testing.T) {
 	require.Len(t, doc.Bodies(), 6)
 }
 
-// TestStitchRefusesOpenAssemblyPinchedAtOneVertex is docs/surface-design.md's
+// TestStitchRefusesOpenAssemblyPinchedAtOneVertex is agent-docs/surface-design.md's
 // T78: T76's own two boxes with BOTH top patches left off, so the assembly
 // stays open (each box's own top rim is a residual free edge) while still
 // sharing the identical pinched corner vertex. Decision 1 runs the
@@ -245,7 +245,7 @@ func TestStitchRefusesOpenAssemblyPinchedAtOneVertex(t *testing.T) {
 	require.Len(t, doc.Bodies(), 6)
 }
 
-// TestStitchDisplacedPatchStaysASheet is docs/surface-design.md's T4: T3's
+// TestStitchDisplacedPatchStaysASheet is agent-docs/surface-design.md's T4: T3's
 // operands with one patch (the top) displaced 1e-9 mm off the wall's own
 // rim level. Every one of the top patch's four corners then differs from
 // the wall's top rim in its z coordinate's bit pattern, so none of the
@@ -268,7 +268,7 @@ func TestStitchDisplacedPatchStaysASheet(t *testing.T) {
 	decadtest.IsSound(t, doc)
 }
 
-// TestStitchNonzeroBoundRimStaysFreeAgainstExactPatch is docs/surface-design.md
+// TestStitchNonzeroBoundRimStaysFreeAgainstExactPatch is agent-docs/surface-design.md
 // §6.2's Table J row J5, watched directly rather than through J4
 // (TestStitchDisplacedPatchStaysASheet already covers J4's bit-identical
 // coordinate match with two zero-bound patches). A wall extruded 5 inches
@@ -370,7 +370,7 @@ func offAxisPlateSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
 }
 
 // TestStitchRefusesIdenticalBoundedRimsWithNoSharedDenotation is
-// docs/surface-design.md §15's T41 — the proof the CURVE half of the
+// agent-docs/surface-design.md §15's T41 — the proof the CURVE half of the
 // shared-denotation certificate is an identity check, never a tolerance.
 // Two INDEPENDENT Extrude calls building the identical profile at the
 // identical Symmetric extent hold bit-identical rim coordinates and
@@ -417,7 +417,7 @@ func TestStitchRefusesIdenticalBoundedRimsWithNoSharedDenotation(t *testing.T) {
 }
 
 // TestStitchClosesABoundedPatchedWallWithChargedVolumeBound is
-// docs/surface-design.md §15's T42 — the CURVE certificate's own
+// agent-docs/surface-design.md §15's T42 — the CURVE certificate's own
 // mass-accumulator obligation. A Symmetric surface-extruded wall on an
 // off-axis, non-origin sketch plane (offAxisPlateSketch — every OTHER
 // fixture in this file sits on the axis-aligned XY plane, where a rounding
@@ -426,7 +426,7 @@ func TestStitchRefusesIdenticalBoundedRimsWithNoSharedDenotation(t *testing.T) {
 // flagship), closing every edge with no weld at all. The single-operand
 // Stitch that follows re-audits that already-closed boundary into a
 // BodySolid — and every welded vertex CLASS here is bounded, not zero, so
-// the published Volume must charge that bound (docs/surface-design.md
+// the published Volume must charge that bound (agent-docs/surface-design.md
 // §6.4's amendment) rather than publish Exact over a triangle set whose
 // true vertices are not the held ones.
 func TestStitchClosesABoundedPatchedWallWithChargedVolumeBound(t *testing.T) {
@@ -466,7 +466,7 @@ func TestStitchClosesABoundedPatchedWallWithChargedVolumeBound(t *testing.T) {
 }
 
 // TestStitchRefusesAPlacedSheetAgainstItsUnplacedSiblings is
-// docs/surface-design.md §15's T42's own placement leg: a placement breaks
+// agent-docs/surface-design.md §15's T42's own placement leg: a placement breaks
 // the CURVE certificate. Unstitching a bounded, closed box (stitch_test.go's
 // TestStitchClosesABoundedPatchedWallWithChargedVolumeBound) frees every
 // edge; placing ONE of the six resulting sheets by a rigid motion neither
@@ -554,7 +554,7 @@ func TestStitchPlacedBoxIsApproximateSolid(t *testing.T) {
 	require.Same(t, placed, doc.Bodies()[0])
 }
 
-// TestStitchTableR is docs/surface-design.md's T13-shaped coverage of every
+// TestStitchTableR is agent-docs/surface-design.md's T13-shaped coverage of every
 // Table R row this increment raises through the public seam: R12 (no body,
 // and a nil operand), R13 (a foreign body), R14 (a retired body), and R17
 // (a solid operand).
@@ -715,9 +715,9 @@ func stitchBoxSheetsAtZ(t *testing.T, doc *decad.Document, z0 float64) (walls, b
 	return walls, bottom, top
 }
 
-// TestStitchBoxReachesAProvenClearanceGap is docs/surface-design.md's T65:
+// TestStitchBoxReachesAProvenClearanceGap is agent-docs/surface-design.md's T65:
 // the stitched box's own clearance-kernel carrier model
-// (docs/clearance-design.md §2/§6.4's zero-bound gate) lets a pair holding
+// (agent-docs/clearance-design.md §2/§6.4's zero-bound gate) lets a pair holding
 // it reach a proven, Sound answer instead of reading undecided. Shown-to-
 // fail: pulling the stitchPayload arm out of newBodyGeomBudget
 // (internal/clearance/pairkernel/geom.go) turns this same Sound report into Suspect with
@@ -741,7 +741,7 @@ func TestStitchBoxReachesAProvenClearanceGap(t *testing.T) {
 }
 
 // TestStitchOverlappingSolidReportsRealInterference is
-// docs/surface-design.md's T72. This replaces
+// agent-docs/surface-design.md's T72. This replaces
 // TestStitchOverlappingSolidStaysUndecided (T66), whose whole subject — a
 // stitched solid's overlap ever reaching a real Interference row — this row
 // retires: the clearance kernel already proved this shape of pair
@@ -787,7 +787,7 @@ func TestStitchOverlappingSolidReportsRealInterference(t *testing.T) {
 	decadtest.MeasuresInterference(t, report, box, block, units.CubicMillimeters(14000))
 }
 
-// TestStitchSmallStitchedBoxContainedInABlock is docs/surface-design.md's
+// TestStitchSmallStitchedBoxContainedInABlock is agent-docs/surface-design.md's
 // T67: a small stitched box wholly inside a large plain block reaches the
 // solid-solid path's own strict-containment certificate —
 // TestVerifyStrictContainmentReusesInnerVolume (interference_test.go) pins
@@ -812,7 +812,7 @@ func TestStitchSmallStitchedBoxContainedInABlock(t *testing.T) {
 	decadtest.MeasuresInterference(t, report, box, block, wantVol.Value, decadtest.Exactly())
 }
 
-// TestStitchBoundedStitchedSolidGetsClearance is docs/surface-design.md's
+// TestStitchBoundedStitchedSolidGetsClearance is agent-docs/surface-design.md's
 // T68: T42's own certificate-welded stitched solid — every vertex bound
 // nonzero even at identity, no placement in play. It now reaches the
 // clearance kernel's own carrier model (pairkernel/geom.go's stitchPayload
@@ -854,7 +854,7 @@ func TestStitchBoundedStitchedSolidGetsClearance(t *testing.T) {
 	require.Same(t, block, row.B)
 }
 
-// TestStitchPlacedStitchedSolidGetsClearance is docs/surface-design.md's
+// TestStitchPlacedStitchedSolidGetsClearance is agent-docs/surface-design.md's
 // T69: T58's own zero-bound box, Placed under a non-identity rigid motion,
 // reaches the identical gate T68 does by the other route — the placement's
 // own RigidRoundAllow widens every vertex bound rather than a certificate

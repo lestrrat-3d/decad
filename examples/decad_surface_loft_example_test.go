@@ -14,10 +14,10 @@ import (
 
 // WithSurfaceResult on Loft builds the wall triangles alone and omits both
 // section caps, publishing a sheet body — Kind() == BodySheet — instead of a
-// solid (docs/surface-design.md §4). Volume and Centroid answer ErrNotSolid
+// solid (agent-docs/surface-design.md §4). Volume and Centroid answer ErrNotSolid
 // for a sheet, proven sound or not; Area and Bounds still answer, over the
 // walls alone. Tessellate and OBJ export the wall triangles with both section
-// rims free (docs/surface-design.md §10).
+// rims free (agent-docs/surface-design.md §10).
 func Example_decad_surfaceLoft() {
 	w := sketch.NewWorld()
 	s0, err := w.CreateSketch(w.XY())
@@ -72,7 +72,7 @@ func Example_decad_surfaceLoft() {
 	// region: the crossing audit that built the body already ran over the
 	// COMPLETE held triangle set — walls and both omitted caps together — so
 	// non-self-intersection of the walls alone follows with no further proof
-	// needed (docs/surface-design.md §9.1).
+	// needed (agent-docs/surface-design.md §9.1).
 	report, err := doc.Verify(context.Background())
 	if err != nil {
 		fmt.Printf("failed to verify: %s\n", err)

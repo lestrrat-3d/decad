@@ -17,7 +17,7 @@ func CloneLoopRecord(loop LoopRecord) LoopRecord { return cloneLoopRecord(loop) 
 // PlaneRecord is the sketch plane as three vectors. It is orthonormal and
 // right-handed; the plane normal is
 // U × V, and that normal is the sense Direction.Along means for a linear
-// extent. Origin is a position in millimetres (docs/api-design.md §5.2); U
+// extent. Origin is a position in millimetres (agent-docs/api-design.md §5.2); U
 // and V are the in-plane axes the (u, v) of a Point2 is expressed in.
 type PlaneRecord struct {
 	Origin r3.Vec `json:"origin"`
@@ -46,7 +46,7 @@ type LoopRecord struct {
 // first segment's walk start and last segment's walk end are FREE — they
 // meet nothing, and nothing closes onto them. It carries no Holes and no
 // walk-level winding, because an open walk bounds no region and so has no
-// inside. See docs/sketch-seam-design.md §2.2 and docs/surface-design.md §13.
+// inside. See agent-docs/sketch-seam-design.md §2.2 and agent-docs/surface-design.md §13.
 type ChainRecord struct {
 	Segments []CurveSegment
 }
@@ -105,7 +105,7 @@ type CurveSegment interface{ curveSegment() }
 
 // The five analytic kinds. Every variant's TStart/TEnd — like a spline's
 // knots and weights — is a curve parameter, not a quantity
-// (docs/api-design.md §5.2).
+// (agent-docs/api-design.md §5.2).
 
 // LineSeg mirrors geom.Line: the endpoints, verbatim.
 type LineSeg struct {

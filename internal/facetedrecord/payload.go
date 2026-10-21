@@ -10,7 +10,7 @@ import (
 // Payload is the evaluator's own record of a mesh-built body: the
 // held mesh, its per-facet source grouping, and the proven error terms the
 // measurements compose from. It is what Transform re-evaluates under a composed
-// motion (docs/evaluator-design.md §8).
+// motion (agent-docs/evaluator-design.md §8).
 type Payload struct {
 	// SmoothRectSection is the immutable exact height curve of an original
 	// rectangular LoftSections result. Placement and similarity drop it.
@@ -97,7 +97,7 @@ type Payload struct {
 	// RevolveLoftSector identifies one rigid copy of a trimmed point loft.
 	RevolveLoftSector *RevolveLoftSectorPlacement
 	Verts             []r3.Vec
-	// VertexBound is β(v) per held vertex (docs/faceted-vertex-bounds-design.md
+	// VertexBound is β(v) per held vertex (agent-docs/faceted-vertex-bounds-design.md
 	// §2, §4.1), composed by the boolean that built the payload (§3) and
 	// carried through every placement. The boolean always writes it; a nil
 	// record is an invariant failure, never a fallback.

@@ -13,7 +13,7 @@ import (
 
 // SectionCoordUpper widens the RECORDED meridian's own coordinate envelope
 // into one that covers the meridian the record DENOTES
-// (docs/surface-intersection-design.md §7.1). coordUpper is an L1 magnitude
+// (agent-docs/surface-intersection-design.md §7.1). coordUpper is an L1 magnitude
 // (internal/boundarywalk/walk.go's ratL1Upper), so a point whose two components each move by
 // at most sectionDelta adds at most twice it. Every term the axis frame and the
 // sweep extreme charge at an envelope has to be charged at THIS one, or those
@@ -30,7 +30,7 @@ func SectionCoordUpper(coordUpper, sectionDelta float64) float64 {
 	return proofbound.AbsSumUpper(coordUpper, proofbound.ProductUpper(2, sectionDelta))
 }
 
-// SectionExtentAllow is docs/surface-intersection-design.md §7.1's FIFTH
+// SectionExtentAllow is agent-docs/surface-intersection-design.md §7.1's FIFTH
 // mechanism in extentBoundedAlong's own enumeration: how far the extreme of the
 // linear functional wg·z + m·ρ moves when the meridian it is taken over is the
 // recorded one rather than the denoted one.
@@ -161,7 +161,7 @@ func ExtentBoundarySweepBound(loBound, hiBound, sweepLo, sweepHi float64) float6
 // The meridian this reading scanned is the RECORDED
 // one, and a trimmed section's own cut coordinates sit within its
 // sectionDelta of the meridian the record denotes
-// (docs/surface-intersection-design.md §7.1). It is zero for every payload
+// (agent-docs/surface-intersection-design.md §7.1). It is zero for every payload
 // no construction displaced, which is what leaves an ordinary revolve's box
 // on the path it takes today.
 func FinishExtent(ax Frame, sectionDelta, base, lo, hi, bound, frameAllow float64) (float64, float64, float64) {

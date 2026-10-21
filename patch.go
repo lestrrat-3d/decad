@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-// This file is PatchProfile of docs/surface-design.md §5.1: a single planar
+// This file is PatchProfile of agent-docs/surface-design.md §5.1: a single planar
 // face built from a recorded profile, on the sketch plane's own frame. It is
 // the seam call (sectioncert.RecordProfile) plus one evaluation, patchchain.Build,
 // that mirrors prismrecord.Build's order without ever building a solid.
@@ -21,9 +21,9 @@ import (
 
 // PatchProfile records p through the seam exactly as Extrude does — the same
 // authentication, staleness, foreign-entity and TExact admission gates of
-// docs/api-design.md §7 and docs/sketch-seam-design.md, with no relaxation —
+// agent-docs/api-design.md §7 and agent-docs/sketch-seam-design.md, with no relaxation —
 // and builds a single planar face on s.Plane().Frame(), carrying the
-// profile's outer loop and every hole loop (docs/surface-design.md §5.1). The
+// profile's outer loop and every hole loop (agent-docs/surface-design.md §5.1). The
 // result is a one-face sheet body: Kind() == BodySheet, one lump, one open
 // shell, and one free edge per coalesced boundary walk. p MUST be a profile
 // of s (ErrForeignProfile) and a current, unaltered snapshot (ErrStaleProfile
@@ -48,7 +48,7 @@ func PatchProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 	}
 	// ONE free-form work counter for this whole call, same convention as
 	// Extrude: the area falsifier's preflight opens it and patchchain.Build's
-	// own walk resolution spends what is left (docs/spline-design.md §5.2).
+	// own walk resolution spends what is left (agent-docs/spline-design.md §5.2).
 	work := freeform.NewFreeformWork()
 	if _, err := profile.FalsifyRecordedArea(profileArea, work); err != nil {
 		return nil, err

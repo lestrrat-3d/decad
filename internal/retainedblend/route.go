@@ -293,7 +293,7 @@ func heldArea(verts []r3.Vec, facets [][3]int) (float64, float64) {
 }
 
 // measureChange returns the area slack and volume bound the rewrite adds
-// (docs/retained-edge-blend-design.md §6.3, Claim K). The area change of the
+// (agent-docs/retained-edge-blend-design.md §6.3, Claim K). The area change of the
 // held mesh is compared with the exact change: the annulus and band removed
 // and the blend face added.
 func (w *work) measureChange(tag blendTag, stripFrom int) (areaSlack, volSymDiff float64) {

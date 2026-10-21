@@ -36,7 +36,7 @@ func narrowest(report *decad.LinkageReport) float64 {
 	return w
 }
 
-// TestVerifyLinkageReadingFloor pins docs/linkage-check-design.md §3's two
+// TestVerifyLinkageReadingFloor pins agent-docs/linkage-check-design.md §3's two
 // floors.
 //
 //   - At the defaults the three-joint arm of §10 closes its reading before

@@ -35,7 +35,7 @@ func OrientRat(a, b, c, d Xpt) *big.Rat {
 // OrientSign is the adaptive-precision sign of det[b−a, c−a, d−a] for float
 // inputs: a float evaluation whose forward error provably cannot cross zero
 // decides the generic case; anything inside the error bound falls back to the
-// exact value — docs/evaluator-design.md §9's discipline, so a sign is never wrong.
+// exact value — agent-docs/evaluator-design.md §9's discipline, so a sign is never wrong.
 func OrientSign(a, b, c, d r3.Vec) int {
 	if sign, certain := OrientSignFloat(a, b, c, d); certain {
 		return sign

@@ -56,7 +56,7 @@ func (t *Track) Features() (contactFeature, contactFeature) {
 
 func (t *Track) Normal() vocab.VecMeasurement { return t.NormalRead }
 
-// Band returns the depth of a band track (docs/multibody-dynamics-design.md
+// Band returns the depth of a band track (agent-docs/multibody-dynamics-design.md
 // §10.3), a Length Measurement whose Value plus Bound bounds every contact
 // point's separation in both directions and the interiors' overlap along
 // Normal(). It is nil for an exact touch track.
@@ -76,7 +76,7 @@ func (t *Track) Band() *vocab.Measurement {
 }
 
 // BandAt returns the depth of a band track over its prefix through fraction
-// (docs/multibody-dynamics-design.md §10.3): a Length Measurement whose Value
+// (agent-docs/multibody-dynamics-design.md §10.3): a Length Measurement whose Value
 // plus Bound bounds every contact point's separation in both directions and
 // the interiors' overlap along Normal() at every instant from the track's
 // start through fraction. At the track's end it is at most Band(); it grows

@@ -7,7 +7,7 @@ import (
 )
 
 // Map2 is the plane-local map between two faces whose normals lie on one
-// reference axis (docs/brep-modify-design.md §5.4): a point of the first face
+// reference axis (agent-docs/brep-modify-design.md §5.4): a point of the first face
 // is lifted into reference coordinates (Embed.Canon) and read back in the
 // second face's frame (Embed.Local). Both steps are signed permutations, so
 // the map moves every float coordinate exactly.

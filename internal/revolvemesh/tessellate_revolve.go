@@ -18,7 +18,7 @@ import (
 // A sample on the axis owns exactly ONE vertex, interned by construction: it is
 // the same junction for every angular index and for both partial caps, which is
 // how an on-axis line's single geometric edge ends up shared by the two caps
-// (docs/tessellation-design.md §9).
+// (agent-docs/tessellation-design.md §9).
 type RevMeridian struct {
 	Z, Rho     float64
 	ZIv, RhoIv proofbound.RatInterval

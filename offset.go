@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is Offset of docs/surface-design.md §17: a SECOND sheet whose
+// This file is Offset of agent-docs/surface-design.md §17: a SECOND sheet whose
 // every face lies at a stated normal distance from the source face it came
 // from. It admits §16's two receiver families and reads the same recorded
 // generator Thicken reads, and it differs from Thicken in exactly two ways.
@@ -19,7 +19,7 @@ import (
 // nothing — the two are the pair a caller stitches, thickens or measures a
 // clearance between — so the result registers on the non-consuming terms
 // Copy already takes (document.go's copyUnder,
-// docs/api-design.md §6). Nothing sums the pair: Volume and Centroid are
+// agent-docs/api-design.md §6). Nothing sums the pair: Volume and Centroid are
 // ErrNotSolid on a sheet by kind (§8), and Union/Cut/Intersect refuse a sheet
 // permanently (Table X), so the two live bodies can never be combined into a
 // reading that counts the same material twice.
@@ -44,7 +44,7 @@ func (offsetSideOption) offsetOption() {}
 // It is its own two-value type rather than a reuse of [ThickenSide]: an offset
 // publishes ONE surface and two surfaces are two calls, so there is no centered
 // value, and ThickenCentered can never enter an operation that would have to
-// refuse it at run time (docs/surface-design.md §17.1).
+// refuse it at run time (agent-docs/surface-design.md §17.1).
 type OffsetSide int
 
 const (
@@ -65,9 +65,9 @@ func WithOffsetSide(side OffsetSide) OffsetOption { return offsetSideOption{side
 // chooses a side, and [WithOffsetSide] does, the last occurrence winning. A
 // recorded planar patch offsets by translation along its own frame normal; a
 // profile-fed prism sheet offsets by the certified per-feature section offset
-// of docs/modify-design.md §8, growing a radius-distance arc at each convex
+// of agent-docs/modify-design.md §8, growing a radius-distance arc at each convex
 // corner and mitering each concave one. Every other sheet family, and every
-// solid, is ErrUnsupported (docs/surface-design.md Table R row R37).
+// solid, is ErrUnsupported (agent-docs/surface-design.md Table R row R37).
 //
 // A nil context, a nil b or an option this package did not mint is
 // ErrDegenerate, as is a zero distance; a wrong-kind, non-finite or negative distance keeps
@@ -122,7 +122,7 @@ func Offset(ctx context.Context, b *Body, distance units.Value, opts ...OffsetOp
 	}
 	// The source is DEPENDED ON, never consumed: commit with no consumed input,
 	// exactly as copyUnder does, so the receiver stays in Document.Bodies()
-	// beside its offset (docs/surface-design.md §17.1).
+	// beside its offset (agent-docs/surface-design.md §17.1).
 	d.commit(result)
 	return result, nil
 }

@@ -8,14 +8,14 @@ import (
 )
 
 // A fit-spline profile's Area, Centroid and SecondMoments answer
-// (docs/spline-design.md Table F): the recorded fit points are sketch's own
+// (agent-docs/spline-design.md Table F): the recorded fit points are sketch's own
 // defining data for the natural-cubic interpolant, taken exactly, so the
 // boundary integral is an exact rational — reported Exact when that rational
 // is representable in the returned unit, Approximate with a one-rounding
 // bound otherwise (§3). decad never re-runs sketch's interpolation solve; it
 // consumes the solved interpolant sketch already computed.
 //
-// A fit-spline section can also EXTRUDE now (docs/spline-design.md §10 P4b);
+// A fit-spline section can also EXTRUDE now (agent-docs/spline-design.md §10 P4b);
 // this example stays scoped to the moments-only capability above.
 func Example_decad_fitSplineMoments() {
 	w := sketch.NewWorld()

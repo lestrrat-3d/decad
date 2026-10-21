@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file holds scenes 2-4 of docs/linkage-check-design.md §11: declared
+// This file holds scenes 2-4 of agent-docs/linkage-check-design.md §11: declared
 // joint contacts, the crane, and the near misses that pin the chain travel
 // bound's ancestor terms. Scene 1 and the standing tests sit in
 // linkage_test.go.
@@ -209,9 +209,9 @@ func TestVerifyLinkageDeclaredJointContact(t *testing.T) {
 		t.Parallel()
 		// The same block sunk 1 mm into the slab, still sharing the face
 		// plane x = 0. The two outlines' walls on x = 0 are one carrier
-		// (docs/general-boolean-design.md §3 A3), so the overlap is the
+		// (agent-docs/general-boolean-design.md §3 A3), so the overlap is the
 		// exact 10 × 10 × 1 slab of the block and, declared or not, a proven
-		// overlap is a collision (docs/linkage-check-design.md §5.4).
+		// overlap is a collision (agent-docs/linkage-check-design.md §5.4).
 		doc := decad.New()
 		block := boxBodyAtZ(t, doc, 0, -5, 10, 5, -1, 10)
 		slab := boxBodyAtZ(t, doc, 0, -20, 40, 20, -10, 10)

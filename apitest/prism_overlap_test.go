@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/prism-boolean-design.md §4.5's own required-tests suite
-// (§15's multi-region rows) and docs/interference-design.md §10.2's
+// This file is agent-docs/prism-boolean-design.md §4.5's own required-tests suite
+// (§15's multi-region rows) and agent-docs/interference-design.md §10.2's
 // multi-region rows, exercised end to end through Document.Verify and the
 // public booleans. The internal admission/decline mechanics (the exactly-
 // tangent decline, the arrangement cap, cancellation, and the G1-G4-style
@@ -76,7 +76,7 @@ func uAndBarBodies(t *testing.T, doc *decad.Document) (u, bar *decad.Body) {
 }
 
 // TestVerifyMultiRegionOverlapReportsSummedVolume is §4.5's own headline test
-// (§15's "the headline" row, docs/interference-design.md §10.2's multi-region
+// (§15's "the headline" row, agent-docs/interference-design.md §10.2's multi-region
 // row): a U-shaped prism crossed by a bar, whose overlap covers two disjoint
 // regions, now reports one Interference row rather than falling to the mesh
 // path's coplanar refusal.
@@ -298,7 +298,7 @@ func TestVerifyFacetedMultiRegionPairStaysAsBefore(t *testing.T) {
 // TestPublicBooleansUnchangedOnMultiRegionPair is §15's "public booleans
 // unchanged" row: decad.Intersect of the U prism and the bar still returns
 // the mesh path's existing refusal, since the public surface owes its caller
-// a Body and §4.5's reading builds none (docs/prism-boolean-design.md §13).
+// a Body and §4.5's reading builds none (agent-docs/prism-boolean-design.md §13).
 // Cut hits the identical mesh-path coplanar-contact refusal (neither the
 // clean-nesting match nor the crossing sub-case resolves a genuinely
 // multi-region selection, §4.4), and Union — whose select-all path merges

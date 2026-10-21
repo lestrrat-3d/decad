@@ -8,7 +8,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is PatchEdges of docs/surface-design.md §5.2: a planar fill of
+// This file is PatchEdges of agent-docs/surface-design.md §5.2: a planar fill of
 // one or more closed chains of a body's own free edges, amended by this PR
 // from a one-chain rule to "one or more chains, each proven independently"
 // (§5.2's own amendment note). It reuses internal/stitchrecord/unstitch.go's held-B-rep-under-a-
@@ -24,7 +24,7 @@ import (
 // generalize beyond.
 //
 // Four gates decide the selection, in order, each reject-only
-// (docs/surface-design.md §5.2, Table R):
+// (agent-docs/surface-design.md §5.2, Table R):
 //
 //  1. every selected edge is free (buildPatchChains);
 //  2. the selection partitions into one or more closed chains, decided by
@@ -39,7 +39,7 @@ import (
 //     crossing audit (patchchain.buildFace) — that audit's own ErrUnsupported is
 //     remapped to ErrDegenerate at this boundary (patchchain.remapCrossingError),
 //     because a self-crossing chain is bad input rather than evaluator
-//     reach, on docs/surface-design.md §5.2's own instruction.
+//     reach, on agent-docs/surface-design.md §5.2's own instruction.
 //
 // Orientation — which sense each new face takes on its chain's edges — is a
 // fifth, purely combinatorial decision with no geometry in it (patchchain.orientChain):
@@ -47,7 +47,7 @@ import (
 // sense, and the patch takes the opposite sense. Where a chain's own
 // adjacent faces do not agree among themselves — unreachable through this
 // evaluator's own builders, which each leave one shell consistently
-// oriented (docs/surface-design.md §2.3), but not excluded by the public
+// oriented (agent-docs/surface-design.md §2.3), but not excluded by the public
 // seam — that disagreement is ErrDegenerate, Table R row R18 (new: §5.2
 // named the case without giving it a row).
 //
@@ -71,13 +71,13 @@ import (
 const (
 	// patchRowNoPayload is Table R row R19: the receiver carries no
 	// evaluator payload for this evaluator to rebuild from.
-	patchRowNoPayload = `docs/surface-design.md Table R row R19`
+	patchRowNoPayload = `agent-docs/surface-design.md Table R row R19`
 )
 
 // PatchEdges resolves sel against b's own live topology, fills every closed
 // chain of free edges the selection proves, and returns a new body carrying
 // b's own faces plus one new planar face per chain, retiring b
-// (docs/surface-design.md §5.2). b's own topology is never mutated: the
+// (agent-docs/surface-design.md §5.2). b's own topology is never mutated: the
 // result is built by REBUILDING b from its own faces, so a retired b stays
 // readable and unmodified for any caller still holding it.
 //

@@ -11,12 +11,12 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is Stitch of docs/surface-design.md §6: the one operation that
+// This file is Stitch of agent-docs/surface-design.md §6: the one operation that
 // turns a boundary into a solid. Its evaluator is internal/stitchrecord's
 // Build.
 
 // Stitch welds every free-edge pair it can prove coincident
-// (docs/surface-design.md §6.2's Table J) across bodies, assembles the
+// (agent-docs/surface-design.md §6.2's Table J) across bodies, assembles the
 // result, and returns one new body, retiring every operand. One operand is
 // meaningful: it re-audits that body's own boundary, which is how a closed
 // sheet becomes a solid (§2.1, §4.1).
@@ -62,7 +62,7 @@ func Stitch(ctx context.Context, bodies ...*Body) (*Body, error) {
 	}
 	for _, b := range bodies {
 		if b.Kind() == BodySolid {
-			return nil, fmt.Errorf(`%w: Stitch does not accept a solid body operand (docs/surface-design.md Table R row R17)`, ErrUnsupported)
+			return nil, fmt.Errorf(`%w: Stitch does not accept a solid body operand (agent-docs/surface-design.md Table R row R17)`, ErrUnsupported)
 		}
 	}
 	if err := ctx.Err(); err != nil {

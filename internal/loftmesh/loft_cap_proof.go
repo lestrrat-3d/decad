@@ -63,7 +63,7 @@ const (
 
 // CapFamilyProof decides one cap's triangle family (which 0: tris[Walls :
 // Walls+CapStartCount], which 1: the rest) as a whole, from exact signs alone
-// (docs/loft-design.md §6). Write C for the cap's triangles, L for its loops,
+// (agent-docs/loft-design.md §6). Write C for the cap's triangles, L for its loops,
 // O for the other cap's loop vertices and the structure's Interior vertices,
 // Π for the exact plane of C's first triangle and n for that triangle's exact
 // normal. The conditions, tested in this order:

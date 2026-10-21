@@ -13,7 +13,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is docs/helix-design.md's entry point: the CoilOption surface,
+// This file is agent-docs/helix-design.md's entry point: the CoilOption surface,
 // Table CS's gates in §4's order, the coil payload that records a coil and
 // its placement. internal/coilshell builds §5's held shell, Table CB's
 // topology and Table CM's readings.
@@ -60,7 +60,7 @@ func decodeCoilOptions(opts []CoilOption) (bool, error) {
 }
 
 // Coil moves the closed profile p of sketch s along the screw motion about
-// axis (docs/helix-design.md): turns full rotations about the axis,
+// axis (agent-docs/helix-design.md): turns full rotations about the axis,
 // right-handed about the axis direction, advancing pitch along that
 // direction per rotation. The section stays in the axis plane throughout, so
 // a thread profile drawn beside the axis cuts the thread it draws. The axis
@@ -83,7 +83,7 @@ func decodeCoilOptions(opts []CoilOption) (bool, error) {
 //
 // The result is a solid: two planar caps, one faceted wall per profile
 // segment spanning every turn, read through Table CM's closed forms and, on
-// an arc, docs/helix-design.md §11.1's area bracket. A failed call leaves
+// an arc, agent-docs/helix-design.md §11.1's area bracket. A failed call leaves
 // the document untouched.
 func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile, axis Axis, pitch, turns units.Value, opts ...CoilOption) (*Body, error) {
 	// CS1: nils, owned options and option arity.

@@ -28,7 +28,7 @@ import (
 // station: arcUpperV[j]/arcUpperW[j] is that station's own OUTGOING cell's
 // per-side arc-length upper bound (PerCellArcUpper), and matchedDelta[j] is
 // that cell's own PARAMETER-MATCHED bound on |curve(s) - idealChord(s)| at the
-// same s: the CHORD-TO-CURVE HALF of docs/loft-design.md §5.2's matchedDelta
+// same s: the CHORD-TO-CURVE HALF of agent-docs/loft-design.md §5.2's matchedDelta
 // row, stated for the ideal chord joining the two points the record denotes.
 // The consumer composes it with the build's own delta through
 // ChordCellDeltaUpper to reach the bound internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper
@@ -44,7 +44,7 @@ import (
 //
 // faceted is parallel to v/w too: true exactly for a LineSeg pair's cell,
 // whose held triangle pair IS the boundary §5 gives it.
-// ComputeLoftChordedAllow (loft_chord_allow.go) charges docs/loft-design.md
+// ComputeLoftChordedAllow (loft_chord_allow.go) charges agent-docs/loft-design.md
 // §5/§8's chorded volume/centroid/area terms on every cell EXCEPT a faceted
 // one with a zero chord-to-curve departure. A circular or free-form cell is
 // charged even at a zero departure, because it stands for the bilinear ruled
@@ -62,7 +62,7 @@ type LoopPair struct {
 	// Faceted is parallel to V/W, one entry per cell: true exactly for a
 	// LineSeg pair's cell, whose held triangle pair IS the boundary §5 gives
 	// it. Every other cell stands for a bilinear ruled patch, whether or not
-	// its chord departs from its curve (docs/loft-design.md §5.2's
+	// its chord departs from its curve (agent-docs/loft-design.md §5.2's
 	// maxTwistOffsetUpper row).
 	Faceted []bool
 }
@@ -97,7 +97,7 @@ func HasUnfacetedCell(pairs []LoopPair) bool {
 // departure bounds the whole section. sectionMatchedDelta is the analogous
 // MAX of every cell's own PARAMETER-MATCHED chord-to-curve departure (F1's
 // rule) — a DIFFERENT quantity, never interchangeable with sectionDelta. It
-// is the CHORD-TO-CURVE HALF of docs/loft-design.md §5.2's matchedDelta row
+// is the CHORD-TO-CURVE HALF of agent-docs/loft-design.md §5.2's matchedDelta row
 // and never that whole row: loftrecord.Build composes it with the build's own delta
 // (ChordCellDeltaUpper) before any chorded leg — each of which names a
 // parameter-matched matchedDelta obligation, never "the sagitta alone" —
@@ -213,7 +213,7 @@ func PairRecords(p0, p1 momentinput.Profile, offsets []int, walks0, walks1 [][]s
 	}
 	// S16 runs after every loop's stations exist, so a free-form pair's S15
 	// and S14 refusals, decided as its stations are generated, come before
-	// any loop's collapsed-cell refusal (docs/loft-design.md §4's gate order).
+	// any loop's collapsed-cell refusal (agent-docs/loft-design.md §4's gate order).
 	for i, pair := range pairs {
 		if err := oneSidedCellGate(i, pair.V, pair.W); err != nil {
 			return nil, 0, 0, 0, err
@@ -225,7 +225,7 @@ func PairRecords(p0, p1 momentinput.Profile, offsets []int, walks0, walks1 [][]s
 // appendFreeform appends one free-form pair's cells to the loop. Each side's
 // tangent energy is the exact integral freeform.SpanTangentEnergyUpper reads
 // off that cell's own dyadic sub-span under the cell's shared native parameter
-// (docs/loft-design.md §5.2's tangentEnergy_k row), so
+// (agent-docs/loft-design.md §5.2's tangentEnergy_k row), so
 // proofbound.CellChordCurveAreaAllow can take its sharp arm on a free-form
 // cell without the constant-speed premise the circular arm discharges.
 func (p *LoopPair) appendFreeform(cell FreeformCell) {
@@ -238,7 +238,7 @@ func (p *LoopPair) appendFreeform(cell FreeformCell) {
 	p.TangentEnergyW = append(p.TangentEnergyW, cell.Energy1...)
 }
 
-// oneSidedCellGate is docs/loft-design.md Table S row S16, decided over one
+// oneSidedCellGate is agent-docs/loft-design.md Table S row S16, decided over one
 // loop's own ASSEMBLED station chains at the phase §4's gate-order paragraph
 // assigns it — as stations are paired into chord cells, which is here and not
 // inside the per-segment generator.

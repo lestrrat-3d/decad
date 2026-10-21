@@ -14,7 +14,7 @@ import (
 // the interface patches between them, the section's frame and accumulated
 // placement, and the section displacement every slab carries. Build
 // evaluates it over topology nodes, and it implements topo.Payload
-// (docs/stacked-prism-design.md §1, docs/evaluator-design.md §8).
+// (agent-docs/stacked-prism-design.md §1, agent-docs/evaluator-design.md §8).
 type Payload struct {
 	Slabs        []Slab
 	Interfaces   []Interface
@@ -101,7 +101,7 @@ func (sp Payload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
 }
 
 // IsGroup reports whether the payload is a prism group
-// (docs/mirror-pattern-design.md §6.3): one slab holding two or more regions.
+// (agent-docs/mirror-pattern-design.md §6.3): one slab holding two or more regions.
 func (sp Payload) IsGroup() bool {
 	return len(sp.Slabs) == 1 && len(sp.Slabs[0].Regions) >= 2
 }

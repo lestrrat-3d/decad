@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// coilSpring is docs/helix-design.md §13's square spring: the section
+// coilSpring is agent-docs/helix-design.md §13's square spring: the section
 // ρ ∈ [2, 3], ζ ∈ [0, 1] screwed two turns at pitch 1.5 about the sketch's V
 // axis.
 func coilSpring(t *testing.T) *decad.Body {

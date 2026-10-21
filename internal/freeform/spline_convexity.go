@@ -9,7 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 )
 
-// This file is docs/spline-design.md §6.5: a proof of one wall edge's
+// This file is agent-docs/spline-design.md §6.5: a proof of one wall edge's
 // curvature sign from the Bernstein coefficients of the curvature numerator
 // K = u'v" − v'u", over the exact polynomial Bézier chain spline_bezier.go's
 // §5.1 conversion produces, or a refusal (Table R row R19) where no single
@@ -55,7 +55,7 @@ const (
 	FreeformConvexityNegative
 )
 
-// FreeformWallConvexityContext is this file's entry point: docs/spline-design.md
+// FreeformWallConvexityContext is this file's entry point: agent-docs/spline-design.md
 // §6.5's whole certificate over one converted wall-edge chain.
 //
 // closed names whether spans came from a chain that closes on itself
@@ -78,7 +78,7 @@ const (
 // by its own definition, so the joint POINT is shared exactly but the cross
 // that would fold its sign carries decad's exact rational lift of sketch's own
 // ROUNDED float solve for SecondDerivs, not a turn of the curve the record
-// names (docs/spline-design.md §6.5, §5.1.2). Reading that rounding noise as
+// names (agent-docs/spline-design.md §6.5, §5.1.2). Reading that rounding noise as
 // geometry is exactly what a real fixture measures: an involute gear flank's
 // 13 interior joints alternate sign under the cross product though every one
 // of its 14 spans independently proves the SAME curvature sign. So when
@@ -103,7 +103,7 @@ const (
 // So the closing joint is a genuine corner exactly as any other chain's is,
 // and folds by the cross product below regardless of fitInterpolated.
 //
-// work is the RECORD's free-form work counter (docs/spline-design.md §5.2),
+// work is the RECORD's free-form work counter (agent-docs/spline-design.md §5.2),
 // threaded to SpanConvexitySignContext, which charges it — never minted here,
 // for the same reason walkOf never mints one: the R7 ceiling bounds one
 // record's total free-form work, so a counter minted per certificate would

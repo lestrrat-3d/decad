@@ -37,7 +37,7 @@ import (
 // buildRevolveLoop is the per-loop walk, and revLoopParts is what it hands
 // back so a full sweep and a partial one assemble the same parts differently
 // rather than through two builds. Every face carries the bound its own
-// surface was built from. See docs/evaluator-design.md §6.
+// surface was built from. See agent-docs/evaluator-design.md §6.
 
 // Build builds the revolved body rp records. work is the record's free-form
 // work counter: an operation that already holds one passes it, so the
@@ -91,7 +91,7 @@ func Build(ctx context.Context, env topo.Env, rp Payload, work *freeform.Freefor
 	// A surface result publishes a sheet, never a solid: solid false is what
 	// makes Volume() and Centroid() answer ErrNotSolid through their existing
 	// guards, and kind BodySheet is what Kind() reports
-	// (docs/surface-design.md §4.3).
+	// (agent-docs/surface-design.md §4.3).
 	kind := topo.BodySolid
 	if rp.SurfaceResult {
 		kind = topo.BodySheet
@@ -122,7 +122,7 @@ func Build(ctx context.Context, env topo.Env, rp Payload, work *freeform.Freefor
 		// the tag and normalBound, so the axis direction, the frame lift and
 		// every placement rounding are charged too; normalBound stays the
 		// figure the gates that refuse a departed face read
-		// (docs/evaluator-design.md §6).
+		// (agent-docs/evaluator-design.md §6).
 		//
 		// capAdmitAllow is revolvemass.AdmitBandCharge's own term (above): each
 		// cap face's LOOP is walked from the axis-snapped profile, while its
@@ -152,7 +152,7 @@ func Build(ctx context.Context, env topo.Env, rp Payload, work *freeform.Freefor
 		})
 	}
 
-	// The section displacement's region charge (docs/surface-intersection-design.md
+	// The section displacement's region charge (agent-docs/surface-intersection-design.md
 	// §7.2): the recorded and denoted regions differ by a band of at most
 	// section.Band, so the cap area and the three axis-frame moments each move by
 	// their integrand's envelope over it. The snap's charges above are about the
@@ -202,7 +202,7 @@ func Build(ctx context.Context, env topo.Env, rp Payload, work *freeform.Freefor
 	// boundary, but a full revolution encloses each profile hole as its own
 	// toroidal void — a separate shell, and a void one (evaluator §3). A
 	// surface result never claims that void (decision B,
-	// docs/surface-design.md §2.2): its hole loop's own closed surface
+	// agent-docs/surface-design.md §2.2): its hole loop's own closed surface
 	// touches the outer one nowhere, so it is a wholly separate piece of the
 	// body's boundary and gets its own Lump rather than a second shell of the
 	// solid's one (decision A).
@@ -229,7 +229,7 @@ func Build(ctx context.Context, env topo.Env, rp Payload, work *freeform.Freefor
 			faces = append(faces, group.faces...)
 		}
 		// A surface result omits both caps from the shell (Table W,
-		// docs/surface-design.md §4.1-§4.2): capStart/capEnd stay constructed
+		// agent-docs/surface-design.md §4.1-§4.2): capStart/capEnd stay constructed
 		// above so the area accumulation below can still read their area
 		// fields, but neither joins faces nor gets its loops attached, which
 		// is what leaves each rim edge with only its wall face — both
@@ -271,7 +271,7 @@ func Build(ctx context.Context, env topo.Env, rp Payload, work *freeform.Freefor
 	}
 
 	// Measurements — Pappus with the profile and float-evaluation bounds
-	// carried through (docs/evaluator-design.md §6).
+	// carried through (agent-docs/evaluator-design.md §6).
 	area := sideArea
 	if !rp.Full {
 		// Both caps' own (area, areaBound) are read back rather than
@@ -656,7 +656,7 @@ func buildRevolveLoop(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 // is rp.SurfaceResult: a full revolution's wall set already closes on itself,
 // so every shell built here is closed regardless of kind, but topobuild.ShellIsOpen
 // still runs rather than assuming it — the same discipline every other shell
-// in this build follows (docs/surface-design.md §2.2). On a solid, a hole
+// in this build follows (agent-docs/surface-design.md §2.2). On a solid, a hole
 // loop's run bounds its own toroidal cavity (evaluator §6), and so does every
 // run of the outer loop but its outer one: the outer surface encloses the
 // others, so its two axis ends bracket every other on-axis junction of the
@@ -735,7 +735,7 @@ func fullRevLoops(alloc topo.Alloc, j0, j1 revJunction, kind revolveaxis.WallKin
 // takes the loop's: outer convex, hole concave. end is THIS cap's end of the
 // sweep (rp.end0() or rp.end1()), and seam the recorded point a closed walk's
 // own seam vertex denotes; that vertex is bounded the same way every other cap
-// vertex is (sweptVertex; docs/evaluator-design.md §6). An open walk reads
+// vertex is (sweptVertex; agent-docs/evaluator-design.md §6). An open walk reads
 // neither.
 func (rp Payload) capEdge(alloc topo.Alloc, b revolvemesh.RevolveBasis, w survey2d.SegmentWalk, plane []survey2d.SegmentWalk, closed bool, vs, ve *topo.Vertex, seam sweptPoint, end sweptEnd, holeLoop, freeformConvex bool, frame massmoment.MapCharge) *topo.Edge {
 	convex := !holeLoop
@@ -789,7 +789,7 @@ func (rp Payload) capEdge(alloc topo.Alloc, b revolvemesh.RevolveBasis, w survey
 	return e
 }
 
-// This section is chain Revolve's own build (docs/surface-design.md §13.4):
+// This section is chain Revolve's own build (agent-docs/surface-design.md §13.4):
 // the open chain's counterpart of Build/buildRevolveLoop
 // above, reusing rp.WallSurface, rp.capEdge, prismrecord.SideOrigins and
 // revolvemass.WallAxisMoment unchanged. It differs only in TOPOLOGY: n segments place
@@ -798,7 +798,7 @@ func (rp Payload) capEdge(alloc topo.Alloc, b revolvemesh.RevolveBasis, w survey
 
 // BuildChain builds the shell body: one swept wall per recorded
 // segment (Table G rows 2-3), never a cap and never a wraparound junction.
-// work is the record's ONE free-form work counter (docs/spline-design.md
+// work is the record's ONE free-form work counter (agent-docs/spline-design.md
 // §5.2): the caller opens it once and this build and the final bounds
 // reading both spend from it.
 func BuildChain(ctx context.Context, env topo.Env, rp ChainPayload, work *freeform.FreeformWork) (*topo.Body, error) {
@@ -832,7 +832,7 @@ func BuildChain(ctx context.Context, env topo.Env, rp ChainPayload, work *freefo
 		// prismrecord.SideOrigins's segment indices and revolvemass.WallAxisMoment's own
 		// rp.Profile.Outer read reach exactly that walk's segments, and ci
 		// feeds the face role so two walks never collide on one role string
-		// (docs/surface-intersection-design.md §3.4).
+		// (agent-docs/surface-intersection-design.md §3.4).
 		view := rp.WalkView(ci)
 		resolved, err := revolveaxis.ResolveChain(ctx, rp.Chains[ci], work, "the revolve wall build",
 			view.ChargedWalk, view.Ax.SnapTol)
@@ -859,7 +859,7 @@ func BuildChain(ctx context.Context, env topo.Env, rp ChainPayload, work *freefo
 		Bound:     units.SquareMillimeters(area.Bound),
 	}
 	// volume and centroid stay at their zero value: a chain bounds no region
-	// (docs/surface-design.md §13.3), so neither is ever integrated here, and
+	// (agent-docs/surface-design.md §13.3), so neither is ever integrated here, and
 	// neither is reachable through Body.Volume/Body.Centroid while solid is
 	// false (§8) — exactly as chainrecord.Build leaves them.
 	bounds, err := Bounds(ctx, rev, work)
@@ -884,7 +884,7 @@ func BuildChain(ctx context.Context, env topo.Env, rp ChainPayload, work *freefo
 // two walls it joins, exactly as buildRevolveLoop's own junctions do for a
 // closed loop. A wall's own copy of its walk at Phi0/Phi1 (capEdge) is never
 // attached to a cap face here — a chain mints none — so it stays free
-// regardless of position (docs/surface-design.md §13.4). It returns the
+// regardless of position (agent-docs/surface-design.md §13.4). It returns the
 // faces and the walk's own total wall area, folded through proofbound.BoundedAdd.
 func buildChainRevolveWalls(ctx context.Context, alloc topo.Alloc, body *topo.Body, ref provenance.Producer, rp Payload, loopIdx int, b revolvemesh.RevolveBasis, resolved revolveaxis.ResolvedWalks, frame massmoment.MapCharge) ([]*topo.Face, proofbound.BoundedScalar, error) {
 	walks, kinds := resolved.Walks, resolved.Kinds
@@ -991,7 +991,7 @@ func buildChainRevolveWalls(ctx context.Context, alloc topo.Alloc, body *topo.Bo
 		if kinds[i] == revolveaxis.WallAxis {
 			// A LineSeg lying exactly on the axis sweeps no face — the same
 			// rule a profile-fed revolve's own revolveaxis.WallAxis segment follows
-			// (docs/evaluator-design.md §6) — and, with no cap to bridge the
+			// (agent-docs/evaluator-design.md §6) — and, with no cap to bridge the
 			// gap either side of it, a chain mints nothing at all for it.
 			continue
 		}
@@ -1023,7 +1023,7 @@ func buildChainRevolveWalls(ctx context.Context, alloc topo.Alloc, body *topo.Bo
 		} else {
 			// holeLoop is always false: a chain has no hole, and its whole
 			// walk takes the loop-0 (outer) convention
-			// (docs/surface-design.md §13.4).
+			// (agent-docs/surface-design.md §13.4).
 			plane := segPlaneWalks(resolved, w.Segs)
 			cap0 := rp.capEdge(alloc, b, w.SegmentWalk, plane, false, js[i].v0, js[i+1].v0, sweptPoint{}, rp.end0(), false, false, frame)
 			cap1 := rp.capEdge(alloc, b, w.SegmentWalk, plane, false, js[i].v1, js[i+1].v1, sweptPoint{}, rp.end1(), false, false, frame)

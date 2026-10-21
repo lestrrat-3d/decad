@@ -20,7 +20,7 @@ import (
 
 // This file is the public boolean surface of core §8. Admitted prism and
 // common-axis Revolve pairs use their source records; other pairs use the
-// exact-predicate mesh boolean of docs/evaluator-design.md §9. The mesh path
+// exact-predicate mesh boolean of agent-docs/evaluator-design.md §9. The mesh path
 // tessellates both operands at an internal chord tolerance derived from the
 // pair's diameter and produces a Faceted body with proven measurement bounds.
 // The signatures follow core §3 invariant #4: no operand is
@@ -39,7 +39,7 @@ import (
 // input live. A two-body result from the mesh path is a Faceted body:
 // its faces are grouped by the operands' source faces, so provenance
 // (FaceCreatedBy) survives, and its measurements are Approximate with proven
-// bounds (docs/evaluator-design.md §9) — except that an all-planar pair whose
+// bounds (agent-docs/evaluator-design.md §9) — except that an all-planar pair whose
 // contact points round exactly keeps an Exact VOLUME (the volume integral is
 // computed in exact arithmetic); the surface area always carries at least an
 // ulp-scale float-summation bound, so it reads Approximate with a bound tiny
@@ -65,7 +65,7 @@ import (
 // consume — a cap-loop chamfer body whose band has a corner this evaluator
 // cannot prove a line-line miter or an exactly tangent join, or a reflex
 // corner, so its mesh carries no proof of the volume it and the body it stands
-// for differ by (docs/tessellation-reach-design.md §7) — surfaces a plain
+// for differ by (agent-docs/tessellation-reach-design.md §7) — surfaces a plain
 // ErrUnsupported before any contact is examined: a capability limit, not a
 // BooleanError. So does an operand restating a held mesh (a Faceted boolean
 // result or a mitred sweep) whose facets where the pair meets carry bounds
@@ -81,7 +81,7 @@ import (
 // clear it — not a BooleanError.
 //
 // The held-mesh half of that limit is what bounds how far booleans CHAIN, and
-// it binds LOCALLY (docs/api-design.md §8 "The chain depth"): a result's bound
+// it binds LOCALLY (agent-docs/api-design.md §8 "The chain depth"): a result's bound
 // is composed per vertex from the operation that made it, and feeding that
 // result back in as an operand refuses exactly when a facet the new pair
 // meets, or comes within the tangency gate's slack of, carries a bound above
@@ -134,7 +134,7 @@ func Intersect(ctx context.Context, a, b *Body) (*Body, error) {
 // tessellateBooleanOperand meshes one boolean operand at its own request
 // tolerance: the pair tolerance, raised to a restating operand's held floor
 // (booloperand.HeldFloor) so that the restatement never refuses
-// (docs/faceted-vertex-bounds-design.md §5). It reports whether the operand
+// (agent-docs/faceted-vertex-bounds-design.md §5). It reports whether the operand
 // restates, which arms the local gate. It stays in the root because it
 // returns a root *Mesh built by the root's tessellateContext.
 func tessellateBooleanOperand(ctx context.Context, b *Body, tolMM float64) (*Mesh, bool, error) {
@@ -209,7 +209,7 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 }
 
 // asBooleanError maps an evaluateBoolean or facetedrecord.BuildWithProof error to the
-// public typed BooleanError (docs/api-design.md §8 / H2). The private
+// public typed BooleanError (agent-docs/api-design.md §8 / H2). The private
 // expected-outcome kinds decide the Code and the wrapped sentinel: an empty
 // result is BooleanEmpty; a valid but unclassifiable coplanar / tangent /
 // grazing / isolated-point contact, and an in-pipeline reach of the boolean
@@ -267,7 +267,7 @@ func evaluateBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 
 // pairMeshes meshes each operand at the pair's own chord tolerance, raised to
 // a restating operand's held floor: the public booleans' rule
-// (docs/evaluator-design.md §9, tessellateBooleanOperand).
+// (agent-docs/evaluator-design.md §9, tessellateBooleanOperand).
 type pairMeshes struct{}
 
 func (pairMeshes) TessellateOperand(ctx context.Context, b *topo.Body, pairTol float64) (*topo.Mesh, bool, error) {

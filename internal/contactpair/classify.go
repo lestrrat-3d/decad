@@ -162,7 +162,7 @@ func classifyPlanarFallback(ctx context.Context, mesher verifiedmesh.Mesher, rep
 
 // classifyPlanarManifold completes an oriented source-box report whose box
 // patches publish no manifold for a touching or overlapping pair: both boxes
-// are exact planar bodies (docs/multibody-dynamics-design.md §9), so §9.3's
+// are exact planar bodies (agent-docs/multibody-dynamics-design.md §9), so §9.3's
 // manifold replaces the report when the exact planar relation agrees and
 // every published point is an edge or vertex of one box on, in or crossing
 // the other, the rows the box patches do not cover. Face pairs stay with the

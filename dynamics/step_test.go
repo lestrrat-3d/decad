@@ -392,7 +392,7 @@ func TestObliqueInitialTouchContinuesAsPersistentContact(t *testing.T) {
 	require.Len(t, report.Events, 1)
 	require.Equal(t, dynamics.ContactImpact, report.Events[0].Kind)
 	// An initial touch takes its restitution target like any contact
-	// (docs/multibody-dynamics-design.md §6.5): restitution 0.5 sends the box
+	// (agent-docs/multibody-dynamics-design.md §6.5): restitution 0.5 sends the box
 	// up at 50 mm/s with 1.5·100 kg·mm/s, and it keeps its 50 mm/s slide.
 	require.InDelta(t, 150, report.Events[0].NormalImpulse.Base(), 1e-6)
 	final, ok := report.Next.Body(box)
@@ -922,7 +922,7 @@ func TestRestingBoxUsesPersistentContactTrack(t *testing.T) {
 	gravity := zeroAcceleration()
 	gravity.Z = units.MillimetersPerSecondSquared(-1000)
 	// The initial touch takes its restitution 0.5 like any contact
-	// (docs/multibody-dynamics-design.md §6.5): the first step's kick of
+	// (agent-docs/multibody-dynamics-design.md §6.5): the first step's kick of
 	// −100 mm/s bounces the box up at 50 mm/s, 5 mm by the step end; the
 	// second step's kick turns that into −50 mm/s, which lands it back on the
 	// floor exactly at the step end, where it bounces at 25 mm/s.

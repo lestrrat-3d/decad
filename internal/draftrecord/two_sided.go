@@ -15,8 +15,8 @@ import (
 
 // This file is the two-sided taper: two single-slab draft bodies built from
 // the sketch plane outward and sewn at their shared middle rim
-// (docs/draft-design.md). TwoSidedPayload implements topo.Payload
-// (docs/evaluator-design.md §8).
+// (agent-docs/draft-design.md). TwoSidedPayload implements topo.Payload
+// (agent-docs/evaluator-design.md §8).
 
 // TwoSidedPayload keeps both halves of a taper measured from the sketch
 // plane. The two near sections are the same recorded profile at level zero.
@@ -55,7 +55,7 @@ func (dp TwoSidedPayload) Placed(ctx context.Context, env topo.Env, composed r3.
 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports
-// (docs/evaluator-design.md §8): the root type this payload replaced.
+// (agent-docs/evaluator-design.md §8): the root type this payload replaced.
 func (TwoSidedPayload) SurveyClass() string { return "twoSidedDraftPayload" }
 
 // BuildTwoSided builds both halves under env, audits their shared middle rim

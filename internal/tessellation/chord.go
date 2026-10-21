@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-// ChordWalkMin is docs/tessellation-design.md §3's default walk minimum: a
+// ChordWalkMin is agent-docs/tessellation-design.md §3's default walk minimum: a
 // whole closed curve needs at least three chords to bound a polygon, and every
 // other walk needs one. A revolve meridian has a third case of its own
 // (revolvesampling.MeridianMin), which is why the minimum is ChordCount's parameter
@@ -29,7 +29,7 @@ func ChordWalkMin(w survey2d.SegmentWalk) int {
 // so consecutive samples are always distinct.
 //
 // nMin is the walk's own minimum count (ChordWalkMin, or revolvesampling.MeridianMin for
-// a revolve meridian). docs/tessellation-design.md §3 asks for it to be tried
+// a revolve meridian). agent-docs/tessellation-design.md §3 asks for it to be tried
 // FIRST: when its own sagitta already fits the budget it is the answer, and the
 // inverse below — which is undefined for a budget at or above 2r — is never
 // evaluated at all.
@@ -81,7 +81,7 @@ func ChordCount(w survey2d.SegmentWalk, tol float64, nMin int) (int, float64, er
 
 // ChordSagitta is a PROVEN upper bound on the sagitta 2r·sin²(Δθ/4) a chord
 // subtends when a circular walk of the given sweep is split into n equal
-// chords — docs/tessellation-design.md §3's published sagitta, and the
+// chords — agent-docs/tessellation-design.md §3's published sagitta, and the
 // single owner of ChordCount's walk-up step, so a later caller measuring the
 // SAME quantity for a hand-chorded fixture reads the identical closed form
 // rather than a second copy of it.
@@ -196,7 +196,7 @@ func exactChordSagitta(radius, sweep float64, n int) float64 {
 // hair so float rounding never understates them. It states the two-cap case
 // only; ChordLoop keeps the wall and one cap's own share apart
 // (ChordSamples.WallSlack/CapSlack) so a sheet mesh, which triangulates no
-// cap, can decline the cap half entirely (docs/surface-design.md §10).
+// cap, can decline the cap half entirely (agent-docs/surface-design.md §10).
 func WalkAreaSlack(w survey2d.SegmentWalk, n int, h float64) float64 {
 	return (WalkWallSlack(w, n, h) + 2*WalkSegmentArea(w, n)) * (1 + 1e-9)
 }
@@ -212,7 +212,7 @@ func WalkWallSlack(w survey2d.SegmentWalk, n int, h float64) float64 {
 
 // WalkSegmentArea is the PLANAR half of WalkAreaSlack, stated on its own
 // because two proofs read it: the caps' own area slack reads it twice (one per
-// cap), and docs/tessellation-reach-design.md §3's occupied-volume term reads it
+// cap), and agent-docs/tessellation-reach-design.md §3's occupied-volume term reads it
 // once per walk against the sweep height.
 //
 // It is the closed-form sum Σ a_c of the n circular segments between one
@@ -221,7 +221,7 @@ func WalkWallSlack(w survey2d.SegmentWalk, n int, h float64) float64 {
 // by exactly those segments, so the prism between two levels differs from the
 // prism it denotes by their sum times the sweep height — an area a hole gains
 // and an outline loses, summed in ABSOLUTE value here because occupied volume
-// admits no cancellation (docs/tessellation-design.md §2).
+// admits no cancellation (agent-docs/tessellation-design.md §2).
 func WalkSegmentArea(w survey2d.SegmentWalk, n int) float64 {
 	sweep := math.Abs(w.Th1 - w.Th0)
 	return w.Radius * w.Radius / 2 * math.Max(sweep-float64(n)*math.Sin(sweep/float64(n)), 0)

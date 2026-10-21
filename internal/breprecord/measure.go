@@ -14,7 +14,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file measures a Payload (docs/general-boolean-design.md §4.3): every
+// This file measures a Payload (agent-docs/general-boolean-design.md §4.3): every
 // reading is a sum over faces of a closed form in that face's own record. The
 // divergence-theorem sums run in exact rational intervals in the reference
 // frame (Embeds): a line contributes an exact rational, a circular wall or
@@ -108,7 +108,7 @@ func (bp Payload) ExtentAt(ctx context.Context, item int, axis r3.Vec,
 
 // ExtentAlong is the through-all stop's reading (root stops.go): the union of every
 // face's own extent along g, and every fillet band's (filletBandExtent,
-// docs/loop-fillet-design.md §5.4), beside the largest of their bounds. Like
+// agent-docs/loop-fillet-design.md §5.4), beside the largest of their bounds. Like
 // a prism's, it refuses a record carrying a section displacement, which moves
 // a coordinate the interval is stated over.
 func (bp Payload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {

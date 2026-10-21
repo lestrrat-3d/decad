@@ -7,7 +7,7 @@ import (
 
 // Key is the exact identity of the point: two points weld exactly when their
 // CANONICAL homogeneous coordinates are identical — stitching by shared exact
-// vertices, never by distance (docs/evaluator-design.md §9). A homogeneous
+// vertices, never by distance (agent-docs/evaluator-design.md §9). A homogeneous
 // point has many spellings, so the raw fields are never compared directly;
 // XhpCanon collapses every spelling of one coordinate to one four-tuple
 // before the key is built.

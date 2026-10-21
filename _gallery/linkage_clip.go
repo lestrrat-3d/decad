@@ -387,7 +387,7 @@ type linkageOptions struct {
 }
 
 // runLinkage renders a mechanism as a PNG sequence: the folding arm
-// (foldingArmScene, the joints and drive of docs/linkage-check-design.md §11
+// (foldingArmScene, the joints and drive of agent-docs/linkage-check-design.md §11
 // scene 1) by default, or with -scene rocker the crank-rocker
 // (crankRockerScene, the four-bar of §15.10 scene 7 turned a full turn), a
 // closed loop posed through a decad.Schedule. It first runs VerifyLinkage over

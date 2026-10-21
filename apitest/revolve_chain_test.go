@@ -137,7 +137,7 @@ func TestRevolveChainPolePlacedBounds(t *testing.T) {
 	after, err := placed.Area()
 	require.NoError(t, err)
 	// The placed area holds the same value; its bound also charges the
-	// rotation's own departure from orthonormal (docs/evaluator-design.md §6).
+	// rotation's own departure from orthonormal (agent-docs/evaluator-design.md §6).
 	require.Equal(t, before.Value, after.Value)
 	require.GreaterOrEqual(t, after.Bound.Base(), before.Bound.Base())
 	box, err := placed.Bounds()
@@ -176,14 +176,14 @@ func requireAreaContains15PiFraction(t *testing.T, area decad.Measurement, denom
 	requireEnclosesPiMultiple(t, "the cone chain's Area", area.Value.Base(), area.Bound.Base(), 15, denominator)
 }
 
-// This file is docs/surface-design.md §13's public-surface tests for
+// This file is agent-docs/surface-design.md §13's public-surface tests for
 // Revolve over a chain: a chain spun into a shell with no cap, over any
 // segment count and kind Table G admits (§15's T134, T135; the R22 on-axis refusal lives in
 // extrude_chain_test.go's TestChainFedRefusals beside SweepChain/LoftChain's
 // own T139 rows).
 
 // twoSegmentChainClearOfAxis builds a two-segment open chain — two lines
-// meeting at a shared point — clear of the u = 0 axis, docs/surface-design.md
+// meeting at a shared point — clear of the u = 0 axis, agent-docs/surface-design.md
 // §15's T134/T135 fixture.
 func twoSegmentChainClearOfAxis(tb testing.TB) (*sketch.Sketch, *sketch.Chain, decad.Axis) {
 	tb.Helper()
@@ -207,7 +207,7 @@ func twoSegmentChainClearOfAxis(tb testing.TB) (*sketch.Sketch, *sketch.Chain, d
 	return s, chains[0], axis
 }
 
-// TestRevolveChainQuarterTurnStaysUndecided is docs/surface-design.md's T134:
+// TestRevolveChainQuarterTurnStaysUndecided is agent-docs/surface-design.md's T134:
 // an open two-segment walk clear of the axis, spun a quarter turn, publishes
 // a two-face open sheet whose Area encloses the analytic Pappus value and
 // whose validity earns no construction proof from a partial sweep.
@@ -256,7 +256,7 @@ func TestRevolveChainQuarterTurnStaysUndecided(t *testing.T) {
 // above reads as arithmetic on a named constant rather than a bare literal.
 func unitsHalfPi() float64 { return 1.5707963267948966 }
 
-// TestRevolveChainFullTurnStaysOpen is docs/surface-design.md's T135: the
+// TestRevolveChainFullTurnStaysOpen is agent-docs/surface-design.md's T135: the
 // same walk revolved a FULL turn stays an OPEN sheet — its two free ends
 // sweep two circles nothing fills — and the full-turn construction proof
 // admits ValidityValid with no diagnostics.
@@ -287,7 +287,7 @@ func TestRevolveChainFullTurnStaysOpen(t *testing.T) {
 }
 
 // TestRevolveChainRunsTheSeamGates confirms chain Revolve runs RecordChain's
-// own gates exactly as chain Extrude does (docs/sketch-seam-design.md §2.2):
+// own gates exactly as chain Extrude does (agent-docs/sketch-seam-design.md §2.2):
 // a stale chain is ErrStaleProfile, and an invalid one is ErrInvalidProfile,
 // neither ever reaching the axis or extent resolution.
 func TestRevolveChainRunsTheSeamGates(t *testing.T) {

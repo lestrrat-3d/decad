@@ -79,7 +79,7 @@ type Torus struct {
 }
 
 // NURBSSurface is a free-form face's geometry — the exact extruded or
-// revolved surface of a recorded free-form curve (docs/spline-design.md §7),
+// revolved surface of a recorded free-form curve (agent-docs/spline-design.md §7),
 // or a direct Loft's ruled surface between two authenticated whole circles:
 // extruded, the control net is the curve's control points against the two
 // sweep ends, degree (p, 1), weights carried through; revolved, the standard
@@ -167,7 +167,7 @@ type Arc3 struct {
 // counter-clockwise about Axis from the start vertex to the end vertex, as
 // Arc3 is, so the point at angle φ from Major is
 // Center + SemiMajor·cos φ·Major + SemiMinor·sin φ·(Axis × Major)
-// (docs/loop-fillet-design.md §2). An edge whose start and end vertex are one
+// (agent-docs/loop-fillet-design.md §2). An edge whose start and end vertex are one
 // vertex is the whole ellipse, one turn from that vertex, as a Circle3 edge is.
 type Ellipse3 struct {
 	Center, Axis, Major  r3.Vec
@@ -181,7 +181,7 @@ type Ellipse3 struct {
 type FilletMiter3 struct{}
 
 // NURBSCurve is a free-form edge's geometry, NURBSSurface's 1-D analog
-// (docs/spline-design.md §7). It reports no Kind at all: Curve is sealed by
+// (agent-docs/spline-design.md §7). It reports no Kind at all: Curve is sealed by
 // its marker method alone and declares no Kind method, so this variant seals
 // in with that method and exports nothing else. Its control points stay
 // private in v1, the same opaque-marker treatment as NURBSSurface.

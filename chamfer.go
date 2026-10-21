@@ -15,7 +15,7 @@ import (
 // lateral edge runs along the side. The code picks a construction route for
 // the body's shape, checks the result, then replaces the old body in its document.
 
-// This file is the chamfer of docs/modify-design.md §7: Chamfer bevels the
+// This file is the chamfer of agent-docs/modify-design.md §7: Chamfer bevels the
 // convex or concave lateral edges of a straight prism (Table R, R1). It is the
 // fillet's sibling under the §2 reduction — a lateral edge is a CORNER of the
 // recorded 2D section, and bevelling it is a rewrite of that section, fed back
@@ -30,19 +30,19 @@ import (
 // The setback d is measured along the adjacent boundary curve, d from the
 // corner along EACH walk; WithAsymmetricChamfer instead sets back d along the
 // walk whose wall is the edge's reference face and its other distance along
-// the other walk (docs/modify-reach-design.md §6). There is NO S5 gate: a
+// the other walk (agent-docs/modify-reach-design.md §6). There is NO S5 gate: a
 // chord exists between any two distinct feet, so the fillet's no-blend-centre
 // refusal has no chamfer case (Table B, B1). A revolve receiver takes the same chord on its meridian
-// (revolve_blend.go, docs/modify-reach-design.md §7), and a brep or stacked
-// boolean result takes routes P and E of docs/brep-modify-design.md and route
-// L of docs/modify-general-design.md (brep_modify.go); any other non-prism
+// (revolve_blend.go, agent-docs/modify-reach-design.md §7), and a brep or stacked
+// boolean result takes routes P and E of agent-docs/brep-modify-design.md and route
+// L of agent-docs/modify-general-design.md (brep_modify.go); any other non-prism
 // receiver is S3 (ErrUnsupported), except a one-span straight solid Sweep's
 // selected lateral edges or one straight cap edge, the bounded tapered
-// full-circle far-rim case in docs/draft-design.md §10.5, and the
+// full-circle far-rim case in agent-docs/draft-design.md §10.5, and the
 // source-authenticated perpendicular cylindrical bore mouth in
-// docs/cross-cylinder-bore-chamfer-design.md.
+// agent-docs/cross-cylinder-bore-chamfer-design.md.
 //
-// Chamfer also takes docs/modify-reach-design.md §8.3's second receiver class,
+// Chamfer also takes agent-docs/modify-reach-design.md §8.3's second receiver class,
 // which the fillet does not: a selection covering every geometric edge of one
 // or more COMPLETE prism cap loops builds a cap-loop chamfer through
 // capblend.go instead of this file's corner rewrite, at an equal setback or,
@@ -53,12 +53,12 @@ import (
 // are SX4 (ErrUnsupported).
 
 // ChamferOption configures Chamfer: WithTangentChain and
-// WithAsymmetricChamfer (docs/modify-reach-design.md §2).
+// WithAsymmetricChamfer (agent-docs/modify-reach-design.md §2).
 type ChamferOption interface{ chamferOption() }
 
 // Chamfer bevels the selected lateral edges of a straight prism with a straight
 // chord set back a distance d along each adjacent wall, returning the new body
-// and retiring b (docs/modify-design.md §7, core §8). A nil b is ErrDegenerate.
+// and retiring b (agent-docs/modify-design.md §7, core §8). A nil b is ErrDegenerate.
 // sel is resolved against the live b; a query matching nothing is loud (ErrNoMatch /
 // ErrCardinality, S16). d is a length magnitude, gated like every other (S15); a
 // zero d is S13. The rewritten section faces the §5 audit before anything is
@@ -66,12 +66,12 @@ type ChamferOption interface{ chamferOption() }
 // (S6), never clipped.
 //
 // On a revolve, Chamfer bevels swept meridian junctions instead
-// (docs/modify-reach-design.md §7): the meridian corner gets the same chord,
+// (agent-docs/modify-reach-design.md §7): the meridian corner gets the same chord,
 // faces the same audit and the revolve's axis gates, and the revolve is rebuilt
 // over the receiver's own axis, sweep and placement. The bevel is a Cone, a
 // Cylinder where the chord runs parallel to the axis, or a Plane where it runs
 // perpendicular. One source-authenticated quarter-turn rectangular radial
-// cap rim takes the bounded faceted route in docs/modify-reach-design.md §7.2.
+// cap rim takes the bounded faceted route in agent-docs/modify-reach-design.md §7.2.
 // Other cap edges and edges on the axis are SX5 (ErrUnsupported).
 //
 // A one-sided positive-taper circular extrude also accepts one complete
@@ -84,7 +84,7 @@ type ChamferOption interface{ chamferOption() }
 // A receiver outside the admitted classes is S3 (ErrUnsupported).
 //
 // WithTangentChain expands the edges sel resolves to as Fillet's does
-// (docs/modify-reach-design.md §5). WithAsymmetricChamfer sets each edge back
+// (agent-docs/modify-reach-design.md §5). WithAsymmetricChamfer sets each edge back
 // d across its reference face and the option's other distance across the
 // other adjacent face (§6), on a prism's lateral edges and a revolve's
 // junctions alike; each setback faces the S6 audit on its own walk. On a
@@ -100,7 +100,7 @@ type ChamferOption interface{ chamferOption() }
 // A selection covering one straight prism cap edge uses route E or the
 // bounded cutter for an admitted oblique edge. A selection
 // covering every geometric edge of one or more complete prism cap loops uses
-// docs/modify-reach-design.md §8.3's cap-loop chamfer. It bevels each loop
+// agent-docs/modify-reach-design.md §8.3's cap-loop chamfer. It bevels each loop
 // with a band of analytic patches, and the result is a cap-blend body whose
 // volume, area, bounds, undercut and minimum-radius readings all answer.
 // Other partial cap selections and mixed cap/lateral selections are SX4
@@ -118,7 +118,7 @@ type ChamferOption interface{ chamferOption() }
 //
 // An analytic boolean result (a brep or stacked body) that reads as a prism
 // along a reference axis is chamfered as that prism
-// (docs/brep-modify-design.md route P): lateral edges and complete cap loops
+// (agent-docs/brep-modify-design.md route P): lateral edges and complete cap loops
 // alike, so a cross-drilled hole's mouth takes a countersink. Any other
 // selection of straight edges along one axis of such a body's face record
 // takes route E (§5): a swept straight wall the edge ends on or runs along
@@ -134,7 +134,7 @@ type ChamferOption interface{ chamferOption() }
 // SB).
 //
 // A selection of one or more complete loops of planar faces of such a body
-// takes route L (docs/modify-general-design.md §4): each loop's face takes
+// takes route L (agent-docs/modify-general-design.md §4): each loop's face takes
 // the loop offset dc into its material, every face beside the loop is trimmed
 // ds along the face's normal, and a band of Plane and Cone patches joins the
 // two, removing a wedge where the walls beside the loop descend into the body
@@ -166,7 +166,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	if err := doc.requireLive(b); err != nil {
 		return nil, err
 	}
-	// Table X (docs/surface-design.md §11): refused ahead of the selector gate
+	// Table X (agent-docs/surface-design.md §11): refused ahead of the selector gate
 	// so the answer does not depend on what the selector matched.
 	if err := refuseSheetOperand(b, "Chamfer"); err != nil {
 		return nil, err
@@ -201,7 +201,7 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	if err != nil {
 		return nil, err
 	}
-	// Reach stage 2 (docs/modify-reach-design.md §4/§5): the seed query's
+	// Reach stage 2 (agent-docs/modify-reach-design.md §4/§5): the seed query's
 	// cardinality has been enforced above; the tangent chain expands it. Expand
 	// first so every added edge can also receive an asymmetric reference face.
 	if o.TangentChain {

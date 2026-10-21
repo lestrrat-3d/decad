@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file tests the chorded volume legs docs/loft-gear-bounds-design.md §2
+// This file tests the chorded volume legs agent-docs/loft-gear-bounds-design.md §2
 // composes — the per-cell wall leg over proofbound.CellChordCurveAreaUpper and
 // the twist measure proofbound.CellTwistVolumeAllow — beside
 // proofbound.ChordedBoundaryMomentAllow, proofbound.CellTwistOffsetUpper,
@@ -96,7 +96,7 @@ func twistedPieSliceMesh(radius, sweepRad, twistRad, h float64, n int) (verts []
 }
 
 // twistedPieSliceTrueVolume is the CLOSED FORM for the true solid a twisted
-// pie-slice loft denotes (docs/loft-design.md's own chord-to-curve
+// pie-slice loft denotes (agent-docs/loft-design.md's own chord-to-curve
 // homotopy, §5 — the chord-chain subsection lands with the arc design
 // change): the RULED surface between the bottom arc, at angle s over [0,
 // sweepRad], and the top arc, at angle s+twistRad, linearly interpolated by
@@ -218,7 +218,7 @@ type chordedAllowBreakdown struct {
 // publish for that cell (TestCellAllowsOfMatchesThePerBoundHelpers) from one
 // certification of the cell's own spans and twist vector:
 //
-//   - wall chord-to-curve (docs/loft-gear-bounds-design.md §2's wallLeg):
+//   - wall chord-to-curve (agent-docs/loft-gear-bounds-design.md §2's wallLeg):
 //     each arc cell's own matched departure times its own
 //     proofbound.CellChordCurveAreaUpper, each side's arc-length claim its own
 //     TRUE arc length radius*dtheta. The two radial cells are straight walls
@@ -359,7 +359,7 @@ var chordSweepTable = sync.OnceValue(func() []chordSweepRow {
 })
 
 // TestChordedWallAndTwistLegsEncloseTheMeasuredGap is the A10 plan's
-// required enclosure test, read over docs/loft-gear-bounds-design.md §2's
+// required enclosure test, read over agent-docs/loft-gear-bounds-design.md §2's
 // legs: the per-cell wall leg plus the twist measure, with no cap or seam leg,
 // must enclose the gap between the held flat-triangle mesh and the true solid
 // in every row. Every row carries a TWIST between the two paired sections: a
@@ -517,7 +517,7 @@ func TestChordedTwistLegIsLoadBearing(t *testing.T) {
 }
 
 // TestChordedWallLegIsLoadBearing pins that the wall leg is necessary once the
-// cap and seam legs are gone (docs/loft-gear-bounds-design.md §2): over the
+// cap and seam legs are gone (agent-docs/loft-gear-bounds-design.md §2): over the
 // sweep table, deleting it (the twist measure alone) must fail to enclose the
 // measured gap on at least one row, and on every untwisted row, where the
 // twist measure is exactly zero while the chorded arc still holds a gap.

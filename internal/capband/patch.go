@@ -7,7 +7,7 @@ type Point = sectionrecord.Point2
 
 // Patch is one patch's exact analytic description, plane-local (u, v)
 // plus the two axial levels, kept alongside the topology for the moments and
-// tessellation passes (docs/modify-reach-design.md §8.4).
+// tessellation passes (agent-docs/modify-reach-design.md §8.4).
 type Patch struct {
 	Circular bool
 	// Plane patch (Circular == false): the two side-level (original) points
@@ -52,7 +52,7 @@ type Patch struct {
 	// contour is the offset arc TRIMMED at the mitered corner feet
 	// (capblend.WallFoot), which sit at a DIFFERENT angle than the wall's own
 	// endpoints wherever the corner is a genuine (non-tangent) miter
-	// (docs/modify-reach-design.md §8.3): Th0/Th1 above stay the wall's own
+	// (agent-docs/modify-reach-design.md §8.3): Th0/Th1 above stay the wall's own
 	// full recorded sweep — the SIDE directrix, which the DX7 survey reads
 	// because the patch genuinely attains it there — while CapTh0/CapTh1 is
 	// the trimmed CAP directrix, and patchRawFlux integrates the
@@ -138,7 +138,7 @@ type Patch struct {
 
 // HeldAllow bounds |held − reference| for each held number of a circular
 // patch whose float the build computed rather than recorded
-// (docs/modify-reach-design.md §8.4).
+// (agent-docs/modify-reach-design.md §8.4).
 //
 // The four angles are float Atan2 results, and the reference is the exact
 // angle about the centre of the point each window end names: the side

@@ -13,13 +13,13 @@ import (
 	"github.com/lestrrat-go/option/v3"
 )
 
-// This file is Draft (docs/draft-design.md §10): the face draft of an
+// This file is Draft (agent-docs/draft-design.md §10): the face draft of an
 // existing prism. It resolves the neutral cap and the wall selection against
 // b, then builds the same draftPayload a tapered Extrude builds
 // (internal/draftrecord) over b's recorded section.
 
 // NeutralPlane is the plane a draft tilts faces about. The set is sealed
-// (docs/draft-design.md §10).
+// (agent-docs/draft-design.md §10).
 type NeutralPlane interface{ neutralPlane() }
 
 // NeutralFace names a planar face of Body, selected and never pointed at
@@ -60,7 +60,7 @@ type DraftOption interface {
 var errNilNeutralPlane = fmt.Errorf(`%w: nil neutral plane`, ErrDegenerate)
 
 // Draft returns a new body whose walls lean by angle from the sweep axis about
-// the neutral plane, retiring b (docs/draft-design.md §10). A
+// the neutral plane, retiring b (agent-docs/draft-design.md §10). A
 // positive angle narrows the body with distance from the neutral plane and a
 // negative one widens it; the angle is a signed [units.Angle] outside
 // [ErrNegativeMagnitude] (core §12). sel names the walls to lean, about one
@@ -69,11 +69,11 @@ var errNilNeutralPlane = fmt.Errorf(`%w: nil neutral plane`, ErrDegenerate)
 // A subset leans only the walls it names: each moved wall's far trace is its
 // own moved line or circle, a kept wall stays vertical, and a corner between a
 // moved and a kept line is the intersection of the two
-// (docs/draft-design.md §10.2).
+// (agent-docs/draft-design.md §10.2).
 //
 // b is a live straight prism: an extrude, a filleted or chamfered
 // extrude, a tube, or any of these placed, whose recorded section is the
-// section it denotes. The gates run in docs/draft-design.md §5's order, and a
+// section it denotes. The gates run in agent-docs/draft-design.md §5's order, and a
 // refused call leaves the document unchanged, including on ctx.Err():
 //
 //   - an angle that is not an angle is [ErrUnitKind], one that is not finite
@@ -241,12 +241,12 @@ func requireFlatAnalyticNeutral(f *Face) error {
 	return fmt.Errorf(`%w: the neutral face is not planar (its surface is %T) (draft SD19)`, ErrDegenerate, f.Surface())
 }
 
-// This file is the tapered Extrude's entry (docs/draft-design.md §7): the
+// This file is the tapered Extrude's entry (agent-docs/draft-design.md §7): the
 // taper's angle gate (SD2), the SD12 surface-result gate and extent
 // resolution, then the one or two slabs internal/draftrecord builds over
 // topology nodes (draftrecord.Build, draftrecord.BuildTwoSided).
 
-// draftAngle is SD2 (docs/draft-design.md Table SD) on a nonzero taper that
+// draftAngle is SD2 (agent-docs/draft-design.md Table SD) on a nonzero taper that
 // has passed SD1: the angle in radians beside its conversion rounding, or
 // ErrDegenerate for an angle at or past a right angle to the sweep. The test
 // reads the stated angle in degrees as well as in radians, because a stated

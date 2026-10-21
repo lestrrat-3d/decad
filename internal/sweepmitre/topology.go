@@ -15,7 +15,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file assembles docs/sweep-design.md §16's mitred sweep into Table BM's
+// This file assembles agent-docs/sweep-design.md §16's mitred sweep into Table BM's
 // held triangle set and topology, and publishes §16.6's four readings from
 // the rational vertices. Every face is planar because §16.3 proves each wall
 // quad planar exactly, so a wall is ONE face whose loop has four edges, held

@@ -17,7 +17,7 @@ import (
 
 // This file builds a cap loop's coalesced walks, offset joins, contour
 // displacement and offset boundary from one recorded loop, and states the
-// cap-loop chamfer's offset refusals (docs/modify-reach-design.md §8.3).
+// cap-loop chamfer's offset refusals (agent-docs/modify-reach-design.md §8.3).
 
 // LoopWalks decomposes a single recorded loop into its coalesced
 // corner walk, the same decomposition offset2d.ProfileCornerLoopsBudget applies to
@@ -115,7 +115,7 @@ func LoopBoundary(ctx context.Context, loop sectionrecord.LoopRecord, d, tol flo
 }
 
 // ChamferDropError re-sentinels the shared offset's own drop refusal as
-// SX6 (docs/modify-reach-design.md Table SX). The offset code is Shell's, and
+// SX6 (agent-docs/modify-reach-design.md Table SX). The offset code is Shell's, and
 // there its drop is S11a — ErrUnsupported, because the shell body exists and
 // only a trimmed-offset kernel is missing. A CAP-LOOP CHAMFER asks a different
 // question of the same machinery: the drop says the selected loop has no

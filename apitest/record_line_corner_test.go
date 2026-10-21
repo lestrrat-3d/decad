@@ -18,7 +18,7 @@ import (
 // each corner joins two recorded parameters that are each off the exact
 // crossing by about ulp(t)·|line|. The region closes every such corner
 // through the exact crossing of the two supporting lines
-// (docs/evaluator-design.md §4), so its area and centroid are the exact
+// (agent-docs/evaluator-design.md §4), so its area and centroid are the exact
 // crossing polygon's, rounded once.
 //
 // Shown-to-fail: closing these corners with the straight chord between the

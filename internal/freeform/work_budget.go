@@ -24,7 +24,7 @@ import (
 // before that loft's first area integral. Certified loft fillet and centered
 // bore rewrites may double the station-scaled allowance for their additional
 // section audit. Other callers keep the default or ordinary loft ceiling
-// (docs/loft-gear-bounds-design.md §7).
+// (agent-docs/loft-gear-bounds-design.md §7).
 const FreeformWorkLimit uint64 = 1 << 20
 
 // ReconstructionWorkLimit is the default ceiling on one record's sketch
@@ -35,7 +35,7 @@ const FreeformWorkLimit uint64 = 1 << 20
 //
 // It is decad's model of sketch's quadratic arranger: 1 << 28 admits a record
 // of ReconstructionChordCeiling chords, which a forty-tooth gear outline's
-// 6640 chords fit under (docs/loft-gear-bounds-design.md §7).
+// 6640 chords fit under (agent-docs/loft-gear-bounds-design.md §7).
 const ReconstructionWorkLimit uint64 = 1 << 28
 
 // LoftReconstructionWorkLimit is the largest reconstruction charge an

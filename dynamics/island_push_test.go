@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Legs of the separating push (docs/multibody-dynamics-design.md §6.6),
+// Legs of the separating push (agent-docs/multibody-dynamics-design.md §6.6),
 // each shown to fail by deleting it in island.go, watching the named test go
 // red, and restoring it:
 //   - the push itself: TestIslandPushSeparatesACurvedBounce refuses with

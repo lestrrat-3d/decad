@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file holds the drive tests of docs/linkage-check-design.md §5.8, the
+// This file holds the drive tests of agent-docs/linkage-check-design.md §5.8, the
 // projection certificate: the three-joint arm's flat minimum, scene 13's
 // pendulum and scene 14's two arms. Each scene states its minimum in closed
 // form, and every IntervalClear interval's Clearance is asserted at or below
@@ -108,7 +108,7 @@ func (p signedPermutation) box(t *testing.T, doc *decad.Document, lo, hi r3.Vec)
 		math.Min(a.Z, b.Z), math.Abs(a.Z-b.Z))
 }
 
-// pendulum is scene 13 of docs/linkage-check-design.md §5.8 carried by p: a
+// pendulum is scene 13 of agent-docs/linkage-check-design.md §5.8 carried by p: a
 // block x ∈ [−5, 5], y ∈ [−50, −40], z ∈ [0, 10] hanging from a revolute
 // joint about Z through the origin, swinging 0° → 90° toward a wall
 // x ∈ [−100, 100], y ∈ [20, 40], z ∈ [−10, 20] above the pivot.
@@ -123,7 +123,7 @@ func pendulum(t *testing.T, p signedPermutation) (*decad.Document, *decad.Linkag
 	return doc, l, decad.Drive{{Link: swing, From: units.Degrees(0), To: units.Degrees(90)}}
 }
 
-// TestVerifyLinkagePendulum is scene 13 of docs/linkage-check-design.md §5.8,
+// TestVerifyLinkagePendulum is scene 13 of agent-docs/linkage-check-design.md §5.8,
 // the remainder's leg. The block's highest corner (5, −40) sits at
 // y = 5·sin θ − 40·cos θ, so the gap g(θ) = 20 − 5·sin θ + 40·cos θ falls
 // from 60 to 15, concave up to θ = atan 8: on a concave stretch the minimum
@@ -189,7 +189,7 @@ func TestVerifyLinkagePendulum(t *testing.T) {
 	}
 }
 
-// TestVerifyLinkageTwoArms is scene 14 of docs/linkage-check-design.md §5.8,
+// TestVerifyLinkageTwoArms is scene 14 of agent-docs/linkage-check-design.md §5.8,
 // both bodies of the pair moving. Arm A, x ∈ [0, 50], y ∈ [−5, 5],
 // z ∈ [0, 10], turns about Z through the origin −30° → 30°; arm B,
 // x ∈ [60, 110], the same section, turns about Z through (110, 0, 0) under the
@@ -238,7 +238,7 @@ func TestVerifyLinkageTwoArms(t *testing.T) {
 	require.Equal(t, len(report.Poses), rows, `the arms are evaluated at every pose`)
 }
 
-// TestVerifyLinkageOutAndBackPin pins where docs/linkage-check-design.md
+// TestVerifyLinkageOutAndBackPin pins where agent-docs/linkage-check-design.md
 // §5.8's segment term stops: a blade x ∈ [0, 50], y ∈ [−0.5, 0.5],
 // z ∈ [0, 10] turns about Z through 0° → 10° → 0°, and a 0.8 mm pin at radius
 // 49 and polar angle 9°, z ∈ [4.6, 5.4], sits in its path near the 10°
@@ -290,7 +290,7 @@ func TestVerifyLinkageOutAndBackPin(t *testing.T) {
 	})
 }
 
-// TestVerifyLinkageTiltedPendulum pins docs/linkage-check-design.md §5.8's
+// TestVerifyLinkageTiltedPendulum pins agent-docs/linkage-check-design.md §5.8's
 // hull points and directions: scene 13's pendulum and its wall carried by
 // tiltToDiagonal, the joint about the tilt of Z through the origin. Every
 // distance is the untilted scene's, so the gap is
@@ -326,7 +326,7 @@ func TestVerifyLinkageTiltedPendulum(t *testing.T) {
 }
 
 // TestVerifyLinkageSlotKeepsItsBox pins the line-segment test of
-// docs/linkage-check-design.md §5.8's hull points: a slot, cap centres
+// agent-docs/linkage-check-design.md §5.8's hull points: a slot, cap centres
 // (0, 45) and (0, 85) with radius 5, z ∈ [0, 10], stands on a revolute joint
 // about Z through the origin and rocks −20° → 20° under a wall
 // x ∈ [−100, 100], y ∈ [95, 105], z ∈ [−10, 20]. Its top cap reaches

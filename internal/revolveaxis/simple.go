@@ -90,7 +90,7 @@ import (
 func ProvesSimple(ctx context.Context, profile momentinput.Profile, ax Frame, full, radialProof bool,
 	sectionDelta float64, scan ExtentScan) bool {
 	if !full || sectionDelta != 0 {
-		// A displaced meridian (docs/surface-intersection-design.md §7.2) is
+		// A displaced meridian (agent-docs/surface-intersection-design.md §7.2) is
 		// read the way a displaced prism section is: the radial extreme below
 		// is of the recorded meridian, not the denoted one, so the leg is
 		// undecided.

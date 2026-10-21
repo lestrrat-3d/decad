@@ -9,7 +9,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
-// RevolveCellAreaSlack is docs/tessellation-design.md §10.2's Ecell for one
+// RevolveCellAreaSlack is agent-docs/tessellation-design.md §10.2's Ecell for one
 // wall cell of a LINE generator, in closed form by COMPLETE SIGN
 // DECOMPOSITION — tess §15's first admissible path, chosen here because the
 // decomposition turns out to need no root isolation at all.
@@ -132,7 +132,7 @@ const (
 // integrand's single zero −β/α is isolated exactly, the unit interval is split
 // there when the zero falls strictly inside it, and each sign-fixed piece is
 // integrated through its own polynomial primitive. This is the whole of
-// docs/tessellation-design.md §10.2's "isolate every zero ... then integrate
+// agent-docs/tessellation-design.md §10.2's "isolate every zero ... then integrate
 // each sign-fixed region in closed form" for a straight generator.
 func AbsLinearIntegral(alpha, beta *big.Rat, weight int) *big.Rat {
 	one := big.NewRat(1, 1)

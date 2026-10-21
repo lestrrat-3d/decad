@@ -1,5 +1,5 @@
 // Package booleaneval is the mesh-boolean pipeline of
-// docs/evaluator-design.md §9: the two operands' tessellations meet in exact
+// agent-docs/evaluator-design.md §9: the two operands' tessellations meet in exact
 // triangle/triangle intersection segments, each cut facet is subdivided along
 // them (internal/meshbool/boolean_cut.go), every resulting piece is classified
 // against the other solid by an exact local side-of-contact test (or exact ray
@@ -100,7 +100,7 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		return Evaluation{}, err
 	}
 	// VerifyAll, passed explicitly rather than taken from Tessellate's default
-	// (docs/tessellation-design.md §11 step 1) by every operandMeshes: the
+	// (agent-docs/tessellation-design.md §11 step 1) by every operandMeshes: the
 	// composition below reads every proof a mesh can carry, and the one-entry
 	// cache keys on the level, so a caller's own earlier unverified mesh at
 	// this same internal tolerance is a different entry and is never handed
@@ -151,7 +151,7 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		}
 		sourceID[f] = len(groups)
 		// The tool of a Cut (every face of b) leaves its natural normal
-		// pointing into the result (docs/faceted-source-retention-design.md §3.1).
+		// pointing into the result (agent-docs/faceted-source-retention-design.md §3.1).
 		group, _ := facetedrecord.SourceTag(f, op == meshbool.OpCut && i >= targetFaces)
 		group.Origins = append([]provenance.Ref(nil), f.Origins...)
 		group.Planar = f.Surface.Kind() == surfacegeom.KindPlane || f.HeldPlanar
@@ -212,7 +212,7 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	}
 	// A restating operand's facets where the pair meets must hold within the
 	// pair tolerance; the gate reads them on the contact classification below
-	// (docs/faceted-vertex-bounds-design.md §5). Any other operand is ungated.
+	// (agent-docs/faceted-vertex-bounds-design.md §5). Any other operand is ungated.
 	if restatingA {
 		bmA.Gate = tolMM
 	}
@@ -303,7 +303,7 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	// |1_B − 1_B'| for all three ops, so it is the sum of the operands' own
 	// symmetric-difference bounds — each δ · (that operand's held area) — plus
 	// what the final float rounding can move. The BOUNDARY bound is a different
-	// question, answered per vertex (docs/faceted-vertex-bounds-design.md §3):
+	// question, answered per vertex (agent-docs/faceted-vertex-bounds-design.md §3):
 	// a vertex the boolean itself creates sits at the crossing of two chord
 	// PLANES, so it is displaced by its own facet pair's trim-amplified
 	// (δ(t_A) + δ(t_B))/sin θ, not by δ, and the stitch adds each vertex's own
@@ -429,7 +429,7 @@ func PrepBoolMesh(ctx context.Context, m *topo.Mesh, src []int) (*meshbool.BoolM
 	if err != nil {
 		return nil, err
 	}
-	// Per-vertex bounds and their facet maxima (docs/faceted-vertex-bounds-
+	// Per-vertex bounds and their facet maxima (agent-docs/faceted-vertex-bounds-
 	// design.md §2, §4.5): the mesh's own record, or §2.1's reading derived
 	// from its face bounds.
 	beta, err := topobuild.VertexBounds(m)

@@ -10,8 +10,8 @@ import (
 )
 
 // This file offsets an open chain K: the kept walks of a shell whose wall
-// does not close around the section (docs/shell-opening-design.md §3). Each
-// interior corner of K takes docs/modify-design.md §7's join, and each end
+// does not close around the section (agent-docs/shell-opening-design.md §3). Each
+// interior corner of K takes agent-docs/modify-design.md §7's join, and each end
 // takes the join its end kind names.
 
 // OpenEnd names how one end of an open chain closes. A mirror end meets the
@@ -36,7 +36,7 @@ type OpenChainOffset struct {
 // end's own refusals are ErrOpeningCorner (SO1) and
 // ErrOpeningSpan (SO2). A walk at an opening end may run past its own end to
 // the rim cut, and OpenWalkConsumed decides its S11a
-// (docs/shell-opening-design.md §2.4).
+// (agent-docs/shell-opening-design.md §2.4).
 func OffsetOpenChain(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, axis Curve,
 	start, end OpenEnd, s, t, tol float64,
 ) (OpenChainOffset, error) {
@@ -142,7 +142,7 @@ func OffsetOpenChain(budget *proofbound.WorkBudget, chain []survey2d.SideWalk, a
 }
 
 // ChainSectionDelta is the section displacement of an open chain's offset
-// (docs/modify-reach-design.md §9.3.1, docs/shell-opening-design.md §4.4):
+// (agent-docs/modify-reach-design.md §9.3.1, agent-docs/shell-opening-design.md §4.4):
 // three times ChainReach's largest reach over K's interior joins and
 // its two ends, on OffsetSectionDelta's own argument. line is the mirror line
 // an axis end meets; a chain with two opening ends never reads it. K and its
@@ -171,7 +171,7 @@ func ChainSectionDelta(budget *proofbound.WorkBudget, chain []survey2d.SideWalk,
 }
 
 // OpenChainWallLoop is the wall section's loop over an open chain
-// (docs/shell-opening-design.md §3's W): inward it walks K, the closing
+// (agent-docs/shell-opening-design.md §3's W): inward it walks K, the closing
 // segment atEnd at K's end, K' backward and the closing segment atStart at
 // K's start; outward it walks K', atEnd back to K's end, K backward and
 // atStart out to K's start. kept is K's record and offset K' in K's own walk

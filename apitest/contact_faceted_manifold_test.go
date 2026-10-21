@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of docs/multibody-dynamics-design.md §13 PR 11. Every
+// The fixtures of agent-docs/multibody-dynamics-design.md §13 PR 11. Every
 // coordinate is dyadic or the exact image of dyadics under a pose whose float
 // entries are read as exact dyadics, so every expected point below is an
 // exact rational and each published witness must lie within its own ball of
@@ -498,7 +498,7 @@ func TestContactPairPlanarManifoldPenetration(t *testing.T) {
 
 // TestPlanarManifoldStitchedVertexTouch publishes the stitched tetrahedron's
 // manifolds on a source-box floor whose top face is z = 0
-// (docs/multibody-dynamics-design.md §13 PR 14b). Deleting the stitched
+// (agent-docs/multibody-dynamics-design.md §13 PR 14b). Deleting the stitched
 // solid's face map (Faces nil) was shown to fail: the apex keeps
 // ContactTouching with no manifold.
 func TestPlanarManifoldStitchedVertexTouch(t *testing.T) {
@@ -564,7 +564,7 @@ func TestContactPairPlanarManifoldCancels(t *testing.T) {
 	require.Equal(t, before, doc.Bodies())
 }
 
-// The fixtures of docs/multibody-dynamics-design.md §13 PR 14d: §9.6's
+// The fixtures of agent-docs/multibody-dynamics-design.md §13 PR 14d: §9.6's
 // face-local patch of the 8 mm cube poking through the §2 tray's floor, whose
 // top face is z = 0. The tray is not convex, so §9.3's patch never runs; the
 // cube is. Each runs in both body orders.
@@ -714,7 +714,7 @@ func TestPlanarManifoldWithholdsCornerThroughTwoFaces(t *testing.T) {
 	require.Equal(t, decad.ContactAmbiguousFeature, report.Reason)
 }
 
-// The fixtures of docs/multibody-dynamics-design.md §13 PR 20d: §10.5's
+// The fixtures of agent-docs/multibody-dynamics-design.md §13 PR 20d: §10.5's
 // support set of a non-convex guest, the §2 cup, over the §2 tray. Neither
 // body carries the convexity certificate, so §9.3 never runs; every fixture
 // runs in both body orders. Every cup corner below is the exact image of a

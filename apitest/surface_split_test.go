@@ -192,7 +192,7 @@ func TestSurfaceSplitOutsideRibbonDoesNotSeparate(t *testing.T) {
 
 // TestSurfaceSplitCoincidentBoundarySeparatesNothing is a ribbon drawn
 // exactly along the block's bottom wall. sketch resolves the ribbon's line
-// and the wall as one carrier (docs/general-boolean-design.md §3 A3), so the
+// and the wall as one carrier (agent-docs/general-boolean-design.md §3 A3), so the
 // target's one cell is unchanged and the split is RS7: the tool separates
 // nothing.
 func TestSurfaceSplitCoincidentBoundarySeparatesNothing(t *testing.T) {

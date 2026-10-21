@@ -1,5 +1,5 @@
 // Package stitchrecord holds the Stitch and Unstitch payloads and their
-// builders over internal/topo nodes (docs/surface-design.md §6). Root
+// builders over internal/topo nodes (agent-docs/surface-design.md §6). Root
 // stitchPayload and unstitchPayload alias them.
 package stitchrecord
 
@@ -24,7 +24,7 @@ type Payload struct {
 	Xform r3.Transform
 	// Delta is the proven displacement proofbound.RigidRoundAllow charges against the
 	// placed shared vertex table — zero exactly when Xform is the identity
-	// transform, an exact struct comparison (docs/loft-design.md §5's
+	// transform, an exact struct comparison (agent-docs/loft-design.md §5's
 	// identical fast path).
 	Delta float64
 	Faces []*topo.Face
@@ -57,7 +57,7 @@ type Payload struct {
 	// AuditClean records whether the crossing audit ran and passed for this
 	// body: true for a solid (Table C requires it) and for an open sheet
 	// whose audit was also run and admitted (the open-case decision,
-	// docs/surface-design.md §9.1's sheet validity leg 4). It is false for a
+	// agent-docs/surface-design.md §9.1's sheet validity leg 4). It is false for a
 	// non-planar body (no audit runs at all) and for an open sheet whose
 	// audit declined without erroring.
 	AuditClean bool
@@ -66,8 +66,8 @@ type Payload struct {
 func (sp Payload) Transform() r3.Transform { return sp.Xform }
 
 // ProvesSimple implements topo.SimpleProver. A Payload is proven by an
-// explicit build-time audit: Stitch runs docs/loft-design.md §6's crossing
-// audit on the OPEN case too (docs/surface-design.md §6.3's open-case
+// explicit build-time audit: Stitch runs agent-docs/loft-design.md §6's crossing
+// audit on the OPEN case too (agent-docs/surface-design.md §6.3's open-case
 // decision), so a payload whose audit ran and passed (AuditClean) admits leg 4
 // the same as a proven-simple prism or loft does, letting a clean stitched
 // sheet read ValidityValid instead of being permanently Suspect.
@@ -78,7 +78,7 @@ func (sp Payload) Placed(ctx context.Context, env topo.Env, composed r3.Transfor
 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports
-// (docs/evaluator-design.md §8): the root type this payload replaced.
+// (agent-docs/evaluator-design.md §8): the root type this payload replaced.
 func (Payload) SurveyClass() string { return "stitchPayload" }
 
 // UnstitchPayload is Unstitch's own record: one face read straight off the
@@ -125,5 +125,5 @@ func (up UnstitchPayload) Placed(ctx context.Context, env topo.Env, composed r3.
 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports
-// (docs/evaluator-design.md §8): the root type this payload replaced.
+// (agent-docs/evaluator-design.md §8): the root type this payload replaced.
 func (UnstitchPayload) SurveyClass() string { return "unstitchPayload" }

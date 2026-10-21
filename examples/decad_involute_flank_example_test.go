@@ -12,7 +12,7 @@ import (
 
 // A real involute gear-tooth flank — not a synthetic hump — is a fit spline
 // through points sampled along the involute curve, and it now extrudes
-// (docs/spline-design.md §10 P4b): a Tier A free-form section builds as long
+// (agent-docs/spline-design.md §10 P4b): a Tier A free-form section builds as long
 // as its chain proves ONE curvature sign along its whole length (§6.5). An
 // involute flank is convex its entire run from base circle to tooth tip, so
 // its chain clears that certificate and the section builds into a fully

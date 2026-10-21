@@ -20,8 +20,8 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is docs/tessellation-design.md §2's stitchPayload restatement
-// row (docs/surface-design.md §10, §14 Table D row 5): an all-planar
+// This file is agent-docs/tessellation-design.md §2's stitchPayload restatement
+// row (agent-docs/surface-design.md §10, §14 Table D row 5): an all-planar
 // stitched body's mesh, CLOSED or OPEN, is an exact restatement of the
 // triangle set Stitch's own build already assembled and audited
 // (stitchrecord.Build), modelled line for line on internal/loftmesh.RestateLoft's exact
@@ -35,10 +35,10 @@ import (
 // chording under surface §10.1; T11 also accepts that sheet's identity
 // Unstitch siblings re-welded along their original edges (§10.2). Other
 // curved sources refuse with decaderr.ErrUnsupported. An OPEN
-// all-planar sheet runs docs/tessellation-design.md §1.2's manifold-with-
+// all-planar sheet runs agent-docs/tessellation-design.md §1.2's manifold-with-
 // boundary audit (topobuild.RequireSheetMesh) in the
 // closed-mesh audit's place, exactly as a surface-result prism or revolve
-// sheet's own mesh does (docs/surface-design.md §10).
+// sheet's own mesh does (agent-docs/surface-design.md §10).
 
 // Restate restates an all-planar stitched body's own recorded triangle set
 // as a mesh node, CLOSED or OPEN. Its per-face bound is the largest
@@ -55,7 +55,7 @@ import (
 // signed volume.
 // lumpFaceGroups returns b's own lumps' constituent faces, one slice
 // per lump: topobuild.SheetLumps builds exactly one shell per lump
-// (docs/surface-design.md §2.2), so this is a direct read of b's own
+// (agent-docs/surface-design.md §2.2), so this is a direct read of b's own
 // recorded connectivity, never a second split.
 func lumpFaceGroups(b *topo.Body) [][]*topo.Face {
 	lumps := b.Lumps
@@ -256,7 +256,7 @@ func Restate(ctx context.Context, b *topo.Body, sp stitchrecord.Payload,
 	// whose every vertex carries a proven bound of exactly zero. Every other
 	// stitched body's exact tetrahedron sum proves only SIGNED volume, never
 	// the occupied-volume symmetric-difference bound a boolean requires, so
-	// symDiffOK stays false for it (docs/surface-design.md §14 Table D row 5)
+	// symDiffOK stays false for it (agent-docs/surface-design.md §14 Table D row 5)
 	// and booloperand.RequireVolumeProof refuses it before this
 	// mesh is even built.
 	//
@@ -267,7 +267,7 @@ func Restate(ctx context.Context, b *topo.Body, sp stitchrecord.Payload,
 	//     stitchweld.ZeroBound (internal/stitchweld/bounds.go) proves every
 	//     vertex's bound is exactly zero. That rules out both a nonzero
 	//     placement delta (internal/stitchrecord/build.go's proofbound.RigidRoundAllow, stitchrecord.Build)
-	//     and a certificate-welded class bound (docs/surface-design.md §6.4's
+	//     and a certificate-welded class bound (agent-docs/surface-design.md §6.4's
 	//     massDelta amendment) — the only two ways this evaluator ever widens
 	//     a stitched vertex's bound above zero.
 	//  2. The polygon stitchrecord.TriangulateFaces (internal/stitchrecord/build.go) built for every face
@@ -282,7 +282,7 @@ func Restate(ctx context.Context, b *topo.Body, sp stitchrecord.Payload,
 	//     face, exactly tiles that exact polygon — holes excluded once each,
 	//     with no gap and no overlap. This is the identical triangulator
 	//     loft's own exact restatement already relies on for its cap
-	//     triangles (docs/tessellation-design.md §2's loftPayload row), and it
+	//     triangles (agent-docs/tessellation-design.md §2's loftPayload row), and it
 	//     introduces no coordinate the polygon's own vertices did not already
 	//     hold: no rounding, no interpolation. stitchrecord.CheckClosure's
 	//     directed-edge parity leg and loftmesh.LoftCrossingAudit's own crossing test
@@ -304,7 +304,7 @@ func Restate(ctx context.Context, b *topo.Body, sp stitchrecord.Payload,
 		// The three-step argument above proves each triangle set exact PER
 		// LUMP; it says nothing about how the lumps relate to one another.
 		// stitchrecord.Build's own lump-separation gate (internal/stitchrecord/build.go,
-		// docs/surface-design.md Table C/R20) already refuses a nested or
+		// agent-docs/surface-design.md Table C/R20) already refuses a nested or
 		// interlocking multi-lump assembly before this body could ever
 		// exist, but this reading does not lean on that: it re-asks the
 		// identical axis-aligned box question directly against b's own
@@ -320,10 +320,10 @@ func Restate(ctx context.Context, b *topo.Body, sp stitchrecord.Payload,
 	// here can only mean a payload that never should have reached this
 	// restatement.
 	//
-	// A BodySheet runs docs/tessellation-design.md §1.2's manifold-with-
+	// A BodySheet runs agent-docs/tessellation-design.md §1.2's manifold-with-
 	// boundary audit in the closed-mesh audit's place, exactly as a
 	// surface-result prism or revolve sheet's own mesh does
-	// (docs/surface-design.md §10): topobuild.RequireSheetMesh proves every free
+	// (agent-docs/surface-design.md §10): topobuild.RequireSheetMesh proves every free
 	// directed edge attributes, face by face and chain count by chain
 	// count, to the body's own recorded free Edges — the one leg Stitch's
 	// own build never itself checked, since stitchrecord.CheckClosure only ever
@@ -340,7 +340,7 @@ func Restate(ctx context.Context, b *topo.Body, sp stitchrecord.Payload,
 
 	// tessellation.RequireClosedMesh's own Degenerate refusal is rewrapped as ErrUnsupported to
 	// match — this evaluator's own restatement reach, never a claim the
-	// body's geometry is bad (docs/tessellation-design.md §12; §1.2's own
+	// body's geometry is bad (agent-docs/tessellation-design.md §12; §1.2's own
 	// note that a stitched solid mesh also runs tessellation.RequireVertexLinks beside
 	// it).
 	if err := tessellation.RequireClosedMesh(mesh.Triangles); err != nil {

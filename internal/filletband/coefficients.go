@@ -8,7 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
-// Coefficients is Table CF's strip polynomial (docs/loop-fillet-design.md
+// Coefficients is Table CF's strip polynomial (agent-docs/loop-fillet-design.md
 // §5.1): the strip S(t) between ℓ and ℓ offset t into F's material has area
 // A1·t + A2·t² and first moment M1·t + M2·t² + M3·t³ about F's frame origin.
 type Coefficients struct {

@@ -10,7 +10,7 @@ import (
 )
 
 // These tests chain steps through dynamics.Timeline
-// (docs/multibody-dynamics-design.md §7.2, §13 PR 6).
+// (agent-docs/multibody-dynamics-design.md §7.2, §13 PR 6).
 
 // gravityBounceInput is gravity −8192 mm/s², so each 1/32 s step kicks the
 // sphere by exactly −256 mm/s.

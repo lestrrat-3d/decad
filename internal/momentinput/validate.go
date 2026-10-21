@@ -264,7 +264,7 @@ func validateAnalyticMomentSegment(segment CurveSegment, work *freeform.Freeform
 // converted chain the moments pass will integrate. The conversion itself is the
 // check: it rejects a non-finite range or control coordinate, a trimmed range, a
 // rational NURBS and every non-Tier-A kind with its own reason
-// (docs/spline-design.md Table R), so no field test is duplicated here.
+// (agent-docs/spline-design.md Table R), so no field test is duplicated here.
 //
 // Every charge this SEGMENT owes is levied here, on the record's own counter:
 // the conversion, the re-anchoring the moments pass performs, and the exact
@@ -312,7 +312,7 @@ func validateFreeformMomentSegment(segment CurveSegment, work *freeform.Freeform
 // still claims — while the record's own natural-START point (always the first
 // of its own run) can never be dropped this way, so only the natural-end side
 // needs checking. This is the one Tier A kind that can drift here at all
-// (docs/spline-design.md Table F): a clamped SplineSeg/ClosedSplineSeg/
+// (agent-docs/spline-design.md Table F): a clamped SplineSeg/ClosedSplineSeg/
 // NURBSSeg interpolates its own recorded end control point exactly, with no
 // sketch-side collapsing on the way, so a general cross-kind join check would
 // only add unearned cost for those three.

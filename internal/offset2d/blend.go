@@ -218,7 +218,7 @@ func RewriteLoop(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, blend
 		segs = append(segs, OriginalSegment(w, startU, startV, endU, endV))
 		// A blend without a connector only moves this walk's end: the brep
 		// route's trim of a face that holds a blended edge as a segment
-		// (docs/brep-modify-design.md §5.3 step 4).
+		// (agent-docs/brep-modify-design.md §5.3 step 4).
 		if cb := blends[(i+1)%n]; cb != nil && cb.Connector != nil {
 			segs = append(segs, cb.Connector)
 			connectors[len(segs)-1] = struct{}{}
@@ -231,7 +231,7 @@ func RewriteLoop(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, blend
 // smooth or cusped corner, then each walk is set back its own arc length from
 // the corner — dA back along the arriving walk to foot fA, dB forward along
 // the leaving walk to foot fB, equal for an equal-distance chamfer and the
-// two distances of an asymmetric one (docs/modify-reach-design.md §6) — and
+// two distances of an asymmetric one (agent-docs/modify-reach-design.md §6) — and
 // the two feet are joined by a chord. The bevel is a plane, so the connector
 // is a LineSeg (fA→fB), which continues the loop's own walk sense; there is
 // no offset carrier and no S5, because a chord exists between any two

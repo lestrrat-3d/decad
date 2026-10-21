@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/spline-design.md §10 P4b's build-level test obligation
+// This file is agent-docs/spline-design.md §10 P4b's build-level test obligation
 // (§11): a Tier A free-form section now builds through the public Extrude
 // call. Every test here asserts on computed geometry — a volume, a bound, a
 // topology count, a bool the certificate decided — never merely "it ran"
@@ -61,7 +61,7 @@ func freeformWallFace(t *testing.T, body *decad.Body) *decad.Face {
 // TestExtrudeFreeformAreaIsRegionPlusPerimeter asserts observable test 2: a
 // free-form prism's Area is 2*(region area) + (wall lengths)*height, with a
 // POSITIVE bound — an arc length is never exact in any tier
-// (docs/spline-design.md §6.1), so a test pinning Exact here would pin a bug.
+// (agent-docs/spline-design.md §6.1), so a test pinning Exact here would pin a bug.
 func TestExtrudeFreeformAreaIsRegionPlusPerimeter(t *testing.T) {
 	t.Parallel()
 	s, p := fitSplineArchSketch(t)
@@ -220,7 +220,7 @@ func rectangleWithBulgeSketch(t *testing.T, bulgeOut bool) (*sketch.Sketch, *ske
 // TestExtrudeFreeformConvexityBothDirections asserts observable test 6: the
 // SAME wall shape closes convex on one strict sign and concave on the other,
 // and a test covering only one direction cannot tell the certificate from a
-// constant (docs/spline-design.md §6.5).
+// constant (agent-docs/spline-design.md §6.5).
 func TestExtrudeFreeformConvexityBothDirections(t *testing.T) {
 	t.Parallel()
 	convexOf := func(bulgeOut bool) bool {
@@ -346,7 +346,7 @@ func r19Fixture(t *testing.T, control [4][2]float64) (*sketch.Sketch, *sketch.Pr
 // TestExtrudeFreeformR19RefusesTheBuild asserts observable test 9: a wall
 // edge whose chain proves no single curvature sign is a BUILD refusal, not a
 // Suspect reading — evaluator §3 decides convex at build and a bool has no
-// Suspect to fall back on (docs/spline-design.md §6.5). Three shapes, three
+// Suspect to fall back on (agent-docs/spline-design.md §6.5). Three shapes, three
 // ways to reach it: two genuine curvature sign changes inside one span, an
 // interior cusp the coefficient fold alone would call strictly signed, and a
 // coincident first control pair whose cusp a half-open root count alone would
@@ -617,7 +617,7 @@ func TestExtrudeFreeformFalsifierDenseSample(t *testing.T) {
 }
 
 // The section below covers the OTHER capabilities a free-form-walled body
-// reaches (docs/spline-design.md §8 Table C). Chording lands them in two
+// reaches (agent-docs/spline-design.md §8 Table C). Chording lands them in two
 // groups. Tessellation, export, the booleans and the interference proof read
 // the chorded mesh and are asserted on computed geometry — a watertight
 // manifold, a volume within its own published bound, a decided pair. The
@@ -638,7 +638,7 @@ func freeformArchBody(t *testing.T, doc *decad.Document) *decad.Body {
 
 // straightNURBSPrismBody extrudes a 10x10 rectangle by 5 mm; its bottom edge
 // is recorded as a degree-1 unit-weight NURBSSeg rather than a LineSeg — the
-// straight-walk case (docs/spline-design.md §6.5's Table K, "K identically
+// straight-walk case (agent-docs/spline-design.md §6.5's Table K, "K identically
 // zero"). The refusal every capability below stages on is keyed to the
 // RECORDED kind, never the degree or the geometric straightness, so this
 // fixture must trip the identical refusal a curved free-form wall does.
@@ -663,7 +663,7 @@ func straightNURBSPrismBody(t *testing.T, doc *decad.Document) *decad.Body {
 	return body
 }
 
-// overshootNetControls is docs/spline-design.md §6.2.1's own overshooting
+// overshootNetControls is agent-docs/spline-design.md §6.2.1's own overshooting
 // control net: a cubic whose two interior control points sit a hundredth of a
 // millimetre off the chord through its ends while the curve itself swings
 // roughly 0.76 mm past that chord's start. It is the shape that separates a
@@ -720,7 +720,7 @@ func segmentDistance(p, a, b [2]float64) float64 {
 	return math.Hypot(p[0]-(a[0]+s*dx), p[1]-(a[1]+s*dy))
 }
 
-// TestFreeformPrismTessellatesItsChordedWall is docs/tessellation-reach-design.md
+// TestFreeformPrismTessellatesItsChordedWall is agent-docs/tessellation-reach-design.md
 // §5's headline: a Tier A free-form wall chords on the existing prism path.
 // The mesh must be a closed, consistently oriented manifold, its facets must
 // name the body's own faces, and the volume it encloses must land on the body's
@@ -765,7 +765,7 @@ func TestFreeformPrismTessellatesItsChordedWall(t *testing.T) {
 }
 
 // TestFreeformPrismChordingEnclosesTheCurveBothWays is §5's falsifier on
-// docs/spline-design.md §6.2.1's own overshooting net, the shape whose true
+// agent-docs/spline-design.md §6.2.1's own overshooting net, the shape whose true
 // departure from its chord is two orders of magnitude past what a carrier-line
 // reading would report. Both directions of the Hausdorff claim [Mesh.Bound]
 // makes are checked: no densely sampled point of the recorded curve lies
@@ -834,7 +834,7 @@ func TestFreeformPrismChordingEnclosesTheCurveBothWays(t *testing.T) {
 // rather than returning a coarser mesh under a bound it cannot prove.
 //
 // The refusal that binds at the fine end is the free-form work counter
-// (docs/spline-design.md Table R row R7), not the chord cap (row R8): an exact
+// (agent-docs/spline-design.md Table R row R7), not the chord cap (row R8): an exact
 // dyadic bisection charges its own arithmetic, and that ceiling is reached long
 // before 2^14 chords are. Both are ErrUnsupported and both are §5's refusal
 // table, so the assertion is on the sentinel and on nothing being returned.
@@ -1028,7 +1028,7 @@ func TestFreeformPrismMinRadiusUndecided(t *testing.T) {
 // refuses even when the selected edges are themselves the analytic vertical
 // junctions. Both a curved wall and a straight-walk (degree-1) NURBSSeg wall
 // must trip the SAME refusal — it is keyed on the recorded kind, not the
-// degree (docs/spline-design.md §5.1/§6.5).
+// degree (agent-docs/spline-design.md §5.1/§6.5).
 func TestFreeformPrismFilletChamferRefuse(t *testing.T) {
 	t.Parallel()
 	for _, fixture := range []struct {
@@ -1173,7 +1173,7 @@ func reversedArchSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
 }
 
 // TestFreeformPrismChordsBothWalkDirectionsIdentically pins the reversal arm of
-// the chording (docs/tessellation-reach-design.md §5): a walk running against
+// the chording (agent-docs/tessellation-reach-design.md §5): a walk running against
 // its curve emits the SAME dyadic cell boundaries the forward walk does, in the
 // opposite order. Two bodies over the same region, recorded in opposite
 // directions, must therefore carry the same chord count, the same published

@@ -18,7 +18,7 @@ import (
 )
 
 // This file is the crossing reach of the class-B Cut
-// (docs/general-boolean-design.md §3 B.3, §5): a pair whose scenes cut
+// (agent-docs/general-boolean-design.md §3 B.3, §5): a pair whose scenes cut
 // edges. Every planar face of either operand that the other reaches is
 // decided by its own scene (§5's parallel- and perpendicular-face scenes),
 // every crossing those scenes compute is replaced by the one float the keyed

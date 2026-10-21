@@ -119,7 +119,7 @@ func (sp Payload) ProvesSimple(context.Context) bool {
 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports
-// (docs/evaluator-design.md §8): the root type this payload replaced.
+// (agent-docs/evaluator-design.md §8): the root type this payload replaced.
 func (Payload) SurveyClass() string { return "sweepPayload" }
 
 // ChainPayload is the chain Sweep's own record of a ribbon body: one chain
@@ -127,7 +127,7 @@ func (Payload) SurveyClass() string { return "sweepPayload" }
 // It stays DISTINCT from chainPayload for the reason sweepPayload stays
 // distinct from prismPayload — a downstream consumer whose Sweep proof has not
 // landed dispatches on this type and refuses, rather than reading the analytic
-// reduction as proof for the original operation (docs/sweep-design.md §10).
+// reduction as proof for the original operation (agent-docs/sweep-design.md §10).
 type ChainPayload struct {
 	Chain   chainrecord.Payload
 	Revolve revolveplan.ChainPayload
@@ -173,7 +173,7 @@ func (sp ChainPayload) Placed(ctx context.Context, env topo.Env, composed r3.Tra
 }
 
 // ProvesSimple implements topo.SimpleProver. The one-span straight reduction
-// is the only admitted case (docs/sweep-design.md §15): chain Sweep builds the
+// is the only admitted case (agent-docs/sweep-design.md §15): chain Sweep builds the
 // body through the identical chainrecord.Build a plain chain Extrude does,
 // over a chainrecord.Payload it then wraps unchanged (FinishChain). So this is
 // the SAME construction argument chainrecord.Payload.ProvesSimple makes,
@@ -188,5 +188,5 @@ func (sp ChainPayload) ProvesSimple(context.Context) bool {
 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports
-// (docs/evaluator-design.md §8): the root type this payload replaced.
+// (agent-docs/evaluator-design.md §8): the root type this payload replaced.
 func (ChainPayload) SurveyClass() string { return "chainSweepPayload" }

@@ -8,7 +8,7 @@ import (
 
 // DegState is the three-valued answer of the clearance kernel's degeneracy
 // oracle (oracle.go), and the discipline that
-// keeps a certificate honest (docs/clearance-design.md §4/§5).
+// keeps a certificate honest (agent-docs/clearance-design.md §4/§5).
 //
 // A closed-form cell is exact only where the configuration it assumes actually
 // holds: a plateau needs EXACT parallelism, a constant-distance critical needs

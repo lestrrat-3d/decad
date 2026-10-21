@@ -42,7 +42,7 @@ func ContourDisplacement(walks []survey2d.SideWalk, joins []capcontour.Join, d, 
 }
 
 // AmountsContourDisplacement is ContourDisplacement for a band whose walk i
-// moves by its own amount amounts[i] (docs/draft-design.md §10.2): a nonzero
+// moves by its own amount amounts[i] (agent-docs/draft-design.md §10.2): a nonzero
 // amount is read over its span within dDelta, and a zero amount is a wall the
 // band leaves in place (WallRadius), read at exactly zero.
 func AmountsContourDisplacement(walks []survey2d.SideWalk, joins []capcontour.Join, amounts []float64, dDelta, tol float64) (float64, error) {

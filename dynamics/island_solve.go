@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the proposal of docs/multibody-dynamics-design.md §6.2:
+// This file is the proposal of agent-docs/multibody-dynamics-design.md §6.2:
 // projected Gauss–Seidel in float64, in the fixed order pairs (canonical) then
 // manifold points (manifold order), for at most MaxIterations sweeps. Each
 // point takes its normal row and then, for a positive-friction pair, its

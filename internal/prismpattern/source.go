@@ -1,7 +1,7 @@
 // Package prismpattern holds the prism-pattern Union's exact radial source
 // tests and joined-prism fillet contact arithmetic: blank and section arc
 // gaps, outward wall certificates, interval contact points, polar angles and
-// ring points. See docs/prism-pattern-union-design.md.
+// ring points. See agent-docs/prism-pattern-union-design.md.
 package prismpattern
 
 import (

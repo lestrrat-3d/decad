@@ -12,7 +12,7 @@ import (
 // The table holds every pair of the world, excluded ones included. A pair
 // whose bodies are both Fixed is never resolved by an impulse; its material
 // is recorded when it mixes, and the representable-range refusal applies only
-// to pairs with a moving body (docs/multibody-dynamics-design.md §3.1).
+// to pairs with a moving body (agent-docs/multibody-dynamics-design.md §3.1).
 type worldPair struct {
 	a, b        int
 	excluded    bool

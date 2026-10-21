@@ -12,7 +12,7 @@ import (
 var ErrRestate = errors.New("the swept face does not restate as a plane")
 
 // Restate states a swept straight wall as the planar rectangle it sweeps
-// (docs/brep-modify-design.md §5.2). ref is the record's reference frame.
+// (agent-docs/brep-modify-design.md §5.2). ref is the record's reference frame.
 //
 // The wall must be a LineSeg over its natural range (0→1 or 1→0) with
 // exactly one of its walked run's two plane-local components zero, its side

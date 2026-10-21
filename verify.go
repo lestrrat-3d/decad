@@ -14,8 +14,8 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the Verify of docs/evaluator-design.md §10/§11 and
-// docs/verification-design.md: one non-mutating call returning a rich report
+// This file is the Verify of agent-docs/evaluator-design.md §10/§11 and
+// agent-docs/verification-design.md: one non-mutating call returning a rich report
 // with a Status at both levels, aggregated by a fixed severity precedence,
 // and one bit — Passed() — an agent gates on. The wall, undercut and
 // concave-radius questions are answered outright by the analytic surveys of
@@ -108,12 +108,12 @@ func resolveVerifyOptions(opts []VerifyOption) (verifyConfig, error) {
 // checks every pair of operand facet boxes before pruning exact predicates. A
 // pair holding a sheet operand never reaches that fallback: it is decided by
 // box separation, or, when the boxes meet, the sheet decision procedure of
-// docs/surface-design.md §9.3. One pair's
+// agent-docs/surface-design.md §9.3. One pair's
 // work can therefore grow with the two facet counts multiplied together, and
 // total work also grows with the number of unresolved body pairs. Verify
 // proves those pairs on up to GOMAXPROCS goroutines (at most 12) and builds
 // the report in pair order, so the report and any returned error match a
-// one-pair-at-a-time walk (docs/interference-design.md §2). Large-model
+// one-pair-at-a-time walk (agent-docs/interference-design.md §2). Large-model
 // callers should pass a context with a deadline chosen from representative
 // inputs. For a document with live bodies, after document and option
 // validation, cancellation returns ctx.Err() and a nil report; validation

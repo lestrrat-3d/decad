@@ -17,7 +17,7 @@ import (
 // read as exact rationals (massmoment.PrismRotation, the leaves
 // proofbound.ExactFrameLiftRound compares every lifted vertex against).
 // Every prism-family build integrates its readings in plane coordinates,
-// and r3 keeps L orthonormal only to rounding (docs/evaluator-design.md §5).
+// and r3 keeps L orthonormal only to rounding (agent-docs/evaluator-design.md §5).
 // The centroid and the box need no charge: an affine map carries a centroid
 // to its image's centroid, and the box reads the linear functional g·L over
 // the plane-coordinate body. An exactly orthonormal L changes nothing.

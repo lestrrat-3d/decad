@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The dynamics fixtures of docs/multibody-dynamics-design.md §13 PR 14e
+// The dynamics fixtures of agent-docs/multibody-dynamics-design.md §13 PR 14e
 // (§10.7, continuation inside the band): a tumble body falls onto a plain
 // 240 mm source-box floor under the §2 material (restitution 0.3, friction
 // 0.4), dt = 1/256 s, the stack-and-drop residuals and SupportBand =
@@ -315,7 +315,7 @@ func requirePublishedHeights(t *testing.T, scene tumbleRestScene, body *decad.Bo
 	return below
 }
 
-// The dynamics fixtures of docs/multibody-dynamics-design.md §13 PR 14f
+// The dynamics fixtures of agent-docs/multibody-dynamics-design.md §13 PR 14f
 // (§10.8, rest inside the band): the step fills SweepRequest.RestSpeed with
 // VelocityResidual, so a lifted vertex the solve rested is held on both
 // sides of the floor; the band track reads §10.8's per-vertex curvature K_p;

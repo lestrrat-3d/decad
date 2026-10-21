@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file hardens the mesh boolean (docs/evaluator-design.md §9) with
+// This file hardens the mesh boolean (agent-docs/evaluator-design.md §9) with
 // randomized, seeded property tests and a native fuzz target. The rest of the
 // suite is fixed hand-chosen cases; the reviewers flagged the degenerate-case
 // space as hard to exhaust by inspection, so here we sample it at scale and

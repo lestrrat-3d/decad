@@ -8,7 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
 
-// This file adapts docs/surface-design.md §6.2's Table J to the held
+// This file adapts agent-docs/surface-design.md §6.2's Table J to the held
 // vertices and edges of the operand faces. The class and pair decisions in
 // internal/stitchweld are recorded once and replayed by every later placement.
 

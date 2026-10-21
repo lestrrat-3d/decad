@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These tests run the Phase 1 exit scene of docs/multibody-dynamics-design.md
+// These tests run the Phase 1 exit scene of agent-docs/multibody-dynamics-design.md
 // §2, stack-and-drop, end to end through the real producers: Body.MassProperties
 // for every mass, ContactPair and SweepPair for every manifold and sweep,
 // World.Step for every event, and Timeline for the chain of steps. The
@@ -339,7 +339,7 @@ func discreteFreeFall(drop float64) *big.Rat {
 	}
 }
 
-// The Phase 2 exit scene of docs/multibody-dynamics-design.md §2, tumble,
+// The Phase 2 exit scene of agent-docs/multibody-dynamics-design.md §2, tumble,
 // end to end through the same producers: a fixed zero-bound Cut tray, four
 // spinning boxes turned about (1, 1, 0), a hexagonal prism, a wedge and a
 // stitched tetrahedron, each released on a corner or a vertex, all landing
@@ -800,7 +800,7 @@ func TestTumbleSceneSubset(t *testing.T) {
 	requireTumbleExit(t, scene, tumbleTimeline(t, scene, 128), 128)
 }
 
-// The Phase 3 exit scene of docs/multibody-dynamics-design.md §2, parts-bin,
+// The Phase 3 exit scene of agent-docs/multibody-dynamics-design.md §2, parts-bin,
 // end to end through the same producers: §2's tray with a shelled cup, a
 // block whose top loop is chamfered 2.3 mm, a loft, a straight hexagon sweep
 // and a revolved bottle dropped 8 mm onto its floor, and a source cylinder

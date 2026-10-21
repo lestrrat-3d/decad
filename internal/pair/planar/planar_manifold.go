@@ -9,7 +9,7 @@ import (
 )
 
 // This file builds the contact manifold of two exact planar solids
-// (docs/multibody-dynamics-design.md §9.3) from the zero-distance feature
+// (agent-docs/multibody-dynamics-design.md §9.3) from the zero-distance feature
 // pairs ClassifyPlanar recorded. The face-pair patch is clipped in
 // planar_patch.go; shallow penetration is handled in
 // planar_penetration_manifold.go.
@@ -68,7 +68,7 @@ type PlanarManifold struct {
 }
 
 // SupportPlane names a face of one solid of a pair, the HOST, whose plane may
-// support the other solid, the GUEST (docs/multibody-dynamics-design.md
+// support the other solid, the GUEST (agent-docs/multibody-dynamics-design.md
 // §10.5).
 type SupportPlane struct {
 	HostIsA bool
@@ -318,7 +318,7 @@ func PlanarTouchManifold(a, b *PlanarSolid, contacts []PlanarContact, convexA, c
 }
 
 // PlanarGuestTouch builds the manifold of a Touching pair neither of whose
-// solids is convex (docs/multibody-dynamics-design.md §10.5). Each solid in
+// solids is convex (agent-docs/multibody-dynamics-design.md §10.5). Each solid in
 // turn, B first, is the HOST and the other the GUEST. A flat host face h
 // supports the guest when every guest vertex lies on or in front of its plane
 // and every recorded contact's host feature lies in h (a facet of h, or an

@@ -34,7 +34,7 @@ func ChargeFitInterpolant(work *FreeformWork, n int) error {
 }
 
 // FitSpanControls returns one coordinate's two INTERIOR Bézier control values
-// for a fit-spline span, docs/spline-design.md §1.3's closed form:
+// for a fit-spline span, agent-docs/spline-design.md §1.3's closed form:
 //
 //	b1 = (2·vi + vi1)/3 − hSq·(2·mi + mi1)/18
 //	b2 = (vi + 2·vi1)/3 − hSq·(mi + 2·mi1)/18

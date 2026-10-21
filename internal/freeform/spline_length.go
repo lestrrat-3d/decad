@@ -15,7 +15,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
-// This file is docs/spline-design.md §6.1: the arc length of a free-form curve
+// This file is agent-docs/spline-design.md §6.1: the arc length of a free-form curve
 // is never exact in any tier, because it integrates a square root that has no
 // polynomial antiderivative. What IS available is a PROVEN two-sided bracket:
 //
@@ -38,7 +38,7 @@ import (
 // arc length against a caller tolerance — so there is no threshold for a
 // measured-target loop to stop on, and the depth is sized to bound both the work
 // and the rational denominators the subdivision introduces (they double per
-// level) instead. Where a target does exist, docs/spline-design.md §6.1 puts the
+// level) instead. Where a target does exist, agent-docs/spline-design.md §6.1 puts the
 // loop there: §6.4's build-time gate and §6.1.1's product enclosure.
 //
 // A fixed depth promises NO relative width, and nothing here claims one:

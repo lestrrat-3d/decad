@@ -33,7 +33,7 @@ func SetFaceBound(m *topo.Mesh, f *topo.Face, delta float64) {
 	}
 }
 
-// SetVertexBounds publishes a per-vertex record (docs/faceted-vertex-bounds-
+// SetVertexBounds publishes a per-vertex record (agent-docs/faceted-vertex-bounds-
 // design.md §2.1) and, from it, every source face's bound as the largest
 // corner entry over that face's own triangles, lifting Bound to match. The
 // caller's record carries exactly one entry per vertex, and Source is
@@ -45,7 +45,7 @@ func SetVertexBounds(m *topo.Mesh, beta []float64) {
 	}
 }
 
-// VertexBounds reads β(v) for every vertex (docs/faceted-vertex-bounds-
+// VertexBounds reads β(v) for every vertex (agent-docs/faceted-vertex-bounds-
 // design.md §2.1): the mesh's own record when its payload publishes one, and
 // otherwise the largest FaceBound over the faces whose facets touch v. The
 // derived reading is a claim the mesh already made — v lies on a facet whose
@@ -72,7 +72,7 @@ func VertexBounds(m *topo.Mesh) ([]float64, error) {
 	return beta, nil
 }
 
-// RequireClosedMesh runs docs/tessellation-design.md §1's closed-mesh audit
+// RequireClosedMesh runs agent-docs/tessellation-design.md §1's closed-mesh audit
 // (tessellation.RequireClosedMesh) over m's facets, its refusal lifted by
 // LiftAuditError.
 func RequireClosedMesh(m *topo.Mesh) error {

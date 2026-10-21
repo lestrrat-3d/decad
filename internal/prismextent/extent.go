@@ -154,7 +154,7 @@ func circularExtremeInterval(w survey2d.SegmentWalk, gu, gv float64) (proofbound
 }
 
 // BoundaryExtremesBoundedContext is the one scan, total over survey2d.WalkKind
-// (docs/spline-design.md §6.2): the min and max of g(u, v) = gu·u + gv·v over
+// (agent-docs/spline-design.md §6.2): the min and max of g(u, v) = gu·u + gv·v over
 // the recorded region's boundary, AND the proven half-width every CANDIDATE's
 // own position contributes to that interval.
 //

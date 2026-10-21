@@ -1,12 +1,12 @@
-// Package brepbandmesh is the brep tessellator (docs/general-boolean-design.md
+// Package brepbandmesh is the brep tessellator (agent-docs/general-boolean-design.md
 // §4.4): Tessellate meshes a brep body's walls and planar faces, audits the
 // mesh and sums its occupied-volume proof. The rest of the package reads a
-// route L body's bands (docs/modify-general-design.md Table DG's DG3). Each
+// route L body's bands (agent-docs/modify-general-design.md Table DG's DG3). Each
 // band is chorded as the cap-loop chamfer chords its own loop
 // (internal/capblend): ONE count per wall walk of the receiver's loop, shared
 // by the cap contour on the loop's face, the band's patch and the side contour
 // — the rim at the side level of the wall beside the loop
-// (docs/tessellation-reach-design.md §7). The count is imposed on that wall as
+// (agent-docs/tessellation-reach-design.md §7). The count is imposed on that wall as
 // its sample points, so the wall's rim at the side level and the band's side
 // ring are the same mesh vertices, and capblend.EmitBand writes the band's
 // strip and its departure terms.
@@ -71,7 +71,7 @@ func (bc *Band) filletInput() brepfilletmesh.Input {
 // on the face beside it. The result maps a swept face's index to the samples
 // its wall must take. A wall two bands reach must take one count from both,
 // or the body refuses. A fillet band adds its interior ring count
-// (docs/loop-fillet-design.md §7.1). The boss and pocket shells, when the
+// (agent-docs/loop-fillet-design.md §7.1). The boss and pocket shells, when the
 // record holds them, append one band each after the record's own bands.
 func Chord(ctx context.Context, bp breprecord.Payload, btopo *breprecord.Topology, chord float64) ([]Band, map[int]tessellation.ChordSamples[*topo.Face], error) {
 	if len(bp.LoopBands) == 0 && bp.BossShell == nil && bp.PocketShell == nil {

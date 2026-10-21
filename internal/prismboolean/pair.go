@@ -1,6 +1,6 @@
 // Package prismboolean admits prism, stacked-prism and prism-group operand
-// payloads to the analytic boolean routes of docs/prism-boolean-design.md and
-// docs/general-boolean-design.md §3 (A1, A5, A7). It reads only the two
+// payloads to the analytic boolean routes of agent-docs/prism-boolean-design.md and
+// agent-docs/general-boolean-design.md §3 (A1, A5, A7). It reads only the two
 // operand payloads, runs the reject-only gates, and passes the admitted
 // records to prismcells, stackedrecord and stackedunion, which build the
 // result payload. The root boolean dispatch builds and commits the body.
@@ -143,7 +143,7 @@ func TryStackedThroughCut(ctx context.Context, a, b topo.Payload) (stackedrecord
 	}
 	// A union-built stack changes its outer loop at an interface. Its exposed
 	// patches are not the exclusive-hole patches this cut re-derives below, so
-	// it takes the mesh path (docs/stacked-prism-design.md §6).
+	// it takes the mesh path (agent-docs/stacked-prism-design.md §6).
 	if len(sp.OuterRuns()) != 1 {
 		return stackedrecord.Payload{}, false, nil
 	}

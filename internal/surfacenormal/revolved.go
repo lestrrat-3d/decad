@@ -16,7 +16,7 @@ import (
 // perpendicular is tagged a Cylinder or a Plane, a cone's half angle is a
 // float atan2, and every centre and origin is placed in float. So the normal
 // a revolve wall's NormalAt publishes is judged against this surface, never
-// against the tag (docs/evaluator-design.md §6).
+// against the tag (agent-docs/evaluator-design.md §6).
 //
 // The surface is the recorded meridian swept about the recorded axis, in the
 // form revolvemesh.RevolveLift.MeridianGap compares a carrier with: a point

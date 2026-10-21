@@ -9,7 +9,7 @@ import (
 )
 
 // Mesher tessellates a body at VerifyAll with chord tolerance tolMM, so the
-// returned mesh carries every proof a tessellation can (docs/tessellation-
+// returned mesh carries every proof a tessellation can (agent-docs/tessellation-
 // design.md §2).
 type Mesher interface {
 	VerifyAll(ctx context.Context, b *topo.Body, tolMM float64) (*topo.Mesh, error)

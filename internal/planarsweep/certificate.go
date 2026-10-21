@@ -18,7 +18,7 @@ import (
 )
 
 // This file holds the certificates that continue the general rotating sweep
-// from an initial touch (docs/multibody-dynamics-design.md §10.2 and §10.3).
+// from an initial touch (agent-docs/multibody-dynamics-design.md §10.2 and §10.3).
 // Both proofs read one SUPPORT PLANE: a face plane of one body S that every
 // vertex of the other body M lies on or in front of, touching it at the
 // contact set. When every vertex of S lies on or behind it, S lies in its

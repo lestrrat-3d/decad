@@ -22,7 +22,7 @@ import (
 )
 
 // CapShellInput is a straight prism shell that removes caps only or keeps
-// every face (docs/modify-design.md §8, docs/modify-reach-design.md BX5/BX8):
+// every face (agent-docs/modify-design.md §8, agent-docs/modify-reach-design.md BX5/BX8):
 // the receiver's exact record and the held thickness.
 type CapShellInput struct {
 	Prism prismrecord.Payload
@@ -155,7 +155,7 @@ func BuildTube(ctx context.Context, env topo.Env, in CapShellInput, offset momen
 	}
 	pp := in.Prism
 	// The annular section is a NEW record no preflight has seen, so the build
-	// opens its one counter here (docs/spline-design.md §5.2). A tube keeps
+	// opens its one counter here (agent-docs/spline-design.md §5.2). A tube keeps
 	// the receiver's sweep, so each end keeps its own axial displacement too.
 	return prismrecord.Build(ctx, env, prismrecord.Payload{
 		Profile: momentinput.Profile{Outer: outer.Outer, Holes: []sectionrecord.LoopRecord{holeLoop}},
@@ -170,7 +170,7 @@ func BuildTube(ctx context.Context, env topo.Env, in CapShellInput, offset momen
 
 // BuildBands builds reach BX8: the both-caps shell of a section with k >= 1
 // holes is 1 + k disjoint bands over the receiver's sweep, one stacked slab
-// holding one region per band (a prism group, docs/stacked-prism-design.md
+// holding one region per band (a prism group, agent-docs/stacked-prism-design.md
 // §2.2). Each band is its own lump with its own rim caps, capStart and
 // capEnd, and its walls carry slab(0).region(m).side(i,j) with the outer band
 // first and the hole linings in ProfileRecord order. The offset loops sit
@@ -189,7 +189,7 @@ func BuildBands(ctx context.Context, env topo.Env, in CapShellInput, offset mome
 	}, stackedrecord.OwnPlan{})
 }
 
-// BuildClosed is reach BX5 (docs/modify-reach-design.md §9.2): WithNoOpenings
+// BuildClosed is reach BX5 (agent-docs/modify-reach-design.md §9.2): WithNoOpenings
 // on a hole-free straight prism keeps every face and lines it with a wall of
 // thickness t, closing a cavity. The record is three stacked slabs: inward,
 // the section P on [z0, z0 + t], the band between P and its erosion Q on

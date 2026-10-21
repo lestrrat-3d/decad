@@ -9,7 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-// This file adapts the exact section offset of docs/modify-design.md §7 and
+// This file adapts the exact section offset of agent-docs/modify-design.md §7 and
 // audits its record for a shell. The offset is per-feature and topology-preserving:
 // a line offsets to a parallel line, a circle to a concentric circle, a corner
 // closes with a miter or an arc of radius t about the corner point or, at a G1
@@ -94,7 +94,7 @@ func AuditRewriteBudget(budget *proofbound.WorkBudget, orig, rewritten momentinp
 
 // OffsetProfile computes the topology-preserving offset of a section: P ⊖ t
 // (inward, s = +1) or P ⊕ t (outward, s = −1), each loop offset in its own
-// sense (docs/modify-design.md §7). A dropped feature is S11a (ErrDrop);
+// sense (agent-docs/modify-design.md §7). A dropped feature is S11a (ErrDrop);
 // a non-closing miter is S11 (ErrTopology), naming the loop and the
 // corner (CornerTopologyError). Both are ErrUnsupported. tol is the shell
 // tolerance BuildLoop classifies with.
@@ -138,7 +138,7 @@ func AuditOffsetSectionBudget(budget *proofbound.WorkBudget, orig, offset moment
 	return AuditRewriteBudget(budget, orig, offset, loops, empty)
 }
 
-// OffsetSectionDelta is the cup's offset displacement (docs/modify-design.md
+// OffsetSectionDelta is the cup's offset displacement (agent-docs/modify-design.md
 // §9): a proven upper bound on how far any boundary point of the offset
 // section OffsetProfile records for (profile, s, t) sits from the boundary of
 // the offset the shell DENOTES — P ⊖ t* inward, P ⊕ t* outward — where t* is

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md's Table W and docs/sweep-design.md's
+// This file is agent-docs/surface-design.md's Table W and agent-docs/sweep-design.md's
 // own delivery-table tests for WithSurfaceResult() on Sweep, the last of the
 // four features to take the option. Sweep has three distinct build paths, and
 // none of them are alike: a one-span straight path reduces to the prism
@@ -56,7 +56,7 @@ func sweepArcPath(t *testing.T) *decad.Path {
 
 // TestSurfaceSweepLineIsASheet is Table W's line row over the one-span
 // straight reduction: the flag rides the reduced prismPayload, so the sheet
-// behaviour is internal/prismrecord/build.go's own (docs/surface-design.md §4.3).
+// behaviour is internal/prismrecord/build.go's own (agent-docs/surface-design.md §4.3).
 func TestSurfaceSweepLineIsASheet(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
@@ -103,9 +103,9 @@ func TestSurfaceSweepLineIsASheet(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 }
 
-// TestSurfaceSweepLineSheetVerifiesSound is docs/sweep-design.md's own Table D
+// TestSurfaceSweepLineSheetVerifiesSound is agent-docs/sweep-design.md's own Table D
 // row D1 carve-out: the one-span straight sheet IS a prismPayload build, so it
-// transfers verbatim the prism argument docs/surface-design.md §9.1 states,
+// transfers verbatim the prism argument agent-docs/surface-design.md §9.1 states,
 // and reads Sound.
 func TestSurfaceSweepLineSheetVerifiesSound(t *testing.T) {
 	t.Parallel()
@@ -180,7 +180,7 @@ func TestSurfaceSweepArcIsASheet(t *testing.T) {
 }
 
 // TestSurfaceSweepArcAndCompositeSheetsVerifyUndecided is the honest answer
-// docs/sweep-design.md's Table D row D1 states: neither the arc reduction
+// agent-docs/sweep-design.md's Table D row D1 states: neither the arc reduction
 // (a revolvePayload build, which carries no construction proof anywhere in
 // this evaluator) nor the composite build (whose own boundary/vertex-link
 // audit proves assembled topology, not geometric non-self-intersection) earns
@@ -223,7 +223,7 @@ func requireSweepSheetUndecided(t *testing.T, doc *decad.Document, sheet *decad.
 // TestSurfaceSweepCompositeIsASheet is the composite path's own new work: the
 // two outer caps are omitted by the assembler (internal/compositesweep/assemble.go), every
 // sewn internal join keeps its two adjacent faces, and the published area is
-// the composed (sum-in, subtract-out) figure docs/surface-design.md §4.3
+// the composed (sum-in, subtract-out) figure agent-docs/surface-design.md §4.3
 // requires rather than a plain walk over the surviving walls alone.
 func TestSurfaceSweepCompositeIsASheet(t *testing.T) {
 	t.Parallel()
@@ -284,7 +284,7 @@ func TestSurfaceSweepCompositeIsASheet(t *testing.T) {
 }
 
 // TestSurfaceSweepCompositeHoledProfileReportsDisconnectedLumps is decision A
-// (docs/surface-design.md §2.2) for the composite path: a holed profile's
+// (agent-docs/surface-design.md §2.2) for the composite path: a holed profile's
 // outer wall tube and hole wall tube touch nowhere once the two outer caps
 // that used to bridge them are gone, so Body.Lumps() must report both. The
 // solid built from the same profile and path keeps its one lump.

@@ -538,7 +538,7 @@ func edgeProductRows() []edgeProductRow {
 // answer's own obligation is exactly eA·max(|wLo−vLo|,|wHi−vHi|) and an
 // understated eBBase puts the answer BELOW it — the unsound direction, since
 // the loft's per-cell wall leg multiplies this reading by the cell's own
-// matched departure (docs/loft-gear-bounds-design.md §2). The comparison is over exact rationals in SQUARED form (the
+// matched departure (agent-docs/loft-gear-bounds-design.md §2). The comparison is over exact rationals in SQUARED form (the
 // norms are irrational, their squares exactly rational), never against a
 // float reference that shares the defect.
 func TestCellChordCurveAreaUpperEnclosesTheExactEdgeProduct(t *testing.T) {
@@ -735,7 +735,7 @@ func ratUnitCirclePoints(ts []int64) [][2]*big.Rat {
 // third subtest reads that ceiling back off tessellation.ChordCount itself.
 //
 // tessellation.ChordSagitta publishes a PROVEN UPPER bound (sin(x) <= x,
-// docs/tessellation-design.md Sec 3) rather than the tight closed form, so
+// agent-docs/tessellation-design.md Sec 3) rather than the tight closed form, so
 // what a circular cell carries is not the arc's exact matched-parameter
 // deviation; it still encloses it,
 // which the fourth subtest pins. That a circular cell's matchedDelta IS that

@@ -126,7 +126,7 @@ type (
 // plane of the other, its foot strictly inside that face, at its exact
 // height; and an exact planar pair apart by at most the band is ContactBand
 // with Gap [0 ± g], g its gap's upper end, publishing that set
-// (docs/multibody-dynamics-design.md §10.5).
+// (agent-docs/multibody-dynamics-design.md §10.5).
 // At identity query poses, the analytic clearance kernel can prove relations
 // for other solids. Only its ruling touches publish a manifold: the two ends
 // of a full source cylinder's ruling on a planar face or another cylinder.

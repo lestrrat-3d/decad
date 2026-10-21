@@ -212,7 +212,7 @@ func DecodeSweep(opts []SweepOption, segments int) (SweepConfig, error) {
 		return SweepConfig{}, fmt.Errorf(`%w: nonzero twist does not combine with a sheet, mitred joins, or section scale`, decaderr.ErrUnsupported)
 	}
 	if cfg.SurfaceResult && (cfg.Mitred || cfg.Scaled) {
-		return SweepConfig{}, fmt.Errorf(`%w: a mitred or scaled sweep builds a solid only; WithSurfaceResult is not implemented for it (docs/sweep-design.md Table SM row SM9)`, decaderr.ErrUnsupported)
+		return SweepConfig{}, fmt.Errorf(`%w: a mitred or scaled sweep builds a solid only; WithSurfaceResult is not implemented for it (agent-docs/sweep-design.md Table SM row SM9)`, decaderr.ErrUnsupported)
 	}
 	return cfg, nil
 }

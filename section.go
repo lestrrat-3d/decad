@@ -34,7 +34,7 @@ import (
 // bounded result enters only straight solid Extrude with an independent Distance.
 // Other body or plane classes return [ErrUnsupported]. A nil body or context,
 // or an invalid plane, returns [ErrDegenerate]. A sheet or unsound solid returns
-// [ErrNotSolid]. See docs/section-design.md.
+// [ErrNotSolid]. See agent-docs/section-design.md.
 func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*sketch.Profile, error) {
 	if b == nil || ctx == nil || !plane.IsValid() {
 		return nil, nil, fmt.Errorf(`%w: a section needs a body, context and valid plane`, ErrDegenerate)

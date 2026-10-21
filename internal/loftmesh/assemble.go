@@ -150,7 +150,7 @@ func Assemble(ctx context.Context, pairs []LoopPair, f0, f1 r3.Frame, plane0 sec
 		}
 	}
 
-	// docs/loft-design.md §5.2's delta row: the station's own rounding, the
+	// agent-docs/loft-design.md §5.2's delta row: the station's own rounding, the
 	// frame lift's, and the placement's, three stages committed one after
 	// the other, so a vertex's total departure is at most their sum.
 	liftAllow := max(FrameLiftRoundAllow(f0, maxLocal0), FrameLiftRoundAllow(f1, maxLocal1))
@@ -177,7 +177,7 @@ func Assemble(ctx context.Context, pairs []LoopPair, f0, f1 r3.Frame, plane0 sec
 
 // FrameLiftRoundAllow bounds the rounding Frame.ToWorldUV commits lifting one
 // plane-local station of magnitude at most maxLocalAbs through frame
-// (docs/loft-design.md §5.2's liftAllow row). The point a station denotes is
+// (agent-docs/loft-design.md §5.2's liftAllow row). The point a station denotes is
 // origin + u·U + v·V over exact rationals, and the held lift rounds two
 // products and two sums per coordinate, every intermediate under
 // |origin| + 2·maxLocalAbs. That is proofbound.RigidRoundAllow's own

@@ -21,7 +21,7 @@ import (
 )
 
 // Run verifies bodies, which the caller lists in document order, and returns
-// the report over their topology nodes (docs/verification-design.md). The
+// the report over their topology nodes (agent-docs/verification-design.md). The
 // caller owns the options and the document; Run reads only the nodes.
 func Run(ctx context.Context, h Hooks, bodies []*topo.Body, cfg verifyConfig) (*Report, error) {
 	// The effective request is recorded once per call, even for an empty
@@ -72,7 +72,7 @@ func Run(ctx context.Context, h Hooks, bodies []*topo.Body, cfg verifyConfig) (*
 	// Interference row. Expected empty, contact, staging, or coarse outcomes
 	// stay Suspect and name themselves in the slice; invariant failures
 	// return from Verify. A pair holding a sheet operand takes none of this —
-	// see proveVerifyPair (internal/verifyrun/pairs.go) and docs/surface-design.md §9.3.
+	// see proveVerifyPair (internal/verifyrun/pairs.go) and agent-docs/surface-design.md §9.3.
 	// The pairs box separation does not finish are proven on a bounded
 	// worker pool and folded back in pair order.
 	jobs, err := verifyPairJobs(ctx, pairBodies, cfg)
@@ -199,7 +199,7 @@ func verifyBody(ctx context.Context, b *topo.Body, cfg verifyConfig, req vocab.V
 	// The held boundary's structural audit. A topo.BodySolid runs
 	// boundaryaudit.AuditSolidBoundary: every edge bounds exactly two faces,
 	// every face carries at least one loop of at least one edge. A topo.BodySheet
-	// runs AuditSheetBoundary instead (docs/surface-design.md §9.1). This evaluator's boundary is exact, so a
+	// runs AuditSheetBoundary instead (agent-docs/surface-design.md §9.1). This evaluator's boundary is exact, so a
 	// defect is proven — Unsound — and a clean audit on a feature-built body
 	// is proven validity. PublishValidityResult (internal/verifyrun/publish.go) maps the
 	// evidence onto ValidityResult and carries the one diagnostic that
@@ -261,7 +261,7 @@ func verifyBody(ctx context.Context, b *topo.Body, cfg verifyConfig, req vocab.V
 	surveysAsked := cfg.Wall != nil || cfg.Pull != nil || cfg.ConcaveRadius
 	// surveysRunnable widens haveRegion by exactly one case: a proven sheet
 	// with a pull requested. The undercut survey answers over a sheet's own
-	// walls (docs/surface-design.md §2.3, §9.1), and runSurveys itself
+	// walls (agent-docs/surface-design.md §2.3, §9.1), and runSurveys itself
 	// gates the wall and concave-radius blocks back down to a solid, so
 	// admitting a sheet here never lets those two surveys run on one.
 	surveysRunnable := haveRegion ||
@@ -294,7 +294,7 @@ func verifyBody(ctx context.Context, b *topo.Body, cfg verifyConfig, req vocab.V
 	case validity.Outcome == vocab.ValidityValid && surveysAsked:
 		// surveysRunnable is false here only because the body is a proven
 		// sheet that asked no pull — a wall and/or concave-radius question
-		// with no material to be about (docs/surface-design.md §9.1).
+		// with no material to be about (agent-docs/surface-design.md §9.1).
 		// runSurveys never runs; verifypublish.PublishWall and
 		// PublishRadius each publish Unavailable plus their own
 		// DiagSurveyPrerequisite from validity and kind alone, so this
@@ -403,7 +403,7 @@ func aggregateStatus(r *Report, undecided bool) vocab.Status {
 		return vocab.Interfering
 	}
 	// A sheet proven to cross a solid's boundary (DiagSheetSolidCrossing,
-	// docs/surface-design.md §9.3) contributes the Interfering rung with no
+	// agent-docs/surface-design.md §9.3) contributes the Interfering rung with no
 	// Interference row at all: a sheet encloses no region, so there is no
 	// overlap volume to report. The scan keeps the invariant that the
 	// report's Status is the worst Diagnostic.Status in the slice even for

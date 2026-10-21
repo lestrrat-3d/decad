@@ -50,7 +50,7 @@ func PiScalar() proofbound.BoundedScalar {
 func CircleRadius(length, lengthBound float64, lengthUnbounded bool) (proofbound.BoundedScalar, error) {
 	if lengthUnbounded {
 		return proofbound.BoundedScalar{}, fmt.Errorf(
-			`%w: Stitch's flux path needs a circle whose circumference this evaluator can bound (docs/surface-design.md Table R row R8)`,
+			`%w: Stitch's flux path needs a circle whose circumference this evaluator can bound (agent-docs/surface-design.md Table R row R8)`,
 			decaderr.ErrUnsupported,
 		)
 	}
@@ -116,7 +116,7 @@ func Dot(a, b r3.Vec) proofbound.BoundedScalar {
 // exactly-zero tangent, a degenerate needle no reachable wallCone ever
 // carries (internal/revolveplan/payload.go computes HalfAngle as
 // math.Atan2(|dr|, |dz|) over a wall revolveaxis.Classify named a cone, so it
-// is finite and strictly between 0 and π/2 — docs/surface-design.md's own
+// is finite and strictly between 0 and π/2 — agent-docs/surface-design.md's own
 // record of that fact). The `proofbound.IsNonFinite(tanValue)` half of this
 // check is a defensive backstop, not independently exercised: a NaN or Inf
 // HalfAngle is refused one layer up, by units.Value.In's own ErrNotFinite,
@@ -141,7 +141,7 @@ func ConeApex(halfAngle, radius units.Value, origin r3.Vec) (proofbound.BoundedS
 	tanValue := math.Tan(half)
 	if !(tanValue > 0) || proofbound.IsNonFinite(tanValue) {
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-			`%w: Stitch's flux path needs a Cone whose half-angle has a positive, finite tangent (docs/surface-design.md Table R row R8)`,
+			`%w: Stitch's flux path needs a Cone whose half-angle has a positive, finite tangent (agent-docs/surface-design.md Table R row R8)`,
 			decaderr.ErrUnsupported,
 		)
 	}
@@ -170,7 +170,7 @@ func ConeApex(halfAngle, radius units.Value, origin r3.Vec) (proofbound.BoundedS
 		// nothing builds costs no reachable fixture
 		// (TestStitchConeApexRefusesNonzeroRadius, stitch_internal_test.go).
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
-			`%w: Stitch's flux path needs a Cone whose Origin is already its own apex (Radius exactly 0); this evaluator has no sound bound for tan(HalfAngle)'s own rounding, which a nonzero Radius would need to divide by (docs/surface-design.md Table R row R8)`,
+			`%w: Stitch's flux path needs a Cone whose Origin is already its own apex (Radius exactly 0); this evaluator has no sound bound for tan(HalfAngle)'s own rounding, which a nonzero Radius would need to divide by (agent-docs/surface-design.md Table R row R8)`,
 			decaderr.ErrUnsupported,
 		)
 	}
@@ -205,14 +205,14 @@ func AxisDistanceFromApex(apexX, apexY, apexZ proofbound.BoundedScalar, axis, po
 // Cylinder/Cone arms' own route) reads a RIM EDGE's own proven
 // circumference, but SphereFaceFluxAndMoment's own scope restriction admits
 // a Sphere face only when it carries NO boundary loop at all (this file's
-// only reachable Sphere fixture — docs/surface-design.md's own T50 — mints
+// only reachable Sphere fixture — agent-docs/surface-design.md's own T50 — mints
 // no latitude circle for either of its two on-axis pole junctions,
 // internal/revolveplan/build.go's fullRevLoops), so there is no edge here to read a
 // circumference from at all, not merely one this file declines to trust.
 // The face's own area, by contrast, is ALREADY a proven reading regardless
 // of loop count: it is set at construction time from the profile's own
 // closed-form Pappus integral (internal/revolveplan/build.go's faceArea, revolvemass.WallAxisMoment),
-// the identical value docs/surface-design.md §6.4's Area-sum block already
+// the identical value agent-docs/surface-design.md §6.4's Area-sum block already
 // trusts unconditionally for every face kind. Inverting Area = 4πR² through
 // proofbound.BoundedQuotient and proofbound.BoundedSqrt is therefore a reuse of an
 // already-published, already-tested reading, never a fresh unproven one —
@@ -227,7 +227,7 @@ func SphereRadius(area, areaBound float64) (proofbound.BoundedScalar, error) {
 	rB := proofbound.BoundedSqrt(rSq)
 	if !(rB.Value > 0) {
 		return proofbound.BoundedScalar{}, fmt.Errorf(
-			`%w: Stitch's flux path needs a Sphere face with a positive radius (docs/surface-design.md Table R row R8)`,
+			`%w: Stitch's flux path needs a Sphere face with a positive radius (agent-docs/surface-design.md Table R row R8)`,
 			decaderr.ErrUnsupported,
 		)
 	}

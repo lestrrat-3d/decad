@@ -19,11 +19,11 @@ import (
 // time that Classify later compares against a returned edge's own
 // Reversed flag, never a geometric test. For an operand B whose relative map
 // is a reflection, it is read off the re-wound record BuildScene builds
-// B from (docs/general-boolean-design.md §3 A4), whose loops keep the
+// B from (agent-docs/general-boolean-design.md §3 A4), whose loops keep the
 // "outer CCW, holes CW" convention the comparison assumes.
 //
 // Region names which of the operand's regions the loop belongs to: 0 for a
-// prism, the lump index for a prism group (docs/general-boolean-design.md §3
+// prism, the lump index for a prism group (agent-docs/general-boolean-design.md §3
 // A5), whose regions enter one scene together.
 type Origin struct {
 	IsB              bool

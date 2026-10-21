@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
-// AdmitTrimPair runs S1-S7 (docs/surface-intersection-design.md §2.1) for a
+// AdmitTrimPair runs S1-S7 (agent-docs/surface-intersection-design.md §2.1) for a
 // Trim over the prism family. Every miss is ErrUnsupported at the call —
 // there is no mesh fallback for this family of operations (§2.1). A revolve
 // pair never reaches here: Trim routes it to revolveplan.AdmitTrimPair through

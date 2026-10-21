@@ -2,11 +2,11 @@
 // mesh-built body, its source groups, the source records and support types
 // that structural rewrites and copies read, and the builder that assembles a
 // Faceted body over internal/topo nodes from a held mesh, with its placement
-// (docs/evaluator-design.md §8, §9). Root facetedPayload, facetGroup and the
+// (agent-docs/evaluator-design.md §8, §9). Root facetedPayload, facetGroup and the
 // record names alias these types.
 //
 // BuildWithProof turns a stitched boolean mesh into a Faceted Body
-// (docs/evaluator-design.md §9, core §6.1): facets grouped into one Face per
+// (agent-docs/evaluator-design.md §9, core §6.1): facets grouped into one Face per
 // CONNECTED PATCH of a source analytic face — the source's origins ride onto
 // every patch of it, so provenance survives the boolean, while a source the
 // boolean cut into disconnected pieces reports each piece as the separate face

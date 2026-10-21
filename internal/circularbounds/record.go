@@ -33,7 +33,7 @@ func RecordPoint(point sectionrecord.Point2) Point2 { return Point2{U: point.U, 
 // ArcRadialResidualUpper is an upper bound on | ‖End − Center‖ − ‖Start − Center‖ |
 // for a recorded arc: how far the recorded End sits from the point the arc
 // denotes at t == 1, which lies at Start's radius and End's own angle
-// (docs/evaluator-design.md §4).
+// (agent-docs/evaluator-design.md §4).
 //
 // The bound is exact-rational throughout and never a float subtraction of two
 // square roots. |r1 − r0| is |r1² − r0²| / (r1 + r0); the numerator is the

@@ -1,4 +1,4 @@
-// Package coil holds the pure arithmetic of docs/helix-design.md: the
+// Package coil holds the pure arithmetic of agent-docs/helix-design.md: the
 // station fractions and their trig, the profile's station chain, a profile
 // station's axis coordinates, the region's axis-frame moments, the four
 // readings' closed forms, the arc wall's area bracket and the cell departure
@@ -123,7 +123,7 @@ type Moments struct {
 // RegionMoments integrates a polygon with holes given every vertex's axis
 // coordinates and its exact plane-local area. loops lists vertex indices per
 // loop, the outer loop counter-clockwise and every hole clockwise in the
-// plane (docs/sketch-seam-design.md), so each loop's shoelace sum nets a
+// plane (agent-docs/sketch-seam-design.md), so each loop's shoelace sum nets a
 // hole out with no special case. The (ζ, ρ) basis has determinant Side
 // against (u, v), so the sums are scaled by Side to come out positive.
 func RegionMoments(rho, zeta []Iv, loops [][]int, area *big.Rat, side int) Moments {
@@ -374,7 +374,7 @@ func SagUpper(rhoMax, dt *big.Rat) *big.Rat {
 	return out.Quo(out, big.NewRat(2, 1))
 }
 
-// CellDepartureUpper bounds docs/helix-design.md §5.4's analytic departure of
+// CellDepartureUpper bounds agent-docs/helix-design.md §5.4's analytic departure of
 // one wall cell: profile segment v → w, at radii rhoV and rhoW, over one
 // station step of dt turns at the given pitch. Every point of the two
 // triangles on the cell's four TRUE corners lies within the returned distance
@@ -429,7 +429,7 @@ func CellDepartureUpper(rhoV, rhoW Iv, pitch, dt *big.Rat) (*big.Rat, bool) {
 }
 
 // CellProof is one wall cell's plane-coordinate mesh-proof terms
-// (docs/helix-design.md §8.1, §8.2), each an upper bound rounded up. Every
+// (agent-docs/helix-design.md §8.1, §8.2), each an upper bound rounded up. Every
 // cell of one segment shares them: they depend on the segment's radii and
 // run and on the station step alone.
 type CellProof struct {

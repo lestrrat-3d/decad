@@ -28,8 +28,8 @@ const (
 	NearPairSeparated
 )
 
-// RefuseUndecidableProximity is the tangency gate (docs/evaluator-design.md
-// §9, docs/tessellation-design.md §11 step 4). ma and mb are the two operand
+// RefuseUndecidableProximity is the tangency gate (agent-docs/evaluator-design.md
+// §9, agent-docs/tessellation-design.md §11 step 4). ma and mb are the two operand
 // tessellations bmA and bmB were prepared from, and memo is the call's
 // contact memo over bmA and bmB.
 //
@@ -53,7 +53,7 @@ const (
 // error alone, bounded by b, cannot open a penetration deeper than b, so a bare
 // touch, a shallow meet at depth ≤ b, or a non-meeting near-miss within b proves
 // nothing and is refused (ErrUnsupported). Deciding such a pair for real is the
-// analytic clearance kernel's job (docs/clearance-design.md), not a chord's;
+// analytic clearance kernel's job (agent-docs/clearance-design.md), not a chord's;
 // loud beats silently wrong.
 //
 // The question is asked per analytic FACE pair, not per facet pair, and the
@@ -146,7 +146,7 @@ type faceFacets struct {
 
 // facesOfMesh groups a tessellation's facets by their source face, in first-
 // appearance order, and charges each face the displacement the MESH proved for
-// it: docs/tessellation-design.md §2's sourceBound(face) (topo.Mesh.FaceBound),
+// it: agent-docs/tessellation-design.md §2's sourceBound(face) (topo.Mesh.FaceBound),
 // which the tessellator composed from that face's own trim chording,
 // coordinate construction, section and axial terms. The gate never re-infers
 // a displacement from the surface kind — a planar carrier does not make a

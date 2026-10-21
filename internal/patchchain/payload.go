@@ -15,7 +15,7 @@ import (
 
 // Payload records what a PatchProfile body was built from — profile, frame and
 // placement — exactly as prismrecord.Payload does for an extrude, so Transform
-// and Copy re-evaluate it the same way (docs/evaluator-design.md §8). It is its
+// and Copy re-evaluate it the same way (agent-docs/evaluator-design.md §8). It is its
 // own type rather than a zero-height prismrecord.Payload: roughly sixteen call
 // sites across the root package type-assert the prism payload, each ok-guarded
 // or carrying a default arm, so a patch falls through to the existing refusal
@@ -37,7 +37,7 @@ func (pp Payload) Transform() r3.Transform { return pp.Xform }
 // Placed re-evaluates the same record under the composed motion (core §8). A
 // re-evaluation path: no moments preflight has run on this record within the
 // call, so the build opens the record's one free-form work counter itself
-// (docs/spline-design.md §5.2).
+// (agent-docs/spline-design.md §5.2).
 func (pp Payload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	pp.Xform = composed
 	return Build(ctx, env, pp, freeform.NewFreeformWork())
@@ -71,7 +71,7 @@ type Chain struct {
 	// AxialBound and HasAxialBound are the proven axial displacement gate 3's
 	// LEVEL arm admitted this chain under — stamped onto the new face's own
 	// AxialDelta exactly as internal/prismrecord/build.go stamps a prism cap's
-	// (docs/surface-design.md §5.2). HasAxialBound stays false, and AxialBound
+	// (agent-docs/surface-design.md §5.2). HasAxialBound stays false, and AxialBound
 	// zero, whenever gate 3 instead admitted the chain through its existing
 	// exact (zero-bound) arm.
 	AxialBound    float64
@@ -124,7 +124,7 @@ func (pp BodyPayload) Placed(ctx context.Context, env topo.Env, composed r3.Tran
 // (internal/verifypublish): the root type name this payload had before it moved.
 func (Payload) SurveyClass() string { return "patchPayload" }
 
-// ProvesSimple implements topo.SimpleProver. Rule P (docs/surface-design.md
+// ProvesSimple implements topo.SimpleProver. Rule P (agent-docs/surface-design.md
 // §6.4) is the construction-proof gate a BodyPayload earns from its own
 // receiver, letting Rule S admit the "walls, then cap, then stitch" flow §6.1
 // motivates. PatchEdges itself proves only its own chains simple in their own

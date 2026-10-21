@@ -23,7 +23,7 @@ import (
 )
 
 // evaluate runs the pair procedure at cell c's centre and classifies the
-// cell from it (docs/linkage-check-design.md §14.3, §14.4 step 4): blocked
+// cell from it (agent-docs/linkage-check-design.md §14.3, §14.4 step 4): blocked
 // when a collision there survives every configuration of the cell, else
 // colliding when some pair collides there, clear when every pair certifies
 // the cell, undecided otherwise.
@@ -61,7 +61,7 @@ func (b *boxRun[B]) evaluate(c *boxCell[B]) error {
 	}
 	var mp *motionengine.Pose
 	if c.gate != "" && poses == nil {
-		// docs/linkage-check-design.md §16.3: an unbuildable centre has no
+		// agent-docs/linkage-check-design.md §16.3: an unbuildable centre has no
 		// pose; it evaluates no pair and carries no row.
 		mp = &motionengine.Pose{
 			Cell: &c.cell, Unbuildable: errors.New(c.gate), Pairs: make([][]motionengine.PairPose, len(r.Movers)),
@@ -91,7 +91,7 @@ func (b *boxRun[B]) evaluate(c *boxCell[B]) error {
 	return nil
 }
 
-// loopCentre reads a looped linkage's cell (docs/linkage-check-design.md
+// loopCentre reads a looped linkage's cell (agent-docs/linkage-check-design.md
 // §16.2, §16.3): the centre's pose, each dependent at its enclosure's float
 // midpoint and its ideal pose over the whole enclosure M_j, then per loop the
 // hull H_j of each dependent over the cell's loop-axis range, δ_j =
@@ -155,7 +155,7 @@ func (b *boxRun[B]) loopCentre(c *boxCell[B]) (loopPose, error) {
 }
 
 // classify sets a cell's outcome from its evaluated centre. A gated cell
-// (docs/linkage-check-design.md §16.3) is never CellClear or CellBlocked: it
+// (agent-docs/linkage-check-design.md §16.3) is never CellClear or CellBlocked: it
 // is CellColliding when its centre collides and CellUndecided otherwise.
 func (b *boxRun[B]) classify(c *boxCell[B]) {
 	r := b.run
@@ -195,7 +195,7 @@ func (b *boxRun[B]) classify(c *boxCell[B]) {
 		if !pp.HasGap {
 			return nil
 		}
-		// docs/linkage-check-design.md §14.3: the pair's bound over the cell is
+		// agent-docs/linkage-check-design.md §14.3: the pair's bound over the cell is
 		// the larger of the travel bound lo_m − τ_half and the projection
 		// bound L_n(C), two proven lower bounds on one gap.
 		lo := proofarith.FloatRat(pp.Lo)
@@ -230,7 +230,7 @@ func (b *boxRun[B]) classify(c *boxCell[B]) {
 	}
 }
 
-// cellProjection is docs/linkage-check-design.md §5.8's cell form for pair k
+// cellProjection is agent-docs/linkage-check-design.md §5.8's cell form for pair k
 // of mover i over cell c (§14.3): each body's inflated box read at the
 // centre's ideal poses under the joints on its relative path — the joints
 // strictly below a link-link pair's lowest common ancestor, less a symmetric
@@ -394,9 +394,9 @@ func (b *boxRun[B]) pairTerms(c *boxCell[B], i, k int) []linkagebound.JointTerm 
 // branchTerms is pairTerms split by Body: the terms that move mover i's own
 // body, and those that move its partner's — none for a static partner. A
 // body symmetric about its own joint's axis takes its path without that
-// joint (linkageDriver.pathOf, docs/linkage-check-design.md §5.2).
+// joint (linkageDriver.pathOf, agent-docs/linkage-check-design.md §5.2).
 //
-// A loop's dependent joint j (docs/linkage-check-design.md §16.3) moves at
+// A loop's dependent joint j (agent-docs/linkage-check-design.md §16.3) moves at
 // most δ_j from its exact value at the centre to its value anywhere in the
 // cell, the whole one-sided distance and not half the hull, so its share is
 // 2·w_j·δ_j — twice its part of τ_half, as a stated joint's w_i·span_i is —
@@ -405,7 +405,7 @@ func (b *boxRun[B]) pairTerms(c *boxCell[B], i, k int) []linkagebound.JointTerm 
 func (b *boxRun[B]) branchTerms(c *boxCell[B], i, k int) (mine, theirs []linkagebound.JointTerm) {
 	r, dr := b.run, b.dr
 	if r.Pairs[i][k].Once != nil {
-		// A constant pair (docs/linkage-check-design.md §5.9) moves nothing
+		// A constant pair (agent-docs/linkage-check-design.md §5.9) moves nothing
 		// relative to its Partner: no joint carries a term.
 		return nil, nil
 	}
@@ -425,7 +425,7 @@ func (b *boxRun[B]) branchTerms(c *boxCell[B], i, k int) (mine, theirs []linkage
 		linkagebound.TermsOnPath(dr.pathOf(other, below), below, span)
 }
 
-// halfTravel is τ_half(C) of docs/linkage-check-design.md §14.3 for pair k of
+// halfTravel is τ_half(C) of agent-docs/linkage-check-design.md §14.3 for pair k of
 // mover i: half the sum of its joint terms, a proven upper bound on how far
 // the pair's distance changes from the cell's centre to any configuration of
 // the cell, since no joint lies farther than half its span from the centre.
@@ -435,7 +435,7 @@ func (b *boxRun[B]) halfTravel(c *boxCell[B], i, k int) *big.Rat {
 
 // blocks reports whether pair k of mover i, which collides at cell c's centre
 // with the published volume, overlaps at every configuration of the cell
-// (docs/linkage-check-design.md §14.3, the blocked certificate). Along the
+// (agent-docs/linkage-check-design.md §14.3, the blocked certificate). Along the
 // straight joint-space segment from the centre to any configuration of the
 // cell a body moves at most its own τ_half, and the overlap volume changes at
 // a rate no larger than each body's surface area times its speed, so it loses
@@ -462,7 +462,7 @@ func (b *boxRun[B]) blocks(c *boxCell[B], i, k int, volume vocab.Measurement) bo
 	return proofarith.FloatRat(lower).Cmp(proofarith.FloatRat(allow)) > 0
 }
 
-// splitAxis is the joint a cell splits along (docs/linkage-check-design.md
+// splitAxis is the joint a cell splits along (agent-docs/linkage-check-design.md
 // §14.4 step 5), or −1 when the cell is not splittable: a cell splits only
 // when it is undecided by pairs a split can help, or colliding, and some
 // varying joint's span is wider than the resolution. The axis is the varying
@@ -471,7 +471,7 @@ func (b *boxRun[B]) blocks(c *boxCell[B], i, k int, volume vocab.Measurement) bo
 // of its travel bound, or its projection bound's own share where that bound
 // is the larger (boundShares) — ties to the earliest link.
 //
-// A gated cell (docs/linkage-check-design.md §16.4) has no pair travel to
+// A gated cell (agent-docs/linkage-check-design.md §16.4) has no pair travel to
 // rank: it splits along the refusing loop's driver, the one axis a split
 // changes, while that axis is wider than the resolution and its range meets
 // some stretch the decomposition certified; otherwise it is stuck.
@@ -534,7 +534,7 @@ func (c *boxCell[B]) configuration() JointConfiguration {
 	return conf
 }
 
-// publish assembles VerifyJointBox's report (docs/linkage-check-design.md
+// publish assembles VerifyJointBox's report (agent-docs/linkage-check-design.md
 // §14.2, §14.4 step 8).
 func (b *boxRun[B]) publish(l *Linkage[B], box JointBox[B]) *JointBoxReport[B] {
 	r := b.run
@@ -686,7 +686,7 @@ func formatCell(c vocab.JointCell) string {
 }
 
 // errLoopNotStated is the refusal of a looped linkage where every joint's
-// value is the caller's to state (docs/linkage-check-design.md §16.1).
+// value is the caller's to state (agent-docs/linkage-check-design.md §16.1).
 func errLoopNotStated() error {
 	return fmt.Errorf(`%w: a linkage with a closed loop has dependent joints whose values follow from its driver, so it cannot be posed joint by joint; pose a drive whose every sweep holds instead`, decaderr.ErrUnsupported)
 }

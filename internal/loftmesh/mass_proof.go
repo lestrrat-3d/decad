@@ -6,7 +6,7 @@ import "github.com/lestrrat-3d/decad/internal/proofbound"
 // It is composed once from the same triangle set and mass sums as the body.
 type MeshProof struct {
 	// FacetDeparture bounds both directions between a held facet and its
-	// parameter-matched true wall patch; see docs/loft-design.md §5.2.
+	// parameter-matched true wall patch; see agent-docs/loft-design.md §5.2.
 	FacetDeparture float64
 	// AreaSlack bounds the difference between held and true surface areas.
 	AreaSlack float64

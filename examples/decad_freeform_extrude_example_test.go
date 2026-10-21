@@ -24,7 +24,7 @@ import (
 // deviation the mesh took, chording included.
 //
 // A free-form curve must still meet its neighbours at shared endpoints, never
-// by crossing (docs/spline-design.md §2.1) — a caller cannot guess that from
+// by crossing (agent-docs/spline-design.md §2.1) — a caller cannot guess that from
 // the error alone, so join the endpoints in the sketch when a profile is
 // rejected as ErrUnrecordableProfile.
 func Example_decad_freeformExtrude() {

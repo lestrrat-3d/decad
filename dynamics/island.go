@@ -14,7 +14,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file forms islands (docs/multibody-dynamics-design.md §6.1), corrects
+// This file forms islands (agent-docs/multibody-dynamics-design.md §6.1), corrects
 // their positions (§6.6) and publishes their events for the step.
 
 // IslandReport is one simultaneous solve: the bodies and pairs that shared
@@ -517,7 +517,7 @@ func (w *World) solveIslands(ctx context.Context, in eventIslands,
 }
 
 // silentIsland reports whether a solved island changes nothing and so
-// publishes nothing (docs/multibody-dynamics-design.md §6.1): every point's
+// publishes nothing (agent-docs/multibody-dynamics-design.md §6.1): every point's
 // enclosed pre-solve normal speed lies within VelocityResidual of zero, every
 // normal and tangent impulse is exactly zero, and every dynamic body keeps
 // its exact pre-solve velocities. Its pairs join the contact set under
@@ -549,7 +549,7 @@ func (w *World) silentIsland(isl island, solution islandSolution, in eventIsland
 }
 
 // continuations completes §5.2's policies for the pairs whose continuation
-// the relation at their post-event poses decides (docs/multibody-dynamics-design.md
+// the relation at their post-event poses decides (agent-docs/multibody-dynamics-design.md
 // §10.7). A pair standing inside a ContactBand within PenetrationResidual is a
 // contact for the step, and a band track over its support set is the only
 // certificate that carries it, so:

@@ -20,7 +20,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// RolePatch is a Patch face's own Origin() role (docs/surface-design.md §5).
+// RolePatch is a Patch face's own Origin() role (agent-docs/surface-design.md §5).
 const RolePatch = "patch"
 
 // Build builds the patch body from the payload: one planar face carrying one
@@ -77,7 +77,7 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	}
 
 	// The positive side is the sketch plane's own normal — the sense
-	// Direction.Along names for that plane (docs/surface-design.md §5.1) —
+	// Direction.Along names for that plane (agent-docs/surface-design.md §5.1) —
 	// so the face's frame is Payload.CapFrame at zero height with no flip, unlike a
 	// prism's start cap.
 	frame, err := prismView.CapFrame(0, false)
@@ -114,7 +114,7 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	// volume and centroid stay at their zero value: finite, so
 	// topobuild.ValidateAnalyticMeasurements below passes, and neither is
 	// reachable through Body.Volume/Body.Centroid while solid is false
-	// (docs/surface-design.md §8).
+	// (agent-docs/surface-design.md §8).
 	bounds, err := prismrecord.Bounds(ctx, prismView, work, pw)
 	if err != nil {
 		return nil, err

@@ -41,7 +41,7 @@ func WithThickenSide(side ThickenSide) ThickenOption { return thickenSideOption{
 // sweep sheet uses its prism or revolve reduction and restores sweep roles.
 // A one-arc chain sweep uses its chain Revolve reduction; a cardinal composite
 // chain sweep assembles one section and sweeps both spans.
-// Other sheet families are staged under docs/surface-design.md §16.8.
+// Other sheet families are staged under agent-docs/surface-design.md §16.8.
 func Thicken(ctx context.Context, b *Body, thickness units.Value, opts ...ThickenOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a thicken`, ErrDegenerate)

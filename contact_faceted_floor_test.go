@@ -134,7 +134,7 @@ func TestSweepPairBoundedFacetedFloorStrictClearReplay(t *testing.T) {
 			Y: units.RadiansPerSecond(0), Z: units.RadiansPerSecond(1)},
 		Duration: units.Seconds(1)}
 	// The placed union is also an exact planar solid, so the spin takes the
-	// general rotating sweep (docs/multibody-dynamics-design.md §10.1), which
+	// general rotating sweep (agent-docs/multibody-dynamics-design.md §10.1), which
 	// certifies the clear path but keeps no replay proof.
 	rotating, err := doc.SweepPair(t.Context(), floor, placed, still, rotation, req)
 	require.NoError(t, err)

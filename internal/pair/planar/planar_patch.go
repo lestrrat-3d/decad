@@ -7,7 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proof"
 )
 
-// This file is the exact 2D half of docs/multibody-dynamics-design.md §9.4:
+// This file is the exact 2D half of agent-docs/multibody-dynamics-design.md §9.4:
 // the plane frame a coplanar face pair is clipped in, Sutherland–Hodgman
 // clipping against a convex polygon, and the exact pieces of a segment inside
 // a polygon region. Every coordinate is a big.Rat; nothing here rounds.

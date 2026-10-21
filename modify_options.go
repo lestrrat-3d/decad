@@ -81,7 +81,7 @@ func decodeShellOptions(opts []ShellOption) (modifyoption.ShellConfig, error) {
 type asymmetricChamferOpts = modifyoption.Asymmetric[*FaceQuery]
 
 // WithTangentChain expands each selected seed edge across the edges that
-// continue it with proven G1 continuity (docs/modify-reach-design.md §5): an
+// continue it with proven G1 continuity (agent-docs/modify-reach-design.md §5): an
 // edge leaving the seed's endpoint along the exactly opposite tangent ray,
 // whose two adjacent faces have the same outward normals there as the
 // seed's. The expansion repeats from every edge it adds. The seed query's
@@ -95,7 +95,7 @@ func WithTangentChain() FilletChamferOption {
 
 // WithAsymmetricChamfer sets back the chamfer's positional distance across
 // reference and otherDistance across the other face adjacent to each selected
-// edge (docs/modify-reach-design.md §6). The option copies reference when it
+// edge (agent-docs/modify-reach-design.md §6). The option copies reference when it
 // is called, so a later change to the caller's query does not reach the
 // chamfer. reference resolves against the receiver after tangent expansion,
 // and every chamfered edge must have exactly one adjacent face in it, and
@@ -124,7 +124,7 @@ func WithAsymmetricChamfer(reference FaceSelector, otherDistance units.Value) Ch
 }
 
 // WithNoOpenings asks Shell to keep every face and build a closed hollow body
-// (docs/modify-reach-design.md §9.2). It is the only call form in which Shell
+// (agent-docs/modify-reach-design.md §9.2). It is the only call form in which Shell
 // accepts a nil face selector, and a non-nil selector beside it is
 // ErrDegenerate. No receiver builds a closed shell yet: Shell returns
 // ErrUnsupported for every receiver it accepts the option on.
@@ -134,7 +134,7 @@ func WithNoOpenings() ShellOption {
 
 // resolveAsymmetricReference is stage 3 of the reach gate order: it resolves
 // the asymmetric chamfer's reference against the receiver and pairs every
-// expanded edge with its one reference face (docs/modify-reach-design.md §6,
+// expanded edge with its one reference face (agent-docs/modify-reach-design.md §6,
 // SX3). A nil reference is errNilSelector and a foreign one ErrDegenerate,
 // the selector errors the seed query takes. An edge with no adjacent face in
 // the resolved set, or with both, and a resolved face adjacent to no

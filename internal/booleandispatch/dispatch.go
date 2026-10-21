@@ -1,5 +1,5 @@
 // Package booleandispatch routes one Boolean to the first route that admits
-// the operand pair, over topology nodes (docs/evaluator-design.md §9). Root
+// the operand pair, over topology nodes (agent-docs/evaluator-design.md §9). Root
 // supplies what only root can: the operand mesher, the typed-error mapping and
 // the routes that read public handles.
 package booleandispatch
@@ -116,7 +116,7 @@ func Body(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *to
 	} else if ok {
 		return n, nil
 	}
-	// Table X (docs/surface-design.md §11): a sheet operand in either position
+	// Table X (agent-docs/surface-design.md §11): a sheet operand in either position
 	// is a plain decaderr.ErrUnsupported, never a BooleanError — without this a sheet
 	// falls through to prismboolean.Try below, which type-asserts prismPayload
 	// and a sheet still carries one, producing a confidently-wrong solid.
@@ -134,7 +134,7 @@ func Body(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *to
 	} else if ok {
 		return prismboolean.AnalyticBody(ctx, env, pp)
 	}
-	// docs/prism-boolean-design.md: a reject-only analytic reduction for a
+	// agent-docs/prism-boolean-design.md: a reject-only analytic reduction for a
 	// co-directional coplanar prism pair, dispatched ahead of the mesh path
 	// for Union's select-all/merge/chain path (§4.2) and Cut/Intersect's
 	// clean-nesting structural match (§4.2). ok=false is never an error —
@@ -169,7 +169,7 @@ func Body(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *to
 		} else if ok {
 			return prismboolean.AnalyticBody(ctx, env, payload)
 		}
-		// docs/general-boolean-design.md §3 A1: unequal sweep intervals that
+		// agent-docs/general-boolean-design.md §3 A1: unequal sweep intervals that
 		// overlap or touch build a stacked prism, or a brep where an
 		// interface is flush or crossing. Same contract as above.
 		if payload, ok, err := prismboolean.TryStackedUnion(ctx, a.Payload, b.Payload); err != nil {
@@ -187,7 +187,7 @@ func Body(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *to
 			}
 			return body, nil
 		}
-		// docs/general-boolean-design.md §3 A5: a prism-group operand, or
+		// agent-docs/general-boolean-design.md §3 A5: a prism-group operand, or
 		// survivors that close into several disjoint loops.
 		if payload, ok, err := prismboolean.TryGroupUnion(ctx, a.Payload, b.Payload); err != nil {
 			if errors.Is(err, decaderr.ErrUnsupported) {
@@ -254,7 +254,7 @@ func Body(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *to
 			}
 			return body, nil
 		}
-		// docs/general-boolean-design.md §3 A5: a prism-group tool.
+		// agent-docs/general-boolean-design.md §3 A5: a prism-group tool.
 		if pp, ok, err := prismboolean.TryGroupCut(ctx, a.Payload, b.Payload); err != nil {
 			if errors.Is(err, decaderr.ErrUnsupported) {
 				return nil, hooks.AsBooleanError(op, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err))
@@ -264,7 +264,7 @@ func Body(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *to
 			return prismboolean.AnalyticBody(ctx, env, pp)
 		}
 	}
-	// docs/general-boolean-design.md §3 class B: a perpendicular pair with a
+	// agent-docs/general-boolean-design.md §3 class B: a perpendicular pair with a
 	// prism, stacked or brep operand builds a brep body (or, for Intersect, a
 	// prism). Same contract as above.
 	if payload, ok, err := classB(ctx, op, a, b); err != nil {
@@ -324,10 +324,10 @@ func Body(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *to
 }
 
 // refuseSheetOperand reports ErrUnsupported when b is a sheet, for an operation
-// docs/surface-design.md Table X does not admit a sheet to.
+// agent-docs/surface-design.md Table X does not admit a sheet to.
 func refuseSheetOperand(b *topo.Body, operation string) error {
 	if b != nil && b.Kind == topo.BodySheet {
-		return fmt.Errorf(`%w: %s does not accept a sheet body (docs/surface-design.md Table X)`, decaderr.ErrUnsupported, operation)
+		return fmt.Errorf(`%w: %s does not accept a sheet body (agent-docs/surface-design.md Table X)`, decaderr.ErrUnsupported, operation)
 	}
 	return nil
 }
@@ -363,7 +363,7 @@ func commonAxisRevolve(ctx context.Context, op meshbool.OperationKind, env topo.
 }
 
 // AnalyticIntersect is the read-only twin of Body's analytic dispatch for
-// Intersect (docs/prism-boolean-design.md §14 PR4; docs/interference-design.md
+// Intersect (agent-docs/prism-boolean-design.md §14 PR4; agent-docs/interference-design.md
 // §5.2, §12): it runs the same admission and resolution, writes nothing to the
 // document and consumes neither operand. ok=false (err nil) means the pair is
 // not admitted by the analytic path and the caller falls back to the mesh

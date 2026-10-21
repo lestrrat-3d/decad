@@ -64,7 +64,7 @@ func endsOfWalk(segment CurveSegment, walk survey2d.SegmentWalk) segmentEnds {
 
 // chargeLoopJunctions charges every junction of one recorded loop at which
 // the walk ending there and the walk starting there need not denote the same
-// point (docs/evaluator-design.md §4). A cut bound is one such place: each
+// point (agent-docs/evaluator-design.md §4). A cut bound is one such place: each
 // side denotes its own entity at its own recorded parameter, and neither
 // parameter is the exact crossing, so the two denoted points differ by the
 // cut parameters' own error. The region a loop denotes is the one its
@@ -166,7 +166,7 @@ const cornerReach = 1024
 
 // lineCorner is the exact crossing of the two supporting lines of a junction
 // between two line fragments, p the end of prev and q the start of next, each
-// the exact point its record denotes (docs/evaluator-design.md §4). It is
+// the exact point its record denotes (agent-docs/evaluator-design.md §4). It is
 // stated over exact rationals from the recorded endpoints, so a T-junction —
 // one line ending on another — closes at the same exact crossing as two
 // fragments cut at it. It reports false where either segment is not a line,

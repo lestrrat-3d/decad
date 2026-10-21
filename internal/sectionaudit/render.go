@@ -1,6 +1,6 @@
 package sectionaudit
 
-// The §5 audit of a fillet's rewritten section (docs/modify-design.md §5)
+// The §5 audit of a fillet's rewritten section (agent-docs/modify-design.md §5)
 // runs before any face is built, in the order §4 fixes: S8 (orientation,
 // asked first), S6 (no walk
 // consumed by its own corners), S7 (no crossing or boundary contact), then S9

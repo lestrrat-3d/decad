@@ -11,7 +11,7 @@ import (
 
 // MirrorPlane is what a body may be mirrored across: a [MirrorFrame] the
 // caller builds, or a [MirrorFace] naming a planar face of a body. The set is
-// sealed (docs/mirror-pattern-design.md §4.1).
+// sealed (agent-docs/mirror-pattern-design.md §4.1).
 type MirrorPlane interface{ mirrorPlane() }
 
 // MirrorFrame mirrors across the plane through Frame's origin spanned by its
@@ -55,7 +55,7 @@ var errNilMirrorPlane = fmt.Errorf(`%w: nil mirror plane`, ErrDegenerate)
 
 // Mirrored returns a new body carrying b's mirror image across plane,
 // retiring b. It calls [Transform] under r3.Reflection of the
-// resolved plane (docs/mirror-pattern-design.md §4.2): the reflection is
+// resolved plane (agent-docs/mirror-pattern-design.md §4.2): the reflection is
 // carried in the body's accumulated placement, and every reading — volume,
 // centroid, outward normals, tessellation winding, export — follows it.
 //
@@ -173,7 +173,7 @@ func (d *Document) resolveMirrorFace(mf MirrorFace) (r3.Frame, error) {
 	pl, ok := face.n.Surface.(surfacegeom.Plane)
 	// A retained tag with a stated normal bound is a stand-in for the
 	// operand's plane, not an exact mirror plane
-	// (docs/faceted-source-retention-design.md §4).
+	// (agent-docs/faceted-source-retention-design.md §4).
 	ok = ok && (!face.n.RetainedTag || face.n.NormalBound == 0)
 	switch {
 	case ok:

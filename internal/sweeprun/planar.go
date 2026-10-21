@@ -27,7 +27,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the general rotating sweep of docs/multibody-dynamics-design.md
+// This file is the general rotating sweep of agent-docs/multibody-dynamics-design.md
 // §10.1: rotationalPairSweep's search, travel bound and pose deviation run
 // over the exact vertex set of two §9 planar bodies instead of eight source-box
 // corners. Each sample's relation and gap come from ContactPair's exact planar

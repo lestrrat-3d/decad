@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md's T180, T182 and T183:
-// docs/surface-intersection-design.md's PR4, Trim and Extend over
+// This file is agent-docs/surface-design.md's T180, T182 and T183:
+// agent-docs/surface-intersection-design.md's PR4, Trim and Extend over
 // the revolve family. Every fixture spins its meridian about the sketch
 // plane's own v axis, so the two operands resolve one frame and one axis and
 // S4 reads them equal on the stored floats.
@@ -28,7 +28,7 @@ func trimRevolveAxis() decad.SketchLine {
 
 // trimRevolveRing spins the axis-aligned rectangle meridian (u0,v0)-(u1,v1) a
 // full turn about that axis. surface selects the sheet — a full turn mints no
-// cap to omit, so WithSurfaceResult returns a CLOSED sheet (docs/surface-design.md
+// cap to omit, so WithSurfaceResult returns a CLOSED sheet (agent-docs/surface-design.md
 // §2.1's closed-sheet rule) — and its absence the solid.
 func trimRevolveRing(t *testing.T, doc *decad.Document, u0, v0, u1, v1 float64, surface bool) *decad.Body {
 	t.Helper()
@@ -283,7 +283,7 @@ func extendRevolveRibbon(t *testing.T, doc *decad.Document, a decad.AngularExten
 // extendRevolveFreeRim returns a full-turn revolve ribbon's two free latitude
 // circles and the index of the one standing at axial level v. The meridian's
 // two free ends sweep exactly those two circles under a full revolution
-// (docs/surface-design.md Table G), so naming one names a meridian end.
+// (agent-docs/surface-design.md Table G), so naming one names a meridian end.
 func extendRevolveFreeRim(t *testing.T, b *decad.Body, v float64) ([]*decad.Edge, int) {
 	t.Helper()
 	edges, err := decad.Edges(decad.Free()).Exactly(2).SelectEdges(b)

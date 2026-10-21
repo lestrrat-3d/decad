@@ -12,7 +12,7 @@ import (
 )
 
 // These tests drive the Coulomb rows of the island solver
-// (docs/multibody-dynamics-design.md §6.2–§6.4, §13 PR 5) through the real
+// (agent-docs/multibody-dynamics-design.md §6.2–§6.4, §13 PR 5) through the real
 // producers in a world of four bodies.
 
 // frictionSlideScene is the four-corner Coulomb slide of
@@ -304,7 +304,7 @@ func TestIslandFrictionStackSlipsOverASticker(t *testing.T) {
 	require.Equal(t, decad.ContactTouching, contact.Relation)
 }
 
-// Gates and legs of the Coulomb rows (docs/multibody-dynamics-design.md
+// Gates and legs of the Coulomb rows (agent-docs/multibody-dynamics-design.md
 // §6.3), each shown to fail by deleting it in island_certify.go, watching
 // the named test go red, and restoring it:
 //   - cone: TestIslandFrictionCertificateGates/"cone";

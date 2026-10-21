@@ -47,33 +47,33 @@ type profileRecord = momentinput.Profile
 
 // prismPayload is the evaluator's own record of a straight extrude: the
 // internal/prismrecord payload, which prismrecord.Build evaluates over
-// topology nodes and which implements topo.Payload (docs/evaluator-design.md
+// topology nodes and which implements topo.Payload (agent-docs/evaluator-design.md
 // §5, §8).
 type prismPayload = prismrecord.Payload
 
 // stackedPrismPayload is the evaluator's own record of a stacked prism: the
 // internal/stackedrecord payload, which stackedrecord.Build evaluates over
 // topology nodes and which implements topo.Payload
-// (docs/stacked-prism-design.md, docs/evaluator-design.md §8).
+// (agent-docs/stacked-prism-design.md, agent-docs/evaluator-design.md §8).
 type stackedPrismPayload = stackedrecord.Payload
 
 // chainPayload is chain Extrude's own record of a ribbon body: the
 // internal/chainrecord payload, which chainrecord.Build evaluates over
 // topology nodes and which implements topo.Payload
-// (docs/surface-design.md §13.4, docs/evaluator-design.md §8).
+// (agent-docs/surface-design.md §13.4, agent-docs/evaluator-design.md §8).
 type chainPayload = chainrecord.Payload
 
 // patchPayload is the evaluator's own record of a PatchProfile body: the
 // internal/patchchain payload, which patchchain.Build evaluates over topology
-// nodes and which implements topo.Payload (docs/surface-design.md §5,
-// docs/evaluator-design.md §8).
+// nodes and which implements topo.Payload (agent-docs/surface-design.md §5,
+// agent-docs/evaluator-design.md §8).
 type patchPayload = patchchain.Payload
 
 // revolvePayload is the evaluator's own record of a revolved body, and
 // chainRevolvePayload chain Revolve's record of a shell: the
 // internal/revolveplan payloads, which revolveplan.Build and
 // revolveplan.BuildChain evaluate over topology nodes and which implement
-// topo.Payload (docs/evaluator-design.md §6, §8; docs/surface-design.md §13.4).
+// topo.Payload (agent-docs/evaluator-design.md §6, §8; agent-docs/surface-design.md §13.4).
 type (
 	revolvePayload      = revolveplan.Payload
 	chainRevolvePayload = revolveplan.ChainPayload
@@ -81,21 +81,21 @@ type (
 
 // coilPayload is the evaluator's record of a coil: the internal/coilshell
 // payload, which coilshell.BuildBody evaluates over topology nodes and which
-// implements topo.Payload (docs/helix-design.md, docs/evaluator-design.md §8).
+// implements topo.Payload (agent-docs/helix-design.md, agent-docs/evaluator-design.md §8).
 type coilPayload = coilshell.Payload
 
 // loftPayload and chainLoftPayload are the evaluator's records of a Loft and of
 // a LoftChain ribbon: the internal/loftrecord payloads, which loftrecord.Build
 // and loftrecord.BuildChain evaluate over topology nodes and which implement
-// topo.Payload (docs/loft-design.md, docs/evaluator-design.md §8).
+// topo.Payload (agent-docs/loft-design.md, agent-docs/evaluator-design.md §8).
 type (
 	loftPayload = loftrecord.Payload
 )
 
 // twistedSweepPayload is the evaluator's record of a twisted Sweep along one
 // line: the internal/twistsweep payload, which twistsweep.Eval evaluates over
-// topology nodes and which implements topo.Payload (docs/sweep-design.md §17,
-// docs/evaluator-design.md §8).
+// topology nodes and which implements topo.Payload (agent-docs/sweep-design.md §17,
+// agent-docs/evaluator-design.md §8).
 type (
 	twistedSweepPayload = twistsweep.Payload
 )
@@ -103,8 +103,8 @@ type (
 // stitchPayload and unstitchPayload are the evaluator's records of a Stitch
 // and of one Unstitch piece: the internal/stitchrecord payloads, which
 // stitchrecord.Build and stitchrecord.BuildUnstitchFace evaluate over
-// topology nodes and which implement topo.Payload (docs/surface-design.md §6,
-// docs/evaluator-design.md §8).
+// topology nodes and which implement topo.Payload (agent-docs/surface-design.md §6,
+// agent-docs/evaluator-design.md §8).
 type (
 	stitchPayload   = stitchrecord.Payload
 	unstitchPayload = stitchrecord.UnstitchPayload
@@ -114,7 +114,7 @@ type (
 // tapered Extrude or face Draft and of a two-sided taper: the
 // internal/draftrecord payloads, which draftrecord.Build and
 // draftrecord.BuildTwoSided evaluate over topology nodes and which implement
-// topo.Payload (docs/draft-design.md, docs/evaluator-design.md §8).
+// topo.Payload (agent-docs/draft-design.md, agent-docs/evaluator-design.md §8).
 type (
 	draftPayload = draftrecord.Payload
 )
@@ -122,8 +122,8 @@ type (
 // capBlendPayload is the evaluator's record of a complete-cap-loop chamfer
 // and of the band view a draft or brep loop band builds through: the
 // internal/capblend payload, which capblend.Build evaluates over topology
-// nodes and which implements topo.Payload (docs/modify-reach-design.md §8.3,
-// docs/evaluator-design.md §8). The other names are its setbacks and its
+// nodes and which implements topo.Payload (agent-docs/modify-reach-design.md §8.3,
+// agent-docs/evaluator-design.md §8). The other names are its setbacks and its
 // loft source.
 type (
 	capBlendPayload = capblend.Payload
@@ -133,7 +133,7 @@ type (
 // facetGroup one source face's provenance in it: the internal/facetedrecord
 // payload, which facetedrecord.BuildWithProof assembles over topology nodes
 // with one face per connected patch and which implements topo.Payload
-// (docs/evaluator-design.md §8, §9).
+// (agent-docs/evaluator-design.md §8, §9).
 type (
 	facetedPayload = facetedrecord.Payload
 	facetGroup     = facetedrecord.Group
@@ -175,9 +175,9 @@ type arcSeg = sectionrecord.ArcSeg
 type fitSplineSeg = sectionrecord.FitSplineSeg
 
 // brepPayload is the evaluator's record of an analytically trimmed body
-// (docs/general-boolean-design.md §4): the internal/breprecord payload, which
+// (agent-docs/general-boolean-design.md §4): the internal/breprecord payload, which
 // breprecord.Build evaluates over topology nodes and which implements
-// topo.Payload (docs/evaluator-design.md §8). The other names are its faces,
+// topo.Payload (agent-docs/evaluator-design.md §8). The other names are its faces,
 // an A1 result's slabs, a route L band and its kind, and the shared topology
 // reading.
 type (

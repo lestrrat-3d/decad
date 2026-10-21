@@ -17,7 +17,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the linkage vocabulary of docs/linkage-check-design.md §2 and
+// This file is the linkage vocabulary of agent-docs/linkage-check-design.md §2 and
 // §4: Linkage, Link and the sealed Joint set, the Drive that moves them,
 // Linkage.PoseAt, and the LinkageReport records. linkage/verify.go runs
 // Document.VerifyLinkage over internal/motionengine's engine, and linkage/bound.go
@@ -59,7 +59,7 @@ func (l *Linkage[B]) Links() []*Link[B] {
 
 // DeclareJointContact names a pair of bodies that meet at a joint by
 // construction — a pin in its bore, a slider on its rail, an arm resting on
-// its pivot's cap (docs/linkage-check-design.md §2.2). VerifyLinkage checks
+// its pivot's cap (agent-docs/linkage-check-design.md §2.2). VerifyLinkage checks
 // the pair for proven overlap at every evaluated pose and publishes a gap it
 // measures, but the pair publishes no undecided or touching finding and
 // enters no interval certificate and no whole-drive reading (§5.4).
@@ -235,7 +235,7 @@ type PrismaticJoint struct {
 
 // JointLimits is a joint's declared working range, in the joint's Kind:
 // Min < Max. A drive whose sweep reaches outside it, or that holds an
-// unlisted joint at a 0 outside it, is refused (docs/linkage-check-design.md
+// unlisted joint at a 0 outside it, is refused (agent-docs/linkage-check-design.md
 // §2.4).
 type JointLimits struct {
 	Min, Max units.Value
@@ -299,7 +299,7 @@ func (PrismaticJoint) joint() {}
 // Drive is a one-parameter motion of a linkage, parameterised by the
 // Dimensionless fraction s ∈ [0, 1]: each listed joint passes through its
 // waypoints From, Via…, To in order, linearly between consecutive ones, and
-// an unlisted joint holds 0 (docs/linkage-check-design.md §2.3). A drive
+// an unlisted joint holds 0 (agent-docs/linkage-check-design.md §2.3). A drive
 // whose sweeps carry n − 1 Via values each has n segments, and segment j
 // covers s ∈ [j/n, (j+1)/n], an equal share each; with no Via the drive is
 // one segment and each joint runs from From to To as s runs from 0 to 1.
@@ -323,7 +323,7 @@ type LinkagePose struct {
 	At units.Value // the Dimensionless fraction s
 	// Values is each link's joint value at s, in Linkage.Links() order: the
 	// stated value, or for a loop's dependent joint the float midpoint of its
-	// certified enclosure (docs/linkage-check-design.md §15.4).
+	// certified enclosure (agent-docs/linkage-check-design.md §15.4).
 	Values []units.Value
 	// Bounds is each value's proven half-width, in its Kind: Values[k] ±
 	// Bounds[k] holds the exact joint value. It is zero for every joint whose
@@ -333,7 +333,7 @@ type LinkagePose struct {
 }
 
 // PoseAt returns every link's joint value and world pose at the fraction at
-// of drive (docs/linkage-check-design.md §2.4). In segment j of n, between
+// of drive (agent-docs/linkage-check-design.md §2.4). In segment j of n, between
 // waypoints w_j and w_{j+1}, a joint's value is w_j + t·(w_{j+1} − w_j) with
 // t = n·at − j, carried in w_j's unit — From + at·(To − From) for a drive
 // with no Via — and 0 in its Kind's base unit for an unlisted joint. A
@@ -355,7 +355,7 @@ type LinkagePose struct {
 // first segment's line extends below 0 and the last's above 1, and a drive
 // whose every sweep holds is legal here.
 //
-// A drive that moves a loop (docs/linkage-check-design.md §15) is answered by
+// A drive that moves a loop (agent-docs/linkage-check-design.md §15) is answered by
 // a one-shot Schedule under context.Background(), with Schedule.PoseAt's
 // refusals: its loop rows, an at outside [0, 1], and an at the loop cannot be
 // enclosed at (decaderr.ErrUnsupported). A renderer that wants one pose per frame
@@ -381,7 +381,7 @@ func (l *Linkage[B]) PoseAt(d Drive[B], at units.Value) (LinkagePose, error) {
 	return spec.poseAt(context.Background(), at, p.Base)
 }
 
-// LinkageReport is VerifyLinkage's drive report (docs/linkage-check-design.md §4).
+// LinkageReport is VerifyLinkage's drive report (agent-docs/linkage-check-design.md §4).
 type LinkageReport[B comparable] struct {
 	Request           vocab.MotionRequest
 	ReadingResolution units.Value
@@ -441,14 +441,14 @@ type linkJoint[B comparable] struct {
 	values []units.Value
 	points []motionbound.MotionParam
 	// dep is the driven loop whose dependent this joint is, nil for a joint
-	// whose value the drive states (docs/linkage-check-design.md §15); its
+	// whose value the drive states (agent-docs/linkage-check-design.md §15); its
 	// values and points are then a hold at 0 nobody reads, and depReach is
 	// its proven reach over the certified drive.
 	dep      *loopDrive[B]
 	depReach *big.Rat
 }
 
-// resolveDrive validates d against l (docs/linkage-check-design.md §2.4).
+// resolveDrive validates d against l (agent-docs/linkage-check-design.md §2.4).
 func (l *Linkage[B]) resolveDrive(d Drive[B]) (*linkageSpec[B], error) {
 	if l == nil {
 		return nil, fmt.Errorf(`%w: a nil linkage has no link to move`, decaderr.ErrDegenerate)
@@ -565,7 +565,7 @@ func (jt linkJoint[B]) moves() bool {
 
 // segment is the segment of jt's schedule that holds the exact fraction s,
 // as a domain from its starting waypoint to its ending one, and s's local
-// fraction t = n·s − j in it (docs/linkage-check-design.md §2.3). Segment j of
+// fraction t = n·s − j in it (agent-docs/linkage-check-design.md §2.3). Segment j of
 // n covers [j/n, (j+1)/n]: a waypoint's fraction j/n takes segment j, 1 takes
 // the last segment, and an s outside [0, 1] extends the first or the last.
 // With one segment t is s itself.

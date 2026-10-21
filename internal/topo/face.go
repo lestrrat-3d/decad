@@ -68,7 +68,7 @@ type Face struct {
 	// patch is RULED between two built directrices, and the `Cone` or `Plane`
 	// it publishes is that ruled surface only to within a bound measured from
 	// the numbers the body publishes for it
-	// (root capblend_departure.go, docs/modify-reach-design.md §8.3). The bound is a
+	// (root capblend_departure.go, agent-docs/modify-reach-design.md §8.3). The bound is a
 	// world-space one, so it covers both a mitered corner's own angular skew and
 	// the placement's independent rounding of every coordinate the build emits —
 	// which leaves the tag even on a flat patch, and on a circular one whose two
@@ -81,7 +81,7 @@ type Face struct {
 	NormalBound float64
 	// RetainedTag marks a face of a mesh Boolean result whose Surface is the
 	// recorded surface of the operand face it descends from, while its loops
-	// and area stay the held polygons (docs/faceted-source-retention-design.md
+	// and area stay the held polygons (agent-docs/faceted-source-retention-design.md
 	// §2). The tag is a bounded stand-in: NormalBound covers both the tag's
 	// own departure (TagDeparture) and the held displacement of this face.
 	RetainedTag bool

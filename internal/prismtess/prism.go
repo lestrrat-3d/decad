@@ -29,7 +29,7 @@ import (
 func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	wallRole func(loop, seg int) string, chord float64, verifyAll bool,
 	countFloor func(loop, seg int) int, freeformTarget float64) (*topo.Mesh, error) {
-	// sheet is docs/surface-design.md §4.1's own flag, read once: a surface
+	// sheet is agent-docs/surface-design.md §4.1's own flag, read once: a surface
 	// result omits both caps from its wall build (internal/prismrecord/build.go), and every
 	// arm below that would otherwise touch a cap face, a cap triangulation or
 	// a cap's own area/volume term reads it to skip that half of the work
@@ -38,9 +38,9 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 
 	// Every mesh vertex lands on the RECORDED section, which a payload carrying a
 	// section displacement holds only within that displacement of the section its
-	// construction DENOTES (docs/prism-boolean-design.md §7). The displacement is
+	// construction DENOTES (agent-docs/prism-boolean-design.md §7). The displacement is
 	// therefore part of the mesh's deviation before a single chord is chosen, so
-	// docs/tessellation-design.md §5 RESERVES it from the chord budget here, and a
+	// agent-docs/tessellation-design.md §5 RESERVES it from the chord budget here, and a
 	// tolerance that cannot pay for it refuses, the same shape as
 	// facetedrecord.Restate's refusal of a tolerance below a held mesh bound. The
 	// reservation keeps chording plus this displacement within tol; it covers no
@@ -62,7 +62,7 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 		}
 	}
 
-	// Facets remember their source face (docs/evaluator-design.md §9); the
+	// Facets remember their source face (agent-docs/evaluator-design.md §9); the
 	// provenance roles are how the payload's walks name the faces evalPrism
 	// built from them.
 	byRole := map[string]*topo.Face{}
@@ -109,8 +109,8 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	}
 	// The build that produced this body already resolved every boundary
 	// segment's walk and published the set onto the payload (internal/prismrecord/build.go,
-	// docs/evaluator-design.md §8). A tessellation is one of the passes
-	// docs/spline-design.md §5.2 names as free to REPLAY that recorded charge
+	// agent-docs/evaluator-design.md §8). A tessellation is one of the passes
+	// agent-docs/spline-design.md §5.2 names as free to REPLAY that recorded charge
 	// instead of doing the work again: chording reads the walks back and
 	// charges this fresh counter what resolving them cost, so the ceiling binds
 	// the chording exactly as resolving would have. A payload carrying no
@@ -154,7 +154,7 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	// The mesh vertices: bottom and top of every boundary sample, placed
 	// through the payload — exactly on the analytic boundary.
 	mesh.Vertices = make([]r3.Vec, 0, 2*len(pts2))
-	// vertexStore is docs/tessellation-reach-design.md §3's deltaStore, one
+	// vertexStore is agent-docs/tessellation-reach-design.md §3's deltaStore, one
 	// entry per mesh vertex: the sample's own plane-local enclosure gap carried
 	// through the frame (proofbound.WalkEndBoundAllow) plus the rounding the frame and
 	// placement write commits (prismrecord.Payload.PointRound). Both are zero for a
@@ -199,7 +199,7 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	// levels — within what its own construction rounded (vertexStore) — and a
 	// payload holds each level and each section only within its own displacement
 	// of what it denotes: the section's in the plane
-	// (docs/prism-boolean-design.md §7), each end's along the normal. So a face
+	// (agent-docs/prism-boolean-design.md §7), each end's along the normal. So a face
 	// deviates by its own trim chording plus its own store, section and axial
 	// terms, which is exactly what §3's faceBound composes. The chording above
 	// already paid for the section displacement out of the reserved budget, so
@@ -251,7 +251,7 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 		}
 	}
 	// Every coordinate the build itself computed can move each facet's own area
-	// (docs/tessellation-design.md §5's per-triangle allowance), so the slack
+	// (agent-docs/tessellation-design.md §5's per-triangle allowance), so the slack
 	// carries one such term per facet beside the analytic ones above.
 	mesh.AreaSlack = proofbound.AbsSumUpper(mesh.AreaSlack,
 		tessellation.StoreAreaAllow(mesh.Vertices, mesh.Triangles, vertexStore))
@@ -259,14 +259,14 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	if sheet {
 		// A sheet encloses no region, so there is no occupied volume to
 		// prove: the mesh publishes NO volSymDiff and leaves symDiffOK
-		// false (docs/surface-design.md §10). That omission IS the proof's
+		// false (agent-docs/surface-design.md §10). That omission IS the proof's
 		// absence, not a placeholder for one still to come — meshbool.OperandSymDiff
 		// (boolean.go) is the consumer that reads symDiffOK and refuses a
 		// boolean that reaches this operand.
 		return mesh, nil
 	}
 
-	// Occupied volume (docs/tessellation-reach-design.md §3). The chorded section
+	// Occupied volume (agent-docs/tessellation-reach-design.md §3). The chorded section
 	// differs from the section it denotes by the circular segments it omits or
 	// adds, over the sweep height; the recorded section differs from the denoted
 	// one by its own displacement tube, again over that height; each end level

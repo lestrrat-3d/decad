@@ -30,7 +30,7 @@ type Scene struct {
 	Pins         []Pin
 	ZeroReadings []sketch.Interval // per dependent: reading at the zero pose
 	// Offset is the driver's scene reading at the zero pose. Its target is
-	// Offset + |q| (docs/linkage-check-design.md §15.2).
+	// Offset + |q| (agent-docs/linkage-check-design.md §15.2).
 	Offset proofbound.RatInterval
 	// Side identifies the scene plane, DriverLink the driver's position in
 	// Linkage.Links(), and SlideDriver whether its value is a length.

@@ -25,7 +25,7 @@ type CapBlendBandInput struct {
 	ArcSag, LocusGap            []float64
 	D, Delta, LevelDelta, Axial float64
 	// Amounts, when non-nil, is each walk's own in-plane setback in place of
-	// D: a subset draft's kept wall reads zero (docs/draft-design.md §10.2).
+	// D: a subset draft's kept wall reads zero (agent-docs/draft-design.md §10.2).
 	Amounts []float64
 }
 

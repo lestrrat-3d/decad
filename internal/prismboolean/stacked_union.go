@@ -13,7 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
-// This file is docs/general-boolean-design.md §3's class A1: a Union of two
+// This file is agent-docs/general-boolean-design.md §3's class A1: a Union of two
 // co-directional prisms (or stacked prisms) whose sweep intervals overlap or
 // touch without being equal. The distinct levels of both operands, compared
 // exactly, cut the union into slabs. A slab one operand reaches takes that

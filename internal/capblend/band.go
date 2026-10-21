@@ -25,7 +25,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
-// This file builds the Payload topology (docs/modify-reach-design.md
+// This file builds the Payload topology (agent-docs/modify-reach-design.md
 // §8.3, Table BX row BX3): the trimmed prism side walls, the cap faces (a
 // mix of unchanged loops and offset "cap contour" loops), and the chamfer
 // band patches between them — a Plane for a line wall, a Cone for a circular
@@ -87,7 +87,7 @@ type BandResult struct {
 // (sideCo, from prismrecord.BuildLoopSidesAs) — shared, never re-derived.
 //
 // suppliedCap is the cap level's boundary when the caller owns it
-// (docs/modify-general-design.md §4.2 step 5): the cap contour's coedges in
+// (agent-docs/modify-general-design.md §4.2 step 5): the cap contour's coedges in
 // walk order, one per wall and one reflex-corner arc after the wall leading
 // into that corner, all forward, whose vertices the band's slant edges then
 // start from. Nil mints them here, as a prism's cap blend does. A supplied
@@ -105,12 +105,12 @@ func BuildBand(ctx context.Context, env topo.Env, body *topo.Body, cbp Payload, 
 	walks := cl.Walks
 	n := len(walks)
 	// dc offsets the cap contour in the plane and ds carries the original loop
-	// along the sweep to the side level (docs/modify-reach-design.md §8.3.1).
+	// along the sweep to the side level (agent-docs/modify-reach-design.md §8.3.1).
 	setback := cbp.SetbackAt(matSign)
 	dc, dcDelta, ds := setback.Dc, setback.DcDelta, setback.Ds
 	sideZ := capZ + matSign*ds
 	// amounts is each walk's own in-plane offset: dc for every walk of a
-	// chamfer, and zero for a wall a subset draft keeps (docs/draft-design.md
+	// chamfer, and zero for a wall a subset draft keeps (agent-docs/draft-design.md
 	// §10.2). A kept wall's offset is exactly zero, so its span carries no
 	// width (amountDelta).
 	amounts := cbp.WalkAmounts(li, walks, dc)
@@ -160,7 +160,7 @@ func BuildBand(ctx context.Context, env topo.Env, body *topo.Body, cbp Payload, 
 	// Only a draft view's negative taper takes the second sign; with the in-plane
 	// half the wall's own outward normal, the reference then meets the true
 	// normal n̂·cos α + e·sin α at a positive dot product for every taper below
-	// a right angle (docs/draft-design.md §2).
+	// a right angle (agent-docs/draft-design.md §2).
 	axialRef := -matSign
 	if dc < 0 {
 		axialRef = matSign
@@ -168,7 +168,7 @@ func BuildBand(ctx context.Context, env topo.Env, body *topo.Body, cbp Payload, 
 	// wallOrigins names wall i's patch: a chamfer's chamferCap(cap, loop, p)
 	// with p the patch's index in this band, or a draft view's side(loop, j)
 	// over the recorded segments the walk coalesced, exactly the roles a
-	// prism's own wall carries (docs/draft-design.md Table BD).
+	// prism's own wall carries (agent-docs/draft-design.md Table BD).
 	wallOrigins := func(segs []int, p int) ([]provenance.Ref, error) {
 		if cbp.Draft {
 			return prismrecord.SideOrigins(ctx, ref, li, segs)
@@ -317,7 +317,7 @@ func BuildBand(ctx context.Context, env topo.Env, body *topo.Body, cbp Payload, 
 	// length bound (SlantEdge's second return) — the same value the edge's
 	// own lengthBound carries everywhere except a miter ruling adjacent to a
 	// circular wall, where lengthBound also carries the chord-versus-locus
-	// excess (docs/modify-reach-design.md §8.3) that proofbound.BandPatchAreaAllow's
+	// excess (agent-docs/modify-reach-design.md §8.3) that proofbound.BandPatchAreaAllow's
 	// slantUpper must NOT read (task-file rule: the area term stays on the
 	// held chord alone).
 	slantInHeld := make([]float64, n)
@@ -455,7 +455,7 @@ func BuildBand(ctx context.Context, env topo.Env, body *topo.Body, cbp Payload, 
 		// toward the corner's own axis, and toward the chamfered cap
 		// (-matSign), exactly as a regular wall patch's does axially; its dot
 		// product with the reference below is dc + ds > 0 for every setback
-		// pair (docs/modify-reach-design.md §8.3.1). The radially-outward
+		// pair (agent-docs/modify-reach-design.md §8.3.1). The radially-outward
 		// reading is not merely the wrong sign: its dot product is dc - ds, so
 		// at dc = ds (cos, sin, -matSign) is EXACTLY perpendicular to the true
 		// normal and decides nothing at all. Verified empirically (never hand-trusted):
@@ -536,7 +536,7 @@ func BuildBand(ctx context.Context, env topo.Env, body *topo.Body, cbp Payload, 
 		// SWEEP (capTh0, capTh1) is resolved alongside it: the offset corner
 		// feet's own angles about the wall's exact centre, generally different
 		// from the wall's own w.th0/w.th1 wherever the corner is a genuine
-		// (non-tangent) miter (docs/modify-reach-design.md §8.3) — the cap
+		// (non-tangent) miter (agent-docs/modify-reach-design.md §8.3) — the cap
 		// directrix is TRIMMED there, the side directrix is not.
 		capRadius := 0.0
 		capTh0, capTh1, wraps := 0.0, 0.0, 0
@@ -840,7 +840,7 @@ func setPatchReadings(f *topo.Face, g capband.Patch, built capband.PatchBuilt, d
 // A MITER corner's ruling (affine false) is tagged Line3 but is the true
 // denoted locus only where BOTH prev and cur are straight walls: the exact
 // offset family's corner foot is otherwise a conic, and the chord this Edge
-// holds understates its length (docs/modify-reach-design.md §8.3's boundary
+// holds understates its length (agent-docs/modify-reach-design.md §8.3's boundary
 // bullet). Where either wall is circular, dc's own offset range [0, dc]
 // (capband.MiterLocusUpper widens it by dc's unit-conversion rounding dcDelta) is
 // split into capband.MiterLocusSubdivisions sub-ranges, each enclosed through
@@ -864,7 +864,7 @@ func setPatchReadings(f *topo.Face, g capband.Patch, built capband.PatchBuilt, d
 //
 // The second return is the edge's own ARITHMETIC-ONLY bound — heldBound,
 // before any locus excess is folded in — which proofbound.BandPatchAreaAllow's
-// slantUpper must keep reading (docs/modify-reach-design.md §8.4): the area
+// slantUpper must keep reading (agent-docs/modify-reach-design.md §8.4): the area
 // term bounds the built quad against the ruled surface it denotes, a question
 // the locus excess (a boundary-only reading) does not answer, so widening
 // slantUpper by it would loosen the area bound for a residual it never
@@ -1022,7 +1022,7 @@ func coneSurface(pl prismrecord.Payload, cu, cv, r0, r1, z0, z1 float64) surface
 
 // PatchWindowSkew is one patch's own widest corner skew: a proven upper
 // bound on the angle about the centre between the side directrix's end and
-// the cap directrix's end at either corner (docs/modify-reach-design.md §8.3),
+// the cap directrix's end at either corner (agent-docs/modify-reach-design.md §8.3),
 // the larger of the two skews capband.SetPatchSkews stamps from
 // capband.CornerSkewUpper. It is never read off a difference of two float
 // Atan2 angles, which can fall below the exact angle. It is zero for a reflex
@@ -1038,7 +1038,7 @@ func coneSurface(pl prismrecord.Payload, cu, cv, r0, r1, z0, z1 float64) surface
 // moves whether or not the windows coincide. That one is measured in world
 // space from the published numbers (departure.go), never from these
 // two windows. The mesh reads it too, for the distance from the ruled patch to
-// the cone it is tagged as (docs/tessellation-reach-design.md §7's skewGap).
+// the cone it is tagged as (agent-docs/tessellation-reach-design.md §7's skewGap).
 func PatchWindowSkew(g capband.Patch) float64 {
 	if !g.Circular {
 		return 0
@@ -1086,12 +1086,12 @@ func CapNameOf(matSign float64) string {
 // no consumer can see a different answer than what was checked here, and the
 // check never trusts a hand-derived sign convention: a Plane's u x v and a
 // Cone's radially-outward formula both flip with which cap a band is on
-// (docs/modify-reach-design.md §8.3), so this call is the ONE place that
+// (agent-docs/modify-reach-design.md §8.3), so this call is the ONE place that
 // decides the sign, from the analytic geometry itself.
 //
 // When NormalAt itself refuses at samplePoint, the sign is a build-time
 // question this evaluator cannot finish, so §11 gives it no undecided state:
-// FixPatchOrientation returns SX15 (docs/modify-reach-design.md §4) as
+// FixPatchOrientation returns SX15 (agent-docs/modify-reach-design.md §4) as
 // decaderr.ErrUnsupported rather than leaving face.Reversed at whatever the caller
 // constructed it with. NormalAt's own refusal there is decaderr.ErrDegenerate, but
 // that sentinel and decaderr.ErrUnsupported are opposite existence claims a caller

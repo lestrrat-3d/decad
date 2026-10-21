@@ -67,7 +67,7 @@ const (
 // SweepRequest bounds the time search and the contact geometry resolution.
 //
 // RestSpeed is a nonnegative Velocity; the zero Value rests no vertex. A band
-// track over a support set (docs/multibody-dynamics-design.md §10.5) holds a
+// track over a support set (agent-docs/multibody-dynamics-design.md §10.5) holds a
 // lifted vertex that closes on the support plane no faster than RestSpeed, or
 // rises, on both sides of the plane, as it holds a contact vertex (§10.8), so
 // the track does not end where that vertex's lower height bound reaches the
@@ -128,7 +128,7 @@ type affinePairPath = sweeppath.AffinePath
 // whole LineSeg sections and zero-bound faceted Booleans — that no narrower
 // path admits receive a clear path or a first-impact bracket under any rotating
 // or affine path, and from an initial touch a departure or a persistent touch
-// or band track (docs/multibody-dynamics-design.md §10.2, §10.3). A
+// or band track (agent-docs/multibody-dynamics-design.md §10.2, §10.3). A
 // positive-bound faceted Boolean or all-planar cap-loop chamfer takes the
 // same run through its held mesh under §10.4: a first impact brackets onto a
 // ContactBand sample, and a band start never departs but may carry a band

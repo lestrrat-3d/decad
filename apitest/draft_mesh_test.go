@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/draft-design.md §11's PR 2 fixture set: a draft body's
+// This file is agent-docs/draft-design.md §11's PR 2 fixture set: a draft body's
 // tessellation (Table DD row DD1) and the readings it opens — booleans (DD2),
 // export (DD3, DD4), interference (DD10), mass properties (DD11) and Patterned
 // (DD13). Closed forms reuse extrude_taper_test.go's 256-bit helpers, with
@@ -398,7 +398,7 @@ func nearTangentSlot(s *sketch.Sketch) {
 	s.CreateArc(pt(-15, 0), d, a)
 }
 
-// TestDraftNearTangentJoinRefusesBooleans pins docs/draft-design.md §9.1's
+// TestDraftNearTangentJoinRefusesBooleans pins agent-docs/draft-design.md §9.1's
 // refusal on a join the build reads as tangent and the record does not make
 // exactly tangent: the body builds and its mesh exports, but the mesh carries
 // no volume proof, and a boolean refuses it naming the corner's point and the

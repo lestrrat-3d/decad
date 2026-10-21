@@ -15,7 +15,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is docs/general-boolean-design.md §3 A6's crossing-sensitivity
+// This file is agent-docs/general-boolean-design.md §3 A6's crossing-sensitivity
 // charge. An operand whose recorded boundary sits within δ of the boundary
 // it denotes moves every crossing with the other operand by more than δ: two
 // carriers that cross at an angle θ, displaced by δ1 and δ2, meet up to
@@ -23,7 +23,7 @@ import (
 // that distance for every crossing the arrangement cut, with sin θ bounded
 // below by exact rational arithmetic on the recorded carriers. A crossing
 // whose bound is not above the dimensionless noise floor ε of
-// docs/verification-design.md §4 (sectionaudit.ContactEps) has no charge;
+// agent-docs/verification-design.md §4 (sectionaudit.ContactEps) has no charge;
 // the caller then takes the mesh path.
 //
 // The argument, for one crossing O of recorded carriers γ1 and γ2 and its
@@ -212,7 +212,7 @@ func junctionCharge(tags map[sketch.Entity]Origin, a, b vertexEnd, deltaA, delta
 }
 
 // aboveNoiseFloor is A6's noise floor: a crossing's certified sin θ_low must
-// be above ε = sectionaudit.ContactEps (docs/verification-design.md §4's
+// be above ε = sectionaudit.ContactEps (agent-docs/verification-design.md §4's
 // floor for a dimensionless quantity) for its displacement to be charged.
 func aboveNoiseFloor(s float64) bool {
 	return s > sectionaudit.ContactEps

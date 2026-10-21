@@ -172,7 +172,7 @@ func BridgeHole(ctx context.Context, pts []Point2, merged, hole []int) ([]int, e
 		// A hole with no boundary crossing anywhere along its +u ray is not
 		// inside the region at all. That is the operand's own geometry, which
 		// no tolerance changes, so it stays an untyped ErrDegenerate that
-		// Verify returns (docs/interference-design.md §7.1).
+		// Verify returns (agent-docs/interference-design.md §7.1).
 		return nil, fmt.Errorf(`%w: a hole lies outside its cap boundary`, decaderr.ErrDegenerate)
 	}
 	if bestU == m.U {
@@ -182,7 +182,7 @@ func BridgeHole(ctx context.Context, pts []Point2, merged, hole []int) ([]int, e
 		// lies within its own sagitta of the true curve, so a pinch between
 		// them is a property of where the chords fell, the same class
 		// tessellation.RequireLoopClearance refuses: an expected undecided outcome
-		// (docs/interference-design.md §7.1), never a wrong mesh.
+		// (agent-docs/interference-design.md §7.1), never a wrong mesh.
 		return nil, tessellation.NewExpectedError(fmt.Errorf(`%w: a hole touches its cap boundary`, decaderr.ErrDegenerate))
 	}
 	hit := Point2{U: bestU, V: m.V}
@@ -322,7 +322,7 @@ func EarClip(ctx context.Context, pts []Point2, poly []int) ([][3]int, error) {
 			// apart, but a single loop's own chords can still cross over a
 			// narrow concave feature, and that lands here. So this is an
 			// expected undecided outcome, not an evaluator failure
-			// (docs/interference-design.md §7.1): read-only interference takes
+			// (agent-docs/interference-design.md §7.1): read-only interference takes
 			// it as an undecided pair, while public Tessellate still sees
 			// ErrDegenerate through Unwrap.
 			return nil, tessellation.NewExpectedError(fmt.Errorf(`%w: the chorded cap boundary self-intersects; tessellate at a finer tolerance`, decaderr.ErrDegenerate))

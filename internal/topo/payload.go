@@ -12,7 +12,7 @@ import (
 // the result's roles are minted under, and the allocator every node of the
 // result comes from. Ref is not always Doc.NextProducer: a motion check
 // builds under a transient producer, and a pattern builds a span of producers
-// before it commits (docs/evaluator-design.md §8).
+// before it commits (agent-docs/evaluator-design.md §8).
 type Env struct {
 	Doc   *Document
 	Ref   provenance.Producer
@@ -22,7 +22,7 @@ type Env struct {
 // Payload is the evaluator's own record of how a body was built: what
 // Transform and Copy re-evaluate under a composed motion. Each payload carries
 // its accumulated rigid placement and rebuilds the same record under a new one
-// (docs/evaluator-design.md §8).
+// (agent-docs/evaluator-design.md §8).
 type Payload interface {
 	// Transform is the accumulated rigid placement.
 	Transform() r3.Transform
@@ -34,7 +34,7 @@ type Payload interface {
 
 // SimpleProver is implemented by a payload whose recorded body can already
 // prove its own boundary does not self-intersect — Table V's leg 4
-// (docs/surface-design.md). A payload that does not implement it, and a nil
+// (agent-docs/surface-design.md). A payload that does not implement it, and a nil
 // payload, prove nothing. The two callers are the sheet-boundary audit, which
 // asks it of a body's own payload, and Rule S and Rule P, which ask it of an
 // operand's SOURCE payload before folding its faces into a curved-solid

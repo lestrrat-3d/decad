@@ -153,7 +153,7 @@ func arcFixedMul(a, b arcFixedInterval) arcFixedInterval {
 // buys the most.
 const RevolveArcIntegralSteps = 32
 
-// RevolveArcCellSlack is docs/tessellation-design.md §10.2's Ecell for one wall
+// RevolveArcCellSlack is agent-docs/tessellation-design.md §10.2's Ecell for one wall
 // cell of a CIRCULAR generator, by certified interval subdivision — tess §15's
 // second admissible path, and the one T3 takes because the first does not
 // exist here.
@@ -354,7 +354,7 @@ var ErrRevolveStationEnclosure = fmt.Errorf(`%w: a revolve meridian chord statio
 
 // ChordSegmentArea is a PROVEN upper bound on the total area of the n circular
 // segments between one circular walk's arc and its chords — the area a partial
-// cap's curved trim omits (docs/tessellation-design.md §10.2), and the circular
+// cap's curved trim omits (agent-docs/tessellation-design.md §10.2), and the circular
 // twin of tessellation.ChordSagitta.
 //
 // One subarc of angle φ = θ/n cuts off (r²/2)(φ − sin φ), and sin φ ≥ φ − φ³/6

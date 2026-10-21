@@ -28,7 +28,7 @@ func HeldRadiusUpper(verts []r3.Vec, departure float64) float64 {
 	return proofbound.AbsSumUpper(radius, departure)
 }
 
-// PoseDeviation is docs/motion-check-design.md §5.1's η: a proven upper bound
+// PoseDeviation is agent-docs/motion-check-design.md §5.1's η: a proven upper bound
 // on how far any point of a mover sits between where the kernel measured it —
 // under the float composed placement C = P0 then PoseAt — and where the ideal
 // motion T* puts it, T* composed onto the mover's own placement P0. For a
@@ -156,7 +156,7 @@ func BasisDefectUpper(t r3.Transform) (*big.Rat, bool) {
 // PoseDeviation's second result, sigma BasisSigmaLower of the rest placement.
 //
 // base is a proven upper bound on ‖R‖₂, the stretch base of
-// docs/motion-check-design.md §5.1: exactly 1 for a Revolute and a Prismatic,
+// agent-docs/motion-check-design.md §5.1: exactly 1 for a Revolute and a Prismatic,
 // whose ideal rotation is exactly orthogonal, and BasisSigmaUpper of the
 // between's From — at s = 1 the larger of From's and To's — for a Between,
 // whose ideal linear part R(s·θ, n)·B(From) is orthogonal only as far as
@@ -203,7 +203,7 @@ func ExceedsResolution(p, q, res MotionParam) bool {
 	return lower.Cmp(upper) > 0
 }
 
-// MoverTravel is τ of docs/motion-check-design.md §5.2 as an exact rational:
+// MoverTravel is τ of agent-docs/motion-check-design.md §5.2 as an exact rational:
 // a proven upper bound on how far any point of the mover travels while the
 // parameter runs from p to q. A prismatic moves every point by exactly the
 // displacement change along a unit direction; a revolute moves a point at

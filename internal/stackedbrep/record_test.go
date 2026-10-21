@@ -48,7 +48,7 @@ func vertices(l stackedbrep.Loop) []pt {
 	return out
 }
 
-// TestLoopOfCircleJunctions covers docs/shell-opening-design.md §4.3's
+// TestLoopOfCircleJunctions covers agent-docs/shell-opening-design.md §4.3's
 // junctions at one recorded point. The lens of the radius-5 circles about
 // (0,0) and (6,0) meets at (3,±4): each crossing is the point both walked
 // ends hold, keyed by the side of the line through the centres it lies on.

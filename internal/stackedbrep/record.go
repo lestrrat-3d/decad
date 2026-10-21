@@ -140,7 +140,7 @@ func (b *Engine) LoopOf(region brepgeom.Profile, budget *proofbound.WorkBudget) 
 // the line. A crossing too close to the centre's foot to decide its side is a
 // tangency when an axis-aligned line lies exactly the radius from the centre
 // (tangentFoot), and takes the exact tangent point, keyed with no side: a
-// tangent line meets its circle once (docs/shell-opening-design.md §4.3).
+// tangent line meets its circle once (agent-docs/shell-opening-design.md §4.3).
 // Any other crossing that close, an oblique line's included, stands only at
 // one recorded point (recordedJunction), and so do two circles; where the two
 // walked ends differ, the junction misses.
@@ -178,7 +178,7 @@ func (b *Engine) junction(ci Carrier, ei ubEnd, cj Carrier, sj ubEnd) (Point2, f
 		}
 	}
 	// The point's own proven distance from the crossing joins its allowance
-	// (docs/general-boolean-design.md §3 A1, §5).
+	// (agent-docs/general-boolean-design.md §3 A1, §5).
 	off := crossingOffset(ei, sj, p)
 	side := 0
 	if curve.Kind != ubCircle {
@@ -265,7 +265,7 @@ func tangentFoot(line, circle Carrier) (Point2, bool) {
 
 // recordedJunction is the junction of two carriers at the one recorded point
 // both walked ends hold, a known join of the record: two circles meeting
-// there (docs/shell-opening-design.md §4.3), or a line and a circle whose
+// there (agent-docs/shell-opening-design.md §4.3), or a line and a circle whose
 // crossing the side test cannot place and that are not exactly tangent, such
 // as an offset arc join meeting an oblique offset line at its foot. The point
 // is taken as recorded, with the larger walked allowance, so no float sign
@@ -326,7 +326,7 @@ func (b *Engine) record(p Point2, delta float64, carriers ...Carrier) {
 // slabs; a caller marks a point it knows is a vertex although its junction
 // does not change, such as a shell's reflex opening corner, which lies inside
 // the cavity floor's walk along the removed face's carrier
-// (docs/shell-opening-design.md §4.3).
+// (agent-docs/shell-opening-design.md §4.3).
 func (b *Engine) Event(p Point2, level int) {
 	if b.Events[p] == nil {
 		b.Events[p] = map[int]struct{}{}

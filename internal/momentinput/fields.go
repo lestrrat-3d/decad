@@ -103,7 +103,7 @@ func validateFieldsWithCapture(poll func() error, record Profile, work *freeform
 	// The reconstruction charge is levied once over the whole scene after
 	// per-segment charges, and before any reconstruction. An analytic record
 	// reaches the same charge through validateRecord after its whole-circle
-	// certificate. See docs/spline-design.md §5.2 for the charge order.
+	// certificate. See agent-docs/spline-design.md §5.2 for the charge order.
 	arrangement, err := chargeReconstruction(pre.Record, work)
 	if err != nil {
 		return FieldPreflight{}, fmt.Errorf(`decad: profile record is invalid: %w`, err)

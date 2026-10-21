@@ -12,7 +12,7 @@ import (
 )
 
 // WithAsymmetricChamfer also sets a complete cap loop back by two distances
-// (docs/modify-reach-design.md §8.3.1). The reference face picks which one
+// (agent-docs/modify-reach-design.md §8.3.1). The reference face picks which one
 // runs where: naming the cap face puts the positional distance across the cap
 // and the other distance down the side walls; naming the side walls swaps
 // them.

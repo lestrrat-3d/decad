@@ -21,7 +21,7 @@ import (
 
 // This file is route L's partial-loop arm: a Fillet of a selected
 // straight-edge chain on one planar loop, and a Chamfer of one or two
-// adjacent straight walks (docs/modify-general-design.md §4.3a). Route E
+// adjacent straight walks (agent-docs/modify-general-design.md §4.3a). Route E
 // prepares the selected edges' end-face corners; these readers move only the
 // selected walls, offset only their walks of the common cap loop, and pin each
 // chain end's terminal to the cap contour's foot.

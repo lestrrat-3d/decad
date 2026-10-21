@@ -18,7 +18,7 @@ func FitSplineBezierSpans(segment FitSplineSeg, work *freeform.FreeformWork) ([]
 func IsFitSplineSeg(segment CurveSegment) bool { return isFitSplineSeg(segment) }
 func FitCoords(points []Point2) [][2]float64   { return fitCoords(points) }
 
-// This file is docs/spline-design.md §5.1.2's fit-spline reduction: a
+// This file is agent-docs/spline-design.md §5.1.2's fit-spline reduction: a
 // recorded FitSplineSeg is Tier A for the moments path (Table F) by consuming
 // sketch's own EXPORTED interpolant — never by re-running the interpolation
 // solve, which seam §2 and record.go's own FitSplineSeg doc comment forbid.
@@ -229,7 +229,7 @@ func fitSplineBezierSpans(seg FitSplineSeg, work *freeform.FreeformWork) ([]free
 
 // isFitSplineSeg reports whether seg converts through THIS file's §5.1.2
 // reduction — the fact §6.5's joint rule needs to apply its FitSplineSeg
-// carve-out (docs/spline-design.md §6.5: "A joint interior to one
+// carve-out (agent-docs/spline-design.md §6.5: "A joint interior to one
 // FitSplineSeg's converted chain is verdict 0 by construction, not by this
 // cross product"). It handles both the value form FitSplineSeg and the
 // pointer form *FitSplineSeg, because normalizeSegment (record.go) accepts

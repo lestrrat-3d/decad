@@ -90,7 +90,7 @@ type GeometryEdge struct {
 // No candidate frame sign is corrected from a computed area, since that
 // would conceal a wrong edge-sense decision. An exact-arm patch publishes
 // this normal; a level-arm patch uses it only to choose the level normal's
-// sign (docs/surface-design.md §5.2). Float operations retain their order.
+// sign (agent-docs/surface-design.md §5.2). Float operations retain their order.
 func OrientedNormal(edges []GeometryEdge) (r3.Vec, error) {
 	for _, edge := range edges {
 		if edge.Kind != Circle && edge.Kind != Arc {

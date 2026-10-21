@@ -6,7 +6,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 )
 
-// This file is the shared surface-result vocabulary of docs/surface-design.md
+// This file is the shared surface-result vocabulary of agent-docs/surface-design.md
 // §3-§4: the one option every wall-building feature accepts,
 // WithSurfaceResult, and the refusal helper that keeps a sheet body out of an
 // operation Table X does not admit it to. Extrude, Revolve, Sweep and Loft
@@ -18,7 +18,7 @@ import (
 // stops.go consume refuseSheetOperand at their own gates.
 
 // SurfaceResultOption configures every feature WithSurfaceResult reaches
-// (docs/surface-design.md §3). A feature this evaluator cannot yet build as a
+// (agent-docs/surface-design.md §3). A feature this evaluator cannot yet build as a
 // surface refuses it with [ErrUnsupported] (Table R row R1).
 type SurfaceResultOption interface {
 	ExtrudeOption
@@ -29,7 +29,7 @@ type SurfaceResultOption interface {
 
 // WithSurfaceResult builds the feature's wall set and omits every face that
 // exists only to close the solid, publishing a sheet body — Kind() ==
-// BodySheet — instead (docs/surface-design.md §4.1). The option carries no
+// BodySheet — instead (agent-docs/surface-design.md §4.1). The option carries no
 // payload of its own; its identity is the whole of the signal, and a repeated
 // WithSurfaceResult() is idempotent, never an error.
 func WithSurfaceResult() SurfaceResultOption {
@@ -37,11 +37,11 @@ func WithSurfaceResult() SurfaceResultOption {
 }
 
 // refuseSheetOperand reports [ErrUnsupported] when b is live and a sheet
-// (Kind() == BodySheet), for an operation docs/surface-design.md Table X does
+// (Kind() == BodySheet), for an operation agent-docs/surface-design.md Table X does
 // not admit a sheet to. A nil b names nothing to refuse.
 func refuseSheetOperand(b *Body, operation string) error {
 	if b != nil && b.Kind() == BodySheet {
-		return fmt.Errorf(`%w: %s does not accept a sheet body (docs/surface-design.md Table X)`, ErrUnsupported, operation)
+		return fmt.Errorf(`%w: %s does not accept a sheet body (agent-docs/surface-design.md Table X)`, ErrUnsupported, operation)
 	}
 	return nil
 }

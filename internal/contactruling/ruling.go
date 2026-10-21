@@ -40,7 +40,7 @@ type rulingSide struct {
 }
 
 // PublishRulingManifold publishes the manifold of
-// docs/contact-geometry-design.md §4.5 from the clearance kernel's ruling
+// agent-docs/contact-geometry-design.md §4.5 from the clearance kernel's ruling
 // certificate. Each cylinder side must be a full source cylinder, so its
 // occupied set meets the separating plane in exactly its tangent ruling; a
 // plane side holds the whole certified ruling inside its trim. The complete
@@ -261,7 +261,7 @@ func rulingSideNormal(side rulingSide, witness measurement.VecMeasurement,
 }
 
 // PlacedCylinder is a full source cylinder staged through a query pose
-// (docs/contact-geometry-design.md §4.5, placed poses). Its identity record
+// (agent-docs/contact-geometry-design.md §4.5, placed poses). Its identity record
 // gives the body-frame axis, radius, axial length and end-disk centers; the
 // pose maps each center exactly. The pose's float basis B is orthonormal only
 // to rounding, so the occupied set is the identity cylinder's image under the
@@ -296,7 +296,7 @@ func PlacedCylinderAt(b *topo.Body, pose r3.Transform) (PlacedCylinder, bool) {
 	return c, true
 }
 
-// ClassifyPlacedRuling is docs/contact-geometry-design.md §4.5 at placed
+// ClassifyPlacedRuling is agent-docs/contact-geometry-design.md §4.5 at placed
 // query poses: a full source cylinder M, at any pose with a positive
 // determinant, against an exact planar body S with zero held displacement,
 // at its own pose. It reports false, leaving report untouched, when the pair
@@ -314,7 +314,7 @@ func PlacedCylinderAt(b *topo.Body, pose r3.Transform) (PlacedCylinder, bool) {
 // support plane then holds the whole contact ruling, and the gap is the least
 // height.
 //
-// On a face-local plane (docs/multibody-dynamics-design.md §10.6) S's
+// On a face-local plane (agent-docs/multibody-dynamics-design.md §10.6) S's
 // material in front of the plane lies at least the lateral clearance m away
 // from the cylinder, so a gap's lower end is the lesser of the least height's
 // and m, its upper end unchanged; a touch or band publishes only when m

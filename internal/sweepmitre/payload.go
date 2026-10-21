@@ -13,11 +13,11 @@ import (
 )
 
 // Payload is the evaluator's record of a mitred polyline sweep
-// (docs/sweep-design.md §16): the authenticated profile and its plane, the
+// (agent-docs/sweep-design.md §16): the authenticated profile and its plane, the
 // path, one scale factor per span and the accumulated placement — what a
 // placement re-runs §16.3 from — plus the build that record produced. Build
 // evaluates it over topology nodes and it implements topo.Payload
-// (docs/evaluator-design.md §8).
+// (agent-docs/evaluator-design.md §8).
 //
 // Exact holds every vertex as the rational the construction denotes, placed
 // exactly under Xform; Verts is each rounded once to the nearest float,

@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Increment 5 of docs/faceted-source-retention-design.md §11: a retained
+// Increment 5 of agent-docs/faceted-source-retention-design.md §11: a retained
 // plane facet states its true piece's distance from its own plane, so a second
 // cut that lands on the first cut's rim facets is admitted.
 

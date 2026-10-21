@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of docs/retained-edge-blend-design.md §9 for increment B1: a
+// The fixtures of agent-docs/retained-edge-blend-design.md §9 for increment B1: a
 // 40x20x20 plate bored by a Ø8 tool along z that a Transform placed, which
 // keeps the pair on the mesh path.
 

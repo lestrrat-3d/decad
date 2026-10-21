@@ -1,7 +1,7 @@
 // Package loftfillet certifies a loft section rewrite at a fitted-spline/circle
 // root corner: the numerical candidate, the exact tangent-root certificate,
 // connector and carrier departures, section contact audits, and the
-// circle-bore containment check. See docs/loft-design.md §17 and §18.
+// circle-bore containment check. See agent-docs/loft-design.md §17 and §18.
 package loftfillet
 
 import (

@@ -483,7 +483,7 @@ func (k *Kernel) windowedCircleOrCoarse(f *clearance.CFace, e *clearance.CEdge, 
 }
 
 // windowedCircleFE is the edge tier's twin of the windowed nested cell
-// (docs/clearance-design.md §4): a circular edge of radius ρ about centre c
+// (agent-docs/clearance-design.md §4): a circular edge of radius ρ about centre c
 // with unit axis n, against a sphere or cylinder face of radius r whose spine
 // the oracle can place neither on the circle's axis nor provably off it — the
 // bore's rim against a pin a rounding error off concentric. Every point of the

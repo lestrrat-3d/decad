@@ -1,6 +1,6 @@
 // Package sweepbuild builds the bodies of Sweep over topology nodes: the
 // profile-fed and chain-fed forms after the options are decoded
-// (docs/sweep-design.md). Root keeps the public gates and the commit.
+// (agent-docs/sweep-design.md). Root keeps the public gates and the commit.
 package sweepbuild
 
 import (
@@ -74,7 +74,7 @@ func Profile(ctx context.Context, env topo.Env, s *sketch.Sketch, p *sketch.Prof
 		return body, ctx.Err()
 	}
 	if cfg.Mitred || cfg.Scaled {
-		// docs/sweep-design.md §16: either option selects the mitred
+		// agent-docs/sweep-design.md §16: either option selects the mitred
 		// polyline builder, whose Table SM gates replace S6 and S10.
 		body, err := mitred(ctx, env, profile, plane, path, cfg)
 		if err != nil {
@@ -117,7 +117,7 @@ func Profile(ctx context.Context, env topo.Env, s *sketch.Sketch, p *sketch.Prof
 		// sweepPayload literal below: internal/prismrecord/build.go's prismrecord.Build reads
 		// pp.SurfaceResult to decide Kind()/solid, cap omission, topobuild.SheetLumps and
 		// the area subtraction, which is what gives the line reduction the
-		// whole sheet behaviour for free (docs/surface-design.md §4).
+		// whole sheet behaviour for free (agent-docs/surface-design.md §4).
 		prism := prismrecord.Payload{
 			Profile:       profile,
 			Frame:         frame,
@@ -140,7 +140,7 @@ func Profile(ctx context.Context, env topo.Env, s *sketch.Sketch, p *sketch.Prof
 }
 
 // Chain builds the chain-fed Sweep of the recorded chain along path
-// (docs/sweep-design.md §15). The seam and option gates have already run. The
+// (agent-docs/sweep-design.md §15). The seam and option gates have already run. The
 // result is not yet committed.
 func Chain(ctx context.Context, env topo.Env, chain sectionrecord.ChainRecord, plane sectionrecord.PlaneRecord,
 	path *sweepinput.Path) (*topo.Body, error) {
@@ -174,7 +174,7 @@ func Chain(ctx context.Context, env topo.Env, chain sectionrecord.ChainRecord, p
 	}
 
 	// ONE free-form work counter for the whole call, exactly as chain Extrude
-	// opens for its own build (docs/spline-design.md §5.2).
+	// opens for its own build (agent-docs/spline-design.md §5.2).
 	work := freeform.NewFreeformWork()
 	// z0 is exactly zero and carries no bound: the recorded walk sits in the
 	// sketch plane by construction and the path starts there (S5's own gate

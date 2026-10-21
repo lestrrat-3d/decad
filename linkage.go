@@ -13,7 +13,7 @@ import (
 	"github.com/lestrrat-go/option/v3"
 )
 
-// This file is the root face of docs/linkage-check-design.md: the linkage
+// This file is the root face of agent-docs/linkage-check-design.md: the linkage
 // model is the generic `linkage` package instantiated with *Body, and the
 // two checks gate their document-bound refusals here before the engine runs.
 
@@ -101,7 +101,7 @@ func (d *Document) linkageHooks() linkage.Hooks[*Body] {
 
 // VerifyLinkage checks whether any link of l, moved along drive, meets a
 // static body or a body of another link anywhere on the drive
-// (docs/linkage-check-design.md). It never changes the document: each pose
+// (agent-docs/linkage-check-design.md). It never changes the document: each pose
 // re-evaluates every link body's payload under its link's pose as a
 // transient body that is never committed, so Document.Bodies(), every body's
 // live state and the next producer identity are what they were before the
@@ -150,7 +150,7 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 
 // VerifyJointBox checks whether every configuration in box is clear: whether
 // no link of l, at any joint values the box holds, meets a static body or a
-// body of another link (docs/linkage-check-design.md §14). It never changes
+// body of another link (agent-docs/linkage-check-design.md §14). It never changes
 // the document: each centre re-evaluates every link body's payload under its
 // link's pose as a transient body that is never committed.
 //
@@ -166,7 +166,7 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 //
 // A closed loop (Linkage.Close) is varied at its driver alone: the box lists
 // at most one joint of each loop, whose parent is the loop's common link, and
-// every other joint of the loop follows it (docs/linkage-check-design.md
+// every other joint of the loop follows it (agent-docs/linkage-check-design.md
 // §16). Each cell reads the loop's dependent joints from sketch's certified
 // enclosures, as VerifyLinkage reads a drive's intervals: their enclosure at
 // the centre is charged into the pose deviation, and the distance from it to
@@ -200,7 +200,7 @@ func (d *Document) VerifyJointBox(ctx context.Context, l *Linkage, box JointBox,
 }
 
 // requireLinkage applies the linkage refusals VerifyLinkage and
-// VerifyJointBox share (docs/linkage-check-design.md §3): a nil linkage or
+// VerifyJointBox share (agent-docs/linkage-check-design.md §3): a nil linkage or
 // one with no link, and a link body or declared contact body that is not a
 // live body of d this evaluator built.
 func (d *Document) requireLinkage(l *Linkage) error {
@@ -231,12 +231,12 @@ func (d *Document) requireLinkage(l *Linkage) error {
 	return nil
 }
 
-// defaultCellBudget is WithCellBudget's default (docs/linkage-check-design.md
+// defaultCellBudget is WithCellBudget's default (agent-docs/linkage-check-design.md
 // §14.1).
 const defaultCellBudget = 16384
 
 // WithCellBudget caps the number of cell centres VerifyJointBox evaluates
-// (docs/linkage-check-design.md §14.4); the default is 16384. Every split
+// (agent-docs/linkage-check-design.md §14.4); the default is 16384. Every split
 // evaluates two centres, so once fewer than two evaluations remain no cell is
 // split and the report raises DiagJointBoxBudgetExhausted. A budget of 1
 // evaluates the whole box's centre alone; cells < 1 is decaderr.ErrDegenerate. It is a

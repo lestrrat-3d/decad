@@ -30,7 +30,7 @@ type Topology struct {
 	// edgeOf maps a use index to its edge index, -1 for an open use.
 	EdgeOf []int
 	// open lists the uses on a route L band's boundary
-	// (docs/modify-general-design.md §4.2): the cap contour's segments on the
+	// (agent-docs/modify-general-design.md §4.2): the cap contour's segments on the
 	// band's face and the side contour's on the faces beside it. The record
 	// bounds each such edge on one side only, and the band's patches bound
 	// it on the other (band.go).

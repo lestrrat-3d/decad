@@ -19,7 +19,7 @@ import (
 )
 
 // This file keeps a held faceted mesh embedded through its float rounding
-// (docs/evaluator-design.md §9, "The final rounding to float64 keeps the mesh
+// (agent-docs/evaluator-design.md §9, "The final rounding to float64 keeps the mesh
 // embedded"). The exact mesh a boolean stitches, or the exact affine image a
 // placement moves, is embedded. Rounding each exact vertex to binary64 moves it
 // by up to an ulp, and where a vertex sits closer than that to an edge or facet
@@ -596,7 +596,7 @@ func zeroXpt(n proof.Xpt) bool {
 
 // pairEmbedded decides, exactly, whether facets i and j meet only along what
 // their indices share: nothing, the one shared vertex, or the one shared edge
-// (docs/tessellation-design.md §1, the Embedding row). An unclassifiable pair
+// (agent-docs/tessellation-design.md §1, the Embedding row). An unclassifiable pair
 // fails, the refusing direction.
 func (e *heldEmbedding) pairEmbedded(i, j int) bool {
 	ti, tj := e.h.Tris[i], e.h.Tris[j]

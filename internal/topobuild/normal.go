@@ -29,10 +29,10 @@ import (
 //
 // The five analytic variants — Plane, Cylinder, Cone, Sphere and Torus — are
 // the whole set this answers for. Any other tagged surface is
-// decaderr.ErrUnsupported: a NURBSSurface for the reason docs/spline-design.md
+// decaderr.ErrUnsupported: a NURBSSurface for the reason agent-docs/spline-design.md
 // §7 owns, and a Faceted face — the tag every boolean-produced face carries —
 // because its answer waits on the faceted certificate stage
-// (docs/payload-verification-design.md §5.4, §13). f must not be nil.
+// (agent-docs/payload-verification-design.md §5.4, §13). f must not be nil.
 func NormalAt(f *topo.Face, p r3.Vec) (measurement.VecMeasurement, error) {
 	switch s := f.Surface.(type) {
 	case surfacegeom.Plane:

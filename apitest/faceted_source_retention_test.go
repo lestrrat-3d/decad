@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixtures of docs/faceted-source-retention-design.md §1 and §6: a 40x20x20
+// The fixtures of agent-docs/faceted-source-retention-design.md §1 and §6: a 40x20x20
 // box with four lateral edges filleted at r=3, then drilled through y by a Ø8
 // tool that a Transform placed, which keeps the pair on the mesh path.
 

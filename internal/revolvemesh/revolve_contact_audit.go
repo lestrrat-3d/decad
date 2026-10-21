@@ -186,7 +186,7 @@ func BoxGapExceeds(a, b [2]r3.Vec, margin float64) bool {
 		gap(a[1].Z, b[0].Z) || gap(b[1].Z, a[0].Z)
 }
 
-// RequireRevolveFacetAreas proves docs/tessellation-design.md §1's positive-area
+// RequireRevolveFacetAreas proves agent-docs/tessellation-design.md §1's positive-area
 // row over the whole mesh and returns the audit triangles it built on the way.
 //
 // It stands OUTSIDE RevolveContactAudit, and runs at every verification level,
@@ -225,7 +225,7 @@ func RequireRevolveFacetAreas(budget *proofbound.WorkBudget, verts []r3.Vec, tri
 	return data, budget.Err()
 }
 
-// RevolveContactAudit is docs/tessellation-design.md §9's facet-contact audit:
+// RevolveContactAudit is agent-docs/tessellation-design.md §9's facet-contact audit:
 // adjacent facets meet ONLY along the vertex or edge their indices share, and
 // no non-adjacent pair touches at all. It runs at VerifyBoundary and above, and
 // data is RequireRevolveFacetAreas' own output for the same triangle set, which
@@ -543,7 +543,7 @@ func revolveSweepAxis(data []RevolveAuditTri) int {
 // RequireRevolveFacetArea proves one facet keeps a positive area everywhere on
 // the displaced family: its exact held area, bracketed from BELOW, exceeds the
 // most a displacement of delta at each corner can take from it
-// (docs/tessellation-design.md §5's own per-triangle area allowance, read here
+// (agent-docs/tessellation-design.md §5's own per-triangle area allowance, read here
 // as a gate rather than as a slack term).
 func RequireRevolveFacetArea(t RevolveAuditTri, i int, delta float64) error {
 	held := proofarith.DySqrtDown(proofarith.DvDot(t.N, t.N))

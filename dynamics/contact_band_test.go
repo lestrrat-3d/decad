@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The dynamics fixtures of docs/multibody-dynamics-design.md §13 PR 18: a
+// The dynamics fixtures of agent-docs/multibody-dynamics-design.md §13 PR 18: a
 // ContactBand (§10.4) is a touch whose penetration bound, its gap band, must
 // lie within PenetrationResidual. The displaced body is a 10 mm box Union a
 // radius-2 disc standing 2 mm proud of its top, whose held mesh stands for
@@ -253,7 +253,7 @@ func partsBinConfig() dynamics.StepConfig {
 	return config
 }
 
-// TestDisplacedBlockRestsOnTray is docs/multibody-dynamics-design.md §13
+// TestDisplacedBlockRestsOnTray is agent-docs/multibody-dynamics-design.md §13
 // PR 20c's dynamics fixture: §2's 12 mm block, its top loop chamfered
 // 2.1 mm so its held mesh carries δ ≈ 1e-15 mm, dropped 8 mm onto the tray.
 // Its held gap first enters the lifted band b = max(SupportBand, δ) as a
@@ -455,7 +455,7 @@ func witnessTorqueOnB(t *testing.T, event dynamics.ContactEvent) *big.Rat {
 	return torque
 }
 
-// TestDisplacedBottleRestsOnTray is docs/multibody-dynamics-design.md §13
+// TestDisplacedBottleRestsOnTray is agent-docs/multibody-dynamics-design.md §13
 // PR 20g's fixture: §2's revolved bottle, read as a held mesh whose δ is
 // about 0.03 mm, dropped 8 mm onto §2's tray at §2's Phase 3 residuals. It
 // lands on a ContactBand on every vertex of its held base, rebounds at

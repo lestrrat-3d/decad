@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file pins docs/evaluator-design.md §6's wall-normal rule: a revolve
+// This file pins agent-docs/evaluator-design.md §6's wall-normal rule: a revolve
 // wall's Face.NormalAt result, grown by its own published bound, encloses the
 // normal of the surface the record DENOTES — the recorded meridian segment
 // rotated about the recorded axis — at the queried point. The face's Surface

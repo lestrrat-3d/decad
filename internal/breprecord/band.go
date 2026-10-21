@@ -23,7 +23,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is route L's band (docs/modify-general-design.md §4.2 step 5 and
+// This file is route L's band (agent-docs/modify-general-design.md §4.2 step 5 and
 // §4.3, "modify-general §N" below): the record a Payload keeps for each
 // chamfered loop, the band boundary edges the record bounds on one side only,
 // the adapter that hands both directrices to modify-reach §8.3's capblend.BuildBand
@@ -38,7 +38,7 @@ import (
 // side distances (modify-general §4.2). sigma is −1 when the walls beside
 // the loop descend into the body, so the band removes a wedge, and +1 when
 // they rise off F, so the band fills the concave corner (Table LB, LB6). kind
-// is the band's surface family (docs/loop-fillet-design.md §4 step 3).
+// is the band's surface family (agent-docs/loop-fillet-design.md §4 step 3).
 type LoopBand struct {
 	Face, Loop int
 	Orig       sectionrecord.LoopRecord
@@ -57,7 +57,7 @@ type LoopBand struct {
 type BandTerminal struct{ Face, Loop, Seg int }
 
 // BandKind is a loop band's surface family: a chamfer's ruled patches or a
-// fillet's pipe patches (docs/loop-fillet-design.md).
+// fillet's pipe patches (agent-docs/loop-fillet-design.md).
 type BandKind string
 
 const (
@@ -107,7 +107,7 @@ func (b LoopBand) view(f Face, xform r3.Transform) capblend.Payload {
 
 // patchRole is the role of the band's patch p: chamferLoop(f,l,p) for a
 // chamfer band's face f and loop l (modify-general BG2), filletLoop(f,l,p) for
-// a fillet band's (docs/loop-fillet-design.md BF1).
+// a fillet band's (agent-docs/loop-fillet-design.md BF1).
 func (b LoopBand) PatchRole(p int) string {
 	return fmt.Sprintf("%sLoop(%d,%d,%d)", b.Kind, b.Face, b.Loop, p)
 }

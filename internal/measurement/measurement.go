@@ -19,7 +19,7 @@ const (
 )
 
 // Measurement is a scalar quantity plus how far it can be trusted. Value is a
-// typed quantity — never a naked float (docs/api-design.md §5.1) — and Bound
+// typed quantity — never a naked float (agent-docs/api-design.md §5.1) — and Bound
 // is the absolute error bound the evaluator proves, of the same Kind as
 // Value: the error bound on a volume is a volume. Bound is zero when the
 // measurement is Exact.
@@ -33,7 +33,7 @@ type Measurement = struct {
 // be trusted. It is what the API returns wherever the evaluator computes a
 // vector: a computed vector never crosses the API as a bare r3.Vec.
 //
-// Value is a position — a length in millimetres, the docs/api-design.md §5.2
+// Value is a position — a length in millimetres, the agent-docs/api-design.md §5.2
 // carve-out — or a unit direction, which is dimensionless and carries no unit
 // at all. Bound follows Value: it is the radius of the ball around Value the
 // true vector is proven to lie in, so its Kind is Length for a position and
@@ -49,7 +49,7 @@ type VecMeasurement = struct {
 // and it reports its own exactness: a box around a curved body produced by a
 // tessellation-backed boolean is bounded by faceted faces and is therefore
 // not tight, and says so. Min and Max are positions, lengths in millimetres
-// (docs/api-design.md §5.2); Bound is the absolute error bound on them, of
+// (agent-docs/api-design.md §5.2); Bound is the absolute error bound on them, of
 // Kind Length, zero when the box is Exact.
 type Box = struct {
 	Min, Max  r3.Vec

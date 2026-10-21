@@ -72,7 +72,7 @@ func patchAreaOf(g Patch) (float64, float64) {
 	// dth is the CAP-level (trimmed) sweep — the actual held chord's own
 	// angle, capTh1-capTh0 — never the wall's own recorded thS1-thS0: a
 	// regular wall's two directrices generally sweep different angles at a
-	// non-tangent miter corner (docs/modify-reach-design.md §8.3), the same
+	// non-tangent miter corner (agent-docs/modify-reach-design.md §8.3), the same
 	// fact patchRawFlux's ruled-patch integral reads off both windows.
 	dth := math.Abs(g.CapTh1 - g.CapTh0)
 	area := dth / 2 * (R0 + R1) * slant
@@ -125,7 +125,7 @@ func sideRadiusAreaAllow(g Patch) float64 {
 // coneSkewAreaAllow is the proven bound on |A − A₀| for a Cone patch, where A
 // is the area of the ruled patch the build holds and A₀ the frustum sector
 // (Δθ/2)·(R0+R1)·√(ΔR²+H²) at the patch's exact cap sweep αc
-// (docs/modify-reach-design.md §8.4 derives it).
+// (agent-docs/modify-reach-design.md §8.4 derives it).
 //
 // The ruled patch is P(u,t) = (1−t)·S(u) + t·C(u) over [0,1]², with the side
 // end S(u) at radius R0 and angle θs(u) = θs0 + u·αs, the cap end C(u) at
@@ -267,7 +267,7 @@ func CornerSkewUpper(cU, cV float64, side, capEnd Point, held float64) (float64,
 // level's axial one (proofbound.BandLevelAreaAllow over levelDelta). patchAreaOf composes
 // it into the bound it publishes, and the tessellator charges the same two
 // terms per patch into the mesh's own area slack
-// (docs/tessellation-reach-design.md §7), so neither reader can be told a
+// (agent-docs/tessellation-reach-design.md §7), so neither reader can be told a
 // different story about how far this patch's area can move.
 //
 // The level allowance is the one term neither reading of a Cone patch's core

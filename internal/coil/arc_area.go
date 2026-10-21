@@ -12,7 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
-// ArcAreaPieces is the number of sub-intervals docs/helix-design.md §11.1
+// ArcAreaPieces is the number of sub-intervals agent-docs/helix-design.md §11.1
 // cuts one arc's wall integral into. The bracket's width is fourth order in
 // the sub-interval, so 1024 pieces hold a round-wire spring's wall to a
 // relative width near 1e-10.
@@ -24,7 +24,7 @@ const ArcAreaPieces = 1024
 const arcGridShift = 160
 
 // ArcArea encloses the area the whole circular profile segment seg sweeps
-// (docs/helix-design.md §11.1): Θ·∫√h dα over the arc, with α its natural
+// (agent-docs/helix-design.md §11.1): Θ·∫√h dα over the arc, with α its natural
 // angle about its centre and
 //
 //	h(α) = r²·ρ(α)² + k²·r²·B(α)²,  ρ(α) = ρ_c + r·A(α)

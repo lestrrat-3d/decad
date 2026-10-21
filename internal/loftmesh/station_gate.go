@@ -19,9 +19,9 @@ import (
 // sagitta and chord bounds are what turn that departure into the section
 // displacement the payload publishes; a cell whose departure cannot be
 // bounded refuses through ErrLoftSagittaUnderivable. The station cap bounds
-// the work before any of it is done. See docs/loft-design.md §5.2.
+// the work before any of it is done. See agent-docs/loft-design.md §5.2.
 
-// StationCapGate decides the circular part of docs/loft-design.md Table S
+// StationCapGate decides the circular part of agent-docs/loft-design.md Table S
 // row S15 from the two records, before any station or triangle is built.
 // A free-form pair is charged in PairRecords as its dyadic generator runs.
 //
@@ -86,7 +86,7 @@ func StationCapGate(p0, p1 momentinput.Profile, recordArea [2]float64, offsets [
 	return target, nil
 }
 
-// ChordFraction is the coefficient docs/loft-gear-bounds-design.md §5's
+// ChordFraction is the coefficient agent-docs/loft-gear-bounds-design.md §5's
 // chord-target rule applies to the sections' own feature size:
 //
 //	chordTarget = ChordFraction * min(|area(p0)| / perimeterUpper(p0), |area(p1)| / perimeterUpper(p1))
@@ -104,7 +104,7 @@ func StationCapGate(p0, p1 momentinput.Profile, recordArea [2]float64, offsets [
 // generator at every run.
 //
 // It is NOT a caller option: a loft's chording is topology, and nothing is
-// added to the public API for it (docs/loft-design.md §5.1).
+// added to the public API for it (agent-docs/loft-design.md §5.1).
 const ChordFraction = 2.5e-4
 
 // FeatureSize is one section's own feature size: the magnitude of its
@@ -133,7 +133,7 @@ func PerimeterUpper(p momentinput.Profile, walks [][]survey2d.SegmentWalk) float
 }
 
 // ChordTarget is one loft build's own chord target
-// (docs/loft-gear-bounds-design.md §5): ChordFraction times the smaller of
+// (agent-docs/loft-gear-bounds-design.md §5): ChordFraction times the smaller of
 // the two sections' feature sizes. area0/area1 are the records' own exact
 // region areas Profile.FalsifyLoftRecordedArea computed in Loft, never sketch's claimed
 // areas, and perim0/perim1 are PerimeterUpper's bounds.

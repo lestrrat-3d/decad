@@ -51,7 +51,7 @@ func BuildChecked(ctx context.Context, env topo.Env, pp prismrecord.Payload,
 	// S8/S9 ErrDegenerate for broken nesting. SX12 audits the exact offset
 	// FAMILY, not the ruled patch the body builds: at axial fraction s, the
 	// denoted miter locus is the parallel section offset by s*dc
-	// (docs/modify-reach-design.md §8.3) — a fact about that family alone,
+	// (agent-docs/modify-reach-design.md §8.3) — a fact about that family alone,
 	// independent of which surface later reports the body's volume — and the
 	// offset distance to any fixed feature is monotone non-increasing as the
 	// offset grows from 0, so a crossing anywhere in the family occurs no
@@ -68,7 +68,7 @@ func BuildChecked(ctx context.Context, env topo.Env, pp prismrecord.Payload,
 	// fit within the sweep. A band reaches its own cap's ds along the sweep
 	// (§8.3.1), whatever its dc.
 	//
-	// It runs AFTER SX6, which docs/modify-reach-design.md puts in stage 5 while
+	// It runs AFTER SX6, which agent-docs/modify-reach-design.md puts in stage 5 while
 	// this row is stage 6 ("SX6 precedes SX7"). The two rows answer the same §4
 	// existence test in opposite directions, and stage order is how §4 keeps one
 	// input from having two sentinels: a setback that empties the cap contour

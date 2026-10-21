@@ -29,7 +29,7 @@ type link struct {
 
 // CellsHaveNoVoid reports whether every cell has at least one boundary edge
 // on its operand's material side, making Union's select-all merge the union
-// (docs/prism-boolean-design.md §4.2). Membership is constant over a cell,
+// (agent-docs/prism-boolean-design.md §4.2). Membership is constant over a cell,
 // so one material-side edge puts the cell inside that operand. A cell whose
 // every edge lies on its operand's void side is outside each operand with an
 // edge on it. Since both operands are hole-free, such a cell is an enclosed
@@ -237,7 +237,7 @@ type RegionKey struct {
 }
 
 // ClassifyRegions is Classify run per record rather than per operand
-// (docs/general-boolean-design.md §3 "A1 as a brep"): for every cell and
+// (agent-docs/general-boolean-design.md §3 "A1 as a brep"): for every cell and
 // every record of the scene, whether the cell sits on that record's material
 // side. Each record's membership propagates across the edges of every other
 // record and never across its own; a span two records share

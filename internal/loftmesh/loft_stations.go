@@ -63,7 +63,7 @@ func WalkEndPlaneDelta(bound proofbound.WalkEndBound) float64 {
 // station generator existed.
 //
 // Its stationRoundUpper is NOT unconditionally zero, and that is the one
-// thing this arm does not inherit from that earlier shape. docs/loft-design.md
+// thing this arm does not inherit from that earlier shape. agent-docs/loft-design.md
 // §5.2 pins a station by its own NATURAL parameter — t == 0 or t == 1 — and
 // never by the kind of segment it sits on, and §5.1's Table C marks a TRIMMED
 // LineSeg end GENERATED for exactly that reason. So this arm reads what its
@@ -109,7 +109,7 @@ func LoftLineCellStations(w0, w1 survey2d.SegmentWalk) ([]LoftStation, []LoftSta
 		[]LoftStation{{U: w1.StartU, V: w1.StartV}}, 0, []float64{0}, round, nil
 }
 
-// LoftCertifiedSagittaUpper is docs/loft-design.md §5.2's certified per-cell
+// LoftCertifiedSagittaUpper is agent-docs/loft-design.md §5.2's certified per-cell
 // sagitta for one side of a chorded circular pair, at a candidate station
 // count m: the in-section-plane distance from one chord to the recorded curve
 // piece it chords, published as ONE outward rounding of an enclosure's upper
@@ -187,7 +187,7 @@ func LoftCertifiedChordLower(radius, sweep proofbound.RatInterval, enclosed bool
 	return lo
 }
 
-// LoftSettleStationCount runs docs/loft-design.md §5.1's JOINT WALK-UP for one
+// LoftSettleStationCount runs agent-docs/loft-design.md §5.1's JOINT WALK-UP for one
 // same-kind circular pair and answers the count it settles on, together with
 // each side's own certified per-cell sagitta AT that count.
 //
@@ -202,7 +202,7 @@ func LoftCertifiedChordLower(radius, sweep proofbound.RatInterval, enclosed bool
 // station-cap gate (StationCapGate, S15) settle the same m the
 // construction phase will, with no station built and no triangle assembled.
 //
-// The two refusals it raises are the two docs/loft-design.md §4's gate-order
+// The two refusals it raises are the two agent-docs/loft-design.md §4's gate-order
 // paragraph assigns to this walk-up: ErrLoftSagittaUnderivable is S14's
 // DERIVATION arm — a candidate count whose certified sagitta has no derivation
 // from the record — and freeform.ErrTooManyChords is the per-walk ceiling tessellation.ChordCount
@@ -240,7 +240,7 @@ func LoftSettleStationCount(a, b LoftCircularSide, target float64) (int, float64
 // LoftCircularStationChain walks this segment's own uniform-angle stations of w,
 // at parameter t_k = k/m — its OWN interior stations, excluding its shared end
 // point (RecordCellStations' own doc comment states why), so the chain holds the
-// entries a loop's own count under docs/loft-design.md §7 needs from it rather
+// entries a loop's own count under agent-docs/loft-design.md §7 needs from it rather
 // than a count stated here.
 //
 // Station 0 is the WALK's own start point, never a recomputed cos/sin at th0.
@@ -251,7 +251,7 @@ func LoftSettleStationCount(a, b LoftCircularSide, target float64) (int, float64
 // float that misses it. Recomputing here would displace such a station off the
 // coordinate the record states — measurably, by an ulp of the coordinate — and
 // would leave every reading that reads a pinned station's own published
-// displacement (docs/loft-design.md §5.2's pinned station kinds) stating it of
+// displacement (agent-docs/loft-design.md §5.2's pinned station kinds) stating it of
 // a vertex the build does not hold. Reading the walk keeps the pin and the station
 // the same point.
 //
@@ -261,7 +261,7 @@ func LoftSettleStationCount(a, b LoftCircularSide, target float64) (int, float64
 // each junction carries exactly one station.
 //
 // The second return is this segment's own reading of the stationRound term
-// docs/loft-design.md §5.2's table lists, as an in-section-plane distance;
+// agent-docs/loft-design.md §5.2's table lists, as an in-section-plane distance;
 // that table owns the quantity it bounds, the certified source it is read from
 // and its max-versus-sum rule. Only station 0 is a coordinate reading
 // alone: every interior station is a math.Sincos evaluation at an angle
@@ -287,7 +287,7 @@ func LoftSettleStationCount(a, b LoftCircularSide, target float64) (int, float64
 // curve's radius from Start alone, so at t == 1 the denoted point sits at
 // Start's radius and End's own angle and misses the recorded End by the
 // arc-end radial residual. ArcNaturalEndRadialUpper charges exactly that
-// residual, at t == 1 alone, and docs/loft-design.md §5.2 owns the term.
+// residual, at t == 1 alone, and agent-docs/loft-design.md §5.2 owns the term.
 //
 // A station the record cannot enclose answers +Inf, which the caller refuses
 // on rather than publishing the certified sagitta as if it were the whole
@@ -361,7 +361,7 @@ func sharedCircleMemoEligible(start, span *big.Rat, m int) bool {
 }
 
 // LoftCircularCellStations is the circular arm. It settles the pair's shared
-// station count through SettleRecordStationCount — docs/loft-design.md §5.1's
+// station count through SettleRecordStationCount — agent-docs/loft-design.md §5.1's
 // JOINT WALK-UP, whose own doc comment owns that rule — and then walks BOTH
 // sides at the count it settles on, never at either side's own smaller count,
 // which is the correspondence a loft wall needs.
@@ -371,7 +371,7 @@ func sharedCircleMemoEligible(start, span *big.Rat, m int) bool {
 // sweep brackets — never the held float tessellation.ChordCount itself returns. That float
 // is computed from the walk's math.Hypot radius and its math.Atan2 sweep, with
 // no enclosure and no outward rounding, so it can decide a COUNT and nothing
-// more (docs/loft-design.md §5.2's third rule). A candidate count whose
+// more (agent-docs/loft-design.md §5.2's third rule). A candidate count whose
 // certified sagitta has no derivation refuses at Table S row S14, in the arm
 // and at the phase §4's gate-order paragraph assigns it, and the refusal never
 // degrades into a published zero or a held substitute.
@@ -408,7 +408,7 @@ func sharedCircleMemoEligible(start, span *big.Rat, m int) bool {
 // — is what keeps both halves readings of the same quantity.
 //
 // matchedDelta is RecordCellStations' own per-cell obligation — the CHORD-TO-
-// CURVE half of docs/loft-design.md §5.2's matchedDelta row, which the
+// CURVE half of agent-docs/loft-design.md §5.2's matchedDelta row, which the
 // consumer composes with the build's own delta (ChordCellDeltaUpper), never
 // the whole row: this arm's sagitta discharges that half EXACTLY (the
 // paragraph above), and every cell of one uniformly-stepped circular segment

@@ -10,7 +10,7 @@ import (
 )
 
 // CellSlack is one meridian cell's Ecell
-// (docs/tessellation-design.md §10.2), stated ONCE for the cell and multiplied
+// (agent-docs/tessellation-design.md §10.2), stated ONCE for the cell and multiplied
 // by the angular count by the caller.
 //
 // One evaluation answers for every angular interval because the ideal samples

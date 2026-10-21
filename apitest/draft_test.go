@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is Draft's fixture set (docs/draft-design.md §11, D1–D5 and
+// This file is Draft's fixture set (agent-docs/draft-design.md §11, D1–D5 and
 // the selector Walls). The closed forms are F1's and F5's, from
 // extrude_taper_test.go's helpers.
 

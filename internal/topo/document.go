@@ -11,7 +11,7 @@ import (
 
 // Document is the data of the root Document handle, which holds one by
 // value: the live body set and the document's identity counters
-// (docs/evaluator-design.md §8). Internal code reads liveness through IsLive
+// (agent-docs/evaluator-design.md §8). Internal code reads liveness through IsLive
 // and Live and mints level and curve identities through MintLevel and
 // MintCurve; only root writes LiveSet and NextProducer
 // (TestTopoDocumentWriteGuard).

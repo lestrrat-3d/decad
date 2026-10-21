@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestVerifyLinkageLoopProjection pins docs/linkage-check-design.md §5.8's
+// TestVerifyLinkageLoopProjection pins agent-docs/linkage-check-design.md §5.8's
 // expansion over a loop's dependent joint on scene 7's crank-rocker. A block
 // x ∈ [96, 104], y ∈ [60, 66], z ∈ [40, 48] rides the follower in a layer of
 // its own, under a ceiling x ∈ [50, 150], y ∈ [67.5, 77.5], z ∈ [39, 49]. The

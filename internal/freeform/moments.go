@@ -9,7 +9,7 @@ type MomentIntegralOrder uint8
 
 // The orders are cumulative: each integrates everything the lower ones do.
 // MomentThirdOrder adds regionIntegrals.third, the section moments a revolve's
-// volume second moments need (docs/dynamic-mass-design.md §2.1): the
+// volume second moments need (agent-docs/dynamic-mass-design.md §2.1): the
 // cylindrical Jacobian contributes one radius and a transverse second moment
 // two more.
 const (

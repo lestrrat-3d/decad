@@ -20,7 +20,7 @@ import (
 // bounds runs parallel to tris and each sub-triangle inherits its parent's
 // entry. xbeta is per exact vertex: a vertex inserted into a facet's edge
 // lies on that held facet, so it is raised to the facet's bound
-// (docs/faceted-vertex-bounds-design.md §3.3).
+// (agent-docs/faceted-vertex-bounds-design.md §3.3).
 func ConformOnce(ctx context.Context, verts []proof.Xpt, tris *[][3]int, src *[]int, bounds *[]float64, xbeta []float64) (bool, error) {
 	// One counter spans the facet walk, the grid-cell candidate scan nested
 	// under it, and the along-edge ordering: the candidate vertices a single

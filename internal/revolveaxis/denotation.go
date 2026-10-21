@@ -28,8 +28,8 @@ type DenotationInput struct {
 // wall reads each recorded segment's own two ends, in walk order; a circular
 // wall reads each segment's recorded centre and radius. Face.NormalAt judges
 // the wall's normal against it, and Stitch's flux path admits the wall only
-// where its tag is exactly this surface (docs/evaluator-design.md §6,
-// docs/surface-design.md §6.4).
+// where its tag is exactly this surface (agent-docs/evaluator-design.md §6,
+// agent-docs/surface-design.md §6.4).
 func (d DenotationInput) WallDenotation(w survey2d.SideWalk, kind WallKind,
 	plane []survey2d.SegmentWalk) *surfacenormal.Revolved {
 	if kind == WallFreeform {

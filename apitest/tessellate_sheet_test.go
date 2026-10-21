@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md §10's T10, run against the PRISM sheet
+// This file is agent-docs/surface-design.md §10's T10, run against the PRISM sheet
 // path: WithSurfaceResult()'s own manifold-with-boundary mesh and export.
 // Every fixture reuses plateSketch/rectWithHoleSketch (extrude_test.go,
 // surface_test.go). NEVER call decadtest.IsManifold on a sheet mesh here — it
@@ -49,7 +49,7 @@ func directedEdgeCensus(t *testing.T, mesh *decad.Mesh) int {
 	return free
 }
 
-// TestSurfaceExtrudeSheetTessellates is docs/surface-design.md's T10 for the
+// TestSurfaceExtrudeSheetTessellates is agent-docs/surface-design.md's T10 for the
 // prism sheet path: a 100x60 mm rectangle surface-extruded 10 mm produces a
 // mesh that is the solid's own minus its two caps.
 func TestSurfaceExtrudeSheetTessellates(t *testing.T) {
@@ -75,7 +75,7 @@ func TestSurfaceExtrudeSheetTessellates(t *testing.T) {
 	require.Len(t, sheetMesh.SourceFaces(), len(sheetMesh.Triangles()))
 	require.InDelta(t, 3200.0, meshTriangleArea(sheetMesh), 1e-9, `4 walls of 100x10/60x10/100x10/60x10 mm sum to 3200 mm^2`)
 
-	// docs/tessellation-design.md §1.2: the shell's positive-side orientation
+	// agent-docs/tessellation-design.md §1.2: the shell's positive-side orientation
 	// is never audited, only asserted here — it holds by construction, so the
 	// sheet's own wall triangles are IDENTICAL, index for index, to the
 	// solid's first 8 (its walls, emitted before its two caps).
@@ -103,7 +103,7 @@ func TestSurfaceExtrudeSheetTessellates(t *testing.T) {
 	require.Equal(t, 8, free)
 
 	// Every mesh free edge is attributed to a wall face carrying exactly two
-	// free body edges (docs/tessellation-design.md §1.2's free-edge
+	// free body edges (agent-docs/tessellation-design.md §1.2's free-edge
 	// attribution).
 	src := sheetMesh.SourceFaces()
 	tris := sheetMesh.Triangles()
@@ -216,7 +216,7 @@ func TestSurfaceExtrudeSheetDeterminism(t *testing.T) {
 
 // TestSurfaceExtrudeHoledSheetMultiLumpTessellates is new since the plan was
 // written: a holed profile's surface extrude splits into two disconnected
-// lumps (docs/surface-design.md §2.2), and both the outer wall tube and the
+// lumps (agent-docs/surface-design.md §2.2), and both the outer wall tube and the
 // hole wall tube must tessellate and pass the manifold-with-boundary audit.
 func TestSurfaceExtrudeHoledSheetMultiLumpTessellates(t *testing.T) {
 	t.Parallel()

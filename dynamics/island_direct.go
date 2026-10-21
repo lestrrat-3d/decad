@@ -10,7 +10,7 @@ import (
 )
 
 // This file is the direct start of the island proposal
-// (docs/multibody-dynamics-design.md §6.2): an island of at most
+// (agent-docs/multibody-dynamics-design.md §6.2): an island of at most
 // directPointLimit manifold points first solves its frictionless normal
 // complementarity problem by active-set enumeration, and the projected
 // Gauss–Seidel sweeps start from that solution. Like the sweeps, the start

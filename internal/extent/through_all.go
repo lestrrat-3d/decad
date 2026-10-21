@@ -11,7 +11,7 @@ import (
 
 // directionalExtent is what a through-all stop needs from a body's payload:
 // the body's extent interval along an arbitrary world direction, BESIDE the
-// proven displacement its two endpoints carry (docs/spline-design.md
+// proven displacement its two endpoints carry (agent-docs/spline-design.md
 // §6.2/§6.4). A payload that cannot state the interval returns ErrUnsupported.
 type directionalExtent interface {
 	ExtentAlong(g r3.Vec) (float64, float64, float64, error)
@@ -38,7 +38,7 @@ func payloadAxialDelta(b *topo.Body) float64 {
 
 // ThroughAll resolves a through-all stop over the live bodies: the sweep runs
 // from the sketch plane frame in the travel sense through the far side of
-// every body it meets (docs/evaluator-design.md §5). It returns the signed
+// every body it meets (agent-docs/evaluator-design.md §5). It returns the signed
 // stop coordinate along the plane normal, that coordinate's proven axial
 // displacement and the met bodies' producers, nearest far side first. No body
 // in the path is ErrDegenerate.

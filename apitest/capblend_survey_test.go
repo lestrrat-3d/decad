@@ -12,7 +12,7 @@ import (
 )
 
 // This file is the cap-blend band's DX7/DX8 surveys read through the public
-// API (docs/modify-reach-design.md §8.3, Table DX). Everything here turns on
+// API (agent-docs/modify-reach-design.md §8.3, Table DX). Everything here turns on
 // ONE fact about a circular band patch at a non-tangential miter corner: the
 // build rules it with straight Line3 rulings between two directrices that
 // sweep DIFFERENT angular windows, so the surface it carries is not the Cone
@@ -209,7 +209,7 @@ func TestCapBlendUnmiteredPatchNormalCarriesNoWindowSkew(t *testing.T) {
 // all-clear — a wrong Sound, not a coarse reading. The Cone patch now stays
 // undecided and unlisted; any independent proven face remains a violation.
 // TestUndercutCapBlendReceiverWallsBoundedLikePatches proves DX7's extended
-// §12 cell (docs/modify-reach-design.md): a cap-blend body's receiver walls
+// §12 cell (agent-docs/modify-reach-design.md): a cap-blend body's receiver walls
 // read through the SAME bounded three-valued rule as a chamfer patch, rather
 // than a raw float range. The receiver here is fu155's own square (edge
 // tangents exactly (3,9), (-9,3), (-3,-9), (9,-3),
@@ -510,7 +510,7 @@ func TestCapBlendMinRadiusUndecidedOnCircularBand(t *testing.T) {
 }
 
 // TestCapBlendMinRadiusUndecidedOnPlacedBand covers DX8's placement gate
-// (docs/modify-reach-design.md §8.3): the same band that answers unplaced
+// (agent-docs/modify-reach-design.md §8.3): the same band that answers unplaced
 // (TestCapBlendMinRadiusMatchesUnchamferedSection's receiver-matching case)
 // is undecided once placed away from the world origin, because the
 // placement's own independent rounding of every emitted coordinate leaves

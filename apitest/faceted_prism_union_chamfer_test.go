@@ -114,7 +114,7 @@ func TestFacetedPrismUnionChamferOfPlacedUnionTakesTheRetainedRoute(t *testing.T
 	require.NoError(t, err)
 	// The placed Union keeps no source relation, so the prism route declines;
 	// the edge is a straight edge between two retained planes, which
-	// docs/retained-edge-blend-design.md blends from the tags.
+	// agent-docs/retained-edge-blend-design.md blends from the tags.
 	chamfered, err := decad.Chamfer(t.Context(), placed, selector, units.Millimeters(1))
 	require.NoError(t, err)
 	after, err := chamfered.Volume()

@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file holds the B1 tests of docs/linkage-check-design.md §16.8: the
+// This file holds the B1 tests of agent-docs/linkage-check-design.md §16.8: the
 // joint box over a closed loop. Every closed form is scene 7's crank-rocker
 // (ground 100, crank 30, coupler 80, follower 70), its follower's top corner
 // at y_c(θ2) = 70·sin θ4 − 4·cos θ4, which rises from 67.0399 at θ2 = 0 to
@@ -110,7 +110,7 @@ func rockerFollowerRho() float64 {
 	return math.Hypot(minX-rockerGround, by-4*math.Cos(t4))
 }
 
-// TestVerifyJointBoxLoopGate is scene 11 of docs/linkage-check-design.md
+// TestVerifyJointBoxLoopGate is scene 11 of agent-docs/linkage-check-design.md
 // §16.8, the acceptance target: the crank over [0°, 90°] and the gate over
 // [0, 10] mm. The colliding region is {d > d*(θ2)}, d*(θ2) = 72 − y_c(θ2):
 // 4.9601 at 0°, 2.6143 at θ2*, 6.1371 at 90°, a boundary that turns back in
@@ -359,7 +359,7 @@ func TestVerifyJointBoxLoopFold(t *testing.T) {
 }
 
 // TestVerifyJointBoxLoopErrors is one subtest per row of
-// docs/linkage-check-design.md §16.6.
+// agent-docs/linkage-check-design.md §16.6.
 func TestVerifyJointBoxLoopErrors(t *testing.T) {
 	t.Parallel()
 	z := r3.NewVec(0, 0, 1)

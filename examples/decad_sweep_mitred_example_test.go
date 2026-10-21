@@ -12,7 +12,7 @@ import (
 
 // WithMitredJoins sweeps a straight-sided profile along a LineTo polyline
 // whose joins are corners, and WithSectionScale tapers the section span by
-// span (docs/sweep-design.md §16). This builds a tree-support branch as one
+// span (agent-docs/sweep-design.md §16). This builds a tree-support branch as one
 // solid: a hexagon of radius 1.5 mm that leans over and narrows to 1 mm.
 // Every wall is an exact plane, so the volume is the nearest float to an
 // exact rational, and the branch tessellates without chording.

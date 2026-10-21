@@ -8,7 +8,7 @@ import (
 )
 
 // FacesNearMiss reports whether two faces' facet sets come within slack of each
-// other in a way this evaluator cannot decide (docs/evaluator-design.md §9). When
+// other in a way this evaluator cannot decide (agent-docs/evaluator-design.md §9). When
 // the facets stay farther than slack apart everywhere, no touch can be hiding and
 // the pair is decided (near = false). When they come within slack — meeting or
 // not — the pair is decided only if the facet sets provably INTERPENETRATE deeper
@@ -17,7 +17,7 @@ import (
 // face-on-face overlap is a tangency the exact mesh pass refuses as an
 // unclassifiable contact (BooleanUnsupportedContact / ErrUnsupported), so it is
 // left to that verdict rather than pre-empted here. That deferral is sound only
-// while that refusal happens: docs/interference-design.md §5.2 states what must
+// while that refusal happens: agent-docs/interference-design.md §5.2 states what must
 // settle such a pair before the refusal is removed.
 func FacesNearMiss(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int, slack float64, memo *ContactMemo) (bool, error) {
 	nc, deferred, err := GatherNearContacts(ctx, bmA, fis, bmB, fjs, slack, memo)
@@ -29,7 +29,7 @@ func FacesNearMiss(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh,
 	}
 	// A restating operand's facets within the slack are where the pair meets
 	// it, so the local chain-depth gate reads them before any depth question
-	// is asked (docs/faceted-vertex-bounds-design.md §5).
+	// is asked (agent-docs/faceted-vertex-bounds-design.md §5).
 	if err := RefuseCoarseHeldContact(bmA, 0, nc.CloseA); err != nil {
 		return false, err
 	}
@@ -44,7 +44,7 @@ func FacesNearMiss(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh,
 }
 
 // ProvenDepthExceeds is the reject-only depth discriminator behind the meet
-// admission (docs/evaluator-design.md §9, docs/tessellation-design.md §11 step
+// admission (agent-docs/evaluator-design.md §9, agent-docs/tessellation-design.md §11 step
 // 4). It reports true ONLY when it has PROVEN that the two facet sets
 // interpenetrate by a signed depth strictly greater than b: a concrete point of
 // one operand's held facets, certified STRICTLY inside the other operand's solid,

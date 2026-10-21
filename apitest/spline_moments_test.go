@@ -1373,7 +1373,7 @@ func TestDegenerateSplineRecordRefuses(t *testing.T) {
 }
 
 // A closed-spline profile's moments now answer AND its side face now builds
-// (docs/spline-design.md §10 P4b, Table R row R6 retired): Extrude reaches the
+// (agent-docs/spline-design.md §10 P4b, Table R row R6 retired): Extrude reaches the
 // walk-kind discriminant's free-form arm instead of refusing there, and the
 // resulting solid's Volume is the Tier A rational times the sweep height —
 // the same exact area TestClosedSplineExactArea proves, composed through the
@@ -1414,7 +1414,7 @@ func TestExtrudeClosedSplineProfileBuilds(t *testing.T) {
 }
 
 // One public operation over one record spends ONE R7 work ceiling
-// (docs/spline-design.md §5.2). Extrude runs the record-wide moments preflight
+// (agent-docs/spline-design.md §5.2). Extrude runs the record-wide moments preflight
 // for its area falsifier, the same preflight again inside the prism build, and
 // then reaches the free-form side face's own build machinery — the length
 // bracket, the directional-extreme bracket and the convexity certificate all

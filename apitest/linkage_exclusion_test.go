@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file holds the PR 3 tests of docs/linkage-check-design.md: the layer
+// This file holds the PR 3 tests of agent-docs/linkage-check-design.md: the layer
 // exclusion (§5.7), the link-link swept-box exclusion and the held links of
 // §6 steps 2 and 4. An exclusion admits a pair without evaluating it, so each
 // rule is pinned by a fixture whose answer goes wrong when the rule lets
@@ -256,7 +256,7 @@ func TestVerifyLinkageHeldLinks(t *testing.T) {
 	})
 }
 
-// TestVerifyLinkageExclusionsTakeTheLarger pins docs/linkage-check-design.md
+// TestVerifyLinkageExclusionsTakeTheLarger pins agent-docs/linkage-check-design.md
 // §6 step 4: a pair both the swept-box exclusion and the layer exclusion
 // (§5.7) settle keeps the larger of their two proven lower bounds.
 //

@@ -18,7 +18,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is Document.VerifyJointBox (docs/linkage-check-design.md §14):
+// This file is Document.VerifyJointBox (agent-docs/linkage-check-design.md §14):
 // the joint-box vocabulary, Linkage.Configuration, the cell certificate, and
 // the subdivision that proves a box of joint values clear cell by cell. It
 // runs internal/motionengine's engine — the same groups, pairs, per-pose kernel and
@@ -27,7 +27,7 @@ import (
 // at its driver alone (§16): linkage/loop.go answers each cell's asks for its
 // dependent joints, and this file charges them into the cell's certificate.
 
-// JointBox is a box of joint values (docs/linkage-check-design.md §14.1).
+// JointBox is a box of joint values (agent-docs/linkage-check-design.md §14.1).
 type JointBox[B comparable] []JointRange[B]
 
 // JointRange is one link's range of joint values.
@@ -44,7 +44,7 @@ type JointConfiguration struct {
 }
 
 // Configuration builds every link's world pose at the stated joint values,
-// one per link in Links() order (docs/linkage-check-design.md §14.1). It
+// one per link in Links() order (agent-docs/linkage-check-design.md §14.1). It
 // composes exactly as PoseAt composes — PoseAt is Configuration of a drive's
 // values at s — so a renderer drawing a cell and VerifyJointBox evaluating its
 // centre read the same transform. Every Bounds entry is zero.
@@ -56,7 +56,7 @@ type JointConfiguration struct {
 // (decaderr.ErrNotFinite). A linkage with a loop is decaderr.ErrUnsupported: a dependent
 // joint's value is not the caller's to state. A looped linkage's
 // configuration is a drive whose every sweep holds, posed by Linkage.PoseAt
-// or Schedule.PoseAt (docs/linkage-check-design.md §16.1).
+// or Schedule.PoseAt (agent-docs/linkage-check-design.md §16.1).
 func (l *Linkage[B]) Configuration(values []units.Value) (JointConfiguration, error) {
 	if l == nil {
 		return JointConfiguration{}, fmt.Errorf(`%w: a nil linkage has no link to pose`, decaderr.ErrDegenerate)
@@ -191,12 +191,12 @@ func VerifyBox[B comparable](ctx context.Context, h Hooks[B], l *Linkage[B], box
 	}
 	if !cfg.Stated {
 		// Unstated, the reading refines past the verdict floor to its own,
-		// per axis, as a drive's does (docs/linkage-check-design.md §3, §14.1).
+		// per axis, as a drive's does (agent-docs/linkage-check-design.md §3, §14.1).
 		reading := motionbound.MotionParam{Turn: new(big.Rat), Base: new(big.Rat).SetFrac64(1, linkageReadingFloor)}
 		cfg.ReadingP = &reading
 	}
 	if len(spec.loops) > 0 {
-		// docs/linkage-check-design.md §16.2: each loop axis is the drive
+		// agent-docs/linkage-check-design.md §16.2: each loop axis is the drive
 		// Min → Max; its scenes, its zero pose and its certifiable set, down
 		// to the verdict floor, before any cell, so a dependent's reach enters
 		// the bounds.
@@ -222,7 +222,7 @@ func VerifyBox[B comparable](ctx context.Context, h Hooks[B], l *Linkage[B], box
 	return br.publish(l, box), nil
 }
 
-// resolveBox validates box against l (docs/linkage-check-design.md §14.1) and
+// resolveBox validates box against l (agent-docs/linkage-check-design.md §14.1) and
 // reads it into one joint per link: a listed joint's schedule is its range,
 // Min to Max, so every bound linkage/bound.go reads over a drive's waypoints
 // reads over the range's two ends; an unlisted joint holds 0. axes lists the
@@ -260,7 +260,7 @@ func (l *Linkage[B]) resolveBox(box JointBox[B]) (*linkageSpec[B], []int, error)
 		varying[link.index] = c < 0
 	}
 	// A loop is varied at its driver alone, its range the one-segment drive
-	// Min → Max (docs/linkage-check-design.md §16.1, §16.2).
+	// Min → Max (agent-docs/linkage-check-design.md §16.1, §16.2).
 	if err := l.resolveLoops(spec, "box"); err != nil {
 		return nil, nil, err
 	}
@@ -334,7 +334,7 @@ type boxCell[B comparable] struct {
 	// the pair the reading and the margin split for; nil when that bound is
 	// an excluded pair's, which no split changes.
 	low *[2]int
-	// A looped linkage's cell (docs/linkage-check-design.md §16.3): delta is,
+	// A looped linkage's cell (agent-docs/linkage-check-design.md §16.3): delta is,
 	// per dependent joint, δ_j, the distance from the centre's enclosure to
 	// the far end of the dependent's hull over the cell, zero for a held
 	// loop's. gate is the refusal that left the cell's centre or a hull
@@ -347,7 +347,7 @@ type boxCell[B comparable] struct {
 	gate     string
 	gateLoop *loopDrive[B]
 	// projShares holds, for each evaluated pair whose bound over the cell is
-	// the projection bound (docs/linkage-check-design.md §5.8), every axis's
+	// the projection bound (agent-docs/linkage-check-design.md §5.8), every axis's
 	// share of that bound's defect; a pair absent here takes the travel
 	// bound's shares, linkagebound.SumTerms over boxRun.pairTerms.
 	projShares map[[2]int]map[int]*big.Rat
@@ -360,7 +360,7 @@ func (c *boxCell[B]) centre(k int) *big.Rat {
 }
 
 // subdivide evaluates the whole box's centre, then splits for the verdict and
-// for the readings (docs/linkage-check-design.md §14.4 steps 3-7): the verdict
+// for the readings (agent-docs/linkage-check-design.md §14.4 steps 3-7): the verdict
 // first, and once no cell is splittable for it, one split at a time for the
 // whole-box reading or the margin, the verdict resuming on the halves, until
 // neither asks for a split or the budget stops it.

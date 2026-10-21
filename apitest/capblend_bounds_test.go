@@ -23,7 +23,7 @@ import (
 // closed-form integral do not depend on which end the band sits at). This is
 // REFERENCE-FREE — it needs no independent formula, only that mirroring the
 // band does not change what it measures — so it catches internal/capblend/band.go's
-// side-window/cap-window defect (docs/modify-reach-design.md §8.3) even
+// side-window/cap-window defect (agent-docs/modify-reach-design.md §8.3) even
 // without a value to check the result against: the quarter-disk case's
 // circular wall meets its two line neighbours at a non-tangential miter on
 // BOTH ends, so a Cone patch integrated over the wrong (shared, wall-only)
@@ -61,7 +61,7 @@ func TestCapBlendStartCapVolumeMatchesEndCap(t *testing.T) {
 // quarterDiskBody extrudes the quarter disk (0,0)->(r,0), a CCW arc about the
 // origin from (r,0) to (0,r), (0,r)->(0,0), by h — a single circular wall
 // meeting a straight neighbour at a non-tangential miter corner at BOTH its
-// own ends (docs/modify-reach-design.md §8.3's affected shape).
+// own ends (agent-docs/modify-reach-design.md §8.3's affected shape).
 func quarterDiskBody(t *testing.T, r, h float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
@@ -845,7 +845,7 @@ func TestCapBlendCentroidBoundEncloses(t *testing.T) {
 		`the bound must enclose the true centroid, not merely be near the estimate`)
 }
 
-// TestCapBlendCentroidNeverExceedsGeometryNet is docs/modify-reach-design.md
+// TestCapBlendCentroidNeverExceedsGeometryNet is agent-docs/modify-reach-design.md
 // §8.4 PR B's required test 10: the published bound is a math.Min against
 // the geometric safety net (the body's own Bounds box reach from the
 // centroid, corners included, plus the box's own Bound), so it can never
@@ -1697,7 +1697,7 @@ func concentricDiskWithHole(t *testing.T, R, r, h float64) *decad.Body {
 // orientation whatever it was constructed with. A holed disk's end-cap
 // chamfer placed 2^60 mm along one plane axis rounds the build's own
 // orientation sample onto the cone axis, so NormalAt refuses there and the
-// build must refuse too (SX15, docs/modify-reach-design.md §4) rather than
+// build must refuse too (SX15, agent-docs/modify-reach-design.md §4) rather than
 // publish a hole patch whose outward side was never checked.
 func TestCapBlendFarPlacementOrientationRefusal(t *testing.T) {
 	t.Parallel()
@@ -1780,7 +1780,7 @@ func capBlendConePatchSlantEdges(chamfered *decad.Body) []*decad.Edge {
 
 // quarterDiskMiterLocusLength is quarterDiskBody's own denoted miter locus
 // length, independent of the evaluator: the exact offset family
-// (docs/modify-reach-design.md §8.3) puts the corner-foot's cap-level
+// (agent-docs/modify-reach-design.md §8.3) puts the corner-foot's cap-level
 // endpoint at axial fraction s at (sqrt(r²-2·r·d·s), s·d, h-d+s·d) — the
 // closed form fu144's investigation derived for the corner at (r, 0), a line
 // (the radius) meeting the wall's own circular arc. Summing the polyline

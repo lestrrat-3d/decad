@@ -13,7 +13,7 @@ import (
 // The pass costs about 8.3e-5 ms per segment squared, so this cap bounds
 // one arrangement at roughly 1.4 seconds and peak memory at twice the cap
 // under 16 MB. It admits a rectangular plate with fourteen circular holes
-// and one circular tool (docs/prism-boolean-design.md §10).
+// and one circular tool (agent-docs/prism-boolean-design.md §10).
 const MaxArrangementSegments = 4096
 
 // RegionsWithinWorkCap counts the densified segments over every region a

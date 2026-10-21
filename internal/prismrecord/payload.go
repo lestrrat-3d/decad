@@ -3,7 +3,7 @@
 // their proven displacements, the accumulated rigid placement, the blend-role
 // descriptors and the walk cache, with the builder that evaluates it over
 // topology nodes (Build) and its topo.Payload methods. The root package
-// names it prismPayload (docs/evaluator-design.md §5, §8).
+// names it prismPayload (agent-docs/evaluator-design.md §5, §8).
 package prismrecord
 
 import (
@@ -15,7 +15,7 @@ import (
 // region, the plane frame it lifts through, the signed sweep interval, and the
 // accumulated rigid placement. Every measurement and the whole topology derive
 // from it, which is what makes Transform exact: Placed re-evaluates the same
-// record under the composed motion (docs/evaluator-design.md §8).
+// record under the composed motion (agent-docs/evaluator-design.md §8).
 //
 // A prism-derived modify body (a filleted or chamfered prism, modify §2) also
 // carries the blend-role descriptors of its own rewritten section: BlendSegs
@@ -24,7 +24,7 @@ import (
 // record so a copy or placement re-mints its own blend roles from its own record
 // (the modify §9 role rule) — a plain extrude leaves them empty (no-op).
 //
-// SurfaceResult is WithSurfaceResult's own flag (docs/surface-design.md §4):
+// SurfaceResult is WithSurfaceResult's own flag (agent-docs/surface-design.md §4):
 // true when the build must omit its closing caps and publish a sheet instead
 // of a solid. It is part of the re-evaluable record for the same reason the
 // blend descriptors are, so Transform and Copy reproduce the
@@ -32,7 +32,7 @@ import (
 //
 // SectionDelta is the proven upper bound on how far any recorded boundary
 // coordinate of the section sits from the section this payload's construction
-// DENOTES (docs/prism-boolean-design.md §7). It is zero for every payload a
+// DENOTES (agent-docs/prism-boolean-design.md §7). It is zero for every payload a
 // caller draws directly — a plain extrude, a placement and every modify rewrite
 // record their own coordinates, so the record IS the section they denote — and
 // the analytic prism boolean is the one construction that sets it, to the
@@ -65,7 +65,7 @@ import (
 // momentinput.ProfileWalks.reusable, so a payload whose profile differs by one
 // float bit resolves afresh. A payload a caller draws directly — a plain
 // extrude, a modify rewrite, a boolean result — leaves it nil and resolves as
-// before. See docs/evaluator-design.md §8.
+// before. See agent-docs/evaluator-design.md §8.
 type Payload struct {
 	Profile       momentinput.Profile
 	Frame         r3.Frame

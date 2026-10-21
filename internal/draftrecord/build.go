@@ -26,11 +26,11 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file builds a draft body over topology nodes (docs/draft-design.md
+// This file builds a draft body over topology nodes (agent-docs/draft-design.md
 // §7): the gates of Table SD in §5's stage order, the near cap over the
 // recorded section P, the far cap over its sharp offset Q, and one ruled wall
 // per walk between them. The walls are the cap-loop band of
-// docs/modify-reach-design.md §8.3 with no straight slab below it:
+// agent-docs/modify-reach-design.md §8.3 with no straight slab below it:
 // Payload.Band hands capblend.BuildBand a view whose side level is the sketch
 // plane and whose cap contour is Q, so every wall patch, ruling and far-cap
 // edge, and every bound they carry, comes from that one construction. The
@@ -110,7 +110,7 @@ func auditSpan(budget *proofbound.WorkBudget, profile momentinput.Profile, walks
 	return fmt.Errorf(`%w: the taper's offset amount is known only within the span its sweep and tangent enclosures state, and at the top of that span the far section fails its audit (%v); this evaluator cannot decide whether the stated draft builds (draft SD10)`, decaderr.ErrUnsupported, err)
 }
 
-// buildBody is stage 7 and the assembly (docs/draft-design.md §7 steps
+// buildBody is stage 7 and the assembly (agent-docs/draft-design.md §7 steps
 // 7–9): per loop the near rim at the sketch plane, then capblend.BuildBand's walls
 // and far rim over it; the two caps over the near and far rims; one shell,
 // one lump. Every edge bounds exactly two faces: a near rim edge its wall and

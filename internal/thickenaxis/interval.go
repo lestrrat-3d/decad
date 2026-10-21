@@ -12,7 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-// Radial is the revolve arm's radial-axis gate (docs/surface-design.md
+// Radial is the revolve arm's radial-axis gate (agent-docs/surface-design.md
 // §16.5): the plane-local axis every swept offset must keep a strictly
 // positive radius from, held as exact rationals so each comparison below is
 // decided rather than measured. A surface of revolution's own normal lies in

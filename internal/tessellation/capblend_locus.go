@@ -32,7 +32,7 @@ type CapBlendLocusInput struct {
 // CapBlendCornerLocusGap is how far a MITER corner's built ruling — an Edge
 // tagged Line3, straight from the cap-level foot down to the original corner —
 // can sit from the conic miter locus it stands for
-// (docs/tessellation-reach-design.md §7's locusGap).
+// (agent-docs/tessellation-reach-design.md §7's locusGap).
 //
 // The locus is a curve of proven length at most L between two endpoints c*
 // apart, so it lies inside the ellipse with those two endpoints as foci and
@@ -56,7 +56,7 @@ type CapBlendLocusInput struct {
 // number at either cap, since a loop chamfered on both caps takes one setback
 // pair on both (resolveCapSetbacks) and the two readings then differ only in
 // the sign of an axial span both take the magnitude of. The locus runs dc in
-// the plane and ds along the sweep (docs/modify-reach-design.md §8.3.1). A
+// the plane and ds along the sweep (agent-docs/modify-reach-design.md §8.3.1). A
 // sub-range whose speed cannot be enclosed answers +Inf, which refuses.
 func CapBlendCornerLocusGap(budget *proofbound.WorkBudget, in CapBlendLocusInput) (float64, error) {
 	n := len(in.Walks)

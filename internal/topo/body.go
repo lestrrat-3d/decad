@@ -14,7 +14,7 @@ import (
 // value. The handle keeps its contact cache, which names root types.
 type Body struct {
 	// Solid reports whether the body is a valid solid, a decided answer
-	// (docs/api-design.md core §6).
+	// (agent-docs/api-design.md core §6).
 	Solid bool
 	// PlanarConvexity caches the exact planar convexity certificate and
 	// PlanarSnapshot the exact held snapshot it is read off, each keyed by
@@ -68,7 +68,7 @@ type Body struct {
 	Owner any
 	// Payload is the evaluator's own record of how this body was built —
 	// what Transform re-evaluates under a composed motion
-	// (docs/evaluator-design.md §8). Nil for a body this evaluator did not
+	// (agent-docs/evaluator-design.md §8). Nil for a body this evaluator did not
 	// build.
 	Payload Payload
 }

@@ -102,8 +102,8 @@ func AxisWall(budget *proofbound.WorkBudget, profile momentinput.Profile, ax rev
 }
 
 // SideWall is the open-chain wall section of a revolve meridian
-// with a side opening (docs/modify-reach-design.md §9.3.2,
-// docs/shell-opening-design.md §8). The kept chain K is the meridian less the
+// with a side opening (agent-docs/modify-reach-design.md §9.3.2,
+// agent-docs/shell-opening-design.md §8). The kept chain K is the meridian less the
 // removed run and its on-axis walk. Each end of K is either on the axis, where
 // the offset takes the corner K makes with its mirror image and ends on the
 // axis, or at the opening, where Table RO's rim — the removed neighbour

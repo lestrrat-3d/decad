@@ -8,7 +8,7 @@ import (
 )
 
 // PlanarSupportSets returns the lifted sets of the support planes
-// (docs/multibody-dynamics-design.md §10.5), each plane's in turn, in the
+// (agent-docs/multibody-dynamics-design.md §10.5), each plane's in turn, in the
 // order of planes. One plane's lifted set is every guest vertex whose exact
 // height h = n·(p − q) over the host face's plane is at most band (in
 // millimetres, h² <= band²·n·n, compared exactly) and whose exact foot on the

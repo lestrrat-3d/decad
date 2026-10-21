@@ -15,7 +15,7 @@ type broadPhaseEntry struct {
 	lo, hi float64
 }
 
-// broadPhaseCandidates is the sort-and-sweep of docs/multibody-dynamics-design.md
+// broadPhaseCandidates is the sort-and-sweep of agent-docs/multibody-dynamics-design.md
 // §4.3. It returns the scheduled pairs whose swept boxes are not strictly
 // disjoint, as canonical pair keys in ascending order.
 //

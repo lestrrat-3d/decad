@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/prism-boolean-design.md §7's own test obligations (§15's
+// This file is agent-docs/prism-boolean-design.md §7's own test obligations (§15's
 // exactness rows): the merged section's displacement from the section the two
 // operands jointly denote, and its reach into every measurement evalPrism
 // publishes. §4.1's re-expression is where that displacement is committed, so
@@ -431,7 +431,7 @@ func TestPrismUnionDisplacedSectionDownstreamReadings(t *testing.T) {
 // own reach over a displaced operand. §3.4 routes a scene the analytic path
 // declines back to the mesh boolean precisely when a source carries a
 // displacement, and no mesh of such an operand can go below it
-// (docs/tessellation-design.md §5), so the pair's diameter-derived chord
+// (agent-docs/tessellation-design.md §5), so the pair's diameter-derived chord
 // tolerance is raised past it rather than refusing an operand this path exists
 // to serve.
 func TestPrismUnionDisplacedOperandStillReachesTheMeshBoolean(t *testing.T) {

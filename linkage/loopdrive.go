@@ -19,7 +19,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// resolveLoops applies the loop rows of docs/linkage-check-design.md §15.6 to
+// resolveLoops applies the loop rows of agent-docs/linkage-check-design.md §15.6 to
 // a resolved drive, marks every dependent joint, and cuts each driven loop's
 // drive into sub-segments. A loop the drive does not list, or whose listed
 // joint holds 0, stands at the zero pose and is left as the tree's held
@@ -85,7 +85,7 @@ func (ld *loopDrive[B]) sceneSide(side int, slide bool) (mirror, halfTurn bool) 
 }
 
 // buildScene builds the loop's private scene for the drive on one side
-// (docs/linkage-check-design.md §15.2): one point per loop pin at its exact
+// (agent-docs/linkage-check-design.md §15.2): one point per loop pin at its exact
 // plane position, Common's pins fixed; a line and a distance per revolute
 // loop link between its two pins, the distance's target the interval around
 // the exact length; for the primary slide, a fixed rail along u through its
@@ -131,7 +131,7 @@ type sceneFlip struct {
 
 // probeOffset reads r₀, the zero-pose angle a revolute driver below Common
 // is measured by on the scene flipped by mirror and halfTurn
-// (docs/linkage-check-design.md §15.2): the same scene driven by a loop joint
+// (agent-docs/linkage-check-design.md §15.2): the same scene driven by a loop joint
 // whose parent is Common, at 0, with that angle driven, answers it as its E0
 // reading after its own falsifier has run.
 func (ld *loopDrive[B]) probeOffset(ctx context.Context, spec *linkageSpec[B], mirror, halfTurn bool) (proofbound.RatInterval, error) {
@@ -243,7 +243,7 @@ func (ld *loopDrive[B]) buildSceneOn(ctx context.Context, spec *linkageSpec[B], 
 }
 
 // prepare builds each driven loop's scene on every side its drive reads and
-// asks each scene's zero pose, E0 (docs/linkage-check-design.md §15.2). E0
+// asks each scene's zero pose, E0 (agent-docs/linkage-check-design.md §15.2). E0
 // refusing is decaderr.ErrUnsupported wrapping sketch's error. The document's pins are
 // exact solutions of the scene's equations at the driving value 0 for every
 // target its intervals hold, so a pin outside E0's box disproves the
@@ -272,7 +272,7 @@ func (s *linkageSpec[B]) prepare(ctx context.Context) error {
 
 // sceneValue is the driver's scene value at the exact fraction s, as the two
 // floats around it: |q(s)| in radians or millimetres, each sub-segment read on
-// the side where it is never negative (docs/linkage-check-design.md §15.3).
+// the side where it is never negative (agent-docs/linkage-check-design.md §15.3).
 func (ld *loopDrive[B]) sceneValue(side int, s *big.Rat) (float64, float64) {
 	q := jointParam(ld.driverJt, s)
 	lo, hi := motionbound.ParamLower(q), motionbound.ParamUpper(q)
@@ -300,7 +300,7 @@ func (ld *loopDrive[B]) decompose(ctx context.Context, spec *linkageSpec[B], flo
 }
 
 // checkLimits holds every dependent with declared limits to its whole-drive
-// hull (docs/linkage-check-design.md §15.5): a hull not proven inside
+// hull (agent-docs/linkage-check-design.md §15.5): a hull not proven inside
 // [Min, Max] — its lower end at or above Min's upper enclosure and its upper
 // end at or below Max's lower — is decaderr.ErrDegenerate naming the link. The hull is
 // wider than the exact value set by the pieces' slack, so a drive that
@@ -403,7 +403,7 @@ func (ld *loopDrive[B]) dependentAt(ctx context.Context, joint int, s *big.Rat) 
 }
 
 // cellHulls is every dependent's hull over the stretch [a, b] of the loop
-// axis (docs/linkage-check-design.md §16.2): the hull, over every piece
+// axis (agent-docs/linkage-check-design.md §16.2): the hull, over every piece
 // intervalSpans cuts the stretch into, of the values at the piece's ends and
 // over its cell; err is the refusal that leaves a joint-box cell gated.
 func (ld *loopDrive[B]) cellHulls(ctx context.Context, a, b *big.Rat) ([]proofbound.RatInterval, error) {
@@ -422,7 +422,7 @@ func (ld *loopDrive[B]) cellHulls(ctx context.Context, a, b *big.Rat) ([]proofbo
 // overlaps, over a positive length, some stretch the decomposition certified.
 // A cell whose range meets none holds no buildable centre a split could place,
 // since every such centre was refused at the floor already
-// (docs/linkage-check-design.md §16.4).
+// (agent-docs/linkage-check-design.md §16.4).
 func (ld *loopDrive[B]) meetsCertified(a, b *big.Rat) bool {
 	for _, c := range ld.certified {
 		if a.Cmp(c[1]) < 0 && c[0].Cmp(b) < 0 {
@@ -433,7 +433,7 @@ func (ld *loopDrive[B]) meetsCertified(a, b *big.Rat) bool {
 }
 
 // loopPose is every link's pose at one configuration of a looped linkage
-// (docs/linkage-check-design.md §15.4): its joint value — stated, or the
+// (agent-docs/linkage-check-design.md §15.4): its joint value — stated, or the
 // float midpoint label of a dependent's enclosure — and that value's proven
 // half-width, its world pose, its ideal pose, and per joint the exact value
 // range the ideal pose was composed over.
@@ -461,7 +461,7 @@ func (s *linkageSpec[B]) loopPosesAt(ctx context.Context, frames []motionbound.M
 // loopPosesOf builds every link's pose with each stated joint k at the exact
 // fraction fracs[k] of its own schedule — one fraction for every joint on a
 // drive, each joint's own on a joint box — and each driven loop's dependents
-// read at its driver's fraction (docs/linkage-check-design.md §15.4, §16.3):
+// read at its driver's fraction (agent-docs/linkage-check-design.md §15.4, §16.3):
 // each stated joint at its label, each dependent at the float midpoint of its
 // enclosure, both posed by posesOf; every link's ideal pose composed over the
 // dependent's whole enclosure by MotionFrame.AtRange; and each value's proven
@@ -540,7 +540,7 @@ func (s *linkageSpec[B]) prepareLoops(ctx context.Context, floor *big.Rat) error
 }
 
 // Schedule is a drive prepared for repeated PoseAt calls on one linkage
-// (docs/linkage-check-design.md §15.7). For every loop the drive moves it
+// (agent-docs/linkage-check-design.md §15.7). For every loop the drive moves it
 // holds the private scene and the chain of certified enclosures, built as far
 // as the drive could be certified. Its PoseAt is safe for concurrent use.
 type Schedule[B comparable] struct {
@@ -587,7 +587,7 @@ func (s *Schedule[B]) Linkage() *Linkage[B] {
 }
 
 // PoseAt returns every link's joint value, its proven half-width and its
-// world pose at the fraction at (docs/linkage-check-design.md §15.4, §15.7).
+// world pose at the fraction at (agent-docs/linkage-check-design.md §15.4, §15.7).
 // For a tree linkage it is Linkage.PoseAt with zero Bounds. For a drive that
 // moves a loop, each dependent joint's value is the float midpoint of its
 // certified enclosure and Bounds its half-width; an at outside [0, 1], or one

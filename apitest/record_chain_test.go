@@ -10,7 +10,7 @@ import (
 )
 
 // This file is RecordChain's own admission-gate coverage
-// (docs/sketch-seam-design.md §2.2, docs/surface-design.md §13.3): the same
+// (agent-docs/sketch-seam-design.md §2.2, agent-docs/surface-design.md §13.3): the same
 // four gates RecordProfile earns, run over a chain instead of a profile.
 // extrude_chain_test.go covers the stale, invalid, and uncertified-fragment
 // gates end to end through chain Extrude; this file targets RecordChain
@@ -86,7 +86,7 @@ func TestRecordChainRejectsForeignBoundaryEntity(t *testing.T) {
 }
 
 // TestRecordChainRejectsTypedNilBoundaryEntity is RecordProfile's typed-nil
-// case, over a chain: docs/surface-design.md §13.3's table groups a nil
+// case, over a chain: agent-docs/surface-design.md §13.3's table groups a nil
 // chain entity with the foreign-source row rather than an invalid one, so
 // the sentinel here differs from RecordProfile's ErrInvalidProfile.
 func TestRecordChainRejectsTypedNilBoundaryEntity(t *testing.T) {

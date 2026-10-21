@@ -32,7 +32,7 @@ func AssembleTriangulated(ctx context.Context, pairs []LoopPair, f0, f1 r3.Frame
 		triangulate, ErrPointUnrepresentable)
 }
 
-// ErrPointUnrepresentable is docs/loft-design.md Table S row S13: a
+// ErrPointUnrepresentable is agent-docs/loft-design.md Table S row S13: a
 // coordinate this build emits — a recorded section point lifted through its
 // own frame and carried by the composed placement, or the orientation anchor
 // — runs past the representable float64 range.

@@ -15,8 +15,8 @@ import (
 
 // This file holds every rim vertex a feature builds from a recorded region to
 // the points its two neighbouring segments DENOTE there: each segment's entity
-// evaluated at its own recorded parameter (docs/sketch-seam-design.md §1/§2,
-// docs/evaluator-design.md §3/§4). A trimmed line's end is the exact lerp at
+// evaluated at its own recorded parameter (agent-docs/sketch-seam-design.md §1/§2,
+// agent-docs/evaluator-design.md §3/§4). A trimmed line's end is the exact lerp at
 // its recorded t, a circle's end is its centre plus r·(cos 2πt, sin 2πt), an
 // arc's whole-range end is Start at t = 0 and Start's radius at End's angle
 // at t = 1, and at a cut junction the two neighbours denote two different points. A vertex

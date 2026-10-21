@@ -103,7 +103,7 @@ func TestFacetedPrismUnionFilletOfPlacedUnionTakesTheRetainedRoute(t *testing.T)
 	require.NoError(t, err)
 	// The placed Union keeps no source relation, so the prism route declines;
 	// the edge is a straight edge between two retained planes, which
-	// docs/retained-edge-blend-design.md blends from the tags.
+	// agent-docs/retained-edge-blend-design.md blends from the tags.
 	filleted, err := decad.Fillet(t.Context(), joined, selector, units.Millimeters(1))
 	require.NoError(t, err)
 	after, err := filleted.Volume()

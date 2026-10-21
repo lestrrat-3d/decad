@@ -1,6 +1,6 @@
 // Package loftface holds the LoftFaces exact cap maps, rational vectors and
 // intervals, and the band injectivity gate and meridian rows built on them.
-// See docs/loft-face-sections-design.md.
+// See agent-docs/loft-face-sections-design.md.
 package loftface
 
 import (

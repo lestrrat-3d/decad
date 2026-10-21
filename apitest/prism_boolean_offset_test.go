@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/prism-boolean-design.md §15's offset-plane rows: G3's
+// This file is agent-docs/prism-boolean-design.md §15's offset-plane rows: G3's
 // shared-axis arm end to end through the public Cut, and the parallel pairs
 // that arm excludes, which stay on the mesh path.
 

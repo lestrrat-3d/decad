@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestReverseSegmentWalksACircleTheOtherWay pins docs/modify-general-design.md
+// TestReverseSegmentWalksACircleTheOtherWay pins agent-docs/modify-general-design.md
 // §3.3 step 5's rule for a whole circle: the same centre and radius, the CCW
 // sense flipped and the range swapped, so reversing twice is the identity. A
 // line and an arc keep their ends and swap their range as before.

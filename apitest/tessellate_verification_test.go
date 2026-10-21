@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These are docs/tessellation-design.md §14's verification-level obligations.
+// These are agent-docs/tessellation-design.md §14's verification-level obligations.
 // The fixture throughout is a fat ring torus, because it is the shape whose
 // facet-pair audit refuses at the very chord tolerance the exporter's own
 // default picks for it (§3's ceiling), so one body exercises both the identity
@@ -77,7 +77,7 @@ func TestTessellateDefaultsToVerifyAll(t *testing.T) {
 // A restatement path copies its proof terms off the payload and publishes them
 // unconditionally, so the level's own withholding is what keeps a VerifyNone
 // mesh from stating a proof the call never ran
-// (docs/tessellation-design.md §2). A faceted body — a boolean's own result —
+// (agent-docs/tessellation-design.md §2). A faceted body — a boolean's own result —
 // is the restatement whose payload always carries a volume proof.
 // framedBoxBody extrudes a box spanning x0..x1, y0..y1 and z0..z0+h, drawn on
 // a plane whose origin is the box's own corner, so every coordinate is exact
@@ -160,7 +160,7 @@ func TestTessellateRefusesAVerificationLevelItDoesNotKnow(t *testing.T) {
 
 // The facet-pair ceiling is a work budget, never a statement that the geometry
 // cannot be meshed: the tolerance VerifyAll refuses for it is met by a level
-// that runs no pair predicate (docs/tessellation-design.md §3).
+// that runs no pair predicate (agent-docs/tessellation-design.md §3).
 func TestVerifyNoneMeetsAToleranceTheProvenPathRefuses(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -179,7 +179,7 @@ func TestVerifyNoneMeetsAToleranceTheProvenPathRefuses(t *testing.T) {
 }
 
 // The one-entry cache keys on the level as well as the tolerance
-// (docs/tessellation-design.md §1.1). Without it the second call at one
+// (agent-docs/tessellation-design.md §1.1). Without it the second call at one
 // tolerance would be answered by the first call's mesh, in either direction.
 func TestTessellationCacheNeverCrossesVerificationLevels(t *testing.T) {
 	t.Parallel()
@@ -245,7 +245,7 @@ func TestVerifyNonePublishesOnlyPositiveAreaFacets(t *testing.T) {
 }
 
 // STL and OBJ default to VerifyNone, so they can write a dense mesh that the
-// facet-pair audit refuses at VerifyAll (docs/api-design.md §11).
+// facet-pair audit refuses at VerifyAll (agent-docs/api-design.md §11).
 func TestExportWritesABodyTheProvenPathRefuses(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -270,7 +270,7 @@ func TestExportWritesABodyTheProvenPathRefuses(t *testing.T) {
 }
 
 // Where both levels succeed the bytes agree: the level publishes proofs, and
-// neither writer reads one (docs/tessellation-design.md §1's Determinism row).
+// neither writer reads one (agent-docs/tessellation-design.md §1's Determinism row).
 func TestExportBytesAreIdenticalAcrossVerificationLevels(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()

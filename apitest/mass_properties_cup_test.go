@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The cup mass path (docs/multibody-dynamics-design.md §8.8) is checked
+// The cup mass path (agent-docs/multibody-dynamics-design.md §8.8) is checked
 // against the outer solid's exact moments minus the cavity's, each integrated
 // in this file in closed form about the world origin, the difference formed
 // before the centroidal tensor. Plate sides, height, thickness and density

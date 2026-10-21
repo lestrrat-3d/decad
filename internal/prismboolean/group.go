@@ -13,9 +13,9 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
-// This file is docs/general-boolean-design.md §3's class A5: prism-boolean's
+// This file is agent-docs/general-boolean-design.md §3's class A5: prism-boolean's
 // analytic paths over operands and results with several regions. A prism
-// group (docs/mirror-pattern-design.md §6.3) is a one-slab
+// group (agent-docs/mirror-pattern-design.md §6.3) is a one-slab
 // stackedrecord.Payload whose regions are pairwise disjoint lumps on one frame
 // and one interval. A group tool enters Cut's private scene as one region per
 // lump; a Union whose select-all survivors close into several loops proven
@@ -27,7 +27,7 @@ import (
 // silent too (prism-boolean §4.4); only an invalid cell the result depends on
 // (RB1), the arrangement cap (RB7) and the recording and audit refusals
 // (RB2-RB9) are errors. A scene whose cuts carry a displaced operand's
-// displacement charges every crossing (docs/general-boolean-design.md §3
+// displacement charges every crossing (agent-docs/general-boolean-design.md §3
 // A6, prismSceneDelta.ChargeCrossings) and never refuses: a crossing with no
 // charge, or any of those errors on such a scene, sends the pair to the mesh
 // path (prismcells.AmplifiedFallback).

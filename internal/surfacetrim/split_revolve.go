@@ -15,7 +15,7 @@ import (
 )
 
 // This file is Split over the revolve family
-// (docs/surface-intersection-design.md §11's PR5). The cell selection and the
+// (agent-docs/surface-intersection-design.md §11's PR5). The cell selection and the
 // per-cell recording run through prismcells over the two operands' MERIDIAN
 // views, as they do for Trim's revolve arm. Each
 // selected cell becomes one solid revolvePayload over the target's own sweep,

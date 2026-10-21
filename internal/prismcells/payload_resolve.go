@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
-// This file is docs/prism-boolean-design.md §4.2's crossing sub-case for Cut
+// This file is agent-docs/prism-boolean-design.md §4.2's crossing sub-case for Cut
 // and Intersect: edge-orientation propagation over the same private scene
 // BuildScene constructs. ResolveAndBuildCut/Intersect call this path when
 // payload_nesting.go's clean-nesting structural match is unresolved.

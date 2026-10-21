@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestVerifyJointBoxSymmetricBody pins docs/linkage-check-design.md §5.2's
+// TestVerifyJointBoxSymmetricBody pins agent-docs/linkage-check-design.md §5.2's
 // symmetry rule in the cell form (§14.3): a disc of radius 5, z ∈ [−5, 5],
 // spins over [0°, 90°] on a revolute about Z under a carriage, x, y ∈ [−5, 5],
 // z ∈ [40, 50], that slides over [0, 20] mm along Y, beside a wall

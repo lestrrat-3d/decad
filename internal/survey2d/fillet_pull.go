@@ -9,7 +9,7 @@ import (
 )
 
 // This file is the undercut survey's reading of a loop fillet's pipe patch
-// (docs/loop-fillet-design.md Table DF's DF7). A patch's outward normal at
+// (agent-docs/loop-fillet-design.md Table DF's DF7). A patch's outward normal at
 // azimuth θ and tube angle φ ∈ [0, π/2] is cos φ·ν + sin φ·σ·û(θ), with ν the
 // outward normal of the face F the band meets, σ the band's side and û(θ)
 // the inward normal of F's region at the loop point at azimuth θ. Its component

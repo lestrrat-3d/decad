@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is the public half of docs/tessellation-reach-design.md §4 (tess
+// This file is the public half of agent-docs/tessellation-reach-design.md §4 (tess
 // §13's increment T6): a lofted body meshes by restating the triangle set its
 // own construction built, and enters the mesh boolean on the strength of the
 // proof record that restatement publishes.
@@ -20,7 +20,7 @@ import (
 // builds. The two
 // sections are identical, so every wall is vertical and every held coordinate
 // is an exactly represented integer. That is what lets the assertions below
-// pin an EXACT zero rather than a small bound — docs/loft-design.md §5.2's
+// pin an EXACT zero rather than a small bound — agent-docs/loft-design.md §5.2's
 // facet-departure row grants the zero only where both its terms are zero by
 // value, which an unplaced LineSeg-only pairing whose stations are all PINNED
 // is the case for.
@@ -33,7 +33,7 @@ func loftBoxAt(t *testing.T, doc *decad.Document, z0, height float64) *decad.Bod
 	return body
 }
 
-// TestLoftTessellate is docs/tessellation-reach-design.md §4's own test list
+// TestLoftTessellate is agent-docs/tessellation-reach-design.md §4's own test list
 // for the restatement: the mesh IS the payload's triangle set, face for face
 // and vertex for vertex, with no chording of its own.
 func TestLoftTessellate(t *testing.T) {
@@ -47,7 +47,7 @@ func TestLoftTessellate(t *testing.T) {
 
 	// Four LineSeg cells on the single loop, each chorded at exactly one
 	// station and split into two wall triangles, plus a square cap's own two
-	// triangles at each end (docs/loft-design.md §5.1's Table C and §7's
+	// triangles at each end (agent-docs/loft-design.md §5.1's Table C and §7's
 	// count).
 	const stations = 4
 	const capTris = 2
@@ -84,7 +84,7 @@ func TestLoftTessellate(t *testing.T) {
 	}
 }
 
-// TestLoftTessellatePinnedLineSegLoftIsExact is docs/tessellation-design.md
+// TestLoftTessellatePinnedLineSegLoftIsExact is agent-docs/tessellation-design.md
 // §14's zero-bound line: an unplaced LineSeg-only loft whose every station is
 // PINNED publishes a zero on all four §2 proofs, and the boolean admits it
 // through the all-planar zero-bound path.
@@ -116,7 +116,7 @@ func TestLoftTessellatePinnedLineSegLoftIsExact(t *testing.T) {
 }
 
 // TestLoftTessellatePlacedLoftUsesThePositiveBoundPath is the same fixture
-// under a non-identity motion: docs/loft-design.md §5.2's facet-departure row
+// under a non-identity motion: agent-docs/loft-design.md §5.2's facet-departure row
 // reduces to the payload's own delta on a LineSeg-only build, so the mesh
 // publishes that displacement and the boolean takes the ordinary
 // positive-bound path instead.
@@ -141,7 +141,7 @@ func TestLoftTessellatePlacedLoftUsesThePositiveBoundPath(t *testing.T) {
 	// A LineSeg-only build charges no chord-to-curve term at all, so its
 	// facet departure reduces to delta — the same term Bounds.Bound carries
 	// beside a zero sectionDelta. The two readings are composed apart
-	// (docs/loft-design.md §5.2's two rows) and each rounds outward through
+	// (agent-docs/loft-design.md §5.2's two rows) and each rounds outward through
 	// its own chain, so the mesh's may sit an ulp above the box's; it may
 	// never sit below it, and it may never be a different quantity.
 	box, err := placed.Bounds()
@@ -164,7 +164,7 @@ func TestLoftTessellatePlacedLoftUsesThePositiveBoundPath(t *testing.T) {
 	require.Less(t, value, 16000.0, "cutting the loft away can only remove material from the 16000 mm^3 prism")
 }
 
-// TestLoftExportIsDeterministic pins docs/tessellation-design.md §1's
+// TestLoftExportIsDeterministic pins agent-docs/tessellation-design.md §1's
 // Determinism row over the restatement path: the same payload and tolerance
 // must produce the same bytes.
 func TestLoftExportIsDeterministic(t *testing.T) {

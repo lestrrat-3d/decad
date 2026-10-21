@@ -11,7 +11,7 @@ import (
 )
 
 // CrossingOffsetUpper is a proven upper bound on the distance from a keyed
-// vertex to the exact crossing it names (docs/general-boolean-design.md §5,
+// vertex to the exact crossing it names (agent-docs/general-boolean-design.md §5,
 // §10): the crossing of a cylinder, whose section is seg, with a plane along
 // its axis. Read in the plane across the axis, the vertex sits on the plane's
 // trace at its exact level along, at the free coordinate free; the crossing

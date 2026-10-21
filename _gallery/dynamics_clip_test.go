@@ -20,7 +20,7 @@ import (
 )
 
 // These tests run the stack-and-drop exit scene of
-// docs/multibody-dynamics-design.md §2 through the real producers and the
+// agent-docs/multibody-dynamics-design.md §2 through the real producers and the
 // real viewer (§11.3): the scene's dynamics.Timeline, the timelineTrack
 // bridge, kinetograph's driven nodes and one rendered frame. dynamics'
 // scene_test.go asserts the same criteria inside the decad module.
@@ -341,7 +341,7 @@ func decadBodyOutsideWorld(t *testing.T) *decad.Body {
 	return body
 }
 
-// These tests run the tumble exit scene of docs/multibody-dynamics-design.md
+// These tests run the tumble exit scene of agent-docs/multibody-dynamics-design.md
 // §2 through the real producers and the real viewer (§11.3): the scene's
 // dynamics.Timeline, the timelineTrack bridge, kinetograph's driven nodes and
 // one rendered frame. dynamics' scene_test.go asserts every exit criterion
@@ -451,7 +451,7 @@ func TestTumbleClip(t *testing.T) {
 }
 
 // These tests run the parts-bin exit scene of
-// docs/multibody-dynamics-design.md §2 through the real producers and the
+// agent-docs/multibody-dynamics-design.md §2 through the real producers and the
 // real viewer (§11.3), as the tumble tests above run theirs. The focused
 // dynamics/scene_test.go tests assert each body's landing and the cylinder's
 // rolling proofs. These tests check the complete scene's end, events, rests,

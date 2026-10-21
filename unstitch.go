@@ -9,7 +9,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is Unstitch of docs/surface-design.md §6.5: the inverse of
+// This file is Unstitch of agent-docs/surface-design.md §6.5: the inverse of
 // stitch.go's Stitch, splitting a body back into one single-face sheet body
 // per face. Its evaluator is internal/stitchrecord's BuildUnstitchFace.
 // Document.commitMany (document.go) is the multi-produce atomic commit this
@@ -17,7 +17,7 @@ import (
 
 // Unstitch returns one single-face sheet body per face of
 // b, in [Body.Faces] order, retiring b
-// (docs/surface-design.md §6.5). Each result carries that face's own
+// (agent-docs/surface-design.md §6.5). Each result carries that face's own
 // surface, loops and readings, and every edge of every result is free: a
 // fresh Face, Edge and Vertex set is minted for each result rather than
 // reusing b's own topology, so the retired b stays
@@ -47,7 +47,7 @@ func Unstitch(ctx context.Context, b *Body) ([]*Body, error) {
 		return nil, err
 	}
 	if _, ok := b.n.Payload.(facetedPayload); ok {
-		return nil, fmt.Errorf(`%w: Unstitch does not accept a Faceted body (docs/surface-design.md Table R row R11)`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: Unstitch does not accept a Faceted body (agent-docs/surface-design.md Table R row R11)`, ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

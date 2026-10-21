@@ -8,7 +8,7 @@ import (
 )
 
 // This file is the exact relation of two closed planar solids
-// (docs/multibody-dynamics-design.md §9.1) and the convexity certificate of
+// (agent-docs/multibody-dynamics-design.md §9.1) and the convexity certificate of
 // one (§9.2). Every predicate is an exact sign over dyadic coordinates; the
 // only rounding is the final conversion of a positive gap.
 //

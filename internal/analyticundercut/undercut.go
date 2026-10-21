@@ -43,7 +43,7 @@ func listVerdict(faces *[]*topo.Face, undecided *bool, f *topo.Face, verdict sur
 // receiver-wall loop: planar sides and caps carry one
 // normal each, cylindrical sides sweep their walk's exact angular range. A
 // straddling face sets undecided without discarding a face already proven to
-// oppose (docs/verification-design.md §6).
+// oppose (agent-docs/verification-design.md §6).
 //
 // A surface result (pp.SurfaceResult) publishes no cap face at all
 // (internal/prismrecord/build.go), so the cap loop below is skipped for one
@@ -115,7 +115,7 @@ func Revolve(b *topo.Body, rp revolveplan.Payload, pull r3.Vec) verifypublish.Un
 		// displaced meridian's tangents only sit within its displacement of the
 		// denoted ones: a planar wall recorded off a rounded miter tilts by an
 		// ulp and would list as an undercut. Undecided, which reads Suspect
-		// (docs/surface-intersection-design.md §7.2).
+		// (agent-docs/surface-intersection-design.md §7.2).
 		return outcome{}
 	}
 	p, ok := pull.Normalize()
@@ -160,7 +160,7 @@ func cupWalksBudget(budget *proofbound.WorkBudget, loop sectionrecord.LoopRecord
 	return loops[0], nil
 }
 
-// Cup surveys a cup's faces against the pull (docs/modify-design.md
+// Cup surveys a cup's faces against the pull (agent-docs/modify-design.md
 // D2): the outer walls over EVERY loop of region O (role side(i,j)), the cavity
 // walls over every loop of the reversed region C (role shellSide(i,j)) — each
 // read by the same exact three-valued survey2d reader Prism uses, so a post

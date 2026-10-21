@@ -10,7 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 )
 
-// BlendAxis reruns the revolve axis gates (docs/evaluator-design.md §6)
+// BlendAxis reruns the revolve axis gates (agent-docs/evaluator-design.md §6)
 // on a rewritten meridian about the receiver's own oriented axis: the side
 // gate, the axis-contact audit and the snap allowances, each with the sentinel
 // the base Revolve call gives it — a new interior axis contact is

@@ -65,7 +65,7 @@ func Properties(ctx context.Context, mesher verifiedmesh.Mesher, b *topo.Body, d
 			return result, err
 		}
 		// A term the analytic path does not charge leaves the revolve to its
-		// verified mesh (docs/multibody-dynamics-design.md §8.5).
+		// verified mesh (agent-docs/multibody-dynamics-design.md §8.5).
 		return verifiedMeshMassProperties(ctx, mesher, b, density)
 	}
 	if faceted, ok := b.Payload.(facetedrecord.Payload); ok {
@@ -108,7 +108,7 @@ func Properties(ctx context.Context, mesher verifiedmesh.Mesher, b *topo.Body, d
 
 // analyticOrMeshMassProperties keeps an analytic arm's result unless that arm
 // refused with decaderr.ErrUnsupported, in which case the body takes its verified mesh
-// (docs/multibody-dynamics-design.md §8.5).
+// (agent-docs/multibody-dynamics-design.md §8.5).
 func analyticOrMeshMassProperties(ctx context.Context, mesher verifiedmesh.Mesher, b *topo.Body, density units.Value, result massmoment.MassReadings, err error) (massmoment.MassReadings, error) {
 	if err == nil || !errors.Is(err, decaderr.ErrUnsupported) || ctx.Err() != nil {
 		return result, err
@@ -118,7 +118,7 @@ func analyticOrMeshMassProperties(ctx context.Context, mesher verifiedmesh.Meshe
 
 // This file owns the mass properties read off an audited triangle set whose
 // occupied volume differs from the denoted solid by a certified E
-// (docs/dynamic-mass-design.md §2.2, docs/multibody-dynamics-design.md §8.3-§8.5):
+// (agent-docs/dynamic-mass-design.md §2.2, agent-docs/multibody-dynamics-design.md §8.3-§8.5):
 //
 //   - internal/massmoment integrates exact signed tetrahedra and widens their
 //     moments by E, R_i·E and R_i·R_j·E;
@@ -143,7 +143,7 @@ const (
 // continues on it and on nothing else.
 var errMassIntervalUnproved = massmoment.ErrMeshIntervalUnproved
 
-// verifiedMeshMassProperties is docs/multibody-dynamics-design.md §8.5's
+// verifiedMeshMassProperties is agent-docs/multibody-dynamics-design.md §8.5's
 // ladder for a solid with no analytic arm: tessellate at VerifyAll with
 // tol_k = diameter·2^-k, diameter the body box's diagonal, and return the
 // first reading whose volume and tensor intervals prove positive. A

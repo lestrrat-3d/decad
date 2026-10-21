@@ -22,7 +22,7 @@ import (
 // selected edge is instead an ordinary lateral edge (the caller then runs the
 // base path). caps names the two cap faces whose loops are the cap loops: the
 // receiver's own capStart/capEnd faces, or a brep receiver's route P caps
-// (docs/brep-modify-design.md §4.2), each face loop mapped to its section
+// (agent-docs/brep-modify-design.md §4.2), each face loop mapped to its section
 // loop.
 func ClassifyChamferSelection(ctx context.Context, pp prismrecord.Payload, caps PrismCaps, sel string, edges []*topo.Edge) (startLoops, endLoops map[int]bool, lateral bool, err error) {
 	budget := proofbound.NewWorkBudget(ctx)

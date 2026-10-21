@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is the undercut survey over draft bodies (docs/draft-design.md
+// This file is the undercut survey over draft bodies (agent-docs/draft-design.md
 // Table DD row DD7, the PR 4 fixtures of §11). A wall drafted at α leans its
 // outward normal n̂·cos α + e·sin α, so against a pull along the sweep e its
 // component is sin α: positive for a narrowing taper, which clears, and

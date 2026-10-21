@@ -8,7 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 )
 
-// The sentinel errors of the public API (docs/api-design.md §12): the cases an
+// The sentinel errors of the public API (agent-docs/api-design.md §12): the cases an
 // agent must branch on. Every fallible operation returns (T, error) — never a
 // bool, a -1 sentinel, or a deferred health state — and wraps one of these
 // where the failure is one a caller decides on, so errors.Is is the branch.
@@ -77,7 +77,7 @@ var ErrNegativeMagnitude = decaderr.ErrNegativeMagnitude
 // caller drew a piece of it, or an
 // uncertified range as an exact trim, would misstate the input geometry, so
 // decad rejects — it never repairs, projects, fits or solves for a point.
-// Full semantics in docs/sketch-seam-design.md.
+// Full semantics in agent-docs/sketch-seam-design.md.
 var ErrUnrecordableProfile = decaderr.ErrUnrecordableProfile
 
 // ErrNotSolid is returned by a region quantity of a body that is not a valid
@@ -93,7 +93,7 @@ var ErrNotSolid = decaderr.ErrNotSolid
 // tessellation refusal — a valid operand whose boolean output cannot be
 // chorded finely enough (a finer tolerance may clear it). A valid but
 // unclassifiable contact or analytic prism-arrangement refusal is
-// [BooleanUnsupportedContact], never ErrDegenerate (docs/api-design.md §8 / H2).
+// [BooleanUnsupportedContact], never ErrDegenerate (agent-docs/api-design.md §8 / H2).
 var ErrDegenerate = decaderr.ErrDegenerate
 
 // ErrBooleanFailed is returned when a boolean operation cannot produce a
@@ -129,7 +129,7 @@ var ErrNotFinite = decaderr.ErrNotFinite
 // requested intent. Evaluator staging is explicit and rejected at the call —
 // never silently approximated or narrowed — and a rejected operation leaves
 // the document untouched. See
-// docs/evaluator-design.md §2. A public Union, Cut or Intersect wraps a valid
+// agent-docs/evaluator-design.md §2. A public Union, Cut or Intersect wraps a valid
 // but unclassifiable contact or analytic prism-arrangement refusal in a
 // [BooleanError] carrying [BooleanUnsupportedContact], but an operand no
 // boolean may consume (a cap-loop chamfer body whose band has a mitered
@@ -145,7 +145,7 @@ var ErrUnsupported = decaderr.ErrUnsupported
 // BooleanErrorCode is the branchable fine reason a public boolean operation
 // failed, read from a [BooleanError] with errors.As. It draws the line the
 // wrapped sentinel is too coarse to draw: the three codes separate a caller's
-// three moves (docs/api-design.md §8 / H2).
+// three moves (agent-docs/api-design.md §8 / H2).
 type BooleanErrorCode int
 
 const (
@@ -194,7 +194,7 @@ const (
 )
 
 // BooleanError is the typed failure of [Union], [Cut] or [Intersect]
-// (docs/api-design.md §8 / H2). It names the operation, the operands as the
+// (agent-docs/api-design.md §8 / H2). It names the operation, the operands as the
 // operation and a branchable Code. It wraps the §12 sentinel errors.Is already branches on, so
 // compatibility holds: errors.Is(err, [ErrBooleanFailed]) holds for
 // [BooleanEmpty] and [BooleanEvaluatorFailure], and errors.Is(err,

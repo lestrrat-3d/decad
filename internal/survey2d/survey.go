@@ -11,7 +11,7 @@ import (
 
 // ExtremeAggregate reduces a population of candidates, each holding a value
 // under its OWN proven bound, to the single interval
-// docs/payload-verification-design.md §9.2 specifies for the faceted twin of
+// agent-docs/payload-verification-design.md §9.2 specifies for the faceted twin of
 // the minimum-radius survey. It is the one owner of that reduction: every
 // survey reading that is an extremum over candidates — the concave radius, the
 // wall reading's arms, and the 2D kernel's own spanning diameter and inradius —

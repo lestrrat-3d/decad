@@ -237,7 +237,7 @@ func (st *stackedUnionState) slabRegion(ctx context.Context, ia, ib int) (profil
 	}
 	// Neither holds the other whole: prism-boolean §4.2's select-all merge,
 	// with §3.4's crossing charge on every cut a displaced source can move
-	// (docs/general-boolean-design.md §3 A6). No cell at all is a scene
+	// (agent-docs/general-boolean-design.md §3 A6). No cell at all is a scene
 	// prismcells.CellProfiles could not restate: the mesh path.
 	if len(m.Profiles) == 0 {
 		return profileRecord{}, false, nil

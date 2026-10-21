@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file pins docs/draft-design.md Table DD row DD1's occupied-volume
+// This file pins agent-docs/draft-design.md Table DD row DD1's occupied-volume
 // proof on the production mesh path (Tessellate at verifyAll): every fixture
 // is meshed at three tolerances, and the exact signed volume of the held mesh
 // must lie within the published VolSymDiff of the closed form §8 states for
@@ -186,7 +186,7 @@ func exactMeshVolume(m *topo.Mesh) *big.Float {
 // meshContactAudit proves the held facets embedded: every facet has
 // positive area, adjacent facets meet only along the vertex or edge their
 // indices share, and no other pair touches. It is the revolve tessellator's
-// exact facet-pair audit (docs/tessellation-design.md §9) run at a zero
+// exact facet-pair audit (agent-docs/tessellation-design.md §9) run at a zero
 // displacement, so it reads the held coordinates and nothing else.
 func meshContactAudit(t *testing.T, verts []r3.Vec, tris [][3]int) error {
 	t.Helper()
@@ -223,7 +223,7 @@ func requireVolumeProofCovers(t *testing.T, fx meshVolumeFixture) {
 	}
 }
 
-// draftFixtures returns docs/draft-design.md §11's F1–F7 records with their
+// draftFixtures returns agent-docs/draft-design.md §11's F1–F7 records with their
 // closed-form volumes.
 func draftFixtures() []meshVolumeFixture {
 	box := func(a, h float64, d *big.Float) *big.Float {
@@ -257,7 +257,7 @@ func draftFixtures() []meshVolumeFixture {
 	}
 }
 
-// TestDraftMeshVolumeProofCoversTheClosedForm is docs/draft-design.md §11's
+// TestDraftMeshVolumeProofCoversTheClosedForm is agent-docs/draft-design.md §11's
 // PR 2 fixture set on the volume proof: F1–F7, each at three chord
 // tolerances, the held mesh's exact volume within VolSymDiff of the body's
 // closed form.
@@ -278,7 +278,7 @@ func TestDraftMeshVolumeProofCoversTheClosedForm(t *testing.T) {
 }
 
 // TestDraftSubsetMeshVolumeProofCoversTheClosedForm is the subset draft's
-// mesh (docs/draft-design.md §10.2 over Table DD row DD1): F1's box with one
+// mesh (agent-docs/draft-design.md §10.2 over Table DD row DD1): F1's box with one
 // wall drafted alone, h·a(a − d/2); F4's L with its notch wall u = 10 drafted
 // alone, h(300 − 5d); and F7's hole drafted alone, πh(R² − r² − rd − d²/3).
 // Each meshes closed at three tolerances, its proof admitted, and the held

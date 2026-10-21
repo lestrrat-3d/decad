@@ -12,7 +12,7 @@ import (
 )
 
 // This file is the crossing audit's second way to enumerate box-overlapping
-// pairs (docs/loft-design.md §6): a uniform grid over the member boxes.
+// pairs (agent-docs/loft-design.md §6): a uniform grid over the member boxes.
 // newPairScan counts, before any runs, the sweep, grid and tree work and
 // hands the audit the cheapest one. All report exactly the box-overlapping
 // pairs, each once, so the candidate set, its

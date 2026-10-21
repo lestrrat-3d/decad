@@ -25,7 +25,7 @@ import (
 )
 
 // This file admits exact planar solids to the general pair relation of
-// docs/multibody-dynamics-design.md §9.1 and caches each body's §9.2
+// agent-docs/multibody-dynamics-design.md §9.1 and caches each body's §9.2
 // convexity certificate. internal/pair decides the relation over the exact
 // snapshots built here, and internal/planarband publishes the contact report
 // from it; this file owns admission, the snapshots and the certificate cache.
@@ -261,7 +261,7 @@ func stitchSolid(budget *proofbound.WorkBudget, b *topo.Body, sp stitchrecord.Pa
 	return solid, proofarith.MustDyOf(displacement), true, nil
 }
 
-// coilSolid reads a coil off its held shell (docs/helix-design.md Table
+// coilSolid reads a coil off its held shell (agent-docs/helix-design.md Table
 // CD row CD5). The shell is a closed all-triangle restatement of the body
 // whose every vertex lies within its own β of the true boundary, so its
 // displacement is the payload's delta, the same bound its mesh publishes. The
@@ -308,7 +308,7 @@ func coilSolid(ctx context.Context, budget *proofbound.WorkBudget, b *topo.Body,
 // off its VerifyAll tessellation, the body's own held mesh at its placement,
 // and returns that mesh's Bound as its displacement δ, the two-sided
 // displacement between the mesh and the true boundary
-// (docs/multibody-dynamics-design.md §10.4). A body whose every face is
+// (agent-docs/multibody-dynamics-design.md §10.4). A body whose every face is
 // planar is read at heldMeshChord, which chords nothing, and its snapshot
 // serves every chord (chordFree); a body with a curved face is read at chord,
 // and a zero chord admits none. A source sphere or cylinder keeps its exact

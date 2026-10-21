@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md §10's T10, run against the REVOLVE
+// This file is agent-docs/surface-design.md §10's T10, run against the REVOLVE
 // sheet path: WithSurfaceResult()'s own manifold-with-boundary mesh and
 // export, one test per Table W row (a partial sweep clear of the axis, a
 // partial sweep meeting it, and a full turn clear of it) plus the design's
@@ -51,7 +51,7 @@ func revolveWallTriangleCount(t *testing.T, solid *decad.Body, solidMesh *decad.
 
 // meshFreeChainCount counts the connected components a mesh's own free
 // directed edges form over its vertex indices — the boundary CHAIN count
-// docs/tessellation-design.md §1.2 reads by connected component, never by
+// agent-docs/tessellation-design.md §1.2 reads by connected component, never by
 // edge count. This is the exact fixture the sheet chain-count fix
 // (PR #292, tessellation.RequireSheetVertexLinks) was required before: a revolve wall
 // meeting the axis shares an interned pole vertex between two rims that are
@@ -146,7 +146,7 @@ func TestSurfaceRevolvePartialClearOfAxisSheetMeshMatchesSolid(t *testing.T) {
 	require.Equal(t, solidMesh.Vertices(), sheetMesh.Vertices())
 
 	// The triangle list equal to the solid's LEADING wall triangles: caps
-	// are appended last (docs/tessellation-design.md §9).
+	// are appended last (agent-docs/tessellation-design.md §9).
 	require.Equal(t, solidMesh.Triangles()[:wantTris], sheetMesh.Triangles())
 
 	// A summed area matching the closed form (within a bound comfortably
@@ -214,7 +214,7 @@ func TestSurfaceRevolveFullTurnClearOfAxisSheetMeshBitEqualsSolid(t *testing.T) 
 		`a full revolution mints no cap in either kind, so its sheet mesh carries no free edge at all`)
 }
 
-// TestSurfaceRevolveHalfDiscFullTurnSheetMeshMatchesSolid is docs/surface-
+// TestSurfaceRevolveHalfDiscFullTurnSheetMeshMatchesSolid is agent-docs/surface-
 // design.md's T6, tessellated: a half-disc revolved a full turn about its
 // diameter is a closed sphere sheet whose mesh is bit-identical to the
 // solid's.
@@ -301,7 +301,7 @@ func TestSurfaceRevolveSheetTessellationDeterminism(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 }
 
-// TestSurfaceRevolveSheetReachesNoBoolean is docs/surface-design.md Table
+// TestSurfaceRevolveSheetReachesNoBoolean is agent-docs/surface-design.md Table
 // X's boolean row for the revolve path specifically: a revolve sheet mesh
 // publishes no occupied-volume proof, so Union refuses it outright.
 func TestSurfaceRevolveSheetReachesNoBoolean(t *testing.T) {

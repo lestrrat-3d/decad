@@ -55,9 +55,9 @@ func SpanPartOf(body *topo.Body) (SpanPart, error) {
 // span's end cap to the first span's start cap and keeps no outer cap.
 //
 // surfaceResult additionally omits the first span's start cap and the last
-// span's end cap from the published face set (docs/surface-design.md §4):
+// span's end cap from the published face set (agent-docs/surface-design.md §4):
 // every span still builds and sews solid (sweeprecord.SpanPayload never
-// carries the flag, docs/surface-design.md's own span-pairing requirement —
+// carries the flag, agent-docs/surface-design.md's own span-pairing requirement —
 // both cap roles must exist for SpanPartOf and SewJoin to run), so this is
 // the ONLY place the flag is consumed. The two outer caps are simply never
 // appended to faces and their body back-pointer is never reassigned to body:
@@ -157,7 +157,7 @@ func Assemble(
 		edge.Faces = LiveFaces(edge.Faces, body)
 	}
 	if surfaceResult {
-		// topobuild.SheetLumps splits by connectivity (docs/surface-design.md §2.2): a
+		// topobuild.SheetLumps splits by connectivity (agent-docs/surface-design.md §2.2): a
 		// holed profile's outer and hole wall tubes touch nowhere once the two
 		// outer caps that used to bridge them are gone, so each becomes its own
 		// Lump. It must run after the live-face filter above, per this

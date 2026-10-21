@@ -298,7 +298,7 @@ func TestParallelDirsExtremeDirections(t *testing.T) {
 }
 
 // roleCapStart is the provenance role of an extrude/revolve start cap
-// (docs/evaluator-design.md §3), shared by the provenance assertions across
+// (agent-docs/evaluator-design.md §3), shared by the provenance assertions across
 // this package's tests.
 const roleCapStart = "capStart"
 
@@ -416,7 +416,7 @@ func TestSelectEdgesPredicates(t *testing.T) {
 	})
 }
 
-// TestFreePredicateMatchesNothingOnASolid pins docs/surface-design.md §3.1:
+// TestFreePredicateMatchesNothingOnASolid pins agent-docs/surface-design.md §3.1:
 // on a solid, Free() matches nothing — an ordinary ErrNoMatch when unasserted,
 // ErrCardinality (never ErrNoMatch) once a cardinality assertion is added —
 // and the SelectionError's Query rendering is what catches a missing render()

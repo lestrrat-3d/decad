@@ -1180,7 +1180,7 @@ func TestVoidRevolveModifyOps(t *testing.T) {
 	}
 
 	// The outer loop's four latitude circles are swept meridian junctions
-	// (docs/modify-reach-design.md Table RX row RX2), so a fillet rounds them
+	// (agent-docs/modify-reach-design.md Table RX row RX2), so a fillet rounds them
 	// and leaves the toroidal void alone. Each radius-1 corner removes a
 	// (1 − π/4) spandrel whose centroid sits k = (10 − 3π)/(12 − 3π) in from
 	// its corner: two corners at ρ = 5 and two at ρ = 15, so the four removed
@@ -1194,7 +1194,7 @@ func TestVoidRevolveModifyOps(t *testing.T) {
 	decadtest.MeasuresVolume(t, filleted,
 		units.CubicMillimeters(2*math.Pi*(1000-40*math.Pi)-2*math.Pi*40*(1-math.Pi/4)))
 
-	// A shell of a holed meridian is SX8 (docs/modify-reach-design.md §9.3):
+	// A shell of a holed meridian is SX8 (agent-docs/modify-reach-design.md §9.3):
 	// the receiver stays live and unchanged.
 	doc, body := voidRevolve(t)
 	before, err := body.Volume()

@@ -15,30 +15,35 @@ CAD software code (e.g. an Autodesk Fusion add-in). Be wrong in the cheap place.
 
 **The public API lands incrementally against approved designs; unshipped
 APIs are design-only.**
-`docs/api-design.md` is the core contract for the whole surface.
+`agent-docs/api-design.md` is the core contract for the whole surface.
+
+## Documentation split
+
+- `docs/` holds user-facing documentation. `docs/api.md` is the API reference and `docs/data-structures.md` the type guide; update both with any public API change.
+- `agent-docs/` holds design decisions and maintenance instructions for agents.
 
 ## Read before you write
 
 | Before writing | Read |
 |---|---|
-| Any file, to find what owns what | `docs/layout.md` — one row per root `.go` file and design doc |
-| Any public type | `docs/api-design.md`, and every companion design listed in `docs/layout/` |
-| Collision geometry or rigid-body dynamics | `docs/collision-dynamics-design.md`, `docs/multibody-dynamics-design.md` |
-| Linkages and joints | `docs/linkage-check-design.md` |
-| Evaluator, topology or feature code | `docs/evaluator-design.md` |
-| Tessellation, export or mesh-boolean operands | `docs/tessellation-design.md` |
-| STEP export | `docs/step-export-design.md` |
-| Free-form geometry or per-kind dispatch | `docs/spline-design.md` |
-| `Union`/`Cut`/`Intersect`, `evaluateBoolean` dispatch, or any code combining recorded sections through a private `sketch` scene | `docs/prism-boolean-design.md`, `docs/general-boolean-design.md` |
-| Mirror, pattern, `Transform`/`Copy` | `docs/mirror-pattern-design.md` |
-| Any modify op, option codec or modify payload | `docs/modify-design.md`, `docs/modify-reach-design.md` |
-| `stackedPrismPayload`, blind `Cut`, slabs | `docs/stacked-prism-design.md` |
-| Sheet-body, surface-result, patch or stitch code | `docs/surface-design.md` |
-| `Trim`, `Extend` or `Split` code | `docs/surface-intersection-design.md` |
+| Any file, to find what owns what | `agent-docs/layout.md` — one row per root `.go` file and design doc |
+| Any public type | `agent-docs/api-design.md`, and every companion design listed in `agent-docs/layout/` |
+| Collision geometry or rigid-body dynamics | `agent-docs/collision-dynamics-design.md`, `agent-docs/multibody-dynamics-design.md` |
+| Linkages and joints | `agent-docs/linkage-check-design.md` |
+| Evaluator, topology or feature code | `agent-docs/evaluator-design.md` |
+| Tessellation, export or mesh-boolean operands | `agent-docs/tessellation-design.md` |
+| STEP export | `agent-docs/step-export-design.md` |
+| Free-form geometry or per-kind dispatch | `agent-docs/spline-design.md` |
+| `Union`/`Cut`/`Intersect`, `evaluateBoolean` dispatch, or any code combining recorded sections through a private `sketch` scene | `agent-docs/prism-boolean-design.md`, `agent-docs/general-boolean-design.md` |
+| Mirror, pattern, `Transform`/`Copy` | `agent-docs/mirror-pattern-design.md` |
+| Any modify op, option codec or modify payload | `agent-docs/modify-design.md`, `agent-docs/modify-reach-design.md` |
+| `stackedPrismPayload`, blind `Cut`, slabs | `agent-docs/stacked-prism-design.md` |
+| Sheet-body, surface-result, patch or stitch code | `agent-docs/surface-design.md` |
+| `Trim`, `Extend` or `Split` code | `agent-docs/surface-intersection-design.md` |
 | Anything the surrounding `.go` file documents | its doc comments |
-| Answering what is missing, or closing/adding a refusal | `docs/missing-features.md` |
-| Tests and CI shards | `docs/testing.md` |
-| Adding or importing a `go.mod` module | `docs/modules.md` |
+| Answering what is missing, or closing/adding a refusal | `agent-docs/missing-features.md` |
+| Tests and CI shards | `agent-docs/testing.md` |
+| Adding or importing a `go.mod` module | `agent-docs/modules.md` |
 
 ## Hard rules
 
@@ -50,14 +55,14 @@ APIs are design-only.**
   itself only where that clearly wins on performance or correctness, and the
   design doc owning that code states the reason (e.g. the coplanar contact
   patch of two exact planar faces, clipped exactly:
-  `docs/multibody-dynamics-design.md` §9.4). Building a private `sketch` scene
+  `agent-docs/multibody-dynamics-design.md` §9.4). Building a private `sketch` scene
   from decad's OWN recorded entities and asking it to arrange them is the
   default's usual shape (`internal/momentinput/record_validation.go`,
-  `docs/prism-boolean-design.md`, `docs/surface-intersection-design.md`):
+  `agent-docs/prism-boolean-design.md`, `agent-docs/surface-intersection-design.md`):
   decad selects among the regions, chains and cells `sketch` returns. The
   soundness half is absolute: where `sketch` reports its own answer
   approximate — an uncertified `Partial` fragment (`BoundaryEdge.TExact`
-  false; `docs/sketch-seam-design.md`) — decad **rejects**. It never repairs,
+  false; `agent-docs/sketch-seam-design.md`) — decad **rejects**. It never repairs,
   projects, fits, or infers the exact answer. A whole (non-`Partial`) edge
   records from the entity's own data and never consults `TExact`.
 - **A decad-side check may only FALSIFY an upstream claim, never bless one.**
@@ -66,7 +71,7 @@ APIs are design-only.**
   geometry it was handed. A residual against a source curve is admissible in exactly
   one direction: **large ⇒ the claim is disproven ⇒ reject**; **small ⇒ proves
   nothing** — a sampled cut can lie arbitrarily close to the curve, so a small
-  residual NEVER admits an input (`docs/sketch-seam-design.md`). A check that can accept
+  residual NEVER admits an input (`agent-docs/sketch-seam-design.md`). A check that can accept
   is an admission gate, and an admission gate on a residual is unsound. Reject-only,
   always.
 - **NEVER hand-roll coordinate math.** Vectors, frames, local↔world transforms →
@@ -75,14 +80,14 @@ APIs are design-only.**
 - **Shapes belong HERE.** `r3` excludes them by charter; solids/surfaces/meshes/
   topology are this module's job.
 - **NEVER add a public API that contradicts the design docs** —
-  `docs/api-design.md` and every design document listed in the Layout table.
+  `agent-docs/api-design.md` and every design document listed in the Layout table.
   Extending them is fine; changing a decision means changing the doc first.
 - **NEVER expose triangles as the representation, indices as selectors, or a bare
   `float64` measurement. NEVER give a boolean a target-out parameter or let it
   mutate an operand.** These are the forward-compatibility invariants that keep
-  an exact-kernel future reachable (`docs/api-design.md` §3). Scalar quantities —
+  an exact-kernel future reachable (`agent-docs/api-design.md` §3). Scalar quantities —
   values and their error bounds alike — are `units.Value`. Exactly two things are
-  not scalar quantities and so fall outside the rule (`docs/api-design.md` §5.2):
+  not scalar quantities and so fall outside the rule (`agent-docs/api-design.md` §5.2):
   the **coordinate** — an `r3.Vec`, or a plane-local `Point2` — which is a length in
   millimetres by convention; and the **curve parameter** — a spline's degree, knots
   and weights, a recorded segment's parameter range (`TStart`/`TEnd`), a conic's
@@ -90,7 +95,7 @@ APIs are design-only.**
   measurement of anything.
   Neither is a licence for a bare float anywhere else.
 - **NEVER add a `go.mod` module without recording the decision in
-  `docs/modules.md`.**
+  `agent-docs/modules.md`.**
 - **Tooling lives in its own nested module.** `_gallery/` renders the README
   images and landing clip, and `_shardgen/` packs the race shards. Both carry
   their own `go.mod` and an `_` prefix, so the root module, its linter and
@@ -116,8 +121,8 @@ APIs are design-only.**
 - User-facing usage → executable Go examples in `examples/` with verified
   `// Output:` blocks. NEVER README-only snippets.
 - Docs state **current state only** — no changelogs, no "was X, now Y".
-- Design docs live in `docs/<topic>-design.md`, and every one of them carries a
-  row in `docs/layout/`, as does every non-test `.go` file in the root.
+- Design docs live in `agent-docs/<topic>-design.md`, and every one of them carries a
+  row in `agent-docs/layout/`, as does every non-test `.go` file in the root.
 
 ## Verification
 

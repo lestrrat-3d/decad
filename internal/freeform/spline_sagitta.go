@@ -7,17 +7,17 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
-// This file implements docs/spline-design.md §6.2.1's chord sagitta bound for
+// This file implements agent-docs/spline-design.md §6.2.1's chord sagitta bound for
 // a Tier A free-form span. Its dyadic station consumer is in spline_stations.go.
 //
 // The bound works in EXACT rational arithmetic; its one rounding is the final
 // proofbound.RatSqrtUp (spline_length.go) that turns
 // a proven rational squared distance into a published float64 upper bound.
 // It does not take a rational (non-unit-weight) span: Tier A is unit-weight
-// only (docs/spline-design.md Table F), so a rational span never reaches this
+// only (agent-docs/spline-design.md Table F), so a rational span never reaches this
 // file — it refuses earlier, at Table R row R10, inside freeformBezierSpans
 // (spline_bezier.go). a10-plan.md's risk register item R5 covers this
-// narrowing explicitly, and docs/spline-design.md §11 excludes the sagitta
+// narrowing explicitly, and agent-docs/spline-design.md §11 excludes the sagitta
 // row from needing a rational fixture for the same reason §6.2.1 gives: the
 // control-point-to-chord-segment argument reads no weight or parameterisation
 // at all, so it holds unchanged on a rational span even though this file
@@ -380,7 +380,7 @@ func (s DyadicSpan) BezierSpan(w *FreeformWork) (BezierSpan, error) {
 
 // --- the sagitta reading ---
 
-// DyadicSpanSagittaUpper is docs/spline-design.md §6.2.1's bound, over the
+// DyadicSpanSagittaUpper is agent-docs/spline-design.md §6.2.1's bound, over the
 // dyadic form PairStations' own bisection already holds: the maximum,
 // over every one of the span's OWN control points, of that point's exact
 // distance to the chord SEGMENT joining the span's first and last control

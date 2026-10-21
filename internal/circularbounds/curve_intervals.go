@@ -118,7 +118,7 @@ type arcOffsets struct {
 
 // arcWalkOffsets encloses seg's walk over [TStart, TEnd], in the record's
 // order, so a reversed record walks backwards. The arc denotes
-// θ(t) = a0 + t·sweep on Start's radius r (docs/evaluator-design.md §4), so
+// θ(t) = a0 + t·sweep on Start's radius r (agent-docs/evaluator-design.md §4), so
 // the signed swept angle is the exact rational (TEnd − TStart) times the
 // sweep enclosure. Each end's offset comes from the record wherever the
 // record states it: Start's own difference at t == 0, and ρ·(End − Center)

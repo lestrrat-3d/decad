@@ -12,7 +12,7 @@ import (
 // cell between them. Their union is 48 + 54 − 4 = 98 mm² of section; filling
 // the cell would publish 122. The analytic paths' select-all merge keeps every
 // bounded cell, so they decline a pair with such a cell and the mesh path
-// answers it (docs/prism-boolean-design.md §4.2).
+// answers it (agent-docs/prism-boolean-design.md §4.2).
 var (
 	voidCShapeA = [][2]float64{{0, 0}, {6, 0}, {6, 3}, {3, 3}, {3, 7}, {6, 7}, {6, 10}, {0, 10}}
 	voidCShapeB = [][2]float64{{5, -1}, {11, -1}, {11, 11}, {5, 11}, {5, 8}, {8, 8}, {8, 2}, {5, 2}}

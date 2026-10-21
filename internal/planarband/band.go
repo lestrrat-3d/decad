@@ -17,7 +17,7 @@ import (
 
 // bandPair is one admitted pair at least one of whose held meshes
 // carries a positive displacement, with both displacements at the query
-// poses (docs/multibody-dynamics-design.md §10.4).
+// poses (agent-docs/multibody-dynamics-design.md §10.4).
 type bandPair struct {
 	a, b           *planar.PlanarSolid
 	deltaA, deltaB proofarith.Dyadic

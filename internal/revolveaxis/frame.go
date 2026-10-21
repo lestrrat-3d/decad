@@ -150,7 +150,7 @@ func (ax Frame) Walk(w survey2d.SegmentWalk) survey2d.SegmentWalk {
 	return ax.WalkCharged(w, proofbound.WalkEndBound{}, proofbound.WalkEndBound{})
 }
 
-// axisCharge is docs/surface-intersection-design.md §7.1's fold: how far a
+// axisCharge is agent-docs/surface-intersection-design.md §7.1's fold: how far a
 // plane-local endpoint displacement (δu, δv) can move that endpoint's two AXIS
 // coordinates. ToAxis is the stored-float rotation z = Δu·dU + Δv·dV,
 // ρ = Δv·dU − Δu·dV about the resolved anchor, and it is linear, so each
@@ -177,7 +177,7 @@ func (ax Frame) axisCharge(c proofbound.WalkEndBound) (float64, float64) {
 
 // WalkCharged is walk with a section displacement folded in, per endpoint.
 // startCharge and endCharge are the plane-local per-component displacements
-// docs/surface-intersection-design.md §7.1 charges — prismcells.TrimCutChargeUV's own
+// agent-docs/surface-intersection-design.md §7.1 charges — prismcells.TrimCutChargeUV's own
 // figures, taken at exactly the endpoint whose recorded parameter is not a
 // natural bound, and at neither endpoint of a segment the arrangement did not
 // cut. Both zero is the ordinary revolve, and every fold below is skipped.

@@ -17,7 +17,7 @@ import (
 // falsifier every "sample the true surface densely" assertion below reads. A
 // sample farther from the mesh than the published Bound DISPROVES the bound;
 // samples that pass prove nothing and never stand in for the proof
-// (docs/tessellation-design.md §14).
+// (agent-docs/tessellation-design.md §14).
 func distanceToMesh(mesh *decad.Mesh, p r3.Vec) float64 {
 	verts := mesh.Vertices()
 	best := math.Inf(1)
@@ -328,7 +328,7 @@ func TestRevolveTessellateReflectedPlacementKeepsOutwardWinding(t *testing.T) {
 
 func TestRevolveTessellateChargesPlacementRoundingSeparately(t *testing.T) {
 	t.Parallel()
-	// docs/tessellation-design.md §8's deltaR: an identity placement performs
+	// agent-docs/tessellation-design.md §8's deltaR: an identity placement performs
 	// no coordinate operation and adds nothing, while a real motion rounds at
 	// its own magnitude and every source bound carries the difference.
 	s, p := solidSketch(t)
@@ -380,7 +380,7 @@ func TestRevolveTessellateRefusals(t *testing.T) {
 	t.Run("two off-axis generators meeting on the axis sweep no manifold pole", func(t *testing.T) {
 		// The apex is on the axis but no on-axis segment continues through it,
 		// so the two cones meet at a single point whose boundary link is two
-		// circles rather than one — docs/tessellation-design.md §9's
+		// circles rather than one — agent-docs/tessellation-design.md §9's
 		// axis-incidence refusal, raised before a sample is emitted.
 		w := sketch.NewWorld()
 		s, err := w.CreateSketch(w.XY())

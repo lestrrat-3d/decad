@@ -159,7 +159,7 @@ func capSweepBracket(cU, cV float64, start, end sectionrecord.Point2, wraps int,
 // arc runs between the offset corner feet (start, end), whose angle about the
 // wall's exact centre is generally DIFFERENT from the wall's own recorded
 // th0/th1 wherever the corner is a genuine (non-tangent) miter
-// (docs/modify-reach-design.md §8.3) — the cap directrix is TRIMMED there —
+// (agent-docs/modify-reach-design.md §8.3) — the cap directrix is TRIMMED there —
 // so the sweep is bracketed straight from those feet, exactly the way
 // CapApexArcBound brackets a reflex corner's own connector: an proofbound.Atan2Interval
 // enclosure of the two feet's own turn about the centre, so no libm accuracy
@@ -216,7 +216,7 @@ func intervalMagnitudeUpper(iv proofbound.RatInterval) float64 {
 // the raw sweep rather than against radius·sweep, so patchAreaOf's Δθ factor
 // (the frustum-sector area formula's own sweep) and CapWallArcBound's length
 // bound both read one proven enclosure of the same sweep
-// (docs/modify-reach-design.md §8.4). radius is the circle the two feet lie
+// (agent-docs/modify-reach-design.md §8.4). radius is the circle the two feet lie
 // on (capRadius for a regular wall's cap contour, d for a reflex corner's
 // connector) and is used only to turn the feet's own contour displacement
 // into the angular turn a foot at that radius can still account for:

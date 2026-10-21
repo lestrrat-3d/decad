@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These fixtures check docs/multibody-dynamics-design.md §8.1 and §8.2: a
+// These fixtures check agent-docs/multibody-dynamics-design.md §8.1 and §8.2: a
 // prism under a non-cardinal frame or placement basis, or with a displaced
 // level, publishes mass and all six world inertia components enclosing the
 // independent closed-form box's exact image under the held basis product M
@@ -227,7 +227,7 @@ func wideDet(m [3][3]*big.Float) *big.Float {
 // m, its column k the image of local axis k, at the same density rho: from
 // the local inertia I the local second moment is S = (trace(I)/2·1 − I)/rho,
 // the image's is S′ = |det m|·m·S·mᵀ, and its inertia rho·(trace(S′)·1 − S′)
-// (docs/multibody-dynamics-design.md §8.6).
+// (agent-docs/multibody-dynamics-design.md §8.6).
 func affineInertia(m, local [3][3]*big.Float, rho *big.Float) [3][3]*big.Float {
 	half := newWide().Add(newWide().Add(local[0][0], local[1][1]), local[2][2])
 	half.Quo(half, newWide().SetInt64(2))

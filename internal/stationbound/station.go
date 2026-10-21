@@ -12,8 +12,8 @@ import (
 )
 
 // This file owns the proven bound on ONE interior chord station of a circular
-// walk — the coordinate-construction half of docs/tessellation-design.md §2's
-// sourceBound(face), which docs/tessellation-reach-design.md §3 names deltaStore.
+// walk — the coordinate-construction half of agent-docs/tessellation-design.md §2's
+// sourceBound(face), which agent-docs/tessellation-reach-design.md §3 names deltaStore.
 //
 // A walk's own two endpoints already state what they are worth
 // (survey2d.SegmentWalk.startBound/endBound, extrude.go). Every sample BETWEEN
@@ -44,7 +44,7 @@ import (
 // An enclosure the recorded data cannot state, a parameter that is not
 // representable as a rational, and a station index outside the walk's own
 // interior all answer +Inf on both components — the underivable bound the
-// tessellation refuses on (docs/tessellation-design.md §12), never a zero.
+// tessellation refuses on (agent-docs/tessellation-design.md §12), never a zero.
 func ChordStationBound(seg sectionrecord.CurveSegment, k, n int, heldU, heldV float64) proofbound.WalkEndBound {
 	underivable := proofbound.WalkEndBound{U: math.Inf(1), V: math.Inf(1)}
 	if n <= 0 || k <= 0 || k >= n {
@@ -66,7 +66,7 @@ func ChordStationBound(seg sectionrecord.CurveSegment, k, n int, heldU, heldV fl
 // CapOffsetStationBound is ChordStationBound read on a wall's exact OFFSET
 // circle at the exact fraction k/n of the wall's own recorded window, k in
 // [0, n] inclusive: the gap between a held cap-contour sample and the point
-// docs/tessellation-reach-design.md §7's ideal polyhedron B1 places there.
+// agent-docs/tessellation-reach-design.md §7's ideal polyhedron B1 places there.
 // k == 0 and k == n are the two corner feet.
 //
 // radiusOffset is the exact rational the offset adds to the segment's own
@@ -76,7 +76,7 @@ func ChordStationBound(seg sectionrecord.CurveSegment, k, n int, heldU, heldV fl
 //
 // An index outside [0, n], an enclosure the record cannot state and a held
 // coordinate that is not finite all answer +Inf on both components — the
-// underivable bound the tessellation refuses on (docs/tessellation-design.md
+// underivable bound the tessellation refuses on (agent-docs/tessellation-design.md
 // §12), never a zero.
 func CapOffsetStationBound(seg sectionrecord.CurveSegment, k, n int, radiusOffset *big.Rat, heldU, heldV float64) proofbound.WalkEndBound {
 	underivable := proofbound.WalkEndBound{U: math.Inf(1), V: math.Inf(1)}

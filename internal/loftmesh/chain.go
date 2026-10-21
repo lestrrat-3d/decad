@@ -13,7 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-// ValidateChainLoftRecords is docs/loft-design.md Table SL rows SL3, SL4, SL5
+// ValidateChainLoftRecords is agent-docs/loft-design.md Table SL rows SL3, SL4, SL5
 // and SL7 over the two authenticated records alone, in §4's stated gate order
 // with the loop dimension collapsed: a ChainRecord holds one walk and no holes,
 // so P1 and P2 have nothing left to decide and P3's segment-count
@@ -47,7 +47,7 @@ func ValidateChainLoftRecords(c0, c1 sectionrecord.ChainRecord, pl0, pl1 section
 		// SL4 first, in SameKindGate's own three-way form, so a mixed-kind
 		// pairing and an opposite-sense circular pairing each keep the sentinel
 		// and the wording Loft already gives them. Loop index 0: a chain takes
-		// the outer-loop convention throughout (docs/surface-design.md §13.4).
+		// the outer-loop convention throughout (agent-docs/surface-design.md §13.4).
 		if err := SameKindGate(c0.Segments[j], c1.Segments[j], 0, j, j); err != nil {
 			return nil, nil, err
 		}
@@ -58,7 +58,7 @@ func ValidateChainLoftRecords(c0, c1 sectionrecord.ChainRecord, pl0, pl1 section
 		// rather than on a station for exactly that reason.
 		if PairTypeOf(c0.Segments[j]) != PairLine {
 			return nil, nil, fmt.Errorf(
-				`%w: LoftChain rules a LineSeg pair only; segment %d is a curved pair, whose stations have no side proof yet (docs/loft-design.md §16.2)`,
+				`%w: LoftChain rules a LineSeg pair only; segment %d is a curved pair, whose stations have no side proof yet (agent-docs/loft-design.md §16.2)`,
 				decaderr.ErrUnsupported, j)
 		}
 		walks0[j] = w0
@@ -74,7 +74,7 @@ func ValidateChainLoftRecords(c0, c1 sectionrecord.ChainRecord, pl0, pl1 section
 	return walks0, walks1, nil
 }
 
-// ChainLoftPlaneSideGate is docs/loft-design.md §16.2's admission gate, and
+// ChainLoftPlaneSideGate is agent-docs/loft-design.md §16.2's admission gate, and
 // the whole of what states a chain loft's positive side.
 //
 // A closed loft orients its shell from the signed tetrahedron sum over the
@@ -84,7 +84,7 @@ func ValidateChainLoftRecords(c0, c1 sectionrecord.ChainRecord, pl0, pl1 section
 // own normal agrees with T x N0, T the from-walk's chord direction across that
 // cell and N0 = U0 x V0 the from-plane's positive normal — the identical
 // vector chain Extrude's wall over the same recorded segment publishes
-// (docs/surface-design.md Table G). That winding agrees with T x N0 exactly
+// (agent-docs/surface-design.md Table G). That winding agrees with T x N0 exactly
 // when the rule vector from a from-station to the paired to-station has a
 // strictly positive component along N0, and exactly parallel planes give that
 // at EVERY station at one exactly-positive offset, whatever the station's own
@@ -109,18 +109,18 @@ func ChainLoftPlaneSideGate(pl0, pl1 sectionrecord.PlaneRecord) error {
 	cr := proof.Xcross(n0, n1)
 	if cr.X.Sign() != 0 || cr.Y.Sign() != 0 || cr.Z.Sign() != 0 {
 		return fmt.Errorf(
-			`%w: the two chain planes are not exactly parallel, so this evaluator has no stated positive side for the ribbon between them (docs/loft-design.md §16.2)`,
+			`%w: the two chain planes are not exactly parallel, so this evaluator has no stated positive side for the ribbon between them (agent-docs/loft-design.md §16.2)`,
 			decaderr.ErrUnsupported)
 	}
 	if proof.XdotSign(n0, proof.Xsub(proof.XptOf(pl1.Origin), proof.XptOf(pl0.Origin))) <= 0 {
 		return fmt.Errorf(
-			`%w: the second chain's plane does not lie on the first plane's positive side, so this evaluator has no stated positive side for the ribbon between them (docs/loft-design.md §16.2)`,
+			`%w: the second chain's plane does not lie on the first plane's positive side, so this evaluator has no stated positive side for the ribbon between them (agent-docs/loft-design.md §16.2)`,
 			decaderr.ErrUnsupported)
 	}
 	return nil
 }
 
-// ChainLoftStations places the two station chains docs/loft-design.md §16.5
+// ChainLoftStations places the two station chains agent-docs/loft-design.md §16.5
 // describes: one station per recorded segment plus the walk's own terminal
 // point, so an n-segment walk carries n+1 stations and the cell walk runs j to
 // j+1 with no wrap.
@@ -129,7 +129,7 @@ func ChainLoftPlaneSideGate(pl0, pl1 sectionrecord.PlaneRecord) error {
 // segment's first station, or the loop's wrap, supplies the one it shares. An
 // open walk has no wrap, so its last segment's end point is carried
 // explicitly — the identical drop chainrecord's buildSides already makes for a chain
-// prism's n+1 rim posts (docs/surface-design.md §13.4).
+// prism's n+1 rim posts (agent-docs/surface-design.md §13.4).
 //
 // The returned stationRound is the MAX over every station of the displacement
 // §5.2 proves for it, each read through the same WalkEndPlaneDelta the closed

@@ -24,7 +24,7 @@ const (
 	ContactTouching
 	ContactOverlapping
 	// ContactBand is published for a body whose held boundary carries a
-	// positive displacement (docs/multibody-dynamics-design.md §10.4), or for
+	// positive displacement (agent-docs/multibody-dynamics-design.md §10.4), or for
 	// an exact planar pair apart by at most the request's SupportBand
 	// (§10.5): the interiors are disjoint except possibly within a band of
 	// width Gap.Bound around Gap.Value, which is zero. A displaced pair's
@@ -44,7 +44,7 @@ const (
 	ContactAmbiguousFeature
 	ContactPointTooCoarse
 	// ContactNonConvex withholds a manifold because neither body carries the
-	// convexity certificate of docs/multibody-dynamics-design.md §9.2: an
+	// convexity certificate of agent-docs/multibody-dynamics-design.md §9.2: an
 	// overlap, or a touch whose contacts no single face of one body holds
 	// with the other body's corners inside it (§10.5).
 	ContactNonConvex

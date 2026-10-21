@@ -14,7 +14,7 @@ import (
 var ErrTimelineStopped = errors.New("dynamics: timeline stopped at an undecided step")
 
 // Timeline chains the steps of one world from one start state
-// (docs/multibody-dynamics-design.md §7.2). Its certified end is the
+// (agent-docs/multibody-dynamics-design.md §7.2). Its certified end is the
 // completed time of the last advanced step; it stops at the first Undecided
 // step and never advances past it.
 //

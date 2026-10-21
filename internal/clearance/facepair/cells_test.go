@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These tests pin docs/clearance-design.md §4's windowed nested cell on
+// These tests pin agent-docs/clearance-design.md §4's windowed nested cell on
 // face pairs built by hand. Legs seen red, each by breaking what it guards:
 // deleting the cell leaves every nested pair of the band test undecided;
 // reading d_sup at the window's midpoint instead of its ends puts the tilt

@@ -63,20 +63,20 @@ func stationPoints(stations []LoftStation) []sectionrecord.Point2 {
 	return points
 }
 
-// StationCap is docs/loft-design.md §5.1's ceiling on a build's TOTAL station
+// StationCap is agent-docs/loft-design.md §5.1's ceiling on a build's TOTAL station
 // count Σstations (§7), as a function of the build's paired-segment count P
-// (docs/loft-gear-bounds-design.md §7):
+// (agent-docs/loft-gear-bounds-design.md §7):
 //
 //	stationCap(P) = min(max(StationCapFloor, StationsPerPair·P), StationCapCeiling)
 //
 // The cap scales with P because a record's need for stations does: the
-// helical gear fixture of docs/loft-gear-bounds-design.md needs 124–132
+// helical gear fixture of agent-docs/loft-gear-bounds-design.md needs 124–132
 // stations for one tooth (P = 6) and 952–1960 for a full outline (P = 48–240).
 // S15 charges each pair's actual settled cells against the shared cap, and a
 // gear's flanks need far more cells than its arcs: the z = 8 outline's flanks
 // need 48 cells each. 64 stations per paired segment leaves enough aggregate
 // room for the measured outlines. The
-// floor keeps a record of a few curves the room the docs/loft-design.md §14
+// floor keeps a record of a few curves the room the agent-docs/loft-design.md §14
 // reference wedges need.
 //
 // The hard ceiling bounds what the cap protects. §7 fixes the assembled
@@ -99,7 +99,7 @@ func StationCap(p uint64) int {
 	return int(max(StationCapFloor, StationsPerPair*p)) //nolint:gosec // p < StationCapCeiling/StationsPerPair here, so the product is below StationCapCeiling.
 }
 
-// StationCap's three constants (docs/loft-gear-bounds-design.md §7).
+// StationCap's three constants (agent-docs/loft-gear-bounds-design.md §7).
 const (
 	StationCapFloor   = 512
 	StationsPerPair   = 64
@@ -107,7 +107,7 @@ const (
 )
 
 // StationWorkUnits is the free-form work one station may charge each record's
-// counter. On the gear fixtures of docs/loft-gear-bounds-design.md the loft's
+// counter. On the gear fixtures of agent-docs/loft-gear-bounds-design.md the loft's
 // walk resolution and station walk together charge 5300–7000 units per
 // station per record, averaged over every station of the build, and
 // TestLoftStationWalkWorkPerStation keeps that average below this constant.
@@ -116,7 +116,7 @@ const StationWorkUnits = 8192
 // StationWorkLimit is the free-form work ceiling a public Loft raises each
 // record's counter to before its first area integral. Re-evaluation paths
 // raise it before they resolve the records' walks
-// (docs/loft-gear-bounds-design.md §7):
+// (agent-docs/loft-gear-bounds-design.md §7):
 //
 //	max(freeform.FreeformWorkLimit, spent + StationWorkUnits·stationCap(P))
 //
@@ -129,7 +129,7 @@ func StationWorkLimit(spent, p uint64) uint64 {
 	return max(freeform.FreeformWorkLimit, spent+StationWorkUnits*uint64(StationCap(p))) //nolint:gosec // StationCap is in [StationCapFloor, StationCapCeiling].
 }
 
-// PairCounts reads docs/loft-design.md §5.1's two build-wide counts off
+// PairCounts reads agent-docs/loft-design.md §5.1's two build-wide counts off
 // Table P over both records: P, the total paired-segment count, and C, the
 // number of CHORDED pairs among them — same-kind circular and same-kind Tier A
 // free-form together. Both are decided from the two authenticated records
@@ -165,7 +165,7 @@ func PairCounts(loops0 []sectionrecord.LoopRecord, offsets []int, walks0, walks1
 	return p, c, true
 }
 
-// IsChordedPair reports whether a paired segment chords (docs/loft-design.md
+// IsChordedPair reports whether a paired segment chords (agent-docs/loft-design.md
 // §5.1): both sides circular, or both free-form.
 func IsChordedPair(w0, w1 survey2d.SegmentWalk) bool {
 	return w0.Kind == w1.Kind && (w0.Kind == survey2d.WalkCircular || w0.Kind == survey2d.WalkFreeform)
@@ -196,7 +196,7 @@ func StationExtraBudget(p uint64) int {
 // never its shared end point — the next segment's own first station (or the
 // loop's wrap) supplies it, the convention LoopPair's own doc comment
 // states, and what makes a loop's own chain total the count
-// docs/loft-design.md §7 states for it rather than one stated here.
+// agent-docs/loft-design.md §7 states for it rather than one stated here.
 //
 // sagittaUpper is the proven upper bound on max_s |curve(s) - chord(s)|
 // under the SAME parameter this cell's own uniform stations walk — a
@@ -204,7 +204,7 @@ func StationExtraBudget(p uint64) int {
 // curve (internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper doc comment states the
 // distinction this field's name exists to keep visible). The LineSeg arm's
 // chord IS the recorded segment, so its bound is exactly zero; the circular
-// arm composes the two terms docs/loft-design.md §5.2's table lists for a
+// arm composes the two terms agent-docs/loft-design.md §5.2's table lists for a
 // chorded cell — that table's certified per-cell sagitta and the displacement
 // its stations carry, each with the derivation and rounding direction that
 // table states and the provenance mark §5.1's Table C gives those stations —
@@ -212,16 +212,16 @@ func StationExtraBudget(p uint64) int {
 //
 // seg0/seg1 are the two RECORDED segments w0/w1 were resolved from. An arm
 // whose bound is a proof rather than a held float needs them: every enclosure
-// docs/loft-design.md §5.2 names is stated by the record, never by the walk,
+// agent-docs/loft-design.md §5.2 names is stated by the record, never by the walk,
 // whose radius is a math.Hypot and whose angles are a math.Atan2 the walk
 // itself declares it cannot enclose (extrude.go's circularWalk).
 //
 // target is ChordTarget's own single per-build reading, never
 // recomputed per cell. work0/work1 are the two records' own free-form work
-// counters (docs/spline-design.md §5.2). Neither arm below charges them;
+// counters (agent-docs/spline-design.md §5.2). Neither arm below charges them;
 // FreeformCellPoints, the free-form arm, charges the same two counters.
 //
-// stationRoundUpper is docs/loft-design.md Table S row S14 (a10-plan.md Part
+// stationRoundUpper is agent-docs/loft-design.md Table S row S14 (a10-plan.md Part
 // 3 PR 6): the proven rounding a COMPUTED station commits, taken as a MAX
 // over this cell's own stations on both sides — a component of delta, never
 // sectionDelta. NEITHER arm is exempt, and the LineSeg arm is not the
@@ -232,7 +232,7 @@ func StationExtraBudget(p uint64) int {
 // parameter made lerp2 compute one. Each arm's own doc comment states its
 // mechanism.
 //
-// matchedDelta is the CHORD-TO-CURVE HALF of docs/loft-design.md §5.2's
+// matchedDelta is the CHORD-TO-CURVE HALF of agent-docs/loft-design.md §5.2's
 // matchedDelta row — the half a consumer composes with the build's own delta
 // (ChordCellDeltaUpper) to reach internal/proofbound/bounds.go's proofbound.CellChordCurveAreaUpper own
 // matchedDeltaUpper obligation (F1's rule) — ONE ENTRY PER CELL, never a single per-segment
@@ -366,7 +366,7 @@ func CircularStationChain(w survey2d.SegmentWalk, seg sectionrecord.CurveSegment
 	return stationPoints(stations), delta
 }
 
-// ArcNaturalEndRadialUpper charges docs/loft-design.md §5.2's ARC-END RADIAL
+// ArcNaturalEndRadialUpper charges agent-docs/loft-design.md §5.2's ARC-END RADIAL
 // RESIDUAL: an upper bound on | ‖End − Center‖ − ‖Start − Center‖ | for a
 // recorded sectionrecord.ArcSeg whose walk reaches the natural bound t == 1, and exactly
 // zero for every other segment and every other bound.
@@ -375,7 +375,7 @@ func CircularStationChain(w survey2d.SegmentWalk, seg sectionrecord.CurveSegment
 // the point the record denotes at that parameter. An sectionrecord.ArcSeg records three
 // points and the curve it denotes takes its radius from Start ALONE —
 // circularEndpointInterval and circularWalkEnclosures (internal/momentregion) both read
-// |Start − Center|, the reading docs/sketch-seam-design.md states outright —
+// |Start − Center|, the reading agent-docs/sketch-seam-design.md states outright —
 // so the denoted point at t == 1 lies at THAT radius and End's own angle. The
 // walk holds the recorded End there (arcWalkEnd), and the two coincide only
 // where the two radii are equal. Nothing certifies that: validateSegment's

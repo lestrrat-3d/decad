@@ -369,7 +369,7 @@ func TestThreeBodyStepReadsPairOverride(t *testing.T) {
 
 // TestNewWorldAdmitsRotatedDensityBox feeds a box placed 30° about (1,1,1)
 // through density-derived mass into NewWorld, whose own validation re-proves
-// the published tensor positive (docs/multibody-dynamics-design.md §8.1).
+// the published tensor positive (agent-docs/multibody-dynamics-design.md §8.1).
 func TestNewWorldAdmitsRotatedDensityBox(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -566,7 +566,7 @@ func TestNewWorldInertiaPositivityProof(t *testing.T) {
 	}
 }
 
-// TestNewWorldRejectsHeldChord is docs/multibody-dynamics-design.md §10.4's
+// TestNewWorldRejectsHeldChord is agent-docs/multibody-dynamics-design.md §10.4's
 // admission: a HeldChord must be a finite nonnegative Length, zero admitting
 // no curved held mesh.
 func TestNewWorldRejectsHeldChord(t *testing.T) {
@@ -605,7 +605,7 @@ func TestNewWorldRejectsHeldChord(t *testing.T) {
 	}
 }
 
-// TestNewWorldRejectsSupportBand is docs/multibody-dynamics-design.md §10.5's
+// TestNewWorldRejectsSupportBand is agent-docs/multibody-dynamics-design.md §10.5's
 // admission: a SupportBand must be a nonnegative Length within
 // PenetrationResidual, since every band it publishes must pass the residual.
 func TestNewWorldRejectsSupportBand(t *testing.T) {

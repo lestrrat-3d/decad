@@ -36,7 +36,7 @@ func Extremes(c0, c1, phi0, phi1 float64, full bool) (float64, float64) {
 
 // ExtremeBounds proves how far Extremes' held (heldLo, heldHi) can
 // sit from the TRUE min/max of m(φ) = c0·cos φ + c1·sin φ over the sweep the
-// record DENOTES (docs/evaluator-design.md §6), without ever trusting
+// record DENOTES (agent-docs/evaluator-design.md §6), without ever trusting
 // math.Sin/Cos/Atan2/Hypot's accuracy: c0 and c1 are read as exact rationals
 // (their own float64 bit patterns — the same convention Extremes' own
 // callers already take), each endpoint's own denoted angle is enclosed by

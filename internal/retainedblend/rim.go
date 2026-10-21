@@ -1,5 +1,5 @@
 // Package retainedblend builds Fillet and Chamfer of an edge between two
-// retained faces of a mesh Boolean result (docs/retained-edge-blend-design.md).
+// retained faces of a mesh Boolean result (agent-docs/retained-edge-blend-design.md).
 // It rewrites the held mesh near the edge so the new faces lie on exact
 // surfaces computed from the two retained tags.
 package retainedblend

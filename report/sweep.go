@@ -22,7 +22,7 @@ const (
 // SweepRequest bounds the time search and the contact geometry resolution.
 //
 // RestSpeed is a nonnegative Velocity; the zero Value rests no vertex. A band
-// track over a support set (docs/multibody-dynamics-design.md §10.5) holds a
+// track over a support set (agent-docs/multibody-dynamics-design.md §10.5) holds a
 // lifted vertex that closes on the support plane no faster than RestSpeed, or
 // rises, on both sides of the plane, as it holds a contact vertex (§10.8), so
 // the track does not end where that vertex's lower height bound reaches the
@@ -237,14 +237,14 @@ func (t *SweepContactTrackOf[F, E, V]) Features() (ContactFeatureOf[F, E, V], Co
 // Normal is the contact normal, pointing from the first body to the second.
 func (t *SweepContactTrackOf[F, E, V]) Normal() VecMeasurement { return t.proof.Normal() }
 
-// Band returns the depth of a band track (docs/multibody-dynamics-design.md
+// Band returns the depth of a band track (agent-docs/multibody-dynamics-design.md
 // §10.3), a Length Measurement whose Value plus Bound bounds every contact
 // point's separation in both directions and the interiors' overlap along
 // Normal(). It is nil for an exact touch track.
 func (t *SweepContactTrackOf[F, E, V]) Band() *Measurement { return t.proof.Band() }
 
 // BandAt returns the depth of a band track over its prefix through fraction
-// (docs/multibody-dynamics-design.md §10.3): a Length Measurement whose Value
+// (agent-docs/multibody-dynamics-design.md §10.3): a Length Measurement whose Value
 // plus Bound bounds every contact point's separation in both directions and
 // the interiors' overlap along Normal() at every instant from the track's
 // start through fraction. At the track's end it is at most Band(); it grows

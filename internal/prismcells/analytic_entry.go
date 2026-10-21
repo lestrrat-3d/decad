@@ -12,7 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
-// This file is docs/prism-boolean-design.md's analytic reduction of
+// This file is agent-docs/prism-boolean-design.md's analytic reduction of
 // Union/Cut/Intersect over co-directional straight prisms on one plane or on
 // shared-axis offset planes, routed entirely through sketch (§4) rather than
 // through the mesh boolean (evaluator-design §9). The entry gate (§3) is reject-only and never
@@ -21,7 +21,7 @@ import (
 // carries a section displacement, a consumed source segment's own walk
 // computed a coordinate (§7's δ_walk, WalkChargeOf), or B's re-expression is
 // nonidentity, every crossing the arrangement cuts can amplify that
-// displacement by 1/sin θ, and docs/general-boolean-design.md §3 A6 charges
+// displacement by 1/sin θ, and agent-docs/general-boolean-design.md §3 A6 charges
 // it (SceneDelta.ChargeCrossings, CrossingCharge). Such a
 // pair never refuses: a crossing too close to tangent to bound, or any later
 // analytic failure, sends it to the mesh path (AmplifiedFallback). Every cut also charges the cut
@@ -171,7 +171,7 @@ func TryAnalytic(ctx context.Context, op meshbool.OperationKind, a, b topo.Paylo
 // (prismplacement.IntersectZIntervalOverlaps), the arrangement work cap
 // (RegionsWithinWorkCap), and the operand re-expression
 // (NewReexpression) — shared by TryAnalytic's meshbool.OpIntersect arm
-// (docs/prism-boolean-design.md §4.5's "Entry" paragraph) so a second caller
+// (agent-docs/prism-boolean-design.md §4.5's "Entry" paragraph) so a second caller
 // can share it unchanged rather than duplicate it: TryAnalytic's own
 // meshbool.OpIntersect case above, and §4.5's overlap-area reading
 // (prismcells.OverlapVolume). Every gate below keeps its order.
@@ -235,7 +235,7 @@ func AdmitIntersectPair(ctx context.Context, a, b topo.Payload) (budget *proofbo
 // AdmitPairBudget checks G1 (both operands a prismrecord.Payload), G3 (the composed
 // world normals are bit-identical and the two planes share one sweep axis,
 // exactly) and G4 (every segment of both records is line/circle/arc) — §3.1.
-// A reflected placement is no gate (docs/general-boolean-design.md §3 A4):
+// A reflected placement is no gate (agent-docs/general-boolean-design.md §3 A4):
 // G3 reads each world normal through ApplyDir, which maps a reflection's
 // sweep direction like any other, and BuildScene re-winds operand B's
 // record when the composed relative map is a reflection

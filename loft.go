@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-go/option/v3"
 )
 
-// This file is docs/loft-design.md PR 1b: the public entry point over PR 1a's
+// This file is agent-docs/loft-design.md PR 1b: the public entry point over PR 1a's
 // evaluator (internal/loftrecord). It owns the LoftOption surface, gates S9-S10,
 // and the atomic record->evaluate->commit tail (§10). internal/featureoption
 // owns S11 and S4's arity half. The other gates — S1-S8 and S13's coordinate-range
@@ -29,7 +29,7 @@ type LoftOption interface {
 // corresponding loop. offsets[0] is the outer loop; offsets[1+h] is
 // p1.Holes[h]. Omitting the option means every offset is 0 — the natural
 // case where both profiles were authored with matching segment order
-// (docs/loft-design.md §2/§3 Table P row P4).
+// (agent-docs/loft-design.md §2/§3 Table P row P4).
 //
 // The option is accepted at most once: two payloads are two different
 // correspondences, so a repeat is [ErrDegenerate] rather than last-wins
@@ -39,7 +39,7 @@ func WithLoftAlignment(offsets ...int) LoftOption {
 }
 
 // Loft builds a solid ruled between two profiles recorded on distinct
-// geometric planes (docs/loft-design.md), registers it, and returns the new
+// geometric planes (agent-docs/loft-design.md), registers it, and returns the new
 // body. s0/p0 is the FROM section (capStart); s1/p1 is the TO section
 // (capEnd) — the same naming Extrude already uses for its two caps. Both
 // profiles pass the unmodified core §7 seam gates independently, in argument
@@ -75,7 +75,7 @@ func WithLoftAlignment(offsets ...int) LoftOption {
 // representable float64 range is [ErrUnsupported] (S13) — the body exists,
 // and this evaluator cannot hold its vertex table. WithSurfaceResult() omits
 // both section caps and publishes a sheet body instead of a solid
-// (docs/surface-design.md §4).
+// (agent-docs/surface-design.md §4).
 //
 // A failed call leaves the document untouched.
 func Loft(ctx context.Context, d *Document, s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch, p1 *sketch.Profile, opts ...LoftOption) (*Body, error) {
@@ -94,7 +94,7 @@ func Loft(ctx context.Context, d *Document, s0 *sketch.Sketch, p0 *sketch.Profil
 
 	// S11 (option ownership) and S4's ARITY half (a repeated
 	// WithLoftAlignment), both pre-gates decidable with no record at all
-	// (docs/loft-design.md §4, amended). decad owns the option vocabulary, so
+	// (agent-docs/loft-design.md §4, amended). decad owns the option vocabulary, so
 	// a foreign concrete type — including one that embeds LoftOption to
 	// promote the sealed marker — is rejected before its Ident() ever runs.
 	cfg, err := decodeLoftOptions(opts)
@@ -111,7 +111,7 @@ func Loft(ctx context.Context, d *Document, s0 *sketch.Sketch, p0 *sketch.Profil
 	return body, nil
 }
 
-// This section is LoftChain of docs/loft-design.md §16: the ruled ribbon
+// This section is LoftChain of agent-docs/loft-design.md §16: the ruled ribbon
 // between two OPEN sketch chains. §16.1 states how Table P reads over two open
 // walks — P1 and P2 collapse onto one walk with no holes, P3 and P5 survive
 // verbatim, P4 loses its modular wrap so segment j pairs with segment j, and
@@ -124,7 +124,7 @@ func Loft(ctx context.Context, d *Document, s0 *sketch.Sketch, p0 *sketch.Profil
 // [LoftOption]: WithSurfaceResult() does not implement it, so the compiler
 // refuses that option outright rather than accepting it as a no-op — a
 // chain-fed loft always returns a sheet, so there is no cap for the option to
-// omit (docs/surface-design.md §13.2, docs/loft-design.md §16.3).
+// omit (agent-docs/surface-design.md §13.2, agent-docs/loft-design.md §16.3).
 // WithLoftAlignment is not a member either: Table P's own P4 row forces a
 // chain pair's offset to 0, so the option would name a correspondence that
 // does not exist. This placeholder tier has no concrete option yet; it reserves the
@@ -139,7 +139,7 @@ type ChainLoftOption interface {
 // TO walk, the same argument order Loft uses for its two sections and the
 // order §16.2's plane gate reads its positive normal from. Both chains pass
 // the identical seam gates chain Extrude runs (RecordChain,
-// docs/surface-design.md §13.3), in argument order, and the seam's own
+// agent-docs/surface-design.md §13.3), in argument order, and the seam's own
 // sentinel wins before any shape gate.
 //
 // The two walks MUST carry the same recorded segment count (ErrUnsupported),
@@ -147,7 +147,7 @@ type ChainLoftOption interface {
 // offset for an open walk, since a nonzero one would pair a segment across a
 // free end. Every paired segment MUST be a LineSeg pair in this increment: a
 // mixed-kind pairing and a same-kind circular pairing are each ErrUnsupported
-// (docs/loft-design.md Table SL rows SL4 and SL7). The two recorded planes
+// (agent-docs/loft-design.md Table SL rows SL4 and SL7). The two recorded planes
 // MUST be exactly parallel with the to-plane strictly on the from-plane's
 // positive side, which is what states the ribbon's positive side
 // (ErrUnsupported, SL5); coplanar sections are ErrDegenerate (S5). A build-time
@@ -179,7 +179,7 @@ func LoftChain(ctx context.Context, d *Document, s0 *sketch.Sketch, c0 *sketch.C
 
 	// SL2 before every shape gate, in argument order: a seam refusal names a
 	// repair the caller makes in the sketch, and a shape refusal reported
-	// first would hide it (docs/loft-design.md Table SL).
+	// first would hide it (agent-docs/loft-design.md Table SL).
 	chain0, plane0, err := recordChain(s0, c0)
 	if err != nil {
 		return nil, err

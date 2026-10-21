@@ -25,7 +25,7 @@ type StackInput struct {
 
 // shellLevel is one derived level of a shell's stack: from moved by by,
 // carrying its source end's displacement, the thickness conversion and this
-// float sum's own rounding (docs/shell-opening-design.md §3).
+// float sum's own rounding (agent-docs/shell-opening-design.md §3).
 func shellLevel(from, delta, by, tDelta float64) stackedbrep.Level {
 	to := from + by
 	return stackedbrep.Level{Held: to, Delta: proofbound.AbsSumUpper(delta, tDelta, proofarith.AddRoundError(from, by, to))}

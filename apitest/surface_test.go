@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md's T1/T9/T13-shaped public-surface tests
+// This file is agent-docs/surface-design.md's T1/T9/T13-shaped public-surface tests
 // for WithSurfaceResult() on Extrude and Table X's sheet-operand refusals.
 // WithSurfaceResult() on Revolve, Sweep and Loft each have their own file,
 // surface_revolve_test.go, surface_sweep_test.go and surface_loft_test.go.
@@ -58,7 +58,7 @@ func requireSheetWithFreeEdges(t *testing.T, b *decad.Body) {
 	require.Len(t, free, n)
 }
 
-// TestSurfaceExtrudePlateIsASheet is docs/surface-design.md's T1: a 100x60 mm
+// TestSurfaceExtrudePlateIsASheet is agent-docs/surface-design.md's T1: a 100x60 mm
 // rectangle surface-extruded 10 mm Along.
 func TestSurfaceExtrudePlateIsASheet(t *testing.T) {
 	t.Parallel()
@@ -359,7 +359,7 @@ func TestSurfaceExtrudeShellOpenAgreesWithFreeEdgeDerivation(t *testing.T) {
 }
 
 // TestSurfaceExtrudeHoledProfileReportsDisconnectedLumps is decision A
-// (docs/surface-design.md §2.2): a holed profile's surface extrude has an
+// (agent-docs/surface-design.md §2.2): a holed profile's surface extrude has an
 // outer wall tube and a hole wall tube that touch nowhere once their shared
 // caps are omitted, so Body.Lumps() must report both rather than the one a
 // single hardcoded shell used to. The solid built from the same profile keeps
@@ -384,7 +384,7 @@ func TestSurfaceExtrudeHoledProfileReportsDisconnectedLumps(t *testing.T) {
 	require.Len(t, solid.Lumps(), 1)
 }
 
-// TestSurfaceExtrudeSheetVerifiesValid is docs/surface-design.md's sheet
+// TestSurfaceExtrudeSheetVerifiesValid is agent-docs/surface-design.md's sheet
 // validity audit (§9.1): a surface-extruded rectangle's boundary reads clean
 // under all three structural legs, and its payload — a prismPayload with
 // surfaceResult true and a zero sectionDelta — admits the fourth,
@@ -413,7 +413,7 @@ func TestSurfaceExtrudeSheetVerifiesValid(t *testing.T) {
 }
 
 // TestSheetWallAndConcaveRadiusKeepTheSurveyPrerequisiteRefusal is
-// docs/surface-design.md §9.1's survey row: a sound sheet has no material for
+// agent-docs/surface-design.md §9.1's survey row: a sound sheet has no material for
 // a wall or a concave question, so each reads Unavailable with its own
 // DiagSurveyPrerequisite naming the blocked survey and dropping "pull" from
 // its message (§9.1's undercut clause is not this survey's cause any more).
@@ -591,7 +591,7 @@ func sheetBoxBody(t *testing.T, doc *decad.Document, x0, y0, x1, y1, h float64) 
 	return body
 }
 
-// TestSheetSolidPairCrossingBoxesReadInterfering is docs/surface-design.md's
+// TestSheetSolidPairCrossingBoxesReadInterfering is agent-docs/surface-design.md's
 // T7, rewritten for increment 2's decision procedure: the sheet's wall at
 // x=10 (y∈[0,10], z∈[0,5]) and the solid's face at y=5 (x∈[5,15], z∈[0,5])
 // are transversal planes whose intersection line — x=10, y=5, z∈[0,5] — sits
@@ -629,18 +629,18 @@ func TestSheetSolidPairCrossingBoxesReadInterfering(t *testing.T) {
 		// A sheet encloses no region: the crossing is proven, but there is
 		// no overlap volume to report, so no Interference row is ever
 		// emitted for it — that absence is not a proven non-overlap here
-		// (docs/surface-design.md §9.3).
+		// (agent-docs/surface-design.md §9.3).
 		require.Empty(t, report.Interferences)
 		require.Empty(t, report.Clearances)
 		require.Len(t, doc.Bodies(), 2)
 	}
 }
 
-// TestSheetSolidPairSeparatedBoxesVerifySound is docs/surface-design.md's T8:
+// TestSheetSolidPairSeparatedBoxesVerifySound is agent-docs/surface-design.md's T8:
 // the same pair, moved apart until the boxes separate, contributes nothing
 // under the default call. Under WithClearances() the kernel still measures
 // the gap, exactly as it does for a box-separated solid-solid pair
-// (docs/interference-design.md §3.1: box separation does not measure the
+// (agent-docs/interference-design.md §3.1: box separation does not measure the
 // true gap, and the analytic kernel still runs when a gap is asked for) — a
 // sheet-solid pair honours the same rule rather than staying silent for the
 // same question the solid path answers.
@@ -675,7 +675,7 @@ func TestSheetSolidPairSeparatedBoxesVerifySound(t *testing.T) {
 	require.Len(t, doc.Bodies(), 2)
 }
 
-// TestSheetSolidPairOutsideProvenSound is docs/surface-design.md §9.3's
+// TestSheetSolidPairOutsideProvenSound is agent-docs/surface-design.md §9.3's
 // increment-2 decision procedure, outside branch: the sheet is a 10×10 mm
 // wall frame (walls only, no caps) around a 4×4 mm solid centered inside it,
 // both spanning z∈[0,5]. Their bounds-inflated boxes MEET (the solid's box
@@ -710,7 +710,7 @@ func TestSheetSolidPairOutsideProvenSound(t *testing.T) {
 	require.Len(t, doc.Bodies(), 2)
 }
 
-// TestSheetSolidPairContainedProvenSound is docs/surface-design.md §9.3's
+// TestSheetSolidPairContainedProvenSound is agent-docs/surface-design.md §9.3's
 // increment-2 decision procedure, containment branch: a 10×10×10 mm sheet
 // box sits centered 5 mm inside a 20×20×20 mm solid cube on every side. The
 // boxes meet (the sheet's box sits wholly inside the solid's), the boundary
@@ -718,7 +718,7 @@ func TestSheetSolidPairOutsideProvenSound(t *testing.T) {
 // witness casts inside the solid, proving containment: Sound, with the SAME
 // shape of gap row under WithClearances() as the outside case — one
 // consequence of the decision procedure is that this row never asserts which
-// side the sheet is on (docs/api-design.md §6.2) — and no diagnostic.
+// side the sheet is on (agent-docs/api-design.md §6.2) — and no diagnostic.
 func TestSheetSolidPairContainedProvenSound(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -751,7 +751,7 @@ func TestSheetSolidPairContainedProvenSound(t *testing.T) {
 }
 
 // TestSheetSolidPairKernelCannotSettleStaysSuspect exercises the "missing
-// body model" leg of docs/surface-design.md §9.3's decision procedure: a
+// body model" leg of agent-docs/surface-design.md §9.3's decision procedure: a
 // surface-extruded fit-spline arch is ValidityValid — the sheet audit's
 // fourth leg is proven by construction for ANY surface-result prism with no
 // section displacement, regardless of wall kind
@@ -789,7 +789,7 @@ func TestSheetSolidPairKernelCannotSettleStaysSuspect(t *testing.T) {
 	require.Len(t, doc.Bodies(), 2)
 }
 
-// TestSheetSheetPairStaysUndecided is docs/surface-design.md §9.3's
+// TestSheetSheetPairStaysUndecided is agent-docs/surface-design.md §9.3's
 // sheet-sheet rule: neither operand offers a closed boundary to cast the
 // other against, so the decision procedure never runs at all — the pair
 // keeps DiagUnsupportedPairSheet and Suspect regardless of whether the true

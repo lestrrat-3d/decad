@@ -59,7 +59,7 @@ func WalkCoordUpper(walks []survey2d.SideWalk, axialUpper float64) float64 {
 
 // Extreme encloses the largest value of g·p over every patch of the band, p a
 // point of the patch in F's frame and g = (gu, gv, gz) an exact direction in
-// that frame (docs/loop-fillet-design.md §5.4). The band's ball centres run at
+// that frame (agent-docs/loop-fillet-design.md §5.4). The band's ball centres run at
 // the side level sideZ, r from ℓ into F's material, and the band climbs from
 // sideZ toward F, along −m times F's normal.
 //

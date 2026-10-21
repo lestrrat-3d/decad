@@ -9,11 +9,11 @@ import (
 )
 
 // evaluateBooleanMeshes runs the mesh-boolean pipeline
-// (internal/booleaneval, docs/evaluator-design.md §9) over a and b, with the
+// (internal/booleaneval, agent-docs/evaluator-design.md §9) over a and b, with the
 // operand meshes drawn from meshes, and states its occupied volume as a public
 // measurement. Verify passes its per-call cache (verifyMeshCache,
 // internal/verifyrun/pairs.go), which meshes each body once at one chord for every pair it
-// takes part in (docs/interference-design.md §5.3); chordScale lets one
+// takes part in (agent-docs/interference-design.md §5.3); chordScale lets one
 // source-certified modify route ask for finer operand chords, and a
 // power-of-two scale preserves the pair tolerance's represented value exactly.
 func evaluateBooleanMeshes(ctx context.Context, op meshbool.OperationKind, a, b *Body,

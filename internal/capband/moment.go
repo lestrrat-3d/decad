@@ -138,7 +138,7 @@ type PhaseTerm struct {
 }
 
 // coneMomentTermsX/Y/Z are the ruled Cone (or apex/whole-circle) patch's own
-// Mx, My, Mz closed forms (docs/modify-reach-design.md §8.4's "Cone / ruled
+// Mx, My, Mz closed forms (agent-docs/modify-reach-design.md §8.4's "Cone / ruled
 // patch"): with S(a) = (R0·cosθS, R0·sinθS, 0), C(a) = (R1·cosθC, R1·sinθC,
 // H), P(a, b) = (1−b)S(a) + b·C(a) + (cU, cV, z0) the same ruled
 // parametrization patchRawFlux integrates, ∫∫(x²/2)·Nx, ∫∫(y²/2)·Ny,

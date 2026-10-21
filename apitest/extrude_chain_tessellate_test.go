@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md §13.4's tessellation increment,
+// This file is agent-docs/surface-design.md §13.4's tessellation increment,
 // gap 2 of this PR's report: a chain-fed prism ribbon's mesh, restated
 // straight off the body's own wall topology with no chording (Table G's
 // Plane row). Chain Extrude and SweepChain's one-span straight reduction

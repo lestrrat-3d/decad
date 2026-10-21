@@ -25,7 +25,7 @@ import (
 
 // RowFacesDisagree is Table R row R18: a chain's adjacent faces cannot be
 // brought into agreement on its patch's orientation.
-const RowFacesDisagree = `docs/surface-design.md Table R row R18`
+const RowFacesDisagree = `agent-docs/surface-design.md Table R row R18`
 
 // orientedEdge is one chain edge under the orientation decision: the
 // receiver's own (read-only) edge, and the sense — forward from Edge.Start
@@ -36,7 +36,7 @@ type orientedEdge struct {
 }
 
 // orientChain reads each edge's adjacent face and delegates the cycle
-// walk to Orient. See docs/surface-design.md §5.2.
+// walk to Orient. See agent-docs/surface-design.md §5.2.
 func orientChain(chain Chain) ([]orientedEdge, error) {
 	oriented := make([]OrientedEdge[*topo.Edge, *topo.Vertex], len(chain.Edges))
 	for i, e := range chain.Edges {
@@ -111,7 +111,7 @@ func BuildBody(ctx context.Context, env topo.Env, srcFaces []*topo.Face, srcBoun
 	// every face is attached (its own contract). PatchEdges never publishes a
 	// solid: closing a sheet's last free edge leaves a CLOSED sheet reporting
 	// BodySheet with IsSolid() false, since Stitch alone makes the material
-	// claim (docs/surface-design.md §2.1).
+	// claim (agent-docs/surface-design.md §2.1).
 	body := env.Alloc.NewBody()
 	body.Solid = false
 	body.Origin = provenance.Ref{Producer: env.Ref, Role: provenance.RoleBody}
@@ -125,7 +125,7 @@ func BuildBody(ctx context.Context, env topo.Env, srcFaces []*topo.Face, srcBoun
 	// Area is the receiver's own faces' area plus each new face's, composed
 	// through proofbound.BoundedAdd — never a re-derived reading — exactly the sum
 	// the stitch evaluator runs over its own constituent faces
-	// (docs/surface-design.md §6.4/§8), reused here for one operand's own
+	// (agent-docs/surface-design.md §6.4/§8), reused here for one operand's own
 	// face set plus the faces this call adds to it.
 	areaAcc := proofbound.BoundedScalar{}
 	for _, f := range allFaces {
@@ -158,7 +158,7 @@ func BuildBody(ctx context.Context, env topo.Env, srcFaces []*topo.Face, srcBoun
 
 // copyFacesUnder deep-copies every one of srcFaces under xform, minting
 // fresh Vertex, Edge and Face values that share no pointer with the retiring
-// receiver (docs/surface-design.md's "rebuild the receiver from its
+// receiver (agent-docs/surface-design.md's "rebuild the receiver from its
 // payload" decision): a retired body stays readable, and a caller may still
 // hold it, so mutating its topology through a shared pointer would corrupt
 // what they read.
@@ -427,7 +427,7 @@ func buildFace(ctx context.Context, alloc topo.Alloc, ref provenance.Producer, c
 		AreaBound: ig.AreaBound,
 		// A chain gate 3's level arm admitted has a proven-bounded plane
 		// origin, never a zero one: the same fields internal/prismrecord/build.go already
-		// sets on a prism's own caps (docs/surface-design.md §5.2). A chain
+		// sets on a prism's own caps (agent-docs/surface-design.md §5.2). A chain
 		// the exact arm admitted instead carries a zero, unset bound here.
 		AxialDelta:    axialDelta,
 		HasAxialDelta: chain.HasAxialBound,
@@ -441,7 +441,7 @@ func buildFace(ctx context.Context, alloc topo.Alloc, ref provenance.Producer, c
 // PatchProfile's own single planar face uses (internal/momentregion), over a
 // single-loop, no-hole record — reused rather than a bespoke shoelace sum,
 // so a patch face's Area answers on the identical Exactness/Bound terms
-// docs/surface-design.md §5.1 already states for a sketch-recorded patch.
+// agent-docs/surface-design.md §5.1 already states for a sketch-recorded patch.
 func chainIntegrals(ctx context.Context, segs []sectionrecord.CurveSegment) (momentinput.Integrals, error) {
 	work := freeform.NewFreeformWork()
 	return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: segs}}.EvaluatorIntegralsContext(ctx, freeform.MomentAreaOrder, work)
@@ -449,7 +449,7 @@ func chainIntegrals(ctx context.Context, segs []sectionrecord.CurveSegment) (mom
 
 // remapCrossingError maps the crossing audit's own [decaderr.ErrUnsupported]
 // refusal to [decaderr.ErrDegenerate] at gate 4's own boundary
-// (docs/surface-design.md §5.2, Table R row R5): a self-crossing chain is
+// (agent-docs/surface-design.md §5.2, Table R row R5): a self-crossing chain is
 // bad input this evaluator will never admit under a finer tolerance, unlike
 // the evaluator-reach refusals ErrUnsupported names elsewhere, so it takes
 // the sentinel a caller should branch on as unfixable rather than staged.
@@ -458,7 +458,7 @@ func remapCrossingError(err error) error {
 		return nil
 	}
 	if errors.Is(err, decaderr.ErrUnsupported) {
-		return fmt.Errorf(`%w: a PatchEdges chain's plane-local walk crosses or touches itself (docs/surface-design.md Table R row R5)`, decaderr.ErrDegenerate)
+		return fmt.Errorf(`%w: a PatchEdges chain's plane-local walk crosses or touches itself (agent-docs/surface-design.md Table R row R5)`, decaderr.ErrDegenerate)
 	}
 	return err
 }

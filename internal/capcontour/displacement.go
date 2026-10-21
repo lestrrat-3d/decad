@@ -32,7 +32,7 @@ func Displacement(walks []survey2d.SideWalk, joins []Join, d, dDelta float64) (f
 }
 
 // AmountsDisplacement is Displacement for a contour whose walk i moves by its
-// own amount amounts[i] (docs/draft-design.md §10.2): a nonzero amount is read
+// own amount amounts[i] (agent-docs/draft-design.md §10.2): a nonzero amount is read
 // over its span within dDelta, as Displacement reads d, and a zero amount is
 // a wall the construction leaves in place, read at exactly zero.
 func AmountsDisplacement(walks []survey2d.SideWalk, joins []Join, amounts []float64, dDelta float64) (float64, bool) {

@@ -9,7 +9,7 @@ import (
 )
 
 // DenotedStartBound is walk's StartBound measured against the point seg
-// DENOTES at its recorded TStart (docs/evaluator-design.md §4). seg is the
+// DENOTES at its recorded TStart (agent-docs/evaluator-design.md §4). seg is the
 // recorded segment the walk starts on: a coalesced line run's first segment.
 // The walk's own bound already states that distance for every end except an
 // arc's natural t == 1 end, which arcWalkEnd pins to the recorded End at zero
@@ -71,7 +71,7 @@ func SameCircleSeam(prev, next CurveSegment) bool {
 // The vertex sits at next's held start. At a cut junction the two neighbours
 // denote different points: each records its own entity at its own recorded
 // parameter, and neither parameter is the exact crossing
-// (docs/evaluator-design.md §4). The vertex is within DenotedStartBound of
+// (agent-docs/evaluator-design.md §4). The vertex is within DenotedStartBound of
 // next's point, and within |held − prev's held end| plus DenotedEndBound of
 // prev's point, so the bound is the larger of the two in each component.
 //

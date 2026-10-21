@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/general-boolean-design.md §3 A3 through the public
+// This file is agent-docs/general-boolean-design.md §3 A3 through the public
 // booleans: two operands whose outlines share a span of one carrier, which
 // sketch resolves once, under one operand's entity.
 

@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The worked examples of docs/clearance-design.md §4/§7 are this file's test
+// The worked examples of agent-docs/clearance-design.md §4/§7 are this file's test
 // oracle: the diagonal cube pair, the stacked cubes, the stop-built stack's
 // coplanar contact, the coaxial peg-in-hole reading, the parallel-axis torus
 // pair, and the PR 1 staging behavior — cone-involved pairs coarse, touching
@@ -108,7 +108,7 @@ func requireExactGap(t *testing.T, report *decad.Report, mm float64) {
 // requireBoundedGapContains asserts the report carries exactly one clearance
 // row whose interval CONTAINS the true gap mm and is honestly Approximate —
 // never a tightened number, never a silent Exact over a widened body
-// (bodyGeom.delta, docs/clearance-design.md §2). Bound is never pinned to a
+// (bodyGeom.delta, agent-docs/clearance-design.md §2). Bound is never pinned to a
 // literal: it differs between amd64 and arm64 (both charge ulp-scale
 // roundoff, at different rounding), so this only asserts enclosure and
 // positivity.
@@ -169,7 +169,7 @@ func TestClearanceParallelCirclePlacementBound(t *testing.T) {
 
 // TestClearancePrunedRodsContainTruth places three radius-2, 20 mm rods so
 // that most rim and cap cells of each pair lie far beyond its gap by box and
-// are pruned (docs/clearance-design.md §5). Rods A at (0, 0) and C at (12, 0)
+// are pruned (agent-docs/clearance-design.md §5). Rods A at (0, 0) and C at (12, 0)
 // stand on z = 0, so their gap is the 8 mm wall plateau. Rod B at (6, 8)
 // stands on z = 28: its bottom rim faces A's and C's top rims across a 6 mm
 // horizontal and 8 mm vertical offset, a 10 mm gap held by a rim × rim cell.
@@ -491,7 +491,7 @@ func TestClearanceBeyondBoxesInHole(t *testing.T) {
 	// partition by boundary clearance plus the §2 nesting-exclusion casts.
 	// The gap is the hole wall against the cube's corner edges:
 	// 10 − 2.5·√2 = 10 − √12.5, which no float holds, so the row is an
-	// Approximate enclosure of it (docs/clearance-design.md §5). Seen red
+	// Approximate enclosure of it (agent-docs/clearance-design.md §5). Seen red
 	// before the cells read their distances as enclosures: the row read
 	// 6.4644660940672614 Exact, 1.0e-15 off.
 	doc := decad.New()

@@ -184,7 +184,7 @@ func TestCylinderSidewallRefusesUnprovedCorridors(t *testing.T) {
 	require.NoError(t, err)
 	// The sidewall corridor needs the transverse diameter strictly inside
 	// the wall face, which the narrow wall's edges meet; the placed ruling
-	// (docs/contact-geometry-design.md §4.5) needs only the contact ruling
+	// (agent-docs/contact-geometry-design.md §4.5) needs only the contact ruling
 	// inside it, so it proves the touch along x = 0, z ∈ [0, 10].
 	nearEdge, err := doc.ContactPair(t.Context(), narrowWall, cylinder,
 		r3.Identity(), touch, req)

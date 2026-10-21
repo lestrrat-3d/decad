@@ -147,7 +147,7 @@ func TestTangentJoinedRotatedSlotChamfer(t *testing.T) {
 }
 
 // TestCapLoopChamferRefusesNearTangentCorner pins SX14's corner-locus refusal
-// (docs/modify-reach-design.md Table SX). Each profile has one corner where a
+// (agent-docs/modify-reach-design.md Table SX). Each profile has one corner where a
 // circular wall meets a line tangentially or nearly so without the two
 // running on as one smooth wall, and a cap-loop chamfer there refuses with
 // ErrUnsupported naming that corner before any measurement is taken.

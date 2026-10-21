@@ -11,7 +11,7 @@ import (
 
 // Payload implements topo.Payload: Transform reads the accumulated placement
 // and Placed rebuilds the record under a composed one through Build
-// (docs/evaluator-design.md §8).
+// (agent-docs/evaluator-design.md §8).
 
 // AxialDelta is the larger of the two ends' displacements: the figure a reading
 // that cannot attribute its error to one particular end takes.
@@ -41,7 +41,7 @@ func (pp Payload) ProvesSimple(context.Context) bool {
 // resolution — travels unchanged, which is what lets the build read the walks
 // back instead of bracketing every free-form arc a second time. That counter is
 // still charged what the resolution cost, so a record near its ceiling refuses
-// here exactly as it did on the way in (docs/spline-design.md §5.2).
+// here exactly as it did on the way in (agent-docs/spline-design.md §5.2).
 func (pp Payload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	pp.Xform = composed
 	return Build(ctx, env, pp, freeform.NewFreeformWork())

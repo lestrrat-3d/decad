@@ -6,7 +6,7 @@ type FaceShell struct {
 	// Void reports whether the shell bounds an internal cavity.
 	Void bool
 	// Open reports whether the shell has at least one free edge. Void and Open
-	// are independent (docs/surface-design.md §2.2).
+	// are independent (agent-docs/surface-design.md §2.2).
 	Open bool
 	// Faces are the nodes of the shell's faces. Root FaceShell.Faces maps
 	// them back to their handles.

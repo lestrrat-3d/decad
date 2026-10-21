@@ -36,7 +36,7 @@ type profileRecord = momentinput.Profile
 // plane-local region into world space. The feature calls run this conversion.
 //
 // Admission consumes only a fresh snapshot authenticated against sketch's own
-// answers (docs/api-design.md §7): p must name s (Profile.Sketch, else
+// answers (agent-docs/api-design.md §7): p must name s (Profile.Sketch, else
 // [ErrForeignProfile]), be current (Profile.IsStale, else [ErrStaleProfile]),
 // and exactly match one fresh result from s.Profiles. Every boundary entity
 // must be non-nil and owned by s. A caller-altered snapshot is

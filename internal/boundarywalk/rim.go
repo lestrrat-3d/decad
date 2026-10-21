@@ -15,7 +15,7 @@ import (
 // starts, and returns its plane position with the 3D bound it owes against the
 // points BOTH walks denote there (JunctionVertex): next's
 // recorded start and prev's recorded end, which differ at a cut junction
-// (docs/evaluator-design.md §3, §4). segs are the recorded segments the walks'
+// (agent-docs/evaluator-design.md §3, §4). segs are the recorded segments the walks'
 // Segs index; a single whole closed walk passes itself as both neighbours.
 // Every kind charges its own walk-end bound: a trimmed line's lerp rounding, a
 // circle's or trimmed arc's trig enclosure, a free-form chain's control-point
@@ -48,7 +48,7 @@ func RimConvexity(ctx context.Context, w survey2d.SideWalk, holeLoop bool, work 
 		// convex rim. The loop's role decides nothing here.
 		return w.Th1 >= w.Th0, nil
 	case survey2d.WalkFreeform:
-		// §6.5's wall-edge convexity certificate (docs/spline-design.md
+		// §6.5's wall-edge convexity certificate (agent-docs/spline-design.md
 		// §6.5, Table R R19). It applies the one reversal negation
 		// internally and states its verdict in the LOOP'S OWN WALK
 		// direction, so the mapping below reads it verbatim — a

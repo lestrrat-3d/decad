@@ -12,7 +12,7 @@ import (
 )
 
 // This file is one event time of the scheduled step
-// (docs/multibody-dynamics-design.md §5 steps 7 and 8, §6.1): the contact
+// (agent-docs/multibody-dynamics-design.md §5 steps 7 and 8, §6.1): the contact
 // set's upkeep, the pairs gathered at the event, the zero-impulse transition
 // and graze events, and the hand-off to the island solve.
 

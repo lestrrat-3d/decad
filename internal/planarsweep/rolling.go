@@ -20,7 +20,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the rolling band track of docs/multibody-dynamics-design.md
+// This file is the rolling band track of agent-docs/multibody-dynamics-design.md
 // §10.4 ("Rolling"): a full source cylinder M lying on its side on an exact
 // planar body S, M drifting at constant ω and S only translating, keeps a
 // §10.3 track whose contact set is the two ends of the contact ruling.

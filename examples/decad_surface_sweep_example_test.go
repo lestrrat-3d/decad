@@ -12,13 +12,13 @@ import (
 
 // WithSurfaceResult on Sweep builds the swept wall set alone and omits both
 // section caps, publishing a sheet body — Kind() == BodySheet — instead of a
-// solid (docs/surface-design.md §4). This example uses a one-span straight
+// solid (agent-docs/surface-design.md §4). This example uses a one-span straight
 // path, which reduces to the same prism build a surface-extruded Extrude
-// takes, so the sheet's own construction proves it sound (docs/sweep-design.md
+// takes, so the sheet's own construction proves it sound (agent-docs/sweep-design.md
 // Table D row D1): Volume and Centroid answer ErrNotSolid for a sheet, proven
 // sound or not; Area and Bounds still answer, over the walls alone.
 // A one-span straight sweep sheet tessellates through its prism reduction
-// (docs/sweep-design.md Table D row D2).
+// (agent-docs/sweep-design.md Table D row D2).
 func Example_decad_surfaceSweep() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())

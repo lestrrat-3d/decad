@@ -28,7 +28,7 @@ import (
 // NoNormalProof for a witness or normal over the request. A penetration that
 // neither patch can certify otherwise keeps the reason report already carries.
 // A positive band appends the lifted set of each support plane after the
-// exact points (docs/multibody-dynamics-design.md §10.5).
+// exact points (agent-docs/multibody-dynamics-design.md §10.5).
 func publishManifold(budget *proofbound.WorkBudget, report *contactReport, a, b *planar.PlanarSolid,
 	result planar.PlanarResult, convexA, convexB bool, band proofarith.Dyadic) error {
 	var points []planar.PatchPoint

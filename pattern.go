@@ -14,7 +14,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is PatternCopies (docs/mirror-pattern-design.md §4.3, §6.2):
+// This file is PatternCopies (agent-docs/mirror-pattern-design.md §4.3, §6.2):
 // repeating a body along a line or about an axis, each instance a new live
 // body. Where the receiver is a straight or stacked prism and the motion
 // keeps it co-directional, an instance keeps the receiver's frame and
@@ -73,7 +73,7 @@ func resolvePatternSpec(spec PatternSpec) (patternrecord.Spec, error) {
 }
 
 // PatternCopies returns Count−1 new live bodies, instances 1..Count−1 of
-// spec in order, and leaves b live (docs/mirror-pattern-design.md §4.3).
+// spec in order, and leaves b live (agent-docs/mirror-pattern-design.md §4.3).
 //
 // The gates are Copy's — a nil context or a nil b is ErrDegenerate, a body
 // this evaluator did not build is ErrUnsupported, a retired or foreign b is
@@ -189,7 +189,7 @@ func (rp resolvedPattern) placedInstance(ctx context.Context, d *Document, ref p
 }
 
 // Patterned returns ONE body holding every instance of spec, b included,
-// and retires b (docs/mirror-pattern-design.md §4.3, §6.1). Its gates are PatternCopies'. The instances combine by the first
+// and retires b (agent-docs/mirror-pattern-design.md §4.3, §6.1). Its gates are PatternCopies'. The instances combine by the first
 // rule that applies:
 //
 //  1. A straight prism or a prism group on the frame-keeping arm whose

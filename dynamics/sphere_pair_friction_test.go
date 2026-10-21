@@ -361,7 +361,7 @@ func TestSpherePairInteriorFrictionImpactReplaysBothSides(t *testing.T) {
 	require.GreaterOrEqual(t, event.Time.Base(), .125)
 	// The impulses are read at the bracket's right sample, up to one
 	// TimeResolution after the exact contact, so they agree with the exact
-	// 60 and 32/7 within ImpulseResidual (docs/multibody-dynamics-design.md
+	// 60 and 32/7 within ImpulseResidual (agent-docs/multibody-dynamics-design.md
 	// §14).
 	require.InDelta(t, 60, event.NormalImpulse.Base(), config.ImpulseResidual.Base())
 	require.InDelta(t, 32.0/7, event.TangentImpulse.Y.Base(), config.ImpulseResidual.Base())

@@ -18,7 +18,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is the crossing audit's pair loop (docs/loft-design.md §6): S6,
+// This file is the crossing audit's pair loop (agent-docs/loft-design.md §6): S6,
 // the S8 ceiling over the candidates the loop will test, and S7 over them.
 // sweepCandidates enumerates those candidates from the selected box scan, and
 // loft_cap_proof.go's CapFamilyProof removes each cap's pairs from them.
@@ -45,14 +45,14 @@ var (
 	loftStructuredShortcuts = LoftAuditShortcuts{BroadPhase: true, Certificates: true, Sweep: true, CapProof: true}
 )
 
-// LoftCrossingAudit is docs/loft-design.md §6's whole build-time audit over
+// LoftCrossingAudit is agent-docs/loft-design.md §6's whole build-time audit over
 // an assembled triangle set with no structure of its own: S8's triangle
 // ceiling (MaxLoftAuditTriangles) first, then S6 (per-triangle existence),
 // then S8's pair ceiling (compared against the enumeration's work and the
 // number of box-overlapping candidate pairs, before any pair test or
 // pair-sized allocation), then S7 (the pair-by-pair contact audit over those
 // candidates). budget is shared with the rest of the pre-commit cancellation
-// path exactly as docs/modify-design.md §5's audits already share one
+// path exactly as agent-docs/modify-design.md §5's audits already share one
 // (fillet_audit.go); Step is called once per triangle in S6, once per scanned
 // pair in each of the two sweep passes, and once per tested pair, and Err at
 // every phase boundary, the end of S7 among them.
@@ -122,7 +122,7 @@ func LoftCrossingAuditWork(budget *proofbound.WorkBudget, verts []r3.Vec, tris [
 }
 
 // LoftCrossingAuditStructured is the loft's crossing audit
-// (docs/loft-design.md §6): LoftCrossingAudit's three phases, with each cap
+// (agent-docs/loft-design.md §6): LoftCrossingAudit's three phases, with each cap
 // whose CapFamilyProof holds decided as a whole. Every pair with a triangle
 // in a proven cap leaves the pair loop and the S8 count, so S8 and S7 run
 // over the wall-wall candidates plus the pairs of any cap whose proof failed.
@@ -170,7 +170,7 @@ func LoftSweepCandidates(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][
 
 // MaxLoftAuditTriangles is S8's ceiling on the triangle count one crossing
 // audit accepts, checked before S6 lifts a single triangle: 8·8192 − 8, the
-// most triangles a loft at docs/loft-gear-bounds-design.md §7's hard station
+// most triangles a loft at agent-docs/loft-gear-bounds-design.md §7's hard station
 // ceiling of 8192 assembles (F = 4·Σstations + 4H − 4 with H ≤ Σstations − 1).
 // It bounds the exact lifts NewLoftAuditData holds for the whole audit, which
 // no candidate count bounds: far-apart triangles give no candidates at all.
@@ -918,7 +918,7 @@ type loftCandidates struct {
 	js      []int32
 }
 
-// sweepCandidates is the second sweep pass (docs/loft-design.md §6): it
+// sweepCandidates is the second sweep pass (agent-docs/loft-design.md §6): it
 // fills the list sweepCandidateCounts sized, then sorts each triangle's
 // partners, so the list runs in the same lexicographic order the all-pairs
 // loop tests in and the first refused pair is the one that loop reports. It

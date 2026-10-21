@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/loft-design.md §12 PR 2a's public-surface placement
+// This file is agent-docs/loft-design.md §12 PR 2a's public-surface placement
 // tests: Transform/Copy over the landed loft payload's own
 // proven displacement term delta (§5, §8). internal/loftmesh's own tests
 // cover the mass accumulator; this file needs a live sketch, the public entry
@@ -31,7 +31,7 @@ func requireBitIdentical(t *testing.T, want, got r3.Vec) {
 }
 
 // TestR3IdentityApplyIsBitIdentical pins the identity fast path's own
-// premise (docs/loft-design.md §5, §12 PR 2a): loftPayload.Delta is 0 only
+// premise (agent-docs/loft-design.md §5, §12 PR 2a): loftPayload.Delta is 0 only
 // because r3.Identity().Apply is bit-exact on every finite coordinate,
 // including the corners a naive implementation might round differently — a
 // subnormal, a near-overflow magnitude, negative zero, and a non-terminating
@@ -62,7 +62,7 @@ func TestR3IdentityApplyIsBitIdentical(t *testing.T) {
 	// zero distance from the exact placed image, and -0.0 and 0.0 are the
 	// same coordinate at zero distance from each other. Every equality this
 	// package runs on a float (exactnessOf, the xform == r3.Identity() fast
-	// path itself) reads the same way. docs/loft-design.md §13 states this
+	// path itself) reads the same way. agent-docs/loft-design.md §13 states this
 	// case as coordinate equality for exactly that reason.
 	t.Run("negative zero", func(t *testing.T) {
 		v := r3.NewVec(math.Copysign(0, -1), 0, math.Copysign(0, -1))
@@ -72,7 +72,7 @@ func TestR3IdentityApplyIsBitIdentical(t *testing.T) {
 	})
 }
 
-// TestLoftPlacementDoesNotRerunTheSeamGates pins docs/loft-design.md §4's
+// TestLoftPlacementDoesNotRerunTheSeamGates pins agent-docs/loft-design.md §4's
 // "S9, S10, S11 and S4's ARITY half belong to the original call alone": a
 // placement rebuilds from the payload's already-authenticated records and
 // never touches a live sketch, so a profile that goes stale AFTER the body
@@ -181,7 +181,7 @@ func TestLoftCopyIdentityIsMeasurementIdentical(t *testing.T) {
 	require.Equal(t, []*decad.Body{body, dup}, doc.Bodies(), "the source stays live")
 }
 
-// TestLoftPlacedRotationSoundness is the regression docs/loft-design.md's
+// TestLoftPlacedRotationSoundness is the regression agent-docs/loft-design.md's
 // PR 2a exists for: rotating the 16000 mm3 square-square loft 37 degrees
 // about X. The naive re-lift-and-round implementation this design measured
 // publishes Volume = 16000.000000000002 with Bound = 7.203e-13 — an
@@ -338,7 +338,7 @@ func TestLoftPlacedReflectionHerringbone(t *testing.T) {
 }
 
 // TestLoftCopyPlacementChainDoesNotAccumulate proves the re-lift-from-record
-// path (docs/loft-design.md §7, §12 PR 2a): ten successive Copy pure
+// path (agent-docs/loft-design.md §7, §12 PR 2a): ten successive Copy pure
 // rotations, chained one onto the last, keep the volume bound within a
 // small constant factor of the FIRST placement's own, since each
 // evaluation re-lifts from the two ORIGINAL recorded profiles rather than
@@ -439,7 +439,7 @@ func TestLoftPlacedFaceAreaSumMatchesBodyArea(t *testing.T) {
 		decadtest.Within(units.SquareMillimeters(sumBound+1e-9)))
 }
 
-// TestLoftPlacedAccessorExactness pins docs/loft-design.md §8's per-accessor
+// TestLoftPlacedAccessorExactness pins agent-docs/loft-design.md §8's per-accessor
 // rule on both sides of delta. This receiver's every vertex position is Exact
 // with a zero bound — it is unplaced AND its every station is PINNED by its
 // own natural parameter (§5.2), which is what a zero delta needs; a placed

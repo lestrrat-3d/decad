@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file holds the loop-driver tests of docs/linkage-check-design.md
+// This file holds the loop-driver tests of agent-docs/linkage-check-design.md
 // §15.10 that L3 lands: waypoints on a loop's driver, a driver crossing 0, a
 // held driver, limits on a dependent joint, and scene 9 driven out and back
 // through its fold. Every closed form is the four-bar's two-circle

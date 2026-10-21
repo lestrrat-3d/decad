@@ -22,7 +22,7 @@ import (
 // displacements move the boundary the interval is read from, and a boundary
 // extreme riding a walked endpoint or a computed arc radius carries that
 // walk's own bound. A direction whose extreme cannot be bracketed refuses
-// rather than publishing the held value. See docs/evaluator-design.md §5.
+// rather than publishing the held value. See agent-docs/evaluator-design.md §5.
 
 // ExtentAlong is the through-all stop's reading of the prism (root stops.go): the
 // extent interval along an arbitrary world direction g — the lifted linear
@@ -31,12 +31,12 @@ import (
 // beside the proven displacement ExtentBoundedAlong states for its two ends.
 // The stop charges that displacement to the level it resolves and decides its
 // own in-path test outside it, so a boundary extreme held by a bracket
-// (docs/spline-design.md §6.2) still answers rather than refusing.
+// (agent-docs/spline-design.md §6.2) still answers rather than refusing.
 //
 // The section displacement is NOT one of the terms this reading carries — it
 // moves a coordinate IN the plane, and the interval is stated over the
 // recorded section — so a prism holding one refuses instead
-// (docs/prism-boolean-design.md §12). Bounds reads
+// (agent-docs/prism-boolean-design.md §12). Bounds reads
 // ExtentBoundedAlong directly and composes both terms into its own outward
 // bound.
 // The stop and clearance callers hold no preflight counter for this record, so
@@ -66,7 +66,7 @@ func (pp Payload) ExtentAlongContext(ctx context.Context, g r3.Vec) (float64, fl
 // endpoint the record does not state all reach this wrapper the same way,
 // through one nonzero bound. A through-all stop does not read through this wrapper:
 // it consumes the bounded reading and charges the displacement to its own level
-// (root stops.go, docs/spline-design.md §6.4).
+// (root stops.go, agent-docs/spline-design.md §6.4).
 func (pp Payload) ExtentAlongWork(ctx context.Context, g r3.Vec, work *freeform.FreeformWork) (float64, float64, error) {
 	lo, hi, bound, err := pp.ExtentBoundedAlong(ctx, g, work, nil)
 	if err != nil {

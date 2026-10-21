@@ -18,7 +18,7 @@ import (
 const maxLoftFacesSections = loftfacestrim.MaxSections
 
 // LoftFaces builds one solid through ordered complete caps of the same
-// authenticated point-loft Split source (docs/loft-face-sections-design.md).
+// authenticated point-loft Split source (agent-docs/loft-face-sections-design.md).
 func LoftFaces(ctx context.Context, d *Document, sections ...*Face) (*Body, error) {
 	if ctx == nil || d == nil || len(sections) < 2 || len(sections) > maxLoftFacesSections {
 		return nil, fmt.Errorf("%w: LoftFaces needs a context, document and 2 to %d cap faces",
@@ -97,7 +97,7 @@ type ConeTangentEnd struct {
 
 // LoftFacesToConeTangent lofts through 1 to 31 selected caps, then a
 // constructed last section tangent to end.Cone along one ruling
-// (docs/loft-face-sections-design.md, "Cone-tangent end section").
+// (agent-docs/loft-face-sections-design.md, "Cone-tangent end section").
 //
 // sections follow LoftFaces: the least slab's toe cap, then heel caps in
 // source order. The last section is built from the cone, not selected. Its

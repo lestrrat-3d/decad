@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file pins four readings docs/clearance-design.md §2 and §5 owe a
+// This file pins four readings agent-docs/clearance-design.md §2 and §5 owe a
 // published Clearance row: a cone carrier is measured as its float apex and
 // window stand, a topology vertex widens the row by its own proven bound, a
 // coalesced wall stands only for exactly collinear segments, and a coarse
@@ -301,7 +301,7 @@ func witnessSliceBody(t *testing.T, doc *decad.Document, cx, cy, r float64) *dec
 
 // TestClearanceCoarseWitnessContainsTruth reads a cone × cylinder pair, which
 // no closed-form cell solves, so its upper end comes from the coarse
-// enclosure's closest witness pair (docs/clearance-design.md §5). The cone is
+// enclosure's closest witness pair (agent-docs/clearance-design.md §5). The cone is
 // witnessConeBody's, its witness about 8.2e-11 outside the wall. A quarter
 // disc of radius 1/4 about (−1/2, 3/2) faces the wall's φ = 0 generator, the
 // line y = x, from √2 away, and its arc's mid witness at −45° is the slice's
@@ -372,7 +372,7 @@ func appleBody(t *testing.T, doc *decad.Document) *decad.Body {
 }
 
 // TestClearanceTiltedBoxContainsTruth reads two spindle tori, which only the
-// coarse enclosure reads (docs/clearance-design.md §5), so the row's lower end
+// coarse enclosure reads (agent-docs/clearance-design.md §5), so the row's lower end
 // is the two faces' box distance. The lower apple is turned 1e-8 rad about
 // the x axis, so its axis is (0, 1, s) with s = sin(1e-8) and its spine
 // circle of radius 3 rises 3s above y = 0 on one side; the upper apple is

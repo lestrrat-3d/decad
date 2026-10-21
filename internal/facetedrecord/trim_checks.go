@@ -86,7 +86,7 @@ func CapOutsideHeelCone(m loftface.Map, box [4]*big.Rat, cone *PointConeLimit) b
 // An error wrapping ErrUnsupported means the record is a tangent end for
 // this cone but the loft and the cone are not provably on one side of the
 // cap plane. The caller refuses; it never falls back to a skipped pair.
-// See docs/loft-face-sections-design.md, "Two-cone continuation".
+// See agent-docs/loft-face-sections-design.md, "Two-cone continuation".
 func CapTangentToHeelCone(record *LoftFacesCapRecord, box [4]*big.Rat,
 	cone *PointConeLimit) (*loftface.TangentPlane, error) {
 	rec := record.Tangent

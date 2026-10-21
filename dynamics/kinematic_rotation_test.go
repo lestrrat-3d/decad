@@ -166,7 +166,7 @@ func TestKinematicRotatingDriverInteriorImpactReverseWorldOrder(t *testing.T) {
 // turns, so the step keeps the impact as its certified prefix and stops
 // with StepPairUndecided.
 //
-// Legs of the rotating driver's field (docs/multibody-dynamics-design.md
+// Legs of the rotating driver's field (agent-docs/multibody-dynamics-design.md
 // §6.4), each shown to fail by deleting it, watching this test go red, then
 // restoring it:
 //   - driverMotionOf's −ω × p term, which moves the field's axis from the

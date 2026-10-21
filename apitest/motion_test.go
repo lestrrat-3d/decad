@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file holds the required tests of docs/motion-check-design.md §9,
+// This file holds the required tests of agent-docs/motion-check-design.md §9,
 // numbered as §9 numbers them. A resolution wider than the whole path
 // (endpointsOnly) evaluates the two endpoints alone. Bounds are
 // asserted against geometric truths or as small, never pinned to a measured
@@ -732,7 +732,7 @@ func TestVerifyMotionPoseDeviationIsCharged(t *testing.T) {
 }
 
 // TestVerifyMotionErrors is §9 test 9: one subtest per row of
-// docs/motion-check-design.md §8's table the public API can reach, each
+// agent-docs/motion-check-design.md §8's table the public API can reach, each
 // asserting the sentinel, no report, and an unchanged document. The row for
 // a body this evaluator did not build is unreachable through the public API
 // and lives in motion_internal_test.go.

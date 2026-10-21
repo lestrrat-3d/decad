@@ -251,13 +251,13 @@
 // for a closed shell (built for a full revolve, a hole-free prism and an
 // inward nested rectangular-slab Union; [ErrUnsupported] elsewhere),
 // and WithTaper drafts an extrude's walls by a signed angle, a positive one
-// narrowing the body away from the sketch plane (docs/draft-design.md); a
+// narrowing the body away from the sketch plane (agent-docs/draft-design.md); a
 // taper the support map does not list is [ErrUnsupported], returned before
 // the document changes. Draft leans an existing prism's walls, all of
 // them or a selected subset, the same way about one of its caps.
 // WithSweepTwist names a sweep's distributed twist. Its admitted straight
 // polygon, symmetric Line/Arc, and cardinal curved polygon cases are
-// described in docs/sweep-design.md §17.
+// described in agent-docs/sweep-design.md §17.
 // WithLoftAlignment
 // picks a loft's per-loop correspondence rotation
 // and is accepted at most once; a repeat is [ErrDegenerate], as is a repeated
@@ -292,8 +292,8 @@
 // this package exports today is the leading edge of that surface, and
 // whatever it does not yet export — ultimately the document, features,
 // evaluator and verification surface — remains design-only. The
-// contract for the whole surface is docs/api-design.md — the core design.
-// Companion designs carry its deep ends; the docs/layout/ part files list every
+// contract for the whole surface is agent-docs/api-design.md — the core design.
+// Companion designs carry its deep ends; the agent-docs/layout/ part files list every
 // design document. Every
 // capability it consumes from sketch, r3 and units exists today — no open
 // dependency gaps — and nothing that contradicts it may be added to this

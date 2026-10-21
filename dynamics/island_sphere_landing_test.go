@@ -13,7 +13,7 @@ import (
 )
 
 // Legs of the push that proves a sub-ulp gap and of the anchored correction
-// (docs/multibody-dynamics-design.md §6.6), each shown to fail by deleting it
+// (agent-docs/multibody-dynamics-design.md §6.6), each shown to fail by deleting it
 // in island.go, watching the named tests go red, and restoring it:
 //   - the push of a separating pair that reads ContactNoGapProof:
 //     TestIslandSphereLandsOnSphere, TestIslandSphereGlancesOffSphere and
@@ -33,7 +33,7 @@ import (
 //     touching start.
 
 // sphereColumn is the sphere column of the Phase 1 stack-and-drop scene
-// (docs/multibody-dynamics-design.md §2) reduced to two spheres: a fixed
+// (agent-docs/multibody-dynamics-design.md §2) reduced to two spheres: a fixed
 // 200×200×10 mm floor with its top at z = 0, two 8 mm source spheres
 // (density 0.001 kg/mm³) released at rest with their centers at z = 60 and
 // z = 90 over x = 120, and one fixed box 1000 mm away along Y. The spheres

@@ -11,7 +11,7 @@ import (
 var ErrAxisFrame = errors.New("the reference axes do not rebuild as a signed-permutation frame")
 
 // AxisFrame is the right-handed signed permutation of ref whose normal is
-// reference axis k (docs/brep-modify-design.md §4.1 P3): U is axis k+1 and
+// reference axis k (agent-docs/brep-modify-design.md §4.1 P3): U is axis k+1 and
 // V axis k+2, modulo 3, with every sign positive. It is PlanarFrame(ref, k,
 // +1).
 func AxisFrame(ref r3.Frame, k int) (r3.Frame, Embed, error) {
@@ -19,7 +19,7 @@ func AxisFrame(ref r3.Frame, k int) (r3.Frame, Embed, error) {
 }
 
 // PlanarFrame is the right-handed signed permutation of ref whose normal is
-// reference axis k scaled by the sign of sign (docs/brep-modify-design.md
+// reference axis k scaled by the sign of sign (agent-docs/brep-modify-design.md
 // §5.2). For a positive sign U is axis k+1 and V axis k+2, modulo 3, every
 // sign positive; for a negative one U is axis k+2 and V axis k+1, and the
 // normal is −k. It shares ref's origin, so a coordinate along its normal is

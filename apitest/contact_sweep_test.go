@@ -37,7 +37,7 @@ func sweepRequest() decad.SweepRequest {
 }
 
 func TestSweepPairRestSpeedValidation(t *testing.T) {
-	// SweepRequest.RestSpeed (docs/multibody-dynamics-design.md §10.8) is the
+	// SweepRequest.RestSpeed (agent-docs/multibody-dynamics-design.md §10.8) is the
 	// zero Value or a finite, nonnegative Velocity, checked as SupportBand is.
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)

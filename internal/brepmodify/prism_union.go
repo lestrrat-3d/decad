@@ -29,7 +29,7 @@ import (
 
 // PrismUnionFillet rounds one untouched outer vertical edge of a faceted Union
 // of two rectangular prisms when the other prism is certified clear of the
-// full removed radius band (docs/modify-reach-design.md §10.1).
+// full removed radius band (agent-docs/modify-reach-design.md §10.1).
 func PrismUnionFillet(ctx context.Context, env topo.Env, hooks Hooks, b *topo.Body, edges []*topo.Edge,
 	rec *facetedrecord.PrismUnionFilletRecord, radius, radiusDelta float64) (*topo.Body, bool, error) {
 	if len(edges) != 1 || radiusDelta != 0 || !(radius > 0) || proofbound.IsNonFinite(radius) {

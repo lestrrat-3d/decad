@@ -14,7 +14,7 @@ import (
 )
 
 // This section is the OPEN-walk counterpart of the closed offsets above: the
-// ribbon and the uncapped chain shell of docs/surface-design.md §16.6 and
+// ribbon and the uncapped chain shell of agent-docs/surface-design.md §16.6 and
 // §16.7. An open walk has no interior to erode, so there is no P ⊖ t / P ⊕ t
 // to take. What a thickened ribbon sweeps is one CLOSED section assembled in
 // closed form: the walk's two offset copies — or the walk and one copy —

@@ -14,7 +14,7 @@ import (
 
 // AngularSequence encloses the sine and cosine stored at every angular sample.
 // IdealBasis encloses the revolve axis basis before coordinate rounding.
-// These checks implement docs/tessellation-design.md §8.
+// These checks implement agent-docs/tessellation-design.md §8.
 
 // AngularInput carries the revolve payload's held angles and denotation.
 type AngularInput struct {
@@ -24,7 +24,7 @@ type AngularInput struct {
 }
 
 // AngularSequence builds the angular sequence for n chords, over the
-// payload's own denotation (docs/evaluator-design.md §6): sample l's angle is
+// payload's own denotation (agent-docs/evaluator-design.md §6): sample l's angle is
 // enclosed as enc(phi0) + (l/n)·(enc(phi1) − enc(phi0)), so the stored
 // cosine/sine is checked against the angle the RECORD denotes, not merely the
 // held float the resolver rounded to. Wherever the payload's denotation
@@ -111,7 +111,7 @@ func AngularSequence(input AngularInput, n int) (RevolveAngular, error) {
 	return out, nil
 }
 
-// IdealBasis is docs/tessellation-design.md §8's axis basis as the EXACT
+// IdealBasis is agent-docs/tessellation-design.md §8's axis basis as the EXACT
 // expression the payload's own floats denote, rather than the float64 triple
 // the build stores for it: a3 = O + aU·U + aV·V, w = dU·U + dV·V,
 // e0 = −dV·U + dU·V and e1 = w × e0. The gap between this and the stored basis

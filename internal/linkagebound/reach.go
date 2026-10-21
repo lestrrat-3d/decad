@@ -86,7 +86,7 @@ func reachCross(a, b motionbound.RatVec) motionbound.RatVec {
 }
 
 // ReadReachBounds reads each link's path, ρ_{ik} at its revolute joints, and
-// its whole-drive reach (docs/linkage-check-design.md §5.2). It walks down
+// its whole-drive reach (agent-docs/linkage-check-design.md §5.2). It walks down
 // the path from the link toward ground, carrying a ball under the joints
 // visited so far. A box corner's greatest axis distance gives the link's
 // own revolute radius. A revolute joint above reads dist(ball centre, axis)

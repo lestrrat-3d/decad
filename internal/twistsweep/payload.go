@@ -12,7 +12,7 @@ import (
 
 // This file is the twisted sweep's payloads: the records Eval evaluates over
 // topology nodes and a placement re-evaluates. Both implement topo.Payload
-// (docs/evaluator-design.md §8, docs/sweep-design.md §17).
+// (agent-docs/evaluator-design.md §8, agent-docs/sweep-design.md §17).
 
 // Payload keeps the true rigidly rotating section separate from the Loft
 // polyhedron used as its held boundary. In particular, consumers must not
@@ -43,7 +43,7 @@ func (p Payload) Placed(ctx context.Context, env topo.Env, xform r3.Transform) (
 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports
-// (docs/evaluator-design.md §8): the root type this payload replaced.
+// (agent-docs/evaluator-design.md §8): the root type this payload replaced.
 func (Payload) SurveyClass() string { return "twistedSweepPayload" }
 
 // CompositePayload is the record of a twist along a line and a cardinal
@@ -69,5 +69,5 @@ func (p CompositePayload) Placed(ctx context.Context, env topo.Env, xform r3.Tra
 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports
-// (docs/evaluator-design.md §8): the root type this payload replaced.
+// (agent-docs/evaluator-design.md §8): the root type this payload replaced.
 func (CompositePayload) SurveyClass() string { return "compositeTwistedSweepPayload" }

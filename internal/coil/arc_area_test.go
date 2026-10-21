@@ -134,7 +134,7 @@ func wallIntegrand(cu, r, k, alpha float64) float64 {
 	return math.Sqrt(r*r*rho*rho + k*k*r*r*s*s)
 }
 
-// TestArcAreaEnclosesTheQuadrature checks docs/helix-design.md §11.1's
+// TestArcAreaEnclosesTheQuadrature checks agent-docs/helix-design.md §11.1's
 // bracket against independent quadratures of Θ·∫√h dα. The whole circle's
 // integrand is periodic and analytic, so the trapezoid rule over 8192 points
 // converges far below float64's own rounding; the semicircle reads composite

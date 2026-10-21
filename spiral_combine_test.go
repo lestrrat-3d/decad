@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The gallery's recorded toe inputs (docs/faceted-vertex-bounds-design.md §3.7).
+// The gallery's recorded toe inputs (agent-docs/faceted-vertex-bounds-design.md §3.7).
 // They are inputs, never bounds.
 var (
 	recordedToeRoot  = planePoint{U: 10.922588984322125, V: 9.7440776823445425}

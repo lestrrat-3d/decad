@@ -44,7 +44,7 @@ import (
 // answers in the section's own (u, v), and the frame, the placement and the
 // reflection correction are applied by consumers downstream of it. The reuse is
 // still guarded by Matches on every read, so a record that differs by one float
-// bit resolves afresh (docs/evaluator-design.md §8, docs/spline-design.md §5.2).
+// bit resolves afresh (agent-docs/evaluator-design.md §8, agent-docs/spline-design.md §5.2).
 type ProfileWalks struct {
 	// Profile is the record every walk below was resolved FROM, kept whole so
 	// that a read against another profile is caught by comparing the recorded
@@ -62,7 +62,7 @@ type ProfileWalks struct {
 	// its counters when it ran, measured across the resolution rather than
 	// estimated. A later re-evaluation that reads these walks back replays the
 	// two figures onto its own counter (Charge) so the record's ceilings bind it
-	// exactly as the work itself would have (docs/spline-design.md §5.2).
+	// exactly as the work itself would have (agent-docs/spline-design.md §5.2).
 	Spent, ReconstructionSpent uint64
 	// Metered says the two figures above were MEASURED by ResolveProfileWalks
 	// or by analyticWalkCapture around every successful preflight WalkOf.
@@ -85,7 +85,7 @@ type WalkReadCharge struct {
 
 // ResolveProfileWalks resolves every segment of profile's outer loop and each
 // hole loop through walkOf exactly once, charging work the same single time
-// each segment's own conversion and length bracket cost (docs/spline-design.md
+// each segment's own conversion and length bracket cost (agent-docs/spline-design.md
 // §5.2), rather than once per consumer. The set it returns records what that
 // cost, so a later rigid re-evaluation can replay the charge instead of
 // re-running the work (Charge).
@@ -114,7 +114,7 @@ func (pw *ProfileWalks) Reusable(profile Profile) bool {
 // Charge replays onto work the exact free-form and reconstruction work this
 // resolution's own walkOf calls charged when they ran, so a re-evaluation that
 // reads the walks back is bound by the record's ceilings exactly as the work
-// itself would have bound it (docs/spline-design.md §5.2).
+// itself would have bound it (agent-docs/spline-design.md §5.2).
 //
 // The replay is one step per counter rather than the original per-segment
 // sequence, and that changes no verdict: every charge is non-negative, so the
@@ -169,7 +169,7 @@ func (pw *ProfileWalks) LoopWalks(loopIndex int) []survey2d.SegmentWalk {
 // section's geometry as the second's, silently.
 //
 // Every consumer that reads a non-nil *ProfileWalks checks this FIRST and
-// refuses rather than reading it — docs/spline-design.md §5.2's own discipline
+// refuses rather than reading it — agent-docs/spline-design.md §5.2's own discipline
 // extended to this cache. The refusal is one-directional, like every other
 // decad-side check: only an exact agreement between the two records reads the
 // cache, and anything else — a differing value, a differing variant, a shape

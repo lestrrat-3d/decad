@@ -76,7 +76,7 @@ func (r *Run) evaluateMover(mp *Pose, i int, placed []*Placed) error {
 }
 
 // settleConstant runs constant pair k of mover i's one evaluation
-// (docs/linkage-check-design.md §5.9) on the two bodies as they stand, the
+// (agent-docs/linkage-check-design.md §5.9) on the two bodies as they stand, the
 // first time a pose reaches it: a measured gap or a transferred overlap is
 // kept as the pair's outcome at every pose; any other outcome clears the
 // pair's constant mark and leaves it to the per-pose procedure.
@@ -231,7 +231,7 @@ func (r *Run) place(mp *Pose, i int, placed []*Placed) (*Placed, error) {
 // overlap proof. a is the mover's transient placement; b is its partner's,
 // or nil when the partner is a static body measured as it stands. A moving
 // partner adds its own η to the gap's widening and its own allowance to the
-// collision transfer (docs/linkage-check-design.md §5.1).
+// collision transfer (agent-docs/linkage-check-design.md §5.1).
 func (r *Run) evaluatePair(mp *Pose, i, k int, a, b *Placed) error {
 	mover, partner := r.Movers[i].Body, r.Partner(i, k)
 	target, etaB, allowance := partner, 0.0, a.allowance
@@ -421,7 +421,7 @@ func (r *Run) recordGap(mp *Pose, i, k int, res pairkernel.Result, etaA, etaB fl
 }
 
 // recordDeclaredGap publishes a declared joint contact's measured gap as a
-// Clearance row and nothing else (docs/linkage-check-design.md §5.4): a
+// Clearance row and nothing else (agent-docs/linkage-check-design.md §5.4): a
 // touching pair or an unbounded η publishes nothing, no finding is raised,
 // and the gap feeds neither an interval certificate nor the whole-path
 // reading.
@@ -435,13 +435,13 @@ func (r *Run) recordDeclaredGap(mp *Pose, mover, partner *topo.Body, res pairker
 }
 
 // intervalVerdict decides one interval between adjacent poses a and b
-// (docs/motion-check-design.md §5.2). A proven collision at either end makes
+// (agent-docs/motion-check-design.md §5.2). A proven collision at either end makes
 // it vocab.IntervalColliding. Otherwise it is vocab.IntervalClear only when EVERY pair
 // certifies: a swept-box-excluded pair by its whole-path lower bound, an
 // evaluated pair by the larger of two proven lower bounds on its gap over the
 // interval being positive — the travel bound (lo_a + lo_b − τ)/2, the lower
 // envelope's minimum, and the driver's projection bound when it supplies one
-// (docs/linkage-check-design.md §5.8) — taken over exact rationals, so no
+// (agent-docs/linkage-check-design.md §5.8) — taken over exact rationals, so no
 // rounding sits between the proven terms and the strict comparison. That
 // larger bound is rounded down to the float the Clearance publishes.
 func (r *Run) intervalVerdict(a, b *Pose) Span {
@@ -472,7 +472,7 @@ func (r *Run) intervalOutcome(a, b *Pose) (vocab.IntervalOutcome, *vocab.Measure
 		}
 		tau := r.Drive.Travel(i, k, a.Param, b.Param)
 		if r.Pairs[i][k].Once != nil {
-			// A constant pair travels nothing (docs/linkage-check-design.md
+			// A constant pair travels nothing (agent-docs/linkage-check-design.md
 			// §5.9).
 			tau = new(big.Rat)
 		}
@@ -537,7 +537,7 @@ func (r *Run) Conclude(poses []*Pose, spans []Span) motionconclude.MotionConclus
 		})
 }
 
-// Publish assembles VerifyMotion's report (docs/motion-check-design.md §4).
+// Publish assembles VerifyMotion's report (agent-docs/motion-check-design.md §4).
 func (r *Run) Publish(poses []*Pose, spans []Span) *Report {
 	c := r.Conclude(poses, spans)
 	report := &Report{
@@ -560,7 +560,7 @@ func (r *Run) Publish(poses []*Pose, spans []Span) *Report {
 	return report
 }
 
-// pathClearance is docs/motion-check-design.md §5.3's whole-path reading: the
+// pathClearance is agent-docs/motion-check-design.md §5.3's whole-path reading: the
 // minimum gap over the path lies between the smallest interval lower bound
 // and the smallest evaluated upper bound, since any pose's upper bound bounds
 // the path's minimum from above. It reports that interval's midpoint and

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file pins docs/clearance-design.md §2's revolve carrier displacement: a
+// This file pins agent-docs/clearance-design.md §2's revolve carrier displacement: a
 // revolve's clearance carriers are built from the walk's float axis
 // coordinates (z, ρ), a re-expression of the recorded plane point that rounds
 // and snaps a near-axis radius onto the axis, so a published Clearance row

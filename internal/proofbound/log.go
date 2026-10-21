@@ -10,7 +10,7 @@ import (
 // This file encloses the square root, the natural logarithm and the inverse
 // hyperbolic sine of exact rationals on the package's fixed-point grid
 // (turn_trig.go's TrigFixedBits), for the coil's wall-area closed form
-// (docs/helix-design.md §7.1). Every enclosure is built from exact integer
+// (agent-docs/helix-design.md §7.1). Every enclosure is built from exact integer
 // operations with an explicit, charged truncation, so no platform's libm or
 // FMA contraction can narrow it.
 

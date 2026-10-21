@@ -22,7 +22,7 @@ const (
 )
 
 // RetainedEdgeCurve returns the analytic curve of the rim between two faces
-// whose retained tags meet along it (docs/faceted-source-retention-design.md
+// whose retained tags meet along it (agent-docs/faceted-source-retention-design.md
 // §10), and whether one is admitted. chain lists the rim's held vertices in
 // order with their bounds; closed is true when the rim starts and ends at one
 // vertex. A rim that no rule admits keeps its chord chain: false is a decline,

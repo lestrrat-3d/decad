@@ -17,8 +17,8 @@ import (
 // — the operation is rejected, never a wrong mesh. The input names a real solid
 // and the refusal is the evaluator's reach, so it carries the BooleanExpectedContact
 // signal and wraps ErrUnsupported (never ErrDegenerate); the public boundary remaps
-// it to BooleanUnsupportedContact (boolean.go, asBooleanError; docs/api-design.md
-// §8 / H2, docs/evaluator-design.md §9).
+// it to BooleanUnsupportedContact (boolean.go, asBooleanError; agent-docs/api-design.md
+// §8 / H2, agent-docs/evaluator-design.md §9).
 func ErrUnclassifiableContact(what string) error {
 	return ExpectedBoolean(BooleanExpectedContact,
 		fmt.Errorf(`%w: %s — the exact predicates cannot classify a tangent contact`, decaderr.ErrUnsupported, what))
@@ -56,7 +56,7 @@ type TriContact struct {
 	// when it runs along none): an in-plane edge. Whether such an edge grazes
 	// the other operand or genuinely crosses it is NOT a property of this pair
 	// — it is a property of the edge's two adjacent facets — so the pair only
-	// reports the fact and the mesh pass decides (docs/evaluator-design.md §9).
+	// reports the fact and the mesh pass decides (agent-docs/evaluator-design.md §9).
 	EdgeA, EdgeB int
 	// sin2 is the exact squared sine of the two facet planes' crossing angle,
 	// nil for a coplanar or empty pair. A rim vertex this pair's segment ends

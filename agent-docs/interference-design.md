@@ -1,0 +1,817 @@
+# Interference Design
+
+How `Document.Verify` proves pairwise overlap and reports its volume without
+changing the document: the pair relation (§1), stable report walk (§2), proof
+paths (§3), full-containment certificate (§4), read-only boolean evaluation
+(§5), positive-volume gate (§6), errors, cost and cancellation (§7), tolerance
+gate (§8), evaluator coverage (§9), tests (§10), and increment plan (§11).
+Companion to `agent-docs/verification-design.md`, which owns what an
+`Interference` row means and how its `Volume` is judged; to
+`agent-docs/clearance-design.md`, which owns analytic pair classification; and to
+`agent-docs/evaluator-design.md`, which owns the mesh boolean and its proven bounds.
+Nothing here adds a public API or modeling operation. Nothing here changes a
+public boolean's consuming semantics.
+
+## 1. Pair relation
+
+Every unordered pair of proven solids has one evaluator relation. A pair
+holding a `BodySheet` operand takes none of it: a sheet encloses no region, so
+the interior relation below is not the question for it at all, and
+`agent-docs/surface-design.md` §9.3 states its own decision procedure and report
+vocabulary (crossing, contained, outside, undecided) in its place. §2 states
+where that procedure sits in the report walk.
+
+| Relation | Proven claim | Report effect |
+|---|---|---|
+| **disjoint** | interiors share no point | no `Interference` row; emit `Clearance` only when asked and measured |
+| **touching** | interiors are disjoint and boundaries meet through a certified contact | no `Interference` row; emit `Exact` zero `Clearance` only when asked |
+| **overlapping** | interiors share a non-empty open region | emit `Interference` only when overlap volume is also bounded; otherwise `Suspect` |
+| **undecided** | none of the three claims is proven | no pair row; `Suspect` |
+
+`boundaryaudit.PairOverlapping` MUST be distinct from `boundaryaudit.PairUndecided`. A nesting witness,
+an admitted transversal boundary crossing, or a certified same-side contact
+proves overlap even when the evaluator cannot yet measure it. Losing that fact
+inside `boundaryaudit.PairUndecided` prevents the next proof stage from using it and makes
+diagnostics lie about what remains unknown.
+
+The relations concern **interiors**. Boundaries may touch while the pair stays
+disjoint. A positive-volume `Interference` row is never emitted for contact
+alone.
+
+The pair result also records the strongest certificate already obtained:
+
+```go
+// internal/clearance/pairkernel
+type Result struct {
+    Verdict boundaryaudit.PairVerdict // undecided / disjoint / touching / overlapping
+    // gap interval + exactness + pair diameter when disjoint or touching
+    // containment classification when a strict nesting proof ran
+}
+```
+
+The type stays internal; nothing public exposes it. The relation and its certificate MUST be
+structural values, never inferred from an error string.
+
+## 2. Stable, non-mutating report walk
+
+`Verify` walks live bodies in `Document.Bodies()` order, keeps only proven
+solids for pair work, and enumerates `i < j`. Both pair lists preserve that
+order. No spatial index, worker completion order, or proof-path order may
+reorder rows.
+
+**A pair holding a `BodySheet` operand is reported, not dropped.** A sheet
+encloses no region, so §1's interior relation is not the question, and dropping
+the pair silently would let a sheet passing straight through a solid leave a
+`Sound` report. The pair runs §3.1's box separation first: separated boxes
+emit nothing. Boxes that MEET run `agent-docs/surface-design.md` §9.3's own decision
+procedure, which owns the full report vocabulary that follows — a proven
+crossing (`Interfering`, no row), a proven containment or separation with a
+measured gap (`Sound`, a `Clearance` row under `WithClearances()`), or
+`DiagUnsupportedPairSheet` naming the pair and no row when the procedure
+cannot settle it, including every sheet-sheet pair.
+
+For each pair:
+
+1. Check `ctx`.
+2. Use bounds-inflated box separation. If it proves disjoint interiors and
+   clearances were not requested, finish the pair.
+3. Run the analytic pair kernel when a gap is requested or box separation did
+   not settle the partition.
+4. Finish immediately on `boundaryaudit.PairDisjoint` or `boundaryaudit.PairTouching`; append a clearance
+   row only when `WithClearances()` asked and the gap was measured.
+5. On `boundaryaudit.PairOverlapping`, try its containment-volume certificate first, then
+   read-only intersection measurement when needed.
+6. On `boundaryaudit.PairUndecided`, try read-only intersection measurement. A positive
+   volume may prove overlap even when the analytic kernel could not classify
+   the contact arrangement.
+7. If neither volume path proves and bounds the overlap, mark the pair
+   undecided for aggregation.
+
+Steps 2–7 run on a bounded worker pool, one pair per task, sized like the
+boolean's contact batches (`GOMAXPROCS`, at most 12). A pair's proof reads only
+its two operands, per-body caches that every caller fills with the same value,
+and the chord §5.3 fixes for each body before the pool starts, so its outcome
+does not depend on which pairs run before it or beside it. Each task writes its
+outcome to its own slot, and `Verify` appends the slots in pair order. A pool
+of more than one worker runs the contact batches of every boolean inside its
+pairs on that pair's worker alone, so the pair proofs never run more
+goroutines than the pool has workers. Letting each pair's batches start their
+own workers beside the pool's put two layers of goroutines on the same cores:
+on a 24-core machine the 20-segment revolved star took 40 s that way and 19 s
+this way. No measured document got slower, down to a three-body star whose
+three pairs leave most cores idle. One worker proving the pairs alone leaves the
+batches their own workers. The worker count never changes a batch's result,
+because each batch merges its slots in input order. When a
+pair fails, no pair after it starts, every pair before it still runs, and
+`Verify` returns the failure at the lowest pair index: the error a walk of the
+pairs one at a time would stop on.
+
+`Verify` MUST NOT call public `Intersect`. Public `Intersect` retires both
+operands, advances provenance, and registers a result. Verification is
+non-mutating and must leave all model state unchanged:
+
+- `Document.Bodies()` membership and order;
+- every body's live/retired state;
+- the next private producer identity.
+
+## 3. Proof paths
+
+The paths run cheapest and strongest first. A later path may add a measurement;
+it may never weaken an earlier relation.
+
+### 3.1 Box separation
+
+Bounds-inflated boxes with disjoint interiors prove the bodies' interiors
+disjoint. Touching boxes are included: box contact cannot prove body contact,
+but it does prove no positive-volume overlap.
+
+Box separation does not measure the true gap. Under `WithClearances()`, the
+analytic clearance kernel still runs.
+
+### 3.2 Analytic pair kernel
+
+The clearance kernel owns boundary distance, certified contact, boundary
+crossing, and nesting classification. It returns all four §1 relations:
+
+- positive boundary clearance plus nesting excluded → `boundaryaudit.PairDisjoint`;
+- a certified opposite-material contact with no other crossing →
+  `boundaryaudit.PairTouching`;
+- an admitted transversal crossing, certified same-side contact, or nesting
+  witness → `boundaryaudit.PairOverlapping`;
+- insufficient trim, contact, or containment proof → `boundaryaudit.PairUndecided`.
+
+Boundary distance alone MUST NOT turn nesting into disjointness. A nesting cast
+must preserve three outcomes — outside, inside, undecided — instead of returning
+one `bool` that merges inside with failed classification.
+
+**The exact planar arm** (`internal/verifyrun/clearance.go`) answers a pair the analytic
+kernel leaves `boundaryaudit.PairUndecided` when one operand is a payload that kernel has
+no carrier model for and the exact planar relation can read: a
+`mitredSweepPayload`, a `facetedPayload` or a `coilPayload`, each read off
+its own held triangle set with that set's displacement `δ`, against a prism,
+a stitched solid, or (a mitred sweep or a faceted result only) another of
+the two; a coil is served against a prism or a stitched solid alone, read exactly off its own record — the same
+admission `Document.ContactPair` uses (`planarpose.SolidAtPose`,
+`internal/planarpose/pose.go`; `agent-docs/multibody-dynamics-design.md` §9.1, §10.4).
+Every predicate there is an exact sign over dyadic coordinates, and the band
+rule of §10.4 turns the held relation into the partition's: a held gap whose
+lower end clears the summed `δ` is `boundaryaudit.PairDisjoint` with the interval widened
+by `δ` outward; a held touch is `boundaryaudit.PairTouching` only at `δ = 0`; a held
+overlap is `boundaryaudit.PairOverlapping` at `δ = 0` or through a vertex proven deeper
+than `δ` (`pair.PlanarDeepVertex`); anything else stays `boundaryaudit.PairUndecided`. The
+arm only ever adds a verdict: it never replaces one the analytic kernel
+reached. A pair of prisms or stitched solids keeps the analytic kernel's
+answer, a cup is never tessellated for verification
+(`agent-docs/payload-verification-design.md` §1), and a loft, a composite sweep
+and a cap-loop chamfer keep their own designs' staging.
+
+### 3.3 Full containment
+
+A strict full-containment certificate proves both the relation and the overlap
+volume without a boolean. §4 defines it.
+
+### 3.4 Read-only intersection
+
+Three evaluators answer here, tried in that order. The read-only analytic
+`OpIntersect` dispatch of `agent-docs/prism-boolean-design.md` resolves an admitted
+co-directional coplanar prism pair from the recorded sections and publishes
+the resolved payload's own volume (§5.2). A pair it does not admit next
+reaches that document's §4.5 overlap-area reading, which measures the same
+recorded sections without building a body and so answers an overlap covering
+any number of disjoint regions. Every pair neither admits reaches the
+exact-predicate mesh boolean, which computes the held intersection; its exact
+rational volume integral and symmetric-difference bound yield a proven
+interval for the true overlap. §5–§6 define when any of the three intervals
+proves a row.
+
+## 4. Full-containment certificate
+
+If one entire body lies in the other's material, their intersection is the
+contained body. Reuse that body's existing `Volume` measurement; do not
+tessellate it again and do not manufacture a new bound.
+
+The certificate requires all of these:
+
+1. Both operands are proven solids.
+2. Their boundaries are proven disjoint with a **strictly positive** boundary
+   clearance. A zero-distance or undecided contact cannot enter this path.
+3. Both bodies are shipped analytic payloads represented by `bodyGeom`, and
+   each has exactly one material lump. Multi-lump/faceted bodies skip this
+   certificate and proceed to §5.
+4. Choose one deterministic witness from **every** shell of both operands,
+   void shells included.
+5. `pointInBody` proves **both** directions: every witness of `inner` lies in
+   `outer` material, **and** every witness of `outer` — its void shells among
+   them — lies outside `inner` material. A witness proven in an `outer` void is
+   outside `outer` material and fails full containment. A cast that grazes or
+   exhausts its direction ladder is undecided.
+
+With disjoint boundaries, membership is constant on each connected component of
+one body minus the other body's shells — not throughout the material lump,
+which the other body's shells can cut into several components. Each shell is
+connected and misses the other boundary, so it lies wholly in one such
+component and its single witness decides that whole shell.
+
+Proving every `outer` witness outside `inner` is what makes `inner`'s own
+witnesses speak for all of it: `outer`'s boundary then misses `inner`
+entirely, so `inner` lies in one component and is wholly inside or wholly
+outside `outer`. Without that direction, an `outer` void shell can sit inside
+`inner`'s material and carve away a part of it that no `inner` witness reports
+— and the reused volume would overstate the true overlap. `inner`'s own voids
+need no separate treatment: they remove material from `inner`, and the
+intersection with `outer` removes the same void.
+
+If A's lump is inside B, report A's volume. If B's lump is inside A, report B's.
+Strict boundary separation prevents both directions from holding for non-empty
+solids.
+
+**All multi-lump analytic containment is staged.** Shipped multi-lump bodies are
+faceted Boolean results, and `bodyGeom` does not represent their held facets.
+They skip analytic nesting entirely and proceed to read-only intersection; an
+unsupported or unmeasurable intersection reads `Suspect`. Never reuse a whole
+multi-lump body's volume from a partial witness set, and never sum only known
+inside lumps.
+
+Containment volume keeps the contained body's `Value`, `Exactness`, and
+`Bound` unchanged. The containment proof itself establishes positive overlap,
+so this path may emit the row even when that existing volume interval reaches
+zero. The coarse measurement still fails §8's tolerance gate; the report
+remains `Interfering`, which outranks `Suspect`.
+
+### 4.1 Coincident analytic bodies
+
+Strict containment cannot classify equal bodies because their boundaries
+coincide. An exact set-equality certificate may reuse one operand's volume on
+the same grounds: `A = B` proves `A ∩ B = A`.
+
+The shipped certificate is analytic and exact. It compares the payload fields
+that determine the represented point set with exact structural equality, never
+samples, bounding boxes, tolerances, or topology counts. Derived metadata that
+does not change that set — `cupPayload.Thickness`/`Sense` and
+`prismPayload.BlendSegs`/`BlendKind` — is deliberately excluded. Equal
+represented-set fields in `prismPayload`, `cupPayload`, or `revolvePayload`
+prove identical represented sets.
+
+The certificate additionally requires each operand's record to BE the set it
+denotes. A `prismPayload` carrying a nonzero section displacement
+(`agent-docs/prism-boolean-design.md` §7), or a `cupPayload` carrying a nonzero
+offset displacement (`agent-docs/modify-design.md` §9), denotes a set its record is
+only within that displacement of, so two equal such records say nothing about
+the two sets: the certificate withholds and the pair stays undecided. That document's
+Implementation notes own the per-consumer list this rule belongs to, and this
+section does not restate its derivation.
+
+Broader equality is staged. A future normalizer may prove harmless
+representation choices equivalent:
+
+- a closed loop's cyclic start point;
+- hole order;
+- an axis line's direction sign;
+- a full revolution's angular start;
+- a sweep interval's endpoint spelling.
+
+That broader normalizer MUST compare by payload:
+
+| Payload | Equality certificate |
+|---|---|
+| `prismPayload` | same world plane and sweep direction; same signed world sweep interval; same normalized line/arc material region |
+| `cupPayload` | same outer region and interval; same cavity region and interval; same accumulated rigid placement |
+| `revolvePayload` | same world axis line; same normalized meridian material region; same angular point set — equal partial interval or both full |
+
+Current coordinates and curve parameters are compared as exact stored values.
+A near match or structurally different record stays undecided. A future
+normalizer may add adaptive-exact comparisons only when it proves set identity.
+
+Do not apply this certificate to `facetedPayload`. Equal held polygons do not
+prove the two bounded source parts equal. Their read-only intersection still
+uses §5–§6.
+
+When equality is certified, emit A's existing volume measurement, where A is
+the first operand in stable pair order. Do not choose opportunistically by
+bound width; stable pair order makes repeated reports byte-stable. The set
+identity proves positive overlap independently of the volume interval, exactly
+as strict containment does.
+
+## 5. Read-only boolean evaluation
+
+Factor the mesh boolean into geometry evaluation and document commit:
+
+```go
+func evaluateBoolean(
+    ctx context.Context,
+    op operationKind,
+    a, b *Body,
+) (booleanEvaluation, error) // no document write
+
+func performBoolean(
+    ctx context.Context,
+    op operationKind,
+    a, b *Body,
+) (*Body, error) // public commit path
+```
+
+Names are illustrative; the split is normative.
+
+`evaluateBoolean` performs only geometry work:
+
+1. derive pair chord tolerance and pair diameter;
+2. tessellate operands — at the pair's chord tolerance for a public boolean
+   (raised to a restating operand's held floor), at each body's own §5.3
+   chord under `Verify`;
+3. map source faces;
+4. prepare exact-predicate meshes;
+5. run the hidden-tangency refusal;
+6. classify and cut the mesh intersection;
+7. stitch, conform, weld, and audit the held result;
+8. compose chord and rounding bounds;
+9. integrate held volume in exact rational arithmetic.
+
+It MUST NOT call `nextProducerID`, advance provenance, retire an operand, register a
+body, or expose a transient result through the document. Its result contains
+the held facets and every bound input needed by either caller.
+
+The public booleans keep consuming behavior:
+
+1. gate nil, foreign, retired, and identical operands;
+2. call `evaluateBoolean(ctx, op, a, b)`;
+3. build and audit the public faceted body with `ctx` and the next real step reference;
+4. append the boolean step and retire/register atomically.
+
+Cancellation before step 4 returns
+`ctx.Err()` unchanged and leaves the document and operands unchanged.
+
+`Verify` calls `booleandispatch.AnalyticIntersect` — §5.2's read-only
+analytic twin of the same `OpIntersect` dispatch `performBoolean` runs — then
+`agent-docs/prism-boolean-design.md` §4.5's overlap-area reading for a pair that
+twin does not admit, then `evaluateBoolean(ctx, OpIntersect, a, b)` for a pair
+neither admits. It consumes only the volume result from whichever path
+answers.
+
+The twin reaches its own answer by building the admitted analytic payload, so
+it reads `nextProducerID` to name that body, but it never commits: provenance
+does not advance, no operand retires, no body registers, and the built body never
+leaves the evaluator. The overlap-area reading builds one such payload per
+measured arrangement cell and keeps the same promise for every one of them.
+None of the three paths builds or registers a transient `Body` in the
+document.
+
+The order is normative. The twin runs first so that every pair it already
+answers keeps its existing measurement unchanged; the overlap-area reading
+picks up only pairs that previously reached the mesh path or no path at all.
+
+### 5.1 One volume integrator
+
+Extract the exact rational volume loop from faceted-body construction into one
+private helper used by both callers. Given the stitched, oriented closed mesh
+and the composed symmetric-difference allowance, it returns:
+
+```go
+Measurement{
+    Value:     units.CubicMillimeters(Vheld),
+    Exactness: exactnessOf(E),
+    Bound:     units.CubicMillimeters(E),
+}
+```
+
+`E` is the existing boolean volume allowance:
+
+- operand A chord symmetric difference;
+- operand B chord symmetric difference;
+- volume swept by final float rounding over the **pre-round** stitched area;
+- exact-rational-to-float rounding of `Vheld`.
+
+The boolean rim displacement does not replace this allowance. The
+symmetric-difference identity is the volume proof; the trim-amplified rim bound
+continues to govern the public result's boundary measurements.
+
+Both callers MUST use the same held facets, orientation audit, volume integral,
+and bound helpers. A verification-only approximate volume formula is forbidden.
+
+### 5.2 Positive-area coplanar patches
+
+The current symmetric triangle classifier refuses a two-dimensional coplanar
+intersection. That refusal stays correct until this complete replacement
+lands; it must not be weakened one pair at a time.
+`agent-docs/prism-boolean-design.md` §14 PR4 wires `measuredInterference` to the
+same read-only analytic `OpIntersect` dispatch `performBoolean` uses
+(`booleandispatch.AnalyticIntersect`), so an admitted coplanar,
+co-directional prism pair — `Union`'s select-all path, `Cut`/`Intersect`'s
+clean-nesting sub-case, or (since PR3) `Cut`/`Intersect`'s crossing sub-case,
+§4.2 — is superseded here and no longer reaches the mesh path at all. PR5
+extends that supersession to a coplanar pair whose overlap covers two or more
+disjoint regions, through that document's §4.5 overlap-area reading: the
+reading measures the arrangement cells both operands claim and sums their
+volumes, so it needs no single assembled section and no body, and a pair of
+meshing gears — whose overlap is always multi-region — is measured rather
+than deferred to a mesh refusal. A crossing pair whose operands carry a
+section displacement or walk charge, or whose re-expression is nonidentity (a
+gear moved with `Transform`), is measured too: that document's §3.4 charges
+each crossing the displacement it can amplify
+(`agent-docs/general-boolean-design.md` §3 A6), and sends one too close to
+tangent to bound to the mesh path below. A pair neither analytic
+path admits still falls back to `evaluateBoolean`'s read-only mesh
+intersection unchanged, so this section still governs every coplanar pair the
+mesh path receives:
+non-prism payloads, non-coplanar or non-co-directional prisms, and every pair
+the entry gate or the region resolution declines.
+
+Coplanar breadth support constructs one exact 2D arrangement per coplanar face
+patch in the dominant-axis projection already used by the boolean's rational
+cutting code:
+
+1. Intersect projected triangle boundaries with exact rational predicates.
+2. Split them into maximal positive-area cells. Edge-only and vertex-only cells
+   remain contact cases.
+3. For each cell, read both operands' outward material side from the oriented
+   adjacent facets. Never infer it from triangle input order alone.
+4. Opposing material sides describe boundary-only contact at that cell. Keep it
+   out of the intersection volume and pass the complete contact set to the
+   touching proof.
+5. Matching material sides describe a coincident intersection boundary. Keep
+   exactly one copy, choosing operand A in stable pair order, and connect its
+   cell edges to the non-coplanar cut regions.
+6. Audit every arrangement edge for two-sided adjacency after the merge. A
+   branching edge, an unclassified neighboring cell, mixed side evidence, or a
+   cell the rational arrangement cannot close is an expected undecided contact
+   outcome, never a guessed keep/drop.
+
+This section owes the hidden-tangency gate (`meshbool.FacesNearMiss`, `internal/meshbool/depth_witness.go`;
+`agent-docs/evaluator-design.md` §9) a **constraint**, not a permission. That gate
+returns `near = false` for the whole face pair on the first facet pair it
+classifies as a positive-area coplanar overlap, deferring the pair to the mesh
+pass's own refusal of a coplanar face-on-face tangency. The deferral is sound
+only while that refusal happens. Once §11's PR4 classifies material sides over a
+patch instead of refusing it, the same `near = false` rests on a refusal that no
+longer runs, and the whole face pair clears the gate with no near-miss proof
+behind it.
+
+§11's PR4 MUST therefore settle the near-miss question for a coplanar carrier
+pair before it removes that refusal, and carrier coplanarity ALONE does not
+settle it. A planar face's carrier plane is exact, but its outline is not: near
+a curved rim the held outline is inscribed, so two operands whose true rims
+touch can leave their held outlines a chord apart, and the arrangement above —
+projected triangle boundaries split into maximal positive-area cells — then has
+no positive-area cell to classify at all. The cells carry no outline allowance
+of their own that would cover that gap.
+
+The patch relation does not decide the whole pair by itself. Opposing cells are
+`boundaryaudit.PairTouching` only when the analytic/contact pass proves no overlap elsewhere.
+Matching cells may bound a positive-volume intersection only after the complete
+stitched result passes §5 and its volume clears §6.
+
+### 5.3 One mesh per body in `Verify`
+
+A public boolean meshes both operands at the pair's own chord tolerance:
+`boolChordFactor` times the diameter of the union of the two operands'
+bounds-inflated boxes, raised past each operand's own reserved floor (its
+section displacement, a revolve's coordinate stages, a coil's or a mitred
+sweep's held `delta`). `Verify` does not. Each
+body is meshed **once per `Verify` call**, at one chord, and that one mesh — its
+facet-contact audit included — serves every pair of the body that reaches the
+mesh path. Meshing per pair would mesh and audit a body in a 20-body star 19
+times, at 19 slightly different tolerances.
+
+**The rule.** A body's chord is the least pair tolerance over its
+*candidate pairs*: the solid pairs, in §2's job list, whose bounds-inflated
+boxes are not separated. Those are the only pairs that can reach the mesh path,
+and the set is known before any pair runs; the pairs that actually reach it are
+known only after the analytic kernel has run on them, too late to fix a chord
+that pairs running beside them share. The chord is computed once, before the
+worker pool starts, from the same per-operand shares the pair tolerance is
+built from. In a two-body document each body's chord is therefore the pair's
+own tolerance, the one a public boolean meshes both operands at.
+
+**Restatements keep the public booleans' rule.** A body whose tessellation
+restates a held mesh instead of chording — a faceted Boolean result, a mitred
+sweep — has nothing to share: it returns the same held facets at any tolerance
+at or above its held floor. Such a body is meshed per pair exactly as a public
+boolean meshes it, at the pair's tolerance raised to its held floor, and each
+pair gates the held facets it touches against that pair's own tolerance
+(`agent-docs/api-design.md` §8 "The chain depth",
+`agent-docs/faceted-vertex-bounds-design.md` §5). A shared body is never gated: it
+restates nothing.
+
+**The bound stays sound.** The requested tolerance only steers how finely a
+body is chorded. §5.1's allowance `E` reads each operand's symmetric-difference
+bound from the mesh that was actually built, never from the tolerance asked
+for: each operand's own proven `volSymDiff`, the rounding of the stitched
+result, and the conversion of `Vheld`. The symmetric-difference identity
+`|1_{A∩B} − 1_{A'∩B'}| ≤ |1_A − 1_A'| + |1_B − 1_B'|` holds for any two held
+operands A' and B', whatever tolerances they were chorded at, so the interval
+`[V − E, V + E]` encloses the true overlap whether or not the two meshes share
+a tolerance. The hidden-tangency gate and `rimDelta` likewise read each mesh's
+own boundary bound, and `rimDelta` keeps the pair's own diameter. Nothing in
+the pipeline assumes the two operands were chorded alike.
+
+**What the reading becomes.** A body's chord is never coarser than the
+tolerance any of its pairs would have derived alone, because the least of a set
+is at most each member. Each operand mesh of a pair is therefore at least as
+fine as the pair would have asked for, and the published `Volume` and `Bound`
+of an overlap can differ from the reading at the pair's own tolerance. Both
+intervals enclose the true overlap, so the two values differ by at most the
+sum of the two bounds. The bound composes each operand's own allowance at its
+body chord, which is usually the smaller of the two.
+
+The §8 tolerance gate reads no chord: its reference is the pair's diameter and
+the operands' areas. A body's chord does depend on which other
+bodies' boxes meet its own, so adding a body that touches it can change the
+reading of its other pairs. For one document the reading is fixed, whatever
+the worker count or the order the pairs finish in.
+
+**The cache.** The per-call cache holds one entry per sharing body: the chord,
+and the outcome of the one tessellation that builds the mesh, run under a
+once-only guard. The entries are created before the pool starts and only read
+afterwards, so workers that ask for the same body at once wait on one build
+rather than each building their own. A failed build is kept like a mesh: the
+build is deterministic, so every pair of the body would fail the same way, and
+each pair still maps the error to its own operand index for §7.1's
+diagnostics. The cache lives for one `Verify` call and is then dropped. The
+body's own one-entry tessellation cache (`agent-docs/tessellation-design.md` §1.1)
+also holds the mesh, keyed by the chord, so a later `Verify` of the same
+document finds it there.
+
+A pair whose chord share cannot be read — a body with no bounds, a pair with
+no extent — contributes nothing to any chord. If it reaches the mesh path, it
+derives its own pair tolerance there and fails exactly as it would without the
+cache. The motion check (`agent-docs/motion-check-design.md`) measures one transient
+pose against one static body at a time and keeps the pair's own tolerance.
+
+## 6. Positive-volume gate
+
+Let an intersection evaluation return `V = abs(Volume.Value)` and
+`E = Volume.Bound`. The true overlap volume lies in the non-negative interval
+
+```text
+[max(0, V - E), V + E].
+```
+
+Emit an `Interference` row from this path only when `V - E > 0`. That strict
+inequality proves the true intersection has positive volume. Copy the
+measurement unchanged into the row.
+
+These outcomes do **not** emit a row:
+
+| Outcome | Why | Pair result |
+|---|---|---|
+| held intersection empty | an empty approximation plus a nonzero symmetric-difference allowance does not prove true emptiness | `Suspect` unless an earlier path proved disjoint/touching |
+| `V - E <= 0` | interval admits zero; held overlap is below this evaluator's proof reach | `Suspect` |
+| tangent/grazing/coplanar contact refused | topology classifier did not prove a positive-volume intersection | `Suspect` unless clearance certified touching |
+| operand/result unsupported | evaluator lacks a complete path | `Suspect` |
+
+Do not turn a mesh witness point, an intersection segment, a nesting witness,
+or a positive held volume alone into a row. Every row carries the bounded
+overlap volume the public contract promises.
+
+The set-identity paths are the only exceptions to `V - E > 0`: strict full
+containment proves `inner ∩ outer = inner`, and the §4.1 analytic equality
+certificate proves `A ∩ B = A`. Each independently proves positive overlap,
+and the existing body volume is the quantity, not the proof of existence.
+
+## 7. Errors and cancellation
+
+### 7.1 Expected undecided outcomes
+
+The read-only evaluator MUST distinguish expected geometric non-results from
+internal failures with private typed outcomes, not sentinel identity alone and
+never message matching:
+
+- empty held intersection;
+- contact/graze/coplanar arrangement the mesh boolean refuses;
+- evaluator staging (`ErrUnsupported`);
+- a valid operand whose chording is too coarse to prove its own topology —
+  loops that close within their chord bounds of each other, a bridge that
+  pinches, a chorded boundary whose ear clipping stalls. The evaluator owns the
+  chord tolerance here, so the caller cannot act on the refusal;
+- positive held intersection whose bound does not clear zero.
+
+`performBoolean` maps these to its existing public errors (`ErrBooleanFailed`,
+`ErrDegenerate`, or `ErrUnsupported`). `Verify` maps them to an undecided pair.
+For diagnostics, preserve the private reason: pre-contact operand staging emits
+`DiagUnsupportedPairPayload` and names the operand; contact policy emits
+`DiagUnsupportedPairContact`; later pipeline reach emits
+`DiagUnsupportedPairPipeline`. Each message states the matching corrective
+action. Verify emits only the matching cause-specific code.
+
+An invariant failure — inconsistent source mapping, an unclosed stitched mesh,
+an impossible shell relation, a failed exact predicate, or a non-positive
+signed volume on a supposedly non-empty oriented result — is not ordinary
+uncertainty. `Verify` returns that error and no report. It MUST NOT hide a broken
+evaluator as `Suspect`.
+
+### 7.2 Context and work
+
+`Verify` passes its context through the entire read-only path. After document
+and option validation, return `ctx.Err()` unchanged once canceled.
+
+Check cancellation:
+
+- before and after every §5 phase;
+- in every O(facet²), O(edge²), component, shell, and containment loop;
+- at every branch-and-bound/refinement subdivision;
+- while cutting facets and while building/stitching adjacency.
+
+Leaf exact predicates remain context-free. Their callers use a shared bounded
+work counter and check `ctx` at least once per 256 candidate operations. Phase
+boundaries check unconditionally. This gives prompt cancellation without
+threading context through arithmetic primitives or changing deterministic
+geometry decisions.
+
+`Union` / `Cut` / `Intersect` propagate their caller
+context through evaluation and faceted-body construction.
+
+The mesh fallback has no constant-work promise. `meshBoolean` checks every
+pair of operand facets, using the facet boxes to skip exact predicates only
+after each pair-box check. Its pair-box work is therefore the number of facets
+in A multiplied by the number in B. `Verify` can pay that cost for every
+proven-solid pair that box, analytic clearance, containment, equality, and the
+§3.4 analytic `OpIntersect` dispatch leave unresolved. Verification §1.2 owns
+the public deadline guidance. The existing
+context is the public control for this work; do not add a separate work-limit
+or progress API.
+
+## 8. Interference tolerance gate
+
+An emitted row makes the report `Interfering` regardless of measurement
+coarseness. The row's measurement is still judged because nothing in a report
+is exempt.
+
+Use verification's ordinary scalar rule:
+
+```text
+Bound <= rel × Ref
+Ref = max(abs(Volume.Value), Quantum)
+Quantum = δ × (AreaA + AreaB)
+δ = 1e-9 × Dpair
+```
+
+`Dpair` is the diameter of the union of the two operand point sets. `AreaA` and
+`AreaB` are the operands' own surface-area readings. The overlap boundary lies
+on operand skins, so their summed area bounds the surface displaced at the
+noise floor.
+
+Keep this reference pair-local. Do not use either body's volume, either body's
+box volume, the document diameter, or the transient intersection's faceted
+area. The transient area can omit or add facets exactly where the approximation
+is uncertain; the operand skins are the proof reference.
+
+The gate affects the pair's trust finding, but status precedence remains
+`Interfering > Suspect`. A caller can inspect the row's `Exactness` and `Bound`
+even though `Passed()` is already false because the bodies overlap.
+
+## 9. Coverage and refusal
+
+The proof path is capability-based, not operation-history-based:
+
+| Operand capability | Available path |
+|---|---|
+| bounds | box disjointness |
+| analytic boundary model + certified casts | clearance/contact/full-containment proof |
+| exact planar held boundary with a displacement `δ` (a mitred sweep, a faceted Boolean result, a coil) against an exact planar partner | §3.2's exact planar arm: disjoint with a gap, touching at `δ = 0`, or overlap through a deep vertex |
+| tessellation accepted by mesh boolean | read-only intersection volume |
+| neither boundary model nor tessellation | undecided → `Suspect` |
+
+Each row is a capability of one operand. The §3.4 analytic `OpIntersect`
+dispatch and the overlap-area reading behind it sit on top of them as
+pair-level paths: an admitted co-directional coplanar prism pair measures its
+overlap from the two recorded sections and needs no tessellation row at all,
+whether that overlap is one region or several.
+
+A prism, a filleted/chamfered prism, and a tube share `prismPayload` and use the
+same paths where their section displacement is zero. A `prismPayload` carrying a
+nonzero displacement (`agent-docs/prism-boolean-design.md` §7) gets no `bodyGeom`
+model, so no analytic clearance, contact or full-containment path is available
+to it, and §4.1's equality certificate withholds separately. Such a body still
+reaches a read-only intersection path: the §3.4 analytic `OpIntersect` dispatch
+where the pair admits it — that path reads the recorded sections rather than a
+`bodyGeom` model, and composes the displacement into the bound it publishes —
+and otherwise the intersection its tessellation supports. A pair neither
+measures reads `Suspect`. A cup uses box proofs and the read-only boolean once
+its shipped cup tessellation is accepted; analytic clearance/full containment
+remain staged until `bodyGeom` supports `cupPayload`. A faceted boolean result
+uses its held mesh and carried bounds. A revolve uses analytic clearance/full
+containment where supported; read-only intersection stays staged until revolve
+tessellation lands.
+
+Do not claim curved coverage from planar facets alone. The hidden-tangency gate
+and every operand chord allowance remain mandatory. If a curved pair lies
+inside those bounds and no analytic proof settles it, the pair is `Suspect`.
+
+## 10. Required tests
+
+Every increment asserts geometry and report state, not only successful return.
+
+### 10.1 Non-mutation and order
+
+- Snapshot the next producer identity, live body pointers/order, and retired state before
+  `Verify`; assert exact equality afterward on overlap, disjoint, undecided,
+  error, and cancellation paths.
+- Build at least three bodies; assert `Interferences` and `Clearances` follow
+  document pair order, independent of proof path.
+- Call `Verify` repeatedly; assert byte-stable report ordering and identical
+  measurements.
+- Verify one document with one pool worker and with several; assert the two
+  reports equal field for field. Assert every pair a parallel pool proves sees
+  one contact worker, and the one-worker walk sees the caller's count.
+
+### 10.2 Relation
+
+- separated boxes → no interference, `Sound` without asked clearances;
+- certified touching caps → no interference, optional `Exact` zero clearance;
+- transversal overlap → one interference row with `Value - Bound > 0`;
+- nested single-lump body → row volume equals contained body volume exactly as
+  a `Measurement` value;
+- a single-lump body whose **void** shell lies inside the other body, whose
+  boundaries are disjoint → no containment reuse: the outer body's void
+  witness is proven inside, so the pair reports only what the read-only
+  Boolean proves, else `Suspect`. A hole-free fixture cannot exercise this;
+- fully or partially contained multi-lump faceted body → no analytic
+  containment reuse; read-only Boolean proves the complete overlap or the pair
+  stays `Suspect`;
+- held overlap at or below its bound → no fabricated row, `Suspect`;
+- identical/coincident and broad coplanar pairs stay `Suspect` until their
+  stated increments land, then report the proved volume;
+- a coplanar prism pair whose 2D outlines overlap in two or more disjoint
+  regions reports one row whose volume is the summed overlap, proving the
+  overlap-area reading answered rather than the mesh path — which refuses a
+  coplanar pair outright, so any row at all on such a pair is the proof;
+- a coplanar prism pair whose sections meet only along a shared wall reports
+  no row and stays `Suspect`, so the reading never turns contact into a
+  zero-volume interference.
+
+### 10.3 Bounds and errors
+
+- perturb analytic fixtures within the carried operand chord allowances; true
+  overlap remains inside `Value ± Bound`;
+- all-planar exact-rational case reaches zero volume bound only when its float
+  conversion is exact;
+- an expected unsupported/contact/empty outcome yields a report with
+  `Suspect`;
+- a forced closure/source/invariant failure makes `Verify` return an error;
+- cancellation during tessellation, facet-pair classification, cutting,
+  stitching, and containment returns `context.Canceled` or
+  `context.DeadlineExceeded` and leaves the document unchanged.
+
+### 10.4 One mesh per body
+
+- three mutually crossing cylinders whose pairs derive different tolerances:
+  each body is tessellated exactly once per `Verify` call, counted by an
+  internal hook on every build, and each body's chord is the least of its
+  pairs' tolerances;
+- the same document's three overlap volumes each enclose the pair's true
+  volume, computed independently by quadrature of the crossed-cylinder
+  integral, and each proves positive;
+- many goroutines asking the cache for one body at once receive one mesh from
+  one build, under `-race`.
+
+### 10.5 Gate
+
+- judge `Interference.Volume` against pair diameter and summed operand areas;
+- never use document size or transient intersection area;
+- a row beyond tolerance remains `Interfering` by precedence while preserving
+  its approximate measurement.
+
+## 11. Increments
+
+Each row is a PR-sized stage. An unanswered verification question reads
+`Suspect`; no row claims work that has not landed.
+
+| PR | Lands | Still `Suspect` |
+|---|---|---|
+| 1 | four-way pair relation; read-only `evaluateBoolean`; shared shell audit and rational volume/bound helper; transversal intersections for operands the mesh boolean accepts; stable ordering; context propagation | containment without a measurable mesh intersection; coincident/broad-coplanar arrangements; operands without tessellation |
+| 2 | strict full-containment certificate for shipped single-lump analytic payloads; whole-contained-body volume reuse | all multi-lump containment unless the Boolean measures the complete intersection |
+| 3 | exact structural equality certificate for analytic payloads, reusing the first equal body's volume | harmless alternate record spellings; non-identical broad coplanar overlap |
+| 4 | coplanar breadth in the mesh classifier: classify material sides over every positive-area coplanar patch, keep crossing/overlap patches, and retain pure opposite-side contact as touching; settle the near-miss question §5.2 states this increment owes a coplanar carrier pair before removing the refusal that pair is deferred to | unsupported curved operands and unresolved curved tangencies |
+| 5 | curved read-only intersection coverage after revolve tessellation, with chord bounds and the hidden-tangency refusal intact | contact or overlap whose proven interval still admits both zero and positive volume |
+| 6 | multi-region analytic overlap: `agent-docs/prism-boolean-design.md` §4.5's overlap-area reading, entered after the §5 twin declines, measuring an admitted coplanar prism pair whose overlap covers any number of disjoint regions | a coplanar pair the prism entry gate or the region classification declines, an exactly-tangent pair, and every faceted or non-coplanar operand |
+| 7 | §3.2's exact planar arm: a mitred sweep or a faceted Boolean result, against a prism, a stitched solid or each other, and a coil against a prism or a stitched solid, partitioned by the exact planar relation under the displacement band | a held touch or a held gap or overlap within the summed displacement; every pair holding a cup, a loft, a composite sweep, a cap-loop chamfer or a curved body |
+
+## 12. Decisions
+
+- Keep the existing public `Interference{A, B, Volume}` shape. Add no option,
+  witness, selector, or modeling operation.
+- Keep public booleans consuming. Share only their read-only geometry
+  evaluation — the mesh `evaluateBoolean` and the analytic intersection twin
+  `booleandispatch.AnalyticIntersect` (§5, §5.2) — never their commit.
+- Let a proof path answer with a volume alone where a body is not needed.
+  `agent-docs/prism-boolean-design.md` §4.5's overlap-area reading measures a
+  multi-region overlap `Intersect` itself still cannot build, and that
+  asymmetry between what `Verify` proves and what a public boolean returns is
+  accepted rather than resolved by widening `prismPayload`.
+- Reuse the boolean's exact rational volume and symmetric-difference bounds.
+- Mesh each body once per `Verify` call, at the least tolerance any of its
+  candidate pairs derives (§5.3). Restatements keep the public booleans' rule.
+  Public booleans keep the pair's tolerance for both operands.
+- Run the contact batches inside a parallel pair pool on the pair's own worker
+  (§2): one layer of parallel workers, never two.
+- Require strict positive lower overlap volume except under a certified
+  containment or equality set identity.
+- Treat empty, contact, unsupported, and coarse results as undecided; propagate
+  internal failures.
+- Preserve document pair order.
+- Stage all multi-lump analytic containment; use read-only intersection and
+  never report a partial sum as total overlap.
+- Check cancellation at phase boundaries and every 256 expensive candidates.
+
+No design decision remains open in this increment. Revolve tessellation,
+analytic cup boundary support, and broader contact certificates are explicit
+prerequisites or staged coverage, not unresolved contract choices.

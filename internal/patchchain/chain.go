@@ -25,7 +25,7 @@ func Partition[E comparable, V comparable](edges []EdgeRef[E, V], render func(V)
 	}
 	for v, n := range degree {
 		if n != 2 {
-			return nil, fmt.Errorf(`%w: PatchEdges selection is not exactly closed chains — a vertex at %s has degree %d over the selection, not 2 (docs/surface-design.md Table R row R5)`,
+			return nil, fmt.Errorf(`%w: PatchEdges selection is not exactly closed chains — a vertex at %s has degree %d over the selection, not 2 (agent-docs/surface-design.md Table R row R5)`,
 				decaderr.ErrDegenerate, render(v), n)
 		}
 	}
@@ -66,7 +66,7 @@ func Partition[E comparable, V comparable](edges []EdgeRef[E, V], render func(V)
 				}
 			}
 			if !found {
-				return nil, fmt.Errorf(`%w: PatchEdges selection does not partition into closed chains (docs/surface-design.md Table R row R5)`, decaderr.ErrDegenerate)
+				return nil, fmt.Errorf(`%w: PatchEdges selection does not partition into closed chains (agent-docs/surface-design.md Table R row R5)`, decaderr.ErrDegenerate)
 			}
 			visited[next] = true
 			chain = append(chain, next)

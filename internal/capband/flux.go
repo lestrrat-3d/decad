@@ -55,7 +55,7 @@ import (
 // straight-Line3-bounded surface the topology actually builds — and its bound
 // above is sound for exactly that solid, but it is NOT a bound against the
 // DENOTED chamfer: the true miter locus at axial fraction s is the section
-// offset by s*d (docs/modify-reach-design.md §8.3's own reduction), a curve
+// offset by s*d (agent-docs/modify-reach-design.md §8.3's own reduction), a curve
 // the straight ruling only touches at s=0 and s=1 and chords in between. That
 // gap is real, grows as the setback approaches the section's own inradius (the
 // cap window closes hard against the side one), and can exceed the arithmetic
@@ -93,7 +93,7 @@ func patchRawFlux(g Patch) proofbound.BoundedScalar {
 	dS := thS1 - thS0
 	dC := thC1 - thC0
 
-	// The STRAIGHT-SLANT RULED PATCH (docs/modify-reach-design.md §8.3): the
+	// The STRAIGHT-SLANT RULED PATCH (agent-docs/modify-reach-design.md §8.3): the
 	// surface between the SIDE arc (radius R0, level z0, sweeping thS0..thS1,
 	// the wall's own full recorded window) and the CAP arc (radius R1, level
 	// z1, sweeping thC0..thC1, the offset TRIMMED at the mitered corner

@@ -82,7 +82,7 @@ func circularWalkEndBound(seg CurveSegment, t, heldU, heldV float64) proofbound.
 // enclose the recorded curve at a NEIGHBOURING parameter, and the bound would
 // then be a proof about a point the construction never named: the cells either
 // side of it would no longer divide the sweep uniformly, the division
-// docs/loft-design.md §5.2's per-cell sagitta row derives that term over.
+// agent-docs/loft-design.md §5.2's per-cell sagitta row derives that term over.
 //
 // An enclosure the recorded data cannot state yields +Inf on both components,
 // the underivable bound every consumer refuses on.

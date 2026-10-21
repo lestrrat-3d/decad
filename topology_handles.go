@@ -11,7 +11,7 @@ import (
 // another node links to carries its handle in Owner. The helpers here are the
 // whole mapping between the two: bornX sets Owner when a handle is born, xHandle
 // maps a linked node back to its handle, and xNode gives a handle's node
-// (docs/evaluator-design.md §3). Data reads go node to node; a read maps back
+// (agent-docs/evaluator-design.md §3). Data reads go node to node; a read maps back
 // only where a handle leaves the code.
 
 // noCopy makes go vet's copylocks check report a value copy of a handle that

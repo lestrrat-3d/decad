@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file holds the prismatic loop tests of docs/linkage-check-design.md
+// This file holds the prismatic loop tests of agent-docs/linkage-check-design.md
 // §15.10: scene 8 (the slider-crank against an end stop), its pin leg, and a
 // slider-crank driven at its slide. The closed forms are the slider-crank's
 // own: with crank r = 30 and rod l = 80 on a rail through the crank's pivot,
@@ -62,7 +62,7 @@ func sliderPin(th float64) float64 {
 	return 30*math.Cos(th) + math.Sqrt(6400-900*math.Sin(th)*math.Sin(th))
 }
 
-// TestVerifyLinkageLoopSliderCrank is scene 8 of docs/linkage-check-design.md
+// TestVerifyLinkageLoopSliderCrank is scene 8 of agent-docs/linkage-check-design.md
 // §15.10. A stop x ∈ [60, 70], y ∈ [−20, 20], z ∈ [19, 29] sits in the
 // slider's layer; the block's left face x − 5 reaches it when x = 75, at
 // cos θ = 1/36.

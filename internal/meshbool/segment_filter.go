@@ -9,7 +9,7 @@ import (
 )
 
 // The mesh boolean uses exact-arithmetic predicates
-// (docs/evaluator-design.md §9): sign tests decided by an adaptive float
+// (agent-docs/evaluator-design.md §9): sign tests decided by an adaptive float
 // filter that falls back to exact rational arithmetic exactly at the
 // boundary cases, plus the rational point, segment and parity predicates the
 // subdivision and classification passes run on. The exact fallback is
@@ -126,7 +126,7 @@ func SegAdmissionRadius2(slack, maxAbs float64) float64 {
 }
 
 // SegFilter is the reject-only float pre-filter in front of the exact
-// OnSegmentInterior3 predicate (docs/evaluator-design.md §9). The conforming
+// OnSegmentInterior3 predicate (agent-docs/evaluator-design.md §9). The conforming
 // pass hands it every vertex the grid says a facet edge might touch, and a long
 // diagonal edge reaches most of the mesh — so without a filter nearly every
 // vertex earns a full math/big.Rat cross product to establish what a dozen

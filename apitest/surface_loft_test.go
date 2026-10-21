@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md's Table W and T-shaped public-surface
+// This file is agent-docs/surface-design.md's Table W and T-shaped public-surface
 // tests for WithSurfaceResult() on Loft: a lofted box's face/edge/area/bounds
 // obligations, the area-bound composition on a fixture whose caps are
 // genuinely inexact, role resolution, placement reproduction, a holed
@@ -32,7 +32,7 @@ import (
 // parallel planes height apart: a LineSeg-only correspondence, so sectionDelta
 // stays zero, whose cap area is irrational for n != 4 — unlike loftSquares'
 // own square caps, which are exactly representable and would prove nothing
-// about the area-bound composition (docs/surface-design.md §4.3).
+// about the area-bound composition (agent-docs/surface-design.md §4.3).
 func loftNGonAt(t *testing.T, n int, r, height float64) (*sketch.Sketch, *sketch.Profile, *sketch.Sketch, *sketch.Profile) {
 	t.Helper()
 	w := sketch.NewWorld()
@@ -288,7 +288,7 @@ func TestSurfaceLoftStaysASheetThroughPlacement(t *testing.T) {
 }
 
 // TestSurfaceLoftHoledProfileReportsDisconnectedLumps is the loft analogue of
-// decision A (docs/surface-design.md §2.2, TestSurfaceRevolveHoledProfileReport
+// decision A (agent-docs/surface-design.md §2.2, TestSurfaceRevolveHoledProfileReport
 // sDisconnectedLumps): a holed profile lofted as a surface has an outer wall
 // tube and a hole wall tube that touch nowhere once their shared cap is
 // omitted, so Body.Lumps() must report both. The solid built from the same
@@ -313,7 +313,7 @@ func TestSurfaceLoftHoledProfileReportsDisconnectedLumps(t *testing.T) {
 	require.Len(t, solid.Lumps(), 1)
 }
 
-// TestSurfaceLoftSheetVerifiesSound is docs/loft-design.md §9 Table D row D6's
+// TestSurfaceLoftSheetVerifiesSound is agent-docs/loft-design.md §9 Table D row D6's
 // own zero-displacement case: a LineSeg-only surface-result loft's crossing
 // audit already ran over its complete triangle set, so its walls alone earn
 // ValidityValid and the report reads Sound.
@@ -338,7 +338,7 @@ func TestSurfaceLoftSheetVerifiesSound(t *testing.T) {
 // TestSurfaceLoftChordedPairVerifiesUndecided is the honest answer at a
 // positive section displacement: a same-kind ArcSeg pairing chords its walls,
 // so sectionDelta is positive and the sheet's own fourth leg has nothing to
-// stand on (docs/surface-design.md §9.1).
+// stand on (agent-docs/surface-design.md §9.1).
 func TestSurfaceLoftChordedPairVerifiesUndecided(t *testing.T) {
 	t.Parallel()
 	w, base, top := loftWedgePlanes(t, 10)

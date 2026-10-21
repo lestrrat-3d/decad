@@ -209,7 +209,7 @@ func pointsContextParallel(ctx context.Context, points []r3.Vec) (float64, bool,
 // The float scan cannot publish its own result: Sub and Len can round ABOVE
 // the exact distance. A 6×6×7 box's diagonal, exactly 11, can read as
 // 11.000000000000002 in float arithmetic. Every Verify reference needs a
-// lower bound (docs/verification-design.md §3); an overstated one could
+// lower bound (agent-docs/verification-design.md §3); an overstated one could
 // loosen the tolerance gate. A near-tie misordered by the float scan only
 // changes which real pair the exact step proves. An empty set, an unusable
 // float distance, or a winning pair without rational coordinates returns no

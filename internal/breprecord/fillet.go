@@ -28,7 +28,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is route L's fillet arm (docs/loop-fillet-design.md, "loop-fillet
+// This file is route L's fillet arm (agent-docs/loop-fillet-design.md, "loop-fillet
 // §N" below): the corner classes of Table LF and SF1's refusal
 // (FilletLoopRead), the pipe band's faces, edges and roles (attachFilletBand),
 // its strip terms in the body's mass sums (§5.3), the receiver's faces

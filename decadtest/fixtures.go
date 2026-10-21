@@ -91,7 +91,7 @@ func NewPrism(tb testing.TB, doc *decad.Document, s *sketch.Sketch, p *sketch.Pr
 // NewBlock builds a rectangle on a fresh sketch's XY plane between corners
 // (x0, y0) and (x1, y1), grounds corner A with sketch.Sketch.Fix so the
 // rectangle solves fully constrained, and extrudes it by height. The four
-// coordinates are millimetres, the docs/api-design.md §5.2 coordinate
+// coordinates are millimetres, the agent-docs/api-design.md §5.2 coordinate
 // carve-out, which is why they are float64 rather than a units.Value; height
 // is a scalar quantity, so §5.1 admits no bare float for it and it stays a
 // units.Value. NewBlock delegates to NewSketch, SolveRegion and NewPrism and

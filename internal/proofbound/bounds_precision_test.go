@@ -22,7 +22,7 @@ func requireBoundsSameFloatBits(t *testing.T, want, got float64, msg string, arg
 }
 
 // This file tests internal/proofbound/bounds.go's proofbound.PerturbedTriangleAreaAllow, the one new
-// helper docs/loft-design.md §12 PR 2a extracts from
+// helper agent-docs/loft-design.md §12 PR 2a extracts from
 // proofbound.PerturbedAreaUpperWithBudget's own per-facet term, proofbound.RigidRoundAllow's
 // own saturated-scale answer, which that PR's placement path is the first
 // consumer to reach at an extreme coordinate, and proofbound.BoundedSqrt's own two
@@ -135,7 +135,7 @@ func exactApply(move r3.Transform, p r3.Vec) [3]*big.Float {
 	}
 }
 
-// TestWalkEndpointAllow pins docs/prism-boolean-design.md §7's δ_walk
+// TestWalkEndpointAllow pins agent-docs/prism-boolean-design.md §7's δ_walk
 // mechanism (task fu143): a positive OPERAND envelope — the magnitude of the
 // values the walk's own arithmetic touches, which is what this helper's
 // contract requires and never the endpoint that arithmetic produced — answers

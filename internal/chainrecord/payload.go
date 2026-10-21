@@ -15,11 +15,11 @@ import (
 // Payload is chain Extrude's own record of a ribbon body: the recorded
 // walk SET, the plane frame it lifts through, the signed sweep interval, and
 // the accumulated rigid placement — Payload is to chain Extrude what
-// prismrecord.Payload is to Extrude (docs/surface-design.md §13.4). A plain
-// chain Extrude builds the one-walk case; docs/surface-intersection-design.md
+// prismrecord.Payload is to Extrude (agent-docs/surface-design.md §13.4). A plain
+// chain Extrude builds the one-walk case; agent-docs/surface-intersection-design.md
 // §3.4 is what first builds more than one, one lump per surviving walk, and
 // sets SectionDelta beside them. Build evaluates it over topology nodes and it
-// implements topo.Payload (docs/evaluator-design.md §8).
+// implements topo.Payload (agent-docs/evaluator-design.md §8).
 type Payload struct {
 	Chains  []sectionrecord.ChainRecord
 	Frame   r3.Frame
@@ -28,7 +28,7 @@ type Payload struct {
 	Z1Delta float64
 	Xform   r3.Transform
 	// SectionDelta is prismrecord.Payload's own §7 term
-	// (docs/prism-boolean-design.md), carried here on the identical terms: the
+	// (agent-docs/prism-boolean-design.md), carried here on the identical terms: the
 	// proven upper bound on how far any recorded boundary coordinate sits from
 	// the section its construction denotes. Zero for every walk a caller draws
 	// through chain Extrude.
@@ -78,7 +78,7 @@ func (pp Payload) Prism() prismrecord.Payload {
 func (pp Payload) Transform() r3.Transform { return pp.Xform }
 
 // ProvesSimple implements topo.SimpleProver. A chain-fed prism earns leg 4 on
-// the profile argument with one word changed (docs/surface-design.md §13.4):
+// the profile argument with one word changed (agent-docs/surface-design.md §13.4):
 // `sketch` already proved the recorded walk a simple planar curve —
 // RecordChain's own ch.Valid gate (§13.3) — Build already refuses a
 // non-positive sweep height, and a simple planar curve crossed with a positive
@@ -91,7 +91,7 @@ func (pp Payload) ProvesSimple(context.Context) bool { return pp.SectionDelta ==
 // Placed re-evaluates the same record under the composed motion (core §8). A
 // re-evaluation path: no moments preflight has run on this record within the
 // call, so the build opens the record's one free-form work counter itself
-// (docs/spline-design.md §5.2), exactly as prismrecord.Payload.Placed does.
+// (agent-docs/spline-design.md §5.2), exactly as prismrecord.Payload.Placed does.
 func (pp Payload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	pp.Xform = composed
 	return Build(ctx, env, pp, freeform.NewFreeformWork())

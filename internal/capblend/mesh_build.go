@@ -18,7 +18,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/triangulation"
 )
 
-// This builder owns tessellation increment T7 (docs/tessellation-reach-design.md
+// This builder owns tessellation increment T7 (agent-docs/tessellation-reach-design.md
 // §7). Each wall walk is chorded once at one count. The trimmed side wall,
 // chamfer band and cap contour reuse that count and its vertex indices, so
 // their shared boundary closes without welding or dropping cells.
@@ -210,14 +210,14 @@ func TessellateMesh(ctx context.Context, b *topo.Body, cbp Payload, chord float6
 		return nil, nil, err
 	}
 	if refusal != nil {
-		// docs/tessellation-reach-design.md §7: this band's cells are not proven
+		// agent-docs/tessellation-reach-design.md §7: this band's cells are not proven
 		// to reproduce the exact offset family slice by slice, so the mesh serves
 		// export alone and booloperand.RequireVolumeProof/meshbool.OperandSymDiff refuse it
 		// with the same reason.
 		mesh.SymDiffOK = false
 		return lms, motion, nil //nolint:nilerr // refusal is the admission result; err was checked above
 	}
-	// Occupied volume (docs/tessellation-reach-design.md §7): the ideal
+	// Occupied volume (agent-docs/tessellation-reach-design.md §7): the ideal
 	// polyhedron B1 differs from the body by its chord polygons' circular
 	// segments, slice by slice, and the held mesh differs from B1 by its
 	// vertices' motion alone, since the two share one triangle index set.
@@ -241,7 +241,7 @@ func TessellateMesh(ctx context.Context, b *topo.Body, cbp Payload, chord float6
 // Vertices writes every loop's mesh vertices. Every sample of a loop
 // owns one vertex per level the loop reaches: the side ring at zLo and zHi, and
 // the cap contour ring at whichever cap(s) the selection named. store is
-// docs/tessellation-reach-design.md §3's deltaStore, one entry per vertex.
+// agent-docs/tessellation-reach-design.md §3's deltaStore, one entry per vertex.
 //
 // motion, built only when proveVolume, is §7's per-vertex displacement from
 // the ideal polyhedron B1, a parallel array: the vertex's plane-local

@@ -12,7 +12,7 @@ import (
 
 // Trace keeps a step's record for replay: the event-free slices of §3.4 with
 // their rounded pair certificates, and the events between them
-// (docs/multibody-dynamics-design.md §3.4).
+// (agent-docs/multibody-dynamics-design.md §3.4).
 type Trace struct {
 	start     State
 	end       State
@@ -23,7 +23,7 @@ type Trace struct {
 	duration  units.Value
 }
 
-// traceSlice is one event-free interval [start, end] of a step (docs/multibody-dynamics-design.md §3.4). Every body
+// traceSlice is one event-free interval [start, end] of a step (agent-docs/multibody-dynamics-design.md §3.4). Every body
 // moves on paths[i], which runs over the held span [start, span] to the end
 // of the step; every scheduled pair carries the rounded certificate that
 // proves those paths over the same span, or the swept-box exclusion that
@@ -47,7 +47,7 @@ type pairProof struct {
 }
 
 // traceEvent is one event time of a step: its held time from the step start, the states on both sides of it, and the
-// islands solved there (docs/multibody-dynamics-design.md §3.4).
+// islands solved there (agent-docs/multibody-dynamics-design.md §3.4).
 type traceEvent struct {
 	at        *big.Rat
 	pre, post State
@@ -56,7 +56,7 @@ type traceEvent struct {
 
 // Sample evaluates a recorded rounded path and its cached geometry proof.
 // It performs no response solve. It also reads the bodies' bounds through Document.SweptBox to check its swept-box
-// exclusions at the sampled poses (docs/multibody-dynamics-design.md §7.1).
+// exclusions at the sampled poses (agent-docs/multibody-dynamics-design.md §7.1).
 // Sample writes nothing, so concurrent calls on one Trace are safe.
 func (tr Trace) Sample(t units.Value) (State, error) {
 	timeValue, durationValue := exactBase(t), exactBase(tr.duration)

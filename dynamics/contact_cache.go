@@ -10,7 +10,7 @@ import (
 )
 
 // This file is the reuse cache and the work budget of the step
-// (docs/multibody-dynamics-design.md §3.2, §3.3, §5.3,
+// (agent-docs/multibody-dynamics-design.md §3.2, §3.3, §5.3,
 // §6.2 and §12): every SweptBox and SweepPair call the step makes passes
 // through one stepWork, which serves a call whose inputs it has seen before
 // from the step's own record or from the input state's cache, and charges
@@ -78,7 +78,7 @@ type bandReading struct {
 // impulses are held per pair and manifold point, and each point's
 // ContactFeature pair is part of the problem a restart must match, so a
 // restart never keys by a topology slice index
-// (docs/rigid-dynamics-design.md "Response").
+// (agent-docs/rigid-dynamics-design.md "Response").
 type warmIsland struct {
 	bodies  []int
 	pre     []BodyState     // island body order

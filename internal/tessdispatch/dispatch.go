@@ -1,5 +1,5 @@
 // Package tessdispatch routes one body to the tessellator of its payload
-// (docs/evaluator-design.md §9, docs/tessellation-design.md). It returns the
+// (agent-docs/evaluator-design.md §9, agent-docs/tessellation-design.md). It returns the
 // mesh node; root wraps it in its handle, caches it and withholds the proofs a
 // lower verification level does not ask for.
 package tessdispatch
@@ -172,12 +172,12 @@ func Body(ctx context.Context, b *topo.Body, chord float64, verify Verify, opts 
 		return chainrecord.Tessellate(ctx, b, sp.Chain, formatSurface)
 	}
 	if mp, ok := b.Payload.(sweepmitre.Payload); ok {
-		// docs/sweep-design.md Table DM row DM2: an exact restatement of the
+		// agent-docs/sweep-design.md Table DM row DM2: an exact restatement of the
 		// held triangles, refused below the payload's own delta.
 		return mitredSweepMesh(ctx, b, mp, chord)
 	}
 	if cp, ok := b.Payload.(coilshell.Payload); ok {
-		// docs/helix-design.md Table CD row CD2: an exact restatement of the
+		// agent-docs/helix-design.md Table CD row CD2: an exact restatement of the
 		// held triangles, refused below the payload's own delta.
 		return coilshell.Tessellate(ctx, b, cp, chord, verify >= All)
 	}
@@ -219,7 +219,7 @@ func prismMesh(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	return prismtess.Build(ctx, b, pp, wallRole, chord, verify >= All, countFloor, freeformTarget)
 }
 
-// requireMeshAudit dispatches docs/tessellation-design.md §1's mandatory
+// requireMeshAudit dispatches agent-docs/tessellation-design.md §1's mandatory
 // mesh audit by body kind. A solid takes the closed-mesh audit; a sheet takes
 // topobuild.RequireSheetMesh's free-boundary and vertex-link audits. Angular
 // Revolve and chain Sweep builders call that node audit directly.
@@ -352,11 +352,11 @@ func compositeSweepMesh(ctx context.Context, b *topo.Body, sp sweeprecord.Payloa
 // mitredSweepMesh is Table DM row DM2's exact restatement: the held
 // triangles of Table BM, publishing each vertex's own rounding gap as its
 // per-vertex bound and every face's source bound as the largest corner gap
-// over that face's triangles (docs/faceted-vertex-bounds-design.md §2.1):
+// over that face's triangles (agent-docs/faceted-vertex-bounds-design.md §2.1):
 // every true face is the exact polygon on the rationals, so each held
 // triangle's true piece is the affine triangle on its corners' rationals. A
 // tolerance below delta asks for a mesh closer to the body than its held
-// vertices are, which no restatement can give (docs/tessellation-design.md
+// vertices are, which no restatement can give (agent-docs/tessellation-design.md
 // §7's rule). The
 // occupied-volume proof is the swept-volume allowance at delta over the
 // perturbed area, because the held set is the exact body with every vertex

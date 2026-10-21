@@ -9,7 +9,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Unstitch is Stitch's own inverse (docs/surface-design.md §6.5): stitch a
+// Unstitch is Stitch's own inverse (agent-docs/surface-design.md §6.5): stitch a
 // box closed, then take it apart again into one single-face sheet per face.
 // Every edge of every result is free, and the six faces' areas sum back to
 // the same 15200 mm^2 the solid's own Area already reported.

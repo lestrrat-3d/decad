@@ -84,7 +84,7 @@ func SameCarrier(a, b sectionrecord.CurveSegment) bool {
 }
 
 // CrossingOffsetUpper is a proven upper bound on the distance from p to the
-// crossing of a's and b's carriers that p names (docs/general-boolean-design.md
+// crossing of a's and b's carriers that p names (agent-docs/general-boolean-design.md
 // §5): the point where two fragments of a boolean's arrangement meet is that
 // crossing, and a walked or keyed float placed there sits off it by the cut
 // parameter's own error, which far from the plane origin is about the

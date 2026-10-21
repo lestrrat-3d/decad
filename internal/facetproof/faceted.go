@@ -15,7 +15,7 @@ import (
 )
 
 // KeepPlacedEmbedded keeps a placed faceted mesh embedded through float
-// rounding of its exact motion (docs/evaluator-design.md §9): the exact image of
+// rounding of its exact motion (agent-docs/evaluator-design.md §9): the exact image of
 // an embedded mesh under the motion is embedded, and each held vertex starts
 // at the nearest float to its exact image. Every vertex that differs
 // from its exact image is checked and, where its facets fold, may move to a
@@ -91,7 +91,7 @@ func FacetedAreaGeom(delta, perimeterUpper, facetAllow float64) float64 {
 	return math.Min(proofbound.ProductUpper(delta, perimeterUpper), facetAllow)
 }
 
-// FacetedExtremeError is docs/faceted-vertex-bounds-design.md §4.2's box
+// FacetedExtremeError is agent-docs/faceted-vertex-bounds-design.md §4.2's box
 // reading: the largest per-coordinate error of the six held extremes lo, hi.
 // B is each vertex's largest facet bound δ(t) over the facets touching it and
 // beta its own β. Every true boundary point lies within δ(t) of some held
