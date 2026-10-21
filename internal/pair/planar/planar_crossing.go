@@ -12,16 +12,21 @@ import (
 func (k *planarKernel) crossings() error {
 	k.a.floatBoxes()
 	k.b.floatBoxes()
+	var near []int
 	for _, side := range [][2]*planarPrep{{k.a, k.b}, {k.b, k.a}} {
 		edges, tris := side[0], side[1]
+		tree := tris.boxTree()
 		for e, edge := range edges.edges {
 			p, q := edges.s.Verts[edge[0]], edges.s.Verts[edge[1]]
-			for t := range tris.s.Tris {
+			near = tree.query(edges.edgeBox[e], near)
+			if err := k.poll(); err != nil {
+				return err
+			}
+			for _, t := range near {
 				if err := k.poll(); err != nil {
 					return err
 				}
-				if floatApart(edges.edgeBox[e], tris.triBox[t]) ||
-					boxesApart(edges.edgeLo[e], edges.edgeHi[e], tris.triLo[t], tris.triHi[t]) {
+				if boxesApart(edges.edgeLo[e], edges.edgeHi[e], tris.triLo[t], tris.triHi[t]) {
 					continue
 				}
 				sp, sq := orientSign(tris, t, p), orientSign(tris, t, q)
@@ -41,13 +46,17 @@ func (k *planarKernel) crossings() error {
 			}
 		}
 	}
+	tree := k.b.boxTree()
 	for ta := range k.a.s.Tris {
-		for tb := range k.b.s.Tris {
+		near = tree.query(k.a.triBox[ta], near)
+		if err := k.poll(); err != nil {
+			return err
+		}
+		for _, tb := range near {
 			if err := k.poll(); err != nil {
 				return err
 			}
-			if floatApart(k.a.triBox[ta], k.b.triBox[tb]) ||
-				boxesApart(k.a.triLo[ta], k.a.triHi[ta], k.b.triLo[tb], k.b.triHi[tb]) {
+			if boxesApart(k.a.triLo[ta], k.a.triHi[ta], k.b.triLo[tb], k.b.triHi[tb]) {
 				continue
 			}
 			coplanar := true

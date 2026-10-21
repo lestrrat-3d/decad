@@ -40,7 +40,8 @@ const heldMeshChord = 1.0
 
 // ClassifyExactPair decides the pair through the exact planar kernel
 // when both bodies are admitted. It reports false, leaving report untouched,
-// when either body is not.
+// when either body is not, or when the planar relation passes its work limit
+// (planar.ErrWorkLimit), a pair too fine for the exact kernel to decide.
 func ClassifyExactPair(ctx context.Context, mesher verifiedmesh.Mesher, report *contactReport) (bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	if err := budget.Err(); err != nil {
@@ -57,6 +58,9 @@ func ClassifyExactPair(ctx context.Context, mesher verifiedmesh.Mesher, report *
 	}
 	hint := hintOf(report.A, report.B)
 	result, err := planar.ClassifyPlanarHinted(&a, &b, hint, budget.Step)
+	if errors.Is(err, planar.ErrWorkLimit) {
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}

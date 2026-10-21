@@ -1171,6 +1171,16 @@ relation. The next relation of the pair reads that pair's exact distance first a
 prune box pairs farther than it, never as the minimum, so the recorded candidate and every outcome are
 the same with or without the cache (`internal/pair/planar/planar_prune.go`).
 
+Neither the crossing scan nor the distance scan tests every pair of boxes. Each asks a bounding-volume
+tree over the other body's facet (or edge) float boxes for the boxes the float pre-test keeps, in index
+order, so the pairs visited and the order of the sites are those of the full scan
+(`internal/pair/planar/planar_boxtree.go`). A held mesh at a fine chord holds hundreds of thousands of
+facets, where the full scan would take hours. The scans charge one poll per query and one per box kept;
+a call that charges more than `stepLimit` polls (2^29, about twice an eight-tooth bevel gear pair at a
+0.05 mm chord) fails with `planar.ErrWorkLimit`. `planarpose.ClassifyExactPair` reports that as a body
+pair the exact kernel does not admit, so `ContactPair` goes on to its other routes and ends `Undecided`
+or unsupported instead of running unbounded.
+
 Two coplanar facets with matching outward normals and a positive-area overlap also prove `Overlapping`.
 A shell whose every vertex lies on the other body's boundary needs no cast: it meets the contact set.
 "Opposed material sides" is a local proof at each zero-distance site (a vertex on a facet, two crossing

@@ -1,6 +1,7 @@
 package planar
 
 import (
+	"errors"
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
@@ -190,6 +191,16 @@ func PlanarConvex(s *PlanarSolid, poll func() error) (bool, error) {
 	return true, nil
 }
 
+// ErrWorkLimit is returned by ClassifyPlanar when the scans charge more than
+// stepLimit polls. The relation is then undecided here; no result is made.
+var ErrWorkLimit = errors.New("planar relation work limit reached")
+
+// stepLimit bounds the polls one ClassifyPlanar call may charge: about twice
+// the 2.8e8 an eight-tooth bevel gear pair at a 0.05 mm chord charges (578,304
+// facets each), which takes minutes. A pair past it is refused instead of
+// left to run unbounded.
+var stepLimit = 1 << 29
+
 // ClassifyPlanar decides the relation of two audited planar solids. Both must
 // have passed CheckPlanarSolid. poll is charged once per exact predicate
 // group; its error is returned unchanged. The result carries the solids'
@@ -206,6 +217,14 @@ func ClassifyPlanar(a, b *PlanarSolid, poll func() error) (PlanarResult, error) 
 // solids (planar_prune.go).
 func ClassifyPlanarHinted(a, b *PlanarSolid, hint PlanarHint, poll func() error) (PlanarResult, error) {
 	pa, pb := preparePlanar(a), preparePlanar(b)
+	steps := 0
+	inner := poll
+	poll = func() error {
+		if steps++; steps > stepLimit {
+			return ErrWorkLimit
+		}
+		return inner()
+	}
 	k := &planarKernel{a: pa, b: pb, poll: poll, hint: hint}
 	result, err := k.classify()
 	if err != nil {
@@ -289,7 +308,7 @@ type planarPrep struct {
 
 	// The distance scan's shortcuts (planar_prune.go), filled on first use.
 	vertBox, triBox, edgeBox []floatBox
-	triBlock, edgeBlock      []floatBox
+	triTree, edgeTree        *boxTree
 	sides                    [][3]proof.DyV3
 	sideBoxes                [][3]floatBox
 	sidesSet                 []bool
