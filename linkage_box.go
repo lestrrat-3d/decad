@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/report"
+
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/motionoption"
@@ -128,9 +130,7 @@ type JointBoxRequest struct {
 }
 
 // JointCell records one closed cell of joint values.
-type JointCell struct {
-	Min, Max []units.Value
-}
+type JointCell = report.JointCell
 
 func cloneJointCell(c JointCell) JointCell {
 	return JointCell{Min: slices.Clone(c.Min), Max: slices.Clone(c.Max)}

@@ -6,7 +6,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/coilshell"
-	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
@@ -63,15 +62,6 @@ type stackedPrismPayload = stackedrecord.Payload
 // topology nodes and which implements topo.Payload
 // (docs/surface-design.md §13.4, docs/evaluator-design.md §8).
 type chainPayload = chainrecord.Payload
-
-// cupPayload is the evaluator's own record of a cup: the internal/cupwall
-// payload, which cupwall.Build evaluates over topology nodes and which
-// implements topo.Payload (docs/modify-reach-design.md §9.1,
-// docs/evaluator-design.md §8). cupView is the two-prism reading it re-derives.
-type (
-	cupPayload = cupwall.Payload
-	cupView    = cupwall.View
-)
 
 // patchPayload is the evaluator's own record of a PatchProfile body: the
 // internal/patchchain payload, which patchchain.Build evaluates over topology

@@ -53,7 +53,7 @@ func bodyName(b *decad.Body) string {
 // — Report.Bodies order at the call — "body[0]". A nil
 // report, or a body the report does not hold, falls back to bodyName's
 // Document.Bodies() order; that fallback is what lets diagnosticBlock be
-// called with a nil report from survey.go, where no report is in scope. A
+// called with a nil report from internal/verifyrun/survey.go, where no report is in scope. A
 // nil b renders "<nil body>".
 func reportBodyName(report *decad.Report, b *decad.Body) string {
 	if b == nil {

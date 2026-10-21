@@ -12,7 +12,7 @@ import (
 // (internal/booleaneval, docs/evaluator-design.md §9) over a and b, with the
 // operand meshes drawn from meshes, and states its occupied volume as a public
 // measurement. Verify passes its per-call cache (verifyMeshCache,
-// verify_pairs.go), which meshes each body once at one chord for every pair it
+// internal/verifyrun/pairs.go), which meshes each body once at one chord for every pair it
 // takes part in (docs/interference-design.md §5.3); chordScale lets one
 // source-certified modify route ask for finer operand chords, and a
 // power-of-two scale preserves the pair tolerance's represented value exactly.

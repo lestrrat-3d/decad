@@ -1,7 +1,10 @@
-package decad
+package verifyrun
 
 import (
 	"context"
+
+	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/verifiedmesh"
 
 	"github.com/lestrrat-3d/decad/internal/boundaryaudit"
 
@@ -51,8 +54,8 @@ import (
 // same reading the interference path forms for this pair. The verdict never
 // loosens the analytic kernel's: the caller consults this arm only for a
 // boundaryaudit.PairUndecided result.
-func planarPairVerdict(ctx context.Context, a, b *Body) (pairkernel.Result, bool, error) {
-	if !pairkernel.PlanarPairAdmits(bodyNode(a), bodyNode(b)) {
+func planarPairVerdict(ctx context.Context, mesher verifiedmesh.Mesher, a, b *topo.Body) (pairkernel.Result, bool, error) {
+	if !pairkernel.PlanarPairAdmits(a, b) {
 		return pairkernel.Result{}, false, nil
 	}
 	budget := proofbound.NewWorkBudget(ctx)
@@ -62,11 +65,11 @@ func planarPairVerdict(ctx context.Context, a, b *Body) (pairkernel.Result, bool
 	// A zero chord admits no curved body (planarpose.heldMeshSolid): those keep
 	// the analytic kernel's answer, and this arm reads only an all-planar
 	// held boundary, which that chord reads exactly.
-	sa, deltaA, okA, err := planarpose.SolidAtPose(ctx, budget, verifyAllMesher{}, bodyNode(a), r3.Identity(), 0)
+	sa, deltaA, okA, err := planarpose.SolidAtPose(ctx, budget, mesher, a, r3.Identity(), 0)
 	if err != nil || !okA {
 		return pairkernel.Result{}, false, err
 	}
-	sb, deltaB, okB, err := planarpose.SolidAtPose(ctx, budget, verifyAllMesher{}, bodyNode(b), r3.Identity(), 0)
+	sb, deltaB, okB, err := planarpose.SolidAtPose(ctx, budget, mesher, b, r3.Identity(), 0)
 	if err != nil || !okB {
 		return pairkernel.Result{}, false, err
 	}
@@ -74,7 +77,7 @@ func planarPairVerdict(ctx context.Context, a, b *Body) (pairkernel.Result, bool
 	if err != nil {
 		return pairkernel.Result{}, false, err
 	}
-	diam, err := pairkernel.PairGateDiameter(ctx, &a.n, &b.n, nil)
+	diam, err := pairkernel.PairGateDiameter(ctx, a, b, nil)
 	if err != nil {
 		return pairkernel.Result{}, false, err
 	}

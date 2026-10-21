@@ -465,7 +465,7 @@ Approximate does NOT imply `Suspect`; only failed bound gate does.
 
 ## 7. Faceted clearance
 
-**Landed as the exact planar arm** (`clearance_planar.go`,
+**Landed as the exact planar arm** (`internal/verifyrun/clearance.go`,
 `docs/interference-design.md` §3.2), not as a `bodyGeom` carrier model: a
 `facetedPayload`, or a `mitredSweepPayload`, is read off its own held
 triangle set as an exact dyadic snapshot with its displacement `δ`
@@ -727,13 +727,13 @@ lands, overlapping pairs remain `Suspect` by verification's pair-partition rule.
 | `internal/clearance/pairkernel/kernel.go` | bounded extent/contact gates + true interval expansion |
 | `shell.go` / `internal/cupwall/payload.go` | expose/recheck exact morphology certificate internally |
 | `internal/cupwall/wall.go` | cup wall theorem and morphology recheck |
-| `survey.go` | cup wall adapter; dispatch faceted surveys |
+| `internal/verifyrun/survey.go` | cup wall adapter; dispatch faceted surveys |
 | `tessellate.go` | create/carry per-facet source certificates + `sourceBound` internally |
 | `boolean.go` / `boolean_mesh.go` | hidden-tangency `sourceBound` consumption; compose `boundaryCert`; preserve facet survey metadata |
 | `topology.go` | faceted `NormalAt` through certificate; no public type change |
 | new `verify_mesh.go` | BVH feature scale + faceted validity |
 | new `survey_mesh.go` | faceted undercut/radius/wall kernels |
-| `verify.go` / `verify_tolerance.go` | loft construction validity + bounds-disjoint staging; validity-first presence; total tolerance gate; payload outcomes |
+| `verify.go` / `internal/verifyrun/tolerance.go` | loft construction validity + bounds-disjoint staging; validity-first presence; total tolerance gate; payload outcomes |
 
 ## 13. Stages
 

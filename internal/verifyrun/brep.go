@@ -1,6 +1,8 @@
-package decad
+package verifyrun
 
 import (
+	"maps"
+
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capblend"
@@ -13,7 +15,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file holds the undercut and minimum-radius surveys over a brepPayload's
+// This file holds the undercut and minimum-radius surveys over a breprecord.Payload's
 // faces (docs/general-boolean-design.md §4.5). internal/breprecord's
 // measure.go measures the body (§4.3).
 
@@ -29,7 +31,7 @@ import (
 // fillet band's pipe patches are read by brepFilletUndercuts (Table DF's DF7).
 // The reading is a normal-direction membership, unaffected by a face's
 // displacements, as a prism's is (docs/prism-boolean-design.md §12).
-func brepUndercuts(budget *proofbound.WorkBudget, b *Body, bp brepPayload, pull r3.Vec) undercutOutcome {
+func brepUndercuts(budget *proofbound.WorkBudget, b *topo.Body, bp breprecord.Payload, pull r3.Vec) undercutOutcome {
 	if bp.BossShell != nil || bp.PocketShell != nil {
 		return undercutOutcome{reason: surveyPayloadStaged}
 	}
@@ -39,9 +41,7 @@ func brepUndercuts(budget *proofbound.WorkBudget, b *Body, bp brepPayload, pull 
 	}
 	roles := facesByRole(b)
 	nodeRoles := make(map[string]*topo.Face, len(roles))
-	for role, face := range roles {
-		nodeRoles[role] = faceNode(face)
-	}
+	maps.Copy(nodeRoles, roles)
 	faces := []*topo.Face{}
 	undecided := false
 	work := freeform.NewFreeformWork()
@@ -80,10 +80,8 @@ func brepUndercuts(budget *proofbound.WorkBudget, b *Body, bp brepPayload, pull 
 		// Keep an entirely undecided result distinct from a proven all-clear.
 		return undercutOutcome{ok: true, undecided: undecided}
 	}
-	handles := make([]*Face, len(faces))
-	for i, face := range faces {
-		handles[i] = faceHandle(face)
-	}
+	handles := make([]*topo.Face, len(faces))
+	copy(handles, faces)
 	return undercutOutcome{faces: handles, ok: true, undecided: undecided}
 }
 
@@ -106,7 +104,7 @@ func brepUndercuts(budget *proofbound.WorkBudget, b *Body, bp brepPayload, pull 
 // undecided (modify-general Table DG's DG8). A fillet band that fills a
 // concave corner adds its tube radius exactly; one that removes material is
 // convex in its tube direction and adds none (loop-fillet Table DF's DF8).
-func brepMinRadius(b *Body, bp brepPayload) (radiusOutcome, bool) {
+func brepMinRadius(b *topo.Body, bp breprecord.Payload) (radiusOutcome, bool) {
 	if bp.SectionDelta() != 0 {
 		return radiusOutcome{}, false
 	}
@@ -117,7 +115,7 @@ func brepMinRadius(b *Body, bp brepPayload) (radiusOutcome, bool) {
 	for _, patches := range bp.LoopPatches {
 		for _, patch := range patches {
 			f := roles[patch.Role]
-			if f == nil || capblend.PatchWindowSkew(patch.Geom) > 0 || f.n.NormalBound != 0 {
+			if f == nil || capblend.PatchWindowSkew(patch.Geom) > 0 || f.NormalBound != 0 {
 				return radiusOutcome{}, false
 			}
 		}

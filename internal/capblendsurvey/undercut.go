@@ -59,7 +59,7 @@ type undercutOutcome = verifypublish.UndercutSurvey[*topo.Face]
 //
 // DX9 (the wall survey) stays deliberately Suspect: a cap blend is not one
 // constant section at one height, and the existing 2D spanning-disk proof
-// does not decide it (runSurveys, survey.go).
+// does not decide it (runSurveys, internal/verifyrun/survey.go).
 
 // CapBlendUndercuts surveys a cap-blend body's patches against the pull
 // (DX7): each patch's published normal range is read from its OWN built Face —
@@ -107,7 +107,7 @@ func CapBlendUndercuts(b *topo.Body, cbp capblend.Payload, pull r3.Vec) verifypu
 	}
 	// Non-nil from the start: an EMPTY listing is this survey's proven
 	// all-clear and a nil one is the undecided answer (BodyReport.Undercut.Faces,
-	// verify_publish.go), so the two shapes must stay distinguishable — the
+	// internal/verifyrun/publish.go), so the two shapes must stay distinguishable — the
 	// same distinction analyticundercut.Prism already keeps.
 	faces := []*topo.Face{}
 	undecided := false

@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/verifyrun"
+
 	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/motionbound"
@@ -394,14 +396,14 @@ func (r *motionRun) readBodies(groups [][]*Body) {
 	for g, bodies := range groups {
 		for _, b := range bodies {
 			isMover[b] = struct{}{}
-			r.movers = append(r.movers, motionMover{body: b, group: g, validity: publishValidityResult(b, bodyValidityEvidence(r.ctx, b))})
+			r.movers = append(r.movers, motionMover{body: b, group: g, validity: verifyrun.PublishValidityResult(b, verifyrun.BodyValidityEvidence(r.ctx, bodyNode(b)))})
 		}
 	}
 	for _, b := range live {
 		if _, ok := isMover[b]; ok {
 			continue
 		}
-		r.statics = append(r.statics, motionStatic{body: b, validity: publishValidityResult(b, bodyValidityEvidence(r.ctx, b))})
+		r.statics = append(r.statics, motionStatic{body: b, validity: verifyrun.PublishValidityResult(b, verifyrun.BodyValidityEvidence(r.ctx, bodyNode(b)))})
 	}
 	for i := range r.movers {
 		mv := &r.movers[i]

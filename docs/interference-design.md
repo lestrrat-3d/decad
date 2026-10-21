@@ -144,7 +144,7 @@ Boundary distance alone MUST NOT turn nesting into disjointness. A nesting cast
 must preserve three outcomes — outside, inside, undecided — instead of returning
 one `bool` that merges inside with failed classification.
 
-**The exact planar arm** (`clearance_planar.go`) answers a pair the analytic
+**The exact planar arm** (`internal/verifyrun/clearance.go`) answers a pair the analytic
 kernel leaves `boundaryaudit.PairUndecided` when one operand is a payload that kernel has
 no carrier model for and the exact planar relation can read: a
 `mitredSweepPayload`, a `facetedPayload` or a `coilPayload`, each read off

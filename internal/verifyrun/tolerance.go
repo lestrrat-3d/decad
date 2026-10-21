@@ -1,7 +1,11 @@
-package decad
+package verifyrun
 
 import (
 	"context"
+
+	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
+	vocab "github.com/lestrrat-3d/decad/report"
 
 	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
@@ -24,8 +28,8 @@ import (
 type bodyToleranceInputs struct {
 	//nolint:containedctx // the reference callbacks have fixed signatures; the gate carries the caller's context through this per-call inputs struct so the diameter build stays cancellable.
 	ctx  context.Context
-	body *Body
-	area Measurement
+	body *topo.Body
+	area vocab.Measurement
 	err  error // a cancellation observed while lazily loading a reference
 
 	diameterLoaded bool
@@ -39,7 +43,7 @@ type bodyToleranceInputs struct {
 
 func (in *bodyToleranceInputs) diameter() (float64, bool) {
 	if !in.diameterLoaded {
-		in.diameterValue, in.diameterOK, in.err = pairkernel.BodyGateDiameter(in.ctx, bodyNode(in.body))
+		in.diameterValue, in.diameterOK, in.err = pairkernel.BodyGateDiameter(in.ctx, in.body)
 		in.diameterLoaded = true
 	}
 	return in.diameterValue, in.diameterOK
@@ -51,12 +55,12 @@ func (in *bodyToleranceInputs) edgeLength() (float64, bool) {
 	}
 	in.edgeLengthLoaded = true
 	in.edgeLengthOK = true
-	for _, edge := range in.body.Edges() {
-		if edge == nil || !tolerance.UsableMagnitude(edge.n.Length) {
+	for _, edge := range topobuild.Edges(in.body) {
+		if edge == nil || !tolerance.UsableMagnitude(edge.Length) {
 			in.edgeLengthOK = false
 			break
 		}
-		in.edgeLengthValue += edge.n.Length
+		in.edgeLengthValue += edge.Length
 		if !tolerance.UsableMagnitude(in.edgeLengthValue) {
 			in.edgeLengthOK = false
 			break
@@ -73,7 +77,7 @@ func (in *bodyToleranceInputs) volumeReference(value float64) (float64, bool) {
 	return tolerance.VolumeReference(value, in.area.Value, in.diameter)
 }
 
-func (in *bodyToleranceInputs) lengthReference(value float64) (float64, bool) {
+func (in *bodyToleranceInputs) LengthReference(value float64) (float64, bool) {
 	return tolerance.LengthReference(value, in.diameter)
 }
 
@@ -85,7 +89,7 @@ func (in *bodyToleranceInputs) diameterReference() (float64, bool) {
 // tolerance's reading and diagnostic records.
 type bodyReadingSet = tolerance.BodyReadings
 type bodyReadingVerdicts = tolerance.BodyVerdicts
-type bodyReadingDiagSet = tolerance.BodyDiagSet[*Body, JointCell]
+type bodyReadingDiagSet = tolerance.BodyDiagSet[*topo.Body, vocab.JointCell]
 
 // bodyReadingDiagnostics applies verification §3's complete body-field table,
 // emitting one diagnostic per present reading that fails — never
@@ -94,12 +98,12 @@ type bodyReadingDiagSet = tolerance.BodyDiagSet[*Body, JointCell]
 // verdict beside them. Body.Edges already deduplicates topology edges, and
 // edgeLength reads each held geometric chain directly even when public
 // Edge.Length must refuse a curved boolean rim.
-func bodyReadingDiagnostics(ctx context.Context, body *Body, readings bodyReadingSet, rel float64) (bodyReadingVerdicts, bodyReadingDiagSet, error) {
+func bodyReadingDiagnostics(ctx context.Context, body *topo.Body, readings bodyReadingSet, rel float64) (bodyReadingVerdicts, bodyReadingDiagSet, error) {
 	in := &bodyToleranceInputs{ctx: ctx, body: body, area: readings.Area}
-	verdicts, diagSet := tolerance.BodyDiagnostics[*Body, JointCell](body, readings, rel,
+	verdicts, diagSet := tolerance.BodyDiagnostics[*topo.Body, vocab.JointCell](body, readings, rel,
 		tolerance.BodyReferences{
 			Area: in.areaReference, Volume: in.volumeReference,
-			Length: in.lengthReference, Diameter: in.diameterReference,
+			Length: in.LengthReference, Diameter: in.diameterReference,
 		})
 	// A cancellation observed while a reference lazily built its geometry is
 	// reported to the caller rather than folded into a Suspect verdict.
@@ -109,13 +113,13 @@ func bodyReadingDiagnostics(ctx context.Context, body *Body, readings bodyReadin
 	return verdicts, diagSet, nil
 }
 
-// pairToleranceInputs owns pair-relative references. Clearance uses the
+// PairToleranceInputs owns pair-relative references. Clearance uses the
 // length reference now; tolerance.Scalar accepts the interference volume
 // reference through the same callback path once interference rows land.
-type pairToleranceInputs struct {
-	diameter float64
+type PairToleranceInputs struct {
+	Diameter float64
 }
 
-func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
-	return tolerance.PairLengthReference(value, in.diameter)
+func (in PairToleranceInputs) LengthReference(value float64) (float64, bool) {
+	return tolerance.PairLengthReference(value, in.Diameter)
 }

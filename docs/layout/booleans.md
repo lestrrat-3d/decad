@@ -14,8 +14,6 @@ The rules for rows live in `docs/layout.md`.
 | `loft_contact_quarter.go` | Relates certified quarter-arc cap crossings to original Loft wall sources, pairs witnesses with held seams, and checks a paired wall's source order, under private source and output budgets. |
 | `loft_contact_direct_shell.go` | Builds a bounded public Union shell from the certified Loft/prism output boundary and its `internal/loftcontact` volume proof. See its proof comments. |
 | `loft_contact_output_proof.go` | Reads the payloads of two live Loft/prism bodies in either order and runs the source partition and output shell in `internal/loftcontact`, which certifies the partition and both Sketch caps, then builds, tiles and audits the transient held shell. |
-| `prism_overlap.go` | Wraps `prismcells.OverlapVolume`, prism-boolean §4.5's overlap-area reading, as a `Verify` measurement. See its doc comment. |
-| `brep_measure.go` | The brep surveys, including fillet-band pull readings and the undercut verdict fold; `internal/breprecord` states prisms and stacked prisms as face views, then builds and measures the record. See general-boolean §4. |
 | `surface_trim.go` | Public `Trim`, `Extend` and `Split` entry checks and commits; `internal/surfacetrim/` builds them. See surface-intersection §2–§3. |
 | `point_plane_scale.go` | ScaledAt: resolves the similarity source by payload kind and commits the image; facetedrecord.ScaleImage admits and scales it. See loft-point design and evaluator §8. |
 | `prism_scale.go` | Admits prism and full-Revolve certified similarity sources and transfers their face roles. See evaluator §8. |

@@ -48,7 +48,7 @@ import (
 // the whole model to finish. The carrier build's payload switch is the
 // clearance kernel's own — it only covers the payloads whose carrier model is
 // an exact restatement of the shipped boundary, because internal/clearance/pairkernel and
-// interference.go trust that model for containment and contact proofs, not
+// internal/verifyrun/interference.go trust that model for containment and contact proofs, not
 // only for a diameter. A miss there is not necessarily a body with no usable
 // diameter: a free-form-walled prismrecord.Payload — the one shipped payload whose
 // side face the clearance kernel's exact model has no arm for at all — can read

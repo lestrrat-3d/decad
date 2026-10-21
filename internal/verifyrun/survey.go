@@ -1,14 +1,23 @@
-package decad
+package verifyrun
 
 import (
+	"maps"
+
 	"github.com/lestrrat-3d/decad/internal/analyticundercut"
+	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/capblendsurvey"
 	"github.com/lestrrat-3d/decad/internal/cupwall"
+	"github.com/lestrrat-3d/decad/internal/draftrecord"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/radiussurvey"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/decad/internal/verifypublish"
+	vocab "github.com/lestrrat-3d/decad/report"
 
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -63,7 +72,7 @@ type wallOutcome struct {
 // is non-nil when every face is decided or any face is proven to oppose; an
 // empty listing is the proven all-clear.
 type undercutOutcome struct {
-	faces     []*Face
+	faces     []*topo.Face
 	ok        bool
 	undecided bool
 	reason    surveyReason
@@ -72,12 +81,10 @@ type undercutOutcome struct {
 // undercutFromNodes preserves face identity and the distinction between an
 // empty proven all-clear and a nil undecided listing.
 func undercutFromNodes(in verifypublish.UndercutSurvey[*topo.Face]) undercutOutcome {
-	var faces []*Face
+	var faces []*topo.Face
 	if in.Faces != nil {
-		faces = make([]*Face, len(in.Faces))
-		for i, f := range in.Faces {
-			faces[i] = faceHandle(f)
-		}
+		faces = make([]*topo.Face, len(in.Faces))
+		copy(faces, in.Faces)
 	}
 	return undercutOutcome{faces: faces, ok: in.OK, undecided: in.Undecided, reason: in.Reason}
 }
@@ -98,14 +105,15 @@ type radiusOutcome struct {
 }
 
 // facesByRole indexes a body's faces by their own-step feature role.
-func facesByRole(b *Body) map[string]*Face {
-	nodes := topobuild.FacesByRole(&b.n)
-	m := make(map[string]*Face, len(nodes))
-	for role, f := range nodes {
-		m[role] = faceHandle(f)
-	}
+func facesByRole(b *topo.Body) map[string]*topo.Face {
+	nodes := topobuild.FacesByRole(b)
+	m := make(map[string]*topo.Face, len(nodes))
+	maps.Copy(m, nodes)
 	return m
 }
+
+// shellTol is the closed-form degeneracy tolerance for the cup wall offset.
+const shellTol = offset2d.ShellTol
 
 var cupWallOperations = cupwall.Operations{
 	Offset: func(budget *proofbound.WorkBudget, profile momentinput.Profile, s, t float64) (momentinput.Profile, error) {
@@ -116,7 +124,7 @@ var cupWallOperations = cupwall.Operations{
 	Reverse: offset2d.ReverseLoopRecordBudget,
 }
 
-func cupWallInput(cp cupView) cupwall.Input {
+func cupWallInput(cp cupwall.View) cupwall.Input {
 	return cupwall.Input{
 		Outer: cp.Outer, Cavity: cp.Cavity,
 		ZOpen: cp.ZOpen, ZOuter: cp.ZOuter, ZCav: cp.ZCav,
@@ -128,11 +136,11 @@ func cupWallInput(cp cupView) cupwall.Input {
 // surveyResults is runSurveys' return record: the raw private outcome for
 // each optional body survey, alongside whether cfg asked for it. It carries
 // no legacy BodyReport reference, so runSurveys' geometry stays independent
-// of the report shape verify_publish.go assembles from it.
+// of the report shape internal/verifyrun/publish.go assembles from it.
 //
 // WallDiagnostics, UndercutDiagnostics, and RadiusDiagnostics are the exact
 // subset of runSurveys' returned diagnostics that survey itself emitted (the
-// same Diagnostic values, never recomputed): verify_publish.go routes each
+// same Diagnostic values, never recomputed): internal/verifyrun/publish.go routes each
 // onto its own result's Diagnostics (proposal §7, §10) so a body's wall,
 // undercut, or concave-radius result carries its own findings without
 // re-deriving them from the flat per-body list.
@@ -153,7 +161,7 @@ type surveyResults struct {
 // runSurveys answers the asked opt-in questions on one proven-solid body, or
 // the undercut question alone on a proven-valid surface-extruded prism
 // sheet (docs/surface-design.md §2.3, §9.1): the wall and concave-radius
-// blocks below run only on a BodySolid, so a sheet leaves WallAsked and
+// blocks below run only on a topo.BodySolid, so a sheet leaves WallAsked and
 // RadiusAsked false and their own prerequisite refusal to
 // verifypublish.PublishWall/PublishRadius. It returns the raw private
 // outcome for each survey and one diagnostic per
@@ -165,45 +173,45 @@ type surveyResults struct {
 // a sweep height with no axial displacement — and Approximate with the bound
 // its own arithmetic derived otherwise; a cap-blend undercut survey can
 // instead use a bounded normal range and leave an individual patch
-// undecided. verify_publish.go's assembler maps the returned outcomes onto
+// undecided. internal/verifyrun/publish.go's assembler maps the returned outcomes onto
 // the private result vocabulary; this function never builds that vocabulary
 // itself.
-func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surveyResults, []Diagnostic, error) {
+func runSurveys(budget *proofbound.WorkBudget, b *topo.Body, cfg verifyConfig) (surveyResults, []Diagnostic, error) {
 	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return surveyResults{}, nil, err
 	}
 	var diags []Diagnostic
 	var results surveyResults
 
-	if cfg.Wall != nil && b.Kind() == BodySolid {
+	if cfg.Wall != nil && b.Kind == topo.BodySolid {
 		results.WallAsked = true
 		out := wallOutcome{}
 		var err error
-		switch pl := b.n.Payload.(type) {
-		case prismPayload:
+		switch pl := b.Payload.(type) {
+		case prismrecord.Payload:
 			reading, readErr := wallsurvey.PrismWall(budget, pl.Profile,
 				survey2d.PrismHeight{Z0: pl.Z0, Z1: pl.Z1, Z0Delta: pl.Z0Delta, Z1Delta: pl.Z1Delta},
 				pl.SectionDelta, cfg.AllowRad)
 			out, err = wallOutcome{reading: reading.Reading, bound: reading.Bound,
 				ok: reading.OK, reason: reading.Reason}, readErr
-		case revolvePayload:
+		case revolveplan.Payload:
 			reading, readErr := wallsurvey.RevolveWall(budget, wallsurvey.RevolveRecord{
 				Profile: pl.Profile, Axis: pl.Ax, SectionDelta: pl.SectionDelta,
 				Full: pl.Full, Phi0: pl.Phi0, Phi1: pl.Phi1, AngularDelta: pl.AngularDelta(),
 			}, cfg.AllowRad)
 			out, err = wallOutcome{reading: reading.Reading, bound: reading.Bound,
 				ok: reading.OK, reason: reading.Reason}, readErr
-		case cupPayload:
+		case cupwall.Payload:
 			wall, wallErr := cupwall.Evaluate(budget, cupWallInput(pl.View()), cfg.AllowRad, cupWallOperations)
 			out, err = wallOutcome{reading: wall.Reading, bound: wall.Bound, ok: wall.OK}, wallErr
-		case capBlendPayload:
+		case capblend.Payload:
 			// DX9 (docs/modify-reach-design.md Table DX): a cap blend is not
 			// one constant section at one height, so the existing 2D
 			// spanning-disk proof does not decide it. A deliberate evaluator
 			// limit, published as an explicit unsupported-payload dispatch
 			// rather than a generic undecided result (proposal §16).
 			out.reason = surveyPayloadStaged
-		case facetedPayload:
+		case facetedrecord.Payload:
 			out.reason = surveyFacetedUnsupported
 		default:
 			// Any payload class this switch does not name — a loft or a draft
@@ -214,7 +222,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 			return surveyResults{}, nil, err
 		}
 		results.Wall = out
-		wallDiags := verifypublish.WallDiagnostics[*Body, JointCell](b, b.n.Payload,
+		wallDiags := verifypublish.WallDiagnostics[*topo.Body, vocab.JointCell](b, b.Payload,
 			verifypublish.ScalarSurvey{Reading: out.reading, Bound: out.bound, OK: out.ok, Reason: out.reason},
 			cfg.Wall.Tool, cfg.ToolMM)
 		results.WallDiagnostics = wallDiags
@@ -227,27 +235,27 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 	if cfg.Pull != nil {
 		results.UndercutAsked = true
 		out := undercutOutcome{}
-		switch pl := b.n.Payload.(type) {
-		case prismPayload:
-			out = undercutFromNodes(analyticundercut.Prism(&b.n, pl, *cfg.Pull))
-		case revolvePayload:
-			out = undercutFromNodes(analyticundercut.Revolve(&b.n, pl, *cfg.Pull))
-		case cupPayload:
-			out = undercutFromNodes(analyticundercut.Cup(&b.n, pl.View(), *cfg.Pull))
-		case capBlendPayload:
-			out = undercutFromNodes(capblendsurvey.CapBlendUndercuts(&b.n, pl, *cfg.Pull))
-		case draftPayload:
-			out = undercutFromNodes(capblendsurvey.DraftUndercuts(&b.n, pl, *cfg.Pull))
-		case brepPayload:
+		switch pl := b.Payload.(type) {
+		case prismrecord.Payload:
+			out = undercutFromNodes(analyticundercut.Prism(b, pl, *cfg.Pull))
+		case revolveplan.Payload:
+			out = undercutFromNodes(analyticundercut.Revolve(b, pl, *cfg.Pull))
+		case cupwall.Payload:
+			out = undercutFromNodes(analyticundercut.Cup(b, pl.View(), *cfg.Pull))
+		case capblend.Payload:
+			out = undercutFromNodes(capblendsurvey.CapBlendUndercuts(b, pl, *cfg.Pull))
+		case draftrecord.Payload:
+			out = undercutFromNodes(capblendsurvey.DraftUndercuts(b, pl, *cfg.Pull))
+		case breprecord.Payload:
 			out = brepUndercuts(budget, b, pl, *cfg.Pull)
-		case facetedPayload:
+		case facetedrecord.Payload:
 			out.reason = surveyFacetedUnsupported
 		default:
 			out.reason = surveyPayloadStaged
 		}
 		results.Undercut = out
-		undercutDiags := verifypublish.UndercutDiagnostics[*Body, *Face, JointCell](b, b.n.Payload,
-			verifypublish.UndercutSurvey[*Face]{Faces: out.faces, OK: out.ok,
+		undercutDiags := verifypublish.UndercutDiagnostics[*topo.Body, *topo.Face, vocab.JointCell](b, b.Payload,
+			verifypublish.UndercutSurvey[*topo.Face]{Faces: out.faces, OK: out.ok,
 				Undecided: out.undecided, Reason: out.reason})
 		results.UndercutDiagnostics = undercutDiags
 		diags = append(diags, results.UndercutDiagnostics...)
@@ -256,33 +264,33 @@ func runSurveys(budget *proofbound.WorkBudget, b *Body, cfg verifyConfig) (surve
 		}
 	}
 
-	if cfg.ConcaveRadius && b.Kind() == BodySolid {
+	if cfg.ConcaveRadius && b.Kind == topo.BodySolid {
 		results.RadiusAsked = true
 		out := radiusOutcome{}
 		ok := false
-		switch pl := b.n.Payload.(type) {
-		case prismPayload:
+		switch pl := b.Payload.(type) {
+		case prismrecord.Payload:
 			reading := radiussurvey.Prism(pl.Profile, pl.SectionDelta)
 			out, ok = radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
-		case revolvePayload:
+		case revolveplan.Payload:
 			reading := radiussurvey.Revolve(pl.Profile, pl.Ax, pl.SectionDelta)
 			out, ok = radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
-		case cupPayload:
+		case cupwall.Payload:
 			view := pl.View()
 			reading := radiussurvey.Cup(view.Outer, view.Cavity, view.OffsetDelta)
 			out, ok = radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
-		case capBlendPayload:
-			reading := capblendsurvey.CapBlendMinRadius(&b.n, pl)
+		case capblend.Payload:
+			reading := capblendsurvey.CapBlendMinRadius(b, pl)
 			out, ok = radiusOutcome{reading: reading.Reading, bound: reading.Bound, ok: reading.OK}, reading.OK
-		case brepPayload:
+		case breprecord.Payload:
 			out, ok = brepMinRadius(b, pl)
-		case facetedPayload:
+		case facetedrecord.Payload:
 			out.reason = surveyFacetedUnsupported
 		default:
 			out.reason = surveyPayloadStaged
 		}
 		results.Radius = out
-		radiusDiags := verifypublish.RadiusDiagnostics[*Body, JointCell](b, b.n.Payload,
+		radiusDiags := verifypublish.RadiusDiagnostics[*topo.Body, vocab.JointCell](b, b.Payload,
 			verifypublish.ScalarSurvey{Reading: out.reading, Bound: out.bound, OK: out.ok, Reason: out.reason}, ok)
 		results.RadiusDiagnostics = radiusDiags
 		diags = append(diags, results.RadiusDiagnostics...)

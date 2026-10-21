@@ -199,3 +199,8 @@ func (r *ReportOf[BodyT, FaceT, CellT]) ForBody(body BodyT) (*BodyReportOf[BodyT
 	}
 	return nil, decaderr.ErrBodyReportNotFound
 }
+
+// JointCell records one closed cell of joint values.
+type JointCell struct {
+	Min, Max []units.Value
+}
