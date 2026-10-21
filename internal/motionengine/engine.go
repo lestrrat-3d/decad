@@ -29,7 +29,7 @@ import (
 // (docs/linkage-check-design.md §6): validation, the swept-box exclusion, the
 // per-pose pair proof over transient placements, the two-sided interval
 // certificate, and the report assembly. motion.go owns the vocabulary and
-// internal/motionbound and internal/linkagebound the bounds; linkage_verify.go
+// internal/motionbound and internal/linkagebound the bounds; linkage/verify.go
 // drives the same engine over a chain of joints.
 //
 // The engine moves one or more GROUPS of bodies, each group rigid under one

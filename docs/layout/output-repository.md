@@ -12,6 +12,7 @@ The rules for rows live in `docs/layout.md`.
 | `tessellate.go` | `Mesh`, `Body.Tessellate`, its mesh cache and proof withholding, and the call into `internal/tessdispatch/`. See tessellation design, surface §10.1. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and mesh proof publication. See tessellation §1, §4. |
 | `export/` | STL, OBJ, 3MF and AP214 writers. See `docs/step-export-design.md`, `docs/3mf-export-design.md`. |
+| `linkage/` | The generic linkage model, its loop and drive solver, and the linkage and joint-box checks over the motion engine. `decad` aliases it. See `docs/linkage-check-design.md`. |
 | `report/` | Result vocabulary generic over body, face, edge and vertex references: measurements, outcome enums, contact, sweep and Verify records. `decad` aliases it. See api-design §6.4. |
 
 ### Repository

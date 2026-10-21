@@ -17,11 +17,6 @@ The rules for rows live in `docs/layout.md`.
 | `internal/planarpose/pose.go` | Planar admission, snapshots and convexity cache; publication through `internal/planarband/`. See multibody §9–§10. |
 | `point_containment.go` | Public point location and body/face distance through verified meshes. See point-containment design. |
 | `motion.go` / `motion_verify.go` | Public motion inputs and options, the report aliases of `report/`, and the `VerifyMotion` gate over `internal/motionengine/`. See motion-check §2–§6. |
-| `linkage_box_cell.go` | Joint-box cell evaluation, classification and report publication, and the bounded transient body cache. See linkage §10, §14. |
-| `linkage.go` / `linkage_verify.go` | `VerifyLinkage` and its public report types. See linkage design. |
-| `linkage_box.go` | `VerifyJointBox` and its public joint-space inputs and reports. See `docs/linkage-check-design.md`. |
-| `linkage_loop.go` | Closed loops and their bar geometry. See `docs/linkage-check-design.md` §15. |
-| `linkage_loop_drive.go` | Loop private-scene drive, loop poses and `Schedule`. See `docs/linkage-check-design.md` §15. |
-| `linkage_bound.go` | Linkage reach and projection adapters. See linkage §5.2, §5.8. |
+| `linkage.go` | The linkage aliases of `linkage/`, the `VerifyLinkage` and `VerifyJointBox` gates, and `WithCellBudget`. See linkage design. |
 | `contact_sweep.go` | `SweepPair` gates, the sweep hooks over `ContactPair`, the lift of the node report to handles, and the report, request, outcome and track aliases of `report/`. See contact-sweep §7. |
 | `swept_box.go` | Whole-path box. See multibody §4.2. |
