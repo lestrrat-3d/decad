@@ -1,4 +1,4 @@
-package decad
+package linkage
 
 import (
 	"fmt"
@@ -6,6 +6,9 @@ import (
 	"math/big"
 	"slices"
 	"sync"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	vocab "github.com/lestrrat-3d/decad/report"
 
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
 	"github.com/lestrrat-3d/decad/internal/linkagebound/loopchain"
@@ -29,15 +32,15 @@ import (
 // both already have parents, so the tree gains one loop. A drive lists at most
 // one joint of a loop, the driver; every other joint of the loop is dependent,
 // and its value at a parameter is whatever closes the loop there.
-type LinkageLoop struct {
-	linkage *Linkage
-	a, b    *Link
-	common  *Link
+type LinkageLoop[B comparable] struct {
+	linkage *Linkage[B]
+	a, b    *Link[B]
+	common  *Link[B]
 	closure RevoluteJoint
 	// sideA and sideB are the links from Common's child down to a and to b;
 	// either is empty when a or b is Common itself.
-	sideA, sideB []*Link
-	links        []*Link // every loop link but Common, in Linkage.Links() order
+	sideA, sideB []*Link[B]
+	links        []*Link[B] // every loop link but Common, in Linkage.Links() order
 	// normal is the closure's axis n exactly as stated; coord is the
 	// coordinate axis it lies along, or -1 for a tilted loop.
 	normal motionbound.RatVec
@@ -46,10 +49,10 @@ type LinkageLoop struct {
 	// order whose parent is Common, nil when there is none. Its rail is the
 	// scene's u axis. Every other prismatic loop link is anchored
 	// (docs/linkage-check-design.md §15.2), and kappa holds each one's κ.
-	slide *Link
-	kappa map[*Link]*big.Rat
+	slide *Link[B]
+	kappa map[*Link[B]]*big.Rat
 	reach float64 // four times the loop's perimeter at the zero pose
-	bars  []loopBar
+	bars  []loopBar[B]
 }
 
 // LoopBar is the length a loop's private scene holds one link's two loop
@@ -58,16 +61,16 @@ type LinkageLoop struct {
 // interval [Length.Value − Length.Bound, Length.Value], so its claims cover
 // the exact length; Length is Exact with a zero Bound when the length is a
 // float.
-type LoopBar struct {
-	Link   *Link
-	Length Measurement
+type LoopBar[B comparable] struct {
+	Link   *Link[B]
+	Length vocab.Measurement
 }
 
 // loopBar is one bar of a loop: the link whose two loop pins it joins, and
 // the exact squared length between them in the loop's plane, with the two
 // floats around its root the scene states it as.
-type loopBar struct {
-	link     *Link
+type loopBar[B comparable] struct {
+	link     *Link[B]
 	own      r3.Vec // the link's own joint pin, or Common's first pin
 	next     r3.Vec // the next pin along the loop
 	down, up float64
@@ -75,32 +78,32 @@ type loopBar struct {
 
 // Common returns the two closed links' lowest common ancestor: the ground for
 // a four-bar.
-func (lp *LinkageLoop) Common() *Link { return lp.common }
+func (lp *LinkageLoop[B]) Common() *Link[B] { return lp.common }
 
 // Links returns every link on the loop but Common, in Linkage.Links() order.
-func (lp *LinkageLoop) Links() []*Link { return slices.Clone(lp.links) }
+func (lp *LinkageLoop[B]) Links() []*Link[B] { return slices.Clone(lp.links) }
 
 // Closure returns the closing pin as Close stated it, with nil Limits.
-func (lp *LinkageLoop) Closure() RevoluteJoint { return lp.closure }
+func (lp *LinkageLoop[B]) Closure() RevoluteJoint { return lp.closure }
 
 // Bars returns the length the loop's private scene holds each link's two loop
 // pins apart at: Common's bar first, then Links() order. A slide has no bar,
 // and neither has a link one of whose loop pins is a slide's rail: Common
 // beside a slide, or a revolute link whose next link slides.
-func (lp *LinkageLoop) Bars() []LoopBar {
-	out := make([]LoopBar, len(lp.bars))
+func (lp *LinkageLoop[B]) Bars() []LoopBar[B] {
+	out := make([]LoopBar[B], len(lp.bars))
 	for n, bar := range lp.bars {
-		m := Measurement{Value: units.Millimeters(bar.up), Exactness: Exact, Bound: units.Millimeters(0)}
+		m := vocab.Measurement{Value: units.Millimeters(bar.up), Exactness: vocab.Exact, Bound: units.Millimeters(0)}
 		if bar.down != bar.up {
-			m.Exactness, m.Bound = Approximate, units.Millimeters(bar.up-bar.down)
+			m.Exactness, m.Bound = vocab.Approximate, units.Millimeters(bar.up-bar.down)
 		}
-		out[n] = LoopBar{Link: bar.link, Length: m}
+		out[n] = LoopBar[B]{Link: bar.link, Length: m}
 	}
 	return out
 }
 
 // Loops returns every loop of l, in Close order.
-func (l *Linkage) Loops() []*LinkageLoop {
+func (l *Linkage[B]) Loops() []*LinkageLoop[B] {
 	return slices.Clone(l.loops)
 }
 
@@ -110,40 +113,40 @@ func (l *Linkage) Loops() []*LinkageLoop {
 // Which joint drives the loop is stated per Drive.
 //
 // It refuses, in this order: a nil linkage, a nil or parentless a or b,
-// a == b, or a link of another linkage (ErrDegenerate); a non-finite center or
-// axis component (ErrNotFinite); the zero axis (ErrDegenerate); a loop
+// a == b, or a link of another linkage (decaderr.ErrDegenerate); a non-finite center or
+// axis component (decaderr.ErrNotFinite); the zero axis (decaderr.ErrDegenerate); a loop
 // revolute whose axis is not exactly parallel to axis, or a loop prismatic
-// whose direction is not exactly perpendicular to it (ErrUnsupported, naming
+// whose direction is not exactly perpendicular to it (decaderr.ErrUnsupported, naming
 // the joint); two consecutive loop slides along exactly parallel directions
-// (ErrDegenerate); a loop joint already on another loop (ErrUnsupported); and
+// (decaderr.ErrDegenerate); a loop joint already on another loop (decaderr.ErrUnsupported); and
 // two loop pins of one link coincident in the
-// loop's plane (ErrDegenerate).
-func (l *Linkage) Close(a, b *Link, center, axis r3.Vec) (*LinkageLoop, error) {
+// loop's plane (decaderr.ErrDegenerate).
+func (l *Linkage[B]) Close(a, b *Link[B], center, axis r3.Vec) (*LinkageLoop[B], error) {
 	if l == nil {
-		return nil, fmt.Errorf(`%w: a nil linkage has no link to close`, ErrDegenerate)
+		return nil, fmt.Errorf(`%w: a nil linkage has no link to close`, decaderr.ErrDegenerate)
 	}
 	if a == nil || b == nil || a.parent == nil || b.parent == nil {
-		return nil, fmt.Errorf(`%w: a closure joins two links that already have parents`, ErrDegenerate)
+		return nil, fmt.Errorf(`%w: a closure joins two links that already have parents`, decaderr.ErrDegenerate)
 	}
 	if a == b {
-		return nil, fmt.Errorf(`%w: a closure joins two distinct links`, ErrDegenerate)
+		return nil, fmt.Errorf(`%w: a closure joins two distinct links`, decaderr.ErrDegenerate)
 	}
 	if a.linkage != l || b.linkage != l {
-		return nil, fmt.Errorf(`%w: a closure joins two links of this linkage`, ErrDegenerate)
+		return nil, fmt.Errorf(`%w: a closure joins two links of this linkage`, decaderr.ErrDegenerate)
 	}
 	if !proofbound.FiniteVec(center) || !proofbound.FiniteVec(axis) {
-		return nil, fmt.Errorf(`%w: a closure's center and axis must be finite, got %v and %v`, ErrNotFinite, center, axis)
+		return nil, fmt.Errorf(`%w: a closure's center and axis must be finite, got %v and %v`, decaderr.ErrNotFinite, center, axis)
 	}
-	if zeroVec(axis) {
-		return nil, fmt.Errorf(`%w: a zero closure axis names no direction`, ErrDegenerate)
+	if (axis == r3.Vec{}) {
+		return nil, fmt.Errorf(`%w: a zero closure axis names no direction`, decaderr.ErrDegenerate)
 	}
-	lp := &LinkageLoop{linkage: l, a: a, b: b, closure: RevoluteJoint{Center: center, Axis: axis}, normal: ratVecExact(axis), coord: -1}
+	lp := &LinkageLoop[B]{linkage: l, a: a, b: b, closure: RevoluteJoint{Center: center, Axis: axis}, normal: ratVecExact(axis), coord: -1}
 	if idx, _, ok := linkagebound.CoordinateAxis(axis); ok {
 		lp.coord = idx
 	}
 	lp.common = commonAncestor(a, b)
 	lp.sideA, lp.sideB = linksBelow(lp.common, a), linksBelow(lp.common, b)
-	on := make(map[*Link]struct{})
+	on := make(map[*Link[B]]struct{})
 	for _, k := range append(slices.Clone(lp.sideA), lp.sideB...) {
 		on[k] = struct{}{}
 	}
@@ -156,11 +159,11 @@ func (l *Linkage) Close(a, b *Link, center, axis r3.Vec) (*LinkageLoop, error) {
 		switch j := k.joint.(type) {
 		case RevoluteJoint:
 			if c := linkagebound.Cross(ratVecExact(j.Axis), lp.normal); !linkagebound.ZeroVec(c) {
-				return nil, fmt.Errorf(`%w: link %d's revolute axis %v is not exactly parallel to the closure axis %v`, ErrUnsupported, k.index, j.Axis, axis)
+				return nil, fmt.Errorf(`%w: link %d's revolute axis %v is not exactly parallel to the closure axis %v`, decaderr.ErrUnsupported, k.index, j.Axis, axis)
 			}
 		case PrismaticJoint:
 			if linkagebound.Dot(ratVecExact(j.Dir), lp.normal).Sign() != 0 {
-				return nil, fmt.Errorf(`%w: link %d's prismatic direction %v is not exactly perpendicular to the closure axis %v`, ErrUnsupported, k.index, j.Dir, axis)
+				return nil, fmt.Errorf(`%w: link %d's prismatic direction %v is not exactly perpendicular to the closure axis %v`, decaderr.ErrUnsupported, k.index, j.Dir, axis)
 			}
 		}
 	}
@@ -173,13 +176,13 @@ func (l *Linkage) Close(a, b *Link, center, axis r3.Vec) (*LinkageLoop, error) {
 		}
 		if k.parent != lp.common && isSlide(k.parent) &&
 			linkagebound.ZeroVec(linkagebound.Cross(slideDir(k), slideDir(k.parent))) {
-			return nil, fmt.Errorf(`%w: links %d and %d slide in a row along parallel directions, which slides the loop with no driver`, ErrDegenerate, k.parent.index, k.index)
+			return nil, fmt.Errorf(`%w: links %d and %d slide in a row along parallel directions, which slides the loop with no driver`, decaderr.ErrDegenerate, k.parent.index, k.index)
 		}
 	}
 	for _, other := range l.loops {
 		for _, k := range lp.links {
 			if slices.Contains(other.links, k) {
-				return nil, fmt.Errorf(`%w: link %d's joint is already on another loop`, ErrUnsupported, k.index)
+				return nil, fmt.Errorf(`%w: link %d's joint is already on another loop`, decaderr.ErrUnsupported, k.index)
 			}
 		}
 	}
@@ -197,8 +200,8 @@ func (l *Linkage) Close(a, b *Link, center, axis r3.Vec) (*LinkageLoop, error) {
 func ratVecExact(v r3.Vec) motionbound.RatVec { return linkagebound.ExactVec(v) }
 
 // commonAncestor is the lowest common ancestor of a and b in their tree.
-func commonAncestor(a, b *Link) *Link {
-	above := make(map[*Link]struct{})
+func commonAncestor[B comparable](a, b *Link[B]) *Link[B] {
+	above := make(map[*Link[B]]struct{})
 	for k := a; k != nil; k = k.parent {
 		above[k] = struct{}{}
 	}
@@ -212,16 +215,16 @@ func commonAncestor(a, b *Link) *Link {
 
 // linksBelow is the path from common's child down to k, in that order; empty
 // when k is common.
-func linksBelow(common, k *Link) []*Link {
-	var out []*Link
+func linksBelow[B comparable](common, k *Link[B]) []*Link[B] {
+	var out []*Link[B]
 	for at := k; at != common; at = at.parent {
-		out = append([]*Link{at}, out...)
+		out = append([]*Link[B]{at}, out...)
 	}
 	return out
 }
 
 // pin is a link's own joint pin: its revolute joint's center.
-func (k *Link) pin() r3.Vec {
+func (k *Link[B]) pin() r3.Vec {
 	if j, ok := k.joint.(RevoluteJoint); ok {
 		return j.Center
 	}
@@ -230,7 +233,7 @@ func (k *Link) pin() r3.Vec {
 
 // nextPin is the pin after link k along its side of the loop: the joint pin of
 // its loop child, or the closure for the side's last link.
-func (lp *LinkageLoop) nextPin(side []*Link, n int) r3.Vec {
+func (lp *LinkageLoop[B]) nextPin(side []*Link[B], n int) r3.Vec {
 	if n+1 < len(side) {
 		return side[n+1].pin()
 	}
@@ -239,8 +242,8 @@ func (lp *LinkageLoop) nextPin(side []*Link, n int) r3.Vec {
 
 // commonPins are Common's two loop pins: the first link's joint pin on each
 // side, or the closure on a side with no link.
-func (lp *LinkageLoop) commonPins() (r3.Vec, r3.Vec) {
-	first := func(side []*Link) r3.Vec {
+func (lp *LinkageLoop[B]) commonPins() (r3.Vec, r3.Vec) {
+	first := func(side []*Link[B]) r3.Vec {
 		if len(side) == 0 {
 			return lp.closure.Center
 		}
@@ -252,12 +255,12 @@ func (lp *LinkageLoop) commonPins() (r3.Vec, r3.Vec) {
 // planeSq is the exact squared distance between two points in the loop's
 // plane: their difference with the component along the closure axis n
 // dropped, |d|² − (d·n)²/|n|².
-func (lp *LinkageLoop) planeSq(p, q r3.Vec) *big.Rat {
+func (lp *LinkageLoop[B]) planeSq(p, q r3.Vec) *big.Rat {
 	return lp.planeSqRat(ratVecExact(p), ratVecExact(q))
 }
 
 // planeSqRat is planeSq between two exact points.
-func (lp *LinkageLoop) planeSqRat(pd, qd motionbound.RatVec) *big.Rat {
+func (lp *LinkageLoop[B]) planeSqRat(pd, qd motionbound.RatVec) *big.Rat {
 	var d motionbound.RatVec
 	for i := range 3 {
 		d[i] = new(big.Rat).Sub(pd[i], qd[i])
@@ -269,13 +272,13 @@ func (lp *LinkageLoop) planeSqRat(pd, qd motionbound.RatVec) *big.Rat {
 }
 
 // linkNext is loop link k's next pin along its side of the loop.
-func (lp *LinkageLoop) linkNext(k *Link) r3.Vec {
+func (lp *LinkageLoop[B]) linkNext(k *Link[B]) r3.Vec {
 	side := lp.sideOf(k)
 	return lp.nextPin(side, slices.Index(side, k))
 }
 
 // sideOf is the side of the loop k lies on.
-func (lp *LinkageLoop) sideOf(k *Link) []*Link {
+func (lp *LinkageLoop[B]) sideOf(k *Link[B]) []*Link[B] {
 	if slices.Contains(lp.sideA, k) {
 		return lp.sideA
 	}
@@ -284,7 +287,7 @@ func (lp *LinkageLoop) sideOf(k *Link) []*Link {
 
 // nextLink is the link after k along its side of the loop, nil for the side's
 // last link, whose next pin is the closure.
-func (lp *LinkageLoop) nextLink(k *Link) *Link {
+func (lp *LinkageLoop[B]) nextLink(k *Link[B]) *Link[B] {
 	side := lp.sideOf(k)
 	if n := slices.Index(side, k); n+1 < len(side) {
 		return side[n+1]
@@ -293,39 +296,39 @@ func (lp *LinkageLoop) nextLink(k *Link) *Link {
 }
 
 // isSlide reports whether k's joint is prismatic.
-func isSlide(k *Link) bool {
+func isSlide[B comparable](k *Link[B]) bool {
 	_, ok := k.joint.(PrismaticJoint)
 	return ok
 }
 
 // slideDir is a slide's Dir, read exactly.
-func slideDir(k *Link) motionbound.RatVec {
+func slideDir[B comparable](k *Link[B]) motionbound.RatVec {
 	j, _ := k.joint.(PrismaticJoint)
 	return ratVecExact(j.Dir)
 }
 
 // anchored reports whether k is a loop slide other than the primary one,
 // whose rail is held by an anchor (docs/linkage-check-design.md §15.2).
-func (lp *LinkageLoop) anchored(k *Link) bool {
+func (lp *LinkageLoop[B]) anchored(k *Link[B]) bool {
 	return isSlide(k) && k != lp.slide
 }
 
 // besideRail reports whether k's next link slides, so that k's second loop
 // pin is that slide's rail.
-func (lp *LinkageLoop) besideRail(k *Link) bool {
+func (lp *LinkageLoop[B]) besideRail(k *Link[B]) bool {
 	next := lp.nextLink(k)
 	return next != nil && isSlide(next)
 }
 
 // commonRail reports whether either side's first link slides, so that one of
 // Common's loop pins is a rail.
-func (lp *LinkageLoop) commonRail() bool {
+func (lp *LinkageLoop[B]) commonRail() bool {
 	return len(lp.sideA) > 0 && isSlide(lp.sideA[0]) || len(lp.sideB) > 0 && isSlide(lp.sideB[0])
 }
 
 // riderAt is slide k's rider's zero-pose position P₀: the first revolute pin
 // after k along its side of the loop, or the closure.
-func (lp *LinkageLoop) riderAt(k *Link) r3.Vec {
+func (lp *LinkageLoop[B]) riderAt(k *Link[B]) r3.Vec {
 	for next := lp.nextLink(k); next != nil; next = lp.nextLink(next) {
 		if !isSlide(next) {
 			return next.pin()
@@ -336,7 +339,7 @@ func (lp *LinkageLoop) riderAt(k *Link) r3.Vec {
 
 // featureAt is loop link k's zero-pose position along the loop: its pin, or a
 // slide's rider's P₀.
-func (lp *LinkageLoop) featureAt(k *Link) r3.Vec {
+func (lp *LinkageLoop[B]) featureAt(k *Link[B]) r3.Vec {
 	if isSlide(k) {
 		return lp.riderAt(k)
 	}
@@ -349,7 +352,7 @@ func (lp *LinkageLoop) featureAt(k *Link) r3.Vec {
 // scale that carries its Dir to the reach, doubled until neither anchor
 // meets a revolute parent's pin in the plane. κ only places the anchor; no
 // claim depends on its value.
-func (lp *LinkageLoop) readKappa() {
+func (lp *LinkageLoop[B]) readKappa() {
 	var at []r3.Vec
 	for _, k := range lp.sideA {
 		at = append(at, lp.featureAt(k))
@@ -363,7 +366,7 @@ func (lp *LinkageLoop) readKappa() {
 		perimeter += proofbound.RatSqrtUp(lp.planeSq(at[n], at[(n+1)%len(at)]))
 	}
 	lp.reach = 4 * perimeter
-	lp.kappa = make(map[*Link]*big.Rat)
+	lp.kappa = make(map[*Link[B]]*big.Rat)
 	for _, k := range lp.links {
 		if !lp.anchored(k) {
 			continue
@@ -378,24 +381,24 @@ func (lp *LinkageLoop) readKappa() {
 
 // scaleFor is the least power of two λ with λ·|dir| at least the loop's
 // reach.
-func (lp *LinkageLoop) scaleFor(dir motionbound.RatVec) *big.Rat {
+func (lp *LinkageLoop[B]) scaleFor(dir motionbound.RatVec) *big.Rat {
 	_, exp := math.Frexp(lp.reach / proofbound.RatSqrtDown(linkagebound.Dot(dir, dir)))
 	return new(big.Rat).SetFloat64(math.Ldexp(1, exp))
 }
 
 // anchorMeets reports whether slide k's anchor at κ meets its revolute
 // parent's pin in the plane.
-func (lp *LinkageLoop) anchorMeets(k *Link, kappa *big.Rat, ahead bool) bool {
+func (lp *LinkageLoop[B]) anchorMeets(k *Link[B], kappa *big.Rat, ahead bool) bool {
 	return lp.planeSqRat(ratVecExact(k.parent.pin()), lp.anchorAtKappa(k, kappa, ahead)).Sign() == 0
 }
 
 // anchorAt is anchored slide k's anchor A = P₀ − κ·Dir, or P₀ + κ·Dir ahead
 // of its rider (docs/linkage-check-design.md §15.2), exactly.
-func (lp *LinkageLoop) anchorAt(k *Link, ahead bool) motionbound.RatVec {
+func (lp *LinkageLoop[B]) anchorAt(k *Link[B], ahead bool) motionbound.RatVec {
 	return lp.anchorAtKappa(k, lp.kappa[k], ahead)
 }
 
-func (lp *LinkageLoop) anchorAtKappa(k *Link, kappa *big.Rat, ahead bool) motionbound.RatVec {
+func (lp *LinkageLoop[B]) anchorAtKappa(k *Link[B], kappa *big.Rat, ahead bool) motionbound.RatVec {
 	p0, dir := ratVecExact(lp.riderAt(k)), slideDir(k)
 	var out motionbound.RatVec
 	for i := range 3 {
@@ -411,7 +414,7 @@ func (lp *LinkageLoop) anchorAtKappa(k *Link, kappa *big.Rat, ahead bool) motion
 
 // anchorLength encloses κ·|Dir|, anchored slide k's reading from its anchor
 // at the zero pose, between the two floats around its exact root.
-func (lp *LinkageLoop) anchorLength(k *Link) proofbound.RatInterval {
+func (lp *LinkageLoop[B]) anchorLength(k *Link[B]) proofbound.RatInterval {
 	sq := lp.planeSqRat(lp.anchorAt(k, false), ratVecExact(lp.riderAt(k)))
 	return proofbound.IntervalOwned(proofarith.FloatRat(proofbound.RatSqrtDown(sq)), proofarith.FloatRat(proofbound.RatSqrtUp(sq)))
 }
@@ -420,19 +423,19 @@ func (lp *LinkageLoop) anchorLength(k *Link) proofbound.RatInterval {
 // link's in Links() order. A slide has no bar, nor has a link one of whose
 // loop pins is a slide's rail.
 // Two pins of one link coincident in the plane are refused.
-func (lp *LinkageLoop) readBars() ([]loopBar, error) {
-	bar := func(link *Link, own, next r3.Vec) (loopBar, error) {
+func (lp *LinkageLoop[B]) readBars() ([]loopBar[B], error) {
+	bar := func(link *Link[B], own, next r3.Vec) (loopBar[B], error) {
 		sq := lp.planeSq(own, next)
 		if sq.Sign() == 0 {
-			return loopBar{}, fmt.Errorf(`%w: two loop pins of one link coincide in the loop's plane at %v`, ErrDegenerate, own)
+			return loopBar[B]{}, fmt.Errorf(`%w: two loop pins of one link coincide in the loop's plane at %v`, decaderr.ErrDegenerate, own)
 		}
 		down, up := proofbound.RatSqrtDown(sq), proofbound.RatSqrtUp(sq)
 		if proofbound.IsNonFinite(up) || !(down > 0) {
-			return loopBar{}, fmt.Errorf(`%w: a loop bar's length is not representable`, ErrNotFinite)
+			return loopBar[B]{}, fmt.Errorf(`%w: a loop bar's length is not representable`, decaderr.ErrNotFinite)
 		}
-		return loopBar{link: link, own: own, next: next, down: down, up: up}, nil
+		return loopBar[B]{link: link, own: own, next: next, down: down, up: up}, nil
 	}
-	var out []loopBar
+	var out []loopBar[B]
 	if !lp.commonRail() {
 		pa, pb := lp.commonPins()
 		common, err := bar(lp.common, pa, pb)
@@ -461,11 +464,11 @@ func (lp *LinkageLoop) readBars() ([]loopBar, error) {
 // value has one sign, with a chain of its own from its near end. The asks are
 // serialised behind mu, since sketch.Enclose must not run concurrently on one
 // sketch, and cached by their place in the canonical chains.
-type loopDrive struct {
-	loop     *LinkageLoop
+type loopDrive[B comparable] struct {
+	loop     *LinkageLoop[B]
 	driver   int   // the driver's position in Linkage.Links()
 	deps     []int // every dependent's position in Linkage.Links(), Loop.Links() order
-	driverJt linkJoint
+	driverJt linkJoint[B]
 	// axisSense is a revolute driver's axis sense against the closure axis;
 	// it picks each side's mirror. A slide driver's is unused.
 	axisSense int
@@ -493,13 +496,13 @@ type loopSpan = linkagebound.Span
 // unbuildableError marks a pose whose loop could not be enclosed
 // (docs/linkage-check-design.md §15.6): the pose is not evaluated and the
 // intervals that end at it are undecided. loop is the loop that refused.
-type unbuildableError struct {
+type unbuildableError[B comparable] struct {
 	cause error
-	loop  *loopDrive
+	loop  *loopDrive[B]
 }
 
-func (e *unbuildableError) Error() string { return e.cause.Error() }
+func (e *unbuildableError[B]) Error() string { return e.cause.Error() }
 
-func (e *unbuildableError) Unwrap() error { return e.cause }
+func (e *unbuildableError[B]) Unwrap() error { return e.cause }
 
-func (e *unbuildableError) Unbuildable() {}
+func (e *unbuildableError[B]) Unbuildable() {}

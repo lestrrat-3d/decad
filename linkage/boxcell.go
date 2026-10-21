@@ -1,4 +1,4 @@
-package decad
+package linkage
 
 import (
 	"errors"
@@ -6,6 +6,9 @@ import (
 	"math/big"
 	"slices"
 	"strings"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	vocab "github.com/lestrrat-3d/decad/report"
 
 	"github.com/lestrrat-3d/decad/internal/motionengine"
 
@@ -24,13 +27,13 @@ import (
 // when a collision there survives every configuration of the cell, else
 // colliding when some pair collides there, clear when every pair certifies
 // the cell, undecided otherwise.
-func (b *boxRun) evaluate(c *boxCell) error {
+func (b *boxRun[B]) evaluate(c *boxCell[B]) error {
 	r := b.run
 	if err := r.Ctx.Err(); err != nil {
 		return err
 	}
 	spec := b.dr.spec
-	c.cell = JointCell{Min: make([]units.Value, len(spec.joints)), Max: make([]units.Value, len(spec.joints))}
+	c.cell = vocab.JointCell{Min: make([]units.Value, len(spec.joints)), Max: make([]units.Value, len(spec.joints))}
 	for k, jt := range spec.joints {
 		c.cell.Min[k], c.cell.Max[k] = jt.label(c.lo[k]), jt.label(c.hi[k])
 	}
@@ -97,14 +100,14 @@ func (b *boxRun) evaluate(c *boxCell) error {
 // still across the Cell: δ_j is zero and the range is M_j. A refused centre
 // returns no pose and gates the cell; a refused hull gates it and publishes
 // the dependent's range as zero values.
-func (b *boxRun) loopCentre(c *boxCell) (loopPose, error) {
+func (b *boxRun[B]) loopCentre(c *boxCell[B]) (loopPose, error) {
 	spec := b.dr.spec
 	fracs := make([]*big.Rat, len(spec.joints))
 	for k := range fracs {
 		fracs[k] = c.centre(k)
 	}
 	lp, err := spec.loopPosesOf(b.run.Ctx, b.dr.frames, fracs)
-	var ub *unbuildableError
+	var ub *unbuildableError[B]
 	if errors.As(err, &ub) {
 		c.gate, c.gateLoop = ub.Error(), ub.loop
 		for _, ld := range spec.loops {
@@ -154,7 +157,7 @@ func (b *boxRun) loopCentre(c *boxCell) (loopPose, error) {
 // classify sets a cell's outcome from its evaluated centre. A gated cell
 // (docs/linkage-check-design.md §16.3) is never CellClear or CellBlocked: it
 // is CellColliding when its centre collides and CellUndecided otherwise.
-func (b *boxRun) classify(c *boxCell) {
+func (b *boxRun[B]) classify(c *boxCell[B]) {
 	r := b.run
 	mp := c.pose
 	for i := range r.Movers {
@@ -242,7 +245,7 @@ func (b *boxRun) classify(c *boxCell) {
 // a gated cell, or a box cannot be read exactly. readings
 // keeps each mover's corner reading at the centre for the cell's other
 // pairs.
-func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[cellReadingKey]cornerBounds) (*big.Rat, map[int]*big.Rat) {
+func (b *boxRun[B]) cellProjection(c *boxCell[B], i, k int, readings map[cellReadingKey]cornerBounds) (*big.Rat, map[int]*big.Rat) {
 	r, dr := b.run, b.dr
 	other := r.Pairs[i][k].Other
 	below := dr.pairDepth(i, other)
@@ -357,7 +360,7 @@ type cellReadingKey struct {
 // staticReading is static body k's point reading — its hull points when hull
 // is set and it has them, else its box corners — rounded outward, read once
 // per call and kept.
-func (b *boxRun) staticReading(k int, hull bool) (cornerBounds, bool) {
+func (b *boxRun[B]) staticReading(k int, hull bool) (cornerBounds, bool) {
 	key := cellReadingKey{mover: k, below: -1, hull: hull}
 	if got, ok := b.statics[key]; ok {
 		return got, true
@@ -383,7 +386,7 @@ func (b *boxRun) staticReading(k int, hull bool) (cornerBounds, bool) {
 // ancestor on each branch, each with its own body's ρ. A joint's span is
 // motionbound.MotionParam.SpanUpper of its exact values at the cell's two
 // ends; a joint that does not vary spans 0.
-func (b *boxRun) pairTerms(c *boxCell, i, k int) []linkagebound.JointTerm {
+func (b *boxRun[B]) pairTerms(c *boxCell[B], i, k int) []linkagebound.JointTerm {
 	mine, theirs := b.branchTerms(c, i, k)
 	return append(mine, theirs...)
 }
@@ -399,7 +402,7 @@ func (b *boxRun) pairTerms(c *boxCell, i, k int) []linkagebound.JointTerm {
 // 2·w_j·δ_j — twice its part of τ_half, as a stated joint's w_i·span_i is —
 // charged to its loop's driver, whose halving shrinks the hull. Only a cell
 // with every δ_j read reaches here: a gated cell has no pair travel.
-func (b *boxRun) branchTerms(c *boxCell, i, k int) (mine, theirs []linkagebound.JointTerm) {
+func (b *boxRun[B]) branchTerms(c *boxCell[B], i, k int) (mine, theirs []linkagebound.JointTerm) {
 	r, dr := b.run, b.dr
 	if r.Pairs[i][k].Once != nil {
 		// A constant pair (docs/linkage-check-design.md §5.9) moves nothing
@@ -426,7 +429,7 @@ func (b *boxRun) branchTerms(c *boxCell, i, k int) (mine, theirs []linkagebound.
 // mover i: half the sum of its joint terms, a proven upper bound on how far
 // the pair's distance changes from the cell's centre to any configuration of
 // the cell, since no joint lies farther than half its span from the centre.
-func (b *boxRun) halfTravel(c *boxCell, i, k int) *big.Rat {
+func (b *boxRun[B]) halfTravel(c *boxCell[B], i, k int) *big.Rat {
 	return linkagebound.HalfSum(b.pairTerms(c, i, k))
 }
 
@@ -441,7 +444,7 @@ func (b *boxRun) halfTravel(c *boxCell, i, k int) *big.Rat {
 // exceeds that sum, compared over exact rationals. A is the mover's proven
 // upper bound on its area at rest (motionengine.Mover.area), which a rigid motion
 // preserves; a static partner moves nothing and is charged nothing.
-func (b *boxRun) blocks(c *boxCell, i, k int, volume Measurement) bool {
+func (b *boxRun[B]) blocks(c *boxCell[B], i, k int, volume vocab.Measurement) bool {
 	r := b.run
 	value, bound := proofarith.FloatRat(volume.Value.Base()), proofarith.FloatRat(volume.Bound.Base())
 	if value == nil || bound == nil {
@@ -472,7 +475,7 @@ func (b *boxRun) blocks(c *boxCell, i, k int, volume Measurement) bool {
 // rank: it splits along the refusing loop's driver, the one axis a split
 // changes, while that axis is wider than the resolution and its range meets
 // some stretch the decomposition certified; otherwise it is stuck.
-func (b *boxRun) splitAxis(c *boxCell) int {
+func (b *boxRun[B]) splitAxis(c *boxCell[B]) int {
 	switch {
 	case c.outcome == CellColliding:
 	case c.outcome == CellUndecided && !c.stuck:
@@ -502,14 +505,14 @@ func (b *boxRun) splitAxis(c *boxCell) int {
 
 // wide reports whether cell c's span along joint k, as a fraction of the
 // joint's range, is wider than the resolution.
-func (b *boxRun) wide(c *boxCell, k int) bool {
+func (b *boxRun[B]) wide(c *boxCell[B], k int) bool {
 	width := new(big.Rat).Sub(c.hi[k], c.lo[k])
 	return width.Cmp(b.run.Cfg.ResolutionP.Base) > 0
 }
 
 // wideForReading reports whether cell c's span along joint k is wider than
 // the reading floor: its own when unstated, else the resolution.
-func (b *boxRun) wideForReading(c *boxCell, k int) bool {
+func (b *boxRun[B]) wideForReading(c *boxCell[B], k int) bool {
 	if b.run.Cfg.ReadingP == nil {
 		return b.wide(c, k)
 	}
@@ -519,7 +522,7 @@ func (b *boxRun) wideForReading(c *boxCell, k int) bool {
 
 // configuration is the joint configuration a cell's centre was evaluated at:
 // the zero JointConfiguration for an unbuildable centre.
-func (c *boxCell) configuration() JointConfiguration {
+func (c *boxCell[B]) configuration() JointConfiguration {
 	if c.pose.Unbuildable != nil {
 		return JointConfiguration{}
 	}
@@ -533,9 +536,9 @@ func (c *boxCell) configuration() JointConfiguration {
 
 // publish assembles VerifyJointBox's report (docs/linkage-check-design.md
 // §14.2, §14.4 step 8).
-func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
+func (b *boxRun[B]) publish(l *Linkage[B], box JointBox[B]) *JointBoxReport[B] {
 	r := b.run
-	report := &JointBoxReport{
+	report := &JointBoxReport[B]{
 		Request: JointBoxRequest{
 			RelativeTolerance: units.Scalar(r.Cfg.Rel),
 			Resolution:        r.Cfg.Resolution,
@@ -546,15 +549,15 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 		Linkage:           l,
 		Box:               slices.Clone(box),
 		Links:             l.Links(),
-		Against:           []*Body{},
+		Against:           []B{},
 		JointContacts:     l.JointContacts(),
-		Cells:             make([]JointCellResult, 0, len(b.leaves)),
+		Cells:             make([]JointCellResult[B], 0, len(b.leaves)),
 		CellsEvaluated:    len(b.evaluated),
-		Collisions:        []JointBoxCollision{},
-		Diagnostics:       []Diagnostic{},
+		Collisions:        []JointBoxCollision[B]{},
+		Diagnostics:       []vocab.DiagnosticOf[B, vocab.JointCell]{},
 	}
 	for _, st := range r.Statics {
-		report.Against = append(report.Against, bodyHandle(st.Body))
+		report.Against = append(report.Against, b.h.Handle(st.Body))
 	}
 	poses := make([]*motionengine.Pose, len(b.evaluated))
 	violated := false
@@ -562,22 +565,22 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 		poses[n] = c.pose
 		violated = violated || c.pose.Violated
 		for _, hit := range c.pose.Collisions {
-			report.Collisions = append(report.Collisions, JointBoxCollision{Configuration: c.configuration(), A: bodyHandle(hit.Moving), B: bodyHandle(hit.Static), Volume: hit.Volume})
+			report.Collisions = append(report.Collisions, JointBoxCollision[B]{Configuration: c.configuration(), A: b.h.Handle(hit.Moving), B: b.h.Handle(hit.Static), Volume: hit.Volume})
 		}
 	}
 	allClear, met := true, true
-	var lowest *Measurement
+	var lowest *vocab.Measurement
 	for _, c := range b.leaves {
-		res := JointCellResult{
+		res := JointCellResult[B]{
 			Cell:          c.cell.Clone(),
 			Outcome:       c.outcome,
 			Center:        c.configuration(),
-			Interferences: verifyLift.Interferences(c.pose.Result.Interferences),
-			Clearances:    verifyLift.Clearances(c.pose.Result.Clearances),
-			Diagnostics:   verifyLift.Diagnostics(c.pose.Result.Diagnostics),
+			Interferences: b.h.lift().Interferences(c.pose.Result.Interferences),
+			Clearances:    b.h.lift().Clearances(c.pose.Result.Clearances),
+			Diagnostics:   b.h.lift().Diagnostics(c.pose.Result.Diagnostics),
 			Clearance:     c.clearance,
 		}
-		var own []Diagnostic
+		var own []vocab.DiagnosticOf[B, vocab.JointCell]
 		switch {
 		case c.outcome != CellClear:
 			allClear, met = false, false
@@ -586,10 +589,10 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 				if c.gate != "" {
 					msg += ": " + c.gate
 				}
-				own = append(own, b.cellFinding(c, Diagnostic{
-					Code:    DiagMotionUndecidedInterval,
-					Status:  Suspect,
-					Reading: ReadingNone,
+				own = append(own, b.cellFinding(c, vocab.DiagnosticOf[B, vocab.JointCell]{
+					Code:    vocab.DiagMotionUndecidedInterval,
+					Status:  vocab.Suspect,
+					Reading: vocab.ReadingNone,
 					Message: msg,
 				}))
 			}
@@ -599,10 +602,10 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 				break
 			}
 			obs := *c.clearance
-			own = append(own, b.cellFinding(c, Diagnostic{
-				Code:     DiagMotionUndecidedClearance,
-				Status:   Suspect,
-				Reading:  ReadingGap,
+			own = append(own, b.cellFinding(c, vocab.DiagnosticOf[B, vocab.JointCell]{
+				Code:     vocab.DiagMotionUndecidedClearance,
+				Status:   vocab.Suspect,
+				Reading:  vocab.ReadingGap,
 				Observed: &obs,
 				Required: r.Cfg.Minimum,
 				Message:  fmt.Sprintf("the joint cell %s is certified clear, but its proven lower bound does not reach the required minimum", formatCell(c.cell)),
@@ -613,7 +616,7 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 		}
 		res.Diagnostics = append(res.Diagnostics, own...)
 		report.Cells = append(report.Cells, res)
-		report.Diagnostics = append(append(report.Diagnostics, verifyLift.Diagnostics(c.pose.Findings)...), own...)
+		report.Diagnostics = append(append(report.Diagnostics, b.h.lift().Diagnostics(c.pose.Findings)...), own...)
 	}
 	// A split cell's centre is gone from Cells, but a collision or a margin
 	// violation proven there is a fact the caller asked for.
@@ -622,34 +625,34 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 			continue
 		}
 		for _, diag := range c.pose.Findings {
-			if diag.Code == DiagMotionCollision || diag.Code == DiagMotionClearanceViolated {
-				report.Diagnostics = append(report.Diagnostics, verifyLift.Diagnostics([]motionengine.Diagnostic{diag})...)
+			if diag.Code == vocab.DiagMotionCollision || diag.Code == vocab.DiagMotionClearanceViolated {
+				report.Diagnostics = append(report.Diagnostics, b.h.lift().Diagnostics([]motionengine.Diagnostic{diag})...)
 			}
 		}
 	}
 	if b.exhausted {
-		report.Diagnostics = append(report.Diagnostics, Diagnostic{
-			Code:    DiagJointBoxBudgetExhausted,
-			Status:  Suspect,
-			Reading: ReadingNone,
+		report.Diagnostics = append(report.Diagnostics, vocab.DiagnosticOf[B, vocab.JointCell]{
+			Code:    vocab.DiagJointBoxBudgetExhausted,
+			Status:  vocab.Suspect,
+			Reading: vocab.ReadingNone,
 			Message: fmt.Sprintf("the cell budget of %d centres stopped the subdivision with %d cells left unsplit that its floors would still have split", b.budget, b.unsplit),
 		})
 	}
 	switch {
 	case r.Cfg.MinimumMM == nil:
-		report.Assessment = AssessmentNotEvaluated
+		report.Assessment = vocab.AssessmentNotEvaluated
 	case violated:
-		report.Assessment = AssessmentViolated
+		report.Assessment = vocab.AssessmentViolated
 	case met:
-		report.Assessment = AssessmentMet
+		report.Assessment = vocab.AssessmentMet
 	default:
-		report.Assessment = AssessmentUndecided
+		report.Assessment = vocab.AssessmentUndecided
 	}
 	if allClear && lowest != nil {
 		if reading, diag := r.PathClearance(poses, lowest, "whole-box"); reading != nil {
 			report.Clearance = reading
 			if diag != nil {
-				report.Diagnostics = append(report.Diagnostics, verifyLift.Diagnostics([]motionengine.Diagnostic{*diag})...)
+				report.Diagnostics = append(report.Diagnostics, b.h.lift().Diagnostics([]motionengine.Diagnostic{*diag})...)
 			}
 		}
 	}
@@ -658,7 +661,7 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 }
 
 // cellFinding marks a cell's own finding with the cell.
-func (b *boxRun) cellFinding(c *boxCell, diag Diagnostic) Diagnostic {
+func (b *boxRun[B]) cellFinding(c *boxCell[B], diag vocab.DiagnosticOf[B, vocab.JointCell]) vocab.DiagnosticOf[B, vocab.JointCell] {
 	cell := c.cell.Clone()
 	diag.Cell = &cell
 	return diag
@@ -674,7 +677,7 @@ func formatValues(values []units.Value) string {
 }
 
 // formatCell renders a cell for a finding's message, one range per link.
-func formatCell(c JointCell) string {
+func formatCell(c vocab.JointCell) string {
 	parts := make([]string, len(c.Min))
 	for k := range c.Min {
 		parts[k] = fmt.Sprintf("[%s, %s]", c.Min[k], c.Max[k])
@@ -685,5 +688,5 @@ func formatCell(c JointCell) string {
 // errLoopNotStated is the refusal of a looped linkage where every joint's
 // value is the caller's to state (docs/linkage-check-design.md §16.1).
 func errLoopNotStated() error {
-	return fmt.Errorf(`%w: a linkage with a closed loop has dependent joints whose values follow from its driver, so it cannot be posed joint by joint; pose a drive whose every sweep holds instead`, ErrUnsupported)
+	return fmt.Errorf(`%w: a linkage with a closed loop has dependent joints whose values follow from its driver, so it cannot be posed joint by joint; pose a drive whose every sweep holds instead`, decaderr.ErrUnsupported)
 }

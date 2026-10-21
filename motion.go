@@ -160,8 +160,6 @@ func decodeMotionOptions(opts []MotionOption) ([]motionoption.MotionOption, erro
 	return encoded, nil
 }
 
-type motionConfig = motionoption.Config
-
 type (
 	// MotionReport is VerifyMotion's path report (docs/motion-check-design.md §4).
 	MotionReport = report.MotionReportOf[*Body, Motion]

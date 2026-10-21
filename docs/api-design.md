@@ -839,6 +839,13 @@ documentation lives in `report`. The package imports no `decad` type, so the
 internal kernels instantiate the same records with topology nodes and
 `report.Lift` maps a finished node record to its handle form.
 
+`linkage/` holds the linkage model of `docs/linkage-check-design.md` the same
+way: `Linkage`, `Link`, `Drive`, `LinkageLoop`, `Schedule` and the linkage and
+joint-box reports are generic over the body reference type, and `decad`
+exports each instantiated with `*Body` as an alias. Its checks run over the
+motion engine through a small set of hooks that map a body reference to its
+topology node and back.
+
 ## 7. The sketch seam
 
 `sketch` answers every 2D question; decad consumes the answer and NEVER

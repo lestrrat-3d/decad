@@ -1,10 +1,13 @@
-package decad
+package linkage
 
 import (
 	"context"
 	"fmt"
 	"math/big"
 	"slices"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	vocab "github.com/lestrrat-3d/decad/report"
 
 	"github.com/lestrrat-3d/decad/internal/motionengine"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -22,54 +25,21 @@ import (
 // This file is Document.VerifyLinkage (docs/linkage-check-design.md §3, §6,
 // §8): validation, the driver that hands internal/motionengine's engine one
 // moving group per link, and the report assembly. linkage.go owns the
-// vocabulary and linkage_bound.go the bounds.
+// vocabulary and linkage/bound.go the bounds.
 
-// VerifyLinkage checks whether any link of l, moved along drive, meets a
-// static body or a body of another link anywhere on the drive
-// (docs/linkage-check-design.md). It never changes the document: each pose
-// re-evaluates every link body's payload under its link's pose as a
-// transient body that is never committed, so Document.Bodies(), every body's
-// live state and the next producer identity are what they were before the
-// call.
-//
-// The options are VerifyMotion's own (WithMotionTolerance, WithResolution,
-// WithMinClearance), with the resolution a Dimensionless fraction of the
-// drive, default units.Scalar(1.0/1024). Every pair result at a pose is
-// Verify's own row or diagnostic. Between two adjacent poses the interval
-// certificate proves the drive clear only when every pair's two proven lower
-// bounds together exceed the chain travel bound τ (§5.2), summed over the
-// joints below the pair's lowest common ancestor, each joint's travel taken on
-// both sides of every waypoint inside the interval; an interval it cannot
-// certify down to the resolution is IntervalUndecided and the report reads
-// Suspect, never Sound. A pose publishes a LinkCollision only for an overlap
-// that survives the pose's own deviation from the ideal poses (§5.1).
-//
-// Declared joint contacts (Linkage.DeclareJointContact) are checked for
-// proven overlap at every pose but enter no interval certificate; the report
-// lists them in JointContacts.
-//
-// Every body of every link, and every body a declared joint contact names,
-// MUST be a live body of d. A nil context, document or linkage, a linkage
-// with no link, a drive in which every sweep holds, a drive whose sweeps carry
-// different numbers of Via values, and a drive with a waypoint outside a
-// joint's declared limits are ErrDegenerate. Validation precedes
-// cancellation; after it a canceled context returns ctx.Err() and no report.
-func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, opts ...MotionOption) (*LinkageReport, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control linkage verification`, ErrDegenerate)
-	}
-	if d == nil {
-		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
-	}
-	if err := d.requireLinkage(l); err != nil {
-		return nil, err
-	}
+// Verify is the engine of Document.VerifyLinkage over a linkage the caller
+// has already admitted (non-nil, with links, every body live and built):
+// it resolves the drive, proves the chain bounds and runs the motion engine.
+// options resolves the caller's options once the drive is known good, so the
+// drive's refusals precede the options'.
+func Verify[B comparable](ctx context.Context, h Hooks[B], l *Linkage[B], drive Drive[B],
+	options func(motionbound.Domain) (motionoption.Config, error)) (*LinkageReport[B], error) {
 	spec, err := l.resolveDrive(drive)
 	if err != nil {
 		return nil, err
 	}
 	if spec.holds() {
-		return nil, fmt.Errorf(`%w: a drive in which every sweep holds names no motion`, ErrDegenerate)
+		return nil, fmt.Errorf(`%w: a drive in which every sweep holds names no motion`, decaderr.ErrDegenerate)
 	}
 	for _, end := range []*big.Rat{new(big.Rat), big.NewRat(1, 1)} {
 		if _, _, err := spec.posesAt(end); err != nil {
@@ -80,11 +50,7 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 	if !ok {
 		return nil, linkageBoundsError()
 	}
-	encodedOpts, err := decodeMotionOptions(opts)
-	if err != nil {
-		return nil, err
-	}
-	cfg, err := motionoption.Resolve(encodedOpts, motionbound.FractionDomain())
+	cfg, err := options(motionbound.FractionDomain())
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +62,7 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 	}
 	var bounds []linkBound
 	if len(spec.loops) == 0 {
-		if bounds, ok = linkagebound.ReadReachBounds(reachSource{spec: spec, frames: frames}); !ok {
+		if bounds, ok = linkagebound.ReadReachBounds(reachSource[B]{spec: spec, frames: frames, node: h.Node}); !ok {
 			return nil, linkageBoundsError()
 		}
 	} else if err := spec.prepareLoops(ctx, cfg.ResolutionP.Base); err != nil {
@@ -104,19 +70,19 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 		// pose and its certifiable set, down to the verdict floor, before
 		// any pose; a dependent's reach enters the bounds.
 		return nil, err
-	} else if bounds, ok = linkagebound.ReadReachBounds(reachSource{spec: spec, frames: frames}); !ok {
+	} else if bounds, ok = linkagebound.ReadReachBounds(reachSource[B]{spec: spec, frames: frames, node: h.Node}); !ok {
 		return nil, linkageBoundsError()
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	run := newLinkageRun(ctx, d, spec, frames, bounds, cfg)
+	run := newLinkageRun(ctx, h, spec, frames, bounds, cfg)
 	poses, spans, err := run.Refine()
 	if err != nil {
 		return nil, err
 	}
-	return publishLinkage(run, l, drive, poses, spans), nil
+	return publishLinkage(run, h, l, drive, poses, spans), nil
 }
 
 // linkageReadingFloor is the denominator of the default reading floor,
@@ -125,7 +91,7 @@ const linkageReadingFloor = 16384
 
 // readingResolution is the reading floor a run used: the stated resolution,
 // or the default reading floor.
-func readingResolution(cfg motionConfig) units.Value {
+func readingResolution(cfg motionoption.Config) units.Value {
 	if cfg.ReadingP == nil {
 		return cfg.Resolution
 	}
@@ -135,19 +101,19 @@ func readingResolution(cfg motionConfig) units.Value {
 // newLinkageRun is VerifyLinkage's working state over a validated drive: one
 // moving group per link, in Linkage.Links() order, every other live body
 // static, and each link body's swept box for the exclusion against them.
-func newLinkageRun(ctx context.Context, d *Document, spec *linkageSpec, frames []motionbound.MotionFrame, bounds []linkBound, cfg motionConfig) *motionengine.Run {
-	run := motionengine.NewRun(ctx, motionHooks(), &d.n, d.n.Live(), cfg)
+func newLinkageRun[B comparable](ctx context.Context, h Hooks[B], spec *linkageSpec[B], frames []motionbound.MotionFrame, bounds []linkBound, cfg motionoption.Config) *motionengine.Run {
+	run := motionengine.NewRun(ctx, h.Engine, h.Doc, h.Live, cfg)
 	run.Dom = motionbound.FractionDomain()
-	dr := &linkageDriver{run: run, spec: spec, frames: frames, bounds: bounds, standing: linkStandings(spec, bounds)}
+	dr := &linkageDriver[B]{run: run, spec: spec, frames: frames, bounds: bounds, standing: linkStandings(spec, bounds)}
 	run.Drive = dr
 	run.Declared = make(map[[2]*topo.Body]struct{}, 2*len(spec.linkage.contacts))
 	for _, c := range spec.linkage.contacts {
-		run.Declared[[2]*topo.Body{bodyNode(c.A), bodyNode(c.B)}] = struct{}{}
-		run.Declared[[2]*topo.Body{bodyNode(c.B), bodyNode(c.A)}] = struct{}{}
+		run.Declared[[2]*topo.Body{h.Node(c.A), h.Node(c.B)}] = struct{}{}
+		run.Declared[[2]*topo.Body{h.Node(c.B), h.Node(c.A)}] = struct{}{}
 	}
 	groups := make([][]*topo.Body, len(spec.joints))
 	for k, jt := range spec.joints {
-		groups[k] = bodyNodes(jt.link.bodies)
+		groups[k] = nodesOf(h, jt.link.bodies)
 	}
 	run.ReadBodies(groups)
 	swept := make([]motionengine.SweptBox, len(run.Movers))
@@ -163,7 +129,7 @@ func newLinkageRun(ctx context.Context, d *Document, spec *linkageSpec, frames [
 	dr.settlePairs(swept)
 	dr.symmetric = make([]bool, len(run.Movers))
 	for i, mv := range run.Movers {
-		dr.symmetric[i] = symmetricAboutJoint(bodyHandle(mv.Body), spec.joints[mv.Group], frames[mv.Group])
+		dr.symmetric[i] = symmetricAboutJoint(mv.Body, spec.joints[mv.Group], frames[mv.Group])
 	}
 	dr.markConstantPairs()
 	return run
@@ -177,7 +143,7 @@ func newLinkageRun(ctx context.Context, d *Document, spec *linkageSpec, frames [
 // two bodies is symmetric about that joint's axis line (symmetricAboutJoint,
 // the exact test of §5.2). The engine evaluates such a pair once, on the
 // bodies as they stand.
-func (dr *linkageDriver) markConstantPairs() {
+func (dr *linkageDriver[B]) markConstantPairs() {
 	r := dr.run
 	for i, mv := range r.Movers {
 		for k := range r.Pairs[i] {
@@ -207,7 +173,7 @@ func (dr *linkageDriver) markConstantPairs() {
 				continue
 			}
 			jt, frame := dr.spec.joints[joint], dr.frames[joint]
-			pair.Constant = symmetricAboutJoint(bodyHandle(mv.Body), jt, frame) || symmetricAboutJoint(bodyHandle(r.Partner(i, k)), jt, frame)
+			pair.Constant = symmetricAboutJoint(mv.Body, jt, frame) || symmetricAboutJoint(r.Partner(i, k), jt, frame)
 		}
 	}
 }
@@ -220,7 +186,7 @@ func (dr *linkageDriver) markConstantPairs() {
 // the larger of the two proven lower bounds, including a pair the engine's
 // swept box against a static body settled already. A pair an operand's
 // validity already decided is left as it stands.
-func (dr *linkageDriver) settlePairs(swept []motionengine.SweptBox) {
+func (dr *linkageDriver[B]) settlePairs(swept []motionengine.SweptBox) {
 	r := dr.run
 	for i, mv := range r.Movers {
 		for k := range r.Pairs[i] {
@@ -255,16 +221,16 @@ func (dr *linkageDriver) settlePairs(swept []motionengine.SweptBox) {
 // settled tries the layer exclusion and, for a link-link pair, the swept-box
 // exclusion on pair k of mover i: each a proven lower bound on the pair's
 // distance over the whole drive or box, so the larger serves.
-func (dr *linkageDriver) settled(i, other, k int, swept []motionengine.SweptBox) (float64, bool) {
+func (dr *linkageDriver[B]) settled(i, other, k int, swept []motionengine.SweptBox) (float64, bool) {
 	r := dr.run
 	mine := dr.bounds[r.Movers[i].Group]
 	if other < 0 {
-		return layerLower(dr.spec, dr.frames, mine.Path, bodyHandle(r.Movers[i].Body), bodyHandle(r.Statics[k].Body))
+		return layerLower(dr.spec, dr.frames, mine.Path, r.Movers[i].Body, r.Statics[k].Body)
 	}
 	theirs := dr.bounds[r.Movers[other].Group]
 	below := linkagebound.CommonDepth(mine.Path, theirs.Path)
 	path := append(slices.Clone(mine.Path[below:]), theirs.Path[below:]...)
-	best, settled := layerLower(dr.spec, dr.frames, path, bodyHandle(r.Movers[i].Body), bodyHandle(r.Movers[other].Body))
+	best, settled := layerLower(dr.spec, dr.frames, path, r.Movers[i].Body, r.Movers[other].Body)
 	if swept[i].Ok && swept[other].Ok {
 		if lower, ok := linkagebound.SweptBoxesLower(swept[i].Lo, swept[i].Hi, swept[other].Lo, swept[other].Hi); ok && lower > best {
 			best, settled = lower, true
@@ -274,9 +240,9 @@ func (dr *linkageDriver) settled(i, other, k int, swept []motionengine.SweptBox)
 }
 
 // linkageDriver drives the engine's groups, one per link, along a drive.
-type linkageDriver struct {
+type linkageDriver[B comparable] struct {
 	run      *motionengine.Run
-	spec     *linkageSpec
+	spec     *linkageSpec[B]
 	standing []linkStanding // per link, §6 step 2
 	frames   []motionbound.MotionFrame
 	bounds   []linkBound
@@ -311,7 +277,7 @@ type cornerKey struct {
 // enclosure's midpoint and its ideal pose over the whole enclosure
 // (docs/linkage-check-design.md §15.4); a pose its loop cannot be enclosed at
 // is unbuildable.
-func (dr *linkageDriver) PosesAt(f *big.Rat, _ units.Value, param motionbound.MotionParam) ([]motionengine.GroupPose, error) {
+func (dr *linkageDriver[B]) PosesAt(f *big.Rat, _ units.Value, param motionbound.MotionParam) ([]motionengine.GroupPose, error) {
 	var (
 		values, bounds []units.Value
 		poses          []r3.Transform
@@ -341,7 +307,7 @@ func (dr *linkageDriver) PosesAt(f *big.Rat, _ units.Value, param motionbound.Mo
 // between two poses, for travel to consume (docs/linkage-check-design.md
 // §15.5); an interval a loop cannot be enclosed over is refused with sketch's
 // cause.
-func (dr *linkageDriver) IntervalGate(a, b *motionengine.Pose) string {
+func (dr *linkageDriver[B]) IntervalGate(a, b *motionengine.Pose) string {
 	for _, ld := range dr.spec.loops {
 		if _, err := ld.intervalSpans(dr.run.Ctx, a.F, b.F); err != nil {
 			return err.Error()
@@ -355,7 +321,7 @@ func (dr *linkageDriver) IntervalGate(a, b *motionengine.Pose) string {
 // against a body of another link, the joints strictly below the two links'
 // lowest common ancestor on each branch, since the joints at and above it
 // move both bodies by one rigid motion.
-func (dr *linkageDriver) Travel(i, k int, a, b motionbound.MotionParam) *big.Rat {
+func (dr *linkageDriver[B]) Travel(i, k int, a, b motionbound.MotionParam) *big.Rat {
 	r := dr.run
 	other := r.Pairs[i][k].Other
 	below := dr.pairDepth(i, other)
@@ -373,7 +339,7 @@ func (dr *linkageDriver) Travel(i, k int, a, b motionbound.MotionParam) *big.Rat
 // pairDepth is the position on each path of the first joint below the
 // lowest common ancestor of mover i's link and its partner's: 0 against a
 // static body (other < 0).
-func (dr *linkageDriver) pairDepth(i, other int) int {
+func (dr *linkageDriver[B]) pairDepth(i, other int) int {
 	if other < 0 {
 		return 0
 	}
@@ -385,7 +351,7 @@ func (dr *linkageDriver) pairDepth(i, other int) int {
 // position below: the link's own, or, for a body its own joint does not move
 // (docs/linkage-check-design.md §5.2), the same without that joint when the
 // joint lies on the relative path.
-func (dr *linkageDriver) pathOf(m, below int) linkBound {
+func (dr *linkageDriver[B]) pathOf(m, below int) linkBound {
 	b := dr.bounds[dr.run.Movers[m].Group]
 	if dr.symmetric[m] && below < len(b.Path) {
 		n := len(b.Path) - 1
@@ -405,7 +371,7 @@ func (dr *linkageDriver) pathOf(m, below int) linkBound {
 // does. It is nil when either body's relative path holds a loop's dependent
 // joint, whose value is an enclosure the expansion does not consume, or a box
 // cannot be read exactly.
-func (dr *linkageDriver) Projection(i, k int, a, b *motionengine.Pose) *big.Rat {
+func (dr *linkageDriver[B]) Projection(i, k int, a, b *motionengine.Pose) *big.Rat {
 	r := dr.run
 	other := r.Pairs[i][k].Other
 	below := dr.pairDepth(i, other)
@@ -493,7 +459,7 @@ func (dr *linkageDriver) Projection(i, k int, a, b *motionengine.Pose) *big.Rat 
 // enclosure, which holds every value it takes over the interval. Each is
 // rounded up to a float. ok is false when a dependent's readings are missing or a span
 // overflows.
-func (dr *linkageDriver) projectionSpans(b linkBound, below int, sa, sb *big.Rat, end *motionengine.Pose) ([]*big.Rat, bool) {
+func (dr *linkageDriver[B]) projectionSpans(b linkBound, below int, sa, sb *big.Rat, end *motionengine.Pose) ([]*big.Rat, bool) {
 	h := make([]*big.Rat, 0, len(b.Path)-below)
 	for _, i := range b.Path[below:] {
 		jt := dr.spec.joints[i]
@@ -529,7 +495,7 @@ func (dr *linkageDriver) projectionSpans(b linkBound, below int, sa, sb *big.Rat
 // from position below on (jointStep), for docs/linkage-check-design.md §5.8's
 // segment term; nil when a waypoint lies inside the interval, or a step
 // cannot be read, and the box form serves.
-func (dr *linkageDriver) projectionSteps(b linkBound, below int, sa, sb *big.Rat) []proofbound.RatInterval {
+func (dr *linkageDriver[B]) projectionSteps(b linkBound, below int, sa, sb *big.Rat) []proofbound.RatInterval {
 	steps := make([]proofbound.RatInterval, 0, len(b.Path)-below)
 	for _, i := range b.Path[below:] {
 		if dr.spec.joints[i].dep != nil {
@@ -547,7 +513,7 @@ func (dr *linkageDriver) projectionSteps(b linkBound, below int, sa, sb *big.Rat
 
 // cornersAt is mover m's corner reading at a pose under the joints on its
 // link's path from position below on, rounded outward, read once and kept.
-func (dr *linkageDriver) cornersAt(pose *motionengine.Pose, m int, b linkBound, below int, hull bool) (cornerBounds, bool) {
+func (dr *linkageDriver[B]) cornersAt(pose *motionengine.Pose, m int, b linkBound, below int, hull bool) (cornerBounds, bool) {
 	key := cornerKey{pose: pose, mover: m, below: below, hull: hull}
 	if got, ok := dr.corners[key]; ok {
 		return got, true
@@ -583,7 +549,7 @@ func (dr *linkageDriver) cornersAt(pose *motionengine.Pose, m int, b linkBound, 
 }
 
 // staticHull is static body k's hull point reading, read once and kept.
-func (dr *linkageDriver) staticHull(k int) (cornerBounds, bool) {
+func (dr *linkageDriver[B]) staticHull(k int) (cornerBounds, bool) {
 	if got, ok := dr.statics[k]; ok {
 		return got, true
 	}
@@ -604,21 +570,21 @@ func (dr *linkageDriver) staticHull(k int) (cornerBounds, bool) {
 
 // publishLinkage assembles VerifyLinkage's report
 // (docs/linkage-check-design.md §4).
-func publishLinkage(r *motionengine.Run, l *Linkage, drive Drive, poses []*motionengine.Pose, spans []motionengine.Span) *LinkageReport {
+func publishLinkage[B comparable](r *motionengine.Run, h Hooks[B], l *Linkage[B], drive Drive[B], poses []*motionengine.Pose, spans []motionengine.Span) *LinkageReport[B] {
 	c := r.Conclude(poses, spans)
-	report := &LinkageReport{
+	report := &LinkageReport[B]{
 		Request:           motionengine.MotionRequest(r.Cfg),
 		ReadingResolution: readingResolution(r.Cfg),
 		Linkage:           l,
 		Drive:             slices.Clone(drive),
 		Links:             l.Links(),
 		JointContacts:     l.JointContacts(),
-		Against:           verifyLift.Bodies(c.Against),
+		Against:           h.lift().Bodies(c.Against),
 		Intervals:         motionengine.Intervals(c.Intervals),
-		Collisions:        []LinkCollision{},
+		Collisions:        []LinkCollision[B]{},
 		Clearance:         c.Clearance,
 		Assessment:        c.Assessment,
-		Diagnostics:       verifyLift.Diagnostics(c.Diagnostics),
+		Diagnostics:       h.lift().Diagnostics(c.Diagnostics),
 		Status:            c.Status,
 	}
 	for _, pose := range poses {
@@ -632,14 +598,14 @@ func publishLinkage(r *motionengine.Run, l *Linkage, drive Drive, poses []*motio
 		for g, gp := range pose.Groups {
 			lp.Values[g], lp.Bounds[g], lp.Poses[g] = gp.Value, gp.Bound, gp.Pose
 		}
-		report.Poses = append(report.Poses, LinkagePoseResult{
+		report.Poses = append(report.Poses, LinkagePoseResult[B]{
 			Pose:          lp,
-			Interferences: verifyLift.Interferences(pose.Result.Interferences),
-			Clearances:    verifyLift.Clearances(pose.Result.Clearances),
-			Diagnostics:   verifyLift.Diagnostics(pose.Result.Diagnostics),
+			Interferences: h.lift().Interferences(pose.Result.Interferences),
+			Clearances:    h.lift().Clearances(pose.Result.Clearances),
+			Diagnostics:   h.lift().Diagnostics(pose.Result.Diagnostics),
 		})
 		for _, hit := range pose.Collisions {
-			report.Collisions = append(report.Collisions, LinkCollision{At: hit.At, A: bodyHandle(hit.Moving), B: bodyHandle(hit.Static), Volume: hit.Volume})
+			report.Collisions = append(report.Collisions, LinkCollision[B]{At: hit.At, A: h.Handle(hit.Moving), B: h.Handle(hit.Static), Volume: hit.Volume})
 		}
 	}
 	return report
@@ -648,7 +614,32 @@ func publishLinkage(r *motionengine.Run, l *Linkage, drive Drive, poses []*motio
 // The engine finds these capabilities by interface at run time, so a method
 // that drifted in name or signature would silently disable them.
 var (
-	_ motionengine.Driver          = (*linkageDriver)(nil)
-	_ motionengine.IntervalGate    = (*linkageDriver)(nil)
-	_ motionengine.PoseUnbuildable = (*unbuildableError)(nil)
+	_ motionengine.Driver          = (*linkageDriver[struct{}])(nil)
+	_ motionengine.IntervalGate    = (*linkageDriver[struct{}])(nil)
+	_ motionengine.PoseUnbuildable = (*unbuildableError[struct{}])(nil)
 )
+
+// Hooks are the services a linkage check takes from its document: the motion
+// engine's own, the document's node and live bodies, and the maps between a
+// body reference and its topology node.
+type Hooks[B comparable] struct {
+	Engine motionengine.Hooks
+	Doc    *topo.Document
+	Live   []*topo.Body
+	Node   func(B) *topo.Body
+	Handle func(*topo.Body) B
+}
+
+// lift maps node lists to body references.
+func (h Hooks[B]) lift() *vocab.RefLift[*topo.Body, struct{}, B, struct{}] {
+	return &vocab.RefLift[*topo.Body, struct{}, B, struct{}]{Body: h.Handle}
+}
+
+// nodesOf maps body references to their topology nodes.
+func nodesOf[B comparable](h Hooks[B], bodies []B) []*topo.Body {
+	out := make([]*topo.Body, len(bodies))
+	for i, b := range bodies {
+		out[i] = h.Node(b)
+	}
+	return out
+}
