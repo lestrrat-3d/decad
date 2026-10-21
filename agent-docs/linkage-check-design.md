@@ -1151,7 +1151,7 @@ circle of radius `48` about the origin, so its top face is the plane `y = 48·si
   `WithResolution(Scalar(1.0/4))`. This is the leg that goes red when the common-ancestor joint is left in
   the pair's `τ`: every interval is then undecided at that floor. The travel terms themselves are pinned by
   the internal travel test below and by scene 4.
-- `examples/` gains `Example_linkageCheck` on this scene, printing `Status`, the first collision's
+- `examples/` gains `Example_verify_linkage_chain` on this scene, printing `Status`, the first collision's
   bodies and its fraction to three decimals — `0.336` on every platform, since the grid is dyadic.
 
 **Scene 2 — the stacked elbow and the declared contact.** Link 2 lowered to `z ∈ [10, 20]`, so its
@@ -1261,7 +1261,7 @@ y ∈ [30, 40], z ∈ [−10, 5]` sits under the arm's final place.
   waypoints sit at dyadic fractions, returns each waypoint exactly at its fraction, the segment's line
   inside it, and the first and last segments' lines outside `[0, 1]`. An internal test pins `|Δq_i|`
   against the hand sum across one and two waypoints, exactly for a prismatic joint whose ends agree.
-- `examples/` gains `Example_linkageWaypoints` on the lift-swing-lower scene, printing `Status`, the
+- `examples/` gains `Example_verify_linkage_waypoints` on the lift-swing-lower scene, printing `Status`, the
   first collision at `s = 0.918`, and its segment and local fraction: the lowering, `75%` through it.
 
 **Scene 8 — the pinned elbow (the concentric pin's acceptance target).** The upper arm `A`: a prism over
@@ -1803,7 +1803,7 @@ and the `(mast, wall)` pair by its swept box, so each centre evaluates `(boom, w
   that shallow.
 - `CellsEvaluated` is below the default budget and no `DiagJointBoxBudgetExhausted` is raised. The test
   file records the measured count.
-- `examples/` gains `Example_jointBox` on this scene at `WithResolution(Scalar(1.0/16))`, printing
+- `examples/` gains `Example_verify_joint_box` on this scene at `WithResolution(Scalar(1.0/16))`, printing
   `Status`, the first collision's bodies and its `θ` and `d` to two decimals; the centres are dyadic, so
   the printed values hold on every platform.
 
@@ -2534,7 +2534,7 @@ highest at the follower's minimum `θ4 = 101.5370°` (`θ2 = 38.5727°`): `69.38
 - `Schedule(ctx, drive).PoseAt(ctx, s)` equals the report's pose at every evaluated `s`, bit for bit, and
   two schedules agree; `Linkage.PoseAt(drive, Scalar(1.0/3))` equals the schedule's. Eight goroutines
   calling `PoseAt` at interleaved parameters get the same poses as one.
-- `examples/` gains `Example_linkageLoop` on this scene, printing `Status`, the first collision's
+- `examples/` gains `Example_verify_linkage_closed_loop` on this scene, printing `Status`, the first collision's
   bodies and its fraction to three decimals — `0.141` on every platform.
 
 **The pin between samples (the dependent travel term).** Scene 7 without the wall and a `0.8` mm pin in
@@ -3084,9 +3084,6 @@ dependent turns over `[−8.7632°, 3.0248°]` — leaves its swept box meeting 
   collision is that shallow.
 - `CellsEvaluated` is below the default budget and no `DiagJointBoxBudgetExhausted` is raised; the test
   file records the count: `393` centres into `197` leaves, `20` clear, `168` colliding, `9` undecided.
-- `examples/` gains `Example_jointBoxLoop` on this scene at `WithResolution(Scalar(1.0/16))`,
-  printing `Status`, the first collision's bodies and its crank angle and gate value to two decimals; the
-  centres are dyadic, so the printed values hold on every platform.
 
 **The clear box and its reading.** Scene 11 with the gate over `[0, 2]` mm: `d*` is at least `2.6143`, so
 no configuration collides, and the minimum gap over the box is `72 − 2 − 69.3857 = 0.6143` mm at

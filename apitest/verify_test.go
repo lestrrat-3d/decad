@@ -156,7 +156,7 @@ func TestVerifyPassedIsNotCoverage(t *testing.T) {
 }
 
 // TestVerifyPolicyRejectsUnrecognizedCode is a pure policy test supplementing
-// Example_verify_exception: proposal §12's documented positive-match
+// Example_verify_waive_diagnostic: proposal §12's documented positive-match
 // exception rejects an unrecognized DiagnosticCode, never treating "not a
 // known failure" as an implicit pass.
 func TestVerifyPolicyRejectsUnrecognizedCode(t *testing.T) {
