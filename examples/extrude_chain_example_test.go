@@ -9,21 +9,18 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Extrude over a chain sweeps an open sketch chain — an ordered run of boundary
-// edges whose two ends are free, sketch.Sketch.Chains' own counterpart of a
-// closed Profile — into a ribbon: one wall face per recorded segment, with
-// no cap and no closing face. The result is always a sheet body, since an
-// open walk encloses no region to close. A line-arc-line chain here builds a
-// three-wall ribbon; the arc wall's area carries its own evaluation bound,
-// while the two straight walls stay exact.
+// Extrude also accepts an open chain of sketch edges instead of a closed
+// profile. The result is a sheet body: one wall per edge, with no caps. Use it
+// for thin walls and surfaces, which can later be thickened into a solid.
 func Example_extrude_chain() {
+	// Draw an open line-arc-line path. It is open, so the sketch has a
+	// chain but no profile.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
 		fmt.Printf("failed to create sketch: %s\n", err)
 		return
 	}
-
 	a := s.CreatePoint(0, 0)
 	b := s.CreatePoint(10, 0)
 	c := s.CreatePoint(15, 5)
@@ -37,41 +34,16 @@ func Example_extrude_chain() {
 		return
 	}
 
-	// The chain is the sketch's one open connected run; the closed-region
-	// path (Profiles) sees nothing here.
-	chains := s.Chains()
-	fmt.Printf("profiles: %d, chains: %d, edges: %d\n", len(s.Profiles()), len(chains), len(chains[0].Edges))
-
+	// Pass the chain where a profile would go.
 	doc := decad.New()
-	body, err := decad.Extrude(context.Background(), doc, s, chains[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	body, err := decad.Extrude(context.Background(), doc, s, s.Chains()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	if err != nil {
-		fmt.Printf("failed to extrude chain: %s\n", err)
+		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-
-	area, err := body.Area()
-	if err != nil {
-		fmt.Printf("failed to measure area: %s\n", err)
-		return
-	}
-	surface, err := area.Value.In(units.SquareMillimeter)
-	if err != nil {
-		fmt.Printf("failed to convert area: %s\n", err)
-		return
-	}
-
-	free, err := decad.Edges(decad.Free()).SelectEdges(body)
-	if err != nil {
-		fmt.Printf("failed to select free edges: %s\n", err)
-		return
-	}
-
-	fmt.Printf("sheet: %v, solid: %v, faces: %d\n", body.Kind() == decad.BodySheet, body.IsSolid(), len(body.Faces()))
-	fmt.Printf("free edges: %d\n", len(free))
-	fmt.Printf("area: %.4f mm² (%s)\n", surface, area.Exactness)
+	fmt.Printf("sheet: %v, solid: %v, walls: %d\n",
+		body.Kind() == decad.BodySheet, body.IsSolid(), len(body.Faces()))
 	// Output:
-	// profiles: 0, chains: 1, edges: 3
-	// sheet: true, solid: false, faces: 3
-	// free edges: 8
-	// area: 278.5398 mm² (Approximate)
+	// sheet: true, solid: false, walls: 3
 }

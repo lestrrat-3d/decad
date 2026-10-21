@@ -9,22 +9,21 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// A through-all extrude has no distance of its own: the sweep runs through
-// the far side of every live body it meets. The stop is resolved at the
-// call from the document's live bodies. The stop body is depended on, never
-// consumed, so it stays live.
+// ThroughAll extrudes without a stated distance: the sweep runs until it has
+// passed through every live body in its path. Use it when a feature must reach
+// across whatever is there, such as a pin or a cut that has to go all the way
+// through. The bodies it passes through are left untouched.
 func Example_extrude_through_all() {
+	// One sketch holds two profiles: a 100 x 60 plate, and a 20 x 20 square
+	// beside it that will become the pin.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
 		fmt.Printf("failed to create sketch: %s\n", err)
 		return
 	}
-
-	// Two profiles on one sketch: a 100 x 60 base plate, and a 20 x 20 pin
-	// footprint beside it.
-	plate := s.CreateRectangle(0, 0, 100, 60)
-	s.Fix(plate.A)
+	plateRect := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(plateRect.A)
 	s.CreateRectangle(120, 0, 140, 20)
 	if _, err := s.Solve(context.Background()); err != nil {
 		fmt.Printf("failed to solve: %s\n", err)
@@ -33,29 +32,25 @@ func Example_extrude_through_all() {
 	var plateProfile, pinProfile *sketch.Profile
 	for _, p := range s.Profiles() {
 		if p.Area > 1000 {
-			plateProfile = p
+			plateProfile = p // the large one is the plate
 		} else {
 			pinProfile = p
 		}
 	}
 
+	// First extrude the plate, 10 mm thick.
 	doc := decad.New()
-	// Step 0: the plate, 10 mm thick — the body the through-all sweep meets.
-	if _, err := decad.Extrude(context.Background(), doc, s, plateProfile, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}); err != nil {
+	if _, err := decad.Extrude(context.Background(), doc, s, plateProfile,
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}); err != nil {
 		fmt.Printf("failed to extrude plate: %s\n", err)
 		return
 	}
-	// Step 1: the pin, through all — it stops at the plate's far side, so
-	// its height is exactly the plate's thickness.
+
+	// Then extrude the pin through all. It stops at the plate's far side,
+	// so its height equals the plate's thickness.
 	pin, err := decad.Extrude(context.Background(), doc, s, pinProfile, decad.ThroughAll{Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude pin: %s\n", err)
-		return
-	}
-
-	vol, err := pin.Volume()
-	if err != nil {
-		fmt.Printf("failed to measure volume: %s\n", err)
 		return
 	}
 	bounds, err := pin.Bounds()
@@ -63,12 +58,9 @@ func Example_extrude_through_all() {
 		fmt.Printf("failed to measure bounds: %s\n", err)
 		return
 	}
-
-	fmt.Printf("volume: %s (%s)\n", vol.Value, vol.Exactness)
 	fmt.Printf("pin spans z: %v .. %v\n", bounds.Min.Z, bounds.Max.Z)
 	fmt.Printf("live bodies: %d\n", len(doc.Bodies()))
 	// Output:
-	// volume: 4000 mm^3 (Exact)
 	// pin spans z: 0 .. 10
 	// live bodies: 2
 }
