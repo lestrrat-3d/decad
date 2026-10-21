@@ -95,6 +95,7 @@ func TestPointConeUpperCapNodeMatchingFaces(t *testing.T) {
 
 	_, _, err = pointcone.UpperCapNode(near, sample, false, false)
 	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorContains(t, err, "WithMatchingFaces")
 	point, round, err := pointcone.UpperCapNode(near, sample, false, true)
 	require.NoError(t, err)
 	require.Equal(t, near, point)
@@ -106,6 +107,8 @@ func TestPointConeUpperCapNodeMatchingFaces(t *testing.T) {
 	require.NoError(t, err)
 	_, _, err = pointcone.UpperCapNode(far, sample, false, true)
 	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorContains(t, err, "misses the cone by")
+	require.NotContains(t, err.Error(), "WithMatchingFaces")
 }
 
 func TestPointConeOutsideWitnessRejectsUncertainContact(t *testing.T) {
