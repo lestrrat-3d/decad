@@ -9,12 +9,14 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Draft tilts the walls of a prism that already exists. The neutral face names
-// the cap whose section stays put, and Walls selects the faces to lean: a
-// positive angle narrows the body away from the neutral cap, so a molded part
-// releases from the mold opening on that side. The result is the body a tapered
-// extrude of the same sketch builds, and the receiver is retired.
+// Draft tilts the walls of a body that already exists. Molded and cast parts
+// need drafted walls so they can be pulled out of the mold. A neutral face
+// tells Draft which end stays the same size; the walls lean inward away from
+// it. If you are drawing the part from scratch, WithTaper on Extrude does the
+// same in one step.
 func Example_draft() {
+	// Make the body to draft: sketch a 20 x 20 mm square and extrude it into
+	// a block 10 mm tall (see Example_extrude for these steps).
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -27,35 +29,32 @@ func Example_draft() {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-
 	doc := decad.New()
-	box, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	block, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
 
-	// Lean every wall 5 degrees about the cap on the sketch plane.
-	drafted, err := decad.Draft(context.Background(), box, decad.Faces(decad.Walls(box)),
-		decad.NeutralFace{Body: box, Face: decad.Faces(decad.FaceCreatedBy(decad.CapStart(box)))},
+	// Lean every side wall by 5 degrees. The neutral face is the bottom, the
+	// face on the sketch plane, so the bottom keeps its 20 x 20 mm size and
+	// the top shrinks. (To draft only some walls, narrow the first query,
+	// for example with decad.Facing.)
+	drafted, err := decad.Draft(context.Background(), block, decad.Faces(decad.Walls(block)),
+		decad.NeutralFace{Body: block, Face: decad.Faces(decad.FaceCreatedBy(decad.CapStart(block)))},
 		units.Degrees(5))
 	if err != nil {
 		fmt.Printf("failed to draft: %s\n", err)
 		return
 	}
-
-	vol, err := drafted.Volume()
+	volume, err := drafted.Volume()
 	if err != nil {
 		fmt.Printf("failed to measure volume: %s\n", err)
 		return
 	}
-	// The drafted far cap is the square offset inward by h·tan 5 degrees, so the
-	// volume falls below the 4000 mm^3 of the straight box.
-	fmt.Printf("faces: %d\n", len(drafted.Faces()))
-	fmt.Printf("volume: %.3f mm^3 (%s)\n", vol.Value.Base(), vol.Exactness)
-	fmt.Printf("bodies in the document: %d\n", len(doc.Bodies()))
+	// The undrafted block holds 4000 mm^3. Leaning the walls removes some.
+	fmt.Printf("volume: %.1f mm^3\n", volume.Value.Base())
 	// Output:
-	// faces: 6
-	// volume: 3660.251 mm^3 (Approximate)
-	// bodies in the document: 1
+	// volume: 3660.3 mm^3
 }

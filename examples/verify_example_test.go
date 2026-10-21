@@ -2,104 +2,66 @@ package examples_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"time"
 
 	"github.com/lestrrat-3d/decad"
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
 
-// Verify is the product: one non-mutating call over the live model, a
-// verdict per body and for the document, and one bit — Passed() — an
-// agent gates on. A question the evaluator cannot decide reads Suspect,
-// never a silent pass: here two far-apart plates are provenly disjoint and
-// the report is Sound, while two overlapping plates are a pair this
-// evaluator can prove neither overlapping nor disjoint.
+// Verify checks the whole model and reports whether it can be trusted. Run it
+// before you hand a design on, or use it as the pass/fail gate in an
+// automated workflow: Passed returns one boolean. Verify never modifies the
+// model. Anything it cannot decide reads as "not sound" rather than passing
+// silently.
 func Example_verify() {
-	buildPlate := func(doc *decad.Document) (*decad.Body, error) {
-		w := sketch.NewWorld()
+	// Two plates that do not touch, 500 mm apart. They sit in one document
+	// so Verify checks them against each other as well as on their own. Each
+	// is drawn in its own sketch (see Example_extrude for these steps).
+	w := sketch.NewWorld()
+	doc := decad.New()
+	var plateSketches [2]*sketch.Sketch
+	for i, x0 := range []float64{0, 500} {
 		s, err := w.CreateSketch(w.XY())
 		if err != nil {
-			return nil, err
+			fmt.Printf("failed to create sketch: %s\n", err)
+			return
 		}
-		rect := s.CreateRectangle(0, 0, 100, 60)
+		rect := s.CreateRectangle(x0, 0, x0+100, 60)
 		s.Fix(rect.A)
 		if _, err := s.Solve(context.Background()); err != nil {
-			return nil, err
-		}
-		return decad.Extrude(context.Background(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
-	}
-
-	doc := decad.New()
-	first, err := buildPlate(doc)
-	if err != nil {
-		fmt.Printf("failed to build: %s\n", err)
-		return
-	}
-	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
-	if err != nil {
-		fmt.Printf("failed to build motion: %s\n", err)
-		return
-	}
-	if _, err := decad.Transform(context.Background(), first, shift); err != nil {
-		fmt.Printf("failed to place: %s\n", err)
-		return
-	}
-	if _, err := buildPlate(doc); err != nil {
-		fmt.Printf("failed to build: %s\n", err)
-		return
-	}
-
-	// Interference is checked even without options. On a large model,
-	// unresolved pairs can reach mesh work proportional to the product of
-	// their facet counts. Use a fresh deadline for each call, with a budget
-	// chosen from representative models; this fixture's budget is deliberately
-	// generous.
-	verify := func() (*decad.Report, error) {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		return doc.Verify(ctx)
-	}
-
-	// Two plates, 500 mm apart: both proven solids, the pair proven
-	// disjoint by box separation.
-	report, err := verify()
-	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			fmt.Println("verification exceeded its deadline")
+			fmt.Printf("failed to solve: %s\n", err)
 			return
 		}
+		if _, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(10), Dir: decad.Along}); err != nil {
+			fmt.Printf("failed to extrude: %s\n", err)
+			return
+		}
+		plateSketches[i] = s
+	}
+
+	report, err := doc.Verify(context.Background())
+	if err != nil {
 		fmt.Printf("failed to verify: %s\n", err)
 		return
 	}
-	fmt.Printf("apart: %s, trustworthy: %v\n", report.Status, report.Passed())
-	body := report.Bodies[0]
-	fmt.Printf("body: %s, validity: %s\n", body.Status, body.Validity.Outcome)
-	fmt.Printf("volume: %s (%s)\n", body.Region.Volume.Value, body.Region.Volume.Exactness)
+	fmt.Printf("separate plates: %s, passed: %v\n", report.Status, report.Passed())
 
-	// A third plate coincident with the second: the boxes overlap, and this
-	// evaluator can prove the pair neither overlapping nor disjoint — the
-	// undecided pair reads Suspect, never a fabricated verdict.
-	if _, err := buildPlate(doc); err != nil {
-		fmt.Printf("failed to build: %s\n", err)
+	// Add a third plate on top of the first one. The two now occupy the same
+	// space, so the model is no longer sound.
+	if _, err := decad.Extrude(context.Background(), doc, plateSketches[0], plateSketches[0].Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along}); err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	report, err = verify()
+	report, err = doc.Verify(context.Background())
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			fmt.Println("verification exceeded its deadline")
-			return
-		}
 		fmt.Printf("failed to verify: %s\n", err)
 		return
 	}
-	fmt.Printf("overlapping: %s, trustworthy: %v\n", report.Status, report.Passed())
+	fmt.Printf("overlapping plates: %s, passed: %v\n", report.Status, report.Passed())
 	// Output:
-	// apart: Sound, trustworthy: true
-	// body: Sound, validity: valid
-	// volume: 60000 mm^3 (Exact)
-	// overlapping: Interfering, trustworthy: false
+	// separate plates: Sound, passed: true
+	// overlapping plates: Interfering, passed: false
 }

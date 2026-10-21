@@ -8,35 +8,42 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-// MeasureProfile gives bounded 2D readings from a current sketch profile.
-// It rejects boundaries that decad cannot record exactly.
-func Example_measureProfile() {
+// MeasureProfile reads the area and centroid of a 2D profile before you extrude
+// it. Use it to check a drawing, for example that a cross-section has the
+// intended area, without building a solid first.
+func Example_measure_profile() {
+	// Draw a 100 x 60 mm plate with a round hole 20 mm across, off to one
+	// side. The off-center hole moves the centroid away from the plate's
+	// middle, which makes the centroid worth reading.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
 		fmt.Printf("failed to create sketch: %s\n", err)
 		return
 	}
-
-	// A 100 x 60 plate with a Ø20 hole.
 	rect := s.CreateRectangle(0, 0, 100, 60)
 	s.Fix(rect.A)
-	s.CreateCircle(s.CreatePoint(50, 30), 10)
+	s.CreateCircle(s.CreatePoint(70, 30), 10)
 	if _, err := s.Solve(context.Background()); err != nil {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
 
-	// The plate region: four lines outside, the circle bounding its hole.
-	var prof *sketch.Profile
+	// Sketch finds a profile for the plate and one for the hole. Choose the
+	// plate, which is the one that has a hole in it.
+	var plate *sketch.Profile
 	for _, p := range s.Profiles() {
 		if len(p.Holes) == 1 {
-			prof = p
+			plate = p
 			break
 		}
 	}
+	if plate == nil {
+		fmt.Println("no plate profile found")
+		return
+	}
 
-	measured, err := decad.MeasureProfile(s, prof)
+	measured, err := decad.MeasureProfile(s, plate)
 	if err != nil {
 		fmt.Printf("failed to measure profile: %s\n", err)
 		return
@@ -46,19 +53,14 @@ func Example_measureProfile() {
 		fmt.Printf("failed to measure area: %s\n", err)
 		return
 	}
-	frame, err := s.Plane().Frame()
+	centroid, err := measured.Centroid()
 	if err != nil {
-		fmt.Printf("failed to read plane: %s\n", err)
+		fmt.Printf("failed to measure centroid: %s\n", err)
 		return
 	}
-
-	fmt.Printf("outer segments: %d\n", len(prof.Outer))
-	fmt.Printf("holes: %d\n", len(prof.Holes))
-	fmt.Printf("area: %s\n", area.Exactness)
-	fmt.Printf("plane normal: %v\n", frame.U().Cross(frame.V()))
+	fmt.Printf("area: %.1f mm^2\n", area.Value.Base())
+	fmt.Printf("centroid x: %.2f mm\n", centroid.Value.X)
 	// Output:
-	// outer segments: 4
-	// holes: 1
-	// area: Approximate
-	// plane normal: {0 0 1}
+	// area: 5685.8 mm^2
+	// centroid x: 48.89 mm
 }

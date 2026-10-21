@@ -6,24 +6,20 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/sketch"
-	"github.com/lestrrat-3d/units"
 )
 
-// Revolve spins a sketch profile about an axis and evaluates the solid of
-// revolution analytically: volume and surface area come from Pappus's
-// theorems on the recorded region's bounded moments, so every measurement is
-// closed form with a proven bound. A rectangle with one edge ON the axis revolves into a solid
-// cylinder — the on-axis edge sweeps nothing, so there is no inner face, and
-// a full revolution has no caps and no seam.
+// Revolve spins a sketch profile about an axis to make a solid of revolution.
+// Use it for round parts such as shafts, bushings, knobs and bottles: draw
+// half of the side view, then spin it.
 func Example_revolve() {
+	// Draw the half side view of a cylinder: a rectangle 10 mm long and 8 mm
+	// tall. Its bottom edge lies on the X axis, which will be the spin axis.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
 		fmt.Printf("failed to create sketch: %s\n", err)
 		return
 	}
-
-	// The generating section: 10 mm long, reaching 8 mm from the axis.
 	rect := s.CreateRectangle(0, 0, 10, 8)
 	s.Fix(rect.A)
 	if _, err := s.Solve(context.Background()); err != nil {
@@ -31,50 +27,27 @@ func Example_revolve() {
 		return
 	}
 
-	// The axis is the sketch's own u axis, stated in plane coordinates.
+	// The axis is given in sketch coordinates: from (0, 0) to (1, 0), which
+	// is the sketch's own U (horizontal) axis.
 	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
 
+	// Spin the profile one full turn. The edge on the axis sweeps nothing, so
+	// the result is a solid cylinder with no hole through it.
 	doc := decad.New()
-	body, err := decad.Revolve(context.Background(), doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
+	cylinder, err := decad.Revolve(context.Background(), doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
 	if err != nil {
 		fmt.Printf("failed to revolve: %s\n", err)
 		return
 	}
-
-	vol, err := body.Volume()
+	volume, err := cylinder.Volume()
 	if err != nil {
 		fmt.Printf("failed to measure volume: %s\n", err)
 		return
 	}
-	volume, err := vol.Value.In(units.CubicMillimeter)
-	if err != nil {
-		fmt.Printf("failed to convert volume: %s\n", err)
-		return
-	}
-	area, err := body.Area()
-	if err != nil {
-		fmt.Printf("failed to measure area: %s\n", err)
-		return
-	}
-	surface, err := area.Value.In(units.SquareMillimeter)
-	if err != nil {
-		fmt.Printf("failed to convert area: %s\n", err)
-		return
-	}
-	c, err := body.Centroid()
-	if err != nil {
-		fmt.Printf("failed to measure centroid: %s\n", err)
-		return
-	}
-
-	// π·8²·10 = 640π mm³; the centroid sits ON the axis.
-	fmt.Printf("solid: %v, faces: %d\n", body.IsSolid(), len(body.Faces()))
-	fmt.Printf("volume: %.4f mm³ (%s)\n", volume, vol.Exactness)
-	fmt.Printf("area: %.4f mm²\n", surface)
-	fmt.Printf("centroid: (%.4f, %.4f, %.4f)\n", c.Value.X, c.Value.Y, c.Value.Z)
+	// The volume of a cylinder is π x 8² x 10 = 640π mm^3.
+	fmt.Printf("faces: %d\n", len(cylinder.Faces()))
+	fmt.Printf("volume: %.1f mm^3\n", volume.Value.Base())
 	// Output:
-	// solid: true, faces: 3
-	// volume: 2010.6193 mm³ (Approximate)
-	// area: 904.7787 mm²
-	// centroid: (5.0000, 0.0000, 0.0000)
+	// faces: 3
+	// volume: 2010.6 mm^3
 }

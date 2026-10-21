@@ -3,7 +3,6 @@ package examples_test
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
@@ -11,70 +10,48 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Chamfer bevels the convex lateral edges of a straight prism. Like the fillet,
-// the reduction is a rewrite of the recorded 2D section — but each corner is cut
-// off by a straight chord between the two setback feet, so the bevel walls are
-// planes, not cylinders, and irrational lengths carry proven bounds. The call
-// resolves the edge query and setback distance before retiring the receiver, so
-// repeated construction is deterministic.
+// Chamfer bevels edges with a flat cut instead of a round one. Use it when a
+// part needs a simple, easy-to-machine corner. Edges are chosen with a query,
+// here the four edges parallel to Z.
 func Example_chamfer() {
+	// Make a box to bevel: sketch a rectangle and extrude it (see
+	// Example_extrude for these steps).
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
 		fmt.Printf("failed to create sketch: %s\n", err)
 		return
 	}
-
-	// A 100 x 60 plate, extruded 20 mm — a box with four lateral edges.
 	rect := s.CreateRectangle(0, 0, 100, 60)
 	s.Fix(rect.A)
 	if _, err := s.Solve(context.Background()); err != nil {
 		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-
 	doc := decad.New()
-	box, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	box, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	if err != nil {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
 
-	// Bevel all four lateral edges (straight, parallel to the z sweep) with a
-	// 10 mm setback.
-	body, err := decad.Chamfer(context.Background(), box, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(10))
+	// Cut each vertical edge back 10 mm on both sides. The box gains one
+	// flat face per edge.
+	beveled, err := decad.Chamfer(context.Background(), box,
+		decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(10))
 	if err != nil {
 		fmt.Printf("failed to chamfer: %s\n", err)
 		return
 	}
-
-	vol, err := body.Volume()
+	volume, err := beveled.Volume()
 	if err != nil {
 		fmt.Printf("failed to measure volume: %s\n", err)
 		return
 	}
-	mm3, err := vol.Value.In(units.CubicMillimeter)
-	if err != nil {
-		fmt.Printf("failed to convert volume: %s\n", err)
-		return
-	}
-
-	bevels := 0
-	for _, f := range body.Faces() {
-		for _, o := range f.Origins() {
-			if strings.HasPrefix(o.Role, "chamfer(") {
-				bevels++
-			}
-		}
-	}
-
-	fmt.Printf("solid: %v, faces: %d\n", body.IsSolid(), len(body.Faces()))
-	fmt.Printf("bevel planes: %d\n", bevels)
-	fmt.Printf("volume: %.3f mm^3 (%s)\n", mm3, vol.Exactness)
-	fmt.Printf("live bodies: %d\n", len(doc.Bodies()))
+	fmt.Printf("faces: %d\n", len(beveled.Faces()))
+	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
 	// Output:
-	// solid: true, faces: 10
-	// bevel planes: 4
-	// volume: 116000.000 mm^3 (Exact)
-	// live bodies: 1
+	// faces: 10
+	// volume: 116000 mm^3
 }

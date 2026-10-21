@@ -11,13 +11,14 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// A selector that resolves to the wrong count fails loudly, and the failure is
-// a *decad.SelectionError: it wraps ErrNoMatch or ErrCardinality (so errors.Is
-// still branches) and carries what an agent needs to repair the query without
-// reconstructing it from source — the stable rendering, the expected/actual
-// counts, and the running match count after each clause, which names the
-// clause that emptied the set.
+// A selector that finds the wrong number of faces or edges fails with a
+// *decad.SelectionError instead of silently picking something else. Use the
+// error to repair the query: it reports how many items were expected and
+// found, and how many were left after each clause of the query, which shows
+// the clause that removed everything.
 func Example_selection_error() {
+	// Make a box. We will ask it for an edge that does not exist, so the selector
+	// has a failure to report.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {

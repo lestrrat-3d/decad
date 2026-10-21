@@ -775,7 +775,7 @@ farthest corner `(48, 14)` sits at exactly `50` mm from the axis and at polar an
    unchanged.
 10. **Cancellation.** A context cancelled during bisection returns `ctx.Err()` and a nil report, with the
     document unchanged.
-11. **Example.** `examples/` gains `Example_motionCheck`, fixture 1 at `WithResolution(0.25°)`, whose
+11. **Example.** `examples/` gains `Example_verify_motion_revolute`, fixture 1 at `WithResolution(0.25°)`, whose
     `// Output:` prints the first collision parameter to two decimals; the grid is dyadic in `90°`, so the
     printed value is the same on every platform.
 
@@ -912,7 +912,7 @@ the endpoints alone.
     kind. The non-finite-component row (`ErrNotFinite`) is kept in code and has no test: every `r3`
     producer validates what it builds and `Transform`'s fields are unexported, so `r3`'s public API cannot
     produce a `Transform` with a non-finite component.
-21. **Example.** `examples/` gains `Example_motionBetween`: the screw arm of test 12 against the raised
+21. **Example.** `examples/` gains `Example_verify_motion_between`: the screw arm of test 12 against the raised
     wall at `WithResolution(Scalar(1.0/256))`, printing `Status` and the first collision's fraction to three
     decimals. The grid is dyadic, so it prints `0.410` — `105/256`, the first depth-8 grid point above
     `s* ≈ 0.40967`, where the corner penetrates the wall by `0.0235` mm and the overlap is a `5.8e-3` mm³

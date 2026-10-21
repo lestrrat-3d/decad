@@ -9,21 +9,25 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Split returns one solid body for each cell a sheet separates from a solid.
+// Split divides a solid along a sheet (a zero-thickness surface) and returns
+// one solid body per piece. Use it to cut a part in two, for example to
+// print it in halves or to work on each side separately.
 func Example_split() {
 	w := sketch.NewWorld()
+	doc := decad.New()
+
+	// The block is the solid we want to cut into pieces.
 	blockSketch, err := w.CreateSketch(w.XY())
 	if err != nil {
-		fmt.Printf("failed to create block sketch: %s\n", err)
+		fmt.Printf("failed to create sketch: %s\n", err)
 		return
 	}
 	rect := blockSketch.CreateRectangle(0, 0, 100, 60)
 	blockSketch.Fix(rect.A)
 	if _, err := blockSketch.Solve(context.Background()); err != nil {
-		fmt.Printf("failed to solve block sketch: %s\n", err)
+		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	doc := decad.New()
 	block, err := decad.Extrude(context.Background(), doc, blockSketch, blockSketch.Profiles()[0],
 		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	if err != nil {
@@ -31,31 +35,44 @@ func Example_split() {
 		return
 	}
 
-	toolSketch, err := w.CreateSketch(w.XY())
+	// The cutter must be a sheet. Extruding a single line (an open chain) at
+	// y = 30 gives an upright wall across the middle of the block. It reaches
+	// 15 mm up and 5 mm down so it passes completely through both block faces.
+	lineSketch, err := w.CreateSketch(w.XY())
 	if err != nil {
-		fmt.Printf("failed to create tool sketch: %s\n", err)
+		fmt.Printf("failed to create sketch: %s\n", err)
 		return
 	}
-	start := toolSketch.CreatePoint(-10, 30)
-	toolSketch.Fix(start)
-	toolSketch.CreateLine(start, toolSketch.CreatePoint(110, 30))
-	if _, err := toolSketch.Solve(context.Background()); err != nil {
-		fmt.Printf("failed to solve tool sketch: %s\n", err)
+	start := lineSketch.CreatePoint(-10, 30)
+	lineSketch.Fix(start)
+	lineSketch.CreateLine(start, lineSketch.CreatePoint(110, 30))
+	if _, err := lineSketch.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
 		return
 	}
-	tool, err := decad.Extrude(context.Background(), doc, toolSketch, toolSketch.Chains()[0], decad.TwoSided{
+	sheet, err := decad.Extrude(context.Background(), doc, lineSketch, lineSketch.Chains()[0], decad.TwoSided{
 		One: decad.DistanceSide{D: units.Millimeters(15)},
 		Two: decad.DistanceSide{D: units.Millimeters(5)},
 	})
 	if err != nil {
-		fmt.Printf("failed to extrude tool: %s\n", err)
+		fmt.Printf("failed to extrude sheet: %s\n", err)
 		return
 	}
-	pieces, err := decad.Split(context.Background(), block, tool)
+
+	pieces, err := decad.Split(context.Background(), block, sheet)
 	if err != nil {
-		fmt.Printf("failed to split block: %s\n", err)
+		fmt.Printf("failed to split: %s\n", err)
 		return
 	}
-	fmt.Printf("solid pieces: %d\n", len(pieces))
-	// Output: solid pieces: 2
+	for i, piece := range pieces {
+		volume, err := piece.Volume()
+		if err != nil {
+			fmt.Printf("failed to measure volume: %s\n", err)
+			return
+		}
+		fmt.Printf("piece %d: %.0f mm^3\n", i, volume.Value.Base())
+	}
+	// Output:
+	// piece 0: 30000 mm^3
+	// piece 1: 30000 mm^3
 }
