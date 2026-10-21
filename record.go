@@ -116,8 +116,7 @@ type (
 // draftrecord.BuildTwoSided evaluate over topology nodes and which implement
 // topo.Payload (docs/draft-design.md, docs/evaluator-design.md §8).
 type (
-	draftPayload         = draftrecord.Payload
-	twoSidedDraftPayload = draftrecord.TwoSidedPayload
+	draftPayload = draftrecord.Payload
 )
 
 // capBlendPayload is the evaluator's record of a complete-cap-loop chamfer

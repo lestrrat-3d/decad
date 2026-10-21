@@ -17,7 +17,7 @@ import (
 // This file is the linkage vocabulary of docs/linkage-check-design.md §2 and
 // §4: Linkage, Link and the sealed Joint set, the Drive that moves them,
 // Linkage.PoseAt, and the LinkageReport records. linkage_verify.go runs
-// Document.VerifyLinkage over motion_verify.go's engine, and linkage_bound.go
+// Document.VerifyLinkage over internal/motionengine's engine, and linkage_bound.go
 // proves the chain travel bound its interval certificate consumes.
 
 // Linkage is a tree of links joined by joints, rooted at the ground link. A

@@ -2,6 +2,7 @@ package report
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/r3"
@@ -203,4 +204,9 @@ func (r *ReportOf[BodyT, FaceT, CellT]) ForBody(body BodyT) (*BodyReportOf[BodyT
 // JointCell records one closed cell of joint values.
 type JointCell struct {
 	Min, Max []units.Value
+}
+
+// Clone returns a copy of c that shares no slice with it.
+func (c JointCell) Clone() JointCell {
+	return JointCell{Min: slices.Clone(c.Min), Max: slices.Clone(c.Max)}
 }

@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/lestrrat-3d/decad/internal/motionengine"
+
 	"github.com/lestrrat-3d/decad/internal/motionconclude"
 
 	"github.com/lestrrat-3d/decad/internal/linkagebound"
@@ -24,7 +26,7 @@ import (
 // the cell, undecided otherwise.
 func (b *boxRun) evaluate(c *boxCell) error {
 	r := b.run
-	if err := r.ctx.Err(); err != nil {
+	if err := r.Ctx.Err(); err != nil {
 		return err
 	}
 	spec := b.dr.spec
@@ -54,28 +56,28 @@ func (b *boxRun) evaluate(c *boxCell) error {
 		}
 		values, bounds, poses, ideals = lp.values, lp.bounds, lp.poses, lp.ideals
 	}
-	var mp *motionPose
+	var mp *motionengine.Pose
 	if c.gate != "" && poses == nil {
 		// docs/linkage-check-design.md §16.3: an unbuildable centre has no
 		// pose; it evaluates no pair and carries no row.
-		mp = &motionPose{
-			cell: &c.cell, unbuildable: errors.New(c.gate), pairs: make([][]motionPairPose, len(r.movers)),
-			result: PoseResult{Interferences: []Interference{}, Clearances: []Clearance{}, Diagnostics: []Diagnostic{}},
+		mp = &motionengine.Pose{
+			Cell: &c.cell, Unbuildable: errors.New(c.gate), Pairs: make([][]motionengine.PairPose, len(r.Movers)),
+			Result: motionengine.PoseResult{Interferences: []motionengine.Interference{}, Clearances: []motionengine.Clearance{}, Diagnostics: []motionengine.Diagnostic{}},
 		}
-		for i := range r.movers {
-			mp.pairs[i] = make([]motionPairPose, len(r.pairs[i]))
+		for i := range r.Movers {
+			mp.Pairs[i] = make([]motionengine.PairPose, len(r.Pairs[i]))
 		}
 	} else {
-		groups := make([]motionGroupPose, len(poses))
+		groups := make([]motionengine.GroupPose, len(poses))
 		for k := range poses {
-			groups[k] = motionGroupPose{
-				pose: poses[k], ideals: []motionbound.IdealPose{ideals[k]}, stretch: 1, value: values[k], bound: bounds[k],
-				fixed: b.dr.standing[k] == linkFixed, constant: b.dr.standing[k] == linkConstant,
+			groups[k] = motionengine.GroupPose{
+				Pose: poses[k], Ideals: []motionbound.IdealPose{ideals[k]}, Stretch: 1, Value: values[k], Bound: bounds[k],
+				Fixed: b.dr.standing[k] == linkFixed, Constant: b.dr.standing[k] == linkConstant,
 			}
 		}
-		mp = r.newPose(groups, units.Value{}, "the configuration "+formatValues(values))
-		mp.cell = &c.cell
-		if err := r.runPairs(mp); err != nil {
+		mp = r.NewPose(groups, units.Value{}, "the configuration "+formatValues(values))
+		mp.Cell = &c.cell
+		if err := r.RunPairs(mp); err != nil {
 			return err
 		}
 	}
@@ -92,7 +94,7 @@ func (b *boxRun) evaluate(c *boxCell) error {
 // hull H_j of each dependent over the cell's loop-axis range, δ_j =
 // max(h_hi − m_lo, m_hi − h_lo) and the cell's published range for the
 // dependent, H_j's ends rounded outward. A held loop's dependents stand
-// still across the cell: δ_j is zero and the range is M_j. A refused centre
+// still across the Cell: δ_j is zero and the range is M_j. A refused centre
 // returns no pose and gates the cell; a refused hull gates it and publishes
 // the dependent's range as zero values.
 func (b *boxRun) loopCentre(c *boxCell) (loopPose, error) {
@@ -101,7 +103,7 @@ func (b *boxRun) loopCentre(c *boxCell) (loopPose, error) {
 	for k := range fracs {
 		fracs[k] = c.centre(k)
 	}
-	lp, err := spec.loopPosesOf(b.run.ctx, b.dr.frames, fracs)
+	lp, err := spec.loopPosesOf(b.run.Ctx, b.dr.frames, fracs)
 	var ub *unbuildableError
 	if errors.As(err, &ub) {
 		c.gate, c.gateLoop = ub.Error(), ub.loop
@@ -120,7 +122,7 @@ func (b *boxRun) loopCentre(c *boxCell) (loopPose, error) {
 	for _, ld := range spec.loops {
 		var hulls []proofbound.RatInterval
 		if !ld.held {
-			hulls, err = ld.cellHulls(b.run.ctx, c.lo[ld.driver], c.hi[ld.driver])
+			hulls, err = ld.cellHulls(b.run.Ctx, c.lo[ld.driver], c.hi[ld.driver])
 			if errors.As(err, &ub) {
 				if c.gate == "" {
 					c.gate, c.gateLoop = ub.Error(), ld
@@ -155,9 +157,9 @@ func (b *boxRun) loopCentre(c *boxCell) (loopPose, error) {
 func (b *boxRun) classify(c *boxCell) {
 	r := b.run
 	mp := c.pose
-	for i := range r.movers {
-		for k := range r.pairs[i] {
-			if mp.pairs[i][k].collision {
+	for i := range r.Movers {
+		for k := range r.Pairs[i] {
+			if mp.Pairs[i][k].Collision {
 				c.held = append(c.held, [2]int{i, k})
 			}
 		}
@@ -171,10 +173,10 @@ func (b *boxRun) classify(c *boxCell) {
 	}
 	if len(c.held) > 0 {
 		c.outcome = CellColliding
-		for _, hit := range mp.collisions {
+		for _, hit := range mp.Collisions {
 			for _, pair := range c.held {
 				i, k := pair[0], pair[1]
-				if hit.Moving == r.movers[i].body && hit.Static == r.partner(i, k) && b.blocks(c, i, k, hit.Volume) {
+				if hit.Moving == r.Movers[i].Body && hit.Static == r.Partner(i, k) && b.blocks(c, i, k, hit.Volume) {
 					c.outcome = CellBlocked
 					return
 				}
@@ -185,15 +187,15 @@ func (b *boxRun) classify(c *boxCell) {
 	var lowBound *big.Rat
 	var low *[2]int
 	readings := make(map[cellReadingKey]cornerBounds)
-	lowest, ok := r.certifyPairs(func(i, k int) *big.Rat {
-		pp := mp.pairs[i][k]
-		if !pp.hasGap {
+	lowest, ok := r.CertifyPairs(func(i, k int) *big.Rat {
+		pp := mp.Pairs[i][k]
+		if !pp.HasGap {
 			return nil
 		}
 		// docs/linkage-check-design.md §14.3: the pair's bound over the cell is
 		// the larger of the travel bound lo_m − τ_half and the projection
 		// bound L_n(C), two proven lower bounds on one gap.
-		lo := proofarith.FloatRat(pp.lo)
+		lo := proofarith.FloatRat(pp.Lo)
 		bound := lo.Sub(lo, b.halfTravel(c, i, k))
 		if proj, shares := b.cellProjection(c, i, k, readings); proj != nil && proj.Cmp(bound) > 0 {
 			bound = proj
@@ -210,7 +212,7 @@ func (b *boxRun) classify(c *boxCell) {
 		}
 		return bound
 	}, func(i, k int) {
-		if !r.pairs[i][k].evaluated() {
+		if !r.Pairs[i][k].Evaluated() {
 			c.stuck = true
 		}
 		c.held = append(c.held, [2]int{i, k})
@@ -242,7 +244,7 @@ func (b *boxRun) classify(c *boxCell) {
 // pairs.
 func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[cellReadingKey]cornerBounds) (*big.Rat, map[int]*big.Rat) {
 	r, dr := b.run, b.dr
-	other := r.pairs[i][k].other
+	other := r.Pairs[i][k].Other
 	below := dr.pairDepth(i, other)
 	mine := dr.pathOf(i, below)
 	var theirs linkBound
@@ -273,7 +275,7 @@ func (b *boxRun) cellProjection(c *boxCell, i, k int, readings map[cellReadingKe
 		key := cellReadingKey{mover: m, below: below, hull: hull}
 		corners, ok := readings[key]
 		if !ok {
-			points, okPoints := bodyPoints(r.movers[m].body, hull)
+			points, okPoints := motionengine.BodyPoints(r.Movers[m].Body, hull)
 			if !okPoints {
 				return projectionSide{}, false
 			}
@@ -360,7 +362,7 @@ func (b *boxRun) staticReading(k int, hull bool) (cornerBounds, bool) {
 	if got, ok := b.statics[key]; ok {
 		return got, true
 	}
-	points, ok := bodyPoints(b.run.statics[k].body, hull)
+	points, ok := motionengine.BodyPoints(b.run.Statics[k].Body, hull)
 	if !ok {
 		return cornerBounds{}, false
 	}
@@ -386,7 +388,7 @@ func (b *boxRun) pairTerms(c *boxCell, i, k int) []linkagebound.JointTerm {
 	return append(mine, theirs...)
 }
 
-// branchTerms is pairTerms split by body: the terms that move mover i's own
+// branchTerms is pairTerms split by Body: the terms that move mover i's own
 // body, and those that move its partner's — none for a static partner. A
 // body symmetric about its own joint's axis takes its path without that
 // joint (linkageDriver.pathOf, docs/linkage-check-design.md §5.2).
@@ -399,9 +401,9 @@ func (b *boxRun) pairTerms(c *boxCell, i, k int) []linkagebound.JointTerm {
 // with every δ_j read reaches here: a gated cell has no pair travel.
 func (b *boxRun) branchTerms(c *boxCell, i, k int) (mine, theirs []linkagebound.JointTerm) {
 	r, dr := b.run, b.dr
-	if r.pairs[i][k].once != nil {
+	if r.Pairs[i][k].Once != nil {
 		// A constant pair (docs/linkage-check-design.md §5.9) moves nothing
-		// relative to its partner: no joint carries a term.
+		// relative to its Partner: no joint carries a term.
 		return nil, nil
 	}
 	span := func(joint int) (int, *big.Rat) {
@@ -411,7 +413,7 @@ func (b *boxRun) branchTerms(c *boxCell, i, k int) (mine, theirs []linkagebound.
 		}
 		return joint, jointParam(jt, c.lo[joint]).SpanUpper(jointParam(jt, c.hi[joint]))
 	}
-	other := r.pairs[i][k].other
+	other := r.Pairs[i][k].Other
 	below := dr.pairDepth(i, other)
 	if other < 0 {
 		return linkagebound.TermsOnPath(dr.pathOf(i, below), below, span), nil
@@ -437,7 +439,7 @@ func (b *boxRun) halfTravel(c *boxCell, i, k int) *big.Rat {
 // at most SweptVolumeAllow(τ_half, A) per moving body. The cell is blocked
 // when the volume's proven lower end, Value − Bound rounded down, strictly
 // exceeds that sum, compared over exact rationals. A is the mover's proven
-// upper bound on its area at rest (motionMover.area), which a rigid motion
+// upper bound on its area at rest (motionengine.Mover.area), which a rigid motion
 // preserves; a static partner moves nothing and is charged nothing.
 func (b *boxRun) blocks(c *boxCell, i, k int, volume Measurement) bool {
 	r := b.run
@@ -447,9 +449,9 @@ func (b *boxRun) blocks(c *boxCell, i, k int, volume Measurement) bool {
 	}
 	lower := proofbound.RatFloatDown(new(big.Rat).Sub(value, bound))
 	mine, theirs := b.branchTerms(c, i, k)
-	allow := proofbound.SweptVolumeAllow(proofbound.RatFloatUp(linkagebound.HalfSum(mine)), r.movers[i].area)
-	if other := r.pairs[i][k].other; other >= 0 {
-		allow = proofbound.AbsSumUpper(allow, proofbound.SweptVolumeAllow(proofbound.RatFloatUp(linkagebound.HalfSum(theirs)), r.movers[other].area))
+	allow := proofbound.SweptVolumeAllow(proofbound.RatFloatUp(linkagebound.HalfSum(mine)), r.Movers[i].Area)
+	if other := r.Pairs[i][k].Other; other >= 0 {
+		allow = proofbound.AbsSumUpper(allow, proofbound.SweptVolumeAllow(proofbound.RatFloatUp(linkagebound.HalfSum(theirs)), r.Movers[other].Area))
 	}
 	if proofbound.IsNonFinite(allow) || proofbound.IsNonFinite(lower) {
 		return false
@@ -502,29 +504,29 @@ func (b *boxRun) splitAxis(c *boxCell) int {
 // joint's range, is wider than the resolution.
 func (b *boxRun) wide(c *boxCell, k int) bool {
 	width := new(big.Rat).Sub(c.hi[k], c.lo[k])
-	return width.Cmp(b.run.cfg.ResolutionP.Base) > 0
+	return width.Cmp(b.run.Cfg.ResolutionP.Base) > 0
 }
 
 // wideForReading reports whether cell c's span along joint k is wider than
 // the reading floor: its own when unstated, else the resolution.
 func (b *boxRun) wideForReading(c *boxCell, k int) bool {
-	if b.run.cfg.ReadingP == nil {
+	if b.run.Cfg.ReadingP == nil {
 		return b.wide(c, k)
 	}
 	width := new(big.Rat).Sub(c.hi[k], c.lo[k])
-	return width.Cmp(b.run.cfg.ReadingP.Base) > 0
+	return width.Cmp(b.run.Cfg.ReadingP.Base) > 0
 }
 
 // configuration is the joint configuration a cell's centre was evaluated at:
 // the zero JointConfiguration for an unbuildable centre.
 func (c *boxCell) configuration() JointConfiguration {
-	if c.pose.unbuildable != nil {
+	if c.pose.Unbuildable != nil {
 		return JointConfiguration{}
 	}
-	n := len(c.pose.groups)
+	n := len(c.pose.Groups)
 	conf := JointConfiguration{Values: make([]units.Value, n), Bounds: make([]units.Value, n), Poses: make([]r3.Transform, n)}
-	for k, g := range c.pose.groups {
-		conf.Values[k], conf.Bounds[k], conf.Poses[k] = g.value, g.bound, g.pose
+	for k, g := range c.pose.Groups {
+		conf.Values[k], conf.Bounds[k], conf.Poses[k] = g.Value, g.Bound, g.Pose
 	}
 	return conf
 }
@@ -535,12 +537,12 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 	r := b.run
 	report := &JointBoxReport{
 		Request: JointBoxRequest{
-			RelativeTolerance: units.Scalar(r.cfg.Rel),
-			Resolution:        r.cfg.Resolution,
-			MinClearance:      r.cfg.Minimum,
+			RelativeTolerance: units.Scalar(r.Cfg.Rel),
+			Resolution:        r.Cfg.Resolution,
+			MinClearance:      r.Cfg.Minimum,
 			CellBudget:        b.budget,
 		},
-		ReadingResolution: readingResolution(r.cfg),
+		ReadingResolution: readingResolution(r.Cfg),
 		Linkage:           l,
 		Box:               slices.Clone(box),
 		Links:             l.Links(),
@@ -551,28 +553,28 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 		Collisions:        []JointBoxCollision{},
 		Diagnostics:       []Diagnostic{},
 	}
-	for _, st := range r.statics {
-		report.Against = append(report.Against, st.body)
+	for _, st := range r.Statics {
+		report.Against = append(report.Against, bodyHandle(st.Body))
 	}
-	poses := make([]*motionPose, len(b.evaluated))
+	poses := make([]*motionengine.Pose, len(b.evaluated))
 	violated := false
 	for n, c := range b.evaluated {
 		poses[n] = c.pose
-		violated = violated || c.pose.violated
-		for _, hit := range c.pose.collisions {
-			report.Collisions = append(report.Collisions, JointBoxCollision{Configuration: c.configuration(), A: hit.Moving, B: hit.Static, Volume: hit.Volume})
+		violated = violated || c.pose.Violated
+		for _, hit := range c.pose.Collisions {
+			report.Collisions = append(report.Collisions, JointBoxCollision{Configuration: c.configuration(), A: bodyHandle(hit.Moving), B: bodyHandle(hit.Static), Volume: hit.Volume})
 		}
 	}
 	allClear, met := true, true
 	var lowest *Measurement
 	for _, c := range b.leaves {
 		res := JointCellResult{
-			Cell:          cloneJointCell(c.cell),
+			Cell:          c.cell.Clone(),
 			Outcome:       c.outcome,
 			Center:        c.configuration(),
-			Interferences: c.pose.result.Interferences,
-			Clearances:    c.pose.result.Clearances,
-			Diagnostics:   slices.Clone(c.pose.result.Diagnostics),
+			Interferences: verifyLift.Interferences(c.pose.Result.Interferences),
+			Clearances:    verifyLift.Clearances(c.pose.Result.Clearances),
+			Diagnostics:   verifyLift.Diagnostics(c.pose.Result.Diagnostics),
 			Clearance:     c.clearance,
 		}
 		var own []Diagnostic
@@ -591,7 +593,7 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 					Message: msg,
 				}))
 			}
-		case r.cfg.MinimumMM != nil && !r.meetsMinimum(c.clearance):
+		case r.Cfg.MinimumMM != nil && !r.MeetsMinimum(c.clearance):
 			met = false
 			if violated {
 				break
@@ -602,7 +604,7 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 				Status:   Suspect,
 				Reading:  ReadingGap,
 				Observed: &obs,
-				Required: r.cfg.Minimum,
+				Required: r.Cfg.Minimum,
 				Message:  fmt.Sprintf("the joint cell %s is certified clear, but its proven lower bound does not reach the required minimum", formatCell(c.cell)),
 			}))
 		}
@@ -611,7 +613,7 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 		}
 		res.Diagnostics = append(res.Diagnostics, own...)
 		report.Cells = append(report.Cells, res)
-		report.Diagnostics = append(append(report.Diagnostics, c.pose.findings...), own...)
+		report.Diagnostics = append(append(report.Diagnostics, verifyLift.Diagnostics(c.pose.Findings)...), own...)
 	}
 	// A split cell's centre is gone from Cells, but a collision or a margin
 	// violation proven there is a fact the caller asked for.
@@ -619,9 +621,9 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 		if !c.split {
 			continue
 		}
-		for _, diag := range c.pose.findings {
+		for _, diag := range c.pose.Findings {
 			if diag.Code == DiagMotionCollision || diag.Code == DiagMotionClearanceViolated {
-				report.Diagnostics = append(report.Diagnostics, diag)
+				report.Diagnostics = append(report.Diagnostics, verifyLift.Diagnostics([]motionengine.Diagnostic{diag})...)
 			}
 		}
 	}
@@ -634,7 +636,7 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 		})
 	}
 	switch {
-	case r.cfg.MinimumMM == nil:
+	case r.Cfg.MinimumMM == nil:
 		report.Assessment = AssessmentNotEvaluated
 	case violated:
 		report.Assessment = AssessmentViolated
@@ -644,10 +646,10 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 		report.Assessment = AssessmentUndecided
 	}
 	if allClear && lowest != nil {
-		if reading, diag := r.pathClearance(poses, lowest, "whole-box"); reading != nil {
+		if reading, diag := r.PathClearance(poses, lowest, "whole-box"); reading != nil {
 			report.Clearance = reading
 			if diag != nil {
-				report.Diagnostics = append(report.Diagnostics, *diag)
+				report.Diagnostics = append(report.Diagnostics, verifyLift.Diagnostics([]motionengine.Diagnostic{*diag})...)
 			}
 		}
 	}
@@ -657,7 +659,7 @@ func (b *boxRun) publish(l *Linkage, box JointBox) *JointBoxReport {
 
 // cellFinding marks a cell's own finding with the cell.
 func (b *boxRun) cellFinding(c *boxCell, diag Diagnostic) Diagnostic {
-	cell := cloneJointCell(c.cell)
+	cell := c.cell.Clone()
 	diag.Cell = &cell
 	return diag
 }
@@ -684,38 +686,4 @@ func formatCell(c JointCell) string {
 // value is the caller's to state (docs/linkage-check-design.md §16.1).
 func errLoopNotStated() error {
 	return fmt.Errorf(`%w: a linkage with a closed loop has dependent joints whose values follow from its driver, so it cannot be posed joint by joint; pose a drive whose every sweep holds instead`, ErrUnsupported)
-}
-
-const poseBodyCacheSize = 32
-
-// poseBodyCache bounds the transient bodies retained for one joint-box mover.
-// Each entry is one completed payload placement at one bit-identical float
-// transform. A hit reuses its body and any completed geometry or mesh proofs;
-// the caller still computes the cell's own ideal-pose allowance.
-type poseBodyCache struct {
-	bodies map[[12]uint64]*Body
-	order  [poseBodyCacheSize][12]uint64
-	next   int
-}
-
-func (c *poseBodyCache) get(key [12]uint64) *Body {
-	return c.bodies[key]
-}
-
-// put returns the body evicted from the cache, if any, so its clearance
-// carriers can be removed from the call's pairkernel.Cache too.
-func (c *poseBodyCache) put(key [12]uint64, body *Body) *Body {
-	if c.bodies == nil {
-		c.bodies = make(map[[12]uint64]*Body, poseBodyCacheSize)
-	}
-	var evicted *Body
-	if len(c.bodies) == poseBodyCacheSize {
-		old := c.order[c.next]
-		evicted = c.bodies[old]
-		delete(c.bodies, old)
-	}
-	c.order[c.next] = key
-	c.bodies[key] = body
-	c.next = (c.next + 1) % poseBodyCacheSize
-	return evicted
 }
