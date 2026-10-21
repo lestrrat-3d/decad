@@ -57,12 +57,12 @@ func Example_select_faces_by_direction() {
 	fmt.Printf("Facing: %d face\n", len(top))
 
 	// The end cap of the extrude is that same top face.
-	cap, err := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))).Exactly(1).SelectFaces(plate)
+	endCap, err := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))).Exactly(1).SelectFaces(plate)
 	if err != nil {
 		fmt.Printf("failed to select: %s\n", err)
 		return
 	}
-	fmt.Printf("same face as the end cap: %v\n", fmt.Sprint(top[0].Origins()) == fmt.Sprint(cap[0].Origins()))
+	fmt.Printf("same face as the end cap: %v\n", fmt.Sprint(top[0].Origins()) == fmt.Sprint(endCap[0].Origins()))
 	// Output:
 	// NormalTo: 2 faces
 	// Facing: 1 face
