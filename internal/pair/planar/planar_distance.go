@@ -73,9 +73,9 @@ func (k *planarKernel) boundUp() (float64, bool) {
 
 // distances computes the exact minimum squared distance over vertex-facet
 // and edge-edge candidates and records every zero-distance site. The scan
-// visits each vertex against blocks of consecutive facets, and each edge of
-// a against blocks of consecutive edges of b, in index order; a block whose
-// float box is past the bound skips every pair in it (planar_prune.go).
+// visits each vertex against the facets, and each edge of a against the
+// edges of b, in index order; a box tree skips the boxes past the bound
+// (planar_prune.go).
 func (k *planarKernel) distances() error {
 	k.a.floatBoxes()
 	k.b.floatBoxes()
@@ -84,54 +84,56 @@ func (k *planarKernel) distances() error {
 }
 
 func (k *planarKernel) scan() error {
+	var near []int
 	for _, side := range [][2]*planarPrep{{k.a, k.b}, {k.b, k.a}} {
 		verts, tris := side[0], side[1]
+		tree := tris.boxTree()
 		for v, point := range verts.s.Verts {
-			for block, box := range tris.triBlock {
-				t0, t1 := block*scanBlock, min((block+1)*scanBlock, len(tris.s.Tris))
-				skip, err := k.blockPruned(verts.vertBox[v], box, t1-t0)
-				if err != nil {
-					return err
-				}
-				if skip {
-					continue
-				}
-				for t := t0; t < t1; t++ {
-					if err := k.poll(); err != nil {
-						return err
-					}
-					if k.pruned(point, point, tris.triLo[t], tris.triHi[t], verts.vertBox[v], tris.triBox[t]) {
-						continue
-					}
-					k.cur = vertexFacetHint(verts == k.b, v, t)
-					k.vertexFacet(verts, v, tris, t)
-				}
-			}
-		}
-	}
-	for ea, edgeA := range k.a.edges {
-		for block, box := range k.b.edgeBlock {
-			e0, e1 := block*scanBlock, min((block+1)*scanBlock, len(k.b.edges))
-			skip, err := k.blockPruned(k.a.edgeBox[ea], box, e1-e0)
-			if err != nil {
+			near = tree.queryWithin(verts.vertBox[v], k.limitUp(), near)
+			if err := k.poll(); err != nil {
 				return err
 			}
-			if skip {
-				continue
-			}
-			for eb := e0; eb < e1; eb++ {
+			for _, t := range near {
 				if err := k.poll(); err != nil {
 					return err
 				}
-				if k.pruned(k.a.edgeLo[ea], k.a.edgeHi[ea], k.b.edgeLo[eb], k.b.edgeHi[eb], k.a.edgeBox[ea], k.b.edgeBox[eb]) {
+				if k.pruned(point, point, tris.triLo[t], tris.triHi[t], verts.vertBox[v], tris.triBox[t]) {
 					continue
 				}
-				k.cur = PlanarHint{kind: hintEdgeEdge, i: ea, j: eb}
-				k.edgeEdge(edgeA, k.b.edges[eb])
+				k.cur = vertexFacetHint(verts == k.b, v, t)
+				k.vertexFacet(verts, v, tris, t)
 			}
 		}
 	}
+	tree := k.b.edgeBoxTree()
+	for ea, edgeA := range k.a.edges {
+		near = tree.queryWithin(k.a.edgeBox[ea], k.limitUp(), near)
+		if err := k.poll(); err != nil {
+			return err
+		}
+		for _, eb := range near {
+			if err := k.poll(); err != nil {
+				return err
+			}
+			if k.pruned(k.a.edgeLo[ea], k.a.edgeHi[ea], k.b.edgeLo[eb], k.b.edgeHi[eb], k.a.edgeBox[ea], k.b.edgeBox[eb]) {
+				continue
+			}
+			k.cur = PlanarHint{kind: hintEdgeEdge, i: ea, j: eb}
+			k.edgeEdge(edgeA, k.b.edges[eb])
+		}
+	}
 	return nil
+}
+
+// limitUp is the float bound a box tree query prunes past: boundUp's, or
+// +Inf while neither a minimum nor a cap is set, which prunes nothing. The
+// bound only falls as the scan goes on, so a box a query prunes is one the
+// scan would prune when it reached it.
+func (k *planarKernel) limitUp() float64 {
+	if up, bounded := k.boundUp(); bounded {
+		return up
+	}
+	return math.Inf(1)
 }
 
 // vertexFacet offers the distance from a vertex to a facet's plane when its

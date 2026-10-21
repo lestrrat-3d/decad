@@ -43,12 +43,12 @@ import (
 //     minimum, so the recorded minimum is the same fraction. Every
 //     zero-distance site lies in a box pair with a zero gap, which no bound
 //     prunes, so the sites are the same, in the same order.
-//   - Block boxes. The scan's inner loop runs over runs of scanBlock
-//     consecutive facets, or edges, each with the union of their float boxes.
-//     A float gap to the block past the bound proves the float gap to every
-//     box in it past the bound, so the whole run is skipped, in place, as the
-//     per-pair float pre-test would skip each pair. The visit order is
-//     unchanged.
+//   - Box trees. The crossing and distance scans ask a tree over the other
+//     solid's facet, or edge, float boxes (planar_boxtree.go) for the boxes the
+//     pre-test above keeps, in index order, instead of testing every one. A
+//     node's box holds its boxes, so a node the pre-test prunes holds none
+//     that it keeps. The visit order is unchanged; a scan polls once per
+//     query and once per box kept.
 //   - Per-triangle side planes for the vertex-facet test. The edge test
 //     ((w−u)×(x−u))·n equals (x−u)·(n×(w−u)) exactly, by the scalar triple
 //     product, so its sign is the same. The plane n×(w−u) is computed once per
@@ -84,8 +84,24 @@ func (p *planarPrep) floatBoxes() {
 	for e, edge := range p.edges {
 		p.edgeBox[e] = p.unionBox(edge[:])
 	}
-	p.triBlock = blockBoxes(p.triBox)
-	p.edgeBlock = blockBoxes(p.edgeBox)
+}
+
+// boxTree returns the tree over p's triangle float boxes, built on first use.
+// floatBoxes must have run.
+func (p *planarPrep) boxTree() *boxTree {
+	if p.triTree == nil {
+		p.triTree = newBoxTree(p.triBox)
+	}
+	return p.triTree
+}
+
+// edgeBoxTree returns the tree over p's edge float boxes, built on first use.
+// floatBoxes must have run.
+func (p *planarPrep) edgeBoxTree() *boxTree {
+	if p.edgeTree == nil {
+		p.edgeTree = newBoxTree(p.edgeBox)
+	}
+	return p.edgeTree
 }
 
 // unionBox is the smallest float box holding the float boxes of the given
@@ -335,44 +351,4 @@ func (k *planarKernel) applyHint() {
 	if scratch.hasBest {
 		k.cap, k.capUp, k.hasCap = scratch.best, scratch.bestUp, true
 	}
-}
-
-// scanBlock is the number of consecutive facets, or edges, one block box of
-// the distance scan holds.
-const scanBlock = 16
-
-// blockBoxes returns the union float box of each run of scanBlock
-// consecutive boxes, the last run possibly shorter.
-func blockBoxes(boxes []floatBox) []floatBox {
-	out := make([]floatBox, 0, (len(boxes)+scanBlock-1)/scanBlock)
-	for i0 := 0; i0 < len(boxes); i0 += scanBlock {
-		b := boxes[i0]
-		for _, o := range boxes[i0+1 : min(i0+scanBlock, len(boxes))] {
-			for axis := range 3 {
-				b.lo[axis] = math.Min(b.lo[axis], o.lo[axis])
-				b.hi[axis] = math.Max(b.hi[axis], o.hi[axis])
-			}
-		}
-		out = append(out, b)
-	}
-	return out
-}
-
-// blockPruned reports whether the float pre-test prunes the pair of a with
-// every one of the n boxes block holds, charging poll once per pair as their
-// own scan would. Each held box lies inside block, and gapSquaredBelow only
-// grows as a box shrinks, so a block gap past the bound puts every held gap
-// past it. Nothing is offered while the block is skipped, so the bound is the
-// one each held pair would have met.
-func (k *planarKernel) blockPruned(a, block floatBox, n int) (bool, error) {
-	up, bounded := k.boundUp()
-	if !bounded || !(gapSquaredBelowLimit(a, block, up) > up) {
-		return false, nil
-	}
-	for range n {
-		if err := k.poll(); err != nil {
-			return false, err
-		}
-	}
-	return true, nil
 }

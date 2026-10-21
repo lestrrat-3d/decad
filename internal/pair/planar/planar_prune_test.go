@@ -750,18 +750,18 @@ func countingPoll(count *int) func() error {
 	}
 }
 
-// TestDistanceScanBlocksKeepAnswers holds the distance scan with its block
-// boxes to the scan without them, over triangle sets several blocks long:
-// the same minimum as the same fraction, the same nearest pair, the same
-// sites in order, and the same polls.
+// TestDistanceScanTreeKeepsAnswers holds the distance scan with its box trees
+// to the plain scan over triangle sets several leaves long: the same minimum
+// as the same fraction, the same nearest pair and the same sites in order. It
+// polls no more often than the plain scan plus one query per vertex and edge.
 //
-// Legs shown to fail: blockBoxes keeping only each block's first box skips
-// blocks that hold nearer pairs, and blockPruned skipping a block without
-// its polls charges fewer polls.
-func TestDistanceScanBlocksKeepAnswers(t *testing.T) {
+// Leg shown to fail: a leaf of queryWithin dropping its last box skips boxes
+// that hold nearer pairs. A node prune at half the bound fails
+// TestClassifyPlanarHintKeepsAnswers.
+func TestDistanceScanTreeKeepsAnswers(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(139, 149))
-	skippable, sited := 0, 0
+	sited := 0
 	for trial := range 30 {
 		lift := proof.DyShift(proof.DyInt(int64(rng.IntN(13))), -1)
 		a, b := scanSoups(rng, 17+rng.IntN(32), lift)
@@ -772,20 +772,12 @@ func TestDistanceScanBlocksKeepAnswers(t *testing.T) {
 		require.NoError(t, got.scan())
 		msg := fmt.Sprintf("trial %d", trial)
 		requireSameScan(t, want, got, msg)
-		require.Equal(t, wantPolls, gotPolls, "%s: polls", msg)
+		queries := len(a.s.Verts) + len(b.s.Verts) + len(a.edges)
+		require.LessOrEqual(t, gotPolls, wantPolls+queries, "%s: polls", msg)
 		if len(want.sites) > 0 {
 			sited++
 		}
-		// The final bound skips some block, so the scan met skippable blocks.
-		for _, vb := range a.vertBox {
-			for _, block := range b.triBlock {
-				if skip, _ := got.blockPruned(vb, block, 0); skip {
-					skippable++
-				}
-			}
-		}
 	}
-	require.Positive(t, skippable, "premise: some blocks lie past the minimum")
 	require.Positive(t, sited, "premise: some scans record sites")
 }
 
@@ -860,7 +852,7 @@ func TestDistanceScanHintKeepsAnswers(t *testing.T) {
 			require.NoError(t, got.scan())
 			msg := fmt.Sprintf("trial %d hint %d", trial, h)
 			requireSameScan(t, want, got, msg)
-			require.Equal(t, wantPolls, gotPolls, "%s: polls", msg)
+			require.LessOrEqual(t, gotPolls, wantPolls+len(a.s.Verts)+len(b.s.Verts)+len(a.edges), "%s: polls", msg)
 		}
 	}
 	require.Positive(t, capped, "premise: some hints set a cap")
@@ -973,7 +965,9 @@ func TestClassifyPlanarHintKeepsAnswers(t *testing.T) {
 			require.Equal(t, want.Contacts, got.Contacts, msg)
 			require.Equal(t, want.Crossings, got.Crossings, msg)
 			require.Equal(t, want.Nearest, got.Nearest, msg)
-			require.Equal(t, wantPolls, gotPolls, "%s: polls", msg)
+			// A hint tightens the bound sooner, so the trees keep fewer boxes
+			// and the scan polls less; only the answers are held to equality.
+			require.LessOrEqual(t, gotPolls, wantPolls, "%s: polls", msg)
 		}
 	}
 	for _, relation := range []pair.Relation{pair.Separated, pair.Touching, pair.Overlapping} {
