@@ -39,9 +39,9 @@ type DocumentOption interface {
 
 // New returns an empty document.
 func New(opts ...DocumentOption) *Document {
-	d := &Document{}
+	d := bornDocument(&Document{})
 	d.gapReach, d.gapErr = gapReachOf(opts)
-	return bornDocument(d)
+	return d
 }
 
 // Bodies returns the live bodies — the model as it stands. The slice is a
