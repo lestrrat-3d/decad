@@ -38,6 +38,44 @@ func WithLoftAlignment(offsets ...int) LoftOption {
 	return loftOptionValue{featureoption.WithLoftAlignment(offsets...)}
 }
 
+// LoftSplit names one recorded segment of one loop and the fractions of its
+// parameter range at which WithLoftSplits cuts it. Loop 0 is the outer loop and
+// loop 1+h is Holes[h]; Segment is the recorded segment index within that loop.
+// Every fraction is strictly inside (0, 1), and they increase.
+type LoftSplit struct {
+	Loop    int
+	Segment int
+	At      []float64
+}
+
+// WithLoftSplits cuts recorded segments of the first and of the second section
+// before the loft pairs them, so two sections whose loops hold different numbers
+// of segments can be paired one to one. Each piece is the same recorded curve over
+// a sub-range of the segment's own parameter range, the way a trimmed fragment is
+// recorded, so a split changes no curve. A fraction f resolves to the parameter
+// TStart + f·(TEnd − TStart) of the segment, which is proportional to length on a
+// line and a parameter of the curve on any other kind. The pieces follow each
+// other in the loop's walk order. WithLoftAlignment then applies to the split
+// loops, and a wall's source role names the split segment index.
+//
+// The option is accepted at most once, like WithLoftAlignment: two payloads are
+// two different correspondences, so a repeat is [ErrDegenerate]. A split index
+// outside its loop, a fraction outside (0, 1) or not increasing, a segment split
+// twice, and a fraction that rounds onto its neighbour are [ErrDegenerate] too.
+// Loops still holding different segment counts, or a pair still of different
+// kinds, after the splits are [ErrUnsupported] as without the option, and a
+// correspondence that twists is refused by the crossing audit.
+func WithLoftSplits(first, second []LoftSplit) LoftOption {
+	conv := func(in []LoftSplit) []featureoption.LoftSplit {
+		out := make([]featureoption.LoftSplit, len(in))
+		for i, s := range in {
+			out[i] = featureoption.LoftSplit{Loop: s.Loop, Segment: s.Segment, At: s.At}
+		}
+		return out
+	}
+	return loftOptionValue{featureoption.WithLoftSplits(conv(first), conv(second))}
+}
+
 // Loft builds a solid ruled between two profiles recorded on distinct
 // geometric planes (agent-docs/loft-design.md), registers it, and returns the new
 // body. s0/p0 is the FROM section (capStart); s1/p1 is the TO section

@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/loftsplit"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -26,6 +27,15 @@ func FromProfiles(ctx context.Context, env topo.Env, s0 *sketch.Sketch, p0 *sket
 	}
 	profile1, plane1, area1, err := sectioncert.RecordProfile(s1, p1)
 	if err != nil {
+		return nil, err
+	}
+
+	// The splits cut recorded segments into pieces of the same curves, so the
+	// split records denote the same sections (internal/loftsplit).
+	if profile0, err = loftsplit.Apply(profile0, splitsOf(cfg.Splits[0])); err != nil {
+		return nil, err
+	}
+	if profile1, err = loftsplit.Apply(profile1, splitsOf(cfg.Splits[1])); err != nil {
 		return nil, err
 	}
 
@@ -97,4 +107,13 @@ func FromChains(ctx context.Context, env topo.Env, chain0 sectionrecord.ChainRec
 		return nil, err
 	}
 	return body, ctx.Err()
+}
+
+// splitsOf converts the option's splits to loftsplit's.
+func splitsOf(in []featureoption.LoftSplit) []loftsplit.Split {
+	out := make([]loftsplit.Split, len(in))
+	for i, s := range in {
+		out[i] = loftsplit.Split{Loop: s.Loop, Segment: s.Segment, At: s.At}
+	}
+	return out
 }

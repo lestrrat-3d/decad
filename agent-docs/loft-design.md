@@ -181,7 +181,7 @@ decad reads the two `ProfileRecord`s' own segment order, and nothing else.
 |---|---|
 | **P1** | `p0.Outer` pairs with `p1.Outer`; `p0.Holes[h]` pairs with `p1.Holes[h]`, by **position** in the `Holes` slice — never by area, by nesting radius, or by any other geometric proximity |
 | **P2** | `len(p0.Holes)` MUST equal `len(p1.Holes)`. A mismatch has no positional pairing (Table S, S1) |
-| **P3** | For each paired loop, `len(loop0.Segments)` MUST equal `len(loop1.Segments)` — call it `n`. A mismatch has no one-to-one pairing (Table S, S2) |
+| **P3** | For each paired loop, `len(loop0.Segments)` MUST equal `len(loop1.Segments)` — call it `n`. A mismatch has no one-to-one pairing unless the caller cuts segments to match (§3.1, Table S, S2) |
 | **P4** | Within a paired loop, segment `j` of `loop0` (for `j` in `[0, n)`) pairs with segment `(j + offset) mod n` of `loop1`, where `offset` is that loop's entry in `WithLoftAlignment`'s `offsets` (default 0) |
 | **P5** | A paired segment's two sides MUST be same-kind: both `LineSeg`, both `ArcSeg`, both `CircleSeg`, or both the same Tier A free-form kind (`agent-docs/spline-design.md` Table F). Any other pairing — mixed-kind, or same-kind at a kind this evaluator has no construction for — is `ErrUnsupported` (§1, Table S row S3). A same-kind `CircleSeg` pair MUST also agree in WALK SENSE: the two sides' recorded `CCW` flags MUST be equal, and a pair whose flags disagree is `ErrDegenerate` (Table S row S7's structural arm). A same-kind Tier A free-form pair uses the least common multiple of its two Bézier span counts as its shared station slot count (§5.1). §4's gate-order paragraph owns where each of these gates sits and what its phase can already have read |
 | **P6** | Every loop's own walk direction is intrinsic to its own plane (outer CCW, holes CW, seam §2) and is never reinterpreted for the pairing: P4's ordinal rule pairs walk-position `j` to walk-position `j`, in each loop's own sense, regardless of how the two profiles' planes are posed relative to each other |
@@ -199,6 +199,38 @@ with segment `j-1`'s end vertex; pairing every segment pairs every vertex:
 vertex `k` of `loop0` (the start of its segment `k`) pairs with vertex
 `(k + offset) mod n` of `loop1`.
 
+### 3.1 Splits: pairing sections of different segment counts
+
+`WithLoftSplits(first, second []LoftSplit)` cuts recorded segments of either section before Table P reads them, so
+two loops that hold different numbers of segments can pair one to one. A `LoftSplit` names a loop (0 is the outer
+loop, 1+h is `Holes[h]`), a recorded segment index in that loop, and strictly increasing fractions in (0, 1).
+
+A piece is the same recorded curve over a sub-range of the segment's own `[TStart, TEnd]`, which is how a trimmed
+fragment is already recorded, so a split changes no curve of any kind. A fraction `f` resolves to the parameter
+`TStart + f·(TEnd − TStart)`, a float; the point the pieces share is the point the record denotes at that float
+parameter. On a line the parameter is proportional to length; on any other kind it is a parameter of the curve. The
+pieces follow each other in the loop's walk order, whichever way the range runs, and a closed kind keeps its winding.
+`internal/loftsplit` owns the cut, and `loftrecord.FromProfiles` applies it to each recorded profile before the area
+falsifier, the pairing gates and the build, so every later step reads ordinary records and no proof is written twice.
+The split records are the payload's records, so placement and re-evaluation replay them with no option to carry.
+
+- `WithLoftAlignment` rotates the second section's split loop, as before.
+- A wall's `side(loop, cell, half)` role names the SPLIT segment index.
+- The option is accepted at most once. A repeat, an index outside its loop, fractions outside (0, 1) or not increasing,
+  an empty fraction list, a segment split twice, and a fraction that rounds onto a neighbouring parameter are
+  `ErrDegenerate`: they name no single intent.
+- After the splits P3 and P5 apply unchanged. Loops still holding different segment counts are S2 and a pair still of
+  different kinds is S3, both `ErrUnsupported`. A correspondence that twists is the crossing audit's S7, `ErrDegenerate`,
+  exactly as for a wrong alignment, so a wrong split is never a silent wrong body.
+
+Tests: `loftsplit` unit tests (sub-ranges of the same curve, reversed range, closed winding, no shared slices, each
+gate) and `apitest/loft_splits_test.go`: a square to an octagon, a triangle to a hexagon, a rectangle to an L-shaped
+section and cuts on the second section, each against the exact prismatoid volume; a half disc whose arc is one arc to a
+half disc whose arc is two, against the frustum volume; fit-spline sections with a verified held mesh; each refusal.
+
+Splits pair different counts of the same kinds. They do not make an arc pair with a line or a spline: that needs a
+common exact form, and none exists over the rationals for an arc.
+
 ## 4. Table S — refusals
 
 The sentinel follows modify §1's existence test: **a body that does not
@@ -208,7 +240,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | S | The call asked for | Does that body exist? | Sentinel | Permanent from decad's side |
 |---|---|---|---|---|
 | **S1** | a hole-loop count mismatch (P2) | this evaluator has no positional pairing for it, though a smarter kernel could still loft a differing hole count by point-degenerate construction | `ErrUnsupported` | no — reach no increment in §12 claims |
-| **S2** | a paired loop's segment-count mismatch (P3) | same — a smarter kernel could subdivide to match; this evaluator's ordinal correspondence cannot | `ErrUnsupported` | no — reach no increment in §12 claims |
+| **S2** | a paired loop's segment-count mismatch (P3) | same — a smarter kernel could subdivide to match; this evaluator's ordinal correspondence cannot, and cuts only the caller names (§3.1) | `ErrUnsupported` | no — reach no increment in §12 claims |
 | **S3** | a paired segment whose two sides are not same-kind (§1, P5), or a same-kind pair whose kind this evaluator has no construction for — after this document, a free-form kind that does not reduce to Tier A (`agent-docs/spline-design.md` Table F). A same-kind `CircleSeg` pair whose two recorded `CCW` flags disagree (P5) is NOT this row's refusal: it is S7's `ErrDegenerate` under that row's STRUCTURAL arm, never its audit arm. §4's gate-order paragraph owns where both sit | yes for a mixed-kind pairing — the ruled surface exists; this evaluator has no exact construction for it. A same-kind non-Tier-A free-form pairing never independently reaches this test: every build reads its section's moments (`agent-docs/spline-design.md` Table C), so a Tier B or Tier C section refuses at spline design's own R10 and an `EllipticalArcSeg` section refuses at R2 before this gate has anything of its own left to decide | `ErrUnsupported`, this document's own sentinel for a mixed-kind pairing; `agent-docs/spline-design.md`'s own R10 or R2 sentinel for a same-kind non-Tier-A pairing, never a fresh sentinel of this document's own | yes for mixed-kind, §1 — the correspondence's own two kinds forbid it structurally. For a same-kind non-Tier-A pairing this document makes no permanence claim of its own, since the refusal is `agent-docs/spline-design.md`'s: permanent for an `EllipticalArcSeg` pairing (R2, §2.2), not permanent for a Tier B or Tier C pairing (R10, §8 — no longer standing once §10 P9 supplies that tier's moments) |
 | **S4** | a `WithLoftAlignment` payload of the wrong length, an offset outside `[0, n)` for its loop, or the option passed more than once | no single intent (mirrors modify-reach SX1, which refuses a repeated contradictory option on the same ground) | `ErrDegenerate` | yes, §2 |
 | **S5** | `p0` and `p1` represent the same geometric plane, regardless of which in-plane origin or right-handed `U`/`V` basis each `PlaneRecord` uses | no — every wall vertex then lies in one plane, so the solid is provably flat: the tetrahedron-sum volume (§8) is a structural zero, not a computed one | `ErrDegenerate` | yes, §4 |

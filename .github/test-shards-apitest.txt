@@ -2192,3 +2192,9 @@
 10	0.20	TestBooleanGapToleranceEdgeAndPointTouches
 10	0.20	TestVerifyGapToleranceDecidesAFlushPair
 10	0.30	TestStitchGapTolerance
+10	0.20	TestLoftSplitsSquareToOctagon
+10	0.20	TestLoftSplitsRefusals
+10	0.20	TestLoftSplitsLeaveAnUnsplitLoftAlone
+10	0.20	TestLoftSplitsPolygonPairs
+10	0.20	TestLoftSplitsArcs
+10	0.20	TestLoftSplitsFitSplines
