@@ -255,6 +255,10 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 func booleanBodyWith(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref producerID,
 	cfg booleanConfig) (*Body, error) {
 	d := documentHandle(a.n.Doc)
+	ctx, err := d.evalContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	hooks := booleandispatch.Hooks{
 		MatchingFaces:    cfg.matchingFaces,
 		Mesher:           pairMeshes{},

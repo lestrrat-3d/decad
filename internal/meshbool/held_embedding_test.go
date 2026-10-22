@@ -194,6 +194,53 @@ func TestEnforceHeldEmbeddingRefusesWhenNoCornerClears(t *testing.T) {
 	require.Equal(t, 0.5, h.Verts[3].Y, `a refused search leaves the first rounding in place`)
 }
 
+// TestEnforceHeldEmbeddingReachClearsWhatTheFloatBoxCannot: the fixture the
+// float box refuses is cleared once the search may sit up to Reach from the
+// exact apex. The nearest step along a facet normal does it, the apex stays
+// within that step of its exact point, and no fold remains.
+func TestEnforceHeldEmbeddingReachClearsWhatTheFloatBoxCannot(t *testing.T) {
+	t.Parallel()
+	const reach = 1e-3
+	h := subUlpSliver(-1)
+	h.Reach = reach
+	moved, err := meshbool.EnforceHeldEmbedding(t.Context(), h)
+	require.NoError(t, err)
+	require.Equal(t, 1, moved)
+
+	gap, _ := meshbool.CoordDistance(h.Exact[3], h.Verts[3]).Float64()
+	require.Positive(t, gap, "the apex left its first rounding")
+	require.LessOrEqual(t, gap, reach/64*1.0001, "the nearest step that clears is the one taken")
+
+	folds, err := meshbool.HeldFolds(t.Context(), h)
+	require.NoError(t, err)
+	require.Empty(t, folds)
+}
+
+// TestEnforceHeldEmbeddingReachLeavesACleanMeshAlone: a mesh the float box
+// already clears moves exactly as it does with no Reach.
+func TestEnforceHeldEmbeddingReachLeavesACleanMeshAlone(t *testing.T) {
+	t.Parallel()
+	plain := subUlpSliver(1)
+	reaching := subUlpSliver(1)
+	reaching.Reach = 1e-3
+	_, err := meshbool.EnforceHeldEmbedding(t.Context(), plain)
+	require.NoError(t, err)
+	_, err = meshbool.EnforceHeldEmbedding(t.Context(), reaching)
+	require.NoError(t, err)
+	require.Equal(t, plain.Verts, reaching.Verts)
+}
+
+// TestEnforceHeldEmbeddingReachCannotMoveAWeldedVertex: a vertex that is not
+// Movable stays where it is however large Reach is, so a fold it makes is
+// still refused.
+func TestEnforceHeldEmbeddingReachCannotMoveAWeldedVertex(t *testing.T) {
+	t.Parallel()
+	h := union14Fold()
+	h.Reach = 1
+	_, err := meshbool.EnforceHeldEmbedding(t.Context(), h)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+}
+
 // TestFloatBoxCornersOrder pins the deterministic corner order the search
 // reads: x before y before z, the lower float before the upper, one value for
 // a coordinate that is itself a float.

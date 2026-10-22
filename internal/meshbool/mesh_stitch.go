@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -323,6 +324,7 @@ func keepRoundedEmbedded(ctx context.Context, xverts []proof.Xpt, remap []int, o
 		Exact:   make([]proof.Xpt, len(out.Verts)),
 		Moved:   make([]bool, len(out.Verts)),
 		Movable: make([]bool, len(out.Verts)),
+		Reach:   gaptol.Reach(ctx),
 	}
 	count := make([]int, len(out.Verts))
 	for i, p := range xverts {

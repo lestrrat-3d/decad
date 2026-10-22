@@ -22,6 +22,10 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 		return nil, fmt.Errorf("%w: the first operand belongs to no document", ErrDegenerate)
 	}
 	d := documentHandle(a.n.Doc)
+	ctx, err := d.evalContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	seen := make(map[*Body]struct{}, len(operands))
 	for _, operand := range operands {
 		if err := d.requireLive(operand); err != nil {

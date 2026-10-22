@@ -55,6 +55,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/cross-cylinder-bore-chamfer-design.md` | Source-backed perpendicular cylinder bore-mouth chamfer and mesh proof. |
 | `agent-docs/tessellation-reach-design.md` | Tessellation reach for lofts, free-form prisms, revolves and cap-loop chamfers. |
 | `agent-docs/faceted-vertex-bounds-design.md` | Per-vertex displacement bounds on faceted bodies and their boolean composition. |
+| `agent-docs/gap-tolerance-design.md` | The document's gap tolerance: the reach of the held-mesh embedding repair, its default, its limits and its charge. |
 | `agent-docs/faceted-source-retention-design.md` | Analytic source surfaces carried onto mesh Boolean result faces: claim, admission, normal bound, readers, increments. |
 | `agent-docs/retained-edge-blend-design.md` | `Fillet` and `Chamfer` of an edge between two retained faces of a mesh Boolean result: edge classes, exact blend geometry, local mesh rewrite, gates, bounds, increments. |
 | `agent-docs/surface-intersection-design.md` | `Trim`/`Extend`/`Split` over shared-generator sweeps. |

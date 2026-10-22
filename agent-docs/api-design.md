@@ -88,6 +88,14 @@ operand encloses no material. Every pair outside it takes the tessellated path,
 or — where an operand is a sheet, whose mesh proves no occupied volume —
 refuses at the call.
 
+The tessellated path ends by rounding its exact vertices to float64, and a
+rounded mesh can fold through itself. The final repair first tries the float
+box of each exact point and then, within the document's gap tolerance, positions
+up to that far away. Every decision stays exact over the values the repair ends
+with, and the distance a vertex moved is part of its bound, so the tolerance
+states a displacement and never makes the topology tolerant
+(`agent-docs/gap-tolerance-design.md`).
+
 ## 3. Forward-compatibility invariants
 
 These are cheap now and expensive to retrofit. They are the upgrade path.
@@ -291,9 +299,10 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 func Remove(b *Body) error                      // retire a live body by hand; the body names its document
 ```
 
-`DocumentOption` has no constructor yet. Its sealed method set includes
-`option.Interface` so a future document option can use the same option codec
-without redefining the tier.
+`DocumentOption` is the tier of `WithGapTolerance` and `ExactOnly`, which set the
+document's gap tolerance: how far the evaluator may move a held vertex off its
+exact point to keep a faceted result embedded, charged to that vertex's bound
+(`agent-docs/gap-tolerance-design.md`). With no option the tolerance is 0.01 mm.
 
 `Body` is **immutable**; every operation returns a new one, and the input body is
 retired from the document.
@@ -1287,8 +1296,9 @@ boolean is refused before any facet is cut, with a plain `ErrUnsupported`,
 not a `BooleanError`, since the limit is the bound the operand holds there.
 The refusal names the operand (`Cut`'s target or tool; the first or second
 operand otherwise), quotes the bound of the facets the pair touches and the
-pair's chord tolerance, and states that a boolean takes no tolerance: there is
-nothing to retry with. Geometry the new pair does not touch keeps the bound it
+pair's chord tolerance, and states that a boolean takes no chord tolerance:
+there is nothing to retry with. The document's gap tolerance is not that
+parameter and does not lift the refusal. Geometry the new pair does not touch keeps the bound it
 already published and is never the reason for a refusal, so a result whose
 `Bound` exceeds the next pair's chord tolerance in untouched regions is still
 an ordinary operand. What limits a chain is therefore where its contacts land:
@@ -1297,7 +1307,7 @@ refused, and a contact elsewhere continues. A restating operand therefore
 contributes at most the pair's chord tolerance `tol` to any rim, as a freshly
 chorded operand does, so a rim between two such facets carries at most
 `2·tol/sin θ` of its own facet pair. Where the comparison does refuse, it is geometry rather than an
-argument the caller got wrong. The booleans take no tolerance parameter (§9),
+argument the caller got wrong. The booleans take no chord-tolerance parameter (§9),
 by the same decision that puts the tolerance's whole effect on the result's
 proven `Bound`. The bounds are readable rather than merely printed in the
 refusal: each `Vertex`, edge and face of a `Faceted` body reports its own

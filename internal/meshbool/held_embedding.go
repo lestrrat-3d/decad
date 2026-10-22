@@ -43,6 +43,10 @@ type HeldRounding struct {
 	Exact   []proof.Xpt
 	Moved   []bool
 	Movable []bool
+	// Reach is how far a Movable vertex may sit from its exact point once the
+	// float-box corners have failed to clear it, in millimetres. Zero keeps
+	// the search to the float box.
+	Reach float64
 }
 
 // heldEmbeddingSweeps caps the passes over the offending vertices. A pass that
@@ -118,78 +122,93 @@ func repairHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, [
 	// neighbours; a move puts the facets around the moved vertex back in.
 	check := query
 	moved := map[int]struct{}{}
-	for sweep := range heldEmbeddingSweeps {
-		if sweep == 0 && memo && len(check) >= 4096 && runtime.GOMAXPROCS(0) > 1 {
-			clean, err := e.parallelClean(ctx, check)
+	// Stage 0 searches the float box of each exact point. A mesh it leaves
+	// folded gets stage 1 when Reach allows, which also tries positions up to
+	// Reach away (improveWithinReach) over a grid padded for them.
+	for stage := range 2 {
+		if stage == 1 {
+			e.reachOn = true
+			if err := e.buildGrid(); err != nil {
+				return 0, nil, err
+			}
+		}
+		for sweep := range heldEmbeddingSweeps {
+			if stage == 0 && sweep == 0 && memo && len(check) >= 4096 && runtime.GOMAXPROCS(0) > 1 {
+				clean, err := e.parallelClean(ctx, check)
+				if err != nil {
+					return 0, nil, err
+				}
+				if clean {
+					return 0, nil, nil
+				}
+			} else if stage == 0 && sweep == 0 && memo {
+				queryFacet := make([]bool, len(e.h.Tris))
+				for _, i := range check {
+					queryFacet[i] = true
+				}
+				// The scan counts its own steps: a discarded scan must not move
+				// the repair path's step count or polling points.
+				repairBudget := e.budget
+				e.budget = proofbound.NewWorkBudget(ctx)
+				clean, err := e.serialClean(check, queryFacet)
+				e.budget = repairBudget
+				if err != nil {
+					return 0, nil, err
+				}
+				if clean {
+					return 0, nil, nil
+				}
+			}
+			if memo && e.pairs == nil {
+				// Repair needs replayable pair answers; a clean first scan does not.
+				e.pairs = make(map[uint64]heldPair, 32*len(query))
+			}
+			offenders, failing, err := e.offenders(check)
 			if err != nil {
 				return 0, nil, err
 			}
-			if clean {
-				return 0, nil, nil
+			if len(failing) == 0 {
+				return len(moved), nil, nil
 			}
-		} else if sweep == 0 && memo {
-			queryFacet := make([]bool, len(e.h.Tris))
-			for _, i := range check {
-				queryFacet[i] = true
+			next := map[int]struct{}{}
+			for _, f := range failing {
+				next[f] = struct{}{}
 			}
-			// The scan counts its own steps: a discarded scan must not move
-			// the repair path's step count or polling points.
-			repairBudget := e.budget
-			e.budget = proofbound.NewWorkBudget(ctx)
-			clean, err := e.serialClean(check, queryFacet)
-			e.budget = repairBudget
-			if err != nil {
-				return 0, nil, err
+			changed := false
+			for _, v := range offenders {
+				placed, err := e.improve(v)
+				if err != nil {
+					return 0, nil, err
+				}
+				if !placed {
+					continue
+				}
+				moved[v] = struct{}{}
+				changed = true
+				for _, f := range e.inc[v] {
+					next[f] = struct{}{}
+				}
 			}
-			if clean {
-				return 0, nil, nil
+			check = make([]int, 0, len(next))
+			for f := range next {
+				check = append(check, f)
+			}
+			slices.Sort(check)
+			if !changed {
+				break
 			}
 		}
-		if memo && e.pairs == nil {
-			// Repair needs replayable pair answers; a clean first scan does not.
-			e.pairs = make(map[uint64]heldPair, 32*len(query))
-		}
-		offenders, failing, err := e.offenders(check)
+		_, failing, err := e.offenders(check)
 		if err != nil {
 			return 0, nil, err
 		}
-		if len(failing) == 0 {
-			return len(moved), nil, nil
+		slices.Sort(failing)
+		if len(failing) == 0 || stage == 1 || e.h.Reach <= 0 {
+			return len(moved), failing, nil
 		}
-		next := map[int]struct{}{}
-		for _, f := range failing {
-			next[f] = struct{}{}
-		}
-		changed := false
-		for _, v := range offenders {
-			placed, err := e.improve(v)
-			if err != nil {
-				return 0, nil, err
-			}
-			if !placed {
-				continue
-			}
-			moved[v] = struct{}{}
-			changed = true
-			for _, f := range e.inc[v] {
-				next[f] = struct{}{}
-			}
-		}
-		check = make([]int, 0, len(next))
-		for f := range next {
-			check = append(check, f)
-		}
-		slices.Sort(check)
-		if !changed {
-			break
-		}
+		check = failing
 	}
-	_, failing, err := e.offenders(check)
-	if err != nil {
-		return 0, nil, err
-	}
-	slices.Sort(failing)
-	return len(moved), failing, nil
+	return len(moved), nil, nil
 }
 
 // HeldFolds returns the facets of the held mesh that meet a facet other than
@@ -478,6 +497,9 @@ type heldEmbedding struct {
 	stamp     []int
 	stampID   int
 	cands     []int
+	// reachOn turns on the reach moves of improveWithinReach. The search sets
+	// it once the float box has done what it can.
+	reachOn bool
 
 	// memoOn enables the two caches below. box is each facet's float box
 	// (TriBox), invalidated when a vertex moves. pairs replays pairEmbedded
@@ -1267,11 +1289,86 @@ func (e *heldEmbedding) improve(v int) (bool, error) {
 			best, bestAt = n, c
 		}
 	}
+	if best > 0 && e.reachOn {
+		reachAt, reachBest, err := e.improveWithinReach(v, orig, best, origGen)
+		if err != nil {
+			return false, err
+		}
+		if reachBest < best {
+			bestAt = reachAt
+		}
+	}
 	if bestAt == orig {
 		return false, nil
 	}
 	e.setVert(v, bestAt)
 	return true, nil
+}
+
+// reachSteps are the fractions of Reach a reach move tries, nearest first.
+var reachSteps = [...]float64{1.0 / 64, 1.0 / 16, 1.0 / 4, 1}
+
+// improveWithinReach tries positions up to Reach from v's exact point, moving
+// along the unit normals of v's facets and of the facets they fail against and
+// along the coordinate axes, both senses, nearest step first. It returns the position leaving the fewest
+// failing pairs among v's facets when that is fewer than best, and best
+// itself with orig otherwise. A step that clears every pair ends the search:
+// the nearest clean position is the one the caller charges least for.
+func (e *heldEmbedding) improveWithinReach(v int, orig r3.Vec, best int, origGen []uint64) (r3.Vec, int, error) {
+	facets := slices.Clone(e.inc[v])
+	for _, f := range e.inc[v] {
+		bad, _, err := e.facetFailures(f)
+		if err != nil {
+			return orig, best, err
+		}
+		facets = append(facets, bad...)
+	}
+	slices.Sort(facets)
+	facets = slices.Compact(facets)
+	var dirs []r3.Vec
+	for _, f := range facets {
+		n, ok := e.floatNorm(f).Normalize()
+		if !ok {
+			continue
+		}
+		dirs = append(dirs, n, n.Scale(-1))
+	}
+	// A collapsed facet has no normal, so the axes are always tried too.
+	for _, u := range [...]r3.Vec{{X: 1}, {Y: 1}, {Z: 1}} {
+		dirs = append(dirs, u, u.Scale(-1))
+	}
+	base := e.h.Exact[v].Vec()
+	bestAt := orig
+	for _, step := range reachSteps {
+		for _, u := range dirs {
+			if err := e.budget.Step(); err != nil {
+				return orig, best, err
+			}
+			c := base.Add(u.Scale(step * e.h.Reach))
+			if c == orig {
+				continue
+			}
+			if _, ok := e.taken[c]; ok {
+				continue
+			}
+			e.setVert(v, c)
+			n, err := e.vertexFailures(v)
+			e.setVert(v, orig)
+			if e.memoOn {
+				e.restamp(v, origGen)
+			}
+			if err != nil {
+				return orig, best, err
+			}
+			if n < best {
+				best, bestAt = n, c
+			}
+		}
+		if best == 0 {
+			break
+		}
+	}
+	return bestAt, best, nil
 }
 
 // FloatBoxCorners lists the binary64 points within an ulp of p per coordinate
@@ -1320,10 +1417,17 @@ func (e *heldEmbedding) buildGrid() error {
 		q := e.h.Exact[v].Vec()
 		maxDev = math.Max(maxDev, math.Max(math.Abs(p.X-q.X), math.Max(math.Abs(p.Y-q.Y), math.Abs(p.Z-q.Z))))
 	}
-	// A corner lies within an ulp of the exact point, and the exact point
-	// within maxDev (plus that rounding's own ulp) of the first rounding, so
-	// no move leaves this pad.
-	e.pad = 2*maxDev + 8*proofbound.UlpOf(maxAbs)
+	// A corner lies within an ulp of the exact point, a reach move within
+	// Reach of it, and the exact point within maxDev (plus that rounding's
+	// own ulp) of the first rounding, so no move leaves this pad. The pad
+	// doubles because two facets can each move. A search that has not
+	// turned reach moves on pads for corners alone, so a mesh the float box
+	// clears is checked exactly as it is with no Reach.
+	reach := 0.0
+	if e.reachOn {
+		reach = e.h.Reach
+	}
+	e.pad = 2*(maxDev+reach) + 8*proofbound.UlpOf(maxAbs)
 
 	lo := r3.NewVec(math.Inf(1), math.Inf(1), math.Inf(1))
 	hi := r3.NewVec(math.Inf(-1), math.Inf(-1), math.Inf(-1))
@@ -1360,6 +1464,7 @@ func (e *heldEmbedding) buildGrid() error {
 		}
 	}
 	e.origin, e.cell, e.dims = lo, cell, dims
+	e.wide = nil
 	e.cells = make([][]int32, dims[0]*dims[1]*dims[2])
 	for i := range e.h.Tris {
 		if err := e.budget.Step(); err != nil {

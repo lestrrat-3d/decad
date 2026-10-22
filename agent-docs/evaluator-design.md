@@ -1310,10 +1310,16 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
     lowers the mesh's count of failing pairs, so the search cannot cycle, and
     its order is fixed, so equal inputs give equal held meshes. A welded
     vertex is never moved: no single float box belongs to it.
+  - **Move a failing vertex within the gap tolerance.** When the document's
+    gap tolerance is positive and the float-box search leaves a fold, the
+    same vertices may also sit up to that far from their exact points, along
+    the normals of their facets and the coordinate axes, nearest first
+    (`agent-docs/gap-tolerance-design.md` §5.1). A mesh the float box clears
+    never reaches this stage.
   - **Refuse what the bounded search does not clear.** A mesh still failing
     the exact held-facet checks is refused (`ErrUnsupported`,
     `BooleanExpectedUnsupported`). The evaluator cannot certify an embedded
-    held mesh from the float-box candidates this bounded search checked.
+    held mesh from the candidates this bounded search checked.
 
   `HeldFolds` runs the same exact check without the repair and returns the
   folded facet pairs, and `RepairHeldEmbedding` runs the repair and returns the
@@ -1326,8 +1332,9 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   that finally holds it is taken exactly after the search, and that maximum is
   the rounding bound every consumer composes (`StitchedMesh.Round`, then the
   swept-volume and perturbed-area terms above). A vertex the search moved is
-  charged where it sits. The search moves no vertex farther than an ulp per
-  coordinate from its exact point.
+  charged where it sits. The float-box stage moves no vertex farther than an
+  ulp per coordinate from its exact point, and the gap-tolerance stage none
+  farther than the document's gap tolerance.
 
   A rigid placement of a faceted body (`Transform`) rounds the same way. The exact
   image of an embedded mesh under the motion's float matrix and translation is
