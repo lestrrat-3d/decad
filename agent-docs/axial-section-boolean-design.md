@@ -61,11 +61,9 @@ and so avoids it. A later `DeclareLoop` element that names an entity with a para
 
 ## 4. Limits
 
-- Rotated copies. A `Copy` with rotation of a prism keeps the section record and carries the rotation as a placement, and a
-  `Patterned` instance of a prism whose segments are all line, arc or circle moves the record and charges its rounding as
-  a section displacement. Neither is an operand: the first has a placement, the second a displacement. A spline section needs
-  a certified bound on how far a fit spline through rounded points departs from the rotated original, which this route does
-  not have, so a part with spline sections draws each instance at its angle in the sketch.
+- Placed copies. An operand that carries a placement (a `Copy` or `PatternCopies` instance of a prism or loft) is placed
+  onto the reference frame and re-recorded with a charge, and a prism that carries a section displacement is not an
+  operand (`agent-docs/axial-pattern-join-design.md`). A placement that tilts the sweep planes is a miss.
 - The loft fillet (§17) takes the corner this union leaves, a line or arc meeting a trimmed circle fragment, so a root
   fillet, then a bore and an outer-cap chamfer, apply to the result.
 - Union only. Cut and Intersect, and sections with holes, are later.

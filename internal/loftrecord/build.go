@@ -71,6 +71,14 @@ func Build(ctx context.Context, env topo.Env, pl Payload, budget *proofbound.Wor
 	if err != nil {
 		return nil, err
 	}
+	if pl.JoinDelta > 0 {
+		if proofbound.IsNonFinite(pl.JoinDelta) {
+			return nil, fmt.Errorf(`%w: the loft join displacement is not finite`, decaderr.ErrUnsupported)
+		}
+		sectionDelta = proofbound.AbsSumUpper(sectionDelta, pl.JoinDelta)
+		sectionMatchedDelta = proofbound.AbsSumUpper(sectionMatchedDelta, pl.JoinDelta)
+		stationRound = proofbound.AbsSumUpper(stationRound, pl.JoinDelta)
+	}
 	if pl.ConstructionDelta > 0 {
 		if proofbound.IsNonFinite(pl.ConstructionDelta) {
 			return nil, fmt.Errorf(`%w: the loft fillet construction displacement is not finite`, decaderr.ErrUnsupported)

@@ -29,7 +29,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/circularbounds/` | Circular endpoints, lengths, area, moment and arc-box bounds over neutral records, and certified circular bore rings. |
 | `internal/surfacetrim/` | Prism-family `Trim`, `Extend` and `Split` pair gates, the S1 family and S7 section-displacement readings, `Extend`'s free-end widening for both families, and revolve `Split`. See surface-intersection §2.1, §3.2. |
 | `internal/mirrorjoin/` | Exact line admission, reflection, prism and stacked record rewrites, splice and joined-section audit. See mirror-pattern §5. |
-| `internal/patternrecord/` | Pattern spec gates, instance motion and record mapping. See mirror-pattern §4.3, §6.2. |
+| `internal/patternrecord/` | Pattern spec gates, instance motion, record mapping and the exact plane map with its charged region move. See mirror-pattern §4.3, §6.2 and axial-pattern-join. |
 | `internal/patternassembly/` | Pattern frame-keeping instances and disjoint group planning over recorded payloads. See mirror-pattern §4.3, §6. |
 | `internal/massmoment/` | Rational mass moments and inertia, and X-axis placement map charges. See dynamic-mass §2–§3. |
 | `internal/capcontour/` | Cap contour displacement, shell offset intervals, and edge and arc bounds. See modify-reach §8.3-§8.4. |

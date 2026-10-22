@@ -198,6 +198,11 @@ proven exact may return a faceted body whose measurements are `decad.Approximate
 Pattern layouts are `decad.LinearPattern` and `decad.CircularPattern`. Mirror planes are `decad.MirrorFrame` and
 `decad.MirrorFace`. `decad.WithJoin` joins a mirror to its source.
 
+To repeat one feature and join the copies to a base, call `decad.PatternCopies` and pass the feature and its copies to
+one `decad.Union` with the base. When the feature and the base are extrusions between the same two planes and the
+pattern keeps those planes (a turn about the sweep axis, or a slide in the plane), the result is one extrusion of the
+joined section, and its bound includes the rounding of the placed copies. A pattern that tilts the planes is refused.
+
 ## Sheets and surfaces
 
 A sheet encloses no material, so `Body.Volume` and `Body.Centroid` return `decad.ErrNotSolid` for it.

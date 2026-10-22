@@ -40,6 +40,10 @@ func UnionMany(ctx context.Context, env topo.Env, bodies []*topo.Body) (*topo.Bo
 	if !anyFreeform {
 		return nil, false, nil
 	}
+	ops, ok, err := Place(ctx, ops)
+	if err != nil || !ok {
+		return nil, false, err
+	}
 	loft, ok := Shared(ops)
 	if !ok {
 		return nil, false, nil
@@ -68,6 +72,7 @@ func UnionMany(ctx context.Context, env topo.Env, bodies []*topo.Body) (*topo.Bo
 		Frame0: src.Frame0, Frame1: src.Frame1,
 		Xform:                       r3.Identity(),
 		AuthenticatedReconstruction: true,
+		JoinDelta:                   MaxDelta(ops),
 		RecordArea:                  [2]float64{recordArea0, recordArea1},
 	}, proofbound.NewWorkBudget(ctx), work0, work1)
 	if err != nil {
