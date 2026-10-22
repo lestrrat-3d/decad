@@ -2204,3 +2204,6 @@
 10	0.20	TestLoftBetweenPointAndProfile
 10	0.20	TestLoftBetweenConeOverACircle
 10	0.20	TestLoftBetweenRefusals
+10	0.20	TestAxialSectionUnionLobesOnADisc
+10	0.20	TestAxialSectionUnionPlateAndTongue
+10	0.20	TestAxialSectionUnionFinishes

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/axialsection"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -46,6 +47,17 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 	}
 	ref := d.nextProducerID()
 	if node, matched, err := prismboolean.UnionMany(ctx, envOf(documentNode(d), ref), bodyNodes(operands)); matched || err != nil {
+		if err != nil {
+			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		body := bodyHandle(node)
+		d.commit(body, operands...)
+		return body, nil
+	}
+	if node, matched, err := axialsection.UnionMany(ctx, envOf(documentNode(d), ref), bodyNodes(operands)); matched || err != nil {
 		if err != nil {
 			return nil, err
 		}
