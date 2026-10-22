@@ -124,6 +124,11 @@ retires `target` and `feature`. It is `PatternCopies` followed by `Union(target,
 never registered: they are built under consecutive producer identities, handed to the many-operand Union route chain
 (`unionManyBodies`, which `Union` shares) and dropped. A refusal leaves the document unchanged and both bodies live.
 
+When `feature` is a loft, the copies are first held as placed payloads (`loftrecord.Payload.WithPlacement`) and handed to
+the axial-section route alone (`axialsection.UnionManyPayloads`), which reads nothing of a body but its payload; no copy is
+built. When that route declines, the copies are built and the other routes run as for `Union`. Both give the same
+volume and bound to the bit (`apitest.TestPatternJoinMatchesBuiltInstancesExactly`).
+
 The gates are `PatternCopies`' for `feature` and `spec`, and `Union`'s for `target`: a nil, foreign or retired target is
 refused, `target` and `feature` must be distinct, and a sheet in either role is `ErrUnsupported`. The join takes the
 routes `Union` takes over the same operands, so every refusal of §5 and of `agent-docs/axial-section-boolean-design.md`

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/axialsection"
+	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/patternassembly"
 	"github.com/lestrrat-3d/decad/internal/patternrecord"
@@ -283,6 +285,18 @@ func PatternJoin(ctx context.Context, target, feature *Body, spec PatternSpec) (
 		return nil, err
 	}
 	base := d.nextProducerID()
+	if lp, ok := feature.n.Payload.(loftrecord.Payload); ok && !keeping {
+		// A free-form loft feature joins through the axial-section route, which reads
+		// payloads alone: try it on unbuilt copies before building any instance body.
+		body, matched, err := rp.joinPlacedLofts(ctx, d, base, target, feature, lp)
+		if err != nil {
+			return nil, err
+		}
+		if matched {
+			d.commitSpan(body, producerID(rp.Count), target, feature)
+			return body, nil
+		}
+	}
 	instances, err := rp.buildInstances(ctx, d, base, feature.n.Payload, keeping)
 	if err != nil {
 		return nil, err
@@ -294,4 +308,32 @@ func PatternJoin(ctx context.Context, target, feature *Body, spec PatternSpec) (
 	}
 	d.commitSpan(body, producerID(len(instances))+span, target, feature)
 	return body, nil
+}
+
+// joinPlacedLofts is the axial-section join of target, feature and its Count-1 copies,
+// the copies held as placed payloads and never built. matched is false when the route
+// takes none of the operands, and the caller builds the copies and tries the others.
+func (rp resolvedPattern) joinPlacedLofts(ctx context.Context, d *Document, base producerID,
+	target, feature *Body, lp loftrecord.Payload) (*Body, bool, error) {
+	if target.n.Payload == nil {
+		return nil, false, nil
+	}
+	payloads := make([]topo.Payload, 0, rp.Count+1)
+	payloads = append(payloads, target.n.Payload, feature.n.Payload)
+	for i := 1; i < rp.Count; i++ {
+		m, err := rp.WorldMotion(i)
+		if err != nil {
+			return nil, false, fmt.Errorf(`%w: pattern instance %d has no rigid motion: %s`, ErrDegenerate, i, err)
+		}
+		composed, err := lp.Transform().Then(m)
+		if err != nil {
+			return nil, false, fmt.Errorf(`decad: composing the placement failed: %w`, err)
+		}
+		payloads = append(payloads, lp.WithPlacement(composed))
+	}
+	node, matched, err := axialsection.UnionManyPayloads(ctx, envOf(documentNode(d), base+producerID(rp.Count-1)), payloads)
+	if err != nil || !matched {
+		return nil, false, err
+	}
+	return bodyHandle(node), true, ctx.Err()
 }

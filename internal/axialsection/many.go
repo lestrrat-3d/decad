@@ -24,13 +24,24 @@ import (
 // A pair of analytic prisms has its own exact route, so this one takes a set only
 // when some operand's section holds a free-form segment.
 func UnionMany(ctx context.Context, env topo.Env, bodies []*topo.Body) (*topo.Body, bool, error) {
-	if len(bodies) < 2 {
+	payloads := make([]topo.Payload, len(bodies))
+	for i, b := range bodies {
+		payloads[i] = b.Payload
+	}
+	return UnionManyPayloads(ctx, env, payloads)
+}
+
+// UnionManyPayloads is UnionMany over the operands' payloads alone. This route reads
+// nothing of a body but its payload, so a caller that wants only this route can hand it
+// payloads it has not built bodies for (loftrecord.Payload.WithPlacement).
+func UnionManyPayloads(ctx context.Context, env topo.Env, payloads []topo.Payload) (*topo.Body, bool, error) {
+	if len(payloads) < 2 {
 		return nil, false, nil
 	}
-	ops := make([]Operand, len(bodies))
+	ops := make([]Operand, len(payloads))
 	anyFreeform := false
-	for i, b := range bodies {
-		op, ok, err := OperandOf(ctx, b.Payload)
+	for i, payload := range payloads {
+		op, ok, err := OperandOf(ctx, payload)
 		if err != nil || !ok {
 			return nil, false, err
 		}

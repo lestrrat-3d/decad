@@ -108,6 +108,7 @@
 0	0.00	TestPathRecordsOwnedSegments
 0	0.05	TestPatternCopiesCircular
 0	83.27	TestPatternJoinManyCopies
+0	2.00	TestPatternJoinMatchesBuiltInstancesExactly
 0	7.02	TestPatternJoinRefusesLobesThatOnlyTouchOrMissTheBase
 0	0.02	TestPatternedGates
 0	0.32	TestPlanStorageFollowsConvertedSegments
