@@ -1,9 +1,11 @@
 package apitest_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 
@@ -49,4 +51,63 @@ func TestPatternJoinJoinsCopiesThatShareWholeSides(t *testing.T) {
 	require.NoError(t, err)
 	want := pv.Value.Base() + 3*tv.Value.Base() - 3*8*height
 	require.InDelta(t, want, v.Value.Base(), v.Bound.Base()+pv.Bound.Base()+3*tv.Bound.Base()+1e-9)
+}
+
+// TestPatternJoinRefusesLobesThatOnlyTouchOrMissTheBase builds lobes whose bottom arc rests on the
+// disc's circle with the flank ends on it, and lobes a hair above it. The first touch the disc along
+// an arc and at the flank ends, the second leave a gap: neither joins into one region sketch can
+// certify, so the join refuses with ErrUnsupported and leaves the document as it was.
+func TestPatternJoinRefusesLobesThatOnlyTouchOrMissTheBase(t *testing.T) {
+	t.Parallel()
+	const r, height, n = 3.0, 2.0, 12
+	for name, gap := range map[string]float64{"touching": 0, "missing by a micron": 1e-3} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			disc := circleBodyAtZ(t, doc, 0, r, 0, height)
+			lobe := gapLoft(t, doc, r, gap, 0.4*math.Pi/n, height)
+			before := doc.Bodies()
+			_, err := decad.PatternJoin(t.Context(), disc, lobe,
+				decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			require.Equal(t, before, doc.Bodies())
+		})
+	}
+}
+
+// gapLoft lofts a lobe whose bottom arc is concentric with the disc at radius r + gap.
+func gapLoft(t *testing.T, doc *decad.Document, r, gap, half, height float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	section := func(plane *sketch.Plane) (*sketch.Sketch, *sketch.Profile) {
+		s, err := w.CreateSketch(plane)
+		require.NoError(t, err)
+		pt := func(rad, a float64) *sketch.Point {
+			p := s.CreatePoint(rad*math.Cos(a), rad*math.Sin(a))
+			s.Fix(p)
+			return p
+		}
+		const fit = 5
+		right, left := make([]*sketch.Point, fit), make([]*sketch.Point, fit)
+		for i := range fit {
+			f := float64(i) / float64(fit-1)
+			rad, a := r+gap+0.65*f, half*(1-0.4*f)
+			right[i], left[i] = pt(rad, -a), pt(rad, a)
+		}
+		_, err = s.CreateFitSpline(right...)
+		require.NoError(t, err)
+		s.CreateArc(s.Origin(), right[fit-1], left[fit-1])
+		_, err = s.CreateFitSpline(left...)
+		require.NoError(t, err)
+		s.CreateArc(s.Origin(), right[0], left[0])
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		require.Len(t, s.Profiles(), 1)
+		return s, s.Profiles()[0]
+	}
+	s0, p0 := section(w.XY())
+	s1, p1 := section(splitTopPlane(t, w, height))
+	b, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	require.NoError(t, err)
+	return b
 }
