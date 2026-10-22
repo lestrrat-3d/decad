@@ -122,3 +122,15 @@ routes `Union` takes over the same operands, so every refusal of §5 and of `age
 
 `Patterned` keeps its own rule (`agent-docs/mirror-pattern-design.md` §4.3, §6.1): it returns the instances of one body
 as one body, and refuses disjoint lumps. `PatternJoin` is the call for a feature that joins a base.
+
+## 8. Features whose flanks cross the base
+
+A feature whose fit-spline flanks start inside the base's circle and leave it joins the base the same way: the private
+scene cuts each spline against the circle, and `sketch` certifies the crossings (`TExact` on every `Partial` fragment of
+its pair certificate, `sketch/docs/pair-certificate-design.md`). The union records the circle's remainders as trimmed
+`CircleSeg` fragments. A union `sketch` leaves uncertified is a miss, as in axial-section-boolean §3. The joined body
+then takes a concave `Fillet` where each flank leaves the circle, a through-bore `Cut` and a cap `Chamfer`.
+
+Tests: `apitest.TestPatternJoinFlanksCrossTheBase` joins 8, 12 and 24 patterned lobes whose flanks cross the disc and
+compares their volume with the same lobes drawn at their own angles.
+`TestPatternJoinFlanksCrossTheBaseThenFilletBoreChamfer` takes 12 of them through the fillet, bore and chamfer.
