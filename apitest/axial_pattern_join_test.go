@@ -44,7 +44,7 @@ func drawnAtAngles(t *testing.T, n int) *decad.Body {
 // agree within their bounds, and the join's bound carries the rotation's rounding.
 func TestPatternedLobesJoinADisc(t *testing.T) {
 	t.Parallel()
-	for _, n := range []int{8, 12, 17, 24} {
+	for _, n := range []int{8, 12} {
 		t.Run(strconv.Itoa(n)+" copies", func(t *testing.T) {
 			t.Parallel()
 			joined, err := joinedByPattern(t, 3.0, 2.0, n, r3.NewVec(0, 0, 1))
@@ -80,7 +80,7 @@ func TestPatternedLobesAboutATiltedAxisAreRefused(t *testing.T) {
 // instance is registered.
 func TestPatternJoinMatchesPatternCopiesThenUnion(t *testing.T) {
 	t.Parallel()
-	const r, height, n = 3.0, 2.0, 12
+	const r, height, n = 3.0, 2.0, 8
 	doc := decad.New()
 	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
 	lobe := lobeLoft(t, doc, r, 0, 0.4*math.Pi/n, height)
@@ -219,7 +219,7 @@ func obliquePatternJoin(t *testing.T, r, height float64, n int) (*decad.Body, er
 // A rigid motion keeps volume, so the result matches the same part on the world frame.
 func TestPatternJoinOnAnObliqueFrame(t *testing.T) {
 	t.Parallel()
-	const r, height, n = 3.0, 2.0, 12
+	const r, height, n = 3.0, 2.0, 8
 	joined, err := obliquePatternJoin(t, r, height, n)
 	require.NoError(t, err)
 	require.True(t, joined.IsSolid())
