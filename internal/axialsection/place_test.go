@@ -135,3 +135,35 @@ func TestPlaceGuardsFireOnTheirOwn(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, ok, "an end plane at another height is refused by the height check alone")
 }
+
+// TestPlaceOnAnObliqueFrame places a lobe by a 17th of a turn about the normal of a
+// frame no axis aligns with. The frames are orthonormal only to rounding and the end
+// frame is the start frame lifted by a float multiple of the normal, so the placement
+// is charged for its off-plane distance, height gaps and lateral offset; it still
+// places, and the charge is positive and tiny.
+func TestPlaceOnAnObliqueFrame(t *testing.T) {
+	t.Parallel()
+	rot, err := r3.RotationAround(r3.Vec{}, r3.NewVec(1, 1, 1), units.Radians(math.Pi/6))
+	require.NoError(t, err)
+	f0, err := r3.NewFrame(r3.NewVec(3, -2, 5), rot.ApplyDir(r3.NewVec(1, 0, 0)), rot.ApplyDir(r3.NewVec(0, 1, 0)))
+	require.NoError(t, err)
+	f1, err := r3.NewFrame(f0.Origin().Add(f0.N().Scale(5)), f0.U(), f0.V())
+	require.NoError(t, err)
+	const n = 17
+	lobe, _ := lobeSection(t, 3, 0, 0.4*math.Pi/n, 6)
+	oblique := func(x r3.Transform, loft bool) axialsection.Operand {
+		op := sweep(t, lobe, x, loft)
+		op.Frame0, op.Frame1 = f0, f1
+		op.Level1 = proofarith.FloatRat(5)
+		return op
+	}
+	turn, err := r3.RotationAround(f0.Origin(), f0.N(), units.Radians(2*math.Pi/n))
+	require.NoError(t, err)
+	ref, placed := oblique(r3.Identity(), true), oblique(turn, false)
+	out, ok, err := axialsection.Place(t.Context(), []axialsection.Operand{ref, placed})
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Positive(t, out[1].Delta)
+	require.Less(t, out[1].Delta, 1e-12)
+	require.Equal(t, ref.Frame0, out[1].Frame0)
+}

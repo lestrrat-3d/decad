@@ -17,17 +17,24 @@ result, are still not operands.
 
 ## 2. Placement onto the reference frame
 
-`axialsection.Place` brings every placed operand onto the frame of the reference operand, the first loft that carries no
-placement. It reads the in-plane map from `patternrecord.NewPlaneMap` and refuses (a miss, never a rounding) unless all
-of these hold exactly:
+`axialsection.Place` brings every operand that is not the reference onto the frame of the reference operand, the first
+loft that carries no placement. A frame is orthonormal only to rounding, so `patternrecord.NewPlaneMap` reads the
+reference's coordinates through the exact inverse of its Gram matrix, which is exact for a point in its plane, and keeps
+the defects it cannot remove:
 
-- The reference frame is orthonormal in exact rationals.
-- The operand's frame plane and the reference plane coincide, so the map is a 2D affine map `(u, v) ↦ A(u, v) + T` with
-  rational entries.
-- `A` is a similarity, `A00 = A11` and `A01 = −A10`. A rotation matrix built from a float sine and cosine is one, with
-  scale `λ = √(A00² + A10²)` within a few float steps of 1. Lines then map to lines and circles to circles.
-- Each end plane sits at the reference operand's height within `2⁻⁴⁶·(1 + |level|)` mm. The gap it does have is charged
-  (§3). The limit only refuses: a gap it admits is charged in full.
+- The image of a source point can sit off the reference plane by `|S0 + S1·u + S2·v| / |n|`, with `n` the reference's
+  plane normal. `MovePlaneRegion` bounds it over the section's extent and charges it.
+- The map `A` need not be a similarity. A line and a fit spline map exactly under `A`. A circle or arc maps to an
+  ellipse, which the charge bounds against the circle of the nearest similarity `S* = [[a, −b], [b, a]]`, whose scale
+  lies in `[ScaleLo, ScaleHi]` and whose distance from `A` in the operator norm is `Defect`.
+- Each end plane sits at a height from the reference's (`PlaneHeight`, `HeightGap`) that is charged in full.
+- An end frame made by adding a float multiple of the normal to an origin sits a little off the sweep axis, so a loft's
+  shift along its axis is the exact projection (`SweepShift`) and its lateral offset is charged.
+
+A placement is refused (a miss) when the off-plane distance or a height gap or a lateral offset exceeds
+`2⁻⁴⁴·(1 + extent + |translation|)` mm. A placement matrix and a frame are exact to a few float steps, far below that,
+so a larger value names a tilted, lifted or sheared sweep. The limit only refuses: a value it admits is charged in
+full.
 
 ## 3. Re-recording and the charge
 
@@ -38,8 +45,8 @@ source curve:
 | Segment | Charge |
 |---|---|
 | Line | The larger endpoint rounding. |
-| Circle | The centre rounding plus `r·|λ − 1|`. |
-| Arc | Three times the largest of its centre, start and end roundings (the argument of `offset2d.OffsetSectionDelta`), plus `2·ρ·|λ − 1|` for its largest radius `ρ`. |
+| Circle | The centre rounding, `r·|λ − 1|` and twice `Defect·(|u|max + |v|max)`. |
+| Arc | Three times the largest of its centre, start and end roundings (the argument of `offset2d.OffsetSectionDelta`), `2·ρ·|λ − 1|` for its largest radius `ρ`, and four times `Defect·(|u|max + |v|max)`. |
 | Fit spline | The distance between the refit cubics and the image of the source cubics, below. |
 
 A fit spline is a natural cubic spline over the sketch's float chord-length parameters. `geom.FitInterpolant.ExactSpans`
@@ -52,8 +59,9 @@ cubics is a cubic in `u` with rational coefficients. Its Bernstein coefficients 
 the same `u`. That is an upper bound on the Hausdorff distance between the curves. It is a charge: it admits nothing,
 and it widens every reading of the result.
 
-The reference operand and any unplaced operand contribute `δ = 0`. An operand's `Delta` is its section's `δ` plus its
-two end-plane gaps (§2) plus any `JoinDelta` it already carries. The scale term of an arc is conservative: the three
+The reference operand contributes `δ = 0`, and so does an operand on the reference's own frame. An operand's `Delta` is
+its section's `δ` plus the off-plane distance, its two end-plane gaps and any `JoinDelta` it already carries. The result
+adds each operand's lateral offset and the reference's, since the result keeps the reference's end frame. The scale term of an arc is conservative: the three
 pinned points of the image arc are the exact images, so the three-times argument already covers the arc.
 
 ## 4. The result
@@ -71,15 +79,20 @@ second one.
 
 ## 5. Limits
 
-- The placement must keep the sweep planes: a rotation about the sweep axis, a translation in the plane, or any
-  composition. A tilt, a lift off the plane or a differently sized sweep is a miss, and the Union takes its next route.
+- The placement must keep the sweep planes to the rounding of the placement (§2): a rotation about the sweep axis, a
+  translation in the plane, or any composition, on any frame. A tilt, a lift off the plane or a differently sized
+  sweep is a miss, and the Union takes its next route.
+- `Fillet`, a through-bore `Cut` and a cap `Chamfer` of the join read the frame's exactness themselves: the loft fillet
+  needs an end frame exactly on the sweep axis (`loftrecord.FilletStraight`), so a join on an oblique frame refuses a
+  fillet.
 - A set whose only loft is itself placed has no reference frame and is a miss.
 - Segments of kind line, arc, circle and fit spline are placed. Other kinds are a miss.
 - The route is `Union` only.
 
 ## 6. Tests
 
-- `internal/patternrecord`: the plane map refuses a tilt and a lift and accepts the identity; the fit charge is below
+- `internal/patternrecord`: `MovePlaneRegion` refuses a tilt and a lift and accepts the identity, charges a 17th-turn
+  turn about the normal of an oblique frame within 1e-12 and refuses a hundredth-radian tilt of it; the fit charge is below
   1e-13 for a 17th-turn rotation and is at least a deliberate 1e-3 displacement of one knot, so it is not vacuous; the
   circle charge is the radius scale deviation.
 - `internal/axialsection`: a lobe placed by a 17th turn is re-recorded within a positive `δ` below 1e-12 and each fit
@@ -88,6 +101,8 @@ second one.
 - `apitest.TestPatternedLobesJoinADisc`: one lobe patterned 8, 12, 17 and 24 times and joined to a disc has the volume
   of the same lobes drawn at their angles within both bounds, with a larger bound, and a `VerifyAll` mesh whose boundary
   and volume are verified. `TestPatternedLobesAboutATiltedAxisAreRefused`: `ErrUnsupported`.
+  `TestPatternJoinOnAnObliqueFrame`: the same part on a frame no axis aligns with has the world-frame part's volume
+  within both bounds, with a verified boundary and volume.
 
 ## 7. PatternJoin
 

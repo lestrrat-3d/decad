@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/patternrecord"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -30,6 +31,9 @@ type Operand struct {
 	// Delta how far the section record sits from the solid it stands for.
 	Xform r3.Transform
 	Delta float64
+	// Lateral is how far the end frame's origin sits off the sweep axis, which the
+	// extrusion this operand is read as does not have.
+	Lateral float64
 	// Level0 and Level1 are the exact axial offsets of the end planes along the
 	// frame normal, from Frame0 of the prism or loft.
 	Level0, Level1 *big.Rat
@@ -73,15 +77,13 @@ func OperandOf(ctx context.Context, payload topo.Payload) (Operand, bool, error)
 		if err != nil || !same {
 			return Operand{}, false, err
 		}
-		axis := prismplacement.SharedAxisOf(
-			prismplacement.Operand{Frame: p.Frame0, Xform: p.Xform},
-			prismplacement.Operand{Frame: p.Frame1, Xform: p.Xform})
-		if !axis.OK || axis.Shift.Sign() <= 0 {
+		shift, lateral, ok := patternrecord.SweepShift(p.Frame0, p.Frame1, p.Xform)
+		if !ok || shift.Sign() <= 0 {
 			return Operand{}, false, nil
 		}
 		return Operand{
 			Section: p.Profile0, Frame0: p.Frame0, Frame1: p.Frame1, Plane0: p.Plane0, Plane1: p.Plane1,
-			FromLoft: true, Level0: new(big.Rat), Level1: axis.Shift, Xform: p.Xform, Delta: p.JoinDelta,
+			FromLoft: true, Level0: new(big.Rat), Level1: shift, Xform: p.Xform, Delta: p.JoinDelta, Lateral: lateral,
 		}, true, nil
 	}
 	return Operand{}, false, nil

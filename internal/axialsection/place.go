@@ -24,13 +24,6 @@ import (
 // from the reference height is charged into Delta beside the section's own charge. Operands that carry no placement are returned as they are,
 // so a set with none behaves as it did before placed operands were admitted.
 func Place(ctx context.Context, ops []Operand) ([]Operand, bool, error) {
-	placed := false
-	for _, op := range ops {
-		placed = placed || op.Xform != r3.Identity()
-	}
-	if !placed {
-		return ops, true, nil
-	}
 	ref := -1
 	for i, op := range ops {
 		if op.FromLoft && op.Xform == r3.Identity() {
@@ -39,49 +32,63 @@ func Place(ctx context.Context, ops []Operand) ([]Operand, bool, error) {
 		}
 	}
 	if ref < 0 {
-		return nil, false, nil
+		for _, op := range ops {
+			if op.Xform != r3.Identity() {
+				return nil, false, nil
+			}
+		}
+		return ops, true, nil
 	}
 	r := ops[ref]
-	heights := func(op Operand) (h0, h1 *big.Rat, ok bool) {
-		h0, ok0 := patternrecord.PlaneHeight(op.Frame0, op.Xform, op.Level0, r.Frame0, r3.Identity())
-		h1, ok1 := patternrecord.PlaneHeight(op.Frame0, op.Xform, op.Level1, r.Frame0, r3.Identity())
-		return h0, h1, ok0 && ok1
-	}
-	r0, r1, ok := heights(r)
-	if !ok {
-		return nil, false, nil
-	}
 	budget := proofbound.NewWorkBudget(ctx)
 	out := make([]Operand, len(ops))
 	for i, op := range ops {
-		if op.Xform == r3.Identity() {
+		if i == ref {
 			out[i] = op
 			continue
 		}
-		pm, ok := patternrecord.NewPlaneMap(op.Frame0, op.Xform, r.Frame0, r3.Identity())
-		if !ok {
-			return nil, false, nil
-		}
-		h0, h1, ok := heights(op)
-		if !ok {
-			return nil, false, nil
-		}
-		lift0, ok0 := heightGap(h0, r0, r.Level0)
-		lift1, ok1 := heightGap(h1, r1, r.Level1)
-		if !ok0 || !ok1 {
-			return nil, false, nil
-		}
-		moved, delta, err := patternrecord.MovePlaneRegion(budget,
-			patternrecord.Region{Outer: op.Section.Outer, Holes: op.Section.Holes}, pm)
-		if err != nil {
-			if cerr := ctx.Err(); cerr != nil {
-				return nil, false, cerr
+		onRef := op.Xform == r3.Identity() && sameFrame(op.Frame0, r.Frame0)
+		var pm patternrecord.PlaneMap
+		var region patternrecord.Region
+		scale := 1.0
+		if !onRef {
+			var ok bool
+			if pm, ok = patternrecord.NewPlaneMap(op.Frame0, op.Xform, r.Frame0, r.Xform); !ok {
+				return nil, false, nil
 			}
-			return nil, false, nil
+			region = patternrecord.Region{Outer: op.Section.Outer, Holes: op.Section.Holes}
+			var err error
+			if scale, err = patternrecord.PlacementScale(region, pm); err != nil {
+				return nil, false, nil //nolint:nilerr // a section with no exact image is a miss, not a failure
+			}
 		}
-		op.Section = momentinput.Profile{Outer: moved.Outer, Holes: moved.Holes}
-		op.Delta = proofbound.AbsSumUpper(op.Delta, delta, lift0, lift1)
-		op.Frame0, op.Frame1, op.Xform = r.Frame0, r.Frame1, r3.Identity()
+		var gaps [2]float64
+		for k, levels := range [2][2]*big.Rat{{op.Level0, r.Level0}, {op.Level1, r.Level1}} {
+			got, lo, ok := patternrecord.PlaneHeight(op.Frame0, op.Xform, levels[0], r.Frame0, r.Xform)
+			want, _, ok2 := patternrecord.PlaneHeight(r.Frame0, r.Xform, levels[1], r.Frame0, r.Xform)
+			if !ok || !ok2 {
+				return nil, false, nil
+			}
+			levelMag, _ := new(big.Rat).Abs(levels[0]).Float64()
+			gaps[k] = patternrecord.HeightGap(got, want, lo)
+			if gaps[k] > patternrecord.OffPlaneLimit*(scale+levelMag) {
+				return nil, false, nil
+			}
+		}
+		delta := 0.0
+		if !onRef {
+			moved, d, err := patternrecord.MovePlaneRegion(budget, region, pm)
+			if err != nil {
+				if cerr := ctx.Err(); cerr != nil {
+					return nil, false, cerr
+				}
+				return nil, false, nil
+			}
+			op.Section = momentinput.Profile{Outer: moved.Outer, Holes: moved.Holes}
+			delta = d
+		}
+		op.Delta = proofbound.AbsSumUpper(op.Delta, delta, gaps[0], gaps[1])
+		op.Frame0, op.Frame1, op.Xform = r.Frame0, r.Frame1, r.Xform
 		op.Plane0, op.Plane1, op.FromLoft = r.Plane0, r.Plane1, false
 		op.Level0, op.Level1 = r.Level0, r.Level1
 		out[i] = op
@@ -89,28 +96,19 @@ func Place(ctx context.Context, ops []Operand) ([]Operand, bool, error) {
 	return out, true, nil
 }
 
-// heightGapLimit bounds, relative to the end plane's offset from the frame
-// origin plus one millimetre, how far a placed end plane may sit from the
-// reference operand's. A placement matrix is exact to a few float steps, which
-// is below this by a wide margin, so a larger gap names a different sweep.
-// The limit only refuses: the gap an operand passes is charged in full.
-const heightGapLimit = 0x1p-46
-
-// heightGap is the exact distance between a placed end plane's height and the
-// reference's, rounded up. ok is false when it exceeds heightGapLimit times the
-// reference offset plus one.
-func heightGap(got, want, level *big.Rat) (float64, bool) {
-	gap := new(big.Rat).Abs(new(big.Rat).Sub(got, want))
-	scale := new(big.Rat).Add(new(big.Rat).Abs(level), big.NewRat(1, 1))
-	up := proofbound.RatFloatUp(gap)
-	return up, up <= heightGapLimit*proofbound.RatFloatUp(scale)
+// sameFrame reports whether two frames have the same origin and axes bit for bit.
+func sameFrame(a, b r3.Frame) bool {
+	return a.Origin() == b.Origin() && a.U() == b.U() && a.V() == b.V()
 }
 
-// MaxDelta is the largest section displacement among the operands.
-func MaxDelta(ops []Operand) float64 {
+// JoinDelta is how far the join of the operands' records can sit from the join
+// of the solids they stand for: the largest per-operand section charge plus that
+// operand's own lateral offset, plus the lateral offset of the reference operand,
+// whose end frame the result keeps.
+func JoinDelta(ops []Operand, ref int) float64 {
 	worst := 0.0
 	for _, op := range ops {
-		worst = max(worst, op.Delta)
+		worst = max(worst, proofbound.AbsSumUpper(op.Delta, op.Lateral))
 	}
-	return worst
+	return proofbound.AbsSumUpper(worst, ops[ref].Lateral)
 }

@@ -29,6 +29,16 @@ type FitSplineSeg = sectionrecord.FitSplineSeg
 // the image of a circle or arc is a circle or arc. A segment kind with no such
 // image is ErrUnsupported.
 func MovePlaneRegion(budget *proofbound.WorkBudget, region Region, pm PlaneMap) (Region, float64, error) {
+	ext, err := regionExtent(region)
+	if err != nil {
+		return Region{}, 0, err
+	}
+	normal := pm.NormalCharge(ext.u, ext.v)
+	if limit := OffPlaneLimit * ext.scale(pm); normal > limit {
+		return Region{}, 0, fmt.Errorf(`%w: the placed section sits %g mm off the reference plane, past the %g mm a placement's rounding explains`,
+			decaderr.ErrUnsupported, normal, limit)
+	}
+	ext.defect = proofbound.ProductUpper(pm.Defect, ext.u+ext.v)
 	mv := pm.Motion()
 	delta := 0.0
 	moveLoop := func(loop LoopRecord) (LoopRecord, error) {
@@ -37,7 +47,7 @@ func MovePlaneRegion(budget *proofbound.WorkBudget, region Region, pm PlaneMap) 
 			if err := budget.Step(); err != nil {
 				return LoopRecord{}, err
 			}
-			moved, charge, err := movePlaneSegment(seg, pm, mv)
+			moved, charge, err := movePlaneSegment(seg, pm, mv, ext.defect)
 			if err != nil {
 				return LoopRecord{}, err
 			}
@@ -57,10 +67,10 @@ func MovePlaneRegion(budget *proofbound.WorkBudget, region Region, pm PlaneMap) 
 		}
 		out.Holes = append(out.Holes, moved)
 	}
-	return out, delta, nil
+	return out, proofbound.AbsSumUpper(delta, normal), nil
 }
 
-func movePlaneSegment(seg CurveSegment, pm PlaneMap, mv PointMotion) (CurveSegment, float64, error) {
+func movePlaneSegment(seg CurveSegment, pm PlaneMap, mv PointMotion, defect float64) (CurveSegment, float64, error) {
 	pts := func(in ...Point2) ([]Point2, float64, error) {
 		moved := make([]Point2, len(in))
 		worst := 0.0
@@ -89,7 +99,7 @@ func movePlaneSegment(seg CurveSegment, pm PlaneMap, mv PointMotion) (CurveSegme
 		}
 		s.Center, s.Start, s.End = p[0], p[1], p[2]
 		scale := proofbound.ProductUpper(2, proofbound.ProductUpper(radius, pm.ScaleDeviation()))
-		return s, proofbound.AbsSumUpper(proofbound.ProductUpper(3, e), scale), nil
+		return s, proofbound.AbsSumUpper(proofbound.ProductUpper(3, e), proofbound.ProductUpper(4, defect), scale), nil
 	case CircleSeg:
 		r, err := s.Radius.In(units.Millimeter)
 		if err != nil {
@@ -100,7 +110,7 @@ func movePlaneSegment(seg CurveSegment, pm PlaneMap, mv PointMotion) (CurveSegme
 			return nil, 0, err
 		}
 		s.Center = p[0]
-		return s, proofbound.AbsSumUpper(e, proofbound.ProductUpper(r, pm.ScaleDeviation())), nil
+		return s, proofbound.AbsSumUpper(e, proofbound.ProductUpper(r, pm.ScaleDeviation()), proofbound.ProductUpper(2, defect)), nil
 	case FitSplineSeg:
 		moved := make([]Point2, len(s.Fit))
 		for k, p := range s.Fit {
@@ -201,4 +211,81 @@ func bernsteinMax(c [4]*big.Rat) *big.Rat {
 		}
 	}
 	return best
+}
+
+// OffPlaneLimit is how far, relative to the section's extent plus the map's
+// translation plus one millimetre, the image of a section may sit off the
+// reference plane before MovePlaneRegion refuses it. A placement matrix and a
+// frame are exact to a few float steps (2⁻⁵³ each), which is below the limit by
+// a wide margin, so a larger distance names a tilted or lifted placement. The
+// limit only refuses: a distance it admits is charged in full.
+const OffPlaneLimit = 0x1p-44
+
+// regionBounds bounds a region: |u| ≤ u and |v| ≤ v over every point of every segment.
+type regionBounds struct {
+	u, v   float64
+	defect float64
+}
+
+// scale is the magnitude the placement's rounding grows with: the region's
+// extent, the map's translation and one millimetre.
+func (e regionBounds) scale(pm PlaneMap) float64 {
+	t0, _ := pm.T[0].Float64()
+	t1, _ := pm.T[1].Float64()
+	return 1 + e.u + e.v + math.Abs(t0) + math.Abs(t1)
+}
+
+func regionExtent(region Region) (regionBounds, error) {
+	var e regionBounds
+	grow := func(u, v float64) {
+		e.u, e.v = math.Max(e.u, math.Abs(u)), math.Max(e.v, math.Abs(v))
+	}
+	loops := append([]LoopRecord{region.Outer}, region.Holes...)
+	for _, loop := range loops {
+		for _, seg := range loop.Segments {
+			switch s := seg.(type) {
+			case LineSeg:
+				grow(s.Start.U, s.Start.V)
+				grow(s.End.U, s.End.V)
+			case ArcSeg:
+				r := math.Max(dist2(s.Center, s.Start), dist2(s.Center, s.End))
+				grow(math.Abs(s.Center.U)+r, math.Abs(s.Center.V)+r)
+			case CircleSeg:
+				r, err := s.Radius.In(units.Millimeter)
+				if err != nil {
+					return regionBounds{}, err
+				}
+				grow(math.Abs(s.Center.U)+r, math.Abs(s.Center.V)+r)
+			case FitSplineSeg:
+				fit := make([][2]float64, len(s.Fit))
+				for i, p := range s.Fit {
+					fit[i] = [2]float64{p.U, p.V}
+				}
+				fi, err := geom.NewFitInterpolant(fit)
+				if err != nil {
+					return regionBounds{}, fmt.Errorf(`%w: the fit spline has no interpolant: %s`, decaderr.ErrUnsupported, err)
+				}
+				spans, err := fi.ExactSpans()
+				if err != nil {
+					return regionBounds{}, fmt.Errorf(`%w: %s`, decaderr.ErrUnsupported, err)
+				}
+				for _, span := range spans {
+					grow(proofbound.RatFloatUp(bernsteinMax(span.X)), proofbound.RatFloatUp(bernsteinMax(span.Y)))
+				}
+			default:
+				return regionBounds{}, fmt.Errorf(`%w: a %T segment has no exact plane motion`, decaderr.ErrUnsupported, seg)
+			}
+		}
+	}
+	return e, nil
+}
+
+// PlacementScale is the magnitude a placement's rounding grows with for a
+// region under pm (see OffPlaneLimit).
+func PlacementScale(region Region, pm PlaneMap) (float64, error) {
+	e, err := regionExtent(region)
+	if err != nil {
+		return 0, err
+	}
+	return e.scale(pm), nil
 }
