@@ -77,6 +77,11 @@ func NewPlaneMap(from r3.Frame, fromX r3.Transform, to r3.Frame, toX r3.Transfor
 	if pm.NormalLo <= 0 {
 		return PlaneMap{}, false
 	}
+	// A reflection reverses every recorded loop and circle sense, which this map
+	// does not re-record: it is refused.
+	if det := new(big.Rat).Sub(mul(pm.A[0][0], pm.A[1][1]), mul(pm.A[0][1], pm.A[1][0])); det.Sign() <= 0 {
+		return PlaneMap{}, false
+	}
 	half := big.NewRat(1, 2)
 	a := mul(add(pm.A[0][0], pm.A[1][1]), half)
 	bb := mul(new(big.Rat).Sub(pm.A[1][0], pm.A[0][1]), half)

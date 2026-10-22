@@ -39,6 +39,16 @@ func rotationAboutZ(t *testing.T, turn float64) r3.Transform {
 	return x
 }
 
+func TestPlaneMapRefusesAReflection(t *testing.T) {
+	f := xyFrame(t)
+	mirror, err := r3.NewFrame(r3.Vec{}, r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0)) // the plane y = 0
+	require.NoError(t, err)
+	x, err := r3.Reflection(mirror)
+	require.NoError(t, err)
+	_, ok := NewPlaneMap(f, x, f, r3.Identity())
+	require.False(t, ok)
+}
+
 func TestMovePlaneRegionRefusesWhatLeavesThePlane(t *testing.T) {
 	f := xyFrame(t)
 	region := Region{Outer: LoopRecord{Segments: []CurveSegment{
