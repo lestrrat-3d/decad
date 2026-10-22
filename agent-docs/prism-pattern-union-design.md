@@ -14,8 +14,11 @@ path.
 The root arc's denoted radius comes from its recorded start. Its recorded
 end can differ slightly, so both endpoints must have squared radius
 strictly below the blank's squared radius after multiplying by the copy's
-exact dyadic XY scale squared. A tangent or outward root refuses before a
-joined shell is built. Every other boundary curve stays outside the blank:
+exact dyadic XY scale squared. A tangent or outward root refuses this route
+before a joined shell is built. A set with a free-form section that this route
+refuses, or that has more than 32 copies, is then tried as a union of the
+sections (`agent-docs/axial-section-boolean-design.md`), which joins a root arc
+lying on the blank's rim and any number of copies. Every other boundary curve stays outside the blank:
 lines and fitted-spline Bezier spans use a strict support line for all their
 controls; centered arcs use their denoted radius. The two lines next to the
 root start inside and end outside the circle, with a positive radial

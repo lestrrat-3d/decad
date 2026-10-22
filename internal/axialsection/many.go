@@ -2,6 +2,7 @@ package axialsection
 
 import (
 	"context"
+	"slices"
 
 	"github.com/lestrrat-3d/r3"
 
@@ -35,6 +36,23 @@ func UnionMany(ctx context.Context, env topo.Env, bodies []*topo.Body) (*topo.Bo
 // nothing of a body but its payload, so a caller that wants only this route can hand it
 // payloads it has not built bodies for (loftrecord.Payload.WithPlacement).
 func UnionManyPayloads(ctx context.Context, env topo.Env, payloads []topo.Payload) (*topo.Body, bool, error) {
+	return unionMany(ctx, env, payloads, false)
+}
+
+// UnionManyPrisms is UnionMany for a set that holds no loft, which the other routes
+// have already declined. The first unplaced prism supplies the two planes the result
+// records (Operand.AsReference). It runs after the prism-pattern route so that route
+// keeps every set it certifies; this one takes the sets whose root contact it
+// cannot certify, such as a root arc that lies on the blank's rim.
+func UnionManyPrisms(ctx context.Context, env topo.Env, bodies []*topo.Body) (*topo.Body, bool, error) {
+	payloads := make([]topo.Payload, len(bodies))
+	for i, b := range bodies {
+		payloads[i] = b.Payload
+	}
+	return unionMany(ctx, env, payloads, true)
+}
+
+func unionMany(ctx context.Context, env topo.Env, payloads []topo.Payload, prismReference bool) (*topo.Body, bool, error) {
 	if len(payloads) < 2 {
 		return nil, false, nil
 	}
@@ -50,6 +68,19 @@ func UnionManyPayloads(ctx context.Context, env topo.Env, payloads []topo.Payloa
 	}
 	if !anyFreeform {
 		return nil, false, nil
+	}
+	if prismReference && !slices.ContainsFunc(ops, func(op Operand) bool { return op.FromLoft }) {
+		// A set of prisms has no loft to supply the two planes the result records,
+		// so an unplaced prism supplies them.
+		i := slices.IndexFunc(ops, func(op Operand) bool { return op.Xform == r3.Identity() })
+		if i < 0 {
+			return nil, false, nil
+		}
+		ref, ok := ops[i].AsReference()
+		if !ok {
+			return nil, false, nil
+		}
+		ops[i] = ref
 	}
 	ops, ok, err := Place(ctx, ops)
 	if err != nil || !ok {

@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/axialsection"
@@ -59,6 +60,23 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 // beside the span of producer identities it used. It commits nothing and
 // checks no cancellation after the last route, so the caller does.
 func unionManyBodies(ctx context.Context, d *Document, ref producerID, operands []*Body) (*Body, producerID, error) {
+	body, span, err := unionManyRoutes(ctx, d, ref, operands)
+	if err == nil || !errors.Is(err, ErrUnsupported) {
+		return body, span, err
+	}
+	// Every route above refused. A set of prisms with a free-form section can
+	// still join through the union of their sections, which reads a root arc
+	// that lies on the blank's rim and any number of copies. A miss or a refusal
+	// there leaves the first refusal as the answer.
+	node, matched, aerr := axialsection.UnionManyPrisms(ctx, envOf(documentNode(d), ref), bodyNodes(operands))
+	if aerr != nil || !matched {
+		return nil, 0, err
+	}
+	return bodyHandle(node), 1, ctx.Err()
+}
+
+// unionManyRoutes is unionManyBodies' route chain.
+func unionManyRoutes(ctx context.Context, d *Document, ref producerID, operands []*Body) (*Body, producerID, error) {
 	a := operands[0]
 	if node, matched, err := prismboolean.UnionMany(ctx, envOf(documentNode(d), ref), bodyNodes(operands)); matched || err != nil {
 		if err != nil {

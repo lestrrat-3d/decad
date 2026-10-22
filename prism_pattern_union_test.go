@@ -34,11 +34,31 @@ func TestPrismPatternUnionOfCopiedExtrudes(t *testing.T) {
 }
 
 func TestPrismPatternUnionRefusesOutwardRootWithoutRetiringSources(t *testing.T) {
-	doc, blank, tooth, rotated := prismPatternTabBodies(t, 3)
+	doc, blank, tooth, rotated := prismPatternTabBodies(t, 2.999)
 	_, err := Union(t.Context(), blank, tooth, rotated)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "root is not strictly inside")
 	require.Len(t, doc.Bodies(), 3)
+}
+
+// A root arc that lies on the blank's rim is a tangent contact the prism-pattern
+// route refuses, and the union of the sections joins it.
+func TestPrismPatternUnionOfTangentRootJoinsBySectionUnion(t *testing.T) {
+	_, blank, tooth, rotated := prismPatternTabBodies(t, 3)
+	var parts float64
+	var slack float64
+	for _, b := range []*Body{blank, tooth, rotated} {
+		v, err := b.Volume()
+		require.NoError(t, err)
+		parts += v.Value.Base()
+		slack += v.Bound.Base()
+	}
+	joined, err := Union(t.Context(), blank, tooth, rotated)
+	require.NoError(t, err)
+	require.True(t, joined.IsSolid())
+	got, err := joined.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(got.Value.Base()-parts), slack+got.Bound.Base())
 }
 
 func TestPrismPatternUnionSelectsProvenAxialChains(t *testing.T) {

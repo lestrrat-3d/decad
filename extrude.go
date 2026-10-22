@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -156,6 +157,10 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	// (agent-docs/spline-design.md §5.2). A counter per phase would give the same
 	// record a fresh full ceiling in each.
 	work := freeform.NewFreeformWork()
+	// A fit-spline section costs about 70000 units per cubic piece, so the
+	// ceiling scales with the piece count, as a loft's does with its stations.
+	loops := append([]sectionrecord.LoopRecord{profile.Outer}, profile.Holes...)
+	work.RaiseLimit(freeform.SpanWorkLimit(sectionrecord.FitSplinePieces(loops...)))
 	if _, err := profile.FalsifyRecordedAreaContext(ctx, profileArea, work); err != nil {
 		return nil, err
 	}

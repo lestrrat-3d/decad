@@ -44,6 +44,12 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	// A fit-spline section costs about 70000 units per cubic piece, so the
+	// ceiling scales with the piece count whoever opened the counter.
+	if work != nil {
+		loops := append([]sectionrecord.LoopRecord{pp.Profile.Outer}, pp.Profile.Holes...)
+		work.RaiseLimit(freeform.SpanWorkLimit(sectionrecord.FitSplinePieces(loops...)))
+	}
 	var ig momentinput.Integrals
 	var captured *momentinput.ProfileWalks
 	var err error

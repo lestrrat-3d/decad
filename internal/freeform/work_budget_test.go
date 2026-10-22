@@ -73,3 +73,12 @@ func TestReconstructionLimitKeepsDetachedDefault(t *testing.T) {
 	clamped.RaiseReconstructionLimit(^uint64(0))
 	require.Equal(t, freeform.LoftReconstructionWorkLimit, clamped.ReconstructionBudget())
 }
+
+func TestSpanWorkLimit(t *testing.T) {
+	require.Equal(t, freeform.FreeformWorkLimit, freeform.SpanWorkLimit(0))
+	require.Equal(t, freeform.FreeformWorkLimit, freeform.SpanWorkLimit(8))
+	require.Equal(t, uint64(9)*freeform.SpanWorkUnits, freeform.SpanWorkLimit(9))
+	require.Equal(t, uint64(28)*freeform.SpanWorkUnits, freeform.SpanWorkLimit(28))
+	require.Equal(t, freeform.SpanWorkCeiling, freeform.SpanWorkLimit(freeform.SpanWorkCeiling/freeform.SpanWorkUnits))
+	require.Equal(t, freeform.SpanWorkCeiling, freeform.SpanWorkLimit(^uint64(0)))
+}
