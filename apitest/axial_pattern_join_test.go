@@ -73,3 +73,71 @@ func TestPatternedLobesAboutATiltedAxisAreRefused(t *testing.T) {
 	_, err := joinedByPattern(t, 2.5, 1.5, 8, r3.Vec{}, r3.NewVec(0.05, 0, 1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
+
+// TestPatternJoinMatchesPatternCopiesThenUnion pins the one-call form to the two-call
+// form on the same lobes, and its document effect: target and feature retire and no
+// instance is registered.
+func TestPatternJoinMatchesPatternCopiesThenUnion(t *testing.T) {
+	t.Parallel()
+	const r, height, n = 3.0, 2.0, 12
+	doc := decad.New()
+	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
+	lobe := lobeLoft(t, doc, r, 0, 0.4*math.Pi/n, height)
+	spec := decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n}
+	joined, err := decad.PatternJoin(t.Context(), disc, lobe, spec)
+	require.NoError(t, err)
+	require.True(t, joined.IsSolid())
+	require.Equal(t, []*decad.Body{joined}, doc.Bodies())
+
+	want, err := joinedByPattern(t, r, height, n, r3.Vec{}, r3.NewVec(0, 0, 1))
+	require.NoError(t, err)
+	wv, err := want.Volume()
+	require.NoError(t, err)
+	gv, err := joined.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, wv.Value.Base(), gv.Value.Base(), wv.Bound.Base()+gv.Bound.Base())
+}
+
+func TestPatternJoinRefusalLeavesTheDocumentUnchanged(t *testing.T) {
+	t.Parallel()
+	const r, height, n = 3.0, 2.0, 8
+	doc := decad.New()
+	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
+	lobe := lobeLoft(t, doc, r, 0, 0.4*math.Pi/n, height)
+	before := doc.Bodies()
+	_, err := decad.PatternJoin(t.Context(), disc, lobe,
+		decad.CircularPattern{Axis: r3.NewVec(0.05, 0, 1), Count: n})
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Equal(t, before, doc.Bodies())
+
+	_, err = decad.PatternJoin(t.Context(), lobe, lobe, decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, err = decad.PatternJoin(t.Context(), nil, lobe, decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, err = decad.PatternJoin(t.Context(), disc, lobe, decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: 1})
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.Equal(t, before, doc.Bodies())
+}
+
+// TestPatternJoinSlidesATongueAlongAPlate repeats a tongue with a fit-spline top along
+// a plate, three times, each crossing the plate's top edge: the joined volume is the
+// plate and three tongues less three overlaps of 8 mm² of section.
+func TestPatternJoinSlidesATongueAlongAPlate(t *testing.T) {
+	t.Parallel()
+	const height = 5.0
+	doc := decad.New()
+	plate := polyPrismBody(t, doc, [][2]float64{{0, 0}, {30, 0}, {30, 6}, {0, 6}}, height)
+	tongue := tongueLoft(t, doc, height)
+	pv, err := plate.Volume()
+	require.NoError(t, err)
+	tv, err := tongue.Volume()
+	require.NoError(t, err)
+	joined, err := decad.PatternJoin(t.Context(), plate, tongue,
+		decad.LinearPattern{Dir: r3.NewVec(1, 0, 0), Step: units.Millimeters(6), Count: 3})
+	require.NoError(t, err)
+	v, err := joined.Volume()
+	require.NoError(t, err)
+	want := pv.Value.Base() + 3*tv.Value.Base() - 3*8*height
+	require.InDelta(t, want, v.Value.Base(), v.Bound.Base()+pv.Bound.Base()+3*tv.Bound.Base()+1e-9)
+	require.True(t, joined.IsSolid())
+}

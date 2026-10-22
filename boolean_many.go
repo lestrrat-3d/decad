@@ -45,28 +45,32 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	ref := d.nextProducerID()
+	body, span, err := unionManyBodies(ctx, d, d.nextProducerID(), operands)
+	if err != nil {
+		return nil, err
+	}
+	d.commitSpan(body, span, operands...)
+	return body, nil
+}
+
+// unionManyBodies is the many-operand Union's route chain over operands that
+// need not be live: Patterned's and PatternJoin's instances are built and never
+// registered. It evaluates under producer identity ref and returns the result
+// beside the span of producer identities it used. It commits nothing and
+// checks no cancellation after the last route, so the caller does.
+func unionManyBodies(ctx context.Context, d *Document, ref producerID, operands []*Body) (*Body, producerID, error) {
+	a := operands[0]
 	if node, matched, err := prismboolean.UnionMany(ctx, envOf(documentNode(d), ref), bodyNodes(operands)); matched || err != nil {
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		body := bodyHandle(node)
-		d.commit(body, operands...)
-		return body, nil
+		return bodyHandle(node), 1, ctx.Err()
 	}
 	if node, matched, err := axialsection.UnionMany(ctx, envOf(documentNode(d), ref), bodyNodes(operands)); matched || err != nil {
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		body := bodyHandle(node)
-		d.commit(body, operands...)
-		return body, nil
+		return bodyHandle(node), 1, ctx.Err()
 	}
 	tools := operands[1:]
 	node, matched, err := loftcylinder.MirrorPairs(ctx, envOf(documentNode(d), ref), verifyAllMesher{},
@@ -96,13 +100,9 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 		body, err = spiralCombineBody(ctx, d, ref, a, tools)
 	}
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	d.commitSpan(body, span, operands...)
-	return body, nil
+	return body, span, ctx.Err()
 }
 
 // tryPrismUnionChain gives prism inputs and exact straight-source Loft inputs

@@ -187,11 +187,13 @@ type CircularPattern struct{ Center, Axis r3.Vec; Count int }
 
 func PatternCopies(ctx context.Context, b *Body, spec PatternSpec) ([]*Body, error)
 func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error)
+func PatternJoin(ctx context.Context, target, feature *Body, spec PatternSpec) (*Body, error)
 ```
 
 `PatternCopies` leaves the receiver live and returns `Count − 1` new live
 bodies, instances `1..Count−1` in order. `Patterned` retires the receiver and
-returns ONE body holding every instance (§6). `Count < 2` is `ErrDegenerate`
+returns ONE body holding every instance (§6). `PatternJoin` joins every instance to a
+separate target in one Union (`agent-docs/axial-pattern-join-design.md` §7). `Count < 2` is `ErrDegenerate`
 (a pattern of one is the receiver), a non-finite or zero `Dir`/`Axis` is
 `ErrNotFinite`/`ErrDegenerate` (a non-finite `Center` too is `ErrNotFinite`),
 a wrong-kind `Step` is `ErrUnitKind`, a negative one `ErrNegativeMagnitude`

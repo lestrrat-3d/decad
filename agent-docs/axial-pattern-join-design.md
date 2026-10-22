@@ -88,3 +88,22 @@ second one.
 - `apitest.TestPatternedLobesJoinADisc`: one lobe patterned 8, 12, 17 and 24 times and joined to a disc has the volume
   of the same lobes drawn at their angles within both bounds, with a larger bound, and a `VerifyAll` mesh whose boundary
   and volume are verified. `TestPatternedLobesAboutATiltedAxisAreRefused`: `ErrUnsupported`.
+
+## 7. PatternJoin
+
+```go
+func PatternJoin(ctx context.Context, target, feature *Body, spec PatternSpec) (*Body, error)
+```
+
+`PatternJoin` repeats `feature` by `spec` and joins every instance, `feature` included, to `target` in one `Union`, and
+retires `target` and `feature`. It is `PatternCopies` followed by `Union(target, feature, copies...)` with the copies
+never registered: they are built under consecutive producer identities, handed to the many-operand Union route chain
+(`unionManyBodies`, which `Union` shares) and dropped. A refusal leaves the document unchanged and both bodies live.
+
+The gates are `PatternCopies`' for `feature` and `spec`, and `Union`'s for `target`: a nil, foreign or retired target is
+refused, `target` and `feature` must be distinct, and a sheet in either role is `ErrUnsupported`. The join takes the
+routes `Union` takes over the same operands, so every refusal of §5 and of `agent-docs/axial-section-boolean-design.md`
+§3 is returned unchanged.
+
+`Patterned` keeps its own rule (`agent-docs/mirror-pattern-design.md` §4.3, §6.1): it returns the instances of one body
+as one body, and refuses disjoint lumps. `PatternJoin` is the call for a feature that joins a base.

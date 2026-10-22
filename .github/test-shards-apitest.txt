@@ -2212,3 +2212,6 @@
 10	0.20	TestLoftFilletCircleFragmentRefusals
 10	0.20	TestPatternedLobesJoinADisc
 10	0.20	TestPatternedLobesAboutATiltedAxisAreRefused
+10	0.20	TestPatternJoinMatchesPatternCopiesThenUnion
+10	0.20	TestPatternJoinRefusalLeavesTheDocumentUnchanged
+10	0.20	TestPatternJoinSlidesATongueAlongAPlate

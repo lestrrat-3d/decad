@@ -251,3 +251,47 @@ func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error) {
 	d.commitSpan(acc, ref-base, b)
 	return acc, nil
 }
+
+// PatternJoin repeats feature by spec and joins every instance, feature
+// included, to target in one Union, retiring target and feature
+// (agent-docs/axial-pattern-join-design.md §7). It is PatternCopies followed
+// by Union(target, feature, copies...) with the copies never registered, so a
+// refusal leaves the document unchanged and both bodies live.
+//
+// The gates are PatternCopies' for feature and spec, plus Union's for target: a
+// nil, foreign or retired target is refused, target and feature must be distinct
+// bodies, and a sheet in either role is refused. The join takes the routes Union
+// takes over the same operands and returns that Union's error when none applies.
+func PatternJoin(ctx context.Context, target, feature *Body, spec PatternSpec) (*Body, error) {
+	d, rp, keeping, err := feature.patternReceiver(ctx, spec)
+	if err != nil {
+		return nil, err
+	}
+	if err := d.requireLive(target); err != nil {
+		return nil, err
+	}
+	if target == feature {
+		return nil, fmt.Errorf(`%w: PatternJoin needs a target distinct from the feature`, ErrDegenerate)
+	}
+	for _, operand := range []*Body{target, feature} {
+		if err := refuseSheetOperand(operand, "PatternJoin"); err != nil {
+			return nil, err
+		}
+	}
+	ctx, err = d.evalContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	base := d.nextProducerID()
+	instances, err := rp.buildInstances(ctx, d, base, feature.n.Payload, keeping)
+	if err != nil {
+		return nil, err
+	}
+	operands := append([]*Body{target, feature}, instances...)
+	body, span, err := unionManyBodies(ctx, d, base+producerID(len(instances)), operands)
+	if err != nil {
+		return nil, err
+	}
+	d.commitSpan(body, producerID(len(instances))+span, target, feature)
+	return body, nil
+}
