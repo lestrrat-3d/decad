@@ -2224,3 +2224,4 @@
 10	0.01	TestWallReadingExactHeightArm
 10	0.02	TestWallReflexSweep
 10	0.00	TestDocumentParams
+10	0.00	TestExtrudeFitSplineSectionScalesWorkWithPieces

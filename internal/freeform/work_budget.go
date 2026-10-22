@@ -27,6 +27,28 @@ import (
 // (agent-docs/loft-gear-bounds-design.md §7).
 const FreeformWorkLimit uint64 = 1 << 20
 
+// SpanWorkUnits is the free-form work allowance per cubic piece of a record's
+// fit splines, for an operation whose work scales with its piece count. A cubic
+// piece of a fit-spline tooth section measures about 70000 units across the
+// area falsifier, the prism build and the extent reading, so this allows about
+// 1.9 times that.
+const SpanWorkUnits uint64 = 1 << 17
+
+// SpanWorkCeiling bounds SpanWorkLimit, so a record with a very large piece
+// count still meets a fixed ceiling (Table R row R7).
+const SpanWorkCeiling uint64 = 1 << 26
+
+// SpanWorkLimit is the exact-rational ceiling an operation over a record of
+// pieces polynomial pieces raises its counter to before its first charge:
+//
+//	min(SpanWorkCeiling, max(FreeformWorkLimit, SpanWorkUnits·pieces))
+func SpanWorkLimit(pieces uint64) uint64 {
+	if pieces >= SpanWorkCeiling/SpanWorkUnits {
+		return SpanWorkCeiling
+	}
+	return max(FreeformWorkLimit, SpanWorkUnits*pieces)
+}
+
 // ReconstructionWorkLimit is the default ceiling on one record's sketch
 // topology reconstruction. Its cost is a record-wide quadratic in the chord
 // total, not exact-rational conversion or integration work, so it must not
