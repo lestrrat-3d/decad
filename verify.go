@@ -133,6 +133,10 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	if err != nil {
 		return nil, err
 	}
+	ctx, err = d.evalContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	found, err := verifyrun.Run(ctx, verifyHooks(), d.n.Live(), cfg)
 	if err != nil {
 		return nil, err

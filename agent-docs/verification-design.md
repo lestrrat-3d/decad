@@ -383,7 +383,11 @@ const (
     // DiagUnsupportedPairContact — the pair reaches a contact or near-contact
     // the exact boolean policy cannot classify. Reading ReadingNone. Suspect.
     // Message names a shared face plane between the operands when they have
-    // one, since deepening the overlap cannot resolve that cause.
+    // one, since deepening the overlap cannot resolve that cause. A document
+    // with a gap tolerance retries the pair's boolean with one operand moved by
+    // up to it (agent-docs/gap-tolerance-design.md §5.2), so the code is left for
+    // an ExactOnly document, a contact the retry does not cover, and a shared
+    // plane no shift opens.
     DiagUnsupportedPairContact
     // DiagUnsupportedPairPipeline — both operands tessellate, but later
     // boolean geometry exceeds the pipeline's reach. Reading ReadingNone.

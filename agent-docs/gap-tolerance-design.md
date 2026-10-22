@@ -92,8 +92,10 @@ result the gap tolerance kept can still read `Suspect`.
 
 ## 5. Where the tolerance runs
 
-The root reads the tolerance in `placePayload`, `booleanBodyWith`, `performUnionMany` and `ScaledAt` and puts it on the
-context. Every other operation, such as `Fillet`, `Shell` and `Loft`, reads no tolerance of its own. Four evaluator
+The root reads the tolerance in `placePayload`, `booleanBodyWith`, `performUnionMany`, `ScaledAt` and
+`Document.Verify`, and puts it on the context. `Verify` hands it to the read-only boolean that measures each pair's
+overlap, so a pair the exact predicates could not classify reads the overlap it has, with a bound that covers the
+shift, instead of `DiagUnsupportedPairContact`. Every other operation, such as `Fillet`, `Shell` and `Loft`, reads no tolerance of its own. Four evaluator
 sites read it:
 
 | Site | Operations that reach it |
@@ -101,7 +103,7 @@ sites read it:
 | `facetproof.KeepPlacedEmbedded`, a rigid placement of a faceted mesh | `Transform`, `Copy`, `PatternCopies`, `Patterned`, `MirroredCopy` |
 | `facetproof` similarity image | `ScaledAt` |
 | `meshbool.keepRoundedEmbedded`, the stitched result of a mesh boolean | `Union`, `Cut`, `Intersect`, and the booleans inside `Patterned` and the tool combinations |
-| `booleaneval.Evaluate`'s shifted retry | `Union`, `Cut`, `Intersect`, and the same inner booleans |
+| `booleaneval.Evaluate`'s shifted retry | `Union`, `Cut`, `Intersect`, the same inner booleans, and the pair readings of `Verify` |
 
 The first three rows are the embedding repair, a stage of `meshbool.RepairHeldEmbedding`: `HeldRounding.Reach` is the
 reach, and zero keeps the float-box search alone.
@@ -195,4 +197,5 @@ owns that refusal in the same change.
 | `apitest.TestBooleanGapTolerance` | Union, Cut and Intersect of boxes that touch or sit flush: the result, the bound that covers the true volume, a tighter bound from a smaller tolerance, and the refusals `ExactOnly` and a slot keep. |
 | `apitest.TestBooleanGapToleranceEdgeAndPointTouches` | A shared corner, a knife edge inside a wider wedge and two crossing edges: Union, Cut and Intersect, the volume bound, and the `ExactOnly` refusal. |
 | `apitest.TestBooleanGapToleranceStaysExactForCurvedContact` | A tangent cylinder on a plate stays refused. |
+| `apitest.TestVerifyGapToleranceDecidesAFlushPair` | `Verify` reads a flush pair's overlap with a covering bound, leaves it staged under `ExactOnly`, and reports an invalid tolerance. |
 | `examples.Example_gap_tolerance` | The documented use. |
