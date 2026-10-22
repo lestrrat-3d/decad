@@ -125,17 +125,19 @@ reach, and zero keeps the float-box search alone.
 
 ### 5.2 The shifted Boolean retry
 
-A mesh Boolean refuses two operand facets that overlap in one plane: the exact predicates cannot say which side of
-the other operand a coplanar region lies on. `meshbool.CoplanarContactError` carries every such pair (up to 64) as
-the first operand's outward unit normal and whether the second operand's facet faces the other way, which puts the
-operands on opposite sides of the plane (a face-on-face touch). `booleaneval.Evaluate` reads it and runs the Boolean
-again with the second operand moved:
+A mesh Boolean refuses three contacts the exact predicates cannot classify. Two operand facets can overlap in one
+plane, so no side of the other operand is proven for the shared region. An edge of one operand can graze along a facet
+of the other. The operands can touch at an isolated point. `meshbool.TouchContactError` carries every such contact it
+met (up to 64) as the first operand's outward unit normal at the contact and whether it is Decisive. A coplanar pair is
+Decisive when the second operand's facet faces the opposite way, which puts the operands on opposite sides of the plane
+(a face-on-face touch). A graze and a point touch are always Decisive. `booleaneval.Evaluate` reads the error and
+runs the Boolean again with the second operand moved:
 
 1. Directions come from the contacts (`shiftDirections`). Every contact must open: the shift's component along each
-   contact's normal is at least 0.02 in magnitude. A face-on-face touch also fixes the sense. A Union moves the second
-   operand inward along the first operand's normal, so touching bodies join into one. A Cut and an Intersect move it
-   outward, so a face-touching Cut leaves its target whole and a face-touching Intersect is empty. With no
-   face-on-face touch, the contacts are flush walls. A Cut and an Intersect still need every flush contact to open
+   contact's normal is at least 0.02 in magnitude. A Decisive contact also fixes the sense. A Union moves the second
+   operand inward along the first operand's normal, so bodies that touch join into one, along a face, an edge or at a
+   corner. A Cut and an Intersect move it outward, so a touching Cut leaves its target whole and a touching Intersect
+   is empty. With no Decisive contact, the contacts are flush walls. A Cut and an Intersect still need every flush contact to open
    outward, so a tool flush with its target's wall pokes through it and leaves no skin. A Union needs only that they
    open. A pair of contacts that no direction opens in the needed sense, such as a tool flush with both walls of a
    slot, is not retried and the refusal stands.
@@ -170,12 +172,11 @@ keeps its refusal:
 - A mesh the second stage leaves folded, because a vertex is welded, no candidate within the reach clears it, or
   the reach is too small.
 - `Stitch` joins free edges only where coincidence is proven (`agent-docs/surface-design.md` §1.3).
-- A boolean contact that is not a coplanar overlap: an edge grazing along a facet, two edges or two vertices meeting,
-  branching intersection curves, and a curved tangency or near contact the proximity gate cannot decide. A shift of
-  one operand does not change which side of the other a grazing edge or a chord lies on, so each stays
-  `BooleanUnsupportedContact`.
-- A coplanar overlap whose contacts no shift opens in the sense the operation needs (§5.2), and one on a pair that
-  uses a spiral-join certificate.
+- Branching intersection curves, a facet or subdivision region that touches the other operand's boundary, and a curved
+  tangency or near contact the proximity gate cannot decide. The first two carry no contact normal. The gate asks
+  whether chorded surfaces touch, and a shift far smaller than the chord error cannot answer that.
+- A coplanar overlap, graze or point touch whose contacts no shift opens in the sense the operation needs (§5.2), and
+  one on a pair that uses a spiral-join certificate.
 - An uncertified `sketch` fragment (§3).
 
 Each is a separate decision. Extending the tolerance to one of them changes this document and the document that
@@ -192,5 +193,6 @@ owns that refusal in the same change.
 | `apitest.TestDocumentGapToleranceOptions` | The option set, its last-wins rule and each invalid value's error. |
 | `booleaneval.TestShiftDirections` | Which sense each operation wants for each kind of contact, and when no direction exists. |
 | `apitest.TestBooleanGapTolerance` | Union, Cut and Intersect of boxes that touch or sit flush: the result, the bound that covers the true volume, a tighter bound from a smaller tolerance, and the refusals `ExactOnly` and a slot keep. |
+| `apitest.TestBooleanGapToleranceEdgeAndPointTouches` | A shared corner, a knife edge inside a wider wedge and two crossing edges: Union, Cut and Intersect, the volume bound, and the `ExactOnly` refusal. |
 | `apitest.TestBooleanGapToleranceStaysExactForCurvedContact` | A tangent cylinder on a plate stays refused. |
 | `examples.Example_gap_tolerance` | The documented use. |

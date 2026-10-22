@@ -10,14 +10,14 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 )
 
-func contact(n r3.Vec, opposite bool) meshbool.CoplanarContact {
-	return meshbool.CoplanarContact{NormalA: n, Opposite: opposite}
+func contact(n r3.Vec, opposite bool) meshbool.TouchContact {
+	return meshbool.TouchContact{NormalA: n, Decisive: opposite}
 }
 
 // requireOpens asserts every direction opens every contact: no component of the
 // unit shift along a contact's normal is closer to zero than the margin the
 // evaluator itself demands.
-func requireOpens(t *testing.T, dirs []r3.Vec, contacts []meshbool.CoplanarContact) {
+func requireOpens(t *testing.T, dirs []r3.Vec, contacts []meshbool.TouchContact) {
 	t.Helper()
 	require.NotEmpty(t, dirs)
 	for _, u := range dirs {
@@ -42,7 +42,7 @@ func TestShiftDirections(t *testing.T) {
 
 	t.Run("a Union closes a face-on-face touch into the first operand", func(t *testing.T) {
 		t.Parallel()
-		contacts := []meshbool.CoplanarContact{contact(up, true)}
+		contacts := []meshbool.TouchContact{contact(up, true)}
 		dirs := booleaneval.ShiftDirections(meshbool.OpUnion, contacts)
 		requireOpens(t, dirs, contacts)
 		for _, u := range dirs {
@@ -52,7 +52,7 @@ func TestShiftDirections(t *testing.T) {
 
 	t.Run("a Cut and an Intersect take a face-on-face touch apart", func(t *testing.T) {
 		t.Parallel()
-		contacts := []meshbool.CoplanarContact{contact(up, true)}
+		contacts := []meshbool.TouchContact{contact(up, true)}
 		for _, op := range []meshbool.OperationKind{meshbool.OpCut, meshbool.OpIntersect} {
 			dirs := booleaneval.ShiftDirections(op, contacts)
 			requireOpens(t, dirs, contacts)
@@ -64,7 +64,7 @@ func TestShiftDirections(t *testing.T) {
 
 	t.Run("a Union opens flush walls on opposite sides whichever way", func(t *testing.T) {
 		t.Parallel()
-		contacts := []meshbool.CoplanarContact{contact(north, false), contact(south, false)}
+		contacts := []meshbool.TouchContact{contact(north, false), contact(south, false)}
 		requireOpens(t, booleaneval.ShiftDirections(meshbool.OpUnion, contacts), contacts)
 	})
 
@@ -72,14 +72,14 @@ func TestShiftDirections(t *testing.T) {
 		t.Parallel()
 		// A tool flush with both walls of a slot would leave a skin on one wall
 		// if it moved, and no shift pokes through both.
-		contacts := []meshbool.CoplanarContact{contact(north, false), contact(south, false)}
+		contacts := []meshbool.TouchContact{contact(north, false), contact(south, false)}
 		require.Empty(t, booleaneval.ShiftDirections(meshbool.OpCut, contacts))
 		require.Empty(t, booleaneval.ShiftDirections(meshbool.OpIntersect, contacts))
 	})
 
 	t.Run("a Cut pokes a flush tool through the wall", func(t *testing.T) {
 		t.Parallel()
-		contacts := []meshbool.CoplanarContact{contact(up, false)}
+		contacts := []meshbool.TouchContact{contact(up, false)}
 		dirs := booleaneval.ShiftDirections(meshbool.OpCut, contacts)
 		requireOpens(t, dirs, contacts)
 		for _, u := range dirs {
@@ -89,7 +89,7 @@ func TestShiftDirections(t *testing.T) {
 
 	t.Run("a face-on-face touch decides the direction beside flush walls", func(t *testing.T) {
 		t.Parallel()
-		contacts := []meshbool.CoplanarContact{contact(down, true), contact(north, false), contact(south, false)}
+		contacts := []meshbool.TouchContact{contact(down, true), contact(north, false), contact(south, false)}
 		dirs := booleaneval.ShiftDirections(meshbool.OpCut, contacts)
 		requireOpens(t, dirs, contacts)
 		for _, u := range dirs {
@@ -99,7 +99,7 @@ func TestShiftDirections(t *testing.T) {
 
 	t.Run("conflicting face-on-face touches decline", func(t *testing.T) {
 		t.Parallel()
-		contacts := []meshbool.CoplanarContact{contact(up, true), contact(down, true)}
+		contacts := []meshbool.TouchContact{contact(up, true), contact(down, true)}
 		require.Empty(t, booleaneval.ShiftDirections(meshbool.OpUnion, contacts))
 		require.Empty(t, booleaneval.ShiftDirections(meshbool.OpCut, contacts))
 	})

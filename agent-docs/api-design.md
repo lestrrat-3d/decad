@@ -1261,7 +1261,9 @@ share no cap area, and every boolean over them runs.
 
 A document with a gap tolerance (`agent-docs/gap-tolerance-design.md` §5.2,
 0.01 mm by default) runs such a boolean again with the second operand moved by
-up to that tolerance, along a direction that opens every coplanar contact. A
+up to that tolerance, along a direction that opens every coplanar contact. The
+same retry resolves an edge grazing along a facet and an isolated point touch,
+so bodies meeting along an edge or at a corner join in a `Union`. A
 `Union` of bodies touching face on face then builds one body, a `Cut` of such a
 body leaves its target, an `Intersect` of them is empty, and a tool flush with
 its target's wall cuts through it. The result reads `Approximate` and its

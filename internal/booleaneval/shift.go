@@ -54,19 +54,20 @@ const (
 	shiftOpenMargin = 0.02
 )
 
-// shiftDirections returns the unit directions to try for the coplanar contacts
-// that refused the Boolean, or none when no shift opens them the way the
-// operation needs. Every contact must open, whichever way it opens. The way
-// matters where it changes the result. A Union wants its operands to overlap,
-// so the result is one body, and a face-on-face touch (Opposite) must open
-// inward along the first operand's outward normal. Cut and Intersect want the
-// operands apart, so a face-on-face touch must open outward along it: a
-// face-touching Intersect is empty and a face-touching Cut leaves its target
-// whole. When no contact is a face-on-face touch, the operands are flush on
-// one side, and Cut and Intersect still need every contact to open outward, so
-// a tool flush with its target's wall pokes through it instead of leaving a
-// skin. Union wants nothing more of a flush contact than that it open.
-func shiftDirections(op meshbool.OperationKind, contacts []meshbool.CoplanarContact) []r3.Vec {
+// shiftDirections returns the unit directions to try for the contacts that
+// refused the Boolean, or none when no shift opens them the way the operation
+// needs. Every contact must open, whichever way it opens. The way matters where
+// it changes the result. A Union wants its operands to overlap, so the result is
+// one body, and a Decisive contact (a face-on-face touch, an edge grazing along
+// a facet, an isolated point touch) must open inward along the first operand's
+// outward normal. Cut and Intersect want the operands apart, so a Decisive
+// contact must open outward along it: a touching Intersect is empty and a
+// touching Cut leaves its target whole. When no contact is Decisive, the
+// operands are flush on one side, and Cut and Intersect still need every
+// contact to open outward, so a tool flush with its target's wall pokes through
+// it instead of leaving a skin. Union wants nothing more of a flush contact
+// than that it open.
+func shiftDirections(op meshbool.OperationKind, contacts []meshbool.TouchContact) []r3.Vec {
 	sigma := 1.0
 	if op == meshbool.OpUnion {
 		sigma = -1
@@ -97,10 +98,10 @@ func shiftDirections(op meshbool.OperationKind, contacts []meshbool.CoplanarCont
 // wantedContacts are the contacts whose opening direction matters to op: the
 // face-on-face touches when there are any, and otherwise every contact for Cut
 // and Intersect and none for Union.
-func wantedContacts(op meshbool.OperationKind, contacts []meshbool.CoplanarContact) []meshbool.CoplanarContact {
-	var touches []meshbool.CoplanarContact
+func wantedContacts(op meshbool.OperationKind, contacts []meshbool.TouchContact) []meshbool.TouchContact {
+	var touches []meshbool.TouchContact
 	for _, c := range contacts {
-		if c.Opposite {
+		if c.Decisive {
 			touches = append(touches, c)
 		}
 	}
@@ -117,7 +118,7 @@ func wantedContacts(op meshbool.OperationKind, contacts []meshbool.CoplanarConta
 // shiftOpens reports whether moving the second operand along u opens every
 // contact by at least shiftOpenMargin, and every wanted contact in the sense
 // sigma names.
-func shiftOpens(u r3.Vec, sigma float64, wanted, contacts []meshbool.CoplanarContact) bool {
+func shiftOpens(u r3.Vec, sigma float64, wanted, contacts []meshbool.TouchContact) bool {
 	for _, c := range contacts {
 		if math.Abs(u.Dot(c.NormalA)) < shiftOpenMargin {
 			return false
@@ -216,14 +217,12 @@ func shiftOperandMesh(ctx context.Context, m *topo.Mesh, shift r3.Vec) (decision
 }
 
 // retryShifted runs attempt with the second operand moved by up to the
-// document's gap tolerance, after attempt(zero) refused with coplanar contacts.
-// It returns the first outcome that is not a coplanar refusal, and the original
-// refusal when no shift gives a different outcome. Only coplanar contacts are
-// retried: they are the contacts a shift opens without changing which side of
-// the other operand a grazing edge or point lies on.
+// document's gap tolerance, after attempt(zero) refused with contacts the exact
+// predicates cannot classify. It returns the first outcome that is not such a
+// refusal, and the original refusal when no shift gives a different outcome.
 func retryShifted(ctx context.Context, refusal error, op meshbool.OperationKind,
 	attempt func(r3.Vec) (Evaluation, error)) (Evaluation, error) {
-	var coplanar *meshbool.CoplanarContactError
+	var coplanar *meshbool.TouchContactError
 	if !errors.As(refusal, &coplanar) {
 		return Evaluation{}, refusal
 	}
@@ -241,7 +240,7 @@ func retryShifted(ctx context.Context, refusal error, op meshbool.OperationKind,
 			if errors.Is(err, errShiftDeclined) {
 				continue
 			}
-			var again *meshbool.CoplanarContactError
+			var again *meshbool.TouchContactError
 			if errors.As(err, &again) {
 				continue
 			}
