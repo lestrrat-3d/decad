@@ -2189,3 +2189,4 @@
 10	0.01	TestDocumentGapToleranceOptions
 10	0.20	TestBooleanGapTolerance
 10	0.20	TestBooleanGapToleranceStaysExactForCurvedContact
+10	0.20	TestBooleanGapToleranceEdgeAndPointTouches

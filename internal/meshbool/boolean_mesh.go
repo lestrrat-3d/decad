@@ -160,19 +160,27 @@ func MeshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 	return meshBoolean(ctx, op, ma, mb, memo, newKeyMemo)
 }
 
-// maxCoplanarContacts is how many coplanar facet pairs a refusal records. The
+// maxTouchContacts is how many coplanar facet pairs a refusal records. The
 // scan stops there: a mesh that coplanar everywhere needs no more to be refused.
-const maxCoplanarContacts = 64
+const maxTouchContacts = 64
 
 // coplanarContactOf reads the first operand's outward unit normal at facet i
 // and whether facet j of the second faces the other way. The exact normals are
 // rounded to float64 only here, for the direction a caller picks.
-func coplanarContactOf(ma, mb *BoolMesh, i, j int) CoplanarContact {
+func coplanarContactOf(ma, mb *BoolMesh, i, j int) TouchContact {
 	ma.PrepareFloatNormal(i)
 	mb.PrepareFloatNormal(j)
 	na, _ := ma.Fnorms[i].Normalize()
 	nb, _ := mb.Fnorms[j].Normalize()
-	return CoplanarContact{NormalA: na, Opposite: na.Dot(nb) < 0}
+	return TouchContact{NormalA: na, Decisive: na.Dot(nb) < 0}
+}
+
+// touchOf is the always-decisive contact at facet i of the first operand: an
+// edge grazing along a facet, or a point touch.
+func touchOf(ma *BoolMesh, i int) TouchContact {
+	ma.PrepareFloatNormal(i)
+	na, _ := ma.Fnorms[i].Normalize()
+	return TouchContact{NormalA: na, Decisive: true}
 }
 
 // meshBoolean is MeshBoolean with the exact-point key function KeepSide uses
@@ -187,6 +195,7 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 	cutsA := map[int][]Xseg{}
 	cutsB := map[int][]Xseg{}
 	var pointTouches []proof.Xpt
+	var pointFacets []int
 	var segEnds []proof.Xpt
 	var inPlane []PairContact
 	// rims maps each rim vertex (a contact segment's endpoint, by exact key)
@@ -197,8 +206,8 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 	// other, which the held-mesh gate reads once classification is done.
 	var touchedA, touchedB []int
 	// coplanar collects the coplanar facet pairs the scan meets, up to
-	// maxCoplanarContacts, so the refusal can say which planes are involved.
-	var coplanar []CoplanarContact
+	// maxTouchContacts, so the refusal can say which planes are involved.
+	var coplanar []TouchContact
 	work := 0
 	contacts := NewContactBatchExecutor(ctx, ma, mb, memo, ContactWorkers(ctx), func(pair ContactPair, c TriContact) error {
 		i, j := pair.I, pair.J
@@ -206,8 +215,8 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 		tb := TriCorners(mb, j)
 		if c.Kind == ContactRegion {
 			coplanar = append(coplanar, coplanarContactOf(ma, mb, i, j))
-			if len(coplanar) >= maxCoplanarContacts {
-				return ExpectedBoolean(BooleanExpectedContact, &CoplanarContactError{Contacts: coplanar})
+			if len(coplanar) >= maxTouchContacts {
+				return ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchCoplanar, Contacts: coplanar})
 			}
 			return nil
 		}
@@ -218,6 +227,7 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 		touchedB = append(touchedB, j)
 		if c.Kind == ContactPoint {
 			pointTouches = append(pointTouches, c.P0)
+			pointFacets = append(pointFacets, i)
 			return nil
 		}
 		segEnds = append(segEnds, c.P0, c.P1)
@@ -267,7 +277,7 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 		return nil, 0, err
 	}
 	if len(coplanar) > 0 {
-		return nil, 0, ExpectedBoolean(BooleanExpectedContact, &CoplanarContactError{Contacts: coplanar})
+		return nil, 0, ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchCoplanar, Contacts: coplanar})
 	}
 	// The held-mesh gate runs on the classification's own answer and before
 	// any facet is cut (agent-docs/faceted-vertex-bounds-design.md §5).
@@ -287,6 +297,9 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 	// is a real rim of the result.
 	blockedA := map[[2]int]struct{}{}
 	blockedB := map[[2]int]struct{}{}
+	// grazes collects the facets of the first operand at every graze, so the
+	// refusal can say where the operands touch.
+	var grazes []TouchContact
 	for i, p := range inPlane {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -299,7 +312,10 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 				return nil, 0, err
 			}
 			if !crossing {
-				return nil, 0, ErrUnclassifiableContact(`an operand edge grazes along the other operand's facet`)
+				if len(grazes) < maxTouchContacts {
+					grazes = append(grazes, touchOf(ma, p.I))
+				}
+				continue
 			}
 			blockedA[key] = struct{}{}
 		}
@@ -309,7 +325,10 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 				return nil, 0, err
 			}
 			if !crossing {
-				return nil, 0, ErrUnclassifiableContact(`an operand edge grazes along the other operand's facet`)
+				if len(grazes) < maxTouchContacts {
+					grazes = append(grazes, touchOf(ma, p.I))
+				}
+				continue
 			}
 			blockedB[key] = struct{}{}
 		}
@@ -334,6 +353,10 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 		}
 	}
 
+	if len(grazes) > 0 {
+		return nil, 0, ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchGraze, Contacts: grazes})
+	}
+
 	// A point contact is legitimate only as the endpoint of some crossing
 	// segment (a chain passing exactly through a vertex). An isolated one is a
 	// tangency the boolean cannot classify: the operands pinch at a point, and
@@ -343,10 +366,14 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 		for _, p := range segEnds {
 			ends[p.Key()] = struct{}{}
 		}
-		for _, p := range pointTouches {
-			if _, ok := ends[p.Key()]; !ok {
-				return nil, 0, ErrUnclassifiableContact(`the operand boundaries touch at an isolated point`)
+		var isolated []TouchContact
+		for k, p := range pointTouches {
+			if _, ok := ends[p.Key()]; !ok && len(isolated) < maxTouchContacts {
+				isolated = append(isolated, touchOf(ma, pointFacets[k]))
 			}
+		}
+		if len(isolated) > 0 {
+			return nil, 0, ExpectedBoolean(BooleanExpectedContact, &TouchContactError{What: touchPoint, Contacts: isolated})
 		}
 	}
 

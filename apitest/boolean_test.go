@@ -1015,7 +1015,7 @@ func TestUnionRejectsVertexTangentContact(t *testing.T) {
 	// isolated point contact no crossing chain owns, which the boolean refuses
 	// rather than stitching a non-manifold result. The model is valid, so the
 	// refusal is BooleanUnsupportedContact wrapping ErrUnsupported.
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 10, 10, 10)
 	_, err := decad.Union(t.Context(), a, b)
@@ -1087,7 +1087,7 @@ func TestUnionRejectsEdgeEdgePointTouch(t *testing.T) {
 	// the facet pairs that see it properly cross each other's planes and their
 	// crossing intervals meet at exactly one point. That zero-length overlap
 	// is the contact, and the boolean refuses it like any isolated point touch.
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	w := sketch.NewWorld()
 	a := wedgePrism(t, doc, w, w.XY(), [3][2]float64{{0, 0}, {12, -4}, {12, 6}}, 5)
 	b := wedgePrism(t, doc, w, w.XZ(), [3][2]float64{{0, 0}, {-12, -6}, {-12, 5}}, 5)
@@ -1207,7 +1207,7 @@ func TestUnionRejectsKnifeEdgeGraze(t *testing.T) {
 	// The inner wedge is placed up 1 mm, so the analytic union's shared-axis
 	// gate declines the pair and the mesh path decides it; drawn unplaced on
 	// one plane, the pair is TestStackedUnionKnifeEdgeNestedWedge's.
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	w := sketch.NewWorld()
 	a := wedgePrism(t, doc, w, w.XY(), [3][2]float64{{0, 0}, {12, -4}, {12, 6}}, 5)
 	b := translated(t, wedgePrism(t, doc, w, w.XY(), [3][2]float64{{0, 0}, {8, -1}, {8, 2}}, 3), 0, 0, 1)

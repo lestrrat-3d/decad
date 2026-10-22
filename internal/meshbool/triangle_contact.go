@@ -24,28 +24,41 @@ func ErrUnclassifiableContact(what string) error {
 		fmt.Errorf(`%w: %s — the exact predicates cannot classify a tangent contact`, decaderr.ErrUnsupported, what))
 }
 
-// CoplanarContact is one pair of coplanar operand facets that share positive
-// area: the first operand's outward unit normal at the contact, and whether the
-// second operand's facet faces the opposite way, which puts the operands on
-// opposite sides of the shared plane (a face-on-face touch) rather than on one.
-type CoplanarContact struct {
+// TouchContact is one contact the exact predicates cannot classify: the first
+// operand's outward unit normal at the contact, and whether the way the second
+// operand must move to resolve it matters to the result. A coplanar overlap is
+// Decisive when the second operand's facet faces the opposite way, which puts
+// the operands on opposite sides of the shared plane (a face-on-face touch)
+// rather than flush on one side. An edge grazing along a facet and an isolated
+// point touch are always Decisive.
+type TouchContact struct {
 	NormalA  r3.Vec
-	Opposite bool
+	Decisive bool
 }
 
-// CoplanarContactError is ErrUnclassifiableContact's refusal for coplanar
-// facets, carrying the contacts it found so that a caller allowed to move an
-// operand can choose the direction that opens them. It reads as the same
-// refusal, and unwraps to ErrUnsupported.
-type CoplanarContactError struct {
-	Contacts []CoplanarContact
+// TouchContactError is ErrUnclassifiableContact's refusal for a coplanar
+// overlap, an edge grazing along a facet or an isolated point touch, carrying
+// the contacts it found so that a caller allowed to move an operand can choose
+// the direction that opens them. It reads as the same refusal, and unwraps to
+// ErrUnsupported.
+type TouchContactError struct {
+	// What names the contact as ErrUnclassifiableContact does.
+	What     string
+	Contacts []TouchContact
 }
 
-func (e *CoplanarContactError) Error() string {
-	return fmt.Sprintf(`%v: two operand facets overlap in one plane — the exact predicates cannot classify a tangent contact`, decaderr.ErrUnsupported)
+func (e *TouchContactError) Error() string {
+	return fmt.Sprintf(`%v: %s — the exact predicates cannot classify a tangent contact`, decaderr.ErrUnsupported, e.What)
 }
 
-func (e *CoplanarContactError) Unwrap() error { return decaderr.ErrUnsupported }
+func (e *TouchContactError) Unwrap() error { return decaderr.ErrUnsupported }
+
+// The contacts a TouchContactError names.
+const (
+	touchCoplanar = `two operand facets overlap in one plane`
+	touchGraze    = `an operand edge grazes along the other operand's facet`
+	touchPoint    = `the operand boundaries touch at an isolated point`
+)
 
 // ContactKind is the DIMENSION of the exact intersection of two closed
 // triangles. Two closed triangles are convex sets, so their intersection is
