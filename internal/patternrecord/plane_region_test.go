@@ -10,11 +10,13 @@ import (
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
 // arcFit is a smooth open curve, a few lengths wide, sampled by n fit points.
-func arcFit(n int) []Point2 {
+func arcFit() []Point2 {
+	const n = 15
 	fit := make([]Point2, n)
 	for i := range fit {
 		t := float64(i) / float64(n-1)
@@ -37,19 +39,26 @@ func rotationAboutZ(t *testing.T, turn float64) r3.Transform {
 	return x
 }
 
-func TestPlaneMapRefusesWhatIsNotAnExactSimilarity(t *testing.T) {
+func TestMovePlaneRegionRefusesWhatLeavesThePlane(t *testing.T) {
 	f := xyFrame(t)
+	region := Region{Outer: LoopRecord{Segments: []CurveSegment{
+		LineSeg{Start: Point2{U: 8, V: 0}, End: Point2{U: 9, V: 1}, TStart: 0, TEnd: 1},
+	}}}
+	move := func(x r3.Transform) error {
+		pm, ok := NewPlaneMap(f, x, f, r3.Identity())
+		require.True(t, ok, "the target frame has a plane")
+		_, _, err := MovePlaneRegion(proofbound.NewWorkBudget(t.Context()), region, pm)
+		return err
+	}
 	t.Run("a tilted placement leaves the plane", func(t *testing.T) {
 		x, err := r3.RotationAround(r3.Vec{}, r3.NewVec(1, 0, 0), units.Radians(0.1))
 		require.NoError(t, err)
-		_, ok := NewPlaneMap(f, x, f, r3.Identity())
-		require.False(t, ok)
+		require.ErrorIs(t, move(x), decaderr.ErrUnsupported)
 	})
 	t.Run("a lifted placement leaves the plane", func(t *testing.T) {
 		x, err := r3.Translation(r3.NewVec(0, 0, 1))
 		require.NoError(t, err)
-		_, ok := NewPlaneMap(f, x, f, r3.Identity())
-		require.False(t, ok)
+		require.ErrorIs(t, move(x), decaderr.ErrUnsupported)
 	})
 	t.Run("the identity is exact", func(t *testing.T) {
 		pm, ok := NewPlaneMap(f, r3.Identity(), f, r3.Identity())
@@ -57,14 +66,68 @@ func TestPlaneMapRefusesWhatIsNotAnExactSimilarity(t *testing.T) {
 		require.Equal(t, 1.0, pm.ScaleLo)
 		require.Equal(t, 1.0, pm.ScaleHi)
 		require.Zero(t, pm.ScaleDeviation())
+		require.Zero(t, pm.Defect)
+		require.Zero(t, pm.NormalCharge(10, 10))
+		require.NoError(t, move(r3.Identity()))
 	})
+}
+
+// obliqueFrame is a frame no axis aligns with, orthonormal only to rounding.
+func obliqueFrame(t *testing.T) r3.Frame {
+	t.Helper()
+	rot, err := r3.RotationAround(r3.Vec{}, r3.NewVec(1, 1, 1), units.Radians(math.Pi/6))
+	require.NoError(t, err)
+	f, err := r3.NewFrame(r3.NewVec(3, -2, 5), rot.ApplyDir(r3.NewVec(1, 0, 0)), rot.ApplyDir(r3.NewVec(0, 1, 0)))
+	require.NoError(t, err)
+	return f
+}
+
+// TestPlaneMapOnAnObliqueFrameChargesItsDefects turns a section by a 17th of a turn
+// about the normal of an oblique frame: the map exists, its defects are a few float
+// steps, and the charge of the moved record stays tiny but positive.
+func TestPlaneMapOnAnObliqueFrameChargesItsDefects(t *testing.T) {
+	f := obliqueFrame(t)
+	x, err := r3.RotationAround(f.Origin(), f.N(), units.Radians(2*math.Pi/17))
+	require.NoError(t, err)
+	pm, ok := NewPlaneMap(f, x, f, r3.Identity())
+	require.True(t, ok)
+	require.Less(t, pm.Defect, 1e-14)
+	require.Less(t, pm.ScaleDeviation(), 1e-14)
+	require.Less(t, pm.NormalCharge(10, 10), 1e-13)
+
+	fit := arcFit()
+	region := Region{Outer: LoopRecord{Segments: []CurveSegment{
+		FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1},
+		ArcSeg{Center: Point2{}, Start: fit[14], End: Point2{U: 8, V: 1}, TStart: 0, TEnd: 1},
+		CircleSeg{Center: Point2{U: 1, V: 1}, Radius: units.Millimeters(0.5), CCW: true, TStart: 0, TEnd: 1},
+		LineSeg{Start: fit[14], End: fit[0], TStart: 0, TEnd: 1},
+	}}}
+	_, delta, err := MovePlaneRegion(proofbound.NewWorkBudget(t.Context()), region, pm)
+	require.NoError(t, err)
+	require.Positive(t, delta)
+	require.Less(t, delta, 1e-12)
+}
+
+// TestPlaneMapOnAnObliqueFrameRefusesATilt tilts the same frame's placement out of
+// its plane by a hundredth of a radian.
+func TestPlaneMapOnAnObliqueFrameRefusesATilt(t *testing.T) {
+	f := obliqueFrame(t)
+	x, err := r3.RotationAround(f.Origin(), f.U(), units.Radians(0.01))
+	require.NoError(t, err)
+	pm, ok := NewPlaneMap(f, x, f, r3.Identity())
+	require.True(t, ok)
+	region := Region{Outer: LoopRecord{Segments: []CurveSegment{
+		LineSeg{Start: Point2{U: 0, V: 1}, End: Point2{U: 0, V: 9}, TStart: 0, TEnd: 1},
+	}}}
+	_, _, err = MovePlaneRegion(proofbound.NewWorkBudget(t.Context()), region, pm)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 }
 
 func TestMovePlaneRegionChargesFitSplineRounding(t *testing.T) {
 	f := xyFrame(t)
 	pm, ok := NewPlaneMap(f, rotationAboutZ(t, 1.0/17), f, r3.Identity())
 	require.True(t, ok)
-	fit := arcFit(15)
+	fit := arcFit()
 	region := Region{Outer: LoopRecord{Segments: []CurveSegment{
 		FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1},
 		LineSeg{Start: fit[14], End: fit[0], TStart: 0, TEnd: 1},
@@ -91,7 +154,7 @@ func TestFitMoveChargeIsNotVacuous(t *testing.T) {
 	f := xyFrame(t)
 	pm, ok := NewPlaneMap(f, rotationAboutZ(t, 1.0/17), f, r3.Identity())
 	require.True(t, ok)
-	fit := arcFit(15)
+	fit := arcFit()
 	moved := make([]Point2, len(fit))
 	for i, p := range fit {
 		u, v := pm.Exact(p)
@@ -137,7 +200,7 @@ func TestFitMoveChargeEnclosesTheSampledDistance(t *testing.T) {
 	for _, turn := range []float64{1.0 / 17, 1.0 / 42, 0.3} {
 		pm, ok := NewPlaneMap(f, rotationAboutZ(t, turn), f, r3.Identity())
 		require.True(t, ok)
-		fit := arcFit(15)
+		fit := arcFit()
 		moved := make([]Point2, len(fit))
 		for i, p := range fit {
 			m, _, err := pm.Motion()(p)

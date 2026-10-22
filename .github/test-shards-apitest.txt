@@ -2215,3 +2215,4 @@
 10	0.20	TestPatternJoinMatchesPatternCopiesThenUnion
 10	0.20	TestPatternJoinRefusalLeavesTheDocumentUnchanged
 10	0.20	TestPatternJoinSlidesATongueAlongAPlate
+10	0.20	TestPatternJoinOnAnObliqueFrame
