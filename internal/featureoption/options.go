@@ -62,6 +62,7 @@ type identSweepTwist struct{}
 type identMitredJoins struct{}
 type identSectionScale struct{}
 type identLoftAlignment struct{}
+type identLoftSplits struct{}
 
 // WithTaper records the signed extrusion taper angle.
 func WithTaper(a units.Value) ExtrudeOption {
@@ -93,6 +94,28 @@ func WithLoftAlignment(offsets ...int) LoftOption {
 	out := make([]int, len(offsets))
 	copy(out, offsets)
 	return loftOption{option.New(identLoftAlignment{}, out)}
+}
+
+// LoftSplit names one recorded segment of one loop and the fractions of its
+// parameter range at which a loft cuts it.
+type LoftSplit struct {
+	Loop, Segment int
+	At            []float64
+}
+
+// loftSplitsPayload is WithLoftSplits' value: one list per section.
+type loftSplitsPayload struct{ First, Second []LoftSplit }
+
+// WithLoftSplits records the splits of the first and of the second section.
+func WithLoftSplits(first, second []LoftSplit) LoftOption {
+	clone := func(in []LoftSplit) []LoftSplit {
+		out := make([]LoftSplit, len(in))
+		for i, s := range in {
+			out[i] = LoftSplit{Loop: s.Loop, Segment: s.Segment, At: slices.Clone(s.At)}
+		}
+		return out
+	}
+	return loftOption{option.New(identLoftSplits{}, loftSplitsPayload{First: clone(first), Second: clone(second)})}
 }
 
 // IsSurfaceResult reports whether an option names the shared surface result.
@@ -242,12 +265,14 @@ func validateSectionScale(raw []units.Value, segments int) ([]float64, error) {
 type LoftConfig struct {
 	Alignment     []int
 	SurfaceResult bool
+	// Splits holds the splits of the first and the second section.
+	Splits [2][]LoftSplit
 }
 
 // DecodeLoft checks owned options and repeated alignment before the sketch seam.
 func DecodeLoft(opts []LoftOption) (LoftConfig, error) {
 	var cfg LoftConfig
-	haveAlignment := false
+	haveAlignment, haveSplits := false, false
 	for _, raw := range opts {
 		if raw == nil {
 			return LoftConfig{}, fmt.Errorf(`%w: a nil option names nothing to apply`, decaderr.ErrDegenerate)
@@ -271,6 +296,16 @@ func DecodeLoft(opts []LoftOption) (LoftConfig, error) {
 			}
 			cfg.Alignment = slices.Clone(v)
 			haveAlignment = true
+		case identLoftSplits:
+			if haveSplits {
+				return LoftConfig{}, fmt.Errorf(`%w: WithLoftSplits was passed more than once; two split payloads name two different correspondences`, decaderr.ErrDegenerate)
+			}
+			v, ok := option.Get[loftSplitsPayload](o)
+			if !ok {
+				return LoftConfig{}, fmt.Errorf(`%w: WithLoftSplits carries no splits`, decaderr.ErrDegenerate)
+			}
+			cfg.Splits = [2][]LoftSplit{v.First, v.Second}
+			haveSplits = true
 		default:
 			return LoftConfig{}, fmt.Errorf(`%w: unknown loft option identifier %T`, decaderr.ErrDegenerate, ident)
 		}

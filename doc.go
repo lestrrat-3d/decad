@@ -261,6 +261,9 @@
 // WithLoftAlignment
 // picks a loft's per-loop correspondence rotation
 // and is accepted at most once; a repeat is [ErrDegenerate], as is a repeated
+// WithLoftSplits, which cuts recorded segments of either section at stated
+// fractions of their parameter ranges so loops of different segment counts
+// pair one to one, and a repeated
 // WithLeftHand, which turns a coil left-handed. Separately,
 // Verify's options (WithTolerance, WithMinWallThickness, WithPullDirection,
 // WithConcaveRadius, WithClearances) take effect. The export package's STL and

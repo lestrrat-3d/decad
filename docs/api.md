@@ -140,7 +140,7 @@ Build a sweep path with `decad.NewPath`. Its segments are `decad.LineTo`, `decad
 | Function | Applies to |
 |---|---|
 | `decad.WithTaper` | `decad.Extrude` |
-| `decad.WithLoftAlignment` | `decad.Loft` |
+| `decad.WithLoftAlignment`, `decad.WithLoftSplits` | `decad.Loft` |
 | `decad.WithMitredJoins`, `decad.WithSectionScale`, `decad.WithSweepTwist` | `decad.Sweep` |
 | `decad.WithLeftHand` | `decad.Coil` |
 | `decad.WithSurfaceResult` | Section features: build a sheet instead of a solid. |
