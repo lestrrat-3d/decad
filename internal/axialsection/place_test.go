@@ -167,3 +167,26 @@ func TestPlaceOnAnObliqueFrame(t *testing.T) {
 	require.Less(t, out[1].Delta, 1e-12)
 	require.Equal(t, ref.Frame0, out[1].Frame0)
 }
+
+// TestPlaceChargesNothingWhenTheMapIsExact slides a section of quarter-millimetre coordinates by a
+// whole number of millimetres: every moved coordinate is exact, so the section, the plane and the
+// sweep are charged exactly zero, spline included.
+func TestPlaceChargesNothingWhenTheMapIsExact(t *testing.T) {
+	t.Parallel()
+	pts := []sectionrecord.Point2{{U: 0, V: 0}, {U: 1, V: 0.5}, {U: 2, V: 0.75}, {U: 3, V: 0.5}, {U: 4, V: 0}}
+	section := momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.FitSplineSeg{Fit: pts, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: pts[4], End: pts[0], TStart: 0, TEnd: 1},
+	}}}
+	slide, err := r3.Translation(r3.NewVec(6, -2, 0))
+	require.NoError(t, err)
+	out, ok, err := axialsection.Place(t.Context(), []axialsection.Operand{
+		sweep(t, section, r3.Identity(), true), sweep(t, section, slide, false)})
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Zero(t, out[1].Delta)
+	moved := fitOf(t, out[1].Section)[0]
+	for i, p := range pts {
+		require.Equal(t, sectionrecord.Point2{U: p.U + 6, V: p.V - 2}, moved[i])
+	}
+}

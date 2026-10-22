@@ -235,3 +235,30 @@ func TestPatternJoinOnAnObliqueFrame(t *testing.T) {
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
 }
+
+// TestPatternJoinManyCopies joins 64 and 128 patterned lobes to a disc and checks the volume
+// against the disc and the lobes: the sum of the parts, within the bounds of all of them.
+func TestPatternJoinManyCopies(t *testing.T) {
+	t.Parallel()
+	for _, n := range []int{64, 128} {
+		t.Run(strconv.Itoa(n)+" copies", func(t *testing.T) {
+			t.Parallel()
+			const r, height = 3.0, 2.0
+			doc := decad.New()
+			disc := circleBodyAtZ(t, doc, 0, r, 0, height)
+			lobe := lobeLoft(t, doc, r, 0, 0.4*math.Pi/float64(n), height)
+			dv, err := disc.Volume()
+			require.NoError(t, err)
+			lv, err := lobe.Volume()
+			require.NoError(t, err)
+			joined, err := decad.PatternJoin(t.Context(), disc, lobe,
+				decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
+			require.NoError(t, err)
+			require.True(t, joined.IsSolid())
+			v, err := joined.Volume()
+			require.NoError(t, err)
+			want := dv.Value.Base() + float64(n)*lv.Value.Base()
+			require.InDelta(t, want, v.Value.Base(), v.Bound.Base()+dv.Bound.Base()+float64(n)*lv.Bound.Base())
+		})
+	}
+}

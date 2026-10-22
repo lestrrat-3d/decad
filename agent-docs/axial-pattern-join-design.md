@@ -87,6 +87,9 @@ second one.
   fillet.
 - A set whose only loft is itself placed has no reference frame and is a miss.
 - Segments of kind line, arc, circle and fit spline are placed. Other kinds are a miss.
+- A tooth or lobe that only touches the base (a bottom arc resting on the circle with the flank ends on it) or misses it by
+  a micron is a miss: it makes no region `sketch` can certify as one union. `apitest.TestPatternJoinRefusesLobesThatOnlyTouchOrMissTheBase`
+  pins both.
 - Copies whose free-form edges cross one another (two arched tops that overlap), or whose sides nearly coincide without
   sharing a whole edge, are a miss: `sketch` certifies a spline against a circle but not a spline against another spline
   or an arc. `apitest.TestPatternJoinRefusesCopiesItCannotCertify` pins both refusals against the 4 mm step that joins.
@@ -100,7 +103,10 @@ second one.
   circle charge is the radius scale deviation.
 - `internal/axialsection`: a lobe placed by a 17th turn is re-recorded within a positive `δ` below 1e-12 and each fit
   point is the rotated source point; misses for a tilt, a lift and a placed reference; each height and plane guard fires
-  alone (shown to fail by disabling it).
+  alone (shown to fail by disabling it); a section of quarter-millimetre coordinates slid by whole millimetres is charged
+  exactly zero, spline included (`TestPlaceChargesNothingWhenTheMapIsExact`), so the charge is nonzero only where a
+  placement rounds.
+- `apitest.TestPatternJoinManyCopies` joins 64 and 128 lobes to a disc and checks the sum of the parts.
 - `apitest.TestPatternedLobesJoinADisc`: one lobe patterned 8, 12, 17 and 24 times and joined to a disc has the volume
   of the same lobes drawn at their angles within both bounds, with a larger bound, and a `VerifyAll` mesh whose boundary
   and volume are verified. `TestPatternedLobesAboutATiltedAxisAreRefused`: `ErrUnsupported`.
