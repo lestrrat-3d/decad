@@ -269,6 +269,20 @@ func (pl Payload) ProvesSimple(context.Context) bool {
 // inherits this bound.
 func (pl Payload) AxialDelta() float64 { return pl.Delta }
 
+// WithPlacement is pl under the composed motion without building it: the records are
+// untouched and the mesh fields are cleared, as Placed clears them before it builds. The
+// result is a payload for a reader of records alone, such as the axial-section union; it
+// is not a body.
+func (pl Payload) WithPlacement(composed r3.Transform) Payload {
+	next := pl
+	next.Xform = composed
+	next.Verts, next.Tris, next.Walls = nil, nil, 0
+	next.CapStartCount, next.Cell, next.Side, next.Segment = 0, nil, nil, nil
+	next.TwistAreaCells = nil
+	next.Proof = loftmesh.MeshProof{}
+	return next
+}
+
 // Placed re-evaluates the same two records under the composed motion
 // (agent-docs/loft-design.md §7, §12 PR 2a): it re-lifts every vertex from the
 // record under the FULL composed transform rather than moving the held mesh

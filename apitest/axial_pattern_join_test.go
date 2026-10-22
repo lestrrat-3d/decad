@@ -303,3 +303,33 @@ func slimLobeLoft(t *testing.T, doc *decad.Document, r, half, height float64) *d
 	require.NoError(t, err)
 	return b
 }
+
+// TestPatternJoinMatchesBuiltInstancesExactly pins the join's unbuilt-copy route to the
+// built-copy route: PatternJoin holds the copies as placed payloads, PatternCopies then
+// Union builds each as a body, and the two give the same volume and bound to the bit.
+func TestPatternJoinMatchesBuiltInstancesExactly(t *testing.T) {
+	t.Parallel()
+	const r, height, n = 3.0, 2.0, 8
+	one := func(join bool) *decad.Body {
+		doc := decad.New()
+		disc := circleBodyAtZ(t, doc, 0, r, 0, height)
+		lobe := lobeLoft(t, doc, r, 0, 0.4*math.Pi/n, height)
+		spec := decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n}
+		if join {
+			b, err := decad.PatternJoin(t.Context(), disc, lobe, spec)
+			require.NoError(t, err)
+			return b
+		}
+		copies, err := decad.PatternCopies(t.Context(), lobe, spec)
+		require.NoError(t, err)
+		b, err := decad.Union(t.Context(), disc, append([]*decad.Body{lobe}, copies...)...)
+		require.NoError(t, err)
+		return b
+	}
+	a, err := one(true).Volume()
+	require.NoError(t, err)
+	b, err := one(false).Volume()
+	require.NoError(t, err)
+	require.Equal(t, b.Value.Base(), a.Value.Base())
+	require.Equal(t, b.Bound.Base(), a.Bound.Base())
+}
