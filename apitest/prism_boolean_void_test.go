@@ -29,7 +29,7 @@ func requireMeshPathVerdict(t *testing.T, err error) {
 
 func TestPrismUnionEnclosedVoidTakesMeshPath(t *testing.T) {
 	t.Parallel()
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	a := polyPrismBody(t, doc, voidCShapeA, 1)
 	b := polyPrismBody(t, doc, voidCShapeB, 1)
 	got, err := decad.Union(t.Context(), a, b)
@@ -45,7 +45,7 @@ func TestPrismUnionEnclosedVoidTakesMeshPath(t *testing.T) {
 // z = 0..10, and a 2×2×5 block on the first C's spine makes the union a stack.
 func TestStackedUnionEnclosedVoidTakesMeshPath(t *testing.T) {
 	t.Parallel()
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	plate := polyPrismBody(t, doc, voidCShapeA, 10)
 	block := boxBodyAtZ(t, doc, 0.5, 4, 2.5, 6, 10, 5)
 	stack, err := decad.Union(t.Context(), plate, block)
@@ -68,7 +68,7 @@ func TestStackedUnionEnclosedVoidTakesMeshPath(t *testing.T) {
 // chained Union meets the same void and returns the mesh path's verdict.
 func TestPatternedEnclosedVoidTakesMeshPath(t *testing.T) {
 	t.Parallel()
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	c := polyPrismBody(t, doc, [][2]float64{{0, 0}, {6, 1}, {6, 4}, {3, 3.5}, {3, 6.5}, {6, 6}, {6, 9}, {0, 10}}, 1)
 	got, err := decad.Patterned(t.Context(), c, decad.LinearPattern{Dir: patternX, Step: units.Millimeters(5), Count: 2})
 	if err == nil {

@@ -39,7 +39,7 @@ func TestPlacedAxisPrismBooleans(t *testing.T) {
 	}
 
 	t.Run("union overlapping", func(t *testing.T) {
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		b := placed(t, a, 0, 0, 5)
 		got, err := decad.Union(t.Context(), a, b)
@@ -47,7 +47,7 @@ func TestPlacedAxisPrismBooleans(t *testing.T) {
 		verify(t, got, 1500)
 	})
 	t.Run("union touching caps", func(t *testing.T) {
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		b := placed(t, a, 0, 0, 10)
 		got, err := decad.Union(t.Context(), a, b)
@@ -55,7 +55,7 @@ func TestPlacedAxisPrismBooleans(t *testing.T) {
 		verify(t, got, 2000)
 	})
 	t.Run("intersection", func(t *testing.T) {
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		b := placed(t, a, 0, 0, 5)
 		got, err := decad.Intersect(t.Context(), a, b)
@@ -63,7 +63,7 @@ func TestPlacedAxisPrismBooleans(t *testing.T) {
 		verify(t, got, 500)
 	})
 	t.Run("cut through tool", func(t *testing.T) {
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		target := boxBody(t, doc, 0, 0, 10, 10, 10)
 		tool := boxBody(t, doc, 2, 2, 8, 8, 20)
 		placedTool := placed(t, tool, 0, 0, -5)
@@ -72,7 +72,7 @@ func TestPlacedAxisPrismBooleans(t *testing.T) {
 		verify(t, got, 640)
 	})
 	t.Run("blind cut", func(t *testing.T) {
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		target := boxBody(t, doc, 0, 0, 10, 10, 10)
 		tool := boxBody(t, doc, 2, 2, 8, 8, 5)
 		placedTool := placed(t, tool, 0, 0, 5)
@@ -81,14 +81,14 @@ func TestPlacedAxisPrismBooleans(t *testing.T) {
 		verify(t, got, 820)
 	})
 	t.Run("off-axis translation refuses", func(t *testing.T) {
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		b := placed(t, a, 0.5, 0, 5)
 		_, err := decad.Union(t.Context(), a, b)
 		requireCoplanarFaceRefusal(t, err)
 	})
 	t.Run("rotated basis refuses", func(t *testing.T) {
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		motion, err := r3.FromBasis(r3.Basis{
 			EX: r3.NewVec(0, 0, -1),

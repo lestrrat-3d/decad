@@ -20,11 +20,15 @@ Outside prism-boolean's admitted class a boolean tessellates both operands
 (evaluator §9) and ends in one of three places, each measured in §2:
 
 1. **A coplanar contact refuses.** Two operands sharing a plane with positive
-   common area are `BooleanUnsupportedContact`. This is the dominant failure:
-   a boss standing on a face, a flange on a shaft,
+   common area are `BooleanUnsupportedContact` under `ExactOnly`, and when
+   no shift of the second operand opens the contact. This is the dominant
+   failure: a boss standing on a face, a flange on a shaft,
    a tooth placed by rotation, a mirrored half beside its source, a tool that
    is a multi-lump body — every one of them shares a cap or a wall with its
-   partner.
+   partner. A document with a gap tolerance runs the boolean again with the
+   second operand moved by up to that tolerance
+   (`agent-docs/gap-tolerance-design.md` §5.2), and the measurements below
+   are of the exact path.
 2. **The result is `Faceted`.** A cross-drilled hole, a slot, a keyway, a
    boss rooted inside a plate, a tee of cylinders all build, but as
    `facetedPayload`: most `Fillet`/`Chamfer`/`Shell` requests refuse

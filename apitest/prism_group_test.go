@@ -176,7 +176,7 @@ func TestPrismGroupUnionMergesOneLump(t *testing.T) {
 // would fill the cell, so the union takes the mesh path.
 func TestPrismGroupUnionLeavesAnEnclosedVoidToTheMeshPath(t *testing.T) {
 	t.Parallel()
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	// Two bars, then a U bridging them closes a 6×6 void at x 2..8, y 2..8.
 	group, err := decad.Union(t.Context(), boxBody(t, doc, 0, 0, 10, 2, 3), boxBody(t, doc, 0, 8, 10, 10, 3))
 	require.NoError(t, err)

@@ -74,8 +74,25 @@ func VolumeReading(ctx context.Context, audit *facetproof.MeshAudit, volSymDiff 
 // at the pair's own chord, scaled by chordScale; capFace and coneFace name the
 // cap and cone faces whose contact the proximity gate exempts for a
 // cone-tangent tooth (nil for every other Boolean).
+//
+// An operand pair whose contact the exact predicates cannot classify is tried
+// again with b moved by up to the document's gap tolerance
+// (agent-docs/gap-tolerance-design.md §5.2).
 func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	meshes OperandMesher, chordScale float64, capFace, coneFace *topo.Face) (Evaluation, error) {
+	ev, err := evaluate(ctx, op, a, b, meshes, chordScale, capFace, coneFace, r3.Vec{})
+	if err == nil {
+		return ev, nil
+	}
+	return retryShifted(ctx, err, op, func(shift r3.Vec) (Evaluation, error) {
+		return evaluate(ctx, op, a, b, meshes, chordScale, capFace, coneFace, shift)
+	})
+}
+
+// evaluate is Evaluate's single attempt, with b's mesh moved by shift when it
+// is not the zero vector.
+func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
+	meshes OperandMesher, chordScale float64, capFace, coneFace *topo.Face, shift r3.Vec) (Evaluation, error) {
 	if err := ctx.Err(); err != nil {
 		return Evaluation{}, err
 	}
@@ -155,6 +172,11 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		group, _ := facetedrecord.SourceTag(f, op == meshbool.OpCut && i >= targetFaces)
 		group.Origins = append([]provenance.Ref(nil), f.Origins...)
 		group.Planar = f.Surface.Kind() == surfacegeom.KindPlane || f.HeldPlanar
+		if shift != (r3.Vec{}) && i >= targetFaces {
+			// A moved operand's facets no longer lie on the surfaces they were
+			// cut from, so the result keeps no retained tag for them.
+			group = facetedrecord.Group{Origins: group.Origins}
+		}
 		groups = append(groups, group)
 	}
 	srcA, err := meshbool.SourceIDs(ctx, ma.Source, sourceID)
@@ -179,6 +201,19 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	mb, spiralCombine, combineHome, err := spiralsector.PrepareCombinedUnion(ctx, op, meshes, a, b, mb, tolMM)
 	if err != nil {
 		return Evaluation{}, err
+	}
+	// mbDecide is the mesh the contact gate reads: mb itself, unless b moved.
+	mbDecide := mb
+	if shift != (r3.Vec{}) {
+		// The spiral joins authenticate the operands' own geometry, which a
+		// moved operand no longer has.
+		if spiralJoin != nil || spiralCombine != nil || capFace != nil || coneFace != nil {
+			return Evaluation{}, errShiftDeclined
+		}
+		mbDecide, mb, err = shiftOperandMesh(ctx, mb, shift)
+		if err != nil {
+			return Evaluation{}, err
+		}
 	}
 	var capHome *spiralsector.CapHome
 	if spiralJoin != nil {
@@ -214,7 +249,12 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		}
 		return Evaluation{}, err
 	}
-	bmB, err := PrepBoolMesh(ctx, mb, srcB)
+	var bmB *meshbool.BoolMesh
+	if shift != (r3.Vec{}) {
+		bmB, err = prepBoolMesh(ctx, mb, srcB, func(int) (r3.Frame, bool) { return r3.Frame{}, false })
+	} else {
+		bmB, err = PrepBoolMesh(ctx, mb, srcB)
+	}
 	if err != nil {
 		if errors.Is(err, decaderr.ErrUnsupported) {
 			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported, err)
@@ -253,7 +293,7 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if combinedAdmission != nil {
 		spiralPairs = combinedAdmission.Roles
 	}
-	if err := meshbool.RefuseUndecidableProximity(ctx, ma, mb, bmA, bmB, memo,
+	if err := meshbool.RefuseUndecidableProximity(ctx, ma, mbDecide, bmA, bmB, memo,
 		capFace, coneFace, spiralPairs); err != nil {
 		err = meshbool.StagingError(op, err)
 		if errors.Is(err, decaderr.ErrUnsupported) {
@@ -468,6 +508,13 @@ func restoreSpiralCaps(ctx context.Context, payload *facetedrecord.Payload,
 // The contact is exactly what this pipeline must not miss, so the operand is
 // refused rather than partly examined. Loud beats silently wrong.
 func PrepBoolMesh(ctx context.Context, m *topo.Mesh, src []int) (*meshbool.BoolMesh, error) {
+	return prepBoolMesh(ctx, m, src, retainedPlaneOf(m))
+}
+
+// prepBoolMesh is PrepBoolMesh with the retained-plane reading as a parameter:
+// a moved operand's facets lie on no retained plane.
+func prepBoolMesh(ctx context.Context, m *topo.Mesh, src []int,
+	retained func(facet int) (r3.Frame, bool)) (*meshbool.BoolMesh, error) {
 	bm, err := meshbool.PrepContext(ctx, m.Vertices, m.Triangles, src)
 	if err != nil {
 		return nil, err
@@ -480,7 +527,7 @@ func PrepBoolMesh(ctx context.Context, m *topo.Mesh, src []int) (*meshbool.BoolM
 		return nil, err
 	}
 	bm.SetVertexBounds(beta)
-	bm.SetSlabBounds(retainedPlaneOf(m))
+	bm.SetSlabBounds(retained)
 	return bm, nil
 }
 

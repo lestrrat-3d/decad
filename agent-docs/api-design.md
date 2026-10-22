@@ -1255,12 +1255,24 @@ sketched on one plane, or on a datum plane and its `CreateOffsetPlane`, to
 refuse. Every pair outside that admitted class stays on the mesh path. There, two bodies
 extruded from ONE sketch plane to one end plane have coplanar caps by
 construction, and where their footprints OVERLAP those caps share positive
-area, which is the contact the boolean reads: `BooleanUnsupportedContact`.
-Coplanar caps on their own are not a contact — two such bodies standing apart
-in the plane share no cap area, and every boolean over them runs. What replaces
-the tangent contact is an INTERIOR overlap: no face pair coplanar, and each
-operand reaching into the other's interior, so every contact is a transversal
-crossing the evaluator does classify. Both operands span the same interval
+area, which is the contact the exact predicates cannot classify. Coplanar caps
+on their own are not a contact: two such bodies standing apart in the plane
+share no cap area, and every boolean over them runs.
+
+A document with a gap tolerance (`agent-docs/gap-tolerance-design.md` §5.2,
+0.01 mm by default) runs such a boolean again with the second operand moved by
+up to that tolerance, along a direction that opens every coplanar contact. A
+`Union` of bodies touching face on face then builds one body, a `Cut` of such a
+body leaves its target, an `Intersect` of them is empty, and a tool flush with
+its target's wall cuts through it. The result reads `Approximate` and its
+bounds cover the move. `ExactOnly` keeps the refusal below, and so does a
+tolerance whose shift no direction can apply, such as a tool flush with both
+walls of a slot.
+
+Under `ExactOnly`, or when the retry cannot apply, the contact is
+`BooleanUnsupportedContact`. What replaces it is an INTERIOR overlap: no face
+pair coplanar, and each operand reaching into the other's interior, so every
+contact is a transversal crossing the evaluator does classify. Both operands span the same interval
 here, so a LATERAL displacement never reaches that state — moving one body
 sideways leaves its caps in the two planes the other's caps lie in, and the
 overlap stands wherever the footprints still meet. The displacement has to run

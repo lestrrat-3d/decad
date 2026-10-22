@@ -160,17 +160,18 @@ func TestLoftCutExactToolSpanKeepsUncutCap(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			frame, err := r3.NewFrame(r3.NewVec(0, 0, tc.originZ), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 			require.NoError(t, err)
-			blank, doc := loftBoreSoundnessBlank(t, frame)
+			blank, doc := loftBoreSoundnessBlank(t, frame, decad.ExactOnly())
 			toolFrame, err := r3.NewFrame(r3.NewVec(0, 0, tc.toolZ), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 			require.NoError(t, err)
 			tool := loftBoreSoundnessTool(t, doc, toolFrame, 0, 0, tc.height, tc.dir)
+			uncut := tc.cap(blank)
 			cut, err := decad.Cut(t.Context(), blank, tool)
 			if err != nil {
 				// The general mesh boolean may refuse a rounded cap contact.
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 				return
 			}
-			caps, err := decad.Faces(decad.FaceCreatedBy(tc.cap(cut))).Exactly(1).SelectFaces(cut)
+			caps, err := decad.Faces(decad.FaceCreatedBy(uncut)).Exactly(1).SelectFaces(cut)
 			require.NoError(t, err)
 			area, err := caps[0].Area()
 			require.NoError(t, err)
@@ -179,7 +180,7 @@ func TestLoftCutExactToolSpanKeepsUncutCap(t *testing.T) {
 	}
 }
 
-func loftBoreSoundnessBlank(t *testing.T, frame r3.Frame) (*decad.Body, *decad.Document) {
+func loftBoreSoundnessBlank(t *testing.T, frame r3.Frame, opts ...decad.DocumentOption) (*decad.Body, *decad.Document) {
 	t.Helper()
 	world := sketch.NewWorld()
 	lower, err := world.CreatePlaneFromFrame(frame)
@@ -197,7 +198,7 @@ func loftBoreSoundnessBlank(t *testing.T, frame r3.Frame) (*decad.Body, *decad.D
 		require.NoError(t, err)
 		sections[i], profiles[i] = s, s.Profiles()[0]
 	}
-	doc := decad.New()
+	doc := decad.New(opts...)
 	blank, err := decad.Loft(t.Context(), doc, sections[0], profiles[0], sections[1], profiles[1])
 	require.NoError(t, err)
 	return blank, doc

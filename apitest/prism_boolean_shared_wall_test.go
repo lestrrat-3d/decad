@@ -75,7 +75,7 @@ func TestPrismBooleanSharedWallBoxes(t *testing.T) {
 // and the pair keeps the mesh path's coplanar refusal.
 func TestPrismBooleanTouchingCornerStaysOnMesh(t *testing.T) {
 	t.Parallel()
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 10, 10, 20, 20, 10)
 	_, err := decad.Union(t.Context(), a, b)
