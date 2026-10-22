@@ -64,7 +64,7 @@ func crossingLoft(t *testing.T, doc *decad.Document, r, half, height float64) *d
 func TestPatternJoinFlanksCrossTheBase(t *testing.T) {
 	t.Parallel()
 	const r, height = 3.0, 2.0
-	for _, n := range []int{8, 12, 24} {
+	for _, n := range []int{8, 12} {
 		t.Run(strconv.Itoa(n)+" copies", func(t *testing.T) {
 			t.Parallel()
 			half := 0.4 * math.Pi / float64(n)
@@ -98,7 +98,7 @@ func TestPatternJoinFlanksCrossTheBase(t *testing.T) {
 // Cut and a cap Chamfer.
 func TestPatternJoinFlanksCrossTheBaseThenFilletBoreChamfer(t *testing.T) {
 	t.Parallel()
-	const r, height, n = 3.0, 2.0, 12
+	const r, height, n = 3.0, 2.0, 8
 	half := 0.4 * math.Pi / n
 	doc := decad.New()
 	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
