@@ -117,6 +117,7 @@ a sheet. The `decad.Section` type constraint covers both.
 | `decad.LoftFaces` | A solid through ordered cap faces. |
 | `decad.LoftFacesToConeTangent` | A face loft that ends tangent to a cone. |
 | `decad.LoftFromPoint` | A solid from an apex point to a profile. |
+| `decad.LoftBetween` | A solid between two ends, each a profile (`decad.ProfileEnd`) or a point (`decad.PointEnd`). |
 | `decad.Coil` | A profile moved along a screw motion, such as a thread or spring. |
 | `decad.ConeFromFace` | The cone that extends a face's straight meridian. |
 

@@ -111,6 +111,7 @@ configuration option.
 | `decad.ConstructionAxis` | struct | A world-space point and a direction. | The caller |
 | `decad.EdgeAxis` | struct | A linear edge of a body, selected by query. | The caller |
 | `decad.LoftSection` | struct | One recorded section of a smooth `decad.LoftSections` feature. | The caller |
+| `decad.LoftEnd` | struct | One end of a `decad.LoftBetween`: a profile or a point. | The caller |
 | `decad.LoftSplit` | struct | One recorded segment of one loop and the parameter fractions at which `decad.WithLoftSplits` cuts it. | The caller |
 | `decad.ConeTangentEnd` | struct | The cone that the last section of `decad.LoftFacesToConeTangent` touches. | The caller |
 | `decad.HoleSpec` | struct | One hole: the face, a world point on it, the diameter, a depth and an optional head. | The caller |
