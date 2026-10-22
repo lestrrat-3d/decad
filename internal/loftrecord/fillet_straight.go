@@ -70,12 +70,16 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 		blend                 *offset2d.Blend
 		fitParam, circleParam float64
 		fitCircle             bool
-		certificate           loftfillet.RootCertificate
-		constructionDelta     float64
-		idealArcLength        float64
-		fitCarrierDeparture   float64
-		rootCarrierDeparture  float64
-		circleIdealParam      proofbound.RatInterval
+		// lineCircle marks a corner between a line or arc and a trimmed circle
+		// fragment: the connector is the ordinary tangent arc, and the fragment is
+		// trimmed by the parameter of the blend's tangent foot.
+		lineCircle           bool
+		certificate          loftfillet.RootCertificate
+		constructionDelta    float64
+		idealArcLength       float64
+		fitCarrierDeparture  float64
+		rootCarrierDeparture float64
+		circleIdealParam     proofbound.RatInterval
 	}
 	blends := make(map[int]loftCornerBlend, len(edges))
 	for _, edge := range edges {
@@ -85,7 +89,8 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 		matched := -1
 		for i := range segments {
 			prev := (i + n - 1) % n
-			if (!analytic[prev] || !analytic[i]) && !loftfillet.FitCirclePair(segments[prev], segments[i]) {
+			if (!analytic[prev] || !analytic[i]) && !loftfillet.FitCirclePair(segments[prev], segments[i]) &&
+				!lineCirclePair(segments[prev], segments[i]) {
 				continue
 			}
 			w := walks[i]
@@ -157,7 +162,7 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 			if err != nil {
 				return nil, fmt.Errorf(`%w; selector %s, section corner %d`, err, selector, matched)
 			}
-			blends[matched] = loftCornerBlend{blend: cb}
+			blends[matched] = loftCornerBlend{blend: cb, lineCircle: lineCirclePair(segments[prev], segments[matched])}
 		}
 	}
 
@@ -229,16 +234,32 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 				rewritten = append(rewritten, original)
 			case sectionrecord.CircleSeg:
 				if hasStart {
-					if !start.fitCircle {
+					switch {
+					case start.fitCircle:
+						original.TStart = start.circleParam
+					case start.lineCircle:
+						t, ok := circleFootParameter(original, start.blend.FB)
+						if !ok {
+							return nil, fmt.Errorf(`%w: the loft fillet foot lies outside its circle fragment`, decaderr.ErrUnsupported)
+						}
+						original.TStart = t
+					default:
 						return nil, fmt.Errorf(`%w: a loft fillet cannot trim this circle carrier`, decaderr.ErrUnsupported)
 					}
-					original.TStart = start.circleParam
 				}
 				if hasEnd {
-					if !end.fitCircle {
+					switch {
+					case end.fitCircle:
+						original.TEnd = end.circleParam
+					case end.lineCircle:
+						t, ok := circleFootParameter(original, end.blend.FA)
+						if !ok {
+							return nil, fmt.Errorf(`%w: the loft fillet foot lies outside its circle fragment`, decaderr.ErrUnsupported)
+						}
+						original.TEnd = t
+					default:
 						return nil, fmt.Errorf(`%w: a loft fillet cannot trim this circle carrier`, decaderr.ErrUnsupported)
 					}
-					original.TEnd = end.circleParam
 				}
 				if original.CCW != (original.TStart < original.TEnd) {
 					return nil, fmt.Errorf(`%w: loft fillets consume section segment %d`, decaderr.ErrUnsupported, i)
@@ -322,4 +343,51 @@ func FilletStraight(ctx context.Context, env topo.Env, selector string, edges []
 	next.Cell, next.Side, next.CapStartCount = nil, nil, 0
 	next.Proof = loftmesh.MeshProof{}
 	return Build(ctx, env, next, budget, work0, work1)
+}
+
+// lineCirclePair reports a corner between a line or an arc and a trimmed circle
+// fragment, in either order. A whole circle is a loop of its own and has no corner.
+func lineCirclePair(a, b sectionrecord.CurveSegment) bool {
+	analytic := func(seg sectionrecord.CurveSegment) bool {
+		switch seg.(type) {
+		case sectionrecord.LineSeg, sectionrecord.ArcSeg:
+			return true
+		}
+		return false
+	}
+	circle := func(seg sectionrecord.CurveSegment) bool {
+		c, ok := seg.(sectionrecord.CircleSeg)
+		return ok && !(math.Min(c.TStart, c.TEnd) == 0 && math.Max(c.TStart, c.TEnd) == 1)
+	}
+	return analytic(a) && circle(b) || circle(a) && analytic(b)
+}
+
+// circleFootParameter is the parameter on the circle fragment seg of the point p
+// near its circle: the angle of p about the centre over 2π, taken on the fragment's
+// own side of its start. It reports false when that parameter lies outside the
+// fragment's range. A circle point at angle 2π·t is C + R(cos, sin), so the point
+// the trimmed record denotes at the returned parameter differs from p by the
+// rounding of p's distance from the circle and of the angle, which the loft's
+// junction charge carries (loftmesh.PairRecords).
+func circleFootParameter(seg sectionrecord.CircleSeg, p sectionrecord.Point2) (float64, bool) {
+	t0 := math.Atan2(p.V-seg.Center.V, p.U-seg.Center.U) / (2 * math.Pi)
+	if t0 < 0 {
+		t0++
+	}
+	a, b := seg.TStart, seg.TEnd
+	var t float64
+	if a < b {
+		d := t0 - a
+		t = a + (d - math.Floor(d))
+		if t > b {
+			return 0, false
+		}
+	} else {
+		d := a - t0
+		t = a - (d - math.Floor(d))
+		if t < b {
+			return 0, false
+		}
+	}
+	return t, true
 }

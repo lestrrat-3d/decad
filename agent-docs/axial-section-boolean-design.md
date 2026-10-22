@@ -66,8 +66,8 @@ and so avoids it. A later `DeclareLoop` element that names an entity with a para
   a section displacement. Neither is an operand: the first has a placement, the second a displacement. A spline section needs
   a certified bound on how far a fit spline through rounded points departs from the rotated original, which this route does
   not have, so a part with spline sections draws each instance at its angle in the sketch.
-- The loft fillet (§17) takes a line or arc meeting an arc, or a fit spline meeting a circle. A line meeting the circle
-  fragment this union leaves is outside it, so a root fillet does not apply to the result.
+- The loft fillet (§17) takes the corner this union leaves, a line or arc meeting a trimmed circle fragment, so a root
+  fillet, then a bore and an outer-cap chamfer, apply to the result.
 - Union only. Cut and Intersect, and sections with holes, are later.
 - The 2D union adds a certified `sketch` arrangement per Union: about 20 ms for 25 regions with fit splines.
 

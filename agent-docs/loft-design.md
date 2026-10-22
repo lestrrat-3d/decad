@@ -2852,12 +2852,28 @@ those roles from the stored connector indices. The result remains a loft:
 its wall faces are bounded planar triangles, and its mass readings retain
 §8's loft bounds.
 
+A corner between a line or an arc and a trimmed circle fragment is also an analytic corner. The union of an
+axial extrusion with a circular boundary leaves it (`agent-docs/axial-section-boolean-design.md`), as a line meeting
+the fragment of the circle between two other curves. `offset2d.Fillet` blends it over the two circular and straight
+walks, the line or arc piece is rewritten from the blend's feet as for any analytic corner, and the circle fragment is
+trimmed by its parameter: the angle of the blend's tangent foot about the circle's centre over 2π, taken on the
+fragment's own side of its start (`circleFootParameter`). The point the trimmed record denotes at that parameter differs
+from the foot by the rounding of the foot's distance from the circle and of the angle; the connector and the fragment
+then meet at distinct denoted ends, which the pairing's junction charge already carries into the loft's bounds
+(`loftmesh.PairRecords`). A foot outside the fragment's range, or a radius that consumes either carrier, refuses with
+`ErrUnsupported`. A whole circle has no corner.
+
 The 17-tooth gear with 15 fit points per involute flank exercises all 34
 line/arc root corners in one call. The focused test checks the selected edges,
 solid result, connector roles and volume against an independently drawn
 tangent-arc gear. A rectangular loft checks
 the one-corner volume against the circular-sector formula and checks that a
 placed copy still has fillet roles.
+`apitest.TestLoftFilletAtALineMeetingACircleFragment` rounds the two corners where a curved-topped blade's straight sides meet a
+disc and checks the gain against the analytic corner area `r²(cot(a/2) − (π − a)/2)` per corner;
+`TestLoftFilletEveryCornerOfLobesOnADisc` rounds all 2N corners of N lobes on a disc, then bores and chamfers the result;
+`TestLoftFilletCircleFragmentRefusals` covers a radius that consumes a carrier and an edge that is not a corner; the
+`loftrecord` unit tests pin `circleFootParameter` and the corner class.
 An audit fixture moves a fit spline's control hull across a changed line and
 checks that the audit refuses the possible contact. The full embedded 30-tooth
 and 60-tooth cases exercise the original trimmed fit flanks, native root
