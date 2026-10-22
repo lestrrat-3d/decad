@@ -2210,3 +2210,5 @@
 10	0.20	TestLoftFilletAtALineMeetingACircleFragment
 10	0.20	TestLoftFilletEveryCornerOfLobesOnADisc
 10	0.20	TestLoftFilletCircleFragmentRefusals
+10	0.20	TestPatternedLobesJoinADisc
+10	0.20	TestPatternedLobesAboutATiltedAxisAreRefused

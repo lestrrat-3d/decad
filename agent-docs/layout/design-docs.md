@@ -47,6 +47,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/sweep-design.md` | `Path`/`Sweep`, its chain section (§15), mitred sweeps (§16) and bounded one-cell, composite and stationed twist (§17). |
 | `agent-docs/helix-design.md` | `Coil`: a profile screwed about an in-plane axis. |
 | `agent-docs/axial-section-boolean-design.md` | Union of axial extrusions as the extrusion of the 2D union of their sections, through sketch loop containment. |
+| `agent-docs/axial-pattern-join-design.md` | Union of axial extrusions that carry a rigid placement, such as pattern copies: exact plane map, re-recorded sections and the join displacement. |
 | `agent-docs/prism-boolean-design.md` | Analytic `Union`/`Cut`/`Intersect` over co-directional prisms. |
 | `agent-docs/prism-pattern-union-design.md` | Certified Union of a circular prism and radial copies of one fitted section. |
 | `agent-docs/stacked-prism-design.md` | Stacked slabs, walls, measurements, mesh and consumers. |

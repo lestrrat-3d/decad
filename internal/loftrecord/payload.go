@@ -59,7 +59,15 @@ type Payload struct {
 	// construction. The first is the maximum matched plane displacement over
 	// all rewritten carriers and connector arcs. The second bounds each ideal
 	// connector's complete arc length, keyed by the outer-loop segment index.
-	ConstructionDelta    float64
+	ConstructionDelta float64
+	// JoinDelta is how far the recorded section sits from the exact image of
+	// the placed operand sections it was joined from (agent-docs/axial-pattern-join-design.md).
+	// It is folded into the held-vertex, chord and matched displacements of
+	// the join body, so its readings enclose the ideal join. A body rebuilt from
+	// a copy of this payload keeps the term as extra slack; it denotes its own
+	// record, and its bounds make no claim about the operation applied to the
+	// ideal join.
+	JoinDelta            float64
 	ConstructionArcUpper map[int]float64
 	// A trimmed carrier can gain length when its ideal tangent parameter
 	// replaces the recorded float trim. Each value bounds that increase for

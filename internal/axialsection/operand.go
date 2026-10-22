@@ -26,6 +26,10 @@ type Operand struct {
 	Frame0, Frame1 r3.Frame
 	Plane0, Plane1 sectionrecord.PlaneRecord
 	FromLoft       bool
+	// Xform is the rigid placement the section frames are recorded under, and
+	// Delta how far the section record sits from the solid it stands for.
+	Xform r3.Transform
+	Delta float64
 	// Level0 and Level1 are the exact axial offsets of the end planes along the
 	// frame normal, from Frame0 of the prism or loft.
 	Level0, Level1 *big.Rat
@@ -43,18 +47,18 @@ func OperandOf(ctx context.Context, payload topo.Payload) (Operand, bool, error)
 		// would drop that charge, so a prism that carries one is not an operand. A loft's
 		// SectionDelta is its own chord displacement, which a rebuild recomputes.
 		if p.SurfaceResult || p.SectionDelta != 0 || p.Z0Delta != 0 || p.Z1Delta != 0 ||
-			p.Xform != r3.Identity() || len(p.BlendSegs) != 0 || len(p.Profile.Holes) != 0 ||
+			len(p.BlendSegs) != 0 || len(p.Profile.Holes) != 0 ||
 			!(p.Z1 > p.Z0) || !proofbound.FiniteVec(r3.Vec{X: p.Z0, Y: p.Z1}) {
 			return Operand{}, false, nil
 		}
 		return Operand{
 			Section: p.Profile, Frame0: p.Frame, Frame1: p.Frame,
-			Level0: proofarith.FloatRat(p.Z0), Level1: proofarith.FloatRat(p.Z1),
+			Level0: proofarith.FloatRat(p.Z0), Level1: proofarith.FloatRat(p.Z1), Xform: p.Xform,
 		}, true, nil
 	case loftrecord.Payload:
 		if !p.AuthenticatedReconstruction || p.SurfaceResult || p.ThroughBoreCut || p.AnalyticBore ||
 			p.ConstructionDelta != 0 || len(p.BlendSegs) != 0 || len(p.ConstructionArcUpper) != 0 ||
-			len(p.ConstructionLengthExtra) != 0 || p.Xform != r3.Identity() ||
+			len(p.ConstructionLengthExtra) != 0 ||
 			len(p.Profile0.Holes) != 0 || len(p.Profile1.Holes) != 0 ||
 			p.Frame0.U() != p.Frame1.U() || p.Frame0.V() != p.Frame1.V() {
 			return Operand{}, false, nil
@@ -77,7 +81,7 @@ func OperandOf(ctx context.Context, payload topo.Payload) (Operand, bool, error)
 		}
 		return Operand{
 			Section: p.Profile0, Frame0: p.Frame0, Frame1: p.Frame1, Plane0: p.Plane0, Plane1: p.Plane1,
-			FromLoft: true, Level0: new(big.Rat), Level1: axis.Shift,
+			FromLoft: true, Level0: new(big.Rat), Level1: axis.Shift, Xform: p.Xform, Delta: p.JoinDelta,
 		}, true, nil
 	}
 	return Operand{}, false, nil
