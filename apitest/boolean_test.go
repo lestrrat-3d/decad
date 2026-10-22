@@ -1137,7 +1137,7 @@ func TestUnionRefusesTangentCylinder(t *testing.T) {
 	// happily report a clean two-lump body for two solids that genuinely touch —
 	// with the verdict decided by where the chord samples happened to fall. The
 	// pre-tessellation proximity gate refuses the question instead.
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	cyl := diskBody(t, doc, 30, 10, 10)
 
@@ -1152,7 +1152,7 @@ func TestUnionRefusesTangentCylinder(t *testing.T) {
 
 	// Moving the cylinder a millimetre clear of the plate's face is decidable
 	// again — the refusal is about proximity, not about the shapes.
-	doc2 := decad.New()
+	doc2 := decad.New(decad.ExactOnly())
 	plate2 := boxBody(t, doc2, 0, 0, 20, 20, 8)
 	apart := diskBody(t, doc2, 31, 10, 10)
 	got, err := decad.Union(t.Context(), plate2, apart)

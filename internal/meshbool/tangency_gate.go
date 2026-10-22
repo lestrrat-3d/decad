@@ -3,9 +3,12 @@ package meshbool
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
@@ -80,6 +83,10 @@ func RefuseUndecidableProximity(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB
 	// One counter spans the grouping and the pair scan it feeds: the grouping
 	// walks every facet and every new source face's edges, which is work the
 	// §7.2 interval covers just as the pair scan is.
+	refusal := &TouchContactError{
+		What:   touchNear,
+		Detail: `the operands' held facets come within the chord tolerance without provably interpenetrating deeper than it, so whether their true surfaces touch or cross is decided by where the chords fall — this evaluator refuses the question rather than answer it wrong`,
+	}
 	budget := proofbound.NewWorkBudget(ctx)
 	fa, err := facesOfMesh(budget, ma)
 	if err != nil {
@@ -130,10 +137,103 @@ func RefuseUndecidableProximity(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB
 				// when its result will audit the matching complete edge chain.
 				continue
 			}
-			return fmt.Errorf(`%w: the operands' held facets come within the chord tolerance without provably interpenetrating deeper than it, so whether their true surfaces touch or cross is decided by where the chords fall — this evaluator refuses the question rather than answer it wrong`, decaderr.ErrUnsupported)
+			// The face-level slack covers the worst facet of either face, which a
+			// face that a boolean already shifted or cut holds far from where it
+			// meets here. A true touch lies within a facet pair's own bounds of
+			// the pair, so the slack that matters is the largest bound among the
+			// facets that come within the face-level slack. It is never larger,
+			// and asking again with it can only find the pair decided.
+			local, err := localSlack(ctx, bmA, ga.facets, bmB, gb.facets, slack*(1+1e-9), memo)
+			if err != nil {
+				return err
+			}
+			if local < slack {
+				near, err = FacesNearMiss(ctx, bmA, ga.facets, bmB, gb.facets, local*(1+1e-9), memo)
+				if err != nil {
+					return err
+				}
+				if !near {
+					continue
+				}
+				slack = local
+			}
+			_, flat := ga.source.Surface.(surfacegeom.Plane)
+			contacts, err := nearContactNormals(ctx, bmA, ga.facets, bmB, gb.facets, slack*(1+1e-9), !flat, memo)
+			if err != nil {
+				return err
+			}
+			refusal.Contacts = append(refusal.Contacts, contacts...)
+			if gaptol.Reach(ctx) <= 0 {
+				return refusal
+			}
+			// A caller that may move the second operand moves each connected piece
+			// of it on its own, so it needs the contacts of every piece.
 		}
 	}
+	if len(refusal.Contacts) > 0 {
+		return refusal
+	}
 	return nil
+}
+
+// localSlack is the sum of the largest facet bound among the first face's facets
+// that come within slack of the second face's facets and the largest among the
+// second's, and slack itself when it finds none.
+func localSlack(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int,
+	slack float64, memo *ContactMemo) (float64, error) {
+	nc, deferred, err := GatherNearContacts(ctx, bmA, fis, bmB, fjs, slack, memo)
+	if err != nil || deferred || len(nc.CloseA) == 0 || len(nc.CloseB) == 0 {
+		return slack, err
+	}
+	worst := func(m *BoolMesh, facets []int) float64 {
+		w := 0.0
+		for _, f := range facets {
+			w = max(w, m.FacetBound[f])
+		}
+		return w
+	}
+	return proofbound.AbsSumUpper(worst(bmA, nc.CloseA), worst(bmB, nc.CloseB)), nil
+}
+
+// firstFacet is the first of facets, or zero when there is none.
+func firstFacet(facets []int) int {
+	if len(facets) == 0 {
+		return 0
+	}
+	return facets[0]
+}
+
+// nearContactNormals reads the first operand's outward unit normal at each of
+// its facets that come within slack of the other face's facets, once per
+// distinct direction and at most maxTouchContacts of them. A caller allowed to
+// move an operand uses them to choose which way to move it, and how far: the
+// second operand has to reach slack past the first along the normal to decide
+// the pair. The contact is Decisive when it is a curved face the second operand
+// sits on, where moving it away would detach it; a flat face is decided by
+// moving the second operand either way.
+func nearContactNormals(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int,
+	slack float64, decisive bool, memo *ContactMemo) ([]TouchContact, error) {
+	nc, _, err := GatherNearContacts(ctx, bmA, fis, bmB, fjs, slack, memo)
+	if err != nil {
+		return nil, err
+	}
+	type key [3]int64
+	seen := map[key]struct{}{}
+	var out []TouchContact
+	for _, i := range nc.CloseA {
+		c := touchOf(bmA, i, firstFacet(fjs))
+		c.Slack, c.Decisive = slack, decisive
+		k := key{int64(math.Round(c.NormalA.X * 1e3)), int64(math.Round(c.NormalA.Y * 1e3)), int64(math.Round(c.NormalA.Z * 1e3))}
+		if _, dup := seen[k]; dup {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, c)
+		if len(out) >= maxTouchContacts {
+			break
+		}
+	}
+	return out, nil
 }
 
 // faceFacets is one analytic face of an operand: its facets, and the chord

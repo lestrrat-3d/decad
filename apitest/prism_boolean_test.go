@@ -294,7 +294,7 @@ func TestPrismUnionRotatedToothFallback(t *testing.T) {
 	axis := r3.NewVec(0, 0, 1)
 
 	build := func(t *testing.T, tr r3.Transform) (*decad.Body, error) {
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		hub := hubBody(t, doc, r, h)
 		toothSrc := toothBody(t, doc, r, r2, th1, th2, h)
 		tooth, err := decad.Transform(t.Context(), toothSrc, tr)
@@ -350,7 +350,7 @@ func TestPrismUnionIndependentlyConstructedCoplanarFrames(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, r3.NewVec(0, 0, 1), rotated.N(), "the probe's own finding: N() is not bit-exact here")
 
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 
 	wB := sketch.NewWorld()

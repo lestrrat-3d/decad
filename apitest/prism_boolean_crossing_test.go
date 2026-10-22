@@ -164,7 +164,7 @@ func TestPrismCutIntersectRotatedSectionStillTakesMeshPath(t *testing.T) {
 	tr, err := r3.RotationAround(r3.Vec{}, r3.NewVec(0, 0, 1), angle)
 	require.NoError(t, err)
 
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	hub := hubBody(t, doc, r, h)
 	toothSrc := toothBody(t, doc, r, r2, th1, th2, h)
 	tooth, err := decad.Transform(t.Context(), toothSrc, tr)
@@ -173,7 +173,7 @@ func TestPrismCutIntersectRotatedSectionStillTakesMeshPath(t *testing.T) {
 	_, err = decad.Cut(t.Context(), hub, tooth)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
-	doc2 := decad.New()
+	doc2 := decad.New(decad.ExactOnly())
 	hub2 := hubBody(t, doc2, r, h)
 	toothSrc2 := toothBody(t, doc2, r, r2, th1, th2, h)
 	tooth2, err := decad.Transform(t.Context(), toothSrc2, tr)

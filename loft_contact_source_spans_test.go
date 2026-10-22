@@ -237,7 +237,7 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 
 func TestLoftCircleSourceCapsRealDiscRefusesWithoutBoundaryProof(t *testing.T) {
 	world := sketch.NewWorld()
-	doc := New()
+	doc := New(ExactOnly())
 	upper, err := world.CreateOffsetPlane(world.XY(), 10)
 	require.NoError(t, err)
 	var sections [2]*sketch.Sketch

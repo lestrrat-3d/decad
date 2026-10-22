@@ -47,7 +47,11 @@ func newGateBox(t *testing.T, lo, hi r3.Vec, delta float64) gateBox {
 	}
 	bm, err := meshbool.PrepContext(t.Context(), verts, tris, nil)
 	require.NoError(t, err)
-	bm.SetVertexBounds(make([]float64, len(verts)))
+	beta := make([]float64, len(verts))
+	for i := range beta {
+		beta[i] = delta
+	}
+	bm.SetVertexBounds(beta)
 	return gateBox{
 		face: face,
 		mesh: &topo.Mesh{Vertices: verts, Triangles: tris, Source: source,
@@ -129,5 +133,42 @@ func TestRefuseUndecidableProximity(t *testing.T) {
 		a, b := pair(0.1)
 		delete(b.mesh.FaceBound, b.face)
 		require.ErrorIs(t, gate(t, a, b, nil, nil, nil), decaderr.ErrBooleanFailed)
+	})
+}
+
+func TestRefuseUndecidableProximityLocalSlack(t *testing.T) {
+	t.Parallel()
+	// b sits 0.1 above a's top. The faces' bounds sum to 0.2, but the facets that
+	// meet there hold their true pieces within 0.01 each.
+	a := newGateBox(t, r3.NewVec(0, 0, 0), r3.NewVec(1, 1, 1), 0.1)
+	b := newGateBox(t, r3.NewVec(0.25, 0.25, 1.1), r3.NewVec(0.75, 0.75, 2), 0.1)
+	tight := make([]float64, len(a.mesh.Vertices))
+	for i := range tight {
+		tight[i] = 0.01
+	}
+	a.bool.SetVertexBounds(tight)
+	tightB := make([]float64, len(b.mesh.Vertices))
+	for i := range tightB {
+		tightB[i] = 0.01
+	}
+	b.bool.SetVertexBounds(tightB)
+	t.Run("close facets with small bounds decide a pair the face bounds cannot", func(t *testing.T) {
+		require.NoError(t, gate(t, a, b, nil, nil, nil))
+	})
+	t.Run("a refusal names the contacts and their slack", func(t *testing.T) {
+		c := newGateBox(t, r3.NewVec(0.25, 0.25, 1.01), r3.NewVec(0.75, 0.75, 2), 0.1)
+		cb := make([]float64, len(c.mesh.Vertices))
+		for i := range cb {
+			cb[i] = 0.01
+		}
+		c.bool.SetVertexBounds(cb)
+		err := gate(t, a, c, nil, nil, nil)
+		var touch *meshbool.TouchContactError
+		require.ErrorAs(t, err, &touch)
+		require.NotEmpty(t, touch.Contacts)
+		for _, ct := range touch.Contacts {
+			require.InDelta(t, 0.02, ct.Slack, 1e-8)
+			require.InDelta(t, 1, ct.NormalA.Len(), 1e-9)
+		}
 	})
 }

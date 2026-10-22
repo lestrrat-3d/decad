@@ -21,6 +21,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
+	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -80,19 +81,31 @@ func VolumeReading(ctx context.Context, audit *facetproof.MeshAudit, volSymDiff 
 // (agent-docs/gap-tolerance-design.md §5.2).
 func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	meshes OperandMesher, chordScale float64, capFace, coneFace *topo.Face) (Evaluation, error) {
-	ev, err := evaluate(ctx, op, a, b, meshes, chordScale, capFace, coneFace, r3.Vec{})
+	ev, err := evaluate(ctx, op, a, b, meshes, chordScale, capFace, coneFace, nil)
 	if err == nil {
 		return ev, nil
 	}
-	return retryShifted(ctx, err, op, func(shift r3.Vec) (Evaluation, error) {
-		return evaluate(ctx, op, a, b, meshes, chordScale, capFace, coneFace, shift)
+	var touch *meshbool.TouchContactError
+	if !errors.As(err, &touch) || !(gaptol.Reach(ctx) > 0) {
+		return ev, err
+	}
+	tolMM, _, perr := booloperand.PairChord(ctx, a, b)
+	if perr != nil {
+		return ev, err
+	}
+	mb, _, terr := meshes.TessellateOperand(ctx, b, tolMM*chordScale)
+	if terr != nil {
+		return ev, err
+	}
+	return retryShifted(ctx, err, op, piecesOf(mb), func(shifts map[int]r3.Vec) (Evaluation, error) {
+		return evaluate(ctx, op, a, b, meshes, chordScale, capFace, coneFace, shifts)
 	})
 }
 
-// evaluate is Evaluate's single attempt, with b's mesh moved by shift when it
-// is not the zero vector.
+// evaluate is Evaluate's single attempt, with the pieces of b's mesh moved by
+// shifts when there are any.
 func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
-	meshes OperandMesher, chordScale float64, capFace, coneFace *topo.Face, shift r3.Vec) (Evaluation, error) {
+	meshes OperandMesher, chordScale float64, capFace, coneFace *topo.Face, shifts map[int]r3.Vec) (Evaluation, error) {
 	if err := ctx.Err(); err != nil {
 		return Evaluation{}, err
 	}
@@ -172,7 +185,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		group, _ := facetedrecord.SourceTag(f, op == meshbool.OpCut && i >= targetFaces)
 		group.Origins = append([]provenance.Ref(nil), f.Origins...)
 		group.Planar = f.Surface.Kind() == surfacegeom.KindPlane || f.HeldPlanar
-		if shift != (r3.Vec{}) && i >= targetFaces {
+		if len(shifts) > 0 && i >= targetFaces {
 			// A moved operand's facets no longer lie on the surfaces they were
 			// cut from, so the result keeps no retained tag for them.
 			group = facetedrecord.Group{Origins: group.Origins}
@@ -204,13 +217,13 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	}
 	// mbDecide is the mesh the contact gate reads: mb itself, unless b moved.
 	mbDecide := mb
-	if shift != (r3.Vec{}) {
+	if len(shifts) > 0 {
 		// The spiral joins authenticate the operands' own geometry, which a
 		// moved operand no longer has.
 		if spiralJoin != nil || spiralCombine != nil || capFace != nil || coneFace != nil {
 			return Evaluation{}, errShiftDeclined
 		}
-		mbDecide, mb, err = shiftOperandMesh(ctx, mb, shift)
+		mbDecide, mb, err = shiftOperandMesh(ctx, mb, piecesOf(mb), shifts)
 		if err != nil {
 			return Evaluation{}, err
 		}
@@ -250,7 +263,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		return Evaluation{}, err
 	}
 	var bmB *meshbool.BoolMesh
-	if shift != (r3.Vec{}) {
+	if len(shifts) > 0 {
 		bmB, err = prepBoolMesh(ctx, mb, srcB, func(int) (r3.Frame, bool) { return r3.Frame{}, false })
 	} else {
 		bmB, err = PrepBoolMesh(ctx, mb, srcB)
@@ -268,7 +281,11 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		bmA.Gate = tolMM
 	}
 	if restatingB {
-		bmB.Gate = tolMM
+		// A moved operand's facets carry the move in their bounds, which the
+		// gate would read as a coarse mesh. The move is what the gap tolerance
+		// permits and the composition of the result's bounds charges it, so the
+		// gate allows it.
+		bmB.Gate = tolMM + (mb.Bound - mbDecide.Bound)
 	}
 	if spiralJoin != nil {
 		// The temporary curved cap carries its actual moved-facet departure.

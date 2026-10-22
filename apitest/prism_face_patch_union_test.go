@@ -155,7 +155,7 @@ func TestUnionRectangularFacePatchUsesOtherSlabAxis(t *testing.T) {
 func TestUnionRectangularFacePatchRefusesTaperedSource(t *testing.T) {
 	t.Parallel()
 	w := sketch.NewWorld()
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	plateSketch, plateProfile := prismFacePatchRectangle(t, w, w.XY(), 0, 0, 20, 20)
 	plate, err := decad.Extrude(t.Context(), doc, plateSketch, plateProfile,
 		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})

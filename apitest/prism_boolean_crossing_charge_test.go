@@ -176,7 +176,7 @@ func TestPrismUnionRotatedToothBuildsAnalytic(t *testing.T) {
 // fallback (prismSceneDelta.SharedSpansBounded) always admitting the span.
 func TestPrismUnionToothOnHubCircleFallsBackAtTheTangentRoot(t *testing.T) {
 	t.Parallel()
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	hub := hubBody(t, doc, 20, 10)
 	src := toothBody(t, doc, 20, 25, -0.1, 0.1, 10)
 	tooth, err := decad.Transform(t.Context(), src, zRotation(t, units.Radians(math.Pi/3)))

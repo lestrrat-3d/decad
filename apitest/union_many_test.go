@@ -52,7 +52,7 @@ func TestUnionManyChainsMixedHeightPrisms(t *testing.T) {
 }
 
 func TestUnionManyRefusalKeepsEveryOperandLive(t *testing.T) {
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	a := boxBody(t, doc, 0, 0, 4, 4, 2)
 	b := boxBody(t, doc, 2, 2, 6, 6, 2)
 	// The first pair joins. The third box touches that result only along an

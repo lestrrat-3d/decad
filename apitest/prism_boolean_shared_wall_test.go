@@ -103,7 +103,7 @@ func TestPrismBooleanToothTouchingHubDoesNotOverlap(t *testing.T) {
 	const r, r2, th1, th2, h = 20.0, 25.0, 0.0, 0.2, 10.0
 	t.Run("Cut and Intersect", func(t *testing.T) {
 		t.Parallel()
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		hub := hubBody(t, doc, r, h)
 		tooth := toothBody(t, doc, r, r2, th1, th2, h)
 		toothVol, err := tooth.Volume()
@@ -118,7 +118,7 @@ func TestPrismBooleanToothTouchingHubDoesNotOverlap(t *testing.T) {
 	})
 	t.Run("Verify", func(t *testing.T) {
 		t.Parallel()
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		hubBody(t, doc, r, h)
 		toothBody(t, doc, r, r2, th1, th2, h)
 		report, err := doc.Verify(t.Context())

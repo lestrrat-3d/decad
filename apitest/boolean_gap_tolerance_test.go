@@ -140,7 +140,7 @@ func TestBooleanGapTolerance(t *testing.T) {
 // shift of the second operand changes that, so the refusal stands.
 func TestBooleanGapToleranceStaysExactForCurvedContact(t *testing.T) {
 	t.Parallel()
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	cyl := diskBody(t, doc, 30, 10, 10)
 	_, err := decad.Union(t.Context(), plate, cyl)

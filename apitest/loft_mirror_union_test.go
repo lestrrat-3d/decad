@@ -68,7 +68,7 @@ func TestLoftMirrorUnionSealsTheSharedCap(t *testing.T) {
 func TestLoftMirrorUnionKeepsUnrelatedSourcesSeparate(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 2, 1)
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	lower, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 	other, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
