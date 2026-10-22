@@ -2223,3 +2223,4 @@
 10	0.01	TestVerifyTouchingAndDisjointPairsEmitNoInterference
 10	0.01	TestWallReadingExactHeightArm
 10	0.02	TestWallReflexSweep
+10	0.00	TestDocumentParams
