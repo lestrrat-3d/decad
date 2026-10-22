@@ -2,9 +2,11 @@ package patternrecord
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch/geom"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 
@@ -124,4 +126,66 @@ func TestMovePlaneRegionChargesScaleOfCircularSegments(t *testing.T) {
 	// radius' scale deviation: 8 mm times |scale − 1|, a few float steps.
 	require.InDelta(t, 8*pm.ScaleDeviation(), delta, 1e-30+8*pm.ScaleDeviation()*0.01)
 	require.Less(t, delta, 1e-14)
+}
+
+// TestFitMoveChargeEnclosesTheSampledDistance samples the matched cubics: the charge
+// is at least the largest sampled distance between the refit spline and the image of
+// the source, and within a small factor of it, so it is a usable enclosure and not a
+// loose one.
+func TestFitMoveChargeEnclosesTheSampledDistance(t *testing.T) {
+	f := xyFrame(t)
+	for _, turn := range []float64{1.0 / 17, 1.0 / 42, 0.3} {
+		pm, ok := NewPlaneMap(f, rotationAboutZ(t, turn), f, r3.Identity())
+		require.True(t, ok)
+		fit := arcFit(15)
+		moved := make([]Point2, len(fit))
+		for i, p := range fit {
+			m, _, err := pm.Motion()(p)
+			require.NoError(t, err)
+			moved[i] = m
+		}
+		charge, err := fitMoveCharge(fit, moved, pm)
+		require.NoError(t, err)
+
+		hold := func(in []Point2) [][2]float64 {
+			out := make([][2]float64, len(in))
+			for i, p := range in {
+				out[i] = [2]float64{p.U, p.V}
+			}
+			return out
+		}
+		src, err := geom.NewFitInterpolant(hold(fit))
+		require.NoError(t, err)
+		refit, err := geom.NewFitInterpolant(hold(moved))
+		require.NoError(t, err)
+		ss, err := src.ExactSpans()
+		require.NoError(t, err)
+		qs, err := refit.ExactSpans()
+		require.NoError(t, err)
+		// Exact rational evaluation: float evaluation of coefficients near 10 carries
+		// a rounding error as large as the distances measured.
+		eval := func(c [4]*big.Rat, u *big.Rat) *big.Rat {
+			acc := new(big.Rat).Set(c[3])
+			for k := 2; k >= 0; k-- {
+				acc.Mul(acc, u).Add(acc, c[k])
+			}
+			return acc
+		}
+		mul := proofbound.RatMul
+		worst := 0.0
+		for j := range ss {
+			for k := range 201 {
+				u := big.NewRat(int64(k), 200)
+				sx, sy := eval(ss[j].X, u), eval(ss[j].Y, u)
+				ix := proofbound.RatAdd(mul(pm.A[0][0], sx), mul(pm.A[0][1], sy), pm.T[0])
+				iy := proofbound.RatAdd(mul(pm.A[1][0], sx), mul(pm.A[1][1], sy), pm.T[1])
+				dx := new(big.Rat).Sub(eval(qs[j].X, u), ix)
+				dy := new(big.Rat).Sub(eval(qs[j].Y, u), iy)
+				d := proofbound.RatSqrtUp(proofbound.RatAdd(mul(dx, dx), mul(dy, dy)))
+				worst = math.Max(worst, d)
+			}
+		}
+		require.LessOrEqual(t, worst, charge, "turn %v", turn)
+		require.LessOrEqual(t, charge, 100*worst+1e-14, "turn %v", turn)
+	}
 }
