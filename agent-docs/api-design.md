@@ -1402,9 +1402,12 @@ nothing; `PatchEdges` fills a closed chain of the body's free edges and
 retires it. `Stitch` retires every operand and `Unstitch` its operand, on §6's
 uniform terms, and neither takes a `*Document` because a `*Body` carries its
 own. `Stitch` closes an existing face assembly; `Thicken` builds a new skin
-and rim from an admitted sheet. `Stitch` joins two free edges only where
-coincidence is proven, never within a tolerance — Fusion's tolerant stitch
-is the `isTolerant` topology §2.1 rejects.
+and rim from an admitted sheet. `Stitch` joins two free edges where
+coincidence is proven and, under the document's gap tolerance
+(`agent-docs/gap-tolerance-design.md` §5.3), where straight edges on planar
+faces miss by no more than it. The joined vertex holds one position and the
+miss is charged to the result's bounds, so no `isTolerant` topology §2.1
+rejects is recorded.
 An edge it cannot join stays free, which is a result rather than an error, so
 the caller reads `Edges(Free())` to see what did not close.
 

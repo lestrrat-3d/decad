@@ -85,12 +85,17 @@ one is queued.
 
 ### 1.3 What this design refuses permanently
 
-**A tolerant stitch.** Fusion stitches surfaces within a tolerance and produces
+**A tolerant topology.** Fusion stitches surfaces within a tolerance and produces
 tolerant topology — `BRepEdge.isTolerant` is that kernel admitting in public
 that its geometry does not meet (`agent-docs/api-design.md` §2.1). decad joins two
-free edges only where coincidence is **proven** (Table J), and leaves every
-other edge free. A caller reads the residual free edges to see what did not
-join. There is no gap parameter to widen, in this design or a later one.
+free edges where coincidence is **proven** (Table J) and, under the document's
+gap tolerance, where straight edges on planar faces miss by no more than it
+(§6.2's gap-tolerance amendment). The second case records no tolerant topology:
+the joined vertex holds one position, every vertex and face that moved carries
+the distance as its own bound, and the result's volume, area and box state it.
+Every other edge stays free, and a caller reads the residual free edges to see
+what did not join. `ExactOnly` returns Table J to proof alone. There is no
+per-call gap parameter.
 
 **A fitted surface through a boundary — Fusion's Ruled and Boundary Fill.**
 Both name a face whose interior no recorded entity generates. A boundary states
@@ -750,8 +755,8 @@ for two solids.
 ### 6.2 Table J — when two free edges join
 
 **A free edge of one operand joins a free edge of another when, and only when,
-both denote the same curve over the same range, proven from the records with
-no tolerance anywhere.** Every row must hold. A pair failing any row does not
+both denote the same curve over the same range, proven from the records, or
+the document's gap tolerance admits the pair (the amendment below).** Every row must hold. A pair failing any row does not
 join, and both edges stay free — it is not an error (§6.3).
 
 **Table J — free-edge join admission**
@@ -779,6 +784,25 @@ edge whose `Curve` is `Circle3`, `Arc3`, `NURBSCurve` or `FacetedCurve`
 therefore declines outright at J2/J5 and stays free — Table C's first row,
 and never an error — until a later increment states a bound for the
 variant's own parameters.
+
+**Table J amendment — the gap tolerance (J4′).** A document whose gap tolerance
+is positive (`agent-docs/gap-tolerance-design.md` §5.3) replaces J4's
+bit-identical comparison with a distance for one kind of vertex: a zero-bound
+vertex every edge of which is a `Line3` on a `Plane` face with no normal bound.
+Such a vertex joins the class of an earlier such vertex within the tolerance, in
+walk order and never farther from the class's first member than the tolerance, so
+a class has no chain. The class holds the first member's position, and its bound
+is the farthest member's distance. J2, J3 and J5 are unchanged: a curved edge and a
+vertex that carries a bound join only by proof. A curve certificate is not
+consulted for a vertex all of whose edges are straight, since a certificate
+speaks of a curve. A merge that would collapse an edge, or repeat a vertex in a face's
+loop that the exact table did not repeat, is not made, and the whole stitch then
+runs on the exact table. The class bounds widen the result as a bounded weld
+already does: every vertex's own bound, each moved edge's length bound by its
+endpoints' distances, each moved face's area bound by `d·P + n·d²` for its
+perimeter `P` and `n` vertices, the body box, and the volume and centroid
+(`massDelta`), which is never `Exact`. The merge is recorded in the plan and
+replayed by every placement.
 
 **A weld key claimed by three or more free edges joins none of them.** Table
 J's admission is pairwise, but a caller can hand `Stitch` more than two
@@ -890,7 +914,7 @@ reads `Kind()`, and a caller who wants to know what is missing resolves
 `Edges(Free())` against the result. That is a better diagnosis than any error
 message: the unjoined edges are handed back as selectable topology, with their
 own curves and endpoints, so an agent can measure the gap it left and repair
-the model. It is also why `Stitch` takes no tolerance and no
+the model. It is also why `Stitch` takes no per-call tolerance and no
 must-close option — there is nothing an option could say that the result does
 not already say better. **A pinched vertex link is not a residual free
 edge, and this rule does not cover it.** An open sheet can still weld

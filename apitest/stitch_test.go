@@ -252,7 +252,7 @@ func TestStitchRefusesOpenAssemblyPinchedAtOneVertex(t *testing.T) {
 // four pairs is bit-identical and none joins (Table J's J4).
 func TestStitchDisplacedPatchStaysASheet(t *testing.T) {
 	t.Parallel()
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	walls, bottom, top := stitchBoxSheets(t, doc, 10+1e-9)
 
 	sheet, err := decad.Stitch(t.Context(), walls, bottom, top)

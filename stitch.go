@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -78,7 +79,11 @@ func Stitch(ctx context.Context, bodies ...*Body) (*Body, error) {
 		srcFaces = append(srcFaces, faces...)
 	}
 	assertStitchSourceOwners(srcFaces)
-	plan := stitchrecord.BuildPlan(srcFaces)
+	ctx, err := d.evalContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	plan := stitchrecord.BuildTolerantPlan(srcFaces, gaptol.Reach(ctx))
 
 	ref := d.nextProducerID()
 	body, err := bodyResult(stitchrecord.Build(ctx, envOf(documentNode(d), ref), srcFaces, plan, r3.Identity()))

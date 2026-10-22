@@ -114,7 +114,8 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | `Face.Centroid` outside an authenticated point-loft far cap or planar Split cap | `ErrUnsupported`; only complete caps carry a bounded area-centroid certificate | `agent-docs/loft-point-design.md` "Planar split of a point loft" |
 | `Body.ExtremeFacesByCentroid` outside a complete point-loft planar Split slab, its rigid copy, or its positive uniform image | `ErrUnsupported`; this source class has a cone bound for every side-face centroid | `agent-docs/loft-point-design.md` "Planar split of a point loft" |
 | `ScaledAt` of other bodies, including partial and sheet Revolves and non-Boolean faceted results | `ErrUnsupported`; no similarity certificate | `agent-docs/loft-point-design.md` "Anchored uniform scale of a Split slab"; `agent-docs/evaluator-design.md` "Positive uniform scale of a prism, stack, full Revolve, or faceted Boolean" |
-| Tolerant stitch, Ruled, Boundary Fill | Refused permanently | `agent-docs/surface-design.md` §1.3 |
+| Ruled, Boundary Fill | Refused permanently | `agent-docs/surface-design.md` §1.3 |
+| `Stitch` of curved edges, of bounded or certified vertices, and of any edge pair under `ExactOnly` that is not proven coincident | the edges stay free | `agent-docs/surface-design.md` §6.2, `agent-docs/gap-tolerance-design.md` §5.3 |
 | Reverse Normal | Named, staged for no increment | `agent-docs/surface-design.md` §1.4 |
 
 ## Data exchange

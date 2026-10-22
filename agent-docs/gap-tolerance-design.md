@@ -14,6 +14,7 @@ never permits, how every use is charged, and which operations read it.
 | How is a use of it charged? | §4 |
 | Which operations read it? | §5 |
 | How does a Boolean use it on a coplanar contact? | §5.2 |
+| How does `Stitch` use it? | §5.3 |
 | Which refusals does it leave in place? | §6 |
 
 This router is navigation, not authority.
@@ -166,6 +167,27 @@ What a result of the retry states, and what it does not:
   wall opens a through hole, because a flush Cut pokes through, and the wall's face area reads the pierced wall. A
   caller that needs the literal reading uses `ExactOnly` or a smaller tolerance.
 
+### 5.3 Stitch
+
+`Stitch` reads the tolerance in `stitchrecord.BuildTolerantPlan`. The exact plan (`agent-docs/surface-design.md`
+Table J) is built first. With a positive reach, `mergeNear` then clusters the vertices of planar, straight-edged faces:
+
+- A vertex takes part when its held bound is zero and every edge it meets is a `Line3` on a `Plane` face with no
+  normal bound. A vertex on a curved edge or face, or with a bound, stays alone.
+- Vertices are taken in walk order, and each joins the first earlier representative within reach, so a class holds
+  no chain: the farthest member is within reach of the first.
+- The class holds the first member's position. Its bound is the farthest member's distance, taken as a proven upper
+  bound, and it is replayed by every placement.
+- The merge is made only if no edge collapses and no face loop repeats a vertex the exact table did not repeat.
+  Otherwise the stitch runs on the exact table.
+
+The bounds that follow from a bounded class are the ones the shared-denotation weld already charges
+(`agent-docs/surface-design.md` Table J amendment J4′): every vertex bound, the volume and centroid through
+`massDelta`, and the box. A moved edge's length bound grows by the distances at its two ends. A moved face's area
+bound grows by `d·P + n·d²` for its perimeter `P` and `n` vertices. The volume is never `Exact`. A face that no merge
+touched keeps its own bounds. A stitch with no vertex within reach of another, and an `ExactOnly` stitch, are the
+exact stitch.
+
 ## 6. What stays refused
 
 The tolerance repairs one refusal class: a held mesh whose float rounding folds it through itself. Everything else
@@ -173,7 +195,8 @@ keeps its refusal:
 
 - A mesh the second stage leaves folded, because a vertex is welded, no candidate within the reach clears it, or
   the reach is too small.
-- `Stitch` joins free edges only where coincidence is proven (`agent-docs/surface-design.md` §1.3).
+- `Stitch` of a curved edge, of a vertex that carries a bound, and of any pair under
+  `ExactOnly`: the edges stay free (§5.3).
 - Branching intersection curves, a facet or subdivision region that touches the other operand's boundary, and a curved
   tangency or near contact the proximity gate cannot decide. The first two carry no contact normal. The gate asks
   whether chorded surfaces touch, and a shift far smaller than the chord error cannot answer that.
