@@ -7,7 +7,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/r3"
 )
 
 // finish checks the restored positions and prices the move. A cap whose facets
@@ -77,41 +76,17 @@ func (st *restoreState) finish(ctx context.Context) (CapRestoration, bool, error
 }
 
 // folds returns the pairs of facets that meet other than as neighbours, among
-// those that touch a changed vertex. It reads the restored mesh as it is and
-// nudged each way by fragile, so a pair that only misses because of an ulp, and
-// that a later placement's rounding would fold, counts as meeting.
+// those that touch a changed vertex. It reads the restored mesh as it is. A
+// pair that only misses by an ulp is not counted here: a later placement's
+// rounding folds it only if the placement probes (unplaceable) say so.
 func (st *restoreState) folds(ctx context.Context, changed []bool) ([][2]int, error) {
 	n := len(st.m.Verts)
-	var out [][2]int
-	for _, nudge := range [...]float64{0, fragile, -fragile} {
-		pos := st.next
-		if nudge != 0 {
-			pos = make([]r3.Vec, n)
-			for i, v := range st.next {
-				pos[i] = r3.Vec{X: v.X + nudge*unit(i, 1), Y: v.Y + nudge*unit(i, 2), Z: v.Z + nudge*unit(i, 3)}
-			}
-		}
-		h := meshbool.HeldRounding{
-			Verts: pos, Tris: st.m.Tris, Exact: make([]proof.Xpt, n),
-			Moved: changed, Movable: make([]bool, n),
-		}
-		for i, v := range pos {
-			h.Exact[i] = proof.XptOf(v)
-		}
-		pairs, err := meshbool.HeldFolds(ctx, h)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, pairs...)
+	h := meshbool.HeldRounding{
+		Verts: st.next, Tris: st.m.Tris, Exact: make([]proof.Xpt, n),
+		Moved: changed, Movable: make([]bool, n),
 	}
-	return out, nil
-}
-
-// unit is a number in [-1, 1] fixed by a vertex and an axis.
-func unit(i, axis int) float64 {
-	x := uint64(i)*0x9e3779b97f4a7c15 + uint64(axis)*0xbf58476d1ce4e5b9
-	x ^= x >> 31
-	x *= 0x94d049bb133111eb
-	x ^= x >> 29
-	return float64(x>>11)/float64(1<<52) - 1
+	for i, v := range st.next {
+		h.Exact[i] = proof.XptOf(v)
+	}
+	return meshbool.HeldFolds(ctx, h)
 }

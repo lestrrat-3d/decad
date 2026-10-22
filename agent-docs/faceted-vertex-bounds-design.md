@@ -260,9 +260,11 @@ facet holds, moves with that facet at its barycentric weights; a vertex a blank
 facet holds stays on the blank.
 
 The restored mesh is then checked like the Boolean's result. The held-mesh
-embedding check (`meshbool.HeldFolds`) reads it as it is and nudged either way
-by 1e-11 mm, so a pair of facets that only misses by an ulp counts as meeting.
-A placement probe (`meshbool.RepairHeldEmbedding`) places the mesh by a quarter
+embedding check (`meshbool.HeldFolds`) reads it as it is. A pair of facets that
+only misses by an ulp is left to the placement probe, because nudging every
+vertex to find such pairs flags facets that already nearly touch in the
+Boolean's own mesh, and each change of one of their vertices then reads as a
+fold. A placement probe (`meshbool.RepairHeldEmbedding`) places the mesh by a quarter
 turn about Z and by an oblique rotation with a translation and runs the
 float-box repair a `Transform` runs; a facet still folded after it fails the
 probe. A vertex of a folded facet stays at its proxy position, and the facets it
@@ -274,15 +276,6 @@ serves. The other caps are restored. Each failure restarts the restoration
 reads are bounded (2^18 vertices, 2^24 vertex-in-facet tests, 2^12 cells per
 proxy facet); reaching a bound refuses the restoration and the proxy-position
 mesh is published unchanged.
-
-One cap of the 62 on the 31-tooth gallery pinion stays at its proxy positions
-(292 of 18,104 moved vertices, 0.028 to 0.032 mm off the cone). A flank facet
-joins one of its rim vertices to two blank vertices about 1 mm away. Lowering
-that rim vertex by 0.0245 mm tilts the facet through two blank facets. Pinning
-the vertex at its proxy position then folds the cap's own facets against the
-flank facets, holding it halfway or three quarters of the way back folds the
-same pair, and no stand lets the cap slide clear. Restoring that cap would need
-the flank facet subdivided where it meets the blank.
 
 The vertex bounds stand as they are: the proxy bound already adds the move to
 the source bound, and the restored position lies within that distance of the
