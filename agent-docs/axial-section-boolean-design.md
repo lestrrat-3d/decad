@@ -21,8 +21,9 @@ A prism that carries a section displacement is not an operand, because the displ
 from the solid it stands for and this route rebuilds from records.
 
 Operands are admitted together only when every one lies between the same two planes: equal section axes and equal exact
-offsets of both end planes along the normal. At least one must be a loft, which records the planes. Anything else is a
-miss, and the Union takes its next route.
+offsets of both end planes along the normal. A loft records the planes. A set of prisms takes them from its first unplaced
+prism (`Operand.AsReference`): that prism's frame raised along its normal by each sweep level, with the float rounding of
+the raised origin charged as its lateral offset. Anything else is a miss, and the Union takes its next route.
 
 ## 2. Flow
 
@@ -43,6 +44,9 @@ miss, and the Union takes its next route.
 
 The route runs for the many-operand Union (`Union(base, tools...)`) ahead of the other many-operand routes, and for a
 two-operand Union ahead of the analytic prism routes and after the loft routes that need a recorded join.
+A set of prisms with no loft runs this route last (`axialsection.UnionManyPrisms`), after every other many-operand route has
+refused it with `ErrUnsupported`, so the prism-pattern route keeps every set it certifies. A refusal here leaves the first
+refusal as the answer.
 
 ## 3. What is a miss, and what is an error
 

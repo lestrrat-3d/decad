@@ -2225,3 +2225,4 @@
 10	0.02	TestWallReflexSweep
 10	0.00	TestDocumentParams
 10	0.00	TestExtrudeFitSplineSectionScalesWorkWithPieces
+10	0.00	TestExtrudedToothPatternJoinsADisc
