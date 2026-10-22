@@ -39,6 +39,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/analyticundercut/` | Maps prism, revolve and cup records to their own-step faces and decides their undercut surveys. See verification §6. |
 | `internal/filletband/` | Loop-fillet closed forms and reference-frame band mass. See loop-fillet §5. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
+| `internal/gaptol/` | The gap tolerance a root operation puts on its context, and the default. See gap-tolerance §1. |
 | `internal/survey2d/` | 2D disks, prism readers, walks, corner loops, Bézier carriers. See verification §6. |
 | `internal/holeplan/` | Plans `Hole`: places the axis on the face plane, gates sizes, and returns the bore, counterbore and countersink tool shapes. See hole design. |
 | `internal/ribplan/` | Plans `Rib`: the rib outline from a line, thickness and overrun, the box-disjoint test and the no-added-volume test. See rib design. |

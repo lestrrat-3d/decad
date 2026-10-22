@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -38,6 +39,7 @@ func ScaleMesh(ctx context.Context, budget *proofbound.WorkBudget,
 	h := meshbool.HeldRounding{
 		Verts: next.Verts, Tris: tris, Exact: make([]proof.Xpt, len(verts)),
 		Moved: make([]bool, len(verts)), Movable: make([]bool, len(verts)),
+		Reach: gaptol.Reach(ctx),
 	}
 	for i, v := range verts {
 		if err := budget.Step(); err != nil {

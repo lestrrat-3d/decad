@@ -27,6 +27,10 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}
+	ctx, err := d.evalContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if factor.Kind() != units.Dimensionless {
 		return nil, fmt.Errorf("%w: the scale factor must be dimensionless", ErrUnitKind)
 	}

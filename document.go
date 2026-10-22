@@ -24,18 +24,24 @@ import (
 type Document struct {
 	// n is the node data internal packages read and build (internal/topo).
 	n topo.Document
+	// gapReach is the gap tolerance in millimetres its operations carry
+	// (gap_tolerance.go), and gapErr the error an invalid option named.
+	gapReach float64
+	gapErr   error
 }
 
-// DocumentOption is a placeholder option tier for New. No options exist yet;
-// it reserves the constructor signature for future options.
+// DocumentOption configures New. WithGapTolerance and ExactOnly are its
+// options. An option from another package cannot implement this sealed tier.
 type DocumentOption interface {
 	option.Interface
 	documentOption()
 }
 
 // New returns an empty document.
-func New(_ ...DocumentOption) *Document {
-	return bornDocument(&Document{})
+func New(opts ...DocumentOption) *Document {
+	d := &Document{}
+	d.gapReach, d.gapErr = gapReachOf(opts)
+	return bornDocument(d)
 }
 
 // Bodies returns the live bodies — the model as it stands. The slice is a

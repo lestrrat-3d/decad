@@ -2186,3 +2186,4 @@
 10	5.00	TestSpiralCopiedToothUnionKeepsCapsOnTheirCones
 10	5.00	TestSpiralFirstToothUnionKeepsCapsOnTheirCones
 10	5.00	TestSpiralFirstToothUnionSurvivesPlacement
+10	0.01	TestDocumentGapToleranceOptions

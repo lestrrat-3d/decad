@@ -342,6 +342,10 @@ func documentNode(d *Document) *topo.Document {
 // topo.Payload.Placed: it builds the environment from d and maps the node
 // back. It never commits.
 func placePayload(ctx context.Context, p topo.Payload, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+	ctx, err := d.evalContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	return bodyResult(placePayloadNode(ctx, p, &d.n, ref, composed))
 }
 

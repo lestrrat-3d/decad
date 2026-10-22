@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -20,7 +21,9 @@ import (
 // at the nearest float to its exact image. Every vertex that differs
 // from its exact image is checked and, where its facets fold, may move to a
 // corner of that image's float box (meshbool.EnforceHeldEmbedding); a fold
-// remaining after the bounded search is refused. It returns, per vertex, the
+// remaining after the bounded search is refused. When ctx carries a gap
+// tolerance (internal/gaptol), a fold the float box cannot clear is also tried
+// at positions up to that far from the exact image. It returns, per vertex, the
 // proven 3D displacement of each vertex the check moved from its exact image:
 // zero for a vertex it left alone, and nil when it moved none. The caller
 // charges alongside that vertex's own rounding allowance, since a corner can
@@ -32,6 +35,7 @@ func KeepPlacedEmbedded(ctx context.Context, exact []proof.Xpt, held []r3.Vec, t
 		Exact:   exact,
 		Moved:   make([]bool, len(held)),
 		Movable: make([]bool, len(held)),
+		Reach:   gaptol.Reach(ctx),
 	}
 	first := make([]r3.Vec, len(held))
 	copy(first, held)
