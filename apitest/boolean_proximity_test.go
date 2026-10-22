@@ -249,7 +249,7 @@ func TestUnionRefusesPlacedPrismGrazingAlongAnEdge(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
-			doc := decad.New()
+			doc := decad.New(decad.ExactOnly())
 			a := boxBody(t, doc, 0, 0, 20, 20, 1)
 			pb := newPlacedPrism(lyingPrismFrame(t, tc.AxisZ), 10, r, 8, 0)
 			require.Equal(t, tc.EdgeZ, pb.bottom[6].Z, `B's lowest long edge sits where the case says`)

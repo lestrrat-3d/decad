@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func loftCylinderPlacedTabPair(t *testing.T, lower, upper r3.Frame) (*Document, *Body, *Body) {
+func loftCylinderPlacedTabPair(t *testing.T, lower, upper r3.Frame, opts ...DocumentOption) (*Document, *Body, *Body) {
 	t.Helper()
 	ctx := t.Context()
 	world := sketch.NewWorld()
@@ -26,7 +26,7 @@ func loftCylinderPlacedTabPair(t *testing.T, lower, upper r3.Frame) (*Document, 
 	require.NoError(t, err)
 	s0, p0 := loftCylinderTabProfile(t, ctx, world, bottomPlane, 0)
 	s1, p1 := loftCylinderTabProfile(t, ctx, world, topPlane, 10*math.Pi/180)
-	doc := New()
+	doc := New(opts...)
 	tooth, err := Loft(ctx, doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 	s, err := world.CreateSketch(bottomPlane)
@@ -509,7 +509,7 @@ func TestLoftCylinderCommonPlacementNativeYZConsumers(t *testing.T) {
 func TestLoftCylinderCommonPlacementRefusesUnequalPoses(t *testing.T) {
 	lower := loftCylinderTestFrame(t, r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	upper := loftCylinderTestFrame(t, r3.Vec{Z: 2}, r3.Vec{X: 1}, r3.Vec{Y: 1})
-	_, blank, tooth := loftCylinderPlacedTabPair(t, lower, upper)
+	_, blank, tooth := loftCylinderPlacedTabPair(t, lower, upper, ExactOnly())
 	var err error
 	blank, err = Transform(t.Context(), blank, loftCylinderTestTranslation(t, 7))
 	require.NoError(t, err)

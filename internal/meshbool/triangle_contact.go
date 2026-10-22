@@ -34,6 +34,15 @@ func ErrUnclassifiableContact(what string) error {
 type TouchContact struct {
 	NormalA  r3.Vec
 	Decisive bool
+	// FacetsB names facets of the second operand's mesh that take part in the
+	// contact, so a caller that moves each connected piece of the second operand
+	// on its own knows which piece to move. Empty when the contact does not say.
+	FacetsB []int
+	// Slack is how deep the second operand must reach into the first along
+	// NormalA for the pair to be decided: the sum of the two faces' chord
+	// displacements for a contact the proximity gate refused, and zero for a
+	// contact the exact predicates refused.
+	Slack float64
 }
 
 // TouchContactError is ErrUnclassifiableContact's refusal for a coplanar
@@ -43,11 +52,17 @@ type TouchContact struct {
 // ErrUnsupported.
 type TouchContactError struct {
 	// What names the contact as ErrUnclassifiableContact does.
-	What     string
+	What string
+	// Detail, when set, is the whole text of the refusal after its sentinel, for
+	// a refusal that is not one of the exact predicates'.
+	Detail   string
 	Contacts []TouchContact
 }
 
 func (e *TouchContactError) Error() string {
+	if e.Detail != "" {
+		return fmt.Sprintf(`%v: %s`, decaderr.ErrUnsupported, e.Detail)
+	}
 	return fmt.Sprintf(`%v: %s — the exact predicates cannot classify a tangent contact`, decaderr.ErrUnsupported, e.What)
 }
 
@@ -58,6 +73,7 @@ const (
 	touchCoplanar = `two operand facets overlap in one plane`
 	touchGraze    = `an operand edge grazes along the other operand's facet`
 	touchPoint    = `the operand boundaries touch at an isolated point`
+	touchNear     = `the operands' held facets come within the chord tolerance`
 )
 
 // ContactKind is the DIMENSION of the exact intersection of two closed

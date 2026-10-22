@@ -172,15 +172,15 @@ func coplanarContactOf(ma, mb *BoolMesh, i, j int) TouchContact {
 	mb.PrepareFloatNormal(j)
 	na, _ := ma.Fnorms[i].Normalize()
 	nb, _ := mb.Fnorms[j].Normalize()
-	return TouchContact{NormalA: na, Decisive: na.Dot(nb) < 0}
+	return TouchContact{NormalA: na, Decisive: na.Dot(nb) < 0, FacetsB: []int{j}}
 }
 
 // touchOf is the always-decisive contact at facet i of the first operand: an
 // edge grazing along a facet, or a point touch.
-func touchOf(ma *BoolMesh, i int) TouchContact {
+func touchOf(ma *BoolMesh, i, j int) TouchContact {
 	ma.PrepareFloatNormal(i)
 	na, _ := ma.Fnorms[i].Normalize()
-	return TouchContact{NormalA: na, Decisive: true}
+	return TouchContact{NormalA: na, Decisive: true, FacetsB: []int{j}}
 }
 
 // meshBoolean is MeshBoolean with the exact-point key function KeepSide uses
@@ -195,7 +195,7 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 	cutsA := map[int][]Xseg{}
 	cutsB := map[int][]Xseg{}
 	var pointTouches []proof.Xpt
-	var pointFacets []int
+	var pointFacets [][2]int
 	var segEnds []proof.Xpt
 	var inPlane []PairContact
 	// rims maps each rim vertex (a contact segment's endpoint, by exact key)
@@ -227,7 +227,7 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 		touchedB = append(touchedB, j)
 		if c.Kind == ContactPoint {
 			pointTouches = append(pointTouches, c.P0)
-			pointFacets = append(pointFacets, i)
+			pointFacets = append(pointFacets, [2]int{i, j})
 			return nil
 		}
 		segEnds = append(segEnds, c.P0, c.P1)
@@ -313,7 +313,7 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 			}
 			if !crossing {
 				if len(grazes) < maxTouchContacts {
-					grazes = append(grazes, touchOf(ma, p.I))
+					grazes = append(grazes, touchOf(ma, p.I, p.J))
 				}
 				continue
 			}
@@ -326,7 +326,7 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 			}
 			if !crossing {
 				if len(grazes) < maxTouchContacts {
-					grazes = append(grazes, touchOf(ma, p.I))
+					grazes = append(grazes, touchOf(ma, p.I, p.J))
 				}
 				continue
 			}
@@ -369,7 +369,7 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 		var isolated []TouchContact
 		for k, p := range pointTouches {
 			if _, ok := ends[p.Key()]; !ok && len(isolated) < maxTouchContacts {
-				isolated = append(isolated, touchOf(ma, pointFacets[k]))
+				isolated = append(isolated, touchOf(ma, pointFacets[k][0], pointFacets[k][1]))
 			}
 		}
 		if len(isolated) > 0 {

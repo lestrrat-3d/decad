@@ -114,7 +114,7 @@ func TestLoftCircleBoreRoundedAdmissionRefusals(t *testing.T) {
 			}
 			s0, p0 := section(basePlane)
 			s1, p1 := section(topPlane)
-			doc := decad.New()
+			doc := decad.New(decad.ExactOnly())
 			blank, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
 			require.NoError(t, err)
 			toolWorld := sketch.NewWorld()

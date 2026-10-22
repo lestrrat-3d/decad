@@ -155,7 +155,7 @@ func TestRevolveBooleanRefusesAHiddenTangency(t *testing.T) {
 	// along a line while the held facets — inscribed in the wall they chord —
 	// merely come within the pair's chord tolerance of it. §11 step 4 refuses
 	// that question rather than letting the chord placement answer it.
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	s, p := solidSketch(t)
 	cyl, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.AngleExtent{A: units.Degrees(180), Dir: decad.Along})
 	require.NoError(t, err)

@@ -123,7 +123,7 @@ func TestCommonAxisRevolveUnionKeepsBothCoincidentWallSources(t *testing.T) {
 func TestCommonAxisRevolveBooleanRefusalsLeaveInputsLive(t *testing.T) {
 	t.Parallel()
 	t.Run("edge contact", func(t *testing.T) {
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		left := revolveMeridian(t, doc, [][2]float64{{0, 0}, {4, 0}, {4, 2}, {0, 2}}, decad.FullRevolution{})
 		ring := revolveMeridian(t, doc, [][2]float64{{4, 2}, {6, 2}, {6, 3}, {4, 3}}, decad.FullRevolution{})
 		before := doc.Bodies()
@@ -135,7 +135,7 @@ func TestCommonAxisRevolveBooleanRefusalsLeaveInputsLive(t *testing.T) {
 		require.Equal(t, before, doc.Bodies())
 	})
 	t.Run("empty intersection", func(t *testing.T) {
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		a := revolveMeridian(t, doc, [][2]float64{{0, 0}, {4, 0}, {4, 2}, {0, 2}}, decad.FullRevolution{})
 		b := revolveMeridian(t, doc, [][2]float64{{4, 0}, {6, 0}, {6, 3}, {4, 3}}, decad.FullRevolution{})
 		before := doc.Bodies()
@@ -147,7 +147,7 @@ func TestCommonAxisRevolveBooleanRefusalsLeaveInputsLive(t *testing.T) {
 		require.Equal(t, before, doc.Bodies())
 	})
 	t.Run("near contact", func(t *testing.T) {
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		a := revolveMeridian(t, doc, [][2]float64{{0, 0}, {4, 0}, {4, 2}, {0, 2}}, decad.FullRevolution{})
 		b := revolveMeridian(t, doc, [][2]float64{{4.00001, 0}, {6, 0}, {6, 3}, {4.00001, 3}},
 			decad.FullRevolution{})
@@ -161,7 +161,7 @@ func TestCommonAxisRevolveBooleanRefusalsLeaveInputsLive(t *testing.T) {
 		}
 	})
 	t.Run("sub-band gap", func(t *testing.T) {
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		a := revolveMeridian(t, doc, [][2]float64{{0, 0}, {4, 0}, {4, 2}, {0, 2}}, decad.FullRevolution{})
 		b := revolveMeridian(t, doc,
 			[][2]float64{{4.0000000000005, 0}, {6, 0}, {6, 3}, {4.0000000000005, 3}},
@@ -176,7 +176,7 @@ func TestCommonAxisRevolveBooleanRefusalsLeaveInputsLive(t *testing.T) {
 		}
 	})
 	t.Run("foreign source", func(t *testing.T) {
-		docA, docB := decad.New(), decad.New()
+		docA, docB := decad.New(decad.ExactOnly()), decad.New(decad.ExactOnly())
 		a := revolveMeridian(t, docA, [][2]float64{{0, 0}, {4, 0}, {4, 2}, {0, 2}}, decad.FullRevolution{})
 		b := revolveMeridian(t, docB, [][2]float64{{4, 0}, {6, 0}, {6, 3}, {4, 3}}, decad.FullRevolution{})
 		beforeA, beforeB := docA.Bodies(), docB.Bodies()
@@ -186,7 +186,7 @@ func TestCommonAxisRevolveBooleanRefusalsLeaveInputsLive(t *testing.T) {
 		require.Equal(t, beforeB, docB.Bodies())
 	})
 	t.Run("canceled", func(t *testing.T) {
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		a := revolveMeridian(t, doc, [][2]float64{{0, 0}, {4, 0}, {4, 2}, {0, 2}}, decad.FullRevolution{})
 		b := revolveMeridian(t, doc, [][2]float64{{4, 0}, {6, 0}, {6, 3}, {4, 3}}, decad.FullRevolution{})
 		before := doc.Bodies()

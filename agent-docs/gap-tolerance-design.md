@@ -128,12 +128,17 @@ reach, and zero keeps the float-box search alone.
 
 ### 5.2 The shifted Boolean retry
 
-A mesh Boolean refuses three contacts the exact predicates cannot classify. Two operand facets can overlap in one
+A mesh Boolean refuses four contacts the exact predicates cannot classify. Two operand facets can overlap in one
 plane, so no side of the other operand is proven for the shared region. An edge of one operand can graze along a facet
-of the other. The operands can touch at an isolated point. `meshbool.TouchContactError` carries every such contact it
-met (up to 64) as the first operand's outward unit normal at the contact and whether it is Decisive. A coplanar pair is
-Decisive when the second operand's facet faces the opposite way, which puts the operands on opposite sides of the plane
-(a face-on-face touch). A graze and a point touch are always Decisive. `booleaneval.Evaluate` reads the error and
+of the other. The operands can touch at an isolated point. Facets of a curved face of one operand can come within the
+chord tolerance of the other operand's facets without provably crossing deeper than it (the proximity gate,
+`meshbool.RefuseUndecidableProximity`). `meshbool.TouchContactError` carries every such contact it met (up to 64) as
+the first operand's outward unit normal at the contact, whether it is Decisive, a Slack, and the second operand's
+facet it meets. A coplanar pair is Decisive when the second operand's facet faces the opposite way, which puts the
+operands on opposite sides of the plane (a face-on-face touch). A graze and a point touch are always Decisive. A
+gate contact is Decisive when the first operand's face is curved, and its Slack is the sum of the largest facet bound
+among the close facets of each face (never more than the faces' own bounds, which cover their worst facet). Any
+other contact has Slack zero. `booleaneval.Evaluate` reads the error and
 runs the Boolean again with the second operand moved:
 
 1. Directions come from the contacts (`shiftDirections`). Every contact must open: the shift's component along each
@@ -144,16 +149,25 @@ runs the Boolean again with the second operand moved:
    outward, so a tool flush with its target's wall pokes through it and leaves no skin. A Union needs only that they
    open. A pair of contacts that no direction opens in the needed sense, such as a tool flush with both walls of a
    slot, is not retried and the refusal stands.
-2. Each direction is the contacts' unit direction plus a generic part of weight 0.2 that is parallel to no coordinate
-   plane, so a shift also opens the walls that two bodies sharing a footprint leave coplanar.
-3. Steps of 1/16, 1/4 and 1 of the reach are tried in order, three directions each. The first outcome that is not a
-   coplanar refusal is the result, whether it is a body or another error, such as an empty Intersect. When every
-   attempt refuses, the original refusal is returned.
+2. Each direction is the contacts' unit direction, each contact pulling in proportion to its Slack, plus a generic part
+   of weight 0.2 that is parallel to no coordinate plane, so a shift also opens the walls that two bodies sharing a
+   footprint leave coplanar.
+3. Steps of 1/64, 1/16, 1/4 and 1 of the reach are tried in order, three directions each. A step's length is the
+   larger of that fraction of the reach and the least shift that clears every contact's Slack (the Slack over the
+   component along its normal, with a margin of 5%). A length above the reach is skipped. The first outcome that
+   is not a contact refusal is the result, whether it is a body or another error, such as an empty Intersect. When a
+   shifted attempt meets a contact the unmoved pair did not reach, the contacts are merged and the search starts
+   again, up to four times. When every attempt refuses, the original refusal is returned.
+4. Each connected piece of the second operand (the teeth of a gear tool, for one) is moved on its own, along the
+   directions and by the length its own contacts ask for, and a piece no contact names stays where it is. Each
+   piece's displacement is charged to its own vertices and faces, the mesh bound takes the largest, and the swept
+   volume sums the pieces, so a piece is never charged for another's move.
 
 The moved operand is the solid the Boolean decides about, so the proximity gate and the exact predicates read it
-with its own bounds. The composition of the result's bounds reads a copy that is wider by the shift
-(`shiftOperandMesh`): every vertex, face and mesh bound grows by the displacement, the symmetric-difference volume
-grows by what the move sweeps over the operand's boundary, and the area allowance grows by the rounding of the new
+with its own bounds. The chain-depth gate (`RefuseCoarseHeldContact`) admits a mesh bound coarser than the chord
+tolerance by the shift the retry applied, because the result's bounds already carry it. The composition of the result's bounds reads a copy that is wider by the shift
+(`shiftOperandMesh`): the vertex and face bounds of a moved piece grow by its displacement, the mesh bound by the
+largest, the symmetric-difference volume grows by what each move sweeps over its piece's boundary, and the area allowance grows by the rounding of the new
 coordinates. The ordinary trim amplification then charges the shift at every crossing. The moved operand keeps no
 retained surface tag, because its facets no longer lie on the surfaces they were cut from. A shifted mesh that folds,
 and any pair that uses a spiral-join certificate, is declined.
@@ -197,9 +211,10 @@ keeps its refusal:
   the reach is too small.
 - `Stitch` of a curved edge, of a vertex that carries a bound, and of any pair under
   `ExactOnly`: the edges stay free (§5.3).
-- Branching intersection curves, a facet or subdivision region that touches the other operand's boundary, and a curved
-  tangency or near contact the proximity gate cannot decide. The first two carry no contact normal. The gate asks
-  whether chorded surfaces touch, and a shift far smaller than the chord error cannot answer that.
+- Branching intersection curves, and a facet or subdivision region that touches the other operand's boundary. They
+  carry no contact normal.
+- A curved near contact no shift within the reach clears. The gate asks whether chorded surfaces touch, and it is
+  decided only when the shift exceeds the contact's Slack, which is the chord error of the facets that meet there.
 - A coplanar overlap, graze or point touch whose contacts no shift opens in the sense the operation needs (§5.2), and
   one on a pair that uses a spiral-join certificate.
 - An uncertified `sketch` fragment (§3).
@@ -216,9 +231,12 @@ owns that refusal in the same change.
 | `meshbool.TestEnforceHeldEmbeddingReachCannotMoveAWeldedVertex` | A welded vertex stays and the fold is still refused. |
 | `facetproof.TestKeepPlacedEmbeddedReach` | A 118-facet crop of a restored spiral cap refuses with no reach, clears at a reach of 1e-3 mm, and charges every moved vertex at least the distance it moved. |
 | `apitest.TestDocumentGapToleranceOptions` | The option set, its last-wins rule and each invalid value's error. |
+| `booleaneval.TestShiftNeed` | The least shift that clears a contact's Slack, along a normal and along a slanted direction. |
+| `booleaneval.TestShiftPiecesChargeEachPieceOnItsOwn` | Two separate pieces: only the moved piece moves and is charged. |
+| `meshbool.TestRefuseUndecidableProximityLocalSlack` | A pair the faces' bounds cannot decide is decided by its close facets' own bounds, and a refusal names its contacts with their Slack. |
 | `booleaneval.TestShiftDirections` | Which sense each operation wants for each kind of contact, and when no direction exists. |
 | `apitest.TestBooleanGapTolerance` | Union, Cut and Intersect of boxes that touch or sit flush: the result, the bound that covers the true volume, a tighter bound from a smaller tolerance, and the refusals `ExactOnly` and a slot keep. |
 | `apitest.TestBooleanGapToleranceEdgeAndPointTouches` | A shared corner, a knife edge inside a wider wedge and two crossing edges: Union, Cut and Intersect, the volume bound, and the `ExactOnly` refusal. |
-| `apitest.TestBooleanGapToleranceStaysExactForCurvedContact` | A tangent cylinder on a plate stays refused. |
+| `apitest.TestBooleanGapToleranceStaysExactForCurvedContact` | A tangent cylinder on a plate stays refused under `ExactOnly`. |
 | `apitest.TestVerifyGapToleranceDecidesAFlushPair` | `Verify` reads a flush pair's overlap with a covering bound, leaves it staged under `ExactOnly`, and reports an invalid tolerance. |
 | `examples.Example_gap_tolerance` | The documented use. |

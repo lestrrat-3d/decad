@@ -482,7 +482,7 @@ func TestBooleanRefusalSoundnessTangentCylinder(t *testing.T) {
 		// are valid-but-unclassifiable contacts, so a tangency is refused as
 		// BooleanUnsupportedContact (ErrUnsupported) EITHER way, never silently
 		// accepted as a clean two-lump body.
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 		cyl := makeCyl(doc, 20+r, 10, r)
 		_, err := decad.Union(t.Context(), plate, cyl)
@@ -495,7 +495,7 @@ func TestBooleanRefusalSoundnessTangentCylinder(t *testing.T) {
 
 		// Clearly clear: a decidable disjoint union of two lumps.
 		gap := 1.0 + rng.Float64()*3
-		doc2 := decad.New()
+		doc2 := decad.New(decad.ExactOnly())
 		plate2 := boxBody(t, doc2, 0, 0, 20, 20, 8)
 		apart := makeCyl(doc2, 20+r+gap, 10, r)
 		got, err := decad.Union(t.Context(), plate2, apart)
@@ -506,7 +506,7 @@ func TestBooleanRefusalSoundnessTangentCylinder(t *testing.T) {
 		// Clearly overlapping: a rod piercing the plate, one lump, whose deep
 		// crossing the chords cannot hide.
 		over := 1.5 + rng.Float64()*2
-		doc3 := decad.New()
+		doc3 := decad.New(decad.ExactOnly())
 		plate3 := boxBody(t, doc3, 0, 0, 20, 20, 8)
 		into := makeCyl(doc3, 20-over, 10, r)
 		got3, err := decad.Union(t.Context(), plate3, into)
