@@ -41,6 +41,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `loft_sections.go` | Public smooth-section loft entry point and source-face assembly. See loft-sections design. |
 | `cone_from_face.go` | `ConeFromFace`: the full tool cone one float step off a Revolve blank's selected conical face. See loft-face-sections design. |
 | `loft_faces.go` | The commit of the loft `internal/revolveloftfaces` assembles and proves, shared rational helpers and map aliases, and `LoftFacesToConeTangent` with `ConeTangentEnd`. See loft-face-sections design. |
+| `loft_between.go` | `LoftBetween` and its `LoftEnd`: dispatches a profile or point end to `Loft` or `LoftFromPoint`, adding no certificate. See loft §3.3. |
 | `loft_point.go` | Admits a point-section Loft from Sketch and publishes the `internal/pointloft/` payload. See loft-point design. |
 
 ### Cap-loop chamfer

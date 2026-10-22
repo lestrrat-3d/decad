@@ -2200,3 +2200,7 @@
 10	0.20	TestLoftSplitsFitSplines
 10	0.20	TestLoftLineAgainstFitSpline
 10	0.20	TestLoftLineAgainstArcStaysRefused
+10	0.20	TestLoftBetweenProfileToProfileIsLoft
+10	0.20	TestLoftBetweenPointAndProfile
+10	0.20	TestLoftBetweenConeOverACircle
+10	0.20	TestLoftBetweenRefusals

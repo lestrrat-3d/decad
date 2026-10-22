@@ -250,6 +250,48 @@ the curved side's cells.
 
 Tests: `apitest.TestLoftLineAgainstFitSpline` (a fit-spline arch against a straight chord, in both orders, with a verified
 mesh) and `apitest.TestLoftLineAgainstArcStaysRefused`.
+### 3.3 Either end a point: `LoftBetween`
+
+```go
+type LoftEnd struct{ /* unexported */ }
+func ProfileEnd(s *sketch.Sketch, p *sketch.Profile) LoftEnd
+func PointEnd(apex r3.Vec) LoftEnd
+func LoftBetween(ctx context.Context, d *Document, from, to LoftEnd, opts ...LoftOption) (*Body, error)
+```
+
+One call names a loft between two ends, each a profile or one world point. It builds nothing of its own: it dispatches to
+the two constructions that exist, so no certificate is added or widened.
+
+| `from` | `to` | Result |
+|---|---|---|
+| profile | profile | `Loft`, with every option `Loft` takes. |
+| point | profile | `LoftFromPoint`: the cone over the profile (`agent-docs/loft-point-design.md`). |
+| profile | point | the same cone, with the profile as the FROM end. |
+| point | point | `ErrDegenerate`: no section exists. |
+
+A zero `LoftEnd`, or a `ProfileEnd` with a nil sketch or profile, is `ErrDegenerate`.
+
+What a point end keeps from `LoftFromPoint`, stated so none of it is a surprise:
+
+- The point loft is a faceted payload, not a loft payload, so the loft fillet (§17), bore and chamfer (§18) do not apply to it.
+- One outer loop and no holes (`ErrUnsupported` otherwise), the point off the profile's plane (`ErrDegenerate` on it),
+  a station cap, a cap triangulation and a crossing audit with the apex.
+- It admits the kinds `Loft` pairs same-kind, because the builder pairs the profile with itself through the ordinary
+  pairing and station code: lines, arcs, circles, and open or closed free-form curves.
+- The cap is named `capEnd` whichever end the point is on, as `LoftFromPoint` names it. A profile-first call does not
+  rename it `capStart`.
+- `WithLoftAlignment` and `WithLoftSplits` name a pairing a point end does not have, so either is `ErrDegenerate`;
+  `WithSurfaceResult` is `ErrUnsupported`.
+
+`Loft` and `LoftFromPoint` keep their own signatures and contracts.
+
+Future work, with no promise: a point as a degenerate section inside the loft payload would let a point loft take
+alignment-free splits of its profile and the loft fillet and chamfer. It needs its own certificate, because a cell that
+collapses on exactly one section is refused by S16 today.
+
+Tests: `apitest.TestLoftBetweenProfileToProfileIsLoft`, `TestLoftBetweenPointAndProfile` (a square pyramid from both
+orders against base times height over three, and against `LoftFromPoint`), `TestLoftBetweenConeOverACircle` (the cone
+volume and a verified mesh) and `TestLoftBetweenRefusals`.
 
 ## 4. Table S — refusals
 
