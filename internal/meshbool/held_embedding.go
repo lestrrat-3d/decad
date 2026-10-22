@@ -75,25 +75,44 @@ func EnforceHeldEmbedding(ctx context.Context, h HeldRounding) (int, error) {
 // positions already gave, so the result is the same either way; the tests
 // run both paths and compare them.
 func enforceHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, error) {
+	moved, failing, err := repairHeldEmbedding(ctx, h, memo)
+	if err != nil {
+		return 0, err
+	}
+	if len(failing) > 0 {
+		return 0, fmt.Errorf(`%w: the result's float rounding folds its held mesh through itself, and the bounded float-box search did not clear it — the held mesh would not be embedded, so this evaluator refuses the result rather than publish it`, decaderr.ErrUnsupported)
+	}
+	return moved, nil
+}
+
+// RepairHeldEmbedding runs the float-box search of EnforceHeldEmbedding and
+// returns, instead of refusing, the facets still folded after it, in ascending
+// order, with the number of vertices it moved. A caller that can still change
+// the mesh uses them to find what to change.
+func RepairHeldEmbedding(ctx context.Context, h HeldRounding) (int, []int, error) {
+	return repairHeldEmbedding(ctx, h, true)
+}
+
+func repairHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, []int, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	if err := budget.Err(); err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	e := newHeldEmbedding(h, budget, memo)
 	var query []int
 	for i, t := range h.Tris {
 		if err := budget.Step(); err != nil {
-			return 0, err
+			return 0, nil, err
 		}
 		if h.Moved[t[0]] || h.Moved[t[1]] || h.Moved[t[2]] {
 			query = append(query, i)
 		}
 	}
 	if len(query) == 0 {
-		return 0, nil
+		return 0, nil, nil
 	}
 	if err := e.buildGrid(); err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	// Every facet outside check is known embedded against all its
 	// neighbours; a move puts the facets around the moved vertex back in.
@@ -103,10 +122,10 @@ func enforceHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, 
 		if sweep == 0 && memo && len(check) >= 4096 && runtime.GOMAXPROCS(0) > 1 {
 			clean, err := e.parallelClean(ctx, check)
 			if err != nil {
-				return 0, err
+				return 0, nil, err
 			}
 			if clean {
-				return 0, nil
+				return 0, nil, nil
 			}
 		} else if sweep == 0 && memo {
 			queryFacet := make([]bool, len(e.h.Tris))
@@ -120,10 +139,10 @@ func enforceHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, 
 			clean, err := e.serialClean(check, queryFacet)
 			e.budget = repairBudget
 			if err != nil {
-				return 0, err
+				return 0, nil, err
 			}
 			if clean {
-				return 0, nil
+				return 0, nil, nil
 			}
 		}
 		if memo && e.pairs == nil {
@@ -132,10 +151,10 @@ func enforceHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, 
 		}
 		offenders, failing, err := e.offenders(check)
 		if err != nil {
-			return 0, err
+			return 0, nil, err
 		}
 		if len(failing) == 0 {
-			return len(moved), nil
+			return len(moved), nil, nil
 		}
 		next := map[int]struct{}{}
 		for _, f := range failing {
@@ -145,7 +164,7 @@ func enforceHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, 
 		for _, v := range offenders {
 			placed, err := e.improve(v)
 			if err != nil {
-				return 0, err
+				return 0, nil, err
 			}
 			if !placed {
 				continue
@@ -167,12 +186,52 @@ func enforceHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, 
 	}
 	_, failing, err := e.offenders(check)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
-	if len(failing) > 0 {
-		return 0, fmt.Errorf(`%w: the result's float rounding folds its held mesh through itself, and the bounded float-box search did not clear it — the held mesh would not be embedded, so this evaluator refuses the result rather than publish it`, decaderr.ErrUnsupported)
+	slices.Sort(failing)
+	return len(moved), failing, nil
+}
+
+// HeldFolds returns the facets of the held mesh that meet a facet other than
+// their neighbours, among those that touch a Moved vertex, each with the
+// facets it meets, in ascending order of the first. It moves nothing; Movable
+// is ignored. A mesh with no Moved vertex has none.
+func HeldFolds(ctx context.Context, h HeldRounding) ([][2]int, error) {
+	budget := proofbound.NewWorkBudget(ctx)
+	if err := budget.Err(); err != nil {
+		return nil, err
 	}
-	return len(moved), nil
+	e := newHeldEmbedding(h, budget, true)
+	var query []int
+	for i, t := range h.Tris {
+		if err := budget.Step(); err != nil {
+			return nil, err
+		}
+		if h.Moved[t[0]] || h.Moved[t[1]] || h.Moved[t[2]] {
+			query = append(query, i)
+		}
+	}
+	if len(query) == 0 {
+		return nil, nil
+	}
+	if err := e.buildGrid(); err != nil {
+		return nil, err
+	}
+	e.pairs = make(map[uint64]heldPair, 32*len(query))
+	var out [][2]int
+	for _, f := range query {
+		bad, collapsed, err := e.facetFailures(f)
+		if err != nil {
+			return nil, err
+		}
+		if collapsed {
+			out = append(out, [2]int{f, f})
+		}
+		for _, g := range bad {
+			out = append(out, [2]int{f, g})
+		}
+	}
+	return out, nil
 }
 
 // parallelClean tests each box-overlapping pair involving a query facet once. A
@@ -1086,7 +1145,7 @@ func (e *heldEmbedding) planeSign(f, p int) int {
 
 // facetFailures returns the facets j that facet i meets improperly, and
 // whether i itself has collapsed to no plane.
-func (e *heldEmbedding) facetFailures(i int, firstOnly bool) ([]int, bool, error) {
+func (e *heldEmbedding) facetFailures(i int) ([]int, bool, error) {
 	if _, _, n := e.facet(i); zeroXpt(n) {
 		return nil, true, nil
 	}
@@ -1103,9 +1162,6 @@ func (e *heldEmbedding) facetFailures(i int, firstOnly bool) ([]int, bool, error
 			continue
 		}
 		bad = append(bad, j)
-		if firstOnly {
-			break
-		}
 	}
 	return bad, false, nil
 }
@@ -1115,7 +1171,7 @@ func (e *heldEmbedding) facetFailures(i int, firstOnly bool) ([]int, bool, error
 func (e *heldEmbedding) vertexFailures(v int) (int, error) {
 	n := 0
 	for _, f := range e.inc[v] {
-		bad, collapsed, err := e.facetFailures(f, false)
+		bad, collapsed, err := e.facetFailures(f)
 		if err != nil {
 			return 0, err
 		}
@@ -1140,7 +1196,7 @@ func (e *heldEmbedding) offenders(query []int) ([]int, []int, error) {
 	set := map[int]struct{}{}
 	var failing []int
 	for _, i := range query {
-		bad, collapsed, err := e.facetFailures(i, false)
+		bad, collapsed, err := e.facetFailures(i)
 		if err != nil {
 			return nil, nil, err
 		}

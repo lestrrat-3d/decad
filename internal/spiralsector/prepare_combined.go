@@ -74,7 +74,7 @@ func PrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind, mesher
 	}
 	home := new(CapHome)
 	for i, placed := range placedParts {
-		home.Append(NewCapHome(placed.Verts, homeParts[i].Verts, homeParts[i].VertexBound))
+		home.Append(NewCapHome(placed.Verts, homeParts[i].Verts, homeParts[i].VertexBound, placed.Tris))
 	}
 	return next, meta, home, nil
 }

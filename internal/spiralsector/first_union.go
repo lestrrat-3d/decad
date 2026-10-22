@@ -59,8 +59,12 @@ func PrepareFirstUnion(ctx context.Context, op meshbool.OperationKind,
 	if err != nil || !ok {
 		return nil, nil, err
 	}
-	return proxy, &FirstUnionAdmission{Source: source, Short: short, Roles: roles,
-		Home: NewCapHome(proxy.Vertices, held.Vertices, held.VertexBound)}, nil
+	admission := &FirstUnionAdmission{Source: source, Short: short, Roles: roles}
+	if groups, ok := JoinGroups(blank, tooth, source); ok {
+		admission.Home = NewCapHome(proxy.Vertices, held.Vertices, held.VertexBound, proxy.Triangles).
+			WithCap(groups.ToothToe, groups.BlankToe).WithCap(groups.ToothHeel, groups.BlankHeel)
+	}
+	return proxy, admission, nil
 }
 
 // faceGroupOf returns the held group of face in the joint blank-then-tooth

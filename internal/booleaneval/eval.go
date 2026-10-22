@@ -201,6 +201,10 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		if err != nil {
 			return Evaluation{}, err
 		}
+		if !combineHome.BindCaps(a, combinedAdmission) {
+			combineHome = nil
+			capHome = nil
+		}
 	}
 
 	bmA, err := PrepBoolMesh(ctx, ma, srcA)
@@ -407,7 +411,7 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		}
 	}
 	if capHome != nil {
-		audit, err = restoreSpiralCaps(ctx, &payload, audit, capHome)
+		audit, err = restoreSpiralCaps(ctx, &payload, audit, capHome, len(topobuild.Faces(a)))
 		if err != nil {
 			return Evaluation{}, err
 		}
@@ -425,15 +429,16 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	return Evaluation{Payload: payload, Volume: volume, VolumeBound: volumeBound, VolumeRat: volumeRat, Audit: audit}, nil
 }
 
-// restoreSpiralCaps puts the proxy cap vertices of a certified spiral join back
-// at the positions the source teeth hold (spiralsector.RestoreCaps), so the
-// tooth caps lie on the cones that trimmed them instead of a fixed offset off
-// them. It charges the move to the payload's volume and area allowances. A
-// restoration the mesh audit refuses leaves the payload and its audit as they
-// were, since the proxy-position mesh is already certified.
+// restoreSpiralCaps lowers the proxy caps of a certified spiral join onto the
+// cones that trimmed them (spiralsector.RestoreCaps), instead of leaving them a
+// fixed lift above them. It charges the move to the payload's volume and area
+// allowances. A restoration the mesh audit refuses leaves the payload and its
+// audit as they were, since the proxy-position mesh is already certified.
 func restoreSpiralCaps(ctx context.Context, payload *facetedrecord.Payload,
-	audit *facetproof.MeshAudit, home *spiralsector.CapHome) (*facetproof.MeshAudit, error) {
-	restored, ok, err := spiralsector.RestoreCaps(ctx, home, payload.Verts, payload.Tris, payload.VertexBound)
+	audit *facetproof.MeshAudit, home *spiralsector.CapHome, nblank int) (*facetproof.MeshAudit, error) {
+	restored, ok, err := spiralsector.RestoreCaps(ctx, home, spiralsector.Mesh{
+		Verts: payload.Verts, Tris: payload.Tris, Src: payload.Src, VertexBound: payload.VertexBound,
+	}, nblank)
 	if err != nil || !ok {
 		return audit, err
 	}
