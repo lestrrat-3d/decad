@@ -11,6 +11,7 @@ import (
 
 	"github.com/lestrrat-3d/units"
 
+	"github.com/lestrrat-3d/decad/internal/axialsection"
 	"github.com/lestrrat-3d/decad/internal/booleaneval"
 	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/crossbore"
@@ -128,6 +129,17 @@ func Body(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *to
 	}
 	if err := refuseSheetOperand(b, op.String()); err != nil {
 		return nil, err
+	}
+	// agent-docs/axial-section-boolean-design.md: a Union of axial extrusions
+	// between the same two planes is the extrusion of the 2D union of their
+	// sections, when some section holds a free-form segment the analytic prism
+	// routes below do not read. ok=false is a miss, never an error.
+	if op == meshbool.OpUnion {
+		if n, ok, err := axialsection.UnionMany(ctx, env, []*topo.Body{a, b}); err != nil {
+			return nil, err
+		} else if ok {
+			return n, nil
+		}
 	}
 	if pp, ok, err := prismboolean.TryAxialLoftUnion(ctx, op, a.Payload, b.Payload); err != nil {
 		if errors.Is(err, decaderr.ErrUnsupported) {

@@ -9,6 +9,7 @@ The rules for rows live in `agent-docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
+| `internal/axialsection/` | Reads prisms and matching axial lofts as axial extrusions and joins their sections through sketch loop containment into a matching axial loft. See axial-section-boolean design. |
 | `internal/prismboolean/` | Analytic boolean admission over payloads: the prism pair with its holed `Intersect` route, axial-Loft and face-patch `Union`, the many-body prism `Union`, blind, spanning and crossing-blind `Cut`, A5 prism groups and A1 stacked `Union`. See prism-boolean §3, general-boolean §3 A1, A5, A7. |
 | `internal/stackedunion/` | Builds A1 stacked Union slabs, private scenes, and BRep faces after `internal/prismboolean` admits them. See general-boolean §3 A1. |
 | `internal/stackedshell/` | Admits and records the exact stacked shells (nested rectangular boss, circular boss, rectangular blind pocket, coaxial counterbore) from a two-slab record and its face view, and `RefuseClosed`; `breprecord` builds the result. See modify-general §3.1a-§3.1c, §3.1e. |
