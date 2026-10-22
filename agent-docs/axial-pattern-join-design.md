@@ -87,6 +87,9 @@ second one.
   fillet.
 - A set whose only loft is itself placed has no reference frame and is a miss.
 - Segments of kind line, arc, circle and fit spline are placed. Other kinds are a miss.
+- Copies whose free-form edges cross one another (two arched tops that overlap), or whose sides nearly coincide without
+  sharing a whole edge, are a miss: `sketch` certifies a spline against a circle but not a spline against another spline
+  or an arc. `apitest.TestPatternJoinRefusesCopiesItCannotCertify` pins both refusals against the 4 mm step that joins.
 - The route is `Union` only.
 
 ## 6. Tests
