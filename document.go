@@ -7,9 +7,11 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/exactrotation"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/parambind"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch/param"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
 )
@@ -28,10 +30,14 @@ type Document struct {
 	// (gap_tolerance.go), and gapErr the error an invalid option named.
 	gapReach float64
 	gapErr   error
+	// params is the parameter table Param and Expr read (params.go), and
+	// ledger the reads they have made.
+	params *param.Table
+	ledger parambind.Ledger
 }
 
-// DocumentOption configures New. WithGapTolerance and ExactOnly are its
-// options. An option from another package cannot implement this sealed tier.
+// DocumentOption configures New. WithGapTolerance, ExactOnly and WithParams
+// are its options. An option from another package cannot implement this sealed tier.
 type DocumentOption interface {
 	option.Interface
 	documentOption()
@@ -41,6 +47,7 @@ type DocumentOption interface {
 func New(opts ...DocumentOption) *Document {
 	d := bornDocument(&Document{})
 	d.gapReach, d.gapErr = gapReachOf(opts)
+	d.params = paramsOf(opts)
 	return d
 }
 

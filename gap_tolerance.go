@@ -46,6 +46,12 @@ func gapReachOf(opts []DocumentOption) (float64, error) {
 		if opt == nil {
 			return 0, fmt.Errorf(`%w: a nil document option names nothing to apply`, ErrDegenerate)
 		}
+		if p, ok := opt.(paramsOption); ok {
+			if p.Interface == nil {
+				return 0, fmt.Errorf(`%w: a zero document option names nothing to apply`, ErrDegenerate)
+			}
+			continue
+		}
 		if g, ok := opt.(gapOption); ok && g.Interface == nil {
 			return 0, fmt.Errorf(`%w: a zero document option names nothing to apply`, ErrDegenerate)
 		}

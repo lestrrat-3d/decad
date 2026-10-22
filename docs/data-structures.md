@@ -266,7 +266,7 @@ other sections return them.
 | `decad.VerifyOption`, `decad.WallOption` | `Document.Verify`, `decad.WithMinWallThickness` |
 | `decad.MotionOption` | `Document.VerifyMotion`, `Document.VerifyLinkage` |
 | `decad.JointBoxOption`, `decad.JointOption` | `Document.VerifyJointBox`, joints |
-| `decad.DocumentOption` | `decad.WithGapTolerance`, `decad.ExactOnly` |
+| `decad.DocumentOption` | `decad.WithGapTolerance`, `decad.ExactOnly`, `decad.WithParams` |
 
 ## Document and body
 
