@@ -137,9 +137,6 @@ const (
 	// capStandMax is the stand beyond which a cap that still fails a check stays
 	// at its proxy positions; each failed attempt doubles a cap's stand.
 	capStandMax = 0.025
-	// fragile is how far, in millimetres, the check for folds nudges every vertex
-	// to find the pairs a placement's rounding would fold.
-	fragile = 1e-11
 )
 
 // RestoreCaps returns the positions of the result's vertices with the proxy

@@ -69,7 +69,7 @@ func TestSpiralCopiedToothUnionKeepsCapsOnTheirCones(t *testing.T) {
 	require.NoError(t, err)
 	joined, err := decad.Union(t.Context(), blank, tooth, copyTooth)
 	require.NoError(t, err)
-	require.Greater(t, requireConeFacesFlush(t, joined, 4), 2000)
+	require.Greater(t, requireConeFacesFlush(t, joined, 0), 2000)
 }
 
 // TestSpiralFirstToothUnionSurvivesPlacement checks that a joined tooth can
