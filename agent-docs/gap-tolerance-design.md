@@ -13,6 +13,7 @@ never permits, how every use is charged, and which operations read it.
 | What is the tolerance never allowed to do? | §3 |
 | How is a use of it charged? | §4 |
 | Which operations read it? | §5 |
+| How does a Boolean use it on a coplanar contact? | §5.2 |
 | Which refusals does it leave in place? | §6 |
 
 This router is navigation, not authority.
@@ -26,11 +27,16 @@ A `Document` carries one gap tolerance, a length in millimetres. `decad.New` tak
 - With no option the tolerance is `gaptol.Default`, 0.01 mm (§2).
 - Several gap options in one `New` call: the last one wins.
 
-The tolerance is the **reach** of the evaluator's final repair of a held faceted mesh. A result whose exact
-vertices round to float64 so that facets fold through each other is first repaired among the float-box corners of
-each exact point (`agent-docs/evaluator-design.md` §9). A mesh that search leaves folded gets a second stage:
-each movable vertex of a failing pair may also sit at any position up to the reach from its exact point. With reach zero the
-second stage does not run, and the refusal is the one the float-box search alone gives.
+The tolerance is the **reach** of two repairs, and each runs only after the exact path has refused:
+
+- The held-mesh embedding repair (§5.1). A result whose exact vertices round to float64 so that facets fold through
+  each other is first repaired among the float-box corners of each exact point
+  (`agent-docs/evaluator-design.md` §9). A mesh that search leaves folded gets a second stage in which each movable
+  vertex of a failing pair may also sit up to the reach from its exact point.
+- The shifted Boolean retry (§5.2). A mesh Boolean whose operands meet in coplanar facets is run again with the
+  second operand moved by up to the reach.
+
+With reach zero neither runs, and the refusal is the one the exact path gives.
 
 An invalid option is reported by every operation that reads the tolerance, because `New` returns no error:
 
@@ -55,9 +61,10 @@ part against a stricter standard than the eye chooses `ExactOnly` or a smaller v
 
 ## 3. What the tolerance never permits
 
-- **It never changes a decision.** Every embedding, contact and coincidence decision stays exact over the held
-  binary64 values the search ends with. The tolerance chooses where the held vertex sits. It does not widen a
-  predicate: two facets still count as meeting only where exact arithmetic says they meet.
+- **It never widens a predicate.** Every embedding, contact and coincidence decision stays exact over the held
+  binary64 values the evaluator ends with. The tolerance chooses where a held vertex, or a whole operand, sits, and
+  the decision is then made exactly about that position: two facets still count as meeting only where exact
+  arithmetic says they meet.
 - **It never admits an answer an upstream package called approximate.** A fragment `sketch` reports uncertified
   (`BoundaryEdge.TExact` false) is still rejected (`agent-docs/sketch-seam-design.md`). The tolerance moves decad's
   own held vertices, and only vertices that stand for exactly one exact point.
@@ -79,24 +86,25 @@ estimate, so a reach move needs no new term: its distance is larger than an ulp,
 into the swept-volume and perturbed-area terms.
 
 A result whose search used the second stage therefore reads `Approximate`, with a vertex `Bound` that covers the
-moved vertices. `Verify` compares those bounds with the caller's `WithTolerance`, so a result the gap tolerance
-kept can still read `Suspect`.
+moved vertices. The shifted Boolean retry charges its move by widening the bounds of the moved operand's copy that
+the result's composition reads (§5.2). `Verify` compares those bounds with the caller's `WithTolerance`, so a
+result the gap tolerance kept can still read `Suspect`.
 
-## 5. Where the search runs
+## 5. Where the tolerance runs
 
-The second stage runs wherever the float-box search runs, and the three sites read the context's reach:
+The root reads the tolerance in `placePayload`, `booleanBodyWith`, `performUnionMany` and `ScaledAt` and puts it on the
+context. Every other operation, such as `Fillet`, `Shell` and `Loft`, reads no tolerance of its own. Four evaluator
+sites read it:
 
 | Site | Operations that reach it |
 |---|---|
 | `facetproof.KeepPlacedEmbedded`, a rigid placement of a faceted mesh | `Transform`, `Copy`, `PatternCopies`, `Patterned`, `MirroredCopy` |
 | `facetproof` similarity image | `ScaledAt` |
 | `meshbool.keepRoundedEmbedded`, the stitched result of a mesh boolean | `Union`, `Cut`, `Intersect`, and the booleans inside `Patterned` and the tool combinations |
+| `booleaneval.Evaluate`'s shifted retry | `Union`, `Cut`, `Intersect`, and the same inner booleans |
 
-The root reads the tolerance in `placePayload`, `booleanBodyWith`, `performUnionMany` and `ScaledAt`. Every other
-operation, such as `Fillet`, `Shell` and `Loft`, builds its mesh without this repair and reads no tolerance.
-
-The second stage is a stage of `meshbool.RepairHeldEmbedding`: `HeldRounding.Reach` is the reach, and zero keeps the
-float-box search alone.
+The first three rows are the embedding repair, a stage of `meshbool.RepairHeldEmbedding`: `HeldRounding.Reach` is the
+reach, and zero keeps the float-box search alone.
 
 ### 5.1 The search
 
@@ -115,6 +123,45 @@ float-box search alone.
 5. Passes repeat as in the float-box stage. Each move strictly lowers the mesh's failing-pair count, so the search
    cannot cycle, and its order is fixed, so equal inputs give equal held meshes.
 
+### 5.2 The shifted Boolean retry
+
+A mesh Boolean refuses two operand facets that overlap in one plane: the exact predicates cannot say which side of
+the other operand a coplanar region lies on. `meshbool.CoplanarContactError` carries every such pair (up to 64) as
+the first operand's outward unit normal and whether the second operand's facet faces the other way, which puts the
+operands on opposite sides of the plane (a face-on-face touch). `booleaneval.Evaluate` reads it and runs the Boolean
+again with the second operand moved:
+
+1. Directions come from the contacts (`shiftDirections`). Every contact must open: the shift's component along each
+   contact's normal is at least 0.02 in magnitude. A face-on-face touch also fixes the sense. A Union moves the second
+   operand inward along the first operand's normal, so touching bodies join into one. A Cut and an Intersect move it
+   outward, so a face-touching Cut leaves its target whole and a face-touching Intersect is empty. With no
+   face-on-face touch, the contacts are flush walls. A Cut and an Intersect still need every flush contact to open
+   outward, so a tool flush with its target's wall pokes through it and leaves no skin. A Union needs only that they
+   open. A pair of contacts that no direction opens in the needed sense, such as a tool flush with both walls of a
+   slot, is not retried and the refusal stands.
+2. Each direction is the contacts' unit direction plus a generic part of weight 0.2 that is parallel to no coordinate
+   plane, so a shift also opens the walls that two bodies sharing a footprint leave coplanar.
+3. Steps of 1/16, 1/4 and 1 of the reach are tried in order, three directions each. The first outcome that is not a
+   coplanar refusal is the result, whether it is a body or another error, such as an empty Intersect. When every
+   attempt refuses, the original refusal is returned.
+
+The moved operand is the solid the Boolean decides about, so the proximity gate and the exact predicates read it
+with its own bounds. The composition of the result's bounds reads a copy that is wider by the shift
+(`shiftOperandMesh`): every vertex, face and mesh bound grows by the displacement, the symmetric-difference volume
+grows by what the move sweeps over the operand's boundary, and the area allowance grows by the rounding of the new
+coordinates. The ordinary trim amplification then charges the shift at every crossing. The moved operand keeps no
+retained surface tag, because its facets no longer lie on the surfaces they were cut from. A shifted mesh that folds,
+and any pair that uses a spiral-join certificate, is declined.
+
+What a result of the retry states, and what it does not:
+
+- Its volume reads `Approximate`, and the bound covers the distance to the volume of the unmoved Boolean.
+- Its vertices lie within their bounds of the features of the unmoved Boolean that the move leaves in place.
+- The Boolean it computes is the tolerant kernel's reading of a coincident contact, not the exact reading. A feature
+  whose existence depends on a gap below the tolerance can be present or absent. A tool that stops one ulp short of a
+  wall opens a through hole, because a flush Cut pokes through, and the wall's face area reads the pierced wall. A
+  caller that needs the literal reading uses `ExactOnly` or a smaller tolerance.
+
 ## 6. What stays refused
 
 The tolerance repairs one refusal class: a held mesh whose float rounding folds it through itself. Everything else
@@ -123,8 +170,12 @@ keeps its refusal:
 - A mesh the second stage leaves folded, because a vertex is welded, no candidate within the reach clears it, or
   the reach is too small.
 - `Stitch` joins free edges only where coincidence is proven (`agent-docs/surface-design.md` §1.3).
-- A boolean's coplanar or tangent contact classification (`agent-docs/api-design.md` §8). Near-coplanar facets are
-  decided by exact arithmetic, and a contact the evaluator cannot classify stays `BooleanUnsupportedContact`.
+- A boolean contact that is not a coplanar overlap: an edge grazing along a facet, two edges or two vertices meeting,
+  branching intersection curves, and a curved tangency or near contact the proximity gate cannot decide. A shift of
+  one operand does not change which side of the other a grazing edge or a chord lies on, so each stays
+  `BooleanUnsupportedContact`.
+- A coplanar overlap whose contacts no shift opens in the sense the operation needs (§5.2), and one on a pair that
+  uses a spiral-join certificate.
 - An uncertified `sketch` fragment (§3).
 
 Each is a separate decision. Extending the tolerance to one of them changes this document and the document that
@@ -139,4 +190,7 @@ owns that refusal in the same change.
 | `meshbool.TestEnforceHeldEmbeddingReachCannotMoveAWeldedVertex` | A welded vertex stays and the fold is still refused. |
 | `facetproof.TestKeepPlacedEmbeddedReach` | A 118-facet crop of a restored spiral cap refuses with no reach, clears at a reach of 1e-3 mm, and charges every moved vertex at least the distance it moved. |
 | `apitest.TestDocumentGapToleranceOptions` | The option set, its last-wins rule and each invalid value's error. |
+| `booleaneval.TestShiftDirections` | Which sense each operation wants for each kind of contact, and when no direction exists. |
+| `apitest.TestBooleanGapTolerance` | Union, Cut and Intersect of boxes that touch or sit flush: the result, the bound that covers the true volume, a tighter bound from a smaller tolerance, and the refusals `ExactOnly` and a slot keep. |
+| `apitest.TestBooleanGapToleranceStaysExactForCurvedContact` | A tangent cylinder on a plate stays refused. |
 | `examples.Example_gap_tolerance` | The documented use. |

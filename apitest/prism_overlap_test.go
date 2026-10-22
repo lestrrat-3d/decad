@@ -311,7 +311,7 @@ func TestVerifyFacetedMultiRegionPairStaysAsBefore(t *testing.T) {
 func TestPublicBooleansUnchangedOnMultiRegionPair(t *testing.T) {
 	t.Parallel()
 	t.Run("intersect refuses through the mesh path", func(t *testing.T) {
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		u, bar := uAndBarBodies(t, doc)
 		_, err := decad.Intersect(t.Context(), u, bar)
 		require.Error(t, err)
@@ -322,7 +322,7 @@ func TestPublicBooleansUnchangedOnMultiRegionPair(t *testing.T) {
 	})
 
 	t.Run("cut refuses through the same mesh-path contact refusal", func(t *testing.T) {
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		u, bar := uAndBarBodies(t, doc)
 		_, err := decad.Cut(t.Context(), u, bar)
 		require.Error(t, err)
@@ -337,7 +337,7 @@ func TestPublicBooleansUnchangedOnMultiRegionPair(t *testing.T) {
 		// neither operand covers. Union's select-all merge would fill it, so
 		// the analytic path declines (prism-boolean §4.2) and the mesh path
 		// refuses the shared caps.
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		u, bar := uAndBarBodies(t, doc)
 		_, err := decad.Union(t.Context(), u, bar)
 		require.ErrorIs(t, err, decad.ErrUnsupported)

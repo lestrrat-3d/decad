@@ -160,6 +160,21 @@ func MeshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 	return meshBoolean(ctx, op, ma, mb, memo, newKeyMemo)
 }
 
+// maxCoplanarContacts is how many coplanar facet pairs a refusal records. The
+// scan stops there: a mesh that coplanar everywhere needs no more to be refused.
+const maxCoplanarContacts = 64
+
+// coplanarContactOf reads the first operand's outward unit normal at facet i
+// and whether facet j of the second faces the other way. The exact normals are
+// rounded to float64 only here, for the direction a caller picks.
+func coplanarContactOf(ma, mb *BoolMesh, i, j int) CoplanarContact {
+	ma.PrepareFloatNormal(i)
+	mb.PrepareFloatNormal(j)
+	na, _ := ma.Fnorms[i].Normalize()
+	nb, _ := mb.Fnorms[j].Normalize()
+	return CoplanarContact{NormalA: na, Opposite: na.Dot(nb) < 0}
+}
+
 // meshBoolean is MeshBoolean with the exact-point key function KeepSide uses
 // supplied per call, so a test can hold the memoized keys to Xpt.Key.
 func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *ContactMemo, newKeyOf func() func(proof.Xpt) string) ([]KeptFacet, float64, error) {
@@ -181,13 +196,20 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 	// touchedA and touchedB are the facets of each operand that meet the
 	// other, which the held-mesh gate reads once classification is done.
 	var touchedA, touchedB []int
+	// coplanar collects the coplanar facet pairs the scan meets, up to
+	// maxCoplanarContacts, so the refusal can say which planes are involved.
+	var coplanar []CoplanarContact
 	work := 0
 	contacts := NewContactBatchExecutor(ctx, ma, mb, memo, ContactWorkers(ctx), func(pair ContactPair, c TriContact) error {
 		i, j := pair.I, pair.J
 		ta := TriCorners(ma, i)
 		tb := TriCorners(mb, j)
 		if c.Kind == ContactRegion {
-			return ErrUnclassifiableContact(`two operand facets overlap in one plane`)
+			coplanar = append(coplanar, coplanarContactOf(ma, mb, i, j))
+			if len(coplanar) >= maxCoplanarContacts {
+				return ExpectedBoolean(BooleanExpectedContact, &CoplanarContactError{Contacts: coplanar})
+			}
+			return nil
 		}
 		if c.Kind == ContactNone {
 			return nil
@@ -243,6 +265,9 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 	}
 	if err := contacts.Done(); err != nil {
 		return nil, 0, err
+	}
+	if len(coplanar) > 0 {
+		return nil, 0, ExpectedBoolean(BooleanExpectedContact, &CoplanarContactError{Contacts: coplanar})
 	}
 	// The held-mesh gate runs on the classification's own answer and before
 	// any facet is cut (agent-docs/faceted-vertex-bounds-design.md §5).

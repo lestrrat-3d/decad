@@ -2187,3 +2187,5 @@
 10	5.00	TestSpiralFirstToothUnionKeepsCapsOnTheirCones
 10	5.00	TestSpiralFirstToothUnionSurvivesPlacement
 10	0.01	TestDocumentGapToleranceOptions
+10	0.20	TestBooleanGapTolerance
+10	0.20	TestBooleanGapToleranceStaysExactForCurvedContact

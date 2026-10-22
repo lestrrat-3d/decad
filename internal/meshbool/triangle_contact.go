@@ -24,6 +24,29 @@ func ErrUnclassifiableContact(what string) error {
 		fmt.Errorf(`%w: %s — the exact predicates cannot classify a tangent contact`, decaderr.ErrUnsupported, what))
 }
 
+// CoplanarContact is one pair of coplanar operand facets that share positive
+// area: the first operand's outward unit normal at the contact, and whether the
+// second operand's facet faces the opposite way, which puts the operands on
+// opposite sides of the shared plane (a face-on-face touch) rather than on one.
+type CoplanarContact struct {
+	NormalA  r3.Vec
+	Opposite bool
+}
+
+// CoplanarContactError is ErrUnclassifiableContact's refusal for coplanar
+// facets, carrying the contacts it found so that a caller allowed to move an
+// operand can choose the direction that opens them. It reads as the same
+// refusal, and unwraps to ErrUnsupported.
+type CoplanarContactError struct {
+	Contacts []CoplanarContact
+}
+
+func (e *CoplanarContactError) Error() string {
+	return fmt.Sprintf(`%v: two operand facets overlap in one plane — the exact predicates cannot classify a tangent contact`, decaderr.ErrUnsupported)
+}
+
+func (e *CoplanarContactError) Unwrap() error { return decaderr.ErrUnsupported }
+
 // ContactKind is the DIMENSION of the exact intersection of two closed
 // triangles. Two closed triangles are convex sets, so their intersection is
 // convex and can only be one of these four — and naming it is what makes the

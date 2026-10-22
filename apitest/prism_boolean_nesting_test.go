@@ -456,7 +456,7 @@ func TestPrismCutG5BuildsAnalyticBlindPocket(t *testing.T) {
 // pre-existing coplanar-cap contact limitation, unaffected by this design.
 func TestPrismIntersectG5FallsBackOnDisjointZIntervals(t *testing.T) {
 	t.Parallel()
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	a := boxBody(t, doc, -5, -5, 5, 5, 10) // z: 0..10
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())

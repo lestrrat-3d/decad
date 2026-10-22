@@ -25,10 +25,11 @@ func prismFacePatchRectangle(t *testing.T, w *sketch.World, plane *sketch.Plane,
 	return s, s.Profiles()[0]
 }
 
-func prismFacePatchPair(t *testing.T, sideX, sideY0, sideY1 float64, dir decad.Direction) (*decad.Body, *decad.Body) {
+func prismFacePatchPair(t *testing.T, sideX, sideY0, sideY1 float64, dir decad.Direction,
+	opts ...decad.DocumentOption) (*decad.Body, *decad.Body) {
 	t.Helper()
 	w := sketch.NewWorld()
-	doc := decad.New()
+	doc := decad.New(opts...)
 	plateSketch, plateProfile := prismFacePatchRectangle(t, w, w.XY(), 0, 0, 20, 20)
 	plate, err := decad.Extrude(t.Context(), doc, plateSketch, plateProfile,
 		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
@@ -84,7 +85,7 @@ func TestUnionRectangularFacePatchFromPerpendicularExtrudes(t *testing.T) {
 
 func TestUnionRectangularFacePatchRefusesEdgeContact(t *testing.T) {
 	t.Parallel()
-	plate, lug := prismFacePatchPair(t, 20, 20, 25, decad.Along)
+	plate, lug := prismFacePatchPair(t, 20, 20, 25, decad.Along, decad.ExactOnly())
 	joined, err := decad.Union(t.Context(), plate, lug)
 	require.Nil(t, joined)
 	require.ErrorIs(t, err, decad.ErrUnsupported)

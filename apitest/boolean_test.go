@@ -570,7 +570,7 @@ func TestCutDisjointKeepsTarget(t *testing.T) {
 func TestBooleanRejections(t *testing.T) {
 	t.Parallel()
 	t.Run("NilOperand", func(t *testing.T) {
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		_, err := decad.Union(t.Context(), nil, a)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
@@ -578,21 +578,21 @@ func TestBooleanRejections(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 	t.Run("SameBody", func(t *testing.T) {
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		_, err := decad.Union(t.Context(), a, a)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 	t.Run("ForeignBody", func(t *testing.T) {
-		docA := decad.New()
-		docB := decad.New()
+		docA := decad.New(decad.ExactOnly())
+		docB := decad.New(decad.ExactOnly())
 		a := boxBody(t, docA, 0, 0, 10, 10, 10)
 		b := boxBody(t, docB, 5, 5, 15, 15, 10)
 		_, err := decad.Union(t.Context(), a, b)
 		require.ErrorIs(t, err, decad.ErrForeignBody)
 	})
 	t.Run("RetiredBody", func(t *testing.T) {
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 5, 5, 5)
 		got, err := decad.Union(t.Context(), a, b)
@@ -605,7 +605,7 @@ func TestBooleanRejections(t *testing.T) {
 	t.Run("CoplanarContact", func(t *testing.T) {
 		// Two cubes meet face on face after an in-plane shift. G3 excludes that
 		// shift, and the mesh path cannot classify the shared planar area.
-		doc := decad.New()
+		doc := decad.New(decad.ExactOnly())
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 0.5, 0, 10)
 		_, err := decad.Union(t.Context(), a, b)
