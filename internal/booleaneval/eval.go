@@ -176,9 +176,16 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if spiralHeld != nil {
 		mb = spiralHeld
 	}
-	mb, spiralCombine, err := spiralsector.PrepareCombinedUnion(ctx, op, meshes, a, b, mb, tolMM)
+	mb, spiralCombine, combineHome, err := spiralsector.PrepareCombinedUnion(ctx, op, meshes, a, b, mb, tolMM)
 	if err != nil {
 		return Evaluation{}, err
+	}
+	var capHome *spiralsector.CapHome
+	if spiralJoin != nil {
+		capHome = spiralJoin.Home
+	}
+	if combineHome != nil {
+		capHome = combineHome
 	}
 	if spiralJoin != nil {
 		allowed, ok := spiralsector.FirstUnionPairs(a, b, spiralJoin, sourceID)
@@ -193,6 +200,10 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		combinedAdmission, err = spiralsector.CombineFaceRoles(ctx, a, b, spiralCombine, sourceID)
 		if err != nil {
 			return Evaluation{}, err
+		}
+		if !combineHome.BindCaps(a, combinedAdmission) {
+			combineHome = nil
+			capHome = nil
 		}
 	}
 
@@ -399,6 +410,12 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 				fmt.Errorf("%w: combined spiral join boundary proof", decaderr.ErrUnsupported))
 		}
 	}
+	if capHome != nil {
+		audit, err = restoreSpiralCaps(ctx, &payload, audit, capHome, len(topobuild.Faces(a)))
+		if err != nil {
+			return Evaluation{}, err
+		}
+	}
 	volume, volumeBound, volumeRat, err := VolumeReading(ctx, audit, payload.VolSymDiff)
 	if err != nil {
 		return Evaluation{}, err
@@ -410,6 +427,32 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		return Evaluation{}, err
 	}
 	return Evaluation{Payload: payload, Volume: volume, VolumeBound: volumeBound, VolumeRat: volumeRat, Audit: audit}, nil
+}
+
+// restoreSpiralCaps lowers the proxy caps of a certified spiral join onto the
+// cones that trimmed them (spiralsector.RestoreCaps), instead of leaving them a
+// fixed lift above them. It charges the move to the payload's volume and area
+// allowances. A restoration the mesh audit refuses leaves the payload and its
+// audit as they were, since the proxy-position mesh is already certified.
+func restoreSpiralCaps(ctx context.Context, payload *facetedrecord.Payload,
+	audit *facetproof.MeshAudit, home *spiralsector.CapHome, nblank int) (*facetproof.MeshAudit, error) {
+	restored, ok, err := spiralsector.RestoreCaps(ctx, home, spiralsector.Mesh{
+		Verts: payload.Verts, Tris: payload.Tris, Src: payload.Src, VertexBound: payload.VertexBound,
+	}, nblank)
+	if err != nil || !ok {
+		return audit, err
+	}
+	next, err := facetproof.AuditFacetedMesh(ctx, restored.Verts, payload.Tris)
+	if err != nil {
+		return audit, ctx.Err()
+	}
+	volume := proofbound.AbsSumUpper(payload.VolSymDiff, restored.VolumeCharge)
+	area := proofbound.AbsSumUpper(payload.AreaSlack, restored.AreaCharge)
+	if proofbound.IsNonFinite(volume) || proofbound.IsNonFinite(area) {
+		return audit, nil
+	}
+	payload.Verts, payload.VolSymDiff, payload.AreaSlack = restored.Verts, volume, area
+	return next, nil
 }
 
 // PrepBoolMesh lifts a tessellation into the exact domain and attaches its

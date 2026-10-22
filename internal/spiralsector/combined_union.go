@@ -337,3 +337,28 @@ func BindCombinedOwners(body *topo.Body, meta *facetedrecord.SpiralCombinedTools
 	}
 	return nil
 }
+
+// BindCaps records, for every copy of the combined tool, the held groups of
+// its toe and heel caps and the blank cones they lie on. It answers false when
+// the first tooth's join groups cannot be bound.
+func (h *CapHome) BindCaps(blank *topo.Body, admission *CombinedAdmission) bool {
+	if h == nil || blank == nil || admission == nil || admission.Source == nil ||
+		admission.Source.First == nil || len(admission.Source.Tools) == 0 {
+		return false
+	}
+	groups, ok := JoinGroups(blank, admission.Source.Tools[0], admission.Source.First)
+	if !ok {
+		return false
+	}
+	for _, copied := range admission.Groups {
+		for held, first := range copied {
+			switch first {
+			case groups.ToothToe:
+				h.WithCap(held, groups.BlankToe)
+			case groups.ToothHeel:
+				h.WithCap(held, groups.BlankHeel)
+			}
+		}
+	}
+	return len(h.caps) > 0
+}

@@ -1315,6 +1315,12 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
     `BooleanExpectedUnsupported`). The evaluator cannot certify an embedded
     held mesh from the float-box candidates this bounded search checked.
 
+  `HeldFolds` runs the same exact check without the repair and returns the
+  folded facet pairs, and `RepairHeldEmbedding` runs the repair and returns the
+  facets still folded instead of refusing, for a caller that rewrites a held
+  mesh and must know what still meets or folds (the spiral join's cap
+  restoration, §3.6 of `agent-docs/faceted-vertex-bounds-design.md`).
+
   The bounds stay honest without new terms, because the rounding displacement
   is MEASURED: the per-coordinate distance from every exact vertex to the float
   that finally holds it is taken exactly after the search, and that maximum is

@@ -278,6 +278,32 @@ func PlacedProxyShells(ctx context.Context, set *FacetedCopySet,
 	return nil, fmt.Errorf("%w: copied proxy shells are not separate", decaderr.ErrUnsupported)
 }
 
+// PlacedSourceMeshes places source for every copy of set exactly as
+// PlacedProxyShells places a proxy of it, without the separation proof, and
+// returns the placed meshes in tool order. A caller pairs them with the placed
+// proxy shells vertex by vertex. source must be the mesh the proxy was made
+// from, so the two have the same facets.
+func PlacedSourceMeshes(ctx context.Context, set *FacetedCopySet,
+	source *topo.Mesh) ([]facetproof.PlacedMesh, error) {
+	if ctx == nil || set == nil || len(set.Tools) < 2 || len(set.Moves) != len(set.Tools) ||
+		len(set.Exact) != len(set.Tools) || source == nil ||
+		len(source.VertexBound) != len(source.Vertices) {
+		return nil, fmt.Errorf("%w: copied source has no placement proof", decaderr.ErrUnsupported)
+	}
+	budget := proofbound.NewWorkBudget(ctx)
+	placed := make([]facetproof.PlacedMesh, len(set.Tools))
+	placed[0] = facetproof.PlacedMesh{Verts: source.Vertices, Tris: source.Triangles,
+		VertexBound: source.VertexBound}
+	for i := 1; i < len(set.Tools); i++ {
+		var err error
+		placed[i], err = placeProxy(ctx, set, budget, source, i, set.Exact[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return placed, nil
+}
+
 // placeProxy places the proxy for copy i. An exact copy's true solid is its
 // exact rotation of the source's, so the proxy pays the gap between that
 // rotation and the float move instead of the float matrix's stretch.

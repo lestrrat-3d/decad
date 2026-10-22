@@ -2183,3 +2183,6 @@
 10	8	TestUnionBevelBlankAndEmbeddedRootTeeth
 10	8	TestUnionHubAndManyRadialLugs
 10	8	TestUnionBevelTipTouchingHeelConeNeedsMatchingFaces
+10	5.00	TestSpiralCopiedToothUnionKeepsCapsOnTheirCones
+10	5.00	TestSpiralFirstToothUnionKeepsCapsOnTheirCones
+10	5.00	TestSpiralFirstToothUnionSurvivesPlacement

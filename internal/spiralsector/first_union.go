@@ -24,6 +24,8 @@ type FirstUnionAdmission struct {
 	Roles     map[[2]*topo.Face]meshbool.NearPairRole
 	Allowed   map[[2]int]bool
 	RootBoxes *[2]*RootFlankSourceBoxes
+	// Home puts the moved cap vertices of the result back at the source tooth.
+	Home *CapHome
 }
 
 // PrepareFirstUnion authenticates source geometry before modifying a
@@ -57,7 +59,12 @@ func PrepareFirstUnion(ctx context.Context, op meshbool.OperationKind,
 	if err != nil || !ok {
 		return nil, nil, err
 	}
-	return proxy, &FirstUnionAdmission{Source: source, Short: short, Roles: roles}, nil
+	admission := &FirstUnionAdmission{Source: source, Short: short, Roles: roles}
+	if groups, ok := JoinGroups(blank, tooth, source); ok {
+		admission.Home = NewCapHome(proxy.Vertices, held.Vertices, held.VertexBound, proxy.Triangles).
+			WithCap(groups.ToothToe, groups.BlankToe).WithCap(groups.ToothHeel, groups.BlankHeel)
+	}
+	return proxy, admission, nil
 }
 
 // faceGroupOf returns the held group of face in the joint blank-then-tooth

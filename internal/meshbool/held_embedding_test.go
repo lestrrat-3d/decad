@@ -69,6 +69,55 @@ func TestEnforceHeldEmbeddingRefusesTheUnion14Fold(t *testing.T) {
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 }
 
+// TestHeldFoldsNamesTheFacetsThatMeet checks that HeldFolds reports the facet
+// pairs the embedding check refuses, moves nothing, and reports none for a mesh
+// that stays embedded.
+func TestHeldFoldsNamesTheFacetsThatMeet(t *testing.T) {
+	t.Parallel()
+	h := union14Fold()
+	before := slices.Clone(h.Verts)
+	pairs, err := meshbool.HeldFolds(t.Context(), h)
+	require.NoError(t, err)
+	require.NotEmpty(t, pairs)
+	for _, p := range pairs {
+		require.Less(t, p[0], len(h.Tris))
+		require.Less(t, p[1], len(h.Tris))
+	}
+	require.Equal(t, before, h.Verts, "the held vertices are not moved")
+
+	apart := heldFragment([][3]r3.Vec{
+		{{X: 0, Y: 0, Z: 0}, {X: 1, Y: 0, Z: 0}, {X: 0, Y: 1, Z: 0}},
+		{{X: 1, Y: 0, Z: 0}, {X: 1, Y: 1, Z: 0}, {X: 0, Y: 1, Z: 0}},
+	})
+	pairs, err = meshbool.HeldFolds(t.Context(), apart)
+	require.NoError(t, err)
+	require.Empty(t, pairs)
+
+	apart.Moved = make([]bool, len(apart.Verts))
+	pairs, err = meshbool.HeldFolds(t.Context(), apart)
+	require.NoError(t, err)
+	require.Empty(t, pairs, "a mesh with no moved vertex has no fold to report")
+}
+
+// TestRepairHeldEmbeddingReturnsWhatItCannotClear checks that
+// RepairHeldEmbedding hands back the facets the float-box search leaves folded,
+// where EnforceHeldEmbedding refuses, and none for an embedded mesh.
+func TestRepairHeldEmbeddingReturnsWhatItCannotClear(t *testing.T) {
+	t.Parallel()
+	_, failing, err := meshbool.RepairHeldEmbedding(t.Context(), union14Fold())
+	require.NoError(t, err)
+	require.NotEmpty(t, failing)
+	require.True(t, slices.IsSorted(failing))
+
+	apart := heldFragment([][3]r3.Vec{
+		{{X: 0, Y: 0, Z: 0}, {X: 1, Y: 0, Z: 0}, {X: 0, Y: 1, Z: 0}},
+		{{X: 1, Y: 0, Z: 0}, {X: 1, Y: 1, Z: 0}, {X: 0, Y: 1, Z: 0}},
+	})
+	_, failing, err = meshbool.RepairHeldEmbedding(t.Context(), apart)
+	require.NoError(t, err)
+	require.Empty(t, failing)
+}
+
 func union14Fold() meshbool.HeldRounding {
 	return heldFragment([][3]r3.Vec{
 		{{X: 3.5767911948474933, Y: -3.47378800959096, Z: 19.07175669307605}, {X: 3.5355339059327373, Y: -3.5355339059327386, Z: 0}, {X: 3.7026241073138704, Y: -3.2854657476607976, Z: 19.83405176975887}},

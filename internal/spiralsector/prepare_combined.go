@@ -25,22 +25,25 @@ type OperandMesher interface {
 
 // PrepareCombinedUnion transports the first join's certified temporary
 // cap mesh to every retained copy. The source-to-proxy volume and boundary
-// charges are summed before the ordinary mesh Boolean can consume them.
+// charges are summed before the ordinary mesh Boolean can consume them. The
+// returned CapHome puts every moved cap vertex of the result back at the
+// position its placed source tooth holds.
 func PrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind, mesher OperandMesher,
-	blank, combined *topo.Body, original *topo.Mesh, pairTol float64) (*topo.Mesh, *facetedrecord.SpiralCombineSource, error) {
+	blank, combined *topo.Body, original *topo.Mesh,
+	pairTol float64) (*topo.Mesh, *facetedrecord.SpiralCombineSource, *CapHome, error) {
 	p, ok := combined.Payload.(facetedrecord.Payload)
 	if !ok || p.SpiralTools == nil || op != meshbool.OpUnion {
-		return original, nil, nil
+		return original, nil, nil, nil
 	}
 	meta := p.SpiralTools.Source
 	if meta == nil || len(meta.Tools) < 2 || len(meta.Tools) != len(meta.Moves) ||
 		meta.First == nil || meta.First.Tooth == nil {
-		return nil, nil, fmt.Errorf("%w: combined spiral source is incomplete", decaderr.ErrUnsupported)
+		return nil, nil, nil, fmt.Errorf("%w: combined spiral source is incomplete", decaderr.ErrUnsupported)
 	}
 	first := meta.Tools[0]
 	firstMesh, _, err := mesher.TessellateOperand(ctx, first, pairTol)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	faceID := make(map[*topo.Face]int)
 	for i, face := range topobuild.Faces(first) {
@@ -48,24 +51,32 @@ func PrepareCombinedUnion(ctx context.Context, op meshbool.OperationKind, mesher
 	}
 	src, err := meshbool.SourceIDs(ctx, firstMesh.Source, faceID)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	proxy, certified, err := OffsetToothMesh(ctx, blank, meta.Tools[0], firstMesh, src, meta.First)
 	if err != nil || !certified {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	placedParts, err := facetedrecord.PlacedProxyShells(ctx, meta.Copies, proxy)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	next, err := CombinedProxyMesh(original, placedParts)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if err := massmoment.AuditMesh(ctx, next.Vertices, next.Triangles, true); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return next, meta, nil
+	homeParts, err := facetedrecord.PlacedSourceMeshes(ctx, meta.Copies, firstMesh)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	home := new(CapHome)
+	for i, placed := range placedParts {
+		home.Append(NewCapHome(placed.Verts, homeParts[i].Verts, homeParts[i].VertexBound, placed.Tris))
+	}
+	return next, meta, home, nil
 }
 
 // CombinedProxyMesh copies the combined operand's mesh and gives its

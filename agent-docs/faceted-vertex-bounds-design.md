@@ -228,6 +228,63 @@ adds its held area upper bound and both operands' true area upper bounds, so
 composition adds the two operand symmetric-difference bounds and Stitch's
 rounding charge.
 
+The published result does not keep the proxy's lift. After the Boolean, the
+audits and the boundary proofs have passed on the proxy-position mesh,
+`spiralsector.RestoreCaps` lowers each tooth cap toward the cone that trimmed
+it (for a copy, the same cap placed by the same motion). The facets do not
+change; only vertex positions do.
+
+The proxy moved every cap vertex by 0.032 mm in Y. The part of that shift along
+the cone's normal is the lift; the rest slides the vertex along the cone. A
+moved vertex gives up the lift and keeps the slide, so the cap keeps the layout
+along the cone that the Boolean proved embedded. The cone's normal and level
+come from the blank cone's own facets (the slope of its vertices, signed by its
+facets), which are many and large, not from the cap's. Each cap then takes the
+mean level of its blank cone plus `capStand` = 0.003 mm, one normal shift per
+cap. The stand keeps the cap and the blank from being exactly coplanar: the
+walls between them stay facets of positive height and no facet degenerates, so
+the rounding of a later placement (`Transform`) cannot fold them. The restored
+caps therefore lie on their cones to within 0.003 mm plus the faces'
+tessellation chord, not 0.032 mm off.
+
+The lift left walls, thin tooth facets from the cap's edge down to the blank's
+facets, and plates of cap over the band the Boolean had cut away. Lowering the
+cap flattens them. Each cap slides out along its cone, as one piece, by the
+least distance (at most 0.06 mm, in 0.002 mm steps) that leaves every flattened
+wall facing along the cone's outward normal and every other facet facing as it
+did, then by up to 0.012 mm more where that holds, so a wall keeps a width. The
+slide is also limited by the vertex bound: a restored vertex must lie within
+its distance to the source position plus the source bound of the proxy's vertex
+bound. A vertex the Boolean made on a facet of the proxy, and that no blank
+facet holds, moves with that facet at its barycentric weights; a vertex a blank
+facet holds stays on the blank.
+
+The restored mesh is then checked like the Boolean's result. The held-mesh
+embedding check (`meshbool.HeldFolds`) reads it as it is and nudged either way
+by 1e-11 mm, so a pair of facets that only misses by an ulp counts as meeting.
+A placement probe (`meshbool.RepairHeldEmbedding`) places the mesh by a quarter
+turn about Z and by an oblique rotation with a translation and runs the
+float-box repair a `Transform` runs; a facet still folded after it fails the
+probe. A vertex of a folded facet stays at its proxy position, and the facets it
+holds slope up to it from the restored cap. A cap that fails a probe doubles its
+stand (0.003, 0.006, 0.012, 0.024 mm) and then stays at its proxy positions; so does a cap with
+a vertex whose bound is below its source position's bound or that no slide
+serves. The other caps are restored. Each failure restarts the restoration
+(at most eight times). The mesh, the vertices and the facets the restoration
+reads are bounded (2^18 vertices, 2^24 vertex-in-facet tests, 2^12 cells per
+proxy facet); reaching a bound refuses the restoration and the proxy-position
+mesh is published unchanged.
+
+The vertex bounds stand as they are: the proxy bound already adds the move to
+the source bound, and the restored position lies within that distance of the
+source position, on the cone or on a facet that moved with it. The restored
+mesh differs only on facets that touch a changed vertex, where every vertex
+moved by at most `d`, the largest move. The volume bound adds
+`SweptVolumeAllow(d, PerturbedAreaUpper(changed facets, d))` and the area slack
+adds the changed facets' area upper bounds before and after. The restored mesh
+must pass the same closed, oriented audit; when it does not, the proxy-position
+mesh is published unchanged.
+
 ### 3.7 One Boolean for patterned curved teeth
 
 `Union` with three or more operands admits one certified finite blank and 2–31 rigid copies of the
