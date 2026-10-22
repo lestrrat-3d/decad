@@ -441,7 +441,7 @@ func TestStitchPlacedSolidTessellateBoundReadsVertexBound(t *testing.T) {
 // uses.
 func TestStitchDisplacedPatchSheetTessellatesItsOwnTriangleSet(t *testing.T) {
 	t.Parallel()
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	walls, bottom, top := stitchBoxSheets(t, doc, 10+1e-9)
 	sheet, err := decad.Stitch(t.Context(), walls, bottom, top)
 	require.NoError(t, err)

@@ -307,7 +307,7 @@ func Build(ctx context.Context, env topo.Env, srcFaces []*topo.Face, plan *Plan,
 		Bound:     units.SquareMillimeters(areaAcc.Bound),
 	}
 
-	box, err := bounds(srcFaces, xform, delta)
+	box, err := bounds(srcFaces, xform, delta, plan.MaxMerged())
 	if err != nil {
 		return nil, err
 	}
@@ -441,6 +441,12 @@ func rebuildTopology(ctx context.Context, alloc topo.Alloc, plan *Plan, xform r3
 		if delta > 0 {
 			lengthBound = proofbound.AbsSumUpper(lengthBound, delta)
 		}
+		// A tolerance merge moves an endpoint of this edge off where the
+		// operand held it, which changes the edge's length by that much.
+		moved := math.Max(plan.Merged[startClass], plan.Merged[endClass])
+		if moved > 0 {
+			lengthBound = proofbound.AbsSumUpper(lengthBound, plan.Merged[startClass], plan.Merged[endClass])
+		}
 		ne := topobuild.NewEdge(alloc, topo.Edge{
 			Convex:          old.Convex,
 			Length:          old.Length,
@@ -457,6 +463,10 @@ func rebuildTopology(ctx context.Context, alloc topo.Alloc, plan *Plan, xform r3
 		})
 		ne.CurveBound, ne.CurveBounded = surfaceplace.PlacedCurveBound(
 			old.Curve, old.CurveBound, old.CurveBounded, curve, xform)
+		if moved > 0 {
+			ne.CurveBound = proofbound.AbsSumUpper(ne.CurveBound, moved)
+			ne.CurveBounded = true
+		}
 		eb := &edgeBuild{edge: ne, startClass: startClass, endClass: endClass}
 		buildByOld[old] = eb
 		if isWelded {
@@ -481,7 +491,7 @@ func rebuildTopology(ctx context.Context, alloc topo.Alloc, plan *Plan, xform r3
 		}
 		nf := topobuild.NewFace(alloc, topo.Face{
 			Area:          f.Area,
-			AreaBound:     f.AreaBound,
+			AreaBound:     mergedAreaBound(plan, f),
 			Reversed:      f.Reversed,
 			HeldPlanar:    f.HeldPlanar,
 			AxialDelta:    axialDelta,
@@ -517,6 +527,27 @@ func rebuildTopology(ctx context.Context, alloc topo.Alloc, plan *Plan, xform r3
 		newFaces[i] = nf
 	}
 	return newFaces, classOf, welded, nil
+}
+
+// mergedAreaBound is f's area bound widened by what a tolerance merge does to
+// its polygon: moving each of its n vertices by at most d changes the area by at
+// most d·P + n·d², P being the polygon's perimeter. A face no merge touched keeps
+// its own bound.
+func mergedAreaBound(plan *Plan, f *topo.Face) float64 {
+	d, perimeter, n := 0.0, 0.0, 0
+	for _, l := range f.Loops {
+		for _, ce := range l.CoEdges {
+			d = math.Max(d, plan.Merged[plan.Table.classOf(ce.Edge.Start)])
+			d = math.Max(d, plan.Merged[plan.Table.classOf(ce.Edge.End)])
+			perimeter = proofbound.AbsSumUpper(perimeter, ce.Edge.Length, ce.Edge.LengthBound)
+			n++
+		}
+	}
+	if d == 0 {
+		return f.AreaBound
+	}
+	return proofbound.AbsSumUpper(f.AreaBound, proofbound.ProductUpper(d, perimeter),
+		proofbound.ProductUpper(proofbound.ProductUpper(d, d), float64(n)))
 }
 
 // ReverseFaceOrientation reverses f's whole boundary walk in place: every
@@ -783,7 +814,7 @@ func fixWeldedEdgeConvexity(welded map[*topo.Edge]struct{}) {
 // which would understate a curved wall's true box. The published Bound is
 // exactly delta: every corner is exact once inflated and transformed, so the
 // only remaining uncertainty is the placement's own rounding.
-func bounds(srcFaces []*topo.Face, xform r3.Transform, delta float64) (measurement.Box, error) {
+func bounds(srcFaces []*topo.Face, xform r3.Transform, delta, merged float64) (measurement.Box, error) {
 	bodies := topobuild.OperandBodies(srcFaces)
 	if len(bodies) == 0 {
 		return measurement.Box{}, fmt.Errorf(`%w: Stitch has no operand geometry to bound`, decaderr.ErrDegenerate)
@@ -792,7 +823,7 @@ func bounds(srcFaces []*topo.Face, xform r3.Transform, delta float64) (measureme
 	var lo, hi r3.Vec
 	for _, b := range bodies {
 		box := b.Bounds
-		inflate := box.Bound.Base()
+		inflate := proofbound.AbsSumUpper(box.Bound.Base(), merged)
 		for _, c := range stitchweld.BoxCorners(box.Min, box.Max, inflate) {
 			p := xform.Apply(c)
 			if !proofbound.FiniteVec(p) {
@@ -807,5 +838,6 @@ func bounds(srcFaces []*topo.Face, xform r3.Transform, delta float64) (measureme
 			hi = r3.Vec{X: math.Max(hi.X, p.X), Y: math.Max(hi.Y, p.Y), Z: math.Max(hi.Z, p.Z)}
 		}
 	}
-	return measurement.Box{Min: lo, Max: hi, Exactness: measurement.ExactnessOf(delta), Bound: units.Millimeters(delta)}, nil
+	total := proofbound.AbsSumUpper(delta, merged)
+	return measurement.Box{Min: lo, Max: hi, Exactness: measurement.ExactnessOf(total), Bound: units.Millimeters(total)}, nil
 }
