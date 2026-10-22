@@ -275,6 +275,15 @@ reads are bounded (2^18 vertices, 2^24 vertex-in-facet tests, 2^12 cells per
 proxy facet); reaching a bound refuses the restoration and the proxy-position
 mesh is published unchanged.
 
+One cap of the 62 on the 31-tooth gallery pinion stays at its proxy positions
+(292 of 18,104 moved vertices, 0.028 to 0.032 mm off the cone). A flank facet
+joins one of its rim vertices to two blank vertices about 1 mm away. Lowering
+that rim vertex by 0.0245 mm tilts the facet through two blank facets. Pinning
+the vertex at its proxy position then folds the cap's own facets against the
+flank facets, holding it halfway or three quarters of the way back folds the
+same pair, and no stand lets the cap slide clear. Restoring that cap would need
+the flank facet subdivided where it meets the blank.
+
 The vertex bounds stand as they are: the proxy bound already adds the move to
 the source bound, and the restored position lies within that distance of the
 source position, on the cone or on a facet that moved with it. The restored
