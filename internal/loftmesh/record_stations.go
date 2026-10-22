@@ -168,7 +168,16 @@ func PairCounts(loops0 []sectionrecord.LoopRecord, offsets []int, walks0, walks1
 // IsChordedPair reports whether a paired segment chords (agent-docs/loft-design.md
 // §5.1): both sides circular, or both free-form.
 func IsChordedPair(w0, w1 survey2d.SegmentWalk) bool {
+	if lineAgainstFreeformWalk(w0, w1) {
+		return true
+	}
 	return w0.Kind == w1.Kind && (w0.Kind == survey2d.WalkCircular || w0.Kind == survey2d.WalkFreeform)
+}
+
+// lineAgainstFreeformWalk reports a line walk paired with a free-form walk, which
+// chords as a free-form pair once the line is lifted (boundarywalk.LiftedLineWalk).
+func lineAgainstFreeformWalk(w0, w1 survey2d.SegmentWalk) bool {
+	return w0.IsLine() && w1.Kind == survey2d.WalkFreeform || w1.IsLine() && w0.Kind == survey2d.WalkFreeform
 }
 
 // StationExtraBudget is the number of cells left after reserving every pair's

@@ -2198,3 +2198,5 @@
 10	0.20	TestLoftSplitsPolygonPairs
 10	0.20	TestLoftSplitsArcs
 10	0.20	TestLoftSplitsFitSplines
+10	0.20	TestLoftLineAgainstFitSpline
+10	0.20	TestLoftLineAgainstArcStaysRefused

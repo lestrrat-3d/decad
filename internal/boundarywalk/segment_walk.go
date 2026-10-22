@@ -240,6 +240,13 @@ func freeformWalk(seg CurveSegment, work *freeform.FreeformWork) (survey2d.Segme
 	if err != nil {
 		return survey2d.SegmentWalk{}, err
 	}
+	return walkOfSpans(spans, reversed, isFitSplineSeg(seg), work)
+}
+
+// walkOfSpans is the free-form walk of an already converted Bézier chain: the
+// chain's own endpoints, length, tangents and bounds. fit says the chain came
+// from a fit spline's interpolant.
+func walkOfSpans(spans []freeform.BezierSpan, reversed, fit bool, work *freeform.FreeformWork) (survey2d.SegmentWalk, error) {
 	start, end, err := freeformEndpoints(spans, reversed)
 	if err != nil {
 		return survey2d.SegmentWalk{}, err
@@ -274,8 +281,47 @@ func freeformWalk(seg CurveSegment, work *freeform.FreeformWork) (survey2d.Segme
 		Kind:            survey2d.WalkFreeform,
 		Spans:           spans,
 		Reversed:        reversed,
-		FitInterpolated: isFitSplineSeg(seg),
+		FitInterpolated: fit,
 	}, nil
+}
+
+// LiftedLineWalk is the free-form walk of a LineSeg lifted to one cubic Bézier
+// span: the exact rational line between the points its range denotes, with equally
+// spaced control points, so the span is the line itself at a parameter
+// proportional to length. A loft pairs a line against a free-form curve by
+// chording this walk against the curve's (agent-docs/loft-design.md §3.2). The
+// walk runs in the segment's own walk order, TStart to TEnd.
+func LiftedLineWalk(segment CurveSegment, work *freeform.FreeformWork) (survey2d.SegmentWalk, error) {
+	if work == nil {
+		return survey2d.SegmentWalk{}, errFreeformWalkUncounted
+	}
+	seg, ok := normalizeLine(segment)
+	if !ok {
+		return survey2d.SegmentWalk{}, fmt.Errorf(`%w: a line segment cannot be lifted to a free-form span`, ErrUnsupported)
+	}
+	at := func(t *big.Rat) freeform.RatPoint {
+		point := func(a, b float64) *big.Rat {
+			ra, rb := proofarith.FloatRat(a), proofarith.FloatRat(b)
+			return new(big.Rat).Add(ra, new(big.Rat).Mul(t, new(big.Rat).Sub(rb, ra)))
+		}
+		return freeform.RatPoint{U: point(seg.Start.U, seg.End.U), V: point(seg.Start.V, seg.End.V)}
+	}
+	t0, t1 := proofarith.FloatRat(seg.TStart), proofarith.FloatRat(seg.TEnd)
+	step := new(big.Rat).Quo(new(big.Rat).Sub(t1, t0), big.NewRat(3, 1))
+	span := make(freeform.BezierSpan, 4)
+	for i := range span {
+		span[i] = at(new(big.Rat).Add(t0, new(big.Rat).Mul(step, big.NewRat(int64(i), 1))))
+	}
+	return walkOfSpans([]freeform.BezierSpan{span}, false, false, work)
+}
+
+func normalizeLine(segment CurveSegment) (LineSeg, bool) {
+	n, err := normalizeSegment(segment)
+	if err != nil {
+		return LineSeg{}, false
+	}
+	line, ok := n.(LineSeg)
+	return line, ok
 }
 
 // errFreeformWalkUncounted is the refusal of a free-form resolution handed no

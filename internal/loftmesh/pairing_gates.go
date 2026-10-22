@@ -183,6 +183,9 @@ func ValidateRecordWalks(p0, p1 momentinput.Profile, pl0, pl1 sectionrecord.Plan
 // as S7's own crossing refusal three build phases later.
 func SameKindGate(seg0, seg1 sectionrecord.CurveSegment, loop, j, k int) error {
 	t0, t1 := PairTypeOf(seg0), PairTypeOf(seg1)
+	if lineAgainstFreeform(t0, t1) {
+		return nil
+	}
 	if t0 == PairUnadmitted || t0 != t1 {
 		return fmt.Errorf(`%w: loop %d segment %d of the first profile and segment %d of the second are not the same admitted segment type; this evaluator pairs two LineSegs, two ArcSegs, two CircleSegs, or two segments of the same Tier A free-form kind only`,
 			decaderr.ErrUnsupported, loop, j, k)
@@ -297,4 +300,12 @@ func PlanesCoincide(a, b sectionrecord.PlaneRecord) bool {
 	}
 	d := proof.Xsub(proof.XptOf(b.Origin), proof.XptOf(a.Origin))
 	return proof.XdotSign(na, d) == 0
+}
+
+// lineAgainstFreeform reports a pair of one LineSeg and one open free-form
+// segment, which a loft chords after lifting the line to a free-form span
+// (agent-docs/loft-design.md §3.2).
+func lineAgainstFreeform(t0, t1 PairType) bool {
+	open := func(t PairType) bool { return t == PairSpline || t == PairNURBS || t == PairFitSpline }
+	return t0 == PairLine && open(t1) || t1 == PairLine && open(t0)
 }
