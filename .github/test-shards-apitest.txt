@@ -2207,3 +2207,6 @@
 10	0.20	TestAxialSectionUnionLobesOnADisc
 10	0.20	TestAxialSectionUnionPlateAndTongue
 10	0.20	TestAxialSectionUnionFinishes
+10	0.20	TestLoftFilletAtALineMeetingACircleFragment
+10	0.20	TestLoftFilletEveryCornerOfLobesOnADisc
+10	0.20	TestLoftFilletCircleFragmentRefusals
