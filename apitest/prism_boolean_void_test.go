@@ -68,7 +68,7 @@ func TestStackedUnionEnclosedVoidTakesMeshPath(t *testing.T) {
 // chained Union meets the same void and returns the mesh path's verdict.
 func TestPatternedEnclosedVoidTakesMeshPath(t *testing.T) {
 	t.Parallel()
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	c := polyPrismBody(t, doc, [][2]float64{{0, 0}, {6, 1}, {6, 4}, {3, 3.5}, {3, 6.5}, {6, 6}, {6, 9}, {0, 10}}, 1)
 	got, err := decad.Patterned(t.Context(), c, decad.LinearPattern{Dir: patternX, Step: units.Millimeters(5), Count: 2})
 	if err == nil {
