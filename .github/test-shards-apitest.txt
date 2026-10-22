@@ -2216,7 +2216,7 @@
 10	0.20	TestPatternJoinRefusalLeavesTheDocumentUnchanged
 10	0.20	TestPatternJoinSlidesATongueAlongAPlate
 10	0.20	TestPatternJoinOnAnObliqueFrame
-10	100.00	TestPatternJoinManyCopies
+10	48.00	TestPatternJoinManyCopies
 10	0.20	TestPatternJoinRefusesLobesThatOnlyTouchOrMissTheBase
 10	0.20	TestPatternJoinRefusesCopiesItCannotCertify
 10	0.20	TestPatternJoinJoinsCopiesThatShareWholeSides

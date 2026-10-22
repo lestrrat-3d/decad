@@ -246,7 +246,7 @@ func TestPatternJoinManyCopies(t *testing.T) {
 			const r, height = 3.0, 2.0
 			doc := decad.New()
 			disc := circleBodyAtZ(t, doc, 0, r, 0, height)
-			lobe := lobeLoft(t, doc, r, 0, 0.4*math.Pi/float64(n), height)
+			lobe := slimLobeLoft(t, doc, r, 0.4*math.Pi/float64(n), height)
 			dv, err := disc.Volume()
 			require.NoError(t, err)
 			lv, err := lobe.Volume()
@@ -261,4 +261,45 @@ func TestPatternJoinManyCopies(t *testing.T) {
 			require.InDelta(t, want, v.Value.Base(), v.Bound.Base()+dv.Bound.Base()+float64(n)*lv.Bound.Base())
 		})
 	}
+}
+
+// slimLobeLoft is lobeLoft's lobe with three fit points on each flank, the fewest a fit
+// spline takes, so the many-copy joins stay within the race budget.
+func slimLobeLoft(t *testing.T, doc *decad.Document, r, half, height float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	section := func(plane *sketch.Plane) (*sketch.Sketch, *sketch.Profile) {
+		s, err := w.CreateSketch(plane)
+		require.NoError(t, err)
+		pt := func(rad, a float64) *sketch.Point {
+			p := s.CreatePoint(rad*math.Cos(a), rad*math.Sin(a))
+			s.Fix(p)
+			return p
+		}
+		const fit = 3
+		rr, rl := pt(r, -half), pt(r, half)
+		right, left := make([]*sketch.Point, fit), make([]*sketch.Point, fit)
+		for i := range fit {
+			f := float64(i) / float64(fit-1)
+			rad, a := r+0.35+f*0.65, half*(1-0.4*f)
+			right[i], left[i] = pt(rad, -a), pt(rad, a)
+		}
+		s.CreateLine(rr, right[0])
+		_, err = s.CreateFitSpline(right...)
+		require.NoError(t, err)
+		s.CreateArc(s.Origin(), right[fit-1], left[fit-1])
+		_, err = s.CreateFitSpline(left...)
+		require.NoError(t, err)
+		s.CreateLine(left[0], rl)
+		s.CreateArc(s.Origin(), rr, rl)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		require.Len(t, s.Profiles(), 1)
+		return s, s.Profiles()[0]
+	}
+	s0, p0 := section(w.XY())
+	s1, p1 := section(splitTopPlane(t, w, height))
+	b, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	require.NoError(t, err)
+	return b
 }
