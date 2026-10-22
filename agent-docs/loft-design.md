@@ -183,7 +183,7 @@ decad reads the two `ProfileRecord`s' own segment order, and nothing else.
 | **P2** | `len(p0.Holes)` MUST equal `len(p1.Holes)`. A mismatch has no positional pairing (Table S, S1) |
 | **P3** | For each paired loop, `len(loop0.Segments)` MUST equal `len(loop1.Segments)` — call it `n`. A mismatch has no one-to-one pairing unless the caller cuts segments to match (§3.1, Table S, S2) |
 | **P4** | Within a paired loop, segment `j` of `loop0` (for `j` in `[0, n)`) pairs with segment `(j + offset) mod n` of `loop1`, where `offset` is that loop's entry in `WithLoftAlignment`'s `offsets` (default 0) |
-| **P5** | A paired segment's two sides MUST be same-kind: both `LineSeg`, both `ArcSeg`, both `CircleSeg`, or both the same Tier A free-form kind (`agent-docs/spline-design.md` Table F). Any other pairing — mixed-kind, or same-kind at a kind this evaluator has no construction for — is `ErrUnsupported` (§1, Table S row S3). A same-kind `CircleSeg` pair MUST also agree in WALK SENSE: the two sides' recorded `CCW` flags MUST be equal, and a pair whose flags disagree is `ErrDegenerate` (Table S row S7's structural arm). A same-kind Tier A free-form pair uses the least common multiple of its two Bézier span counts as its shared station slot count (§5.1). §4's gate-order paragraph owns where each of these gates sits and what its phase can already have read |
+| **P5** | A paired segment's two sides MUST be same-kind: both `LineSeg`, both `ArcSeg`, both `CircleSeg`, both the same Tier A free-form kind, or one `LineSeg` against one open free-form segment (§3.2) (`agent-docs/spline-design.md` Table F). Any other pairing — mixed-kind, or same-kind at a kind this evaluator has no construction for — is `ErrUnsupported` (§1, Table S row S3). A same-kind `CircleSeg` pair MUST also agree in WALK SENSE: the two sides' recorded `CCW` flags MUST be equal, and a pair whose flags disagree is `ErrDegenerate` (Table S row S7's structural arm). A same-kind Tier A free-form pair uses the least common multiple of its two Bézier span counts as its shared station slot count (§5.1). §4's gate-order paragraph owns where each of these gates sits and what its phase can already have read |
 | **P6** | Every loop's own walk direction is intrinsic to its own plane (outer CCW, holes CW, seam §2) and is never reinterpreted for the pairing: P4's ordinal rule pairs walk-position `j` to walk-position `j`, in each loop's own sense, regardless of how the two profiles' planes are posed relative to each other |
 
 **A wrong alignment choice is not a silent wrong body.** If the caller's
@@ -230,6 +230,26 @@ half disc whose arc is two, against the frustum volume; fit-spline sections with
 
 Splits pair different counts of the same kinds. They do not make an arc pair with a line or a spline: that needs a
 common exact form, and none exists over the rationals for an arc.
+
+### 3.2 A line against a free-form segment
+
+A `LineSeg` pairs with one open free-form segment (`SplineSeg`, `NURBSSeg` with equal weights, or `FitSplineSeg`) in either
+order. The line is lifted, for the pairing only, to the cubic Bézier span whose four control points are the exact rational
+points the record denotes at the parameters `TStart`, `TStart + (TEnd − TStart)/3`, `TStart + 2(TEnd − TStart)/3` and
+`TEnd`. That span is the line itself, at a parameter proportional to length, so the lift changes no curve and carries no
+departure. The pair then runs the free-form arm of §5.1 unchanged: both sides are divided into the least common
+multiple of their span counts by exact subdivision, and every cell is measured and bisected on both sides together. The
+correspondence is by span index and parameter within a span, as for any free-form pair, never by arc length. The recorded
+segments, the segment walks and every other reading (junctions, areas, roles) keep the `LineSeg`; only the station
+generator reads the lifted walk (`boundarywalk.LiftedLineWalk`).
+
+A line against an arc, a circle or a closed spline stays P5's refusal: an arc has no exact common form with a line over
+the rationals, because its weights are not rational in general. The pair still spends the shared station cap (S15), so
+two strongly curved pairs in one small loop can exhaust it; a line side adds no chord cells of its own, since it follows
+the curved side's cells.
+
+Tests: `apitest.TestLoftLineAgainstFitSpline` (a fit-spline arch against a straight chord, in both orders, with a verified
+mesh) and `apitest.TestLoftLineAgainstArcStaysRefused`.
 
 ## 4. Table S — refusals
 

@@ -136,7 +136,16 @@ func PairRecords(p0, p1 momentinput.Profile, offsets []int, walks0, walks1 [][]s
 			w1 := walks1[i][k]
 			seg0 := loops0[i].Segments[j]
 			seg1 := loops1[i].Segments[k]
-			if w0.Kind == survey2d.WalkFreeform && w1.Kind == survey2d.WalkFreeform {
+			if w0.Kind == survey2d.WalkFreeform && w1.Kind == survey2d.WalkFreeform || lineAgainstFreeformWalk(w0, w1) {
+				var err error
+				if w0.IsLine() {
+					w0, err = boundarywalk.LiftedLineWalk(seg0, work0)
+				} else if w1.IsLine() {
+					w1, err = boundarywalk.LiftedLineWalk(seg1, work1)
+				}
+				if err != nil {
+					return nil, 0, 0, 0, err
+				}
 				cell, err := FreeformCellPoints(w0, w1, target, 1+remainingExtra, work0, work1)
 				if err != nil {
 					var capErr *StationCapError

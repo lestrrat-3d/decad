@@ -457,3 +457,97 @@ func TestLoftSplitsFitSplines(t *testing.T) {
 	require.True(t, mesh.BoundaryVerified())
 	require.True(t, mesh.VolumeVerified())
 }
+
+// archApex is the depth of the apex archSection closes its sections at.
+const archApex = 12
+
+// archSection draws a section whose top edge is a fit spline through the given
+// points, running from the right end to the left, closed below by two lines
+// through the apex (0, -archApex). With a straight top edge, pass two points.
+func archSection(t *testing.T, w *sketch.World, plane *sketch.Plane, top [][2]float64) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	pts := make([]*sketch.Point, len(top))
+	for i, p := range top {
+		pts[i] = s.CreatePoint(p[0], p[1])
+		s.Fix(pts[i])
+	}
+	bottom := s.CreatePoint(0, -archApex)
+	s.Fix(bottom)
+	if len(top) == 2 {
+		s.CreateLine(pts[0], pts[1])
+	} else {
+		_, err = s.CreateFitSpline(pts...)
+		require.NoError(t, err)
+	}
+	s.CreateLine(pts[len(pts)-1], bottom)
+	s.CreateLine(bottom, pts[0])
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	return s, s.Profiles()[0]
+}
+
+// TestLoftLineAgainstFitSpline lofts a section whose top edge is a fit spline arch
+// to a triangle whose top edge is the straight chord, so one pair is a fit spline
+// against a line and the other two pairs are identical lines. The sections are
+// A(t) regions between a moving top curve and fixed sides, so the volume lies
+// between the triangle's area and the arch section's area times the height, and
+// the held mesh verifies.
+func TestLoftLineAgainstFitSpline(t *testing.T) {
+	t.Parallel()
+	const height = 30.0
+	arch := make([][2]float64, 5)
+	for i := range arch {
+		a := math.Pi * float64(i) / 4
+		arch[i] = [2]float64{20 * math.Cos(a), 1.6 * (math.Sin(a) + 0.2*math.Sin(2*a))}
+	}
+	w := sketch.NewWorld()
+	s0, p0 := archSection(t, w, w.XY(), arch)
+	s1, p1 := archSection(t, w, splitTopPlane(t, w, height), [][2]float64{{20, 0}, {-20, 0}})
+	require.Less(t, p1.Area, p0.Area)
+	body, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1)
+	require.NoError(t, err)
+	require.True(t, body.IsSolid())
+	v, err := body.Volume()
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, v.Value.Base()+v.Bound.Base(), height*p1.Area)
+	require.LessOrEqual(t, v.Value.Base()-v.Bound.Base(), height*p0.Area)
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+
+	// The pair is symmetric: the line on the first section and the arch on the second.
+	w2 := sketch.NewWorld()
+	t0, q0 := archSection(t, w2, w2.XY(), [][2]float64{{20, 0}, {-20, 0}})
+	t1, q1 := archSection(t, w2, splitTopPlane(t, w2, height), arch)
+	swapped, err := decad.Loft(t.Context(), decad.New(), t0, q0, t1, q1)
+	require.NoError(t, err)
+	sv, err := swapped.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, v.Value.Base(), sv.Value.Base(), v.Bound.Base()+sv.Bound.Base())
+}
+
+// TestLoftLineAgainstArcStaysRefused pins what the line lift does not reach: an arc
+// has no exact common form with a line, so the pair stays ErrUnsupported.
+func TestLoftLineAgainstArcStaysRefused(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	round, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	right, left, bottom := round.CreatePoint(20, 0), round.CreatePoint(-20, 0), round.CreatePoint(0, -12)
+	for _, p := range []*sketch.Point{right, left, bottom} {
+		round.Fix(p)
+	}
+	round.CreateArc(round.Origin(), right, left)
+	round.CreateLine(left, bottom)
+	round.CreateLine(bottom, right)
+	_, err = round.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, round.Profiles(), 1)
+	s1, p1 := archSection(t, w, splitTopPlane(t, w, 30), [][2]float64{{20, 0}, {-20, 0}})
+	_, err = decad.Loft(t.Context(), decad.New(), round, round.Profiles()[0], s1, p1)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+}
