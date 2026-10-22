@@ -73,10 +73,10 @@ func UnionManyPayloads(ctx context.Context, env topo.Env, payloads []topo.Payloa
 	if err != nil {
 		return nil, true, err
 	}
-	recordArea1, err := section.FalsifyLoftRecordedArea(area, work1)
-	if err != nil {
-		return nil, true, err
-	}
+	// The two records are the same section, so the second integral is the first: it gives
+	// the same area and spends the same work.
+	recordArea1 := recordArea0
+	work1.Spent, work1.ReconstructionSpent = work0.Spent, work0.ReconstructionSpent
 	body, err := loftrecord.Build(ctx, env, loftrecord.Payload{
 		Profile0: section, Profile1: section,
 		Plane0: src.Plane0, Plane1: src.Plane1,

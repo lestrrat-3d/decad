@@ -2,6 +2,7 @@ package loftmesh
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -116,14 +117,24 @@ func ValidateRecordWalks(p0, p1 momentinput.Profile, pl0, pl1 sectionrecord.Plan
 		walks0[i] = make([]survey2d.SegmentWalk, n)
 		walks1[i] = make([]survey2d.SegmentWalk, n)
 		for j := range n {
+			spent0, reconstruction0 := uint64(0), uint64(0)
+			if work0 != nil {
+				spent0, reconstruction0 = work0.Spent, work0.ReconstructionSpent
+			}
 			w0, err := boundarywalk.WalkOf(loops0[i].Segments[j], work0)
 			if err != nil {
 				return nil, nil, nil, err
 			}
 
 			k := (j + off) % n
-			w1, err := boundarywalk.WalkOf(loops1[i].Segments[k], work1)
-			if err != nil {
+			var w1 survey2d.SegmentWalk
+			if reflect.DeepEqual(loops0[i].Segments[j], loops1[i].Segments[k]) && work1 != nil && work0 != nil {
+				// The same record walks the same way: reuse the walk, and charge the
+				// second counter what the walk cost the first.
+				w1 = w0
+				work1.Spent += work0.Spent - spent0
+				work1.ReconstructionSpent += work0.ReconstructionSpent - reconstruction0
+			} else if w1, err = boundarywalk.WalkOf(loops1[i].Segments[k], work1); err != nil {
 				return nil, nil, nil, err
 			}
 
