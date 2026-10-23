@@ -97,7 +97,7 @@ func finiteConicalBlank(t *testing.T, doc *decad.Document) *decad.Body {
 	return blank
 }
 
-func TestCurvedLoftFacesSourceNeedsHeldSeam(t *testing.T) {
+func TestCurvedLoftFacesUnionStopsAtTheChainDepthGate(t *testing.T) {
 	doc := decad.New()
 	inner := fittedSectorPointLoft(t, doc)
 	slabs := make([]*decad.Body, 0, 8)
@@ -129,7 +129,7 @@ func TestCurvedLoftFacesSourceNeedsHeldSeam(t *testing.T) {
 	before := doc.Bodies()
 	_, err = decad.Union(t.Context(), blank, trimmed)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "certified curved LoftFaces contact needs a held-seam builder")
+	require.ErrorContains(t, err, "coarser than this pair's chord tolerance")
 	require.Equal(t, before, doc.Bodies())
 
 	move, err := r3.Translation(r3.NewVec(0, 0.05, 0))
@@ -138,6 +138,6 @@ func TestCurvedLoftFacesSourceNeedsHeldSeam(t *testing.T) {
 	require.NoError(t, err)
 	_, err = decad.Union(t.Context(), shifted, trimmed)
 	if err != nil {
-		require.NotContains(t, err.Error(), "certified curved LoftFaces contact")
+		require.ErrorIs(t, err, decad.ErrUnsupported)
 	}
 }

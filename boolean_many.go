@@ -118,10 +118,14 @@ func unionManyRoutes(ctx context.Context, d *Document, ref producerID, operands 
 	}
 	span := producerID(1)
 	if !matched && err == nil {
-		body, span, _, err = tryPrismUnionChain(ctx, ref, operands)
+		body, span, matched, err = tryPrismUnionChain(ctx, ref, operands)
 	}
 	if err != nil {
 		return nil, 0, err
+	}
+	if !matched {
+		return nil, 0, fmt.Errorf("%w: Union of three or more bodies needs a certified prism, "+
+			"axial or copied-tooth set; join them two at a time", ErrUnsupported)
 	}
 	return body, span, ctx.Err()
 }

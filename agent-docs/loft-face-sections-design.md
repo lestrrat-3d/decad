@@ -547,12 +547,5 @@ facets need separate source-curve, chord,
 and rounding bounds before they can be welded to these vertices.
 
 This source certificate does not change the held mesh or grant a contact
-exception. A certified pair currently returns `ErrUnsupported` at public
-`Union` because the source-aligned held seam and its boundary, area, volume
-and complete-contact audits have not been built. The same producer remains
-unchanged after that refusal.
-
-An unfinished source proof or face-pair census does not select this path.
-Unless the caller's context was canceled, `Union` may continue through the
-ordinary mesh Boolean and its independent contact and volume gates. A
-completed source certificate and census still require the held-seam builder.
+exception. Public `Union` runs the ordinary mesh Boolean and its independent
+contact, chain-depth and volume gates.
