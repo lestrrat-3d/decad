@@ -103,7 +103,7 @@ func boundedBuildError(ctx context.Context, err error) error {
 // centroid products stay below the route's 8,192-bit arithmetic ceiling.
 func boundedFacetedInput(in Mesh, audit *facetproof.MeshAudit, volRat *big.Rat) bool {
 	v, f := len(in.Verts), len(in.Tris)
-	if in.SpiralTools || v == 0 || f == 0 || f > 512 || v > 3*f ||
+	if v == 0 || f == 0 || f > 512 || v > 3*f ||
 		len(in.VertexBound) != v || len(in.Src) != f || audit == nil || volRat == nil ||
 		len(audit.XVerts) != v || len(audit.Det) != f || len(audit.Comp) != f || len(audit.Adj) != f ||
 		len(audit.Members) == 0 || len(audit.Members) > f ||

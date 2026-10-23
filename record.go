@@ -154,10 +154,7 @@ type (
 	pointSectionRecord         = facetedrecord.PointSectionRecord
 	pointSectionSource         = facetedrecord.PointSectionSource
 	revolveLoftSectorPlacement = facetedrecord.RevolveLoftSectorPlacement
-	revolveSectionCertificate  = facetedrecord.RevolveSectionCertificate
 	revolveSectionSpan         = facetedrecord.RevolveSectionSpan
-	spiralCombineSource        = facetedrecord.SpiralCombineSource
-	spiralFirstJoinSource      = facetedrecord.SpiralFirstJoinSource
 )
 
 type loopRecord = sectionrecord.LoopRecord

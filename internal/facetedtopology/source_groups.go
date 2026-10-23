@@ -51,7 +51,7 @@ func GroupFace(src, faceOf []int, faceCount, group int) (int, bool) {
 
 // TrimGroupFace returns the face index shared by every facet of group, or -1
 // when src and faceOf differ in length, two facets name different faces, or
-// the index is at least faceCount. spiralsector.TrimFaceGroup reads it.
+// the index is at least faceCount.
 func TrimGroupFace(src, faceOf []int, faceCount, group int) int {
 	if len(faceOf) != len(src) {
 		return -1

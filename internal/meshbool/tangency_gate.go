@@ -12,25 +12,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
-// NearPairRole is a source certificate's verdict for one held face pair the
-// tangency gate could not otherwise decide. The spiral Union admissions
-// build the tables: the first curved tooth join's own table, and the combined
-// spiral tool's table, which copies that first-join table onto every tooth
-// copy. Each caller must still audit the complete held result and refuse any
-// near pair absent from its table.
-type NearPairRole uint8
-
-const (
-	// NearPairUnknown is a pair the certificate says nothing about.
-	NearPairUnknown NearPairRole = iota
-	// NearPairCrossing is a pair whose true faces cross; a held near-miss
-	// between them passes the gate.
-	NearPairCrossing
-	// NearPairSeparated is a pair whose true faces are disjoint; any held
-	// facet contact between them is refused.
-	NearPairSeparated
-)
-
 // RefuseUndecidableProximity is the tangency gate (agent-docs/evaluator-design.md
 // §9, agent-docs/tessellation-design.md §11 step 4). ma and mb are the two operand
 // tessellations bmA and bmB were prepared from, and memo is the call's
@@ -65,21 +46,17 @@ const (
 // cylinder wall threading a cap's own triangulation diagonal), and that is no
 // tangency at all.
 //
-// Two source certificates narrow the gate, and each still refuses any held
+// One source certificate narrows the gate, and it still refuses any held
 // facet contact it does not cover. A non-nil capFace names a LoftFaces cap of
 // the first operand whose true surface the cone-trim source map proves
 // disjoint from coneFace of the second; that pair is admitted only when no
-// held facet of one touches a held facet of the other. roles is the table of
-// an admitted spiral Union, either the first curved tooth join's or the
-// combined spiral tool's copy table, and nil when neither admission applies:
-// a separated pair gets the same no-contact check, and a crossing pair passes
-// a near-miss.
+// held facet of one touches a held facet of the other.
 //
 // It may refuse a valid model whose operands genuinely pass within a chord
 // tolerance of each other. That is the accepted price; the alternative is a
 // verdict decided by chord placement.
 func RefuseUndecidableProximity(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB *BoolMesh,
-	memo *ContactMemo, capFace, coneFace *topo.Face, roles map[[2]*topo.Face]NearPairRole) error {
+	memo *ContactMemo, capFace, coneFace *topo.Face) error {
 	// One counter spans the grouping and the pair scan it feeds: the grouping
 	// walks every facet and every new source face's edges, which is work the
 	// §7.2 interval covers just as the pair scan is.
@@ -107,15 +84,6 @@ func RefuseUndecidableProximity(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB
 				}
 				continue
 			}
-			role := roles[[2]*topo.Face{ga.source, gb.source}]
-			if role == NearPairSeparated {
-				// A true source separation cannot admit a held contact, even
-				// when the held penetration is deeper than the near threshold.
-				if err := refuseFacetContact(ctx, bmA, bmB, ga.facets, gb.facets, memo); err != nil {
-					return err
-				}
-				continue
-			}
 			slack := ga.delta + gb.delta
 			if slack <= 0 {
 				// Both faces are held exactly (a planar face with straight
@@ -132,9 +100,7 @@ func RefuseUndecidableProximity(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB
 			if err != nil {
 				return err
 			}
-			if !near || role == NearPairCrossing {
-				// A curved first-join crossing can pass this ambiguity only
-				// when its result will audit the matching complete edge chain.
+			if !near {
 				continue
 			}
 			// The face-level slack covers the worst facet of either face, which a

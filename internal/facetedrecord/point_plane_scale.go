@@ -77,7 +77,6 @@ func ScaleImage(ctx context.Context, body *topo.Body, fp Payload, anchor r3.Vec,
 	next.LoftFacesToe = nil
 	next.LoftFacesTrim = nil
 	next.CopyLineage = nil
-	next.SpiralTools = nil
 	next.PointSection, next.PointCone = nil, nil
 	next.ExactSourceVerts, next.ExactSourceTris = nil, nil
 	next.LowerSupport = nil

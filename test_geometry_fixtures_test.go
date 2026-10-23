@@ -306,8 +306,6 @@ func loftRecordAreasOrZero(profile0, profile1 profileRecord) [2]float64 {
 	return areas
 }
 
-var revolveAxisU = SketchLine{Start: planePoint{}, End: planePoint{U: 1}}
-
 func arcCellFixture(center, radius, start, delta float64) revolvemesh.RevArcCell {
 	return revolvemesh.RevArcCell{
 		CV: big.NewRat(0, 1).SetFloat64(center), Radius: big.NewRat(0, 1).SetFloat64(radius),

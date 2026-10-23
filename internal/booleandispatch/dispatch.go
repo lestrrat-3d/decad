@@ -27,7 +27,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/obliqueboss"
 	"github.com/lestrrat-3d/decad/internal/prismboolean"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
-	"github.com/lestrrat-3d/decad/internal/revolvecontact"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -103,11 +102,6 @@ func Body(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *to
 		return nil, err
 	} else if ok {
 		return n, nil
-	}
-	if ok, err := revolvecontact.TryUnion(ctx, op, a, b); err != nil {
-		return nil, err
-	} else if ok {
-		return nil, decaderr.ErrUnsupported
 	}
 	if n, ok, err := revolveplan.PointConeBoolean(ctx, op, env, a, b, hooks.MatchingFaces); err != nil {
 		return nil, err

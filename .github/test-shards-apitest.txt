@@ -948,7 +948,6 @@
 4	0.14	TestShellCupWallThickness
 4	0.08	TestShellInwardSectionWorkBudget
 4	0.02	TestShellStackedBossClearanceRefusal
-4	22.82	TestSpiralCopiedToothUnionKeepsCapsOnTheirCones
 4	0.01	TestStackedUnionEqualBoxesStacked
 4	0.43	TestStitchCurvedWeldedRevolveSiblingsTessellate
 4	0.01	TestStitchDisplacedPatchSheetTessellatesItsOwnTriangleSet
@@ -1162,7 +1161,6 @@
 5	0.02	TestShellCupSeparatesComputedOpenAndExactFloorBounds
 5	0.01	TestShellCupWallToolVerdict
 5	0.88	TestShellRoundStackedBoss
-5	27.18	TestSpiralCopiedToothUnionNeedsExactRotation
 5	0.01	TestStitchConicalSolidMatchesTheRevolveEngine
 5	2.61	TestStitchCurvedRevolveSurfaceKindsTessellate
 5	0.02	TestStitchDecimalFrustumEnclosesItsRecord
@@ -1354,7 +1352,6 @@
 6	0.02	TestShellCupTessellateOutwardBox
 6	0.08	TestShellCupWallOutwardCavityQualifyingPinch
 6	0.01	TestShellSelectorAdmission
-6	23.00	TestSpiralTangentFirstToothUnionIsCertified
 6	0.01	TestStitchCurvedVolumeBoundWidensWhenPlaced
 6	0.02	TestStitchPlacedStitchedSolidGetsClearance
 6	0.01	TestStitchRefusesNestedBoxesWithAGap
@@ -1565,7 +1562,6 @@
 7	0.03	TestShellCupPlacedComposes
 7	0.13	TestShellCupTwoHolesThroughStack
 7	0.19	TestShellSideOpeningArcExtension
-7	33.13	TestSpiralFirstToothUnionIsCertified
 7	0.02	TestStackBrepScaledAtVerified
 7	0.04	TestStackedOpposedInterfacePockets
 7	0.01	TestStitchAnnularRevolveSheetClosesToATube
@@ -1658,7 +1654,7 @@
 8	0.00	TestCopyIdentity
 8	4.47	TestCrossCylinderBoreMouthChamferRefusesUnprovedCases
 8	0.06	TestCrossingBlindPocketOnThroughHole
-8	7.37	TestCurvedLoftFacesSourceNeedsHeldSeam
+8	7.37	TestCurvedLoftFacesUnionStopsAtTheChainDepthGate
 8	0.87	TestCurvedRimLengthRefuses
 8	0.01	TestDocumentGapToleranceOptions
 8	0.00	TestDocumentRemoveRefusals
@@ -1952,7 +1948,6 @@
 9	0.20	TestShellSideOpeningUChannel
 9	0.13	TestShellStackedWrongCapRefuses
 9	0.03	TestShellTubeInwardCylinder
-9	24.33	TestSpiralFirstToothUnionKeepsCapsOnTheirCones
 9	0.04	TestStackedUnionBossOnPlate
 9	0.41	TestStackedUnionCrossingBossStanding
 9	0.02	TestStackedUnionFlushEdgeBoss
@@ -2159,7 +2154,6 @@
 10	0.27	TestShellOffsetRectangularBoss
 10	0.45	TestShellSideOpeningCircleJunctions
 10	0.06	TestShellTubeInwardBox
-10	22.88	TestSpiralFirstToothUnionSurvivesPlacement
 10	0.13	TestStackedUnionBrepOperandChain
 10	0.05	TestStackedUnionEnclosedVoidTakesMeshPath
 10	0.04	TestStackedUnionFlushCornerBoss
@@ -2227,6 +2221,4 @@
 10	0.00	TestExtrudeFitSplineSectionScalesWorkWithPieces
 10	0.00	TestExtrudedToothPatternJoinsADisc
 10	0.00	TestUnionManyJoinsTwistedLoftTeethToADisc
-10	0.00	TestSpiralToothWithAShorterCutterJoinsTheBlank
-10	0.00	TestSpiralToothOnATallerBlankJoinsTheBlank
 10	0.00	TestChainToleranceAdmitsAContactOnACoarserRim

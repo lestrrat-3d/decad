@@ -60,11 +60,10 @@ func newGateBox(t *testing.T, lo, hi r3.Vec, delta float64) gateBox {
 	}
 }
 
-func gate(t *testing.T, a, b gateBox, capFace, coneFace *topo.Face,
-	roles map[[2]*topo.Face]meshbool.NearPairRole) error {
+func gate(t *testing.T, a, b gateBox, capFace, coneFace *topo.Face) error {
 	t.Helper()
 	return meshbool.RefuseUndecidableProximity(t.Context(), a.mesh, b.mesh, a.bool, b.bool,
-		meshbool.NewContactMemo(a.bool, b.bool), capFace, coneFace, roles)
+		meshbool.NewContactMemo(a.bool, b.bool), capFace, coneFace)
 }
 
 func TestRefuseUndecidableProximity(t *testing.T) {
@@ -81,58 +80,46 @@ func TestRefuseUndecidableProximity(t *testing.T) {
 	}
 	t.Run("exact faces hide no tangency", func(t *testing.T) {
 		a, b := pair(0)
-		require.NoError(t, gate(t, a, b, nil, nil, nil))
+		require.NoError(t, gate(t, a, b, nil, nil))
 	})
 	t.Run("a pair farther apart than its slack is decided", func(t *testing.T) {
 		a, b := pair(0.01)
-		require.NoError(t, gate(t, a, b, nil, nil, nil))
+		require.NoError(t, gate(t, a, b, nil, nil))
 	})
 	t.Run("a near miss within the slack is refused", func(t *testing.T) {
 		a, b := pair(0.1)
-		err := gate(t, a, b, nil, nil, nil)
+		err := gate(t, a, b, nil, nil)
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 		require.ErrorContains(t, err, "held facets come within the chord tolerance")
 	})
 	t.Run("the slack sums both faces' bounds", func(t *testing.T) {
 		a, b := pairOf(0.06, 0.06)
-		require.ErrorIs(t, gate(t, a, b, nil, nil, nil), decaderr.ErrUnsupported)
+		require.ErrorIs(t, gate(t, a, b, nil, nil), decaderr.ErrUnsupported)
 	})
 	t.Run("a deep crossing is decided", func(t *testing.T) {
 		a, b := overlapping()
-		require.NoError(t, gate(t, a, b, nil, nil, nil))
+		require.NoError(t, gate(t, a, b, nil, nil))
 	})
-	t.Run("a certified crossing passes a near miss", func(t *testing.T) {
+	t.Run("a cone-cap pair admits held facets that do not touch", func(t *testing.T) {
 		a, b := pair(0.1)
-		roles := map[[2]*topo.Face]meshbool.NearPairRole{{a.face, b.face}: meshbool.NearPairCrossing}
-		require.NoError(t, gate(t, a, b, nil, nil, roles))
+		require.NoError(t, gate(t, a, b, a.face, b.face))
 	})
-	t.Run("a certified separation admits held facets that do not touch", func(t *testing.T) {
-		a, b := pair(0.1)
-		roles := map[[2]*topo.Face]meshbool.NearPairRole{{a.face, b.face}: meshbool.NearPairSeparated}
-		require.NoError(t, gate(t, a, b, nil, nil, roles))
-		require.NoError(t, gate(t, a, b, a.face, b.face, nil))
-	})
-	t.Run("a certified separation refuses a held contact", func(t *testing.T) {
+	t.Run("a cone-cap pair refuses a held contact", func(t *testing.T) {
 		a, b := overlapping()
-		roles := map[[2]*topo.Face]meshbool.NearPairRole{{a.face, b.face}: meshbool.NearPairSeparated}
-		for _, err := range []error{
-			gate(t, a, b, nil, nil, roles),
-			gate(t, a, b, a.face, b.face, nil),
-		} {
-			require.ErrorIs(t, err, decaderr.ErrUnsupported)
-			require.ErrorContains(t, err, "held facet contact")
-		}
+		err := gate(t, a, b, a.face, b.face)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "held facet contact")
 	})
 	t.Run("the cone-cap exemption covers only its own pair", func(t *testing.T) {
 		a, b := pair(0.1)
-		err := gate(t, a, b, a.face, &topo.Face{}, nil)
+		err := gate(t, a, b, a.face, &topo.Face{})
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 		require.ErrorContains(t, err, "held facets come within the chord tolerance")
 	})
 	t.Run("a source face with no stated bound is an evaluator failure", func(t *testing.T) {
 		a, b := pair(0.1)
 		delete(b.mesh.FaceBound, b.face)
-		require.ErrorIs(t, gate(t, a, b, nil, nil, nil), decaderr.ErrBooleanFailed)
+		require.ErrorIs(t, gate(t, a, b, nil, nil), decaderr.ErrBooleanFailed)
 	})
 }
 
@@ -153,7 +140,7 @@ func TestRefuseUndecidableProximityLocalSlack(t *testing.T) {
 	}
 	b.bool.SetVertexBounds(tightB)
 	t.Run("close facets with small bounds decide a pair the face bounds cannot", func(t *testing.T) {
-		require.NoError(t, gate(t, a, b, nil, nil, nil))
+		require.NoError(t, gate(t, a, b, nil, nil))
 	})
 	t.Run("a refusal names the contacts and their slack", func(t *testing.T) {
 		c := newGateBox(t, r3.NewVec(0.25, 0.25, 1.01), r3.NewVec(0.75, 0.75, 2), 0.1)
@@ -162,7 +149,7 @@ func TestRefuseUndecidableProximityLocalSlack(t *testing.T) {
 			cb[i] = 0.01
 		}
 		c.bool.SetVertexBounds(cb)
-		err := gate(t, a, c, nil, nil, nil)
+		err := gate(t, a, c, nil, nil)
 		var touch *meshbool.TouchContactError
 		require.ErrorAs(t, err, &touch)
 		require.NotEmpty(t, touch.Contacts)

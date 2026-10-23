@@ -32,7 +32,7 @@ func ordinaryCopyOf(t *testing.T, body *Body, degrees float64) *Body {
 }
 
 func TestCertifyFacetedCopiesPassesExactMaps(t *testing.T) {
-	_, source, _ := neutralArcSeamSource(t)
+	_, source := neutralArcSeamSource(t)
 	// As TestFacetedCopyTransferSeparation: the widened bound of the second
 	// copy is chargeable only by a direct pairwise check, so a certified set
 	// shows that reference-gap transfer ran.
@@ -141,7 +141,7 @@ func TestExactRotationAtTinyAngleHasHiddenTranslation(t *testing.T) {
 }
 
 func TestPlacedProxyShellsChargeExactCopies(t *testing.T) {
-	_, source, _ := neutralArcSeamSource(t)
+	_, source := neutralArcSeamSource(t)
 	proxy, _, err := tessellateBooleanOperand(t.Context(), source, 0.1)
 	require.NoError(t, err)
 	image := exactCopyOf(t, source, 40)
@@ -198,7 +198,7 @@ func TestPlacedProxyShellsChargeExactCopies(t *testing.T) {
 }
 
 func TestRealCurvedCopiedToolLineage(t *testing.T) {
-	blank, source, _ := neutralArcSeamSource(t)
+	blank, source := neutralArcSeamSource(t)
 	turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(180))
 	require.NoError(t, err)
 	image, err := Copy(t.Context(), source, WithCopyPlacement(turn))
@@ -265,7 +265,7 @@ func TestRealCurvedCopiedToolLineage(t *testing.T) {
 }
 
 func TestFacetedCopyLineageDirectTransfer(t *testing.T) {
-	_, source, _ := neutralArcSeamSource(t)
+	_, source := neutralArcSeamSource(t)
 	rotate := func(degrees float64) r3.Transform {
 		turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(degrees))
 		require.NoError(t, err)
@@ -322,7 +322,7 @@ func looseBounds(body *Body) {
 }
 
 func TestFacetedCopyTransferSeparation(t *testing.T) {
-	_, source, _ := neutralArcSeamSource(t)
+	_, source := neutralArcSeamSource(t)
 	rotate := func(degrees float64) r3.Transform {
 		turn, err := r3.Rotation(r3.Vec{X: 1}, units.Degrees(degrees))
 		require.NoError(t, err)

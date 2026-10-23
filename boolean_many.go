@@ -120,11 +120,12 @@ func unionManyRoutes(ctx context.Context, d *Document, ref producerID, operands 
 	if !matched && err == nil {
 		body, span, matched, err = tryPrismUnionChain(ctx, ref, operands)
 	}
-	if !matched && err == nil {
-		body, err = spiralCombineBody(ctx, d, ref, a, tools)
-	}
 	if err != nil {
 		return nil, 0, err
+	}
+	if !matched {
+		return nil, 0, fmt.Errorf("%w: Union of three or more bodies needs a certified prism, "+
+			"axial or copied-tooth set; join them two at a time", ErrUnsupported)
 	}
 	return body, span, ctx.Err()
 }

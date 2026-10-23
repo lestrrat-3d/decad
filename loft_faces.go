@@ -57,15 +57,7 @@ func collectLoftFaces(d *Document, faces []*Face) ([]revolveloftfaces.LoftFacesS
 }
 
 // The LoftFaces cap-map carriers live in internal/loftface.
-type loftFaceRatVec = loftface.RatVec
-
 type loftFaceMap = loftface.Map
-
-type loftFaceInterval = loftface.Interval
-
-func lfZero() *big.Rat { return new(big.Rat) }
-
-func lfOne() *big.Rat { return big.NewRat(1, 1) }
 
 func lfF(v float64) *big.Rat { return proofarith.FloatRat(v) }
 

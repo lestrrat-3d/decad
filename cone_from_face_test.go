@@ -9,7 +9,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
-	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -17,8 +16,7 @@ import (
 )
 
 // coneFromFaceSpiralSection is the six-point axial section of the 31 tooth,
-// module 1, 35 degree spiral bevel blank that the spiral first-join fixture
-// revolves (apitest/spiral_first_join_fixture_test.go). Its heel side lies on
+// module 1, 35 degree spiral bevel blank. Its heel side lies on
 // x + r = C with C = 31 + 2^-48, a float, so nearest rounding of C is exact.
 func coneFromFaceSpiralSection() []planePoint {
 	const module, teeth = 1.0, 31
@@ -82,11 +80,11 @@ func TestConeFromFaceIsStrictlyOffBlankFaces(t *testing.T) {
 			require.NoError(t, doc.requireLive(blank), "the source stays live")
 			limit, ok := revolveplan.PointConeSource(&cone.n)
 			require.True(t, ok, "the result must be an exact point cone")
-			gap, ok := spiralsector.ToolOuterGap(limit, tc.first, tc.last, tc.sign)
-			require.True(t, ok, "both face ends must lie strictly on the certified side")
-			require.Positive(t, gap.Sign())
-			require.True(t, spiralsector.FiniteConeSide(limit, tc.first, tc.last, tc.sign),
-				"the whole finite generator must lie on the certified side")
+			for _, point := range []planePoint{tc.first, tc.last} {
+				residual := new(big.Rat).Add(lfF(point.U), new(big.Rat).Mul(limit.Slope, lfF(point.V)))
+				residual.Sub(residual, limit.Apex)
+				require.Equal(t, tc.sign, residual.Sign(), "both face ends must lie strictly on the certified side")
+			}
 			require.Zero(t, limit.Far.Cmp(lfF(-5)), "far plane is the requested one")
 		})
 	}
@@ -384,4 +382,28 @@ func TestConeFromFaceCancelledDuringConstruction(t *testing.T) {
 		require.Equal(t, producer, doc.nextProducerID())
 		canceledLate = canceledLate || cancelAt > 3
 	}
+}
+
+// spiralTestRevolveBlank revolves a closed axial section into a blank.
+func spiralTestRevolveBlank(t *testing.T, section []planePoint) *Body {
+	t.Helper()
+	doc := New()
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	points := make([]*sketch.Point, len(section))
+	for i, point := range section {
+		points[i] = s.CreatePoint(point.U, point.V)
+		s.Fix(points[i])
+	}
+	for i := range points {
+		s.CreateLine(points[i], points[(i+1)%len(points)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	blank, err := Revolve(t.Context(), doc, s, s.Profiles()[0],
+		SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
+	require.NoError(t, err)
+	return blank
 }
