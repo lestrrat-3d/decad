@@ -73,6 +73,7 @@ func ScaleImage(ctx context.Context, body *topo.Body, fp Payload, anchor r3.Vec,
 	next.RevolveLoftJoin = nil
 	next.RevolveLoftSector = nil
 	next.LoftFacesPrimitive = false
+	next.HeldFloor = 0
 	next.LoftFacesCap = nil
 	next.LoftFacesToe = nil
 	next.LoftFacesTrim = nil

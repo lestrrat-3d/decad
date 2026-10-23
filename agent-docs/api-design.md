@@ -1298,7 +1298,9 @@ trim amplification, and each adds its own final rounding displacement. §9's
 chord tolerance for the next pair is a fixed fraction of that pair's diameter,
 raised to a coil's, mitred sweep's, or certified `LoftFaces` result's held
 bound when that is larger, since those operands hold one fixed mesh: their partner is then meshed more
-coarsely, with its bounds still proven.
+coarsely, with its bounds still proven. A boolean result keeps that held floor
+of the fixed meshes whose facets it inherited, through later booleans and rigid
+placement, and raises the next pair's tolerance to it the same way.
 The next boolean compares the two only where the new pair meets the operand
 (`agent-docs/faceted-vertex-bounds-design.md` §5): every facet of an operand that
 restates a held mesh (a boolean result or a mitred sweep) that the contact
@@ -1312,7 +1314,10 @@ The refusal names the operand (`Cut`'s target or tool; the first or second
 operand otherwise), quotes the bound of the facets the pair touches and the
 pair's chord tolerance, and states that a boolean takes no chord tolerance:
 there is nothing to retry with. The document's gap tolerance is not that
-parameter and does not lift the refusal. Geometry the new pair does not touch keeps the bound it
+parameter and does not lift the refusal. The document's chain tolerance
+(`decad.WithChainTolerance`) does: a touched bound within it is admitted, every
+bound the result carries is still proven, and the result's `Bound` reads the
+larger figure that admits. Geometry the new pair does not touch keeps the bound it
 already published and is never the reason for a refusal, so a result whose
 `Bound` exceeds the next pair's chord tolerance in untouched regions is still
 an ordinary operand. What limits a chain is therefore where its contacts land:

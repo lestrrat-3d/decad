@@ -186,6 +186,7 @@ proven exact may return a faceted body whose measurements are `decad.Approximate
 | Function | Effect |
 |---|---|
 | `decad.Copy` | Returns a new live body and leaves the source live. `decad.WithCopyPlacement` and `decad.WithCopyRotation` place it. |
+| `decad.WithChainTolerance` | A `decad.New` option. Sets the coarsest bound, as a length, that a facet of an earlier boolean's result may carry where a later boolean touches it. The default is the pair's own chord tolerance, and a contact on a coarser facet is refused. A value admits contacts up to it and the result's bound grows to match. |
 | `decad.WithGapTolerance` | A `decad.New` option. Sets how far, as a length, the evaluator may move a vertex of a faceted result, or the second operand of a boolean whose faces lie in one plane, off its exact place to keep the operation from refusing. The default is 0.01 mm, and the move is added to the result's bound. |
 | `decad.WithParams` | A `decad.New` option. Makes the document read parameters from a `sketch/param` table, such as `sketch.World.Params()`. |
 | `Document.Param`, `Document.Expr`, `Document.ParamInt` | Read a named parameter, an expression or a whole-number parameter as the value a feature takes. Editing the table and running the builder again rebuilds the model. |

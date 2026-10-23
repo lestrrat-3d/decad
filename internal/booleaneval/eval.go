@@ -18,6 +18,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 
 	"github.com/lestrrat-3d/decad/internal/booloperand"
+	"github.com/lestrrat-3d/decad/internal/chaintol"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
@@ -277,15 +278,16 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	// A restating operand's facets where the pair meets must hold within the
 	// pair tolerance; the gate reads them on the contact classification below
 	// (agent-docs/faceted-vertex-bounds-design.md §5). Any other operand is ungated.
+	chain := chaintol.Of(ctx)
 	if restatingA {
-		bmA.Gate = tolMM
+		bmA.Gate = max(tolMM, chain)
 	}
 	if restatingB {
 		// A moved operand's facets carry the move in their bounds, which the
 		// gate would read as a coarse mesh. The move is what the gap tolerance
 		// permits and the composition of the result's bounds charges it, so the
 		// gate allows it.
-		bmB.Gate = tolMM + (mb.Bound - mbDecide.Bound)
+		bmB.Gate = max(tolMM+(mb.Bound-mbDecide.Bound), chain)
 	}
 	if spiralJoin != nil {
 		// The temporary curved cap carries its actual moved-facet departure.
@@ -422,6 +424,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		DPair:       dPair,
 		Xform:       r3.Identity(),
 	}
+	payload.HeldFloor = max(booloperand.HeldFloorOf(a.Payload), booloperand.HeldFloorOf(b.Payload))
 	if err := ctx.Err(); err != nil {
 		return Evaluation{}, err
 	}

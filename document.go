@@ -30,14 +30,18 @@ type Document struct {
 	// (gap_tolerance.go), and gapErr the error an invalid option named.
 	gapReach float64
 	gapErr   error
+	// chainTol is the chain tolerance in millimetres its booleans carry
+	// (chain_tolerance.go), and chainErr the error an invalid option named.
+	chainTol float64
+	chainErr error
 	// params is the parameter table Param and Expr read (params.go), and
 	// ledger the reads they have made.
 	params *param.Table
 	ledger parambind.Ledger
 }
 
-// DocumentOption configures New. WithGapTolerance, ExactOnly and WithParams
-// are its options. An option from another package cannot implement this sealed tier.
+// DocumentOption configures New. WithGapTolerance, ExactOnly,
+// WithChainTolerance and WithParams are its options. An option from another package cannot implement this sealed tier.
 type DocumentOption interface {
 	option.Interface
 	documentOption()
@@ -47,6 +51,7 @@ type DocumentOption interface {
 func New(opts ...DocumentOption) *Document {
 	d := bornDocument(&Document{})
 	d.gapReach, d.gapErr = gapReachOf(opts)
+	d.chainTol, d.chainErr = chainToleranceOf(opts)
 	d.params = paramsOf(opts)
 	return d
 }

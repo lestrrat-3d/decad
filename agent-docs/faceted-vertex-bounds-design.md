@@ -521,6 +521,10 @@ already raises it past twice its displacement (`meshbool.PairChordFrom`, through
 operand touches the partner with then holds `δ(t) ≤ heldBound ≤ tol`, so the gate
 below admits it. A boolean result's `MeshBound` does not raise the pair
 tolerance: it is the figure a chain grows, and the gate exists to refuse it.
+Its `HeldFloor` does: the largest bound of the facets it kept from a fixed held
+mesh, which no boolean can mesh closer. A boolean sets the result's floor to the
+larger of its operands' floors, and rigid placement adds the largest growth of
+any vertex bound.
 Rigid placement of `LoftFaces` keeps the primitive classification while
 charging its new bound; a Boolean result clears it.
 The partner pays for the raise: a chorded analytic partner is meshed at the
@@ -544,6 +548,14 @@ target or tool, else first or second), the bound of the touched facet, the
 pair's chord tolerance, and says that a boolean takes no tolerance. A chorded
 analytic operand is not gated: its `sourceBound` may exceed `tol` by
 tessellation §1's Tolerance row today, and nothing here changes that.
+
+**Chain tolerance.** A document may state the coarsest facet bound a contact
+may touch (`decad.WithChainTolerance`). The gate then compares a touched facet
+against the larger of the pair's chord tolerance and that figure. The pair's
+chord tolerance, and so the partner's mesh, is unchanged; only the refusal
+moves. Every rim the contact makes still composes from the proven bounds of
+the facets it touches, so a larger tolerance admits a larger bound on the
+result and no unproven one.
 
 **Reject-only.** The gate compares two proven numbers, a facet's published
 bound and the pair's tolerance, and refuses when the first exceeds the second.

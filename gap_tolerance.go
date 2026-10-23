@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/chaintol"
 	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/units"
@@ -52,6 +53,9 @@ func gapReachOf(opts []DocumentOption) (float64, error) {
 			}
 			continue
 		}
+		if _, ok := opt.(chainOption); ok {
+			continue
+		}
 		if g, ok := opt.(gapOption); ok && g.Interface == nil {
 			return 0, fmt.Errorf(`%w: a zero document option names nothing to apply`, ErrDegenerate)
 		}
@@ -81,5 +85,8 @@ func (d *Document) evalContext(ctx context.Context) (context.Context, error) {
 	if d.gapErr != nil {
 		return nil, d.gapErr
 	}
-	return gaptol.With(ctx, d.gapReach), nil
+	if d.chainErr != nil {
+		return nil, d.chainErr
+	}
+	return chaintol.With(gaptol.With(ctx, d.gapReach), d.chainTol), nil
 }
