@@ -301,3 +301,4 @@
 10	0.00	TestRevolveLoftFacesToolCapSourceCellsPreserveSlicePresence
 10	0.00	TestSectorCapRefinementKeepsSharedEdges
 10	0.00	TestPrismPatternUnionOfTangentRootJoinsBySectionUnion
+10	0.00	TestPointLoftSourceStaysCurrentOnATiltedPlane
