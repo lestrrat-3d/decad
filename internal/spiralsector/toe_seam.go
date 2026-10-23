@@ -17,16 +17,20 @@ type spiralToeRootSeam = spiralHeelRootSeam
 
 // At the toe cap R=C-X. The ideal arc uses the source radius recorded by
 // Sketch; spiralHeelSourceBox bounds that carrier's discrepancy from the
-// actual source arc, including the opposite endpoint's radius.
+// actual source arc, including the opposite endpoint's radius. It also returns
+// the premises the charge argument reads and the mapped radius error.
 func spiralToeMapCharge(first, second loftFaceMap, box [4]*big.Rat,
-	radiusBound, capC *big.Rat) (bool, bool) {
+	radiusBound, capC *big.Rat) (positiveOrNegative, negative bool, premise seamChargePremise, radialError *big.Rat) {
 	if loftface.PositiveDenominator(first, box) != nil || loftface.PositiveDenominator(second, box) != nil {
-		return false, false
+		return false, false, premise, nil
 	}
 	stretch := math.Max(first.Stretch, second.Stretch)
-	if proofbound.IsNonFinite(stretch) ||
-		seamRatMul(seamRatF(stretch), radiusBound).Cmp(big.NewRat(1, 1_000_000_000_000)) >= 0 {
-		return false, false
+	if proofbound.IsNonFinite(stretch) {
+		return false, false, premise, nil
+	}
+	radialError = seamRatMul(seamRatF(stretch), radiusBound)
+	if radialError.Cmp(big.NewRat(1, 1_000_000_000_000)) >= 0 {
+		return false, false, premise, nil
 	}
 	corners := loftface.BoxCorners(box)
 	axis := [3]loftFaceRatVec{{seamRatOne(), seamRatZero(), seamRatZero()},
@@ -38,53 +42,56 @@ func spiralToeMapCharge(first, second loftFaceMap, box [4]*big.Rat,
 		delta[i] = loftface.IntervalSub(secondRange[i], firstRange[i])
 	}
 	for _, cap := range [][3]loftFaceInterval{firstRange, secondRange} {
-		if cap[0].Lo.Cmp(big.NewRat(9, 1)) <= 0 || cap[0].Hi.Cmp(big.NewRat(12, 1)) >= 0 ||
-			cap[1].Lo.Cmp(big.NewRat(8, 1)) <= 0 || cap[1].Hi.Cmp(big.NewRat(11, 1)) >= 0 ||
-			cap[2].Lo.Cmp(big.NewRat(-4, 1)) <= 0 || cap[2].Hi.Cmp(big.NewRat(4, 1)) >= 0 ||
-			seamRatSub(capC, cap[0].Lo).Cmp(big.NewRat(12, 1)) >= 0 {
-			return false, false
+		if cap[0].Lo.Sign() <= 0 || cap[1].Lo.Sign() <= 0 {
+			return false, false, premise, nil
 		}
+		premise.include(cap[1].Lo, cap[1].Hi, cap[2], seamRatSub(capC, cap[0].Lo))
 	}
 	for _, span := range delta {
-		if span.Lo.Cmp(big.NewRat(-4, 1)) <= 0 || span.Hi.Cmp(big.NewRat(4, 1)) >= 0 {
-			return false, false
-		}
+		premise.span(span)
 	}
 	if delta[0].Lo.Sign() <= 0 {
-		return false, false
+		return false, false, premise, nil
 	}
-	negative := firstRange[2].Hi.Sign() < 0 && secondRange[2].Hi.Sign() < 0
+	negative = firstRange[2].Hi.Sign() < 0 && secondRange[2].Hi.Sign() < 0
 	positive := firstRange[2].Lo.Sign() > 0 && secondRange[2].Lo.Sign() > 0
-	return negative || positive, negative
+	return negative || positive, negative, premise, radialError
 }
 
-// An arc point is within 10^-12 mm of its ideal mapped point. With
-// 9<X<12, 8<Y<11, |Z|<4, 8<R<12, and each cap span <4 mm, this changes
-// |Q| by less than 5.5*10^-11 mm². Q_t>20 moves its one root by less
-// than 2.75*10^-12 and each coordinate by less than 1.2*10^-11 mm.
-// The published charges of 10^-10 mm and 10^-9 in Z/Y exceed those
-// bounds, since Y>8. Every premise is checked here or below.
-func spiralToeIdealDerivative(ctx context.Context, p spiralHeelPolys) (bool, error) {
+// A mapped radius error e moves the root of Q by at most the charge
+// seamChargePremise.covers allows when Q_t is at least qMin. The largest qMin of
+// the ladder at which Q_t - qMin*d^2 is positive over both caps is used, and the
+// published charges of 10^-10 mm and 10^-9 in Z/Y must cover the result.
+func spiralToeIdealDerivative(ctx context.Context, p spiralHeelPolys,
+	premise seamChargePremise, radialError *big.Rat) (bool, error) {
 	delta := [3][]*big.Rat{}
 	for axis := range delta {
 		delta[axis] = polynomial.BernsteinSub(p.b[axis], p.a[axis])
 	}
-	for _, at := range [...][3][]*big.Rat{p.a, p.b} {
-		radius := polynomial.BernsteinSub(polynomial.BernsteinScale(p.d, p.coneC), at[0])
-		derivative := polynomial.BernsteinScale(polynomial.BernsteinAdd(polynomial.BernsteinAdd(
-			polynomial.BernsteinMul(at[1], delta[1]), polynomial.BernsteinMul(at[2], delta[2])),
-
-			polynomial.BernsteinMul(radius, delta[0])),
-
-			big.NewRat(2, 1))
-
-		lower := polynomial.BernsteinSub(derivative, polynomial.BernsteinScale(polynomial.BernsteinMul(p.d, p.d), big.NewRat(20, 1)))
-		ok, err := polynomial.BernsteinSignByHalving(ctx, lower, 1, 8)
-		if err != nil || !ok {
-			return false, err
+	for _, qMin := range [...]*big.Rat{big.NewRat(20, 1), big.NewRat(10, 1), big.NewRat(5, 1),
+		big.NewRat(2, 1), big.NewRat(1, 1), big.NewRat(1, 2)} {
+		held := true
+		for _, at := range [...][3][]*big.Rat{p.a, p.b} {
+			radius := polynomial.BernsteinSub(polynomial.BernsteinScale(p.d, p.coneC), at[0])
+			derivative := polynomial.BernsteinScale(polynomial.BernsteinAdd(polynomial.BernsteinAdd(
+				polynomial.BernsteinMul(at[1], delta[1]), polynomial.BernsteinMul(at[2], delta[2])),
+				polynomial.BernsteinMul(radius, delta[0])),
+				big.NewRat(2, 1))
+			lower := polynomial.BernsteinSub(derivative, polynomial.BernsteinScale(polynomial.BernsteinMul(p.d, p.d), qMin))
+			ok, err := polynomial.BernsteinSignByHalving(ctx, lower, 1, 8)
+			if err != nil {
+				return false, err
+			}
+			if !ok {
+				held = false
+				break
+			}
+		}
+		if held {
+			return premise.covers(radialError, qMin), nil
 		}
 	}
-	return true, nil
+	return false, nil
 }
 
 func spiralToeFixedSlopeAtX(p spiralHeelPolys, x, slope *big.Rat) []*big.Rat {
@@ -227,7 +234,7 @@ func CertifySpiralToeRootSeam(ctx context.Context,
 		capC.Sign() <= 0 || seamRatF(proof.Blank.ToeRoot.U).Cmp(seamRatF(proof.Blank.ToeOuter.U)) >= 0 {
 		return nil, false, nil
 	}
-	mapOK, negative := spiralToeMapCharge(trim.Maps[1], trim.Maps[2], box, radiusBound, capC)
+	mapOK, negative, premise, radialError := spiralToeMapCharge(trim.Maps[1], trim.Maps[2], box, radiusBound, capC)
 	if !mapOK {
 		return nil, false, nil
 	}
@@ -243,7 +250,7 @@ func CertifySpiralToeRootSeam(ctx context.Context,
 			return nil, false, err
 		}
 	}
-	if yes, err := spiralToeIdealDerivative(ctx, p); err != nil || !yes {
+	if yes, err := spiralToeIdealDerivative(ctx, p, premise, radialError); err != nil || !yes {
 		return nil, false, err
 	}
 	coordCharge, slopeCharge := big.NewRat(1, 10_000_000_000), big.NewRat(1, 1_000_000_000)

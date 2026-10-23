@@ -139,20 +139,24 @@ func spiralHeelIntervalMul(a, b loftFaceInterval) loftFaceInterval {
 	return loftFaceInterval{Lo: lo, Hi: hi}
 }
 
-// A mapped radius error below 10^-12 mm changes |Q| by less than
-// (2*(15+5+16)+3*10^-12)*10^-12 < 7.3*10^-11 mm².
-// With Q_t>25 this moves the root t by <3*10^-12. Each map span is <4 mm,
-// so each root coordinate moves by <1.3*10^-11 mm. Y>13 and |Z|<5 then
-// bound the Z/Y change below 10^-9. The published charges are 10^-10 mm
-// per coordinate and 10^-9 in slope. Every premise is gated below.
+// A mapped radius error e changes |Q| by at most (2*(Ymax+Zmax+Rmax)+3e)*e, where
+// Ymax, Zmax and Rmax bound the mapped Y, |Z| and R=C-X over the source box. With
+// Q_t at least qMin this moves the root t by at most that over qMin, and each root
+// coordinate by at most span times that, span being the largest cap-to-cap move.
+// Y > Ymin then bounds the change of Z/Y by (1+Zmax/Ymin)*d/(Ymin-d) for a
+// coordinate move d. The published charges are 10^-10 mm per coordinate and 10^-9
+// in slope. Every premise is read from the maps and gated below.
 func spiralHeelMapCharge(first, second loftFaceMap, box [4]*big.Rat,
 	radiusBound, coneC *big.Rat) (bool, bool) {
 	if loftface.PositiveDenominator(first, box) != nil || loftface.PositiveDenominator(second, box) != nil {
 		return false, false
 	}
 	stretch := math.Max(first.Stretch, second.Stretch)
-	if math.IsNaN(stretch) || math.IsInf(stretch, 0) ||
-		seamRatMul(seamRatF(stretch), radiusBound).Cmp(big.NewRat(1, 1_000_000_000_000)) >= 0 {
+	if math.IsNaN(stretch) || math.IsInf(stretch, 0) {
+		return false, false
+	}
+	radialError := seamRatMul(seamRatF(stretch), radiusBound)
+	if radialError.Cmp(big.NewRat(1, 1_000_000_000_000)) >= 0 {
 		return false, false
 	}
 	corners := loftface.BoxCorners(box)
@@ -163,34 +167,89 @@ func spiralHeelMapCharge(first, second loftFaceMap, box [4]*big.Rat,
 		a[i], b[i] = loftface.ScalarRange(first, axis[i], corners), loftface.ScalarRange(second, axis[i], corners)
 		delta[i] = loftface.IntervalSub(b[i], a[i])
 	}
+	premise := seamChargePremise{}
 	for _, cap := range [][3]loftFaceInterval{a, b} {
-		if cap[0].Lo.Sign() <= 0 || cap[0].Hi.Cmp(big.NewRat(17, 1)) >= 0 ||
-			cap[1].Lo.Cmp(big.NewRat(13, 1)) <= 0 || cap[1].Hi.Cmp(big.NewRat(15, 1)) >= 0 ||
-			cap[2].Lo.Cmp(big.NewRat(-5, 1)) <= 0 || cap[2].Hi.Cmp(big.NewRat(5, 1)) >= 0 ||
-			seamRatSub(coneC, cap[0].Lo).Cmp(big.NewRat(16, 1)) >= 0 {
+		if cap[0].Lo.Sign() <= 0 || cap[1].Lo.Sign() <= 0 {
 			return false, false
 		}
+		premise.include(cap[1].Lo, cap[1].Hi, cap[2], seamRatSub(coneC, cap[0].Lo))
 	}
 	for _, span := range delta {
-		if span.Lo.Cmp(big.NewRat(-4, 1)) <= 0 || span.Hi.Cmp(big.NewRat(4, 1)) >= 0 {
-			return false, false
-		}
+		premise.span(span)
 	}
 	if delta[0].Lo.Sign() <= 0 {
 		return false, false
 	}
+	qMin := (*big.Rat)(nil)
 	for _, cap := range [][3]loftFaceInterval{a, b} {
 		radial := loftFaceInterval{Lo: seamRatSub(coneC, cap[0].Hi), Hi: seamRatSub(coneC, cap[0].Lo)}
 		derivative := spiralHeelIntervalAdd(spiralHeelIntervalAdd(
 			spiralHeelIntervalMul(cap[1], delta[1]), spiralHeelIntervalMul(cap[2], delta[2])),
 			spiralHeelIntervalMul(radial, delta[0]))
-		if seamRatMul(big.NewRat(2, 1), derivative.Lo).Cmp(big.NewRat(25, 1)) <= 0 {
-			return false, false
+		q := seamRatMul(big.NewRat(2, 1), derivative.Lo)
+		if qMin == nil || q.Cmp(qMin) < 0 {
+			qMin = q
 		}
+	}
+	if !premise.covers(radialError, qMin) {
+		return false, false
 	}
 	negative := a[2].Hi.Sign() < 0 && b[2].Hi.Sign() < 0
 	positive := a[2].Lo.Sign() > 0 && b[2].Lo.Sign() > 0
 	return negative || positive, negative
+}
+
+// seamChargePremise collects the bounds the root-coordinate charge argument reads.
+type seamChargePremise struct {
+	yMin, yMax, zMax, rMax, spanMax *big.Rat
+}
+
+func (p *seamChargePremise) include(yLo, yHi *big.Rat, z loftFaceInterval, radialHi *big.Rat) {
+	if p.yMin == nil || yLo.Cmp(p.yMin) < 0 {
+		p.yMin = yLo
+	}
+	if p.yMax == nil || yHi.Cmp(p.yMax) > 0 {
+		p.yMax = yHi
+	}
+	zAbs := seamRatAbs(z.Lo)
+	if hi := seamRatAbs(z.Hi); hi.Cmp(zAbs) > 0 {
+		zAbs = hi
+	}
+	if p.zMax == nil || zAbs.Cmp(p.zMax) > 0 {
+		p.zMax = zAbs
+	}
+	if p.rMax == nil || radialHi.Cmp(p.rMax) > 0 {
+		p.rMax = radialHi
+	}
+}
+
+func (p *seamChargePremise) span(s loftFaceInterval) {
+	m := seamRatAbs(s.Lo)
+	if hi := seamRatAbs(s.Hi); hi.Cmp(m) > 0 {
+		m = hi
+	}
+	if p.spanMax == nil || m.Cmp(p.spanMax) > 0 {
+		p.spanMax = m
+	}
+}
+
+// covers reports whether the published charges, 10^-10 mm per root coordinate and
+// 10^-9 in Z/Y, exceed the moves a mapped radius error e can cause when Q_t is at
+// least qMin.
+func (p *seamChargePremise) covers(e, qMin *big.Rat) bool {
+	if p.yMin == nil || qMin == nil || qMin.Sign() <= 0 {
+		return false
+	}
+	three := big.NewRat(3, 1)
+	sum := seamRatAdd(seamRatAdd(p.yMax, p.zMax), p.rMax)
+	dQ := seamRatMul(seamRatAdd(seamRatMul(big.NewRat(2, 1), sum), seamRatMul(three, e)), e)
+	d := seamRatMul(p.spanMax, new(big.Rat).Quo(dQ, qMin))
+	if d.Cmp(big.NewRat(1, 10_000_000_000)) >= 0 || d.Cmp(p.yMin) >= 0 {
+		return false
+	}
+	slope := new(big.Rat).Quo(seamRatMul(seamRatAdd(seamRatOne(), new(big.Rat).Quo(p.zMax, p.yMin)), d),
+		seamRatSub(p.yMin, d))
+	return slope.Cmp(big.NewRat(1, 1_000_000_000)) < 0
 }
 
 func spiralHeelBuildPolys(first, second loftFaceMap, radius, coneC *big.Rat) spiralHeelPolys {
