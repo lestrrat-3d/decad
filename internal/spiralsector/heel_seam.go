@@ -388,48 +388,69 @@ func CertifySpiralHeelRootSeam(ctx context.Context, proof *spiralFirstJoinSource
 	if ok, err := polynomial.BernsteinSignByHalving(ctx, p.at(big.NewRat(19, 20)), -1, 6); err != nil || !ok {
 		return nil, false, err
 	}
-	idealXLo, idealXHi := big.NewRat(8231, 500), big.NewRat(1646399, 100000)
-	// The fixed-X resultant is nonzero at both limits. Its strict sign
-	// excludes any simultaneous Q=0 and X=limit, even when the solved t
-	// lies outside this band. The endpoint boxes below place the whole
-	// continuous one-root branch between the limits.
-	for _, gate := range [...]struct {
-		value *big.Rat
-		sign  int
-	}{{idealXLo, -1}, {idealXHi, 1}} {
-		if ok, err := polynomial.BernsteinSignByHalving(ctx, p.fixedX(gate.value), gate.sign, 12); err != nil || !ok {
-			return nil, false, err
-		}
-	}
-	idealSLo, idealSHi := big.NewRat(137, 1000), big.NewRat(1441, 5000)
-	slopeLoSign, slopeHiSign := -1, 1
-	if negative {
-		idealSLo, idealSHi = seamRatSub(seamRatZero(), idealSHi), seamRatSub(seamRatZero(), idealSLo)
-		slopeLoSign, slopeHiSign = 1, -1
-	}
-	for _, gate := range [...]struct {
-		value *big.Rat
-		sign  int
-	}{{idealSLo, slopeLoSign}, {idealSHi, slopeHiSign}} {
-		// Q at the unique solution of Z-sY=0 is strictly nonzero. The
-		// solution may lie outside this band: nonzero still excludes a
-		// simultaneous slope/seam crossing anywhere in the band. The
-		// endpoint boxes below select the side of each limit.
-		delta, q := p.fixedSlope(gate.value)
-		deltaSign := 1
-		if negative {
-			deltaSign = -1
-		}
-		if ok, err := polynomial.BernsteinSignByHalving(ctx, delta, deltaSign, 0); err != nil || !ok {
-			return nil, false, err
-		}
-		if ok, err := polynomial.BernsteinSignByHalving(ctx, q, gate.sign, 6); err != nil || !ok {
-			return nil, false, err
-		}
-	}
 	// The map charge proves these outward rational enlargements cover the
 	// actual Sketch arc and both its endpoint crossings.
 	coordCharge, slopeCharge := big.NewRat(1, 10_000_000_000), big.NewRat(1, 1_000_000_000)
+	var ends [2][3]loftFaceInterval
+	var ratios [2]loftFaceInterval
+	for end, point := range [...]planePoint{arc.Start, arc.End} {
+		endpoint, ok, err := spiralHeelEndpointBox(ctx, trim.Maps[7], trim.Maps[8], point,
+			coneC, coordCharge)
+		if err != nil || !ok {
+			return nil, false, err
+		}
+		ratio, ok := spiralHeelRatio(endpoint)
+		if !ok {
+			return nil, false, nil
+		}
+		ends[end], ratios[end] = endpoint, ratio
+	}
+	// The seam's X and slope bands start at this tooth's own endpoint boxes and
+	// move outward along a ladder until the resultant gate holds at the limit.
+	// Each gate proves the resultant has the needed strict sign at its limit, so
+	// a limit the geometry cannot support is never believed, and a tighter limit
+	// keeps the held-seam proofs that read the band as narrow as the source allows.
+	// Strict nonzero at a limit excludes any simultaneous crossing there, even when
+	// the solved parameter lies outside the band; the endpoint boxes place the
+	// whole continuous one-root branch between the limits.
+	idealXLo, ok, err := seamLimit(ends[0][0].Lo, ends[1][0].Lo, -1, seamXLadder,
+		func(limit *big.Rat) (bool, error) {
+			return polynomial.BernsteinSignByHalving(ctx, p.fixedX(limit), -1, 12)
+		})
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	idealXHi, ok, err := seamLimit(ends[0][0].Hi, ends[1][0].Hi, 1, seamXLadder,
+		func(limit *big.Rat) (bool, error) {
+			return polynomial.BernsteinSignByHalving(ctx, p.fixedX(limit), 1, 12)
+		})
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	slopeLoSign, slopeHiSign, deltaSign := -1, 1, 1
+	if negative {
+		slopeLoSign, slopeHiSign, deltaSign = 1, -1, -1
+	}
+	// Q at the unique solution of Z-sY=0 is strictly nonzero. The solution may lie
+	// outside the band: nonzero still excludes a simultaneous slope/seam crossing
+	// anywhere in it. The endpoint boxes select the side of each limit.
+	slopeHolds := func(sign int) func(*big.Rat) (bool, error) {
+		return func(limit *big.Rat) (bool, error) {
+			delta, q := p.fixedSlope(limit)
+			if ok, err := polynomial.BernsteinSignByHalving(ctx, delta, deltaSign, 0); err != nil || !ok {
+				return false, err
+			}
+			return polynomial.BernsteinSignByHalving(ctx, q, sign, 6)
+		}
+	}
+	idealSLo, ok, err := seamLimit(ratios[0].Lo, ratios[1].Lo, -1, seamSlopeLadder, slopeHolds(slopeLoSign))
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	idealSHi, ok, err := seamLimit(ratios[0].Hi, ratios[1].Hi, 1, seamSlopeLadder, slopeHolds(slopeHiSign))
+	if err != nil || !ok {
+		return nil, false, err
+	}
 	seam := &spiralHeelRootSeam{
 		X:        loftFaceInterval{Lo: seamRatSub(idealXLo, coordCharge), Hi: seamRatAdd(idealXHi, coordCharge)},
 		Slope:    loftFaceInterval{Lo: seamRatSub(idealSLo, slopeCharge), Hi: seamRatAdd(idealSHi, slopeCharge)},
@@ -440,20 +461,44 @@ func CertifySpiralHeelRootSeam(ctx context.Context, proof *spiralFirstJoinSource
 		seam.X.Hi.Cmp(seamRatF(proof.Blank.HeelOuter.U)) >= 0 {
 		return nil, false, nil
 	}
-	for end, point := range [...]planePoint{arc.Start, arc.End} {
-		endpoint, ok, err := spiralHeelEndpointBox(ctx, trim.Maps[7], trim.Maps[8], point,
-			coneC, coordCharge)
-		if err != nil || !ok {
-			return nil, false, err
-		}
-		ratio, ok := spiralHeelRatio(endpoint)
-		if !ok || endpoint[0].Lo.Cmp(seam.X.Lo) <= 0 || endpoint[0].Hi.Cmp(seam.X.Hi) >= 0 ||
-			ratio.Lo.Cmp(seam.Slope.Lo) <= 0 || ratio.Hi.Cmp(seam.Slope.Hi) >= 0 {
+	for end := range ends {
+		if ends[end][0].Lo.Cmp(seam.X.Lo) <= 0 || ends[end][0].Hi.Cmp(seam.X.Hi) >= 0 ||
+			ratios[end].Lo.Cmp(seam.Slope.Lo) <= 0 || ratios[end].Hi.Cmp(seam.Slope.Hi) >= 0 {
 			return nil, false, nil
 		}
-		seam.Ends[end] = endpoint
+		seam.Ends[end] = ends[end]
 	}
 	return seam, true, nil
+}
+
+// seamXLadder and seamSlopeLadder are the distances, in order, at which a seam
+// band limit is tried beyond the endpoint boxes.
+var (
+	seamXLadder = []*big.Rat{big.NewRat(1, 100_000), big.NewRat(1, 10_000), big.NewRat(3, 10_000),
+		big.NewRat(1, 1000), big.NewRat(3, 1000), big.NewRat(1, 100)}
+	seamSlopeLadder = []*big.Rat{big.NewRat(1, 100_000), big.NewRat(1, 10_000), big.NewRat(3, 10_000),
+		big.NewRat(1, 1000), big.NewRat(1, 100), big.NewRat(1, 10)}
+)
+
+// seamLimit returns the nearest limit beyond the outer one of two endpoint
+// values, on the side dir (-1 below, +1 above), at which holds is true.
+func seamLimit(a, b *big.Rat, dir int, ladder []*big.Rat,
+	holds func(limit *big.Rat) (bool, error)) (*big.Rat, bool, error) {
+	edge := a
+	if dir < 0 && b.Cmp(a) < 0 || dir > 0 && b.Cmp(a) > 0 {
+		edge = b
+	}
+	for _, step := range ladder {
+		limit := seamRatAdd(edge, seamRatMul(big.NewRat(int64(dir), 1), step))
+		ok, err := holds(limit)
+		if err != nil {
+			return nil, false, err
+		}
+		if ok {
+			return limit, true, nil
+		}
+	}
+	return nil, false, nil
 }
 
 // SpiralHeelTailBox bounds the source seam tail using the blank's exact heel meridian R=C-X.

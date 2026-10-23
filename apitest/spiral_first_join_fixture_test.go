@@ -280,9 +280,8 @@ func spiralSlabs(t *testing.T, doc *decad.Document, d spiralDims, f spiralFrame,
 }
 
 // spiralTrace returns the total crown roll of the cutter-circle arc.
-func spiralTraceTotal(t *testing.T, d spiralDims, f spiralFrame) (total float64) {
+func spiralTraceTotal(t *testing.T, d spiralDims, f spiralFrame, cutter float64) (total float64) {
 	t.Helper()
-	cutter := f.mean
 	cx := f.mean - cutter*math.Sin(spiralAngle)
 	cy := cutter * math.Cos(spiralAngle)
 	near := func(radius float64) [2]float64 {
@@ -433,6 +432,13 @@ func spiralLoftSections(t *testing.T, slabs []*decad.Body, f spiralFrame) []*dec
 // tooth in one document. Neither has been combined yet.
 func spiralBlankAndTooth(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
 	t.Helper()
+	return spiralBlankAndToothCutter(t, doc, 0)
+}
+
+// spiralBlankAndToothCutter is spiralBlankAndTooth with the cutter circle of the
+// given radius in mm. A radius of 0 selects the mean cone distance.
+func spiralBlankAndToothCutter(t *testing.T, doc *decad.Document, cutter float64) (*decad.Body, *decad.Body) {
+	t.Helper()
 	d := spiralDerive()
 	section := spiralBlankSection(d)
 	blank := spiralRevolve(t, doc, section)
@@ -440,7 +446,10 @@ func spiralBlankAndTooth(t *testing.T, doc *decad.Document) (*decad.Body, *decad
 	point := spiralPointTooth(t, doc, d, spiralCapTilt)
 	f := spiralSlabFrame(section)
 	slabs := spiralSlabs(t, doc, d, f, point)
-	total := spiralTraceTotal(t, d, f)
+	if cutter <= 0 {
+		cutter = f.mean
+	}
+	total := spiralTraceTotal(t, d, f, cutter)
 	twisted, _ := spiralTwistSlabs(t, slabs, f, total)
 	crowned := spiralCrownSlabs(t, twisted, f, total)
 	curved, err := decad.LoftFaces(t.Context(), doc, spiralLoftSections(t, crowned, f)...)
@@ -502,7 +511,7 @@ func spiralTangentBlankAndTooth(t *testing.T, doc *decad.Document) (blank, trimm
 	point := spiralPointTooth(t, doc, d, 0)
 	f := spiralSlabFrame(section)
 	slabs := spiralSlabs(t, doc, d, f, point)
-	total := spiralTraceTotal(t, d, f)
+	total := spiralTraceTotal(t, d, f, f.mean)
 	twisted, heelTurn := spiralTwistSlabs(t, slabs, f, total)
 	crowned := spiralCrownSlabs(t, twisted, f, total)
 	faces := spiralLoftSections(t, crowned, f)
