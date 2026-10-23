@@ -9,7 +9,6 @@ The rules for rows live in `agent-docs/layout.md`.
 |---|---|
 | `boolean.go` | Public `Union`/`Cut`/`Intersect`, `BooleanError` mapping and scale-source marking; hands the route order to `internal/booleandispatch/` with root-only hooks. See evaluator §9. |
 | `boolean_many.go` | Validates and commits a multi-body Union, dispatching the certified pattern, one-scene prism and straight-source Loft routes and transient prism pair chains. See API §8 and prism-boolean §4.6. |
-| `spiral_combine.go` | Builds a multi-tool spiral-bevel join and its cap proxy, and admits the first curved join by requiring every copy to carry an exact X-axis rotation (`WithCopyRotation`). `internal/spiralsector` binds copy roles and validates each copy. See faceted-vertex-bounds §3.7. |
 | `surface_trim.go` | Public `Trim`, `Extend` and `Split` entry checks and commits; `internal/surfacetrim/` builds them. See surface-intersection §2–§3. |
 | `point_plane_scale.go` | ScaledAt: resolves the similarity source by payload kind and commits the image; facetedrecord.ScaleImage admits and scales it. See loft-point design and evaluator §8. |
 | `prism_scale.go` | Admits prism and full-Revolve certified similarity sources and transfers their face roles. See evaluator §8. |

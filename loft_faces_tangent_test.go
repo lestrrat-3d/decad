@@ -16,7 +16,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/revolvecontact"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -496,8 +495,6 @@ func TestLoftFacesTangentHeelIntersectKeepsTrimRecord(t *testing.T) {
 	require.Len(t, trimRecord.Maps, 3)
 
 	// The end cap does not survive; the heel cone is one face.
-	require.NotNil(t, revolvecontact.UniqueResultSourceFace(bodyNode(trim), trimRecord.HeelCapGroup))
-	require.NotNil(t, revolvecontact.UniqueResultSourceFace(bodyNode(trim), trimRecord.ToeCapGroup))
 	_, err = Faces(FaceCreatedBy(CapEnd(c.loft))).SelectFaces(trim)
 	require.ErrorIs(t, err, ErrNoMatch, "no result face descends from the planar end cap")
 

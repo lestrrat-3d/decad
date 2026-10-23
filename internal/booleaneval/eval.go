@@ -26,8 +26,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/revolveshell"
-	"github.com/lestrrat-3d/decad/internal/spiralsector"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -204,24 +202,12 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if err := ctx.Err(); err != nil {
 		return Evaluation{}, err
 	}
-	spiralHeld, spiralJoin, err := spiralsector.PrepareFirstUnion(ctx, op, revolveshell.RootCandidates(a),
-		a, b, mb, srcB)
-	if err != nil {
-		return Evaluation{}, err
-	}
-	if spiralHeld != nil {
-		mb = spiralHeld
-	}
-	mb, spiralCombine, combineHome, err := spiralsector.PrepareCombinedUnion(ctx, op, meshes, a, b, mb, tolMM)
-	if err != nil {
-		return Evaluation{}, err
-	}
 	// mbDecide is the mesh the contact gate reads: mb itself, unless b moved.
 	mbDecide := mb
 	if len(shifts) > 0 {
-		// The spiral joins authenticate the operands' own geometry, which a
-		// moved operand no longer has.
-		if spiralJoin != nil || spiralCombine != nil || capFace != nil || coneFace != nil {
+		// The cap and cone certificates authenticate the operands' own
+		// geometry, which a moved operand no longer has.
+		if capFace != nil || coneFace != nil {
 			return Evaluation{}, errShiftDeclined
 		}
 		mbDecide, mb, err = shiftOperandMesh(ctx, mb, piecesOf(mb), shifts)
@@ -229,33 +215,6 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			return Evaluation{}, err
 		}
 	}
-	var capHome *spiralsector.CapHome
-	if spiralJoin != nil {
-		capHome = spiralJoin.Home
-	}
-	if combineHome != nil {
-		capHome = combineHome
-	}
-	if spiralJoin != nil {
-		allowed, ok := spiralsector.FirstUnionPairs(a, b, spiralJoin, sourceID)
-		if !ok {
-			return Evaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
-				fmt.Errorf("%w: first spiral join source faces", decaderr.ErrUnsupported))
-		}
-		spiralJoin.Allowed = allowed
-	}
-	var combinedAdmission *spiralsector.CombinedAdmission
-	if spiralCombine != nil {
-		combinedAdmission, err = spiralsector.CombineFaceRoles(ctx, a, b, spiralCombine, sourceID)
-		if err != nil {
-			return Evaluation{}, err
-		}
-		if !combineHome.BindCaps(a, combinedAdmission) {
-			combineHome = nil
-			capHome = nil
-		}
-	}
-
 	bmA, err := PrepBoolMesh(ctx, ma, srcA)
 	if err != nil {
 		if errors.Is(err, decaderr.ErrUnsupported) {
@@ -289,15 +248,6 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		// gate allows it.
 		bmB.Gate = max(tolMM+(mb.Bound-mbDecide.Bound), chain)
 	}
-	if spiralJoin != nil {
-		// The temporary curved cap carries its actual moved-facet departure.
-		// Complete source-pair and output-curve gates below scope this one
-		// allowance to the authenticated first tooth join.
-		bmB.Gate = max(bmB.Gate, mb.Bound)
-	}
-	if spiralCombine != nil {
-		bmB.Gate = max(bmB.Gate, mb.Bound)
-	}
 	if err := ctx.Err(); err != nil {
 		return Evaluation{}, err
 	}
@@ -305,42 +255,13 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	// the gate and the mesh pass both walk; it is dropped when the call
 	// returns (meshbool.ContactMemo).
 	memo := meshbool.NewContactMemo(bmA, bmB)
-	var spiralPairs map[[2]*topo.Face]meshbool.NearPairRole
-	if spiralJoin != nil {
-		spiralPairs = spiralJoin.Roles
-	}
-	if combinedAdmission != nil {
-		spiralPairs = combinedAdmission.Roles
-	}
 	if err := meshbool.RefuseUndecidableProximity(ctx, ma, mbDecide, bmA, bmB, memo,
-		capFace, coneFace, spiralPairs); err != nil {
+		capFace, coneFace); err != nil {
 		err = meshbool.StagingError(op, err)
 		if errors.Is(err, decaderr.ErrUnsupported) {
 			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedContact, err)
 		}
 		return Evaluation{}, err
-	}
-	if spiralJoin != nil {
-		ok, err := spiralsector.ScopeWidenedContacts(ctx, bmA, bmB, memo,
-			spiralJoin.Allowed, tolMM)
-		if err != nil {
-			return Evaluation{}, err
-		}
-		if !ok {
-			return Evaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
-				fmt.Errorf("%w: first spiral join contact faces", decaderr.ErrUnsupported))
-		}
-	}
-	if combinedAdmission != nil {
-		ok, err := spiralsector.ScopeWidenedContacts(ctx, bmA, bmB, memo,
-			combinedAdmission.Allowed, tolMM, 24*len(combinedAdmission.Source.Tools))
-		if err != nil {
-			return Evaluation{}, err
-		}
-		if !ok {
-			return Evaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
-				fmt.Errorf("%w: combined spiral join contact faces", decaderr.ErrUnsupported))
-		}
 	}
 	if err := ctx.Err(); err != nil {
 		return Evaluation{}, err
@@ -401,17 +322,6 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		symA, symB, roundVol,
 		ma.AreaSlack, mb.AreaSlack, stitched.DropArea,
 	)
-	if spiralJoin != nil || combinedAdmission != nil {
-		allowance, ok, err := spiralsector.JoinAreaAllowance(ctx, a, b, stitched)
-		if err != nil {
-			return Evaluation{}, err
-		}
-		if !ok {
-			return Evaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
-				fmt.Errorf("%w: spiral join area bound", decaderr.ErrUnsupported))
-		}
-		areaSlack = proofbound.AbsSumUpper(areaSlack, allowance)
-	}
 	payload := facetedrecord.Payload{
 		Verts:       stitched.Verts,
 		VertexBound: stitched.VertexBound,
@@ -431,50 +341,6 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if err != nil {
 		return Evaluation{}, err
 	}
-	if spiralJoin != nil {
-		ok, err := spiralsector.ScopeOutputSwitches(ctx, stitched,
-			len(topobuild.Faces(a)), spiralJoin.Allowed)
-		if err != nil {
-			return Evaluation{}, err
-		}
-		if !ok {
-			return Evaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
-				fmt.Errorf("%w: first spiral join output faces", decaderr.ErrUnsupported))
-		}
-		ok, err = spiralsector.ValidateFirstUnion(ctx, a, b, bmA, stitched, spiralJoin)
-		if err != nil {
-			return Evaluation{}, err
-		}
-		if !ok {
-			return Evaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
-				fmt.Errorf("%w: first spiral join boundary proof", decaderr.ErrUnsupported))
-		}
-	}
-	if combinedAdmission != nil {
-		ok, err := spiralsector.ScopeOutputSwitches(ctx, stitched,
-			len(topobuild.Faces(a)), combinedAdmission.Allowed, 24*len(combinedAdmission.Source.Tools))
-		if err != nil {
-			return Evaluation{}, err
-		}
-		if !ok {
-			return Evaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
-				fmt.Errorf("%w: combined spiral join output faces", decaderr.ErrUnsupported))
-		}
-		ok, err = spiralsector.ValidateCombinedUnion(ctx, a, bmA, stitched, combinedAdmission)
-		if err != nil {
-			return Evaluation{}, err
-		}
-		if !ok {
-			return Evaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedUnsupported,
-				fmt.Errorf("%w: combined spiral join boundary proof", decaderr.ErrUnsupported))
-		}
-	}
-	if capHome != nil {
-		audit, err = restoreSpiralCaps(ctx, &payload, audit, capHome, len(topobuild.Faces(a)))
-		if err != nil {
-			return Evaluation{}, err
-		}
-	}
 	volume, volumeBound, volumeRat, err := VolumeReading(ctx, audit, payload.VolSymDiff)
 	if err != nil {
 		return Evaluation{}, err
@@ -486,32 +352,6 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		return Evaluation{}, err
 	}
 	return Evaluation{Payload: payload, Volume: volume, VolumeBound: volumeBound, VolumeRat: volumeRat, Audit: audit}, nil
-}
-
-// restoreSpiralCaps lowers the proxy caps of a certified spiral join onto the
-// cones that trimmed them (spiralsector.RestoreCaps), instead of leaving them a
-// fixed lift above them. It charges the move to the payload's volume and area
-// allowances. A restoration the mesh audit refuses leaves the payload and its
-// audit as they were, since the proxy-position mesh is already certified.
-func restoreSpiralCaps(ctx context.Context, payload *facetedrecord.Payload,
-	audit *facetproof.MeshAudit, home *spiralsector.CapHome, nblank int) (*facetproof.MeshAudit, error) {
-	restored, ok, err := spiralsector.RestoreCaps(ctx, home, spiralsector.Mesh{
-		Verts: payload.Verts, Tris: payload.Tris, Src: payload.Src, VertexBound: payload.VertexBound,
-	}, nblank)
-	if err != nil || !ok {
-		return audit, err
-	}
-	next, err := facetproof.AuditFacetedMesh(ctx, restored.Verts, payload.Tris)
-	if err != nil {
-		return audit, ctx.Err()
-	}
-	volume := proofbound.AbsSumUpper(payload.VolSymDiff, restored.VolumeCharge)
-	area := proofbound.AbsSumUpper(payload.AreaSlack, restored.AreaCharge)
-	if proofbound.IsNonFinite(volume) || proofbound.IsNonFinite(area) {
-		return audit, nil
-	}
-	payload.Verts, payload.VolSymDiff, payload.AreaSlack = restored.Verts, volume, area
-	return next, nil
 }
 
 // PrepBoolMesh lifts a tessellation into the exact domain and attaches its

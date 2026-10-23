@@ -89,9 +89,6 @@ type Payload struct {
 	// CopyLineage names the live faceted source and its recorded rigid image.
 	// A Boolean result has no copy lineage; Copy and placement issue it.
 	CopyLineage *FacetedCopyLineage
-	// SpiralTools exists only on a transient disjoint-tool operand built by
-	// A multi-body Union. It maps its source faces back to the live input tools.
-	SpiralTools *SpiralCombinedTools
 	// RevolveLoftJoin retains a geometry-certified section/sector source.
 	RevolveLoftJoin *RevolveLoftJoinRecord
 	// RevolveLoftSector identifies one rigid copy of a trimmed point loft.

@@ -69,7 +69,7 @@ func BuildWithProofBounded(ctx context.Context, budget *proofbound.WorkBudget, e
 
 func meshOfPayload(pp Payload) Mesh {
 	in := Mesh{Verts: pp.Verts, VertexBound: pp.VertexBound, Tris: pp.Tris, Src: pp.Src,
-		Groups: pp.Groups, AxialSectionJoin: pp.AxialSectionJoin, SpiralTools: pp.SpiralTools != nil,
+		Groups: pp.Groups, AxialSectionJoin: pp.AxialSectionJoin,
 		VolSymDiff: pp.VolSymDiff, AreaSlack: pp.AreaSlack, DPair: pp.DPair}
 	return in
 }

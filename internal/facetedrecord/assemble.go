@@ -34,12 +34,9 @@ type Mesh struct {
 	// interval. Its held vertical boundary chains retain a Z direction for
 	// selectors even though their curve type remains bounded FacetedCurve.
 	AxialSectionJoin bool
-	// SpiralTools marks the transient disjoint-tool operand a multi-body
-	// Union builds, whose diameter needs only a lower witness.
-	SpiralTools bool
-	VolSymDiff  float64
-	AreaSlack   float64
-	DPair       float64
+	VolSymDiff       float64
+	AreaSlack        float64
+	DPair            float64
 }
 
 // AssembleBody assembles the Faceted body from the held mesh: exact
@@ -64,11 +61,6 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 	var err error
 	if shared != nil {
 		diameterReading, ok, err = diameter.PointsWithBudget(shared, verts)
-	} else if in.SpiralTools {
-		// The transient multi-tool operand needs only a lower witness. Its
-		// coordinate-extreme vertices give one without a quadratic all-pairs
-		// scan over every patterned copy.
-		diameterReading, ok, err = diameter.AxisExtremesContext(ctx, verts)
 	} else {
 		diameterReading, ok, err = diameter.PointsContext(ctx, verts)
 	}

@@ -34,7 +34,7 @@ import (
 // repeated body is ErrDegenerate; a call with no other body is ErrDegenerate.
 // Three or more bodies admit a one-scene exact union of equal-interval,
 // same-placement, hole-free whole-line prisms with distinct source line
-// carriers, plus certified straight and spiral bevel tooth patterns. Other
+// carriers, plus certified straight bevel tooth patterns. Other
 // prism inputs use the two-body evaluator in order, with one final commit.
 // Each pair must pass its own proof. Failure or cancellation leaves every
 // input live. A two-body result from the mesh path is a Faceted body:

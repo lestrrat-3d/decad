@@ -18,7 +18,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/revolvecontact"
 	"github.com/lestrrat-3d/decad/internal/revolveloftfaces"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -96,7 +95,7 @@ func RecordConeToe(ctx context.Context, source, tool, result *topo.Body) error {
 	if !ok {
 		return nil
 	}
-	toeCapFace := revolvecontact.UniqueResultSourceFace(result, len(topobuild.Faces(source))+IndexOfFace(topobuild.Faces(tool), coneFace))
+	toeCapFace := uniqueResultSourceFace(result, len(topobuild.Faces(source))+IndexOfFace(topobuild.Faces(tool), coneFace))
 	if toeCapFace == nil {
 		return nil
 	}
@@ -242,8 +241,8 @@ func ConeHeelBoolean(ctx context.Context, op meshbool.OperationKind, env topo.En
 	if !ok {
 		return body, true, nil
 	}
-	if revolvecontact.UniqueResultSourceFace(body, toeCapSource) == nil ||
-		revolvecontact.UniqueResultSourceFace(body, heelCapSource) == nil {
+	if uniqueResultSourceFace(body, toeCapSource) == nil ||
+		uniqueResultSourceFace(body, heelCapSource) == nil {
 		return body, true, nil
 	}
 	result.LoftFacesTrim = &facetedrecord.LoftFacesTrimRecord{
@@ -330,4 +329,19 @@ func (m *TangentHeelMeshes) ClearsResult(ctx context.Context, result []r3.Vec) e
 func orderedConeLimits(toe, heel *facetedrecord.PointConeLimit, base facetedrecord.Payload) bool {
 	return pointcone.ToeHeelOrdered(toe.Apex, toe.Slope, heel.Apex, heel.Slope,
 		base.Verts, base.MeshBound)
+}
+
+// uniqueResultSourceFace returns the one live face of body that source group
+// names, or nil when the group is not a single face.
+func uniqueResultSourceFace(body *topo.Body, source int) *topo.Face {
+	p, ok := body.Payload.(facetedrecord.Payload)
+	if !ok {
+		return nil
+	}
+	faces := topobuild.Faces(body)
+	index, ok := facetedtopology.UniqueGroupFace(p.Src, p.FaceOf, len(faces), source)
+	if !ok {
+		return nil
+	}
+	return faces[index]
 }

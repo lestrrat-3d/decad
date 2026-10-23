@@ -56,7 +56,6 @@ func (fp Payload) PlacedWith(ctx context.Context, env topo.Env, composed r3.Tran
 	next.LoftFacesToe = nil
 	next.LoftFacesTrim = nil
 	next.CopyLineage = nil
-	next.SpiralTools = nil
 	// A rigid copy keeps the immutable Split source for certified face
 	// centroid ranking, but cannot become a new structural Split source.
 	next.PointPlaneSourceEligible = false
