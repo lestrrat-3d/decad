@@ -2229,3 +2229,4 @@
 10	0.00	TestUnionManyJoinsTwistedLoftTeethToADisc
 10	0.00	TestSpiralToothWithAShorterCutterJoinsTheBlank
 10	0.00	TestSpiralToothOnATallerBlankJoinsTheBlank
+10	0.00	TestChainToleranceAdmitsAContactOnACoarserRim

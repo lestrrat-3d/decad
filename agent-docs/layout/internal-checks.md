@@ -41,6 +41,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/parambind/` | The ledger of parameter reads behind `Document.Bindings`. See param-binding §3. |
 | `internal/gaptol/` | The gap tolerance a root operation puts on its context, and the default. See gap-tolerance §1. |
+| `internal/chaintol/` | The chain tolerance. |
 | `internal/survey2d/` | 2D disks, prism readers, walks, corner loops, Bézier carriers. See verification §6. |
 | `internal/holeplan/` | Plans `Hole`: places the axis on the face plane, gates sizes, and returns the bore, counterbore and countersink tool shapes. See hole design. |
 | `internal/ribplan/` | Plans `Rib`: the rib outline from a line, thickness and overrun, the box-disjoint test and the no-added-volume test. See rib design. |
