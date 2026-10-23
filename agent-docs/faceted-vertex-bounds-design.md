@@ -233,6 +233,12 @@ published charges of 10^-10 mm per root coordinate and 10^-9 in Z/Y must exceed
 the move they allow. The heel seam proves Q_t from interval arithmetic; the toe
 seam takes the largest of a ladder of Q_t thresholds its polynomial gate proves.
 
+The short-cap crossing proofs bracket each crossing root in [tLo, 1], where tLo is
+the nearest sixteenth below 1 at which the crossing form is negative on every
+Bernstein row, and the toe endpoint root is bracketed over [0, 1] because the
+ideal-derivative gate proves the cap-to-cap form increasing. The held short-cap
+bounds read the same tLo.
+
 The proxy's occupied-volume charge is the largest actual Y move times the
 sum of exact projected XZ areas of every changed facet. Its endpoints must
 both be closed, oriented meshes with identical indexed triangles. The area

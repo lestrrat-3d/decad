@@ -45,12 +45,13 @@ func ShortCapEndpointX(first, second loftface.Map, span freeform.BezierSpan,
 	}, true
 }
 
-// ShortCapTBracket encloses the crossing time of one Bernstein cell.
-func ShortCapTBracket(q [3][]*big.Rat) (loftface.Interval, bool) {
+// ShortCapTBracket encloses the crossing time of one Bernstein cell, which
+// lies in [tLo, 1] because Q is negative at tLo.
+func ShortCapTBracket(q [3][]*big.Rat, tLo *big.Rat) (loftface.Interval, bool) {
 	if len(q[0]) == 0 || len(q[0]) != len(q[1]) || len(q[0]) != len(q[2]) {
 		return loftface.Interval{}, false
 	}
-	lo, hi := big.NewRat(15, 16), shortRatOne()
+	lo, hi := tLo, shortRatOne()
 	for range 64 {
 		mid := shortRatMul(shortRatAdd(lo, hi), big.NewRat(1, 2))
 		coeff := polynomial.BernsteinRowsAt(q, mid)
@@ -178,7 +179,7 @@ func ShortCapXRange(first, second loftface.Map, span freeform.BezierSpan,
 
 // ShortCubicBox bounds the clipped cubic crossing in sixteen source cells.
 func ShortCubicBox(ctx context.Context, first, second loftface.Map,
-	span freeform.BezierSpan, q [3][]*big.Rat, clipLo, clipHi *big.Rat,
+	span freeform.BezierSpan, q [3][]*big.Rat, tLo, clipLo, clipHi *big.Rat,
 	finiteEnd int) ([3]loftface.Interval, bool, error) {
 	var result [3]loftface.Interval
 	if ctx == nil || len(span) != 4 || clipLo == nil || clipHi == nil ||
@@ -203,7 +204,7 @@ func ShortCubicBox(ctx context.Context, first, second loftface.Map,
 		for row := range restricted {
 			restricted[row] = polynomial.BernsteinRestrict(q[row], left, right)
 		}
-		t, ok := ShortCapTBracket(restricted)
+		t, ok := ShortCapTBracket(restricted, tLo)
 		if !ok {
 			return result, false, nil
 		}

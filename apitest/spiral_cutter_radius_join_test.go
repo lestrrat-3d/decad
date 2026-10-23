@@ -16,11 +16,22 @@ import (
 // seam proofs read their X and slope limits from the tooth's own root arc, so
 // the first tooth and its rotated copy each add the same volume.
 func TestSpiralToothWithAShorterCutterJoinsTheBlank(t *testing.T) {
-	const cutter = 30.0
+	testSpiralOptionsJoinTheBlank(t, 30, 0)
+}
+
+// TestSpiralToothOnATallerBlankJoinsTheBlank joins the blank with a base height
+// of 2 mm. The short-cap and toe-seam proofs bracket the crossing from the
+// geometry, so the first tooth and its rotated copy each add the same volume.
+func TestSpiralToothOnATallerBlankJoinsTheBlank(t *testing.T) {
+	testSpiralOptionsJoinTheBlank(t, 0, 2)
+}
+
+func testSpiralOptionsJoinTheBlank(t *testing.T, cutter, base float64) {
+	t.Helper()
 	angle := 2 * math.Pi * 23 / 31
 
 	doc := decad.New()
-	blank, tooth := spiralBlankAndToothCutter(t, doc, cutter)
+	blank, tooth := spiralBlankAndToothOptions(t, doc, cutter, base)
 	blankVolume, err := blank.Volume()
 	require.NoError(t, err)
 	joined, err := decad.Union(t.Context(), blank, tooth)
@@ -31,7 +42,7 @@ func TestSpiralToothWithAShorterCutterJoinsTheBlank(t *testing.T) {
 	require.Greater(t, added, 10.0, "the tooth must add volume")
 
 	doc2 := decad.New()
-	blank2, tooth2 := spiralBlankAndToothCutter(t, doc2, cutter)
+	blank2, tooth2 := spiralBlankAndToothOptions(t, doc2, cutter, base)
 	copied, err := decad.Copy(t.Context(), tooth2, decad.WithCopyRotation(r3.Vec{}, r3.Vec{X: 1}, units.Radians(angle)))
 	require.NoError(t, err)
 	both, err := decad.Union(t.Context(), blank2, tooth2, copied)

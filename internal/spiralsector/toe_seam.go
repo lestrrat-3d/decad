@@ -183,7 +183,9 @@ func spiralToeEndpointBox(ctx context.Context, first, second loftFaceMap,
 		r := seamRatSub(capC, p[0])
 		return seamRatSub(seamRatAdd(seamRatMul(p[1], p[1]), seamRatMul(p[2], p[2])), seamRatMul(r, r))
 	}
-	lo, hi := big.NewRat(9, 10), seamRatOne()
+	// spiralToeIdealDerivative proves Q increases from the first cap to the second
+	// at every arc point, so Q has exactly one root on [0, 1] when it changes sign.
+	lo, hi := seamRatZero(), seamRatOne()
 	if q(lo).Sign() >= 0 || q(hi).Sign() <= 0 {
 		return empty, false, nil
 	}

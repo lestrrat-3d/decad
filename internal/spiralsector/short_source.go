@@ -70,15 +70,30 @@ func ShortCapCrossingProof(first, second loftFaceMap, span freeform.BezierSpan,
 			return ShortCapCrossing{}, false
 		}
 	}
-	tLo := big.NewRat(15, 16)
-	oneMinus := shortRatSub(shortRatOne(), tLo)
-	for k := range q[0] {
-		value := shortRatAdd(shortRatAdd(shortRatMul(shortRatMul(oneMinus, oneMinus), q[0][k]),
-			shortRatMul(shortRatMul(shortRatMul(big.NewRat(2, 1), oneMinus), tLo), q[1][k])),
-			shortRatMul(shortRatMul(tLo, tLo), q[2][k]))
-		if value.Sign() >= 0 {
-			return ShortCapCrossing{}, false
+	// The crossing root lies in [tLo, 1] when Q is negative at tLo. The nearest
+	// tLo to the span end that holds is used, since a narrower bracket gives the
+	// X range and boxes that follow less to cover.
+	var tLo *big.Rat
+	for sixteenths := int64(15); sixteenths >= 1; sixteenths-- {
+		candidate := big.NewRat(sixteenths, 16)
+		oneMinus := shortRatSub(shortRatOne(), candidate)
+		holds := true
+		for k := range q[0] {
+			value := shortRatAdd(shortRatAdd(shortRatMul(shortRatMul(oneMinus, oneMinus), q[0][k]),
+				shortRatMul(shortRatMul(shortRatMul(big.NewRat(2, 1), oneMinus), candidate), q[1][k])),
+				shortRatMul(shortRatMul(candidate, candidate), q[2][k]))
+			if value.Sign() >= 0 {
+				holds = false
+				break
+			}
 		}
+		if holds {
+			tLo = candidate
+			break
+		}
+	}
+	if tLo == nil {
+		return ShortCapCrossing{}, false
 	}
 	x, ok := ShortCapXRange(first, second, span, tLo)
 	if !ok || requireFullFinite && (x.Lo.Cmp(capStart) <= 0 || x.Hi.Cmp(capEnd) >= 0) ||
@@ -88,7 +103,7 @@ func ShortCapCrossingProof(first, second loftFaceMap, span freeform.BezierSpan,
 	}
 	certificate := ShortCapCrossing{Span: span, Q: q, TLo: tLo, X: x}
 	if len(span) == 2 {
-		t, ok := ShortCapTBracket(q)
+		t, ok := ShortCapTBracket(q, tLo)
 		if !ok {
 			return ShortCapCrossing{}, false
 		}
