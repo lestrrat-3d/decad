@@ -96,6 +96,12 @@ func unionManyRoutes(ctx context.Context, d *Document, ref producerID, operands 
 	body := bodyHandle(node)
 	if !matched && err == nil {
 		var node *topo.Body
+		node, matched, err = loftcylinder.UnionTeeth(ctx, envOf(documentNode(d), ref), verifyAllMesher{},
+			bodyNode(a), bodyNodes(tools))
+		body = bodyHandle(node)
+	}
+	if !matched && err == nil {
+		var node *topo.Body
 		node, matched, err = revolveshell.SectorUnionMany(ctx, envOf(documentNode(d), ref), bodyNodes(operands))
 		body = bodyHandle(node)
 	}

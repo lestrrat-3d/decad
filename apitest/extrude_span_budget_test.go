@@ -16,20 +16,26 @@ import (
 // of fit points each, joined by a tip arc and a root arc about the origin.
 func fitToothSection(t *testing.T, w *sketch.World, plane *sketch.Plane, fit int, half float64) (*sketch.Sketch, *sketch.Profile) {
 	t.Helper()
+	return twistedFitToothSection(t, w, plane, 9.5, fit, half, 0)
+}
+
+// twistedFitToothSection is fitToothSection with the root arc at radius root and every point turned by twist radians.
+func twistedFitToothSection(t *testing.T, w *sketch.World, plane *sketch.Plane, root float64, fit int, half, twist float64) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
 	s, err := w.CreateSketch(plane)
 	require.NoError(t, err)
 	pt := func(rad, a float64) *sketch.Point {
-		p := s.CreatePoint(rad*math.Cos(a), rad*math.Sin(a))
+		p := s.CreatePoint(rad*math.Cos(a+twist), rad*math.Sin(a+twist))
 		s.Fix(p)
 		return p
 	}
 	right, left := make([]*sketch.Point, fit), make([]*sketch.Point, fit)
 	for i := range fit {
 		f := float64(i) / float64(fit-1)
-		rad, a := 9.8+1.6*f, half*(1-0.4*f)
+		rad, a := root+0.3+1.6*f, half*(1-0.4*f)
 		right[i], left[i] = pt(rad, -a), pt(rad, a)
 	}
-	rootRight, rootLeft := pt(9.5, -half), pt(9.5, half)
+	rootRight, rootLeft := pt(root, -half), pt(root, half)
 	s.CreateLine(rootRight, right[0])
 	_, err = s.CreateFitSpline(right...)
 	require.NoError(t, err)

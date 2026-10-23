@@ -217,3 +217,13 @@ bound give the centroid allowance. `loftcylinder.BuildMirrorCapChamfer`
 reflects the lower half within its document, gives the exterior cap groups the
 bored Join's cap origins, and has `loftcylinder.TagCaps` tag them with the
 blank's planar cap surfaces.
+
+## One-pass Loft pattern Join
+
+Multi-body `Union` also accepts a centered circular prism followed by distinct
+copies of authenticated Lofts, such as the twisted teeth of a circular pattern.
+`loftcylinder.UnionTeeth` certifies the blank and every tooth in one circular
+Join, the same certificate the binary `Union` extends one tooth at a time. It
+runs after the mirrored-pair Join and before the other many-operand routes. A
+set it does not admit, or whose boundary departure exceeds 0.1 mm, goes on to
+the next route.
