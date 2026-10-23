@@ -138,19 +138,6 @@ func TriTriClassifyPrepared(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proo
 	return TriTriClassifyCore(ta, tb, xta, xtb, na, nb, nil, nil, nil, nil, true, fna, fnb, true)
 }
 
-// useFilter says whether this call may take float-only separation exits in
-// the coplanar and non-coplanar arms below. A caller with rational vertices
-// whose float images have a separate rounding bound must pass false and
-// supply exact plane signs. Ordinary float-vertex callers may pass true.
-//
-// It is an argument rather than a package-level switch because the choice
-// belongs to one call. A switch a test flipped would decide the classification
-// of every other caller running at that moment, which is both a data race and a
-// wrong answer, and it is why those tests could not run in parallel.
-func TriTriClassifyWithProjections(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xpt, pa, pb *[3]Xp2, sa, sb *[3]int, useFilter bool) (TriContact, error) {
-	return TriTriClassifyCore(ta, tb, xta, xtb, na, nb, pa, pb, sa, sb, useFilter, r3.Vec{}, r3.Vec{}, false)
-}
-
 // TriContactSpan is the kind and the end points of an exact
 // triangle/triangle intersection, without the boundary, edge and angle
 // records TriContact adds.

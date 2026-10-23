@@ -174,31 +174,6 @@ func FivCross(a, b FivVec) FivVec {
 	}
 }
 
-// TriSpanOnLine is TriTriMissesFilter's per-triangle half: a proven [lo, hi]
-// enclosure of the range triangle t occupies when its plane crossings against
-// the OTHER triangle o are projected onto dir — the float mirror of
-// OrderOnLine over PlaneCrossings' own two cases (a zero-sign vertex sits
-// exactly on the crossing; a sign-changing edge crosses it at t). signs is
-// the caller's own already-decided sign triple (OrientSign, possibly via its
-// exact fallback) for t's vertices against o's plane — this filter never
-// re-derives a sign, only asks which of PlaneCrossings' branches it selects,
-// exactly as the exact code does.
-//
-// The bound is deliberately a SUPERSET of the true occupied range: it takes
-// every candidate PlaneCrossings would have considered — including one a
-// wide interval later drops from contention exactly the way dedupePoints or
-// the ≤2-points invariant would — and folds in its own projected interval, so
-// the returned span can only be wider than the truth, never narrower. A
-// wider span makes the filter LESS likely to prove disjointness, never more:
-// the reject-only direction is unaffected by the extra slack. ok is false —
-// the uniform abstain signal — the moment any step could not be bounded, or
-// no candidate was found at all (which AllOneSide's own gate, run before this
-// filter is ever called, has already ruled out for a real non-coplanar pair).
-func TriSpanOnLine(t, o [3]FivVec, signs [3]int, dir FivVec) (FloatInterval, bool) {
-	planeNormal := FivCross(FivSub(o[1], o[0]), FivSub(o[2], o[0]))
-	return triSpanOnLineWithNormal(t, o[0], signs, dir, planeNormal)
-}
-
 // triSpanOnLineWithNormal uses an enclosure of the other triangle's exact
 // normal. The caller already has that normal when classifying a facet pair.
 func triSpanOnLineWithNormal(t [3]FivVec, origin FivVec, signs [3]int, dir, planeNormal FivVec) (FloatInterval, bool) {

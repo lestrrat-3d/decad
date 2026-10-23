@@ -60,31 +60,3 @@ func MeridianQRows(first, second Map, span freeform.BezierSpan,
 	return [3][]*big.Rat{q0.Rats(), q0.Add(q1.Scale(big.NewRat(1, 2))).Rats(),
 		q0.Add(q1).Add(q2).Rats()}
 }
-
-// MeridianJRows returns the numerator of X_t*Q_s−X_s*Q_t along
-// Q=0, after multiplying by D². With X=(A+t*B)/D, it is
-// J=B*D*Q_s−(H_s*D−H*D_s)*Q_t. For a source span of degree n, each row has
-// Bernstein degree at most 8n−1 in s and quadratic degree in t. A caller
-// separately proves the sign of Q_s before using J to order a moving crossing.
-func MeridianJRows(first, second Map, span freeform.BezierSpan,
-	q [3][]*big.Rat) [3][]*big.Rat {
-	g0, h0 := capIntegerRows(first, span)
-	g1, h1 := capIntegerRows(second, span)
-	d := g0.Mul(g1)
-	a, z := h0[0].Mul(g1), h1[0].Mul(g0)
-	b := z.Sub(a)
-	bd := b.Mul(d)
-	u0 := a.Deriv().Mul(d).Sub(a.Mul(d.Deriv()))
-	u1 := b.Deriv().Mul(d).Sub(b.Mul(d.Deriv()))
-	rows := [3]polynomial.BernsteinIntRow{polynomial.BernsteinIntRowOf(q[0]),
-		polynomial.BernsteinIntRowOf(q[1]), polynomial.BernsteinIntRowOf(q[2])}
-	two := big.NewRat(2, 1)
-	q0 := rows[0]
-	q1 := rows[1].Sub(rows[0]).Scale(two)
-	q2 := rows[2].Sub(rows[1].Scale(two)).Add(rows[0])
-	j0 := bd.Mul(q0.Deriv()).Sub(u0.Mul(q1))
-	j1 := bd.Mul(q1.Deriv()).Sub(u0.Mul(q2).Scale(two).Add(u1.Mul(q1)))
-	j2 := bd.Mul(q2.Deriv()).Sub(u1.Mul(q2).Scale(two))
-	return [3][]*big.Rat{j0.Rats(), j0.Add(j1.Scale(big.NewRat(1, 2))).Rats(),
-		j0.Add(j1).Add(j2).Rats()}
-}

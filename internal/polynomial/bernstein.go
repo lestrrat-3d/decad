@@ -237,29 +237,11 @@ func BernsteinRestrict(a []*big.Rat, lo, hi *big.Rat) []*big.Rat {
 	return left
 }
 
-// BernsteinAdd is the coefficient-wise sum of two rows of equal length.
-func BernsteinAdd(a, b []*big.Rat) []*big.Rat {
-	out := make([]*big.Rat, len(a))
-	for i := range a {
-		out[i] = ratAdd(a[i], b[i])
-	}
-	return out
-}
-
 // BernsteinSub is the coefficient-wise difference of two rows of equal length.
 func BernsteinSub(a, b []*big.Rat) []*big.Rat {
 	out := make([]*big.Rat, len(a))
 	for i := range a {
 		out[i] = ratSub(a[i], b[i])
-	}
-	return out
-}
-
-// BernsteinScale multiplies every coefficient of a by k.
-func BernsteinScale(a []*big.Rat, k *big.Rat) []*big.Rat {
-	out := make([]*big.Rat, len(a))
-	for i := range a {
-		out[i] = ratMul(a[i], k)
 	}
 	return out
 }

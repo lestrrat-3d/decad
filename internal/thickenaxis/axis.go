@@ -15,15 +15,6 @@ import (
 // AxisDir is an exact unit direction along one recorded plane axis.
 type AxisDir struct{ u, v int }
 
-// NewAxisDir records a unit axis direction.
-func NewAxisDir(u, v int) AxisDir { return AxisDir{u: u, v: v} }
-
-// U returns the direction's U component.
-func (d AxisDir) U() int { return d.u }
-
-// V returns the direction's V component.
-func (d AxisDir) V() int { return d.v }
-
 type thickenExactPoint struct{ u, v *big.Rat }
 
 type thickenAxisJoin struct {

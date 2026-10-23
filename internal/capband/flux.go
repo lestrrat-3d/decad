@@ -691,35 +691,6 @@ func phaseIntegralInterval(a0, a1 *big.Rat) (cosIv, sinIv proofbound.RatInterval
 	return proofbound.IntervalMul(c, sc), proofbound.IntervalMul(s, sc), true
 }
 
-// conePatchFluxInterval encloses the EXACT raw flux of the ruled Cone patch
-// at its held parameters — the same closed form patchRawFlux's float arm
-// evaluates (poly + origin + cross·intCos) — over rationals, with the four
-// endpoint sines/cosines and the ruled-angle integral read through the
-// certified radian enclosure. ok is false only where a parameter does not
-// lift to a rational (non-finite geometry).
-//
-// Why the enclosure is sound, and why its reach is the whole bound:
-//   - every non-trigonometric input is a float64 field, hence an exact
-//     rational, and H, dS, dC, dR, dSC are formed exactly, so no subtraction
-//     rounds;
-//   - the four endpoint sines/cosines (proofbound.RadSinCosInterval) and the ruled-angle
-//     integral (phaseIntegralInterval) are enclosed, and interval arithmetic
-//     is inclusion-monotonic, so the result contains the exact closed form at
-//     the held parameters whatever the platform's math package does;
-//   - its caller holds the nearest float to the midpoint and publishes
-//     proofbound.IntervalFloatError, the larger distance to either end rounded up, so
-//     the true flux in the interval lies within that bound of the held value.
-//
-// Nothing here grows with the arc centre's distance from the plane-local
-// origin beyond the enclosure's own width, which is set by the radian-to-turn
-// grid (survey2d.TurnGridShift), not by a magnitude envelope. The width is never zero
-// for a non-whole-turn patch: proofbound.RadSinCosInterval answers a non-point interval
-// for every nonzero rational, so a Cone patch stays Approximate.
-func conePatchFluxInterval(g Patch) (proofbound.RatInterval, bool) {
-	held, _, ok := coneFluxEnclosures(g)
-	return held, ok
-}
-
 // coneFluxEnclosures is conePatchFluxInterval at the held parameters (held)
 // and over every parameter g.Held admits (wide). The held angles are float
 // Atan2 results and an ArcSeg's held side radius a math.Hypot, so the patch
@@ -875,14 +846,6 @@ func tripleProductUpper(a, b, c r3.Vec) float64 {
 // RawFlux returns one cap band's patch flux and its proven bound.
 func RawFlux(g Patch) proofbound.BoundedScalar { return patchRawFlux(g) }
 
-// ChordLocusSliverCube returns the bound on Σ ∫ δ³ dv a Cone patch's region
-// term reads.
-func ChordLocusSliverCube(g Patch) float64 { return chordLocusSliverCube(g) }
-
-// ChordLocusSpanFlux encloses a Cone patch's denoted surface's flux about the
-// arc's axis from its corner locus spans.
-func ChordLocusSpanFlux(g Patch) (proofbound.RatInterval, bool) { return chordLocusSpanFlux(g) }
-
 // ChordLocusFluxes returns the wide, narrow and built fluxes a Cone patch's
 // chord-versus-locus term reads, about the arc's axis, with their bounds.
 func ChordLocusFluxes(g Patch) (wide, narrow, built proofbound.BoundedScalar) {
@@ -891,21 +854,6 @@ func ChordLocusFluxes(g Patch) (wide, narrow, built proofbound.BoundedScalar) {
 
 // ChordLocusFluxAllow returns a Cone patch's chord-versus-locus flux term.
 func ChordLocusFluxAllow(g Patch) float64 { return chordLocusResidualAllow(g) }
-
-// ChordLocusBuiltDeficit returns how far inside the cone radius a Cone
-// patch's region term lets its built surface cross a ray.
-func ChordLocusBuiltDeficit(g Patch) float64 {
-	radius, _, _ := chordLocusShellInputs(g)
-	return proofbound.ChordLocusBuiltDeficitUpper(radius, math.Max(g.SkewStart, g.SkewEnd))
-}
-
-// ChordLocusCornerDeficit returns how far inside the cone radius a Cone
-// patch's region term lets a crossing of its built surface or corner sliver
-// sit at a corner azimuth.
-func ChordLocusCornerDeficit(g Patch) float64 {
-	radius, _, _ := chordLocusShellInputs(g)
-	return proofbound.ChordLocusCornerDeficitUpper(radius, math.Max(g.SkewStart, g.SkewEnd))
-}
 
 // AxisAnchoredLevels translates a band's two levels so the side level sits
 // next to zero with their exact difference kept.
@@ -917,14 +865,6 @@ func AxisAnchoredLevels(sideZ, capZ float64) (float64, float64) {
 func WindowOnBranch(capTh0, capTh1, th0 float64) (float64, float64) {
 	return capWindowOnBranch(capTh0, capTh1, th0)
 }
-
-// RuledAngleCos evaluates the ruled patch's closed-form angular integral.
-func RuledAngleCos(thS0, thS1, thC0, thC1 float64) float64 {
-	return ruledAngleCos(thS0, thS1, thC0, thC1)
-}
-
-// ConeFluxInterval encloses a cone patch's raw flux.
-func ConeFluxInterval(g Patch) (proofbound.RatInterval, bool) { return conePatchFluxInterval(g) }
 
 func intervalMid(a proofbound.RatInterval) *big.Rat {
 	return new(big.Rat).Mul(new(big.Rat).Add(a.Lo, a.Hi), big.NewRat(1, 2))

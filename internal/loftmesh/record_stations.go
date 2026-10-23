@@ -369,12 +369,6 @@ func PerCellTangentEnergy(seg sectionrecord.CurveSegment, w survey2d.SegmentWalk
 	}
 }
 
-// CircularStationChain delegates the station proof to internal/tessellation.
-func CircularStationChain(w survey2d.SegmentWalk, seg sectionrecord.CurveSegment, m int) ([]sectionrecord.Point2, float64) {
-	stations, delta := LoftCircularStationChain(RecordCircularSide(w, seg), m)
-	return stationPoints(stations), delta
-}
-
 // ArcNaturalEndRadialUpper charges agent-docs/loft-design.md §5.2's ARC-END RADIAL
 // RESIDUAL: an upper bound on | ‖End − Center‖ − ‖Start − Center‖ | for a
 // recorded sectionrecord.ArcSeg whose walk reaches the natural bound t == 1, and exactly
@@ -441,15 +435,6 @@ func CircularSegmentRange(seg sectionrecord.CurveSegment) (*big.Rat, *big.Rat, b
 		return nil, nil, false
 	}
 	return start, circularbounds.ExactCoordinateDelta(tEnd, tStart), true
-}
-
-// CertifiedSagittaUpper delegates the station proof to internal/tessellation.
-func CertifiedSagittaUpper(seg sectionrecord.CurveSegment, m int) float64 {
-	if m <= 0 {
-		return math.Inf(1)
-	}
-	radius, sweep, enclosed := circularbounds.WalkEnclosures(circularbounds.RecordSegment(seg))
-	return LoftCertifiedSagittaUpper(radius, sweep, enclosed, m)
 }
 
 // CertifiedChordLower delegates the station proof to internal/tessellation.

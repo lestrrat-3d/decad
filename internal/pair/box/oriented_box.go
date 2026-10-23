@@ -147,27 +147,6 @@ func OrientedBoxGap(a, b OrientedBox, gap, normSquared proofarith.Dyadic) (pair.
 	return pair.ScalarReading{ValueMM: value, BoundMM: bound}, true
 }
 
-func OrientedVertexFaceDistanceSquared(vertex proofarith.DyV3, box OrientedBox, axis, side int) *big.Rat {
-	foot, ok := orientedVertexFaceProjection(vertex, box, axis, side)
-	if !ok {
-		return nil
-	}
-	return foot.distanceSquared()
-}
-
-func OrientedVertexFaceFoot(vertex proofarith.DyV3, box OrientedBox, axis, side int) ([3]*big.Rat, *big.Rat) {
-	foot, ok := orientedVertexFaceProjection(vertex, box, axis, side)
-	if !ok {
-		return [3]*big.Rat{}, nil
-	}
-	var at [3]*big.Rat
-	normSquared := foot.normSquared.Rat()
-	for k := range 3 {
-		at[k] = new(big.Rat).Quo(foot.scaled[k].Rat(), normSquared)
-	}
-	return at, foot.distanceSquared()
-}
-
 // orientedFaceProjection is a vertex's orthogonal projection onto a box face's
 // plane, held exactly as Dyadic numerators over the face normal's squared
 // length: the foot is scaled/normSquared and the squared distance to it
@@ -180,22 +159,6 @@ type orientedFaceProjection struct {
 
 func (f orientedFaceProjection) distanceSquared() *big.Rat {
 	return new(big.Rat).Quo(proofarith.DyMul(f.distance, f.distance).Rat(), f.normSquared.Rat())
-}
-
-// orientedVertexFaceProjection projects vertex onto the face of box on the
-// given axis and side, ok only when the foot lies in the closed face. With
-// a, b the face's edges, n = a × b, N = n·n and w the vertex less the face
-// origin, the foot is the origin plus P/N, P = N·w − (w·n)·n, and its face
-// coordinates are u = U/(N·det) and v = V/(N·det), det = (a·a)(b·b) − (a·b)²,
-// U = (P·a)(b·b) − (P·b)(a·b), V = (P·b)(a·a) − (P·a)(a·b). Every quantity is
-// a polynomial in held coordinates, so it is Dyadic, and the face test
-// 0 ≤ u, v ≤ 1 compares U and V against 0 and N·det exactly.
-func orientedVertexFaceProjection(vertex proofarith.DyV3, box OrientedBox, axis, side int) (orientedFaceProjection, bool) {
-	projector, ok := prepareOrientedFaceProjector(box, axis, side)
-	if !ok {
-		return orientedFaceProjection{}, false
-	}
-	return projector.project(vertex)
 }
 
 type orientedFaceProjector struct {

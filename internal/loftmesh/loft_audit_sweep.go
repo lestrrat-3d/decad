@@ -134,13 +134,6 @@ func LoftCrossingAuditStructured(budget *proofbound.WorkBudget, verts []r3.Vec, 
 	return err
 }
 
-// LoftCrossingAuditStructuredWork is LoftCrossingAuditStructured's body with
-// explicit shortcuts and an explicit S8 ceiling, for tests: production always
-// passes proofbound.MaxFacetPairTestsPerCall.
-func LoftCrossingAuditStructuredWork(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int, structure LoftAuditStructure, shortcuts LoftAuditShortcuts, ceiling uint64) (LoftAuditWork, error) {
-	return loftCrossingAudit(budget, verts, tris, &structure, shortcuts, ceiling)
-}
-
 // LoftSweepCandidates returns the generic audit's candidate list over every
 // triangle, in the order its pair loop tests them. It is the tests' view of
 // sweepCandidates; no production path calls it.

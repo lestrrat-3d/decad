@@ -2878,16 +2878,6 @@ func ChordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, c
 	return AbsSumUpper(wallMoment, twistMoment)
 }
 
-// ChordedBoundaryMomentResidualAllow is the moment allowance after the exact
-// bilinear-patch volume and first-moment corrections have moved the nominal
-// centroid off the held triangle surface. The former twist sweep is therefore
-// absent; the remaining wall chord-to-curve sweep is unchanged.
-func ChordedBoundaryMomentResidualAllow(matchedDelta, wallAreaUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper float64) float64 {
-	return ChordedBoundaryMomentAllow(
-		matchedDelta, wallAreaUpper, 0, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper,
-	)
-}
-
 // BoundedSqrt propagates a proven bound through a square root: x.bound must
 // already prove the true operand lies in [x.value−x.bound, x.value+x.bound]
 // (clamped at zero, since every caller's operand is a sum of squares or a

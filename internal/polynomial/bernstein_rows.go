@@ -30,20 +30,6 @@ func BernsteinRowsCross(q [3][]*big.Rat) bool {
 	return BernsteinRowsPositive(derivative)
 }
 
-// BernsteinRowsAt evaluates the quadratic Bernstein combination of the three
-// rows at band time t, control by control.
-func BernsteinRowsAt(q [3][]*big.Rat, t *big.Rat) []*big.Rat {
-	oneMinus := ratSub(ratOne(), t)
-	a := ratMul(oneMinus, oneMinus)
-	b := ratMul(big.NewRat(2, 1), ratMul(t, oneMinus))
-	c := ratMul(t, t)
-	out := make([]*big.Rat, len(q[0]))
-	for i := range out {
-		out[i] = ratAdd(ratAdd(ratMul(a, q[0][i]), ratMul(b, q[1][i])), ratMul(c, q[2][i]))
-	}
-	return out
-}
-
 // BernsteinRowsSignAt reports whether every Bernstein control of the band-time
 // curve at source s, restricted to [tLo, tHi], has the given sign.
 func BernsteinRowsSignAt(q [3][]*big.Rat, s, tLo, tHi *big.Rat, sign int) bool {
@@ -92,26 +78,6 @@ func BernsteinRectOpenSide(q [3][]*big.Rat,
 		if valid {
 			return side
 		}
-	}
-	return 0
-}
-
-// BernsteinRowsPointSign returns -1 or 1 when the three rows are all strictly
-// negative or all strictly positive at fixed source s, and 0 otherwise.
-// A strict sign at fixed source s for all times follows from the exact
-// quadratic Bernstein coefficients in band time.
-func BernsteinRowsPointSign(q [3][]*big.Rat, s *big.Rat) int {
-	negative, positive := true, true
-	for _, row := range q {
-		sign := BernsteinSign(row, s)
-		negative = negative && sign < 0
-		positive = positive && sign > 0
-	}
-	if negative {
-		return -1
-	}
-	if positive {
-		return 1
 	}
 	return 0
 }

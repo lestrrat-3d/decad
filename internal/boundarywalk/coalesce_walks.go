@@ -9,7 +9,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
-func CoalesceWalks(walks []survey2d.SideWalk) []survey2d.SideWalk { return coalesceWalks(walks) }
 func CoalesceWalksBudget(walks []survey2d.SideWalk, budget *proofbound.WorkBudget) ([]survey2d.SideWalk, error) {
 	return coalesceWalksBudget(walks, budget)
 }
@@ -18,17 +17,6 @@ func CoalesceWalksContext(ctx context.Context, walks []survey2d.SideWalk) ([]sur
 }
 func CoalesceChainWalksContext(ctx context.Context, walks []survey2d.SideWalk) ([]survey2d.SideWalk, error) {
 	return coalesceChainWalksContext(ctx, walks)
-}
-
-// coalesceWalks merges consecutive collinear line walks, wrap-around
-// included. Circular walks never merge; a loop that is entirely one straight
-// line is degenerate and left to the area gate. Collinear means EXACTLY
-// collinear (exactlyCollinear): a merged walk stands for every segment it
-// covers, so a merge across a kink, however slight, would publish a wall the
-// record does not have.
-func coalesceWalks(walks []survey2d.SideWalk) []survey2d.SideWalk {
-	out, _ := coalesceWalksBudget(walks, nil)
-	return out
 }
 
 func coalesceWalksBudget(walks []survey2d.SideWalk, budget *proofbound.WorkBudget) ([]survey2d.SideWalk, error) {

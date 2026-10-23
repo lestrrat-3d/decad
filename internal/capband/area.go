@@ -365,10 +365,5 @@ func AreaOf(g Patch) (float64, float64) { return patchAreaOf(g) }
 // DisplacementAreaAllow bounds the patch's directrix displacement.
 func DisplacementAreaAllow(g Patch) float64 { return patchDisplacementAreaAllow(g) }
 
-// FrustumAreaBracket bounds the held cone-sector area against its interval.
-func FrustumAreaBracket(R0, R1, H, dth, dthAllow, held float64) float64 {
-	return coneFrustumAreaBracket(R0, R1, H, dth, dthAllow, held)
-}
-
 // SkewAreaAllow bounds a Cone patch's ruled area against its frustum sector.
 func SkewAreaAllow(g Patch) float64 { return coneSkewAreaAllow(g) }

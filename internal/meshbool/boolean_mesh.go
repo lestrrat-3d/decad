@@ -460,17 +460,6 @@ func XtriCorners(m *BoolMesh, i int) [3]proof.Xpt {
 	return [3]proof.Xpt{m.Xverts[t[0]], m.Xverts[t[1]], m.Xverts[t[2]]}
 }
 
-// KeepSide classifies one operand's boundary against the other solid and
-// returns the kept facets: subdivided pieces for the cut facets, whole
-// facets for the uncut regions (classified per connected component by exact
-// ray parity — the classification is constant on a component that crosses
-// nothing). Every kept corner carries its pre-weld bound (KeptFacet.Beta):
-// an operand vertex keeps its own β, and a subdivision vertex takes rims'
-// bound when it is a rim vertex and its facet's δ otherwise (CutCornerBound).
-func KeepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, blocked map[[2]int]struct{}, rims map[string]float64, wantInside, flip bool) ([]KeptFacet, error) {
-	return keepSide(ctx, m, other, cuts, blocked, rims, wantInside, flip, newKeyMemo())
-}
-
 // newKeyMemo returns a function that reads an exact point's canonical Key
 // (a GCD) once per distinct integer pointer set. Cut pieces share corners, and
 // an exact point is immutable once built, so the same four pointers always

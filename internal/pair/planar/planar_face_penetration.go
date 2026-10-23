@@ -42,22 +42,6 @@ import (
 // vertex box. A true M that would poke a second face of S within δ is then
 // refused as the held one would be.
 
-// PlanarFacePenetration publishes the face-local patch of an Overlapping
-// pair from the crossings ClassifyPlanar recorded. Each convex solid in turn
-// is tried as M against the other as S; the patch is published when exactly
-// one order publishes, and two publishing orders withhold it with
-// AmbiguousFeature. The points are §9.3's shallow row: each deepest vertex
-// paired with its exact foot on h's plane, h's outward normal oriented A to
-// B, and a Separation enclosing −d. Supports names h, whose lifted set
-// (PlanarSupportSets with overlap) a positive band appends. A withheld patch
-// carries AmbiguousFeature when the overlap crossed two faces of S, and no
-// reason otherwise. Both snapshots must carry Faces. poll is charged
-// throughout; its error is returned unchanged.
-func PlanarFacePenetration(a, b *PlanarSolid, crossings []PlanarCrossing, convexA, convexB bool,
-	poll func() error) (PlanarManifold, error) {
-	return PlanarFacePenetrationGrown(a, b, crossings, convexA, convexB, proof.DyZero(), proof.DyZero(), poll)
-}
-
 // PlanarFacePenetrationGrown is PlanarFacePenetration with each solid, when
 // tried as M, read grown by its own nonnegative displacement, growA for a
 // and growB for b: condition 3's sunk part is every held point at most the

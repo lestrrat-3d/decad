@@ -249,16 +249,6 @@ func (s *SharedDenom) Float64(x SRat) (float64, bool) {
 	return s.Rat(x).Float64()
 }
 
-// LiftInterval writes a RatInterval over D.
-func (s *SharedDenom) LiftInterval(iv RatInterval) SInterval {
-	return SInterval{Lo: s.Lift(iv.Lo), Hi: s.Lift(iv.Hi)}
-}
-
-// LiftIVec3 writes a RatInterval vector over D.
-func (s *SharedDenom) LiftIVec3(v [3]RatInterval) SIVec3 {
-	return SIVec3{s.LiftInterval(v[0]), s.LiftInterval(v[1]), s.LiftInterval(v[2])}
-}
-
 // SPoint is the degenerate interval [x, x].
 func SPoint(x SRat) SInterval { return SInterval{Lo: x, Hi: x} }
 

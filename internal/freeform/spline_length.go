@@ -326,18 +326,6 @@ func ScaledNumerator(r *big.Rat, den *big.Int) *big.Int {
 	return out.Mul(out, r.Num())
 }
 
-func (s DyadicSpan) LengthBracket(depth int) (float64, float64) {
-	if depth == 0 || len(s.Points) < 2 {
-		return s.ChordLower(), s.PolygonUpper()
-	}
-	// Unmetered: FreeformBracketCost already charged every split in this
-	// subtree up front (its own doc comment), so a nil counter cannot refuse.
-	left, right, _ := s.Split(nil)
-	leftLo, leftHi := left.LengthBracket(depth - 1)
-	rightLo, rightHi := right.LengthBracket(depth - 1)
-	return DownRound(leftLo + rightLo), proofbound.UpRound(leftHi + rightHi)
-}
-
 // LengthSplitScratch owns the three control nets used at one subdivision
 // level. Its integer storage remains live for the whole depth-first walk, so
 // sibling subtrees reuse it without changing the order of leaf summation.
@@ -559,13 +547,6 @@ func (s DyadicSpan) DistanceSquaredScratch(
 	scratch.Tmp.Mul(&scratch.Dv, &scratch.Dv)
 	scratch.Num.Add(&scratch.Num, &scratch.Tmp)
 	return SpanSquaredDistance{Num: &scratch.Num, DenSq: s.DenSq, Exp: exp}
-}
-
-// SquaredDistance is the rational reference for callers that need the exact
-// squared distance rather than a directed float square root.
-func (s DyadicSpan) SquaredDistance(a, b DyadicPoint) *big.Rat {
-	d := s.DistanceSquared(a, b)
-	return new(big.Rat).SetFrac(d.Num, new(big.Int).Lsh(d.DenSq, 2*d.Exp))
 }
 
 // SpanSquareCmp compares f² to the exact squared distance without a rational
