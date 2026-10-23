@@ -195,6 +195,33 @@ refusal it drops is one a tighter proven bound makes unnecessary. The gate
 stays reject-only: it compares a proven bound against a proven depth and
 never reads the geometry to admit.
 
+### 3.6 Shallow crossings
+
+A rim vertex's bound divides the pair's summed facet bounds by `sin θ`, so two facets that cross at a shallow
+angle give a large bound however small their own bounds are. A spiral bevel member built with a 30 mm cutter
+radius has rim pairs with `sin θ` between 0.0064 and 0.0095, facet bounds 0.0066 mm and 0.0026 mm, and a largest
+rim bound of 1.43 mm. `VerifyAll` at 0.1 mm then refuses with "requested tolerance ... is below the faceted
+body's minimum mesh bound". The same refusal applies to a 20 degree spiral angle and a 14.5 degree pressure angle.
+
+These pairs have nearly equal outward normals, so for Union and Intersect the result's corner at the rim is
+nearly flat, and the nearest point of the true boundary is much closer than `(δ_A + δ_B)/sin θ`. A flat-corner
+rule of the form `min((δ_A + δ_B)/sin θ, √2 · max(δ_A, δ_B))` for `n_A · n_B ≥ 0` (`-n_B` for Cut) is NOT part of
+this design. It rests on a band premise: that the true solid lies inside every point farther than `δ` on a
+facet's inner side and outside every point farther than `δ` on its outer side, within a ball of radius
+`√2 · max(δ_A, δ_B)` about the rim vertex. Boundary closeness does not establish it:
+
+- Two thin plates thinner than `δ`, nearly parallel and co-oriented, are boundary-close to their meshes, yet
+  their true Intersect is empty near the rim and the nearest true boundary lies about `2δ/θ` away.
+- Another facet of the same operand inside the ball breaks the premise for the points past it.
+- The flat-corner bound is a distance to the result's boundary. It is not a distance to the true crossing of the
+  two true faces, so §2's definition of `v*` for a rim vertex and §3.5's per-corner affine argument would change
+  with it.
+
+A sound version needs a one-sided-band flag published by every producer (including the chorded loft and revolve
+payloads, which have no vertex record), an exact rational clearance check of every other facet of the operand
+against the ball, and a redefined meaning of the bound with every consumer updated. Until then the rule above
+stays as §3.2 states it.
+
 ## 4. Consumers
 
 ### 4.1 The faceted payload record
