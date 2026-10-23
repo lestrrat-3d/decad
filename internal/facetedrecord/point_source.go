@@ -3,6 +3,8 @@ package facetedrecord
 import (
 	"slices"
 
+	"github.com/lestrrat-3d/r3"
+
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 )
@@ -25,10 +27,14 @@ func PointSourceCurrent(record *PointSectionRecord) bool {
 		len(src.Profile.Outer) != len(src.Entities) {
 		return false
 	}
-	if _, _, _, err := sectioncert.RecordProfile(src.Sketch, src.Profile); err != nil {
+	_, plane, _, err := sectioncert.RecordProfile(src.Sketch, src.Profile)
+	if err != nil {
 		return false
 	}
-	frame, err := src.Sketch.Plane().Frame()
+	// LoftFromPoint recorded NewFrame of the profile's plane record, and NewFrame
+	// is not idempotent: the sketch plane's own frame can differ from it in the
+	// last bit, so the current plane is rebuilt the way the record was.
+	frame, err := r3.NewFrame(plane.Origin, plane.U, plane.V)
 	if err != nil || frame.Origin() != src.Frame.Origin() ||
 		frame.U() != src.Frame.U() || frame.V() != src.Frame.V() {
 		return false
