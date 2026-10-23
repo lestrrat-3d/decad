@@ -53,11 +53,20 @@ func spiralDerive() spiralDims {
 
 // spiralBlankSection is the six-point axial section of the finite blank.
 func spiralBlankSection(d spiralDims) []spiralAxial {
+	return spiralBlankSectionBase(d, 0)
+}
+
+// spiralBlankSectionBase is spiralBlankSection with the blank's base height set
+// to base mm. A base of 0 selects the default height.
+func spiralBlankSectionBase(d spiralDims, base float64) []spiralAxial {
 	r := spiralModule * spiralTeeth / 2
 	dedendum := 1.25 * spiralModule
 	baseHeight := math.Min(math.Max(spiralModule*spiralTeeth/8,
 		1.05*dedendum*math.Sin(d.coneAngle)),
 		0.95*(r-dedendum*math.Cos(d.coneAngle))*math.Tan(d.coneAngle))
+	if base > 0 {
+		baseHeight = base
+	}
 	heelStation := d.coneDist*math.Cos(d.coneAngle) + baseHeight
 	heelRadius := r - baseHeight/math.Tan(d.coneAngle)
 	ded := spiralAxial{
@@ -439,8 +448,15 @@ func spiralBlankAndTooth(t *testing.T, doc *decad.Document) (*decad.Body, *decad
 // given radius in mm. A radius of 0 selects the mean cone distance.
 func spiralBlankAndToothCutter(t *testing.T, doc *decad.Document, cutter float64) (*decad.Body, *decad.Body) {
 	t.Helper()
+	return spiralBlankAndToothOptions(t, doc, cutter, 0)
+}
+
+// spiralBlankAndToothOptions is spiralBlankAndToothCutter with the blank's base
+// height set to base mm. A base of 0 selects the default height.
+func spiralBlankAndToothOptions(t *testing.T, doc *decad.Document, cutter, base float64) (*decad.Body, *decad.Body) {
+	t.Helper()
 	d := spiralDerive()
-	section := spiralBlankSection(d)
+	section := spiralBlankSectionBase(d, base)
 	blank := spiralRevolve(t, doc, section)
 
 	point := spiralPointTooth(t, doc, d, spiralCapTilt)

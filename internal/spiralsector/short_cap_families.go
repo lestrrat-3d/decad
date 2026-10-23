@@ -134,7 +134,7 @@ func ShortCapFamilies(ctx context.Context, proof *spiralFirstJoinSource) (
 				}
 				family.FiniteClip = clip
 				box, ok, err := ShortCubicBox(ctx, proof.Tooth.Maps[band],
-					proof.Tooth.Maps[band+1], spans[0], family.Pieces[0].Q,
+					proof.Tooth.Maps[band+1], spans[0], family.Pieces[0].Q, family.Pieces[0].TLo,
 					clip.SLo, clip.SHi, family.FiniteEnd)
 				if err != nil || !ok {
 					return out, false, err

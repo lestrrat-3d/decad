@@ -151,7 +151,7 @@ func shortSourceCells(ctx context.Context, proof *facetedrecord.SpiralFirstJoinS
 		for row := range restricted {
 			restricted[row] = polynomial.BernsteinRestrict(part.Q[row], lo, hi)
 		}
-		t, yes := ShortCapTBracket(restricted)
+		t, yes := ShortCapTBracket(restricted, part.TLo)
 		if !yes {
 			return nil, false, nil
 		}
