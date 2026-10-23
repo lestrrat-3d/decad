@@ -227,6 +227,11 @@ strict sign at the limit. The nearest limit that holds is used, because the held
 seam proofs compare the band with the held chain and refuse a band wider than
 the held mesh error allows. A tooth whose geometry no ladder step supports
 refuses at these gates; no band is assumed from the source-default gear.
+The mapped-radius charge argument reads its premises (Y, Z and R bounds, the
+largest cap-to-cap move and the lower bound of Q_t) from the cap maps, and the
+published charges of 10^-10 mm per root coordinate and 10^-9 in Z/Y must exceed
+the move they allow. The heel seam proves Q_t from interval arithmetic; the toe
+seam takes the largest of a ladder of Q_t thresholds its polynomial gate proves.
 
 The proxy's occupied-volume charge is the largest actual Y move times the
 sum of exact projected XZ areas of every changed facet. Its endpoints must
