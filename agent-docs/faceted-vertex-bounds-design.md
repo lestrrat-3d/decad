@@ -521,10 +521,6 @@ already raises it past twice its displacement (`meshbool.PairChordFrom`, through
 operand touches the partner with then holds `δ(t) ≤ heldBound ≤ tol`, so the gate
 below admits it. A boolean result's `MeshBound` does not raise the pair
 tolerance: it is the figure a chain grows, and the gate exists to refuse it.
-Its `HeldFloor` does: the largest bound of the facets it kept from a fixed held
-mesh, which no boolean can mesh closer. A boolean sets the result's floor to the
-larger of its operands' floors, and rigid placement adds the largest growth of
-any vertex bound.
 Rigid placement of `LoftFaces` keeps the primitive classification while
 charging its new bound; a Boolean result clears it.
 The partner pays for the raise: a chorded analytic partner is meshed at the

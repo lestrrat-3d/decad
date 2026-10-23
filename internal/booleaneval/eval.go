@@ -424,7 +424,6 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		DPair:       dPair,
 		Xform:       r3.Identity(),
 	}
-	payload.HeldFloor = max(booloperand.HeldFloorOf(a.Payload), booloperand.HeldFloorOf(b.Payload))
 	if err := ctx.Err(); err != nil {
 		return Evaluation{}, err
 	}

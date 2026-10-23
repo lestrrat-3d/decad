@@ -204,7 +204,6 @@ func (fp Payload) PlacedWith(ctx context.Context, env topo.Env, composed r3.Tran
 	next.Verts, next.Tris = placed.Verts, placed.Tris
 	next.VertexBound, next.MeshBound, next.VolSymDiff = placed.VertexBound, placed.MeshBound, placed.VolSymDiff
 	next.AreaSlack = placed.AreaSlack
-	next.HeldFloor = placedHeldFloor(fp, placed.VertexBound)
 	next.DPair = SourceDiameterUpper(next.Verts, next.MeshBound)
 	if proofbound.IsNonFinite(next.DPair) {
 		return nil, fmt.Errorf("%w: the placed pair diameter has no finite proof", decaderr.ErrUnsupported)
@@ -227,20 +226,4 @@ func (fp Payload) PlacedWith(ctx context.Context, env topo.Env, composed r3.Tran
 		next.PointSimilarity = &record
 	}
 	return Build(ctx, env, next)
-}
-
-// placedHeldFloor carries fp's held floor through a rigid placement: every
-// vertex bound grows by the placement's charge, so the floor grows by the
-// largest growth. The growth is read as a float difference and widened by a
-// relative 1e-9, far past its own rounding.
-func placedHeldFloor(fp Payload, placed []float64) float64 {
-	if fp.HeldFloor <= 0 || len(placed) != len(fp.VertexBound) {
-		return 0
-	}
-	growth := 0.0
-	for i, bound := range placed {
-		growth = max(growth, bound-fp.VertexBound[i])
-	}
-	growth = proofbound.ProductUpper(growth, 1+1e-9)
-	return proofbound.AbsSumUpper(fp.HeldFloor, growth)
 }

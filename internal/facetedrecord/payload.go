@@ -70,12 +70,6 @@ type Payload struct {
 	// LoftFacesPrimitive identifies one certified LoftFaces held mesh. Rigid
 	// placement preserves this source; a Boolean result starts a new chain.
 	LoftFacesPrimitive bool
-	// HeldFloor is the largest bound, in millimetres, of facets this body keeps
-	// from fixed held meshes that cannot be refined: a certified primitive's
-	// own mesh, carried through Booleans and rigid placement. Facets a Boolean
-	// creates are not counted. A later pair's chord tolerance rises to it, as
-	// for the primitive itself, so the chain-depth gate admits those facets.
-	HeldFloor float64
 	// LoftFacesCap records the authenticated final cap map of an original
 	// LoftFaces body. A Cut result receives only the one-use cone trim record.
 	LoftFacesCap  *LoftFacesCapRecord

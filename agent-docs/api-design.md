@@ -1298,9 +1298,7 @@ trim amplification, and each adds its own final rounding displacement. §9's
 chord tolerance for the next pair is a fixed fraction of that pair's diameter,
 raised to a coil's, mitred sweep's, or certified `LoftFaces` result's held
 bound when that is larger, since those operands hold one fixed mesh: their partner is then meshed more
-coarsely, with its bounds still proven. A boolean result keeps that held floor
-of the fixed meshes whose facets it inherited, through later booleans and rigid
-placement, and raises the next pair's tolerance to it the same way.
+coarsely, with its bounds still proven.
 The next boolean compares the two only where the new pair meets the operand
 (`agent-docs/faceted-vertex-bounds-design.md` §5): every facet of an operand that
 restates a held mesh (a boolean result or a mitred sweep) that the contact

@@ -79,8 +79,6 @@ func TestChordShare(t *testing.T) {
 			// A boolean result's bound grows with the chain; it never raises
 			// the pair tolerance.
 			{facetedrecord.Payload{MeshBound: 0.25}, 0},
-			// A result keeps the floor of the fixed held mesh it inherited, not its bound.
-			{facetedrecord.Payload{MeshBound: 0.25, HeldFloor: 0.125}, 0.125},
 		} {
 			got := booloperand.ChordShare(t.Context(), boxBody(lo, hi, 0, c.payload))
 			require.Equal(t, c.floor, got.Floor, "%#v", c.payload)

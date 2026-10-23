@@ -118,15 +118,14 @@ func sectionDisplacement(payload topo.Payload) float64 {
 // touches the partner with holds at most that bound, so raising the pair
 // tolerance to it is what lets the chain-depth gate admit the pair. A boolean
 // result's MeshBound is not one: it grows with the chain, which is what the
-// gate exists to refuse. Its HeldFloor is: the facets it kept from a fixed held
-// mesh still cannot be meshed closer. Every other payload answers zero.
+// gate exists to refuse. Every other payload answers zero.
 func heldPrimitiveFloor(payload topo.Payload) float64 {
 	switch p := payload.(type) {
 	case facetedrecord.Payload:
 		if p.LoftFacesPrimitive {
 			return p.MeshBound
 		}
-		return p.HeldFloor
+		return 0
 	case coilshell.Payload:
 		return p.Delta
 	case sweepmitre.Payload:
@@ -162,8 +161,3 @@ func coordDisplacement(ctx context.Context, payload topo.Payload) float64 {
 	}
 	return proofbound.AbsSumUpper(res.DeltaCPrior, res.DeltaRPrior)
 }
-
-// HeldFloorOf is the held floor a Boolean result inherits from operand payload:
-// heldPrimitiveFloor, the fixed held bound the operand's mesh cannot be refined
-// below.
-func HeldFloorOf(payload topo.Payload) float64 { return heldPrimitiveFloor(payload) }
