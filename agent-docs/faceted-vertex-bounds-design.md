@@ -219,6 +219,15 @@ temporary cap proxy, the held blank meridian checks and the output-curve
 gates. They read topology nodes; the root Union passes in the blank's
 candidate Revolve root sections and gives the proxy node its mesh handle.
 
+The heel and toe root-seam proofs bound the crossing of the tooth's root arc
+with the blank cap cone by an X interval and a slope interval. Each limit starts
+at the outer edge of the arc's two endpoint boxes and moves outward along a fixed
+ladder of distances until the fixed-X or fixed-slope resultant has its required
+strict sign at the limit. The nearest limit that holds is used, because the held
+seam proofs compare the band with the held chain and refuse a band wider than
+the held mesh error allows. A tooth whose geometry no ladder step supports
+refuses at these gates; no band is assumed from the source-default gear.
+
 The proxy's occupied-volume charge is the largest actual Y move times the
 sum of exact projected XZ areas of every changed facet. Its endpoints must
 both be closed, oriented meshes with identical indexed triangles. The area

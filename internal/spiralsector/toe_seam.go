@@ -246,31 +246,56 @@ func CertifySpiralToeRootSeam(ctx context.Context,
 	if yes, err := spiralToeIdealDerivative(ctx, p); err != nil || !yes {
 		return nil, false, err
 	}
-	idealXLo, idealXHi := big.NewRat(21955, 2000), big.NewRat(21957, 2000)
-	for _, gate := range [...]struct {
-		value *big.Rat
-		sign  int
-	}{{idealXLo, -1}, {idealXHi, 1}} {
-		if yes, err := polynomial.BernsteinSignByHalving(ctx, p.fixedX(gate.value), gate.sign, 12); err != nil || !yes {
+	coordCharge, slopeCharge := big.NewRat(1, 10_000_000_000), big.NewRat(1, 1_000_000_000)
+	var ends [2][3]loftFaceInterval
+	var ratios [2]loftFaceInterval
+	for end, point := range [...]planePoint{arc.Start, arc.End} {
+		endpoint, yes, err := spiralToeEndpointBox(ctx, trim.Maps[1], trim.Maps[2],
+			point, capC, coordCharge)
+		if err != nil || !yes {
 			return nil, false, err
 		}
+		ratio, yes := spiralHeelRatio(endpoint)
+		if !yes {
+			return nil, false, nil
+		}
+		ends[end], ratios[end] = endpoint, ratio
 	}
-	idealSLo, idealSHi := big.NewRat(345, 2000), big.NewRat(307, 1000)
-	if negative {
-		idealSLo, idealSHi = seamRatSub(seamRatZero(), idealSHi), seamRatSub(seamRatZero(), idealSLo)
+	// The X and slope limits start at the endpoint boxes and move outward along
+	// the same ladder as the heel seam until each resultant gate holds.
+	idealXLo, yes, err := seamLimit(ends[0][0].Lo, ends[1][0].Lo, -1, seamXLadder,
+		func(limit *big.Rat) (bool, error) {
+			return polynomial.BernsteinSignByHalving(ctx, p.fixedX(limit), -1, 12)
+		})
+	if err != nil || !yes {
+		return nil, false, err
 	}
-	for _, gate := range [...]struct {
-		slope *big.Rat
-		sign  int
-	}{{idealSLo, 1}, {idealSHi, -1}} {
-		for _, x := range [...]*big.Rat{idealXLo, idealXHi} {
-			if yes, err := polynomial.BernsteinSignByHalving(ctx, spiralToeFixedSlopeAtX(p, x, gate.slope),
-				gate.sign, 12); err != nil || !yes {
-				return nil, false, err
+	idealXHi, yes, err := seamLimit(ends[0][0].Hi, ends[1][0].Hi, 1, seamXLadder,
+		func(limit *big.Rat) (bool, error) {
+			return polynomial.BernsteinSignByHalving(ctx, p.fixedX(limit), 1, 12)
+		})
+	if err != nil || !yes {
+		return nil, false, err
+	}
+	slopeHolds := func(sign int) func(*big.Rat) (bool, error) {
+		return func(slope *big.Rat) (bool, error) {
+			for _, x := range [...]*big.Rat{idealXLo, idealXHi} {
+				ok, err := polynomial.BernsteinSignByHalving(ctx, spiralToeFixedSlopeAtX(p, x, slope), sign, 12)
+				if err != nil || !ok {
+					return false, err
+				}
 			}
+			return true, nil
 		}
 	}
-	coordCharge, slopeCharge := big.NewRat(1, 10_000_000_000), big.NewRat(1, 1_000_000_000)
+	idealSLo, yes, err := seamLimit(ratios[0].Lo, ratios[1].Lo, -1, seamSlopeLadder, slopeHolds(1))
+	if err != nil || !yes {
+		return nil, false, err
+	}
+	idealSHi, yes, err := seamLimit(ratios[0].Hi, ratios[1].Hi, 1, seamSlopeLadder, slopeHolds(-1))
+	if err != nil || !yes {
+		return nil, false, err
+	}
 	seam := &spiralToeRootSeam{
 		X:        loftFaceInterval{Lo: seamRatSub(idealXLo, coordCharge), Hi: seamRatAdd(idealXHi, coordCharge)},
 		Slope:    loftFaceInterval{Lo: seamRatSub(idealSLo, slopeCharge), Hi: seamRatAdd(idealSHi, slopeCharge)},
@@ -281,19 +306,12 @@ func CertifySpiralToeRootSeam(ctx context.Context,
 		seam.X.Hi.Cmp(seamRatF(proof.Blank.ToeOuter.U)) >= 0 {
 		return nil, false, nil
 	}
-	for end, point := range [...]planePoint{arc.Start, arc.End} {
-		endpoint, yes, err := spiralToeEndpointBox(ctx, trim.Maps[1], trim.Maps[2],
-			point, capC, coordCharge)
-		if err != nil || !yes {
-			return nil, false, err
-		}
-		ratio, yes := spiralHeelRatio(endpoint)
-		if !yes || endpoint[0].Lo.Cmp(seam.X.Lo) <= 0 ||
-			endpoint[0].Hi.Cmp(seam.X.Hi) >= 0 ||
-			ratio.Lo.Cmp(seam.Slope.Lo) <= 0 || ratio.Hi.Cmp(seam.Slope.Hi) >= 0 {
+	for end := range ends {
+		if ends[end][0].Lo.Cmp(seam.X.Lo) <= 0 || ends[end][0].Hi.Cmp(seam.X.Hi) >= 0 ||
+			ratios[end].Lo.Cmp(seam.Slope.Lo) <= 0 || ratios[end].Hi.Cmp(seam.Slope.Hi) >= 0 {
 			return nil, false, nil
 		}
-		seam.Ends[end] = endpoint
+		seam.Ends[end] = ends[end]
 	}
 	return seam, true, nil
 }
