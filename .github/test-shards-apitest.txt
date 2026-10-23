@@ -2226,3 +2226,4 @@
 10	0.00	TestDocumentParams
 10	0.00	TestExtrudeFitSplineSectionScalesWorkWithPieces
 10	0.00	TestExtrudedToothPatternJoinsADisc
+10	0.00	TestUnionManyJoinsTwistedLoftTeethToADisc
