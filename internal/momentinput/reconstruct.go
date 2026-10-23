@@ -14,16 +14,6 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// ReconstructionOf counts the sketch chords charged to a recorded region.
-func ReconstructionOf(profile Profile) freeform.FreeformReconstruction {
-	return reconstructionOf(profile)
-}
-
-// ReconstructionChords counts the chords charged to one recorded segment.
-func ReconstructionChords(segment CurveSegment) uint64 {
-	return reconstructionChords(segment)
-}
-
 // ChargeReconstruction charges the whole-scene arrangements before sketch runs.
 func ChargeReconstruction(profile Profile, work *freeform.FreeformWork) (uint64, error) {
 	return chargeReconstruction(profile, work)

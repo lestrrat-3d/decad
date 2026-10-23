@@ -47,16 +47,11 @@ func IsFreeformSegment(segment CurveSegment) bool { return isFreeformSegment(seg
 func FreeformBezierSpans(segment CurveSegment, work *freeform.FreeformWork) ([]freeform.BezierSpan, bool, error) {
 	return freeformBezierSpans(segment, work)
 }
-func RatPointsOf(points []Point2) ([]freeform.RatPoint, error) { return ratPointsOf(points) }
+
 func SplineBezierSpans(segment SplineSeg, work *freeform.FreeformWork) ([]freeform.BezierSpan, error) {
 	return splineBezierSpans(segment, work)
 }
-func NURBSBezierSpans(segment NURBSSeg, work *freeform.FreeformWork) ([]freeform.BezierSpan, error) {
-	return nurbsBezierSpans(segment, work)
-}
-func ClosedSplineBezierSpans(segment ClosedSplineSeg, work *freeform.FreeformWork) ([]freeform.BezierSpan, error) {
-	return closedSplineBezierSpans(segment, work)
-}
+
 func ShiftFreeformSpans(spans []freeform.BezierSpan, anchor Point2) error {
 	return shiftFreeformSpans(spans, anchor)
 }

@@ -118,13 +118,6 @@ func WithLoftSplits(first, second []LoftSplit) LoftOption {
 	return loftOption{option.New(identLoftSplits{}, loftSplitsPayload{First: clone(first), Second: clone(second)})}
 }
 
-// IsSurfaceResult reports whether an option names the shared surface result.
-// Revolve tests identifiers directly, so this follows that call's semantics.
-func IsSurfaceResult(o option.Interface) bool {
-	_, ok := o.Ident().(identSurfaceResult)
-	return ok
-}
-
 // ExtrudeConfig is the folded extrusion option set.
 type ExtrudeConfig struct {
 	Taper         units.Value

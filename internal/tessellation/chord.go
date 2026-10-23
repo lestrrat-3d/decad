@@ -189,18 +189,6 @@ func exactChordSagitta(radius, sweep float64, n int) float64 {
 	return proofbound.RatFloatUp(num.Quo(num, denom))
 }
 
-// WalkAreaSlack is the proven chord-versus-arc area slack one circular walk
-// contributes ACROSS TWO CAPS — a solid's own composition: the wall loses
-// (arc − chord) × height, and each of the two caps gains or loses the
-// circular segment between arc and chords — both closed form, both padded a
-// hair so float rounding never understates them. It states the two-cap case
-// only; ChordLoop keeps the wall and one cap's own share apart
-// (ChordSamples.WallSlack/CapSlack) so a sheet mesh, which triangulates no
-// cap, can decline the cap half entirely (agent-docs/surface-design.md §10).
-func WalkAreaSlack(w survey2d.SegmentWalk, n int, h float64) float64 {
-	return (WalkWallSlack(w, n, h) + 2*WalkSegmentArea(w, n)) * (1 + 1e-9)
-}
-
 // WalkWallSlack is the WALL half of WalkAreaSlack: the area one circular walk's
 // side face loses by standing on n chords instead of its arc, (arc − chord) × h.
 func WalkWallSlack(w survey2d.SegmentWalk, n int, h float64) float64 {

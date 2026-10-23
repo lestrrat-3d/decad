@@ -549,29 +549,6 @@ func ChordLocusVolume(g Patch) (volume, radialGap float64) {
 	return proofbound.DivUpper(flux, 3), proofarith.RationalFloatError(proofarith.FloatRat(g.SideRadius), g.CapRadius)
 }
 
-// ConeMomentTermsX returns the exact Fourier terms for the first coordinate.
-func ConeMomentTermsX(R0, R1, H, cU, dS, dC *big.Rat) []PhaseTerm {
-	return coneMomentTermsX(R0, R1, H, cU, dS, dC)
-}
-
-// ConeMomentTermsY returns the exact Fourier terms for the second coordinate.
-func ConeMomentTermsY(R0, R1, H, cV, dS, dC *big.Rat) []PhaseTerm {
-	return coneMomentTermsY(R0, R1, H, cV, dS, dC)
-}
-
-// ConeMomentTermsZ returns the exact Fourier terms for the axial coordinate.
-func ConeMomentTermsZ(R0, R1, H, z0, dS, dC *big.Rat) []PhaseTerm {
-	return coneMomentTermsZ(R0, R1, H, z0, dS, dC)
-}
-
-// K and M are the harmonic's two phase multipliers.
-func (t PhaseTerm) K() int { return t.k }
-func (t PhaseTerm) M() int { return t.m }
-
-// Ac and As are the harmonic's exact cosine and sine coefficients.
-func (t PhaseTerm) Ac() *big.Rat { return t.ac }
-func (t PhaseTerm) As() *big.Rat { return t.as }
-
 func ratScale(value *big.Rat, num, den int64) *big.Rat {
 	return new(big.Rat).Mul(value, big.NewRat(num, den))
 }

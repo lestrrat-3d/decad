@@ -273,15 +273,6 @@ func (s Side) ExtentsAlong(n motionbound.RatVec, norm *big.Rat) (up, down *big.R
 	return up, down
 }
 
-// LowerHull is agent-docs/linkage-check-design.md §5.8's hull bound for
-// a pair whose two sides read hull points: the largest L_n over the six
-// coordinate directions and every face normal of either side, each
-// numerator divided by |n| rounded up when positive and down otherwise, less
-// both pads; nil when no direction can be normed.
-func LowerHull(a, b Side) *big.Rat {
-	return LowerHullWithWitness(a, b).Bound
-}
-
 // HullWitness records the first direction attaining a lower hull bound.
 type HullWitness struct {
 	Bound *big.Rat

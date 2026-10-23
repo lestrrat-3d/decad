@@ -422,23 +422,3 @@ func CertifyQuarterSourceHeldSelected(ctx context.Context, budget *proofbound.Wo
 	}
 	return report, true, nil
 }
-
-// CertifyQuarterSourceHeldY1 bounds the selected y=1 chain.
-func CertifyQuarterSourceHeldY1(ctx context.Context, budget *proofbound.WorkBudget,
-	prism, loft *topo.Body, arcSegment int, radii [2]*big.Rat) (QuarterSourceHeldY1, bool, error) {
-	pair, accepted, err := CertifyQuarterSourceHeldSelected(ctx, budget, prism, loft, arcSegment, radii, 1)
-	if err != nil || !accepted {
-		return QuarterSourceHeldSeam{Reason: pair.Reason}, false, err
-	}
-	return pair.Y1, true, nil
-}
-
-// CertifyQuarterSourceHeldY3 bounds the selected y=3 chain.
-func CertifyQuarterSourceHeldY3(ctx context.Context, budget *proofbound.WorkBudget,
-	prism, loft *topo.Body, arcSegment int, radii [2]*big.Rat) (QuarterSourceHeldY3, bool, error) {
-	pair, accepted, err := CertifyQuarterSourceHeldSelected(ctx, budget, prism, loft, arcSegment, radii, 2)
-	if err != nil || !accepted {
-		return QuarterSourceHeldSeam{Reason: pair.Reason}, false, err
-	}
-	return pair.Y3, true, nil
-}

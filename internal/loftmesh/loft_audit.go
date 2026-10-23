@@ -67,12 +67,6 @@ func LoftTriCorners(verts []r3.Vec, tri [3]int) [3]r3.Vec {
 	return [3]r3.Vec{verts[tri[0]], verts[tri[1]], verts[tri[2]]}
 }
 
-// LoftXTriCorners is LoftTriCorners' exact lift.
-func LoftXTriCorners(verts []r3.Vec, tri [3]int) [3]proof.Xpt {
-	c := LoftTriCorners(verts, tri)
-	return [3]proof.Xpt{proof.XptOf(c[0]), proof.XptOf(c[1]), proof.XptOf(c[2])}
-}
-
 // LoftAuditData holds the immutable per-vertex and per-triangle values shared
 // by every pair in one crossing audit. The old pair path rebuilt the same
 // exact vertex lifts and triangle normals for every pair, even though both are
@@ -582,16 +576,6 @@ func loftPlaneSeparatedSigns(data *LoftAuditData, i, j int) (bool, [3]int, [3]in
 	}
 	sa = data.planeSigns(j, xta, ta)
 	return meshbool.AllOneSide(sa), sa, sb
-}
-
-// AuditLoftPair classifies one triangle pair against its recorded adjacency
-// (agent-docs/loft-design.md §6) and returns S7 (ErrDegenerate) when the exact
-// contact is not the one that adjacency expects. It is the tests' reference
-// entry point: it runs AuditLoftPairData's zero-shortcut path, so every pair
-// it decides reaches the exact classification.
-func AuditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error {
-	_, err := AuditLoftPairData(NewLoftAuditData(verts, tris), tris, i, j, LoftAuditShortcuts{})
-	return err
 }
 
 // AuditLoftPairData classifies pair (i, j) and reports which decision path

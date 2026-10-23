@@ -28,14 +28,6 @@ func (k *Kernel) Err() error               { return k.err }
 func (k *Kernel) Refused() bool            { return k.refused }
 func (k *Kernel) oracle() clearance.Oracle { return clearance.Oracle{Tol: k.tol} }
 
-func (k *Kernel) PlaneCrossesRevolved(f, g *clearance.CFace, sink *clearance.CellSink) {
-	k.planeCrossesRevolved(f, g, sink)
-}
-
-func (k *Kernel) PlaneSphere(f, g *clearance.CFace, sink *clearance.CellSink) {
-	k.planeSphere(f, g, sink)
-}
-
 // FaceCell dispatches one face pair through the §4 table.
 func (k *Kernel) FaceCell(f, g *clearance.CFace, sink *clearance.CellSink) {
 	if g.Kind < f.Kind {

@@ -17,11 +17,11 @@ var (
 
 // The root package keeps its private validation call sites while this package
 // owns their behavior.
-func FiniteSegmentValue(value float64) bool                       { return finiteSegmentValue(value) }
-func ValidateNURBSSegment(segment NURBSSeg) error                 { return validateNURBSSegment(segment) }
-func ValidateNURBSSegmentSizes(segment NURBSSeg) error            { return validateNURBSSegmentSizes(segment) }
-func ValidateNURBSSegmentContent(segment NURBSSeg) error          { return validateNURBSSegmentContent(segment) }
-func ValidateSegment(segment CurveSegment) error                  { return validateSegment(segment) }
+func FiniteSegmentValue(value float64) bool { return finiteSegmentValue(value) }
+
+func ValidateNURBSSegmentSizes(segment NURBSSeg) error   { return validateNURBSSegmentSizes(segment) }
+func ValidateNURBSSegmentContent(segment NURBSSeg) error { return validateNURBSSegmentContent(segment) }
+
 func NormalizeSegment(segment CurveSegment) (CurveSegment, error) { return normalizeSegment(segment) }
 
 // MagnitudeIn checks a typed, non-negative magnitude before conversion.
@@ -39,30 +39,8 @@ func MagnitudeIn(v units.Value, kind units.Kind, unit units.Unit, what string) (
 	return m, nil
 }
 
-const (
-	segKindLine          = "line"
-	segKindCircle        = "circle"
-	segKindArc           = "arc"
-	segKindEllipse       = "ellipse"
-	segKindEllipticalArc = "elliptical_arc"
-	segKindSpline        = "spline"
-	segKindNURBS         = "nurbs"
-	segKindClosedSpline  = "closed_spline"
-	segKindFitSpline     = "fit_spline"
-	segKindConic         = "conic"
-	segmentFieldStart    = "start"
-	segmentFieldEnd      = "end"
-)
-
 func finiteSegmentValue(v float64) bool {
 	return !math.IsNaN(v) && !math.IsInf(v, 0)
-}
-
-func validateSegmentPoint(point Point2, what string) error {
-	if !finiteSegmentValue(point.U) || !finiteSegmentValue(point.V) {
-		return fmt.Errorf(`%w: %s must have finite coordinates`, ErrNotFinite, what)
-	}
-	return nil
 }
 
 // validateSegmentPoints checks a whole recorded point array. The per-point
@@ -84,84 +62,6 @@ func validateSegmentPoints(points []Point2, minimum int, what string) error {
 		)
 	}
 	return nil
-}
-
-func validateSegmentParameter(v float64, what string) error {
-	if !finiteSegmentValue(v) {
-		return fmt.Errorf(`%w: %s must be finite`, ErrNotFinite, what)
-	}
-	return nil
-}
-
-func validateSegmentRange(tStart, tEnd float64, kind string) error {
-	if err := validateSegmentParameter(tStart, kind+" segment t_start"); err != nil {
-		return prependCodecPath(err, "t_start")
-	}
-	if err := validateSegmentParameter(tEnd, kind+" segment t_end"); err != nil {
-		return prependCodecPath(err, "t_end")
-	}
-	if tStart < 0 || tStart > 1 {
-		return prependCodecPath(
-			fmt.Errorf(`%w: %s segment range [%v, %v] is outside [0, 1]`, ErrDegenerate, kind, tStart, tEnd),
-			"t_start",
-		)
-	}
-	if tEnd < 0 || tEnd > 1 {
-		return prependCodecPath(
-			fmt.Errorf(`%w: %s segment range [%v, %v] is outside [0, 1]`, ErrDegenerate, kind, tStart, tEnd),
-			"t_end",
-		)
-	}
-	if tStart == tEnd {
-		return prependCodecPath(
-			fmt.Errorf(`%w: %s segment has an empty range at %v`, ErrDegenerate, kind, tStart),
-			"t_end",
-		)
-	}
-	return nil
-}
-
-func validateSegmentWinding(ccw bool, tStart, tEnd float64, kind string) error {
-	if ccw != (tStart < tEnd) {
-		return prependCodecPath(
-			fmt.Errorf(`%w: %s segment's CCW flag contradicts its range order`, ErrDegenerate, kind),
-			"ccw",
-		)
-	}
-	return nil
-}
-
-func validateSegmentMagnitude(v units.Value, kind units.Kind, unit units.Unit, what string) error {
-	if v.Kind() != kind {
-		return fmt.Errorf(`%w: %s must be a %s, got %s`, ErrUnitKind, what, kind, v.Kind())
-	}
-	m, err := v.In(unit)
-	if err != nil {
-		return fmt.Errorf(`%w: %s is not representable: %s`, ErrNotFinite, what, err)
-	}
-	if m < 0 {
-		return fmt.Errorf(`%w: %s must be non-negative, got %s`, ErrNegativeMagnitude, what, v)
-	}
-	return nil
-}
-
-func validateSegmentQuantity(v units.Value, kind units.Kind, unit units.Unit, what string) error {
-	if v.Kind() != kind {
-		return fmt.Errorf(`%w: %s must be a %s, got %s`, ErrUnitKind, what, kind, v.Kind())
-	}
-	if _, err := v.In(unit); err != nil {
-		return fmt.Errorf(`%w: %s is not representable: %s`, ErrNotFinite, what, err)
-	}
-	return nil
-}
-
-// validateNURBSSegment applies the sizes before the contents, so no caller pays
-// for a scan of an array a record that cannot be well formed at any content.
-func validateNURBSSegment(seg NURBSSeg) error {
-	if err := validateNURBSSegmentSizes(seg); err != nil {
-		return err
-	}
-	return validateNURBSSegmentContent(seg)
 }
 
 // validateNURBSSegmentSizes is the O(1) structural preflight: the degree and
@@ -322,128 +222,6 @@ func validateNURBSKnotRun(seg NURBSSeg, start, run int) error {
 		),
 		fmt.Sprintf(`knots[%d]`, start),
 	)
-}
-
-// validateSegment enforces the CurveSegment structural checks:
-// finite values, physical unit kinds, non-negative magnitudes, normalized
-// non-empty ranges, closed-curve winding, spline field counts, and the complete
-// clamped NURBS shape.
-func validateSegment(segment CurveSegment) error {
-	segment, err := normalizeSegment(segment)
-	if err != nil {
-		return err
-	}
-	validateRange := func(kind string, tStart, tEnd float64) error {
-		return validateSegmentRange(tStart, tEnd, kind)
-	}
-	switch seg := segment.(type) {
-	case LineSeg:
-		if err := validateSegmentPoint(seg.Start, "line segment start"); err != nil {
-			return prependCodecPath(err, segmentFieldStart)
-		}
-		if err := validateSegmentPoint(seg.End, "line segment end"); err != nil {
-			return prependCodecPath(err, segmentFieldEnd)
-		}
-		return validateRange(segKindLine, seg.TStart, seg.TEnd)
-	case CircleSeg:
-		if err := validateSegmentPoint(seg.Center, "circle segment center"); err != nil {
-			return prependCodecPath(err, "center")
-		}
-		if err := validateSegmentMagnitude(seg.Radius, units.Length, units.Millimeter, "circle segment radius"); err != nil {
-			return prependCodecPath(err, "radius")
-		}
-		if err := validateRange(segKindCircle, seg.TStart, seg.TEnd); err != nil {
-			return err
-		}
-		return validateSegmentWinding(seg.CCW, seg.TStart, seg.TEnd, segKindCircle)
-	case ArcSeg:
-		for _, point := range []struct {
-			value Point2
-			name  string
-		}{{seg.Center, "center"}, {seg.Start, segmentFieldStart}, {seg.End, segmentFieldEnd}} {
-			if err := validateSegmentPoint(point.value, "arc segment "+point.name); err != nil {
-				return prependCodecPath(err, point.name)
-			}
-		}
-		return validateRange(segKindArc, seg.TStart, seg.TEnd)
-	case EllipseSeg:
-		if err := validateSegmentPoint(seg.Center, "ellipse segment center"); err != nil {
-			return prependCodecPath(err, "center")
-		}
-		if err := validateSegmentMagnitude(seg.Rx, units.Length, units.Millimeter, "ellipse segment rx"); err != nil {
-			return prependCodecPath(err, "rx")
-		}
-		if err := validateSegmentMagnitude(seg.Ry, units.Length, units.Millimeter, "ellipse segment ry"); err != nil {
-			return prependCodecPath(err, "ry")
-		}
-		if err := validateSegmentQuantity(seg.Rotation, units.Angle, units.Radian, "ellipse segment rotation"); err != nil {
-			return prependCodecPath(err, "rotation")
-		}
-		if err := validateRange(segKindEllipse, seg.TStart, seg.TEnd); err != nil {
-			return err
-		}
-		return validateSegmentWinding(seg.CCW, seg.TStart, seg.TEnd, segKindEllipse)
-	case EllipticalArcSeg:
-		for _, point := range []struct {
-			value Point2
-			name  string
-		}{{seg.Center, "center"}, {seg.Start, segmentFieldStart}, {seg.End, segmentFieldEnd}} {
-			if err := validateSegmentPoint(point.value, "elliptical arc segment "+point.name); err != nil {
-				return prependCodecPath(err, point.name)
-			}
-		}
-		if err := validateSegmentMagnitude(seg.Rx, units.Length, units.Millimeter, "elliptical arc segment rx"); err != nil {
-			return prependCodecPath(err, "rx")
-		}
-		if err := validateSegmentMagnitude(seg.Ry, units.Length, units.Millimeter, "elliptical arc segment ry"); err != nil {
-			return prependCodecPath(err, "ry")
-		}
-		if err := validateSegmentQuantity(seg.Rotation, units.Angle, units.Radian, "elliptical arc segment rotation"); err != nil {
-			return prependCodecPath(err, "rotation")
-		}
-		return validateRange(segKindEllipticalArc, seg.TStart, seg.TEnd)
-	case SplineSeg:
-		if err := validateSegmentPoints(seg.Control, 4, "spline segment control"); err != nil {
-			return prependCodecPath(err, "control")
-		}
-		return validateRange(segKindSpline, seg.TStart, seg.TEnd)
-	case NURBSSeg:
-		if err := validateNURBSSegment(seg); err != nil {
-			return err
-		}
-		return validateRange(segKindNURBS, seg.TStart, seg.TEnd)
-	case ClosedSplineSeg:
-		if err := validateSegmentPoints(seg.Control, 3, "closed spline segment control"); err != nil {
-			return prependCodecPath(err, "control")
-		}
-		if err := validateRange(segKindClosedSpline, seg.TStart, seg.TEnd); err != nil {
-			return err
-		}
-		return validateSegmentWinding(seg.CCW, seg.TStart, seg.TEnd, segKindClosedSpline)
-	case FitSplineSeg:
-		if err := validateSegmentPoints(seg.Fit, 2, "fit spline segment fit"); err != nil {
-			return prependCodecPath(err, "fit")
-		}
-		return validateRange(segKindFitSpline, seg.TStart, seg.TEnd)
-	case ConicSeg:
-		for _, point := range []struct {
-			value Point2
-			name  string
-		}{{seg.Start, segmentFieldStart}, {seg.Apex, "apex"}, {seg.End, segmentFieldEnd}} {
-			if err := validateSegmentPoint(point.value, "conic segment "+point.name); err != nil {
-				return prependCodecPath(err, point.name)
-			}
-		}
-		if err := validateSegmentParameter(seg.Rho, "conic segment rho"); err != nil {
-			return prependCodecPath(err, "rho")
-		}
-		if seg.Rho <= 0 || seg.Rho >= 1 {
-			return prependCodecPath(fmt.Errorf(`%w: conic segment rho must be in (0, 1), got %v`, ErrDegenerate, seg.Rho), "rho")
-		}
-		return validateRange(segKindConic, seg.TStart, seg.TEnd)
-	default:
-		return fmt.Errorf(`%w: unknown curve segment type %T`, ErrDegenerate, segment)
-	}
 }
 
 // errNilSegment rejects a nil variant pointer: it names no curve to record.

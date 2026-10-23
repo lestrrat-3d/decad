@@ -46,17 +46,6 @@ func OrthonormalityDefect(m [3][3]*big.Rat) *big.Rat {
 	return defect
 }
 
-// TensorMagnitude is the largest magnitude any entry of the box allows.
-func TensorMagnitude(t [3][3]proofbound.RatInterval) *big.Rat {
-	largest := new(big.Rat)
-	for i := range t {
-		for j := range t[i] {
-			largest = proofbound.RatMax(largest, proofbound.IntervalAbsUpper(t[i][j]))
-		}
-	}
-	return largest
-}
-
 // GershgorinLower is a lower bound on the smallest eigenvalue of every
 // symmetric tensor inside the box: each diagonal lower end minus the largest
 // magnitudes its row's off-diagonal entries allow, minimized over rows.

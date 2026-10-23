@@ -87,17 +87,6 @@ func PublishBody[BodyT comparable, FaceT comparable, CellT any](in BodyPublicati
 	}
 }
 
-// PublishReport assembles an already decided document report.
-func PublishReport[BodyT comparable, FaceT any, CellT any](req report.VerifyRequest,
-	bodies []*report.BodyReportOf[BodyT, FaceT, CellT], interferences []report.InterferenceOf[BodyT],
-	clearances []report.ClearanceOf[BodyT], diagnostics []report.DiagnosticOf[BodyT, CellT], status report.Status,
-) *report.ReportOf[BodyT, FaceT, CellT] {
-	return &report.ReportOf[BodyT, FaceT, CellT]{
-		Request: req, Bodies: bodies, Interferences: interferences,
-		Clearances: clearances, Diagnostics: diagnostics, Status: status,
-	}
-}
-
 // ValidityEvidence distinguishes a proven sheet audit from a solid boundary audit.
 type ValidityEvidence struct {
 	Sheet         bool
