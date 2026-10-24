@@ -1260,6 +1260,58 @@ uses, with the geometric safety-net bound (the true centroid lies within the
 body's own `Bounds` box) standing as a `math.Min` ceiling on the formula
 answer, never the whole bound.
 
+### 8.5 Free-form rim chamfer
+
+A selection covering the whole outer loop of one or both caps of a straight prism whose section holds fit
+splines cannot take the exact cap-loop band above: its contour offset is not representable (spline-design R5).
+`Chamfer` builds it instead as a Boolean `Cut` of the receiver by a cutter, which is the only inexact chamfer
+here, and which `brepmodify.FreeformRimChamfer` (`internal/brepmodify/freeform_rim.go`) states as follows.
+
+| Condition | Answer |
+|---|---|
+| receiver is a plain `Extrude` prism (no placement transform, no section or level displacement) whose outer loop holds a fit spline | the route below |
+| selection is every edge of a cap's outer loop, for one or both caps; equal setback; no `WithAsymmetricChamfer` | the route below |
+| any other receiver or selection | the ordinary routes and their refusals (SX4, the free-form refusal of `offset2d`) |
+| the loop holds a segment that is not a whole fit spline or whole line | `ErrUnsupported` |
+| a joint between two segments turns by more than 10° (`rimoffset.MaxJointAngle`) | `ErrUnsupported`, naming the corner |
+| the setback, plus its overshoot, reaches a radius of curvature of the outline | `ErrDegenerate` |
+| the setback reaches the far end (`d ≥ h`, or `2d ≥ h` with both rims) | `ErrUnsupported`, as SX7 |
+| the offset splines depart from the exact offset by more than `rimoffset.MaxDeviationRatio · d` | `ErrUnsupported` |
+
+Per selected rim, with setback `d`, overshoot `o` and the outline's offset by `u` written `C(u)` (positive into
+the material):
+
+1. `internal/rimoffset` builds `C(d + o)` and `C(−o)`. A line moves exactly. A fit spline is sampled in
+   the chord-length parameter of its recorded fit points, every one to a few spans apart, and the new fit
+   spline passes through the sample moved along the curve's left normal, with the joints between segments moved
+   along the bisector of their two normals so the loop closes. The samples lie off the recorded fit points on
+   purpose: a cutter whose rulings cross the receiver's mesh edges exactly sits within rounding of them, and the
+   Boolean refuses the result as folded (evaluator §9).
+2. The cutter is the `Loft` of two rings. Each ring lies between a circle about the outline's box and an
+   offset of the outline. The first ring is at the level `o` beyond the cap and holds `C(d + o)`; the second is at
+   the level `o` beyond the bevel's far edge, `d + o` from the first ring's level along the sweep, and holds
+   `C(−o)`. The lofted wall between the two outlines is the bevel: it runs at 45° and crosses the cap's level at
+   `C(d)` and the receiver's side wall at `d` below the cap. The circle makes the loft chord at a coarse target,
+   which the loft's station cap needs, and its radius, `scale` times the outline's farthest point from the box's
+   middle, sets the pair diameter the Boolean's chord tolerance follows.
+3. `Cut` removes it. The cut's result is held as a mesh, so its readings and bounds are the Boolean's own.
+
+Which `o` and `scale` build depends on the shape. `rimAttempts` tries `(0.5d, 1.5)`, then `(0.35d, 1.5)` for a
+Boolean that refuses a cutter close to the receiver's edges, then circles of 2 and 3 times for a loft whose
+station cap or work ceiling a tight ring exceeds; a refusal of the cutter or of the Cut tries the next, and a
+refusal of the offset does not. A larger circle holds the body coarser: a Cut's chord tolerance follows the
+pair's diameter, and the cutter's circle sets that diameter.
+
+**Exactness.** The route proves nothing about the chamfer being the ideal one. `rimoffset.OffsetLoop` measures,
+at the middle of each step between samples, the distance from the exact offset to the offset spline, and refuses past
+`MaxDeviationRatio · d`. A small measurement proves nothing, so the check can only refuse, never admit (CLAUDE.md,
+hard rules). The body that results is exact for what it is, the receiver minus a
+cutter. What it departs from is the ideal bevel, and the caller owes the same statement it owes for a chorded
+section (spline-design §4): a proof over this body proves a chamfer within the stated ratio of the one intended.
+
+The result carries no chamfer role and no band record, so a further modify op on it is the refusal of any Boolean
+result, and `Verify` reads it as a faceted body.
+
 ## 9. Shell reach
 
 ### 9.1 `stackedPrismPayload`

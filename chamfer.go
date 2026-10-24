@@ -103,6 +103,16 @@ type ChamferOption interface{ chamferOption() }
 // agent-docs/modify-reach-design.md §8.3's cap-loop chamfer. It bevels each loop
 // with a band of analytic patches, and the result is a cap-blend body whose
 // volume, area, bounds, undercut and minimum-radius readings all answer.
+// A selection covering the whole outer loop of one or both caps of a straight
+// prism whose section holds fit splines and lines, with no corner past 10°,
+// bevels it at an equal setback by cutting the prism with a lofted cutter
+// (agent-docs/modify-reach-design.md §8.5). Decad cannot offset a fit spline
+// exactly, so the cutter's offset curves are fit splines through points of the
+// exact offset, and the call refuses an offset that departs from it by more than
+// 0.002 of the setback. The result is a mesh Boolean's: faceted, with the Cut's
+// own bounds, and it matches the ideal chamfer only within that ratio. A
+// setback that reaches the outline's radius of curvature is ErrDegenerate.
+//
 // All twelve straight edges of an exact axis-aligned box take
 // agent-docs/modify-general-design.md §4.3b's simultaneous chamfer, with or
 // without a cross bore. Other partial cap selections and mixed cap/lateral

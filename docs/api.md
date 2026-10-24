@@ -159,7 +159,7 @@ Each of these returns a new body and retires its input.
 | Function | Effect |
 |---|---|
 | `decad.Fillet` | Rounds selected edges with a tangent arc of a given radius. |
-| `decad.Chamfer` | Bevels selected edges. `decad.WithAsymmetricChamfer` sets a second distance. |
+| `decad.Chamfer` | Bevels selected edges. `decad.WithAsymmetricChamfer` sets a second distance. Selecting the whole outer cap loop of a prism whose section is a smooth chain of fit splines bevels it within a measured ratio of the ideal chamfer, as a cut. |
 | `decad.Shell` | Removes the selected faces and lines the rest with a wall. `decad.WithShellSense` picks `decad.Inward` or `decad.Outward`. |
 | `decad.Draft` | Leans selected walls about a `decad.NeutralPlane` (`decad.NeutralFace`). |
 | `decad.Hole` | Cuts a round hole at a point on a planar face, through or blind, with an optional `decad.Counterbore` or `decad.Countersink` head. |
