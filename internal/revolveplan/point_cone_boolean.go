@@ -35,7 +35,16 @@ func PointConeBoolean(ctx context.Context, op meshbool.OperationKind, env topo.E
 	} else if fp.PointSection == nil || fp.PointSection.Apex != (r3.Vec{}) {
 		return nil, false, nil
 	}
-	if !pointcone.AboveFarCap(record.Base.Verts, record.Base.MeshBound, cone.Far) {
+	// A new limit joins the record only about the axis of every limit the
+	// record already holds. A canonical axis never equals a general one, and
+	// two parallel axes of different lengths differ too
+	// (agent-docs/revolve-axis-design.md §3.3, §4.4).
+	for _, held := range []*facetedrecord.PointConeLimit{record.Lower, record.Upper} {
+		if held != nil && held.Axis != cone.Axis {
+			return nil, false, nil
+		}
+	}
+	if !pointcone.AboveFarCap(record.Base.Verts, record.Base.MeshBound, cone.Far, cone.Axis) {
 		return nil, false, nil
 	}
 	if op == meshbool.OpCut {

@@ -35,9 +35,9 @@ func PointConeFacetGroup(cone *PointConeLimit, flip bool) Group {
 // positive apex and slope, and to the big.Rat form otherwise.
 func PointConeFactor(p r3.Vec, cone *PointConeLimit) (pointcone.Sample, error) {
 	if cone.Apex.Sign() <= 0 || cone.Slope.Sign() <= 0 {
-		return pointcone.FactorRat(p, cone.Apex, cone.Slope)
+		return pointcone.FactorRat(p, cone.Axis, cone.Apex, cone.Slope)
 	}
-	return pointcone.FactorDyadic(p, cone.Constants())
+	return pointcone.FactorDyadic(p, cone.Axis, cone.Constants())
 }
 
 // PointConeFactorParallelMin is the point count from which PointConeFactors
@@ -66,10 +66,10 @@ func PointConeFactors(points []r3.Vec, cone *PointConeLimit, workers int) ([]poi
 		}
 		return samples, errs
 	}
-	consts := cone.Constants()
+	consts, axis := cone.Constants(), cone.Axis
 	// The per-index error lives in errs, so Each's own result is unused.
 	_, _ = orderedwork.Each(len(points), workers, 256, nil, func(i int) error {
-		samples[i], errs[i] = pointcone.FactorDyadic(points[i], consts)
+		samples[i], errs[i] = pointcone.FactorDyadic(points[i], axis, consts)
 		return errs[i]
 	})
 	return samples, errs
@@ -86,15 +86,30 @@ func PointConeLimitEarlier(old, next *PointConeLimit, base Payload) bool {
 	return PointConeLimitOrdered(next, old, base)
 }
 
+// PointConeLimitOrdered compares two limits about the earlier limit's axis.
+// The caller has checked that both limits share that axis
+// (revolveplan.PointConeBoolean).
 func PointConeLimitOrdered(earlier, later *PointConeLimit, base Payload) bool {
 	return pointcone.Ordered(earlier.Apex, earlier.Slope, later.Apex, later.Slope,
-		base.Verts, base.MeshBound)
+		base.Verts, base.MeshBound, earlier.Axis)
 }
 
+// PointConeHasOutsideWitness reports whether some fan vertex lies strictly
+// outside the cone by more than its crossing error and the move of the source
+// mesh bound. A millimetre move of the mesh bound changes q = (s + k·σ)/c by
+// at most (1+k)·meshBound·|A|/c, which is (1+k)·meshBound/a for the canonical
+// axis.
 func PointConeHasOutsideWitness(base Payload, cone *PointConeLimit) bool {
+	mesh := proofarith.FloatRat(base.MeshBound)
+	if !cone.Axis.Canonical() {
+		_, hi := cone.Axis.NormBracket()
+		if proofbound.IsNonFinite(hi) {
+			return false
+		}
+		mesh = new(big.Rat).Mul(mesh, proofarith.FloatRat(hi))
+	}
 	move := new(big.Rat).Quo(new(big.Rat).Mul(
-		new(big.Rat).Add(big.NewRat(1, 1), cone.Slope),
-		proofarith.FloatRat(base.MeshBound)), cone.Apex)
+		new(big.Rat).Add(big.NewRat(1, 1), cone.Slope), mesh), cone.Apex)
 	for _, p := range base.Verts[1:] {
 		sample, err := PointConeFactor(p, cone)
 		if err != nil {

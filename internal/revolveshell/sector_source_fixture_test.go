@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/coneaxis"
+
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
@@ -69,9 +71,11 @@ func revolveFixture(t *testing.T, outline []sectionrecord.Point2) *topo.Body {
 
 // sectorFixture is the radial lug of the public sector Union tests: a point
 // Loft from the origin to a profile in the X = 10 plane, recorded as a cone
-// trim. CertifySector reads only the source record and its untrimmed base.
-func sectorFixture(t *testing.T, rootRadius float64) *topo.Body {
+// trim. Its root edge is the arc of radius 4.3. CertifySector reads only the
+// source record and its untrimmed base.
+func sectorFixture(t *testing.T) *topo.Body {
 	t.Helper()
+	const rootRadius = 4.3
 	world := sketch.NewWorld()
 	frame, err := r3.NewFrame(r3.NewVec(10, 0, 0), r3.NewVec(0, -1, 0), r3.NewVec(0, 0, -1))
 	require.NoError(t, err)
@@ -122,7 +126,7 @@ func sectorFixture(t *testing.T, rootRadius float64) *topo.Body {
 	require.NoError(t, err)
 	return &topo.Body{Payload: facetedrecord.Payload{Xform: r3.Identity(),
 		PointCone: &facetedrecord.PointConeTrimRecord{Base: base,
-			Lower: &facetedrecord.PointConeLimit{}, Upper: &facetedrecord.PointConeLimit{}}}}
+			Lower: &facetedrecord.PointConeLimit{Axis: coneaxis.X()}, Upper: &facetedrecord.PointConeLimit{Axis: coneaxis.X()}}}}
 }
 
 func sectorPayload(sector *topo.Body) facetedrecord.Payload {

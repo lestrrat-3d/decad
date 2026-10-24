@@ -89,23 +89,30 @@ func TestPointConeSourceGates(t *testing.T) {
 		{"four segments", func(p *revolvePayload) {
 			p.Profile.Outer.Segments = append(p.Profile.Outer.Segments, p.Profile.Outer.Segments[0])
 		}},
+		// A path that replaces the frame or the resolved axis clears AxisVec
+		// (revolveplan.Payload.AxisVec), so these edits clear it too. The
+		// record then fails both the frame predicate and coneaxis.OfRevolve.
 		{"frame off the origin", func(p *revolvePayload) {
-			p.Frame = frameOf(t, r3.Vec{X: 1}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+			p.Frame, p.AxisVec = frameOf(t, r3.Vec{X: 1}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)), r3.Vec{}
 		}},
 		{"frame U not X", func(p *revolvePayload) {
-			p.Frame = frameOf(t, r3.Vec{}, r3.NewVec(0, 0, 1), r3.NewVec(0, 1, 0))
+			p.Frame, p.AxisVec = frameOf(t, r3.Vec{}, r3.NewVec(0, 0, 1), r3.NewVec(0, 1, 0)), r3.Vec{}
 		}},
 		{"frame V not Y", func(p *revolvePayload) {
-			p.Frame = frameOf(t, r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 0, 1))
+			p.Frame, p.AxisVec = frameOf(t, r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 0, 1)), r3.Vec{}
 		}},
-		{"axis origin U", func(p *revolvePayload) { p.Ax.AU = 1 }},
-		{"axis origin V", func(p *revolvePayload) { p.Ax.AV = 1 }},
-		{"axis direction U", func(p *revolvePayload) { p.Ax.DU = 0.5 }},
-		{"axis direction V", func(p *revolvePayload) { p.Ax.DV = 1 }},
-		{"axis origin U bound", func(p *revolvePayload) { p.Ax.AUBound = 1 }},
-		{"axis origin V bound", func(p *revolvePayload) { p.Ax.AVBound = 1 }},
-		{"axis direction U bound", func(p *revolvePayload) { p.Ax.DUBound = 1 }},
-		{"axis direction V bound", func(p *revolvePayload) { p.Ax.DVBound = 1 }},
+		{"axis origin U", func(p *revolvePayload) { p.Ax.AU, p.AxisVec = 1, r3.Vec{} }},
+		{"axis origin V", func(p *revolvePayload) { p.Ax.AV, p.AxisVec = 1, r3.Vec{} }},
+		{"axis direction U", func(p *revolvePayload) { p.Ax.DU, p.AxisVec = 0.5, r3.Vec{} }},
+		{"axis direction V", func(p *revolvePayload) { p.Ax.DV, p.AxisVec = 1, r3.Vec{} }},
+		{"axis origin U bound", func(p *revolvePayload) { p.Ax.AUBound, p.AxisVec = 1, r3.Vec{} }},
+		{"axis origin V bound", func(p *revolvePayload) { p.Ax.AVBound, p.AxisVec = 1, r3.Vec{} }},
+		{"axis direction U bound", func(p *revolvePayload) { p.Ax.DUBound, p.AxisVec = 1, r3.Vec{} }},
+		{"axis direction V bound", func(p *revolvePayload) { p.Ax.DVBound, p.AxisVec = 1, r3.Vec{} }},
+		{"frame off the origin with its axis vector", func(p *revolvePayload) {
+			p.Frame = frameOf(t, r3.Vec{X: 1}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+		}},
+		{"axis anchor off the origin with its axis vector", func(p *revolvePayload) { p.Ax.AU = 1 }},
 		{"non-line segment", func(p *revolvePayload) {
 			p.Profile.Outer.Segments[0] = sectionrecord.ArcSeg{}
 		}},
@@ -183,6 +190,24 @@ func TestPointConeSourceGates(t *testing.T) {
 			require.False(t, ok)
 		})
 	}
+
+	// The same meridian recorded on the world XZ plane with AxisVec = X fails
+	// the frame predicate and reads about the canonical axis, so it gives the
+	// same limit (agent-docs/revolve-axis-design.md §3.3).
+	t.Run("XZ frame with its axis vector", func(t *testing.T) {
+		saved := cone.n.Payload
+		defer func() { cone.n.Payload = saved }()
+		p := good
+		p.Frame = frameOf(t, r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 0, 1))
+		require.Equal(t, r3.Vec{X: 1}, p.AxisVec)
+		cone.n.Payload = p
+		got, ok := revolveplan.PointConeSource(&cone.n)
+		require.True(t, ok)
+		require.True(t, got.Axis.Canonical())
+		require.Zero(t, got.Apex.Cmp(limit.Apex))
+		require.Zero(t, got.Far.Cmp(limit.Far))
+		require.Zero(t, got.Slope.Cmp(limit.Slope))
+	})
 
 	t.Run("no cone face", func(t *testing.T) {
 		faces := topobuild.Faces(&cone.n)

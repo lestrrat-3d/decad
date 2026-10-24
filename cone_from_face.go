@@ -122,12 +122,12 @@ func ConeFromFace(ctx context.Context, body *Body, face FaceSelector, far units.
 }
 
 // commitExactPointCone registers a built cone in d only when revolveplan.PointConeSource
-// reads it back. The recognizer also needs a face classified Cone, and Revolve
-// calls a generator that shallow a cylinder. The check runs before the body is
-// registered, so a refusal leaves the document and its provenance numbering
-// untouched.
+// reads it back as a cone about world X. The recognizer also needs a face
+// classified Cone, and Revolve calls a generator that shallow a cylinder. The
+// check runs before the body is registered, so a refusal leaves the document
+// and its provenance numbering untouched.
 func commitExactPointCone(ctx context.Context, d *Document, cone *Body) error {
-	if _, ok := revolveplan.PointConeSource(&cone.n); !ok {
+	if limit, ok := revolveplan.PointConeSource(&cone.n); !ok || !limit.Axis.Canonical() {
 		return fmt.Errorf(`%w: the offset cone is not an exact point cone`, ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {

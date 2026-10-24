@@ -47,8 +47,9 @@ func buildPointConeInsideBand(ctx context.Context, env topo.Env,
 		upperNodeRound = max(upperNodeRound, upperSamples[i].PointError)
 		upperQError = max(upperQError, upperSamples[i].QError)
 	}
-	capGeom := pointcone.CapGeometry(far, caps)
-	upperCapBound, upperLip, err := pointcone.CapBound(capGeom, upper.Constants())
+	// A lower limit shares the upper limit's axis (revolveplan.PointConeBoolean).
+	capGeom := pointcone.CapGeometry(far, caps, upper.Axis)
+	upperCapBound, upperLip, err := pointcone.CapBound(capGeom, upper.BoundConstants())
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +58,7 @@ func buildPointConeInsideBand(ctx context.Context, env topo.Env,
 			proofbound.ProductUpper(upperLip, upperLip))))
 	lowerCapBound, lowerLip, lowerNodeRound := 0.0, 0.0, 0.0
 	if lower != nil {
-		lowerCapBound, lowerLip, err = pointcone.CapBound(capGeom, lower.Constants())
+		lowerCapBound, lowerLip, err = pointcone.CapBound(capGeom, lower.BoundConstants())
 		if err != nil {
 			return nil, err
 		}
@@ -223,7 +224,7 @@ func buildPointConeOuterBand(ctx context.Context, env topo.Env,
 		maxNodeRound = max(maxNodeRound, sample.PointError)
 		maxQError = max(maxQError, sample.QError)
 	}
-	capBound, lip, err := pointcone.CapBound(pointcone.CapGeometry(far, caps), cone.Constants())
+	capBound, lip, err := pointcone.CapBound(pointcone.CapGeometry(far, caps, cone.Axis), cone.BoundConstants())
 	if err != nil {
 		return nil, err
 	}

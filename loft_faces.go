@@ -107,8 +107,8 @@ type ConeTangentEnd struct {
 //
 // The cone must be live in the sections' document. A nil context, cone or
 // section list of the wrong length, a Radial with a nonzero X or without a
-// finite nonzero (Y, Z), or a cone that is not an exact point cone is
-// ErrDegenerate or ErrUnsupported. Selection failures are those of
+// finite nonzero (Y, Z), or a cone that is not an exact point cone about
+// world X is ErrDegenerate or ErrUnsupported. Selection failures are those of
 // LoftFaces. A canceled ctx returns ctx.Err() before the document changes.
 func LoftFacesToConeTangent(ctx context.Context, end ConeTangentEnd, sections ...*Face) (*Body, error) {
 	if ctx == nil || end.Cone == nil || len(sections) < 1 || len(sections) > maxLoftFacesSections-1 {
@@ -126,7 +126,7 @@ func LoftFacesToConeTangent(ctx context.Context, end ConeTangentEnd, sections ..
 		return nil, err
 	}
 	cone, ok := revolveplan.PointConeSource(&end.Cone.n)
-	if !ok {
+	if !ok || !cone.Axis.Canonical() {
 		return nil, fmt.Errorf("%w: LoftFacesToConeTangent needs an unplaced full straight-meridian cone about X",
 			ErrUnsupported)
 	}

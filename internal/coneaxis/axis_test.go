@@ -378,3 +378,72 @@ func TestCanonicalIsExactlyPlusX(t *testing.T) {
 	require.True(t, axis.Canonical())
 	require.Equal(t, coneaxis.X(), axis)
 }
+
+// RadialLowerOf over a point set bounds σ at every point of the set and
+// equals RadialLower on a triangle's three vertices.
+func TestRadialLowerOfBoundsEveryPoint(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(9, 10))
+	for _, v := range testAxes {
+		axis, _ := coneaxis.New(v)
+		for range 50 {
+			points := make([]r3.Vec, 2+rng.IntN(12))
+			for i := range points {
+				points[i] = dyadicPoint(rng)
+			}
+			lower, ok := axis.RadialLowerOf(points)
+			require.True(t, ok)
+			for _, p := range points {
+				require.True(t, proofbound.RatSquareAtMost(lower, oracleCrossSq(p, v)), "%g exceeds σ(%v) about %v",
+					lower, p, v)
+			}
+			tri := [3]r3.Vec{points[0], points[1], points[len(points)-1]}
+			want, _ := axis.RadialLower(tri)
+			got, _ := axis.RadialLowerOf(tri[:])
+			require.Equal(t, want, got)
+		}
+	}
+}
+
+// ScaledDown and ScaledUp bracket q/|A| from the side §3.4 names. Each holds
+// against the exact comparison of out²·(A·A) with q², read with the signs.
+func TestScaledBracketsTheMillimetreValue(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(11, 12))
+	// atMost reports whether out ≤ q/|A| exactly, and atLeast whether
+	// out ≥ q/|A|.
+	atMost := func(out float64, q, aa *big.Rat) bool {
+		o := rat(out)
+		cmp := new(big.Rat).Mul(new(big.Rat).Mul(o, o), aa).Cmp(new(big.Rat).Mul(q, q))
+		if q.Sign() >= 0 {
+			return o.Sign() <= 0 || cmp <= 0
+		}
+		return o.Sign() < 0 && cmp >= 0
+	}
+	atLeast := func(out float64, q, aa *big.Rat) bool {
+		o := rat(out)
+		cmp := new(big.Rat).Mul(new(big.Rat).Mul(o, o), aa).Cmp(new(big.Rat).Mul(q, q))
+		if q.Sign() >= 0 {
+			return o.Sign() >= 0 && cmp >= 0
+		}
+		return o.Sign() >= 0 || cmp <= 0
+	}
+	for _, v := range append(append([]r3.Vec(nil), testAxes...), r3.Vec{X: 2}, r3.Vec{Y: 0.5}) {
+		axis, _ := coneaxis.New(v)
+		aa := oracleDot(v, v)
+		for i := range 200 {
+			q := new(big.Rat).SetFrac64(int64(rng.IntN(20001)-10000), int64(1+rng.IntN(97)))
+			if i == 0 {
+				q = new(big.Rat)
+			}
+			down, ok := axis.ScaledDown(q)
+			require.True(t, ok)
+			up, ok := axis.ScaledUp(q)
+			require.True(t, ok)
+			require.True(t, atMost(down, q, aa), "ScaledDown(%s) = %g about %v", q, down, v)
+			require.True(t, atLeast(up, q, aa), "ScaledUp(%s) = %g about %v", q, up, v)
+		}
+	}
+	_, ok := coneaxis.Axis{}.ScaledDown(big.NewRat(1, 1))
+	require.False(t, ok, "the zero axis has no positive norm bracket")
+}

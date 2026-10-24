@@ -98,6 +98,9 @@ func TestConeHeelBooleanGates(t *testing.T) {
 		{"cone off the tangent apex", func(t *testing.T, c *tangentTrimChain, _ *meshbool.OperationKind, tool **Body) {
 			*tool = c.f.coneAt(t, -4, 16, math.Nextafter(8, 9))
 		}},
+		{"heel cone about another axis", func(t *testing.T, c *tangentTrimChain, _ *meshbool.OperationKind, tool **Body) {
+			*tool = coneAboutY(t, c.f.doc, -4, 16, 8)
+		}},
 	}
 	for _, tc := range declines {
 		t.Run(tc.name, func(t *testing.T) {
@@ -165,6 +168,9 @@ func TestRecordConeToeGates(t *testing.T) {
 		}},
 		{"cone past the source cap", func(t *testing.T, c *tangentTrimChain, _, tool **topo.Body) {
 			*tool = &c.f.coneAt(t, -4, 8.625, -3).n
+		}},
+		{"cone about another axis", func(t *testing.T, c *tangentTrimChain, _, tool **topo.Body) {
+			*tool = &coneAboutY(t, c.f.doc, -4, 8.625, 7.5).n
 		}},
 	}
 	for _, tc := range declines {

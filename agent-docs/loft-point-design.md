@@ -142,18 +142,28 @@ the conservative two-unit direction bound used for placed planar tags.
 ## Coaxial finite cone trims
 
 `Cut` and `Intersect` retain the point loft's authenticated fan when the
-tool is an unplaced, full Revolve of a triangular straight meridian. The
-tool axis is world X, its apex is at positive X, and its finite far cap is
-at negative X. Every source fan vertex minus the source mesh bound must
-lie strictly ahead of that far cap. A tool outside this class takes the
-ordinary mesh Boolean path.
+tool is an unplaced, full Revolve of a triangular straight meridian about an
+axis through the world origin. The axis is world X, or an exact vector `A`
+that lies in a world coordinate plane and that the tool Revolve records
+(`agent-docs/revolve-axis-design.md` §3, §4.3). The tool's apex lies on the
+positive side of the origin along the axis, and its finite far cap on the
+negative side. Every source fan vertex minus the source mesh bound must lie
+strictly ahead of that far cap. A tool outside this class takes the ordinary
+mesh Boolean path. A second limit joins a trim only about the axis of the
+limit the trim already holds; a toe about X and a heel about Y take the mesh
+path.
 An untrimmed point-loft target enters this arm only while its source record
 survives. Ordinary placement keeps that record only for exactly identity
 deltas; an exact rotation copy drops it regardless of angle. Later float
 composition to identity cannot restore it, so that pair takes the mesh path.
 
 The cone is recorded as `g(p)=x+k·hypot(y,z)` and `alpha(p)=a/g(p)`,
-with exact-rational apex `a` and slope `k` read from the meridian. A
+with exact-rational apex `a` and slope `k` read from the meridian. About a
+general axis `x` is the exact `s(p)=p·A`, `hypot(y,z)` is `σ(p)=|p×A|`, and
+`a` is the A-scaled apex `c=P·A`, so `alpha` is the same crossing. Orderings,
+the far-cap test and the witness widen the mesh bound by `|A|↑`, and the cell
+bounds below read millimetre geometry and `a↑ ≥ c/|A|`
+(`agent-docs/revolve-axis-design.md` §3.4, §3.5, §5.4). A
 `Cut` retains rays after the cone crossing; an `Intersect` retains rays
 before it. The outside result requires a far-cap vertex with
 `g(p)/a−1` strictly larger than its arithmetic error and the source

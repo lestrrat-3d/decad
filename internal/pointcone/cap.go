@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/coneaxis"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -243,24 +244,26 @@ func MidpointRound(p, q, held r3.Vec) float64 {
 	return proofbound.Radius3D(max(e[0], e[1], e[2]))
 }
 
-// CellGeom is the cone-independent half of TriangleBound.
+// CellGeom is the cone-independent half of TriangleBound, in millimetres:
+// a lower bound on the cell's axial coordinate and on its distance from the
+// axis, its greatest reach from the origin and its longest edge.
 type CellGeom struct{ xMin, rhoMin, reach, h float64 }
 
 // capParallelMin is the cell count from which CapGeometry and CapBound work
 // on several goroutines.
 const capParallelMin = 1024
 
-// CapGeometry reads every cap cell's geometry once, so two cones
-// share it. A vertex's reach is the same DvLenUpper of the same exact vector
-// in each cell holding it, and is computed once.
-func CapGeometry(far []r3.Vec, caps [][3]int) []CellGeom {
+// CapGeometry reads every cap cell's geometry about axis once, so two cones
+// about that axis share it. A vertex's reach is the same DvLenUpper of the
+// same exact vector in each cell holding it, and is computed once.
+func CapGeometry(far []r3.Vec, caps [][3]int, axis coneaxis.Axis) []CellGeom {
 	workers := orderedwork.EachWorkers(len(caps), capParallelMin)
-	return capGeometry(far, caps, workers)
+	return capGeometry(far, caps, axis, workers)
 }
 
 // capGeometry is CapGeometry on up to workers goroutines. It runs the serial
 // loop when workers < 2 or a far vertex is not finite.
-func capGeometry(far []r3.Vec, caps [][3]int, workers int) []CellGeom {
+func capGeometry(far []r3.Vec, caps [][3]int, axis coneaxis.Axis, workers int) []CellGeom {
 	reach := make([]float64, len(far))
 	out := make([]CellGeom, len(caps))
 	if workers >= 2 && !proofbound.AllFinite(far) {
@@ -277,7 +280,7 @@ func capGeometry(far []r3.Vec, caps [][3]int, workers int) []CellGeom {
 				done[v] = true
 			}
 			out[k] = cellGeometryWith([3]r3.Vec{far[tri[0]], far[tri[1]], far[tri[2]]},
-				[3]float64{reach[tri[0]], reach[tri[1]], reach[tri[2]]})
+				[3]float64{reach[tri[0]], reach[tri[1]], reach[tri[2]]}, axis)
 		}
 		return out
 	}
@@ -294,22 +297,31 @@ func capGeometry(far []r3.Vec, caps [][3]int, workers int) []CellGeom {
 	_, _ = orderedwork.Each(len(caps), workers, 256, nil, func(k int) error {
 		tri := caps[k]
 		out[k] = cellGeometryWith([3]r3.Vec{far[tri[0]], far[tri[1]], far[tri[2]]},
-			[3]float64{reach[tri[0]], reach[tri[1]], reach[tri[2]]})
+			[3]float64{reach[tri[0]], reach[tri[1]], reach[tri[2]]}, axis)
 		return nil
 	})
 	return out
 }
 
-// CellGeometry reads one cap cell's geometry.
-func CellGeometry(tri [3]r3.Vec) CellGeom {
+// CellGeometry reads one cap cell's geometry about axis.
+func CellGeometry(tri [3]r3.Vec, axis coneaxis.Axis) CellGeom {
 	var reach [3]float64
 	for i, p := range tri {
 		reach[i] = proofbound.DvLenUpper(proofbound.HeldDelta(p, r3.Vec{}))
 	}
-	return cellGeometryWith(tri, reach)
+	return cellGeometryWith(tri, reach, axis)
 }
 
-func cellGeometryWith(tri [3]r3.Vec, vertexReach [3]float64) CellGeom {
+// cellGeometryWith reads one cell's geometry from its vertices and their
+// reaches. Reach and h are millimetre distances for every axis. For a general
+// axis, xMin is the exact smallest s(p) converted down to millimetres, and
+// rhoMin is the §3.5 lower bound on σ divided by |A|↑ (agent-docs/
+// revolve-axis-design.md §3.4, §3.5). A cell whose conversion fails gets
+// rhoMin = 0, which TriangleBound refuses.
+func cellGeometryWith(tri [3]r3.Vec, vertexReach [3]float64, axis coneaxis.Axis) CellGeom {
+	if !axis.Canonical() {
+		return cellGeometryAxis(tri, vertexReach, axis)
+	}
 	xMin, yMin, yMax, zMin, zMax := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)
 	reach, h := 0.0, 0.0
 	for i, p := range tri {
@@ -327,6 +339,31 @@ func cellGeometryWith(tri [3]r3.Vec, vertexReach [3]float64) CellGeom {
 	}
 	rhoMin := max(minAbs(yMin, yMax), minAbs(zMin, zMax))
 	return CellGeom{xMin: xMin, rhoMin: rhoMin, reach: reach, h: h}
+}
+
+func cellGeometryAxis(tri [3]r3.Vec, vertexReach [3]float64, axis coneaxis.Axis) CellGeom {
+	reach, h := 0.0, 0.0
+	sMin := axis.Axial(tri[0])
+	for i, p := range tri {
+		sMin = proofarith.DyMin(sMin, axis.Axial(p))
+		reach = max(reach, vertexReach[i])
+		h = max(h, proofbound.DvLenUpper(proofbound.HeldDelta(p, tri[(i+1)%3])))
+	}
+	geom := CellGeom{reach: reach, h: h}
+	xMin, ok := axis.ScaledDown(sMin.Rat())
+	if !ok {
+		return geom
+	}
+	sigma, ok := axis.RadialLower(tri)
+	if !ok {
+		return geom
+	}
+	rhoMin, ok := axis.ScaledDown(proofarith.FloatRat(sigma))
+	if !ok {
+		return geom
+	}
+	geom.xMin, geom.rhoMin = xMin, rhoMin
+	return geom
 }
 
 // CapBound is the largest cell bound and Lipschitz value of TriangleBound over
@@ -390,7 +427,12 @@ func geomFinite(geom []CellGeom) bool {
 //	lip ratio  = an(kd+kn)kd / (ad·G²)
 //
 // It works over the cell geometry computed by CellGeometry or CapGeometry.
+//
+// c is the bound constant set of ConstantsOf. A nil c refuses.
 func TriangleBound(geom CellGeom, c *Consts) (float64, float64, float64, error) {
+	if c == nil {
+		return 0, 0, 0, fmt.Errorf("%w: the point-cone axis has no finite norm bracket", decaderr.ErrUnsupported)
+	}
 	xMin, rhoMin, reach, h := geom.xMin, geom.rhoMin, geom.reach, geom.h
 	if rhoMin <= 0 {
 		return 0, 0, 0, fmt.Errorf("%w: the point-cone cap reaches the axis", decaderr.ErrUnsupported)

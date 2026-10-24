@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/coneaxis"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -254,8 +255,8 @@ func TestVerticalLimits(t *testing.T) {
 
 	trim := func() *facetedrecord.LoftFacesTrimRecord {
 		return &facetedrecord.LoftFacesTrimRecord{
-			Toe:  &facetedrecord.PointConeLimit{Apex: rat(2), Far: rat(-5), Slope: rat(1)},
-			Heel: &facetedrecord.PointConeLimit{Apex: rat(10), Far: rat(-5), Slope: rat(2)},
+			Toe:  &facetedrecord.PointConeLimit{Axis: coneaxis.X(), Apex: rat(2), Far: rat(-5), Slope: rat(1)},
+			Heel: &facetedrecord.PointConeLimit{Axis: coneaxis.X(), Apex: rat(10), Far: rat(-5), Slope: rat(2)},
 		}
 	}
 	span := func(from, to float64) facetedrecord.RevolveSectionSpan {

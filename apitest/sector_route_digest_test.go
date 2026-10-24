@@ -23,8 +23,8 @@ import (
 // their per-fixture digests to, one file per test. A change that must leave the
 // +X sector route bit-identical runs these tests on its base commit and on its
 // head, on one machine, and compares the two directories byte for byte
-// (agent-docs/revolve-axis-design.md §8.2). The test files are copied onto the
-// base commit because the base lacks them.
+// (agent-docs/revolve-axis-design.md §8.2). Each commit runs its own copy of
+// these tests.
 const sectorDigestEnv = "DECAD_SECTOR_DIGEST"
 
 // sectorDigestTolerance is the VerifyAll tolerance every fixture tessellates at.

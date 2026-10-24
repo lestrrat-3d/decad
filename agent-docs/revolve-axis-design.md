@@ -9,8 +9,10 @@ zero, and its arithmetic is unchanged. Nothing here is specific to gears: the
 class is any Revolve blank, one cone-trimmed point-Loft sector and rigid copies
 of that sector.
 
-Until the PRs in §7 land, the general class is design-only and the code refuses
-it (`agent-docs/missing-features.md`, Booleans).
+The point-cone trims about a general axis (§4.3, §4.4) are implemented. The
+section certificate, the copies and the Union are design-only until their PRs
+in §7 land, and the code refuses them (`agent-docs/missing-features.md`,
+Booleans).
 
 ## Question router
 
@@ -80,9 +82,9 @@ class is unplaced too, so they stay unchanged:
 |---|---|---|---|
 | `internal/revolveshell/sector_source.go` | `RecordedSection` | Frame origin 0, `U = X`, `V = Y`; `Ax` `AU = AV = 0`, `DU = 1`, `DV = 0`, all bounds 0 | 3 |
 | same | `RootCandidates` | `cone.Axis == {X:1}`, `Origin.Y = Origin.Z = 0`; apex read as `Origin.X` | 3 |
-| same | `CertifySector` | reads `Lower`/`Upper` constants as +X; no axis comparison | 2 |
-| `internal/revolveplan/point_cone_source.go` | `PointConeSource` | the same frame and `Ax` gate as `RecordedSection` | 2 |
-| `internal/revolveplan/point_cone_boolean.go` | `PointConeBoolean` | combines `Lower` and `Upper` with no axis comparison | 2 |
+| same | `CertifySector` | compares the blank's and both limits' axes (§4.4); the blank reading is +X | 2 |
+| `internal/revolveplan/point_cone_source.go` | `PointConeSource` | the frame predicate selects the +X reading; any other record reads about its `AxisVec` (§4.3) | 2 |
+| `internal/revolveplan/point_cone_boolean.go` | `PointConeBoolean` | admits a limit only about the held limits' axis (§4.4) | 2 |
 | `internal/revolveproof/sector_fit.go` | `revolveFitMeridianDifference` | `cone.Axis == {X:1}`, `Apex.Y = Apex.Z = 0` | 3 |
 | `internal/revolveproof/circle_side.go` | `CircleFragmentSide` | `cone.Axis == {X:1}` | 3 |
 | `internal/massmoment/axis_placement.go` | `XAxisRotation`, `XAxisPlacementCharge` | block form about X | 1 (new), 4 (callers) |
@@ -105,7 +107,7 @@ class is unplaced too, so they stay unchanged:
 | `internal/pointcone/cap.go` | `CapGeometry`, `capGeometry`, `CellGeometry`, `cellGeometryWith` | `xMin` from `p.X`, `rhoMin` from the YZ box | 2 |
 | same | `ReachUpper` | the norm of `p` in millimetres; axis-free, kept in millimetres (§3.4) | 2 (checked) |
 | same | `TriangleBound` | millimetre `a`, `G`, `h` (homogeneity, §3.4) | 2 |
-| `internal/facetedrecord/point.go` | `PointConeLimit`, `Constants` | `Apex`, `Far` are X coordinates; no axis field; one constant set | 2 |
+| `internal/facetedrecord/point.go` | `PointConeLimit`, `Constants`, `BoundConstants` | `Apex`, `Far` are A-scaled about `Axis`, X coordinates for the canonical axis; one constant set for the canonical axis | 2 |
 | `internal/facetedrecord/point_cone_helpers.go` | `PointConeFactor(s)`, `PointConeLimitLater/Earlier/Ordered` | through `pointcone` | 2 |
 | `internal/revolveproof/sector_geometry.go` | `RevolveMeridianResidual` | meridian `(U,V)` against `Origin.X` | 3 |
 | same | `RevolveImplicitDisplacement`, `revolveMeridianExtensionGap` | `world.X > 0`, X range of the fan | 3 |
@@ -410,10 +412,13 @@ for a copy that `XAxisRotation` rejects. The drift that passes is charged
 
 - `ConeFromFace`, `loft_faces.go`, `loftfacestrim` and `CapOutside*` decline a
   `PointConeLimit` or section whose axis is not canonical. They keep +X math
-  and never see a general record. PR 2 adds the limit declines, and PR 3 adds
-  the section decline in `ConeFromFace`.
-- `SectorCylinderCut` declines a joined record whose certificate axis is not
-  canonical (PR 5). The pair then takes ordinary dispatch.
+  and never see a general record. PR 2 adds the limit declines, including
+  `ConeFromFace`'s check that the cone it built reads back about X, and PR 3
+  adds the section decline in `ConeFromFace`.
+- `SectorCylinderCut` declines a joined record whose tooth trim holds a limit
+  about a non-canonical axis (PR 2). The pair then takes ordinary dispatch.
+  The join's certificate axis equals its limits' axis (§4.4), so the same
+  check covers a general join once PR 5 admits one.
 - From PR 3 until PR 5, `SectorUnion`, `NextSectorUnion` and
   `SectorUnionMany` decline a non-canonical certificate (matched false). A
   general set therefore keeps its current route and never receives an error
@@ -741,13 +746,18 @@ Changes:
 - `ConstantsOf` yields the sample and bound sets, and `PointConeLimit`
   caches both (§3.4).
 - `pointcone` takes an `Axis` in `FactorDyadic`, `FactorRat`, `AboveFarCap`,
-  `Ordered`, `ToeHeelOrdered`, `CapGeometry`, `capGeometry`, `CellGeometry`,
-  `cellGeometryWith` and `TriangleBound` (§3.4, §3.5, §5.4). `ReachUpper` stays
-  in millimetres, and the PR shows that with a test.
-- `facetedrecord` helpers pass `Axis` through.
+  `Ordered`, `ToeHeelOrdered`, `CapGeometry`, `capGeometry`, `CellGeometry`
+  and `cellGeometryWith` (§3.4, §3.5, §5.4). The cell geometry converts to
+  millimetres, so `TriangleBound` keeps its signature and reads the
+  millimetre geometry with the bound constant set. `ReachUpper` stays in
+  millimetres, and the PR shows that with a test.
+- `coneaxis` gains `RadialLowerOf` over a point set and the millimetre
+  conversions `ScaledDown` and `ScaledUp` (§3.4).
+- `facetedrecord` helpers pass `Axis` through, and the outside witness widens
+  its move by `|A|↑`.
 - The axis comparison in `PointConeBoolean` and in `CertifySector` (§4.4).
-- The limit declines in `loft_faces.go`, `loftfacestrim` and `CapOutside*`
-  (§4.6).
+- The limit declines in `ConeFromFace`, `loft_faces.go`, `loftfacestrim`,
+  `CapOutside*`, `CapTangentToHeelCone` and `SectorCylinderCut` (§4.6).
 - Update `agent-docs/loft-point-design.md` "Coaxial finite cone trims" and the
   missing-features row.
 
@@ -757,11 +767,12 @@ canonical in this PR, so `CertifySector` declines every general limit.
 
 Tests:
 
-- apitest trim about `A = (0,1,0)`. The fixture is the +X fixture with an exact
-  coordinate permutation, so the volume intervals must overlap and the face
-  classes must match.
-- apitest trim about `A = (1,2,0)`. It runs `VerifyAll`, keeps the `PointCone`
-  record, and checks the cone `NormalAt` against the analytic normal.
+- Root-package trim about `A = (0,1,0)`, which reads the `PointCone` record.
+  The fixture is the +X fixture with an exact coordinate permutation, so the
+  volume intervals must overlap and the face classes must match.
+- Root-package trim about `A = (1,2,0)`. It runs `VerifyAll`, keeps the
+  `PointCone` record, and checks the cone `NormalAt` against the analytic
+  normal.
 - `pointcone` Dyadic-versus-Rat differentials for a general `A`.
 - An `AboveFarCap` fixture whose margin lies between `meshBound` and
   `meshBound·|A|`. It goes red without `|A|↑`.
@@ -769,10 +780,14 @@ Tests:
   instead of `a↑`.
 - Refusals:
   - a +X blank with a Y-axis tooth trim does not take the sector route;
-  - a toe about X and a heel about Y decline in `PointConeBoolean`;
+  - a toe about X and a heel about Y decline in `PointConeBoolean`, and so
+    does a heel about a parallel axis of another length;
   - an on-axis point one unit in the last place off the axis;
   - a non-coordinate frame;
-  - a `LoftFaces` cut with a general cone.
+  - a `LoftFaces` cut with a general cone, a heel `Intersect` with one,
+    `LoftFacesToConeTangent` with one, and `CapOutside*`;
+  - `ConeFromFace` registering a cone that reads back about another axis;
+  - the bore `Cut` of a join whose tooth trim holds a general limit.
 
 ### 7.3 PR 3: Section and sector certificate about `A`
 
@@ -837,7 +852,6 @@ Changes:
 - `RevolveSectionAngles` radii.
 - The separation direction and the patch axes (§5.8).
 - The join record carries the certificate axis.
-- `SectorCylinderCut` declines a non-canonical join.
 - The Union declines from PR 3 are removed.
 - Update `agent-docs/revolve-loft-sector-design.md`, `agent-docs/api-design.md`
   §8 and missing-features.
@@ -907,10 +921,11 @@ builds hash equally, and `TestPointConeDigest` hashes twice. When
 per-fixture digests to `<group>.txt` there. When `DECAD_POINTCONE_DIGEST` names
 a file, `TestPointConeDigest` writes its per-cone digests there.
 
-Every PR runs both on its base commit and its head commit on the same machine.
-The base commit lacks the test files, so the procedure copies the two files
-from the head onto a scratch checkout of the base before running them. The two
-digest outputs must be byte-equal, and the PR body records the digests.
+Every PR runs both on its base commit and its head commit on the same machine,
+each tree with its own copy of the two test files. A PR that changes the
+signature of a hashed function edits its copy to pass the canonical axis and
+keeps every hashed reading and the output format. The two digest outputs must
+be byte-equal, and the PR body records the digests.
 
 ### 8.3 Fixtures in the digest
 

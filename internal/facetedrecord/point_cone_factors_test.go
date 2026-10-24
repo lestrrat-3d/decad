@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/coneaxis"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -31,7 +32,7 @@ func TestPointConeFactorsMatchSerial(t *testing.T) {
 	}
 	for _, c := range cones {
 		t.Run(c.name, func(t *testing.T) {
-			newCone := func() *PointConeLimit { return &PointConeLimit{Apex: c.apex, Slope: c.slope} }
+			newCone := func() *PointConeLimit { return &PointConeLimit{Axis: coneaxis.X(), Apex: c.apex, Slope: c.slope} }
 			ref := newCone()
 			first, firstErr := -1, error(nil)
 			for i, p := range points {

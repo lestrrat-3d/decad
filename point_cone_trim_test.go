@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/coneaxis"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/r3"
@@ -66,7 +67,7 @@ func TestPointConeTrimRejectsRoundTrippedPointLoft(t *testing.T) {
 
 func TestPointConeUpperFarPlaneNodeRequiresCapCharge(t *testing.T) {
 	t.Parallel()
-	cone := &pointConeLimit{Apex: big.NewRat(10, 1), Slope: big.NewRat(1, 1)}
+	cone := &pointConeLimit{Axis: coneaxis.X(), Apex: big.NewRat(10, 1), Slope: big.NewRat(1, 1)}
 	far := r3.Vec{X: 5, Y: 4.9}
 	sample, err := facetedrecord.PointConeFactor(far, cone)
 	require.NoError(t, err)
@@ -85,7 +86,7 @@ func TestPointConeUpperFarPlaneNodeRequiresCapCharge(t *testing.T) {
 // disproves the declaration and refuses.
 func TestPointConeUpperCapNodeMatchingFaces(t *testing.T) {
 	t.Parallel()
-	cone := &pointConeLimit{Apex: big.NewRat(10, 1), Slope: big.NewRat(1, 1)}
+	cone := &pointConeLimit{Axis: coneaxis.X(), Apex: big.NewRat(10, 1), Slope: big.NewRat(1, 1)}
 	near := r3.Vec{X: 5, Y: 5 * (1 - 1e-14)}
 	sample, err := facetedrecord.PointConeFactor(near, cone)
 	require.NoError(t, err)
@@ -113,7 +114,7 @@ func TestPointConeUpperCapNodeMatchingFaces(t *testing.T) {
 
 func TestPointConeOutsideWitnessRejectsUncertainContact(t *testing.T) {
 	t.Parallel()
-	cone := &pointConeLimit{Apex: big.NewRat(13, 1), Slope: big.NewRat(1, 1)}
+	cone := &pointConeLimit{Axis: coneaxis.X(), Apex: big.NewRat(13, 1), Slope: big.NewRat(1, 1)}
 	base := facetedPayload{Verts: []r3.Vec{{}, {X: 8, Y: 5.00001}}}
 	require.True(t, facetedrecord.PointConeHasOutsideWitness(base, cone))
 	base.MeshBound = 0.001
