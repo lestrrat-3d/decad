@@ -5,6 +5,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/coneaxis"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -29,20 +30,72 @@ func xTurn(t *testing.T, radians float64) r3.Transform {
 // cleared every gate.
 func joinedPair(t *testing.T) (joined, placed *topo.Body) {
 	t.Helper()
+	return joinedPairAbout(t, coneaxis.X(), xTurn(t, math.Pi/2), r3.Vec{X: 10}, r3.Vec{Y: 10})
+}
+
+// joinedPairAbout is joinedPair with a certificate about axis, its first
+// sector holding the one vertex first and the copy at motion holding placed.
+// The certificate carries no General reading, so GeneralCertificate passes it
+// and the copy's placement gate is the one under test.
+func joinedPairAbout(t *testing.T, axis coneaxis.Axis, motion r3.Transform,
+	first, placedVertex r3.Vec) (joined, placed *topo.Body) {
+	t.Helper()
 	trim := new(facetedrecord.PointConeTrimRecord)
-	motion := xTurn(t, math.Pi/2)
 	record := &facetedrecord.RevolveLoftJoinRecord{
-		Certificate: &facetedrecord.RevolveLoftSectorCertificate{Trim: trim},
-		First:       facetedrecord.Payload{Verts: []r3.Vec{{X: 10}}, MeshBound: 0.1},
+		Certificate: &facetedrecord.RevolveLoftSectorCertificate{Trim: trim,
+			Section: facetedrecord.RevolveSectionCertificate{Axis: axis}},
+		First: facetedrecord.Payload{Verts: []r3.Vec{first}, MeshBound: 0.1},
 	}
 	joined = &topo.Body{Payload: facetedrecord.Payload{RevolveLoftJoin: record, Xform: r3.Identity()}}
 	placed = &topo.Body{Payload: facetedrecord.Payload{
 		RevolveLoftSector: &facetedrecord.RevolveLoftSectorPlacement{Source: trim, Motion: motion},
 		Xform:             motion,
-		Verts:             []r3.Vec{{Y: 10}},
+		Verts:             []r3.Vec{placedVertex},
 		MeshBound:         0.1,
 	}}
 	return joined, placed
+}
+
+func TestNextSectorUnionPlacementAboutAxis(t *testing.T) {
+	t.Parallel()
+	for name, axisVec := range generalAxes {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			axis := axisValue(t, axisVec)
+			// first lies off the axis, so a half turn moves it 20 mm away.
+			first := r3.Vec{Z: 10}
+			union := func(motion r3.Transform) (bool, error) {
+				joined, placed := joinedPairAbout(t, axis, motion, first, motion.Apply(first))
+				_, ok, err := revolveshell.NextSectorUnion(t.Context(), meshbool.OpUnion, topo.Env{}, joined, placed)
+				return ok, err
+			}
+
+			// r3.Rotation about the float-normalized axis drifts by rounding
+			// only, so the copy reaches the build, which refuses the
+			// certificate's missing blank.
+			ok, err := union(turnAbout(t, axisVec, math.Pi))
+			require.True(t, ok, "a copy that only drifts by rounding")
+			require.ErrorContains(t, err, "sector source is incomplete or stale")
+
+			declines := map[string]r3.Transform{
+				"tilted past DriftSinLimit": tiltedTurnAbout(t, axisVec, math.Pi, 0x1p-40, first),
+				"reverses the axis":         turnAbout(t, r3.Vec{Z: 1}, math.Pi),
+			}
+			shift, err := r3.Translation(r3.Vec{Z: 1})
+			require.NoError(t, err)
+			declines["translated"], err = turnAbout(t, axisVec, math.Pi).Then(shift)
+			require.NoError(t, err)
+			mirror, err := r3.NewFrame(r3.Vec{}, unitOf(axisVec), r3.Vec{Z: 1})
+			require.NoError(t, err)
+			declines["reflected"], err = r3.Reflection(mirror)
+			require.NoError(t, err)
+			for what, motion := range declines {
+				ok, err := union(motion)
+				require.NoError(t, err, what)
+				require.False(t, ok, what)
+			}
+		})
+	}
 }
 
 func TestNextSectorUnionDeclines(t *testing.T) {

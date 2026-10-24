@@ -68,35 +68,99 @@ func AxisRotation(t r3.Transform, axis coneaxis.Axis) (MapCharge, float64, bool)
 			ma[i].Add(ma[i], new(big.Rat).Mul(rotation[i][k], exactA[k]))
 		}
 	}
+	sin, ok := acuteSinUpper(ma, exactA, axis.NormSq().Rat())
+	if !ok || sin > DriftSinLimit {
+		return MapCharge{}, 0, false
+	}
+	return charge, tiltCharge(charge.Stretch, sin), true
+}
+
+// AxisPlacementCharge returns the map charge and the drift charge ε of a
+// recorded sector placement about axis: zero for the identity, and
+// AxisRotation's charge and ε for any placement it admits. Any other
+// placement is an unsupported error. For the canonical axis the charge is
+// XAxisPlacementCharge's and ε is its Stretch.
+func AxisPlacementCharge(t r3.Transform, axis coneaxis.Axis) (MapCharge, float64, error) {
+	if t == r3.Identity() {
+		return MapCharge{}, 0, nil
+	}
+	charge, eps, ok := AxisRotation(t, axis)
+	if !ok {
+		return MapCharge{}, 0, fmt.Errorf("%w: sector placement is not an axis rotation", decaderr.ErrUnsupported)
+	}
+	return charge, eps, nil
+}
+
+// FrameTilt returns δ_B, the charge of the held angular frame B = (w, e0, e1)
+// against an exact orthonormal frame whose first axis is the unit vector
+// along axis (agent-docs/revolve-axis-design.md §5.6). With e_B the Stretch
+// of B read as exact rationals and s_W a proven upper bound on sin∠(w, A),
+// δ_B = e_B + (π/2)(e_B + s_W), rounded up: the §5.5 argument with B in place
+// of the placement. It reports false when B's defect reaches 1/2, when w·A is
+// not positive, or when a reading is not finite.
+func FrameTilt(w, e0, e1 r3.Vec, axis coneaxis.Axis) (float64, bool) {
+	var b [3][3]*big.Rat
+	for k, column := range []r3.Vec{w, e0, e1} {
+		exact, ok := ExactVec(column)
+		if !ok {
+			return 0, false
+		}
+		for i := range exact {
+			b[i][k] = exact[i]
+		}
+	}
+	charge, err := MapChargeOf(b)
+	if err != nil {
+		return 0, false
+	}
+	a := axis.Vec()
+	exactW, okW := ExactVec(w)
+	exactA, okA := ExactVec(a)
+	if !okW || !okA {
+		return 0, false
+	}
+	sin, ok := acuteSinUpper(exactW, exactA, axis.NormSq().Rat())
+	if !ok {
+		return 0, false
+	}
+	tilt := tiltCharge(charge.Stretch, sin)
+	return tilt, !proofbound.IsNonFinite(tilt)
+}
+
+// acuteSinUpper returns a proven upper bound on sin∠(u, a) for exact vectors
+// with u·a > 0, which makes the angle acute; aSq is a·a. It reports false
+// when u·a is not positive or a reading is not finite.
+func acuteSinUpper(u, a [3]*big.Rat, aSq *big.Rat) (float64, bool) {
 	dot := new(big.Rat)
-	maSq := new(big.Rat)
-	for i := range ma {
-		dot.Add(dot, new(big.Rat).Mul(ma[i], exactA[i]))
-		maSq.Add(maSq, new(big.Rat).Mul(ma[i], ma[i]))
+	uSq := new(big.Rat)
+	for i := range u {
+		dot.Add(dot, new(big.Rat).Mul(u[i], a[i]))
+		uSq.Add(uSq, new(big.Rat).Mul(u[i], u[i]))
 	}
 	if dot.Sign() <= 0 {
-		return MapCharge{}, 0, false
+		return 0, false
 	}
-	// |MA×A|² = |MA|²|A|² − (MA·A)², an exact identity.
-	aSq := axis.NormSq().Rat()
-	crossSq := new(big.Rat).Mul(maSq, aSq)
+	// |u×a|² = |u|²|a|² − (u·a)², an exact identity.
+	crossSq := new(big.Rat).Mul(uSq, aSq)
 	crossSq.Sub(crossSq, new(big.Rat).Mul(dot, dot))
-	maFloor, aFloor, crossCeil := proofbound.RatSqrtDown(maSq), proofbound.RatSqrtDown(aSq), proofbound.RatSqrtUp(crossSq)
-	if maFloor <= 0 || aFloor <= 0 || proofbound.IsNonFinite(crossCeil) {
-		return MapCharge{}, 0, false
+	uFloor, aFloor, crossCeil := proofbound.RatSqrtDown(uSq), proofbound.RatSqrtDown(aSq), proofbound.RatSqrtUp(crossSq)
+	if uFloor <= 0 || aFloor <= 0 || proofbound.IsNonFinite(crossCeil) {
+		return 0, false
 	}
 	// Rounding the numerator up and each factor of the denominator down can
 	// only widen the quotient.
-	denom := new(big.Rat).Mul(proofarith.FloatRat(maFloor), proofarith.FloatRat(aFloor))
+	denom := new(big.Rat).Mul(proofarith.FloatRat(uFloor), proofarith.FloatRat(aFloor))
 	sin := proofbound.RatFloatUp(new(big.Rat).Quo(proofarith.FloatRat(crossCeil), denom))
-	if math.IsNaN(sin) || sin > DriftSinLimit {
-		return MapCharge{}, 0, false
-	}
-	e := proofarith.FloatRat(charge.Stretch)
+	return sin, !math.IsNaN(sin)
+}
+
+// tiltCharge returns e + (π/2)(e + s), rounded up (§5.5).
+func tiltCharge(stretch, sin float64) float64 {
+	e := proofarith.FloatRat(stretch)
 	sum := new(big.Rat).Add(e, proofarith.FloatRat(sin))
 	eps := new(big.Rat).Mul(proofarith.FloatRat(halfPiUpper), sum)
 	eps.Add(eps, e)
-	return charge, proofbound.RatFloatUp(eps), true
+	return proofbound.RatFloatUp(eps)
 }
 
 // XAxisRotation admits only a proper rigid rotation around the

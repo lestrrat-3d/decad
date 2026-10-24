@@ -9,10 +9,12 @@ zero, and its arithmetic is unchanged. Nothing here is specific to gears: the
 class is any Revolve blank, one cone-trimmed point-Loft sector and rigid copies
 of that sector.
 
-The point-cone trims (§4.3, §4.4) and the section and sector certificate
-(§4.1, §4.2, §5.2, §5.3) about a general axis are implemented. The copies and
-the Union are design-only until their PRs in §7 land: every Union entry
-declines a general certificate (§4.6), and the code refuses the class
+The point-cone trims (§4.3, §4.4), the section and sector certificate
+(§4.1, §4.2, §5.2, §5.3), and the copy placement, drift, frame tilt and
+source separation (§4.5, §5.5, §5.6, §5.8) about a general axis are
+implemented. The ring, the angles, the patch axes and the Union are
+design-only until PR 5 in §7 lands: every Union entry declines a general
+certificate (§4.6), and the code refuses the class
 (`agent-docs/missing-features.md`, Booleans).
 
 ## Question router
@@ -120,14 +122,15 @@ class is unplaced too, so they stay unchanged:
 | `internal/revolveshell/section_tool_gap.go` | `RevolveSectionToolGap` | `U + k·V − Apex` with X-scalar cone limits | 3 |
 | `internal/revolveproof/sector_path.go` | `RevolveExteriorPath` | `Angle = atan2(Z, Y)` | 3 |
 | `internal/revolveshell/sector_join_plan.go` | `PrepareSectorJoinPlans` | `PlacedRound` charges `Stretch` times the node norm | 4 |
-| same | same | `facetproof.AngleAt`; `MinRadius` from `V` | 5 |
+| same | same | `MinRadius` from `V` | 4 |
+| same | same | `facetproof.AngleAt` | 5 |
 | `internal/revolveshell/sector_cap.go` | `revolveFarRootPoint` | generator `{1, s·cos, s·sin}` | 5 |
 | same | `RevolveSectorCapBoundary` | `atan2(Z, Y) + 2π` | 5 |
 | `internal/revolveshell/section_ring.go` | `BuildRevolvedSectionRing` | vertex `{U, V·cos, V·sin}`; axis vertex `{U,0,0}`; X exact | 5 |
 | `internal/revolveshell/section_angles.go` | `RevolveSectionAngles` | `maxRadius` from `V`; angles in the atan2(Z,Y) convention | 5 |
 | `internal/revolveshell/sector_cap_refine.go`, `sector_mesh.go` | `SectorConeCapBounds`, `SectorRefineCap`, `BuildRevolveSectorMesh` | through `pointcone` | 5 |
 | `internal/facetproof/sector_seam.go` | `AngleAt`, `SectorSeam` | `atan2(Z, Y)` | 5 |
-| `internal/facetproof/sector.go` | `sectorPairProjectionSeparate(Float)` | YZ direction (sound for any axis, weak off X) | 5 |
+| `internal/facetproof/sector.go` | `sectorPairProjectionSeparate(Float)` | YZ direction (sound for any axis, weak off X) | 4 |
 | `internal/loftmesh/loft_projected_patch.go` | `ProjectedPatch` | coordinate planes only (sound, self-checking) | 5 (caller) |
 
 ### 2.4 Shared consumers of the +X records
@@ -420,9 +423,20 @@ the one constructor that sets it.
 `DriftSinLimit` admits the drift that rounding leaves in `r3.Rotation` about a
 float-normalized `A`. That drift is a few units in the last place. The limit
 declines a deliberate tilt. A declined copy makes `AxisRotation` return
-`ok = false`, and the Union route declines (matched false), as it does today
-for a copy that `XAxisRotation` rejects. The drift that passes is charged
-(§5.5), never assumed away.
+`ok = false`, and the Union route declines (matched false), as it does for a
+copy that `XAxisRotation` rejects. The drift that passes is charged (§5.5),
+never assumed away.
+
+`massmoment.AxisPlacementCharge(m, axis)` reads a recorded placement: zero
+charge and `ε = 0` for the identity, `AxisRotation`'s charge and `ε` for an
+admitted rotation, and an unsupported error otherwise. Every placement site
+reads the certificate's axis `Section.Axis`:
+
+- `NextSectorUnion` admits the new copy only through `AxisRotation`.
+- `RevolveSectorSourcesSeparate` charges each copy's mesh bound with
+  `AxisPlacementCharge`'s map charge.
+- `buildSectorsJoinAtSag` passes each copy's charge and `ε` to
+  `PrepareSectorJoinPlans` (`SectorJoinInput.Charges`, `Drifts`).
 
 ### 4.6 Declines outside the class
 
@@ -583,8 +597,10 @@ at every point.
 
 **Where the charge enters.** `PrepareSectorJoinPlans` charges placement
 displacement in one term:
-`PlacedRound = RigidRoundAllow + e·Radius3D(maxAbs)`. The general class puts
-`ε` in place of `e` there and nowhere else. `PlacedRound` then reaches every
+`PlacedRound = RigidRoundAllow + ε·Radius3D(maxAbs)`, with `ε` read from
+`SectorJoinInput.Drifts`. For the canonical axis `ε` is `e` exactly, the
+Stretch itself. The general class puts `ε` in place of `e` there and nowhere
+else. `PlacedRound` then reaches every
 bound that the +X class gives it (`AccumulateSectorJoinBounds`):
 
 - `plan.CrossingBound = PlacedBound(SourceCrossingBound) + PlacedRound`;
@@ -639,7 +655,20 @@ the angle about `A` therefore differ by at most
 `PrepareSectorJoinPlans` converts spatial costs to angle by
 `2·seamCost/minRadius`. Adding `τ = (π/2)·δ_B·r_max` to each pair's `seamCost`
 covers both nodes' angle errors in the angular-gap proof. `minRadius` is
-`min(R0,R1)/|A|↑`.
+`min(R0,R1)/|A|↑`. The seam test already requires `seamCost < minRadius/2`,
+and `τ ≥ δ_B·r_max`, so a passing pair meets `δ_B r_max < ρ_min` with no
+separate check.
+
+The code holds these pieces as follows:
+
+- `RevolveSectionAxis` stores the blank basis's `W` with `E0` and `E1`.
+- `massmoment.FrameTilt(W, E0, E1, A)` returns `δ_B`. It shares the sine
+  bound and the `e + (π/2)(e + s)` rounding with `AxisRotation` and has no
+  limit of its own: a large tilt only makes `τ` large.
+- `revolveshell.GeneralPlanInput` sets `minRadius` from the exact `RootR`
+  with `ScaledDown`, `FrameTilt` and `Tilted` on `SectorJoinInput`.
+- `PrepareSectorJoinPlans` computes `r_max` over the placed nodes and folds
+  `τ` only when `Tilted` is set.
 
 For +X, `B` is the exact identity permutation, so `τ = 0`. The canonical
 branch does not fold it.
@@ -666,8 +695,12 @@ no separate charge.
 ### 5.8 Separation direction and audit patches
 
 `sectorPairProjectionSeparate` stays a proof for any direction, because the
-direction only selects a test. The general branch uses the exact box-centre
-difference minus its `A` component. The canonical branch keeps YZ.
+direction only selects a test. The general branch,
+`facetproof.SectorSourcesSeparateAbout`, uses the exact box-centre
+difference `d` minus its `A` component, `n = (A·A)·d − (d·A)·A`, and projects
+every held vertex exactly onto it, widened by `|n|↑` times the placed bound.
+It has no float fast path. The canonical branch keeps YZ and its fast path.
+`RevolveSectorSourcesSeparate` selects the branch by the axis predicate.
 
 The cap patches project onto the coordinate plane that drops the index of the
 largest `|A_k|`. For +X that is `{1,2}`. A failed patch proof keeps every pair in
@@ -700,9 +733,9 @@ Each question below was checked against the sections above.
    zero translation, `M·A·A > 0` and `DriftSinLimit` decline each one.
 8. **Can drift go uncharged?** `ε` replaces `e` at the single site that charges
    placement displacement (§5.5). PR 4's test uses a copy whose axis is off by
-   a few units in the last place. It shows that `ε·|p|` covers the exact
+   just under `DriftSinLimit`. It shows that `PlacedRound` covers the exact
    distance of its placed root contacts from the root cone, and it goes red
-   without the `s_φ` leg.
+   with `e` in place of `ε`.
 9. **Can the atan2 branch cut break a proof?** A source tooth whose root
    contacts straddle `−E0` has `|a−b| ≥ π` and refuses in
    `RevolveRootAngles`, as one straddling `−Y` does today. That is a refusal,
@@ -719,9 +752,9 @@ Each question below was checked against the sections above.
     run on every result.
 13. **Is any PR unsound on its own?** §7 states each PR's declines. PR 2 makes
     general limits and compares axes in the same PR. PR 3 makes general
-    certificates and declines them at every Union entry. PR 4 changes placement
-    charges while the Union still declines. PR 5 removes the declines only with
-    the ring, angles and separation in place.
+    certificates and declines them at every Union entry. PR 4 changes the
+    placement, tilt and separation charges while the Union still declines.
+    PR 5 removes the declines only with the ring and angles in place.
 
 ## 6. Consumer contract
 
@@ -875,14 +908,18 @@ Tests:
 - The Union of the general set still takes its current route, and every
   Union entry declines the general certificate.
 
-### 7.4 PR 4: Placement and drift about `A`
+### 7.4 PR 4: Placement, drift, tilt and separation about `A`
 
 Changes:
 
 - `AxisRotation` at every placement site: `RevolveSectorSourcesSeparate`,
   `buildSectorsJoinAtSag` and `NextSectorUnion`. Each takes the certificate's
-  axis.
+  axis (§4.5).
 - `ε` in `PlacedRound` (§5.5).
+- `τ` in `seamCost`, with `r_max`, `FrameTilt`, the stored `W` and
+  `minRadius` from `RootR` (§5.6). The node angles stay in the +X convention
+  until PR 5.
+- The separation direction (§5.8).
 
 Soundness on its own: the Union still declines non-canonical certificates, so
 the new code runs only on canonical axes there, where it is the current code.
@@ -890,25 +927,33 @@ General inputs reach it only through the internal tests below.
 
 Tests:
 
-- `RevolveSectorSourcesSeparate` with copies about `(1,2,0)`, separating and
-  overlapping.
-- `PrepareSectorJoinPlans` on a general plan: `PlacedRound` covers the exact
-  distance of each placed root contact from the root cone, and goes red with
-  `e` in place of `ε`.
-- `NextSectorUnion` declines a copy past `DriftSinLimit`, a reflected copy, a
-  translated copy and an obtuse copy.
+- `RevolveSectorSourcesSeparate` with copies about `(1,2,0)` and `(0,1,0)`:
+  a quarter turn separates only along the general direction, a five-degree
+  turn overlaps, and a tilted, translated, reflected or obtuse copy refuses.
+- `PrepareSectorJoinPlans` on a general plan about both axes: `PlacedRound`
+  covers the exact distance of each placed root contact from the root cone,
+  and goes red with `e` in place of `ε`.
+- `PrepareSectorJoinPlans` with a frame tilt whose `τ` exceeds the angular
+  gap refuses, and goes red without `τ`.
+- `FrameTilt` bounds the change of a held angle difference against the exact
+  angle about `A`, and goes red without the `s_W` leg.
+- `GeneralPlanInput` reads `minRadius` about the axis, and `FrameTilt` is
+  zero for the permuted fixture.
+- `NextSectorUnion` with a certificate about `(1,2,0)` or `(0,1,0)` admits a
+  rounded copy about the axis and declines a copy past `DriftSinLimit`, a
+  reflected copy, a translated copy and an obtuse copy. A general certificate
+  still declines a copy about its own axis.
 - The canonical copy tests and the digest are unchanged.
 
-### 7.5 PR 5: Ring, angles, separation and Union acceptance
+### 7.5 PR 5: Ring, angles and Union acceptance
 
 Changes:
 
-- `τ` in `seamCost` (§5.6).
 - `SectorSeam` and `AngleAt`, `RevolveSectorCapBoundary` and
   `revolveFarRootPoint` in the blank basis.
 - `BuildRevolvedSectionRing` through `RevolveLift` (§5.7).
 - `RevolveSectionAngles` radii.
-- The separation direction and the patch axes (§5.8).
+- The patch axes (§5.8).
 - The join record carries the certificate axis.
 - The Union declines from PR 3 are removed.
 - Update `agent-docs/revolve-loft-sector-design.md`, `agent-docs/api-design.md`
@@ -923,7 +968,6 @@ Tests:
 - A consumer-shaped bevel case: blank, back-cone tooth, toe and heel cones and
   three teeth on XY about a 26-bit direction. It checks `VerifyAll`, Euler 2
   and the gain.
-- A basis-tilt fixture. It goes red without `τ`.
 - A ring-vertex test whose composed bound encloses `SweptPointGap`.
 - Refusals: a source tooth straddling `−E0`, and the bore `Cut` declining.
 
@@ -1012,7 +1056,9 @@ The apitest digest builds these existing tests' fixtures:
   - the six `TestPointConeTrimKeepsFittedSidesAndCone` cases;
   - `TestPointConeTrimConeNormalAndCopyPlacement`.
 
-These existing tests still run unchanged on every PR:
+These existing tests still run on every PR. A signature change only adds the
+canonical axis to a call in them, as `revolve_sector_placement_test.go` passes
+`coneaxis.X()` to `RevolveSectorSourcesSeparate`:
 
 - the `VerifyAll` and relation tests above;
 - their refusal texts ("complete sector sources are not separate",

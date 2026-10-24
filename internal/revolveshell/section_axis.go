@@ -1,10 +1,13 @@
 package revolveshell
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/coneaxis"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -65,7 +68,7 @@ func rootCandidatesAbout(blank *topo.Body,
 		}
 		general := &facetedrecord.RevolveSectionAxis{Cone: cone, Slope: slope, Apex: apexScalar,
 			RootZ: [2]*big.Rat{z0, z1}, RootR: [2]*big.Rat{r0, r1},
-			ApexGap: apexGap, SlopeGap: slopeGap, E0: basis.E0, E1: basis.E1}
+			ApexGap: apexGap, SlopeGap: slopeGap, W: basis.W, E0: basis.E0, E1: basis.E1}
 		gap := general.ConeGap(reach)
 		if proofbound.IsNonFinite(gap) || proofbound.IsNonFinite(slopeGap) {
 			continue
@@ -115,6 +118,31 @@ func reportedCone(axis coneaxis.Axis, normSq, apexScalar, slope *big.Rat) (sketc
 // (agent-docs/revolve-axis-design.md §4.6).
 func GeneralCertificate(cert *facetedrecord.RevolveLoftSectorCertificate) bool {
 	return cert != nil && cert.Section.General != nil
+}
+
+// GeneralPlanInput sets the angular inputs of a general certificate's sector
+// plan (agent-docs/revolve-axis-design.md §5.6): MinRadius is
+// min(R0, R1)/|A|↑, a lower bound on the root ends' radii in millimetres, and
+// the plan charges τ from FrameTilt, the δ_B of the blank's held frame
+// (W, E0, E1) about the axis. It refuses a frame that massmoment.FrameTilt
+// declines. section must come from the general record branch: its General
+// must not be nil.
+func GeneralPlanInput(input *SectorJoinInput, section facetedrecord.RevolveSectionCertificate) error {
+	general := section.General
+	rootR := general.RootR[0]
+	if general.RootR[1].Cmp(rootR) < 0 {
+		rootR = general.RootR[1]
+	}
+	minRadius, ok := section.Axis.ScaledDown(rootR)
+	if !ok {
+		return fmt.Errorf("%w: root sector has no radius bound about the axis", decaderr.ErrUnsupported)
+	}
+	tilt, ok := massmoment.FrameTilt(general.W, general.E0, general.E1, section.Axis)
+	if !ok {
+		return fmt.Errorf("%w: the blank's angular frame departs from the axis", decaderr.ErrUnsupported)
+	}
+	input.MinRadius, input.Tilted, input.FrameTilt = minRadius, true, tilt
+	return nil
 }
 
 // sectionToolGapAbout is RevolveSectionToolGap for a general certificate. It

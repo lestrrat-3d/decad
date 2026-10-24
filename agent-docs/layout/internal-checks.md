@@ -31,7 +31,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/mirrorjoin/` | Exact line admission, reflection, prism and stacked record rewrites, splice and joined-section audit. See mirror-pattern §5. |
 | `internal/patternrecord/` | Pattern spec gates, instance motion, record mapping and the exact plane map with its charged region move. See mirror-pattern §4.3, §6.2 and axial-pattern-join. |
 | `internal/patternassembly/` | Pattern frame-keeping instances and disjoint group planning over recorded payloads. See mirror-pattern §4.3, §6. |
-| `internal/massmoment/` | Rational mass moments and inertia, and axis placement map charges (`AxisRotation`). See dynamic-mass §2–§3 and revolve-axis §4.5. |
+| `internal/massmoment/` | Rational mass moments and inertia, axis placement map and drift charges (`AxisRotation`, `AxisPlacementCharge`), and the angular frame tilt (`FrameTilt`). See dynamic-mass §2–§3 and revolve-axis §4.5, §5.5, §5.6. |
 | `internal/capcontour/` | Cap contour displacement, shell offset intervals, and edge and arc bounds. See modify-reach §8.3-§8.4. |
 | `internal/offset2d/` | Offset carriers, proofs, profile offsets and corner loops, rewrite and offset audits, offset displacement, and the draft near and far section stages. See modify §5–§9, shell-opening §3–§5, draft §2, §7. |
 | `internal/capband/` | Cap-band loop walks, offset joins, contour, loop boundary, patch, locus, volume, first-moment and centroid bounds, and cap-loop chamfer refusals. See modify-reach §8.3–§8.4. |

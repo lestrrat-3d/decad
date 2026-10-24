@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
@@ -535,8 +536,14 @@ func TestSectorUnionDeclinesGeneralCertificate(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, ok)
 	}
-	turn, err := r3.Rotation(worldX, units.Degrees(180))
+	// The copy turns about the certificate's own axis, which
+	// massmoment.AxisRotation admits, so only the general-certificate decline
+	// keeps NextSectorUnion from the join.
+	s5 := math.Sqrt(5)
+	turn, err := r3.Rotation(r3.Vec{X: 1 / s5, Y: 2 / s5}, units.Degrees(180))
 	require.NoError(t, err)
+	_, _, admitted := massmoment.AxisRotation(turn, cert.Section.Axis)
+	require.True(t, admitted)
 	second, err := Copy(t.Context(), f.lug, WithCopyPlacement(turn))
 	require.NoError(t, err)
 	_, ok, err := revolveshell.SectorUnionMany(t.Context(), topo.Env{}, []*topo.Body{lug, hub, bodyNode(second)})
@@ -551,4 +558,31 @@ func TestSectorUnionDeclinesGeneralCertificate(t *testing.T) {
 	_, err = Union(t.Context(), f.hub, f.lug)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "the chain cannot continue")
+}
+
+// A general certificate's sector plan reads the root radius about the axis,
+// min(R0, R1)/|A|↑, and charges τ from the blank frame's tilt. The congruent
+// fixture's frame is an exact permutation, so its tilt is zero; the tilted
+// fixture's held direction (1, 2)/√5 rounds, so its tilt is a few units in the
+// last place.
+func TestGeneralPlanInputReadsRadiusAndFrameAboutAxis(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		fixture         sectionAxisFixture
+		radius, maxTilt float64
+	}{
+		"(0,1,0)": {permutedSectionFixture(t, false), 2.5, 0},
+		"(1,2,0)": {tiltedSectionFixture(t, false, planePoint{U: 1, V: 2}), 2.5 * math.Sqrt(5) / 2, 0x1p-48},
+	} {
+		cert := tc.fixture.certify(t)
+		var input revolveshell.SectorJoinInput
+		require.NoError(t, revolveshell.GeneralPlanInput(&input, cert.Section), name)
+		require.True(t, input.Tilted, name)
+		require.LessOrEqual(t, input.FrameTilt, tc.maxTilt, name)
+		require.GreaterOrEqual(t, input.FrameTilt, 0.0, name)
+		// The root ends' smallest radius about the axis is 2.5 in design
+		// units, which the tilted fixture scales by √5/2.
+		require.LessOrEqual(t, input.MinRadius, tc.radius, name)
+		require.InEpsilon(t, tc.radius, input.MinRadius, 1e-15, name)
+	}
 }
