@@ -98,7 +98,10 @@ document and all source bodies unchanged.
 ## Two-cone continuation
 
 A Cut by an unplaced, full, straight world-X cone can carry one continuation
-record from an original, unplaced LoftFaces body. The final cap map must place
+record from an original, unplaced LoftFaces body. A cone whose
+`revolveplan.PointConeSource` limit has any other axis leaves the Cut without a
+record, and the next Intersect by one declines
+(`agent-docs/revolve-axis-design.md` §4.6). The final cap map must place
 the entire authenticated source rectangle strictly outside the toe cone. The
 Cut must leave every final-cap held triangle unchanged, with one surviving cap
 face. A partial or altered cap receives no record.
@@ -244,7 +247,9 @@ Every other Intersect result has no continuation record. Placement drops it.
 caps and then through a last section that no selected cap supplies. The last
 section is the plane that touches `end.Cone` along one ruling. It is built
 from the cone's exact apex `A` and slope `k` (read by `revolveplan.PointConeSource`) and the
-float direction `end.Radial = (0, y, z)`.
+float direction `end.Radial = (0, y, z)`. The construction is about world X, so a
+cone whose limit has any other axis refuses with `ErrUnsupported`
+(`agent-docs/revolve-axis-design.md` §4.6).
 
 `loftface.NewTangentEnd` chooses a unit vector `e = (e_y, e_z)` by the
 half-angle parameterisation: `e_y = (1-T^2)/(1+T^2)`, `e_z = 2T/(1+T^2)`, with
@@ -316,8 +321,8 @@ must be above `far`, `R` must be positive, and `A > 0 > far` so that
 
 Revolve classifies a generator as a cylinder when `|dr| <= 1e-9*hypot(dx, dr)`,
 and the directed rounding can cross that boundary. The built body is checked
-with `revolveplan.PointConeSource`, which needs a face classified Cone, before it is
-registered in the document. A failed check is `ErrUnsupported` and leaves the
+with `revolveplan.PointConeSource`, which needs a face classified Cone and must
+report the canonical world-X axis, before it is registered in the document. A failed check is `ErrUnsupported` and leaves the
 document and its provenance numbering unchanged.
 
 The result is the full Revolve of the triangle `(far, 0)`, `(far, R)`,

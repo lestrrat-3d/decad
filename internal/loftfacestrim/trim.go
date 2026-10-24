@@ -70,8 +70,10 @@ func RecordConeToe(ctx context.Context, source, tool, result *topo.Body) error {
 		base.Xform != r3.Identity() {
 		return nil
 	}
+	// The toe proof runs +X arithmetic, so a cone about any other axis
+	// leaves the cut unrecorded (agent-docs/revolve-axis-design.md §4.6).
 	cone, ok := revolveplan.PointConeSource(tool)
-	if !ok || !pointcone.AboveFarCap(base.Verts, base.MeshBound, cone.Far) {
+	if !ok || !cone.Axis.Canonical() || !pointcone.AboveFarCap(base.Verts, base.MeshBound, cone.Far, cone.Axis) {
 		return nil
 	}
 	box, err := revolveloftfaces.LfSourceBox(base.LoftFacesCap.Source)
@@ -140,9 +142,11 @@ func ConeHeelBoolean(ctx context.Context, op meshbool.OperationKind, env topo.En
 		p.LoftFacesToe.CapFace == nil || p.LoftFacesToe.CapFace.Body != target {
 		return nil, false, nil
 	}
+	// The heel proof runs +X arithmetic, so a cone about any other axis
+	// declines (agent-docs/revolve-axis-design.md §4.6).
 	cone, ok := revolveplan.PointConeSource(tool)
-	if !ok || cone.Far.Cmp(p.LoftFacesToe.Toe.Far) != 0 ||
-		!pointcone.AboveFarCap(p.LoftFacesToe.Base.Verts, p.LoftFacesToe.Base.MeshBound, cone.Far) ||
+	if !ok || !cone.Axis.Canonical() || cone.Far.Cmp(p.LoftFacesToe.Toe.Far) != 0 ||
+		!pointcone.AboveFarCap(p.LoftFacesToe.Base.Verts, p.LoftFacesToe.Base.MeshBound, cone.Far, cone.Axis) ||
 		!orderedConeLimits(p.LoftFacesToe.Toe, cone, p.LoftFacesToe.Base) {
 		return nil, false, nil
 	}
@@ -327,8 +331,8 @@ func (m *TangentHeelMeshes) ClearsResult(ctx context.Context, result []r3.Vec) e
 }
 
 func orderedConeLimits(toe, heel *facetedrecord.PointConeLimit, base facetedrecord.Payload) bool {
-	return pointcone.ToeHeelOrdered(toe.Apex, toe.Slope, heel.Apex, heel.Slope,
-		base.Verts, base.MeshBound)
+	return toe.Axis == heel.Axis && pointcone.ToeHeelOrdered(toe.Apex, toe.Slope, heel.Apex, heel.Slope,
+		base.Verts, base.MeshBound, toe.Axis)
 }
 
 // uniqueResultSourceFace returns the one live face of body that source group

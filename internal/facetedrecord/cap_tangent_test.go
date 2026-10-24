@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/coneaxis"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftface"
@@ -19,7 +20,7 @@ func TestLoftCapTangentToHeelCone(t *testing.T) {
 	previous := final
 	previous.Constant = loftface.VAdd(final.Constant, loftface.VScale(normal, big.NewRat(1, 8)))
 	box := [4]*big.Rat{big.NewRat(-4, 1), big.NewRat(-3, 1), big.NewRat(-1, 1), big.NewRat(1, 1)}
-	cone := &facetedrecord.PointConeLimit{Apex: apex, Far: big.NewRat(-4, 1), Slope: slope}
+	cone := &facetedrecord.PointConeLimit{Axis: coneaxis.X(), Apex: apex, Far: big.NewRat(-4, 1), Slope: slope}
 	record := func() *facetedrecord.LoftFacesCapRecord {
 		return &facetedrecord.LoftFacesCapRecord{Tangent: &end, Final: final, Maps: []loftface.Map{previous, previous, final}}
 	}
@@ -30,13 +31,17 @@ func TestLoftCapTangentToHeelCone(t *testing.T) {
 	require.Equal(t, 1, plane.Side)
 	require.False(t, facetedrecord.CapOutsideHeelCone(final, box, cone), "the tangent cap is not on the strict path")
 
+	plane, err = facetedrecord.CapTangentToHeelCone(record(), box, aboutY(cone))
+	require.NoError(t, err)
+	require.Nil(t, plane, "a cone about world Y has no tangent scope")
+
 	plain := record()
 	plain.Tangent = nil
 	plane, err = facetedrecord.CapTangentToHeelCone(plain, box, cone)
 	require.NoError(t, err)
 	require.Nil(t, plane, "a plain LoftFaces cap has no tangent scope")
 
-	other := &facetedrecord.PointConeLimit{Apex: apex, Far: cone.Far, Slope: big.NewRat(1, 1)}
+	other := &facetedrecord.PointConeLimit{Axis: coneaxis.X(), Apex: apex, Far: cone.Far, Slope: big.NewRat(1, 1)}
 	plane, err = facetedrecord.CapTangentToHeelCone(record(), box, other)
 	require.NoError(t, err)
 	require.Nil(t, plane, "the end was built for another cone")

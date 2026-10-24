@@ -4,8 +4,10 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/coneaxis"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftface"
+	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,9 +24,10 @@ func TestCapOutsideHeelCone(t *testing.T) {
 		G0:       one, GU: zero, GV: zero,
 	}
 	box := [4]*big.Rat{big.NewRat(-3, 1), big.NewRat(-1, 1), big.NewRat(-1, 1), one}
-	cone := &facetedrecord.PointConeLimit{Apex: big.NewRat(10, 1), Far: zero, Slope: one}
+	cone := &facetedrecord.PointConeLimit{Axis: coneaxis.X(), Apex: big.NewRat(10, 1), Far: zero, Slope: one}
 	require.True(t, facetedrecord.CapOutsideHeelCone(m, box, cone),
 		"the exact positive quadratic with a small radial margin was refused")
+	require.False(t, facetedrecord.CapOutsideHeelCone(m, box, aboutY(cone)), "a cone about world Y was admitted")
 	changed := m
 	changed.QU[1] = one
 	require.False(t, facetedrecord.CapOutsideHeelCone(changed, box, cone), "a cap that touches the cone at v=0 was admitted")
@@ -57,8 +60,9 @@ func TestCapOutsideToeCone(t *testing.T) {
 		G0:       one, GU: zero, GV: zero,
 	}
 	box := [4]*big.Rat{big.NewRat(-3, 1), big.NewRat(-1, 1), big.NewRat(-1, 1), one}
-	cone := &facetedrecord.PointConeLimit{Apex: big.NewRat(8, 1), Far: zero, Slope: one}
+	cone := &facetedrecord.PointConeLimit{Axis: coneaxis.X(), Apex: big.NewRat(8, 1), Far: zero, Slope: one}
 	require.True(t, facetedrecord.CapOutsideToeCone(m, box, cone), "the cap strictly outside the toe cone was refused")
+	require.False(t, facetedrecord.CapOutsideToeCone(m, box, aboutY(cone)), "a cone about world Y was admitted")
 
 	inside := m
 	inside.Q0[1] = big.NewRat(2, 1)
@@ -68,10 +72,10 @@ func TestCapOutsideToeCone(t *testing.T) {
 	atFar.Q0[0] = zero
 	require.False(t, facetedrecord.CapOutsideToeCone(atFar, box, cone), "a cap reaching the far plane was admitted")
 
-	steep := &facetedrecord.PointConeLimit{Apex: big.NewRat(8, 1), Far: zero, Slope: big.NewRat(1, 100)}
+	steep := &facetedrecord.PointConeLimit{Axis: coneaxis.X(), Apex: big.NewRat(8, 1), Far: zero, Slope: big.NewRat(1, 100)}
 	require.False(t, facetedrecord.CapOutsideToeCone(m, box, steep), "a thin cone leaves the margin below zero")
 
-	exact := &facetedrecord.PointConeLimit{Apex: big.NewRat(5, 1), Far: zero, Slope: big.NewRat(1, 1)}
+	exact := &facetedrecord.PointConeLimit{Axis: coneaxis.X(), Apex: big.NewRat(5, 1), Far: zero, Slope: big.NewRat(1, 1)}
 	touching := m
 	touching.Q0[1] = zero
 	require.False(t, facetedrecord.CapOutsideToeCone(touching, box, exact), "touching the cone is not strictly outside")
@@ -87,7 +91,7 @@ func TestCapOutsideToeConeMargin(t *testing.T) {
 			QU: qu, QV: loftface.RatVec{zero, zero, zero}, G0: one, GU: zero, GV: zero}
 	}
 	cone := func(apex, far, slope int64) *facetedrecord.PointConeLimit {
-		return &facetedrecord.PointConeLimit{Apex: big.NewRat(apex, 1), Far: big.NewRat(far, 1), Slope: big.NewRat(slope, 1)}
+		return &facetedrecord.PointConeLimit{Axis: coneaxis.X(), Apex: big.NewRat(apex, 1), Far: big.NewRat(far, 1), Slope: big.NewRat(slope, 1)}
 	}
 	flat := loftface.RatVec{zero, zero, zero}
 
@@ -156,4 +160,13 @@ func TestUniqueSourcePatches(t *testing.T) {
 		require.NoError(t, err, tc.name)
 		require.Equal(t, tc.want, got, tc.name)
 	}
+}
+
+// aboutY is cone with every reading kept and its axis set to world Y. The
+// cap checks read the cone in world X, so they refuse it
+// (agent-docs/revolve-axis-design.md §4.6).
+func aboutY(cone *facetedrecord.PointConeLimit) *facetedrecord.PointConeLimit {
+	out := *cone
+	out.Axis, _ = coneaxis.New(r3.Vec{Y: 1})
+	return &out
 }

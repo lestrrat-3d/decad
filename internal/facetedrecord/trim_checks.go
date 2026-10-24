@@ -45,7 +45,13 @@ func UniqueSourcePatches(ctx context.Context, p Payload, adj [][]int, groups ...
 
 // The source cap lies outside the toe cone on its whole certified rectangle.
 // Linear-fractional coordinate extrema occur at its corners because g > 0.
+//
+// The test reads the cone in world X, so a cone about any other axis is
+// refused (agent-docs/revolve-axis-design.md §4.6).
 func CapOutsideToeCone(m loftface.Map, box [4]*big.Rat, cone *PointConeLimit) bool {
+	if !cone.Axis.Canonical() {
+		return false
+	}
 	corners := loftface.BoxCorners(box)
 	x := loftface.ScalarRange(m, loftface.RatVec{new(big.Rat).SetInt64(1), new(big.Rat), new(big.Rat)}, corners)
 	y := loftface.ScalarRange(m, loftface.RatVec{new(big.Rat), new(big.Rat).SetInt64(1), new(big.Rat)}, corners)
@@ -62,8 +68,11 @@ func CapOutsideToeCone(m loftface.Map, box [4]*big.Rat, cone *PointConeLimit) bo
 // Q is the exact cone pullback after multiplying through the positive map
 // denominator. This narrow arm requires Q=A*u²+C*v² with A,C>0 and u
 // strictly one-sided throughout the authenticated source rectangle.
+//
+// The pullback reads the cone in world X, so a cone about any other axis is
+// refused (agent-docs/revolve-axis-design.md §4.6).
 func CapOutsideHeelCone(m loftface.Map, box [4]*big.Rat, cone *PointConeLimit) bool {
-	if box[1].Sign() >= 0 && box[0].Sign() <= 0 {
+	if !cone.Axis.Canonical() || box[1].Sign() >= 0 && box[0].Sign() <= 0 {
 		return false
 	}
 	return loftface.ConeStrictOutsideForm(loftface.ConePullback(m, cone.Apex, cone.Slope))
@@ -74,6 +83,7 @@ func CapOutsideHeelCone(m loftface.Map, box [4]*big.Rat, cone *PointConeLimit) b
 // plane, with the loft side, when all of these hold, and nil when the record
 // is not a cone-tangent end for this cone:
 //
+//   - the cone is about world X (agent-docs/revolve-axis-design.md §4.6);
 //   - the record's tangent end was built for this cone's exact apex and slope
 //     and reproduces the recorded final map;
 //   - the final cap's pullback to the cone is exactly C*v^2 with C > 0 over a
@@ -90,7 +100,7 @@ func CapOutsideHeelCone(m loftface.Map, box [4]*big.Rat, cone *PointConeLimit) b
 func CapTangentToHeelCone(record *LoftFacesCapRecord, box [4]*big.Rat,
 	cone *PointConeLimit) (*loftface.TangentPlane, error) {
 	rec := record.Tangent
-	if rec == nil || !rec.MatchesCone(cone.Apex, cone.Slope) ||
+	if rec == nil || !cone.Axis.Canonical() || !rec.MatchesCone(cone.Apex, cone.Slope) ||
 		!loftface.MapEqual(rec.Map(), record.Final) ||
 		!loftface.ConeTangentAlongRuling(record.Final, box, cone.Apex, cone.Slope) {
 		return nil, nil //nolint:nilnil // nil plane with nil error means the record is not a tangent end for this cone.

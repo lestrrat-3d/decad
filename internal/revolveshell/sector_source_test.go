@@ -4,7 +4,9 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/coneaxis"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
@@ -292,7 +294,7 @@ func TestCertifySector(t *testing.T) {
 	translated, err := r3.Translation(r3.Vec{Z: 0.5})
 	require.NoError(t, err)
 	t.Run("certifies the radial lug on the tapered hub", func(t *testing.T) {
-		cert, ok := revolveshell.CertifySector(revolveFixture(t, taperedHub), sectorFixture(t, 4.3))
+		cert, ok := revolveshell.CertifySector(revolveFixture(t, taperedHub), sectorFixture(t))
 		require.True(t, ok)
 		require.Equal(t, taperedHubRootSpan, cert.Section.RootSpan)
 	})
@@ -301,7 +303,7 @@ func TestCertifySector(t *testing.T) {
 		// lug certifies against both roots.
 		hub := revolveFixture(t, []sectionrecord.Point2{{U: 4}, {U: 12}, {U: 12, V: 6}, {U: 11, V: 5.5},
 			{U: 10, V: 6}, {U: 8, V: 4}, {U: 4, V: 2}})
-		sector := sectorFixture(t, 4.3)
+		sector := sectorFixture(t)
 		base := sectorPayload(sector).PointCone.Base
 		certified := 0
 		for _, section := range revolveshell.RootCandidates(hub) {
@@ -323,6 +325,24 @@ func TestCertifySector(t *testing.T) {
 			trim.Base.Xform = translated
 			p.PointCone = &trim
 		}},
+		{"refuses a tooth trimmed about another axis", func(p *facetedrecord.Payload) {
+			// Every other reading of the limits is the +X tooth's; only the
+			// axis names world Y (agent-docs/revolve-axis-design.md §4.4).
+			trim := *p.PointCone
+			yAxis, _ := coneaxis.New(r3.Vec{Y: 1})
+			lower, upper := *trim.Lower, *trim.Upper
+			lower.Axis, upper.Axis = yAxis, yAxis
+			trim.Lower, trim.Upper = &lower, &upper
+			p.PointCone = &trim
+		}},
+		{"refuses a heel about another axis", func(p *facetedrecord.Payload) {
+			trim := *p.PointCone
+			yAxis, _ := coneaxis.New(r3.Vec{Y: 1})
+			upper := *trim.Upper
+			upper.Axis = yAxis
+			trim.Upper = &upper
+			p.PointCone = &trim
+		}},
 		{"refuses an apex off the origin", func(p *facetedrecord.Payload) {
 			trim := *p.PointCone
 			section := *trim.Base.PointSection
@@ -333,7 +353,7 @@ func TestCertifySector(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			hub := revolveFixture(t, taperedHub)
-			sector := sectorFixture(t, 4.3)
+			sector := sectorFixture(t)
 			p := sectorPayload(sector)
 			tc.mutate(&p)
 			sector.Payload = p
@@ -341,4 +361,31 @@ func TestCertifySector(t *testing.T) {
 			require.False(t, ok)
 		})
 	}
+}
+
+// A +X blank and a tooth trimmed about world Y never reach the sector route:
+// both Union entries decline before any join is built
+// (agent-docs/revolve-axis-design.md §4.4).
+func TestSectorUnionDeclinesToothAboutAnotherAxis(t *testing.T) {
+	t.Parallel()
+	hub := revolveFixture(t, taperedHub)
+	sector := sectorFixture(t)
+	_, ok := revolveshell.CertifySector(hub, sector)
+	require.True(t, ok, "the +X tooth is the control")
+	p := sectorPayload(sector)
+	trim := *p.PointCone
+	yAxis, _ := coneaxis.New(r3.Vec{Y: 1})
+	lower, upper := *trim.Lower, *trim.Upper
+	lower.Axis, upper.Axis = yAxis, yAxis
+	trim.Lower, trim.Upper = &lower, &upper
+	p.PointCone = &trim
+	sector.Payload = p
+	for _, pair := range [][2]*topo.Body{{hub, sector}, {sector, hub}} {
+		_, ok, err := revolveshell.SectorUnion(t.Context(), meshbool.OpUnion, topo.Env{}, pair[0], pair[1])
+		require.NoError(t, err)
+		require.False(t, ok)
+	}
+	_, ok, err := revolveshell.SectorUnionMany(t.Context(), topo.Env{}, []*topo.Body{sector, hub})
+	require.NoError(t, err)
+	require.False(t, ok)
 }

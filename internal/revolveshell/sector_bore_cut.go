@@ -27,9 +27,9 @@ import (
 // SectorCylinderCut handles only a complete coaxial cylinder across an
 // authenticated Revolve/point-Loft join and builds the result in env. It
 // reports false, with no error, for an operation other than Cut, a target
-// with no join record, or a tool that is not an unplaced axis-X prism of one
-// whole origin-centered circle; other booleans then keep their usual
-// dispatch. A joined target without a complete planar cap-ring record
+// with no join record or with a tooth trimmed about an axis other than world
+// X, or a tool that is not an unplaced axis-X prism of one whole
+// origin-centered circle; other booleans then keep their usual dispatch. A joined target without a complete planar cap-ring record
 // refuses before the tool is read, and so does any later failed check. This
 // route runs before the general faceted contact-tolerance gate.
 func SectorCylinderCut(ctx context.Context, op meshbool.OperationKind, env topo.Env,
@@ -38,7 +38,7 @@ func SectorCylinderCut(ctx context.Context, op meshbool.OperationKind, env topo.
 		return nil, false, nil
 	}
 	joined, ok := target.Payload.(facetedrecord.Payload)
-	if !ok || joined.RevolveLoftJoin == nil {
+	if !ok || joined.RevolveLoftJoin == nil || sectorJoinGeneralAxis(joined.RevolveLoftJoin) {
 		return nil, false, nil
 	}
 	caps, ok := RevolveSectorBoreCapRecord(joined)
@@ -277,4 +277,21 @@ func buildSectorAnnularCut(ctx context.Context, joined facetedrecord.Payload, ca
 	result.RevolveLoftJoin = nil
 	result.ContactAudited = true
 	return result, nil
+}
+
+// sectorJoinGeneralAxis reports whether the join's tooth trim holds a limit
+// about an axis other than world X. The bore route reads the joined record in
+// +X arithmetic, so such a join keeps ordinary dispatch
+// (agent-docs/revolve-axis-design.md §4.6).
+func sectorJoinGeneralAxis(record *facetedrecord.RevolveLoftJoinRecord) bool {
+	if record.Certificate == nil || record.Certificate.Trim == nil {
+		return false
+	}
+	trim := record.Certificate.Trim
+	for _, limit := range []*facetedrecord.PointConeLimit{trim.Lower, trim.Upper} {
+		if limit != nil && !limit.Axis.Canonical() {
+			return true
+		}
+	}
+	return false
 }

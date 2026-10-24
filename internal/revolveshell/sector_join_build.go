@@ -256,12 +256,12 @@ func buildSectorsJoinAtSag(ctx context.Context, env topo.Env,
 	for i, node := range original {
 		far[i] = node.P
 	}
-	capGeom := pointcone.CapGeometry(far, caps)
-	upperBound, upperLip, err := pointcone.CapBound(capGeom, record.Upper.Constants())
+	capGeom := pointcone.CapGeometry(far, caps, record.Upper.Axis)
+	upperBound, upperLip, err := pointcone.CapBound(capGeom, record.Upper.BoundConstants())
 	if err != nil {
 		return nil, nil, err
 	}
-	lowerBound, lowerLip, err := pointcone.CapBound(capGeom, record.Lower.Constants())
+	lowerBound, lowerLip, err := pointcone.CapBound(capGeom, record.Lower.BoundConstants())
 	if err != nil {
 		return nil, nil, err
 	}

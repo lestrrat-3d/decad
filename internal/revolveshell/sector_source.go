@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/coneaxis"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -219,7 +220,10 @@ func RootCandidates(blank *topo.Body) []facetedrecord.RevolveSectionCertificate 
 
 // CertifySector tries each authenticated finite conical face of
 // the Revolve section. The source must certify exactly one face as the
-// contact surface; a held geometric resemblance never selects one.
+// contact surface; a held geometric resemblance never selects one. The
+// tooth's toe and heel limits and the blank must share one axis, checked
+// before any boundary certificate is requested
+// (agent-docs/revolve-axis-design.md §4.4).
 func CertifySector(blank, sector *topo.Body) (*facetedrecord.RevolveLoftSectorCertificate, bool) {
 	if sector == nil {
 		return nil, false
@@ -233,6 +237,9 @@ func CertifySector(blank, sector *topo.Body) (*facetedrecord.RevolveLoftSectorCe
 		return nil, false
 	}
 	trim := fp.PointCone
+	if !sectorAxesMatch(blank, trim) {
+		return nil, false
+	}
 	if !facetedrecord.PointSourceCurrent(trim.Base.PointSection) {
 		return nil, false
 	}
@@ -254,4 +261,22 @@ func CertifySector(blank, sector *topo.Body) (*facetedrecord.RevolveLoftSectorCe
 			Trimmed: fp, Trim: trim, Base: trim.Base, Boundary: boundary}
 	}
 	return selected, selected != nil
+}
+
+// sectorAxesMatch reports whether both trim limits are about the blank's axis
+// (coneaxis.OfRevolve), compared bitwise (agent-docs/revolve-axis-design.md
+// §3.3). A canonical axis never equals a general one, so a +X blank with a
+// tooth trimmed about another axis declines. Every Union entry reaches the
+// sector route through CertifySector or through a join certificate that
+// passed it.
+func sectorAxesMatch(blank *topo.Body, trim *facetedrecord.PointConeTrimRecord) bool {
+	if blank == nil {
+		return false
+	}
+	rp, ok := blank.Payload.(revolveplan.Payload)
+	if !ok {
+		return false
+	}
+	axis, ok := coneaxis.OfRevolve(rp.Frame, rp.Ax, rp.AxisVec)
+	return ok && trim.Lower.Axis == axis && trim.Upper.Axis == axis
 }

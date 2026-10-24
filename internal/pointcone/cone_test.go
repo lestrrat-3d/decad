@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/coneaxis"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -16,7 +17,7 @@ import (
 
 func TestPointConeTriangleBoundIncludesReciprocalCurvature(t *testing.T) {
 	t.Parallel()
-	c := ConstantsOf(big.NewRat(1, 5), big.NewRat(1, 1))
+	c := xConsts(big.NewRat(1, 5), big.NewRat(1, 1))
 	tri := [3]r3.Vec{{X: -0.9, Y: 1.1}, {X: -0.9, Y: 1.1125},
 		{X: -0.9, Y: 1.1, Z: 0.0125}}
 	_, alphaBound, _, err := triangleBound(tri, c)
@@ -34,10 +35,10 @@ func TestPointConeSourceMustClearFiniteFarCap(t *testing.T) {
 	t.Parallel()
 	far := big.NewRat(-2, 1)
 	verts := []r3.Vec{{}, {X: -3, Y: 10}}
-	require.False(t, AboveFarCap(verts, 0, far))
+	require.False(t, AboveFarCap(verts, 0, far, coneaxis.X()))
 	verts[1].X = -1
-	require.True(t, AboveFarCap(verts, 0, far))
-	require.False(t, AboveFarCap(verts, 1, far))
+	require.True(t, AboveFarCap(verts, 0, far, coneaxis.X()))
+	require.False(t, AboveFarCap(verts, 1, far, coneaxis.X()))
 }
 
 // Ordered widens the source fan by the mesh bound: the margin must beat the
@@ -47,9 +48,9 @@ func TestOrderedChargesMeshBound(t *testing.T) {
 	verts := []r3.Vec{{}, {X: 5, Y: 1}, {X: 5, Z: 1}}
 	one := big.NewRat(1, 1)
 	four, eight := big.NewRat(4, 1), big.NewRat(8, 1)
-	require.True(t, Ordered(four, one, eight, one, verts, 0))
-	require.False(t, Ordered(eight, one, four, one, verts, 0))
-	require.False(t, Ordered(four, one, eight, one, verts, 10))
+	require.True(t, Ordered(four, one, eight, one, verts, 0, coneaxis.X()))
+	require.False(t, Ordered(eight, one, four, one, verts, 0, coneaxis.X()))
+	require.False(t, Ordered(four, one, eight, one, verts, 10, coneaxis.X()))
 }
 
 // pointConeTestCones returns apex and slope pairs: the small and large
@@ -70,7 +71,7 @@ func pointConeTestCones(r *rand.Rand, extra ...[2]*big.Rat) [][2]*big.Rat {
 
 // triangleBound is the bound of one triangle's own geometry.
 func triangleBound(tri [3]r3.Vec, c *Consts) (float64, float64, float64, error) {
-	return TriangleBound(CellGeometry(tri), c)
+	return TriangleBound(CellGeometry(tri, coneaxis.X()), c)
 }
 
 // triangleBoundRat forms the same bounds as TriangleBound from big.Rat values.
@@ -146,7 +147,7 @@ func TestPointConeTriangleBoundMatchesRationalForm(t *testing.T) {
 			tri[j] = base.Add(r3.Vec{X: r.Float64() * scale, Y: r.Float64() * scale, Z: r.Float64() * scale})
 		}
 		wantCap, wantAlpha, wantLip, wantErr := triangleBoundRat(tri, cone[0], cone[1])
-		gotCap, gotAlpha, gotLip, gotErr := triangleBound(tri, ConstantsOf(cone[0], cone[1]))
+		gotCap, gotAlpha, gotLip, gotErr := triangleBound(tri, xConsts(cone[0], cone[1]))
 		if wantErr != nil {
 			require.Error(t, gotErr)
 			require.Equal(t, wantErr.Error(), gotErr.Error())
@@ -184,8 +185,8 @@ func TestPointConeFactorMatchesRationalForm(t *testing.T) {
 		case 5:
 			p.X = -math.Abs(p.X)
 		}
-		want, wantErr := FactorRat(p, cone[0], cone[1])
-		got, gotErr := FactorDyadic(p, ConstantsOf(cone[0], cone[1]))
+		want, wantErr := FactorRat(p, coneaxis.X(), cone[0], cone[1])
+		got, gotErr := FactorDyadic(p, coneaxis.X(), xConsts(cone[0], cone[1]))
 		if wantErr != nil {
 			require.Error(t, gotErr, "%v", p)
 			require.Equal(t, wantErr.Error(), gotErr.Error())
@@ -242,8 +243,8 @@ func legacyPointConeCapBound(far []r3.Vec, caps [][3]int, c *Consts) (float64, f
 func TestPointConeCapGeometryMatchesPerConeBound(t *testing.T) {
 	t.Parallel()
 	r := rand.New(rand.NewPCG(11, 13))
-	upper := ConstantsOf(big.NewRat(1, 5), big.NewRat(3, 7))
-	lower := ConstantsOf(big.NewRat(10, 1), big.NewRat(1, 1))
+	upper := xConsts(big.NewRat(1, 5), big.NewRat(3, 7))
+	lower := xConsts(big.NewRat(10, 1), big.NewRat(1, 1))
 	for i := range 30 {
 		scale := math.Ldexp(1, r.IntN(6)-2)
 		far := make([]r3.Vec, 40)
@@ -266,7 +267,7 @@ func TestPointConeCapGeometryMatchesPerConeBound(t *testing.T) {
 		for j := range caps {
 			caps[j] = [3]int{r.IntN(len(far)), r.IntN(len(far)), r.IntN(len(far))}
 		}
-		geom := CapGeometry(far, caps)
+		geom := CapGeometry(far, caps, coneaxis.X())
 		for _, c := range []*Consts{upper, lower} {
 			wantBound, wantLip, wantErr := legacyPointConeCapBound(far, caps, c)
 			gotBound, gotLip, gotErr := CapBound(geom, c)
@@ -311,4 +312,10 @@ func TestPointConeMidpointRoundMatchesRational(t *testing.T) {
 		got := MidpointRound(p, q, held)
 		require.Equal(t, math.Float64bits(want), math.Float64bits(got), "%v %v", p, q)
 	}
+}
+
+// xConsts is the one constant set of a cone about world X.
+func xConsts(apex, slope *big.Rat) *Consts {
+	sample, _ := ConstantsOf(coneaxis.X(), apex, slope)
+	return sample
 }

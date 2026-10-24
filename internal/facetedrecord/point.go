@@ -3,6 +3,7 @@ package facetedrecord
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/coneaxis"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
@@ -54,26 +55,44 @@ type PointConeTrimRecord struct {
 	Upper *PointConeLimit
 }
 
+// PointConeLimit is one exact cone limit of a point-cone trim. Apex and Far
+// are A-scaled scalars c = P·A of the apex and the far plane about Axis, and
+// Slope is the cone's tan(half-angle) (agent-docs/revolve-axis-design.md
+// §4.3). For the canonical axis they are millimetre X coordinates.
 type PointConeLimit struct {
 	Apex, Far, Slope *big.Rat
-	Surface          surfacegeom.Cone
-	Origins          []provenance.Ref
-	Denoted          *surfacenormal.Revolved
-	Reversed         bool
+	// Axis is the axis value of the tool Revolve that made the limit. Only
+	// revolveplan.PointConeSource sets it. Code that runs +X arithmetic on a
+	// limit declines one whose axis is not canonical.
+	Axis     coneaxis.Axis
+	Surface  surfacegeom.Cone
+	Origins  []provenance.Ref
+	Denoted  *surfacenormal.Revolved
+	Reversed bool
 	// MatchingFaces records that the caller asked the Boolean that made this
 	// limit to treat a cap that meets the cone within rounding as meeting it
 	// exactly (decad.WithMatchingFaces). It only widens the cap-node test by
 	// pointcone.MatchingFaceSlack; a larger gap still refuses.
 	MatchingFaces bool
 
-	Consts *pointcone.Consts // built on first use by Constants
+	Consts      *pointcone.Consts // sample set, built on first use by Constants
+	BoundConsts *pointcone.Consts // bound set, built with Consts
 }
 
+// Constants returns the sample constant set that FactorDyadic reads
+// (pointcone.ConstantsOf).
 func (cone *PointConeLimit) Constants() *pointcone.Consts {
 	if cone.Consts == nil {
-		cone.Consts = pointcone.ConstantsOf(cone.Apex, cone.Slope)
+		cone.Consts, cone.BoundConsts = pointcone.ConstantsOf(cone.Axis, cone.Apex, cone.Slope)
 	}
 	return cone.Consts
+}
+
+// BoundConstants returns the bound constant set that TriangleBound and
+// CapBound read. For a canonical axis it is the sample set.
+func (cone *PointConeLimit) BoundConstants() *pointcone.Consts {
+	cone.Constants()
+	return cone.BoundConsts
 }
 
 // PointPlaneSimilarityRecord retains the exact source cut maps and the order

@@ -227,3 +227,10 @@
 10	0.00	TestPrismPatternUnionOfTangentRootJoinsBySectionUnion
 10	0.00	TestPointLoftSourceStaysCurrentOnATiltedPlane
 10	0.02	TestRevolveRecordsAxisVec
+10	0.01	TestPointConeSourceReadsGeneralAxis
+10	1.93	TestPointConeTrimAboutPermutedAxisMatchesX
+10	0.66	TestPointConeTrimAboutTiltedAxis
+10	1.03	TestPointConeBooleanDeclinesMixedAxes
+10	0.00	TestPointConeSourceRefusesInexactAxisAndFrame
+10	0.01	TestCommitExactPointConeRefusesGeneralAxis
+10	0.02	TestLoftFacesToConeTangentRefusesGeneralAxis

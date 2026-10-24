@@ -143,6 +143,13 @@ func (a Axis) NormBracket() (lo, hi float64) {
 // plane. A canonical axis keeps the current rule, the larger of the smallest
 // |y| and the smallest |z| over the three vertices.
 func (a Axis) RadialLower(tri [3]r3.Vec) (float64, bool) {
+	return a.RadialLowerOf(tri[:])
+}
+
+// RadialLowerOf is RadialLower over the convex hull of a non-empty point set.
+// Both functionals of §3.5 are linear, so their ranges over the hull come from
+// the points themselves.
+func (a Axis) RadialLowerOf(points []r3.Vec) (float64, bool) {
 	if a.Canonical() {
 		minAbs := func(lo, hi float64) float64 {
 			if lo <= 0 && hi >= 0 {
@@ -150,8 +157,11 @@ func (a Axis) RadialLower(tri [3]r3.Vec) (float64, bool) {
 			}
 			return min(math.Abs(lo), math.Abs(hi))
 		}
-		yLo, yHi := min(tri[0].Y, tri[1].Y, tri[2].Y), max(tri[0].Y, tri[1].Y, tri[2].Y)
-		zLo, zHi := min(tri[0].Z, tri[1].Z, tri[2].Z), max(tri[0].Z, tri[1].Z, tri[2].Z)
+		yLo, yHi, zLo, zHi := math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)
+		for _, p := range points {
+			yLo, yHi = min(yLo, p.Y), max(yHi, p.Y)
+			zLo, zHi = min(zLo, p.Z), max(zHi, p.Z)
+		}
 		return max(minAbs(yLo, yHi), minAbs(zLo, zHi)), true
 	}
 	n := -1
@@ -178,7 +188,7 @@ func (a Axis) RadialLower(tri [3]r3.Vec) (float64, bool) {
 	na := a.v.Cross(en)
 	inPlane, normal := ratRange(), ratRange()
 	dna := dyVec(na)
-	for _, p := range tri {
+	for _, p := range points {
 		dp := dyVec(p)
 		d := proofarith.DyAdd(proofarith.DyAdd(
 			proofarith.DyMul(dp[0], dna[0]), proofarith.DyMul(dp[1], dna[1])), proofarith.DyMul(dp[2], dna[2]))
@@ -189,6 +199,41 @@ func (a Axis) RadialLower(tri [3]r3.Vec) (float64, bool) {
 	nm := normal.minAbs()
 	sum.Add(sum, new(big.Rat).Mul(a.NormSq().Rat(), new(big.Rat).Mul(nm, nm)))
 	return proofbound.RatSqrtDown(sum), true
+}
+
+// ScaledDown converts an A-scaled linear quantity q to millimetres as a lower
+// bound (§3.4): it returns a float no larger than q/|A|, dividing a
+// nonnegative q by |A|↑ and a negative q by |A|↓. It reports false when the
+// norm bracket or the result is not finite and positive.
+func (a Axis) ScaledDown(q *big.Rat) (float64, bool) {
+	lo, hi := a.NormBracket()
+	div := hi
+	if q.Sign() < 0 {
+		div = lo
+	}
+	return scaled(q, div, lo, hi, proofbound.RatFloatDown)
+}
+
+// ScaledUp is ScaledDown's upper bound: a float no smaller than q/|A|,
+// dividing a nonnegative q by |A|↓ and a negative q by |A|↑.
+func (a Axis) ScaledUp(q *big.Rat) (float64, bool) {
+	lo, hi := a.NormBracket()
+	div := lo
+	if q.Sign() < 0 {
+		div = hi
+	}
+	return scaled(q, div, lo, hi, proofbound.RatFloatUp)
+}
+
+func scaled(q *big.Rat, div, lo, hi float64, round func(*big.Rat) float64) (float64, bool) {
+	if !(lo > 0) || proofbound.IsNonFinite(hi) {
+		return 0, false
+	}
+	out := round(new(big.Rat).Quo(q, proofarith.FloatRat(div)))
+	if proofbound.IsNonFinite(out) {
+		return 0, false
+	}
+	return out, true
 }
 
 type ratSpan struct{ lo, hi *big.Rat }

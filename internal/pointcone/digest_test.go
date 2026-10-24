@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/coneaxis"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -19,8 +20,9 @@ import (
 // pointConeDigestEnv names the file TestPointConeDigest writes its digests to.
 // A change that must leave the +X point-cone arithmetic bit-identical runs this
 // test on its base commit and on its head, on one machine, and compares the
-// two files byte for byte (agent-docs/revolve-axis-design.md §8.2). The test
-// file is copied onto the base commit because the base lacks it.
+// two files byte for byte (agent-docs/revolve-axis-design.md §8.2). Each
+// commit runs its own copy of this file, which passes the canonical axis to
+// every axis-taking function.
 const pointConeDigestEnv = "DECAD_POINTCONE_DIGEST"
 
 type digestCone struct {
@@ -113,29 +115,29 @@ func pointConeDigest() string {
 	for _, cone := range cones {
 		h := sha256.New()
 		for _, p := range points {
-			sample, err := FactorRat(p, cone.apex, cone.slope)
+			sample, err := FactorRat(p, coneaxis.X(), cone.apex, cone.slope)
 			digestSample(h, sample, err)
 			if cone.apex.Sign() > 0 && cone.slope.Sign() > 0 {
-				sample, err = FactorDyadic(p, ConstantsOf(cone.apex, cone.slope))
+				sample, err = FactorDyadic(p, coneaxis.X(), xConsts(cone.apex, cone.slope))
 				digestSample(h, sample, err)
 			}
 		}
-		geom := CapGeometry(far, caps)
+		geom := CapGeometry(far, caps, coneaxis.X())
 		if cone.apex.Sign() > 0 && cone.slope.Sign() > 0 {
-			bound, lip, err := CapBound(geom, ConstantsOf(cone.apex, cone.slope))
+			bound, lip, err := CapBound(geom, xConsts(cone.apex, cone.slope))
 			digestWrite(h, bound, lip)
 			digestError(h, err)
 		}
 		digestWrite(h, ReachUpper(far))
 		for _, other := range cones {
-			digestBool(h, Ordered(cone.apex, cone.slope, other.apex, other.slope, fan, 0))
-			digestBool(h, Ordered(cone.apex, cone.slope, other.apex, other.slope, fan, 1e-6))
-			digestBool(h, ToeHeelOrdered(cone.apex, cone.slope, other.apex, other.slope, fan, 0))
-			digestBool(h, ToeHeelOrdered(cone.apex, cone.slope, other.apex, other.slope, fan, 1e-6))
+			digestBool(h, Ordered(cone.apex, cone.slope, other.apex, other.slope, fan, 0, coneaxis.X()))
+			digestBool(h, Ordered(cone.apex, cone.slope, other.apex, other.slope, fan, 1e-6, coneaxis.X()))
+			digestBool(h, ToeHeelOrdered(cone.apex, cone.slope, other.apex, other.slope, fan, 0, coneaxis.X()))
+			digestBool(h, ToeHeelOrdered(cone.apex, cone.slope, other.apex, other.slope, fan, 1e-6, coneaxis.X()))
 		}
 		for _, bound := range []float64{0, 1e-9, 0.5} {
 			for _, farPlane := range []*big.Rat{big.NewRat(-2, 1), big.NewRat(3, 1), new(big.Rat)} {
-				digestBool(h, AboveFarCap(fan[1:], bound, farPlane))
+				digestBool(h, AboveFarCap(fan[1:], bound, farPlane, coneaxis.X()))
 			}
 		}
 		fmt.Fprintf(&report, "%s %s\n", cone.name, hex.EncodeToString(h.Sum(nil)))
