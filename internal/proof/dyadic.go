@@ -207,7 +207,10 @@ func (d *Dyadic) view(t *big.Int, buf *dyBuf) *big.Int {
 	for n > 0 && words[n-1] == 0 {
 		n--
 	}
-	t.SetBits(words[:n])
+	// SetBits retains its input words. Keep the backing storage on the heap so
+	// the returned big.Int never points into this stack-local scratch buffer.
+	owned := append([]big.Word(nil), words[:n]...)
+	t.SetBits(owned)
 	if d.neg() {
 		t.Neg(t)
 	}
