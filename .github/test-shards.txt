@@ -234,3 +234,9 @@
 10	0.00	TestPointConeSourceRefusesInexactAxisAndFrame
 10	0.01	TestCommitExactPointConeRefusesGeneralAxis
 10	0.02	TestLoftFacesToConeTangentRefusesGeneralAxis
+10	1.25	TestCertifySectorAboutPermutedAxisMatchesX
+10	1.32	TestCertifySectorAboutTiltedAxis
+10	0.01	TestRootConeGapAboutAxis
+10	0.17	TestImplicitMarginAboutAxisScalesCost
+10	0.30	TestSectionAboutAxisRefusals
+10	0.40	TestSectorUnionDeclinesGeneralCertificate

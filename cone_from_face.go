@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/coneaxis"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
@@ -69,8 +70,11 @@ func ConeFromFace(ctx context.Context, body *Body, face FaceSelector, far units.
 	if err != nil {
 		return nil, err
 	}
+	// RecordedSection also reads a section about a general axis, whose spans
+	// are not (x, r) about world X (agent-docs/revolve-axis-design.md §4.6).
+	rp, isRevolve := bodyNode(body).Payload.(revolveplan.Payload)
 	spans, _, _, ok := revolveshell.RecordedSection(bodyNode(body))
-	if !ok {
+	if !ok || !isRevolve || !coneaxis.FrameCanonical(rp.Frame, rp.Ax) {
 		return nil, fmt.Errorf(`%w: ConeFromFace needs an unplaced full Revolve of straight sides about X`,
 			ErrUnsupported)
 	}

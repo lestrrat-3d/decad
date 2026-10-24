@@ -12,12 +12,16 @@ import (
 // RevolveSectionToolGap charges the finite meridian mismatch between each
 // trimming cone and the two section spans meeting the selected root face.
 // The endpoints come from the recorded section walk, not profile positions.
+// A general certificate reads them about its axis (sectionToolGapAbout).
 func RevolveSectionToolGap(section facetedrecord.RevolveSectionCertificate,
 	record *facetedrecord.PointConeTrimRecord) (float64, bool) {
 	if record == nil || record.Lower == nil || record.Upper == nil ||
 		len(section.Spans) < 4 || section.RootSpan < 0 ||
 		section.RootSpan >= len(section.Spans) {
 		return 0, false
+	}
+	if section.General != nil {
+		return sectionToolGapAbout(section, record)
 	}
 	root := section.Spans[section.RootSpan]
 	var neighbors [2]sectionrecord.Point2

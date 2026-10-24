@@ -150,7 +150,7 @@ func RevolveExteriorPath(base facetedrecord.Payload, boundary facetedrecord.Revo
 	}
 	for _, i := range []int{0, len(forward) - 1} {
 		forward[i].RootBoundary = true
-		forward[i].Angle = math.Atan2(forward[i].Point.Z, forward[i].Point.Y)
+		forward[i].Angle = rootAngle(section, forward[i].Point)
 	}
 	return forward, maxCrossBound, nil
 }

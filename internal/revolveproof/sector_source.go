@@ -2,7 +2,6 @@ package revolveproof
 
 import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
@@ -82,7 +81,7 @@ func CertifyRevolveFitBoundary(record *facetedrecord.PointSectionRecord,
 				return empty, false
 			}
 			side, margin, ok := CircleFragmentSide(src.Frame, typed, edge, segment, cone)
-			if !ok || margin.Cmp(proofarith.FloatRat(implicitCost)) <= 0 {
+			if !ok || !implicitMarginExceeds(margin, implicitCost, section) {
 				return empty, false
 			}
 			sides[i] = side
@@ -103,7 +102,7 @@ func CertifyRevolveFitBoundary(record *facetedrecord.PointSectionRecord,
 		cert, err := src.Sketch.CertifyConeCurveSide(entity, cone)
 		if err != nil || cert.Entity() != entity || cert.Cone() != cone ||
 			cert.IsStale() || cert.ImplicitMargin() == nil ||
-			cert.ImplicitMargin().Cmp(proofarith.FloatRat(implicitCost)) <= 0 {
+			!implicitMarginExceeds(cert.ImplicitMargin(), implicitCost, section) {
 			return empty, false
 		}
 		sides[i] = cert.Side()
@@ -218,7 +217,7 @@ func CertifyRevolveConnectorBoundary(record *facetedrecord.PointSectionRecord,
 		cert, err := src.Sketch.CertifyConeCurveSide(entity, cone)
 		if err != nil || cert.Entity() != entity || cert.Cone() != cone || cert.IsStale() ||
 			cert.ImplicitMargin() == nil ||
-			cert.ImplicitMargin().Cmp(proofarith.FloatRat(implicitCost)) <= 0 {
+			!implicitMarginExceeds(cert.ImplicitMargin(), implicitCost, section) {
 			return empty, false
 		}
 		switch cert.Side() {

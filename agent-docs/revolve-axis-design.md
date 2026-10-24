@@ -9,10 +9,11 @@ zero, and its arithmetic is unchanged. Nothing here is specific to gears: the
 class is any Revolve blank, one cone-trimmed point-Loft sector and rigid copies
 of that sector.
 
-The point-cone trims about a general axis (§4.3, §4.4) are implemented. The
-section certificate, the copies and the Union are design-only until their PRs
-in §7 land, and the code refuses them (`agent-docs/missing-features.md`,
-Booleans).
+The point-cone trims (§4.3, §4.4) and the section and sector certificate
+(§4.1, §4.2, §5.2, §5.3) about a general axis are implemented. The copies and
+the Union are design-only until their PRs in §7 land: every Union entry
+declines a general certificate (§4.6), and the code refuses the class
+(`agent-docs/missing-features.md`, Booleans).
 
 ## Question router
 
@@ -214,6 +215,17 @@ about U, runs the general record branch and the canonical arithmetic branch. Its
 arithmetic is the +X arithmetic, because that arithmetic reads world
 coordinates only.
 
+The section certificate is the exception. Its +X arithmetic reads the
+plane-local root ends as `(x, r)`, which holds only for a record that passes
+the frame predicate. `RootCandidates` therefore records which branch built
+the certificate: a certificate from the general record branch carries
+`RevolveSectionCertificate.General`, the exact A-scaled readings of §4.1 and
+§4.2, and every section consumer (`RevolveImplicitDisplacement`, the seat and
+fit brackets, `RevolveSectionToolGap`, `RevolveExteriorPath`) selects its
+branch on that field, not on `Canonical()`. Such a certificate takes the
+general arithmetic even when `A = X`. `CircleFragmentSide` reads only world
+coordinates and the cone, so it branches on the cone's axis.
+
 **Axis comparison.** A blank and a limit, or two limits, match exactly when
 their `A` values are bitwise equal. A canonical axis (`X`) never equals a
 general one, so a mixed canonical/general pair declines. Two general axes that
@@ -336,8 +348,10 @@ record needs `OfRevolve` to succeed (§3.3, §3.6) and then reads:
   - A point the Revolve snapped onto the axis has `R ≠ 0`, so it is not an
     axis point and the section refuses.
 - `SpanFace` rebuilds each wall's surface from the record's own axis walk
-  (`rp.Ax.Walk` of the plane walk). The build used that same walk, so face
-  matching stays an exact equality.
+  (`rp.Ax.Walk` of the plane walk) and classifies it with the build's own
+  `revolveaxis.Classify`. The build used that same walk, so face matching
+  stays an exact equality. A span the build split differently from the exact
+  corners finds no face, and the section refuses.
 
 `RootCandidates` reads the cone from exact data, not from the rounded
 `surfacegeom.Cone` tag:
@@ -347,16 +361,18 @@ record needs `OfRevolve` to succeed (§3.3, §3.6) and then reads:
 
 It requires all of the following:
 
-- a finite slope with `k* > 0`;
-- `Z_a` strictly below both span ends;
+- a finite slope with `k* > 0`, which puts `Z_a` strictly below both span
+  ends because `R0 > 0`;
 - the tag is a `Cone`, which binds the face.
 
 ### 4.2 Reported cone
 
 `ConeSection()` returns `{Apex: float(P*), Axis: A, Slope: float(k*)}` and is
-stored on the certificate. Sketch certifies against exactly this cone. §5.2
-charges `ConeGap`, the distance between it and the true root cone, over the
-fan's axial reach.
+stored on the certificate (`RevolveSectionAxis.Cone`). Each coordinate of
+`P*` and the slope round to the nearest float. Sketch certifies against
+exactly this cone. §5.2 charges `ConeGap`, the distance between it and the
+true root cone: the certificate's `ConeGap` covers the root span's own axial
+reach, and `RevolveImplicitDisplacement` recomputes it over the fan's reach.
 
 ### 4.3 Cone tools (`PointConeSource`)
 
@@ -419,10 +435,13 @@ for a copy that `XAxisRotation` rejects. The drift that passes is charged
   about a non-canonical axis (PR 2). The pair then takes ordinary dispatch.
   The join's certificate axis equals its limits' axis (§4.4), so the same
   check covers a general join once PR 5 admits one.
-- From PR 3 until PR 5, `SectorUnion`, `NextSectorUnion` and
-  `SectorUnionMany` decline a non-canonical certificate (matched false). A
-  general set therefore keeps its current route and never receives an error
-  that a later PR would remove.
+- Until PR 5, `SectorUnion`, `NextSectorUnion` and `SectorUnionMany` decline
+  a certificate from the general record branch (matched false,
+  `revolveshell.GeneralCertificate`). A general set therefore keeps its
+  current route, the mesh Boolean and its refusal, and never receives an
+  error that a later PR would remove.
+- `ConeFromFace` reads a section side as `(x, r)` about world X, so it
+  declines a blank outside the frame predicate before it reads a span.
 
 ## 5. Soundness
 
@@ -467,21 +486,51 @@ The bound replaces both `RevolveMeridianResidual` over the span and
 `revolveMeridianExtensionGap` over the fan reach. The span lies on `K*`
 exactly, so no meridian residual remains.
 
+The point distance between the two cones needs only
+`δ_a + |k* − s|·max(|z_lo|, |z_hi|)`: a point of `K_r` moves by at most `δ_a`
+under the translation, and the radial gap read at its own axial distance
+covers the rest. The term `|k* − s|·δ_a` covers the implicit reading of §5.3,
+which evaluates the slope gap at the translated point, whose axial distance
+from `P*` may be `δ_a` larger. A test against the exact distance therefore
+cannot show that term red, and the tests in §7.3 show the other two terms red.
+
 For +X the canonical branch keeps the current tag-based residual.
 
 ### 5.3 Sketch margins and implicit costs
 
 `ImplicitMargin` is an exact lower bound on `|F|` with `F` homogeneous of
 degree 2 in `A`. `RevolveImplicitDisplacement` bounds the change of
-`ρ² − s²z²` in mm². `CertifyRevolve*Boundary` and `CircleFragmentSide` must
-therefore compare the margin with `cost·(A·A)`, and the factor is exact.
+`ρ² − s²z²` in mm². `CertifyRevolve*Boundary`, for its Sketch side
+certificates and for `CircleFragmentSide`'s margin, must therefore compare
+the margin with `cost·(A·A)` (`implicitMarginExceeds`), and the factor is
+exact.
+
+The general `RevolveImplicitDisplacement` requires `p·A > 0` for every fan
+vertex. It reads the fan's axial range from `P*` per §3.4, widened by the
+mesh bound, and requires its lower end above `δ_a`, so the fan lies past both
+apexes. Its displacement is `d = MeshBound + ConeGap` over the fan's reach.
+The cost `(1+s²)·d·(2r+d)` bounds the change of `ρ² − s²h²` only when `r`
+bounds both `ρ` and the axial `h`. The apex may lie behind the origin, so `r`
+is the larger of the fan's distance from the origin and its axial reach from
+`P*`, plus `d`.
 
 `revolveSeatPoint`'s brackets read `|(p−O_r)×A|² − s²((p−O_r)·A)²` (Sketch's
 own `F`). They also read the source form `|p×A|² − (m·(p·A) + B)²`, where
-`R = m·Z + B` is the meridian line in A-scaled coordinates. `B` is exact
-because it comes from the scaled span ends. `fCost` scales by `A·A`.
+`R = m·Z + B` is the meridian line in A-scaled coordinates. `B = −k*·Z_a` is
+exact because it comes from the scaled span ends. Both forms are quadratic
+along the exact connector `q + t·d`, so their difference `D(t)` is too. The
+general bracket takes `fCost` as the exact maximum of `|D|` over `t ∈ [0, 1]`,
+read at the two ends and the vertex. It needs neither `ConeGap` nor an `A·A`
+factor, because `D` and Sketch's `F` share A-scaled units.
 
-For a canonical axis the branch is the current code.
+The general fitted-spline bracket (`revolveFitMeridianDifference`) bounds
+`F_blank − F_cone` over the box of a spline range. With `u = (p−O_r)·A` and
+`c_O = O_r·A`, the difference is `2·p·W − |O_r×A|²` plus `gap·sum`, where
+`W = (A·A)·O_r − c_O·A`, `gap = (s−k*)·u − c` and `sum = (s+k*)·u + c` with
+`c = k*·c_O + B`. The first part is zero for an apex on the axis line, and
+the second is the +X factored form.
+
+For a canonical certificate the branch is the current code.
 
 ### 5.4 Point-cone trims
 
@@ -807,15 +856,24 @@ Union entry declines it.
 
 Tests:
 
-- `CertifySector` on a hub and a lug about `(1,2,0)` certifies exactly one
-  root face.
-- `ConeGap` is at least the exact `K*`-to-`K_r` distance, computed
-  independently in the test, and goes red without the `|k*−s|·δ_a` term on a
-  fixture whose apex rounding is large.
+- `CertifySector` on a hub and a lug about `(1,2,0)`, with line and fitted
+  flanks, certifies exactly one root face, and the root contacts' angles in
+  the blank basis match the +X fixture's.
+- The congruent hub and lug about `(0,1,0)` certify the same root span and
+  boundary roles as +X, with the same tool gap.
+- `ConeGap` is at least the `K*`-to-`K_r` distance, sampled independently in
+  512-bit arithmetic. It goes red without `δ_a` on a fixture whose apex
+  rounds and whose slope is exact, and without the `|k*−s|` term on a fixture
+  whose apex is the origin and whose slope rounds. §5.2 states why the
+  `|k*−s|·δ_a` term has no distance test.
 - An `A·A = 5` margin fixture refuses, and goes red without the factor.
-- Refusals: a snapped axis point, a tool axis `2·A`, a profile on the negative
-  side, and `ConeFromFace` on a general blank.
-- The Union of the general set still takes its current route.
+- The seat shift covers the exact contact on a connector, and the fitted
+  bracket is exact on point boxes, about an axis whose rounded apex lies off
+  the axis line. `CircleFragmentSide` about `(0,1,0)` matches +X.
+- Refusals: a snapped axis point, a tool axis `2·A`, a profile behind the
+  origin, and `ConeFromFace` on a general blank.
+- The Union of the general set still takes its current route, and every
+  Union entry declines the general certificate.
 
 ### 7.4 PR 4: Placement and drift about `A`
 

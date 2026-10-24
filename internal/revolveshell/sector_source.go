@@ -24,24 +24,47 @@ import (
 // full axial Revolve of a finite, closed whole-line walk and binds each
 // geometric side to exactly one retained source face. It returns the spans,
 // the index of the one span on the axis, and the Revolve frame.
+//
+// A record that passes the frame predicate (coneaxis.FrameCanonical) reads
+// its plane points as (x, r) about world X. Any other record needs
+// coneaxis.OfRevolve and reads each point's exact plane-scaled coordinates
+// Z = p·A and R = cross2D(A, p) instead: Z > 0 and R ≥ 0 on every corner, and
+// the axis span is the one span with R = 0 exactly at both ends
+// (agent-docs/revolve-axis-design.md §4.1). The spans stay plane-local points.
 func RecordedSection(blank *topo.Body) ([]facetedrecord.RevolveSectionSpan, int, r3.Frame, bool) {
-	var empty r3.Frame
+	section, ok := recordedSection(blank)
+	return section.spans, section.axisSpan, section.frame, ok
+}
+
+// recordedSectionReading is RecordedSection's answer together with the axis
+// reading the root certificate needs.
+type recordedSectionReading struct {
+	spans     []facetedrecord.RevolveSectionSpan
+	axisSpan  int
+	frame     r3.Frame
+	axis      coneaxis.Axis
+	canonical bool
+	payload   revolveplan.Payload
+}
+
+func recordedSection(blank *topo.Body) (recordedSectionReading, bool) {
+	empty := recordedSectionReading{axisSpan: -1}
 	if blank == nil {
-		return nil, -1, empty, false
+		return empty, false
 	}
 	rp, ok := blank.Payload.(revolveplan.Payload)
 	if !ok || !rp.Full || rp.SurfaceResult || rp.SectionDelta != 0 ||
-		rp.Xform != r3.Identity() || len(rp.Profile.Holes) != 0 ||
-		rp.Frame.Origin() != (r3.Vec{}) || rp.Frame.U() != (r3.Vec{X: 1}) ||
-		rp.Frame.V() != (r3.Vec{Y: 1}) ||
-		rp.Ax.AU != 0 || rp.Ax.AV != 0 || rp.Ax.DU != 1 || rp.Ax.DV != 0 ||
-		rp.Ax.AUBound != 0 || rp.Ax.AVBound != 0 ||
-		rp.Ax.DUBound != 0 || rp.Ax.DVBound != 0 {
-		return nil, -1, empty, false
+		rp.Xform != r3.Identity() || len(rp.Profile.Holes) != 0 {
+		return empty, false
+	}
+	canonical := coneaxis.FrameCanonical(rp.Frame, rp.Ax)
+	axis, ok := coneaxis.OfRevolve(rp.Frame, rp.Ax, rp.AxisVec)
+	if !ok {
+		return empty, false
 	}
 	segments := rp.Profile.Outer.Segments
 	if len(segments) < 4 || len(segments) > 128 {
-		return nil, -1, empty, false
+		return empty, false
 	}
 	points, ends := make([]sectionrecord.Point2, len(segments)), make([]sectionrecord.Point2, len(segments))
 	seen := make(map[sectionrecord.Point2]struct{}, len(segments))
@@ -51,20 +74,20 @@ func RecordedSection(blank *topo.Body) ([]facetedrecord.RevolveSectionSpan, int,
 			(line.TStart == 1 && line.TEnd == 0)) || line.Start == line.End ||
 			!proofbound.FiniteVec(r3.Vec{X: line.Start.U, Y: line.Start.V}) ||
 			!proofbound.FiniteVec(r3.Vec{X: line.End.U, Y: line.End.V}) {
-			return nil, -1, empty, false
+			return empty, false
 		}
 		points[i], ends[i] = line.Start, line.End
 		if line.TStart == 1 {
 			points[i], ends[i] = ends[i], points[i]
 		}
 		if _, duplicate := seen[points[i]]; duplicate {
-			return nil, -1, empty, false
+			return empty, false
 		}
 		seen[points[i]] = struct{}{}
 	}
 	for i := range ends {
 		if ends[i] != points[(i+1)%len(points)] {
-			return nil, -1, empty, false
+			return empty, false
 		}
 	}
 	var corners []int
@@ -75,7 +98,7 @@ func RecordedSection(blank *topo.Body) ([]facetedrecord.RevolveSectionSpan, int,
 		}
 	}
 	if len(corners) < 4 {
-		return nil, -1, empty, false
+		return empty, false
 	}
 	spans := make([]facetedrecord.RevolveSectionSpan, len(corners))
 	axisSpan := -1
@@ -87,31 +110,54 @@ func RecordedSection(blank *topo.Body) ([]facetedrecord.RevolveSectionSpan, int,
 		for i := start; i != end; i = (i + 1) % len(points) {
 			span.SourceEdges = append(span.SourceEdges, i)
 		}
-		if span.Start.U <= 0 || span.End.U <= 0 ||
-			span.Start.V < 0 || span.End.V < 0 {
-			return nil, -1, empty, false
+		onAxis, ok := spanSides(rp.Frame, axis, canonical, *span)
+		if !ok {
+			return empty, false
 		}
-		if span.Start.V == 0 && span.End.V == 0 {
+		if onAxis {
 			if axisSpan >= 0 {
-				return nil, -1, empty, false
+				return empty, false
 			}
 			axisSpan = j
 			continue
 		}
 		face, ok := SpanFace(blank, *span)
 		if !ok {
-			return nil, -1, empty, false
+			return empty, false
 		}
 		if _, duplicate := usedFaces[face]; duplicate {
-			return nil, -1, empty, false
+			return empty, false
 		}
 		usedFaces[face] = struct{}{}
 		span.Face, span.Origins = face, append([]provenance.Ref(nil), face.Origins...)
 	}
 	if axisSpan < 0 {
-		return nil, -1, empty, false
+		return empty, false
 	}
-	return spans, axisSpan, rp.Frame, true
+	return recordedSectionReading{spans: spans, axisSpan: axisSpan, frame: rp.Frame, axis: axis,
+		canonical: canonical, payload: rp}, true
+}
+
+// spanSides checks that both ends of span lie strictly past the origin along
+// the axis and on the nonnegative radial side, and reports whether the span
+// lies on the axis. A canonical record reads U > 0 and V ≥ 0; any other reads
+// the exact plane-scaled Z > 0 and R ≥ 0 (§4.1), so a point the Revolve
+// snapped onto the axis keeps R ≠ 0 and is not an axis point.
+func spanSides(frame r3.Frame, axis coneaxis.Axis, canonical bool,
+	span facetedrecord.RevolveSectionSpan) (bool, bool) {
+	if canonical {
+		if span.Start.U <= 0 || span.End.U <= 0 ||
+			span.Start.V < 0 || span.End.V < 0 {
+			return false, false
+		}
+		return span.Start.V == 0 && span.End.V == 0, true
+	}
+	z0, r0 := axis.PlaneScaled(frame, span.Start.U, span.Start.V)
+	z1, r1 := axis.PlaneScaled(frame, span.End.U, span.End.V)
+	if z0.Sign() <= 0 || z1.Sign() <= 0 || r0.Sign() < 0 || r1.Sign() < 0 {
+		return false, false
+	}
+	return r0.IsZero() && r1.IsZero(), true
 }
 
 // SpanFace returns the one face of the Revolve blank whose origins are
@@ -126,7 +172,13 @@ func SpanFace(blank *topo.Body, span facetedrecord.RevolveSectionSpan) (*topo.Fa
 	w := survey2d.SegmentWalk{StartU: span.Start.U, StartV: span.Start.V,
 		EndU: span.End.U, EndV: span.End.V, TanInU: dz, TanInV: dr}
 	kind := revolveaxis.WallCone
-	if dz == 0 {
+	if !coneaxis.FrameCanonical(rp.Frame, rp.Ax) {
+		// The build swept the record's own axis walk of each plane walk, and
+		// a whole-line span's axis walk ends where its first and last
+		// segments' do (agent-docs/revolve-axis-design.md §4.1).
+		w = rp.Ax.Walk(w)
+		kind = revolveaxis.Classify(w, rp.Ax.SnapTol)
+	} else if dz == 0 {
 		kind = revolveaxis.WallPlane
 	} else if dr == 0 {
 		kind = revolveaxis.WallCylinder
@@ -170,13 +222,19 @@ func SpanFace(blank *topo.Body, span facetedrecord.RevolveSectionSpan) (*topo.Fa
 }
 
 // RootCandidates returns a certificate for every non-axis side of the
-// recorded section whose face is a finite world-X cone with its apex on the
-// axis and both span ends strictly past the apex.
+// recorded section whose face is a finite cone with its apex on the axis and
+// both span ends strictly past the apex. A +X record reads the cone from the
+// face's tag; any other reads it from the exact span data
+// (rootCandidatesAbout).
 func RootCandidates(blank *topo.Body) []facetedrecord.RevolveSectionCertificate {
-	spans, axisSpan, frame, ok := RecordedSection(blank)
+	section, ok := recordedSection(blank)
 	if !ok {
 		return nil
 	}
+	if !section.canonical {
+		return rootCandidatesAbout(blank, section)
+	}
+	spans, axisSpan, frame := section.spans, section.axisSpan, section.frame
 	var candidates []facetedrecord.RevolveSectionCertificate
 	for i, span := range spans {
 		if span.Face == nil || span.Start.V == 0 || span.End.V == 0 {
@@ -213,7 +271,7 @@ func RootCandidates(blank *topo.Body) []facetedrecord.RevolveSectionCertificate 
 		candidates = append(candidates, facetedrecord.RevolveSectionCertificate{
 			Blank: blank, Spans: spans, Frame: frame,
 			AxisSpan: axisSpan, RootSpan: i, RootStart: start, RootEnd: end,
-			RootCone: cone, ConeGap: gap})
+			RootCone: cone, ConeGap: gap, Axis: section.axis})
 	}
 	return candidates
 }
