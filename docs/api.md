@@ -97,6 +97,12 @@ A `decad.Document` is not safe for concurrent mutation. Bodies are immutable and
 |---|---|
 | `decad.New` | Creates an empty `decad.Document`. |
 | `Document.Bodies` | Lists the live bodies. |
+| `Document.Root`, `Container.NewChild` | Read the document's root container and add named children to a container. A container groups sketches, planes and bodies and changes no geometry. |
+| `Container.Name`, `Container.Parent`, `Container.Children` | Read a container's name, parent (nil for the root) and children in creation order. |
+| `Container.AddSketch`, `Container.AddPlane` | Place a sketch or plane in a container. Unplaced ones belong to the root. |
+| `Container.Sketches`, `Container.Planes`, `Container.Bodies` | List a container's members in creation order. |
+| `Document.ContainerOf`, `Document.ContainerOfSketch` | Read the container of a body or a sketch. |
+| `Document.MoveBody` | Puts a live body in another container and changes nothing else. |
 | `decad.Remove` | Retires a body from its document. |
 | `decad.Body` | An immutable solid or sheet. |
 | `decad.BodyKind` | `decad.BodySolid` or `decad.BodySheet`. `Body.Kind` and `Body.IsSolid` read it. |
@@ -299,6 +305,7 @@ Branch on a sentinel with `errors.Is`.
 | `decad.ErrBooleanFailed` | A boolean could not produce a result. |
 | `decad.ErrNotSolid` | A solid-only reading was asked of a sheet. |
 | `decad.ErrForeignBody` | A body belongs to another document. |
+| `decad.ErrCrossContainer` | One operation read bodies or sketches from different containers. |
 | `decad.ErrRetiredBody` | A body was already consumed by a feature. |
 | `decad.ErrForeignProfile`, `decad.ErrStaleProfile`, `decad.ErrInvalidProfile`, `decad.ErrUnrecordableProfile` | A sketch profile was rejected. |
 

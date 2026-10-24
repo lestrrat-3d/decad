@@ -2217,7 +2217,9 @@ the resulting bodies, measurements, and verification reports directly.
 
 ## 13. Non-goals for v1
 
-Assemblies (`Component`/`Occurrence` instancing and the DAG that comes with it), a
+Assemblies (`Component`/`Occurrence` instancing and the DAG that comes with it; a
+`Container` that only groups members of one document is not one,
+`agent-docs/container-design.md`), a
 feature tree / timeline / rollback, native analytic STEP export, sheet metal, mesh import,
 GUI or view state of any kind, and Fusion code generation.
 

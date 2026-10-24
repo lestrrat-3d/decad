@@ -110,7 +110,7 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 		return nil, err
 	}
 	body := bodyHandle(node)
-	d.commit(body)
+	d.commitIn(d.ContainerOfSketch(s), body)
 	return body, nil
 }
 
@@ -161,7 +161,7 @@ func sweepChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.C
 		return nil, err
 	}
 	body := bodyHandle(node)
-	d.commit(body)
+	d.commitIn(d.ContainerOfSketch(s), body)
 	return body, nil
 }
 

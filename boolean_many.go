@@ -38,6 +38,9 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 		}
 		seen[operand] = struct{}{}
 	}
+	if err := d.requireSameContainer(operands); err != nil {
+		return nil, err
+	}
 	for _, operand := range operands {
 		if err := refuseSheetOperand(operand, "Union"); err != nil {
 			return nil, err

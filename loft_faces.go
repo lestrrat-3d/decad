@@ -31,6 +31,11 @@ func LoftFaces(ctx context.Context, d *Document, sections ...*Face) (*Body, erro
 	if err != nil {
 		return nil, err
 	}
+	bodies := faceBodies(sections)
+	if err := d.requireSameContainer(bodies); err != nil {
+		return nil, err
+	}
+	defer d.resultIn(d.bodyContainer(bodies[0]))()
 	return buildLoftFaces(ctx, d, selected, source, nil)
 }
 
@@ -133,6 +138,11 @@ func LoftFacesToConeTangent(ctx context.Context, end ConeTangentEnd, sections ..
 	if err != nil {
 		return nil, err
 	}
+	bodies := append(faceBodies(sections), end.Cone)
+	if err := d.requireSameContainer(bodies); err != nil {
+		return nil, err
+	}
+	defer d.resultIn(d.bodyContainer(bodies[0]))()
 	tangent, err := loftface.NewTangentEnd(cone.Apex, cone.Slope, end.Radial.Y, end.Radial.Z)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupported, err)

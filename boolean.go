@@ -229,6 +229,9 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, 
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}
+	if err := d.requireSameContainer([]*Body{a, b}); err != nil {
+		return nil, err
+	}
 	if a == b {
 		return nil, fmt.Errorf(`%w: a boolean needs two distinct bodies`, ErrDegenerate)
 	}

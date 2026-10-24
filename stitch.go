@@ -61,6 +61,9 @@ func Stitch(ctx context.Context, bodies ...*Body) (*Body, error) {
 			return nil, err
 		}
 	}
+	if err := d.requireSameContainer(bodies); err != nil {
+		return nil, err
+	}
 	for _, b := range bodies {
 		if b.Kind() == BodySolid {
 			return nil, fmt.Errorf(`%w: Stitch does not accept a solid body operand (agent-docs/surface-design.md Table R row R17)`, ErrUnsupported)

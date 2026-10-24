@@ -123,6 +123,6 @@ func Offset(ctx context.Context, b *Body, distance units.Value, opts ...OffsetOp
 	// The source is DEPENDED ON, never consumed: commit with no consumed input,
 	// exactly as copyUnder does, so the receiver stays in Document.Bodies()
 	// beside its offset (agent-docs/surface-design.md §17.1).
-	d.commit(result)
+	d.commitIn(d.bodyContainer(b), result)
 	return result, nil
 }

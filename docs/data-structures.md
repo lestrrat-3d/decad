@@ -27,6 +27,7 @@ configuration option.
 | Type | Kind | Holds | Obtained from |
 |---|---|---|---|
 | `decad.Document` | struct | The live set of bodies and the producer identities behind provenance. | `decad.New` |
+| `decad.Container` | struct | A named, nestable group of sketches, planes and bodies of one document. | `Document.Root`, `Container.NewChild` |
 | `decad.Binding` | struct | One parameter read: name, source text, value and direct dependencies. | `Document.Bindings` |
 | `decad.Body` | struct | An immutable solid or sheet. | A feature function |
 | `decad.BodyKind` | enum | `decad.BodySolid` or `decad.BodySheet`. | `Body.Kind` |

@@ -72,6 +72,6 @@ func PatchProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(body)
+	d.commitIn(d.ContainerOfSketch(s), body)
 	return body, nil
 }
