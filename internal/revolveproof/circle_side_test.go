@@ -1,6 +1,7 @@
 package revolveproof_test
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -18,7 +19,15 @@ import (
 // cone axis, 10 mm from the apex) and the circle fragment left of the line.
 func circleFragmentScene(t *testing.T, r, cutU float64) (r3.Frame, *sketch.Circle, sketch.BoundaryEdge) {
 	t.Helper()
-	frame, err := r3.NewFrame(r3.Vec{X: 10}, r3.Vec{Y: 1}, r3.Vec{Z: 1})
+	return circleFragmentSceneOn(t, r3.Vec{X: 10}, r3.Vec{Y: 1}, r3.Vec{Z: 1}, r, cutU)
+}
+
+// circleFragmentSceneOn is circleFragmentScene on the plane with the given
+// frame.
+func circleFragmentSceneOn(t *testing.T, origin, u, v r3.Vec, r, cutU float64) (
+	r3.Frame, *sketch.Circle, sketch.BoundaryEdge) {
+	t.Helper()
+	frame, err := r3.NewFrame(origin, u, v)
 	require.NoError(t, err)
 	world := sketch.NewWorld()
 	plane, err := world.CreatePlaneFromFrame(frame)
@@ -93,6 +102,46 @@ func TestCircleFragmentSide(t *testing.T) {
 		_, _, ok := revolveproof.CircleFragmentSide(frame, circle, edge, circleSegment(circle, edge), cone)
 		require.False(t, ok)
 	})
+}
+
+// A cone about another axis reads Sketch's own F = |q×A|² − s²(q·A)²
+// (agent-docs/revolve-axis-design.md §5.3). The scene mapped by the exact
+// rotation (x, y, z) → (z, x, y) about A = (0, 1, 0) proves the same side with
+// the same margin; about A = (1, 2, 0) the margin scales by about A·A = 5.
+func TestCircleFragmentSideAboutAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		r, cut float64
+		side   sketch.ConeSide
+	}{{"inside", 3, -2.9, sketch.ConeInside}, {"outside", 20, -19.5, sketch.ConeOutside}} {
+		t.Run(tc.name, func(t *testing.T) {
+			frame, circle, edge := circleFragmentScene(t, tc.r, tc.cut)
+			xSide, xMargin, ok := revolveproof.CircleFragmentSide(frame, circle, edge, circleSegment(circle, edge),
+				sketch.ConeSection{Axis: r3.Vec{X: 1}, Slope: 1})
+			require.True(t, ok)
+			require.Equal(t, tc.side, xSide)
+
+			frame, circle, edge = circleFragmentSceneOn(t, r3.Vec{Y: 10}, r3.Vec{Z: 1}, r3.Vec{X: 1}, tc.r, tc.cut)
+			side, margin, ok := revolveproof.CircleFragmentSide(frame, circle, edge, circleSegment(circle, edge),
+				sketch.ConeSection{Axis: r3.Vec{Y: 1}, Slope: 1})
+			require.True(t, ok)
+			require.Equal(t, tc.side, side)
+			require.Zero(t, xMargin.Cmp(margin), "x margin %s, permuted %s", xMargin, margin)
+
+			s5 := math.Sqrt(5)
+			frame, circle, edge = circleFragmentSceneOn(t, r3.Vec{X: 10 / s5, Y: 20 / s5},
+				r3.Vec{X: -2 / s5, Y: 1 / s5}, r3.Vec{Z: 1}, tc.r, tc.cut)
+			side, margin, ok = revolveproof.CircleFragmentSide(frame, circle, edge, circleSegment(circle, edge),
+				sketch.ConeSection{Axis: r3.Vec{X: 1, Y: 2}, Slope: 1})
+			require.True(t, ok)
+			require.Equal(t, tc.side, side)
+			scaled := new(big.Rat).Mul(xMargin, big.NewRat(5, 1))
+			ratio, _ := new(big.Rat).Quo(margin, scaled).Float64()
+			// The world box of the oblique fragment is wider than its frame box,
+			// so the margin is slightly smaller than five times the +X margin.
+			require.InDelta(t, 1, ratio, 0.05, "the margin about (1, 2, 0) is five times the +X margin")
+		})
+	}
 }
 
 func TestFitRangeMatchesEdge(t *testing.T) {

@@ -18,9 +18,13 @@ import (
 // F_cone=y*y+z*z-s*s*(x-originX)^2. Both forms use exact rationals of their
 // stored binary64 inputs; a positive derivative margin can therefore prove
 // that the recorded meridian has the same single crossing as Sketch's cone.
+// A general certificate takes fitMeridianDifferenceAbout.
 func revolveFitMeridianDifference(section facetedrecord.RevolveSectionCertificate, cone sketch.ConeSection,
 	frame r3.Frame, pointLo, pointHi, tangentLo, tangentHi [2]float64,
 ) (*big.Rat, *big.Rat, [3]proofbound.RatInterval, bool) {
+	if section.General != nil {
+		return fitMeridianDifferenceAbout(section, cone, frame, pointLo, pointHi, tangentLo, tangentHi)
+	}
 	var empty [3]proofbound.RatInterval
 	if cone.Axis != (r3.Vec{X: 1}) ||
 		cone.Apex.Y != 0 || cone.Apex.Z != 0 || cone.Slope <= 0 ||

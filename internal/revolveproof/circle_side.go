@@ -32,7 +32,9 @@ const circleFragmentSlack = 1e-9
 // Sketch must report the fragment's bounds exact (TExact), and the recorded
 // segment must carry the same centre, radius and range. The returned margin is
 // an exact lower bound on |F| over the box, the quantity ImplicitMargin gives
-// for a Sketch certificate.
+// for a Sketch certificate. A cone about an axis A other than world X reads
+// Sketch's own F = |q×A|² − s²(q·A)², whose margin is in |A|²·mm²
+// (agent-docs/revolve-axis-design.md §5.3).
 func CircleFragmentSide(frame r3.Frame, circle *sketch.Circle, edge sketch.BoundaryEdge,
 	segment sectionrecord.CircleSeg, cone sketch.ConeSection) (sketch.ConeSide, *big.Rat, bool) {
 	if circle == nil || circle.IsStale() || edge.Entity != sketch.Entity(circle) ||
@@ -45,7 +47,8 @@ func CircleFragmentSide(frame r3.Frame, circle *sketch.Circle, edge sketch.Bound
 		!(0 <= lo && lo < hi && hi <= 1) || hi-lo >= 0.25 ||
 		segment.Center != (sectionrecord.Point2{U: cx, V: cy}) || segment.Radius.Base() != r ||
 		min(segment.TStart, segment.TEnd) != lo || max(segment.TStart, segment.TEnd) != hi ||
-		cone.Axis != (r3.Vec{X: 1}) || !(cone.Slope > 0) || math.IsInf(cone.Slope, 0) {
+		!proofbound.FiniteVec(cone.Axis) || cone.Axis == (r3.Vec{}) ||
+		!(cone.Slope > 0) || math.IsInf(cone.Slope, 0) {
 		return 0, nil, false
 	}
 	a0, a1 := 2*math.Pi*lo-circleFragmentSlack, 2*math.Pi*hi+circleFragmentSlack
@@ -75,6 +78,13 @@ func CircleFragmentSide(frame r3.Frame, circle *sketch.Circle, edge sketch.Bound
 	for i := range q {
 		q[i] = proofbound.IntervalSub(world[i], proofbound.PointInterval(proofarith.FloatRat(apex[i])))
 	}
+	if cone.Axis != (r3.Vec{X: 1}) {
+		residual, ok := coneResidualAbout(q, cone)
+		if !ok {
+			return 0, nil, false
+		}
+		return circleSide(residual)
+	}
 	// The axis is +X, so the half-cone test is q.X > 0 and the cross product
 	// with the axis has components (0, q.Z, -q.Y).
 	h := q[0]
@@ -85,6 +95,11 @@ func CircleFragmentSide(frame r3.Frame, circle *sketch.Circle, edge sketch.Bound
 	residual := proofbound.IntervalSub(
 		proofbound.IntervalAdd(proofbound.IntervalSquare(q[1]), proofbound.IntervalSquare(q[2])),
 		proofbound.IntervalScale(proofbound.IntervalSquare(h), slope2))
+	return circleSide(residual)
+}
+
+// circleSide reads the side and the exact margin from the residual's interval.
+func circleSide(residual proofbound.RatInterval) (sketch.ConeSide, *big.Rat, bool) {
 	if residual.Lo.Sign() > 0 {
 		return sketch.ConeOutside, new(big.Rat).Set(residual.Lo), true
 	}

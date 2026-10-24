@@ -34,9 +34,14 @@ func RevolveMeridianResidual(point sectionrecord.Point2, slope, originX float64)
 }
 
 // RevolveImplicitDisplacement bounds the source fan's two-sided held-mesh
-// departure against the reported cone, including the finite meridian gap.
+// departure against the reported cone, including the finite meridian gap. The
+// answer is in mm²; compare a Sketch margin with it through
+// implicitMarginExceeds. A general certificate takes implicitDisplacementAbout.
 func RevolveImplicitDisplacement(section facetedrecord.RevolveSectionCertificate,
 	base facetedrecord.Payload) (float64, bool) {
+	if section.General != nil {
+		return implicitDisplacementAbout(section, base)
+	}
 	if !proofbound.FiniteVec(r3.Vec{X: base.MeshBound}) || base.MeshBound < 0 ||
 		section.RootStart.U <= 0 || len(base.Verts) < 4 {
 		return 0, false

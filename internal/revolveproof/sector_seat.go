@@ -72,6 +72,8 @@ func revolveCrossingPoint(src *facetedrecord.PointSectionSource, cert sketch.Con
 // meridian recorded by Revolve. F is strictly monotone along the whole line;
 // its endpoint margins dominate the meridian perturbation. The inverse slope
 // then encloses how far the true source contact can move along the connector.
+// A general certificate bounds the meridian perturbation exactly instead
+// (seatShiftAbout).
 func revolveSeatPoint(src *facetedrecord.PointSectionSource, cert sketch.ConeLineCrossing,
 	section facetedrecord.RevolveSectionCertificate, base facetedrecord.Payload) (r3.Vec, float64, bool) {
 	point, pointBound, ok := revolveCrossingPoint(src, cert)
@@ -113,6 +115,14 @@ func revolveSeatPoint(src *facetedrecord.PointSectionSource, cert sketch.ConeLin
 	endQ := [3]*big.Rat{}
 	for i := range q {
 		endQ[i] = new(big.Rat).Add(q[i], d[i])
+	}
+	if section.General != nil {
+		shift, ok := seatShiftAbout(section, q, endQ, d)
+		if !ok {
+			return r3.Vec{}, 0, false
+		}
+		bound, ok := seatAllowance(cert, frame, pointBound, shift)
+		return point, bound, ok
 	}
 	f0, f1 := form(q), form(endQ)
 	derivative := func(p [3]*big.Rat) *big.Rat {
@@ -160,10 +170,19 @@ func revolveSeatPoint(src *facetedrecord.PointSectionSource, cert sketch.ConeLin
 		return r3.Vec{}, 0, false
 	}
 	shift := proofbound.RatFloatUp(new(big.Rat).Quo(proofarith.FloatRat(fCost), minD))
+	bound, ok := seatAllowance(cert, frame, pointBound, shift)
+	return point, bound, ok
+}
+
+// seatAllowance turns a proven parameter shift of the true contact along the
+// connector into a world displacement added to the crossing point's bound.
+func seatAllowance(cert sketch.ConeLineCrossing, frame r3.Frame, pointBound, shift float64) (float64, bool) {
 	lo, hi := cert.TBounds()
 	if proofbound.IsNonFinite(shift) || !(lo > shift && hi+shift < 1) {
-		return r3.Vec{}, 0, false
+		return 0, false
 	}
+	line := cert.Line()
+	start, end := line.Start.Geometry(), line.End.Geometry()
 	localLength := proofbound.DvLenUpper(proofbound.HeldDelta(
 		r3.Vec{X: end.X, Y: end.Y}, r3.Vec{X: start.X, Y: start.Y}))
 	basis := proofbound.AbsSumUpper(
@@ -172,5 +191,5 @@ func revolveSeatPoint(src *facetedrecord.PointSectionSource, cert sketch.ConeLin
 	worldShift := proofbound.ProductUpper(shift,
 		proofbound.ProductUpper(localLength, basis))
 	bound := proofbound.AbsSumUpper(pointBound, worldShift)
-	return point, bound, !proofbound.IsNonFinite(bound)
+	return bound, !proofbound.IsNonFinite(bound)
 }
