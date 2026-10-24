@@ -393,19 +393,21 @@ func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool, tree *heldBox
 			if !BoxesOverlap(box, node.box) {
 				continue
 			}
-			if node.facet < 0 {
-				stack = append(stack, node.right, node.left)
+			if node.leafStart >= 0 {
+				for _, j := range tree.facets[node.leafStart : node.leafStart+node.leafCount] {
+					if err := e.scanStep(); err != nil {
+						return false, err
+					}
+					if j == i || j < i && queryFacet[j] || !BoxesOverlap(box, tree.boxes[j]) {
+						continue
+					}
+					if !e.pairEmbeddedOverlapping(i, j) {
+						return false, nil
+					}
+				}
 				continue
 			}
-			j := node.facet
-			if j == i || j < i && queryFacet[j] {
-				continue
-			}
-			// Reaching a leaf proves that the query box overlaps the facet box.
-			// Avoid repeating that same box test in pairEmbedded.
-			if !e.pairEmbeddedOverlapping(i, j) {
-				return false, nil
-			}
+			stack = append(stack, node.right, node.left)
 		}
 	}
 	return true, nil
