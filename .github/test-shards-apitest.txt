@@ -19,7 +19,7 @@
 #   shard 7:  190.52s over 201 tests
 #   shard 8:  162.43s over 197 tests
 #   shard 9:  172.78s over 200 tests
-#   shard 10:  180.01s over 200 tests
+#   shard 10:  180.01s over 201 tests
 #
 0	0.17	TestAPIReferenceNamesExist
 0	0.01	TestArcEdgeAxisFollowsWalkSense
@@ -787,6 +787,7 @@
 3	0.00	TestUndercutsTiltedPull
 3	0.04	TestUnderflowingSplineAreaPublishesBoundedZero
 3	43.34	TestUnionBevelTipTouchingHeelConeNeedsMatchingFaces
+10	0.00	TestUnionBevelTipTouchingHeelConeRefusesWithoutMatchingFaces
 3	0.02	TestUnionManyChainsMixedHeightPrisms
 3	0.01	TestUnionManyRefusalKeepsEveryOperandLive
 3	0.01	TestUnstitchedCapToFaceStopMatchesUnUnstitchedCap

@@ -230,14 +230,19 @@ func TestUnionBevelBlankAndEmbeddedRootTeeth(t *testing.T) {
 // the faces are meant to match and the join goes through.
 func TestUnionBevelTipTouchingHeelConeNeedsMatchingFaces(t *testing.T) {
 	if testing.Short() {
-		t.Skip("joins two sectors twice")
+		t.Skip("joins two sectors")
 	}
-	_, _, err := bevel16.join(t, 2)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "far source plane")
-
 	blank, joined, err := bevel16.join(t, 2, decad.WithMatchingFaces())
 	require.NoError(t, err)
 	requireVerified(t, joined)
 	requireTeethAddGain(t, bevel16, 2, blank, joined, decad.WithMatchingFaces())
+}
+
+func TestUnionBevelTipTouchingHeelConeRefusesWithoutMatchingFaces(t *testing.T) {
+	if testing.Short() {
+		t.Skip("joins two sectors")
+	}
+	_, _, err := bevel16.join(t, 2)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "far source plane")
 }
