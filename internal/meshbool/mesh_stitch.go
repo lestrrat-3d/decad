@@ -59,23 +59,24 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 	// inserts it into another facet's edge.
 	var xbeta []float64
 	index := map[string]int{}
-	// Exact vertices are immutable after construction. Reuse the canonical key
-	// when another incident facet carries the same four integer pointers.
-	keyByRaw := map[[4]*big.Int]string{}
+	// Exact vertices are immutable after construction. Reuse the stitched
+	// index when another incident facet carries the same four integer pointers.
+	indexByRaw := map[[4]*big.Int]int{}
 	addVert := func(p proof.Xpt) int {
 		raw := [4]*big.Int{p.X, p.Y, p.Z, p.W}
-		k, ok := keyByRaw[raw]
-		if !ok {
-			k = p.Key()
-			keyByRaw[raw] = k
-		}
-		if i, ok := index[k]; ok {
+		if i, ok := indexByRaw[raw]; ok {
 			return i
 		}
-		index[k] = len(xverts)
-		xverts = append(xverts, p)
-		xbeta = append(xbeta, 0)
-		return len(xverts) - 1
+		k := p.Key()
+		i, ok := index[k]
+		if !ok {
+			i = len(xverts)
+			index[k] = i
+			xverts = append(xverts, p)
+			xbeta = append(xbeta, 0)
+		}
+		indexByRaw[raw] = i
+		return i
 	}
 	var tris [][3]int
 	var src []int
