@@ -174,13 +174,43 @@ func gatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *Bool
 	// A face pair usually queues few contacts, so keep its initial buffers
 	// small without changing when the ordered batch is flushed.
 	contacts.initialCapacity = contactBatchInitialCapacity
+	useTree := len(fis) > 0 && len(fjs) > 0 && len(fis)*len(fjs) > 16384 && slack >= 0 && !math.IsNaN(slack)
+	var tree heldBoxTree
+	var candidateMarks []bool
+	var candidateIDs []int
+	if useTree {
+		boxes := make([][2]r3.Vec, len(fjs))
+		for position, j := range fjs {
+			boxes[position] = bmB.Boxes[j]
+		}
+		tree = newBoxTree(boxes)
+		candidateMarks = make([]bool, len(fjs))
+		candidateIDs = make([]int, 0, min(len(fjs), 64))
+	}
 	for _, i := range fis {
-		for _, j := range fjs {
+		if useTree {
+			for _, position := range candidateIDs {
+				candidateMarks[position] = false
+			}
+			candidateIDs = candidateIDs[:0]
+			box := expandBoxForSlack(bmA.Boxes[i], slack)
+			if err := tree.visitOverlaps(box, nil, func(position int) error {
+				candidateMarks[position] = true
+				candidateIDs = append(candidateIDs, position)
+				return nil
+			}); err != nil {
+				return NearContacts{}, false, err
+			}
+		}
+		for position, j := range fjs {
 			work++
 			if work%256 == 0 {
 				if err := ctx.Err(); err != nil {
 					return NearContacts{}, false, err
 				}
+			}
+			if useTree && !candidateMarks[position] {
+				continue
 			}
 			if !BoxesWithin(bmA.Boxes[i], bmB.Boxes[j], slack) {
 				continue
@@ -200,6 +230,21 @@ func gatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *Bool
 		return NearContacts{}, false, err
 	}
 	return nc, false, nil
+}
+
+func expandBoxForSlack(box [2]r3.Vec, slack float64) [2]r3.Vec {
+	return [2]r3.Vec{
+		{
+			X: math.Nextafter(box[0].X-slack, math.Inf(-1)),
+			Y: math.Nextafter(box[0].Y-slack, math.Inf(-1)),
+			Z: math.Nextafter(box[0].Z-slack, math.Inf(-1)),
+		},
+		{
+			X: math.Nextafter(box[1].X+slack, math.Inf(1)),
+			Y: math.Nextafter(box[1].Y+slack, math.Inf(1)),
+			Z: math.Nextafter(box[1].Z+slack, math.Inf(1)),
+		},
+	}
 }
 
 // ContactSpan is one exact contact segment of a face pair the gate examines:
