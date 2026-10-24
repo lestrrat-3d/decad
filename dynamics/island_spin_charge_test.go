@@ -27,23 +27,6 @@ func sphereIslandTestFloor(t *testing.T, doc *decad.Document) *decad.Body {
 	return body
 }
 
-func sphereIslandTestSphere(t *testing.T, doc *decad.Document) *decad.Body {
-	t.Helper()
-	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
-	require.NoError(t, err)
-	left, right, center := s.CreatePoint(-5, 0), s.CreatePoint(5, 0), s.CreatePoint(0, 0)
-	s.Fix(left)
-	s.CreateLine(left, right)
-	s.CreateArc(center, right, left)
-	_, err = s.Solve(t.Context())
-	require.NoError(t, err)
-	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
-	require.NoError(t, err)
-	return body
-}
-
 // TestSphereIslandCombinedSpinChargesAlignedContactTorques checks that one
 // island charges aligned contact torques together.
 // A ball rests on the floor under a fixed upper sphere and strikes both at
@@ -56,7 +39,7 @@ func TestSphereIslandCombinedSpinChargesAlignedContactTorques(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	floor := sphereIslandTestFloor(t, doc)
-	ball, upper := sphereIslandTestSphere(t, doc), sphereIslandTestSphere(t, doc)
+	ball, upper := grazingSphere(t, doc), grazingSphere(t, doc)
 	ballPose, err := r3.Translation(r3.Vec{Z: 5})
 	require.NoError(t, err)
 	upperPose, err := r3.Translation(r3.Vec{X: 6, Z: 13})

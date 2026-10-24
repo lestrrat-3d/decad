@@ -395,21 +395,26 @@ func TestNewSTEPFileClassBCutAnalytic(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			body := classBCut(t, tc.draw)
-			require.Len(t, body.Faces(), tc.faces)
-			f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
-			require.NoError(t, err)
-			counts, uses := entityUses(f)
-			require.Equal(t, tc.faces, counts["ADVANCED_FACE"])
-			require.Equal(t, tc.planes, counts["PLANE"])
-			require.Equal(t, tc.cylinders, counts["CYLINDRICAL_SURFACE"])
-			for _, senses := range uses {
-				require.ElementsMatch(t, []step.Enumeration{"T", "F"}, senses)
-			}
-			data, err := f.Marshal()
-			require.NoError(t, err)
-			require.Contains(t, string(data), "analytic decad solid")
+			requireAnalyticSTEPFeatures(t, body, tc.faces, tc.planes, tc.cylinders)
 		})
 	}
+}
+
+func requireAnalyticSTEPFeatures(t *testing.T, body *decad.Body, faces, planes, cylinders int) {
+	t.Helper()
+	require.Len(t, body.Faces(), faces)
+	file, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	counts, uses := entityUses(file)
+	require.Equal(t, faces, counts["ADVANCED_FACE"])
+	require.Equal(t, planes, counts["PLANE"])
+	require.Equal(t, cylinders, counts["CYLINDRICAL_SURFACE"])
+	for _, senses := range uses {
+		require.ElementsMatch(t, []step.Enumeration{"T", "F"}, senses)
+	}
+	data, err := file.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(data), "analytic decad solid")
 }
 
 // TestNewSTEPFileFilletedClassBCutAnalytic writes S1 after a Fillet of its
@@ -726,19 +731,7 @@ func TestNewSTEPFileFlushBossUnionAnalytic(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			body := flushBossUnion(t, tc.draw)
-			require.Len(t, body.Faces(), tc.faces)
-			f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
-			require.NoError(t, err)
-			counts, uses := entityUses(f)
-			require.Equal(t, tc.faces, counts["ADVANCED_FACE"])
-			require.Equal(t, tc.planes, counts["PLANE"])
-			require.Equal(t, tc.cylinders, counts["CYLINDRICAL_SURFACE"])
-			for _, senses := range uses {
-				require.ElementsMatch(t, []step.Enumeration{"T", "F"}, senses)
-			}
-			data, err := f.Marshal()
-			require.NoError(t, err)
-			require.Contains(t, string(data), "analytic decad solid")
+			requireAnalyticSTEPFeatures(t, body, tc.faces, tc.planes, tc.cylinders)
 		})
 	}
 }

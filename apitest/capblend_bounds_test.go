@@ -1092,28 +1092,7 @@ func TestCapBlendCapContourVertexBoundCoversWallDirection(t *testing.T) {
 	for i := range n {
 		miters[i] = exactOffsetMiter(corners[(i+n-1)%n], corners[i], corners[(i+1)%n], d)
 	}
-	checked := 0
-	for _, v := range chamfered.Vertices() {
-		p := v.Position()
-		if p.Value.Z != height {
-			continue
-		}
-		checked++
-		var gap *big.Float
-		for _, m := range miters {
-			du := new(big.Float).SetPrec(400).Sub(new(big.Float).SetFloat64(p.Value.X), m[0])
-			dv := new(big.Float).SetPrec(400).Sub(new(big.Float).SetFloat64(p.Value.Y), m[1])
-			dist := new(big.Float).SetPrec(400).Add(new(big.Float).Mul(du, du), new(big.Float).Mul(dv, dv))
-			dist.Sqrt(dist)
-			if gap == nil || dist.Cmp(gap) < 0 {
-				gap = dist
-			}
-		}
-		require.LessOrEqual(t, gap.Cmp(new(big.Float).SetFloat64(p.Bound.Mag())), 0,
-			`vertex %v publishes bound %g against a true distance %s to the denoted miter`,
-			p.Value, p.Bound.Mag(), gap.Text('g', 6))
-	}
-	require.Equal(t, n, checked, `one cap-level foot per corner`)
+	requireCapVerticesBoundDenotedPoints(t, chamfered, height, miters, "miter")
 }
 
 // TestCapBlendCapContourVertexBoundCoversArcWallNormal is the same enclosure
@@ -1171,28 +1150,34 @@ func TestCapBlendCapContourVertexBoundCoversArcWallNormal(t *testing.T) {
 		exactWallFoot(a2, a, a, d), exactWallFoot(b, b2, b, d),
 		exactOffsetMiter(b, b2, a2, d), exactOffsetMiter(b2, a2, a, d),
 	}
+	requireCapVerticesBoundDenotedPoints(t, chamfered, height, denoted, "point")
+}
+
+func requireCapVerticesBoundDenotedPoints(t *testing.T, body *decad.Body, height float64,
+	denoted [][2]*big.Float, kind string) {
+	t.Helper()
 	checked := 0
-	for _, v := range chamfered.Vertices() {
-		p := v.Position()
-		if p.Value.Z != height {
+	for _, vertex := range body.Vertices() {
+		position := vertex.Position()
+		if position.Value.Z != height {
 			continue
 		}
 		checked++
 		var gap *big.Float
-		for _, m := range denoted {
-			du := new(big.Float).SetPrec(400).Sub(new(big.Float).SetFloat64(p.Value.X), m[0])
-			dv := new(big.Float).SetPrec(400).Sub(new(big.Float).SetFloat64(p.Value.Y), m[1])
-			dist := new(big.Float).SetPrec(400).Add(new(big.Float).Mul(du, du), new(big.Float).Mul(dv, dv))
-			dist.Sqrt(dist)
-			if gap == nil || dist.Cmp(gap) < 0 {
-				gap = dist
+		for _, point := range denoted {
+			du := new(big.Float).SetPrec(400).Sub(new(big.Float).SetFloat64(position.Value.X), point[0])
+			dv := new(big.Float).SetPrec(400).Sub(new(big.Float).SetFloat64(position.Value.Y), point[1])
+			distance := new(big.Float).SetPrec(400).Add(new(big.Float).Mul(du, du), new(big.Float).Mul(dv, dv))
+			distance.Sqrt(distance)
+			if gap == nil || distance.Cmp(gap) < 0 {
+				gap = distance
 			}
 		}
-		require.LessOrEqual(t, gap.Cmp(new(big.Float).SetFloat64(p.Bound.Mag())), 0,
-			`vertex %v publishes bound %g against a true distance %s to its denoted point`,
-			p.Value, p.Bound.Mag(), gap.Text('g', 6))
+		require.LessOrEqual(t, gap.Cmp(new(big.Float).SetFloat64(position.Bound.Mag())), 0,
+			"vertex %v publishes bound %g against a true distance %s to the denoted "+kind,
+			position.Value, position.Bound.Mag(), gap.Text('g', 6))
 	}
-	require.Equal(t, len(denoted), checked, `one cap-level point per denoted point`)
+	require.Equal(t, len(denoted), checked, "one cap-level %s per denoted point", kind)
 }
 
 // exactArcFoot is, at 400 bits, corner − d·(corner − c)/|corner − c|: the
@@ -1203,13 +1188,7 @@ func exactArcFoot(c, corner [2]float64, d float64) [2]*big.Float {
 	f := func(x float64) *big.Float { return new(big.Float).SetPrec(prec).SetFloat64(x) }
 	du := new(big.Float).SetPrec(prec).Sub(f(corner[0]), f(c[0]))
 	dv := new(big.Float).SetPrec(prec).Sub(f(corner[1]), f(c[1]))
-	l := new(big.Float).SetPrec(prec).Add(new(big.Float).Mul(du, du), new(big.Float).Mul(dv, dv))
-	l.Sqrt(l)
-	k := new(big.Float).SetPrec(prec).Quo(f(d), l)
-	return [2]*big.Float{
-		new(big.Float).SetPrec(prec).Sub(f(corner[0]), new(big.Float).Mul(k, du)),
-		new(big.Float).SetPrec(prec).Sub(f(corner[1]), new(big.Float).Mul(k, dv)),
-	}
+	return exactDirectedFoot(corner, du, dv, -d)
 }
 
 // exactWallFoot is, at 400 bits, corner + d·n̂ for the left unit normal n̂ of
@@ -1219,12 +1198,19 @@ func exactWallFoot(p0, p1, corner [2]float64, d float64) [2]*big.Float {
 	f := func(x float64) *big.Float { return new(big.Float).SetPrec(prec).SetFloat64(x) }
 	du := new(big.Float).SetPrec(prec).Sub(f(p1[0]), f(p0[0]))
 	dv := new(big.Float).SetPrec(prec).Sub(f(p1[1]), f(p0[1]))
-	l := new(big.Float).SetPrec(prec).Add(new(big.Float).Mul(du, du), new(big.Float).Mul(dv, dv))
-	l.Sqrt(l)
-	k := new(big.Float).SetPrec(prec).Quo(f(d), l)
+	normalU := new(big.Float).SetPrec(prec).Neg(dv)
+	return exactDirectedFoot(corner, normalU, du, d)
+}
+
+func exactDirectedFoot(corner [2]float64, du, dv *big.Float, d float64) [2]*big.Float {
+	const prec = 400
+	f := func(x float64) *big.Float { return new(big.Float).SetPrec(prec).SetFloat64(x) }
+	length := new(big.Float).SetPrec(prec).Add(new(big.Float).Mul(du, du), new(big.Float).Mul(dv, dv))
+	length.Sqrt(length)
+	k := new(big.Float).SetPrec(prec).Quo(f(d), length)
 	return [2]*big.Float{
-		new(big.Float).SetPrec(prec).Sub(f(corner[0]), new(big.Float).Mul(k, dv)),
-		new(big.Float).SetPrec(prec).Add(f(corner[1]), new(big.Float).Mul(k, du)),
+		new(big.Float).SetPrec(prec).Add(f(corner[0]), new(big.Float).Mul(k, du)),
+		new(big.Float).SetPrec(prec).Add(f(corner[1]), new(big.Float).Mul(k, dv)),
 	}
 }
 

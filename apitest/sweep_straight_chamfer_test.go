@@ -6,31 +6,13 @@ import (
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/decadtest"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
-func straightSweepChamferBox(t *testing.T) (*decad.Document, *decad.Body) {
-	t.Helper()
-	world := sketch.NewWorld()
-	s, err := world.CreateSketch(world.XY())
-	require.NoError(t, err)
-	rect := s.CreateRectangle(0, 0, 20, 20)
-	s.Fix(rect.A)
-	_, err = s.Solve(t.Context())
-	require.NoError(t, err)
-	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.NewVec(0, 0, 10)})
-	require.NoError(t, err)
-	doc := decad.New()
-	body, err := decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path)
-	require.NoError(t, err)
-	return doc, body
-}
-
 func TestStraightSweepChamferSelectedWallsAndVerifyAll(t *testing.T) {
 	t.Parallel()
-	doc, source := straightSweepChamferBox(t)
+	doc, source := straightSweepSquare(t)
 	vertical := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex()).Exactly(4)
 	beveled, err := decad.Chamfer(t.Context(), source, vertical, units.Millimeters(1))
 	require.NoError(t, err)
@@ -58,7 +40,7 @@ func TestStraightSweepChamferSingleCapEdgeAndVerifyAll(t *testing.T) {
 		{name: "translated", shift: r3.NewVec(5, -3, 7)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			doc, source := straightSweepChamferBox(t)
+			doc, source := straightSweepSquare(t)
 			if tc.shift != (r3.Vec{}) {
 				motion, err := r3.Translation(tc.shift)
 				require.NoError(t, err)
@@ -87,7 +69,7 @@ func TestStraightSweepChamferSingleCapEdgeAndVerifyAll(t *testing.T) {
 
 func TestStraightSweepChamferOneEdgeAndPlacedReplay(t *testing.T) {
 	t.Parallel()
-	doc, source := straightSweepChamferBox(t)
+	doc, source := straightSweepSquare(t)
 	shift, err := r3.Translation(r3.NewVec(5, -3, 7))
 	require.NoError(t, err)
 	placed, err := decad.Copy(t.Context(), source, decad.WithCopyPlacement(shift))
@@ -125,7 +107,7 @@ func TestStraightSweepChamferRefusesOtherEdges(t *testing.T) {
 		{"mixed cap and lateral edges", decad.Edges().AtLeast(1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			doc, source := straightSweepChamferBox(t)
+			doc, source := straightSweepSquare(t)
 			out, err := decad.Chamfer(t.Context(), source, tc.sel, units.Millimeters(1))
 			require.Nil(t, out)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -136,7 +118,7 @@ func TestStraightSweepChamferRefusesOtherEdges(t *testing.T) {
 
 func TestStraightSweepChamferRefusesAsymmetricReference(t *testing.T) {
 	t.Parallel()
-	doc, source := straightSweepChamferBox(t)
+	doc, source := straightSweepSquare(t)
 	corner := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)),
 		decad.EndpointAt(r3.Vec{})).Exactly(1)
 	wall := decad.Faces(decad.Facing(r3.NewVec(-1, 0, 0))).Exactly(1)

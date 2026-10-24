@@ -346,25 +346,12 @@ func TestSectionDirectLoftMovingCircleRefusesNonexactY(t *testing.T) {
 
 func TestSectionDirectLoftAnnulusRefusesCapAndTilt(t *testing.T) {
 	source := directLoftCircles(t, true, 1, 2, 1, 0)
-	for _, tc := range []struct {
-		name   string
-		origin r3.Vec
-		u, v   r3.Vec
-	}{
+	requireSectionFramesRefused(t, source, []sectionFrameCase{
 		{"bottom cap", r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)},
 		{"top cap", r3.NewVec(0, 0, 2), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)},
 		{"nonexact circle interpolation", r3.NewVec(0, 0, 0.2), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)},
 		{"tilted section", r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 1), r3.NewVec(0, 1, 0)},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			frame, err := r3.NewFrame(tc.origin, tc.u, tc.v)
-			require.NoError(t, err)
-			section, profiles, err := source.Section(t.Context(), frame)
-			require.ErrorIs(t, err, decad.ErrUnsupported)
-			require.Nil(t, section)
-			require.Nil(t, profiles)
-		})
-	}
+	})
 }
 
 func requireDirectLoftSectionUnsupported(t *testing.T, body *decad.Body, origin r3.Vec) {

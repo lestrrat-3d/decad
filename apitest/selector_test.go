@@ -302,30 +302,9 @@ func TestParallelDirsExtremeDirections(t *testing.T) {
 // this package's tests.
 const roleCapStart = "capStart"
 
-// holePlateBody extrudes a 100×60 plate with a Ø20 hole at (70, 30) by 8 mm:
-// 7 faces (4 planar sides + 1 hole cylinder + 2 caps) and 14 edges (12 box
-// lines + 2 hole circles) — the known set every predicate below is checked
-// against.
+// holePlateBody is the shared selector-test view of the common holed plate.
 func holePlateBody(t *testing.T) *decad.Body {
-	t.Helper()
-	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
-	require.NoError(t, err)
-	rect := s.CreateRectangle(0, 0, 100, 60)
-	s.Fix(rect.A)
-	s.CreateCircle(s.CreatePoint(70, 30), 10)
-	_, err = s.Solve(t.Context())
-	require.NoError(t, err)
-	var prof *sketch.Profile
-	for _, p := range s.Profiles() {
-		if len(p.Holes) == 1 {
-			prof = p
-		}
-	}
-	require.NotNil(t, prof)
-	doc := decad.New()
-	body, err := decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
-	require.NoError(t, err)
+	_, body := holePlateFixture(t)
 	return body
 }
 

@@ -1,7 +1,7 @@
 package apitest_test
 
 import (
-	"errors"
+	"context"
 	"math"
 	"testing"
 
@@ -168,17 +168,8 @@ func TestBrepSingleBossTopEdgeChamferKeepsRouteE(t *testing.T) {
 }
 
 func TestBrepIndependentBossRootEdgesRefuseChamferRouteE(t *testing.T) {
-	t.Parallel()
-	joined := squareBossOnPlate(t)
-	roots := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
-		decad.EndpointAt(r3.NewVec(-5, -5, 5)))
-	roots.Or(decad.ParallelTo(r3.NewVec(1, 0, 0)),
-		decad.EndpointAt(r3.NewVec(-5, 5, 5)))
-	got, err := decad.Chamfer(t.Context(), joined, roots.Exactly(2), units.Millimeters(1))
-	require.True(t, errors.Is(err, decad.ErrUnsupported), "error: %v", err)
-	require.ErrorContains(t, err, "interior material wedge")
-	require.Nil(t, got)
-	volume, err := joined.Volume()
-	require.NoError(t, err)
-	require.Equal(t, 2500.0, volume.Value.Base())
+	testIndependentBossRootRefusal(t, func(ctx context.Context, body *decad.Body, selector decad.EdgeSelector,
+		amount units.Value) (*decad.Body, error) {
+		return decad.Chamfer(ctx, body, selector, amount)
+	})
 }

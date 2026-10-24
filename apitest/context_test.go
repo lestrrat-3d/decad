@@ -11,6 +11,41 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type documentBodyCall struct {
+	name string
+	call func(context.Context, *decad.Document) (*decad.Body, error)
+}
+
+func requireCancellationLeavesDocumentUnchanged(t *testing.T, tests []documentBodyCall) {
+	t.Helper()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			canceled, cancel := context.WithCancel(t.Context())
+			cancel()
+			_, err := tc.call(canceled, doc)
+			require.Equal(t, context.Canceled, err)
+			require.Empty(t, doc.Bodies())
+
+			const maxChecks = 1000
+			for n := 1; n <= maxChecks; n++ {
+				ctx := &cancelAtCheckContext{Context: t.Context(), n: n}
+				body, err := tc.call(ctx, doc)
+				if err == nil {
+					require.NotNil(t, body)
+					require.Greater(t, n, 3, "the call checks its context at several steps before it commits")
+					require.Len(t, doc.Bodies(), 1)
+					return
+				}
+				require.Equal(t, context.Canceled, err, "check %d", n)
+				require.Empty(t, doc.Bodies(), "check %d", n)
+			}
+			require.Fail(t, "the call never completed")
+		})
+	}
+}
+
 // Every context-taking operation refuses a nil context before inspecting its
 // document, operands, or options.
 func TestContextOperationsRejectNilBeforeOperands(t *testing.T) {
@@ -142,10 +177,7 @@ func TestRevolveCanceledContextLeavesDocumentUnchanged(t *testing.T) {
 	profileSketch, profile := solidSketch(t)
 	chainSketch, chain, chainAxis := coneChainAtRadius(t, 0)
 	profileAxis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	tests := []struct {
-		name string
-		call func(context.Context, *decad.Document) (*decad.Body, error)
-	}{
+	tests := []documentBodyCall{
 		{"profile", func(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
 			return decad.Revolve(ctx, doc, profileSketch, profile, profileAxis, decad.FullRevolution{})
 		}},
@@ -153,32 +185,7 @@ func TestRevolveCanceledContextLeavesDocumentUnchanged(t *testing.T) {
 			return decad.Revolve(ctx, doc, chainSketch, chain, chainAxis, decad.FullRevolution{})
 		}},
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			doc := decad.New()
-			canceled, cancel := context.WithCancel(t.Context())
-			cancel()
-			_, err := tc.call(canceled, doc)
-			require.Equal(t, context.Canceled, err)
-			require.Empty(t, doc.Bodies())
-
-			const maxChecks = 1000
-			for n := 1; n <= maxChecks; n++ {
-				ctx := &cancelAtCheckContext{Context: t.Context(), n: n}
-				body, err := tc.call(ctx, doc)
-				if err == nil {
-					require.NotNil(t, body)
-					require.Greater(t, n, 3, "the call checks its context at several steps before it commits")
-					require.Len(t, doc.Bodies(), 1)
-					return
-				}
-				require.Equal(t, context.Canceled, err, "check %d", n)
-				require.Empty(t, doc.Bodies(), "check %d", n)
-			}
-			require.Fail(t, "the call never completed")
-		})
-	}
+	requireCancellationLeavesDocumentUnchanged(t, tests)
 }
 
 // TestExtrudeTypedNilSectionIsDegenerate pins that a typed-nil section of
@@ -206,10 +213,7 @@ func TestExtrudeCanceledContextLeavesDocumentUnchanged(t *testing.T) {
 	profileSketch, profile := solidSketch(t)
 	chainSketch, chain := lineChainSketch(t)
 	e := decad.Distance{D: units.Millimeters(5), Dir: decad.Along}
-	tests := []struct {
-		name string
-		call func(context.Context, *decad.Document) (*decad.Body, error)
-	}{
+	tests := []documentBodyCall{
 		{"profile", func(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
 			return decad.Extrude(ctx, doc, profileSketch, profile, e)
 		}},
@@ -224,30 +228,5 @@ func TestExtrudeCanceledContextLeavesDocumentUnchanged(t *testing.T) {
 			return decad.Extrude(ctx, doc, chainSketch, chain, e)
 		}},
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			doc := decad.New()
-			canceled, cancel := context.WithCancel(t.Context())
-			cancel()
-			_, err := tc.call(canceled, doc)
-			require.Equal(t, context.Canceled, err)
-			require.Empty(t, doc.Bodies())
-
-			const maxChecks = 1000
-			for n := 1; n <= maxChecks; n++ {
-				ctx := &cancelAtCheckContext{Context: t.Context(), n: n}
-				body, err := tc.call(ctx, doc)
-				if err == nil {
-					require.NotNil(t, body)
-					require.Greater(t, n, 3, "the call checks its context at several steps before it commits")
-					require.Len(t, doc.Bodies(), 1)
-					return
-				}
-				require.Equal(t, context.Canceled, err, "check %d", n)
-				require.Empty(t, doc.Bodies(), "check %d", n)
-			}
-			require.Fail(t, "the call never completed")
-		})
-	}
+	requireCancellationLeavesDocumentUnchanged(t, tests)
 }

@@ -650,27 +650,8 @@ func requireTumbleExit(t *testing.T, scene tumbleScene, timeline *dynamics.Timel
 		// equals the gravity and contact impulses, within the readings' own
 		// bounds plus, for every island, each dynamic body's certified
 		// linear-law limit ImpulseResidual + m·VelocityResidual.
-		c := report.Conservation
-		require.NotNil(t, c, "step %d", k)
-		limit := 0.0
-		for _, island := range report.Islands {
-			for _, body := range island.Bodies {
-				if mass, ok := scene.masses[body]; ok {
-					limit += config.ImpulseResidual.Base() + mass*config.VelocityResidual.Base()
-				}
-			}
-		}
-		for axis, get := range []func(dynamics.QuantityVec) units.Value{
-			func(v dynamics.QuantityVec) units.Value { return v.X },
-			func(v dynamics.QuantityVec) units.Value { return v.Y },
-			func(v dynamics.QuantityVec) units.Value { return v.Z },
-		} {
-			change := get(c.Completion.LinearMomentum.Value).Base() - get(c.Input.LinearMomentum.Value).Base()
-			applied := get(c.GravityImpulse.Value).Base() + get(c.ContactImpulse.Value).Base()
-			slack := get(c.Completion.LinearMomentum.Bound).Base() + get(c.Input.LinearMomentum.Bound).Base() +
-				get(c.GravityImpulse.Bound).Base() + get(c.ContactImpulse.Bound).Base() + limit
-			require.InDelta(t, applied, change, slack, "step %d axis %d", k, axis)
-		}
+		requireStepLinearMomentumBalance(t, report, scene.masses, config.ImpulseResidual.Base(),
+			config.VelocityResidual.Base(), k)
 		// Every event joins a body and the tray's floor, whose normal is +Z:
 		// no body reaches another one or a wall.
 		for _, event := range report.Events {
@@ -765,6 +746,36 @@ func requireTumbleExit(t *testing.T, scene tumbleScene, timeline *dynamics.Timel
 	for frame := range steps * 60 / 256 {
 		_, err := timeline.Sample(units.Seconds(float64(frame) / 60))
 		require.NoError(t, err, "frame %d", frame)
+	}
+}
+
+func requireStepLinearMomentumBalance(t *testing.T, report *dynamics.StepReport,
+	masses map[*decad.Body]float64, impulseResidual, velocityResidual float64, step int) {
+	t.Helper()
+	conservation := report.Conservation
+	require.NotNil(t, conservation, "step %d", step)
+	limit := 0.0
+	for _, island := range report.Islands {
+		for _, body := range island.Bodies {
+			if mass, ok := masses[body]; ok {
+				limit += impulseResidual + mass*velocityResidual
+			}
+		}
+	}
+	for axis, component := range []func(dynamics.QuantityVec) units.Value{
+		func(v dynamics.QuantityVec) units.Value { return v.X },
+		func(v dynamics.QuantityVec) units.Value { return v.Y },
+		func(v dynamics.QuantityVec) units.Value { return v.Z },
+	} {
+		change := component(conservation.Completion.LinearMomentum.Value).Base() -
+			component(conservation.Input.LinearMomentum.Value).Base()
+		applied := component(conservation.GravityImpulse.Value).Base() +
+			component(conservation.ContactImpulse.Value).Base()
+		slack := component(conservation.Completion.LinearMomentum.Bound).Base() +
+			component(conservation.Input.LinearMomentum.Bound).Base() +
+			component(conservation.GravityImpulse.Bound).Base() +
+			component(conservation.ContactImpulse.Bound).Base() + limit
+		require.InDelta(t, applied, change, slack, "step %d axis %d", step, axis)
 	}
 }
 
@@ -1037,27 +1048,8 @@ func requirePartsBinExit(t *testing.T, scene partsBinScene, timeline *dynamics.T
 		// equals the gravity and contact impulses, within the readings' own
 		// bounds plus, for every island, each dynamic body's certified
 		// linear-law limit ImpulseResidual + m·VelocityResidual.
-		c := report.Conservation
-		require.NotNil(t, c, "step %d", k)
-		limit := 0.0
-		for _, island := range report.Islands {
-			for _, body := range island.Bodies {
-				if mass, ok := scene.masses[body]; ok {
-					limit += config.ImpulseResidual.Base() + mass*velocityResidual
-				}
-			}
-		}
-		for axis, get := range []func(dynamics.QuantityVec) units.Value{
-			func(v dynamics.QuantityVec) units.Value { return v.X },
-			func(v dynamics.QuantityVec) units.Value { return v.Y },
-			func(v dynamics.QuantityVec) units.Value { return v.Z },
-		} {
-			change := get(c.Completion.LinearMomentum.Value).Base() - get(c.Input.LinearMomentum.Value).Base()
-			applied := get(c.GravityImpulse.Value).Base() + get(c.ContactImpulse.Value).Base()
-			slack := get(c.Completion.LinearMomentum.Bound).Base() + get(c.Input.LinearMomentum.Bound).Base() +
-				get(c.GravityImpulse.Bound).Base() + get(c.ContactImpulse.Bound).Base() + limit
-			require.InDelta(t, applied, change, slack, "step %d axis %d", k, axis)
-		}
+		requireStepLinearMomentumBalance(t, report, scene.masses, config.ImpulseResidual.Base(),
+			velocityResidual, k)
 
 		// Every event joins a body and the tray's floor, whose normal is +Z:
 		// no body reaches another one or a wall.
