@@ -20,9 +20,16 @@ type heldBoxNode struct {
 }
 
 func newHeldBoxTree(e *heldEmbedding) heldBoxTree {
-	facets := make([]int, 0, len(e.h.Tris))
-	for i := range e.h.Tris {
-		box := e.triBox(i)
+	boxes := make([][2]r3.Vec, len(e.h.Tris))
+	for i := range boxes {
+		boxes[i] = e.triBox(i)
+	}
+	return newBoxTree(boxes)
+}
+
+func newBoxTree(boxes [][2]r3.Vec) heldBoxTree {
+	facets := make([]int, 0, len(boxes))
+	for i, box := range boxes {
 		// BoxesOverlap is false for a box with a NaN coordinate.
 		if heldBoxHasNaN(box) {
 			continue
@@ -31,9 +38,49 @@ func newHeldBoxTree(e *heldEmbedding) heldBoxTree {
 	}
 	tree := heldBoxTree{nodes: make([]heldBoxNode, 0, 2*len(facets))}
 	if len(facets) > 0 {
-		tree.build(e.box, facets)
+		tree.build(boxes, facets)
 	}
 	return tree
+}
+
+func (tree *heldBoxTree) visitOverlaps(box [2]r3.Vec, poll func() error,
+	visit func(int) error) error {
+	if poll != nil {
+		if err := poll(); err != nil {
+			return err
+		}
+	}
+	if len(tree.nodes) == 0 {
+		return nil
+	}
+	stack := make([]int, 1, 64)
+	work := 0
+	for len(stack) > 0 {
+		work++
+		if work%256 == 0 && poll != nil {
+			if err := poll(); err != nil {
+				return err
+			}
+		}
+		last := len(stack) - 1
+		nodeIndex := stack[last]
+		stack = stack[:last]
+		node := tree.nodes[nodeIndex]
+		if !BoxesOverlap(box, node.box) {
+			continue
+		}
+		if node.facet >= 0 {
+			if err := visit(node.facet); err != nil {
+				return err
+			}
+			continue
+		}
+		stack = append(stack, node.right, node.left)
+	}
+	if poll != nil {
+		return poll()
+	}
+	return nil
 }
 
 func heldBoxHasNaN(box [2]r3.Vec) bool {

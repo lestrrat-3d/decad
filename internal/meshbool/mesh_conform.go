@@ -139,20 +139,19 @@ func DominantAxis(d proof.Xpt) int {
 	return 2
 }
 
-// ConformScan is the searchable form of the stitched vertex set each facet edge
-// is swept through: the exact vertices, their float approximations, a coarse
-// uniform grid over those approximations, and the reject-only filter threshold
-// every candidate is measured against. The grid prunes the exact on-edge tests;
-// the slack absorbs the approximation, so no incidence is missed.
+// ConformScan indexes the stitched vertices by their float approximations and
+// retains the exact vertices for the on-edge predicate. Its reject-only filter
+// threshold is derived from the approximation error, so pruning cannot miss an
+// exact incidence.
 type ConformScan struct {
-	Verts  []proof.Xpt
-	Approx []r3.Vec
-	Grid   map[[3]int][]int
-	cells  [][3]int
-	Lo     r3.Vec
-	Cell   float64
-	Slack  float64
-	Tau2   float64
+	Verts      []proof.Xpt
+	Approx     []r3.Vec
+	points     heldBoxTree
+	pointCells [][3]int
+	Lo         r3.Vec
+	Cell       float64
+	Slack      float64
+	Tau2       float64
 }
 
 func NewConformScan(budget *proofbound.WorkBudget, verts []proof.Xpt) (*ConformScan, error) {
@@ -185,31 +184,22 @@ func NewConformScan(budget *proofbound.WorkBudget, verts []proof.Xpt) (*ConformS
 	s := &ConformScan{
 		Verts:  verts,
 		Approx: approx,
-		Grid:   map[[3]int][]int{},
 		Lo:     lo,
 		Cell:   cell,
 		Slack:  diag*1e-9 + cell*1e-9,
 	}
 	s.Tau2 = SegAdmissionRadius2(s.Slack, maxAbs)
+	boxes := make([][2]r3.Vec, len(verts))
+	s.pointCells = make([][3]int, len(verts))
 	for i := range verts {
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
 		c := s.CellOf(approx[i].X, approx[i].Y, approx[i].Z)
-		s.Grid[c] = append(s.Grid[c], i)
+		s.pointCells[i] = c
+		boxes[i] = [2]r3.Vec{approx[i], approx[i]}
 	}
-	for c := range s.Grid {
-		s.cells = append(s.cells, c)
-	}
-	sort.Slice(s.cells, func(i, j int) bool {
-		a, b := s.cells[i], s.cells[j]
-		for axis := range 3 {
-			if a[axis] != b[axis] {
-				return a[axis] < b[axis]
-			}
-		}
-		return false
-	})
+	s.points = newBoxTree(boxes)
 	return s, nil
 }
 
@@ -222,10 +212,9 @@ func (s *ConformScan) CellOf(x, y, z float64) [3]int {
 }
 
 // EdgeInteriorHits returns the mesh vertices lying exactly in the interior of
-// facet edge (a, b), searched through the grid cells the edge's slack box
-// covers. An edge spanning the mesh sweeps the whole grid, so the cells and the
-// candidate vertices in them — not the facets — are the candidate operations
-// §7.2 counts, and both step the budget.
+// facet edge (a, b), searched through the point boxes in a conservative
+// expanded segment box.
+// Both tree traversal and candidate checks step the budget.
 //
 // Every candidate meets the reject-only SegFilter before the exact predicate,
 // and the exact predicate still decides every candidate the filter does not
@@ -239,57 +228,41 @@ func (s *ConformScan) EdgeInteriorHits(budget *proofbound.WorkBudget, a, b int, 
 	pa, pb := s.Approx[a], s.Approx[b]
 	filter := NewSegFilter(pa, pb, s.Tau2)
 	var hits []int
-	cLo := s.CellOf(math.Min(pa.X, pb.X)-s.Slack, math.Min(pa.Y, pb.Y)-s.Slack, math.Min(pa.Z, pb.Z)-s.Slack)
-	cHi := s.CellOf(math.Max(pa.X, pb.X)+s.Slack, math.Max(pa.Y, pb.Y)+s.Slack, math.Max(pa.Z, pb.Z)+s.Slack)
-	visit := func(c [3]int) error {
-		for _, vi := range s.Grid[c] {
-			if err := budget.Step(); err != nil {
-				return err
-			}
-			if vi == tri[0] || vi == tri[1] || vi == tri[2] {
-				continue
-			}
-			if filter.TooFar(s.Approx[vi]) {
-				continue
-			}
-			if OnSegmentInterior3(s.Verts[a], s.Verts[b], s.Verts[vi]) {
-				hits = append(hits, vi)
-			}
+	// An exact on-edge point's float approximation is within sqrt(Tau2) of
+	// this float segment, by SegAdmissionRadius2. Querying that expanded segment
+	// box is therefore a complete superset, even when subtracting Lo to find a
+	// grid cell loses precision at large coordinate offsets.
+	tau := math.Nextafter(math.Sqrt(s.Tau2), math.Inf(1))
+	box := [2]r3.Vec{
+		{X: math.Nextafter(math.Min(pa.X, pb.X)-tau, math.Inf(-1)), Y: math.Nextafter(math.Min(pa.Y, pb.Y)-tau, math.Inf(-1)), Z: math.Nextafter(math.Min(pa.Z, pb.Z)-tau, math.Inf(-1))},
+		{X: math.Nextafter(math.Max(pa.X, pb.X)+tau, math.Inf(1)), Y: math.Nextafter(math.Max(pa.Y, pb.Y)+tau, math.Inf(1)), Z: math.Nextafter(math.Max(pa.Z, pb.Z)+tau, math.Inf(1))},
+	}
+	var candidates []int
+	if err := s.points.visitOverlaps(box, budget.Step, func(i int) error {
+		if err := budget.Step(); err != nil {
+			return err
 		}
+		candidates = append(candidates, i)
 		return nil
+	}); err != nil {
+		return nil, err
 	}
-	volume := 1.0
-	for axis := range 3 {
-		volume *= float64(cHi[axis]) - float64(cLo[axis]) + 1
-	}
-	if volume > 2*float64(len(s.cells)) {
-		// Scan occupied cells in the same coordinate order as the box walk.
-		// This avoids probing a large number of empty grid cells.
-		for _, c := range s.cells {
-			if err := budget.Step(); err != nil {
-				return nil, err
-			}
-			if c[0] < cLo[0] || c[0] > cHi[0] ||
-				c[1] < cLo[1] || c[1] > cHi[1] ||
-				c[2] < cLo[2] || c[2] > cHi[2] {
-				continue
-			}
-			if err := visit(c); err != nil {
-				return nil, err
+	// Keep the previous grid walk's deterministic cell and vertex order.
+	sort.Slice(candidates, func(i, j int) bool {
+		a, b := candidates[i], candidates[j]
+		for axis := range 3 {
+			if s.pointCells[a][axis] != s.pointCells[b][axis] {
+				return s.pointCells[a][axis] < s.pointCells[b][axis]
 			}
 		}
-		return hits, nil
-	}
-	for cx := cLo[0]; cx <= cHi[0]; cx++ {
-		for cy := cLo[1]; cy <= cHi[1]; cy++ {
-			for cz := cLo[2]; cz <= cHi[2]; cz++ {
-				if err := budget.Step(); err != nil {
-					return nil, err
-				}
-				if err := visit([3]int{cx, cy, cz}); err != nil {
-					return nil, err
-				}
-			}
+		return a < b
+	})
+	for _, vi := range candidates {
+		if vi == tri[0] || vi == tri[1] || vi == tri[2] || filter.TooFar(s.Approx[vi]) {
+			continue
+		}
+		if OnSegmentInterior3(s.Verts[a], s.Verts[b], s.Verts[vi]) {
+			hits = append(hits, vi)
 		}
 	}
 	return hits, nil
