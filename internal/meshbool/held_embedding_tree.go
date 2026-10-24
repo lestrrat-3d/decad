@@ -10,14 +10,19 @@ import (
 // heldBoxTree indexes the unchanged facet boxes for the first read-only scan.
 // Repair still uses the padded grid because a moved vertex changes its box.
 type heldBoxTree struct {
-	nodes []heldBoxNode
+	nodes  []heldBoxNode
+	boxes  [][2]r3.Vec
+	facets []int
 }
 
 type heldBoxNode struct {
-	box         [2]r3.Vec
-	left, right int
-	facet       int
+	box                  [2]r3.Vec
+	left, right          int
+	leafStart, leafCount int
 }
+
+// heldBoxLeafSize reduces tree traversal work while keeping leaf checks exact.
+const heldBoxLeafSize = 16
 
 func newHeldBoxTree(e *heldEmbedding) heldBoxTree {
 	boxes := make([][2]r3.Vec, len(e.h.Tris))
@@ -36,7 +41,8 @@ func newBoxTree(boxes [][2]r3.Vec) heldBoxTree {
 		}
 		facets = append(facets, i)
 	}
-	tree := heldBoxTree{nodes: make([]heldBoxNode, 0, 2*len(facets))}
+	tree := heldBoxTree{nodes: make([]heldBoxNode, 0, len(facets)), boxes: boxes,
+		facets: make([]int, 0, len(facets))}
 	if len(facets) > 0 {
 		tree.build(boxes, facets)
 	}
@@ -69,9 +75,20 @@ func (tree *heldBoxTree) visitOverlaps(box [2]r3.Vec, poll func() error,
 		if !BoxesOverlap(box, node.box) {
 			continue
 		}
-		if node.facet >= 0 {
-			if err := visit(node.facet); err != nil {
-				return err
+		if node.leafStart >= 0 {
+			for _, facet := range tree.facets[node.leafStart : node.leafStart+node.leafCount] {
+				work++
+				if work%256 == 0 && poll != nil {
+					if err := poll(); err != nil {
+						return err
+					}
+				}
+				if !BoxesOverlap(box, tree.boxes[facet]) {
+					continue
+				}
+				if err := visit(facet); err != nil {
+					return err
+				}
 			}
 			continue
 		}
@@ -94,7 +111,7 @@ func heldBoxHasNaN(box [2]r3.Vec) bool {
 
 func (tree *heldBoxTree) build(boxes [][2]r3.Vec, facets []int) int {
 	index := len(tree.nodes)
-	tree.nodes = append(tree.nodes, heldBoxNode{})
+	tree.nodes = append(tree.nodes, heldBoxNode{leafStart: -1})
 	box := boxes[facets[0]]
 	for _, facet := range facets[1:] {
 		other := boxes[facet]
@@ -106,11 +123,12 @@ func (tree *heldBoxTree) build(boxes [][2]r3.Vec, facets []int) int {
 		box[1].Z = math.Max(box[1].Z, other[1].Z)
 	}
 	tree.nodes[index].box = box
-	if len(facets) == 1 {
-		tree.nodes[index].facet = facets[0]
+	if len(facets) <= heldBoxLeafSize {
+		tree.nodes[index].leafStart = len(tree.facets)
+		tree.nodes[index].leafCount = len(facets)
+		tree.facets = append(tree.facets, facets...)
 		return index
 	}
-	tree.nodes[index].facet = -1
 	axis := 0
 	extent := [3]float64{box[1].X - box[0].X, box[1].Y - box[0].Y, box[1].Z - box[0].Z}
 	if extent[1] > extent[axis] {
