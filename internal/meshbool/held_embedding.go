@@ -1168,12 +1168,16 @@ func (e *heldEmbedding) planeSign(f, p int) int {
 // facetFailures returns the facets j that facet i meets improperly, and
 // whether i itself has collapsed to no plane.
 func (e *heldEmbedding) facetFailures(i int) ([]int, bool, error) {
-	if _, _, n := e.facet(i); zeroXpt(n) {
-		return nil, true, nil
-	}
 	cands, err := e.candidates(i)
 	if err != nil {
 		return nil, false, err
+	}
+	return e.facetFailuresAmong(i, cands)
+}
+
+func (e *heldEmbedding) facetFailuresAmong(i int, cands []int) ([]int, bool, error) {
+	if _, _, n := e.facet(i); zeroXpt(n) {
+		return nil, true, nil
 	}
 	var bad []int
 	for _, j := range cands {
@@ -1217,8 +1221,29 @@ func (e *heldEmbedding) vertexFailures(v int) (int, error) {
 func (e *heldEmbedding) offenders(query []int) ([]int, []int, error) {
 	set := map[int]struct{}{}
 	var failing []int
+	var tree *heldBoxTree
+	if e.memoOn {
+		built := newHeldBoxTree(e)
+		tree = &built
+	}
+	candidates := make([]int, 0, 64)
 	for _, i := range query {
-		bad, collapsed, err := e.facetFailures(i)
+		var bad []int
+		var collapsed bool
+		var err error
+		if tree == nil {
+			bad, collapsed, err = e.facetFailures(i)
+		} else {
+			candidates = candidates[:0]
+			err = tree.visitOverlaps(e.triBox(i), e.budget.Step, func(j int) error {
+				candidates = append(candidates, j)
+				return nil
+			})
+			if err == nil {
+				slices.Sort(candidates)
+				bad, collapsed, err = e.facetFailuresAmong(i, candidates)
+			}
+		}
 		if err != nil {
 			return nil, nil, err
 		}

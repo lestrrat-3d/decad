@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -209,6 +210,8 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 	// maxTouchContacts, so the refusal can say which planes are involved.
 	var coplanar []TouchContact
 	work := 0
+	boxTree := newBoxTree(mb.Boxes)
+	candidates := make([]int, 0, 64)
 	contacts := NewContactBatchExecutor(ctx, ma, mb, memo, ContactWorkers(ctx), func(pair ContactPair, c TriContact) error {
 		i, j := pair.I, pair.J
 		ta := TriCorners(ma, i)
@@ -258,15 +261,21 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 		return nil
 	})
 	for i := range ma.Tris {
-		for j := range mb.Tris {
+		candidates = candidates[:0]
+		err := boxTree.visitOverlaps(ma.Boxes[i], ctx.Err, func(j int) error {
+			candidates = append(candidates, j)
+			return nil
+		})
+		if err != nil {
+			return nil, 0, err
+		}
+		sort.Ints(candidates)
+		for _, j := range candidates {
 			work++
 			if work%256 == 0 {
 				if err := ctx.Err(); err != nil {
 					return nil, 0, err
 				}
-			}
-			if !BoxesOverlap(ma.Boxes[i], mb.Boxes[j]) {
-				continue
 			}
 			if err := contacts.Add(i, j); err != nil {
 				return nil, 0, err
