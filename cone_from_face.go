@@ -114,6 +114,7 @@ func ConeFromFace(ctx context.Context, body *Body, face FaceSelector, far units.
 	if err != nil {
 		return nil, err
 	}
+	defer d.resultIn(d.bodyContainer(body))()
 	if err := commitExactPointCone(ctx, d, cone); err != nil {
 		return nil, err
 	}

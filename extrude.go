@@ -147,6 +147,10 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if err := d.requireSameContainer(extentBodies(e), s); err != nil {
+		return nil, err
+	}
+	defer d.resultIn(d.ContainerOfSketch(s))()
 	profile, plane, profileArea, certificate, err := sectioncert.RecordExtrudeProfile(s, p)
 	if err != nil {
 		return nil, err
@@ -241,7 +245,7 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(body)
+	d.commitIn(d.ContainerOfSketch(s), body)
 	return body, nil
 }
 
@@ -427,6 +431,10 @@ func extrudeChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if err := d.requireSameContainer(extentBodies(e), s); err != nil {
+		return nil, err
+	}
+	defer d.resultIn(d.ContainerOfSketch(s))()
 
 	chain, plane, err := recordChain(s, ch)
 	if err != nil {
@@ -479,7 +487,7 @@ func extrudeChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(body)
+	d.commitIn(d.ContainerOfSketch(s), body)
 	return body, nil
 }
 

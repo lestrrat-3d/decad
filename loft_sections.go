@@ -40,6 +40,16 @@ func LoftSections(ctx context.Context, d *Document, sections ...LoftSection) (*B
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	sketches := make([]*sketch.Sketch, len(sections))
+	for i, section := range sections {
+		sketches[i] = section.Sketch
+	}
+	if err := d.requireSameContainer(nil, sketches...); err != nil {
+		return nil, err
+	}
+	if sketches[0] != nil {
+		defer d.resultIn(d.ContainerOfSketch(sketches[0]))()
+	}
 	if len(sections) == 4 {
 		return d.buildFourRoundedSections(ctx, sections)
 	}

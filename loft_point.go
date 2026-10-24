@@ -81,6 +81,6 @@ func LoftFromPoint(ctx context.Context, d *Document, apex r3.Vec,
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(body)
+	d.commitIn(d.ContainerOfSketch(s), body)
 	return body, nil
 }

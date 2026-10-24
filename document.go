@@ -38,6 +38,12 @@ type Document struct {
 	// ledger the reads they have made.
 	params *param.Table
 	ledger parambind.Ledger
+	// groups is the container tree and the placement of its members
+	// (container.go), guarded by the node's LiveMu.
+	groups containerState
+	// resultIn names the container commits that name none place their result
+	// in, while an operation that cannot pass one down holds it (resultIn).
+	resultC *Container
 }
 
 // DocumentOption configures New. WithGapTolerance, ExactOnly,
@@ -103,13 +109,37 @@ func Remove(b *Body) error {
 // (agent-docs/evaluator-design.md §8): a failed evaluation never reaches here, so
 // a rejected operation leaves the document untouched.
 func (d *Document) commit(produced *Body, consumed ...*Body) {
+	d.commitIn(nil, produced, consumed...)
+}
+
+// commitIn is commit placing the produced body in c. A nil c reads the container
+// of the first consumed body, and the root when nothing is consumed
+// (agent-docs/container-design.md §2).
+func (d *Document) commitIn(c *Container, produced *Body, consumed ...*Body) {
 	d.n.NextProducer++
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
-	for _, c := range consumed {
-		d.retire(c)
+	dest := d.destinationLocked(c, consumed)
+	for _, gone := range consumed {
+		d.retire(gone)
 	}
 	d.n.LiveSet = append(d.n.LiveSet, bodyNode(produced))
+	d.placeLocked(bodyNode(produced), dest)
+}
+
+// destinationLocked is the container a commit places its results in. The caller
+// holds LiveMu, and has not yet retired the consumed bodies.
+func (d *Document) destinationLocked(c *Container, consumed []*Body) *Container {
+	if c != nil {
+		return c
+	}
+	if d.resultC != nil {
+		return d.resultC
+	}
+	if len(consumed) > 0 && consumed[0] != nil {
+		return d.bodyContainerLocked(bodyNode(consumed[0]))
+	}
+	return d.rootLocked()
 }
 
 // commitMany is commit's N-producer variant (agent-docs/surface-design.md §6.5):
@@ -121,15 +151,24 @@ func (d *Document) commit(produced *Body, consumed ...*Body) {
 // surface before commitMany is ever called), so this function's own job is
 // only to make the retirement and every registration one atomic step from
 // [Document.Bodies]'s point of view, exactly as commit already is for one
-// producer.
+// producer. Every produced body lands in one container, as commitIn places one.
 func (d *Document) commitMany(produced []*Body, consumed ...*Body) {
+	d.commitManyIn(nil, produced, consumed...)
+}
+
+// commitManyIn is commitMany placing every produced body in c.
+func (d *Document) commitManyIn(c *Container, produced []*Body, consumed ...*Body) {
 	d.n.NextProducer += producerID(len(produced))
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
-	for _, c := range consumed {
-		d.retire(c)
+	dest := d.destinationLocked(c, consumed)
+	for _, gone := range consumed {
+		d.retire(gone)
 	}
 	d.n.LiveSet = append(d.n.LiveSet, bodyNodes(produced)...)
+	for _, b := range produced {
+		d.placeLocked(bodyNode(b), dest)
+	}
 }
 
 // commitSpan is commit for an operation that evaluated several bodies under
@@ -139,13 +178,20 @@ func (d *Document) commitMany(produced []*Body, consumed ...*Body) {
 // identity those transient bodies minted roles under unique, so a later
 // producer never repeats one a result's provenance can carry.
 func (d *Document) commitSpan(produced *Body, span producerID, consumed ...*Body) {
+	d.commitSpanIn(nil, produced, span, consumed...)
+}
+
+// commitSpanIn is commitSpan placing the produced body in c.
+func (d *Document) commitSpanIn(c *Container, produced *Body, span producerID, consumed ...*Body) {
 	d.n.NextProducer += span
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
-	for _, c := range consumed {
-		d.retire(c)
+	dest := d.destinationLocked(c, consumed)
+	for _, gone := range consumed {
+		d.retire(gone)
 	}
 	d.n.LiveSet = append(d.n.LiveSet, bodyNode(produced))
+	d.placeLocked(bodyNode(produced), dest)
 }
 
 // retire removes a body from the live set. The body itself is untouched —
@@ -158,6 +204,7 @@ func (d *Document) retire(b *Body) {
 			continue
 		}
 		d.n.LiveSet = append(d.n.LiveSet[:i], d.n.LiveSet[i+1:]...)
+		delete(d.groups.ofBody, n)
 		return
 	}
 }
@@ -371,7 +418,7 @@ func (b *Body) copyUnder(ctx context.Context, motion r3.Transform, exact *exactr
 	}
 	// The source is depended on, not consumed: commit with no consumed inputs,
 	// so the retire rule never touches it.
-	d.commit(copied)
+	d.commitIn(d.bodyContainer(b), copied)
 	return copied, nil
 }
 

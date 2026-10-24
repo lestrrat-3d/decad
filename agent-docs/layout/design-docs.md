@@ -9,6 +9,7 @@ The rules for rows live in `agent-docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
+| `agent-docs/container-design.md` | `Container`: grouping of sketches, planes and bodies, result placement, `MoveBody`, `ErrCrossContainer`. |
 | `agent-docs/api-design.md` | Public API contract for modeling, features, selectors, and verification. |
 | `docs/api.md` | User-facing API reference by task; `apitest/api_reference_test.go` checks its names exist. |
 | `docs/data-structures.md` | User-facing type index and structure guide; `apitest/api_reference_test.go` checks it lists every exported type. |

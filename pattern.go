@@ -103,7 +103,7 @@ func PatternCopies(ctx context.Context, b *Body, spec PatternSpec) ([]*Body, err
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commitMany(out)
+	d.commitManyIn(d.bodyContainer(b), out)
 	return out, nil
 }
 
@@ -270,6 +270,9 @@ func PatternJoin(ctx context.Context, target, feature *Body, spec PatternSpec) (
 		return nil, err
 	}
 	if err := d.requireLive(target); err != nil {
+		return nil, err
+	}
+	if err := d.requireSameContainer([]*Body{target, feature}); err != nil {
 		return nil, err
 	}
 	if target == feature {

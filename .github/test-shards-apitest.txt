@@ -2224,3 +2224,8 @@
 10	0.00	TestUnionManyJoinsTwistedLoftTeethToADisc
 10	0.00	TestChainToleranceAdmitsAContactOnACoarserRim
 10	1.40	TestManySplineOutlineTessellatesUnderVerifyAll
+10	0.01	TestContainerTree
+10	0.01	TestContainerSketchAndPlaneMembership
+10	0.05	TestContainerPlacement
+10	0.05	TestContainerCrossRefusal
+10	0.05	TestContainerMoveBody

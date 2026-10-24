@@ -15,6 +15,9 @@ import (
 // stay live until it does.
 func combineTools(ctx context.Context, d *Document, b *Body, op meshbool.OperationKind, tools []*Body, merge bool,
 	accept func(result *Body) error) (*Body, error) {
+	if err := d.requireSameContainer(append([]*Body{b}, tools...)); err != nil {
+		return nil, err
+	}
 	start := d.nextProducerID()
 	ref := start
 	if merge && len(tools) > 1 {

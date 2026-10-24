@@ -139,13 +139,16 @@ func Loft(ctx context.Context, d *Document, s0 *sketch.Sketch, p0 *sketch.Profil
 	if err != nil {
 		return nil, err
 	}
+	if err := d.requireSameContainer(nil, s0, s1); err != nil {
+		return nil, err
+	}
 	// S9: both profiles through the unmodified seam gates, in argument order.
 	node, err := loftrecord.FromProfiles(ctx, envOf(documentNode(d), d.nextProducerID()), s0, p0, s1, p1, cfg)
 	if err != nil {
 		return nil, err
 	}
 	body := bodyHandle(node)
-	d.commit(body)
+	d.commitIn(d.ContainerOfSketch(s0), body)
 	return body, nil
 }
 
@@ -218,6 +221,9 @@ func LoftChain(ctx context.Context, d *Document, s0 *sketch.Sketch, c0 *sketch.C
 	// SL2 before every shape gate, in argument order: a seam refusal names a
 	// repair the caller makes in the sketch, and a shape refusal reported
 	// first would hide it (agent-docs/loft-design.md Table SL).
+	if err := d.requireSameContainer(nil, s0, s1); err != nil {
+		return nil, err
+	}
 	chain0, plane0, err := recordChain(s0, c0)
 	if err != nil {
 		return nil, err
@@ -232,6 +238,6 @@ func LoftChain(ctx context.Context, d *Document, s0 *sketch.Sketch, c0 *sketch.C
 		return nil, err
 	}
 	body := bodyHandle(node)
-	d.commit(body)
+	d.commitIn(d.ContainerOfSketch(s0), body)
 	return body, nil
 }

@@ -41,6 +41,9 @@ func Extend(ctx context.Context, b *Body, edges *EdgeQuery, tool *Body) (*Body, 
 	if err := d.requireLive(tool); err != nil {
 		return nil, err
 	}
+	if err := d.requireSameContainer([]*Body{b, tool}); err != nil {
+		return nil, err
+	}
 	if b == tool {
 		return nil, fmt.Errorf(`%w: an extension needs two distinct bodies`, ErrDegenerate)
 	}
@@ -106,6 +109,9 @@ func Trim(ctx context.Context, b *Body, tool *Body, side TrimSide) (*Body, error
 	if err := d.requireLive(tool); err != nil {
 		return nil, err
 	}
+	if err := d.requireSameContainer([]*Body{b, tool}); err != nil {
+		return nil, err
+	}
 	if b == tool {
 		return nil, fmt.Errorf(`%w: a trim needs two distinct bodies`, ErrDegenerate)
 	}
@@ -142,6 +148,9 @@ func Split(ctx context.Context, target, tool *Body) ([]*Body, error) {
 		return nil, err
 	}
 	if err := d.requireLive(tool); err != nil {
+		return nil, err
+	}
+	if err := d.requireSameContainer([]*Body{target, tool}); err != nil {
 		return nil, err
 	}
 	if target == tool {
