@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -28,19 +29,36 @@ type SectorJoinPlan struct {
 
 // SectorJoinInput contains the bounded source readings needed to place sectors.
 type SectorJoinInput struct {
-	Original            []pointcone.SectorNode
-	RootContactIndex    int // Index in the certified loop before subdivision.
-	Edges               []pointcone.SectorEdge
-	Motions             []r3.Transform
-	Charges             []massmoment.MapCharge
+	Original         []pointcone.SectorNode
+	RootContactIndex int // Index in the certified loop before subdivision.
+	Edges            []pointcone.SectorEdge
+	Motions          []r3.Transform
+	Charges          []massmoment.MapCharge
+	// Drifts holds each motion's drift charge ε per unit of radius
+	// (massmoment.AxisPlacementCharge). For the canonical axis it equals the
+	// charge's Stretch.
+	Drifts              []float64
 	SourceMeshBounds    []float64
 	SourceCrossingBound float64
 	Seam, MinRadius     float64
 	RegularSource       []float64
+	// Tilted reports that the certificate is general, so every pair's seam
+	// cost takes τ = (π/2)·FrameTilt·r_max, with FrameTilt the δ_B of the
+	// blank's angular frame (massmoment.FrameTilt). A canonical certificate
+	// leaves it false and FrameTilt unread (agent-docs/revolve-axis-design.md
+	// §5.6).
+	Tilted    bool
+	FrameTilt float64
 }
 
-// PrepareSectorJoinPlans selects one angular ring for all authenticated sectors.
+// PrepareSectorJoinPlans selects one angular ring for all authenticated
+// sectors. A later sector's PlacedRound charges its drift ε, never the bare
+// Stretch, against every node's radius (agent-docs/revolve-axis-design.md
+// §5.5).
 func PrepareSectorJoinPlans(input SectorJoinInput) ([]SectorJoinPlan, []float64, error) {
+	if len(input.Drifts) != len(input.Motions) || len(input.Charges) != len(input.Motions) {
+		return nil, nil, fmt.Errorf("%w: sector placements have no drift charge", decaderr.ErrUnsupported)
+	}
 	plans := make([]SectorJoinPlan, len(input.Motions))
 	for i := range plans {
 		plan := &plans[i]
@@ -59,7 +77,7 @@ func PrepareSectorJoinPlans(input SectorJoinInput) ([]SectorJoinPlan, []float64,
 				maxAbs := max(math.Abs(node.P.X), math.Abs(node.P.Y), math.Abs(node.P.Z))
 				plan.PlacedRound = max(plan.PlacedRound, proofbound.AbsSumUpper(
 					proofbound.RigidRoundAllow(maxAbs, 0),
-					proofbound.ProductUpper(input.Charges[i].Stretch, proofbound.Radius3D(maxAbs))))
+					proofbound.ProductUpper(input.Drifts[i], proofbound.Radius3D(maxAbs))))
 			}
 		}
 		a, b := plan.Nodes[0].Angle, plan.Nodes[input.RootContactIndex].Angle
@@ -74,12 +92,19 @@ func PrepareSectorJoinPlans(input SectorJoinInput) ([]SectorJoinPlan, []float64,
 		}
 	}
 	minRadius := input.MinRadius
+	tau := 0.0
+	if input.Tilted {
+		tau = frameTiltSeamCost(plans, input.FrameTilt)
+	}
 	for i := range plans {
 		for j := i + 1; j < len(plans); j++ {
 			seamCost := proofbound.AbsSumUpper(plans[i].CrossingBound,
 				plans[j].CrossingBound,
 				massmoment.PlacedBound(input.SourceMeshBounds[i], input.Charges[i]),
 				massmoment.PlacedBound(input.SourceMeshBounds[j], input.Charges[j]))
+			if input.Tilted {
+				seamCost = proofbound.AbsSumUpper(seamCost, tau)
+			}
 			if !(minRadius > 0 && seamCost < minRadius/2) {
 				return nil, nil, fmt.Errorf("%w: root sectors have no angular error bound", decaderr.ErrUnsupported)
 			}
@@ -125,6 +150,31 @@ func PrepareSectorJoinPlans(input SectorJoinInput) ([]SectorJoinPlan, []float64,
 		}
 	}
 	return plans, angles, nil
+}
+
+// frameTiltSeamCost returns τ = (π/2)·δ_B·r_max rounded up, where r_max is a
+// proven upper bound on |p| over every root-boundary node p of every plan,
+// placed copies included (agent-docs/revolve-axis-design.md §5.6). A node's
+// angle in the held frame and its angle about the axis differ by at most
+// τ/ρ_min, so τ added to a pair's seam cost covers both nodes' angle errors
+// once the cost is turned into an angle by 2·cost/minRadius. The seam test
+// requires cost < minRadius/2, which implies δ_B·r_max < ρ_min as the bound
+// requires. A non-finite reading answers +Inf, which that test refuses.
+func frameTiltSeamCost(plans []SectorJoinPlan, frameTilt float64) float64 {
+	rMax := 0.0
+	for _, plan := range plans {
+		for _, node := range plan.Nodes {
+			if node.RootBoundary {
+				rMax = max(rMax, proofbound.DvLenUpper(proofarith.DyVec(node.P)))
+			}
+		}
+	}
+	halfPi := proofbound.RatFloatUp(proofbound.HalfPiInterval().Hi)
+	tau := proofbound.ProductUpper(halfPi, proofbound.ProductUpper(frameTilt, rMax))
+	if proofbound.IsNonFinite(tau) || !(frameTilt >= 0) {
+		return math.Inf(1)
+	}
+	return tau
 }
 
 // SectorJoinBoundInput contains the source and cap bounds shared by all sectors.

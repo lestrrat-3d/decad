@@ -31,6 +31,30 @@ func ratMul(a, b *big.Rat) *big.Rat { return new(big.Rat).Mul(a, b) }
 // projection after the certified mesh bounds are charged proves whole-source
 // separation, including the interior.
 func SectorSourcesSeparate(sectors []SectorSource) bool {
+	return sectorSourcesSeparate(sectors, func(a, b SectorSource, aLo, aHi, bLo, bHi r3.Vec) bool {
+		return sectorPairProjectionSeparate(a.Verts, b.Verts, a.Bound, b.Bound, aLo, aHi, bLo, bHi)
+	})
+}
+
+// SectorSourcesSeparateAbout is SectorSourcesSeparate for sectors placed about
+// the axis vector axis, a finite nonzero vector of any length. A pair whose
+// boxes overlap is tested along the exact box-centre difference minus its
+// axis component, n = (A·A)·d − (d·A)·A, in place of the YZ direction, which
+// is weak off the X axis (agent-docs/revolve-axis-design.md §5.8). The
+// direction only selects the test: exact projections of every held vertex,
+// widened by |n|↑ times each bound, supply the proof.
+func SectorSourcesSeparateAbout(sectors []SectorSource, axis r3.Vec) bool {
+	a, ok := exactVec(axis)
+	if !ok {
+		return false
+	}
+	return sectorSourcesSeparate(sectors, func(p, q SectorSource, pLo, pHi, qLo, qHi r3.Vec) bool {
+		return sectorPairSeparateAbout(p, q, pLo, pHi, qLo, qHi, a)
+	})
+}
+
+func sectorSourcesSeparate(sectors []SectorSource,
+	pairSeparate func(a, b SectorSource, aLo, aHi, bLo, bHi r3.Vec) bool) bool {
 	type box struct{ lo, hi r3.Vec }
 	boxes := make([]box, len(sectors))
 	for i, sector := range sectors {
@@ -72,13 +96,76 @@ func SectorSourcesSeparate(sectors []SectorSource) bool {
 				a.hi.Z < b.lo.Z || b.hi.Z < a.lo.Z {
 				continue
 			}
-			if !sectorPairProjectionSeparate(sectors[i].Verts, sectors[j].Verts,
-				sectors[i].Bound, sectors[j].Bound, a.lo, a.hi, b.lo, b.hi) {
+			if !pairSeparate(sectors[i], sectors[j], a.lo, a.hi, b.lo, b.hi) {
 				return false
 			}
 		}
 	}
 	return true
+}
+
+// exactVec reads v's components as rationals, reporting false for a
+// non-finite or zero vector.
+func exactVec(v r3.Vec) ([3]*big.Rat, bool) {
+	if !proofbound.FiniteVec(v) || v == (r3.Vec{}) {
+		return [3]*big.Rat{}, false
+	}
+	return [3]*big.Rat{ratF(v.X), ratF(v.Y), ratF(v.Z)}, true
+}
+
+func ratDot(a, b [3]*big.Rat) *big.Rat {
+	return ratAdd(ratAdd(ratMul(a[0], b[0]), ratMul(a[1], b[1])), ratMul(a[2], b[2]))
+}
+
+// sectorPairSeparateAbout separates two sources along the box-centre
+// difference d (doubled, which keeps it exact) with its component along the
+// exact axis a removed: n = (a·a)·d − (d·a)·a, so n·a = 0 exactly.
+func sectorPairSeparateAbout(a, b SectorSource, aLo, aHi, bLo, bHi r3.Vec, axis [3]*big.Rat) bool {
+	var d [3]*big.Rat
+	for i, pair := range [3][4]float64{
+		{aLo.X, aHi.X, bLo.X, bHi.X}, {aLo.Y, aHi.Y, bLo.Y, bHi.Y}, {aLo.Z, aHi.Z, bLo.Z, bHi.Z},
+	} {
+		d[i] = ratSub(ratAdd(ratF(pair[0]), ratF(pair[1])), ratAdd(ratF(pair[2]), ratF(pair[3])))
+	}
+	aa, da := ratDot(axis, axis), ratDot(d, axis)
+	var n [3]*big.Rat
+	for i := range n {
+		n[i] = ratSub(ratMul(aa, d[i]), ratMul(da, axis[i]))
+	}
+	normSq := ratDot(n, n)
+	if normSq.Sign() == 0 {
+		return false
+	}
+	norm := proofbound.RatSqrtUp(normSq)
+	if proofbound.IsNonFinite(norm) || norm <= 0 {
+		return false
+	}
+	aMin, aMax, ok := sectorProjectionAlong(a.Verts, a.Bound, n, norm)
+	if !ok {
+		return false
+	}
+	bMin, bMax, ok := sectorProjectionAlong(b.Verts, b.Bound, n, norm)
+	return ok && (aMax.Cmp(bMin) < 0 || bMax.Cmp(aMin) < 0)
+}
+
+// sectorProjectionAlong returns the exact range of n·p over verts, widened on
+// each side by norm·bound rounded up, where norm ≥ |n|.
+func sectorProjectionAlong(verts []r3.Vec, bound float64, n [3]*big.Rat, norm float64) (*big.Rat, *big.Rat, bool) {
+	var lo, hi *big.Rat
+	for _, vertex := range verts {
+		value := ratDot(n, [3]*big.Rat{ratF(vertex.X), ratF(vertex.Y), ratF(vertex.Z)})
+		if lo == nil || value.Cmp(lo) < 0 {
+			lo = value
+		}
+		if hi == nil || value.Cmp(hi) > 0 {
+			hi = value
+		}
+	}
+	charge := proofbound.ProductUpper(norm, bound)
+	if lo == nil || proofbound.IsNonFinite(charge) {
+		return nil, nil, false
+	}
+	return ratSub(lo, ratF(charge)), ratAdd(hi, ratF(charge)), true
 }
 
 // The difference between the held box centers chooses a test direction; it

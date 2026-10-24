@@ -215,3 +215,103 @@ func TestAxisRotationDeclines(t *testing.T) {
 	require.Equal(t, massmoment.MapCharge{}, charge)
 	require.Zero(t, eps)
 }
+
+func TestAxisPlacementCharge(t *testing.T) {
+	t.Parallel()
+	x := coneaxis.X()
+	for _, m := range []r3.Transform{r3.Identity(), rotation(t, r3.Vec{X: 1}, math.Pi/3),
+		rotation(t, r3.Vec{X: 1}, 2*math.Pi*5/16)} {
+		charge, eps, err := massmoment.AxisPlacementCharge(m, x)
+		require.NoError(t, err)
+		want, err := massmoment.XAxisPlacementCharge(m)
+		require.NoError(t, err)
+		require.Equal(t, want, charge, "the canonical axis keeps the +X charge")
+		require.Equal(t, charge.Stretch, eps)
+	}
+	a := r3.Vec{X: 1, Y: 2}
+	m := rotation(t, tilted(a, 0x1p-48), math.Pi)
+	charge, eps, err := massmoment.AxisPlacementCharge(m, axisOf(t, a))
+	require.NoError(t, err)
+	wantCharge, wantEps, ok := massmoment.AxisRotation(m, axisOf(t, a))
+	require.True(t, ok)
+	require.Equal(t, wantCharge, charge)
+	require.Equal(t, wantEps, eps)
+	_, _, err = massmoment.AxisPlacementCharge(rotation(t, tilted(a, 0x1p-40), math.Pi), axisOf(t, a))
+	require.Error(t, err, "a tilt past DriftSinLimit")
+}
+
+// bigAngle returns atan2(y, x) of 300-bit readings.
+func bigAngle(y, x *big.Float) float64 {
+	fy, _ := y.Float64()
+	fx, _ := x.Float64()
+	return math.Atan2(fy, fx)
+}
+
+func bigVec3(v r3.Vec) [3]*big.Float { return [3]*big.Float{bf(v.X), bf(v.Y), bf(v.Z)} }
+
+func bigDot3(a, b [3]*big.Float) *big.Float {
+	return addf(addf(mulf(a[0], b[0]), mulf(a[1], b[1])), mulf(a[2], b[2]))
+}
+
+func wrapAngle(a float64) float64 {
+	for a > math.Pi {
+		a -= 2 * math.Pi
+	}
+	for a <= -math.Pi {
+		a += 2 * math.Pi
+	}
+	return a
+}
+
+// A held angular frame tilted off the axis turns the angle between two points
+// measured in it away from their true angle about the axis. FrameTilt's δ_B
+// must bound that change by 2·(π/2)·δ_B·r_max/ρ_min (design §5.6), which needs
+// the s_W leg: the frame is orthonormal to rounding, so e_B alone is a few
+// units in the last place.
+func TestFrameTiltCoversHeldAngles(t *testing.T) {
+	t.Parallel()
+	for _, a := range []r3.Vec{{X: 1, Y: 2}, {Y: 1}} {
+		axis := axisOf(t, a)
+		w := tilted(a, 1e-6)
+		e0 := r3.Vec{X: -w.Y, Y: w.X}
+		e1 := w.Cross(e0)
+		tilt, ok := massmoment.FrameTilt(w, e0, e1, axis)
+		require.True(t, ok)
+
+		unit := normalize(a)
+		normal := r3.Vec{X: unit.Y, Y: -unit.X}
+		p := unit.Scale(50).Add(normal)
+		q := unit.Scale(50).Add(r3.Vec{Z: 1})
+
+		// The true angle from p to q about the exact unit axis.
+		ua := bigVec3(a)
+		norm := new(big.Float).SetPrec(oraclePrec).Sqrt(bigDot3(ua, ua))
+		for i := range ua {
+			ua[i] = new(big.Float).SetPrec(oraclePrec).Quo(ua[i], norm)
+		}
+		perp := func(v r3.Vec) [3]*big.Float {
+			x := bigVec3(v)
+			h := bigDot3(x, ua)
+			return [3]*big.Float{subf(x[0], mulf(h, ua[0])), subf(x[1], mulf(h, ua[1])), subf(x[2], mulf(h, ua[2]))}
+		}
+		pp, qp := perp(p), perp(q)
+		cross := [3]*big.Float{subf(mulf(pp[1], qp[2]), mulf(pp[2], qp[1])),
+			subf(mulf(pp[2], qp[0]), mulf(pp[0], qp[2])), subf(mulf(pp[0], qp[1]), mulf(pp[1], qp[0]))}
+		trueTurn := bigAngle(bigDot3(cross, ua), bigDot3(pp, qp))
+
+		held := func(v r3.Vec) float64 {
+			x := bigVec3(v)
+			return bigAngle(bigDot3(x, bigVec3(e1)), bigDot3(x, bigVec3(e0)))
+		}
+		heldTurn := wrapAngle(held(q) - held(p))
+		moved := math.Abs(heldTurn - trueTurn)
+
+		rMax := max(p.Len(), q.Len()) * (1 + 1e-12)
+		rhoMin := 1 - 1e-12
+		bound := 2 * (math.Pi / 2) * tilt * rMax / rhoMin
+		require.Greater(t, moved, 1e-6, "%v: the fixture's tilt must move the angle", a)
+		require.LessOrEqual(t, moved, bound, "%v: angle moved %g, bound %g", a, moved, bound)
+	}
+	_, ok := massmoment.FrameTilt(r3.Vec{X: -1}, r3.Vec{Y: 1}, r3.Vec{Z: -1}, coneaxis.X())
+	require.False(t, ok, "a frame whose axis points away from A declines")
+}

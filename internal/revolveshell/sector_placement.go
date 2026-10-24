@@ -3,6 +3,7 @@ package revolveshell
 import (
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/coneaxis"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
@@ -10,10 +11,14 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// RevolveSectorSourcesSeparate checks each later sector's recorded axis
-// placement, charges its mesh bound for that placement, and asks
-// facetproof.SectorSourcesSeparate for whole-source separation.
-func RevolveSectorSourcesSeparate(sectors []facetedrecord.Payload) bool {
+// RevolveSectorSourcesSeparate checks each later sector's recorded placement
+// as a rotation about axis (massmoment.AxisPlacementCharge), charges its mesh
+// bound for that placement, and asks facetproof for whole-source separation:
+// SectorSourcesSeparate for the canonical axis, and SectorSourcesSeparateAbout
+// with axis's vector for any other. It needs no drift term, because it proves
+// the denoted copies disjoint, and those are the copies the union holds
+// (agent-docs/revolve-axis-design.md §5.5).
+func RevolveSectorSourcesSeparate(sectors []facetedrecord.Payload, axis coneaxis.Axis) bool {
 	sources := make([]facetproof.SectorSource, len(sectors))
 	for i, sector := range sectors {
 		charge := massmoment.MapCharge{}
@@ -23,7 +28,7 @@ func RevolveSectorSourcesSeparate(sectors []facetedrecord.Payload) bool {
 				return false
 			}
 			var err error
-			charge, err = massmoment.XAxisPlacementCharge(sector.RevolveLoftSector.Motion)
+			charge, _, err = massmoment.AxisPlacementCharge(sector.RevolveLoftSector.Motion, axis)
 			if err != nil {
 				return false
 			}
@@ -31,7 +36,10 @@ func RevolveSectorSourcesSeparate(sectors []facetedrecord.Payload) bool {
 		sources[i] = facetproof.SectorSource{Verts: sector.Verts, MeshBound: sector.MeshBound,
 			Bound: massmoment.PlacedBound(sector.MeshBound, charge)}
 	}
-	return facetproof.SectorSourcesSeparate(sources)
+	if axis.Canonical() {
+		return facetproof.SectorSourcesSeparate(sources)
+	}
+	return facetproof.SectorSourcesSeparateAbout(sources, axis.Vec())
 }
 
 // RevolveSectorSeam reads the sector loop's first and last root contacts and

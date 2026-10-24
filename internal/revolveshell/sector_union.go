@@ -44,7 +44,7 @@ func SectorUnionMany(ctx context.Context, env topo.Env,
 				}
 				sources = append(sources, placed)
 			}
-			if !RevolveSectorSourcesSeparate(sources) {
+			if !RevolveSectorSourcesSeparate(sources, cert.Section.Axis) {
 				return nil, true, fmt.Errorf("%w: complete sector sources are not separate", decaderr.ErrUnsupported)
 			}
 			body, err := BuildSectorsJoin(ctx, env,
@@ -85,7 +85,10 @@ func SectorUnion(ctx context.Context, op meshbool.OperationKind,
 // NextSectorUnion rebuilds a serial join from the retained
 // authenticated Revolve and point-Loft sources. The faceted joined operand
 // is not used as a geometric source for the next contact. A join whose
-// certificate is about a general axis declines (GeneralCertificate).
+// certificate is about a general axis declines (GeneralCertificate). The new
+// copy's motion must be a rotation about the certificate's axis that
+// massmoment.AxisRotation admits: a reflected, translated or obtuse copy, or
+// one whose axis drifts past massmoment.DriftSinLimit, declines.
 func NextSectorUnion(ctx context.Context, op meshbool.OperationKind,
 	env topo.Env, a, b *topo.Body) (*topo.Body, bool, error) {
 	if op != meshbool.OpUnion {
@@ -104,8 +107,11 @@ func NextSectorUnion(ctx context.Context, op meshbool.OperationKind,
 		jp.RevolveLoftJoin.Certificate == nil ||
 		GeneralCertificate(jp.RevolveLoftJoin.Certificate) ||
 		jp.RevolveLoftJoin.Certificate.Trim != p.RevolveLoftSector.Source ||
-		p.Xform != p.RevolveLoftSector.Motion ||
-		!massmoment.XAxisRotation(p.RevolveLoftSector.Motion) {
+		p.Xform != p.RevolveLoftSector.Motion {
+		return nil, false, nil
+	}
+	axis := jp.RevolveLoftJoin.Certificate.Section.Axis
+	if _, _, ok := massmoment.AxisRotation(p.RevolveLoftSector.Motion, axis); !ok {
 		return nil, false, nil
 	}
 	record := jp.RevolveLoftJoin
@@ -113,7 +119,7 @@ func NextSectorUnion(ctx context.Context, op meshbool.OperationKind,
 	sectors = append(sectors, record.First)
 	sectors = append(sectors, record.Placed...)
 	sectors = append(sectors, p)
-	if !RevolveSectorSourcesSeparate(sectors) {
+	if !RevolveSectorSourcesSeparate(sectors, axis) {
 		return nil, false, nil
 	}
 	body, err := BuildSectorsJoin(ctx, env,

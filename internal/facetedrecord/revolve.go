@@ -100,9 +100,11 @@ type RevolveSectionAxis struct {
 	RootZ, RootR [2]*big.Rat
 	// ApexGap is δ_a ≥ |Cone.Apex − P*| and SlopeGap ≥ |k* − Cone.Slope|.
 	ApexGap, SlopeGap float64
-	// E0 and E1 are the blank basis's angle-0 and angle-π/2 directions
-	// (revolvemesh.RevolveBasis, §3.7).
-	E0, E1 r3.Vec
+	// W is the blank basis's held axis direction, and E0 and E1 are its
+	// angle-0 and angle-π/2 directions (revolvemesh.RevolveBasis, §3.7).
+	// massmoment.FrameTilt charges (W, E0, E1) against an exact frame about
+	// the axis (§5.6).
+	W, E0, E1 r3.Vec
 }
 
 // ConeGap returns δ_a + |k*−s|·(reach + δ_a) rounded upward, the distance

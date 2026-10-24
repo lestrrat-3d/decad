@@ -205,6 +205,7 @@ func buildSectorsJoinAtSag(ctx context.Context, env topo.Env,
 	}
 	motions := make([]r3.Transform, len(sources))
 	charges := make([]massmoment.MapCharge, len(sources))
+	drifts := make([]float64, len(sources))
 	motions[0] = r3.Identity()
 	if sources[0].PointCone != record || sources[0].Xform != r3.Identity() {
 		return nil, nil, fmt.Errorf("%w: first sector lost its source", decaderr.ErrUnsupported)
@@ -216,7 +217,7 @@ func buildSectorsJoinAtSag(ctx context.Context, env topo.Env,
 			return nil, nil, fmt.Errorf("%w: placed sector lost its source", decaderr.ErrUnsupported)
 		}
 		motions[i] = placed.RevolveLoftSector.Motion
-		charges[i], err = massmoment.XAxisPlacementCharge(motions[i])
+		charges[i], drifts[i], err = massmoment.AxisPlacementCharge(motions[i], section.Axis)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -229,13 +230,19 @@ func buildSectorsJoinAtSag(ctx context.Context, env topo.Env,
 	for i := range sources {
 		sourceMeshBounds[i] = sources[i].MeshBound
 	}
-	plans, angles, err := PrepareSectorJoinPlans(SectorJoinInput{
+	planInput := SectorJoinInput{
 		Original: original, RootContactIndex: len(path) - 1, Edges: edges,
-		Motions: motions, Charges: charges, SourceCrossingBound: cert.CrossingBound,
+		Motions: motions, Charges: charges, Drifts: drifts, SourceCrossingBound: cert.CrossingBound,
 		SourceMeshBounds: sourceMeshBounds,
 		Seam:             seam, MinRadius: min(section.RootStart.V, section.RootEnd.V),
 		RegularSource: regularSource,
-	})
+	}
+	if section.General != nil {
+		if err := GeneralPlanInput(&planInput, section); err != nil {
+			return nil, nil, err
+		}
+	}
+	plans, angles, err := PrepareSectorJoinPlans(planInput)
 	if err != nil {
 		return nil, nil, err
 	}

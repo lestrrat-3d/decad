@@ -240,3 +240,4 @@
 10	0.17	TestImplicitMarginAboutAxisScalesCost
 10	0.30	TestSectionAboutAxisRefusals
 10	0.40	TestSectorUnionDeclinesGeneralCertificate
+10	0.31	TestGeneralPlanInputReadsRadiusAndFrameAboutAxis
