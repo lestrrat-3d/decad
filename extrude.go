@@ -161,6 +161,9 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	// ceiling scales with the piece count, as a loft's does with its stations.
 	loops := append([]sectionrecord.LoopRecord{profile.Outer}, profile.Holes...)
 	work.RaiseLimit(freeform.SpanWorkLimit(sectionrecord.FitSplinePieces(loops...)))
+	// The profile is a live Sketch region that sketch authenticated, so its
+	// reconstruction may use the larger ceiling an authenticated loft does.
+	work.RaiseReconstructionLimit(freeform.LoftReconstructionWorkLimit)
 	if _, err := profile.FalsifyRecordedAreaContext(ctx, profileArea, work); err != nil {
 		return nil, err
 	}

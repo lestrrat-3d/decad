@@ -107,6 +107,12 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	if freeformTarget > 0 {
 		work.RaiseLimit(sweeprecord.CompositeFitWorkLimit)
 	}
+	// The build that produced this body raised its own ceiling with the
+	// record's cubic piece count (prismrecord.Build), and replaying its charge
+	// below must meet the same ceiling or a record that built would refuse
+	// to tessellate.
+	work.RaiseLimit(freeform.SpanWorkLimit(sectionrecord.FitSplinePieces(
+		append([]sectionrecord.LoopRecord{pp.Profile.Outer}, pp.Profile.Holes...)...)))
 	// The build that produced this body already resolved every boundary
 	// segment's walk and published the set onto the payload (internal/prismrecord/build.go,
 	// agent-docs/evaluator-design.md §8). A tessellation is one of the passes
@@ -119,6 +125,9 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	// resolves through walkOf as before.
 	pw := pp.Walks
 	if pw.Reusable(pp.Profile) {
+		// The build admitted this charge under its own reconstruction ceiling,
+		// so replaying it is bound by that same figure, never a larger one.
+		work.RaiseReconstructionLimit(pw.ReconstructionSpent)
 		if err := pw.Charge(work); err != nil {
 			return nil, err
 		}
