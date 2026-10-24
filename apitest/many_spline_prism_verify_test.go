@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"math"
+	"strconv"
 	"testing"
 
 	"github.com/lestrrat-3d/sketch"
@@ -14,8 +15,9 @@ import (
 // wavyOutlineBody extrudes a closed outline r(t) = 20 + 2 cos(lobes t) drawn as
 // two fit splines per lobe, each through pointsPerSpline fixed points: one over
 // the convex arc about the peak and one over the concave arc about the valley,
-// so no spline crosses an inflection.
-func wavyOutlineBody(t *testing.T, lobes, pointsPerSpline int) *decad.Body {
+// so no spline crosses an inflection. It cuts holes circular holes of radius 1.5
+// on a circle of radius 10.
+func wavyOutlineBody(t *testing.T, lobes, pointsPerSpline, holes int) *decad.Body {
 	t.Helper()
 	const r0, amp = 20.0, 2.0
 	n := float64(lobes)
@@ -69,29 +71,46 @@ func wavyOutlineBody(t *testing.T, lobes, pointsPerSpline int) *decad.Body {
 		require.NoError(t, err)
 		start = pts[len(pts)-1]
 	}
+	for h := range holes {
+		a := 2 * math.Pi * float64(h) / float64(holes)
+		c := s.CreatePoint(10*math.Cos(a), 10*math.Sin(a))
+		s.Fix(c)
+		s.CreateCircle(c, 1.5)
+	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	require.Len(t, s.Profiles(), 1)
-	body, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0],
+	var profile *sketch.Profile
+	for _, candidate := range s.Profiles() {
+		if len(candidate.Holes) == holes {
+			profile = candidate
+		}
+	}
+	require.NotNil(t, profile)
+	body, err := decad.Extrude(t.Context(), decad.New(), s, profile,
 		decad.Distance{D: units.Millimeters(8)})
 	require.NoError(t, err)
 	return body
 }
 
 // TestManySplineOutlineTessellatesUnderVerifyAll extrudes an outline of 30 fit
-// splines and tessellates it with full verification. The build raises its work
-// ceiling with the record's cubic piece count, and replaying that build's charge
-// at tessellation must meet the same ceiling.
+// splines, with and without seven holes, and tessellates it with full
+// verification. The build raises its work ceilings with the record, and
+// replaying its charge at tessellation must meet the same ceilings.
 func TestManySplineOutlineTessellatesUnderVerifyAll(t *testing.T) {
 	t.Parallel()
-	body := wavyOutlineBody(t, 15, 14)
-	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
-	require.NoError(t, err)
-	require.True(t, mesh.BoundaryVerified())
-	require.True(t, mesh.VolumeVerified())
-	volume, err := body.Volume()
-	require.NoError(t, err)
-	// Area of r = 20 + 2 cos(15 t) is pi (400 + 2) (the cosine term integrates to its mean square).
-	want := math.Pi * (400 + 2) * 8
-	require.InDelta(t, want, volume.Value.Base(), 0.01*want)
+	for _, holes := range []int{0, 7} {
+		t.Run(strconv.Itoa(holes)+" holes", func(t *testing.T) {
+			t.Parallel()
+			body := wavyOutlineBody(t, 15, 14, holes)
+			mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+			require.NoError(t, err)
+			require.True(t, mesh.BoundaryVerified())
+			require.True(t, mesh.VolumeVerified())
+			volume, err := body.Volume()
+			require.NoError(t, err)
+			// The outline r = 20 + 2 cos(15 t) has area pi (400 + 2); each hole removes pi 1.5^2.
+			want := (math.Pi*(400+2) - float64(holes)*math.Pi*1.5*1.5) * 8
+			require.InDelta(t, want, volume.Value.Base(), 0.01*want)
+		})
+	}
 }

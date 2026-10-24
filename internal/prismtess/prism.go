@@ -125,6 +125,9 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	// resolves through walkOf as before.
 	pw := pp.Walks
 	if pw.Reusable(pp.Profile) {
+		// The build admitted this charge under its own reconstruction ceiling,
+		// so replaying it is bound by that same figure, never a larger one.
+		work.RaiseReconstructionLimit(pw.ReconstructionSpent)
 		if err := pw.Charge(work); err != nil {
 			return nil, err
 		}
