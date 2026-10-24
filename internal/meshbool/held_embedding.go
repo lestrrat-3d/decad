@@ -1215,7 +1215,8 @@ func (e *heldEmbedding) vertexFailures(v int) (int, error) {
 // movable vertices of every failing facet and of every facet it fails
 // against, and the failing query facets themselves.
 func (e *heldEmbedding) offenders(query []int) ([]int, []int, error) {
-	set := map[int]struct{}{}
+	movable := make([]bool, len(e.h.Verts))
+	vertices := make([]int, 0)
 	var failing []int
 	for _, i := range query {
 		bad, collapsed, err := e.facetFailures(i)
@@ -1226,23 +1227,20 @@ func (e *heldEmbedding) offenders(query []int) ([]int, []int, error) {
 			continue
 		}
 		failing = append(failing, i)
-		e.addMovable(set, i)
+		e.addMovable(movable, &vertices, i)
 		for _, j := range bad {
-			e.addMovable(set, j)
+			e.addMovable(movable, &vertices, j)
 		}
 	}
-	out := make([]int, 0, len(set))
-	for v := range set {
-		out = append(out, v)
-	}
-	slices.Sort(out)
-	return out, failing, nil
+	slices.Sort(vertices)
+	return vertices, failing, nil
 }
 
-func (e *heldEmbedding) addMovable(set map[int]struct{}, f int) {
+func (e *heldEmbedding) addMovable(movable []bool, vertices *[]int, f int) {
 	for _, v := range e.h.Tris[f] {
-		if e.h.Movable[v] {
-			set[v] = struct{}{}
+		if e.h.Movable[v] && !movable[v] {
+			movable[v] = true
+			*vertices = append(*vertices, v)
 		}
 	}
 }
