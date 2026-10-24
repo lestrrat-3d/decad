@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func straightSweepFilletSquare(t *testing.T) (*decad.Document, *decad.Body) {
+func straightSweepSquare(t *testing.T) (*decad.Document, *decad.Body) {
 	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -34,7 +34,7 @@ func convexVerticalSweepEdges() *decad.EdgeQuery {
 
 func TestSweepLineFilletVerticalEdgesVerified(t *testing.T) {
 	t.Parallel()
-	doc, body := straightSweepFilletSquare(t)
+	doc, body := straightSweepSquare(t)
 	selected, err := convexVerticalSweepEdges().SelectEdges(body)
 	require.NoError(t, err)
 	require.Len(t, selected, 4)
@@ -71,7 +71,7 @@ func TestSweepLineFilletVerticalEdgesVerified(t *testing.T) {
 
 func TestSweepLineFilletCapEdgeRefuses(t *testing.T) {
 	t.Parallel()
-	doc, body := straightSweepFilletSquare(t)
+	doc, body := straightSweepSquare(t)
 	_, err := decad.Fillet(t.Context(), body, decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))),
 		units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
@@ -81,7 +81,7 @@ func TestSweepLineFilletCapEdgeRefuses(t *testing.T) {
 
 func TestSweepLineFilletSingleTopCapEdgeVerified(t *testing.T) {
 	t.Parallel()
-	doc, body := straightSweepFilletSquare(t)
+	doc, body := straightSweepSquare(t)
 	sel := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		decad.EndpointAt(r3.NewVec(0, 0, 10))).Exactly(1)
 	selected, err := sel.SelectEdges(body)
@@ -109,7 +109,7 @@ func TestSweepLineFilletSingleTopCapEdgeVerified(t *testing.T) {
 
 func TestSweepLineFilletPlacedBottomCapEdgeVerified(t *testing.T) {
 	t.Parallel()
-	_, body := straightSweepFilletSquare(t)
+	_, body := straightSweepSquare(t)
 	motion, err := r3.Translation(r3.NewVec(3, -2, 5))
 	require.NoError(t, err)
 	placed, err := decad.Transform(t.Context(), body, motion)
@@ -132,7 +132,7 @@ func TestSweepLineFilletPlacedBottomCapEdgeVerified(t *testing.T) {
 
 func TestSweepLineFilletPlacedReceiver(t *testing.T) {
 	t.Parallel()
-	_, body := straightSweepFilletSquare(t)
+	_, body := straightSweepSquare(t)
 	move, err := r3.Translation(r3.NewVec(3, -2, 5))
 	require.NoError(t, err)
 	placed, err := decad.Transform(t.Context(), body, move)

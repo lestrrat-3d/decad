@@ -692,25 +692,7 @@ func TestUndercutsVerticalHoleClear(t *testing.T) {
 
 // holePlate extrudes a 100×60×8 plate with a Ø20 through hole at (70, 30).
 func holePlate(t *testing.T) *decad.Document {
-	t.Helper()
-	ws := sketch.NewWorld()
-	s, err := ws.CreateSketch(ws.XY())
-	require.NoError(t, err)
-	rect := s.CreateRectangle(0, 0, 100, 60)
-	s.Fix(rect.A)
-	s.CreateCircle(s.CreatePoint(70, 30), 10)
-	_, err = s.Solve(t.Context())
-	require.NoError(t, err)
-	var prof *sketch.Profile
-	for _, p := range s.Profiles() {
-		if len(p.Holes) == 1 {
-			prof = p
-		}
-	}
-	require.NotNil(t, prof)
-	doc := decad.New()
-	_, err = decad.Extrude(t.Context(), doc, s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
-	require.NoError(t, err)
+	doc, _ := holePlateFixture(t)
 	return doc
 }
 

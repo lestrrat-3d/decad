@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"context"
 	"math"
 	"testing"
 
@@ -16,25 +17,10 @@ import (
 func BenchmarkFilletBoxAllConvexEdges(b *testing.B) {
 	const radius = 10.0
 	wantVolume := (100*60 - (4-math.Pi)*radius*radius) * 20
-	selector := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex())
-	for range b.N {
-		b.StopTimer()
-		doc := decad.New()
-		box := benchBoxBody(b, doc, 0, 0, 100, 60, 20)
-		edges, err := selector.SelectEdges(box)
-		require.NoError(b, err)
-		require.Len(b, edges, 4)
-		b.StartTimer()
-		body, err := decad.Fillet(b.Context(), box, selector, units.Millimeters(radius))
-		b.StopTimer()
-		require.NoError(b, err)
-		require.True(b, body.IsSolid())
-		require.Len(b, body.Faces(), 10)
-		require.Equal(b, []*decad.Body{body}, doc.Bodies())
-		volume, err := body.Volume()
-		require.NoError(b, err)
-		require.InDelta(b, wantVolume, volume.Value.Base(), 1e-8)
-	}
+	benchmarkBoxAllConvexEdges(b, radius, wantVolume, func(ctx context.Context, body *decad.Body,
+		selector decad.EdgeSelector, amount units.Value) (*decad.Body, error) {
+		return decad.Fillet(ctx, body, selector, amount)
+	})
 }
 
 // BenchmarkChamferBoxAllConvexEdges measures the complete lateral-edge rewrite
@@ -43,6 +29,13 @@ func BenchmarkFilletBoxAllConvexEdges(b *testing.B) {
 func BenchmarkChamferBoxAllConvexEdges(b *testing.B) {
 	const setback = 10.0
 	wantVolume := (100*60 - 4*setback*setback/2) * 20
+	benchmarkBoxAllConvexEdges(b, setback, wantVolume, func(ctx context.Context, body *decad.Body,
+		selector decad.EdgeSelector, amount units.Value) (*decad.Body, error) {
+		return decad.Chamfer(ctx, body, selector, amount)
+	})
+}
+
+func benchmarkBoxAllConvexEdges(b *testing.B, amount, wantVolume float64, call edgeModifyCall) {
 	selector := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex())
 	for range b.N {
 		b.StopTimer()
@@ -52,7 +45,7 @@ func BenchmarkChamferBoxAllConvexEdges(b *testing.B) {
 		require.NoError(b, err)
 		require.Len(b, edges, 4)
 		b.StartTimer()
-		body, err := decad.Chamfer(b.Context(), box, selector, units.Millimeters(setback))
+		body, err := call(b.Context(), box, selector, units.Millimeters(amount))
 		b.StopTimer()
 		require.NoError(b, err)
 		require.True(b, body.IsSolid())

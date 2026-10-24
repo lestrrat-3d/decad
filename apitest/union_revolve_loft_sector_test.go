@@ -426,38 +426,11 @@ func taperedHubAndRadialLugWidth(t *testing.T, splitU, toeApex, rootRadius, half
 	require.Len(t, lugProfiles, 1)
 	lug, err := decad.LoftFromPoint(t.Context(), doc, r3.Vec{}, lugSketch, lugProfiles[0])
 	require.NoError(t, err)
-	toeTrim, err := decad.Cut(t.Context(), lug, radialLugConeTool(t, doc, toeApex))
+	toeTrim, err := decad.Cut(t.Context(), lug, pointConeTool(t, doc, toeApex))
 	require.NoError(t, err)
-	trimmed, err := decad.Intersect(t.Context(), toeTrim, radialLugConeTool(t, doc, 12))
+	trimmed, err := decad.Intersect(t.Context(), toeTrim, pointConeTool(t, doc, 12))
 	require.NoError(t, err)
 	return doc, hub, trimmed, lugSketch, splitCap
-}
-
-// radialLugConeTool is a real Sketch and Revolve producer kept with this
-// neutral Union test so the older point-cone test fixture can be removed.
-func radialLugConeTool(t *testing.T, doc *decad.Document, apex float64) *decad.Body {
-	t.Helper()
-	world := sketch.NewWorld()
-	section, err := world.CreateSketch(world.XY())
-	require.NoError(t, err)
-	points := []*sketch.Point{
-		section.CreatePoint(-2, 0), section.CreatePoint(-2, apex+2),
-		section.CreatePoint(apex, 0),
-	}
-	for _, point := range points {
-		section.Fix(point)
-	}
-	for i := range points {
-		section.CreateLine(points[i], points[(i+1)%len(points)])
-	}
-	_, err = section.Solve(t.Context())
-	require.NoError(t, err)
-	profiles := section.Profiles()
-	require.Len(t, profiles, 1)
-	tool, err := decad.Revolve(t.Context(), doc, section, profiles[0],
-		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
-	require.NoError(t, err)
-	return tool
 }
 
 func TestUnionTaperedHubRadialLugRefusals(t *testing.T) {

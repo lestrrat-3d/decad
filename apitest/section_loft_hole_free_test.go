@@ -71,25 +71,12 @@ func TestSectionDirectHoleFreeLoftRefusesUnprovedCases(t *testing.T) {
 	bottom, bottomProfile, top, topProfile := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 5, 2)
 	source, err := decad.Loft(t.Context(), decad.New(), bottom, bottomProfile, top, topProfile)
 	require.NoError(t, err)
-	for _, tc := range []struct {
-		name   string
-		origin r3.Vec
-		u, v   r3.Vec
-	}{
+	requireSectionFramesRefused(t, source, []sectionFrameCase{
 		{"bottom cap", r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)},
 		{"top cap", r3.NewVec(0, 0, 2), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)},
 		{"shifted origin", r3.NewVec(1, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)},
 		{"tilted frame", r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 1), r3.NewVec(0, 1, 0)},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			frame, err := r3.NewFrame(tc.origin, tc.u, tc.v)
-			require.NoError(t, err)
-			section, profiles, err := source.Section(t.Context(), frame)
-			require.ErrorIs(t, err, decad.ErrUnsupported)
-			require.Nil(t, section)
-			require.Nil(t, profiles)
-		})
-	}
+	})
 	move, err := r3.Translation(r3.NewVec(10, 0, 0))
 	require.NoError(t, err)
 	placed, err := decad.Transform(t.Context(), source, move)

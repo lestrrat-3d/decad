@@ -2,7 +2,6 @@ package apitest_test
 
 import (
 	"math"
-	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -46,42 +45,13 @@ func draftedDiskRoundedVolume(radius, height, taper, f float64) float64 {
 	return frustum - math.Pi*(coneIntegral(height)-coneIntegral(z0)-arcIntegral)
 }
 
-func checkDraftCircleFilletRoles(t *testing.T, b *decad.Body) {
-	t.Helper()
-	for _, cap := range []decad.FeatureRef{decad.CapStart(b), decad.CapEnd(b)} {
-		faces, err := decad.Faces(decad.FaceCreatedBy(cap)).Exactly(1).SelectFaces(b)
-		require.NoError(t, err)
-		require.Equal(t, decad.KindPlane, faces[0].Surface().Kind())
-		edges, err := decad.Edges(decad.OuterLoopOf(cap), decad.Circular()).Exactly(1).SelectEdges(b)
-		require.NoError(t, err)
-		require.Len(t, edges[0].Faces(), 2)
-	}
-	var cone, torus, fillet int
-	for _, face := range b.Faces() {
-		switch face.Surface().Kind() {
-		case decad.KindCone:
-			cone++
-		case decad.KindTorus:
-			torus++
-		}
-		for _, ref := range face.Origins() {
-			if strings.HasPrefix(ref.Role, "fillet(") {
-				fillet++
-			}
-		}
-	}
-	require.Equal(t, 1, cone)
-	require.Equal(t, 1, torus)
-	require.Equal(t, 1, fillet)
-	requireEveryEdgeOnTwoFaces(t, b)
-}
-
 func TestDraftCircleEndRimFilletVerified(t *testing.T) {
 	t.Parallel()
 	base := draftedDisk(t, r3.NewVec(0, 0, 0), 5)
 	rounded, err := decad.Fillet(t.Context(), base, draftedDiskEndRim(base), units.Millimeters(1))
 	require.NoError(t, err)
-	checkDraftCircleFilletRoles(t, rounded)
+	checkDraftCircleModifyRoles(t, rounded,
+		map[decad.SurfaceKind]int{decad.KindCone: 1, decad.KindTorus: 1}, "fillet(")
 	volume, err := rounded.Volume()
 	require.NoError(t, err)
 	require.InDelta(t, draftedDiskRoundedVolume(8, 10, 5, 1), volume.Value.Base(), 1e-6)
@@ -102,10 +72,12 @@ func TestDraftCircleEndRimFilletPlacement(t *testing.T) {
 	require.NoError(t, err)
 	rounded, err := decad.Fillet(t.Context(), placed, draftedDiskEndRim(placed), units.Millimeters(1))
 	require.NoError(t, err)
-	checkDraftCircleFilletRoles(t, rounded)
+	checkDraftCircleModifyRoles(t, rounded,
+		map[decad.SurfaceKind]int{decad.KindCone: 1, decad.KindTorus: 1}, "fillet(")
 	placedCopy, err := decad.Copy(t.Context(), rounded, decad.WithCopyPlacement(shift))
 	require.NoError(t, err)
-	checkDraftCircleFilletRoles(t, placedCopy)
+	checkDraftCircleModifyRoles(t, placedCopy,
+		map[decad.SurfaceKind]int{decad.KindCone: 1, decad.KindTorus: 1}, "fillet(")
 	mesh, err := placedCopy.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)

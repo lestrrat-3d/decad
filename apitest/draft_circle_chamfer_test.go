@@ -2,7 +2,6 @@ package apitest_test
 
 import (
 	"math"
-	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -12,42 +11,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func checkDraftCircleChamferRoles(t *testing.T, b *decad.Body) {
-	t.Helper()
-	for _, cap := range []decad.FeatureRef{decad.CapStart(b), decad.CapEnd(b)} {
-		faces, err := decad.Faces(decad.FaceCreatedBy(cap)).Exactly(1).SelectFaces(b)
-		require.NoError(t, err)
-		require.Equal(t, decad.KindPlane, faces[0].Surface().Kind())
-		edges, err := decad.Edges(decad.OuterLoopOf(cap), decad.Circular()).Exactly(1).SelectEdges(b)
-		require.NoError(t, err)
-		require.Len(t, edges[0].Faces(), 2)
-	}
-	var cones, planes, bevels int
-	for _, face := range b.Faces() {
-		switch face.Surface().Kind() {
-		case decad.KindCone:
-			cones++
-		case decad.KindPlane:
-			planes++
-		}
-		for _, ref := range face.Origins() {
-			if strings.HasPrefix(ref.Role, "chamfer(") {
-				bevels++
-			}
-		}
-	}
-	require.Equal(t, 2, cones)
-	require.Equal(t, 2, planes)
-	require.Equal(t, 1, bevels)
-	requireEveryEdgeOnTwoFaces(t, b)
-}
-
 func TestDraftCircleEndRimChamferVerified(t *testing.T) {
 	t.Parallel()
 	base := draftedDisk(t, r3.NewVec(0, 0, 0), 5)
 	beveled, err := decad.Chamfer(t.Context(), base, draftedDiskEndRim(base), units.Millimeters(1))
 	require.NoError(t, err)
-	checkDraftCircleChamferRoles(t, beveled)
+	checkDraftCircleModifyRoles(t, beveled,
+		map[decad.SurfaceKind]int{decad.KindCone: 2, decad.KindPlane: 2}, "chamfer(")
 	volume, err := beveled.Volume()
 	require.NoError(t, err)
 	k := math.Tan(5 * math.Pi / 180)
@@ -92,10 +62,12 @@ func TestDraftCircleEndRimChamferPlacement(t *testing.T) {
 	require.NoError(t, err)
 	beveled, err := decad.Chamfer(t.Context(), placed, draftedDiskEndRim(placed), units.Millimeters(1))
 	require.NoError(t, err)
-	checkDraftCircleChamferRoles(t, beveled)
+	checkDraftCircleModifyRoles(t, beveled,
+		map[decad.SurfaceKind]int{decad.KindCone: 2, decad.KindPlane: 2}, "chamfer(")
 	moved, err := decad.Copy(t.Context(), beveled, decad.WithCopyPlacement(shift))
 	require.NoError(t, err)
-	checkDraftCircleChamferRoles(t, moved)
+	checkDraftCircleModifyRoles(t, moved,
+		map[decad.SurfaceKind]int{decad.KindCone: 2, decad.KindPlane: 2}, "chamfer(")
 	mesh, err := moved.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)

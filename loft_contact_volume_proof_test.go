@@ -661,26 +661,23 @@ func loftVolumeSourceAdversarialCases(t *testing.T, pp prismPayload, lp loftPayl
 }
 
 func TestLoftBoundedProfilesRealRightXPrismFirst(t *testing.T) {
-	prism, loft := loftBounded520Operands(t)
-	operation := proofbound.NewWorkBudget(t.Context())
-	boundary, admitted, err := loftdirect.CertifyLoftOutputBoundary(t.Context(), bodyNode(prism), bodyNode(loft), operation)
-	require.NoError(t, err)
-	require.True(t, admitted)
-	checkLoftBoundedCapCertificates(t, boundary.Source)
-	pp := prism.n.Payload.(prismPayload)
-	lp := loft.n.Payload.(loftPayload)
-	proof, admitted, err := loftcontact.VolumeCompose(t.Context(), operation, pp, lp, boundary)
-	require.NoError(t, err)
-	require.True(t, admitted)
-	require.Zero(t, proof.SourceVolume.Cmp(big.NewRat(520, 1)))
-	require.Less(t, proof.TotalOutputVisits, uint64(loftcontact.VolumeOutputSteps))
-	t.Logf("totalOutputVisits=%d", proof.TotalOutputVisits)
+	testLoftBoundedProfilesRealRightXOrder(t, false)
 }
 
 func TestLoftBoundedProfilesRealRightXLoftFirst(t *testing.T) {
+	testLoftBoundedProfilesRealRightXOrder(t, true)
+}
+
+func testLoftBoundedProfilesRealRightXOrder(t *testing.T, loftFirst bool) {
+	t.Helper()
+	t.Parallel()
 	prism, loft := loftBounded520Operands(t)
 	operation := proofbound.NewWorkBudget(t.Context())
-	boundary, admitted, err := loftdirect.CertifyLoftOutputBoundary(t.Context(), bodyNode(loft), bodyNode(prism), operation)
+	first, second := prism, loft
+	if loftFirst {
+		first, second = loft, prism
+	}
+	boundary, admitted, err := loftdirect.CertifyLoftOutputBoundary(t.Context(), bodyNode(first), bodyNode(second), operation)
 	require.NoError(t, err)
 	require.True(t, admitted)
 	checkLoftBoundedCapCertificates(t, boundary.Source)

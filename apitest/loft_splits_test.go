@@ -19,26 +19,6 @@ const (
 	splitKindSpline = "a spline"
 )
 
-// splitPolygon draws a closed polygon with the given vertices on plane and
-// returns its sketch and profile.
-func splitPolygon(t *testing.T, w *sketch.World, plane *sketch.Plane, pts [][2]float64) (*sketch.Sketch, *sketch.Profile) {
-	t.Helper()
-	s, err := w.CreateSketch(plane)
-	require.NoError(t, err)
-	sp := make([]*sketch.Point, len(pts))
-	for i, p := range pts {
-		sp[i] = s.CreatePoint(p[0], p[1])
-		s.Fix(sp[i])
-	}
-	for i := range sp {
-		s.CreateLine(sp[i], sp[(i+1)%len(sp)])
-	}
-	_, err = s.Solve(t.Context())
-	require.NoError(t, err)
-	require.Len(t, s.Profiles(), 1)
-	return s, s.Profiles()[0]
-}
-
 func splitTopPlane(t *testing.T, w *sketch.World, z float64) *sketch.Plane {
 	t.Helper()
 	frame, err := r3.NewFrame(r3.Vec{Z: z}, r3.Vec{X: 1}, r3.Vec{Y: 1})
@@ -80,8 +60,8 @@ func TestLoftSplitsSquareToOctagon(t *testing.T) {
 	octagon := [][2]float64{{-2, -2}, {0, -3}, {2, -2}, {3, 0}, {2, 2}, {0, 3}, {-2, 2}, {-3, 0}}
 	const height = 5.0
 	w := sketch.NewWorld()
-	s0, p0 := splitPolygon(t, w, w.XY(), square)
-	s1, p1 := splitPolygon(t, w, splitTopPlane(t, w, height), octagon)
+	s0, p0 := fixedPolygonProfile(t, w, w.XY(), square)
+	s1, p1 := fixedPolygonProfile(t, w, splitTopPlane(t, w, height), octagon)
 	var cuts []decad.LoftSplit
 	for j := range 4 {
 		cuts = append(cuts, decad.LoftSplit{Loop: 0, Segment: j, At: []float64{0.5}})
@@ -110,8 +90,8 @@ func TestLoftSplitsRefusals(t *testing.T) {
 	hex := regularPolygon(6, 3, 0)
 	build := func(opts ...decad.LoftOption) error {
 		w := sketch.NewWorld()
-		s0, p0 := splitPolygon(t, w, w.XY(), square)
-		s1, p1 := splitPolygon(t, w, splitTopPlane(t, w, 4), hex)
+		s0, p0 := fixedPolygonProfile(t, w, w.XY(), square)
+		s1, p1 := fixedPolygonProfile(t, w, splitTopPlane(t, w, 4), hex)
 		_, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1, opts...)
 		return err
 	}
@@ -169,8 +149,8 @@ func TestLoftSplitsLeaveAnUnsplitLoftAlone(t *testing.T) {
 	square := [][2]float64{{-2, -2}, {2, -2}, {2, 2}, {-2, 2}}
 	vol := func(opts ...decad.LoftOption) float64 {
 		w := sketch.NewWorld()
-		s0, p0 := splitPolygon(t, w, w.XY(), square)
-		s1, p1 := splitPolygon(t, w, splitTopPlane(t, w, 3), [][2]float64{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}})
+		s0, p0 := fixedPolygonProfile(t, w, w.XY(), square)
+		s1, p1 := fixedPolygonProfile(t, w, splitTopPlane(t, w, 3), [][2]float64{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}})
 		b, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1, opts...)
 		require.NoError(t, err)
 		v, err := b.Volume()
@@ -245,8 +225,8 @@ func TestLoftSplitsPolygonPairs(t *testing.T) {
 			t.Parallel()
 			const height = 4.0
 			w := sketch.NewWorld()
-			s0, p0 := splitPolygon(t, w, w.XY(), c.a)
-			s1, p1 := splitPolygon(t, w, splitTopPlane(t, w, height), c.b)
+			s0, p0 := fixedPolygonProfile(t, w, w.XY(), c.a)
+			s1, p1 := fixedPolygonProfile(t, w, splitTopPlane(t, w, height), c.b)
 			body, err := decad.Loft(t.Context(), decad.New(), s0, p0, s1, p1, decad.WithLoftSplits(c.cuts0, c.cuts1))
 			require.NoError(t, err)
 			require.True(t, body.IsSolid())

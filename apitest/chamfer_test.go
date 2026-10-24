@@ -71,36 +71,9 @@ func TestChamferContextCancellationDuringAuditPreservesError(t *testing.T) {
 }
 
 func TestChamferSelectorAdmission(t *testing.T) {
-	t.Parallel()
-	t.Run("BuiltInQuery", func(t *testing.T) {
-		_, box := filletBox(t)
-
-		_, err := decad.Chamfer(t.Context(), box, verticalEdges(), units.Millimeters(5))
-		require.NoError(t, err)
-	})
-
-	t.Run("ForeignRetiringImplementation", func(t *testing.T) {
-		doc, box := filletBox(t)
-		calls := 0
-		foreign := retiringEdgeSelector{
-			EdgeQuery: verticalEdges(),
-			calls:     &calls,
-		}
-
-		_, err := decad.Chamfer(t.Context(), box, foreign, units.Millimeters(5))
-		require.ErrorIs(t, err, decad.ErrDegenerate)
-		require.Zero(t, calls, `Chamfer rejects a foreign selector before it can retire the receiver`)
-		require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a rejected selector leaves the receiver live`)
-	})
-
-	t.Run("TypedNilQuery", func(t *testing.T) {
-		doc, box := filletBox(t)
-		var query *decad.EdgeQuery
-		var selector decad.EdgeSelector = query
-
-		_, err := decad.Chamfer(t.Context(), box, selector, units.Millimeters(5))
-		require.ErrorIs(t, err, decad.ErrDegenerate)
-		require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a typed nil selector leaves the receiver live`)
+	testEdgeSelectorAdmission(t, "Chamfer", func(ctx context.Context, body *decad.Body, selector decad.EdgeSelector,
+		amount units.Value) (*decad.Body, error) {
+		return decad.Chamfer(ctx, body, selector, amount)
 	})
 }
 

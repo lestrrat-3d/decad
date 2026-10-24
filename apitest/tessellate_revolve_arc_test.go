@@ -1,12 +1,10 @@
 package apitest_test
 
 import (
-	"bytes"
 	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
-	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -352,16 +350,7 @@ func TestRevolveTessellateCircularGeneratorExportIsByteIdentical(t *testing.T) {
 	s, p := semicircleSketch(t)
 	body, err := decad.Revolve(t.Context(), decad.New(), s, p, uAxis, decad.AngleExtent{A: units.Degrees(150), Dir: decad.Along})
 	require.NoError(t, err)
-
-	var stl1, stl2, obj1, obj2 bytes.Buffer
-	require.NoError(t, export.STL(t.Context(), &stl1, body, units.Millimeters(0.1)))
-	require.NoError(t, export.STL(t.Context(), &stl2, body, units.Millimeters(0.1)))
-	require.Equal(t, stl1.String(), stl2.String())
-	require.NotEmpty(t, stl1.String())
-	require.NoError(t, export.OBJ(t.Context(), &obj1, body, units.Millimeters(0.1)))
-	require.NoError(t, export.OBJ(t.Context(), &obj2, body, units.Millimeters(0.1)))
-	require.Equal(t, obj1.String(), obj2.String())
-	require.NotEmpty(t, obj1.String())
+	requireRevolveExportsByteIdentical(t, body)
 }
 
 func TestRevolveTessellateCircularMeridianChordsWithTolerance(t *testing.T) {

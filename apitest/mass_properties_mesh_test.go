@@ -150,25 +150,6 @@ func TestMassPropertiesStitchedTetrahedron(t *testing.T) {
 	require.Equal(t, decad.MassProperties{}, reading)
 }
 
-// meshPolygonSketch draws a closed polygon through fixed corners on plane.
-func meshPolygonSketch(t *testing.T, w *sketch.World, plane *sketch.Plane, corners [][2]float64) (*sketch.Sketch, *sketch.Profile) {
-	t.Helper()
-	s, err := w.CreateSketch(plane)
-	require.NoError(t, err)
-	points := make([]*sketch.Point, len(corners))
-	for i, c := range corners {
-		points[i] = s.CreatePoint(c[0], c[1])
-		s.Fix(points[i])
-	}
-	for i := range points {
-		s.CreateLine(points[i], points[(i+1)%len(points)])
-	}
-	_, err = s.Solve(t.Context())
-	require.NoError(t, err)
-	require.Len(t, s.Profiles(), 1)
-	return s, s.Profiles()[0]
-}
-
 // TestMassPropertiesLoftOctagons lofts the 8×8 square whose edge midpoints
 // are pushed out by 1/4 to a chamfered-square octagon shifted off the axis by
 // (1, 1/2). The cap triangulator refuses collinear corners, and a loft pairs
@@ -185,10 +166,10 @@ func TestMassPropertiesLoftOctagons(t *testing.T) {
 	w := sketch.NewWorld()
 	top, err := w.CreateOffsetPlane(w.XY(), 8)
 	require.NoError(t, err)
-	s0, p0 := meshPolygonSketch(t, w, w.XY(), [][2]float64{
+	s0, p0 := fixedPolygonProfile(t, w, w.XY(), [][2]float64{
 		{4.25, 0}, {4, 4}, {0, 4.25}, {-4, 4}, {-4.25, 0}, {-4, -4}, {0, -4.25}, {4, -4},
 	})
-	s1, p1 := meshPolygonSketch(t, w, top, [][2]float64{
+	s1, p1 := fixedPolygonProfile(t, w, top, [][2]float64{
 		{5, -1.5}, {5, 2.5}, {3, 4.5}, {-1, 4.5}, {-3, 2.5}, {-3, -1.5}, {-1, -3.5}, {3, -3.5},
 	})
 	loft, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
