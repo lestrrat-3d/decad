@@ -9,7 +9,7 @@ The rules for rows live in `agent-docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
-| `internal/pointcone/` | Point-loft cone crossing samples about world X or an exact axis vector (revolve-axis §3.4, §5.4), far-cap subdivision and contact split, cap and triangle crossing bounds, and sector cap paths, subdivision, merged angles and root-edge order, and the strict-side offset of a cone meridian (`offset.go`). See loft-point and loft-face-sections designs. |
+| `internal/pointcone/` | Point-loft cone crossing samples about an exact axis, far-cap subdivision and contact split, cap and triangle crossing bounds, sector cap paths, subdivision, merged angles and root-edge order, and the strict-side meridian offset. See loft-point, loft-face-sections and revolve-axis designs. |
 | `internal/pointloft/` | Builds the point-section Loft apex fan and proves its source stations, boundary, area and volume. See loft-point design. |
 | `internal/loftrecord/` | The loft and chain loft payloads and their builders over nodes: `FromProfiles`/`FromChains`, evaluation, placement, flat-triangle topology, bore proofs, the straight corner Fillet, mass readings, mesh restatement. Root `loftPayload` aliases it. See loft §5, §7, §16, §18, evaluator §8. |
 | `internal/loftsplit/` | Cuts recorded profile segments at stated parameter fractions into pieces of the same curves, so loft sections of different segment counts pair. See loft §3.1. |
