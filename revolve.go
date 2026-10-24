@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/coneaxis"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
@@ -262,7 +263,11 @@ func revolveProfileBuild(ctx context.Context, d *Document, s *sketch.Sketch, p *
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the recorded plane is degenerate: %s`, ErrDegenerate, err)
 	}
-	line, err := axisInPlane(evalAxis, frame)
+	input, err := axisInput(evalAxis)
+	if err != nil {
+		return nil, err
+	}
+	line, err := revolveaxis.AxisInPlane(input, frame)
 	if err != nil {
 		return nil, err
 	}
@@ -270,6 +275,7 @@ func revolveProfileBuild(ctx context.Context, d *Document, s *sketch.Sketch, p *
 	if err != nil {
 		return nil, err
 	}
+	axisVec := coneaxis.RecordedVec(frame, input, ax, side)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -300,6 +306,7 @@ func revolveProfileBuild(ctx context.Context, d *Document, s *sketch.Sketch, p *
 		Xform:         r3.Identity(),
 		SurfaceResult: surfaceResult,
 		RadialProof:   ax.RadialProof,
+		AxisVec:       axisVec,
 	}, work))
 	if err != nil {
 		return nil, err
@@ -581,7 +588,11 @@ func revolveChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the recorded plane is degenerate: %s`, ErrDegenerate, err)
 	}
-	line, err := axisInPlane(evalAxis, frame)
+	input, err := axisInput(evalAxis)
+	if err != nil {
+		return nil, err
+	}
+	line, err := revolveaxis.AxisInPlane(input, frame)
 	if err != nil {
 		return nil, err
 	}
@@ -596,6 +607,7 @@ func revolveChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	if err != nil {
 		return nil, err
 	}
+	axisVec := coneaxis.RecordedVec(frame, input, ax, side)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -614,9 +626,10 @@ func revolveChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 		Frame:  frame,
 		Ax:     ax,
 		Phi0:   phi0, Phi1: phi1,
-		Full:  full,
-		Den:   den,
-		Xform: r3.Identity(),
+		Full:    full,
+		Den:     den,
+		Xform:   r3.Identity(),
+		AxisVec: axisVec,
 	}, work))
 	if err != nil {
 		return nil, err
@@ -649,20 +662,28 @@ func refuseChainRevolveOptions(opts []RevolveOption) error {
 // revolveplan.ResolveAxisSide
 // (internal/revolveplan/axis_side.go). See agent-docs/evaluator-design.md §6.
 
+// axisInput reads the public axis variant into the numeric record
+// revolveaxis resolves.
+func axisInput(a Axis) (revolveaxis.AxisInput, error) {
+	switch value := a.(type) {
+	case SketchLine:
+		return revolveaxis.SketchLine{
+			StartU: value.Start.U, StartV: value.Start.V,
+			EndU: value.End.U, EndV: value.End.V,
+		}, nil
+	case ConstructionAxis:
+		return revolveaxis.ConstructionAxis{Origin: value.Origin, Dir: value.Dir}, nil
+	default:
+		return nil, fmt.Errorf(`%w: axis %T is not supported by this evaluator`, ErrUnsupported, a)
+	}
+}
+
 // axisInPlane reads the public axis variant and resolves its coordinates
 // through revolveaxis.AxisInPlane.
 func axisInPlane(a Axis, frame r3.Frame) (revolveaxis.Line2, error) {
-	var input revolveaxis.AxisInput
-	switch value := a.(type) {
-	case SketchLine:
-		input = revolveaxis.SketchLine{
-			StartU: value.Start.U, StartV: value.Start.V,
-			EndU: value.End.U, EndV: value.End.V,
-		}
-	case ConstructionAxis:
-		input = revolveaxis.ConstructionAxis{Origin: value.Origin, Dir: value.Dir}
-	default:
-		return revolveaxis.Line2{}, fmt.Errorf(`%w: axis %T is not supported by this evaluator`, ErrUnsupported, a)
+	input, err := axisInput(a)
+	if err != nil {
+		return revolveaxis.Line2{}, err
 	}
 	return revolveaxis.AxisInPlane(input, frame)
 }

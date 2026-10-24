@@ -2232,3 +2232,9 @@
 10	15.00	TestChamferFreeformRimVolume
 10	20.00	TestChamferFreeformRimOneCap
 10	4.00	TestChamferFreeformRimRefusals
+10	2.64	TestSectorRouteDigestSingleLug
+10	5.01	TestSectorRouteDigestCopiedLugs
+10	9.69	TestSectorRouteDigestManyLugs
+10	10.68	TestSectorRouteDigestBevel
+10	2.48	TestSectorRouteDigestCylinderCut
+10	1.19	TestSectorRouteDigestPointCone
