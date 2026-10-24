@@ -86,6 +86,9 @@ func SectorSourcesSeparate(sectors []SectorSource) bool {
 // vertices, enlarged by the spatial and placement bounds, supply the proof.
 func sectorPairProjectionSeparate(a, b []r3.Vec, aBound, bBound float64,
 	aLo, aHi, bLo, bHi r3.Vec) bool {
+	if sectorPairProjectionSeparateFloat(a, b, aBound, bBound, aLo, aHi, bLo, bHi) {
+		return true
+	}
 	ny := ratSub(ratAdd(ratF(aLo.Y), ratF(aHi.Y)), ratAdd(ratF(bLo.Y), ratF(bHi.Y)))
 	nz := ratSub(ratAdd(ratF(aLo.Z), ratF(aHi.Z)), ratAdd(ratF(bLo.Z), ratF(bHi.Z)))
 	if ny.Sign() == 0 && nz.Sign() == 0 {
@@ -101,6 +104,72 @@ func sectorPairProjectionSeparate(a, b []r3.Vec, aBound, bBound float64,
 	}
 	bMin, bMax, ok := sectorProjection(b, bBound, ny, nz, norm)
 	return ok && (aMax.Cmp(bMin) < 0 || bMax.Cmp(aMin) < 0)
+}
+
+// sectorPairProjectionSeparateFloat is a fast sufficient proof before the
+// exact projection check. It uses the float box-center direction as any
+// separating direction, then encloses each dot product by 1e-12 of its
+// absolute product sum, which exceeds the accumulated normal rounding error.
+// The 1e-300 term covers subnormal rounding. The exact proof remains
+// responsible whenever the intervals overlap or any calculation is non-finite.
+func sectorPairProjectionSeparateFloat(a, b []r3.Vec, aBound, bBound float64,
+	aLo, aHi, bLo, bHi r3.Vec) bool {
+	ny, nz, norm, ok := sectorProjectionAxisFloat(aLo, aHi, bLo, bHi)
+	if !ok {
+		return false
+	}
+	aMin, aMax, ok := sectorProjectionFloat(a, ny, nz, norm, aBound)
+	if !ok {
+		return false
+	}
+	bMin, bMax, ok := sectorProjectionFloat(b, ny, nz, norm, bBound)
+	if !ok {
+		return false
+	}
+	return aMax < bMin || bMax < aMin
+}
+
+func sectorProjectionAxisFloat(aLo, aHi, bLo, bHi r3.Vec) (float64, float64, float64, bool) {
+	centerY := aLo.Y*0.5 + aHi.Y*0.5 - (bLo.Y*0.5 + bHi.Y*0.5)
+	centerZ := aLo.Z*0.5 + aHi.Z*0.5 - (bLo.Z*0.5 + bHi.Z*0.5)
+	scale := max(math.Abs(centerY), math.Abs(centerZ))
+	if proofbound.IsNonFinite(scale) || scale == 0 {
+		return 0, 0, 0, false
+	}
+	ny, nz := centerY/scale, centerZ/scale
+	norm := math.Nextafter(math.Abs(ny)+math.Abs(nz), math.Inf(1))
+	if proofbound.IsNonFinite(norm) || norm <= 0 {
+		return 0, 0, 0, false
+	}
+	return ny, nz, norm, true
+}
+
+func sectorProjectionFloat(verts []r3.Vec, ny, nz, norm, bound float64) (float64, float64, bool) {
+	if bound < 0 {
+		return 0, 0, false
+	}
+	lo, hi := math.Inf(1), math.Inf(-1)
+	for _, vertex := range verts {
+		py, pz := ny*vertex.Y, nz*vertex.Z
+		dot, magnitude := py+pz, math.Abs(py)+math.Abs(pz)
+		if proofbound.IsNonFinite(dot) || proofbound.IsNonFinite(magnitude) {
+			return 0, 0, false
+		}
+		err := math.Nextafter(1e-12*magnitude+1e-300, math.Inf(1))
+		lower := math.Nextafter(dot-err, math.Inf(-1))
+		upper := math.Nextafter(dot+err, math.Inf(1))
+		if proofbound.IsNonFinite(lower) || proofbound.IsNonFinite(upper) {
+			return 0, 0, false
+		}
+		lo, hi = min(lo, lower), max(hi, upper)
+	}
+	charge := math.Nextafter(norm*bound, math.Inf(1))
+	if proofbound.IsNonFinite(lo) || proofbound.IsNonFinite(hi) || proofbound.IsNonFinite(charge) {
+		return 0, 0, false
+	}
+	lo = math.Nextafter(lo-charge, math.Inf(-1))
+	hi = math.Nextafter(hi+charge, math.Inf(1))
+	return lo, hi, !proofbound.IsNonFinite(lo) && !proofbound.IsNonFinite(hi)
 }
 
 func sectorProjection(verts []r3.Vec, bound float64,
