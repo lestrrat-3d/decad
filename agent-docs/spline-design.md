@@ -175,7 +175,7 @@ exactly → `ErrUnrecordableProfile`.
 | **R4** | `Fillet` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
 | **R5** | `Chamfer` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
 | **R6** | *retired at §10 P4b* — a Tier A free-form walk, `FitSplineSeg` among them, now builds | — | retired |
-| **R7** | exact-rational conversion, length bracketing, integration or topology reconstruction exceeds its work budget (2^20 exact-rational units, raised for a loft's station walk to `Spent + 8192 · stationCap(P)`, and for a profile `Extrude` to `min(2^26, max(2^20, 2^17 · pieces))` where `pieces` counts the cubic pieces of the section's fit splines; 2^28 reconstruction units) | `ErrUnsupported` | no, §5.2, §6.1 |
+| **R7** | exact-rational conversion, length bracketing, integration or topology reconstruction exceeds its work budget (2^20 exact-rational units, raised for a loft's station walk to `Spent + 8192 · stationCap(P)`, and for a profile `Extrude` and the tessellation of the prism it builds to `min(2^26, max(2^20, 2^17 · pieces))` where `pieces` counts the cubic pieces of the section's fit splines, the tessellation replaying the build's recorded charge in steps each below the cost ceiling; 2^28 reconstruction units) | `ErrUnsupported` | no, §5.2, §6.1 |
 | **R8** | chording a free-form walk needs more than the chord cap | `ErrUnsupported` | no, reuses `errTooManyChords` |
 | **R9** | a `Verify` reading's proof does not close — its bracket cannot separate it from its threshold, or a §6.3 certificate fails | not an error — `Suspect` | no, §8 |
 | **R10** | a Tier B or Tier C walk reaches a BUILD before its moments land | `ErrUnsupported` | no, §8 |

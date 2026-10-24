@@ -2222,3 +2222,4 @@
 10	0.00	TestExtrudedToothPatternJoinsADisc
 10	0.00	TestUnionManyJoinsTwistedLoftTeethToADisc
 10	0.00	TestChainToleranceAdmitsAContactOnACoarserRim
+10	1.40	TestManySplineOutlineTessellatesUnderVerifyAll

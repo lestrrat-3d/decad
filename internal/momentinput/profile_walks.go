@@ -116,20 +116,36 @@ func (pw *ProfileWalks) Reusable(profile Profile) bool {
 // reads the walks back is bound by the record's ceilings exactly as the work
 // itself would have bound it (agent-docs/spline-design.md §5.2).
 //
-// The replay is one step per counter rather than the original per-segment
+// The replay is a few steps per counter rather than the original per-segment
 // sequence, and that changes no verdict: every charge is non-negative, so the
 // running total is monotone and a sequence of steps refuses precisely when its
 // SUM exceeds what the counter has left — the same condition, returning the same
-// step error, as the one aggregate step. It cannot refuse EARLIER than the work
+// step error, as one aggregate step. It cannot refuse EARLIER than the work
 // would have either, because every walk this set holds already resolved.
+//
+// A single step at or above the cost ceiling refuses whatever the limit is
+// (FreeformWork.Step), because a saturated estimate stands for unknown work.
+// A resolution's total can pass that ceiling under a ceiling raised for its
+// piece count, so the replay is cut into steps each below it.
 func (pw *ProfileWalks) Charge(work *freeform.FreeformWork) error {
 	if pw == nil || !pw.Metered {
 		return ErrUnmeteredWalksCharge
 	}
-	if err := work.Step(pw.Spent); err != nil {
-		return err
+	for left := pw.Spent; left > 0; {
+		n := min(left, freeform.FreeformCostCeiling-1)
+		if err := work.Step(n); err != nil {
+			return err
+		}
+		left -= n
 	}
-	return work.ReconstructionStep(pw.ReconstructionSpent)
+	for left := pw.ReconstructionSpent; left > 0; {
+		n := min(left, freeform.ReconstructionCostCeiling-1)
+		if err := work.ReconstructionStep(n); err != nil {
+			return err
+		}
+		left -= n
+	}
+	return nil
 }
 
 // At returns the resolved walk for loop index loopIndex (0 the outer loop,
