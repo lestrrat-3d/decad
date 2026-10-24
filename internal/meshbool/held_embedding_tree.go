@@ -2,6 +2,7 @@ package meshbool
 
 import (
 	"math"
+	"math/bits"
 	"sort"
 
 	"github.com/lestrrat-3d/r3"
@@ -137,15 +138,69 @@ func (tree *heldBoxTree) build(boxes [][2]r3.Vec, facets []int) int {
 	if extent[2] > extent[axis] {
 		axis = 2
 	}
-	sort.Slice(facets, func(i, j int) bool {
-		a := heldBoxAxis(boxes[facets[i]][0], axis)
-		b := heldBoxAxis(boxes[facets[j]][0], axis)
-		return a < b || a == b && facets[i] < facets[j]
-	})
 	middle := len(facets) / 2
+	selectHeldBoxMedian(facets, boxes, axis, middle)
 	tree.nodes[index].left = tree.build(boxes, facets[:middle])
 	tree.nodes[index].right = tree.build(boxes, facets[middle:])
 	return index
+}
+
+func selectHeldBoxMedian(facets []int, boxes [][2]r3.Vec, axis, middle int) {
+	less := func(a, b int) bool {
+		x := heldBoxAxis(boxes[a][0], axis)
+		y := heldBoxAxis(boxes[b][0], axis)
+		return x < y || x == y && a < b
+	}
+	maxSteps := 2 * bits.Len(uint(len(facets)))
+	for lo, hi, steps := 0, len(facets)-1, 0; lo < hi; steps++ {
+		if steps == maxSteps {
+			sort.Slice(facets[lo:hi+1], func(i, j int) bool {
+				return less(facets[lo+i], facets[lo+j])
+			})
+			return
+		}
+		mid := lo + (hi-lo)/2
+		pivot := medianHeldBoxFacet(facets, lo, mid, hi, less)
+		facets[pivot], facets[hi] = facets[hi], facets[pivot]
+		store := lo
+		for scan := lo; scan < hi; scan++ {
+			if less(facets[scan], facets[hi]) {
+				facets[store], facets[scan] = facets[scan], facets[store]
+				store++
+			}
+		}
+		facets[store], facets[hi] = facets[hi], facets[store]
+		switch {
+		case store == middle:
+			return
+		case store < middle:
+			lo = store + 1
+		default:
+			hi = store - 1
+		}
+	}
+}
+
+func medianHeldBoxFacet(facets []int, lo, mid, hi int, less func(int, int) bool) int {
+	a, b, c := facets[lo], facets[mid], facets[hi]
+	switch {
+	case less(a, b):
+		if less(b, c) {
+			return mid
+		}
+		if less(a, c) {
+			return hi
+		}
+		return lo
+	default:
+		if less(a, c) {
+			return lo
+		}
+		if less(b, c) {
+			return hi
+		}
+		return mid
+	}
 }
 
 func heldBoxAxis(point r3.Vec, axis int) float64 {
