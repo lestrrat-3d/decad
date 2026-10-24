@@ -401,7 +401,9 @@ func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool, tree *heldBox
 			if j == i || j < i && queryFacet[j] {
 				continue
 			}
-			if !e.pairEmbedded(i, j) {
+			// Reaching a leaf proves that the query box overlaps the facet box.
+			// Avoid repeating that same box test in pairEmbedded.
+			if !e.pairEmbeddedOverlapping(i, j) {
 				return false, nil
 			}
 		}
@@ -600,7 +602,7 @@ func (e *heldEmbedding) pairOK(i, j int) bool {
 	if p, ok := e.pairs[key]; ok && p.genLo == e.gen[lo] && p.genHi == e.gen[hi] {
 		return p.ok
 	}
-	ok := e.pairEmbedded(i, j)
+	ok := e.pairEmbeddedOverlapping(i, j)
 	e.pairs[key] = heldPair{genLo: e.gen[lo], genHi: e.gen[hi], ok: ok}
 	return ok
 }
@@ -680,10 +682,16 @@ func zeroXpt(n proof.Xpt) bool {
 // (agent-docs/tessellation-design.md §1, the Embedding row). An unclassifiable pair
 // fails, the refusing direction.
 func (e *heldEmbedding) pairEmbedded(i, j int) bool {
-	ti, tj := e.h.Tris[i], e.h.Tris[j]
 	if !BoxesOverlap(e.triBox(i), e.triBox(j)) {
 		return true
 	}
+	return e.pairEmbeddedOverlapping(i, j)
+}
+
+// pairEmbeddedOverlapping classifies a pair whose facet boxes are already
+// known to overlap. Callers must establish that precondition before entry.
+func (e *heldEmbedding) pairEmbeddedOverlapping(i, j int) bool {
+	ti, tj := e.h.Tris[i], e.h.Tris[j]
 	var bufI, bufJ [3]int
 	sharedI, sharedJ := bufI[:0], bufJ[:0]
 	for a, va := range ti {
