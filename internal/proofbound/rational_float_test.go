@@ -204,14 +204,18 @@ func TestRatFloatDownUpMatchLegacy(t *testing.T) {
 		t.Helper()
 		before := new(big.Rat).Set(q)
 		storedBefore := denomStored(q)
-		msg := "q=" + q.String()
-		if len(msg) > 80 {
-			msg = fmt.Sprintf("q=%s...(%d bits)", msg[:40], q.Num().BitLen())
+		wantDown, gotDown := legacyRatFloatDown(q), proofbound.RatFloatDown(q)
+		if math.Float64bits(wantDown) != math.Float64bits(gotDown) {
+			t.Fatalf("RatFloatDown mismatch for q=%s: want %v, got %v", q, wantDown, gotDown)
 		}
-		requireSameFloatBits(t, legacyRatFloatDown(q), proofbound.RatFloatDown(q), "RatFloatDown "+msg)
-		requireSameFloatBits(t, legacyRatFloatUp(q), proofbound.RatFloatUp(q), "RatFloatUp "+msg)
-		requireSameTerms(t, before, q, "RatFloat* modified "+msg)
-		require.Equal(t, storedBefore, denomStored(q), "RatFloat* changed the stored denominator "+msg)
+		wantUp, gotUp := legacyRatFloatUp(q), proofbound.RatFloatUp(q)
+		if math.Float64bits(wantUp) != math.Float64bits(gotUp) {
+			t.Fatalf("RatFloatUp mismatch for q=%s: want %v, got %v", q, wantUp, gotUp)
+		}
+		if before.Num().Cmp(q.Num()) != 0 || before.Denom().Cmp(q.Denom()) != 0 ||
+			before.IsInt() != q.IsInt() || storedBefore != denomStored(q) {
+			t.Fatalf("RatFloat* modified q=%s", q)
+		}
 	}
 	rng := rand.New(rand.NewPCG(211, 213))
 	for _, q := range extremeRats() {
