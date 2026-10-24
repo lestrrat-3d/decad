@@ -101,7 +101,8 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 |---|---|---|
 | Tier B (conic, ellipse) or Tier C (unequal-weight NURBS) segment in any build | `ErrUnsupported` (R10) until spline P9 | `agent-docs/spline-design.md` §8 Table C |
 | Tier A chain with no single curvature sign | `ErrUnsupported` (R19) | `agent-docs/spline-design.md` §6.5 |
-| Modify ops over free-form walls | Refused per R3–R5, except the analytic-corner slice | `agent-docs/spline-design.md` §4.1 |
+| Modify ops over free-form walls | Refused per R3–R5, except the analytic-corner slice and the chamfer of a complete smooth outer cap loop of fit splines and lines | `agent-docs/spline-design.md` §4.1, `agent-docs/modify-reach-design.md` §8.5 |
+| Chamfer of a free-form rim with a corner past 10°, a hole loop, an unequal setback, or a placed or already blended prism; a setback reaching the rim's radius of curvature | `ErrUnsupported` (`internal/brepmodify/freeform_rim.go`); the rim chamfer is a Cut of a cutter, held as a mesh at the pair's chord tolerance | `agent-docs/modify-reach-design.md` §8.5 |
 
 ## Sheets and surfaces
 

@@ -63,6 +63,10 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 	if err := draftrecord.RequireNotReceiver(b.Payload, "chamfers"); err != nil {
 		return Result{}, err
 	}
+	// A smooth fit-spline cap rim cannot take the exact cap-loop band, so it takes a cutter.
+	if res, matched, err := FreeformRimChamfer(ctx, env, hooks, b, edges, dmm, dDelta, asym); matched || err != nil {
+		return res, err
+	}
 	// Several body routes need the same flat cut at a section corner.
 	// For unequal setbacks, the chosen reference face decides which nearby
 	// section walk receives each distance.

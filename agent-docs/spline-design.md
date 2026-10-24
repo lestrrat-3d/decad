@@ -173,7 +173,7 @@ exactly → `ErrUnrecordableProfile`.
 | **R2** | `EllipticalArcSeg` reaches a build or an integral | `ErrUnsupported` | yes, §2.2 |
 | **R3** | free-form walk in a section a `Shell` offsets | `ErrUnsupported` | yes for a curved walk, §4.1 |
 | **R4** | `Fillet` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
-| **R5** | `Chamfer` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
+| **R5** | `Chamfer` corner with a free-form carrier | `ErrUnsupported`, except a smooth outer cap loop of fit splines and lines (modify-reach §8.5) | yes for a curved walk, §4.1 |
 | **R6** | *retired at §10 P4b* — a Tier A free-form walk, `FitSplineSeg` among them, now builds | — | retired |
 | **R7** | exact-rational conversion, length bracketing, integration or topology reconstruction exceeds its work budget (2^20 exact-rational units, raised for a loft's station walk to `Spent + 8192 · stationCap(P)`, and for a profile `Extrude` and the tessellation of the prism it builds to `min(2^26, max(2^20, 2^17 · pieces))` where `pieces` counts the cubic pieces of the section's fit splines, the tessellation replaying the build's recorded charge in steps each below the cost ceiling; 2^28 reconstruction units, raised to 2^32 for a profile `Extrude`, whose region sketch authenticated, and for the tessellation replay of a charge the build admitted) | `ErrUnsupported` | no, §5.2, §6.1 |
 | **R8** | chording a free-form walk needs more than the chord cap | `ErrUnsupported` | no, reuses `errTooManyChords` |
@@ -255,7 +255,12 @@ different ground, stated after them.
 - **R5.** A chamfer's foot sits a setback distance along the boundary curve,
   measured as ARC LENGTH. On a curved span that length is a bracket and never
   exact (§6.1), so the foot is not exact, so the chord's recorded endpoints
-  would be approximate coordinates — which core §6.2 forbids outright.
+  would be approximate coordinates — which core §6.2 forbids outright. A
+  chamfer of a complete, smooth outer cap loop is not that corner chamfer: it
+  cuts a lofted cutter, and the cutter's offset curves are fit splines through
+  points of the exact offset. Nothing about a recorded section is
+  approximated; the result states that it matches the ideal chamfer only within
+  a measured ratio (modify-reach §8.5).
 
 **The straight slice is refused too, and NOT for those reasons.** A degree-1
 `NURBSSeg` is a polyline: a rational degree-1 Bézier is a convex combination of

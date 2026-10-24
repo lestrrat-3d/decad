@@ -2229,3 +2229,6 @@
 10	0.05	TestContainerPlacement
 10	0.05	TestContainerCrossRefusal
 10	0.05	TestContainerMoveBody
+10	15.00	TestChamferFreeformRimVolume
+10	20.00	TestChamferFreeformRimOneCap
+10	4.00	TestChamferFreeformRimRefusals

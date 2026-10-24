@@ -1087,9 +1087,9 @@ func TestFreeformPrismShellRefuses(t *testing.T) {
 	}
 }
 
-// TestFreeformPrismCapLoopChamferRefuses pins the complete-cap-loop chamfer
-// path (capblend.OneLoopCornerLoop), reached by selecting every
-// edge of one cap rather than a single corner.
+// TestFreeformPrismCapLoopChamferRefuses pins the complete-cap-loop chamfer of a free-form rim that is not
+// smooth: the arch's chord meets its spline at a corner, which the free-form rim chamfer
+// (modify-reach §8.5) cannot offset, and no other cap-loop route reads a free-form carrier.
 func TestFreeformPrismCapLoopChamferRefuses(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -1098,7 +1098,8 @@ func TestFreeformPrismCapLoopChamferRefuses(t *testing.T) {
 	_, err := decad.Chamfer(t.Context(), body, capLoopEdges(body), units.Millimeters(1))
 
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "free-form boundary segment")
+	require.ErrorContains(t, err, "only a smooth rim offsets")
+	require.Equal(t, []*decad.Body{body}, doc.Bodies(), "a refused chamfer leaves the receiver live")
 }
 
 // TestFreeformRevolveAxisContactRefuses pins the strict-clearance gate for a
