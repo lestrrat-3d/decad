@@ -108,7 +108,7 @@ func BuildSectorsJoin(ctx context.Context, env topo.Env,
 func buildSectorsJoinRefined(ctx context.Context, env topo.Env,
 	cert *facetedrecord.RevolveLoftSectorCertificate,
 	sources []facetedrecord.Payload) (*topo.Body, *facetedrecord.RevolvedSectionRing, error) {
-	sag := 0.01
+	sag := 0.05
 	capLimit := math.Inf(1)
 	rounds := sectorCapRounds
 	attempt := -1

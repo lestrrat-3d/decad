@@ -96,6 +96,14 @@ func (tree *heldBoxTree) build(boxes [][2]r3.Vec, facets []int) int {
 	index := len(tree.nodes)
 	tree.nodes = append(tree.nodes, heldBoxNode{})
 	box := boxes[facets[0]]
+	center := func(box [2]r3.Vec) r3.Vec {
+		return r3.Vec{
+			X: box[0].X/2 + box[1].X/2,
+			Y: box[0].Y/2 + box[1].Y/2,
+			Z: box[0].Z/2 + box[1].Z/2,
+		}
+	}
+	centerLo, centerHi := center(box), center(box)
 	for _, facet := range facets[1:] {
 		other := boxes[facet]
 		box[0].X = math.Min(box[0].X, other[0].X)
@@ -104,6 +112,11 @@ func (tree *heldBoxTree) build(boxes [][2]r3.Vec, facets []int) int {
 		box[1].X = math.Max(box[1].X, other[1].X)
 		box[1].Y = math.Max(box[1].Y, other[1].Y)
 		box[1].Z = math.Max(box[1].Z, other[1].Z)
+		c := center(other)
+		centerLo.X, centerLo.Y, centerLo.Z =
+			math.Min(centerLo.X, c.X), math.Min(centerLo.Y, c.Y), math.Min(centerLo.Z, c.Z)
+		centerHi.X, centerHi.Y, centerHi.Z =
+			math.Max(centerHi.X, c.X), math.Max(centerHi.Y, c.Y), math.Max(centerHi.Z, c.Z)
 	}
 	tree.nodes[index].box = box
 	if len(facets) == 1 {
@@ -112,7 +125,7 @@ func (tree *heldBoxTree) build(boxes [][2]r3.Vec, facets []int) int {
 	}
 	tree.nodes[index].facet = -1
 	axis := 0
-	extent := [3]float64{box[1].X - box[0].X, box[1].Y - box[0].Y, box[1].Z - box[0].Z}
+	extent := [3]float64{centerHi.X - centerLo.X, centerHi.Y - centerLo.Y, centerHi.Z - centerLo.Z}
 	if extent[1] > extent[axis] {
 		axis = 1
 	}
@@ -120,8 +133,9 @@ func (tree *heldBoxTree) build(boxes [][2]r3.Vec, facets []int) int {
 		axis = 2
 	}
 	sort.Slice(facets, func(i, j int) bool {
-		a := heldBoxAxis(boxes[facets[i]][0], axis)
-		b := heldBoxAxis(boxes[facets[j]][0], axis)
+		aBox, bBox := boxes[facets[i]], boxes[facets[j]]
+		a := heldBoxAxis(aBox[0], axis) + heldBoxAxis(aBox[1], axis)
+		b := heldBoxAxis(bBox[0], axis) + heldBoxAxis(bBox[1], axis)
 		return a < b || a == b && facets[i] < facets[j]
 	})
 	middle := len(facets) / 2
