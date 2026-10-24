@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -176,41 +177,63 @@ func gatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *Bool
 	contacts.initialCapacity = contactBatchInitialCapacity
 	useTree := len(fis) > 0 && len(fjs) > 0 && len(fis)*len(fjs) > 16384 && slack >= 0 && !math.IsNaN(slack)
 	var tree heldBoxTree
-	var candidateMarks []bool
 	var candidateIDs []int
+	nextPoll := 256
 	if useTree {
 		boxes := make([][2]r3.Vec, len(fjs))
 		for position, j := range fjs {
 			boxes[position] = bmB.Boxes[j]
 		}
 		tree = newBoxTree(boxes)
-		candidateMarks = make([]bool, len(fjs))
 		candidateIDs = make([]int, 0, min(len(fjs), 64))
 	}
 	for _, i := range fis {
 		if useTree {
-			for _, position := range candidateIDs {
-				candidateMarks[position] = false
-			}
 			candidateIDs = candidateIDs[:0]
 			box := expandBoxForSlack(bmA.Boxes[i], slack)
 			if err := tree.visitOverlaps(box, nil, func(position int) error {
-				candidateMarks[position] = true
 				candidateIDs = append(candidateIDs, position)
 				return nil
 			}); err != nil {
 				return NearContacts{}, false, err
 			}
+			sort.Ints(candidateIDs)
+			rowStart := work
+			for _, position := range candidateIDs {
+				target := rowStart + position + 1
+				for nextPoll <= target {
+					if err := ctx.Err(); err != nil {
+						return NearContacts{}, false, err
+					}
+					nextPoll += 256
+				}
+				j := fjs[position]
+				if !BoxesWithin(bmA.Boxes[i], bmB.Boxes[j], slack) {
+					continue
+				}
+				if err := contacts.Add(i, j); err != nil {
+					if err == ErrContactBatchStop {
+						return NearContacts{}, true, nil
+					}
+					return NearContacts{}, false, err
+				}
+			}
+			rowEnd := rowStart + len(fjs)
+			for nextPoll <= rowEnd {
+				if err := ctx.Err(); err != nil {
+					return NearContacts{}, false, err
+				}
+				nextPoll += 256
+			}
+			work = rowEnd
+			continue
 		}
-		for position, j := range fjs {
+		for _, j := range fjs {
 			work++
 			if work%256 == 0 {
 				if err := ctx.Err(); err != nil {
 					return NearContacts{}, false, err
 				}
-			}
-			if useTree && !candidateMarks[position] {
-				continue
 			}
 			if !BoxesWithin(bmA.Boxes[i], bmB.Boxes[j], slack) {
 				continue
