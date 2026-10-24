@@ -95,6 +95,13 @@ type Payload struct {
 	// RadialProof belongs to this exact profile and resolved axis. A path
 	// replacing either must clear it; placement alone preserves both.
 	RadialProof bool
+	// AxisVec is the exact axis vector of a Revolve about a line through the
+	// world origin in a coordinate plane (coneaxis.RecordedVec,
+	// agent-docs/revolve-axis-design.md §3.6). It is zero unless the Revolve
+	// producer met every condition there, and no route reads it yet. It
+	// belongs to Frame and Ax together: a path that replaces either must
+	// clear it, and placement keeps it.
+	AxisVec r3.Vec
 	// BlendSegs and BlendKind are prismrecord.Payload's own blend-role descriptors,
 	// read over the MERIDIAN: a revolve junction fillet or chamfer
 	// (internal/brepmodify/revolve_blend.go) records, per loop, the segment indices of its
@@ -454,6 +461,8 @@ type ChainPayload struct {
 	Full       bool
 	Den        revolveangle.Sweep
 	Xform      r3.Transform
+	// AxisVec is Payload.AxisVec for the chain's Revolve.
+	AxisVec r3.Vec
 	// SectionDelta is prismrecord.Payload's own §7 term (agent-docs/prism-boolean-design.md),
 	// carried here on the identical terms: the proven upper bound on how far
 	// any recorded meridian coordinate sits from the meridian its construction
@@ -488,6 +497,7 @@ func (rp ChainPayload) Revolve() Payload {
 		Full:         rp.Full,
 		Den:          rp.Den,
 		Xform:        rp.Xform,
+		AxisVec:      rp.AxisVec,
 		SectionDelta: rp.SectionDelta,
 	}
 }

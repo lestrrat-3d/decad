@@ -42,6 +42,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/revolve-loft-contact-graph-design.md` | Source-event ownership and held anchors for finite Revolve and trimmed LoftFaces contacts. |
 | `agent-docs/loft-point-design.md` | Point-to-profile solid loft, its apex topology and mesh proof. |
 | `agent-docs/revolve-loft-sector-design.md` | Finite Revolve and trimmed point-Loft source certificate, first Union class and removal ledger. |
+| `agent-docs/revolve-axis-design.md` | Revolve/point-Loft sector Union and point-cone trims about a coordinate-plane axis through the origin: exact axis vector, predicates, charges, PR plan, +X digest. |
 | `agent-docs/loft-gear-bounds-design.md` | Loft gear bounds: per-cell residuals, centroid shift, `A/P` target, audit, ceilings. |
 | `agent-docs/loft-cylinder-boolean-design.md` | Certified axial Loft and centered cylinder Union, cap record, seam and volume bounds. |
 | `agent-docs/loft-mirror-boolean-design.md` | Certified end-cap reflection of one axial Loft and its sewn three-ring Union. |

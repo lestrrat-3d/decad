@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/thickenaxis"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/r3"
 )
 
 // Side is the validated public ThickenSide expressed for the builder.
@@ -102,6 +103,7 @@ func Revolve(ctx context.Context, env topo.Env, rp revolveplan.Payload, side Sid
 	rp.Profile = annulus
 	rp.Ax = ax
 	rp.RadialProof = false
+	rp.AxisVec = r3.Vec{}
 	rp.SurfaceResult = false
 	rp.BlendSegs, rp.BlendKind = nil, ""
 	return revolveplan.Build(ctx, env, rp, work)
@@ -204,5 +206,6 @@ func ChainRevolve(ctx context.Context, env topo.Env, cp revolveplan.ChainPayload
 	rp.Profile = section
 	rp.Ax = ax
 	rp.RadialProof = false
+	rp.AxisVec = r3.Vec{}
 	return revolveplan.Build(ctx, env, rp, work)
 }
