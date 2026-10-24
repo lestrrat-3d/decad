@@ -487,7 +487,11 @@ func TestGatherNearContactsPollScheduleMatchesLegacy(t *testing.T) {
 	c = classifyContactPair(ma, mb, ContactPair{I: 0, J: 0})
 	require.NoError(t, c.Err)
 	require.Equal(t, ContactRegion, c.Contact.Kind)
-	for _, tail := range []int{256, 300, 513} {
+	for _, tail := range []int{256, 300, 513, 16_384} {
+		slack := 100.0
+		if tail > 513 {
+			slack = 0.5
+		}
 		fjs := make([]int, tail+1)
 		for i := range tail {
 			fjs[i] = far
@@ -495,7 +499,7 @@ func TestGatherNearContactsPollScheduleMatchesLegacy(t *testing.T) {
 		fjs[tail] = 0 // the coplanar pair comes last
 		base := WithContactWorkers(t.Context(), 1)
 		free := newPollRecorder(base, math.MaxInt64)
-		_, freeDeferred, err := legacyGatherNearContacts(free, ma, []int{0}, mb, fjs, 100, NewContactMemo(ma, mb))
+		_, freeDeferred, err := legacyGatherNearContacts(free, ma, []int{0}, mb, fjs, slack, NewContactMemo(ma, mb))
 		require.NoError(t, err)
 		require.True(t, freeDeferred)
 		total := free.polls.Load()
@@ -503,8 +507,8 @@ func TestGatherNearContactsPollScheduleMatchesLegacy(t *testing.T) {
 			label := fmt.Sprintf("tail=%d cancel at poll %d of %d", tail, n, total)
 			oldCtx := newPollRecorder(base, n)
 			newCtx := newPollRecorder(base, n)
-			_, od, oe := legacyGatherNearContacts(oldCtx, ma, []int{0}, mb, fjs, 100, NewContactMemo(ma, mb))
-			_, nd, ne := GatherNearContacts(newCtx, ma, []int{0}, mb, fjs, 100, NewContactMemo(ma, mb))
+			_, od, oe := legacyGatherNearContacts(oldCtx, ma, []int{0}, mb, fjs, slack, NewContactMemo(ma, mb))
+			_, nd, ne := GatherNearContacts(newCtx, ma, []int{0}, mb, fjs, slack, NewContactMemo(ma, mb))
 			require.Equal(t, od, nd, label)
 			require.Equal(t, fmt.Sprint(oe), fmt.Sprint(ne), label)
 			require.Equal(t, oldCtx.polls.Load(), newCtx.polls.Load(), label)
