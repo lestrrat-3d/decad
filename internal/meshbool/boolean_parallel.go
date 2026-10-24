@@ -28,7 +28,22 @@ func ContactWorkers(ctx context.Context) int {
 	if workers, ok := ctx.Value(ContactWorkerContextKey{}).(int); ok && workers > 0 {
 		return workers
 	}
-	return DefaultContactWorkers()
+	return defaultContactBatchWorkers()
+}
+
+// defaultContactBatchWorkers caps per-boolean contact classification at the
+// measured saturation point. Verify uses DefaultContactWorkers for its outer
+// pair pool and sets each nested boolean to one worker, so the two limits stay
+// independent.
+func defaultContactBatchWorkers() int {
+	workers := runtime.GOMAXPROCS(0)
+	if workers < 1 {
+		return 1
+	}
+	if workers > 4 {
+		return 4
+	}
+	return workers
 }
 
 // ContactPair names one facet pair in the order the producer discovered it.
@@ -196,9 +211,9 @@ func (e *ContactBatchExecutor) Done() error {
 }
 
 // DefaultContactWorkers uses the process's measured parallelism and caps it
-// at the largest worker count used by the evaluator's benchmark matrix. A
-// single-process caller keeps the old serial path, while a large process does
-// not oversubscribe the boolean operation with an unbounded private pool.
+// at the largest worker count used by the evaluator's benchmark matrix. Verify
+// uses this limit for its outer pair pool and keeps nested boolean batches
+// serial, avoiding nested parallelism.
 func DefaultContactWorkers() int {
 	workers := runtime.GOMAXPROCS(0)
 	if workers < 1 {
