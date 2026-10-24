@@ -172,6 +172,25 @@ func TestGatherNearContactsMatchesLegacy(t *testing.T) {
 	require.True(t, sawDeferred, "the sweep never saw a coplanar overlap")
 }
 
+func TestGatherNearContactsTreeMatchesLegacy(t *testing.T) {
+	t.Parallel()
+	pair := nearGatePairs(t, 8)["apart"]
+	ma, mb := pair[0], pair[1]
+	fis, fjs := allFacets(ma), allFacets(mb)
+	fis = append(fis, 0)
+	fjs = append(fjs, 0)
+	for _, slack := range []float64{0.05, 0.5} {
+		ctx := WithContactWorkers(t.Context(), 2)
+		want, wantDeferred, wantErr := legacyGatherNearContacts(
+			ctx, ma, fis, mb, fjs, slack, NewContactMemo(ma, mb))
+		got, gotDeferred, gotErr := GatherNearContacts(
+			ctx, ma, fis, mb, fjs, slack, NewContactMemo(ma, mb))
+		require.Equal(t, wantErr, gotErr)
+		require.Equal(t, wantDeferred, gotDeferred)
+		requireSameNearContacts(t, want, got, "tree prefilter")
+	}
+}
+
 func TestGatherNearContactsMemoHitsMatch(t *testing.T) {
 	t.Parallel()
 	pair := nearGatePairs(t, 12)["apart"]
