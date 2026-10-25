@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
@@ -61,10 +62,10 @@ func RpAdd(a, b RatPoly) RatPoly {
 	for i := range out {
 		out[i] = new(big.Rat)
 		if i < len(a) {
-			out[i].Add(out[i], a[i])
+			proof.AddRat(out[i], out[i], a[i])
 		}
 		if i < len(b) {
-			out[i].Add(out[i], b[i])
+			proof.AddRat(out[i], out[i], b[i])
 		}
 	}
 	return out
@@ -95,8 +96,11 @@ func RpMul(a, b RatPoly) RatPoly {
 			continue
 		}
 		for j, bj := range b {
-			tmp.Mul(ai, bj)
-			out[i+j].Add(out[i+j], tmp)
+			if bj.Sign() == 0 {
+				continue
+			}
+			proof.MulRat(tmp, ai, bj)
+			proof.AddRat(out[i+j], out[i+j], tmp)
 		}
 	}
 	return out
@@ -105,7 +109,7 @@ func RpMul(a, b RatPoly) RatPoly {
 func RpScale(a RatPoly, s *big.Rat) RatPoly {
 	out := make(RatPoly, len(a))
 	for i := range a {
-		out[i] = new(big.Rat).Mul(a[i], s)
+		out[i] = proof.MulRat(new(big.Rat), a[i], s)
 	}
 	return out
 }
@@ -116,7 +120,7 @@ func RpDeriv(a RatPoly) RatPoly {
 	}
 	out := make(RatPoly, len(a)-1)
 	for i := 1; i < len(a); i++ {
-		out[i-1] = new(big.Rat).Mul(a[i], new(big.Rat).SetInt64(int64(i)))
+		out[i-1] = proof.MulRat(new(big.Rat), a[i], new(big.Rat).SetInt64(int64(i)))
 	}
 	return out
 }
@@ -124,8 +128,8 @@ func RpDeriv(a RatPoly) RatPoly {
 func RpEval(a RatPoly, x *big.Rat) *big.Rat {
 	out := new(big.Rat)
 	for _, c := range slices.Backward(a) {
-		out.Mul(out, x)
-		out.Add(out, c)
+		proof.MulRat(out, out, x)
+		proof.AddRat(out, out, c)
 	}
 	return out
 }
@@ -147,11 +151,11 @@ func RpRem(a, b RatPoly) RatPoly {
 		if len(rem) < len(b) {
 			break
 		}
-		q := new(big.Rat).Quo(rem[len(rem)-1], lead)
+		q := proof.QuoRat(new(big.Rat), rem[len(rem)-1], lead)
 		shift := len(rem) - len(b)
 		for j := range b {
-			tmp.Mul(q, b[j])
-			rem[shift+j].Sub(rem[shift+j], tmp)
+			proof.MulRat(tmp, q, b[j])
+			proof.SubRat(rem[shift+j], rem[shift+j], tmp)
 		}
 		rem = rem[:len(rem)-1]
 	}
@@ -206,11 +210,11 @@ func RpQuo(a, b RatPoly) RatPoly {
 	lead := b[len(b)-1]
 	tmp := new(big.Rat)
 	for i := range slices.Backward(out) {
-		q := new(big.Rat).Quo(rem[i+len(b)-1], lead)
+		q := proof.QuoRat(new(big.Rat), rem[i+len(b)-1], lead)
 		out[i] = q
 		for j := range b {
-			tmp.Mul(q, b[j])
-			rem[i+j].Sub(rem[i+j], tmp)
+			proof.MulRat(tmp, q, b[j])
+			proof.SubRat(rem[i+j], rem[i+j], tmp)
 		}
 	}
 	return RpTrim(out)
