@@ -95,3 +95,26 @@ func TestParallelHeldEmbeddingMatchesSerialAndPollsCancellation(t *testing.T) {
 		t.Fatalf("parallel scan after cancellation = %v, want context.Canceled", err)
 	}
 }
+
+func TestHeldEmbeddingScanPollsAcrossChunks(t *testing.T) {
+	h := HeldRounding{
+		Verts: []r3.Vec{{}, {X: 1}, {Y: 1}},
+		Tris:  [][3]int{{0, 1, 2}},
+	}
+	e := newHeldEmbedding(h, proofbound.NewWorkBudget(t.Context()), true)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	e.pollErr, e.pollInterval, e.pollRemaining = ctx.Err, 4, 4
+	tree := newHeldBoxTree(e)
+	// One node and its one facet consume half an interval. A new chunk
+	// must use the remaining half rather than restart the countdown.
+	clean, err := e.cleanPairs([]int{0}, []bool{true}, &tree)
+	require.NoError(t, err)
+	require.True(t, clean)
+	require.Equal(t, 2, e.pollRemaining)
+	cancel()
+	clean, err = e.cleanPairs([]int{0}, []bool{true}, &tree)
+	require.ErrorIs(t, err, context.Canceled)
+	require.False(t, clean)
+	require.Equal(t, 4, e.pollRemaining)
+}
