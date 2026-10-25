@@ -40,8 +40,7 @@ func Example_operation_diagnostics() {
 		return
 	}
 	err = fmt.Errorf("check body: %w", err)
-	var diagnostics decad.OperationDiagnosticError
-	if errors.As(err, &diagnostics) {
+	if diagnostics, ok := errors.AsType[decad.OperationDiagnosticError](err); ok {
 		for _, diagnostic := range diagnostics.OperationDiagnostics() {
 			switch diagnostic.Code {
 			case decad.OpDiagSelectionFailed:

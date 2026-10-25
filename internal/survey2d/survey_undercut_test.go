@@ -172,7 +172,7 @@ func TestWallNormalDecisionUnbracketedWindowReadsItsEnds(t *testing.T) {
 	allow := proofbound.WalkEndBoundAllow(bound)
 	require.Less(t, allow, 1.0, `each end's box must stay off the centre`)
 	require.Greater(t, allow, 0.9, `each end's angle enclosure must spread past a quarter turn`)
-	w := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+	w := survey2d.SideWalk{
 		Kind:       survey2d.WalkCircular,
 		Radius:     1,
 		Th0:        0,
@@ -181,8 +181,7 @@ func TestWallNormalDecisionUnbracketedWindowReadsItsEnds(t *testing.T) {
 		EndU:       math.Cos(endAngle),
 		EndV:       math.Sin(endAngle),
 		StartBound: bound,
-		EndBound:   bound,
-	}, Segs: []int{0}}
+		EndBound:   bound, Segs: []int{0}}
 
 	low, ok := survey2d.EndAngleEnclosure(0, 0, w.StartU, w.StartV, allow, w.Th0)
 	require.True(t, ok)
@@ -219,7 +218,7 @@ func TestWallNormalDecisionUnenclosedEndStaysWithItsWall(t *testing.T) {
 	wide := proofbound.WalkEndBound{U: perAxis, V: perAxis}
 	require.GreaterOrEqual(t, proofbound.WalkEndBoundAllow(wide), 1.0, `the start's box must reach the centre`)
 	quarter := func(endBound proofbound.WalkEndBound) survey2d.SideWalk {
-		return survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+		return survey2d.SideWalk{
 			Kind:       survey2d.WalkCircular,
 			Radius:     1,
 			Th0:        0,
@@ -227,8 +226,7 @@ func TestWallNormalDecisionUnenclosedEndStaysWithItsWall(t *testing.T) {
 			StartU:     1,
 			EndV:       1,
 			StartBound: wide,
-			EndBound:   endBound,
-		}, Segs: []int{0}}
+			EndBound:   endBound, Segs: []int{0}}
 	}
 
 	requireWallVerdicts(t, quarter(proofbound.WalkEndBound{}), map[r3.Vec]survey2d.PullVerdict{

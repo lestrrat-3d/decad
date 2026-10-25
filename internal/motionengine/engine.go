@@ -649,8 +649,7 @@ func (r *Run) evaluatePose(f *big.Rat, at units.Value) (*Pose, error) {
 	param := r.Dom.FromP.Lerp(r.Dom.ToP, f)
 	groups, err := r.Drive.PosesAt(f, at, param)
 	if err != nil {
-		var ub PoseUnbuildable
-		if !errors.As(err, &ub) {
+		if _, ok := errors.AsType[PoseUnbuildable](err); !ok {
 			return nil, err
 		}
 		return &Pose{F: f, Param: param, Where: at, Unbuildable: err,

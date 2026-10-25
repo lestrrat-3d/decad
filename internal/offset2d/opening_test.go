@@ -14,10 +14,9 @@ import (
 // line is a straight walk from a to b.
 func line(a, b [2]float64) survey2d.SideWalk {
 	du, dv := b[0]-a[0], b[1]-a[1]
-	return survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+	return survey2d.SideWalk{
 		StartU: a[0], StartV: a[1], EndU: b[0], EndV: b[1],
-		TanInU: du, TanInV: dv, TanOutU: du, TanOutV: dv,
-	}}
+		TanInU: du, TanInV: dv, TanOutU: du, TanOutV: dv}
 }
 
 // arc is a circular walk about c of radius r from angle th0 to th1,
@@ -28,13 +27,12 @@ func arc(c [2]float64, r, th0, th1 float64) survey2d.SideWalk {
 	if th1 < th0 {
 		sense = -1
 	}
-	return survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+	return survey2d.SideWalk{
 		Kind: survey2d.WalkCircular, CU: c[0], CV: c[1], Radius: r, Th0: th0, Th1: th1,
 		StartU: c[0] + r*math.Cos(th0), StartV: c[1] + r*math.Sin(th0),
 		EndU: c[0] + r*math.Cos(th1), EndV: c[1] + r*math.Sin(th1),
 		TanInU: -sense * math.Sin(th0), TanInV: sense * math.Cos(th0),
-		TanOutU: -sense * math.Sin(th1), TanOutV: sense * math.Cos(th1),
-	}}
+		TanOutU: -sense * math.Sin(th1), TanOutV: sense * math.Cos(th1)}
 }
 
 const openingTol = 1e-9

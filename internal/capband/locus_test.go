@@ -83,19 +83,17 @@ func referenceCornerShare(prev, cur survey2d.SideWalk, cU, cV, vU, vV, dc, ds fl
 
 func lineWalk(su, sv, eu, ev float64) survey2d.SideWalk {
 	l := math.Hypot(eu-su, ev-sv)
-	return survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+	return survey2d.SideWalk{
 		StartU: su, StartV: sv, EndU: eu, EndV: ev,
-		TanInU: (eu - su) / l, TanInV: (ev - sv) / l, TanOutU: (eu - su) / l, TanOutV: (ev - sv) / l,
-	}}
+		TanInU: (eu - su) / l, TanInV: (ev - sv) / l, TanOutU: (eu - su) / l, TanOutV: (ev - sv) / l}
 }
 
 func arcWalk(cu, cv, r, th0, th1 float64) survey2d.SideWalk {
-	return survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+	return survey2d.SideWalk{
 		Kind: survey2d.WalkCircular,
 		CU:   cu, CV: cv, Radius: r, Th0: th0, Th1: th1,
 		StartU: cu + r*math.Cos(th0), StartV: cv + r*math.Sin(th0),
-		EndU: cu + r*math.Cos(th1), EndV: cv + r*math.Sin(th1),
-	}}
+		EndU: cu + r*math.Cos(th1), EndV: cv + r*math.Sin(th1)}
 }
 
 // TestMiterLocusSliverFluxCoversTheExactCornerShare checks the corner term

@@ -35,8 +35,8 @@ func TestKinematicRotatingDriverInteriorImpactUsesProductionGeometry(t *testing.
 	sweep, err := doc.SweepPair(t.Context(), driver, box, path,
 		decad.RigidDriftSegment{From: r3.Identity(), Center: mass.Center.Value,
 			LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t), Duration: path.Duration},
-		decad.SweepRequest{ContactRequest: decad.ContactRequest{
-			PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6)},
+		decad.SweepRequest{
+			PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6),
 			TimeResolution: units.Seconds(1e-9), MaxPoseEvaluations: 128})
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepImpactBracket, sweep.Outcome)

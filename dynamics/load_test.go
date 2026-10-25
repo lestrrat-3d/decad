@@ -216,8 +216,8 @@ func TestTorqueDrivenRotatingBoxReboundsFromFixedFloor(t *testing.T) {
 			LinearVelocity: fall, AngularVelocity: dynamics.QuantityVec{
 				X: units.RadiansPerSecond(0), Y: units.RadiansPerSecond(0),
 				Z: units.RadiansPerSecond(0.6)}, Duration: units.Seconds(0.2)},
-		decad.SweepRequest{ContactRequest: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
-			NormalResolution: units.Radians(1e-6)}, TimeResolution: units.Seconds(1e-9),
+		decad.SweepRequest{PointResolution: units.Millimeters(1e-6),
+			NormalResolution: units.Radians(1e-6), TimeResolution: units.Seconds(1e-9),
 			MaxPoseEvaluations: 128, StartPolicy: decad.StopAtInitialContact})
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepImpactBracket, sweep.Outcome)

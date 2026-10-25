@@ -196,10 +196,8 @@ func operationError(kind OperationKind, err error) error {
 	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return err
 	}
-	var existing OperationDiagnosticError
-	if errors.As(err, &existing) {
-		var nested *OperationError
-		if errors.As(err, &nested) {
+	if _, ok := errors.AsType[OperationDiagnosticError](err); ok {
+		if nested, ok := errors.AsType[*OperationError](err); ok {
 			diagnostics := nested.OperationDiagnostics()
 			changed := false
 			for i := range diagnostics {
@@ -215,15 +213,13 @@ func operationError(kind OperationKind, err error) error {
 		}
 		return err
 	}
-	var tessellationFailure *tessellation.ExpectedError
-	if errors.As(err, &tessellationFailure) {
+	if _, ok := errors.AsType[*tessellation.ExpectedError](err); ok {
 		return &OperationError{err: err, diagnostics: []OperationDiagnostic{{
 			Code: OpDiagTessellationUnresolved, Severity: OperationDiagnosticFailure,
 			Operation: kind, Stage: OperationStageEvaluation, Message: err.Error(),
 		}}}
 	}
-	var coarse *meshbool.CoarseHeldContactError
-	if errors.As(err, &coarse) {
+	if coarse, ok := errors.AsType[*meshbool.CoarseHeldContactError](err); ok {
 		name, ordinal := booleanOperandLocation(kind, coarse.Operand)
 		diagnostic := OperationDiagnostic{
 			Code: OpDiagOperandBoundExceeded, Severity: OperationDiagnosticFailure,
@@ -239,8 +235,7 @@ func operationError(kind OperationKind, err error) error {
 		}
 		return &OperationError{err: err, diagnostics: []OperationDiagnostic{diagnostic}}
 	}
-	var arrangementLimit *prismcells.WorkLimitError
-	if errors.As(err, &arrangementLimit) {
+	if arrangementLimit, ok := errors.AsType[*prismcells.WorkLimitError](err); ok {
 		return &OperationError{err: err, diagnostics: []OperationDiagnostic{{
 			Code: OpDiagWorkLimitReached, Severity: OperationDiagnosticFailure,
 			Operation: kind, Stage: OperationStageEvaluation,
@@ -249,8 +244,7 @@ func operationError(kind OperationKind, err error) error {
 			Message: err.Error(),
 		}}}
 	}
-	var proofLimit *proofbound.WorkLimitError
-	if errors.As(err, &proofLimit) {
+	if proofLimit, ok := errors.AsType[*proofbound.WorkLimitError](err); ok {
 		maxInt := uint64(^uint(0) >> 1)
 		var workLimit *OperationWorkLimit
 		if proofLimit.Observed <= maxInt && proofLimit.Maximum <= maxInt {
@@ -263,8 +257,7 @@ func operationError(kind OperationKind, err error) error {
 			WorkLimit: workLimit, Message: err.Error(),
 		}}}
 	}
-	var expected *meshbool.BooleanExpectedError
-	if errors.As(err, &expected) {
+	if expected, ok := errors.AsType[*meshbool.BooleanExpectedError](err); ok {
 		code, stage := OpDiagUnsupportedIntent, OperationStageEvaluation
 		switch expected.Kind {
 		case meshbool.BooleanExpectedEmpty:

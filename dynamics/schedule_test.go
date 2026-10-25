@@ -545,8 +545,8 @@ type cachePyramid struct {
 
 func newCachePyramid(t *testing.T, config dynamics.StepConfig) cachePyramid {
 	t.Helper()
-	scene := cachePyramid{pyramidScene: pyramidScene{doc: decad.New(),
-		density: units.KilogramsPerCubicMillimeter(0.001)}}
+	scene := cachePyramid{doc: decad.New(),
+		density: units.KilogramsPerCubicMillimeter(0.001)}
 	scene.floor = makeBox(t, scene.doc, -65, -90, 135, 110, -10, 10)
 	for i, corner := range pyramidBoxes {
 		scene.boxes[i] = makeBox(t, scene.doc, corner[0], corner[1], corner[0]+20, corner[1]+20, corner[2], 20)

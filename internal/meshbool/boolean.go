@@ -89,8 +89,7 @@ func ExpectedBooleanAfterShift(err error, displacementBound, allowedReach float6
 // ExpectedBooleanForOperand retains which operand hit a pre-contact staging
 // limit. Other expected outcomes concern the pair or the result and use -1.
 func ExpectedBooleanForOperand(kind BooleanExpectedKind, operand int, err error) error {
-	var expected *BooleanExpectedError
-	if errors.As(err, &expected) {
+	if _, ok := errors.AsType[*BooleanExpectedError](err); ok {
 		return err
 	}
 	return &BooleanExpectedError{Kind: kind, Operand: operand, Err: err}

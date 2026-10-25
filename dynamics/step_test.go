@@ -497,8 +497,8 @@ func TestSlideEdgeTransitionRespectsEventLimit(t *testing.T) {
 		decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: duration},
 		decad.RigidDriftSegment{From: r3.Identity(), Center: mass.Center.Value,
 			LinearVelocity: velocity, AngularVelocity: zeroAngular(t), Duration: duration},
-		decad.SweepRequest{ContactRequest: decad.ContactRequest{
-			PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6)},
+		decad.SweepRequest{
+			PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6),
 			TimeResolution: units.Seconds(1e-9), MaxPoseEvaluations: 128,
 			StartPolicy: decad.ContinueCertifiedTouch})
 	require.NoError(t, err)
@@ -690,8 +690,8 @@ func TestSlideEdgeTransitionCertifiesRoundedRightPose(t *testing.T) {
 		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(0)}
 	mass, err := box.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(0.001))
 	require.NoError(t, err)
-	request := decad.SweepRequest{ContactRequest: decad.ContactRequest{
-		PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6)},
+	request := decad.SweepRequest{
+		PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6),
 		TimeResolution: units.Seconds(1e-9), MaxPoseEvaluations: 128,
 		StartPolicy: decad.ContinueCertifiedTouch}
 	still := decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: duration}
@@ -754,8 +754,8 @@ func TestSuppliedMassBoxReboundUsesProductionGeometry(t *testing.T) {
 			LinearVelocity: dynamics.QuantityVec{X: units.MillimetersPerSecond(0),
 				Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(-100)},
 			AngularVelocity: zeroAngular(t), Duration: duration},
-		decad.SweepRequest{ContactRequest: decad.ContactRequest{
-			PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6)},
+		decad.SweepRequest{
+			PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6),
 			TimeResolution: units.Seconds(1e-9), MaxPoseEvaluations: 128})
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepImpactBracket, sweep.Outcome)
@@ -821,8 +821,8 @@ func TestCenteredForceBoxReboundUsesProductionGeometry(t *testing.T) {
 		decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: duration},
 		decad.RigidDriftSegment{From: pose, Center: pose.Apply(mass.Center.Value),
 			LinearVelocity: fall, AngularVelocity: zeroAngular(t), Duration: duration},
-		decad.SweepRequest{ContactRequest: decad.ContactRequest{
-			PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6)},
+		decad.SweepRequest{
+			PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6),
 			TimeResolution: units.Seconds(1e-9), MaxPoseEvaluations: 128})
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepImpactBracket, sweep.Outcome)
@@ -1027,9 +1027,9 @@ func TestStationarySeparatedBoxesAdvanceClear(t *testing.T) {
 	stillFloor := decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: duration}
 	stillBox := decad.PoseSegment{From: pose, To: pose, Duration: duration}
 	sweep, err := doc.SweepPair(t.Context(), floor, box, stillFloor, stillBox, decad.SweepRequest{
-		ContactRequest: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
-			NormalResolution: units.Radians(1e-6)},
-		TimeResolution: units.Seconds(1e-9), MaxPoseEvaluations: 128,
+		PointResolution:  units.Millimeters(1e-6),
+		NormalResolution: units.Radians(1e-6),
+		TimeResolution:   units.Seconds(1e-9), MaxPoseEvaluations: 128,
 		StartPolicy: decad.ContinueCertifiedTouch,
 	})
 	require.NoError(t, err)

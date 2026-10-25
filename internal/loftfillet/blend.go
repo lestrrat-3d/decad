@@ -81,11 +81,10 @@ func CircleBlend(segments []sectionrecord.CurveSegment, walks []survey2d.SideWal
 	if fitArrives {
 		startU, startV, endU, endV = px-dx, py-dy, px, py
 	}
-	surrogate := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+	surrogate := survey2d.SideWalk{
 		StartU: startU, StartV: startV, EndU: endU, EndV: endV,
 		TanInU: dx, TanInV: dy, TanOutU: dx, TanOutV: dy,
-		Length: 1, Kind: survey2d.WalkLine,
-	}}
+		Length: 1, Kind: survey2d.WalkLine}
 	arrive, leave := circleWalk, surrogate
 	if fitArrives {
 		arrive, leave = surrogate, circleWalk

@@ -14,10 +14,9 @@ import (
 // lineWalk is a straight walk from (u0, v0) to (u1, v1).
 func lineWalk(u0, v0, u1, v1 float64) survey2d.SideWalk {
 	du, dv := u1-u0, v1-v0
-	return survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+	return survey2d.SideWalk{
 		StartU: u0, StartV: v0, EndU: u1, EndV: v1,
-		TanInU: du, TanInV: dv, TanOutU: du, TanOutV: dv,
-	}}
+		TanInU: du, TanInV: dv, TanOutU: du, TanOutV: dv}
 }
 
 // polygonWalks walks the closed polygon pts in order.
@@ -72,10 +71,9 @@ func TestSharpJoinsKeepG1AndRefuseOthers(t *testing.T) {
 	const tt = 0.5
 	// A counter-clockwise quarter arc of radius 5 about the origin ending at
 	// (0, 5), its tangent there (−1, 0).
-	arc := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+	arc := survey2d.SideWalk{
 		Kind: survey2d.WalkCircular, CU: 0, CV: 0, Radius: 5, Th0: 0, Th1: math.Pi / 2,
-		StartU: 5, StartV: 0, EndU: 0, EndV: 5, TanInU: 0, TanInV: 1, TanOutU: -1, TanOutV: 0,
-	}}
+		StartU: 5, StartV: 0, EndU: 0, EndV: 5, TanInU: 0, TanInV: 1, TanOutU: -1, TanOutV: 0}
 	tangent := lineWalk(0, 5, -10, 5)
 	j, err := offset2d.SharpCornerJoin(arc, tangent, tt, tt, 1e-9)
 	require.NoError(t, err)
@@ -143,10 +141,9 @@ func TestSharpLoopMixedAmounts(t *testing.T) {
 		require.Equal(t, want[i], j.M, "corner %d", i)
 	}
 
-	arc := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+	arc := survey2d.SideWalk{
 		Kind: survey2d.WalkCircular, CU: 0, CV: 0, Radius: 5, Th0: 0, Th1: math.Pi / 2,
-		StartU: 5, StartV: 0, EndU: 0, EndV: 5, TanInU: 0, TanInV: 1, TanOutU: -1, TanOutV: 0,
-	}}
+		StartU: 5, StartV: 0, EndU: 0, EndV: 5, TanInU: 0, TanInV: 1, TanOutU: -1, TanOutV: 0}
 	tangent := lineWalk(0, 5, -10, 5)
 	j, err := offset2d.SharpCornerJoin(arc, tangent, 0, 0, 1e-9)
 	require.NoError(t, err)

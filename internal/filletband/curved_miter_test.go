@@ -14,14 +14,12 @@ import (
 // speed can be integrated independently of the production locus bound.
 func TestCurvedMiterLengthEnclosesLineArcSeam(t *testing.T) {
 	t.Parallel()
-	line := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
-		StartU: 10, EndU: 5, StartV: 0, EndV: 0,
-	}}
-	arc := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+	line := survey2d.SideWalk{
+		StartU: 10, EndU: 5, StartV: 0, EndV: 0}
+	arc := survey2d.SideWalk{
 		Kind:   survey2d.WalkCircular,
 		StartU: 5, StartV: 0, EndU: -5, EndV: 0,
-		CU: 0, CV: 0, Radius: 5, Th0: 0, Th1: -math.Pi,
-	}}
+		CU: 0, CV: 0, Radius: 5, Th0: 0, Th1: -math.Pi}
 	got, ok := filletband.CurvedMiterLength(line, arc, 1)
 	require.True(t, ok)
 	for _, offset := range []float64{0, 0.25, 0.5, 0.75, 1} {
@@ -82,13 +80,11 @@ func TestCurvedMiterLengthEnclosesLineArcSeam(t *testing.T) {
 
 func TestCurvedMiterRefusesFoldedOffset(t *testing.T) {
 	t.Parallel()
-	line := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
-		StartU: 0, EndU: 10,
-	}}
-	arc := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+	line := survey2d.SideWalk{
+		StartU: 0, EndU: 10}
+	arc := survey2d.SideWalk{
 		Kind: survey2d.WalkCircular,
-		CU:   0, CV: -5, Radius: 5, Th0: math.Pi / 2, Th1: math.Pi,
-	}}
+		CU:   0, CV: -5, Radius: 5, Th0: math.Pi / 2, Th1: math.Pi}
 	_, ok := filletband.CurvedMiterLength(line, arc, 1)
 	require.False(t, ok)
 	_, ok = filletband.CurvedMiterPoint(line, arc, 1, 0.5, 0, 0)
@@ -97,16 +93,14 @@ func TestCurvedMiterRefusesFoldedOffset(t *testing.T) {
 
 func TestCurvedMiterPointEnclosesTwoCircularWalls(t *testing.T) {
 	t.Parallel()
-	prev := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+	prev := survey2d.SideWalk{
 		Kind:   survey2d.WalkCircular,
 		StartU: 2, StartV: 0, EndU: 0, EndV: 4,
-		CU: -3, CV: 0, Radius: 5, Th0: 0, Th1: math.Atan2(4, 3),
-	}}
-	cur := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+		CU: -3, CV: 0, Radius: 5, Th0: 0, Th1: math.Atan2(4, 3)}
+	cur := survey2d.SideWalk{
 		Kind:   survey2d.WalkCircular,
 		StartU: 0, StartV: 4, EndU: -2, EndV: 0,
-		CU: 3, CV: 0, Radius: 5, Th0: math.Atan2(4, -3), Th1: math.Pi,
-	}}
+		CU: 3, CV: 0, Radius: 5, Th0: math.Atan2(4, -3), Th1: math.Pi}
 	for _, offset := range []float64{0, 0.25, 0.5, 0.75, 1} {
 		point, ok := filletband.CurvedMiterPoint(prev, cur, 1, offset, 0, 4)
 		require.True(t, ok)

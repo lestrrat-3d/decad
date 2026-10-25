@@ -12,11 +12,11 @@ import (
 )
 
 func lineWalk() survey2d.SideWalk {
-	return survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{Kind: survey2d.WalkLine}}
+	return survey2d.SideWalk{Kind: survey2d.WalkLine}
 }
 
 func circleWalk() survey2d.SideWalk {
-	return survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{Kind: survey2d.WalkCircular}}
+	return survey2d.SideWalk{Kind: survey2d.WalkCircular}
 }
 
 // Every gate of the loft cap-band volume proof refuses before any mesh, motion

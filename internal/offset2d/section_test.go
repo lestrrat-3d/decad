@@ -13,10 +13,10 @@ import (
 
 func TestSectionJoinsKeepHeldBits(t *testing.T) {
 	walls := []survey2d.SideWalk{
-		{SegmentWalk: survey2d.SegmentWalk{StartU: 0, StartV: 0, TanInU: 1, TanOutU: 1}},
-		{SegmentWalk: survey2d.SegmentWalk{StartU: 10, StartV: 0, TanInV: 1, TanOutV: 1}},
-		{SegmentWalk: survey2d.SegmentWalk{StartU: 10, StartV: 10, TanInU: -1, TanOutU: -1}},
-		{SegmentWalk: survey2d.SegmentWalk{StartU: 0, StartV: 10, TanInV: -1, TanOutV: -1}},
+		{StartU: 0, StartV: 0, TanInU: 1, TanOutU: 1},
+		{StartU: 10, StartV: 0, TanInV: 1, TanOutV: 1},
+		{StartU: 10, StartV: 10, TanInU: -1, TanOutU: -1},
+		{StartU: 0, StartV: 10, TanInV: -1, TanOutV: -1},
 	}
 	budget := proofbound.NewWorkBudget(t.Context())
 	inward, err := offset2d.JoinsBudget(budget, walls, 1, 0.75, 1e-9)
@@ -38,7 +38,7 @@ func TestSectionJoinsKeepHeldBits(t *testing.T) {
 	}
 	require.Equal(t, [2]uint64{0xbfe8000000000000, 0},
 		[2]uint64{math.Float64bits(outward[0].PA.U), math.Float64bits(outward[0].PA.V)})
-	w := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{Radius: 1.3, Th0: 0.1, Th1: 1.1}}
+	w := survey2d.SideWalk{Radius: 1.3, Th0: 0.1, Th1: 1.1}
 	r, ok := offset2d.OffsetRadius(w, 1, 0.4, 1e-9)
 	require.True(t, ok)
 	require.Equal(t, uint64(0x3feccccccccccccd), math.Float64bits(r))
@@ -57,8 +57,8 @@ func TestMirrorCornerJoin(t *testing.T) {
 	const tt = 1.0
 	axis := offset2d.Curve{IsLine: true, DX: 1}
 	n := 1 / math.Sqrt(5)
-	leave := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{StartU: 20, EndU: 0, EndV: 10, TanInU: -20, TanInV: 10, TanOutU: -20, TanOutV: 10}}
-	arrive := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{StartU: 0, StartV: 10, EndU: 20, TanInU: 20, TanInV: -10, TanOutU: 20, TanOutV: -10}}
+	leave := survey2d.SideWalk{StartU: 20, EndU: 0, EndV: 10, TanInU: -20, TanInV: 10, TanOutU: -20, TanOutV: 10}
+	arrive := survey2d.SideWalk{StartU: 0, StartV: 10, EndU: 20, TanInU: 20, TanInV: -10, TanOutU: 20, TanOutV: -10}
 
 	miter, err := offset2d.MirrorCornerJoin(leave, false, axis, 1, tt, 1e-9)
 	require.NoError(t, err)
@@ -84,7 +84,7 @@ func TestMirrorCornerJoin(t *testing.T) {
 	require.InDelta(t, 20+tt*n, end.PA.U, 1e-12)
 	require.InDelta(t, 2*tt*n, end.PA.V, 1e-12)
 
-	square := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{StartU: 20, EndU: 20, EndV: 10, TanInV: 1, TanOutV: 1}}
+	square := survey2d.SideWalk{StartU: 20, EndU: 20, EndV: 10, TanInV: 1, TanOutV: 1}
 	g1, err := offset2d.MirrorCornerJoin(square, false, axis, 1, tt, 1e-9)
 	require.NoError(t, err)
 	require.True(t, g1.G1)
@@ -95,10 +95,9 @@ func TestMirrorCornerJoin(t *testing.T) {
 	// foot stepped along the float normal lands at v = −1.2e-16, below the
 	// axis. The join takes the axis point itself. Shown to fail with the foot
 	// in place of the axis point.
-	pole := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+	pole := survey2d.SideWalk{
 		StartU: 10, EndU: 0, CU: 5, Radius: 5, Kind: survey2d.WalkCircular, Th0: 0, Th1: math.Pi,
-		TanInV: 1, TanOutU: -math.Sin(math.Pi), TanOutV: math.Cos(math.Pi),
-	}}
+		TanInV: 1, TanOutU: -math.Sin(math.Pi), TanOutV: math.Cos(math.Pi)}
 	g1, err = offset2d.MirrorCornerJoin(pole, true, axis, 1, tt, 1e-9)
 	require.NoError(t, err)
 	require.True(t, g1.G1)
@@ -126,10 +125,9 @@ func TestMirrorCornerJoin(t *testing.T) {
 func TestOpenWalkConsumed(t *testing.T) {
 	const tol = 1e-9
 	rho := 10.625
-	arc := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+	arc := survey2d.SideWalk{
 		StartU: 0, StartV: 13, EndU: 5, EndV: 12, CU: 0, CV: 0, Radius: 13,
-		Kind: survey2d.WalkCircular, Th0: math.Pi / 2, Th1: math.Atan2(12, 5),
-	}}
+		Kind: survey2d.WalkCircular, Th0: math.Pi / 2, Th1: math.Atan2(12, 5)}
 	start := offset2d.Point{U: 0, V: rho}
 	end := offset2d.Point{U: 5, V: 9.375}
 	require.True(t, offset2d.WalkConsumed(arc, start, end, tol))
@@ -146,14 +144,13 @@ func TestOpenWalkConsumed(t *testing.T) {
 	far := at(rho, math.Atan2(12, 5)*180/math.Pi-100)
 	require.True(t, offset2d.OpenWalkConsumed(arc, start, far, false, true, tol), "a 100° reading is no extension")
 
-	full := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+	full := survey2d.SideWalk{
 		StartU: 1, EndU: math.Cos(-0.2), EndV: math.Sin(-0.2), Radius: 1,
-		Kind: survey2d.WalkCircular, Th0: 0, Th1: 2*math.Pi - 0.2,
-	}}
+		Kind: survey2d.WalkCircular, Th0: 0, Th1: 2*math.Pi - 0.2}
 	require.True(t, offset2d.OpenWalkConsumed(full, at(1, 0.05*180/math.Pi), at(1, 0.1*180/math.Pi), false, true, tol),
 		"an allowance of a full turn holds no recorded arc")
 
-	line := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{StartU: 0, EndU: 10, TanInU: 1, TanOutU: 1}}
+	line := survey2d.SideWalk{StartU: 0, EndU: 10, TanInU: 1, TanOutU: 1}
 	back := offset2d.Point{U: -1}
 	require.Equal(t, offset2d.WalkConsumed(line, offset2d.Point{U: 2}, back, tol),
 		offset2d.OpenWalkConsumed(line, offset2d.Point{U: 2}, back, true, true, tol))
@@ -172,8 +169,8 @@ func TestOpenWalkConsumed(t *testing.T) {
 func TestSectionJoinsNameTheCornerThatDoesNotMeet(t *testing.T) {
 	t.Parallel()
 	walls := []survey2d.SideWalk{
-		{SegmentWalk: survey2d.SegmentWalk{StartU: 0, StartV: 0, EndU: 10, TanInU: 1, TanOutU: 1}},
-		{SegmentWalk: survey2d.SegmentWalk{StartU: 10, StartV: 0, TanInU: -1, TanOutU: -1}},
+		{StartU: 0, StartV: 0, EndU: 10, TanInU: 1, TanOutU: 1},
+		{StartU: 10, StartV: 0, TanInU: -1, TanOutU: -1},
 	}
 	_, err := offset2d.SectionJoinsBudget(proofbound.NewWorkBudget(t.Context()), walls, 1, 0.5, 1e-9)
 	require.ErrorIs(t, err, offset2d.ErrTopology)
@@ -198,10 +195,9 @@ func TestOpenChainNamesTheCornerThatDoesNotMeet(t *testing.T) {
 	t.Parallel()
 	line := func(u0, v0, u1, v1 float64) survey2d.SideWalk {
 		du, dv := u1-u0, v1-v0
-		return survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+		return survey2d.SideWalk{
 			StartU: u0, StartV: v0, EndU: u1, EndV: v1,
-			TanInU: du, TanInV: dv, TanOutU: du, TanOutV: dv,
-		}}
+			TanInU: du, TanInV: dv, TanOutU: du, TanOutV: dv}
 	}
 	chain := []survey2d.SideWalk{line(0, 0, 10, 0), line(10, 0, 0, 0)}
 	axis := offset2d.Curve{IsLine: true, DY: 1}

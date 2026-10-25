@@ -12,11 +12,10 @@ import (
 // lineWalk is a straight walk between two points, its tangent the float
 // difference of its ends, as a recorded line's walk carries.
 func lineWalk(i int, su, sv, eu, ev float64) survey2d.SideWalk {
-	return survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{
+	return survey2d.SideWalk{
 		Kind:   survey2d.WalkLine,
 		StartU: su, StartV: sv, EndU: eu, EndV: ev,
-		TanInU: eu - su, TanInV: ev - sv, TanOutU: eu - su, TanOutV: ev - sv,
-	}, Segs: []int{i}}
+		TanInU: eu - su, TanInV: ev - sv, TanOutU: eu - su, TanOutV: ev - sv, Segs: []int{i}}
 }
 
 // TestCoalesceWalksMergesOnlyExactlyCollinear pins exactlyCollinear: two line

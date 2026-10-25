@@ -621,8 +621,7 @@ func (s *linkageSpec[B]) poseAt(ctx context.Context, at units.Value, f *big.Rat)
 	}
 	values, bounds, poses, _, err := s.loopPosesAt(ctx, nil, f)
 	if err != nil {
-		var ub *unbuildableError[B]
-		if errors.As(err, &ub) {
+		if ub, ok := errors.AsType[*unbuildableError[B]](err); ok {
 			return LinkagePose{}, fmt.Errorf(`%w: the drive's loop cannot be enclosed at %s: %w`, decaderr.ErrUnsupported, at, ub.cause)
 		}
 		return LinkagePose{}, err

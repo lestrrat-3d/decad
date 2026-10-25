@@ -115,8 +115,7 @@ func Continue(ctx context.Context, sc Scene, lo, hi float64, pred Ask) (Ask, err
 		if invariant(err) {
 			return Ask{}, err
 		}
-		var fold *sketch.FoldError
-		if errors.As(err, &fold) {
+		if fold, ok := errors.AsType[*sketch.FoldError](err); ok {
 			err = sc.foldRefusal(fold, err)
 		}
 		return Ask{Err: err}, nil

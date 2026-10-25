@@ -644,8 +644,7 @@ func TestLoftCrossingAuditWithCapsCancelledStructuredPass(t *testing.T) {
 			sawCancel = true
 			continue
 		}
-		var contact *LoftContactError
-		if !errors.As(err, &contact) {
+		if _, ok := errors.AsType[*LoftContactError](err); !ok {
 			// An S6 refusal is the generic audit's text.
 			require.Equal(t, capsGeneric(t, m).Error(), err.Error())
 		}

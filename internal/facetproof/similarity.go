@@ -32,10 +32,9 @@ func ScaleMesh(ctx context.Context, budget *proofbound.WorkBudget,
 		proofbound.IsNonFinite(volSymDiff) || proofbound.IsNonFinite(areaSlack) {
 		return SimilarMesh{}, fmt.Errorf("%w: the similarity input has no finite proof", decaderr.ErrUnsupported)
 	}
-	next := SimilarMesh{PlacedMesh: PlacedMesh{
+	next := SimilarMesh{
 		Verts: make([]r3.Vec, len(verts)), Tris: tris,
-		VertexBound: make([]float64, len(vertexBound)),
-	}}
+		VertexBound: make([]float64, len(vertexBound))}
 	h := meshbool.HeldRounding{
 		Verts: next.Verts, Tris: tris, Exact: make([]proof.Xpt, len(verts)),
 		Moved: make([]bool, len(verts)), Movable: make([]bool, len(verts)),
