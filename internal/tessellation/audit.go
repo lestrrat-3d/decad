@@ -395,6 +395,14 @@ func orientationSum(vertices []r3.Vec, triangles [][3]int, anchor r3.Vec, worker
 	_, _ = orderedwork.Each(blocks, workers, 1, nil, func(k int) error {
 		lo := k * orientationBlock
 		hi := min(lo+orientationBlock, len(triangles))
+		// A zero anchor lets the native determinant read the held coordinates.
+		// Other anchors need exact dyadic differences before multiplication.
+		if anchor == (r3.Vec{}) {
+			for _, t := range triangles[lo:hi] {
+				parts[k].Add(proof.FloatDeterminant(vertices[t[0]], vertices[t[1]], vertices[t[2]]))
+			}
+			return nil
+		}
 		for _, t := range triangles[lo:hi] {
 			a := proof.DvSub(proof.DyVec(vertices[t[0]]), xa)
 			b := proof.DvSub(proof.DyVec(vertices[t[1]]), xa)
