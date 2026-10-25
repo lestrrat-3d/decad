@@ -13,44 +13,50 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The bore route reads a join in +X arithmetic. A join whose tooth trim holds
-// a limit about another axis keeps ordinary dispatch: the route reports no
-// match before it reads the cap-ring record. The +X join with the same empty
-// record is the control: the route matches it and refuses the missing record
-// (agent-docs/revolve-axis-design.md §4.6).
+// The bore route reads a join about its certificate's axis. A join whose
+// tooth trim holds a limit about another axis keeps ordinary dispatch: the
+// route reports no match before it reads the cap-ring record. That covers a +X
+// certificate with a limit about Y, and a general certificate about Y with a
+// limit about X. A join whose limits match its certificate is the control:
+// the route matches it, +X or general, and refuses the missing record
+// (agent-docs/revolve-axis-design.md §4.6, §9.1).
 func TestSectorCylinderCutDeclinesJoinAboutAnotherAxis(t *testing.T) {
 	t.Parallel()
 	yAxis, ok := coneaxis.New(r3.Vec{Y: 1})
 	require.True(t, ok)
-	joined := func(lower, upper coneaxis.Axis) *topo.Body {
+	joined := func(section facetedrecord.RevolveSectionCertificate, lower, upper coneaxis.Axis) *topo.Body {
 		trim := &facetedrecord.PointConeTrimRecord{
 			Lower: &facetedrecord.PointConeLimit{Axis: lower},
 			Upper: &facetedrecord.PointConeLimit{Axis: upper},
 		}
 		return &topo.Body{Payload: facetedrecord.Payload{Xform: r3.Identity(),
 			RevolveLoftJoin: &facetedrecord.RevolveLoftJoinRecord{
-				Certificate: &facetedrecord.RevolveLoftSectorCertificate{Trim: trim}}}}
+				Certificate: &facetedrecord.RevolveLoftSectorCertificate{Section: section, Trim: trim}}}}
 	}
-	_, ok, err := revolveshell.SectorCylinderCut(t.Context(), meshbool.OpCut, topo.Env{},
-		joined(coneaxis.X(), coneaxis.X()), &topo.Body{})
-	require.True(t, ok)
-	require.ErrorIs(t, err, decaderr.ErrUnsupported)
-	for _, axes := range [][2]coneaxis.Axis{{yAxis, yAxis}, {coneaxis.X(), yAxis}, {yAxis, coneaxis.X()}} {
-		out, ok, err := revolveshell.SectorCylinderCut(t.Context(), meshbool.OpCut, topo.Env{},
-			joined(axes[0], axes[1]), &topo.Body{})
-		require.NoError(t, err)
-		require.False(t, ok)
-		require.Nil(t, out)
+	plusX := facetedrecord.RevolveSectionCertificate{Axis: coneaxis.X()}
+	aboutX := facetedrecord.RevolveSectionCertificate{Axis: coneaxis.X(), General: &facetedrecord.RevolveSectionAxis{}}
+	aboutY := facetedrecord.RevolveSectionCertificate{Axis: yAxis, General: &facetedrecord.RevolveSectionAxis{}}
+	for name, body := range map[string]*topo.Body{
+		"+X":              joined(plusX, coneaxis.X(), coneaxis.X()),
+		"general about X": joined(aboutX, coneaxis.X(), coneaxis.X()),
+		"general about Y": joined(aboutY, yAxis, yAxis),
+	} {
+		out, ok, err := revolveshell.SectorCylinderCut(t.Context(), meshbool.OpCut, topo.Env{}, body, &topo.Body{})
+		require.True(t, ok, name)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported, name)
+		require.ErrorContains(t, err, "cap-ring record", name)
+		require.Nil(t, out, name)
 	}
-	// A certificate from the general record branch declines even when its
-	// axis value and both limits are X, as for an XZ-plane blank revolved
-	// about U: its ring stands at angles in the blank's own basis.
-	general := joined(coneaxis.X(), coneaxis.X())
-	payload := general.Payload.(facetedrecord.Payload)
-	payload.RevolveLoftJoin.Certificate.Section = facetedrecord.RevolveSectionCertificate{
-		Axis: coneaxis.X(), General: &facetedrecord.RevolveSectionAxis{}}
-	out, ok, err := revolveshell.SectorCylinderCut(t.Context(), meshbool.OpCut, topo.Env{}, general, &topo.Body{})
-	require.NoError(t, err)
-	require.False(t, ok)
-	require.Nil(t, out)
+	for name, body := range map[string]*topo.Body{
+		"+X with both about Y":    joined(plusX, yAxis, yAxis),
+		"+X with lower about Y":   joined(plusX, yAxis, coneaxis.X()),
+		"+X with upper about Y":   joined(plusX, coneaxis.X(), yAxis),
+		"about Y with X limits":   joined(aboutY, coneaxis.X(), coneaxis.X()),
+		"about Y with upper at X": joined(aboutY, yAxis, coneaxis.X()),
+	} {
+		out, ok, err := revolveshell.SectorCylinderCut(t.Context(), meshbool.OpCut, topo.Env{}, body, &topo.Body{})
+		require.NoError(t, err, name)
+		require.False(t, ok, name)
+		require.Nil(t, out, name)
+	}
 }

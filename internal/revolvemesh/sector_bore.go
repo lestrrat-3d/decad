@@ -82,9 +82,19 @@ func SectorRingMaxStep(angles []float64) (float64, bool) {
 
 // SectorBorePatches proposes projected graphs from the completed
 // result. The crossing audit independently proves each proposal and audits
-// every pair outside a proven patch, including all cross-patch pairs.
+// every pair outside a proven patch, including all cross-patch pairs. Every
+// patch projects onto the world YZ plane, the plane normal to +X.
 func SectorBorePatches(src []int, oldCount, stations int,
 	band bool, lowGroup, highGroup, bandGroup, wallGroup int) []loftmesh.ProjectedPatch {
+	return SectorBorePatchesOnto(src, oldCount, stations, band, lowGroup, highGroup, bandGroup, wallGroup,
+		[2]int{1, 2})
+}
+
+// SectorBorePatchesOnto is SectorBorePatches projected onto the coordinate
+// plane axes names. A bore about a general axis passes the plane that drops
+// the axis's largest component (agent-docs/revolve-axis-design.md §5.8, §9).
+func SectorBorePatchesOnto(src []int, oldCount, stations int,
+	band bool, lowGroup, highGroup, bandGroup, wallGroup int, axes [2]int) []loftmesh.ProjectedPatch {
 	groups := make(map[int][]int)
 	for i := range oldCount {
 		group := src[i]
@@ -105,7 +115,7 @@ func SectorBorePatches(src []int, oldCount, stations int,
 			continue
 		}
 		patches = append(patches, loftmesh.ProjectedPatch{
-			Triangles: groups[group], Axes: [2]int{1, 2},
+			Triangles: groups[group], Axes: axes,
 		})
 	}
 	// A complete annulus has two boundary loops. Each angular half is a
@@ -122,7 +132,7 @@ func SectorBorePatches(src []int, oldCount, stations int,
 				indices = append(indices, base, base+1)
 			}
 			patches = append(patches, loftmesh.ProjectedPatch{
-				Triangles: indices, Axes: [2]int{1, 2},
+				Triangles: indices, Axes: axes,
 			})
 		}
 	}

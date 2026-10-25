@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -139,11 +140,14 @@ func (p revolveAxisPlacement) revolveAbout(t *testing.T, doc *decad.Document, ou
 	return body
 }
 
-// The hub outlines of the +X sector Union tests in design points (x, r): the
-// shouldered hub, and the tapered hub whose split cap the bore Cut reads.
+// The hub outlines of the sector Union tests in design points (x, r): the
+// shouldered hub, and the tapered hub whose two planar caps the bore Cut
+// reads. The tapered hub draws its high cap as one line; split at (9, 1.5),
+// as the +X fixture taperedHubAndRadialLug draws it, its join about (1, 2, 0)
+// takes ordinary dispatch.
 var (
 	shoulderedHubOutline = [][2]float64{{6, 0}, {9, 0}, {9.2, 1.5}, {9, 3}, {8, 4}, {5, 2.5}, {6, 1.5}}
-	taperedHubOutline    = [][2]float64{{6, 0}, {9, 0}, {9, 1.5}, {9, 3}, {8, 4}, {5, 2.5}, {6, 1.5}}
+	taperedHubOutline    = [][2]float64{{6, 0}, {9, 0}, {9, 3}, {8, 4}, {5, 2.5}, {6, 1.5}}
 )
 
 // coneTool is pointConeTool about the axis: the cone of slope 1 whose apex
@@ -202,6 +206,7 @@ type revolveAxisUnion struct {
 	volume     decad.Measurement
 	hubVolume  decad.Measurement
 	joinedArea decad.Measurement
+	hub        *decad.Body
 }
 
 // union revolves the hub outline, builds the trimmed lug, copies the lug
@@ -246,7 +251,8 @@ func (p revolveAxisPlacement) union(t *testing.T, outline [][2]float64, turns []
 	area, err := joined.Area()
 	require.NoError(t, err)
 	require.Greater(t, volume.Value.Base()-volume.Bound.Base(), hubVolume.Value.Base()+hubVolume.Bound.Base())
-	return revolveAxisUnion{doc: doc, joined: joined, mesh: mesh, volume: volume, hubVolume: hubVolume, joinedArea: area}
+	return revolveAxisUnion{doc: doc, joined: joined, mesh: mesh, volume: volume, hubVolume: hubVolume,
+		joinedArea: area, hub: hub}
 }
 
 // requireClosedMesh checks that every edge of mesh borders exactly two
@@ -362,29 +368,94 @@ func (p revolveAxisPlacement) boreTool(t *testing.T, doc *decad.Document) *decad
 	return tool
 }
 
-// The coaxial bore Cut reads a join in +X arithmetic, so a join whose
-// certificate is about a general axis keeps ordinary dispatch, whose mesh
-// Boolean refuses this pair. That holds about (0, 1, 0), and for the XZ-plane
-// blank whose axis value is X but whose certificate took the general record
-// branch. The +X join is the control: the bore route cuts it
-// (agent-docs/revolve-axis-design.md §4.6).
-func TestRevolveSectorCylinderCutDeclinesGeneralJoin(t *testing.T) {
-	x := xAxisPlacement(t).union(t, taperedHubOutline, nil, false)
-	cut, err := decad.Cut(t.Context(), x.joined, xAxisPlacement(t).boreTool(t, x.doc))
+// boreCut is a joined body about one axis cut by the coaxial bore, with the
+// cut's volume and area.
+type boreCut struct {
+	cut    *decad.Body
+	volume decad.Measurement
+	area   decad.Measurement
+}
+
+// cutBore cuts u's joined body with the placement's bore tool through the
+// public Cut. The result passes VerifyAll, is watertight with Euler
+// characteristic 0, holds less volume than the joined body, keeps both
+// Revolve caps' origins on planar faces and the tool's side origins on a
+// cylindrical face.
+func (p revolveAxisPlacement) cutBore(t *testing.T, u revolveAxisUnion) boreCut {
+	t.Helper()
+	tool := p.boreTool(t, u.doc)
+	cut, err := decad.Cut(t.Context(), u.joined, tool)
 	require.NoError(t, err)
 	mesh, err := cut.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
 	require.Equal(t, 0, revolveLugEuler(mesh))
-	for name, placement := range map[string]revolveAxisPlacement{
-		"(0,1,0)":          permutedAxisPlacement(t),
-		"XZ plane about X": xzAxisPlacement(t),
+	requireClosedMesh(t, mesh)
+	volume, err := cut.Volume()
+	require.NoError(t, err)
+	area, err := cut.Area()
+	require.NoError(t, err)
+	require.Greater(t, u.volume.Value.Base()-u.volume.Bound.Base(), volume.Value.Base()+volume.Bound.Base())
+	keeps := func(origins []decad.FeatureRef, kind func(decad.Surface) bool) bool {
+		for _, face := range cut.Faces() {
+			if kind(face.Surface()) && slices.Equal(origins, face.Origins()) {
+				return true
+			}
+		}
+		return false
+	}
+	planar := func(s decad.Surface) bool { _, ok := s.(decad.Plane); return ok }
+	cylindrical := func(s decad.Surface) bool { _, ok := s.(decad.Cylinder); return ok }
+	caps := 0
+	for _, face := range u.hub.Faces() {
+		if planar(face.Surface()) {
+			caps++
+			require.True(t, keeps(face.Origins(), planar), "a Revolve cap lost its source origins")
+		}
+	}
+	require.Equal(t, 2, caps)
+	walls := 0
+	for _, face := range tool.Faces() {
+		if cylindrical(face.Surface()) {
+			walls++
+			require.True(t, keeps(face.Origins(), cylindrical), "the bore wall lost its source origins")
+		}
+	}
+	require.Equal(t, 1, walls)
+	return boreCut{cut: cut, volume: volume, area: area}
+}
+
+// The coaxial bore Cut of a tapered hub and three copied lugs about a general
+// axis takes the bore route at the default tolerance
+// (agent-docs/revolve-axis-design.md §9). The result is watertight with Euler
+// characteristic 0 and passes VerifyAll, and its volume agrees with the same
+// construction about +X within the proven bounds: with no slack about
+// (0, 1, 0) and for the XZ-plane blank about X, both exact quarter-turn
+// images of +X, and with the input slack of
+// TestUnionHubAndRadialLugsAboutTiltedAxis about (1, 2, 0) and about a
+// 70-degree shaft direction rounded to 26 significant bits.
+func TestRevolveSectorCylinderCutAboutGeneralAxis(t *testing.T) {
+	turns := []float64{120, 240}
+	x := xAxisPlacement(t)
+	control := x.cutBore(t, x.union(t, taperedHubOutline, turns, false))
+	shaft := 70 * math.Pi / 180
+	for _, tc := range []struct {
+		name      string
+		placement revolveAxisPlacement
+		shift     float64
+	}{
+		{"(0,1,0)", permutedAxisPlacement(t), 0},
+		{"XZ plane about X", xzAxisPlacement(t), 0},
+		{"(1,2,0)", tiltedAxisPlacement(t, r3.Vec{X: 1, Y: 2}, 0x1p-30), 1e-8},
+		{"26-bit 70 degrees",
+			tiltedAxisPlacement(t, r3.Vec{X: round26(math.Cos(shaft)), Y: round26(math.Sin(shaft))}, 0x1p-22), 1e-6},
 	} {
-		general := placement.union(t, taperedHubOutline, nil, false)
-		before := general.doc.Bodies()
-		tool := placement.boreTool(t, general.doc)
-		_, err := decad.Cut(t.Context(), general.joined, tool)
-		require.ErrorIs(t, err, decad.ErrUnsupported, name)
-		require.ErrorContains(t, err, "the chain cannot continue", name)
-		require.Equal(t, append(before, tool), general.doc.Bodies(), name)
+		t.Run(tc.name, func(t *testing.T) {
+			general := tc.placement.cutBore(t, tc.placement.union(t, taperedHubOutline, turns, false))
+			requireVolumesAgree(t, control.volume, general.volume, inputSlack(general.area, tc.shift))
+			t.Logf("+X bored volume %.12g ± %.3g, bored volume %.12g ± %.3g", control.volume.Value.Base(),
+				control.volume.Bound.Base(), general.volume.Value.Base(), general.volume.Bound.Base())
+		})
 	}
 }
