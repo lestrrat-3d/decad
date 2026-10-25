@@ -51,6 +51,7 @@ func twistedFitToothSection(t *testing.T, w *sketch.World, plane *sketch.Plane, 
 }
 
 func TestExtrudeFitSplineSectionScalesWorkWithPieces(t *testing.T) {
+	t.Parallel()
 	const height = 3.0
 	for _, fit := range []int{9, 15} {
 		w := sketch.NewWorld()
@@ -82,6 +83,7 @@ func TestExtrudeFitSplineSectionScalesWorkWithPieces(t *testing.T) {
 // The teeth touch the disc only along their root arcs, so the joined volume is
 // the disc plus every tooth.
 func TestExtrudedToothPatternJoinsADisc(t *testing.T) {
+	t.Parallel()
 	const height = 3.0
 	for _, tc := range []struct {
 		teeth, fit int
