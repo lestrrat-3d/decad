@@ -344,7 +344,6 @@ func SpanWitness(ctx context.Context, bmA, bmB *BoolMesh, spans []ContactSpan, b
 	if len(spans) == 0 {
 		return false, nil
 	}
-	allA, allB := AllFacets(bmA), AllFacets(bmB)
 	one, two := big.NewInt(1), big.NewInt(2)
 	for n, s := range spans {
 		if n >= MaxDepthWitnessSpans {
@@ -354,11 +353,11 @@ func SpanWitness(ctx context.Context, bmA, bmB *BoolMesh, spans []ContactSpan, b
 			return false, err
 		}
 		mid := proof.Xlerp(s.P0, s.P1, one, two)
-		deep, err := WalkFacetFromSpan(ctx, mid, bmA, s.I, bmB, s.J, allB, b)
+		deep, err := WalkFacetFromSpan(ctx, mid, bmA, s.I, bmB, s.J, b)
 		if err != nil || deep {
 			return deep, err
 		}
-		deep, err = WalkFacetFromSpan(ctx, mid, bmB, s.J, bmA, s.I, allA, b)
+		deep, err = WalkFacetFromSpan(ctx, mid, bmB, s.J, bmA, s.I, b)
 		if err != nil || deep {
 			return deep, err
 		}
@@ -370,7 +369,7 @@ func SpanWitness(ctx context.Context, bmA, bmB *BoolMesh, spans []ContactSpan, b
 // of m and on facet fj of other, it steps toward every corner of facet fi that
 // lies strictly on the inner side of facet fj's plane and asks DeepWitnessAt
 // about each step.
-func WalkFacetFromSpan(ctx context.Context, mid proof.Xpt, m *BoolMesh, fi int, other *BoolMesh, fj int, all []int, b float64) (bool, error) {
+func WalkFacetFromSpan(ctx context.Context, mid proof.Xpt, m *BoolMesh, fi int, other *BoolMesh, fj int, b float64) (bool, error) {
 	ot := other.Tris[fj]
 	origin, normal := other.Xverts[ot[0]], other.Norms[fj]
 	midF := mid.Vec()
@@ -391,7 +390,7 @@ func WalkFacetFromSpan(ctx context.Context, mid proof.Xpt, m *BoolMesh, fi int, 
 				break
 			}
 			p := proof.Xlerp(mid, c, one, den)
-			deep, err := DeepWitnessAt(ctx, p, other, all, b)
+			deep, err := DeepWitnessAt(ctx, p, other, b)
 			if err != nil || deep {
 				return deep, err
 			}
@@ -407,11 +406,11 @@ func WalkFacetFromSpan(ctx context.Context, mid proof.Xpt, m *BoolMesh, fi int, 
 // witness search goes through. The cheap float depth runs before the costly
 // exact parity: a point no deeper than b is no witness however it classifies,
 // so the order changes which points are tested, never which become witnesses.
-func DeepWitnessAt(ctx context.Context, p proof.Xpt, other *BoolMesh, all []int, b float64) (bool, error) {
+func DeepWitnessAt(ctx context.Context, p proof.Xpt, other *BoolMesh, b float64) (bool, error) {
 	if CertifiedInteriorDepth(p, other) <= b {
 		return false, nil
 	}
-	inside, onBoundary, err := MeshParityPreparedContext(ctx, p, other.Parity, all)
+	inside, onBoundary, err := MeshParityAllContext(ctx, p, other.Parity)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return false, ctxErr

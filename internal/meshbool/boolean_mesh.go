@@ -551,7 +551,6 @@ func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 	}
 	next := 0
 	componentWork := 0
-	all := AllFacets(other)
 	for i := range m.Tris {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -591,7 +590,7 @@ func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 		// operand outright if any facet collapsed.
 		seed := XtriCorners(m, members[0])
 		probe := XCentroid(seed[0], seed[1], seed[2])
-		inside, onBoundary, err := MeshParityPreparedContext(ctx, probe, other.Parity, all)
+		inside, onBoundary, err := MeshParityAllContext(ctx, probe, other.Parity)
 		if err != nil {
 			return nil, err
 		}
@@ -649,7 +648,7 @@ func ClassifyRegion(ctx context.Context, reg CutRegion, other *BoolMesh) (bool, 
 			return false, fmt.Errorf(`%w: a region probe landed on its contact plane`, decaderr.ErrBooleanFailed)
 		}
 	}
-	inside, onBoundary, err := MeshParityPreparedContext(ctx, reg.Probe, other.Parity, AllFacets(other))
+	inside, onBoundary, err := MeshParityAllContext(ctx, reg.Probe, other.Parity)
 	if err != nil {
 		return false, err
 	}
