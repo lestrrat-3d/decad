@@ -162,3 +162,104 @@ func ulpOf(v float64) float64 {
 	v = math.Abs(v)
 	return math.Nextafter(v, math.Inf(1)) - v
 }
+
+func requireTrigDyadic(t *testing.T, x *big.Rat) {
+	t.Helper()
+	d := x.Denom()
+	require.Equal(t, d.BitLen()-1, int(d.TrailingZeroBits()), "denominator is not a power of two")
+}
+
+// TestTrigWideningRoundsOutward checks the exact rounding direction, relative
+// error, significand size and input ownership, including values far outside
+// float64's range and values on both sides of the significand cutoff.
+func TestTrigWideningRoundsOutward(t *testing.T) {
+	rel := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), proofbound.TrigFixedBits-2))
+	mantissas := []*big.Int{big.NewInt(1), big.NewInt(3)}
+	for _, p := range []uint{199, 200, 201} {
+		x := new(big.Int).Lsh(big.NewInt(1), p)
+		mantissas = append(mantissas,
+			new(big.Int).Sub(x, big.NewInt(1)), new(big.Int).Add(x, big.NewInt(1)))
+	}
+	denominators := []*big.Int{big.NewInt(1), big.NewInt(3),
+		new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 257), big.NewInt(1))}
+	for _, e := range []int{-4096, -1075, -200, -1, 0, 199, 200, 201, 1024, 4096} {
+		for _, m := range mantissas {
+			for _, d := range denominators {
+				n, den := new(big.Int).Set(m), new(big.Int).Set(d)
+				if e >= 0 {
+					n.Lsh(n, uint(e))
+				} else {
+					den.Lsh(den, uint(-e))
+				}
+				q := new(big.Rat).SetFrac(n, den)
+				before := new(big.Rat).Set(q)
+				got := proofbound.TrigWidening(q)
+				require.GreaterOrEqual(t, got.Cmp(q), 0, "inward rounding at exponent %d", e)
+				extra := new(big.Rat).Sub(got, q)
+				require.LessOrEqual(t, extra.Cmp(new(big.Rat).Mul(q, rel)), 0, "relative error at exponent %d", e)
+				requireTrigDyadic(t, got)
+				require.LessOrEqual(t, got.Num().BitLen()-int(got.Num().TrailingZeroBits()), proofbound.TrigFixedBits)
+				require.Zero(t, before.Cmp(q), "input changed")
+				got.SetInt64(0)
+				require.Zero(t, before.Cmp(q), "result shares input storage")
+			}
+		}
+	}
+	zero := new(big.Rat)
+	got := proofbound.TrigWidening(zero)
+	require.Zero(t, got.Sign())
+	got.SetInt64(1)
+	require.Zero(t, zero.Sign())
+}
+
+// radSinCosExactWidening is the rational construction before dyadic widening.
+// It returns its exact widening as well as the two enclosures.
+func radSinCosExactWidening(t *testing.T, x *big.Rat) (proofbound.RatInterval, proofbound.RatInterval, *big.Rat) {
+	t.Helper()
+	if x.Sign() == 0 {
+		return proofbound.PointInterval(new(big.Rat)), proofbound.PointInterval(big.NewRat(1, 1)), new(big.Rat)
+	}
+	pi := proofbound.TwoPiInterval()
+	turn, ok := proofbound.IntervalQuo(proofbound.PointInterval(x), pi)
+	require.True(t, ok)
+	base := proofbound.RatFloorGrid(turn.Lo, proofbound.TurnGridShift)
+	gap := new(big.Rat).Sub(turn.Hi, base)
+	slop := new(big.Rat).Mul(pi.Hi, gap)
+	sin, cos := proofbound.TurnSinCosInterval(base)
+	return proofbound.IntervalWiden(sin, slop), proofbound.IntervalWiden(cos, slop), slop
+}
+
+// TestRadSinCosDyadicEnclosesExactWidening checks that outward rounding only
+// expands the previous exact construction, by at most its stated relative
+// rounding allowance. Both endpoints must stay dyadic for later arithmetic.
+func TestRadSinCosDyadicEnclosesExactWidening(t *testing.T) {
+	angles := []*big.Rat{new(big.Rat), big.NewRat(1, 3), big.NewRat(-7, 5), big.NewRat(1000003, 7),
+		proofarith.FloatRat(math.Pi / 2), proofarith.FloatRat(2 * math.Pi)}
+	for _, e := range []uint{200, 1075, 4096} {
+		x := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), e))
+		angles = append(angles, x, new(big.Rat).Neg(x))
+	}
+	rel := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), proofbound.TrigFixedBits-2))
+	for _, x := range angles {
+		before := new(big.Rat).Set(x)
+		for _, width := range []*big.Rat{new(big.Rat), big.NewRat(1, 7),
+			new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(3), 2048))} {
+			oldSin, oldCos, slop := radSinCosExactWidening(t, x)
+			oldSin, oldCos = proofbound.IntervalWiden(oldSin, width), proofbound.IntervalWiden(oldCos, width)
+			span := proofbound.Interval(x, new(big.Rat).Add(x, width))
+			sin, cos, ok := proofbound.RadSinCosSpan(span)
+			require.True(t, ok)
+			allow := new(big.Rat).Mul(new(big.Rat).Add(slop, width), rel)
+			for _, pair := range [][2]proofbound.RatInterval{{oldSin, sin}, {oldCos, cos}} {
+				old, got := pair[0], pair[1]
+				for _, extra := range []*big.Rat{new(big.Rat).Sub(old.Lo, got.Lo), new(big.Rat).Sub(got.Hi, old.Hi)} {
+					require.GreaterOrEqual(t, extra.Sign(), 0, "previous enclosure shrank")
+					require.LessOrEqual(t, extra.Cmp(allow), 0, "exceeded rounding allowance")
+				}
+				requireTrigDyadic(t, got.Lo)
+				requireTrigDyadic(t, got.Hi)
+			}
+		}
+		require.Zero(t, before.Cmp(x), "input changed")
+	}
+}

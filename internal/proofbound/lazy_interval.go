@@ -26,7 +26,8 @@ func LazyIntervalSqrt(a proofarith.LazyInterval) (proofarith.LazyInterval, bool)
 
 // LazyRadSinCosSpan is RadSinCosSpan: width = Hi-Lo normalised, a negative
 // width refuses, RadSinCosInterval(Lo.Rat()) (the memo sees the same key as
-// before), both enclosures widened lazily by the normalised width.
+// before), both enclosures widened lazily by trigWidening's upward-rounded
+// dyadic width, exactly as RadSinCosSpan does.
 func LazyRadSinCosSpan(x proofarith.LazyInterval) (proofarith.LazyInterval, proofarith.LazyInterval, bool) {
 	diff := proofarith.LazySub(x.Hi, x.Lo)
 	if diff.Sign() < 0 {
@@ -36,7 +37,7 @@ func LazyRadSinCosSpan(x proofarith.LazyInterval) (proofarith.LazyInterval, proo
 	if !ok {
 		return proofarith.LazyInterval{}, proofarith.LazyInterval{}, false
 	}
-	width := proofarith.LazyOf(diff.Rat())
+	width := proofarith.LazyOf(trigWidening(diff.Rat()))
 	return proofarith.LazyIntervalWiden(proofarith.LazyIntervalOf(ToProofInterval(sin)), width),
 		proofarith.LazyIntervalWiden(proofarith.LazyIntervalOf(ToProofInterval(cos)), width), true
 }

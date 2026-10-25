@@ -6,6 +6,9 @@ import "math/big"
 // oracle test can compare the memoised answer against it.
 var RadSinCosIntervalUncached = radSinCosIntervalUncached
 
+// TrigWidening exposes the upward-rounded width for exact enclosure checks.
+var TrigWidening = trigWidening
+
 // RadSinCosMemoHolds reports whether the memo holds a reading for x.
 func RadSinCosMemoHolds(x *big.Rat) bool {
 	radSinCosMemo.mu.Lock()

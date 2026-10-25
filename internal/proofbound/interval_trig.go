@@ -27,6 +27,9 @@ const TurnGridShift = 96
 // 2π·w with w the whole remaining gap — sound because |sin(2πt) − sin(2πt₀)|
 // ≤ 2π|t − t₀| and the same for the cosine, so no monotonicity over the gap
 // need be argued.
+// The widening rounds upward to a dyadic with TrigFixedBits significant
+// bits. It still covers the whole gap and keeps later interval arithmetic
+// on power-of-two denominators.
 //
 // The enclosure is a pure function of x, and tessellation asks for the same
 // angle many times over (every revolve on one angular plan reads the same
@@ -49,12 +52,14 @@ func RadSinCosInterval(x *big.Rat) (RatInterval, RatInterval, bool) {
 
 // RadSinCosSpan encloses sine and cosine over a rational radian interval.
 // Both functions are 1-Lipschitz, so the interval width widens the reading
-// at its lower endpoint without assuming monotonicity over the span.
+// at its lower endpoint without assuming monotonicity over the span. The
+// width rounds upward through trigWidening before widening the reading.
 func RadSinCosSpan(x RatInterval) (RatInterval, RatInterval, bool) {
 	width := proofarith.SubRat(new(big.Rat), x.Hi, x.Lo)
 	if width.Sign() < 0 {
 		return RatInterval{}, RatInterval{}, false
 	}
+	width = trigWidening(width)
 	sin, cos, ok := RadSinCosInterval(x.Lo)
 	if !ok {
 		return RatInterval{}, RatInterval{}, false
@@ -150,7 +155,37 @@ func radSinCosIntervalUncached(x *big.Rat) (RatInterval, RatInterval, bool) {
 	}
 	sin, cos := TurnSinCosInterval(base)
 	slop := proofarith.MulRat(new(big.Rat), twoPi.Hi, gap)
+	slop = trigWidening(slop)
 	return IntervalWiden(sin, slop), IntervalWiden(cos, slop), true
+}
+
+// trigWidening rounds a non-negative widening upward onto a power-of-two
+// denominator. The grid follows the input's magnitude, so a positive amount
+// never rounds to zero and tiny inputs do not acquire a fixed absolute error.
+// Scaling by 2^shift puts q in (2^(P-2), 2^P), P = TrigFixedBits;
+// the ceiling adds less than one grid unit, at most 2^(2-P) relative error.
+// The rounded significand has at most P bits (2^P itself reduces to one).
+// All division and rounding use integers, and q is only read.
+func trigWidening(q *big.Rat) *big.Rat {
+	if q.Sign() == 0 {
+		return new(big.Rat)
+	}
+	shift := TrigFixedBits - 1 + q.Denom().BitLen() - q.Num().BitLen()
+	n, d := new(big.Int).Set(q.Num()), new(big.Int).Set(q.Denom())
+	if shift >= 0 {
+		n.Lsh(n, uint(shift))
+	} else {
+		d.Lsh(d, uint(-shift))
+	}
+	m, rem := new(big.Int), new(big.Int)
+	m.QuoRem(n, d, rem)
+	if rem.Sign() > 0 {
+		m.Add(m, big.NewInt(1))
+	}
+	if shift < 0 {
+		return new(big.Rat).SetInt(m.Lsh(m, uint(-shift)))
+	}
+	return proofarith.RatFrac(new(big.Rat), m, new(big.Int).Lsh(big.NewInt(1), uint(shift)))
 }
 
 // WindowReachesDirection decides, over arcs each shorter than a half turn,
