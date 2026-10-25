@@ -33,6 +33,13 @@ import (
 var taperedHubOutline = []planePoint{{U: 6}, {U: 9}, {U: 9, V: 1.5}, {U: 9, V: 3}, {U: 8, V: 4},
 	{U: 5, V: 2.5}, {U: 6, V: 1.5}}
 
+// taperedHubCorners omits the split cap point. About a tilted axis, rounding
+// can move that point off the axis-coordinate chord, so the builder keeps two
+// cap faces and RecordedSection refuses their mismatch with the exact spans.
+// The +X and permuted fixtures keep taperedHubOutline's split-cap coverage.
+var taperedHubCorners = []planePoint{{U: 6}, {U: 9}, {U: 9, V: 3}, {U: 8, V: 4},
+	{U: 5, V: 2.5}, {U: 6, V: 1.5}}
+
 // axisRevolve fully revolves a closed polygon drawn on a plane through the
 // origin with axes u and v about the sketch line from (0, 0) to end.
 func axisRevolve(t *testing.T, doc *Document, u, v r3.Vec, end planePoint, outline []planePoint) *Body {
@@ -162,7 +169,7 @@ func tiltedSectionFixtureAt(t *testing.T, fitted bool, toolEnd planePoint, toeT,
 			planePoint{U: -1 - 2*(apexT+1), V: -2 + apexT + 1}, planePoint{U: apexT, V: 2 * apexT})
 	}
 	return sectionAxisFixture{doc: doc, axis: r3.Vec{X: 1, Y: 2},
-		hub: axisRevolve(t, doc, worldX, worldY, planePoint{U: 1, V: 2}, tiltedOutline(taperedHubOutline)),
+		hub: axisRevolve(t, doc, worldX, worldY, planePoint{U: 1, V: 2}, tiltedOutline(taperedHubCorners)),
 		lug: axisLug(t, doc, r3.Vec{X: 10 / s5, Y: 20 / s5}, r3.Vec{X: 2 / s5, Y: -1 / s5}, r3.Vec{Z: -1},
 			fitted, tool(toeT), tool(heelT))}
 }
@@ -465,16 +472,32 @@ func TestImplicitMarginAboutAxisScalesCost(t *testing.T) {
 // (agent-docs/revolve-axis-design.md §4.1, §4.4, §4.6).
 func TestSectionAboutAxisRefusals(t *testing.T) {
 	t.Parallel()
+	t.Run("split cap rounds off the chord", func(t *testing.T) {
+		t.Parallel()
+		// A split at design radius 1 keeps two cap faces on both fused and
+		// unfused arithmetic. The exact plane-local span still has one cap.
+		doc := New()
+		exact := axisRevolve(t, doc, worldX, worldY, planePoint{U: 1, V: 2}, tiltedOutline(taperedHubCorners))
+		_, _, _, ok := revolveshell.RecordedSection(bodyNode(exact))
+		require.True(t, ok)
+		outline := tiltedOutline(taperedHubOutline)
+		outline[2] = tiltedPoint(planePoint{U: 9, V: 1})
+		split := axisRevolve(t, doc, worldX, worldY, planePoint{U: 1, V: 2}, outline)
+		require.Len(t, split.Faces(), len(exact.Faces())+1)
+		_, _, _, ok = revolveshell.RecordedSection(bodyNode(split))
+		require.False(t, ok)
+		require.Empty(t, revolveshell.RootCandidates(bodyNode(split)))
+	})
 	t.Run("snapped axis point", func(t *testing.T) {
 		t.Parallel()
 		// The axis corner (3, 6) one unit in the last place off the line: the
 		// Revolve snaps it onto the axis and sweeps no face there, but its exact
 		// R is not zero, so the span is not the axis span.
 		doc := New()
-		exact := axisRevolve(t, doc, worldX, worldY, planePoint{U: 1, V: 2}, tiltedOutline(taperedHubOutline))
+		exact := axisRevolve(t, doc, worldX, worldY, planePoint{U: 1, V: 2}, tiltedOutline(taperedHubCorners))
 		_, _, _, ok := revolveshell.RecordedSection(bodyNode(exact))
 		require.True(t, ok, "the exact hub is the control")
-		outline := tiltedOutline(taperedHubOutline)
+		outline := tiltedOutline(taperedHubCorners)
 		require.Equal(t, planePoint{U: 3, V: 6}, outline[0])
 		outline[0].V = math.Nextafter(6, 7)
 		snapped := axisRevolve(t, doc, worldX, worldY, planePoint{U: 1, V: 2}, outline)
@@ -499,7 +522,7 @@ func TestSectionAboutAxisRefusals(t *testing.T) {
 		// The tapered hub without its split cap point, moved back along the
 		// axis by shift: at shift 7 its axis span starts at z = -1, where
 		// Z = p·A is negative. Shift 0 is the control.
-		outline := []planePoint{{U: 6}, {U: 9}, {U: 9, V: 3}, {U: 8, V: 4}, {U: 5, V: 2.5}, {U: 6, V: 1.5}}
+		outline := taperedHubCorners
 		for _, shift := range []float64{0, 7} {
 			moved := make([]planePoint, len(outline))
 			for i, p := range outline {
