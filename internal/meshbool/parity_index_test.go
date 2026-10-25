@@ -19,6 +19,47 @@ type parityIndexFixture struct {
 	tris  [][3]int
 }
 
+func TestBooleanParityConsumersMatchScan(t *testing.T) {
+	verts, tris := parityCylinder(64)
+	bm, err := PrepContext(t.Context(), verts, tris, nil)
+	require.NoError(t, err)
+	bm.Parity = NewParityMesh(verts, tris)
+	ref := NewParityMesh(verts, tris)
+	all := AllFacets(bm)
+	queries := []r3.Vec{{X: 0.25, Y: 0.125}, {X: 4}, {Z: 2}, {Z: -1}}
+	queries = append(queries, verts...)
+	rng := rand.New(rand.NewPCG(67, 91))
+	for range 64 {
+		queries = append(queries, r3.NewVec(8*rng.Float64()-4, 8*rng.Float64()-4, 5*rng.Float64()-2))
+	}
+	for i, q := range queries {
+		p := proof.XptOf(q)
+		inside, on, refErr := MeshParityPreparedContext(t.Context(), p, ref, all)
+		got, err := ClassifyRegion(t.Context(), CutRegion{Probe: p}, bm)
+		switch {
+		case refErr != nil:
+			require.EqualError(t, err, refErr.Error(), "query %d", i)
+		case on:
+			require.ErrorContains(t, err, "subdivision region touches", "query %d", i)
+		default:
+			require.NoError(t, err, "query %d", i)
+			require.Equal(t, inside, got, "query %d", i)
+		}
+		const bound = 0.125
+		deep, err := DeepWitnessAt(t.Context(), p, bm, bound)
+		require.NoError(t, err, "query %d", i)
+		want := refErr == nil && inside && !on && CertifiedInteriorDepth(p, bm) > bound
+		require.Equal(t, want, deep, "query %d", i)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	p := proof.XptOf(queries[0])
+	_, err = ClassifyRegion(ctx, CutRegion{Probe: p}, bm)
+	require.ErrorIs(t, err, context.Canceled)
+	_, err = DeepWitnessAt(ctx, p, bm, 0.125)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
 func fr(f float64) *big.Rat { return new(big.Rat).SetFloat64(f) }
 
 // parityCylinder is a closed z-axis prism, radius 3 from z = -1 to 2, over a
