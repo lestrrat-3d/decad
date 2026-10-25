@@ -132,6 +132,9 @@ func RatFloatUp(q *big.Rat) float64 {
 // integer, take the square root of a mantissa that always sits in [0.5, 2), and
 // scale the result back by a power of two, which moves no significand bit.
 func RatSqrtSeed(q *big.Rat) float64 {
+	if seed, ok := proofarith.RatioSqrtSeed(q.Num(), q.Denom(), 0); ok {
+		return seed
+	}
 	mant := new(big.Float).SetPrec(64)
 	exp := new(big.Float).SetPrec(64).SetRat(q).MantExp(mant)
 	if exp%2 != 0 {
