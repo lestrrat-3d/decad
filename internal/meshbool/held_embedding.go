@@ -395,6 +395,19 @@ func (e *heldEmbedding) strictSideFloat(t, u [3]int, skip int) (bool, bool) {
 }
 
 func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool, tree *heldBoxTree) (bool, error) {
+	// This scan runs only on a parallel worker. Keep its polling countdown on
+	// the worker's stack rather than writing the predicate-cache object on
+	// every node and candidate. Save it across chunks, including early exits.
+	remaining, interval, poll := e.pollRemaining, e.pollInterval, e.pollErr
+	defer func() { e.pollRemaining = remaining }()
+	step := func() error {
+		remaining--
+		if remaining != 0 {
+			return nil
+		}
+		remaining = interval
+		return poll()
+	}
 	stack := make([]int, 0, 64)
 	for _, i := range query {
 		if !e.facetOpenFloat(i) {
@@ -411,7 +424,7 @@ func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool, tree *heldBox
 			last := len(stack) - 1
 			node := tree.nodes[stack[last]]
 			stack = stack[:last]
-			if err := e.scanStep(); err != nil {
+			if err := step(); err != nil {
 				return false, err
 			}
 			if !BoxesOverlap(box, node.box) {
@@ -419,7 +432,7 @@ func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool, tree *heldBox
 			}
 			if node.leafStart >= 0 {
 				for _, j := range tree.facets[node.leafStart : node.leafStart+node.leafCount] {
-					if err := e.scanStep(); err != nil {
+					if err := step(); err != nil {
 						return false, err
 					}
 					if j == i || j < i && queryFacet[j] || !BoxesOverlap(box, tree.boxes[j]) {
