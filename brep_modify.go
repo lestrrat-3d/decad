@@ -21,27 +21,35 @@ func publicCurveName(c surfacegeom.Curve) string { return fmt.Sprintf("%T", publ
 // commitModifyResult commits a modify op's result in place of its receiver,
 // after the receiver's liveness and the context are read once more at the
 // commit edge (modify §13's atomic commit).
-func commitModifyResult(ctx context.Context, b, body *Body) (*Body, error) {
+func commitModifyResult(ctx context.Context, kind OperationKind, b, body *Body) (*Body, error) {
 	if err := documentHandle(b.n.Doc).requireLive(b); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	documentHandle(b.n.Doc).commit(body, b)
+	d := documentHandle(b.n.Doc)
+	if err := d.commitOperationIn(ctx, nil, kind,
+		[]OperationInput{{Body: b, Role: operationRoleSource, Use: InputConsumed}}, body, b); err != nil {
+		return nil, err
+	}
 	return body, nil
 }
 
 // commitResult commits a modify op's result in place of its receiver. A result
 // evaluated under several producer identities advances the document past all
 // of them; the node routes that build one have already read the context.
-func commitResult(ctx context.Context, b *Body, r brepmodify.Result) (*Body, error) {
+func commitResult(ctx context.Context, kind OperationKind, b *Body, r brepmodify.Result) (*Body, error) {
 	body := bodyHandle(r.Body)
 	if r.Span > 1 {
-		documentHandle(b.n.Doc).commitSpan(body, producerID(r.Span), b)
+		d := documentHandle(b.n.Doc)
+		if err := d.commitOperationSpanIn(ctx, nil, kind,
+			[]OperationInput{{Body: b, Role: operationRoleSource, Use: InputConsumed}}, body, producerID(r.Span), b); err != nil {
+			return nil, err
+		}
 		return body, nil
 	}
-	return commitModifyResult(ctx, b, body)
+	return commitModifyResult(ctx, kind, b, body)
 }
 
 // modifyHooks are the root-owned parts of Fillet and Chamfer: the Boolean

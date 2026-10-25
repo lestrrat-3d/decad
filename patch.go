@@ -32,7 +32,8 @@ import (
 // boundary carrying a free-form segment this evaluator cannot integrate is
 // ErrUnsupported (Table R row R3). A failed evaluation leaves the document
 // untouched. A nil context or a nil d is ErrDegenerate.
-func PatchProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile) (*Body, error) {
+func PatchProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationPatchProfile, retErr) }()
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a patch`, ErrDegenerate)
 	}
@@ -72,6 +73,8 @@ func PatchProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commitIn(d.ContainerOfSketch(s), body)
+	if err := d.commitOperationIn(ctx, d.ContainerOfSketch(s), OperationPatchProfile, nil, body); err != nil {
+		return nil, err
+	}
 	return body, nil
 }

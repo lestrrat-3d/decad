@@ -75,7 +75,11 @@ func stationedTwistCountAtTarget(poly TwistPolygon, angleUpper, target float64) 
 		facets := 2*len(poly.Points)*cells + 2*(len(poly.Points)-2)
 		pairs, ok := proofbound.WallChoose2(uint64(facets))
 		if !ok || pairs > proofbound.MaxFacetPairTestsPerCall {
-			return 0, fmt.Errorf(`%w: stationed twist exceeds the fixed facet-pair work ceiling`, decaderr.ErrUnsupported)
+			err := fmt.Errorf(`%w: stationed twist exceeds the fixed facet-pair work ceiling`, decaderr.ErrUnsupported)
+			if ok {
+				return 0, proofbound.WithWorkLimit(err, "facet_pairs", pairs, proofbound.MaxFacetPairTestsPerCall)
+			}
+			return 0, err
 		}
 		return cells, nil
 	}

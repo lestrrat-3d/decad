@@ -2,8 +2,6 @@ package apitest_test
 
 import (
 	"math"
-	"regexp"
-	"strconv"
 	"testing"
 
 	"github.com/lestrrat-3d/sketch"
@@ -29,16 +27,25 @@ func TestChainToleranceAdmitsAContactOnACoarserRim(t *testing.T) {
 
 	_, err := chainedCut(t)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	m := regexp.MustCompile(`within a bound of (\S+) mm, coarser than this pair's chord tolerance (\S+) mm`).FindStringSubmatch(err.Error())
-	require.Len(t, m, 3)
-	touched, err := strconv.ParseFloat(m[1], 64)
-	require.NoError(t, err)
+	var failure decad.OperationDiagnosticError
+	require.ErrorAs(t, err, &failure)
+	diagnostics := failure.OperationDiagnostics()
+	require.Len(t, diagnostics, 1)
+	require.Equal(t, decad.OpDiagOperandBoundExceeded, diagnostics[0].Code)
+	require.NotNil(t, diagnostics[0].Chain)
+	require.Nil(t, diagnostics[0].Chain.ChainAllowance)
+	touched := diagnostics[0].Chain.TouchedBound.Base()
 
 	t.Run("a tolerance below the touched bound still refuses", func(t *testing.T) {
 		t.Parallel()
 		_, err := chainedCut(t, decad.WithChainTolerance(units.Millimeters(touched/2)))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "a boolean takes no tolerance")
+		var failure decad.OperationDiagnosticError
+		require.ErrorAs(t, err, &failure)
+		chain := failure.OperationDiagnostics()[0].Chain
+		require.NotNil(t, chain.ChainAllowance)
+		require.Equal(t, touched/2, chain.ChainAllowance.Base())
 	})
 
 	t.Run("a tolerance at the touched bound admits it", func(t *testing.T) {
@@ -46,6 +53,11 @@ func TestChainToleranceAdmitsAContactOnACoarserRim(t *testing.T) {
 		cut, err := chainedCut(t, decad.WithChainTolerance(units.Millimeters(touched*1.01)))
 		require.NoError(t, err)
 		require.True(t, cut.IsSolid())
+		warnings := cut.OperationDiagnostics()
+		require.Len(t, warnings, 1)
+		require.Equal(t, decad.OpDiagChainAllowanceApplied, warnings[0].Code)
+		require.NotNil(t, warnings[0].Chain)
+		require.Equal(t, touched*1.01, warnings[0].Chain.ChainAllowance.Base())
 
 		// Two Ø8 and Ø6 holes through a 40x20x20 box with 3 mm corner fillets: the
 		// holes overlap, so the removed volume is at most the sum of the two bores.

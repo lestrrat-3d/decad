@@ -22,6 +22,12 @@ specified in `agent-docs/sweep-design.md`. The sheet body — a body that enclos
 material region — and the operations that build, fill and close one are
 specified in `agent-docs/surface-design.md`.
 
+Two design-only proposals extend operation observability without changing this
+contract: `agent-docs/operation-history-design.md` covers evaluator proof
+lineage, source-derived quantity calculations, and immutable execution records;
+`agent-docs/operation-diagnostics-design.md` covers structured operation
+failures and successful-call warnings.
+
 ## 1. What decad is answerable for
 
 decad is **not** a CAD kernel competing with Fusion. It is a **proxy that must
@@ -294,6 +300,7 @@ type Document struct{ /* ... */ }
 func New(opts ...DocumentOption) *Document
 
 func (d *Document) Bodies() []*Body            // live bodies
+func (d *Document) OperationHistory() *OperationHistory // immutable successful-call snapshot
 func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, error)
 
 func Remove(b *Body) error                      // retire a live body by hand; the body names its document
@@ -303,6 +310,11 @@ func Remove(b *Body) error                      // retire a live body by hand; t
 document's gap tolerance: how far the evaluator may move a held vertex off its
 exact point to keep a faceted result embedded, charged to that vertex's bound
 (`agent-docs/gap-tolerance-design.md`). With no option the tolerance is 0.01 mm.
+
+Every document collects successful public operation history without an option.
+Snapshots expose caller-visible body dependencies and outputs; they do not record
+failed or read-only calls. The history API and its face coverage rules are owned
+by `agent-docs/operation-history-design.md`.
 
 `Body` is **immutable**; every operation returns a new one, and the input body is
 retired from the document.

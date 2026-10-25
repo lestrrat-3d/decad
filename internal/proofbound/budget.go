@@ -14,14 +14,17 @@ func NewWallWorkBudget(limit uint64) *WorkBudget {
 	return &WorkBudget{
 		StepFn: func() error {
 			if remaining == 0 {
-				return ErrWallWorkBudget
+				if limit == ^uint64(0) {
+					return ErrWallWorkBudget
+				}
+				return WithWorkLimit(ErrWallWorkBudget, "proof_steps", limit+1, limit)
 			}
 			remaining--
 			return nil
 		},
 		ErrFn: func() error {
 			if remaining == 0 {
-				return ErrWallWorkBudget
+				return WithWorkLimit(ErrWallWorkBudget, "proof_steps", limit, limit)
 			}
 			return nil
 		},

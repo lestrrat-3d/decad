@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/featureoption"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/rimoffset"
@@ -108,6 +109,7 @@ func cutRims(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, pp
 		return step
 	}
 	out := body
+	var warnings opdiagnostic.CompositeSummaries
 	for _, r := range rims {
 		// The cutter runs from the level beyond the cap, where its hole is the deepest offset, to the level
 		// beyond the bevel's far edge, where its hole is the outline pushed outward.
@@ -122,7 +124,9 @@ func cutRims(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, pp
 		if out, err = hooks.Boolean(ctx, meshbool.OpCut, next(), out, cutter); err != nil {
 			return nil, used, true, err
 		}
+		warnings.Add(out.OperationWarnings, 0)
 	}
+	out.OperationWarnings = warnings.Records()
 	return out, used, false, ctx.Err()
 }
 

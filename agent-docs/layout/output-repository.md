@@ -20,6 +20,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `examples/` | Executable Go examples (`Example_…`, `go test`-verified `// Output:` blocks). Never `package main`. |
+| `examples/operation_diagnostics_example_test.go` | Builds an exact body, reads its empty warning list, and branches on a wrapped selection diagnostic. See operation-diagnostics-design. |
 | `dynamics/` | Rigid-body worlds and their scheduled step. See `agent-docs/multibody-dynamics-design.md`. |
 | `apitest/` | Tests of the exported API alone. See `apitest/doc.go`. |
 | `decadtest/` | The public test kit. See `decadtest/doc.go`. |

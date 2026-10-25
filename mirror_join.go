@@ -99,7 +99,11 @@ func (b *Body) mirroredJoin(ctx context.Context, plane MirrorPlane) (*Body, erro
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(body, b)
+	if err := d.commitOperationIn(ctx, nil, OperationMirrored,
+		[]OperationInput{{Body: b, Role: operationRoleSource, Use: InputConsumed},
+			{Body: b, Role: "plane", Use: InputReferenced}}, body, b); err != nil {
+		return nil, err
+	}
 	return body, nil
 }
 

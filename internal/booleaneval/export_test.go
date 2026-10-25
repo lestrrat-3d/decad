@@ -20,5 +20,6 @@ func PieceOfFacet(m *topo.Mesh) []int { return piecesOf(m).ofFacet }
 // ShiftPieces moves each connected piece of m by its shift and returns the
 // decision and charged copies.
 func ShiftPieces(m *topo.Mesh, shifts map[int]r3.Vec) (*topo.Mesh, *topo.Mesh, error) {
-	return shiftOperandMesh(context.Background(), m, piecesOf(m), shifts)
+	decision, charged, _, err := shiftOperandMesh(context.Background(), m, piecesOf(m), shifts)
+	return decision, charged, err
 }

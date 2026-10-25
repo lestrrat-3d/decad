@@ -99,7 +99,9 @@ var errNilNeutralPlane = fmt.Errorf(`%w: nil neutral plane`, ErrDegenerate)
 // extrude. ctx, b, sel and neutral MUST NOT be nil; a nil one is [ErrDegenerate].
 // Every measurement of the result is Approximate: the tangent of the angle is
 // only ever enclosed.
-func Draft(ctx context.Context, b *Body, sel FaceSelector, neutral NeutralPlane, angle units.Value, opts ...DraftOption) (*Body, error) {
+func Draft(ctx context.Context, b *Body, sel FaceSelector, neutral NeutralPlane, angle units.Value,
+	opts ...DraftOption) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationDraft, retErr) }()
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a draft`, ErrDegenerate)
 	}
@@ -185,7 +187,13 @@ func Draft(ctx context.Context, b *Body, sel FaceSelector, neutral NeutralPlane,
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(body, b)
+	inputs := []OperationInput{{Body: b, Role: operationRoleSource, Use: InputConsumed}}
+	if neutralFace != nil {
+		inputs = append(inputs, OperationInput{Body: bodyHandle(neutralFace.n.Body), Role: "neutral", Use: InputReferenced})
+	}
+	if err := d.commitOperationIn(ctx, nil, OperationDraft, inputs, body, b); err != nil {
+		return nil, err
+	}
 	return body, nil
 }
 
@@ -305,6 +313,8 @@ func (d *Document) extrudeDraft(ctx context.Context, profile profileRecord, fram
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(body)
+	if err := d.commitOperationIn(ctx, nil, OperationExtrude, sweep.operationInputs, body); err != nil {
+		return nil, err
+	}
 	return body, nil
 }

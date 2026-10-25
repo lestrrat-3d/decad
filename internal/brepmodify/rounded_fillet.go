@@ -14,6 +14,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -67,6 +68,9 @@ func RoundedBrepCapEdgeFillet(ctx context.Context, env topo.Env, hooks Hooks, bo
 	if err != nil {
 		return Result{}, true, hooks.AsBooleanError(meshbool.OpCut, err)
 	}
+	var warnings opdiagnostic.CompositeSummaries
+	warnings.Add(eval.Diagnostics(meshbool.OpCut), 0)
+	out.OperationWarnings = warnings.Records()
 	if err := ctx.Err(); err != nil {
 		return Result{}, true, err
 	}

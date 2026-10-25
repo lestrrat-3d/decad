@@ -273,7 +273,11 @@ func RevolveContactAudit(budget *proofbound.WorkBudget, data []RevolveAuditTri, 
 	f := len(tris)
 	pairs, ok := proofbound.WallChoose2(uint64(f))
 	if !ok || pairs > proofbound.MaxFacetPairTestsPerCall {
-		return fmt.Errorf(`%w: this revolve mesh's facet-pair audit needs %d exact tests, past the fixed ceiling of %d; retry with a coarser chord tolerance`, decaderr.ErrUnsupported, pairs, proofbound.MaxFacetPairTestsPerCall)
+		err := fmt.Errorf(`%w: this revolve mesh's facet-pair audit needs %d exact tests, past the fixed ceiling of %d; retry with a coarser chord tolerance`, decaderr.ErrUnsupported, pairs, proofbound.MaxFacetPairTestsPerCall)
+		if ok {
+			return proofbound.WithWorkLimit(err, "facet_pairs", pairs, proofbound.MaxFacetPairTestsPerCall)
+		}
+		return err
 	}
 	margin := proofbound.ProductUpper(2, delta)
 	if !(margin >= 0) {

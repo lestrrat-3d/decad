@@ -324,7 +324,7 @@ func (c countingCtx) Err() error {
 }
 
 // TestUnstitchAtomicCommitLeavesDocumentUnchanged proves
-// Document.commitMany's atomicity: a context canceled partway through
+// Document.commitOperationManyFacesIn's atomicity: a context canceled partway through
 // Unstitch's per-face loop — after at least one face's own build has
 // already run to completion — leaves the document exactly as it was before
 // the call, never a state with the receiver retired and only some of its

@@ -145,9 +145,9 @@ func TryAnalytic(ctx context.Context, op meshbool.OperationKind, a, b topo.Paylo
 		return prismrecord.Payload{}, false, err
 	}
 	if !withinCap {
-		return prismrecord.Payload{}, false, fmt.Errorf(
+		return prismrecord.Payload{}, false, WithWorkLimit(fmt.Errorf(
 			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1); combine the sections into one profile instead of applying this op once per feature, or accept the mesh path by making the pair non-coplanar`,
-			decaderr.ErrUnsupported, op, segments, MaxArrangementSegments)
+			decaderr.ErrUnsupported, op, segments, MaxArrangementSegments), segments)
 	}
 
 	reexpress, err := NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
@@ -220,9 +220,9 @@ func AdmitIntersectPair(ctx context.Context, a, b topo.Payload) (budget *proofbo
 		return nil, prismrecord.Payload{}, prismrecord.Payload{}, nil, false, err
 	}
 	if !withinCap {
-		return nil, prismrecord.Payload{}, prismrecord.Payload{}, nil, false, fmt.Errorf(
+		return nil, prismrecord.Payload{}, prismrecord.Payload{}, nil, false, WithWorkLimit(fmt.Errorf(
 			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1); combine the sections into one profile instead of applying this op once per feature, or accept the mesh path by making the pair non-coplanar`,
-			decaderr.ErrUnsupported, meshbool.OpIntersect, segments, MaxArrangementSegments)
+			decaderr.ErrUnsupported, meshbool.OpIntersect, segments, MaxArrangementSegments), segments)
 	}
 
 	reexpress, err = NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())

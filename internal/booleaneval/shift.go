@@ -233,14 +233,14 @@ func piecesOf(m *topo.Mesh) pieces {
 // boundary, and the area allowance by the rounding of the new coordinates. m is
 // not modified. It returns errShiftDeclined when the moved mesh folds through
 // itself.
-func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[int]r3.Vec) (decision, charged *topo.Mesh, err error) {
+func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[int]r3.Vec) (decision, charged *topo.Mesh, displacementBound float64, err error) {
 	verts := make([]r3.Vec, len(m.Vertices))
 	moved := make([]bool, len(m.Vertices))
 	maxAbs := 0.0
 	for i, v := range m.Vertices {
 		sh := shifts[pc.ofVertex[i]]
 		if !proofbound.FiniteVec(sh) {
-			return nil, nil, errShiftDeclined
+			return nil, nil, 0, errShiftDeclined
 		}
 		verts[i] = v.Add(sh)
 		moved[i] = sh != (r3.Vec{})
@@ -254,7 +254,7 @@ func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[i
 	for c, sh := range shifts {
 		d := proofbound.AbsSumUpper(proofbound.DvLenUpper(proofbound.HeldDelta(sh, r3.Vec{})), proofbound.Radius3D(round))
 		if proofbound.IsNonFinite(d) {
-			return nil, nil, errShiftDeclined
+			return nil, nil, 0, errShiftDeclined
 		}
 		displacement[c] = d
 		worst = max(worst, d)
@@ -269,15 +269,15 @@ func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[i
 	}
 	folds, err := meshbool.HeldFolds(ctx, h)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 	if len(folds) > 0 {
-		return nil, nil, errShiftDeclined
+		return nil, nil, 0, errShiftDeclined
 	}
 
 	beta, err := topobuild.VertexBounds(m)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 	for i := range beta {
 		beta[i] = proofbound.AbsSumUpper(beta[i], displacement[pc.ofVertex[i]])
@@ -303,7 +303,7 @@ func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[i
 	for c, tris := range trisOf {
 		swept, err := proofbound.PerturbedAreaUpperContext(ctx, verts, tris, displacement[c])
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, 0, err
 		}
 		volume = proofbound.AbsSumUpper(volume, proofbound.SweptVolumeAllow(displacement[c], swept))
 		for _, t := range tris {
@@ -326,9 +326,9 @@ func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[i
 	next.AreaSlack = proofbound.AbsSumUpper(m.AreaSlack, areaRound)
 	next.VolSymDiff = proofbound.AbsSumUpper(m.VolSymDiff, volume)
 	if proofbound.IsNonFinite(next.AreaSlack) || proofbound.IsNonFinite(next.VolSymDiff) {
-		return nil, nil, errShiftDeclined
+		return nil, nil, 0, errShiftDeclined
 	}
-	return &decided, &next, nil
+	return &decided, &next, worst, nil
 }
 
 // retryShifted runs attempt with the pieces of the second operand moved by up to

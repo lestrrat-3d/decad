@@ -44,6 +44,11 @@ type Document struct {
 	// resultIn names the container commits that name none place their result
 	// in, while an operation that cannot pass one down holds it (resultIn).
 	resultC *Container
+	// operations and their indexes are published under n.LiveMu with body
+	// retirement and registration.
+	operations []*Operation
+	producers  map[*Body]*Operation
+	consumers  map[*Body][]*Operation
 }
 
 // DocumentOption configures New. WithGapTolerance, ExactOnly,
@@ -56,6 +61,8 @@ type DocumentOption interface {
 // New returns an empty document.
 func New(opts ...DocumentOption) *Document {
 	d := bornDocument(&Document{})
+	d.producers = make(map[*Body]*Operation)
+	d.consumers = make(map[*Body][]*Operation)
 	d.gapReach, d.gapErr = gapReachOf(opts)
 	d.chainTol, d.chainErr = chainToleranceOf(opts)
 	d.params = paramsOf(opts)
@@ -95,12 +102,231 @@ func Remove(b *Body) error {
 	if d == nil {
 		return fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
+	operation := d.operation(OperationRemove, []OperationInput{{Body: b, Role: "body", Use: InputConsumed}})
+	operation.faceSuccessors = make(map[*Face]FaceHistory)
+	for _, face := range b.Faces() {
+		operation.faceSuccessors[face] = FaceHistory{coverage: HistoryComplete}
+	}
+	if err := d.validateOperation(operation, []*Body{b}); err != nil {
+		return err
+	}
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
 	if !slices.Contains(d.n.LiveSet, bodyNode(b)) {
 		return ErrRetiredBody
 	}
 	d.retire(b)
+	d.appendOperationLocked(operation)
+	return nil
+}
+
+// commitOperationIn publishes one public operation with its output and input
+// retirement under the same lock.
+func (d *Document) commitOperationIn(ctx context.Context, c *Container, kind OperationKind, inputs []OperationInput,
+	produced *Body, consumed ...*Body) error {
+	return d.commitOperationSpanIn(ctx, c, kind, inputs, produced, 1, consumed...)
+}
+
+func (d *Document) commitOperationSpanIn(ctx context.Context, c *Container, kind OperationKind, inputs []OperationInput,
+	produced *Body, span producerID, consumed ...*Body) error {
+	return d.commitOperationSpanPrefixIn(ctx, c, kind, inputs, produced, 0, span, consumed...)
+}
+
+func (d *Document) commitOperationSpanPrefixIn(ctx context.Context, c *Container, kind OperationKind,
+	inputs []OperationInput, produced *Body, prefix, span producerID, consumed ...*Body) error {
+	if !operationHistoryInputs(ctx, inputs) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		capture, ok := ctx.Value(operationHistorySuppressedKey{}).(*operationHistoryCapture)
+		if !ok {
+			return fmt.Errorf("decad: private construction is missing its history capture")
+		}
+		capture.advanceProducerSpan(span)
+		return nil
+	}
+	operation := d.operation(kind, inputs, produced)
+	if err := d.validateOperation(operation, consumed); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	d.n.NextProducer += prefix + span
+	d.n.LiveMu.Lock()
+	defer d.n.LiveMu.Unlock()
+	dest := d.destinationLocked(c, consumed)
+	for _, gone := range consumed {
+		d.retire(gone)
+	}
+	d.n.LiveSet = append(d.n.LiveSet, bodyNode(produced))
+	d.placeLocked(bodyNode(produced), dest)
+	stampOperationWarningKind(produced, kind)
+	d.appendOperationLocked(operation)
+	return nil
+}
+
+func (d *Document) commitOperationManyIn(ctx context.Context, c *Container, kind OperationKind, inputs []OperationInput,
+	produced []*Body, consumed ...*Body) error {
+	return d.commitOperationManyFacesIn(ctx, c, kind, inputs, produced, nil, consumed...)
+}
+
+func (d *Document) commitOperationManyFacesIn(ctx context.Context, c *Container, kind OperationKind,
+	inputs []OperationInput, produced []*Body, faceSuccessors map[*Face]FaceHistory, consumed ...*Body) error {
+	if !operationHistoryInputs(ctx, inputs) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		capture, ok := ctx.Value(operationHistorySuppressedKey{}).(*operationHistoryCapture)
+		if !ok {
+			return fmt.Errorf("decad: private construction is missing its history capture")
+		}
+		capture.advanceProducerSpan(producerID(len(produced)))
+		return nil
+	}
+	operation := d.operation(kind, inputs, produced...)
+	operation.faceSuccessors = cloneFaceSuccessors(faceSuccessors)
+	if err := d.validateOperation(operation, consumed); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	d.n.NextProducer += producerID(len(produced))
+	d.n.LiveMu.Lock()
+	defer d.n.LiveMu.Unlock()
+	dest := d.destinationLocked(c, consumed)
+	for _, gone := range consumed {
+		d.retire(gone)
+	}
+	d.n.LiveSet = append(d.n.LiveSet, bodyNodes(produced)...)
+	for _, body := range produced {
+		d.placeLocked(bodyNode(body), dest)
+		stampOperationWarningKind(body, kind)
+	}
+	d.appendOperationLocked(operation)
+	return nil
+}
+
+func (d *Document) validateOperation(operation *Operation, consumed []*Body) error {
+	if operation.kind == OperationUnknown || len(operation.outputs) == 0 && operation.kind != OperationRemove {
+		return fmt.Errorf("%w: operation record has no public kind or output", ErrBooleanFailed)
+	}
+	// Most modeling calls consume one body. Validate that common case without
+	// allocating two temporary maps on every successful feature evaluation.
+	if len(consumed) <= 1 {
+		var consumedBody *Body
+		if len(consumed) == 1 {
+			consumedBody = consumed[0]
+			if consumedBody == nil || consumedBody.n.Doc != &d.n {
+				return fmt.Errorf("%w: operation record names a foreign consumed body", ErrForeignBody)
+			}
+		}
+		matchedConsumedInput := false
+		for _, input := range operation.inputs {
+			if input.Body == nil || input.Body.n.Doc != &d.n || input.Role == "" {
+				return fmt.Errorf("%w: operation record has an invalid body input", ErrForeignBody)
+			}
+			switch input.Use {
+			case InputConsumed:
+				if consumedBody == nil || input.Body != consumedBody {
+					return fmt.Errorf("%w: operation record inputs do not match the consumed bodies", ErrBooleanFailed)
+				}
+				matchedConsumedInput = true
+			case InputReferenced:
+			default:
+				return fmt.Errorf("%w: operation record has an unknown input use", ErrBooleanFailed)
+			}
+		}
+		if consumedBody != nil && !matchedConsumedInput {
+			return fmt.Errorf("%w: operation record omits a consumed body", ErrBooleanFailed)
+		}
+	} else {
+		consumedSet := make(map[*Body]struct{}, len(consumed))
+		for _, body := range consumed {
+			if body == nil || body.n.Doc != &d.n {
+				return fmt.Errorf("%w: operation record names a foreign consumed body", ErrForeignBody)
+			}
+			consumedSet[body] = struct{}{}
+		}
+		inputsConsumed := make(map[*Body]struct{}, len(consumedSet))
+		for _, input := range operation.inputs {
+			if input.Body == nil || input.Body.n.Doc != &d.n || input.Role == "" {
+				return fmt.Errorf("%w: operation record has an invalid body input", ErrForeignBody)
+			}
+			switch input.Use {
+			case InputConsumed:
+				inputsConsumed[input.Body] = struct{}{}
+			case InputReferenced:
+			default:
+				return fmt.Errorf("%w: operation record has an unknown input use", ErrBooleanFailed)
+			}
+		}
+		if len(inputsConsumed) != len(consumedSet) {
+			return fmt.Errorf("%w: operation record inputs do not match the consumed bodies", ErrBooleanFailed)
+		}
+		for body := range consumedSet {
+			if _, ok := inputsConsumed[body]; !ok {
+				return fmt.Errorf("%w: operation record omits a consumed body", ErrBooleanFailed)
+			}
+		}
+	}
+	for _, output := range operation.outputs {
+		if output == nil || output.n.Doc != &d.n {
+			return fmt.Errorf("%w: operation record has a foreign output", ErrBooleanFailed)
+		}
+	}
+	if len(operation.faceSuccessors) > 0 {
+		inputFaces := make(map[*topo.Face]struct{})
+		for _, input := range operation.inputs {
+			for _, lump := range input.Body.n.Lumps {
+				for _, shell := range lump.Shells {
+					for _, face := range shell.Faces {
+						inputFaces[face] = struct{}{}
+					}
+				}
+			}
+		}
+		outputFaces := make(map[*topo.Face]struct{})
+		for _, output := range operation.outputs {
+			for _, lump := range output.n.Lumps {
+				for _, shell := range lump.Shells {
+					for _, face := range shell.Faces {
+						outputFaces[face] = struct{}{}
+					}
+				}
+			}
+		}
+		for face, history := range operation.faceSuccessors {
+			if face == nil {
+				return fmt.Errorf("%w: operation face mapping names a face outside its inputs", ErrBooleanFailed)
+			}
+			if _, ok := inputFaces[&face.n]; !ok {
+				return fmt.Errorf("%w: operation face mapping names a face outside its inputs", ErrBooleanFailed)
+			}
+			if history.coverage != HistoryUnknown && history.coverage != HistoryComplete {
+				return fmt.Errorf("%w: operation face mapping has unknown coverage", ErrBooleanFailed)
+			}
+			var seen map[*Face]struct{}
+			if len(history.faces) > 1 {
+				seen = make(map[*Face]struct{}, len(history.faces))
+			}
+			for _, successor := range history.faces {
+				if successor == nil {
+					return fmt.Errorf("%w: operation face mapping names a face outside its outputs", ErrBooleanFailed)
+				}
+				if _, ok := outputFaces[&successor.n]; !ok {
+					return fmt.Errorf("%w: operation face mapping names a face outside its outputs", ErrBooleanFailed)
+				}
+				if seen != nil {
+					if _, duplicate := seen[successor]; duplicate {
+						return fmt.Errorf("%w: operation face mapping repeats a successor", ErrBooleanFailed)
+					}
+					seen[successor] = struct{}{}
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -142,58 +368,6 @@ func (d *Document) destinationLocked(c *Container, consumed []*Body) *Container 
 	return d.rootLocked()
 }
 
-// commitMany is commit's N-producer variant (agent-docs/surface-design.md §6.5):
-// Unstitch produces many bodies from one receiver, and registering them one
-// commit at a time would leave the document in a partial state — the
-// receiver retired but fewer than len(produced) results live — if a later
-// one somehow failed between calls. Every produced body must already be
-// fully built by the time this runs (stitchrecord.BuildUnstitchFace's own errors
-// surface before commitMany is ever called), so this function's own job is
-// only to make the retirement and every registration one atomic step from
-// [Document.Bodies]'s point of view, exactly as commit already is for one
-// producer. Every produced body lands in one container, as commitIn places one.
-func (d *Document) commitMany(produced []*Body, consumed ...*Body) {
-	d.commitManyIn(nil, produced, consumed...)
-}
-
-// commitManyIn is commitMany placing every produced body in c.
-func (d *Document) commitManyIn(c *Container, produced []*Body, consumed ...*Body) {
-	d.n.NextProducer += producerID(len(produced))
-	d.n.LiveMu.Lock()
-	defer d.n.LiveMu.Unlock()
-	dest := d.destinationLocked(c, consumed)
-	for _, gone := range consumed {
-		d.retire(gone)
-	}
-	d.n.LiveSet = append(d.n.LiveSet, bodyNodes(produced)...)
-	for _, b := range produced {
-		d.placeLocked(bodyNode(b), dest)
-	}
-}
-
-// commitSpan is commit for an operation that evaluated several bodies under
-// span consecutive producer identities, from nextProducerID on, and keeps
-// only produced: Patterned builds its instances and every intermediate Union
-// before registering the last one. Advancing past the whole span keeps every
-// identity those transient bodies minted roles under unique, so a later
-// producer never repeats one a result's provenance can carry.
-func (d *Document) commitSpan(produced *Body, span producerID, consumed ...*Body) {
-	d.commitSpanIn(nil, produced, span, consumed...)
-}
-
-// commitSpanIn is commitSpan placing the produced body in c.
-func (d *Document) commitSpanIn(c *Container, produced *Body, span producerID, consumed ...*Body) {
-	d.n.NextProducer += span
-	d.n.LiveMu.Lock()
-	defer d.n.LiveMu.Unlock()
-	dest := d.destinationLocked(c, consumed)
-	for _, gone := range consumed {
-		d.retire(gone)
-	}
-	d.n.LiveSet = append(d.n.LiveSet, bodyNode(produced))
-	d.placeLocked(bodyNode(produced), dest)
-}
-
 // retire removes a body from the live set. The body itself is untouched —
 // retiring is a change of document membership, not of the body (core §6).
 // The caller holds LiveMu.
@@ -211,6 +385,13 @@ func (d *Document) retire(b *Body) {
 
 // nextProducerID is the identity the next successful operation will occupy.
 func (d *Document) nextProducerID() producerID { return d.n.NextProducer }
+
+func (d *Document) producerID(ctx context.Context) producerID {
+	if capture, ok := ctx.Value(operationHistorySuppressedKey{}).(*operationHistoryCapture); ok {
+		return capture.nextProducerID(d)
+	}
+	return d.nextProducerID()
+}
 
 // requireLive gates a body-consuming operation: the body must belong to this
 // document (ErrForeignBody) and still be part of the model (ErrRetiredBody).
@@ -238,6 +419,12 @@ func (d *Document) requireLive(b *Body) error {
 // (agent-docs/prism-boolean-design.md §3.4), while motions composing back to the
 // partner's own placement leave the re-expression the identity.
 func Transform(ctx context.Context, body *Body, t r3.Transform) (*Body, error) {
+	placed, err := transform(ctx, body, t, OperationTransform)
+	return placed, operationError(OperationTransform, err)
+}
+
+func transform(ctx context.Context, body *Body, t r3.Transform, kind OperationKind,
+	additionalInputs ...OperationInput) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a placement`, ErrDegenerate)
 	}
@@ -273,7 +460,10 @@ func Transform(ctx context.Context, body *Body, t r3.Transform) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(placed, body)
+	inputs := append([]OperationInput{{Body: body, Role: operationRoleSource, Use: InputConsumed}}, additionalInputs...)
+	if err := d.commitOperationIn(ctx, nil, kind, inputs, placed, body); err != nil {
+		return nil, err
+	}
 	return placed, nil
 }
 
@@ -333,7 +523,8 @@ func WithCopyRotation(center, axis r3.Vec, angle units.Value) CopyOption {
 // source provenance. source MUST NOT be nil. A body this evaluator did not
 // build is ErrUnsupported. Invalid or nil options are ErrDegenerate. A
 // canceled context stops the rebuild before the document changes.
-func Copy(ctx context.Context, source *Body, opts ...CopyOption) (*Body, error) {
+func Copy(ctx context.Context, source *Body, opts ...CopyOption) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationCopy, retErr) }()
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a copy`, ErrDegenerate)
 	}
@@ -367,14 +558,15 @@ func Copy(ctx context.Context, source *Body, opts ...CopyOption) (*Body, error) 
 			return nil, fmt.Errorf(`%w: the copy option is not a decad copy option (%T)`, ErrDegenerate, opt)
 		}
 	}
-	return source.copyUnder(ctx, motion, exact)
+	return source.copyUnder(ctx, motion, exact, OperationCopy)
 }
 
 // copyUnder leaves its source live while re-evaluating at a new identity.
 // It mirrors Transform's gate order and commit (core §8, agent-docs/api-design.md H4).
 // A non-nil exact record asks a faceted payload for the exact-rotation
 // placement; every other payload places by motion alone.
-func (b *Body) copyUnder(ctx context.Context, motion r3.Transform, exact *exactrotation.Rotation) (*Body, error) {
+func (b *Body) copyUnder(ctx context.Context, motion r3.Transform, exact *exactrotation.Rotation,
+	kind OperationKind, additionalInputs ...OperationInput) (*Body, error) {
 	if b == nil || b.n.Doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -418,7 +610,10 @@ func (b *Body) copyUnder(ctx context.Context, motion r3.Transform, exact *exactr
 	}
 	// The source is depended on, not consumed: commit with no consumed inputs,
 	// so the retire rule never touches it.
-	d.commitIn(d.bodyContainer(b), copied)
+	inputs := append([]OperationInput{{Body: b, Role: operationRoleSource, Use: InputReferenced}}, additionalInputs...)
+	if err := d.commitOperationIn(ctx, d.bodyContainer(b), kind, inputs, copied); err != nil {
+		return nil, err
+	}
 	return copied, nil
 }
 

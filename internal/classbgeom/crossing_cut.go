@@ -368,12 +368,12 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 	tool := momentinput.Profile{Outer: toLoop(other[0])}
 	target := prismrecord.Payload{Profile: a}
 	toolP := prismrecord.Payload{Profile: tool}
-	if _, within, err := prismcells.RegionsWithinWorkCap(b.budget, target.Profile, toolP.Profile); err != nil || !within {
+	if segments, within, err := prismcells.RegionsWithinWorkCap(b.budget, target.Profile, toolP.Profile); err != nil || !within {
 		if err != nil {
 			return err
 		}
-		return fmt.Errorf(`%w: a class-B face scene exceeds this evaluator's arrangement cap of %d`,
-			decaderr.ErrUnsupported, prismcells.MaxArrangementSegments)
+		return prismcells.WithWorkLimit(fmt.Errorf(`%w: a class-B face scene exceeds this evaluator's arrangement cap of %d`,
+			decaderr.ErrUnsupported, prismcells.MaxArrangementSegments), segments)
 	}
 	reexpress := &prismcells.Reexpression{Identity: true}
 	if cut {

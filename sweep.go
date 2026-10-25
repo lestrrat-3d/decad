@@ -77,11 +77,14 @@ func Sweep[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec S,
 	opts ...SweepOption) (*Body, error) {
 	switch v := any(sec).(type) {
 	case *sketch.Profile:
-		return sweepProfile(ctx, d, s, v, pathNode(path), opts)
+		body, err := sweepProfile(ctx, d, s, v, pathNode(path), opts)
+		return body, operationError(OperationSweep, err)
 	case *sketch.Chain:
-		return sweepChain(ctx, d, s, v, pathNode(path), opts)
+		body, err := sweepChain(ctx, d, s, v, pathNode(path), opts)
+		return body, operationError(OperationSweep, err)
 	default:
-		return nil, fmt.Errorf(`%w: Sweep section %T is not a profile or chain`, ErrDegenerate, sec)
+		return nil, operationError(OperationSweep,
+			fmt.Errorf(`%w: Sweep section %T is not a profile or chain`, ErrDegenerate, sec))
 	}
 }
 
@@ -110,7 +113,9 @@ func sweepProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.
 		return nil, err
 	}
 	body := bodyHandle(node)
-	d.commitIn(d.ContainerOfSketch(s), body)
+	if err := d.commitOperationIn(ctx, d.ContainerOfSketch(s), OperationSweep, nil, body); err != nil {
+		return nil, err
+	}
 	return body, nil
 }
 
@@ -161,7 +166,9 @@ func sweepChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch.C
 		return nil, err
 	}
 	body := bodyHandle(node)
-	d.commitIn(d.ContainerOfSketch(s), body)
+	if err := d.commitOperationIn(ctx, d.ContainerOfSketch(s), OperationSweep, nil, body); err != nil {
+		return nil, err
+	}
 	return body, nil
 }
 

@@ -22,11 +22,16 @@ func Preflight(profile momentinput.Profile, spans int) error {
 		return fmt.Errorf(`%w: a composite sweep requires at least two spans`, decaderr.ErrDegenerate)
 	}
 	if spans > MaxSpansPerCall {
-		return fmt.Errorf(`%w: a composite sweep exceeds the fixed span ceiling of %d`, decaderr.ErrUnsupported, MaxSpansPerCall)
+		return proofbound.WithWorkLimit(fmt.Errorf(`%w: a composite sweep exceeds the fixed span ceiling of %d`, decaderr.ErrUnsupported, MaxSpansPerCall),
+			"sweep_spans", uint64(spans), MaxSpansPerCall)
 	}
 	pairs, ok := proofbound.WallChoose2(uint64(spans))
 	if !ok || pairs > proofbound.MaxFacetPairTestsPerCall {
-		return fmt.Errorf(`%w: the composite sweep audit exceeds its fixed pair budget`, decaderr.ErrUnsupported)
+		err := fmt.Errorf(`%w: the composite sweep audit exceeds its fixed pair budget`, decaderr.ErrUnsupported)
+		if ok {
+			return proofbound.WithWorkLimit(err, "sweep_span_pairs", pairs, proofbound.MaxFacetPairTestsPerCall)
+		}
+		return err
 	}
 	segments := len(profile.Outer.Segments)
 	for _, hole := range profile.Holes {
@@ -42,7 +47,11 @@ func Preflight(profile momentinput.Profile, spans int) error {
 	}
 	faces, ok = proofbound.WallCheckedAdd(faces, 2)
 	if !ok || faces > maxFacesPerCall {
-		return fmt.Errorf(`%w: a composite sweep exceeds the fixed face ceiling of %d`, decaderr.ErrUnsupported, maxFacesPerCall)
+		err := fmt.Errorf(`%w: a composite sweep exceeds the fixed face ceiling of %d`, decaderr.ErrUnsupported, maxFacesPerCall)
+		if ok {
+			return proofbound.WithWorkLimit(err, "sweep_faces", faces, maxFacesPerCall)
+		}
+		return err
 	}
 	return nil
 }

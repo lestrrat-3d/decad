@@ -36,12 +36,13 @@ func LoftFaces(ctx context.Context, d *Document, sections ...*Face) (*Body, erro
 		return nil, err
 	}
 	defer d.resultIn(d.bodyContainer(bodies[0]))()
-	return buildLoftFaces(ctx, d, selected, source, nil)
+	return buildLoftFaces(ctx, d, OperationLoftFaces, faceInputs(sections, "section"), selected, source, nil)
 }
 
 // buildLoftFaces has revolveloftfaces.BuildLoftFaces loft through the
 // collected sections, then commits the body.
-func buildLoftFaces(ctx context.Context, d *Document, sections []revolveloftfaces.LoftFacesSection,
+func buildLoftFaces(ctx context.Context, d *Document, kind OperationKind, inputs []OperationInput,
+	sections []revolveloftfaces.LoftFacesSection,
 	source *pointSectionRecord, tangent *loftface.TangentEnd) (*Body, error) {
 	ref := d.nextProducerID()
 	body, err := bodyResult(revolveloftfaces.BuildLoftFaces(ctx, envOf(documentNode(d), ref), sections, source, tangent))
@@ -51,8 +52,18 @@ func buildLoftFaces(ctx context.Context, d *Document, sections []revolveloftface
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(body)
+	if err := d.commitOperationIn(ctx, nil, kind, inputs, body); err != nil {
+		return nil, err
+	}
 	return body, nil
+}
+
+func faceInputs(faces []*Face, role string) []OperationInput {
+	inputs := make([]OperationInput, len(faces))
+	for i, face := range faces {
+		inputs[i] = OperationInput{Body: bodyHandle(face.n.Body), Role: role, Use: InputReferenced}
+	}
+	return inputs
 }
 
 // collectLoftFaces authenticates the section faces through
@@ -154,5 +165,7 @@ func LoftFacesToConeTangent(ctx context.Context, end ConeTangentEnd, sections ..
 		ring[j] = loftface.RoundPoint(endMap.At(u, v))
 	}
 	selected = append(selected, revolveloftfaces.LoftFacesSection{Slice: selected[0].Slice, Ring: ring, Constructed: &endMap})
-	return buildLoftFaces(ctx, d, selected, source, &tangent)
+	inputs := faceInputs(sections, "section")
+	inputs = append(inputs, OperationInput{Body: end.Cone, Role: "tangent", Use: InputReferenced})
+	return buildLoftFaces(ctx, d, OperationLoftFacesToConeTangent, inputs, selected, source, &tangent)
 }

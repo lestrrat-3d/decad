@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/prismboolean"
 	"github.com/lestrrat-3d/decad/internal/prismpattern"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
@@ -53,7 +54,13 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 	if err != nil {
 		return nil, err
 	}
-	d.commitSpan(body, span, operands...)
+	inputs := make([]OperationInput, len(operands))
+	for i, operand := range operands {
+		inputs[i] = OperationInput{Body: operand, Role: operationRoleOperand, Use: InputConsumed}
+	}
+	if err := d.commitOperationSpanIn(ctx, nil, OperationUnion, inputs, body, span, operands...); err != nil {
+		return nil, err
+	}
 	return body, nil
 }
 
@@ -160,6 +167,7 @@ func tryPrismUnionChain(ctx context.Context, ref producerID, operands []*Body) (
 		return nil, 0, false, nil
 	}
 	result := operands[0]
+	var warnings opdiagnostic.UnionSummaries
 	for i, operand := range operands[1:] {
 		if err := ctx.Err(); err != nil {
 			return nil, 0, true, err
@@ -169,6 +177,8 @@ func tryPrismUnionChain(ctx context.Context, ref producerID, operands []*Body) (
 		if err != nil {
 			return nil, 0, true, err
 		}
+		warnings.AddPair(result.n.OperationWarnings, i+1)
 	}
+	result.n.OperationWarnings = warnings.Records()
 	return result, producerID(len(operands) - 1), true, nil
 }

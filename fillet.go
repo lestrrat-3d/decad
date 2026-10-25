@@ -126,7 +126,9 @@ type FilletOption interface{ filletOption() }
 // proof, exports to STEP, takes part in a mesh boolean, is surveyed for
 // undercuts and concave radii, and is placed, mirrored and patterned like any
 // brep body (agent-docs/loop-fillet-design.md Table DF).
-func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error) {
+func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value,
+	opts ...FilletOption) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationFillet, retErr) }()
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a fillet`, ErrDegenerate)
 	}
@@ -185,7 +187,7 @@ func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts 
 	if err != nil {
 		return nil, err
 	}
-	return commitResult(ctx, b, res)
+	return commitResult(ctx, OperationFillet, b, res)
 }
 
 // cornerLoop is survey2d.CornerLoop: one boundary loop resolved into its

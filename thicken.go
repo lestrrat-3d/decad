@@ -42,7 +42,9 @@ func WithThickenSide(side ThickenSide) ThickenOption { return thickenSideOption{
 // A one-arc chain sweep uses its chain Revolve reduction; a cardinal composite
 // chain sweep assembles one section and sweeps both spans.
 // Other sheet families are staged under agent-docs/surface-design.md §16.8.
-func Thicken(ctx context.Context, b *Body, thickness units.Value, opts ...ThickenOption) (*Body, error) {
+func Thicken(ctx context.Context, b *Body, thickness units.Value,
+	opts ...ThickenOption) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationThicken, retErr) }()
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a thicken`, ErrDegenerate)
 	}
@@ -87,7 +89,10 @@ func Thicken(ctx context.Context, b *Body, thickness units.Value, opts ...Thicke
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	result := bodyHandle(node)
-	d.commit(result, b)
+	result = bodyHandle(node)
+	if err := d.commitOperationIn(ctx, nil, OperationThicken,
+		[]OperationInput{{Body: b, Role: operationRoleSource, Use: InputConsumed}}, result, b); err != nil {
+		return nil, err
+	}
 	return result, nil
 }

@@ -74,7 +74,9 @@ func WithOffsetSide(side OffsetSide) OffsetOption { return offsetSideOption{side
 // sectionrecord.MagnitudeIn's own sentinel (R40). A retired b is ErrRetiredBody (R41).
 // A refusal registers nothing and retires nothing, so b is live
 // after a refusal exactly as it is after a success.
-func Offset(ctx context.Context, b *Body, distance units.Value, opts ...OffsetOption) (*Body, error) {
+func Offset(ctx context.Context, b *Body, distance units.Value,
+	opts ...OffsetOption) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationOffset, retErr) }()
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control an offset`, ErrDegenerate)
 	}
@@ -113,7 +115,7 @@ func Offset(ctx context.Context, b *Body, distance units.Value, opts ...OffsetOp
 	if err != nil {
 		return nil, err
 	}
-	result := bodyHandle(node)
+	result = bodyHandle(node)
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}
@@ -123,6 +125,9 @@ func Offset(ctx context.Context, b *Body, distance units.Value, opts ...OffsetOp
 	// The source is DEPENDED ON, never consumed: commit with no consumed input,
 	// exactly as copyUnder does, so the receiver stays in Document.Bodies()
 	// beside its offset (agent-docs/surface-design.md §17.1).
-	d.commitIn(d.bodyContainer(b), result)
+	if err := d.commitOperationIn(ctx, d.bodyContainer(b), OperationOffset,
+		[]OperationInput{{Body: b, Role: operationRoleSource, Use: InputReferenced}}, result); err != nil {
+		return nil, err
+	}
 	return result, nil
 }

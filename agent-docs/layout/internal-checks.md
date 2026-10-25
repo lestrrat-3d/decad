@@ -16,6 +16,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/sectioncert/` | Private bounded-section Sketch provenance, guarded Extrude recording, and `RecordProfile`, the Sketch-profile recording seam. See section design, sketch-seam §1–§2. |
 | `internal/exactrotation/` | Exactly orthogonal rational rotation recorded at Copy time: scale-safe quaternion construction, exact translation, structural X-axis test, and the reject-only gap against r3's float rotation. See file comments. |
 | `internal/proofbound/` | Certified bounds, intervals, work budgets and trig. See file comments. |
+| `internal/prooflineage/` | Compact source-volume and containment evidence retained by evaluator results for certified quantity calculations. See operation-history-design. |
 | `internal/compositemesh/` | Plans shared composite Sweep stations, maps reduced span rings and source roles, and assembles a transient mesh node with its numeric audits. See sweep Table D. |
 | `internal/compositesweep/` | Composite Sweep limits, span assembly (cap pairing, rim sewing, cap removal), boundary and vertex-link audits, bounded and body measurements, separation, body-extent and cross-span facet audits, rim-join certificate, side-role and cap-role rewrites. See sweep §7, §9. |
 | `internal/diameter/` | Lower-bound diameter of held witness points, including vertex, axis-extreme and prism station witnesses and the free-form prism section arm. See verification §3. |
@@ -40,8 +41,6 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/filletband/` | Loop-fillet closed forms and reference-frame band mass. See loop-fillet §5. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/parambind/` | The ledger of parameter reads behind `Document.Bindings`. See param-binding §3. |
-| `internal/gaptol/` | The gap tolerance a root operation puts on its context, and the default. See gap-tolerance §1. |
-| `internal/chaintol/` | The chain tolerance. |
 | `internal/survey2d/` | 2D disks, prism readers, walks, corner loops, Bézier carriers. See verification §6. |
 | `internal/holeplan/` | Plans `Hole`: places the axis on the face plane, gates sizes, and returns the bore, counterbore and countersink tool shapes. See hole design. |
 | `internal/ribplan/` | Plans `Rib`: the rib outline from a line, thickness and overrun, the box-disjoint test and the no-added-volume test. See rib design. |

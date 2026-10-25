@@ -224,5 +224,10 @@ func (fp Payload) PlacedWith(ctx context.Context, env topo.Env, composed r3.Tran
 			MeshBound: next.MeshBound, CapDisplacement: next.PointPlaneCapDisplacement})
 		next.PointSimilarity = &record
 	}
-	return Build(ctx, env, next)
+	body, err := Build(ctx, env, next)
+	if err != nil {
+		return nil, err
+	}
+	body.OperationWarnings = append(body.OperationWarnings, placed.EmbeddingReach.Diagnostics()...)
+	return body, nil
 }

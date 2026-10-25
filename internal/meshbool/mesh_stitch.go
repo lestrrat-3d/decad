@@ -25,6 +25,8 @@ type StitchedMesh struct {
 	// float rounding: no held vertex is farther than this from the exact
 	// point it stands for.
 	Round float64
+	// EmbeddingReach describes only final accepted positive-reach positions.
+	EmbeddingReach *EmbeddingReach
 	// preArea upper-bounds the area of the surface the rounding acted ON —
 	// the stitched surface BEFORE any facet was dropped, and along the whole
 	// motion from it to the held mesh. It is what the volume error is charged
@@ -354,10 +356,11 @@ func keepRoundedEmbedded(ctx context.Context, xverts []proof.Xpt, remap []int, o
 	if couldMove {
 		before = slices.Clone(out.Verts)
 	}
-	moved, err := EnforceHeldEmbedding(ctx, h)
+	moved, repair, err := EnforceHeldEmbeddingWithSummary(ctx, h)
 	if err != nil {
 		return nil, err
 	}
+	out.EmbeddingReach = repair
 	if moved > 0 {
 		for i, p := range xverts {
 			if i%256 == 0 {

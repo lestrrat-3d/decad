@@ -95,7 +95,8 @@ func RequireWallSurveyWork(budget *proofbound.WorkBudget, elems, verts int) erro
 		return fmt.Errorf(`%w: inward shell section survey candidate count overflows the checked work counter (fixed work budget %d)`, decaderr.ErrUnsupported, shellInradiusWorkLimit)
 	}
 	if candidateWork > shellInradiusWorkLimit {
-		return fmt.Errorf(`%w: inward shell section survey needs %d candidate-family visits, above the fixed work budget of %d`, decaderr.ErrUnsupported, candidateWork, shellInradiusWorkLimit)
+		return proofbound.WithWorkLimit(fmt.Errorf(`%w: inward shell section survey needs %d candidate-family visits, above the fixed work budget of %d`, decaderr.ErrUnsupported, candidateWork, shellInradiusWorkLimit),
+			"shell_candidate_visits", candidateWork, shellInradiusWorkLimit)
 	}
 	return nil
 }
@@ -117,7 +118,7 @@ func WallSurveyInradius(budget *proofbound.WorkBudget, elems []survey2d.SurveyEl
 		return 0, err
 	}
 	if errors.Is(err, proofbound.ErrWallWorkBudget) {
-		return 0, fmt.Errorf(`%w: inward shell section survey exceeded the fixed work budget of %d during candidate generation or validation`, decaderr.ErrUnsupported, shellInradiusWorkLimit)
+		return 0, proofbound.PreserveWorkLimit(fmt.Errorf(`%w: inward shell section survey exceeded the fixed work budget of %d during candidate generation or validation`, decaderr.ErrUnsupported, shellInradiusWorkLimit), err)
 	}
 	if err != nil {
 		return 0, fmt.Errorf(`%w: inward shell section survey failed: %v`, decaderr.ErrUnsupported, err)

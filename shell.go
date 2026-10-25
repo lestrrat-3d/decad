@@ -142,7 +142,9 @@ func WithShellSense(s ShellSense) ShellOption {
 // nested rectangular slabs: removing the boss top inward builds the plate
 // and boss cavity with four cylinder root patches (modify-general §3.1a).
 // A coaxial two-level counterbore has a separate inward route (§3.1e).
-func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts ...ShellOption) (*Body, error) {
+func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value,
+	opts ...ShellOption) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationShell, retErr) }()
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a shell`, ErrDegenerate)
 	}
@@ -204,7 +206,7 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value, opts .
 	if err != nil {
 		return nil, err
 	}
-	return commitModifyResult(ctx, b, bodyHandle(node))
+	return commitModifyResult(ctx, OperationShell, b, bodyHandle(node))
 }
 
 // shellTol is the closed-form degeneracy tolerance for the shell's own gates

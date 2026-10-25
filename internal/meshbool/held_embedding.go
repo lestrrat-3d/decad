@@ -79,14 +79,23 @@ func EnforceHeldEmbedding(ctx context.Context, h HeldRounding) (int, error) {
 // positions already gave, so the result is the same either way; the tests
 // run both paths and compare them.
 func enforceHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, error) {
-	moved, failing, err := repairHeldEmbedding(ctx, h, memo)
+	moved, _, err := enforceHeldEmbeddingWithSummary(ctx, h, memo)
+	return moved, err
+}
+
+func enforceHeldEmbeddingWithSummary(ctx context.Context, h HeldRounding, memo bool) (int, *EmbeddingReach, error) {
+	var summary EmbeddingReach
+	moved, failing, err := repairHeldEmbeddingSummary(ctx, h, memo, &summary)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	if len(failing) > 0 {
-		return 0, fmt.Errorf(`%w: the result's float rounding folds its held mesh through itself, and the bounded float-box search did not clear it — the held mesh would not be embedded, so this evaluator refuses the result rather than publish it`, decaderr.ErrUnsupported)
+		return 0, nil, fmt.Errorf(`%w: the result's float rounding folds its held mesh through itself, and the bounded float-box search did not clear it — the held mesh would not be embedded, so this evaluator refuses the result rather than publish it`, decaderr.ErrUnsupported)
 	}
-	return moved, nil
+	if summary.DisplacementBound == 0 {
+		return moved, nil, nil
+	}
+	return moved, &summary, nil
 }
 
 // RepairHeldEmbedding runs the float-box search of EnforceHeldEmbedding and
@@ -98,6 +107,10 @@ func RepairHeldEmbedding(ctx context.Context, h HeldRounding) (int, []int, error
 }
 
 func repairHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, []int, error) {
+	return repairHeldEmbeddingSummary(ctx, h, memo, nil)
+}
+
+func repairHeldEmbeddingSummary(ctx context.Context, h HeldRounding, memo bool, summary *EmbeddingReach) (int, []int, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	if err := budget.Err(); err != nil {
 		return 0, nil, err
@@ -168,6 +181,9 @@ func repairHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, [
 				return 0, nil, err
 			}
 			if len(failing) == 0 {
+				if err := e.summarizeReach(ctx, summary); err != nil {
+					return 0, nil, err
+				}
 				return len(moved), nil, nil
 			}
 			next := map[int]struct{}{}
@@ -204,9 +220,17 @@ func repairHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, [
 		}
 		slices.Sort(failing)
 		if len(failing) == 0 || stage == 1 || e.h.Reach <= 0 {
+			if len(failing) == 0 {
+				if err := e.summarizeReach(ctx, summary); err != nil {
+					return 0, nil, err
+				}
+			}
 			return len(moved), failing, nil
 		}
 		check = failing
+	}
+	if err := e.summarizeReach(ctx, summary); err != nil {
+		return 0, nil, err
 	}
 	return len(moved), nil, nil
 }
@@ -504,6 +528,9 @@ type heldEmbedding struct {
 	// reachOn turns on the reach moves of improveWithinReach. The search sets
 	// it once the float box has done what it can.
 	reachOn bool
+	// reachUsed names vertices whose final accepted position came from the
+	// positive-reach stage, never positions visited only by a trial.
+	reachUsed map[int]struct{}
 
 	// memoOn enables the two caches below. box is each facet's float box
 	// (TriBox), invalidated when a vertex moves. pairs replays pairEmbedded
@@ -1268,6 +1295,7 @@ func (e *heldEmbedding) improve(v int) (bool, error) {
 		return false, err
 	}
 	bestAt := orig
+	usesReach := false
 	// Each trial moves only v, so putting v back restores every incident
 	// facet's positions, and with them the stamps they carried.
 	var origGen []uint64
@@ -1304,12 +1332,21 @@ func (e *heldEmbedding) improve(v int) (bool, error) {
 		}
 		if reachBest < best {
 			bestAt = reachAt
+			usesReach = true
 		}
 	}
 	if bestAt == orig {
 		return false, nil
 	}
 	e.setVert(v, bestAt)
+	if usesReach {
+		if e.reachUsed == nil {
+			e.reachUsed = make(map[int]struct{})
+		}
+		e.reachUsed[v] = struct{}{}
+	} else {
+		delete(e.reachUsed, v)
+	}
 	return true, nil
 }
 

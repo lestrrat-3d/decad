@@ -191,7 +191,10 @@ func revolveProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	if err != nil {
 		return nil, err
 	}
-	d.commitIn(d.ContainerOfSketch(s), body)
+	inputs := append(axisOperationInputs(axis), angularExtentOperationInputs(a)...)
+	if err := d.commitOperationIn(ctx, d.ContainerOfSketch(s), OperationRevolve, inputs, body); err != nil {
+		return nil, err
+	}
 	return body, nil
 }
 
@@ -294,7 +297,7 @@ func revolveProfileBuild(ctx context.Context, d *Document, s *sketch.Sketch, p *
 		den.Phi0, den.Phi1 = den.Phi1.Neg(), den.Phi0.Neg()
 	}
 
-	ref := d.nextProducerID()
+	ref := d.producerID(ctx)
 	body, err := bodyResult(revolveplan.Build(ctx, envOf(documentNode(d), ref), revolvePayload{
 		Profile:       profile,
 		Frame:         frame,
@@ -620,7 +623,7 @@ func revolveChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 		den.Phi0, den.Phi1 = den.Phi1.Neg(), den.Phi0.Neg()
 	}
 
-	ref := d.nextProducerID()
+	ref := d.producerID(ctx)
 	body, err := bodyResult(revolveplan.BuildChain(ctx, envOf(documentNode(d), ref), chainRevolvePayload{
 		Chains: []chainRecord{chain},
 		Frame:  frame,
@@ -637,8 +640,58 @@ func revolveChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commitIn(d.ContainerOfSketch(s), body)
+	inputs := append(axisOperationInputs(axis), angularExtentOperationInputs(a)...)
+	if err := d.commitOperationIn(ctx, d.ContainerOfSketch(s), OperationRevolve, inputs, body); err != nil {
+		return nil, err
+	}
 	return body, nil
+}
+
+func axisOperationInputs(axis Axis) []OperationInput {
+	switch axis := axis.(type) {
+	case EdgeAxis:
+		return []OperationInput{{Body: axis.Body, Role: "axis", Use: InputReferenced}}
+	case *EdgeAxis:
+		if axis != nil {
+			return []OperationInput{{Body: axis.Body, Role: "axis", Use: InputReferenced}}
+		}
+	}
+	return nil
+}
+
+func angularExtentOperationInputs(extent AngularExtent) []OperationInput {
+	var inputs []OperationInput
+	add := func(stop ToFaceAngular) {
+		inputs = append(inputs, OperationInput{Body: stop.Body, Role: "stop", Use: InputReferenced})
+	}
+	switch extent := extent.(type) {
+	case *ToFaceAngular:
+		if extent != nil {
+			add(*extent)
+		}
+	case ToFaceAngular:
+		add(extent)
+	case *TwoSidedAngle:
+		if extent != nil {
+			inputs = append(inputs, angularSideOperationInputs(extent.One)...)
+			inputs = append(inputs, angularSideOperationInputs(extent.Two)...)
+		}
+	case TwoSidedAngle:
+		inputs = append(inputs, angularSideOperationInputs(extent.One)...)
+		inputs = append(inputs, angularSideOperationInputs(extent.Two)...)
+	}
+	return inputs
+}
+
+func angularSideOperationInputs(side SideAngular) []OperationInput {
+	switch side := side.(type) {
+	case ToFaceAngular:
+		return angularExtentOperationInputs(side)
+	case *ToFaceAngular:
+		return angularExtentOperationInputs(side)
+	default:
+		return nil
+	}
 }
 
 // refuseChainRevolveOptions refuses every option a chain section cannot

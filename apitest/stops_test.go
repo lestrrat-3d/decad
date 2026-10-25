@@ -494,6 +494,9 @@ func TestRevolveToFaceAngular(t *testing.T) {
 	// exactly [0, π/2].
 	body, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.ToFaceAngular{Body: host, Face: capEndFace(host)})
 	require.NoError(t, err)
+	producer, err := doc.OperationHistory().Producer(body)
+	require.NoError(t, err)
+	require.Equal(t, []decad.OperationInput{{Body: host, Role: "stop", Use: decad.InputReferenced}}, producer.Inputs())
 	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(500*math.Pi))
 	decadtest.MeasuresBounds(t, body, r3.NewVec(0, 0, 0), r3.NewVec(10, 15, 15))
 	require.Contains(t, doc.Bodies(), host, `a stop body is depended on, never retired`)

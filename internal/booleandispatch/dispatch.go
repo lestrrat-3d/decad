@@ -316,6 +316,7 @@ func Body(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *to
 	if err != nil {
 		return nil, hooks.AsBooleanError(op, err)
 	}
+	body.OperationWarnings = append(body.OperationWarnings, eval.Diagnostics(op)...)
 	if op == meshbool.OpCut {
 		if err := loftfacestrim.RecordConeToe(ctx, a, b, body); err != nil {
 			return nil, err

@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -20,6 +21,8 @@ type PlacedMesh struct {
 	MeshBound   float64
 	VolSymDiff  float64
 	AreaSlack   float64
+	// EmbeddingReach records only a new accepted positive-reach repair.
+	EmbeddingReach *meshbool.EmbeddingReach
 }
 
 // placeParallelMin is the vertex count from which PlaceMesh computes its exact
@@ -133,10 +136,11 @@ func placeMeshGap(ctx context.Context, budget *proofbound.WorkBudget, verts []r3
 			next.Tris[i] = [3]int{t[0], t[2], t[1]}
 		}
 	}
-	moved, err := KeepPlacedEmbedded(ctx, exact, next.Verts, next.Tris)
+	moved, repair, err := KeepPlacedEmbeddedWithSummary(ctx, exact, next.Verts, next.Tris)
 	if err != nil {
 		return PlacedMesh{}, err
 	}
+	next.EmbeddingReach = repair
 	allow := 0.0
 	next.VertexBound = make([]float64, len(vertexBound))
 	lengthStretch := proofbound.AbsSumUpper(1, stretch)

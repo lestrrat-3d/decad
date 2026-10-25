@@ -424,5 +424,5 @@ func BuildMirrorCapChamfer(ctx context.Context, env topo.Env, old facetedrecord.
 		assembled.CapLevels, env.Ref); err != nil {
 		return nil, err
 	}
-	return facetedrecord.Build(ctx, env, result)
+	return buildMirrorWithWarnings(ctx, env, result, lowerBody, upperBody)
 }

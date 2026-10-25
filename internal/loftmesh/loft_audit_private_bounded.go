@@ -87,7 +87,7 @@ func LoftCrossingAuditPrivateBounded(budget *proofbound.WorkBudget,
 
 	pairs := uint64(f * (f - 1) / 2)
 	if pairs > privateLoftAuditMaxPairs {
-		return errLoftAuditCeiling()
+		return proofbound.WithWorkLimit(errLoftAuditCeiling(), "facet_pairs", pairs, privateLoftAuditMaxPairs)
 	}
 	// The private table holds one vertex lift and seven facet-sized slices;
 	// each facet also owns three projected corners. Reserve their logical

@@ -85,9 +85,9 @@ func tryHoledIntersect(ctx context.Context, a, b topo.Payload) (prismrecord.Payl
 		return prismrecord.Payload{}, false, err
 	}
 	if !withinCap {
-		return prismrecord.Payload{}, false, fmt.Errorf(
+		return prismrecord.Payload{}, false, prismcells.WithWorkLimit(fmt.Errorf(
 			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d`,
-			decaderr.ErrUnsupported, meshbool.OpIntersect, segments, prismcells.MaxArrangementSegments)
+			decaderr.ErrUnsupported, meshbool.OpIntersect, segments, prismcells.MaxArrangementSegments), segments)
 	}
 	reexpress, err := prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())
 	if err != nil {

@@ -55,9 +55,17 @@ const (
 // Verify recognizes the private type and leaves the pair undecided. Invariant
 // failures remain ordinary errors and return from Verify.
 type BooleanExpectedError struct {
-	Kind    BooleanExpectedKind
-	Operand int
-	Err     error
+	Kind         BooleanExpectedKind
+	Operand      int
+	Err          error
+	AppliedShift *AppliedShift
+}
+
+// AppliedShift describes a shift accepted by a retry whose final result is
+// empty. It carries only the charged displacement and configured reach.
+type AppliedShift struct {
+	DisplacementBound float64
+	AllowedReach      float64
 }
 
 func (e *BooleanExpectedError) Error() string { return e.Err.Error() }
@@ -66,6 +74,16 @@ func (e *BooleanExpectedError) Unwrap() error { return e.Err }
 
 func ExpectedBoolean(kind BooleanExpectedKind, err error) error {
 	return ExpectedBooleanForOperand(kind, -1, err)
+}
+
+func ExpectedBooleanAfterShift(err error, displacementBound, allowedReach float64) error {
+	cause := ExpectedBoolean(BooleanExpectedEmpty, err)
+	var expected *BooleanExpectedError
+	if !errors.As(cause, &expected) {
+		return cause
+	}
+	expected.AppliedShift = &AppliedShift{DisplacementBound: displacementBound, AllowedReach: allowedReach}
+	return expected
 }
 
 // ExpectedBooleanForOperand retains which operand hit a pre-contact staging
@@ -79,17 +97,22 @@ func ExpectedBooleanForOperand(kind BooleanExpectedKind, operand int, err error)
 }
 
 // CoarseHeldContactError is RefuseCoarseHeldContact's refusal: operand
-// Operand's facets where the pair meets carry a bound of Bound, coarser than
-// the pair's chord tolerance Tol. The root restates it in the boolean's own
+// Operand's facets where the pair meets carry a bound of Bound, above Gate.
+// Tol is the pair's ordinary chord limit. The root restates it in the boolean's own
 // terms (StagingError).
 type CoarseHeldContactError struct {
-	Operand    int
-	Bound, Tol float64
+	Operand          int
+	Bound, Tol, Gate float64
+	ChainAllowance   float64
+	Detail           string
 }
 
 func (e *CoarseHeldContactError) Error() string {
-	return fmt.Sprintf(`%v: operand %d's held facets where the pair meets carry a bound of %g mm, coarser than the pair's chord tolerance %g mm`,
-		decaderr.ErrUnsupported, e.Operand, e.Bound, e.Tol)
+	if e.Detail != "" {
+		return fmt.Sprintf(`%v: %s`, decaderr.ErrUnsupported, e.Detail)
+	}
+	return fmt.Sprintf(`%v: operand %d's held facets where the pair meets carry a bound of %g mm, above the local gate %g mm`,
+		decaderr.ErrUnsupported, e.Operand, e.Bound, e.Gate)
 }
 
 func (e *CoarseHeldContactError) Unwrap() error { return decaderr.ErrUnsupported }
@@ -108,11 +131,16 @@ func RefuseCoarseHeldContact(m *BoolMesh, operand int, facets []int) error {
 	for _, f := range facets {
 		worst = max(worst, m.SlabBound[f])
 	}
+	m.ChainTouchedBound = max(m.ChainTouchedBound, worst)
+	if m.ChainAllowance > m.PairChordLimit && worst > m.PairChordLimit && worst <= m.ChainAllowance {
+		m.ChainAllowanceUsed = true
+	}
 	if worst <= m.Gate {
 		return nil
 	}
 	return ExpectedBooleanForOperand(BooleanExpectedStaging, operand,
-		&CoarseHeldContactError{Operand: operand, Bound: worst, Tol: m.Gate})
+		&CoarseHeldContactError{Operand: operand, Bound: worst, Tol: m.PairChordLimit, Gate: m.Gate,
+			ChainAllowance: m.ChainAllowance})
 }
 
 // NearContacts is what GatherNearContacts collects for one face pair: the

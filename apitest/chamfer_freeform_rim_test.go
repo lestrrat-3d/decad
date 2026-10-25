@@ -173,6 +173,16 @@ func TestChamferFreeformRimVolume(t *testing.T) {
 	const c = 0.5
 	out, err := decad.Chamfer(t.Context(), body, bothRims(body), units.Millimeters(c))
 	require.NoError(t, err)
+	warnings := out.OperationDiagnostics()
+	require.Len(t, warnings, 1)
+	require.Equal(t, decad.OpDiagChainAllowanceApplied, warnings[0].Code)
+	require.Equal(t, decad.OperationChamfer, warnings[0].Operation)
+	require.Empty(t, warnings[0].Subject.Name)
+	require.Nil(t, warnings[0].Subject.Ordinal)
+	require.NotNil(t, warnings[0].Chain)
+	require.NotNil(t, warnings[0].Chain.ChainAllowance)
+	require.Greater(t, warnings[0].Chain.TouchedBound.Base(), warnings[0].Chain.PairChordLimit.Base())
+	require.Equal(t, 0.1, warnings[0].Chain.ChainAllowance.Base())
 	require.Len(t, doc.Bodies(), 1)
 	require.Equal(t, out, doc.Bodies()[0])
 

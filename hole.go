@@ -86,7 +86,8 @@ const holeTolerance = 0.05
 // is ErrDegenerate; an undecided location does not refuse. A boolean the
 // evaluator cannot decide is the boolean's own error. Every failure leaves
 // the document unchanged and b live.
-func Hole(ctx context.Context, b *Body, spec HoleSpec) (*Body, error) {
+func Hole(ctx context.Context, b *Body, spec HoleSpec) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationHole, retErr) }()
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a hole`, ErrDegenerate)
 	}
@@ -117,12 +118,13 @@ func Hole(ctx context.Context, b *Body, spec HoleSpec) (*Body, error) {
 	if err := holeAxisInsideBody(ctx, b, in, plan); err != nil {
 		return nil, err
 	}
-	tools, err := buildHoleTools(ctx, d, plan)
+	toolCtx, capture := privateConstructionContext(ctx)
+	tools, err := buildHoleTools(toolCtx, d, plan)
 	if err != nil {
 		return nil, err
 	}
 	defer removeTools(tools)
-	return combineTools(ctx, d, b, meshbool.OpCut, tools, false, nil)
+	return combineTools(ctx, d, OperationHole, b, meshbool.OpCut, tools, false, nil, capture)
 }
 
 // holeInput resolves spec into the plain-data request holeplan reads.

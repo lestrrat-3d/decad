@@ -163,7 +163,9 @@ type ChamferOption interface{ chamferOption() }
 // oblique, split or on both sides of the loop's face is SL2, and a band
 // reaching a far face end is SX7 (each ErrUnsupported); a setback that
 // empties a loop's offset is SX6 (ErrDegenerate).
-func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error) {
+func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
+	opts ...ChamferOption) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationChamfer, retErr) }()
 	// Geometry work can take time, so callers need a context that can cancel it.
 	// The body needs a document because a successful chamfer replaces that body there.
 	if ctx == nil {
@@ -239,5 +241,5 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 	if err != nil {
 		return nil, err
 	}
-	return commitResult(ctx, b, res)
+	return commitResult(ctx, OperationChamfer, b, res)
 }

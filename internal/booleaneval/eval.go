@@ -24,6 +24,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -47,11 +48,54 @@ type OperandMesher interface {
 // payload with the occupied volume, its proven bound and exact value, and the
 // closure audit. It holds no document reference or public model state.
 type Evaluation struct {
-	Payload     facetedrecord.Payload
-	Volume      float64
-	VolumeBound float64
-	VolumeRat   *big.Rat
-	Audit       *facetproof.MeshAudit
+	Payload        facetedrecord.Payload
+	Volume         float64
+	VolumeBound    float64
+	VolumeRat      *big.Rat
+	Audit          *facetproof.MeshAudit
+	Shift          *ShiftSummary
+	Chain          *ChainAllowanceSummary
+	EmbeddingReach *meshbool.EmbeddingReach
+}
+
+// ChainAllowanceSummary records a local gate that the configured allowance
+// raised above the pair's ordinary chord limit.
+type ChainAllowanceSummary struct {
+	Operand        int
+	TouchedBound   float64
+	PairChordLimit float64
+	ChainAllowance float64
+}
+
+// ShiftSummary describes the accepted shifted retry, including coordinate
+// rounding in the charge on the moved mesh pieces.
+type ShiftSummary struct {
+	DisplacementBound float64
+	AllowedReach      float64
+}
+
+// Diagnostics returns copied summaries from this accepted evaluation. Callers
+// that combine private steps must aggregate these records at their public
+// boundary and discard them if the enclosing operation fails.
+func (e Evaluation) Diagnostics(op meshbool.OperationKind) []opdiagnostic.Record {
+	var records []opdiagnostic.Record
+	if e.Shift != nil {
+		records = append(records, opdiagnostic.Record{
+			Operation: int(op), Code: opdiagnostic.CodeGapShiftApplied, Operand: 1,
+			Change:            opdiagnostic.ChangeGapShift,
+			DisplacementBound: e.Shift.DisplacementBound,
+			AllowedReach:      e.Shift.AllowedReach,
+		})
+	}
+	if e.Chain != nil {
+		allowance := e.Chain.ChainAllowance
+		records = append(records, opdiagnostic.Record{
+			Operation: int(op), Code: opdiagnostic.CodeChainAllowanceApplied,
+			Operand: e.Chain.Operand, TouchedBound: e.Chain.TouchedBound,
+			PairChordLimit: e.Chain.PairChordLimit, ChainAllowance: &allowance,
+		})
+	}
+	return append(records, e.EmbeddingReach.Diagnostics()...)
 }
 
 // VolumeReading reads the audited mesh's exact component volumes and composes
@@ -204,13 +248,14 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	}
 	// mbDecide is the mesh the contact gate reads: mb itself, unless b moved.
 	mbDecide := mb
+	shiftDisplacement := 0.0
 	if len(shifts) > 0 {
 		// The cap and cone certificates authenticate the operands' own
 		// geometry, which a moved operand no longer has.
 		if capFace != nil || coneFace != nil {
 			return Evaluation{}, errShiftDeclined
 		}
-		mbDecide, mb, err = shiftOperandMesh(ctx, mb, piecesOf(mb), shifts)
+		mbDecide, mb, shiftDisplacement, err = shiftOperandMesh(ctx, mb, piecesOf(mb), shifts)
 		if err != nil {
 			return Evaluation{}, err
 		}
@@ -239,14 +284,14 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	// (agent-docs/faceted-vertex-bounds-design.md §5). Any other operand is ungated.
 	chain := chaintol.Of(ctx)
 	if restatingA {
-		bmA.Gate = max(tolMM, chain)
+		configureChainGate(bmA, tolMM, chain)
 	}
 	if restatingB {
 		// A moved operand's facets carry the move in their bounds, which the
 		// gate would read as a coarse mesh. The move is what the gap tolerance
 		// permits and the composition of the result's bounds charges it, so the
 		// gate allows it.
-		bmB.Gate = max(tolMM+(mb.Bound-mbDecide.Bound), chain)
+		configureChainGate(bmB, tolMM+(mb.Bound-mbDecide.Bound), chain)
 	}
 	if err := ctx.Err(); err != nil {
 		return Evaluation{}, err
@@ -271,8 +316,11 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		return Evaluation{}, meshbool.StagingError(op, err)
 	}
 	if len(kept) == 0 {
-		return Evaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedEmpty,
-			fmt.Errorf(`%w: the %s result is empty`, decaderr.ErrBooleanFailed, op))
+		err := fmt.Errorf(`%w: the %s result is empty`, decaderr.ErrBooleanFailed, op)
+		if len(shifts) > 0 {
+			return Evaluation{}, meshbool.ExpectedBooleanAfterShift(err, shiftDisplacement, gaptol.Reach(ctx))
+		}
+		return Evaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedEmpty, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return Evaluation{}, err
@@ -351,7 +399,38 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if err := ctx.Err(); err != nil {
 		return Evaluation{}, err
 	}
-	return Evaluation{Payload: payload, Volume: volume, VolumeBound: volumeBound, VolumeRat: volumeRat, Audit: audit}, nil
+	ev := Evaluation{Payload: payload, Volume: volume, VolumeBound: volumeBound, VolumeRat: volumeRat, Audit: audit}
+	ev.EmbeddingReach = stitched.EmbeddingReach
+	if len(shifts) > 0 {
+		ev.Shift = &ShiftSummary{DisplacementBound: shiftDisplacement, AllowedReach: gaptol.Reach(ctx)}
+	}
+	ev.Chain = summarizeChainAllowance(bmA, 0, bmB, 1)
+	return ev, nil
+}
+
+func configureChainGate(bm *meshbool.BoolMesh, pairLimit, allowance float64) {
+	bm.PairChordLimit = pairLimit
+	bm.ChainAllowance = allowance
+	bm.Gate = max(pairLimit, allowance)
+}
+
+func summarizeChainAllowance(a *meshbool.BoolMesh, operandA int, b *meshbool.BoolMesh, operandB int) *ChainAllowanceSummary {
+	var chosen *ChainAllowanceSummary
+	for _, candidate := range []struct {
+		mesh    *meshbool.BoolMesh
+		operand int
+	}{{a, operandA}, {b, operandB}} {
+		m := candidate.mesh
+		if !m.ChainAllowanceUsed {
+			continue
+		}
+		summary := &ChainAllowanceSummary{Operand: candidate.operand,
+			TouchedBound: m.ChainTouchedBound, PairChordLimit: m.PairChordLimit, ChainAllowance: m.ChainAllowance}
+		if chosen == nil || summary.TouchedBound > chosen.TouchedBound {
+			chosen = summary
+		}
+	}
+	return chosen
 }
 
 // PrepBoolMesh lifts a tessellation into the exact domain and attaches its

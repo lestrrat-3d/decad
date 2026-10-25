@@ -43,14 +43,24 @@ type Result struct {
 	Lo, Hi  float64
 	Exact   bool
 	Diam    float64
-	// Contained is non-nil only when strict positive boundary clearance, one
-	// witness per shell of this body proven inside the other, and one witness
-	// per shell of the other — voids included — proven outside this one prove
-	// this whole body lies in the other.
-	Contained *topo.Body
+	// Containment is issued only when strict positive boundary clearance,
+	// every inner-shell witness inside the outer body, and every outer-shell
+	// witness outside the inner body prove whole-set containment.
+	Containment *ContainmentCertificate
 	// Ruling is non-nil only on a boundaryaudit.PairTouching verdict proved by a
 	// §6 ruling certificate; it keeps the certified faces and feet.
 	Ruling *clearance.RulingContact
+}
+
+// ContainmentCertificate is a per-call proof of strict whole-solid
+// containment. Its body pointers are valid only while the caller holds the
+// source records; committed consumers freeze the needed values separately.
+type ContainmentCertificate struct {
+	Inner               *topo.Body
+	Outer               *topo.Body
+	BoundaryGapLower    float64
+	InnerShellWitnesses int
+	OuterShellWitnesses int
 }
 
 // pairKernel is one pair's working state.
@@ -315,7 +325,21 @@ func Pair(ctx context.Context, a, b *topo.Body, nestingExcluded bool, cache *Cac
 			return Result{}, err
 		}
 		if verdict != boundaryaudit.PairDisjoint {
-			return Result{Verdict: verdict, Diam: diam, Contained: contained}, nil
+			result := Result{Verdict: verdict, Diam: diam}
+			if contained != nil {
+				inner, outer := k.a, k.b
+				if contained == k.b.body {
+					inner, outer = k.b, k.a
+				}
+				result.Containment = &ContainmentCertificate{
+					Inner:               inner.body,
+					Outer:               outer.body,
+					BoundaryGapLower:    lo,
+					InnerShellWitnesses: len(inner.shellWit),
+					OuterShellWitnesses: len(outer.shellWit),
+				}
+			}
+			return result, nil
 		}
 	}
 	return Result{Verdict: boundaryaudit.PairDisjoint, Lo: lo, Hi: hi, Exact: exact, Diam: diam}, nil

@@ -190,7 +190,7 @@ func preflightLoftRowsWorkers(budget *proofbound.WorkBudget, tree loftRowScan, m
 					return err
 				}
 				if exceeded {
-					return errLoftAuditCeiling()
+					return errLoftAuditScanLimit(scanned, work, ceiling)
 				}
 				scanned += work
 				if out[k].count != starts[i+1]-starts[i] {
@@ -208,7 +208,7 @@ func preflightLoftRowsWorkers(budget *proofbound.WorkBudget, tree loftRowScan, m
 			return err
 		}
 		if exceeded {
-			return errLoftAuditCeiling()
+			return errLoftAuditScanLimit(scanned, work, ceiling)
 		}
 		scanned += work
 		if rowCount != starts[i+1]-starts[i] {
@@ -282,7 +282,7 @@ func streamLoftPairsWorkers(budget *proofbound.WorkBudget, tree loftRowScan, mem
 				return -1, -1, err
 			}
 			if exceeded {
-				return -1, -1, errLoftAuditCeiling()
+				return -1, -1, errLoftAuditScanLimit(scanned, rowWork, ceiling)
 			}
 			scanned += rowWork
 			row = r.row
@@ -297,7 +297,7 @@ func streamLoftPairsWorkers(budget *proofbound.WorkBudget, tree loftRowScan, mem
 				return -1, -1, err
 			}
 			if exceeded {
-				return -1, -1, errLoftAuditCeiling()
+				return -1, -1, errLoftAuditScanLimit(scanned, rowWork, ceiling)
 			}
 			scanned += rowWork
 			if len(row) != starts[i+1]-starts[i] {

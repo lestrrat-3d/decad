@@ -819,12 +819,20 @@ because provenance roles are stable (§3).
 
 ## 8. Document state and re-evaluation
 
-`Document` owns the live body set and a private monotonic producer identity used for topology provenance. Its node (`topo.Document`) holds both, with the level and curve counters, and builders mint level and curve identities through it (`MintLevel`, `MintCurve`). Every feature call validates live inputs, evaluates geometry without mutation, and commits only after success. Commit retires consumed bodies, registers the result, and advances the producer identity. Cancellation and every other failure leave the live body set and the producer identity unchanged. A failed build may have advanced the level and curve counters; they only increase, so no identity is reused, and an identity a failed build minted appears on no committed body.
+`Document` owns the live body set, a private monotonic producer identity used for topology provenance, and successful public operation records. Its node (`topo.Document`) holds the live set and counters; root publishes records under the same membership lock. Builders mint level and curve identities through it (`MintLevel`, `MintCurve`). Every feature call validates live inputs, evaluates geometry without mutation, and commits only after success. Commit retires consumed bodies, registers the result, advances the producer identity and publishes its operation record atomically. Cancellation and every other failure leave the live body set, producer identity and operation history unchanged. A failed build may have advanced the level and curve counters; they only increase, so no identity is reused, and an identity a failed build minted appears on no committed body.
+
+The mesh-built `Cut` may also carry a strict-containment Volume certificate. When
+the source-derived subtraction agrees with the ordinary mesh interval and has a
+strictly smaller bound, `Body.Volume` and `Verify` use the source reading. The
+certificate retains bounded source readings and proof values, not topology or
+document handles. It does not change the mesh, its bounds, closure, orientation,
+or occupied-volume proof. See `agent-docs/operation-history-design.md` for its
+admission and interval rules.
 
 `Remove` is commit's retire step with no feature around it: it gates the body exactly as
 `requireLive` does, retires it, and registers nothing, so the producer identity does not advance.
 The live body set (the node's `LiveSet`) sits behind the document node's own lock (`LiveMu`).
-`commit`, `commitMany`, `commitSpan` and `Remove` change it under that lock, and every reader —
+`commitOperation*` helpers and `Remove` change it under that lock, and every reader —
 `Bodies`, `Verify`, `VerifyMotion`, the `ThroughAll` stop scan and the liveness gates, all through
 the node's `IsLive` and `Live` — reads it under the same lock, and a reader that walks the set walks
 its own snapshot. Only root writes the set and the producer counter, and only root takes the write

@@ -83,7 +83,9 @@ func LoftSections(ctx context.Context, d *Document, sections ...LoftSection) (*B
 				if err := ctx.Err(); err != nil {
 					return nil, err
 				}
-				d.commit(body)
+				if err := d.commitOperationIn(ctx, nil, OperationLoftSections, nil, body); err != nil {
+					return nil, err
+				}
 				return body, nil
 			}
 			if !errors.Is(constantErr, ErrUnsupported) {
@@ -198,7 +200,9 @@ func (d *Document) buildSmoothSectionBody(ctx context.Context, built smoothloft.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(body)
+	if err := d.commitOperationIn(ctx, nil, OperationLoftSections, nil, body); err != nil {
+		return nil, err
+	}
 	return body, nil
 }
 

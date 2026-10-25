@@ -26,7 +26,7 @@ configuration option.
 
 | Type | Kind | Holds | Obtained from |
 |---|---|---|---|
-| `decad.Document` | struct | The live set of bodies and the producer identities behind provenance. | `decad.New` |
+| `decad.Document` | struct | The live set of bodies, provenance identities and operation records. | `decad.New` |
 | `decad.Container` | struct | A named, nestable group of sketches, planes and bodies of one document. | `Document.Root`, `Container.NewChild` |
 | `decad.Binding` | struct | One parameter read: name, source text, value and direct dependencies. | `Document.Bindings` |
 | `decad.Body` | struct | An immutable solid or sheet. | A feature function |
@@ -40,6 +40,13 @@ configuration option.
 | `decad.Vertex` | struct | A topological point. | `Body.Vertices`, `Edge.Start` |
 | `decad.FeatureRef` | struct | The stable role that made a body, face or edge. | `Face.Origins`, `Body.Origin` |
 | `decad.HeldTopology` | struct | A body's lump and void counts. | `BodyReport.Topology` |
+| `decad.OperationHistory` | struct | An immutable snapshot of successful modeling calls. | `Document.OperationHistory` |
+| `decad.Operation` | struct | One public call, its kind, body inputs and outputs. | `OperationHistory.Operations` |
+| `decad.OperationInput` | struct | One body argument, role and consumed or referenced use. | `Operation.Inputs` |
+| `decad.InputUse` | enum | `InputConsumed` or `InputReferenced`. | `OperationInput.Use` |
+| `decad.HistoryCoverage` | enum | `HistoryUnknown` or `HistoryComplete` for a face map. | `FaceHistory.Coverage` |
+| `decad.FaceHistory` | struct | Known successor faces and correspondence coverage. | `Operation.FaceSuccessors` |
+| `decad.OperationKind` | enum | The public modeling or selector-resolution entry point. | `Operation.Kind` |
 
 ### Geometry
 
@@ -185,6 +192,17 @@ configuration option.
 | `decad.Clearance` | struct | A measured gap between two bodies. | `Report.Clearances` |
 | `decad.BooleanError` | struct | The typed failure of a boolean. | `decad.Union`, `decad.Cut`, `decad.Intersect` |
 | `decad.BooleanErrorCode` | enum | The fine reason a boolean failed. | `BooleanError.Code` |
+| `decad.OperationDiagnosticError` | interface | An error that returns structured operation diagnostics. | `errors.As` |
+| `decad.OperationError` | struct | An original error plus structured operation reasons. | Modeling calls |
+| `decad.OperationDiagnostic` | struct | One operation failure or successful-call warning. | Errors, `Body.OperationDiagnostics` |
+| `decad.OperationDiagnosticCode` | enum | A stable failure or warning reason, including shifted Booleans, chain allowances, Stitch merges and positive-reach repairs. | `OperationDiagnostic.Code` |
+| `decad.OperationDiagnosticSeverity` | enum | Unknown, warning or failure. | `OperationDiagnostic.Severity` |
+| `decad.OperationStage` | enum | The broad stage where a diagnostic occurred. | `OperationDiagnostic.Stage` |
+| `decad.OperationSubject` | struct | The public argument location associated with a diagnostic. | `OperationDiagnostic.Subject` |
+| `decad.OperationChangeMechanism` | enum | The kind of accepted geometry adjustment. | `OperationChange.Mechanism` |
+| `decad.OperationChange` | struct | A bounded geometry adjustment and its allowed reach. | `OperationDiagnostic.Change` |
+| `decad.OperationChainDetail` | struct | The three values used by the local chain-depth gate. | `OperationDiagnostic.Chain` |
+| `decad.OperationWorkLimit` | struct | An existing resource limit and its observed count. | `OperationDiagnostic.WorkLimit` |
 
 ### Motion, linkages and contact
 
@@ -272,9 +290,17 @@ other sections return them.
 
 ## Document and body
 
-A `decad.Document` owns the live set of bodies. A `decad.Body` is an immutable boundary representation. It holds
-topology, the geometry attached to that topology, and the error bounds of its readings. A body is never a triangle
-mesh and never exposes indices; faces, edges and vertices are pointers you read from the body.
+A `decad.Document` owns the live set of bodies and records successful public
+calls. `Document.OperationHistory` returns an immutable snapshot whose records
+keep the input and output body handles. A `decad.Body` is an immutable boundary
+representation. It holds topology, the geometry attached to that topology, and
+the error bounds of its readings. A body is never a triangle mesh and never
+exposes indices; faces, edges and vertices are pointers you read from the body.
+
+`Body.OperationDiagnostics` returns successful-call warnings. A shifted Boolean,
+a raised chain allowance and a tolerant Stitch merge each report the adjustment
+and its measured bound. The slice is empty when the operation produced no
+warning.
 
 ## Topology
 

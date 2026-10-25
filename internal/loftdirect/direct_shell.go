@@ -286,7 +286,7 @@ func loftContactBoundedResult(ctx context.Context, err error) (*topo.Body, bool,
 		return nil, false, ctxErr
 	}
 	if errors.Is(err, proofbound.ErrWallWorkBudget) || errors.Is(err, errLoftDirectLimit) {
-		return nil, false, fmt.Errorf("%w: direct Loft/prism bounded proof limit", decaderr.ErrUnsupported)
+		return nil, false, proofbound.PreserveWorkLimit(fmt.Errorf("%w: direct Loft/prism bounded proof limit", decaderr.ErrUnsupported), err)
 	}
 	if errors.Is(err, errLoftDirectProofRefused) {
 		return nil, false, fmt.Errorf("%w: direct Loft/prism proof refused after source certification", decaderr.ErrUnsupported)

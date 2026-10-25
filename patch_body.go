@@ -93,7 +93,8 @@ const (
 // [ErrNoMatch] or [ErrCardinality], Table R row R16) and every one of gates
 // 1-4's refusals (R4, R5, R6, R18) surface unchanged. A failed call leaves
 // the document and b unchanged.
-func PatchEdges(ctx context.Context, b *Body, sel EdgeSelector) (*Body, error) {
+func PatchEdges(ctx context.Context, b *Body, sel EdgeSelector) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationPatchEdges, retErr) }()
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a patch`, ErrDegenerate)
 	}
@@ -132,6 +133,9 @@ func PatchEdges(ctx context.Context, b *Body, sel EdgeSelector) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(body, b)
+	if err := d.commitOperationIn(ctx, nil, OperationPatchEdges,
+		[]OperationInput{{Body: b, Role: operationRoleSource, Use: InputConsumed}}, body, b); err != nil {
+		return nil, err
+	}
 	return body, nil
 }

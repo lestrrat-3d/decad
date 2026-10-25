@@ -26,9 +26,11 @@ var floor = map[string]struct{}{
 	"planarsnapshot": {},
 	"denotation":     {},
 	"measurement":    {},
+	"opdiagnostic":   {},
 	"surfacenormal":  {},
 	"surfacegeom":    {},
 	"provenance":     {},
+	"prooflineage":   {},
 	"radiusmemo":     {},
 	"seal":           {},
 }
@@ -62,5 +64,5 @@ func TestBodyMovedFields(t *testing.T) {
 	for f := range typ.Fields() {
 		got = append(got, f.Name)
 	}
-	require.Equal(t, []string{"Solid", "PlanarConvexity", "PlanarSnapshot", "PlanarHints", "Tess", "SweepRadii", "Origin", "Volume", "Area", "Centroid", "Bounds", "Kind", "Doc", "Lumps", "Owner", "Payload"}, got)
+	require.Equal(t, []string{"Solid", "PlanarConvexity", "PlanarSnapshot", "PlanarHints", "Tess", "SweepRadii", "Origin", "Volume", "VolumeLineage", "OperationWarnings", "Area", "Centroid", "Bounds", "Kind", "Doc", "Lumps", "Owner", "Payload"}, got)
 }

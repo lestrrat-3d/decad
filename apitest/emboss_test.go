@@ -57,6 +57,10 @@ func TestEmbossRaisedOnTop(t *testing.T) {
 	out, err := decad.Emboss(t.Context(), plate, s, profiles, embossFace(true, plate), decad.EmbossRaised, units.Millimeters(2))
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies())
+	operations := doc.OperationHistory().Operations()
+	require.Len(t, operations, 2)
+	require.Equal(t, decad.OperationEmboss, operations[1].Kind())
+	require.Equal(t, []decad.OperationInput{{Body: plate, Role: "target", Use: decad.InputConsumed}}, operations[1].Inputs())
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(embossPlateVolume+10*6*2))
 	decadtest.MeasuresBounds(t, out, r3.Vec{}, r3.Vec{X: 40, Y: 30, Z: 12})
 }

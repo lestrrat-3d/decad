@@ -16,13 +16,12 @@ import (
 // MintCurve; only root writes LiveSet and NextProducer
 // (TestTopoDocumentWriteGuard).
 type Document struct {
-	// LiveMu guards LiveSet alone. Root commit, commitMany, commitSpan and
-	// Remove take it to write; every reader takes it to read and works on a
+	// LiveMu guards LiveSet alone. Root operation commit helpers and Remove take it to write; every reader takes it to read and works on a
 	// copy, so a Remove racing a Verify never shifts the slice a reader is
 	// walking. Internal code never takes the write lock.
 	LiveMu sync.RWMutex
 	// LiveSet holds the nodes of the live bodies in commit order. It is
-	// written only by root commit, commitMany, commitSpan and retire, under
+	// written only by root operation commit helpers and retire, under
 	// LiveMu.
 	LiveSet []*Body
 	// NextLevel is the LEVEL half of the shared-denotation certificate. It is
@@ -32,7 +31,7 @@ type Document struct {
 	// written only by MintCurve.
 	NextCurve denotation.CurveID
 	// NextProducer is the identity the next successful operation occupies. It
-	// is written only by root commit, commitMany and commitSpan.
+	// is written only by root operation commit helpers.
 	NextProducer provenance.Producer
 	// Owner is the root Document handle that holds this node by value. Root
 	// sets it when the handle is born and maps a node back to its handle

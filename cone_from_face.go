@@ -119,7 +119,7 @@ func ConeFromFace(ctx context.Context, body *Body, face FaceSelector, far units.
 		return nil, err
 	}
 	defer d.resultIn(d.bodyContainer(body))()
-	if err := commitExactPointCone(ctx, d, cone); err != nil {
+	if err := commitExactPointConeFrom(ctx, d, body, cone); err != nil {
 		return nil, err
 	}
 	return cone, nil
@@ -130,6 +130,17 @@ func ConeFromFace(ctx context.Context, body *Body, face FaceSelector, far units.
 // classified Cone, and Revolve calls a generator that shallow a cylinder. The
 // check runs before the body is registered, so a refusal leaves the document
 // and its provenance numbering untouched.
+func commitExactPointConeFrom(ctx context.Context, d *Document, source, cone *Body) error {
+	if limit, ok := revolveplan.PointConeSource(&cone.n); !ok || !limit.Axis.Canonical() {
+		return fmt.Errorf(`%w: the offset cone is not an exact point cone`, ErrUnsupported)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return d.commitOperationIn(ctx, nil, OperationConeFromFace,
+		[]OperationInput{{Body: source, Role: operationRoleSource, Use: InputReferenced}}, cone)
+}
+
 func commitExactPointCone(ctx context.Context, d *Document, cone *Body) error {
 	if limit, ok := revolveplan.PointConeSource(&cone.n); !ok || !limit.Axis.Canonical() {
 		return fmt.Errorf(`%w: the offset cone is not an exact point cone`, ErrUnsupported)

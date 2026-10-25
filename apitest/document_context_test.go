@@ -137,7 +137,7 @@ func TestPlacementContextChecksCancellationBeforeCommit(t *testing.T) {
 	}{
 		{
 			name:   "Transform",
-			target: "Transform",
+			target: "transform",
 			run: func(ctx context.Context, body *decad.Body) (*decad.Body, error) {
 				return decad.Transform(ctx, body, shift)
 			},

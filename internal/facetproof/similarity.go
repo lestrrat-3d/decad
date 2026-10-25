@@ -54,9 +54,11 @@ func ScaleMesh(ctx context.Context, budget *proofbound.WorkBudget,
 			h.Moved[i], h.Movable[i] = true, true
 		}
 	}
-	if _, err := meshbool.EnforceHeldEmbedding(ctx, h); err != nil {
+	_, repair, err := meshbool.EnforceHeldEmbeddingWithSummary(ctx, h)
+	if err != nil {
 		return SimilarMesh{}, err
 	}
+	next.EmbeddingReach = repair
 	for i, beta := range vertexBound {
 		if err := budget.Step(); err != nil {
 			return SimilarMesh{}, err

@@ -96,17 +96,21 @@ func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.P
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if err := d.requireSameContainer([]*Body{b}, s); err != nil {
+		return nil, err
+	}
 	extent := TwoSided{
 		One: DistanceSide{D: units.Millimeters(sweep.Along)},
 		Two: DistanceSide{D: units.Millimeters(sweep.Against)},
 	}
 	var tools []*Body
 	defer func() { removeTools(tools) }()
+	toolCtx, capture := privateConstructionContext(ctx)
 	for _, p := range profiles {
 		if p == nil {
 			return nil, fmt.Errorf(`%w: a nil profile names no relief`, ErrDegenerate)
 		}
-		tool, err := Extrude(ctx, d, s, p, extent)
+		tool, err := Extrude(toolCtx, d, s, p, extent)
 		if err != nil {
 			return nil, err
 		}
@@ -123,9 +127,9 @@ func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.P
 	if mode == EmbossEngraved {
 		op = meshbool.OpCut
 	}
-	return combineTools(ctx, d, b, op, tools, false, func(result *Body) error {
+	return combineTools(ctx, d, OperationEmboss, b, op, tools, false, func(result *Body) error {
 		return requireReliefChangesVolume(b, result, mode)
-	})
+	}, capture)
 }
 
 // requireReliefChangesVolume refuses a result whose volume certifiably did not
