@@ -1107,7 +1107,8 @@ larger miss disproves the declaration and refuses as it would without the
 option. The declaration comes from the caller and decad's check can only reject
 it, so the option never admits a shape for another reason. It is read only
 where a pair's source records keep a cone limit (a point-Loft cut or
-intersected by a cone about the world X axis); elsewhere it has no effect. The
+intersected by a cone about an axis through the world origin in a world
+coordinate plane); elsewhere it has no effect. The
 construction is in `agent-docs/revolve-loft-sector-design.md`.
 
 `Union` requires at least two distinct live bodies from one document. A
@@ -1132,11 +1133,13 @@ One-float-step axial placement differences receive explicit boundary and
 swept-volume allowances.
 
 The finite Revolve/point-Loft class accepts an authenticated full Revolve
-section, one cone-trimmed point-Loft sector, and rigid copies of that sector.
-Serial and variadic `Union` rebuild one section ring and its certified sector
-caps. A centered cylinder spanning both axial caps can `Cut` the joined body.
-The source, clearance, boundary and volume proofs are in
-`agent-docs/revolve-loft-sector-design.md`.
+section, one cone-trimmed point-Loft sector, and rigid copies of that sector,
+all about one axis: world X, or an axis through the world origin in a world
+coordinate plane. Serial and variadic `Union` rebuild one section ring and its
+certified sector caps. A centered cylinder spanning both axial caps can `Cut`
+a body joined about world X. The source, clearance, boundary and volume
+proofs are in `agent-docs/revolve-loft-sector-design.md`, and the general axis
+in `agent-docs/revolve-axis-design.md`.
 
 The bounded spiral-bevel class accepts an exact finite revolve blank and
 separate rigid copies of one authenticated, cone-trimmed nine-section tooth.

@@ -2,9 +2,12 @@
 
 ## Source admission
 
-The first public `Union` route accepts a finite, unplaced, full axis-X Revolve
-of one closed Sketch section and one point-Loft sector after authenticated
-toe Cut and heel Intersect. The section consists of whole straight edges.
+The first public `Union` route accepts a finite, unplaced, full Revolve of one
+closed Sketch section and one point-Loft sector after authenticated toe Cut
+and heel Intersect. The Revolve's axis is world X, or any axis through the
+world origin that lies in a world coordinate plane; every step reads that
+axis as `agent-docs/revolve-axis-design.md` states. This document states the
+construction in its world X form, which that document generalizes. The section consists of whole straight edges.
 Exactly forward-collinear edges become one geometric span; every such span
 keeps the complete set of recorded source roles and its retained face. The
 section has one axial span. A candidate root span must have a finite positive
@@ -61,7 +64,9 @@ Its X/YZ cross terms are exactly zero, its YZ block has the proper rotation
 relations, and its held X basis length differs from one by at most one float
 step. `MapChargeOf` charges that axial basis defect in source and cap placement
 bounds. The builder also checks each placed cap's measured snap to the shared
-root ring. A larger axial defect or a tilted axis refuses this route.
+root ring. A larger axial defect or a tilted axis refuses this route. About a
+general axis, `massmoment.AxisRotation` admits the copy and charges its drift
+(`agent-docs/revolve-axis-design.md` §4.5, §5.5).
 
 For repeated sectors, the complete trimmed source solids must be separate by
 one certified projection for every pair. The builder first checks expanded
@@ -125,13 +130,17 @@ seam allowance quarters the angular sag allowance, and an occupied-volume
 refusal scales that allowance by a factor from 0.1 to 0.5 set by its measured
 margin. Each new
 mesh must pass the same exact audit. Refusal leaves all operands live. The
-current source class requires a canonical unplaced, full axis-X Revolve.
-Off-axis and transformed Revolves use the ordinary Boolean route or refuse.
+source class requires an unplaced, full Revolve about an axis that
+`agent-docs/revolve-axis-design.md` §3 admits. Transformed Revolves and
+other axes use the ordinary Boolean route or refuse.
 
 ## Coaxial cylinder Cut
 
 `Cut` accepts a full centered cylinder spanning both axial ends of a joined
-Revolve/point-Loft sector body. It reads the same authenticated section,
+Revolve/point-Loft sector body whose certificate is about world X and came
+from a Revolve that passes the frame predicate. A join about any other axis,
+or one whose blank misses the frame predicate, keeps ordinary dispatch
+(`agent-docs/revolve-axis-design.md` §4.6). It reads the same authenticated section,
 ordered ring IDs, source groups, and published boundary, occupied-volume and
 area bounds as `Union`. The two spans adjacent to the section's sole axial
 span must be planar radial caps. Their ring IDs identify one complete axis

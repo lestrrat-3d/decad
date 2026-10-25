@@ -27,8 +27,8 @@ import (
 // SectorCylinderCut handles only a complete coaxial cylinder across an
 // authenticated Revolve/point-Loft join and builds the result in env. It
 // reports false, with no error, for an operation other than Cut, a target
-// with no join record or with a tooth trimmed about an axis other than world
-// X, or a tool that is not an unplaced axis-X prism of one whole
+// with no join record, with a certificate about a general axis or with a
+// tooth trimmed about an axis other than world X, or a tool that is not an unplaced axis-X prism of one whole
 // origin-centered circle; other booleans then keep their usual dispatch. A joined target without a complete planar cap-ring record
 // refuses before the tool is read, and so does any later failed check. This
 // route runs before the general faceted contact-tolerance gate.
@@ -279,12 +279,21 @@ func buildSectorAnnularCut(ctx context.Context, joined facetedrecord.Payload, ca
 	return result, nil
 }
 
-// sectorJoinGeneralAxis reports whether the join's tooth trim holds a limit
-// about an axis other than world X. The bore route reads the joined record in
-// +X arithmetic, so such a join keeps ordinary dispatch
-// (agent-docs/revolve-axis-design.md §4.6).
+// sectorJoinGeneralAxis reports whether the join's certificate came from the
+// general record branch, or its tooth trim holds a limit about an axis other
+// than world X. The bore route reads the joined record and its ring in +X
+// arithmetic, so such a join keeps ordinary dispatch. A general certificate
+// declines even about A = X, such as an XZ-plane blank revolved about U: its
+// ring stands at angles in the blank's own basis, not at atan2(Z, Y)
+// (agent-docs/revolve-axis-design.md §3.3, §4.6).
 func sectorJoinGeneralAxis(record *facetedrecord.RevolveLoftJoinRecord) bool {
-	if record.Certificate == nil || record.Certificate.Trim == nil {
+	if record.Certificate == nil {
+		return false
+	}
+	if record.Certificate.Section.General != nil {
+		return true
+	}
+	if record.Certificate.Trim == nil {
 		return false
 	}
 	trim := record.Certificate.Trim

@@ -35,8 +35,7 @@ func joinedPair(t *testing.T) (joined, placed *topo.Body) {
 
 // joinedPairAbout is joinedPair with a certificate about axis, its first
 // sector holding the one vertex first and the copy at motion holding placed.
-// The certificate carries no General reading, so GeneralCertificate passes it
-// and the copy's placement gate is the one under test.
+// The copy's placement gate is the one under test.
 func joinedPairAbout(t *testing.T, axis coneaxis.Axis, motion r3.Transform,
 	first, placedVertex r3.Vec) (joined, placed *topo.Body) {
 	t.Helper()

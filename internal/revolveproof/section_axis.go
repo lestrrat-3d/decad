@@ -299,8 +299,5 @@ func coneResidualAbout(q [3]proofbound.RatInterval, cone sketch.ConeSection) (pr
 // axis: atan2(Z, Y) for a +X certificate, and atan2(p·E1, p·E0) in the
 // blank's own basis for a general one (agent-docs/revolve-axis-design.md §3.7).
 func rootAngle(section facetedrecord.RevolveSectionCertificate, p r3.Vec) float64 {
-	if section.General == nil {
-		return math.Atan2(p.Z, p.Y)
-	}
-	return math.Atan2(p.Dot(section.General.E1), p.Dot(section.General.E0))
+	return section.AngleBasis().Angle(p)
 }

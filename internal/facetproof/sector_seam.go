@@ -12,9 +12,37 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
+// AngleBasis measures the angle of a point about a sector join's axis. The
+// zero value is the +X convention, atan2(Z, Y). A General basis reads
+// atan2(p·E1, p·E0) in the blank's own held frame, so its branch cut lies
+// along −E0 (agent-docs/revolve-axis-design.md §3.7). The held frame departs
+// from an exact frame about the axis; the sector plan charges that departure
+// (§5.6), so the angles here are construction quantities only.
+type AngleBasis struct {
+	General bool
+	E0, E1  r3.Vec
+}
+
+// Angle returns the angle of p about the basis's axis in [−π, π].
+func (b AngleBasis) Angle(p r3.Vec) float64 {
+	if !b.General {
+		return math.Atan2(p.Z, p.Y)
+	}
+	return math.Atan2(p.Dot(b.E1), p.Dot(b.E0))
+}
+
+// AngleAt returns the angle of p about the basis's axis in
+// [start, start+2π).
+func (b AngleBasis) AngleAt(p r3.Vec, start float64) float64 {
+	return wrapAngle(b.Angle(p), start)
+}
+
 // AngleAt returns the angle of p around the +X axis in [start, start+2π).
 func AngleAt(p r3.Vec, start float64) float64 {
-	angle := math.Atan2(p.Z, p.Y)
+	return AngleBasis{}.AngleAt(p, start)
+}
+
+func wrapAngle(angle, start float64) float64 {
 	for angle < start {
 		angle += 2 * math.Pi
 	}
@@ -26,20 +54,26 @@ func AngleAt(p r3.Vec, start float64) float64 {
 
 type sectorInterval struct{ lo, hi float64 }
 
-// SectorSeam returns a seam angle for the sector loop whose first and last
-// root contacts are first and last, placed by each of motions.
+// SectorSeam returns a seam angle about the +X axis for the sector loop whose
+// first and last root contacts are first and last, placed by each of motions.
+func SectorSeam(first, last r3.Vec, motions []r3.Transform) (float64, error) {
+	return AngleBasis{}.SectorSeam(first, last, motions)
+}
+
+// SectorSeam returns a seam angle about the basis's axis for the sector loop
+// whose first and last root contacts are first and last, placed by each of
+// motions.
 //
 // The largest unused gap supplies a seam outside every certified root
 // sector. The later spatial-error test proves these held intervals disjoint.
-func SectorSeam(first, last r3.Vec, motions []r3.Transform) (float64, error) {
+func (basis AngleBasis) SectorSeam(first, last r3.Vec, motions []r3.Transform) (float64, error) {
 	if len(motions) == 0 {
 		return 0, fmt.Errorf("%w: sector source has no root contacts", decaderr.ErrUnsupported)
 	}
 	intervals := make([]sectorInterval, len(motions))
 	for i, motion := range motions {
-		a := math.Atan2(motion.Apply(first).Z, motion.Apply(first).Y)
-		b := math.Atan2(motion.Apply(last).Z,
-			motion.Apply(last).Y)
+		a := basis.Angle(motion.Apply(first))
+		b := basis.Angle(motion.Apply(last))
 		if a < 0 {
 			a += 2 * math.Pi
 		}

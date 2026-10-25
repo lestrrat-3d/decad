@@ -14,8 +14,8 @@ import (
 
 // SectorUnionMany admits one Revolve and one authentic point
 // Loft source, followed by copies of that same source. Operand order does
-// not assign a geometric role; source records do. A certificate about a
-// general axis declines (GeneralCertificate), so the set keeps its route.
+// not assign a geometric role; source records do. The certificate may be
+// about +X or about a general axis (agent-docs/revolve-axis-design.md).
 func SectorUnionMany(ctx context.Context, env topo.Env,
 	operands []*topo.Body) (*topo.Body, bool, error) {
 	for blankIndex, blank := range operands {
@@ -24,7 +24,7 @@ func SectorUnionMany(ctx context.Context, env topo.Env,
 				continue
 			}
 			cert, ok := CertifySector(blank, first)
-			if !ok || GeneralCertificate(cert) {
+			if !ok {
 				continue
 			}
 			if err := TraceSectorLoop(cert); err != nil {
@@ -55,8 +55,8 @@ func SectorUnionMany(ctx context.Context, env topo.Env,
 	return nil, false, nil
 }
 
-// SectorUnion authenticates source geometry before construction. A
-// certificate about a general axis declines (GeneralCertificate).
+// SectorUnion authenticates source geometry before construction. The
+// certificate may be about +X or about a general axis.
 func SectorUnion(ctx context.Context, op meshbool.OperationKind,
 	env topo.Env, a, b *topo.Body) (*topo.Body, bool, error) {
 	if op != meshbool.OpUnion {
@@ -71,9 +71,6 @@ func SectorUnion(ctx context.Context, op meshbool.OperationKind,
 			return nil, false, nil
 		}
 	}
-	if GeneralCertificate(cert) {
-		return nil, false, nil
-	}
 	if err := TraceSectorLoop(cert); err != nil {
 		return nil, true, err
 	}
@@ -84,9 +81,8 @@ func SectorUnion(ctx context.Context, op meshbool.OperationKind,
 
 // NextSectorUnion rebuilds a serial join from the retained
 // authenticated Revolve and point-Loft sources. The faceted joined operand
-// is not used as a geometric source for the next contact. A join whose
-// certificate is about a general axis declines (GeneralCertificate). The new
-// copy's motion must be a rotation about the certificate's axis that
+// is not used as a geometric source for the next contact. The new copy's
+// motion must be a rotation about the certificate's axis that
 // massmoment.AxisRotation admits: a reflected, translated or obtuse copy, or
 // one whose axis drifts past massmoment.DriftSinLimit, declines.
 func NextSectorUnion(ctx context.Context, op meshbool.OperationKind,
@@ -105,7 +101,6 @@ func NextSectorUnion(ctx context.Context, op meshbool.OperationKind,
 		jp.Xform != r3.Identity() || p.RevolveLoftSector == nil ||
 		p.RevolveLoftSector.Source == nil ||
 		jp.RevolveLoftJoin.Certificate == nil ||
-		GeneralCertificate(jp.RevolveLoftJoin.Certificate) ||
 		jp.RevolveLoftJoin.Certificate.Trim != p.RevolveLoftSector.Source ||
 		p.Xform != p.RevolveLoftSector.Motion {
 		return nil, false, nil
