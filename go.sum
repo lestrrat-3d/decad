@@ -1,7 +1,5 @@
 github.com/lestrrat-3d/r3 v0.0.0-20261014125509-3c90eee135e1 h1:fgCGzCJZtB56H7nPuXgr3OTS7km1+f8AVLCOMBWJeGA=
 github.com/lestrrat-3d/r3 v0.0.0-20261014125509-3c90eee135e1/go.mod h1:4ZWWwLiR9tf6tOORKYM95+OXLMbdAmHywWdUYsDJfYc=
-github.com/lestrrat-3d/sketch v0.0.0-20261024123506-8e7da692d5d8 h1:dKYEUbrusEmgLmGPiKsloUCNTQzt2JHmR04lJIL0Djk=
-github.com/lestrrat-3d/sketch v0.0.0-20261024123506-8e7da692d5d8/go.mod h1:yU8fsrfp5gVwwjxD96OCgw/2R25SW4Smuz+U7iBWzT0=
 github.com/lestrrat-3d/sketch v0.0.0-20261025131903-b8ce0f76ca74 h1:7TphJwLOi57bbZqR7mW4UjbIA3LljSWBU/Twxpwm2vQ=
 github.com/lestrrat-3d/sketch v0.0.0-20261025131903-b8ce0f76ca74/go.mod h1:WO8zEiM5QqHE0+Lb6SOSqsVQ3xrowRgK04RkUmlyuxg=
 github.com/lestrrat-3d/step v0.0.0-20261009070858-31dac8684384 h1:j6zfQpoBQLJJrkznI3DOLIZobIAwOEyL2aFueLnnvow=
