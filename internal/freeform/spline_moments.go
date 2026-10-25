@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // FreeformSpanCeiling is the span length, in control points, past which
@@ -58,8 +59,11 @@ func ChargeFreeformSpans(spans []BezierSpan, work *FreeformWork) error {
 // RpIntegral01 is the exact ∫₀¹ of a rational polynomial: Σ cᵢ/(i+1).
 func RpIntegral01(p polynomial.RatPoly) *big.Rat {
 	out := new(big.Rat)
+	var term, divisor big.Rat
 	for i, coefficient := range p {
-		out.Add(out, new(big.Rat).Quo(coefficient, big.NewRat(int64(i)+1, 1)))
+		divisor.SetInt64(int64(i) + 1)
+		proof.QuoRat(&term, coefficient, &divisor)
+		proof.AddRat(out, out, &term)
 	}
 	return out
 }
