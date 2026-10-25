@@ -302,6 +302,17 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 	if err := tree.prepareQueryCeilings(ctx, queryFacet); err != nil {
 		return false, err
 	}
+	// The first scan cannot move vertices. Build its projected certificates
+	// once before workers share them; repair invalidates incident facets only
+	// after every worker has joined.
+	for i := range e.h.Tris {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return false, err
+			}
+		}
+		e.projection(i)
+	}
 	clean := make([]bool, workers)
 	errors := make([]error, workers)
 	locals := make([]*heldEmbedding, workers)
@@ -483,8 +494,8 @@ func (e *heldEmbedding) scanStep() error {
 	return e.pollErr()
 }
 
-// readOnlyScanCopy shares the immutable facet boxes and incident-facet lists,
-// while each worker writes only its own predicate caches.
+// readOnlyScanCopy shares the immutable facet boxes, prepared projections and
+// incident-facet lists. Each worker writes only its own remaining predicate caches.
 func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int) *heldEmbedding {
 	local := *e
 	local.pollErr = ctx.Err
@@ -504,8 +515,6 @@ func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int) *held
 	local.fnormOK = make([]bool, len(e.fnormOK))
 	local.cone = make([][3][2]r3.Vec, len(e.cone))
 	local.coneOK = make([][3]bool, len(e.coneOK))
-	local.projected = make([]heldProjectedFacet, len(e.projected))
-	local.projectedOK = make([]bool, len(e.projectedOK))
 	local.sideSigns = make(map[[2]int]int)
 	local.stamp = nil
 	local.cands = nil
@@ -833,8 +842,8 @@ type heldProjectedFacet struct {
 }
 
 // projection builds each directed edge sign once for this facet. A vertex
-// move invalidates its incident facets; parallel scan workers use separate
-// caches, so the shared held mesh remains read-only during that scan.
+// move invalidates its incident facets; the first parallel scan prepares all
+// projections before sharing them, so its workers only read these caches.
 func (e *heldEmbedding) projection(i int) *heldProjectedFacet {
 	if e.projectedOK[i] {
 		return &e.projected[i]
