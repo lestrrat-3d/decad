@@ -1,9 +1,11 @@
 package loftmesh
 
 import (
+	"context"
 	"errors"
 	"math"
 	"math/rand/v2"
+	"sync"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -118,6 +120,88 @@ func TestCountParallelMatchesVisit(t *testing.T) {
 					require.Equal(t, wantErr, gotErr, "limit %d budget %d", limit, k)
 					require.Equal(t, wantSteps, gotSteps, "limit %d budget %d", limit, k)
 				}
+			}
+		})
+	}
+}
+
+func TestCountParallelPollPreservesSerialBudget(t *testing.T) {
+	type parallelScan interface {
+		pairScan
+		countParallel(*proofbound.WorkBudget, int, func(int, int) bool, uint64, int) (sweepCount, error)
+	}
+	boxes := randomBoxes(3, 1500, 0.3)
+	members := allMembers(len(boxes))
+	family := make([]int, len(boxes))
+	for i := range family {
+		family[i] = i%3 - 1
+	}
+	scans := map[string]parallelScan{
+		"tree": newTreeScan(boxes, members), "grouped": newGroupedTreeScan(boxes, members, family),
+	}
+	keep := func(i, j int) bool { return (i+j)%3 != 0 }
+	for name, scan := range scans {
+		t.Run(name, func(t *testing.T) {
+			for _, tc := range []struct {
+				name        string
+				limit, used uint64
+				pollError   error
+			}{
+				{name: "zero ceiling"},
+				{name: "one remaining step", limit: 1},
+				{name: "previously exhausted", limit: 1, used: 1},
+				{name: "cancellation", pollError: context.Canceled},
+				{name: "other poll error", pollError: errors.New("poll failed")},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					newBudget := func(steps *uint64) *proofbound.WorkBudget {
+						b := countingBudget(tc.limit, steps)
+						for range tc.used {
+							require.NoError(t, b.Step())
+						}
+						return b
+					}
+					var wantSteps, gotSteps uint64
+					want, wantErr := sweepCandidateCountsWorkers(newBudget(&wantSteps), scan,
+						len(boxes), keep, math.MaxUint64, 1)
+					gate := make(chan struct{})
+					var release sync.Once
+					defer release.Do(func() { close(gate) })
+					budget := newBudget(&gotSteps)
+					poll := budget.ErrFn
+					polled := false
+					budget.ErrFn = func() error {
+						polled = true
+						release.Do(func() { close(gate) })
+						if tc.pollError != nil {
+							return tc.pollError
+						}
+						return poll()
+					}
+					// Workers wait until the real caller-side timer polls. The
+					// keep result is unchanged, and no scheduler delay is assumed.
+					got, gotErr := scan.countParallel(budget, len(boxes), func(i, j int) bool {
+						<-gate
+						return keep(i, j)
+					}, math.MaxUint64, 4)
+					require.True(t, polled)
+					if tc.pollError != nil {
+						require.ErrorIs(t, gotErr, tc.pollError)
+						require.Equal(t, tc.used, gotSteps, "a failed poll must not charge work")
+						return
+					}
+					require.Equal(t, want.scanned, got.scanned)
+					require.Equal(t, want.exceeded, got.exceeded)
+					require.Equal(t, want.count, got.count)
+					require.Len(t, got.starts, len(want.starts))
+					require.Equal(t, wantSteps, gotSteps)
+					var wantLimit, gotLimit *proofbound.WorkLimitError
+					require.ErrorAs(t, wantErr, &wantLimit)
+					require.ErrorAs(t, gotErr, &gotLimit)
+					require.Equal(t, wantLimit.Resource, gotLimit.Resource)
+					require.Equal(t, wantLimit.Maximum, gotLimit.Maximum)
+					require.Equal(t, wantLimit.Observed, gotLimit.Observed)
+				})
 			}
 		})
 	}

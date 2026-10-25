@@ -1,6 +1,7 @@
 package loftmesh
 
 import (
+	"errors"
 	"math"
 	"reflect"
 	"slices"
@@ -806,6 +807,11 @@ func (t treeScan) countParallel(budget *proofbound.WorkBudget, f int, keep func(
 		partial[blk] = local
 		return nil
 	}); err != nil {
+		// No worker has charged budget. Replay an exhausted ceiling through
+		// the serial walk so its first failing step and metadata are identical.
+		if errors.Is(err, proofbound.ErrWallWorkBudget) {
+			return sweepCandidateCountsWorkers(budget, t, f, keep, limit, 1)
+		}
 		return sweepCount{}, err
 	}
 	total := used
