@@ -209,21 +209,9 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, worker
 		return nil, fmt.Errorf(`%w: the boolean result holds no boundary`, decaderr.ErrBooleanFailed)
 	}
 
-	directed := map[[2]int]int{}
-	for i, t := range tris {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-		}
-		for k := range 3 {
-			directed[[2]int{t[k], t[(k+1)%3]}]++
-		}
-	}
-	for e, n := range directed {
-		if n != 1 || directed[[2]int{e[1], e[0]}] != 1 {
-			return nil, fmt.Errorf(`%w: the held boundary does not close`, decaderr.ErrBooleanFailed)
-		}
+	neighbors, err := closedFacetEdges(ctx, tris)
+	if err != nil {
+		return nil, err
 	}
 
 	// A lift or determinant that panics on a bad input must do so where the
@@ -257,7 +245,7 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, worker
 	for i := range audit.Comp {
 		audit.Comp[i] = -1
 	}
-	Adj, err := meshbool.FacetAdjacencyContext(ctx, tris)
+	Adj, err := closedFacetAdjacency(ctx, tris, neighbors)
 	if err != nil {
 		return nil, err
 	}
