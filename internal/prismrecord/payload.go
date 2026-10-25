@@ -57,7 +57,7 @@ import (
 // vertices and the vertical edge lengths. Being payload fields they re-evaluate
 // with the payload, so a placement or copy keeps them.
 //
-// Walks is the plane-local walk resolution of THIS payload's own profile,
+// Walks holds the plane-local walks and moments of THIS payload's own profile,
 // published by the evaluation that built the body and carried through every
 // rigid re-evaluation of it (Placed). It is a pure cache: it
 // holds nothing the record does not already determine, nothing

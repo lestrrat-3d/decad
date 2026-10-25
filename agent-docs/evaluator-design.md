@@ -983,7 +983,16 @@ What makes it sound is that a walk holds nothing placement-dependent: `walkOf`
 answers in the section's own (u, v), and the frame, the placement and the
 reflection's orientation and winding corrections are all applied by consumers
 DOWNSTREAM of it. So a reflected copy still runs every correction it always ran;
-only the arc-length bracketing under it is not repeated.
+the arc-length bracketing and completed plane-local moment integration are reused.
+
+`ProfileWalks` also owns the successful integration at its recorded moment order
+and a deep copy of the source record as that result's identity key. Every read
+runs the original field validation and charges before checking the key. A matching
+record and order return owned copies of all rational fields; a changed record,
+different order, or absent result integrates normally. Publishing a result creates
+a new snapshot; existing walk caches are never mutated. This preserves concurrent
+placement reads, work-limit failures and their metadata, and source-array edits
+cannot silently change the cached result's key.
 
 A tessellation reads the same published set. `tessellateContext`'s prism arm
 chords the very loops the build resolved, so it replays the recorded charge onto
