@@ -18,10 +18,9 @@ func dyQuoRound(n, d Dyadic, up bool) (float64, bool, bool) {
 	if n.IsZero() {
 		return 0, true, true
 	}
-	var ta, tb big.Int
-	var ba, bb dyBuf
-	a := new(big.Int).Abs(n.view(&ta, &ba))
-	b := new(big.Int).Abs(d.view(&tb, &bb))
+	var numerator, denominator big.Int
+	a := n.MantInto(&numerator)
+	b := d.MantInto(&denominator)
 	exp := a.BitLen() - b.BitLen()
 	if shift := 54 - exp; shift > 0 {
 		a.Lsh(a, uint(shift))
