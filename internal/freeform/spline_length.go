@@ -588,10 +588,14 @@ func SpanSquareCmpScratch(f float64, d SpanSquaredDistance, scratch *LengthDista
 	return scratch.Lhs.Cmp(scratch.Rhs.Lsh(d.Num, uint(-shift)))
 }
 
-// SpanSqrtSeed follows proofbound.RatSqrtSeed's 64-bit big.Float quotient, while keeping
-// the power-of-two part of the denominator as an exponent. SetRat uses the same
-// full-precision integer operands and Quo for a noninteger rational.
+// SpanSqrtSeed matches proofbound.RatSqrtSeed's 64-bit quotient, keeping the
+// power-of-two denominator as an exponent. Integer prefixes determine the
+// rounded mantissa when RatioSqrtSeed succeeds; otherwise full-precision
+// big.Float division supplies it.
 func SpanSqrtSeed(d SpanSquaredDistance) float64 {
+	if seed, ok := proofarith.RatioSqrtSeed(d.Num, d.DenSq, 2*int(d.Exp)); ok {
+		return seed
+	}
 	mant := new(big.Float).SetPrec(64)
 	ratio := new(big.Float).SetPrec(64).Quo(
 		new(big.Float).SetInt(d.Num), new(big.Float).SetInt(d.DenSq),
@@ -605,11 +609,14 @@ func SpanSqrtSeed(d SpanSquaredDistance) float64 {
 	return math.Ldexp(math.Sqrt(m), exp/2)
 }
 
-// SpanSqrtSeedScratch uses the same precision and rounding as SpanSqrtSeed.
-// Each integer input starts with zero precision so SetInt gives it its full
-// bit length, as a newly allocated big.Float would. The quotient and mantissa
-// use 64 bits, while their storage is reused across this bracket's leaf legs.
+// SpanSqrtSeedScratch uses the same prefix shortcut as SpanSqrtSeed. In the
+// full-division fallback, each integer input starts with zero precision so
+// SetInt gives it its full bit length, as a new big.Float would. The quotient
+// and mantissa use 64 bits, reusing storage across this bracket's leaf legs.
 func SpanSqrtSeedScratch(d SpanSquaredDistance, scratch *LengthDistanceScratch) float64 {
+	if seed, ok := proofarith.RatioSqrtSeed(d.Num, d.DenSq, 2*int(d.Exp)); ok {
+		return seed
+	}
 	scratch.SeedMant.SetPrec(64)
 	scratch.SeedRatio.SetPrec(64)
 	ratio := scratch.SeedRatio.Quo(
