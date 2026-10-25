@@ -227,6 +227,8 @@
 10	0.00	TestPrismPatternUnionOfTangentRootJoinsBySectionUnion
 10	0.00	TestPointLoftSourceStaysCurrentOnATiltedPlane
 10	0.00	TestContainedCutUsesCertifiedSourceVolumeAndRecordsHistory
+10	0.00	TestContainedCutUsesCertifiedSourceCentroid
+10	0.00	TestContainedCutCentroidEvidenceFailureKeepsDocumentUnchanged
 10	0.00	TestOperationDiagnosticEnumsAndBooleanError
 10	0.00	TestOperationErrorPreservesKnownFailureAndSkipsTypedErrors
 10	0.00	TestOperationErrorCopiesOptionalDetailsAndUnwrapsOriginal

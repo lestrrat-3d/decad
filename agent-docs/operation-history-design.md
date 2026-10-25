@@ -13,15 +13,17 @@ Navigation only; the named sections own their rules.
 ## Status and scope
 
 Implementation records public body-producing routes and `Remove`, and includes
-the contained-Cut Volume calculation. Remove and Unstitch have complete face
-maps; other routes report unknown coverage unless the builder supplies an
-attribution map. Composite tools remain outside the live set and public history
-until their outer call commits. This work changes no role, geometry, liveness,
-or measurement contract.
+the contained-Cut Volume and centroid calculations. Remove and Unstitch have
+complete face maps; other routes report unknown coverage unless the builder
+supplies an attribution map. Composite tools remain outside the live set and
+public history until their outer call commits. This work changes no role,
+geometry, liveness, or measurement contract.
 
 Retain construction history as evaluator evidence so later calculations can use
-analytic source geometry instead of accumulating avoidable mesh error. The first
-new calculation is a tighter Volume reading for a certified contained Cut.
+analytic source geometry instead of accumulating avoidable mesh error. The new
+calculations derive tighter Volume and centroid readings for a certified
+contained Cut. The centroid calculation uses source first moments and its own
+bound; it does not derive a centroid from Volume alone.
 Every document records public operation history from creation for verification
 and inspection of successful calls.
 The caller's Go function remains the feature tree. Proof records describe evaluated
@@ -74,9 +76,45 @@ Keep both valid proof intervals available for consistency checks.
 Disjoint candidate intervals are an internal consistency error before publication.
 Limit the attempt to the containment kernel's supported analytic input classes.
 Reuse a matching certificate obtained during evaluation when available; otherwise
-make one bounded attempt under the operation's context and work budget.
-An undecided proof or exhausted optional work budget selects the ordinary reading.
-Context cancellation aborts the operation through the existing atomic-failure path.
+call `pairkernel.Pair` once before commit under the operation's context. An
+unsupported carrier or undecided relation returns no containment certificate and
+selects the ordinary reading. `proofbound.WorkBudget` polls the context and has no
+separate work-exhaustion result. Cancellation and other `Pair` errors follow the
+existing error path and abort the operation before commit.
+
+### Contained Cut centroid
+
+For a successfully built mesh `Cut(A, B)` with the same strict whole-containment
+certificate, derive the result centroid from the bounded source volume and
+centroid readings. Compute each world-coordinate first moment about the target
+centroid anchor `o`:
+
+```text
+o + [VA·(CA − o) − VB·(CB − o)] / [VA − VB]
+```
+
+Use the already-derived source-volume difference as the denominator. Propagate
+both source volume bounds, both source centroid radii, and each arithmetic
+rounding term with `proofbound` bounded arithmetic. Require the denominator's
+proven lower endpoint to be positive. If its interval crosses zero, keep the
+audited mesh centroid. If the interval is wholly nonpositive, the source
+readings contradict strict containment; fail before commit. If arithmetic
+overflows a finite reading, keep the mesh centroid.
+
+Compare the derived and audited mesh centroid balls using exact held-center
+distance. Disjoint certified balls are an internal consistency error before
+commit. Select the derived centroid only when its radius is strictly smaller;
+a tie or larger radius keeps the mesh result. This selection is independent of
+whether the source-derived Volume reading wins its own bound comparison.
+`Verify` reads the selected `Body.Centroid` through its existing centroid gate.
+Derive `Exactness` from the selected centroid's own bound. Do not derive
+`MassProperties` or inertia from this centroid record.
+
+Store both candidate centroid readings and the selection result as plain
+`CentroidLineage` values nested in `VolumeLineage`. Validate source producer
+identities against the parent record. Do not retain topology, body, document,
+context, or cache pointers. Public operation history continues to record only
+the public call and its body relationships.
 
 ### Local modify and later measurements
 
@@ -88,11 +126,11 @@ Existing retained-edge routes can consume the resulting surfaces, rims and local
 bounds under `retained-edge-blend-design.md`. They gain no new admission from an
 operation name, ancestry pointer, or complete public face mapping.
 
-Stage source-moment composition after the Volume fixture. A contained Cut can
-subtract volume, first moments and second moments in one common frame, then derive
-centroid and inertia with interval arithmetic. Each term needs its own moment
-certificate and placement charge. A Volume certificate alone cannot tighten area,
-centroid, inertia, wall thickness, or the mesh's symmetric-difference bound.
+The contained-Cut centroid uses source first moments with the existing source
+Volume readings. Stage second-moment composition separately before changing
+`MassProperties` or inertia; each term needs its own moment certificate and
+placement charge. A Volume or centroid certificate alone cannot tighten area,
+inertia, wall thickness, or the mesh's symmetric-difference bound.
 
 Stage analytic reconstruction separately. Reusing a source payload requires a
 set-equality certificate or a complete certified analytic trim boundary plus
@@ -404,9 +442,17 @@ Do not demand Exact for pi. Verify must consume the tighter returned reading.
 Inspect the always-available public snapshot and confirm its Cut record names the
 actual inputs and result. Confirm that Cut retired both original inputs and that
 the returned body's calculation does not depend on their live membership.
-This is a proposed fixture, not a claimed measured improvement. If the real
-containment producer or mesh consumer cannot admit it, stop this increment and
-report the prerequisite and scope; do not substitute a manually populated record.
+`operation_history_volume_test.go` implements this real fixture and checks the
+containment proof, mesh output, selected Volume, Verify reading and public Cut
+record. It also confirms the inputs retire while the result remains readable.
+
+`operation_history_centroid_test.go` implements the centroid fixture with the
+same real cube, tilted cylinder, containment proof and public Cut. It checks a
+certified pi interval and source volume and centroid bounds against both
+candidate centroid balls in 3D. Both balls must enclose the reference, and the
+selected source-derived centroid must have a strictly smaller radius than the
+audited mesh centroid. `Body.Centroid` and `Verify` must return the selected
+reading.
 
 ## Focused repository proof fixtures
 
@@ -586,8 +632,10 @@ Do not merge a partially instrumented public history API.
 - Deliverable: Preserve evidence through placement only with a proved transfer
   and fresh charges. Otherwise discard the optional quantity certificate and
   recompute through the existing path. Do not tighten `MassProperties`, area,
-  centroid or inertia from Volume alone; `internal/massdispatch/dispatch.go`
-  continues to require its own moment proof.
+  centroid or inertia from Volume alone. The separate contained-Cut centroid
+  consumer uses bounded source first moments and its own placement and
+  arithmetic charges. `internal/massdispatch/dispatch.go` continues to require
+  its own moment proof for `MassProperties` and inertia.
 - Focused tests: Add consumer arithmetic tests for representable subtraction,
   nonzero source bounds, rounding, equal-bound selection, mismatched identities,
   invalid units or non-finite data, and disjoint intervals. Use a test-only
