@@ -55,6 +55,9 @@ func massPropertiesFromReadings(readings massmoment.MassReadings, err error) (Ma
 // carries an occupied-volume proof, refining the mesh until the tensor
 // interval proves positive: lofts, tapered extrudes, exact stitched solids
 // and curved payloads the analytic arms refuse.
+// A faceted result of a strictly contained Cut may use immutable source V/P/Q
+// moments when they agree with the audited mesh readings and improve the full
+// mass-property tuple. Otherwise the verified-mesh reading is returned.
 // It returns ErrUnsupported for other solids rather than estimating their inertia.
 // The receiver and context must not be nil.
 func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassProperties, error) {

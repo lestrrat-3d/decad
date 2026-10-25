@@ -286,6 +286,10 @@ Features choose edges and faces with queries.
 | Cross-section | `Body.Section` returns a sketch and its profiles on a plane. |
 | Mesh | `Body.Tessellate` returns a `*decad.Mesh` with its chord error bound. |
 
+`Body.MassProperties` uses certified source moments for some strictly
+contained prism Cuts when they produce tighter readings that agree with the
+verified mesh. Other faceted results continue to use their verified mesh.
+
 Surfaces are `decad.Plane`, `decad.Cylinder`, `decad.Cone`, `decad.Sphere`, `decad.Torus`, `decad.Faceted`,
 `decad.NURBSSurface` and others, told apart by `decad.SurfaceKind`. A `decad.Mesh` is an output only. It is never
 the body representation.

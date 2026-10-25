@@ -231,6 +231,12 @@ Rules:
 
 ## 4. Mass properties — decad's own, on decad's own records
 
+The faceted `MassProperties` query can consume immutable V/P/Q evidence from
+the admitted strictly contained Cut of a rectangular prism by a whole circular
+prism. It checks the source tuple against the independently audited mesh tuple
+before selecting it. This does not change the faceted geometry, mesh bounds,
+or topology and does not transfer source moments to descendants.
+
 The hard rule "Ask `sketch` for 2D answers by default" forbids re-deciding what
 sketch has decided: closure, validity, cuts, intersections, projections. It does
 **not** put the recorded region's *mass properties* out of reach — once

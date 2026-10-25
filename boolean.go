@@ -15,6 +15,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/contactfaceted"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
+	"github.com/lestrrat-3d/decad/internal/massdispatch"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prooflineage"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -322,10 +323,15 @@ func containedCutQuantities(ctx context.Context, result, target, tool *Body) err
 	if err != nil {
 		return newBooleanError(meshbool.OpCut, BooleanEvaluatorFailure, ErrBooleanFailed, err)
 	}
+	momentLineage, err := massdispatch.CaptureContainedCutMoments(ctx, &result.n, &target.n, &tool.n, volumeLineage)
+	if err != nil {
+		return newBooleanError(meshbool.OpCut, BooleanEvaluatorFailure, ErrBooleanFailed, err)
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	volumeLineage.Centroid = centroidLineage
+	volumeLineage.Moments = momentLineage
 	result.n.VolumeLineage = volumeLineage
 	if selectVolume {
 		result.n.Volume = volumeLineage.Derived

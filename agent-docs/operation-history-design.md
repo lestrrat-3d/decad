@@ -13,7 +13,7 @@ Navigation only; the named sections own their rules.
 ## Status and scope
 
 Implementation records public body-producing routes and `Remove`, and includes
-the contained-Cut Volume and centroid calculations. Remove and Unstitch have
+contained-Cut Volume, centroid, and mass-property calculations. Remove and Unstitch have
 complete face maps; other routes report unknown coverage unless the builder
 supplies an attribution map. Composite tools remain outside the live set and
 public history until their outer call commits. This work changes no role,
@@ -21,9 +21,9 @@ geometry, liveness, or measurement contract.
 
 Retain construction history as evaluator evidence so later calculations can use
 analytic source geometry instead of accumulating avoidable mesh error. The new
-calculations derive tighter Volume and centroid readings for a certified
-contained Cut. The centroid calculation uses source first moments and its own
-bound; it does not derive a centroid from Volume alone.
+calculations derive tighter Volume, centroid, and mass-property readings for a
+certified contained Cut. The centroid uses source first moments, and the mass
+properties use density-independent source volume, first, and second moments.
 Every document records public operation history from creation for verification
 and inspection of successful calls.
 The caller's Go function remains the feature tree. Proof records describe evaluated
@@ -116,6 +116,24 @@ identities against the parent record. Do not retain topology, body, document,
 context, or cache pointers. Public operation history continues to record only
 the public call and its body relationships.
 
+### Contained Cut mass properties
+
+For the currently admitted rectangular-prism target and whole circular-prism
+tool, integrate both source records into world-coordinate V/P/Q moments about
+the target's held centroid. Freeze copied source moments and their difference
+in the result's existing volume lineage before commit. The moment record keeps
+producer identities and containment facts, and each query validates them
+before reading independent copies.
+
+The faceted `MassProperties` path always obtains its audited mesh tuple first.
+It then publishes a source-derived candidate with the caller's density and
+checks mass, all six inertia entries, and both center balls against the mesh
+and the selected body centroid. Any disjoint evidence fails the query. A
+consistent source tuple replaces the mesh tuple only when all eight bounds are
+no larger and at least one is smaller. Unsupported integrations or source
+publication limits keep the mesh tuple. This slice does not transfer moments
+through Copy, Transform, or other operations.
+
 ### Local modify and later measurements
 
 Preserve unchanged source-patch certificates across Fillet and Chamfer. Replace
@@ -126,11 +144,14 @@ Existing retained-edge routes can consume the resulting surfaces, rims and local
 bounds under `retained-edge-blend-design.md`. They gain no new admission from an
 operation name, ancestry pointer, or complete public face mapping.
 
-The contained-Cut centroid uses source first moments with the existing source
-Volume readings. Stage second-moment composition separately before changing
-`MassProperties` or inertia; each term needs its own moment certificate and
-placement charge. A Volume or centroid certificate alone cannot tighten area,
-inertia, wall thickness, or the mesh's symmetric-difference bound.
+The contained-Cut mass-property slice is implemented in
+`agent-docs/contained-cut-moments-design.md`. It retains only a rectangular
+prism target and whole circular prism tool, consumes their V/P/Q moments in
+the existing faceted query, and validates the full tuple against the audited
+mesh. Other operation classes still need their own moment evidence and
+selection rules before they can improve `MassProperties`. A Volume or
+centroid certificate alone cannot tighten area, wall thickness, or the mesh's
+symmetric-difference bound.
 
 Stage analytic reconstruction separately. Reusing a source payload requires a
 set-equality certificate or a complete certified analytic trim boundary plus
