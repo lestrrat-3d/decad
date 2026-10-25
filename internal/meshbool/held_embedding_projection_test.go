@@ -91,3 +91,30 @@ func TestHeldProjectedEdgesInvalidateWithVertex(t *testing.T) {
 		require.Equal(t, fresh.projectionsSeparated(0, 1), e.projectionsSeparated(0, 1))
 	}
 }
+
+func TestHeldSharedProjectionsInvalidateAfterFailedScan(t *testing.T) {
+	h := HeldRounding{
+		Verts:   []r3.Vec{{}, {X: 1}, {Y: 1}, {X: 0.2, Y: 0.2}, {X: 0.8, Y: 0.2}, {X: 0.2, Y: 0.8}},
+		Tris:    [][3]int{{0, 1, 2}, {3, 4, 5}},
+		Movable: make([]bool, 6),
+	}
+	e := newHeldEmbedding(h, proofbound.NewWorkBudget(t.Context()), true)
+	require.NoError(t, e.buildGrid())
+	clean, err := e.parallelClean(t.Context(), []int{0, 1})
+	require.NoError(t, err)
+	require.False(t, clean, "the two coplanar facets overlap")
+	for i := range h.Tris {
+		require.True(t, e.projectedOK[i], "facet %d was prepared before workers started", i)
+	}
+	local := e.readOnlyScanCopy(t.Context(), 1)
+	require.True(t, &local.projected[0] == &e.projected[0], "workers share the prepared certificates")
+	require.True(t, &local.projectedOK[0] == &e.projectedOK[0], "workers share the read-only readiness flags")
+	other := e.projected[1]
+	e.setVert(1, r3.Vec{X: 4, Y: 1, Z: 2})
+	require.False(t, e.projectedOK[0], "repair invalidates the moved vertex's facet")
+	require.True(t, e.projectedOK[1], "repair preserves the other facet")
+	require.Equal(t, other, e.projected[1])
+	requireHeldProjectedEdgesMatch(t, e)
+	fresh := newHeldEmbedding(e.h, proofbound.NewWorkBudget(t.Context()), true)
+	require.Equal(t, fresh.projectionsSeparated(0, 1), e.projectionsSeparated(0, 1))
+}
