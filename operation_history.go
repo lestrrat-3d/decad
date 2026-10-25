@@ -144,14 +144,12 @@ func (o *Operation) FaceSuccessors(face *Face) (FaceHistory, error) {
 		return FaceHistory{}, ErrForeignBody
 	}
 	for _, input := range o.inputs {
-		for _, candidate := range input.Body.Faces() {
-			if candidate == face {
-				if history, ok := o.faceSuccessors[face]; ok {
-					history.faces = slices.Clone(history.faces)
-					return history, nil
-				}
-				return FaceHistory{coverage: HistoryUnknown}, nil
+		if input.Body != nil && bodyNode(input.Body) == face.n.Body {
+			if history, ok := o.faceSuccessors[face]; ok {
+				history.faces = slices.Clone(history.faces)
+				return history, nil
 			}
+			return FaceHistory{coverage: HistoryUnknown}, nil
 		}
 	}
 	return FaceHistory{}, ErrNoMatch
@@ -233,12 +231,23 @@ func (d *Document) appendOperationLocked(operation *Operation) {
 	for _, output := range operation.outputs {
 		d.producers[output] = operation
 	}
-	seen := make(map[*Body]struct{}, len(operation.inputs))
+	var firstConsumed *Body
+	var seen map[*Body]struct{}
 	for _, input := range operation.inputs {
 		if input.Use != InputConsumed {
 			continue
 		}
-		if _, ok := seen[input.Body]; ok {
+		if firstConsumed == nil {
+			firstConsumed = input.Body
+			d.consumers[input.Body] = append(d.consumers[input.Body], operation)
+			continue
+		}
+		if seen == nil {
+			if input.Body == firstConsumed {
+				continue
+			}
+			seen = map[*Body]struct{}{firstConsumed: {}}
+		} else if _, ok := seen[input.Body]; ok {
 			continue
 		}
 		seen[input.Body] = struct{}{}

@@ -212,32 +212,63 @@ func (d *Document) validateOperation(operation *Operation, consumed []*Body) err
 	if operation.kind == OperationUnknown || len(operation.outputs) == 0 && operation.kind != OperationRemove {
 		return fmt.Errorf("%w: operation record has no public kind or output", ErrBooleanFailed)
 	}
-	consumedSet := make(map[*Body]struct{}, len(consumed))
-	for _, body := range consumed {
-		if body == nil || body.n.Doc != &d.n {
-			return fmt.Errorf("%w: operation record names a foreign consumed body", ErrForeignBody)
+	// Most modeling calls consume one body. Validate that common case without
+	// allocating two temporary maps on every successful feature evaluation.
+	if len(consumed) <= 1 {
+		var consumedBody *Body
+		if len(consumed) == 1 {
+			consumedBody = consumed[0]
+			if consumedBody == nil || consumedBody.n.Doc != &d.n {
+				return fmt.Errorf("%w: operation record names a foreign consumed body", ErrForeignBody)
+			}
 		}
-		consumedSet[body] = struct{}{}
-	}
-	inputsConsumed := make(map[*Body]struct{}, len(consumedSet))
-	for _, input := range operation.inputs {
-		if input.Body == nil || input.Body.n.Doc != &d.n || input.Role == "" {
-			return fmt.Errorf("%w: operation record has an invalid body input", ErrForeignBody)
+		matchedConsumedInput := false
+		for _, input := range operation.inputs {
+			if input.Body == nil || input.Body.n.Doc != &d.n || input.Role == "" {
+				return fmt.Errorf("%w: operation record has an invalid body input", ErrForeignBody)
+			}
+			switch input.Use {
+			case InputConsumed:
+				if consumedBody == nil || input.Body != consumedBody {
+					return fmt.Errorf("%w: operation record inputs do not match the consumed bodies", ErrBooleanFailed)
+				}
+				matchedConsumedInput = true
+			case InputReferenced:
+			default:
+				return fmt.Errorf("%w: operation record has an unknown input use", ErrBooleanFailed)
+			}
 		}
-		switch input.Use {
-		case InputConsumed:
-			inputsConsumed[input.Body] = struct{}{}
-		case InputReferenced:
-		default:
-			return fmt.Errorf("%w: operation record has an unknown input use", ErrBooleanFailed)
-		}
-	}
-	if len(inputsConsumed) != len(consumedSet) {
-		return fmt.Errorf("%w: operation record inputs do not match the consumed bodies", ErrBooleanFailed)
-	}
-	for body := range consumedSet {
-		if _, ok := inputsConsumed[body]; !ok {
+		if consumedBody != nil && !matchedConsumedInput {
 			return fmt.Errorf("%w: operation record omits a consumed body", ErrBooleanFailed)
+		}
+	} else {
+		consumedSet := make(map[*Body]struct{}, len(consumed))
+		for _, body := range consumed {
+			if body == nil || body.n.Doc != &d.n {
+				return fmt.Errorf("%w: operation record names a foreign consumed body", ErrForeignBody)
+			}
+			consumedSet[body] = struct{}{}
+		}
+		inputsConsumed := make(map[*Body]struct{}, len(consumedSet))
+		for _, input := range operation.inputs {
+			if input.Body == nil || input.Body.n.Doc != &d.n || input.Role == "" {
+				return fmt.Errorf("%w: operation record has an invalid body input", ErrForeignBody)
+			}
+			switch input.Use {
+			case InputConsumed:
+				inputsConsumed[input.Body] = struct{}{}
+			case InputReferenced:
+			default:
+				return fmt.Errorf("%w: operation record has an unknown input use", ErrBooleanFailed)
+			}
+		}
+		if len(inputsConsumed) != len(consumedSet) {
+			return fmt.Errorf("%w: operation record inputs do not match the consumed bodies", ErrBooleanFailed)
+		}
+		for body := range consumedSet {
+			if _, ok := inputsConsumed[body]; !ok {
+				return fmt.Errorf("%w: operation record omits a consumed body", ErrBooleanFailed)
+			}
 		}
 	}
 	for _, output := range operation.outputs {
@@ -246,34 +277,53 @@ func (d *Document) validateOperation(operation *Operation, consumed []*Body) err
 		}
 	}
 	if len(operation.faceSuccessors) > 0 {
-		inputFaces := make(map[*Face]struct{})
+		inputFaces := make(map[*topo.Face]struct{})
 		for _, input := range operation.inputs {
-			for _, face := range input.Body.Faces() {
-				inputFaces[face] = struct{}{}
+			for _, lump := range input.Body.n.Lumps {
+				for _, shell := range lump.Shells {
+					for _, face := range shell.Faces {
+						inputFaces[face] = struct{}{}
+					}
+				}
 			}
 		}
-		outputFaces := make(map[*Face]struct{})
+		outputFaces := make(map[*topo.Face]struct{})
 		for _, output := range operation.outputs {
-			for _, face := range output.Faces() {
-				outputFaces[face] = struct{}{}
+			for _, lump := range output.n.Lumps {
+				for _, shell := range lump.Shells {
+					for _, face := range shell.Faces {
+						outputFaces[face] = struct{}{}
+					}
+				}
 			}
 		}
 		for face, history := range operation.faceSuccessors {
-			if _, ok := inputFaces[face]; !ok {
+			if face == nil {
+				return fmt.Errorf("%w: operation face mapping names a face outside its inputs", ErrBooleanFailed)
+			}
+			if _, ok := inputFaces[&face.n]; !ok {
 				return fmt.Errorf("%w: operation face mapping names a face outside its inputs", ErrBooleanFailed)
 			}
 			if history.coverage != HistoryUnknown && history.coverage != HistoryComplete {
 				return fmt.Errorf("%w: operation face mapping has unknown coverage", ErrBooleanFailed)
 			}
-			seen := make(map[*Face]struct{}, len(history.faces))
+			var seen map[*Face]struct{}
+			if len(history.faces) > 1 {
+				seen = make(map[*Face]struct{}, len(history.faces))
+			}
 			for _, successor := range history.faces {
-				if _, ok := outputFaces[successor]; !ok {
+				if successor == nil {
 					return fmt.Errorf("%w: operation face mapping names a face outside its outputs", ErrBooleanFailed)
 				}
-				if _, duplicate := seen[successor]; duplicate {
-					return fmt.Errorf("%w: operation face mapping repeats a successor", ErrBooleanFailed)
+				if _, ok := outputFaces[&successor.n]; !ok {
+					return fmt.Errorf("%w: operation face mapping names a face outside its outputs", ErrBooleanFailed)
 				}
-				seen[successor] = struct{}{}
+				if seen != nil {
+					if _, duplicate := seen[successor]; duplicate {
+						return fmt.Errorf("%w: operation face mapping repeats a successor", ErrBooleanFailed)
+					}
+					seen[successor] = struct{}{}
+				}
 			}
 		}
 	}
