@@ -687,6 +687,11 @@ func DvCross(a, b DyV3) DyV3 {
 func DvDot(a, b DyV3) Dyadic {
 	a0, a1, a2 := a[0], a[1], a[2]
 	b0, b1, b2 := b[0], b[1], b[2]
+	if (a0.hi|a1.hi|a2.hi)&^dySign != 0 && a == b {
+		if out, ok := dvSquareInline(a); ok {
+			return out
+		}
+	}
 	out := DyAdd(DyZero(), DyMul(a0, b0))
 	out = DyAdd(out, DyMul(a1, b1))
 	return DyAdd(out, DyMul(a2, b2))
