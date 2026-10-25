@@ -140,7 +140,7 @@ other axes use the ordinary Boolean route or refuse.
 Revolve/point-Loft sector body. This section states the route for a
 certificate about world X from a Revolve that passes the frame predicate.
 A certificate from the general record branch reads the same route about its
-own axis, and refuses a band bore (`agent-docs/revolve-axis-design.md` §9).
+own axis (`agent-docs/revolve-axis-design.md` §9).
 It reads the same authenticated section,
 ordered ring IDs, source groups, and published boundary, occupied-volume and
 area bounds as `Union`. The two spans adjacent to the section's sole axial

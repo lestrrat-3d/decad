@@ -13,9 +13,8 @@ Every step of the class is implemented about a general axis: the point-cone
 trims (§4.3, §4.4), the section and sector certificate (§4.1, §4.2, §5.2,
 §5.3), the copy placement, drift, frame tilt and source separation (§4.5,
 §5.5, §5.6, §5.8), the ring, the angles, the patch axes and the serial and
-variadic Union (§3.7, §5.7, §5.8), and the coaxial bore `Cut` of a joined body
-whose bore lies inside both cap radii (§9). A bore through a section band
-stays +X only (§9.7, `agent-docs/missing-features.md`, Booleans).
+variadic Union (§3.7, §5.7, §5.8), and the coaxial bore `Cut` of a joined body,
+annular or through the band before the low cap (§9).
 
 ## Question router
 
@@ -44,13 +43,13 @@ world origin:
    rotation about the axis up to rounding (§4.5).
 4. Serial and variadic `Union` (`revolveshell.SectorUnion`,
    `NextSectorUnion`, `SectorUnionMany`).
-5. The coaxial bore `Cut` of the joined body when the bore radius lies
-   strictly inside both cap radii (`revolveshell.SectorCylinderCut`, §9).
+5. The coaxial bore `Cut` of the joined body, with the bore radius strictly
+   inside both cap radii or strictly between the low and the high cap radius
+   (`revolveshell.SectorCylinderCut`, §9).
 
-The following stay +X only. Each declines or refuses a general-axis record
-explicitly (§4.6, §9.7):
+The following stay +X only. Each declines a general-axis record explicitly
+(§4.6):
 
-- The coaxial bore `Cut` through a section band (`BuildSectorBandCut`).
 - `ConeFromFace`.
 - The `LoftFaces` cone trims (`loftfacestrim`, `loft_faces.go`).
 
@@ -103,7 +102,7 @@ class is unplaced too, so they stay unchanged:
 | `internal/revolveshell/sector_bore_cut.go` | `SectorCylinderCut` | prism frame `N = X`, `U = Y`, `V = Z`; a general certificate takes `sectorCylinderCutAbout` (§9.1) | §7.6 |
 | `internal/revolveshell/sector_bore_record.go` | `RevolveSectorBoreCapRecord` | axis vertices `== {X: U}`; a general certificate takes `revolveSectorBoreCapsAbout` (§9.2) | §7.6 |
 | `internal/revolveshell/sector_bore_cut.go` | `buildSectorAnnularCut` | reads the axis through `sectorBoreAxis`: `xBoreAxis` or `generalBoreAxis` (§9.3–§9.6) | §7.6 |
-| `internal/revolveshell/sector_bore_band.go` | `BuildSectorBandCut` | caps at `x`, radii in YZ; refused about a general axis (§9.7) | §7.6 |
+| `internal/revolveshell/sector_bore_band.go` | `BuildSectorBandCut` | reads the axis through `sectorBoreAxis.band`: the +X crossing in `xBoreAxis`, the general one in `generalBoreAxis` (§9.7) | §7.6 |
 
 ### 2.3 World X as the axial coordinate, YZ as the radial plane
 
@@ -151,10 +150,8 @@ These sites take `PointConeSource` limits or `RecordedSection` spans. They run
 - `internal/loftfacestrim/trim.go:73,143,329`.
 - `internal/facetedrecord/trim_checks.go` `CapOutsideToeCone`.
 - `CapOutsideHeelCone` and `loftface.ConePullback`.
-- `internal/revolveshell/sector_bore_band.go`, which a general certificate
-  never reaches (§9.7).
 
-The annular bore reads its +X arithmetic through `xBoreAxis`, and
+The annular and band bores read their +X arithmetic through `xBoreAxis`, and
 `revolvemesh.SectorBorePatches` projects onto YZ (`Axes {1,2}`). A general
 certificate reads `generalBoreAxis` and `SectorBorePatchesOnto` (§9).
 
@@ -775,7 +772,7 @@ Each question below was checked against the sections above.
     sends every general certificate, including one about `A = X` from a blank
     outside the frame predicate, to `sectorCylinderCutAbout` before it reads
     the record. That route reads the record only through `generalBoreAxis`
-    and refuses a band bore (§9).
+    (§9).
 
 ## 6. Consumer contract
 
@@ -813,8 +810,9 @@ A model in the general class does the following:
   centred at its sketch origin on a plane whose normal is the axis and whose
   origin lies on it. One way is the frame `r3.NewFrame(t·Â, N̂, Â×N̂)` with
   `Â` the float-normalized `A` and `N̂` its left normal in the sketch plane.
-  The tool must span both caps and its radius must lie strictly inside both
-  cap radii (§9.1). A bore through a section band refuses (§9.7).
+  The tool must span both caps, and its radius must lie strictly inside both
+  cap radii or strictly between the low and the high cap radius, crossing the
+  straight band before the low cap (§9.1, §9.7).
 
 ## 7. Tests
 
@@ -968,6 +966,17 @@ red.
   minimisation at, just below and just above the exact distance, covering
   pierced triangles and nearest points inside an edge and at a vertex. It
   goes red without the pierce test or the interior-edge case.
+- `TestRevolveSectorCylinderBandCutAboutGeneralAxis` is the same
+  construction with a radius-2 bore, which crosses the band from `(5, 2.5)`
+  to `(6, 1.5)` and removes the low cap. Each result keeps only the high cap
+  and agrees with the +X band bore within the proven bounds. It goes red when
+  the general route refuses a band bore.
+- `TestBoreBandAboutAxisCoversTheCrossing`: about `(1,2,0)`, with a tool
+  deviation of `10⁻³` mm, every clipped vertex lies within the bound less
+  the chord sag of the exact band crossing at the bore radius and at the
+  radius plus the deviation, and every chord midpoint within the bound of the
+  crossing circle. It goes red without the seam factor `1 + 1/k`, without the
+  deviation in the clipped ring, or without the sag.
 - `TestSectorCylinderCutDeclinesJoinAboutAnotherAxis`: a mixed-axis join
   declines; matching +X and general joins reach the cap-ring record.
 - The +X bore tests and the digest are unchanged (§8, §9.8).
@@ -1078,10 +1087,10 @@ canonical axis to a call in them, as `revolve_sector_placement_test.go` passes
 `SectorCylinderCut` cuts a joined body with a complete coaxial cylinder. A
 certificate from the general record branch takes `sectorCylinderCutAbout`;
 any other takes the +X route (`agent-docs/revolve-loft-sector-design.md`,
-"Coaxial cylinder Cut"). Both build the annular result in one function,
-`buildSectorAnnularCut`, which reads the axis only through `sectorBoreAxis`:
-`xBoreAxis` holds the +X body verbatim, and `generalBoreAxis` the readings
-below. Nothing here reads a gear: the class is any join of §1 and one
+"Coaxial cylinder Cut"). Both build the annular result in
+`buildSectorAnnularCut` and the band result in `BuildSectorBandCut`, which
+read the axis only through `sectorBoreAxis`: `xBoreAxis` holds the +X body
+verbatim, and `generalBoreAxis` the readings below. Nothing here reads a gear: the class is any join of §1 and one
 coaxial prism.
 
 ### 9.1 Tool admission
@@ -1194,31 +1203,53 @@ changes only the audit's work.
 
 ### 9.7 Band crossing
 
-A bore whose radius lies between the low cap's radius and the high cap's
-refuses about a general axis: `sectorCylinderCutAbout` never calls
-`BuildSectorBandCut`, whose readings are +X. Its general form is designed
-here and not built:
+A bore whose radius lies strictly between the low cap's radius and the high
+cap's crosses the straight band before the low cap. `BuildSectorBandCut`
+removes both cap fans and the band's cells, and inserts the clipped band, the
+high annulus and the wall, as the +X route does
+(`agent-docs/revolve-loft-sector-design.md`, "Coaxial cylinder Cut"). It
+reads the axis through `sectorBoreAxis.band`. The general reading
+(`generalBoreAxis.band`) is:
 
-- The band span's ends satisfy `R_start² > r²·(A·A) > R_end²` exactly.
-- The crossing `R = r·|A|` is irrational in general. Its axial coordinate
-  `Z_x = Z_o + (Z_c − Z_o)·(R_o − r|A|)/(R_o − R_c)` is monotone in `|A|`,
-  so the norm bracket encloses it, and the plane point at the crossing takes
-  a box as `borePlanePoint` does. The band's slope `(R_o − R_c)/(Z_c − Z_o)`
-  is homogeneous in `A` and exact.
-- The clipped ring vertices are `RevolveLift.Point` at the crossing's float
-  axial coordinate and radius `r`, each charged its `SweptPointGap` against
-  that box in place of `cross.Round` and the +X trigonometric rounding.
-- The band's retained ring vertices are compared with the ring's own lift,
-  as §9.2 compares the axis vertices, in place of the `X` station equality.
-- Every radius, span and height in the band's volume terms is a plane-scaled
-  reading divided by `|A|` on the widening side, and the tool deviation of
-  §9.4 adds to the bore bound.
+- The band runs from its outer end `o` to the low cap's outer point `c`. Its
+  exact plane-scaled readings satisfy `Z_o < Z_c`, `R_o > R_c > 0` and
+  `R_o² > r²·(A·A) > R_c²`, so the bore crosses it strictly inside.
+- The crossing `R = r·|A|` is irrational in general. It sits at the band
+  parameter `s = (R_o − r·|A|)/(R_o − R_c)`, which decreases in `|A|`, so the
+  norm bracket encloses `s` strictly inside `(0, 1)`, and the plane point at
+  the crossing takes a box as `borePlanePoint` does.
+- Each clipped vertex is `RevolveLift.Point` at the box's float axial
+  coordinate, the bore radius and the station angle, charged its exact
+  `SweptPointGap` against the box. That point distance replaces the +X
+  `cross.Round`, the trigonometric rounding and the `SlopeHi·cross.Round`
+  term, because it reaches an exact point on both the band and the ideal
+  bore.
+- The tool deviation `d` of §9.4 moves the true seam along the band by at
+  most `d·√(1 + 1/k²) ≤ d·(1 + 1/k)`, where `k = (R_o − R_c)/(Z_c − Z_o)` is
+  the band's exact radial slope, homogeneous in `A`, read rounded down. The
+  clipped ring charges `d·(1 + 1/k)`, and the high inner ring charges `d`
+  through §9.3.
+- Each retained ring vertex of the band, at `o` and at `c`, must equal the
+  ring's own lift of its plane point, as §9.2 compares the axis vertices, and
+  charges its `SweptPointGap` in place of the +X station equality and
+  trigonometric rounding.
+- The band's outer radius is `R_o/|A|` rounded down where it refuses (the
+  clearance) and up where it widens (the sag and the side shell). The low
+  cap's radius is `R_c/|A|` rounded up, the side that refuses the bore
+  enclosing it. The band's axial span `(Z_c − Z_o)/|A|` and the height
+  `(Z_high − Z_o)/|A|` round up.
+
+The bore bound is the larger of the high ring's bound (§9.3) and the clipped
+ring's sag, gap and seam charge. The side bounds, the seam slab, the volume
+gap, the area slack, the census and the audit are the +X route's, fed these
+readings, with the patch axes of §9.6.
 
 ### 9.8 +X bit identity
 
 `SectorCylinderCut` selects the general route on the certificate's
 `General` field alone, so every +X fixture runs the +X route. `xBoreAxis`
-holds the +X ring, span test, triangle test, patch axes and height verbatim,
+holds the +X ring, band crossing, span test, triangle test, patch axes and
+height verbatim,
 and `SectorBorePatches` is `SectorBorePatchesOnto` with `{1, 2}`. The digest
-of §8.2, which covers the four +X bore tests, is byte-equal before and after
-this route.
+of §8.2, which covers the four +X bore tests, is byte-equal with and without
+the general route.

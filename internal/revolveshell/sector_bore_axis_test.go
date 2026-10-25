@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/coneaxis"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
@@ -241,4 +242,68 @@ func TestBoreToolSpansCapsReadsTheTiltedDisc(t *testing.T) {
 	require.False(t, revolveshell.BoreToolSpansCaps(prism, y, 1, shift(0, 5e-14), shift(6, -2e-13)))
 	require.False(t, revolveshell.BoreToolSpansCaps(prism, y, 1, shift(0, 2e-13), shift(6, -5e-14)))
 	require.False(t, revolveshell.BoreToolSpansCaps(prism, y, 1, shift(0, -1), shift(6, -2e-13)))
+}
+
+// The general band reading of the six-span hub about (1, 2, 0), whose band
+// runs from design point (5, 2.5) to the low cap's (6, 1.5) at slope 1, for a
+// radius-2 bore whose tool deviates by 10⁻³ mm. A tool wall that far outside
+// the radius crosses the band at radius 2 + 10⁻³ and 10⁻³ mm farther along
+// the axis, √2·10⁻³ from the ideal crossing. Every clipped vertex lies within
+// the bound, less the chord sag, of the exact crossing at either radius at
+// its own angle, read in 512-bit arithmetic; every chord midpoint lies within
+// the bound of the ideal crossing circle (agent-docs/revolve-axis-design.md
+// §9.7). The high inner ring is ring's (§9.3).
+func TestBoreBandAboutAxisCoversTheCrossing(t *testing.T) {
+	t.Parallel()
+	design := [][2]float64{{6, 0}, {9, 0}, {9, 3}, {8, 4}, {5, 2.5}, {6, 1.5}}
+	outline := make([]sectionrecord.Point2, len(design))
+	for i, p := range design {
+		outline[i] = sectionrecord.Point2{U: p[0]/2 - p[1], V: p[0] + p[1]/2}
+	}
+	hub := revolveFixtureAbout(t, outline, sectionrecord.Point2{U: 1, V: 2})
+	candidates := revolveshell.RootCandidates(hub)
+	require.NotEmpty(t, candidates)
+	section := candidates[0]
+	require.NotNil(t, section.General)
+	const stations, radius, deviation = 64, 2.0, 1e-3
+	angles := make([]float64, stations)
+	for j := range angles {
+		angles[j] = 2 * math.Pi * float64(j) / stations
+	}
+	maxStep, ok := revolvemesh.SectorRingMaxStep(angles)
+	require.True(t, ok)
+	mesh := &facetedrecord.JoinedMesh{}
+	ring, _, err := revolveshell.BuildRevolvedSectionRing(mesh, section, angles, nil, 0.1)
+	require.NoError(t, err)
+	cut, high, bound, err := revolveshell.BoreBandAbout(t.Context(), section, mesh.Verts, ring, radius, maxStep,
+		deviation)
+	require.NoError(t, err)
+	require.Len(t, cut, stations)
+	require.Len(t, high, stations)
+	sag := ringBig(radius * maxStep * maxStep / 8)
+	vertexLimit := new(big.Float).SetPrec(ringPrec).Sub(ringBig(bound), sag)
+	// The plane point of design point (x, r) is (x/2)·(1, 2) + (r/2)·(−2, 1),
+	// at axial h = x·√5/2 and radius ρ = r·√5/2 mm. The design band is
+	// r = 7.5 − x, so it crosses radius ρ at h = 7.5·√5/2 − ρ.
+	axis := section.Axis.Vec()
+	apex := new(big.Float).SetPrec(ringPrec).Sqrt(ringBig(5))
+	apex.Mul(apex, ringBig(7.5/2))
+	off := func(p r3.Vec, rho float64) *big.Float {
+		h, rp := circleReading(p, axis)
+		dh := new(big.Float).SetPrec(ringPrec).Sub(h, new(big.Float).SetPrec(ringPrec).Sub(apex, ringBig(rho)))
+		dr := new(big.Float).SetPrec(ringPrec).Sub(rp, ringBig(rho))
+		sum := new(big.Float).SetPrec(ringPrec).Add(new(big.Float).SetPrec(ringPrec).Mul(dh, dh),
+			new(big.Float).SetPrec(ringPrec).Mul(dr, dr))
+		return sum.Sqrt(sum)
+	}
+	for j, v := range cut {
+		for _, rho := range []float64{radius, radius + deviation} {
+			distance := off(v, rho)
+			require.LessOrEqual(t, distance.Cmp(vertexLimit), 0,
+				"station %d lies %s off the crossing at radius %g, bound less sag %s", j, distance.Text('g', 6),
+				rho, vertexLimit.Text('g', 6))
+		}
+		mid := v.Add(cut[(j+1)%stations]).Scale(0.5)
+		require.LessOrEqual(t, off(mid, radius).Cmp(ringBig(bound)), 0, "chord %d leaves the circle", j)
+	}
 }

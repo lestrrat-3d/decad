@@ -41,6 +41,37 @@ type sectorBoreAxis interface {
 	patchAxes() [2]int
 	// height bounds the axial distance between the two caps from above.
 	height(caps SectorBoreCaps) float64
+	// band reads a bore that crosses the straight band before the low cap.
+	band(ctx context.Context, in sectorBandInput) (sectorBandCut, error)
+}
+
+// sectorBandInput is what BuildSectorBandCut hands the axis reader: the
+// joined body, its caps, the cap-adjacent band span and its retained ring,
+// the bore radius and the joined ring's largest station step.
+type sectorBandInput struct {
+	joined   facetedrecord.Payload
+	caps     SectorBoreCaps
+	band     facetedrecord.RevolveSectionSpan
+	rootRing []int
+	radius   float64
+	maxStep  float64
+}
+
+// sectorBandCut is the axis reader's answer for a band bore
+// (agent-docs/revolve-axis-design.md §9.7). cut holds the band's clipped ring
+// vertices at the bore crossing, which replace the low cap's outer ring, and
+// high the high cap's inner ring. boreBound bounds both rings and their
+// chords against the true bore circles; oldSideErr bounds the band's
+// retained ring and newSideErr its clipped ring against the band surface.
+// capUpper bounds the low cap's radius from above, and outerLower and
+// outerUpper bound the band's outer radius. span bounds the band's axial
+// length, height the axial distance from the band's outer end to the high
+// cap, and slopeLo the band's radial slope from below.
+type sectorBandCut struct {
+	cut, high                         []r3.Vec
+	boreBound, oldSideErr, newSideErr float64
+	capUpper, outerLower, outerUpper  float64
+	span, height, slopeLo             float64
 }
 
 // xBoreAxis reads a +X certificate: caps at x = LowX and x = HighX, radii in
@@ -70,6 +101,78 @@ func (xBoreAxis) triangleClear(tri [3]int, verts []r3.Vec, clearance float64) bo
 }
 
 func (xBoreAxis) patchAxes() [2]int { return [2]int{1, 2} }
+
+// band reads a +X band bore: the crossing's exact rational X
+// (RevolveSectorStraightBandCross), the bore ring in YZ, and each retained
+// ring vertex's trigonometric rounding about X.
+func (xBoreAxis) band(ctx context.Context, in sectorBandInput) (sectorBandCut, error) {
+	joined, caps, band, rootRing, radius := in.joined, in.caps, in.band, in.rootRing, in.radius
+	angles := joined.RevolveLoftJoin.CapRing.Angles
+	if band.Start.V <= radius || band.End.V >= radius {
+		return sectorBandCut{}, fmt.Errorf("%w: bore has no complete cap-adjacent straight band", decaderr.ErrUnsupported)
+	}
+	cross, ok := RevolveSectorStraightBandCross(band.Start, band.End, radius)
+	if !ok || cross.X >= caps.HighX {
+		return sectorBandCut{}, fmt.Errorf("%w: bore does not cross one straight section band", decaderr.ErrUnsupported)
+	}
+	inner, boreBound, err := circularbounds.BoreRingAtStep(ctx, radius, angles, in.maxStep)
+	if err != nil {
+		return sectorBandCut{}, err
+	}
+	if boreBound >= radius || proofbound.IsNonFinite(boreBound) {
+		return sectorBandCut{}, fmt.Errorf("%w: bore circle has no radial bound", decaderr.ErrUnsupported)
+	}
+	maxRound, oldRound := 0.0, 0.0
+	for i, angle := range angles {
+		if err := ctx.Err(); err != nil {
+			return sectorBandCut{}, err
+		}
+		sinIv, cosIv, ok := proofbound.RadSinCosInterval(proofarith.FloatRat(angle))
+		if !ok {
+			return sectorBandCut{}, fmt.Errorf("%w: section ring angle has no enclosure", decaderr.ErrUnsupported)
+		}
+		for _, sample := range [...]struct {
+			rad   float64
+			point r3.Vec
+		}{
+			{radius, r3.Vec{Y: inner[i].U, Z: inner[i].V}},
+			{band.Start.V, joined.Verts[rootRing[i]]},
+			{band.End.V, joined.Verts[caps.LowOuter[i]]},
+		} {
+			exactRadius := proofarith.FloatRat(sample.rad)
+			yErr := proofbound.IntervalFloatError(proofbound.IntervalScale(cosIv, exactRadius), sample.point.Y)
+			zErr := proofbound.IntervalFloatError(proofbound.IntervalScale(sinIv, exactRadius), sample.point.Z)
+			round := proofbound.Radius3D(max(yErr, zErr))
+			if sample.rad == radius {
+				maxRound = max(maxRound, round)
+			} else {
+				oldRound = max(oldRound, round)
+			}
+		}
+		if joined.Verts[rootRing[i]].X != band.Start.U ||
+			joined.Verts[caps.LowOuter[i]].X != band.End.U {
+			return sectorBandCut{}, fmt.Errorf("%w: section band changed its source stations", decaderr.ErrUnsupported)
+		}
+	}
+	sagFactor := proofbound.ProductUpper(in.maxStep, in.maxStep) / 8
+	cutRound := proofbound.AbsSumUpper(maxRound, cross.Round)
+	boreBound = proofbound.AbsSumUpper(proofbound.ProductUpper(radius, sagFactor), cutRound)
+	oldSideErr := proofbound.AbsSumUpper(proofbound.ProductUpper(band.Start.V, sagFactor), oldRound)
+	newSideErr := proofbound.AbsSumUpper(
+		proofbound.ProductUpper(max(band.Start.V, radius), sagFactor), oldRound, cutRound,
+		proofbound.ProductUpper(cross.SlopeHi, cross.Round))
+	out := sectorBandCut{cut: make([]r3.Vec, len(inner)), high: make([]r3.Vec, len(inner)),
+		boreBound: boreBound, oldSideErr: oldSideErr, newSideErr: newSideErr,
+		capUpper: caps.LowRadius, outerLower: band.Start.V, outerUpper: band.Start.V, slopeLo: cross.SlopeLo}
+	for i, p := range inner {
+		out.cut[i] = r3.Vec{X: cross.X, Y: p.U, Z: p.V}
+		out.high[i] = r3.Vec{X: caps.HighX, Y: p.U, Z: p.V}
+	}
+	rootX := proofarith.FloatRat(band.Start.U)
+	out.span = proofbound.RatFloatUp(new(big.Rat).Sub(proofarith.FloatRat(band.End.U), rootX))
+	out.height = proofbound.RatFloatUp(new(big.Rat).Sub(proofarith.FloatRat(caps.HighX), rootX))
+	return out, nil
+}
 
 func (xBoreAxis) height(caps SectorBoreCaps) float64 {
 	return proofbound.RatFloatUp(new(big.Rat).Sub(
@@ -177,6 +280,118 @@ func (g generalBoreAxis) borePlanePoint(z *big.Rat, radius float64) (sectionreco
 		}
 	}
 	return sectionrecord.Point2{U: held[0], V: held[1]}, proofbound.WalkEndBound{U: within[0], V: within[1]}, true
+}
+
+// band reads a band bore about the exact axis (agent-docs/revolve-axis-design.md
+// §9.7). The band runs from its outer end o to the low cap's outer point c,
+// with exact plane-scaled readings Z_o < Z_c and R_o > R_c, and the bore
+// crosses it where R = r·|A|: R_o² > r²·(A·A) > R_c² exactly. That crossing
+// sits at the band parameter s = (R_o − r·|A|)/(R_o − R_c), which is
+// decreasing in |A|, so the norm bracket encloses it and the plane point
+// there takes a box. Each clipped vertex is the blank's lift at the box's
+// axial coordinate, the bore radius and the station angle, charged its
+// SweptPointGap against the box. The tool deviation d moves the true seam
+// along the band by at most d·√(1 + 1/k²) ≤ d·(1 + 1/k), with k the band's
+// exact radial slope, which the clipped ring charges. Each retained ring
+// vertex must equal the ring's own lift of its plane point, and charges its
+// SweptPointGap. The high cap's inner ring is ring's.
+func (g generalBoreAxis) band(ctx context.Context, in sectorBandInput) (sectorBandCut, error) {
+	band, radius, caps := in.band, in.radius, in.caps
+	joined := in.joined
+	angles := joined.RevolveLoftJoin.CapRing.Angles
+	noCross := fmt.Errorf("%w: bore does not cross one straight section band", decaderr.ErrUnsupported)
+	if radius <= 0 || proofbound.IsNonFinite(radius) {
+		return sectorBandCut{}, noCross
+	}
+	zo, ro := planeScaledRat(g.axis, g.frame, band.Start)
+	zc, rc := planeScaledRat(g.axis, g.frame, band.End)
+	dz, dr := new(big.Rat).Sub(zc, zo), new(big.Rat).Sub(ro, rc)
+	r := proofarith.FloatRat(radius)
+	boreSq := new(big.Rat).Mul(new(big.Rat).Mul(r, r), g.axis.NormSq().Rat())
+	if dz.Sign() <= 0 || dr.Sign() <= 0 || rc.Sign() <= 0 ||
+		new(big.Rat).Mul(ro, ro).Cmp(boreSq) <= 0 || new(big.Rat).Mul(rc, rc).Cmp(boreSq) >= 0 {
+		return sectorBandCut{}, noCross
+	}
+	lo, hi := g.axis.NormBracket()
+	if !(lo > 0) || proofbound.IsNonFinite(hi) {
+		return sectorBandCut{}, noCross
+	}
+	at := func(norm float64) *big.Rat {
+		return new(big.Rat).Quo(new(big.Rat).Sub(ro, new(big.Rat).Mul(r, proofarith.FloatRat(norm))), dr)
+	}
+	sLo, sHi := at(hi), at(lo)
+	if sLo.Sign() <= 0 || sHi.Cmp(big.NewRat(1, 1)) >= 0 {
+		return sectorBandCut{}, noCross
+	}
+	var center, within [2]float64
+	for i, pair := range [2][2]float64{{band.Start.U, band.End.U}, {band.Start.V, band.End.V}} {
+		from := proofarith.FloatRat(pair[0])
+		along := new(big.Rat).Sub(proofarith.FloatRat(pair[1]), from)
+		x := new(big.Rat).Add(from, new(big.Rat).Mul(sLo, along))
+		y := new(big.Rat).Add(from, new(big.Rat).Mul(sHi, along))
+		center[i], _ = new(big.Rat).Quo(new(big.Rat).Add(x, y), big.NewRat(2, 1)).Float64()
+		h := proofarith.FloatRat(center[i])
+		dx, dy := new(big.Rat).Sub(x, h), new(big.Rat).Sub(y, h)
+		within[i] = max(proofbound.RatFloatUp(dx.Abs(dx)), proofbound.RatFloatUp(dy.Abs(dy)))
+		if proofbound.IsNonFinite(center[i]) || proofbound.IsNonFinite(within[i]) {
+			return sectorBandCut{}, noCross
+		}
+	}
+	box := proofbound.WalkEndBound{U: within[0], V: within[1]}
+	crossZ, _ := g.lift.payload.Ax.ToAxis(center[0], center[1])
+	_, high, highBound, err := g.ring(ctx, caps, radius, angles, in.maxStep)
+	if err != nil {
+		return sectorBandCut{}, err
+	}
+	out := sectorBandCut{cut: make([]r3.Vec, len(angles)), high: high}
+	cutGap, oldRound := 0.0, 0.0
+	for j, angle := range angles {
+		if err := ctx.Err(); err != nil {
+			return sectorBandCut{}, err
+		}
+		sin, cos, ok := proofbound.RadSinCosInterval(proofarith.FloatRat(angle))
+		if !ok {
+			return sectorBandCut{}, fmt.Errorf("%w: section ring angle has no enclosure", decaderr.ErrUnsupported)
+		}
+		held := g.lift.lift.Point(g.lift.basis, r3.Identity(), crossZ, radius, angle)
+		gap := g.lift.lift.SweptPointGap(g.lift.bound, r3.Identity(), center[0], center[1], box, sin, cos, held)
+		if !proofbound.FiniteVec(held) || proofbound.IsNonFinite(gap) {
+			return sectorBandCut{}, fmt.Errorf("%w: bore ring vertex is non-finite", decaderr.ErrUnsupported)
+		}
+		out.cut[j], cutGap = held, max(cutGap, gap)
+		for _, kept := range [2]struct {
+			point sectionrecord.Point2
+			index int
+		}{{band.Start, in.rootRing[j]}, {band.End, caps.LowOuter[j]}} {
+			ringHeld, ringGap := g.lift.vertex(kept.point, false, angle, sin, cos)
+			if ringHeld != joined.Verts[kept.index] {
+				return sectorBandCut{}, fmt.Errorf("%w: section band changed its source stations", decaderr.ErrUnsupported)
+			}
+			oldRound = max(oldRound, ringGap)
+		}
+	}
+	slopeLo := proofbound.RatFloatDown(new(big.Rat).Quo(dr, dz))
+	outerUpper, upOK := g.axis.ScaledUp(ro)
+	outerLower, downOK := g.axis.ScaledDown(ro)
+	capUpper, capOK := g.axis.ScaledUp(rc)
+	span, spanOK := g.axis.ScaledUp(dz)
+	height, heightOK := g.axis.ScaledUp(new(big.Rat).Sub(g.highZ, zo))
+	if !(slopeLo > 0) || !upOK || !downOK || !capOK || !spanOK || !heightOK {
+		return sectorBandCut{}, noCross
+	}
+	seam := proofbound.ProductUpper(g.deviation, proofbound.AbsSumUpper(1, proofbound.DivUpper(1, slopeLo)))
+	sagFactor := proofbound.ProductUpper(in.maxStep, in.maxStep) / 8
+	cutRound := proofbound.AbsSumUpper(cutGap, seam)
+	out.boreBound = max(highBound, proofbound.AbsSumUpper(proofbound.ProductUpper(radius, sagFactor), cutRound))
+	if out.boreBound >= radius || proofbound.IsNonFinite(out.boreBound) {
+		return sectorBandCut{}, fmt.Errorf("%w: bore circle has no radial bound", decaderr.ErrUnsupported)
+	}
+	out.oldSideErr = proofbound.AbsSumUpper(proofbound.ProductUpper(outerUpper, sagFactor), oldRound)
+	out.newSideErr = proofbound.AbsSumUpper(proofbound.ProductUpper(max(outerUpper, radius), sagFactor),
+		oldRound, cutRound)
+	out.capUpper, out.outerLower, out.outerUpper = capUpper, outerLower, outerUpper
+	out.span, out.height, out.slopeLo = span, height, slopeLo
+	return out, nil
 }
 
 // spanClear reads the span's two ends' exact plane-scaled R as millimetres
@@ -304,8 +519,9 @@ func revolveSectorBoreCapsAbout(joined facetedrecord.Payload) (SectorBoreCaps, g
 // origin, with its normal N on the axis (N·A > 0) and its origin on the axis
 // line, each within massmoment.DriftSinLimit; a tool outside that keeps
 // ordinary dispatch. Both of the tool's end discs must lie strictly outside
-// the caps. The bore radius must lie strictly inside both cap radii; a bore
-// through a section band refuses.
+// the caps. The bore radius must lie strictly inside both cap radii, or
+// strictly between the low and the high cap radius, through the band before
+// the low cap (§9.7).
 func sectorCylinderCutAbout(ctx context.Context, env topo.Env, joined facetedrecord.Payload,
 	tool *topo.Body) (*topo.Body, bool, error) {
 	caps, bore, ok := revolveSectorBoreCapsAbout(joined)
@@ -355,7 +571,12 @@ func sectorCylinderCutAbout(ctx context.Context, env topo.Env, joined facetedrec
 		return body, true, err
 	}
 	if radius > caps.LowRadius && radius < caps.HighRadius {
-		return nil, true, fmt.Errorf("%w: bore through a section band about a general axis", decaderr.ErrUnsupported)
+		result, err := BuildSectorBandCut(ctx, joined, caps, radius, wallGroup, bore)
+		if err != nil {
+			return nil, true, err
+		}
+		body, err := facetedrecord.Build(ctx, env, result)
+		return body, true, err
 	}
 	return nil, true, fmt.Errorf("%w: bore has no certified section crossing", decaderr.ErrUnsupported)
 }

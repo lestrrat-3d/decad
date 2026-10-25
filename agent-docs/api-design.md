@@ -1149,9 +1149,8 @@ section, one cone-trimmed point-Loft sector, and rigid copies of that sector,
 all about one axis: world X, or an axis through the world origin in a world
 coordinate plane. Serial and variadic `Union` rebuild one section ring and its
 certified sector caps. A centered cylinder spanning both axial caps can `Cut`
-a body joined about world X, and a body joined about another admitted axis
-when its radius lies inside both cap radii. The source, clearance, boundary and volume
-proofs are in `agent-docs/revolve-loft-sector-design.md`, and the general axis
+a body joined about world X or about another admitted axis. The source,
+clearance, boundary and volume proofs are in `agent-docs/revolve-loft-sector-design.md`, and the general axis
 in `agent-docs/revolve-axis-design.md`.
 
 The bounded spiral-bevel class accepts an exact finite revolve blank and
