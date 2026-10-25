@@ -1,6 +1,7 @@
 package loftmesh
 
 import (
+	"errors"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -324,6 +325,11 @@ func (s groupedTreeScan) countParallel(budget *proofbound.WorkBudget, f int,
 		partial[blk] = local
 		return nil
 	}); err != nil {
+		// As in treeScan, workers have not charged budget; the serial walk
+		// determines whether a step fails, including a scan with no work.
+		if errors.Is(err, proofbound.ErrWallWorkBudget) {
+			return sweepCandidateCountsWorkers(budget, s, f, keep, limit, 1)
+		}
 		return sweepCount{}, err
 	}
 	total := used
