@@ -284,93 +284,127 @@ func sourceIntRayOf(ray sourceRay) sourceIntRay {
 		dx: scale(ray.direction.X), dy: scale(ray.direction.Y), den: den}
 }
 
-// pointInt is the point at s = m / 2^k over denominator den*2^k.
-func (r sourceIntRay) pointInt(m, pow *big.Int) (*big.Int, *big.Int) {
-	x := new(big.Int).Mul(r.ox, pow)
-	x.Add(x, new(big.Int).Mul(m, r.dx))
-	y := new(big.Int).Mul(r.oy, pow)
-	y.Add(y, new(big.Int).Mul(m, r.dy))
-	return x, y
-}
-
 // crossingBox bisects the wall parameter in integers: low and high are
 // L/2^k and H/2^k, every comparison is an exact comparison of rationals
 // cross-multiplied over positive denominators, and the box is formed from the
 // final dyadic bounds with the exact rational lerps.
 func (c Connector) crossingBox(tLo, tHi, radius2 *big.Rat) XYBox {
-	raysLo, raysHi := c.rays(tLo), c.rays(tHi)
+	sameT := tLo.Cmp(tHi) == 0
+	raysLo := c.rays(tLo)
+	raysHi := raysLo
+	if !sameT {
+		raysHi = c.rays(tHi)
+	}
 	var intLo, intHi [2]sourceIntRay
 	for half := range 2 {
 		intLo[half] = sourceIntRayOf(raysLo[half])
-		intHi[half] = sourceIntRayOf(raysHi[half])
+		intHi[half] = intLo[half]
+		if !sameT {
+			intHi[half] = sourceIntRayOf(raysHi[half])
+		}
 	}
 	rn, rd := new(big.Int).Set(radius2.Num()), new(big.Int).Set(radius2.Denom())
-	sameT := tLo.Cmp(tHi) == 0
-	// low = L/2^k, high = H/2^k.
-	low, high := big.NewInt(0), big.NewInt(2)
-	pow := big.NewInt(1)
-	point := func(rays *[2]sourceIntRay, m, pow *big.Int) (*big.Int, *big.Int, *big.Int) {
-		ray := &rays[0]
-		u := m
-		if m.Cmp(pow) > 0 {
-			ray = &rays[1]
-			u = new(big.Int).Sub(m, pow)
-		}
-		x, y := ray.pointInt(u, pow)
-		return x, y, new(big.Int).Mul(ray.den, pow)
+	// The 52 bisections keep pow <= 2^52, low/high <= 2^53 and their
+	// midpoint sum <= 2^54. Only coordinate arithmetic needs big integers.
+	low, high, pow := uint64(0), uint64(2), uint64(1)
+	var parameter, pointTerm, squareTerm, compareLeft, compareRight big.Int
+	point := func(ray *sourceIntRay, u uint64, shift uint, x, y, den *big.Int) {
+		parameter.SetUint64(u)
+		x.Lsh(ray.ox, shift)
+		pointTerm.Mul(&parameter, ray.dx)
+		x.Add(x, &pointTerm)
+		y.Lsh(ray.oy, shift)
+		pointTerm.Mul(&parameter, ray.dy)
+		y.Add(y, &pointTerm)
+		den.Lsh(ray.den, shift)
 	}
-	norm2 := func(x, y *big.Int) *big.Int {
-		return new(big.Int).Add(new(big.Int).Mul(x, x), new(big.Int).Mul(y, y))
+	norm2 := func(z, x, y *big.Int) {
+		z.Mul(x, x)
+		squareTerm.Mul(y, y)
+		z.Add(z, &squareTerm)
 	}
 	// cmpFrac compares n/d (d > 0) against radius2: sign of n*rd - rn*d.
 	cmpFrac := func(n, d *big.Int) int {
-		return new(big.Int).Mul(n, rd).Cmp(new(big.Int).Mul(rn, d))
+		compareLeft.Mul(n, rd)
+		compareRight.Mul(rn, d)
+		return compareLeft.Cmp(&compareRight)
 	}
-	for range 52 {
+	// Every temporary owns its reusable limbs for this invocation. No scratch
+	// integer is returned or installed in the immutable source records.
+	var x0, y0, e0, x1, y1, e1, q0, q1, e0sq, e1sq big.Int
+	var px0, py0, px1, py1, esq, dx, dy, den, num, dotTerm, minNum, minDen big.Int
+	for iteration := range 52 {
 		// mid = (low+high)/2 = (L+H)/2^(k+1).
-		low.Lsh(low, 1)
-		high.Lsh(high, 1)
-		pow.Lsh(pow, 1)
-		mid := new(big.Int).Add(low, high)
-		mid.Rsh(mid, 1)
-		x0, y0, e0 := point(&intLo, mid, pow)
-		x1, y1, e1 := point(&intHi, mid, pow)
-		q0, q1 := norm2(x0, y0), norm2(x1, y1)
-		e0sq, e1sq := new(big.Int).Mul(e0, e0), new(big.Int).Mul(e1, e1)
-		if cmpFrac(q0, e0sq) < 0 && cmpFrac(q1, e1sq) < 0 {
+		low <<= 1
+		high <<= 1
+		pow <<= 1
+		mid := (low + high) >> 1
+		half, u := 0, mid
+		if mid > pow {
+			half, u = 1, mid-pow
+		}
+		point(&intLo[half], u, uint(iteration+1), &x0, &y0, &e0)
+		norm2(&q0, &x0, &y0)
+		e0sq.Mul(&e0, &e0)
+		if sameT {
+			// At one height both endpoints and their segment minimum are the
+			// same point. Its exact squared radius decides every bisection.
+			comparison := cmpFrac(&q0, &e0sq)
+			if comparison < 0 {
+				low = mid
+				continue
+			}
+			if comparison > 0 {
+				high = mid
+				continue
+			}
+			low, high = mid, mid
+			break
+		}
+		point(&intHi[half], u, uint(iteration+1), &x1, &y1, &e1)
+		norm2(&q1, &x1, &y1)
+		e1sq.Mul(&e1, &e1)
+		if cmpFrac(&q0, &e0sq) < 0 && cmpFrac(&q1, &e1sq) < 0 {
 			low = mid
 			continue
 		}
 		// Common denominator E = e0*e1 for the segment p0 -> p1.
-		px0, py0 := new(big.Int).Mul(x0, e1), new(big.Int).Mul(y0, e1)
-		px1, py1 := new(big.Int).Mul(x1, e0), new(big.Int).Mul(y1, e0)
-		esq := new(big.Int).Mul(e0, e1)
-		esq.Mul(esq, esq)
-		dx, dy := new(big.Int).Sub(px1, px0), new(big.Int).Sub(py1, py0)
-		den := norm2(dx, dy)
-		num := new(big.Int).Add(new(big.Int).Mul(px0, dx), new(big.Int).Mul(py0, dy))
-		num.Neg(num)
-		var minNum, minDen *big.Int
+		px0.Mul(&x0, &e1)
+		py0.Mul(&y0, &e1)
+		px1.Mul(&x1, &e0)
+		py1.Mul(&y1, &e0)
+		esq.Mul(&e0, &e1)
+		esq.Mul(&esq, &esq)
+		dx.Sub(&px1, &px0)
+		dy.Sub(&py1, &py0)
+		norm2(&den, &dx, &dy)
+		num.Mul(&px0, &dx)
+		dotTerm.Mul(&py0, &dy)
+		num.Add(&num, &dotTerm)
+		num.Neg(&num)
+		minimumDen := &esq
 		switch {
 		case den.Sign() == 0 || num.Sign() <= 0:
-			minNum, minDen = norm2(px0, py0), esq
-		case num.Cmp(den) >= 0:
-			minNum, minDen = norm2(px1, py1), esq
+			norm2(&minNum, &px0, &py0)
+		case num.Cmp(&den) >= 0:
+			norm2(&minNum, &px1, &py1)
 		default:
-			minNum = new(big.Int).Sub(new(big.Int).Mul(norm2(px0, py0), den), new(big.Int).Mul(num, num))
-			minDen = new(big.Int).Mul(den, esq)
+			norm2(&minNum, &px0, &py0)
+			minNum.Mul(&minNum, &den)
+			dotTerm.Mul(&num, &num)
+			minNum.Sub(&minNum, &dotTerm)
+			minDen.Mul(&den, &esq)
+			minimumDen = &minDen
 		}
-		if cmpFrac(minNum, minDen) > 0 {
+		if cmpFrac(&minNum, minimumDen) > 0 {
 			high = mid
 			continue
 		}
-		if sameT && cmpFrac(q0, e0sq) == 0 {
-			low, high = mid, new(big.Int).Set(mid)
-		}
 		break
 	}
-	lowRat := new(big.Rat).SetFrac(low, pow)
-	highRat := new(big.Rat).SetFrac(high, pow)
+	denominator := new(big.Int).SetUint64(pow)
+	lowRat := new(big.Rat).SetFrac(new(big.Int).SetUint64(low), denominator)
+	highRat := new(big.Rat).SetFrac(new(big.Int).SetUint64(high), denominator)
 	box := sourceBoxOf(
 		sourcePointAt(raysLo, lowRat), sourcePointAt(raysHi, lowRat),
 		sourcePointAt(raysLo, highRat), sourcePointAt(raysHi, highRat))

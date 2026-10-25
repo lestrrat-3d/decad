@@ -95,6 +95,60 @@ func TestLoftCylinderSourceCrossingBoxMatchesRationalBisection(t *testing.T) {
 	}
 }
 
+func TestLoftCylinderSourceCrossingBoxReusesWideIntegerScratch(t *testing.T) {
+	for _, width := range []uint{128, 512} {
+		epsilon := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), width))
+		for _, negative := range []bool{false, true} {
+			point := func(x int64) XY {
+				p := XY{X: big.NewRat(x, 2), Y: big.NewRat(1, 4)}
+				if negative {
+					p.X.Neg(p.X)
+					p.Y.Neg(p.Y)
+				}
+				return p
+			}
+			a, f := point(1), point(6)
+			upperA := XY{X: new(big.Rat).Add(a.X, epsilon), Y: new(big.Rat).Set(a.Y)}
+			upperF := XY{X: new(big.Rat).Add(f.X, epsilon), Y: new(big.Rat).Set(f.Y)}
+			connector := Connector{a: [2]XY{a, upperA}, d: [2]XY{a, upperA}, f: [2]XY{f, upperF}}
+			saved := new(big.Rat).Set(upperA.X)
+			for _, heights := range [][2]*big.Rat{
+				{big.NewRat(1, 3), big.NewRat(1, 3)},
+				{big.NewRat(1, 8), big.NewRat(7, 8)},
+			} {
+				radius2 := big.NewRat(9, 4)
+				want := loftCylinderCrossingBoxReference(connector, heights[0], heights[1], radius2)
+				got := connector.crossingBox(heights[0], heights[1], radius2)
+				for i, pair := range [][2]*big.Rat{
+					{want.lo.X, got.lo.X}, {want.lo.Y, got.lo.Y},
+					{want.hi.X, got.hi.X}, {want.hi.Y, got.hi.Y},
+				} {
+					require.Zero(t, pair[0].Cmp(pair[1]), "width %d negative %t coordinate %d", width, negative, i)
+				}
+				require.Zero(t, saved.Cmp(upperA.X), "source endpoint changed")
+			}
+		}
+	}
+}
+
+func TestLoftCylinderSourceCrossingBoxCollapsesAtFinalMidpoint(t *testing.T) {
+	point := func(x int64) XY { return XY{X: big.NewRat(x, 1), Y: new(big.Rat)} }
+	connector := Connector{
+		a: [2]XY{point(1), point(1)}, d: [2]XY{point(2), point(2)}, f: [2]XY{point(3), point(3)},
+	}
+	epsilon := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 51))
+	for _, radius := range []*big.Rat{
+		new(big.Rat).Add(big.NewRat(2, 1), epsilon),
+		new(big.Rat).Sub(big.NewRat(3, 1), epsilon),
+	} {
+		box := connector.crossingBox(big.NewRat(1, 3), big.NewRat(1, 3), new(big.Rat).Mul(radius, radius))
+		require.Zero(t, radius.Cmp(box.lo.X))
+		require.Zero(t, radius.Cmp(box.hi.X))
+		require.Zero(t, box.lo.Y.Sign())
+		require.Zero(t, box.hi.Y.Sign())
+	}
+}
+
 // point is the exact wall point at wall parameter s and height parameter t.
 func (c Connector) point(s, t *big.Rat) XY {
 	var lo, hi [2]XY
