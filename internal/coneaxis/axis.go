@@ -201,6 +201,65 @@ func (a Axis) RadialLowerOf(points []r3.Vec) (float64, bool) {
 	return proofbound.RatSqrtDown(sum), true
 }
 
+// TriangleBeyond reports whether every point of the closed triangle lies
+// farther than distance millimetres from the axis line. The test is exact:
+// q = p×A maps the triangle linearly onto a triangle in the plane normal to
+// A with |q| = σ(p), so the triangle clears the axis exactly when the image
+// misses the origin and each image edge keeps |q|² above distance²·(A·A).
+// It reports false for a non-finite vertex or distance.
+func (a Axis) TriangleBeyond(tri [3]r3.Vec, distance float64) bool {
+	if !proofbound.FiniteVec(a.v) || proofbound.IsNonFinite(distance) || distance < 0 {
+		return false
+	}
+	for _, p := range tri {
+		if !proofbound.FiniteVec(p) {
+			return false
+		}
+	}
+	da := proofarith.DyVec(a.v)
+	var q [3]proofarith.DyV3
+	for i, p := range tri {
+		q[i] = proofarith.DvCross(proofarith.DyVec(p), da)
+	}
+	// The origin lies inside the image when it is strictly on one side of
+	// every directed edge, read about A.
+	var signs [3]int
+	for i := range 3 {
+		signs[i] = proofarith.DvDot(proofarith.DvCross(q[i], q[(i+1)%3]), da).Sign()
+	}
+	if (signs[0] > 0 && signs[1] > 0 && signs[2] > 0) || (signs[0] < 0 && signs[1] < 0 && signs[2] < 0) {
+		return false
+	}
+	dd := proofarith.MustDyOf(distance)
+	limit := proofarith.DyMul(proofarith.DyMul(dd, dd), a.NormSq())
+	beyond := func(v proofarith.DyV3) bool { return proofarith.DyCmp(proofarith.DvDot(v, v), limit) > 0 }
+	for i := range 3 {
+		from, to := q[i], q[(i+1)%3]
+		edge := proofarith.DvSub(to, from)
+		along := proofarith.DvDot(edge, edge)
+		start := proofarith.DvDot(from, edge)
+		switch {
+		case along.IsZero() || start.Sign() >= 0:
+			if !beyond(from) {
+				return false
+			}
+		case proofarith.DvDot(to, edge).Sign() <= 0:
+			if !beyond(to) {
+				return false
+			}
+		default:
+			// The nearest point is interior: |from|² − (from·edge)²/(edge·edge),
+			// compared with the limit after multiplying through by edge·edge > 0.
+			gap := proofarith.DySubScalar(proofarith.DyMul(proofarith.DvDot(from, from), along),
+				proofarith.DyMul(start, start))
+			if proofarith.DyCmp(gap, proofarith.DyMul(limit, along)) <= 0 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // ScaledDown converts an A-scaled linear quantity q to millimetres as a lower
 // bound (§3.4): it returns a float no larger than q/|A|, dividing a
 // nonnegative q by |A|↑ and a negative q by |A|↓. It reports false when the

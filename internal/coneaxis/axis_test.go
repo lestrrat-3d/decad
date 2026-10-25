@@ -447,3 +447,136 @@ func TestScaledBracketsTheMillimetreValue(t *testing.T) {
 	_, ok := coneaxis.Axis{}.ScaledDown(big.NewRat(1, 1))
 	require.False(t, ok, "the zero axis has no positive norm bracket")
 }
+
+// oracleTriangleMinSq is the exact minimum of σ(p)² = |p|²(A·A) − (p·A)² over
+// the closed triangle, in big.Rat arithmetic on the triangle's barycentric
+// form p = a + s·(b − a) + t·(c − a). It minimises the quadratic in (s, t):
+// the interior stationary point when the 2×2 system is regular and its
+// solution lies in the triangle, and otherwise the three edges, each a
+// clamped one-dimensional quadratic. A singular quadratic is constant along
+// its null direction, so its minimum over the triangle is on an edge.
+func oracleTriangleMinSq(tri [3]r3.Vec, axis r3.Vec) *big.Rat {
+	sigma := func(p [3]*big.Rat) *big.Rat {
+		a := ratVec(axis)
+		pp, aa, pa := new(big.Rat), new(big.Rat), new(big.Rat)
+		for i := range 3 {
+			pp.Add(pp, new(big.Rat).Mul(p[i], p[i]))
+			aa.Add(aa, new(big.Rat).Mul(a[i], a[i]))
+			pa.Add(pa, new(big.Rat).Mul(p[i], a[i]))
+		}
+		return new(big.Rat).Sub(new(big.Rat).Mul(pp, aa), new(big.Rat).Mul(pa, pa))
+	}
+	at := func(s, t *big.Rat) [3]*big.Rat {
+		a, b, c := ratVec(tri[0]), ratVec(tri[1]), ratVec(tri[2])
+		var p [3]*big.Rat
+		for i := range 3 {
+			p[i] = new(big.Rat).Add(a[i], new(big.Rat).Add(
+				new(big.Rat).Mul(s, new(big.Rat).Sub(b[i], a[i])), new(big.Rat).Mul(t, new(big.Rat).Sub(c[i], a[i]))))
+		}
+		return p
+	}
+	zero, one, half := new(big.Rat), big.NewRat(1, 1), big.NewRat(1, 2)
+	// Q(s, t) = q0 + gs·s + gt·t + hss·s² + 2·hst·s·t + htt·t², read from
+	// samples, which a quadratic determines exactly.
+	q := func(s, t *big.Rat) *big.Rat { return sigma(at(s, t)) }
+	q00, q10, q01, q11 := q(zero, zero), q(one, zero), q(zero, one), q(one, one)
+	q20 := q(big.NewRat(2, 1), zero)
+	q02 := q(zero, big.NewRat(2, 1))
+	hss := new(big.Rat).Mul(half, new(big.Rat).Add(new(big.Rat).Sub(q20, new(big.Rat).Mul(big.NewRat(2, 1), q10)), q00))
+	htt := new(big.Rat).Mul(half, new(big.Rat).Add(new(big.Rat).Sub(q02, new(big.Rat).Mul(big.NewRat(2, 1), q01)), q00))
+	gs := new(big.Rat).Sub(new(big.Rat).Sub(q10, q00), hss)
+	gt := new(big.Rat).Sub(new(big.Rat).Sub(q01, q00), htt)
+	hst := new(big.Rat).Mul(half, new(big.Rat).Sub(new(big.Rat).Sub(new(big.Rat).Sub(q11, q00),
+		new(big.Rat).Add(gs, gt)), new(big.Rat).Add(hss, htt)))
+	best := (*big.Rat)(nil)
+	consider := func(v *big.Rat) {
+		if best == nil || v.Cmp(best) < 0 {
+			best = v
+		}
+	}
+	det := new(big.Rat).Sub(new(big.Rat).Mul(hss, htt), new(big.Rat).Mul(hst, hst))
+	if det.Sign() > 0 {
+		// ∇Q = 0: 2·hss·s + 2·hst·t = −gs, 2·hst·s + 2·htt·t = −gt.
+		s := new(big.Rat).Quo(new(big.Rat).Sub(new(big.Rat).Mul(hst, gt), new(big.Rat).Mul(htt, gs)),
+			new(big.Rat).Mul(big.NewRat(2, 1), det))
+		t := new(big.Rat).Quo(new(big.Rat).Sub(new(big.Rat).Mul(hst, gs), new(big.Rat).Mul(hss, gt)),
+			new(big.Rat).Mul(big.NewRat(2, 1), det))
+		if s.Sign() >= 0 && t.Sign() >= 0 && new(big.Rat).Add(s, t).Cmp(one) <= 0 {
+			consider(q(s, t))
+		}
+	}
+	// Each edge is u ↦ Q(e0 + u·(e1 − e0)) on [0, 1], read from three samples.
+	for _, edge := range [3][2][2]*big.Rat{{{zero, zero}, {one, zero}}, {{one, zero}, {zero, one}},
+		{{zero, one}, {zero, zero}}} {
+		point := func(u *big.Rat) *big.Rat {
+			s := new(big.Rat).Add(edge[0][0], new(big.Rat).Mul(u, new(big.Rat).Sub(edge[1][0], edge[0][0])))
+			t := new(big.Rat).Add(edge[0][1], new(big.Rat).Mul(u, new(big.Rat).Sub(edge[1][1], edge[0][1])))
+			return q(s, t)
+		}
+		e0, e1, eh := point(zero), point(one), point(half)
+		consider(e0)
+		consider(e1)
+		// e(u) = e0 + b·u + c·u² with c = 2(e0 + e1 − 2eh) and b = e1 − e0 − c.
+		c := new(big.Rat).Mul(big.NewRat(2, 1), new(big.Rat).Sub(new(big.Rat).Add(e0, e1),
+			new(big.Rat).Mul(big.NewRat(2, 1), eh)))
+		if c.Sign() > 0 {
+			b := new(big.Rat).Sub(new(big.Rat).Sub(e1, e0), c)
+			u := new(big.Rat).Quo(new(big.Rat).Neg(b), new(big.Rat).Mul(big.NewRat(2, 1), c))
+			if u.Sign() > 0 && u.Cmp(one) < 0 {
+				consider(point(u))
+			}
+		}
+	}
+	return best
+}
+
+// TriangleBeyond decides exactly whether a triangle clears the axis by more
+// than a distance. Random dyadic triangles near each fixture axis are
+// compared with an independent big.Rat minimisation, at distances on, just
+// below and just above the exact minimum, so a triangle the axis pierces, one
+// whose nearest point is inside an edge and one whose nearest point is a
+// vertex all occur (agent-docs/revolve-axis-design.md §9.5).
+func TestTriangleBeyondMatchesRationalOracle(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(7, 11))
+	coord := func() float64 { return float64(rng.IntN(1<<12)-(1<<11)) / (1 << 9) }
+	kinds := map[string]int{}
+	for _, a := range testAxes {
+		axis, ok := coneaxis.New(a)
+		require.True(t, ok)
+		aa := oracleDot(a, a)
+		for range 300 {
+			var tri [3]r3.Vec
+			for i := range tri {
+				tri[i] = r3.Vec{X: coord(), Y: coord(), Z: coord()}
+			}
+			minSq := oracleTriangleMinSq(tri, a)
+			vertexMin := (*big.Rat)(nil)
+			for _, p := range tri {
+				if v := oracleCrossSq(p, a); vertexMin == nil || v.Cmp(vertexMin) < 0 {
+					vertexMin = v
+				}
+			}
+			switch {
+			case minSq.Sign() == 0:
+				kinds["pierced"]++
+			case minSq.Cmp(vertexMin) < 0:
+				kinds["interior"]++
+			default:
+				kinds["vertex"]++
+			}
+			exact := new(big.Rat).Quo(minSq, aa)
+			distance := proofbound.RatSqrtDown(exact)
+			for _, d := range []float64{distance, math.Nextafter(distance, 0), math.Nextafter(distance, math.Inf(1)), 0} {
+				dr := rat(d)
+				want := exact.Cmp(new(big.Rat).Mul(dr, dr)) > 0
+				require.Equal(t, want, axis.TriangleBeyond(tri, d), "axis %v triangle %v distance %g", a, tri, d)
+			}
+		}
+	}
+	for _, kind := range []string{"pierced", "interior", "vertex"} {
+		require.Positive(t, kinds[kind], "no %s triangle drawn", kind)
+	}
+	require.False(t, coneaxis.X().TriangleBeyond([3]r3.Vec{{Y: 1}, {Y: 2}, {Y: math.NaN()}}, 0.5))
+	require.False(t, coneaxis.X().TriangleBeyond([3]r3.Vec{{Y: 1}, {Y: 2}, {Y: 3}}, math.Inf(1)))
+}

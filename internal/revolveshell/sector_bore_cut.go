@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
@@ -27,19 +26,25 @@ import (
 // SectorCylinderCut handles only a complete coaxial cylinder across an
 // authenticated Revolve/point-Loft join and builds the result in env. It
 // reports false, with no error, for an operation other than Cut, a target
-// with no join record, with a certificate about a general axis or with a
-// tooth trimmed about an axis other than world X, or a tool that is not an unplaced axis-X prism of one whole
-// origin-centered circle; other booleans then keep their usual dispatch. A joined target without a complete planar cap-ring record
-// refuses before the tool is read, and so does any later failed check. This
-// route runs before the general faceted contact-tolerance gate.
+// with no join record, a join whose tooth trim holds a limit about another
+// axis than its certificate, or a tool that is not an unplaced coaxial prism
+// of one whole origin-centered circle; other booleans then keep their usual
+// dispatch. A certificate from the general record branch takes
+// sectorCylinderCutAbout; any other reads world +X. A joined target without
+// a complete planar cap-ring record refuses before the tool is read, and so
+// does any later failed check. This route runs before the general faceted
+// contact-tolerance gate.
 func SectorCylinderCut(ctx context.Context, op meshbool.OperationKind, env topo.Env,
 	target, tool *topo.Body) (*topo.Body, bool, error) {
 	if op != meshbool.OpCut {
 		return nil, false, nil
 	}
 	joined, ok := target.Payload.(facetedrecord.Payload)
-	if !ok || joined.RevolveLoftJoin == nil || sectorJoinGeneralAxis(joined.RevolveLoftJoin) {
+	if !ok || joined.RevolveLoftJoin == nil || sectorJoinMixedAxis(joined.RevolveLoftJoin) {
 		return nil, false, nil
+	}
+	if cert := joined.RevolveLoftJoin.Certificate; cert != nil && cert.Section.General != nil {
+		return sectorCylinderCutAbout(ctx, env, joined, tool)
 	}
 	caps, ok := RevolveSectorBoreCapRecord(joined)
 	if !ok {
@@ -75,28 +80,12 @@ func SectorCylinderCut(ctx context.Context, op meshbool.OperationKind, env topo.
 		end.Cmp(proofarith.FloatRat(caps.HighX)) <= 0 {
 		return nil, true, fmt.Errorf("%w: cylinder does not span both section caps", decaderr.ErrUnsupported)
 	}
-	var wall *topo.Face
-	for _, face := range topobuild.Faces(tool) {
-		for _, origin := range face.Origins {
-			if origin.Role != prismrecord.OuterFirstSideRole {
-				continue
-			}
-			if wall != nil {
-				return nil, true, fmt.Errorf("%w: cylinder wall is ambiguous", decaderr.ErrUnsupported)
-			}
-			if _, ok := face.Surface.(surfacegeom.Cylinder); !ok {
-				return nil, true, fmt.Errorf("%w: tool has no cylindrical side", decaderr.ErrUnsupported)
-			}
-			wall = face
-		}
+	wallGroup, err := sectorBoreWall(tool)
+	if err != nil {
+		return nil, true, err
 	}
-	if wall == nil {
-		return nil, true, fmt.Errorf("%w: cylinder wall is missing", decaderr.ErrUnsupported)
-	}
-	wallGroup := facetedrecord.Group{Origins: append([]provenance.Ref(nil), wall.Origins...),
-		Surface: wall.Surface, NormalBound: wall.NormalBound, Reversed: !wall.Reversed}
 	if radius < min(caps.LowRadius, caps.HighRadius) {
-		result, err := buildSectorAnnularCut(ctx, joined, caps, radius, wallGroup)
+		result, err := buildSectorAnnularCut(ctx, joined, caps, radius, wallGroup, xBoreAxis{})
 		if err != nil {
 			return nil, true, err
 		}
@@ -114,11 +103,38 @@ func SectorCylinderCut(ctx context.Context, op meshbool.OperationKind, env topo.
 	return nil, true, fmt.Errorf("%w: bore has no certified section crossing", decaderr.ErrUnsupported)
 }
 
+// sectorBoreWall returns the tool's cylindrical side as the result's bore wall
+// group, reversed to face the bore's axis.
+func sectorBoreWall(tool *topo.Body) (facetedrecord.Group, error) {
+	var wall *topo.Face
+	for _, face := range topobuild.Faces(tool) {
+		for _, origin := range face.Origins {
+			if origin.Role != prismrecord.OuterFirstSideRole {
+				continue
+			}
+			if wall != nil {
+				return facetedrecord.Group{}, fmt.Errorf("%w: cylinder wall is ambiguous", decaderr.ErrUnsupported)
+			}
+			if _, ok := face.Surface.(surfacegeom.Cylinder); !ok {
+				return facetedrecord.Group{}, fmt.Errorf("%w: tool has no cylindrical side", decaderr.ErrUnsupported)
+			}
+			wall = face
+		}
+	}
+	if wall == nil {
+		return facetedrecord.Group{}, fmt.Errorf("%w: cylinder wall is missing", decaderr.ErrUnsupported)
+	}
+	return facetedrecord.Group{Origins: append([]provenance.Ref(nil), wall.Origins...),
+		Surface: wall.Surface, NormalBound: wall.NormalBound, Reversed: !wall.Reversed}, nil
+}
+
 // buildSectorAnnularCut replaces both complete axis cap fans of joined with
 // annuli around a bore of radius strictly inside both cap outer radii, and
-// adds the bore's wall as wallGroup.
+// adds the bore's wall as wallGroup. bore reads the join's axis: xBoreAxis
+// for a +X certificate, generalBoreAxis for one from the general record
+// branch.
 func buildSectorAnnularCut(ctx context.Context, joined facetedrecord.Payload, caps SectorBoreCaps,
-	radius float64, wallGroup facetedrecord.Group) (facetedrecord.Payload, error) {
+	radius float64, wallGroup facetedrecord.Group, bore sectorBoreAxis) (facetedrecord.Payload, error) {
 	var empty facetedrecord.Payload
 	ring := joined.RevolveLoftJoin.CapRing
 	n := len(ring.Angles)
@@ -130,7 +146,7 @@ func buildSectorAnnularCut(ctx context.Context, joined facetedrecord.Payload, ca
 	if !ok {
 		return empty, fmt.Errorf("%w: joined section ring has no bounded station plan", decaderr.ErrUnsupported)
 	}
-	inner, boreBound, err := circularbounds.BoreRingAtStep(ctx, radius, ring.Angles, maxStep)
+	innerLowAt, innerHighAt, boreBound, err := bore.ring(ctx, caps, radius, ring.Angles, maxStep)
 	if err != nil {
 		return empty, err
 	}
@@ -146,7 +162,7 @@ func buildSectorAnnularCut(ctx context.Context, joined facetedrecord.Payload, ca
 		if i == section.AxisSpan || i == caps.Low || i == caps.High {
 			continue
 		}
-		if min(span.Start.V, span.End.V) <= clearance {
+		if !bore.spanClear(span, clearance) {
 			return empty, fmt.Errorf("%w: section meridian may enter the bore", decaderr.ErrUnsupported)
 		}
 	}
@@ -192,7 +208,7 @@ func buildSectorAnnularCut(ctx context.Context, joined facetedrecord.Payload, ca
 			highSeen[cell] = true
 			continue
 		}
-		if !RevolveSectorTriangleClear(tri, joined.Verts, clearance) {
+		if !bore.triangleClear(tri, joined.Verts, clearance) {
 			return empty, fmt.Errorf("%w: untouched face may enter the bore", decaderr.ErrUnsupported)
 		}
 		mesh.Add(tri, joined.Src[i])
@@ -207,8 +223,7 @@ func buildSectorAnnularCut(ctx context.Context, joined facetedrecord.Payload, ca
 	vertexBound := append([]float64(nil), joined.VertexBound...)
 	innerLow, innerHigh := make([]int, n), make([]int, n)
 	for i := range n {
-		low := r3.Vec{X: caps.LowX, Y: inner[i].U, Z: inner[i].V}
-		high := r3.Vec{X: caps.HighX, Y: inner[i].U, Z: inner[i].V}
+		low, high := innerLowAt[i], innerHighAt[i]
 		if i == 0 {
 			innerLow[i], innerHigh[i] = caps.LowAxis, caps.HighAxis
 			mesh.Verts[caps.LowAxis], mesh.Verts[caps.HighAxis] = low, high
@@ -241,14 +256,14 @@ func buildSectorAnnularCut(ctx context.Context, joined facetedrecord.Payload, ca
 	if len(mesh.Tris) != len(joined.Tris)+4*n {
 		return empty, fmt.Errorf("%w: cap and wall triangle census changed", decaderr.ErrUnsupported)
 	}
-	patches := revolvemesh.SectorBorePatches(mesh.Src, oldCount, n, false, caps.LowGroup, caps.HighGroup, -1, wallIndex)
+	patches := revolvemesh.SectorBorePatchesOnto(mesh.Src, oldCount, n, false, caps.LowGroup, caps.HighGroup, -1,
+		wallIndex, bore.patchAxes())
 	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewWorkBudget(ctx),
 		mesh.Verts, mesh.Tris, patches, SectorBoreMaxAuditTriangles,
 		SectorBoreMaxAuditScans); err != nil {
 		return empty, err
 	}
-	height := proofbound.RatFloatUp(new(big.Rat).Sub(
-		proofarith.FloatRat(caps.HighX), proofarith.FloatRat(caps.LowX)))
+	height := bore.height(caps)
 	if height <= 0 || proofbound.IsNonFinite(height) {
 		return empty, fmt.Errorf("%w: bore has no positive axial span", decaderr.ErrUnsupported)
 	}
@@ -279,26 +294,24 @@ func buildSectorAnnularCut(ctx context.Context, joined facetedrecord.Payload, ca
 	return result, nil
 }
 
-// sectorJoinGeneralAxis reports whether the join's certificate came from the
-// general record branch, or its tooth trim holds a limit about an axis other
-// than world X. The bore route reads the joined record and its ring in +X
-// arithmetic, so such a join keeps ordinary dispatch. A general certificate
-// declines even about A = X, such as an XZ-plane blank revolved about U: its
-// ring stands at angles in the blank's own basis, not at atan2(Z, Y)
-// (agent-docs/revolve-axis-design.md §3.3, §4.6).
-func sectorJoinGeneralAxis(record *facetedrecord.RevolveLoftJoinRecord) bool {
-	if record.Certificate == nil {
+// sectorJoinMixedAxis reports whether the join's tooth trim holds a limit
+// about an axis other than its certificate's: a +X certificate with a limit
+// about any other axis, or a general certificate with a limit about another
+// axis value. CertifySector admits neither, so such a join keeps ordinary
+// dispatch (agent-docs/revolve-axis-design.md §3.3, §4.6, §9.1).
+func sectorJoinMixedAxis(record *facetedrecord.RevolveLoftJoinRecord) bool {
+	if record.Certificate == nil || record.Certificate.Trim == nil {
 		return false
 	}
-	if record.Certificate.Section.General != nil {
-		return true
-	}
-	if record.Certificate.Trim == nil {
-		return false
-	}
-	trim := record.Certificate.Trim
+	section, trim := record.Certificate.Section, record.Certificate.Trim
 	for _, limit := range []*facetedrecord.PointConeLimit{trim.Lower, trim.Upper} {
-		if limit != nil && !limit.Axis.Canonical() {
+		if limit == nil {
+			continue
+		}
+		if section.General == nil && !limit.Axis.Canonical() {
+			return true
+		}
+		if section.General != nil && limit.Axis != section.Axis {
 			return true
 		}
 	}
