@@ -291,20 +291,17 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, worker
 		audit.Members = append(audit.Members, list)
 	}
 
-	// preDet[fi], preOK[fi] are facet fi's determinant term, computed ahead
+	// preDet[fi] is facet fi's determinant term, computed ahead
 	// of the component loop that consumes them in its own order.
 	var preDet []proof.Dyadic
-	var preOK []bool
 	if workers >= 2 {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		preDet = make([]proof.Dyadic, len(tris))
-		preOK = make([]bool, len(tris))
 		if _, err := orderedwork.Each(len(tris), workers, 256, ctx.Err, func(fi int) error {
 			t := tris[fi]
-			preDet[fi], preOK[fi] = proof.XdotDyadic(audit.XVerts[t[0]],
-				proof.Xcross(audit.XVerts[t[1]], audit.XVerts[t[2]]))
+			preDet[fi] = floatFacetDeterminant(verts, t)
 			return nil
 		}); err != nil {
 			return nil, err
@@ -313,53 +310,35 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, worker
 
 	sixth := big.NewRat(1, 6)
 	det := make([]proof.Dyadic, len(tris))
-	allDyadic := true
 	audit.CompVol = make([]*big.Rat, len(audit.Members))
 	for ci, list := range audit.Members {
 		// Every term is a Dyadic (power-of-two denominators), so the
 		// sum accumulates without a GCD and converts once; the value is the
 		// same rational the big.Rat sum produced.
 		var total proof.DyAcc
-		var v *big.Rat
 		for i, fi := range list {
 			if i%256 == 0 {
 				if err := ctx.Err(); err != nil {
 					return nil, err
 				}
 			}
-			if v == nil && preOK != nil {
-				if preOK[fi] {
-					det[fi] = preDet[fi]
-					total.Add(preDet[fi])
-					continue
-				}
-				v = total.Rat()
+			var term proof.Dyadic
+			if preDet != nil {
+				term = preDet[fi]
+			} else {
+				term = floatFacetDeterminant(verts, tris[fi])
 			}
-			t := tris[fi]
-			cross := proof.Xcross(audit.XVerts[t[1]], audit.XVerts[t[2]])
-			if v == nil {
-				if term, ok := proof.XdotDyadic(audit.XVerts[t[0]], cross); ok {
-					det[fi] = term
-					total.Add(term)
-					continue
-				}
-				v = total.Rat()
-			}
-			allDyadic = false
-			v.Add(v, proof.XdotRat(audit.XVerts[t[0]], cross))
+			det[fi] = term
+			total.Add(term)
 		}
-		if v == nil {
-			v = total.Rat()
-		}
+		v := total.Rat()
 		audit.CompVol[ci] = v.Mul(v, sixth)
 		if audit.CompVol[ci].Sign() == 0 {
 			return nil, fmt.Errorf(`%w: a result shell encloses no volume`, decaderr.ErrBooleanFailed)
 		}
 	}
 
-	if allDyadic {
-		audit.Det = det
-	}
+	audit.Det = det
 	audit.Contains = make([][]bool, len(audit.Members))
 	for i := range audit.Members {
 		audit.Contains[i] = make([]bool, len(audit.Members))
@@ -424,4 +403,13 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, worker
 		}
 	}
 	return audit, nil
+}
+
+// floatFacetDeterminant reads the exact scalar triple product directly from
+// finite held coordinates. Their dyadic denominators need no homogeneous
+// alignment before the cross product. The audit keeps its homogeneous lifts
+// for containment and later moment consumers.
+func floatFacetDeterminant(verts []r3.Vec, t [3]int) proof.Dyadic {
+	a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
+	return proof.FloatDeterminant(a, b, c)
 }
