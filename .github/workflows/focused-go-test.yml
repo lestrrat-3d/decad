@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     container:
-      image: golang:1.26.8-bookworm
+      image: golang:1.27.3-bookworm
       options: --memory=4g --memory-swap=4g
     steps:
       - name: Validate inputs
