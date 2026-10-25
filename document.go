@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/exactrotation"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/massdispatch"
 	"github.com/lestrrat-3d/decad/internal/parambind"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -604,6 +605,20 @@ func (b *Body) copyUnder(ctx context.Context, motion r3.Transform, exact *exactr
 			source = record.Source
 		}
 		facetedrecord.BindCopyLineage(bodyNode(copied), source, composed, faceted.CopyLineage == nil, exact)
+	}
+	if kind == OperationCopy && isFaceted && exact != nil {
+		evidence, err := massdispatch.CaptureExactCopyMoments(ctx, bodyNode(b), bodyNode(copied), exact)
+		if err != nil {
+			return nil, err
+		}
+		if evidence != nil {
+			copiedPayload, ok := copied.n.Payload.(facetedPayload)
+			if !ok {
+				return nil, fmt.Errorf("faceted exact-copy rebuild returned %T", copied.n.Payload)
+			}
+			copiedPayload.ExactCopyMoments = evidence
+			copied.n.Payload = copiedPayload
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

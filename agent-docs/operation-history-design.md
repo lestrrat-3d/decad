@@ -131,8 +131,10 @@ checks mass, all six inertia entries, and both center balls against the mesh
 and the selected body centroid. Any disjoint evidence fails the query. A
 consistent source tuple replaces the mesh tuple only when all eight bounds are
 no larger and at least one is smaller. Unsupported integrations or source
-publication limits keep the mesh tuple. This slice does not transfer moments
-through Copy, Transform, or other operations.
+publication limits keep the mesh tuple. One direct exact-rotation Copy of an
+admitted original Cut transfers frozen V/P/Q evidence through
+exact-copy-moments-design.md. Transform, default Copy, and later descendants
+do not transfer the record.
 
 ### Local modify and later measurements
 
@@ -148,8 +150,10 @@ The contained-Cut mass-property slice is implemented in
 `agent-docs/contained-cut-moments-design.md`. It retains only a rectangular
 prism target and whole circular prism tool, consumes their V/P/Q moments in
 the existing faceted query, and validates the full tuple against the audited
-mesh. Other operation classes still need their own moment evidence and
-selection rules before they can improve `MassProperties`. A Volume or
+mesh. A direct exact-rotation Copy uses the retained source under
+agent-docs/exact-copy-moments-design.md; it does not support moment chains.
+Other operation classes still need their own moment evidence and selection
+rules before they can improve `MassProperties`. A Volume or
 centroid certificate alone cannot tighten area, wall thickness, or the mesh's
 symmetric-difference bound.
 

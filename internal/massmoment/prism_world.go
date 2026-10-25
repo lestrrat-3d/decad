@@ -52,7 +52,7 @@ func PrismWorldMoments(ctx context.Context, record PrismRecord, anchor r3.Vec) (
 	}
 	delta := proofbound.HeldDelta(heldOrigin, anchor)
 	world = Shift(world, [3]*big.Rat{delta[0].Rat(), delta[1].Rat(), delta[2].Rat()})
-	world, err = widenTranslation(world, originBound)
+	world, err = WidenTranslation(world, originBound)
 	if err != nil {
 		return Moments{}, err
 	}
@@ -62,9 +62,9 @@ func PrismWorldMoments(ctx context.Context, record PrismRecord, anchor r3.Vec) (
 	return world, nil
 }
 
-// widenTranslation encloses a common translation uncertainty in every
+// WidenTranslation encloses a common translation uncertainty in every
 // coordinate. Each second-moment term reads the same unshifted moment values.
-func widenTranslation(m Moments, radius float64) (Moments, error) {
+func WidenTranslation(m Moments, radius float64) (Moments, error) {
 	if radius == 0 {
 		return m, nil
 	}

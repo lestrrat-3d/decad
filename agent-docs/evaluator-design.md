@@ -234,8 +234,10 @@ Rules:
 The faceted `MassProperties` query can consume immutable V/P/Q evidence from
 the admitted strictly contained Cut of a rectangular prism by a whole circular
 prism. It checks the source tuple against the independently audited mesh tuple
-before selecting it. This does not change the faceted geometry, mesh bounds,
-or topology and does not transfer source moments to descendants.
+before selecting it. A direct exact-rotation Copy of that original Cut
+transports its frozen moments through the exact map and repeats the same mesh
+comparison. The transfer does not support chains or ordinary placements; see
+`agent-docs/exact-copy-moments-design.md`.
 
 The hard rule "Ask `sketch` for 2D answers by default" forbids re-deciding what
 sketch has decided: closure, validity, cuts, intersections, projections. It does
@@ -925,7 +927,10 @@ mirror join is a separate record, so each exact copy still mints both outer-cap
 roles under its own identity. The zero-bound exact source mesh survives only an
 exactly identity record. The copy lineage keeps the rotation only for a copy
 made directly from the source's own payload; `Transform` and a copy of a copy
-record none. Every exact placement sets the payload's `ExactPlaced` mark, and
+record none. A direct exact-rotation Copy of an admitted contained Cut also
+attaches `ExactCopyMoments`, which the faceted mass reader transports and
+compares against the audited mesh. Later placements and rewrites drop it.
+Every exact placement sets the payload's `ExactPlaced` mark, and
 every later placement, `Copy`, `Transform` and `ScaledAt` keeps it. The motion
 checks (`VerifyMotion`, `VerifyLinkage`) refuse to re-place a marked mover with
 `ErrUnsupported`, because their pose deviation model does not describe a

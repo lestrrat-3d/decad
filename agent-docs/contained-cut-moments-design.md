@@ -151,10 +151,11 @@ symmetry. Recompute subtraction and compare rational endpoints, not rounded
 floats. Require each source Volume interval to overlap its parent source
 reading, and the difference to overlap both parent result readings.
 
-Copy, Transform, MirroredCopy, and ScaledAt descendants do not transfer this
-record in this slice. Their builders must omit it and retain their existing
-mesh readings. A stale record with a different result producer is an error,
-not permission to consume its source moments.
+Transform, MirroredCopy, and ScaledAt descendants do not transfer this record.
+One direct exact-rotation Copy transfers a frozen source record under
+exact-copy-moments-design.md; default Copy and all later descendants keep
+their existing mesh readings. A stale record with a different result producer
+is an error, not permission to consume its source moments.
 
 ## Selection
 
@@ -217,6 +218,8 @@ isolation. Use bounded scalar diagnostics; never deep-diff a topology graph.
 
 Preserve `MeshBound`, vertex bounds, `VolSymDiff`, `AreaSlack`, topology,
 provenance, public history, and existing selected Volume and centroid readings.
+The direct exact-rotation Copy exception is owned by
+exact-copy-moments-design.md and does not extend this Cut's source admission.
 No general analytic reconstruction, chained-Cut proof, external kernel,
 OCCT source, new module, or public API belongs to this slice.
 
