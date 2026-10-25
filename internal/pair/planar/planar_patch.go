@@ -11,6 +11,9 @@ import (
 // the plane frame a coplanar face pair is clipped in, Sutherland–Hodgman
 // clipping against a convex polygon, and the exact pieces of a segment inside
 // a polygon region. Every coordinate is a big.Rat; nothing here rounds.
+// Coordinates come from Dyadic.Rat and rational arithmetic, which construct
+// lowest terms. The point primitives preserve that invariant with proof's
+// arithmetic helpers, including their power-of-two denominator paths.
 
 // Point2 is an exact point of a plane frame.
 type Point2 struct {
@@ -64,26 +67,26 @@ func (f PlaneFrame) Lift(p Point2) Point3 {
 func ratPoint3(v proof.DyV3) Point3 { return Point3{v[0].Rat(), v[1].Rat(), v[2].Rat()} }
 
 func sub2(a, b Point2) Point2 {
-	return Point2{X: new(big.Rat).Sub(a.X, b.X), Y: new(big.Rat).Sub(a.Y, b.Y)}
+	return Point2{X: proof.SubRat(new(big.Rat), a.X, b.X), Y: proof.SubRat(new(big.Rat), a.Y, b.Y)}
 }
 
 func cross2(a, b Point2) *big.Rat {
-	out := new(big.Rat).Mul(a.X, b.Y)
-	return out.Sub(out, new(big.Rat).Mul(a.Y, b.X))
+	out := proof.MulRat(new(big.Rat), a.X, b.Y)
+	return proof.SubRat(out, out, proof.MulRat(new(big.Rat), a.Y, b.X))
 }
 
 func dot2(a, b Point2) *big.Rat {
-	out := new(big.Rat).Mul(a.X, b.X)
-	return out.Add(out, new(big.Rat).Mul(a.Y, b.Y))
+	out := proof.MulRat(new(big.Rat), a.X, b.X)
+	return proof.AddRat(out, out, proof.MulRat(new(big.Rat), a.Y, b.Y))
 }
 
-func equal2(a, b Point2) bool { return a.X.Cmp(b.X) == 0 && a.Y.Cmp(b.Y) == 0 }
+func equal2(a, b Point2) bool { return proof.CmpRat(a.X, b.X) == 0 && proof.CmpRat(a.Y, b.Y) == 0 }
 
 // at2 returns p + t·(q − p).
 func at2(p, q Point2, t *big.Rat) Point2 {
 	d := sub2(q, p)
-	return Point2{X: new(big.Rat).Add(p.X, new(big.Rat).Mul(t, d.X)),
-		Y: new(big.Rat).Add(p.Y, new(big.Rat).Mul(t, d.Y))}
+	return Point2{X: proof.AddRat(new(big.Rat), p.X, proof.MulRat(new(big.Rat), t, d.X)),
+		Y: proof.AddRat(new(big.Rat), p.Y, proof.MulRat(new(big.Rat), t, d.Y))}
 }
 
 // DoubleArea is twice the exact signed area of a polygon: positive when it
@@ -91,7 +94,7 @@ func at2(p, q Point2, t *big.Rat) Point2 {
 func DoubleArea(polygon []Point2) *big.Rat {
 	area := new(big.Rat)
 	for i, p := range polygon {
-		area.Add(area, cross2(p, polygon[(i+1)%len(polygon)]))
+		proof.AddRat(area, area, cross2(p, polygon[(i+1)%len(polygon)]))
 	}
 	return area
 }
@@ -224,19 +227,19 @@ func locate(x Point2, loops [][]Point2) int {
 	for _, loop := range loops {
 		for i, u := range loop {
 			w := loop[(i+1)%len(loop)]
-			uy, wy := u.Y.Cmp(x.Y), w.Y.Cmp(x.Y)
+			uy, wy := proof.CmpRat(u.Y, x.Y), proof.CmpRat(w.Y, x.Y)
 			if (uy > 0) == (wy > 0) {
 				// Only a horizontal edge or an endpoint at x.Y can
 				// contain x when the ray does not cross this edge.
 				switch {
 				case uy == 0 && wy == 0:
-					ux, wx := u.X.Cmp(x.X), w.X.Cmp(x.X)
+					ux, wx := proof.CmpRat(u.X, x.X), proof.CmpRat(w.X, x.X)
 					if (ux <= 0 && wx >= 0) || (wx <= 0 && ux >= 0) {
 						return 0
 					}
-				case uy == 0 && u.X.Cmp(x.X) == 0:
+				case uy == 0 && proof.CmpRat(u.X, x.X) == 0:
 					return 0
-				case wy == 0 && w.X.Cmp(x.X) == 0:
+				case wy == 0 && proof.CmpRat(w.X, x.X) == 0:
 					return 0
 				}
 				continue
