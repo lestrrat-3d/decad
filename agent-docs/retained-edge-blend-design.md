@@ -55,10 +55,10 @@ Table RR lists the edges a blend can be built on. The others are refused.
 
 | RR | Edge | Faces | Blend surface (fillet / chamfer) | Staged |
 |---|---|---|---|---|
-| **R1** | `Line3`, convex or concave | two retained `Plane`s, not parallel, ending at three-face corners whose third face is a retained `Plane` | `Cylinder` / `Plane` | increment B2; equal-distance chamfer only |
-| **R2** | `Circle3`, closed, centre on the axis | retained `Plane` and coaxial retained `Cylinder` | `Torus` / `Cone` | increment B1; equal-distance chamfer only |
-| **R3** | `Line3` of retention E4 | retained `Plane` and a `Cylinder` whose axis lies in the plane, ending on retained planes normal to the axis | `Cylinder` / `Plane` | increment B3; equal-distance chamfer only |
-| **R4** | `Arc3` | as R2, open, ending on planes parallel to the axis | as R2 | ends on two distinct retained planes; equal-distance chamfer only; an arc whose ends meet one face is refused |
+| **R1** | `Line3`, convex or concave | two retained `Plane`s, not parallel, ending at three-face corners whose third face is a retained `Plane` | `Cylinder` / `Plane` | increment B2; equal or two-distance chamfer |
+| **R2** | `Circle3`, closed, centre on the axis | retained `Plane` and coaxial retained `Cylinder` | `Torus` / `Cone` | increment B1; equal or two-distance chamfer |
+| **R3** | `Line3` of retention E4 | retained `Plane` and a `Cylinder` whose axis lies in the plane, ending on retained planes normal to the axis | `Cylinder` / `Plane` | increment B3; equal or two-distance chamfer |
+| **R4** | `Arc3` | as R2, open, ending on planes parallel to the axis | as R2 | ends on two distinct retained planes; equal or two-distance chamfer; an arc whose ends meet one face is refused |
 
 Refused, with the reason a caller can act on:
 
@@ -392,8 +392,10 @@ Reach RX6's row gains a class and SX9 narrows with it.
 The result is a `facetedPayload` with retained tags. A further `Fillet`,
 `Chamfer` or Boolean takes it like any retained body, and a placement carries
 its tags by retention §3.4. `Shell` stays SX9. An asymmetric chamfer takes the
-reference-face option of modify §7 through the faces' public indices; a missing
-or ambiguous one is reach SX3.
+reference-face option of modify §7: SX3 resolves one reference face per edge,
+and each step finds it again on the evolving mesh by its retained tag
+(`agent-docs/retained-modify-reach-design.md` §4). A missing or ambiguous one
+is reach SX3.
 
 ## 8. Readers
 
