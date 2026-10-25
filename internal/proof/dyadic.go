@@ -934,9 +934,42 @@ func (d Dyadic) MantInto(z *big.Int) *big.Int {
 	if d.big != nil {
 		return z.Set(d.big)
 	}
-	var t big.Int
-	var buf dyBuf
-	return z.Set(d.view(&t, &buf))
+	if d.IsZero() {
+		return z.SetInt64(0)
+	}
+	// Write directly into the destination's owned limbs, avoiding a temporary
+	// owned view followed by another copy. Two words cover a lifted float and
+	// its usual alignment shift; wider mantissas use big.Int's growth margin.
+	n := (d.bitLen() + bits.UintSize - 1) / bits.UintSize
+	words := z.Bits()
+	if cap(words) < n {
+		capacity := max(2, n)
+		if n > 1 {
+			capacity = n + 4
+		}
+		words = make([]big.Word, n, capacity)
+	} else {
+		words = words[:n]
+	}
+	if bits.UintSize == 64 {
+		words[0] = big.Word(d.lo)
+		if n > 1 {
+			words[1] = big.Word(d.hi &^ dySign)
+		}
+	} else {
+		for i := range words {
+			if i < 2 {
+				words[i] = big.Word(d.lo >> uint(32*i))
+			} else {
+				words[i] = big.Word((d.hi &^ dySign) >> uint(32*(i-2)))
+			}
+		}
+	}
+	z.SetBits(words)
+	if d.neg() {
+		z.Neg(z)
+	}
+	return z
 }
 
 // Exp returns the binary exponent for internal proof consumers.
