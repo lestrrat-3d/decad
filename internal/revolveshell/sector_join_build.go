@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/coneaxis"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
@@ -222,7 +223,7 @@ func buildSectorsJoinAtSag(ctx context.Context, env topo.Env,
 			return nil, nil, err
 		}
 	}
-	seam, err := RevolveSectorSeam(cert.Loop, motions)
+	seam, err := RevolveSectorSeam(section.AngleBasis(), cert.Loop, motions)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -338,10 +339,11 @@ func buildSectorsJoinAtSag(ctx context.Context, env topo.Env,
 	scans := min(pairCount, workCeiling)
 	patches := make([]loftmesh.ProjectedPatch, 2*len(plans))
 	patchByGroup := make(map[int]int, len(patches))
+	axes := capPatchAxes(section.Axis)
 	for i, plan := range plans {
 		for side, group := range plan.CapGroups {
 			patch := 2*i + side
-			patches[patch].Axes = [2]int{1, 2} // The admitted Revolve source has world-X axis.
+			patches[patch].Axes = axes
 			patchByGroup[group] = patch
 		}
 	}
@@ -402,6 +404,26 @@ func buildSectorsJoinAtSag(ctx context.Context, env topo.Env,
 		return nil, nil, &sectorVolumeRefineError{gain: gain, bound: joinedVolume.Bound.Base()}
 	}
 	return body, &ring, nil
+}
+
+// capPatchAxes returns the coordinate plane the sector cap patches project
+// onto: the plane that drops the index of the axis's largest |A_k|, {1, 2}
+// for +X (agent-docs/revolve-axis-design.md §5.8). A patch whose projection
+// proof fails keeps its pairs in the exact contact audit, so the choice
+// changes the audit's work and never its answer.
+func capPatchAxes(axis coneaxis.Axis) [2]int {
+	if axis.Canonical() {
+		return [2]int{1, 2}
+	}
+	a := axis.Vec()
+	components := [3]float64{math.Abs(a.X), math.Abs(a.Y), math.Abs(a.Z)}
+	drop := 0
+	for k := 1; k < 3; k++ {
+		if components[k] > components[drop] {
+			drop = k
+		}
+	}
+	return [3][2]int{{1, 2}, {0, 2}, {0, 1}}[drop]
 }
 
 // solidVolume reads n's enclosed volume. A body that is not a solid encloses

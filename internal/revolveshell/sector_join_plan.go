@@ -49,6 +49,9 @@ type SectorJoinInput struct {
 	// §5.6).
 	Tilted    bool
 	FrameTilt float64
+	// Angles measures every placed root node's angle. Its zero value is the
+	// +X convention; a general certificate passes its own AngleBasis.
+	Angles facetproof.AngleBasis
 }
 
 // PrepareSectorJoinPlans selects one angular ring for all authenticated
@@ -71,7 +74,7 @@ func PrepareSectorJoinPlans(input SectorJoinInput) ([]SectorJoinPlan, []float64,
 			}
 			plan.Nodes[j].P = point
 			if node.RootBoundary {
-				plan.Nodes[j].Angle = facetproof.AngleAt(point, input.Seam)
+				plan.Nodes[j].Angle = input.Angles.AngleAt(point, input.Seam)
 			}
 			if i != 0 {
 				maxAbs := max(math.Abs(node.P.X), math.Abs(node.P.Y), math.Abs(node.P.Z))

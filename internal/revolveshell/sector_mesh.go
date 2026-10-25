@@ -20,6 +20,19 @@ type SectorSamples struct {
 	filled   bool
 }
 
+// rootSpanDescends reports whether the root span's walk runs toward the
+// axial origin: U falls along it for a +X certificate, and the exact axial
+// coordinate Z = p·A falls for a general one.
+func rootSpanDescends(section facetedrecord.RevolveSectionCertificate) bool {
+	root := section.Spans[section.RootSpan]
+	if section.General == nil {
+		return root.Start.U > root.End.U
+	}
+	start, _ := planeScaledRat(section.Axis, section.Frame, root.Start)
+	end, _ := planeScaledRat(section.Axis, section.Frame, root.End)
+	return start.Cmp(end) > 0
+}
+
 // BuildRevolveSectorMesh closes an admitted sector against the root face's
 // two ordered section rings. The section walk, rather than a profile role,
 // selects the rings shared with the blank mesh.
@@ -32,9 +45,8 @@ func BuildRevolveSectorMesh(mesh *facetedrecord.JoinedMesh, ring facetedrecord.R
 		section.RootSpan < 0 || section.RootSpan >= len(ring.Rings) {
 		return 0, 0, fmt.Errorf("%w: sector cap has invalid source records", decaderr.ErrUnsupported)
 	}
-	root := section.Spans[section.RootSpan]
 	lowSpan, highSpan := section.RootSpan, (section.RootSpan+1)%len(section.Spans)
-	if root.Start.U > root.End.U {
+	if rootSpanDescends(section) {
 		lowSpan, highSpan = highSpan, lowSpan
 	}
 	baseGroup := len(mesh.Groups)

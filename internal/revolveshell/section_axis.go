@@ -10,6 +10,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolvemesh"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -112,19 +114,86 @@ func reportedCone(axis coneaxis.Axis, normSq, apexScalar, slope *big.Rat) (sketc
 	return sketch.ConeSection{Apex: point, Axis: a, Slope: s}, apexGap, true
 }
 
-// GeneralCertificate reports whether a sector certificate's section came from
-// a blank outside the frame predicate. Every Union entry declines such a
-// certificate until the general join is admitted
-// (agent-docs/revolve-axis-design.md §4.6).
-func GeneralCertificate(cert *facetedrecord.RevolveLoftSectorCertificate) bool {
-	return cert != nil && cert.Section.General != nil
+// sectionStation is how the section ring reads one span's start point: on the
+// axis, on the negative radial side, and an upper bound on its radius in
+// millimetres.
+type sectionStation struct {
+	onAxis, negative bool
+	radius           float64
+}
+
+// sectionStations reads every span's start point. A +X certificate reads the
+// plane-local V as the radius. A general one reads the exact plane-scaled R:
+// the point is on the axis exactly when R = 0, and its radius bound is
+// R/|A|↓ (agent-docs/revolve-axis-design.md §3.4, §5.7). It reports false
+// when a general radius has no finite bound.
+func sectionStations(section facetedrecord.RevolveSectionCertificate) ([]sectionStation, bool) {
+	stations := make([]sectionStation, len(section.Spans))
+	for i, span := range section.Spans {
+		p := span.Start
+		if section.General == nil {
+			stations[i] = sectionStation{onAxis: p.V == 0, negative: p.V < 0, radius: p.V}
+			continue
+		}
+		_, r := planeScaledRat(section.Axis, section.Frame, p)
+		radius, ok := section.Axis.ScaledUp(new(big.Rat).Abs(r))
+		if !ok {
+			return nil, false
+		}
+		stations[i] = sectionStation{onAxis: r.Sign() == 0, negative: r.Sign() < 0, radius: radius}
+	}
+	return stations, true
+}
+
+// ringLiftAbout places a general certificate's ring vertices with the blank
+// Revolve's own construction (agent-docs/revolve-axis-design.md §5.7): a
+// vertex is RevolveLift.Point at the plane point's axis coordinates
+// (revolveaxis.Frame.ToAxis) and the station angle, and an axis vertex is the
+// same point at radius and angle zero. Its gap is RevolveLift.SweptPointGap
+// against the recorded plane point rotated about the record's axis within
+// the axis's own bound.
+type ringLiftAbout struct {
+	payload revolveplan.Payload
+	lift    revolvemesh.RevolveLift
+	basis   revolvemesh.RevolveBasis
+	bound   revolvemesh.AxisBound
+}
+
+func newRingLiftAbout(section facetedrecord.RevolveSectionCertificate) (ringLiftAbout, bool) {
+	if section.Blank == nil {
+		return ringLiftAbout{}, false
+	}
+	rp, ok := section.Blank.Payload.(revolveplan.Payload)
+	if !ok || rp.Frame != section.Frame || rp.Xform != r3.Identity() {
+		return ringLiftAbout{}, false
+	}
+	lift := rp.Lift()
+	return ringLiftAbout{payload: rp, lift: lift, basis: lift.Basis(), bound: rp.AxisBound()}, true
+}
+
+// vertex returns the held ring vertex of plane point p at the angle whose
+// held value is angle and whose exact sine and cosine sin and cos enclose,
+// and the proven distance from it to the point it denotes. An axis vertex
+// takes radius and angle zero.
+func (l ringLiftAbout) vertex(p sectionrecord.Point2, onAxis bool, angle float64,
+	sin, cos proofbound.RatInterval) (r3.Vec, float64) {
+	z, rho := l.payload.Ax.ToAxis(p.U, p.V)
+	if onAxis {
+		rho, angle = 0, 0
+		zero, one := new(big.Rat), big.NewRat(1, 1)
+		sin, cos = proofbound.Interval(zero, zero), proofbound.Interval(one, one)
+	}
+	held := l.lift.Point(l.basis, r3.Identity(), z, rho, angle)
+	gap := l.lift.SweptPointGap(l.bound, r3.Identity(), p.U, p.V, proofbound.WalkEndBound{}, sin, cos, held)
+	return held, gap
 }
 
 // GeneralPlanInput sets the angular inputs of a general certificate's sector
-// plan (agent-docs/revolve-axis-design.md §5.6): MinRadius is
-// min(R0, R1)/|A|↑, a lower bound on the root ends' radii in millimetres, and
+// plan (agent-docs/revolve-axis-design.md §3.7, §5.6): MinRadius is
+// min(R0, R1)/|A|↑, a lower bound on the root ends' radii in millimetres,
 // the plan charges τ from FrameTilt, the δ_B of the blank's held frame
-// (W, E0, E1) about the axis. It refuses a frame that massmoment.FrameTilt
+// (W, E0, E1) about the axis, and measures the placed root nodes' angles in
+// that frame. It refuses a frame that massmoment.FrameTilt
 // declines. section must come from the general record branch: its General
 // must not be nil.
 func GeneralPlanInput(input *SectorJoinInput, section facetedrecord.RevolveSectionCertificate) error {
@@ -142,6 +211,7 @@ func GeneralPlanInput(input *SectorJoinInput, section facetedrecord.RevolveSecti
 		return fmt.Errorf("%w: the blank's angular frame departs from the axis", decaderr.ErrUnsupported)
 	}
 	input.MinRadius, input.Tilted, input.FrameTilt = minRadius, true, tilt
+	input.Angles = section.AngleBasis()
 	return nil
 }
 

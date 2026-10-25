@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/coneaxis"
+	"github.com/lestrrat-3d/decad/internal/facetproof"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -116,6 +117,17 @@ type RevolveSectionAxis struct {
 func (g *RevolveSectionAxis) ConeGap(reach float64) float64 {
 	return proofbound.AbsSumUpper(g.ApexGap,
 		proofbound.ProductUpper(g.SlopeGap, proofbound.AbsSumUpper(reach, g.ApexGap)))
+}
+
+// AngleBasis returns the basis that measures a root node's angle about the
+// section's axis: the +X convention atan2(Z, Y) for a +X certificate, and
+// the blank's own held frame (E0, E1) for a general one
+// (agent-docs/revolve-axis-design.md §3.7).
+func (section RevolveSectionCertificate) AngleBasis() facetproof.AngleBasis {
+	if section.General == nil {
+		return facetproof.AngleBasis{}
+	}
+	return facetproof.AngleBasis{General: true, E0: section.General.E0, E1: section.General.E1}
 }
 
 // ConeSection returns the cone Sketch certifies against: the stored general

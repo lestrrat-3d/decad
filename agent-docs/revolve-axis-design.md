@@ -9,13 +9,12 @@ zero, and its arithmetic is unchanged. Nothing here is specific to gears: the
 class is any Revolve blank, one cone-trimmed point-Loft sector and rigid copies
 of that sector.
 
-The point-cone trims (§4.3, §4.4), the section and sector certificate
-(§4.1, §4.2, §5.2, §5.3), and the copy placement, drift, frame tilt and
-source separation (§4.5, §5.5, §5.6, §5.8) about a general axis are
-implemented. The ring, the angles, the patch axes and the Union are
-design-only until PR 5 in §7 lands: every Union entry declines a general
-certificate (§4.6), and the code refuses the class
-(`agent-docs/missing-features.md`, Booleans).
+Every step of the class is implemented about a general axis: the point-cone
+trims (§4.3, §4.4), the section and sector certificate (§4.1, §4.2, §5.2,
+§5.3), the copy placement, drift, frame tilt and source separation (§4.5,
+§5.5, §5.6, §5.8), and the ring, the angles, the patch axes and the serial and
+variadic Union (§3.7, §5.7, §5.8). The coaxial cylinder `Cut` of a joined body
+stays +X only (§4.6, `agent-docs/missing-features.md`, Booleans).
 
 ## Question router
 
@@ -28,7 +27,7 @@ Navigation only; each section owns its content.
 | What does the general class admit and refuse? | §4 |
 | Why is each new charge sound? | §5 |
 | What must a consumer model do? | §6 |
-| Which PRs implement it, with which tests? | §7 |
+| Which tests cover each part? | §7 |
 | How is the +X path proven unchanged? | §8 |
 
 ## 1. Scope
@@ -48,13 +47,15 @@ The following stay +X only. Each declines a general-axis record explicitly
 (§4.6):
 
 - The coaxial cylinder `Cut` of a joined body (`revolveshell.SectorCylinderCut`).
+  It also declines a join whose certificate came from the general record
+  branch about `A = X`.
 - `ConeFromFace`.
 - The `LoftFaces` cone trims (`loftfacestrim`, `loft_faces.go`).
 
 ## 2. Inventory of +X assumptions
 
-Each row names a site, what it reads as +X, and the PR in §7 that generalizes
-it. "Canonical" means the +X body stays verbatim behind the canonical branch
+Each row names a site, what it reads as +X, and the part of §7 that tests its
+general reading. "Canonical" means the +X body stays verbatim behind the canonical branch
 (§3.3, §8.1).
 
 ### 2.1 Placement gates that stay
@@ -81,57 +82,58 @@ class is unplaced too, so they stay unchanged:
 
 ### 2.2 Axis gates
 
-| Site | Function | +X reading | PR |
+| Site | Function | +X reading | Tests |
 |---|---|---|---|
-| `internal/revolveshell/sector_source.go` | `RecordedSection` | Frame origin 0, `U = X`, `V = Y`; `Ax` `AU = AV = 0`, `DU = 1`, `DV = 0`, all bounds 0 | 3 |
-| same | `RootCandidates` | `cone.Axis == {X:1}`, `Origin.Y = Origin.Z = 0`; apex read as `Origin.X` | 3 |
-| same | `CertifySector` | compares the blank's and both limits' axes (§4.4); the blank reading is +X | 2 |
-| `internal/revolveplan/point_cone_source.go` | `PointConeSource` | the frame predicate selects the +X reading; any other record reads about its `AxisVec` (§4.3) | 2 |
-| `internal/revolveplan/point_cone_boolean.go` | `PointConeBoolean` | admits a limit only about the held limits' axis (§4.4) | 2 |
-| `internal/revolveproof/sector_fit.go` | `revolveFitMeridianDifference` | `cone.Axis == {X:1}`, `Apex.Y = Apex.Z = 0` | 3 |
-| `internal/revolveproof/circle_side.go` | `CircleFragmentSide` | `cone.Axis == {X:1}` | 3 |
-| `internal/massmoment/axis_placement.go` | `XAxisRotation`, `XAxisPlacementCharge` | block form about X | 1 (new), 4 (callers) |
-| `internal/revolveshell/sector_union.go` | `NextSectorUnion` | `XAxisRotation(motion)` | 4 |
-| `internal/revolveshell/sector_placement.go` | `RevolveSectorSourcesSeparate` | `XAxisPlacementCharge` | 4 |
-| `internal/revolveshell/sector_join_build.go` | `buildSectorsJoinAtSag` | `XAxisPlacementCharge` | 4 |
-| same | same | `ProjectedPatch.Axes = {1,2}` | 5 |
-| `internal/revolveshell/sector_bore_cut.go` | `SectorCylinderCut` | prism frame `N = X`, `U = Y`, `V = Z` | declines (5) |
-| `internal/revolveshell/sector_bore_record.go` | `RevolveSectorBoreCapRecord` | axis vertices `== {X: U}` | declines (5) |
+| `internal/revolveshell/sector_source.go` | `RecordedSection` | Frame origin 0, `U = X`, `V = Y`; `Ax` `AU = AV = 0`, `DU = 1`, `DV = 0`, all bounds 0 | §7.3 |
+| same | `RootCandidates` | `cone.Axis == {X:1}`, `Origin.Y = Origin.Z = 0`; apex read as `Origin.X` | §7.3 |
+| same | `CertifySector` | compares the blank's and both limits' axes (§4.4); the blank reading is +X | §7.2 |
+| `internal/revolveplan/point_cone_source.go` | `PointConeSource` | the frame predicate selects the +X reading; any other record reads about its `AxisVec` (§4.3) | §7.2 |
+| `internal/revolveplan/point_cone_boolean.go` | `PointConeBoolean` | admits a limit only about the held limits' axis (§4.4) | §7.2 |
+| `internal/revolveproof/sector_fit.go` | `revolveFitMeridianDifference` | `cone.Axis == {X:1}`, `Apex.Y = Apex.Z = 0` | §7.3 |
+| `internal/revolveproof/circle_side.go` | `CircleFragmentSide` | `cone.Axis == {X:1}` | §7.3 |
+| `internal/massmoment/axis_placement.go` | `XAxisRotation`, `XAxisPlacementCharge` | block form about X | §7.1, §7.4 |
+| `internal/revolveshell/sector_union.go` | `NextSectorUnion` | `XAxisRotation(motion)` | §7.4 |
+| `internal/revolveshell/sector_placement.go` | `RevolveSectorSourcesSeparate` | `XAxisPlacementCharge` | §7.4 |
+| `internal/revolveshell/sector_join_build.go` | `buildSectorsJoinAtSag` | `XAxisPlacementCharge` | §7.4 |
+| same | same | `ProjectedPatch.Axes = {1,2}` | §7.5 |
+| `internal/revolveshell/sector_bore_cut.go` | `SectorCylinderCut` | prism frame `N = X`, `U = Y`, `V = Z` | declines (§7.5) |
+| `internal/revolveshell/sector_bore_record.go` | `RevolveSectorBoreCapRecord` | axis vertices `== {X: U}` | declines (§7.5) |
 
 ### 2.3 World X as the axial coordinate, YZ as the radial plane
 
-| Site | Function | +X reading | PR |
+| Site | Function | +X reading | Tests |
 |---|---|---|---|
-| `internal/pointcone/factor.go` | `FactorDyadic`, `FactorRat` | `g = x + k·hypot(y,z)`, `q = g/a` | 2 |
-| `internal/pointcone/cone.go` | `ConstantsOf` | one constant set from the X apex `a` and `k`, used for samples and bounds alike | 2 |
-| same | `AboveFarCap` | far plane `x = far`, `p.X − meshBound` | 2 |
-| same | `Ordered` | X range, `rho` from `y²+z²`, YZ-box radial minimum | 2 |
-| same | `ToeHeelOrdered` | X range | 2 |
-| `internal/pointcone/cap.go` | `CapGeometry`, `capGeometry`, `CellGeometry`, `cellGeometryWith` | `xMin` from `p.X`, `rhoMin` from the YZ box | 2 |
-| same | `ReachUpper` | the norm of `p` in millimetres; axis-free, kept in millimetres (§3.4) | 2 (checked) |
-| same | `TriangleBound` | millimetre `a`, `G`, `h` (homogeneity, §3.4) | 2 |
-| `internal/facetedrecord/point.go` | `PointConeLimit`, `Constants`, `BoundConstants` | `Apex`, `Far` are A-scaled about `Axis`, X coordinates for the canonical axis; one constant set for the canonical axis | 2 |
-| `internal/facetedrecord/point_cone_helpers.go` | `PointConeFactor(s)`, `PointConeLimitLater/Earlier/Ordered` | through `pointcone` | 2 |
-| `internal/revolveproof/sector_geometry.go` | `RevolveMeridianResidual` | meridian `(U,V)` against `Origin.X` | 3 |
-| same | `RevolveImplicitDisplacement`, `revolveMeridianExtensionGap` | `world.X > 0`, X range of the fan | 3 |
-| `internal/revolveproof/sector_seat.go` | `revolveSeatPoint` | form `y²+z² − s²(x − Origin.X)²`, `sourceForm`, X range | 3 |
-| `internal/revolveproof/sector_fit.go` | `revolveFitMeridianDifference` | box `x = point[0]`, tangent `[0]` | 3 |
-| `internal/revolveproof/circle_side.go` | `CircleFragmentSide` | `h = q[0]`, `q1²+q2² − s²h²` | 3 |
-| `internal/revolveproof/sector_source.go` | `CertifyRevolve{Connector,Fit}Boundary` | `ImplicitMargin` against a cost in mm² (unit axis) | 3 |
-| `internal/facetedrecord/revolve.go` | `ConeSection`, `MeridianEquation` | tag axis; `(U,V)` read as world `(X, r)` | 3 |
-| `internal/revolveshell/section_tool_gap.go` | `RevolveSectionToolGap` | `U + k·V − Apex` with X-scalar cone limits | 3 |
-| `internal/revolveproof/sector_path.go` | `RevolveExteriorPath` | `Angle = atan2(Z, Y)` | 3 |
-| `internal/revolveshell/sector_join_plan.go` | `PrepareSectorJoinPlans` | `PlacedRound` charges `Stretch` times the node norm | 4 |
-| same | same | `MinRadius` from `V` | 4 |
-| same | same | `facetproof.AngleAt` | 5 |
-| `internal/revolveshell/sector_cap.go` | `revolveFarRootPoint` | generator `{1, s·cos, s·sin}` | 5 |
-| same | `RevolveSectorCapBoundary` | `atan2(Z, Y) + 2π` | 5 |
-| `internal/revolveshell/section_ring.go` | `BuildRevolvedSectionRing` | vertex `{U, V·cos, V·sin}`; axis vertex `{U,0,0}`; X exact | 5 |
-| `internal/revolveshell/section_angles.go` | `RevolveSectionAngles` | `maxRadius` from `V`; angles in the atan2(Z,Y) convention | 5 |
-| `internal/revolveshell/sector_cap_refine.go`, `sector_mesh.go` | `SectorConeCapBounds`, `SectorRefineCap`, `BuildRevolveSectorMesh` | through `pointcone` | 5 |
-| `internal/facetproof/sector_seam.go` | `AngleAt`, `SectorSeam` | `atan2(Z, Y)` | 5 |
-| `internal/facetproof/sector.go` | `sectorPairProjectionSeparate(Float)` | YZ direction (sound for any axis, weak off X) | 4 |
-| `internal/loftmesh/loft_projected_patch.go` | `ProjectedPatch` | coordinate planes only (sound, self-checking) | 5 (caller) |
+| `internal/pointcone/factor.go` | `FactorDyadic`, `FactorRat` | `g = x + k·hypot(y,z)`, `q = g/a` | §7.2 |
+| `internal/pointcone/cone.go` | `ConstantsOf` | one constant set from the X apex `a` and `k`, used for samples and bounds alike | §7.2 |
+| same | `AboveFarCap` | far plane `x = far`, `p.X − meshBound` | §7.2 |
+| same | `Ordered` | X range, `rho` from `y²+z²`, YZ-box radial minimum | §7.2 |
+| same | `ToeHeelOrdered` | X range | §7.2 |
+| `internal/pointcone/cap.go` | `CapGeometry`, `capGeometry`, `CellGeometry`, `cellGeometryWith` | `xMin` from `p.X`, `rhoMin` from the YZ box | §7.2 |
+| same | `ReachUpper` | the norm of `p` in millimetres; axis-free, kept in millimetres (§3.4) | §7.2 |
+| same | `TriangleBound` | millimetre `a`, `G`, `h` (homogeneity, §3.4) | §7.2 |
+| `internal/facetedrecord/point.go` | `PointConeLimit`, `Constants`, `BoundConstants` | `Apex`, `Far` are A-scaled about `Axis`, X coordinates for the canonical axis; one constant set for the canonical axis | §7.2 |
+| `internal/facetedrecord/point_cone_helpers.go` | `PointConeFactor(s)`, `PointConeLimitLater/Earlier/Ordered` | through `pointcone` | §7.2 |
+| `internal/revolveproof/sector_geometry.go` | `RevolveMeridianResidual` | meridian `(U,V)` against `Origin.X` | §7.3 |
+| same | `RevolveImplicitDisplacement`, `revolveMeridianExtensionGap` | `world.X > 0`, X range of the fan | §7.3 |
+| `internal/revolveproof/sector_seat.go` | `revolveSeatPoint` | form `y²+z² − s²(x − Origin.X)²`, `sourceForm`, X range | §7.3 |
+| `internal/revolveproof/sector_fit.go` | `revolveFitMeridianDifference` | box `x = point[0]`, tangent `[0]` | §7.3 |
+| `internal/revolveproof/circle_side.go` | `CircleFragmentSide` | `h = q[0]`, `q1²+q2² − s²h²` | §7.3 |
+| `internal/revolveproof/sector_source.go` | `CertifyRevolve{Connector,Fit}Boundary` | `ImplicitMargin` against a cost in mm² (unit axis) | §7.3 |
+| `internal/facetedrecord/revolve.go` | `ConeSection`, `MeridianEquation` | tag axis; `(U,V)` read as world `(X, r)` | §7.3 |
+| `internal/revolveshell/section_tool_gap.go` | `RevolveSectionToolGap` | `U + k·V − Apex` with X-scalar cone limits | §7.3 |
+| `internal/revolveproof/sector_path.go` | `RevolveExteriorPath` | `Angle = atan2(Z, Y)` | §7.3 |
+| `internal/revolveshell/sector_join_plan.go` | `PrepareSectorJoinPlans` | `PlacedRound` charges `Stretch` times the node norm | §7.4 |
+| same | same | `MinRadius` from `V` | §7.4 |
+| same | same | `facetproof.AngleAt` | §7.5 |
+| `internal/revolveshell/sector_cap.go` | `revolveFarRootPoint` | generator `{1, s·cos, s·sin}` | §7.5 |
+| same | `RevolveSectorCapBoundary` | `atan2(Z, Y) + 2π` | §7.5 |
+| `internal/revolveshell/section_ring.go` | `BuildRevolvedSectionRing` | vertex `{U, V·cos, V·sin}`; axis vertex `{U,0,0}`; X exact | §7.5 |
+| `internal/revolveshell/section_angles.go` | `RevolveSectionAngles` | `maxRadius` from `V`; angles in the atan2(Z,Y) convention | §7.5 |
+| `internal/revolveshell/sector_cap_refine.go`, `sector_mesh.go` | `SectorConeCapBounds`, `SectorRefineCap`, `BuildRevolveSectorMesh` | through `pointcone` | §7.5 |
+| `internal/revolveshell/sector_mesh.go` | `BuildRevolveSectorMesh` | the root span's high end by `U`; a general certificate compares the exact `Z` | §7.5 |
+| `internal/facetproof/sector_seam.go` | `AngleAt`, `SectorSeam` | `atan2(Z, Y)` | §7.5 |
+| `internal/facetproof/sector.go` | `sectorPairProjectionSeparate(Float)` | YZ direction (sound for any axis, weak off X) | §7.4 |
+| `internal/loftmesh/loft_projected_patch.go` | `ProjectedPatch` | coordinate planes only (sound, self-checking) | §7.5 |
 
 ### 2.4 Shared consumers of the +X records
 
@@ -331,6 +333,13 @@ vertices come from `RevolveLift.Point`. All of this is `r3` arithmetic, and no
 frame is written by hand. §5.6 charges the basis's departure from an exact
 orthonormal frame about `A`.
 
+`facetproof.AngleBasis` holds the convention. Its zero value is the +X
+`atan2(Z, Y)`, and `RevolveSectionCertificate.AngleBasis()` returns the
+general basis `(E0, E1)` exactly when `General` is set. Every angle of the
+join reads it: the exterior path's root contacts, the cap boundary's root
+stations, the seam (`AngleBasis.SectorSeam`) and each placed plan's root nodes
+(`SectorJoinInput.Angles`, set by `GeneralPlanInput`).
+
 ## 4. Admission
 
 ### 4.1 Blank (`RecordedSection`, `RootCandidates`)
@@ -442,18 +451,15 @@ reads the certificate's axis `Section.Axis`:
 
 - `ConeFromFace`, `loft_faces.go`, `loftfacestrim` and `CapOutside*` decline a
   `PointConeLimit` or section whose axis is not canonical. They keep +X math
-  and never see a general record. PR 2 adds the limit declines, including
-  `ConeFromFace`'s check that the cone it built reads back about X, and PR 3
-  adds the section decline in `ConeFromFace`.
-- `SectorCylinderCut` declines a joined record whose tooth trim holds a limit
-  about a non-canonical axis (PR 2). The pair then takes ordinary dispatch.
-  The join's certificate axis equals its limits' axis (§4.4), so the same
-  check covers a general join once PR 5 admits one.
-- Until PR 5, `SectorUnion`, `NextSectorUnion` and `SectorUnionMany` decline
-  a certificate from the general record branch (matched false,
-  `revolveshell.GeneralCertificate`). A general set therefore keeps its
-  current route, the mesh Boolean and its refusal, and never receives an
-  error that a later PR would remove.
+  and never see a general record. `ConeFromFace` also checks that the cone it
+  built reads back about X.
+- `SectorCylinderCut` declines a joined record whose certificate came from the
+  general record branch, or whose tooth trim holds a limit about a
+  non-canonical axis (`sectorJoinGeneralAxis`). The pair then takes ordinary
+  dispatch (`agent-docs/missing-features.md`, Booleans). The certificate check covers a blank outside the frame predicate about `A = X`,
+  such as an XZ-plane blank revolved about U: its limits are canonical, but its
+  ring stands at angles in the blank's basis and the bore route reads
+  `atan2(Z, Y)`.
 - `ConeFromFace` reads a section side as `(x, r)` about world X, so it
   declines a blank outside the frame predicate before it reads a span.
 
@@ -675,19 +681,24 @@ branch does not fold it.
 
 ### 5.7 Ring vertices, root nodes and caps
 
-General ring vertices are `RevolveLift.Point(basis, I, z, ρ, φ)`. Their gap to
-the denoted swept point, which is the recorded plane point rotated about the
-record's axis within its own `AxisBound`, is bounded exactly by the
-`RevolveLift.SweptPointGap` construction. A per-station bound may compose
-`BasisRound` once with the per-vertex product rounding, provided a unit test
-shows it encloses `SweptPointGap`.
+General ring vertices are `RevolveLift.Point(basis, I, z, ρ, φ)`, with `z` and
+`ρ` the plane point's axis coordinates (`revolveaxis.Frame.ToAxis`) and the
+blank Revolve's own lift and basis. Each vertex charges its exact
+`RevolveLift.SweptPointGap`: the gap to the denoted swept point, which is the
+recorded plane point rotated about the record's axis within its own
+`AxisBound`, at the angle whose exact sine and cosine the station's
+enclosures hold. The ring evaluates that construction at every vertex rather
+than composing a per-station bound.
 
 `sectionSag = maxRadius·maxStep²/8 + maxRound` keeps its form, with
-`maxRadius = max R/|A|↓` and `maxRound` the largest such gap. The axis vertex is
-`RevolveLift.Point(basis, I, z, 0, 0)`, and its gap is charged the same way.
+`maxRadius = max R/|A|↓` and `maxRound` the largest such gap. A point is on the
+axis exactly when its plane-scaled `R` is zero. Its axis vertex is
+`RevolveLift.Point(basis, I, z, 0, 0)`, and its gap is charged the same way at
+angle zero. `RevolveSectionAngles` reads its radius as `R/|A|↓` too, and
+`BuildRevolveSectorMesh` orders the root span's ends by the exact `Z`.
 
-`revolveFarRootPoint` builds its generator `W + s·(E0 cos θ + E1 sin θ)` from
-the same basis. Each root node is then snapped to its ring vertex, and the
+`revolveFarRootPointAbout` builds its generator `W + s·(E0 cos θ + E1 sin θ)`
+from the same basis, starting at the reported apex `O_r`. Each root node is then snapped to its ring vertex, and the
 measured `Snap` is charged in `localBound` as it is today. A root node's
 displacement is therefore covered by the ring vertex gap plus `Snap`, and needs
 no separate charge.
@@ -713,12 +724,11 @@ Each question below was checked against the sections above.
 
 1. **Can a general record reach +X-only math?** Only through `PointConeSource`,
    `RecordedSection`, a join record or a placement. §4.4 compares axes at
-   `PointConeBoolean` and `CertifySector` from the PR that first makes a general
-   limit, and §4.6 gates every consumer in §2.4. Each such PR carries a refusal
-   test for each gate.
+   `PointConeBoolean` and `CertifySector`, and §4.6 gates every consumer in
+   §2.4. Each gate has a refusal test (§7).
 2. **Can `ImplicitMargin` units be mixed?** Margin is in `|A|²·mm²`. §5.3
-   multiplies the cost by `A·A`. PR 3 uses `A·A = 5`, so a missing factor admits
-   a fixture that must refuse.
+   multiplies the cost by `A·A`. The margin test (§7.3) uses `A·A = 5`, so a
+   missing factor admits a fixture that must refuse.
 3. **Can the reported cone differ from the one Sketch saw?** The certificate
    stores the `ConeSection` it passed. Every `cert.Cone() != cone` check
    compares that same value, `Axis` included.
@@ -732,8 +742,8 @@ Each question below was checked against the sections above.
 7. **Can a reflected, translated, obtuse or tilted copy pass?** `IsReflection`,
    zero translation, `M·A·A > 0` and `DriftSinLimit` decline each one.
 8. **Can drift go uncharged?** `ε` replaces `e` at the single site that charges
-   placement displacement (§5.5). PR 4's test uses a copy whose axis is off by
-   just under `DriftSinLimit`. It shows that `PlacedRound` covers the exact
+   placement displacement (§5.5). The drift test (§7.4) uses a copy whose axis
+   is off by just under `DriftSinLimit`. It shows that `PlacedRound` covers the exact
    distance of its placed root contacts from the root cone, and it goes red
    with `e` in place of `ε`.
 9. **Can the atan2 branch cut break a proof?** A source tooth whose root
@@ -750,11 +760,10 @@ Each question below was checked against the sections above.
     choice and the patch axes affect construction only. Orientation, vertex
     links, the exact triangle contact audit and the measured-volume gain still
     run on every result.
-13. **Is any PR unsound on its own?** §7 states each PR's declines. PR 2 makes
-    general limits and compares axes in the same PR. PR 3 makes general
-    certificates and declines them at every Union entry. PR 4 changes the
-    placement, tilt and separation charges while the Union still declines.
-    PR 5 removes the declines only with the ring and angles in place.
+13. **Can a +X-only consumer read a general join?** The bore route reads the
+    join record in +X arithmetic. `SectorCylinderCut` declines every general
+    certificate before it reads the record, including one about `A = X` from a
+    blank outside the frame predicate (§4.6).
 
 ## 6. Consumer contract
 
@@ -770,7 +779,15 @@ A model in the general class does the following:
     round exactly.
   - One way: round the direction to 26 significant bits and the on-axis
     stations to 27.
-  - Off-axis points need no rounding.
+- Places each cone tool's two rim endpoints exactly on its far plane:
+  `PointConeSource` requires their `Z = p·A` to equal the far station's `Z`
+  exactly, and a rim a rounding off that plane declines the trim.
+  - One way: write each tool point as `s·A + q·N`, where `N` is `A` turned a
+    quarter turn in the sketch plane, with `s` and `q` on a dyadic grid coarse
+    enough that both plane coordinates are exact. Its readings are then
+    exactly `Z = s·|A|²` and `R = q·|A|²`. A 26-bit direction and a `2⁻²²`
+    grid keep coordinates below 16 exact.
+  - The blank's other off-axis points need no rounding.
 - Lofts the tooth from the world origin and trims it with the toe `Cut` and the
   heel `Intersect`.
 - Places the source tooth so its two root contacts do not straddle `−E0`, the
@@ -779,33 +796,15 @@ A model in the general class does the following:
   float-normalized `A` and never uses `WithCopyRotation`. A copy whose axis
   drifts past `DriftSinLimit` declines.
 - Does not `Transform` the blank or the joined body before the Union.
+- Does not expect the coaxial cylinder `Cut` of the joined body: it takes
+  ordinary dispatch (§4.6).
 
-## 7. PR plan
+## 7. Tests
 
-Each PR keeps the general class declined wherever a later PR owns the work.
-Each PR is green and sound on its own. Every new test is shown red first, either
-by deleting the bound leg it guards or by running it against the base commit.
+Each test below goes red when the bound leg or the code path it guards is
+removed.
 
-### 7.1 PR 1: Axis record, axis algebra and the bit-identity harness
-
-The design document ships with this PR. No route consumes the new code yet.
-
-Changes:
-
-- `revolveplan.Payload.AxisVec` is set in `revolve.go` and in the chain Revolve
-  (§3.6).
-- A new leaf package `internal/coneaxis` holds `Axis` and `OfRevolve`, the two
-  predicates (§3.3), and these methods:
-  - `Axial`, `RadialSq` (Dyadic), `NormSq`, `NormBracket`;
-  - `RadialLower` (§3.5);
-  - `PlaneScaled(frame, u, v)`, which reads the axis in the frame's `U` and `V`;
-  - `RecordedVec` (§3.6).
-- `massmoment.AxisRotation(m, axis)` with `DriftSinLimit` (§4.5, §5.5).
-  `XAxisRotation` becomes its canonical branch.
-- The digest harness (§8.2).
-- Layout rows for the package and the doc.
-
-Tests:
+### 7.1 Axis record, axis algebra and the bit-identity harness
 
 - `coneaxis` against brute-force exact distances, using random dyadic points and
   `A ∈ {(1,2,0), (0,1,0), (3,4,0), (1,0,2)}`.
@@ -817,37 +816,9 @@ Tests:
   `Start`, a non-origin `Origin` and a non-coordinate frame.
 - The predicates: an XZ-plane record with `AxisVec = X` fails the frame
   predicate and passes the axis predicate.
-- The harness digests are equal on base and head.
+- The digest harness (§8.2).
 
-### 7.2 PR 2: Point-cone trims about `A`
-
-Changes:
-
-- `PointConeSource` admits a general record and sets `PointConeLimit.Axis`
-  (§4.3).
-- `ConstantsOf` yields the sample and bound sets, and `PointConeLimit`
-  caches both (§3.4).
-- `pointcone` takes an `Axis` in `FactorDyadic`, `FactorRat`, `AboveFarCap`,
-  `Ordered`, `ToeHeelOrdered`, `CapGeometry`, `capGeometry`, `CellGeometry`
-  and `cellGeometryWith` (§3.4, §3.5, §5.4). The cell geometry converts to
-  millimetres, so `TriangleBound` keeps its signature and reads the
-  millimetre geometry with the bound constant set. `ReachUpper` stays in
-  millimetres, and the PR shows that with a test.
-- `coneaxis` gains `RadialLowerOf` over a point set and the millimetre
-  conversions `ScaledDown` and `ScaledUp` (§3.4).
-- `facetedrecord` helpers pass `Axis` through, and the outside witness widens
-  its move by `|A|↑`.
-- The axis comparison in `PointConeBoolean` and in `CertifySector` (§4.4).
-- The limit declines in `ConeFromFace`, `loft_faces.go`, `loftfacestrim`,
-  `CapOutside*`, `CapTangentToHeelCone` and `SectorCylinderCut` (§4.6).
-- Update `agent-docs/loft-point-design.md` "Coaxial finite cone trims" and the
-  missing-features row.
-
-Soundness on its own: a general limit reaches only `PointConeBoolean`, its own
-trim build, `CertifySector` and the declining consumers. Blanks are all
-canonical in this PR, so `CertifySector` declines every general limit.
-
-Tests:
+### 7.2 Point-cone trims about `A`
 
 - Root-package trim about `A = (0,1,0)`, which reads the `PointCone` record.
   The fixture is the +X fixture with an exact coordinate permutation, so the
@@ -855,7 +826,8 @@ Tests:
 - Root-package trim about `A = (1,2,0)`. It runs `VerifyAll`, keeps the
   `PointCone` record, and checks the cone `NormalAt` against the analytic
   normal.
-- `pointcone` Dyadic-versus-Rat differentials for a general `A`.
+- `pointcone` Dyadic-versus-Rat differentials for a general `A`, and
+  `ReachUpper` read in millimetres.
 - An `AboveFarCap` fixture whose margin lies between `meshBound` and
   `meshBound·|A|`. It goes red without `|A|↑`.
 - A `TriangleBound` fixture that goes red when the bound constants use `c`
@@ -871,23 +843,7 @@ Tests:
   - `ConeFromFace` registering a cone that reads back about another axis;
   - the bore `Cut` of a join whose tooth trim holds a general limit.
 
-### 7.3 PR 3: Section and sector certificate about `A`
-
-Changes:
-
-- `RecordedSection`, `SpanFace` and `RootCandidates` (§4.1).
-- `ConeSection` stored with `Axis = A` (§4.2), and `ConeGap` (§5.2).
-- Connector, fit and circle boundaries, `revolveSeatPoint`,
-  `revolveFitMeridianDifference`, `RevolveImplicitDisplacement` and
-  `RevolveSectionToolGap` (§5.3).
-- `RevolveExteriorPath` angles in the blank basis (§3.7).
-- The Union declines of non-canonical certificates, and the `ConeFromFace`
-  section decline (§4.6).
-
-Soundness on its own: a general certificate reaches no join code, because every
-Union entry declines it.
-
-Tests:
+### 7.3 Section and sector certificate about `A`
 
 - `CertifySector` on a hub and a lug about `(1,2,0)`, with line and fitted
   flanks, certifies exactly one root face, and the root contacts' angles in
@@ -905,27 +861,8 @@ Tests:
   the axis line. `CircleFragmentSide` about `(0,1,0)` matches +X.
 - Refusals: a snapped axis point, a tool axis `2·A`, a profile behind the
   origin, and `ConeFromFace` on a general blank.
-- The Union of the general set still takes its current route, and every
-  Union entry declines the general certificate.
 
-### 7.4 PR 4: Placement, drift, tilt and separation about `A`
-
-Changes:
-
-- `AxisRotation` at every placement site: `RevolveSectorSourcesSeparate`,
-  `buildSectorsJoinAtSag` and `NextSectorUnion`. Each takes the certificate's
-  axis (§4.5).
-- `ε` in `PlacedRound` (§5.5).
-- `τ` in `seamCost`, with `r_max`, `FrameTilt`, the stored `W` and
-  `minRadius` from `RootR` (§5.6). The node angles stay in the +X convention
-  until PR 5.
-- The separation direction (§5.8).
-
-Soundness on its own: the Union still declines non-canonical certificates, so
-the new code runs only on canonical axes there, where it is the current code.
-General inputs reach it only through the internal tests below.
-
-Tests:
+### 7.4 Placement, drift, tilt and separation about `A`
 
 - `RevolveSectorSourcesSeparate` with copies about `(1,2,0)` and `(0,1,0)`:
   a quarter turn separates only along the general direction, a five-degree
@@ -941,35 +878,49 @@ Tests:
   zero for the permuted fixture.
 - `NextSectorUnion` with a certificate about `(1,2,0)` or `(0,1,0)` admits a
   rounded copy about the axis and declines a copy past `DriftSinLimit`, a
-  reflected copy, a translated copy and an obtuse copy. A general certificate
-  still declines a copy about its own axis.
+  reflected copy, a translated copy and an obtuse copy.
 - The canonical copy tests and the digest are unchanged.
 
-### 7.5 PR 5: Ring, angles and Union acceptance
+### 7.5 Ring, angles and Union
 
-Changes:
+- `apitest/union_revolve_axis_test.go` builds the shouldered hub, the radial
+  lug, its toe and heel cone tools and two copies at 120° and 240° through the
+  public API about one axis, joins them with `Union`, and checks `VerifyAll`,
+  Euler characteristic 2 and a closed mesh whose every edge meets its
+  opposite once. Its volume, and the hub's, must agree with the same
+  construction about +X within the sum of the proven bounds:
+  - about `(0,1,0)`, and about X from an XZ-plane blank (a general
+    certificate with `A = X`), both exact quarter-turn images of +X, with no
+    slack;
+  - about `(1,2,0)`, serial and variadic, and about `(1,2)/√5` rounded to 26
+    significant bits, with every tool point on a dyadic grid (§6) and a slack
+    of the surface area times the largest input displacement.
 
-- `SectorSeam` and `AngleAt`, `RevolveSectorCapBoundary` and
-  `revolveFarRootPoint` in the blank basis.
-- `BuildRevolvedSectionRing` through `RevolveLift` (§5.7).
-- `RevolveSectionAngles` radii.
-- The patch axes (§5.8).
-- The join record carries the certificate axis.
-- The Union declines from PR 3 are removed.
-- Update `agent-docs/revolve-loft-sector-design.md`, `agent-docs/api-design.md`
-  §8 and missing-features.
+  Each goes red when any Union entry declines a general certificate, or when
+  the ring, the cap boundary's root angles, the seam, the plans' angles, the
+  root generator, the root span order or the ring radius reads the +X
+  convention.
+- The root-package Union of a tilted hub and lug in either operand order,
+  serially with a copy and variadically, keeps the general certificate on
+  every join record.
+- `BuildRevolvedSectionRing` about `(1,2,0)` and `(1,−2,0)`: every vertex lies
+  within its charged `SweptPointGap` of the circle its plane point sweeps
+  about the exact axis, read in 512-bit arithmetic, and the ring's bound covers
+  every vertex and the chord sag at the largest true radius. About `(1,−2,0)`
+  every plane-local `V` is negative, so a ring that reads `V` as the radius
+  goes red.
+- Refusals:
+  - a source tooth about `(0,1,0)` straddling `−E0 = −Z` refuses in
+    `TraceSectorLoop` and in the public `Union`, while the same tooth along
+    `+Z` traces; with the root angles read as `atan2(Z, Y)` it would not
+    straddle;
+  - the coaxial cylinder `Cut` of a join about `(0,1,0)`, and of the XZ-plane
+    join about X, takes ordinary dispatch, while the +X join is cut by the
+    bore route; `SectorCylinderCut` declines a certificate with `General` set
+    even when its limits are about X.
 
-Tests:
-
-- apitest Union about `(0,1,0)`. It is congruent to the +X hub and lug, so the
-  volume intervals overlap, Euler is 2 and `VerifyAll` passes.
-- Hub and three lugs about `(1,2,0)`, serial and variadic. The gain is three
-  times the single gain within the proven slack.
-- A consumer-shaped bevel case: blank, back-cone tooth, toe and heel cones and
-  three teeth on XY about a 26-bit direction. It checks `VerifyAll`, Euler 2
-  and the gain.
-- A ring-vertex test whose composed bound encloses `SweptPointGap`.
-- Refusals: a source tooth straddling `−E0`, and the bore `Cut` declining.
+The patch axes (§5.8) change only the audit's work, so no test can show them
+red.
 
 ## 8. Bit-identical +X verification
 
@@ -994,7 +945,7 @@ volume relations, Euler numbers and refusal text. Float bounds also differ
 between amd64 and arm64, so a committed float literal would fail on the macOS
 main job.
 
-PR 1 adds two kinds of digest test:
+Two kinds of digest test exist:
 
 - `apitest/sector_route_digest_test.go` holds the `TestSectorRouteDigest*` tests,
   one per group of fixtures so the CI shards place them independently. They
@@ -1023,11 +974,12 @@ builds hash equally, and `TestPointConeDigest` hashes twice. When
 per-fixture digests to `<group>.txt` there. When `DECAD_POINTCONE_DIGEST` names
 a file, `TestPointConeDigest` writes its per-cone digests there.
 
-Every PR runs both on its base commit and its head commit on the same machine,
-each tree with its own copy of the two test files. A PR that changes the
-signature of a hashed function edits its copy to pass the canonical axis and
-keeps every hashed reading and the output format. The two digest outputs must
-be byte-equal, and the PR body records the digests.
+A pull request that touches a site in §2 runs both on its base commit and its
+head commit on the same machine, each tree with its own copy of the two test
+files. One that changes the signature of a hashed function edits its copy to
+pass the canonical axis and keeps every hashed reading and the output format.
+The two digest outputs must be byte-equal, and the pull request body records
+the digests.
 
 ### 8.3 Fixtures in the digest
 
@@ -1056,7 +1008,7 @@ The apitest digest builds these existing tests' fixtures:
   - the six `TestPointConeTrimKeepsFittedSidesAndCone` cases;
   - `TestPointConeTrimConeNormalAndCopyPlacement`.
 
-These existing tests still run on every PR. A signature change only adds the
+These existing tests still run on every change. A signature change only adds the
 canonical axis to a call in them, as `revolve_sector_placement_test.go` passes
 `coneaxis.X()` to `RevolveSectorSourcesSeparate`:
 

@@ -16,29 +16,52 @@ import (
 // revolveFarRootPoint maps a direction on the authenticated root cone back
 // to the point-loft source plane. The cone apex may lie anywhere on its axis.
 func revolveFarRootPoint(frame r3.Frame, cone surfacegeom.Cone, slope, angle float64) (r3.Vec, bool) {
-	normal := frame.U().Cross(frame.V())
 	direction := r3.Vec{X: 1, Y: slope * math.Cos(angle), Z: slope * math.Sin(angle)}
+	return rootGeneratorPoint(frame, cone.Origin, direction)
+}
+
+// revolveFarRootPointAbout is revolveFarRootPoint for a general certificate.
+// Its generator W + s·(E0·cos θ + E1·sin θ) starts at the reported cone's
+// apex and reads the blank's own held basis, the frame the angle θ is
+// measured in (agent-docs/revolve-axis-design.md §3.7, §5.7). The point only
+// places a cap station: the build snaps it to its ring vertex and charges
+// the measured snap.
+func revolveFarRootPointAbout(frame r3.Frame, general *facetedrecord.RevolveSectionAxis,
+	angle float64) (r3.Vec, bool) {
+	sin, cos := math.Sincos(angle)
+	slope := general.Cone.Slope
+	radial := general.E0.Scale(cos).Add(general.E1.Scale(sin))
+	return rootGeneratorPoint(frame, general.Cone.Apex, general.W.Add(radial.Scale(slope)))
+}
+
+// rootGeneratorPoint intersects the ray from apex along direction with the
+// plane of frame, and reports false unless the crossing lies ahead of apex
+// and is finite.
+func rootGeneratorPoint(frame r3.Frame, apex, direction r3.Vec) (r3.Vec, bool) {
+	normal := frame.U().Cross(frame.V())
 	den := normal.Dot(direction)
 	if den == 0 {
 		return r3.Vec{}, false
 	}
-	distance := normal.Dot(frame.Origin().Sub(cone.Origin)) / den
-	point := cone.Origin.Add(direction.Scale(distance))
+	distance := normal.Dot(frame.Origin().Sub(apex)) / den
+	point := apex.Add(direction.Scale(distance))
 	return point, proofbound.FiniteVec(point) && distance > 0
 }
 
 // RevolveSectorCapBoundary closes the certified outside route with stations
 // on the root face. Every root station has an exact matching angular index in
-// the revolved section mesh.
+// the revolved section mesh. Angles are about the section's axis, in its
+// AngleBasis.
 func RevolveSectorCapBoundary(path []pointcone.SectorNode, section facetedrecord.RevolveSectionCertificate,
 	frame r3.Frame, angles []float64, sector [2]float64) ([]pointcone.SectorNode, error) {
 	if len(path) < 3 || len(angles) < 3 {
 		return nil, fmt.Errorf("%w: sector cap has no closed source route", decaderr.ErrUnsupported)
 	}
+	basis := section.AngleBasis()
 	nodes := append([]pointcone.SectorNode(nil), path...)
 	for _, i := range []int{0, len(nodes) - 1} {
 		nodes[i].RootBoundary = true
-		nodes[i].Angle = math.Atan2(nodes[i].P.Z, nodes[i].P.Y) + 2*math.Pi
+		nodes[i].Angle = basis.Angle(nodes[i].P) + 2*math.Pi
 		if nodes[i].Angle < sector[0] || nodes[i].Angle > sector[1] {
 			return nil, fmt.Errorf("%w: root contact is outside the angular sector", decaderr.ErrUnsupported)
 		}
@@ -51,8 +74,14 @@ func RevolveSectorCapBoundary(path []pointcone.SectorNode, section facetedrecord
 		}
 	}
 	appendRoot := func(angle float64) error {
-		point, ok := revolveFarRootPoint(frame, section.RootCone,
-			section.ConeSection().Slope, angle)
+		var point r3.Vec
+		var ok bool
+		if section.General != nil {
+			point, ok = revolveFarRootPointAbout(frame, section.General, angle)
+		} else {
+			point, ok = revolveFarRootPoint(frame, section.RootCone,
+				section.ConeSection().Slope, angle)
+		}
 		if !ok {
 			return fmt.Errorf("%w: root generator misses the source plane", decaderr.ErrUnsupported)
 		}

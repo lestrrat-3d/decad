@@ -6,11 +6,8 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
-	"github.com/lestrrat-3d/decad/internal/massmoment"
-	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/revolveproof"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
-	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -151,6 +148,13 @@ func permutedSectionFixture(t *testing.T, fitted bool) sectionAxisFixture {
 // toolEnd is the end of the tools' axis line, (1, 2) or a multiple of it.
 func tiltedSectionFixture(t *testing.T, fitted bool, toolEnd planePoint) sectionAxisFixture {
 	t.Helper()
+	return tiltedSectionFixtureAt(t, fitted, toolEnd, 3.375, 5.375)
+}
+
+// tiltedSectionFixtureAt is tiltedSectionFixture with the toe and heel apexes
+// at toeT·(1, 2) and heelT·(1, 2).
+func tiltedSectionFixtureAt(t *testing.T, fitted bool, toolEnd planePoint, toeT, heelT float64) sectionAxisFixture {
+	t.Helper()
 	doc := New()
 	s5 := math.Sqrt(5)
 	tool := func(apexT float64) *Body {
@@ -160,7 +164,7 @@ func tiltedSectionFixture(t *testing.T, fitted bool, toolEnd planePoint) section
 	return sectionAxisFixture{doc: doc, axis: r3.Vec{X: 1, Y: 2},
 		hub: axisRevolve(t, doc, worldX, worldY, planePoint{U: 1, V: 2}, tiltedOutline(taperedHubOutline)),
 		lug: axisLug(t, doc, r3.Vec{X: 10 / s5, Y: 20 / s5}, r3.Vec{X: 2 / s5, Y: -1 / s5}, r3.Vec{Z: -1},
-			fitted, tool(3.375), tool(5.375))}
+			fitted, tool(toeT), tool(heelT))}
 }
 
 func (f sectionAxisFixture) certify(t *testing.T) *facetedrecord.RevolveLoftSectorCertificate {
@@ -522,42 +526,92 @@ func TestSectionAboutAxisRefusals(t *testing.T) {
 	})
 }
 
-// Every Union entry declines a certificate about a general axis until the
-// general join is admitted (agent-docs/revolve-axis-design.md §4.6), so the
-// pair keeps the mesh Boolean route and its refusal.
-func TestSectorUnionDeclinesGeneralCertificate(t *testing.T) {
+// Every Union entry accepts a certificate about a general axis
+// (agent-docs/revolve-axis-design.md §7.5): the pair joins in either operand
+// order, a copy about the certificate's axis joins serially through
+// NextSectorUnion and variadically through SectorUnionMany, and every joined
+// record keeps the general certificate.
+func TestSectorUnionAcceptsGeneralCertificate(t *testing.T) {
 	t.Parallel()
-	f := tiltedSectionFixture(t, false, planePoint{U: 1, V: 2})
-	cert := f.certify(t)
-	require.True(t, revolveshell.GeneralCertificate(cert))
-	hub, lug := bodyNode(f.hub), bodyNode(f.lug)
-	for _, pair := range [][2]*topo.Body{{hub, lug}, {lug, hub}} {
-		_, ok, err := revolveshell.SectorUnion(t.Context(), meshbool.OpUnion, topo.Env{}, pair[0], pair[1])
+	// The tilted hub is the +X hub scaled by √5/2, so toe and heel apexes at
+	// 3.75·(1, 2) and 6·(1, 2), the +X 7.5 and 12 scaled likewise, meet its
+	// root corners exactly.
+	fixture := func() (sectionAxisFixture, *Body) {
+		f := tiltedSectionFixtureAt(t, false, planePoint{U: 1, V: 2}, 3.75, 6)
+		s5 := math.Sqrt(5)
+		turn, err := r3.Rotation(r3.Vec{X: 1 / s5, Y: 2 / s5}, units.Degrees(180))
 		require.NoError(t, err)
-		require.False(t, ok)
+		second, err := Copy(t.Context(), f.lug, WithCopyPlacement(turn))
+		require.NoError(t, err)
+		return f, second
 	}
-	// The copy turns about the certificate's own axis, which
-	// massmoment.AxisRotation admits, so only the general-certificate decline
-	// keeps NextSectorUnion from the join.
-	s5 := math.Sqrt(5)
-	turn, err := r3.Rotation(r3.Vec{X: 1 / s5, Y: 2 / s5}, units.Degrees(180))
+	requireGeneralJoin := func(f sectionAxisFixture, hubVolume Measurement, joined *Body, placed int) {
+		t.Helper()
+		record := bodyNode(joined).Payload.(facetedPayload).RevolveLoftJoin
+		require.NotNil(t, record)
+		require.NotNil(t, record.Certificate.Section.General)
+		require.Equal(t, f.axis, record.Certificate.Section.Axis.Vec())
+		require.Len(t, record.Placed, placed)
+		volume, err := joined.Volume()
+		require.NoError(t, err)
+		require.Greater(t, volume.Value.Base()-volume.Bound.Base(),
+			hubVolume.Value.Base()+hubVolume.Bound.Base())
+	}
+	for _, swapped := range []bool{false, true} {
+		f, second := fixture()
+		hubVolume, err := f.hub.Volume()
+		require.NoError(t, err)
+		a, b := f.hub, f.lug
+		if swapped {
+			a, b = b, a
+		}
+		joined, err := Union(t.Context(), a, b)
+		require.NoError(t, err)
+		requireGeneralJoin(f, hubVolume, joined, 0)
+		serial, err := Union(t.Context(), joined, second)
+		require.NoError(t, err)
+		requireGeneralJoin(f, hubVolume, serial, 1)
+	}
+	f, second := fixture()
+	hubVolume, err := f.hub.Volume()
 	require.NoError(t, err)
-	_, _, admitted := massmoment.AxisRotation(turn, cert.Section.Axis)
-	require.True(t, admitted)
-	second, err := Copy(t.Context(), f.lug, WithCopyPlacement(turn))
+	variadic, err := Union(t.Context(), second, f.hub, f.lug)
 	require.NoError(t, err)
-	_, ok, err := revolveshell.SectorUnionMany(t.Context(), topo.Env{}, []*topo.Body{lug, hub, bodyNode(second)})
-	require.NoError(t, err)
-	require.False(t, ok)
-	joined := &topo.Body{Payload: facetedrecord.Payload{Xform: r3.Identity(),
-		RevolveLoftJoin: &facetedrecord.RevolveLoftJoinRecord{Certificate: cert, Blank: hub, First: cert.Trimmed}}}
-	_, ok, err = revolveshell.NextSectorUnion(t.Context(), meshbool.OpUnion, topo.Env{}, joined, bodyNode(second))
-	require.NoError(t, err)
-	require.False(t, ok)
+	requireGeneralJoin(f, hubVolume, variadic, 1)
+}
 
-	_, err = Union(t.Context(), f.hub, f.lug)
-	require.ErrorIs(t, err, ErrUnsupported)
-	require.ErrorContains(t, err, "the chain cannot continue")
+// A source tooth whose two root contacts straddle −E0, the branch cut of the
+// blank basis's angle, refuses: its contacts' angles differ by more than π
+// (agent-docs/revolve-axis-design.md §5.9 item 9, §6). The congruent fixture
+// about (0, 1, 0) has E0 = Z, so the lug turned half a turn about the axis to
+// point along −Z straddles it, while the lug along +Z is the control. Read in
+// the +X convention atan2(Z, Y), the turned lug's contacts would not straddle.
+func TestSectorTraceRefusesToothStraddlingBranchCut(t *testing.T) {
+	t.Parallel()
+	for _, straddle := range []bool{false, true} {
+		doc := New()
+		u, v := r3.Vec{Z: -1}, r3.Vec{X: -1}
+		if straddle {
+			u, v = r3.Vec{Z: 1}, r3.Vec{X: 1}
+		}
+		f := sectionAxisFixture{doc: doc, axis: worldY,
+			hub: axisRevolve(t, doc, worldY, worldZ, planePoint{U: 1}, taperedHubOutline),
+			lug: axisLug(t, doc, r3.Vec{Y: 10}, u, v, false,
+				permutedConeTool(t, doc, 7.5), permutedConeTool(t, doc, 12))}
+		cert := f.certify(t)
+		require.NotNil(t, cert.Section.General)
+		require.Equal(t, worldZ, cert.Section.General.E0)
+		err := revolveshell.TraceSectorLoop(cert)
+		if !straddle {
+			require.NoError(t, err)
+			continue
+		}
+		require.ErrorIs(t, err, ErrUnsupported)
+		before := doc.Bodies()
+		_, err = Union(t.Context(), f.hub, f.lug)
+		require.ErrorIs(t, err, ErrUnsupported)
+		require.Equal(t, before, doc.Bodies())
+	}
 }
 
 // A general certificate's sector plan reads the root radius about the axis,

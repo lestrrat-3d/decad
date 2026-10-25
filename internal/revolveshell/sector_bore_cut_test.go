@@ -42,4 +42,15 @@ func TestSectorCylinderCutDeclinesJoinAboutAnotherAxis(t *testing.T) {
 		require.False(t, ok)
 		require.Nil(t, out)
 	}
+	// A certificate from the general record branch declines even when its
+	// axis value and both limits are X, as for an XZ-plane blank revolved
+	// about U: its ring stands at angles in the blank's own basis.
+	general := joined(coneaxis.X(), coneaxis.X())
+	payload := general.Payload.(facetedrecord.Payload)
+	payload.RevolveLoftJoin.Certificate.Section = facetedrecord.RevolveSectionCertificate{
+		Axis: coneaxis.X(), General: &facetedrecord.RevolveSectionAxis{}}
+	out, ok, err := revolveshell.SectorCylinderCut(t.Context(), meshbool.OpCut, topo.Env{}, general, &topo.Body{})
+	require.NoError(t, err)
+	require.False(t, ok)
+	require.Nil(t, out)
 }

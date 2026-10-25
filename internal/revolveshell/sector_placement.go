@@ -43,10 +43,11 @@ func RevolveSectorSourcesSeparate(sectors []facetedrecord.Payload, axis coneaxis
 }
 
 // RevolveSectorSeam reads the sector loop's first and last root contacts and
-// asks facetproof.SectorSeam for a seam outside every certified root sector.
-func RevolveSectorSeam(path []facetedrecord.RevolveSectorNode, motions []r3.Transform) (float64, error) {
+// asks basis's SectorSeam for a seam outside every certified root sector.
+func RevolveSectorSeam(basis facetproof.AngleBasis, path []facetedrecord.RevolveSectorNode,
+	motions []r3.Transform) (float64, error) {
 	if len(path) < 2 || len(motions) == 0 {
 		return 0, fmt.Errorf("%w: sector source has no root contacts", decaderr.ErrUnsupported)
 	}
-	return facetproof.SectorSeam(path[0].Point, path[len(path)-1].Point, motions)
+	return basis.SectorSeam(path[0].Point, path[len(path)-1].Point, motions)
 }

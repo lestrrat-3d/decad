@@ -2238,3 +2238,6 @@
 10	10.68	TestSectorRouteDigestBevel
 10	2.48	TestSectorRouteDigestCylinderCut
 10	1.19	TestSectorRouteDigestPointCone
+10	3.61	TestUnionHubAndRadialLugsAboutTiltedAxis
+10	1.90	TestUnionHubAndRadialLugsAboutPermutedAxis
+10	1.27	TestRevolveSectorCylinderCutDeclinesGeneralJoin

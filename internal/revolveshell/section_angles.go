@@ -23,8 +23,21 @@ func RevolveSectionAngles(section facetedrecord.RevolveSectionCertificate, secto
 		return nil, empty, fmt.Errorf("%w: section has no bounded angular plan", decaderr.ErrUnsupported)
 	}
 	radius := 0.0
-	for _, span := range section.Spans {
-		radius = max(radius, span.Start.V, span.End.V)
+	if section.General != nil {
+		// A general section reads each radius about the axis, R/|A|↓
+		// (agent-docs/revolve-axis-design.md §5.7). Every span end is the
+		// next span's start.
+		stations, ok := sectionStations(section)
+		if !ok {
+			return nil, empty, fmt.Errorf("%w: section has no finite radius", decaderr.ErrUnsupported)
+		}
+		for _, station := range stations {
+			radius = max(radius, station.radius)
+		}
+	} else {
+		for _, span := range section.Spans {
+			radius = max(radius, span.Start.V, span.End.V)
+		}
 	}
 	if radius <= 0 || proofbound.IsNonFinite(radius) {
 		return nil, empty, fmt.Errorf("%w: section has no finite radius", decaderr.ErrUnsupported)
