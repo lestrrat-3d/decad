@@ -45,12 +45,15 @@ bound IS the claim that the value is exactly representable). A nonzero bound
 reads `Approximate` and a **zero** bound reads `Exact`, on either path. Which
 measurements can reach zero depends on the path that built the result.
 
-**On the mesh path (§9), exactly one measurement can reach it:** the **VOLUME**
-of an all-planar pair whose contact points round exactly, which is integrated in
-exact rational arithmetic over the held mesh and whose rounding term is then
-genuinely zero. Every other measurement of a mesh-built result is Approximate —
-a length, an area or a centroid is a float sum of square roots, and the last ulp
-is not free, so its bound is never zero (§9, `internal/proofbound/bounds.go`).
+**On the ordinary mesh path (§9), only VOLUME can reach it:** an all-planar pair
+whose contact points round exactly is integrated in exact rational arithmetic
+over the held mesh, with a genuinely zero volume bound. Other ordinary mesh
+measurements, including its centroid, have nonzero bounds because their float
+integrals charge rounding (§9, `internal/proofbound/bounds.go`). A contained
+mesh Cut may also publish an Exact centroid when its strict-containment
+certificate permits a source-derived first-moment calculation whose own bound
+is zero. That centroid is Exact only from its own zero bound; the mesh proof
+still supplies closure, topology and the ordinary fallback.
 
 **On the analytic reduction (§9), the result is a swept payload and reads by §4
 like any other one**, so a volume, an area, a centroid and a `Box` can all reach

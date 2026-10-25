@@ -45,8 +45,8 @@ type Body struct {
 	// Volume is the body's enclosed volume. Root Body.Volume converts it to
 	// the public Measurement form.
 	Volume measurement.Measurement
-	// VolumeLineage is optional evaluator evidence for an independently
-	// certified volume reading. It contains plain values, not topology links.
+	// VolumeLineage is optional evaluator evidence for independently certified
+	// volume and centroid readings. It contains plain values, not topology links.
 	VolumeLineage *prooflineage.VolumeLineage
 	// OperationWarnings are bounded summaries from the public call that built
 	// this body. Root adapts them to public diagnostic values.

@@ -246,7 +246,7 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, 
 		return nil, err
 	}
 	if op == meshbool.OpCut {
-		if err := containedCutVolume(ctx, body, a, b); err != nil {
+		if err := containedCutQuantities(ctx, body, a, b); err != nil {
 			return nil, err
 		}
 	}
@@ -289,7 +289,7 @@ func operationKindForBoolean(op meshbool.OperationKind) OperationKind {
 	}
 }
 
-func containedCutVolume(ctx context.Context, result, target, tool *Body) error {
+func containedCutQuantities(ctx context.Context, result, target, tool *Body) error {
 	if _, ok := result.n.Payload.(facetedPayload); !ok {
 		return nil
 	}
@@ -301,7 +301,7 @@ func containedCutVolume(ctx context.Context, result, target, tool *Body) error {
 	if certificate == nil || certificate.Inner != &tool.n || certificate.Outer != &target.n {
 		return nil
 	}
-	lineage, selected, err := prooflineage.ContainedCutVolume(
+	volumeLineage, selectVolume, err := prooflineage.ContainedCutVolume(
 		int(target.n.Origin.Producer), int(tool.n.Origin.Producer),
 		target.n.Volume, tool.n.Volume, result.n.Volume,
 		prooflineage.Containment{
@@ -313,9 +313,25 @@ func containedCutVolume(ctx context.Context, result, target, tool *Body) error {
 	if err != nil {
 		return newBooleanError(meshbool.OpCut, BooleanEvaluatorFailure, ErrBooleanFailed, err)
 	}
-	result.n.VolumeLineage = lineage
-	if selected {
-		result.n.Volume = lineage.Derived
+	centroidLineage, selectCentroid, err := prooflineage.ContainedCutCentroid(
+		volumeLineage,
+		prooflineage.SourceCentroid{Producer: int(target.n.Origin.Producer), Reading: target.n.Centroid},
+		prooflineage.SourceCentroid{Producer: int(tool.n.Origin.Producer), Reading: tool.n.Centroid},
+		result.n.Centroid,
+	)
+	if err != nil {
+		return newBooleanError(meshbool.OpCut, BooleanEvaluatorFailure, ErrBooleanFailed, err)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	volumeLineage.Centroid = centroidLineage
+	result.n.VolumeLineage = volumeLineage
+	if selectVolume {
+		result.n.Volume = volumeLineage.Derived
+	}
+	if selectCentroid {
+		result.n.Centroid = centroidLineage.Derived
 	}
 	return nil
 }
