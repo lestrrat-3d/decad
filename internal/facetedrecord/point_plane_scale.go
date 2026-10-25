@@ -86,6 +86,7 @@ func ScaleImageWithSummary(ctx context.Context, body *topo.Body, fp Payload, anc
 	next.LoftFacesToe = nil
 	next.LoftFacesTrim = nil
 	next.CopyLineage = nil
+	next.ExactCopyMoments = nil
 	next.PointSection, next.PointCone = nil, nil
 	next.ExactSourceVerts, next.ExactSourceTris = nil, nil
 	next.LowerSupport = nil

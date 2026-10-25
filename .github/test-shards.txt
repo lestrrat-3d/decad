@@ -230,6 +230,11 @@
 10	0.00	TestContainedCutUsesCertifiedSourceCentroid
 10	0.00	TestContainedCutCentroidEvidenceFailureKeepsDocumentUnchanged
 10	0.00	TestContainedCutSourceMassProperties
+10	0.00	TestExactCopyUsesContainedCutSourceMassProperties
+10	0.00	TestExactCopyMomentHistoryAndRetiredSource
+10	0.00	TestExactCopyMomentEvidenceRollback
+10	0.00	TestExactCopyMomentScope
+10	0.00	TestExactCopyMassQueriesAreReadOnly
 10	0.00	TestOperationDiagnosticEnumsAndBooleanError
 10	0.00	TestOperationErrorPreservesKnownFailureAndSkipsTypedErrors
 10	0.00	TestOperationErrorCopiesOptionalDetailsAndUnwrapsOriginal

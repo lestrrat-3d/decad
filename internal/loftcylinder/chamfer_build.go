@@ -380,6 +380,7 @@ func chamferCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	result.Verts, result.Tris, result.Src, result.Groups = mesh.Verts, mesh.Tris, mesh.Src, mesh.Groups
 	result.VertexBound, result.MeshBound = bounds, bound
 	result.VolSymDiff, result.AreaSlack = volumeGap, proofbound.AbsSumUpper(fp.AreaSlack, area)
+	result.ExactCopyMoments = nil
 	result.LoftCylinderJoin, result.LoftCylinderBore = nil, nil
 	body, err := facetedrecord.Build(ctx, env, result)
 	if err != nil {

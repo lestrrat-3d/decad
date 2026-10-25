@@ -39,6 +39,7 @@ func TestScaleImage(t *testing.T) {
 		move, err := r3.Translation(r3.Vec{Y: 7})
 		require.NoError(t, err)
 		src := scaleSource()
+		src.ExactCopyMoments = &facetedrecord.ExactCopyMomentRecord{}
 		src.Xform = move
 		src.Groups = []facetedrecord.Group{{Surface: surfacegeom.Plane{Frame: frame}}}
 		src.LoftFacesPrimitive = true
@@ -60,6 +61,7 @@ func TestScaleImage(t *testing.T) {
 		require.False(t, got.LoftFacesPrimitive)
 		require.False(t, got.PointPlaneSourceEligible)
 		require.Nil(t, got.CopyLineage)
+		require.Nil(t, got.ExactCopyMoments)
 		// The plane about the anchor moves to anchor + 2(origin - anchor) and
 		// carries the unit-normal departure bound.
 		plane, ok := got.Groups[0].Surface.(surfacegeom.Plane)

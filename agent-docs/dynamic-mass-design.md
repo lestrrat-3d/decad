@@ -182,6 +182,12 @@ tensor interval without a positive row-dominance proof returns
 `ErrUnsupported`. A faceted payload without a matching verified mesh or finite
 `E` and `R` also returns `ErrUnsupported`.
 
+An admitted contained Cut retains source V/P/Q moments for the existing
+audited-mesh comparison. A direct exact-rotation Copy of that original Cut
+transports the frozen moments with its exact rational map before the same
+comparison. See `exact-copy-moments-design.md`; later placements and
+modifications do not inherit this evidence.
+
 For a curved or approximated body, request a `VerifyAll` tessellation with
 `BoundaryVerified()` and `VolumeVerified()`. Read its private certified
 `volSymDiff = E`, where `E` bounds the occupied volume of

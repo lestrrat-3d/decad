@@ -120,18 +120,20 @@ func containedCutMassProperties(ctx context.Context, mesher verifiedmesh.Mesher,
 	if err != nil {
 		return massmoment.MassReadings{}, err
 	}
-	lineage := body.VolumeLineage
-	if lineage == nil || lineage.Moments == nil {
-		return ordinary, nil
-	}
-	_, _, difference, err := lineage.Moments.Read(int(body.Origin.Producer), lineage)
-	if err != nil {
-		return massmoment.MassReadings{}, booleanEvidenceError(err)
-	}
 	if err := ctx.Err(); err != nil {
 		return massmoment.MassReadings{}, err
 	}
-	derived, err := publishContainedCutMoments(ctx, difference, density)
+	moments, present, err := sourceMomentSnapshot(ctx, body, payload)
+	if err != nil {
+		return massmoment.MassReadings{}, err
+	}
+	if !present {
+		if err := ctx.Err(); err != nil {
+			return massmoment.MassReadings{}, err
+		}
+		return ordinary, nil
+	}
+	derived, err := publishContainedCutMoments(ctx, moments, density)
 	if err != nil {
 		if ctx.Err() != nil {
 			return massmoment.MassReadings{}, ctx.Err()
@@ -147,11 +149,19 @@ func containedCutMassProperties(ctx context.Context, mesher verifiedmesh.Mesher,
 		return massmoment.MassReadings{}, booleanEvidenceError(errors.New("source and audited mass-property bounds are disjoint"))
 	}
 	if sourceMassPropertiesStrictlyBetter(ordinary, derived) {
+		if err := ctx.Err(); err != nil {
+			return massmoment.MassReadings{}, err
+		}
 		return derived, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return massmoment.MassReadings{}, err
 	}
 	return ordinary, nil
 }
 
+// publishContainedCutMoments publishes retained source V/P/Q for an original
+// contained Cut or its certified direct exact-rotation Copy.
 func publishContainedCutMoments(ctx context.Context, moments prooflineage.MomentSnapshot,
 	density units.Value) (massmoment.MassReadings, error) {
 	var local massmoment.Moments

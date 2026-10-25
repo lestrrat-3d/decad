@@ -89,6 +89,9 @@ type Payload struct {
 	// CopyLineage names the live faceted source and its recorded rigid image.
 	// A Boolean result has no copy lineage; Copy and placement issue it.
 	CopyLineage *FacetedCopyLineage
+	// ExactCopyMoments stores contained-Cut moments only for a direct public
+	// Copy made with WithCopyRotation. Later placements and rewrites drop it.
+	ExactCopyMoments *ExactCopyMomentRecord
 	// RevolveLoftJoin retains a geometry-certified section/sector source.
 	RevolveLoftJoin *RevolveLoftJoinRecord
 	// RevolveLoftSector identifies one rigid copy of a trimmed point loft.

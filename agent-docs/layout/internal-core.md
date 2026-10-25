@@ -25,13 +25,13 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/contactruling/` | Placed ruling contact of a source cylinder against an exact planar body: side faces, the ruling set, normals and the manifolds published into a contact report. See contact-geometry §4.5. |
 | `internal/contactfaceted/` | Exact faceted support-face proof, bounded strict separation from a source-box floor, and the floor contact classification. See contact-geometry §4. |
 | `internal/contactpair/` | The contact pair proof for two live solids: source-box, sphere, cylinder, faceted-floor, planar and placed-ruling arms in order, with the planar fallbacks and the analytic kernel verdict. See contact-geometry §4. |
-| `internal/massdispatch/` | Mass properties by body payload: source sphere and cylinder, revolve, sweep, cup, prism and faceted readings, and the verified-mesh ladder. See dynamic-mass §2–§3. |
+| `internal/massdispatch/` | Mass properties by payload, Cut and exact-Copy moments, and mesh ladder. See dynamic-mass §2 and exact-copy-moments-design. |
 | `internal/pair/sphere/` | Exact sphere-pair relation, gap and bounded response witness. See contact-geometry §4.3. |
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, support faces, and convexity. |
 | `internal/planarsnapshot/` | Planar contact snapshots, cached records, pose gates and placement. See multibody §9.1–§9.2. |
 | `internal/placedruling/` | Placed cylinder staging, support and relation proofs. See contact-geometry §4.5. |
 | `internal/facetproof/` | Faceted shell audits, placement, similarity and revolve sector-separation proofs, sector seams, angular gaps, and the centroid allowance. See `agent-docs/evaluator-design.md` §9. |
-| `internal/facetedrecord/` | Faceted payloads, point-loft source authentication, slab and cone-trim builders, bounds, caps, centroids, similarity proofs, placement, node building, mesh restatement and copy separation proofs. Root aliases its records. See evaluator §8–§9, loft-point design and faceted-vertex-bounds §3.7. |
+| `internal/facetedrecord/` | Faceted payloads, source records, bounds, placement, mesh and exact-copy moments. Root aliases its records. See evaluator §8 and exact-copy-moments-design. |
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/selectorquery/` | Selector matching on node views, query rendering, residual counts, face-role indexes. See API §9. |
 | `internal/modifyselect/` | Modify's selected-edge context and corner match. See modify §6. |
