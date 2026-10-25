@@ -32,6 +32,16 @@ type blendSpec struct {
 	fillet bool
 	r      float64
 	dA, dB float64
+	// asym is set for a two-distance chamfer: dA is then the positional
+	// distance, and assign gives dA and dB their per-edge meaning.
+	asym *asymSpec
+}
+
+// asymSpec is a two-distance chamfer's second distance and the reference face
+// of each selected edge.
+type asymSpec struct {
+	refs  map[*topo.Edge]*topo.Face
+	other float64
 }
 
 func (s blendSpec) planeSetback() float64 {
@@ -46,6 +56,47 @@ func (s blendSpec) wallSetback() float64 {
 		return s.r
 	}
 	return s.dB
+}
+
+func (s blendSpec) otherSize() float64 {
+	if s.asym == nil {
+		return 0
+	}
+	return s.asym.other
+}
+
+// refTag is the retained tag of a reference face. Face indices change between
+// the steps of a multi-edge blend, so each step finds its reference by the tag
+// bit for bit; the two faces of an edge carry distinct tags
+// (agent-docs/retained-modify-reach-design.md §4.1).
+type refTag struct {
+	surface  surfacegeom.Surface
+	reversed bool
+}
+
+func tagOf(f *topo.Face) refTag { return refTag{surface: f.Surface, reversed: f.Reversed} }
+
+// is reports whether f carries the tag. Retained faces are planes and
+// cylinders, whose values compare by field.
+func (t refTag) is(f *topo.Face) bool { return f.Reversed == t.reversed && f.Surface == t.surface }
+
+// assign returns the spec of one step: dA is the setback along f1 and dB the
+// setback along f2, where ref is the tag of the edge's reference face. The
+// faces are the two the class reader names, plane then wall for R2-R4.
+func (s blendSpec) assign(ref refTag, f1, f2 *topo.Face) (blendSpec, error) {
+	if s.asym == nil {
+		return s, nil
+	}
+	d, other := s.dA, s.asym.other
+	switch {
+	case ref.is(f1):
+		s.dA, s.dB = d, other
+	case ref.is(f2):
+		s.dA, s.dB = other, d
+	default:
+		return s, fmt.Errorf("%w: the reference face is not a face of the selected edge", decaderr.ErrUnsupported)
+	}
+	return s, nil
 }
 
 // rim is a closed circular edge between a retained plane and a coaxial

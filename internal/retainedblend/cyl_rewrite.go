@@ -38,7 +38,7 @@ func (c cylLine) solveSection(spec blendSpec, k0, o0, wA, wB r3.Vec, convex bool
 	if !spec.fillet {
 		d := spec.dA
 		s.ta = k0.Add(wA.Scale(d))
-		s.thetaT = d / c.radius
+		s.thetaT = spec.dB / c.radius
 		s.tb = o0.Add(u1.Scale(math.Cos(s.thetaT) * c.radius)).Add(wB.Scale(math.Sin(s.thetaT) * c.radius))
 		s.rows = []r3.Vec{s.ta, s.tb}
 		s.setback = d

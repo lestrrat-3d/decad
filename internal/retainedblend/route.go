@@ -24,14 +24,26 @@ func Fillet(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pa
 	return blend(ctx, env, b, fp, edges, blendSpec{fillet: true, r: radius}, radiusDelta, "fillet")
 }
 
-// Chamfer bevels the selected rims of b with an equal setback d along the
-// plane and the wall. An asymmetric chamfer is not recognized.
+// Reference is a resolved two-distance chamfer (agent-docs/retained-modify-reach-design.md
+// §4.1): Refs maps each selected edge to its one reference face of b, which takes
+// the positional distance d. The other face adjacent to the edge takes Other.
+type Reference struct {
+	Refs              map[*topo.Edge]*topo.Face
+	Other, OtherDelta float64
+}
+
+// Chamfer bevels the selected edges of b. Without ref the setback is d on both
+// faces; with ref each edge's reference face takes d and its other face takes
+// ref.Other. All edges must be non-nil, and every edge of an asymmetric chamfer
+// must have an entry in ref.Refs.
 func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Payload, edges []*topo.Edge,
-	d, dDelta float64, asymmetric bool) (*topo.Body, bool, error) {
-	if asymmetric {
-		return nil, false, nil
+	d, dDelta float64, ref *Reference) (*topo.Body, bool, error) {
+	spec := blendSpec{dA: d, dB: d}
+	if ref != nil {
+		spec.asym = &asymSpec{refs: ref.Refs, other: ref.Other}
+		dDelta = math.Max(math.Abs(dDelta), math.Abs(ref.OtherDelta))
 	}
-	return blend(ctx, env, b, fp, edges, blendSpec{dA: d, dB: d}, dDelta, "chamfer")
+	return blend(ctx, env, b, fp, edges, spec, dDelta, "chamfer")
 }
 
 // edgeKind is the class of a selected edge.
@@ -57,7 +69,10 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 	if delta != 0 {
 		return nil, true, fmt.Errorf("%w: a retained edge blend needs a size that converts exactly to millimetres", decaderr.ErrUnsupported)
 	}
-	if err := checkFinite(spec.r, spec.dA, spec.dB); err != nil {
+	if spec.asym != nil && !(spec.asym.other > 0) {
+		return nil, true, fmt.Errorf("%w: a blend needs a positive size", decaderr.ErrDegenerate)
+	}
+	if err := checkFinite(spec.r, spec.dA, spec.dB, spec.otherSize()); err != nil {
 		return nil, true, err
 	}
 	faceIndex := faceIndexOf(b)
@@ -65,8 +80,20 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 		rimKey  rimKey
 		lineKey lineKey
 		kind    edgeKind
+		ref     refTag // the tag of the edge's reference face
 	}
 	targets := make([]target, len(edges))
+	for i, e := range edges {
+		if spec.asym == nil {
+			break
+		}
+		f := spec.asym.refs[e]
+		if _, ok := faceIndex[f]; f == nil || !ok {
+			return nil, true, fmt.Errorf("%w: a two-distance chamfer has no reference face for a selected edge",
+				decaderr.ErrUnsupported)
+		}
+		targets[i].ref = tagOf(f)
+	}
 	var corners []r3.Vec
 	claim := func(ends [2]lineEnd, scale float64) error {
 		for _, end := range ends {
@@ -89,7 +116,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			if err := claim(l.ends, l.scale); err != nil {
 				return nil, true, err
 			}
-			targets[i] = target{lineKey: l.key(), kind: straightLine}
+			targets[i].lineKey, targets[i].kind = l.key(), straightLine
 		case looksLikeArc(e):
 			a, err := readArc(e, fp, faceIndex)
 			if err != nil {
@@ -103,7 +130,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			if err := claim(a.ends, a.scale); err != nil {
 				return nil, true, err
 			}
-			targets[i] = target{lineKey: a.arcKey(), kind: openArc}
+			targets[i].lineKey, targets[i].kind = a.arcKey(), openArc
 		case looksLikeCylLine(e):
 			c, err := readCylLine(e, fp, faceIndex)
 			if err != nil {
@@ -112,7 +139,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			if err := claim(c.ends, c.scale); err != nil {
 				return nil, true, err
 			}
-			targets[i] = target{lineKey: c.key(), kind: cylinderLine}
+			targets[i].lineKey, targets[i].kind = c.key(), cylinderLine
 		default:
 			r, err := readRim(e, fp, faceIndex)
 			if err != nil {
@@ -121,7 +148,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			if err := r.checkSize(spec); err != nil {
 				return nil, true, err
 			}
-			targets[i] = target{rimKey: r.key(), kind: closedRim}
+			targets[i].rimKey, targets[i].kind = r.key(), closedRim
 			for _, earlier := range targets[:i] {
 				if earlier.kind == closedRim && earlier.rimKey == targets[i].rimKey {
 					return nil, true, fmt.Errorf("%w: the selection names one rim twice", decaderr.ErrDegenerate)
@@ -151,26 +178,39 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 		role := fmt.Sprintf("%s(%d)", op, i)
 		var next *topo.Body
 		var err error
+		step := spec
 		switch targets[i].kind {
 		case straightLine:
 			var l line
 			if l, err = readLine(e, curFP, faceIndex); err == nil {
-				next, err = rewriteLineEdge(ctx, env, curFP, l, spec, role, faceIndex)
+				step, err = spec.assign(targets[i].ref, l.faceA, l.faceB)
+			}
+			if err == nil {
+				next, err = rewriteLineEdge(ctx, env, curFP, l, step, role, faceIndex)
 			}
 		case openArc:
 			var a arcRim
 			if a, err = readArc(e, curFP, faceIndex); err == nil {
-				next, err = rewriteArc(ctx, env, curFP, a, spec, role, faceIndex)
+				step, err = spec.assign(targets[i].ref, a.planeFace, a.wallFace)
+			}
+			if err == nil {
+				next, err = rewriteArc(ctx, env, curFP, a, step, role, faceIndex)
 			}
 		case cylinderLine:
 			var c cylLine
 			if c, err = readCylLine(e, curFP, faceIndex); err == nil {
-				next, err = rewriteCylLine(ctx, env, curFP, c, spec, role, faceIndex)
+				step, err = spec.assign(targets[i].ref, c.faceA, c.faceB)
+			}
+			if err == nil {
+				next, err = rewriteCylLine(ctx, env, curFP, c, step, role, faceIndex)
 			}
 		default:
 			var r rim
 			if r, err = readRim(e, curFP, faceIndex); err == nil {
-				next, err = rewriteRim(ctx, env, curFP, r, spec, role, faceIndex)
+				step, err = spec.assign(targets[i].ref, r.planeFace, r.wallFace)
+			}
+			if err == nil {
+				next, err = rewriteRim(ctx, env, curFP, r, step, role, faceIndex)
 			}
 		}
 		if err != nil {

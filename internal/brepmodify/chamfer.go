@@ -138,7 +138,11 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 		if recognized || err != nil {
 			return Result{Body: node}, err
 		}
-		node, recognized, err = retainedblend.Chamfer(ctx, env, b, fp, edges, dmm, dDelta, asym != nil)
+		var ref *retainedblend.Reference
+		if asym != nil {
+			ref = &retainedblend.Reference{Refs: asym.Refs, Other: asym.Other, OtherDelta: asym.OtherDelta}
+		}
+		node, recognized, err = retainedblend.Chamfer(ctx, env, b, fp, edges, dmm, dDelta, ref)
 		if recognized || err != nil {
 			return Result{Body: node}, err
 		}

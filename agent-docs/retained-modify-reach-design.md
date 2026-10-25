@@ -1,0 +1,535 @@
+# Retained Modify Reach Design
+
+What the modify operations and placements do with a mesh Boolean result whose faces carry retained analytic
+surfaces (`agent-docs/faceted-source-retention-design.md`, "retention §N"). Companion to
+`agent-docs/retained-edge-blend-design.md` ("blend §N"), which owns Table RR, the blend construction and Table SR;
+`agent-docs/modify-design.md` ("modify §N"), which owns the call contracts and base gates; and
+`agent-docs/modify-reach-design.md` ("reach §N"), which owns tangent-chain expansion (§5), the asymmetric
+reference (§6) and SX9. This document adds receiver classes and refusal rows to those tables. It changes no
+prism, revolve or brep receiver.
+
+Navigation only; the sections own the content.
+
+| Question | Section |
+|---|---|
+| Which gaps build and which stay refused | §3 |
+| Two-distance chamfer of a retained edge | §4 |
+| Fillet or chamfer of a rounded outline (line, arc, line …) | §5 |
+| `Copy` with `WithCopyRotation` | §6 |
+| `ScaledAt` | §7 |
+| Edge between two parallel cylinders | §8 |
+| Why `Shell`, `Draft`, `Offset`, `PatternJoin`, cone and torus blends stay refused | §9 |
+| Refusal rows and gate order | §10 |
+| Tests and their red legs | §12 |
+| PR order | §14 |
+
+## 1. Problem
+
+Probe on `main` at 02ae79969 on 2026-10-26 (dated illustration). The fixture is retention §1's: a 40×20×20 box with
+its four z-parallel edges filleted at r=3, cut by a Ø8 tool along y that a `Transform` placed (P2) or placed and
+rotated 20° about z (P3). Both results are mesh Boolean results whose faces read 6 `Plane` and 5 `Cylinder`, and
+whose edges publish `Line3`, `Arc3` and `Circle3` (retention §10).
+
+| Row | Call on the P2/P3 result | Outcome |
+|---|---|---|
+| — | `Hole` on a retained plane, `PatternCopies`, `Mirrored`/`MirroredCopy` across a retained plane, `Transform`, `Copy`, `WithCopyPlacement` | builds; tags kept |
+| GAP-A | `Copy` with `WithCopyRotation` | builds; every face reads `Faceted` (`internal/facetedrecord/place.go` `ExactGroupPlaced`) |
+| GAP-B | `Shell` inward, top face removed | `ErrUnsupported`, "shells a straight prism or its one-line Sweep reduction only" (`internal/brepmodify/shell.go`) |
+| GAP-C | `Draft` of the walls about the bottom face | `ErrUnsupported`, draft SD23 (`internal/draftrecord/gates.go`) |
+| GAP-D | `Chamfer` with `WithAsymmetricChamfer` of a top edge | `ErrUnsupported`: `retainedblend.Chamfer` declines it, then `internal/brepmodify/chamfer.go` refuses |
+| GAP-E | `Fillet`/`Chamfer` of an x-parallel top edge | `ErrUnsupported`, "an edge end meets a face that is not a retained plane" (`internal/retainedblend/line.go`) |
+| GAP-E | the same with `WithTangentChain` | `ErrUnsupported`, SX9 at expansion (`brep_modify_partial.go`) |
+| GAP-F | `PatternJoin` of a box feature, two copies | `ErrUnsupported`, "Union of three or more bodies needs a certified prism, axial or copied-tooth set" (`boolean_many.go`) |
+| — | `Offset` | `ErrUnsupported`, "Offset requires a sheet body" |
+| — | `ScaledAt` by 2 or 1.1 | builds; 6 `Plane` (bound 2) and 5 `Faceted` (`internal/facetedrecord/point_plane_scale.go`) |
+
+GAP-E is the common case. The x-parallel top edge runs from `(3,0,20)` to `(37,0,20)`. At each end it continues
+tangentially into an `Arc3` of radius 3 between the top face and a lateral blend cylinder, because the front face
+is tangent to that cylinder along the generator `x = 3, y = 0`. The edge has no end face: it is one edge of the
+top face's closed outline of 4 lines and 4 arcs. The same outline on the box before the Cut takes reach §8's
+complete cap-loop blend.
+
+## 2. What the design reads
+
+| Input | Source | Used for |
+|---|---|---|
+| Retained tags with `NormalBound == 0` and no denoted patch | retention §3 | every exact surface in §4, §5, §8 |
+| Retained edge curves (`Line3`, `Arc3`, `Circle3`) | retention §10 | edge classes and chain topology |
+| Held vertices, facets and vertex bounds | retention §3.3, faceted-vertex-bounds §2 | rewrite and clearance gates |
+| `brepmodify.Asymmetric.Refs` | reach §6, `modify_options.go` `resolveAsymmetricReference` | which face takes which distance (§4) |
+| `exactrotation.Rotation` (`Linear`, `Translation`) | `document.go` `copyUnder` | the exact image of a tag (§6) |
+| Anchor and factor of `ScaledAt` | `point_plane_scale.go` | the exact similar image of a tag (§7) |
+
+Faces with a stated departure or a denoted patch are not read by §4, §5 or §8, for blend §2's reason.
+
+## 3. Verdicts
+
+| Gap | Verdict | Reason in one clause | Section |
+|---|---|---|---|
+| GAP-D | build | the blend construction is already two-distance; only the reference mapping is missing | §4 |
+| GAP-E | build | at an exact tangent junction the two neighbouring blends share one exact cross-section (Claim J) | §5 |
+| GAP-A | build | the exact rotation is exactly orthogonal, so the tag's image costs only its rounding | §6 |
+| `ScaledAt` | build | a uniform scale keeps every normal, so the scaled tag costs only its origin and radius rounding | §7 |
+| Cylinder/Cylinder, parallel axes | build | the blend is a `Cylinder` from a circle–circle cross-section, as blend §4.3 | §8 |
+| GAP-B (`Shell`) | refuse | the cavity needs the trims between offset faces, which a mesh result does not record | §9.1 |
+| GAP-C (`Draft`) | refuse | each drafted face must be re-trimmed against its neighbours and the tool, with the same missing trims | §9.2 |
+| `Offset` of a solid | refuse | surface-design R37 refuses every solid; not a retention matter | §9.3 |
+| GAP-F (`PatternJoin`) | refuse here | the refusal is the many-body Union rule, which retention does not touch | §9.4 |
+| Cylinder/Cylinder, crossing axes | refuse | the blend is a canal surface outside the surface vocabulary | §9.5 |
+| `Cone`, `Torus` faces | refuse | the admitted sources carry denoted interval surfaces, which this route does not read | §9.5 |
+
+## 4. Two-distance chamfer of a retained edge (GAP-D)
+
+`retainedblend` already builds every Table RR chamfer from two setbacks: `blendSpec.dA` along the plane face (R2,
+R3, R4) or face `A` (R1), and `blendSpec.dB` along the wall or face `B`. The equal chamfer sets both to `d`. This
+section passes reach §6's two distances through instead.
+
+### 4.1 Mapping
+
+SX3 has resolved, for each selected edge `e`, exactly one adjacent reference face `Refs[e]`. Let `F1`, `F2` be the
+two faces in the order the class reader names them (`A`/`B` for R1, plane/wall for R2–R4).
+
+| Reference | Setback on `F1` | Setback on `F2` |
+|---|---|---|
+| `Refs[e] == F1` | `D` (the positional distance) | `Other` |
+| `Refs[e] == F2` | `Other` | `D` |
+
+**Resolve each reference to a tag before the first step.** Edges after the first are found again on the evolving
+mesh (blend §7), whose face pointers are new. Record, per target, the retained tag of its reference face. Each step
+picks the face whose tag equals that tag bit for bit; the two faces of every RR edge carry distinct tags.
+
+R3's chamfer reads `dA` for both setbacks (`internal/retainedblend/cyl_rewrite.go`, `solveSection`). It must read
+`dA` along the plane line `L` and arc length `dB` along the wall circle, so `θ_T = dB / R`.
+
+### 4.2 Geometry and proof
+
+No new claim. R1's chamfer plane runs through two parallel setback lines at in-plane distances `dA` and `dB`; R2
+and R4 take the `Cone` through the circle `R + σ·dA` on the plane and the circle at distance `dB` along the wall
+(blend §4.2); R3 takes the plane through the generator at distance `dA` along `L` and the one at arc length `dB`
+along `C`. Blend §5's exact areas and Claim K already state every term for `dA ≠ dB`. Each face's clearance
+(blend §6.2) uses that face's own setback.
+
+`DDelta` and `OtherDelta` must both be zero, for blend §6.1's existing "converts exactly to millimetres" rule.
+A tangent chain (§5) takes one assignment for the whole chain; SX3 forces it (§5.6).
+
+## 5. Tangent chains on one base plane (GAP-E)
+
+### 5.1 Table RC — chain classes
+
+A **chain** is a run of selected edges `e_1 … e_n` that all lie on one retained plane face `P` (the **base**),
+where each `e_k` is an R1 edge between `P` and a retained plane wall `W_k`, or an R4 edge between `P` and a
+retained cylinder wall `W_k` whose axis is normal to `P`, and consecutive edges meet at a **tangent junction**
+(§5.2).
+
+| RC | Chain | Ends | Staged |
+|---|---|---|---|
+| **C1** | closed: every edge of one loop of `P` | none | increment M3 |
+| **C2** | open | each end at a three-face corner that blend §5.0 (R1) or §4.4 (R4) admits, reflex foot corners included | increment M4 |
+
+At a junction both walls are perpendicular to `P`: a cylinder wall's axis is normal to `P`, and a plane wall
+tangent to it along a generator contains that generator. So every edge of a chain has dihedral angle `π/2`, and
+the whole chain is convex or the whole chain is concave.
+
+### 5.2 Tangent junction
+
+Edges `e_k` and `e_{k+1}` meet at a tangent junction at vertex `v` when all of these hold.
+
+1. Their faces are `{P, W_k}` and `{P, W_{k+1}}` with `W_k ≠ W_{k+1}`.
+2. `W_k` and `W_{k+1}` are tangent along one line `g` normal to `P`, decided by an exact identity on the tags'
+   floats read as rationals:
+   - plane `(n, o)` and cylinder `(a, c, R)`: `a · n = 0` and `(n · (c − o))² = R²·(n · n)`;
+   - cylinder `(a1, c1, R1)` and cylinder `(a2, c2, R2)`: `a1 × a2 = 0` and
+     `|(c2 − c1)_⊥|² = (R1 ± R2)²`, with `_⊥` the part normal to `a1`, `+` for external and `−` for internal
+     tangency;
+   - two plane walls are never a junction;
+   - every cylinder wall's axis is normal to `P` exactly: its cross product with `P`'s frame normal is zero.
+3. The two walls' outward normals along `g` are equal: their exact dot product is positive (the sign test of
+   reach §5.1).
+4. `V = g ∩ P` is exact. `g` is the line parallel to the axis through the foot of the axis on the plane wall,
+   `c − n·(n · (c − o)) / (n · n)`, or for two cylinders through `c1 + R1·(c2 − c1)_⊥ / (R1 ± R2)`. Both are
+   rational once identity 2 holds, and `P` meets `g` in one rational point.
+5. Falsifier: the held `v` lies within `bound(v) + slack` of `V` (blend §6.3's slack). A larger distance disproves
+   the pairing and refuses (SR6). A smaller one proves nothing.
+
+Identity 2 is the oracle of reach §5.1 applied to tag data: exact equality proves "tangent"; a difference above
+`ClrAngTol` relative to the operands proves "not tangent"; anything between is undecided and is SX2. A tolerance
+never proves "tangent".
+
+### 5.3 Expansion
+
+`expandTangentChain` (`brep_modify_partial.go`) refuses every `facetedPayload` today. It admits one whose seeds are
+all retained-curve edges between two faces that §2 reads. The walk calls a retained continuation test in place
+of `tangentchain.Continues`: §5.2 decides a candidate edge at `v`; an incident edge whose faces fail §2, or whose
+curve is a chord chain, is undecided (SX2). At a junction the third incident edge is the seam `{W_k, W_{k+1}}`; its
+face map sends `P` to a wall, test 4 of reach §5 fails, and it is "not a continuation". Seeds whose chains overlap
+merge into one chain (reach §5's fixed point), so the four x-parallel seeds of §1 give two closed chains.
+
+Without `WithTangentChain` the selection is what the caller named. A selection that names every edge of a chain
+builds the chain. A selected edge that ends at a proven tangent junction whose continuation is not selected is
+SM2 (§10).
+
+### 5.4 Claim J
+
+**Claim J.** Let `e_k` and `e_{k+1}` meet at a tangent junction `V` with base outward normal `n_P` and common wall
+outward normal `n_g` along `g`. Let `Π` be the plane through `V` normal to `d_V = n_P × n_g`. Then the
+cross-section of `e_k`'s blend by `Π` equals the cross-section of `e_{k+1}`'s blend by `Π`:
+
+| Blend | Common section in `Π` |
+|---|---|
+| fillet of radius `r`, convex | the quarter circle of radius `r` about `c_J = V − r·n_P − r·n_g`, from `c_J + r·n_P` to `c_J + r·n_g` |
+| fillet, concave | the quarter circle of radius `r` about `c_J = V + r·n_P + r·n_g`, from `c_J − r·n_P` to `c_J − r·n_g` |
+| chamfer, setbacks `t_P` on `P`, `t_W` on the walls | the segment from `V − t_P·n_g` to `V − t_W·n_P` (convex; `+` for concave) |
+
+*Proof.* `Π` contains `n_P` and `n_g`, hence `g`. For an R1 edge, `d_V` is the edge direction, so `Π` is normal to
+the blend cylinder's axis and cuts it in blend §4.1's circle: centre at `r/cos(π/4) = r√2` along the bisector, which
+is `−r·n_P − r·n_W` with `n_W = n_g`. For an R4 edge, the meridian plane at `V`'s azimuth holds the axis (parallel
+to `n_P`) and the radial direction at `V` (parallel to `n_g`), so it is `Π`. In it the torus is a circle of radius
+`r` about the tube centre: radius `R − r` from the axis toward `V` when the material lies inside the cylinder
+(`n_g` radial outward), `R + r` when it lies outside (`n_g` radial inward), at depth `r` below `P`. Both give
+`V − r·n_g − r·n_P`. A concave edge puts the ball on the void side, which flips both signs in both readings. In
+every case the two blends touch `P` and `g` at the feet of `c_J` on them, so both arcs share their end points. The
+chamfer case reads the setback points the same way: blend §4.1's setback lines and blend §4.2's cone circles both
+pass through `V ∓ t_P·n_g` and `V ∓ t_W·n_P`. For two cylinder walls, both meridian planes at `V` hold both axes
+and `g`, so both are `Π`, and the argument repeats. ∎
+
+Both blend surfaces contain the common section, and both tangent planes along it hold `d_V` and the section's
+tangent, so the blends meet G1. Claim J needs identity 2 of §5.2 exactly; without it the two sections differ and no
+shared row exists, which is why near tangency is SX2 and not a charge (§16 lists the alternative).
+
+### 5.5 Construction
+
+The rewrite touches `P`, every wall `W_k`, every seam between consecutive walls, and for C2 the two end faces.
+
+1. **Exact data.** Per junction `J`: `V_J`, `c_J`, and one row of section points `q_j(J)`, `j = 0 … m`, at tube
+   angles `α_j = j·(π/2)/m`. `m` follows blend §5 step 3 for `τ = 2⁻¹⁰·r`; every chain edge has angle `π/2` and
+   the same `r`, so every edge takes the same `m`. A chamfer has `m = 1`. **Compute each junction row once** and
+   give the same vertex indices to both strips that meet there; `q_0(J) = P_J` lies on `P` and
+   `q_m(J) = S_J = g ∩ P'` on the seam, with `P'` the plane parallel to `P` at depth `t_W` into the material.
+2. **Strips.** An R1 edge's strip is blend §5.0 step 4 with each end row taken from its junction (or, for a C2 end,
+   from blend §5.0 step 1). An R4 edge's strip is blend §4.4's grid with its two end columns taken from its
+   junction rows. Rows are wound to face the blend's outward normal.
+3. **Base face.** The chain's run in `P`'s loop gives way to the setback contour: an R1 edge's setback edge between
+   its two end setback points, an R4 edge's ring-0 polygon. `P_J` is shared by both neighbours. `P` is then
+   triangulated again by ear clipping over its loops (blend §5 step 2), with its other loops kept.
+4. **Walls.** Each `W_k` loses the band between `P` and `P'`: a plane wall by blend §5.0 step 2's chain cut at the
+   setback line, a cylinder wall by blend §5 step 2's cut at the setback height. Each seam's held run is cut at
+   `S_J`: the run's vertices on `P`'s side of `S_J` go and `S_J` takes their place.
+5. **Ends (C2).** Blend §5.0 (R1) or §4.4 (R4), unchanged.
+6. **Build.** `facetedrecord.Build`, as blend §5 step 5. Each chain edge gets its own blend group with role
+   `fillet(k)` or `chamfer(k)`, `k` the edge's ordinal in the expanded selection.
+
+New edges: each junction row is an `Arc3` (centre `c_J`, radius `r`, axis `±d_V`) for a fillet or a `Line3` for a
+chamfer, between two blend faces, marked `RetainedCurve` (blend §5.2). Setback edges and wall cut edges follow
+blend §5.2.
+
+### 5.6 Gates
+
+All tests are exact rational predicates over held floats and published bounds, inflated by `b + slack` with `b`
+the largest vertex bound of the tested chord. The inflation only refuses more.
+
+- **Base band.** Edge `k`'s band in `P` is a rectangle (R1: between the edge line, its setback line and the planes
+  `Π` or `G` at its ends) or an annular sector (R4: radii `R` and `R ∓ t_P` about the axis, between the two radial
+  lines to its ends). Every held boundary chord of `P` that is not on the chain must miss every band. A rectangle
+  test is affine. An annular test clips the chord to the sector's wedge (two half-planes, exact), then compares
+  the clipped chord's exact minimum and maximum squared distance from the axis with the two squared radii. An R4
+  edge whose span exceeds `π` has no convex wedge and is SM3.
+- **Neighbours.** The vertices of edges `k − 1` and `k + 1` other than `V_J` are chords of `P` for edge `k`'s band
+  test like any other. A G1 neighbour leaves `V_J` beyond `Π_J`, so it clears the band.
+- **Walls.** Every held boundary vertex of every wall that lies on no chain edge and no seam has distance at least
+  `t_W + b + slack` from `P`. Distance to a plane is affine, so the chords between such vertices clear `P'` as well.
+- **Seams.** Each seam's far end lies at distance at least `t_W + b + slack` from `P`, so `S_J` cuts it.
+- **Sizes.** Blend SR3 per edge: an R4 edge whose material lies inside its cylinder needs `R − r > 0` (fillet) or
+  `R − t_P > 0` (chamfer).
+- **Asymmetric.** `P` borders every edge of the chain, so a reference that names `P` names it for every edge. A
+  reference naming walls names each edge's own wall. A mix gives some edge two reference faces, and SX3 refuses it
+  first (reach §6's cap-loop argument); SM5 is the second check.
+
+A chord inside a band deflated by `b + slack` proves the blend consumes another face (SR4). A chord that meets the
+inflated band but not the deflated one is undecided (SR5). Every band of a chain lies in the prism over its base
+band between `P` and `P'`, so disjoint base bands give disjoint regions `K_k`, adjacent ones sharing only `Π_J`.
+A component that enters `K_k` without touching `P`, a wall or a seam is left to SR7, as in blend §6.1.
+
+### 5.7 Bounds
+
+Claim K (blend §6.3) holds with `K = ∪ K_k`: outside it the rewritten mesh equals the held one; inside each `K_k`
+the strip's chords leave the exact blend by at most `τ`. The shared junction rows add no term, because both
+neighbouring strips use the same vertices, which lie on both exact blend surfaces (Claim J). A junction vertex
+takes `τ` plus the rounding of its computation. `VolSymDiff` and `AreaSlack` add each edge's terms as blend §6.3
+states them. The exact areas are blend §5.0's for an R1 edge with `μ = 0` (its end planes are normal to it) and
+blend §4.4's for an R4 edge over its azimuth span.
+
+## 6. Exact-rotation `Copy` keeps its tags (GAP-A)
+
+`WithCopyRotation` gives a faceted copy that denotes `Q·S + t_Q`, with `Q` an exactly orthogonal rational rotation
+(`internal/exactrotation`). `ExactGroupPlaced` drops every group's `Surface`, `Denoted` and `CapRecord`, because
+they describe the float placement and not `Q`.
+
+**Construction.** For a group with `Retained == true`, no denoted patch, and `Surface` a `Plane`, `Cylinder`,
+`Sphere` or `Torus`: set `Surface` to the float image of the tag under the float delta
+(`surfaceplace.TransformSurface`) and `NormalBound` to `min(2, ε_F + add)`, where `ε_F` is the group's own
+`NormalBound` and `add` is retention §3.4's charge computed against `Q`: the linear map is `Q.Linear()`, the
+translation `Q.Translation()`, and `e = 0` because `Q` is exactly orthogonal. A plane takes `8a + P`; a curved tag
+takes the held term of retention §3.3 at displacement `2·(P + a·D)`. `a` and `P` are the exact distances of the
+moved frame vectors and origin from their images under `Q`, so they cover both the float rounding and the gap
+between the float delta and `Q`. A retained `Cone` keeps the bound 2, as retention §3.4 states. Denoted patches,
+non-retained structural tags and `CapRecord` are dropped.
+
+**Proof.** The copy's true solid is `Q·S + t_Q`. By Claim R each true patch of the group lies on the source tag
+`T`, so it lies on `Q·T + t_Q` exactly. The published tag is within `a` (directions) and `P` (origin) of that
+surface, and `Q` maps normals to normals without stretch, so retention §3.4's derivation holds with `e = 0`. A
+`Q` that is a signed permutation rounds nothing, gives bound 0, and so admits `MirrorFace` correctly: the tag is
+then the exact image plane.
+
+**Code.** `facetedrecord.PlacedTagDeparture` takes a float transform. Split out
+`PlacedTagDepartureBy(tag, moved, linear [3][3]*big.Rat, translation [3]*big.Rat, e float64, verts, reach)`, keep
+`PlacedTagDeparture` as its float-transform wrapper, and call it from `ExactGroupPlaced` with `fp.Verts` and the
+`reach` that `PlacedWith` already computes.
+
+## 7. `ScaledAt` keeps curved tags
+
+`ScaleImage` drops every retained curved or denoted tag, and gives every retained plane `NormalBound = 2`
+(`internal/facetedrecord/point_plane_scale.go`). A positive uniform scale `x ↦ a + s·(x − a)` maps each surface
+to a similar one with the same normal at corresponding points, so the only charge is rounding.
+
+| Tag | Scaled tag | Charge `add` |
+|---|---|---|
+| `Plane` | origin `round(a + s·(o − a))`, frame from `r3.NewFrame` on the unchanged `U`, `V` | `8·α + P` |
+| `Cylinder` | axis unchanged, origin as above, `Radius = round(s·R)` | held term of retention §3.3 at `2·(P + ρ)` |
+| `Sphere` | centre as above, `Radius = round(s·R)` | the same |
+| `Torus` | axis unchanged, centre as above, `Major` and `Minor` each rounded from `s` times the source value | the same |
+
+`P` is the exact distance of the rounded origin from `a + s·(o − a)`, `ρ` the largest exact gap of a rounded radius
+from `s` times the source radius, and `α` the exact gap of `NewFrame`'s vectors from `U`, `V`. Each group's
+`NormalBound` becomes `min(2, ε_F + add)`; `ε_F` is a bound on an angle, which a uniform scale preserves. `Cone`
+and denoted groups still read `Faceted`: retention §3.4 states no cone rule, and the interval denotation has no
+similarity image here. A retained curved group passes through the same A4 check at assembly as any other.
+
+## 8. Parallel cylinders (R5)
+
+Two cylinders with parallel axes meet in straight generators. Retention §10.1 keeps their chord chain. Two rows
+close it.
+
+**E10** (retention §10.1). `Cylinder` and `Cylinder` with `|a1 × a2| ≤ 10⁻¹²` and axis distance `s` with
+`|R1 − R2| < s < R1 + R2` within slack: `Line3`. Two generators exist, at the cross-section's circle–circle
+intersections; either passes if E6 accepts it, as in E4.
+
+**R5** (Table RR). A `Line3` of E10 ending on retained planes normal to the axes. In the cross-section normal to
+the edge, the walls are circles `C1 (o1, R1)` and `C2 (o2, R2)` meeting at `K`. The angle between their tangents at
+`K` must clear `minSine`.
+
+- Fillet: the centre is the point of `circle(o1, R1 + κ1·r) ∩ circle(o2, R2 + κ2·r)` nearest `K`, with `κ_i`
+  chosen per circle exactly as blend §4.3 chooses `κ`. The tangent points are the radial projections of the centre
+  onto `C1` and `C2`. The blend is a `Cylinder` of radius `r` along the edge.
+- Chamfer: arc length `dA` along `C1` and `dB` along `C2` from `K`; the blend is the `Plane` through the two
+  generators.
+- Each wall is cut as blend §4.3 cuts R3's wall, by the half-plane through its axis and its setback generator.
+- Ends: blend §4.3's end rule.
+
+The offset circles not meeting is SR3. The construction reuses `cylLine.solveSection` with the line `L` replaced
+by `C1`.
+
+## 9. Refusals
+
+### 9.1 `Shell` (GAP-B)
+
+An inward `Shell` removes the cavity `S ⊖_F t`: the erosion of `S` by `t`, open through the removed faces `F`
+(modify §8's erosion rules). The tags give every offset surface exactly: a plane moved `t`, a cylinder at
+`R ∓ t`, a sphere, a torus minor radius `∓ t`. The cavity also needs where those offsets meet: a miter at a convex
+edge, a radius-`t` blend about a reflex edge, the faces that vanish when `t` exceeds them, and how a bore's offset
+meets a wall's offset. A mesh result records none of it (retention §12, last bullet), so building the cavity from
+tags is a general 3D erosion kernel.
+
+Two subclasses were examined.
+
+- **Every face a retained plane, and the body provably convex.** Convexity is proven when every held vertex off a
+  face lies on the inner side of that face's plane by more than its bound. The cavity is then the intersection of
+  the moved half-spaces, exact by rational vertex enumeration, and SX8's topology-change refusal applies when a
+  face drops out. This is sound. It is not built: it is a new polyhedral kernel for bodies that mesh Booleans
+  rarely produce.
+- **Retained planes and cylinders** (the drilled rounded box of §1). The bore makes the body non-convex, and its
+  reflex junctions need trims the record lacks. This design has no construction from tags alone.
+
+`Shell` of a `facetedPayload` stays SX9 outside the source-backed routes (`agent-docs/shell-faceted-boss-design.md`).
+§16 lists the operand-record route.
+
+### 9.2 `Draft` (GAP-C)
+
+Drafting turns each selected wall's tag about its line on the neutral plane. The turned plane is computable
+(a rational rotation, as `internal/exactrotation`). Each drafted face then needs new trims against its neighbours,
+and a bore through a drafted wall meets it in a new curve, which re-meshes the bore wall. These are the same
+missing trims as §9.1. `Draft` of a brep receiver is also SD23 (the probe's unplaced-tool Cut, a `brepPayload`),
+so a mesh `Draft` would come after a brep one. `Draft` of a `facetedPayload` stays SD23. §16 lists the
+operand-record route.
+
+### 9.3 `Offset` of a solid
+
+`Offset` refuses every solid (surface-design R37, `agent-docs/missing-features.md` "Direct edits"). Retention
+changes nothing about it.
+
+### 9.4 `PatternJoin` (GAP-F)
+
+Not a retention matter. `PatternJoin` joins the target and every instance in one many-body `Union`. Its pairwise
+fallback, `tryPrismUnionChain` (`boolean_many.go`), admits prism and exact-Loft operands only; the contract is
+`agent-docs/api-design.md`'s many-body `Union` paragraph. Each pair of a chain would be an ordinary mesh Boolean,
+and retention §3.1 already carries tags through a second generation. Whether faceted operands may join that chain
+belongs to that owner.
+
+### 9.5 Cylinder/Cylinder, `Cone` and `Torus` blends
+
+- **Crossing cylinders.** The rolling ball's centre runs along the intersection of two offset cylinders, a
+  quartic, and the blend is a canal surface about it. It is no `Cylinder`, `Cone`, `Torus` or `Sphere`, and
+  `NURBSSurface` carries no geometry a proof can read (spline §7). SR1.
+- **`Cone` and `Torus` faces.** In the meridian of a coaxial pair the blend is a `Torus`, so the geometry exists.
+  The retained cones and tori that reach a mesh result come from revolves. Their tag is a float re-expression (the
+  cone's half-angle is an `Atan2`, `internal/revolveplan/payload.go`) whose departure is stated only through the
+  face's denoted interval surface (`topo.Face.Denoted`), which blend §2 does not read. A cone or torus that a blend
+  built (blend §4.2) meets its neighbours tangentially, so it has no edge to blend, and a later cut through it
+  gives a non-coaxial rim. SR1. §16 lists the denoted-surface route.
+
+## 10. Table SM — added refusal rows
+
+Rows narrow blend Table SR and reach SX2/SX9; sentinels follow those tables.
+
+| SM | Call | Sentinel |
+|---|---|---|
+| **SM1** | a chain junction whose tangency §5.2 cannot decide | `ErrUnsupported` (reach SX2's text) |
+| **SM2** | a selected edge ends at a proven tangent junction whose continuation is not selected and `WithTangentChain` is absent; the message names the junction point and `WithTangentChain` | `ErrUnsupported` |
+| **SM3** | a chain whose edges share no base plane, a junction of two plane walls, a cylinder wall whose axis is not exactly normal to `P`, or an R4 chain edge spanning more than `π` | `ErrUnsupported` |
+| **SM4** | the chain gates of §5.6: proven overlap | `ErrDegenerate` (SR4) |
+| **SM5** | the chain gates of §5.6: undecided; or a chain whose resolved references mix `P` and walls | `ErrUnsupported` (SR5; SX3 first for the mix) |
+| **SM6** | R5: the offset circles do not meet | `ErrDegenerate` (SR3) |
+| **SM7** | R5: the walls meet at `K` below `minSine` | `ErrUnsupported` (SR5) |
+
+Kept refusals: `Shell` (the `shell.go` text, SX9), `Draft` (SD23), `Offset` (R37), `PatternJoin` (the many-body
+`Union` text), crossing cylinders, `Cone`, `Torus` and oblique plane/cylinder rims (SR1).
+
+Gate order: modify §4 stage 1, reach stage 2 (expansion, SM1), stage 3 (SX3), then SR1, SM3, SR2 and SM2, SR3 and
+SM6, SR6, SR5, SM5 and SM7, SR4 and SM4, the construction, SR7.
+
+## 11. Readers
+
+- A chain result is a retained body; every retention §4 and §10.3 row applies. Its junction edges join two blend
+  faces tangentially. `FaceCreatedBy` finds each blend face by its `fillet(k)` or `chamfer(k)` role.
+- An exact-rotation copy answers `NormalAt`, `Facing` and `Face.Surface()` from its tags. `MirrorFace` admits a
+  plane only at bound 0, which a signed-permutation `Q` gives. `ToFace` refuses, because `CapRecord` is dropped.
+  A retained blend on the copy refuses at SR1 unless the bound is 0. `ExactCopyMoments` and the motion engine's
+  `ExactPlaced` reading are unchanged.
+- A scaled body answers the same readers; `MirrorFace` admits a plane whose charge is 0.
+
+## 12. Tests and the red leg each must show
+
+Tests assert on computed geometry. Volumes compare with the result's published bound and normals with
+`NormalAt`'s bound, never with a pinned bound literal: float bounds differ between amd64 and arm64. Each test is
+shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corner area and
+`x̄ = r·(10 − 3π) / (3·(4 − π))` its centroid's distance from the sharp corner along either face.
+
+| Test | Asserts | Red leg |
+|---|---|---|
+| R1 two-distance chamfer (placed-tool plate, one reference face per edge) | the bevel plane runs through the setback `D` on the reference face and `Other` on the other; removed `L·D·Other/2` | swap the §4.1 mapping: the distances swap |
+| R2 two-distance chamfer, reference the plane | removed `π·dA·dB·(R + dA/3)`; the `Cone` leans by `atan(dA / dB)`, starts `dB` below the plane and has radius `R` there | use `D` on both faces: the half-angle and volume are wrong |
+| R3 two-distance chamfer of a groove's top edge | the wall's setback generator lies at angle `dB / R` from `K` | keep `solveSection`'s `dA` for the wall: the angle reads `dA / R` |
+| R4 two-distance chamfer of an arc | as R2 over the arc's span | as R2 |
+| Two R1 edges, two reference faces, one call | each edge's setbacks match its own reference | resolve references by face pointer: the second step finds no reference |
+| Chain expansion on P2 | a top-front seed with `WithTangentChain` expands to 4 `Line3` and 4 `Arc3` in body order | keep the faceted gate in `expandTangentChain`: SX9 |
+| Closed chain fillet on P2, r = 1 (C1) | 4 `Cylinder`, 4 `Torus` (`Major = R − r`); removed `A_f·(96 + 2π·(R − x̄))`; junctions `Arc3` of radius `r`; `VerifyAll` passes | build each junction row per edge: rows differ in the last bits, SR7 refuses |
+| Same, torus side | as above | take `κ` the other way: `Major = R + r` and the volume is off |
+| Closed chain chamfer, equal and with reference `P` | removed `(t_P·t_W / 2)·(ΣL + 2π·(R − t_P/3))` | let the arcs take `t_W` along `P`: the two-distance volume is off |
+| Four x-parallel seeds | two closed chains; removed volume twice the C1 row's | skip merging overlapping chains: the corners are claimed twice and SR2 refuses |
+| One straight edge, no option | SM2 naming `WithTangentChain` and `(3,0,20)` | drop SM2: the message is blend SR5's "not a retained plane" |
+| All 8 edges named, no option | builds the C1 result; volume equal within both bounds | treat shared junction corners as SR2: refused |
+| Open chain (C2): one lateral fillet, seed its top edge | chain of line, arc, line; removed `A_f·(L1 + L2) + (π/2)·(R − x̄)·A_f` | stop the walk at the junction and use the R1 end rule: refused as grazing |
+| Concave chain: rounded boss on a plate, cut by a placed tool | fill `A_f·(ΣL + 2π·(R + x̄))`; blend normals point into the void | build the convex blend: the normals point into the material |
+| Chain clearance | a pocket whose chord crosses a band while its vertices lie outside it refuses SM5; a hole deep inside a band refuses SM4 | test vertices only: the crossing chord builds and SR7 or the volume check fails |
+| `internal/tangentchain` retained oracle | exactly tangent plane/cylinder tags prove "tangent"; tags one float step off are undecided; a clear miss is "not tangent" | replace the identity by a tolerance: the one-step case proves "tangent" |
+| Exact-rotation copy of P3, 20° | 6 `Plane`, 5 `Cylinder`; `NormalAt` at an interior facet centroid within its bound plus 64 float steps of the rotated source normal; bounds below 1 | keep `ExactGroupPlaced`'s drop: `Faceted` |
+| `facetedrecord` exact-copy charge | a plane whose image under a 20° `Q` rounds has `NormalBound ≥ 8a + P` recomputed in the test, and above 0 | charge 0: the relation fails |
+| Exact-rotation copy, 90° | bound 0 and `MirrorFace` across a copied plane builds; at 20° `MirrorFace` refuses | charge 0 for every `Q`: the 20° mirror builds |
+| Cut of the 20° copy | untouched planes and cylinders keep their tags | clear `Retained` in `ExactGroupPlaced`: the Cut loses them |
+| `ScaledAt` of P2 by 2 and by 1.1 | 6 `Plane`, 5 `Cylinder`; `Radius` is `2·R` at `s = 2` and within its rounding of `1.1·R`; `NormalAt` bounds below 1 | keep the drop: `Faceted`; keep the plane's 2: bound 2 |
+| `facetedrecord` scale charge | a cylinder at `s = 1.1` has `NormalBound` at least the held term at `2·(P + ρ)` recomputed in the test | charge 0: the relation fails |
+| R5: two overlapping parallel bosses, placed-tool cut | the boss–boss edge is `Line3`; fillet and chamfer change the volume by `L` times the section's corner area | flip `κ1`: the centre sits on the wrong side of `C1` |
+| Kept refusals on P2 | `Shell`, `Draft`, `Offset` and `PatternJoin` keep the texts of §10 | none; pins the refusals |
+
+## 13. Files and fallout
+
+| Area | Change |
+|---|---|
+| `internal/retainedblend/route.go` | `Chamfer` takes a two-distance spec with per-target reference tags (§4.1); group selected edges into chains; SM2, SM3 |
+| `internal/retainedblend/line_rewrite.go`, `arc_rewrite.go`, `rewrite.go` | setbacks from the mapping; an end at a junction plane in place of an end face |
+| `internal/retainedblend/cyl_rewrite.go` | the wall setback reads `dB` (§4.1) |
+| `internal/retainedblend/chain.go`, `chain_rewrite.go` | new: Table RC, §5.2 junctions, Claim J rows, §5.5 construction, §5.6 gates |
+| `internal/retainedblend/cyl2.go` | new: R5 |
+| `internal/brepmodify/chamfer.go`, `asymmetric.go` | pass the resolved reference into `retainedblend.Chamfer` |
+| `internal/tangentchain/` | the retained continuation test of §5.3 |
+| `brep_modify_partial.go` | admit a retained `facetedPayload` and dispatch the retained test |
+| `internal/facetedrecord/place.go`, `place_tag.go`, `placed.go` | §6 |
+| `internal/facetedrecord/point_plane_scale.go`, `place_tag.go` | §7 |
+| `internal/facetedrecord/edge_curve.go` | E10 |
+| `document.go` | `WithCopyRotation`'s doc comment states the tags it keeps (§6) |
+| `agent-docs/retained-edge-blend-design.md` | Table RR: the two-distance chamfer, R5, a pointer to this document's chains; §7 |
+| `agent-docs/faceted-source-retention-design.md` | §3.4 (exact rotation), §6 (`ScaledAt`), §10.1 (E10) |
+| `agent-docs/modify-reach-design.md` | RX6 row and SX9 text; §5's sentence that faceted curves never enter the oracle |
+| `agent-docs/missing-features.md` | the rows for faceted `Fillet`/`Chamfer` and for analytic readings of a `WithCopyRotation` copy |
+| `apitest/` | the tests of §12; `apitest/faceted_retained_blend_test.go` holds the blend rows |
+| `examples/` | one executable example: the rounded box's top rim filleted after a placed-tool Cut |
+| `docs/api.md`, `docs/data-structures.md` | none: no exported name or signature changes, and their rows name no receiver class |
+
+## 14. Increments
+
+Each increment is one PR. M1 ships this document.
+
+| # | Lands | Gate to start the next |
+|---|---|---|
+| M1 | §4: two-distance chamfer on R1–R4 | the five two-distance rows of §12 pass; `go test ./...` on CI |
+| M2 | §6: exact-rotation `Copy` keeps its tags (independent of M1) | the four exact-copy rows pass on CI |
+| M3 | §5.2–§5.7 for C1: retained expansion, junctions, closed chains, SM1–SM5 | the expansion, C1, chamfer, seed-merge, SM2, all-8 and oracle rows pass, and the example's output is verified |
+| M4 | C2: open chains with blend §5.0 and §4.4 ends, including reflex foot ends | the C2, concave and clearance rows pass |
+| M5 | §7: `ScaledAt` keeps curved tags | the two scale rows pass |
+| M6 | §8: E10 and R5 | the R5 row passes |
+
+M3 starts with one real end-to-end run on the P2 fixture before any other fixture. If that run refuses, the
+increment stops and reports the refusal.
+
+## 15. Rejected shortcuts
+
+- **Admit near tangency by a tolerance.** Reach §5 lets a tolerance prove "no" only. Claim J needs equal sections,
+  which near tangency does not give.
+- **Blend each chain edge on the evolving mesh.** Blending one edge alone leaves a flat end cap in `Π_J`; the
+  next edge's blend then removes that cap to zero area, which no end rule builds.
+- **Expand a tangent chain without `WithTangentChain`.** Cardinality applies to what the caller named (reach §2).
+  SM2 names the option instead.
+- **Re-derive the copy's or the scaled body's tag from its moved polygons.** It blesses a surface from the
+  polygons it should be checked against (CLAUDE.md).
+- **Scale or rotate a tag and set its bound to 0.** The origin and radius round; a zero bound would claim the
+  rounded tag is the true surface.
+- **Shell by a Cut with an inward-offset copy of the held mesh.** A vertex-normal offset of a mesh is not the
+  erosion and carries no proof.
+- **Rebuild the operands of a mesh Cut from tags and roles.** Payload §5.2 forbids rebuilding from roles, and tags
+  carry no trims.
+
+## 16. Decisions the user may want to overturn
+
+| Decision | Default | Alternative |
+|---|---|---|
+| Chain junctions | exact tangency only (§5.2) | a bounded near-tangency rule |
+| `Shell` and `Draft` of a mesh Cut | refuse (§9.1, §9.2) | a source-backed route on an operand record |
+| `Cone` and `Torus` rims | refuse (§9.5) | a coaxial revolution class read from denoted surfaces |
+| Increment order | M1 and M2 first (small), then the chains | chains first |
+| R5 | build last (M6) | drop it |
+
+- **Chain junctions.** The default proof is short and matches reach §5. It refuses every part whose wall and
+  fillet tags miss tangency by a rounding, for example a 40.1 mm box. The bounded rule admits those parts. It costs
+  a new proof that the seam lies within `√(2R·δ)` of the foot and that the crease angle is at most `√(2δ/R)`,
+  with `δ` the exact tangency defect, both charged into the junction rows.
+- **`Shell` and `Draft`.** The mesh Cut would keep an immutable record of its operands `T` and `U`. Then
+  `Shell(T − U) = (T − U) − ((T ⊖_F t) − (U ⊕ t))` holds for modify §8's erosion when `F` are faces of `T` and `U`
+  crosses `T` by more than `t`, and `Draft(T − U) = Draft(T) − U` holds when every drafted face descends from `T`.
+  The route gains shells and drafts of drilled parts. It costs a new record on every mesh Cut, a dilation of the
+  tool, two more mesh Booleans per call (which may hit the coarse-held-contact refusal on curved faces), and a
+  separate design of about three PRs.
+- **`Cone` and `Torus`.** The coaxial class's meridian blend is a `Torus`, built from the denoted interval
+  surfaces. It gains blends on revolved shafts after a placed cut. It costs an interval construction and a proof
+  that two denoted walls share one axis. A caller can blend on the revolve (reach RX2) before the cut today.
+- **Increment order.** Chains first lands the highest-value case one PR sooner. M3's two-distance chain chamfer
+  row then waits for M1.
+- **R5.** Dropping it saves M6. Two parallel cylinders meeting in a transversal edge are rare in machined parts.

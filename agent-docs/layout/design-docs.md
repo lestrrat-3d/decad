@@ -67,6 +67,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/operation-diagnostics-design.md` | Operation failure diagnostics, successful-call warnings, delivery APIs, compatibility rules, and proof fixtures. |
 | `agent-docs/faceted-source-retention-design.md` | Analytic source surfaces carried onto mesh Boolean result faces: claim, admission, normal bound, readers, increments. |
 | `agent-docs/retained-edge-blend-design.md` | `Fillet` and `Chamfer` of an edge between two retained faces of a mesh Boolean result: edge classes, exact blend geometry, local mesh rewrite, gates, bounds, increments. |
+| `agent-docs/retained-modify-reach-design.md` | Modify and placement reach on retained mesh Boolean results: two-distance and tangent-chain blends, exact-copy and scaled tags, parallel-cylinder blends, and the Shell, Draft and PatternJoin refusals. |
 | `agent-docs/surface-intersection-design.md` | `Trim`/`Extend`/`Split` over shared-generator sweeps. |
 | `agent-docs/surface-design.md` | Sheet bodies, surface operations, verification and export. |
 | `agent-docs/motion-check-design.md` | `VerifyMotion`: motions, the per-pose proof, the interval certificate, `MotionReport`. |
