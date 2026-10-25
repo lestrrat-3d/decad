@@ -1,6 +1,7 @@
 package meshbool_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -158,4 +159,50 @@ func TestRefuseUndecidableProximityLocalSlack(t *testing.T) {
 			require.InDelta(t, 1, ct.NormalA.Len(), 1e-9)
 		}
 	})
+}
+
+func TestRefuseUndecidableProximityFaceBoxes(t *testing.T) {
+	t.Parallel()
+	const delta = 0.0625
+	slack := 2 * delta * (1 + 1e-9)
+	for _, axis := range []r3.Vec{{X: 1}, {Y: 1}, {Z: 1}, {X: -1}, {Y: -1}, {Z: -1}} {
+		for _, gap := range []float64{0, delta, slack, math.Nextafter(slack, math.Inf(1)), 0.25} {
+			for _, split := range []bool{false, true} {
+				lo, hi := r3.NewVec(100, 200, 300), r3.NewVec(101, 201, 301)
+				a := newGateBox(t, lo, hi, delta)
+				shift := axis.Scale(1 + gap)
+				b := newGateBox(t, lo.Add(shift), hi.Add(shift), delta)
+				size := len(a.mesh.Source)
+				if split {
+					size = 2
+					for _, box := range []gateBox{a, b} {
+						for i := 0; i < len(box.mesh.Source); i += 2 {
+							face := &topo.Face{}
+							box.mesh.Source[i], box.mesh.Source[i+1] = face, face
+							box.mesh.FaceBound[face] = delta
+						}
+					}
+				}
+				// Scan every face pair without the face-box filter, including
+				// the exact same padding and rounding at the slack boundary.
+				allA, allB := meshbool.AllFacets(a.bool), meshbool.AllFacets(b.bool)
+				memo := meshbool.NewContactMemo(a.bool, b.bool)
+				near := false
+				for i := 0; i < len(allA); i += size {
+					for j := 0; j < len(allB); j += size {
+						got, err := meshbool.FacesNearMiss(t.Context(), a.bool, allA[i:i+size],
+							b.bool, allB[j:j+size], slack, memo)
+						require.NoError(t, err)
+						near = near || got
+					}
+				}
+				err := gate(t, a, b, nil, nil)
+				if near {
+					require.ErrorIs(t, err, decaderr.ErrUnsupported, "axis %v, gap %g, split %t", axis, gap, split)
+				} else {
+					require.NoError(t, err, "axis %v, gap %g, split %t", axis, gap, split)
+				}
+			}
+		}
+	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/r3"
 )
 
 // RefuseUndecidableProximity is the tangency gate (agent-docs/evaluator-design.md
@@ -65,11 +66,11 @@ func RefuseUndecidableProximity(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB
 		Detail: `the operands' held facets come within the chord tolerance without provably interpenetrating deeper than it, so whether their true surfaces touch or cross is decided by where the chords fall — this evaluator refuses the question rather than answer it wrong`,
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-	fa, err := facesOfMesh(budget, ma)
+	fa, err := facesOfMesh(budget, ma, bmA.Boxes)
 	if err != nil {
 		return err
 	}
-	fb, err := facesOfMesh(budget, mb)
+	fb, err := facesOfMesh(budget, mb, bmB.Boxes)
 	if err != nil {
 		return err
 	}
@@ -96,6 +97,13 @@ func RefuseUndecidableProximity(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB
 			// both sides of that comparison are float-computed: pad the
 			// threshold so the rounding can only ever ADD a refusal, never
 			// drop one. A relative 1e-9 is nothing against any real clearance.
+			// Each face box contains all its facet boxes. BoxesWithin uses only
+			// monotone subtraction and comparison, so a separated face pair has
+			// no facet pair GatherNearContacts could queue at this same slack.
+			// Reject it before allocating that scan's maps, buffers and callback.
+			if !BoxesWithin(ga.box, gb.box, slack*(1+1e-9)) {
+				continue
+			}
 			near, err := FacesNearMiss(ctx, bmA, ga.facets, bmB, gb.facets, slack*(1+1e-9), memo)
 			if err != nil {
 				return err
@@ -208,6 +216,7 @@ type faceFacets struct {
 	source *topo.Face
 	delta  float64
 	facets []int
+	box    [2]r3.Vec
 }
 
 // facesOfMesh groups a tessellation's facets by their source face, in first-
@@ -222,7 +231,7 @@ type faceFacets struct {
 // A source face the mesh states no bound for is a broken evaluator, not a
 // staged capability: it returns ErrBooleanFailed rather than an ErrUnsupported
 // that Verify would hide as an undecided pair, and never a zero.
-func facesOfMesh(budget *proofbound.WorkBudget, m *topo.Mesh) ([]faceFacets, error) {
+func facesOfMesh(budget *proofbound.WorkBudget, m *topo.Mesh, boxes [][2]r3.Vec) ([]faceFacets, error) {
 	index := map[*topo.Face]int{}
 	var out []faceFacets
 	for i, f := range m.Source {
@@ -237,9 +246,16 @@ func facesOfMesh(budget *proofbound.WorkBudget, m *topo.Mesh) ([]faceFacets, err
 			}
 			k = len(out)
 			index[f] = k
-			out = append(out, faceFacets{source: f, delta: delta})
+			out = append(out, faceFacets{source: f, delta: delta, box: boxes[i]})
 		}
 		out[k].facets = append(out[k].facets, i)
+		box := &out[k].box
+		box[0].X = math.Min(box[0].X, boxes[i][0].X)
+		box[0].Y = math.Min(box[0].Y, boxes[i][0].Y)
+		box[0].Z = math.Min(box[0].Z, boxes[i][0].Z)
+		box[1].X = math.Max(box[1].X, boxes[i][1].X)
+		box[1].Y = math.Max(box[1].Y, boxes[i][1].Y)
+		box[1].Z = math.Max(box[1].Z, boxes[i][1].Z)
 	}
 	return out, nil
 }
