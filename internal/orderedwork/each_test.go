@@ -106,3 +106,54 @@ func TestEachInlineStartsNoGoroutine(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 10, first)
 }
+
+func TestEachNestedCallKeepsPollingAndReleasesWorkers(t *testing.T) {
+	prior := runtime.GOMAXPROCS(2)
+	defer runtime.GOMAXPROCS(prior)
+	stop := errors.New("nested stop")
+	release := make(chan struct{})
+	var innerStarted atomic.Int32
+	polls := 0
+	first, err := orderedwork.Each(2, 2, 1, nil, func(i int) error {
+		if i != 0 {
+			return nil
+		}
+		// The parent holds the available extra worker until its call joins.
+		// A nested call must still poll while its single worker is blocked.
+		_, err := orderedwork.Each(4, 2, 1, func() error {
+			polls++
+			close(release)
+			return stop
+		}, func(int) error {
+			innerStarted.Add(1)
+			<-release
+			return nil
+		})
+		return err
+	})
+	require.Equal(t, 0, first)
+	require.ErrorIs(t, err, stop)
+	require.Equal(t, 1, polls)
+	require.Equal(t, int32(1), innerStarted.Load())
+
+	// Both workers must be available again after the failed nested call and
+	// its parent have joined. Neither callback can finish before the other starts.
+	release = make(chan struct{})
+	var started atomic.Int32
+	released := false
+	first, err = orderedwork.Each(2, 2, 1, func() error {
+		if started.Load() == 2 && !released {
+			close(release)
+			released = true
+		}
+		return nil
+	}, func(int) error {
+		started.Add(1)
+		<-release
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, 2, first)
+	require.Equal(t, int32(2), started.Load())
+	require.True(t, released)
+}
