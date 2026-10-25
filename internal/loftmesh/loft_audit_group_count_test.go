@@ -1,11 +1,13 @@
 package loftmesh
 
 import (
+	"errors"
 	"math"
 	"math/rand/v2"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -126,7 +128,21 @@ func TestGroupedCountParallelMatchesVisit(t *testing.T) {
 						got, gotErr := sweepCandidateCountsWorkers(countingBudget(k, &gotSteps), scan, f, keep,
 							math.MaxUint64, 4)
 						require.Equal(t, want, got, "budget %d", k)
-						require.Equal(t, wantErr, gotErr, "budget %d", k)
+						require.Equal(t, wantErr == nil, gotErr == nil, "budget %d", k)
+						if wantErr != nil {
+							require.ErrorIs(t, wantErr, proofbound.ErrWallWorkBudget)
+							require.ErrorIs(t, gotErr, proofbound.ErrWallWorkBudget)
+							require.Equal(t, wantErr.Error(), gotErr.Error(), "budget %d", k)
+						}
+						var wantLimit, gotLimit *proofbound.WorkLimitError
+						if errors.As(wantErr, &wantLimit) || errors.As(gotErr, &gotLimit) {
+							require.ErrorAs(t, wantErr, &wantLimit)
+							require.ErrorAs(t, gotErr, &gotLimit)
+							require.Equal(t, wantLimit.Resource, gotLimit.Resource)
+							require.Equal(t, wantLimit.Maximum, gotLimit.Maximum)
+							require.True(t, wantLimit.Observed == wantSteps || wantLimit.Observed == wantSteps+1)
+							require.True(t, gotLimit.Observed == gotSteps || gotLimit.Observed == gotSteps+1)
+						}
 						require.Equal(t, wantSteps, gotSteps, "budget %d", k)
 					}
 				})

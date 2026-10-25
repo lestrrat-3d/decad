@@ -2,6 +2,7 @@ package proofbound_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand/v2"
@@ -198,9 +199,20 @@ func TestPerturbedTriangleTermsBudget(t *testing.T) {
 			proofbound.NewWallWorkBudget(limit), verts, tris, 1)
 		_, _, gotErr := proofbound.PerturbedTriangleTermsForTest(
 			proofbound.NewWallWorkBudget(limit), verts, tris, 4)
-		require.Equal(t, wantErr, gotErr, "limit %d", limit)
+		require.Equal(t, wantErr == nil, gotErr == nil, "limit %d", limit)
 		if limit < uint64(len(tris)) {
 			require.ErrorIs(t, gotErr, proofbound.ErrWallWorkBudget)
+			require.ErrorIs(t, wantErr, proofbound.ErrWallWorkBudget)
+			require.Equal(t, wantErr.Error(), gotErr.Error(), "limit %d", limit)
+			var wantLimit, gotLimit *proofbound.WorkLimitError
+			require.True(t, errors.As(wantErr, &wantLimit))
+			require.True(t, errors.As(gotErr, &gotLimit))
+			require.Equal(t, "proof_steps", wantLimit.Resource)
+			require.Equal(t, wantLimit.Resource, gotLimit.Resource)
+			require.Equal(t, limit, wantLimit.Maximum)
+			require.Equal(t, wantLimit.Maximum, gotLimit.Maximum)
+			require.True(t, wantLimit.Observed == limit || wantLimit.Observed == limit+1)
+			require.True(t, gotLimit.Observed == limit || gotLimit.Observed == limit+1)
 		} else {
 			require.NoError(t, gotErr)
 		}
