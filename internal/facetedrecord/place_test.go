@@ -12,6 +12,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -95,10 +96,17 @@ func TestPlacedCapCentroidReadsPlacementAsExactMap(t *testing.T) {
 	require.Equal(t, math.Float64bits(want.Bound.Base()), math.Float64bits(got.Bound.Base()))
 }
 
+func exactGroupFixture(t *testing.T, degrees float64) (*exactrotation.Rotation, r3.Transform, []r3.Vec) {
+	t.Helper()
+	center, axis := r3.NewVec(20, 10, 0), r3.NewVec(0, 0, 1)
+	q, delta, err := exactrotation.New(center, axis, units.Degrees(degrees))
+	require.NoError(t, err)
+	return q, delta, []r3.Vec{r3.NewVec(0, 0, 0), r3.NewVec(40, 20, 20)}
+}
+
 func TestExactGroupPlacedMapsCentroidAndDropsTags(t *testing.T) {
 	q, d, err := exactrotation.New(r3.Vec{}, r3.Vec{Z: 1}, units.Degrees(90))
 	require.NoError(t, err)
-	_ = d
 	origin := provenance.Ref{Producer: 1, Role: provenance.RoleCapStart}
 	g := facetedrecord.Group{
 		Origins: []provenance.Ref{origin}, HasCentroid: true, Planar: true, Reversed: true,
@@ -106,10 +114,11 @@ func TestExactGroupPlacedMapsCentroidAndDropsTags(t *testing.T) {
 		Surface:     surfacegeom.Plane{},
 		NormalBound: 3,
 	}
-	require.NoError(t, facetedrecord.ExactGroupPlaced(&g, q))
-	require.Nil(t, g.Surface)
+	require.NoError(t, facetedrecord.ExactGroupPlaced(&g, q, d, nil, 0))
+	require.Nil(t, g.Surface, "a non-retained tag describes the float placement")
 	require.Nil(t, g.Denoted)
 	require.Zero(t, g.NormalBound)
+	require.False(t, g.Retained)
 	require.True(t, g.Planar)
 	require.True(t, g.Reversed)
 	require.Equal(t, []provenance.Ref{origin}, g.Origins)
@@ -126,4 +135,74 @@ func TestExactGroupPlacedMapsCentroidAndDropsTags(t *testing.T) {
 	bound := new(big.Rat)
 	require.NotNil(t, bound.SetFloat64(g.Centroid.Bound.Base()))
 	require.LessOrEqual(t, delta.Cmp(bound), 0, "reading strays from exact Q*c beyond its bound")
+}
+
+func TestExactGroupPlacedKeepsRetainedTags(t *testing.T) {
+	t.Parallel()
+	q, delta, verts := exactGroupFixture(t, 20)
+	frame, err := r3.NewFrame(r3.NewVec(0, 0, 20), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	plane := surfacegeom.Plane{Frame: frame}
+	cyl := surfacegeom.Cylinder{Origin: r3.NewVec(20, 0, 10), Axis: r3.NewVec(0, 1, 0), Radius: units.Millimeters(4)}
+
+	t.Run("a retained plane takes the float image and the 8a+P charge against Q", func(t *testing.T) {
+		t.Parallel()
+		g := facetedrecord.Group{Surface: plane, Retained: true, NormalBound: 1e-12}
+		require.NoError(t, facetedrecord.ExactGroupPlaced(&g, q, delta, verts, 1e-9))
+		moved, ok := g.Surface.(surfacegeom.Plane)
+		require.True(t, ok)
+		require.True(t, g.Retained)
+		// Recompute a: the exact image Q*U against the moved U.
+		lin := q.Linear()
+		a := 0.0
+		for i, want := range [3]float64{moved.Frame.U().X, moved.Frame.U().Y, moved.Frame.U().Z} {
+			exact := new(big.Rat).Set(lin[i][0])
+			diff := new(big.Rat).Sub(exact, new(big.Rat).SetFloat64(want))
+			f, _ := diff.Abs(diff).Float64()
+			a = max(a, f)
+		}
+		require.Positive(t, a, "a 20 degree image rounds")
+		require.GreaterOrEqual(t, g.NormalBound, 1e-12+8*a)
+		require.Less(t, g.NormalBound, 1e-9)
+		require.InDelta(t, math.Cos(20*math.Pi/180), moved.Frame.U().X, 1e-12)
+		require.InDelta(t, math.Sin(20*math.Pi/180), moved.Frame.U().Y, 1e-12)
+	})
+
+	t.Run("a retained cylinder takes the float image and a finite bound", func(t *testing.T) {
+		t.Parallel()
+		g := facetedrecord.Group{Surface: cyl, Retained: true}
+		require.NoError(t, facetedrecord.ExactGroupPlaced(&g, q, delta, verts, 1e-9))
+		moved, ok := g.Surface.(surfacegeom.Cylinder)
+		require.True(t, ok)
+		require.InDelta(t, -math.Sin(20*math.Pi/180), moved.Axis.X, 1e-12)
+		require.InDelta(t, math.Cos(20*math.Pi/180), moved.Axis.Y, 1e-12)
+		require.Positive(t, g.NormalBound)
+		require.Less(t, g.NormalBound, 1e-9)
+	})
+
+	t.Run("a retained cone keeps the trivial bound", func(t *testing.T) {
+		t.Parallel()
+		cone := surfacegeom.Cone{Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(1), HalfAngle: units.Degrees(10)}
+		g := facetedrecord.Group{Surface: cone, Retained: true}
+		require.NoError(t, facetedrecord.ExactGroupPlaced(&g, q, delta, verts, 1e-9))
+		require.IsType(t, surfacegeom.Cone{}, g.Surface)
+		require.InDelta(t, 2, g.NormalBound, 0)
+	})
+
+	t.Run("a retained tag with a denoted patch is dropped", func(t *testing.T) {
+		t.Parallel()
+		g := facetedrecord.Group{Surface: plane, Retained: true, Denoted: &surfacenormal.Revolved{}}
+		require.NoError(t, facetedrecord.ExactGroupPlaced(&g, q, delta, verts, 1e-9))
+		require.Nil(t, g.Surface)
+		require.Nil(t, g.Denoted)
+		require.False(t, g.Retained)
+	})
+
+	t.Run("a far vertex raises the curved bound with the displacement", func(t *testing.T) {
+		t.Parallel()
+		g := facetedrecord.Group{Surface: cyl, Retained: true}
+		require.NoError(t, facetedrecord.ExactGroupPlaced(&g, q, delta, []r3.Vec{r3.NewVec(1e16, 0, 0)}, 1e-9))
+		require.Greater(t, g.NormalBound, 0.1)
+		require.LessOrEqual(t, g.NormalBound, 2.0)
+	})
 }

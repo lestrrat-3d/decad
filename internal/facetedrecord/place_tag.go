@@ -51,14 +51,30 @@ func PlacedTagDeparture(tag, moved surfacegeom.Surface, delta r3.Transform, vert
 		return 0, false
 	}
 	charge, err := massmoment.MapChargeOf(linear)
-	if err != nil || !(charge.Stretch <= placedTagMaxDefect) {
+	if err != nil {
 		return 0, false
 	}
 	translation, ok := massmoment.ExactVec(delta.Translation())
 	if !ok {
 		return 0, false
 	}
-	e := charge.Stretch
+	return PlacedTagDepartureBy(tag, moved, linear, translation, charge.Stretch, verts, reach)
+}
+
+// PlacedTagDepartureBy is PlacedTagDeparture for a placement given as the exact
+// rational linear map and translation, with e the orthonormality defect of the
+// linear map. moved is the float image of tag; its distance to the exact image
+// under linear and translation is what the charge covers, so the placement
+// the copy denotes may differ from the float one that produced moved. An
+// exactly orthogonal rational rotation passes e = 0 (the 4e and 2e terms then
+// vanish and a and P cover the float rounding and the gap between the float
+// delta and the rotation). A defect above the
+// stated range, or a non-finite one, keeps no bound.
+func PlacedTagDepartureBy(tag, moved surfacegeom.Surface, linear [3][3]*big.Rat, translation [3]*big.Rat,
+	e float64, verts []r3.Vec, reach float64) (float64, bool) {
+	if !(e <= placedTagMaxDefect) {
+		return 0, false
+	}
 	switch t := tag.(type) {
 	case surfacegeom.Plane:
 		m, isPlane := moved.(surfacegeom.Plane)

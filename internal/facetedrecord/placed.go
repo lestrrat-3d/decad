@@ -30,10 +30,11 @@ func (fp Payload) Placed(ctx context.Context, env topo.Env, composed r3.Transfor
 // the float placement alone when exact is nil. With a record the result
 // denotes Q*S + t_Q, where S is fp's true solid: the held mesh is placed by
 // the float delta as ever, charged for its distance to Q, and every record
-// that describes the float placement rather than Q is dropped (every group
-// surface tag and denoted patch, PointSection, PointPlane, PointSimilarity,
-// RevolveLoftSector and LoftMirrorCopy). A dropped record is never rebuilt
-// from a later float placement.
+// that describes the float placement rather than Q is dropped (every denoted
+// patch and non-retained surface tag, PointSection, PointPlane,
+// PointSimilarity, RevolveLoftSector and LoftMirrorCopy). A retained group
+// tag survives with the charge of ExactGroupPlaced. A dropped record is never
+// rebuilt from a later float placement.
 func (fp Payload) PlacedWith(ctx context.Context, env topo.Env, composed r3.Transform,
 	exact *exactrotation.Rotation) (*topo.Body, error) {
 	budget := proofbound.NewWorkBudget(ctx)
@@ -117,7 +118,7 @@ func (fp Payload) PlacedWith(ctx context.Context, env topo.Env, composed r3.Tran
 	reach = proofbound.AbsSumUpper(reach, fp.MeshBound)
 	for i := range next.Groups {
 		if exact != nil {
-			if err := ExactGroupPlaced(&next.Groups[i], exact); err != nil {
+			if err := ExactGroupPlaced(&next.Groups[i], exact, delta, fp.Verts, reach); err != nil {
 				return nil, err
 			}
 			continue

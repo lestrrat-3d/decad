@@ -10,6 +10,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/surfaceplace"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -48,12 +50,19 @@ func SourceDiameterUpper(verts []r3.Vec, departure float64) float64 {
 
 // ExactGroupPlaced restates one source group for a copy that denotes the exact
 // rotation q. The cap centroid moves by q itself, which is exactly orthogonal,
-// so the placed reading adds no stretch charge. The analytic surface tag and
-// its denoted patch describe the float placement, not q, so both are dropped;
-// the group's faces then read as Faceted with their held bound. Planar,
-// Reversed and Origins describe the source face, which q maps rigidly, and
-// stay.
-func ExactGroupPlaced(g *Group, q *exactrotation.Rotation) error {
+// so the placed reading adds no stretch charge. Planar, Reversed and Origins
+// describe the source face, which q maps rigidly, and stay.
+//
+// A retained Plane, Cylinder, Sphere or Torus group with no denoted patch keeps
+// its tag. The tag becomes its float image under delta, the float placement
+// that moved the held mesh, and the group's NormalBound becomes its own plus
+// PlacedTagDepartureBy against q with defect 0 (retention design §3.4), where
+// verts and reach are the held mesh and its reach before the placement. A
+// retained Cone keeps the trivial bound 2, as under a float placement. Every
+// other tag, a denoted patch and the CapRecord describe the float placement
+// rather than q and are dropped, so those faces read as Faceted.
+func ExactGroupPlaced(g *Group, q *exactrotation.Rotation, delta r3.Transform, verts []r3.Vec,
+	reach float64) error {
 	if g.HasCentroid {
 		reading, err := PlacedCapCentroidBy(g.Centroid, q.Linear(), q.Translation())
 		if err != nil {
@@ -61,8 +70,27 @@ func ExactGroupPlaced(g *Group, q *exactrotation.Rotation) error {
 		}
 		g.Centroid = reading
 	}
+	source, sourceBound, denoted := g.Surface, g.NormalBound, g.Denoted != nil
 	g.Surface, g.Denoted, g.NormalBound = nil, nil, 0
 	g.CapRecord, g.AxialDelta, g.HasAxialDelta = nil, 0, false
+	if !g.Retained || source == nil || denoted {
+		g.Retained = false
+		return nil
+	}
+	switch source.(type) {
+	case surfacegeom.Plane, surfacegeom.Cylinder, surfacegeom.Cone, surfacegeom.Sphere, surfacegeom.Torus:
+	default:
+		g.Retained = false
+		return nil
+	}
+	moved, err := surfaceplace.TransformSurface(source, delta)
+	if err != nil {
+		return err
+	}
+	g.Surface, g.NormalBound = moved, 2
+	if add, stated := PlacedTagDepartureBy(source, moved, q.Linear(), q.Translation(), 0, verts, reach); stated {
+		g.NormalBound = min(2, proofbound.AbsSumUpper(sourceBound, add))
+	}
 	return nil
 }
 
