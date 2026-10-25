@@ -249,12 +249,11 @@ func CapExtension(ctx context.Context, held HeldMesh, capFace int, plane Tangent
 	scale := ratDiv(new(big.Rat).Mul(h, big.NewRat(int64(-plane.Side), 1)), ratF(normUp))
 	disp := VScale(plane.N, scale)
 
-	out := Extension{HeldMesh: HeldMesh{
+	out := Extension{
 		Vertices:    append([]r3.Vec(nil), held.Vertices...),
 		Triangles:   make([][3]int, 0, nTri+2*len(ring)),
 		Face:        make([]int, 0, nTri+2*len(ring)),
-		VertexBound: append([]float64(nil), held.VertexBound...),
-	}}
+		VertexBound: append([]float64(nil), held.VertexBound...)}
 	// Per-vertex gaps, so each extension vertex carries its own radius.
 	gapRadius := func(v int, rounded r3.Vec) float64 {
 		exact := VAdd(Vec(held.Vertices[v]), disp)

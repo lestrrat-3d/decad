@@ -148,8 +148,7 @@ func PairRecords(p0, p1 momentinput.Profile, offsets []int, walks0, walks1 [][]s
 				}
 				cell, err := FreeformCellPoints(w0, w1, target, 1+remainingExtra, work0, work1)
 				if err != nil {
-					var capErr *StationCapError
-					if errors.As(err, &capErr) {
+					if capErr, ok := errors.AsType[*StationCapError](err); ok {
 						capErr.Loop, capErr.Seg = i, j
 					}
 					return nil, 0, 0, 0, err

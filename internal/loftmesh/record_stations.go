@@ -38,10 +38,10 @@ func (b loftCircularBounder) sharedCircleBoundsAt(other loftCircularBounder, t *
 ) (proofbound.WalkEndBound, proofbound.WalkEndBound) {
 	ivU0, ivV0, ivU1, ivV1 := b.endpoint.AtSharedCircleTurnWithMemo(other.endpoint, t, trigMemo)
 	return proofbound.WalkEndBound{
-			U: proofbound.IntervalFloatError(ivU0, u0), V: proofbound.IntervalFloatError(ivV0, v0),
-		}, proofbound.WalkEndBound{
-			U: proofbound.IntervalFloatError(ivU1, u1), V: proofbound.IntervalFloatError(ivV1, v1),
-		}
+		U: proofbound.IntervalFloatError(ivU0, u0), V: proofbound.IntervalFloatError(ivV0, v0),
+	}, proofbound.WalkEndBound{
+		U: proofbound.IntervalFloatError(ivU1, u1), V: proofbound.IntervalFloatError(ivV1, v1),
+	}
 }
 
 func RecordCircularSide(w survey2d.SegmentWalk, seg sectionrecord.CurveSegment) LoftCircularSide {

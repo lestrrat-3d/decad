@@ -39,8 +39,7 @@ func prependCodecPath(err error, prefix string) error {
 	if err == nil {
 		return nil
 	}
-	var pathErr *codecPathError
-	if errors.As(err, &pathErr) {
+	if pathErr, ok := errors.AsType[*codecPathError](err); ok {
 		return &codecPathError{
 			path: joinCodecPath(prefix, pathErr.path),
 			err:  pathErr.err,

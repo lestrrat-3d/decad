@@ -59,7 +59,7 @@ func ResolveMotion(m Motion) (Spec, error) {
 			return Spec{}, err
 		}
 		spec = Spec{Kind: MotionRevolute, Center: mv.Center, Axis: mv.Axis,
-			Domain: Domain{Quantity: units.Angle, From: mv.From, To: mv.To}}
+			Quantity: units.Angle, From: mv.From, To: mv.To}
 	case *Revolute:
 		if mv == nil {
 			return Spec{}, fmt.Errorf(`%w: a nil motion names no path`, decaderr.ErrDegenerate)
@@ -70,7 +70,7 @@ func ResolveMotion(m Motion) (Spec, error) {
 			return Spec{}, err
 		}
 		spec = Spec{Kind: MotionPrismatic, Dir: mv.Dir,
-			Domain: Domain{Quantity: units.Length, From: mv.From, To: mv.To}}
+			Quantity: units.Length, From: mv.From, To: mv.To}
 	case *Prismatic:
 		if mv == nil {
 			return Spec{}, fmt.Errorf(`%w: a nil motion names no path`, decaderr.ErrDegenerate)
@@ -82,7 +82,7 @@ func ResolveMotion(m Motion) (Spec, error) {
 			return Spec{}, err
 		}
 		spec = Spec{Kind: MotionBetween, Between: mv, Screw: sc,
-			Domain: Domain{Quantity: units.Dimensionless, From: units.Scalar(0), To: units.Scalar(1)}}
+			Quantity: units.Dimensionless, From: units.Scalar(0), To: units.Scalar(1)}
 	case *Between:
 		if mv == nil {
 			return Spec{}, fmt.Errorf(`%w: a nil motion names no path`, decaderr.ErrDegenerate)

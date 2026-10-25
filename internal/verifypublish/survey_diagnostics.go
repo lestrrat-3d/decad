@@ -111,8 +111,8 @@ func payloadClassName(payload any) string {
 		return named.SurveyClass()
 	}
 	name := fmt.Sprintf("%T", payload)
-	if i := strings.LastIndexByte(name, '.'); i >= 0 {
-		return name[i+1:]
+	if _, after, ok := strings.CutLast(name, "."); ok {
+		return after
 	}
 	return name
 }

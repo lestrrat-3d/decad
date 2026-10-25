@@ -109,8 +109,7 @@ func Build(ctx context.Context, env topo.Env, mp Payload) (*topo.Body, error) {
 		return nil, err
 	}
 	if err := loftmesh.LoftCrossingAudit(proofbound.NewWorkBudget(ctx), verts, a.Tris); err != nil {
-		var contact *loftmesh.LoftContactError
-		if errors.As(err, &contact) {
+		if contact, ok := errors.AsType[*loftmesh.LoftContactError](err); ok {
 			return nil, fmt.Errorf(`%w: mitred sweep faces %s and %s %s`, decaderr.ErrDegenerate,
 				a.Roles[a.TriFace[contact.I]], a.Roles[a.TriFace[contact.J]], contact.Reason)
 		}

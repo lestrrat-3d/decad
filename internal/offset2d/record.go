@@ -122,8 +122,7 @@ func SectionJoinsBudget(budget *proofbound.WorkBudget, walks []survey2d.SideWalk
 	}
 	if errors.Is(err, ErrNoIntersection) {
 		u, v := math.NaN(), math.NaN()
-		var ce *cornerError
-		if errors.As(err, &ce) {
+		if ce, ok := errors.AsType[*cornerError](err); ok {
 			u, v = ce.u, ce.v
 		}
 		return nil, &CornerTopologyError{U: u, V: v, Loop: -1}

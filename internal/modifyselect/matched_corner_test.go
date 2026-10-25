@@ -14,7 +14,7 @@ import (
 )
 
 func walkAt(u, v float64) survey2d.SideWalk {
-	return survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{StartU: u, StartV: v}}
+	return survey2d.SideWalk{StartU: u, StartV: v}
 }
 
 func TestNewMatchedCorner(t *testing.T) {

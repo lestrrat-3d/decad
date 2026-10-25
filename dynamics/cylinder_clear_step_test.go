@@ -195,8 +195,8 @@ func TestCylinderSweepRefusesTiltAndSpin(t *testing.T) {
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	cylinder := makeCylinder(t, doc)
-	request := decad.SweepRequest{ContactRequest: decad.ContactRequest{
-		PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6)},
+	request := decad.SweepRequest{
+		PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6),
 		TimeResolution: units.Seconds(1e-9), MaxPoseEvaluations: 128}
 	stationary := decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: units.Seconds(1)}
 	start, err := r3.Translation(r3.Vec{Z: 10})
@@ -298,8 +298,8 @@ func TestCylinderImpactPoseBudgetIsUndecided(t *testing.T) {
 	fixed := decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: units.Seconds(.2)}
 	moving := decad.RigidDriftSegment{From: pose, LinearVelocity: down,
 		AngularVelocity: zero, Duration: units.Seconds(.2)}
-	request := decad.SweepRequest{ContactRequest: decad.ContactRequest{
-		PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6)},
+	request := decad.SweepRequest{
+		PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6),
 		TimeResolution: units.Seconds(1e-9), MaxPoseEvaluations: 2}
 	for _, reverse := range []bool{false, true} {
 		a, b := floor, cylinder

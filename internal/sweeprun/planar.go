@@ -64,7 +64,7 @@ func sweepPlanarPair(ctx context.Context, h Hooks, a, b *topo.Body,
 			To: sweeppath.Instant(big.NewRat(1, 1), pa.Duration)}
 		return report, true, nil
 	}
-	aPath, bPath := rotationalSweepPath{RotationalPath: sweepproof.RotationalPath{BodyPath: planarA}, body: a}, rotationalSweepPath{RotationalPath: sweepproof.RotationalPath{BodyPath: planarB}, body: b}
+	aPath, bPath := rotationalSweepPath{BodyPath: planarA, body: a}, rotationalSweepPath{BodyPath: planarB, body: b}
 	planarsweep.AttachMemos(&aPath.BodyPath, &bPath.BodyPath)
 	defer planarsweep.CloseMemos(&aPath.BodyPath, &bPath.BodyPath)
 	run := rotationalPairSweep{hooks: h, a: aPath, b: bPath, req: req,

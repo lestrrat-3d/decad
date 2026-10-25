@@ -22,7 +22,7 @@ func TestMatchCorner(t *testing.T) {
 	pp := prismrecord.Payload{Frame: frame, Xform: r3.Identity(), Z0: 0, Z1: 10}
 	// Loop 0 is a closed circle (one closed walk); loop 1 has three corners;
 	// loop 2 is one open walk, whose single junction is still a corner.
-	closed := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{StartU: 7, StartV: 8, Closed: true}}
+	closed := survey2d.SideWalk{StartU: 7, StartV: 8, Closed: true}
 	loops := []survey2d.CornerLoop{
 		{Walks: []survey2d.SideWalk{closed}},
 		{Walks: []survey2d.SideWalk{walkAt(0, 0), walkAt(1, 2), walkAt(4, 5)}},

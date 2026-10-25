@@ -11,9 +11,9 @@ import (
 
 func TestRimConvexity(t *testing.T) {
 	circular := func(th0, th1 float64) survey2d.SideWalk {
-		return survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{Kind: survey2d.WalkCircular, Th0: th0, Th1: th1}}
+		return survey2d.SideWalk{Kind: survey2d.WalkCircular, Th0: th0, Th1: th1}
 	}
-	line := survey2d.SideWalk{SegmentWalk: survey2d.SegmentWalk{Kind: survey2d.WalkLine}}
+	line := survey2d.SideWalk{Kind: survey2d.WalkLine}
 
 	tests := []struct {
 		name     string

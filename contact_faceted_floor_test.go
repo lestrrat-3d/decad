@@ -332,11 +332,9 @@ func facetedFloorSweepFixture(t *testing.T) (*Document, *Body, *Body) {
 
 func facetedSweepRequest(policy SweepStartPolicy) SweepRequest {
 	return SweepRequest{
-		ContactRequest: ContactRequest{
-			PointResolution:  units.Millimeters(1e-6),
-			NormalResolution: units.Degrees(1),
-		},
-		TimeResolution: units.Seconds(1e-6), MaxPoseEvaluations: 8, StartPolicy: policy,
+		PointResolution:  units.Millimeters(1e-6),
+		NormalResolution: units.Degrees(1),
+		TimeResolution:   units.Seconds(1e-6), MaxPoseEvaluations: 8, StartPolicy: policy,
 	}
 }
 

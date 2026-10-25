@@ -47,7 +47,7 @@ func prepareRotationalSweepPath(body *topo.Body, path affinePairPath) (rotationa
 	}
 	prepared.StartPoints = append([]proofarith.DyV3(nil), startBox.Corner[:]...)
 	prepared.SourcePoints = append([]proofarith.DyV3(nil), sourceBox.Corner[:]...)
-	return rotationalSweepPath{RotationalPath: sweepproof.RotationalPath{BodyPath: prepared, StartBox: startBox}, body: body}, true
+	return rotationalSweepPath{BodyPath: prepared, StartBox: startBox, body: body}, true
 }
 
 type rotationalPairSweep struct {

@@ -127,10 +127,8 @@ func StraightTwistStations(height, heldAngle float64, angle proofbound.RatInterv
 			return nil, fmt.Errorf(`%w: twist station has no finite coordinate bound`, decaderr.ErrUnsupported)
 		}
 		stations[index] = StraightTwistStation{
-			TwistStation: TwistStation{
-				Plane: planeRecord{Origin: frame.Origin(), U: frame.U(), V: frame.V()},
-				Frame: frame, PointError: pointError,
-			},
+			Plane: planeRecord{Origin: frame.Origin(), U: frame.U(), V: frame.V()},
+			Frame: frame, PointError: pointError,
 			axialError: axialError,
 		}
 	}

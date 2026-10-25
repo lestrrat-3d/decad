@@ -127,20 +127,20 @@ func TestSweepPairRollingCylinder(t *testing.T) {
 	}{
 		// One turn at 2π rad/s rolls π·20 mm along −y with the contact point
 		// at rest: every height is exact and the track is an exact touch.
-		{name: "roll", rollingCase: rollingCase{omega: r3.Vec{X: omega}, v: roll, center: axis,
-			seconds: 1, half: 15}},
+		{name: "roll", omega: r3.Vec{X: omega}, v: roll, center: axis,
+			seconds: 1, half: 15},
 		// A quarter-millimetre-per-second sink adds its rate: |c|·h.
-		{name: "closing", rollingCase: rollingCase{omega: r3.Vec{X: omega},
-			v: r3.Vec{Y: roll.Y, Z: -.25}, center: axis, seconds: 1, half: 15}},
+		{name: "closing", omega: r3.Vec{X: omega},
+			v: r3.Vec{Y: roll.Y, Z: -.25}, center: axis, seconds: 1, half: 15},
 		// A pivot an eighth of a millimetre above the axis swings the end
 		// centers on a small circle: K·h².
-		{name: "orbit", rollingCase: rollingCase{omega: r3.Vec{X: omega}, v: roll,
-			center: r3.Vec{Y: rollingAxisY, Z: .125}, seconds: 1, half: 15}},
+		{name: "orbit", omega: r3.Vec{X: omega}, v: roll,
+			center: r3.Vec{Y: rollingAxisY, Z: .125}, seconds: 1, half: 15},
 		// A 4 mm disc tipping about Y lifts one rim by its radius's term
 		// r·|ω×â|²·h², more than its rate and K allow alone. Its rim points
 		// drift up to (3/2)·r·|ω×â|·h, about 1.9 mm, off the end centers'
 		// feet, which a request must admit for interior manifolds.
-		{name: "tilt", rollingCase: rollingCase{omega: r3.Vec{Y: .5}, center: axis, seconds: .25, half: 2},
+		{name: "tilt", omega: r3.Vec{Y: .5}, center: axis, seconds: .25, half: 2,
 			resolution: 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -641,11 +641,11 @@ func TestSweepPairRollingOnTrayFloor(t *testing.T) {
 		rollingCase
 	}{
 		{name: "without slip", touch: true,
-			rollingCase: rollingCase{omega: r3.Vec{X: omega}, v: roll, center: axis, seconds: 1, half: 15}},
-		{name: "sinking", rollingCase: rollingCase{omega: r3.Vec{X: omega},
-			v: r3.Vec{Y: roll.Y, Z: -.25}, center: axis, seconds: 1, half: 15}},
-		{name: "off-axis pivot", rollingCase: rollingCase{omega: r3.Vec{X: omega}, v: roll,
-			center: r3.Vec{Y: rollingAxisY, Z: .125}, seconds: 1, half: 15}},
+			omega: r3.Vec{X: omega}, v: roll, center: axis, seconds: 1, half: 15},
+		{name: "sinking", omega: r3.Vec{X: omega},
+			v: r3.Vec{Y: roll.Y, Z: -.25}, center: axis, seconds: 1, half: 15},
+		{name: "off-axis pivot", omega: r3.Vec{X: omega}, v: roll,
+			center: r3.Vec{Y: rollingAxisY, Z: .125}, seconds: 1, half: 15},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := decad.New()

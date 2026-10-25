@@ -397,8 +397,7 @@ func retryShifted(ctx context.Context, refusal error, op meshbool.OperationKind,
 				if errors.Is(err, errShiftDeclined) {
 					continue
 				}
-				var again *meshbool.TouchContactError
-				if errors.As(err, &again) {
+				if again, ok := errors.AsType[*meshbool.TouchContactError](err); ok {
 					// A contact this shift met and the last did not changes
 					// which directions and lengths open them all, so the
 					// search starts over with it before any longer shift.

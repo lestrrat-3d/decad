@@ -85,8 +85,8 @@ func sweepRollingPair(ctx context.Context, h Hooks, a, b *topo.Body,
 	defer planarsweep.CloseMemos(&preparedM, &preparedS)
 	run := &rollingPairSweep{hooks: h, m: m, s: 1 - m, cylinder: start, req: req, report: report,
 		resolution: resolution}
-	run.paths[run.m] = rotationalSweepPath{RotationalPath: sweepproof.RotationalPath{BodyPath: preparedM}, body: bodyM}
-	run.paths[run.s] = rotationalSweepPath{RotationalPath: sweepproof.RotationalPath{BodyPath: preparedS}, body: bodyS}
+	run.paths[run.m] = rotationalSweepPath{BodyPath: preparedM, body: bodyM}
+	run.paths[run.s] = rotationalSweepPath{BodyPath: preparedS, body: bodyS}
 	result, err := run.execute(ctx)
 	if err != nil || result == nil {
 		return result, true, err

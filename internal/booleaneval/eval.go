@@ -180,8 +180,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	// back here.
 	ma, restatingA, err := meshes.TessellateOperand(ctx, a, tolMM)
 	if err != nil {
-		var coarse *tessellation.ExpectedError
-		if errors.As(err, &coarse) {
+		if _, ok := errors.AsType[*tessellation.ExpectedError](err); ok {
 			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedCoarseTessellation, err)
 		} else if errors.Is(err, decaderr.ErrUnsupported) {
 			// A tessellation decaderr.ErrUnsupported is a capability/staging limit on the
@@ -196,8 +195,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	}
 	mb, restatingB, err := meshes.TessellateOperand(ctx, b, tolMM)
 	if err != nil {
-		var coarse *tessellation.ExpectedError
-		if errors.As(err, &coarse) {
+		if _, ok := errors.AsType[*tessellation.ExpectedError](err); ok {
 			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedCoarseTessellation, err)
 		} else if errors.Is(err, decaderr.ErrUnsupported) {
 			// A tessellation decaderr.ErrUnsupported is a capability/staging limit on the
