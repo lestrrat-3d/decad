@@ -3,13 +3,10 @@ package revolveshell
 import (
 	"context"
 	"fmt"
-	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/circularbounds"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -23,8 +20,10 @@ const (
 
 // BuildSectorBandCut rewrites one complete cap-adjacent straight band.
 // The full band and both cap fans are counted before any facets are removed.
+// bore reads the join's axis: xBoreAxis for a +X certificate,
+// generalBoreAxis for one from the general record branch.
 func BuildSectorBandCut(ctx context.Context, joined facetedrecord.Payload,
-	caps SectorBoreCaps, radius float64, wall facetedrecord.Group) (facetedrecord.Payload, error) {
+	caps SectorBoreCaps, radius float64, wall facetedrecord.Group, bore sectorBoreAxis) (facetedrecord.Payload, error) {
 	record := joined.RevolveLoftJoin
 	section, ring := record.Certificate.Section, record.CapRing
 	n, count := len(ring.Angles), len(section.Spans)
@@ -32,31 +31,32 @@ func BuildSectorBandCut(ctx context.Context, joined facetedrecord.Payload,
 	band := section.Spans[bandIndex]
 	if bandIndex == section.AxisSpan || bandIndex == section.RootSpan ||
 		band.End != section.Spans[caps.Low].Start ||
-		band.Start.V <= radius || band.End.V >= radius ||
 		band.Face == nil || len(band.Origins) == 0 ||
 		len(ring.Rings[bandIndex]) != n ||
 		ring.Groups[bandIndex] < 0 || ring.Groups[bandIndex] >= len(joined.Groups) ||
 		len(joined.Tris) > SectorBoreMaxAuditTriangles-2*n {
 		return facetedrecord.Payload{}, fmt.Errorf("%w: bore has no complete cap-adjacent straight band", decaderr.ErrUnsupported)
 	}
-	cross, ok := RevolveSectorStraightBandCross(band.Start, band.End, radius)
-	if !ok || cross.X >= caps.HighX {
-		return facetedrecord.Payload{}, fmt.Errorf("%w: bore does not cross one straight section band", decaderr.ErrUnsupported)
+	rootRing := ring.Rings[bandIndex]
+	for i := range n {
+		for _, v := range [...]int{caps.LowOuter[i], caps.HighOuter[i], rootRing[i]} {
+			if v < 0 || v >= len(joined.Verts) {
+				return facetedrecord.Payload{}, fmt.Errorf("%w: section band ring vertex is out of range", decaderr.ErrUnsupported)
+			}
+		}
 	}
 	maxStep, ok := revolvemesh.SectorRingMaxStep(ring.Angles)
 	if !ok {
 		return facetedrecord.Payload{}, fmt.Errorf("%w: section ring has no bounded angular plan", decaderr.ErrUnsupported)
 	}
-	inner, boreBound, err := circularbounds.BoreRingAtStep(ctx, radius, ring.Angles, maxStep)
+	cut, err := bore.band(ctx, sectorBandInput{joined: joined, caps: caps, band: band, rootRing: rootRing,
+		radius: radius, maxStep: maxStep})
 	if err != nil {
 		return facetedrecord.Payload{}, err
 	}
-	if boreBound >= radius || proofbound.IsNonFinite(boreBound) {
-		return facetedrecord.Payload{}, fmt.Errorf("%w: bore circle has no radial bound", decaderr.ErrUnsupported)
-	}
+	boreBound, oldSideErr, newSideErr := cut.boreBound, cut.oldSideErr, cut.newSideErr
 	lowPos, highPos := make(map[int]int, n), make(map[int]int, n)
 	used := map[int]bool{caps.LowAxis: true, caps.HighAxis: true}
-	rootRing := ring.Rings[bandIndex]
 	for i := range n {
 		for _, v := range [...]int{caps.LowOuter[i], caps.HighOuter[i], rootRing[i]} {
 			if v < 0 || v >= len(joined.Verts) || used[v] {
@@ -81,50 +81,11 @@ func BuildSectorBandCut(ctx context.Context, joined facetedrecord.Payload,
 			bandCells[key] = false
 		}
 	}
-	maxRound, oldRound := 0.0, 0.0
-	for i, angle := range ring.Angles {
-		if err := ctx.Err(); err != nil {
-			return facetedrecord.Payload{}, err
-		}
-		sinIv, cosIv, ok := proofbound.RadSinCosInterval(proofarith.FloatRat(angle))
-		if !ok {
-			return facetedrecord.Payload{}, fmt.Errorf("%w: section ring angle has no enclosure", decaderr.ErrUnsupported)
-		}
-		for _, sample := range [...]struct {
-			rad   float64
-			point r3.Vec
-		}{
-			{radius, r3.Vec{Y: inner[i].U, Z: inner[i].V}},
-			{band.Start.V, joined.Verts[rootRing[i]]},
-			{band.End.V, joined.Verts[caps.LowOuter[i]]},
-		} {
-			exactRadius := proofarith.FloatRat(sample.rad)
-			yErr := proofbound.IntervalFloatError(proofbound.IntervalScale(cosIv, exactRadius), sample.point.Y)
-			zErr := proofbound.IntervalFloatError(proofbound.IntervalScale(sinIv, exactRadius), sample.point.Z)
-			round := proofbound.Radius3D(max(yErr, zErr))
-			if sample.rad == radius {
-				maxRound = max(maxRound, round)
-			} else {
-				oldRound = max(oldRound, round)
-			}
-		}
-		if joined.Verts[rootRing[i]].X != band.Start.U ||
-			joined.Verts[caps.LowOuter[i]].X != band.End.U {
-			return facetedrecord.Payload{}, fmt.Errorf("%w: section band changed its source stations", decaderr.ErrUnsupported)
-		}
-	}
-	sagFactor := proofbound.ProductUpper(maxStep, maxStep) / 8
-	cutRound := proofbound.AbsSumUpper(maxRound, cross.Round)
-	boreBound = proofbound.AbsSumUpper(proofbound.ProductUpper(radius, sagFactor), cutRound)
-	oldSideErr := proofbound.AbsSumUpper(proofbound.ProductUpper(band.Start.V, sagFactor), oldRound)
-	newSideErr := proofbound.AbsSumUpper(
-		proofbound.ProductUpper(max(band.Start.V, radius), sagFactor), oldRound, cutRound,
-		proofbound.ProductUpper(cross.SlopeHi, cross.Round))
 	sideErr := max(oldSideErr, newSideErr)
 	bound := max(joined.MeshBound, boreBound, sideErr)
 	if proofbound.IsNonFinite(bound) || bound > 0.1 || boreBound >= radius ||
-		proofbound.AbsSumUpper(caps.LowRadius, joined.MeshBound, boreBound) >= radius ||
-		proofbound.AbsSumUpper(radius, joined.MeshBound, boreBound) >= band.Start.V {
+		proofbound.AbsSumUpper(cut.capUpper, joined.MeshBound, boreBound) >= radius ||
+		proofbound.AbsSumUpper(radius, joined.MeshBound, boreBound) >= cut.outerLower {
 		return facetedrecord.Payload{}, fmt.Errorf("%w: bore has no separate source bands", decaderr.ErrUnsupported)
 	}
 	// Keep every other section span strictly outside the cylinder. This also
@@ -134,7 +95,7 @@ func BuildSectorBandCut(ctx context.Context, joined facetedrecord.Payload,
 		if i == section.AxisSpan || i == caps.Low || i == caps.High || i == bandIndex {
 			continue
 		}
-		if min(span.Start.V, span.End.V) <= clearance {
+		if !bore.spanClear(span, clearance) {
 			return facetedrecord.Payload{}, fmt.Errorf("%w: another section span may enter the bore", decaderr.ErrUnsupported)
 		}
 	}
@@ -178,7 +139,7 @@ func BuildSectorBandCut(ctx context.Context, joined facetedrecord.Payload,
 			bandCells[key] = true
 			continue
 		}
-		if !RevolveSectorTriangleClear(tri, joined.Verts, clearance) {
+		if !bore.triangleClear(tri, joined.Verts, clearance) {
 			return facetedrecord.Payload{}, fmt.Errorf("%w: untouched face may enter the bore", decaderr.ErrUnsupported)
 		}
 		mesh.Add(tri, joined.Src[i])
@@ -198,10 +159,9 @@ func BuildSectorBandCut(ctx context.Context, joined facetedrecord.Payload,
 	vertexBound := append([]float64(nil), joined.VertexBound...)
 	innerHigh := make([]int, n)
 	for i := range n {
-		cut := r3.Vec{X: cross.X, Y: inner[i].U, Z: inner[i].V}
-		mesh.Verts[caps.LowOuter[i]] = cut
+		mesh.Verts[caps.LowOuter[i]] = cut.cut[i]
 		vertexBound[caps.LowOuter[i]] = max(boreBound, newSideErr)
-		high := r3.Vec{X: caps.HighX, Y: inner[i].U, Z: inner[i].V}
+		high := cut.high[i]
 		switch i {
 		case 0:
 			innerHigh[i] = caps.HighAxis
@@ -234,22 +194,21 @@ func BuildSectorBandCut(ctx context.Context, joined facetedrecord.Payload,
 	if len(mesh.Tris) != len(joined.Tris)+2*n {
 		return facetedrecord.Payload{}, fmt.Errorf("%w: band and wall triangle census changed", decaderr.ErrUnsupported)
 	}
-	patches := revolvemesh.SectorBorePatches(mesh.Src, oldCount, n, true, caps.LowGroup, caps.HighGroup, bandGroup, wallGroup)
+	patches := revolvemesh.SectorBorePatchesOnto(mesh.Src, oldCount, n, true, caps.LowGroup, caps.HighGroup,
+		bandGroup, wallGroup, bore.patchAxes())
 	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewWorkBudget(ctx),
 		mesh.Verts, mesh.Tris, patches, SectorBoreMaxAuditTriangles,
 		SectorBoreMaxAuditScans); err != nil {
 		return facetedrecord.Payload{}, err
 	}
-	rootX := proofarith.FloatRat(band.Start.U)
-	span := proofbound.RatFloatUp(new(big.Rat).Sub(proofarith.FloatRat(band.End.U), rootX))
-	height := proofbound.RatFloatUp(new(big.Rat).Sub(proofarith.FloatRat(caps.HighX), rootX))
-	seamHalf := proofbound.DivUpper(sideErr, cross.SlopeLo)
+	span, height := cut.span, cut.height
+	seamHalf := proofbound.DivUpper(sideErr, cut.slopeLo)
 	if proofbound.IsNonFinite(span) || proofbound.IsNonFinite(height) ||
 		proofbound.IsNonFinite(seamHalf) || height <= 0 {
 		return facetedrecord.Payload{}, fmt.Errorf("%w: bore has no finite section span", decaderr.ErrUnsupported)
 	}
 	sideShell := proofbound.ProductUpper(proofbound.ProductUpper(4, proofbound.TwoPiUpper()/2),
-		proofbound.ProductUpper(proofbound.AbsSumUpper(band.Start.V, sideErr),
+		proofbound.ProductUpper(proofbound.AbsSumUpper(cut.outerUpper, sideErr),
 			proofbound.ProductUpper(sideErr, span)))
 	seamRadius := proofbound.AbsSumUpper(radius, sideErr)
 	seamSlab := proofbound.ProductUpper(proofbound.ProductUpper(2, seamHalf),

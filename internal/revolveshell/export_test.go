@@ -62,3 +62,30 @@ var (
 	BoreToolSpansCaps = boreToolSpansCaps
 	BoreToolDeviation = boreToolDeviation
 )
+
+// BoreBandAbout is the general band reading of a certificate from the
+// general record branch whose section ring holds verts: the band before
+// the low cap, crossed by a bore of the given radius whose tool deviates by
+// deviation. It returns the clipped ring, the high inner ring and the bore
+// bound.
+func BoreBandAbout(ctx context.Context, section facetedrecord.RevolveSectionCertificate, verts []r3.Vec,
+	ring facetedrecord.RevolvedSectionRing, radius, maxStep, deviation float64) ([]r3.Vec, []r3.Vec, float64, error) {
+	lift, ok := newRingLiftAbout(section)
+	if !ok {
+		return nil, nil, 0, errNoLift
+	}
+	count := len(section.Spans)
+	low, high := (section.AxisSpan+count-1)%count, (section.AxisSpan+1)%count
+	band := (low + count - 1) % count
+	lowZ, _ := planeScaledRat(section.Axis, section.Frame, section.Spans[low].Start)
+	highZ, _ := planeScaledRat(section.Axis, section.Frame, section.Spans[high].End)
+	bore := generalBoreAxis{axis: section.Axis, frame: section.Frame, lift: lift,
+		lowPoint: section.Spans[low].Start, highPoint: section.Spans[high].End,
+		lowZ: lowZ, highZ: highZ, deviation: deviation}
+	caps := SectorBoreCaps{Low: low, High: high, LowOuter: ring.Rings[low], HighOuter: ring.Rings[(high+1)%count]}
+	joined := facetedrecord.Payload{Verts: verts,
+		RevolveLoftJoin: &facetedrecord.RevolveLoftJoinRecord{CapRing: &ring}}
+	cut, err := bore.band(ctx, sectorBandInput{joined: joined, caps: caps, band: section.Spans[band],
+		rootRing: ring.Rings[band], radius: radius, maxStep: maxStep})
+	return cut.cut, cut.high, cut.boreBound, err
+}

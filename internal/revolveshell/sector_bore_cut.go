@@ -93,7 +93,7 @@ func SectorCylinderCut(ctx context.Context, op meshbool.OperationKind, env topo.
 		return body, true, err
 	}
 	if radius > caps.LowRadius && radius < caps.HighRadius {
-		result, err := BuildSectorBandCut(ctx, joined, caps, radius, wallGroup)
+		result, err := BuildSectorBandCut(ctx, joined, caps, radius, wallGroup, xBoreAxis{})
 		if err != nil {
 			return nil, true, err
 		}

@@ -346,9 +346,9 @@ func TestUnionHubAndRadialLugsAboutTiltedAxis(t *testing.T) {
 	}
 }
 
-// boreTool extrudes a circle of radius 1 about the axis from 4 mm to 10 mm
-// along it: revolveSectorCylinderTool mapped onto the placement.
-func (p revolveAxisPlacement) boreTool(t *testing.T, doc *decad.Document) *decad.Body {
+// boreTool extrudes a circle of the given radius about the axis from 4 mm to
+// 10 mm along it: revolveSectorCylinderTool mapped onto the placement.
+func (p revolveAxisPlacement) boreTool(t *testing.T, doc *decad.Document, radius float64) *decad.Body {
 	t.Helper()
 	world := sketch.NewWorld()
 	frame, err := r3.NewFrame(p.world(r3.Vec{X: 4}), p.world(r3.Vec{Y: 1}), p.world(r3.Vec{Z: 1}))
@@ -359,7 +359,7 @@ func (p revolveAxisPlacement) boreTool(t *testing.T, doc *decad.Document) *decad
 	require.NoError(t, err)
 	center := s.CreatePoint(0, 0)
 	s.Fix(center)
-	s.CreateCircle(center, 1)
+	s.CreateCircle(center, radius)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	tool, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0],
@@ -376,14 +376,15 @@ type boreCut struct {
 	area   decad.Measurement
 }
 
-// cutBore cuts u's joined body with the placement's bore tool through the
-// public Cut. The result passes VerifyAll, is watertight with Euler
-// characteristic 0, holds less volume than the joined body, keeps both
-// Revolve caps' origins on planar faces and the tool's side origins on a
-// cylindrical face.
-func (p revolveAxisPlacement) cutBore(t *testing.T, u revolveAxisUnion) boreCut {
+// cutBore cuts u's joined body with the placement's bore tool of the given
+// radius through the public Cut. The result passes VerifyAll, is watertight
+// with Euler characteristic 0, holds less volume than the joined body, keeps
+// the tool's side origins on a cylindrical face and keeps keptCaps Revolve
+// caps' origins on planar faces: both for an annular bore, and only the high
+// cap for a bore through the band, which removes the low cap.
+func (p revolveAxisPlacement) cutBore(t *testing.T, u revolveAxisUnion, radius float64, keptCaps int) boreCut {
 	t.Helper()
-	tool := p.boreTool(t, u.doc)
+	tool := p.boreTool(t, u.doc, radius)
 	cut, err := decad.Cut(t.Context(), u.joined, tool)
 	require.NoError(t, err)
 	mesh, err := cut.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
@@ -407,14 +408,17 @@ func (p revolveAxisPlacement) cutBore(t *testing.T, u revolveAxisUnion) boreCut 
 	}
 	planar := func(s decad.Surface) bool { _, ok := s.(decad.Plane); return ok }
 	cylindrical := func(s decad.Surface) bool { _, ok := s.(decad.Cylinder); return ok }
-	caps := 0
+	caps, kept := 0, 0
 	for _, face := range u.hub.Faces() {
 		if planar(face.Surface()) {
 			caps++
-			require.True(t, keeps(face.Origins(), planar), "a Revolve cap lost its source origins")
+			if keeps(face.Origins(), planar) {
+				kept++
+			}
 		}
 	}
 	require.Equal(t, 2, caps)
+	require.Equal(t, keptCaps, kept, "the cut keeps the wrong number of Revolve caps")
 	walls := 0
 	for _, face := range tool.Faces() {
 		if cylindrical(face.Surface()) {
@@ -426,21 +430,19 @@ func (p revolveAxisPlacement) cutBore(t *testing.T, u revolveAxisUnion) boreCut 
 	return boreCut{cut: cut, volume: volume, area: area}
 }
 
-// The coaxial bore Cut of a tapered hub and three copied lugs about a general
-// axis takes the bore route at the default tolerance
-// (agent-docs/revolve-axis-design.md §9). The result is watertight with Euler
-// characteristic 0 and passes VerifyAll, and its volume agrees with the same
-// construction about +X within the proven bounds: with no slack about
+// generalBoreAxes are the axes the coaxial bore Cut tests run about, each
+// with the input slack of TestUnionHubAndRadialLugsAboutTiltedAxis: none for
 // (0, 1, 0) and for the XZ-plane blank about X, both exact quarter-turn
-// images of +X, and with the input slack of
-// TestUnionHubAndRadialLugsAboutTiltedAxis about (1, 2, 0) and about a
-// 70-degree shaft direction rounded to 26 significant bits.
-func TestRevolveSectorCylinderCutAboutGeneralAxis(t *testing.T) {
-	turns := []float64{120, 240}
-	x := xAxisPlacement(t)
-	control := x.cutBore(t, x.union(t, taperedHubOutline, turns, false))
+// images of +X, and the rounding of the tilted fixtures about (1, 2, 0) and
+// a 70-degree shaft direction rounded to 26 significant bits.
+func generalBoreAxes(t *testing.T) []struct {
+	name      string
+	placement revolveAxisPlacement
+	shift     float64
+} {
+	t.Helper()
 	shaft := 70 * math.Pi / 180
-	for _, tc := range []struct {
+	return []struct {
 		name      string
 		placement revolveAxisPlacement
 		shift     float64
@@ -450,12 +452,44 @@ func TestRevolveSectorCylinderCutAboutGeneralAxis(t *testing.T) {
 		{"(1,2,0)", tiltedAxisPlacement(t, r3.Vec{X: 1, Y: 2}, 0x1p-30), 1e-8},
 		{"26-bit 70 degrees",
 			tiltedAxisPlacement(t, r3.Vec{X: round26(math.Cos(shaft)), Y: round26(math.Sin(shaft))}, 0x1p-22), 1e-6},
-	} {
+	}
+}
+
+// requireBoreAboutGeneralAxes cuts the tapered hub and three copied lugs with
+// a bore of the given radius about +X and about each general axis, and
+// checks each general result's volume against the +X one within the proven
+// bounds and the axis's input slack.
+func requireBoreAboutGeneralAxes(t *testing.T, radius float64, keptCaps int) {
+	t.Helper()
+	turns := []float64{120, 240}
+	x := xAxisPlacement(t)
+	control := x.cutBore(t, x.union(t, taperedHubOutline, turns, false), radius, keptCaps)
+	for _, tc := range generalBoreAxes(t) {
 		t.Run(tc.name, func(t *testing.T) {
-			general := tc.placement.cutBore(t, tc.placement.union(t, taperedHubOutline, turns, false))
+			general := tc.placement.cutBore(t, tc.placement.union(t, taperedHubOutline, turns, false), radius, keptCaps)
 			requireVolumesAgree(t, control.volume, general.volume, inputSlack(general.area, tc.shift))
 			t.Logf("+X bored volume %.12g ± %.3g, bored volume %.12g ± %.3g", control.volume.Value.Base(),
 				control.volume.Bound.Base(), general.volume.Value.Base(), general.volume.Bound.Base())
 		})
 	}
+}
+
+// The coaxial bore Cut of a tapered hub and three copied lugs about a general
+// axis takes the bore route at the default tolerance
+// (agent-docs/revolve-axis-design.md §9). A radius-1 bore lies inside both
+// cap radii. The result is watertight with Euler characteristic 0, passes
+// VerifyAll, keeps both caps, and its volume agrees with the +X bore within
+// the proven bounds.
+func TestRevolveSectorCylinderCutAboutGeneralAxis(t *testing.T) {
+	requireBoreAboutGeneralAxes(t, 1, 2)
+}
+
+// A radius-2 bore lies between the low cap's radius 1.5 and the high cap's
+// radius 3, so it crosses the straight band from (5, 2.5) to (6, 1.5) and
+// removes the low cap (agent-docs/revolve-axis-design.md §9.7). About each
+// general axis the result is watertight with Euler characteristic 0, passes
+// VerifyAll, keeps only the high cap, and its volume agrees with the +X band
+// bore within the proven bounds.
+func TestRevolveSectorCylinderBandCutAboutGeneralAxis(t *testing.T) {
+	requireBoreAboutGeneralAxes(t, 2, 1)
 }
