@@ -1014,6 +1014,11 @@ func TrianglePlaneSigns(plane LoftExactPlane, other [3]proof.Xpt) [3]int {
 
 // planeSigns evaluates the cached exact plane. The adaptive float filter may
 // decide a sign only when the exact points are lifts of the float corners.
+// An undecided sign uses that plane's affine numerator, avoiding a fresh
+// homogeneous difference vector for every point of every pair.
+// An identical table-owned point is one of the plane's corners and has sign
+// zero without arithmetic. Equal coordinates with distinct lifts still use
+// the adaptive predicate.
 func (d *LoftAuditData) planeSigns(i int, xother [3]proof.Xpt, other [3]r3.Vec) [3]int {
 	if d.exactLifts {
 		return TrianglePlaneSigns(d.Planes[i], xother)
@@ -1021,8 +1026,17 @@ func (d *LoftAuditData) planeSigns(i int, xother [3]proof.Xpt, other [3]r3.Vec) 
 	t := d.corners(i)
 	xt := d.xtri(i)
 	var signs [3]int
+	var sum, term big.Int
 	for k := range signs {
-		signs[k] = proof.OrientSignPrepared(t[0], t[1], t[2], other[k], xt[0], xother[k], d.Norms[i])
+		p := xother[k]
+		if p == xt[0] || p == xt[1] || p == xt[2] {
+			continue
+		}
+		if s, certain := proof.OrientSignFloat(t[0], t[1], t[2], other[k]); certain {
+			signs[k] = s
+			continue
+		}
+		signs[k] = d.Planes[i].Sign(p, &sum, &term)
 	}
 	return signs
 }
