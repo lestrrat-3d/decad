@@ -56,7 +56,7 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	if pp.Walks == nil {
 		ig, captured, err = pp.Profile.EvaluatorIntegralsWithAnalyticWalksContext(ctx, freeform.MomentFirstOrder, work)
 	} else {
-		ig, err = pp.Profile.EvaluatorIntegralsUncheckedContext(ctx, freeform.MomentFirstOrder, work)
+		ig, err = pp.Walks.EvaluatorIntegralsUncheckedContext(ctx, pp.Profile, freeform.MomentFirstOrder, work)
 	}
 	if err != nil {
 		return nil, err
@@ -302,6 +302,9 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	// and every walk in it held. Publishing it onto the payload is what lets a
 	// later rigid re-evaluation read it back; the record itself is unchanged, so
 	// the payload the body carries denotes exactly what it did before.
+	if pw != pp.Walks {
+		pw = pw.WithIntegrals(ig, freeform.MomentFirstOrder)
+	}
 	pp.Walks = pw
 	body.Payload = pp
 	return body, nil

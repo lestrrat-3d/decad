@@ -76,7 +76,10 @@ type ProfileWalks struct {
 	// ReadCharges is set only by a chain build that captured each walk at
 	// its existing build position. Bounds replays that segment's measured
 	// charges at each read, preserving the old per-read work ceiling.
-	ReadCharges [][]WalkReadCharge
+	ReadCharges     [][]WalkReadCharge
+	integrals       *Integrals
+	integralOrder   freeform.MomentIntegralOrder
+	integralProfile Profile
 }
 
 type WalkReadCharge struct {
