@@ -2,6 +2,7 @@ package facetproof
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -286,12 +287,25 @@ const (
 // has a non-dyadic denominator. Large meshes sum blocks of facets on several
 // goroutines; the exact sum does not depend on the grouping, and the budget is
 // charged one step per facet on the calling goroutine afterwards.
+// Nonempty work first polls the shared budget. An exhausted wall budget reports
+// the first attempted facet through Step, as the serial loop does, before any
+// vertex lifting or parallel block computation starts.
 func FirstMomentsFromAudit(budget *proofbound.WorkBudget, audit *MeshAudit, tris [][3]int) ([3]*big.Rat, error) {
 	return firstMomentsFromAudit(budget, audit, tris, orderedwork.EachWorkers(len(tris), momentsParallelMin))
 }
 
 func firstMomentsFromAudit(budget *proofbound.WorkBudget, audit *MeshAudit, tris [][3]int,
 	workers int) ([3]*big.Rat, error) {
+	if len(tris) > 0 {
+		if err := budget.Err(); err != nil {
+			if errors.Is(err, proofbound.ErrWallWorkBudget) {
+				if stepErr := budget.Step(); stepErr != nil {
+					return [3]*big.Rat{}, stepErr
+				}
+			}
+			return [3]*big.Rat{}, err
+		}
+	}
 	if audit.Det == nil {
 		return FirstMoments(budget, audit.XVerts, tris)
 	}
