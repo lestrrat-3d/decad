@@ -468,7 +468,6 @@ jobs:
   test-platforms:
     name: test (${{ matrix.os }})
     if: github.event_name != 'pull_request'
-    needs: [race-binary]
     strategy:
       fail-fast: false
       matrix:
