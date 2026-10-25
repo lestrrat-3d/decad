@@ -47,6 +47,11 @@ type HeldRounding struct {
 	// float-box corners have failed to clear it, in millimetres. Zero keeps
 	// the search to the float box.
 	Reach float64
+	// ScanAxes optionally selects linear projections for the first read-only
+	// box-tree scan. Outward interval dot products bound every held corner;
+	// disjoint projected boxes prove separation without orthogonality.
+	// Zero axes keep world boxes. Repair always uses the original world grid.
+	ScanAxes [3]r3.Vec
 }
 
 // heldEmbeddingSweeps caps the passes over the offending vertices. A pass that
@@ -290,7 +295,10 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 	for _, i := range query {
 		queryFacet[i] = true
 	}
-	tree := newHeldBoxTree(e)
+	tree, err := newHeldScanTree(ctx, e)
+	if err != nil {
+		return false, err
+	}
 	if err := tree.prepareQueryCeilings(ctx, queryFacet); err != nil {
 		return false, err
 	}
@@ -412,13 +420,14 @@ func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool, tree *heldBox
 		return poll()
 	}
 	stack := make([]int, 0, 64)
+	oriented := tree.oriented
 	for _, i := range query {
 		if !e.facetOpenFloat(i) {
 			if _, _, n := e.facet(i); zeroXpt(n) {
 				return false, nil
 			}
 		}
-		box := e.triBox(i)
+		box := tree.boxes[i]
 		if len(tree.nodes) == 0 {
 			continue
 		}
@@ -443,6 +452,9 @@ func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool, tree *heldBox
 						return false, err
 					}
 					if j == i || j < i && queryFacet[j] || !BoxesOverlap(box, tree.boxes[j]) {
+						continue
+					}
+					if oriented && !BoxesOverlap(e.triBox(i), e.triBox(j)) {
 						continue
 					}
 					if !e.pairEmbeddedOverlapping(i, j) {

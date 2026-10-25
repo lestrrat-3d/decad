@@ -136,7 +136,8 @@ func placeMeshGap(ctx context.Context, budget *proofbound.WorkBudget, verts []r3
 			next.Tris[i] = [3]int{t[0], t[2], t[1]}
 		}
 	}
-	moved, repair, err := KeepPlacedEmbeddedWithSummary(ctx, exact, next.Verts, next.Tris)
+	moved, repair, err := keepPlacedEmbeddedWithAxes(ctx, exact, next.Verts, next.Tris,
+		[3]r3.Vec{basis.EX, basis.EY, basis.EZ})
 	if err != nil {
 		return PlacedMesh{}, err
 	}

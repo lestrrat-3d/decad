@@ -2,6 +2,9 @@ package meshbool
 
 import (
 	"context"
+	"math"
+	"math/big"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -61,15 +64,94 @@ func TestHeldQueryCeilingsKeepEveryRequiredPair(t *testing.T) {
 			if selection == "last" && want == crossing {
 				t.Fatalf("the last-facet reference did not detect crossing=%t", crossing)
 			}
-			e := newHeldEmbedding(h, proofbound.NewWorkBudget(t.Context()), true)
-			require.NoError(t, e.buildGrid())
-			clean, err := e.parallelClean(t.Context(), query)
-			require.NoError(t, err)
-			if clean != want {
-				t.Fatalf("crossing=%t selection=%s: clean=%t, want %t", crossing, selection, clean, want)
+			for _, axes := range [][3]r3.Vec{{}, {{X: 2, Y: 3, Z: 5}, {X: -3, Y: 2}, {X: 1, Z: -2}}} {
+				h.ScanAxes = axes
+				e := newHeldEmbedding(h, proofbound.NewWorkBudget(t.Context()), true)
+				require.NoError(t, e.buildGrid())
+				clean, err := e.parallelClean(t.Context(), query)
+				require.NoError(t, err)
+				if clean != want {
+					t.Fatalf("crossing=%t selection=%s axes=%v: clean=%t, want %t", crossing, selection, axes, clean, want)
+				}
 			}
 		}
 	}
+}
+
+func TestHeldScanBoxesEncloseExactDotProducts(t *testing.T) {
+	rng := rand.New(rand.NewPCG(0x1284ab, 0x318f72))
+	axes := [3]r3.Vec{{X: 2, Y: 3, Z: 5}, {X: -3, Y: 2}, {X: 1, Z: -2}}
+	for _, exp := range []int{-1074, -300, 0, 300} {
+		scanAxes := axes
+		if exp == -1074 {
+			for i := range scanAxes {
+				scanAxes[i] = scanAxes[i].Scale(0x1p-10)
+			}
+		}
+		h := HeldRounding{ScanAxes: scanAxes}
+		for range 48 {
+			h.Verts = append(h.Verts, r3.NewVec(math.Ldexp(2*rng.Float64()-1, exp),
+				math.Ldexp(2*rng.Float64()-1, exp), math.Ldexp(2*rng.Float64()-1, exp)))
+		}
+		for i := 0; i < len(h.Verts); i += 3 {
+			h.Tris = append(h.Tris, [3]int{i, i + 1, i + 2})
+		}
+		e := newHeldEmbedding(h, proofbound.NewWorkBudget(t.Context()), true)
+		tree, err := newHeldScanTree(t.Context(), e)
+		require.NoError(t, err)
+		require.True(t, tree.oriented)
+		for i, tri := range h.Tris {
+			for _, v := range tri {
+				p := h.Verts[v]
+				for k, axis := range scanAxes {
+					coords, dir := [3]float64{p.X, p.Y, p.Z}, [3]float64{axis.X, axis.Y, axis.Z}
+					exact := new(big.Rat)
+					for j := range coords {
+						exact.Add(exact, new(big.Rat).Mul(new(big.Rat).SetFloat64(coords[j]),
+							new(big.Rat).SetFloat64(dir[j])))
+					}
+					lo := new(big.Rat).SetFloat64(CoordOf(tree.boxes[i][0], k))
+					hi := new(big.Rat).SetFloat64(CoordOf(tree.boxes[i][1], k))
+					require.LessOrEqual(t, lo.Cmp(exact), 0, "triangle %d, axis %d", i, k)
+					require.GreaterOrEqual(t, hi.Cmp(exact), 0, "triangle %d, axis %d", i, k)
+				}
+			}
+		}
+	}
+}
+
+func TestHeldScanAxesFallbackAndBoundaryContact(t *testing.T) {
+	h := HeldRounding{
+		Verts: []r3.Vec{{}, {X: 1}, {Y: 1}, {X: 1}, {X: 2}, {X: 1, Y: 1}},
+		Tris:  [][3]int{{0, 1, 2}, {3, 4, 5}}, Movable: make([]bool, 6),
+	}
+	for _, axes := range [][3]r3.Vec{
+		{}, {{Y: -1}, {Z: 1}, {X: 1}},
+		{{X: math.Inf(1)}, {Y: 1}, {Z: 1}},
+		{{X: math.NaN()}, {Y: 1}, {Z: 1}},
+		{{X: math.MaxFloat64}, {Y: 1}, {Z: 1}},
+	} {
+		h.ScanAxes = axes
+		e := newHeldEmbedding(h, proofbound.NewWorkBudget(t.Context()), true)
+		tree, err := newHeldScanTree(t.Context(), e)
+		require.NoError(t, err)
+		require.False(t, tree.oriented)
+		for i, tri := range h.Tris {
+			require.Equal(t, TriBox(h.Verts, tri), tree.boxes[i])
+		}
+	}
+	// The triangles meet at a closed box boundary but share no index. Their
+	// unexpected contact must still reach the exact classifier and refuse.
+	h.ScanAxes = [3]r3.Vec{{X: 2, Y: 3, Z: 5}, {X: -3, Y: 2}, {X: 1, Z: -2}}
+	e := newHeldEmbedding(h, proofbound.NewWorkBudget(t.Context()), true)
+	require.NoError(t, e.buildGrid())
+	clean, err := e.parallelClean(t.Context(), []int{0, 1})
+	require.NoError(t, err)
+	require.False(t, clean)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, err = newHeldScanTree(ctx, e)
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 func TestHeldQueryCeilingsSkipCompletedChunks(t *testing.T) {
