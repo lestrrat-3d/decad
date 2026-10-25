@@ -225,6 +225,7 @@ func sectorDigestCylinderFixture(radius float64, copies int) func(t *testing.T) 
 
 // TestSectorRouteDigestSingleLug covers one lug joined to each hub shape.
 func TestSectorRouteDigestSingleLug(t *testing.T) {
+	t.Parallel()
 	runSectorDigest(t, "single-lug", []sectorDigestFixture{
 		{"TaperedHubAndRadialLug", sectorDigestTapered(9, false)},
 		{"TaperedHubAndFittedRadialLug", sectorDigestTapered(9, true)},
@@ -239,6 +240,7 @@ func TestSectorRouteDigestSingleLug(t *testing.T) {
 // TestSectorRouteDigestCopiedLugs covers serial NextSectorUnion and variadic
 // SectorUnionMany over rotated copies of one lug.
 func TestSectorRouteDigestCopiedLugs(t *testing.T) {
+	t.Parallel()
 	runSectorDigest(t, "copied-lugs", []sectorDigestFixture{
 		{"ShoulderedHubAndTwoRadialLugsSerial", func(t *testing.T) []*decad.Body {
 			_, hub, trimmed := shoulderedHubAndRadialLug(t)
@@ -271,6 +273,7 @@ func TestSectorRouteDigestCopiedLugs(t *testing.T) {
 
 // TestSectorRouteDigestManyLugs joins 40 copies of one lug in one Union.
 func TestSectorRouteDigestManyLugs(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("joins 40 sectors")
 	}
@@ -293,6 +296,7 @@ func TestSectorRouteDigestManyLugs(t *testing.T) {
 // TestSectorRouteDigestBevel covers the circle-fragment and partial-fit root
 // routes of the embedded-root tooth joins.
 func TestSectorRouteDigestBevel(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("joins five sectors")
 	}
@@ -313,6 +317,7 @@ func TestSectorRouteDigestBevel(t *testing.T) {
 // TestSectorRouteDigestCylinderCut covers the coaxial cylinder Cut of a joined
 // sector body.
 func TestSectorRouteDigestCylinderCut(t *testing.T) {
+	t.Parallel()
 	runSectorDigest(t, "cylinder-cut", []sectorDigestFixture{
 		{"AnnularCylinderCut", sectorDigestCylinderFixture(1, 1)},
 		{"RepeatedAnnularCylinderCut", sectorDigestCylinderFixture(1, 2)},
@@ -324,6 +329,7 @@ func TestSectorRouteDigestCylinderCut(t *testing.T) {
 // TestSectorRouteDigestPointCone covers the point-Loft cone trims and the
 // placed copy of a trimmed tooth.
 func TestSectorRouteDigestPointCone(t *testing.T) {
+	t.Parallel()
 	runSectorDigest(t, "point-cone", []sectorDigestFixture{
 		{"PointConeToeCut", sectorDigestPointConeFixture(5, true, false)},
 		{"PointConeToeInside", sectorDigestPointConeFixture(5, false, false)},
