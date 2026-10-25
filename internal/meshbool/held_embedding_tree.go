@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -19,6 +20,7 @@ type heldBoxTree struct {
 	// queryCeiling is the highest queried facet index in each node, or the
 	// facet count if it contains any non-query facet. Only cleanPairs uses it.
 	queryCeiling []int
+	oriented     bool
 }
 
 type heldBoxNode struct {
@@ -36,6 +38,72 @@ func newHeldBoxTree(e *heldEmbedding) heldBoxTree {
 		boxes[i] = e.triBox(i)
 	}
 	return newBoxTree(boxes)
+}
+
+// newHeldScanTree can index three other linear projections of the same held
+// triangles. Their exact dot products lie in the interval hull of the three
+// corners, so disjoint closed boxes omit only disjoint triangles. Any nonfinite
+// endpoint abandons the entire alternate coordinate system, including earlier
+// projections, and builds the world tree instead.
+func newHeldScanTree(ctx context.Context, e *heldEmbedding) (heldBoxTree, error) {
+	axes := e.h.ScanAxes
+	if axes == [3]r3.Vec{} || coordinateScanAxes(axes) {
+		return newHeldBoxTree(e), nil
+	}
+	projected := make([][2]r3.Vec, len(e.h.Verts))
+	for i, vertex := range e.h.Verts {
+		if i%proofbound.WorkPollInterval == 0 {
+			if err := ctx.Err(); err != nil {
+				return heldBoxTree{}, err
+			}
+		}
+		var lo, hi [3]float64
+		for k, axis := range axes {
+			iv := FivDot(FivVecOf(vertex), FivVecOf(axis))
+			if proofbound.IsNonFinite(iv.Lo) || proofbound.IsNonFinite(iv.Hi) {
+				return newHeldBoxTree(e), nil
+			}
+			lo[k], hi[k] = iv.Lo, iv.Hi
+		}
+		projected[i] = [2]r3.Vec{r3.NewVec(lo[0], lo[1], lo[2]), r3.NewVec(hi[0], hi[1], hi[2])}
+	}
+	boxes := make([][2]r3.Vec, len(e.h.Tris))
+	for i, tri := range e.h.Tris {
+		if i%proofbound.WorkPollInterval == 0 {
+			if err := ctx.Err(); err != nil {
+				return heldBoxTree{}, err
+			}
+		}
+		box := projected[tri[0]]
+		for _, v := range tri[1:] {
+			p := projected[v]
+			box[0] = r3.NewVec(math.Min(box[0].X, p[0].X), math.Min(box[0].Y, p[0].Y), math.Min(box[0].Z, p[0].Z))
+			box[1] = r3.NewVec(math.Max(box[1].X, p[1].X), math.Max(box[1].Y, p[1].Y), math.Max(box[1].Z, p[1].Z))
+		}
+		boxes[i] = box
+	}
+	tree := newBoxTree(boxes)
+	tree.oriented = true
+	return tree, ctx.Err()
+}
+
+func coordinateScanAxes(axes [3]r3.Vec) bool {
+	for _, axis := range axes {
+		nonzero := 0
+		for _, c := range [...]float64{axis.X, axis.Y, axis.Z} {
+			if c == 0 {
+				continue
+			}
+			if c != 1 && c != -1 {
+				return false
+			}
+			nonzero++
+		}
+		if nonzero != 1 {
+			return false
+		}
+	}
+	return true
 }
 
 // prepareQueryCeilings lets the read-only scan discard whole nodes containing

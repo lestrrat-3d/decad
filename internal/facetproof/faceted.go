@@ -37,13 +37,19 @@ func KeepPlacedEmbedded(ctx context.Context, exact []proof.Xpt, held []r3.Vec, t
 // for final accepted positive-reach positions, independent of rounding charges.
 func KeepPlacedEmbeddedWithSummary(ctx context.Context, exact []proof.Xpt, held []r3.Vec,
 	tris [][3]int) ([]float64, *meshbool.EmbeddingReach, error) {
+	return keepPlacedEmbeddedWithAxes(ctx, exact, held, tris, [3]r3.Vec{})
+}
+
+func keepPlacedEmbeddedWithAxes(ctx context.Context, exact []proof.Xpt, held []r3.Vec,
+	tris [][3]int, axes [3]r3.Vec) ([]float64, *meshbool.EmbeddingReach, error) {
 	h := meshbool.HeldRounding{
-		Verts:   held,
-		Tris:    tris,
-		Exact:   exact,
-		Moved:   make([]bool, len(held)),
-		Movable: make([]bool, len(held)),
-		Reach:   gaptol.Reach(ctx),
+		Verts:    held,
+		Tris:     tris,
+		Exact:    exact,
+		Moved:    make([]bool, len(held)),
+		Movable:  make([]bool, len(held)),
+		Reach:    gaptol.Reach(ctx),
+		ScanAxes: axes,
 	}
 	first := make([]r3.Vec, len(held))
 	copy(first, held)
