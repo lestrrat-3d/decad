@@ -28,6 +28,43 @@ func TestPlaneSignsExactLiftsKeepSubnormalSide(t *testing.T) {
 	require.Equal(t, want, broadSigns)
 }
 
+func TestPlaneSignsSharedAndEqualObliqueCorners(t *testing.T) {
+	t.Parallel()
+	for _, scale := range []float64{0x1p-400, 1, 0x1p400} {
+		for _, upward := range []bool{false, true} {
+			inf := math.Inf(-1)
+			wantSide := -1
+			if upward {
+				inf, wantSide = math.Inf(1), 1
+			}
+			for _, reversed := range []bool{false, true} {
+				verts := []r3.Vec{
+					{X: 1, Y: 2, Z: 3}, {X: 2, Y: 3, Z: 4}, {X: -1, Y: 3, Z: 8},
+					{X: 1, Y: 2, Z: math.Nextafter(3, inf)},
+					{X: -1, Y: 3, Z: 8}, {X: 1, Y: 2, Z: 3},
+				}
+				for i := range verts {
+					verts[i] = verts[i].Scale(scale)
+				}
+				tris := [][3]int{{0, 1, 2}, {2, 0, 3}, {4, 5, 3}}
+				side := wantSide
+				if reversed {
+					tris[0][1], tris[0][2] = tris[0][2], tris[0][1]
+					side = -side
+				}
+				data := NewLoftAuditData(verts, tris)
+				for _, other := range []int{1, 2} {
+					x, corners := data.xtri(other), data.corners(other)
+					want := TrianglePlaneSigns(data.Planes[0], x)
+					require.Equal(t, [3]int{0, 0, side}, want)
+					require.Equal(t, want, data.planeSigns(0, x, corners),
+						"scale %g, upward %t, reversed %t, other %d", scale, upward, reversed, other)
+				}
+			}
+		}
+	}
+}
+
 func TestCompactLoftAuditDataMatchesFullPairResults(t *testing.T) {
 	t.Parallel()
 	verts := []r3.Vec{
