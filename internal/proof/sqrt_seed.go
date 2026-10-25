@@ -6,6 +6,12 @@ import (
 	"math/bits"
 )
 
+// RatSqrtSeed is RatioSqrtSeed for a rational. Numerator and denominator
+// references stay inside proof, which owns the read-only integer access.
+func RatSqrtSeed(q *big.Rat) (float64, bool) {
+	return RatioSqrtSeed(q.Num(), q.Denom(), 0)
+}
+
 // RatioSqrtSeed returns the 64-bit big.Float quotient seed for
 // sqrt(n / (d * 2^denomExp)) when leading integer words determine its rounded
 // mantissa. n and d must be positive. False asks the caller to use its full
