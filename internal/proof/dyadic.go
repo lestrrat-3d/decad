@@ -730,6 +730,11 @@ func DySqrtSeed(d Dyadic) float64 {
 	if d.big == nil && d.lo != 0 && !d.neg() {
 		return dySqrtSeedInline(d)
 	}
+	if d.big != nil && d.big.Sign() > 0 {
+		if seed, ok := RatioSqrtSeed(d.big, big.NewInt(1), -d.exp); ok {
+			return seed
+		}
+	}
 	// The mantissa is normalised into [0.5, 1) first and its own exponent
 	// folded into the total, so a value near either end of the float64 range
 	// roots from a fraction rather than from an integer the conversion would

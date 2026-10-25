@@ -369,6 +369,48 @@ func TestDySqrtSeedInlineMatchesBigFloat(t *testing.T) {
 	}
 }
 
+func TestDySqrtSeedBigMatchesBigFloat(t *testing.T) {
+	r := rand.New(rand.NewPCG(0x495f31, 0x72b40a))
+	check := func(d Dyadic) {
+		t.Helper()
+		before := new(big.Int).Set(d.big)
+		got, want := DySqrtSeed(d), bigFloatSqrtSeed(d)
+		require.Equal(t, math.Float64bits(want), math.Float64bits(got), "mantissa bits %d, exponent %d", d.bitLen(), d.exp)
+		require.Zero(t, d.big.Cmp(before), "seed changed its immutable mantissa")
+	}
+	for range 6000 {
+		width := 128 + r.IntN(3969)
+		raw := make([]byte, (width+7)/8)
+		for i := range raw {
+			raw[i] = byte(r.Uint64())
+		}
+		mant := new(big.Int).SetBytes(raw)
+		mant.Rsh(mant, uint(len(raw)*8-width))
+		mant.SetBit(mant, width-1, 1)
+		mant.SetBit(mant, 0, 1)
+		for _, exp := range []int{r.IntN(8193) - 4096, -width + r.IntN(8) - 4} {
+			check(fromBig(new(big.Int).Set(mant), exp))
+		}
+	}
+	// Keep wide odd mantissas on either side of a binary64 midpoint, where
+	// the prefix interval may require the original full conversion.
+	for _, width := range []uint{128, 129, 191, 256, 513, 2048} {
+		top := new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 63), big.NewInt(1024))
+		top.Lsh(top, width-64)
+		for _, low := range []int64{-9, -7, -1, 1, 7, 9} {
+			for _, exp := range []int{-4096, -2148, -1, 0, 1, 1024, 4096} {
+				check(fromBig(new(big.Int).Add(top, big.NewInt(low)), exp))
+			}
+		}
+	}
+}
+
+func TestDySqrtSeedBigDoesNotAllocate(t *testing.T) {
+	d := fromBig(new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 512), big.NewInt(1)), -512)
+	require.Equal(t, math.Float64bits(bigFloatSqrtSeed(d)), math.Float64bits(DySqrtSeed(d)))
+	require.Zero(t, testing.AllocsPerRun(100, func() { _ = DySqrtSeed(d) }))
+}
+
 // TestDyadicFloat64MatchesLdexp checks the table-scaled inline conversion
 // against Ldexp over inline Dyadics whose value is a normal float.
 func TestDyadicFloat64MatchesLdexp(t *testing.T) {
