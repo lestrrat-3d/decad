@@ -880,8 +880,22 @@ func projectedEdgeSeparates(a, b *heldProjectedFacet, axis, edge int) bool {
 	}
 	start := a.points[axis][edge]
 	end := a.points[axis][(edge+1)%3]
+	bx, by := end[0]-start[0], end[1]-start[1]
+	mxEdge, myEdge := proof.Abs(bx), proof.Abs(by)
+	// A nonzero cached sign means Orient2Float admitted both edge
+	// differences. Compute them once for all three queried points and check
+	// only each point's new differences, with the same error bound.
 	for _, point := range b.points[axis] {
-		if Orient2Float(start, end, point) != -sign {
+		cx, cy := point[0]-start[0], point[1]-start[1]
+		mx, my := proof.Abs(cx), proof.Abs(cy)
+		if !(cx == 0 || mx >= 0x1p-300 && mx <= 0x1p250) ||
+			!(cy == 0 || my >= 0x1p-300 && my <= 0x1p250) {
+			return false
+		}
+		det := bx*cy - by*cx
+		perm := mxEdge*my + myEdge*mx
+		err := 1e-12 * perm
+		if sign > 0 && !(det < -err) || sign < 0 && !(det > err) {
 			return false
 		}
 	}
