@@ -153,7 +153,7 @@ func LcmInt(a, b *big.Int) *big.Int {
 	if a.IsInt64() && a.Int64() == 1 {
 		return new(big.Int).Set(b)
 	}
-	g := new(big.Int).GCD(nil, nil, a, b)
+	g := ratGCD(new(big.Int), a, b)
 	out := new(big.Int).Quo(a, g)
 	return out.Mul(out, b)
 }

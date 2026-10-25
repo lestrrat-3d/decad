@@ -3,6 +3,7 @@ package proof
 import (
 	"cmp"
 	"math/big"
+	"math/bits"
 )
 
 // ratSplitAdd sets z = a+b (a-b with sub) in lowest terms with Knuth's
@@ -11,7 +12,7 @@ import (
 func ratSplitAdd(z, a, b *big.Rat, sub bool) *big.Rat {
 	p1, q1 := a.Num(), a.Denom()
 	p2, q2 := b.Num(), b.Denom()
-	d1 := new(big.Int).GCD(nil, nil, q1, q2)
+	d1 := ratGCD(new(big.Int), q1, q2)
 	if isOne(d1) {
 		n := new(big.Int).Mul(p1, q2)
 		m := new(big.Int).Mul(p2, q1)
@@ -40,7 +41,7 @@ func ratSplitAdd(z, a, b *big.Rat, sub bool) *big.Rat {
 	if t.Sign() == 0 {
 		return z.SetInt64(0)
 	}
-	d2 := u.GCD(nil, nil, t, d1)
+	d2 := ratGCD(u, t, d1)
 	if !isOne(d2) {
 		t.Quo(t, d2)
 		q2d.Quo(q2, d2)
@@ -62,12 +63,12 @@ func ratSplitMul(z, a, b *big.Rat) *big.Rat {
 		return z.SetInt64(0)
 	}
 	n1, d2 := p1, q2
-	if g := new(big.Int).GCD(nil, nil, p1, q2); !isOne(g) {
+	if g := ratGCD(new(big.Int), p1, q2); !isOne(g) {
 		n1 = new(big.Int).Quo(p1, g)
 		d2 = new(big.Int).Quo(q2, g)
 	}
 	n2, d1 := p2, q1
-	if g := new(big.Int).GCD(nil, nil, p2, q1); !isOne(g) {
+	if g := ratGCD(new(big.Int), p2, q1); !isOne(g) {
 		n2 = new(big.Int).Quo(p2, g)
 		d1 = new(big.Int).Quo(q1, g)
 	}
@@ -95,12 +96,12 @@ func QuoRat(z, a, b *big.Rat) *big.Rat {
 		return z.SetInt64(0)
 	}
 	n1, n2 := p1, p2
-	if g := new(big.Int).GCD(nil, nil, p1, p2); !isOne(g) {
+	if g := ratGCD(new(big.Int), p1, p2); !isOne(g) {
 		n1 = new(big.Int).Quo(p1, g)
 		n2 = new(big.Int).Quo(p2, g)
 	}
 	m1, m2 := q2, q1
-	if g := new(big.Int).GCD(nil, nil, q1, q2); !isOne(g) {
+	if g := ratGCD(new(big.Int), q1, q2); !isOne(g) {
 		m1 = new(big.Int).Quo(q2, g)
 		m2 = new(big.Int).Quo(q1, g)
 	}
@@ -167,3 +168,39 @@ func mulDenom(z, n *big.Int, r *big.Rat) *big.Int {
 
 // isOne reports whether x is 1.
 func isOne(x *big.Int) bool { return x.IsInt64() && x.Int64() == 1 }
+
+// ratGCD is GCD(nil, nil, a, b). When either magnitude is a power of two,
+// their greatest common divisor is 2^min(tz(a), tz(b)). Count those bits instead
+// of running the Euclidean algorithm. Other operands skip complete low zero
+// words before GCD; their original common binary factor is restored afterwards.
+// z owns its result and may alias either input, as with big.Int.GCD.
+func ratGCD(z, a, b *big.Int) *big.Int {
+	if a.Sign() == 0 || b.Sign() == 0 {
+		return z.GCD(nil, nil, a, b)
+	}
+	at, bt := a.TrailingZeroBits(), b.TrailingZeroBits()
+	if a.BitLen() == int(at)+1 || b.BitLen() == int(bt)+1 {
+		return z.Lsh(z.SetInt64(1), min(at, bt))
+	}
+	if at >= bits.UintSize || bt >= bits.UintSize {
+		// Discard complete zero words without copying the immutable operand
+		// limbs. GCD writes a separate result before z changes, so the views
+		// stay read-only even when z aliases a or b. No view is returned.
+		var av, bv big.Int
+		aa, bb := a, b
+		if at >= bits.UintSize {
+			aa = av.SetBits(a.Bits()[at/bits.UintSize:])
+		}
+		if bt >= bits.UintSize {
+			bb = bv.SetBits(b.Bits()[bt/bits.UintSize:])
+		}
+		var reduced big.Int
+		reduced.GCD(nil, nil, aa, bb)
+		// The odd parts determine the odd gcd. Remove any residual binary
+		// factor from the word-aligned views and restore the original one.
+		reduced.Rsh(&reduced, reduced.TrailingZeroBits())
+		reduced.Lsh(&reduced, min(at, bt))
+		return z.Set(&reduced)
+	}
+	return z.GCD(nil, nil, a, b)
+}
