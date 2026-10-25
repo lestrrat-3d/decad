@@ -112,7 +112,7 @@ func TestContainedCutUsesCertifiedSourceCentroid(t *testing.T) {
 }
 
 func TestContainedCutCentroidEvidenceFailureKeepsDocumentUnchanged(t *testing.T) {
-	doc, target, tool := containedCutCentroidFailureFixture(t)
+	doc, target, tool := containedCutCentroidSources(t)
 	target.n.Centroid.Value.X = math.NaN()
 
 	bodiesBefore := doc.Bodies()
@@ -133,7 +133,7 @@ func TestContainedCutCentroidEvidenceFailureKeepsDocumentUnchanged(t *testing.T)
 	}
 }
 
-func containedCutCentroidFailureFixture(t *testing.T) (*Document, *Body, *Body) {
+func containedCutCentroidSources(t *testing.T) (*Document, *Body, *Body) {
 	t.Helper()
 	world := sketch.NewWorld()
 	doc := New()

@@ -85,7 +85,7 @@ configuration option.
 | `decad.VecMeasurement` | struct | A position or direction with its exactness and bound. | `Body.Centroid`, `Vertex.Position` |
 | `decad.Box` | struct | An axis-aligned bound with its own exactness and bound. | `Body.Bounds` |
 | `decad.Exactness` | enum | `decad.Exact` or `decad.Approximate`. | `Measurement.Exactness` |
-| `decad.MassProperties` | struct | Mass, center and inertia of a solid. | `Body.MassProperties` |
+| `decad.MassProperties` | struct | Mass, center and inertia of a solid, with certified source moments used for some contained prism Cuts when they improve the verified-mesh reading. | `Body.MassProperties` |
 | `decad.InertiaReading` | struct | The symmetric inertia tensor about the mass center in world axes. | `MassProperties.Inertia` |
 | `decad.QuantityVec` | struct | Three components of one physical kind. | The caller |
 | `decad.MeasuredProfile` | struct | A snapshot of a validated profile for plane-local measurement. | `decad.MeasureProfile` |

@@ -2245,3 +2245,4 @@
 10	0.00	TestUnionManyOperationWarnings
 10	0.00	TestVerifyDoesNotChangeOperationWarnings
 10	0.00	TestCopyReportsAcceptedEmbeddingReach
+10	0.03	TestMassPropertiesContainedCutSourceMoments

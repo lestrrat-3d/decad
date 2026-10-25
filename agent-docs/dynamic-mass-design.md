@@ -203,6 +203,15 @@ mesh at `VerifyNone` or `VerifyBoundary` cannot provide density-derived
 inertia. The same rule applies to placed faceted bodies and Boolean results:
 their inherited occupied-volume allowances contribute to `E`.
 
+An admitted faceted result of a strictly contained Cut also carries immutable
+source `V`, `P`, and `Q` intervals for a rectangular-prism target minus a
+whole circular-prism tool. `MassProperties` still computes the verified-mesh
+tuple first. It publishes and selects the source tuple only when every mass
+and inertia interval overlaps the mesh result, both center balls overlap, all
+eight source bounds are no larger, and one is smaller. Other source classes
+continue to use the verified-mesh path. The source evidence contains no
+density or query cache.
+
 ## 3. Center, tensor, and numerical admission
 
 Compute `S` with interval arithmetic from one common `V`, `P`, and `Q`

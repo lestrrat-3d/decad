@@ -16,7 +16,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/sectioncert/` | Private bounded-section Sketch provenance, guarded Extrude recording, and `RecordProfile`, the Sketch-profile recording seam. See section design, sketch-seam §1–§2. |
 | `internal/exactrotation/` | Exactly orthogonal rational rotation recorded at Copy time: scale-safe quaternion construction, exact translation, structural X-axis test, and the reject-only gap against r3's float rotation. See file comments. |
 | `internal/proofbound/` | Certified bounds, intervals, work budgets and trig. See file comments. |
-| `internal/prooflineage/` | Compact source-volume and containment evidence retained by evaluator results for certified quantity calculations. See operation-history-design. |
+| `internal/prooflineage/` | Compact source-volume, centroid, and immutable contained-Cut V/P/Q evidence retained for certified quantity calculations. See operation-history-design and contained-cut-moments-design. |
 | `internal/compositemesh/` | Plans shared composite Sweep stations, maps reduced span rings and source roles, and assembles a transient mesh node with its numeric audits. See sweep Table D. |
 | `internal/compositesweep/` | Composite Sweep limits, span assembly (cap pairing, rim sewing, cap removal), boundary and vertex-link audits, bounded and body measurements, separation, body-extent and cross-span facet audits, rim-join certificate, side-role and cap-role rewrites. See sweep §7, §9. |
 | `internal/diameter/` | Lower-bound diameter of held witness points, including vertex, axis-extreme and prism station witnesses and the free-form prism section arm. See verification §3. |
@@ -32,7 +32,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/mirrorjoin/` | Exact line admission, reflection, prism and stacked record rewrites, splice and joined-section audit. See mirror-pattern §5. |
 | `internal/patternrecord/` | Pattern spec gates, instance motion, record mapping and the exact plane map with its charged region move. See mirror-pattern §4.3, §6.2 and axial-pattern-join. |
 | `internal/patternassembly/` | Pattern frame-keeping instances and disjoint group planning over recorded payloads. See mirror-pattern §4.3, §6. |
-| `internal/massmoment/` | Rational mass moments and inertia, axis placement map and drift charges (`AxisRotation`, `AxisPlacementCharge`), and the angular frame tilt (`FrameTilt`). See dynamic-mass §2–§3 and revolve-axis §4.5, §5.5, §5.6. |
+| `internal/massmoment/` | Rational mass moments and inertia, prism world-moment composition, axis placement map and drift charges (`AxisRotation`, `AxisPlacementCharge`), and the angular frame tilt (`FrameTilt`). See dynamic-mass §2–§3, contained-cut-moments-design, and revolve-axis §4.5, §5.5, §5.6. |
 | `internal/capcontour/` | Cap contour displacement, shell offset intervals, and edge and arc bounds. See modify-reach §8.3-§8.4. |
 | `internal/offset2d/` | Offset carriers, proofs, profile offsets and corner loops, rewrite and offset audits, offset displacement, and the draft near and far section stages. See modify §5–§9, shell-opening §3–§5, draft §2, §7. |
 | `internal/capband/` | Cap-band loop walks, offset joins, contour, loop boundary, patch, locus, volume, first-moment and centroid bounds, and cap-loop chamfer refusals. See modify-reach §8.3–§8.4. |

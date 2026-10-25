@@ -69,7 +69,7 @@ func Properties(ctx context.Context, mesher verifiedmesh.Mesher, b *topo.Body, d
 		return verifiedMeshMassProperties(ctx, mesher, b, density)
 	}
 	if faceted, ok := b.Payload.(facetedrecord.Payload); ok {
-		return facetedMassProperties(ctx, mesher, b, faceted, density)
+		return containedCutMassProperties(ctx, mesher, b, faceted, density)
 	}
 	if sweep, ok := b.Payload.(sweeprecord.Payload); ok {
 		result, err := massmoment.SweepProperties(ctx, sweep.MassRecord(), b.Centroid, density)

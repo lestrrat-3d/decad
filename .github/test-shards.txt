@@ -229,6 +229,7 @@
 10	0.00	TestContainedCutUsesCertifiedSourceVolumeAndRecordsHistory
 10	0.00	TestContainedCutUsesCertifiedSourceCentroid
 10	0.00	TestContainedCutCentroidEvidenceFailureKeepsDocumentUnchanged
+10	0.00	TestContainedCutSourceMassProperties
 10	0.00	TestOperationDiagnosticEnumsAndBooleanError
 10	0.00	TestOperationErrorPreservesKnownFailureAndSkipsTypedErrors
 10	0.00	TestOperationErrorCopiesOptionalDetailsAndUnwrapsOriginal
@@ -254,3 +255,4 @@
 10	2.72	TestSectorUnionAcceptsGeneralCertificate
 10	0.31	TestGeneralPlanInputReadsRadiusAndFrameAboutAxis
 10	0.37	TestSectorTraceRefusesToothStraddlingBranchCut
+10	0.00	TestContainedCutMomentEvidenceRollback

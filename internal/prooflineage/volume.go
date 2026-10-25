@@ -30,6 +30,7 @@ type VolumeLineage struct {
 	Derived        measurement.Measurement
 	Containment    Containment
 	Centroid       *CentroidLineage
+	Moments        *ContainedCutMoments
 }
 
 // ContainedCutVolume subtracts the tool's source volume from the target's
