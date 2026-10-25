@@ -3,6 +3,7 @@ package proof
 import (
 	"math"
 	"math/big"
+	"math/bits"
 )
 
 // Directed float64 roundings of a quotient of
@@ -18,19 +19,24 @@ func dyQuoRound(n, d Dyadic, up bool) (float64, bool, bool) {
 	if n.IsZero() {
 		return 0, true, true
 	}
-	var numerator, denominator big.Int
-	a := n.MantInto(&numerator)
-	b := d.MantInto(&denominator)
-	exp := a.BitLen() - b.BitLen()
-	if shift := 54 - exp; shift > 0 {
-		a.Lsh(a, uint(shift))
-	} else if shift < 0 {
-		b.Lsh(b, uint(-shift))
+	exp := n.bitLen() - d.bitLen()
+	mant, sticky, native := dyQuoMantissa128(n, d, exp)
+	if !native {
+		mant, sticky, native = dyQuoMantissaWords(n, d, exp)
 	}
-	var q, r big.Int
-	q.QuoRem(a, b, &r)
-	mant := q.Uint64()
-	sticky := r.Sign() != 0
+	if !native {
+		var numerator, denominator big.Int
+		a := n.MantInto(&numerator)
+		b := d.MantInto(&denominator)
+		if shift := 54 - exp; shift > 0 {
+			a.Lsh(a, uint(shift))
+		} else if shift < 0 {
+			b.Lsh(b, uint(-shift))
+		}
+		var q, r big.Int
+		q.QuoRem(a, b, &r)
+		mant, sticky = q.Uint64(), r.Sign() != 0
+	}
 	if mant>>54 == 1 {
 		if mant&1 != 0 {
 			sticky = true
@@ -68,6 +74,28 @@ func dyQuoRound(n, d Dyadic, up bool) (float64, bool, bool) {
 		return float64(mant) * dyPow2[scale+dyPow2Bias], exact, true
 	}
 	return math.Ldexp(float64(mant), scale), exact, true
+}
+
+// dyQuoMantissa128 forms the same quotient bits and remainder flag as the
+// big.Int path for an inline numerator and a 64-bit denominator. A positive
+// numerator shift leaves at most 64+54 bits. A negative shift must keep the
+// denominator in 64 bits. The quotient has at most 55 bits, so Div64's high
+// numerator word is strictly below the denominator.
+func dyQuoMantissa128(n, d Dyadic, exp int) (uint64, bool, bool) {
+	if n.big != nil || d.big != nil || d.hi&^dySign != 0 {
+		return 0, false, false
+	}
+	lo, hi, denominator := n.lo, n.hi&^dySign, d.lo
+	if shift := 54 - exp; shift > 0 {
+		lo, hi, _ = shl128(lo, hi, shift, n.bitLen())
+	} else if shift < 0 {
+		if bits.Len64(denominator)-shift > 64 {
+			return 0, false, false
+		}
+		denominator <<= uint(-shift)
+	}
+	quotient, remainder := bits.Div64(hi, lo, denominator)
+	return quotient, remainder != 0, true
 }
 
 // DyQuoFloatUp is proofbound.RatFloatUp over the exact quotient n/d, for
