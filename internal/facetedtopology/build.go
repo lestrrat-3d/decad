@@ -82,21 +82,21 @@ func build(
 
 	// Directed halfedge → facet, and the boundary predicate: the twin facet
 	// belongs to a different face.
-	halfOwner := map[[2]int]int{}
+	halfOwner := newDirectedFacets(len(verts))
 	for i, t := range tris {
 		for k := range 3 {
 			if err := budget.Step(); err != nil {
 				return err
 			}
-			halfOwner[[2]int{t[k], t[(k+1)%3]}] = i
+			halfOwner.set(t[k], t[(k+1)%3], i)
 		}
 	}
 	isBoundary := func(u, v int) bool {
-		mine, ok := halfOwner[[2]int{u, v}]
+		mine, ok := halfOwner.get(u, v)
 		if !ok {
 			return false
 		}
-		twin, ok := halfOwner[[2]int{v, u}]
+		twin, ok := halfOwner.get(v, u)
 		if !ok {
 			return false
 		}
@@ -120,7 +120,7 @@ func build(
 				continue
 			}
 			mine := i
-			twin := halfOwner[[2]int{v, u}]
+			twin, _ := halfOwner.get(v, u)
 			// The hinge: the twin's opposite vertex against this facet's
 			// plane — below (negative) is material bending away: convex.
 			tw := tris[twin]
@@ -134,7 +134,7 @@ func build(
 		// A closed one-face patch, such as a whole sphere, has no B-rep
 		// edges or loops. Check closure and edge connectivity before naming
 		// that topology; disconnected shells must not collapse to one face.
-		if len(tris) == 0 || len(facetFace) != len(tris) || len(halfOwner) != 3*len(tris) {
+		if len(tris) == 0 || len(facetFace) != len(tris) || halfOwner.len() != 3*len(tris) {
 			return fmt.Errorf(`%w: a faceted body carries no face boundaries`, decaderr.ErrBooleanFailed)
 		}
 		face := facetFace[0]
@@ -151,7 +151,7 @@ func build(
 			}
 			tri := tris[i]
 			for k := range 3 {
-				twin, ok := halfOwner[[2]int{tri[(k+1)%3], tri[k]}]
+				twin, ok := halfOwner.get(tri[(k+1)%3], tri[k])
 				if !ok || facetFace[twin] != face {
 					return fmt.Errorf(`%w: a faceted body carries no face boundaries`, decaderr.ErrBooleanFailed)
 				}
@@ -359,7 +359,7 @@ func build(
 			if err := budget.Step(); err != nil {
 				return [2]int{}, err
 			}
-			f := halfOwner[cur]
+			f, _ := halfOwner.get(cur[0], cur[1])
 			t := tris[f]
 			var follow [2]int
 			switch {
