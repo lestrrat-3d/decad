@@ -1,8 +1,10 @@
 package meshbool
 
 import (
+	"context"
 	"math"
 	"math/bits"
+	"slices"
 	"sort"
 
 	"github.com/lestrrat-3d/r3"
@@ -14,6 +16,9 @@ type heldBoxTree struct {
 	nodes  []heldBoxNode
 	boxes  [][2]r3.Vec
 	facets []int
+	// queryCeiling is the highest queried facet index in each node, or the
+	// facet count if it contains any non-query facet. Only cleanPairs uses it.
+	queryCeiling []int
 }
 
 type heldBoxNode struct {
@@ -31,6 +36,36 @@ func newHeldBoxTree(e *heldEmbedding) heldBoxTree {
 		boxes[i] = e.triBox(i)
 	}
 	return newBoxTree(boxes)
+}
+
+// prepareQueryCeilings lets the read-only scan discard whole nodes containing
+// only query facets already paired from their lower index. A non-query facet
+// must still be compared with every query, whatever its own index.
+func (tree *heldBoxTree) prepareQueryCeilings(ctx context.Context, queryFacet []bool) error {
+	tree.queryCeiling = make([]int, len(tree.nodes))
+	// Children follow their parent in nodes, so reverse order reads completed
+	// child ceilings without another traversal or a recursive stack.
+	for i, node := range slices.Backward(tree.nodes) {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+		}
+		if node.leafStart < 0 {
+			tree.queryCeiling[i] = max(tree.queryCeiling[node.left], tree.queryCeiling[node.right])
+			continue
+		}
+		ceiling := -1
+		for _, j := range tree.facets[node.leafStart : node.leafStart+node.leafCount] {
+			if !queryFacet[j] {
+				ceiling = len(queryFacet)
+				break
+			}
+			ceiling = max(ceiling, j)
+		}
+		tree.queryCeiling[i] = ceiling
+	}
+	return ctx.Err()
 }
 
 func newBoxTree(boxes [][2]r3.Vec) heldBoxTree {

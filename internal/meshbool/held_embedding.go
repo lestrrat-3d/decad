@@ -291,6 +291,9 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 		queryFacet[i] = true
 	}
 	tree := newHeldBoxTree(e)
+	if err := tree.prepareQueryCeilings(ctx, queryFacet); err != nil {
+		return false, err
+	}
 	clean := make([]bool, workers)
 	errors := make([]error, workers)
 	locals := make([]*heldEmbedding, workers)
@@ -422,10 +425,14 @@ func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool, tree *heldBox
 		stack = append(stack[:0], 0)
 		for len(stack) > 0 {
 			last := len(stack) - 1
-			node := tree.nodes[stack[last]]
+			nodeIndex := stack[last]
+			node := tree.nodes[nodeIndex]
 			stack = stack[:last]
 			if err := step(); err != nil {
 				return false, err
+			}
+			if len(tree.queryCeiling) > 0 && tree.queryCeiling[nodeIndex] <= i {
+				continue
 			}
 			if !BoxesOverlap(box, node.box) {
 				continue
