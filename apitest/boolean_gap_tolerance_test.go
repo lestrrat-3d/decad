@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -55,6 +56,26 @@ func TestBooleanGapTolerance(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, joined.Lumps(), 1)
 		requireVolumeWithin(t, joined, 2000)
+		diagnostics := joined.OperationDiagnostics()
+		require.Len(t, diagnostics, 1)
+		diagnostic := diagnostics[0]
+		require.Equal(t, decad.OpDiagGapShiftApplied, diagnostic.Code)
+		require.Equal(t, decad.OperationDiagnosticWarning, diagnostic.Severity)
+		require.Equal(t, decad.OperationUnion, diagnostic.Operation)
+		require.Equal(t, "others", diagnostic.Subject.Name)
+		require.NotNil(t, diagnostic.Subject.Ordinal)
+		require.Zero(t, *diagnostic.Subject.Ordinal)
+		require.NotNil(t, diagnostic.Change)
+		require.Positive(t, diagnostic.Change.DisplacementBound.Base())
+		require.LessOrEqual(t, diagnostic.Change.DisplacementBound.Base(), diagnostic.Change.AllowedReach.Base())
+		diagnostic.Change.DisplacementBound = units.Millimeters(99)
+		*diagnostic.Subject.Ordinal = 99
+		again := joined.OperationDiagnostics()
+		require.NotEqual(t, 99.0, again[0].Change.DisplacementBound.Base())
+		require.Zero(t, *again[0].Subject.Ordinal)
+		duplicate, err := decad.Copy(t.Context(), joined)
+		require.NoError(t, err)
+		require.Empty(t, duplicate.OperationDiagnostics(), "a copy reports only adjustments it applies itself")
 	})
 
 	t.Run("a Cut of a box touching the target leaves the target", func(t *testing.T) {
@@ -67,9 +88,62 @@ func TestBooleanGapTolerance(t *testing.T) {
 
 	t.Run("an Intersect of boxes that only touch is empty", func(t *testing.T) {
 		t.Parallel()
-		a, b := touching()
-		_, err := decad.Intersect(t.Context(), a, b)
-		require.ErrorIs(t, err, decad.ErrBooleanFailed)
+		// Offsetting both footprint axes gives the mesh retry a face contact
+		// it can open outward without leaving another pair of side faces flush.
+		a, b := gapBoxes(t, 0.5, 2, 10, 10, 10, 10)
+		doc := a.Document()
+		before := doc.OperationHistory().Operations()
+		common, err := decad.Intersect(t.Context(), a, b)
+		require.Nil(t, common)
+		wrapped := fmt.Errorf("checking the common volume: %w", err)
+		require.ErrorIs(t, wrapped, decad.ErrBooleanFailed)
+		var boolean *decad.BooleanError
+		require.ErrorAs(t, wrapped, &boolean)
+		require.Equal(t, decad.BooleanEmpty, boolean.Code)
+		var diagnosticError decad.OperationDiagnosticError
+		require.ErrorAs(t, wrapped, &diagnosticError)
+		diagnostics := diagnosticError.OperationDiagnostics()
+		require.Len(t, diagnostics, 2)
+		require.Equal(t, decad.OpDiagResultEmpty, diagnostics[0].Code)
+		require.Equal(t, decad.OperationDiagnosticFailure, diagnostics[0].Severity)
+		require.Equal(t, decad.OperationIntersect, diagnostics[0].Operation)
+		require.Equal(t, decad.OperationStageResult, diagnostics[0].Stage)
+		shift := diagnostics[1]
+		require.Equal(t, decad.OpDiagGapShiftApplied, shift.Code)
+		require.Equal(t, decad.OperationDiagnosticWarning, shift.Severity)
+		require.Equal(t, decad.OperationIntersect, shift.Operation)
+		require.Equal(t, decad.OperationStageResult, shift.Stage)
+		require.Equal(t, "b", shift.Subject.Name)
+		require.Nil(t, shift.Subject.Ordinal)
+		require.NotNil(t, shift.Change)
+		require.Equal(t, decad.OperationChangeGapShift, shift.Change.Mechanism)
+		require.Positive(t, shift.Change.DisplacementBound.Base())
+		require.LessOrEqual(t, shift.Change.DisplacementBound.Base(), shift.Change.AllowedReach.Base())
+		require.Equal(t, 0.01, shift.Change.AllowedReach.Base())
+		shift.Change.DisplacementBound = units.Millimeters(99)
+		require.NotEqual(t, 99.0, diagnosticError.OperationDiagnostics()[1].Change.DisplacementBound.Base())
+
+		live := doc.Bodies()
+		require.Len(t, live, 2)
+		require.Same(t, a, live[0])
+		require.Same(t, b, live[1])
+		after := doc.OperationHistory().Operations()
+		require.Len(t, after, len(before))
+		for i, operation := range before {
+			require.Same(t, operation, after[i])
+		}
+		for _, body := range []*decad.Body{a, b} {
+			volume, err := body.Volume()
+			require.NoError(t, err)
+			require.Equal(t, 1000.0, volume.Value.Base())
+			require.Empty(t, body.OperationDiagnostics())
+		}
+		next, err := decad.Copy(t.Context(), a)
+		require.NoError(t, err)
+		controlA, _ := gapBoxes(t, 0.5, 2, 10, 10, 10, 10)
+		controlNext, err := decad.Copy(t.Context(), controlA)
+		require.NoError(t, err)
+		require.Equal(t, controlNext.Origin(), next.Origin())
 	})
 
 	t.Run("a Cut with a tool flush with the wall opens the pocket", func(t *testing.T) {

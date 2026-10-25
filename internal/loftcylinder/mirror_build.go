@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
+	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -71,7 +72,7 @@ func BuildMirrorJoin(ctx context.Context, env topo.Env, blank *topo.Body, pairs 
 		return nil, err
 	}
 	TagBridgedTop(&fp, shell.CapGroups[1], []float64{bridgeBound})
-	return facetedrecord.Build(ctx, env, fp)
+	return buildMirrorWithWarnings(ctx, env, fp, lowerHalf, upperHalf)
 }
 
 // BuildMirrorBore builds the mirrored circular bore from the bored lower half
@@ -136,7 +137,24 @@ func BuildMirrorBore(ctx context.Context, env topo.Env, record *facetedrecord.Lo
 		return nil, err
 	}
 	TagBridgedTop(&fp, shell.CapGroups[1], []float64{record.BridgeBound})
-	return facetedrecord.Build(ctx, env, fp)
+	return buildMirrorWithWarnings(ctx, env, fp, lowerBody, upperBody)
+}
+
+// buildMirrorWithWarnings builds the final shell and merges only warnings from
+// halves freshly built by this operation. Source bodies from prior calls must
+// not be passed here: their creation warnings do not describe this operation.
+func buildMirrorWithWarnings(ctx context.Context, env topo.Env, payload facetedrecord.Payload,
+	halves ...*topo.Body) (*topo.Body, error) {
+	body, err := facetedrecord.Build(ctx, env, payload)
+	if err != nil {
+		return nil, err
+	}
+	var warnings opdiagnostic.CompositeSummaries
+	for _, half := range halves {
+		warnings.Add(half.OperationWarnings, 0)
+	}
+	body.OperationWarnings = warnings.Records()
+	return body, nil
 }
 
 // mirrorCapOrigins gives each cap group of fp, without repeats and in first-

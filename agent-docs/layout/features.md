@@ -12,7 +12,10 @@ The rules for rows live in `agent-docs/layout.md`.
 | `topology.go` | Topology types from `Body` to `Vertex` and public surface and curve variants. See API §6.1 and evaluator §3. |
 | `topology_handles.go` | Born-handle constructors, the node-to-handle mapping of linked topology nodes, `handleAlloc` and `envOf` for internal builders, `bodyResult`, and `placePayload`, the root path into `topo.Payload.Placed`. See evaluator §3, §8. |
 | `container.go` | `Container`, the document's grouping of sketches, planes and bodies; placement of results and `ErrCrossContainer`. See `agent-docs/container-design.md`. |
-| `document.go` | `Document`: live body set, commit, `Remove`, liveness gates, `Transform` and `Copy`; the producer identity spelling and zero-vector predicate. See evaluator §8. |
+| `document.go` | `Document`: live body set, atomic operation publication, `Remove`, liveness gates, `Transform` and `Copy`; the producer identity spelling and zero-vector predicate. See evaluator §8 and operation history. |
+| `operation_history.go` | Immutable public operation snapshots, body dependency indexes, and face-successor query values. See operation-history-design. |
+| `operation_kind.go` | Shared public operation-kind vocabulary and stable string tokens. See operation-history-design and operation-diagnostics-design. |
+| `operation_diagnostics.go` | Public operation diagnostic values, typed error accessors and body warning snapshots. See operation-diagnostics-design. |
 | `params.go` | `WithParams`, `Document.Params`, `Param`, `Expr`, `ParamInt`, `Bindings`. See param-binding §2. |
 | `chain_tolerance.go` | `WithChainTolerance`, the document option that moves the chain-depth refusal. See faceted-vertex-bounds §5. |
 | `gap_tolerance.go` | `WithGapTolerance`, `ExactOnly` and the context the root hands the evaluator. See gap-tolerance §1. |
@@ -26,7 +29,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `rib.go` | Public `Rib`, `Web` and `WithRibOverrun`: line, thickness and extent gates, rib tool extrusion, touch and volume checks. See rib design. |
 | `emboss.go` | Public `Emboss` and `EmbossMode`: gates, sketch-plane check, tool extrusion, join and volume checks. See emboss design. |
 | `planar_face.go` | Resolves a selector to one analytic planar face and its outward normal; `Hole` and `Emboss` share it. |
-| `tool_combine.go` | Shared by `Hole` and `Rib`: chains boolean steps over tool bodies, commits once, and removes the tools. |
+| `tool_combine.go` | Shared by composite features: chains Boolean steps over temporary tools, commits once, and retires tools without public history entries. |
 | `thicken.go` | Public `Thicken` option, thickness and sheet gates and the commit; `internal/thickenbuild/` dispatches the payload and builds. See surface §16. |
 | `offset.go` | `Offset`: option, distance and sheet gates and the commit; `internal/thickenbuild/` builds the second sheet at a normal distance. See surface §17. |
 | `patch_body.go` | `PatchEdges` selection and commit; the chain gates, level proof and Rule P live in `internal/patchchain/`. See surface §5.2. |

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -19,9 +18,10 @@ func StagingError(op OperationKind, err error) error {
 	if !errors.As(err, &held) {
 		return err
 	}
+	held.Detail = fmt.Sprintf(`%s's %s holds its mesh, where this pair meets, only within a bound of %s, coarser than this pair's chord tolerance %s; a boolean takes no tolerance, so the chain cannot continue through that geometry: place the new contact away from the earlier booleans' rims, reshape the construction with fewer booleans over that region, or draw the pair so the analytic prism path admits it (agent-docs/api-design.md §8, "The chain depth")`,
+		op, operandRole(op, held.Operand), units.Millimeters(held.Bound), units.Millimeters(held.Tol))
 	return ExpectedBooleanForOperand(BooleanExpectedStaging, held.Operand,
-		fmt.Errorf(`%w: %s's %s holds its mesh, where this pair meets it, only within a bound of %s, coarser than this pair's chord tolerance %s; a boolean takes no tolerance, so the chain cannot continue through that geometry: place the new contact away from the earlier booleans' rims, reshape the construction with fewer booleans over that region, or draw the pair so the analytic prism path admits it (agent-docs/api-design.md §8, "The chain depth")`,
-			decaderr.ErrUnsupported, op, operandRole(op, held.Operand), units.Millimeters(held.Bound), units.Millimeters(held.Tol)))
+		held)
 }
 
 // operandRole names an operand the way the public signatures do: Cut's

@@ -27,7 +27,8 @@ import (
 // tool sharing ONE generator, exactly as Trim does — both a straight sweep, or
 // both a revolve about one axis — under surface-intersection §2.1's own gate.
 // A nil context or a nil b is ErrDegenerate.
-func Extend(ctx context.Context, b *Body, edges *EdgeQuery, tool *Body) (*Body, error) {
+func Extend(ctx context.Context, b *Body, edges *EdgeQuery, tool *Body) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationExtend, retErr) }()
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control an extension`, ErrDegenerate)
 	}
@@ -51,12 +52,16 @@ func Extend(ctx context.Context, b *Body, edges *EdgeQuery, tool *Body) (*Body, 
 	if err != nil {
 		return nil, err
 	}
-	result, err := surfacetrim.Extend(ctx, envOf(documentNode(d), d.nextProducerID()), &b.n, edgeNodes(selected), &tool.n)
+	node, err := surfacetrim.Extend(ctx, envOf(documentNode(d), d.nextProducerID()), &b.n, edgeNodes(selected), &tool.n)
 	if err != nil {
 		return nil, err
 	}
-	body := bodyHandle(result)
-	d.commit(body, b, tool)
+	body := bodyHandle(node)
+	if err := d.commitOperationIn(ctx, nil, OperationExtend,
+		[]OperationInput{{Body: b, Role: operationRoleTarget, Use: InputConsumed},
+			{Body: tool, Role: operationRoleTool, Use: InputConsumed}}, body, b, tool); err != nil {
+		return nil, err
+	}
 	return body, nil
 }
 
@@ -95,7 +100,8 @@ func (s TrimSide) String() string {
 // so there is no mesh path for a miss to reroute to. A tool that separates no
 // fragment of b, or every fragment, is [ErrDegenerate] (R30): no
 // trimmed body exists either way. A nil context or a nil b is ErrDegenerate.
-func Trim(ctx context.Context, b *Body, tool *Body, side TrimSide) (*Body, error) {
+func Trim(ctx context.Context, b *Body, tool *Body, side TrimSide) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationTrim, retErr) }()
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a trim`, ErrDegenerate)
 	}
@@ -124,7 +130,11 @@ func Trim(ctx context.Context, b *Body, tool *Body, side TrimSide) (*Body, error
 		return nil, err
 	}
 	body := bodyHandle(node)
-	d.commit(body, b, tool)
+	if err := d.commitOperationIn(ctx, nil, OperationTrim,
+		[]OperationInput{{Body: b, Role: operationRoleTarget, Use: InputConsumed},
+			{Body: tool, Role: operationRoleTool, Use: InputConsumed}}, body, b, tool); err != nil {
+		return nil, err
+	}
 	return body, nil
 }
 
@@ -136,7 +146,8 @@ func Trim(ctx context.Context, b *Body, tool *Body, side TrimSide) (*Body, error
 // after every piece has been built. A tool that separates no target cell is
 // ErrDegenerate, as is a nil context or a nil target. The document is the
 // target's own.
-func Split(ctx context.Context, target, tool *Body) ([]*Body, error) {
+func Split(ctx context.Context, target, tool *Body) (results []*Body, retErr error) {
+	defer func() { retErr = operationError(OperationSplit, retErr) }()
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a split`, ErrDegenerate)
 	}
@@ -161,6 +172,10 @@ func Split(ctx context.Context, target, tool *Body) ([]*Body, error) {
 		return nil, err
 	}
 	bodies := bodyHandles(nodes)
-	d.commitMany(bodies, target, tool)
+	if err := d.commitOperationManyIn(ctx, nil, OperationSplit,
+		[]OperationInput{{Body: target, Role: operationRoleTarget, Use: InputConsumed},
+			{Body: tool, Role: operationRoleTool, Use: InputConsumed}}, bodies, target, tool); err != nil {
+		return nil, err
+	}
 	return bodies, nil
 }

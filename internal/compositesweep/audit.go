@@ -54,7 +54,11 @@ func audit(ctx context.Context, spans []AuditSpan, closed bool) error {
 	}
 	pairs, ok := proofbound.WallChoose2(uint64(len(spans)))
 	if !ok || pairs > proofbound.MaxFacetPairTestsPerCall {
-		return fmt.Errorf(`%w: the composite sweep audit exceeds its fixed pair budget`, decaderr.ErrUnsupported)
+		err := fmt.Errorf(`%w: the composite sweep audit exceeds its fixed pair budget`, decaderr.ErrUnsupported)
+		if ok {
+			return proofbound.WithWorkLimit(err, "sweep_span_pairs", pairs, proofbound.MaxFacetPairTestsPerCall)
+		}
+		return err
 	}
 	operation := proofbound.NewWorkBudget(ctx)
 	geometry := freeform.NewFreeformWork()

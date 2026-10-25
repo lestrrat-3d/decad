@@ -70,10 +70,15 @@ func TestRibAcrossPocket(t *testing.T) {
 	t.Parallel()
 	doc, part := ribPart(t)
 	s, lines := ribSketch(t, [4]float64{3, 20, 37, 20})
+	operationCount := len(doc.OperationHistory().Operations())
 	out, err := decad.Rib(t.Context(), part, s, lines[0], units.Millimeters(2),
 		decad.Distance{D: units.Millimeters(11), Dir: decad.Along})
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{out}, doc.Bodies(), "the part and the rib tool leave the document")
+	operations := doc.OperationHistory().Operations()
+	require.Len(t, operations, operationCount+1)
+	require.Equal(t, decad.OperationRib, operations[len(operations)-1].Kind())
+	require.Equal(t, []decad.OperationInput{{Body: part, Role: "target", Use: decad.InputConsumed}}, operations[len(operations)-1].Inputs())
 	// The rib stands from the floor at z = 5 to z = 15 between the pocket
 	// walls x = 5 and 35: 30 x 2 x 10 of new material.
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(ribPartVolume+30*2*10))
@@ -84,12 +89,24 @@ func TestWebCrossesRibs(t *testing.T) {
 	t.Parallel()
 	doc, part := ribPart(t)
 	s, lines := ribSketch(t, [4]float64{3, 20, 37, 20}, [4]float64{20, 3, 20, 37})
+	operationCount := len(doc.OperationHistory().Operations())
 	out, err := decad.Web(t.Context(), part, s, lines, units.Millimeters(2),
-		decad.Distance{D: units.Millimeters(11), Dir: decad.Along})
+		decad.ThroughAll{Dir: decad.Along})
 	require.NoError(t, err)
 	require.Len(t, doc.Bodies(), 1)
-	// Two 30 x 2 x 10 ribs share a 2 x 2 x 10 crossing.
-	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(ribPartVolume+2*30*2*10-2*2*10))
+	operations := doc.OperationHistory().Operations()
+	require.Len(t, operations, operationCount+1)
+	require.Equal(t, decad.OperationWeb, operations[len(operations)-1].Kind())
+	inputs := operations[len(operations)-1].Inputs()
+	require.Equal(t, decad.OperationInput{Body: part, Role: "target", Use: decad.InputConsumed}, inputs[0])
+	require.Len(t, inputs, 3)
+	for _, input := range inputs[1:] {
+		require.Equal(t, decad.OperationInput{Body: part, Role: "throughAll", Use: decad.InputReferenced}, input)
+		_, err := doc.OperationHistory().Producer(input.Body)
+		require.NoError(t, err, "no private tool can appear in the public history inputs")
+	}
+	// ThroughAll fills the 15 mm pocket, and the two ribs share a 2 x 2 x 15 crossing.
+	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(ribPartVolume+2*30*2*15-2*2*15))
 }
 
 func TestRibOverrunBuriesTheEnds(t *testing.T) {

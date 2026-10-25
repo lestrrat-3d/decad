@@ -341,9 +341,9 @@ func RequireRegionsWithinCap(budget *proofbound.WorkBudget, pa, pb momentinput.P
 		return err
 	}
 	if !withinCap {
-		return fmt.Errorf(
+		return WithWorkLimit(fmt.Errorf(
 			`%w: the analytic union scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1)`,
-			decaderr.ErrUnsupported, segments, MaxArrangementSegments)
+			decaderr.ErrUnsupported, segments, MaxArrangementSegments), segments)
 	}
 	return nil
 }

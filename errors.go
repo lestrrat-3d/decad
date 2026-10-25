@@ -211,10 +211,11 @@ const (
 // pair tolerance) passes through plain — none of these three is a
 // BooleanError.
 type BooleanError struct {
-	op   meshbool.OperationKind
-	Code BooleanErrorCode
-	msg  string
-	err  error
+	op    meshbool.OperationKind
+	Code  BooleanErrorCode
+	msg   string
+	err   error
+	shift *OperationChange
 }
 
 // Error reports the operation and the underlying human-readable reason.

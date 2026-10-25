@@ -203,6 +203,9 @@ func TestCapBlendThroughAllStopsAtBuiltExtent(t *testing.T) {
 	require.NoError(t, err)
 	chamfered, err := decad.Chamfer(t.Context(), plate, capLoopEdges(plate), units.Millimeters(d))
 	require.NoError(t, err)
+	sheet, err := decad.Extrude(t.Context(), doc, s, pinProf,
+		decad.Distance{D: units.Millimeters(height), Dir: decad.Along}, decad.WithSurfaceResult())
+	require.NoError(t, err)
 
 	// The chamfer offsets INTO the material at the cap and leaves [z0, z1]
 	// alone, so every vertex the build made still sits within the receiver's
@@ -213,8 +216,20 @@ func TestCapBlendThroughAllStopsAtBuiltExtent(t *testing.T) {
 	}
 	require.InDelta(t, height, zHi, 1e-9)
 
+	scanned := doc.Bodies()
 	pin, err := decad.Extrude(t.Context(), doc, s, pinProf, decad.ThroughAll{Dir: decad.Along})
 	require.NoError(t, err)
+	producer, err := doc.OperationHistory().Producer(pin)
+	require.NoError(t, err)
+	require.Equal(t, decad.OperationExtrude, producer.Kind())
+	inputs := producer.Inputs()
+	require.Len(t, inputs, len(scanned))
+	for i, body := range scanned {
+		require.Same(t, body, inputs[i].Body)
+		require.Equal(t, "throughAll", inputs[i].Role)
+		require.Equal(t, decad.InputReferenced, inputs[i].Use)
+	}
+	require.Contains(t, scanned, sheet, "ThroughAll history includes a scanned sheet that its stop evaluator excludes")
 	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(20*20*height))
 	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, 0), r3.NewVec(140, 20, height), decadtest.Exactly())
 }

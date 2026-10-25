@@ -66,7 +66,9 @@ var errNilMirrorPlane = fmt.Errorf(`%w: nil mirror plane`, ErrDegenerate)
 // ErrDegenerate, as is a nil b. With [WithJoin] it returns the union of b and
 // its image instead, on the class WithJoin states. A refused call leaves the
 // document unchanged.
-func Mirrored(ctx context.Context, b *Body, plane MirrorPlane, opts ...MirrorOption) (*Body, error) {
+func Mirrored(ctx context.Context, b *Body, plane MirrorPlane,
+	opts ...MirrorOption) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationMirrored, retErr) }()
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a mirror`, ErrDegenerate)
 	}
@@ -88,14 +90,15 @@ func Mirrored(ctx context.Context, b *Body, plane MirrorPlane, opts ...MirrorOpt
 	if err != nil {
 		return nil, err
 	}
-	return Transform(ctx, b, t)
+	return transform(ctx, b, t, OperationMirrored, mirrorPlaneInputs(plane)...)
 }
 
 // MirroredCopy returns a new live body carrying b's mirror image across
 // plane, leaving b LIVE. It calls [Copy] with [WithCopyPlacement] under
 // r3.Reflection of the resolved plane, with the gates [Mirrored] states.
 // A nil b is ErrDegenerate.
-func MirroredCopy(ctx context.Context, b *Body, plane MirrorPlane) (*Body, error) {
+func MirroredCopy(ctx context.Context, b *Body, plane MirrorPlane) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationMirroredCopy, retErr) }()
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a mirror`, ErrDegenerate)
 	}
@@ -103,7 +106,19 @@ func MirroredCopy(ctx context.Context, b *Body, plane MirrorPlane) (*Body, error
 	if err != nil {
 		return nil, err
 	}
-	return Copy(ctx, b, WithCopyPlacement(t))
+	return b.copyUnder(ctx, t, nil, OperationMirroredCopy, mirrorPlaneInputs(plane)...)
+}
+
+func mirrorPlaneInputs(plane MirrorPlane) []OperationInput {
+	switch plane := plane.(type) {
+	case MirrorFace:
+		return []OperationInput{{Body: plane.Body, Role: "plane", Use: InputReferenced}}
+	case *MirrorFace:
+		if plane != nil {
+			return []OperationInput{{Body: plane.Body, Role: "plane", Use: InputReferenced}}
+		}
+	}
+	return nil
 }
 
 // mirrorTransform runs the receiver's identity gates, then resolves plane to

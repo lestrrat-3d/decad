@@ -21,15 +21,15 @@ func surfaceScene(ctx context.Context, budget *proofbound.WorkBudget, receiver, 
 	if !withinCap {
 		switch op {
 		case SurfaceTrim:
-			return nil, nil, nil, fmt.Errorf(
+			return nil, nil, nil, WithWorkLimit(fmt.Errorf(
 				`%w: the trim scene charges at least %d arranger segments against this evaluator's cap of %d; simplify the receiver or tool before trimming`,
-				decaderr.ErrUnsupported, segments, MaxArrangementSegments)
+				decaderr.ErrUnsupported, segments, MaxArrangementSegments), segments)
 		case SurfaceSplit:
-			return nil, nil, nil, fmt.Errorf(`%w: the split scene charges %d arranger segments against the cap of %d`,
-				decaderr.ErrUnsupported, segments, MaxArrangementSegments)
+			return nil, nil, nil, WithWorkLimit(fmt.Errorf(`%w: the split scene charges %d arranger segments against the cap of %d`,
+				decaderr.ErrUnsupported, segments, MaxArrangementSegments), segments)
 		default:
-			return nil, nil, nil, fmt.Errorf(`%w: the extend scene charges %d segments against the cap of %d`,
-				decaderr.ErrUnsupported, segments, MaxArrangementSegments)
+			return nil, nil, nil, WithWorkLimit(fmt.Errorf(`%w: the extend scene charges %d segments against the cap of %d`,
+				decaderr.ErrUnsupported, segments, MaxArrangementSegments), segments)
 		}
 	}
 	reexpress, err := NewReexpression(receiver.Placement, tool.Placement)

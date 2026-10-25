@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
 // FreeformWorkLimit is the fixed ceiling on ONE RECORD's free-form conversion,
@@ -191,11 +192,16 @@ func (w *FreeformWork) Step(n uint64) error {
 	}
 	limit := w.WorkLimit()
 	if n >= FreeformCostCeiling || n > limit-w.Spent {
+		observed, known := proofbound.WallCheckedAdd(w.Spent, n)
 		w.Spent = limit
-		return fmt.Errorf(
+		err := fmt.Errorf(
 			`%w: free-form exact integration needs more than the fixed work budget of %d`,
 			decaderr.ErrUnsupported, limit,
 		)
+		if n < FreeformCostCeiling && known {
+			return proofbound.WithWorkLimit(err, "freeform_work_units", observed, limit)
+		}
+		return err
 	}
 	w.Spent += n
 	return nil
@@ -209,11 +215,16 @@ func (w *FreeformWork) ReconstructionStep(n uint64) error {
 	}
 	limit := w.ReconstructionBudget()
 	if n >= ReconstructionCostCeiling || n > limit-w.ReconstructionSpent {
+		observed, known := proofbound.WallCheckedAdd(w.ReconstructionSpent, n)
 		w.ReconstructionSpent = limit
-		return fmt.Errorf(
+		err := fmt.Errorf(
 			`%w: sketch reconstruction needs more than the fixed work budget of %d`,
 			decaderr.ErrUnsupported, limit,
 		)
+		if n < ReconstructionCostCeiling && known {
+			return proofbound.WithWorkLimit(err, "reconstruction_work_units", observed, limit)
+		}
+		return err
 	}
 	w.ReconstructionSpent += n
 	return nil

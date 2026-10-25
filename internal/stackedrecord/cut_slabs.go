@@ -40,9 +40,9 @@ func CutSlabs(ctx context.Context, budget *proofbound.WorkBudget, sp Payload,
 			return Payload{}, false, err
 		}
 		if !withinCap {
-			return Payload{}, false, fmt.Errorf(
+			return Payload{}, false, prismcells.WithWorkLimit(fmt.Errorf(
 				`%w: slab %d's analytic cut scene charges %d arranger segments against the cap of %d`,
-				decaderr.ErrUnsupported, k, segments, prismcells.MaxArrangementSegments)
+				decaderr.ErrUnsupported, k, segments, prismcells.MaxArrangementSegments), segments)
 		}
 		scene, profiles, tags, sceneDelta, err := prismcells.CutCells(ctx, budget, target.Profile, tool.Profile, reexpress)
 		if err != nil {

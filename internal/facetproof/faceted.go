@@ -29,6 +29,14 @@ import (
 // charges alongside that vertex's own rounding allowance, since a corner can
 // sit farther from the exact image than nearest rounding did.
 func KeepPlacedEmbedded(ctx context.Context, exact []proof.Xpt, held []r3.Vec, tris [][3]int) ([]float64, error) {
+	charge, _, err := KeepPlacedEmbeddedWithSummary(ctx, exact, held, tris)
+	return charge, err
+}
+
+// KeepPlacedEmbeddedWithSummary is KeepPlacedEmbedded with actual-use evidence
+// for final accepted positive-reach positions, independent of rounding charges.
+func KeepPlacedEmbeddedWithSummary(ctx context.Context, exact []proof.Xpt, held []r3.Vec,
+	tris [][3]int) ([]float64, *meshbool.EmbeddingReach, error) {
 	h := meshbool.HeldRounding{
 		Verts:   held,
 		Tris:    tris,
@@ -42,7 +50,7 @@ func KeepPlacedEmbedded(ctx context.Context, exact []proof.Xpt, held []r3.Vec, t
 	for i := range held {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		}
 		if !proof.XptDenotes(exact[i], held[i]) {
@@ -50,12 +58,12 @@ func KeepPlacedEmbedded(ctx context.Context, exact []proof.Xpt, held []r3.Vec, t
 			h.Movable[i] = true
 		}
 	}
-	n, err := meshbool.EnforceHeldEmbedding(ctx, h)
+	n, summary, err := meshbool.EnforceHeldEmbeddingWithSummary(ctx, h)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if n == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	out := make([]float64, len(held))
 	for i := range held {
@@ -67,7 +75,7 @@ func KeepPlacedEmbedded(ctx context.Context, exact []proof.Xpt, held []r3.Vec, t
 			out[i] = proofbound.Radius3D(proofbound.ProvenUpRound(w))
 		}
 	}
-	return out, nil
+	return out, summary, nil
 }
 
 // MeshAreaUpper is a proven upper bound on the held mesh's total facet area:

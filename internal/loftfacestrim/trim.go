@@ -241,6 +241,7 @@ func ConeHeelBoolean(ctx context.Context, op meshbool.OperationKind, env topo.En
 	if err != nil {
 		return nil, true, err
 	}
+	body.OperationWarnings = eval.Diagnostics(op)
 	result, ok := body.Payload.(facetedrecord.Payload)
 	if !ok {
 		return body, true, nil

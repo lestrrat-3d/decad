@@ -48,9 +48,9 @@ func BuildBlindCut(ctx context.Context, budget *proofbound.WorkBudget,
 		return Payload{}, false, err
 	}
 	if !withinCap {
-		return Payload{}, false, fmt.Errorf(
+		return Payload{}, false, prismcells.WithWorkLimit(fmt.Errorf(
 			`%w: the analytic cut scene charges %d arranger segments against the cap of %d`,
-			decaderr.ErrUnsupported, segments, prismcells.MaxArrangementSegments)
+			decaderr.ErrUnsupported, segments, prismcells.MaxArrangementSegments), segments)
 	}
 	reexpress, err := prismcells.NewReexpression(target.PlacementOperand(), tool.PlacementOperand())
 	if err != nil {

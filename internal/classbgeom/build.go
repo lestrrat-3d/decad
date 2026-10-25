@@ -151,8 +151,8 @@ func classBPerpendicularRegion(ctx context.Context, cp Pair, region momentinput.
 		return momentinput.Profile{}, false, err
 	}
 	if !within {
-		return momentinput.Profile{}, false, fmt.Errorf(`%w: the class-B face scene charges at least %d arranger segments against this evaluator's cap of %d`,
-			decaderr.ErrUnsupported, segments, prismcells.MaxArrangementSegments)
+		return momentinput.Profile{}, false, prismcells.WithWorkLimit(fmt.Errorf(`%w: the class-B face scene charges at least %d arranger segments against this evaluator's cap of %d`,
+			decaderr.ErrUnsupported, segments, prismcells.MaxArrangementSegments), segments)
 	}
 	reexpress, err := prismcells.NewReexpression(target.PlacementOperand(), tool.PlacementOperand())
 	if err != nil {

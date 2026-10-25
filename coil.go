@@ -178,6 +178,8 @@ func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile,
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commitIn(d.ContainerOfSketch(s), body)
+	if err := d.commitOperationIn(ctx, d.ContainerOfSketch(s), OperationCoil, axisOperationInputs(axis), body); err != nil {
+		return nil, err
+	}
 	return body, nil
 }

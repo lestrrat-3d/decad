@@ -34,8 +34,8 @@ func Hole(ctx context.Context, b *Body, spec HoleSpec) (*Body, error)
   the cone bottom, the cone at an overshoot height of half the head diameter above the face, and the axis at that
   height. The cone's base never lies in the face plane (H7).
 - The bore is cut first and the head second, so the head tool's inner part lies in empty space.
-- Each cut runs through `booleanBody` with no commit. The final body replaces `b` through one `commitSpan`, and the
-  tools are removed afterwards. A failure in any step removes the tools and leaves `b` live and the document unchanged.
+- Each cut runs through `booleanBody` with no commit. The final body replaces `b` in one operation commit, and private tools never enter
+  the live body set. A failure in any step removes the tools and leaves `b` live and the document unchanged.
 - A tool is live in the document between its build and the removal. A concurrent `Document.Bodies` can see it.
 
 ## 3. Exactness

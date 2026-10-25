@@ -2241,3 +2241,6 @@
 10	3.61	TestUnionHubAndRadialLugsAboutTiltedAxis
 10	1.90	TestUnionHubAndRadialLugsAboutPermutedAxis
 10	1.27	TestRevolveSectorCylinderCutDeclinesGeneralJoin
+10	0.00	TestUnionManyOperationWarnings
+10	0.00	TestVerifyDoesNotChangeOperationWarnings
+10	0.00	TestCopyReportsAcceptedEmbeddingReach

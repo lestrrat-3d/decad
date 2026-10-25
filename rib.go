@@ -47,11 +47,12 @@ const ribTolerance = 1e-9
 // ErrDegenerate. A union the evaluator cannot decide is the union's own error.
 // Every failure leaves the document unchanged and b live.
 func Rib(ctx context.Context, b *Body, s *sketch.Sketch, line *sketch.Line, thickness units.Value, e Extent,
-	opts ...RibOption) (*Body, error) {
+	opts ...RibOption) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationRib, retErr) }()
 	if line == nil {
 		return nil, fmt.Errorf(`%w: a nil line names no rib`, ErrDegenerate)
 	}
-	return Web(ctx, b, s, []*sketch.Line{line}, thickness, e, opts...)
+	return web(ctx, OperationRib, b, s, []*sketch.Line{line}, thickness, e, opts...)
 }
 
 // Web adds one rib along each of lines and returns the result, retiring b.
@@ -60,7 +61,13 @@ func Rib(ctx context.Context, b *Body, s *sketch.Sketch, line *sketch.Line, thic
 // failure on any rib leaves the document unchanged and b live. lines MUST NOT
 // be empty (ErrDegenerate); every other rule is Rib's.
 func Web(ctx context.Context, b *Body, s *sketch.Sketch, lines []*sketch.Line, thickness units.Value, e Extent,
-	opts ...RibOption) (*Body, error) {
+	opts ...RibOption) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationWeb, retErr) }()
+	return web(ctx, OperationWeb, b, s, lines, thickness, e, opts...)
+}
+
+func web(ctx context.Context, kind OperationKind, b *Body, s *sketch.Sketch, lines []*sketch.Line,
+	thickness units.Value, e Extent, opts ...RibOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a rib`, ErrDegenerate)
 	}
@@ -106,10 +113,14 @@ func Web(ctx context.Context, b *Body, s *sketch.Sketch, lines []*sketch.Line, t
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if err := d.requireSameContainer([]*Body{b}, s); err != nil {
+		return nil, err
+	}
 	var tools []*Body
 	defer func() { removeTools(tools) }()
+	toolCtx, history := privateConstructionContext(ctx)
 	for _, corners := range footprints {
-		tool, err := ribTool(ctx, d, frame, corners, e)
+		tool, err := ribTool(toolCtx, d, frame, corners, e)
 		if err != nil {
 			return nil, err
 		}
@@ -118,9 +129,9 @@ func Web(ctx context.Context, b *Body, s *sketch.Sketch, lines []*sketch.Line, t
 			return nil, err
 		}
 	}
-	return combineTools(ctx, d, b, meshbool.OpUnion, tools, true, func(result *Body) error {
+	return combineTools(ctx, d, kind, b, meshbool.OpUnion, tools, true, func(result *Body) error {
 		return requireRibAddsVolume(b, result)
-	})
+	}, history, history.snapshot()...)
 }
 
 // ribOverrun reads the last WithRibOverrun in opts, in millimetres.

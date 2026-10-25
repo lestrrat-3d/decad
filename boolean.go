@@ -12,9 +12,11 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/booleandispatch"
 	"github.com/lestrrat-3d/decad/internal/booloperand"
+	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/contactfaceted"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/prooflineage"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
 )
@@ -107,12 +109,14 @@ func Union(ctx context.Context, first *Body, others ...*Body) (*Body, error) {
 		return nil, fmt.Errorf("%w: Union needs at least two bodies", ErrDegenerate)
 	}
 	if len(others) == 1 {
-		return performBoolean(ctx, meshbool.OpUnion, first, others[0])
+		body, err := performBoolean(ctx, meshbool.OpUnion, first, others[0])
+		return body, operationError(OperationUnion, err)
 	}
 	bodies := make([]*Body, 0, len(others)+1)
 	bodies = append(bodies, first)
 	bodies = append(bodies, others...)
-	return performUnionMany(ctx, bodies)
+	body, err := performUnionMany(ctx, bodies)
+	return body, operationError(OperationUnion, err)
 }
 
 // Cut returns target minus tool, retiring both operands from their document
@@ -121,7 +125,8 @@ func Union(ctx context.Context, first *Body, others ...*Body) (*Body, error) {
 // the other gates match Union's. It returns ctx.Err() unchanged when ctx is
 // canceled before the document commit.
 func Cut(ctx context.Context, target, tool *Body, opts ...BooleanOption) (*Body, error) {
-	return performBoolean(ctx, meshbool.OpCut, target, tool, opts...)
+	body, err := performBoolean(ctx, meshbool.OpCut, target, tool, opts...)
+	return body, operationError(OperationCut, err)
 }
 
 // Intersect returns the volume common to a and b, retiring both operands
@@ -129,7 +134,8 @@ func Cut(ctx context.Context, target, tool *Body, opts ...BooleanOption) (*Body,
 // empty result is ErrBooleanFailed; the other gates match Union's. It returns
 // ctx.Err() unchanged when ctx is canceled before the document commit.
 func Intersect(ctx context.Context, a, b *Body, opts ...BooleanOption) (*Body, error) {
-	return performBoolean(ctx, meshbool.OpIntersect, a, b, opts...)
+	body, err := performBoolean(ctx, meshbool.OpIntersect, a, b, opts...)
+	return body, operationError(OperationIntersect, err)
 }
 
 // BooleanOption configures Cut and Intersect. An option from another package
@@ -239,11 +245,79 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, 
 	if err != nil {
 		return nil, err
 	}
+	if op == meshbool.OpCut {
+		if err := containedCutVolume(ctx, body, a, b); err != nil {
+			return nil, err
+		}
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(body, a, b)
+	kind := operationKindForBoolean(op)
+	if err := d.commitOperationIn(ctx, nil, kind, operationInputsForBoolean(op, a, b), body, a, b); err != nil {
+		return nil, err
+	}
 	return body, nil
+}
+
+func operationInputsForBoolean(op meshbool.OperationKind, a, b *Body) []OperationInput {
+	first := OperationInput{Body: a, Use: InputConsumed}
+	second := OperationInput{Body: b, Use: InputConsumed}
+	switch op {
+	case meshbool.OpCut:
+		first.Role, second.Role = "target", "tool"
+	case meshbool.OpUnion:
+		first.Role, second.Role = "first", "others"
+	case meshbool.OpIntersect:
+		first.Role, second.Role = "a", "b"
+	default:
+		first.Role, second.Role = "operand", "operand"
+	}
+	return []OperationInput{first, second}
+}
+
+func operationKindForBoolean(op meshbool.OperationKind) OperationKind {
+	switch op {
+	case meshbool.OpCut:
+		return OperationCut
+	case meshbool.OpUnion:
+		return OperationUnion
+	case meshbool.OpIntersect:
+		return OperationIntersect
+	default:
+		return OperationUnknown
+	}
+}
+
+func containedCutVolume(ctx context.Context, result, target, tool *Body) error {
+	if _, ok := result.n.Payload.(facetedPayload); !ok {
+		return nil
+	}
+	proof, err := pairkernel.Pair(ctx, &target.n, &tool.n, false, nil)
+	if err != nil {
+		return err
+	}
+	certificate := proof.Containment
+	if certificate == nil || certificate.Inner != &tool.n || certificate.Outer != &target.n {
+		return nil
+	}
+	lineage, selected, err := prooflineage.ContainedCutVolume(
+		int(target.n.Origin.Producer), int(tool.n.Origin.Producer),
+		target.n.Volume, tool.n.Volume, result.n.Volume,
+		prooflineage.Containment{
+			BoundaryGapLower:    units.Millimeters(certificate.BoundaryGapLower),
+			InnerShellWitnesses: certificate.InnerShellWitnesses,
+			OuterShellWitnesses: certificate.OuterShellWitnesses,
+		},
+	)
+	if err != nil {
+		return newBooleanError(meshbool.OpCut, BooleanEvaluatorFailure, ErrBooleanFailed, err)
+	}
+	result.n.VolumeLineage = lineage
+	if selected {
+		result.n.Volume = lineage.Derived
+	}
+	return nil
 }
 
 // booleanBody builds a boolean's result body under producer identity ref
@@ -316,12 +390,21 @@ func asBooleanError(op meshbool.OperationKind, err error) error {
 // Code, and the human text of the underlying error (its
 // "decad: " sentinel prefix trimmed so BooleanError.Error does not repeat it).
 func newBooleanError(op meshbool.OperationKind, code BooleanErrorCode, sentinel, orig error) error {
-	return &BooleanError{
+	result := &BooleanError{
 		op:   op,
 		Code: code,
 		msg:  strings.TrimPrefix(orig.Error(), "decad: "),
 		err:  sentinel,
 	}
+	var expected *meshbool.BooleanExpectedError
+	if errors.As(orig, &expected) && expected.AppliedShift != nil {
+		result.shift = &OperationChange{
+			Mechanism:         OperationChangeGapShift,
+			DisplacementBound: units.Millimeters(expected.AppliedShift.DisplacementBound),
+			AllowedReach:      units.Millimeters(expected.AppliedShift.AllowedReach),
+		}
+	}
+	return result
 }
 
 // evaluateBoolean runs the complete geometry pipeline without writing the

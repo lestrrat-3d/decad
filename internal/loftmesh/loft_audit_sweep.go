@@ -179,8 +179,18 @@ func errLoftAuditCeiling() error {
 		decaderr.ErrUnsupported, ErrLoftAuditCeiling)
 }
 
+func errLoftAuditScanLimit(scanned, next, ceiling uint64) error {
+	err := errLoftAuditCeiling()
+	observed, ok := proofbound.WallCheckedAdd(scanned, next)
+	if !ok {
+		return err
+	}
+	return proofbound.WithWorkLimit(err, "pair_enumeration_steps", observed, ceiling)
+}
+
 func errLoftAuditTriangles(f int) error {
-	return fmt.Errorf(`%w: the loft crossing audit's %d triangles exceed the fixed ceiling of %d`, decaderr.ErrUnsupported, f, MaxLoftAuditTriangles)
+	return proofbound.WithWorkLimit(fmt.Errorf(`%w: the loft crossing audit's %d triangles exceed the fixed ceiling of %d`, decaderr.ErrUnsupported, f, MaxLoftAuditTriangles),
+		"mesh_facets", uint64(f), MaxLoftAuditTriangles)
 }
 
 // loftCrossingAudit is every entry point's body. structure is nil for the
@@ -232,8 +242,12 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 		if triangleLimit == MaxLoftAuditTriangles {
 			return work, errLoftAuditTriangles(f)
 		}
-		return work, fmt.Errorf(`%w: the loft crossing audit's %d triangles exceed the fixed ceiling of %d`,
+		err := fmt.Errorf(`%w: the loft crossing audit's %d triangles exceed the fixed ceiling of %d`,
 			decaderr.ErrUnsupported, f, triangleLimit)
+		if triangleLimit >= 0 {
+			return work, proofbound.WithWorkLimit(err, "mesh_facets", uint64(f), uint64(triangleLimit))
+		}
+		return work, err
 	}
 
 	// S6: per-triangle existence, before the pair audit runs at all.
@@ -360,7 +374,7 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 			return work, err
 		}
 		if sc.exceeded {
-			return work, errLoftAuditCeiling()
+			return work, proofbound.WithWorkLimit(errLoftAuditCeiling(), "pair_enumeration_steps", sc.scanned, ceiling)
 		}
 		starts, count, scanned = sc.starts, sc.count, sc.scanned
 	} else {
@@ -371,7 +385,7 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 		}
 	}
 	if count > ceiling {
-		return work, errLoftAuditCeiling()
+		return work, proofbound.WithWorkLimit(errLoftAuditCeiling(), "facet_pairs", count, ceiling)
 	}
 	work.Candidates = int(count)
 	streamed := data == nil && structure == nil && shortcuts.Sweep &&

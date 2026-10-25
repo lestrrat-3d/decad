@@ -37,6 +37,18 @@ func TestStitchGapTolerance(t *testing.T) {
 		for _, gap := range []float64{1e-9, 1e-4, 0.005} {
 			box := stitched(t, gap)
 			require.Equal(t, decad.BodySolid, box.Kind(), "gap %g", gap)
+			warnings := box.OperationDiagnostics()
+			if gap == 0 {
+				require.Empty(t, warnings)
+			} else {
+				require.NotEmpty(t, warnings)
+				for _, warning := range warnings {
+					require.Equal(t, decad.OpDiagStitchMergeApplied, warning.Code)
+					require.Equal(t, decad.OperationStitch, warning.Operation)
+					require.Equal(t, decad.OperationChangeStitchMerge, warning.Change.Mechanism)
+					require.LessOrEqual(t, warning.Change.DisplacementBound.Base(), 0.01)
+				}
+			}
 			require.Len(t, box.Lumps(), 1)
 			_, err := decad.Edges(decad.Free()).SelectEdges(box)
 			require.ErrorIs(t, err, decad.ErrNoMatch, "no free edge remains")
@@ -79,6 +91,7 @@ func TestStitchGapTolerance(t *testing.T) {
 		t.Parallel()
 		sheet := stitched(t, 1e-9, decad.ExactOnly())
 		require.Equal(t, decad.BodySheet, sheet.Kind())
+		require.Empty(t, sheet.OperationDiagnostics())
 		free, err := decad.Edges(decad.Free()).SelectEdges(sheet)
 		require.NoError(t, err)
 		require.Len(t, free, 8)
@@ -87,6 +100,7 @@ func TestStitchGapTolerance(t *testing.T) {
 	t.Run("a box with no gap stays exact", func(t *testing.T) {
 		t.Parallel()
 		box := stitched(t, 0)
+		require.Empty(t, box.OperationDiagnostics())
 		volume, err := box.Volume()
 		require.NoError(t, err)
 		require.Equal(t, decad.Exact, volume.Exactness)

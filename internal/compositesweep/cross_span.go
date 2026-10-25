@@ -19,7 +19,11 @@ func CrossSpanContactAudit(budget *proofbound.WorkBudget, data []revolvemesh.Rev
 	}
 	pairs, ok := proofbound.WallChoose2(uint64(len(triangles)))
 	if !ok || pairs > proofbound.MaxFacetPairTestsPerCall {
-		return fmt.Errorf(`%w: the composite sweep's facet-pair audit exceeds its fixed work ceiling`, decaderr.ErrUnsupported)
+		err := fmt.Errorf(`%w: the composite sweep's facet-pair audit exceeds its fixed work ceiling`, decaderr.ErrUnsupported)
+		if ok {
+			return proofbound.WithWorkLimit(err, "facet_pairs", pairs, proofbound.MaxFacetPairTestsPerCall)
+		}
+		return err
 	}
 	margin := proofbound.ProductUpper(2, delta)
 	for i := range triangles {

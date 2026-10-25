@@ -12,8 +12,8 @@ import (
 // This file is Unstitch of agent-docs/surface-design.md §6.5: the inverse of
 // stitch.go's Stitch, splitting a body back into one single-face sheet body
 // per face. Its evaluator is internal/stitchrecord's BuildUnstitchFace.
-// Document.commitMany (document.go) is the multi-produce atomic commit this
-// file's N results need beside the existing single-body commit.
+// Document.commitOperationManyFacesIn (document.go) publishes the N results
+// and complete face map atomically with input retirement.
 
 // Unstitch returns one single-face sheet body per face of
 // b, in [Body.Faces] order, retiring b
@@ -33,9 +33,9 @@ import (
 // different document is [ErrForeignBody] (R13); a retired b is
 // [ErrRetiredBody] (R14). A failed call leaves the document and
 // b unchanged: every result is built before any is registered, and
-// Document.commitMany registers all of them (and retires b) in
-// one atomic step.
-func Unstitch(ctx context.Context, b *Body) ([]*Body, error) {
+// Document.commitOperationManyFacesIn registers them and retires b in one atomic step.
+func Unstitch(ctx context.Context, b *Body) (results []*Body, retErr error) {
+	defer func() { retErr = operationError(OperationUnstitch, retErr) }()
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control an unstitch`, ErrDegenerate)
 	}
@@ -55,7 +55,7 @@ func Unstitch(ctx context.Context, b *Body) ([]*Body, error) {
 
 	faces := b.Faces()
 	base := d.nextProducerID()
-	results := make([]*Body, len(faces))
+	results = make([]*Body, len(faces))
 	for i, f := range faces {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -70,7 +70,18 @@ func Unstitch(ctx context.Context, b *Body) ([]*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commitMany(results, b)
+	successors := make(map[*Face]FaceHistory, len(faces))
+	for i, input := range faces {
+		outFaces := results[i].Faces()
+		if len(outFaces) != 1 {
+			return nil, fmt.Errorf("%w: Unstitch output does not contain exactly one source face", ErrBooleanFailed)
+		}
+		successors[input] = FaceHistory{coverage: HistoryComplete, faces: outFaces}
+	}
+	if err := d.commitOperationManyFacesIn(ctx, nil, OperationUnstitch,
+		[]OperationInput{{Body: b, Role: operationRoleSource, Use: InputConsumed}}, results, successors, b); err != nil {
+		return nil, err
+	}
 	return results, nil
 }
 

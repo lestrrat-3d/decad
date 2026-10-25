@@ -54,7 +54,8 @@ func LoftBetween(ctx context.Context, d *Document, from, to LoftEnd, opts ...Lof
 	case from.point && to.point:
 		return nil, fmt.Errorf(`%w: a loft between two points has no section`, ErrDegenerate)
 	case !from.point && !to.point:
-		return Loft(ctx, d, from.sketch, from.profile, to.sketch, to.profile, opts...)
+		body, err := loft(ctx, OperationLoftBetween, d, from.sketch, from.profile, to.sketch, to.profile, opts...)
+		return body, operationError(OperationLoftBetween, err)
 	}
 	cfg, err := decodeLoftOptions(opts)
 	if err != nil {
@@ -70,5 +71,6 @@ func LoftBetween(ctx context.Context, d *Document, from, to LoftEnd, opts ...Lof
 	if from.point {
 		end, apex = to, from
 	}
-	return LoftFromPoint(ctx, d, apex.apex, end.sketch, end.profile)
+	body, err := loftFromPoint(ctx, OperationLoftBetween, d, apex.apex, end.sketch, end.profile)
+	return body, operationError(OperationLoftBetween, err)
 }

@@ -16,7 +16,8 @@ import (
 // then retires b. A nil context or a nil b is ErrDegenerate.
 // Source roles and certified boundary and occupied-volume bounds follow the
 // image. A refused or canceled call leaves the document unchanged.
-func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (*Body, error) {
+func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationScaledAt, retErr) }()
 	if ctx == nil {
 		return nil, fmt.Errorf("%w: a nil context cannot control a scale", ErrDegenerate)
 	}
@@ -63,7 +64,7 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 			return nil, err
 		}
 	}
-	next, err := facetedrecord.ScaleImage(ctx, &b.n, fp, anchor, s)
+	next, repair, err := facetedrecord.ScaleImageWithSummary(ctx, &b.n, fp, anchor, s)
 	if err != nil {
 		return nil, err
 	}
@@ -72,9 +73,13 @@ func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (
 	if err != nil {
 		return nil, err
 	}
+	scaled.n.OperationWarnings = append(scaled.n.OperationWarnings, repair.Diagnostics()...)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(scaled, b)
+	if err := d.commitOperationIn(ctx, nil, OperationScaledAt,
+		[]OperationInput{{Body: b, Role: operationRoleSource, Use: InputConsumed}}, scaled, b); err != nil {
+		return nil, err
+	}
 	return scaled, nil
 }

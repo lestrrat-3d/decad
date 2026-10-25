@@ -281,9 +281,9 @@ func (b *ubBuild) scene(ctx context.Context, refsA, refsB []ubRef) (*ubScene, er
 		return nil, err
 	}
 	if !within {
-		return nil, fmt.Errorf(
+		return nil, prismcells.WithWorkLimit(fmt.Errorf(
 			`%w: the analytic union scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1)`,
-			decaderr.ErrUnsupported, segments, prismcells.MaxArrangementSegments)
+			decaderr.ErrUnsupported, segments, prismcells.MaxArrangementSegments), segments)
 	}
 	s, tags, delta, err := prismcells.BuildProfileScene(b.st.budget, regionsA, regionsB, &prismReexpression{Identity: true})
 	if err != nil {

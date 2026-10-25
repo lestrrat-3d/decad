@@ -2,8 +2,10 @@ package decad
 
 import (
 	"context"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 )
 
 // combineTools applies op between b and each tool in order and commits the
@@ -11,15 +13,18 @@ import (
 // one another in order, and b meets the single merged tool: tools that share
 // planes meet each other on the prism path before they meet b. Nothing is registered until every step has
 // succeeded and accept, when not nil, has approved the result, so a failure
-// leaves b live and the document unchanged. The caller removes the tools, which
-// stay live until it does.
-func combineTools(ctx context.Context, d *Document, b *Body, op meshbool.OperationKind, tools []*Body, merge bool,
-	accept func(result *Body) error) (*Body, error) {
-	if err := d.requireSameContainer(append([]*Body{b}, tools...)); err != nil {
+// leaves b live and the document unchanged. The tools remain private to this call.
+func combineTools(ctx context.Context, d *Document, kind OperationKind, b *Body, op meshbool.OperationKind,
+	tools []*Body, merge bool,
+	accept func(result *Body) error, capture *operationHistoryCapture,
+	additionalInputs ...OperationInput) (*Body, error) {
+	if err := d.requireSameContainer([]*Body{b}); err != nil {
 		return nil, err
 	}
-	start := d.nextProducerID()
+	privateSpan := capture.producerSpan(d)
+	start := d.nextProducerID() + privateSpan
 	ref := start
+	var warnings opdiagnostic.CompositeSummaries
 	if merge && len(tools) > 1 {
 		merged := tools[0]
 		for _, tool := range tools[1:] {
@@ -30,6 +35,7 @@ func combineTools(ctx context.Context, d *Document, b *Body, op meshbool.Operati
 			if err != nil {
 				return nil, err
 			}
+			warnings.Add(next.n.OperationWarnings, int(kind))
 			merged = next
 			ref++
 		}
@@ -44,9 +50,11 @@ func combineTools(ctx context.Context, d *Document, b *Body, op meshbool.Operati
 		if err != nil {
 			return nil, err
 		}
+		warnings.Add(next.n.OperationWarnings, int(kind))
 		acc = next
 		ref++
 	}
+	acc.n.OperationWarnings = warnings.Records()
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -58,7 +66,10 @@ func combineTools(ctx context.Context, d *Document, b *Body, op meshbool.Operati
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}
-	d.commitSpan(acc, ref-start, b)
+	inputs := append([]OperationInput{{Body: b, Role: operationRoleTarget, Use: InputConsumed}}, additionalInputs...)
+	if err := d.commitOperationSpanPrefixIn(ctx, nil, kind, inputs, acc, privateSpan, ref-start, b); err != nil {
+		return nil, err
+	}
 	return acc, nil
 }
 
@@ -67,6 +78,14 @@ func combineTools(ctx context.Context, d *Document, b *Body, op meshbool.Operati
 // already gone.
 func removeTools(tools []*Body) {
 	for _, t := range tools {
-		_ = Remove(t)
+		if t == nil || t.n.Doc == nil {
+			continue
+		}
+		d := documentHandle(t.n.Doc)
+		d.n.LiveMu.Lock()
+		if slices.Contains(d.n.LiveSet, bodyNode(t)) {
+			d.retire(t)
+		}
+		d.n.LiveMu.Unlock()
 	}
 }

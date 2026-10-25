@@ -57,3 +57,31 @@ func TestVerifyGapToleranceDecidesAFlushPair(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrNegativeMagnitude)
 	})
 }
+
+// TestVerifyDoesNotChangeOperationWarnings proves that Verify uses its own
+// request tolerances without changing warnings recorded by an earlier call.
+func TestVerifyDoesNotChangeOperationWarnings(t *testing.T) {
+	t.Parallel()
+
+	doc := decad.New()
+	a := boxBody(t, doc, 0, 0, 10, 10, 10)
+	require.Empty(t, a.OperationDiagnostics(), "exact construction adds no adjustment warning")
+	b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 0.5, 0, 10)
+	joined, err := decad.Union(t.Context(), a, b)
+	require.NoError(t, err)
+	before := joined.OperationDiagnostics()
+	require.Len(t, before, 1)
+	require.Equal(t, decad.OpDiagGapShiftApplied, before[0].Code)
+
+	loose, err := doc.Verify(t.Context(), decad.WithTolerance(units.Scalar(1)))
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, loose.Status)
+	require.Equal(t, before, joined.OperationDiagnostics())
+
+	strict, err := doc.Verify(t.Context(), decad.WithTolerance(units.Scalar(0.000001)))
+	require.NoError(t, err)
+	require.Equal(t, decad.Suspect, strict.Status)
+	require.NotEmpty(t, strict.Diagnostics)
+	require.Equal(t, decad.DiagMeasurementBeyondTolerance, strict.Diagnostics[0].Code)
+	require.Equal(t, before, joined.OperationDiagnostics())
+}

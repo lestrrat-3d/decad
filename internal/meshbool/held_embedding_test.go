@@ -104,18 +104,20 @@ func TestHeldFoldsNamesTheFacetsThatMeet(t *testing.T) {
 // where EnforceHeldEmbedding refuses, and none for an embedded mesh.
 func TestRepairHeldEmbeddingReturnsWhatItCannotClear(t *testing.T) {
 	t.Parallel()
-	_, failing, err := meshbool.RepairHeldEmbedding(t.Context(), union14Fold())
+	_, failing, summary, err := meshbool.RepairHeldEmbeddingWithSummary(t.Context(), union14Fold())
 	require.NoError(t, err)
 	require.NotEmpty(t, failing)
+	require.Nil(t, summary, "an incomplete repair reports no accepted reach change")
 	require.True(t, slices.IsSorted(failing))
 
 	apart := heldFragment([][3]r3.Vec{
 		{{X: 0, Y: 0, Z: 0}, {X: 1, Y: 0, Z: 0}, {X: 0, Y: 1, Z: 0}},
 		{{X: 1, Y: 0, Z: 0}, {X: 1, Y: 1, Z: 0}, {X: 0, Y: 1, Z: 0}},
 	})
-	_, failing, err = meshbool.RepairHeldEmbedding(t.Context(), apart)
+	_, failing, summary, err = meshbool.RepairHeldEmbeddingWithSummary(t.Context(), apart)
 	require.NoError(t, err)
 	require.Empty(t, failing)
+	require.Nil(t, summary)
 }
 
 func union14Fold() meshbool.HeldRounding {
@@ -176,9 +178,10 @@ func TestEnforceHeldEmbeddingMovesAFlattenedSliver(t *testing.T) {
 	t.Parallel()
 	h := subUlpSliver(1)
 	require.Equal(t, 0.5, h.Verts[3].Y, `nearest rounding puts the apex on the edge's line`)
-	moved, err := meshbool.EnforceHeldEmbedding(t.Context(), h)
+	moved, summary, err := meshbool.EnforceHeldEmbeddingWithSummary(t.Context(), h)
 	require.NoError(t, err)
 	require.Equal(t, 1, moved)
+	require.Nil(t, summary, "a float-box corner is not a reach repair")
 	require.Equal(t, r3.Vec{X: 0.5, Y: math.Nextafter(0.5, 1), Z: 0}, h.Verts[3])
 }
 
@@ -189,8 +192,9 @@ func TestEnforceHeldEmbeddingMovesAFlattenedSliver(t *testing.T) {
 func TestEnforceHeldEmbeddingRefusesWhenNoCornerClears(t *testing.T) {
 	t.Parallel()
 	h := subUlpSliver(-1)
-	_, err := meshbool.EnforceHeldEmbedding(t.Context(), h)
+	_, summary, err := meshbool.EnforceHeldEmbeddingWithSummary(t.Context(), h)
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	require.Nil(t, summary)
 	require.Equal(t, 0.5, h.Verts[3].Y, `a refused search leaves the first rounding in place`)
 }
 
@@ -203,17 +207,31 @@ func TestEnforceHeldEmbeddingReachClearsWhatTheFloatBoxCannot(t *testing.T) {
 	const reach = 1e-3
 	h := subUlpSliver(-1)
 	h.Reach = reach
-	moved, err := meshbool.EnforceHeldEmbedding(t.Context(), h)
+	moved, summary, err := meshbool.EnforceHeldEmbeddingWithSummary(t.Context(), h)
 	require.NoError(t, err)
 	require.Equal(t, 1, moved)
+	require.NotNil(t, summary)
+	require.Equal(t, reach, summary.AllowedReach)
 
 	gap, _ := meshbool.CoordDistance(h.Exact[3], h.Verts[3]).Float64()
 	require.Positive(t, gap, "the apex left its first rounding")
 	require.LessOrEqual(t, gap, reach/64*1.0001, "the nearest step that clears is the one taken")
+	require.GreaterOrEqual(t, summary.DisplacementBound, gap)
+	require.LessOrEqual(t, summary.DisplacementBound, reach)
 
 	folds, err := meshbool.HeldFolds(t.Context(), h)
 	require.NoError(t, err)
 	require.Empty(t, folds)
+
+	partial := subUlpSliver(-1)
+	partial.Reach = reach
+	count, failing, repairSummary, err := meshbool.RepairHeldEmbeddingWithSummary(t.Context(), partial)
+	require.NoError(t, err)
+	require.Equal(t, moved, count)
+	require.Empty(t, failing)
+	require.NotNil(t, repairSummary)
+	require.Equal(t, summary.DisplacementBound, repairSummary.DisplacementBound)
+	require.Equal(t, reach, repairSummary.AllowedReach)
 }
 
 // TestEnforceHeldEmbeddingReachLeavesACleanMeshAlone: a mesh the float box
@@ -223,10 +241,12 @@ func TestEnforceHeldEmbeddingReachLeavesACleanMeshAlone(t *testing.T) {
 	plain := subUlpSliver(1)
 	reaching := subUlpSliver(1)
 	reaching.Reach = 1e-3
-	_, err := meshbool.EnforceHeldEmbedding(t.Context(), plain)
+	_, plainSummary, err := meshbool.EnforceHeldEmbeddingWithSummary(t.Context(), plain)
 	require.NoError(t, err)
-	_, err = meshbool.EnforceHeldEmbedding(t.Context(), reaching)
+	_, reachSummary, err := meshbool.EnforceHeldEmbeddingWithSummary(t.Context(), reaching)
 	require.NoError(t, err)
+	require.Nil(t, plainSummary)
+	require.Nil(t, reachSummary)
 	require.Equal(t, plain.Verts, reaching.Verts)
 }
 

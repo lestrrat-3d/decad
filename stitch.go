@@ -3,8 +3,10 @@ package decad
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/gaptol"
+	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -40,7 +42,8 @@ import (
 // self-contact or an exhausted audit budget surfaces the crossing audit's
 // own [ErrDegenerate]/[ErrUnsupported] (R9/R10) unchanged. A failed call
 // leaves the document and every operand unchanged.
-func Stitch(ctx context.Context, bodies ...*Body) (*Body, error) {
+func Stitch(ctx context.Context, bodies ...*Body) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationStitch, retErr) }()
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a stitch`, ErrDegenerate)
 	}
@@ -96,8 +99,49 @@ func Stitch(ctx context.Context, bodies ...*Body) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(body, bodies...)
+	body.n.OperationWarnings = append(body.n.OperationWarnings, stitchMergeWarnings(plan, bodies, gaptol.Reach(ctx))...)
+	inputs := make([]OperationInput, len(bodies))
+	for i, operand := range bodies {
+		inputs[i] = OperationInput{Body: operand, Role: operationRoleOperand, Use: InputConsumed}
+	}
+	if err := d.commitOperationIn(ctx, nil, OperationStitch, inputs, body, bodies...); err != nil {
+		return nil, err
+	}
 	return body, nil
+}
+
+func stitchMergeWarnings(plan *stitchrecord.Plan, bodies []*Body, reach float64) []opdiagnostic.Record {
+	mergedByBody := make(map[int]float64)
+	for ordinal, body := range bodies {
+		for _, face := range topobuild.Faces(bodyNode(body)) {
+			for _, loop := range face.Loops {
+				for _, coedge := range loop.CoEdges {
+					for _, vertex := range []*topo.Vertex{topobuild.CoEdgeStart(coedge), topobuild.CoEdgeEnd(coedge)} {
+						class, exists := plan.Table.Classes[vertex]
+						if !exists {
+							continue
+						}
+						mergedByBody[ordinal] = max(mergedByBody[ordinal], plan.Merged[class])
+					}
+				}
+			}
+		}
+	}
+	ordinals := make([]int, 0, len(mergedByBody))
+	for ordinal, bound := range mergedByBody {
+		if bound > 0 {
+			ordinals = append(ordinals, ordinal)
+		}
+	}
+	sort.Ints(ordinals)
+	warnings := make([]opdiagnostic.Record, 0, len(ordinals))
+	for _, ordinal := range ordinals {
+		warnings = append(warnings, opdiagnostic.Record{Operation: -1,
+			Code: opdiagnostic.CodeStitchMergeApplied, Operand: ordinal,
+			Change:            opdiagnostic.ChangeStitchMerge,
+			DisplacementBound: mergedByBody[ordinal], AllowedReach: reach})
+	}
+	return warnings
 }
 
 // assertStitchSourceOwners maps every operand vertex node, then every operand

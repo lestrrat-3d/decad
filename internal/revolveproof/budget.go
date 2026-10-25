@@ -88,10 +88,16 @@ func PreflightFacets(loops FacetLoops, nPhi int, full, sheet, audit bool, work *
 	}
 	total, ok := AddChecked(walls, caps)
 	if !ok || total > maxFacetsPerMesh {
+		if ok {
+			return proofbound.WithWorkLimit(errRevolveFacetCeiling, "mesh_facets", total, maxFacetsPerMesh)
+		}
 		return errRevolveFacetCeiling
 	}
 	spent, ok := AddChecked(work.Facets, total)
 	if !ok || spent > maxFacetWorkPerCall {
+		if ok {
+			return proofbound.WithWorkLimit(errRevolveFacetCeiling, "facet_allocations", spent, maxFacetWorkPerCall)
+		}
 		return errRevolveFacetCeiling
 	}
 	charged := work.Pairs
@@ -106,7 +112,11 @@ func PreflightFacets(loops FacetLoops, nPhi int, full, sheet, audit bool, work *
 		}
 		charged, ok = AddChecked(work.Pairs, pairs)
 		if !ok || charged > proofbound.MaxFacetPairTestsPerCall {
-			return fmt.Errorf(`%w: this chord tolerance asks for %d facets in one revolve mesh, whose pairwise audit exceeds the fixed ceiling of %d exact tests; retry with a coarser tolerance, or ask for a mesh that does not run that audit`, decaderr.ErrUnsupported, total, proofbound.MaxFacetPairTestsPerCall)
+			err := fmt.Errorf(`%w: this chord tolerance asks for %d facets in one revolve mesh, whose pairwise audit exceeds the fixed ceiling of %d exact tests; retry with a coarser tolerance, or ask for a mesh that does not run that audit`, decaderr.ErrUnsupported, total, proofbound.MaxFacetPairTestsPerCall)
+			if ok {
+				return proofbound.WithWorkLimit(err, "facet_pairs", charged, proofbound.MaxFacetPairTestsPerCall)
+			}
+			return err
 		}
 	}
 	work.Facets, work.Pairs = spent, charged

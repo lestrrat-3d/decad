@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -20,31 +21,39 @@ import (
 // retains a denoted or curved surface. Source roles are dropped; the held mesh
 // and its bounds follow the image.
 func ScaleImage(ctx context.Context, body *topo.Body, fp Payload, anchor r3.Vec, s float64) (Payload, error) {
+	next, _, err := ScaleImageWithSummary(ctx, body, fp, anchor, s)
+	return next, err
+}
+
+// ScaleImageWithSummary is ScaleImage with actual-use evidence for the new
+// image's accepted positive-reach repair. No source warning list is inherited.
+func ScaleImageWithSummary(ctx context.Context, body *topo.Body, fp Payload, anchor r3.Vec,
+	s float64) (Payload, *meshbool.EmbeddingReach, error) {
 	pointSlab := fp.PointPlane != nil && fp.PointPlane.Base.PointSection != nil
 	booleanSource := fp.BooleanSimilaritySource && body.Kind == topo.BodySolid && body.Solid
 	if (!pointSlab && !fp.SimilaritySource && !booleanSource) || !fp.Xform.IsValid() ||
 		len(fp.Verts) == 0 || len(fp.VertexBound) != len(fp.Verts) {
-		return Payload{}, fmt.Errorf("%w: this body has no certified similarity source", decaderr.ErrUnsupported)
+		return Payload{}, nil, fmt.Errorf("%w: this body has no certified similarity source", decaderr.ErrUnsupported)
 	}
 	if booleanSource && !CertifiedBooleanSimilaritySource(fp, len(topobuild.Faces(body))) {
-		return Payload{}, fmt.Errorf("%w: the Boolean similarity source has no complete proof", decaderr.ErrUnsupported)
+		return Payload{}, nil, fmt.Errorf("%w: the Boolean similarity source has no complete proof", decaderr.ErrUnsupported)
 	}
 	if fp.PointSimilarity != nil && fp.PointSimilarity.Slice != fp.PointPlane {
-		return Payload{}, fmt.Errorf("%w: the slab similarity source does not match its Split source", decaderr.ErrUnsupported)
+		return Payload{}, nil, fmt.Errorf("%w: the slab similarity source does not match its Split source", decaderr.ErrUnsupported)
 	}
 	for _, group := range fp.Groups {
 		if group.Denoted != nil && !group.Retained {
-			return Payload{}, fmt.Errorf("%w: a denoted surface has no similarity proof", decaderr.ErrUnsupported)
+			return Payload{}, nil, fmt.Errorf("%w: a denoted surface has no similarity proof", decaderr.ErrUnsupported)
 		}
 		if _, ok := group.Surface.(surfacegeom.Plane); group.Surface != nil && !ok && !group.Retained {
-			return Payload{}, fmt.Errorf("%w: a retained curved surface has no similarity proof", decaderr.ErrUnsupported)
+			return Payload{}, nil, fmt.Errorf("%w: a retained curved surface has no similarity proof", decaderr.ErrUnsupported)
 		}
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	mesh, err := facetproof.ScaleMesh(ctx, budget, fp.Verts, fp.Tris, fp.VertexBound,
 		fp.VolSymDiff, fp.AreaSlack, anchor, s)
 	if err != nil {
-		return Payload{}, err
+		return Payload{}, nil, err
 	}
 	next := fp
 	next.SmoothRectSection = nil
@@ -84,13 +93,13 @@ func ScaleImage(ctx context.Context, body *topo.Body, fp Payload, anchor r3.Vec,
 	for i := range next.Groups {
 		group := &next.Groups[i]
 		if err := budget.Step(); err != nil {
-			return Payload{}, err
+			return Payload{}, nil, err
 		}
 		if group.HasCentroid {
 			centroid, centroidErr := SimilarCapCentroid(group.Centroid, anchor, s)
 			group.Centroid, err = centroid, centroidErr
 			if err != nil {
-				return Payload{}, err
+				return Payload{}, nil, err
 			}
 		}
 		if _, plane := group.Surface.(surfacegeom.Plane); group.Retained && (!plane || group.Denoted != nil) {
@@ -102,7 +111,7 @@ func ScaleImage(ctx context.Context, body *topo.Body, fp Payload, anchor r3.Vec,
 			origin := anchor.Add(plane.Frame.Origin().Sub(anchor).Scale(s))
 			frame, frameErr := r3.NewFrame(origin, plane.Frame.U(), plane.Frame.V())
 			if frameErr != nil {
-				return Payload{}, fmt.Errorf("%w: a scaled cap frame is not representable: %s", decaderr.ErrUnsupported, frameErr)
+				return Payload{}, nil, fmt.Errorf("%w: a scaled cap frame is not representable: %s", decaderr.ErrUnsupported, frameErr)
 			}
 			group.Surface = surfacegeom.Plane{Frame: frame}
 			// NewFrame may round the held axes again. The exact similar plane
@@ -115,9 +124,9 @@ func ScaleImage(ctx context.Context, body *topo.Body, fp Payload, anchor r3.Vec,
 		CarryPointPlaneScale(fp, &next, anchor, s, mesh.Round)
 	}
 	if proofbound.IsNonFinite(next.DPair) || proofbound.IsNonFinite(next.PointPlaneCapDisplacement) {
-		return Payload{}, fmt.Errorf("%w: the scaled source proof is not finite", decaderr.ErrUnsupported)
+		return Payload{}, nil, fmt.Errorf("%w: the scaled source proof is not finite", decaderr.ErrUnsupported)
 	}
-	return next, nil
+	return next, mesh.EmbeddingReach, nil
 }
 
 // CarryPointPlaneScale records the new image of an authenticated Split slab.

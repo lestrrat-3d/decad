@@ -14,6 +14,7 @@ Root-package identifiers carry the `decad.` prefix. `apitest/api_reference_test.
 - [The modeling loop](#the-modeling-loop)
 - [Conventions](#conventions)
 - [Documents and bodies](#documents-and-bodies)
+- [Operation history and diagnostics](#operation-history-and-diagnostics)
 - [Building bodies](#building-bodies)
 - [Modifying bodies](#modifying-bodies)
 - [Booleans](#booleans)
@@ -97,6 +98,7 @@ A `decad.Document` is not safe for concurrent mutation. Bodies are immutable and
 |---|---|
 | `decad.New` | Creates an empty `decad.Document`. |
 | `Document.Bodies` | Lists the live bodies. |
+| `Document.OperationHistory` | Returns an immutable snapshot of recorded successful modeling calls. |
 | `Document.Root`, `Container.NewChild` | Read the document's root container and add named children to a container. A container groups sketches, planes and bodies and changes no geometry. |
 | `Container.Name`, `Container.Parent`, `Container.Children` | Read a container's name, parent (nil for the root) and children in creation order. |
 | `Container.AddSketch`, `Container.AddPlane` | Place a sketch or plane in a container. Unplaced ones belong to the root. |
@@ -106,6 +108,38 @@ A `decad.Document` is not safe for concurrent mutation. Bodies are immutable and
 | `decad.Remove` | Retires a body from its document. |
 | `decad.Body` | An immutable solid or sheet. |
 | `decad.BodyKind` | `decad.BodySolid` or `decad.BodySheet`. `Body.Kind` and `Body.IsSolid` read it. |
+
+## Operation history and diagnostics
+
+`Document.OperationHistory` snapshots recorded calls in commit order. Use
+`Operations`, `Producer` and `Consumers` to inspect body dependencies, including
+retired bodies. Each operation reports its public kind, ordered body inputs and
+outputs. `FaceSuccessors` reports `HistoryUnknown` when the operation has no
+complete face map.
+
+Every document records successful public body-producing calls and successful `Remove` calls. Temporary tools used
+inside `Hole`, `Rib`, `Web` and `Emboss` do not create separate history entries. A failed or canceled call creates
+no entry. History collection has no option.
+
+`Body.OperationDiagnostics` returns warnings attached to the call that created
+the body. An accepted shifted Boolean retry reports `OpDiagGapShiftApplied`
+with its charged displacement bound. A Boolean that uses a configured chain
+allowance reports `OpDiagChainAllowanceApplied` with the touched bound, pair
+chord limit and allowance. A tolerant Stitch merge reports
+`OpDiagStitchMergeApplied` with its charged displacement bound. Calls that make
+no reported adjustment return an empty warning slice. A held-mesh repair that
+uses its positive-reach stage reports `OpDiagEmbeddingReachApplied` with the
+repair's displacement bound; ordinary coordinate rounding does not add it.
+An empty Boolean result after an accepted shift includes both the empty-result
+failure and the shift warning on its error.
+
+Use `errors.As` with `OperationDiagnosticError` to inspect structured reasons,
+including through caller `%w` wrapping. `BooleanError` and `SelectionError`
+keep their concrete types. `OperationError` wraps other mapped Decad errors and
+preserves `errors.Is` behavior. Cancellation and deadline errors pass through
+unchanged. Existing bounded work-limit refusals report their resource and
+observed and maximum counts when the producer knows them. See
+`Example_operation_diagnostics` for code-based branching.
 
 ## Building bodies
 

@@ -169,8 +169,8 @@ func elidedPointerElem(typ ast.Expr) string {
 }
 
 // documentWriteFields are the topo.Document fields only root and the node's
-// own methods write: the live set and the producer counter (root commit,
-// commitMany, commitSpan, retire, New and VerifyMotion's transient document)
+// own methods write: the live set and the producer counter (root operation commit helpers,
+// retire, New and VerifyMotion's transient document)
 // and the level and curve counters (MintLevel and MintCurve in
 // internal/topo/document.go). No other type has a field with these names, so a
 // match by name is a write to a document node.

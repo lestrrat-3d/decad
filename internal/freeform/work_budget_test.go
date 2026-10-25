@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/stretchr/testify/require"
 )
 
@@ -72,6 +73,37 @@ func TestReconstructionLimitKeepsDetachedDefault(t *testing.T) {
 	clamped := freeform.NewFreeformWork()
 	clamped.RaiseReconstructionLimit(^uint64(0))
 	require.Equal(t, freeform.LoftReconstructionWorkLimit, clamped.ReconstructionBudget())
+}
+
+func TestWorkLimitDetailsRequireUnsaturatedCounts(t *testing.T) {
+	work := freeform.NewFreeformWork()
+	require.NoError(t, work.Step(freeform.FreeformWorkLimit))
+	err := work.Step(1)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	var detail *proofbound.WorkLimitError
+	require.ErrorAs(t, err, &detail)
+	require.Equal(t, "freeform_work_units", detail.Resource)
+	require.Equal(t, freeform.FreeformWorkLimit+1, detail.Observed)
+	require.Equal(t, freeform.FreeformWorkLimit, detail.Maximum)
+	require.Equal(t, freeform.FreeformWorkLimit, work.Spent)
+
+	work = freeform.NewFreeformWork()
+	require.NoError(t, work.ReconstructionStep(freeform.ReconstructionWorkLimit))
+	err = work.ReconstructionStep(1)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	require.ErrorAs(t, err, &detail)
+	require.Equal(t, "reconstruction_work_units", detail.Resource)
+	require.Equal(t, freeform.ReconstructionWorkLimit+1, detail.Observed)
+	require.Equal(t, freeform.ReconstructionWorkLimit, detail.Maximum)
+	require.Equal(t, freeform.ReconstructionWorkLimit, work.ReconstructionSpent)
+
+	work = freeform.NewFreeformWork()
+	err = work.Step(freeform.FreeformCostCeiling)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	require.NotErrorAs(t, err, &detail)
+	err = work.ReconstructionStep(freeform.ReconstructionCostCeiling)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	require.NotErrorAs(t, err, &detail)
 }
 
 func TestSpanWorkLimit(t *testing.T) {

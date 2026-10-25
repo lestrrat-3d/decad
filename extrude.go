@@ -122,11 +122,14 @@ func Extrude[S Section](ctx context.Context, d *Document, s *sketch.Sketch, sec 
 	opts ...ExtrudeOption) (*Body, error) {
 	switch v := any(sec).(type) {
 	case *sketch.Profile:
-		return extrudeProfile(ctx, d, s, v, e, opts)
+		body, err := extrudeProfile(ctx, d, s, v, e, opts)
+		return body, operationError(OperationExtrude, err)
 	case *sketch.Chain:
-		return extrudeChain(ctx, d, s, v, e, opts)
+		body, err := extrudeChain(ctx, d, s, v, e, opts)
+		return body, operationError(OperationExtrude, err)
 	default:
-		return nil, fmt.Errorf(`%w: Extrude section %T is not a profile or chain`, ErrDegenerate, sec)
+		return nil, operationError(OperationExtrude,
+			fmt.Errorf(`%w: Extrude section %T is not a profile or chain`, ErrDegenerate, sec))
 	}
 }
 
@@ -223,7 +226,7 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 		return nil, err
 	}
 
-	ref := d.nextProducerID()
+	ref := d.producerID(ctx)
 	var sectionDelta float64
 	if certificate != nil {
 		sectionDelta = certificate.Delta
@@ -245,7 +248,10 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commitIn(d.ContainerOfSketch(s), body)
+	if err := d.commitOperationIn(ctx, d.ContainerOfSketch(s), OperationExtrude,
+		sweep.operationInputs, body); err != nil {
+		return nil, err
+	}
 	return body, nil
 }
 
@@ -256,10 +262,12 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 // resolution COMPUTED reports the rounding that computation committed, which is
 // what the prism payload carries into every level-derived reading.
 type linearSweep struct {
-	z0, z1  float64
-	z0Delta float64
-	z1Delta float64
-	inputs  []producerID
+	z0, z1          float64
+	z0Delta         float64
+	z1Delta         float64
+	inputs          []producerID
+	bodyInputs      []*Body
+	operationInputs []OperationInput
 }
 
 // resolveLinearExtent turns a linear extent into that sweep
@@ -318,7 +326,10 @@ func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, e
 		}
 		named := append(append([]producerID(nil), one.named...), two.named...)
 		refs := provenance.DedupProducers(append(append(named, one.through...), two.through...))
-		return linearSweep{z0: two.z, z1: one.z, z0Delta: two.delta, z1Delta: one.delta, inputs: refs}, nil
+		bodyInputs := append(append([]*Body(nil), one.bodyInputs...), two.bodyInputs...)
+		operationInputs := append(append([]OperationInput(nil), one.operationInputs...), two.operationInputs...)
+		return linearSweep{z0: two.z, z1: one.z, z0Delta: two.delta, z1Delta: one.delta,
+			inputs: refs, bodyInputs: bodyInputs, operationInputs: operationInputs}, nil
 	case ThroughAll:
 		// An unknown Direction is malformed input, never silently Along.
 		var travel float64
@@ -330,23 +341,30 @@ func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, e
 		default:
 			return linearSweep{}, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(e.Dir))
 		}
-		stop, delta, refs, err := extent.ThroughAll(frame, travel, d.n.Live())
+		live := d.n.Live()
+		stop, delta, refs, err := extent.ThroughAll(frame, travel, live)
 		if err != nil {
 			return linearSweep{}, err
 		}
 		if travel > 0 {
-			return linearSweep{z1: stop, z1Delta: delta, inputs: refs}, nil
+			bodies := bodyHandles(live)
+			return linearSweep{z1: stop, z1Delta: delta, inputs: refs, bodyInputs: bodies,
+				operationInputs: referencedInputs(bodies, "throughAll")}, nil
 		}
-		return linearSweep{z0: stop, z0Delta: delta, inputs: refs}, nil
+		bodies := bodyHandles(live)
+		return linearSweep{z0: stop, z0Delta: delta, inputs: refs, bodyInputs: bodies,
+			operationInputs: referencedInputs(bodies, "throughAll")}, nil
 	case ToFace:
 		stop, delta, ref, err := d.resolveToFace(e, frame, 0, "a to-face extent")
 		if err != nil {
 			return linearSweep{}, err
 		}
 		if stop > 0 {
-			return linearSweep{z1: stop, z1Delta: delta, inputs: []producerID{ref}}, nil
+			return linearSweep{z1: stop, z1Delta: delta, inputs: []producerID{ref}, bodyInputs: []*Body{e.Body},
+				operationInputs: []OperationInput{{Body: e.Body, Role: "stop", Use: InputReferenced}}}, nil
 		}
-		return linearSweep{z0: stop, z0Delta: delta, inputs: []producerID{ref}}, nil
+		return linearSweep{z0: stop, z0Delta: delta, inputs: []producerID{ref}, bodyInputs: []*Body{e.Body},
+			operationInputs: []OperationInput{{Body: e.Body, Role: "stop", Use: InputReferenced}}}, nil
 	case nil:
 		return linearSweep{}, fmt.Errorf(`%w: a nil extent sweeps nothing`, ErrDegenerate)
 	default:
@@ -359,10 +377,12 @@ func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, e
 // and the stop refs it resolved — named-extent and through-all kept apart so
 // the enclosing extent can order them deterministically.
 type linearSide struct {
-	z       float64
-	delta   float64
-	named   []producerID
-	through []producerID
+	z               float64
+	delta           float64
+	named           []producerID
+	through         []producerID
+	bodyInputs      []*Body
+	operationInputs []OperationInput
 }
 
 // resolveLinearSide resolves one side of a TwoSided; travel is +1 for the
@@ -382,17 +402,21 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 		// displacement carries across unchanged.
 		return linearSide{z: travel * m, delta: delta}, nil
 	case ThroughAllSide:
-		stop, delta, refs, err := extent.ThroughAll(frame, travel, d.n.Live())
+		live := d.n.Live()
+		stop, delta, refs, err := extent.ThroughAll(frame, travel, live)
 		if err != nil {
 			return linearSide{}, err
 		}
-		return linearSide{z: stop, delta: delta, through: refs}, nil
+		bodies := bodyHandles(live)
+		return linearSide{z: stop, delta: delta, through: refs, bodyInputs: bodies,
+			operationInputs: referencedInputs(bodies, "throughAll")}, nil
 	case ToFace:
 		stop, delta, ref, err := d.resolveToFace(s, frame, travel, what)
 		if err != nil {
 			return linearSide{}, err
 		}
-		return linearSide{z: stop, delta: delta, named: []producerID{ref}}, nil
+		return linearSide{z: stop, delta: delta, named: []producerID{ref}, bodyInputs: []*Body{s.Body},
+			operationInputs: []OperationInput{{Body: s.Body, Role: "stop", Use: InputReferenced}}}, nil
 	case nil:
 		return linearSide{}, fmt.Errorf(`%w: a two-sided extent requires both sides`, ErrDegenerate)
 	default:
@@ -471,7 +495,7 @@ func extrudeChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	// buildSides' own walkOf calls and the final bounds reading below
 	// spend from the same ceiling rather than each opening a fresh one.
 	work := freeform.NewFreeformWork()
-	ref := d.nextProducerID()
+	ref := d.producerID(ctx)
 	body, err := bodyResult(chainrecord.Build(ctx, envOf(documentNode(d), ref), chainPayload{
 		Chains:  []chainRecord{chain},
 		Frame:   frame,
@@ -487,7 +511,9 @@ func extrudeChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commitIn(d.ContainerOfSketch(s), body)
+	if err := d.commitOperationIn(ctx, d.ContainerOfSketch(s), OperationExtrude, sweep.operationInputs, body); err != nil {
+		return nil, err
+	}
 	return body, nil
 }
 

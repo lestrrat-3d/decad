@@ -46,6 +46,12 @@ type BoolMesh struct {
 	// within the pre-pass slack of it, must carry a FacetBound no larger than
 	// Gate (agent-docs/faceted-vertex-bounds-design.md §5, RefuseCoarseHeldContact).
 	Gate float64
+	// PairChordLimit and ChainAllowance preserve the inputs to the local
+	// chain-depth gate. ChainAllowance is zero unless it raises the gate.
+	PairChordLimit     float64
+	ChainAllowance     float64
+	ChainTouchedBound  float64
+	ChainAllowanceUsed bool
 	// owner maps each directed mesh edge to the facet that walks it, so the
 	// twin across a facet edge is one lookup. The graze-or-crossing call
 	// needs it: whether an in-plane edge grazes the other operand or crosses

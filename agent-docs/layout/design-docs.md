@@ -61,6 +61,8 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/faceted-vertex-bounds-design.md` | Per-vertex displacement bounds on faceted bodies and their boolean composition. |
 | `agent-docs/param-binding-design.md` | Reading feature values from a `sketch/param` table, and the ledger of those reads. |
 | `agent-docs/gap-tolerance-design.md` | The document's gap tolerance: the reach of the held-mesh embedding repair, its default, its limits and its charge. |
+| `agent-docs/operation-history-design.md` | Computational proof lineage, source-derived quantity calculations, operation snapshots, and shared operation kinds. |
+| `agent-docs/operation-diagnostics-design.md` | Operation failure diagnostics, successful-call warnings, delivery APIs, compatibility rules, and proof fixtures. |
 | `agent-docs/faceted-source-retention-design.md` | Analytic source surfaces carried onto mesh Boolean result faces: claim, admission, normal bound, readers, increments. |
 | `agent-docs/retained-edge-blend-design.md` | `Fillet` and `Chamfer` of an edge between two retained faces of a mesh Boolean result: edge classes, exact blend geometry, local mesh rewrite, gates, bounds, increments. |
 | `agent-docs/surface-intersection-design.md` | `Trim`/`Extend`/`Split` over shared-generator sweeps. |

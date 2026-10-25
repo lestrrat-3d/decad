@@ -57,7 +57,11 @@ func Loops(outer sectionrecord.LoopRecord, holes []sectionrecord.LoopRecord) ([]
 // Preflight applies SM10's span and facet-pair ceilings from counts alone.
 func Preflight(loopIdx [][]int, spans, spanCap int) error {
 	if spans > spanCap {
-		return fmt.Errorf(`%w: a mitred sweep exceeds the fixed span ceiling of %d`, decaderr.ErrUnsupported, spanCap)
+		err := fmt.Errorf(`%w: a mitred sweep exceeds the fixed span ceiling of %d`, decaderr.ErrUnsupported, spanCap)
+		if spans >= 0 && spanCap >= 0 {
+			return proofbound.WithWorkLimit(err, "sweep_spans", uint64(spans), uint64(spanCap))
+		}
+		return err
 	}
 	segments := uint64(0)
 	for _, idx := range loopIdx {
@@ -73,7 +77,11 @@ func Preflight(loopIdx [][]int, spans, spanCap int) error {
 	walls := 2 * uint64(spans) * segments
 	pairs, ok := proofbound.WallChoose2(walls + 2*capTris)
 	if !ok || pairs > proofbound.MaxFacetPairTestsPerCall {
-		return fmt.Errorf(`%w: the mitred sweep crossing audit exceeds its fixed facet-pair ceiling`, decaderr.ErrUnsupported)
+		err := fmt.Errorf(`%w: the mitred sweep crossing audit exceeds its fixed facet-pair ceiling`, decaderr.ErrUnsupported)
+		if ok {
+			return proofbound.WithWorkLimit(err, "facet_pairs", pairs, proofbound.MaxFacetPairTestsPerCall)
+		}
+		return err
 	}
 	return nil
 }

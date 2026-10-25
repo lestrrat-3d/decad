@@ -80,8 +80,8 @@ func analyticBodiesEqual(budget *proofbound.WorkBudget, a, b *topo.Body) (bool, 
 // meshes supplies the mesh path's operand meshes: Verify's per-call cache,
 // or pairMeshes{} where a caller measures one pair on its own.
 func MeasuredInterference(ctx context.Context, alloc topo.Alloc, a, b *topo.Body, res pairkernel.Result, meshes booleaneval.OperandMesher) (vocab.Measurement, boundaryaudit.InterferenceOutcome, error) {
-	if res.Contained != nil {
-		return res.Contained.Volume, boundaryaudit.InterferenceMeasured, nil
+	if res.Containment != nil {
+		return res.Containment.Inner.Volume, boundaryaudit.InterferenceMeasured, nil
 	}
 	equal, err := analyticBodiesEqual(proofbound.NewWorkBudget(ctx), a, b)
 	if err != nil {

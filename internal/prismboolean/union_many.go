@@ -113,8 +113,8 @@ func UnionMany(ctx context.Context, env topo.Env,
 		return nil, true, err
 	}
 	if !withinCap {
-		return nil, true, fmt.Errorf("%w: Union's one-scene prism arrangement needs %d segments, above its %d-segment cap",
-			decaderr.ErrUnsupported, segments, prismcells.MaxArrangementSegments)
+		return nil, true, prismcells.WithWorkLimit(fmt.Errorf("%w: Union's one-scene prism arrangement needs %d segments, above its %d-segment cap",
+			decaderr.ErrUnsupported, segments, prismcells.MaxArrangementSegments), segments)
 	}
 	for i, line := range lines {
 		for _, prior := range lines[:i] {

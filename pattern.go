@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/axialsection"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/patternassembly"
 	"github.com/lestrrat-3d/decad/internal/patternrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -103,7 +104,10 @@ func PatternCopies(ctx context.Context, b *Body, spec PatternSpec) ([]*Body, err
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commitManyIn(d.bodyContainer(b), out)
+	if err := d.commitOperationManyIn(ctx, d.bodyContainer(b), OperationPatternCopies,
+		[]OperationInput{{Body: b, Role: operationRoleSource, Use: InputReferenced}}, out); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -227,7 +231,10 @@ func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error) {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			d.commitSpan(body, 1, b)
+			if err := d.commitOperationSpanIn(ctx, nil, OperationPatterned,
+				[]OperationInput{{Body: b, Role: operationRoleSource, Use: InputConsumed}}, body, 1, b); err != nil {
+				return nil, err
+			}
 			return body, nil
 		}
 	}
@@ -237,6 +244,10 @@ func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error) {
 	}
 	ref := base + producerID(len(instances))
 	acc := b
+	var warnings opdiagnostic.CompositeSummaries
+	for _, inst := range instances {
+		warnings.Add(inst.n.OperationWarnings, int(OperationPatterned))
+	}
 	for _, inst := range instances {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -245,12 +256,17 @@ func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error) {
 		if err != nil {
 			return nil, err
 		}
+		warnings.Add(acc.n.OperationWarnings, int(OperationPatterned))
 		ref++
 	}
+	acc.n.OperationWarnings = warnings.Records()
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commitSpan(acc, ref-base, b)
+	if err := d.commitOperationSpanIn(ctx, nil, OperationPatterned,
+		[]OperationInput{{Body: b, Role: operationRoleSource, Use: InputConsumed}}, acc, ref-base, b); err != nil {
+		return nil, err
+	}
 	return acc, nil
 }
 
@@ -296,7 +312,11 @@ func PatternJoin(ctx context.Context, target, feature *Body, spec PatternSpec) (
 			return nil, err
 		}
 		if matched {
-			d.commitSpan(body, producerID(rp.Count), target, feature)
+			if err := d.commitOperationSpanIn(ctx, nil, OperationPatternJoin,
+				[]OperationInput{{Body: target, Role: operationRoleTarget, Use: InputConsumed},
+					{Body: feature, Role: "feature", Use: InputConsumed}}, body, producerID(rp.Count), target, feature); err != nil {
+				return nil, err
+			}
 			return body, nil
 		}
 	}
@@ -309,7 +329,18 @@ func PatternJoin(ctx context.Context, target, feature *Body, spec PatternSpec) (
 	if err != nil {
 		return nil, err
 	}
-	d.commitSpan(body, producerID(len(instances))+span, target, feature)
+	var warnings opdiagnostic.CompositeSummaries
+	warnings.Add(body.n.OperationWarnings, int(OperationPatternJoin))
+	for _, inst := range instances {
+		warnings.Add(inst.n.OperationWarnings, int(OperationPatternJoin))
+	}
+	body.n.OperationWarnings = warnings.Records()
+	if err := d.commitOperationSpanIn(ctx, nil, OperationPatternJoin,
+		[]OperationInput{{Body: target, Role: operationRoleTarget, Use: InputConsumed},
+			{Body: feature, Role: "feature", Use: InputConsumed}}, body,
+		producerID(len(instances))+span, target, feature); err != nil {
+		return nil, err
+	}
 	return body, nil
 }
 
