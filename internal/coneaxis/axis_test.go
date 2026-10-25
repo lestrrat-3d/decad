@@ -236,6 +236,38 @@ func sigmaMinSq(a r3.Vec, aa *big.Rat, tri [3]r3.Vec) *big.Rat {
 	return out.Add(out, new(big.Rat).Mul(aa, new(big.Rat).Mul(normal, normal)))
 }
 
+func TestRadialLowerMatchesRationalFormulaAcrossScales(t *testing.T) {
+	t.Parallel()
+	axes := []r3.Vec{{X: 1, Y: 2}, {X: -3, Y: 4}, {Y: -3, Z: 4}, {X: 1, Z: -2}, {Y: 1}, {X: 2}}
+	triangles := [][3]r3.Vec{
+		{{X: 1, Y: 2, Z: 3}, {X: 2, Y: 3, Z: 4}, {X: 4, Y: 2, Z: 5}},
+		{{X: -1, Y: -2, Z: -3}, {X: -2, Y: -3, Z: -4}, {X: -4, Y: -2, Z: -5}},
+		{{X: -2, Y: 1, Z: -4}, {X: 3, Y: -1, Z: 4}, {X: 1, Y: 2}},
+		{{X: 1.25, Y: 2.5, Z: 3.75}, {X: 1.25, Y: 2.5, Z: 3.75}, {X: 1.25, Y: 2.5, Z: 3.75}},
+	}
+	for axisIndex, vector := range axes {
+		for _, axisExp := range []int{-400, 0, 400} {
+			v := vector.Scale(math.Ldexp(1, axisExp))
+			axis, ok := coneaxis.New(v)
+			require.True(t, ok)
+			aa := oracleDot(v, v)
+			for _, pointExp := range []int{-1070, -600, -53, -1, 0, 1, 53, 600, 1018} {
+				for triangleIndex, tri := range triangles {
+					for i := range tri {
+						tri[i] = tri[i].Scale(math.Ldexp(1, pointExp))
+					}
+					want := proofbound.RatSqrtDown(sigmaMinSq(v, aa, tri))
+					got, ok := axis.RadialLowerOf(tri[:])
+					require.True(t, ok)
+					require.Equal(t, math.Float64bits(want), math.Float64bits(got),
+						"axis %d axis exponent %d point exponent %d triangle %d",
+						axisIndex, axisExp, pointExp, triangleIndex)
+				}
+			}
+		}
+	}
+}
+
 func TestRadialLowerCanonicalKeepsTheCoordinateRule(t *testing.T) {
 	t.Parallel()
 	tri := [3]r3.Vec{{X: 4, Y: 1, Z: -2}, {X: 4, Y: 3, Z: 5}, {X: 5, Y: 2, Z: 1}}
