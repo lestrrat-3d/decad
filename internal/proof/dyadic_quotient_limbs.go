@@ -21,10 +21,10 @@ func dyQuoMantissaWords(n, d Dyadic, exp int) (uint64, bool, bool) {
 	var denominator [maxWords]uint64
 	var numerator, product [maxWords + 1]uint64
 	for i := range count {
-		denominator[i] = dyQuoBits(d, i*64-normalize)
+		denominator[i] = dyMagnitudeBits(d, i*64-normalize)
 	}
 	for i := range count + 1 {
-		numerator[i] = dyQuoBits(n, i*64-shift)
+		numerator[i] = dyMagnitudeBits(n, i*64-shift)
 	}
 	if count == 1 {
 		quotient, remainder := bits.Div64(numerator[1], numerator[0], denominator[0])
@@ -64,50 +64,4 @@ func cmpQuotientWords(a, b []uint64) int {
 		}
 	}
 	return 0
-}
-
-// dyQuoBits reads 64 bits of a mantissa's magnitude starting at offset.
-// Positions below bit zero and beyond the mantissa are zero.
-func dyQuoBits(d Dyadic, offset int) uint64 {
-	if offset < 0 {
-		if offset <= -64 {
-			return 0
-		}
-		return dyQuoLimb(d, 0) << uint(-offset)
-	}
-	index, shift := offset/64, uint(offset%64)
-	word := dyQuoLimb(d, index) >> shift
-	if shift != 0 {
-		word |= dyQuoLimb(d, index+1) << (64 - shift)
-	}
-	return word
-}
-
-func dyQuoLimb(d Dyadic, index int) uint64 {
-	if d.big == nil {
-		switch index {
-		case 0:
-			return d.lo
-		case 1:
-			return d.hi &^ dySign
-		default:
-			return 0
-		}
-	}
-	words := d.big.Bits()
-	if bits.UintSize == 64 {
-		if index < len(words) {
-			return uint64(words[index])
-		}
-		return 0
-	}
-	index *= 2
-	if index >= len(words) {
-		return 0
-	}
-	word := uint64(words[index])
-	if index+1 < len(words) {
-		word |= uint64(words[index+1]) << 32
-	}
-	return word
 }

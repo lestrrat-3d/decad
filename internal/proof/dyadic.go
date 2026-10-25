@@ -506,17 +506,26 @@ func DyCmp(a, b Dyadic) int {
 		}
 		return -sign
 	}
-	var ta, tb big.Int
-	var ba, bb dyBuf
-	am, bm := a.view(&ta, &ba), b.view(&tb, &bb)
-	switch {
-	case a.exp == b.exp:
-		return am.Cmp(bm)
-	case a.exp > b.exp:
-		return new(big.Int).Lsh(am, uint(a.exp-b.exp)).Cmp(bm)
-	default:
-		return am.Cmp(new(big.Int).Lsh(bm, uint(b.exp-a.exp)))
+	if a.exp == b.exp {
+		// Equal leading positions and exponents imply equal mantissa widths,
+		// so this branch has two big mantissas, both already owned and immutable.
+		return a.big.Cmp(b.big)
 	}
+	// Read the aligned magnitudes a word at a time rather than allocating
+	// shifted copies. Coincident leading positions bound the aligned width
+	// by the larger existing mantissa, even when their exponents differ.
+	base := min(a.exp, b.exp)
+	for word := (max(aLen, bLen) - 1) / 64; word >= 0; word-- {
+		x := dyMagnitudeBits(a, word*64-(a.exp-base))
+		y := dyMagnitudeBits(b, word*64-(b.exp-base))
+		if x > y {
+			return sign
+		}
+		if x < y {
+			return -sign
+		}
+	}
+	return 0
 }
 
 // DyAbs returns |d|.
