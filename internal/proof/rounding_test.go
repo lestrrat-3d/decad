@@ -119,13 +119,22 @@ func TestRationalFloatErrorMatchesBigRatSub(t *testing.T) {
 
 func TestCmpFloatRatMatchesRatCmp(t *testing.T) {
 	t.Parallel()
+	// Each float is checked against many rationals. Its independent exact
+	// reference is immutable and need only be converted once per bit pattern.
+	references := make(map[uint64]*big.Rat)
 	check := func(f float64, q *big.Rat) {
 		t.Helper()
 		before := new(big.Rat).Set(q)
-		want := new(big.Rat).SetFloat64(f).Cmp(q)
+		bits := math.Float64bits(f)
+		ref := references[bits]
+		if ref == nil {
+			ref = new(big.Rat).SetFloat64(f)
+			references[bits] = ref
+		}
+		want := ref.Cmp(q)
 		require.Equal(t, want, proof.CmpFloatRat(f, q), "f=%v q=%v", f, q)
 		require.Zero(t, before.Cmp(q), "CmpFloatRat modified q")
-		require.Equal(t, before.Denom().String(), q.Denom().String())
+		require.Zero(t, before.Denom().Cmp(q.Denom()), "CmpFloatRat modified the denominator")
 	}
 	exactQ := func(f float64) *big.Rat { return new(big.Rat).SetFloat64(f) }
 	floats := []float64{
