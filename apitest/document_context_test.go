@@ -446,8 +446,9 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 		build  func(*testing.T) (*decad.Document, *decad.Body)
 	}{
 		{
-			name:   "PrismProfileIntegration",
-			target: "integrateMomentRecordModeContext",
+			name: "PrismProfileIntegration",
+			// Placements read cached moments after the reader's field preflight.
+			target: "EvaluatorIntegralsUncheckedContext",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				s, p := plateSketch(t)
 				doc := decad.New()

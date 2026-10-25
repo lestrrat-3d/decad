@@ -152,6 +152,16 @@ func TestProfileMomentCachePreservesPreflightAndFallbacks(t *testing.T) {
 	gotNil, err := cache.EvaluatorIntegralsUncheckedContext(t.Context(), profile, freeform.MomentFirstOrder, nil)
 	require.NoError(t, err)
 	requireCachedIntegrals(t, wantNil, gotNil)
+	preflightPolls := 0
+	_, err = momentinput.ValidateFieldsWithPoll(func() error {
+		preflightPolls++
+		return nil
+	}, profile, freeform.NewFreeformWork())
+	require.NoError(t, err)
+	readCtx := &profileMomentCancelContext{Context: t.Context(), remaining: preflightPolls}
+	_, err = cache.EvaluatorIntegralsUncheckedContext(readCtx, profile, freeform.MomentFirstOrder,
+		freeform.NewFreeformWork())
+	require.ErrorIs(t, err, context.Canceled, "a cached read must poll after its preflight")
 	wantSecond, err := profile.EvaluatorIntegralsUncheckedContext(t.Context(), freeform.MomentSecondOrder,
 		freeform.NewFreeformWork())
 	require.NoError(t, err)
@@ -173,4 +183,17 @@ func TestProfileMomentCachePreservesPreflightAndFallbacks(t *testing.T) {
 	cancel()
 	_, err = cache.EvaluatorIntegralsUncheckedContext(ctx, profile, freeform.MomentFirstOrder, freeform.NewFreeformWork())
 	require.ErrorIs(t, err, context.Canceled)
+}
+
+type profileMomentCancelContext struct {
+	context.Context //nolint:containedctx // deterministic cancellation wrapper scoped to one cache read.
+	remaining       int
+}
+
+func (c *profileMomentCancelContext) Err() error {
+	if c.remaining == 0 {
+		return context.Canceled
+	}
+	c.remaining--
+	return c.Context.Err()
 }
