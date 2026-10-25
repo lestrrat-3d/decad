@@ -2,6 +2,7 @@ package facetproof_test
 
 import (
 	"context"
+	"errors"
 	"math"
 	"testing"
 
@@ -172,6 +173,43 @@ func countingBudget(steps *int) *proofbound.WorkBudget {
 	return &proofbound.WorkBudget{
 		StepFn: func() error { *steps++; return nil },
 		ErrFn:  func() error { return nil },
+	}
+}
+
+func TestFirstMomentsFromAuditChecksExhaustionBeforeWork(t *testing.T) {
+	verts, tris := uvSphere(t, r3.Vec{}, 1, 4, 8, false)
+	audit, err := facetproof.AuditFacetedMeshWorkers(t.Context(), verts, tris, 1)
+	require.NoError(t, err)
+	for _, workers := range []int{1, 4} {
+		wall := proofbound.NewWallWorkBudget(0)
+		polled, steps := false, 0
+		budget := &proofbound.WorkBudget{
+			ErrFn: func() error {
+				polled = true
+				return wall.Err()
+			},
+			StepFn: func() error {
+				steps++
+				if !polled {
+					return errors.New("moment work began before checking the exhausted budget")
+				}
+				return wall.Step()
+			},
+		}
+		_, err := facetproof.FirstMomentsFromAuditWorkers(budget, audit, tris, workers)
+		require.ErrorIs(t, err, proofbound.ErrWallWorkBudget, "workers %d", workers)
+		require.Equal(t, 1, steps, "workers %d", workers)
+		var limit *proofbound.WorkLimitError
+		require.ErrorAs(t, err, &limit)
+		require.Equal(t, "proof_steps", limit.Resource)
+		require.Equal(t, uint64(1), limit.Observed)
+		require.Zero(t, limit.Maximum)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	for _, workers := range []int{1, 4} {
+		_, err := facetproof.FirstMomentsFromAuditWorkers(proofbound.NewWorkBudget(ctx), audit, tris, workers)
+		require.ErrorIs(t, err, context.Canceled, "workers %d", workers)
 	}
 }
 
