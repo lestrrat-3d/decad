@@ -186,19 +186,26 @@ func (a Axis) RadialLowerOf(points []r3.Vec) (float64, bool) {
 		en.Z = 1
 	}
 	na := a.v.Cross(en)
-	inPlane, normal := ratRange(), ratRange()
 	dna := dyVec(na)
-	for _, p := range points {
+	project := func(p r3.Vec) proofarith.Dyadic {
 		dp := dyVec(p)
-		d := proofarith.DyAdd(proofarith.DyAdd(
+		return proofarith.DyAdd(proofarith.DyAdd(
 			proofarith.DyMul(dp[0], dna[0]), proofarith.DyMul(dp[1], dna[1])), proofarith.DyMul(dp[2], dna[2]))
-		inPlane.add(d.Rat())
-		normal.add(proofarith.FloatRat(component(p, n)))
 	}
-	sum := new(big.Rat).Mul(inPlane.minAbs(), inPlane.minAbs())
-	nm := normal.minAbs()
-	sum.Add(sum, new(big.Rat).Mul(a.NormSq().Rat(), new(big.Rat).Mul(nm, nm)))
-	return proofbound.RatSqrtDown(sum), true
+	inLo := project(points[0])
+	inHi := inLo
+	normalLo := proofarith.MustDyOf(component(points[0], n))
+	normalHi := normalLo
+	for _, p := range points[1:] {
+		d := project(p)
+		inLo, inHi = proofarith.DyMin(inLo, d), proofarith.DyMax(inHi, d)
+		dn := proofarith.MustDyOf(component(p, n))
+		normalLo, normalHi = proofarith.DyMin(normalLo, dn), proofarith.DyMax(normalHi, dn)
+	}
+	im := dyadicRangeMinAbs(inLo, inHi)
+	nm := dyadicRangeMinAbs(normalLo, normalHi)
+	sum := proofarith.DyAdd(proofarith.DyMul(im, im), proofarith.DyMul(a.NormSq(), proofarith.DyMul(nm, nm)))
+	return proofbound.RatSqrtDown(sum.Rat()), true
 }
 
 // TriangleBeyond reports whether every point of the closed triangle lies
@@ -295,32 +302,12 @@ func scaled(q *big.Rat, div, lo, hi float64, round func(*big.Rat) float64) (floa
 	return out, true
 }
 
-type ratSpan struct{ lo, hi *big.Rat }
-
-func ratRange() *ratSpan { return &ratSpan{} }
-
-func (s *ratSpan) add(v *big.Rat) {
-	if s.lo == nil || v.Cmp(s.lo) < 0 {
-		s.lo = v
+// dyadicRangeMinAbs returns the smallest |x| in the closed interval.
+func dyadicRangeMinAbs(lo, hi proofarith.Dyadic) proofarith.Dyadic {
+	if lo.Sign() <= 0 && hi.Sign() >= 0 {
+		return proofarith.Dyadic{}
 	}
-	if s.hi == nil || v.Cmp(s.hi) > 0 {
-		s.hi = v
-	}
-}
-
-// minAbs returns the smallest |x| over the span.
-func (s *ratSpan) minAbs() *big.Rat {
-	if s.lo.Sign() <= 0 && s.hi.Sign() >= 0 {
-		return new(big.Rat)
-	}
-	return new(big.Rat).Abs(minRat(new(big.Rat).Abs(s.lo), new(big.Rat).Abs(s.hi)))
-}
-
-func minRat(a, b *big.Rat) *big.Rat {
-	if a.Cmp(b) <= 0 {
-		return a
-	}
-	return b
+	return proofarith.DyMin(proofarith.DyAbs(lo), proofarith.DyAbs(hi))
 }
 
 // PlaneScaled returns the exact plane-scaled coordinates of the plane-local
