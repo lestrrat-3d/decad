@@ -49,6 +49,10 @@ func Read(m *stepread.Model, limit int) (Mesh, error) {
 		return Mesh{}, err
 	}
 	r.scale = scale
+	if name := assemblyEntity(m); name != "" {
+		return Mesh{}, fmt.Errorf("%w: the file places its shapes as an assembly (%s), and placements are not read, so the parts would sit at their own origins",
+			decaderr.ErrUnsupported, name)
+	}
 	solids := 0
 	for _, id := range sortedIDs(m) {
 		e := m.Entities[id]
@@ -81,6 +85,28 @@ func Read(m *stepread.Model, limit int) (Mesh, error) {
 		return Mesh{}, fmt.Errorf("%w: the model holds no MANIFOLD_SOLID_BREP or BREP_WITH_VOIDS", ErrMalformed)
 	}
 	return Mesh{Vertices: r.vertices, Triangles: r.tris}, nil
+}
+
+// assemblyEntity names the first entity that makes the file an assembly: a
+// NEXT_ASSEMBLY_USAGE_OCCURRENCE, or a representation relationship with a
+// transformation, a member of a complex instance as well as a simple one. It is
+// empty when the file has none. The reader places no shape, so it refuses these
+// rather than overlay parts that the file puts apart.
+func assemblyEntity(m *stepread.Model) string {
+	for _, id := range sortedIDs(m) {
+		e := m.Entities[id]
+		names := []string{e.Name}
+		for _, p := range e.Parts {
+			names = append(names, p.Name)
+		}
+		for _, n := range names {
+			switch n {
+			case "NEXT_ASSEMBLY_USAGE_OCCURRENCE", "ITEM_DEFINED_TRANSFORMATION", "REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION":
+				return n
+			}
+		}
+	}
+	return ""
 }
 
 func sortedIDs(m *stepread.Model) []int {

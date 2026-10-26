@@ -2483,3 +2483,4 @@
 10	0.01	TestUnionOfSeveralBodiesFoldsThemTwoAtATime
 10	0.01	TestUnionFoldIsTheSameWhateverTheOrder
 10	0.01	TestUnionFoldRefusalsLeaveEveryBodyLive
+10	0.01	TestReadSTEPRefusesAnAssembly

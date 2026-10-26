@@ -570,3 +570,27 @@ func TestReadSTEPReadsAConeFrustum(t *testing.T) {
 	require.InDelta(t, 5, m.Bounds().Max.X, 1e-9)
 	require.InDelta(t, 10, m.Bounds().Max.Z, 1e-9)
 }
+
+// A file that places its shapes as an assembly is refused: ReadSTEP places nothing, so the parts
+// would overlay one another at their own origins.
+func TestReadSTEPRefusesAnAssembly(t *testing.T) {
+	t.Parallel()
+	file := plateWithSquareHoleFile("PLANE")
+	for name, line := range map[string]string{
+		"a usage occurrence":       "#9000=NEXT_ASSEMBLY_USAGE_OCCURRENCE('1','a','b',#1,#2,$);",
+		"a placing transform":      "#9000=ITEM_DEFINED_TRANSFORMATION('','',#1,#2);",
+		"a related transformation": "#9000=(REPRESENTATION_RELATIONSHIP('','',#1,#2)REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION(#9001)SHAPE_REPRESENTATION_RELATIONSHIP());",
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			end := strings.LastIndex(file, "ENDSEC;")
+			require.Positive(t, end)
+			_, err := readSTEPBytes(t, []byte(file[:end]+line+"\n"+file[end:]))
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			require.Contains(t, err.Error(), "assembly")
+		})
+	}
+	// The same file with no placement entity reads.
+	_, err := readSTEPBytes(t, []byte(file))
+	require.NoError(t, err)
+}
