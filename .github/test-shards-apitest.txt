@@ -2402,3 +2402,11 @@
 10	0.01	TestTextProfilesSkipsSpaces
 10	0.01	TestTextProfilesEmbossesAndEngraves
 10	0.01	TestTextProfilesRefusals
+10	0.01	TestReadSTEPRoundTripsABlock
+10	0.01	TestReadSTEPRoundTripsAConcavePrism
+10	0.01	TestReadSTEPRoundTripsACavity
+10	0.01	TestReadSTEPRoundTripsAFacetedCone
+10	0.01	TestReadSTEPRefusesACurvedBody
+10	0.01	TestReadSTEPHandWrittenPlateWithAHoleAndInches
+10	0.01	TestReadSTEPRefusals
+10	0.01	TestReadSTEPHonoursAnOrientedVoidShellsFlag

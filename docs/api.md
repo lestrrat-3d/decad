@@ -338,7 +338,7 @@ A `decad.Diagnostic` states each reason a report is not sound, with its `decad.D
 
 ## Import
 
-`decad.ReadSTL`, `decad.ReadOBJ` and `decad.ReadThreeMF` read a triangle mesh file into a `decad.MeshBody`. A `decad.MeshBody` is not a
+`decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF` and `decad.ReadSTEP` read a triangle mesh file or a planar STEP solid into a `decad.MeshBody`. A `decad.MeshBody` is not a
 `decad.Body`: no feature or Boolean takes it. It reports whether its triangles close into a surface, and its bounds,
 area and enclosed volume.
 

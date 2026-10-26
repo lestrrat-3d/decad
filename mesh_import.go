@@ -2,10 +2,13 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
 	"github.com/lestrrat-3d/decad/internal/meshparse"
+	"github.com/lestrrat-3d/decad/internal/stepbrep"
+	"github.com/lestrrat-3d/decad/internal/stepread"
 	"github.com/lestrrat-go/option/v3"
 )
 
@@ -144,6 +147,58 @@ func ReadThreeMF(ctx context.Context, r io.Reader, opts ...MeshImportOption) (*M
 	}
 	mesh, err := meshparse.ThreeMF(ctx, r, l)
 	if err != nil {
+		return nil, err
+	}
+	return NewMeshBody(ctx, mesh.Vertices, mesh.Triangles)
+}
+
+// ReadSTEP reads the planar-faced solids of a STEP file into a [MeshBody]
+// (agent-docs/step-import-design.md). It reads every MANIFOLD_SOLID_BREP and
+// BREP_WITH_VOIDS: each face on a plane is cut into triangles, a face with holes
+// included, and the vertices are welded by coordinate. A cavity's shell winds
+// into the cavity, so the volume of a solid with one reads as the material
+// alone. Lengths are converted from the file's unit to millimetres.
+//
+// Only planes and straight edges are read. A face on a cylinder, cone, sphere,
+// torus or free-form surface, or an edge that is an arc or a curve, is
+// [ErrUnsupported]: decad reads no curved boundary representation. A file that is
+// not well-formed STEP, or whose entities do not make the B-rep they name, is
+// [ErrMalformedMesh], and input past a limit is [ErrMeshTooLarge].
+//
+// ctx and r MUST NOT be nil, each otherwise ErrDegenerate. A canceled context
+// returns its error.
+func ReadSTEP(ctx context.Context, r io.Reader, opts ...MeshImportOption) (*MeshBody, error) {
+	if ctx == nil || r == nil {
+		return nil, fmt.Errorf(`%w: reading a STEP file needs a context and a reader`, ErrDegenerate)
+	}
+	l, err := meshLimits(opts)
+	if err != nil {
+		return nil, err
+	}
+	data, err := io.ReadAll(io.LimitReader(r, l.Bytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("STEP read failed: %w", err)
+	}
+	if int64(len(data)) > l.Bytes {
+		return nil, fmt.Errorf("%w: more than %d bytes", ErrMeshTooLarge, l.Bytes)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	model, err := stepread.Parse(data)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s", ErrMalformedMesh, err)
+	}
+	mesh, err := stepbrep.Read(model, l.Triangles)
+	switch {
+	case errors.Is(err, stepbrep.ErrTooLarge):
+		return nil, fmt.Errorf("%w: %s", ErrMeshTooLarge, err)
+	case errors.Is(err, stepbrep.ErrMalformed):
+		return nil, fmt.Errorf("%w: %s", ErrMalformedMesh, err)
+	case err != nil:
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	return NewMeshBody(ctx, mesh.Vertices, mesh.Triangles)
