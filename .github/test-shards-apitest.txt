@@ -1456,6 +1456,9 @@
 7	0.01	TestMassPropertiesCupOuterMinusCavity
 7	0.01	TestMassPropertiesStitchedTetrahedron
 7	0.00	TestMotionPoseAt
+10	0.00	TestShellStackedBossOpenAtBottom
+10	0.00	TestShellStackedBossOpenAtBottomOffCentre
+10	0.00	TestShellStackedBossOpenAtBottomRefusesCollapsedCavity
 7	0.36	TestNormalAtAnswersRetainedSurfaces
 7	0.01	TestOffsetPairCannotDoubleCount
 7	0.00	TestOffsetPatchPositive

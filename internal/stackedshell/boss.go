@@ -40,7 +40,9 @@ func rectBoss(ctx context.Context, env topo.Env, sp stackedrecord.Payload, view 
 	t := call.T
 	if !(a.Z1-a.Z0 > 2*t && boss.Width() > 2*t && boss.Height() > 2*t &&
 		boss.U0 > plate.U0+t && boss.V0 > plate.V0+t && boss.U1 < plate.U1-t && boss.V1 < plate.V1-t) {
-		return refuse("has insufficient floor, wall, or root clearance")
+		// a.Z1-a.Z0 > 2t is stricter than the bottom-open geometry needs; it
+		// is kept so every arm shares one exactness gate.
+		return refuse("has insufficient plate thickness, wall, or root clearance")
 	}
 	if (closed || bottomOpen) && b.Z1-b.Z0 <= t {
 		return refuse("has no cavity below the kept boss roof")
@@ -65,9 +67,9 @@ func rectBoss(ctx context.Context, env topo.Env, sp stackedrecord.Payload, view 
 		!prismshell.BossRectArithmeticExact(plate, t) || !prismshell.BossRectArithmeticExact(boss, t) {
 		return refuse("needs exactly represented offset coordinates")
 	}
-	// The source view has a single top cap. All its other faces keep their
-	// recorded geometry; the result gets new face(k)/wall(k) roles on rebuild.
-	// The removed cap is the top cap, the bottom cap when bottomOpen, and
+	// The source view has one top cap and one bottom cap. All faces but the
+	// removed cap keep their recorded geometry; the result gets new
+	// face(k)/wall(k) roles on rebuild. The removed cap is the top cap, the bottom cap when bottomOpen, and
 	// none when closed.
 	capZ, capOutward, capName := b.Z1, true, "top cap"
 	if bottomOpen {

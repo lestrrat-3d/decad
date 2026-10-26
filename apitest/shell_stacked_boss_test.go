@@ -142,8 +142,6 @@ func TestShellStackedBossOpenAtBottom(t *testing.T) {
 	// open), the 8x8x4 upper cavity under the kept roof, and the root band
 	// 20/3 + 8*pi + 60.
 	want := 2500.0 - 18*18*4 - 8*8*4 - (60 + 20.0/3 + 8*math.Pi)
-	closedWant := 2500.0 - 18*18*3 - 8*8*4 - (60 + 20.0/3 + 8*math.Pi)
-	require.InDelta(t, 18*18*1, closedWant-want, 1e-9)
 	require.LessOrEqual(t, math.Abs(v.Value.Base()-want), v.Bound.Base())
 	// Moment about z=0: plate 2000 at 2.5, boss 500 at 7.5, lower cavity
 	// 1296 at 2, upper cavity 256 at 7, and the band at its ledge level 4
@@ -179,6 +177,64 @@ func TestShellStackedBossOpenAtBottom(t *testing.T) {
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
+}
+
+// The off-centre boss makes the lower cavity's U and V moments differ from
+// the boss's, so a wrong lower-cavity weight shows in the centroid.
+func TestShellStackedBossOpenAtBottomOffCentre(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	stack, err := decad.Union(t.Context(), boxBody(t, doc, -12, -10, 8, 10, 6),
+		boxBodyAtZ(t, doc, -2, -4, 6, 2, 6, 4))
+	require.NoError(t, err)
+	shell, err := decad.Shell(t.Context(), stack, decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1),
+		units.Millimeters(1))
+	require.NoError(t, err)
+	v, err := shell.Volume()
+	require.NoError(t, err)
+	// Plate 20x20x6 centred at U=-2, boss 8x6x4, lower cavity 18x18x5 (floor open), upper
+	// cavity 6x4x3 under the kept roof, root band 80/3 + 5*pi.
+	bandV := 80.0/3 + 5*math.Pi
+	want := 2400.0 + 192 - 1620 - 72 - bandV
+	require.LessOrEqual(t, math.Abs(v.Value.Base()-want), v.Bound.Base())
+	c, err := shell.Centroid()
+	require.NoError(t, err)
+	tol := 1e-12 + c.Bound.Base()
+	require.LessOrEqual(t, math.Abs(c.Value.X-(-1320-2*bandV)/want), tol)
+	require.LessOrEqual(t, math.Abs(c.Value.Y-(-120+bandV)/want), tol)
+	mz := 7200.0 + 1536 - 1620*2.5 - 72*7.5 - (5*bandV + 59.0/3)
+	require.LessOrEqual(t, math.Abs(c.Value.Z-mz/want), tol)
+	mesh, err := shell.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.VolumeVerified())
+	require.LessOrEqual(t, math.Abs(shellMeshSignedVolume(mesh)-v.Value.Base()), 1.0+v.Bound.Base())
+}
+
+func TestShellStackedBossOpenAtBottomRefusesCollapsedCavity(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name                             string
+		plateHeight, bossHeight, bossOff float64
+	}{
+		{name: "floor", plateHeight: 2, bossHeight: 5, bossOff: 5},
+		{name: "roof", plateHeight: 5, bossHeight: 1, bossOff: 5},
+		{name: "root clearance", plateHeight: 5, bossHeight: 5, bossOff: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			stack, err := decad.Union(t.Context(), boxBody(t, doc, -10, -10, 10, 10, tc.plateHeight),
+				boxBodyAtZ(t, doc, -10+tc.bossOff, -10+tc.bossOff, 10-tc.bossOff, 10-tc.bossOff,
+					tc.plateHeight, tc.bossHeight))
+			require.NoError(t, err)
+			shell, err := decad.Shell(t.Context(), stack,
+				decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1), units.Millimeters(1))
+			require.Nil(t, shell)
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			_, err = stack.Volume()
+			require.NoError(t, err, "a refused shell leaves its source live")
+		})
+	}
 }
 
 // Each of the other stacked shells opens only at the cap its shape names.
