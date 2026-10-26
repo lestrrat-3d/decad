@@ -2433,3 +2433,7 @@
 10	0.01	TestPathPatternPivotTurnsCopiesAboutThePivot
 10	0.01	TestPathPatternPivotAtThePathStartIsTheDefault
 10	0.01	TestPathPatternPivotRefusals
+10	0.01	TestArrangeAngleLaysADiagonalBarSquareToTheBed
+10	0.01	TestArrangeAngleKeepsABodyThatIsAlreadySquare
+10	0.01	TestArrangeAngleCoarseStepMissesTheBestAngle
+10	0.01	TestArrangeAngleRefusals

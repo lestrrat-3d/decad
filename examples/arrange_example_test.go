@@ -115,3 +115,57 @@ func Example_arrange_turns() {
 	// x 1..21, y 6..10
 	// x 1..21, y 11..15
 }
+
+// WithArrangeAngle turns each part about +Z to the angle that makes its
+// footprint smallest, for parts that lie across the diagonal. Here a 4 x 30 mm
+// bar turned 45 degrees would need a bed 24 mm deep; tried at 5 degree steps it
+// lies along X and fits a bed 10 mm deep.
+func Example_arrange_angle() {
+	doc := decad.New()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(0, 0, 4, 30)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	bar, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(3), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	turn, err := r3.RotationAround(r3.Vec{X: 2, Y: 15}, r3.Vec{Z: 1}, units.Degrees(45))
+	if err != nil {
+		fmt.Printf("failed to build turn: %s\n", err)
+		return
+	}
+	bar, err = decad.Transform(context.Background(), bar, turn)
+	if err != nil {
+		fmt.Printf("failed to turn: %s\n", err)
+		return
+	}
+	placed, err := decad.Arrange(context.Background(), []*decad.Body{bar}, decad.ArrangeBed{
+		Origin: r3.Vec{},
+		Width:  units.Millimeters(40),
+		Depth:  units.Millimeters(10),
+		Gap:    units.Millimeters(1),
+	}, decad.WithArrangeAngle(units.Degrees(5)))
+	if err != nil {
+		fmt.Printf("failed to arrange: %s\n", err)
+		return
+	}
+	box, err := placed[0].Bounds()
+	if err != nil {
+		fmt.Printf("failed to read bounds: %s\n", err)
+		return
+	}
+	fmt.Printf("x %.0f..%.0f, y %.0f..%.0f\n", box.Min.X, box.Max.X, box.Min.Y, box.Max.Y)
+	// Output:
+	// x 1..31, y 1..5
+}
