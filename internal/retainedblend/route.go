@@ -466,8 +466,12 @@ func blendChains(ctx context.Context, env topo.Env, b *topo.Body, fp facetedreco
 	return cur, nil
 }
 
+// sameEdgeKey reports whether a and b join the same two points, whichever way
+// each is directed: replanning a chain on the partly blended body can direct
+// an edge opposite to the selected one.
 func sameEdgeKey(a, b *topo.Edge) bool {
-	return a.Start.Position == b.Start.Position && a.End.Position == b.End.Position
+	return (a.Start.Position == b.Start.Position && a.End.Position == b.End.Position) ||
+		(a.Start.Position == b.End.Position && a.End.Position == b.Start.Position)
 }
 
 // replanChain orders edges of body that form one chain.
