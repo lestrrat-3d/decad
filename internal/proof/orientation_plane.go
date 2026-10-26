@@ -40,7 +40,7 @@ func NewFloatOrientationPlane(a, b, c r3.Vec) FloatOrientationPlane {
 // Sign returns an exact orientation sign when its float error bound decides
 // it. An uncertain result must use exact arithmetic. This factors the same
 // six triple products as OrientSignFloat, grouping by the probe differences.
-// Each term still has at most eight roundings. Its guard and 1e-12 permanent
+// Each term still has at most eight roundings. Its guard and 2e-15 permanent
 // bound retain the normal-range and subnormal-grid proof in OrientSignFloat.
 func (p *FloatOrientationPlane) Sign(d r3.Vec) (int, bool) {
 	da := d.Sub(p.anchor)
@@ -59,7 +59,7 @@ func (p *FloatOrientationPlane) Sign(d r3.Vec) (int, bool) {
 	}
 	det := p.normal.Dot(da)
 	perm := p.magnitude.Dot(r3.NewVec(Abs(da.X), Abs(da.Y), Abs(da.Z)))
-	err := 1e-12 * perm
+	err := 2e-15 * perm
 	if det > err {
 		return 1, true
 	}

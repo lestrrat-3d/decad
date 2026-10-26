@@ -1040,12 +1040,22 @@ func (d *LoftAuditData) planeSigns(i int, xother [3]proof.Xpt, other [3]r3.Vec) 
 	xt := d.xtri(i)
 	var signs [3]int
 	var sum, term big.Int
+	var corners [3]r3.Vec
+	loadedCorners := false
 	for k := range signs {
 		p := xother[k]
 		if p == xt[0] || p == xt[1] || p == xt[2] {
 			continue
 		}
 		if s, certain := plane.Sign(other[k]); certain {
+			signs[k] = s
+			continue
+		}
+		if !loadedCorners {
+			corners = d.corners(i)
+			loadedCorners = true
+		}
+		if s, certain := proof.OrientSignExpansion(corners[0], corners[1], corners[2], other[k]); certain {
 			signs[k] = s
 			continue
 		}
@@ -1069,8 +1079,8 @@ func (d *LoftAuditData) planeSigns(i int, xother [3]proof.Xpt, other [3]r3.Vec) 
 // table order and edgeA is one of those corners, so na . (edgeA - t0) is exactly
 // 0 and the value is na . (apex - t0) = det[t1 - t0, t2 - t0, apex - t0], the
 // value proof.OrientSignFloat signs for (t0, t1, t2, apex). A sign that filter
-// certifies is therefore the exact sign, and a certified zero is its
-// exact-zero-column case. An undecided sign, an apex that is not a corner of the
+// certifies is therefore the exact sign, including a certified zero.
+// An undecided sign, an apex that is not a corner of the
 // table's triangle j, or an edgeA that is not a corner of the table's triangle i
 // falls through to the exact dot product. The float answer is off for data built
 // by NewLoftAuditDataWithExact, whose exact lifts may differ from the float

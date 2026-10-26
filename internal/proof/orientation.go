@@ -85,14 +85,14 @@ func OrientSignFloat(a, b, c, d r3.Vec) (int, bool) {
 	// results on those grids are exact; magnitudes below 6*2^750 cannot overflow.
 	// Each signed triple product has at most eight roundings, giving
 	// |Dhat-D| < 9e-16*Phat. When Phat is nonzero, it is at least 2^-900,
-	// so 1e-12*Phat stays normal and exceeds this error bound after rounding.
-	if err := 1e-12 * perm; det > err || det < -err {
+	// so 2e-15*Phat stays normal and exceeds this error bound after rounding.
+	if err := 2e-15 * perm; det > err || det < -err {
 		if det > 0 {
 			return 1, true
 		}
 		return -1, true
 	}
-	return 0, false
+	return OrientSignExpansion(a, b, c, d)
 }
 
 // OrientSignMixed is the exact plane-side sign of a homogeneous probe against
