@@ -66,7 +66,7 @@ func MeshPNG(ctx context.Context, w io.Writer, m *decad.MeshBody, view View) err
 	if err := checkMeshWriter(ctx, w, m, "PNG"); err != nil {
 		return err
 	}
-	return writePNG(ctx, w, m, view)
+	return writePNG(ctx, w, m, view, []int{len(m.Triangles())})
 }
 
 // MeshDXF writes the feature edges of m as a 2D DXF drawing, as [DXF] writes a

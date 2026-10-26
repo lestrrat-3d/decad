@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image/color"
 	"image/png"
 
 	"github.com/lestrrat-3d/decad"
@@ -101,6 +102,52 @@ func Example_export_png_bodies() {
 	fmt.Printf("image: %d x %d pixels\n", bounds.Dx(), bounds.Dy())
 	// Output:
 	// image: 320 x 240 pixels
+}
+
+// View.Colors gives each body its own colour, so the parts of an assembly read
+// apart. Here two blocks are drawn red and green from above, and the pixel over
+// each is checked.
+func Example_export_png_colors() {
+	doc := decad.New()
+	var parts []*decad.Body
+	for _, x := range []float64{0, 30} {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		if err != nil {
+			fmt.Printf("failed to create sketch: %s\n", err)
+			return
+		}
+		rect := s.CreateRectangle(x, 0, x+10, 10)
+		s.Fix(rect.A)
+		if _, err := s.Solve(context.Background()); err != nil {
+			fmt.Printf("failed to solve: %s\n", err)
+			return
+		}
+		part, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+		if err != nil {
+			fmt.Printf("failed to extrude: %s\n", err)
+			return
+		}
+		parts = append(parts, part)
+	}
+	view := export.View{Direction: r3.NewVec(0, 0, -1), Up: r3.NewVec(0, 1, 0), Width: 400, Height: 400}
+	view.Colors = []color.RGBA{{R: 200, G: 40, B: 40}, {R: 40, G: 200, B: 40}}
+	var out bytes.Buffer
+	if err := export.PNGBodies(context.Background(), &out, parts, units.Millimeters(0.1), view); err != nil {
+		fmt.Printf("failed to export: %s\n", err)
+		return
+	}
+	img, err := png.Decode(&out)
+	if err != nil {
+		fmt.Printf("failed to read the image: %s\n", err)
+		return
+	}
+	left := color.RGBAModel.Convert(img.At(50, 200)).(color.RGBA)
+	right := color.RGBAModel.Convert(img.At(340, 200)).(color.RGBA)
+	fmt.Printf("left block is red: %t, right block is green: %t\n", left.R > left.G, right.G > right.R)
+	// Output:
+	// left block is red: true, right block is green: true
 }
 
 // Set Outlines on the view to draw the part's visible edges in dark grey over

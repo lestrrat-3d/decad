@@ -14,8 +14,9 @@ import (
 // (agent-docs/png-export-design.md §5). Each body is tessellated at the chord
 // tolerance and the meshes are drawn together, so a nearer body hides a farther
 // one and the whole scene is centred and scaled to fill the image with the
-// margin [PNG] leaves. The bodies share the one colour scheme: a face toward the
-// camera is blue and one looking away is orange. A pixel no face covers is
+// margin [PNG] leaves. A face toward the camera is blue and one looking away is
+// orange, unless View.Colors gives each body its own colour for the faces that
+// look toward the camera. A pixel no face covers is
 // opaque white.
 //
 // The meshes default to decad.VerifyNone; pass decad.WithVerification to demand
@@ -34,18 +35,20 @@ func PNGBodies(ctx context.Context, w io.Writer, bodies []*decad.Body, tol units
 		return fmt.Errorf("export: PNG: %w: no body to draw", decad.ErrDegenerate)
 	}
 	var scene mergedMesh
+	counts := make([]int, 0, len(bodies))
 	for _, body := range bodies {
 		mesh, err := tessellateForExport(ctx, body, tol, opts)
 		if err != nil {
 			return err
 		}
+		counts = append(counts, len(mesh.Triangles()))
 		offset := len(scene.vertices)
 		scene.vertices = append(scene.vertices, mesh.Vertices()...)
 		for _, tri := range mesh.Triangles() {
 			scene.triangles = append(scene.triangles, [3]int{tri[0] + offset, tri[1] + offset, tri[2] + offset})
 		}
 	}
-	return writePNG(ctx, w, scene, view)
+	return writePNG(ctx, w, scene, view, counts)
 }
 
 // mergedMesh is the meshes of several bodies as one: each body's triangles keep

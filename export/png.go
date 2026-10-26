@@ -22,7 +22,8 @@ import (
 // (agent-docs/png-export-design.md). Direction is the way the camera looks,
 // from the eye into the scene, and Up sets the image's vertical. Neither need
 // be a unit vector. The image's right is Direction × Up. Width and Height are
-// pixels, each from 16 to 8192.
+// pixels, each from 16 to 8192. Colors gives each body its own colour
+// (agent-docs/png-export-design.md §8).
 //
 // Outlines draws the body's visible feature edges over the shading, one dark
 // pixel wide (agent-docs/png-export-design.md §6). FieldOfView, an angle, makes
@@ -35,6 +36,11 @@ type View struct {
 	Width, Height int
 	Outlines      bool
 	FieldOfView   units.Value
+	// Colors, when not empty, are the colours of the bodies' faces that look
+	// toward the camera, one for each body drawn, in order: [PNG] and [MeshPNG]
+	// draw one body and so take one, and [PNGBodies] takes one for each body.
+	// The alpha channel is ignored. Faces that look away stay orange.
+	Colors []color.RGBA
 }
 
 // IsometricView looks at the model along the diagonal from above its +X, +Y,
@@ -70,12 +76,39 @@ func PNG(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, vi
 	if err != nil {
 		return err
 	}
-	return writePNG(ctx, w, mesh, view)
+	return writePNG(ctx, w, mesh, view, []int{len(mesh.Triangles())})
 }
 
-// writePNG draws the mesh as a PNG image.
-func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View) error {
+// bodyTints is the front colour of each triangle for bodies whose triangle
+// counts are counts, or nil when the view sets no colours: view.Colors is one
+// colour for each body.
+func bodyTints(view View, counts []int) ([]color.RGBA, error) {
+	if len(view.Colors) == 0 {
+		return nil, nil
+	}
+	if len(view.Colors) != len(counts) {
+		return nil, fmt.Errorf("export: PNG: %w: %d colours for %d bodies; give one for each body or none",
+			decad.ErrDegenerate, len(view.Colors), len(counts))
+	}
+	var tints []color.RGBA
+	for i, n := range counts {
+		c := view.Colors[i]
+		c.A = 255
+		for range n {
+			tints = append(tints, c)
+		}
+	}
+	return tints, nil
+}
+
+// writePNG draws the mesh as a PNG image. counts are the triangle counts of
+// the bodies the mesh is made of, in order, which View.Colors is read against.
+func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View, counts []int) error {
 	if err := ctx.Err(); err != nil {
+		return err
+	}
+	tints, err := bodyTints(view, counts)
+	if err != nil {
 		return err
 	}
 	cam := raster.Camera{Direction: view.Direction, Up: view.Up}
@@ -92,7 +125,7 @@ func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View) erro
 		}
 		cam.FieldOfView = fov
 	}
-	img, err := raster.Render(ctx, mesh.Vertices(), mesh.Triangles(), cam, view.Width, view.Height)
+	img, err := raster.RenderTinted(ctx, mesh.Vertices(), mesh.Triangles(), tints, cam, view.Width, view.Height)
 	if errors.Is(err, raster.ErrDegenerate) {
 		return fmt.Errorf("export: PNG: %w: %s", decad.ErrDegenerate, err)
 	}

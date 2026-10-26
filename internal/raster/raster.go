@@ -103,14 +103,14 @@ func Shaded(cam Camera, normal r3.Vec) (color.RGBA, error) {
 	if !ok {
 		return color.RGBA{}, fmt.Errorf("%w: the face normal has no length", ErrDegenerate)
 	}
-	return shade(dir, dir, right, up, n), nil
+	return shade(Front, dir, dir, right, up, n), nil
 }
 
 // shade colours a face with the unit normal n. view is the direction from the
 // eye to the face: dir for an orthographic camera and the line of sight to the
 // face for a perspective one. A face whose normal points along view looks away.
-func shade(view, dir, right, up, n r3.Vec) color.RGBA {
-	base := Front
+func shade(front color.RGBA, view, dir, right, up, n r3.Vec) color.RGBA {
+	base := front
 	if n.Dot(view) > 0 { // the normal points away from the camera: a back face
 		base = Back
 		n = n.Scale(-1)
@@ -253,6 +253,13 @@ func checkMesh(verts []r3.Vec, tris [][3]int) error {
 // mesh is centred and scaled to fit with a margin, keeping its proportions. A
 // triangle takes the colour Shaded gives for its normal.
 func Render(ctx context.Context, verts []r3.Vec, tris [][3]int, cam Camera, width, height int) (*image.RGBA, error) {
+	return RenderTinted(ctx, verts, tris, nil, cam, width, height)
+}
+
+// RenderTinted is Render with a front colour for each triangle: tints[i] is the
+// base colour of triangle i when it looks toward the camera, in place of Front.
+// A back face keeps the Back colour. tints is nil, or as long as tris.
+func RenderTinted(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []color.RGBA, cam Camera, width, height int) (*image.RGBA, error) {
 	proj, err := NewProjection(verts, cam, width, height)
 	if err != nil {
 		return nil, err
@@ -260,11 +267,14 @@ func Render(ctx context.Context, verts []r3.Vec, tris [][3]int, cam Camera, widt
 	if err := checkMesh(verts, tris); err != nil {
 		return nil, err
 	}
+	if tints != nil && len(tints) != len(tris) {
+		return nil, fmt.Errorf("%w: %d tints for %d triangles", ErrDegenerate, len(tints), len(tris))
+	}
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	for i := range img.Pix {
 		img.Pix[i] = 0xff // opaque white
 	}
-	if _, err := draw(ctx, verts, tris, proj, img); err != nil {
+	if _, err := draw(ctx, verts, tris, tints, proj, img); err != nil {
 		return nil, err
 	}
 	return img, nil
@@ -277,12 +287,12 @@ func DepthBuffer(ctx context.Context, verts []r3.Vec, tris [][3]int, proj Projec
 	if err := checkMesh(verts, tris); err != nil {
 		return nil, err
 	}
-	return draw(ctx, verts, tris, proj, nil)
+	return draw(ctx, verts, tris, nil, proj, nil)
 }
 
 // draw rasterizes the triangles, colouring img when it is not nil, and returns
 // the depth buffer.
-func draw(ctx context.Context, verts []r3.Vec, tris [][3]int, proj Projection, img *image.RGBA) ([]float64, error) {
+func draw(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []color.RGBA, proj Projection, img *image.RGBA) ([]float64, error) {
 	screen := make([]screenVertex, len(verts))
 	for i, v := range verts {
 		x, y, depth := proj.Project(v)
@@ -309,7 +319,11 @@ func draw(ctx context.Context, verts []r3.Vec, tris [][3]int, proj Projection, i
 				centre := verts[t[0]].Add(verts[t[1]]).Add(verts[t[2]]).Scale(1.0 / 3)
 				view = centre.Sub(proj.eye)
 			}
-			fill = shade(view, proj.dir, proj.right, proj.up, normal)
+			front := Front
+			if tints != nil {
+				front = tints[ti]
+			}
+			fill = shade(front, view, proj.dir, proj.right, proj.up, normal)
 		}
 		fillTriangle(img, depths, proj.Width, screen[t[0]], screen[t[1]], screen[t[2]], fill)
 	}
