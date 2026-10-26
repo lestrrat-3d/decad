@@ -2303,3 +2303,9 @@
 10	0.01	TestBossOnTheUnderside
 10	0.01	TestBossRefusals
 10	0.01	TestBossRefusesAFaceThatIsNotPlanar
+10	0.01	TestSectionOutlineOfABlockIsItsSquare
+10	0.01	TestSectionOutlineFlippedNormalReversesTheLoop
+10	0.01	TestSectionOutlineOfADrilledPlateHasAHole
+10	0.01	TestSectionOutlineObliquePlaneCutsAHexagon
+10	0.01	TestSectionOutlineThroughAFaceReadsJustBehindIt
+10	0.01	TestSectionOutlineMissesAndRefusals

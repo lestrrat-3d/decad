@@ -290,7 +290,7 @@ Features choose edges and faces with queries.
 | Position | `Body.LocatePoint`, `Body.DistanceToPoint`, `Face.DistanceToPoint`, `Body.ClosestPoint`, `Face.ClosestPoint` |
 | Topology | `Body.Lumps`, `Body.Shells`, `Body.Faces`, `Body.Edges`, `Body.Vertices`, `Face.Loops`, `Edge.Faces` |
 | Geometry | `Face.Surface`, `Edge.Curve`, `Face.NormalAt`, `Edge.Length`, `Vertex.Position` |
-| Cross-section | `Body.Section` returns a sketch and its profiles on a plane. |
+| Cross-section | `Body.Section` returns a sketch and its profiles on a plane. `Body.SectionOutline` returns the closed outlines of the verified mesh cut by a plane, for bodies `Body.Section` refuses. |
 | Mesh | `Body.Tessellate` returns a `*decad.Mesh` with its chord error bound. |
 
 `Body.MassProperties` uses certified source moments for some strictly

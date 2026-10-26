@@ -27,6 +27,7 @@ first.
 
 - `agent-docs/layout/design-docs.md`: design documents, user guides, seam and
   records, mass properties and free-form curves.
+- `agent-docs/layout/design-docs-gaps.md`: design documents of the features added to close gap rows.
 - `agent-docs/layout/features.md`: feature files and the cap-loop chamfer.
 - `agent-docs/layout/modify-booleans.md`: modify operations.
 - `agent-docs/layout/booleans.md`: Boolean files.
