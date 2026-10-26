@@ -760,7 +760,8 @@ func (v *Vertex) Position() VecMeasurement // millimetres (§5.2); a computed co
 
 // MeshBody is an imported triangle mesh (STL, OBJ). It NEVER claims to be a solid
 // B-rep — invariant #5. It reports its bounds, area, closed-surface status and,
-// when closed and consistently wound, its volume; no feature or Boolean takes it.
+// when closed and consistently wound, its volume and exact point queries; no
+// feature or Boolean takes it.
 // agent-docs/mesh-import-design.md owns it.
 type MeshBody struct{ /* ... */ }
 ```
