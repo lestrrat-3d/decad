@@ -2374,3 +2374,8 @@
 10	0.01	TestFilletChordOnAHexagonEdge
 10	0.01	TestFilletChordOnEverySideEdgeOfTheHexagon
 10	0.01	TestFilletChordRefusesMixedAnglesAndConcaveEdges
+10	0.01	TestEmbossDraftRaisedNarrowsTowardTheTop
+10	0.01	TestEmbossDraftNegativeWidensTowardTheTop
+10	0.01	TestEmbossDraftEngravedNarrowsTowardTheFloor
+10	0.01	TestEmbossDraftZeroIsAStraightWall
+10	0.01	TestEmbossDraftRefusals
