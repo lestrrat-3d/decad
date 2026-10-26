@@ -132,7 +132,7 @@ finds behind a surface (`agent-docs/dxf-export-design.md` D5, D6).
 | H2 | Each covered pixel's world point is rebuilt from its place and depth, mapped into the light's view and compared with the nearest depth there. The pixel is in shadow when the map's depth is nearer by more than a bias of `1.5 + 2·tan θ` pixels of the map, `θ` being the angle between the face's normal and the light, so no face shadows itself. |
 | H3 | A pixel in shadow takes its face's base colour at the ambient level, 0.3, which is the level of a face turned from the light. A face turned from the light is left as it was. So a convex part shows no shadow on itself, and the bytes of a lone block are those without `Shadows`. |
 | H4 | The shadow of a body falls on the others drawn in the same image by `PNGBodies`. The shadow is hard, one light, one sample, so its edge is as fine as the map and the image. |
-| H5 | The zero value draws none, and the bytes are those of §1 to §9. `Shadows` with `FieldOfView` is `ErrDegenerate`. `MeshPNG` and `PNGBodies` take the field too. |
+| H5 | The zero value draws none, and the bytes are those of §1 to §9. `Shadows` takes `FieldOfView` as §13 says. `MeshPNG` and `PNGBodies` take the field too. |
 
 ## 11. A colour for the faces that look away
 
@@ -153,5 +153,16 @@ finds behind a surface (`agent-docs/dxf-export-design.md` D5, D6).
 | Q1 | An edge is a feature as §6 says, except that a silhouette is an edge whose two faces differ in facing, a face looking toward the camera when its normal points against the line of sight from the eye to the face's centre (V5), not against the camera's axis. |
 | Q2 | An edge's ends are placed in the plane at distance 1 from the eye, as V3 places any point, and the edge is the straight line between them: a straight edge projects to a straight line under a pinhole camera. The result is in those plane units and meant for the pixels of the same view. |
 | Q3 | An edge is cut into visible and hidden runs by the depth buffer of V4. A sample is hidden when a face in front of it covers its pixel or a neighbouring one, within a tolerance of two pixels: the depth there is minus the reciprocal of the distance, so two pixels' length at distance `d` is `2·PixelSize/d` in depth, and the tolerance is that at the sample's own depth. |
-| Q4 | `Shadows` with `FieldOfView` is still `ErrDegenerate`. A view's other fields and the order of drawing, dashes under outlines, are those of §6 and §9. |
+| Q4 | A view's other fields and the order of drawing, dashes under outlines, are those of §6 and §9. |
 | Q5 | The tests state the near and far squares' pixel positions of a block seen from above from the distances of V2, and require that the dashed far edge lies there and that the near outline lies on the near face, and `raster`'s own tests state the plane point, the facing and the tolerance by their formulas. |
+
+## 13. Shadows under a perspective camera
+
+`Shadows` draws with `FieldOfView` set. The light stays the directional key light of H1, so the shadow map is the orthographic one.
+
+| Decision | Rule |
+|---|---|
+| W1 | A pixel's world point is on its ray from the eye: the point at distance `-1/depth` along the view direction, where `depth` is the buffer's value (V4), and the camera's right and up by the pixel's plane position times that distance. `raster.Projection.World` is the inverse of `Project` for either camera. |
+| W2 | A face seen from behind is decided against the line of sight from the eye to the pixel's world point (V5), not the camera's axis, so a face the axis sees edge on can still look toward or away from the eye. The shadow's colour is that face's base colour, as H3 says. |
+| W3 | Every other rule of §10 holds: the bias, the map's size, a convex part shadowing none of itself and the bytes without `Shadows`. |
+| W4 | The tests place the shadow of a pillar on a plate from the distances of V2 and the key light's direction and read the pixel's colour, which is the plate's blue at the ambient level, and `raster`'s own tests state the world point and the sight line. |

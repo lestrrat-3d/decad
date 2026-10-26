@@ -93,13 +93,40 @@ func TestPNGShadowsLeaveARoundRodAlone(t *testing.T) {
 	require.Equal(t, renderPNG(t, rod, plain), renderPNG(t, rod, lit))
 }
 
-func TestPNGShadowsRefusePerspective(t *testing.T) {
+func TestPNGShadowsFallWhereAPerspectiveCameraPutsThem(t *testing.T) {
 	t.Parallel()
-	body := decadtest.NewBlock(t, decad.New(), 0, 0, 20, 20, units.Millimeters(10))
-	view := export.IsometricView(100, 100)
-	view.Shadows = true
+	bodies := shadowScene(t)
+	view := topDown(400)
 	view.FieldOfView = units.Degrees(60)
-	var out bytes.Buffer
-	require.ErrorIs(t, export.PNG(t.Context(), &out, body, units.Millimeters(0.1), view), decad.ErrDegenerate)
-	require.Zero(t, out.Len())
+	plain := view
+	view.Shadows = true
+	off := renderShadowScene(t, bodies, plain)
+	on := renderShadowScene(t, bodies, view)
+	// The scene spans 60 x 40 x 22 mm, so its bounding sphere has radius √5684/2 and the eye
+	// sits twice that above its middle, at z = 11 + √5684, 86.39 mm. The plate's top, at z = 2,
+	// is 84.39 mm from the eye, and each millimetre of it is 1/84.39 of the plane at distance 1;
+	// the plate's 60 mm width fits 360 pixels, 506.3 per unit of that plane. A plate point at
+	// (x, y) mm is so at pixel (200 + (x-30)·506.3/84.39, 200 - (y-20)·506.3/84.39).
+	pixel := func(x, y float64) (int, int) {
+		k := 506.3 / 84.39
+		return int(200 + (x-30)*k), int(200 - (y-20)*k)
+	}
+	// The key light is above and to the left of the camera: it falls 0.35 to the right and 0.5
+	// down the image per unit it drops, so the pillar's top, 18 mm over the plate, throws its
+	// shadow 6.3 mm right and 9 mm down, onto x 31.3 to 41.3 and y 6 to 16.
+	x, y := pixel(38, 10)
+	require.Equal(t, [3]uint8{36, 48, 60}, [3]uint8{on.RGBAAt(x, y).R, on.RGBAAt(x, y).G, on.RGBAAt(x, y).B},
+		"the shadow is the plate's blue at the ambient level, 0.3")
+	require.NotEqual(t, off.RGBAAt(x, y), on.RGBAAt(x, y))
+	// The plate across the pillar, and the pillar's top, are as lit as without shadows.
+	x, y = pixel(20, 30)
+	require.Equal(t, off.RGBAAt(x, y), on.RGBAAt(x, y), "the lit side of the plate")
+	require.Equal(t, off.RGBAAt(200, 200), on.RGBAAt(200, 200), "the pillar's top faces the light")
+	// A convex block shadows none of itself under a perspective camera either.
+	block := decadtest.NewBlock(t, decad.New(), 0, 0, 20, 20, units.Millimeters(10))
+	one := export.IsometricView(200, 200)
+	one.FieldOfView = units.Degrees(60)
+	lit := one
+	lit.Shadows = true
+	require.Equal(t, renderPNG(t, block, one), renderPNG(t, block, lit))
 }

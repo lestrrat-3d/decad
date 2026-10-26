@@ -347,3 +347,34 @@ func TestProjectionDepthToleranceIsTwoPixelsAtTheDepth(t *testing.T) {
 		require.InDelta(t, 2*persp.PixelSize()/distance, persp.DepthTolerance(depth), 1e-12)
 	}
 }
+
+func TestProjectionWorldInvertsProject(t *testing.T) {
+	t.Parallel()
+	persp, err := raster.NewProjection(boxCorners(), raster.Camera{Direction: r3.Vec{Z: -1}, Up: r3.Vec{Y: 1}, FieldOfView: math.Pi / 3}, 200, 200)
+	require.NoError(t, err)
+	ortho, err := raster.NewProjection(boxCorners(), topView, 200, 200)
+	require.NoError(t, err)
+	for _, proj := range []raster.Projection{persp, ortho} {
+		for _, v := range []r3.Vec{{X: 2, Y: -1, Z: 10}, {X: -1.5, Y: 2, Z: 0}, {X: 0.5, Y: 0.25, Z: 4}} {
+			x, y := proj.PlanePoint(v)
+			_, _, depth := proj.Project(v)
+			got := proj.World(x, y, depth)
+			require.InDelta(t, 0, got.Sub(v).Len(), 1e-9, "%v", v)
+		}
+	}
+}
+
+func TestProjectionSightIsTheAxisOrTheLineFromTheEye(t *testing.T) {
+	t.Parallel()
+	persp, err := raster.NewProjection(boxCorners(), raster.Camera{Direction: r3.Vec{Z: -1}, Up: r3.Vec{Y: 1}, FieldOfView: math.Pi / 3}, 200, 200)
+	require.NoError(t, err)
+	ortho, err := raster.NewProjection(boxCorners(), topView, 200, 200)
+	require.NoError(t, err)
+	eyeZ := 5 + math.Sqrt(132)/math.Sin(math.Pi/6)/2
+	at := r3.Vec{X: 2, Y: -1, Z: 10}
+	require.Equal(t, r3.Vec{Z: -1}, ortho.Sight(at))
+	got := persp.Sight(at)
+	require.InDelta(t, 2, got.X, 1e-12)
+	require.InDelta(t, -1, got.Y, 1e-12)
+	require.InDelta(t, 10-eyeZ, got.Z, 1e-12)
+}

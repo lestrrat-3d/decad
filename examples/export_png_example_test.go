@@ -331,35 +331,39 @@ func Example_export_png_shadows() {
 		fmt.Printf("failed to build the pillar: %s\n", err)
 		return
 	}
-	draw := func(shadows bool) (image.Image, error) {
-		view := export.View{Direction: r3.NewVec(0, 0, -1), Up: r3.NewVec(0, 1, 0), Width: 400, Height: 400, Shadows: shadows}
+	draw := func(shadows bool, fov units.Value) (image.Image, error) {
+		view := export.View{Direction: r3.NewVec(0, 0, -1), Up: r3.NewVec(0, 1, 0), Width: 400, Height: 400, Shadows: shadows, FieldOfView: fov}
 		var out bytes.Buffer
 		if err := export.PNGBodies(context.Background(), &out, []*decad.Body{plate, pillar}, units.Millimeters(0.1), view); err != nil {
 			return nil, err
 		}
 		return png.Decode(&out)
 	}
-	plain, err := draw(false)
-	if err != nil {
-		fmt.Printf("failed to draw: %s\n", err)
-		return
-	}
-	shaded, err := draw(true)
-	if err != nil {
-		fmt.Printf("failed to draw: %s\n", err)
-		return
-	}
-	darker := 0
-	for y := range 400 {
-		for x := range 400 {
-			a, b := color.RGBAModel.Convert(plain.At(x, y)).(color.RGBA), color.RGBAModel.Convert(shaded.At(x, y)).(color.RGBA)
-			if int(b.R)+int(b.G)+int(b.B) < int(a.R)+int(a.G)+int(a.B) {
-				darker++
+	// Shadows fall under a perspective camera too: set FieldOfView as for any perspective view.
+	for _, fov := range []units.Value{{}, units.Degrees(60)} {
+		plain, err := draw(false, fov)
+		if err != nil {
+			fmt.Printf("failed to draw: %s\n", err)
+			return
+		}
+		shaded, err := draw(true, fov)
+		if err != nil {
+			fmt.Printf("failed to draw: %s\n", err)
+			return
+		}
+		darker := 0
+		for y := range 400 {
+			for x := range 400 {
+				a, b := color.RGBAModel.Convert(plain.At(x, y)).(color.RGBA), color.RGBAModel.Convert(shaded.At(x, y)).(color.RGBA)
+				if int(b.R)+int(b.G)+int(b.B) < int(a.R)+int(a.G)+int(a.B) {
+					darker++
+				}
 			}
 		}
+		fmt.Printf("shadow pixels: %t\n", darker > 200)
 	}
-	fmt.Printf("shadow pixels: %t\n", darker > 200)
 	// Output:
+	// shadow pixels: true
 	// shadow pixels: true
 }
 
