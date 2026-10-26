@@ -335,6 +335,12 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 	}
 	var tasks []heldNodePair
 	if allQuery {
+		if tree.oriented {
+			tree.slotWorld = make([][2]r3.Vec, len(tree.facets))
+			for s, facet := range tree.facets {
+				tree.slotWorld[s] = e.triBox(facet)
+			}
+		}
 		tasks, err = tree.selfPairTasks(ctx, 16*workers)
 		if err != nil {
 			return false, err
@@ -823,11 +829,13 @@ func (e *heldEmbedding) pairEmbeddedOverlapping(i, j int) bool {
 	ti, tj := e.h.Tris[i], e.h.Tris[j]
 	var bufI, bufJ [3]int
 	sharedI, sharedJ := bufI[:0], bufJ[:0]
-	for a, va := range ti {
-		for b, vb := range tj {
-			if va == vb {
-				sharedI = append(sharedI, a)
-				sharedJ = append(sharedJ, b)
+	if sharesCorner(ti, tj) {
+		for a, va := range ti {
+			for b, vb := range tj {
+				if va == vb {
+					sharedI = append(sharedI, a)
+					sharedJ = append(sharedJ, b)
+				}
 			}
 		}
 	}
@@ -844,6 +852,15 @@ func (e *heldEmbedding) pairEmbeddedOverlapping(i, j int) bool {
 		return true
 	}
 	return e.pairEmbeddedExact(i, j, sharedI, sharedJ)
+}
+
+// sharesCorner reports whether facets t and u name a common vertex. Most
+// box-overlapping pairs share none; nine comparisons decide those without
+// the slot loop that lists what a sharing pair shares.
+func sharesCorner(t, u [3]int) bool {
+	return t[0] == u[0] || t[0] == u[1] || t[0] == u[2] ||
+		t[1] == u[0] || t[1] == u[1] || t[1] == u[2] ||
+		t[2] == u[0] || t[2] == u[1] || t[2] == u[2]
 }
 
 // pairEmbeddedExact is pairEmbedded's exact path, for a pair that passed the
@@ -915,7 +932,7 @@ func (e *heldEmbedding) projection(i int) *heldProjectedFacet {
 			point := e.h.Verts[v]
 			p.points[axis][k] = [2]float64{AxisCoord(point, axes[0]), AxisCoord(point, axes[1])}
 			for _, coord := range p.points[axis][k] {
-				magnitude := proof.Abs(coord)
+				magnitude := math.Abs(coord)
 				if !(magnitude == 0 || magnitude >= 1e-100 && magnitude <= 1e100) {
 					p.stable[axis] = false
 				}
@@ -961,13 +978,15 @@ func projectedEdgeSeparates(a, b *heldProjectedFacet, axis, edge int) bool {
 	start := a.points[axis][edge]
 	end := a.points[axis][(edge+1)%3]
 	bx, by := end[0]-start[0], end[1]-start[1]
-	mxEdge, myEdge := proof.Abs(bx), proof.Abs(by)
+	// These differences take either sign, so the branch-free math.Abs beats
+	// proof.Abs here; the two agree bit for bit.
+	mxEdge, myEdge := math.Abs(bx), math.Abs(by)
 	// A nonzero cached sign means Orient2Float admitted both edge
 	// differences. Compute them once for all three queried points and check
 	// only each point's new differences, with the same error bound.
 	for _, point := range b.points[axis] {
 		cx, cy := point[0]-start[0], point[1]-start[1]
-		mx, my := proof.Abs(cx), proof.Abs(cy)
+		mx, my := math.Abs(cx), math.Abs(cy)
 		if !(cx == 0 || mx >= 0x1p-300 && mx <= 0x1p250) ||
 			!(cy == 0 || my >= 0x1p-300 && my <= 0x1p250) {
 			return false
@@ -981,6 +1000,10 @@ func projectedEdgeSeparates(a, b *heldProjectedFacet, axis, edge int) bool {
 	}
 	return true
 }
+
+// heldConeCosLimit is cos(85°), the half-angle cosine below which coneBox
+// gives up on a corner's directions.
+var heldConeCosLimit = math.Cos(85 * math.Pi / 180)
 
 // coneBox bounds the unit directions in which facet i leaves its corner k:
 // the arc of the unit sphere between its two edge directions there. Two facets
@@ -1001,7 +1024,7 @@ func (e *heldEmbedding) coneBox(i, k int) [2]r3.Vec {
 	whole := [2]r3.Vec{r3.NewVec(-2, -2, -2), r3.NewVec(2, 2, 2)}
 	t := e.h.Tris[i]
 	v, a, b := e.h.Verts[t[k]], e.h.Verts[t[(k+1)%3]], e.h.Verts[t[(k+2)%3]]
-	scale := math.Max(proof.Abs(v.X), math.Max(proof.Abs(v.Y), proof.Abs(v.Z)))
+	scale := math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z)))
 	s := math.Max(scale, math.SmallestNonzeroFloat64)
 	var floor float64
 	if s >= 0x1p-1000 {
@@ -1017,7 +1040,7 @@ func (e *heldEmbedding) coneBox(i, k int) [2]r3.Vec {
 	if la > floor && lb > floor {
 		ua, ub := da.Scale(1/la), db.Scale(1/lb)
 		cosHalf := math.Sqrt(math.Max(0, (1+ua.Dot(ub))/2))
-		if cosHalf > math.Cos(85*math.Pi/180) {
+		if cosHalf > heldConeCosLimit {
 			grow := 1 / cosHalf
 			lo := r3.NewVec(math.Min(ua.X, ub.X), math.Min(ua.Y, ub.Y), math.Min(ua.Z, ub.Z))
 			hi := r3.NewVec(math.Max(ua.X, ub.X), math.Max(ua.Y, ub.Y), math.Max(ua.Z, ub.Z))
