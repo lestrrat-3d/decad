@@ -9,6 +9,10 @@ require (
 	github.com/lestrrat-3d/units v0.0.0-20261004210137-572d4a3c7f0a
 	github.com/lestrrat-go/option/v3 v3.0.0-alpha1
 	github.com/stretchr/testify v1.12.1
+	golang.org/x/image v0.47.0
 )
 
-require go.yaml.in/yaml/v3 v3.0.5 // indirect
+require (
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
+	golang.org/x/text v0.43.0 // indirect
+)

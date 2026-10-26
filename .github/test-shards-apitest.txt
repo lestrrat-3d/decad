@@ -2395,3 +2395,10 @@
 10	0.01	TestHoleDraftWithACounterbore
 10	0.01	TestHoleDraftRefusals
 10	0.01	TestBossPilotDraft
+10	0.01	TestTextProfilesOfACapitalIIsItsGlyphBox
+10	0.01	TestTextProfilesKeepsALettersCounterAsAHole
+10	0.01	TestTextProfilesSetsLettersAdvanceApart
+10	0.01	TestTextProfilesBreaksLinesAndPlacesTheOrigin
+10	0.01	TestTextProfilesSkipsSpaces
+10	0.01	TestTextProfilesEmbossesAndEngraves
+10	0.01	TestTextProfilesRefusals

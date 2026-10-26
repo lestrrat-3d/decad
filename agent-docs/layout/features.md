@@ -31,6 +31,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `boss.go` | Public `Boss`, `BossSpec` and `BossBore`: face and size gates, the cylinder tool, then a union and the pilot cut through `combineToolSteps`. See boss design. |
 | `hole.go` | Public `Hole`, `HoleSpec`, depth, head and shape variants: gates, tool sketches, chained cut and the commit; `internal/holeplan/` computes the tools. See hole design. |
 | `rib.go` | Public `Rib`, `RibArc`, `Web`, `WebPath` and `WithRibOverrun`: line, thickness and extent gates, rib tool extrusion, touch and volume checks. See rib design. |
+| `text.go` | Public `TextProfiles` and `TextSpec`: gates, then `internal/glyphs/` lays the text out and the contours are drawn into a sketch and filtered to filled regions. See text design. |
 | `emboss.go` | Public `Emboss`, `EmbossMode` and `WithEmbossDraft`: gates, sketch-plane check, tool extrusion, join and volume checks. See emboss design. |
 | `planar_face.go` | Resolves a selector to one analytic planar face and its outward normal; `Hole` and `Emboss` share it. |
 | `tool_combine.go` | Shared by composite features: chains Boolean steps, of one kind (`combineTools`) or several (`combineToolSteps`), over temporary tools, commits once, and retires tools without public history entries. |
