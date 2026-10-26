@@ -1,7 +1,7 @@
-// Package stepbrep reads the planar-faced solids of a STEP model into a
-// triangle mesh (agent-docs/step-import-design.md). It reads the faces of
-// MANIFOLD_SOLID_BREP and BREP_WITH_VOIDS whose surfaces are planes and whose
-// edges are straight, and refuses the rest.
+// Package stepbrep reads the solids of a STEP model into a triangle mesh
+// (agent-docs/step-import-design.md). It reads the faces of MANIFOLD_SOLID_BREP
+// and BREP_WITH_VOIDS whose surfaces are planes or cylinders and whose edges are
+// lines or circles, and refuses the rest.
 package stepbrep
 
 import (
@@ -35,12 +35,15 @@ type reader struct {
 	vertices []r3.Vec
 	index    map[[3]float64]int
 	tris     [][3]int
+	// samples caches each EDGE_CURVE's points from its start to its end, so two
+	// faces that share an edge place the same points on it.
+	samples map[int][]r3.Vec
 }
 
 // Read triangulates every solid of the model. limit is the most triangles it
 // accepts.
 func Read(m *stepread.Model, limit int) (Mesh, error) {
-	r := &reader{m: m, limit: limit, index: map[[3]float64]int{}}
+	r := &reader{m: m, limit: limit, index: map[[3]float64]int{}, samples: map[int][]r3.Vec{}}
 	scale, err := lengthScale(m)
 	if err != nil {
 		return Mesh{}, err
@@ -333,11 +336,11 @@ func (r *reader) ring(boundValue stepread.Value) (ring []r3.Vec, outer bool, err
 	case "EDGE_LOOP":
 		edges, _ := loop.Params[1].(stepread.List)
 		for _, ev := range edges {
-			p, err := r.orientedEdgeStart(ev)
+			points, err := r.orientedEdgePoints(ev)
 			if err != nil {
 				return nil, false, err
 			}
-			ring = append(ring, p)
+			ring = append(ring, points...)
 		}
 	case "POLY_LOOP":
 		points, _ := loop.Params[1].(stepread.List)
@@ -359,42 +362,34 @@ func (r *reader) ring(boundValue stepread.Value) (ring []r3.Vec, outer bool, err
 	return ring, outer, nil
 }
 
-// orientedEdgeStart returns where walking the oriented edge begins, after
-// checking that the edge is a straight line.
-func (r *reader) orientedEdgeStart(v stepread.Value) (r3.Vec, error) {
+// orientedEdgePoints returns the points of the oriented edge in the direction it
+// is walked, from where it begins up to but not including where it ends: the
+// next edge of the loop begins there. A line gives its start, and an arc its
+// start and the samples between.
+func (r *reader) orientedEdgePoints(v stepread.Value) ([]r3.Vec, error) {
 	oe, err := r.entity(v, "oriented edge")
 	if err != nil {
-		return r3.Vec{}, err
+		return nil, err
 	}
 	if oe.Name != "ORIENTED_EDGE" || len(oe.Params) < 5 {
-		return r3.Vec{}, fmt.Errorf("%w: #%d is not an ORIENTED_EDGE", ErrMalformed, oe.ID)
+		return nil, fmt.Errorf("%w: #%d is not an ORIENTED_EDGE", ErrMalformed, oe.ID)
 	}
 	edge, err := r.entity(oe.Params[3], "edge")
 	if err != nil {
-		return r3.Vec{}, err
+		return nil, err
 	}
-	if edge.Name != "EDGE_CURVE" || len(edge.Params) < 4 {
-		return r3.Vec{}, fmt.Errorf("%w: #%d is not an EDGE_CURVE", ErrMalformed, edge.ID)
-	}
-	curve, err := r.entity(edge.Params[3], "curve")
+	samples, err := r.edgeSamples(edge)
 	if err != nil {
-		return r3.Vec{}, err
+		return nil, err
 	}
-	if curve.Name != "LINE" {
-		return r3.Vec{}, fmt.Errorf("%w: an edge is a %s, and only straight edges are read", decaderr.ErrUnsupported, nameOf(curve))
-	}
-	startIndex := 1
+	out := append([]r3.Vec(nil), samples[:len(samples)-1]...)
 	if orientation, _ := oe.Params[4].(stepread.Enum); orientation == "F" {
-		startIndex = 2
+		out = append([]r3.Vec(nil), samples[1:]...)
+		for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+			out[i], out[j] = out[j], out[i]
+		}
 	}
-	vertex, err := r.entity(edge.Params[startIndex], "vertex")
-	if err != nil {
-		return r3.Vec{}, err
-	}
-	if vertex.Name != "VERTEX_POINT" || len(vertex.Params) < 2 {
-		return r3.Vec{}, fmt.Errorf("%w: #%d is not a VERTEX_POINT", ErrMalformed, vertex.ID)
-	}
-	return r.point(vertex.Params[1])
+	return out, nil
 }
 
 // face triangulates one ADVANCED_FACE (or FACE_SURFACE) and adds it, flipped
@@ -406,6 +401,13 @@ func (r *reader) face(v stepread.Value, flipped bool) error {
 	}
 	if (f.Name != "ADVANCED_FACE" && f.Name != "FACE_SURFACE") || len(f.Params) < 4 {
 		return fmt.Errorf("%w: #%d is not an ADVANCED_FACE", ErrMalformed, f.ID)
+	}
+	surface, err := r.entity(f.Params[2], "surface")
+	if err != nil {
+		return err
+	}
+	if surface.Name == "CYLINDRICAL_SURFACE" {
+		return r.cylinderFace(f, surface, flipped)
 	}
 	normal, err := r.planeNormal(f.Params[2])
 	if err != nil {
