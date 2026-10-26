@@ -44,6 +44,11 @@ func GLTF(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, o
 	if err != nil {
 		return err
 	}
+	return writeGLTF(ctx, w, mesh)
+}
+
+// writeGLTF writes the mesh as a deterministic glTF 2.0 file.
+func writeGLTF(ctx context.Context, w io.Writer, mesh meshSource) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -119,7 +124,7 @@ type gltfBuffer struct {
 	URI        string `json:"uri"`
 }
 
-func buildGLTF(ctx context.Context, mesh *decad.Mesh) (gltfDocument, error) {
+func buildGLTF(ctx context.Context, mesh meshSource) (gltfDocument, error) {
 	vertices, triangles := mesh.Vertices(), mesh.Triangles()
 	if len(vertices) == 0 || len(triangles) == 0 {
 		return gltfDocument{}, fmt.Errorf("export: glTF: %w: the mesh is empty", decad.ErrDegenerate)
