@@ -46,7 +46,9 @@ type DXFPaper struct {
 	// Title is written in the title block. It holds printable ASCII only.
 	Title string
 	// Dimensions adds, for each view, its overall width below it and its overall
-	// height left of it, as the model's true size and not the drawn one.
+	// height left of it, as the model's true size and not the drawn one, and the
+	// diameter of each whole circle and the radius of each whole arc the view draws
+	// as one (agent-docs/dxf-export-design.md §8).
 	Dimensions bool
 }
 
@@ -226,6 +228,20 @@ func DXFSheet(ctx context.Context, w io.Writer, body *decad.Body, tol units.Valu
 			line(DXFDimensionLayer, dx-paperTick/2, y+p.paperH-paperTick/2, dx+paperTick/2, y+p.paperH+paperTick/2)
 			label = dimensionLabel(p.trueH)
 			text(dx-1, y+p.paperH/2-float64(len(label))*paperTextHeight/4, paperTextHeight, 90, label)
+			// Each circle seen whole gets its diameter, a leader across it and the true size; each arc
+			// its radius, a leader from its centre to its middle.
+			for _, c := range p.lines.VisibleCircles {
+				cx, cy, pr := (c.Centre[0]-p.minX)*scale+x, (c.Centre[1]-p.minY)*scale+y, c.Radius*scale
+				line(DXFDimensionLayer, cx-pr, cy, cx+pr, cy)
+				label = "DIA " + dimensionLabel(2*c.Radius)
+				text(cx-float64(len(label))*paperTextHeight/4, cy+1, paperTextHeight, 0, label)
+			}
+			for _, a := range p.lines.VisibleArcs {
+				cx, cy, pr := (a.Centre[0]-p.minX)*scale+x, (a.Centre[1]-p.minY)*scale+y, a.Radius*scale
+				sin, cos := math.Sincos((a.Start + a.End) / 2)
+				line(DXFDimensionLayer, cx, cy, cx+pr*cos, cy+pr*sin)
+				text(cx+pr*cos/2, cy+pr*sin/2+1, paperTextHeight, 0, "R"+dimensionLabel(a.Radius))
+			}
 		}
 		x += p.paperW + gap
 	}

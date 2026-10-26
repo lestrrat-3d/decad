@@ -219,3 +219,45 @@ func Example_export_dxf_arcs() {
 	// Output:
 	// arcs: 8, lines: 8
 }
+
+// DXFSheet with Dimensions states the diameter of each whole circle a view draws
+// and the radius of each arc, beside the overall width and height. Here a rod seen
+// from above on A4 paper at 1:2 gets its 10 mm diameter.
+func Example_export_dxf_sheet_dimensions() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	centre := s.CreatePoint(0, 0)
+	s.Fix(centre)
+	s.CreateCircle(centre, 5)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	rod, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	var out bytes.Buffer
+	if err := export.DXFSheet(context.Background(), &out, rod, units.Millimeters(0.1), export.DXFPaper{
+		Views:      []export.DrawingView{{Direction: r3.NewVec(0, 0, -1), Up: r3.NewVec(0, 1, 0)}},
+		Width:      units.Millimeters(297),
+		Height:     units.Millimeters(210),
+		Scale:      units.Scalar(0.5),
+		Margin:     units.Millimeters(10),
+		Gap:        units.Millimeters(0),
+		Title:      "ROD",
+		Dimensions: true,
+	}); err != nil {
+		fmt.Printf("failed to export: %s\n", err)
+		return
+	}
+	fmt.Printf("diameter stated: %t\n", strings.Contains(out.String(), "DIA 10"))
+	// Output:
+	// diameter stated: true
+}
