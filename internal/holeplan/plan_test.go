@@ -171,3 +171,25 @@ func TestCurvedMargin(t *testing.T) {
 	_, err = holeplan.CurvedMargin(0, 1, false)
 	require.Error(t, err)
 }
+
+func TestComputeRecordsWhereTheBoreProperStarts(t *testing.T) {
+	t.Parallel()
+	base := holeplan.Input{
+		Frame: topFrame(t), Outward: r3.Vec{Z: 1}, At: r3.Vec{Z: 10}, Diameter: 4, Through: true, Reach: 10,
+	}
+	plain, err := holeplan.Compute(base)
+	require.NoError(t, err)
+	require.Zero(t, plain.HeadDepth)
+
+	bored := base
+	bored.Head = holeplan.Head{Kind: holeplan.HeadCounterbore, Diameter: 8, Depth: 3}
+	plan, err := holeplan.Compute(bored)
+	require.NoError(t, err)
+	require.InDelta(t, 3, plan.HeadDepth, 1e-12)
+
+	sunk := base
+	sunk.Head = holeplan.Head{Kind: holeplan.HeadCountersink, Diameter: 8, Angle: math.Pi / 2}
+	plan, err = holeplan.Compute(sunk)
+	require.NoError(t, err)
+	require.InDelta(t, 2, plan.HeadDepth, 1e-12, "a 90 degree cone from radius 4 to radius 2 is 2 mm deep")
+}

@@ -47,7 +47,7 @@ face. A countersink cut gives a faceted result whose planar faces are split into
 ## 4. Not covered
 
 - A hole in a face that is not an analytic plane or cylinder, or in a sheet.
-- A noncircular hole other than `RectangularHole` and `SlotHole`, a threaded hole, and a tapped-hole annotation. `Thread` (`agent-docs/thread-design.md`) threads a bored hole afterward.
+- A noncircular hole other than `RectangularHole` and `SlotHole`, a threaded shaped hole, a threaded hole on a cylindrical face, and a thread on a counterbore or countersink.
 - Several holes in one call. Call `Hole` per hole, or build one hole and use `Patterned`.
 
 ## 5. Rectangular holes
@@ -96,4 +96,26 @@ material, whether the face is a rod's outer wall or a bore's inner wall.
 The result is a mesh Boolean's, faceted, with the Cut's own bounds. The tests compare volumes against integrals
 computed independently: the chord of the rod weighted by the hole's section, and the wall's thickness weighted by the
 hole's section.
+
+## 8. Tapped holes
+
+`HoleSpec.Thread` taps a round hole in the same commit that drills it.
+
+```go
+type HoleThread struct {
+    Pitch    units.Value
+    LeftHand bool
+    Length   units.Value
+}
+```
+
+| Decision | Rule |
+|---|---|
+| X1 | The hole's `Diameter` is the thread's minor (tap drill) diameter, and the groove is the internal ISO profile of `agent-docs/thread-design.md` T5 about that bore. |
+| X2 | The coil is built as `Thread` builds one, with its frame on the hole axis where the bore proper starts: the face for a plain hole, the floor of a counterbore, the bottom of a countersink's cone (`holeplan.Plan.HeadDepth`). Its V axis runs into the body, and the thread is right-handed unless `LeftHand` is set. |
+| X3 | The coil is one more tool after the bore and its head. `combineTools` cuts the tools in order, so the thread is cut from the holed body and the whole is one `OperationHole` commit. A failure leaves the plate live and the document unchanged. |
+| X4 | `Length` is measured from where the bore proper starts. The zero `Value` threads the whole bore: a through hole's groove runs out of its far end, and a blind hole's stops at the bottom with the coil's flat end. A positive `Length` no longer than the bore stops the groove there likewise. A longer one is `ErrDegenerate`. |
+| X5 | A `Pitch` that is zero is `ErrDegenerate`, a negative one `ErrNegativeMagnitude` and a wrong unit kind `ErrUnitKind`. A pitch too coarse for the bore, so that the groove reaches the axis, is `ErrDegenerate`. |
+| X6 | A thread needs a round hole: a `Shape` with a thread is `ErrDegenerate`. A hole on a cylindrical face with a thread is `ErrUnsupported`. |
+| X7 | The groove under a counterbore's floor lies inside the counterbore's radius, so the head void holds the groove's start: a counterbore narrower than the thread's major diameter would be cut into by the groove and is the caller's to avoid. |
 

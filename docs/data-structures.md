@@ -137,7 +137,8 @@ configuration option.
 | `decad.BossSpec` | struct | One boss: the face it stands on, a world point, its diameter and height, and an optional pilot. | The caller |
 | `decad.BossBore` | struct | A boss's blind pilot hole: diameter and depth from the boss's top. | The caller |
 | `decad.SectionOutline` | struct | The closed outlines where a body's verified mesh meets a plane, and how far they lie from the true surface. | `Body.SectionOutline` |
-| `decad.HoleSpec` | struct | One hole: the face, a world point on it, the diameter, a depth, an optional head and an optional shape. | The caller |
+| `decad.HoleSpec` | struct | One hole: the face, a world point on it, the diameter, a depth, an optional head, an optional shape and an optional thread. | The caller |
+| `decad.HoleThread` | struct | The thread of a tapped hole: pitch, hand and an optional length. | The caller |
 | `decad.HoleShape` | sealed interface | The cross-section of a hole that is not round. | The caller |
 | `decad.RectangularHole` | struct | A hole with a rectangular bore: width, height and a turn about the hole axis. | The caller |
 | `decad.SlotHole` | struct | A hole with a stadium bore: length, width and a turn about the hole axis. | The caller |

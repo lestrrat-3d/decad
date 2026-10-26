@@ -159,6 +159,9 @@ type Plan struct {
 	Counterbore *Cylinder
 	// Sink is the countersink cone, set when the head is a countersink.
 	Sink *Sink
+	// HeadDepth is how far below the face the bore proper starts: the
+	// counterbore's depth or the countersink cone's, and zero with no head.
+	HeadDepth float64
 }
 
 // Compute checks the request and returns its tools.
@@ -296,6 +299,7 @@ func (p Plan) withCounterbore(in Input) (Plan, error) {
 			decaderr.ErrDegenerate, h.Depth, p.Bore.Length)
 	}
 	p.Counterbore = &Cylinder{Radius: h.Diameter / 2, Length: h.Depth, Margin: p.Bore.Margin}
+	p.HeadDepth = h.Depth
 	return p, nil
 }
 
@@ -316,6 +320,7 @@ func (p Plan) withSink(in Input) (Plan, error) {
 		return Plan{}, fmt.Errorf(`%w: the countersink is %g mm deep, which must be less than the hole depth %g mm`,
 			decaderr.ErrDegenerate, depth, p.Bore.Length)
 	}
+	p.HeadDepth = depth
 	over := h.Diameter * sinkOvershoot
 	centre := in.Frame.ToWorldUV(p.U, p.V)
 	plane, err := r3.NewFrame(centre, in.Frame.U(), in.Outward)

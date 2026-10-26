@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/holeplan"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/threadplan"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -78,6 +79,20 @@ type SlotHole struct {
 
 func (SlotHole) holeShape() {}
 
+// HoleThread is a thread tapped into a round hole. The hole's Diameter is then
+// the thread's minor (tap drill) diameter. Pitch is the axial advance per turn,
+// a positive length. The thread is right-handed unless LeftHand is set. Length
+// is the length to thread, measured from where the bore proper starts (the face
+// of a plain hole, the floor of a counterbore or the bottom of a countersink): the
+// zero Value threads the bore's whole length, running out of a through hole's far
+// end, and a positive length no longer than the bore stops the thread there with
+// the coil's flat end (agent-docs/hole-design.md §8).
+type HoleThread struct {
+	Pitch    units.Value
+	LeftHand bool
+	Length   units.Value
+}
+
 // HoleSpec describes one hole.
 //
 // Face selects the face the hole starts in and must resolve to exactly one
@@ -89,6 +104,10 @@ func (SlotHole) holeShape() {}
 // Shape is optional. A nil Shape makes a round hole of Diameter. A non-nil
 // Shape replaces the round bore: Diameter MUST then be the zero units.Value and
 // Head MUST be nil, each otherwise ErrDegenerate.
+//
+// Thread is optional. A non-nil Thread taps the round bore in the same commit
+// (agent-docs/hole-design.md §8). It needs a nil Shape, ErrDegenerate otherwise,
+// and a planar face, ErrUnsupported on a cylinder.
 type HoleSpec struct {
 	Face     FaceSelector
 	At       r3.Vec
@@ -96,6 +115,7 @@ type HoleSpec struct {
 	Depth    HoleDepth
 	Head     HoleHead
 	Shape    HoleShape
+	Thread   *HoleThread
 }
 
 // holeTolerance is the chord tolerance, in millimetres, Hole reads At's
@@ -152,12 +172,26 @@ func Hole(ctx context.Context, b *Body, spec HoleSpec) (result *Body, retErr err
 	if err := holeAxisInsideBody(ctx, b, in, plan); err != nil {
 		return nil, err
 	}
+	var tap *holeTap
+	if spec.Thread != nil {
+		if tap, err = planHoleThread(spec, in, plan); err != nil {
+			return nil, err
+		}
+	}
 	toolCtx, capture := privateConstructionContext(ctx)
 	tools, err := buildHoleTools(toolCtx, d, plan)
 	if err != nil {
 		return nil, err
 	}
-	defer removeTools(tools)
+	defer func() { removeTools(tools) }()
+	if tap != nil {
+		coil, err := buildThreadCoil(toolCtx, d, tap.frame, tap.plan, tap.pitch, spec.Thread.LeftHand)
+		if err != nil {
+			return nil, err
+		}
+		// The coil is cut after the bore and its head, as Thread cuts a bore that exists.
+		tools = append(tools, coil)
+	}
 	return combineTools(ctx, d, OperationHole, b, meshbool.OpCut, tools, false, nil, capture)
 }
 
@@ -522,4 +556,53 @@ func holeSink(ctx context.Context, d *Document, sink *holeplan.Sink) (*Body, err
 	}
 	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 0, V: 1}}
 	return Revolve(ctx, d, s, s.Profiles()[0], axis, FullRevolution{})
+}
+
+// holeTap is the thread of a tapped hole in the plain data buildThreadCoil reads.
+type holeTap struct {
+	frame r3.Frame
+	plan  threadplan.Plan
+	pitch float64
+}
+
+// planHoleThread plans the thread of spec on the bore of plan. Its frame has its
+// origin on the hole axis where the bore proper starts, its V axis into the body
+// and its U axis in the face plane.
+func planHoleThread(spec HoleSpec, in holeplan.Input, plan holeplan.Plan) (*holeTap, error) {
+	if spec.Shape != nil {
+		return nil, fmt.Errorf(`%w: a thread needs a round hole, not a shaped one`, ErrDegenerate)
+	}
+	if in.Margin != 0 {
+		return nil, fmt.Errorf(`%w: a thread in a hole on a cylindrical face is not built`, ErrUnsupported)
+	}
+	pitch, err := sectionrecord.MagnitudeIn(spec.Thread.Pitch, units.Length, units.Millimeter, "the thread pitch")
+	if err != nil {
+		return nil, err
+	}
+	span := plan.Bore.Length - plan.HeadDepth
+	partial := spec.Thread.Length != (units.Value{})
+	if partial {
+		threaded, err := sectionrecord.MagnitudeIn(spec.Thread.Length, units.Length, units.Millimeter, "the thread length")
+		if err != nil {
+			return nil, err
+		}
+		if threaded > span {
+			return nil, fmt.Errorf(`%w: a thread length of %g mm is longer than the %g mm bore`, ErrDegenerate, threaded, span)
+		}
+		span = threaded
+	} else if _, through := spec.Depth.(ThroughHole); !through {
+		// A blind bore's thread stops at its bottom rather than running past it.
+		partial = true
+	}
+	threadPlan, err := threadplan.Compute(in.Diameter/2, pitch, span, false, partial)
+	if err != nil {
+		return nil, err
+	}
+	inward := in.Outward.Scale(-1)
+	origin := in.Frame.ToWorldUV(plan.U, plan.V).Add(inward.Scale(plan.HeadDepth))
+	frame, err := r3.NewFrame(origin, in.Frame.U(), inward)
+	if err != nil {
+		return nil, fmt.Errorf(`%w: the thread frame is degenerate: %s`, ErrDegenerate, err)
+	}
+	return &holeTap{frame: frame, plan: threadPlan, pitch: pitch}, nil
 }
