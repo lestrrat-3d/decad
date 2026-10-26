@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/export"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
@@ -50,4 +51,44 @@ func Example_export_dxf() {
 	// Output:
 	// visible edges: 9
 	// hidden edges: 3
+}
+
+// export.DXFViews puts several views of a body on one drawing sheet, side by side
+// with a gap between them, as the front, top and side views of a drawing are laid
+// out. Each view rests on the same baseline.
+func Example_export_dxf_views() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(0, 0, 20, 30)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	box, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+
+	// The top view, looking down with +Y up the sheet, and the front view,
+	// looking along +Y with +Z up, 5 mm apart. The top view is 20 by 30 mm and
+	// the front view 20 by 10 mm, so the front view starts at x = 25.
+	top := export.DrawingView{Direction: r3.NewVec(0, 0, -1), Up: r3.NewVec(0, 1, 0)}
+	front := export.DrawingView{Direction: r3.NewVec(0, 1, 0), Up: r3.NewVec(0, 0, 1)}
+	var out bytes.Buffer
+	if err := export.DXFViews(context.Background(), &out, box, units.Millimeters(0.1),
+		[]export.DrawingView{top, front}, units.Millimeters(5)); err != nil {
+		fmt.Printf("failed to export: %s\n", err)
+		return
+	}
+	fmt.Printf("layers: %d visible entities, ends with EOF: %t\n",
+		strings.Count(out.String(), "VISIBLE\n 10"), strings.HasSuffix(out.String(), "EOF\n"))
+	// Output:
+	// layers: 8 visible entities, ends with EOF: true
 }

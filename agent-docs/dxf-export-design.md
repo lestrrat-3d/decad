@@ -51,5 +51,21 @@ determinism of the bytes. A crease rule that marks every edge, or no absorption 
 
 - Dimensions, text, hatching, centre lines and title blocks.
 - Analytic circles, arcs and ellipses, and DXF versions after release 12.
-- Several views on one sheet, scale and paper size.
+- Scale, paper size, view labels and borders on a sheet, and a layout other than one row.
 - A tolerance on the hidden-line test finer than the depth buffer's pixel.
+
+## 5. Several views on one sheet
+
+```go
+func DXFViews(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, views []DrawingView,
+    gap units.Value, opts ...decad.TessellateOption) error
+```
+
+| Decision | Rule |
+|---|---|
+| V1 | The body is tessellated once and projected along each view as D1 to D6 say. |
+| V2 | Each view is moved so the least x of its edges falls on the sheet's running x position and the least y of its edges falls on y = 0. The first view's left edge is at x = 0, and each later view starts `gap` to the right of the previous view's greatest x. |
+| V3 | The views share the `VISIBLE` and `HIDDEN` layers and the file of D8, so the entities of the views follow one another in view order, visible runs then hidden runs for each layer as D7 orders them. |
+| V4 | `gap` is a non-negative length: a negative value is `ErrNegativeMagnitude` and a wrong unit kind `ErrUnitKind`. An empty `views`, an invalid view, a nil context, writer or body are `ErrDegenerate`, and the file is fully built before the first write. |
+| V5 | A view is moved by its drawn edges, so a view's extent is that of its feature edges, not of any frame. Views that differ in how far their edges reach from the origin still line up on the baseline. |
+

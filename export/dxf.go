@@ -72,13 +72,24 @@ func writeDXFDrawing(ctx context.Context, w io.Writer, mesh meshSource, view Dra
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	lines, err := drawing.Project(ctx, mesh.Vertices(), mesh.Triangles(), raster.Camera{Direction: view.Direction, Up: view.Up})
-	if errors.Is(err, raster.ErrDegenerate) {
-		return fmt.Errorf("export: DXF: %w: %s", decad.ErrDegenerate, err)
-	}
+	lines, err := projectDrawing(ctx, mesh, view)
 	if err != nil {
 		return err
 	}
+	return writeDXFFile(ctx, w, lines)
+}
+
+// projectDrawing projects the feature edges of mesh along view.
+func projectDrawing(ctx context.Context, mesh meshSource, view DrawingView) (drawing.Lines, error) {
+	lines, err := drawing.Project(ctx, mesh.Vertices(), mesh.Triangles(), raster.Camera{Direction: view.Direction, Up: view.Up})
+	if errors.Is(err, raster.ErrDegenerate) {
+		return drawing.Lines{}, fmt.Errorf("export: DXF: %w: %s", decad.ErrDegenerate, err)
+	}
+	return lines, err
+}
+
+// writeDXFFile builds the DXF file for lines and writes it with one Write.
+func writeDXFFile(ctx context.Context, w io.Writer, lines drawing.Lines) error {
 	var out bytes.Buffer
 	writeDXF(&out, lines)
 	if err := ctx.Err(); err != nil {
