@@ -4,11 +4,10 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/momentinput"
-	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/sweeparc"
 	"github.com/lestrrat-3d/decad/internal/sweepinput"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,16 +34,6 @@ func line(end r3.Vec) sweepinput.Segment { return sweepinput.Segment{End: end} }
 
 func arc(through, end r3.Vec) sweepinput.Segment {
 	return sweepinput.Segment{Through: through, End: end, Arc: true}
-}
-
-func xyPlane() sectionrecord.PlaneRecord {
-	return sectionrecord.PlaneRecord{U: r3.NewVec(1, 0, 0), V: r3.NewVec(0, 1, 0)}
-}
-
-func circleProfile(radius float64) momentinput.Profile {
-	return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
-		sectionrecord.CircleSeg{Radius: units.Millimeters(radius), CCW: true, TStart: 0, TEnd: 1},
-	}}}
 }
 
 // racetrack is a height-4 loop of two half-turn arcs of radius 3 about Y.
@@ -93,29 +82,7 @@ func TestClosedCircle(t *testing.T) {
 	})
 }
 
-func TestClosedRacetrack(t *testing.T) {
-	plane := xyPlane()
-	t.Run("admitted", func(t *testing.T) {
-		require.True(t, sweepinput.ClosedRacetrack(circleProfile(1), plane, r3.Vec{}, racetrack(t)))
-	})
-	t.Run("radius too large for the height", func(t *testing.T) {
-		require.False(t, sweepinput.ClosedRacetrack(circleProfile(2), plane, r3.Vec{}, racetrack(t)))
-	})
-	t.Run("offset start", func(t *testing.T) {
-		require.False(t, sweepinput.ClosedRacetrack(circleProfile(1), plane, r3.NewVec(1, 0, 0), racetrack(t)))
-	})
-	t.Run("quarter turn instead of half", func(t *testing.T) {
-		records := racetrack(t)
-		records[1].ArcAngle.Turn = big.NewRat(1, 4)
-		require.False(t, sweepinput.ClosedRacetrack(circleProfile(1), plane, r3.Vec{}, records))
-	})
-	t.Run("wrong record count", func(t *testing.T) {
-		require.False(t, sweepinput.ClosedRacetrack(circleProfile(1), plane, r3.Vec{}, racetrack(t)[:3]))
-	})
-}
-
-func TestClosedPlanarTangentLoop(t *testing.T) {
-	plane := xyPlane()
+func TestClosedCardinalLoop(t *testing.T) {
 	loop := func(t *testing.T) []sweepinput.PathRecord {
 		t.Helper()
 		return chain(t, r3.Vec{},
@@ -126,25 +93,59 @@ func TestClosedPlanarTangentLoop(t *testing.T) {
 			arc(r3.NewVec(3, 0, -3), r3.NewVec(0, 0, 0)),
 		)
 	}
-	t.Run("admitted", func(t *testing.T) {
-		require.True(t, sweepinput.ClosedPlanarTangentLoop(circleProfile(1), plane, r3.Vec{}, loop(t)))
+	t.Run("admitted racetrack", func(t *testing.T) {
+		require.NoError(t, sweepinput.ClosedCardinalLoop(racetrack(t)))
 	})
-	t.Run("turns sum to three quarters", func(t *testing.T) {
-		records := loop(t)
-		records[2].ArcAngle.Turn = big.NewRat(1, 4)
-		require.False(t, sweepinput.ClosedPlanarTangentLoop(circleProfile(1), plane, r3.Vec{}, records))
+	t.Run("admitted loop with a split line", func(t *testing.T) {
+		require.NoError(t, sweepinput.ClosedCardinalLoop(loop(t)))
 	})
-	t.Run("record off the Y=0 plane", func(t *testing.T) {
-		records := loop(t)
-		records[0].End.Y = 1
-		require.False(t, sweepinput.ClosedPlanarTangentLoop(circleProfile(1), plane, r3.Vec{}, records))
-	})
-	t.Run("too few records", func(t *testing.T) {
-		require.False(t, sweepinput.ClosedPlanarTangentLoop(circleProfile(1), plane, r3.Vec{}, racetrack(t)))
-	})
-	t.Run("profile with a hole", func(t *testing.T) {
-		profile := circleProfile(1)
-		profile.Holes = []sectionrecord.LoopRecord{profile.Outer}
-		require.False(t, sweepinput.ClosedPlanarTangentLoop(profile, plane, r3.Vec{}, loop(t)))
-	})
+	refusals := []struct {
+		name   string
+		mutate func(*testing.T, []sweepinput.PathRecord) []sweepinput.PathRecord
+		want   string
+	}{
+		{"too few spans", func(t *testing.T, r []sweepinput.PathRecord) []sweepinput.PathRecord { return r[:3] },
+			"fewer than four"},
+		{"quarter turn instead of half", func(t *testing.T, r []sweepinput.PathRecord) []sweepinput.PathRecord {
+			r[1].ArcAngle.Turn = big.NewRat(1, 4)
+			return r
+		}, "not one whole turn"},
+		{"arc turn is not cardinal", func(t *testing.T, r []sweepinput.PathRecord) []sweepinput.PathRecord {
+			r[1].ArcAngle.Turn = big.NewRat(1, 3)
+			return r
+		}, "not an exact quarter or half turn"},
+		{"arc rounded to a radian angle", func(t *testing.T, r []sweepinput.PathRecord) []sweepinput.PathRecord {
+			r[1].ArcAngle.Rad = big.NewRat(1, 1)
+			return r
+		}, "not an exact quarter or half turn"},
+		{"line leaves the plane", func(t *testing.T, r []sweepinput.PathRecord) []sweepinput.PathRecord {
+			r[0].End.Y = 1
+			return r
+		}, "leaves the plane of the loop"},
+		{"arc axis is not a coordinate axis", func(t *testing.T, r []sweepinput.PathRecord) []sweepinput.PathRecord {
+			r[1].Arc.Axis[0] = big.NewRat(1, 1)
+			return r
+		}, "non-coordinate axis"},
+		{"arcs turn about different axes", func(t *testing.T, r []sweepinput.PathRecord) []sweepinput.PathRecord {
+			r[3].Arc.Axis = sweeparc.RatVec{new(big.Rat), new(big.Rat), big.NewRat(1, 1)}
+			return r
+		}, "different coordinate axis"},
+		{"arcs with opposite senses", func(t *testing.T, r []sweepinput.PathRecord) []sweepinput.PathRecord {
+			r[3].Arc.Axis[1] = big.NewRat(-1, 1)
+			return r
+		}, "not one whole turn"},
+		{"only lines", func(t *testing.T, r []sweepinput.PathRecord) []sweepinput.PathRecord {
+			for i := range r {
+				r[i].Arc = nil
+			}
+			return r
+		}, "fewer than two"},
+	}
+	for _, tc := range refusals {
+		t.Run(tc.name, func(t *testing.T) {
+			err := sweepinput.ClosedCardinalLoop(tc.mutate(t, racetrack(t)))
+			require.ErrorIs(t, err, decaderr.ErrUnsupported)
+			require.ErrorContains(t, err, tc.want)
+		})
+	}
 }

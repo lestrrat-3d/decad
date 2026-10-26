@@ -40,8 +40,9 @@ The current `Sweep` implementation admits:
 - an open path made from `LineTo` and `ArcThrough` segments;
 - §3.3's closed full circle made from two complementary `ArcThrough` segments
   when the result is a zero-twist solid;
-- §3.4's closed planar racetrack with one authenticated circular section;
-- §3.5's closed planar tangent line/arc loop with one authenticated circular section;
+- §3.4's closed planar cardinal loop, which includes the four-span racetrack, with any
+  authenticated section the arc builders and the contact audit prove simple;
+- §3.5's loops with split lines and any arc count on the same construction;
 - line, circle, arc, and fitted-spline profile boundaries;
 - zero total twist, or §17's bounded straight-path twist;
 - tangent internal joins;
@@ -201,7 +202,7 @@ geometry.
 | **P6** | The initial path point lies exactly in the recorded profile plane, and the first tangent is exactly codirectional with the plane's positive normal. The profile need not contain that point. |
 | **P7** | The initial frame is the profile's `(U, V, N)`. Lines translate it; arcs rotate it about their axes. Composition is rotation-minimizing transport. |
 | **P8** | Zero twist adds no motion. Nonzero twist composes a rotation about the transported tangent by `total * length(prefix) / length(path)`. It never changes the path or section scale. |
-| **P9** | A path ending at its start is closed. Sweep admits §§3.3–3.5 when exact path geometry proves the transported end frame equals the start frame. Every other closed path is staged, even when its internal joins are tangent. No distributed correction is inferred. |
+| **P9** | A path ending at its start is closed. Sweep admits §§3.3–3.4 when exact path geometry proves the transported end frame equals the start frame. Every other closed path is staged, even when its internal joins are tangent. No distributed correction is inferred. |
 
 ### 3.1 Exact path record
 
@@ -264,56 +265,68 @@ nonzero twist, `WithSurfaceResult()`, a corner option, or section scale is
 staged. A near match never enters this reduction; §3.4 owns its separate
 closed-path class.
 
-### 3.4 Closed circular-section racetrack
+### 3.4 Closed cardinal loop
 
-`Sweep` admits a zero-twist solid on the origin XY profile plane when its
-authenticated source is one whole circular outer loop, with centre at the
-path start and radius `r`. The four path segments are, in order: a positive-Z
-line of length `L`; a positive-X semicircle of radius `R` in XZ; a negative-Z
-line of length `L`; and a second positive-X semicircle of radius `R` returning
-to the start. The exact path records must prove both arcs are half turns,
-their line joins and the closure are tangent, `R > r`, and `L > 2r`.
-A structural mismatch returns S7 without committing a body.
+`Sweep` admits a zero-twist solid on a closed path whose recorded spans are
+lines and arcs, when exact path data proves all of these:
 
-The two half-turn transports rotate the section by one whole turn about Y.
-The terminal frame therefore equals the initial frame exactly. Neighbouring
-span interiors occupy opposite sides of their shared section planes. The
-opposite lines have a strict X gap because `R > r`; the upper and lower arcs
-have a strict Z gap because `L > 2r`. The global audit treats the last and
-first spans as neighbours.
+- the path has at least four spans and at least two arcs;
+- every arc is an exact quarter or half turn (`Turn` of one quarter or one
+  half, with no radian or interval angle) about one coordinate axis, and all
+  arcs share that axis line (either sense);
+- the start and end of every span and every arc centre have one common
+  coordinate along that axis, so the loop lies in one plane perpendicular to
+  it;
+- the signed turns sum to exactly one whole turn in magnitude.
 
-The four existing line and arc span builders provide analytic walls and two
-temporary caps per span. All four rims pair by recorded profile station;
-the last rim pairs with the first. The final body omits every temporary cap
-and has one closed shell. It keeps `side(k,0,0)` provenance for all four
-walls. `Transform` replays the same records and the cyclic proof.
+The gate reads recorded coordinates only; a close sampled path cannot pass.
+Each refusal wraps `ErrUnsupported` and names the failed condition (S7). The
+gate does not inspect the section. A section of any kind a composite sweep
+builds, off-centre or not, reaches the construction below.
 
-The true volume is `pi*r*r*(2*L + 2*pi*R)` and the true area is
-`2*pi*r*(2*L + 2*pi*R)`. The body sums each span's certified volume and
-first moments, its live wall areas, and its span bounds. Tessellation shares
-one profile grid across all spans and identifies the last station with the
-first. It omits cap triangles, charges the final rim's coordinate movement
-like every other join, and audits cyclic contact, closed vertex links and
-positive orientation before publishing the occupied-volume proof.
+The transport then runs once over the closed path. Every quarter and half turn
+about a coordinate axis takes the exact frame path, so the terminal frame is
+compared with the initial frame at zero bound and equal components. A frame
+that differs, or that carries any displacement, refuses with S7. The two
+checks agree for every path the gate admits; the second guards the cyclic
+construction against a gate that is ever loosened.
 
-### 3.5 Closed planar tangent line/arc loop
+Each arc builder proves the section stays on one side of its carrier axis and
+meets it per Revolve's exact axis-incidence rule (S8). The global audit
+treats the last and first spans as neighbours. Neighbouring span interiors
+must lie on opposite sides of their shared section plane, and every other span
+pair must have a strict bounded-box gap (S9). Short legs and off-centre
+sections therefore build exactly when the audit proves them simple, and a
+section that touches an opposite leg refuses. The audit, not a clearance
+inequality on the section, decides.
 
-The cyclic span construction also admits a whole circular section centred on
-the path start, in the origin XY plane. The path has at least five tangent
-spans, lies exactly in XZ, and closes at its recorded start. Each arc has a
-positive Y carrier axis and an exact quarter- or half-turn angle. The sum of
-its arc turns is exactly one whole turn. Lines may have any positive length;
-the sequence need not have the racetrack's four-span shape. The frame
-transport must independently return the exact initial frame with zero
-displacement. A structural mismatch returns S7.
+The span builders provide analytic walls and two temporary caps per span. All
+rims pair by recorded profile station; the last rim pairs with the first. The
+final body omits every temporary cap and has one closed shell. It keeps
+`side(k,i,j)` provenance for every wall. `Transform` replays the same records
+and the cyclic proof.
 
-Each arc builder proves the circular section stays outside its carrier axis.
-The cyclic contact audit proves neighboring spans lie on opposite sides of
-their common section and every other span pair has a strict bounded gap.
-The construction then pairs all rims and omits every temporary cap. Its
-measurements, placement replay, and tessellation use §3.4's cyclic span
-proof. Paths with non-cardinal arc turns or uncertain frame closure remain
-staged.
+A circular section of radius `r` on §3.4's four-span racetrack (a positive-Z
+line of length `L`, a positive-X semicircle of radius `R` in XZ, a
+negative-Z line of length `L`, and a second semicircle returning to the start)
+has volume `pi*r*r*(2*L + 2*pi*R)` and area `2*pi*r*(2*L + 2*pi*R)`. A
+section whose centroid lies on the path has volume `area * pathLength` for any
+loop (Pappus). An off-centre section is swept at the centroid radius on each
+arc, so its volume is `area * (line length + sum of turn * centroid radius)`.
+The body sums each span's certified volume and first moments, its live wall
+areas, and its span bounds. Tessellation shares one profile grid across all
+spans and identifies the last station with the first. It omits cap triangles,
+charges the final rim's coordinate movement like every other join, and audits
+cyclic contact, closed vertex links and positive orientation before
+publishing the occupied-volume proof.
+
+### 3.5 Loops with split lines and more arcs
+
+The gate in §3.4 places no limit on the arc count or the line lengths, so an
+eight-span rounded rectangle, a loop with consecutive collinear lines, and a
+racetrack all take the same construction. Paths with non-cardinal arc turns,
+arcs about different axes, spatial loops or uncertain frame closure remain
+staged at S7.
 
 ## 4. 3D sketches
 
@@ -360,7 +373,7 @@ The existing existence rule applies: a requested solid that does not exist is
 | **S4** | zero-length line; repeated or collinear `ArcThrough` points | `ErrDegenerate` | yes |
 | **S5** | path start is not on the profile plane, or its initial tangent is not codirectional with the positive plane normal | `ErrDegenerate` | yes for this operation's meaning |
 | **S6** | an internal path join is not tangent, and the call does not carry `WithMitredJoins()` | `ErrUnsupported` | no; `WithMitredJoins()` defines the one admitted corner mode, and §16.4 owns what refuses it |
-| **S7** | path is closed but outside §§3.3–3.5's bounded solid reductions | `ErrUnsupported` | no; general closed-frame holonomy is staged |
+| **S7** | path is closed but outside §§3.3–3.4's bounded solid reductions: fewer than four spans, an arc that is not an exact quarter or half turn, arcs about more than one coordinate axis, a span off the loop's plane, signed turns that do not sum to one whole turn, or a transported end frame that differs from the start | `ErrUnsupported`; the message names the failed gate | no; general closed-frame holonomy is staged |
 | **S8** | an arc span's rotation axis crosses the transported profile interior, or boundary contact fails Revolve's exact axis-incidence rule | `ErrDegenerate` | yes; the mapped boundary folds or pinches |
 | **S9** | remote patches contact, or neighbours contact beyond their shared boundary | proved contact: `ErrDegenerate`; undecided budget: `ErrUnsupported` | contact is permanent; budget is not |
 | **S10** | profile kind is unsupported by one of the path-span builders | `ErrUnsupported` | follows spline reach |
@@ -470,8 +483,8 @@ its exact axis-incidence audit; `Sweep` changes only the face origins and
 retains the source `Path` in its payload. A merged wall face keeps every origin
 of its contributing profile segments.
 
-The §3.4 racetrack also has no section caps. Its four analytic wall faces
-meet at four shared rims, including the final-to-initial section seam.
+A §3.4 cardinal loop also has no section caps. Its analytic wall faces meet at
+one shared rim per span, including the final-to-initial section seam.
 
 The body has one lump and one outer shell. Profile holes become void passages
 through the sweep; they do not create extra lumps. S9 rejects any mapping that
@@ -499,7 +512,7 @@ with its two temporary section caps excluded. The body combines them as follows:
 
 The §3.3 full circle takes all four readings and their bounds from the full
 `Revolve` reduction. It does not sum two partial-turn readings across a seam.
-The §3.4 racetrack sums four certified span readings and omits all cap areas.
+A §3.4 cardinal loop sums one certified reading per span and omits all cap areas.
 
 Every span carries the displacement of its derived path carrier, transported
 frame, computed stations, and accumulated rigid motion. A reading composes only
@@ -614,8 +627,8 @@ separation audit closes. Other composite paths remain staged as
 | **8** | sweep boundary adapter for clearance/interference | non-constant-section surveys |
 | **M1**, **M2** | §16's mitred polyline sweep; §16.9 owns the two rows | what §16.9 lists |
 | **F1** | §3.3's exact two-arc full circle as a zero-twist solid, including D1–D3 and D7 through full `Revolve` | general closed paths and nonzero closed-path twist |
-| **F2** | §3.4's four-span circular-section racetrack as a zero-twist solid, including D1–D3 and D7 | nonzero closed-path twist |
-| **F3** | §3.5's exact-turn planar circular-section loop with cyclic span proof and verified tessellation | non-cardinal or spatial closed paths and nonzero closed-path twist |
+| **F2** | §3.4's closed cardinal loop with any proven-simple section as a zero-twist solid, including D1–D3 and D7 | nonzero closed-path twist |
+| **F3** | §3.5's eight-span rounded rectangle and other split-line loops on the same construction | non-cardinal or spatial closed paths and nonzero closed-path twist |
 
 Each published feature increment lands its four measurements and structural
 verification together. An increment never returns a body whose cached reading
@@ -639,11 +652,18 @@ Every test asserts computed geometry or a proof bound.
   twist and a closed surface result without committing a body.
 - Build §3.4's racetrack from a solved Sketch circle. Check its volume and
   area against the tube formulas, four shared rims, no caps, cyclic
-  `VerifyAll` at 0.1 mm, and placement replay. Refuse insufficient gap and
-  an off-centre circle without committing a body.
+  `VerifyAll` at 0.1 mm, and placement replay. Build a short-leg racetrack
+  and an off-centre circle and compare their volumes with Pappus. Refuse a
+  circle that touches the arc axis without committing a body.
+- Build the racetrack and the eight-span rounded rectangle from a solved
+  square Sketch section, and the racetrack about the X axis. Check volume
+  and area against `side*side*pathLength`, `Verify`, and `VerifyAll` at
+  0.1 mm.
 - Build §3.5's eight-span rounded rectangle from a solved Sketch circle.
   Check its tube volume and area, eight shared rims, no caps, `VerifyAll`
   at 0.1 mm, and placement replay. Refuse axis contact without committing.
+- Refuse a closed loop of arcs that are not quarter or half turns, with the
+  specific S7 message, and unit-test every other S7 condition of §3.4.
 - Put the profile across an arc axis and assert S8 before any document commit.
 - Make a remote path span cross an earlier span. Assert S9 and the specific
   non-neighbouring patches the audit classified.

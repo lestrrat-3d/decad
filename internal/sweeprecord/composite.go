@@ -303,9 +303,8 @@ func BuildClosedCyclic(ctx context.Context, env topo.Env,
 	profile momentinput.Profile, plane sectionrecord.PlaneRecord, frame r3.Frame, path *sweepinput.Path,
 	work *freeform.FreeformWork,
 ) (*topo.Body, error) {
-	if !sweepinput.ClosedRacetrack(profile, plane, path.Start, path.Records) &&
-		!sweepinput.ClosedPlanarTangentLoop(profile, plane, path.Start, path.Records) {
-		return nil, fmt.Errorf(`%w: the closed sweep path is outside the admitted cyclic classes`, decaderr.ErrUnsupported)
+	if err := sweepinput.ClosedCardinalLoop(path.Records); err != nil {
+		return nil, err
 	}
 	return buildCompositeWithClosure(ctx, env, profile, plane, frame, path, work, false, true)
 }
