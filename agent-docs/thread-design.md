@@ -12,7 +12,10 @@ type ThreadSpec struct {
     Pitch    units.Value
     LeftHand bool
     Length   units.Value
+    Form     ThreadForm
 }
+
+type ThreadForm struct{ Angle, Depth, Flat units.Value }
 
 func Thread(ctx context.Context, b *Body, spec ThreadSpec) (*Body, error)
 ```
@@ -50,7 +53,7 @@ exactly.
 - A thread on a face beside a larger face or a shoulder. The groove runs out of the face's ends and cuts the
   neighbour. Thread a rod that ends at the thread, or cut the thread before adding the shoulder.
 - A lead-in chamfer and a runout that tapers the groove out.
-- Tapered (pipe) and trapezoidal forms, and the UN inch series.
+- Tapered (pipe) forms, asymmetric (buttress) grooves and the UN inch series' own tables: a UN thread is the ISO profile at a pitch of `25.4 / threads per inch`.
 - A thread table lookup. The caller states the pitch.
 - Cosmetic threads that mark a face and cut nothing.
 - Fit classes and tolerances: the profile is the basic profile with no allowance.
@@ -68,3 +71,16 @@ exactly.
 The volume a partial thread removes has no closed form in one line: the tests integrate the groove's axial overlap with
 `[0, length]` over radius and angle, and require the published interval to enclose `V₀` less that.
 
+## 6. Trapezoidal forms
+
+`ThreadSpec.Form` replaces the ISO basic profile with a symmetric trapezoidal groove, for Acme, trapezoidal and
+Whitworth-style threads. `threadplan.ComputeForm` takes the form, and `Compute` is `ComputeForm` with the zero form.
+
+| Decision | Rule |
+|---|---|
+| F1 | The zero `ThreadForm` is the ISO profile of T5. A form that sets one or two of `Angle`, `Depth` and `Flat` is `ErrDegenerate`. |
+| F2 | `Angle` is the included angle between the flanks, above zero and at most 120 degrees. Each flank widens the groove by `tan(Angle/2)` per unit of depth. A wrong unit kind is `ErrUnitKind`, a negative value `ErrNegativeMagnitude`, a non-finite one `ErrNotFinite`, and zero or past 120 degrees `ErrDegenerate`. |
+| F3 | `Depth` is the root's distance from the face, below the major radius for a rod and beyond the minor radius for a bore, and `Flat` is the root's width. Both are positive lengths, read as `Pitch` is. |
+| F4 | The groove is the four-corner polygon of T5 with these three numbers: root at `Depth`, mouth `0.05·P` past the face, and the width at the mouth `Flat + 2·tan(Angle/2)·(Depth + 0.05·P)`. T6 holds for it: a groove whose width reaches `0.95·P` or whose root reaches the axis is `ErrDegenerate`. |
+| F5 | The removed volume of a groove that runs out of both ends is the integral of §3 with `w(ρ) = Flat + 2·tan(Angle/2)·(ρ − root)` for a rod, and the tests compute it independently. |
+| F6 | A form with the ISO angle, depth and flat of the pitch gives the ISO thread's volume, so `ThreadForm` restates the profile and adds no second path. |

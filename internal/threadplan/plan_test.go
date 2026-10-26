@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/threadplan"
 	"github.com/stretchr/testify/require"
 )
@@ -95,4 +96,24 @@ func TestComputePartialEndsTheLastGrooveAtTheLength(t *testing.T) {
 		require.NoError(t, err)
 		require.Less(t, plan.Turns, full.Turns, "a partial thread is shorter than one that runs out")
 	}
+}
+
+func TestComputeFormUsesItsSlopeDepthAndFlat(t *testing.T) {
+	t.Parallel()
+	// Slope 0.25, depth 1, flat 0.5 on a 5 mm rod at a 2 mm pitch: the root is at 4, the
+	// mouth at 5.1, and each flank widens by 0.25 per unit of depth.
+	plan, err := threadplan.ComputeForm(5, 2, 20, true, false, threadplan.Form{Slope: 0.25, Depth: 1, Flat: 0.5})
+	require.NoError(t, err)
+	p := plan.Profile
+	require.InDelta(t, 4, p[0][0], 1e-12)
+	require.InDelta(t, 5.1, p[2][0], 1e-12)
+	require.InDelta(t, 0.5, p[1][1]-p[0][1], 1e-12, "the root flat")
+	require.InDelta(t, 0.5+2*0.25*1.1, p[2][1]-p[3][1], 1e-12, "the mouth")
+	zero, err := threadplan.ComputeForm(5, 2, 20, true, false, threadplan.Form{})
+	require.NoError(t, err)
+	iso, err := threadplan.Compute(5, 2, 20, true, false)
+	require.NoError(t, err)
+	require.Equal(t, iso, zero)
+	_, err = threadplan.ComputeForm(5, 2, 20, true, false, threadplan.Form{Slope: 0.25, Depth: 1})
+	require.ErrorIs(t, err, decaderr.ErrDegenerate, "a form with no flat")
 }

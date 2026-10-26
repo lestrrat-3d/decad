@@ -27,6 +27,20 @@ type ThreadSpec struct {
 	Pitch    units.Value
 	LeftHand bool
 	Length   units.Value
+	// Form is the groove's cross-section. The zero Form is the 60 degree ISO
+	// basic profile; any other makes a symmetric trapezoidal groove, such as an
+	// Acme or trapezoidal thread (agent-docs/thread-design.md §6).
+	Form ThreadForm
+}
+
+// ThreadForm is a symmetric trapezoidal groove for [ThreadSpec.Form]. Angle is
+// the included angle between the two flanks, Depth how far the groove reaches
+// from the face to its root, and Flat the width of the root. The groove mouth
+// opens a twentieth of the pitch past the face, as the ISO groove's does. Set
+// all three or none: the zero ThreadForm is the ISO profile. Angle is an angle
+// above zero and up to 120 degrees, and Depth and Flat are positive lengths.
+type ThreadForm struct {
+	Angle, Depth, Flat units.Value
 }
 
 // Thread cuts a 60 degree ISO metric thread into a cylindrical
@@ -95,7 +109,11 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 		}
 		length = threaded
 	}
-	plan, err := threadplan.Compute(radius, pitch, length, external, partial)
+	form, err := threadForm(spec.Form)
+	if err != nil {
+		return nil, err
+	}
+	plan, err := threadplan.ComputeForm(radius, pitch, length, external, partial, form)
 	if err != nil {
 		return nil, err
 	}
@@ -110,6 +128,39 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 	tools := []*Body{coil}
 	defer removeTools(tools)
 	return combineTools(ctx, d, OperationThread, b, meshbool.OpCut, tools, false, nil, capture)
+}
+
+// threadForm reads a ThreadForm into the planner's millimetre form: the zero
+// form is the ISO profile, and a partly set one is ErrDegenerate.
+func threadForm(f ThreadForm) (threadplan.Form, error) {
+	if f == (ThreadForm{}) {
+		return threadplan.Form{}, nil
+	}
+	if f.Angle == (units.Value{}) || f.Depth == (units.Value{}) || f.Flat == (units.Value{}) {
+		return threadplan.Form{}, fmt.Errorf(`%w: a thread form needs an angle, a depth and a root flat, all three or none`, ErrDegenerate)
+	}
+	if f.Angle.Kind() != units.Angle {
+		return threadplan.Form{}, fmt.Errorf(`%w: the thread form angle must be an angle`, ErrUnitKind)
+	}
+	angle := f.Angle.Base()
+	if math.IsNaN(angle) || math.IsInf(angle, 0) {
+		return threadplan.Form{}, fmt.Errorf(`%w: the thread form angle is not finite`, ErrNotFinite)
+	}
+	if angle < 0 {
+		return threadplan.Form{}, fmt.Errorf(`%w: the thread form angle is negative`, ErrNegativeMagnitude)
+	}
+	if angle == 0 || angle > 2*math.Pi/3 {
+		return threadplan.Form{}, fmt.Errorf(`%w: the thread form angle must be above zero and at most 120 degrees`, ErrDegenerate)
+	}
+	depth, err := sectionrecord.MagnitudeIn(f.Depth, units.Length, units.Millimeter, "the thread form depth")
+	if err != nil {
+		return threadplan.Form{}, err
+	}
+	flat, err := sectionrecord.MagnitudeIn(f.Flat, units.Length, units.Millimeter, "the thread form root flat")
+	if err != nil {
+		return threadplan.Form{}, err
+	}
+	return threadplan.Form{Slope: math.Tan(angle / 2), Depth: depth, Flat: flat}, nil
 }
 
 // resolveCylindricalFace resolves sel to exactly one face of b and returns it

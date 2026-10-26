@@ -47,22 +47,47 @@ type Plan struct {
 // last groove's far flank meets length, so the thread ends there with the
 // coil's flat end and the groove never reaches past length.
 func Compute(radius, pitch, length float64, external, partial bool) (Plan, error) {
+	return ComputeForm(radius, pitch, length, external, partial, Form{})
+}
+
+// Form is a symmetric trapezoidal groove: the slope of each flank (tan of half
+// the included angle, the flank's axial widening per unit of depth), the
+// groove's depth and the width of its root flat, all millimetres bar the
+// slope. The zero Form is the ISO basic profile of the pitch.
+type Form struct {
+	Slope, Depth, Flat float64
+}
+
+// ComputeForm is [Compute] for a groove of the given form. A zero form is the
+// ISO profile; any other must hold a positive finite slope, depth and flat.
+func ComputeForm(radius, pitch, length float64, external, partial bool, form Form) (Plan, error) {
 	for name, v := range map[string]float64{"radius": radius, "pitch": pitch, "length": length} {
 		if !(v > 0) || math.IsInf(v, 0) {
 			return Plan{}, fmt.Errorf(`%w: the thread %s must be positive and finite`, decaderr.ErrDegenerate, name)
 		}
 	}
+	slope := flankSlope
 	depth, flat := externalDepth*pitch, externalFlat*pitch
-	root, mouth := radius-depth, radius+mouthOvershoot*pitch
 	if !external {
 		depth, flat = internalDepth*pitch, internalFlat*pitch
+	}
+	if form != (Form{}) {
+		for name, v := range map[string]float64{"flank slope": form.Slope, "depth": form.Depth, "root flat": form.Flat} {
+			if !(v > 0) || math.IsInf(v, 0) {
+				return Plan{}, fmt.Errorf(`%w: the thread %s must be positive and finite`, decaderr.ErrDegenerate, name)
+			}
+		}
+		slope, depth, flat = form.Slope, form.Depth, form.Flat
+	}
+	root, mouth := radius-depth, radius+mouthOvershoot*pitch
+	if !external {
 		root, mouth = radius+depth, radius-mouthOvershoot*pitch
 	}
 	if root <= 0 || mouth <= 0 {
 		return Plan{}, fmt.Errorf(`%w: a %g mm pitch is too coarse for a %g mm radius: the groove reaches the axis`,
 			decaderr.ErrDegenerate, pitch, radius)
 	}
-	half := flat/2 + math.Abs(mouth-root)*flankSlope
+	half := flat/2 + math.Abs(mouth-root)*slope
 	if 2*half >= maxProfileRatio*pitch {
 		return Plan{}, fmt.Errorf(`%w: the groove is %g mm wide, too wide for a %g mm pitch`,
 			decaderr.ErrDegenerate, 2*half, pitch)

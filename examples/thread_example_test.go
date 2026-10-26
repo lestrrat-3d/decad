@@ -99,3 +99,50 @@ func Example_thread_left_hand_length() {
 	// Output:
 	// volume: 1476 mm^3
 }
+
+// Form replaces the ISO groove with a trapezoidal one, such as an Acme lead
+// screw thread: its included flank angle, its depth and the width of its root.
+// Here a 29 degree Acme-style groove 1.1 mm deep with a 0.74 mm root is cut into
+// a 10 mm rod at a 2 mm pitch.
+func Example_thread_form() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	centre := s.CreatePoint(0, 0)
+	s.Fix(centre)
+	s.CreateCircle(centre, 5)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	rod, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	threaded, err := decad.Thread(context.Background(), rod, decad.ThreadSpec{
+		Face:  decad.Faces(decad.Cylindrical()),
+		Pitch: units.Millimeters(2),
+		Form: decad.ThreadForm{
+			Angle: units.Degrees(29),
+			Depth: units.Millimeters(1.1),
+			Flat:  units.Millimeters(0.74),
+		},
+	})
+	if err != nil {
+		fmt.Printf("failed to thread: %s\n", err)
+		return
+	}
+	volume, err := threaded.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
+	// Output:
+	// volume: 1252 mm^3
+}

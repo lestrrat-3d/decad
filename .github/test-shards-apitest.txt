@@ -2454,3 +2454,8 @@
 10	0.01	TestArrangeAngleKeepsABodyThatIsAlreadySquare
 10	0.01	TestArrangeAngleCoarseStepMissesTheBestAngle
 10	0.01	TestArrangeAngleRefusals
+10	0.01	TestThreadFormCutsATrapezoidalGrooveInARod
+10	0.01	TestThreadFormCutsATrapezoidalGrooveOutOfABore
+10	0.01	TestThreadFormOfTheISOValuesIsTheISOThread
+10	0.01	TestThreadFormIsWiderThanTheISOGroove
+10	0.01	TestThreadFormRefusals
