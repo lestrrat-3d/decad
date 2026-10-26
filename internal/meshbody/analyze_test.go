@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/meshbody"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -124,6 +125,74 @@ func TestAnalyzeAreaEnclosesIrrationalSides(t *testing.T) {
 	require.LessOrEqual(t, low, math.Sqrt(3)/2)
 	require.GreaterOrEqual(t, high, math.Sqrt(3)/2)
 	require.Less(t, high-low, 1e-15)
+}
+
+func TestAnalyzeMatchesIndependentRationalGeometry(t *testing.T) {
+	t.Parallel()
+	base := []r3.Vec{{X: 0.1, Y: -0.2, Z: 0.3}, {X: 1.1, Y: 0.25, Z: -0.7},
+		{X: -0.4, Y: 1.7, Z: 0.4}, {X: 0.3, Y: 0.6, Z: 2.1}}
+	tris := [][3]int{{0, 2, 1}, {0, 1, 3}, {1, 2, 3}, {2, 0, 3}}
+	for _, exponent := range []int{-600, -300, -20, 0, 20, 300, 500} {
+		for _, offsetBits := range []int{0, 40, 54} {
+			scale := math.Ldexp(1, exponent)
+			var offset r3.Vec
+			if offsetBits != 0 {
+				offset = r3.NewVec(0.7, -0.6, 0.9).Scale(math.Ldexp(1, exponent+offsetBits))
+			}
+			verts := make([]r3.Vec, len(base))
+			for i, p := range base {
+				verts[i] = p.Scale(scale).Add(offset)
+			}
+			volume, low, high, degenerate := rationalGeometry(verts, tris)
+			got, err := meshbody.Analyze(t.Context(), verts, tris)
+			require.NoError(t, err)
+			require.Zero(t, got.SignedVolume.Cmp(volume), "volume at exponent %d offset %d", exponent, offsetBits)
+			require.Zero(t, got.AreaLow.Cmp(low), "lower area at exponent %d offset %d", exponent, offsetBits)
+			require.Zero(t, got.AreaHigh.Cmp(high), "upper area at exponent %d offset %d", exponent, offsetBits)
+			require.Equal(t, degenerate, got.DegenerateTriangles, "exponent %d offset %d", exponent, offsetBits)
+		}
+	}
+}
+
+// rationalGeometry computes the original rational expressions directly with
+// math/big, independently of the dyadic vector operations under test.
+func rationalGeometry(verts []r3.Vec, tris [][3]int) (*big.Rat, *big.Rat, *big.Rat, int) {
+	vec := func(v r3.Vec) [3]*big.Rat {
+		return [3]*big.Rat{new(big.Rat).SetFloat64(v.X), new(big.Rat).SetFloat64(v.Y), new(big.Rat).SetFloat64(v.Z)}
+	}
+	sub := func(a, b [3]*big.Rat) [3]*big.Rat {
+		return [3]*big.Rat{new(big.Rat).Sub(a[0], b[0]), new(big.Rat).Sub(a[1], b[1]), new(big.Rat).Sub(a[2], b[2])}
+	}
+	cross := func(a, b [3]*big.Rat) [3]*big.Rat {
+		var out [3]*big.Rat
+		for i := range 3 {
+			j, k := (i+1)%3, (i+2)%3
+			out[i] = new(big.Rat).Sub(new(big.Rat).Mul(a[j], b[k]), new(big.Rat).Mul(a[k], b[j]))
+		}
+		return out
+	}
+	dot := func(a, b [3]*big.Rat) *big.Rat {
+		out := new(big.Rat)
+		for i := range 3 {
+			out.Add(out, new(big.Rat).Mul(a[i], b[i]))
+		}
+		return out
+	}
+	volume, low, high := new(big.Rat), new(big.Rat), new(big.Rat)
+	degenerate := 0
+	for _, tri := range tris {
+		a, b, c := vec(verts[tri[0]]), vec(verts[tri[1]]), vec(verts[tri[2]])
+		normal := cross(sub(b, a), sub(c, a))
+		lengthSquared := dot(normal, normal)
+		if lengthSquared.Sign() == 0 {
+			degenerate++
+			continue
+		}
+		volume.Add(volume, new(big.Rat).Quo(dot(a, cross(b, c)), big.NewRat(6, 1)))
+		low.Add(low, new(big.Rat).SetFloat64(proofbound.RatSqrtDown(lengthSquared)))
+		high.Add(high, new(big.Rat).SetFloat64(proofbound.RatSqrtUp(lengthSquared)))
+	}
+	return volume, low.Quo(low, big.NewRat(2, 1)), high.Quo(high, big.NewRat(2, 1)), degenerate
 }
 
 func TestAnalyzeRefusals(t *testing.T) {

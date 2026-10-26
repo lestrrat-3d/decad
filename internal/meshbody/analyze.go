@@ -48,36 +48,13 @@ func (a Analysis) Closed() bool {
 
 type edge [2]int
 
-func ratVec(v r3.Vec) [3]*big.Rat {
-	return [3]*big.Rat{proofarith.FloatRat(v.X), proofarith.FloatRat(v.Y), proofarith.FloatRat(v.Z)}
-}
-
-func sub(a, b [3]*big.Rat) [3]*big.Rat {
-	return [3]*big.Rat{new(big.Rat).Sub(a[0], b[0]), new(big.Rat).Sub(a[1], b[1]), new(big.Rat).Sub(a[2], b[2])}
-}
-
-func dot(a, b [3]*big.Rat) *big.Rat {
-	out := new(big.Rat)
-	for i := range a {
-		out.Add(out, new(big.Rat).Mul(a[i], b[i]))
-	}
-	return out
-}
-
-func cross(a, b [3]*big.Rat) [3]*big.Rat {
-	term := func(i, j int) *big.Rat {
-		return new(big.Rat).Sub(new(big.Rat).Mul(a[i], b[j]), new(big.Rat).Mul(a[j], b[i]))
-	}
-	return [3]*big.Rat{term(1, 2), term(2, 0), term(0, 1)}
-}
-
 // Analyze reads the mesh. Every vertex must be finite and every triangle index
 // in range; anything else is ErrUnsupported.
 func Analyze(ctx context.Context, verts []r3.Vec, tris [][3]int) (Analysis, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	out := Analysis{Vertices: len(verts), Triangles: len(tris), SignedVolume: new(big.Rat),
 		AreaLow: new(big.Rat), AreaHigh: new(big.Rat)}
-	exact := make([][3]*big.Rat, len(verts))
+	exact := make([]proofarith.DyV3, len(verts))
 	for i, v := range verts {
 		if err := budget.Step(); err != nil {
 			return Analysis{}, err
@@ -85,7 +62,7 @@ func Analyze(ctx context.Context, verts []r3.Vec, tris [][3]int) (Analysis, erro
 		if !proofbound.FiniteVec(v) {
 			return Analysis{}, fmt.Errorf(`%w: vertex %d is not finite`, decaderr.ErrUnsupported, i)
 		}
-		exact[i] = ratVec(v)
+		exact[i] = proofarith.DyVec(v)
 	}
 	directed := make(map[edge]int, 3*len(tris))
 	live := make([]int, 0, len(tris))
@@ -101,8 +78,11 @@ func Analyze(ctx context.Context, verts []r3.Vec, tris [][3]int) (Analysis, erro
 			}
 		}
 		a, b, c := exact[tri[0]], exact[tri[1]], exact[tri[2]]
-		normal := cross(sub(b, a), sub(c, a))
-		lengthSquared := dot(normal, normal)
+		// Finite float coordinates and their products are exact dyadics.
+		// Keep intermediate vectors there instead of reducing a rational
+		// after every scalar operation.
+		normal := proofarith.DvCross(proofarith.DvSub(b, a), proofarith.DvSub(c, a))
+		lengthSquared := proofarith.DvDot(normal, normal).Rat()
 		if tri[0] == tri[1] || tri[1] == tri[2] || tri[2] == tri[0] || lengthSquared.Sign() == 0 {
 			out.DegenerateTriangles++
 			continue
@@ -111,7 +91,8 @@ func Analyze(ctx context.Context, verts []r3.Vec, tris [][3]int) (Analysis, erro
 		for k := range tri {
 			directed[edge{tri[k], tri[(k+1)%3]}]++
 		}
-		out.SignedVolume.Add(out.SignedVolume, new(big.Rat).Quo(dot(a, cross(b, c)), six))
+		triple := proofarith.DvDot(a, proofarith.DvCross(b, c)).Rat()
+		out.SignedVolume.Add(out.SignedVolume, new(big.Rat).Quo(triple, six))
 		low := proofarith.FloatRat(proofbound.RatSqrtDown(lengthSquared))
 		high := proofarith.FloatRat(proofbound.RatSqrtUp(lengthSquared))
 		out.AreaLow.Add(out.AreaLow, low)
