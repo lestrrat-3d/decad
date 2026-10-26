@@ -131,7 +131,12 @@ holds both `LowerExposed` and `UpperExposed`. A private `sketch` scene over the
 interiors of every exclusive hole must return one valid whole cell per hole,
 no two cells sharing a vertex, with no arrangement charge. Two holes meeting
 at one corner would leave the body meeting itself at that point, so they are
-not separate (`prismcells.ProveGroupApart`). `stackedrecord.Derive` and `Falsify` run this proof;
+not separate (`prismcells.ProveGroupApart`). A tangency is no vertex: the
+arrangement neither cuts nor flags a clean tangent contact. So every pair of
+entities from two holes with a curved member also goes to sketch's own
+intersection query, and any point it reports, within its band, refuses. Two
+tangent round pockets, or a round pocket tangent to a rectangular one, are not
+separate. `stackedrecord.Derive` and `Falsify` run this proof;
 the reached slabs' cut scenes already prove each hole lies inside its section
 and clears holes on the same side. The lower side exposes each upper-only hole
 as a floor, and the upper side exposes each lower-only hole as a ceiling.

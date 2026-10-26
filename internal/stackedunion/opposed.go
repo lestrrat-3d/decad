@@ -120,9 +120,10 @@ func OpposedCut(ctx context.Context, budget *proofbound.WorkBudget, oc stackedre
 		}
 	}
 	geom.RecordJunctions(n)
-	// Every scene vertex is two axis-aligned lines' exact crossing, so the
-	// only allowance is the one the engine records for the slab loops'
-	// own junctions.
+	// Every scene vertex is two axis-aligned lines' crossing, and every span
+	// both sides share lies on one exact line, so each vertex sits at exact
+	// levels. The only allowance is the one the engine records for the slab
+	// loops' own junctions.
 	return breprecord.StackedRecord(ctx, budget, geom, levels, oc.Frame, oc.Xform, geom.Allow())
 }
 
@@ -135,7 +136,8 @@ type opposedCell struct {
 
 // opposedCells arranges the exclusive holes' interiors in one private scene
 // and records its floor and ceiling cells. Every partial edge must carry
-// TExact and the scene no walk charge; every cell must classify.
+// TExact, the scene no walk charge, and every shared span exact carriers;
+// every cell must classify.
 func opposedCells(ctx context.Context, budget *proofbound.WorkBudget,
 	lowerOnly, upperOnly []sectionrecord.LoopRecord) ([]opposedCell, error) {
 	regionsA, err := stackedrecord.Exposed(ctx, lowerOnly)
@@ -209,6 +211,16 @@ func opposedCells(ctx context.Context, budget *proofbound.WorkBudget,
 		return nil, err
 	}
 	if !ok {
+		return nil, errUBMiss
+	}
+	// Sketch resolves two lines as one shared span when their carriers differ
+	// within its identity band. Such a span states no exact face edge, so both
+	// recorded lines of every span must lie on precisely one line.
+	exact, err := coincident.ExactLineCarriers(budget)
+	if err != nil {
+		return nil, err
+	}
+	if !exact {
 		return nil, errUBMiss
 	}
 	manifold, err := opposedManifold(budget, tags, coincident, profiles, classes)

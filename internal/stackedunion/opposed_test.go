@@ -5,6 +5,7 @@ package stackedunion
 // public API can draw, so only this reading shows each rule deciding alone.
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/classbgeom"
@@ -55,6 +56,12 @@ func TestOpposedCellsReadsFloorsAndCeilings(t *testing.T) {
 		// The upper hole inside the lower one: one ceiling with a hole.
 		{name: "nested", lower: rectHole(-6, -6, 6, 6), upper: rectHole(-2, -2, 2, 2),
 			ceiling: 144 - 16, ceilings: 1},
+		// Sketch resolves the lower hole's top y = 2 + 1e-12, or one ulp
+		// above 2, as the upper hole's top y = 2: a shared span whose two
+		// carriers differ, which states no exact face edge.
+		{name: "near-shared-1e-12", lower: rectHole(-4, -2, 1, 2+1e-12), upper: rectHole(-6, -2, -2, 2), refused: true},
+		{name: "near-shared-ulp", lower: rectHole(-4, -2, 1, math.Nextafter(2, 3)), upper: rectHole(-6, -2, -2, 2),
+			refused: true},
 		{name: "edge-touch", lower: rectHole(-2, -2, 2, 2), upper: rectHole(-6, -2, -2, 2), refused: true},
 		{name: "corner-touch", lower: rectHole(-2, 2, 2, 6), upper: rectHole(-6, -2, -2, 2), refused: true},
 		// Both holes reflex at the origin: the lower one misses the first

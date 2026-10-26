@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/sketch/geom"
 )
 
 // GroupScene contains one multi-region arrangement and its charged section
@@ -173,17 +174,23 @@ func GroupUnionLoops(budget *proofbound.WorkBudget, scene GroupScene) ([]section
 // region. Holes stay inside their own outer by the input's validity gate.
 func ProveGroupDisjoint(ctx context.Context, budget *proofbound.WorkBudget,
 	regions []momentinput.Profile) (bool, float64, error) {
-	_, separate, charge, err := proveGroupCells(ctx, budget, regions)
+	_, _, separate, charge, err := proveGroupCells(ctx, budget, regions)
 	return separate, charge, err
 }
 
 // ProveGroupApart is ProveGroupDisjoint with the regions' closures apart as
-// well: two whole cells that share a walked vertex touch at that point, and a
-// body that meets itself there is not a manifold. The shared point is
-// sketch's own vertex, matched by exact equality; the check only refuses.
+// well, since a body that meets itself at a point is not a manifold. Two whole
+// cells that share a walked vertex touch there. A curve touching another
+// region's outline at an interior point, such as two tangent circles, is no
+// vertex: sketch's arrangement neither cuts nor flags a clean tangency, so
+// every pair of entities from two regions with a curved member is also put to
+// sketch's own intersection query (geom.LineCircleIntersections and its
+// circle and arc kin), which reports a tangency within its band as one point.
+// Any point it reports touches. A curve kind the query does not cover refuses.
+// The check only refuses: a reported point never admits anything.
 func ProveGroupApart(ctx context.Context, budget *proofbound.WorkBudget,
 	regions []momentinput.Profile) (bool, float64, error) {
-	cells, separate, charge, err := proveGroupCells(ctx, budget, regions)
+	cells, tags, separate, charge, err := proveGroupCells(ctx, budget, regions)
 	if err != nil || !separate {
 		return false, charge, err
 	}
@@ -206,53 +213,130 @@ func ProveGroupApart(ctx context.Context, budget *proofbound.WorkBudget,
 			}
 		}
 	}
+	touch, err := curvedContact(budget, tags)
+	if err != nil || touch {
+		return false, charge, err
+	}
 	return true, charge, nil
 }
 
-// proveGroupCells returns the one matched cell per region when every region
-// matched a distinct valid, whole cell.
+// curvedContact reports whether sketch's intersection query finds any point
+// shared by two entities of different regions where at least one is curved.
+// A line's reported point counts when it lies on the segment, read with the
+// same band the query uses.
+func curvedContact(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin) (bool, error) {
+	entities := make([]sketch.Entity, 0, len(tags))
+	for e := range tags {
+		entities = append(entities, e)
+	}
+	for i, a := range entities {
+		for _, b := range entities[i+1:] {
+			if err := budget.Step(); err != nil {
+				return false, err
+			}
+			if tags[a].IsB == tags[b].IsB && tags[a].Region == tags[b].Region {
+				continue
+			}
+			touch, covered := curvedPairContact(a, b)
+			if !covered || touch {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+// curvedPairContact asks sketch's geom query whether a and b meet. Two lines
+// are the arrangement's to split and report covered with no contact.
+func curvedPairContact(a, b sketch.Entity) (bool, bool) {
+	if _, ok := a.(*sketch.Line); !ok {
+		if _, ok := b.(*sketch.Line); ok {
+			a, b = b, a
+		}
+	}
+	onSegment := func(l *geom.Line, pts []*geom.Point) bool {
+		const band = 1e-9
+		for _, p := range pts {
+			if _, t := geom.ClosestPointOnLine(l, p); t >= -band && t <= 1+band {
+				return true
+			}
+		}
+		return false
+	}
+	switch a := a.(type) {
+	case *sketch.Line:
+		switch b := b.(type) {
+		case *sketch.Line:
+			return false, true
+		case *sketch.Circle:
+			l := a.Geometry()
+			return onSegment(l, geom.LineCircleIntersections(l, b.Geometry())), true
+		case *sketch.Arc:
+			l := a.Geometry()
+			return onSegment(l, geom.LineArcIntersections(l, b.Geometry())), true
+		}
+	case *sketch.Circle:
+		switch b := b.(type) {
+		case *sketch.Circle:
+			return len(geom.CircleCircleIntersections(a.Geometry(), b.Geometry())) != 0, true
+		case *sketch.Arc:
+			return len(geom.CircleArcIntersections(a.Geometry(), b.Geometry())) != 0, true
+		}
+	case *sketch.Arc:
+		switch b := b.(type) {
+		case *sketch.Circle:
+			return len(geom.CircleArcIntersections(b.Geometry(), a.Geometry())) != 0, true
+		case *sketch.Arc:
+			return len(geom.ArcArcIntersections(a.Geometry(), b.Geometry())) != 0, true
+		}
+	}
+	return false, false
+}
+
+// proveGroupCells returns the one matched cell per region, and the scene's
+// tags, when every region matched a distinct valid, whole cell.
 func proveGroupCells(ctx context.Context, budget *proofbound.WorkBudget,
-	regions []momentinput.Profile) ([]*sketch.Profile, bool, float64, error) {
+	regions []momentinput.Profile) ([]*sketch.Profile, map[sketch.Entity]Origin, bool, float64, error) {
 	outers := make([]momentinput.Profile, len(regions))
 	for i, region := range regions {
 		outers[i] = momentinput.Profile{Outer: region.Outer}
 	}
 	if err := groupWithinCap(budget, "disjointness", outers); err != nil {
-		return nil, false, 0, err
+		return nil, nil, false, 0, err
 	}
 	s, tags, charge, err := BuildSceneRegions(budget, groupSceneProfiles(outers), nil, &Reexpression{Identity: true})
 	if err != nil {
-		return nil, false, 0, err
+		return nil, nil, false, 0, err
 	}
 	profiles, err := ProfilesContext(ctx, s.Profiles)
 	if err != nil {
-		return nil, false, 0, err
+		return nil, nil, false, 0, err
 	}
 	if len(profiles) != len(regions) {
-		return nil, false, 0, nil
+		return nil, nil, false, 0, nil
 	}
 	claimed := make([]bool, len(profiles))
 	for r := range regions {
 		want, err := RegionLoopEntitySet(budget, tags, false, r, -1)
 		if err != nil {
-			return nil, false, 0, err
+			return nil, nil, false, 0, err
 		}
 		match, resolved, err := FindLoopMatch(budget, profiles, want, nil)
 		if err != nil {
-			return nil, false, 0, err
+			return nil, nil, false, 0, err
 		}
 		if !resolved || !match.Valid {
-			return nil, false, 0, nil
+			return nil, nil, false, 0, nil
 		}
 		for i, p := range profiles {
 			if p != match {
 				continue
 			}
 			if claimed[i] {
-				return nil, false, 0, nil
+				return nil, nil, false, 0, nil
 			}
 			claimed[i] = true
 		}
 	}
-	return profiles, true, charge.A, nil
+	return profiles, tags, true, charge.A, nil
 }

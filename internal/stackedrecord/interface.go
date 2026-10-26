@@ -25,9 +25,11 @@ func Exposed(ctx context.Context, holes []sectionrecord.LoopRecord) ([]momentinp
 }
 
 // SeparatedOpposed asks sketch for one valid, whole cell per exclusive hole
-// interior, no two cells sharing a vertex. A scene charge would leave their
-// true separation unproved. Two opposed holes meeting at one corner would
-// leave the body meeting itself at that point, so they are not separate.
+// interior, no two cells sharing a vertex and no curved pair that sketch's
+// intersection query finds touching (prismcells.ProveGroupApart). A scene
+// charge would leave their true separation unproved. Two opposed holes
+// meeting at one corner or one tangency would leave the body meeting itself
+// at that point, so they are not separate.
 func SeparatedOpposed(ctx context.Context, budget *proofbound.WorkBudget,
 	lowerOnly, upperOnly []sectionrecord.LoopRecord) (Interface, bool, error) {
 	if len(lowerOnly) == 0 || len(upperOnly) == 0 {

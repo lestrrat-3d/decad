@@ -79,21 +79,35 @@ func TestStackedOpposedOverlapPockets(t *testing.T) {
 
 // TestStackedOpposedTouchingPocketsRefuse keeps opposed pockets that only
 // touch off every analytic route: along an edge the floor and ceiling would
-// put four faces on one edge, and at a corner the body would meet itself at
-// one point. Under ExactOnly the mesh path refuses the contact.
+// put four faces on one edge, and at a corner or a tangency the body would
+// meet itself at one point. Under ExactOnly the mesh path refuses the contact.
 func TestStackedOpposedTouchingPocketsRefuse(t *testing.T) {
 	t.Parallel()
+	box := func(x0, y0, x1, y1, z0, h float64) func(*testing.T, *decad.Document) *decad.Body {
+		return func(t *testing.T, doc *decad.Document) *decad.Body { return boxBodyAtZ(t, doc, x0, y0, x1, y1, z0, h) }
+	}
+	round := func(x, r, z0, h float64) func(*testing.T, *decad.Document) *decad.Body {
+		return func(t *testing.T, doc *decad.Document) *decad.Body { return circleBodyAtZ(t, doc, x, r, z0, h) }
+	}
 	for _, tc := range []struct {
-		name   string
-		bottom [4]float64
+		name        string
+		top, bottom func(*testing.T, *decad.Document) *decad.Body
 	}{
-		{name: "edge", bottom: [4]float64{-2, -2, 2, 2}},
-		{name: "corner", bottom: [4]float64{-2, 2, 2, 6}},
+		{name: "edge", top: box(-6, -2, -2, 2, 6, 4), bottom: box(-2, -2, 2, 2, 0, 6)},
+		{name: "corner", top: box(-6, -2, -2, 2, 6, 4), bottom: box(-2, 2, 2, 6, 0, 6)},
+		// Circles of radius 1 about x = -3 and x = -1 touch at (-2, 0); the
+		// circle about x = -1 touches the rectangle's edge x = -2 there too.
+		{name: "tangent-circles", top: round(-3, 1, 6, 4), bottom: round(-1, 1, 0, 6)},
+		{name: "tangent-rectangle-circle", top: box(-6, -2, -2, 2, 6, 4), bottom: round(-1, 1, 0, 6)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New(decad.ExactOnly())
-			_, err := opposedPockets(t, doc, [4]float64{-6, -2, -2, 2}, tc.bottom, true)
+			plate := boxBody(t, doc, -10, -10, 10, 10, 10)
+			part, err := decad.Cut(t.Context(), plate, tc.top(t, doc))
+			require.NoError(t, err)
+			require.Equal(t, "decad.stackedPrismPayload", decadtest.PayloadClass(part))
+			_, err = decad.Cut(t.Context(), part, tc.bottom(t, doc))
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			var be *decad.BooleanError
 			require.ErrorAs(t, err, &be)

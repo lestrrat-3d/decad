@@ -10,12 +10,13 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// OpposedCut is a blind cut on a stack whose tool ends exactly at an
-// existing interface and leaves exclusive holes on both sides of it:
-// pockets from opposite faces that overlap in plan at one level (agent-docs/stacked-prism-design.md §7 stage
-// 3). Its slabs are proven as CutSlabs proves them, but the payload's whole
-// column rings cannot hold the partial floor and ceiling, so the caller
-// states the body as a BRep (agent-docs/general-boolean-design.md §3 A8).
+// OpposedCut is a blind cut on a stack whose tool ends exactly at an existing
+// interface and leaves exclusive holes on both sides of it: pockets from
+// opposite faces that overlap in plan at one level
+// (agent-docs/stacked-prism-design.md §7 stage 3). Its slabs are proven as
+// CutSlabs proves them, but the payload's whole column rings cannot hold the
+// partial floor and ceiling, so the caller states the body as a BRep
+// (agent-docs/general-boolean-design.md §3 A8).
 type OpposedCut struct {
 	Slabs []Slab
 	// Interfaces holds every other interface's derived record. Interfaces[At]
@@ -28,13 +29,13 @@ type OpposedCut struct {
 	Xform                r3.Transform
 }
 
-// ApplyOpposedBlindCut admits the interface arm of ApplyBlindCut that
-// CutSlabs leaves to the mesh path because its opposed exclusive holes are
-// not apart. The dispatch tries ApplyBlindCut first, so opposed holes the
-// stacked payload records never reach this arm. Every reached slab still needs its own whole-loop cut proof, the
-// section displacement must be zero, and every exclusive hole at the
-// interface must be a loop of axis-aligned lines, whose crossings are exact.
-// ok=false is a silent miss.
+// ApplyOpposedBlindCut admits the interface arm of ApplyBlindCut that CutSlabs
+// leaves to the mesh path because its opposed exclusive holes are not apart.
+// The dispatch tries ApplyBlindCut first, so opposed holes the stacked payload
+// records never reach this arm. Every reached slab still needs its own
+// whole-loop cut proof, the section displacement must be zero, and every
+// exclusive hole at the interface must be a loop of axis-aligned lines, whose
+// crossings are exact. ok=false is a silent miss.
 func ApplyOpposedBlindCut(ctx context.Context, budget *proofbound.WorkBudget, sp Payload,
 	outer, tool prismrecord.Payload) (OpposedCut, bool, error) {
 	reach, ok, err := reachBlindCut(budget, sp, outer, tool)
