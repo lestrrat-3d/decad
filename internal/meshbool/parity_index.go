@@ -475,7 +475,8 @@ func (idx *ParityIndex) addTriangle(pm *ParityMesh, tri [3]int, u, v, ti int, bo
 		if lo > hi {
 			continue
 		}
-		for j := idx.v.cellOf(lo); j <= idx.v.cellOf(hi); j++ {
+		jHi := idx.v.cellOf(hi)
+		for j := idx.v.cellOf(lo); j <= jHi; j++ {
 			cells = append(cells, int32(i*c+j))
 			facets = append(facets, int32(ti))
 		}
