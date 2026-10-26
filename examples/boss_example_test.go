@@ -153,3 +153,47 @@ func Example_boss_draft() {
 	// Output:
 	// volume: 8361 mm^3
 }
+
+// RootFillet rounds the sharp corner where the post meets the plate, which
+// spreads the load a post carries and eases a cast part's corner. Here a post 8
+// mm wide and 8 mm tall gets a 1 mm fillet at its foot.
+func Example_boss_root_fillet() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(0, 0, 40, 40)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	boss, err := decad.Boss(context.Background(), plate, decad.BossSpec{
+		Face:       decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
+		At:         r3.Vec{X: 20, Y: 20, Z: 5},
+		Diameter:   units.Millimeters(8),
+		Height:     units.Millimeters(8),
+		RootFillet: units.Millimeters(1),
+	})
+	if err != nil {
+		fmt.Printf("failed to raise the boss: %s\n", err)
+		return
+	}
+	volume, err := boss.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	// The plate and post hold 8402 mm^3, and the fillet adds about 7 mm^3.
+	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
+	// Output:
+	// volume: 8408 mm^3
+}
