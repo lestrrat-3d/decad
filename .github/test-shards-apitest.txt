@@ -2424,3 +2424,7 @@
 10	0.00	TestSectionBlindPocketFeedsExtrude
 10	0.00	TestSectionBlindPocketRefusesLevelsOffSlabInteriors
 10	0.00	TestSectionStackedPrismGateRefusals
+10	0.01	TestInchPocketLevelsCoincidingAfterRounding
+10	0.01	TestInchPocketLevelsInvertedAfterRounding
+10	0.01	TestInchPocketLevelsWithinOneUlp
+10	0.01	TestInchPocketUnionLevelsFollowDenotation
