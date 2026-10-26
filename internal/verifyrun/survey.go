@@ -212,7 +212,7 @@ func runSurveys(budget *proofbound.WorkBudget, b *topo.Body, cfg verifyConfig) (
 			// rather than a generic undecided result (proposal §16).
 			out.reason = surveyPayloadStaged
 		case facetedrecord.Payload:
-			out.reason = surveyFacetedUnsupported
+			out, err = facetedWall(budget, pl)
 		default:
 			// Any payload class this switch does not name — a loft or a draft
 			// body today (draft DD8) — has no implemented wall survey either.

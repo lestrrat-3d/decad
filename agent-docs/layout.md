@@ -39,6 +39,7 @@ first.
 - `agent-docs/layout/internal-revolve-sweep.md`: Revolve, Sweep, coil and pair-sweep path internal packages.
 - `agent-docs/layout/internal-checks.md`: internal packages for bounds, surveys,
   sweeps and clearance.
+- `agent-docs/layout/internal-surveys.md`: wall, undercut and concave-radius survey internal packages.
 - `agent-docs/layout/internal-loft.md`: Loft, point-loft, cone and contact internal packages.
 - `agent-docs/layout/internal-prism.md`: prism, stacked, cup and Shell internal packages.
 - `agent-docs/layout/internal-placement.md`: body layout and path-spacing internal packages.

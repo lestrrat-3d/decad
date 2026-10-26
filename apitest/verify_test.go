@@ -825,8 +825,17 @@ func TestVerifyDiagnosticsUnsupportedFacetedSurveys(t *testing.T) {
 
 	require.Equal(t, decad.Suspect, report.Status)
 	requireDiagnosticInvariants(t, report)
-	require.Len(t, report.Diagnostics, 3, `each staged faceted survey names its own refusal`)
-	for _, diagnostic := range report.Diagnostics {
+	// The wall survey of a faceted body reads rays through its mesh: it can
+	// prove a wall too thin and cannot prove one thick enough, so a thick body
+	// reads the wall interval straddling the tool and beyond the tolerance. The
+	// undercut and concave-radius surveys stay staged, each naming its own refusal.
+	require.Len(t, report.Diagnostics, 4)
+	require.Equal(t, decad.SurveyWall, report.Diagnostics[0].Survey)
+	require.Equal(t, decad.DiagUndecidedWall, report.Diagnostics[0].Code)
+	require.Equal(t, decad.SurveyWall, report.Diagnostics[1].Survey)
+	require.Equal(t, decad.DiagMeasurementBeyondTolerance, report.Diagnostics[1].Code)
+	for _, i := range []int{2, 3} {
+		diagnostic := report.Diagnostics[i]
 		require.Equal(t, decad.DiagUnsupportedSurveyPayload, diagnostic.Code)
 		require.Equal(t, decad.Suspect, diagnostic.Status)
 		require.Equal(t, decad.ReadingNone, diagnostic.Reading)
@@ -834,14 +843,10 @@ func TestVerifyDiagnosticsUnsupportedFacetedSurveys(t *testing.T) {
 		require.Contains(t, diagnostic.Message, "facetedPayload")
 		require.Contains(t, diagnostic.Message, "use an analytic body")
 	}
-	// Wall, undercut, and concave-radius are distinguished by structured
-	// Survey identity rather than by parsing Message text (proposal §10);
-	// runSurveys' fixed emission order — wall, then pull, then radius —
-	// survives §10's flattening because these are the only diagnostics on
-	// this body.
-	require.Equal(t, decad.SurveyWall, report.Diagnostics[0].Survey)
-	require.Equal(t, decad.SurveyUndercut, report.Diagnostics[1].Survey)
-	require.Equal(t, decad.SurveyConcaveRadius, report.Diagnostics[2].Survey)
+	// Undercut and concave-radius are distinguished by structured Survey
+	// identity rather than by parsing Message text (proposal §10).
+	require.Equal(t, decad.SurveyUndercut, report.Diagnostics[2].Survey)
+	require.Equal(t, decad.SurveyConcaveRadius, report.Diagnostics[3].Survey)
 }
 
 func TestVerifyDiagnosticsInterference(t *testing.T) {
