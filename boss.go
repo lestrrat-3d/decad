@@ -29,7 +29,8 @@ type BossBore struct {
 	Draft    units.Value
 }
 
-// BossSpec describes one round boss standing on a planar face.
+// BossSpec describes one boss standing on a planar face: round by default, or the
+// shape Shape names.
 //
 // Face selects the planar face the boss stands on and must resolve to exactly
 // one face. At is a world point in millimetres that lies on that face's plane;
@@ -41,6 +42,11 @@ type BossBore struct {
 // diameter at Face either way. RootFillet is optional: a positive length rounds
 // the concave edge where the boss meets the face with a fillet of that radius,
 // and the zero Value leaves the corner sharp (agent-docs/boss-design.md §6).
+// Shape is optional and replaces the round section with a RectangularHole,
+// SlotHole or PolygonHole section, centred on At, as a Hole's shape is: Diameter
+// is then zero, the shape's size is the boss's size at Face, and a Draft leans
+// every wall by its angle (agent-docs/boss-design.md §7). A shaped boss takes no
+// RootFillet.
 type BossSpec struct {
 	Face       FaceSelector
 	At         r3.Vec
@@ -49,6 +55,7 @@ type BossSpec struct {
 	Bore       *BossBore
 	Draft      units.Value
 	RootFillet units.Value
+	Shape      HoleShape
 }
 
 // Boss raises a round boss on a planar face of b, with an optional blind pilot
@@ -177,6 +184,8 @@ type bossRequest struct {
 	// diameter and height are the boss's size, embed how far it reaches into
 	// the body behind the face, and draft the lean of its wall in radians.
 	diameter, height, embed, draft float64
+	// shape, when set, is the section in place of a circle of diameter.
+	shape *bossShape
 	// bore, when set, is the pilot hole's request on the boss's top face, and
 	// tap the thread to cut in it.
 	bore *holeplan.Input
@@ -190,11 +199,25 @@ func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
 		return in, err
 	}
 	in.frame, in.outward = plane.Frame, normal.Value
-	if in.diameter, err = sectionrecord.MagnitudeIn(spec.Diameter, units.Length, units.Millimeter, "the boss diameter"); err != nil {
-		return in, err
+	if spec.Shape == nil || spec.Diameter != (units.Value{}) {
+		if in.diameter, err = sectionrecord.MagnitudeIn(spec.Diameter, units.Length, units.Millimeter, "the boss diameter"); err != nil {
+			return in, err
+		}
 	}
 	if in.height, err = sectionrecord.MagnitudeIn(spec.Height, units.Length, units.Millimeter, "the boss height"); err != nil {
 		return in, err
+	}
+	if spec.Shape != nil {
+		if in.diameter != 0 {
+			return in, fmt.Errorf(`%w: a shaped boss takes its size from the shape, so Diameter must be zero`, ErrDegenerate)
+		}
+		if spec.RootFillet != (units.Value{}) {
+			return in, fmt.Errorf(`%w: a shaped boss takes no root fillet`, ErrUnsupported)
+		}
+		if in.shape, err = readBossShape(spec.Shape); err != nil {
+			return in, err
+		}
+		in.diameter = in.shape.across()
 	}
 	if in.diameter == 0 || in.height == 0 {
 		return in, fmt.Errorf(`%w: a boss needs a positive diameter and height`, ErrDegenerate)
@@ -287,12 +310,17 @@ func buildBossPillar(ctx context.Context, d *Document, in bossRequest) (*Body, e
 	if err != nil {
 		return nil, err
 	}
-	centre := s.CreatePoint(in.u, in.v)
-	s.Fix(centre)
-	// The taper runs from the footing plane, embed below the face, so the circle
+	// The taper runs from the footing plane, embed below the face, so the section
 	// there is as much wider as the wall leans over that depth: the wall is then
-	// the stated diameter at the face.
-	s.CreateCircle(centre, in.diameter/2+in.embed*math.Tan(in.draft))
+	// the stated size at the face.
+	grow := in.embed * math.Tan(in.draft)
+	if in.shape != nil {
+		in.shape.sketchSection(s, in.u, in.v, grow)
+	} else {
+		centre := s.CreatePoint(in.u, in.v)
+		s.Fix(centre)
+		s.CreateCircle(centre, in.diameter/2+grow)
+	}
 	if _, err := s.Solve(ctx); err != nil {
 		return nil, err
 	}

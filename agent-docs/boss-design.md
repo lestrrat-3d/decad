@@ -21,6 +21,7 @@ type BossSpec struct {
     Bore       *BossBore
     Draft      units.Value
     RootFillet units.Value
+    Shape      HoleShape
 }
 
 func Boss(ctx context.Context, b *Body, spec BossSpec) (*Body, error)
@@ -45,7 +46,7 @@ faces are planes and cylinders where the Booleans admit them.
 - Ribs and gussets at the boss's foot. Add them with `Rib` and `Web`.
 - A pilot thread whose major diameter exceeds the boss's.
 - A draft that closes the boss or breaks its circle before its top: `Extrude`'s refusal.
-- A boss that is not round, or one that stands on a curved face.
+- A boss that stands on a curved face, and a shaped boss with a root fillet.
 - A boss whose axis is tilted from the face normal.
 
 ## 4. A pilot with a head or a thread
@@ -81,3 +82,18 @@ faces are planes and cylinders where the Booleans admit them.
 | R2 | The boss is built as before. The fillet then takes the one circular edge of the result that lies in the face's plane, about the boss's axis, with the boss's radius at the face (a drafted boss's radius at the face is its `Diameter`). The result is a mesh-free torus patch where `Fillet` admits one, and carries the fillet's own bounds. |
 | R3 | A boss and fillet are tried on a copy of `b` first: the copy is built, filleted and retired. A fillet the evaluator refuses, or a root circle not found in the result, therefore leaves `b` live and the document unchanged. The copy and its trial leave history entries. |
 | R4 | The result is `Boss`'s union and pilot cut followed by `Fillet`, so the history holds `OperationBoss` then `OperationFillet`. A fillet too large for the face, for the boss's height or for the body's other edges is `Fillet`'s refusal. |
+
+## 7. A shaped boss
+
+`BossSpec.Shape` replaces the round section with a `RectangularHole`, `SlotHole` or `PolygonHole`, the shapes of `Hole`
+(`agent-docs/hole-design.md` §5, §6, §10), so a rectangular rib block, a stadium lug or a hexagonal post stands on the face.
+
+| Decision | Rule |
+|---|---|
+| Q1 | The section is centred on `At` and turned as the hole shape is: a rectangle's `Width` along the face frame's U axis before `Angle` turns it, a slot's long axis along U, and a polygon with a flat toward U. The shape's size is the boss's size at the face. |
+| Q2 | `Diameter` must be the zero value (`ErrDegenerate` otherwise) and the shape's own gates are the hole's: a polygon of 3 to 64 sides, a slot longer than it is wide, positive lengths (`ErrUnitKind`, `ErrDegenerate`). |
+| Q3 | The pillar is the shape extruded out of the face, starting `embed` behind it, from a sketch of fixed points joined by lines and arcs, as the round pillar is from a circle. |
+| Q4 | A `Draft` moves every wall of the section by `h·tan(draft)` over a height `h`, which is the rectangle's width and height each smaller by `2h·tan(draft)`, the polygon's width across flats and the slot's width and length the same. The footing is wider by `embed·tan(draft)` on each side so the wall has the stated size at the face. A taller draft than the section can close is `Extrude`'s refusal. |
+| Q5 | A pilot opens in the top face and must be narrower than the shape's smallest width there: the rectangle's shorter side, the slot's width or the polygon's width across flats, less `2·height·tan(draft)`. Its other gates are §1's. |
+| Q6 | A `RootFillet` with a shape is `ErrUnsupported`: the root loop of §6 is a circle. |
+| Q7 | The volume above the face is the section's area times the height, which the tests compute independently: `w·l·h − (w+l)·t·h² + 4/3·t²·h³` for a drafted rectangle, `(n·(a/2)²·tan(π/n))·h` for a polygon across flats `a`, and `(w·(l−w) + π·w²/4)·h` for a slot. |

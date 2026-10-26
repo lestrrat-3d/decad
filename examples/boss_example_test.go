@@ -197,3 +197,46 @@ func Example_boss_root_fillet() {
 	// Output:
 	// volume: 8408 mm^3
 }
+
+// Shape gives the boss a rectangular, slot or polygonal section instead of a
+// round one, reusing the shapes a Hole takes. Here a hexagonal post 8 mm across
+// flats and 6 mm tall stands on a plate, as the seat for a hex nut.
+func Example_boss_shape() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(0, 0, 40, 40)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	boss, err := decad.Boss(context.Background(), plate, decad.BossSpec{
+		Face:   decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
+		At:     r3.Vec{X: 20, Y: 20, Z: 5},
+		Height: units.Millimeters(6),
+		Shape:  decad.PolygonHole{Sides: 6, AcrossFlats: units.Millimeters(8), Angle: units.Degrees(0)},
+	})
+	if err != nil {
+		fmt.Printf("failed to raise the boss: %s\n", err)
+		return
+	}
+	volume, err := boss.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	// The plate holds 8000 mm^3 and a hexagon 8 mm across flats, 55.4 mm^2, adds 332.6 mm^3 over 6 mm.
+	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
+	// Output:
+	// volume: 8333 mm^3
+}

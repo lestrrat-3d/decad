@@ -2488,3 +2488,9 @@
 10	0.01	TestHolePolygonFlatsFaceUAndTurnsWithTheAngle
 10	0.01	TestHolePolygonOtherSidesAndBlind
 10	0.01	TestHolePolygonRefusals
+10	0.01	TestBossRectangularStandsOnThePlate
+10	0.01	TestBossPolygonAndSlotVolumes
+10	0.01	TestBossRectangularStaysWhereTheShapeIsTurned
+10	0.01	TestBossShapedDraftLeansEveryWall
+10	0.01	TestBossShapedWithAPilot
+10	0.01	TestBossShapedRefusals
