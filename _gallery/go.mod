@@ -19,4 +19,6 @@ require (
 	github.com/lestrrat-go/option/v3 v3.0.0-alpha1 // indirect
 	github.com/lestrrat-go/stl v0.0.0-20260904080308-f2792ffa3582 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
+	golang.org/x/image v0.47.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 )
