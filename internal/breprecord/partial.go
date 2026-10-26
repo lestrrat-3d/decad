@@ -138,7 +138,9 @@ func attachPartialFilletBand(ctx context.Context, alloc topo.Alloc, body *topo.B
 			j := fr.Joins[k]
 			w := fr.Walks[k]
 			vertex := sectionrecord.Point2{U: w.StartU, V: w.StartV}
-			trail[k] = meridian(j.PA, vertex, w, arc.Start, side[k].Start)
+			// PA ends the previous walk's offset, so the trailing meridian
+			// closes that walk's patch and takes its axis.
+			trail[k] = meridian(j.PA, vertex, fr.Walks[prev], arc.Start, side[k].Start)
 			lead[k] = meridian(j.PB, vertex, w, arc.End, side[k].Start)
 			continue
 		}

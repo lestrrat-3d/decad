@@ -269,12 +269,14 @@ func attachFilletBand(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 		// under the contour foot, from that foot at F's level down to the side
 		// vertex.
 		//
-		// Its axis is the straight neighbour's own walk direction, the very
-		// value that wall's cylinder carries as its Axis, up to sign, so a
+		// Given a straight walk, its axis is that walk's own direction, the
+		// very value the walk's cylinder carries as its Axis, up to sign, so a
 		// consumer comparing the two compares equal values: the cross product
 		// of the foot's normal with up is perpendicular to the walk only to
-		// rounding. A meridian with no straight wall beside it (two circular
-		// walks) keeps that cross product.
+		// rounding. Given none it keeps that cross product. An LF5 meridian
+		// passes the first straight walk of the two it joins; an LF6 meridian
+		// passes only the one walk whose wall it bounds, so it keeps the cross
+		// product whenever that walk is circular, even beside a straight walk.
 		meridian := func(foot sectionrecord.Point2, v survey2d.SideWalk, straight *survey2d.SideWalk, capV, sideV *topo.Vertex) *topo.Edge {
 			nu, nv := foot.U-v.StartU, foot.V-v.StartV
 			l := math.Hypot(nu, nv)

@@ -296,33 +296,92 @@ func (a arcRat) cross(b arcRat) arcRat {
 	return arcRat{term(1, 2), term(2, 0), term(0, 1)}
 }
 
-// TestBrepLoopFilletReflexMeridiansLieOnTheirCircles reads every Arc3 of the
-// L prism's filleted loops, whose one reflex corner records a connector arc
-// and the two meridians from its ends down to the side vertex, and checks in
-// exact rational arithmetic that each recorded circle holds its own edge:
-// both end vertices lie at the recorded radius from the centre, in the plane
-// through the centre perpendicular to Axis, and the quarter turn from Start
-// to End runs counter-clockwise about Axis. Each meridian stands on the wall
-// of the walk whose offset foot it starts from, so its Axis is that walk's
-// direction; every coordinate here is a dyadic rational, so the circles hold
-// exactly.
+// pocketMouthPlate is the 40×40×10 plate with the blind 20×10 pocket 5 deep
+// (loop-fillet P2), and its top face.
+func pocketMouthPlate(t *testing.T) (*decad.Body, *decad.Face) {
+	t.Helper()
+	doc := decad.New()
+	plate := boxBody(t, doc, 0, 0, 40, 40, 10)
+	pocket, err := decad.Cut(t.Context(), plate, boxBodyAtZ(t, doc, 10, 15, 30, 25, 5, 5))
+	require.NoError(t, err)
+	return pocket, planeFacing(t, pocket, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10))
+}
+
+// pocketMouthLoop is the top face's loop around the pocket mouth.
+func pocketMouthLoop(t *testing.T, top *decad.Face) *decad.Loop {
+	t.Helper()
+	for _, l := range top.Loops() {
+		if !l.IsOuter() {
+			return l
+		}
+	}
+	require.FailNow(t, "the top face has no pocket mouth loop")
+	return nil
+}
+
+// TestBrepLoopFilletReflexMeridiansLieOnTheirCircles reads every Arc3 of a
+// loop fillet whose reflex corners each record a connector arc and the two
+// meridians from its ends down to the side vertex, and checks in exact
+// rational arithmetic that each recorded circle holds its own edge: both end
+// vertices lie at the recorded radius from the centre, in the plane through
+// the centre perpendicular to Axis, and the quarter turn from Start to End
+// runs counter-clockwise about Axis. Each meridian stands on the wall of the
+// walk whose offset foot it starts from, so its Axis is that walk's
+// direction. The bodies are the L prism's two loops (one reflex corner), the
+// P2 pocket mouth (four), and three of the mouth's four edges, which reach
+// the partial-loop record and keep the two reflex corners at x = 30 between
+// the two terminal arcs at x = 10. Every
+// coordinate here is a dyadic rational, so the circles hold exactly.
 func TestBrepLoopFilletReflexMeridiansLieOnTheirCircles(t *testing.T) {
 	t.Parallel()
+	lLoop := func(normal, at r3.Vec) func(t *testing.T) (*decad.Body, *decad.EdgeQuery) {
+		return func(t *testing.T) (*decad.Body, *decad.EdgeQuery) {
+			_, l := polygonPrism(t, lPrism)
+			return l, loopEdgeQuery(planeFacing(t, l, normal, at).Loops()[0])
+		}
+	}
 	for _, tc := range []struct {
-		name       string
-		normal, at r3.Vec
+		name  string
+		build func(t *testing.T) (*decad.Body, *decad.EdgeQuery)
+		// vertical counts the arcs whose plane stands on the side level:
+		// two meridians per reflex corner and a partial loop's terminal
+		// arc at each open end.
+		vertical int
 	}{
-		{"top loop", r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10)},
-		{"bottom loop", r3.NewVec(0, 0, -1), r3.Vec{}},
+		{"L prism top loop", lLoop(r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10)), 2},
+		{"L prism bottom loop", lLoop(r3.NewVec(0, 0, -1), r3.Vec{}), 2},
+		{"pocket mouth", func(t *testing.T) (*decad.Body, *decad.EdgeQuery) {
+			body, top := pocketMouthPlate(t)
+			return body, loopEdgeQuery(pocketMouthLoop(t, top))
+		}, 8},
+		{"pocket mouth without its x = 10 edge", func(t *testing.T) (*decad.Body, *decad.EdgeQuery) {
+			body, top := pocketMouthPlate(t)
+			var q *decad.EdgeQuery
+			kept := 0
+			for _, e := range pocketMouthLoop(t, top).Edges() {
+				a, b := e.Start().Position().Value, e.End().Position().Value
+				if a.X == 10 && b.X == 10 {
+					continue
+				}
+				preds := []decad.EdgePredicate{decad.EndpointAt(a), decad.EndpointAt(b), decad.ParallelTo(b.Sub(a))}
+				if q == nil {
+					q = decad.Edges(preds...)
+				} else {
+					q.Or(preds...)
+				}
+				kept++
+			}
+			require.Equal(t, 3, kept)
+			return body, q.Exactly(kept)
+		}, 6},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			_, l := polygonPrism(t, lPrism)
-			face := planeFacing(t, l, tc.normal, tc.at)
-			got, err := decad.Fillet(t.Context(), l, loopEdgeQuery(face.Loops()[0]), units.Millimeters(1.5))
+			body, q := tc.build(t)
+			got, err := decad.Fillet(t.Context(), body, q, units.Millimeters(1.5))
 			require.NoError(t, err)
 			r2 := big.NewRat(9, 4)
-			meridians := 0
+			vertical := 0
 			for _, e := range got.Edges() {
 				arc, ok := e.Curve().(decad.Arc3)
 				if !ok {
@@ -340,10 +399,10 @@ func TestBrepLoopFilletReflexMeridiansLieOnTheirCircles(t *testing.T) {
 				}
 				require.Positive(t, s.cross(en).dot(axis).Sign(), "arc at %v about %v: the quarter turn runs clockwise", arc.Center, arc.Axis)
 				if arc.Axis.Z == 0 {
-					meridians++
+					vertical++
 				}
 			}
-			require.Equal(t, 2, meridians, "the reflex corner records two meridians")
+			require.Equal(t, tc.vertical, vertical, "vertical arcs")
 		})
 	}
 }
