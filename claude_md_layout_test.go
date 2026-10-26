@@ -175,6 +175,7 @@ var (
 	}
 	layoutPartSpecs = []docSpec{
 		layoutPartSpec("design-docs.md"),
+		layoutPartSpec("design-docs-gaps.md"),
 		layoutPartSpec("features.md"),
 		layoutPartSpec("modify-booleans.md"),
 		layoutPartSpec("booleans.md"),

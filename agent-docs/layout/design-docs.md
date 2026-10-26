@@ -22,14 +22,6 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/point-containment-design.md` | Public point classification, distance, and mesh-to-body proofs. |
 | `agent-docs/section-design.md` | Read-only planar section gate and Sketch reconstruction proof. |
 | `agent-docs/interference-design.md` | Read-only pair overlap and bounded volume proofs. |
-| `agent-docs/thread-design.md` | `Thread`: ISO metric thread cut into a cylindrical face through a coil, and its groove profile. |
-| `agent-docs/gltf-export-design.md` | The glTF writer's file layout, metre scaling and error contract. |
-| `agent-docs/mesh-import-design.md` | `MeshBody`, `ReadSTL` and `ReadOBJ`: the mesh readers, the mesh report and its exact volume. |
-| `agent-docs/path-pattern-design.md` | `PathPatternCopies`: copies spaced at equal arc length along a `Path`, and the path sampler. |
-| `agent-docs/fillet-chord-design.md` | `FilletChord`: chord-length fillet as a radius, sharing the right-angle gate of `ChamferAngle`. |
-| `agent-docs/arrange-design.md` | `Arrange`: shelf packing of body footprints onto a flat bed by translation. |
-| `agent-docs/chamfer-angle-design.md` | `ChamferAngle`: distance-and-angle bevel as a second setback, and its right-angle gate. |
-| `agent-docs/boss-design.md` | `Boss`: a round boss and its blind pilot hole in one atomic union-and-cut commit. |
 | `agent-docs/hole-design.md` | `Hole`: face and point placement, size gates, tool shapes and the atomic cut. |
 | `agent-docs/rib-design.md` | `Rib` and `Web`: line outline, extent, overrun, touch and volume checks, and the merged join. |
 | `agent-docs/emboss-design.md` | `Emboss`: face-derived sweep, plane checks, margin, volume checks and the shared join. |
@@ -105,6 +97,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `measurement.go` | Public bounded reading types and their internal adapters. |
 | `record.go` | Root-owned `Point2`, structural record and payload aliases (including the faceted payload and its records), and slice adapters. See sketch-seam §2. |
 | `seam.go` | Sketch chain recording adapters, `MeasureProfile` and `SecondMoments`; profile recording lives in `internal/sectioncert/`. See sketch-seam §1–§2. |
+| `section_outline.go` | Public `SectionOutline` and `Body.SectionOutline`: the verified mesh cut by a plane through `internal/meshslice/`. See section-outline design. |
 | `section.go` | Public planar section query over certified prism, stack-backed BRep, direct and smooth Loft, sphere and cone records; exact builders and clips live in `internal/sectionclip/`; also the `Section` profile-or-chain constraint. See section design, surface §13.2. |
 | `path.go` | The immutable spatial `Path`, sealed segments and its recorded `internal/sweepinput.Path`. See sweep §2–§3. |
 | `extent.go` | Public linear and angular extent variants and normalization. See API §8.1. |
