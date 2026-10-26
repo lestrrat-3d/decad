@@ -103,16 +103,16 @@ func Shaded(cam Camera, normal r3.Vec) (color.RGBA, error) {
 	if !ok {
 		return color.RGBA{}, fmt.Errorf("%w: the face normal has no length", ErrDegenerate)
 	}
-	return shade(Front, dir, dir, right, up, n), nil
+	return shade(Front, Back, dir, dir, right, up, n), nil
 }
 
 // shade colours a face with the unit normal n. view is the direction from the
 // eye to the face: dir for an orthographic camera and the line of sight to the
 // face for a perspective one. A face whose normal points along view looks away.
-func shade(front color.RGBA, view, dir, right, up, n r3.Vec) color.RGBA {
+func shade(front, back color.RGBA, view, dir, right, up, n r3.Vec) color.RGBA {
 	base := front
 	if n.Dot(view) > 0 { // the normal points away from the camera: a back face
-		base = Back
+		base = back
 		n = n.Scale(-1)
 	}
 	light, _ := dir.Scale(-1).Add(up.Scale(lightUp)).Sub(right.Scale(lightLeft)).Normalize()
@@ -258,8 +258,14 @@ func Render(ctx context.Context, verts []r3.Vec, tris [][3]int, cam Camera, widt
 
 // RenderTinted is Render with a front colour for each triangle: tints[i] is the
 // base colour of triangle i when it looks toward the camera, in place of Front.
-// A back face keeps the Back colour. tints is nil, or as long as tris.
+// A back face takes the Back colour. tints is nil, or as long as tris.
 func RenderTinted(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []color.RGBA, cam Camera, width, height int) (*image.RGBA, error) {
+	return RenderBacked(ctx, verts, tris, tints, Back, cam, width, height)
+}
+
+// RenderBacked is RenderTinted with the colour of the faces that look away from
+// the camera in place of Back.
+func RenderBacked(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []color.RGBA, back color.RGBA, cam Camera, width, height int) (*image.RGBA, error) {
 	proj, err := NewProjection(verts, cam, width, height)
 	if err != nil {
 		return nil, err
@@ -274,7 +280,7 @@ func RenderTinted(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []co
 	for i := range img.Pix {
 		img.Pix[i] = 0xff // opaque white
 	}
-	if _, err := draw(ctx, verts, tris, tints, proj, img, nil); err != nil {
+	if _, err := draw(ctx, verts, tris, tints, back, proj, img, nil); err != nil {
 		return nil, err
 	}
 	return img, nil
@@ -287,12 +293,12 @@ func DepthBuffer(ctx context.Context, verts []r3.Vec, tris [][3]int, proj Projec
 	if err := checkMesh(verts, tris); err != nil {
 		return nil, err
 	}
-	return draw(ctx, verts, tris, nil, proj, nil, nil)
+	return draw(ctx, verts, tris, nil, Back, proj, nil, nil)
 }
 
 // draw rasterizes the triangles, colouring img when it is not nil, and returns
 // the depth buffer.
-func draw(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []color.RGBA, proj Projection, img *image.RGBA, ids []int32) ([]float64, error) {
+func draw(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []color.RGBA, back color.RGBA, proj Projection, img *image.RGBA, ids []int32) ([]float64, error) {
 	screen := make([]screenVertex, len(verts))
 	for i, v := range verts {
 		x, y, depth := proj.Project(v)
@@ -323,7 +329,7 @@ func draw(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []color.RGBA
 			if tints != nil {
 				front = tints[ti]
 			}
-			fill = shade(front, view, proj.dir, proj.right, proj.up, normal)
+			fill = shade(front, back, view, proj.dir, proj.right, proj.up, normal)
 		}
 		fillTriangle(img, depths, ids, int32(ti), proj.Width, screen[t[0]], screen[t[1]], screen[t[2]], fill)
 	}
@@ -423,7 +429,7 @@ func DrawDashed(img *image.RGBA, proj Projection, segments [][2][2]float64, c co
 // compared with the nearest depth there, less a bias of the map's own pixel,
 // widened for a face that meets the light at a grazing angle so that no face
 // shadows itself.
-func RenderShadowed(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []color.RGBA, cam Camera,
+func RenderShadowed(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []color.RGBA, back color.RGBA, cam Camera,
 	width, height, shadowSize int) (*image.RGBA, error) {
 	if cam.FieldOfView != 0 {
 		return nil, fmt.Errorf("%w: shadows are not drawn with a perspective camera", ErrDegenerate)
@@ -446,7 +452,7 @@ func RenderShadowed(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []
 	for i := range ids {
 		ids[i] = -1
 	}
-	depths, err := draw(ctx, verts, tris, tints, proj, img, ids)
+	depths, err := draw(ctx, verts, tris, tints, back, proj, img, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -506,7 +512,7 @@ func RenderShadowed(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []
 				}
 				base := front
 				if cosView := proj.dir.Dot(verts[t[1]].Sub(verts[t[0]]).Cross(verts[t[2]].Sub(verts[t[0]]))); cosView > 0 {
-					base = Back
+					base = back
 				}
 				img.SetRGBA(x, y, color.RGBA{
 					R: uint8(math.Round(float64(base.R) * ambient)),

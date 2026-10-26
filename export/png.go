@@ -49,6 +49,11 @@ type View struct {
 	// light is drawn at the ambient level (agent-docs/png-export-design.md §10).
 	// It is not combined with a perspective camera.
 	Shadows bool
+	// BackColor, when set, is the colour of the faces that look away from the
+	// camera, in place of orange: they show where a sheet is open or a mesh is
+	// wound inside out, and a part's far side through an open shell. Its alpha is
+	// ignored (agent-docs/png-export-design.md §11).
+	BackColor *color.RGBA
 }
 
 // IsometricView looks at the model along the diagonal from above its +X, +Y,
@@ -134,11 +139,16 @@ func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View, coun
 		cam.FieldOfView = fov
 	}
 	var img *image.RGBA
+	back := raster.Back
+	if view.BackColor != nil {
+		back = *view.BackColor
+		back.A = 255
+	}
 	if view.Shadows {
-		img, err = raster.RenderShadowed(ctx, mesh.Vertices(), mesh.Triangles(), tints, cam, view.Width, view.Height,
+		img, err = raster.RenderShadowed(ctx, mesh.Vertices(), mesh.Triangles(), tints, back, cam, view.Width, view.Height,
 			min(max(2*max(view.Width, view.Height), 512), 4096))
 	} else {
-		img, err = raster.RenderTinted(ctx, mesh.Vertices(), mesh.Triangles(), tints, cam, view.Width, view.Height)
+		img, err = raster.RenderBacked(ctx, mesh.Vertices(), mesh.Triangles(), tints, back, cam, view.Width, view.Height)
 	}
 	if errors.Is(err, raster.ErrDegenerate) {
 		return fmt.Errorf("export: PNG: %w: %s", decad.ErrDegenerate, err)
