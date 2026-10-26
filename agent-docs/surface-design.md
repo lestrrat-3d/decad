@@ -769,21 +769,36 @@ join, and both edges stay free — it is not an error (§6.3).
 | J4 | Both endpoint vertices' positions are bit-identical held `float64` coordinates, matched as an unordered pair. | exact comparison |
 | J5 | Every one of those held values carries a **zero bound**. | `Vertex`'s own bound and the edge's `Curve` |
 
-**Table J amendment — J5 is undecidable for every variant but `Line3`.**
-`Circle3` and `Arc3` carry `Center`, `Axis` and `Radius` with no bound field
-at all, so there is no held value on the variant itself to ask "does this
-carry a zero bound" of — J5 cannot be answered either way for them, and an
-undecidable row admits nothing (`CLAUDE.md`'s reject-only rule). `Line3`
-alone answers it, and answers it **vacuously**: a straight edge's whole
-geometry lives in its two vertices, which J4 already compares, so J3 states
+**Table J amendment — J5 for a `Line3`, and for a `Circle3` or `Arc3` with a
+proven curve bound.** A `Line3` answers J5 **vacuously**: a straight edge's
+whole geometry lives in its two vertices, which J4 already compares, so J3 states
 nothing further about the variant itself to prove, and J5's vertex half is
 exactly what `stitchrecord.VertexTable`'s own merge rule enforces (`internal/stitchrecord/plan.go`)
 — two vertices merge into one table class only when both carry a zero bound,
-so a shared class already proves J4 and J5's vertex half together. A free
-edge whose `Curve` is `Circle3`, `Arc3`, `NURBSCurve` or `FacetedCurve`
-therefore declines outright at J2/J5 and stays free — Table C's first row,
-and never an error — until a later increment states a bound for the
-variant's own parameters.
+so a shared class already proves J4 and J5's vertex half together.
+
+`Circle3` and `Arc3` carry `Center`, `Axis` and `Radius` with no bound field, but
+the edge carries one: `Edge.CurveBounded` and `Edge.CurveBound` bound how far the
+denoted curve lies from the held circle (`internal/topo/edge.go`), and the prism,
+patch-disk and revolve builders set it. Two such edges join when all of these hold:
+
+- both edges are `CurveBounded` with `CurveBound == 0`, and all four end vertices
+  carry a zero bound, so the held circle is the true curve;
+- the two edges' end vertices fall in the same two table classes;
+- both variants are `Circle3`, or both are `Arc3`, with bit-identical `Center` and
+  `Radius` and an `Axis` equal up to sign.
+
+An `Arc3` has no range field. Its range is its start and end vertex, swept
+counter-clockwise about `Axis`, so two arcs of one circle between the same two
+vertices can be complementary. Edges that meet start to start join only with equal
+axes, and edges that meet start to end join only with opposite axes. An arc whose
+two end positions are equal declines. A zero bound makes held equality true
+coincidence, so this admits by proof and never by a residual. A straight and a
+curved edge never share a weld key: each kind claims its keys on its own.
+
+A free edge whose `Curve` is `NURBSCurve` or `FacetedCurve`, or a `Circle3` or `Arc3`
+that lacks a zero curve bound and shares no curve token, declines at J5 and stays
+free — Table C's first row, and never an error.
 
 **Table J amendment — the gap tolerance (J4′).** A document whose gap tolerance
 is positive (`agent-docs/gap-tolerance-design.md` §5.3) replaces J4's

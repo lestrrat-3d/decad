@@ -222,7 +222,7 @@ func buildPlan(faces []*topo.Face, merged map[*topo.Vertex]mergedVertex) *Plan {
 		table.Bounds[class] = proofbound.AbsSumUpper(table.Bounds[class], d)
 	}
 
-	var candidates []stitchweld.Candidate[*topo.Edge]
+	var lines, curves []stitchweld.Candidate[*topo.Edge]
 	seen := map[*topo.Edge]struct{}{}
 	for _, f := range faces {
 		for _, l := range f.Loops {
@@ -236,29 +236,92 @@ func buildPlan(faces []*topo.Face, merged map[*topo.Vertex]mergedVertex) *Plan {
 					continue
 				}
 				_, isLine := e.Curve.(surfacegeom.Line3)
-				if !isLine && e.Denot.ID == 0 { // J2, then J5, or the certificate
+				if !isLine && e.Denot.ID == 0 && !zeroBoundCircular(e) { // J2, then J5, or the certificate
 					continue
 				}
-				candidates = append(candidates, stitchweld.Candidate[*topo.Edge]{
+				c := stitchweld.Candidate[*topo.Edge]{
 					Edge: e, Start: table.classOf(e.Start), End: table.classOf(e.End),
-				})
+				}
+				if isLine {
+					lines = append(lines, c)
+					continue
+				}
+				curves = append(curves, c)
 			}
 		}
 	}
-	group, groups := stitchweld.WeldPairs(candidates, edgesJoin)
+	// A straight edge and a curved edge between the same two classes are
+	// different edges, so each kind claims its weld keys on its own: a curved
+	// pair never makes a straight pair one claim too many, nor the reverse.
+	group, groups := stitchweld.WeldPairs(lines, edgesJoin)
+	curveGroup, curveGroups := stitchweld.WeldPairs(curves, edgesJoin)
+	for e, id := range curveGroup {
+		group[e] = groups + id
+	}
+	groups += curveGroups
 	return &Plan{Table: table, Group: group, Groups: groups, Merged: mergedBound}
 }
 
 // edgesJoin decides Table J's J2/J3 for two free edges that already
 // share an unordered pair of vertex classes. A Line3 needs no further data;
-// another variant joins only with the same nonzero token and held geometry.
+// another variant joins with the same nonzero token and held geometry, or, for
+// a Circle3 or Arc3, when both edges prove a zero curve bound and hold one circle
+// (agent-docs/surface-design.md §6.2, J5 for circles).
 func edgesJoin(a, b *topo.Edge) bool {
 	_, aLine := a.Curve.(surfacegeom.Line3)
 	_, bLine := b.Curve.(surfacegeom.Line3)
 	if aLine && bLine {
 		return true
 	}
-	return denotation.SameCurve(a.Denot, b.Denot) && sameCurveVariant(a.Curve, b.Curve)
+	if denotation.SameCurve(a.Denot, b.Denot) && sameCurveVariant(a.Curve, b.Curve) {
+		return true
+	}
+	return zeroBoundCircular(a) && zeroBoundCircular(b) && sameZeroBoundCircle(a, b)
+}
+
+// zeroBoundCircular reports whether e is a Circle3 or Arc3 edge whose builder
+// proved CurveBound zero and whose end vertices all carry a zero bound, so
+// that its held data is the true curve.
+func zeroBoundCircular(e *topo.Edge) bool {
+	switch e.Curve.(type) {
+	case surfacegeom.Circle3, surfacegeom.Arc3:
+	default:
+		return false
+	}
+	return e.CurveBounded && e.CurveBound == 0 && e.Start.Bound.Base() == 0 && e.End.Bound.Base() == 0
+}
+
+// sameZeroBoundCircle compares the held circles of two zero-bound circular
+// edges bit for bit. A Circle3 pairs only with a Circle3. An Arc3 pairs only
+// with an Arc3 sweeping the same angular range: an arc is counter-clockwise
+// about its axis from its start to its end, so edges that meet start to start
+// need equal axes and edges that meet start to end need opposite axes. Any
+// other meeting is the complementary arc, or an arc whose endpoints coincide.
+func sameZeroBoundCircle(a, b *topo.Edge) bool {
+	switch av := a.Curve.(type) {
+	case surfacegeom.Circle3:
+		bv, ok := b.Curve.(surfacegeom.Circle3)
+		return ok && sameHeldCircle(av.Center, av.Axis, av.Radius.Base(), bv.Center, bv.Axis, bv.Radius.Base())
+	case surfacegeom.Arc3:
+		bv, ok := b.Curve.(surfacegeom.Arc3)
+		if !ok || !sameHeldCircle(av.Center, av.Axis, av.Radius.Base(), bv.Center, bv.Axis, bv.Radius.Base()) {
+			return false
+		}
+		if a.Start.Position == a.End.Position {
+			return false
+		}
+		switch {
+		case a.Start.Position == b.Start.Position && a.End.Position == b.End.Position:
+			return av.Axis == bv.Axis
+		case a.Start.Position == b.End.Position && a.End.Position == b.Start.Position:
+			return av.Axis == bv.Axis.Scale(-1)
+		}
+	}
+	return false
+}
+
+func sameHeldCircle(ac, aa r3.Vec, ar float64, bc, ba r3.Vec, br float64) bool {
+	return ac == bc && ar == br && (aa == ba || aa == ba.Scale(-1))
 }
 
 // sameCurveVariant compares held Circle3 and Arc3 parameters, allowing
