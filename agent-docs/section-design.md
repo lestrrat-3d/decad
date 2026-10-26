@@ -57,6 +57,16 @@ the prism record. A source segment that cannot be recreated or whose
 trim Sketch does not certify returns `ErrUnsupported`. A reconstructed profile
 that does not match the source never becomes a section result.
 
+## Exact slab of a stacked prism
+
+A blind-pocket `Cut` returns a stacked prism: slabs of exact regions, each with
+its own levels. `Body.Section` reads it through `stackedunion.OperandFromPayload`
+and `sectionclip.SectionBrepStack`, with the same gates as the BRep stack below.
+A plane strictly inside the pocketed slab returns the outer outline with the
+pocket as a hole, and a plane strictly inside the solid slab returns the full
+outline. The pocket floor, which is an interface between two slabs, is refused,
+as are the end caps and levels outside the body.
+
 ## Exact slab of an authenticated Boolean BRep
 
 An A1 planar `Union` may return a BRep with an authenticated stack of prism

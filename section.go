@@ -29,7 +29,7 @@ import (
 // a rectangular prism cut by an interior cardinal vertical plane, and
 // a bounded oblique cut of an exact rectangular or whole-circle prism,
 // including a certified crossing of one circle-prism cap. The
-// exact slab profiles of a stack-backed BRep can be cut strictly inside one
+// exact slab profiles of a stack-backed BRep or a stacked prism (a blind pocket) can be cut strictly inside one
 // slab by a plane preserving their recorded coordinates. The
 // bounded result enters only straight solid Extrude with an independent Distance.
 // Other body or plane classes return [ErrUnsupported]. A nil body or context,
@@ -106,6 +106,13 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 			return s, []*sketch.Profile{result}, nil
 		}
 		return sectionclip.ReconstructExactSection(ctx, profile, plane)
+	}
+	if _, ok := b.n.Payload.(stackedPrismPayload); ok {
+		operand, admitted := stackedunion.OperandFromPayload(b.n.Payload)
+		if !admitted {
+			return nil, nil, fmt.Errorf(`%w: section needs an authenticated slab stack`, ErrUnsupported)
+		}
+		return sectionclip.SectionBrepStack(ctx, operand.Proxy, operand.Slabs, plane)
 	}
 	if _, ok := b.n.Payload.(brepPayload); ok {
 		operand, admitted := stackedunion.OperandFromPayload(b.n.Payload)
