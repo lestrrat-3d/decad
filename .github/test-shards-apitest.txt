@@ -2095,6 +2095,7 @@
 10	0.02	TestFacetedPrismUnionChamferOfPlacedUnionTakesTheRetainedRoute
 10	0.01	TestFacetedPrismUnionChamferRefusesToolInCornerBand
 10	8.09	TestFacetedRetainedBlend
+10	0.00	TestFacetedRetainedBlendParallelCylinders
 10	0.00	TestFacetedRetainedBlendChain
 10	0.00	TestFacetedRetainedBlendOpenChain
 10	0.00	TestFacetedRetainedChamferTwoDistance

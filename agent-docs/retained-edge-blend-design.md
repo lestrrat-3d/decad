@@ -59,6 +59,7 @@ Table RR lists the edges a blend can be built on. The others are refused.
 | **R2** | `Circle3`, closed, centre on the axis | retained `Plane` and coaxial retained `Cylinder` | `Torus` / `Cone` | increment B1; equal or two-distance chamfer |
 | **R3** | `Line3` of retention E4 | retained `Plane` and a `Cylinder` whose axis lies in the plane, ending on retained planes normal to the axis | `Cylinder` / `Plane` | increment B3; equal or two-distance chamfer |
 | **R4** | `Arc3` | as R2, open, ending on planes parallel to the axis | as R2 | ends on two distinct retained planes; equal or two-distance chamfer; an arc whose ends meet one face is refused |
+| **R5** | `Line3` of retention E10 | two retained `Cylinder`s with parallel axes, ending on retained planes normal to the axes | `Cylinder` / `Plane` | reach §8; equal or two-distance chamfer |
 
 Refused, with the reason a caller can act on:
 
@@ -68,7 +69,7 @@ Refused, with the reason a caller can act on:
   vocabulary has is `NURBSSurface`, an opaque marker with no geometry to carry
   a proof (spline §7). The rim keeps its published ellipse and the blend
   refuses (SR1).
-- **A `Cylinder`/`Cylinder` rim, a `Sphere` rim, a `Cone` or `Torus` face.**
+- **A `Cylinder`/`Cylinder` rim with crossing axes, a `Sphere` rim, a `Cone` or `Torus` face.**
   No Table RR row; SR1.
 - **A rim with a face that is not retained,** or whose edge is a chord chain
   because retention §10 declined it. SR1.
