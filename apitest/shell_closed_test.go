@@ -1,8 +1,8 @@
 package apitest_test
 
 import (
-	"io"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -196,12 +196,14 @@ func TestShellClosedPrismGatesAndConsumers(t *testing.T) {
 			require.False(t, sh.IsVoid(), `the opened cavity is no void`)
 		}
 	})
-	t.Run("STEP refuses the void shell", func(t *testing.T) {
+	t.Run("STEP writes the void shell as a BREP_WITH_VOIDS", func(t *testing.T) {
 		_, closed := closedShellBox(t, 5)
-		err := export.STEP(t.Context(), io.Discard, closed, units.Millimeters(0.1),
+		var out strings.Builder
+		err := export.STEP(t.Context(), &out, closed, units.Millimeters(0.1),
 			export.WithSTEPName("closed"), export.WithSTEPAuthor("apitest"), export.WithSTEPOrganization("decad"))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.Contains(t, err.Error(), "single non-void shell")
+		require.NoError(t, err)
+		require.Contains(t, out.String(), "BREP_WITH_VOIDS")
+		require.Contains(t, out.String(), "ORIENTED_CLOSED_SHELL")
 	})
 	t.Run("the wall survey stays staged", func(t *testing.T) {
 		doc, _ := closedShellBox(t, 5)
