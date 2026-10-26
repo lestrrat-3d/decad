@@ -284,3 +284,66 @@ func TestDrawDashedSkipsAfterEachDash(t *testing.T) {
 	// A segment past the image is clipped without a panic, and an off of zero is solid.
 	raster.DrawDashed(img, proj, [][2][2]float64{{{-500, 0}, {500, 500}}}, red, 4, 0)
 }
+
+// boxCorners are the corners of a 4 x 4 x 10 mm box on the origin. Its bounding
+// sphere has radius √132/2, so a 60 degree perspective eye sits √132 mm from the
+// middle, z = 5, straight above it.
+func boxCorners() []r3.Vec {
+	return []r3.Vec{{X: -2, Y: -2}, {X: 2, Y: 2, Z: 10}}
+}
+
+func TestProjectionPlanePointDividesByTheDistanceFromTheEye(t *testing.T) {
+	t.Parallel()
+	cam := raster.Camera{Direction: r3.Vec{Z: -1}, Up: r3.Vec{Y: 1}, FieldOfView: math.Pi / 3}
+	persp, err := raster.NewProjection(boxCorners(), cam, 200, 200)
+	require.NoError(t, err)
+	ortho, err := raster.NewProjection(boxCorners(), topView, 200, 200)
+	require.NoError(t, err)
+	eyeZ := 5 + math.Sqrt(132)/math.Sin(math.Pi/6)/2
+	for _, v := range []r3.Vec{{X: 2, Y: -1, Z: 10}, {X: -1.5, Y: 2, Z: 0}, {X: 0.5, Y: 0.25, Z: 4}} {
+		x, y := persp.PlanePoint(v)
+		require.InDelta(t, v.X/(eyeZ-v.Z), x, 1e-12)
+		require.InDelta(t, v.Y/(eyeZ-v.Z), y, 1e-12)
+		ox, oy := ortho.PlanePoint(v)
+		require.InDelta(t, v.X, ox, 1e-12, "an orthographic camera keeps the right component")
+		require.InDelta(t, v.Y, oy, 1e-12)
+		// Plane maps the point to the pixel Project does.
+		px, py := persp.Plane(x, y)
+		qx, qy, _ := persp.Project(v)
+		require.InDelta(t, qx, px, 1e-9)
+		require.InDelta(t, qy, py, 1e-9)
+	}
+}
+
+func TestProjectionFacingAtReadsTheLineOfSight(t *testing.T) {
+	t.Parallel()
+	cam := raster.Camera{Direction: r3.Vec{Z: -1}, Up: r3.Vec{Y: 1}, FieldOfView: math.Pi / 3}
+	persp, err := raster.NewProjection(boxCorners(), cam, 200, 200)
+	require.NoError(t, err)
+	ortho, err := raster.NewProjection(boxCorners(), topView, 200, 200)
+	require.NoError(t, err)
+	eyeZ := 5 + math.Sqrt(132)/math.Sin(math.Pi/6)/2
+	wall, at := r3.Vec{X: 1}, r3.Vec{X: 2, Z: 5}
+	require.Zero(t, persp.Facing(wall), "the axis sees a side wall edge on")
+	require.InDelta(t, -2, persp.FacingAt(wall, at), 1e-12, "the eye over the middle sees +X's wall from behind: -n·(at-eye) = -2")
+	require.InDelta(t, 0, ortho.FacingAt(wall, at), 1e-12, "orthographic is Facing")
+	top := r3.Vec{Z: 1}
+	require.InDelta(t, eyeZ-5, persp.FacingAt(top, r3.Vec{X: 2, Z: 5}), 1e-12)
+	require.InDelta(t, 1, ortho.FacingAt(top, r3.Vec{X: 2, Z: 5}), 1e-12)
+	require.Negative(t, persp.FacingAt(r3.Vec{Z: -1}, r3.Vec{Z: 0}), "a face turned down looks away")
+}
+
+func TestProjectionDepthToleranceIsTwoPixelsAtTheDepth(t *testing.T) {
+	t.Parallel()
+	cam := raster.Camera{Direction: r3.Vec{Z: -1}, Up: r3.Vec{Y: 1}, FieldOfView: math.Pi / 3}
+	persp, err := raster.NewProjection(boxCorners(), cam, 200, 200)
+	require.NoError(t, err)
+	ortho, err := raster.NewProjection(boxCorners(), topView, 200, 200)
+	require.NoError(t, err)
+	require.InDelta(t, 2*ortho.PixelSize(), ortho.DepthTolerance(7), 1e-15, "the same everywhere")
+	// Depth is minus the reciprocal of the distance, so two pixels' length d·2·PixelSize at distance d is that over d².
+	for _, distance := range []float64{8, 20} {
+		_, _, depth := persp.Project(r3.Vec{Z: 5 + math.Sqrt(132)/math.Sin(math.Pi/6)/2 - distance})
+		require.InDelta(t, 2*persp.PixelSize()/distance, persp.DepthTolerance(depth), 1e-12)
+	}
+}

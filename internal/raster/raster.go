@@ -231,8 +231,40 @@ func (p Projection) Plane(x, y float64) (px, py float64) {
 func (p Projection) PixelSize() float64 { return 1 / p.scale }
 
 // Facing is positive for a triangle with unit normal n that looks toward the
-// camera, negative for one that looks away and zero for one seen edge on.
+// camera, negative for one that looks away and zero for one seen edge on. It
+// reads the camera's axis, so it is the orthographic camera's answer; a
+// perspective camera's is [Projection.FacingAt].
 func (p Projection) Facing(n r3.Vec) float64 { return -n.Dot(p.dir) }
+
+// FacingAt is Facing for a triangle with unit normal n whose centre is at: for
+// a perspective camera it reads the line of sight from the eye to at, and for an
+// orthographic one it is Facing.
+func (p Projection) FacingAt(n, at r3.Vec) float64 {
+	if !p.perspective {
+		return p.Facing(n)
+	}
+	return -n.Dot(at.Sub(p.eye))
+}
+
+// PlanePoint returns the position of v in the image plane before fitting, in
+// the coordinates [Projection.Plane] takes: its right and up components for an
+// orthographic camera, and those over its distance from the eye for a
+// perspective one.
+func (p Projection) PlanePoint(v r3.Vec) (x, y float64) {
+	x, y, _ = p.plane(v)
+	return x, y
+}
+
+// DepthTolerance is how far apart two depths at depth may lie and still belong
+// to one surface seen across two pixels: two pixels' length along the view for
+// an orthographic camera, and that length over the square of the distance for a
+// perspective one, whose depth is minus the reciprocal of the distance.
+func (p Projection) DepthTolerance(depth float64) float64 {
+	if !p.perspective {
+		return 2 * p.PixelSize()
+	}
+	return 2 * p.PixelSize() * -depth
+}
 
 // checkMesh refuses an empty mesh or a triangle naming a missing vertex.
 func checkMesh(verts []r3.Vec, tris [][3]int) error {

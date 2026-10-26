@@ -29,8 +29,8 @@ import (
 // pixel wide (agent-docs/png-export-design.md §6). FieldOfView, an angle, makes
 // the camera perspective with that field of view across the smaller image side
 // of the scene's bounding sphere; the zero units.Value is the orthographic camera
-// (agent-docs/png-export-design.md §7). Outlines and a perspective camera are not
-// combined.
+// (agent-docs/png-export-design.md §7). Outlines and HiddenEdges take the perspective
+// camera too (agent-docs/png-export-design.md §12).
 type View struct {
 	Direction, Up r3.Vec
 	Width, Height int
@@ -42,8 +42,7 @@ type View struct {
 	// The alpha channel is ignored. Faces that look away stay orange.
 	Colors []color.RGBA
 	// HiddenEdges draws the feature edges behind surfaces as dashed light grey
-	// lines under the outlines (agent-docs/png-export-design.md §9). It is not
-	// combined with a perspective camera.
+	// lines under the outlines (agent-docs/png-export-design.md §9).
 	HiddenEdges bool
 	// Shadows casts the key light's shadows: a face a nearer one hides from the
 	// light is drawn at the ambient level (agent-docs/png-export-design.md §10).
@@ -133,8 +132,8 @@ func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View, coun
 		if fov == 0 {
 			return fmt.Errorf("export: PNG: %w: a field of view of zero draws nothing; leave it unset for an orthographic camera", decad.ErrDegenerate)
 		}
-		if view.Outlines || view.HiddenEdges || view.Shadows {
-			return fmt.Errorf("export: PNG: %w: outlines, hidden edges and shadows are not drawn with a perspective camera", decad.ErrDegenerate)
+		if view.Shadows {
+			return fmt.Errorf("export: PNG: %w: shadows are not drawn with a perspective camera", decad.ErrDegenerate)
 		}
 		cam.FieldOfView = fov
 	}
@@ -157,7 +156,7 @@ func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View, coun
 		return err
 	}
 	if view.Outlines || view.HiddenEdges {
-		if err := drawOutlines(ctx, img, mesh, view); err != nil {
+		if err := drawOutlines(ctx, img, mesh, view, cam.FieldOfView); err != nil {
 			return err
 		}
 	}
@@ -192,8 +191,8 @@ const (
 // drawOutlines draws the visible feature edges of mesh over img when the view
 // asks for outlines, and the hidden ones, dashed and under them, when it asks
 // for hidden edges.
-func drawOutlines(ctx context.Context, img *image.RGBA, mesh meshSource, view View) error {
-	cam := raster.Camera{Direction: view.Direction, Up: view.Up}
+func drawOutlines(ctx context.Context, img *image.RGBA, mesh meshSource, view View, fieldOfView float64) error {
+	cam := raster.Camera{Direction: view.Direction, Up: view.Up, FieldOfView: fieldOfView}
 	lines, err := drawing.Project(ctx, mesh.Vertices(), mesh.Triangles(), cam)
 	if err != nil {
 		return err
