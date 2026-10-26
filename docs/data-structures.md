@@ -126,6 +126,8 @@ configuration option.
 | `decad.ClosestPoint` | struct | The nearest point of a body or face to a query point, its distance reading and how far it can lie from the true surface. | `Body.ClosestPoint`, `Face.ClosestPoint` |
 | `decad.MeshBody` | struct | An imported triangle mesh: vertices, triangles and what they say. Not a `decad.Body`. | `decad.ReadSTL`, `decad.ReadOBJ`, `decad.NewMeshBody` |
 | `decad.MeshImportOption` | option set | A limit on `decad.ReadSTL` or `decad.ReadOBJ`: `decad.WithMaxMeshTriangles` or `decad.WithMaxMeshBytes`. | The caller |
+| `decad.MeshRepairOption` | option set | A repair step of `decad.RepairMesh`: `decad.WithMeshWeld`, `decad.WithMeshOrient` or `decad.WithMeshFillHoles`. | The caller |
+| `decad.MeshRepairReport` | struct | The counts `decad.RepairMesh` changed: vertices welded, triangles dropped and flipped, loops filled or skipped, triangles added. | `decad.RepairMesh` |
 | `decad.MeshReport` | struct | The counts a mesh body reads from its triangles: edges by use, shells, zero-area triangles, closed and inverted. | `MeshBody.Report` |
 | `decad.PathPatternOption` | option set | A setting on `decad.PathPatternCopies`: `decad.WithPathFollow` turns each copy to follow the path. | The caller |
 | `decad.ArrangeOption` | option set | A setting on `decad.Arrange`: `decad.WithArrangeTurns` lets bodies turn a quarter turn to fit. | The caller |

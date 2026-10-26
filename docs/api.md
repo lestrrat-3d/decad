@@ -345,6 +345,11 @@ area and enclosed volume.
 
 `MeshBody.Volume` is `decad.ErrNotSolid` unless the mesh is closed and wound counter-clockwise seen from outside.
 
+`decad.RepairMesh` returns a mended copy of a mesh body and a `decad.MeshRepairReport` of what changed. It always drops
+triangles that carry no surface, and `decad.WithMeshWeld`, `decad.WithMeshOrient` and `decad.WithMeshFillHoles` merge
+close vertices, wind shells consistently and close simple holes. Read `MeshBody.Report` on the result to see whether
+the mesh closed.
+
 ## Export
 
 `export.STEP`, `export.STL`, `export.OBJ`, `export.ThreeMF` and `export.GLTF` write a body to an `io.Writer` at a chord tolerance.
