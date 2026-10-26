@@ -553,9 +553,9 @@ This scope preserves current stable feature roles.
 
 ## Ordered implementation tasks
 
-Execute these phases in order on one implementation branch. This list specifies
-future work; no implementation or fixture result is claimed here. Proposed new
-file and test names below are destinations, not existing symbols. The owning
+Execute these phases in order on one implementation branch. Phases 0-6 are
+implemented (#2405). Phase 7 below is the open work, and its proposed new file
+and test names are destinations, not existing symbols. The owning
 sections above define behavior; each phase's acceptance checks apply those rules.
 Do not merge a partially instrumented public history API.
 
@@ -799,33 +799,193 @@ Do not merge a partially instrumented public history API.
 
 ### Phase 7: Carry source patches through later real consumers
 
-- Dependencies: Phase 4; Phase 6 supplies the public unknown-coverage behavior.
-- Files: `internal/booleaneval/eval.go` and `retained_plane.go`,
-  `internal/facetedrecord/group.go`, `assemble.go`, `topology.go` and placement
-  files, `internal/facetedtopology/`, `internal/meshbool/`, and
-  `internal/retainedblend/` rewrite/assembly files.
-- Deliverable: Add immediate source identity at Evaluate's real face-to-group
-  assignment, preserve it through facet subdivision, grouping and connected-patch
-  assembly, and retain compact computational source descriptions in the payload.
-  Keep pending public face pointers separate from committed computational tokens.
-  Preserve all incoming certified relationships when canonicalization merges
-  patches. Never key a source map by `Group.Origins` alone.
-- Deliverable: Carry unchanged plane/domain evidence through supported modify
-  rewrites and record new blend/trim evidence only where their builders prove it.
-  Drop invalid placement evidence. Feed the result to a later actual Cut and
-  preserve the retained-plane slab consumer under its existing owner.
-- Focused tests: Add the source-plane/later-Cut and modify/later-Cut cases from
-  Focused repository proof fixtures. Compare to the full-displacement control
-  and assert tighter local rim bounds and bounded geometry. Add incomplete-domain
-  and invalid-placement cases that keep the ordinary calculation.
+- Dependencies: Phase 4 and Phase 6. `operation_history_volume_test.go` and
+  `operation_history_centroid_test.go` run First calculation fixture on the
+  real producer. `Operation.FaceSuccessors` returns complete maps for Unstitch
+  (`unstitch.go`) and Remove (`document.go`) and `HistoryUnknown` elsewhere.
+
+The retained-plane certificate already travels with the faceted payload. Each
+stage carries it as follows:
+
+| Stage | Code | What it carries |
+|---|---|---|
+| Face-to-group assignment | `booleaneval/eval.go` `evaluate` | One group per operand face; `SourceTag` copies the admitted tag. |
+| Facet cutting and weld | `meshbool` `SourceIDs`, `KeptFacet.Src`, `StitchFacetsContext` | Each kept or split facet's group index. |
+| Patch assembly | `facetedrecord/assemble.go` | One face per connected patch of a group, with the group's tag. |
+| Edge chains | `facetedtopology` | Per-face indices only; it never reads groups. |
+| Later mesh Boolean | `booleaneval/retained_plane.go`, `meshbool/plane_slab.go` | The slab bound of retention §11 for an admitted plane facet. |
+| Placement | `facetedrecord/placed.go`, `place.go`, `point_plane_scale.go` | Every group, with `NormalBound` recomputed by retention §3.4. |
+| Retained blend | `retainedblend/route.go` and the five `*_rewrite.go` files | The copied groups, plus one new blend group. |
+
+All paths are under `internal/`. `evaluate` orders groups as
+`topobuild.Faces(a)` then `Faces(b)`, so a group index is the operand face's
+identity within one operation. Its `sourceID` map from face pointer to group
+index is local and dropped on return. A shifted retry keeps only `Origins` for
+the moved operand. Assembly sets `RetainedTag` on a patch when retention A4
+admits it, and no faceted path merges two groups. `facetedtopology` needs no
+change in this phase.
+
+`retainedPlaneOf` reads the operand mesh's `Source` face. It admits a
+`RetainedTag` `Plane` with `NormalBound == 0` and no denoted patch.
+`RefuseCoarseHeldContact` and `RimBound` then read the slab bound in place of
+`FacetBound`. Any departure that placement states ends the admission.
+`retainedblend` copies `fp.Groups`, clearing only the whole-group centroid of
+the shrunk faces. It appends one blend group with `Retained`, `NormalBound == 0`
+and the exact blend surface. An R1, R3 or R5 chamfer adds a `Plane`. The five
+rewrite files are `line_rewrite.go`, `cyl_rewrite.go`, `cyl2_rewrite.go`,
+`arc_rewrite.go` and `chain_rewrite.go`.
+
+A retained plane therefore reaches a later mesh Cut through mesh Booleans,
+exact-translation placements and retained blends. `apitest/faceted_plane_slab_test.go`
+checks the Cut-then-Cut case against a fixed bound literal.
+Root `faceted_source_patch_test.go` checks it against the full-displacement
+control of Task 7.1. No test checks the slab after a blend. `Group` records no source identity, and
+`Group.Origins` holds roles only, so no record says which earlier patch a group
+descends from.
+
+Phase 7 consists of four tasks. Each merges on its own, and the first PR also
+carries this document.
+
+| Task | Depends on | Can run beside |
+|---|---|---|
+| 7.1 Slab control and Cut-then-Cut fixture | none | 7.3 |
+| 7.2 Retained blend then Cut fixture | 7.1 merged | 7.3, 7.4 |
+| 7.3 Immediate source identity | none | 7.1, 7.2, 7.4 |
+| 7.4 Fallback fixtures | 7.1 merged | 7.2, 7.3 |
+
+Tasks 7.1, 7.2 and 7.4 add root-package tests in separate files, so their
+branches do not conflict. Task 7.3 edits the face-to-group loop of
+`booleaneval/eval.go`; Task 7.1 edits only the `PrepBoolMesh` path in the same
+file. Each fixture builds bodies through the public API, then reads internal
+fields from the root package. It compares two runs: the ordinary run, and a
+control run that disables only `retainedPlaneOf`. Each run uses its own document.
+The control refuses every second cut of the P3 scene, so a fixture compares the
+real run's build against the control's refusal, and where both runs build it
+compares vertex lists in a loop and reports the first differing index only.
+Never dump a mesh or topology graph on failure. Pin no bound literal, because
+float bounds differ between amd64 and arm64; assert relations between the two
+runs, or between the real run and the bound the control's refusal quotes. Show every fixture red first by the red leg named in its task.
+Add each new test name to shard 10 of `.github/test-shards.txt`.
+
+#### Task 7.1: Slab control and Cut-then-Cut fixture
+
+- Files: `internal/booleaneval/retained_plane.go`, `eval.go`'s `PrepBoolMesh`
+  path, and new root `faceted_source_patch_test.go`.
+- Deliverable: Add `booleaneval.WithoutRetainedPlaneSlab(ctx)`, a context option
+  in the style of `meshbool.WithContactWorkers`. Under it, `PrepBoolMesh` passes
+  a plane reader that admits no facet, so every facet keeps `FacetBound`.
+  Production code never sets the option. The full-displacement control is this
+  option on the real producer's result; never construct a payload by hand.
+- Fixture: Build retention §1's P3 scene in the root package: a 40×20×20 box,
+  four lateral edges filleted at 3 mm, and a Ø8 y-bore at x = 20 placed by
+  `Transform`. Run each second y-cut with and without the option.
+  - Measured: Across second cuts at x from 5 to 37 and radii from 0.25 to 9,
+    the real run builds and the control refuses every one that is not itself
+    unbuildable. The control's refusal is the chain-depth gate: the first cut's
+    plane facets hold a `FacetBound` of about 0.002973 mm, coarser than the
+    pair's chord tolerance of about 0.0015 mm. Neither x nor the radius lowers
+    the bound, because every y-cut touches the first cut's y = 0 and y = 20
+    faces. No second y-cut builds in both runs, so no vertex-position
+    comparison exists in this scene.
+  - Cases x = 30 r = 4, x = 33 r = 2 and x = 10 r = 1: The real run builds and
+    the control refuses with a plain `ErrUnsupported` that quotes its touched
+    bound and the chord tolerance, the bound being larger. Every new rim
+    vertex lies within its own bound of the exact circle, and the largest
+    rim bound is strictly smaller than the quoted touched bound. The volume
+    matches the closed form within its bound.
+- Red leg: Make `PrepBoolMesh` ignore the option. The control then builds, and
+  the refusal assertion fails.
+- Stop condition: If a probe finds a second cut that builds in both runs and
+  the runs differ in any vertex position, stop and report. Retention §11 claims
+  the slab changes bounds and gates only.
+
+#### Task 7.2: Retained blend then Cut fixture
+
+- Files: New root `faceted_source_patch_blend_test.go`. No production change is
+  expected.
+- Fixture: Bore the 40×20×20 plate of `apitest/faceted_retained_blend_test.go`
+  with a Ø8 z-bore at (20, 10) placed by translation. Fillet the top mouth at
+  r = 1 (R2). Then cut beside the mouth so the new wall crosses top-plane facets
+  between the blend's setback ring and the plate edge. In a second case, chamfer
+  a straight retained edge (R1) and cut across the chamfer face.
+- Assertions: After the blend, the top face is still a `RetainedTag` `Plane`
+  with `NormalBound == 0`, and its frame is bit-equal to the bored plate's.
+  The control cannot be relied on to build: the later cut builds in the real
+  run, and the control refuses it on the touched plane bound. The top-plane rim
+  vertex bounds all lie below the bound the control's refusal quotes. A cut that
+  touches only the torus rim refuses in both runs, because a curved group takes
+  no slab. The chamfer face is a `RetainedTag` `Plane` with `NormalBound == 0`,
+  and its rim vertex bounds lie below the bound the control's refusal quotes. Every rim vertex lies within its bound of the
+  exact circle. The volume removed by the later cut matches its closed form
+  within the published bounds.
+- Red leg: In a scratch edit, clear `Retained` on the copied groups in
+  `retainedblend` `work.build`. The top plane then loses its slab, and the
+  strictness check fails.
+- Stop condition: If the blend's output does not reach the slab consumer, stop
+  and report the failing stage. Do not repair `retainedblend` inside this task.
+
+#### Task 7.3: Immediate source identity
+
+- Files: `internal/facetedrecord/group.go`, new `internal/facetedrecord/source_patch.go`,
+  `internal/booleaneval/eval.go`'s face-to-group loop, and the blend-group
+  appends in the six `retainedblend` files of the table above. Update
+  retention §3.1's group table, `retained-edge-blend-design.md` §5.1 and
+  `evaluator-design.md` §9's group fields.
+- Deliverable: Add `Group.Source *SourcePatch`. A `SourcePatch` is immutable and
+  holds the operand body's `Origin.Producer`, the operand position, the face's
+  ordinal in `topobuild.Faces`, and `Parent`. `Parent` is the operand face's own
+  group record when the operand is faceted, and nil for a built face. A blend
+  group's record names the modify producer and the edge's ordinal in the call.
+  The record holds no topology node, body, document, context or cache.
+- Deliverable: `evaluate` sets `Source` for every group, including a moved
+  operand's group on the shifted retry, where the tag is still dropped.
+  Placement and similarity copy the group struct (`placed.go`, `place.go`,
+  `point_plane_scale.go`), so they keep the pointer with no new code.
+  `retainedblend` keeps copied groups' records and gives each blend group a new
+  one. A future path that merges groups must keep every incoming record.
+- Deliverable: Identity admits nothing. `retainedPlaneOf` keeps reading the
+  face's tag and bound only, and no route derives coverage from `Source`.
+- Fixtures: In root `faceted_source_patch_identity_test.go`, split a retained
+  top plane into two patches with a second cut. Both patches carry one record
+  that names the top face, and their areas sum to the closed-form remainder
+  within bounds. Cut that result again. The two patches become operand faces
+  with equal `Origins` and get two distinct records with equal `Parent`. An
+  untouched plane two Cuts later has the first Cut's record as `Parent` and a
+  bit-equal frame. A Transform keeps the pointers. The public Cut record's
+  `FaceSuccessors` still reports `HistoryUnknown` with no faces.
+- Red leg: Key the record map by `Origins`. The equal-origins case then merges
+  the two records.
+
+#### Task 7.4: Fallback fixtures
+
+- Files: New root `faceted_source_patch_fallback_test.go`.
+- Fixtures: Each case runs with and without the option of Task 7.1. The control
+  refuses in the P3 scene, so a case asserts that the real run refuses with the
+  same touched bound as the control, or builds where the control refuses, plus
+  the volume's closed form within its bound when it builds.
+  - Invalid placement transfer: Make a 20° exact-rotation `Copy` of the P3
+    result, and separately translate it by X = 0.1. First assert that each
+    plane the later cut touches carries a nonzero `NormalBound`. The later cut
+    then matches the control.
+  - Valid transfer: An integer translation keeps `NormalBound == 0`, and the
+    later cut still builds where the control refuses.
+  - Denoted plane: Run a revolved part's cap through a mesh Cut, then a later
+    cut. First assert that the cap carries a denoted patch. The later cut then
+    matches the control.
+  - Curved rim: The cut through the first bore's wall in
+    `TestFacetedPlaneSlab` refuses identically in both runs.
+- Red leg: Drop the `NormalBound == 0` test in `retainedPlaneOf`. The placed
+  cases then tighten.
+
 - Acceptance: A later calculation consumes the real prior builder's evidence.
   Source identity alone upgrades neither geometry nor public completeness.
-- Expansion gate: Complete mesh/Copy/Transform/analytic public face mapping is a
-  separate increment. Before enabling any such coverage, implement that route's
-  explicit builder certificate and the real split-face and duplicate-origin
-  fixtures above. Do not use single-face group helpers for a source that can
-  produce several connected patches. Analytic section maps require actual
-  arrangement spans; compound maps require every private step.
+- Expansion gate: Complete mesh, Copy, Transform and analytic public face
+  mapping is a separate increment. It needs a pending list from group index to
+  operand face, returned beside `Evaluation` and never stored in the payload.
+  It also needs the real split-face and duplicate-origin fixtures above. Do not
+  use `facetedtopology.UniqueGroupFace`, `GroupFace` or `TrimGroupFace` for a
+  source that can produce several connected patches. Analytic section maps
+  require actual arrangement spans; compound maps require every private step.
 
 ### Phase 8: Verify rollback, concurrency and retained memory
 

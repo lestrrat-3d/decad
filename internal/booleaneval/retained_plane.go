@@ -1,6 +1,8 @@
 package booleaneval
 
 import (
+	"context"
+
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -25,4 +27,19 @@ func retainedPlaneOf(m *topo.Mesh) func(facet int) (r3.Frame, bool) {
 		}
 		return pl.Frame, true
 	}
+}
+
+type withoutRetainedPlaneSlabKey struct{}
+
+// WithoutRetainedPlaneSlab returns a context under which PrepBoolMesh reads no
+// retained plane, so every facet keeps its FacetBound. It is the
+// full-displacement control that tests compare a real run against; production
+// code never sets it.
+func WithoutRetainedPlaneSlab(ctx context.Context) context.Context {
+	return context.WithValue(ctx, withoutRetainedPlaneSlabKey{}, struct{}{})
+}
+
+func retainedPlaneSlabDisabled(ctx context.Context) bool {
+	_, ok := ctx.Value(withoutRetainedPlaneSlabKey{}).(struct{})
+	return ok
 }
