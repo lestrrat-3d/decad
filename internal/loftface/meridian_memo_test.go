@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/hwfault"
 	"github.com/lestrrat-3d/decad/internal/loftface"
 )
 
@@ -150,6 +151,7 @@ func TestMeridianMemoSeparatesDifferingInputs(t *testing.T) {
 }
 
 func TestMeridianMemoNilInputBypassesMemo(t *testing.T) {
+	hwfault.SkipOnWindows(t)
 	r := rand.New(rand.NewPCG(59, 61))
 	in := memoInputOf(r)
 	in.first.GV = nil

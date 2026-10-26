@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/hwfault"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proof"
 
@@ -414,6 +415,7 @@ func xp2Weighted(p Xp2, w int64) Xp2 {
 // a shared pair and of the third point. Shared pointers must never turn a
 // panic of the old exact path into a 0.
 func TestCross2xSignMalformedPointsMatchOracle(t *testing.T) {
+	hwfault.SkipOnWindows(t)
 	t.Parallel()
 	for _, finite := range []bool{false, true} {
 		for kind := range 3 {
@@ -439,6 +441,7 @@ func TestCross2xSignMalformedPointsMatchOracle(t *testing.T) {
 }
 
 func TestCross2xSignMalformedSharedPairPanicsLikeTheOldPath(t *testing.T) {
+	hwfault.SkipOnWindows(t)
 	t.Parallel()
 	a := NewXP2(big.NewRat(0, 1), big.NewRat(0, 1))
 	require.Panics(t, func() { oracleCross2xSign(a, a, Xp2{}) })
@@ -468,6 +471,7 @@ func xptMasked(p proof.Xpt, mask int) proof.Xpt {
 }
 
 func TestPlaneSideMalformedPointsMatchOracle(t *testing.T) {
+	hwfault.SkipOnWindows(t)
 	t.Parallel()
 	a := proof.XptOf(r3.Vec{X: 1, Y: 2, Z: 0.5})
 	b := proof.XptOf(r3.Vec{X: 4, Y: 1, Z: 2})
@@ -487,6 +491,7 @@ func TestPlaneSideMalformedPointsMatchOracle(t *testing.T) {
 }
 
 func TestPlaneSideSharedPointWithNilNormalPanics(t *testing.T) {
+	hwfault.SkipOnWindows(t)
 	t.Parallel()
 	a := proof.XptOf(r3.Vec{X: 1, Y: 2, Z: 0.5})
 	b := proof.XptOf(r3.Vec{X: 4, Y: 1, Z: 2})
@@ -566,6 +571,7 @@ func TestSegTriOverlap2OddWeightsMatchOracle(t *testing.T) {
 // TestSegTriOverlap2MalformedPointsMatchOracle nils every field mask of every
 // single point and every pair of points, for each flavour.
 func TestSegTriOverlap2MalformedPointsMatchOracle(t *testing.T) {
+	hwfault.SkipOnWindows(t)
 	t.Parallel()
 	tri := [3]pt2{{0, 0}, {4, 0}, {0, 4}}
 	segs := [][2]pt2{{{2, 0}, {2, -1}}, {{2, -1}, {2, 0}}, {{2, 0}, {2, 1}}}

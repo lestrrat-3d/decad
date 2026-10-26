@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/hwfault"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/stretchr/testify/require"
@@ -276,6 +277,7 @@ func TestRatFloatDownUpDirection(t *testing.T) {
 }
 
 func TestRatFloatDownUpNonFiniteAndNil(t *testing.T) {
+	hwfault.SkipOnWindows(t)
 	inf := new(big.Rat).SetFrac(new(big.Int).Lsh(big.NewInt(1), 1100), big.NewInt(1))
 	ninf := new(big.Rat).Neg(inf)
 	require.True(t, math.IsInf(proofbound.RatFloatUp(inf), 1))
