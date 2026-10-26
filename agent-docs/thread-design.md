@@ -126,3 +126,14 @@ the 10 mm diameter instead of stating them.
 | K3 | `<n>/<m>-<t>`, or `<n>-<t>` for a whole number of inches, is a Unified thread of nominal diameter `n/m` inch, a multiple of 1/64 inch in the table from 1/4 to 1 inch, at `t` threads per inch, which must be that size's UNC or UNF value (20 or 28 for 1/4, 13 or 20 for 1/2, 8 or 12 for 1, and so on). The pitch is `25.4/t` mm and the diameter `n/m · 25.4` mm. |
 | K4 | The result is a `ThreadSize` of two lengths. It names no tolerance class, allowance or minor diameter: a bore's drill diameter is the caller's to state from the thread's own tables. Any other designation, an empty one, one with a space, or a size not in the tables is `ErrDegenerate`. |
 | K5 | The tests pin each table value against the standard's, a stated pitch and a Unified size against the converted inch, every refusal, and cut a rod with the size `"M10"` names to the volume of a 1.5 mm pitch thread. |
+
+## 10. A lead-in at another angle
+
+`ThreadSpec.LeadInAngle` sets the lead-in bevel's slope, for a start steeper or shallower than 45 degrees.
+
+| Decision | Rule |
+|---|---|
+| A1 | `LeadInAngle` is an angle strictly between 0 and 90 degrees and needs `LeadIn`: without a distance it is `ErrDegenerate`, as are zero as an angle, 90 degrees or more, and a negative angle `ErrNegativeMagnitude`, a wrong unit kind `ErrUnitKind`. The zero `Value` is 45 degrees and the chamfer of §7. |
+| A2 | The bevel is `ChamferAngle` on the same edges as L1, with `LeadIn` the distance along the end face, the end face the reference and `LeadInAngle` the angle between bevel and end face, so the bevel runs `LeadIn·tan(angle)` along the threaded face. Its receivers, routes and refusals are those of `ChamferAngle`. |
+| A3 | Order, copying and history are those of L2 to L4: `OperationChamfer` then `OperationThread`. |
+| A4 | The volume is L5's with the end face receding `tan(angle)·(ρ − (R − d))` at radius `ρ` in place of `ρ − (R − d)`, and the tests compute it for 30 and 60 degrees independently, and require 45 degrees to equal the default. |

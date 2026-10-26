@@ -35,6 +35,12 @@ type ThreadSpec struct {
 	// convex end of the threaded face before the thread, so a screw or a nut
 	// starts without a burr: a positive length (agent-docs/thread-design.md §7).
 	LeadIn units.Value
+	// LeadInAngle, set with LeadIn, is the angle between the lead-in's bevel and
+	// the threaded face's end face, in place of 45 degrees: LeadIn stays the
+	// bevel's distance along the end face and the bevel runs LeadIn·tan(angle)
+	// along the threaded face. It is an angle above zero and below 90 degrees
+	// (agent-docs/thread-design.md §10).
+	LeadInAngle units.Value
 }
 
 // ThreadForm is a symmetric trapezoidal groove for [ThreadSpec.Form]. Angle is
@@ -142,6 +148,9 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 		return combineTools(ctx, d, OperationThread, target, meshbool.OpCut, tools, false, nil, capture, consumed...)
 	}
 	if spec.LeadIn == (units.Value{}) {
+		if spec.LeadInAngle != (units.Value{}) {
+			return nil, fmt.Errorf(`%w: a thread lead-in angle needs a lead-in distance`, ErrDegenerate)
+		}
 		return cut(b)
 	}
 	leadIn, err := sectionrecord.MagnitudeIn(spec.LeadIn, units.Length, units.Millimeter, "the thread lead-in")
@@ -151,12 +160,26 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 	if leadIn == 0 {
 		return nil, fmt.Errorf(`%w: a thread lead-in needs a positive distance`, ErrDegenerate)
 	}
+	leadAngle := 0.0
+	if spec.LeadInAngle != (units.Value{}) {
+		leadAngle, err = sectionrecord.MagnitudeIn(spec.LeadInAngle, units.Angle, units.Radian, "the thread lead-in angle")
+		if err != nil {
+			return nil, err
+		}
+		// A bevel along the end face or the threaded face is no chamfer.
+		if leadAngle <= 0 || leadAngle >= math.Pi/2 {
+			return nil, fmt.Errorf(`%w: a thread lead-in angle must lie above zero and below 90 degrees`, ErrDegenerate)
+		}
+	}
 	ends := threadLeadInEdges(face)
 	if len(ends) == 0 {
 		return nil, fmt.Errorf(`%w: the threaded face has no convex circular end to chamfer for a lead-in`, ErrDegenerate)
 	}
 	chamfer := func(target *Body) (*Body, error) {
-		return Chamfer(ctx, target, edgesQuery(ends), units.Millimeters(leadIn))
+		if leadAngle == 0 {
+			return Chamfer(ctx, target, edgesQuery(ends), units.Millimeters(leadIn))
+		}
+		return ChamferAngle(ctx, target, edgesQuery(ends), units.Millimeters(leadIn), Faces(Planar()), units.Radians(leadAngle))
 	}
 	// Build on a copy, then retire b together with the chamfered copy only when
 	// the cut succeeds. The frame and plan still come from b's unchamfered face.

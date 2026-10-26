@@ -15,8 +15,12 @@ import (
 // leadInRod is the volume of the 5 mm radius, 20 mm rod threaded at pitch 1.5 after
 // both its ends are chamfered by d at 45 degrees: the chamfered rod less the groove.
 // At radius rho the groove covers width(rho)/pitch of the rod's length at that radius,
-// the length the chamfer leaves: 20 less 2·max(0, d − (5 − rho)).
-func leadInRod(d float64) float64 {
+// the length the chamfer leaves: 20 less 2·slope·max(0, d − (5 − rho)).
+func leadInRod(d float64) float64 { return leadInRodAt(d, 1) }
+
+// leadInRodAt is leadInRod for a bevel d along each end face that runs d·slope along the
+// rod's side: the end face recedes slope·(rho − (5 − d)) at radius rho.
+func leadInRodAt(d, slope float64) float64 {
 	const R, L, pitch = 5.0, 20.0, threadPitch
 	const steps = 200000
 	// The chamfered rod.
@@ -25,7 +29,7 @@ func leadInRod(d float64) float64 {
 	step := d / steps
 	for i := range steps {
 		rho := R - d + (float64(i)+0.5)*step
-		ring += 2 * math.Pi * rho * (rho - (R - d)) * step
+		ring += 2 * math.Pi * rho * slope * (rho - (R - d)) * step
 	}
 	rod -= 2 * ring
 	// The groove inside it.
@@ -36,7 +40,7 @@ func leadInRod(d float64) float64 {
 	for i := range steps {
 		rho := root + (float64(i)+0.5)*step
 		width := pitch/8 + 2*(rho-root)*math.Tan(math.Pi/6)
-		length := L - 2*math.Max(0, d-(R-rho))
+		length := L - 2*slope*math.Max(0, d-(R-rho))
 		groove += 2 * math.Pi * rho * length * width / pitch * step
 	}
 	return rod - groove
@@ -89,4 +93,58 @@ func TestThreadLeadInRefusals(t *testing.T) {
 	require.Error(t, err)
 	require.Len(t, doc.Bodies(), 1)
 	require.True(t, doc.Bodies()[0] == rod)
+}
+
+func TestThreadLeadInAngleSetsTheBevelsSlope(t *testing.T) {
+	t.Parallel()
+	for name, angle := range map[string]float64{"shallow": 30, "steep": 60} {
+		rod := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
+		out, err := decad.Thread(t.Context(), rod, decad.ThreadSpec{
+			Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(threadPitch),
+			LeadIn: units.Millimeters(0.8), LeadInAngle: units.Degrees(angle)})
+		require.NoError(t, err, name)
+		volume, err := out.Volume()
+		require.NoError(t, err, name)
+		requireThreadVolume(t, volume, leadInRodAt(0.8, math.Tan(angle*math.Pi/180)))
+	}
+	// 45 degrees is the default.
+	a := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
+	b := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
+	spec := decad.ThreadSpec{Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(threadPitch), LeadIn: units.Millimeters(0.8)}
+	plain, err := decad.Thread(t.Context(), a, spec)
+	require.NoError(t, err)
+	spec.LeadInAngle = units.Degrees(45)
+	angled, err := decad.Thread(t.Context(), b, spec)
+	require.NoError(t, err)
+	pv, err := plain.Volume()
+	require.NoError(t, err)
+	av, err := angled.Volume()
+	require.NoError(t, err)
+	requireThreadVolume(t, av, pv.Value.Base())
+}
+
+func TestThreadLeadInAngleRefusals(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
+	spec := decad.ThreadSpec{Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(threadPitch)}
+	spec.LeadInAngle = units.Degrees(30)
+	_, err := decad.Thread(t.Context(), rod, spec)
+	require.ErrorIs(t, err, decad.ErrDegenerate, "an angle without a distance")
+	spec.LeadIn = units.Millimeters(0.8)
+	for name, tc := range map[string]struct {
+		angle units.Value
+		want  error
+	}{
+		"right angle": {units.Degrees(90), decad.ErrDegenerate},
+		"obtuse":      {units.Degrees(120), decad.ErrDegenerate},
+		testNegative:  {units.Degrees(-10), decad.ErrNegativeMagnitude},
+		"a length":    {units.Millimeters(1), decad.ErrUnitKind},
+	} {
+		spec.LeadInAngle = tc.angle
+		_, err := decad.Thread(t.Context(), rod, spec)
+		require.ErrorIs(t, err, tc.want, name)
+	}
+	require.Len(t, doc.Bodies(), 1)
+	require.True(t, doc.Bodies()[0] == rod, "a refusal leaves the rod live")
 }
