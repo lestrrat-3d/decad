@@ -1016,7 +1016,7 @@ Feature tests cover every example model and operation. Repeated construction
 preserves live-body order and provenance roles. Later evaluators may build a
 different topology split but must preserve role/query meaning.
 
-### Positive uniform scale of a prism, stack, full Revolve, or faceted Boolean
+### Positive uniform scale of a prism, stack, solid Revolve, or faceted Boolean
 
 `ScaledAt` admits a solid `prismPayload` whose outer and hole loops contain
 only whole `LineSeg`, `CircleSeg`, and `ArcSeg` records and whose section and
@@ -1050,16 +1050,20 @@ scaled around the caller's anchor. A circular source wall becomes a `Faceted`
 face with the inherited boundary bound; this path has no scaled curved-normal
 certificate. The result is not a new `prismPayload`.
 
-A complete solid `revolvePayload` with zero section displacement takes the same
-transfer after its own `Tessellate(VerifyAll)` proves boundary and occupied
-volume. Its initial chord is `nextafter(0.05/max(1, factor), 0)` mm. The mesh
+A solid `revolvePayload`, complete or partial, with zero section displacement
+takes the same transfer after its own `Tessellate(VerifyAll)` proves boundary
+and occupied volume. That tessellation's facet-pair contact audit supplies the
+embedding evidence for the held mesh. The source mesh's occupied-volume bound
+already covers the partial sweep, and the image multiplies it by the factor
+cubed. Its initial chord is `nextafter(0.05/max(1, factor), 0)` mm. The mesh
 keeps each source face's origin roles. Planar faces keep scaled plane tags;
 curved faces publish `Faceted`, including a sphere's one face with no edge or
 loop. The faceted topology builder admits that zero-boundary case only for a
 closed, edge-connected, single-face mesh. That face has zero rim perimeter;
 the source mesh's proved `areaSlack`, scaled by the factor squared, covers its
-curved area difference without a rim term. Partial or sheet revolves, and any
-source without complete mesh proofs, refuse without retiring the source.
+curved area difference without a rim term. A sheet Revolve, and any
+source without complete mesh proofs, refuses
+without retiring the source.
 
 The faceted payload marks this source class so a later `Transform`, `Copy` or
 `ScaledAt` can repeat the proof from its held mesh and bounds.

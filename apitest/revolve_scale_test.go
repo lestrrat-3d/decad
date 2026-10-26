@@ -73,15 +73,59 @@ func TestFullRevolveScaledAtPreservesPlanarFaceRoles(t *testing.T) {
 	require.True(t, mesh.VolumeVerified())
 }
 
-func TestScaledAtRefusesPartialRevolveWithoutRetiringSource(t *testing.T) {
+func TestPartialRevolveScaledAtPreservesSectorVolumeAndFaceRoles(t *testing.T) {
 	s, profile := solidSketch(t)
 	doc := decad.New()
 	wedge, err := decad.Revolve(t.Context(), doc, s, profile, uAxis,
 		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
-	_, err = decad.ScaledAt(t.Context(), wedge, r3.Vec{}, units.Scalar(2))
+	anchor := r3.NewVec(1, 2, 3)
+	srcCentroid, err := wedge.Centroid()
+	require.NoError(t, err)
+	scaled, err := decad.ScaledAt(t.Context(), wedge, anchor, units.Scalar(2))
+	require.NoError(t, err)
+	require.Equal(t, []*decad.Body{scaled}, doc.Bodies())
+
+	// The source is a quarter of the cylinder of radius 8 and length 10, so
+	// its volume is pi/4*8^2*10 = 160 pi. Scaling by 2 multiplies it by 8.
+	volume, err := scaled.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, 8*160*math.Pi, volume.Value.Base(), volume.Bound.Base())
+	require.Greater(t, volume.Bound.Base(), 0.0)
+	// A scale about the anchor maps the source centroid c to anchor+2(c-anchor).
+	centroid, err := scaled.Centroid()
+	require.NoError(t, err)
+	want := anchor.Add(srcCentroid.Value.Sub(anchor).Scale(2))
+	require.LessOrEqual(t, want.Sub(centroid.Value).Len(), centroid.Bound.Base()+2*srcCentroid.Bound.Base())
+	for _, face := range wedge.Faces() {
+		images, err := decad.Faces(decad.FaceCreatedBy(face.Origins()[0])).SelectFaces(scaled)
+		require.NoError(t, err)
+		require.Len(t, images, 1)
+		if _, planar := face.Surface().(decad.Plane); planar {
+			require.IsType(t, decad.Plane{}, images[0].Surface())
+		} else {
+			require.IsType(t, decad.Faceted{}, images[0].Surface())
+		}
+	}
+	mesh, err := scaled.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.NotEqual(t, decad.Unsound, report.Status)
+}
+
+func TestScaledAtRefusesPartialSheetRevolveWithoutRetiringSource(t *testing.T) {
+	s, profile := solidSketch(t)
+	doc := decad.New()
+	sheet, err := decad.Revolve(t.Context(), doc, s, profile, uAxis,
+		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	_, err = decad.ScaledAt(t.Context(), sheet, r3.Vec{}, units.Scalar(2))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Equal(t, []*decad.Body{wedge}, doc.Bodies())
+	require.Equal(t, []*decad.Body{sheet}, doc.Bodies())
 }
 
 func TestFullRevolveScaledAtRepeatsAfterRigidPlacement(t *testing.T) {

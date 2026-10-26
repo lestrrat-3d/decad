@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -39,18 +40,33 @@ func prismScaleSource(ctx context.Context, b *Body, prism prismPayload, factor f
 	return certifiedScaleSource(ctx, b, chord)
 }
 
-// revolveScaleSource admits a complete solid Revolve only after its own
-// tessellation proves both the boundary and occupied volume. The similarity
+// revolveScaleSource admits a solid Revolve, complete or partial, only after
+// its own tessellation proves both the boundary and occupied volume and an
+// its own contact audit covers the held mesh. The similarity
 // then carries those proofs through the same faceted path as a prism.
 func revolveScaleSource(ctx context.Context, b *Body, source revolvePayload, factor float64) (facetedPayload, error) {
-	if !source.Full || source.SurfaceResult || !source.Xform.IsValid() || source.SectionDelta != 0 {
-		return facetedPayload{}, fmt.Errorf("%w: scale needs a complete exact solid Revolve", ErrUnsupported)
+	if source.SurfaceResult || !source.Xform.IsValid() || source.SectionDelta != 0 {
+		return facetedPayload{}, fmt.Errorf("%w: scale needs an exact solid Revolve", ErrUnsupported)
 	}
 	chord := math.Nextafter(0.05/math.Max(1, factor), 0)
 	if chord <= 0 {
 		return facetedPayload{}, fmt.Errorf("%w: the scale leaves no representable Revolve chord", ErrUnsupported)
 	}
+	// The source's VerifyAll tessellation already ran the facet-pair contact
+	// audit on the held mesh, so no second audit is added here.
 	return certifiedScaleSource(ctx, b, chord)
+}
+
+// auditHeldScaleContact checks every held facet pair of a scale source for
+// contact, so rounded tessellation coordinates cannot introduce an unproven
+// contact before ScaleMesh moves them. It can only refuse.
+func auditHeldScaleContact(ctx context.Context, fp facetedPayload) error {
+	budget := proofbound.NewWorkBudget(ctx)
+	data, err := revolvemesh.RequireRevolveFacetAreas(budget, fp.Verts, fp.Tris, 0)
+	if err != nil {
+		return err
+	}
+	return revolvemesh.RevolveContactAudit(budget, data, fp.Tris, 0)
 }
 
 // certifiedScaleSource transfers an authenticated source mesh to the
