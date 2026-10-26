@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image"
 	"image/color"
 	"image/png"
 
@@ -298,4 +299,65 @@ func Example_export_png_hidden_edges() {
 	fmt.Printf("dashed hidden edges in the middle: %t\n", grey > 60)
 	// Output:
 	// dashed hidden edges in the middle: true
+}
+
+// Shadows casts the key light's shadows, so a tall part visibly shades the plate
+// beside it. Here a 20 mm pillar stands on a flat plate, seen from above, and the
+// image is drawn with and without shadows.
+func Example_export_png_shadows() {
+	doc := decad.New()
+	block := func(x0, y0, x1, y1, height float64) (*decad.Body, error) {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		if err != nil {
+			return nil, err
+		}
+		rect := s.CreateRectangle(x0, y0, x1, y1)
+		s.Fix(rect.A)
+		if _, err := s.Solve(context.Background()); err != nil {
+			return nil, err
+		}
+		return decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	}
+	plate, err := block(0, 0, 60, 40, 2)
+	if err != nil {
+		fmt.Printf("failed to build the plate: %s\n", err)
+		return
+	}
+	pillar, err := block(25, 15, 35, 25, 20)
+	if err != nil {
+		fmt.Printf("failed to build the pillar: %s\n", err)
+		return
+	}
+	draw := func(shadows bool) (image.Image, error) {
+		view := export.View{Direction: r3.NewVec(0, 0, -1), Up: r3.NewVec(0, 1, 0), Width: 400, Height: 400, Shadows: shadows}
+		var out bytes.Buffer
+		if err := export.PNGBodies(context.Background(), &out, []*decad.Body{plate, pillar}, units.Millimeters(0.1), view); err != nil {
+			return nil, err
+		}
+		return png.Decode(&out)
+	}
+	plain, err := draw(false)
+	if err != nil {
+		fmt.Printf("failed to draw: %s\n", err)
+		return
+	}
+	shaded, err := draw(true)
+	if err != nil {
+		fmt.Printf("failed to draw: %s\n", err)
+		return
+	}
+	darker := 0
+	for y := range 400 {
+		for x := range 400 {
+			a, b := color.RGBAModel.Convert(plain.At(x, y)).(color.RGBA), color.RGBAModel.Convert(shaded.At(x, y)).(color.RGBA)
+			if int(b.R)+int(b.G)+int(b.B) < int(a.R)+int(a.G)+int(a.B) {
+				darker++
+			}
+		}
+	}
+	fmt.Printf("shadow pixels: %t\n", darker > 200)
+	// Output:
+	// shadow pixels: true
 }

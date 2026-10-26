@@ -45,6 +45,10 @@ type View struct {
 	// lines under the outlines (agent-docs/png-export-design.md §9). It is not
 	// combined with a perspective camera.
 	HiddenEdges bool
+	// Shadows casts the key light's shadows: a face a nearer one hides from the
+	// light is drawn at the ambient level (agent-docs/png-export-design.md §10).
+	// It is not combined with a perspective camera.
+	Shadows bool
 }
 
 // IsometricView looks at the model along the diagonal from above its +X, +Y,
@@ -124,12 +128,18 @@ func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View, coun
 		if fov == 0 {
 			return fmt.Errorf("export: PNG: %w: a field of view of zero draws nothing; leave it unset for an orthographic camera", decad.ErrDegenerate)
 		}
-		if view.Outlines || view.HiddenEdges {
-			return fmt.Errorf("export: PNG: %w: outlines and hidden edges are not drawn with a perspective camera", decad.ErrDegenerate)
+		if view.Outlines || view.HiddenEdges || view.Shadows {
+			return fmt.Errorf("export: PNG: %w: outlines, hidden edges and shadows are not drawn with a perspective camera", decad.ErrDegenerate)
 		}
 		cam.FieldOfView = fov
 	}
-	img, err := raster.RenderTinted(ctx, mesh.Vertices(), mesh.Triangles(), tints, cam, view.Width, view.Height)
+	var img *image.RGBA
+	if view.Shadows {
+		img, err = raster.RenderShadowed(ctx, mesh.Vertices(), mesh.Triangles(), tints, cam, view.Width, view.Height,
+			min(max(2*max(view.Width, view.Height), 512), 4096))
+	} else {
+		img, err = raster.RenderTinted(ctx, mesh.Vertices(), mesh.Triangles(), tints, cam, view.Width, view.Height)
+	}
 	if errors.Is(err, raster.ErrDegenerate) {
 		return fmt.Errorf("export: PNG: %w: %s", decad.ErrDegenerate, err)
 	}
