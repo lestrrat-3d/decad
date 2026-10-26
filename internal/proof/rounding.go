@@ -99,16 +99,51 @@ func RatFloat64(q *big.Rat) (float64, bool) {
 
 // RationalFloatError returns |exact-held| rounded upward.
 func RationalFloatError(exact *big.Rat, held float64) float64 {
-	heldRat := FloatRat(held)
-	if exact == nil || heldRat == nil {
+	if exact == nil || !finite(held) {
 		return math.Inf(1)
 	}
-	d := SubRat(new(big.Rat), exact, heldRat)
-	d.Abs(d)
-	out, exactFloat := RatFloat64(d)
+	// Form an integer difference over a positive denominator and round that
+	// quotient without reducing it. Dyadic inputs align their exponents;
+	// other denominators cross-multiply the held float's odd mantissa.
+	num, den := exact.Num(), exact.Denom()
+	var difference, term, denominator big.Int
+	if held != 0 {
+		mantissa, exponent := floatOddMantissa(held)
+		term.SetInt64(mantissa)
+		if k, dyadic := denomExp(exact); dyadic {
+			// n/2^k and m*2^e share the larger denominator. The sign
+			// is held-exact; only its magnitude is published below.
+			if shift := exponent + int(k); shift >= 0 {
+				difference.Lsh(&term, uint(shift))
+				difference.Sub(&difference, num)
+			} else {
+				difference.Lsh(num, uint(-shift))
+				difference.Sub(&term, &difference)
+				den = denominator.SetBit(&denominator, -exponent, 1)
+			}
+		} else {
+			// For n/d and m*2^e, use denominator d when e>=0,
+			// and d*2^-e otherwise. No normalization is needed.
+			difference.Mul(&term, den)
+			if exponent >= 0 {
+				difference.Lsh(&difference, uint(exponent))
+				difference.Sub(&difference, num)
+			} else {
+				term.Lsh(num, uint(-exponent))
+				difference.Sub(&difference, &term)
+				den = denominator.Lsh(den, uint(-exponent))
+			}
+		}
+		if difference.Sign() == 0 {
+			return 0
+		}
+		num = &difference
+	}
+	out, exactFloat := quotientFloat64(num, den)
+	out = math.Abs(out)
 	// Float64 can report exact even when a positive subnormal fraction flushed
 	// to zero. The rational sign is the proof that this bound cannot be zero.
-	if d.Sign() > 0 && out == 0 {
+	if num.Sign() != 0 && out == 0 {
 		return math.SmallestNonzeroFloat64
 	}
 	if !exactFloat {
