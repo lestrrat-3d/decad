@@ -10,6 +10,7 @@ validation and one atomic commit, and no new geometry kernel. The public contrac
 ```go
 func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.Profile, face FaceSelector, mode EmbossMode, height units.Value, opts ...EmbossOption) (*Body, error)
 func WithEmbossDraft(angle units.Value) EmbossOption
+func WithEmbossRimFillet(radius units.Value) EmbossOption
 ```
 
 `EmbossMode` is `EmbossRaised` or `EmbossEngraved`. `Emboss` retires `b` and returns the result.
@@ -50,7 +51,7 @@ reliefs of different height on one side, `Facing` matches several faces and `Emb
 
 - A relief on a face that is not an analytic plane, such as a cylinder wall.
 - Text from a font. The caller supplies closed profiles; `agent-docs/missing-features.md` lists text profiles.
-- A fillet on a relief's rim, and a height that varies across the profile.
+- A height that varies across the profile.
 
 ## 6. Draft
 
@@ -64,3 +65,14 @@ its sign and its refusals are `Extrude`'s (`agent-docs/draft-design.md` §2).
 | D3 | The tool's one millimetre on the other side of the face (E4) leans the same way and lies inside the body, so the join sees the relief's own walls where they meet the face. |
 | D4 | The result is what `Union` or `Cut` gives for the drafted tool. The tests compare the volume against `∫ (L − 2t·tan(angle))² dt` for a square relief within a relative `1e-9` and probe a point a drafted wall leaves as material. |
 
+## 7. A rim fillet
+
+`WithEmbossRimFillet` rounds the relief's rim with the evaluator's `Fillet`.
+
+| Decision | Rule |
+|---|---|
+| R1 | The radius is a positive length: zero is `ErrDegenerate`, a negative value `ErrNegativeMagnitude` and a wrong unit kind `ErrUnitKind`. The last option wins. |
+| R2 | The rim of a raised relief is every edge of the planar faces that face outward in the plane `height` out of the embossed face. The rim of an engraving is the edges of the inner loops of the planar faces that face outward in the embossed face's own plane, which is where the engraving's wall meets that face. Both are convex edges. |
+| R3 | The relief is built, and its rim rounded, on a copy of `b` first, retired once read, so a fillet the evaluator refuses, or a rim not found in the result, leaves `b` live and the document unchanged. The copy leaves history entries. The face is resolved once, on `b`, and the copy is embossed by that plane, so a provenance selector need not match it. |
+| R4 | The result is the emboss followed by `Fillet`, so the history holds `OperationEmboss` then `OperationFillet`. A round too large for the relief is `Fillet`'s refusal. |
+| R5 | A circular relief's rim round removes the volume of `∫ 2π(R ∓ x)(r − √(r² − (r − x)²)) dx` over `x` from 0 to `r`, minus for a raised relief and plus for an engraving, which the tests compute independently. |

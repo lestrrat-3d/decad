@@ -34,7 +34,8 @@ The rules for rows live in `agent-docs/layout.md`.
 | `hole.go` | Public `Hole`, `HoleSpec`, depth, head and shape variants: gates, tool sketches, chained cut and the commit; `internal/holeplan/` computes the tools. See hole design. |
 | `rib.go` | Public `Rib`, `RibArc`, `Web`, `WebPath` and `WithRibOverrun`: line, thickness and extent gates, rib tool extrusion, touch and volume checks. See rib design. |
 | `text.go` | Public `TextProfiles` and `TextSpec`: gates, then `internal/glyphs/` lays the text out and the contours are drawn into a sketch and filtered to filled regions. See text design. |
-| `emboss.go` | Public `Emboss`, `EmbossMode` and `WithEmbossDraft`: gates, sketch-plane check, tool extrusion, join and volume checks. See emboss design. |
+| `emboss.go` | Public `Emboss`, `EmbossMode`, `WithEmbossDraft` and `WithEmbossRimFillet`: gates, sketch-plane check, tool extrusion, join and volume checks. See emboss design. |
+| `emboss_rim.go` | Rim fillet of an `Emboss` relief: finds the rim edges in the result and calls `Fillet`, after a trial on a copy. See emboss design §7. |
 | `planar_face.go` | Resolves a selector to one analytic planar face and its outward normal; `Hole` and `Emboss` share it. |
 | `tool_combine.go` | Shared by composite features: chains Boolean steps, of one kind (`combineTools`) or several (`combineToolSteps`), over temporary tools, commits once, and retires tools without public history entries. |
 | `thicken.go` | Public `Thicken` option, thickness and sheet gates and the commit; `internal/thickenbuild/` dispatches the payload and builds. See surface §16. |
