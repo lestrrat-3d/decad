@@ -219,11 +219,11 @@ func TestReadSTEPReadsPartialCylinderWalls(t *testing.T) {
 	require.Less(t, volume.Value.Base(), (20*10+math.Pi*25)*10)
 }
 
-func TestReadSTEPRefusesAConeFace(t *testing.T) {
+func TestReadSTEPRefusesATorusFace(t *testing.T) {
 	t.Parallel()
-	_, err := readSTEPBytes(t, []byte(plateWithSquareHoleFile("CONICAL_SURFACE")))
+	_, err := readSTEPBytes(t, []byte(plateWithSquareHoleFile("TOROIDAL_SURFACE")))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Contains(t, err.Error(), "CONICAL_SURFACE")
+	require.Contains(t, err.Error(), "TOROIDAL_SURFACE")
 }
 
 func TestReadSTEPHandWrittenPlateWithAHoleAndInches(t *testing.T) {
@@ -451,4 +451,52 @@ func TestReadSTEPReadsAWallBetweenTwoCircularLoops(t *testing.T) {
 	volume, err := m.Volume()
 	require.NoError(t, err)
 	require.InDelta(t, 20*area, volume.Value.Base(), 1e-6)
+}
+
+// frustumFile is a cone frustum of radius 5 at z = 0 and 3 at z = 10 whose wall is
+// one conical face bounded by two circular loops and no seam, in millimetres. When
+// apex is set the top circle is a point.
+func frustumFile() string {
+	b := &stepBuilder{}
+	shared := map[float64]int{}
+	radius := map[float64]float64{0: 5, 10: 3}
+	plane := func(z float64, normal float64) string {
+		origin := b.add("CARTESIAN_POINT('',(0.,0.,%v))", z)
+		axis := b.add("DIRECTION('',(0.,0.,%v))", normal)
+		ref := b.add("DIRECTION('',(1.,0.,0.))")
+		placement := b.add("AXIS2_PLACEMENT_3D('',#%d,#%d,#%d)", origin, axis, ref)
+		return fmt.Sprintf("#%d", b.add("PLANE('',#%d)", placement))
+	}
+	disc := func(z, normal float64) int {
+		loop := b.circleLoop(z, radius[z], normal > 0, shared)
+		bound := b.add("FACE_OUTER_BOUND('',#%d,.T.)", loop)
+		return b.add("ADVANCED_FACE('',(#%d),%s,.T.)", bound, plane(z, normal))
+	}
+	top, bottom := disc(10, 1), disc(0, -1)
+	bottomLoop, topLoop := b.circleLoop(0, 5, true, shared), b.circleLoop(10, 3, false, shared)
+	outer := b.add("FACE_OUTER_BOUND('',#%d,.T.)", bottomLoop)
+	other := b.add("FACE_BOUND('',#%d,.T.)", topLoop)
+	origin := b.add("CARTESIAN_POINT('',(0.,0.,0.))")
+	axis := b.add("DIRECTION('',(0.,0.,1.))")
+	ref := b.add("DIRECTION('',(1.,0.,0.))")
+	placement := b.add("AXIS2_PLACEMENT_3D('',#%d,#%d,#%d)", origin, axis, ref)
+	cone := b.add("CONICAL_SURFACE('',#%d,5.,%v)", placement, math.Atan(0.2))
+	wall := b.add("ADVANCED_FACE('',(#%d,#%d),#%d,.T.)", outer, other, cone)
+	shell := b.add("CLOSED_SHELL('',(#%d,#%d,#%d))", top, bottom, wall)
+	b.add("MANIFOLD_SOLID_BREP('frustum',#%d)", shell)
+	return "ISO-10303-21;\nHEADER;\nENDSEC;\nDATA;\n" + strings.Join(b.lines, "\n") + "\nENDSEC;\nEND-ISO-10303-21;\n"
+}
+
+func TestReadSTEPReadsAConeFrustum(t *testing.T) {
+	t.Parallel()
+	m, err := readSTEPBytes(t, []byte(frustumFile()))
+	require.NoError(t, err)
+	require.True(t, m.Report().Closed, "the wall's ladder meets both discs' polygons, though their chord counts differ")
+	volume, err := m.Volume()
+	require.NoError(t, err)
+	exact := math.Pi * 10 / 3 * (25 + 15 + 9)
+	require.Less(t, volume.Value.Base(), exact, "inscribed polygons enclose a little less")
+	require.Greater(t, volume.Value.Base(), 0.995*exact)
+	require.InDelta(t, 5, m.Bounds().Max.X, 1e-9)
+	require.InDelta(t, 10, m.Bounds().Max.Z, 1e-9)
 }

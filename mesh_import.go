@@ -152,18 +152,18 @@ func ReadThreeMF(ctx context.Context, r io.Reader, opts ...MeshImportOption) (*M
 	return NewMeshBody(ctx, mesh.Vertices, mesh.Triangles)
 }
 
-// ReadSTEP reads the planar- and cylinder-faced solids of a STEP file into a [MeshBody]
+// ReadSTEP reads the planar-, cylinder- and cone-faced solids of a STEP file into a [MeshBody]
 // (agent-docs/step-import-design.md). It reads every MANIFOLD_SOLID_BREP and
 // BREP_WITH_VOIDS: each face on a plane is cut into triangles, a face with holes
-// included, each wall on a cylinder is cut into a ladder of triangles, arcs are
+// included, each wall on a cylinder or a cone is cut into a ladder of triangles, arcs are
 // cut into chords within 0.01 mm of their circle, and the vertices are welded
 // by coordinate. A cavity's shell winds
 // into the cavity, so the volume of a solid with one reads as the material
 // alone. Lengths are converted from the file's unit to millimetres.
 //
-// Only planes and cylinders, with straight and circular edges, are read. A face
-// on a cone, sphere, torus or free-form surface, a cylinder wall with holes or
-// an oblique boundary, or an edge that is an ellipse or a curve, is
+// Only planes, cylinders and cones, with straight and circular edges, are read. A
+// face on a sphere, torus or free-form surface, a cone at its apex, a wall with
+// holes or an oblique boundary, or an edge that is an ellipse or a curve, is
 // [ErrUnsupported]. A file that is
 // not well-formed STEP, or whose entities do not make the B-rep they name, is
 // [ErrMalformedMesh], and input past a limit is [ErrMeshTooLarge].

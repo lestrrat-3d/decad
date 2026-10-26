@@ -1,6 +1,6 @@
 // Package stepbrep reads the solids of a STEP model into a triangle mesh
 // (agent-docs/step-import-design.md). It reads the faces of MANIFOLD_SOLID_BREP
-// and BREP_WITH_VOIDS whose surfaces are planes or cylinders and whose edges are
+// and BREP_WITH_VOIDS whose surfaces are planes, cylinders or cones and whose edges are
 // lines or circles, and refuses the rest.
 package stepbrep
 
@@ -406,7 +406,7 @@ func (r *reader) face(v stepread.Value, flipped bool) error {
 	if err != nil {
 		return err
 	}
-	if surface.Name == "CYLINDRICAL_SURFACE" {
+	if surface.Name == "CYLINDRICAL_SURFACE" || surface.Name == "CONICAL_SURFACE" {
 		return r.cylinderFace(f, surface, flipped)
 	}
 	normal, err := r.planeNormal(f.Params[2])

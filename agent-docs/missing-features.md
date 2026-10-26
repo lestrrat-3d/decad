@@ -20,7 +20,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Gap | Section below |
 |---|---|
 | Fillet, chamfer and shell take a boolean result only where it reads as a prism, (shell) as a prism cut by through tools with its caps or a run of straight walls removed, or (fillet, chamfer) at straight edges along an axis, or (chamfer) at complete loops, one or two adjacent rising inner edges, two adjacent outer edges, or every straight outer edge of an admitted axis-aligned box, bored or bare | Modify operations |
-| No import of IGES, of STEP faces other than planes and cylinders, or of any format as a solid | Data exchange |
+| No import of IGES, of STEP faces other than planes, cylinders and cones, or of any format as a solid | Data exchange |
 | Booleans outside the admitted analytic classes fall to a faceted mesh result, and may refuse touching contact | Booleans |
 
 ## Feature operations
@@ -138,7 +138,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Today | Owner |
 |---|---|---|
-| Import of IGES, of STEP with cone, sphere, torus or free-form faces or ellipse or curve edges, or of STEP assemblies; import of any format as a solid `Body`; repair of an imported mesh beyond weld, orient and flat-hole fill | `ReadSTL`, `ReadOBJ`, `ReadThreeMF` and `ReadSTEP` read STL, OBJ, 3MF and STEP of planes and cylinders into a `MeshBody` that no feature, Boolean or `Verify` takes, and `RepairMesh` mends it (`mesh_import.go`, `mesh_repair.go`) | `agent-docs/mesh-import-design.md` §5, §7, §8, `agent-docs/step-import-design.md` §3 |
+| Import of IGES, of STEP with sphere, torus or free-form faces or ellipse or curve edges, or of STEP assemblies; import of any format as a solid `Body`; repair of an imported mesh beyond weld, orient and flat-hole fill | `ReadSTL`, `ReadOBJ`, `ReadThreeMF` and `ReadSTEP` read STL, OBJ, 3MF and STEP of planes, cylinders and cones into a `MeshBody` that no feature, Boolean or `Verify` takes, and `RepairMesh` mends it (`mesh_import.go`, `mesh_repair.go`) | `agent-docs/mesh-import-design.md` §5, §7, §8, `agent-docs/step-import-design.md` §3 |
 | Analytic STEP for cones, spheres, horn tori, free-form walls | Whole body falls back to faceted STEP; planes, cylinders and tori with circle, arc, line and ellipse edges write analytic (`export/step_analytic.go`, `export/step_analytic_torus.go`) | `agent-docs/step-export-design.md` |
 | STEP of a body with two outer shells, or whose cavity shell touches its outer shell | `ErrUnsupported`: "a solid needs exactly one outer shell", or a mesh whose shells do not match the body's (`export/step.go`); a cavity writes a faceted `BREP_WITH_VOIDS` | `agent-docs/step-export-design.md` §9 |
 

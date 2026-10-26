@@ -10,25 +10,27 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// cylinderFace triangulates an ADVANCED_FACE on a CYLINDRICAL_SURFACE. Its
-// boundary has been cut into chords already (edgeSamples). A wall with one bound
+// cylinderFace triangulates an ADVANCED_FACE on a CYLINDRICAL_SURFACE or a
+// CONICAL_SURFACE, a wall of revolution whose bounds are circles about one axis at
+// two heights and lines between them. Its boundary has been cut into chords
+// already (edgeSamples). A wall with one bound
 // of arcs at two heights and lines along the axis is a ladder of triangles
 // between its two arcs, and a wall that goes all the way round, with a circular
 // loop at each end and no seam, is a strip between the two rings. Any other wall
 // is refused.
 func (r *reader) cylinderFace(f, surface stepread.Entity, flipped bool) error {
 	if len(surface.Params) < 3 {
-		return fmt.Errorf("%w: #%d is not a CYLINDRICAL_SURFACE", ErrMalformed, surface.ID)
+		return fmt.Errorf("%w: #%d is not a %s", ErrMalformed, surface.ID, surface.Name)
 	}
 	frame, err := r.placement(surface.Params[1])
 	if err != nil {
 		return err
 	}
-	rad, ok := surface.Params[2].(stepread.Number)
-	if !ok || !(float64(rad) > 0) {
-		return fmt.Errorf("%w: a cylinder has no positive radius", ErrMalformed)
+	// The radius is the points' own: the frame and the rings carry it. A cone's circle
+	// at its apex has none, and its angle about the axis is undefined.
+	if rad, ok := surface.Params[2].(stepread.Number); !ok || float64(rad) < 0 {
+		return fmt.Errorf("%w: #%d has no radius", ErrMalformed, surface.ID)
 	}
-	_ = float64(rad) * r.scale // the radius is the points' own; the frame and the rings carry it
 	bounds, _ := f.Params[1].(stepread.List)
 	if len(bounds) == 0 {
 		return fmt.Errorf("%w: face #%d has no bound", ErrMalformed, f.ID)
@@ -41,6 +43,11 @@ func (r *reader) cylinderFace(f, surface stepread.Entity, flipped bool) error {
 		}
 		if len(ring) < 3 {
 			return fmt.Errorf("%w: a bound of face #%d has %d points", ErrMalformed, f.ID, len(ring))
+		}
+		for _, p := range ring {
+			if d := p.Sub(frame.o); d.Sub(frame.z.Scale(d.Dot(frame.z))).Len() < 1e-9 {
+				return fmt.Errorf("%w: face #%d reaches the axis, at a cone's apex, which is not read", decaderr.ErrUnsupported, f.ID)
+			}
 		}
 		rings = append(rings, ring)
 	}
