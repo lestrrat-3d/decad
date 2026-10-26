@@ -122,6 +122,10 @@ func TestClosedCardinalLoop(t *testing.T) {
 			r[0].End.Y = 1
 			return r
 		}, "leaves the plane of the loop"},
+		{"arc centre leaves the plane", func(t *testing.T, r []sweepinput.PathRecord) []sweepinput.PathRecord {
+			r[1].Arc.Center[1] = big.NewRat(1, 1)
+			return r
+		}, "leaves the plane of the loop"},
 		{"arc axis is not a coordinate axis", func(t *testing.T, r []sweepinput.PathRecord) []sweepinput.PathRecord {
 			r[1].Arc.Axis[0] = big.NewRat(1, 1)
 			return r

@@ -273,7 +273,8 @@ lines and arcs, when exact path data proves all of these:
 - the path has at least four spans and at least two arcs;
 - every arc is an exact quarter or half turn (`Turn` of one quarter or one
   half, with no radian or interval angle) about one coordinate axis, and all
-  arcs share that axis line (either sense);
+  arc axes are parallel to one coordinate axis (either sense; the arcs need not
+  share one axis line);
 - the start and end of every span and every arc centre have one common
   coordinate along that axis, so the loop lies in one plane perpendicular to
   it;
@@ -312,7 +313,7 @@ negative-Z line of length `L`, and a second semicircle returning to the start)
 has volume `pi*r*r*(2*L + 2*pi*R)` and area `2*pi*r*(2*L + 2*pi*R)`. A
 section whose centroid lies on the path has volume `area * pathLength` for any
 loop (Pappus). An off-centre section is swept at the centroid radius on each
-arc, so its volume is `area * (line length + sum of turn * centroid radius)`.
+arc, so its volume is `area * (line length + sum of 2*pi*turn * centroid radius)`.
 The body sums each span's certified volume and first moments, its live wall
 areas, and its span bounds. Tessellation shares one profile grid across all
 spans and identifies the last station with the first. It omits cap triangles,

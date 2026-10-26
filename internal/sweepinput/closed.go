@@ -39,9 +39,9 @@ func ClosedCircle(records []PathRecord) (*sweeparc.Record, bool) {
 }
 
 // ClosedCardinalLoop admits a cyclic sweep path from exact recorded data.
-// Every arc must be an exact quarter or half turn about one common coordinate
-// axis line, and the whole path must lie in the one plane perpendicular to that
-// line that holds the first record. The signed turns must sum to exactly one
+// Every arc must be an exact quarter or half turn about an axis parallel to one
+// common coordinate axis, and the whole path must lie in the one plane
+// perpendicular to that axis that holds the first record. The signed turns must sum to exactly one
 // whole turn. Any refusal wraps decaderr.ErrUnsupported and names the failed
 // gate. The caller still transports the section frame, which must return to
 // its start with zero displacement, and the global contact audit decides
