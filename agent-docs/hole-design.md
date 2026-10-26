@@ -119,3 +119,17 @@ type HoleThread struct {
 | X6 | A thread needs a round hole: a `Shape` with a thread is `ErrDegenerate`. A hole on a cylindrical face with a thread is `ErrUnsupported`. |
 | X7 | The groove under a counterbore's floor lies inside the counterbore's radius, so the head void holds the groove's start: a counterbore narrower than the thread's major diameter would be cut into by the groove and is the caller's to avoid. |
 
+## 9. Drafted holes
+
+`HoleSpec.Draft` leans the round bore's wall. It passes `WithTaper` to the `Extrude` that builds the bore tool, as
+`agent-docs/draft-design.md` §2 states it.
+
+| Decision | Rule |
+|---|---|
+| Z1 | `Diameter` is the bore's diameter at the face. A positive `Draft` makes the bore narrower toward its bottom, with the radius `Diameter/2 − t·tan(Draft)` at the depth `t`, and a negative one wider. The zero `Value` is a straight bore. |
+| Z2 | The tool starts `Margin` outside the face (H7) and the taper runs from there, so its circle is wider than the bore by `Margin·tan(Draft)`: the wall is then the stated diameter at the face (`holeplan.Plan.BoreDraft`, `holeCylinder`). |
+| Z3 | A counterbore's or countersink's own tool is not drafted. The bore proper below a counterbore leans from the face, so its radius at the counterbore's floor is `Diameter/2 − HeadDepth·tan(Draft)`. |
+| Z4 | `Draft` is read as a signed angle. A wrong unit kind is `ErrUnitKind`, a magnitude at or past a right angle is `ErrDegenerate`, and a draft that closes the bore before its bottom is the drafted `Extrude`'s own refusal, `ErrUnsupported`. |
+| Z5 | A shaped hole with a draft, a thread with a draft (a tapped hole is straight) and a draft in a hole on a cylindrical face are `ErrDegenerate`, `ErrDegenerate` and `ErrUnsupported`. |
+| Z6 | `BossBore.Draft` is the same for a boss's pilot (`agent-docs/boss-design.md` §5). |
+

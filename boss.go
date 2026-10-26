@@ -18,12 +18,15 @@ import (
 // positive length. Head is optional and widens the pilot's mouth with a
 // [Counterbore] or [Countersink], as [HoleSpec].Head does. Thread is optional
 // and taps the pilot, as [HoleSpec].Thread does, with Diameter as the tap drill
-// (agent-docs/boss-design.md §4).
+// (agent-docs/boss-design.md §4). Draft is optional and leans the pilot's wall as
+// [HoleSpec].Draft does a hole's, narrower toward its bottom for a positive angle;
+// a pilot that is tapped takes none (ErrDegenerate).
 type BossBore struct {
 	Diameter units.Value
 	Depth    units.Value
 	Head     HoleHead
 	Thread   *HoleThread
+	Draft    units.Value
 }
 
 // BossSpec describes one round boss standing on a planar face.
@@ -159,11 +162,8 @@ func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
 	}
 	if spec.Draft != (units.Value{}) {
 		// A draft is signed, so it is read as an angle rather than as a magnitude.
-		if in.draft, err = spec.Draft.In(units.Radian); err != nil {
-			return in, fmt.Errorf(`%w: the boss draft must be an angle: %s`, ErrUnitKind, err)
-		}
-		if !(math.Abs(in.draft) < math.Pi/2) {
-			return in, fmt.Errorf(`%w: the boss draft must lie strictly within a quarter turn of straight`, ErrDegenerate)
+		if in.draft, err = readDraft(spec.Draft, "the boss draft"); err != nil {
+			return in, err
 		}
 	}
 	local := plane.Frame.ToLocal(spec.At)
@@ -221,6 +221,14 @@ func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
 		Reach:    in.height + reach,
 	}
 	in.tap = spec.Bore.Thread
+	if spec.Bore.Draft != (units.Value{}) {
+		if spec.Bore.Thread != nil {
+			return in, fmt.Errorf(`%w: a tapped pilot is straight and takes no draft`, ErrDegenerate)
+		}
+		if in.bore.Draft, err = readDraft(spec.Bore.Draft, "the pilot draft"); err != nil {
+			return in, err
+		}
+	}
 	return in, holeHeadInput(in.bore, spec.Bore.Head)
 }
 

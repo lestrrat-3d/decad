@@ -199,7 +199,7 @@ Each of these returns a new body and retires its input.
 | `decad.ChamferAngle` | Bevels convex edges between two planar faces by a distance along a reference face and an angle from that face. |
 | `decad.Shell` | Removes the selected faces and lines the rest with a wall. `decad.WithShellSense` picks `decad.Inward` or `decad.Outward`. |
 | `decad.Draft` | Leans selected walls about a `decad.NeutralPlane` (`decad.NeutralFace`). |
-| `decad.Hole` | Cuts a round hole, optionally tapped with a `decad.HoleThread`, at a point on a planar face, or radially into a cylindrical one, through or blind, with an optional `decad.Counterbore` or `decad.Countersink` head. A `decad.RectangularHole` or `decad.SlotHole` shape cuts that cross-section instead, without a head. |
+| `decad.Hole` | Cuts a round hole, optionally drafted with `HoleSpec.Draft` or tapped with a `decad.HoleThread`, at a point on a planar face, or radially into a cylindrical one, through or blind, with an optional `decad.Counterbore` or `decad.Countersink` head. A `decad.RectangularHole` or `decad.SlotHole` shape cuts that cross-section instead, without a head. |
 | `decad.Thread` | Cuts an ISO metric thread, right- or left-handed, into a cylindrical face, a rod or a bore, from its pitch, along the whole face or a stated length of it. |
 | `decad.Boss` | Raises a round boss on a planar face, with an optional blind pilot hole that may carry a counterbore, a countersink or a thread. |
 | `decad.Rib` | Thickens one straight sketch line, extrudes it by an `decad.Extent` and joins it to the body. `decad.WithRibOverrun` buries its ends in the walls, and `decad.WithRibDraft` leans its walls. |

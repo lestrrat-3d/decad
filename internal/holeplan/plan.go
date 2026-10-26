@@ -77,6 +77,10 @@ type Input struct {
 	// Margin is how far the tools start outside the face, in millimetres. Zero
 	// means MouthMargin; a hole on a concave cylinder sets it to CurvedMargin.
 	Margin float64
+	// Draft leans the round bore's wall, in radians: a positive angle narrows
+	// the bore toward its bottom. Zero is a straight bore. It is read for a
+	// round bore only.
+	Draft float64
 	// Rect, when set, replaces the round bore: Diameter is then ignored and
 	// Head must be HeadNone.
 	Rect *Rect
@@ -159,6 +163,8 @@ type Plan struct {
 	Counterbore *Cylinder
 	// Sink is the countersink cone, set when the head is a countersink.
 	Sink *Sink
+	// BoreDraft is Input.Draft for a round bore, in radians.
+	BoreDraft float64
 	// HeadDepth is how far below the face the bore proper starts: the
 	// counterbore's depth or the countersink cone's, and zero with no head.
 	HeadDepth float64
@@ -199,11 +205,12 @@ func Compute(in Input) (Plan, error) {
 	}
 	radius := in.Diameter / 2
 	plan := Plan{
-		Plane:   mouth,
-		U:       local.X,
-		V:       local.Y,
-		Against: in.Outward.Dot(in.Frame.N()) > 0,
-		Bore:    Cylinder{Radius: radius, Length: boreLength, Margin: margin},
+		Plane:     mouth,
+		U:         local.X,
+		V:         local.Y,
+		Against:   in.Outward.Dot(in.Frame.N()) > 0,
+		Bore:      Cylinder{Radius: radius, Length: boreLength, Margin: margin},
+		BoreDraft: in.Draft,
 	}
 	switch in.Head.Kind {
 	case HeadNone:

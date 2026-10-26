@@ -62,3 +62,47 @@ func Example_hole() {
 	// Output:
 	// volume: 11378 mm^3
 }
+
+// A HoleSpec's Draft leans the bore's wall, as a cast or moulded hole is made so
+// that its core pulls out. A positive angle narrows the bore toward its bottom.
+// Here a 6 mm hole 6 mm deep, drafted 3 degrees, is about 5.37 mm across at its floor.
+func Example_hole_draft() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(0, 0, 20, 20)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	drilled, err := decad.Hole(context.Background(), plate, decad.HoleSpec{
+		Face:     decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
+		At:       r3.Vec{X: 10, Y: 10, Z: 10},
+		Diameter: units.Millimeters(6),
+		Depth:    decad.BlindHole{Depth: units.Millimeters(6)},
+		Draft:    units.Degrees(3),
+	})
+	if err != nil {
+		fmt.Printf("failed to drill: %s\n", err)
+		return
+	}
+	volume, err := drilled.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	// The plate holds 4000 mm^3 and the bore is a frustum of radii 3 and 2.69 mm.
+	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
+	// Output:
+	// volume: 3848 mm^3
+}
