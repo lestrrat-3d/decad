@@ -2332,7 +2332,7 @@
 10	0.01	TestBossWithPilotHole
 10	0.01	TestBossOnTheUnderside
 10	0.01	TestBossRefusals
-10	0.01	TestBossRefusesAFaceThatIsNotPlanar
+10	0.01	TestBossRefusesAFaceThatIsNeitherPlanarNorCylindrical
 10	0.01	TestSectionOutlineOfABlockIsItsSquare
 10	0.01	TestSectionOutlineFlippedNormalReversesTheLoop
 10	0.01	TestSectionOutlineOfADrilledPlateHasAHole
@@ -2535,3 +2535,6 @@
 10	0.01	TestReadSTEPReadsASphericalCapWalkedBackward
 10	0.01	TestReadSTEPRefusesSphericalFacesItDoesNotRead
 10	0.01	TestReadSTEPReadsAnInsideOutSphericalCap
+10	0.01	TestBossStandsOnARod
+10	0.01	TestBossStandsOnTheWallOfABore
+10	0.01	TestBossOnACylinderRefusals

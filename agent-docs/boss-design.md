@@ -1,6 +1,6 @@
 # Boss design
 
-`Boss` raises a round boss on a planar face, with an optional blind pilot hole. It builds a cylinder tool, unions it
+`Boss` raises a round boss on a planar or cylindrical face, with an optional blind pilot hole. It builds a cylinder tool, unions it
 to the body and cuts the pilot with the tools `Hole` builds, all in one atomic commit. It adds no geometry kernel.
 
 ## 1. Contract
@@ -29,7 +29,7 @@ func Boss(ctx context.Context, b *Body, spec BossSpec) (*Body, error)
 
 | Decision | Rule |
 |---|---|
-| B1 | `Face` resolves to exactly one analytic plane of a live solid `b`, as `Hole`'s does (`agent-docs/hole-design.md` H1). `At` is a world point within `holeplan.OnPlaneTol` (1e-6 mm) of the face plane, and is never moved onto it. |
+| B1 | `Face` resolves to exactly one analytic plane of a live solid `b`, as `Hole`'s does (`agent-docs/hole-design.md` H1), or one cylinder (§8). `At` is a world point within `holeplan.OnPlaneTol` (1e-6 mm) of the face plane, and is never moved onto it. |
 | B2 | The boss runs `Height` along the face's outward normal, a positive length. `Diameter` is positive. Zero is `ErrDegenerate` and a wrong unit kind is `ErrUnitKind`. |
 | B3 | The cylinder tool starts `embed` behind the face, where `embed` is `holeplan.MouthMargin` (1 mm) or half the body's depth behind the face, whichever is less, so the union crosses the face and nothing lies in its plane. A body with no depth behind the face is `ErrDegenerate`. |
 | B4 | The pilot hole is `Hole`'s plain blind hole, started on the boss's top face at the boss axis: the same tools, `holeplan.Compute` and gates. `Bore.Diameter` is less than `Diameter`, and `Bore.Depth` is positive and less than `Height` plus the body's depth behind the face, so the pilot never leaves through the back. A violation is `ErrDegenerate`. |
@@ -46,7 +46,7 @@ faces are planes and cylinders where the Booleans admit them.
 - Ribs and gussets at the boss's foot. Add them with `Rib` and `Web`.
 - A pilot thread whose major diameter exceeds the boss's.
 - A draft that closes the boss or breaks its circle before its top: `Extrude`'s refusal.
-- A boss that stands on a curved face, and a shaped boss with a root fillet.
+- A boss that stands on a curved face other than a cylinder's (§8), a boss on a cylinder with a root fillet or a draft, and a shaped boss with a root fillet.
 - A boss whose axis is tilted from the face normal.
 
 ## 4. A pilot with a head or a thread
@@ -97,3 +97,17 @@ faces are planes and cylinders where the Booleans admit them.
 | Q5 | A pilot opens in the top face and must be narrower than the shape's smallest width there: the rectangle's shorter side, the slot's width or the polygon's width across flats, less `2·height·tan(draft)`. Its other gates are §1's. |
 | Q6 | A `RootFillet` with a shape is `ErrUnsupported`: the root loop of §6 is a circle. |
 | Q7 | The volume above the face is the section's area times the height, which the tests compute independently: `w·l·h − (w+l)·t·h² + 4/3·t²·h³` for a drafted rectangle, `(n·(a/2)²·tan(π/n))·h` for a polygon across flats `a`, and `(w·(l−w) + π·w²/4)·h` for a slot. |
+
+## 8. A boss on a cylindrical face
+
+`Face` may resolve to one analytic cylindrical face, a rod's wall or a bore's, as `Hole`'s may
+(`agent-docs/hole-design.md`). The boss stands on the plane tangent to the cylinder at `At` and runs along the radial line
+through it, out of the body's material.
+
+| Decision | Rule |
+|---|---|
+| C1 | `At` is a world point within `holeplan.OnPlaneTol` of the cylinder, off its axis, and is the boss's centre: the tangent plane, its frame and the boss's local axis come from `Hole`'s `cylinderHoleSite`. The boss runs `Height` along the face's outward normal at `At`, which points away from the axis for a rod and toward it for a bore, measured from the tangent plane. |
+| C2 | A convex wall falls away from the tangent plane by the sagitta `R − √(R² − r²)` at distance `r`, so the footing starts `embed = MouthMargin + R − √(R² − r²)` behind it, `r` being half the boss's `Diameter`, and lies inside the body across its whole section. A boss as wide as the cylinder (`r ≥ R`), or `embed` past the body's depth behind the face, is `ErrDegenerate`. A concave wall rises into the material the footing already overlaps, so `embed` stays `MouthMargin`. |
+| C3 | A boss on a cylindrical face takes no `RootFillet` and no `Draft`: both are `ErrUnsupported`. A pilot `Bore`, its head, its thread and the shape of §7 follow the tangent frame as on a plane. Everything else of §1 holds, and the result is the union of the pillar with the body, a mesh Boolean where the evaluator has no analytic route, with its own proven volume bound. |
+| C4 | The pillar's footprint along the cylinder's axis is the caller's to keep on the wall: a boss wider than the rod is long overhangs its ends and adds the overhang. |
+| C5 | The tests state the volume of a rod with a boss and of a bore with a boss from the integral of the pillar over its footprint, `∫ 2√(r² − y²)·(R + h − √(R² − y²)) dy` for a rod and `∫ 2√(r² − y²)·(√(R² − y²) − (R − h)) dy` for a bore, and require it inside the result's own volume bound; the sagitta embed is checked by a boss wide enough that dropping it leaves a gap the volume shows. |
