@@ -351,14 +351,9 @@ func booleanBody(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref
 	return booleanBodyWith(ctx, op, a, b, ref, booleanConfig{})
 }
 
-func booleanBodyWith(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref producerID,
-	cfg booleanConfig) (*Body, error) {
-	d := documentHandle(a.n.Doc)
-	ctx, err := d.evalContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	hooks := booleandispatch.Hooks{
+// booleanHooks supplies the root-owned parts of booleandispatch for one call's options.
+func booleanHooks(cfg booleanConfig) booleandispatch.Hooks {
+	return booleandispatch.Hooks{
 		MatchingFaces:    cfg.matchingFaces,
 		Mesher:           pairMeshes{},
 		Verified:         verifyAllMesher{},
@@ -368,6 +363,16 @@ func booleanBodyWith(ctx context.Context, op meshbool.OperationKind, a, b *Body,
 			return contactfaceted.CertifyUnionLowerSupport(ctx, result, first, second)
 		},
 	}
+}
+
+func booleanBodyWith(ctx context.Context, op meshbool.OperationKind, a, b *Body, ref producerID,
+	cfg booleanConfig) (*Body, error) {
+	d := documentHandle(a.n.Doc)
+	ctx, err := d.evalContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	hooks := booleanHooks(cfg)
 	return bodyResult(booleandispatch.Body(ctx, op, envOf(documentNode(d), ref), &a.n, &b.n, hooks))
 }
 

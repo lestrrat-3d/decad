@@ -9,6 +9,7 @@ Navigation only; the named sections own their rules.
 | What can callers inspect? | Public API proposal; Face correspondence and completeness |
 | What is collected and published atomically? | Atomic publication and storage |
 | What should an implementation agent do, in order? | Ordered implementation tasks |
+| May internal code read public records? | Boolean chain regroup |
 
 ## Status and scope
 
@@ -28,7 +29,8 @@ Every document records public operation history from creation for verification
 and inspection of successful calls.
 The caller's Go function remains the feature tree. Proof records describe evaluated
 sets and constructions; they contain no replayable feature commands, rebuild mechanism,
-undo, or file format.
+undo, or file format. Internal code may read public records to re-run Boolean geometry
+over the retained bodies they name; Boolean chain regroup below owns the rules.
 
 The owning contracts are `api-design.md` §2, §3, §5.3, §6 and §12;
 `evaluator-design.md` §3 and §8; `prism-boolean-design.md` §11;
@@ -165,6 +167,18 @@ result through the existing analytic builder and fresh-role policy; never replac
 an already returned body's topology. Unsupported reconstruction keeps the proven
 faceted result. Do not re-tessellate an unknown trim as if it were an analytic patch.
 
+### Boolean chain regroup
+
+`agent-docs/boolean-chain-regroup-design.md` owns the one designed reader of public
+records. When a two-body Boolean refuses and an operand is a mesh Boolean result, it
+walks producer records to the retained source bodies and evaluates a set-equal
+regrouping of the chain. It is not replay:
+
+- It re-runs Boolean geometry only, over immutable retained bodies.
+- It replays no feature call, re-solves no sketch and reads no parameter.
+- It publishes no record beyond the caller's own Boolean and consumes no retired body.
+- A missing producer record or an ineligible body makes it decline; it never refuses.
+
 ## Computational evidence
 
 Keep two distinct always-on records. Internal proof lineage contains immutable
@@ -272,7 +286,9 @@ an operation with no outputs can span none.
 Every returned slice is a copy. Bodies, faces and operation records are immutable.
 Changing the live model after a snapshot cannot change that snapshot's records,
 consumer results, or face correspondence. It can change current body liveness;
-history is never permission to consume a retired body.
+history is never permission to consume a retired body. Reading a retired body's
+immutable geometry inside a later call's private evaluation is not consumption: it
+changes no liveness and publishes no record.
 
 ## Operation kinds
 
@@ -412,6 +428,8 @@ strong references to input and output bodies, so retired geometry stays reachabl
 for the document's lifetime and for any surviving snapshot. Memory grows with
 recorded bodies and face links, including bodies no caller otherwise retains.
 This retention is the memory cost of complete run history for verification.
+Boolean chain regroup reads retired source bodies through these references; an eviction
+API would also have to state how that reader declines.
 No eviction or clearing API is proposed because it would invalidate producer
 lookup and completeness claims. Computational proof lineage remains distinct
 from these public records and supplies its consumers directly from result payloads.

@@ -21,3 +21,4 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/mesh-wall-survey-design.md` | The wall and undercut surveys of a faceted body by rays through its held mesh: what they prove and what they cannot. |
 | `agent-docs/dxf-export-design.md` | `export.DXF`: feature-edge projection, hidden-line runs and the release-12 file. |
 | `agent-docs/png-export-design.md` | `export.PNG` and `export.PNGBodies`: the orthographic flat-shaded renderer, its camera and shading rules. |
+| `agent-docs/boolean-chain-regroup-design.md` | Rebuilding a refused two-body Boolean from the source bodies its history names: admitted set identities, plan, fallback and fixtures. |
