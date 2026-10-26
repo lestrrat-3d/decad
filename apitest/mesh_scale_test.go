@@ -101,3 +101,48 @@ func TestScaleMeshOverflowingVerticesAreNotFinite(t *testing.T) {
 	_, err = decad.ScaleMesh(t.Context(), m, r3.Vec{X: 1e308}, scalarOf(1e10), scalarOf(1), scalarOf(1))
 	require.ErrorIs(t, err, decad.ErrNotFinite)
 }
+
+func TestScaleBodyMeshStretchesASolid(t *testing.T) {
+	t.Parallel()
+	block := boxBody(t, decad.New(), 0, 0, 10, 20, 30)
+	m, err := decad.ScaleBodyMesh(t.Context(), block, r3.Vec{}, scalarOf(2), scalarOf(1), scalarOf(0.5), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.True(t, m.Report().Closed)
+	volume, err := m.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, 10*20*30*1.0, volume.Value.Base(), 1e-9, "a block of flat faces keeps its volume exactly, scaled by |x·y·z| = 1")
+	box := m.Bounds()
+	require.True(t, box.Max.Equal(r3.NewVec(20, 20, 15), 1e-12))
+	// The source is untouched.
+	original, err := block.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, 6000, original.Value.Base(), 1e-9)
+}
+
+func TestScaleBodyMeshStretchesARodIntoAnEllipticalOne(t *testing.T) {
+	t.Parallel()
+	rod := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
+	m, err := decad.ScaleBodyMesh(t.Context(), rod, r3.Vec{}, scalarOf(2), scalarOf(1), scalarOf(1), units.Millimeters(0.01))
+	require.NoError(t, err)
+	volume, err := m.Volume()
+	require.NoError(t, err)
+	// An ellipse of semi-axes 10 and 5 over 20 mm, to the tessellation's own error.
+	want := math.Pi * 10 * 5 * 20
+	require.InDelta(t, want, volume.Value.Base(), 0.005*want)
+	box := m.Bounds()
+	// The polygon of the rod's rim lies within the chord tolerance, 0.01 mm, of the circle.
+	require.InDelta(t, 10, box.Max.X, 2*0.01)
+	require.InDelta(t, 5, box.Max.Y, 0.01)
+}
+
+func TestScaleBodyMeshRefusals(t *testing.T) {
+	t.Parallel()
+	block := boxBody(t, decad.New(), 0, 0, 10, 20, 30)
+	one := scalarOf(1)
+	_, err := decad.ScaleBodyMesh(t.Context(), nil, r3.Vec{}, one, one, one, units.Millimeters(0.1))
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, err = decad.ScaleBodyMesh(t.Context(), block, r3.Vec{}, one, scalarOf(0), one, units.Millimeters(0.1))
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, err = decad.ScaleBodyMesh(t.Context(), block, r3.Vec{}, one, one, one, units.Degrees(1))
+	require.ErrorIs(t, err, decad.ErrUnitKind)
+}

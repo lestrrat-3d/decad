@@ -2494,3 +2494,6 @@
 10	0.01	TestBossShapedDraftLeansEveryWall
 10	0.01	TestBossShapedWithAPilot
 10	0.01	TestBossShapedRefusals
+10	0.01	TestScaleBodyMeshStretchesASolid
+10	0.01	TestScaleBodyMeshStretchesARodIntoAnEllipticalOne
+10	0.01	TestScaleBodyMeshRefusals

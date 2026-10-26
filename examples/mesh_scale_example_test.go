@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -56,4 +57,43 @@ f 4 5 8
 	// Output:
 	// size: 20 x 10 x 5 mm
 	// volume: 1000 mm^3
+}
+
+// ScaleBodyMesh stretches a solid body per axis, which the solid kernel cannot:
+// the body is tessellated first and the mesh stretched, so the result is a mesh
+// body. Here a 10 mm cube becomes a 20 x 10 x 5 mm slab of the same volume.
+func Example_scale_body_mesh() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(0, 0, 10, 10)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	cube, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	slab, err := decad.ScaleBodyMesh(context.Background(), cube, r3.Vec{},
+		units.Scalar(2), units.Scalar(1), units.Scalar(0.5), units.Millimeters(0.1))
+	if err != nil {
+		fmt.Printf("failed to scale: %s\n", err)
+		return
+	}
+	size := slab.Bounds().Max
+	volume, err := slab.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure: %s\n", err)
+		return
+	}
+	fmt.Printf("size: %g x %g x %g mm, volume: %g mm^3\n", size.X, size.Y, size.Z, volume.Value.Base())
+	// Output:
+	// size: 20 x 10 x 5 mm, volume: 1000 mm^3
 }

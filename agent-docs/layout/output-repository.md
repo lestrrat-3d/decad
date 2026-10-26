@@ -16,7 +16,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `mesh_repair.go` | Public `RepairMesh`, its options and `MeshRepairReport`: option gates, then `internal/meshrepair/` mends and `NewMeshBody` reads the result. See mesh-import design §7. |
 | `mesh_refine.go` | Public `RefineMesh`: gates, then `internal/meshrefine/` splits long edges and `NewMeshBody` reads the result. See mesh-import design §11. |
 | `internal/meshrefine/` | Midpoint splitting of the long edges of an indexed triangle mesh. See mesh-import design §11. |
-| `mesh_scale.go` | Public `ScaleMesh`: gates, per-axis stretch about an anchor, reversed winding under an odd number of negative factors, then `NewMeshBody`. See mesh-import design §10. |
+| `mesh_scale.go` | Public `ScaleMesh` and `ScaleBodyMesh`: gates, per-axis stretch about an anchor, reversed winding under an odd number of negative factors, then `NewMeshBody`. See mesh-import design §10. |
 | `lattice.go` | Public `GyroidLattice` and `LatticeSpec`: gates, then `internal/lattice/` samples and cuts the field and `NewMeshBody` reads the result. See lattice design. |
 | `internal/lattice/` | Gyroid field sampled on a grid and cut by marching tetrahedra into a closed triangle mesh. See lattice design. |
 | `mesh_reduce.go` | Public `ReduceMesh` and `MeshReduceReport`: gates, then `internal/meshreduce/` clusters vertices and `NewMeshBody` reads the result. See mesh-import design §9. |

@@ -364,6 +364,7 @@ the mesh closed. `decad.ReduceMesh` thins a mesh body by clustering its vertices
 midpoints, so it covers the same surface with shorter edges. `decad.GyroidLattice`
 fills a box with a gyroid lattice, the wall used for print infill, as a closed mesh body. `decad.ScaleMesh`
 stretches a mesh body by a separate factor along each axis about a point; a negative factor mirrors it.
+`decad.ScaleBodyMesh` does the same to a solid body, as a mesh, after tessellating it.
 
 ## Export
 

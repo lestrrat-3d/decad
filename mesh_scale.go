@@ -80,3 +80,35 @@ func ScaleMesh(ctx context.Context, m *MeshBody, anchor r3.Vec, x, y, z units.Va
 	}
 	return NewMeshBody(ctx, vertices, triangles)
 }
+
+// ScaleBodyMesh stretches a solid body by a separate factor along each world
+// axis about anchor and returns the result as a [MeshBody]
+// (agent-docs/mesh-import-design.md §10). The solid kernel has no per-axis
+// scale: [ScaledAt] is uniform and [Transform] is rigid, and a stretched sphere
+// is no sphere. So b is tessellated at chord tolerance tol, and the mesh is
+// stretched as [ScaleMesh] stretches one. b is not changed.
+//
+// The result is a mesh of the stretched solid, not a [Body]: no feature takes it,
+// but it reads, queries and exports as a mesh does. Its volume is that of the
+// tessellation times |x·y·z|, so it holds the volume of b to the tessellation's
+// own error, which tol bounds for a curved body and which is nil for a body of
+// flat faces. opts are [Body.Tessellate]'s. ctx and b MUST NOT be nil; the other
+// gates, with those of tol, are ScaleMesh's and Tessellate's, and a sheet or a
+// body that will not tessellate is Tessellate's refusal.
+func ScaleBodyMesh(ctx context.Context, b *Body, anchor r3.Vec, x, y, z, tol units.Value, opts ...TessellateOption) (*MeshBody, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control a mesh scale`, ErrDegenerate)
+	}
+	if b == nil {
+		return nil, fmt.Errorf(`%w: a mesh scale needs a body`, ErrDegenerate)
+	}
+	mesh, err := b.Tessellate(ctx, tol, opts...)
+	if err != nil {
+		return nil, err
+	}
+	m, err := NewMeshBody(ctx, mesh.Vertices(), mesh.Triangles())
+	if err != nil {
+		return nil, err
+	}
+	return ScaleMesh(ctx, m, anchor, x, y, z)
+}
