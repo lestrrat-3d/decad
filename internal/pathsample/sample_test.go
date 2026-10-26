@@ -70,3 +70,37 @@ func TestSampleRefusesDegenerateSegments(t *testing.T) {
 	_, err = pathsample.Sample(r3.Vec{}, []pathsample.Segment{collinear}, 3)
 	require.ErrorIs(t, err, pathsample.ErrDegenerate, "three points on a line have no circle")
 }
+
+func TestSampleStationsLineAndArcTangents(t *testing.T) {
+	t.Parallel()
+	// 10 along X, then a quarter circle of radius 10 about (10, 10) from (10, 0)
+	// to (20, 10), turning counter-clockwise.
+	mid := 10 / math.Sqrt2
+	segs := []pathsample.Segment{
+		{End: r3.Vec{X: 10}},
+		{Arc: true, Through: r3.Vec{X: 10 + mid, Y: 10 - mid}, End: r3.Vec{X: 20, Y: 10}},
+	}
+	// Total length is 10 + 5π; stations sit at 0, 10 (the join) and the end.
+	got, err := pathsample.SampleStations(r3.Vec{}, segs, 3)
+	require.NoError(t, err)
+	require.True(t, got[0].Tangent.Equal(r3.Vec{X: 1}, 1e-12), "start runs along +X: %v", got[0].Tangent)
+	require.True(t, got[2].Tangent.Equal(r3.Vec{Y: 1}, 1e-9), "the arc ends running along +Y: %v", got[2].Tangent)
+	for i, st := range got {
+		require.InDelta(t, 1, st.Tangent.Len(), 1e-12, "tangent %d is a unit vector", i)
+	}
+}
+
+func TestTurn(t *testing.T) {
+	t.Parallel()
+	axis, angle, err := pathsample.Turn(r3.Vec{X: 1}, r3.Vec{Y: 1})
+	require.NoError(t, err)
+	require.True(t, axis.Equal(r3.Vec{Z: 1}, 1e-12))
+	require.InDelta(t, math.Pi/2, angle, 1e-12)
+
+	_, angle, err = pathsample.Turn(r3.Vec{X: 1}, r3.Vec{X: 1})
+	require.NoError(t, err)
+	require.Zero(t, angle)
+
+	_, _, err = pathsample.Turn(r3.Vec{X: 1}, r3.Vec{X: -1})
+	require.ErrorIs(t, err, pathsample.ErrDegenerate)
+}

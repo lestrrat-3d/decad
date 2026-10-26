@@ -127,6 +127,7 @@ configuration option.
 | `decad.MeshBody` | struct | An imported triangle mesh: vertices, triangles and what they say. Not a `decad.Body`. | `decad.ReadSTL`, `decad.ReadOBJ`, `decad.NewMeshBody` |
 | `decad.MeshImportOption` | option set | A limit on `decad.ReadSTL` or `decad.ReadOBJ`: `decad.WithMaxMeshTriangles` or `decad.WithMaxMeshBytes`. | The caller |
 | `decad.MeshReport` | struct | The counts a mesh body reads from its triangles: edges by use, shells, zero-area triangles, closed and inverted. | `MeshBody.Report` |
+| `decad.PathPatternOption` | option set | A setting on `decad.PathPatternCopies`: `decad.WithPathFollow` turns each copy to follow the path. | The caller |
 | `decad.ArrangeBed` | struct | The flat area `decad.Arrange` fills: a corner, a width, a depth and a gap. | The caller |
 | `decad.ThreadSpec` | struct | One thread: the cylindrical face to cut and the pitch. | The caller |
 | `decad.BossSpec` | struct | One boss: the face it stands on, a world point, its diameter and height, and an optional pilot. | The caller |
