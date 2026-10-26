@@ -2281,3 +2281,12 @@
 10	0.01	TestClosestPointOfBox
 10	0.01	TestClosestPointOfFace
 10	0.01	TestClosestPointRefusals
+10	0.01	TestMeshImportSTLRoundTripsAnExportedBlock
+10	0.01	TestMeshImportOBJRoundTripsAnExportedBlock
+10	0.01	TestMeshImportBinarySTLTetrahedron
+10	0.01	TestMeshImportASCIISTLWeldsRepeatedCornersAndStoresPositiveZero
+10	0.01	TestMeshImportOBJAcceptsNegativeIndicesQuadsAndExtraParts
+10	0.01	TestMeshImportReadsAnInvertedMeshAsNotSolid
+10	0.01	TestMeshImportRefusesMalformedInput
+10	0.01	TestMeshImportLimitsRefuseLargeInput
+10	0.01	TestMeshImportNilArgumentsAreDegenerate

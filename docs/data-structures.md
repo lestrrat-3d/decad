@@ -124,6 +124,8 @@ configuration option.
 | `decad.LoftSplit` | struct | One recorded segment of one loop and the parameter fractions at which `decad.WithLoftSplits` cuts it. | The caller |
 | `decad.ConeTangentEnd` | struct | The cone that the last section of `decad.LoftFacesToConeTangent` touches. | The caller |
 | `decad.ClosestPoint` | struct | The nearest point of a body or face to a query point, its distance reading and how far it can lie from the true surface. | `Body.ClosestPoint`, `Face.ClosestPoint` |
+| `decad.MeshBody` | struct | An imported triangle mesh: vertices, triangles and what they say. Not a `decad.Body`. | `decad.ReadSTL`, `decad.ReadOBJ`, `decad.NewMeshBody` |
+| `decad.MeshReport` | struct | The counts a mesh body reads from its triangles: edges by use, shells, zero-area triangles, closed and inverted. | `MeshBody.Report` |
 | `decad.ArrangeBed` | struct | The flat area `decad.Arrange` fills: a corner, a width, a depth and a gap. | The caller |
 | `decad.HoleSpec` | struct | One hole: the face, a world point on it, the diameter, a depth, an optional head and an optional shape. | The caller |
 | `decad.HoleShape` | sealed interface | The cross-section of a hole that is not round. | The caller |

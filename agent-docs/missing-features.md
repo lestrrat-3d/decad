@@ -138,7 +138,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Today | Owner |
 |---|---|---|
-| Import of STEP, IGES, STL, OBJ or 3MF | No import entry point exists; mesh import is a v1 non-goal | `agent-docs/api-design.md` §13 |
+| Import of STEP, IGES or 3MF; import of any format as a solid `Body`; repair of an imported mesh | `ReadSTL` and `ReadOBJ` read STL and OBJ into a `MeshBody` that no feature, Boolean or `Verify` takes (`mesh_import.go`) | `agent-docs/mesh-import-design.md` §4 |
 | Analytic STEP for cones, spheres, horn tori, free-form walls | Whole body falls back to faceted STEP; planes, cylinders and tori with circle, arc, line and ellipse edges write analytic (`export/step_analytic.go`, `export/step_analytic_torus.go`) | `agent-docs/step-export-design.md` |
 | STEP of a body with a cavity: a `WithNoOpenings` closed shell, a full revolve of a cavity meridian or a holed meridian | `ErrUnsupported`: "only a single non-void shell is supported" (`export/step.go`) | `agent-docs/step-export-design.md` |
 

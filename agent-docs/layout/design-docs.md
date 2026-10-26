@@ -22,6 +22,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/point-containment-design.md` | Public point classification, distance, and mesh-to-body proofs. |
 | `agent-docs/section-design.md` | Read-only planar section gate and Sketch reconstruction proof. |
 | `agent-docs/interference-design.md` | Read-only pair overlap and bounded volume proofs. |
+| `agent-docs/mesh-import-design.md` | `MeshBody`, `ReadSTL` and `ReadOBJ`: the mesh readers, the mesh report and its exact volume. |
 | `agent-docs/path-pattern-design.md` | `PathPatternCopies`: copies spaced at equal arc length along a `Path`, and the path sampler. |
 | `agent-docs/fillet-chord-design.md` | `FilletChord`: chord-length fillet as a radius, sharing the right-angle gate of `ChamferAngle`. |
 | `agent-docs/arrange-design.md` | `Arrange`: shelf packing of body footprints onto a flat bed by translation. |
