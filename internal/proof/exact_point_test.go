@@ -19,8 +19,10 @@ func TestXdotDiffSignMatchesExactSubtraction(t *testing.T) {
 		{X: 0.5, Y: 1, Z: -4},
 		{X: math.Ldexp(1, -120), Y: 1, Z: 0},
 		{X: -math.Ldexp(1, -70), Y: 1, Z: 0},
+		{X: math.MaxFloat64, Y: -math.SmallestNonzeroFloat64, Z: 1},
 	}
 	normals := []r3.Vec{{X: 1}, {X: 1, Y: 1, Z: -1}, {X: math.Ldexp(1, 80), Y: -1}}
+	var scratch [3]big.Int
 	for _, nv := range normals {
 		n := proof.XptOf(nv)
 		for _, pv := range points {
@@ -36,6 +38,8 @@ func TestXdotDiffSignMatchesExactSubtraction(t *testing.T) {
 					}
 					want := proof.XdotSign(n, proof.Xsub(p, scaled))
 					require.Equal(t, want, proof.XdotDiffSign(n, p, scaled), "n=%v p=%v q=%v factor=%d", nv, pv, qv, factor)
+					require.Equal(t, want, proof.XdotDiffSignScratch(&scratch, n, p, scaled),
+						"reused scratch: n=%v p=%v q=%v factor=%d", nv, pv, qv, factor)
 				}
 			}
 		}

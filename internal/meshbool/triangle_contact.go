@@ -431,6 +431,7 @@ func segmentBoundaryEdges(p0, p1 proof.Xpt, xt [3]proof.Xpt, n proof.Xpt) (bool,
 	var known, on [2]uint8
 	var edgeKnown uint8
 	var edgeNormals [3]proof.Xpt
+	var sideScratch [3]big.Int
 	onEdge := func(point, edge int) bool {
 		bit := uint8(1 << edge)
 		if known[point]&bit == 0 {
@@ -442,7 +443,7 @@ func segmentBoundaryEdges(p0, p1 proof.Xpt, xt [3]proof.Xpt, n proof.Xpt) (bool,
 				edgeNormals[edge] = proof.Xcross(n, proof.Xsub(b, a))
 				edgeKnown |= bit
 			}
-			if proof.XdotDiffSign(edgeNormals[edge], points[point], a) == 0 &&
+			if proof.XdotDiffSignScratch(&sideScratch, edgeNormals[edge], points[point], a) == 0 &&
 				PointOnSegment3D(a, b, points[point]) {
 				on[point] |= bit
 			}

@@ -1055,6 +1055,7 @@ func (e *heldEmbedding) coneBox(i, k int) [2]r3.Vec {
 type pairSideSigns struct{ a, b [3]int }
 
 func (e *heldEmbedding) pairSeparated(i, j int, sharedI, sharedJ []int) (bool, bool, pairSideSigns) {
+	var sideScratch [3]big.Int
 	ti, tj := e.h.Tris[i], e.h.Tris[j]
 	otherI, otherJ := unshared(ti, sharedI), unshared(tj, sharedJ)
 	// A side is -1, 0 or 1. Two marks a reading not needed yet.
@@ -1071,7 +1072,7 @@ func (e *heldEmbedding) pairSeparated(i, j int, sharedI, sharedJ []int) (bool, b
 				continue
 			}
 			if values[k] == 2 {
-				values[k] = e.planeSign(f, p)
+				values[k] = e.planeSignScratch(f, p, &sideScratch)
 			}
 			s := values[k]
 			if s == 0 || (s0 != 0 && s != s0) {
@@ -1089,7 +1090,7 @@ func (e *heldEmbedding) pairSeparated(i, j int, sharedI, sharedJ []int) (bool, b
 		if zeroXpt(ni) || zeroXpt(nj) {
 			return false, true, pairSideSigns{}
 		}
-		if e.planeSign(i, otherJ.verts[0]) != 0 {
+		if e.planeSignScratch(i, otherJ.verts[0], &sideScratch) != 0 {
 			return true, true, pairSideSigns{}
 		}
 		a, b := ti[sharedI[0]], ti[sharedI[1]]
@@ -1117,12 +1118,12 @@ func (e *heldEmbedding) pairSeparated(i, j int, sharedI, sharedJ []int) (bool, b
 		}
 		for k, p := range ti {
 			if signs.a[k] == 2 {
-				signs.a[k] = e.planeSign(j, p)
+				signs.a[k] = e.planeSignScratch(j, p, &sideScratch)
 			}
 		}
 		for k, p := range tj {
 			if signs.b[k] == 2 {
-				signs.b[k] = e.planeSign(i, p)
+				signs.b[k] = e.planeSignScratch(i, p, &sideScratch)
 			}
 		}
 		return false, false, signs
@@ -1291,6 +1292,11 @@ func (e *heldEmbedding) orient2(a, b, c, u, v int) int {
 // planeSign is the exact side of held vertex p against facet f's plane: the
 // float filter first, then f's cached exact normal.
 func (e *heldEmbedding) planeSign(f, p int) int {
+	var scratch [3]big.Int
+	return e.planeSignScratch(f, p, &scratch)
+}
+
+func (e *heldEmbedding) planeSignScratch(f, p int, scratch *[3]big.Int) int {
 	var key [2]int
 	cache := false
 	if e.sideSigns != nil {
@@ -1309,7 +1315,7 @@ func (e *heldEmbedding) planeSign(f, p int) int {
 		return s
 	}
 	n := e.normal(f)
-	sign := proof.XdotDiffSign(n, e.lift(p), e.lift(t[0]))
+	sign := proof.XdotDiffSignScratch(scratch, n, e.lift(p), e.lift(t[0]))
 	if cache {
 		e.sideSigns[key] = int(e.planeSense[f]) * sign
 	}
