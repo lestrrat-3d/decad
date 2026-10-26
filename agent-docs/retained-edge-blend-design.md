@@ -54,21 +54,24 @@ is read only where its tag IS the surface its record denotes, decided by
 `stitchflux.TagIsDenoted` on recorded data by exact equality: every leaf of the
 patch is a point, the axis frame is exactly orthonormal in rationals, and the
 tag equals the denoted cylinder or plane exactly. Nothing is admitted on a
-residual. A widened patch, a partial-sweep cap, a rotated placement, an
-off-axis sketch line, and a `Cone`, `Sphere` or `Torus` tag all fail that test
-and stay SR1. The admitted face is then exactly as retained as an Extrude face,
-so R1 to R5 and their chains read it unchanged.
+residual. Only a `Plane` or `Cylinder` tag is considered: the route refuses a
+`Cone`, `Sphere` or `Torus` tag before it asks `TagIsDenoted`. A widened patch,
+a partial-sweep cap, a rotated placement and an off-axis sketch line fail the
+test and stay SR1. An admitted face is read as a retained `Plane` or `Cylinder`
+tag, and every other gate of the route (the edge class, the end faces, the
+setback and clearance gates) applies to it as to any retained face.
 
 **Interior vertices of an end face.** A revolve's end disc is triangulated as a
 fan around a centre vertex on the axis, so the held end face has a vertex that
 no boundary loop reaches. An end face `G` may hold such a vertex only where it
 lies exactly on `G`'s plane tag (rational test of `n·(x − o) = 0` on the held
-normal, origin and vertex). The rewrite discards every facet of `G` and
-triangulates it again from its boundary loops alone (§5), so the dropped vertex
-reaches neither the result nor its bounds, and the exact-plane test shows it
-never carried geometry off the plane. A vertex off the plane by any amount, and
-any stray vertex on a plane, wall or chain base face that is not an end face,
-still refuses (SR5).
+normal, origin and vertex). The same holds for the plane face of an R2 rim and
+the base plane of a chain. Each of these faces is rewritten by discarding all
+its facets and triangulating it again from its boundary loops alone (§5), so
+the dropped vertex reaches neither the result nor its bounds, and the
+exact-plane test shows it never carried geometry off the plane. A vertex off
+the plane by any amount, and any stray vertex on a wall face, still refuses
+(SR5).
 
 ## 3. Edge classes
 
@@ -227,8 +230,8 @@ faces `G₀` and `G₁`. Everything else in the held mesh is copied unchanged.
    the region is triangulated again by ear clipping over those loops, with one
    bridge from each hole to the outer loop. The ear clipping uses every loop
    vertex, collinear ones included, so the face keeps the vertices its
-   neighbours share. A face with a vertex off its boundary loops refuses, except an end face's vertex exactly on its plane (§2)
-   (SR5). The wall's facets are cut by the setback plane: a facet wholly beyond
+   neighbours share. A face with a vertex off its boundary loops refuses
+   (SR5), except a plane face's vertex exactly on its plane (§2). The wall's facets are cut by the setback plane: a facet wholly beyond
    it stays, one wholly before it goes, and a crossing facet is clipped, with one
    new vertex per cut mesh edge shared by the facets on either side. A new wall
    vertex lies on a held facet edge, so it takes that edge's larger vertex bound,

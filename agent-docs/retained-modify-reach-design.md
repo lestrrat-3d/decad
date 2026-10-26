@@ -102,7 +102,7 @@ the box before the Cut takes reach §8's complete cap-loop blend.
 | `exactrotation.Rotation` (`Linear`, `Translation`) | `document.go` `copyUnder` | the exact image of a tag (§6) |
 | Anchor and factor of `ScaledAt` | `point_plane_scale.go` | the exact similar image of a tag (§7) |
 
-Faces with a stated departure, or a denoted patch whose tag is not exactly the surface it denotes, are not read by §4, §5 or §8, for blend §2's reason. A Revolve `Plane` or `Cylinder` face is read; its cut by a placed tool blends through R1 to R5 like an Extrude face.
+Faces with a stated departure, or a denoted patch whose tag is not exactly the surface it denotes, are not read by §4, §5 or §8, for blend §2's reason. A Revolve `Plane` or `Cylinder` face whose tag is exactly its denoted surface is read as a retained tag (blend §2).
 
 ## 3. Verdicts
 
@@ -602,8 +602,8 @@ increment stops and reports the refusal.
   separate design of about three PRs.
 - **`Cone` and `Torus`.** The coaxial class's meridian blend is a `Torus`, built from the denoted interval
   surfaces. It gains blends on revolved shafts after a placed cut. It costs an interval construction and a proof
-  that two denoted walls share one axis. A revolved shaft's plane and cylinder faces already blend after a placed
-  cut (blend §2); only the cone and torus classes wait.
+  that two denoted walls share one axis. A revolved shaft's plane and cylinder faces blend after a placed cut where
+  the other gates of the route hold (blend §2); the cone and torus classes wait.
 - **Increment order.** Chains first lands the highest-value case one PR sooner. M3's two-distance chain chamfer
   row then waits for M1.
 - **R5.** Dropping it saves M6. Two parallel cylinders meeting in a transversal edge are rare in machined parts.

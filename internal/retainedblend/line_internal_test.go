@@ -1,6 +1,7 @@
 package retainedblend
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -42,5 +43,23 @@ func TestFaceLoopsStrayVertex(t *testing.T) {
 		t.Parallel()
 		_, err := fanFace(0).faceLoops(0, nil)
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	})
+}
+
+func TestPlaneHolds(t *testing.T) {
+	t.Parallel()
+	p := plane{n: r3.NewVec(1, 0, 0), o: r3.NewVec(3, 0, 0)}
+
+	t.Run("a point exactly on the plane is held", func(t *testing.T) {
+		t.Parallel()
+		require.True(t, p.holds(r3.NewVec(3, 7, -2)))
+	})
+	t.Run("a point off the plane by one ulp is not held", func(t *testing.T) {
+		t.Parallel()
+		require.False(t, p.holds(r3.NewVec(math.Nextafter(3, 4), 7, -2)))
+	})
+	t.Run("a point that is not finite is not held", func(t *testing.T) {
+		t.Parallel()
+		require.False(t, p.holds(r3.NewVec(math.Inf(1), 0, 0)))
 	})
 }
