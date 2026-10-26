@@ -40,6 +40,7 @@ first.
   sweeps and clearance.
 - `agent-docs/layout/internal-loft.md`: Loft, point-loft, cone and contact internal packages.
 - `agent-docs/layout/internal-prism.md`: prism, stacked, cup and Shell internal packages.
+- `agent-docs/layout/internal-placement.md`: body layout and path-spacing internal packages.
 - `agent-docs/layout/operation-observability.md`: operation history and diagnostics internals.
 
 ## Splitting oversized agent files
