@@ -129,7 +129,7 @@ func TestStitchLeavesComplementaryArcsFree(t *testing.T) {
 	decadtest.MeasuresArea(t, sheet, units.SquareMillimeters(math.Pi*100))
 }
 
-// flippedCircleSketch is circleSketchAt(r, 0) on a plane whose normal is -Z.
+// flippedCircleSketch is circleSketchAt(t, 0) on a plane whose normal is -Z.
 func flippedCircleSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
 	t.Helper()
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, -1, 0))
@@ -202,9 +202,10 @@ func TestStitchDoesNotWeldAnOppositeAxisCircle(t *testing.T) {
 
 // halfDiskWallAndPatch extrudes the upper half disk of radius 10 as a surface
 // wall 15 mm Along and patches a half disk onto its bottom rim; flipped builds
-// that patch on a -Z plane from the lower half of its own coordinates, which is
-// the same world region with the arc's axis reversed.
-func halfDiskWallAndPatch(t *testing.T, flipped bool) (*decad.Body, *decad.Body) {
+// that patch on a -Z plane. In the flipped plane, lower picks the lower local
+// half, which is the same world region as the wall with the arc's axis reversed;
+// the upper local half is the complementary world half.
+func halfDiskWallAndPatch(t *testing.T, flipped, lower bool) (*decad.Body, *decad.Body) {
 	t.Helper()
 	doc := decad.New()
 	build := func(w *sketch.World, plane *sketch.Plane, lower bool) (*sketch.Sketch, *sketch.Profile) {
@@ -233,13 +234,12 @@ func halfDiskWallAndPatch(t *testing.T, flipped bool) (*decad.Body, *decad.Body)
 	require.NoError(t, err)
 
 	pw := sketch.NewWorld()
-	plane, lower := pw.XY(), false
+	plane := pw.XY()
 	if flipped {
 		frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, -1, 0))
 		require.NoError(t, err)
 		plane, err = pw.CreatePlaneFromFrame(frame)
 		require.NoError(t, err)
-		lower = true
 	}
 	ps, pp := build(pw, plane, lower)
 	patch, err := decad.PatchProfile(t.Context(), doc, ps, pp)
@@ -252,7 +252,7 @@ func halfDiskWallAndPatch(t *testing.T, flipped bool) (*decad.Body, *decad.Body)
 // and the diameters weld too, leaving the wall's top arc and top diameter free.
 func TestStitchWeldsAZeroBoundArcRim(t *testing.T) {
 	t.Parallel()
-	wall, patch := halfDiskWallAndPatch(t, false)
+	wall, patch := halfDiskWallAndPatch(t, false, false)
 	sheet, err := decad.Stitch(t.Context(), wall, patch)
 	require.NoError(t, err)
 	free, err := decad.Edges(decad.Free()).Exactly(2).SelectEdges(sheet)
@@ -267,7 +267,7 @@ func TestStitchWeldsAZeroBoundArcRim(t *testing.T) {
 // runs the other way with the opposite axis: the arcs meet start to end.
 func TestStitchWeldsAnOppositeAxisArcRim(t *testing.T) {
 	t.Parallel()
-	wall, patch := halfDiskWallAndPatch(t, true)
+	wall, patch := halfDiskWallAndPatch(t, true, true)
 	sheet, err := decad.Stitch(t.Context(), wall, patch)
 	require.NoError(t, err)
 	free, err := decad.Edges(decad.Free()).Exactly(2).SelectEdges(sheet)
@@ -276,4 +276,18 @@ func TestStitchWeldsAnOppositeAxisArcRim(t *testing.T) {
 		require.Equal(t, 15.0, e.Start().Position().Value.Z)
 	}
 	decadtest.MeasuresArea(t, sheet, units.SquareMillimeters((math.Pi*10+20)*15+math.Pi*50))
+}
+
+// TestStitchLeavesAComplementaryOppositeAxisArcFree patches the lower world
+// half disk on a -Z plane against the upper half-disk wall. The arcs meet start
+// to start with opposite axes: the same circle and endpoints, but the
+// complementary arc. Only the diameters weld, so four arcs and lines stay free.
+func TestStitchLeavesAComplementaryOppositeAxisArcFree(t *testing.T) {
+	t.Parallel()
+	wall, patch := halfDiskWallAndPatch(t, true, false)
+	sheet, err := decad.Stitch(t.Context(), wall, patch)
+	require.NoError(t, err)
+	free, err := decad.Edges(decad.Free()).Exactly(4).SelectEdges(sheet)
+	require.NoError(t, err)
+	require.Len(t, free, 4)
 }

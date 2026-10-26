@@ -131,7 +131,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | `Body.ExtremeFacesByCentroid` outside a complete point-loft planar Split slab, its rigid copy, or its positive uniform image | `ErrUnsupported`; this source class has a cone bound for every side-face centroid | `agent-docs/loft-point-design.md` "Planar split of a point loft" |
 | `ScaledAt` of other bodies, including partial and sheet Revolves and non-Boolean faceted results | `ErrUnsupported`; no similarity certificate | `agent-docs/loft-point-design.md` "Anchored uniform scale of a Split slab"; `agent-docs/evaluator-design.md` "Positive uniform scale of a prism, stack, full Revolve, or faceted Boolean" |
 | Ruled, Boundary Fill | Refused permanently | `agent-docs/surface-design.md` §1.3 |
-| `Stitch` of a `Circle3` or `Arc3` edge without a proven zero curve bound, of any other curved edge (`Ellipse3`, `FilletMiter3`, spline, faceted), of bounded or certified vertices, and of any edge pair under `ExactOnly` that is not proven coincident | the edges stay free | `agent-docs/surface-design.md` §6.2, `agent-docs/gap-tolerance-design.md` §5.3 |
+| `Stitch` of a `Circle3` or `Arc3` edge without a proven zero curve bound, of an opposite-axis whole `Circle3` pair (refused `ErrDegenerate` when the seams coincide), of any other curved edge (`Ellipse3`, `FilletMiter3`, spline, faceted), of bounded or certified vertices, and of any edge pair under `ExactOnly` that is not proven coincident | the edges stay free | `agent-docs/surface-design.md` §6.2, `agent-docs/gap-tolerance-design.md` §5.3 |
 | Reverse Normal | Named, staged for no increment | `agent-docs/surface-design.md` §1.4 |
 
 ## Data exchange

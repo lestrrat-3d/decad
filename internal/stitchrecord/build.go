@@ -760,9 +760,9 @@ func reverseIntSlice(s []int) {
 // either original operand's now-meaningless walk-based flag: a welded edge
 // is a genuine interior junction between two independently built faces, and
 // topology.go's own doc comment on Edge.IsConvex states that a junction
-// edge's convexity IS the material dihedral angle. Both adjacent faces are
-// guaranteed Plane: only a Line3 rim edge is ever welded (plan.go),
-// and only a planar face's straight boundary segment ever records one. It
+// edge's convexity IS the material dihedral angle. The dihedral is computed
+// only where both adjacent faces are Plane; a welded circular edge, or any
+// edge with a non-Plane face, keeps the flag it had. It
 // must run AFTER any global orientation-sign fix, since that fix can invert
 // which side either face calls outward.
 func fixWeldedEdgeConvexity(welded map[*topo.Edge]struct{}) {

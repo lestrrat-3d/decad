@@ -209,8 +209,7 @@ keeps its refusal:
 
 - A mesh the second stage leaves folded, because a vertex is welded, no candidate within the reach clears it, or
   the reach is too small.
-- `Stitch` of a circular edge without a proven zero curve bound, of any other curved edge, of a vertex that
-  carries a bound, and of any pair under `ExactOnly`: the edges stay free (§5.3).
+- `Stitch` of a curved edge, of a vertex that carries a bound, and of any pair under `ExactOnly`: the edges stay free (§5.3).
 - Branching intersection curves, and a facet or subdivision region that touches the other operand's boundary. They
   carry no contact normal.
 - A curved near contact no shift within the reach clears. The gate asks whether chorded surfaces touch, and it is

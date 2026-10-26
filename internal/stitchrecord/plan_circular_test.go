@@ -25,8 +25,12 @@ func faceOf(e *topo.Edge) *topo.Face {
 }
 
 func arcEdge(a, b *topo.Vertex, bounded bool, bound float64) *topo.Edge {
+	return arcEdgeOfRadius(a, b, bounded, bound, 10)
+}
+
+func arcEdgeOfRadius(a, b *topo.Vertex, bounded bool, bound, radius float64) *topo.Edge {
 	return &topo.Edge{
-		Curve:        surfacegeom.Arc3{Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(10)},
+		Curve:        surfacegeom.Arc3{Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(radius)},
 		Start:        a,
 		End:          b,
 		CurveBounded: bounded,
@@ -34,35 +38,43 @@ func arcEdge(a, b *topo.Vertex, bounded bool, bound float64) *topo.Edge {
 	}
 }
 
-// TestBuildPlanZeroBoundArcs checks both halves of the zero-bound arm: the
-// edge's own curve bound and its end vertices' bounds.
+// TestBuildPlanZeroBoundArcs checks each leg of the zero-bound arm: the edge's
+// own curve bound, each end vertex's bound alone, the arc's end positions and
+// its radius. A vertex that carries a bound still joins a class through a shared
+// curve token, so the edge's own vertex-bound legs are what keep it out.
 func TestBuildPlanZeroBoundArcs(t *testing.T) {
 	t.Parallel()
 	zero := units.Millimeters(0)
 	small := units.Millimeters(1e-3)
 	tok := denotation.NewCurve(7)
+	none := denotation.CurveToken{}
 	tests := []struct {
-		name    string
-		bounded bool
-		bound   float64
-		vBound  units.Value
-		vTok    denotation.CurveToken
-		groups  int
+		name         string
+		bounded      bool
+		bound        float64
+		radius       float64
+		start, end   units.Value
+		tok          denotation.CurveToken
+		endX         float64
+		wantedGroups int
 	}{
-		{"zero bound welds", true, 0, zero, denotation.CurveToken{}, 1},
-		{"curve bound unstated", false, 0, zero, denotation.CurveToken{}, 0},
-		{"nonzero curve bound", true, 1e-3, zero, denotation.CurveToken{}, 0},
-		{"bounded vertices sharing a token", true, 0, small, tok, 0},
+		{"zero bound welds", true, 0, 10, zero, zero, none, -10, 1},
+		{"curve bound unstated", false, 0, 10, zero, zero, none, -10, 0},
+		{"nonzero curve bound", true, 1e-3, 10, zero, zero, none, -10, 0},
+		{"bounded start vertex", true, 0, 10, small, zero, tok, -10, 0},
+		{"bounded end vertex", true, 0, 10, zero, small, tok, -10, 0},
+		{"equal end positions", true, 0, 10, zero, zero, none, 10, 0},
+		{"zero radius", true, 0, 0, zero, zero, none, -10, 0},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			var faces []*topo.Face
 			for range 2 {
-				a, b := vertexAt(10, tc.vBound, tc.vTok), vertexAt(-10, tc.vBound, tc.vTok)
-				faces = append(faces, faceOf(arcEdge(a, b, tc.bounded, tc.bound)))
+				a, b := vertexAt(10, tc.start, tc.tok), vertexAt(tc.endX, tc.end, tc.tok)
+				faces = append(faces, faceOf(arcEdgeOfRadius(a, b, tc.bounded, tc.bound, tc.radius)))
 			}
-			require.Equal(t, tc.groups, stitchrecord.BuildPlan(faces).Groups)
+			require.Equal(t, tc.wantedGroups, stitchrecord.BuildPlan(faces).Groups)
 		})
 	}
 }

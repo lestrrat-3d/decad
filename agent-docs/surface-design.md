@@ -789,8 +789,10 @@ as the prism, patch-disk and revolve builders set it. Two such edges join when a
   bit-identical `Center` and `Radius`. Two `Circle3` edges need equal axes: a whole
   circle has no endpoints to fix its sense, and the weld derives coedge
   directions from the vertex classes alone, so opposite axes would leave the two
-  faces with inconsistent normals. Two `Arc3` edges need an axis equal up to sign,
-  as the next paragraph states.
+  faces with inconsistent normals. An opposite-axis zero-bound `Circle3` pair is
+  declined and both rims stay free; when the two seam vertices coincide the
+  unwelded rims pinch there and `Stitch` refuses with `ErrDegenerate` (R7, as T78).
+  Two `Arc3` edges need an axis equal up to sign, as the next paragraph states.
 
 An `Arc3` has no range field. Its range is its start and end vertex, swept
 counter-clockwise about `Axis`, so two arcs of one circle between the same two
@@ -834,10 +836,12 @@ choice among equally-claimed edges, and welding all three is non-manifold
 or more stays free, and the result's own residual free edges name the
 ambiguity exactly as they name any other unjoined pair (§6.3).
 
-Orientation is **not** a join condition. J1–J5 decide the welding, and the
-consistent orientation is derived afterwards over the welded graph (§6.3); a set
-that admits no consistent choice is refused there as a whole (R7) rather than
-leaving individual pairs unjoined.
+Orientation is **not** a join condition for a straight edge or an arc. J1–J5
+decide the welding, and the consistent orientation is derived afterwards over the
+welded graph (§6.3); a set that admits no consistent choice is refused there as a
+whole (R7) rather than leaving individual pairs unjoined. A whole `Circle3` is the
+exception: its zero-bound arm needs equal axes, so an opposite-axis pair stays
+unjoined, because the weld derives coedge directions from vertex classes alone.
 
 **J5 is the load-bearing row, and it is what makes this sound rather than
 merely strict.** Bit-identical held coordinates prove the two edges' *held*
@@ -886,8 +890,8 @@ route beside the existing zero-bound one: two vertices with the bit-identical
 held key that also carry an equal non-zero token merge into one class too,
 whatever bound either carries — narrowed by the same bit-identical key the
 zero-bound route already requires, so a token match at a DIFFERENT held
-coordinate never merges. `stitchrecord.BuildPlan`'s own edge gate widens from
-"Line3 only" to "Line3, or a non-zero token": a `Line3` pair still joins
+coordinate never merges. `stitchrecord.BuildPlan`'s own edge gate admits a `Line3`, an edge with a
+non-zero token, or a zero-bound circular edge: a `Line3` pair still joins
 vacuously (J3 states nothing beyond what the shared vertex class already
 proves), while any other pair — a revolve's own `Circle3`/`Arc3` junction —
 joins through the zero-bound arm above, or through an
