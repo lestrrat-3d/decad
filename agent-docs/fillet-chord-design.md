@@ -42,7 +42,7 @@ on the 120 degree edges of a hexagonal prism.
 
 ## 4. Not covered
 
-- A curved face beside the edge.
+- A curved face beside a straight or free-form edge, and a torus: the angle there varies along the edge.
 - `WithTangentChain`.
 - Setback corners and curvature-continuous blends, which have no entry point.
 
@@ -52,3 +52,15 @@ The hexagonal prism's six vertical edges meet at 120 degrees. `FilletChord` of o
 tests compare the volume with the area `R²(cot 60° − 30°)` a fillet of that radius removes from the corner. All six
 together give one radius and are one call. A right-isosceles triangular prism's 45, 45 and 90 degree edges together are
 `ErrUnsupported`, and the L-shaped prism's reflex edge is a concave edge: its faces turn 90 degrees, so a chord of `2√2` is a radius of 2 and the round adds `(1 − π/4)·r²·height` to the corner.
+
+## 6. A circular edge between a plane and a surface of revolution
+
+An edge that is a `Circle3` or an `Arc3` may lie between a plane and a `Cylinder`, `Cone` or `Sphere`, or between two of
+those: such a circle lies on a surface of revolution about its own axis, so it meets the other face at one angle all round.
+The rim of a rod, the mouth of a bore and the foot of a boss are such edges.
+
+| Decision | Rule |
+|---|---|
+| C7 | φ is read from the two faces' outward normals at the edge's start, as `planarDihedral` reads it for planes. The radius is `chord/(2·cos(φ/2))` as C1 says, which is `chord/√2` for the right angle between a cap and a wall. |
+| C8 | A curved face beside a straight or free-form edge, and a `Torus` anywhere, is `ErrUnsupported`: the angle there varies along the edge. Two faces that meet tangentially have φ of π and are refused. |
+| C9 | The result is `Fillet`'s for that radius, so its refusals apply. The tests compare a rod's two rims with `∫ 2π(R−x)(r−√(r²−(r−x)²))dx` over the round. |
