@@ -116,6 +116,12 @@ func TestLocatePrismHoles(t *testing.T) {
 		{Segments: []sectionrecord.CurveSegment{wholeCircle(pt{U: 10, V: 5}, 2, false)}},
 	}})
 	requirePrismLocations(t, escaping, []prismCase{{name: "hole outside the outer loop", at: r3.NewVec(11, 5, 5), want: Undecided}})
+	// A point on the outer loop inside a hole is not a sketch-arranged
+	// region's point either.
+	crossing := payloadOf(t, momentinput.Profile{Outer: squareLoop(), Holes: []sectionrecord.LoopRecord{
+		{Segments: []sectionrecord.CurveSegment{wholeCircle(pt{U: 5, V: 1}, 2, false)}},
+	}})
+	requirePrismLocations(t, crossing, []prismCase{{name: "outer boundary inside a hole", at: r3.NewVec(5, 0, 5), want: Undecided}})
 }
 
 func TestLocatePrismArc(t *testing.T) {
@@ -181,7 +187,9 @@ func TestLocatePrismLeavesOpenRecords(t *testing.T) {
 			Center: pt{U: 5, V: 5}, Rx: units.Millimeters(3), Ry: units.Millimeters(2), Rotation: units.Degrees(0),
 			CCW: true, TStart: 0, TEnd: 1,
 		}}},
-		"lone line": {Segments: []sectionrecord.CurveSegment{line(o, pt{U: 10, V: 0})}},
+		"lone line":       {Segments: []sectionrecord.CurveSegment{line(o, pt{U: 10, V: 0})}},
+		"arc start = end": pieLoop(sectionrecord.ArcSeg{Center: o, Start: pt{U: 20, V: 0}, End: pt{U: 20, V: 0}, TStart: 0, TEnd: 1}),
+		"zero radius":     {Segments: []sectionrecord.CurveSegment{wholeCircle(pt{U: 5, V: 5}, 0, true)}},
 	}
 	for name, loop := range loops {
 		_, decided, err := LocatePrism(t.Context(), r3.NewVec(5, 5.5, 5), payloadOf(t, momentinput.Profile{Outer: loop}))
@@ -220,5 +228,25 @@ func TestLocatePrismJunctionCorner(t *testing.T) {
 		{name: "corner", at: r3.NewVec(10, 0, 5), want: OnBoundary},
 		{name: "material", at: r3.NewVec(5, 5, 5), want: Inside},
 		{name: "1e-9 past the corner", at: r3.NewVec(10+1e-9, 0, 5), want: Outside},
+	})
+}
+
+// TestLocatePrismConcaveArc reads a 20 mm square whose top side carries a
+// radius-4 notch: a half-circle arc dipping into the material, walked back
+// from End to Start. The ring's chord runs along the top side, so a point in
+// the notch is inside the ring and only the arc's −1 correction places it
+// outside.
+func TestLocatePrismConcaveArc(t *testing.T) {
+	t.Parallel()
+	notch := sectionrecord.ArcSeg{Center: pt{U: 10, V: 20}, Start: pt{U: 6, V: 20}, End: pt{U: 14, V: 20}, TStart: 1, TEnd: 0}
+	a, b, c, d := pt{U: 0, V: 0}, pt{U: 20, V: 0}, pt{U: 20, V: 20}, pt{U: 0, V: 20}
+	loop := sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		line(a, b), line(b, c), line(c, notch.End), notch, line(notch.Start, d), line(d, a),
+	}}
+	requirePrismLocations(t, payloadOf(t, momentinput.Profile{Outer: loop}), []prismCase{
+		{name: "in the notch", at: r3.NewVec(10, 18, 5), want: Outside},
+		{name: "notch floor", at: r3.NewVec(10, 16, 5), want: OnBoundary},
+		{name: "under the notch", at: r3.NewVec(10, 15, 5), want: Inside},
+		{name: "beside the notch", at: r3.NewVec(3, 18, 5), want: Inside},
 	})
 }

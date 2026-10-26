@@ -199,8 +199,11 @@ orthonormal only to rounding, so its transpose is not its inverse. The route
 solves `L·x = p − T − B·O` by Cramer's rule over exact rationals, as the
 oblique sphere section solves its Gram system
 (`agent-docs/section-design.md`, "Oblique plane of an authenticated source
-sphere"). A zero determinant hands the point to §2. The solve gives the exact
-plane coordinates `(u, v, z)` of `p`.
+sphere"). This is an exception to CLAUDE.md's "inverse = transpose, never a
+solve" rule: the transpose inverts the held map only to rounding, so it could
+never place a point exactly on the boundary the record denotes. A zero
+determinant hands the point to §2. The solve gives the exact plane
+coordinates `(u, v, z)` of `p`.
 
 `z < Z0` or `z > Z1` is `PointOutside` without reading the profile.
 
@@ -294,7 +297,11 @@ before it.
   point on its chord falls to §2. The same pie with `End` 500 ulps off the
   radius falls to §2 for every point, which leaves points near its boundary
   undecided.
+- A square whose top side carries a half-circle notch walked back from `End`
+  to `Start` answers outside inside the notch, where the ring alone reads
+  inside and only the arc's `−1` correction decides.
 - Unit fixtures hand the point to §2 for each admission gate, a singular
-  placement, a circle or arc fragment, a circle in inches, an ellipse, a
-  one-line loop, two holes holding one point, and a hole outside the outer
-  loop. A reversed record answers as its forward twin.
+  placement, a circle or arc fragment, a circle in inches, a zero-radius
+  circle, an arc whose `Start` equals its `End`, an ellipse, a one-line loop,
+  two holes holding one point, a hole outside the outer loop, and a point on
+  the outer loop inside a hole. A reversed record answers as its forward twin.

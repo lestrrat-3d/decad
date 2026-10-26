@@ -83,8 +83,9 @@ func TestPointLocationExactPlacedPlate(t *testing.T) {
 
 // TestPointLocationExactCutFragments reads a square drawn as four
 // overshooting lines, so every recorded segment is a Partial fragment cut at
-// a recorded parameter. The route closes each junction at the exact corner
-// the evaluator closes it through.
+// a recorded parameter. Its fragments meet at equal ends, so no junction here
+// needs a closing path; TestLocatePrismJunctionCorner
+// (internal/pointquery) covers the closure through the exact corner.
 func TestPointLocationExactCutFragments(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
