@@ -2344,3 +2344,11 @@
 10	0.01	TestRepairMeshMendsAllThree
 10	0.01	TestRepairMeshLeavesAGoodMeshWhole
 10	0.01	TestRepairMeshRefusals
+10	0.01	TestReadThreeMFReadsACube
+10	0.01	TestReadThreeMFRoundTripsAnExportedBody
+10	0.01	TestReadThreeMFScalesTheModelUnit
+10	0.01	TestReadThreeMFAppliesTheItemTransform
+10	0.01	TestReadThreeMFKeepsAMirroredCubeRightWayOut
+10	0.01	TestReadThreeMFFollowsComponents
+10	0.01	TestReadThreeMFSkipsSupports
+10	0.01	TestReadThreeMFRefusals

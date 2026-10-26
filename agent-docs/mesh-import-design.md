@@ -23,6 +23,7 @@ func (m *MeshBody) ClosestPoint(ctx context.Context, p r3.Vec) (ClosestPoint, er
 
 func ReadSTL(ctx context.Context, r io.Reader, opts ...MeshImportOption) (*MeshBody, error)
 func ReadOBJ(ctx context.Context, r io.Reader, opts ...MeshImportOption) (*MeshBody, error)
+func ReadThreeMF(ctx context.Context, r io.Reader, opts ...MeshImportOption) (*MeshBody, error)
 func WithMaxMeshTriangles(n int) MeshImportOption
 func WithMaxMeshBytes(n int64) MeshImportOption
 
@@ -74,7 +75,7 @@ triangles, two shells and an inverted mesh.
 
 ## 5. Not covered
 
-- STEP, IGES and 3MF import.
+- STEP and IGES import, and 3MF materials, colours, slices and beam lattices.
 - Turning a `MeshBody` into a `Body`, or taking one in a feature, a Boolean or `Verify`.
 - Repair beyond §7: self-intersections, edges three triangles use, bent holes closed to their true surface, and slivers.
 - Writing a `MeshBody` as STEP or 3MF.
@@ -122,4 +123,19 @@ func WithMeshFillHoles() MeshRepairOption
 | M6 | `WithMeshFillHoles` closes each boundary loop in which every vertex has one way onward: one triangle for a loop of three, otherwise a fan from a new vertex at the loop's centroid. The fan is flat only when the loop is, so a bent loop closes to a surface that need not match the source. A boundary that branches stays open and counts once in `SkippedLoops`. |
 | M7 | A weld distance that is negative is `ErrNegativeMagnitude`, not a length `ErrUnitKind`. An option given twice, a nil option, a nil context and a nil mesh are `ErrDegenerate`, as is a result with no triangle. |
 | M8 | The float arithmetic here decides only which triangles to flip and drop. It claims nothing about the result: every reading of the new mesh body is exact over its own triangles, as §2 says. |
+
+## 8. 3MF
+
+`ReadThreeMF` reads a 3MF Core package into a `MeshBody`. `internal/meshparse/threemf.go` unpacks and parses it.
+
+| Decision | Rule |
+|---|---|
+| T1 | The model part is the target of the package's `.../3dmodel` relationship in `_rels/.rels`, or `3D/3dmodel.model` when there is none. A package that is not a zip, or has no model part, is `ErrMalformedMesh`. |
+| T2 | Every `<item>` of the `<build>` is read, in order, and the meshes are welded together as the other readers weld. A build with no item or no triangle is `ErrMalformedMesh`. Items of type `support` and `solidsupport` are skipped; every other type is read. |
+| T3 | An object holds a `<mesh>`, `<components>`, or both. A component places another object by `objectid` with its own optional `transform`. Components nest to 16 deep, and a deeper or looping set is `ErrMalformedMesh`. |
+| T4 | The model's `unit` scales every coordinate to millimetres: `micron`, `millimeter` (the default), `centimeter`, `meter`, `inch` and `foot`. Another unit is `ErrMalformedMesh`. |
+| T5 | A `transform` is twelve numbers: the rows of a 3 x 3 matrix then the translation, for a point as a row vector. A component's transform is applied first, then each enclosing component's and then the item's. A transform that is not rigid is `ErrUnsupported`, because `r3.Transform` holds rotations, translations and reflections only. |
+| T6 | A reflection reverses the winding of the triangles it moves, so a mirrored body stays outward. |
+| T7 | A triangle index outside its object's vertices, a vertex that is not finite, a malformed transform and XML that does not parse are `ErrMalformedMesh`. A part that expands past the byte limit, as well as input past either limit, is `ErrMeshTooLarge`. |
+| T8 | Materials, colours, textures, slices and beam lattices are ignored. |
 
