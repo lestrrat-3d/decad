@@ -61,18 +61,35 @@ func XdotSign(a, b Xpt) int { return XdotNum(a, b).Sign() }
 // XdotDiffSign is the sign of n·(p−q). All weights are positive, so the
 // subtraction can stay in integer numerators without constructing a point.
 func XdotDiffSign(n, p, q Xpt) int {
+	var scratch [3]big.Int
+	return XdotDiffSignScratch(&scratch, n, p, q)
+}
+
+// XdotDiffSignScratch is XdotDiffSign with reusable temporary integers.
+// scratch must be nonnil, must not alias any input and must belong to one
+// running calculation. The inputs are read-only, and no temporary is returned.
+func XdotDiffSignScratch(scratch *[3]big.Int, n, p, q Xpt) int {
 	if p.W.Cmp(q.W) == 0 {
-		var diff, sum, term big.Int
+		diff, sum, term := &scratch[0], &scratch[1], &scratch[2]
 		diff.Sub(p.X, q.X)
-		sum.Mul(n.X, &diff)
+		sum.Mul(n.X, diff)
 		diff.Sub(p.Y, q.Y)
-		term.Mul(n.Y, &diff)
-		sum.Add(&sum, &term)
+		term.Mul(n.Y, diff)
+		sum.Add(sum, term)
 		diff.Sub(p.Z, q.Z)
-		term.Mul(n.Z, &diff)
-		return sum.Add(&sum, &term).Sign()
+		term.Mul(n.Z, diff)
+		return sum.Add(sum, term).Sign()
 	}
-	pNum, qNum := XdotNum(n, p), XdotNum(n, q)
+	pNum, qNum, term := &scratch[0], &scratch[1], &scratch[2]
+	dot := func(out *big.Int, v Xpt) {
+		out.Mul(n.X, v.X)
+		term.Mul(n.Y, v.Y)
+		out.Add(out, term)
+		term.Mul(n.Z, v.Z)
+		out.Add(out, term)
+	}
+	dot(pNum, p)
+	dot(qNum, q)
 	// Float lifts carry power-of-two weights. Shift their numerators instead
 	// of using general multiplication; other exact points retain that path.
 	qShift := q.W.TrailingZeroBits()
