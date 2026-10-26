@@ -170,27 +170,6 @@ func CheckPlanarSolid(s *PlanarSolid, poll func() error) (bool, error) {
 	return volume.Sign() > 0, nil
 }
 
-// PlanarConvex is the §9.2 certificate: every vertex lies on or behind every
-// triangle's plane. Combined with CheckPlanarSolid's audit this proves the
-// solid is the convex polytope its facet half-spaces cut out; a hollow or
-// multi-lump solid fails it, since some vertex lies in front of a facet. The
-// result is invariant under any affine map with a positive determinant.
-func PlanarConvex(s *PlanarSolid, poll func() error) (bool, error) {
-	for _, tri := range s.Tris {
-		a := s.Verts[tri[0]]
-		normal := proof.DvCross(proof.DvSub(s.Verts[tri[1]], a), proof.DvSub(s.Verts[tri[2]], a))
-		for _, v := range s.Verts {
-			if err := poll(); err != nil {
-				return false, err
-			}
-			if proof.DvDot(normal, proof.DvSub(v, a)).Sign() > 0 {
-				return false, nil
-			}
-		}
-	}
-	return true, nil
-}
-
 // ErrWorkLimit is returned by ClassifyPlanar when the scans charge more than
 // stepLimit polls. The relation is then undecided here; no result is made.
 var ErrWorkLimit = errors.New("planar relation work limit reached")
