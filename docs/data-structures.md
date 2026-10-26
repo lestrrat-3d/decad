@@ -150,7 +150,7 @@ configuration option.
 | `decad.Counterbore` | struct | A flat-bottomed cylindrical recess. | The caller |
 | `decad.TextSpec` | struct | A line of lettering: the text, the font size, where its baseline starts, an optional tolerance and an optional font. | The caller |
 | `decad.EmbossMode` | enum | `decad.EmbossRaised` or `decad.EmbossEngraved`. | The caller |
-| `decad.EmbossOption` | option set | A setting on `decad.Emboss`: `decad.WithEmbossDraft` leans the relief's walls. | The caller |
+| `decad.EmbossOption` | option set | A setting on `decad.Emboss`: `decad.WithEmbossDraft` leans the relief's walls and `decad.WithEmbossRimFillet` rounds its rim. | The caller |
 | `decad.Countersink` | struct | A conical recess with an included angle. | The caller |
 
 ### Selection, patterns and placement

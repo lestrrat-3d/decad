@@ -150,3 +150,60 @@ func Example_emboss_draft() {
 	// Output:
 	// volume: 12285 mm^3
 }
+
+// WithEmbossRimFillet rounds the rim of a relief, so a raised badge or a nameplate
+// has no sharp top edge to catch on. Here a round 8 mm badge 2 mm tall gets a
+// 0.5 mm round on its top rim.
+func Example_emboss_rim_fillet() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(0, 0, 40, 30)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	topPlane, err := w.CreateOffsetPlane(w.XY(), 10)
+	if err != nil {
+		fmt.Printf("failed to create plane: %s\n", err)
+		return
+	}
+	badge, err := w.CreateSketch(topPlane)
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	centre := badge.CreatePoint(20, 15)
+	badge.Fix(centre)
+	badge.CreateCircle(centre, 4)
+	if _, err := badge.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	raised, err := decad.Emboss(context.Background(), plate, badge, badge.Profiles(),
+		decad.Faces(decad.Facing(r3.Vec{Z: 1})), decad.EmbossRaised, units.Millimeters(2),
+		decad.WithEmbossRimFillet(units.Millimeters(0.5)))
+	if err != nil {
+		fmt.Printf("failed to emboss: %s\n", err)
+		return
+	}
+	volume, err := raised.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	// The plate holds 12000 mm^3, the badge adds 100.5, and the round takes off about 1.8.
+	fmt.Printf("volume: %.1f mm^3\n", volume.Value.Base())
+	// Output:
+	// volume: 12099.2 mm^3
+}

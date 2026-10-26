@@ -46,6 +46,17 @@ type embossOption struct{ option.Interface }
 func (embossOption) embossOption() {}
 
 type identEmbossDraft struct{}
+type identEmbossRimFillet struct{}
+
+// WithEmbossRimFillet rounds the relief's rim with a fillet of the given radius
+// (agent-docs/emboss-design.md §7). The rim of a raised relief is the edges of
+// its top face, and the rim of an engraving is the edges where its wall meets the
+// face it is cut into. The radius is a positive length. The relief is built and
+// filleted on a copy of b first, so a fillet the evaluator refuses leaves b
+// live and the document unchanged; the copy leaves history entries.
+func WithEmbossRimFillet(radius units.Value) EmbossOption {
+	return embossOption{option.New(identEmbossRimFillet{}, radius)}
+}
 
 // WithEmbossDraft leans the relief's walls by a draft angle
 // (agent-docs/emboss-design.md §6). A positive angle makes a raised relief
@@ -101,13 +112,28 @@ func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.P
 		return nil, errNilSelector
 	}
 	var taper []ExtrudeOption
+	var rim *units.Value
 	for _, o := range opts {
 		if o == nil {
 			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
-		if _, ok := o.Ident().(identEmbossDraft); ok {
+		switch o.Ident().(type) {
+		case identEmbossDraft:
 			angle, _ := option.Get[units.Value](o)
 			taper = []ExtrudeOption{WithTaper(angle)}
+		case identEmbossRimFillet:
+			r, _ := option.Get[units.Value](o)
+			rim = &r
+		}
+	}
+	rimRadius := 0.0
+	if rim != nil {
+		var err error
+		if rimRadius, err = sectionrecord.MagnitudeIn(*rim, units.Length, units.Millimeter, "the relief rim fillet"); err != nil {
+			return nil, err
+		}
+		if rimRadius == 0 {
+			return nil, fmt.Errorf(`%w: a relief rim fillet needs a positive radius`, ErrDegenerate)
 		}
 	}
 	h, err := sectionrecord.MagnitudeIn(height, units.Length, units.Millimeter, "the relief height")
@@ -136,6 +162,39 @@ func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.P
 		One: DistanceSide{D: units.Millimeters(sweep.Along)},
 		Two: DistanceSide{D: units.Millimeters(sweep.Against)},
 	}
+	run := func(target *Body) (*Body, error) {
+		return embossOnto(ctx, d, target, s, profiles, mode, extent, taper)
+	}
+	if rim == nil {
+		return run(b)
+	}
+	// The relief and its rim are tried on a copy first, so a fillet the evaluator
+	// refuses leaves b live and the document unchanged.
+	probe, err := Copy(ctx, b)
+	if err != nil {
+		return nil, err
+	}
+	defer removeTools([]*Body{probe})
+	probed, err := run(probe)
+	if err != nil {
+		return nil, err
+	}
+	filleted, perr := filletEmbossRim(ctx, probed, plane, outward.Value, h, mode, rimRadius)
+	removeTools([]*Body{probed, filleted})
+	if perr != nil {
+		return nil, perr
+	}
+	grown, err := run(b)
+	if err != nil {
+		return nil, err
+	}
+	return filletEmbossRim(ctx, grown, plane, outward.Value, h, mode, rimRadius)
+}
+
+// embossOnto builds the relief tools of the profiles and unions them into
+// target, or cuts them from it, in one atomic commit that retires target.
+func embossOnto(ctx context.Context, d *Document, target *Body, s *sketch.Sketch, profiles []*sketch.Profile,
+	mode EmbossMode, extent TwoSided, taper []ExtrudeOption) (*Body, error) {
 	var tools []*Body
 	defer func() { removeTools(tools) }()
 	toolCtx, capture := privateConstructionContext(ctx)
@@ -148,7 +207,7 @@ func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.P
 			return nil, err
 		}
 		tools = append(tools, tool)
-		disjoint, err := boundsDisjoint(b, tool)
+		disjoint, err := boundsDisjoint(target, tool)
 		if err != nil {
 			return nil, err
 		}
@@ -160,8 +219,8 @@ func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.P
 	if mode == EmbossEngraved {
 		op = meshbool.OpCut
 	}
-	return combineTools(ctx, d, OperationEmboss, b, op, tools, false, func(result *Body) error {
-		return requireReliefChangesVolume(b, result, mode)
+	return combineTools(ctx, d, OperationEmboss, target, op, tools, false, func(result *Body) error {
+		return requireReliefChangesVolume(target, result, mode)
 	}, capture)
 }
 

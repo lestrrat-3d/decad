@@ -19,18 +19,29 @@ func filletBossRoot(ctx context.Context, body *Body, in bossRequest, radius floa
 	if err != nil {
 		return nil, err
 	}
+	return Fillet(ctx, body, edgesQuery(root.Edges()), units.Millimeters(radius))
+}
+
+// edgesQuery selects exactly the given edges of a body by their endpoints and,
+// for a straight edge its direction and for a curved one its curvature, so no
+// other edge matches. edges is not empty.
+func edgesQuery(edges []*Edge) *EdgeQuery {
 	var q *EdgeQuery
-	edges := root.Edges()
 	for _, e := range edges {
 		a, b := e.Start().Position().Value, e.End().Position().Value
-		preds := []EdgePredicate{EndpointAt(a), EndpointAt(b), Circular()}
+		preds := []EdgePredicate{EndpointAt(a), EndpointAt(b)}
+		if _, line := e.Curve().(Line3); line {
+			preds = append(preds, ParallelTo(b.Sub(a)))
+		} else {
+			preds = append(preds, Circular())
+		}
 		if q == nil {
 			q = Edges(preds...)
 			continue
 		}
 		q.Or(preds...)
 	}
-	return Fillet(ctx, body, q.Exactly(len(edges)), units.Millimeters(radius))
+	return q.Exactly(len(edges))
 }
 
 // bossRootLoop finds the loop of one circular edge, of the boss's radius about
