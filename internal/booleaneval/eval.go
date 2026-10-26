@@ -444,6 +444,9 @@ func summarizeChainAllowance(a *meshbool.BoolMesh, operandA int, b *meshbool.Boo
 // The contact is exactly what this pipeline must not miss, so the operand is
 // refused rather than partly examined. Loud beats silently wrong.
 func PrepBoolMesh(ctx context.Context, m *topo.Mesh, src []int) (*meshbool.BoolMesh, error) {
+	if retainedPlaneSlabDisabled(ctx) {
+		return prepBoolMesh(ctx, m, src, func(int) (r3.Frame, bool) { return r3.Frame{}, false })
+	}
 	return prepBoolMesh(ctx, m, src, retainedPlaneOf(m))
 }
 
