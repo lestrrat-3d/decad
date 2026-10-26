@@ -2273,3 +2273,7 @@
 10	0.01	TestArrangePlacesBodiesInShelves
 10	0.01	TestArrangeRefusals
 10	0.01	TestArrangeRefusesBadBodyLists
+10	0.01	TestPathPatternCopiesAlongALine
+10	0.01	TestPathPatternCopiesAlongAnArc
+10	0.01	TestPathPatternCopiesRefusals
+10	0.01	TestPathPatternCopiesSpacesByArcLength

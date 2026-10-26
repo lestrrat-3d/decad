@@ -57,6 +57,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/brepfilletmesh/` | Places full and selected BRep fillet rings, emits patch triangles, and computes their area and motion bounds. See loop-fillet §7.1. |
 | `internal/throughshell/` | Through-cut record recognition, section and cavity construction, strips, rim assembly, audits, and the shell route over them. See modify-general §3. |
 | `internal/arrangeplan/` | Shelf packing of rectangular footprints onto a bed with a gap; plain millimetre data. See arrange design. |
+| `internal/pathsample/` | Equal-arc-length points along a path of lines and circular arcs; plain millimetre vectors. See path-pattern design. |
 | `internal/capedge/` | Convex cap-edge cutter admission, quarter-cylinder profile, chamfer wedge and the P8 top front edge test. See vertex-blend §2. |
 | `internal/gatewitness/` | Selects payload witness prisms and their displacement for Verify's fallback diameter; root reads their stations. See verification §3. |
 | `internal/cuptess/` | Builds a cup payload's chorded mesh node and its face, area and occupied-volume bounds. See tessellation §6. |
