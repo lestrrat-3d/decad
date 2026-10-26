@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfaceplace"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -53,14 +54,19 @@ func SourceDiameterUpper(verts []r3.Vec, departure float64) float64 {
 // so the placed reading adds no stretch charge. Planar, Reversed and Origins
 // describe the source face, which q maps rigidly, and stay.
 //
-// A retained Plane, Cylinder, Sphere or Torus group with no denoted patch keeps
+// A retained Plane group with no denoted patch, a zero NormalBound and a tag
+// normal that q fixes exactly (PlaneFixedBy) keeps its tag, its CapRecord and
+// its axial bound verbatim and with bound 0: q maps that plane onto itself, so
+// the source's exact record still denotes the plane of the copy. When the group
+// has a CapRecord, the record's plane must be fixed by q as well. Any other
+// retained Plane, Cylinder, Sphere or Torus group with no denoted patch keeps
 // its tag. The tag becomes its float image under delta, the float placement
 // that moved the held mesh, and the group's NormalBound becomes its own plus
 // PlacedTagDepartureBy against q with defect 0 (retention design §3.4), where
 // verts and reach are the held mesh and its reach before the placement. A
 // retained Cone keeps the trivial bound 2, as under a float placement. Every
-// other tag, a denoted patch and the CapRecord describe the float placement
-// rather than q and are dropped, so those faces read as Faceted.
+// other tag, a denoted patch and every other CapRecord describe the float
+// placement rather than q and are dropped, so those faces read as Faceted.
 func ExactGroupPlaced(g *Group, q *exactrotation.Rotation, delta r3.Transform, verts []r3.Vec,
 	reach float64) error {
 	if g.HasCentroid {
@@ -71,8 +77,14 @@ func ExactGroupPlaced(g *Group, q *exactrotation.Rotation, delta r3.Transform, v
 		g.Centroid = reading
 	}
 	source, sourceBound, denoted := g.Surface, g.NormalBound, g.Denoted != nil
+	record, axial, hasAxial := g.CapRecord, g.AxialDelta, g.HasAxialDelta
 	g.Surface, g.Denoted, g.NormalBound = nil, nil, 0
 	g.CapRecord, g.AxialDelta, g.HasAxialDelta = nil, 0, false
+	if plane, ok := source.(surfacegeom.Plane); ok && g.Retained && !denoted && sourceBound == 0 &&
+		planeGroupFixedBy(plane, record, q.Linear(), q.Translation()) {
+		g.Surface, g.CapRecord, g.AxialDelta, g.HasAxialDelta = source, record, axial, hasAxial
+		return nil
+	}
 	if !g.Retained || source == nil || denoted {
 		g.Retained = false
 		return nil
@@ -148,4 +160,95 @@ func PointPlaneRound(q [3]*big.Rat) (r3.Vec, float64, error) {
 		gap = max(gap, proofbound.RatAbsDiff(q[i], value[i]))
 	}
 	return r3.NewVec(value[0], value[1], value[2]), proofbound.Radius3D(gap), nil
+}
+
+// planeGroupFixedBy reports whether the exact rotation (linear, t) maps both
+// the tag plane and, when there is one, the plane the CapRecord denotes onto
+// themselves.
+func planeGroupFixedBy(tag surfacegeom.Plane, record *topo.CapRecord, linear [3][3]*big.Rat, t [3]*big.Rat) bool {
+	n, ok := tagNormal(tag)
+	if !ok || !PlaneFixedBy(linear, t, n) {
+		return false
+	}
+	if record == nil {
+		return true
+	}
+	m, ok := capRecordNormal(record)
+	return ok && PlaneFixedBy(linear, t, m)
+}
+
+// tagNormal is the exact normal U x V of the tag plane Origin + span(U, V). It
+// is not Frame.N(), which is that cross product rounded to floats.
+func tagNormal(tag surfacegeom.Plane) ([3]*big.Rat, bool) {
+	u, uok := ratVec3(tag.Frame.U())
+	v, vok := ratVec3(tag.Frame.V())
+	if !uok || !vok {
+		return [3]*big.Rat{}, false
+	}
+	return ratCross3(u, v), true
+}
+
+func ratCross3(a, b [3]*big.Rat) [3]*big.Rat {
+	return [3]*big.Rat{
+		pointPlaneSub(pointPlaneMul(a[1], b[2]), pointPlaneMul(a[2], b[1])),
+		pointPlaneSub(pointPlaneMul(a[2], b[0]), pointPlaneMul(a[0], b[2])),
+		pointPlaneSub(pointPlaneMul(a[0], b[1]), pointPlaneMul(a[1], b[0])),
+	}
+}
+
+// capRecordNormal is the exact normal m = (B*U) x (B*V) of the plane a
+// CapRecord denotes, where B is the linear part of its Xform.
+func capRecordNormal(rec *topo.CapRecord) ([3]*big.Rat, bool) {
+	u, uok := ratVec3(rec.Frame.U())
+	v, vok := ratVec3(rec.Frame.V())
+	basis := rec.Xform.Basis()
+	ex, xok := ratVec3(basis.EX)
+	ey, yok := ratVec3(basis.EY)
+	ez, zok := ratVec3(basis.EZ)
+	if !uok || !vok || !xok || !yok || !zok {
+		return [3]*big.Rat{}, false
+	}
+	apply := func(a [3]*big.Rat) [3]*big.Rat {
+		var out [3]*big.Rat
+		for i := range out {
+			out[i] = pointPlaneAdd(pointPlaneAdd(pointPlaneMul(ex[i], a[0]), pointPlaneMul(ey[i], a[1])),
+				pointPlaneMul(ez[i], a[2]))
+		}
+		return out
+	}
+	bu, bv := apply(u), apply(v)
+	m := ratCross3(bu, bv)
+	if m[0].Sign() == 0 && m[1].Sign() == 0 && m[2].Sign() == 0 {
+		return m, false
+	}
+	return m, true
+}
+
+// PlaneFixedBy reports whether the exact map p -> linear*p + t sends every
+// plane with normal direction m onto itself. It holds exactly when linear*m = m,
+// linear^T*m = m and m.t = 0, all in rationals; a rotation about the direction
+// m satisfies them whatever its center. A nonzero m is required. The check
+// compares exact data and admits only when every equality holds exactly.
+func PlaneFixedBy(linear [3][3]*big.Rat, t, m [3]*big.Rat) bool {
+	if m[0].Sign() == 0 && m[1].Sign() == 0 && m[2].Sign() == 0 {
+		return false
+	}
+	dot := new(big.Rat)
+	for i := range m {
+		dot.Add(dot, pointPlaneMul(m[i], t[i]))
+		var forward, back = new(big.Rat), new(big.Rat)
+		for j := range m {
+			forward.Add(forward, pointPlaneMul(linear[i][j], m[j]))
+			back.Add(back, pointPlaneMul(linear[j][i], m[j]))
+		}
+		if forward.Cmp(m[i]) != 0 || back.Cmp(m[i]) != 0 {
+			return false
+		}
+	}
+	return dot.Sign() == 0
+}
+
+func ratVec3(v r3.Vec) ([3]*big.Rat, bool) {
+	out := [3]*big.Rat{ratOfPointPlane(v.X), ratOfPointPlane(v.Y), ratOfPointPlane(v.Z)}
+	return out, out[0] != nil && out[1] != nil && out[2] != nil
 }

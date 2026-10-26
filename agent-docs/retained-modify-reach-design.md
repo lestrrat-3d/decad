@@ -321,10 +321,18 @@ blend §4.4's for an R4 edge over its azimuth span.
 ## 6. Exact-rotation `Copy` keeps its tags (GAP-A)
 
 `WithCopyRotation` gives a faceted copy that denotes `Q·S + t_Q`, with `Q` an exactly orthogonal rational rotation
-(`internal/exactrotation`). `ExactGroupPlaced` drops every group's `Surface`, `Denoted` and `CapRecord`, because
-they describe the float placement and not `Q`.
+(`internal/exactrotation`). `ExactGroupPlaced` drops every group's `Denoted`, and every `Surface` and `CapRecord`
+except those of a plane that `Q` maps onto itself (below), because they describe the float placement and not `Q`.
 
-**Construction.** For a group with `Retained == true`, no denoted patch, and `Surface` a `Plane`, `Cylinder`,
+**Fixed planes.** A retained `Plane` group with no denoted patch and `NormalBound == 0` keeps its `Surface`,
+`CapRecord`, `AxialDelta` and `HasAxialDelta` verbatim, at bound 0, when `Q` maps its plane onto itself: for the tag's
+exact normal `m = U × V` (not the rounded `Frame.N()`), and for the `CapRecord` plane's normal `m = (B·U) × (B·V)` when there is a record, `Q·m = m`,
+`Qᵀ·m = m` and `m·t_Q = 0`, all in rationals (`facetedrecord.PlaneFixedBy`). The image plane is then the source
+plane, so the source's exact record and its axial bound denote the copy's plane. The check compares recorded
+data and admits only when every equality holds. A rotation about z fixes the ±z caps. Every other plane takes the
+construction below.
+
+**Construction.** For any other group with `Retained == true`, no denoted patch, and `Surface` a `Plane`, `Cylinder`,
 `Sphere` or `Torus`: set `Surface` to the float image of the tag under the float delta
 (`surfaceplace.TransformSurface`) and `NormalBound` to `min(2, ε_F + add)`, where `ε_F` is the group's own
 `NormalBound` and `add` is retention §3.4's charge computed against `Q`: the linear map is `Q.Linear()`, the
@@ -337,8 +345,7 @@ non-retained structural tags and `CapRecord` are dropped.
 **Proof.** The copy's true solid is `Q·S + t_Q`. By Claim R each true patch of the group lies on the source tag
 `T`, so it lies on `Q·T + t_Q` exactly. The published tag is within `a` (directions) and `P` (origin) of that
 surface, and `Q` maps normals to normals without stretch, so retention §3.4's derivation holds with `e = 0`. A
-`Q` that is a signed permutation rounds nothing, gives bound 0, and so admits `MirrorFace` correctly: the tag is
-then the exact image plane.
+plane that `Q` fixes is handled by the fixed-plane rule above.
 
 **Code.** `facetedrecord.PlacedTagDeparture` takes a float transform. Split out
 `PlacedTagDepartureBy(tag, moved, linear [3][3]*big.Rat, translation [3]*big.Rat, e float64, verts, reach)`, keep
@@ -473,7 +480,8 @@ SM6, SR6, SR5, SM5 and SM7, SR4 and SM4, the construction, SR7.
 - A chain result is a retained body; every retention §4 and §10.3 row applies. Its junction edges join two blend
   faces tangentially. `FaceCreatedBy` finds each blend face by its `fillet(k)` or `chamfer(k)` role.
 - An exact-rotation copy answers `NormalAt`, `Facing` and `Face.Surface()` from its tags. `MirrorFace` admits a
-  plane only at bound 0, which a signed-permutation `Q` gives. `ToFace` refuses, because `CapRecord` is dropped.
+  plane only at bound 0, which a plane that `Q` fixes keeps. `ToFace` also needs
+  a `CapRecord`, which only such a fixed plane keeps; every other plane's record is dropped.
   A retained blend on the copy refuses at SR1 unless the bound is 0. `ExactCopyMoments` and the motion engine's
   `ExactPlaced` reading are unchanged.
 - A scaled body answers the same readers; `MirrorFace` admits a plane whose charge is 0.
@@ -507,7 +515,7 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | `internal/tangentchain` retained oracle | exactly tangent plane/cylinder tags prove "tangent"; tags one float step off are undecided; a clear miss is "not tangent" | replace the identity by a tolerance: the one-step case proves "tangent" |
 | Exact-rotation copy of P3, 20° | 6 `Plane`, 5 `Cylinder`; `NormalAt` at an interior facet centroid within its bound plus 64 float steps of the rotated source normal; bounds below 1 | keep `ExactGroupPlaced`'s drop: `Faceted` |
 | `facetedrecord` exact-copy charge | a plane whose image under a 20° `Q` rounds has `NormalBound ≥ 8a + P` recomputed in the test, and above 0 | charge 0: the relation fails |
-| Exact-rotation copy, 90° | bound 0 and `MirrorFace` across a copied plane builds; at 20° `MirrorFace` refuses | charge 0 for every `Q`: the 20° mirror builds |
+| Exact-rotation copy of P3, 20°, ±z caps | bound 0; `ToFace` stops at exactly z = 20 and `MirrorFace` across the top cap mirrors to the exact z range; a tilted rotation still refuses | drop the fixed-plane arm in `ExactGroupPlaced`: both refuse |
 | Cut of the 20° copy | untouched planes and cylinders keep their tags | clear `Retained` in `ExactGroupPlaced`: the Cut loses them |
 | `ScaledAt` of P2 by 2 and by 1.1 | 6 `Plane`, 5 `Cylinder`; `Radius` is `2·R` at `s = 2` and within its rounding of `1.1·R`; `NormalAt` bounds below 1 | keep the drop: `Faceted`; keep the plane's 2: bound 2 |
 | `facetedrecord` scale charge | a cylinder at `s = 1.1` has `NormalBound` at least the held term at `2·(P + ρ)` recomputed in the test | charge 0: the relation fails |

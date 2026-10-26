@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -15,6 +16,14 @@ import (
 
 func rotatedRetentionCopy(t *testing.T, degrees float64) (*decad.Body, *decad.Body, r3.Transform) {
 	t.Helper()
+	_, drilled, copied, turn := rotatedRetentionScene(t, degrees)
+	return drilled, copied, turn
+}
+
+// rotatedRetentionScene is rotatedRetentionCopy with the scene that owns both
+// bodies, so a later Extrude can name the copy as its stop.
+func rotatedRetentionScene(t *testing.T, degrees float64) (*retentionScene, *decad.Body, *decad.Body, r3.Transform) {
+	t.Helper()
 	sc := newRetentionScene()
 	drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
 	require.NoError(t, err)
@@ -23,7 +32,7 @@ func rotatedRetentionCopy(t *testing.T, degrees float64) (*decad.Body, *decad.Bo
 	require.NoError(t, err)
 	turn, err := r3.RotationAround(center, axis, units.Degrees(degrees))
 	require.NoError(t, err)
-	return drilled, copied, turn
+	return sc, drilled, copied, turn
 }
 
 func TestRetainedRotatedCopy(t *testing.T) {
@@ -47,7 +56,13 @@ func TestRetainedRotatedCopy(t *testing.T) {
 			bound := n.Bound.Base()
 			require.False(t, math.IsNaN(bound) || math.IsInf(bound, 0), "bound %v", bound)
 			require.Less(t, bound, 1.0)
-			require.Positive(t, bound, "a 20 degree image is a rounded float image of the exact one")
+			// A rotation about z fixes the +z and -z cap planes exactly, so those
+			// tags keep bound 0. Every other plane image is a rounded float one.
+			if math.Abs(n.Value.Z) > 1-1e-9 {
+				require.Zero(t, bound, "a cap plane normal to the rotation axis is its own exact image")
+			} else {
+				require.Positive(t, bound, "a 20 degree image is a rounded float image of the exact one")
+			}
 			switch s := f.Surface().(type) {
 			case decad.Plane:
 				// The tag's normal is the face normal up to orientation, and
@@ -102,4 +117,70 @@ func TestRetainedRotatedCopy(t *testing.T) {
 			require.Less(t, n.Bound.Base(), 1.0)
 		}
 	})
+
+	t.Run("ToFace stops exactly at the top cap of a rotated copy", func(t *testing.T) {
+		t.Parallel()
+		sc, _, copied, _ := rotatedRetentionScene(t, 20)
+		top := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(0, 0, 1)))
+		sk := rotatedCopySketch(t, sc.w)
+		pin, err := decad.Extrude(t.Context(), sc.doc, sk, sk.Profiles()[0], decad.ToFace{Body: copied, Face: top})
+		require.NoError(t, err)
+		box, err := pin.Bounds()
+		require.NoError(t, err)
+		require.Equal(t, 20.0, box.Max.Z, "the pin ends on the cap's plane z=20")
+		require.Zero(t, box.Min.Z)
+		vol, err := pin.Volume()
+		require.NoError(t, err)
+		require.InDelta(t, 35*35*20, vol.Value.Base(), vol.Bound.Base()+1e-9)
+	})
+
+	t.Run("MirrorFace across the top cap of a rotated copy is exact", func(t *testing.T) {
+		t.Parallel()
+		_, copied, _ := rotatedRetentionCopy(t, 20)
+		top := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(0, 0, 1)))
+		mirrored, err := decad.MirroredCopy(t.Context(), copied, decad.MirrorFace{Body: copied, Face: top})
+		require.NoError(t, err)
+		src, err := copied.Bounds()
+		require.NoError(t, err)
+		got, err := mirrored.Bounds()
+		require.NoError(t, err)
+		require.InDelta(t, 2*20-src.Max.Z, got.Min.Z, 1e-9)
+		require.InDelta(t, 2*20-src.Min.Z, got.Max.Z, 1e-9)
+		want, err := copied.Volume()
+		require.NoError(t, err)
+		vol, err := mirrored.Volume()
+		require.NoError(t, err)
+		require.InDelta(t, want.Value.Base(), vol.Value.Base(), want.Bound.Base()+vol.Bound.Base())
+	})
+
+	t.Run("a tilted rotation still refuses ToFace and MirrorFace", func(t *testing.T) {
+		t.Parallel()
+		sc := newRetentionScene()
+		drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		require.NoError(t, err)
+		copied, err := decad.Copy(t.Context(), drilled,
+			decad.WithCopyRotation(r3.NewVec(20, 10, 0), r3.NewVec(1, 0, 0), units.Degrees(20)))
+		require.NoError(t, err)
+		tilted := decad.Faces(decad.Planar(), decad.Facing(r3.NewVec(0, -0.3420201433256687, 0.9396926207859084)))
+		faces, err := tilted.SelectFaces(copied)
+		require.NoError(t, err)
+		require.Len(t, faces, 1)
+		_, err = decad.MirroredCopy(t.Context(), copied, decad.MirrorFace{Body: copied, Face: tilted})
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		sk := rotatedCopySketch(t, sc.w)
+		_, err = decad.Extrude(t.Context(), sc.doc, sk, sk.Profiles()[0], decad.ToFace{Body: copied, Face: tilted})
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+	})
+}
+
+// rotatedCopySketch is a square at the origin of the XY plane.
+func rotatedCopySketch(t *testing.T, w *sketch.World) *sketch.Sketch {
+	t.Helper()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	r := s.CreateRectangle(-30, -30, 5, 5)
+	s.Fix(r.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	return s
 }
