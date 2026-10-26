@@ -9,10 +9,10 @@ import (
 // CANONICAL homogeneous coordinates are identical — stitching by shared exact
 // vertices, never by distance (agent-docs/evaluator-design.md §9). A homogeneous
 // point has many spellings, so the raw fields are never compared directly;
-// XhpCanon collapses every spelling of one coordinate to one four-tuple
+// Canonicalization collapses every spelling of one coordinate to one four-tuple
 // before the key is built.
 func (p Xpt) Key() string {
-	c := XhpCanon(Xhp(p))
+	c := xhpCanon(Xhp(p), false)
 	return ExactIntsKey(c.X, c.Y, c.Z, c.W)
 }
 
