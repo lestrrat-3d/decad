@@ -29,12 +29,14 @@ type BossBore struct {
 	Draft    units.Value
 }
 
-// BossSpec describes one boss standing on a planar face: round by default, or the
-// shape Shape names.
+// BossSpec describes one boss standing on a planar or cylindrical face: round by
+// default, or the shape Shape names.
 //
-// Face selects the planar face the boss stands on and must resolve to exactly
-// one face. At is a world point in millimetres that lies on that face's plane;
-// the boss axis runs through it, out of the body. Diameter and Height are
+// Face selects the face the boss stands on and must resolve to exactly one face.
+// At is a world point in millimetres that lies on that face's plane, or on a
+// cylindrical face, where the boss stands on the plane tangent there and takes
+// neither a RootFillet nor a Draft (agent-docs/boss-design.md §8); the boss axis
+// runs through it, out of the body. Diameter and Height are
 // positive lengths, Height measured from Face. Bore is optional, and nil makes
 // a solid boss. Draft is optional: a positive angle makes the boss narrower
 // toward its top by that lean of its wall, a negative one wider, and the zero
@@ -68,7 +70,7 @@ type BossSpec struct {
 //
 // b MUST be a live solid; a nil context, body or selector is ErrDegenerate. A
 // selector that does not resolve to one face is the selector's own error or
-// ErrDegenerate, and a face that is not an analytic plane is ErrUnsupported. A
+// ErrDegenerate, and a face that is not an analytic plane or cylinder is ErrUnsupported. A
 // Diameter or Height that is not positive and finite is ErrDegenerate or
 // ErrUnitKind. A bore as wide as the boss, or one deep enough to leave the
 // boss's footing through the back of the body, is ErrDegenerate. An At more
@@ -186,19 +188,44 @@ type bossRequest struct {
 	diameter, height, embed, draft float64
 	// shape, when set, is the section in place of a circle of diameter.
 	shape *bossShape
+	// curved, when set, says the boss stands on a cylindrical face: frame is then the
+	// plane tangent to the cylinder at the boss's centre.
+	curved *curvedHole
 	// bore, when set, is the pilot hole's request on the boss's top face, and
 	// tap the thread to cut in it.
 	bore *holeplan.Input
 	tap  *HoleThread
 }
 
+// resolveBossSite resolves spec.Face to the plane the boss stands on: a planar
+// face is its own plane, and a cylindrical face gives the plane tangent to it at
+// spec.At, which MUST lie on the cylinder, as a hole's site does.
+func resolveBossSite(b *Body, spec BossSpec) (holeSite, error) {
+	if faces, err := spec.Face.SelectFaces(b); err == nil && len(faces) == 1 {
+		if cyl, ok := faces[0].Surface().(Cylinder); ok {
+			return cylinderHoleSite(faces[0], cyl, spec.At)
+		}
+	}
+	plane, normal, err := resolvePlanarFace(b, spec.Face, "Boss")
+	if err != nil {
+		return holeSite{}, err
+	}
+	return holeSite{frame: plane.Frame, outward: normal.Value}, nil
+}
+
 func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
 	var in bossRequest
-	plane, normal, err := resolvePlanarFace(b, spec.Face, "Boss")
+	site, err := resolveBossSite(b, spec)
 	if err != nil {
 		return in, err
 	}
-	in.frame, in.outward = plane.Frame, normal.Value
+	in.frame, in.outward, in.curved = site.frame, site.outward, site.cylinder
+	if in.curved != nil && spec.RootFillet != (units.Value{}) {
+		return in, fmt.Errorf(`%w: a boss on a cylindrical face takes no root fillet`, ErrUnsupported)
+	}
+	if in.curved != nil && spec.Draft != (units.Value{}) {
+		return in, fmt.Errorf(`%w: a boss on a cylindrical face takes no draft`, ErrUnsupported)
+	}
 	if spec.Shape == nil || spec.Diameter != (units.Value{}) {
 		if in.diameter, err = sectionrecord.MagnitudeIn(spec.Diameter, units.Length, units.Millimeter, "the boss diameter"); err != nil {
 			return in, err
@@ -228,7 +255,7 @@ func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
 			return in, err
 		}
 	}
-	local := plane.Frame.ToLocal(spec.At)
+	local := in.frame.ToLocal(spec.At)
 	if local.Z > holeplan.OnPlaneTol || local.Z < -holeplan.OnPlaneTol {
 		return in, fmt.Errorf(`%w: the boss centre lies %g mm off the face plane`, ErrDegenerate, local.Z)
 	}
@@ -241,11 +268,30 @@ func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
 	if err != nil {
 		return in, fmt.Errorf(`%w: the body bounds are not representable: %s`, ErrNotFinite, err)
 	}
-	reach := holeplan.Reach(box.Min, box.Max, plane.Frame.Origin(), in.outward, bound) - holeplan.ThroughMargin
+	reach := holeplan.Reach(box.Min, box.Max, in.frame.Origin(), in.outward, bound) - holeplan.ThroughMargin
 	if !(reach > 0) {
 		return in, fmt.Errorf(`%w: the body has no material behind the face`, ErrDegenerate)
 	}
 	in.embed = min(holeplan.MouthMargin, reach/2)
+	if c := in.curved; c != nil {
+		// The pillar starts embed behind the plane tangent to the cylinder at the
+		// boss's centre. A convex wall falls away from that plane by the sagitta
+		// R - sqrt(R² - r²) at distance r, which the footing must reach past to lie
+		// inside the body across its whole section; a concave wall rises toward it,
+		// into the material the footing already overlaps.
+		in.embed = holeplan.MouthMargin
+		if !c.concave {
+			half := in.diameter / 2
+			if half >= c.radius {
+				return in, fmt.Errorf(`%w: a boss of %g mm across is as wide as the %g mm radius cylinder it stands on`,
+					ErrDegenerate, in.diameter, c.radius)
+			}
+			in.embed += c.radius - math.Sqrt(c.radius*c.radius-half*half)
+		}
+		if in.embed >= reach {
+			return in, fmt.Errorf(`%w: the body is too thin behind the cylindrical face for the boss's footing`, ErrDegenerate)
+		}
+	}
 	if spec.Bore == nil {
 		return in, nil
 	}
@@ -270,7 +316,7 @@ func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
 		return in, fmt.Errorf(`%w: a pilot %g mm deep would leave the boss's footing through the back of the body`,
 			ErrDegenerate, depth)
 	}
-	top, err := r3.NewFrame(plane.Frame.Origin().Add(in.outward.Scale(in.height)), plane.Frame.U(), plane.Frame.V())
+	top, err := r3.NewFrame(in.frame.Origin().Add(in.outward.Scale(in.height)), in.frame.U(), in.frame.V())
 	if err != nil {
 		return in, fmt.Errorf(`%w: the face frame is degenerate: %s`, ErrDegenerate, err)
 	}

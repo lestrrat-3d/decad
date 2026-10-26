@@ -240,3 +240,51 @@ func Example_boss_shape() {
 	// Output:
 	// volume: 8333 mm^3
 }
+
+// A boss can stand on a cylinder too: At is a point on the rod's wall, and the post
+// runs out along the radial line through it, Height from the plane tangent there. Here
+// a 10 mm radius, 16 mm long rod takes a 12 mm wide post 20 mm tall.
+func Example_boss_cylinder() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	centre := s.CreatePoint(0, 0)
+	s.Fix(centre)
+	s.CreateCircle(centre, 10)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	rod, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(16), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	boss, err := decad.Boss(context.Background(), rod, decad.BossSpec{
+		Face:     decad.Faces(decad.Cylindrical()),
+		At:       r3.Vec{X: 10, Y: 0, Z: 8},
+		Diameter: units.Millimeters(12),
+		Height:   units.Millimeters(20),
+	})
+	if err != nil {
+		fmt.Printf("failed to raise the boss: %s\n", err)
+		return
+	}
+	box, err := boss.Bounds()
+	if err != nil {
+		fmt.Printf("failed to read bounds: %s\n", err)
+		return
+	}
+	volume, err := boss.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	fmt.Printf("post top at x = %.0f mm, volume: %.0f mm^3\n", box.Max.X, volume.Value.Base())
+	// Output:
+	// post top at x = 30 mm, volume: 7341 mm^3
+}

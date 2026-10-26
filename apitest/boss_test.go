@@ -109,13 +109,13 @@ func TestBossRefusals(t *testing.T) {
 	}
 }
 
-func TestBossRefusesAFaceThatIsNotPlanar(t *testing.T) {
+func TestBossRefusesAFaceThatIsNeitherPlanarNorCylindrical(t *testing.T) {
 	t.Parallel()
-	doc := decad.New()
-	rod := circleBodyAtZ(t, doc, 0, 5, 0, 20)
-	_, err := decad.Boss(t.Context(), rod, decad.BossSpec{
-		Face: decad.Faces(decad.Cylindrical()), At: r3.Vec{X: 5},
+	cone := coneBody(t, 10)
+	doc := cone.Document()
+	_, err := decad.Boss(t.Context(), cone, decad.BossSpec{
+		Face: sideFace(t, cone, coneSurface), At: r3.Vec{X: 5, Y: 5},
 		Diameter: units.Millimeters(2), Height: units.Millimeters(2)})
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Equal(t, []*decad.Body{rod}, doc.Bodies())
+	require.Equal(t, []*decad.Body{cone}, doc.Bodies())
 }
