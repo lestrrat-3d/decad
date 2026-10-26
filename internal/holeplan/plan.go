@@ -54,6 +54,20 @@ type Rect struct {
 	Width, Height, Angle float64
 }
 
+// MaxPolygonSides is the most sides a polygonal bore may have.
+const MaxPolygonSides = 64
+
+// Poly is a regular polygonal bore in millimetres and radians: Sides equal sides
+// AcrossFlats apart, a flat facing the frame's U axis before Angle turns it
+// counter-clockwise about the hole axis.
+type Poly struct {
+	Sides              int
+	AcrossFlats, Angle float64
+}
+
+// Circumradius is the distance from the centre of the polygon to a corner.
+func (p Poly) Circumradius() float64 { return p.AcrossFlats / (2 * math.Cos(math.Pi/float64(p.Sides))) }
+
 // Slot is a stadium-shaped bore in millimetres and radians: a Width-wide strip
 // with a half circle on each end, Length long end to end. Angle turns it
 // counter-clockwise about the hole axis, measured from the frame's U axis.
@@ -87,6 +101,9 @@ type Input struct {
 	// Slot, when set, replaces the round bore like Rect. Rect and Slot are
 	// not both set.
 	Slot *Slot
+	// Poly, when set, replaces the round bore like Rect. At most one of Rect,
+	// Slot and Poly is set.
+	Poly *Poly
 }
 
 // SlotTool is a stadium bore in the sketch plane's coordinates. Start and End
@@ -154,9 +171,9 @@ type Plan struct {
 	Against bool
 	// Bore is the main drill.
 	Bore Cylinder
-	// Corners, when set, are the four corners of the rectangular bore in
+	// Corners, when set, are the corners of the rectangular or polygonal bore in
 	// Plane's coordinates, counter-clockwise. Bore.Radius is then unused.
-	Corners *[4][2]float64
+	Corners [][2]float64
 	// SlotTool, when set, is the stadium bore. Bore.Radius is then unused.
 	SlotTool *SlotTool
 	// Counterbore is the recess cylinder, set when the head is a counterbore.
@@ -172,7 +189,7 @@ type Plan struct {
 
 // Compute checks the request and returns its tools.
 func Compute(in Input) (Plan, error) {
-	if in.Rect != nil || in.Slot != nil {
+	if in.Rect != nil || in.Slot != nil || in.Poly != nil {
 		return computeShape(in)
 	}
 	if !positive(in.Diameter) {
@@ -227,7 +244,13 @@ func Compute(in Input) (Plan, error) {
 // computeShape plans a rectangular or slot bore. It shares the placement and
 // depth gates of the round hole and refuses a head.
 func computeShape(in Input) (Plan, error) {
-	if in.Rect != nil && in.Slot != nil {
+	shapes := 0
+	for _, set := range []bool{in.Rect != nil, in.Slot != nil, in.Poly != nil} {
+		if set {
+			shapes++
+		}
+	}
+	if shapes != 1 {
 		return Plan{}, fmt.Errorf(`%w: a hole has one shape`, decaderr.ErrDegenerate)
 	}
 	if in.Head.Kind != HeadNone {
@@ -237,6 +260,15 @@ func computeShape(in Input) (Plan, error) {
 	case in.Rect != nil:
 		if !positive(in.Rect.Width) || !positive(in.Rect.Height) || !finite(in.Rect.Angle) {
 			return Plan{}, fmt.Errorf(`%w: the rectangular hole needs a positive finite width and height and a finite angle`,
+				decaderr.ErrDegenerate)
+		}
+	case in.Poly != nil:
+		if in.Poly.Sides < 3 || in.Poly.Sides > MaxPolygonSides {
+			return Plan{}, fmt.Errorf(`%w: a polygonal hole has from 3 to %d sides, got %d`,
+				decaderr.ErrDegenerate, MaxPolygonSides, in.Poly.Sides)
+		}
+		if !positive(in.Poly.AcrossFlats) || !finite(in.Poly.Angle) {
+			return Plan{}, fmt.Errorf(`%w: the polygonal hole needs a positive finite width across flats and a finite angle`,
 				decaderr.ErrDegenerate)
 		}
 	default:
@@ -250,7 +282,7 @@ func computeShape(in Input) (Plan, error) {
 		}
 	}
 	round := in
-	round.Rect, round.Slot = nil, nil
+	round.Rect, round.Slot, round.Poly = nil, nil, nil
 	round.Diameter = 1
 	plan, err := Compute(round)
 	if err != nil {
@@ -261,19 +293,36 @@ func computeShape(in Input) (Plan, error) {
 		plan.Corners = rectCorners(plan, *in.Rect)
 		return plan, nil
 	}
+	if in.Poly != nil {
+		plan.Corners = polyCorners(plan, *in.Poly)
+		return plan, nil
+	}
 	plan.SlotTool = slotTool(plan, *in.Slot)
 	return plan, nil
 }
 
 // rectCorners returns the corners of r about the hole axis in plan's coordinates.
-func rectCorners(plan Plan, r Rect) *[4][2]float64 {
+func rectCorners(plan Plan, r Rect) [][2]float64 {
 	sin, cos := math.Sincos(r.Angle)
 	hw, hh := r.Width/2, r.Height/2
-	var corners [4][2]float64
+	corners := make([][2]float64, 4)
 	for i, c := range [4][2]float64{{-hw, -hh}, {hw, -hh}, {hw, hh}, {-hw, hh}} {
 		corners[i] = [2]float64{plan.U + c[0]*cos - c[1]*sin, plan.V + c[0]*sin + c[1]*cos}
 	}
-	return &corners
+	return corners
+}
+
+// polyCorners returns the corners of p about the hole axis in plan's coordinates,
+// counter-clockwise, the first half a side's angle past the polygon's turn so a
+// flat faces the U axis when the turn is zero.
+func polyCorners(plan Plan, p Poly) [][2]float64 {
+	radius := p.Circumradius()
+	corners := make([][2]float64, p.Sides)
+	for i := range corners {
+		sin, cos := math.Sincos(p.Angle + math.Pi/float64(p.Sides) + 2*math.Pi*float64(i)/float64(p.Sides))
+		corners[i] = [2]float64{plan.U + radius*cos, plan.V + radius*sin}
+	}
+	return corners
 }
 
 // slotTool returns the stadium of sl about the hole axis in plan's coordinates.
