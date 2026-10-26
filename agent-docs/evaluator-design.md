@@ -545,7 +545,10 @@ body's and every face's `Area` and every edge's `Length` by e·(|x| + bound)
 (`proofbound.BoundedStretch`). The prism, the chain extrude, the planar patch,
 the draft, the cap blend, the stacked prism (and the cup built on it) and the
 class-B brep take it as their last step; a brep's face frames are signed
-permutations of its first, so the first face's map stands for all. A face copy
+permutations of its first, so the first face's map stands for all. A faceted
+loft integrates its walls from placed vertices and only its two caps in plane
+coordinates, so each cap takes its own section map's area charge and the
+body's `Area` the larger of the two (`agent-docs/loft-design.md` §8). A face copy
 (`Unstitch`, `PatchEdges`) carries its source's readings through its
 placement alone and takes the placement's own charge; a `PatchEdges` face
 fitted to a rim takes its fitted frame's, and one fitted to a straight-edged

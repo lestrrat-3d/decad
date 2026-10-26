@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -217,6 +218,12 @@ func Build(ctx context.Context, env topo.Env, pl Payload, budget *proofbound.Wor
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	// Each cap holds a plane-local area, so it takes its section map's charge
+	// before any reading below composes its bound.
+	capStretch, err := chargeCapMaps(pl, capStart, capEnd)
+	if err != nil {
+		return nil, err
+	}
 
 	// A surface result omits both caps from the shell (Table W,
 	// agent-docs/surface-design.md §4.1-§4.2): capStart/capEnd stay constructed above
@@ -258,6 +265,10 @@ func Build(ctx context.Context, env topo.Env, pl Payload, budget *proofbound.Wor
 	}
 	body.Bounds = bounds
 	body.Area = massArea(mass, cap0Rat, cap1Rat)
+	// Both caps sit inside the body's area, so the larger cap stretch over the
+	// whole nonnegative total covers both cap charges.
+	bodyArea := massmoment.MapCharge{Stretch: capStretch}.AreaOf(measurementScalar(body.Area))
+	body.Area.Bound = units.SquareMillimeters(bodyArea.Bound)
 	if circularWall != nil {
 		var wallArea proofbound.BoundedScalar
 		if directCircle != WallCylinder {
