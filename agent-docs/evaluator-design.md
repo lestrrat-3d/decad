@@ -1105,7 +1105,9 @@ the scaled body. A rigid placement and another positive scale can repeat this
 proof; a failed source gate, embedding audit or build leaves the receiver live.
 
 Every other faceted solid has no similarity mark: a `LoftSections` or
-`LoftFromPoint` result, `LoftFaces`, a structural join, and the images of
+`LoftFromPoint` result, `LoftFaces`, a structural join, a `Fillet` or `Chamfer`
+of a mesh Boolean result that keeps its retained tags (`internal/retainedblend`),
+any other modify rewrite that rebuilds a faceted record, and the images of
 these under placement or scale. `ScaledAt` certifies such a
 source when it is called. It runs the same `CertifiedFacetedSimilaritySource`
 field checks, then `massmoment.AuditMesh` over the held mesh: shell closure and
@@ -1115,13 +1117,18 @@ These checks only refuse. The proof terms they read are the ones every
 faceted reading already trusts: `Restate` publishes them as a complete
 boundary and occupied-volume proof, and a Boolean takes them as an operand
 proof. The audit supplies the embedded source mesh that `ScaleMesh` assumes.
-The image then takes the transfer above: plane tags scale, curved and denoted
-tags read `Faceted`, and every structural source record is dropped, including
-a point loft's `PointSection` and any point-plane record that is not a Split
-slab's. A sheet has no faceted record, so it does not reach this path. The crossing
-audit refuses a mesh above `loftmesh.MaxLoftAuditTriangles` (65,528) triangles
-or above its pair-test ceiling, so those ceilings bound its work. A failed field check or audit leaves the
-receiver live.
+The image then takes the transfer above. Plane tags and retained `Cylinder`,
+`Sphere` and `Torus` tags scale to their similar images, so a retained
+blend's cylinders and tori keep their kind with scaled radii. A retained
+`Cone`, every denoted tag and every unretained curved tag read `Faceted`.
+Every structural source record is dropped, including a point loft's
+`PointSection` and any point-plane record that is not a Split slab's. A sheet
+has no faceted record, so it does not reach this path. A failed shell,
+orientation or vertex-link audit refuses. When the producer did not record
+`ContactAudited`, the crossing audit also refuses a mesh above
+`loftmesh.MaxLoftAuditTriangles` (65,528) triangles or above its pair-test
+ceiling, so those ceilings bound its work. A failed field check or audit
+leaves the receiver live.
 
 ## 9. The boolean — where exactness dies, and how
 

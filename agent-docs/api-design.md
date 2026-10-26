@@ -1489,7 +1489,8 @@ displacement, an exact line-only stacked prism or stack-backed BRep, a
 faceted result of the generic mesh Boolean, or any other faceted solid whose
 held mesh passes its audit, after a positive, finite,
 dimensionless uniform scale around `anchor` in millimetres. The other faceted
-solids include `LoftSections` and `LoftFromPoint` results. It accepts
+solids include `LoftSections` and `LoftFromPoint` results and retained
+`Fillet` or `Chamfer` results of a mesh Boolean. It accepts
 rigidly placed and previously scaled copies of these classes. A Split slab
 keeps its original cap origins, face-centroid certificates and rational source
 cut maps. A prism or Revolve keeps its source-face roles and planar tags, while
@@ -1498,8 +1499,10 @@ can refuse it. A stacked prism or stack-backed BRep keeps its source-face roles
 and planar tags but loses its structural section record after scale. A faceted
 Boolean keeps its source-face roles, its planar tags and its retained
 cylinder, sphere and torus tags, but loses structural Boolean source records
-after scale. Any other faceted solid keeps its source-face roles and planar
-tags; its curved faces become `Faceted`, and it loses its structural source
+after scale. Any other faceted solid keeps its source-face roles, its planar
+tags and its retained cylinder, sphere and torus tags, such as those of a
+retained `Fillet` or `Chamfer`; its retained cones, denoted faces and
+unretained curved faces become `Faceted`, and it loses its structural source
 records, such as a point loft's source Sketch. These
 classes rebuild the held mesh with scaled vertex, area and occupied-volume
 bounds. A nonpositive factor is `ErrDegenerate`, and a length factor is

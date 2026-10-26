@@ -18,9 +18,10 @@ import (
 // Source roles and certified boundary and occupied-volume bounds follow the
 // image. A faceted Boolean result keeps the retained Plane, Cylinder, Sphere
 // and Torus surfaces of its faces, scaled with the body; a retained Cone or
-// denoted face reads Faceted. Another faceted solid keeps its plane faces,
-// and its curved faces read Faceted. A refused or canceled call leaves the
-// document unchanged.
+// denoted face reads Faceted. Another faceted solid follows the same rule:
+// plane faces and retained Cylinder, Sphere and Torus faces keep their scaled
+// surfaces, and retained Cone, denoted and unretained curved faces read
+// Faceted. A refused or canceled call leaves the document unchanged.
 func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (result *Body, retErr error) {
 	defer func() { retErr = operationError(OperationScaledAt, retErr) }()
 	if ctx == nil {
