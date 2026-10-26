@@ -99,3 +99,40 @@ func TestPackTurningRefusesWhatNoLayoutFits(t *testing.T) {
 	_, _, ok := arrangeplan.PackTurning([]arrangeplan.Item{{Width: 30, Depth: 30}}, arrangeplan.Bed{Width: 20, Depth: 20, Gap: 1})
 	require.False(t, ok)
 }
+
+func TestPackLayersStacksWhatTheBedCannotHold(t *testing.T) {
+	t.Parallel()
+	// A 20 x 10 bed with a 1 mm gap holds two 8 x 8 items side by side: three need a second layer.
+	bed := arrangeplan.Bed{Width: 20, Depth: 10, Gap: 1}
+	items := []arrangeplan.Item{{Width: 8, Depth: 8}, {Width: 8, Depth: 8}, {Width: 8, Depth: 8}}
+	layout, ok := arrangeplan.PackLayers(items, []float64{5, 3, 4}, bed, 100, false)
+	require.True(t, ok)
+	require.Equal(t, 2, layout.Layers)
+	require.Equal(t, []float64{0, 0, 6}, layout.ZBase, "the second layer rests a gap above the tallest of the first, 5 + 1")
+	require.Equal(t, [2]float64{1, 1}, layout.Positions[0])
+	require.Equal(t, [2]float64{10, 1}, layout.Positions[1])
+	require.Equal(t, [2]float64{1, 1}, layout.Positions[2], "the third starts the second layer's first shelf")
+}
+
+func TestPackLayersKeepsASmallerItemForTheLayerItFits(t *testing.T) {
+	t.Parallel()
+	bed := arrangeplan.Bed{Width: 20, Depth: 10, Gap: 1}
+	// The second item does not fit beside the first, but a narrow third does: it joins the first layer.
+	items := []arrangeplan.Item{{Width: 12, Depth: 8}, {Width: 12, Depth: 8}, {Width: 4, Depth: 8}}
+	layout, ok := arrangeplan.PackLayers(items, []float64{2, 2, 2}, bed, 100, false)
+	require.True(t, ok)
+	require.Equal(t, []float64{0, 3, 0}, layout.ZBase)
+	require.Equal(t, 2, layout.Layers)
+}
+
+func TestPackLayersRefusesAnItemTooBigAndALimitTooLow(t *testing.T) {
+	t.Parallel()
+	bed := arrangeplan.Bed{Width: 20, Depth: 10, Gap: 1}
+	_, ok := arrangeplan.PackLayers([]arrangeplan.Item{{Width: 30, Depth: 8}}, []float64{1}, bed, 100, false)
+	require.False(t, ok, "an item wider than the bed fits no layer")
+	items := []arrangeplan.Item{{Width: 12, Depth: 8}, {Width: 12, Depth: 8}}
+	_, ok = arrangeplan.PackLayers(items, []float64{5, 5}, bed, 10, false)
+	require.False(t, ok, "two layers of 5 with a gap of 1 stand 11 high")
+	_, ok = arrangeplan.PackLayers(items, []float64{5, 5}, bed, 11, false)
+	require.True(t, ok)
+}

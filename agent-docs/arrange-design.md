@@ -11,6 +11,7 @@ type ArrangeBed struct {
     Origin       r3.Vec
     Width, Depth units.Value
     Gap          units.Value
+    Height       units.Value
 }
 
 func Arrange(ctx context.Context, bodies []*Body, bed ArrangeBed, opts ...ArrangeOption) ([]*Body, error)
@@ -46,7 +47,7 @@ and the rest where they were. Every refusal G2, G3 and G7 name is raised before 
 ## 4. Not covered
 
 - Turning bodies about any axis but +Z, or following their outlines. Packing is by bounding rectangle.
-- Packing in three dimensions or stacking bodies.
+- Packing in three dimensions beyond whole layers, and stacking one body on another that it fits above.
 - A bed that is not a rectangle aligned with X and Y.
 
 ## 5. Quarter turns
@@ -75,3 +76,16 @@ each trial's footprint from a copy of the body, so it needs no geometry of its o
 | A5 | The option combines with `WithArrangeTurns`: the quarter-turn packer then works on the turned footprints. |
 | A6 | `step` is an angle (`ErrUnitKind`), finite (`ErrNotFinite`), not negative (`ErrNegativeMagnitude`), and nonzero with at most 360 multiples below a quarter turn (`ErrDegenerate`). The last option wins. A body that cannot be copied turned carries `Copy`'s refusal. |
 | A7 | Refusals A6 names are raised before any trial, and a set that does not fit is `ErrDegenerate` with no body moved, as G7 says. |
+
+## 7. Layers
+
+`ArrangeBed.Height` lets bodies that the bed's surface cannot hold stack in layers.
+
+| Decision | Rule |
+|---|---|
+| L1 | The zero `Value` is a single layer, G7's refusal included. A positive `Height` is the most the layers may stand above the bed's surface. A negative one is `ErrNegativeMagnitude`, a wrong unit kind `ErrUnitKind`, and one that is not a length `ErrUnitKind`. |
+| L2 | `arrangeplan.PackLayers` takes the bodies in order. Each joins the current layer if that layer still packs with it, by `Pack` or by `PackTurning` when turns are allowed, and otherwise waits for a later layer; a body that fits no empty layer is refused. So a narrow body can join an early layer that a wide one before it could not. |
+| L3 | A layer's base rests `Gap` above the top of the tallest body of the layer below. A body's height is its box's extent along Z grown by the bound of the box, so the bound never lets two layers touch. The first layer's base is the bed's surface. |
+| L4 | The layers together, the gaps between them included, must stand no higher than `Height`, or the arrangement is `ErrDegenerate` and no body moves. |
+| L5 | Each body moves by one translation as G5 says, its minimum Z landing on its layer's base. A quarter turn or an angle of `WithArrangeAngle` changes no body's extent along Z. |
+| L6 | The tests state each layer's base from the bodies' own heights and compare the moved boxes with it, and check the limit on both sides. |
