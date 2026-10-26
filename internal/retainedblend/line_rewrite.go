@@ -115,7 +115,7 @@ func setbackPoint(base, d r3.Vec, g plane) r3.Vec {
 // rewriteLineEdge blends one straight edge and builds the body over the
 // rewritten mesh.
 func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload, l line, spec blendSpec,
-	role string, faceIndex map[*topo.Face]int) (*topo.Body, error) {
+	role string, ord int, faceIndex map[*topo.Face]int) (*topo.Body, error) {
 	w := newWork(fp, rim{scale: l.scale}, spec)
 	slack := l.slack()
 	margin := w.tau + slack
@@ -348,6 +348,7 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 	groups := append([]facetedrecord.Group(nil), fp.Groups...)
 	groups = append(groups, facetedrecord.Group{
 		Origins:  []provenance.Ref{{Producer: env.Ref, Role: role}},
+		Source:   facetedrecord.BlendSource(env.Ref, ord),
 		Surface:  tag.surface,
 		Retained: true,
 		Reversed: tag.reversed,

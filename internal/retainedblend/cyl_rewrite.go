@@ -143,7 +143,7 @@ func (c cylLine) cornerArea(spec blendSpec, s section, k0, o0, wA r3.Vec) float6
 // rewriteCylLine blends one plane-cylinder line and builds the body over the
 // rewritten mesh.
 func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c cylLine, spec blendSpec,
-	role string, faceIndex map[*topo.Face]int) (*topo.Body, error) {
+	role string, ord int, faceIndex map[*topo.Face]int) (*topo.Body, error) {
 	w := newWork(fp, rim{scale: c.scale}, spec)
 	slack := c.slack()
 	margin := w.tau + slack
@@ -536,6 +536,7 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	groups := append([]facetedrecord.Group(nil), fp.Groups...)
 	groups = append(groups, facetedrecord.Group{
 		Origins:  []provenance.Ref{{Producer: env.Ref, Role: role}},
+		Source:   facetedrecord.BlendSource(env.Ref, ord),
 		Surface:  tag.surface,
 		Retained: true,
 		Reversed: tag.reversed,

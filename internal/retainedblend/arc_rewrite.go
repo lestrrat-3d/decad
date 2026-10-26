@@ -67,7 +67,7 @@ func (a arcRim) rowAngles(p arcProfile, s float64, ref [2]float64) ([2]float64, 
 
 // rewriteArc blends one open arc and builds the body over the rewritten mesh.
 func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a arcRim, spec blendSpec,
-	role string, faceIndex map[*topo.Face]int) (*topo.Body, error) {
+	role string, ord int, faceIndex map[*topo.Face]int) (*topo.Body, error) {
 	if err := a.checkSize(spec); err != nil {
 		return nil, err
 	}
@@ -289,6 +289,7 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	groups := append([]facetedrecord.Group(nil), fp.Groups...)
 	groups = append(groups, facetedrecord.Group{
 		Origins:  []provenance.Ref{{Producer: env.Ref, Role: role}},
+		Source:   facetedrecord.BlendSource(env.Ref, ord),
 		Surface:  tag.surface,
 		Retained: true,
 		Reversed: tag.reversed,

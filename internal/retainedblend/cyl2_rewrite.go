@@ -19,7 +19,7 @@ import (
 // over the rewritten mesh. Both walls are cut at their setback generators as
 // the wall of R3 is; the strip joins the two cuts.
 func rewriteCylCyl(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c cylCyl, spec blendSpec,
-	role string, faceIndex map[*topo.Face]int) (*topo.Body, error) {
+	role string, ord int, faceIndex map[*topo.Face]int) (*topo.Body, error) {
 	w := newWork(fp, rim{scale: c.scale}, spec)
 	slack := c.slack()
 	margin := w.tau + slack
@@ -181,6 +181,7 @@ func rewriteCylCyl(ctx context.Context, env topo.Env, fp facetedrecord.Payload, 
 	groups := append([]facetedrecord.Group(nil), fp.Groups...)
 	groups = append(groups, facetedrecord.Group{
 		Origins:  []provenance.Ref{{Producer: env.Ref, Role: role}},
+		Source:   facetedrecord.BlendSource(env.Ref, ord),
 		Surface:  tag.surface,
 		Retained: true,
 		Reversed: tag.reversed,

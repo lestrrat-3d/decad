@@ -574,6 +574,7 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		blendTrue += ba
 		groups = append(groups, facetedrecord.Group{
 			Origins:  []provenance.Ref{{Producer: env.Ref, Role: fmt.Sprintf("%s(%d)", op, en.ord)}},
+			Source:   facetedrecord.BlendSource(env.Ref, en.ord),
 			Surface:  tag.surface,
 			Retained: true,
 			Reversed: tag.reversed,

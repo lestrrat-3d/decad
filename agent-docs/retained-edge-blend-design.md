@@ -288,7 +288,7 @@ is a trapezoid of area `½(|P_A,₀P_A,₁| + |P_B,₀P_B,₁|)·|T_B − T_A|`.
 | Face | Group fields |
 |---|---|
 | `A`, `B`, `G` | the old group, with `Surface`, `Retained`, `Reversed`, `CapRecord` and `NormalBound` unchanged. The face's patch is smaller; its plane or cylinder is not |
-| blend | a new group: `Surface` the exact `Cylinder`, `Plane`, `Torus` or `Cone` of §4, `Retained = true`, `Reversed` as §4 states, `NormalBound = 0`, `Origins` the role the step mints (`fillet(k)` or `chamfer(k)`, `k` the edge's ordinal in the call) |
+| blend | a new group: `Surface` the exact `Cylinder`, `Plane`, `Torus` or `Cone` of §4, `Retained = true`, `Reversed` as §4 states, `NormalBound = 0`, `Origins` the role the step mints (`fillet(k)` or `chamfer(k)`, `k` the edge's ordinal in the call), `Source` a new `SourcePatch` naming the modify producer and `k` (`Blend` true, no parent). The old groups keep their `Source` pointers |
 
 The blend tag satisfies retention Claim R: the true blend patch lies on the
 surface by definition of the blend. The face's normal bound follows retention

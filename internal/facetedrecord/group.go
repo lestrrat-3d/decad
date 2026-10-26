@@ -30,6 +30,10 @@ import (
 // rebuild (Transform) reproduces the same origins.
 type Group struct {
 	Origins []provenance.Ref
+	// Source traces the operand face or blend this group came from. It never
+	// admits a plane or changes a bound (Source is read by tests and history
+	// only), and a placement copies it with the struct.
+	Source *SourcePatch
 	// Centroid is available only when this entire source group has a separate
 	// certificate. A disconnected group cannot give that reading to a patch.
 	Centroid    measurement.VecMeasurement

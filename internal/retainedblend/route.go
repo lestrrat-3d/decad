@@ -212,7 +212,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				step, err = spec.assign(targets[i].ref, l.faceA, l.faceB)
 			}
 			if err == nil {
-				next, err = rewriteLineEdge(ctx, env, curFP, l, step, role, faceIndex)
+				next, err = rewriteLineEdge(ctx, env, curFP, l, step, role, i, faceIndex)
 			}
 		case openArc:
 			var a arcRim
@@ -220,7 +220,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				step, err = spec.assign(targets[i].ref, a.planeFace, a.wallFace)
 			}
 			if err == nil {
-				next, err = rewriteArc(ctx, env, curFP, a, step, role, faceIndex)
+				next, err = rewriteArc(ctx, env, curFP, a, step, role, i, faceIndex)
 			}
 		case cylinderPair:
 			var c cylCyl
@@ -228,7 +228,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				step, err = spec.assign(targets[i].ref, c.wall[0].face, c.wall[1].face)
 			}
 			if err == nil {
-				next, err = rewriteCylCyl(ctx, env, curFP, c, step, role, faceIndex)
+				next, err = rewriteCylCyl(ctx, env, curFP, c, step, role, i, faceIndex)
 			}
 		case cylinderLine:
 			var c cylLine
@@ -236,7 +236,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				step, err = spec.assign(targets[i].ref, c.faceA, c.faceB)
 			}
 			if err == nil {
-				next, err = rewriteCylLine(ctx, env, curFP, c, step, role, faceIndex)
+				next, err = rewriteCylLine(ctx, env, curFP, c, step, role, i, faceIndex)
 			}
 		default:
 			var r rim
@@ -244,7 +244,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				step, err = spec.assign(targets[i].ref, r.planeFace, r.wallFace)
 			}
 			if err == nil {
-				next, err = rewriteRim(ctx, env, curFP, r, step, role, faceIndex)
+				next, err = rewriteRim(ctx, env, curFP, r, step, role, i, faceIndex)
 			}
 		}
 		if err != nil {
@@ -261,7 +261,7 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 
 // rewriteRim blends one rim and builds the body over the rewritten mesh.
 func rewriteRim(ctx context.Context, env topo.Env, fp facetedrecord.Payload, r rim,
-	spec blendSpec, role string, faceIndex map[*topo.Face]int) (*topo.Body, error) {
+	spec blendSpec, role string, ord int, faceIndex map[*topo.Face]int) (*topo.Body, error) {
 	if err := r.checkSize(spec); err != nil {
 		return nil, err
 	}
@@ -279,6 +279,7 @@ func rewriteRim(ctx context.Context, env topo.Env, fp facetedrecord.Payload, r r
 	blendGroup := len(groups)
 	groups = append(groups, facetedrecord.Group{
 		Origins:  []provenance.Ref{{Producer: env.Ref, Role: role}},
+		Source:   facetedrecord.BlendSource(env.Ref, ord),
 		Surface:  tag.surface,
 		Retained: true,
 		Reversed: tag.reversed,
