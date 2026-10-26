@@ -58,3 +58,46 @@ func Example_export_png() {
 	// image: 320 x 240 pixels
 	// corner is white: true
 }
+
+// export.PNGBodies draws several bodies in one picture, such as the parts of an
+// assembly laid out side by side. The scene is centred and scaled as a whole.
+func Example_export_png_bodies() {
+	doc := decad.New()
+	var parts []*decad.Body
+	for _, x := range []float64{0, 30} {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		if err != nil {
+			fmt.Printf("failed to create sketch: %s\n", err)
+			return
+		}
+		rect := s.CreateRectangle(x, 0, x+10, 10)
+		s.Fix(rect.A)
+		if _, err := s.Solve(context.Background()); err != nil {
+			fmt.Printf("failed to solve: %s\n", err)
+			return
+		}
+		part, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+		if err != nil {
+			fmt.Printf("failed to extrude: %s\n", err)
+			return
+		}
+		parts = append(parts, part)
+	}
+
+	var out bytes.Buffer
+	if err := export.PNGBodies(context.Background(), &out, parts, units.Millimeters(0.1), export.IsometricView(320, 240)); err != nil {
+		fmt.Printf("failed to export: %s\n", err)
+		return
+	}
+	img, err := png.Decode(&out)
+	if err != nil {
+		fmt.Printf("failed to read the image: %s\n", err)
+		return
+	}
+	bounds := img.Bounds()
+	fmt.Printf("image: %d x %d pixels\n", bounds.Dx(), bounds.Dy())
+	// Output:
+	// image: 320 x 240 pixels
+}
