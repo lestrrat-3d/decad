@@ -338,6 +338,10 @@ const (
     // STRADDLES the tool (§6). In the straddle case Reading is ReadingWall with
     // Observed the wall reading and Required the tool; when the survey could not
     // answer at all Reading is ReadingNone and both are nil. Contributes Suspect.
+    // A faceted body's wall survey (agent-docs/mesh-wall-survey-design.md)
+    // publishes the interval from zero to an upper bound of the thinnest wall,
+    // so it ends in DiagWallTooThin or in this straddle and never in a Sound
+    // wall.
     DiagUndecidedWall
     // DiagUndecidedUndercut — the pull survey could neither prove nor exclude an
     // undercut (§6). Reading ReadingNone, Observed* and Required nil. Suspect.

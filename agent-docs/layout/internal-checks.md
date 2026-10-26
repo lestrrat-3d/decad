@@ -37,20 +37,14 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/capcontour/` | Cap contour displacement, shell offset intervals, and edge and arc bounds. See modify-reach §8.3-§8.4. |
 | `internal/offset2d/` | Offset carriers, proofs, profile offsets and corner loops, rewrite and offset audits, offset displacement, and the draft near and far section stages. See modify §5–§9, shell-opening §3–§5, draft §2, §7. |
 | `internal/capband/` | Cap-band loop walks, offset joins, contour, loop boundary, patch, locus, volume, first-moment and centroid bounds, and cap-loop chamfer refusals. See modify-reach §8.3–§8.4. |
-| `internal/capblendsurvey/` | Cap-blend and Draft undercut readers, patch normal ranges, and cap-blend concave-radius reading. See modify-reach Table DX and draft DD7. |
-| `internal/analyticundercut/` | Maps prism, revolve and cup records to their own-step faces and decides their undercut surveys. See verification §6. |
 | `internal/filletband/` | Loop-fillet closed forms and reference-frame band mass. See loop-fillet §5. |
 | `internal/decaderr/` | The sentinel error values `errors.go` re-exports, so internal packages can return them. |
 | `internal/parambind/` | The ledger of parameter reads behind `Document.Bindings`. See param-binding §3. |
-| `internal/survey2d/` | 2D disks, prism readers, walks, corner loops, Bézier carriers. See verification §6. |
 | `internal/holeplan/` | Plans `Hole`: places the axis on the face plane, gates sizes, and returns the bore, counterbore and countersink tool shapes. See hole design. |
 | `internal/ribplan/` | Plans `Rib`: the rib outline from a line, thickness and overrun, the box-disjoint test and the no-added-volume test. See rib design. |
 | `internal/embossplan/` | Plans `Emboss`: the sketch-versus-face plane test, the two tool sides and the no-removed-volume test. See emboss design. |
 | `internal/thickenaxis/` | Holds certified section pairs, checks offsets, ribbons and interval clearance, and builds the circle and axis offset sections of a prism sheet. See surface §16, §17. |
 | `internal/thickenbuild/` | Dispatches Thicken and Offset by sheet payload, computes its amounts and certified sections, and builds the solids from admitted sheets. See surface §16. |
-| `internal/revolvesurvey/` | Revolve wall, undercut and concave-radius readers. See verification §6. |
-| `internal/wallsurvey/` | Prism and revolve wall record preparation and bounded readings; revolve clearance carrier construction and bounds. See verification §6, clearance §2. |
-| `internal/radiussurvey/` | Prism, revolve, cup and BRep concave-radius readings. See verification §6. |
 | `internal/motionbound/` | Motion variants, exact parameters, poses, box bounds, pair certificates, record radii, overlap transfer and sweeps. |
 | `internal/motionrun/` | Static mover/stationary pair validity, swept-box exclusion and sheet classification over topology nodes. See motion-check §2–§6. |
 | `internal/motionoption/` | Motion options. See motion-check §3. |

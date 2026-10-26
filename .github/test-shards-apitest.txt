@@ -2309,3 +2309,6 @@
 10	0.01	TestSectionOutlineObliquePlaneCutsAHexagon
 10	0.01	TestSectionOutlineThroughAFaceReadsJustBehindIt
 10	0.01	TestSectionOutlineMissesAndRefusals
+10	0.01	TestFacetedWallSurveyProvesAThinPlateTooThin
+10	0.01	TestFacetedWallSurveyLeavesAThickEnoughPlateUndecided
+10	0.01	TestFacetedWallSurveyDoesNotCallAThickBodyThin
