@@ -25,7 +25,7 @@ const (
 | D1 | `Direction` is the way the camera looks. The drawing's X axis is `Direction × Up` and its Y axis is the component of `Up` square to `Direction`. Neither need be a unit vector. A zero `Direction`, or an `Up` parallel to it, is `ErrDegenerate`. |
 | D2 | Coordinates are millimetres at full scale, measured along those axes from the world origin's projection. There is no fitting, margin or sheet border. |
 | D3 | A feature edge is an edge of the tessellation that one triangle uses or three or more do, one whose two triangles' normals turn by more than 30 degrees (`drawing.CreaseCosine`), or one shared by a triangle looking toward the camera and one looking away (a silhouette). The diagonals of a flat face are not features. A triangle of zero area contributes none. |
-| D4 | A curved face is drawn as the chords of its tessellation. Its crease-free facet edges are not drawn, so a cylinder shows its two silhouette lines and its rim polygons. A circle is a polygon of LINE entities, unless §7 takes it as a CIRCLE. |
+| D4 | A curved face is drawn as the chords of its tessellation. Its crease-free facet edges are not drawn, so a cylinder shows its two silhouette lines and its rim polygons. A circle or arc is a polygon of LINE entities, unless §7 takes it as a CIRCLE or an ARC. |
 | D5 | An edge is cut into runs by sampling it once per pixel of a 2048 x 2048 depth buffer of all the triangles. A sample is hidden when its depth exceeds the nearest depth in the 3 x 3 pixels around it by more than two pixels of the drawing's size plus twice the depth change per pixel of that nearest surface. |
 | D6 | A run shorter than three samples is the buffer's noise where an edge meets a corner. It joins its longer neighbour, and neighbours of one visibility join. An edge of one run stays whole. |
 | D7 | Visible runs are LINE entities on layer `VISIBLE` (colour 7, linetype `CONTINUOUS`) and hidden runs LINE entities on layer `HIDDEN` (colour 8, linetype `HIDDEN`, dashed). Entities are ordered by layer, then by the mesh edge's vertex indices, then along the edge. Equal input gives equal bytes. |
@@ -37,7 +37,7 @@ const (
 Hidden-line removal reads a depth buffer, so it is exact to a pixel of that buffer and no better: a drawing of a part
 a metre long resolves about half a millimetre. An edge that passes behind a surface by less than the tolerance of D5
 reads as visible. The drawing shows the mesh's edges, so a curve is as coarse as `tol` makes it. The DXF carries no
-arcs, ellipses or splines, and a circle only where §7 draws one whole.
+ellipses or splines, and a circle or arc only where §7 draws one whole.
 
 ## 3. Verification
 
@@ -112,3 +112,11 @@ whole, in place of its polygon of `LINE`s. `MeshDXF` has no edges to read and dr
 | X2 | A candidate is taken when the visible segments with both ends on the circle, within `1e-7` of its radius (at least 1 mm), together run all the way round it: the sum of the angles they span reaches 2π less 1e-6. Every chord is then a whole visible segment, and those segments are removed and a `CIRCLE` on `VISIBLE` written. The same test is made on the hidden segments for a `CIRCLE` on `HIDDEN`. A candidate that is cut by a surface in part, so that a chord's run ends inside it, fails the test and stays as its segments. |
 | X3 | The test only chooses between two drawings of edges the body states: whether the polygon is the circle is the body's, not a residual. A near circle in the mesh with no `Circle3` edge is never replaced. |
 | X4 | A `CIRCLE` has layer, centre and radius, `10`, `20`, `30` and `40` as the file's group codes. `DXFViews` moves each by its view's offset, `DXFSheet` moves and scales it with the view, and both count its extent with the segments' so a view is placed by its whole drawing. The circles come before the lines in the file, visible then hidden, and are ordered as the body's edges are. |
+
+### Arcs
+
+| Decision | Rule |
+|---|---|
+| X5 | An `Arc3` edge whose axis lies along the view direction is an arc candidate, by X1's test. It is swept counter-clockwise about its axis from its start vertex to its end vertex. The drawing's toward-the-viewer axis is `-Direction`, so the arc is counter-clockwise in the drawing, from the start's angle to the end's, when the axis has a negative component along `Direction`, and from the end's angle to the start's when it has a positive one. |
+| X6 | An arc is taken when the visible (or hidden) segments with both ends on its circle and inside its sweep, within X2's tolerance, together span its sweep less 1e-6: each chord of the arc's polygon is then a whole segment. They are removed and an `ARC` is written with the centre, the radius and the start and end angles in degrees (group codes 10, 20, 30, 40, 50, 51), counter-clockwise from the start. A chord cut by a surface, or one missing, leaves the arc as segments. |
+| X7 | `DXFViews` and `DXFSheet` place a view by its arcs' own boxes (the end points and each axis extreme the sweep passes through), not their circles', and move and scale the arcs with the view. |

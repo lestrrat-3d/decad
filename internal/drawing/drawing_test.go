@@ -174,3 +174,38 @@ func TestCirculateLeavesARingWhoseChordIsCutShort(t *testing.T) {
 	require.Empty(t, lines.VisibleCircles)
 	require.Len(t, lines.Visible, 48)
 }
+
+func TestCirculateArcsTakesAWholeArcAndLeavesItsNeighbours(t *testing.T) {
+	t.Parallel()
+	c := drawing.Circle{Centre: [2]float64{1, 2}, Radius: 5}
+	ring := ringSegments(c, 48)
+	// A quarter arc from 90 to 180 degrees is the chords from index 12 to 24; the other chords are
+	// other edges of the drawing.
+	arc := drawing.Arc{Centre: c.Centre, Radius: 5, Start: math.Pi / 2, End: math.Pi}
+	lines := drawing.Lines{Visible: ring}
+	lines.CirculateArcs([]drawing.Arc{arc})
+	require.Equal(t, []drawing.Arc{arc}, lines.VisibleArcs)
+	require.Len(t, lines.Visible, 48-12, "the quarter's twelve chords are taken")
+}
+
+func TestCirculateArcsLeavesAnArcWithAChordMissing(t *testing.T) {
+	t.Parallel()
+	c := drawing.Circle{Radius: 5}
+	ring := ringSegments(c, 48)
+	arc := drawing.Arc{Radius: 5, Start: math.Pi / 2, End: math.Pi}
+	lines := drawing.Lines{Visible: append(append([]drawing.Segment(nil), ring[:15]...), ring[16:]...)}
+	lines.CirculateArcs([]drawing.Arc{arc})
+	require.Empty(t, lines.VisibleArcs)
+	require.Len(t, lines.Visible, 47)
+}
+
+func TestArcBoundsIncludeTheExtremesItPassesThrough(t *testing.T) {
+	t.Parallel()
+	// A half circle from -45 to 135 degrees passes through 0 and 90: its box reaches the radius at x and y.
+	a := drawing.Arc{Centre: [2]float64{10, 10}, Radius: 4, Start: -math.Pi / 4, End: 3 * math.Pi / 4}
+	minX, maxX, minY, maxY := a.Bounds()
+	require.InDelta(t, 14, maxX, 1e-12)
+	require.InDelta(t, 14, maxY, 1e-12)
+	require.InDelta(t, 10-4*math.Sqrt2/2, minX, 1e-12)
+	require.InDelta(t, 10-4*math.Sqrt2/2, minY, 1e-12)
+}

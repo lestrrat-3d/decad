@@ -174,3 +174,48 @@ func Example_export_dxf_circles() {
 	// Output:
 	// circles: 2, lines: 0
 }
+
+// A rounded corner is an arc in the drawing, and DXF writes it as an ARC entity with
+// its centre, radius and angles. Here a 40 x 30 plate with 5 mm corners, seen from
+// above, draws four arcs for its top rim (and four dashed ones for its bottom rim,
+// behind them) and the four straight sides as lines.
+func Example_export_dxf_arcs() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	pt := func(x, y float64) *sketch.Point {
+		p := s.CreatePoint(x, y)
+		s.Fix(p)
+		return p
+	}
+	s.CreateLine(pt(5, 0), pt(35, 0))
+	s.CreateArc(pt(35, 5), pt(35, 0), pt(40, 5))
+	s.CreateLine(pt(40, 5), pt(40, 25))
+	s.CreateArc(pt(35, 25), pt(40, 25), pt(35, 30))
+	s.CreateLine(pt(35, 30), pt(5, 30))
+	s.CreateArc(pt(5, 25), pt(5, 30), pt(0, 25))
+	s.CreateLine(pt(0, 25), pt(0, 5))
+	s.CreateArc(pt(5, 5), pt(0, 5), pt(5, 0))
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	top := export.DrawingView{Direction: r3.NewVec(0, 0, -1), Up: r3.NewVec(0, 1, 0)}
+	var out bytes.Buffer
+	if err := export.DXF(context.Background(), &out, plate, units.Millimeters(0.1), top); err != nil {
+		fmt.Printf("failed to export: %s\n", err)
+		return
+	}
+	fmt.Printf("arcs: %d, lines: %d\n", strings.Count(out.String(), "ARC\n"), strings.Count(out.String(), "LINE\n"))
+	// Output:
+	// arcs: 8, lines: 8
+}
