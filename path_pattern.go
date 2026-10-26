@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/pathsample"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -23,6 +24,7 @@ type pathPatternOption struct{ option.Interface }
 func (pathPatternOption) pathPatternOption() {}
 
 type identPathFollow struct{}
+type identPathPivot struct{}
 
 // WithPathFollow turns each copy of [PathPatternCopies] to follow the path.
 // Copy i is rotated about the path's start by the shortest turn that takes the
@@ -33,6 +35,17 @@ type identPathFollow struct{}
 // that turn has no shortest axis.
 func WithPathFollow() PathPatternOption {
 	return pathPatternOption{option.New(identPathFollow{}, true)}
+}
+
+// WithPathPivot turns each copy about pivot, a point in millimetres, instead of
+// about the path's start. It sets the point that [WithPathFollow]'s turn
+// leaves in place before the copy is moved to its station, so a body that sits
+// away from the path's start, or a pivot at the body's own centre, swings
+// about that point. The last of several pivots wins. A pivot with no
+// [WithPathFollow] has no turn to centre and is ErrDegenerate, and a non-finite
+// pivot is ErrNotFinite.
+func WithPathPivot(pivot r3.Vec) PathPatternOption {
+	return pathPatternOption{option.New(identPathPivot{}, pivot)}
 }
 
 // PathPatternCopies repeats b along path and returns the count-1 extra copies
@@ -69,7 +82,7 @@ func PathPatternCopies(ctx context.Context, b *Body, path *Path, count int, opts
 	if err := documentHandle(b.n.Doc).requireLive(b); err != nil {
 		return nil, err
 	}
-	follow, err := pathPatternFollows(opts)
+	settings, err := pathPatternFollows(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +94,7 @@ func PathPatternCopies(ctx context.Context, b *Body, path *Path, count int, opts
 	if err != nil {
 		return nil, pathSampleError(err)
 	}
-	return pathCopies(ctx, b, stations, follow)
+	return pathCopies(ctx, b, stations, settings)
 }
 
 // PathPatternSpaced repeats b along path at a stated distance and returns the
@@ -114,7 +127,7 @@ func PathPatternSpaced(ctx context.Context, b *Body, path *Path, spacing units.V
 	if err := documentHandle(b.n.Doc).requireLive(b); err != nil {
 		return nil, err
 	}
-	follow, err := pathPatternFollows(opts)
+	settings, err := pathPatternFollows(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -129,21 +142,38 @@ func PathPatternSpaced(ctx context.Context, b *Body, path *Path, spacing units.V
 	if len(stations) < 2 {
 		return nil, fmt.Errorf(`%w: a spacing of %g mm leaves no copy along the path`, ErrDegenerate, step)
 	}
-	return pathCopies(ctx, b, stations, follow)
+	return pathCopies(ctx, b, stations, settings)
+}
+
+// pathPatternSettings are the options of a path pattern read.
+type pathPatternSettings struct {
+	follow   bool
+	pivot    r3.Vec
+	hasPivot bool
 }
 
 // pathPatternFollows reads the options of a path pattern.
-func pathPatternFollows(opts []PathPatternOption) (bool, error) {
-	follow := false
+func pathPatternFollows(opts []PathPatternOption) (pathPatternSettings, error) {
+	var out pathPatternSettings
 	for _, o := range opts {
 		if o == nil {
-			return false, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+			return out, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
-		if _, ok := o.Ident().(identPathFollow); ok {
-			follow = true
+		switch o.Ident().(type) {
+		case identPathFollow:
+			out.follow = true
+		case identPathPivot:
+			out.pivot, _ = option.Get[r3.Vec](o)
+			out.hasPivot = true
 		}
 	}
-	return follow, nil
+	if out.hasPivot && !proofbound.FiniteVec(out.pivot) {
+		return out, fmt.Errorf(`%w: the path pattern pivot is not finite`, ErrNotFinite)
+	}
+	if out.hasPivot && !out.follow {
+		return out, fmt.Errorf(`%w: a path pattern pivot needs WithPathFollow, which is what turns the copies`, ErrDegenerate)
+	}
+	return out, nil
 }
 
 // patternSegments converts the segments of path for the sampler.
@@ -173,10 +203,10 @@ func pathSampleError(err error) error {
 
 // pathCopies makes a Copy of b at each station but the first. A failure
 // retires the copies already made.
-func pathCopies(ctx context.Context, b *Body, stations []pathsample.Station, follow bool) ([]*Body, error) {
+func pathCopies(ctx context.Context, b *Body, stations []pathsample.Station, settings pathPatternSettings) ([]*Body, error) {
 	copies := make([]*Body, 0, len(stations)-1)
 	for _, st := range stations[1:] {
-		t, err := pathStep(stations[0], st, follow)
+		t, err := pathStep(stations[0], st, settings)
 		if err != nil {
 			removeTools(copies)
 			return nil, err
@@ -192,14 +222,14 @@ func pathCopies(ctx context.Context, b *Body, stations []pathsample.Station, fol
 }
 
 // pathStep is the placement of the copy at station st: the move from the first
-// station's point to st's, after the turn about the first point that takes the
-// first direction onto st's when follow is set.
-func pathStep(first, st pathsample.Station, follow bool) (r3.Transform, error) {
+// station's point to st's, after the turn about the pivot (the first point unless
+// one is set) that takes the first direction onto st's when follow is set.
+func pathStep(first, st pathsample.Station, settings pathPatternSettings) (r3.Transform, error) {
 	move, err := r3.Translation(st.Point.Sub(first.Point))
 	if err != nil {
 		return r3.Transform{}, fmt.Errorf(`%w: a pattern step is not finite: %s`, ErrNotFinite, err)
 	}
-	if !follow {
+	if !settings.follow {
 		return move, nil
 	}
 	axis, angle, err := pathsample.Turn(first.Tangent, st.Tangent)
@@ -212,7 +242,11 @@ func pathStep(first, st pathsample.Station, follow bool) (r3.Transform, error) {
 	if angle == 0 {
 		return move, nil
 	}
-	turn, err := r3.RotationAround(first.Point, axis, units.Radians(angle))
+	pivot := first.Point
+	if settings.hasPivot {
+		pivot = settings.pivot
+	}
+	turn, err := r3.RotationAround(pivot, axis, units.Radians(angle))
 	if err != nil {
 		return r3.Transform{}, fmt.Errorf(`%w: a pattern turn is not finite: %s`, ErrNotFinite, err)
 	}

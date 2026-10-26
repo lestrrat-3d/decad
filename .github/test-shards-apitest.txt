@@ -2428,3 +2428,6 @@
 10	0.01	TestInchPocketLevelsInvertedAfterRounding
 10	0.01	TestInchPocketLevelsWithinOneUlp
 10	0.01	TestInchPocketUnionLevelsFollowDenotation
+10	0.01	TestPathPatternPivotTurnsCopiesAboutThePivot
+10	0.01	TestPathPatternPivotAtThePathStartIsTheDefault
+10	0.01	TestPathPatternPivotRefusals
