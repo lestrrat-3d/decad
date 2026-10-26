@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -204,5 +205,103 @@ func TestExactGroupPlacedKeepsRetainedTags(t *testing.T) {
 		require.NoError(t, facetedrecord.ExactGroupPlaced(&g, q, delta, []r3.Vec{r3.NewVec(1e16, 0, 0)}, 1e-9))
 		require.Greater(t, g.NormalBound, 0.1)
 		require.LessOrEqual(t, g.NormalBound, 2.0)
+	})
+}
+
+// A plane whose exact normal the rotation fixes is its own image, so an exact
+// placement keeps its tag, CapRecord and axial bound with bound 0. Each leg of
+// the check refuses on its own.
+func TestExactGroupPlacedKeepsFixedPlane(t *testing.T) {
+	t.Parallel()
+	q, delta, verts := exactGroupFixture(t, 20)
+	frame, err := r3.NewFrame(r3.NewVec(3, 4, 20), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	tilted, err := r3.NewFrame(r3.NewVec(3, 4, 20), r3.NewVec(1, 0, 0), r3.NewVec(0, 0.6, 0.8))
+	require.NoError(t, err)
+	record := &topo.CapRecord{Frame: frame, Xform: r3.Identity(), Z: 0}
+	group := func(tag r3.Frame, rec *topo.CapRecord) facetedrecord.Group {
+		return facetedrecord.Group{
+			Surface: surfacegeom.Plane{Frame: tag}, Retained: true,
+			CapRecord: rec, AxialDelta: 1e-9, HasAxialDelta: rec != nil,
+		}
+	}
+
+	t.Run("the tag, record and axial bound survive with bound 0", func(t *testing.T) {
+		t.Parallel()
+		g := group(frame, record)
+		require.NoError(t, facetedrecord.ExactGroupPlaced(&g, q, delta, verts, 1e-9))
+		require.Zero(t, g.NormalBound)
+		require.True(t, g.Retained)
+		require.Equal(t, surfacegeom.Plane{Frame: frame}, g.Surface)
+		require.Same(t, record, g.CapRecord)
+		require.True(t, g.HasAxialDelta)
+		require.Equal(t, 1e-9, g.AxialDelta)
+	})
+
+	t.Run("a tag without a record keeps bound 0 and states no record", func(t *testing.T) {
+		t.Parallel()
+		g := group(frame, nil)
+		require.NoError(t, facetedrecord.ExactGroupPlaced(&g, q, delta, verts, 1e-9))
+		require.Zero(t, g.NormalBound)
+		require.Nil(t, g.CapRecord)
+		require.False(t, g.HasAxialDelta)
+	})
+
+	t.Run("a tilted tag is charged and loses its record", func(t *testing.T) {
+		t.Parallel()
+		g := group(tilted, record)
+		require.NoError(t, facetedrecord.ExactGroupPlaced(&g, q, delta, verts, 1e-9))
+		require.Positive(t, g.NormalBound)
+		require.Nil(t, g.CapRecord)
+		require.False(t, g.HasAxialDelta)
+	})
+
+	t.Run("a flat tag over a tilted record loses the record and keeps no bound 0", func(t *testing.T) {
+		t.Parallel()
+		g := group(frame, &topo.CapRecord{Frame: tilted, Xform: r3.Identity(), Z: 0})
+		require.NoError(t, facetedrecord.ExactGroupPlaced(&g, q, delta, verts, 1e-9))
+		require.Positive(t, g.NormalBound)
+		require.Nil(t, g.CapRecord)
+	})
+
+	t.Run("a tag with its own bound takes the charged path", func(t *testing.T) {
+		t.Parallel()
+		g := group(frame, record)
+		g.NormalBound = 1e-12
+		require.NoError(t, facetedrecord.ExactGroupPlaced(&g, q, delta, verts, 1e-9))
+		require.Positive(t, g.NormalBound)
+		require.Nil(t, g.CapRecord)
+	})
+}
+
+func TestPlaneFixedBy(t *testing.T) {
+	t.Parallel()
+	q, _, _ := exactGroupFixture(t, 20)
+	linear, trans := q.Linear(), q.Translation()
+	rat := func(a, b, c int64) [3]*big.Rat {
+		return [3]*big.Rat{big.NewRat(a, 1), big.NewRat(b, 1), big.NewRat(c, 1)}
+	}
+	require.True(t, facetedrecord.PlaneFixedBy(linear, trans, rat(0, 0, 1)))
+	require.True(t, facetedrecord.PlaneFixedBy(linear, trans, rat(0, 0, -3)), "the length of m is free")
+	require.False(t, facetedrecord.PlaneFixedBy(linear, trans, rat(1, 0, 0)), "an in-plane direction turns")
+	require.False(t, facetedrecord.PlaneFixedBy(linear, trans, rat(0, 0, 0)), "no direction")
+
+	t.Run("a translation along m moves the plane", func(t *testing.T) {
+		t.Parallel()
+		require.False(t, facetedrecord.PlaneFixedBy(linear, rat(0, 0, 1), rat(0, 0, 1)))
+	})
+
+	t.Run("a map whose transpose does not fix m refuses", func(t *testing.T) {
+		t.Parallel()
+		shear := linear
+		shear[2][0] = big.NewRat(1, 2)
+		require.False(t, facetedrecord.PlaneFixedBy(shear, trans, rat(0, 0, 1)))
+	})
+
+	t.Run("a map that does not fix m refuses", func(t *testing.T) {
+		t.Parallel()
+		shear := linear
+		shear[0][2] = big.NewRat(1, 2)
+		require.False(t, facetedrecord.PlaneFixedBy(shear, trans, rat(0, 0, 1)))
 	})
 }

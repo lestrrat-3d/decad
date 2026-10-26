@@ -101,7 +101,7 @@ recorded it, not because the polygons happen to sit near it.
 | `Reversed` | the operand face's `Reversed`, flipped for the faces of the subtracted operand of a `Cut` |
 | `NormalBound` | the tag's own departure `ε_F`: zero for a built operand face, the operand's `TagDeparture` for a retained one, the operand's own `NormalBound` for a denoted face (§3.3) |
 | `Denoted` | the operand face's denoted patch, when it has one |
-| `CapRecord`, `AxialDelta`, `HasAxialDelta` | for a `Plane` group, the operand face's. A Boolean never moves a plane, so the exact-plane record transfers verbatim; every placement and similarity drops it |
+| `CapRecord`, `AxialDelta`, `HasAxialDelta` | for a `Plane` group, the operand face's. A Boolean never moves a plane, so the exact-plane record transfers verbatim; every float placement and similarity drops it; an exact rotation copy keeps it for a plane the rotation maps onto itself (retained-modify-reach §6) |
 | `Source` | an immutable `SourcePatch`: the operand body's `Origin.Producer`, the operand position, the face's ordinal in `topobuild.Faces`, and `Parent`, the operand face's own record when it is faceted (nil for a built face). It also rides a moved operand's group on the shifted retry, where the tag is dropped. It traces origin only: no admission rule, bound or reader consults it |
 
 `Union` and `Intersect` keep both operands' orientations; `Cut` keeps the
@@ -208,7 +208,7 @@ does with a retained tag; the audit in §7 keeps the table complete.
 | `Face.Surface()`, `surfacegeom.SurfaceTypeName`, `decadtest` formatting | the tag | reports `Plane`/`Cylinder`/`Sphere` instead of `Faceted`; examples and tests that print `faceted` for these faces change (§8) |
 | `Face.NormalAt` | tag + `NormalBound` | answers with the bound of §3.3 instead of `ErrUnsupported` |
 | `internal/selectorquery/topo_views.go` planar and cylindrical views | the tag | a flat retained face matches `Facing`/`ParallelTo` by its plane normal, signed by `Reversed` |
-| `internal/extent/to_face.go`, `angular_stop.go` | `Plane`, `NormalBound == 0`, `CapRecord`, `HasAxialDelta` | admits a retained `Plane` whose group carried `CapRecord` and `NormalBound == 0`; a placed or scaled body drops the record, so it refuses as before |
+| `internal/extent/to_face.go`, `angular_stop.go` | `Plane`, `NormalBound == 0`, `CapRecord`, `HasAxialDelta` | admits a retained `Plane` whose group carried `CapRecord` and `NormalBound == 0`; a float-placed or scaled body drops the record, so it refuses as before; an exact rotation copy keeps it on a plane the rotation fixes (a cap normal to a rotation about z) |
 | `mirror.go` `resolveMirrorFace` | `Plane` | mirrors across a retained `Plane` with `NormalBound == 0`; a placed body's tag is a float image and keeps refusing |
 | `Face.isPlanar` | `Plane` or `HeldPlanar` | unchanged; both stay true |
 | `internal/contactfaceted/floor.go` `AxisSupportAtPose` | `HeldPlanar && Kind == Faceted` | **must change.** The predicate drops every retained plane from the support proof. It becomes `HeldPlanar && face is held geometry`, where a new `topo.Face.RetainedTag` flag marks a tag on a faceted payload (§5) |
@@ -276,7 +276,7 @@ the clause named.
 | A3 | a Boolean that leaves one loop-less sphere face reads `Faceted` | drop A3: `AuditSolidBoundary` accepts a body whose only face is a retained loop-less sphere |
 | `internal/contactfaceted/floor.go` predicate | the support proof still finds the floor face of a retained-plane body | keep the old `Kind == Faceted` test: the proof finds no valid face and the contact returns `ContactPayloadUnsupported` |
 | `ToFace` on a retained plane | the stop level equals the plane's exact coordinate; `AxialDelta` is the operand's | clear `CapRecord` on the group: `ToFace` refuses |
-| Placement | a translated and a 20°-rotated copy of P3 report `NormalAt` bounds within 1e-9 of the unplaced copy's, and the rotated normal lies within the two bounds of the rotated reading; a rotated plane never reads as an exact mirror plane | keep the old constant 2: the placed `NormalAt` bound is 2 |
+| Placement | a translated and a 20°-rotated copy of P3 report `NormalAt` bounds within 1e-9 of the unplaced copy's, and the rotated normal lies within the two bounds of the rotated reading; a plane that the rotation turns never reads as an exact mirror plane | keep the old constant 2: the placed `NormalAt` bound is 2 |
 | Reader audit | a test lists every non-test file under the module that matches `Surface\.\(surfacegeom\.` or `Surface\(\)\.\(`, and fails on a file this document's §4 does not name | add a reader without a §4 row: the audit fails |
 | Existing assertions | the 23 `decad.Faceted` / `KindFaceted` assertions under `apitest/` and `examples/` (for example `apitest/mirror_test.go`, whose premise is a Boolean wall that carries no `Plane`) are rewritten to the retained kind where §3.2 admits the face, and kept where it declines | run the suite before the change; a test that still passes after it, on a face §3.2 admits, asserts the wrong thing |
 
