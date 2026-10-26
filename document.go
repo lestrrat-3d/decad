@@ -505,10 +505,14 @@ func WithCopyPlacement(t r3.Transform) CopyOption {
 // are placed by r3.RotationAround(center, axis, angle), exactly as
 // WithCopyPlacement of that transform.
 //
-// A faceted copy made this way carries no analytic surface tags: every face
-// reads as Faceted with its held bound, so Face.NormalAt refuses it and
-// ToFace stops and MirrorFace refuse it. It also stops being a point-loft
-// source. Use WithCopyPlacement for a copy that needs those readings.
+// A faceted copy made this way keeps the analytic tag of a face that a mesh
+// Boolean retained from its operands (a plane, cylinder, sphere or torus), with
+// a NormalAt bound that charges the float image of the tag against the exact
+// rotation; a retained cone keeps the bound 2. Every other face reads as
+// Faceted with its held bound, so Face.NormalAt refuses it and ToFace stops
+// refuse it. A rotated plane tag is a float image, so MirrorFace refuses it.
+// The copy also stops being a point-loft source. Use WithCopyPlacement for a
+// copy that needs those readings.
 //
 // A zero or non-finite axis is ErrDegenerate, a non-finite center or angle is
 // ErrNotFinite, and an angle that is not an angle is ErrUnitKind, all when

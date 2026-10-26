@@ -2144,6 +2144,7 @@
 10	0.02	TestRecordProfileReportsHoleAndEdgeIndices
 10	0.01	TestRegionMomentsRejectUnsupportedAndEmptyRecords
 10	0.00	TestRegionMomentsRequestedOrderControlsOverflow
+10	0.00	TestRetainedRotatedCopy
 10	0.00	TestRevolveChainQuarterTurnStaysUndecided
 10	0.01	TestRevolveChainWallNormalCoversNearParallelSegment
 10	0.00	TestRevolveFullTurnStaysApproximate
