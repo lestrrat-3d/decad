@@ -426,38 +426,75 @@ func orientationSum(vertices []r3.Vec, triangles [][3]int, anchor r3.Vec, worker
 // exists beside it.
 func RequireVertexLinks(ctx context.Context, vertexCount int, triangles [][3]int) error {
 	budget := proofbound.NewWorkBudget(ctx)
-	links := make(map[int]map[int][]int, vertexCount)
-	add := func(center, from, to int) {
-		l, ok := links[center]
-		if !ok {
-			l = map[int][]int{}
-			links[center] = l
-		}
-		l[from] = append(l[from], to)
-		l[to] = append(l[to], from)
+	// Store incident triangle corners in one linked index, then reuse one
+	// neighbour table for each vertex. A valid link needs only two neighbours
+	// per entry; retain higher degrees as counts for the original diagnostics.
+	heads := make([]int, vertexCount)
+	for i := range heads {
+		heads[i] = -1
 	}
-	for _, tri := range triangles {
+	next := make([][3]int, len(triangles))
+	for i, tri := range triangles {
 		if err := budget.Step(); err != nil {
 			return err
 		}
-		add(tri[0], tri[1], tri[2])
-		add(tri[1], tri[2], tri[0])
-		add(tri[2], tri[0], tri[1])
+		for k, center := range tri {
+			if center < 0 || center >= vertexCount {
+				continue
+			}
+			next[i][k], heads[center] = heads[center], 3*i+k
+		}
+	}
+	type neighbours struct {
+		vertices [2]int
+		count    int
+	}
+	const maxRetainedLinkVertices = 256
+	link := make(map[int]neighbours)
+	seen := make(map[int]struct{})
+	add := func(from, to int) {
+		n := link[from]
+		if n.count < len(n.vertices) {
+			n.vertices[n.count] = to
+		}
+		n.count++
+		link[from] = n
 	}
 	// Vertex index order, never map order: a refusal names the FIRST vertex
 	// that fails, so two runs over the same mesh report the same one.
+	linkWork := 0
 	for center := range vertexCount {
-		link, ok := links[center]
-		if !ok {
+		if heads[center] < 0 {
 			continue
 		}
 		if err := budget.Step(); err != nil {
 			return err
 		}
+		// Clearing a large map scans its capacity. Drop an unusually large
+		// link rather than clearing that capacity for every later small link.
+		if len(link) > maxRetainedLinkVertices {
+			link = make(map[int]neighbours)
+		} else {
+			clear(link)
+		}
+		for corner := heads[center]; corner >= 0; {
+			linkWork++
+			if linkWork%pollInterval == 0 {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+			}
+			i, k := corner/3, corner%3
+			tri := triangles[i]
+			a, b := tri[(k+1)%3], tri[(k+2)%3]
+			add(a, b)
+			add(b, a)
+			corner = next[i][k]
+		}
 		start := -1
 		for v, nbrs := range link {
-			if len(nbrs) != 2 {
-				return fmt.Errorf(`%w: the mesh vertex at index %d has a pinched link: its neighbour %d meets %d link edges rather than two`, decaderr.ErrUnsupported, center, v, len(nbrs))
+			if nbrs.count != 2 {
+				return fmt.Errorf(`%w: the mesh vertex at index %d has a pinched link: its neighbour %d meets %d link edges rather than two`, decaderr.ErrUnsupported, center, v, nbrs.count)
 			}
 			if start < 0 || v < start {
 				start = v
@@ -466,10 +503,15 @@ func RequireVertexLinks(ctx context.Context, vertexCount int, triangles [][3]int
 		if start < 0 {
 			continue
 		}
-		seen := map[int]struct{}{start: {}}
+		if len(seen) > maxRetainedLinkVertices {
+			seen = make(map[int]struct{})
+		} else {
+			clear(seen)
+		}
+		seen[start] = struct{}{}
 		prev, cur := -1, start
 		for {
-			nbrs := link[cur]
+			nbrs := link[cur].vertices
 			next := nbrs[0]
 			if next == prev {
 				next = nbrs[1]

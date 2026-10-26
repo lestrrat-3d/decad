@@ -3,8 +3,10 @@ package tessellation_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
@@ -32,6 +34,92 @@ func TestClosedMeshRefusesAnOpenFan(t *testing.T) {
 	err := tessellation.RequireClosedMesh([][3]int{{0, 1, 2}, {0, 2, 3}})
 	audit := requireAudit(t, err, tessellation.Degenerate)
 	require.Equal(t, "the chorded boundary could not be triangulated into a watertight mesh", audit.Detail)
+}
+
+func TestVertexLinksKeepDisconnectedShellsAndRefusePinches(t *testing.T) {
+	t.Parallel()
+	remap := func(ids [4]int) [][3]int {
+		tris := tetrahedron()
+		for i, tri := range tris {
+			for k, vertex := range tri {
+				tris[i][k] = ids[vertex]
+			}
+		}
+		return tris
+	}
+	separate := append(remap([4]int{1, 2, 3, 4}), remap([4]int{5, 6, 7, 8})...)
+	require.NoError(t, tessellation.RequireVertexLinks(t.Context(), 10, separate))
+	pinched := append(remap([4]int{1, 2, 3, 4}), remap([4]int{3, 5, 6, 7})...)
+	err := tessellation.RequireVertexLinks(t.Context(), 10, pinched)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	require.Contains(t, err.Error(), "at index 3 has a link of")
+	for _, tris := range [][][3]int{
+		{{0, 1, 2}, {0, 2, 3}},
+		append(tetrahedron(), [3]int{0, 1, 2}),
+		{{0, 1, 2}, {0, 2, 3}, {0, 3, 1}, {0, 1, 4}},
+	} {
+		err := tessellation.RequireVertexLinks(t.Context(), 5, tris)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.Contains(t, err.Error(), "at index 0 has a pinched link")
+	}
+}
+
+// A bipyramid has two large links followed by small links. The appended
+// tetrahedron also checks that tables reused across components hold no old edges.
+func vertexLinkBipyramid(n int) [][3]int {
+	tris := make([][3]int, 0, 2*n+4)
+	for k := range n {
+		a, b := k+2, (k+1)%n+2
+		tris = append(tris, [3]int{0, a, b}, [3]int{1, b, a})
+	}
+	for _, tri := range tetrahedron() {
+		tris = append(tris, [3]int{tri[0] + n + 2, tri[1] + n + 2, tri[2] + n + 2})
+	}
+	return tris
+}
+
+func TestVertexLinksReuseTablesAcrossLargeAndSmallFans(t *testing.T) {
+	t.Parallel()
+	const n = 600
+	tris := vertexLinkBipyramid(n)
+	require.NoError(t, tessellation.RequireVertexLinks(t.Context(), n+6, tris))
+	// Duplicate a tetrahedron face after both large links have been audited.
+	tris = append(tris, tris[len(tris)-1])
+	err := tessellation.RequireVertexLinks(t.Context(), n+6, tris)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	require.Contains(t, err.Error(), fmt.Sprintf("at index %d has a pinched link", n+3))
+}
+
+type vertexLinkCancelContext struct {
+	context.Context //nolint:containedctx // deterministic cancellation wrapper used only within one test call.
+	cancel          context.CancelFunc
+	polls           int
+	cancelAt        int
+}
+
+func (c *vertexLinkCancelContext) Err() error {
+	c.polls++
+	if c.polls == c.cancelAt {
+		c.cancel()
+	}
+	return c.Context.Err()
+}
+
+func TestVertexLinksPollWhileBuildingALargeLink(t *testing.T) {
+	t.Parallel()
+	const n = 600
+	tris := vertexLinkBipyramid(n)
+	// The duplicate makes the first link invalid. A cancelled reconstruction
+	// must return cancellation before reaching that link's degree check.
+	tris = append(tris, tris[0])
+	base, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	// The triangle index polls once per 256 triangles. Cancel at the next
+	// poll, while the first large neighbour table is being populated.
+	ctx := &vertexLinkCancelContext{Context: base, cancel: cancel, cancelAt: len(tris)/256 + 1}
+	require.ErrorIs(t, tessellation.RequireVertexLinks(ctx, n+6, tris), context.Canceled)
+	require.Equal(t, ctx.cancelAt, ctx.polls)
+	require.ErrorIs(t, tessellation.RequireVertexLinks(ctx, 0, nil), context.Canceled)
 }
 
 // TestSheetVertexLinksAdmitsAnOpenPathFan is a fan of triangles around a
