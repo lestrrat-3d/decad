@@ -163,7 +163,8 @@ the sense, the thickness and whether the one removed face is the receiver's
 cap-end or cap-start face. The rectangular-boss builder admits one nested,
 hole-free pair of axis-aligned rectangular slabs in the same frame. Both
 sections and all levels must have zero displacement. The lower slab is the
-plate, the upper slab is the boss for the top-open call. `WithNoOpenings`
+plate, the upper slab is the boss for the top-open and bottom-open calls.
+`WithNoOpenings`
 (`stackedshell.Closed`) accepts that order and the reverse order, where the
 lower slab is narrower.
 The reverse order negates both slab intervals and each section's V coordinate,
@@ -173,7 +174,7 @@ changes any held U, V or N component while flipping V, the reverse route
 refuses because the source-to-result map would need a displacement bound.
 Inward thickness `t` must leave a positive floor, a positive lower cavity
 wall, an upper cavity at least `2t` narrower in both directions, and, for a
-closed shell, a positive cavity below the boss roof. It must also leave
+closed or bottom-open shell, a positive cavity below the boss roof. It must also leave
 positive clearance between the boss and the plate's eroded outline. All new
 offset coordinates must be exactly representable. Other stacks continue to
 route S and keep SG3.
@@ -183,6 +184,18 @@ ends at `z2 − t`, where its ceiling faces into the void. Its lower inset,
 ledge and four quarter-cylinder root patches match the top-open construction.
 The completed cavity forms one void shell inside the one outer shell; the
 plate floor, boss roof and root clearances prove they do not meet.
+
+The bottom-open result removes the plate's cap-start face and keeps the boss
+roof. Its cavity ends at `z2 − t` under a ceiling, as the closed result's does,
+and the lower inset's walls run from the plate bottom `z0` to the ledge at
+`z1 − t`. One planar annulus at `z0` joins the plate outline to the lower inset
+and replaces the cavity floor, so the body is a single shell. The plate must
+still be thicker than `2t`. `BossShellBand.CavityBottomZ` is the lower
+cavity's bottom level, `z0 + t` above a kept floor and `z0` here; the measure
+reads the lower cavity over `[CavityBottomZ, z1 − t]`. For the same dimensions
+and thickness, the bottom-open volume is the closed volume less the lower
+inset's area times `t`. Only the rectangular boss opens at the plate bottom;
+the circular boss and the blind pocket keep SG3 there.
 
 The top-open result keeps the source's exterior faces except the boss top.
 Its cavity has a plate inset over `[z0+t, z1-t]`, a horizontal ledge at `z1-t`, and a

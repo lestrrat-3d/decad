@@ -156,11 +156,14 @@ func RecordedBossCircle(p profileRecord) (RoundBossCircle, bool) {
 
 // BossShellBand records the one rounded cavity transition of an inward shell
 // on a two-slab rectangular boss. The two open rings belong to the inner
-// ledge at LowerZ and the upper cavity walls at InterfaceZ.
+// ledge at LowerZ and the upper cavity walls at InterfaceZ. CavityBottomZ is
+// the level of the lower cavity's bottom: Z0+T above a kept floor, Z0 where
+// the cavity is open through the plate bottom.
 type BossShellBand struct {
 	Plate, Boss, Lower, Upper                BossRect
 	Round                                    *RoundBossCircle
 	Z0, InterfaceZ, TopZ, CavityTopZ, LowerZ float64
+	CavityBottomZ                            float64
 	T                                        float64
 	LedgeFace                                int
 	OuterFaceCount                           int

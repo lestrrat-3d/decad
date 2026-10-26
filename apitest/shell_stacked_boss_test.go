@@ -124,21 +124,72 @@ func TestShellOffsetRectangularBoss(t *testing.T) {
 	require.LessOrEqual(t, math.Abs(cutVolume.Value.Base()-(want-6)), cutVolume.Bound.Base())
 }
 
-// Each stacked shell opens only at the cap its shape names. Removing the
-// other cap must not build that shell: the stack falls through to route S,
-// which reads no through-cut and refuses.
+// The rectangular boss shell also opens at the plate bottom. Its volume is
+// the closed arm's volume less the lower inset's area times t, and its
+// bottom is one planar annulus between the plate outline and that inset.
+func TestShellStackedBossOpenAtBottom(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	stack, err := decad.Union(t.Context(), boxBody(t, doc, -10, -10, 10, 10, 5),
+		boxBodyAtZ(t, doc, -5, -5, 5, 5, 5, 5))
+	require.NoError(t, err)
+	shell, err := decad.Shell(t.Context(), stack, decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1),
+		units.Millimeters(1))
+	require.NoError(t, err)
+	v, err := shell.Volume()
+	require.NoError(t, err)
+	// Plate 20x20x5 plus boss 10x10x5, less the 18x18x4 lower cavity (floor
+	// open), the 8x8x4 upper cavity under the kept roof, and the root band
+	// 20/3 + 8*pi + 60.
+	want := 2500.0 - 18*18*4 - 8*8*4 - (60 + 20.0/3 + 8*math.Pi)
+	closedWant := 2500.0 - 18*18*3 - 8*8*4 - (60 + 20.0/3 + 8*math.Pi)
+	require.InDelta(t, 18*18*1, closedWant-want, 1e-9)
+	require.LessOrEqual(t, math.Abs(v.Value.Base()-want), v.Bound.Base())
+	// Moment about z=0: plate 2000 at 2.5, boss 500 at 7.5, lower cavity
+	// 1296 at 2, upper cavity 256 at 7, and the band at its ledge level 4
+	// plus its own offset 43 + 2/3.
+	bandV := 60 + 20.0/3 + 8*math.Pi
+	mz := 5000.0 + 3750 - 1296*2 - 256*7 - (4*bandV + 131.0/3)
+	c, err := shell.Centroid()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(c.Value.Z-mz/want), 1e-12+c.Bound.Base())
+	require.InDelta(t, 0, c.Value.X, 1e-12)
+	require.InDelta(t, 0, c.Value.Y, 1e-12)
+
+	var bottoms int
+	for _, face := range shell.Faces() {
+		pl, ok := face.Surface().(decad.Plane)
+		if !ok || math.Abs(pl.Frame.Origin().Z) > 1e-9 {
+			continue
+		}
+		n, err := face.NormalAt(pl.Frame.Origin())
+		require.NoError(t, err)
+		if n.Value.Z < 0 {
+			bottoms++
+			a, err := face.Area()
+			require.NoError(t, err)
+			require.LessOrEqual(t, math.Abs(a.Value.Base()-(400-324)), a.Bound.Base())
+		}
+	}
+	require.Equal(t, 1, bottoms)
+	mesh, err := shell.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.VolumeVerified())
+	require.LessOrEqual(t, math.Abs(shellMeshSignedVolume(mesh)-v.Value.Base()), 1.0+v.Bound.Base())
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+}
+
+// Each of the other stacked shells opens only at the cap its shape names.
+// Removing the other cap must not build that shell: the stack falls through to
+// route S, which reads no through-cut and refuses.
 func TestShellStackedWrongCapRefuses(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		build func(t *testing.T, doc *decad.Document) *decad.Body
 	}{
-		{name: "rectangular boss", build: func(t *testing.T, doc *decad.Document) *decad.Body {
-			stack, err := decad.Union(t.Context(), boxBody(t, doc, -10, -10, 10, 10, 5),
-				boxBodyAtZ(t, doc, -5, -5, 5, 5, 5, 5))
-			require.NoError(t, err)
-			return stack
-		}},
 		{name: "round boss", build: func(t *testing.T, doc *decad.Document) *decad.Body {
 			return roundBossFromSketch(t, doc, 10, 10)
 		}},

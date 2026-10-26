@@ -13,8 +13,8 @@ import (
 )
 
 // rectBoss handles only the exact two-slab, nested rectangular case, open at
-// its cap end or, with no removed face, closed. An unrelated stack falls
-// through to the ordinary Shell route.
+// its cap end, open at its cap start (the plate bottom) or, with no removed
+// face, closed. An unrelated stack falls through to the ordinary Shell route.
 func rectBoss(ctx context.Context, env topo.Env, sp stackedrecord.Payload, view breprecord.Payload,
 	call Call) (*topo.Body, bool, error) {
 	if !twoSlabs(sp) {
@@ -26,7 +26,8 @@ func rectBoss(ctx context.Context, env topo.Env, sp stackedrecord.Payload, view 
 		return nil, false, nil
 	}
 	closed := call.Removed == 0
-	if !call.Inward || (!closed && !call.CapEnd) {
+	bottomOpen := call.CapStart
+	if !call.Inward || (!closed && !call.CapEnd && !bottomOpen) {
 		return nil, false, nil
 	}
 	refuse := func(why string) (*topo.Body, bool, error) {
@@ -41,13 +42,16 @@ func rectBoss(ctx context.Context, env topo.Env, sp stackedrecord.Payload, view 
 		boss.U0 > plate.U0+t && boss.V0 > plate.V0+t && boss.U1 < plate.U1-t && boss.V1 < plate.V1-t) {
 		return refuse("has insufficient floor, wall, or root clearance")
 	}
-	if closed && b.Z1-b.Z0 <= t {
+	if (closed || bottomOpen) && b.Z1-b.Z0 <= t {
 		return refuse("has no cavity below the kept boss roof")
 	}
 	lower, upper := plate.Inset(t), boss.Inset(t)
 	lowerZ := a.Z1 - t
-	cavityTopZ := b.Z1
-	if closed {
+	cavityTopZ, cavityBottomZ := b.Z1, a.Z0+t
+	if bottomOpen {
+		cavityBottomZ = a.Z0
+	}
+	if closed || bottomOpen {
 		cavityTopZ = b.Z1 - t
 		if proofbound.ExactSumRound(cavityTopZ, b.Z1, -t) != 0 {
 			return refuse("needs an exactly represented cavity ceiling")
@@ -63,24 +67,40 @@ func rectBoss(ctx context.Context, env topo.Env, sp stackedrecord.Payload, view 
 	}
 	// The source view has a single top cap. All its other faces keep their
 	// recorded geometry; the result gets new face(k)/wall(k) roles on rebuild.
-	topCapIdx, why := soleCap(view.Faces, b.Z1, true, "top cap")
+	// The removed cap is the top cap, the bottom cap when bottomOpen, and
+	// none when closed.
+	capZ, capOutward, capName := b.Z1, true, "top cap"
+	if bottomOpen {
+		capZ, capOutward, capName = a.Z0, false, "bottom cap"
+	}
+	capIdx, why := soleCap(view.Faces, capZ, capOutward, capName)
 	if why != "" {
 		return refuse(why)
 	}
 	if closed {
-		topCapIdx = -1
+		capIdx = -1
 	}
-	r := newRecord(sp, view, topCapIdx, 16)
+	r := newRecord(sp, view, capIdx, 16)
 	outerFaceCount := len(r.p.Faces)
-	r.plane(lower.Profile(), a.Z0+t, true)
-	r.walls(lower.Profile(), a.Z0+t, lowerZ, true)
+	if bottomOpen {
+		// The cavity runs through the plate bottom: one annulus rim between
+		// the plate outline and the lower inset replaces the cavity floor.
+		rim, err := annulus(ctx, plate.Profile(), lower.Profile())
+		if err != nil {
+			return nil, true, err
+		}
+		r.plane(rim, a.Z0, false)
+	} else {
+		r.plane(lower.Profile(), cavityBottomZ, true)
+	}
+	r.walls(lower.Profile(), cavityBottomZ, lowerZ, true)
 	ledge, err := annulus(ctx, lower.Profile(), boss.Profile())
 	if err != nil {
 		return nil, true, err
 	}
 	ledgeFace := r.plane(ledge, lowerZ, false)
 	r.walls(upper.Profile(), b.Z0, cavityTopZ, true)
-	if closed {
+	if closed || bottomOpen {
 		r.plane(upper.Profile(), cavityTopZ, false)
 	} else {
 		rim, err := annulus(ctx, boss.Profile(), upper.Profile())
@@ -91,7 +111,7 @@ func rectBoss(ctx context.Context, env topo.Env, sp stackedrecord.Payload, view 
 	}
 	r.p.BossShell = &prismshell.BossShellBand{Plate: plate, Boss: boss, Lower: lower, Upper: upper,
 		Z0: a.Z0, InterfaceZ: a.Z1, TopZ: b.Z1, CavityTopZ: cavityTopZ,
-		LowerZ: lowerZ, T: t, LedgeFace: ledgeFace, Frame: sp.Frame,
+		CavityBottomZ: cavityBottomZ, LowerZ: lowerZ, T: t, LedgeFace: ledgeFace, Frame: sp.Frame,
 		OuterFaceCount: outerFaceCount, Closed: closed}
 	return r.build(ctx, env)
 }
@@ -166,7 +186,7 @@ func roundBoss(ctx context.Context, env topo.Env, sp stackedrecord.Payload, view
 	}
 	r.plane(rim, b.Z1, true)
 	r.p.BossShell = &prismshell.BossShellBand{Plate: plate, Lower: lower, Round: &circle,
-		Z0: a.Z0, InterfaceZ: a.Z1, TopZ: b.Z1, LowerZ: lowerZ,
+		Z0: a.Z0, InterfaceZ: a.Z1, TopZ: b.Z1, LowerZ: lowerZ, CavityBottomZ: a.Z0 + t,
 		T: t, LedgeFace: ledgeFace, Frame: sp.Frame}
 	return r.build(ctx, env)
 }
