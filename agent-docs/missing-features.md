@@ -185,7 +185,7 @@ moves its row to the matching section above, with that doc as owner.
 | Pattern along a path that turns each instance to follow the path, or that joins the copies, or spaces by distance | `PathPatternCopies` copies a body at equal arc-length points of a `Path` and keeps its orientation (`path_pattern.go`); `PatternSpec` holds `LinearPattern` and `CircularPattern` only (`pattern.go`) |
 | Fillet by chord length on an edge that is not a right angle, with setback corners or with a curvature-continuous blend; chamfer by distance and angle on an edge that is not a right angle | `Fillet` takes one radius and no options (`fillet.go`), and `FilletChord` converts a chord on right-angled planar edges only (`fillet_chord.go`); `Chamfer` takes one distance, or two with `WithAsymmetricChamfer` (`chamfer.go`); `ChamferAngle` converts an angle on right-angled planar edges only (`chamfer_angle.go`) |
 | Shell with a different thickness per face, or a wall on both sides of the original surface | `Shell` takes one thickness, and `WithShellSense` picks one side (`shell.go`) |
-| Screw boss for a plastic part | No entry point exists |
+| Boss with ribs or a root fillet, a non-round or tilted boss, a boss on a curved face, or a pilot with a head or draft | `Boss` raises one round boss with a plain blind pilot on a planar face (`boss.go`; `agent-docs/boss-design.md` §3) |
 | T-spline (Form) sculpting | No entry point exists; free-form surfaces are NURBS (`decad.NURBSSurface`) |
 | Mesh bodies as input: convert to a solid, reduce, repair, remesh | No entry point exists; `decad.Mesh` is an output only |
 | Lattice or volumetric infill for printing | No entry point exists |

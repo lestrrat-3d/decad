@@ -73,6 +73,54 @@ func combineTools(ctx context.Context, d *Document, kind OperationKind, b *Body,
 	return acc, nil
 }
 
+// toolStep is one boolean of a combineToolSteps chain: op applies tool to the
+// running result.
+type toolStep struct {
+	op   meshbool.OperationKind
+	tool *Body
+}
+
+// combineToolSteps applies each step to b in order, with the running result as
+// the target, and commits the final body in place of b. It is combineTools for a
+// chain whose steps differ in kind, such as a union followed by a cut. Nothing is
+// registered until every step has succeeded, so a failure leaves b live and the
+// document unchanged. The tools remain private to this call.
+func combineToolSteps(ctx context.Context, d *Document, kind OperationKind, b *Body, steps []toolStep,
+	capture *operationHistoryCapture) (*Body, error) {
+	if err := d.requireSameContainer([]*Body{b}); err != nil {
+		return nil, err
+	}
+	privateSpan := capture.producerSpan(d)
+	start := d.nextProducerID() + privateSpan
+	ref := start
+	var warnings opdiagnostic.CompositeSummaries
+	acc := b
+	for _, step := range steps {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		next, err := booleanBody(ctx, step.op, acc, step.tool, ref)
+		if err != nil {
+			return nil, err
+		}
+		warnings.Add(next.n.OperationWarnings, int(kind))
+		acc = next
+		ref++
+	}
+	acc.n.OperationWarnings = warnings.Records()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := d.requireLive(b); err != nil {
+		return nil, err
+	}
+	inputs := []OperationInput{{Body: b, Role: operationRoleTarget, Use: InputConsumed}}
+	if err := d.commitOperationSpanPrefixIn(ctx, nil, kind, inputs, acc, privateSpan, ref-start, b); err != nil {
+		return nil, err
+	}
+	return acc, nil
+}
+
 // removeTools retires the tool bodies a feature registered. A tool is
 // live until the feature returns, so a removal cannot fail except on a body
 // already gone.
