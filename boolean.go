@@ -105,6 +105,11 @@ import (
 // (agent-docs/boolean-chain-regroup-design.md); only a failure of that retry too
 // returns the refusal.
 //
+// A Union of three or more bodies that no certified route takes as a set joins
+// the bodies two at a time, left to right, after trying the whole chain on copies
+// (agent-docs/union-fold-design.md): a chain whose step refuses returns the
+// many-body refusal and leaves every body live.
+//
 // It returns ctx.Err() unchanged when ctx is canceled before the document
 // commit.
 func Union(ctx context.Context, first *Body, others ...*Body) (*Body, error) {
@@ -122,6 +127,13 @@ func Union(ctx context.Context, first *Body, others ...*Body) (*Body, error) {
 	bodies = append(bodies, first)
 	bodies = append(bodies, others...)
 	body, err := performUnionMany(ctx, bodies)
+	if errors.Is(err, ErrUnsupported) && isManyUnionRefusal(err) {
+		// No certified route takes the set as a whole: join the bodies two at a time,
+		// after trying the whole chain on copies (agent-docs/union-fold-design.md).
+		if folded, ferr := unionFold(ctx, bodies); ferr == nil {
+			return folded, nil
+		}
+	}
 	return body, operationError(OperationUnion, err)
 }
 

@@ -8,6 +8,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `boolean.go` | Public `Union`/`Cut`/`Intersect`, `BooleanError` mapping, contained-Cut source volume, centroid, and moment capture, and scale-source marking; hands route order to `internal/booleandispatch/` with root-only hooks. See evaluator §9 and operation-history-design. |
+| `boolean_fold.go` | Two-at-a-time fold of a many-body `Union` that no certified route takes: a trial chain on copies, then the real one. See union-fold design. |
 | `boolean_many.go` | Validates and commits a multi-body Union, dispatching the certified pattern, one-scene prism and straight-source Loft routes and transient prism pair chains. See API §8 and prism-boolean §4.6. |
 | `boolean_regroup.go` | Chain regroup for a refused two-body Boolean: reads `Document.producers`, maps invariant-break errors. See boolean-chain-regroup-design. |
 | `surface_trim.go` | Public `Trim`, `Extend` and `Split` entry checks and commits; `internal/surfacetrim/` builds them. See surface-intersection §2–§3. |
