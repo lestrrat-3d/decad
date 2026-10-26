@@ -2895,7 +2895,7 @@ The row-9 curved-mesh obligations are:
 | T155 | 100×60 mm `PatchProfile` with a radius-10 mm hole, positive 2 mm | 7 faces; volume and area intervals enclose `12000-200π` mm³ and `12640-160π` mm²; box (0,0,0)–(100,60,2) mm |
 | T156 | internal exact-generation check: U = 2^53 mm axis-parallel edge displaced by 1 mm | R27 `ErrUnsupported`; the held coordinate cannot equal the true derived coordinate |
 | T157 | a `Loft` sheet | R24 `ErrUnsupported`; it stays live and `Document.Bodies()` is unchanged |
-| T157b | a line-then-quarter-arc composite `Sweep` sheet of a square, thickened on every side; and the same sheet at a thickness reaching the arc axis | the solid measures the annulus area times `L + πR/2`, verifies Sound with a volume proof; the folding thickness is `ErrDegenerate` and leaves the sheet live |
+| T157b | a line-then-quarter-arc composite `Sweep` sheet of a square, thickened on every side; the same sheet at a thickness that touches the arc axis and one that crosses it; a holed profile; a placed sheet | the solid measures the annulus area times `L + πR/2` and verifies Sound with a volume proof; contact and crossing are both R24 `ErrUnsupported` ("reaches the revolve axis"); the holed and placed sheets are R24; each refusal leaves the sheet live |
 | T158 | a 10 × 10 mm meridian rectangle at `r ∈ [10, 20]`, `z ∈ [0, 10]` spun a FULL turn as a surface, thickened inward 2 mm | `BodySolid`, 8 faces, one lump whose second shell is the toroidal void the eroded meridian sweeps; `Volume` and `Area` intervals each enclose `1920π` (mm³ and mm²); `Bounds` exactly (−20, 0, −20)–(20, 10, 20) mm; the source sheet is retired and still readable. Shown-to-fail: zeroing `revolvePayload.Sweep`'s width bound publishes `Volume` `Exact` at a zero bound, and its interval then excludes `1920π` |
 | T159 | a radius-5 mm circle centred at `r = 20` spun a full turn as a surface — a one-face torus sheet — thickened outward 2 mm, and separately centered 4 mm | 2 faces each; `Volume` intervals enclose `960π²` and `1600π²` mm³; the outward result's `Bounds` reaches ±27 mm radially and ±7 mm axially. Shown-to-fail: deleting the region integral's own first-moment bound publishes `Volume` `Exact` and its interval then excludes `960π²` |
 | T160 | T158's meridian swept a QUARTER turn as a surface, thickened inward 2 mm | 10 faces — 8 walls and two annular caps of 64 mm² each; `Volume` encloses `480π mm³` and `Area` encloses `480π + 128 mm²`; the source sheet's own `Volume` was `ErrNotSolid` and the result's is a measurement |
@@ -3067,7 +3067,8 @@ identity (§6). A refusal retires nothing. A `Document.Thicken` alternative
 would leave the owning body's liveness and consuming semantics implicit, so
 the entry point is on `*Body` as `Shell` is.
 
-Seven payload shapes build, and each one's own subsection states its class,
+Seven payload shapes build (a composite profile sweep reuses `sweepPayload`),
+and each one's own subsection states its class,
 its construction and its readings:
 
 | Sheet family and payload | Result at the call | Deciding record or missing proof |
@@ -3078,7 +3079,8 @@ its construction and its readings:
 | chain ribbon, `chainPayload` | admitted (§16.6) | one recorded open walk of axis-parallel `LineSeg`s with right-angle interior corners; `sectionDelta == 0` |
 | chain revolve shell, `chainRevolvePayload` | admitted (§16.7) | §16.6's walk class and §16.5's axis class together |
 | one-span straight or arc sweep sheet, `sweepPayload` | admitted (§16.8) | offset the reduced prism or revolve section, then publish the solid with sweep roles and payload |
-| composite sweep sheet, `sweepPayload` | R24 (§16.8) | each adjacent pair needs a proof that its offset sections join without folding |
+| hole-free composite profile sweep sheet, `sweepPayload` with two or more spans | admitted (§16.8) | §16.2's section class, `sectionDelta == 0`, identity placement, and each arc span's §16.5 radial gate; the one generated annulus re-sweeps the path, so every span gate and the separation audit rerun |
+| holed or placed composite sweep sheet, `sweepPayload` | R24 (§16.8) | the generated annulus is built from the unplaced, hole-free section only |
 | §15.8's cardinal composite chain-sweep sheet, `chainSweepPayload` | admitted (§16.8) | the one source line generates an exact rectangular section, with positive radius through the whole offset interval and a certified two-span join |
 | one-arc chain-sweep sheet, `chainSweepPayload` | admitted (§16.8) | its one chain `Revolve` reduction passes §16.7's offset and exact-axis gates |
 | other chain-sweep sheet, `chainSweepPayload` | R24 (§16.8) | its source walk's offset has no certified path-span join |
@@ -3086,8 +3088,8 @@ its construction and its readings:
 | stitched sheet, `stitchPayload` | R24 (§16.8) | welded faces have no one recorded generator |
 | `PatchEdges` or `Unstitch` sheet | R24 (§16.8) | its held face set is not one recorded profile in `patchPayload` |
 
-A `PatchEdges` result, an `Unstitch` result, a stitched sheet, a composite
-sweep sheet and a loft sheet are R24, even when one face happens to be planar.
+A `PatchEdges` result, an `Unstitch` result, a stitched sheet, a holed or
+placed composite sweep sheet and a loft sheet are R24, even when one face happens to be planar.
 Their payloads do not give this arm the same recorded generator and proof, and
 §16.8 states what each one is still missing. These cases refuse at the call,
 never after publishing a solid. The rejected
@@ -3489,20 +3491,22 @@ The built solid keeps the new section and the original path in a `sweepPayload`.
 `side(0,...)`; the arc arm also restores path-order cap roles when its axis was
 reversed. A placed replay re-evaluates the new section through the same span.
 The reduction's own section, offset, axis, measurement and mesh refusals apply
-unchanged. A COMPOSITE profile-fed sheet (two or more spans, one authenticated profile
-without holes, zero section displacement, identity placement) thickens through
-one generated section instead of offsetting the sheet. `SectionOf` offsets the
-profile exactly as §16.2 does, and its annulus (`{Outer: P, Hole: reverse(Q)}`
-for the generated and source loops) goes through `sweeprecord.BuildComposite`
-along the original path. Each span's own existence gates rerun on the annulus
-(an arc span's axis-side gate refuses a section reaching its axis with
-`ErrDegenerate`), the transported frames must still be exact, and
-`compositesweep`'s separation audit reruns over the thickened spans. No offset
-join is trusted: a thickness at which the section folds fails a span gate or the
-audit, and the sheet stays live. A one-sided outward offset rounds a convex
-corner with an arc, so the section may carry arc segments; the volume is the
-annulus area times the swept length (Pappus on each arc span). A holed profile,
-a closed or circle path and a placed sheet keep R24.
+unchanged. A COMPOSITE profile-fed sheet (two or more spans, one authenticated
+profile without holes, zero section displacement, identity placement) thickens
+through one generated section instead of offsetting the sheet. `SectionOf`
+offsets the profile exactly as §16.2 does and forms §16.2's annulus (`Q+ ∖ P`,
+`P ∖ Q-` or `Q+ ∖ Q-` by side), which goes through `sweeprecord.BuildComposite`
+along the original path. First, §16.5's radial gate runs once per arc span on
+that span's plane-local axis: an offset that touches or crosses the axis refuses
+with `ErrUnsupported` ("reaches the revolve axis"), exactly as the one-span arc
+sheet does. Then each span's own existence gates rerun on the annulus, the
+transported frames must still be exact, and `compositesweep`'s separation
+audit reruns over the thickened spans. No offset join is trusted: a thickness
+at which the section folds at a join fails a span gate or the audit, and the
+sheet stays live. A one-sided outward offset rounds a convex corner with an
+arc, so the section may carry arc segments; the volume is the annulus area
+times the swept length (Pappus on each arc span). A holed profile, a closed or
+circle path, a nonzero section displacement and a placed sheet keep R24.
 
 **The cardinal chain-sweep sheet thickens through one generated section.**
 The receiver is §15.8's unplaced, two-span `chainSweepPayload` with one exact

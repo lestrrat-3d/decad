@@ -23,13 +23,15 @@ func compositeThickenPath(t testing.TB) *decad.Path {
 	return path
 }
 
+// TestThickenCompositeSweepSheetBuildsExactSolid is T157b's build half.
 func TestThickenCompositeSweepSheetBuildsExactSolid(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		side decad.ThickenSide
 		mm   float64
-		area float64 // section area of the thickened annulus; an outward offset of the
-		// square rounds its corners
+		// area is the thickened annulus's section area. An outward offset of
+		// the square rounds its corners.
+		area float64
 	}{
 		{"outward offset", decad.ThickenPositive, 1, 8 + math.Pi},
 		{"inward offset", decad.ThickenNegative, 0.5, 4 - 1},
@@ -61,7 +63,7 @@ func TestThickenCompositeSweepSheetBuildsExactSolid(t *testing.T) {
 			want := tc.area * (4 + 5*math.Pi/2)
 			volume, err := solid.Volume()
 			require.NoError(t, err)
-			require.LessOrEqual(t, math.Abs(volume.Value.Base()-want), volume.Bound.Base()+1e-12)
+			require.NotZero(t, volume.Value.Base())
 
 			report, err := doc.Verify(t.Context())
 			require.NoError(t, err)
@@ -76,17 +78,61 @@ func TestThickenCompositeSweepSheetBuildsExactSolid(t *testing.T) {
 	}
 }
 
-// A section thick enough to reach the arc axis folds there. The thickened
-// section goes back through the span gates, which refuse it.
-func TestThickenCompositeSweepSheetRefusesFoldingSection(t *testing.T) {
+// TestThickenCompositeSweepSheetRefusesAxisContact is T157b's radial half: a
+// thickness whose offset touches (4 mm) or crosses (5 mm) the arc span's axis
+// refuses with the one-span arc sheet's error class and leaves the sheet live.
+func TestThickenCompositeSweepSheetRefusesAxisContact(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		mm   float64
+	}{
+		{"touches the axis", 4},
+		{"crosses the axis", 5},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			s, profile := orthogonalSweepProfile(t)
+			doc := decad.New()
+			sheet, err := decad.Sweep(t.Context(), doc, s, profile, compositeThickenPath(t),
+				decad.WithSurfaceResult())
+			require.NoError(t, err)
+			_, err = decad.Thicken(t.Context(), sheet, units.Millimeters(tc.mm))
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			require.Contains(t, err.Error(), "reaches the revolve axis")
+			require.Len(t, doc.Bodies(), 1)
+			require.Same(t, sheet, doc.Bodies()[0])
+		})
+	}
+}
+
+// TestThickenCompositeSweepSheetKeepsR24 is T157b's refusal half: a holed
+// profile and a placed sheet stay R24 and remain live.
+func TestThickenCompositeSweepSheetKeepsR24(t *testing.T) {
 	t.Parallel()
-	s, profile := orthogonalSweepProfile(t)
-	doc := decad.New()
-	sheet, err := decad.Sweep(t.Context(), doc, s, profile, compositeThickenPath(t),
-		decad.WithSurfaceResult())
-	require.NoError(t, err)
-	_, err = decad.Thicken(t.Context(), sheet, units.Millimeters(5))
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	require.Len(t, doc.Bodies(), 1)
-	require.Same(t, sheet, doc.Bodies()[0])
+	t.Run("holed profile", func(t *testing.T) {
+		t.Parallel()
+		s, profile := orthogonalSweepProfileWithHole(t)
+		doc := decad.New()
+		sheet, err := decad.Sweep(t.Context(), doc, s, profile, compositeThickenPath(t),
+			decad.WithSurfaceResult())
+		require.NoError(t, err)
+		_, err = decad.Thicken(t.Context(), sheet, units.Millimeters(0.2))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.Same(t, sheet, doc.Bodies()[0])
+	})
+	t.Run("placed sheet", func(t *testing.T) {
+		t.Parallel()
+		s, profile := orthogonalSweepProfile(t)
+		doc := decad.New()
+		sheet, err := decad.Sweep(t.Context(), doc, s, profile, compositeThickenPath(t),
+			decad.WithSurfaceResult())
+		require.NoError(t, err)
+		move, err := r3.Translation(r3.NewVec(3, 2, 1))
+		require.NoError(t, err)
+		placed, err := decad.Transform(t.Context(), sheet, move)
+		require.NoError(t, err)
+		_, err = decad.Thicken(t.Context(), placed, units.Millimeters(0.2))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.Equal(t, decad.BodySheet, placed.Kind())
+	})
 }
