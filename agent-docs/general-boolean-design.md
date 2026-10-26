@@ -714,10 +714,11 @@ The result is the class-B `brepPayload` an Extrude shaft gives: the full-length
 D-flat and keyway of `apitest/revolve_shaft_class_b_test.go` measure the same
 value and bound bit for bit as their Extrude twins. The crossing charges the
 flat's section displacement, so brep-modify SB1 refuses `Fillet` and
-`Chamfer` of its edges. A tool placed by `Transform` carries its own
-placement, misses the shared-placement condition of B.3 as it does for an
-Extrude target, and keeps the mesh path, where retained-edge-blend §2 blends
-those edges.
+`Chamfer` of its edges; `Thread` on the cut wall builds, to its Extrude
+twin's volume. A shaft or a tool placed by `Transform` carries its own
+placement, misses the shared-placement condition of B.3 (`AdmitPair`) as it
+does for an Extrude pair, and keeps the mesh path, where retained-edge-blend
+§2 blends those edges.
 
 ### Common-axis full revolutions
 
@@ -1257,8 +1258,10 @@ are relations, never literals.
   builds a keyway with five planes, `40·(100π − (3·√91 + 100·asin(0.3) − 42))`.
   Each verifies its mesh at `VerifyAll` and matches its Extrude twin's value
   and bound bit for bit; a shaft about the sketch's V axis builds the same
-  D-flat. A tool ending inside the span (drawn either way along the axis), a
-  tool wall in the end plane, a tilted tool, a `Transform`-placed tool, a
+  D-flat, and an Acme thread of pitch 8 on the D-flat's wall builds to its
+  twin's volume. A tool ending inside the span (drawn either way along the
+  axis), a tool wall in the end plane (missed by B8), a tilted tool, a
+  `Transform`-placed tool, a
   stepped shaft and a tube each keep the mesh path, and `Fillet` and
   `Chamfer` of the class-B flat's edges refuse with SB1.
   `internal/revolveplan/cylinder_view_test.go` misses each view condition

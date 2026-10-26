@@ -170,6 +170,35 @@ func TestRevolvedShaftClassBCut(t *testing.T) {
 		requireClassBShaft(t, got, 3, shaftLess(flatSegment()))
 	})
 
+	t.Run("thread on the D-flat wall", func(t *testing.T) {
+		t.Parallel()
+		// The cut wall takes a thread, to the same volume as its Extrude
+		// twin's. A coarse pitch keeps the thread to five turns.
+		threaded := func(shaft func(*testing.T, *retentionScene) *decad.Body) (float64, decad.Measurement) {
+			sc := newRetentionScene()
+			cut, err := decad.Cut(t.Context(), shaft(t, sc),
+				shaftTool(t, sc, flatPlane(t, sc), -5, -20, shaftL+5, 20))
+			require.NoError(t, err)
+			before, err := cut.Volume()
+			require.NoError(t, err)
+			out, err := decad.Thread(t.Context(), cut, decad.ThreadSpec{
+				Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(8), Form: acmeForm()})
+			require.NoError(t, err)
+			after, err := out.Volume()
+			require.NoError(t, err)
+			b, err := before.Value.In(units.CubicMillimeter)
+			require.NoError(t, err)
+			return b, after
+		}
+		before, got := threaded(revolvedShaft)
+		_, twin := threaded(extrudedShaft)
+		require.Equal(t, twin.Value, got.Value)
+		require.Equal(t, twin.Bound, got.Bound)
+		after, err := got.Value.In(units.CubicMillimeter)
+		require.NoError(t, err)
+		require.Less(t, after, before, `the thread removes material`)
+	})
+
 	t.Run("blends of the D-flat refuse", func(t *testing.T) {
 		t.Parallel()
 		// The class-B flat carries a crossing displacement, so brep-modify's
@@ -227,6 +256,8 @@ func TestRevolvedShaftClassBMisses(t *testing.T) {
 
 	t.Run("tool wall in the end plane", func(t *testing.T) {
 		t.Parallel()
+		// The tool's x = 0 wall lies in the shaft's end cap plane. B8, not the
+		// tool-wall gate, misses this pair: the gate never sees it.
 		sc := newRetentionScene()
 		got, err := decad.Cut(t.Context(), revolvedShaft(t, sc),
 			shaftTool(t, sc, flatPlane(t, sc), 0, -20, shaftL+5, 20))
