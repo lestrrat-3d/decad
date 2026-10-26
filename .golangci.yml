@@ -65,6 +65,10 @@ linters:
           msg: raw big.Rat arithmetic; use proof.AddRat, SubRat, MulRat, QuoRat or CmpRat
     goconst:
       min-occurrences: 5
+    predeclared:
+      # cap names an end cap of a body throughout the proofs and tests.
+      ignore:
+        - cap
     govet:
       disable:
         - shadow
