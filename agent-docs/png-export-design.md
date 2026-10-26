@@ -15,6 +15,7 @@ type View struct {
     FieldOfView   units.Value
     Colors        []color.RGBA
     HiddenEdges   bool
+    Shadows       bool
 }
 
 func IsometricView(width, height int) View
@@ -51,7 +52,7 @@ image axis flipped, turns the tests red.
 ## 4. Not covered
 
 - Axes, dimensions and text, and outlines or hidden edges on a perspective camera.
-- Materials, textures, shadows and anti-aliasing, and a colour for the faces that look away from the camera.
+- Materials, textures and anti-aliasing, soft or multiple-light shadows, and a colour for the faces that look away from the camera.
 - A transparent background and image formats other than PNG.
 - Drawing a mesh body together with bodies.
 
@@ -119,3 +120,15 @@ finds behind a surface (`agent-docs/dxf-export-design.md` D5, D6).
 | E2 | The dashes are drawn over the shading and under the outlines, so with `Outlines` set a visible edge covers a dash where the two cross. |
 | E3 | The zero value draws none, and the bytes are those of §1 to §8. `HiddenEdges` is independent of `Outlines`. |
 | E4 | `HiddenEdges` with `FieldOfView` is `ErrDegenerate`, as `Outlines` with it is. `PNGBodies` and `MeshPNG` take the field too, and a hidden run is hidden by any body. |
+
+## 10. Shadows
+
+`View.Shadows` casts the key light's shadows, so a tall part visibly shades the ground or a neighbour beside it.
+
+| Decision | Rule |
+|---|---|
+| H1 | The key light is the one of §1: raised 0.5 and 0.35 to the left of the camera in the camera's own axes. A shadow map is the scene seen from the light along that direction by an orthographic camera, drawn into a depth buffer of side `2·max(Width, Height)` clamped to 512 to 4096 pixels. |
+| H2 | Each covered pixel's world point is rebuilt from its place and depth, mapped into the light's view and compared with the nearest depth there. The pixel is in shadow when the map's depth is nearer by more than a bias of `1.5 + 2·tan θ` pixels of the map, `θ` being the angle between the face's normal and the light, so no face shadows itself. |
+| H3 | A pixel in shadow takes its face's base colour at the ambient level, 0.3, which is the level of a face turned from the light. A face turned from the light is left as it was. So a convex part shows no shadow on itself, and the bytes of a lone block are those without `Shadows`. |
+| H4 | The shadow of a body falls on the others drawn in the same image by `PNGBodies`. The shadow is hard, one light, one sample, so its edge is as fine as the map and the image. |
+| H5 | The zero value draws none, and the bytes are those of §1 to §9. `Shadows` with `FieldOfView` is `ErrDegenerate`. `MeshPNG` and `PNGBodies` take the field too. |

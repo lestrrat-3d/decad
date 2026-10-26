@@ -274,7 +274,7 @@ func RenderTinted(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []co
 	for i := range img.Pix {
 		img.Pix[i] = 0xff // opaque white
 	}
-	if _, err := draw(ctx, verts, tris, tints, proj, img); err != nil {
+	if _, err := draw(ctx, verts, tris, tints, proj, img, nil); err != nil {
 		return nil, err
 	}
 	return img, nil
@@ -287,12 +287,12 @@ func DepthBuffer(ctx context.Context, verts []r3.Vec, tris [][3]int, proj Projec
 	if err := checkMesh(verts, tris); err != nil {
 		return nil, err
 	}
-	return draw(ctx, verts, tris, nil, proj, nil)
+	return draw(ctx, verts, tris, nil, proj, nil, nil)
 }
 
 // draw rasterizes the triangles, colouring img when it is not nil, and returns
 // the depth buffer.
-func draw(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []color.RGBA, proj Projection, img *image.RGBA) ([]float64, error) {
+func draw(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []color.RGBA, proj Projection, img *image.RGBA, ids []int32) ([]float64, error) {
 	screen := make([]screenVertex, len(verts))
 	for i, v := range verts {
 		x, y, depth := proj.Project(v)
@@ -325,14 +325,14 @@ func draw(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []color.RGBA
 			}
 			fill = shade(front, view, proj.dir, proj.right, proj.up, normal)
 		}
-		fillTriangle(img, depths, proj.Width, screen[t[0]], screen[t[1]], screen[t[2]], fill)
+		fillTriangle(img, depths, ids, int32(ti), proj.Width, screen[t[0]], screen[t[1]], screen[t[2]], fill)
 	}
 	return depths, nil
 }
 
 // fillTriangle records every pixel whose centre lies in the triangle and that
 // is nearer than what is drawn there, colouring img when it is not nil.
-func fillTriangle(img *image.RGBA, depths []float64, width int, a, b, c screenVertex, fill color.RGBA) {
+func fillTriangle(img *image.RGBA, depths []float64, ids []int32, id int32, width int, a, b, c screenVertex, fill color.RGBA) {
 	area := (b.x-a.x)*(c.y-a.y) - (b.y-a.y)*(c.x-a.x)
 	if area == 0 {
 		return
@@ -359,6 +359,9 @@ func fillTriangle(img *image.RGBA, depths []float64, width int, a, b, c screenVe
 				continue
 			}
 			depths[at] = depth
+			if ids != nil {
+				ids[at] = id
+			}
 			if img != nil {
 				img.SetRGBA(x, y, fill)
 			}
@@ -406,4 +409,113 @@ func DrawDashed(img *image.RGBA, proj Projection, segments [][2][2]float64, c co
 			}
 		}
 	}
+}
+
+// RenderShadowed is [RenderTinted] with shadows cast by the key light: a pixel
+// the light cannot reach, because a nearer triangle lies between it and the
+// light, takes its face's base colour at the ambient level, as a face turned
+// from the light does. Only an orthographic camera is drawn; a perspective one is
+// [ErrDegenerate].
+//
+// The shadow map is the scene seen from the light, an orthographic camera along
+// the key light's direction, drawn into a depth buffer of side shadowSize. A
+// pixel's world point is rebuilt from its depth, mapped into that view and
+// compared with the nearest depth there, less a bias of the map's own pixel,
+// widened for a face that meets the light at a grazing angle so that no face
+// shadows itself.
+func RenderShadowed(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []color.RGBA, cam Camera,
+	width, height, shadowSize int) (*image.RGBA, error) {
+	if cam.FieldOfView != 0 {
+		return nil, fmt.Errorf("%w: shadows are not drawn with a perspective camera", ErrDegenerate)
+	}
+	proj, err := NewProjection(verts, cam, width, height)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkMesh(verts, tris); err != nil {
+		return nil, err
+	}
+	if tints != nil && len(tints) != len(tris) {
+		return nil, fmt.Errorf("%w: %d tints for %d triangles", ErrDegenerate, len(tints), len(tris))
+	}
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for i := range img.Pix {
+		img.Pix[i] = 0xff // opaque white
+	}
+	ids := make([]int32, width*height)
+	for i := range ids {
+		ids[i] = -1
+	}
+	depths, err := draw(ctx, verts, tris, tints, proj, img, ids)
+	if err != nil {
+		return nil, err
+	}
+	toLight, _ := proj.dir.Scale(-1).Add(proj.up.Scale(lightUp)).Sub(proj.right.Scale(lightLeft)).Normalize()
+	lightCam := Camera{Direction: toLight.Scale(-1), Up: cam.Up}
+	if _, _, _, err := lightCam.axes(); err != nil {
+		lightCam.Up = proj.right // the light lies along the camera's up: any other way up will do
+	}
+	lproj, err := NewProjection(verts, lightCam, shadowSize, shadowSize)
+	if err != nil {
+		return nil, err
+	}
+	shadowMap, err := DepthBuffer(ctx, verts, tris, lproj)
+	if err != nil {
+		return nil, err
+	}
+	for y := range height {
+		if y%64 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
+		for x := range width {
+			at := y*width + x
+			if ids[at] < 0 {
+				continue
+			}
+			t := tris[ids[at]]
+			normal, ok := verts[t[1]].Sub(verts[t[0]]).Cross(verts[t[2]].Sub(verts[t[0]])).Normalize()
+			if !ok {
+				continue
+			}
+			view := proj.dir
+			if normal.Dot(view) > 0 {
+				normal = normal.Scale(-1) // seen from behind: the side that faces the camera
+			}
+			cos := normal.Dot(toLight)
+			if cos <= 0 {
+				continue // turned from the light: already at the ambient level
+			}
+			// The pixel's world point: the image plane's right and up by the pixel's place, and
+			// the view direction by its depth.
+			px := proj.centreX + (float64(x)+0.5-float64(width)/2)/proj.scale
+			py := proj.centreY - (float64(y)+0.5-float64(height)/2)/proj.scale
+			world := proj.right.Scale(px).Add(proj.up.Scale(py)).Add(proj.dir.Scale(depths[at]))
+			lx, ly, ld := lproj.Project(world)
+			ix, iy := int(math.Floor(lx)), int(math.Floor(ly))
+			if ix < 0 || iy < 0 || ix >= shadowSize || iy >= shadowSize {
+				continue
+			}
+			slope := math.Sqrt(math.Max(0, 1-cos*cos)) / math.Max(cos, 0.1)
+			bias := lproj.PixelSize() * (1.5 + 2*slope)
+			if ld > shadowMap[iy*shadowSize+ix]+bias {
+				front := Front
+				if tints != nil {
+					front = tints[ids[at]]
+				}
+				base := front
+				if cosView := proj.dir.Dot(verts[t[1]].Sub(verts[t[0]]).Cross(verts[t[2]].Sub(verts[t[0]]))); cosView > 0 {
+					base = Back
+				}
+				img.SetRGBA(x, y, color.RGBA{
+					R: uint8(math.Round(float64(base.R) * ambient)),
+					G: uint8(math.Round(float64(base.G) * ambient)),
+					B: uint8(math.Round(float64(base.B) * ambient)),
+					A: 255,
+				})
+			}
+		}
+	}
+	return img, nil
 }
