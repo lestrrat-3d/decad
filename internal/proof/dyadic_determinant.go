@@ -1,6 +1,8 @@
 package proof
 
 import (
+	"math"
+	"math/big"
 	"math/bits"
 
 	"github.com/lestrrat-3d/r3"
@@ -33,36 +35,71 @@ func tripleTerm(a, b, c floatDyadicFactor, negate bool) dyadicTripleTerm {
 	}
 }
 
+// floatFactorOf splits a finite float into an odd mantissa and an exponent,
+// exactly as MustDyOf does, without building a Dyadic.
+func floatFactorOf(f float64) floatDyadicFactor {
+	b := math.Float64bits(f)
+	mag, exp := b&(1<<52-1), int(b>>52&0x7ff)
+	switch {
+	case exp == 0x7ff:
+		panic("decad: exact Dyadic lift requires a finite float")
+	case exp != 0:
+		mag |= 1 << 52
+		exp -= 1075
+	case mag == 0:
+		return floatDyadicFactor{}
+	default:
+		exp = -1074
+	}
+	tz := bits.TrailingZeros64(mag)
+	return floatDyadicFactor{mant: mag >> tz, exp: exp + tz, neg: b>>63 != 0}
+}
+
+// ownedBig is a big.Int allocated together with the storage of a small
+// mantissa, so a result of up to four words costs one allocation.
+type ownedBig struct {
+	z     big.Int
+	words [4]big.Word
+}
+
+// bigOfOddWords returns the integer ±words (least significant word first,
+// most significant word non-zero) as a new big.Int that owns its storage.
+func bigOfOddWords(words []uint64, neg bool) *big.Int {
+	if bits.UintSize != 64 || len(words) > len(ownedBig{}.words) {
+		return bigOfWords(words, neg)
+	}
+	h := new(ownedBig)
+	for i, w := range words {
+		h.words[i] = big.Word(w)
+	}
+	h.z.SetBits(h.words[:len(words)])
+	if neg {
+		h.z.Neg(&h.z)
+	}
+	return &h.z
+}
+
 // FloatDeterminant returns a dot (b cross c) exactly for finite coordinates.
 // It sums the six signed triple products in native limbs, allocating only the
-// final owned mantissa. Wide exponent spans use the general dyadic arithmetic.
+// final owned mantissa, and only when that mantissa is wider than the inline
+// representation. Wide exponent spans use the general dyadic arithmetic.
 // A non-finite coordinate panics, as in DyVec.
 func FloatDeterminant(a, b, c r3.Vec) Dyadic {
-	var factors [9]floatDyadicFactor
-	for i, coordinate := range [9]float64{a.X, a.Y, a.Z, b.X, b.Y, b.Z, c.X, c.Y, c.Z} {
-		d := MustDyOf(coordinate)
-		factors[i] = floatDyadicFactor{mant: d.lo, exp: d.exp, neg: d.neg()}
-	}
+	fa := [3]floatDyadicFactor{floatFactorOf(a.X), floatFactorOf(a.Y), floatFactorOf(a.Z)}
+	fb := [3]floatDyadicFactor{floatFactorOf(b.X), floatFactorOf(b.Y), floatFactorOf(b.Z)}
+	fc := [3]floatDyadicFactor{floatFactorOf(c.X), floatFactorOf(c.Y), floatFactorOf(c.Z)}
 	terms := [6]dyadicTripleTerm{
-		tripleTerm(factors[0], factors[4], factors[8], false),
-		tripleTerm(factors[1], factors[5], factors[6], false),
-		tripleTerm(factors[2], factors[3], factors[7], false),
-		tripleTerm(factors[0], factors[5], factors[7], true),
-		tripleTerm(factors[1], factors[3], factors[8], true),
-		tripleTerm(factors[2], factors[4], factors[6], true),
+		tripleTerm(fa[0], fb[1], fc[2], false),
+		tripleTerm(fa[1], fb[2], fc[0], false),
+		tripleTerm(fa[2], fb[0], fc[1], false),
+		tripleTerm(fa[0], fb[2], fc[1], true),
+		tripleTerm(fa[1], fb[0], fc[2], true),
+		tripleTerm(fa[2], fb[1], fc[0], true),
 	}
-	minExp, seen := 0, false
-	for _, term := range terms {
-		if term.words[0] != 0 && (!seen || term.exp < minExp) {
-			minExp, seen = term.exp, true
-		}
-	}
-	if !seen {
-		return Dyadic{}
-	}
-	var sum [8]uint64
-	wordCount := 0
-	for _, term := range terms {
+	// One pass finds the lowest exponent and the highest bit any term reaches.
+	minExp, top, seen := 0, 0, false
+	for i := range terms {
+		term := &terms[i]
 		if term.words[0] == 0 {
 			continue
 		}
@@ -72,16 +109,27 @@ func FloatDeterminant(a, b, c r3.Vec) Dyadic {
 		} else if term.words[1] == 0 {
 			width = bits.Len64(term.words[0])
 		}
-		// Six magnitudes require three carry bits; reserve a sign bit too.
-		width += term.exp - minExp + 4
-		if width > len(sum)*64 {
-			da, db, dc := DyVec(a), DyVec(b), DyVec(c)
-			cross := DvCross(db, dc)
-			return DvDot(da, cross)
+		if !seen {
+			minExp, top, seen = term.exp, width+term.exp, true
+			continue
 		}
-		wordCount = max(wordCount, (width+63)/64)
+		minExp = min(minExp, term.exp)
+		top = max(top, width+term.exp)
 	}
-	for _, term := range terms {
+	if !seen {
+		return Dyadic{}
+	}
+	// Six magnitudes require three carry bits; reserve a sign bit too.
+	width := top - minExp + 4
+	if width > 8*64 {
+		da, db, dc := DyVec(a), DyVec(b), DyVec(c)
+		cross := DvCross(db, dc)
+		return DvDot(da, cross)
+	}
+	wordCount := (width + 63) / 64
+	var sum [8]uint64
+	for i := range terms {
+		term := &terms[i]
 		if term.words[0] == 0 {
 			continue
 		}
@@ -117,8 +165,30 @@ func FloatDeterminant(a, b, c r3.Vec) Dyadic {
 	if wordCount == 0 {
 		return Dyadic{}
 	}
-	if wordCount <= 2 && sum[1]&dySign == 0 {
-		return fromMag(sum[0], sum[1], negative, minExp)
+	exp := minExp
+	// Reduce to an odd mantissa in place, as the canonical form requires.
+	lowWord := 0
+	for sum[lowWord] == 0 {
+		lowWord++
 	}
-	return fromBig(bigOfWords(sum[:wordCount], negative), minExp)
+	if tz := bits.TrailingZeros64(sum[lowWord]); lowWord != 0 || tz != 0 {
+		n := wordCount - lowWord
+		for i := range n {
+			w := sum[i+lowWord] >> uint(tz)
+			if tz != 0 && i+lowWord+1 < wordCount {
+				w |= sum[i+lowWord+1] << (64 - uint(tz))
+			}
+			sum[i] = w
+		}
+		clear(sum[n:wordCount])
+		wordCount = n
+		exp += lowWord*64 + tz
+		for wordCount > 0 && sum[wordCount-1] == 0 {
+			wordCount--
+		}
+	}
+	if wordCount <= 1 || wordCount == 2 && sum[1]&dySign == 0 {
+		return fromMag(sum[0], sum[1], negative, exp)
+	}
+	return Dyadic{big: bigOfOddWords(sum[:wordCount], negative), exp: exp}
 }
