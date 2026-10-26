@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -30,6 +31,26 @@ type TextSpec struct {
 	At        Point2
 	Tolerance units.Value
 	Font      []byte
+	// Arc, when set, sets the first line along a circular arc instead of a
+	// straight baseline (agent-docs/text-design.md §6). At is then unused.
+	Arc *TextArc
+}
+
+// TextArc is a circle to set lettering along. The baseline runs along the circle
+// of the given Radius about Center from the angle Start, which is measured
+// counter-clockwise from the plane's U axis. With Clockwise set the letters run
+// clockwise with their tops outward, as text reads along the top of a badge; with
+// it clear they run counter-clockwise with their tops inward, as it reads along
+// the bottom. Each letter keeps its own shape and is turned as a whole to stand
+// on the circle at the middle of its advance, so letters are not bent: a letter
+// much wider than the circle is large leaves a gap or a wedge between its
+// neighbours. Radius is a positive length and Start an angle. The lettering must
+// be one line.
+type TextArc struct {
+	Center    Point2
+	Radius    units.Value
+	Start     units.Value
+	Clockwise bool
 }
 
 // TextProfiles draws the outlines of a line of lettering into a new sketch on
@@ -84,6 +105,12 @@ func TextProfiles(ctx context.Context, w *sketch.World, plane *sketch.Plane, spe
 	if err != nil {
 		return nil, nil, err
 	}
+	place := func(i int, p [2]float64) (float64, float64) { return spec.At.U + p[0], spec.At.V + p[1] }
+	if spec.Arc != nil {
+		if place, err = arcPlacement(spec.Arc, laid); err != nil {
+			return nil, nil, err
+		}
+	}
 	for i, contour := range laid.Contours {
 		if i%64 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -92,7 +119,8 @@ func TextProfiles(ctx context.Context, w *sketch.World, plane *sketch.Plane, spe
 		}
 		points := make([]*sketch.Point, len(contour))
 		for k, p := range contour {
-			points[k] = s.CreatePoint(spec.At.U+p[0], spec.At.V+p[1])
+			u, v := place(i, p)
+			points[k] = s.CreatePoint(u, v)
 			s.Fix(points[k])
 		}
 		for k := range points {
@@ -156,4 +184,45 @@ func boundaryKey(loop []sketch.BoundaryEdge) string {
 	}
 	sort.Strings(names)
 	return strings.Join(slices.Compact(names), ",")
+}
+
+// arcPlacement returns the map from contour i's laid-out point to the plane
+// along arc: the glyph the contour belongs to is turned to stand on the circle at
+// the middle of its advance, its baseline tangent to the circle there.
+func arcPlacement(arc *TextArc, laid glyphs.Result) (func(int, [2]float64) (float64, float64), error) {
+	radius, err := sectionrecord.MagnitudeIn(arc.Radius, units.Length, units.Millimeter, "the text arc radius")
+	if err != nil {
+		return nil, err
+	}
+	if radius == 0 {
+		return nil, fmt.Errorf(`%w: the text arc radius must be positive`, ErrDegenerate)
+	}
+	start, err := sectionrecord.MagnitudeIn(arc.Start, units.Angle, units.Radian, "the text arc start")
+	if err != nil {
+		return nil, err
+	}
+	for _, g := range laid.Glyphs {
+		if g.Line != 0 {
+			return nil, fmt.Errorf(`%w: lettering along an arc is one line`, ErrDegenerate)
+		}
+	}
+	sign := -1.0 // clockwise runs the angle down
+	if !arc.Clockwise {
+		sign = 1
+	}
+	return func(i int, p [2]float64) (float64, float64) {
+		g := laid.Glyphs[laid.ContourGlyph[i]]
+		mid := (g.Start + g.End) / 2
+		theta := start + sign*mid/radius
+		sin, cos := math.Sincos(theta)
+		// The tangent along the text and the way up: outward for clockwise text, inward for
+		// counter-clockwise, so the pair is right-handed and no letter is mirrored.
+		tx, ty := sign*-sin, sign*cos
+		ux, uy := cos, sin
+		if !arc.Clockwise {
+			ux, uy = -cos, -sin
+		}
+		lx, ly := p[0]-mid, p[1]
+		return arc.Center.U + radius*cos + lx*tx + ly*ux, arc.Center.V + radius*sin + lx*ty + ly*uy
+	}, nil
 }

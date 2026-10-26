@@ -34,6 +34,17 @@ type Result struct {
 	// baseline of its line, in millimetres from the line's start. A newline's is
 	// zero.
 	Advances []float64
+	// Glyphs are the spans of the runes that drew an outline, in order, and
+	// ContourGlyph names for each contour the glyph it belongs to.
+	Glyphs       []GlyphSpan
+	ContourGlyph []int
+}
+
+// GlyphSpan is where one rune sits on its line: the pen before and after it, in
+// millimetres from the line's start, and the line, from zero.
+type GlyphSpan struct {
+	Start, End float64
+	Line       int
 }
 
 // DefaultFont returns the bytes of the font used when none is given: Go Regular.
@@ -94,6 +105,12 @@ func Layout(ttf []byte, text string, size, tolerance float64) (Result, error) {
 			advance, err := f.GlyphAdvance(&buf, index, ppem, font.HintingNone)
 			if err != nil {
 				return Result{}, fmt.Errorf("%w: rune %q: %s", ErrDegenerate, r, err)
+			}
+			if len(contours) > 0 {
+				for range contours {
+					out.ContourGlyph = append(out.ContourGlyph, len(out.Glyphs))
+				}
+				out.Glyphs = append(out.Glyphs, GlyphSpan{Start: pen, End: pen + float64(advance)/64*scale, Line: lineNo})
 			}
 			pen += float64(advance) / 64 * scale
 			out.Advances = append(out.Advances, pen)

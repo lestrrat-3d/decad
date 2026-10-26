@@ -69,3 +69,28 @@ func Example_text() {
 	// regions: 2
 	// the letters add material: true
 }
+
+// TextSpec.Arc sets a line of text along a circle, for a badge or a dial: each letter
+// keeps its shape and is turned to stand on the circle. Clockwise text runs along the
+// top of the circle with its tops outward. Here "HI" is set along a 30 mm radius from
+// the top, and each letter is still one region.
+func Example_text_arc() {
+	w := sketch.NewWorld()
+	_, profiles, err := decad.TextProfiles(context.Background(), w, w.XY(), decad.TextSpec{
+		Text:   "HI",
+		Height: units.Millimeters(12),
+		Arc: &decad.TextArc{
+			Center:    decad.Point2{U: 0, V: 0},
+			Radius:    units.Millimeters(30),
+			Start:     units.Degrees(90),
+			Clockwise: true,
+		},
+	})
+	if err != nil {
+		fmt.Printf("failed to set the text: %s\n", err)
+		return
+	}
+	fmt.Printf("regions: %d\n", len(profiles))
+	// Output:
+	// regions: 2
+}
