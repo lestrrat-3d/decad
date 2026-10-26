@@ -1143,7 +1143,11 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   is asked at that
   tolerance raised to its own held floor, which its restatement always meets,
   so the request never refuses; which of its facets the pair may cut is the
-  rim bullet's gate below (`agent-docs/faceted-vertex-bounds-design.md` §5).
+  rim bullet's gate below (`agent-docs/faceted-vertex-bounds-design.md` §5). A pair the gate
+  refuses is retried from the source bodies of its chain when the chain regroup applies
+  (`agent-docs/boolean-chain-regroup-design.md`). A route that moves accepted geometry
+  MUST record an `opdiagnostic.Record` with a `Change` mechanism, because the regroup
+  reads that field to tell a result that denotes its operation exactly from one that does not.
   `Verify`'s read-only intersection instead meshes each other body once per
   call, at the least tolerance any of its candidate pairs derives
   (`agent-docs/interference-design.md` §5.3). The booleans of core §8 expose no

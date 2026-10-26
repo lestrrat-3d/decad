@@ -219,6 +219,10 @@ Each of these returns a new body and retires its input.
 | `decad.Intersect` | The volume common to both bodies. |
 | `decad.Split` | One solid per arranged target cell. |
 
+A `Cut` or `Intersect` that would be refused because an operand is the mesh result of earlier Booleans is retried from
+the source bodies of that chain, when all but one pair combine by exact routes. The result is the same solid. Its
+history records the one call, and faces made by the exact steps carry fresh roles, so select them by geometry.
+
 `Cut` and `Intersect` take options. `decad.WithMatchingFaces()` says faces of the two bodies are meant to match
 where they meet, such as a cap drawn to touch a cone. A miss of a few last-place steps is then taken as the
 match you intended and charged into the result's error bounds; a larger miss is still refused. See

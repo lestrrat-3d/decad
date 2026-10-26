@@ -92,7 +92,10 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 		sc := newRetentionScene()
 		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
 		require.NoError(t, err)
-		_, err = decad.Cut(t.Context(), first, slabYTool(t, sc, 22, 3))
+		// A Copy ends the history chain, so the final call is the sequential gate, not a regroup.
+		held, err := decad.Copy(t.Context(), first)
+		require.NoError(t, err)
+		_, err = decad.Cut(t.Context(), held, slabYTool(t, sc, 22, 3))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 
 		sc = newRetentionScene()
@@ -110,7 +113,10 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 		sc := newRetentionScene()
 		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
 		require.NoError(t, err)
-		_, err = decad.Cut(t.Context(), first, regroupCylinderZ(t, sc))
+		// A Copy ends the history chain, so the final call is the sequential gate, not a regroup.
+		held, err := decad.Copy(t.Context(), first)
+		require.NoError(t, err)
+		_, err = decad.Cut(t.Context(), held, regroupCylinderZ(t, sc))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 
 		sc = newRetentionScene()
@@ -154,7 +160,10 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 		sc := newRetentionScene()
 		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
 		require.NoError(t, err)
-		_, err = decad.Intersect(t.Context(), first, regroupSlabC(t, sc))
+		// A Copy ends the history chain, so the final call is the sequential gate, not a regroup.
+		held, err := decad.Copy(t.Context(), first)
+		require.NoError(t, err)
+		_, err = decad.Intersect(t.Context(), held, regroupSlabC(t, sc))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 
 		sc = newRetentionScene()
@@ -190,7 +199,10 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 		sc := newRetentionScene()
 		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
 		require.NoError(t, err)
-		_, err = decad.Cut(t.Context(), first, tilted(t, sc))
+		// A Copy ends the history chain, so the final call is the sequential gate, not a regroup.
+		held, err := decad.Copy(t.Context(), first)
+		require.NoError(t, err)
+		_, err = decad.Cut(t.Context(), held, tilted(t, sc))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 
 		sc = newRetentionScene()

@@ -19,7 +19,11 @@ func chainedCut(t *testing.T, opts ...decad.DocumentOption) (*decad.Body, error)
 	sc := &retentionScene{w: sketch.NewWorld(), doc: decad.New(opts...)}
 	first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
 	require.NoError(t, err)
-	return decad.Cut(t.Context(), first, slabYTool(t, sc, 22, 3))
+	// A Copy ends the operation history's Boolean chain, so the refusal under test is
+	// the sequential gate, not a chain the regroup rebuilds.
+	held, err := decad.Copy(t.Context(), first)
+	require.NoError(t, err)
+	return decad.Cut(t.Context(), held, slabYTool(t, sc, 22, 3))
 }
 
 func TestChainToleranceAdmitsAContactOnACoarserRim(t *testing.T) {

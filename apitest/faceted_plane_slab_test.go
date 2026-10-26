@@ -90,7 +90,11 @@ func TestFacetedPlaneSlab(t *testing.T) {
 	t.Run("a contact on a curved rim still refuses", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		built, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		require.NoError(t, err)
+		// A Copy ends the operation history's Boolean chain, so the refusal under test is
+		// the sequential gate, not a chain the regroup rebuilds.
+		first, err := decad.Copy(t.Context(), built)
 		require.NoError(t, err)
 		held, err := mustTessellate(t, first, units.Millimeters(1)).Bound().In(units.Millimeter)
 		require.NoError(t, err)
