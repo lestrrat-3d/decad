@@ -196,6 +196,6 @@ moves its row to the matching section above, with that doc as owner.
 | Per-axis (non-uniform) scaling of a body | No entry point exists; `ScaledAt` scales uniformly (`point_plane_scale.go`) and `Transform`/`Copy` take a rigid motion only (`document.go`) |
 | Saving a `Document` to a file or loading one back | No entry point exists; a model is rebuilt by rerunning the Go program that built it |
 | Text profiles from a font, for engraved or embossed lettering | No entry point exists |
-| 2D drawings: projected views, silhouette and hidden lines, DXF output | No entry point exists |
+| 2D drawings with dimensions, analytic arcs and circles, several views on a sheet, hatching or a title block | `export.DXF` writes one orthographic view of tessellation edges as LINEs, with hidden-line runs from a depth buffer (`export/dxf.go`; `agent-docs/dxf-export-design.md` §4) |
 | PMI or GD&T, as data or in STEP AP242 | No entry point exists; `export.STEP` writes AP214 geometry only |
 | IGES or Parasolid export | `export` writes STL, OBJ, 3MF, glTF and STEP only (`agent-docs/api-design.md` §11) |

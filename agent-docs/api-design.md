@@ -2154,7 +2154,8 @@ proof and accept its refusals. An STL file from a sheet is not a solid; at
 object. See `agent-docs/3mf-export-design.md`. `export.GLTF` writes the same
 mesh as a glTF 2.0 file with an embedded buffer, in metres, and defaults to
 `VerifyNone` like the others. See `agent-docs/gltf-export-design.md`. `export.PNG` draws the mesh as an
-orthographic flat-shaded image from a `View`. See `agent-docs/png-export-design.md`.
+orthographic flat-shaded image from a `View`. See `agent-docs/png-export-design.md`. `export.DXF` writes the mesh's feature edges as
+a 2D DXF drawing with hidden edges on their own layer. See `agent-docs/dxf-export-design.md`.
 
 `Tessellate` and every writer pass `ctx` through chording, loop-clearance
 scans, cap triangulation, mesh audits, and faceted restatement. Cancellation
