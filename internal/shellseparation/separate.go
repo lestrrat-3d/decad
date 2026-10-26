@@ -423,12 +423,15 @@ func slabsClearance(ctx context.Context, pa, pb Shell, axialExtra float64) (floa
 	if !(levels[slabs-1] < levels[slabs]) {
 		return 0, false
 	}
+	// A triangle's X range depends on the shell alone, so it is read once here
+	// instead of once per slab.
+	xa, xb := triangleXRanges(pa), triangleXRanges(pb)
 	for i := range slabs {
 		if err := ctx.Err(); err != nil {
 			return 0, false
 		}
-		fa, ca, okA := slabFacets(pa, levels[i], levels[i+1], axialExtra)
-		fb, cb, okB := slabFacets(pb, levels[i], levels[i+1], axialExtra)
+		fa, ca, okA := slabFacets(pa, xa, levels[i], levels[i+1], axialExtra)
+		fb, cb, okB := slabFacets(pb, xb, levels[i], levels[i+1], axialExtra)
 		if !okA || !okB {
 			return 0, false
 		}
@@ -556,7 +559,22 @@ func slabHullAxes(a Shell, fa []int, b Shell, fb []int) []r3.Vec {
 	return axes
 }
 
-func slabFacets(p Shell, lo, hi, axialExtra float64) ([]int, r3.Vec, bool) {
+// xRanges holds each triangle's smallest and largest vertex X, by triangle.
+type xRanges struct{ lo, hi []float64 }
+
+func triangleXRanges(p Shell) xRanges {
+	r := xRanges{lo: make([]float64, len(p.Tris)), hi: make([]float64, len(p.Tris))}
+	for i, tri := range p.Tris {
+		a, b, c := p.Verts[tri[0]].X, p.Verts[tri[1]].X, p.Verts[tri[2]].X
+		r.lo[i], r.hi[i] = min(a, b, c), max(a, b, c)
+	}
+	return r
+}
+
+// slabFacets selects, in ascending triangle order, the triangles whose X range
+// meets the slab enlarged by the shell's reach. x holds p's triangle X ranges
+// from triangleXRanges; only selected triangles have their vertices loaded.
+func slabFacets(p Shell, x xRanges, lo, hi, axialExtra float64) ([]int, r3.Vec, bool) {
 	reach := p.MeshBound
 	if axialExtra > 0 {
 		reach = proofbound.AbsSumUpper(reach, axialExtra)
@@ -569,13 +587,13 @@ func slabFacets(p Shell, lo, hi, axialExtra float64) ([]int, r3.Vec, bool) {
 	}
 	selected := make([]int, 0, len(p.Tris)/8)
 	center := r3.Vec{}
-	for i, tri := range p.Tris {
-		a, b, c := p.Verts[tri[0]], p.Verts[tri[1]], p.Verts[tri[2]]
-		if max(a.X, b.X, c.X) < searchLo || min(a.X, b.X, c.X) > searchHi {
+	for i, top := range x.hi {
+		if top < searchLo || x.lo[i] > searchHi {
 			continue
 		}
+		tri := p.Tris[i]
 		selected = append(selected, i)
-		center = center.Add(a).Add(b).Add(c)
+		center = center.Add(p.Verts[tri[0]]).Add(p.Verts[tri[1]]).Add(p.Verts[tri[2]])
 	}
 	if len(selected) == 0 {
 		return nil, r3.Vec{}, true
