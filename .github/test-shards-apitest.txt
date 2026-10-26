@@ -711,6 +711,10 @@
 4	0.00	TestBodyDocumentIsTheDocument
 4	0.01	TestBodyPatchFillsASingleClosedCircularRim
 4	0.00	TestBodyPatchPlanarCappedTubeTessellates
+10	0.00	TestStackedOpposedOverlapPockets
+10	0.00	TestStackedOpposedTouchingPocketsRefuse
+10	0.00	TestStackedOpposedOverlapGates
+10	0.00	TestStackedOpposedSeparatePocketsStayStacked
 4	2.63	TestBooleanCutWasherThroughDiscKeepsStandingPost
 4	10.32	TestBooleanDegenerateClusterSoundness
 4	1.50	TestBooleanRefusalConcaveHoleSpuriousContact

@@ -217,59 +217,25 @@ func denotedStrictlyInside(inner, lo, hi *big.Rat) bool {
 // interfaces must pass the audit.
 func ApplyBlindCut(ctx context.Context, budget *proofbound.WorkBudget, sp Payload,
 	outer, tool prismrecord.Payload) (Payload, bool, error) {
-	if len(tool.Profile.Holes) != 0 {
-		return Payload{}, false, nil
-	}
-	trimmed, err := prismcells.ProfileHasTrimmedCircularSource(budget, tool.Profile.Outer, tool.Profile.Holes)
-	if err != nil || trimmed {
+	reach, ok, err := reachBlindCut(budget, sp, outer, tool)
+	if err != nil || !ok {
 		return Payload{}, false, err
-	}
-	z0, z1, ok := prismplacement.ShiftedInterval(outer.PlacementOperand(), tool.PlacementOperand())
-	if !ok {
-		return Payload{}, false, nil
-	}
-	first := proofarith.FloatRat(sp.Slabs[0].Z0)
-	last := proofarith.FloatRat(sp.Slabs[len(sp.Slabs)-1].Z1)
-	if first == nil || last == nil {
-		return Payload{}, false, nil
-	}
-	openAtTop := z0.Cmp(first) > 0 && z0.Cmp(last) < 0 && z1.Cmp(last) >= 0
-	openAtBottom := z0.Cmp(first) <= 0 && z1.Cmp(first) > 0 && z1.Cmp(last) < 0
-	if !openAtTop && !openAtBottom {
-		return Payload{}, false, nil
-	}
-	inner, innerDenoted := toolInnerEnd(outer.PlacementOperand(), tool, z0, z1, openAtBottom)
-	innerDelta := tool.Z0Delta
-	if openAtBottom {
-		innerDelta = tool.Z1Delta
-	}
-	split, interfaceAt := -1, denotedInterface(sp.Slabs, innerDenoted)
-	if interfaceAt < 0 {
-		split = heldSplit(sp.Slabs, inner, innerDenoted)
-	}
-	if split < 0 && interfaceAt < 0 {
-		return Payload{}, false, nil
 	}
 	reexpress, err := prismcells.NewReexpression(outer.PlacementOperand(), tool.PlacementOperand())
 	if err != nil {
 		return Payload{}, false, err
 	}
-	if interfaceAt >= 0 {
-		active := make([]bool, len(sp.Slabs))
-		for k := range active {
-			active[k] = k <= interfaceAt
-			if openAtTop {
-				active[k] = k > interfaceAt
-			}
-		}
-		return CutSlabs(ctx, budget, sp, outer, tool, reexpress, active, sp.Interfaces, interfaceAt)
+	if reach.interfaceAt >= 0 {
+		return CutSlabs(ctx, budget, sp, outer, tool, reexpress, reach.interfaceActive(len(sp.Slabs)),
+			sp.Interfaces, reach.interfaceAt)
 	}
-	innerHeld, _ := inner.Float64()
+	split := reach.split
+	innerHeld, _ := reach.inner.Float64()
 	if innerHeld <= sp.Slabs[split].Z0 || innerHeld >= sp.Slabs[split].Z1 {
 		return Payload{}, false, nil
 	}
-	innerDelta = proofbound.AbsSumUpper(innerDelta, proofarith.RationalFloatError(inner, innerHeld))
-	level := prismplacement.DenoteLevel(innerDenoted, innerHeld, innerDelta)
+	innerDelta := proofbound.AbsSumUpper(reach.innerDelta, proofarith.RationalFloatError(reach.inner, innerHeld))
+	level := prismplacement.DenoteLevel(reach.innerDenoted, innerHeld, innerDelta)
 	lower, upper := sp.Slabs[split], sp.Slabs[split]
 	lower.Z1, lower.Z1Delta, lower.Z1Denoted = innerHeld, innerDelta, level
 	upper.Z0, upper.Z0Delta, upper.Z0Denoted = innerHeld, innerDelta, level
@@ -284,9 +250,73 @@ func ApplyBlindCut(ctx context.Context, budget *proofbound.WorkBudget, sp Payloa
 	active := make([]bool, len(result.Slabs))
 	for k := range active {
 		active[k] = k <= split
-		if openAtTop {
+		if reach.openAtTop {
 			active[k] = k > split
 		}
 	}
 	return CutSlabs(ctx, budget, result, outer, tool, reexpress, active, prior, -1)
+}
+
+// blindCutReach is where a blind tool's inner end lies in a stack: strictly
+// inside slab split, or at the interface after slab interfaceAt whose denoted
+// level equals the tool's. The other index is -1.
+type blindCutReach struct {
+	openAtTop           bool
+	inner, innerDenoted *big.Rat
+	innerDelta          float64
+	split, interfaceAt  int
+}
+
+// reachBlindCut reads a hole-free, untrimmed blind tool's interval against
+// the stack's levels exactly. ok=false is a silent miss.
+func reachBlindCut(budget *proofbound.WorkBudget, sp Payload,
+	outer, tool prismrecord.Payload) (blindCutReach, bool, error) {
+	if len(tool.Profile.Holes) != 0 {
+		return blindCutReach{}, false, nil
+	}
+	trimmed, err := prismcells.ProfileHasTrimmedCircularSource(budget, tool.Profile.Outer, tool.Profile.Holes)
+	if err != nil || trimmed {
+		return blindCutReach{}, false, err
+	}
+	z0, z1, ok := prismplacement.ShiftedInterval(outer.PlacementOperand(), tool.PlacementOperand())
+	if !ok {
+		return blindCutReach{}, false, nil
+	}
+	first := proofarith.FloatRat(sp.Slabs[0].Z0)
+	last := proofarith.FloatRat(sp.Slabs[len(sp.Slabs)-1].Z1)
+	if first == nil || last == nil {
+		return blindCutReach{}, false, nil
+	}
+	openAtTop := z0.Cmp(first) > 0 && z0.Cmp(last) < 0 && z1.Cmp(last) >= 0
+	openAtBottom := z0.Cmp(first) <= 0 && z1.Cmp(first) > 0 && z1.Cmp(last) < 0
+	if !openAtTop && !openAtBottom {
+		return blindCutReach{}, false, nil
+	}
+	reach := blindCutReach{openAtTop: openAtTop, innerDelta: tool.Z0Delta, split: -1}
+	reach.inner, reach.innerDenoted = toolInnerEnd(outer.PlacementOperand(), tool, z0, z1, openAtBottom)
+	if openAtBottom {
+		reach.innerDelta = tool.Z1Delta
+	}
+	reach.interfaceAt = denotedInterface(sp.Slabs, reach.innerDenoted)
+	if reach.interfaceAt < 0 {
+		reach.split = heldSplit(sp.Slabs, reach.inner, reach.innerDenoted)
+	}
+	if reach.split < 0 && reach.interfaceAt < 0 {
+		return blindCutReach{}, false, nil
+	}
+	return reach, true, nil
+}
+
+// interfaceActive names the slabs a tool ending at interface interfaceAt
+// reaches: those below it for a pocket from the bottom, above it for one
+// from the top.
+func (r blindCutReach) interfaceActive(n int) []bool {
+	active := make([]bool, n)
+	for k := range active {
+		active[k] = k <= r.interfaceAt
+		if r.openAtTop {
+			active[k] = k > r.interfaceAt
+		}
+	}
+	return active
 }

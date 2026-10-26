@@ -243,6 +243,13 @@ func Analytic(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b
 			}
 			return body, true, nil
 		}
+		// agent-docs/general-boolean-design.md §3 A8: opposed pockets that
+		// overlap in plan at the interface the tool ends at.
+		if bp, ok, err := prismboolean.TryOpposedBlindCut(ctx, a.Payload, b.Payload); err != nil {
+			return nil, false, err
+		} else if ok {
+			return found(prismboolean.AnalyticBody(ctx, env, bp))
+		}
 		if bp, ok, err := prismboolean.TryCrossingBlindCut(ctx, a.Payload, b.Payload); err != nil {
 			return nil, false, err
 		} else if ok {

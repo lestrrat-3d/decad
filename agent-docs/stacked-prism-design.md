@@ -122,12 +122,16 @@ For an enclosing interface, both sides have exclusive holes. One side has
 exactly one new hole, and the other has one or more old holes it encloses.
 The cut's two whole-loop sketch cells prove the nesting. The patch on the
 old-hole side reverses the new hole for its outer and carries the old holes
-inside it. Opposed holes that neither nest nor separate remain `ErrUnsupported`.
+inside it. Opposed holes that neither nest nor separate remain `ErrUnsupported`
+here; a blind `Cut` that leaves them overlapping builds a BRep instead (§7
+stage 3).
 
 When both sides have exclusive holes that are pairwise separate, the interface
 holds both `LowerExposed` and `UpperExposed`. A private `sketch` scene over the
 interiors of every exclusive hole must return one valid whole cell per hole,
-with no arrangement charge. `stackedrecord.Derive` and `Falsify` run this proof;
+no two cells sharing a vertex, with no arrangement charge. Two holes meeting
+at one corner would leave the body meeting itself at that point, so they are
+not separate (`prismcells.ProveGroupApart`). `stackedrecord.Derive` and `Falsify` run this proof;
 the reached slabs' cut scenes already prove each hole lies inside its section
 and clears holes on the same side. The lower side exposes each upper-only hole
 as a floor, and the upper side exposes each lower-only hole as a ceiling.
@@ -357,7 +361,7 @@ reads its `sectionDelta` through `booloperand.sectionDisplacement`, as it reads 
 |---|---|
 | `Transform` / `Copy` | re-evaluates the payload under the composed motion |
 | `ScaledAt` | Exact line-only solid sections with zero section and level displacement become a certified faceted image; source roles and planar tags follow the scale (evaluator §8). |
-| later `Cut` with a prism tool | A spanning tool or a blind tool ending inside a slab or exactly at an interface builds when each reached slab proves a clean cut or no change inside a hole; opposed interface holes require exact, separated sections (§7). |
+| later `Cut` with a prism tool | A spanning tool or a blind tool ending inside a slab or exactly at an interface builds when each reached slab proves a clean cut or no change inside a hole; opposed interface holes require exact, separated sections, and overlapping ones build a BRep (§7). |
 | `Union` with a stacked operand | `agent-docs/general-boolean-design.md` §3 A1: every slab region hole-free, the stack splits at every level of both operands; a prism-group operand over the partner's interval is A5's |
 | `Cut` by a prism-group tool | `agent-docs/general-boolean-design.md` §3 A5 on a prism target: one arrangement for every lump |
 | `Intersect` with a stacked operand | mesh path, over this payload's own tessellation |
@@ -415,9 +419,16 @@ Each admitted arm ships its implementation and tests together.
    1e-15 mm. The reached slabs' private scenes
    plus the interface audit prove the new hole set is monotone. Opposed
    exclusive holes also build when the private scene above proves their
-   separation without a charge and the section displacement is zero. A tool
-   whose opposed holes overlap, touch, or carry a section displacement takes
-   the mesh path.
+   separation without a charge and the section displacement is zero.
+
+   Opposed exclusive holes that overlap in plan at that interface build a
+   BRep through general-boolean §3 A8. The reached slabs keep this stage's
+   cut proofs. A private scene over only the exclusive holes gives the
+   partial floor and ceiling as cells, which this payload's whole column
+   rings cannot hold. Opposed holes that only touch, along an edge or at a
+   corner, have no manifold result and take the mesh path. So do opposed
+   holes at a displaced level, holes that carry a section displacement, and
+   holes that are not loops of axis-aligned lines.
 
    A blind rectangle crossing one existing rectangular through hole on a
    prism target uses general-boolean §3 A7's BRep path. Its partial floor
@@ -457,8 +468,10 @@ arm64.
   interface stays monotone. Separate pockets from opposite faces ending at
   that interface build two distinct exposed faces when the private scene
   proves their holes separate, with analytic volume, verified watertight mesh,
-  and placement. Touching or overlapping opposed pockets still take the mesh
-  path.
+  and placement. Opposed pockets touching along an edge or at a corner take
+  the mesh path, which refuses them under `ExactOnly`. Overlapping opposed
+  pockets build general-boolean §3 A8's BRep with an `Exact` volume, every
+  edge on two faces, a verified watertight mesh and a `Sound` report.
 - Denoted levels: on a plate 12 mm thick, two pockets beside each other cut
   from z = 12 by 3.175 mm and 0.125 in, in either order, by 0.2 in twice, or
   by 0.2 in against a full-length `Symmetric` 0.4 in or a `TwoSided` 0.2 in

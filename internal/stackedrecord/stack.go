@@ -92,85 +92,88 @@ func Derive(ctx context.Context, slabs []Slab, prior []Interface) ([]Interface, 
 	out := make([]Interface, len(slabs)-1)
 	budget := proofbound.NewWorkBudget(ctx)
 	for i := range out {
-		if wideLower, lining := LiningSides(slabs[i], slabs[i+1]); lining {
-			narrow := slabs[i].Regions
-			if wideLower {
-				narrow = slabs[i+1].Regions
-			}
-			exposed, err := liningExposed(ctx, narrow)
-			if err != nil {
-				return nil, err
-			}
-			if wideLower {
-				out[i] = Interface{LowerExposed: exposed}
-			} else {
-				out[i] = Interface{UpperExposed: exposed}
-			}
-			continue
-		}
-		lowerRegion, upperRegion := slabs[i].Regions[0], slabs[i+1].Regions[0]
-		same := equalLoop(lowerRegion.Outer, upperRegion.Outer)
-		if !same {
-			if i >= len(prior) {
-				return nil, fmt.Errorf(`%w: interface %d changes the outer loop and has no prior record of its exposed side`, decaderr.ErrDegenerate, i)
-			}
-			if len(prior[i].LowerExposed) == 1 && len(prior[i].UpperExposed) == 0 {
-				lower, err := UnionExposed(ctx, lowerRegion, upperRegion)
-				if err != nil {
-					return nil, err
-				}
-				out[i] = Interface{LowerExposed: lower}
-				continue
-			}
-			upper, err := UnionExposed(ctx, upperRegion, lowerRegion)
-			if err != nil {
-				return nil, err
-			}
-			out[i] = Interface{UpperExposed: upper}
-			continue
-		}
-		lowerOnly, upperOnly := ExclusiveHoles(lowerRegion, upperRegion)
-		if len(lowerOnly) != 0 && len(upperOnly) != 0 {
-			opposed, separate, err := SeparatedOpposed(ctx, budget, lowerOnly, upperOnly)
-			if err != nil {
-				return nil, err
-			}
-			if separate {
-				out[i] = opposed
-				continue
-			}
-			if i >= len(prior) {
-				return nil, fmt.Errorf(`%w: enclosing interface %d has no prior exposed side`, decaderr.ErrDegenerate, i)
-			}
-			switch {
-			case len(upperOnly) == 1 && len(prior[i].LowerExposed) == 1 && len(prior[i].UpperExposed) == 0:
-				lower, err := EnclosingExposed(ctx, upperOnly[0], lowerOnly)
-				if err != nil {
-					return nil, err
-				}
-				out[i] = Interface{LowerExposed: lower}
-			case len(lowerOnly) == 1 && len(prior[i].UpperExposed) == 1 && len(prior[i].LowerExposed) == 0:
-				upper, err := EnclosingExposed(ctx, lowerOnly[0], upperOnly)
-				if err != nil {
-					return nil, err
-				}
-				out[i] = Interface{UpperExposed: upper}
-			default:
-				return nil, fmt.Errorf(`%w: enclosing interface %d has no unique exposed side`, decaderr.ErrUnsupported, i)
-			}
-			continue
-		}
-		lower, err := Exposed(ctx, upperOnly)
+		var err error
+		out[i], err = deriveInterface(ctx, budget, slabs, prior, i)
 		if err != nil {
 			return nil, err
 		}
-		upper, err := Exposed(ctx, lowerOnly)
-		if err != nil {
-			return nil, err
-		}
-		out[i] = Interface{LowerExposed: lower, UpperExposed: upper}
 	}
 	return out, nil
+}
+
+// deriveInterface is Derive's reading of interface i alone.
+func deriveInterface(ctx context.Context, budget *proofbound.WorkBudget, slabs []Slab, prior []Interface, i int) (Interface, error) {
+	if wideLower, lining := LiningSides(slabs[i], slabs[i+1]); lining {
+		narrow := slabs[i].Regions
+		if wideLower {
+			narrow = slabs[i+1].Regions
+		}
+		exposed, err := liningExposed(ctx, narrow)
+		if err != nil {
+			return Interface{}, err
+		}
+		if wideLower {
+			return Interface{LowerExposed: exposed}, nil
+		}
+		return Interface{UpperExposed: exposed}, nil
+	}
+	lowerRegion, upperRegion := slabs[i].Regions[0], slabs[i+1].Regions[0]
+	same := equalLoop(lowerRegion.Outer, upperRegion.Outer)
+	if !same {
+		if i >= len(prior) {
+			return Interface{}, fmt.Errorf(`%w: interface %d changes the outer loop and has no prior record of its exposed side`, decaderr.ErrDegenerate, i)
+		}
+		if len(prior[i].LowerExposed) == 1 && len(prior[i].UpperExposed) == 0 {
+			lower, err := UnionExposed(ctx, lowerRegion, upperRegion)
+			if err != nil {
+				return Interface{}, err
+			}
+			return Interface{LowerExposed: lower}, nil
+		}
+		upper, err := UnionExposed(ctx, upperRegion, lowerRegion)
+		if err != nil {
+			return Interface{}, err
+		}
+		return Interface{UpperExposed: upper}, nil
+	}
+	lowerOnly, upperOnly := ExclusiveHoles(lowerRegion, upperRegion)
+	if len(lowerOnly) != 0 && len(upperOnly) != 0 {
+		opposed, separate, err := SeparatedOpposed(ctx, budget, lowerOnly, upperOnly)
+		if err != nil {
+			return Interface{}, err
+		}
+		if separate {
+			return opposed, nil
+		}
+		if i >= len(prior) {
+			return Interface{}, fmt.Errorf(`%w: enclosing interface %d has no prior exposed side`, decaderr.ErrDegenerate, i)
+		}
+		switch {
+		case len(upperOnly) == 1 && len(prior[i].LowerExposed) == 1 && len(prior[i].UpperExposed) == 0:
+			lower, err := EnclosingExposed(ctx, upperOnly[0], lowerOnly)
+			if err != nil {
+				return Interface{}, err
+			}
+			return Interface{LowerExposed: lower}, nil
+		case len(lowerOnly) == 1 && len(prior[i].UpperExposed) == 1 && len(prior[i].LowerExposed) == 0:
+			upper, err := EnclosingExposed(ctx, lowerOnly[0], upperOnly)
+			if err != nil {
+				return Interface{}, err
+			}
+			return Interface{UpperExposed: upper}, nil
+		default:
+			return Interface{}, fmt.Errorf(`%w: enclosing interface %d has no unique exposed side`, decaderr.ErrUnsupported, i)
+		}
+	}
+	lower, err := Exposed(ctx, upperOnly)
+	if err != nil {
+		return Interface{}, err
+	}
+	upper, err := Exposed(ctx, lowerOnly)
+	if err != nil {
+		return Interface{}, err
+	}
+	return Interface{LowerExposed: lower, UpperExposed: upper}, nil
 }
 
 // falsifyPrismGroup is §2.2's I1/I2 reading for a prism group: one slab with

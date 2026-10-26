@@ -173,46 +173,86 @@ func GroupUnionLoops(budget *proofbound.WorkBudget, scene GroupScene) ([]section
 // region. Holes stay inside their own outer by the input's validity gate.
 func ProveGroupDisjoint(ctx context.Context, budget *proofbound.WorkBudget,
 	regions []momentinput.Profile) (bool, float64, error) {
+	_, separate, charge, err := proveGroupCells(ctx, budget, regions)
+	return separate, charge, err
+}
+
+// ProveGroupApart is ProveGroupDisjoint with the regions' closures apart as
+// well: two whole cells that share a walked vertex touch at that point, and a
+// body that meets itself there is not a manifold. The shared point is
+// sketch's own vertex, matched by exact equality; the check only refuses.
+func ProveGroupApart(ctx context.Context, budget *proofbound.WorkBudget,
+	regions []momentinput.Profile) (bool, float64, error) {
+	cells, separate, charge, err := proveGroupCells(ctx, budget, regions)
+	if err != nil || !separate {
+		return false, charge, err
+	}
+	owner := map[[2]float64]int{}
+	for i, cell := range cells {
+		for _, loop := range append([][]sketch.BoundaryEdge{cell.Outer}, cell.Holes...) {
+			for _, e := range loop {
+				if err := budget.Step(); err != nil {
+					return false, 0, err
+				}
+				if len(e.Polyline) == 0 {
+					return false, charge, nil
+				}
+				for _, p := range [][2]float64{e.Polyline[0], e.Polyline[len(e.Polyline)-1]} {
+					if j, ok := owner[p]; ok && j != i {
+						return false, charge, nil
+					}
+					owner[p] = i
+				}
+			}
+		}
+	}
+	return true, charge, nil
+}
+
+// proveGroupCells returns the one matched cell per region when every region
+// matched a distinct valid, whole cell.
+func proveGroupCells(ctx context.Context, budget *proofbound.WorkBudget,
+	regions []momentinput.Profile) ([]*sketch.Profile, bool, float64, error) {
 	outers := make([]momentinput.Profile, len(regions))
 	for i, region := range regions {
 		outers[i] = momentinput.Profile{Outer: region.Outer}
 	}
 	if err := groupWithinCap(budget, "disjointness", outers); err != nil {
-		return false, 0, err
+		return nil, false, 0, err
 	}
 	s, tags, charge, err := BuildSceneRegions(budget, groupSceneProfiles(outers), nil, &Reexpression{Identity: true})
 	if err != nil {
-		return false, 0, err
+		return nil, false, 0, err
 	}
 	profiles, err := ProfilesContext(ctx, s.Profiles)
 	if err != nil {
-		return false, 0, err
+		return nil, false, 0, err
 	}
 	if len(profiles) != len(regions) {
-		return false, 0, nil
+		return nil, false, 0, nil
 	}
 	claimed := make([]bool, len(profiles))
 	for r := range regions {
 		want, err := RegionLoopEntitySet(budget, tags, false, r, -1)
 		if err != nil {
-			return false, 0, err
+			return nil, false, 0, err
 		}
 		match, resolved, err := FindLoopMatch(budget, profiles, want, nil)
 		if err != nil {
-			return false, 0, err
+			return nil, false, 0, err
 		}
 		if !resolved || !match.Valid {
-			return false, 0, nil
+			return nil, false, 0, nil
 		}
 		for i, p := range profiles {
 			if p != match {
 				continue
 			}
 			if claimed[i] {
-				return false, 0, nil
+				return nil, false, 0, nil
 			}
 			claimed[i] = true
 		}
 	}
-	return true, charge.A, nil
+	return profiles, true, charge.A, nil
 }
