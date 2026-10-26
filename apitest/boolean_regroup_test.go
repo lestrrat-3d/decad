@@ -182,3 +182,35 @@ func TestBooleanRegroupConjunction(t *testing.T) {
 		requireRefusalUnchanged(t, sc.doc, err, historyLen, bodies)
 	})
 }
+
+func TestBooleanRegroupDisjunction(t *testing.T) {
+	t.Parallel()
+
+	t.Run("F3 a box beside a plate carrying a boss", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New(decad.ExactOnly())
+		plate := boxBody(t, doc, 0, 0, 40, 20, 10)
+		box2 := boxBody(t, doc, 40, 0, 60, 20, 10)
+		boss := translated(t, boxBodyAtZ(t, doc, 10, 8, 14, 12, 5, 20), 0.125, 0, 0)
+		first, err := decad.Union(t.Context(), plate, boss)
+		require.NoError(t, err)
+		got, err := decad.Union(t.Context(), first, box2)
+		require.NoError(t, err)
+		requireRegroupSolid(t, got)
+		requireRegroupResult(t, got, 12240)
+		requireRegroupHistory(t, doc, decad.OperationUnion, [2]string{"first", "others"}, first, box2, got,
+			[]*decad.Body{plate, boss})
+	})
+
+	t.Run("D2 a Cut result in a disjunction is a leaf", func(t *testing.T) {
+		t.Parallel()
+		sc := newRetentionScene()
+		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		require.NoError(t, err)
+		tool := slabYTool(t, sc, 22, 3)
+		historyLen := len(sc.doc.OperationHistory().Operations())
+		bodies := sc.doc.Bodies()
+		_, err = decad.Union(t.Context(), first, tool)
+		requireRefusalUnchanged(t, sc.doc, err, historyLen, bodies)
+	})
+}

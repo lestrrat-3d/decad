@@ -100,6 +100,11 @@ import (
 // tolerance the faceted body already meets returns a [Mesh] whose Bound is the
 // largest of them.
 //
+// A two-body call refused with ErrUnsupported on a mesh result of earlier Union
+// calls is retried from the source bodies of that chain
+// (agent-docs/boolean-chain-regroup-design.md); only a failure of that retry too
+// returns the refusal.
+//
 // It returns ctx.Err() unchanged when ctx is canceled before the document
 // commit.
 func Union(ctx context.Context, first *Body, others ...*Body) (*Body, error) {
