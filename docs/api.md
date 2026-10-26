@@ -239,6 +239,7 @@ proven exact may return a faceted body whose measurements are `decad.Approximate
 | `decad.Patterned` | Returns one body holding every instance of a `decad.PatternSpec`. |
 | `decad.PatternCopies` | Returns the extra instances as separate bodies. |
 | `decad.PatternJoin` | Repeats a feature by a `decad.PatternSpec` and joins every instance to a target body in one Union. |
+| `decad.Arrange` | Moves bodies by translation to lie side by side on a flat bed, each resting on its surface and a gap apart. |
 | `decad.Mirrored` | Returns the mirror image across a `decad.MirrorPlane` and retires the input. |
 | `decad.MirroredCopy` | Returns the mirror image and leaves the source live. |
 
