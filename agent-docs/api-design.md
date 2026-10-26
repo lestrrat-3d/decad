@@ -1483,7 +1483,7 @@ an ambient assembly context (§4). The zero `Transform{}` is invalid
 faceted-payload rebuild and returns its error without changing the document.
 
 `ScaledAt` retires an authenticated point-loft planar Split slab, an exact
-line/circular solid prism, a complete solid Revolve whose section has no
+line/circular solid prism, a solid Revolve, complete or partial, whose section has no
 displacement, an exact line-only stacked prism or stack-backed BRep, or a
 faceted result of the generic mesh Boolean after a positive, finite,
 dimensionless uniform scale around `anchor` in millimetres. It accepts
@@ -1497,7 +1497,7 @@ Boolean keeps its source-face roles and any retained planar tags, but loses
 structural Boolean source records after scale. These
 classes rebuild the held mesh with scaled vertex, area and occupied-volume
 bounds. A nonpositive factor is `ErrDegenerate`, and a length factor is
-`ErrUnitKind`. A partial or sheet Revolve and any other unsupported body return
+`ErrUnitKind`. A sheet Revolve and any other unsupported body return
 `ErrUnsupported`. Cancellation and proof refusal leave the receiver live.
 
 **A body can be copied without consuming it.** `Transform` retires its input, so

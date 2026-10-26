@@ -12,7 +12,7 @@ import (
 
 // ScaledAt returns the positive uniform image of an authenticated point-loft
 // Split slab, exact line/circular solid prism, line-only stack or stack-backed
-// BRep, complete solid Revolve, or audited faceted Boolean result about anchor,
+// BRep, solid Revolve (complete or partial), or audited faceted Boolean result about anchor,
 // then retires b. A nil context or a nil b is ErrDegenerate.
 // Source roles and certified boundary and occupied-volume bounds follow the
 // image. A faceted Boolean result keeps the retained Plane, Cylinder, Sphere

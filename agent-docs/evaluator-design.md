@@ -1052,17 +1052,17 @@ certificate. The result is not a new `prismPayload`.
 
 A solid `revolvePayload`, complete or partial, with zero section displacement
 takes the same transfer after its own `Tessellate(VerifyAll)` proves boundary
-and occupied volume. An exact facet-pair audit of the held mesh (the one the
-stack and BRep path runs) then finds no contact before `facetproof.ScaleMesh`
-maps its vertices. A partial Revolve's volume bound already carries its sweep
-allowance, and the image multiplies it by the factor cubed. Its initial chord is `nextafter(0.05/max(1, factor), 0)` mm. The mesh
+and occupied volume. That tessellation's facet-pair contact audit supplies the
+embedding evidence for the held mesh. The source mesh's occupied-volume bound
+already covers the partial sweep, and the image multiplies it by the factor
+cubed. Its initial chord is `nextafter(0.05/max(1, factor), 0)` mm. The mesh
 keeps each source face's origin roles. Planar faces keep scaled plane tags;
 curved faces publish `Faceted`, including a sphere's one face with no edge or
 loop. The faceted topology builder admits that zero-boundary case only for a
 closed, edge-connected, single-face mesh. That face has zero rim perimeter;
 the source mesh's proved `areaSlack`, scaled by the factor squared, covers its
 curved area difference without a rim term. A sheet Revolve, and any
-source without complete mesh proofs or with a failed contact audit, refuses
+source without complete mesh proofs, refuses
 without retiring the source.
 
 The faceted payload marks this source class so a later `Transform`, `Copy` or

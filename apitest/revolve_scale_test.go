@@ -79,7 +79,10 @@ func TestPartialRevolveScaledAtPreservesSectorVolumeAndFaceRoles(t *testing.T) {
 	wedge, err := decad.Revolve(t.Context(), doc, s, profile, uAxis,
 		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
-	scaled, err := decad.ScaledAt(t.Context(), wedge, r3.NewVec(1, 2, 3), units.Scalar(2))
+	anchor := r3.NewVec(1, 2, 3)
+	srcCentroid, err := wedge.Centroid()
+	require.NoError(t, err)
+	scaled, err := decad.ScaledAt(t.Context(), wedge, anchor, units.Scalar(2))
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{scaled}, doc.Bodies())
 
@@ -89,6 +92,11 @@ func TestPartialRevolveScaledAtPreservesSectorVolumeAndFaceRoles(t *testing.T) {
 	require.NoError(t, err)
 	require.InDelta(t, 8*160*math.Pi, volume.Value.Base(), volume.Bound.Base())
 	require.Greater(t, volume.Bound.Base(), 0.0)
+	// A scale about the anchor maps the source centroid c to anchor+2(c-anchor).
+	centroid, err := scaled.Centroid()
+	require.NoError(t, err)
+	want := anchor.Add(srcCentroid.Value.Sub(anchor).Scale(2))
+	require.LessOrEqual(t, want.Sub(centroid.Value).Len(), centroid.Bound.Base()+2*srcCentroid.Bound.Base())
 	for _, face := range wedge.Faces() {
 		images, err := decad.Faces(decad.FaceCreatedBy(face.Origins()[0])).SelectFaces(scaled)
 		require.NoError(t, err)

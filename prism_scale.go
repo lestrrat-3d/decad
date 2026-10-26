@@ -42,7 +42,7 @@ func prismScaleSource(ctx context.Context, b *Body, prism prismPayload, factor f
 
 // revolveScaleSource admits a solid Revolve, complete or partial, only after
 // its own tessellation proves both the boundary and occupied volume and an
-// exact facet-pair audit finds the held mesh free of contact. The similarity
+// its own contact audit covers the held mesh. The similarity
 // then carries those proofs through the same faceted path as a prism.
 func revolveScaleSource(ctx context.Context, b *Body, source revolvePayload, factor float64) (facetedPayload, error) {
 	if source.SurfaceResult || !source.Xform.IsValid() || source.SectionDelta != 0 {
@@ -52,14 +52,9 @@ func revolveScaleSource(ctx context.Context, b *Body, source revolvePayload, fac
 	if chord <= 0 {
 		return facetedPayload{}, fmt.Errorf("%w: the scale leaves no representable Revolve chord", ErrUnsupported)
 	}
-	fp, err := certifiedScaleSource(ctx, b, chord)
-	if err != nil {
-		return facetedPayload{}, err
-	}
-	if err := auditHeldScaleContact(ctx, fp); err != nil {
-		return facetedPayload{}, err
-	}
-	return fp, nil
+	// The source's VerifyAll tessellation already ran the facet-pair contact
+	// audit on the held mesh, so no second audit is added here.
+	return certifiedScaleSource(ctx, b, chord)
 }
 
 // auditHeldScaleContact checks every held facet pair of a scale source for
