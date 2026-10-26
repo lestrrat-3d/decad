@@ -1169,8 +1169,8 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   adaptive-precision sign tests that fall back to exact rational arithmetic
   exactly at the boundary cases — a sign decided exactly is a topology
   decision that cannot flip (core §2.1's whole fear), so the output is
-  watertight **by construction** on the tessellated geometry. The exact
-  fallback is carried as homogeneous integer coordinates — an integer
+  watertight **by construction** on the tessellated geometry. The general
+  exact fallback is carried as homogeneous integer coordinates — an integer
   numerator triple over one shared positive denominator — rather than
   `math/big.Rat`: every predicate is a homogeneous form of fixed degree in the
   differences, so its sign is invariant under scaling by a positive
@@ -1179,6 +1179,13 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   identity and a homogeneous point has many spellings. Retriangulation along
   intersection curves, classification by exact winding tests, stitching by
   shared exact vertices.
+
+  An uncertain binary64 orientation first tries an exact floating expansion
+  when its coordinate differences are exactly representable and within
+  `proof.OrientSignExpansion`'s bounds. Product remainders and error-free sums
+  give the exact determinant sign. Rounded differences and out-of-range inputs
+  use the general integer fallback. Rational source points use their integer
+  planes directly; an expansion of rounded source coordinates cannot decide them.
 - **Subdivide cut facets in bounded batches.** Each facet owns its cutter and
   cancellation budget. Independent subdivisions run concurrently; region
   classification, point-key caching and facet emission run on the caller in

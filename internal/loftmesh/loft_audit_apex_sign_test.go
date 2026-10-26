@@ -55,7 +55,7 @@ func apexPoints(rng *rand.Rand, kind int) (e0, e1, a, b r3.Vec) {
 	case 1: // exactly coplanar, integer coordinates
 		e0, e1, a = integer(), integer(), integer()
 		return e0, e1, a, coplanarApex(e0, e1, a)
-	case 2: // one ulp off the plane at a large translation, so the filter cannot decide
+	case 2: // one ulp off the plane after a large translation
 		e0, e1, a = integer(), integer(), integer()
 		b = coplanarApex(e0, e1, a)
 		shift := r3.Vec{X: float64(rng.IntN(1e7)), Y: float64(rng.IntN(1e7)), Z: float64(rng.IntN(1e7))}
@@ -87,7 +87,8 @@ func apexPoints(rng *rand.Rand, kind int) (e0, e1, a, b r3.Vec) {
 }
 
 // apexFixtureMesh draws the whole fixture: scales 2^k for k in {-40, 0, 40} and
-// 200 pairs scaled so every coordinate difference is subnormal.
+// 200 pairs scaled so every coordinate difference is subnormal, and another
+// 400 below the float filter's scale guard to keep the integer fallback covered.
 func apexFixtureMesh(pairs int) *apexFixture {
 	rng := rand.New(rand.NewPCG(53, 59))
 	f := &apexFixture{}
@@ -95,6 +96,8 @@ func apexFixtureMesh(pairs int) *apexFixture {
 		scale := math.Ldexp(1, [3]int{-40, 0, 40}[rng.IntN(3)])
 		if p < 200 {
 			scale = math.Ldexp(1, -1070)
+		} else if p < 600 {
+			scale = math.Ldexp(1, -320)
 		}
 		for {
 			e0, e1, a, b := apexPoints(rng, p%5)
