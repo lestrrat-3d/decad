@@ -29,6 +29,20 @@ type BossBore struct {
 	Draft    units.Value
 }
 
+// BossRibs is the set of triangular gusset ribs that brace a [BossSpec]'s root,
+// spaced evenly round the boss's axis (agent-docs/boss-design.md §9). Each rib
+// stands Height up the boss's wall and reaches Length out along the face, its
+// outer edge sloping from the face up to the wall, and is Thickness thick, centred
+// on the plane through the boss's axis. Count is from 1 to 16, Thickness, Length and
+// Height are positive lengths with Height at most the boss's Height, and Angle is the
+// angle of the first rib from the face frame's U axis about the boss's axis: the zero
+// Value is along U. The ribs are not drawn into the boss's pilot hole.
+type BossRibs struct {
+	Count                     int
+	Thickness, Length, Height units.Value
+	Angle                     units.Value
+}
+
 // BossSpec describes one boss standing on a planar or cylindrical face: round by
 // default, or the shape Shape names.
 //
@@ -58,6 +72,8 @@ type BossSpec struct {
 	Draft      units.Value
 	RootFillet units.Value
 	Shape      HoleShape
+	// Ribs, when not nil, braces the boss's root with gusset ribs (agent-docs/boss-design.md §9).
+	Ribs *BossRibs
 }
 
 // Boss raises a round boss on a planar face of b, with an optional blind pilot
@@ -146,6 +162,16 @@ func bossCombine(ctx context.Context, d *Document, b *Body, in bossRequest) (*Bo
 	tools := []*Body{pillar}
 	defer func() { removeTools(tools) }()
 	steps := []toolStep{{op: meshbool.OpUnion, tool: pillar}}
+	if len(in.ribs) > 0 {
+		ribs, err := buildBossRibs(toolCtx, d, in)
+		if err != nil {
+			return nil, err
+		}
+		tools = append(tools, ribs...)
+		// One union of the pillar and its ribs: a second union would meet a target that
+		// already holds the first one's coarse mesh.
+		steps = []toolStep{{op: meshbool.OpUnion, merge: append([]*Body{pillar}, ribs...)}}
+	}
 	if in.bore != nil {
 		plan, err := holeplan.Compute(*in.bore)
 		if err != nil {
@@ -188,6 +214,8 @@ type bossRequest struct {
 	diameter, height, embed, draft float64
 	// shape, when set, is the section in place of a circle of diameter.
 	shape *bossShape
+	// ribs, when set, are the gusset ribs round the boss's root, in the order of their angles.
+	ribs []bossRibRequest
 	// curved, when set, says the boss stands on a cylindrical face: frame is then the
 	// plane tangent to the cylinder at the boss's centre.
 	curved *curvedHole
@@ -220,6 +248,16 @@ func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
 		return in, err
 	}
 	in.frame, in.outward, in.curved = site.frame, site.outward, site.cylinder
+	if spec.Ribs != nil {
+		switch {
+		case in.curved != nil:
+			return in, fmt.Errorf(`%w: a boss on a cylindrical face takes no ribs`, ErrUnsupported)
+		case spec.Shape != nil:
+			return in, fmt.Errorf(`%w: a shaped boss takes no ribs`, ErrUnsupported)
+		case spec.Draft != (units.Value{}) || spec.RootFillet != (units.Value{}):
+			return in, fmt.Errorf(`%w: a boss with ribs takes no draft and no root fillet`, ErrUnsupported)
+		}
+	}
 	if in.curved != nil && spec.RootFillet != (units.Value{}) {
 		return in, fmt.Errorf(`%w: a boss on a cylindrical face takes no root fillet`, ErrUnsupported)
 	}
@@ -248,6 +286,11 @@ func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
 	}
 	if in.diameter == 0 || in.height == 0 {
 		return in, fmt.Errorf(`%w: a boss needs a positive diameter and height`, ErrDegenerate)
+	}
+	if spec.Ribs != nil {
+		if in.ribs, err = readBossRibs(spec.Ribs, in.diameter/2, in.height); err != nil {
+			return in, err
+		}
 	}
 	if spec.Draft != (units.Value{}) {
 		// A draft is signed, so it is read as an angle rather than as a magnitude.
@@ -379,4 +422,114 @@ func buildBossPillar(ctx context.Context, d *Document, in bossRequest) (*Body, e
 		taper = []ExtrudeOption{WithTaper(units.Radians(in.draft))}
 	}
 	return Extrude(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(in.height + in.embed), Dir: dir}, taper...)
+}
+
+// bossRibRequest is one gusset rib in plain data: its angle about the boss's axis from the
+// face frame's U axis, in radians, and its thickness, length and height in millimetres.
+type bossRibRequest struct {
+	angle, thickness, length, height float64
+}
+
+// readBossRibs reads r into one request for each rib. radius is the boss's radius at the
+// face and height its height.
+func readBossRibs(r *BossRibs, radius, height float64) ([]bossRibRequest, error) {
+	if r.Count < 1 || r.Count > 16 {
+		return nil, fmt.Errorf(`%w: a boss takes from 1 to 16 ribs, not %d`, ErrDegenerate, r.Count)
+	}
+	thickness, err := sectionrecord.MagnitudeIn(r.Thickness, units.Length, units.Millimeter, "the boss rib thickness")
+	if err != nil {
+		return nil, err
+	}
+	length, err := sectionrecord.MagnitudeIn(r.Length, units.Length, units.Millimeter, "the boss rib length")
+	if err != nil {
+		return nil, err
+	}
+	rise, err := sectionrecord.MagnitudeIn(r.Height, units.Length, units.Millimeter, "the boss rib height")
+	if err != nil {
+		return nil, err
+	}
+	if thickness == 0 || length == 0 || rise == 0 {
+		return nil, fmt.Errorf(`%w: a boss rib needs a positive thickness, length and height`, ErrDegenerate)
+	}
+	if rise > height {
+		return nil, fmt.Errorf(`%w: a boss rib %g mm tall is taller than the %g mm boss`, ErrDegenerate, rise, height)
+	}
+	if thickness >= 2*radius {
+		return nil, fmt.Errorf(`%w: a boss rib %g mm thick is as thick as the %g mm boss is wide`, ErrDegenerate, thickness, 2*radius)
+	}
+	// Neighbouring ribs meet at the boss's wall when half a rib's thickness reaches the
+	// half-way line between them.
+	if r.Count > 1 && thickness/2 >= radius*math.Sin(math.Pi/float64(r.Count)) {
+		return nil, fmt.Errorf(`%w: %d ribs %g mm thick meet at the root of a boss of radius %g mm`, ErrDegenerate, r.Count, thickness, radius)
+	}
+	start := 0.0
+	if r.Angle != (units.Value{}) {
+		if start, err = r.Angle.In(units.Radian); err != nil {
+			return nil, fmt.Errorf(`%w: the boss rib angle must be an angle: %s`, ErrUnitKind, err)
+		}
+		if math.IsNaN(start) || math.IsInf(start, 0) {
+			return nil, fmt.Errorf(`%w: the boss rib angle is not finite`, ErrNotFinite)
+		}
+	}
+	out := make([]bossRibRequest, r.Count)
+	for k := range out {
+		out[k] = bossRibRequest{angle: start + 2*math.Pi*float64(k)/float64(r.Count), thickness: thickness, length: length, height: rise}
+	}
+	return out, nil
+}
+
+// buildBossRibs extrudes one gusset rib for each request: a polygon in the plane through
+// the boss's axis at the rib's angle, its coordinates the distance along the rib out from
+// the axis and the height above the face, extruded half its thickness each way. The polygon
+// starts half way to the axis and half of embed below the face so it overlaps the boss and the body without lying in the pillar's footing plane,
+// runs out to the boss's wall plus the rib's length, and slopes from the face at that end up
+// to the rib's height at the wall.
+func buildBossRibs(ctx context.Context, d *Document, in bossRequest) ([]*Body, error) {
+	radius := in.diameter / 2
+	var tools []*Body
+	fail := func(err error) ([]*Body, error) {
+		removeTools(tools)
+		return nil, err
+	}
+	for _, rib := range in.ribs {
+		dir := in.frame.U().Scale(math.Cos(rib.angle)).Add(in.frame.V().Scale(math.Sin(rib.angle)))
+		frame, err := r3.NewFrame(in.frame.ToWorldUV(in.u, in.v), dir, in.outward)
+		if err != nil {
+			return fail(fmt.Errorf(`%w: a boss rib's plane is degenerate: %s`, ErrDegenerate, err))
+		}
+		w := sketch.NewWorld()
+		pl, err := w.CreatePlaneFromFrame(frame)
+		if err != nil {
+			return fail(err)
+		}
+		s, err := w.CreateSketch(pl)
+		if err != nil {
+			return fail(err)
+		}
+		corners := [][2]float64{
+			{radius / 2, -in.embed / 2},
+			{radius + rib.length, -in.embed / 2},
+			{radius + rib.length, 0},
+			{radius, rib.height},
+			{radius / 2, rib.height},
+		}
+		points := make([]*sketch.Point, len(corners))
+		for i, c := range corners {
+			points[i] = s.CreatePoint(c[0], c[1])
+			s.Fix(points[i])
+		}
+		for i := range points {
+			s.CreateLine(points[i], points[(i+1)%len(points)])
+		}
+		if _, err := s.Solve(ctx); err != nil {
+			return fail(err)
+		}
+		half := units.Millimeters(rib.thickness / 2)
+		tool, err := Extrude(ctx, d, s, s.Profiles()[0], TwoSided{One: DistanceSide{D: half}, Two: DistanceSide{D: half}})
+		if err != nil {
+			return fail(err)
+		}
+		tools = append(tools, tool)
+	}
+	return tools, nil
 }

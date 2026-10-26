@@ -2567,3 +2567,6 @@
 10	0.01	TestEmbossEngravesIntoARod
 10	0.01	TestEmbossRaisesAReliefInABore
 10	0.01	TestEmbossOnACylinderRefusals
+10	0.01	TestBossWithGussetRibs
+10	0.01	TestBossRibsTurnWithTheirAngleAndLeavePilotHoleClear
+10	0.01	TestBossRibsRefusals
