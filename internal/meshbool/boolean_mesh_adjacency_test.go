@@ -3,6 +3,7 @@ package meshbool_test
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -96,9 +97,18 @@ func TestFacetAdjacencyPreCanceledAvoidsReservation(t *testing.T) {
 
 	var got [][]int
 	var err error
-	allocs := testing.AllocsPerRun(1, func() {
-		got, err = meshbool.FacetAdjacencyContext(ctx, tris)
-	})
+	// AllocsPerRun counts every allocation in the process, so another
+	// goroutine's stray allocation can land in one reading. A reservation by
+	// FacetAdjacencyContext lands in every reading, so the lowest one decides.
+	allocs := math.MaxFloat64
+	for range 5 {
+		allocs = min(allocs, testing.AllocsPerRun(1, func() {
+			got, err = meshbool.FacetAdjacencyContext(ctx, tris)
+		}))
+		if allocs == 0 {
+			break
+		}
+	}
 	require.ErrorIs(t, err, context.Canceled)
 	require.Nil(t, got)
 	require.Zero(t, allocs)
