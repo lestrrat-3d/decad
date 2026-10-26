@@ -10,6 +10,7 @@ geometry kernel. The public contract is in `agent-docs/api-design.md` §8; this 
 func Rib(ctx context.Context, b *Body, s *sketch.Sketch, line *sketch.Line, thickness units.Value, e Extent, opts ...RibOption) (*Body, error)
 func Web(ctx context.Context, b *Body, s *sketch.Sketch, lines []*sketch.Line, thickness units.Value, e Extent, opts ...RibOption) (*Body, error)
 func RibArc(ctx context.Context, b *Body, s *sketch.Sketch, arc *sketch.Arc, thickness units.Value, e Extent, opts ...RibOption) (*Body, error)
+func WebPath(ctx context.Context, b *Body, s *sketch.Sketch, path []sketch.Entity, thickness units.Value, e Extent, opts ...RibOption) (*Body, error)
 func WithRibOverrun(overrun units.Value) RibOption
 ```
 
@@ -43,7 +44,7 @@ func WithRibOverrun(overrun units.Value) RibOption
 
 ## 4. Not covered
 
-- A rib along a chain or a polyline, a rib along an arc in `Web`, and a rib that follows the surface of the body.
+- A rib that follows the surface of the body, and a rib along a spline or any entity but a line and an arc.
 - A rib that extends itself to the body. The caller draws the line and the extent so that the rib reaches the walls.
 - A rib thickened perpendicular to the sketch plane. The thickness lies in the sketch plane.
 
@@ -64,4 +65,16 @@ computes the band.
 The volume a rib adds, above the body it stands on, is the band's area times its height: `θ·R·t·h` for a sweep of `θ`
 radians. The tests compare against it and check on which side of the arc material lies, so a rib swept the wrong way
 round the circle turns them red.
+
+## 6. A run of lines and arcs
+
+`WebPath` adds one rib along each line and arc of a run, in order, in one commit: `Web` for lines and arcs mixed.
+
+| Decision | Rule |
+|---|---|
+| P1 | `path` holds `*sketch.Line` and `*sketch.Arc` entities of `s`. Each is built as `Rib` or `RibArc` builds it (R2 to R4, A1 to A5). Any other entity, a nil entity and an entity of another sketch are `ErrDegenerate`, as is an empty path. |
+| P2 | `Web` is `WebPath` over its lines, and `Rib` over one line, so the three share every rule of §1 and §5. |
+| P3 | The ribs are united with one another in path order and the single merged tool joins `b` once (§2), so a rib that crosses or meets another needs no special case. |
+| P4 | Ribs that meet end to end, the legs of a polyline or an arc and the lines either side of it, overlap only through the overrun of R7. With the default of zero their end faces touch in a coplanar contact that `Union` refuses, so a run that is one chain sets an overrun. |
+| P5 | A corner is not mitred: the overrun of each leg fills the corner on the outside and the legs overlap inside it. |
 
