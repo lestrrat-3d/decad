@@ -219,7 +219,7 @@ Each of these returns a new body and retires its input.
 | `decad.Intersect` | The volume common to both bodies. |
 | `decad.Split` | One solid per arranged target cell. |
 
-A `Cut` or `Intersect` that would be refused because an operand is the mesh result of earlier Booleans is retried from
+A two-body `Union`, `Cut` or `Intersect` that would be refused because an operand is the mesh result of earlier Booleans is retried from
 the source bodies of that chain, when all but one pair combine by exact routes. The result is the same solid. Its
 history records the one call, and faces made by the exact steps carry fresh roles, so select them by geometry.
 
