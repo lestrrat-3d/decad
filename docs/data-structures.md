@@ -148,6 +148,7 @@ configuration option.
 | `decad.HoleHead` | sealed interface | The widening at a hole's mouth. | The caller |
 | `decad.Counterbore` | struct | A flat-bottomed cylindrical recess. | The caller |
 | `decad.EmbossMode` | enum | `decad.EmbossRaised` or `decad.EmbossEngraved`. | The caller |
+| `decad.EmbossOption` | option set | A setting on `decad.Emboss`: `decad.WithEmbossDraft` leans the relief's walls. | The caller |
 | `decad.Countersink` | struct | A conical recess with an included angle. | The caller |
 
 ### Selection, patterns and placement

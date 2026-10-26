@@ -8,7 +8,8 @@ validation and one atomic commit, and no new geometry kernel. The public contrac
 ## 1. Contract
 
 ```go
-func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.Profile, face FaceSelector, mode EmbossMode, height units.Value) (*Body, error)
+func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.Profile, face FaceSelector, mode EmbossMode, height units.Value, opts ...EmbossOption) (*Body, error)
+func WithEmbossDraft(angle units.Value) EmbossOption
 ```
 
 `EmbossMode` is `EmbossRaised` or `EmbossEngraved`. `Emboss` retires `b` and returns the result.
@@ -49,4 +50,17 @@ reliefs of different height on one side, `Facing` matches several faces and `Emb
 
 - A relief on a face that is not an analytic plane, such as a cylinder wall.
 - Text from a font. The caller supplies closed profiles; `agent-docs/missing-features.md` lists text profiles.
-- A relief with a draft angle, a fillet on its rim, or a height that varies across the profile.
+- A fillet on a relief's rim, and a height that varies across the profile.
+
+## 6. Draft
+
+`WithEmbossDraft` leans the relief's walls. It passes `WithTaper` to the `Extrude` that builds each tool, so the lean,
+its sign and its refusals are `Extrude`'s (`agent-docs/draft-design.md` §2).
+
+| Decision | Rule |
+|---|---|
+| D1 | A positive angle narrows a raised relief toward its top and an engraving toward its floor: the wall at depth `t` from the face has moved in by `t·tan(angle)`. A negative angle widens them. The zero value is a straight wall. |
+| D2 | The angle is `WithTaper`'s: an angle is required, a wrong unit kind is `ErrUnitKind`, and one at or past a right angle is `ErrDegenerate`. A nil option is `ErrDegenerate`. |
+| D3 | The tool's one millimetre on the other side of the face (E4) leans the same way and lies inside the body, so the join sees the relief's own walls where they meet the face. |
+| D4 | The result is what `Union` or `Cut` gives for the drafted tool. The tests compare the volume against `∫ (L − 2t·tan(angle))² dt` for a square relief within a relative `1e-9` and probe a point a drafted wall leaves as material. |
+

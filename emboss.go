@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
+	"github.com/lestrrat-go/option/v3"
 )
 
 // EmbossMode says whether a relief stands out of a face or is cut into it.
@@ -34,6 +35,28 @@ func (m EmbossMode) String() string {
 	}
 }
 
+// EmbossOption configures [Emboss].
+type EmbossOption interface {
+	option.Interface
+	embossOption()
+}
+
+type embossOption struct{ option.Interface }
+
+func (embossOption) embossOption() {}
+
+type identEmbossDraft struct{}
+
+// WithEmbossDraft leans the relief's walls by a draft angle
+// (agent-docs/emboss-design.md §6). A positive angle makes a raised relief
+// narrower toward its top and an engraving narrower toward its floor, the way a
+// moulded or cast part leaves its mould. A negative angle widens them. The angle
+// is [WithTaper]'s: a draft at or past a right angle is ErrDegenerate, and the
+// zero value is a straight wall.
+func WithEmbossDraft(angle units.Value) EmbossOption {
+	return embossOption{option.New(identEmbossDraft{}, angle)}
+}
+
 // Emboss raises or engraves the profiles on a planar face of b and returns the
 // result, retiring b.
 //
@@ -54,7 +77,7 @@ func (m EmbossMode) String() string {
 // in a shared plane. A boolean the evaluator cannot decide is the boolean's
 // own error. Every failure leaves the document unchanged and b live.
 func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.Profile, face FaceSelector,
-	mode EmbossMode, height units.Value) (*Body, error) {
+	mode EmbossMode, height units.Value, opts ...EmbossOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control an emboss`, ErrDegenerate)
 	}
@@ -76,6 +99,16 @@ func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.P
 	}
 	if face == nil {
 		return nil, errNilSelector
+	}
+	var taper []ExtrudeOption
+	for _, o := range opts {
+		if o == nil {
+			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+		}
+		if _, ok := o.Ident().(identEmbossDraft); ok {
+			angle, _ := option.Get[units.Value](o)
+			taper = []ExtrudeOption{WithTaper(angle)}
+		}
 	}
 	h, err := sectionrecord.MagnitudeIn(height, units.Length, units.Millimeter, "the relief height")
 	if err != nil {
@@ -110,7 +143,7 @@ func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.P
 		if p == nil {
 			return nil, fmt.Errorf(`%w: a nil profile names no relief`, ErrDegenerate)
 		}
-		tool, err := Extrude(toolCtx, d, s, p, extent)
+		tool, err := Extrude(toolCtx, d, s, p, extent, taper...)
 		if err != nil {
 			return nil, err
 		}

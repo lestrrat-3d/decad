@@ -92,3 +92,61 @@ func Example_emboss() {
 	// Output:
 	// volume: 12100 mm^3
 }
+
+// WithEmbossDraft leans the relief's walls so a moulded or cast part releases
+// from its tool. A positive angle makes a raised relief narrower toward its top.
+// Here a 10 mm square label, raised 3 mm with a 5 degree draft, is 10 mm wide on
+// the plate and about 9.5 mm wide at its top.
+func Example_emboss_draft() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(0, 0, 40, 30)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	topPlane, err := w.CreateOffsetPlane(w.XY(), 10)
+	if err != nil {
+		fmt.Printf("failed to create plane: %s\n", err)
+		return
+	}
+	label, err := w.CreateSketch(topPlane)
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	labelRect := label.CreateRectangle(10, 10, 20, 20)
+	label.Fix(labelRect.A)
+	if _, err := label.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	raised, err := decad.Emboss(context.Background(), plate, label, label.Profiles(),
+		decad.Faces(decad.Facing(r3.Vec{Z: 1})), decad.EmbossRaised, units.Millimeters(3),
+		decad.WithEmbossDraft(units.Degrees(5)))
+	if err != nil {
+		fmt.Printf("failed to emboss: %s\n", err)
+		return
+	}
+	volume, err := raised.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	// The plate holds 12000 mm^3. A straight label would add 300 mm^3; the draft
+	// leaves about 285.
+	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
+	// Output:
+	// volume: 12285 mm^3
+}
