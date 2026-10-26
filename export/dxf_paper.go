@@ -133,6 +133,12 @@ func DXFSheet(ctx context.Context, w io.Writer, body *decad.Body, tol units.Valu
 				maxY = math.Max(maxY, c.Centre[1]+c.Radius)
 			}
 		}
+		for _, group := range [][]drawing.Arc{lines.VisibleArcs, lines.HiddenArcs} {
+			for _, a := range group {
+				_, _, _, ay1 := a.Bounds()
+				maxY = math.Max(maxY, ay1)
+			}
+		}
 		p := placed{lines: lines, minX: minX, minY: minY, trueW: maxX - minX, trueH: maxY - minY}
 		p.paperW, p.paperH = p.trueW*scale, p.trueH*scale
 		views[i] = p
@@ -186,11 +192,20 @@ func DXFSheet(ctx context.Context, w io.Writer, body *decad.Body, tol units.Valu
 				Centre: [2]float64{(c.Centre[0]-p.minX)*scale + x, (c.Centre[1]-p.minY)*scale + y}, Radius: c.Radius * scale})
 		}
 	}
+	moveArcs := func(p placed, group []drawing.Arc, layer string) {
+		for _, a := range group {
+			a.Centre = [2]float64{(a.Centre[0]-p.minX)*scale + x, (a.Centre[1]-p.minY)*scale + y}
+			a.Radius *= scale
+			writeDXFArc(&out, layer, a)
+		}
+	}
 	for _, p := range views {
 		move(p, p.lines.Visible, DXFVisibleLayer)
 		move(p, p.lines.Hidden, DXFHiddenLayer)
 		moveCircles(p, p.lines.VisibleCircles, DXFVisibleLayer)
 		moveCircles(p, p.lines.HiddenCircles, DXFHiddenLayer)
+		moveArcs(p, p.lines.VisibleArcs, DXFVisibleLayer)
+		moveArcs(p, p.lines.HiddenArcs, DXFHiddenLayer)
 		if paper.Dimensions {
 			// The width: extension lines down from both sides, a dimension line with
 			// a tick at each end, and the true width centred above it.

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 
 	"github.com/lestrrat-3d/decad"
@@ -96,23 +97,53 @@ func projectBodyDrawing(ctx context.Context, body *decad.Body, mesh meshSource, 
 		return drawing.Lines{}, err
 	}
 	right, up, dir := raster.Camera{Direction: view.Direction, Up: view.Up}.Axes()
+	project := func(p r3.Vec) [2]float64 { return [2]float64{right.Dot(p), up.Dot(p)} }
 	var candidates []drawing.Circle
+	var arcs []drawing.Arc
 	for _, e := range body.Edges() {
-		c, ok := e.Curve().(decad.Circle3)
-		if !ok || e.Start() != e.End() {
-			continue
+		switch c := e.Curve().(type) {
+		case decad.Circle3:
+			if e.Start() != e.End() {
+				continue
+			}
+			axis, ok := c.Axis.Normalize()
+			if !ok || axis.Cross(dir).Len() > 1e-9 {
+				continue
+			}
+			radius, err := c.Radius.In(units.Millimeter)
+			if err != nil {
+				continue
+			}
+			candidates = append(candidates, drawing.Circle{Centre: project(c.Center), Radius: radius})
+		case decad.Arc3:
+			axis, ok := c.Axis.Normalize()
+			if !ok || axis.Cross(dir).Len() > 1e-9 || e.Start() == e.End() {
+				continue
+			}
+			radius, err := c.Radius.In(units.Millimeter)
+			if err != nil {
+				continue
+			}
+			centre := project(c.Center)
+			angle := func(p r3.Vec) float64 {
+				q := project(p)
+				return math.Atan2(q[1]-centre[1], q[0]-centre[0])
+			}
+			from, to := angle(e.Start().Position().Value), angle(e.End().Position().Value)
+			// The arc sweeps counter-clockwise about its axis. Seen in the drawing, whose
+			// toward-the-viewer axis is -dir, that is counter-clockwise when the axis points
+			// toward the viewer and clockwise when it points away.
+			if axis.Dot(dir) > 0 {
+				from, to = to, from
+			}
+			if to <= from {
+				to += 2 * math.Pi
+			}
+			arcs = append(arcs, drawing.Arc{Centre: centre, Radius: radius, Start: from, End: to})
 		}
-		axis, ok := c.Axis.Normalize()
-		if !ok || axis.Cross(dir).Len() > 1e-9 {
-			continue
-		}
-		radius, err := c.Radius.In(units.Millimeter)
-		if err != nil {
-			continue
-		}
-		candidates = append(candidates, drawing.Circle{Centre: [2]float64{right.Dot(c.Center), up.Dot(c.Center)}, Radius: radius})
 	}
 	lines.Circulate(candidates)
+	lines.CirculateArcs(arcs)
 	return lines, nil
 }
 
@@ -160,9 +191,13 @@ func writeDXF(out *bytes.Buffer, lines drawing.Lines) {
 	for _, layer := range []struct {
 		name    string
 		circles []drawing.Circle
-	}{{DXFVisibleLayer, lines.VisibleCircles}, {DXFHiddenLayer, lines.HiddenCircles}} {
+		arcs    []drawing.Arc
+	}{{DXFVisibleLayer, lines.VisibleCircles, lines.VisibleArcs}, {DXFHiddenLayer, lines.HiddenCircles, lines.HiddenArcs}} {
 		for _, c := range layer.circles {
 			writeDXFCircle(out, layer.name, c)
+		}
+		for _, a := range layer.arcs {
+			writeDXFArc(out, layer.name, a)
 		}
 	}
 	for _, layer := range []struct {
@@ -181,6 +216,13 @@ func writeDXF(out *bytes.Buffer, lines drawing.Lines) {
 func writeDXFCircle(out *bytes.Buffer, layer string, c drawing.Circle) {
 	fmt.Fprintf(out, "  0\nCIRCLE\n  8\n%s\n 10\n%s\n 20\n%s\n 30\n0\n 40\n%s\n",
 		layer, dxfNumber(c.Centre[0]), dxfNumber(c.Centre[1]), dxfNumber(c.Radius))
+}
+
+// writeDXFArc writes one ARC entity on layer, its angles in degrees.
+func writeDXFArc(out *bytes.Buffer, layer string, a drawing.Arc) {
+	fmt.Fprintf(out, "  0\nARC\n  8\n%s\n 10\n%s\n 20\n%s\n 30\n0\n 40\n%s\n 50\n%s\n 51\n%s\n",
+		layer, dxfNumber(a.Centre[0]), dxfNumber(a.Centre[1]), dxfNumber(a.Radius),
+		dxfNumber(math.Mod(a.Start*180/math.Pi+360, 360)), dxfNumber(math.Mod(a.End*180/math.Pi+360, 360)))
 }
 
 // dxfNumber formats x in plain decimal, never in exponent form, with negative

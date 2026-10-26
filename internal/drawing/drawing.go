@@ -34,11 +34,48 @@ type Circle struct {
 	Radius float64
 }
 
-// Lines are the feature edges split by visibility. VisibleCircles and
-// HiddenCircles are circles that Circulate took out of Visible and Hidden.
+// Arc is a circular arc in the drawing plane, in millimetres, counter-clockwise
+// seen in the drawing from Start to End, both angles in radians from the X axis.
+// End is Start plus the sweep, so it may pass 2π.
+type Arc struct {
+	Centre     [2]float64
+	Radius     float64
+	Start, End float64
+}
+
+// Ends returns the arc's two end points.
+func (a Arc) Ends() (start, end [2]float64) {
+	at := func(angle float64) [2]float64 {
+		return [2]float64{a.Centre[0] + a.Radius*math.Cos(angle), a.Centre[1] + a.Radius*math.Sin(angle)}
+	}
+	return at(a.Start), at(a.End)
+}
+
+// Bounds returns the box of the arc: its end points and each axis extreme of the
+// circle the arc passes through.
+func (a Arc) Bounds() (minX, maxX, minY, maxY float64) {
+	s, e := a.Ends()
+	minX, maxX = math.Min(s[0], e[0]), math.Max(s[0], e[0])
+	minY, maxY = math.Min(s[1], e[1]), math.Max(s[1], e[1])
+	for k := range 4 {
+		angle := float64(k) * math.Pi / 2
+		// The extreme at angle is on the arc when it lies past Start within the sweep.
+		if math.Mod(angle-a.Start+4*math.Pi, 2*math.Pi) <= a.End-a.Start {
+			x, y := a.Centre[0]+a.Radius*math.Cos(angle), a.Centre[1]+a.Radius*math.Sin(angle)
+			minX, maxX = math.Min(minX, x), math.Max(maxX, x)
+			minY, maxY = math.Min(minY, y), math.Max(maxY, y)
+		}
+	}
+	return minX, maxX, minY, maxY
+}
+
+// Lines are the feature edges split by visibility. VisibleCircles, HiddenCircles,
+// VisibleArcs and HiddenArcs are circles and arcs that Circulate and
+// CirculateArcs took out of Visible and Hidden.
 type Lines struct {
 	Visible, Hidden               []Segment
 	VisibleCircles, HiddenCircles []Circle
+	VisibleArcs, HiddenArcs       []Arc
 }
 
 // circleOnTolerance is how far, relative to a circle's radius (at least 1 mm), a
@@ -65,6 +102,63 @@ func (l *Lines) Circulate(candidates []Circle) {
 			l.HiddenCircles = append(l.HiddenCircles, c)
 		}
 	}
+}
+
+// CirculateArcs is Circulate for arcs: an arc is taken when the visible segments
+// with both ends on its circle and inside its sweep together run all the way along
+// it, each a whole chord, and then those segments are removed and the arc joins
+// VisibleArcs; otherwise the hidden segments are tried for HiddenArcs.
+func (l *Lines) CirculateArcs(candidates []Arc) {
+	for _, a := range candidates {
+		if rest, ok := coverArc(l.Visible, a); ok {
+			l.Visible = rest
+			l.VisibleArcs = append(l.VisibleArcs, a)
+		}
+		if rest, ok := coverArc(l.Hidden, a); ok {
+			l.Hidden = rest
+			l.HiddenArcs = append(l.HiddenArcs, a)
+		}
+	}
+}
+
+// coverArc splits segments into the chords of arc a and the rest, and reports
+// whether the chords run the whole sweep.
+func coverArc(segments []Segment, a Arc) (rest []Segment, covered bool) {
+	eps := circleOnTolerance * math.Max(1, a.Radius)
+	sweep := a.End - a.Start
+	// into is how far past Start, counter-clockwise, the point lies on the circle, or false
+	// when the point is off the circle or outside the sweep. A point just before Start
+	// counts as zero.
+	into := func(p [2]float64) (float64, bool) {
+		if math.Abs(math.Hypot(p[0]-a.Centre[0], p[1]-a.Centre[1])-a.Radius) > eps {
+			return 0, false
+		}
+		d := math.Mod(math.Atan2(p[1]-a.Centre[1], p[0]-a.Centre[0])-a.Start+4*math.Pi, 2*math.Pi)
+		if d > 2*math.Pi-1e-9 {
+			d = 0
+		}
+		return d, d <= sweep+1e-9
+	}
+	mine := make([]bool, len(segments))
+	span := 0.0
+	for i, s := range segments {
+		da, okA := into(s.A)
+		db, okB := into(s.B)
+		if !okA || !okB {
+			continue
+		}
+		mine[i] = true
+		span += math.Abs(db - da)
+	}
+	if span < sweep-1e-6 {
+		return segments, false
+	}
+	for i, s := range segments {
+		if !mine[i] {
+			rest = append(rest, s)
+		}
+	}
+	return rest, true
 }
 
 // coverCircle splits segments into those on circle c and the rest, and reports
