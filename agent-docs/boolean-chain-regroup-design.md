@@ -449,9 +449,10 @@ Every Absorb or Merge step the Regrouped plan column names is analytic; every `F
 - `Vx` is the intersection of `t1`'s and `t3`'s cylinders, axes crossing at (20, 10, 10):
   `Vx = 36·∫_{−π/2}^{π/2} cos²φ·√(16 − 9·sin²φ) dφ`. Evaluate by the trapezoid rule on N = 4096 and N = 2048 nodes
   (the integrand is smooth and π-periodic); require the two to agree within 1e-12 mm³ and use N = 4096.
-- F1 also checks vertices: every result vertex with y = 0 or y = 20 (within 1e-9) whose distance from (20, 10) in
-  (x, z) is within 0.05 of 4 and whose distance from (22, 10) exceeds 3 + 0.05 satisfies
-  `|hypot − 4| ≤ Vertex.Position().Bound`. At least one such vertex exists.
+- F1 also checks vertices: every result vertex with y = 0 or y = 20 (within 1e-9) whose distance from a rim's centre,
+  (20, 10) with r = 4 or (22, 10) with r = 3, is within 0.05 of that rim's radius satisfies
+  `|hypot − r| ≤ Vertex.Position().Bound`. The result has four such pairs: the two rim crossings on each of the two
+  faces lie on both rims.
 
 Assertions for every F fixture:
 

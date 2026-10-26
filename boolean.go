@@ -123,8 +123,12 @@ func Union(ctx context.Context, first *Body, others ...*Body) (*Body, error) {
 // Cut returns target minus tool, retiring both operands from their document
 // (core §8). The target and tool roles are asymmetric. A cut that removes
 // everything is ErrBooleanFailed;
-// the other gates match Union's. It returns ctx.Err() unchanged when ctx is
-// canceled before the document commit.
+// the other gates match Union's.
+// A call refused with ErrUnsupported on a mesh result of earlier Cut and
+// Intersect calls is retried from the source bodies of that chain
+// (agent-docs/boolean-chain-regroup-design.md); only a failure of that retry too
+// returns the refusal.
+// It returns ctx.Err() unchanged when ctx is canceled before the document commit.
 func Cut(ctx context.Context, target, tool *Body, opts ...BooleanOption) (*Body, error) {
 	body, err := performBoolean(ctx, meshbool.OpCut, target, tool, opts...)
 	return body, operationError(OperationCut, err)
@@ -132,8 +136,12 @@ func Cut(ctx context.Context, target, tool *Body, opts ...BooleanOption) (*Body,
 
 // Intersect returns the volume common to a and b, retiring both operands
 // from their document (core §8). Disjoint operands share nothing, so the
-// empty result is ErrBooleanFailed; the other gates match Union's. It returns
-// ctx.Err() unchanged when ctx is canceled before the document commit.
+// empty result is ErrBooleanFailed; the other gates match Union's.
+// A call refused with ErrUnsupported on a mesh result of earlier Cut and
+// Intersect calls is retried from the source bodies of that chain
+// (agent-docs/boolean-chain-regroup-design.md); only a failure of that retry too
+// returns the refusal.
+// It returns ctx.Err() unchanged when ctx is canceled before the document commit.
 func Intersect(ctx context.Context, a, b *Body, opts ...BooleanOption) (*Body, error) {
 	body, err := performBoolean(ctx, meshbool.OpIntersect, a, b, opts...)
 	return body, operationError(OperationIntersect, err)
@@ -243,8 +251,16 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, 
 		return nil, fmt.Errorf(`%w: a boolean needs two distinct bodies`, ErrDegenerate)
 	}
 	body, err := booleanBodyWith(ctx, op, a, b, d.nextProducerID(), cfg)
+	span := producerID(1)
 	if err != nil {
-		return nil, err
+		rescued, used, ok, rerr := regroupBoolean(ctx, d, op, a, b, cfg, err)
+		if rerr != nil {
+			return nil, rerr
+		}
+		if !ok {
+			return nil, err
+		}
+		body, span = rescued, used
 	}
 	if op == meshbool.OpCut {
 		if err := containedCutQuantities(ctx, body, a, b); err != nil {
@@ -255,7 +271,7 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, 
 		return nil, err
 	}
 	kind := operationKindForBoolean(op)
-	if err := d.commitOperationIn(ctx, nil, kind, operationInputsForBoolean(op, a, b), body, a, b); err != nil {
+	if err := d.commitOperationSpanIn(ctx, nil, kind, operationInputsForBoolean(op, a, b), body, span, a, b); err != nil {
 		return nil, err
 	}
 	return body, nil
