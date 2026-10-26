@@ -28,8 +28,9 @@ import (
 // flag to omit the two outer caps after every span has built solid.
 //
 // An open Sweep mints two section caps. The exact two-arc closed circle of
-// §3.3 reduces to a full Revolve. The §§3.4–3.5 circular-section loops sew
-// analytic spans cyclically. Neither closed build mints section caps.
+// §3.3 reduces to a full Revolve. Under the §§3.4–3.5 closed cardinal loop
+// gate, any section the arc builders and contact audit prove simple is admitted,
+// and its analytic spans sew cyclically. Neither closed build mints section caps.
 
 // SweepOption configures Sweep.
 type SweepOption interface {

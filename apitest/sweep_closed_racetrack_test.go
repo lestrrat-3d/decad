@@ -124,23 +124,44 @@ func TestSweepClosedRacetrackBuildsVerifiedTubeAndReplaysPlacement(t *testing.T)
 	require.InDelta(t, wantCentroid.Z, turnedCentroid.Value.Z, 1e-10+turnedCentroid.Bound.Base())
 }
 
-func TestSweepClosedRacetrackRefusesUnprovedClearanceAndSection(t *testing.T) {
+func TestSweepClosedRacetrackRefusesAxisContact(t *testing.T) {
+	t.Parallel()
+	s, profile := racetrackSection(t, 0, 1)
+	doc := decad.New()
+	body, err := decad.Sweep(t.Context(), doc, s, profile, racetrackPath(t, 5, 1))
+	require.Nil(t, body)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.ErrorContains(t, err, "touching the revolve axis")
+	require.Empty(t, doc.Bodies())
+}
+
+// A short straight leg and an off-centre section are admitted when the
+// cyclic contact audit proves the result simple. Pappus fixes both volumes.
+func TestSweepClosedRacetrackAdmitsShortLegsAndOffCentreSections(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name                     string
 		x, radius, length, major float64
+		pathLength               float64
 	}{
-		{name: "opposite arcs touch", radius: 1, length: 2, major: 5},
-		{name: "opposite lines touch", radius: 1, length: 5, major: 1},
-		{name: "section is off path", x: 0.25, radius: 1, length: 5, major: 5},
+		{name: "short legs", radius: 1, length: 2, major: 5, pathLength: 2*2 + 2*math.Pi*5},
+		// The centroid sits 0.25 toward each arc axis, so both half turns
+		// sweep it at radius major-0.25.
+		{name: "off-centre section", x: 0.25, radius: 1, length: 5, major: 5,
+			pathLength: 2*5 + 2*math.Pi*(5-0.25)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, profile := racetrackSection(t, tc.x, tc.radius)
 			doc := decad.New()
 			body, err := decad.Sweep(t.Context(), doc, s, profile, racetrackPath(t, tc.length, tc.major))
-			require.Nil(t, body)
-			require.ErrorIs(t, err, decad.ErrUnsupported)
-			require.Empty(t, doc.Bodies())
+			require.NoError(t, err)
+			volume, err := body.Volume()
+			require.NoError(t, err)
+			require.InDelta(t, math.Pi*tc.radius*tc.radius*tc.pathLength, volume.Value.Base(),
+				1e-9+volume.Bound.Base())
+			report, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			require.True(t, report.Passed())
 		})
 	}
 }

@@ -865,7 +865,6 @@
 4	0.05	TestSweepChainArcThickenSolidAndReplay
 4	0.00	TestSweepChainMultiSegmentWallSet
 4	0.00	TestSweepChainStagedSurveyNamesPayloadClass
-4	0.03	TestSweepClosedRacetrackRefusesUnprovedClearanceAndSection
 4	0.39	TestSweepCompositeCircularHoleTessellates
 4	0.01	TestSweepFilletRefusesArcCompositeAndMitredPaths
 4	0.02	TestSweepLineFilletVerticalEdgesVerified
@@ -1765,6 +1764,12 @@
 8	0.01	TestSweepArcMatchesQuarterRevolveAndReplaysPlacement
 8	0.02	TestSweepChainArcThickenSides
 8	0.00	TestSweepChainRefusesCompositeOutsideCardinalClass
+10	0.00	TestSweepClosedCardinalRefusesNonQuarterArcs
+10	0.00	TestSweepClosedCardinalSquareRoundedRectangle
+10	0.00	TestSweepClosedCardinalSquareStadium
+10	0.00	TestSweepClosedCardinalSquareStadiumAboutXAxis
+10	0.00	TestSweepClosedRacetrackAdmitsShortLegsAndOffCentreSections
+10	0.00	TestSweepClosedRacetrackRefusesAxisContact
 8	0.00	TestSweepClosedCircleRefusesUnsupportedVariantsWithoutCommit
 8	0.07	TestSweepCompositeTessellatesSharedGrid
 8	19.28	TestSweepMitredClusteredBranchUnionChain

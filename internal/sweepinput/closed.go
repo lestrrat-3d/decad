@@ -1,13 +1,12 @@
 package sweepinput
 
 import (
+	"fmt"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/momentinput"
-	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
 	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/units"
 )
 
 // ClosedCircle recognizes the two complementary arcs of one exact
@@ -39,104 +38,84 @@ func ClosedCircle(records []PathRecord) (*sweeparc.Record, bool) {
 	return first.Arc, true
 }
 
-// ClosedRacetrack admits the circular tube of sweep design §3.4 from exact
-// recorded coordinates. A close sampled path or section cannot pass this gate.
-func ClosedRacetrack(
-	profile momentinput.Profile, plane sectionrecord.PlaneRecord, start r3.Vec, records []PathRecord,
-) bool {
-	if plane.Origin != (r3.Vec{}) || plane.U != r3.NewVec(1, 0, 0) ||
-		plane.V != r3.NewVec(0, 1, 0) || start != (r3.Vec{}) ||
-		len(records) != 4 || len(profile.Holes) != 0 || len(profile.Outer.Segments) != 1 {
-		return false
+// ClosedCardinalLoop admits a cyclic sweep path from exact recorded data.
+// Every arc must be an exact quarter or half turn about an axis parallel to one
+// common coordinate axis, and the whole path must lie in the one plane
+// perpendicular to that axis that holds the first record. The signed turns must sum to exactly one
+// whole turn. Any refusal wraps decaderr.ErrUnsupported and names the failed
+// gate. The caller still transports the section frame, which must return to
+// its start with zero displacement, and the global contact audit decides
+// whether the result is simple. A close sampled path cannot pass this gate.
+func ClosedCardinalLoop(records []PathRecord) error {
+	if len(records) < 4 {
+		return closedLoopRefusal("the path has %d spans, fewer than four", len(records))
 	}
-	circle, ok := profile.Outer.Segments[0].(sectionrecord.CircleSeg)
-	if !ok || circle.Center.U != 0 || circle.Center.V != 0 ||
-		!circle.CCW || circle.TStart != 0 || circle.TEnd != 1 {
-		return false
-	}
-	radius, err := circle.Radius.In(units.Millimeter)
-	if err != nil || radius <= 0 {
-		return false
-	}
-	r := new(big.Rat).SetFloat64(radius)
-	if r == nil {
-		return false
-	}
-	firstLine, upper, lastLine, lower := records[0], records[1], records[2], records[3]
-	if firstLine.Arc != nil || upper.Arc == nil || lastLine.Arc != nil || lower.Arc == nil ||
-		!halfTurn(upper) || !halfTurn(lower) {
-		return false
-	}
-	height := sweeparc.VecOf(firstLine.End)[2]
-	major := upper.Arc.Center[0]
-	if height.Sign() <= 0 || major.Sign() <= 0 ||
-		major.Cmp(r) <= 0 || height.Cmp(new(big.Rat).Mul(r, big.NewRat(2, 1))) <= 0 {
-		return false
-	}
-	twiceMajor := new(big.Rat).Mul(major, big.NewRat(2, 1))
-	return ratVecIs(firstLine.End, new(big.Rat), new(big.Rat), height) &&
-		ratVecIs(upper.End, twiceMajor, new(big.Rat), height) &&
-		ratVecIs(lastLine.End, twiceMajor, new(big.Rat), new(big.Rat)) &&
-		ratVecIs(lower.End, new(big.Rat), new(big.Rat), new(big.Rat)) &&
-		carrierIs(upper.Arc, major, height) &&
-		carrierIs(lower.Arc, major, new(big.Rat))
-}
-
-// ClosedPlanarTangentLoop admits a cyclic tube only when its recorded arc
-// turns compose one exact rotation about the common Y axis. Transport and
-// the global contact audit supply the remaining frame and separation proofs.
-func ClosedPlanarTangentLoop(
-	profile momentinput.Profile, plane sectionrecord.PlaneRecord, start r3.Vec, records []PathRecord,
-) bool {
-	if plane.Origin != (r3.Vec{}) || plane.U != r3.NewVec(1, 0, 0) ||
-		plane.V != r3.NewVec(0, 1, 0) || start != (r3.Vec{}) ||
-		len(records) < 5 || len(profile.Holes) != 0 || len(profile.Outer.Segments) != 1 {
-		return false
-	}
-	circle, ok := profile.Outer.Segments[0].(sectionrecord.CircleSeg)
-	if !ok || circle.Center.U != 0 || circle.Center.V != 0 ||
-		!circle.CCW || circle.TStart != 0 || circle.TEnd != 1 {
-		return false
-	}
+	axisIndex := -1
+	var plane *big.Rat
 	turns := new(big.Rat)
 	arcCount := 0
-	for _, record := range records {
-		if record.Start.Y != 0 || record.End.Y != 0 {
-			return false
+	for i, record := range records {
+		if record.Arc != nil {
+			arcCount++
+			index, sign, ok := cardinalAxis(record.Arc.Axis)
+			if !ok {
+				return closedLoopRefusal("span %d is an arc about a non-coordinate axis", i)
+			}
+			if axisIndex >= 0 && index != axisIndex {
+				return closedLoopRefusal("span %d turns about a different coordinate axis", i)
+			}
+			axisIndex = index
+			angle := record.ArcAngle
+			if angle.Turn == nil || angle.Rad == nil || angle.Rad.Sign() != 0 || angle.Span != nil ||
+				(angle.Turn.Cmp(big.NewRat(1, 4)) != 0 && angle.Turn.Cmp(big.NewRat(1, 2)) != 0) {
+				return closedLoopRefusal("span %d is not an exact quarter or half turn", i)
+			}
+			turns.Add(turns, new(big.Rat).Mul(angle.Turn, big.NewRat(int64(sign), 1)))
 		}
-		if record.Arc == nil {
+	}
+	if arcCount < 2 || axisIndex < 0 {
+		return closedLoopRefusal("the path has %d arcs, fewer than two", arcCount)
+	}
+	for i, record := range records {
+		start, end := sweeparc.VecOf(record.Start), sweeparc.VecOf(record.End)
+		if plane == nil {
+			plane = start[axisIndex]
+		}
+		if start[axisIndex].Cmp(plane) != 0 || end[axisIndex].Cmp(plane) != 0 ||
+			(record.Arc != nil && record.Arc.Center[axisIndex].Cmp(plane) != 0) {
+			return closedLoopRefusal("span %d leaves the plane of the loop", i)
+		}
+	}
+	if new(big.Rat).Abs(turns).Cmp(big.NewRat(1, 1)) != 0 {
+		return closedLoopRefusal("the signed arc turns sum to %s, not one whole turn", turns.RatString())
+	}
+	return nil
+}
+
+func closedLoopRefusal(format string, args ...any) error {
+	return fmt.Errorf("%w: the closed sweep path is outside the admitted cardinal loop class: "+format,
+		append([]any{decaderr.ErrUnsupported}, args...)...)
+}
+
+// cardinalAxis reports the index and sign of an axis vector with exactly one
+// nonzero component.
+func cardinalAxis(axis sweeparc.RatVec) (int, int, bool) {
+	index := -1
+	for i, component := range axis {
+		if component.Sign() == 0 {
 			continue
 		}
-		arcCount++
-		arc := record.Arc
-		angle := record.ArcAngle
-		if arc.Center[1].Sign() != 0 || arc.Axis[0].Sign() != 0 ||
-			arc.Axis[1].Sign() <= 0 || arc.Axis[2].Sign() != 0 ||
-			angle.Turn == nil || angle.Rad == nil || angle.Rad.Sign() != 0 || angle.Span != nil ||
-			(angle.Turn.Cmp(big.NewRat(1, 4)) != 0 && angle.Turn.Cmp(big.NewRat(1, 2)) != 0) {
-			return false
+		if index >= 0 {
+			return 0, 0, false
 		}
-		turns.Add(turns, angle.Turn)
+		index = i
 	}
-	return arcCount >= 2 && turns.Cmp(big.NewRat(1, 1)) == 0
+	if index < 0 {
+		return 0, 0, false
+	}
+	return index, axis[index].Sign(), true
 }
 
 func samePoint(a, b r3.Vec) bool {
 	return a.X == b.X && a.Y == b.Y && a.Z == b.Z
-}
-
-func halfTurn(record PathRecord) bool {
-	angle := record.ArcAngle
-	return angle.Turn != nil && angle.Turn.Cmp(big.NewRat(1, 2)) == 0 &&
-		angle.Rad != nil && angle.Rad.Sign() == 0 && angle.Span == nil
-}
-
-func ratVecIs(point r3.Vec, x, y, z *big.Rat) bool {
-	actual := sweeparc.VecOf(point)
-	return actual[0].Cmp(x) == 0 && actual[1].Cmp(y) == 0 && actual[2].Cmp(z) == 0
-}
-
-func carrierIs(arc *sweeparc.Record, x, z *big.Rat) bool {
-	return arc.Center[0].Cmp(x) == 0 && arc.Center[1].Sign() == 0 && arc.Center[2].Cmp(z) == 0 &&
-		arc.Axis[0].Sign() == 0 && arc.Axis[1].Sign() > 0 && arc.Axis[2].Sign() == 0
 }
