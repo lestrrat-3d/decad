@@ -252,6 +252,7 @@ proven exact may return a faceted body whose measurements are `decad.Approximate
 | `decad.Transform` | Moves a body by an `r3.Transform` and retires the input. |
 | `decad.ScaledAt` | Scales a supported body uniformly about an anchor point. A scaled mesh Boolean result keeps the retained plane, cylinder, sphere and torus surfaces of its faces with their radii scaled; its other faces read `Faceted`. |
 | `decad.Patterned` | Returns one body holding every instance of a `decad.PatternSpec`. |
+| `decad.PathPatternJoin` | Repeats a body along a `decad.Path` and unites every instance with a target through one `decad.Union`; `decad.PathPatternJoinSpaced` places them by distance. |
 | `decad.PathPatternSpaced` | Returns copies of a body at a stated arc-length distance along a `decad.Path`, as `decad.PathPatternCopies` does for a count. |
 | `decad.PathPatternCopies` | Returns copies of a body spaced at equal arc length along a `decad.Path`, keeping its orientation, or turned to follow the path with `decad.WithPathFollow`, about its start or a `decad.WithPathPivot` point. |
 | `decad.PatternCopies` | Returns the extra instances as separate bodies. |

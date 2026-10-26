@@ -256,3 +256,63 @@ func pathStep(first, st pathsample.Station, settings pathPatternSettings) (r3.Tr
 	}
 	return placed, nil
 }
+
+// PathPatternJoin repeats feature along path as [PathPatternCopies] does and
+// joins every instance, feature included, to target in one [Union], returning
+// the joined body and retiring target and feature
+// (agent-docs/path-pattern-design.md §7). The copies are never left live: a
+// refusal retires them, and leaves target and feature live and the document as it
+// was.
+//
+// The gates are PathPatternCopies' for feature, path and count, plus Union's for
+// target: target must be live, distinct from feature, and a sheet in either role
+// is refused. The join takes the routes Union takes over the same operands and
+// returns that Union's error when none applies.
+func PathPatternJoin(ctx context.Context, target, feature *Body, path *Path, count int, opts ...PathPatternOption) (*Body, error) {
+	if err := checkPathJoinTarget(target, feature); err != nil {
+		return nil, err
+	}
+	copies, err := PathPatternCopies(ctx, feature, path, count, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return joinPathCopies(ctx, target, feature, copies)
+}
+
+// PathPatternJoinSpaced is [PathPatternJoin] with the copies placed by
+// [PathPatternSpaced]: a stated arc-length distance apart instead of a count.
+func PathPatternJoinSpaced(ctx context.Context, target, feature *Body, path *Path, spacing units.Value, opts ...PathPatternOption) (*Body, error) {
+	if err := checkPathJoinTarget(target, feature); err != nil {
+		return nil, err
+	}
+	copies, err := PathPatternSpaced(ctx, feature, path, spacing, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return joinPathCopies(ctx, target, feature, copies)
+}
+
+// checkPathJoinTarget refuses a target that is nil, not live, or the feature.
+func checkPathJoinTarget(target, feature *Body) error {
+	if target == nil || target.n.Doc == nil {
+		return fmt.Errorf(`%w: the target belongs to no document`, ErrDegenerate)
+	}
+	if feature == nil || feature.n.Doc == nil {
+		return fmt.Errorf(`%w: the feature belongs to no document`, ErrDegenerate)
+	}
+	if target == feature {
+		return fmt.Errorf(`%w: a path pattern join needs a target distinct from the feature`, ErrDegenerate)
+	}
+	return documentHandle(target.n.Doc).requireLive(target)
+}
+
+// joinPathCopies unions target, feature and the copies, retiring the copies when
+// the union is refused.
+func joinPathCopies(ctx context.Context, target, feature *Body, copies []*Body) (*Body, error) {
+	joined, err := Union(ctx, target, append([]*Body{feature}, copies...)...)
+	if err != nil {
+		removeTools(copies)
+		return nil, err
+	}
+	return joined, nil
+}
