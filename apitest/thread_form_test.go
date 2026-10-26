@@ -129,3 +129,51 @@ func TestThreadFormRefusals(t *testing.T) {
 	badDepth.Depth = units.Degrees(1)
 	require.ErrorIs(t, thread(badDepth), decad.ErrUnitKind)
 }
+
+func buttressForm() decad.ThreadForm {
+	return decad.ThreadForm{
+		FlankLead: units.Degrees(45), FlankTrail: units.Degrees(7),
+		Depth: units.Millimeters(1.5), Flat: units.Millimeters(0.4),
+	}
+}
+
+func TestThreadFormCutsAnAsymmetricButtressGroove(t *testing.T) {
+	t.Parallel()
+	const pitch = 3.0
+	rod := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
+	out, err := decad.Thread(t.Context(), rod, decad.ThreadSpec{
+		Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(pitch), Form: buttressForm()})
+	require.NoError(t, err)
+	volume, err := out.Volume()
+	require.NoError(t, err)
+	// Width at a radius is the flat plus each flank's lean over the height above the root: the two
+	// slopes add, so the volume is a symmetric groove's of their mean.
+	slope := (math.Tan(45*math.Pi/180) + math.Tan(7*math.Pi/180)) / 2
+	removed := removedTrapezoid(5-1.5, 5, 20, pitch, 0.4, slope, func(rho float64) float64 { return rho - (5 - 1.5) })
+	requireThreadVolume(t, volume, math.Pi*25*20-removed)
+}
+
+func TestThreadFormAsymmetricRefusals(t *testing.T) {
+	t.Parallel()
+	rod := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
+	thread := func(form decad.ThreadForm) error {
+		_, err := decad.Thread(t.Context(), rod, decad.ThreadSpec{
+			Face: decad.Faces(decad.Cylindrical()), Pitch: units.Millimeters(3), Form: form})
+		return err
+	}
+	onlyLead := buttressForm()
+	onlyLead.FlankTrail = units.Value{}
+	require.ErrorIs(t, thread(onlyLead), decad.ErrDegenerate, "both flanks or none")
+	both := buttressForm()
+	both.Angle = units.Degrees(30)
+	require.ErrorIs(t, thread(both), decad.ErrDegenerate, "an angle and flanks")
+	square := buttressForm()
+	square.FlankTrail = units.Degrees(90)
+	require.ErrorIs(t, thread(square), decad.ErrDegenerate, "a flank must lean from the radial")
+	wrongKind := buttressForm()
+	wrongKind.FlankLead = units.Millimeters(1)
+	require.ErrorIs(t, thread(wrongKind), decad.ErrUnitKind)
+	negative := buttressForm()
+	negative.FlankLead = units.Degrees(-5)
+	require.ErrorIs(t, thread(negative), decad.ErrNegativeMagnitude)
+}

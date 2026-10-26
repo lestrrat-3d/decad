@@ -2506,3 +2506,5 @@
 10	0.01	TestArrangeStacksWhatTheBedCannotHoldInLayers
 10	0.01	TestArrangeLayersKeepToTheHeightLimit
 10	0.01	TestArrangeLayersRefusals
+10	0.01	TestThreadFormCutsAnAsymmetricButtressGroove
+10	0.01	TestThreadFormAsymmetricRefusals

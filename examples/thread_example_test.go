@@ -188,3 +188,51 @@ func Example_thread_lead_in() {
 	// Output:
 	// volume: 1306 mm^3
 }
+
+// A buttress groove has a steep flank on one side and a shallow one on the other:
+// set FlankLead, the flank toward the face's start, and FlankTrail, the one toward
+// its far end, in place of Angle. Here a 10 mm rod takes a buttress thread of pitch
+// 3 mm, 45 degrees on the lead flank and 7 on the trail.
+func Example_thread_buttress() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	centre := s.CreatePoint(0, 0)
+	s.Fix(centre)
+	s.CreateCircle(centre, 5)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	rod, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	threaded, err := decad.Thread(context.Background(), rod, decad.ThreadSpec{
+		Face:  decad.Faces(decad.Cylindrical()),
+		Pitch: units.Millimeters(3),
+		Form: decad.ThreadForm{
+			FlankLead:  units.Degrees(45),
+			FlankTrail: units.Degrees(7),
+			Depth:      units.Millimeters(1.5),
+			Flat:       units.Millimeters(0.4),
+		},
+	})
+	if err != nil {
+		fmt.Printf("failed to thread: %s\n", err)
+		return
+	}
+	volume, err := threaded.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
+	// Output:
+	// volume: 1225 mm^3
+}
