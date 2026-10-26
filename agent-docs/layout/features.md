@@ -23,6 +23,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `mirror_join.go` | `WithJoin`, face selection and document commit around `internal/mirrorjoin/`'s record rewrite. See mirror-pattern §5. |
 | `arrange_angle.go` | Public `WithArrangeAngle` and its footprint probes: copies turned by each angle step are measured and retired, then the best turn is applied. See arrange design §6. |
 | `arrange.go` | Public `Arrange`, `ArrangeBed` (with its layers) and `WithArrangeTurns`: gates, footprints, then one `Transform` per body. `internal/arrangeplan/` packs the footprints. See arrange design. |
+| `thread_table.go` | Public `LookupThread` and `ThreadSize`: the metric coarse and Unified pitch tables and the designation parser. See thread design §9. |
 | `thread.go` | Public `Thread` and `ThreadSpec`: face and pitch gates, the axis-plane frame, then a private `Coil` and `Cut`. `internal/threadplan/` plans the groove. See thread design. |
 | `path_pattern.go` | Public `PathPatternCopies`, `PathPatternSpaced`, `PathPatternJoin`, `PathPatternJoinSpaced`, `WithPathFollow` and `WithPathPivot`: gates, path sampling through `internal/pathsample/`, then one `Copy` per instance. See path-pattern design. |
 | `pattern.go` | Public pattern specs, admission, Copy/Union fallback, `PatternJoin` and publication; `internal/patternassembly/` plans frame-keeping instances and disjoint groups. See mirror-pattern §4.3, §6. |

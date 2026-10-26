@@ -58,7 +58,7 @@ exactly.
   neighbour. Thread a rod that ends at the thread, or cut the thread before adding the shoulder.
 - A runout that tapers the groove out, and a lead-in of another angle than 45 degrees.
 - Tapered (pipe) forms and the UN inch series' own tables: a UN thread is the ISO profile at a pitch of `25.4 / threads per inch`.
-- A thread table lookup. The caller states the pitch.
+- Tables beyond the metric coarse series, explicit metric pitches and the Unified fractional sizes of §9, such as ISO fine series by size, UN numbered sizes, pipe threads and trapezoidal tables. The caller states any other pitch.
 - Cosmetic threads that mark a face and cut nothing.
 - Fit classes and tolerances: the profile is the basic profile with no allowance.
 
@@ -113,3 +113,16 @@ one behind it. They replace `Angle`.
 | B2 | The groove polygon is T5's with the mouth reaching `Flat/2 + h·tan(FlankLead)` from the middle of the root toward the start and `Flat/2 + h·tan(FlankTrail)` toward the far end, `h` the root's distance from the mouth. `threadplan.Form.BackSlope` is the far flank's slope, zero meaning the start flank's. |
 | B3 | The first groove lies wholly before the start plane, so its middle sits the far reach and the margin before it, and the coil carries on until the start reach clears the far end: `(length + lead + trail + 2·margin)/pitch` turns. A groove whose two reaches together reach `0.95·P` is `ErrDegenerate`. |
 | B4 | The volume of a groove that runs out of both ends depends on the sum of the two slopes alone, so it is F5's with `tan` of the mean: the tests compute that independently, and the polygon's own corners are pinned in `threadplan`. Which flank is which is read from the polygon, not from the volume. |
+
+## 9. Looking a thread up
+
+`LookupThread(designation)` reads a thread's major diameter and pitch from its name, so a caller writes `"M10"` for the pitch of 1.5 mm and
+the 10 mm diameter instead of stating them.
+
+| Decision | Rule |
+|---|---|
+| K1 | `M<d>` is an ISO metric thread at its ISO 261 coarse pitch, for a preferred nominal diameter `d` from M1 to M64 (1, 1.2, 1.4, 1.6, 1.8, 2, 2.5, 3, 3.5, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 27, 30, 33, 36, 39, 42, 45, 48, 52, 56, 60, 64). Another size has no coarse pitch and is `ErrDegenerate`. |
+| K2 | `M<d>x<p>` states the pitch: any positive finite `p` below `d`, for any positive `d`. The letters M and x are read in either case. |
+| K3 | `<n>/<m>-<t>`, or `<n>-<t>` for a whole number of inches, is a Unified thread of nominal diameter `n/m` inch, a multiple of 1/64 inch in the table from 1/4 to 1 inch, at `t` threads per inch, which must be that size's UNC or UNF value (20 or 28 for 1/4, 13 or 20 for 1/2, 8 or 12 for 1, and so on). The pitch is `25.4/t` mm and the diameter `n/m · 25.4` mm. |
+| K4 | The result is a `ThreadSize` of two lengths. It names no tolerance class, allowance or minor diameter: a bore's drill diameter is the caller's to state from the thread's own tables. Any other designation, an empty one, one with a space, or a size not in the tables is `ErrDegenerate`. |
+| K5 | The tests pin each table value against the standard's, a stated pitch and a Unified size against the converted inch, every refusal, and cut a rod with the size `"M10"` names to the volume of a 1.5 mm pitch thread. |

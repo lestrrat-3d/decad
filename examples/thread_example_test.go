@@ -236,3 +236,32 @@ func Example_thread_buttress() {
 	// Output:
 	// volume: 1225 mm^3
 }
+
+// LookupThread reads a designation into a thread's major diameter and pitch, so
+// "M10" is a 10 mm thread at 1.5 mm and "1/4-20" a quarter-inch thread of 20 to the
+// inch, without looking either up. Use the pitch in a ThreadSpec and the diameter to
+// size the rod or the bore.
+func Example_thread_lookup() {
+	for _, designation := range []string{"M10", "M10x1.25", "1/4-20"} {
+		size, err := decad.LookupThread(designation)
+		if err != nil {
+			fmt.Printf("failed to look up %s: %s\n", designation, err)
+			return
+		}
+		major, err := size.Major.In(units.Millimeter)
+		if err != nil {
+			fmt.Printf("failed to read the diameter: %s\n", err)
+			return
+		}
+		pitch, err := size.Pitch.In(units.Millimeter)
+		if err != nil {
+			fmt.Printf("failed to read the pitch: %s\n", err)
+			return
+		}
+		fmt.Printf("%s: %g mm at %g mm\n", designation, major, pitch)
+	}
+	// Output:
+	// M10: 10 mm at 1.5 mm
+	// M10x1.25: 10 mm at 1.25 mm
+	// 1/4-20: 6.35 mm at 1.27 mm
+}

@@ -2508,3 +2508,8 @@
 10	0.01	TestArrangeLayersRefusals
 10	0.01	TestThreadFormCutsAnAsymmetricButtressGroove
 10	0.01	TestThreadFormAsymmetricRefusals
+10	0.01	TestLookupThreadReadsMetricCoarseSizes
+10	0.01	TestLookupThreadReadsAMetricPitchStated
+10	0.01	TestLookupThreadReadsUnifiedSizes
+10	0.01	TestLookupThreadRefusals
+10	0.01	TestLookupThreadSizeCutsTheThreadItNames
