@@ -188,7 +188,7 @@ moves its row to the matching section above, with that doc as owner.
 | Boss with ribs, a non-round or tilted boss, or a boss on a curved face | `Boss` raises one round boss, optionally drafted and with a root fillet, with a blind pilot, optionally with a head, a thread or a draft, on a planar face (`boss.go`, `boss_fillet.go`; `agent-docs/boss-design.md` §3 to §6) |
 | T-spline (Form) sculpting | No entry point exists; free-form surfaces are NURBS (`decad.NURBSSurface`) |
 | Mesh bodies as input: convert to a solid, reduce within a stated surface distance, remesh | No entry point exists; a `MeshBody` is read, queried, repaired, thinned by vertex clustering and written, and no feature takes it |
-| Lattice or volumetric infill for printing | No entry point exists |
+| Volumetric infill of a body, and lattices other than the gyroid | `GyroidLattice` fills a box with a gyroid as a closed `MeshBody` (`lattice.go`, `agent-docs/lattice-design.md`); no feature or Boolean takes a `MeshBody`, so it cannot be intersected with a part |
 | Nesting that follows body outlines or stacks bodies in three dimensions | `Arrange` packs bounding rectangles by translation, with an optional quarter turn about +Z or a footprint-minimising turn through any angle step (`arrange.go`, `arrange_angle.go`) |
 | Toolpath generation (CAM) | No entry point exists |
 | Finite-element stress or thermal simulation | No entry point exists |
