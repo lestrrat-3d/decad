@@ -200,6 +200,9 @@ func TestXhpCanonPow2MatchesGCD(t *testing.T) {
 		want := oracleCanon(p)
 		got := proof.XhpCanon(p)
 		requireSameXhp(t, want, got, "canon")
+		wantKey := proof.ExactIntsKey(want.X, want.Y, want.Z, want.W)
+		require.True(t, wantKey == proof.Xpt(p).Key(), "key case %d", i)
+		requireSameXhp(t, clone, p, "key input")
 		requireOwned(t, got, []proof.Xhp{p}, []proof.Xhp{clone}, "canon")
 		if t.Failed() {
 			t.Fatalf("case %d", i)

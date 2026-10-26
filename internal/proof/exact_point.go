@@ -340,6 +340,12 @@ func XhpStripTwosOwned(p Xhp) Xhp {
 // A power-of-two W makes the divisor 2^min(tz(W), tz(x), tz(y), tz(z)) over the
 // nonzero coordinates, so that case is four right shifts and no GCD.
 func XhpCanon(p Xhp) Xhp {
+	return xhpCanon(p, true)
+}
+
+// xhpCanon may reuse p's integers when own is false and p is already
+// canonical. The key encoder only reads them; XhpCanon requests owned outputs.
+func xhpCanon(p Xhp, own bool) Xhp {
 	if k, ok := pow2Exp(p.W); ok {
 		for _, v := range [3]*big.Int{p.X, p.Y, p.Z} {
 			if v.Sign() == 0 {
@@ -348,6 +354,9 @@ func XhpCanon(p Xhp) Xhp {
 			if t := v.TrailingZeroBits(); t < k {
 				k = t
 			}
+		}
+		if k == 0 && !own {
+			return p
 		}
 		return Xhp{
 			X: new(big.Int).Rsh(p.X, k),
@@ -358,10 +367,16 @@ func XhpCanon(p Xhp) Xhp {
 	}
 	g := new(big.Int).Set(p.W)
 	for _, v := range [3]*big.Int{p.X, p.Y, p.Z} {
+		if isOne(g) {
+			break
+		}
 		if v.Sign() == 0 {
 			continue
 		}
 		g.GCD(nil, nil, g, v)
+	}
+	if isOne(g) && !own {
+		return p
 	}
 	return Xhp{
 		X: new(big.Int).Quo(p.X, g),
