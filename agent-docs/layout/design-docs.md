@@ -98,7 +98,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `record.go` | Root-owned `Point2`, structural record and payload aliases (including the faceted payload and its records), and slice adapters. See sketch-seam §2. |
 | `seam.go` | Sketch chain recording adapters, `MeasureProfile` and `SecondMoments`; profile recording lives in `internal/sectioncert/`. See sketch-seam §1–§2. |
 | `section_outline.go` | Public `SectionOutline` and `Body.SectionOutline`: the verified mesh cut by a plane through `internal/meshslice/`. See section-outline design. |
-| `section.go` | Public planar section query over certified prism, stack-backed BRep, direct and smooth Loft, sphere and cone records; exact builders and clips live in `internal/sectionclip/`; also the `Section` profile-or-chain constraint. See section design, surface §13.2. |
+| `section.go` | Public planar section query over certified prism, stack-backed BRep, stacked prism, direct and smooth Loft, sphere and cone records; exact builders and clips live in `internal/sectionclip/`; also the `Section` profile-or-chain constraint. See section design, surface §13.2. |
 | `path.go` | The immutable spatial `Path`, sealed segments and its recorded `internal/sweepinput.Path`. See sweep §2–§3. |
 | `extent.go` | Public linear and angular extent variants and normalization. See API §8.1. |
 | `selector.go` | `EdgeQuery`/`FaceQuery`, which resolve against live bodies through `internal/selectorquery` node views. See API §9. |

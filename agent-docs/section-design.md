@@ -57,6 +57,21 @@ the prism record. A source segment that cannot be recreated or whose
 trim Sketch does not certify returns `ErrUnsupported`. A reconstructed profile
 that does not match the source never becomes a section result.
 
+## Exact slab of a stacked prism
+
+A stacked prism is a stack of slabs of exact regions, each with its own levels.
+A blind-pocket `Cut`, a stacked `Union` boss, a closed shell with a cavity and a
+mirrored or patterned stack all produce one. `Body.Section` reads any of them
+through `stackedunion.OperandFromPayload` and `sectionclip.SectionBrepStack`,
+with the same gates as the BRep stack below. A plane strictly inside the
+pocketed slab of a blind pocket returns the outer outline with the pocket as a
+hole, and a plane strictly inside the solid slab returns the full outline.
+The gates refuse a nonzero section displacement, a nonzero displacement at
+either level of the selected slab, a level that is not strictly inside a slab
+(an interface such as the pocket floor, an end cap or a level outside the body),
+a slab with more than one region, and a frame that does not preserve the
+recorded coordinates.
+
 ## Exact slab of an authenticated Boolean BRep
 
 An A1 planar `Union` may return a BRep with an authenticated stack of prism
@@ -554,6 +569,11 @@ reusing its bound.
 
 ## Verification
 
+- Cut a real 4×4×4 mm blind pocket from a 10 mm cube. Section at z=8 gives
+  84 mm² with one hole spanning (3..7, 3..7), and at z=3 gives 100 mm². Each
+  2 mm Extrude passes `Tessellate(0.1 mm, VerifyAll)`. The pocket floor, caps
+  and exterior levels, a circular pocket (displaced stack), a translated body
+  and a reversed frame are refused.
 - Loft three real Sketch triangles with scales 1, 1.5 and 1 at equally spaced
   heights. Section at one-quarter height gives 11.34375 mm²; its 2 mm Extrude
   gives 22.6875 mm³ and passes `Tessellate(0.1 mm, VerifyAll)`. Repeat at the

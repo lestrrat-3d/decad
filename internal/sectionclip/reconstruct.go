@@ -55,8 +55,8 @@ func SmoothHomotheticSectionRecord(fp facetedPayload, plane r3.Frame) (profileRe
 	return fp.SmoothHomotheticSection.At(plane.Origin().Z)
 }
 
-// SectionBrepStack reads only the certified slab profiles of an A1 Union.
-// The same exact frame and strict interior-level check used for a prism
+// SectionBrepStack reads the certified slab profiles of a slab stack: an A1
+// Union BRep or a stacked prism. The same exact frame and strict interior-level check used for a prism
 // applies to each slab separately. An interface level names two different
 // sections, so neither slab admits it. The proxy is the stacked-union
 // operand's prism proxy and slabs are its slabs.
@@ -64,7 +64,7 @@ func SectionBrepStack(ctx context.Context, proxy prismPayload, slabs []stackedre
 	*sketch.Sketch, []*sketch.Profile, error,
 ) {
 	if proxy.SectionDelta != 0 {
-		return nil, nil, fmt.Errorf(`%w: BRep section has a displaced source profile`, decaderr.ErrUnsupported)
+		return nil, nil, fmt.Errorf(`%w: a slab stack has a displaced source profile`, decaderr.ErrUnsupported)
 	}
 	for _, slab := range slabs {
 		if err := ctx.Err(); err != nil {
@@ -76,11 +76,11 @@ func SectionBrepStack(ctx context.Context, proxy prismPayload, slabs []stackedre
 			continue
 		}
 		if slab.Z0Delta != 0 || slab.Z1Delta != 0 || len(slab.Regions) != 1 {
-			return nil, nil, fmt.Errorf(`%w: BRep section needs one exact slab region`, decaderr.ErrUnsupported)
+			return nil, nil, fmt.Errorf(`%w: a slab stack section needs one exact slab region`, decaderr.ErrUnsupported)
 		}
 		return ReconstructExactSection(ctx, slab.Regions[0], plane)
 	}
-	return nil, nil, fmt.Errorf(`%w: section plane lies outside BRep slab interiors`, decaderr.ErrUnsupported)
+	return nil, nil, fmt.Errorf(`%w: section plane lies outside slab stack interiors`, decaderr.ErrUnsupported)
 }
 
 // ReconstructExactSection charges the profile record and rebuilds it as a
