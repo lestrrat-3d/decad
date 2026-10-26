@@ -8,6 +8,10 @@ Adding a `go.mod` module requires recording the decision here first.
   decad's inputs and `Measurement`s are `units.Value`, the module `sketch`
   uses too, so no parallel unit system exists.
 - `github.com/lestrrat-3d/step` — AP214; `export` package only.
+- `golang.org/x/image` — the `font/sfnt` TrueType reader and the `font/gofont/goregular`
+  font, for `TextProfiles` alone (`internal/glyphs/`). It pulls in `golang.org/x/text`.
+  decad draws lettering from glyph outlines it flattens itself, so no rendering code
+  of the module is used, and the font is the Go project's own BSD-licensed Go Regular.
 - `github.com/lestrrat-go/option/v3` — functional options (house library). Used
   by feature options.
 - `github.com/stretchr/testify/require` — assertions, **test code only**.

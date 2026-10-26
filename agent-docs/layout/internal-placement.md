@@ -11,3 +11,4 @@ The rules for rows live in `agent-docs/layout.md`.
 |---|---|
 | `internal/arrangeplan/` | Shelf packing of rectangular footprints onto a bed with a gap; plain millimetre data. See arrange design. |
 | `internal/pathsample/` | Equal-arc-length points along a path of lines and circular arcs; plain millimetre vectors. See path-pattern design. |
+| `internal/glyphs/` | TrueType layout of a line of text and flattening of its glyph outlines to closed polygons. See text design. |

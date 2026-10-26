@@ -195,7 +195,7 @@ moves its row to the matching section above, with that doc as owner.
 | Rendered images with hidden edges, outlines on a perspective camera, materials, shadows or a separate colour for each body | `export.PNG` and `export.PNGBodies` draw orthographically with flat shading (`export/png.go`, `export/png_bodies.go`; `agent-docs/png-export-design.md` §4) |
 | Per-axis (non-uniform) scaling of a body | No entry point exists; `ScaledAt` scales uniformly (`point_plane_scale.go`) and `Transform`/`Copy` take a rigid motion only (`document.go`) |
 | Saving a `Document` to a file or loading one back | No entry point exists; a model is rebuilt by rerunning the Go program that built it |
-| Text profiles from a font, for engraved or embossed lettering | No entry point exists |
+| Lettering beyond left-to-right runs in one TrueType font: kerning, shaping, text on a curve or surface, true curves | `TextProfiles` sets lines of text in a font as polygons for `Emboss` (`text.go`; `agent-docs/text-design.md` §4) |
 | 2D drawings with dimensions, analytic arcs and circles, scale or paper size, hatching or a title block | `export.DXF` writes one orthographic view of tessellation edges as LINEs, and `export.DXFViews` several in a row, with hidden-line runs from a depth buffer (`export/dxf.go`, `export/dxf_sheet.go`; `agent-docs/dxf-export-design.md` §4) |
 | PMI or GD&T, as data or in STEP AP242 | No entry point exists; `export.STEP` writes AP214 geometry only |
 | IGES or Parasolid export | `export` writes STL, OBJ, 3MF, glTF and STEP only (`agent-docs/api-design.md` §11) |
