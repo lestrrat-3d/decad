@@ -1,6 +1,7 @@
 package loftmesh
 
 import (
+	"errors"
 	"fmt"
 	"math/bits"
 	"runtime"
@@ -172,7 +173,10 @@ func preflightLoftRows(budget *proofbound.WorkBudget, tree loftRowScan, members,
 }
 
 // preflightLoftRowsWorkers is preflightLoftRows with an explicit worker count;
-// with workers < 2 the rows walk serially against the budget.
+// with workers < 2 the rows walk serially against the budget. Workers never
+// charge the budget, so when a poll finds it exhausted the serial walk takes
+// over from the first row not yet replayed. It fails at the step a serial run
+// fails at, with that step's error, whenever the poll happens to fire.
 func preflightLoftRowsWorkers(budget *proofbound.WorkBudget, tree loftRowScan, members, starts []int,
 	ceiling uint64, workers int) error {
 	var scanned uint64
@@ -181,6 +185,9 @@ func preflightLoftRowsWorkers(budget *proofbound.WorkBudget, tree loftRowScan, m
 		for lo := 0; lo < len(members); {
 			hi := loftRowChunkEnd(members, starts, lo)
 			if err := walkLoftRows(budget, tree, members, lo, hi, ceiling, false, workers, out); err != nil {
+				if errors.Is(err, proofbound.ErrWallWorkBudget) {
+					return preflightLoftRowsSerial(budget, tree, members[lo:], starts, ceiling, scanned)
+				}
 				return err
 			}
 			for k := range hi - lo {
@@ -201,6 +208,13 @@ func preflightLoftRowsWorkers(budget *proofbound.WorkBudget, tree loftRowScan, m
 		}
 		return budget.Err()
 	}
+	return preflightLoftRowsSerial(budget, tree, members, starts, ceiling, scanned)
+}
+
+// preflightLoftRowsSerial walks members one row at a time against the budget,
+// given the work scanned by the rows before them.
+func preflightLoftRowsSerial(budget *proofbound.WorkBudget, tree loftRowScan, members, starts []int,
+	ceiling, scanned uint64) error {
 	for _, i := range members {
 		rowCount := 0
 		work, exceeded, err := tree.visitRow(budget, i, ceiling-scanned, func(int) { rowCount++ })
@@ -268,14 +282,20 @@ func streamLoftPairsWorkers(budget *proofbound.WorkBudget, tree loftRowScan, mem
 	}
 	var chunkLo, chunkHi int
 	for m, i := range members {
-		if workers >= 2 {
-			if m == chunkHi {
-				chunkLo, chunkHi = m, loftRowChunkEnd(members, starts, m)
-				if err := walkLoftRows(budget, tree, members, chunkLo, chunkHi, ceiling, true, workers,
-					out); err != nil {
+		if workers >= 2 && m == chunkHi {
+			chunkLo, chunkHi = m, loftRowChunkEnd(members, starts, m)
+			if err := walkLoftRows(budget, tree, members, chunkLo, chunkHi, ceiling, true, workers,
+				out); err != nil {
+				// Workers never charge the budget, so a poll that finds it
+				// exhausted hands this row and the rest to the serial walk,
+				// which fails at its own step with that step's error.
+				if !errors.Is(err, proofbound.ErrWallWorkBudget) {
 					return -1, -1, err
 				}
+				workers = 1
 			}
+		}
+		if workers >= 2 {
 			r := &out[m-chunkLo]
 			rowWork, exceeded, err := replayLoftRow(budget, r, ceiling-scanned)
 			if err != nil {

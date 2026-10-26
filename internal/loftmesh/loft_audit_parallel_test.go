@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -338,4 +339,58 @@ func TestStreamLoftPairsParallelMatchesSerial(t *testing.T) {
 		require.Error(t, want.err)
 		require.Equal(t, want, got)
 	}
+}
+
+// slowFirstRow wraps a scan so its first row walk outlasts the workers' budget
+// poll, which makes the poll fire while the workers still run.
+type slowFirstRow struct {
+	loftRowScan
+	once sync.Once
+}
+
+func (s *slowFirstRow) walkRow(i int, limit uint64, fn func(j int)) (uint64, bool) {
+	s.once.Do(func() { time.Sleep(3 * time.Second / 20) })
+	return s.loftRowScan.walkRow(i, limit, fn)
+}
+
+// TestRowWalksFailLikeSerialWhenPollFindsBudgetExhausted pins that an
+// exhausted budget fails with the serial walk's step error, whether or not the
+// poll fires first: the poll reports the budget one step earlier.
+func TestRowWalksFailLikeSerialWhenPollFindsBudgetExhausted(t *testing.T) {
+	n := loftRowChunkRows + 200
+	boxes := randomBoxes(8, n, 0.08)
+	members := allMembers(n)
+	inner := newTreeScan(boxes, members)
+	sc, err := sweepCandidateCountsWorkers(unlimitedBudget(t), inner, n, keepEveryPair, math.MaxUint64, 1)
+	require.NoError(t, err)
+	require.Positive(t, sc.count)
+
+	t.Run("preflight", func(t *testing.T) {
+		var wantSteps, gotSteps uint64
+		wantErr := preflightLoftRowsWorkers(countingBudget(0, &wantSteps), inner, members, sc.starts,
+			math.MaxUint64, 1)
+		require.Error(t, wantErr)
+		gotErr := preflightLoftRowsWorkers(countingBudget(0, &gotSteps), &slowFirstRow{loftRowScan: inner},
+			members, sc.starts, math.MaxUint64, 4)
+		require.Equal(t, wantErr, gotErr)
+		require.Equal(t, wantSteps, gotSteps)
+	})
+	t.Run("stream", func(t *testing.T) {
+		type result struct {
+			failI, failJ int
+			steps        uint64
+			err          error
+		}
+		run := func(scan loftRowScan, workers int) result {
+			var r result
+			var work LoftAuditWork
+			r.failI, r.failJ, r.err = streamLoftPairsWorkers(countingBudget(0, &r.steps), scan, members,
+				sc.starts, sc.count, math.MaxUint64, 1_000, nil, boxes, nil, LoftAuditShortcuts{}, &work,
+				func(int, int) error { return nil }, workers)
+			return r
+		}
+		want := run(inner, 1)
+		require.Error(t, want.err)
+		require.Equal(t, want, run(&slowFirstRow{loftRowScan: inner}, 4))
+	})
 }
