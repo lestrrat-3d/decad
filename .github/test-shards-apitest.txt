@@ -2277,3 +2277,7 @@
 10	0.01	TestPathPatternCopiesAlongAnArc
 10	0.01	TestPathPatternCopiesRefusals
 10	0.01	TestPathPatternCopiesSpacesByArcLength
+10	0.01	TestClosestPointOffSurfaceStatesTheMeshBound
+10	0.01	TestClosestPointOfBox
+10	0.01	TestClosestPointOfFace
+10	0.01	TestClosestPointRefusals
