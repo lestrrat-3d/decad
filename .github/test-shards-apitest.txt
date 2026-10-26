@@ -2522,3 +2522,7 @@
 10	0.01	TestLatticeKindsConvergeAndThicken
 10	0.01	TestLatticeKindsDifferFromTheGyroidAndEachOther
 10	0.01	TestLatticeKindsRefusals
+10	0.01	TestReadSTEPReadsASphericalCap
+10	0.01	TestReadSTEPReadsASphericalCapWalkedBackward
+10	0.01	TestReadSTEPRefusesSphericalFacesItDoesNotRead
+10	0.01	TestReadSTEPReadsAnInsideOutSphericalCap

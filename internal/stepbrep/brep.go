@@ -435,6 +435,9 @@ func (r *reader) face(v stepread.Value, flipped bool) error {
 	if surface.Name == "CYLINDRICAL_SURFACE" || surface.Name == "CONICAL_SURFACE" {
 		return r.cylinderFace(f, surface, flipped)
 	}
+	if surface.Name == "SPHERICAL_SURFACE" {
+		return r.sphereFace(f, surface, flipped)
+	}
 	normal, err := r.planeNormal(f.Params[2])
 	if err != nil {
 		return err
