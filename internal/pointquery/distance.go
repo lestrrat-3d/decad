@@ -116,6 +116,35 @@ func boxDistanceSquared(p, a, b, c ratVec) *big.Rat {
 	return result
 }
 
+// boxDistanceSquaredLower rounds every positive gap, square and partial sum
+// downward. It bounds the exact box distance even when an operation
+// overflows: NextDown then gives MaxFloat64, below the exact result.
+// Comparing this lower bound with an upward-rounded minimum can only skip
+// triangles the exact box test would skip. Unresolved cases keep that test.
+func boxDistanceSquaredLower(p, a, b, c r3.Vec) float64 {
+	var result float64
+	for _, axis := range [3][4]float64{
+		{p.X, a.X, b.X, c.X},
+		{p.Y, a.Y, b.Y, c.Y},
+		{p.Z, a.Z, b.Z, c.Z},
+	} {
+		lo, hi := min(axis[1], axis[2], axis[3]), max(axis[1], axis[2], axis[3])
+		var gap float64
+		switch {
+		case axis[0] < lo:
+			gap = proof.NextDown(lo - axis[0])
+		case axis[0] > hi:
+			gap = proof.NextDown(axis[0] - hi)
+		default:
+			continue
+		}
+		gap = max(0, gap)
+		squared := max(0, proof.NextDown(float64(gap*gap)))
+		result = max(0, proof.NextDown(result+squared))
+	}
+	return result
+}
+
 // MeshDistanceSquared returns the exact squared distance from p to the held
 // triangle set, which may be a selected face patch. All coordinates are finite
 // float64 values interpreted as exact dyadics. The caller must provide a
@@ -137,6 +166,7 @@ func MeshDistanceSquared(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][
 		converted[i] = exactVec(v)
 	}
 	var minimum *big.Rat
+	var minimumUpper float64
 	for _, tri := range tris {
 		if err := budget.Step(); err != nil {
 			return nil, err
@@ -147,7 +177,8 @@ func MeshDistanceSquared(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][
 			}
 		}
 		a, b, c := converted[tri[0]], converted[tri[1]], converted[tri[2]]
-		if minimum != nil && boxDistanceSquared(point, a, b, c).Cmp(minimum) >= 0 {
+		if minimum != nil && (boxDistanceSquaredLower(p, verts[tri[0]], verts[tri[1]], verts[tri[2]]) >= minimumUpper ||
+			boxDistanceSquared(point, a, b, c).Cmp(minimum) >= 0) {
 			continue
 		}
 		distance, err := triangleDistanceSquared(point, a, b, c)
@@ -156,6 +187,7 @@ func MeshDistanceSquared(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][
 		}
 		if minimum == nil || distance.Cmp(minimum) < 0 {
 			minimum = distance
+			minimumUpper = proofbound.RatFloatUp(minimum)
 		}
 	}
 	return minimum, nil
