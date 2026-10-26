@@ -24,6 +24,7 @@ func ReadSTEP(ctx context.Context, r io.Reader, opts ...MeshImportOption) (*Mesh
 | I11 | A plane's loops may hold arcs: the polygon of their chords is cut as in I6, so a drilled plate's faces read. |
 | I12 | A `CYLINDRICAL_SURFACE` or `CONICAL_SURFACE` wall is read in one of two shapes, the same for both: the ladder and the strip use the points of the arcs and their angles about the axis, and never the radius. A wall with one bound of arcs at two heights and lines along the axis, which is a seamed full wall or a partial wall, is a ladder of triangles between its two arcs, the points of each in order of angle and the two lists merged. A wall with two bounds that each go once round the axis, with no seam, is a band between its two rings, merged by angle the same way. A triangle spans neighbouring points only, so it lies on the cylinder within the chord tolerance, and on a cone within it for the two arcs' own radii. A cone whose boundary reaches the axis, at its apex, is `ErrUnsupported`. Any other bound, a wall with holes, or a boundary point between the two heights is `ErrUnsupported`. |
 | I13 | A wall's triangles face along the cylinder's outward radius, or against it when the face's `same_sense` is `.F.`, as a bore's is, and are turned over with a void shell whose flag is `.F.` (I5). |
+| I14 | A file that places its shapes as an assembly is `ErrUnsupported`: any `NEXT_ASSEMBLY_USAGE_OCCURRENCE`, `ITEM_DEFINED_TRANSFORMATION` or `REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION`, as a simple instance or as a member of a complex one. The reader applies no placement, so reading the solids would lay every part at its own origin over the others. A file without them is read as before. |
 | I8 | Vertices at identical coordinates are welded, as the other readers weld. Nothing else is repaired, so `MeshBody.Report` says what the faces made. |
 | I9 | The limits of `MeshImportOption` apply: bytes before the parse, and triangles as the faces are cut. A canceled context returns its error. |
 
@@ -39,5 +40,5 @@ reading), not a claim about the part the file's author meant.
 ## 3. Not covered
 
 - Spherical, toroidal and free-form faces, a cone at its apex, cylinder and cone walls with holes or oblique boundaries, and ellipses and splines as edges.
-- IGES, STEP assemblies and product structure, placements of shapes, colours, layers, PMI and units other than length.
+- IGES, reading STEP assemblies (they are refused, I14) and product structure, placements of shapes, colours, layers, PMI and units other than length.
 - Turning the mesh into a `Body`, which no feature or Boolean takes.
