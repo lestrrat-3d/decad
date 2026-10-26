@@ -2513,3 +2513,5 @@
 10	0.01	TestLookupThreadReadsUnifiedSizes
 10	0.01	TestLookupThreadRefusals
 10	0.01	TestLookupThreadSizeCutsTheThreadItNames
+10	0.01	TestThreadLeadInAngleSetsTheBevelsSlope
+10	0.01	TestThreadLeadInAngleRefusals
