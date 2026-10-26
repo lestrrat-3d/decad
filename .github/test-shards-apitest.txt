@@ -2423,3 +2423,4 @@
 10	0.01	TestScaleMeshOverflowingVerticesAreNotFinite
 10	0.00	TestSectionBlindPocketFeedsExtrude
 10	0.00	TestSectionBlindPocketRefusesLevelsOffSlabInteriors
+10	0.00	TestSectionStackedPrismGateRefusals
