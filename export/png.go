@@ -13,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/internal/drawing"
 	"github.com/lestrrat-3d/decad/internal/raster"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -24,11 +25,16 @@ import (
 // pixels, each from 16 to 8192.
 //
 // Outlines draws the body's visible feature edges over the shading, one dark
-// pixel wide (agent-docs/png-export-design.md §6).
+// pixel wide (agent-docs/png-export-design.md §6). FieldOfView, an angle, makes
+// the camera perspective with that field of view across the smaller image side
+// of the scene's bounding sphere; the zero units.Value is the orthographic camera
+// (agent-docs/png-export-design.md §7). Outlines and a perspective camera are not
+// combined.
 type View struct {
 	Direction, Up r3.Vec
 	Width, Height int
 	Outlines      bool
+	FieldOfView   units.Value
 }
 
 // IsometricView looks at the model along the diagonal from above its +X, +Y,
@@ -72,8 +78,21 @@ func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View) erro
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	img, err := raster.Render(ctx, mesh.Vertices(), mesh.Triangles(),
-		raster.Camera{Direction: view.Direction, Up: view.Up}, view.Width, view.Height)
+	cam := raster.Camera{Direction: view.Direction, Up: view.Up}
+	if view.FieldOfView != (units.Value{}) {
+		fov, err := sectionrecord.MagnitudeIn(view.FieldOfView, units.Angle, units.Radian, "the field of view")
+		if err != nil {
+			return fmt.Errorf("export: PNG: %w", err)
+		}
+		if fov == 0 {
+			return fmt.Errorf("export: PNG: %w: a field of view of zero draws nothing; leave it unset for an orthographic camera", decad.ErrDegenerate)
+		}
+		if view.Outlines {
+			return fmt.Errorf("export: PNG: %w: outlines are not drawn with a perspective camera", decad.ErrDegenerate)
+		}
+		cam.FieldOfView = fov
+	}
+	img, err := raster.Render(ctx, mesh.Vertices(), mesh.Triangles(), cam, view.Width, view.Height)
 	if errors.Is(err, raster.ErrDegenerate) {
 		return fmt.Errorf("export: PNG: %w: %s", decad.ErrDegenerate, err)
 	}

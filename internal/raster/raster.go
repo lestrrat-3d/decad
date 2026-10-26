@@ -44,11 +44,15 @@ const (
 	marginFraction = 0.05
 )
 
-// Camera is an orthographic camera. Direction is the way it looks, from the eye
-// into the scene, and Up sets the image's vertical. Neither need be a unit
-// vector.
+// Camera is a camera. Direction is the way it looks, from the eye into the
+// scene, and Up sets the image's vertical. Neither need be a unit vector.
+// FieldOfView, in radians, is zero for an orthographic camera. A positive one,
+// below π, makes the camera perspective: its eye sits on the line through the
+// middle of the mesh's bounds along Direction, as near as keeps the mesh's
+// bounding sphere inside the field of view.
 type Camera struct {
 	Direction, Up r3.Vec
+	FieldOfView   float64
 }
 
 // Light offsets of the key light from the camera, in the camera's own axes: a
@@ -99,13 +103,15 @@ func Shaded(cam Camera, normal r3.Vec) (color.RGBA, error) {
 	if !ok {
 		return color.RGBA{}, fmt.Errorf("%w: the face normal has no length", ErrDegenerate)
 	}
-	return shade(dir, right, up, n), nil
+	return shade(dir, dir, right, up, n), nil
 }
 
-// shade colours a face with the unit normal n.
-func shade(dir, right, up, n r3.Vec) color.RGBA {
+// shade colours a face with the unit normal n. view is the direction from the
+// eye to the face: dir for an orthographic camera and the line of sight to the
+// face for a perspective one. A face whose normal points along view looks away.
+func shade(view, dir, right, up, n r3.Vec) color.RGBA {
 	base := Front
-	if n.Dot(dir) > 0 { // the normal points away from the camera: a back face
+	if n.Dot(view) > 0 { // the normal points away from the camera: a back face
 		base = Back
 		n = n.Scale(-1)
 	}
@@ -128,6 +134,12 @@ type Projection struct {
 	centreX        float64
 	centreY        float64
 	Width, Height  int
+	// eye is the camera's position when it is perspective, and perspective
+	// says so. A perspective projection works in the units of the plane at
+	// distance 1 from the eye, where a point maps to its camera x and y over its
+	// distance along the view direction.
+	eye         r3.Vec
+	perspective bool
 }
 
 // NewProjection builds the projection that fits verts into a width by height
@@ -144,10 +156,27 @@ func NewProjection(verts []r3.Vec, cam Camera, width, height int) (Projection, e
 	if len(verts) == 0 {
 		return Projection{}, fmt.Errorf("%w: there is nothing to project", ErrDegenerate)
 	}
+	if cam.FieldOfView != 0 && !(cam.FieldOfView > 0 && cam.FieldOfView < math.Pi) {
+		return Projection{}, fmt.Errorf("%w: a field of view must lie strictly between 0 and π radians, got %g", ErrDegenerate, cam.FieldOfView)
+	}
+	p := Projection{dir: dir, right: right, up: up, Width: width, Height: height}
+	if cam.FieldOfView > 0 {
+		lo, hi := verts[0], verts[0]
+		for _, v := range verts[1:] {
+			lo = r3.Vec{X: math.Min(lo.X, v.X), Y: math.Min(lo.Y, v.Y), Z: math.Min(lo.Z, v.Z)}
+			hi = r3.Vec{X: math.Max(hi.X, v.X), Y: math.Max(hi.Y, v.Y), Z: math.Max(hi.Z, v.Z)}
+		}
+		centre := lo.Add(hi).Scale(0.5)
+		radius := hi.Sub(lo).Len() / 2
+		// A mesh of no extent still needs an eye away from it.
+		distance := math.Max(radius, 1e-9) / math.Sin(cam.FieldOfView/2)
+		p.eye = centre.Sub(dir.Scale(distance))
+		p.perspective = true
+	}
 	minX, maxX := math.Inf(1), math.Inf(-1)
 	minY, maxY := math.Inf(1), math.Inf(-1)
 	for _, v := range verts {
-		x, y := right.Dot(v), up.Dot(v)
+		x, y, _ := p.plane(v)
 		minX, maxX = math.Min(minX, x), math.Max(maxX, x)
 		minY, maxY = math.Min(minY, y), math.Max(maxY, y)
 	}
@@ -162,16 +191,32 @@ func NewProjection(verts []r3.Vec, cam Camera, width, height int) (Projection, e
 	if math.IsInf(scale, 1) {
 		scale = 1
 	}
-	return Projection{dir: dir, right: right, up: up, scale: scale,
-		centreX: (minX + maxX) / 2, centreY: (minY + maxY) / 2, Width: width, Height: height}, nil
+	p.scale, p.centreX, p.centreY = scale, (minX+maxX)/2, (minY+maxY)/2
+	return p, nil
+}
+
+// plane returns the position of v in the image plane, before fitting, and its
+// depth. For an orthographic camera that is its right and up components and its
+// distance along the view direction. For a perspective one it is those
+// components over the distance from the eye along the view direction, and the
+// depth is minus the reciprocal of that distance: still larger for a farther
+// point, and linear in screen space across a triangle.
+func (p Projection) plane(v r3.Vec) (x, y, depth float64) {
+	if !p.perspective {
+		return p.right.Dot(v), p.up.Dot(v), p.dir.Dot(v)
+	}
+	rel := v.Sub(p.eye)
+	z := p.dir.Dot(rel)
+	return p.right.Dot(rel) / z, p.up.Dot(rel) / z, -1 / z
 }
 
 // Project returns the pixel position of v, with y growing downward, and its
-// depth along the view direction: a larger depth is farther from the camera.
+// depth: a larger depth is farther from the camera. The depth is the distance
+// along the view direction for an orthographic camera, and only its order
+// carries meaning for a perspective one.
 func (p Projection) Project(v r3.Vec) (x, y, depth float64) {
-	return float64(p.Width)/2 + (p.right.Dot(v)-p.centreX)*p.scale,
-		float64(p.Height)/2 - (p.up.Dot(v)-p.centreY)*p.scale,
-		p.dir.Dot(v)
+	px, py, depth := p.plane(v)
+	return float64(p.Width)/2 + (px-p.centreX)*p.scale, float64(p.Height)/2 - (py-p.centreY)*p.scale, depth
 }
 
 // Plane returns the pixel position of the point (x, y) of the image plane,
@@ -259,7 +304,12 @@ func draw(ctx context.Context, verts []r3.Vec, tris [][3]int, proj Projection, i
 		}
 		fill := color.RGBA{}
 		if img != nil {
-			fill = shade(proj.dir, proj.right, proj.up, normal)
+			view := proj.dir
+			if proj.perspective {
+				centre := verts[t[0]].Add(verts[t[1]]).Add(verts[t[2]]).Scale(1.0 / 3)
+				view = centre.Sub(proj.eye)
+			}
+			fill = shade(view, proj.dir, proj.right, proj.up, normal)
 		}
 		fillTriangle(img, depths, proj.Width, screen[t[0]], screen[t[1]], screen[t[2]], fill)
 	}

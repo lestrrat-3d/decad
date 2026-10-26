@@ -4,6 +4,7 @@ import (
 	"context"
 	"image"
 	"image/color"
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/raster"
@@ -167,4 +168,91 @@ func TestDrawSegmentsDrawsALineBetweenItsEnds(t *testing.T) {
 	require.Equal(t, red, img.RGBAAt(50, 10))
 	// A segment past the image is clipped without a panic.
 	raster.DrawSegments(img, proj, [][2][2]float64{{{-500, 0}, {500, 500}}}, red)
+}
+
+// twoSquares are two 4 x 4 squares facing +Z, one at z = 10 on the left (x from
+// -6 to -2) and one at z = 0 on the right (x from 2 to 6), seen from above.
+func twoSquares() ([]r3.Vec, [][3]int) {
+	v := []r3.Vec{
+		{X: -6, Y: -2, Z: 10}, {X: -2, Y: -2, Z: 10}, {X: -2, Y: 2, Z: 10}, {X: -6, Y: 2, Z: 10},
+		{X: 2, Y: -2, Z: 0}, {X: 6, Y: -2, Z: 0}, {X: 6, Y: 2, Z: 0}, {X: 2, Y: 2, Z: 0},
+	}
+	return v, [][3]int{{0, 1, 2}, {0, 2, 3}, {4, 5, 6}, {4, 6, 7}}
+}
+
+// coveredColumns counts the columns of img in [from, to) with a non-white pixel
+// in the middle row.
+func coveredColumns(img *image.RGBA, from, to int) int {
+	n := 0
+	for x := from; x < to; x++ {
+		if img.RGBAAt(x, img.Bounds().Dy()/2) != raster.Background {
+			n++
+		}
+	}
+	return n
+}
+
+func TestPerspectiveMakesANearerSquareLarger(t *testing.T) {
+	t.Parallel()
+	v, tris := twoSquares()
+	cam := raster.Camera{Direction: r3.Vec{Z: -1}, Up: r3.Vec{Y: 1}}
+	ortho, err := raster.Render(t.Context(), v, tris, cam, 200, 200)
+	require.NoError(t, err)
+	// Orthographic: both squares are 4 mm wide, so they cover the same columns.
+	require.InDelta(t, coveredColumns(ortho, 0, 100), coveredColumns(ortho, 100, 200), 1)
+
+	cam.FieldOfView = math.Pi / 3
+	persp, err := raster.Render(t.Context(), v, tris, cam, 200, 200)
+	require.NoError(t, err)
+	// The eye is 16.12 mm above the middle of the bounds at z = 5 (the bounding
+	// sphere's radius is √65 and sin 30° is a half), so z = 21.12. The near square
+	// is 11.12 mm from it and the far one 21.12 mm. The projected x spans are
+	// -0.5396 to -0.1799 and 0.0947 to 0.2841, fitted into 180 px at 218.5 px per unit.
+	near, far := coveredColumns(persp, 0, 100), coveredColumns(persp, 100, 200)
+	require.InDelta(t, 78.6, near, 1.5)
+	require.InDelta(t, 41.4, far, 1.5)
+	require.Greater(t, float64(near)/float64(far), 1.8)
+}
+
+func TestPerspectiveNearerTriangleHidesAFarOne(t *testing.T) {
+	t.Parallel()
+	// Two squares on the same line of sight: the near one, at z = 10, is smaller
+	// than the far one at z = 0, so it shows against it as a frame of the far one.
+	// The near square faces the camera (blue) and the far one faces away (orange),
+	// so which is in front shows in the colour, in either drawing order.
+	v := []r3.Vec{
+		{X: -4, Y: -4, Z: 0}, {X: 4, Y: -4, Z: 0}, {X: 4, Y: 4, Z: 0}, {X: -4, Y: 4, Z: 0},
+		{X: -1, Y: -1, Z: 10}, {X: 1, Y: -1, Z: 10}, {X: 1, Y: 1, Z: 10}, {X: -1, Y: 1, Z: 10},
+	}
+	far := [][3]int{{0, 2, 1}, {0, 3, 2}}
+	near := [][3]int{{4, 5, 6}, {4, 6, 7}}
+	cam := raster.Camera{Direction: r3.Vec{Z: -1}, Up: r3.Vec{Y: 1}, FieldOfView: math.Pi / 3}
+	for _, order := range [][][3]int{append(append([][3]int{}, far...), near...), append(append([][3]int{}, near...), far...)} {
+		img, err := raster.Render(t.Context(), v, order, cam, 200, 200)
+		require.NoError(t, err)
+		centre, frame := img.RGBAAt(100, 100), img.RGBAAt(30, 100)
+		require.Greater(t, centre.B, centre.R, "the middle shows the near, blue face")
+		require.Greater(t, frame.R, frame.B, "the rim shows the far, orange face")
+	}
+}
+
+func TestPerspectiveFieldOfViewLimits(t *testing.T) {
+	t.Parallel()
+	v, tris := twoSquares()
+	for _, fov := range []float64{-0.5, math.Pi, 4, math.NaN()} {
+		_, err := raster.Render(t.Context(), v, tris, raster.Camera{Direction: r3.Vec{Z: -1}, Up: r3.Vec{Y: 1}, FieldOfView: fov}, 100, 100)
+		require.ErrorIs(t, err, raster.ErrDegenerate, "field of view %v", fov)
+	}
+}
+
+func TestPerspectiveBackFacesFollowTheLineOfSight(t *testing.T) {
+	t.Parallel()
+	// A square seen from above, facing down: its normal points away from the
+	// camera, so it is a back face, orange.
+	v := []r3.Vec{{X: -2, Y: -2}, {X: -2, Y: 2}, {X: 2, Y: 2}, {X: 2, Y: -2}}
+	tris := [][3]int{{0, 1, 2}, {0, 2, 3}}
+	img, err := raster.Render(t.Context(), v, tris, raster.Camera{Direction: r3.Vec{Z: -1}, Up: r3.Vec{Y: 1}, FieldOfView: math.Pi / 3}, 100, 100)
+	require.NoError(t, err)
+	got := img.RGBAAt(50, 50)
+	require.Greater(t, got.R, got.B, "a back face is orange")
 }
