@@ -35,3 +35,40 @@ func Example_gyroid_lattice() {
 	// Output:
 	// closed: true, solid fraction: 0.53
 }
+
+// SchwarzPLattice and DiamondLattice take the same spec for the other two common
+// triply periodic walls: the primitive lattice of cubic channels and the diamond
+// lattice of the carbon crystal. Each field has its own range, so Level runs up
+// to 3 for Schwarz P and to √2 for the diamond.
+func Example_schwarz_diamond_lattice() {
+	spec := decad.LatticeSpec{
+		Min:        r3.Vec{},
+		Max:        r3.Vec{X: 20, Y: 20, Z: 20},
+		Cell:       units.Millimeters(10),
+		Resolution: 16,
+	}
+	for _, kind := range []struct {
+		name  string
+		build func(context.Context, decad.LatticeSpec) (*decad.MeshBody, error)
+		level float64
+	}{
+		{"Schwarz P", decad.SchwarzPLattice, 1},
+		{"diamond", decad.DiamondLattice, 0.5},
+	} {
+		spec.Level = units.Scalar(kind.level)
+		lattice, err := kind.build(context.Background(), spec)
+		if err != nil {
+			fmt.Printf("failed to build the %s lattice: %s\n", kind.name, err)
+			return
+		}
+		volume, err := lattice.Volume()
+		if err != nil {
+			fmt.Printf("failed to measure volume: %s\n", err)
+			return
+		}
+		fmt.Printf("%s: closed: %t, solid fraction: %.2f\n", kind.name, lattice.Report().Closed, volume.Value.Base()/8000)
+	}
+	// Output:
+	// Schwarz P: closed: true, solid fraction: 0.57
+	// diamond: closed: true, solid fraction: 0.41
+}

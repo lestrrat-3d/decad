@@ -35,7 +35,19 @@ solid fraction by sampling `g` directly on a grid of its own and compare the vol
 
 ## 3. Not covered
 
-- Other lattices: cubic, diamond and strut lattices, and a lattice that varies its thickness through space.
+- Strut lattices, a lattice of a kind other than the three of §4, and a lattice that varies its thickness through space.
 - Filling a body. The lattice fills a box; no feature or Boolean takes a `MeshBody`, so a lattice cannot be intersected
   with a part.
 - A mesh that is smooth or merged to a stated surface distance: the mesh is the grid's.
+
+## 4. Other surfaces
+
+`SchwarzPLattice` and `DiamondLattice` take the same `LatticeSpec` and cut the same way: only the field `g` changes, so G1
+to G6 hold with that field and its range.
+
+| Decision | Rule |
+|---|---|
+| K1 | Schwarz P is `g = cos kx + cos ky + cos kz`, from −3 to 3. `Level` lies strictly between 0 and 3. |
+| K2 | The diamond is `g = sin kx·sin ky·sin kz + sin kx·cos ky·cos kz + cos kx·sin ky·cos kz + cos kx·cos ky·sin kz`, from −√2 to √2 (the largest of `|g|`, at `kx = ky = kz = π/4`). `Level` lies strictly between 0 and √2. |
+| K3 | A level at or above the kind's largest `|g|`, or at or below zero, is `ErrDegenerate`; the other gates are G6's. `internal/lattice.Surface` takes the kind and `Gyroid` is its gyroid case. |
+| K4 | The tests write each field out from the definition, read the solid fraction by sampling it on a grid of their own as §2 does, and require the closed mesh, the capped bounds, the convergence with `Resolution` and the growth with `Level` of every kind, and that the three kinds' volumes differ at one level. |
