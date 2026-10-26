@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/holeplan"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
@@ -79,7 +80,7 @@ func TestComputeRectCorners(t *testing.T) {
 	plan, err := holeplan.Compute(in)
 	require.NoError(t, err)
 	require.NotNil(t, plan.Corners)
-	require.Equal(t, [4][2]float64{{0, 2}, {6, 2}, {6, 6}, {0, 6}}, *plan.Corners, "an unturned rectangle is exact")
+	require.Equal(t, [][2]float64{{0, 2}, {6, 2}, {6, 6}, {0, 6}}, plan.Corners, "an unturned rectangle is exact")
 
 	in.Rect = &holeplan.Rect{Width: 6, Height: 4, Angle: math.Pi / 2}
 	plan, err = holeplan.Compute(in)
@@ -192,4 +193,27 @@ func TestComputeRecordsWhereTheBoreProperStarts(t *testing.T) {
 	plan, err = holeplan.Compute(sunk)
 	require.NoError(t, err)
 	require.InDelta(t, 2, plan.HeadDepth, 1e-12, "a 90 degree cone from radius 4 to radius 2 is 2 mm deep")
+}
+
+func TestComputePolygonCornersLieOnTheCircumcircleWithAFlatTowardU(t *testing.T) {
+	t.Parallel()
+	in := holeplan.Input{
+		Frame: topFrame(t), Outward: r3.Vec{Z: 1}, At: r3.Vec{X: 3, Y: 4, Z: 10}, Through: true, Reach: 11,
+		Poly: &holeplan.Poly{Sides: 6, AcrossFlats: 6},
+	}
+	plan, err := holeplan.Compute(in)
+	require.NoError(t, err)
+	require.Len(t, plan.Corners, 6)
+	radius := 3 / math.Cos(math.Pi/6)
+	for i, c := range plan.Corners {
+		require.InDelta(t, radius, math.Hypot(c[0]-3, c[1]-4), 1e-12, "corner %d", i)
+	}
+	// The first corner is half a side past U, and the flat between the first and last faces +U.
+	require.InDelta(t, 3+radius*math.Cos(math.Pi/6), plan.Corners[0][0], 1e-12)
+	require.InDelta(t, 4+radius*math.Sin(math.Pi/6), plan.Corners[0][1], 1e-12)
+	require.InDelta(t, plan.Corners[0][0], plan.Corners[5][0], 1e-12, "the +U flat is vertical")
+	require.InDelta(t, 3+3, plan.Corners[0][0], 1e-12, "and lies half the width across flats from the axis")
+	in.Poly.Sides = 2
+	_, err = holeplan.Compute(in)
+	require.ErrorIs(t, err, decaderr.ErrDegenerate)
 }

@@ -11,7 +11,7 @@ func Hole(ctx context.Context, b *Body, spec HoleSpec) (*Body, error)
 ```
 
 `HoleSpec` holds `Face` (a `FaceSelector`), `At` (a world `r3.Vec`), `Diameter`, `Depth` (`ThroughHole` or
-`BlindHole`), an optional `Head` (`Counterbore` or `Countersink`) and an optional `Shape` (`RectangularHole`, §5, or `SlotHole`, §6). `Hole` retires `b` and returns the drilled body.
+`BlindHole`), an optional `Head` (`Counterbore` or `Countersink`) and an optional `Shape` (`RectangularHole`, §5, `SlotHole`, §6, or `PolygonHole`, §10). `Hole` retires `b` and returns the drilled body.
 
 | Decision | Rule |
 |---|---|
@@ -47,7 +47,7 @@ face. A countersink cut gives a faceted result whose planar faces are split into
 ## 4. Not covered
 
 - A hole in a face that is not an analytic plane or cylinder, or in a sheet.
-- A noncircular hole other than `RectangularHole` and `SlotHole`, a threaded shaped hole, a threaded hole on a cylindrical face, and a thread on a counterbore or countersink.
+- A noncircular hole other than `RectangularHole`, `SlotHole` and a regular `PolygonHole`, a threaded shaped hole, a threaded hole on a cylindrical face, and a thread on a counterbore or countersink.
 - Several holes in one call. Call `Hole` per hole, or build one hole and use `Patterned`.
 
 ## 5. Rectangular holes
@@ -133,3 +133,14 @@ type HoleThread struct {
 | Z5 | A shaped hole with a draft, a thread with a draft (a tapped hole is straight) and a draft in a hole on a cylindrical face are `ErrDegenerate`, `ErrDegenerate` and `ErrUnsupported`. |
 | Z6 | `BossBore.Draft` is the same for a boss's pilot (`agent-docs/boss-design.md` §5). |
 
+## 10. Polygonal holes
+
+`PolygonHole` holds `Sides`, `AcrossFlats` and `Angle`. The bore is a regular polygon centred on `At`, built as `RectangularHole`'s is:
+a prism over the polygon from `holeplan.Plan.Corners`.
+
+| Decision | Rule |
+|---|---|
+| P1 | `Sides` is from 3 to 64: any other is `ErrDegenerate`. `AcrossFlats` is a positive length, the distance between two opposite flats of an even polygon and twice the inradius of any. `Angle` is an angle, so a zero value of no kind is `ErrUnitKind`: write `units.Degrees(0)`. |
+| P2 | The corners lie at the circumradius `AcrossFlats / (2·cos(π/Sides))` from the axis, at the angles `Angle + π/Sides + 2π·i/Sides`, counter-clockwise from the face frame's U axis. With a zero `Angle` a flat faces +U, between the corners at ±π/Sides, whatever the number of sides. |
+| P3 | The polygon replaces the round bore as `RectangularHole` does: `Diameter` stays zero, a head is `ErrDegenerate`, and a through or blind depth reads as for a round hole. The mouth margin and the reach gates take the circumradius as the largest radius of the bore (Y4). |
+| P4 | The removed volume is `Sides · (AcrossFlats/2)² · tan(π/Sides) · depth`, which the tests compute independently, and the polygon's walls are planes. |

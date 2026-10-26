@@ -53,7 +53,7 @@ func (Counterbore) holeHead() {}
 func (Countersink) holeHead() {}
 
 // HoleShape is the cross-section of a hole that is not round. Its variants are
-// RectangularHole and SlotHole.
+// RectangularHole, SlotHole and PolygonHole.
 type HoleShape interface{ holeShape() }
 
 // RectangularHole is a hole whose bore is a Width by Height rectangle centred
@@ -78,6 +78,19 @@ type SlotHole struct {
 }
 
 func (SlotHole) holeShape() {}
+
+// PolygonHole is a hole whose bore is a regular polygon of Sides sides, from 3
+// to 64, AcrossFlats wide from one flat to the opposite one (a hexagon for a
+// nut, say), centred on the hole axis. With a zero Angle a flat faces the face
+// frame's U axis; Angle turns the polygon counter-clockwise about the axis.
+// AcrossFlats is a positive length and Angle is an angle.
+type PolygonHole struct {
+	Sides       int
+	AcrossFlats units.Value
+	Angle       units.Value
+}
+
+func (PolygonHole) holeShape() {}
 
 // HoleThread is a thread tapped into a round hole. The hole's Diameter is then
 // the thread's minor (tap drill) diameter. Pitch is the axial advance per turn,
@@ -283,6 +296,8 @@ func (c *curvedHole) margin(in holeplan.Input) (float64, error) {
 	switch {
 	case in.Rect != nil:
 		reach = math.Hypot(in.Rect.Width, in.Rect.Height) / 2
+	case in.Poly != nil:
+		reach = in.Poly.Circumradius()
 	case in.Slot != nil:
 		reach = in.Slot.Length / 2
 	}
@@ -373,6 +388,16 @@ func holeShapeInput(in *holeplan.Input, spec HoleSpec) error {
 			return err
 		}
 		in.Rect = &holeplan.Rect{Width: width, Height: height, Angle: angle}
+	case PolygonHole:
+		flats, err := sectionrecord.MagnitudeIn(shape.AcrossFlats, units.Length, units.Millimeter, "the polygonal hole width across flats")
+		if err != nil {
+			return err
+		}
+		angle, err := sectionrecord.MagnitudeIn(shape.Angle, units.Angle, units.Radian, "the polygonal hole angle")
+		if err != nil {
+			return err
+		}
+		in.Poly = &holeplan.Poly{Sides: shape.Sides, AcrossFlats: flats, Angle: angle}
 	case SlotHole:
 		length, err := sectionrecord.MagnitudeIn(shape.Length, units.Length, units.Millimeter, "the slot length")
 		if err != nil {
@@ -508,7 +533,7 @@ func holeBore(ctx context.Context, d *Document, plan holeplan.Plan) (*Body, erro
 		return pt
 	}
 	if plan.Corners != nil {
-		var points [4]*sketch.Point
+		points := make([]*sketch.Point, len(plan.Corners))
 		for i, c := range plan.Corners {
 			points[i] = fixed(c)
 		}

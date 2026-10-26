@@ -2484,3 +2484,7 @@
 10	0.01	TestUnionFoldIsTheSameWhateverTheOrder
 10	0.01	TestUnionFoldRefusalsLeaveEveryBodyLive
 10	0.01	TestReadSTEPRefusesAnAssembly
+10	0.01	TestHolePolygonHexagonThrough
+10	0.01	TestHolePolygonFlatsFaceUAndTurnsWithTheAngle
+10	0.01	TestHolePolygonOtherSidesAndBlind
+10	0.01	TestHolePolygonRefusals
