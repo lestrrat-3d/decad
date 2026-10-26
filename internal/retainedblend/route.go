@@ -55,6 +55,7 @@ const (
 	straightLine
 	cylinderLine
 	openArc
+	cylinderPair
 )
 
 func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Payload, edges []*topo.Edge,
@@ -63,7 +64,8 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 		return nil, false, nil
 	}
 	for _, e := range edges {
-		if !looksLikeRim(e) && !looksLikeLine(e) && !looksLikeCylLine(e) && !looksLikeArc(e) {
+		if !looksLikeRim(e) && !looksLikeLine(e) && !looksLikeCylLine(e) && !looksLikeArc(e) &&
+			!looksLikeCylCyl(e) {
 			return nil, false, nil
 		}
 	}
@@ -144,6 +146,15 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				return nil, true, err
 			}
 			targets[i].lineKey, targets[i].kind = a.arcKey(), openArc
+		case looksLikeCylCyl(e):
+			c, err := readCylCyl(e, fp, faceIndex)
+			if err != nil {
+				return nil, true, err
+			}
+			if err := claim(c.ends, c.scale); err != nil {
+				return nil, true, err
+			}
+			targets[i].lineKey, targets[i].kind = c.key(), cylinderPair
 		case looksLikeCylLine(e):
 			c, err := readCylLine(e, fp, faceIndex)
 			if err != nil {
@@ -178,6 +189,8 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				e, ok = findLine(cur, targets[i].lineKey, 64*ulp*math.Max(1, math.Abs(targets[i].lineKey.p0.X)))
 			case openArc:
 				e, ok = findArc(cur, targets[i].lineKey, 64*ulp*math.Max(1, math.Abs(targets[i].lineKey.p0.X)))
+			case cylinderPair:
+				e, ok = findCylCyl(cur, targets[i].lineKey, 64*ulp*math.Max(1, math.Abs(targets[i].lineKey.p0.X)))
 			case cylinderLine:
 				e, ok = findCylLine(cur, targets[i].lineKey, 64*ulp*math.Max(1, math.Abs(targets[i].lineKey.p0.X)))
 			default:
@@ -208,6 +221,14 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			}
 			if err == nil {
 				next, err = rewriteArc(ctx, env, curFP, a, step, role, faceIndex)
+			}
+		case cylinderPair:
+			var c cylCyl
+			if c, err = readCylCyl(e, curFP, faceIndex); err == nil {
+				step, err = spec.assign(targets[i].ref, c.wall[0].face, c.wall[1].face)
+			}
+			if err == nil {
+				next, err = rewriteCylCyl(ctx, env, curFP, c, step, role, faceIndex)
 			}
 		case cylinderLine:
 			var c cylLine

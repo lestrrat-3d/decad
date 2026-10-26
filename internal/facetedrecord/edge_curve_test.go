@@ -313,3 +313,42 @@ func TestRetainedEdgeCurveCylinderTorus(t *testing.T) {
 		require.False(t, ok)
 	})
 }
+
+func TestRetainedEdgeCurveParallelCylinders(t *testing.T) {
+	t.Parallel()
+	cylinder := func(x float64, axis r3.Vec) *topo.Face {
+		return retained(surfacegeom.Cylinder{Origin: r3.NewVec(x, 0, 0), Axis: axis, Radius: units.Millimeters(4)})
+	}
+	left, right := cylinder(0, r3.NewVec(0, 0, 1)), cylinder(7, r3.NewVec(0, 0, 1))
+	h := math.Sqrt(16 - 3.5*3.5)
+	generator := func(y float64) []r3.Vec {
+		return []r3.Vec{r3.NewVec(3.5, y, 0), r3.NewVec(3.5, y, 6), r3.NewVec(3.5, y, 12)}
+	}
+	bounds := []float64{1e-9, 1e-9, 1e-9}
+
+	for _, y := range []float64{h, -h} {
+		curve, ok := facetedrecord.RetainedEdgeCurve(left, right, generator(y), bounds, false)
+		require.True(t, ok, "either generator of the pair passes")
+		require.IsType(t, surfacegeom.Line3{}, curve)
+	}
+	_, ok := facetedrecord.RetainedEdgeCurve(right, left, generator(h), bounds, false)
+	require.True(t, ok, "the order of the two faces does not matter")
+
+	// The falsifier rejects a chain off both generators, and accepts it once its
+	// own bound covers the offset.
+	off := []r3.Vec{r3.NewVec(3.5, h, 0), r3.NewVec(3.5, h+0.01, 6), r3.NewVec(3.5, h, 12)}
+	_, ok = facetedrecord.RetainedEdgeCurve(left, right, off, bounds, false)
+	require.False(t, ok, "a vertex 10⁻² off the generator, bound 10⁻⁹")
+	_, ok = facetedrecord.RetainedEdgeCurve(left, right, off, []float64{1e-9, 0.02, 1e-9}, false)
+	require.True(t, ok)
+
+	// Axes that cross, circles that do not meet, and circles that touch decline.
+	_, ok = facetedrecord.RetainedEdgeCurve(left, cylinder(7, r3.NewVec(1, 0, 0)), generator(h), bounds, false)
+	require.False(t, ok, "crossing axes are not a generator")
+	_, ok = facetedrecord.RetainedEdgeCurve(left, cylinder(9, r3.NewVec(0, 0, 1)), generator(0), bounds, false)
+	require.False(t, ok, "the cross-sections' circles miss")
+	_, ok = facetedrecord.RetainedEdgeCurve(left, cylinder(8, r3.NewVec(0, 0, 1)), generator(0), bounds, false)
+	require.False(t, ok, "tangent circles are not an edge")
+	_, ok = facetedrecord.RetainedEdgeCurve(left, cylinder(0, r3.NewVec(0, 0, 1)), generator(0), bounds, false)
+	require.False(t, ok, "one axis cannot carry two cylinders' meeting")
+}

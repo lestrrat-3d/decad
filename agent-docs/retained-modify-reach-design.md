@@ -313,8 +313,7 @@ retained keeps the bound 2.
 
 ## 8. Parallel cylinders (R5)
 
-Two cylinders with parallel axes meet in straight generators. Retention §10.1 keeps their chord chain. Two rows
-close it.
+Two cylinders with parallel axes meet in straight generators. Two rows publish and blend them.
 
 **E10** (retention §10.1). `Cylinder` and `Cylinder` with `|a1 × a2| ≤ 10⁻¹²` and axis distance `s` with
 `|R1 − R2| < s < R1 + R2` within slack: `Line3`. Two generators exist, at the cross-section's circle–circle
@@ -332,7 +331,8 @@ the edge, the walls are circles `C1 (o1, R1)` and `C2 (o2, R2)` meeting at `K`. 
 - Each wall is cut as blend §4.3 cuts R3's wall, by the half-plane through its axis and its setback generator.
 - Ends: blend §4.3's end rule.
 
-The offset circles not meeting is SR3. The construction reuses `cylLine.solveSection` with the line `L` replaced
+The offset circles not meeting is SR3. Both ends must be corners of the same type as the edge (blend SR5), so
+a valley between bosses that stand on a plate, with one convex and one reflex end, refuses. The construction reuses `cylLine.solveSection` with the line `L` replaced
 by `C1`.
 
 ## 9. Refusals
@@ -454,7 +454,8 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | Cut of the 20° copy | untouched planes and cylinders keep their tags | clear `Retained` in `ExactGroupPlaced`: the Cut loses them |
 | `ScaledAt` of P2 by 2 and by 1.1 | 6 `Plane`, 5 `Cylinder`; `Radius` is `2·R` at `s = 2` and within its rounding of `1.1·R`; `NormalAt` bounds below 1 | keep the drop: `Faceted`; keep the plane's 2: bound 2 |
 | `facetedrecord` scale charge | a cylinder at `s = 1.1` has `NormalBound` at least the held term at `2·(P + ρ)` recomputed in the test | charge 0: the relation fails |
-| R5: two overlapping parallel bosses, placed-tool cut | the boss–boss edge is `Line3`; fillet and chamfer change the volume by `L` times the section's corner area | flip `κ1`: the centre sits on the wrong side of `C1` |
+| R5: two overlapping parallel bores, placed-tool cuts | the bore–bore ridge is `Line3`; fillet and chamfer change the volume by `L` times the section's corner area; the fillet is a `Cylinder` of radius `r` through the ball's centre | flip `κ1`: the centre sits on the wrong side of `C1` |
+| R5 refusals | a valley between bosses standing on a plate (ends of unlike corner type) and bores with crossing axes refuse with `ErrUnsupported` | drop the end-corner gate: the valley blend builds |
 | Kept refusals on P2 | `Shell`, `Draft`, `Offset` and `PatternJoin` keep the texts of §10 | none; pins the refusals |
 
 ## 13. Files and fallout
@@ -465,7 +466,7 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | `internal/retainedblend/line_rewrite.go`, `arc_rewrite.go`, `rewrite.go` | setbacks from the mapping; an end at a junction plane in place of an end face |
 | `internal/retainedblend/cyl_rewrite.go` | the wall setback reads `dB` (§4.1) |
 | `internal/retainedblend/chain.go`, `chain_rewrite.go` | new: Table RC, §5.2 junctions, Claim J rows, §5.5 construction, §5.6 gates |
-| `internal/retainedblend/cyl2.go` | new: R5 |
+| `internal/retainedblend/cyl2.go`, `cyl2_rewrite.go` | new: R5 |
 | `internal/brepmodify/chamfer.go`, `asymmetric.go` | pass the resolved reference into `retainedblend.Chamfer` |
 | `internal/tangentchain/` | the retained continuation test of §5.3 |
 | `brep_modify_partial.go` | admit a retained `facetedPayload` and dispatch the retained test |

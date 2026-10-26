@@ -35,6 +35,9 @@ func RetainedEdgeCurve(a, b *topo.Face, chain []r3.Vec, bounds []float64, closed
 	if circle, ok := cylinderTorusRim(ta, tb, chain, bounds, closed); ok {
 		return circle, true
 	}
+	if line, ok := parallelCylindersRim(ta, tb, chain, bounds); ok {
+		return line, true
+	}
 	if _, ok := tb.(surfacegeom.Plane); ok {
 		ta, tb = tb, ta
 	}
