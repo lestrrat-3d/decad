@@ -108,7 +108,7 @@ admits takes it unchanged.
 | A4 | a reflected operand, or two operands whose relative map is a reflection | M3, M4, M5, T1, T2 | prism-boolean's own paths over a reflected re-expression (§3.2) |
 | A5 | a multi-region operand or result: a prism-group tool (N holes in one arrangement), a `Union` of disjoint footprints | S5 (through mirror §6), S12, P2 | one-slab multi-region `stackedPrismPayload` (mirror §6.3) |
 | A6 | a split boundary under a non-identity re-expression, a prior section displacement or a walk charge | S9 (45° in plane), rotated and translated overlaps; not P1 (A6 below) | `prismPayload` carrying a certified crossing-sensitivity charge |
-| A7 | one rectangular blind pocket crossing one rectangular through hole | a pocket that partly overlaps a through opening | `brepPayload` with split hole walls and a partial floor |
+| A7 | one rectangular blind pocket crossing one rectangular through hole, opening at either cap, clipped to the target | a pocket that partly overlaps a through opening | `brepPayload` with split hole walls and a partial floor |
 
 #### A1 — stacked union
 
@@ -517,13 +517,30 @@ first union trims the hub circle.
 `prismboolean.TryCrossingBlindCut` admits `Cut(target, tool)` when `target` is a
 prism with exactly one through hole, `tool` is a hole-free prism, and every
 section loop is four axis-aligned lines. The target and tool have zero
-section and level displacement. Their relative section map is the identity;
-the tool starts strictly inside the target and ends exactly at its far cap,
-as exact rational level comparisons state. The tool's first level and both
-target levels have zero displacement. Other pairs continue to the ordinary
-boolean dispatch.
+section displacement. Their relative section map is the identity.
 
-The target's original section is the lower slab. For the reached slab, a
+`stackedrecord.CrossingBlindLevels` reads the two sweep intervals exactly. The
+tool is clipped to the target's interval, so it takes one of two arms:
+
+- The top arm: the tool starts strictly inside the target and ends at the
+  target's far cap or beyond it.
+- The bottom arm: the tool ends strictly inside the target and starts at the
+  target's first cap or before it.
+
+A tool that spans the whole interval, lies wholly inside it, matches it, is
+disjoint from it, or touches it only at a cap continues to the ordinary boolean dispatch. A level may carry an axial
+displacement (an inch-converted depth does). Two levels compare by their exact
+rationals and order only when their gap exceeds the sum of both displacements.
+Equal levels count as one only when both are undisplaced. A gap inside the
+displacements, or equal levels that carry one, orders nothing and the pair
+continues to the ordinary dispatch. A displacement therefore never admits an
+order: it only has to be smaller than the gap. A displaced level reaches the
+result's face levels, so the volume reads `Approximate` with a proven bound,
+and a result with no displaced level reads `Exact`.
+
+In the top arm the target's original section is the lower slab and the cut
+section the upper; in the bottom arm the cut section is the lower slab and the
+target's section the upper. For the reached slab, a
 private Sketch scene requires `TExact` on every partial edge and classifies
 every cell, including cells with a hole, by each source region's recorded edge
 orientation. It retains cells inside the
@@ -538,7 +555,7 @@ cells. Its horizontal cap face can carry a hole, and its existing wall
 assembly splits a partially shared hole wall at the floor. The generic BRep
 face and topology checks run before publication; `Tessellate(VerifyAll)`
 checks the occupied volume. A pocket crossing the body's outer boundary, a
-second source hole, a displaced section or level, a rotated footprint, and later Cuts of
+second source hole, a displaced section, a rotated footprint, and later Cuts of
 the result remain outside this bounded path.
 
 ### Class B — perpendicular prism pairs with planar contacts
