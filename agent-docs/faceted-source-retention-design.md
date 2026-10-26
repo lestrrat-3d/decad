@@ -249,9 +249,11 @@ For row P3 of §1, with this design:
 
 Two readings change that are not improvements. A retained face no longer
 publishes `Faceted.Bound`, its held displacement `δ_f`; a caller reads it from
-the face's vertex bounds. `ScaledAt` keeps a retained `Plane` and reads a
-retained `Cylinder` or `Sphere` as `Faceted` afterwards, because the scaled
-tag has no similarity proof here.
+the face's vertex bounds. `ScaledAt` keeps a retained `Plane`, `Cylinder`,
+`Sphere` or `Torus` at its similar image, charged for rounding only
+(`agent-docs/retained-modify-reach-design.md` §7). A retained `Cone` or
+denoted face reads `Faceted` afterwards, because the scaled tag has no
+similarity proof here.
 
 What does not change: the held polygons, `Volume`, `Area`, `Centroid`,
 `Box`, every vertex and edge bound, `Verify` results, and the tessellation.

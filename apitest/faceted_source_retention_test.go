@@ -211,9 +211,10 @@ func TestFacetedSourceRetention(t *testing.T) {
 		require.NoError(t, err)
 		kinds := retentionKinds(scaled)
 		require.Zero(t, kinds["other"], "kinds %v", kinds)
-		// A scaled plane keeps its tag; a scaled cylinder reads Faceted.
+		// A uniform scale keeps every retained tag
+		// (TestRetainedScaledAtKeepsCurvedTags).
 		require.Equal(t, 6, kinds["plane"], "kinds %v", kinds)
-		require.Equal(t, 5, kinds["faceted"], "kinds %v", kinds)
+		require.Equal(t, 5, kinds["cylinder"], "kinds %v", kinds)
 	})
 
 	t.Run("ToFace stops at a retained cap", func(t *testing.T) {

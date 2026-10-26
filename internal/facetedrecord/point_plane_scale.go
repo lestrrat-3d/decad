@@ -18,8 +18,10 @@ import (
 // anchor by factor s, from the certified similarity source fp. It refuses a
 // source that is neither an authenticated point-loft Split slab, a similarity
 // source, nor a Boolean result whose proof is complete, and a source that
-// retains a denoted or curved surface. Source roles are dropped; the held mesh
-// and its bounds follow the image.
+// retains an unretained denoted or curved surface.
+// A retained Plane, Cylinder, Sphere or Torus tag keeps its tag at ScaleTag's image; a
+// retained Cone or denoted tag reads Faceted. Source roles are dropped; the
+// held mesh and its bounds follow the image.
 func ScaleImage(ctx context.Context, body *topo.Body, fp Payload, anchor r3.Vec, s float64) (Payload, error) {
 	next, _, err := ScaleImageWithSummary(ctx, body, fp, anchor, s)
 	return next, err
@@ -103,9 +105,21 @@ func ScaleImageWithSummary(ctx context.Context, body *topo.Body, fp Payload, anc
 				return Payload{}, nil, err
 			}
 		}
+		if group.Retained && group.Denoted == nil {
+			// A uniform scale keeps every normal, so a retained Plane,
+			// Cylinder, Sphere or Torus keeps its tag at the image of ScaleTag.
+			// The group's own departure carries over (an angle survives the
+			// scale) and the image adds only its rounding.
+			if moved, add, stated := ScaleTag(group.Surface, anchor, s); stated {
+				group.Surface = moved
+				group.NormalBound = min(2, proofbound.AbsSumUpper(group.NormalBound, add))
+				group.CapRecord, group.AxialDelta, group.HasAxialDelta = nil, 0, false
+				continue
+			}
+		}
 		if _, plane := group.Surface.(surfacegeom.Plane); group.Retained && (!plane || group.Denoted != nil) {
-			// A scaled retained curved or denoted face reads Faceted: its tag
-			// has no similarity image here.
+			// A scaled retained Cone, denoted face, or tag with no stated
+			// bound reads Faceted: its tag has no similarity image here.
 			group.Surface, group.Denoted, group.Retained, group.NormalBound = nil, nil, false, 0
 		}
 		if plane, ok := group.Surface.(surfacegeom.Plane); ok {

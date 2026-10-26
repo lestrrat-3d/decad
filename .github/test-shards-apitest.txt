@@ -2249,3 +2249,4 @@
 10	0.01	TestVerifyStrictContainmentReusesInnerVolume
 10	0.01	TestVertexPlacedRevolveBoundEnclosesDisplacement
 10	0.01	TestWallReflexSweep
+10	0.10	TestRetainedScaledAtKeepsCurvedTags

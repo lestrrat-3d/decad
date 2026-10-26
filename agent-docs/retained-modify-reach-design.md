@@ -287,9 +287,9 @@ then the exact image plane.
 
 ## 7. `ScaledAt` keeps curved tags
 
-`ScaleImage` drops every retained curved or denoted tag, and gives every retained plane `NormalBound = 2`
-(`internal/facetedrecord/point_plane_scale.go`). A positive uniform scale `x ↦ a + s·(x − a)` maps each surface
-to a similar one with the same normal at corresponding points, so the only charge is rounding.
+`ScaleImage` (`internal/facetedrecord/point_plane_scale.go`) scales each retained `Plane`, `Cylinder`, `Sphere`
+and `Torus` tag through `facetedrecord.ScaleTag` (`scale_tag.go`). A positive uniform scale `x ↦ a + s·(x − a)`
+maps each surface to a similar one with the same normal at corresponding points, so the only charge is rounding.
 
 | Tag | Scaled tag | Charge `add` |
 |---|---|---|
@@ -298,11 +298,12 @@ to a similar one with the same normal at corresponding points, so the only charg
 | `Sphere` | centre as above, `Radius = round(s·R)` | the same |
 | `Torus` | axis unchanged, centre as above, `Major` and `Minor` each rounded from `s` times the source value | the same |
 
-`P` is the exact distance of the rounded origin from `a + s·(o − a)`, `ρ` the largest exact gap of a rounded radius
-from `s` times the source radius, and `α` the exact gap of `NewFrame`'s vectors from `U`, `V`. Each group's
+`P` is the exact distance of the rounded origin from `a + s·(o − a)`, `ρ` the exact gap of the rounded radius
+from `s` times the source radius (a `Torus` takes the sum of its two radii's gaps), and `α` the exact gap of `NewFrame`'s vectors from `U`, `V`. Each group's
 `NormalBound` becomes `min(2, ε_F + add)`; `ε_F` is a bound on an angle, which a uniform scale preserves. `Cone`
 and denoted groups still read `Faceted`: retention §3.4 states no cone rule, and the interval denotation has no
-similarity image here. A retained curved group passes through the same A4 check at assembly as any other.
+similarity image here. A retained curved group passes through the same A4 check at assembly as any other. A plane group that is not
+retained keeps the bound 2.
 
 ## 8. Parallel cylinders (R5)
 
