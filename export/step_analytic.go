@@ -16,7 +16,8 @@ import (
 // A plane's loops are a single full circle or a chain of lines and arcs; a
 // cylinder is a full wall (two one-circle loops whose starts align along its
 // axis) or a partial wall (one loop of lines along its axis closed by arcs
-// about it or by ellipses); a torus is a whole turn (two one-circle loops
+// about it or by ellipses); a cone is a full wall (two one-circle loops whose
+// starts share a meridian); a torus is a whole turn (two one-circle loops
 // whose starts share an azimuth) or a patch of parallel and meridian arcs
 // (supportsAnalyticTorus). An unsupported edge or wall sends the entire body
 // through the faceted writer, so one file never mixes two unrelated boundary
@@ -60,6 +61,10 @@ func supportsAnalyticSTEP(ctx context.Context, body *decad.Body) (bool, error) {
 			}
 		case decad.Torus:
 			if !supportsAnalyticTorus(loops, surface) {
+				return false, nil
+			}
+		case decad.Cone:
+			if !supportsAnalyticConeWall(loops, surface) {
 				return false, nil
 			}
 		default:
@@ -171,6 +176,8 @@ func (b *fileBuilder) addAnalyticFaces(ctx context.Context, body *decad.Body) ([
 			ref, err = a.addCylinderFace(ctx, face, surface)
 		case decad.Torus:
 			ref, err = a.addTorusFace(ctx, face, surface)
+		case decad.Cone:
+			ref, err = a.addConeFace(ctx, face, surface)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("export: STEP analytic face %d: %w", i, err)
