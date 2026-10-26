@@ -146,9 +146,7 @@ func TestHoleOnACylinderRefusals(t *testing.T) {
 	}{
 		{"centre off the cylinder", func(s *decad.HoleSpec) { s.At = r3.NewVec(4, 0, 10) }, decad.ErrDegenerate},
 		{"centre on the axis", func(s *decad.HoleSpec) { s.At = r3.NewVec(0, 0, 10) }, decad.ErrDegenerate},
-		{"counterbore on a curve", func(s *decad.HoleSpec) {
-			s.Head = decad.Counterbore{Diameter: units.Millimeters(5), Depth: units.Millimeters(1)}
-		}, decad.ErrUnsupported},
+		{"draft on a curve", func(s *decad.HoleSpec) { s.Draft = units.Degrees(2) }, decad.ErrUnsupported},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

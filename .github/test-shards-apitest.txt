@@ -2543,3 +2543,8 @@
 10	0.01	TestBossStandsOnARod
 10	0.01	TestBossStandsOnTheWallOfABore
 10	0.01	TestBossOnACylinderRefusals
+10	0.01	TestHoleCounterboreInARod
+10	0.01	TestHoleCounterboreOutOfABore
+10	0.01	TestHoleCountersinkInARod
+10	0.01	TestHoleHeadOnACylinderRefusals
+10	0.01	TestHoleCountersinkOutOfABore
