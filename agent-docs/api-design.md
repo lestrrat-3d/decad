@@ -1357,7 +1357,11 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts
 func Shell(ctx context.Context, b *Body, sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
 func ChamferAngle(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, reference FaceSelector,
     angle units.Value) (*Body, error)
+func FilletChord(ctx context.Context, b *Body, sel EdgeSelector, chord units.Value) (*Body, error)
 ```
+
+`FilletChord(ctx, b, sel, chord)` rounds right-angled planar edges with the radius `chord/√2` and builds the result with
+`Fillet`. `agent-docs/fillet-chord-design.md` owns its rules.
 
 `ChamferAngle` sets back `d` on `reference` and `d·tan(angle)` on the other face of each right-angled planar edge, and
 builds the result with `Chamfer`. `agent-docs/chamfer-angle-design.md` owns its rules.
