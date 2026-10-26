@@ -2336,3 +2336,11 @@
 10	0.01	TestThreadLeftHandRod
 10	0.01	TestThreadPartialLengthStopsShortOfTheFaceEnd
 10	0.01	TestThreadLengthRefusals
+10	0.01	TestRepairMeshWeldsASplitCube
+10	0.01	TestRepairMeshOrientsAShell
+10	0.01	TestRepairMeshTurnsAnInsideOutCubeRightWayOut
+10	0.01	TestRepairMeshFillsAHole
+10	0.01	TestRepairMeshDropsTrianglesThatCarryNoSurface
+10	0.01	TestRepairMeshMendsAllThree
+10	0.01	TestRepairMeshLeavesAGoodMeshWhole
+10	0.01	TestRepairMeshRefusals

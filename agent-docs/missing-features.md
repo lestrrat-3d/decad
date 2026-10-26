@@ -138,7 +138,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Today | Owner |
 |---|---|---|
-| Import of STEP, IGES or 3MF; import of any format as a solid `Body`; repair of an imported mesh | `ReadSTL` and `ReadOBJ` read STL and OBJ into a `MeshBody` that no feature, Boolean or `Verify` takes (`mesh_import.go`) | `agent-docs/mesh-import-design.md` §5 |
+| Import of STEP, IGES or 3MF; import of any format as a solid `Body`; repair of an imported mesh beyond weld, orient and flat-hole fill | `ReadSTL` and `ReadOBJ` read STL and OBJ into a `MeshBody` that no feature, Boolean or `Verify` takes, and `RepairMesh` mends it (`mesh_import.go`, `mesh_repair.go`) | `agent-docs/mesh-import-design.md` §5, §7 |
 | Analytic STEP for cones, spheres, horn tori, free-form walls | Whole body falls back to faceted STEP; planes, cylinders and tori with circle, arc, line and ellipse edges write analytic (`export/step_analytic.go`, `export/step_analytic_torus.go`) | `agent-docs/step-export-design.md` |
 | STEP of a body with a cavity: a `WithNoOpenings` closed shell, a full revolve of a cavity meridian or a holed meridian | `ErrUnsupported`: "only a single non-void shell is supported" (`export/step.go`) | `agent-docs/step-export-design.md` |
 
@@ -187,7 +187,7 @@ moves its row to the matching section above, with that doc as owner.
 | Shell with a different thickness per face, or a wall on both sides of the original surface | `Shell` takes one thickness, and `WithShellSense` picks one side (`shell.go`) |
 | Boss with ribs or a root fillet, a non-round or tilted boss, a boss on a curved face, or a pilot with a head or draft | `Boss` raises one round boss with a plain blind pilot on a planar face (`boss.go`; `agent-docs/boss-design.md` §3) |
 | T-spline (Form) sculpting | No entry point exists; free-form surfaces are NURBS (`decad.NURBSSurface`) |
-| Mesh bodies as input: convert to a solid, reduce, repair, remesh | No entry point exists; `decad.Mesh` is an output only |
+| Mesh bodies as input: convert to a solid, reduce, remesh | No entry point exists; a `MeshBody` is read, queried, repaired and written, and no feature takes it |
 | Lattice or volumetric infill for printing | No entry point exists |
 | Nesting that turns bodies by other than a quarter turn, follows their outlines or stacks them in three dimensions | `Arrange` packs bounding rectangles by translation, with an optional quarter turn about +Z (`arrange.go`) |
 | Toolpath generation (CAM) | No entry point exists |

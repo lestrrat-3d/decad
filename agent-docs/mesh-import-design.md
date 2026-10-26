@@ -76,7 +76,7 @@ triangles, two shells and an inverted mesh.
 
 - STEP, IGES and 3MF import.
 - Turning a `MeshBody` into a `Body`, or taking one in a feature, a Boolean or `Verify`.
-- Repair: filling holes, flipping triangles, merging near-equal vertices or removing slivers.
+- Repair beyond §7: self-intersections, edges three triangles use, bent holes closed to their true surface, and slivers.
 - Writing a `MeshBody` as STEP or 3MF.
 - Concave or non-planar OBJ faces, which a fan cuts wrongly.
 - Units other than millimetres.
@@ -100,4 +100,26 @@ func MeshDXF(ctx context.Context, w io.Writer, m *decad.MeshBody, view DrawingVi
 | E3 | A nil context, writer or mesh body is `ErrDegenerate`. A cancelled context writes nothing. |
 | E4 | A zero-area triangle has no STL normal and is `ErrDegenerate` for `MeshSTL`. `MeshPNG` shows an open or inside-out mesh with its orange back faces, and `MeshDXF` draws its boundary edges. |
 | E5 | STEP and 3MF are not offered: both need a sound solid, which an imported mesh is not. |
+
+## 7. Repair
+
+`RepairMesh` mends a `MeshBody` into a new one. The work is plain-data code in `internal/meshrepair/`.
+
+```go
+func RepairMesh(ctx context.Context, m *MeshBody, opts ...MeshRepairOption) (*MeshBody, MeshRepairReport, error)
+func WithMeshWeld(distance units.Value) MeshRepairOption
+func WithMeshOrient() MeshRepairOption
+func WithMeshFillHoles() MeshRepairOption
+```
+
+| Decision | Rule |
+|---|---|
+| M1 | `m` is unchanged. The result is built with `NewMeshBody`, so its `Report` says what the repair achieved and whether the mesh closed. A repair never claims a mesh sound. |
+| M2 | Triangles that name a vertex twice, have zero area or repeat an earlier triangle's vertex set are always dropped. Vertices no triangle uses are dropped with them. |
+| M3 | The steps run in this order: weld, drop, orient, fill. |
+| M4 | `WithMeshWeld` merges each vertex into the first earlier vertex within the distance, found by a grid of that cell size. Zero merges only equal coordinates. The merge is greedy and by input order, so it is deterministic and not transitive. |
+| M5 | `WithMeshOrient` flips triangles so that every edge two triangles share runs both ways, shell by shell over edges that exactly two triangles use, and flips a closed shell whose volume is negative. A shell holds the triangles joined by such edges, and an edge that three or more triangles use joins nothing. |
+| M6 | `WithMeshFillHoles` closes each boundary loop in which every vertex has one way onward: one triangle for a loop of three, otherwise a fan from a new vertex at the loop's centroid. The fan is flat only when the loop is, so a bent loop closes to a surface that need not match the source. A boundary that branches stays open and counts once in `SkippedLoops`. |
+| M7 | A weld distance that is negative is `ErrNegativeMagnitude`, not a length `ErrUnitKind`. An option given twice, a nil option, a nil context and a nil mesh are `ErrDegenerate`, as is a result with no triangle. |
+| M8 | The float arithmetic here decides only which triangles to flip and drop. It claims nothing about the result: every reading of the new mesh body is exact over its own triangles, as §2 says. |
 
