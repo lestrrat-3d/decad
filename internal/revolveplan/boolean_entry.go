@@ -39,7 +39,9 @@ func PrepareCommonAxis(ctx context.Context, op meshbool.OperationKind,
 			if err := budget.Step(); err != nil {
 				return Payload{}, false, false, err
 			}
-			if _, ok := seg.(sectionrecord.LineSeg); !ok {
+			switch seg.(type) {
+			case sectionrecord.LineSeg, sectionrecord.ArcSeg, sectionrecord.CircleSeg:
+			default:
 				return Payload{}, false, false, nil
 			}
 		}

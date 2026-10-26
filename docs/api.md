@@ -220,6 +220,11 @@ Each of these returns a new body and retires its input.
 | `decad.Intersect` | The volume common to both bodies. |
 | `decad.Split` | One solid per arranged target cell. |
 
+Two full `decad.Revolve` bodies about one axis combine exactly, with no `Faceted` face, when their meridians
+are lines, arcs or circles: a sphere cut by a coaxial disk or shaft, or two coaxial spheres, keep their
+sphere, torus, cone, cylinder and plane faces (an off-axis circle meridian gives torus faces). A shared arc or
+circle span between the operands, or a contact at a pole or an edge, is not joined this way.
+
 A two-body `Union`, `Cut` or `Intersect` that would be refused because an operand is the mesh result of earlier Booleans is retried from
 the source bodies of that chain, when all but one pair combine by exact routes. The result is the same solid. Its
 history records the one call, and faces made by the exact steps carry fresh roles, so select them by geometry.

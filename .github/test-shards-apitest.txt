@@ -1091,6 +1091,10 @@
 5	0.02	TestSweepPairCylinderDiskTrack
 5	0.24	TestSweepPairRollingPlacedStart
 5	0.09	TestSweepPairRollingTowardTrayWall
+10	0.00	TestCommonAxisRevolveArcMeridianBooleans
+10	0.00	TestCommonAxisRevolveArcMeridianLens
+10	0.00	TestCommonAxisRevolveArcMeridianMisses
+10	0.00	TestCommonAxisRevolveCircleMeridianTorus
 5	0.01	TestSweepPairSupportSetDeparts
 5	0.03	TestSweepSpatialPathTurnsThroughOrthogonalPlanes
 5	0.00	TestSweepStagedSurveyNamesPayloadClass
