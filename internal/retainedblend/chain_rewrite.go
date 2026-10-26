@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -16,8 +17,9 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file builds a closed tangent chain (agent-docs/retained-modify-reach-design.md
-// §5.5): every edge of one loop of the base plane P is blended as one chain.
+// This file builds a tangent chain (agent-docs/retained-modify-reach-design.md
+// §5.5): every edge of one loop of the base plane P, or an open run of them, is
+// blended as one chain.
 // Section points of a junction are computed once and shared by both strips.
 
 // chainEntry is one chain edge in walk order, which is the direction of the
@@ -59,7 +61,7 @@ func heldIndex(fp facetedrecord.Payload, v *topo.Vertex) int {
 	return -1
 }
 
-// rewriteChain blends the closed chain on a copy of the held mesh.
+// rewriteChain blends the chain on a copy of the held mesh.
 func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, cyc chainCycle, ords []int,
 	refs []refTag, spec blendSpec, op string, faceIndex map[*topo.Face]int) (*topo.Body, error) {
 	n := len(cyc.edges)
@@ -94,13 +96,46 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 	}
 	nP, oP := bp.n, bp.o
 
-	// The walk follows the base loop.
-	jp := make([]r3.Vec, n)
-	hv := make([]int, n)
+	// The chain's points on the base loop, in the chain's own order: the
+	// junctions, and for an open chain the two corners where it ends.
+	open := cyc.open
+	nj := n
+	if open {
+		nj = n + 1
+	}
+	jp := make([]r3.Vec, nj)
+	hv := make([]int, nj)
+	ats := make([]*topo.Vertex, nj)
+	var ecuts [2]*chainEndCut
+	edgesW := append([]*topo.Edge(nil), cyc.edges...)
 	for i, l := range cyc.joins {
-		jp[i] = l.j.point
-		if hv[i] = heldIndex(fp, l.at); hv[i] < 0 {
+		k := i
+		if open {
+			k = i + 1
+		}
+		jp[k], ats[k] = l.j.point, l.at
+	}
+	if open {
+		first, last := cyc.freeEnds()
+		ats[0], ats[n] = first, last
+		for k, c := range []struct {
+			v *topo.Vertex
+			e *topo.Edge
+		}{{first, cyc.edges[0]}, {last, cyc.edges[n-1]}} {
+			ec, err := w.readEndCorner(c.v, c.e, base, bp, fp, faceIndex, slack)
+			if err != nil {
+				return nil, err
+			}
+			ecuts[k] = ec
+		}
+		jp[0], jp[n] = ecuts[0].exact, ecuts[1].exact
+	}
+	for i := range nj {
+		if hv[i] = heldIndex(fp, ats[i]); hv[i] < 0 {
 			return nil, fmt.Errorf("%w: a chain junction is not a vertex of the held mesh", decaderr.ErrUnsupported)
+		}
+		if open && (i == 0 || i == n) {
+			continue
 		}
 		if d := fp.Verts[hv[i]].Sub(jp[i]).Len(); d > fp.VertexBound[hv[i]]+slack {
 			return nil, fmt.Errorf("%w: a chain junction is not where its tags meet", decaderr.ErrUnsupported)
@@ -115,29 +150,55 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		return nil, fmt.Errorf("%w: the chain's junctions lie on no one loop of the base", decaderr.ErrUnsupported)
 	}
 	loop := fl.loops[li]
-	pos := make([]int, n)
-	descents := 0
+	pos := make([]int, nj)
 	for i := range pos {
 		pos[i] = indexIn(loop, hv[i])
 	}
-	for i := range pos {
-		if pos[(i+1)%n] < pos[i] {
-			descents++
-		}
-	}
 	entries := make([]chainEntry, n)
-	switch descents {
-	case 1:
-		for s := range entries {
-			entries[s] = chainEntry{edge: cyc.edges[(s+1)%n], ja: s, jb: (s + 1) % n}
+	if open {
+		// The walk follows the base loop forward: the chain's points must
+		// appear in the loop in one cyclic order, and the order reverses when
+		// the loop runs the other way.
+		fwd, bwd := 0, 0
+		for i := 0; i+1 < nj; i++ {
+			fwd += (pos[i+1] - pos[i] + len(loop)) % len(loop)
+			bwd += (pos[i] - pos[i+1] + len(loop)) % len(loop)
 		}
-	case n - 1:
-		for s := range entries {
-			a := n - 1 - s
-			entries[s] = chainEntry{edge: cyc.edges[a], ja: a, jb: (a - 1 + n) % n}
+		switch {
+		case fwd < len(loop):
+		case bwd < len(loop):
+			slices.Reverse(jp)
+			slices.Reverse(hv)
+			slices.Reverse(ats)
+			slices.Reverse(pos)
+			slices.Reverse(edgesW)
+			ecuts[0], ecuts[1] = ecuts[1], ecuts[0]
+		default:
+			return nil, fmt.Errorf("%w: the chain does not follow its base loop", decaderr.ErrUnsupported)
 		}
-	default:
-		return nil, fmt.Errorf("%w: the chain does not follow its base loop", decaderr.ErrUnsupported)
+		for s := range entries {
+			entries[s] = chainEntry{edge: edgesW[s], ja: s, jb: s + 1}
+		}
+	} else {
+		descents := 0
+		for i := range pos {
+			if pos[(i+1)%n] < pos[i] {
+				descents++
+			}
+		}
+		switch descents {
+		case 1:
+			for s := range entries {
+				entries[s] = chainEntry{edge: cyc.edges[(s+1)%n], ja: s, jb: (s + 1) % n}
+			}
+		case n - 1:
+			for s := range entries {
+				a := n - 1 - s
+				entries[s] = chainEntry{edge: cyc.edges[a], ja: a, jb: (a - 1 + n) % n}
+			}
+		default:
+			return nil, fmt.Errorf("%w: the chain does not follow its base loop", decaderr.ErrUnsupported)
+		}
 	}
 	ordOf := map[*topo.Edge]int{}
 	refOf := map[*topo.Edge]refTag{}
@@ -184,11 +245,11 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 			en.run = append(en.run, v)
 		}
 		covered += 1 + len(en.run)
-		if err := w.readChainEdge(en, fp, faceIndex, nP, oP, cyc, slack); err != nil {
+		if err := w.readChainEdge(en, fp, faceIndex, nP, ats, slack); err != nil {
 			return nil, err
 		}
 	}
-	if covered != len(loop) {
+	if !open && covered != len(loop) {
 		return nil, fmt.Errorf("%w: the chain is not the whole of its base loop", decaderr.ErrUnsupported)
 	}
 	tP, tW := entries[0].step.planeSetback(), entries[0].step.wallSetback()
@@ -215,10 +276,26 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		}
 		return rows
 	}
-	jrows := make([][]int, n)
+	jrows := make([][]int, nj)
+	// An end column slides its rows along the edge to the end face.
+	endRows := func(v, m, d r3.Vec, g plane) []int {
+		rows := make([]int, rowsM)
+		for j := range rows {
+			rows[j] = w.vertex(setbackPoint(rowPoint(v, m, j), d, g), bound)
+		}
+		return rows
+	}
 	for t := range entries {
+		if open && t == 0 {
+			jrows[0] = endRows(entries[0].p0, entries[0].m[0], entries[0].d, ecuts[0].g)
+			continue
+		}
 		prev := entries[(t-1+n)%n]
 		jrows[entries[t].ja] = newRows(entries[t].p0, prev.m[1])
+	}
+	if open {
+		last := entries[n-1]
+		jrows[n] = endRows(last.p1, last.m[1], last.d, ecuts[1].g)
 	}
 	for t := range entries {
 		en := &entries[t]
@@ -252,10 +329,30 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 			ringA = append(ringA, c.rows[0])
 		}
 	}
-	if err := w.checkContour(ringA, nP, oP); err != nil {
+	if open {
+		last := entries[n-1].cols
+		ringA = append(ringA, last[len(last)-1].rows[0])
+	}
+	if err := w.checkContour(ringA, nP, oP, open); err != nil {
 		return nil, err
 	}
-	if err := w.checkBaseClear(fl, li, loop, entries, tP, margin); err != nil {
+	var baseLoop []int
+	if open {
+		for k := pos[0]; ; k++ {
+			baseLoop = append(baseLoop, loop[k%len(loop)])
+			if k%len(loop) == pos[n] {
+				break
+			}
+		}
+		for _, ec := range ecuts {
+			if err := w.readEndCut(ec, nP, tP, tW, margin, slack); err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		baseLoop = loop
+	}
+	if err := w.checkBaseClear(fl, li, baseLoop, entries, tP, margin, ecuts[:]); err != nil {
 		return nil, err
 	}
 	loops := make([][]int, 0, len(fl.loops))
@@ -264,7 +361,25 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 			loops = append(loops, lp)
 		}
 	}
-	if err := w.retriangulate(nP, oP, append(loops, ringA), fl.group); err != nil {
+	if open {
+		run := map[int]bool{}
+		for _, v := range baseLoop {
+			run[v] = true
+		}
+		for _, ec := range ecuts {
+			for _, v := range ec.remP {
+				run[v] = true
+			}
+		}
+		outside, _, err := splice(loop, run)
+		if err != nil {
+			return nil, err
+		}
+		loops = append(loops, append(outside, ringA...))
+	} else {
+		loops = append(loops, ringA)
+	}
+	if err := w.retriangulate(nP, oP, loops, fl.group); err != nil {
 		return nil, err
 	}
 	w.removed = append(w.removed, fl.facets...)
@@ -283,14 +398,26 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 	for t := range entries {
 		en := entries[t]
 		near := map[int]bool{en.wallIx: true, entries[(t+1)%n].wallIx: true, entries[(t-1+n)%n].wallIx: true}
+		if open && t == 0 {
+			near[ecuts[0].faceIx] = true
+		}
+		if open && t == n-1 {
+			near[ecuts[1].faceIx] = true
+		}
 		cutsOf[t], wallGroups[t], err = w.clipChainWall(en, nP, oP, tW, topSet, near, faceVerts, slack)
 		if err != nil {
 			return nil, err
 		}
 	}
 	ringB := make([][]int, n)
-	seam := make([]int, n)
+	seam := make([]int, nj)
 	for t := range entries {
+		if open && t == 0 {
+			if seam[0], err = w.findEndCut(cutsOf[0], jp[0], nP, slack); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		var common []int
 		for c := range cutsOf[t] {
 			if cutsOf[(t-1+n)%n][c] {
@@ -302,9 +429,17 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		}
 		seam[t] = common[0]
 	}
+	if open {
+		if seam[n], err = w.findEndCut(cutsOf[n-1], jp[n], nP, slack); err != nil {
+			return nil, err
+		}
+	}
 	for t := range entries {
 		en := entries[t]
 		first, last := seam[t], seam[(t+1)%n]
+		if open {
+			last = seam[t+1]
+		}
 		var mid []int
 		for c := range cutsOf[t] {
 			if c != first && c != last {
@@ -316,9 +451,25 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		ringB[t] = append(append([]int{first}, mid...), last)
 	}
 
+	// The end faces give way to the end columns.
+	var removedTrue, blendTrue float64
+	if open {
+		for i, ec := range ecuts {
+			col := 0
+			if i == 1 {
+				col = n
+			}
+			seq := append(append([]int(nil), jrows[col]...), seam[col])
+			corner, err := w.rebuildEnd(ec, seq, spec.fillet, spec.r, tP, tW)
+			if err != nil {
+				return nil, err
+			}
+			removedTrue += corner
+		}
+	}
+
 	// The strips.
 	stripFrom := len(w.out)
-	var removedTrue, blendTrue float64
 	groups := append([]facetedrecord.Group(nil), fp.Groups...)
 	for t := range entries {
 		en := entries[t]
@@ -369,6 +520,11 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 			Planar:   planar,
 		})
 	}
+	if open {
+		for _, ec := range ecuts {
+			wallGroups = append(wallGroups, ec.fl.group)
+		}
+	}
 	for _, g := range append([]int{fl.group}, wallGroups...) {
 		groups[g].HasCentroid = false
 		groups[g].Centroid = measurement.VecMeasurement{}
@@ -390,8 +546,7 @@ func (en chainEntry) param(p r3.Vec) float64 {
 // readChainEdge fills in the entry's geometry and checks that the base loop's
 // run between its junctions lies on the edge.
 func (w *work) readChainEdge(en *chainEntry, fp facetedrecord.Payload, faceIndex map[*topo.Face]int,
-	nP, oP r3.Vec, cyc chainCycle, slack float64) error {
-	_ = oP
+	nP r3.Vec, ats []*topo.Vertex, slack float64) error {
 	switch curve := en.edge.Curve.(type) {
 	case surfacegeom.Line3:
 		wp, ok := retainedPlane(en.wall)
@@ -431,7 +586,7 @@ func (w *work) readChainEdge(en *chainEntry, fp facetedrecord.Payload, faceIndex
 		if curve.Axis.Dot(nP) < 0 {
 			sense = -1
 		}
-		if en.edge.Start != cyc.joins[en.ja].at {
+		if en.edge.Start != ats[en.ja] {
 			sense = -sense
 		}
 		if sense != en.sigma {
@@ -468,8 +623,9 @@ func (w *work) readChainEdge(en *chainEntry, fp facetedrecord.Payload, faceIndex
 }
 
 // checkContour refuses an offset contour that crosses itself: the setback
-// consumes the base face (SR4).
-func (w *work) checkContour(ring []int, nP, oP r3.Vec) error {
+// consumes the base face (SR4). An open contour is a path and a closed one a
+// polygon.
+func (w *work) checkContour(ring []int, nP, oP r3.Vec, open bool) error {
 	u, ok := perpendicular(nP)
 	if !ok {
 		return fmt.Errorf("%w: the base has no frame", decaderr.ErrUnsupported)
@@ -481,9 +637,13 @@ func (w *work) checkContour(ring []int, nP, oP r3.Vec) error {
 		ps[i] = pt2{q.Dot(u), q.Dot(v)}
 	}
 	n := len(ps)
-	for i := range n {
-		for j := i + 2; j < n; j++ {
-			if i == 0 && j == n-1 {
+	segs := n
+	if open {
+		segs = n - 1
+	}
+	for i := range segs {
+		for j := i + 2; j < segs; j++ {
+			if !open && i == 0 && j == n-1 {
 				continue
 			}
 			if segmentsTouch(ps[i], ps[(i+1)%n], ps[j], ps[(j+1)%n]) {
@@ -494,12 +654,20 @@ func (w *work) checkContour(ring []int, nP, oP r3.Vec) error {
 	return nil
 }
 
-// checkBaseClear refuses a chain whose band reaches another loop of the base.
-func (w *work) checkBaseClear(fl faceLoops, li int, loop []int, entries []chainEntry, tP, margin float64) error {
+// checkBaseClear refuses a chain whose band reaches another part of the base.
+// path is the chain's run on the base loop, closed when the chain is. For an
+// open chain the rest of its own loop is tested too, except the segments that
+// touch the chain or the end faces' lines, which the end checks cover.
+func (w *work) checkBaseClear(fl faceLoops, li int, path []int, entries []chainEntry, tP, margin float64,
+	ends []*chainEndCut) error {
+	closed := ends[0] == nil
+	nseg := len(path)
+	if !closed {
+		nseg--
+	}
 	sag := 0.0
-	for i, v := range loop {
-		q := loop[(i+1)%len(loop)]
-		sag = max(sag, w.verts[v].Sub(w.verts[q]).Len())
+	for i := range nseg {
+		sag = max(sag, w.verts[path[i]].Sub(w.verts[path[(i+1)%len(path)]]).Len())
 	}
 	// The longest chord of the held outline bounds the sagitta of its arcs.
 	rMin := math.Inf(1)
@@ -512,15 +680,27 @@ func (w *work) checkBaseClear(fl faceLoops, li int, loop []int, entries []chainE
 	if !math.IsInf(rMin, 1) {
 		allow = sag * sag / (8 * rMin)
 	}
-	for k, other := range fl.loops {
-		if k == li {
-			continue
+	skip := map[int]bool{}
+	if !closed {
+		for _, v := range path {
+			skip[v] = true
 		}
+		for _, ec := range ends {
+			for _, v := range ec.remP {
+				skip[v] = true
+			}
+			skip[ec.beyondP] = true
+		}
+	}
+	for k, other := range fl.loops {
 		for i, a := range other {
 			b := other[(i+1)%len(other)]
+			if k == li && (closed || skip[a] || skip[b]) {
+				continue
+			}
 			gap := math.Inf(1)
-			for j, c := range loop {
-				d := loop[(j+1)%len(loop)]
+			for j := range nseg {
+				c, d := path[j], path[(j+1)%len(path)]
 				gap = math.Min(gap, segmentDistance(w.verts[a], w.verts[b], w.verts[c], w.verts[d]))
 			}
 			if err := clearance(gap-tP, max(w.beta[a], w.beta[b])+margin+allow, "the base face"); err != nil {

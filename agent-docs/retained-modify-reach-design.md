@@ -124,7 +124,7 @@ retained cylinder wall `W_k` whose axis is normal to `P`, and consecutive edges 
 | RC | Chain | Ends | Staged |
 |---|---|---|---|
 | **C1** | closed: every edge of one loop of `P` | none | increment M3 |
-| **C2** | open | each end at a three-face corner that blend §5.0 (R1) or §4.4 (R4) admits, reflex foot corners included | increment M4 |
+| **C2** | open | each end at a three-face corner of a straight R1 edge that blend §5.0 admits, on an end plane normal to the edge | increment M4 |
 
 At a junction both walls are perpendicular to `P`: a cylinder wall's axis is normal to `P`, and a plane wall
 tangent to it along a generator contains that generator. So every edge of a chain has dihedral angle `π/2`, and
@@ -214,12 +214,18 @@ The rewrite touches `P`, every wall `W_k`, every seam between consecutive walls,
 4. **Walls.** Each `W_k` loses the band between `P` and `P'`: a plane wall by blend §5.0 step 2's chain cut at the
    setback line, a cylinder wall by blend §5 step 2's cut at the setback height. Each seam's held run is cut at
    `S_J`: the run's vertices on `P`'s side of `S_J` go and `S_J` takes their place.
-5. **Ends (C2).** Blend §5.0 (R1) or §4.4 (R4), unchanged.
+5. **Ends (C2).** Blend §5.0 (R1) at the first and last edge, which must be straight with a retained plane wall and
+   an end face `G` that is a retained plane normal to the edge. The end column is the junction row's construction
+   with `V` the corner `P ∩ W ∩ G`; its rows lie in `G`, and its last vertex is the cut of `W` on `G ∩ W`, shared
+   with the wall. `G` gives up the corner and the chain vertices nearer than the setbacks, and takes the column. `P`'s
+   loop gives up the chain's run and the removed part of `G ∩ P` at each end. A first or last arc (R4) and a reflex
+   foot corner refuse (`ErrUnsupported`).
 6. **Build.** `facetedrecord.Build`, as blend §5 step 5. Each chain edge gets its own blend group with role
    `fillet(k)` or `chamfer(k)`, `k` the edge's ordinal in the expanded selection.
 
-New edges: each junction row is an `Arc3` (centre `c_J`, radius `r`, axis `±d_V`) for a fillet or a `Line3` for a
-chamfer, between two blend faces, marked `RetainedCurve` (blend §5.2). Setback edges and wall cut edges follow
+New edges: each fillet junction row is an `Arc3` (centre `c_J`, radius `r`, axis `±d_V`) between a `Cylinder` and a
+`Torus` blend, published by retention §10.1 E11 and marked `RetainedCurve` (blend §5.2). A chamfer junction keeps its
+chord chain: no edge rule publishes the `Plane`/`Cone` section. Setback edges and wall cut edges follow
 blend §5.2.
 
 ### 5.6 Gates
@@ -483,15 +489,16 @@ Each increment is one PR. M1 ships this document.
 | M1 | §4: two-distance chamfer on R1–R4 | the five two-distance rows of §12 pass; `go test ./...` on CI |
 | M2 | §6: exact-rotation `Copy` keeps its tags (independent of M1) | the four exact-copy rows pass on CI |
 | M3 | §5.2–§5.7 for C1: retained expansion, junctions, closed chains, SM1–SM5 | the expansion, C1, chamfer, seed-merge, SM2, all-8 and oracle rows pass, and the example's output is verified |
-| M4 | C2: open chains with blend §5.0 and §4.4 ends, including reflex foot ends | the C2, concave and clearance rows pass |
+| M4 | C2: open chains with blend §5.0 straight ends; E11 for the fillet junction `Arc3` | the C2 row passes; the concave and arc-end cases stay refused and tested |
 | M5 | §7: `ScaledAt` keeps curved tags | the two scale rows pass |
 | M6 | §8: E10 and R5 | the R5 row passes |
 
-M3 is built for convex closed chains of lines and arcs. `retainedblend.Tangent` decides each junction
+Chains are built for convex outlines of lines and arcs. `retainedblend.Tangent` decides each junction
 (`chain_tangent.go`), `planChains` groups and orders the selection (`chain.go`) and `rewriteChain` builds one chain
-(`chain_rewrite.go`). A concave chain, an open chain and a chain with fewer than three edges are refused, the open
-chain with the text "open tangent chain". The edge between two blend faces of a chain keeps its chord chain: no
-edge rule publishes the Cylinder/Torus section as an `Arc3` yet.
+(`chain_rewrite.go`); the ends of an open chain live in `chain_open.go`. A closed chain has at least three edges
+and an open chain at least two. A concave chain, an open chain whose first or last edge is an arc, and an end face
+that is not normal to its edge are refused. The edge between a `Cylinder` and a `Torus` blend of a fillet chain is an
+`Arc3` (retention §10.1 E11).
 
 M3 starts with one real end-to-end run on the P2 fixture before any other fixture. If that run refuses, the
 increment stops and reports the refusal.
