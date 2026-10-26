@@ -189,7 +189,7 @@ func measureBossShell(ctx context.Context, bp Payload, body *topo.Body) error {
 	hb := sub(point(b.TopZ), point(b.InterfaceZ))
 	bw, bh := point(b.Boss.Width()), point(b.Boss.Height())
 	plateV, bossV := mul(area(b.Plate), h), mul(area(b.Boss), hb)
-	lowerV := mul(area(b.Lower), sub(h, scale(t, 2, 1)))
+	lowerV := mul(area(b.Lower), sub(point(b.LowerZ), point(b.CavityBottomZ)))
 	upperHeight := sub(point(b.CavityTopZ), point(b.InterfaceZ))
 	upperV := mul(area(b.Upper), upperHeight)
 	t2, t3, t4 := mul(t, t), mul(mul(t, t), t), mul(mul(t, t), mul(t, t))
@@ -209,6 +209,7 @@ func measureBossShell(ctx context.Context, bp Payload, body *topo.Body) error {
 	plateCZ := scale(add(point(b.Z0), point(b.InterfaceZ)), 1, 2)
 	bossCZ := scale(add(point(b.InterfaceZ), point(b.TopZ)), 1, 2)
 	upperCZ := scale(add(point(b.InterfaceZ), point(b.CavityTopZ)), 1, 2)
+	lowerCZ := scale(add(point(b.CavityBottomZ), point(b.LowerZ)), 1, 2)
 	bandZ := add(mul(point(b.LowerZ), bandV),
 		add(sub(scale(mul(area(b.Boss), t2), 1, 2), scale(mul(widths, t3), 1, 3)), scale(t4, 1, 3)))
 	mu := sub(sub(add(mul(plateV, centerU(b.Plate)), mul(bossV, centerU(b.Boss))),
@@ -216,7 +217,7 @@ func measureBossShell(ctx context.Context, bp Payload, body *topo.Body) error {
 	mv := sub(sub(add(mul(plateV, centerV(b.Plate)), mul(bossV, centerV(b.Boss))),
 		add(mul(lowerV, centerV(b.Lower)), mul(upperV, centerV(b.Upper)))), mul(bandV, centerV(b.Boss)))
 	mz := sub(sub(add(mul(plateV, plateCZ), mul(bossV, bossCZ)),
-		add(mul(lowerV, plateCZ), mul(upperV, upperCZ))), bandZ)
+		add(mul(lowerV, lowerCZ), mul(upperV, upperCZ))), bandZ)
 	ivs := []proofbound.RatInterval{mu, mv, mz}
 	var c [3]proofbound.BoundedScalar
 	for i, iv := range ivs {
@@ -502,7 +503,7 @@ func measureRoundBossShell(ctx context.Context, bp Payload, body *topo.Body) err
 	t2, t3, t4 := mul(t, t), mul(mul(t, t), t), mul(mul(t, t), mul(t, t))
 	plateV := mul(area(b.Plate), h)
 	bossV := mul(pi, mul(mul(r, r), hb))
-	lowerV := mul(area(b.Lower), sub(h, scale(t, 2, 1)))
+	lowerV := mul(area(b.Lower), sub(point(b.LowerZ), point(b.CavityBottomZ)))
 	upperV := mul(pi, mul(mul(ri, ri), hb))
 	bandAreaIntegral := add(add(mul(mul(ri, ri), t), scale(mul(mul(ri, pi), t2), 1, 2)), scale(t3, 2, 3))
 	bandV := mul(pi, bandAreaIntegral)
@@ -514,6 +515,7 @@ func measureRoundBossShell(ctx context.Context, bp Payload, body *topo.Body) err
 	body.Volume = measurement.Measurement{Value: units.CubicMillimeters(v), Bound: units.CubicMillimeters(ve), Exactness: measurement.ExactnessOf(ve)}
 	plateCZ := scale(add(point(b.Z0), point(b.InterfaceZ)), 1, 2)
 	bossCZ := scale(add(point(b.InterfaceZ), point(b.TopZ)), 1, 2)
+	lowerCZ := scale(add(point(b.CavityBottomZ), point(b.LowerZ)), 1, 2)
 	bandFirst := add(add(scale(mul(mul(ri, ri), t2), 1, 2), scale(mul(ri, t3), 2, 3)), scale(t4, 1, 4))
 	bandZ := add(mul(point(b.LowerZ), bandV), mul(pi, bandFirst))
 	plateNet := sub(plateV, lowerV)
@@ -523,7 +525,7 @@ func measureRoundBossShell(ctx context.Context, bp Payload, body *topo.Body) err
 	mu := add(mul(plateNet, plateU), mul(bossNet, point(circle.Center.U)))
 	mv := add(mul(plateNet, plateVCenter), mul(bossNet, point(circle.Center.V)))
 	mz := sub(sub(add(mul(plateV, plateCZ), mul(bossV, bossCZ)),
-		add(mul(lowerV, plateCZ), mul(upperV, bossCZ))), bandZ)
+		add(mul(lowerV, lowerCZ), mul(upperV, bossCZ))), bandZ)
 	var c [3]proofbound.BoundedScalar
 	for i, iv := range []proofbound.RatInterval{mu, mv, mz} {
 		q, ok := proofbound.IntervalQuo(iv, volume)
