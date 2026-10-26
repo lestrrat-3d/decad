@@ -170,7 +170,7 @@ func ScaleMesh(ctx context.Context, m *MeshBody, anchor r3.Vec, x, y, z units.Va
 | Z2 | The volume of a closed mesh is multiplied by `\|x·y·z\|`. Areas follow no one factor, and a uniform stretch keeps every angle while any other does not. |
 | Z3 | A negative factor mirrors across the plane through the anchor square to its axis. When the product of the factors is negative the triangles' second and third corners are swapped, so a mesh wound outward stays wound outward. |
 | Z4 | A factor must be dimensionless (`ErrUnitKind`), finite (`ErrNotFinite`) and not zero (`ErrDegenerate`), as must the anchor be finite. A nil context or mesh is `ErrDegenerate`, and the result is read by `NewMeshBody`, so overflowing vertices are `ErrNotFinite`. |
-| Z5 | The solid kernel has no per-axis scale: `ScaledAt` is uniform and `Transform` is rigid. Only a held mesh stretches. |
+| Z5 | The solid kernel has no per-axis scale: `ScaledAt` is uniform and `Transform` is rigid. Only a mesh stretches. `ScaleBodyMesh(ctx, b, anchor, x, y, z, tol, opts...)` tessellates a solid body at chord tolerance `tol` and stretches that mesh as Z1 to Z4 say, returning a `MeshBody`: the stretched solid as a mesh, not a `Body`. A flat-faced body keeps its volume times `\|x·y·z\|` exactly, and a curved one to its tessellation's own error. |
 
 ## 11. Refinement
 
