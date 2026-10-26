@@ -1,6 +1,10 @@
 package meshbool
 
-import "context"
+import (
+	"context"
+
+	"github.com/lestrrat-3d/r3"
+)
 
 type heldNodePair struct{ a, b int }
 
@@ -96,33 +100,34 @@ func (e *heldEmbedding) cleanSelfPairs(tasks []heldNodePair, tree *heldBoxTree) 
 				stack = append(stack, children[:n]...)
 				continue
 			}
-			left := tree.facets[a.leafStart : a.leafStart+a.leafCount]
-			right := tree.facets[b.leafStart : b.leafStart+b.leafCount]
-			for k, i := range left {
-				box := tree.boxes[i]
+			self := pair.a == pair.b
+			for s := a.leafStart; s < a.leafStart+a.leafCount; s++ {
+				box := tree.slotBoxes[s]
 				// The two leaf hulls may overlap even when this facet is
 				// disjoint from the entire other leaf. Reject that row first.
-				if pair.a != pair.b && !BoxesOverlap(box, b.box) {
+				if !self && !BoxesOverlap(box, b.box) {
 					continue
 				}
-				world := box
+				var world [2]r3.Vec
 				if tree.oriented {
-					world = e.triBox(i)
+					world = tree.slotWorld[s]
 				}
-				start := 0
-				if pair.a == pair.b {
-					start = k + 1
+				i := tree.facets[s]
+				start := b.leafStart
+				if self {
+					start = s + 1
 				}
-				for _, j := range right[start:] {
+				for t := start; t < b.leafStart+b.leafCount; t++ {
 					if err := step(); err != nil {
 						return false, err
 					}
-					if !BoxesOverlap(box, tree.boxes[j]) {
+					if !BoxesOverlap(box, tree.slotBoxes[t]) {
 						continue
 					}
-					if tree.oriented && !BoxesOverlap(world, e.triBox(j)) {
+					if tree.oriented && !BoxesOverlap(world, tree.slotWorld[t]) {
 						continue
 					}
+					j := tree.facets[t]
 					lo, hi := i, j
 					if lo > hi {
 						lo, hi = hi, lo

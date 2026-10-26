@@ -17,6 +17,12 @@ type heldBoxTree struct {
 	nodes  []heldBoxNode
 	boxes  [][2]r3.Vec
 	facets []int
+	// slotBoxes is boxes in leaf order: slotBoxes[s] is boxes[facets[s]].
+	// The self-pair scan reads a leaf's boxes in order, not through facets.
+	slotBoxes [][2]r3.Vec
+	// slotWorld is, for an oriented tree, each facet's world box in leaf
+	// order. Only parallelClean fills it, before its workers share the tree.
+	slotWorld [][2]r3.Vec
 	// queryCeiling is the highest queried facet index in each node, or the
 	// facet count if it contains any non-query facet. Only cleanPairs uses it.
 	queryCeiling []int
@@ -75,10 +81,12 @@ func newHeldScanTree(ctx context.Context, e *heldEmbedding) (heldBoxTree, error)
 			}
 		}
 		box := projected[tri[0]]
+		// Every endpoint is finite, so the builtin min and max agree with
+		// math.Min and math.Max bit for bit, signed zeros included.
 		for _, v := range tri[1:] {
 			p := projected[v]
-			box[0] = r3.NewVec(math.Min(box[0].X, p[0].X), math.Min(box[0].Y, p[0].Y), math.Min(box[0].Z, p[0].Z))
-			box[1] = r3.NewVec(math.Max(box[1].X, p[1].X), math.Max(box[1].Y, p[1].Y), math.Max(box[1].Z, p[1].Z))
+			box[0] = r3.NewVec(min(box[0].X, p[0].X), min(box[0].Y, p[0].Y), min(box[0].Z, p[0].Z))
+			box[1] = r3.NewVec(max(box[1].X, p[1].X), max(box[1].Y, p[1].Y), max(box[1].Z, p[1].Z))
 		}
 		boxes[i] = box
 	}
@@ -150,6 +158,10 @@ func newBoxTree(boxes [][2]r3.Vec) heldBoxTree {
 	if len(facets) > 0 {
 		tree.build(boxes, facets)
 	}
+	tree.slotBoxes = make([][2]r3.Vec, len(tree.facets))
+	for s, facet := range tree.facets {
+		tree.slotBoxes[s] = boxes[facet]
+	}
 	return tree
 }
 
@@ -217,14 +229,16 @@ func (tree *heldBoxTree) build(boxes [][2]r3.Vec, facets []int) int {
 	index := len(tree.nodes)
 	tree.nodes = append(tree.nodes, heldBoxNode{leafStart: -1})
 	box := boxes[facets[0]]
+	// newBoxTree admits no NaN box, so the builtin min and max agree with
+	// math.Min and math.Max bit for bit, signed zeros and infinities included.
 	for _, facet := range facets[1:] {
 		other := boxes[facet]
-		box[0].X = math.Min(box[0].X, other[0].X)
-		box[0].Y = math.Min(box[0].Y, other[0].Y)
-		box[0].Z = math.Min(box[0].Z, other[0].Z)
-		box[1].X = math.Max(box[1].X, other[1].X)
-		box[1].Y = math.Max(box[1].Y, other[1].Y)
-		box[1].Z = math.Max(box[1].Z, other[1].Z)
+		box[0].X = min(box[0].X, other[0].X)
+		box[0].Y = min(box[0].Y, other[0].Y)
+		box[0].Z = min(box[0].Z, other[0].Z)
+		box[1].X = max(box[1].X, other[1].X)
+		box[1].Y = max(box[1].Y, other[1].Y)
+		box[1].Z = max(box[1].Z, other[1].Z)
 	}
 	tree.nodes[index].box = box
 	if len(facets) <= heldBoxLeafSize {
