@@ -5,10 +5,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
 	"image/png"
 	"io"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/drawing"
 	"github.com/lestrrat-3d/decad/internal/raster"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -19,9 +22,13 @@ import (
 // from the eye into the scene, and Up sets the image's vertical. Neither need
 // be a unit vector. The image's right is Direction × Up. Width and Height are
 // pixels, each from 16 to 8192.
+//
+// Outlines draws the body's visible feature edges over the shading, one dark
+// pixel wide (agent-docs/png-export-design.md §6).
 type View struct {
 	Direction, Up r3.Vec
 	Width, Height int
+	Outlines      bool
 }
 
 // IsometricView looks at the model along the diagonal from above its +X, +Y,
@@ -73,6 +80,11 @@ func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View) erro
 	if err != nil {
 		return err
 	}
+	if view.Outlines {
+		if err := drawOutlines(ctx, img, mesh, view); err != nil {
+			return err
+		}
+	}
 	var encoded bytes.Buffer
 	if err := png.Encode(&encoded, img); err != nil {
 		return fmt.Errorf("export: PNG encoding failed: %w", err)
@@ -85,5 +97,27 @@ func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View) erro
 	} else if n != encoded.Len() {
 		return fmt.Errorf("export: PNG write failed: %w", io.ErrShortWrite)
 	}
+	return nil
+}
+
+// outlineColor is the dark grey of an outline.
+var outlineColor = color.RGBA{R: 32, G: 32, B: 32, A: 255}
+
+// drawOutlines draws the visible feature edges of mesh over img.
+func drawOutlines(ctx context.Context, img *image.RGBA, mesh meshSource, view View) error {
+	cam := raster.Camera{Direction: view.Direction, Up: view.Up}
+	lines, err := drawing.Project(ctx, mesh.Vertices(), mesh.Triangles(), cam)
+	if err != nil {
+		return err
+	}
+	proj, err := raster.NewProjection(mesh.Vertices(), cam, view.Width, view.Height)
+	if err != nil {
+		return err
+	}
+	segments := make([][2][2]float64, len(lines.Visible))
+	for i, s := range lines.Visible {
+		segments[i] = [2][2]float64{s.A, s.B}
+	}
+	raster.DrawSegments(img, proj, segments, outlineColor)
 	return nil
 }
