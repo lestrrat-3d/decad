@@ -175,15 +175,19 @@ func (c MapCharge) AreaInterval(iv proofbound.RatInterval) proofbound.RatInterva
 	return stretchInterval(iv, c.Stretch)
 }
 
-// AreaSlackOf widens slack, a bound on how far a held mesh's area lies from a
-// true plane-coordinate area enclosed by iv, to bound its distance from the
-// true area's image: the image lies within Stretch·max(|lo|, |hi|) of the
-// plane-coordinate area. A zero Stretch returns slack itself.
+// AreaSlackOf widens slack, an allowance on how far a held mesh's area lies
+// from a true area enclosed by iv, when the allowance's own terms are
+// plane-coordinate lengths and areas while the mesh it was read against is
+// placed. Each such term grows by at most the factor 1 + Stretch under the
+// map, and the true area's image lies within Stretch·max(|lo|, |hi|) of the
+// plane-coordinate area, so the result is slack·(1 + Stretch) +
+// Stretch·max(|lo|, |hi|). A zero Stretch returns slack itself.
 func (c MapCharge) AreaSlackOf(slack float64, iv proofbound.RatInterval) float64 {
 	if c.Stretch <= 0 {
 		return slack
 	}
-	return proofbound.AbsSumUpper(slack,
+	stretched := proofbound.BoundedStretch(proofbound.MeasuredScalar(0, slack), c.Stretch).Bound
+	return proofbound.AbsSumUpper(stretched,
 		proofbound.ProductUpper(c.Stretch, proofbound.RatFloatUp(proofbound.IntervalAbsUpper(iv))))
 }
 

@@ -312,8 +312,9 @@ func evalStationedCells(ctx context.Context, env topo.Env,
 		if err != nil {
 			return nil, err
 		}
-		// The wall and cap allowances compare the held facets with the
-		// plane-local surface; its image lies within the stretch of it.
+		// The wall and cap allowances read plane-local lengths and areas
+		// against the placed held facets, and the true placed area lies
+		// within the stretch of the plane-local one: both take the charge.
 		mesh.AreaSlack = charge.AreaSlackOf(mesh.AreaSlack, trueAreaIv)
 	} else {
 		mesh.AreaSlack = proofbound.RatFloatUp(proofbound.IntervalAbsUpper(

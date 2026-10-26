@@ -1630,8 +1630,11 @@ every plane-local reading before anything composes it:
   (`MapCharge.AreaInterval`), for B's orthonormality defect `e`. The body's
   `Area`, the true-to-held area gap in the mesh's `AreaSlack`, and every
   face's area bound, which is wider than the body's total area, all read the
-  widened interval. The rounded-profile class's local wall and cap allowance
-  adds `e` times the true area's upper end (`MapCharge.AreaSlackOf`).
+  widened interval. The rounded-profile class's wall and cap allowance reads
+  plane-local arc lengths, energies, radii and heights while
+  `TwistMixedWallAreaL1` evaluates it on the placed held vertices, so the
+  allowance itself takes the factor `(1 + e)` and then adds `e` times the
+  true area's upper end (`MapCharge.AreaSlackOf`).
 - The boundary displacement `Delta` and the occupied-volume allowance
   `VolSymDiff` take the length charge `(1 + e)` and the volume charge
   `(1 + ||det B| − 1|)` over their whole totals. Both mix plane-local terms
@@ -1644,7 +1647,8 @@ every plane-local reading before anything composes it:
 
 An exactly orthonormal B, such as the identity a translation holds, reads both
 charges as zero, and every reading stays bit for bit. The focused fixture
-places each builder under 5000 composed rotations. It checks that each
+places each builder, and the rounded-profile class, under 5000 composed
+rotations. It checks that each
 published volume meets `|det B|` times the unplaced enclosure. It checks that
 each published area, body and face, meets the unplaced enclosure scaled by
 the Gershgorin range of `cof(B)ᵀcof(B)`, which holds the squared area factor

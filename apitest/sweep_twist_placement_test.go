@@ -133,35 +133,43 @@ func twistMapSquare(t *testing.T, half float64) (*sketch.Sketch, *sketch.Profile
 	return s, s.Profiles()[0]
 }
 
-// twistMapCase is one twisted sweep of a centred square. straight marks a
-// straight path, whose volume is the exact product of area and height.
+// twistMapCase is one twisted sweep of a profile on the world XY sketch
+// plane. exactVolume, when nonzero, is the straight path's exact product of
+// profile area and height.
 type twistMapCase struct {
-	name     string
-	half     float64
-	segments []decad.PathSegment
-	degrees  float64
-	straight bool
+	name        string
+	profile     func(t *testing.T) (*sketch.Sketch, *sketch.Profile)
+	segments    []decad.PathSegment
+	degrees     float64
+	exactVolume float64
 }
 
 // twistMapCases covers the three twisted-sweep builders: one straight Loft
-// (an angle up to one radian), stationed Lofts (a larger angle), and a line
-// followed by a cardinal quarter arc.
+// (an angle up to one radian), stationed Lofts (a larger angle, or a profile
+// with Arc corners), and a line followed by a cardinal quarter arc.
 func twistMapCases() []twistMapCase {
-	line := []decad.PathSegment{decad.LineTo{End: r3.NewVec(0, 0, 2)}}
+	square := func(half float64) func(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
+		return func(t *testing.T) (*sketch.Sketch, *sketch.Profile) { return twistMapSquare(t, half) }
+	}
+	rounded := func(t *testing.T) (*sketch.Sketch, *sketch.Profile) { return roundedTwistProfile(t, 0) }
+	line := func(h float64) []decad.PathSegment {
+		return []decad.PathSegment{decad.LineTo{End: r3.NewVec(0, 0, h)}}
+	}
 	return []twistMapCase{
-		{"straight", 50, line, 30, true},
-		{"stationed", 50, line, 90, true},
-		{"lineArc", 2, []decad.PathSegment{decad.LineTo{End: r3.NewVec(0, 0, 10)},
-			decad.ArcThrough{Through: r3.NewVec(20, 0, 50), End: r3.NewVec(50, 0, 60)}}, 5, false},
+		{"straight", square(50), line(2), 30, 20000},
+		{"stationed", square(50), line(2), 90, 20000},
+		{"rounded", rounded, line(5), 30, 0},
+		{"lineArc", square(2), []decad.PathSegment{decad.LineTo{End: r3.NewVec(0, 0, 10)},
+			decad.ArcThrough{Through: r3.NewVec(20, 0, 50), End: r3.NewVec(50, 0, 60)}}, 5, 0},
 	}
 }
 
-func twistMapSweep(t *testing.T, half float64, segments []decad.PathSegment, degrees float64) *decad.Body {
+func twistMapSweep(t *testing.T, c twistMapCase) *decad.Body {
 	t.Helper()
-	s, p := twistMapSquare(t, half)
-	path, err := decad.NewPath(r3.Vec{}, segments...)
+	s, p := c.profile(t)
+	path, err := decad.NewPath(r3.Vec{}, c.segments...)
 	require.NoError(t, err)
-	body, err := decad.Sweep(t.Context(), decad.New(), s, p, path, decad.WithSweepTwist(units.Degrees(degrees)))
+	body, err := decad.Sweep(t.Context(), decad.New(), s, p, path, decad.WithSweepTwist(units.Degrees(c.degrees)))
 	require.NoError(t, err)
 	return body
 }
@@ -173,7 +181,7 @@ func TestSweepTwistChargesPlacementMap(t *testing.T) {
 	for _, c := range twistMapCases() {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			body := twistMapSweep(t, c.half, c.segments, c.degrees)
+			body := twistMapSweep(t, c)
 			placed, err := decad.Transform(t.Context(), body, pose)
 			require.NoError(t, err)
 			v0, err := body.Volume()
@@ -215,7 +223,7 @@ func TestSweepTwistExactPlacementKeepsReadings(t *testing.T) {
 	for _, c := range twistMapCases() {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			body := twistMapSweep(t, c.half, c.segments, c.degrees)
+			body := twistMapSweep(t, c)
 			placed, err := decad.Transform(t.Context(), body, move)
 			require.NoError(t, err)
 			v0, err := body.Volume()
@@ -228,11 +236,11 @@ func TestSweepTwistExactPlacementKeepsReadings(t *testing.T) {
 			a, err := placed.Area()
 			require.NoError(t, err)
 			require.Equal(t, a0, a)
-			if c.straight {
-				// A straight twist's volume is the exact product of the
-				// profile area and the path height.
+			if c.exactVolume != 0 {
+				// A straight polygon twist's volume is the exact product of
+				// the profile area and the path height.
 				require.Equal(t, decad.Exact, v.Exactness)
-				require.InDelta(t, 4*c.half*c.half*2, v.Value.Base(), 0)
+				require.InDelta(t, c.exactVolume, v.Value.Base(), 0)
 			}
 		})
 	}
