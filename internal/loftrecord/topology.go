@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -55,6 +56,36 @@ func buildWallFace(env topo.Env, body *topo.Body, verts []r3.Vec, tri [3]int, i,
 		Origins:   []provenance.Ref{{Producer: env.Ref, Role: fmt.Sprintf("side(%d,%d,%d)", i, j, side)}},
 		Body:      body,
 	}), nil
+}
+
+// chargeCapMaps widens each cap's area bound by its section's map charge and
+// returns the larger of the two stretches. A cap reads its area from the
+// plane-local shoelace polygon, while the cap the record denotes is that
+// polygon's image under B·[U V], the section frame's held U and V and the
+// placement's held basis read as exact rationals (massmoment.PlaneMap). r3
+// keeps that map orthonormal only to rounding, and a placement composed with
+// r3.Transform.Then drifts further, so the image's area is the shoelace area
+// times a factor within the map's Stretch of 1 (agent-docs/loft-design.md §8).
+// The wall triangles read their areas from the placed vertices and need no
+// such charge. An exactly orthonormal map leaves both caps unchanged.
+func chargeCapMaps(pl Payload, capStart, capEnd *topo.Face) (float64, error) {
+	stretch := 0.0
+	for _, end := range []struct {
+		face  *topo.Face
+		frame r3.Frame
+	}{{capStart, pl.Frame0}, {capEnd, pl.Frame1}} {
+		l, err := massmoment.PlaneMap(end.frame, pl.Xform)
+		if err != nil {
+			return 0, err
+		}
+		c, err := massmoment.MapChargeOf(l)
+		if err != nil {
+			return 0, err
+		}
+		end.face.AreaBound = c.AreaOf(proofbound.MeasuredScalar(end.face.Area, end.face.AreaBound)).Bound
+		stretch = max(stretch, c.Stretch)
+	}
+	return stretch, nil
 }
 
 // BuildTopology builds the B-rep topology from the assembled, globally

@@ -2390,6 +2390,8 @@
 10	0.01	TestReduceMeshThinsAGrid
 10	0.01	TestReduceMeshThinsASphereAndKeepsItsShape
 10	0.01	TestReduceMeshWithAFineCellChangesNothing
+10	0.00	TestLoftCapAreaChargesPlacementStretch
+10	0.00	TestLoftCapAreaExactMapKeepsBound
 10	0.01	TestReduceMeshRefusals
 10	0.01	TestHoleThreadThroughPlate
 10	0.01	TestHoleThreadBlindStopsAtTheLength

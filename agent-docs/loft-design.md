@@ -1769,8 +1769,9 @@ the triangle's aspect ratio — and Table B's diagonal split makes thin walls
 the ordinary case for a short loft over long recorded `LineSeg`s.
 Spline design §3 states the identical asymmetry for arc length. A loft's
 `Area` is the two caps' own exact rational SHOELACE area over the polygon
-this construction assembled (above), contributing no bound of its own,
-plus one mixed wall reading. A `LineSeg` cell contributes its held triangles'
+this construction assembled (above), contributing no rounding bound of its
+own (the section map's charge below is a separate term), plus one mixed wall
+reading. A `LineSeg` cell contributes its held triangles'
 proven-bound sum. A chorded cell contributes `cellBilinearArea`'s midpoint and
 bound for its bilinear ruled patch (§5.2). The total is
 `Approximate` with a proven bound whenever at least one wall triangle has
@@ -1782,6 +1783,23 @@ states, summed over every wall AND cap triangle. The caps need it as much as
 the walls do — a cap's contribution is the assembled chord polygon's exact
 rational area (above), and the built cap triangles are within `delta` of the
 points that polygon's own vertices denote.
+
+**Each cap also takes its section map's charge.** The shoelace area is a
+plane-local reading. The cap the record denotes is that polygon's image under
+`B·[U V]`, the section frame's held `U` and `V` and the placement's held basis
+read as exact rationals (`massmoment.PlaneMap`). r3 keeps that map orthonormal
+only to rounding, and a placement composed through `r3.Transform.Then` drifts
+further with every composition, so the image's area is the plane-local area
+times a factor within the map's orthonormality defect `e` of 1
+(`agent-docs/evaluator-design.md` §5.1). `loftrecord.chargeCapMaps` widens each
+cap face's bound by `e·(|A| + bound)` (`massmoment.MapCharge.AreaOf`), each cap
+under its own section's frame, before any reading composes that bound. The
+body's `Area` takes the larger of the two caps' `e` over its whole total, which
+covers both cap terms since every face area is nonnegative. The wall triangles
+read their areas from the placed vertices, whose departure from the denoted
+corners `delta` already bounds, so they take no map charge. A map whose
+columns are exactly orthonormal, such as world-XY frames under the identity or
+an exact quarter turn, reads `e = 0` and leaves every bound bit for bit.
 
 A CHORDED body's `Area` reaches for TWO further terms, and §5.2's table owns
 both.

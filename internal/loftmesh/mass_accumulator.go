@@ -571,9 +571,11 @@ func (m *MassAccumulator) Area(capAreas ...*big.Rat) (float64, float64) {
 	addBound := proofarith.AddRoundError(wallValue, capFloat, value)
 	bound := proofbound.AbsSumUpper(wallBound, capBound, addBound)
 	// The per-triangle allowance covers both directions at once: the base wall
-	// accumulator is over held triangles and the cap term is the denoted region's
-	// exact rational, and the two differ by at most this sum
-	// (agent-docs/loft-design.md §12 PR 2a). That TRIANGLE-level role is the whole
+	// accumulator is over held triangles and the cap term is the denoted
+	// plane-local region's exact rational, and the two differ by at most this sum
+	// (agent-docs/loft-design.md §12 PR 2a). The cap term's image under the
+	// section map is a separate charge that loftrecord.Build applies to this
+	// reading (agent-docs/loft-design.md §8). That TRIANGLE-level role is the whole
 	// of what it is proven for. The wall's own SURFACE step from the held
 	// corners to the stations they denote is a different quantity of the same
 	// shape, charged by proofbound.CellStationShiftAreaAllow inside areaExcess below;
