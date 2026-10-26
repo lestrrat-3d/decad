@@ -2366,3 +2366,6 @@
 10	0.01	TestBossPilotWithACountersink
 10	0.01	TestBossPilotTapped
 10	0.01	TestBossBoreRefusals
+10	0.01	TestWebPathJoinsALineArcLineChain
+10	0.01	TestWebPathOfOneLineIsARib
+10	0.01	TestWebPathRefusals

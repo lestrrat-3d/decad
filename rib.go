@@ -108,26 +108,73 @@ func newRibSetup(ctx context.Context, b *Body, s *sketch.Sketch, thickness units
 
 func web(ctx context.Context, kind OperationKind, b *Body, s *sketch.Sketch, lines []*sketch.Line,
 	thickness units.Value, e Extent, opts ...RibOption) (*Body, error) {
+	entities := make([]sketch.Entity, len(lines))
+	for i, line := range lines {
+		if line == nil {
+			return nil, fmt.Errorf(`%w: a nil line names no rib`, ErrDegenerate)
+		}
+		entities[i] = line
+	}
+	return webEntities(ctx, kind, b, s, entities, thickness, e, opts...)
+}
+
+// WebPath adds one rib along each of path, a run of lines and arcs of s in the
+// order given, and returns the result, retiring b (agent-docs/rib-design.md §6).
+// A *sketch.Line is a rib as Rib builds it and a *sketch.Arc one as RibArc builds
+// it; the ribs have one thickness, extent and overrun and may cross or meet.
+// They are joined to b in order and committed once, so a failure on any rib
+// leaves the document unchanged and b live.
+//
+// Ribs that meet end to end, as the legs of a polyline or an arc and the lines
+// either side of it do, need an overrun to overlap at the joint: with the
+// default of zero, two ribs that only touch end faces meet in coplanar contact,
+// which Union refuses. path MUST NOT be empty and must hold only lines and arcs,
+// each otherwise ErrDegenerate; every other rule is Rib's and RibArc's.
+func WebPath(ctx context.Context, b *Body, s *sketch.Sketch, path []sketch.Entity, thickness units.Value, e Extent,
+	opts ...RibOption) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationWeb, retErr) }()
+	return webEntities(ctx, OperationWeb, b, s, path, thickness, e, opts...)
+}
+
+// webEntities builds the outline of each entity, a line or an arc of s, and
+// joins the ribs to b.
+func webEntities(ctx context.Context, kind OperationKind, b *Body, s *sketch.Sketch, entities []sketch.Entity,
+	thickness units.Value, e Extent, opts ...RibOption) (*Body, error) {
 	rs, err := newRibSetup(ctx, b, s, thickness, opts)
 	if err != nil {
 		return nil, err
 	}
-	if len(lines) == 0 {
-		return nil, fmt.Errorf(`%w: a rib needs at least one line`, ErrDegenerate)
+	if len(entities) == 0 {
+		return nil, fmt.Errorf(`%w: a rib needs at least one line or arc`, ErrDegenerate)
 	}
 	var outlines []ribOutline
-	for _, line := range lines {
-		if line == nil || !slices.Contains(s.Entities(), sketch.Entity(line)) {
-			return nil, fmt.Errorf(`%w: a rib line is nil or is not an entity of the sketch`, ErrDegenerate)
+	for _, entity := range entities {
+		if entity == nil || !slices.Contains(s.Entities(), entity) {
+			return nil, fmt.Errorf(`%w: a rib entity is nil or is not an entity of the sketch`, ErrDegenerate)
 		}
-		if line.IsStale() {
-			return nil, fmt.Errorf(`%w: a rib line is stale`, ErrDegenerate)
+		switch v := entity.(type) {
+		case *sketch.Line:
+			if v.IsStale() {
+				return nil, fmt.Errorf(`%w: a rib line is stale`, ErrDegenerate)
+			}
+			corners, err := ribplan.Footprint(v.Start.X(), v.Start.Y(), v.End.X(), v.End.Y(), rs.thick, rs.overrun)
+			if err != nil {
+				return nil, err
+			}
+			outlines = append(outlines, ribOutline{corners: &corners})
+		case *sketch.Arc:
+			if v.IsStale() {
+				return nil, fmt.Errorf(`%w: a rib arc is stale`, ErrDegenerate)
+			}
+			band, err := ribplan.ArcBand(v.Center.X(), v.Center.Y(), v.Start.X(), v.Start.Y(),
+				v.End.X(), v.End.Y(), rs.thick, rs.overrun)
+			if err != nil {
+				return nil, err
+			}
+			outlines = append(outlines, ribOutline{band: &band})
+		default:
+			return nil, fmt.Errorf(`%w: a rib follows a line or an arc, not a %T`, ErrDegenerate, entity)
 		}
-		corners, err := ribplan.Footprint(line.Start.X(), line.Start.Y(), line.End.X(), line.End.Y(), rs.thick, rs.overrun)
-		if err != nil {
-			return nil, err
-		}
-		outlines = append(outlines, ribOutline{corners: &corners})
 	}
 	return joinRibs(ctx, kind, rs, b, s, outlines, e)
 }
