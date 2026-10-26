@@ -7,7 +7,10 @@
 package prismrecord
 
 import (
+	"math/big"
+
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -57,6 +60,14 @@ import (
 // vertices and the vertical edge lengths. Being payload fields they re-evaluate
 // with the payload, so a placement or copy keeps them.
 //
+// Z0Denoted and Z1Denoted record, where the producer knows it, the exact
+// rational each displaced level denotes (an inch Distance records
+// extent.ExactConversion of its magnitude). The zero value records nothing,
+// and a level with zero displacement denotes its own held float without one.
+// DenotedZ0 and DenotedZ1 read them; a copy that rewrites a level or its
+// displacement without restating the denotation reads nil there
+// (agent-docs/stacked-prism-design.md §2.1).
+//
 // Walks holds the plane-local walks and moments of THIS payload's own profile,
 // published by the evaluation that built the body and carried through every
 // rigid re-evaluation of it (Placed). It is a pure cache: it
@@ -72,6 +83,8 @@ type Payload struct {
 	Z0, Z1        float64
 	Z0Delta       float64
 	Z1Delta       float64
+	Z0Denoted     prismplacement.LevelDenotation
+	Z1Denoted     prismplacement.LevelDenotation
 	Xform         r3.Transform
 	BlendSegs     []map[int]struct{}
 	BlendKind     string
@@ -83,3 +96,13 @@ type Payload struct {
 // SurveyClass names the payload class a staged survey diagnostic reports
 // (internal/verifypublish): the root type name this payload had before it moved.
 func (Payload) SurveyClass() string { return "prismPayload" }
+
+// DenotedZ0 is the exact level Z0 denotes, or nil when no record proves it.
+func (pp Payload) DenotedZ0() *big.Rat {
+	return prismplacement.DenotedLevel(pp.Z0, pp.Z0Delta, pp.Z0Denoted)
+}
+
+// DenotedZ1 is the exact level Z1 denotes, or nil when no record proves it.
+func (pp Payload) DenotedZ1() *big.Rat {
+	return prismplacement.DenotedLevel(pp.Z1, pp.Z1Delta, pp.Z1Denoted)
+}

@@ -3,6 +3,7 @@ package stackedrecord
 import (
 	"context"
 	"fmt"
+	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -41,6 +42,10 @@ func BuildBlindCut(ctx context.Context, budget *proofbound.WorkBudget,
 	openAtTop := z0.Cmp(a0) > 0 && z0.Cmp(a1) < 0 && z1.Cmp(a1) >= 0
 	openAtBottom := z0.Cmp(a0) <= 0 && z1.Cmp(a0) > 0 && z1.Cmp(a1) < 0
 	if !openAtTop && !openAtBottom {
+		return Payload{}, false, nil
+	}
+	inner, innerDenoted := toolInnerEnd(target.PlacementOperand(), tool, z0, z1, openAtBottom)
+	if !denotedStrictlyInside(innerDenoted, target.DenotedZ0(), target.DenotedZ1()) {
 		return Payload{}, false, nil
 	}
 	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, target.Profile, tool.Profile)
@@ -94,10 +99,9 @@ func BuildBlindCut(ctx context.Context, budget *proofbound.WorkBudget,
 	if err != nil {
 		return Payload{}, false, err
 	}
-	inner := z0
 	innerDelta := tool.Z0Delta
 	if openAtBottom {
-		inner, innerDelta = z1, tool.Z1Delta
+		innerDelta = tool.Z1Delta
 	}
 	innerHeld, _ := inner.Float64()
 	shiftRound := proofarith.RationalFloatError(inner, innerHeld)
@@ -106,20 +110,20 @@ func BuildBlindCut(ctx context.Context, budget *proofbound.WorkBudget,
 	} else {
 		innerDelta = proofbound.AbsSumUpper(innerDelta, shiftRound)
 	}
+	level := prismplacement.DenoteLevel(innerDenoted, innerHeld, innerDelta)
 	sp := Payload{Frame: target.Frame, Xform: target.Xform, Slabs: make([]Slab, 2),
 		SectionDelta: max(proofbound.AbsSumUpper(target.SectionDelta, sceneDelta.A),
 			proofbound.AbsSumUpper(tool.SectionDelta, sceneDelta.B, reexpress.Delta))}
+	lower := Slab{Z0: target.Z0, Z1: innerHeld, Z0Delta: target.Z0Delta, Z1Delta: innerDelta,
+		Z0Denoted: target.Z0Denoted, Z1Denoted: level}
+	upper := Slab{Z0: innerHeld, Z1: target.Z1, Z0Delta: innerDelta, Z1Delta: target.Z1Delta,
+		Z0Denoted: level, Z1Denoted: target.Z1Denoted}
 	if openAtTop {
-		sp.Slabs[0] = Slab{Regions: []momentinput.Profile{target.Profile},
-			Z0: target.Z0, Z1: innerHeld, Z0Delta: target.Z0Delta, Z1Delta: innerDelta}
-		sp.Slabs[1] = Slab{Regions: []momentinput.Profile{cutRegion},
-			Z0: innerHeld, Z1: target.Z1, Z0Delta: innerDelta, Z1Delta: target.Z1Delta}
+		lower.Regions, upper.Regions = []momentinput.Profile{target.Profile}, []momentinput.Profile{cutRegion}
 	} else {
-		sp.Slabs[0] = Slab{Regions: []momentinput.Profile{cutRegion},
-			Z0: target.Z0, Z1: innerHeld, Z0Delta: target.Z0Delta, Z1Delta: innerDelta}
-		sp.Slabs[1] = Slab{Regions: []momentinput.Profile{target.Profile},
-			Z0: innerHeld, Z1: target.Z1, Z0Delta: innerDelta, Z1Delta: target.Z1Delta}
+		lower.Regions, upper.Regions = []momentinput.Profile{cutRegion}, []momentinput.Profile{target.Profile}
 	}
+	sp.Slabs[0], sp.Slabs[1] = lower, upper
 	if len(enclosing.EnclosedHoles) != 0 {
 		innerHoles := make([]sectionrecord.LoopRecord, 0, len(enclosing.EnclosedHoles))
 		for _, i := range enclosing.EnclosedHoles {
@@ -150,9 +154,67 @@ func BuildBlindCut(ctx context.Context, budget *proofbound.WorkBudget,
 	return sp, true, nil
 }
 
+// toolInnerEnd is a blind tool's inner end on the target's axis: the exact
+// lift of its held level, and the level it denotes, or nil when no record
+// proves that level.
+func toolInnerEnd(target prismplacement.Operand, tool prismrecord.Payload, z0, z1 *big.Rat,
+	openAtBottom bool) (*big.Rat, *big.Rat) {
+	if openAtBottom {
+		return z1, prismplacement.DenotedShiftedLevel(target, tool.PlacementOperand(), tool.Z1, tool.Z1Delta, tool.Z1Denoted)
+	}
+	return z0, prismplacement.DenotedShiftedLevel(target, tool.PlacementOperand(), tool.Z0, tool.Z0Delta, tool.Z0Denoted)
+}
+
+// denotedInterface is the interface whose denoted level equals level, or -1.
+// Both slabs meeting there must record that level. Equal held floats never
+// stand in for it, since each may round a different denoted level.
+func denotedInterface(slabs []Slab, level *big.Rat) int {
+	if level == nil {
+		return -1
+	}
+	for k := 0; k+1 < len(slabs); k++ {
+		below, above := slabs[k].DenotedZ1(), slabs[k+1].DenotedZ0()
+		if below != nil && above != nil && below.Cmp(above) == 0 && below.Cmp(level) == 0 {
+			return k
+		}
+	}
+	return -1
+}
+
+// heldSplit is the slab whose held interval strictly contains inner, or -1.
+// An inner end equal to a held interface level is -1: denotedInterface alone
+// decides that arm. Where the denoted levels are known, they must keep the
+// held order, so every recorded denotation in the stack stays monotone.
+func heldSplit(slabs []Slab, inner, denoted *big.Rat) int {
+	for k, slab := range slabs {
+		lower, upper := proofarith.FloatRat(slab.Z0), proofarith.FloatRat(slab.Z1)
+		if lower == nil || upper == nil || inner.Cmp(lower) <= 0 {
+			return -1
+		}
+		if inner.Cmp(upper) > 0 {
+			continue
+		}
+		if inner.Cmp(upper) == 0 || !denotedStrictlyInside(denoted, slab.DenotedZ0(), slab.DenotedZ1()) {
+			return -1
+		}
+		return k
+	}
+	return -1
+}
+
+// denotedStrictlyInside is false when the known denoted levels contradict an
+// inner end strictly between lo and hi. An unknown level contradicts nothing.
+func denotedStrictlyInside(inner, lo, hi *big.Rat) bool {
+	if inner == nil {
+		return true
+	}
+	return (lo == nil || inner.Cmp(lo) > 0) && (hi == nil || inner.Cmp(hi) < 0)
+}
+
 // ApplyBlindCut splits the slab containing a blind tool's inner end, or
-// reuses an exact existing interface. Every reached slab needs its own
-// whole-loop cut proof, and the resulting interfaces must pass the audit.
+// reuses an existing interface whose denoted level equals the tool's. Every
+// reached slab needs its own whole-loop cut proof, and the resulting
+// interfaces must pass the audit.
 func ApplyBlindCut(ctx context.Context, budget *proofbound.WorkBudget, sp Payload,
 	outer, tool prismrecord.Payload) (Payload, bool, error) {
 	if len(tool.Profile.Holes) != 0 {
@@ -176,21 +238,14 @@ func ApplyBlindCut(ctx context.Context, budget *proofbound.WorkBudget, sp Payloa
 	if !openAtTop && !openAtBottom {
 		return Payload{}, false, nil
 	}
-	inner, innerDelta := z0, tool.Z0Delta
+	inner, innerDenoted := toolInnerEnd(outer.PlacementOperand(), tool, z0, z1, openAtBottom)
+	innerDelta := tool.Z0Delta
 	if openAtBottom {
-		inner, innerDelta = z1, tool.Z1Delta
+		innerDelta = tool.Z1Delta
 	}
-	split, interfaceAt := -1, -1
-	for k, slab := range sp.Slabs {
-		lower, upper := proofarith.FloatRat(slab.Z0), proofarith.FloatRat(slab.Z1)
-		if lower != nil && upper != nil && inner.Cmp(lower) > 0 && inner.Cmp(upper) < 0 {
-			split = k
-			break
-		}
-		if upper != nil && k < len(sp.Slabs)-1 && inner.Cmp(upper) == 0 {
-			interfaceAt = k
-			break
-		}
+	split, interfaceAt := -1, denotedInterface(sp.Slabs, innerDenoted)
+	if interfaceAt < 0 {
+		split = heldSplit(sp.Slabs, inner, innerDenoted)
 	}
 	if split < 0 && interfaceAt < 0 {
 		return Payload{}, false, nil
@@ -200,12 +255,6 @@ func ApplyBlindCut(ctx context.Context, budget *proofbound.WorkBudget, sp Payloa
 		return Payload{}, false, err
 	}
 	if interfaceAt >= 0 {
-		// With a displaced level, the nominal equality does not prove which
-		// slabs the true tool reaches. Keep this arm to exactly shared levels.
-		if innerDelta != 0 || sp.Slabs[interfaceAt].Z1Delta != 0 ||
-			sp.Slabs[interfaceAt+1].Z0Delta != 0 {
-			return Payload{}, false, nil
-		}
 		active := make([]bool, len(sp.Slabs))
 		for k := range active {
 			active[k] = k <= interfaceAt
@@ -220,9 +269,10 @@ func ApplyBlindCut(ctx context.Context, budget *proofbound.WorkBudget, sp Payloa
 		return Payload{}, false, nil
 	}
 	innerDelta = proofbound.AbsSumUpper(innerDelta, proofarith.RationalFloatError(inner, innerHeld))
+	level := prismplacement.DenoteLevel(innerDenoted, innerHeld, innerDelta)
 	lower, upper := sp.Slabs[split], sp.Slabs[split]
-	lower.Z1, lower.Z1Delta = innerHeld, innerDelta
-	upper.Z0, upper.Z0Delta = innerHeld, innerDelta
+	lower.Z1, lower.Z1Delta, lower.Z1Denoted = innerHeld, innerDelta, level
+	upper.Z0, upper.Z0Delta, upper.Z0Denoted = innerHeld, innerDelta, level
 	result := sp
 	result.Slabs = make([]Slab, len(sp.Slabs)+1)
 	copy(result.Slabs, sp.Slabs[:split])

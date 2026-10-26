@@ -3,9 +3,11 @@ package decad
 import (
 	"context"
 	"fmt"
+	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/featureoption"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
@@ -239,6 +241,8 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 		Z1:            sweep.z1,
 		Z0Delta:       sweep.z0Delta,
 		Z1Delta:       sweep.z1Delta,
+		Z0Denoted:     prismplacement.DenoteLevel(sweep.z0Exact, sweep.z0, sweep.z0Delta),
+		Z1Denoted:     prismplacement.DenoteLevel(sweep.z1Exact, sweep.z1, sweep.z1Delta),
 		Xform:         r3.Identity(),
 		SurfaceResult: surfaceResult,
 	}, work))
@@ -260,11 +264,15 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 // private producer identities of the bodies the extent's stops resolved against. A level the
 // caller stated denotes itself and reports a zero displacement; a level the
 // resolution COMPUTED reports the rounding that computation committed, which is
-// what the prism payload carries into every level-derived reading.
+// what the prism payload carries into every level-derived reading. z0Exact and
+// z1Exact are the exact levels a converted distance denotes, nil where the
+// resolution does not know one (agent-docs/stacked-prism-design.md §2.1).
 type linearSweep struct {
 	z0, z1          float64
 	z0Delta         float64
 	z1Delta         float64
+	z0Exact         *big.Rat
+	z1Exact         *big.Rat
 	inputs          []producerID
 	bodyInputs      []*Body
 	operationInputs []OperationInput
@@ -282,6 +290,7 @@ func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, e
 		if err != nil {
 			return linearSweep{}, err
 		}
+		exact := extent.ExactConversion(e.D, units.Millimeter)
 		if m == 0 {
 			return linearSweep{}, fmt.Errorf(`%w: a zero-distance extent sweeps no solid`, ErrDegenerate)
 		}
@@ -290,9 +299,9 @@ func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, e
 		// and the swept end takes the distance's own displacement.
 		switch e.Dir {
 		case Along:
-			return linearSweep{z1: m, z1Delta: delta}, nil
+			return linearSweep{z1: m, z1Delta: delta, z1Exact: exact}, nil
 		case Against:
-			return linearSweep{z0: -m, z0Delta: delta}, nil
+			return linearSweep{z0: -m, z0Delta: delta, z0Exact: extent.ScaledExact(exact, -1, 1)}, nil
 		default:
 			return linearSweep{}, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(e.Dir))
 		}
@@ -301,17 +310,20 @@ func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, e
 		if err != nil {
 			return linearSweep{}, err
 		}
+		exact := extent.ExactConversion(e.D, units.Millimeter)
 		if m == 0 {
 			return linearSweep{}, fmt.Errorf(`%w: a zero-distance extent sweeps no solid`, ErrDegenerate)
 		}
 		half := m
 		if e.FullLength {
 			half = m / 2
+			exact = extent.ScaledExact(exact, 1, 2)
 		}
 		// Halving is exact in binary, so each end sits within the distance's own
 		// displacement of the level it denotes; charging the whole displacement
 		// to each end rather than half of it is the conservative reading.
-		return linearSweep{z0: -half, z1: half, z0Delta: delta, z1Delta: delta}, nil
+		return linearSweep{z0: -half, z1: half, z0Delta: delta, z1Delta: delta,
+			z0Exact: extent.ScaledExact(exact, -1, 1), z1Exact: exact}, nil
 	case TwoSided:
 		one, err := d.resolveLinearSide(e.One, frame, 1, "the along side")
 		if err != nil {
@@ -329,7 +341,7 @@ func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, e
 		bodyInputs := append(append([]*Body(nil), one.bodyInputs...), two.bodyInputs...)
 		operationInputs := append(append([]OperationInput(nil), one.operationInputs...), two.operationInputs...)
 		return linearSweep{z0: two.z, z1: one.z, z0Delta: two.delta, z1Delta: one.delta,
-			inputs: refs, bodyInputs: bodyInputs, operationInputs: operationInputs}, nil
+			z0Exact: two.exact, z1Exact: one.exact, inputs: refs, bodyInputs: bodyInputs, operationInputs: operationInputs}, nil
 	case ThroughAll:
 		// An unknown Direction is malformed input, never silently Along.
 		var travel float64
@@ -379,6 +391,7 @@ func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, e
 type linearSide struct {
 	z               float64
 	delta           float64
+	exact           *big.Rat
 	named           []producerID
 	through         []producerID
 	bodyInputs      []*Body
@@ -400,7 +413,8 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 		}
 		// travel is ±1, so the signed level is the magnitude itself and its
 		// displacement carries across unchanged.
-		return linearSide{z: travel * m, delta: delta}, nil
+		exact := extent.ScaledExact(extent.ExactConversion(s.D, units.Millimeter), int64(travel), 1)
+		return linearSide{z: travel * m, delta: delta, exact: exact}, nil
 	case ThroughAllSide:
 		live := d.n.Live()
 		stop, delta, refs, err := extent.ThroughAll(frame, travel, live)
