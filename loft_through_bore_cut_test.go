@@ -6,6 +6,9 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -189,4 +192,35 @@ func TestLoftThroughBoreCutGates(t *testing.T) {
 		require.False(t, ok)
 		require.ErrorIs(t, err, context.Canceled)
 	})
+}
+
+// TestPlacedLoftBoreChargesPlacement places a certified through-bore Loft.
+// The rebuild keeps the analytic bore mark, so the placed cylinder must carry
+// the departure the rotation leaves on its tag; the unplaced one has none.
+func TestPlacedLoftBoreChargesPlacement(t *testing.T) {
+	doc, loft, tool := throughBoreFixture(t)
+	env := envOf(documentNode(doc), doc.nextProducerID())
+	node, ok, err := loftrecord.ThroughBoreCut(t.Context(), env, loft, tool)
+	require.NoError(t, err)
+	require.True(t, ok)
+	cylinderBound := func(body *topo.Body) float64 {
+		t.Helper()
+		var bounds []float64
+		for _, face := range topobuild.Faces(body) {
+			if _, isCylinder := face.Surface.(surfacegeom.Cylinder); isCylinder {
+				bounds = append(bounds, face.NormalBound)
+			}
+		}
+		require.Len(t, bounds, 1)
+		return bounds[0]
+	}
+	require.Zero(t, cylinderBound(node))
+	rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Radians(0.7))
+	require.NoError(t, err)
+	placed, err := node.Payload.(loftPayload).Placed(t.Context(), envOf(documentNode(doc), doc.nextProducerID()), rotation)
+	require.NoError(t, err)
+	want, ok := loftrecord.BoreCylinderNormalBound(loft.Frame0, rotation, 1, 0.5, 2, 1)
+	require.True(t, ok)
+	require.Positive(t, want)
+	require.Equal(t, want, cylinderBound(placed))
 }

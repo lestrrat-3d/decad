@@ -2904,9 +2904,9 @@ The certified Cut marks the resulting Loft for analytic bore topology only
 when exact rational lifts of both section origins and circle centers agree
 with one common axis and sweep level. It compares the recorded frames' exact
 axis directions as well. Rounded `Frame.ToLocal` and `Frame.ToWorld` readings
-cannot establish this proof. Cylindrical topology also requires an exact
-held center and an exactly orthonormal frame map. An accepted Cut without
-these proofs keeps its tessellated Loft topology.
+cannot establish this proof. Cylindrical topology also requires a finite
+bore normal departure below 1 (below). An accepted Cut without these proofs
+keeps its tessellated Loft topology.
 The evaluator keeps the held polygonal outer walls, assembly, mass and
 tessellation proofs. It replaces only the hole-wall triangles with one
 cylindrical face and their cap rim chords with one full `Circle3` per cap.
@@ -2914,7 +2914,50 @@ Every former hole-wall `side(i,j,k)` role belongs to that cylinder, so the
 unchanged held triangle mesh still resolves its source face at `VerifyAll`.
 The cap face area subtracts the bounded whole-circle integral from the held
 outer polygon area. Placement and duplication rebuild Cut topology from the
-same mark.
+same mark. The rebuild recomputes the bore normal departure under the composed
+placement, and a placement whose departure has no bound keeps the faceted
+walls.
+
+The shared cylinder builder tags the bore wall as the `Cylinder` about the
+held center `pp.Point(u, v, 0)` along the held axis `pp.Dir(0, 0, 1)`. The
+record denotes the right circular cylinder of radius `ρ` about the exact lift
+of `(u, v)`, carried through the exact affine map `x ↦ L·x + T`, where
+`L = B·[U V N]` (`massmoment.PrismRotation`). A rounded center lift, a frame
+map that is not exactly orthonormal, or a held axis that rounds across the
+exact ruling direction `L·e3` each turn the tag's normal away from the wall's.
+`loftrecord.BoreCylinderNormalBound` bounds that turn and the face publishes
+it as `NormalBound`, which `NormalAt` composes. Let `s` be the map's
+orthonormality defect (`MapCharge.Stretch`), `k = 1 + s`, `σ` the length of
+`L·e3` across the unit held axis, `|δ|` the center's exact lift rounding
+(`PointRound`) and `h` the axial level. The bound is
+
+    2k·[ s·(1 + k)/(1 − s) + σ·(k/(1 − s) + h/ρ) + |δ|/ρ ].
+
+A wall point with plane offset `q` (`|q| = ρ`, `q ⟂ e3`) at height `z` has
+normal `L⁻ᵀq`. The tag's normal there is the direction of
+`P(Lq + z·L·e3 − δ)`, with `P` removing the held axis component. With every
+eigenvalue of `LᵀL` in `[1 − s, 1 + s]`: `|L⁻ᵀq − Lq| ≤ √(1+s)·s·ρ/(1 − s)`,
+`|P·Lq − Lq| ≤ (s + √(1+s)·σ)·ρ/√(1 − s)`, `|P·L·e3| = σ` and
+`|P·δ| ≤ |δ|`, for every height `z` from 0 to `h`. Two vectors `a` and `b`
+with `|a − b| ≤ ε` have unit directions within `2ε/|b|`, and
+`|L⁻ᵀq| ≥ ρ/√(1+s)`. The bound is zero exactly when the center lift, the
+map and the axis are exact, which keeps every exact bore's cylinder at
+`NormalBound` 0. A bound that is not finite or reaches 1 refuses the
+cylinder, and the wall stays faceted.
+
+Every other reader of a `Cylinder` tag either charges this bound or never sees
+a Loft bore wall. `Face.NormalAt` and the edge dihedral reading built on it
+charge it. Mesh Boolean retention (`facetedrecord.SourceTag`) declines a built
+face with a nonzero `NormalBound`, so retained-edge blends and every
+`facetedrecord` placement and scaling arm never receive the tag. Stitch
+refuses such a face in its flux proof and in a placed rebuild, and Unstitch and
+patch chains refuse to place one. The contact, revolve sector bore,
+loft-cylinder join bore, brep all-edge, cap-blend and patch-chain readers
+take only prism, revolve, brep or cap-blend bodies, and clearance builds its
+carriers from those payloads, never from face tags. The tangent-chain oracle
+reads face normals only beside a continuing open edge, and the bore wall is
+bounded only by its two closed rim circles. Hole, Boss and Thread read the tag only to place a new tool, and the
+selector and STEP export read it as the published held geometry.
 
 A direct Loft also publishes one `Circle3` per cap rim and one curved hole
 wall when its authenticated sections have identical outer records, one whole
@@ -2924,12 +2967,12 @@ positive sweep level, and their frame axis directions must agree exactly.
 Rounded `ToLocal` and `ToWorld` equality does not prove either gate. A pair
 with bit-identical circle records and matching in-plane frame axes uses the
 cylindrical builder only when both circle-center lifts agree as exact
-rationals, its held center equals that exact lift, and its placed frame map
-is exactly orthonormal. Other pairs keep faceted topology because the shared
-cylinder builder publishes no wall-normal departure bound. Equal rounded
-radii without identical records keep faceted
-topology. Changing circles with matching axes require identity placement,
-exact world-XY section axes and an exactly representable axial height. A
+rationals and the bore normal departure has a bound below 1. The cylinder
+carries that bound, so a rounded held center or a placed frame map that is not
+exactly orthonormal still publishes the cylinder. Equal rounded radii without
+identical records keep faceted topology. Changing circles with matching axes
+require identity placement, exact world-XY section axes and an exactly
+representable axial height. A
 fixed center with changing radius gives a `Cone` whose lateral area is
 enclosed directly by the frustum formula, so the outer loop may be curved.
 A moving center gives a rational ruled `NURBSSurface`, including when its
