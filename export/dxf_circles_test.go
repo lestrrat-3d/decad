@@ -261,3 +261,44 @@ func TestDXFViewsPlacesTheArcsByTheirOwnBounds(t *testing.T) {
 	}
 	require.ElementsMatch(t, []string{"VISIBLE (35,5) r5 270>0", "VISIBLE (35,25) r5 0>90", "VISIBLE (5,25) r5 90>180", "VISIBLE (5,5) r5 180>270"}, got)
 }
+
+func sheetTexts(t *testing.T, body *decad.Body, paper export.DXFPaper) []string {
+	t.Helper()
+	var out bytes.Buffer
+	require.NoError(t, export.DXFSheet(t.Context(), &out, body, units.Millimeters(0.1), paper))
+	var values []string
+	for _, tx := range readDXFTexts(t, out.String()) {
+		values = append(values, tx.value)
+	}
+	return values
+}
+
+func TestDXFSheetDimensionsACircleAndItsLeader(t *testing.T) {
+	t.Parallel()
+	rod := circleBodyForDXF(t, decad.New())
+	paper := a4Sheet(true)
+	paper.Views = []export.DrawingView{topView}
+	paper.Title = "ROD"
+	// The overall 10 and 10 of the view, and the circle's diameter once: the hidden rim behind it has none.
+	require.ElementsMatch(t, []string{"ROD", "SCALE 1:2", "10", "10", "DIA 10"}, sheetTexts(t, rod, paper))
+	paper.Dimensions = false
+	require.ElementsMatch(t, []string{"ROD", "SCALE 1:2"}, sheetTexts(t, rod, paper))
+}
+
+func TestDXFSheetDimensionsTheRadiusOfEachCorner(t *testing.T) {
+	t.Parallel()
+	plate := roundedPlate(t)
+	paper := a4Sheet(true)
+	paper.Views = []export.DrawingView{topView}
+	paper.Title = "PLATE"
+	texts := sheetTexts(t, plate, paper)
+	var radii int
+	for _, v := range texts {
+		if v == "R5" {
+			radii++
+		}
+	}
+	require.Equal(t, 4, radii, "one radius for each corner arc: %v", texts)
+	require.Contains(t, texts, "40", "the overall width is still stated")
+	require.Contains(t, texts, "30")
+}

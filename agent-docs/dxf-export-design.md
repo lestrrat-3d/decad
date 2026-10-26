@@ -120,3 +120,15 @@ whole, in place of its polygon of `LINE`s. `MeshDXF` has no edges to read and dr
 | X5 | An `Arc3` edge whose axis lies along the view direction is an arc candidate, by X1's test. It is swept counter-clockwise about its axis from its start vertex to its end vertex. The drawing's toward-the-viewer axis is `-Direction`, so the arc is counter-clockwise in the drawing, from the start's angle to the end's, when the axis has a negative component along `Direction`, and from the end's angle to the start's when it has a positive one. |
 | X6 | An arc is taken when the visible (or hidden) segments with both ends on its circle and inside its sweep, within X2's tolerance, together span its sweep less 1e-6: each chord of the arc's polygon is then a whole segment. They are removed and an `ARC` is written with the centre, the radius and the start and end angles in degrees (group codes 10, 20, 30, 40, 50, 51), counter-clockwise from the start. A chord cut by a surface, or one missing, leaves the arc as segments. |
 | X7 | `DXFViews` and `DXFSheet` place a view by its arcs' own boxes (the end points and each axis extreme the sweep passes through), not their circles', and move and scale the arcs with the view. |
+
+## 8. Diameters and radii on a sheet
+
+With `DXFPaper.Dimensions`, `DXFSheet` also states the size of each circle and arc a view draws whole (§7), on the `DIMENSION` and
+`TEXT` layers.
+
+| Decision | Rule |
+|---|---|
+| M1 | Each visible `CIRCLE` of a view gets a leader across its diameter, a `LINE` along the drawing's X axis through its centre, and a 3.5 mm `TEXT` `DIA d` just above the centre, `d` the model's diameter, not the drawn one, to two decimals. A hidden circle gets none. |
+| M2 | Each visible `ARC` gets a leader from its centre to the middle of its sweep, a `LINE`, and a 3.5 mm `TEXT` `R r` (written `Rr`) half way along it, `r` the model's radius to two decimals. A hidden arc gets none. |
+| M3 | The positions are the view's, moved and scaled as its lines are, so a dimension sits on the circle it states whatever the scale. The text is ASCII, so a diameter is `DIA` and not the diameter sign. |
+| M4 | The sizes come from the body's own circle and arc edges (§7 X1, X5), so a polygon the mesh draws as a circle is never dimensioned. A circle seen at an angle, or one a surface hides in part, is drawn as lines and has no dimension. |
