@@ -6,7 +6,6 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/decadtest"
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -53,27 +52,4 @@ func TestFilletChordRefusals(t *testing.T) {
 			require.Equal(t, []*decad.Body{block}, doc.Bodies(), "a refused fillet leaves the block live and alone")
 		})
 	}
-}
-
-// A triangular prism's acute lateral edge is not a right angle, so the radius
-// is not chord/√2 there.
-func TestFilletChordRefusesAnEdgeThatIsNotRightAngled(t *testing.T) {
-	t.Parallel()
-	doc := decad.New()
-	s := decadtest.NewSketch(t)
-	a := s.CreatePoint(0, 0)
-	b := s.CreatePoint(20, 0)
-	c := s.CreatePoint(0, 20)
-	s.Fix(a)
-	s.Fix(b)
-	s.Fix(c)
-	s.CreateLine(a, b)
-	s.CreateLine(b, c)
-	s.CreateLine(c, a)
-	prism := decadtest.NewPrism(t, doc, s, decadtest.SolveRegion(t, s), units.Millimeters(10))
-	edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(20, 0, 0))).Exactly(1)
-	_, err := decad.FilletChord(t.Context(), prism, edge, units.Millimeters(2))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "right angle")
-	require.Equal(t, []*decad.Body{prism}, doc.Bodies())
 }

@@ -13,29 +13,42 @@ func FilletChord(ctx context.Context, b *Body, sel EdgeSelector, chord units.Val
 
 | Decision | Rule |
 |---|---|
-| C1 | On a right-angled edge the arc turns a quarter turn, so its radius is `chord/√2`. |
-| C2 | `FilletChord` calls `Fillet(ctx, b, sel, chord/√2)`. Receivers, routes, history entry (`OperationFillet`) and refusals are `Fillet`'s. |
+| C1 | Where the two faces meet at the interior angle φ the arc turns π − φ, so its radius is `chord/(2·cos(φ/2))`, which is `chord/√2` on a right angle. |
+| C2 | `FilletChord` calls `Fillet(ctx, b, sel, radius)`. Receivers, routes, history entry (`OperationFillet`) and refusals are `Fillet`'s. |
 | C3 | `chord` is a positive length. Zero is `ErrDegenerate`, a negative value is `ErrNegativeMagnitude`, and a wrong unit kind is `ErrUnitKind`. |
-| C4 | Each selected edge has exactly two faces, both `Plane`, whose normals have a dot product of exactly zero. Any other edge is `ErrUnsupported`. |
+| C4 | Each selected edge is convex and has exactly two faces, both `Plane`. Any other edge is `ErrUnsupported`. |
 | C5 | A nil context or body is `ErrDegenerate`. A selector `Fillet` would refuse is passed to `Fillet` for its own error. |
+| C6 | `Fillet` takes one radius, so every selected edge MUST give the same one within a relative 1e-12, which equal dihedrals do. A selection that mixes angles is `ErrUnsupported`: take the angles in separate calls. |
 
-## 2. The right-angle gate
+## 2. The dihedral
 
-The radius is `chord/√2` only where the two faces meet at a right angle. Another dihedral turns the arc through a
-different angle `α`, and the radius is `chord/(2·sin(α/2))`, which needs the dihedral read from the face tags. A
-decad-side test of a near-right angle can only falsify (CLAUDE.md "Reject-only"), so C4 admits an edge only when
-the plane normals are exactly perpendicular. `ChamferAngle` applies the same gate through the shared
-`Edge.requireRightAngle` (`agent-docs/chamfer-angle-design.md` §2).
+`Edge.convexDihedral` (`edge_dihedral.go`) reads φ from the unit outward normals of the edge's two planes: the angle
+between them is `atan2(|n₁ × n₂|, n₁ · n₂)`, accurate near a flat edge and near a knife edge as well as at a right angle,
+and φ is π less that. It is data of the recorded planes, not a test of a claim, so it blesses nothing: the radius is a
+float function of those planes, and the result is `Fillet`'s result for a radius of that value. `ChamferAngle` reads its
+dihedral the same way (`agent-docs/chamfer-angle-design.md` §2).
+
+The same-radius test of C6 only groups edges. Two equal dihedrals read from different face pairs differ in rounding,
+far below 1e-12, and the one radius used differs from the other edge's by less than that, far below the bound of the
+result `Fillet` publishes.
 
 `WithTangentChain` is not offered: the chain would add edges C4 has not checked.
 
 ## 3. Exactness
 
-The radius is a float quotient, so a result is as exact as `Fillet`'s for a radius of that value. The tests compare
-volumes against `(1 − π/4)·(chord²/2)·height` within a relative `1e-9`.
+The radius is a float, so a result is as exact as `Fillet`'s for a radius of that value. The tests compare volumes
+against `(1 − π/4)·(chord²/2)·height` on a right angle within a relative `1e-9`, and against `R²(cot(φ/2) − (π − φ)/2)·height`
+on the 120 degree edges of a hexagonal prism.
 
 ## 4. Not covered
 
-- An edge whose faces meet at an angle other than a right angle, or a curved face beside the edge.
+- A concave edge, or a curved face beside the edge.
 - `WithTangentChain`.
 - Setback corners and curvature-continuous blends, which have no entry point.
+
+## 5. Edges that are not right angled
+
+The hexagonal prism's six vertical edges meet at 120 degrees. `FilletChord` of one gives the radius `chord`, and the
+tests compare the volume with the area `R²(cot 60° − 30°)` a fillet of that radius removes from the corner. All six
+together give one radius and are one call. A right-isosceles triangular prism's 45, 45 and 90 degree edges together are
+`ErrUnsupported`, and the L-shaped prism's reflex edge is `ErrUnsupported` for being concave.
