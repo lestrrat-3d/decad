@@ -80,6 +80,7 @@ type LoftAuditData struct {
 	Norms       []proof.Xpt
 	floatNorms  []r3.Vec
 	Planes      []LoftExactPlane
+	floatPlanes []proof.FloatOrientationPlane
 	Projections [][3]meshbool.Xp2
 	compact     bool
 	verts       []r3.Vec
@@ -234,11 +235,12 @@ func liftLoftVertices(verts []r3.Vec, need []bool, workers int) []proof.Xpt {
 func newLoftAuditDataSelected(verts []r3.Vec, exact []proof.Xpt, tris [][3]int,
 	selected []bool, compact bool, workers int) *LoftAuditData {
 	d := &LoftAuditData{
-		Xverts:     exact,
-		Norms:      make([]proof.Xpt, len(tris)),
-		floatNorms: make([]r3.Vec, len(tris)),
-		Planes:     make([]LoftExactPlane, len(tris)),
-		compact:    compact,
+		Xverts:      exact,
+		Norms:       make([]proof.Xpt, len(tris)),
+		floatNorms:  make([]r3.Vec, len(tris)),
+		Planes:      make([]LoftExactPlane, len(tris)),
+		floatPlanes: make([]proof.FloatOrientationPlane, len(tris)),
+		compact:     compact,
 	}
 	// The table owns a copy: a caller that reorders its own list afterwards
 	// cannot reach the corners every certificate and the entry check read.
@@ -266,6 +268,8 @@ func newLoftAuditDataSelected(verts []r3.Vec, exact []proof.Xpt, tris [][3]int,
 		d.Norms[i] = proof.Xcross(proof.Xsub(xt[1], xt[0]), proof.Xsub(xt[2], xt[0]))
 		d.floatNorms[i] = d.Norms[i].Vec()
 		d.Planes[i] = NewLoftExactPlane(xt[0], d.Norms[i])
+		corners := LoftTriCorners(verts, tri)
+		d.floatPlanes[i] = proof.NewFloatOrientationPlane(corners[0], corners[1], corners[2])
 		projAxes[i] = uint8(ProjectionPairIndex(meshbool.ProjAxes(d.Norms[i])))
 		return nil
 	})
@@ -1023,7 +1027,16 @@ func (d *LoftAuditData) planeSigns(i int, xother [3]proof.Xpt, other [3]r3.Vec) 
 	if d.exactLifts {
 		return TrianglePlaneSigns(d.Planes[i], xother)
 	}
-	t := d.corners(i)
+	// The small private audit builds its own budgeted table without the
+	// retained float cache. Prepare its plane on the stack for this call.
+	var local proof.FloatOrientationPlane
+	plane := &local
+	if d.floatPlanes != nil {
+		plane = &d.floatPlanes[i]
+	} else {
+		t := d.corners(i)
+		local = proof.NewFloatOrientationPlane(t[0], t[1], t[2])
+	}
 	xt := d.xtri(i)
 	var signs [3]int
 	var sum, term big.Int
@@ -1032,7 +1045,7 @@ func (d *LoftAuditData) planeSigns(i int, xother [3]proof.Xpt, other [3]r3.Vec) 
 		if p == xt[0] || p == xt[1] || p == xt[2] {
 			continue
 		}
-		if s, certain := proof.OrientSignFloat(t[0], t[1], t[2], other[k]); certain {
+		if s, certain := plane.Sign(other[k]); certain {
 			signs[k] = s
 			continue
 		}
