@@ -430,6 +430,7 @@
 2	0.14	TestSweepCompositePolygonHoleTessellates
 2	0.02	TestSweepCompositeStraightCircularHoleMesh
 2	0.00	TestSweepLineStagesModify
+10	0.00	TestScaledAtUnmarkedFacetedSolid
 2	0.27	TestSweepMitredTreeBranch
 2	1.18	TestSweepPairBandReplaysBracketLeftEdge
 2	0.01	TestSweepPairRefusesSeparatedOffOriginRotatingSphere

@@ -154,9 +154,11 @@ func (fp Payload) Transform() r3.Transform { return fp.Xform }
 // tessellate refusal report: the root type name this payload replaced.
 func (Payload) SurveyClass() string { return "facetedPayload" }
 
-// CertifiedBooleanSimilaritySource checks the private Boolean result's
-// geometry, proof terms, and source-group mapping before ScaleMesh consumes it.
-func CertifiedBooleanSimilaritySource(fp Payload, faceCount int) bool {
+// CertifiedFacetedSimilaritySource checks a faceted solid's geometry field
+// shapes, proof terms, and source-group mapping before ScaleMesh consumes it.
+// It holds for a marked Boolean result and for an unmarked faceted solid; the
+// latter also needs a fresh mesh audit (ScaleImage).
+func CertifiedFacetedSimilaritySource(fp Payload, faceCount int) bool {
 	if len(fp.Tris) == 0 || len(fp.Tris) != len(fp.Src) ||
 		len(fp.Tris) != len(fp.FaceOf) || len(fp.Groups) == 0 || faceCount == 0 ||
 		fp.MeshBound < 0 || fp.VolSymDiff < 0 || fp.AreaSlack < 0 || fp.DPair <= 0 ||
