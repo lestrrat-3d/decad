@@ -95,6 +95,6 @@ rim.
 |---|---|
 | L1 | The zero `Value` cuts no lead-in. A positive length is the distance of a 45 degree `Chamfer` on each convex circular edge of the threaded face: the rims at the ends of a rod, and the mouths of a bore. A negative value is `ErrNegativeMagnitude`, a wrong unit kind `ErrUnitKind`, and a face with no convex circular edge `ErrDegenerate`. |
 | L2 | The chamfer comes first and the groove is cut from the chamfered body. The groove's frame and plan are those of the unchamfered face, so the thread is the same helix whatever the lead-in. A shoulder's concave edge is not chamfered. |
-| L3 | The lead-in and the thread are tried on a copy of `b` first, retired once read, so a chamfer or a cut the evaluator refuses leaves `b` live and the document unchanged. The copy leaves history entries. |
+| L3 | The chamfer and thread run on a copy of `b`. The successful thread commit consumes `b` and the chamfered copy together. A refusal leaves `b` live. The copy leaves history entries. |
 | L4 | The history holds `OperationChamfer` then `OperationThread`. |
 | L5 | The removed volume of a rod threaded after a lead-in `d` is the chamfered rod's less `∫ 2π·ρ·w(ρ)/P·ℓ(ρ) dρ` over the groove's radii, where `ℓ(ρ)` is the length 20 less `2·max(0, d − (R − ρ))` the chamfer leaves at radius `ρ`. A groove covers `w(ρ)/P` of any axial interval at every radius on average over the turn, so the integral is exact. The tests compute it independently. |

@@ -270,3 +270,4 @@
 10	0.00	TestShiftedRetryGroupsKeepSource
 10	0.00	TestFacetedSourcePatchBlendThenCut
 10	0.00	TestFacetedSourcePatchFallback
+10	0.00	TestCombineToolsAdditionalConsumptionIsAtomic
