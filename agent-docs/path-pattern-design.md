@@ -1,6 +1,6 @@
 # Path pattern design
 
-`PathPatternCopies` repeats a body at points spaced along a `Path`. It places each instance with `Copy` and a
+`PathPatternCopies` and `PathPatternSpaced` repeat a body at points spaced along a `Path`, by count and by distance. It places each instance with `Copy` and a
 translation and adds no geometry kernel. The points come from `internal/pathsample/`, which works on plain
 millimetre vectors.
 
@@ -8,6 +8,7 @@ millimetre vectors.
 
 ```go
 func PathPatternCopies(ctx context.Context, b *Body, path *Path, count int, opts ...PathPatternOption) ([]*Body, error)
+func PathPatternSpaced(ctx context.Context, b *Body, path *Path, spacing units.Value, opts ...PathPatternOption) ([]*Body, error)
 func WithPathFollow() PathPatternOption
 ```
 
@@ -42,7 +43,6 @@ The translation of an arc point is not exact, so such an instance reads as `Appr
 
 - Turning instances about the path's own axis, or about a pivot other than its start.
 - A path of any segment kind beyond `LineTo` and `ArcThrough`, which is all `Path` holds.
-- Spacing by a stated distance instead of a count.
 - Joining the copies to a base. Pass them with the base to one `Union`.
 
 ## 5. Following the path
@@ -58,4 +58,16 @@ point with the unit direction there, and `pathsample.Turn` gives the shortest ro
 | F4 | The turn has no roll about the direction of travel: it is the shortest rotation, so a copy never twists about its own forward beyond what the path's bending carries. |
 | F5 | A direction exactly opposite the start's has no shortest axis and is `ErrDegenerate`. A nil option is `ErrDegenerate`. |
 | F6 | A direction equal to the start's leaves the copy unturned, so a straight path gives the same copies with and without the option. |
+
+## 6. Spacing by distance
+
+`PathPatternSpaced` places copies at a stated arc length instead of a count. `pathsample.SampleSpaced` returns the points.
+
+| Decision | Rule |
+|---|---|
+| S1 | Instance `i` lies `i · spacing` of arc length along the path, for every `i` with `i · spacing` within the path's length. The first is at the path's start. |
+| S2 | A spacing that divides the length, up to a relative 1e-12 of rounding, gives the last instance at the path's end exactly. Otherwise the last lies short of the end. |
+| S3 | `spacing` is a positive length. A wrong unit kind is `ErrUnitKind`, a negative value is `ErrNegativeMagnitude`, and zero is `ErrDegenerate`. |
+| S4 | A spacing that leaves no copy, because it is longer than the path, is `ErrDegenerate`. One that would place more than 100000 points is `ErrDegenerate`. |
+| S5 | Orientation, `WithPathFollow`, the path's segments, failure and the copies' exactness are `PathPatternCopies`'s (P1 to P6, §5). |
 

@@ -112,3 +112,49 @@ func Example_path_pattern_follow() {
 	// x 16.0..20.0, y 6.7..10.7
 	// x 16.0..20.0, y 20.0..24.0
 }
+
+// PathPatternSpaced places copies at a stated distance along the path instead
+// of a count: here a peg every 12 mm along a 30 mm line. The last copy sits
+// short of the path's end when the distance does not divide its length.
+func Example_path_pattern_spaced() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(0, 0, 4, 4)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	doc := decad.New()
+	peg, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.Vec{X: 30}})
+	if err != nil {
+		fmt.Printf("failed to build path: %s\n", err)
+		return
+	}
+	copies, err := decad.PathPatternSpaced(context.Background(), peg, path, units.Millimeters(12))
+	if err != nil {
+		fmt.Printf("failed to pattern: %s\n", err)
+		return
+	}
+	for _, c := range copies {
+		box, err := c.Bounds()
+		if err != nil {
+			fmt.Printf("failed to read bounds: %s\n", err)
+			return
+		}
+		fmt.Printf("x %.0f..%.0f\n", box.Min.X, box.Max.X)
+	}
+	// Output:
+	// x 12..16
+	// x 24..28
+}

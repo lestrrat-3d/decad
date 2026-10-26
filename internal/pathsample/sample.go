@@ -54,33 +54,90 @@ func Sample(start r3.Vec, segments []Segment, count int) ([]r3.Vec, error) {
 // where two segments meet takes the direction of the segment that holds it, and
 // the last point takes the direction at the path's end.
 func SampleStations(start r3.Vec, segments []Segment, count int) ([]Station, error) {
+	pieces, total, end, err := resolveAll(start, segments)
+	if err != nil {
+		return nil, err
+	}
+	lengths := make([]float64, count)
+	for i := range lengths {
+		lengths[i] = total * float64(i) / float64(count-1)
+	}
+	stations := stationsAt(pieces, lengths)
+	stations[0].Point = start
+	stations[count-1].Point = end
+	return stations, nil
+}
+
+// spacingSlack is the relative allowance that lets a spacing which divides the
+// path's length, up to rounding, place a station at the path's end.
+const spacingSlack = 1e-12
+
+// SampleSpaced returns the points at 0, spacing, 2·spacing and so on along the
+// path, as many as lie within its length, with the direction of travel at each.
+// The first is at start. spacing is positive and finite; a spacing longer than
+// the path leaves one point, which the caller refuses.
+func SampleSpaced(start r3.Vec, segments []Segment, spacing float64) ([]Station, error) {
+	if !(spacing > 0) || math.IsInf(spacing, 0) {
+		return nil, ErrDegenerate
+	}
+	pieces, total, end, err := resolveAll(start, segments)
+	if err != nil {
+		return nil, err
+	}
+	steps := math.Floor(total/spacing*(1+spacingSlack)) + 1
+	if steps > maxStations {
+		return nil, ErrTooMany
+	}
+	lengths := make([]float64, int(steps))
+	for i := range lengths {
+		lengths[i] = min(float64(i)*spacing, total)
+	}
+	stations := stationsAt(pieces, lengths)
+	stations[0].Point = start
+	if last := len(stations) - 1; lengths[last] == total {
+		stations[last].Point = end
+	}
+	return stations, nil
+}
+
+// maxStations bounds the points a spacing may produce.
+const maxStations = 100000
+
+// ErrTooMany reports a spacing that would place more than 100000 points.
+var ErrTooMany = errors.New("pathsample: too many points")
+
+// resolveAll resolves every segment and returns the pieces, the path's total
+// length and its end point.
+func resolveAll(start r3.Vec, segments []Segment) ([]piece, float64, r3.Vec, error) {
 	pieces := make([]piece, 0, len(segments))
 	total := 0.0
 	prev := start
 	for _, seg := range segments {
 		p, err := resolve(prev, seg)
 		if err != nil {
-			return nil, err
+			return nil, 0, r3.Vec{}, err
 		}
 		pieces = append(pieces, p)
 		total += p.length
 		prev = seg.End
 	}
-	points := make([]Station, count)
-	piece, offset := 0, 0.0
-	for i := range points {
-		want := total * float64(i) / float64(count-1)
-		for piece < len(pieces)-1 && want > offset+pieces[piece].length {
-			offset += pieces[piece].length
-			piece++
+	return pieces, total, prev, nil
+}
+
+// stationsAt returns the station at each of the ascending lengths.
+func stationsAt(pieces []piece, lengths []float64) []Station {
+	stations := make([]Station, len(lengths))
+	index, offset := 0, 0.0
+	for i, want := range lengths {
+		for index < len(pieces)-1 && want > offset+pieces[index].length {
+			offset += pieces[index].length
+			index++
 		}
-		p := pieces[piece]
+		p := pieces[index]
 		along := min(max(want-offset, 0), p.length)
-		points[i] = Station{Point: p.at(along), Tangent: p.dir(along)}
+		stations[i] = Station{Point: p.at(along), Tangent: p.dir(along)}
 	}
-	points[0].Point = start
-	points[count-1].Point = prev
-	return points, nil
+	return stations
 }
 
 func resolve(start r3.Vec, seg Segment) (piece, error) {

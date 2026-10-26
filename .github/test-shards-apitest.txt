@@ -2328,3 +2328,8 @@
 10	0.01	TestArrangeTurnsBodiesToFitTheBed
 10	0.01	TestArrangeTurnsLeavesAFlatBodyAlone
 10	0.01	TestArrangeTurnsRefusals
+10	0.01	TestPathPatternSpacedPlacesCopiesAtTheStatedDistance
+10	0.01	TestPathPatternSpacedPutsTheLastCopyAtTheEndWhenItDivides
+10	0.01	TestPathPatternSpacedMeasuresAlongAnArc
+10	0.01	TestPathPatternSpacedFollowsThePath
+10	0.01	TestPathPatternSpacedRefusals
