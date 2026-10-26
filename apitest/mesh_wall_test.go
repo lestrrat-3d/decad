@@ -76,3 +76,49 @@ func TestFacetedWallSurveyDoesNotCallAThickBodyThin(t *testing.T) {
 	require.False(t, thin, "an 8 mm plate is not below a 2 mm tool: %+v", report.Diagnostics)
 	require.NotEqual(t, decad.Violating, report.Status)
 }
+
+// A pull along +Z releases the flat plate's top and the tilted plate's upper
+// face, but the tilted plate's underside, where it lies above the flat plate,
+// is blocked from below by that plate: a proven undercut.
+func TestFacetedUndercutSurveyFindsAnOverhang(t *testing.T) {
+	t.Parallel()
+	doc := crossedPlates(t, 1)
+	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
+	require.NoError(t, err)
+	d, ok := wallDiagnostic(report, decad.DiagUndercut)
+	require.True(t, ok, "the tilted plate's underside is blocked: %+v", report.Diagnostics)
+	require.Equal(t, decad.Violating, d.Status)
+	require.Equal(t, decad.Violating, report.Status)
+	require.NotEmpty(t, report.Bodies[0].Undercut.Faces, "the blocked faces are listed")
+	// The survey cannot show the rest free, so it also says it is undecided.
+	_, undecided := wallDiagnostic(report, decad.DiagUndecidedUndercut)
+	require.True(t, undecided)
+}
+
+// An oblique bore through a plate, pulled along the bore's own axis, has no
+// face the ray test can block: no undercut is claimed, and the survey stays
+// undecided, since it cannot prove the body free.
+func TestFacetedUndercutSurveyClaimsNothingForAFreePull(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	plate := boxBody(t, doc, 0, 0, 30, 30, 6)
+	tool := circleBodyAtZ(t, doc, 0, 3, -5, 16)
+	turn, err := r3.RotationAround(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), units.Degrees(20))
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.NewVec(15, 15, 0))
+	require.NoError(t, err)
+	turned, err := decad.Transform(t.Context(), tool, turn)
+	require.NoError(t, err)
+	placed, err := decad.Transform(t.Context(), turned, shift)
+	require.NoError(t, err)
+	bored, err := decad.Cut(t.Context(), plate, placed)
+	require.NoError(t, err)
+	require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(bored))
+	axis := turn.ApplyDir(r3.NewVec(0, 0, 1))
+	report, err := doc.Verify(t.Context(), decad.WithPullDirection(axis))
+	require.NoError(t, err)
+	_, undercut := wallDiagnostic(report, decad.DiagUndercut)
+	require.False(t, undercut, "a body that releases along its bore has no undercut: %+v", report.Diagnostics)
+	_, undecided := wallDiagnostic(report, decad.DiagUndecidedUndercut)
+	require.True(t, undecided)
+}

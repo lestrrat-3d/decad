@@ -249,7 +249,11 @@ func runSurveys(budget *proofbound.WorkBudget, b *topo.Body, cfg verifyConfig) (
 		case breprecord.Payload:
 			out = brepUndercuts(budget, b, pl, *cfg.Pull)
 		case facetedrecord.Payload:
-			out.reason = surveyFacetedUnsupported
+			var undercutErr error
+			out, undercutErr = facetedUndercuts(budget, b, pl, *cfg.Pull)
+			if undercutErr != nil {
+				return surveyResults{}, nil, undercutErr
+			}
 		default:
 			out.reason = surveyPayloadStaged
 		}

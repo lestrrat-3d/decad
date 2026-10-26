@@ -33,11 +33,72 @@ type node struct {
 	first, end  int // the leaf's range in order
 }
 
-type tree struct {
-	verts []r3.Vec
-	tris  [][3]int
-	order []int // triangle indices, grouped by leaf
-	nodes []node
+// Tree is a bounding-volume tree over a triangle mesh that answers nearest-hit
+// ray queries.
+type Tree struct {
+	verts   []r3.Vec
+	tris    [][3]int
+	normals []r3.Vec // each triangle's unit normal, the zero vector for one of no area
+	order   []int    // triangle indices, grouped by leaf
+	nodes   []node
+}
+
+// Side says which way a hit triangle must face the ray to count.
+type Side int
+
+const (
+	// Exiting counts a triangle whose outward normal points along the ray: the
+	// ray leaves material through it.
+	Exiting Side = 1
+	// Entering counts a triangle whose outward normal points against the ray:
+	// the ray enters material through it.
+	Entering Side = -1
+)
+
+// edgeOn is the least sine of the angle between a ray and a triangle's plane for
+// a hit to count: a triangle closer than this to parallel to the ray is seen
+// edge on, and a hit on it is a graze, not a crossing. A ray that runs along a
+// wall of a tessellated cylinder is within float rounding of every facet's
+// plane, so without this cut it reports a hit on a neighbouring facet that the
+// ray only brushes.
+const edgeOn = 1e-6
+
+// NewTree sorts the mesh into a bounding-volume tree. An empty mesh gives an
+// empty tree, for which Empty is true. Cancellation is polled through budget.
+func NewTree(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int) (*Tree, error) {
+	if len(verts) == 0 || len(tris) == 0 {
+		return &Tree{}, nil
+	}
+	t := &Tree{verts: verts, tris: tris, order: make([]int, len(tris)), normals: make([]r3.Vec, len(tris))}
+	for i, tri := range tris {
+		t.order[i] = i
+		a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
+		t.normals[i], _ = b.Sub(a).Cross(c.Sub(a)).Normalize()
+	}
+	if err := budget.Err(); err != nil {
+		return nil, err
+	}
+	if _, err := t.build(budget, 0, len(tris)); err != nil {
+		return nil, err
+	}
+	if err := budget.Err(); err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+// Empty reports a tree over no triangles.
+func (t *Tree) Empty() bool { return len(t.nodes) == 0 }
+
+// Diameter is the length of the diagonal of the mesh's bounding box.
+func (t *Tree) Diameter() float64 { return t.nodes[0].box.hi.Sub(t.nodes[0].box.lo).Len() }
+
+// Hit returns the nearest triangle, other than skip, that the ray from origin in
+// the unit direction dir crosses at least minDist out and less than limit out,
+// among those facing the ray as side says and not within edgeOn of parallel to
+// it, with its distance. ok is false when there is none.
+func (t *Tree) Hit(origin, dir r3.Vec, skip int, minDist, limit float64, side Side) (dist float64, tri int, ok bool) {
+	return t.nearestHit(origin, dir, skip, minDist, limit, side)
 }
 
 // Min casts the rays. The mesh must be closed and wound counter-clockwise seen
@@ -46,30 +107,13 @@ type tree struct {
 // no ray. Found is false when no ray hit anything. An empty mesh is Found
 // false.
 func Min(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int) (Result, error) {
-	if len(verts) == 0 || len(tris) == 0 {
-		return Result{}, nil
+	t, err := NewTree(budget, verts, tris)
+	if err != nil || t.Empty() {
+		return Result{}, err
 	}
-	t := &tree{verts: verts, tris: tris, order: make([]int, len(tris))}
-	for i := range t.order {
-		t.order[i] = i
-	}
-	lo, hi := verts[0], verts[0]
-	for _, v := range verts[1:] {
-		lo = r3.Vec{X: math.Min(lo.X, v.X), Y: math.Min(lo.Y, v.Y), Z: math.Min(lo.Z, v.Z)}
-		hi = r3.Vec{X: math.Max(hi.X, v.X), Y: math.Max(hi.Y, v.Y), Z: math.Max(hi.Z, v.Z)}
-	}
-	scale := hi.Sub(lo).Len()
+	scale := t.Diameter()
 	if !(scale > 0) {
 		return Result{}, nil
-	}
-	if err := budget.Err(); err != nil {
-		return Result{}, err
-	}
-	if _, err := t.build(budget, 0, len(tris)); err != nil {
-		return Result{}, err
-	}
-	if err := budget.Err(); err != nil {
-		return Result{}, err
 	}
 	// A hit closer than this is the ray's own start, never a wall.
 	nearest := 1e-9 * scale
@@ -84,8 +128,7 @@ func Min(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int) (Result, 
 			continue
 		}
 		origin := a.Add(b).Add(c).Scale(1.0 / 3)
-		dir := normal.Scale(-1)
-		if d, hit := t.nearestHit(origin, dir, i, nearest, best.Thickness); hit {
+		if d, _, hit := t.nearestHit(origin, normal.Scale(-1), i, nearest, best.Thickness, Exiting); hit {
 			best = Result{Thickness: d, Found: true}
 		}
 	}
@@ -96,7 +139,7 @@ func Min(budget *proofbound.WorkBudget, verts []r3.Vec, tris [][3]int) (Result, 
 }
 
 // build makes the node over order[first:end] and returns its index.
-func (t *tree) build(budget *proofbound.WorkBudget, first, end int) (int, error) {
+func (t *Tree) build(budget *proofbound.WorkBudget, first, end int) (int, error) {
 	if err := budget.Step(); err != nil {
 		return 0, err
 	}
@@ -133,7 +176,7 @@ func (t *tree) build(budget *proofbound.WorkBudget, first, end int) (int, error)
 	return idx, nil
 }
 
-func (t *tree) rangeBox(first, end int) box {
+func (t *Tree) rangeBox(first, end int) box {
 	lo := r3.Vec{X: math.Inf(1), Y: math.Inf(1), Z: math.Inf(1)}
 	hi := r3.Vec{X: math.Inf(-1), Y: math.Inf(-1), Z: math.Inf(-1)}
 	for _, i := range t.order[first:end] {
@@ -149,8 +192,8 @@ func (t *tree) rangeBox(first, end int) box {
 // nearestHit returns the distance along the ray from origin in direction dir
 // (a unit vector) to the nearest triangle other than skip that it crosses at
 // least minDist out and no farther than limit out.
-func (t *tree) nearestHit(origin, dir r3.Vec, skip int, minDist, limit float64) (float64, bool) {
-	best, found := limit, false
+func (t *Tree) nearestHit(origin, dir r3.Vec, skip int, minDist, limit float64, side Side) (float64, int, bool) {
+	best, bestTri, found := limit, -1, false
 	stack := []int{0}
 	for len(stack) > 0 {
 		n := t.nodes[stack[len(stack)-1]]
@@ -163,15 +206,18 @@ func (t *tree) nearestHit(origin, dir r3.Vec, skip int, minDist, limit float64) 
 				if i == skip {
 					continue
 				}
+				if facing := t.normals[i].Dot(dir) * float64(side); !(facing > edgeOn) {
+					continue
+				}
 				if d, ok := t.hitTriangle(origin, dir, i); ok && d >= minDist && d < best {
-					best, found = d, true
+					best, bestTri, found = d, i, true
 				}
 			}
 			continue
 		}
 		stack = append(stack, n.left, n.right)
 	}
-	return best, found
+	return best, bestTri, found
 }
 
 // rayMeetsBox reports whether the ray reaches the box within maxDist, by the
@@ -200,7 +246,7 @@ func rayMeetsBox(o, d r3.Vec, b box, maxDist float64) bool {
 
 // hitTriangle is the Möller–Trumbore ray-triangle test: the distance along the
 // ray to triangle i, if the ray crosses it.
-func (t *tree) hitTriangle(o, d r3.Vec, i int) (float64, bool) {
+func (t *Tree) hitTriangle(o, d r3.Vec, i int) (float64, bool) {
 	tri := t.tris[i]
 	a, b, c := t.verts[tri[0]], t.verts[tri[1]], t.verts[tri[2]]
 	e1, e2 := b.Sub(a), c.Sub(a)

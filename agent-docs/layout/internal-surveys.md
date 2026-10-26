@@ -15,4 +15,4 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/revolvesurvey/` | Revolve wall, undercut and concave-radius readers. See verification §6. |
 | `internal/wallsurvey/` | Prism and revolve wall record preparation and bounded readings; revolve clearance carrier construction and bounds. See verification §6, clearance §2. |
 | `internal/radiussurvey/` | Prism, revolve, cup and BRep concave-radius readings. See verification §6. |
-| `internal/meshthick/` | Ray-cast wall thickness of a closed triangle mesh through a bounding-volume tree. See mesh-wall-survey design. |
+| `internal/meshthick/` | Ray-cast wall thickness and pull undercuts of a closed triangle mesh through a bounding-volume tree. See mesh-wall-survey design. |

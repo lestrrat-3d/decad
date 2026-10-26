@@ -1,7 +1,7 @@
-# Mesh wall survey design
+# Mesh wall and undercut survey design
 
 `Verify` with `WithMinWallThickness` surveys the wall of a faceted body, the result of a mesh Boolean, by casting rays
-through its held mesh. The survey finds thin walls and cannot rule them out, so it proves a body too thin and never
+through its held mesh, and with `WithPullDirection` surveys its undercuts the same way (§6). The survey finds thin walls and cannot rule them out, so it proves a body too thin and never
 proves one thick enough. The sampling is plain-data code in `internal/meshthick/`, and `internal/verifyrun/faceted_wall.go`
 turns it into the wall reading the report publishes.
 
@@ -44,4 +44,18 @@ bound turns the second test red, and a survey that casts no rays turns the first
 
 - Proving a wall thick enough, and so a `Sound` wall verdict for a faceted body.
 - A sheet body, which has no inward side.
-- Undercut and concave-radius surveys of a faceted body, which stay unsupported.
+- Proving a pull free of undercuts, and a concave-radius survey of a faceted body, which stays unsupported.
+
+## 6. Undercuts against a pull
+
+The same tree answers the pull question.
+
+| Decision | Rule |
+|---|---|
+| U1 | A triangle whose outward normal has a component along the pull must be released along it, and one with a component against the pull along the reverse. A triangle within `1e-6` of square to the pull (a sine below that) is seen edge on and casts no ray. |
+| U2 | From the centre of each such triangle a ray runs in its release direction. The triangle is undercut when the nearest triangle the ray crosses at least `clearance` out, and whose outward normal points against the ray by more than `1e-6`, is one the ray enters material through. `clearance` is twice the mesh's displacement bound plus `1e-9` of the diameter, so the hit is not the mesh's approximation of the triangle's own neighbours. |
+| U3 | Blocked triangles name their faces, once each, in face order. Any listed face makes `DiagUndercut`, `Violating`, with `ok` and `undecided` both set. A body with no blocked triangle reads `DiagUndecidedUndercut`, `Suspect`, with nothing listed, because one ray per triangle shows no face free. |
+| U4 | A ray that runs along a wall, as one along a tessellated cylinder's axis does, is within float rounding of every facet's plane. A hit counts only when its triangle is more than `1e-6` from parallel to the ray, in both the wall survey (W1) and this one, so a graze never reads as a crossing. |
+
+A face blocked by the body is a proven undercut whatever parting surface the mould takes: a face looking along the pull
+can only be formed by the half that moves along it, and material above the face stops that half.
