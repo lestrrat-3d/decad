@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -43,8 +44,8 @@ func TestCommonAxisRevolveArcMeridianBooleans(t *testing.T) {
 		want float64
 		run  func(context.Context, *decad.Body, *decad.Body) (*decad.Body, error)
 	}{
-		{name: "cut", want: 4000*math.Pi/3 - capVolume, run: pairCut},
-		{name: "intersect", want: capVolume, run: pairIntersect},
+		{name: "sphere cut", want: 4000*math.Pi/3 - capVolume, run: pairCut},
+		{name: "sphere intersect", want: capVolume, run: pairIntersect},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -113,4 +114,40 @@ func TestCommonAxisRevolveArcMeridianMisses(t *testing.T) {
 		require.Error(t, err)
 		require.Equal(t, before, doc.Bodies())
 	})
+}
+
+// A circle meridian off the axis is a torus. A coaxial block over z in [0, 10]
+// cuts it through the circle's centre line, leaving half the torus: the full
+// volume is 2 pi^2 R r^2 = 108 pi^2 for R = 6, r = 3.
+//
+// Shown to fail with the CircleSeg arm of PrepareCommonAxis removed: both rows
+// take the mesh path and return Faceted faces.
+func TestCommonAxisRevolveCircleMeridianTorus(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		run  func(context.Context, *decad.Body, *decad.Body) (*decad.Body, error)
+	}{
+		{name: "torus cut", run: pairCut},
+		{name: "torus intersect", run: pairIntersect},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New(decad.ExactOnly())
+			w := sketch.NewWorld()
+			s, err := w.CreateSketch(w.XY())
+			require.NoError(t, err)
+			s.CreateCircle(s.CreatePoint(0, 6), 3)
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			require.Len(t, s.Profiles(), 1)
+			torus, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+			require.NoError(t, err)
+			tool := revolveMeridian(t, doc, [][2]float64{{0, 0}, {10, 0}, {10, 10}, {0, 10}}, decad.FullRevolution{})
+			result, err := tc.run(t.Context(), torus, tool)
+			require.NoError(t, err)
+			requireAnalyticVolume(t, result, 54*math.Pi*math.Pi)
+			requireArcResultMesh(t, result)
+		})
+	}
 }
