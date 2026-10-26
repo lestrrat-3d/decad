@@ -52,3 +52,28 @@ func Pack(items []Item, bed Bed) (positions [][2]float64, ok bool) {
 	}
 	return positions, true
 }
+
+// PackTurning is Pack for items that may turn a quarter about Z, which swaps
+// an item's width and depth. It returns the position of each item's minimum
+// corner after any turn, and which items turned.
+//
+// It tries two layouts and returns the first that fits. In the first every item
+// lies with its longer side along X, which keeps shelves shallow. In the second
+// no item turns, so a set that Pack fits is never refused for being allowed to
+// turn.
+func PackTurning(items []Item, bed Bed) (positions [][2]float64, turned []bool, ok bool) {
+	turned = make([]bool, len(items))
+	laid := make([]Item, len(items))
+	for i, it := range items {
+		laid[i] = it
+		if it.Depth > it.Width {
+			laid[i] = Item{Width: it.Depth, Depth: it.Width}
+			turned[i] = true
+		}
+	}
+	if positions, ok = Pack(laid, bed); ok {
+		return positions, turned, true
+	}
+	positions, ok = Pack(items, bed)
+	return positions, make([]bool, len(items)), ok
+}

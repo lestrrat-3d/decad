@@ -1467,7 +1467,7 @@ func Transform(ctx context.Context, body *Body, t r3.Transform) (*Body, error)
 func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (*Body, error)
 ```
 
-`Arrange(ctx, bodies, bed)` places several bodies on a flat bed by one `Transform` each, in shelves of their bounding
+`Arrange(ctx, bodies, bed)` places several bodies on a flat bed by one `Transform` each (two for a body that `WithArrangeTurns` turns), in shelves of their bounding
 boxes, and `agent-docs/arrange-design.md` owns its rules.
 
 This is the whole of the "explicit transforms" story: a body is positioned by an

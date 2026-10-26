@@ -59,3 +59,43 @@ func TestPackKeepsEveryGap(t *testing.T) {
 		}
 	}
 }
+
+func TestPackTurningLaysLongSidesAlongX(t *testing.T) {
+	t.Parallel()
+	// Three 4 x 20 items on a 30 x 8 bed fit only when each is turned to 20 x 4.
+	items := []arrangeplan.Item{{Width: 4, Depth: 20}, {Width: 4, Depth: 20}, {Width: 4, Depth: 20}}
+	bed := arrangeplan.Bed{Width: 30, Depth: 20, Gap: 1}
+	_, ok := arrangeplan.Pack(items, bed)
+	require.False(t, ok, "a 20 deep item and its gaps do not fit a bed 20 deep")
+	got, turned, ok := arrangeplan.PackTurning(items, bed)
+	require.True(t, ok)
+	require.Equal(t, []bool{true, true, true}, turned)
+	require.Equal(t, [][2]float64{{1, 1}, {1, 6}, {1, 11}}, got)
+}
+
+func TestPackTurningKeepsAnItemThatAlreadyLiesFlat(t *testing.T) {
+	t.Parallel()
+	got, turned, ok := arrangeplan.PackTurning([]arrangeplan.Item{{Width: 10, Depth: 5}}, arrangeplan.Bed{Width: 20, Depth: 20, Gap: 2})
+	require.True(t, ok)
+	require.Equal(t, []bool{false}, turned)
+	require.Equal(t, [][2]float64{{2, 2}}, got)
+}
+
+func TestPackTurningNeverLosesAFitPackFinds(t *testing.T) {
+	t.Parallel()
+	// Pack fits these in two shelves. Turning them all (the first layout) also
+	// fits here, so both agree on ok; the check is that ok is never false when
+	// Pack's is true.
+	items := []arrangeplan.Item{{Width: 18, Depth: 6}, {Width: 18, Depth: 6}, {Width: 6, Depth: 18}}
+	bed := arrangeplan.Bed{Width: 40, Depth: 40, Gap: 2}
+	_, packOK := arrangeplan.Pack(items, bed)
+	_, _, turnOK := arrangeplan.PackTurning(items, bed)
+	require.True(t, packOK)
+	require.True(t, turnOK)
+}
+
+func TestPackTurningRefusesWhatNoLayoutFits(t *testing.T) {
+	t.Parallel()
+	_, _, ok := arrangeplan.PackTurning([]arrangeplan.Item{{Width: 30, Depth: 30}}, arrangeplan.Bed{Width: 20, Depth: 20, Gap: 1})
+	require.False(t, ok)
+}

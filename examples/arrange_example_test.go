@@ -64,3 +64,54 @@ func Example_arrange() {
 	// x 2..32, y 2..17
 	// x 2..22, y 19..29
 }
+
+// WithArrangeTurns lets Arrange turn parts a quarter turn about +Z when that
+// makes them fit. Here three 4 x 20 mm bars cannot stand on a 30 x 20 mm bed
+// with a 1 mm gap, because each needs 22 mm of depth, but lying down they fit.
+func Example_arrange_turns() {
+	doc := decad.New()
+	var bars []*decad.Body
+	for range 3 {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		if err != nil {
+			fmt.Printf("failed to create sketch: %s\n", err)
+			return
+		}
+		rect := s.CreateRectangle(0, 0, 4, 20)
+		s.Fix(rect.A)
+		if _, err := s.Solve(context.Background()); err != nil {
+			fmt.Printf("failed to solve: %s\n", err)
+			return
+		}
+		bar, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(3), Dir: decad.Along})
+		if err != nil {
+			fmt.Printf("failed to extrude: %s\n", err)
+			return
+		}
+		bars = append(bars, bar)
+	}
+	bed := decad.ArrangeBed{Width: units.Millimeters(30), Depth: units.Millimeters(20), Gap: units.Millimeters(1)}
+	if _, err := decad.Arrange(context.Background(), bars, bed); err != nil {
+		fmt.Println("without turns: the bars do not fit")
+	}
+	placed, err := decad.Arrange(context.Background(), bars, bed, decad.WithArrangeTurns())
+	if err != nil {
+		fmt.Printf("failed to arrange: %s\n", err)
+		return
+	}
+	for _, bar := range placed {
+		box, err := bar.Bounds()
+		if err != nil {
+			fmt.Printf("failed to read bounds: %s\n", err)
+			return
+		}
+		fmt.Printf("x %.0f..%.0f, y %.0f..%.0f\n", box.Min.X, box.Max.X, box.Min.Y, box.Max.Y)
+	}
+	// Output:
+	// without turns: the bars do not fit
+	// x 1..21, y 1..5
+	// x 1..21, y 6..10
+	// x 1..21, y 11..15
+}
