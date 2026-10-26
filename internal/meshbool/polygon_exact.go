@@ -85,7 +85,14 @@ func cacheFloat(f float64) float64 {
 // representation used by polygon construction, while Cross2x can use the
 // homogeneous form to avoid normalising four intermediate differences.
 func NewXP2FromXpt(p proof.Xpt, u, v int) Xp2 {
-	ur, vr := RatCoordOf(p, u), RatCoordOf(p, v)
+	return newXP2FromXptInto(p, u, v, new(big.Rat), new(big.Rat))
+}
+
+// newXP2FromXptInto fills distinct caller-owned rationals. The caller must
+// keep both unchanged until every reader of the returned projection finishes.
+func newXP2FromXptInto(p proof.Xpt, u, v int, ur, vr *big.Rat) Xp2 {
+	proof.RatFrac(ur, XIntCoordOf(p, u), p.W)
+	proof.RatFrac(vr, XIntCoordOf(p, v), p.W)
 	fu, _ := proof.RatFloat64(ur)
 	fv, _ := proof.RatFloat64(vr)
 	return Xp2{
