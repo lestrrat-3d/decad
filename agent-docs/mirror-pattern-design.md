@@ -240,15 +240,17 @@ about the X axis through the origin then leaves that blank exactly invariant.
 
 A faceted exact copy denotes `Q*S + t`, where `S` is the source's true solid.
 The held vertices are the float placement's, charged for their distance to `Q`.
-A retained plane group whose tag normal and `CapRecord` plane the rotation
-fixes exactly keeps its tag, `CapRecord` and axial bound, because `Q*P + t`
+A retained plane group of the faceted copy whose exact tag normal `U x V` and
+`CapRecord` plane the rotation fixes exactly keeps its tag, `CapRecord` and axial bound, because `Q*P + t`
 is then the plane itself. The check is exact rational equality on recorded data
-(`Q*m = m`, `Q^T*m = m` and `m.t = 0` for the tag normal and for the record's
+(`Q*m = m`, `Q^T*m = m` and `m.t = 0` for the tag's exact normal `U x V`, not the rounded `Frame.N()`, and for the record's
 normal `m = (B*U) x (B*V)`). A rotation about z fixes the +z and -z cap planes
 of any part this way, so `ToFace` stops at such a cap and `MirrorFace` mirrors
-across it at bound 0. A plane that `Q` turns, and every other retained tag, keep
-the float image and the charge of retained-modify-reach §6, so `ToFace` and
-`MirrorFace` refuse them. The copy carries no denoted patch, no point-loft
+across it at bound 0. A retained plane of a faceted copy that `Q` turns, and every
+other retained tag, keep the float image and the charge of retained-modify-reach
+§6, so `ToFace` and `MirrorFace` refuse those planes. An analytic prism's
+rotated copy is not a faceted copy: it keeps its `CapRecord` through the
+record's `Xform`. The copy carries no denoted patch, no point-loft
 source record and no loft mirror copy proof, because each describes the float
 placement. Its other faces read as `Faceted`. The loft mirror cap roles survive as
 provenance. Only a copy made directly from the source records the rotation in

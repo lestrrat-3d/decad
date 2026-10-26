@@ -920,13 +920,14 @@ Its held vertices are placed by the same float basis, and each vertex pays
 stretch and determinant charge, because `Q` keeps length, area and volume. The
 group centroids are re-derived as `Q*c + t` in rational arithmetic with no
 stretch charge. Every record that describes the float placement instead of `Q`
-is dropped: every group denoted patch, every group surface tag other than a retained
-plane with a zero `NormalBound` that `Q` maps onto itself (it keeps its tag,
-`CapRecord` and axial bound; mirror-pattern §4.4), `PointSection`,
+is dropped: every group denoted patch, every non-retained group surface tag,
+every `CapRecord` but a fixed plane's, `PointSection`,
 `PointPlane`, `PointSimilarity`, the point-plane cap displacement,
 `RevolveLoftSector` and `LoftMirrorCopy`. The cap-role provenance of a loft
 mirror join is a separate record, so each exact copy still mints both outer-cap
-roles under its own identity. The zero-bound exact source mesh survives only an
+roles under its own identity. A retained group tag stays as a float image with a
+charged bound; a retained plane with a zero `NormalBound` that `Q` maps onto
+itself keeps its tag, `CapRecord` and axial bound exactly (mirror-pattern §4.4). The zero-bound exact source mesh survives only an
 exactly identity record. The copy lineage keeps the rotation only for a copy
 made directly from the source's own payload; `Transform` and a copy of a copy
 record none. A direct exact-rotation Copy of an admitted contained Cut also

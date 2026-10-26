@@ -166,7 +166,7 @@ func PointPlaneRound(q [3]*big.Rat) (r3.Vec, float64, error) {
 // the tag plane and, when there is one, the plane the CapRecord denotes onto
 // themselves.
 func planeGroupFixedBy(tag surfacegeom.Plane, record *topo.CapRecord, linear [3][3]*big.Rat, t [3]*big.Rat) bool {
-	n, ok := ratVec3(tag.Frame.N())
+	n, ok := tagNormal(tag)
 	if !ok || !PlaneFixedBy(linear, t, n) {
 		return false
 	}
@@ -175,6 +175,25 @@ func planeGroupFixedBy(tag surfacegeom.Plane, record *topo.CapRecord, linear [3]
 	}
 	m, ok := capRecordNormal(record)
 	return ok && PlaneFixedBy(linear, t, m)
+}
+
+// tagNormal is the exact normal U x V of the tag plane Origin + span(U, V). It
+// is not Frame.N(), which is that cross product rounded to floats.
+func tagNormal(tag surfacegeom.Plane) ([3]*big.Rat, bool) {
+	u, uok := ratVec3(tag.Frame.U())
+	v, vok := ratVec3(tag.Frame.V())
+	if !uok || !vok {
+		return [3]*big.Rat{}, false
+	}
+	return ratCross3(u, v), true
+}
+
+func ratCross3(a, b [3]*big.Rat) [3]*big.Rat {
+	return [3]*big.Rat{
+		pointPlaneSub(pointPlaneMul(a[1], b[2]), pointPlaneMul(a[2], b[1])),
+		pointPlaneSub(pointPlaneMul(a[2], b[0]), pointPlaneMul(a[0], b[2])),
+		pointPlaneSub(pointPlaneMul(a[0], b[1]), pointPlaneMul(a[1], b[0])),
+	}
 }
 
 // capRecordNormal is the exact normal m = (B*U) x (B*V) of the plane a
@@ -198,11 +217,7 @@ func capRecordNormal(rec *topo.CapRecord) ([3]*big.Rat, bool) {
 		return out
 	}
 	bu, bv := apply(u), apply(v)
-	m := [3]*big.Rat{
-		pointPlaneSub(pointPlaneMul(bu[1], bv[2]), pointPlaneMul(bu[2], bv[1])),
-		pointPlaneSub(pointPlaneMul(bu[2], bv[0]), pointPlaneMul(bu[0], bv[2])),
-		pointPlaneSub(pointPlaneMul(bu[0], bv[1]), pointPlaneMul(bu[1], bv[0])),
-	}
+	m := ratCross3(bu, bv)
 	if m[0].Sign() == 0 && m[1].Sign() == 0 && m[2].Sign() == 0 {
 		return m, false
 	}

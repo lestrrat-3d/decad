@@ -305,3 +305,23 @@ func TestPlaneFixedBy(t *testing.T) {
 		require.False(t, facetedrecord.PlaneFixedBy(shear, trans, rat(0, 0, 1)))
 	})
 }
+
+// The plane a tag denotes is Origin + span(U, V), whose exact normal is U x V.
+// A rotation about the float-rounded Frame.N() fixes that rounded vector but
+// not the exact normal, so the tag must take the charged image.
+func TestExactGroupPlacedChargesTiltedTagRotatedAboutRoundedNormal(t *testing.T) {
+	t.Parallel()
+	c, s := math.Cos(math.Pi/6), math.Sin(math.Pi/6)
+	ct, st := math.Cos(0.3), math.Sin(0.3)
+	frame, err := r3.NewFrame(r3.NewVec(3, 4, 5), r3.NewVec(c, s, 0), r3.NewVec(-s*ct, c*ct, st))
+	require.NoError(t, err)
+	n := frame.N()
+	require.NotZero(t, n.X)
+	require.NotZero(t, n.Y)
+	q, delta, err := exactrotation.New(r3.NewVec(1, 2, 3), n, units.Degrees(20))
+	require.NoError(t, err)
+	g := facetedrecord.Group{Surface: surfacegeom.Plane{Frame: frame}, Retained: true}
+	require.NoError(t, facetedrecord.ExactGroupPlaced(&g, q, delta, []r3.Vec{{}, {X: 10, Y: 10, Z: 10}}, 1e-9))
+	require.Positive(t, g.NormalBound, "the exact U x V is not the axis the rotation fixes")
+	require.NotEqual(t, surfacegeom.Plane{Frame: frame}, g.Surface)
+}
