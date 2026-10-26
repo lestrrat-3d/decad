@@ -49,7 +49,7 @@ determinism of the bytes. A crease rule that marks every edge, or no absorption 
 
 ## 4. Not covered
 
-- Hatching, centre lines, dimensions other than a view's overall width and height, and a title block with more than a title and a scale.
+- Hatching, centre lines, dimensions other than the overall size, diameters and radii, and a title block with more than a title, three fields and a scale.
 - Arcs and ellipses, a circle only partly seen, and DXF versions after release 12.
 - View labels and a layout other than one row.
 - A tolerance on the hidden-line test finer than the depth buffer's pixel.
@@ -79,7 +79,10 @@ type DXFPaper struct {
     Margin, Gap   units.Value
     Title         string
     Dimensions    bool
+    Fields        []DXFField
 }
+
+type DXFField struct{ Label, Value string }
 
 func DXFSheet(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, paper DXFPaper,
     opts ...decad.TessellateOption) error
@@ -132,3 +135,13 @@ With `DXFPaper.Dimensions`, `DXFSheet` also states the size of each circle and a
 | M2 | Each visible `ARC` gets a leader from its centre to the middle of its sweep, a `LINE`, and a 3.5 mm `TEXT` `R r` (written `Rr`) half way along it, `r` the model's radius to two decimals. A hidden arc gets none. |
 | M3 | The positions are the view's, moved and scaled as its lines are, so a dimension sits on the circle it states whatever the scale. The text is ASCII, so a diameter is `DIA` and not the diameter sign. |
 | M4 | The sizes come from the body's own circle and arc edges (§7 X1, X5), so a polygon the mesh draws as a circle is never dimensioned. A circle seen at an angle, or one a surface hides in part, is drawn as lines and has no dimension. |
+
+## 9. Title block fields
+
+`DXFPaper.Fields` adds up to three labelled entries to the title block: a part number, an author, a revision.
+
+| Decision | Rule |
+|---|---|
+| T1 | A `DXFField` is a label and a value, each printable ASCII, the label not empty: `PART` and `BK-100` are written `PART: BK-100`. More than three fields, an empty label or a character outside printable ASCII is `ErrDegenerate` and nothing is written. |
+| T2 | The fields are `TEXT` 2.5 mm high on the `TEXT` layer, stacked from the top of the title block, the first 4 mm below it and each 4 mm under the last, at 0.55 of the way from the sheet's left border to the scale's divider. The title keeps its place at the left. |
+| T3 | No fields adds nothing, so a sheet without them is as it was. The tests read the texts back and require the stack's spacing and that each lies inside the block and left of the scale. |
