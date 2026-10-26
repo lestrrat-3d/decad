@@ -85,12 +85,36 @@ func planChains(b *topo.Body, edges []*topo.Edge) (chains []chainCycle, handled 
 					decaderr.ErrUnsupported, selectorquery.RenderVec(l.at.Position))
 			}
 		}
-		if len(ls) != 2 {
-			return nil, true, fmt.Errorf("%w: an open tangent chain ends at a corner; only a closed chain is built",
-				decaderr.ErrUnsupported)
-		}
 	}
 	seen := map[*topo.Edge]bool{}
+	// An open chain starts at an edge with one link and ends at the other such
+	// edge.
+	for _, e := range edges {
+		if seen[e] || len(links[e]) != 1 {
+			continue
+		}
+		cyc := chainCycle{open: true}
+		cur, via := e, (*topo.Vertex)(nil)
+		for {
+			seen[cur] = true
+			cyc.edges = append(cyc.edges, cur)
+			var next *chainLink
+			for i := range links[cur] {
+				if links[cur][i].at != via {
+					next = &links[cur][i]
+				}
+			}
+			if next == nil {
+				break
+			}
+			cyc.joins = append(cyc.joins, *next)
+			cur, via = next.other, next.at
+			if seen[cur] {
+				return nil, true, fmt.Errorf("%w: a tangent chain does not close", decaderr.ErrUnsupported)
+			}
+		}
+		chains = append(chains, cyc)
+	}
 	for _, e := range edges {
 		if seen[e] {
 			continue
@@ -127,8 +151,24 @@ func planChains(b *topo.Body, edges []*topo.Edge) (chains []chainCycle, handled 
 	return chains, true, nil
 }
 
-// chainCycle is one closed chain: edges[i] meets edges[i+1] at joins[i].
+// chainCycle is one chain: edges[i] meets edges[i+1] at joins[i]. A closed
+// chain has as many joins as edges, and joins[n-1] meets edges[0]. An open
+// chain has one join fewer and two free ends.
 type chainCycle struct {
 	edges []*topo.Edge
 	joins []chainLink
+	open  bool
+}
+
+// freeEnds are the two vertices where an open chain ends: the vertex of the
+// first edge that is no junction, and the same for the last edge.
+func (c chainCycle) freeEnds() (first, last *topo.Vertex) {
+	n := len(c.edges)
+	other := func(e *topo.Edge, v *topo.Vertex) *topo.Vertex {
+		if e.Start == v {
+			return e.End
+		}
+		return e.Start
+	}
+	return other(c.edges[0], c.joins[0].at), other(c.edges[n-1], c.joins[n-2].at)
 }

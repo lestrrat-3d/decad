@@ -348,10 +348,11 @@ chord chain; nothing refuses.
 | E6 | The falsifier: every chain vertex lies within `bound(v) + slack` of the curve, `slack = 64·2⁻⁵²·max(1, |coordinate|)` | |
 | E7 | For an `Arc3`, the chain has an interior vertex, every angular step about the axis clears `4(max bound + slack)/R`, stays below `π`, has one sign, and the steps sum below `2π` | the sign picks `Axis = ±n` so the run is counter-clockwise |
 | E8 | `Plane` and `Cylinder` with the axis oblique to the plane: `|axis × n| > 10⁻¹²` and `|axis · n| ≥ 10⁻³` | `Ellipse3`, §10.5 |
+| E11 | `Cylinder` of radius `r` and `Torus` of tube radius `r` (equal within slack) with the cylinder axis `d` normal to the torus axis `a` (`|d · a| ≤ 10⁻¹²`), where `c` is the point of the cylinder's axis nearest the torus centre `C`: `c − C` lies in the torus's equatorial plane (`|(c − C) · a| ≤ slack`) at distance `Major` from `C` (within slack) | `Arc3` about `c` of radius `r`, axis `±d`, or `Circle3` for a closed rim. This is the junction of two retained blends (reach §5.4); the falsifier E6 and the sweep rule E7 apply |
 
 A `Line3` carries no parameters, so E2 and E4 assert only that the edge is
 straight between its vertices. The other pairs (`Cylinder`/`Cylinder`, `Cone`,
-`Torus`, and a `Plane`/`Cylinder` pair E8 declines) keep `FacetedCurve`.
+any other `Torus` pairing, and a `Plane`/`Cylinder` pair E8 declines) keep `FacetedCurve`.
 
 E6 can only reject. A vertex far from the curve disproves the pairing (a bug,
 or a chain that does not follow the intersection), and the edge stays a chord

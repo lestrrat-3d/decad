@@ -115,6 +115,9 @@ func TestFacetedRetainedBlendChain(t *testing.T) {
 				continue
 			}
 			junctions++
+			arc, isArc := e.Curve().(decad.Arc3)
+			require.True(t, isArc, "a junction between a cylinder and a torus blend is an Arc3")
+			require.InDelta(t, r, arc.Radius.Base(), 1e-12)
 			// A quarter circle of radius r: its ends are r*sqrt(2) apart.
 			chord := e.Start().Position().Value.Sub(e.End().Position().Value).Len()
 			require.InDelta(t, r*math.Sqrt2, chord, 1e-9)
@@ -198,35 +201,5 @@ func TestFacetedRetainedBlendChain(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "WithTangentChain")
 		require.Regexp(t, `(3|37),0,20`, err.Error())
-	})
-
-	t.Run("an open chain is refused", func(t *testing.T) {
-		t.Parallel()
-		sc := newRetentionScene()
-		s, err := sc.w.CreateSketch(sc.w.XY())
-		require.NoError(t, err)
-		r := s.CreateRectangle(0, 0, 40, 20)
-		s.Fix(r.A)
-		_, err = s.Solve(t.Context())
-		require.NoError(t, err)
-		box, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
-		require.NoError(t, err)
-		corner, err := decad.Fillet(t.Context(), box,
-			decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.Vec{})).Exactly(1),
-			units.Millimeters(3))
-		require.NoError(t, err)
-		drilled, err := decad.Cut(t.Context(), corner, sc.tool(t, 20))
-		require.NoError(t, err)
-		var seed decad.EdgeSelector
-		for _, e := range drilled.Edges() {
-			if arc, ok := e.Curve().(decad.Arc3); ok && math.Abs(arc.Center.Z-20) < 1e-9 {
-				seed = decad.Edges(decad.Circular(), decad.EndpointAt(e.Start().Position().Value)).Exactly(1)
-			}
-		}
-		require.NotNil(t, seed)
-		_, err = decad.Fillet(t.Context(), drilled, seed, units.Millimeters(1), decad.WithTangentChain())
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "open tangent chain")
 	})
 }

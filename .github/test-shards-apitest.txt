@@ -2096,6 +2096,7 @@
 10	0.01	TestFacetedPrismUnionChamferRefusesToolInCornerBand
 10	8.09	TestFacetedRetainedBlend
 10	0.00	TestFacetedRetainedBlendChain
+10	0.00	TestFacetedRetainedBlendOpenChain
 10	0.00	TestFacetedRetainedChamferTwoDistance
 10	0.03	TestFilletArcArcCorner
 10	0.00	TestFitSplineAllCoincidentFitPointsRefuses

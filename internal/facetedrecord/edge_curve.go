@@ -32,6 +32,9 @@ func RetainedEdgeCurve(a, b *topo.Face, chain []r3.Vec, bounds []float64, closed
 		return nil, false
 	}
 	ta, tb := a.Surface, b.Surface
+	if circle, ok := cylinderTorusRim(ta, tb, chain, bounds, closed); ok {
+		return circle, true
+	}
 	if _, ok := tb.(surfacegeom.Plane); ok {
 		ta, tb = tb, ta
 	}
@@ -64,6 +67,48 @@ func RetainedEdgeCurve(a, b *topo.Face, chain []r3.Vec, bounds []float64, closed
 		return circleRim(s.Center.Sub(n.Scale(d)), n, math.Sqrt(rr), chain, bounds, closed, slack)
 	}
 	return nil, false
+}
+
+// cylinderTorusRim returns the junction circle of a blend cylinder and a blend
+// torus of one tube radius (agent-docs/retained-modify-reach-design.md §5.4,
+// Claim J, and retention §10.1 E11). The cylinder's axis d is normal to the
+// torus axis a, and the plane through the torus axis normal to d cuts the
+// cylinder axis at the tube centre c_J: c_J lies in the torus's equatorial
+// plane at distance Major from its centre. Both surfaces then hold the circle
+// of radius r about c_J in that plane, which is published as an Arc3 (an open
+// rim) or a Circle3. The chain falsifier of E6 and the sweep rule of E7 apply;
+// a pair that fails any identity declines and keeps its chord chain.
+func cylinderTorusRim(sa, sb surfacegeom.Surface, chain []r3.Vec, bounds []float64,
+	closed bool) (surfacegeom.Curve, bool) {
+	cyl, ok := sa.(surfacegeom.Cylinder)
+	tor, tok := sb.(surfacegeom.Torus)
+	if !ok || !tok {
+		cyl, ok = sb.(surfacegeom.Cylinder)
+		tor, tok = sa.(surfacegeom.Torus)
+		if !ok || !tok {
+			return nil, false
+		}
+	}
+	scale := 1.0
+	for _, v := range chain {
+		scale = max(scale, math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
+	}
+	slack := 64 * edgeEps * scale
+	radius, rok := millimeters(cyl.Radius)
+	minor, mok := millimeters(tor.Minor)
+	major, jok := millimeters(tor.Major)
+	if !rok || !mok || !jok || math.Abs(radius-minor) > slack {
+		return nil, false
+	}
+	if math.Abs(cyl.Axis.Dot(tor.Axis)) > edgeParallel {
+		return nil, false
+	}
+	centre := cyl.Origin.Add(cyl.Axis.Scale(cyl.Axis.Dot(tor.Center.Sub(cyl.Origin))))
+	q := centre.Sub(tor.Center)
+	if math.Abs(q.Dot(tor.Axis)) > slack || math.Abs(q.Len()-major) > slack {
+		return nil, false
+	}
+	return circleRim(centre, cyl.Axis, radius, chain, bounds, closed, slack)
 }
 
 type rimLine struct{ point, dir r3.Vec }

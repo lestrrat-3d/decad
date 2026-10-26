@@ -217,3 +217,99 @@ func TestRetainedEdgeCurveObliqueEllipse(t *testing.T) {
 		require.False(t, ok)
 	})
 }
+
+// TestRetainedEdgeCurveCylinderTorus covers the junction of two fillet blends
+// (agent-docs/retained-modify-reach-design.md §5.4, Claim J). A fillet of
+// radius 1 along the front edge y=0 of a plate top z=20 is the cylinder about
+// the line y=1, z=19. The fillet of the r=3 corner about (3,3) is the torus of
+// tube radius 1 about the corner axis at depth 1. They meet in the quarter
+// circle about (3,1,19) in the plane x=3.
+func TestRetainedEdgeCurveCylinderTorus(t *testing.T) {
+	t.Parallel()
+	cylinder := func(radius float64) *topo.Face {
+		return retained(surfacegeom.Cylinder{Origin: r3.NewVec(3, 1, 19), Axis: r3.NewVec(1, 0, 0),
+			Radius: units.Millimeters(radius)})
+	}
+	torus := func(centre r3.Vec, major float64) *topo.Face {
+		return retained(surfacegeom.Torus{Center: centre, Axis: r3.NewVec(0, 0, 1),
+			Major: units.Millimeters(major), Minor: units.Millimeters(1)})
+	}
+	var chain []r3.Vec
+	var bounds []float64
+	for i := range 7 {
+		a := float64(i) / 6 * math.Pi / 2
+		chain = append(chain, r3.NewVec(3, 1-math.Sin(a), 19+math.Cos(a)))
+		bounds = append(bounds, 1e-9)
+	}
+	blend, ring := cylinder(1), torus(r3.NewVec(3, 3, 19), 2)
+
+	curve, ok := facetedrecord.RetainedEdgeCurve(blend, ring, chain, bounds, false)
+	require.True(t, ok)
+	arc, isArc := curve.(surfacegeom.Arc3)
+	require.True(t, isArc)
+	require.InDelta(t, 1, arc.Radius.Base(), 1e-12)
+	require.InDelta(t, 0, arc.Center.Sub(r3.NewVec(3, 1, 19)).Len(), 1e-12)
+	require.Equal(t, r3.NewVec(1, 0, 0), arc.Axis, "the run from (3,1,20) to (3,0,19) is counter-clockwise about +x")
+	curve, ok = facetedrecord.RetainedEdgeCurve(ring, blend, chain, bounds, false)
+	require.True(t, ok, "the order of the two faces does not matter")
+	require.IsType(t, surfacegeom.Arc3{}, curve)
+
+	reversed := make([]r3.Vec, len(chain))
+	for i, p := range chain {
+		reversed[len(chain)-1-i] = p
+	}
+	curve, ok = facetedrecord.RetainedEdgeCurve(blend, ring, reversed, bounds, false)
+	require.True(t, ok)
+	require.Equal(t, r3.NewVec(-1, 0, 0), curve.(surfacegeom.Arc3).Axis, "the reversed run sweeps about -x")
+
+	t.Run("a tube centre not at the major radius declines", func(t *testing.T) {
+		t.Parallel()
+		_, ok := facetedrecord.RetainedEdgeCurve(blend, torus(r3.NewVec(3, 3, 19), 2.5), chain, bounds, false)
+		require.False(t, ok)
+	})
+	t.Run("a torus centre off the equatorial plane declines", func(t *testing.T) {
+		t.Parallel()
+		// The centre is still Major from the tube centre, but out of the plane.
+		_, ok := facetedrecord.RetainedEdgeCurve(blend, torus(r3.NewVec(3, 1+math.Sqrt(3), 18), 2), chain, bounds,
+			false)
+		require.False(t, ok)
+	})
+	t.Run("unequal radii decline", func(t *testing.T) {
+		t.Parallel()
+		// A chain on the cylinder's own circle of radius 1.5 passes the falsifier,
+		// but the torus's tube is 1.
+		var wide []r3.Vec
+		for i := range 7 {
+			a := float64(i) / 6 * math.Pi / 2
+			wide = append(wide, r3.NewVec(3, 1-1.5*math.Sin(a), 19+1.5*math.Cos(a)))
+		}
+		_, ok := facetedrecord.RetainedEdgeCurve(cylinder(1.5), ring, wide, bounds, false)
+		require.False(t, ok)
+	})
+	t.Run("a cylinder along the torus axis declines", func(t *testing.T) {
+		t.Parallel()
+		// Every other identity holds, and a flat circle about the same centre is
+		// the cylinder's own section, but the two surfaces do not meet in it.
+		along := retained(surfacegeom.Cylinder{Origin: r3.NewVec(3, 1, 19), Axis: r3.NewVec(0, 0, 1),
+			Radius: units.Millimeters(1)})
+		var flat []r3.Vec
+		for i := range 7 {
+			a := float64(i) / 6 * math.Pi / 2
+			flat = append(flat, r3.NewVec(3+math.Cos(a), 1+math.Sin(a), 19))
+		}
+		_, ok := facetedrecord.RetainedEdgeCurve(along, ring, flat, bounds, false)
+		require.False(t, ok)
+	})
+	t.Run("a vertex off the circle falsifies the pairing", func(t *testing.T) {
+		t.Parallel()
+		bad := append([]r3.Vec(nil), chain...)
+		bad[3] = bad[3].Add(r3.NewVec(0, 0.5, 0))
+		_, ok := facetedrecord.RetainedEdgeCurve(blend, ring, bad, bounds, false)
+		require.False(t, ok)
+	})
+	t.Run("a chain with no interior vertex keeps its chords", func(t *testing.T) {
+		t.Parallel()
+		_, ok := facetedrecord.RetainedEdgeCurve(blend, ring, []r3.Vec{chain[0], chain[6]}, bounds[:2], false)
+		require.False(t, ok)
+	})
+}
