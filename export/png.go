@@ -41,6 +41,10 @@ type View struct {
 	// draw one body and so take one, and [PNGBodies] takes one for each body.
 	// The alpha channel is ignored. Faces that look away stay orange.
 	Colors []color.RGBA
+	// HiddenEdges draws the feature edges behind surfaces as dashed light grey
+	// lines under the outlines (agent-docs/png-export-design.md §9). It is not
+	// combined with a perspective camera.
+	HiddenEdges bool
 }
 
 // IsometricView looks at the model along the diagonal from above its +X, +Y,
@@ -120,8 +124,8 @@ func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View, coun
 		if fov == 0 {
 			return fmt.Errorf("export: PNG: %w: a field of view of zero draws nothing; leave it unset for an orthographic camera", decad.ErrDegenerate)
 		}
-		if view.Outlines {
-			return fmt.Errorf("export: PNG: %w: outlines are not drawn with a perspective camera", decad.ErrDegenerate)
+		if view.Outlines || view.HiddenEdges {
+			return fmt.Errorf("export: PNG: %w: outlines and hidden edges are not drawn with a perspective camera", decad.ErrDegenerate)
 		}
 		cam.FieldOfView = fov
 	}
@@ -132,7 +136,7 @@ func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View, coun
 	if err != nil {
 		return err
 	}
-	if view.Outlines {
+	if view.Outlines || view.HiddenEdges {
 		if err := drawOutlines(ctx, img, mesh, view); err != nil {
 			return err
 		}
@@ -152,10 +156,22 @@ func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View, coun
 	return nil
 }
 
-// outlineColor is the dark grey of an outline.
-var outlineColor = color.RGBA{R: 32, G: 32, B: 32, A: 255}
+// outlineColor is the dark grey of an outline, and hiddenColor the light grey of
+// a hidden edge.
+var (
+	outlineColor = color.RGBA{R: 32, G: 32, B: 32, A: 255}
+	hiddenColor  = color.RGBA{R: 150, G: 150, B: 150, A: 255}
+)
 
-// drawOutlines draws the visible feature edges of mesh over img.
+// hiddenDash is the dash of a hidden edge in pixels: 4 drawn, 3 skipped.
+const (
+	hiddenOn  = 4
+	hiddenOff = 3
+)
+
+// drawOutlines draws the visible feature edges of mesh over img when the view
+// asks for outlines, and the hidden ones, dashed and under them, when it asks
+// for hidden edges.
 func drawOutlines(ctx context.Context, img *image.RGBA, mesh meshSource, view View) error {
 	cam := raster.Camera{Direction: view.Direction, Up: view.Up}
 	lines, err := drawing.Project(ctx, mesh.Vertices(), mesh.Triangles(), cam)
@@ -166,10 +182,18 @@ func drawOutlines(ctx context.Context, img *image.RGBA, mesh meshSource, view Vi
 	if err != nil {
 		return err
 	}
-	segments := make([][2][2]float64, len(lines.Visible))
-	for i, s := range lines.Visible {
-		segments[i] = [2][2]float64{s.A, s.B}
+	plane := func(in []drawing.Segment) [][2][2]float64 {
+		out := make([][2][2]float64, len(in))
+		for i, s := range in {
+			out[i] = [2][2]float64{s.A, s.B}
+		}
+		return out
 	}
-	raster.DrawSegments(img, proj, segments, outlineColor)
+	if view.HiddenEdges {
+		raster.DrawDashed(img, proj, plane(lines.Hidden), hiddenColor, hiddenOn, hiddenOff)
+	}
+	if view.Outlines {
+		raster.DrawSegments(img, proj, plane(lines.Visible), outlineColor)
+	}
 	return nil
 }

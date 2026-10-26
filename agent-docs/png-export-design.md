@@ -14,6 +14,7 @@ type View struct {
     Outlines      bool
     FieldOfView   units.Value
     Colors        []color.RGBA
+    HiddenEdges   bool
 }
 
 func IsometricView(width, height int) View
@@ -49,7 +50,7 @@ image axis flipped, turns the tests red.
 
 ## 4. Not covered
 
-- Hidden edges, axes, dimensions and text, and outlines on a perspective camera.
+- Axes, dimensions and text, and outlines or hidden edges on a perspective camera.
 - Materials, textures, shadows and anti-aliasing, and a colour for the faces that look away from the camera.
 - A transparent background and image formats other than PNG.
 - Drawing a mesh body together with bodies.
@@ -105,3 +106,16 @@ projection `export.DXF` uses (`agent-docs/dxf-export-design.md`), so they are th
 | K1 | An empty `Colors` is the default scheme, and the bytes are those of §1 to §7. Otherwise `Colors` has one entry for each body drawn: `PNG` and `MeshPNG` draw one body and take one, and `PNGBodies` takes one for each of its bodies, in order. Any other length is `ErrDegenerate` and nothing is written. |
 | K2 | A triangle of body `i` is shaded with `Colors[i]` in place of the default blue, by the same headlight and ambient level (`raster.Shaded`'s). A face that looks away keeps the orange of §1, so an open sheet or an inside-out mesh still shows. The alpha channel of a colour is ignored: the image is opaque. |
 | K3 | The default blue, 120, 160, 200, as a colour gives the bytes of no colour. Outlines and the perspective camera draw as before. |
+
+## 9. Hidden edges
+
+`View.HiddenEdges` draws the feature edges that lie behind surfaces, dashed, so the far side of a part reads through
+its shading. They come from `drawing.Project` as the outlines of §6 do: its hidden runs are the ones a depth buffer
+finds behind a surface (`agent-docs/dxf-export-design.md` D5, D6).
+
+| Decision | Rule |
+|---|---|
+| E1 | Each hidden run is drawn in light grey, `(150, 150, 150)`, by `raster.DrawDashed`: along it, from its start, 4 pixels drawn and 3 skipped, in the half-pixel steps of `DrawSegments`. A run shorter than 4 pixels is drawn whole. |
+| E2 | The dashes are drawn over the shading and under the outlines, so with `Outlines` set a visible edge covers a dash where the two cross. |
+| E3 | The zero value draws none, and the bytes are those of §1 to §8. `HiddenEdges` is independent of `Outlines`. |
+| E4 | `HiddenEdges` with `FieldOfView` is `ErrDegenerate`, as `Outlines` with it is. `PNGBodies` and `MeshPNG` take the field too, and a hidden run is hidden by any body. |

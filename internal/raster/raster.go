@@ -384,3 +384,26 @@ func DrawSegments(img *image.RGBA, proj Projection, segments [][2][2]float64, c 
 		}
 	}
 }
+
+// DrawDashed is [DrawSegments] with a dash pattern: along each segment, from its
+// start, on pixels are drawn and then off pixels skipped, again and again. The
+// pattern is counted in the half-pixel steps DrawSegments takes, so a segment
+// shorter than on pixels is drawn whole. on is positive and off not negative.
+func DrawDashed(img *image.RGBA, proj Projection, segments [][2][2]float64, c color.RGBA, on, off int) {
+	period := 2 * (on + off)
+	for _, s := range segments {
+		ax, ay := proj.Plane(s[0][0], s[0][1])
+		bx, by := proj.Plane(s[1][0], s[1][1])
+		steps := int(math.Ceil(2 * math.Max(math.Abs(bx-ax), math.Abs(by-ay))))
+		for i := 0; i <= max(steps, 1); i++ {
+			if i%period >= 2*on {
+				continue
+			}
+			t := float64(i) / float64(max(steps, 1))
+			x, y := int(math.Floor(ax+(bx-ax)*t)), int(math.Floor(ay+(by-ay)*t))
+			if x >= 0 && y >= 0 && x < proj.Width && y < proj.Height {
+				img.SetRGBA(x, y, c)
+			}
+		}
+	}
+}
