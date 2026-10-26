@@ -349,6 +349,7 @@ area and enclosed volume.
 `export.GLTF` writes a glTF 2.0 JSON file with its mesh embedded, in metres.
 `export.PNG` draws a body as an orthographic, flat-shaded PNG image from a `export.View`, such as `export.IsometricView`.
 `export.DXF` writes the feature edges of a body as an ASCII DXF drawing along an `export.DrawingView`, with hidden edges on their own dashed layer.
+`export.MeshSTL`, `export.MeshOBJ`, `export.MeshGLTF`, `export.MeshPNG` and `export.MeshDXF` write a `decad.MeshBody` in the same formats, as it is, with no tolerance.
 `export.NewSTEPFile` builds a STEP file in memory. STEP header fields use `export.WithSTEPAuthor`,
 `export.WithSTEPName`, `export.WithSTEPOrganization` and `export.WithSTEPTimestamp`.
 

@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -25,6 +26,18 @@ func STL(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, op
 	if err != nil {
 		return err
 	}
+	return writeSTL(ctx, w, mesh)
+}
+
+// meshSource is a triangle mesh a writer reads: a body's tessellation or an
+// imported mesh body.
+type meshSource interface {
+	Vertices() []r3.Vec
+	Triangles() [][3]int
+}
+
+// writeSTL writes the mesh as deterministic ASCII STL.
+func writeSTL(ctx context.Context, w io.Writer, mesh meshSource) error {
 	vertices, triangles := mesh.Vertices(), mesh.Triangles()
 	if err := ctx.Err(); err != nil {
 		return err
@@ -71,6 +84,11 @@ func OBJ(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, op
 	if err != nil {
 		return err
 	}
+	return writeOBJ(ctx, w, mesh)
+}
+
+// writeOBJ writes the mesh as deterministic Wavefront OBJ.
+func writeOBJ(ctx context.Context, w io.Writer, mesh meshSource) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}

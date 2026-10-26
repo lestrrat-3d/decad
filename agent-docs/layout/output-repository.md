@@ -15,7 +15,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `mesh_import.go` | Public `ReadSTL`, `ReadOBJ`, their options and `ErrMalformedMesh`, `ErrMeshTooLarge`: limits, then `internal/meshparse/` parses and `NewMeshBody` reads the result. See mesh-import design. |
 | `internal/meshparse/` | STL and OBJ parsing into welded vertices and triangles, with size limits. See mesh-import design. |
 | `internal/meshbody/` | Exact edge classification, shell count, signed volume and area interval of an imported mesh. See mesh-import design. |
-| `export/` | STL, OBJ, 3MF, glTF, PNG, DXF and AP214 writers. See `agent-docs/step-export-design.md`, `agent-docs/3mf-export-design.md`, `agent-docs/gltf-export-design.md`, `agent-docs/png-export-design.md`, `agent-docs/dxf-export-design.md`. |
+| `export/` | STL, OBJ, 3MF, glTF, PNG, DXF and AP214 writers, and the same mesh writers for a `MeshBody` (`mesh_body.go`). See `agent-docs/step-export-design.md`, `agent-docs/3mf-export-design.md`, `agent-docs/gltf-export-design.md`, `agent-docs/png-export-design.md`, `agent-docs/dxf-export-design.md`. |
 | `internal/meshslice/` | Cuts a triangle mesh with a plane and chains the cut into closed outlines by the mesh edges it crosses. See section-outline design. |
 | `internal/drawing/` | Feature-edge projection of a mesh with depth-buffer hidden-line runs, for `export.DXF`; plain millimetre data. See dxf-export design. |
 | `internal/raster/` | Orthographic flat-shaded triangle rasterizer, projection and depth buffer, for `export.PNG` and `export.DXF`; plain millimetre data. See png-export design. |

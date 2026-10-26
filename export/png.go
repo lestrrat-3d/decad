@@ -57,6 +57,11 @@ func PNG(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, vi
 	if err != nil {
 		return err
 	}
+	return writePNG(ctx, w, mesh, view)
+}
+
+// writePNG draws the mesh as a PNG image.
+func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}

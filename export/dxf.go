@@ -64,6 +64,11 @@ func DXF(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, vi
 	if err != nil {
 		return err
 	}
+	return writeDXFDrawing(ctx, w, mesh, view)
+}
+
+// writeDXFDrawing writes the mesh's feature edges as a DXF drawing.
+func writeDXFDrawing(ctx context.Context, w io.Writer, mesh meshSource, view DrawingView) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}

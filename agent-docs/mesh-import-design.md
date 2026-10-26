@@ -1,7 +1,7 @@
 # Mesh import design
 
 `ReadSTL` and `ReadOBJ` read an STL or OBJ file into a `MeshBody`: triangles and nothing else. A `MeshBody` is not a `Body`. It
-has no faces, edges or analytic surfaces, and no feature, Boolean, `Verify` or export takes it. It reads out what its
+has no faces, edges or analytic surfaces, and no feature, Boolean or `Verify` takes it, and only the mesh writers of §6 export it. It reads out what its
 triangles say, so a mesh from another tool can be checked (is it closed, how much does it hold, how large is it)
 before a model is built around it. The separate type is `agent-docs/api-design.md` invariant 5.
 
@@ -77,6 +77,27 @@ triangles, two shells and an inverted mesh.
 - STEP, IGES and 3MF import.
 - Turning a `MeshBody` into a `Body`, or taking one in a feature, a Boolean or `Verify`.
 - Repair: filling holes, flipping triangles, merging near-equal vertices or removing slivers.
-- Writing a `MeshBody` with `export`.
+- Writing a `MeshBody` as STEP or 3MF.
 - Concave or non-planar OBJ faces, which a fan cuts wrongly.
 - Units other than millimetres.
+
+## 6. Export
+
+`export.MeshSTL`, `MeshOBJ`, `MeshGLTF`, `MeshPNG` and `MeshDXF` write a `*decad.MeshBody` as the matching body writer does.
+
+```go
+func MeshSTL(ctx context.Context, w io.Writer, m *decad.MeshBody) error
+func MeshOBJ(ctx context.Context, w io.Writer, m *decad.MeshBody) error
+func MeshGLTF(ctx context.Context, w io.Writer, m *decad.MeshBody) error
+func MeshPNG(ctx context.Context, w io.Writer, m *decad.MeshBody, view View) error
+func MeshDXF(ctx context.Context, w io.Writer, m *decad.MeshBody, view DrawingView) error
+```
+
+| Decision | Rule |
+|---|---|
+| E1 | Each function and its body writer share one core over the vertices and triangles (`export/mesh_body.go`), so the layout, number format and determinism are the body writer's. |
+| E2 | The mesh is written as it is. There is no tolerance, no tessellation and no proof, so a mesh read from an STL file and written back holds the same triangles. |
+| E3 | A nil context, writer or mesh body is `ErrDegenerate`. A cancelled context writes nothing. |
+| E4 | A zero-area triangle has no STL normal and is `ErrDegenerate` for `MeshSTL`. `MeshPNG` shows an open or inside-out mesh with its orange back faces, and `MeshDXF` draws its boundary edges. |
+| E5 | STEP and 3MF are not offered: both need a sound solid, which an imported mesh is not. |
+
