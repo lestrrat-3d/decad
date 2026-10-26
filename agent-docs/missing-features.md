@@ -49,6 +49,9 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | `Extrude` over a chain with `WithTaper` (any angle) or `WithSurfaceResult()` | `ErrUnsupported` after the seam gates and before the extent; a chain extrude always returns a sheet and has no draft build | `agent-docs/surface-design.md` §13.2 |
 | `Emboss` on a non-planar face, or a relief with draft or a rim fillet | `Emboss` takes closed profiles on an analytic planar face (`emboss.go`) | `agent-docs/emboss-design.md` §5 |
 | `Rib` or `Web` along a chain, arc or polyline, or one that extends itself to the body | `Rib` accepts one straight `*sketch.Line` and the caller sets the extent and overrun (`rib.go`) | `agent-docs/rib-design.md` §4 |
+| `Hole` with a thread or a noncircular shape | `HoleSpec` holds a round diameter, a depth and an optional counterbore or countersink; it has no thread or shape field (`hole.go`) | `agent-docs/hole-design.md` §4 |
+| `Hole` in a face that is not an analytic plane, or in a sheet | `ErrUnsupported` (`hole.go`) | `agent-docs/hole-design.md` §4 |
+| `Sweep` along guide rails or guide surfaces, or between a second profile | `Sweep` takes one section and one `Path`; it has no guide input | `agent-docs/sweep-design.md` §16 |
 
 ## Modify operations
 
@@ -177,7 +180,20 @@ moves its row to the matching section above, with that doc as owner.
 
 | Gap | Today |
 |---|---|
-| Direct edits: move, offset, delete or replace a face of a solid, press-pull | No entry point exists; `Offset` refuses every solid (`offset.go`, `agent-docs/surface-design.md` R37) |
+| Direct edits: move, offset, delete, replace, merge or split a face of a solid, press-pull | No entry point exists; `Offset` refuses every solid (`offset.go`, `agent-docs/surface-design.md` R37) |
+| Split a body or face at its silhouette from a view direction; untrim a surface | No entry point exists; `Split` cuts with a tool body (`surface_trim.go`) |
+| Standard threads (ISO, UN) on a cylindrical face, cosmetic or modeled, chosen from a thread table | No entry point exists; `Coil` sweeps a profile along a helix and reads no thread table |
+| Pattern along a path or curve | `PatternSpec` holds `LinearPattern` and `CircularPattern` only (`pattern.go`) |
+| Fillet by chord length, with setback corners or with a curvature-continuous blend; chamfer by distance and angle | `Fillet` takes one radius and no options (`fillet.go`); `Chamfer` takes one distance, or two with `WithAsymmetricChamfer` (`chamfer.go`) |
+| Shell with a different thickness per face, or a wall on both sides of the original surface | `Shell` takes one thickness, and `WithShellSense` picks one side (`shell.go`) |
+| Screw boss for a plastic part | No entry point exists |
+| T-spline (Form) sculpting | No entry point exists; free-form surfaces are NURBS (`decad.NURBSSurface`) |
+| Mesh bodies as input: convert to a solid, reduce, repair, remesh | No entry point exists; `decad.Mesh` is an output only |
+| Lattice or volumetric infill for printing | No entry point exists |
+| Nesting parts on a sheet or build plate | No entry point exists |
+| Toolpath generation (CAM) | No entry point exists |
+| Finite-element stress or thermal simulation | No entry point exists |
+| Rendered images | No entry point exists |
 | Per-axis (non-uniform) scaling of a body | No entry point exists; `ScaledAt` scales uniformly (`point_plane_scale.go`) and `Transform`/`Copy` take a rigid motion only (`document.go`) |
 | Saving a `Document` to a file or loading one back | No entry point exists; a model is rebuilt by rerunning the Go program that built it |
 | Text profiles from a font, for engraved or embossed lettering | No entry point exists |
