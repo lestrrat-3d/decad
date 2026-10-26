@@ -2471,3 +2471,8 @@
 10	0.01	TestPathPatternJoinUnitesTheInstancesWithTheTarget
 10	0.01	TestPathPatternJoinSpacedPlacesTheCopiesByDistance
 10	0.01	TestPathPatternJoinRefusalsLeaveBothBodiesLive
+10	0.01	TestGyroidLatticeIsAClosedSolidOfTheExpectedFraction
+10	0.01	TestGyroidLatticeConvergesAsTheGridRefines
+10	0.01	TestGyroidLatticeThickensWithItsLevel
+10	0.01	TestGyroidLatticeRepeatsEveryCell
+10	0.01	TestGyroidLatticeRefusals

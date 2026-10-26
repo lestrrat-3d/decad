@@ -1,0 +1,86 @@
+package decad
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"math"
+
+	"github.com/lestrrat-3d/decad/internal/lattice"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
+)
+
+// defaultLatticeResolution is the samples to a cell a [LatticeSpec] with no
+// Resolution takes.
+const defaultLatticeResolution = 16
+
+// LatticeSpec describes a gyroid lattice for [GyroidLattice].
+type LatticeSpec struct {
+	// Min and Max are the box's corners in millimetres; Min is below Max on every
+	// axis.
+	Min, Max r3.Vec
+	// Cell is the length after which the lattice repeats along each axis, a
+	// positive length.
+	Cell units.Value
+	// Level is a dimensionless wall thickness: the solid is where the gyroid field
+	// g lies within Level of zero, |g| ≤ Level, and g runs from −3/2 to 3/2. A
+	// level of 0.3 gives a thin wall, 1 a heavy one and values near 3/2 a nearly
+	// full box. It lies strictly between 0 and 3/2.
+	Level units.Value
+	// Resolution is the number of samples to a cell along each axis, from 4 up.
+	// The zero value takes 16. A finer grid follows the surface more closely and
+	// makes more triangles.
+	Resolution int
+}
+
+// GyroidLattice builds a gyroid lattice, the triply periodic wall used for
+// lightweight print infill, as a closed [MeshBody] filling the box of spec
+// (agent-docs/lattice-design.md). The box's faces cap the lattice, so the mesh
+// is closed and wound outward, and its [MeshBody.Volume] reads.
+//
+// The surface is the zero set of the field sampled on a grid and cut by
+// marching tetrahedra, so it is as exact as the grid is fine: the mesh is not a
+// B-rep, and its volume converges on the lattice's as Resolution grows. The
+// lattice fills a box, not a body: nothing here takes a mesh body into a Boolean.
+//
+// ctx MUST NOT be nil. A nil context, a box with no volume, a cell that is not
+// positive, a level not between 0 and 3/2, a Resolution below 4, and a lattice
+// that needs more than 8 million samples or 2 million triangles are
+// ErrDegenerate. A cell of the wrong unit kind is ErrUnitKind and a negative one
+// ErrNegativeMagnitude. A level that is not dimensionless is ErrUnitKind.
+// Non-finite corners are ErrNotFinite. A canceled context returns its error.
+func GyroidLattice(ctx context.Context, spec LatticeSpec) (*MeshBody, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control a lattice`, ErrDegenerate)
+	}
+	for _, c := range []float64{spec.Min.X, spec.Min.Y, spec.Min.Z, spec.Max.X, spec.Max.Y, spec.Max.Z} {
+		if math.IsNaN(c) || math.IsInf(c, 0) {
+			return nil, fmt.Errorf(`%w: a lattice corner is not finite`, ErrNotFinite)
+		}
+	}
+	cell, err := sectionrecord.MagnitudeIn(spec.Cell, units.Length, units.Millimeter, "the lattice cell")
+	if err != nil {
+		return nil, err
+	}
+	if spec.Level.Kind() != units.Dimensionless {
+		return nil, fmt.Errorf(`%w: the lattice level must be dimensionless`, ErrUnitKind)
+	}
+	level := spec.Level.Base()
+	if math.IsNaN(level) || math.IsInf(level, 0) {
+		return nil, fmt.Errorf(`%w: the lattice level is not finite`, ErrNotFinite)
+	}
+	res := spec.Resolution
+	if res == 0 {
+		res = defaultLatticeResolution
+	}
+	vertices, triangles, err := lattice.Gyroid(ctx, spec.Min, spec.Max, cell, level, res)
+	if errors.Is(err, lattice.ErrDegenerate) {
+		return nil, fmt.Errorf("%w: %s", ErrDegenerate, err)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return NewMeshBody(ctx, vertices, triangles)
+}
