@@ -302,3 +302,51 @@ func Example_export_dxf_title_fields() {
 	// Output:
 	// part number written: true, revision written: true
 }
+
+// export.DXFSection draws the cut of a body by a plane, with the cut's outline and
+// its hatching, the way a section view of an engineering drawing does. Here a plate
+// with a round hole is cut through its middle: the hatch fills the plate and leaves
+// the hole empty.
+func Example_export_dxf_section() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(0, 0, 40, 40)
+	s.Fix(rect.A)
+	s.CreateCircle(s.CreatePoint(20, 20), 6)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	var plate *decad.Body
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			plate, err = decad.Extrude(context.Background(), decad.New(), s, p,
+				decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+			if err != nil {
+				fmt.Printf("failed to extrude: %s\n", err)
+				return
+			}
+		}
+	}
+	// The cutting plane is z = 5, its X and Y along the world's.
+	plane, err := r3.NewFrame(r3.NewVec(0, 0, 5), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	if err != nil {
+		fmt.Printf("failed to make the plane: %s\n", err)
+		return
+	}
+	var out bytes.Buffer
+	err = export.DXFSection(context.Background(), &out, plate, plane, units.Millimeters(0.1),
+		export.DXFHatch{Spacing: units.Millimeters(2)})
+	if err != nil {
+		fmt.Printf("failed to export: %s\n", err)
+		return
+	}
+	fmt.Printf("outline: %t, hatch: %t\n",
+		strings.Contains(out.String(), export.DXFSectionLayer), strings.Contains(out.String(), export.DXFHatchLayer))
+	// Output:
+	// outline: true, hatch: true
+}

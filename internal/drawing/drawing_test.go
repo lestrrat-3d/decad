@@ -209,3 +209,90 @@ func TestArcBoundsIncludeTheExtremesItPassesThrough(t *testing.T) {
 	require.InDelta(t, 10-4*math.Sqrt2/2, minX, 1e-12)
 	require.InDelta(t, 10-4*math.Sqrt2/2, minY, 1e-12)
 }
+
+// polygonArea is the area of a simple polygon by the shoelace formula, counter-clockwise positive.
+func polygonArea(p [][2]float64) float64 {
+	a := 0.0
+	for i := range p {
+		q := p[(i+1)%len(p)]
+		a += p[i][0]*q[1] - q[0]*p[i][1]
+	}
+	return a / 2
+}
+
+func TestHatchFillsARectangleWithRowsAMultipleOfSpacingApart(t *testing.T) {
+	t.Parallel()
+	// A 10 x 6 rectangle from (1, 1): at spacing 2 and angle 0 the horizontal lines at y = 2, 4 and 6
+	// cross it, each 10 long.
+	rect := [][2]float64{{1, 1}, {11, 1}, {11, 7}, {1, 7}}
+	got, err := drawing.Hatch([][][2]float64{rect}, 2, 0)
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+	for i, s := range got {
+		y := 2 * float64(i+1)
+		require.InDelta(t, y, s.A[1], 1e-12)
+		require.InDelta(t, y, s.B[1], 1e-12)
+		require.InDelta(t, 10, math.Abs(s.B[0]-s.A[0]), 1e-12)
+		require.InDelta(t, 1, math.Min(s.A[0], s.B[0]), 1e-12)
+	}
+}
+
+func TestHatchLeavesAHoleEmptyWhicheverWayItRuns(t *testing.T) {
+	t.Parallel()
+	outer := [][2]float64{{0, 0}, {20, 0}, {20, 20}, {0, 20}}
+	hole := [][2]float64{{5, 5}, {15, 5}, {15, 15}, {5, 15}}
+	reversed := [][2]float64{{5, 5}, {5, 15}, {15, 15}, {15, 5}}
+	for _, h := range [][][2]float64{hole, reversed} {
+		got, err := drawing.Hatch([][][2]float64{outer, h}, 1, math.Pi/4)
+		require.NoError(t, err)
+		length := 0.0
+		for _, s := range got {
+			length += math.Hypot(s.B[0]-s.A[0], s.B[1]-s.A[1])
+			mid := [2]float64{(s.A[0] + s.B[0]) / 2, (s.A[1] + s.B[1]) / 2}
+			require.False(t, mid[0] > 5+1e-9 && mid[0] < 15-1e-9 && mid[1] > 5+1e-9 && mid[1] < 15-1e-9, "a segment crosses the hole at %v", mid)
+		}
+		// The lines are a spacing apart, so the hatch's length times the spacing is the region's area, 300.
+		require.InDelta(t, 300, length*1, 0.02*300)
+		require.InDelta(t, polygonArea(outer)-polygonArea(hole), 300, 1e-9)
+	}
+}
+
+func TestHatchLinesLieOnMultiplesOfSpacingAcrossTheLines(t *testing.T) {
+	t.Parallel()
+	tri := [][2]float64{{0, 0}, {9, 1}, {3, 8}}
+	angle := 0.6
+	got, err := drawing.Hatch([][][2]float64{tri}, 0.7, angle)
+	require.NoError(t, err)
+	require.NotEmpty(t, got)
+	sin, cos := math.Sincos(angle)
+	for _, s := range got {
+		for _, p := range [][2]float64{s.A, s.B} {
+			k := (-p[0]*sin + p[1]*cos) / 0.7
+			require.InDelta(t, math.Round(k), k, 1e-9, "the line sits at a whole multiple of the spacing")
+		}
+		// Each segment runs along the angle.
+		require.InDelta(t, 0, (s.B[0]-s.A[0])*sin-(s.B[1]-s.A[1])*cos, 1e-9)
+	}
+}
+
+func TestHatchRefusals(t *testing.T) {
+	t.Parallel()
+	square := [][2]float64{{0, 0}, {10, 0}, {10, 10}, {0, 10}}
+	for name, tc := range map[string]struct {
+		loops          [][][2]float64
+		spacing, angle float64
+	}{
+		"zero spacing":     {[][][2]float64{square}, 0, 0},
+		"negative spacing": {[][][2]float64{square}, -1, 0},
+		"NaN spacing":      {[][][2]float64{square}, math.NaN(), 0},
+		"infinite angle":   {[][][2]float64{square}, 1, math.Inf(1)},
+		"too fine":         {[][][2]float64{square}, 1e-6, 0},
+		"NaN point":        {[][][2]float64{{{0, 0}, {math.NaN(), 1}, {1, 1}}}, 1, 0},
+	} {
+		_, err := drawing.Hatch(tc.loops, tc.spacing, tc.angle)
+		require.ErrorIs(t, err, raster.ErrDegenerate, name)
+	}
+	got, err := drawing.Hatch(nil, 1, 0)
+	require.NoError(t, err)
+	require.Empty(t, got)
+}

@@ -26,7 +26,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/meshbody/` | Exact edge classification, shell count, signed volume and area interval of an imported mesh. See mesh-import design. |
 | `export/` | STL, OBJ, 3MF, glTF, PNG, DXF and AP214 writers, and mesh writers for a `MeshBody`. See `agent-docs/step-export-design.md`, `agent-docs/3mf-export-design.md`, `agent-docs/gltf-export-design.md`, `agent-docs/png-export-design.md`, `agent-docs/dxf-export-design.md`. |
 | `internal/meshslice/` | Cuts a triangle mesh with a plane and chains the cut into closed outlines by the mesh edges it crosses. See section-outline design. |
-| `internal/drawing/` | Feature-edge projection of a mesh with depth-buffer hidden-line runs, for `export.DXF`; plain millimetre data. See dxf-export design. |
+| `internal/drawing/` | Feature-edge projection of a mesh with depth-buffer hidden-line runs, and the even-odd hatch of a section, for `export.DXF` and `export.DXFSection`; plain millimetre data. See dxf-export design. |
 | `internal/raster/` | Orthographic flat-shaded triangle rasterizer, projection and depth buffer, for `export.PNG` and `export.DXF`; plain millimetre data. See png-export design. |
 | `linkage/` | The generic linkage model, its loop and drive solver, and the linkage and joint-box checks over the motion engine. `decad` aliases it. See `agent-docs/linkage-check-design.md`. |
 | `report/` | Result vocabulary generic over body, face, edge and vertex references: measurements, outcome enums, contact, sweep and Verify records. `decad` aliases it. See api-design §6.4. |
