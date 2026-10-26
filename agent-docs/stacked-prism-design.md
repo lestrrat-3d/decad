@@ -67,7 +67,7 @@ charges a section displacement charges this one.
 **Denoted levels.** A level with zero displacement denotes its own held
 float. A displaced level denotes a rational the float only rounds:
 `fl(x) · fl(Inch.Factor) / fl(Millimeter.Factor)` for an inch depth
-(`extent.ExactConversion`), or `12 − 3.175` for a 3.175 mm pocket below an
+(`extent.ExactConversion`), or `12 − fl(3.175)` for a 3.175 mm pocket below an
 offset plane at 12. `prismplacement.LevelDenotation` records that rational
 beside the held float and displacement it was proven against, on
 `prismrecord.Payload` (`Z0Denoted`, `Z1Denoted`) and on `Slab`. `DenoteLevel`
@@ -85,7 +85,8 @@ level, and carries the target's own end denotations onto the stack's ends. A
 `Transform` or `Copy` keeps them with the rest of the record. A `ToFace` or `ThroughAll` stop, a chamfered end, a shell level and
 every union-built level record none.
 
-The denotation decides only the interface arm (§7 stage 3). Measurements,
+The denotations decide the interface arm, guard the split arm's order
+(§7 stage 3) and enter the I4 audit (§2.2). Measurements,
 tessellation and every bound read the held floats and their displacements
 as before, so a displaced level still reads `Approximate` (§4).
 
@@ -403,11 +404,15 @@ Each admitted arm ships its implementation and tests together.
    declines, while 0.125 in and 3.175 mm denote one plane and share the
    interface whatever rounding the floor level carries. A tool end with a
    displacement and no recorded denotation, or an interface whose slabs record
-   none or disagree, declines this arm. The split arm compares held levels; where the
-   tool end and the split slab's levels are all denoted, those rationals must
-   keep the same strict order, and the blind cut on a prism checks the same
-   against the target's ends, so the denoted levels a stack records stay
-   monotone. The reached slabs' private scenes
+   none or disagree, declines this arm. The split arm compares held levels;
+   where the tool end is denoted, it must lie strictly between whichever of
+   the containing slab's two ends are denoted, and the blind cut on a prism
+   checks the same against the target's ends. Only those two ends are
+   checked: when one of them is displaced with no recorded denotation, a
+   denoted level farther along the stack could still sit out of order with
+   the new one. That needs a displacement larger than a slab's thickness,
+   while a unit conversion or a shift rounding displaces a level by about
+   1e-15 mm. The reached slabs' private scenes
    plus the interface audit prove the new hole set is monotone. Opposed
    exclusive holes also build when the private scene above proves their
    separation without a charge and the section displacement is zero. A tool

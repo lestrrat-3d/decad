@@ -534,8 +534,8 @@ disjoint from it, or touches it only at a cap continues to the ordinary boolean 
 displacement (an inch-converted depth does). Two levels compare by their exact
 rationals and order only when their gap exceeds the sum of both displacements.
 Equal levels count as one only when both are undisplaced; A7 compares held
-levels and does not read the denoted levels stacked §2.1 records, which only
-stacked §7's interface arm uses. A gap inside the
+levels and does not read the denoted levels stacked §2.1 records, which
+stacked §7's blind cuts and the stacked I4 audit read. A gap inside the
 displacements, or equal levels that carry one, orders nothing and the pair
 continues to the ordinary dispatch. A displacement therefore never admits an
 order: it only has to be smaller than the gap. A displaced level reaches the
