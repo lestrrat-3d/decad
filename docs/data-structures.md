@@ -136,7 +136,7 @@ configuration option.
 | `decad.ArrangeBed` | struct | The flat area `decad.Arrange` fills: a corner, a width, a depth and a gap. | The caller |
 | `decad.ThreadSpec` | struct | One thread: the cylindrical face to cut, the pitch, the hand, an optional length, an optional groove form and an optional lead-in chamfer. | The caller |
 | `decad.ThreadForm` | struct | A symmetric trapezoidal thread groove: included flank angle, depth and root flat; the zero value is the ISO profile. | `decad.ThreadSpec` |
-| `decad.BossSpec` | struct | One boss: the face it stands on, a world point, its diameter and height, an optional pilot, an optional draft and an optional root fillet. | The caller |
+| `decad.BossSpec` | struct | One boss: the face it stands on, a world point, its diameter and height, an optional pilot, an optional draft, an optional root fillet and an optional non-round shape. | The caller |
 | `decad.BossBore` | struct | A boss's blind pilot hole: diameter and depth from the boss's top, an optional head and an optional thread. | The caller |
 | `decad.SectionOutline` | struct | The closed outlines where a body's verified mesh meets a plane, and how far they lie from the true surface. | `Body.SectionOutline` |
 | `decad.HoleSpec` | struct | One hole: the face, a world point on it, the diameter, a depth, an optional head, an optional shape, an optional thread and an optional draft. | The caller |
