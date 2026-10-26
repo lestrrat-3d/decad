@@ -117,6 +117,41 @@ func TestRationalFloatErrorMatchesBigRatSub(t *testing.T) {
 	require.True(t, math.IsInf(proof.RationalFloatError(big.NewRat(1, 3), math.NaN()), 1))
 }
 
+func TestRationalFloatErrorRoundingBoundaries(t *testing.T) {
+	t.Parallel()
+	tiny := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(3), 1200))
+	huge := new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), 2048))
+	for i, tc := range []struct {
+		exact *big.Rat
+		held  float64
+	}{
+		{new(big.Rat), 0},
+		{new(big.Rat), math.Copysign(0, -1)},
+		{big.NewRat(7, 3), 0},
+		{big.NewRat(-7, 3), 0},
+		{big.NewRat(7, 3), 7.0 / 3},
+		{big.NewRat(-7, 3), -7.0 / 3},
+		{proof.FloatRat(math.Pi), math.Pi},
+		{proof.FloatRat(math.MaxFloat64), -math.MaxFloat64},
+		{tiny, 0},
+		{new(big.Rat).Neg(tiny), 0},
+		{huge, 0},
+		{new(big.Rat).Neg(huge), math.SmallestNonzeroFloat64},
+		{big.NewRat(1<<53+1, 1<<53), 0},
+		{big.NewRat(-(1<<53 + 1), 1<<53), 0},
+	} {
+		num, den := new(big.Int).Set(tc.exact.Num()), new(big.Int).Set(tc.exact.Denom())
+		want := bigRatFloatError(tc.exact, tc.held)
+		got := proof.RationalFloatError(tc.exact, tc.held)
+		require.Equal(t, math.Float64bits(want), math.Float64bits(got), "case %d", i)
+		require.Zero(t, num.Cmp(tc.exact.Num()), "case %d numerator changed", i)
+		require.Zero(t, den.Cmp(tc.exact.Denom()), "case %d denominator changed", i)
+	}
+	for _, held := range []float64{math.Inf(-1), math.Inf(1), math.NaN()} {
+		require.True(t, math.IsInf(proof.RationalFloatError(big.NewRat(1, 3), held), 1))
+	}
+}
+
 func TestCmpFloatRatMatchesRatCmp(t *testing.T) {
 	t.Parallel()
 	// Each float is checked against many rationals. Its independent exact
