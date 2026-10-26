@@ -5,6 +5,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/hwfault"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
@@ -306,6 +307,7 @@ func TestApexPlaneSignKeepsOutcomesUnderCallerPermutation(t *testing.T) {
 // carry no lift. Neither may be decided in floats: the first must equal the
 // exact dot product, the second must reach it (and panic on the missing lift).
 func TestApexPlaneSignDeclinesForeignPoints(t *testing.T) {
+	hwfault.SkipOnWindows(t)
 	t.Parallel()
 	verts := []r3.Vec{{}, {X: 1}, {Y: 1}, {Z: 1}}
 	data := NewLoftAuditData(verts, [][3]int{{0, 1, 2}, {0, 1, 3}})

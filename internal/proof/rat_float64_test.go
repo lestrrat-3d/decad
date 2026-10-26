@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/hwfault"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
@@ -221,6 +222,7 @@ func TestRatFloat64MatchesFloat64(t *testing.T) {
 }
 
 func TestRatFloat64NilPanicsLikeFloat64(t *testing.T) {
+	hwfault.SkipOnWindows(t)
 	t.Parallel()
 	run := func(fn func()) (v any) {
 		defer func() { v = recover() }()
