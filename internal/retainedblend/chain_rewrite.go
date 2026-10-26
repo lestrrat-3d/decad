@@ -1,0 +1,691 @@
+package retainedblend
+
+import (
+	"context"
+	"fmt"
+	"math"
+	"sort"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
+)
+
+// This file builds a closed tangent chain (agent-docs/retained-modify-reach-design.md
+// §5.5): every edge of one loop of the base plane P is blended as one chain.
+// Section points of a junction are computed once and shared by both strips.
+
+// chainEntry is one chain edge in walk order, which is the direction of the
+// base loop.
+type chainEntry struct {
+	edge   *topo.Edge
+	ord    int
+	ref    refTag
+	wall   *topo.Face
+	wallIx int
+	arc    bool
+	rim    rim
+	ja, jb int // junction indices at the start and end
+	p0, p1 r3.Vec
+	d      r3.Vec // line: direction
+	m      [2]r3.Vec
+	sigma  float64 // arc: +1 when the walk turns counter-clockwise about the base normal
+	phi0   float64
+	span   float64 // arc: swept angle
+	length float64 // line: length
+	cols   []chainCol
+	run    []int
+	step   blendSpec
+}
+
+// chainCol is one cross-section of the chain: the point on the chain, the way
+// into P, and the vertices of its rows 0 … M−1.
+type chainCol struct {
+	s    float64
+	rows []int
+}
+
+func heldIndex(fp facetedrecord.Payload, v *topo.Vertex) int {
+	for i, p := range fp.Verts {
+		if p == v.Position {
+			return i
+		}
+	}
+	return -1
+}
+
+// rewriteChain blends the closed chain on a copy of the held mesh.
+func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, cyc chainCycle, ords []int,
+	refs []refTag, spec blendSpec, op string, faceIndex map[*topo.Face]int) (*topo.Body, error) {
+	n := len(cyc.edges)
+	scale := 1.0
+	for _, v := range fp.Verts {
+		scale = max(scale, math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
+	}
+	w := newWork(fp, rim{scale: scale}, spec)
+	slack := 64 * ulp * scale
+	margin := w.tau + slack
+
+	// The base: the one face every chain edge borders.
+	var base *topo.Face
+	for _, f := range cyc.edges[0].Faces {
+		all := true
+		for _, e := range cyc.edges[1:] {
+			all = all && (e.Faces[0] == f || e.Faces[1] == f)
+		}
+		if all {
+			if base != nil {
+				return nil, fmt.Errorf("%w: the chain's edges share two faces", decaderr.ErrUnsupported)
+			}
+			base = f
+		}
+	}
+	if base == nil {
+		return nil, fmt.Errorf("%w: the chain's edges share no base plane", decaderr.ErrUnsupported)
+	}
+	bp, ok := retainedPlane(base)
+	if !ok {
+		return nil, fmt.Errorf("%w: the chain's base is not a retained plane", decaderr.ErrUnsupported)
+	}
+	nP, oP := bp.n, bp.o
+
+	// The walk follows the base loop.
+	jp := make([]r3.Vec, n)
+	hv := make([]int, n)
+	for i, l := range cyc.joins {
+		jp[i] = l.j.point
+		if hv[i] = heldIndex(fp, l.at); hv[i] < 0 {
+			return nil, fmt.Errorf("%w: a chain junction is not a vertex of the held mesh", decaderr.ErrUnsupported)
+		}
+		if d := fp.Verts[hv[i]].Sub(jp[i]).Len(); d > fp.VertexBound[hv[i]]+slack {
+			return nil, fmt.Errorf("%w: a chain junction is not where its tags meet", decaderr.ErrUnsupported)
+		}
+	}
+	fl, err := w.faceLoops(faceIndex[base])
+	if err != nil {
+		return nil, err
+	}
+	li, ok := fl.loopWith(hv...)
+	if !ok {
+		return nil, fmt.Errorf("%w: the chain's junctions lie on no one loop of the base", decaderr.ErrUnsupported)
+	}
+	loop := fl.loops[li]
+	pos := make([]int, n)
+	descents := 0
+	for i := range pos {
+		pos[i] = indexIn(loop, hv[i])
+	}
+	for i := range pos {
+		if pos[(i+1)%n] < pos[i] {
+			descents++
+		}
+	}
+	entries := make([]chainEntry, n)
+	switch descents {
+	case 1:
+		for s := range entries {
+			entries[s] = chainEntry{edge: cyc.edges[(s+1)%n], ja: s, jb: (s + 1) % n}
+		}
+	case n - 1:
+		for s := range entries {
+			a := n - 1 - s
+			entries[s] = chainEntry{edge: cyc.edges[a], ja: a, jb: (a - 1 + n) % n}
+		}
+	default:
+		return nil, fmt.Errorf("%w: the chain does not follow its base loop", decaderr.ErrUnsupported)
+	}
+	ordOf := map[*topo.Edge]int{}
+	refOf := map[*topo.Edge]refTag{}
+	for i, e := range cyc.edges {
+		ordOf[e], refOf[e] = ords[i], refs[i]
+	}
+	covered := 0
+	topSet := map[int]bool{}
+	for _, v := range loop {
+		topSet[v] = true
+	}
+	for t := range entries {
+		en := &entries[t]
+		en.ord, en.ref = ordOf[en.edge], refOf[en.edge]
+		en.p0, en.p1 = jp[en.ja], jp[en.jb]
+		for _, f := range en.edge.Faces {
+			if f != base {
+				en.wall = f
+			}
+		}
+		en.wallIx = faceIndex[en.wall]
+		if !en.edge.Convex {
+			return nil, fmt.Errorf("%w: a concave tangent chain is not built", decaderr.ErrUnsupported)
+		}
+		step, err := spec.assign(en.ref, base, en.wall)
+		if err != nil {
+			return nil, err
+		}
+		en.step = step
+		if t > 0 && (step.planeSetback() != entries[0].step.planeSetback() ||
+			step.wallSetback() != entries[0].step.wallSetback()) {
+			return nil, fmt.Errorf("%w: a chain takes one setback on the base and one on the walls",
+				decaderr.ErrUnsupported)
+		}
+		if !(step.planeSetback() > 0) || !(step.wallSetback() > 0) {
+			return nil, fmt.Errorf("%w: a blend needs a positive size", decaderr.ErrDegenerate)
+		}
+		// The loop vertices strictly between the two junctions.
+		for k := pos[en.ja] + 1; ; k++ {
+			v := loop[k%len(loop)]
+			if k%len(loop) == pos[en.jb] {
+				break
+			}
+			en.run = append(en.run, v)
+		}
+		covered += 1 + len(en.run)
+		if err := w.readChainEdge(en, fp, faceIndex, nP, oP, cyc, slack); err != nil {
+			return nil, err
+		}
+	}
+	if covered != len(loop) {
+		return nil, fmt.Errorf("%w: the chain is not the whole of its base loop", decaderr.ErrUnsupported)
+	}
+	tP, tW := entries[0].step.planeSetback(), entries[0].step.wallSetback()
+
+	// The rows of a cross-section.
+	fillet := spec.fillet
+	rowsM := 1
+	if fillet {
+		step := 2 * math.Acos(1-math.Min(w.tau/spec.r, 1))
+		rowsM = max(2, int(math.Ceil(math.Pi/2/step)))
+	}
+	rowPoint := func(v, m r3.Vec, j int) r3.Vec {
+		if !fillet {
+			return v.Add(m.Scale(tP))
+		}
+		alpha := float64(j) * math.Pi / 2 / float64(rowsM)
+		return v.Add(m.Scale(spec.r * (1 - math.Sin(alpha)))).Sub(nP.Scale(spec.r * (1 - math.Cos(alpha))))
+	}
+	bound := w.tau + slack
+	newRows := func(v, m r3.Vec) []int {
+		rows := make([]int, rowsM)
+		for j := range rows {
+			rows[j] = w.vertex(rowPoint(v, m, j), bound)
+		}
+		return rows
+	}
+	jrows := make([][]int, n)
+	for t := range entries {
+		prev := entries[(t-1+n)%n]
+		jrows[entries[t].ja] = newRows(entries[t].p0, prev.m[1])
+	}
+	for t := range entries {
+		en := &entries[t]
+		if !en.arc {
+			en.cols = []chainCol{{s: 0, rows: jrows[en.ja]}, {s: en.length, rows: jrows[en.jb]}}
+			continue
+		}
+		rhoMax := max(en.rim.radius, en.rim.radius+en.rim.kappa*tP)
+		dTheta := 2 * math.Acos(1-math.Min(w.tau/rhoMax, 1))
+		na := max(2, int(math.Ceil(en.span/dTheta)))
+		for i := 0; i <= na; i++ {
+			f := float64(i) / float64(na)
+			switch i {
+			case 0:
+				en.cols = append(en.cols, chainCol{s: 0, rows: jrows[en.ja]})
+			case na:
+				en.cols = append(en.cols, chainCol{s: en.span, rows: jrows[en.jb]})
+			default:
+				phi := en.phi0 + en.sigma*en.span*f
+				v := en.rim.at(en.rim.radius, phi, 0)
+				radial, _ := v.Sub(en.rim.center).Normalize()
+				en.cols = append(en.cols, chainCol{s: en.span * f, rows: newRows(v, radial.Scale(-en.sigma))})
+			}
+		}
+	}
+
+	// The base face gives way to the offset contour.
+	var ringA []int
+	for _, en := range entries {
+		for _, c := range en.cols[:len(en.cols)-1] {
+			ringA = append(ringA, c.rows[0])
+		}
+	}
+	if err := w.checkContour(ringA, nP, oP); err != nil {
+		return nil, err
+	}
+	if err := w.checkBaseClear(fl, li, loop, entries, tP, margin); err != nil {
+		return nil, err
+	}
+	loops := make([][]int, 0, len(fl.loops))
+	for k, lp := range fl.loops {
+		if k != li {
+			loops = append(loops, lp)
+		}
+	}
+	if err := w.retriangulate(nP, oP, append(loops, ringA), fl.group); err != nil {
+		return nil, err
+	}
+	w.removed = append(w.removed, fl.facets...)
+
+	// The walls lose the band between P and its parallel plane at depth tW.
+	faceVerts := w.faceOfVertex()
+	wallSet := map[int]bool{}
+	for _, en := range entries {
+		wallSet[en.wallIx] = true
+	}
+	if len(wallSet) != n {
+		return nil, fmt.Errorf("%w: a chain borders one wall twice", decaderr.ErrUnsupported)
+	}
+	cutsOf := make([]map[int]bool, n)
+	wallGroups := make([]int, n)
+	for t := range entries {
+		en := entries[t]
+		near := map[int]bool{en.wallIx: true, entries[(t+1)%n].wallIx: true, entries[(t-1+n)%n].wallIx: true}
+		cutsOf[t], wallGroups[t], err = w.clipChainWall(en, nP, oP, tW, topSet, near, faceVerts, slack)
+		if err != nil {
+			return nil, err
+		}
+	}
+	ringB := make([][]int, n)
+	seam := make([]int, n)
+	for t := range entries {
+		var common []int
+		for c := range cutsOf[t] {
+			if cutsOf[(t-1+n)%n][c] {
+				common = append(common, c)
+			}
+		}
+		if len(common) != 1 {
+			return nil, fmt.Errorf("%w: a seam between two walls is not cut once", decaderr.ErrUnsupported)
+		}
+		seam[t] = common[0]
+	}
+	for t := range entries {
+		en := entries[t]
+		first, last := seam[t], seam[(t+1)%n]
+		var mid []int
+		for c := range cutsOf[t] {
+			if c != first && c != last {
+				mid = append(mid, c)
+			}
+		}
+		param := func(c int) float64 { return en.param(w.verts[c]) }
+		sort.Slice(mid, func(a, b int) bool { return param(mid[a]) < param(mid[b]) })
+		ringB[t] = append(append([]int{first}, mid...), last)
+	}
+
+	// The strips.
+	stripFrom := len(w.out)
+	var removedTrue, blendTrue float64
+	groups := append([]facetedrecord.Group(nil), fp.Groups...)
+	for t := range entries {
+		en := entries[t]
+		tag, planar := w.chainTag(en, nP, tP, tW)
+		group := len(fp.Groups) + t
+		emit := func(a, b, c int) {
+			tri := [3]int{a, b, c}
+			pa, pb, pc := w.verts[a], w.verts[b], w.verts[c]
+			centroid := pa.Add(pb).Add(pc).Scale(1.0 / 3)
+			if pb.Sub(pa).Cross(pc.Sub(pa)).Dot(tag.outward(centroid)) < 0 {
+				tri[1], tri[2] = tri[2], tri[1]
+			}
+			w.emit(tri, group)
+		}
+		for i := 0; i+1 < len(en.cols); i++ {
+			for j := 0; j+1 < rowsM; j++ {
+				a, b := en.cols[i].rows, en.cols[i+1].rows
+				emit(a[j], b[j], b[j+1])
+				emit(a[j], b[j+1], a[j+1])
+			}
+		}
+		last := rowsM - 1
+		bi := 0
+		bp := make([]float64, len(ringB[t]))
+		for k, c := range ringB[t] {
+			bp[k] = en.param(w.verts[c])
+		}
+		bp[0], bp[len(bp)-1] = 0, en.cols[len(en.cols)-1].s
+		for i := 0; i+1 < len(en.cols) || bi+1 < len(ringB[t]); {
+			advanceA := bi+1 >= len(ringB[t]) ||
+				(i+1 < len(en.cols) && en.cols[i+1].s <= bp[bi+1])
+			if advanceA {
+				emit(en.cols[i].rows[last], en.cols[i+1].rows[last], ringB[t][bi])
+				i++
+				continue
+			}
+			emit(en.cols[i].rows[last], ringB[t][bi+1], ringB[t][bi])
+			bi++
+		}
+		pa, wa, ba := en.areas(tP, tW, spec)
+		removedTrue += pa + wa
+		blendTrue += ba
+		groups = append(groups, facetedrecord.Group{
+			Origins:  []provenance.Ref{{Producer: env.Ref, Role: fmt.Sprintf("%s(%d)", op, en.ord)}},
+			Surface:  tag.surface,
+			Retained: true,
+			Reversed: tag.reversed,
+			Planar:   planar,
+		})
+	}
+	for _, g := range append([]int{fl.group}, wallGroups...) {
+		groups[g].HasCentroid = false
+		groups[g].Centroid = measurement.VecMeasurement{}
+	}
+	w.removedTrue = removedTrue
+	return w.build(ctx, env, groups, stripFrom, blendTag{trueArea: blendTrue})
+}
+
+// param is the position of p along the entry: the distance from its start for
+// a line, the swept angle for an arc.
+func (en chainEntry) param(p r3.Vec) float64 {
+	if !en.arc {
+		return p.Sub(en.p0).Dot(en.d)
+	}
+	d := en.sigma * (en.rim.angle(p) - en.phi0)
+	return d - 2*math.Pi*math.Floor((d+math.Pi)/(2*math.Pi))
+}
+
+// readChainEdge fills in the entry's geometry and checks that the base loop's
+// run between its junctions lies on the edge.
+func (w *work) readChainEdge(en *chainEntry, fp facetedrecord.Payload, faceIndex map[*topo.Face]int,
+	nP, oP r3.Vec, cyc chainCycle, slack float64) error {
+	_ = oP
+	switch curve := en.edge.Curve.(type) {
+	case surfacegeom.Line3:
+		wp, ok := retainedPlane(en.wall)
+		if !ok {
+			return fmt.Errorf("%w: a chain wall is not a retained plane", decaderr.ErrUnsupported)
+		}
+		d, ok := en.p1.Sub(en.p0).Normalize()
+		if !ok {
+			return fmt.Errorf("%w: a chain edge has no length", decaderr.ErrDegenerate)
+		}
+		en.d, en.length = d, en.p1.Sub(en.p0).Len()
+		m := nP.Cross(d)
+		if wp.n.Add(m).Len() > 1e-9 {
+			return fmt.Errorf("%w: a chain wall does not lean away from the base loop's inside", decaderr.ErrUnsupported)
+		}
+		en.m = [2]r3.Vec{m, m}
+		for _, v := range en.run {
+			t := w.verts[v].Sub(en.p0).Dot(d)
+			if distToLine(w.verts[v], en.p0, d) > w.beta[v]+slack || t < -w.beta[v]-slack || t > en.length+w.beta[v]+slack {
+				return fmt.Errorf("%w: the base loop leaves a chain edge", decaderr.ErrUnsupported)
+			}
+		}
+	case surfacegeom.Arc3:
+		r, err := readRim(en.edge, fp, faceIndex)
+		if err != nil {
+			return err
+		}
+		if r.planeFace == nil || r.wallFace != en.wall || !r.convex {
+			return fmt.Errorf("%w: a chain arc does not border the base and its wall convexly", decaderr.ErrUnsupported)
+		}
+		if err := r.checkSize(en.step); err != nil {
+			return err
+		}
+		en.arc, en.rim, en.sigma = true, r, -r.kappa
+		// The walk's own sense must agree with the arc's recorded sense.
+		sense := 1.0
+		if curve.Axis.Dot(nP) < 0 {
+			sense = -1
+		}
+		if en.edge.Start != cyc.joins[en.ja].at {
+			sense = -sense
+		}
+		if sense != en.sigma {
+			return fmt.Errorf("%w: a chain arc turns against its base loop", decaderr.ErrUnsupported)
+		}
+		for _, p := range []r3.Vec{en.p0, en.p1} {
+			if !r.onRim(p, 0) {
+				return fmt.Errorf("%w: a chain junction is off its arc", decaderr.ErrUnsupported)
+			}
+		}
+		en.phi0 = r.angle(en.p0)
+		span := en.sigma * (r.angle(en.p1) - en.phi0)
+		span -= 2 * math.Pi * math.Floor(span/(2*math.Pi))
+		if !(span > minSine) {
+			return fmt.Errorf("%w: a chain arc has no span", decaderr.ErrDegenerate)
+		}
+		if span > math.Pi+1e-9 {
+			return fmt.Errorf("%w: a chain arc spans more than a half turn", decaderr.ErrUnsupported)
+		}
+		en.span = span
+		for k, p := range []r3.Vec{en.p0, en.p1} {
+			radial, _ := p.Sub(r.center).Normalize()
+			en.m[k] = radial.Scale(-en.sigma)
+		}
+		for _, v := range en.run {
+			if !r.onRim(w.verts[v], w.beta[v]) {
+				return fmt.Errorf("%w: the base loop leaves a chain arc", decaderr.ErrUnsupported)
+			}
+		}
+	default:
+		return fmt.Errorf("%w: a chain edge is neither a line nor an arc", decaderr.ErrUnsupported)
+	}
+	return nil
+}
+
+// checkContour refuses an offset contour that crosses itself: the setback
+// consumes the base face (SR4).
+func (w *work) checkContour(ring []int, nP, oP r3.Vec) error {
+	u, ok := perpendicular(nP)
+	if !ok {
+		return fmt.Errorf("%w: the base has no frame", decaderr.ErrUnsupported)
+	}
+	v := nP.Cross(u)
+	ps := make([]pt2, len(ring))
+	for i, vi := range ring {
+		q := w.verts[vi].Sub(oP)
+		ps[i] = pt2{q.Dot(u), q.Dot(v)}
+	}
+	n := len(ps)
+	for i := range n {
+		for j := i + 2; j < n; j++ {
+			if i == 0 && j == n-1 {
+				continue
+			}
+			if segmentsTouch(ps[i], ps[(i+1)%n], ps[j], ps[(j+1)%n]) {
+				return fmt.Errorf("%w: the setback consumes the base face", decaderr.ErrDegenerate)
+			}
+		}
+	}
+	return nil
+}
+
+// checkBaseClear refuses a chain whose band reaches another loop of the base.
+func (w *work) checkBaseClear(fl faceLoops, li int, loop []int, entries []chainEntry, tP, margin float64) error {
+	sag := 0.0
+	for i, v := range loop {
+		q := loop[(i+1)%len(loop)]
+		sag = max(sag, w.verts[v].Sub(w.verts[q]).Len())
+	}
+	// The longest chord of the held outline bounds the sagitta of its arcs.
+	rMin := math.Inf(1)
+	for _, en := range entries {
+		if en.arc {
+			rMin = math.Min(rMin, en.rim.radius)
+		}
+	}
+	allow := 0.0
+	if !math.IsInf(rMin, 1) {
+		allow = sag * sag / (8 * rMin)
+	}
+	for k, other := range fl.loops {
+		if k == li {
+			continue
+		}
+		for i, a := range other {
+			b := other[(i+1)%len(other)]
+			gap := math.Inf(1)
+			for j, c := range loop {
+				d := loop[(j+1)%len(loop)]
+				gap = math.Min(gap, segmentDistance(w.verts[a], w.verts[b], w.verts[c], w.verts[d]))
+			}
+			if err := clearance(gap-tP, max(w.beta[a], w.beta[b])+margin+allow, "the base face"); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// faceOfVertex maps each held vertex to the faces that use it.
+func (w *work) faceOfVertex() map[int]map[int]bool {
+	out := map[int]map[int]bool{}
+	for i, t := range w.fp.Tris {
+		for _, v := range t {
+			if out[v] == nil {
+				out[v] = map[int]bool{}
+			}
+			out[v][w.fp.FaceOf[i]] = true
+		}
+	}
+	return out
+}
+
+// clipChainWall cuts the wall at depth tW below the base and returns the
+// vertices it cut, by the old mesh edge they lie on.
+func (w *work) clipChainWall(en chainEntry, nP, oP r3.Vec, tW float64, topSet, near map[int]bool,
+	faceVerts map[int]map[int]bool, slack float64) (map[int]bool, int, error) {
+	facets := facetsOfFace(w.fp.FaceOf, en.wallIx)
+	group, err := w.groupOf(facets)
+	if err != nil {
+		return nil, 0, err
+	}
+	g := map[int]float64{}
+	for _, f := range facets {
+		for _, v := range w.fp.Tris[f] {
+			if _, seen := g[v]; seen {
+				continue
+			}
+			p := w.verts[v]
+			depth := -nP.Dot(p.Sub(oP))
+			b := w.beta[v] + slack
+			if math.Abs(depth) <= b {
+				if !topSet[v] {
+					return nil, 0, fmt.Errorf("%w: a wall touches the base plane off the chain", decaderr.ErrUnsupported)
+				}
+				g[v] = -tW
+				continue
+			}
+			gv := depth - tW
+			if gv > b+w.tau {
+				g[v] = gv
+				continue
+			}
+			onSeam := distToLine(p, en.p0, nP) <= b || distToLine(p, en.p1, nP) <= b
+			if onSeam && depth > 0 && gv < -(b+w.tau) {
+				for fi := range faceVerts[v] {
+					if !near[fi] {
+						return nil, 0, fmt.Errorf("%w: a seam vertex inside the band borders another face",
+							decaderr.ErrUnsupported)
+					}
+				}
+				g[v] = gv
+				continue
+			}
+			if err := clearance(gv, b+w.tau, "the wall"); err != nil {
+				return nil, 0, err
+			}
+		}
+	}
+	mine := map[int]bool{}
+	cut := func(a, b int) int {
+		k := [2]int{min(a, b), max(a, b)}
+		c, ok := w.cuts[k]
+		if !ok {
+			t := g[a] / (g[a] - g[b])
+			p := w.verts[a].Add(w.verts[b].Sub(w.verts[a]).Scale(t))
+			c = w.vertex(p, max(w.beta[a], w.beta[b])+slack+w.tau)
+			w.cuts[k] = c
+		}
+		mine[c] = true
+		return c
+	}
+	for _, f := range facets {
+		t := w.fp.Tris[f]
+		var above []int
+		for k, v := range t {
+			if g[v] > 0 {
+				above = append(above, k)
+			}
+		}
+		switch len(above) {
+		case 0:
+		case 3:
+			w.emit(t, group)
+		case 1:
+			x := above[0]
+			a, b, c := t[x], t[(x+1)%3], t[(x+2)%3]
+			w.emit([3]int{a, cut(a, b), cut(c, a)}, group)
+		case 2:
+			z := 0
+			for k := range 3 {
+				if g[t[k]] <= 0 {
+					z = k
+				}
+			}
+			x, y, below := t[(z+1)%3], t[(z+2)%3], t[z]
+			cyz, czx := cut(y, below), cut(below, x)
+			w.emit([3]int{x, y, cyz}, group)
+			w.emit([3]int{x, cyz, czx}, group)
+		}
+	}
+	w.removed = append(w.removed, facets...)
+	if len(mine) < 2 {
+		return nil, 0, fmt.Errorf("%w: a wall's cut leaves fewer than two vertices", decaderr.ErrUnsupported)
+	}
+	return mine, group, nil
+}
+
+// chainTag is the exact surface of the entry's blend face.
+func (w *work) chainTag(en chainEntry, nP r3.Vec, tP, tW float64) (blendTag, bool) {
+	if en.arc {
+		tmp := &work{r: en.rim, spec: en.step, tau: w.tau}
+		return tmp.tag(), false
+	}
+	if en.step.fillet {
+		r := en.step.r
+		c0 := en.p0.Add(en.m[0].Scale(r)).Sub(nP.Scale(r))
+		return blendTag{
+			surface: surfacegeom.Cylinder{Origin: c0, Axis: en.d, Radius: units.Millimeters(r)},
+			outward: func(p r3.Vec) r3.Vec {
+				q := p.Sub(c0)
+				return q.Sub(en.d.Scale(q.Dot(en.d)))
+			},
+		}, false
+	}
+	a0 := en.p0.Add(en.m[0].Scale(tP))
+	b0 := en.p0.Sub(nP.Scale(tW))
+	chord, _ := b0.Sub(a0).Normalize()
+	outward := nP.Sub(en.m[0])
+	tag := blendTag{outward: func(r3.Vec) r3.Vec { return outward }}
+	if frame, err := r3.NewFrame(a0, en.d, chord); err == nil {
+		tag.surface = surfacegeom.Plane{Frame: frame}
+		tag.reversed = frame.N().Dot(outward) < 0
+	}
+	return tag, true
+}
+
+// areas are the exact areas the entry takes from the base and from its wall,
+// and the area of its blend face.
+func (en chainEntry) areas(tP, tW float64, spec blendSpec) (base, wall, blend float64) {
+	if !en.arc {
+		base, wall = en.length*tP, en.length*tW
+		if spec.fillet {
+			return base, wall, en.length * spec.r * math.Pi / 2
+		}
+		return base, wall, en.length * math.Hypot(tP, tW)
+	}
+	R, k := en.rim.radius, en.rim.kappa
+	rho := R + k*tP
+	base = en.span * math.Abs(R*R-rho*rho) / 2
+	wall = en.span * R * tW
+	if spec.fillet {
+		r := spec.r
+		return base, wall, en.span * r * ((R+k*r)*math.Pi/2 - k*r)
+	}
+	return base, wall, en.span * (R + rho) / 2 * math.Hypot(tP, tW)
+}

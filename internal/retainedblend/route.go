@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
@@ -93,6 +94,18 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				decaderr.ErrUnsupported)
 		}
 		targets[i].ref = tagOf(f)
+	}
+	chains, handled, err := planChains(b, edges)
+	if err != nil {
+		return nil, true, err
+	}
+	if handled {
+		refs := make([]refTag, len(edges))
+		for i := range edges {
+			refs[i] = targets[i].ref
+		}
+		out, err := blendChains(ctx, env, b, fp, edges, refs, chains, spec, op)
+		return out, true, err
 	}
 	var corners []r3.Vec
 	claim := func(ends [2]lineEnd, scale float64) error {
@@ -362,4 +375,88 @@ func pick(all [][3]int, idx []int) [][3]int {
 		out[i] = all[f]
 	}
 	return out
+}
+
+// blendChains blends each closed tangent chain in turn. The edges of a later
+// chain are found again on the partly blended body by their end points.
+func blendChains(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Payload, edges []*topo.Edge,
+	refs []refTag, chains []chainCycle, spec blendSpec, op string) (*topo.Body, error) {
+	ordOf := map[*topo.Edge]int{}
+	for i, e := range edges {
+		ordOf[e] = i
+	}
+	type key struct {
+		k   lineKey
+		arc bool
+	}
+	keys := make([][]key, len(chains))
+	for ci, c := range chains {
+		for _, e := range c.edges {
+			_, arc := e.Curve.(surfacegeom.Arc3)
+			keys[ci] = append(keys[ci], key{lineKey{e.Start.Position, e.End.Position}, arc})
+		}
+	}
+	cur, curFP := b, fp
+	for ci, c := range chains {
+		cyc := c
+		if ci > 0 {
+			cyc = chainCycle{}
+			var found []*topo.Edge
+			for _, k := range keys[ci] {
+				ok := looksLikeLine
+				if k.arc {
+					ok = looksLikeArc
+				}
+				e, found1 := findEdge(cur, k.k, 64*ulp*math.Max(1, math.Abs(k.k.p0.X)), ok)
+				if !found1 {
+					return nil, fmt.Errorf("%w: a chain edge is no longer an edge of the partly blended body",
+						decaderr.ErrUnsupported)
+				}
+				found = append(found, e)
+			}
+			var err error
+			if cyc, _, err = replanChain(cur, found); err != nil {
+				return nil, err
+			}
+		}
+		ords := make([]int, len(cyc.edges))
+		cref := make([]refTag, len(cyc.edges))
+		for i, e := range cyc.edges {
+			if ci == 0 {
+				ords[i], cref[i] = ordOf[e], refs[ordOf[e]]
+				continue
+			}
+			for _, e0 := range chains[ci].edges {
+				if sameEdgeKey(e0, e) {
+					ords[i], cref[i] = ordOf[e0], refs[ordOf[e0]]
+				}
+			}
+		}
+		next, err := rewriteChain(ctx, env, curFP, cyc, ords, cref, spec, op, faceIndexOf(cur))
+		if err != nil {
+			return nil, err
+		}
+		cur = next
+		var ok bool
+		if curFP, ok = next.Payload.(facetedrecord.Payload); !ok {
+			return nil, fmt.Errorf("%w: the blended body lost its payload", decaderr.ErrBooleanFailed)
+		}
+	}
+	return cur, nil
+}
+
+func sameEdgeKey(a, b *topo.Edge) bool {
+	return a.Start.Position == b.Start.Position && a.End.Position == b.End.Position
+}
+
+// replanChain orders edges of body that form one chain.
+func replanChain(body *topo.Body, edges []*topo.Edge) (chainCycle, bool, error) {
+	chains, _, err := planChains(body, edges)
+	if err != nil {
+		return chainCycle{}, false, err
+	}
+	if len(chains) != 1 {
+		return chainCycle{}, false, fmt.Errorf("%w: a chain changed shape under an earlier blend", decaderr.ErrUnsupported)
+	}
+	return chains[0], true, nil
 }

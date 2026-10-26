@@ -487,6 +487,12 @@ Each increment is one PR. M1 ships this document.
 | M5 | §7: `ScaledAt` keeps curved tags | the two scale rows pass |
 | M6 | §8: E10 and R5 | the R5 row passes |
 
+M3 is built for convex closed chains of lines and arcs. `retainedblend.Tangent` decides each junction
+(`chain_tangent.go`), `planChains` groups and orders the selection (`chain.go`) and `rewriteChain` builds one chain
+(`chain_rewrite.go`). A concave chain, an open chain and a chain with fewer than three edges are refused, the open
+chain with the text "open tangent chain". The edge between two blend faces of a chain keeps its chord chain: no
+edge rule publishes the Cylinder/Torus section as an `Arc3` yet.
+
 M3 starts with one real end-to-end run on the P2 fixture before any other fixture. If that run refuses, the
 increment stops and reports the refusal.
 

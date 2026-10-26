@@ -264,7 +264,9 @@ cycle stops when the next edge is already in the expanded set. Final edge order
 is body order, so replay and role assignment stay deterministic.
 
 Faceted curves/surfaces never enter the oracle. They route to SX9 before
-expansion.
+expansion, except a mesh Boolean result whose seeds are retained lines and arcs between retained plane and cylinder
+tags: its junctions are decided by `retainedblend.Tangent`
+(`agent-docs/retained-modify-reach-design.md` §5.2, §5.3).
 
 ### 5.1 Implementation
 
