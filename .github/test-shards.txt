@@ -268,3 +268,4 @@
 10	0.00	TestRetainedBlendGroupsRecordSource
 10	0.00	TestSplitPlaneSharesOneSourceRecord
 10	0.00	TestShiftedRetryGroupsKeepSource
+10	0.00	TestFacetedSourcePatchBlendThenCut
