@@ -46,8 +46,8 @@ face. A countersink cut gives a faceted result whose planar faces are split into
 
 ## 4. Not covered
 
-- A hole in a face that is not an analytic plane or cylinder, or in a sheet. A draft or a thread in a hole on a cylindrical face.
-- A noncircular hole other than `RectangularHole`, `SlotHole` and a regular `PolygonHole`, a threaded shaped hole, a threaded hole on a cylindrical face, and a thread on a counterbore or countersink.
+- A hole in a face that is not an analytic plane or cylinder, or in a sheet. A draft in a hole on a cylindrical face.
+- A noncircular hole other than `RectangularHole`, `SlotHole` and a regular `PolygonHole`, a threaded shaped hole, and a thread on a counterbore or countersink.
 - Several holes in one call. Call `Hole` per hole, or build one hole and use `Patterned`.
 
 ## 5. Rectangular holes
@@ -116,7 +116,7 @@ type HoleThread struct {
 | X3 | The coil is one more tool after the bore and its head. `combineTools` cuts the tools in order, so the thread is cut from the holed body and the whole is one `OperationHole` commit. A failure leaves the plate live and the document unchanged. |
 | X4 | `Length` is measured from where the bore proper starts. The zero `Value` threads the whole bore: a through hole's groove runs out of its far end, and a blind hole's stops at the bottom with the coil's flat end. A positive `Length` no longer than the bore stops the groove there likewise. A longer one is `ErrDegenerate`. |
 | X5 | A `Pitch` that is zero is `ErrDegenerate`, a negative one `ErrNegativeMagnitude` and a wrong unit kind `ErrUnitKind`. A pitch too coarse for the bore, so that the groove reaches the axis, is `ErrDegenerate`. |
-| X6 | A thread needs a round hole: a `Shape` with a thread is `ErrDegenerate`. A hole on a cylindrical face with a thread is `ErrUnsupported`. |
+| X6 | A thread needs a round hole: a `Shape` with a thread is `ErrDegenerate`. A hole on a cylindrical face with a thread follows §12. |
 | X7 | The groove under a counterbore's floor lies inside the counterbore's radius, so the head void holds the groove's start: a counterbore narrower than the thread's major diameter would be cut into by the groove and is the caller's to avoid. |
 
 ## 9. Drafted holes
@@ -157,3 +157,13 @@ cylinder at `At`, the plane Y2 reads a blind `Depth` from.
 | Z3 | A countersink's cone rises at least that margin over the plane, so a bore's wall that has risen into it is cut. |
 | Z4 | The bore and its head are one cut. On the mesh path a second cut would meet a target that already holds the first cut's coarse mesh and be refused, so a counterbore's cylinders are united before the cut, and a countersink on a cylindrical face is one revolve of the bore and the cone together. |
 | Z5 | The tests state the removed volume of each case from an integral over the hole's section of the length between the wall and the recess floor, the wall at `√(R² − y²)`, and require it inside the result's own bound. A counterbore wide enough that the wall rises more than `MouthMargin` toward the plane checks Z2. |
+
+## 12. A thread in a hole on a cylindrical face
+
+`HoleSpec.Thread` taps a hole in a cylindrical face (§7) as it taps one in a plane (§8).
+
+| Decision | Rule |
+|---|---|
+| T1 | The thread's frame, span and handedness are §8's, read from the tangent plane at `At`: the groove starts there, a head's floor if there is one, and runs the bore's depth or `HoleThread.Length`. The groove's first turn lies in the plane's side of the wall by the margin a plain hole takes (Y3). |
+| T2 | The bore, its head and the coil are one cut by their union (Z4): on the mesh path a second cut meets a target that already holds the first cut's coarse mesh and is refused. A united tool is coarser than a pair's tolerance on a thin rod, whose cylinder asks for a finer one, and the cut is then the evaluator's own `ErrUnsupported`, which leaves the body live. A bore's wall and a rod of radius 14 mm or more are cut. |
+| T3 | The tests state the removed volume of a tapped blind hole as the bore's integral plus the groove's: the groove's axial overlap with the material along the hole axis, at each radius and angle about the bore, the angle taken from the cylinder's axis, and require it inside the result's own volume bound. A thin rod's refusal is tested as such. |

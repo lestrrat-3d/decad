@@ -151,3 +151,52 @@ func Example_hole_counterbore_on_a_cylinder() {
 	// Output:
 	// volume: 4945 mm^3
 }
+
+// A threaded hole can start in a bore's wall too, for a screw that goes into a
+// boss from the inside. The thread starts at the plane tangent to the wall at At.
+// Here a 12 mm bore through a 40 x 40 x 10 block takes an M5 hole, 8 mm deep.
+func Example_hole_thread_on_a_cylinder() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(-20, -20, 20, 20)
+	s.Fix(rect.A)
+	s.CreateCircle(s.CreatePoint(0, 0), 6)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	var block *decad.Body
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			block, err = decad.Extrude(context.Background(), decad.New(), s, p,
+				decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+			if err != nil {
+				fmt.Printf("failed to extrude: %s\n", err)
+				return
+			}
+		}
+	}
+	tapped, err := decad.Hole(context.Background(), block, decad.HoleSpec{
+		Face:     decad.Faces(decad.Cylindrical()),
+		At:       r3.Vec{X: 6, Y: 0, Z: 5},
+		Diameter: units.Millimeters(4.2),
+		Depth:    decad.BlindHole{Depth: units.Millimeters(8)},
+		Thread:   &decad.HoleThread{Pitch: units.Millimeters(0.8)},
+	})
+	if err != nil {
+		fmt.Printf("failed to tap: %s\n", err)
+		return
+	}
+	volume, err := tapped.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
+	// Output:
+	// volume: 14730 mm^3
+}
