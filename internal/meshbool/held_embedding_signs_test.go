@@ -168,6 +168,20 @@ func TestPairSeparatedReusesExactClassifierSigns(t *testing.T) {
 			fb, xb, nb := e.facet(1)
 			checkCrossings(t, xa, xb, nb, signs.a)
 			checkCrossings(t, xb, xa, na, signs.b)
+			for _, factors := range [][6]int64{{1, 3, 5, 7, 11, 13}, {3, 3, 3, 3, 3, 3}, {3, 3, 3, 5, 5, 5}} {
+				scale := func(p proof.Xpt, factor int64) proof.Xpt {
+					f := big.NewInt(factor)
+					return proof.Xpt{X: new(big.Int).Mul(p.X, f), Y: new(big.Int).Mul(p.Y, f),
+						Z: new(big.Int).Mul(p.Z, f), W: new(big.Int).Mul(p.W, f)}
+				}
+				var sa, sb [3]proof.Xpt
+				for i := range 3 {
+					sa[i] = scale(xa[i], factors[i])
+					sb[i] = scale(xb[i], factors[i+3])
+				}
+				checkCrossings(t, sa, sb, nb, signs.a)
+				checkCrossings(t, sb, sa, na, signs.b)
+			}
 			for k := range 3 {
 				require.Equal(t, proof.OrientSignPrepared(fb[0], fb[1], fb[2], fa[k], xb[0], xa[k], nb), signs.a[k])
 				require.Equal(t, proof.OrientSignPrepared(fa[0], fa[1], fa[2], fb[k], xa[0], xb[k], na), signs.b[k])

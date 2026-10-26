@@ -100,3 +100,58 @@ func TestXptDenotesComparesExactPointToFloatVertex(t *testing.T) {
 	require.False(t, proof.XptDenotes(third, r3.Vec{X: 1.0 / 3}))
 	require.True(t, proof.XptDenotes(proof.XptOf(r3.Vec{}), r3.Vec{}))
 }
+
+func TestXplaneCrossingMatchesRationalInterpolation(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(0x716d, 0x92ab))
+	integer := func() *big.Int {
+		n := new(big.Int).SetUint64(rng.Uint64() | 1)
+		n.Lsh(n, uint(rng.IntN(300)))
+		n.Add(n, new(big.Int).SetUint64(rng.Uint64()))
+		return n
+	}
+	point := func() proof.Xpt {
+		return proof.Xpt{X: integer(), Y: new(big.Int).Neg(integer()), Z: integer(), W: integer()}
+	}
+	for trial := range 500 {
+		a, b := point(), point()
+		an, bn := integer(), new(big.Int).Neg(integer())
+		if trial%2 == 0 {
+			an.Neg(an)
+			bn.Neg(bn)
+		}
+		if trial%3 == 0 {
+			b.W.Set(a.W)
+		}
+		if trial%5 == 0 {
+			a.X.SetInt64(0)
+			b.Z.SetInt64(0)
+		}
+		sources := []*big.Int{a.X, a.Y, a.Z, a.W, b.X, b.Y, b.Z, b.W, an, bn}
+		copies := make([]*big.Int, len(sources))
+		for i, src := range sources {
+			copies[i] = new(big.Int).Set(src)
+		}
+		va := new(big.Rat).SetFrac(an, a.W)
+		vb := new(big.Rat).SetFrac(bn, b.W)
+		tt := new(big.Rat).Quo(va, new(big.Rat).Sub(va, vb))
+		got := proof.XplaneCrossing(a, b, an, bn)
+		require.Positive(t, got.W.Sign(), "trial %d: weight", trial)
+		for axis, nums := range [3][3]*big.Int{{a.X, b.X, got.X}, {a.Y, b.Y, got.Y}, {a.Z, b.Z, got.Z}} {
+			av := new(big.Rat).SetFrac(nums[0], a.W)
+			bv := new(big.Rat).SetFrac(nums[1], b.W)
+			want := new(big.Rat).Add(av, new(big.Rat).Mul(tt, new(big.Rat).Sub(bv, av)))
+			actual := new(big.Rat).SetFrac(nums[2], got.W)
+			require.Zero(t, want.Cmp(actual), "trial %d: coordinate %d", trial, axis)
+		}
+		for i, src := range sources {
+			require.Zero(t, copies[i].Cmp(src), "trial %d: source %d modified", trial, i)
+		}
+		for _, result := range []*big.Int{got.X, got.Y, got.Z, got.W} {
+			result.Add(result, big.NewInt(1))
+		}
+		for i, src := range sources {
+			require.Zero(t, copies[i].Cmp(src), "trial %d: result aliases source %d", trial, i)
+		}
+	}
+}
