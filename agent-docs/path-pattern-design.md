@@ -10,6 +10,7 @@ millimetre vectors.
 func PathPatternCopies(ctx context.Context, b *Body, path *Path, count int, opts ...PathPatternOption) ([]*Body, error)
 func PathPatternSpaced(ctx context.Context, b *Body, path *Path, spacing units.Value, opts ...PathPatternOption) ([]*Body, error)
 func WithPathFollow() PathPatternOption
+func WithPathPivot(pivot r3.Vec) PathPatternOption
 ```
 
 | Decision | Rule |
@@ -41,7 +42,7 @@ The translation of an arc point is not exact, so such an instance reads as `Appr
 
 ## 4. Not covered
 
-- Turning instances about the path's own axis, or about a pivot other than its start.
+- Turning instances about the path's own axis.
 - A path of any segment kind beyond `LineTo` and `ArcThrough`, which is all `Path` holds.
 - Joining the copies to a base. Pass them with the base to one `Union`.
 
@@ -57,6 +58,7 @@ point with the unit direction there, and `pathsample.Turn` gives the shortest ro
 | F3 | A line's direction is constant, and an arc's is the derivative of its circle at that length. A point where two segments meet takes the direction of the segment that holds it, and the last point takes the direction at the path's end. |
 | F4 | The turn has no roll about the direction of travel: it is the shortest rotation, so a copy never twists about its own forward beyond what the path's bending carries. |
 | F5 | A direction exactly opposite the start's has no shortest axis and is `ErrDegenerate`. A nil option is `ErrDegenerate`. |
+| F7 | `WithPathPivot` replaces the path's start in F2: the turn is about the stated point, in millimetres, and the move of P2 follows it. A body centred on the pivot turns in place. The last pivot wins. A pivot with no `WithPathFollow` is `ErrDegenerate`, and a non-finite pivot is `ErrNotFinite`. |
 | F6 | A direction equal to the start's leaves the copy unturned, so a straight path gives the same copies with and without the option. |
 
 ## 6. Spacing by distance

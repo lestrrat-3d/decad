@@ -81,3 +81,44 @@ func TestPathPatternFollowRefusals(t *testing.T) {
 	_, err = decad.PathPatternCopies(t.Context(), block, followPath(t), 3, nil)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
+
+func TestPathPatternPivotTurnsCopiesAboutThePivot(t *testing.T) {
+	t.Parallel()
+	_, block := patternBlock(t)
+	// About the block's own centre a quarter turn leaves it square on its place, so the
+	// last copy is the block moved by the path's end: x 20 to 24, y 10 to 14. About the
+	// path's start the same turn swings it to x 16 to 20.
+	copies, err := decad.PathPatternCopies(t.Context(), block, followPath(t), 3,
+		decad.WithPathFollow(), decad.WithPathPivot(r3.Vec{X: 2, Y: 2}))
+	require.NoError(t, err)
+	requireBoundsNear(t, copies[1], r3.Vec{X: 20, Y: 10, Z: 0}, r3.Vec{X: 24, Y: 14, Z: 2})
+	for _, c := range copies {
+		decadtest.MeasuresVolume(t, c, units.CubicMillimeters(32))
+	}
+	moved, err := decad.PathPatternCopies(t.Context(), block, followPath(t), 3, decad.WithPathFollow())
+	require.NoError(t, err)
+	requireBoundsNear(t, moved[1], r3.Vec{X: 16, Y: 10, Z: 0}, r3.Vec{X: 20, Y: 14, Z: 2})
+}
+
+func TestPathPatternPivotAtThePathStartIsTheDefault(t *testing.T) {
+	t.Parallel()
+	_, block := patternBlock(t)
+	copies, err := decad.PathPatternCopies(t.Context(), block, followPath(t), 3,
+		decad.WithPathFollow(), decad.WithPathPivot(r3.Vec{}))
+	require.NoError(t, err)
+	lo, hi := turnedBlockBounds(math.Pi/2, r3.Vec{X: 20, Y: 10})
+	requireBoundsNear(t, copies[1], lo, hi)
+}
+
+func TestPathPatternPivotRefusals(t *testing.T) {
+	t.Parallel()
+	_, block := patternBlock(t)
+	_, err := decad.PathPatternCopies(t.Context(), block, followPath(t), 3, decad.WithPathPivot(r3.Vec{}))
+	require.ErrorIs(t, err, decad.ErrDegenerate, "a pivot without a turn")
+	_, err = decad.PathPatternCopies(t.Context(), block, followPath(t), 3,
+		decad.WithPathFollow(), decad.WithPathPivot(r3.Vec{X: math.NaN()}))
+	require.ErrorIs(t, err, decad.ErrNotFinite)
+	_, err = decad.PathPatternSpaced(t.Context(), block, followPath(t), units.Millimeters(5),
+		decad.WithPathFollow(), decad.WithPathPivot(r3.Vec{Z: math.Inf(1)}))
+	require.ErrorIs(t, err, decad.ErrNotFinite)
+}

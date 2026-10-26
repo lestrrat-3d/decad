@@ -3,6 +3,7 @@ package examples_test
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
@@ -157,4 +158,56 @@ func Example_path_pattern_spaced() {
 	// Output:
 	// x 12..16
 	// x 24..28
+}
+
+// WithPathPivot sets the point a followed turn swings about. By default each
+// copy turns about the path's start, so a body that sits away from it swings
+// round that point. Here a 4 mm peg turns a quarter turn at the end of a path
+// that bends left: about its own centre it stays square on its place, and about
+// the start it swings to the side.
+func Example_path_pattern_pivot() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(0, 0, 4, 4)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	doc := decad.New()
+	peg, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(2), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	mid := 10 / math.Sqrt2
+	path, err := decad.NewPath(r3.Vec{},
+		decad.ArcThrough{Through: r3.Vec{X: mid, Y: 10 - mid}, End: r3.Vec{X: 10, Y: 10}})
+	if err != nil {
+		fmt.Printf("failed to build path: %s\n", err)
+		return
+	}
+	for _, pivot := range []r3.Vec{{}, {X: 2, Y: 2}} {
+		copies, err := decad.PathPatternCopies(context.Background(), peg, path, 2,
+			decad.WithPathFollow(), decad.WithPathPivot(pivot))
+		if err != nil {
+			fmt.Printf("failed to pattern: %s\n", err)
+			return
+		}
+		box, err := copies[0].Bounds()
+		if err != nil {
+			fmt.Printf("failed to read bounds: %s\n", err)
+			return
+		}
+		fmt.Printf("pivot (%.0f, %.0f): x %.0f..%.0f, y %.0f..%.0f\n",
+			pivot.X, pivot.Y, box.Min.X, box.Max.X, box.Min.Y, box.Max.Y)
+	}
+	// Output:
+	// pivot (0, 0): x 6..10, y 10..14
+	// pivot (2, 2): x 10..14, y 10..14
 }
