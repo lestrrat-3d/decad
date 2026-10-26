@@ -88,5 +88,5 @@ func TestAnalyticConeToAnApexKeepsFaceted(t *testing.T) {
 	require.NoError(t, err)
 	ok, err := supportsAnalyticSTEP(t.Context(), body)
 	require.NoError(t, err)
-	require.False(t, ok, "a cone that reaches its apex has one loop, which the analytic arm does not take")
+	require.False(t, ok, "a cone that reaches its apex has one circle loop, which the analytic arm does not take")
 }

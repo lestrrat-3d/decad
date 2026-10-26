@@ -216,25 +216,32 @@ func roundedDrilledPlate(t *testing.T) *decad.Body {
 // TestBrepLoopChamferPublicRoundedPlateExports chamfers P8's top loop by 1 (four
 // Plane and four Cone patches at G1 joins, 15232 − 8π/3) and its hole rim by 1
 // (one Cone, 15280 − 10π/3). Each body tessellates to a closed mesh whose
-// volume lies within the chord times the curved faces' area of the closed form, Verify reads it Sound, and STEP writes it faceted, a cone sending the
-// whole body to the faceted writer: one ADVANCED_FACE per mesh triangle.
+// volume lies within the chord times the curved faces' area of the closed form,
+// and Verify reads it Sound. STEP writes the top loop analytic, each corner cone
+// patch a CONICAL_SURFACE, and ReadSTEP reads it back closed within its own
+// 0.01 mm chord times the curved area of the closed form. The hole rim's cone
+// sends its body to the faceted writer: one ADVANCED_FACE per mesh triangle.
+// The top loop's analytic leg was shown to fail with
+// supportsAnalyticConePatch refusing every loop (the body fell to the faceted
+// writer).
 func TestBrepLoopChamferPublicRoundedPlateExports(t *testing.T) {
 	t.Parallel()
 	up := r3.NewVec(0, 0, 1)
 	for _, tc := range []struct {
-		name   string
-		face   func(t *testing.T, body *decad.Body) *decad.Face
-		loop   int
-		cones  int
-		planes int
-		a, b   *big.Rat
+		name     string
+		face     func(t *testing.T, body *decad.Body) *decad.Face
+		loop     int
+		cones    int
+		planes   int
+		a, b     *big.Rat
+		analytic bool
 	}{
 		{"top loop", func(t *testing.T, body *decad.Body) *decad.Face {
 			return planeFacing(t, body, up, r3.NewVec(0, 0, 20))
-		}, 0, 4, 4, big.NewRat(15232, 1), big.NewRat(-8, 3)},
+		}, 0, 4, 4, big.NewRat(15232, 1), big.NewRat(-8, 3), true},
 		{"hole rim", func(t *testing.T, body *decad.Body) *decad.Face {
 			return planeFacing(t, body, r3.NewVec(0, -1, 0), r3.Vec{})
-		}, 1, 1, 0, big.NewRat(15280, 1), big.NewRat(-10, 3)},
+		}, 1, 1, 0, big.NewRat(15280, 1), big.NewRat(-10, 3), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -291,8 +298,23 @@ func TestBrepLoopChamferPublicRoundedPlateExports(t *testing.T) {
 			require.NoError(t, export.STEP(t.Context(), &buf, got, units.Millimeters(0.05),
 				export.WithSTEPName("plate"), export.WithSTEPAuthor("apitest"), export.WithSTEPOrganization("decad")))
 			text := buf.String()
-			require.Contains(t, text, "faceted decad solid")
-			require.Equal(t, len(mesh.Triangles()), strings.Count(text, "=ADVANCED_FACE("))
+			if !tc.analytic {
+				require.Contains(t, text, "faceted decad solid")
+				require.Equal(t, len(mesh.Triangles()), strings.Count(text, "=ADVANCED_FACE("))
+				return
+			}
+			require.Contains(t, text, "analytic decad solid")
+			require.Equal(t, len(got.Faces()), strings.Count(text, "=ADVANCED_FACE("))
+			require.Equal(t, tc.cones, strings.Count(text, "=CONICAL_SURFACE("))
+			read, err := decad.ReadSTEP(t.Context(), strings.NewReader(text))
+			require.NoError(t, err)
+			require.True(t, read.Report().Closed, "the cone patches' chords meet their neighbours'")
+			readVolume, err := read.Volume()
+			require.NoError(t, err)
+			readHeld := new(big.Rat).SetFloat64(readVolume.Value.Base())
+			readSlack := new(big.Rat).SetFloat64(0.01 * curved)
+			require.LessOrEqual(t, new(big.Rat).Sub(readHeld, readSlack).Cmp(lo), 0)
+			require.GreaterOrEqual(t, new(big.Rat).Add(readHeld, readSlack).Cmp(hi), 0)
 		})
 	}
 }

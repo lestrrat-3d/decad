@@ -1054,7 +1054,9 @@ Route L (L-2):
   their meshes are export-only, within the chord times the curved faces' area
   of `15000 − 135/2 − 9π/8`, and a `Cut` over them refuses.
 - P3's rim chamfer tessellates with one count on the cone's two circles;
-  P8's loop chamfers export faceted STEP and P2's top loop analytic; `Verify`
+  P8's top-loop chamfer exports analytic STEP, each corner cone a
+  `CONICAL_SURFACE` patch, its hole-rim chamfer faceted, and P2's top loop
+  analytic; `Verify`
   `Sound` on each.
 - The undercut survey lists P3's rim cone, which faces up and out, under a
   pull along `−z` and clears the body along `+z`. The concave-radius survey
