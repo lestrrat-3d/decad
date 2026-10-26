@@ -49,9 +49,9 @@ determinism of the bytes. A crease rule that marks every edge, or no absorption 
 
 ## 4. Not covered
 
-- Dimensions, text, hatching, centre lines and title blocks.
+- Hatching, centre lines, dimensions other than a view's overall width and height, and a title block with more than a title and a scale.
 - Analytic circles, arcs and ellipses, and DXF versions after release 12.
-- Scale, paper size, view labels and borders on a sheet, and a layout other than one row.
+- View labels and a layout other than one row.
 - A tolerance on the hidden-line test finer than the depth buffer's pixel.
 
 ## 5. Several views on one sheet
@@ -69,3 +69,34 @@ func DXFViews(ctx context.Context, w io.Writer, body *decad.Body, tol units.Valu
 | V4 | `gap` is a non-negative length: a negative value is `ErrNegativeMagnitude` and a wrong unit kind `ErrUnitKind`. An empty `views`, an invalid view, a nil context, writer or body are `ErrDegenerate`, and the file is fully built before the first write. |
 | V5 | A view is moved by its drawn edges, so a view's extent is that of its feature edges, not of any frame. Views that differ in how far their edges reach from the origin still line up on the baseline. |
 
+## 6. Paper, scale and a title block
+
+```go
+type DXFPaper struct {
+    Views         []DrawingView
+    Width, Height units.Value
+    Scale         units.Value
+    Margin, Gap   units.Value
+    Title         string
+    Dimensions    bool
+}
+
+func DXFSheet(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, paper DXFPaper,
+    opts ...decad.TessellateOption) error
+
+const (
+    DXFBorderLayer    = "BORDER"
+    DXFTextLayer      = "TEXT"
+    DXFDimensionLayer = "DIMENSION"
+)
+```
+
+| Decision | Rule |
+|---|---|
+| P1 | Coordinates are paper millimetres, the paper's lower left corner at the origin. The views are projected as D1 to D6 say, then every coordinate is moved to its least x and least y and multiplied by `Scale`, a dimensionless ratio of paper to model: 0.5 is 1:2. |
+| P2 | The border is the paper inset by `Margin`. A title block, 14 mm deep, fills the bottom of the border: a line across its top, and a divider 60 mm from the right edge. `Title` is a `TEXT` 5 mm high at 3 mm in, and `SCALE 1:n` or `SCALE n:1` sits right of the divider, `n` rounded to two decimals. |
+| P3 | The row of views, `Gap` apart, is centred in the area above the title block. With `Dimensions` the row also takes 12 mm to the left and 12 mm below it, for each view's dimensions. |
+| P4 | A view's width is dimensioned below it: two extension lines, a dimension line with a 45 degree tick at each end, and a 3.5 mm `TEXT` of the model's width, not the drawn one, rounded to two decimals. Its height is dimensioned the same way left of it, with the text turned 90 degrees. Two or more dimensioned views need `Gap` of at least 12 mm. |
+| P5 | The border, the title block and their divider are `LINE`s on `BORDER` and every `TEXT` is on `TEXT`. A dimension's lines are on `DIMENSION`, colour 3. The views keep the `VISIBLE` and `HIDDEN` layers. Entities are ordered border, texts, then each view's visible lines, hidden lines and dimension, so equal input gives equal bytes. |
+| P6 | `Width`, `Height` and `Scale` must be positive: zero is `ErrDegenerate`, a negative value `ErrNegativeMagnitude` and a wrong unit kind `ErrUnitKind`. `Margin` and `Gap` are lengths that are not negative. A title with a character outside printable ASCII is `ErrDegenerate`. |
+| P7 | Views that do not fit the area, with their dimensions, are `ErrDegenerate` and nothing is written. An empty `Views`, an invalid view, and a nil context, writer or body are `ErrDegenerate`. The file is fully built before the first write. |
