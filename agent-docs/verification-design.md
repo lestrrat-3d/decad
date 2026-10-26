@@ -341,7 +341,8 @@ const (
     // A faceted body's wall survey (agent-docs/mesh-wall-survey-design.md)
     // publishes the interval from zero to an upper bound of the thinnest wall,
     // so it ends in DiagWallTooThin or in this straddle and never in a Sound
-    // wall.
+    // wall. Its pull survey likewise ends in DiagUndercut or in
+    // DiagUndecidedUndercut and never in an all-clear.
     DiagUndecidedWall
     // DiagUndecidedUndercut — the pull survey could neither prove nor exclude an
     // undercut (§6). Reading ReadingNone, Observed* and Required nil. Suspect.

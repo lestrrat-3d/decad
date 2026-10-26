@@ -2312,3 +2312,5 @@
 10	0.01	TestFacetedWallSurveyProvesAThinPlateTooThin
 10	0.01	TestFacetedWallSurveyLeavesAThickEnoughPlateUndecided
 10	0.01	TestFacetedWallSurveyDoesNotCallAThickBodyThin
+10	0.01	TestFacetedUndercutSurveyFindsAnOverhang
+10	0.01	TestFacetedUndercutSurveyClaimsNothingForAFreePull
