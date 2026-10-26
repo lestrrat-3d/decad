@@ -74,6 +74,9 @@ type Input struct {
 	Depth    float64
 	Reach    float64
 	Head     Head
+	// Margin is how far the tools start outside the face, in millimetres. Zero
+	// means MouthMargin; a hole on a concave cylinder sets it to CurvedMargin.
+	Margin float64
 	// Rect, when set, replaces the round bore: Diameter is then ignored and
 	// Head must be HeadNone.
 	Rect *Rect
@@ -93,15 +96,38 @@ type SlotTool struct {
 }
 
 // Cylinder is a hole tool swept inward. Length is the depth below the face
-// the cylinder reaches; the tool itself starts MouthMargin outside the face
-// and so runs Tool() long.
+// the cylinder reaches; the tool itself starts Margin outside the face and so
+// runs Tool() long.
 type Cylinder struct {
 	Radius float64
 	Length float64
+	Margin float64
 }
 
 // Tool is the length of the extruded tool.
-func (c Cylinder) Tool() float64 { return c.Length + MouthMargin }
+func (c Cylinder) Tool() float64 { return c.Length + c.Margin }
+
+// CurvedMargin returns how far a tool must start outside the tangent plane at
+// the hole axis on a cylindrical face of the given radius so that it starts
+// clear of the face everywhere its section reaches. toolRadius is the radius of
+// the circle that holds the tool's section. A convex face falls away from the
+// tangent plane, so MouthMargin serves. A concave face rises toward it by the
+// sagitta R - sqrt(R² - r²) at distance r, which the tool must clear as well; a
+// tool section reaching the axis of a concave face is refused.
+func CurvedMargin(radius, toolRadius float64, concave bool) (float64, error) {
+	if !positive(radius) || !positive(toolRadius) {
+		return 0, fmt.Errorf(`%w: the cylinder and tool radii must be positive and finite`, decaderr.ErrDegenerate)
+	}
+	if !concave {
+		return MouthMargin, nil
+	}
+	if toolRadius >= radius {
+		return 0, fmt.Errorf(`%w: a hole of radius %g mm reaches the axis of the %g mm radius bore it starts in`,
+			decaderr.ErrUnsupported, toolRadius, radius)
+	}
+	sag := radius - math.Sqrt(radius*radius-toolRadius*toolRadius)
+	return MouthMargin + sag, nil
+}
 
 // Sink is the revolve profile of a countersink tool. Its sketch plane holds
 // the hole axis; Radial and Height are measured from the axis point on the
@@ -157,7 +183,14 @@ func Compute(in Input) (Plan, error) {
 		}
 		boreLength = in.Depth
 	}
-	mouth, err := r3.NewFrame(in.Frame.Origin().Add(in.Outward.Scale(MouthMargin)), in.Frame.U(), in.Frame.V())
+	margin := in.Margin
+	if margin == 0 {
+		margin = MouthMargin
+	}
+	if !positive(margin) {
+		return Plan{}, fmt.Errorf(`%w: the tool margin must be positive and finite`, decaderr.ErrDegenerate)
+	}
+	mouth, err := r3.NewFrame(in.Frame.Origin().Add(in.Outward.Scale(margin)), in.Frame.U(), in.Frame.V())
 	if err != nil {
 		return Plan{}, fmt.Errorf(`%w: the face frame is degenerate: %s`, decaderr.ErrDegenerate, err)
 	}
@@ -167,7 +200,7 @@ func Compute(in Input) (Plan, error) {
 		U:       local.X,
 		V:       local.Y,
 		Against: in.Outward.Dot(in.Frame.N()) > 0,
-		Bore:    Cylinder{Radius: radius, Length: boreLength},
+		Bore:    Cylinder{Radius: radius, Length: boreLength, Margin: margin},
 	}
 	switch in.Head.Kind {
 	case HeadNone:
@@ -262,7 +295,7 @@ func (p Plan) withCounterbore(in Input) (Plan, error) {
 		return Plan{}, fmt.Errorf(`%w: the counterbore depth %g mm must be less than the hole depth %g mm`,
 			decaderr.ErrDegenerate, h.Depth, p.Bore.Length)
 	}
-	p.Counterbore = &Cylinder{Radius: h.Diameter / 2, Length: h.Depth}
+	p.Counterbore = &Cylinder{Radius: h.Diameter / 2, Length: h.Depth, Margin: p.Bore.Margin}
 	return p, nil
 }
 

@@ -15,7 +15,7 @@ func Hole(ctx context.Context, b *Body, spec HoleSpec) (*Body, error)
 
 | Decision | Rule |
 |---|---|
-| H1 | `Face` resolves under the exactly-one rule of `FaceSelector.SelectFaces`. The face MUST have an analytic `Plane` surface; any other surface is `ErrUnsupported`. |
+| H1 | `Face` resolves under the exactly-one rule of `FaceSelector.SelectFaces`. The face MUST have an analytic `Plane` or `Cylinder` surface (§7); any other surface is `ErrUnsupported`. |
 | H2 | `At` is a world point. `Frame.ToLocal` gives its plane coordinates. A point more than `holeplan.OnPlaneTol` (1e-6 mm) off the plane is `ErrDegenerate`; the point is never moved onto the plane. |
 | H3 | The hole runs along the face's inward normal. The outward normal is `Face.NormalAt` at the plane origin. The tool sweeps against the frame normal exactly when that normal points outward. |
 | H4 | `Diameter`, a blind `Depth`, a counterbore's diameter and depth, and a countersink's diameter are positive finite lengths. A countersink angle is the included angle, strictly between 0 and π. A violation is `ErrDegenerate`, or `ErrUnitKind` for a wrong unit kind. |
@@ -46,7 +46,7 @@ face. A countersink cut gives a faceted result whose planar faces are split into
 
 ## 4. Not covered
 
-- A hole in a face that is not an analytic plane, or in a sheet.
+- A hole in a face that is not an analytic plane or cylinder, or in a sheet.
 - A noncircular hole other than `RectangularHole` and `SlotHole`, a threaded hole, and a tapped-hole annotation. `Thread` (`agent-docs/thread-design.md`) threads a bored hole afterward.
 - Several holes in one call. Call `Hole` per hole, or build one hole and use `Patterned`.
 
@@ -79,3 +79,21 @@ turns it counter-clockwise about the hole axis.
 | L3 | The bore tool is the stadium sketched on the mouth plane and extruded inward as in R4. Two fixed lines join two counter-clockwise arcs about the end centres, which are `(Length − Width)/2` from the axis along the slot. |
 
 The walls are two planes and two cylinders, so a slot hole is `Approximate` as a round hole is (§3).
+
+## 7. Holes on a cylindrical face
+
+A face that is an analytic `Cylinder` takes a radial hole: the axis runs along the radial line through `At`, into the
+material, whether the face is a rod's outer wall or a bore's inner wall.
+
+| Decision | Rule |
+|---|---|
+| Y1 | `At` lies within `holeplan.OnPlaneTol` of the cylinder's surface, a distance from its axis within 1e-6 mm of the radius, and not on the axis. A violation is `ErrDegenerate`. |
+| Y2 | The site is the plane tangent to the cylinder at `At`, with the face's outward normal there as its normal. Placement, depth, reach and the axis check (H2 to H8) then read it as they read a plane. A blind `Depth` is measured from the surface at `At`. |
+| Y3 | The tools start `holeplan.CurvedMargin` outside the tangent plane. A rod's wall falls away from the plane, so the margin is `holeplan.MouthMargin`. A bore's wall rises toward it by the sagitta `R − sqrt(R² − r²)` at distance `r`, so the margin is `MouthMargin` plus the sagitta of the largest radius the bore's section reaches, and no sliver of wall stands above the tool's start. |
+| Y4 | The largest radius is half the diameter of a round hole, half the diagonal of a `RectangularHole` and half the length of a `SlotHole`. In a bore it MUST be less than the bore's radius, or the hole is `ErrUnsupported`. |
+| Y5 | A `Head` on a cylindrical face is `ErrUnsupported`. |
+
+The result is a mesh Boolean's, faceted, with the Cut's own bounds. The tests compare volumes against integrals
+computed independently: the chord of the rod weighted by the hole's section, and the wall's thickness weighted by the
+hole's section.
+
