@@ -77,6 +77,7 @@ triangles, two shells and an inverted mesh.
 
 - STEP and IGES import, and 3MF materials, colours, slices and beam lattices.
 - Turning a `MeshBody` into a `Body`, or taking one in a feature, a Boolean or `Verify`.
+- Reduction that keeps the surface within a stated distance of the source, and remeshing.
 - Repair beyond §7: self-intersections, edges three triangles use, bent holes closed to their true surface, and slivers.
 - Writing a `MeshBody` as STEP or 3MF.
 - Concave or non-planar OBJ faces, which a fan cuts wrongly.
@@ -138,4 +139,20 @@ func WithMeshFillHoles() MeshRepairOption
 | T6 | A reflection reverses the winding of the triangles it moves, so a mirrored body stays outward. |
 | T7 | A triangle index outside its object's vertices, a vertex that is not finite, a malformed transform and XML that does not parse are `ErrMalformedMesh`. A part that expands past the byte limit, as well as input past either limit, is `ErrMeshTooLarge`. |
 | T8 | Materials, colours, textures, slices and beam lattices are ignored. |
+
+## 9. Reduction
+
+`ReduceMesh` thins a `MeshBody` by vertex clustering into a new one. The work is plain-data code in `internal/meshreduce/`.
+
+```go
+func ReduceMesh(ctx context.Context, m *MeshBody, cell units.Value) (*MeshBody, MeshReduceReport, error)
+```
+
+| Decision | Rule |
+|---|---|
+| R1 | Space is cut into cubic cells of side `cell`, aligned to the origin. The vertices of a cell become one vertex at their mean, and each triangle is rebuilt over the replacements. |
+| R2 | A triangle whose corners share a cell, or that repeats another triangle's three cells in any order, is dropped. The first of a repeated set is kept. Vertices no kept triangle uses are dropped, and the rest are numbered in the order the kept triangles first use them. |
+| R3 | `MaxVertexMove` is the greatest distance from an original vertex to its replacement. It bounds how far the vertices moved, never how far the surface moved: nothing here claims the result is close to the source, closed, manifold or free of self-intersection. `MeshBody.Report` on the result says what it is. |
+| R4 | The mean lies inside its cell, so a convex corner is pulled in. A cell smaller than the vertex spacing changes nothing, and one larger than the mesh drops every triangle. |
+| R5 | A cell that is not positive is `ErrDegenerate` for zero, `ErrNegativeMagnitude` for a negative and `ErrUnitKind` for a wrong kind. A reduction that leaves no triangle, a nil context and a nil mesh are `ErrDegenerate`. |
 

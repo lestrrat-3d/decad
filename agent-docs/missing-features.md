@@ -187,7 +187,7 @@ moves its row to the matching section above, with that doc as owner.
 | Shell with a different thickness per face, or a wall on both sides of the original surface | `Shell` takes one thickness, and `WithShellSense` picks one side (`shell.go`) |
 | Boss with ribs or a root fillet, a non-round or tilted boss, a boss on a curved face, or a pilot with a head or draft | `Boss` raises one round boss with a plain blind pilot on a planar face (`boss.go`; `agent-docs/boss-design.md` §3) |
 | T-spline (Form) sculpting | No entry point exists; free-form surfaces are NURBS (`decad.NURBSSurface`) |
-| Mesh bodies as input: convert to a solid, reduce, remesh | No entry point exists; a `MeshBody` is read, queried, repaired and written, and no feature takes it |
+| Mesh bodies as input: convert to a solid, reduce within a stated surface distance, remesh | No entry point exists; a `MeshBody` is read, queried, repaired, thinned by vertex clustering and written, and no feature takes it |
 | Lattice or volumetric infill for printing | No entry point exists |
 | Nesting that turns bodies by other than a quarter turn, follows their outlines or stacks them in three dimensions | `Arrange` packs bounding rectangles by translation, with an optional quarter turn about +Z (`arrange.go`) |
 | Toolpath generation (CAM) | No entry point exists |
