@@ -181,7 +181,10 @@ func TestFacetedRetainedBlendOpenChain(t *testing.T) {
 		growth := after.Bound.Mag() - before.Bound.Mag()
 		t.Logf("area change %.9f, want %.9f, bound growth %.3g", got, want, growth)
 		require.InDelta(t, want, got, growth)
-		require.Less(t, growth, 1.0)
+		// The growth carries the old geometric area terms of the faces the
+		// chain rewrites (agent-docs/retained-edge-blend-design.md §6.3), about 2
+		// here, beside the chord error of the new facets.
+		require.Less(t, growth, 2.5)
 	})
 
 	t.Run("junction and end edges are quarter circles of the blend radius", func(t *testing.T) {

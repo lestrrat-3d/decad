@@ -266,8 +266,8 @@ a concave rim), or the `Cone` through the circles `(ρA, 0)` and `(ρB, zB)`,
 whose `Origin` is the narrower circle.
 
 **Size (SR3).** The rim refuses when no ball of radius `r` touches both faces,
-when the plane's setback circle reaches the axis (`ρA` within slack of 0), when
-the sphere's setback runs past the pole (`ρB` within slack of 0), and when the
+when the plane's setback circle reaches the axis (`ρA ≤ τ + slack`), when
+the sphere's setback runs past the pole (`ρB ≤ τ + slack`), and when the
 tangent point or the arc is degenerate (R3's tests).
 
 **Construction.** As R2 (§5). The plane's rim loop gives way to the polygon on
@@ -276,9 +276,15 @@ sphere in exactly the setback circle. A sphere's held facets carry vertices
 inside the face. Such a vertex is the tessellation of a doubly curved surface,
 not a feature of the face, so only the wall's boundary loops must clear the
 band (§6.2). The cut removes an inner vertex with its facets or keeps it, by the
-side of the cut plane its held position lies on. Where the band is thin against
-the wall's held vertex bounds, the clipped facets can fold; the rebuilt mesh
-then fails its audit (SR7).
+side of the cut plane its held position lies on. A kept inner vertex `v` whose
+held height clears the cut plane by at most `β(v) + slack` may have its true
+point in the removed zone, which is no longer boundary. Its bound becomes the
+larger of `β(v)` and its distance to the blend face, plus slack: that distance
+is the meridian distance from `v`'s image to the torus arc or the cone's
+segment, and a point of the blend face is a true boundary point. The largest
+such bound joins `ε` of §6.3. Where the band is thin against the wall's held
+vertex bounds, the clipped facets can fold; the rebuilt mesh then fails its
+audit (SR7).
 
 **Exact areas.** The plane loses the annulus `π·|ρA² − ρ0²|` and the sphere the
 zone `2π·R_s·|zB|` (Archimedes). The torus patch has area
@@ -441,9 +447,9 @@ nothing fitted.
   rim's must lie at axial distance at least `t + b + slack` from the rim's
   plane.
 - **R6.** The plane as R2's, out to `ρA`. On the sphere, every vertex of a
-  boundary loop other than the rim's must lie at least `|zB| + b + slack` from
-  the rim's plane on the wall's side. A vertex inside the face is no feature and
-  is not gated (§4.5).
+  boundary loop other than the rim's must clear the cut plane at `|zB|` by more
+  than `b + τ + slack` on the wall's side. A vertex inside the face is no
+  feature and is not gated; a kept one near the cut takes the bound of §4.5.
 
 ### 6.3 Bounds of the result
 
@@ -469,9 +475,15 @@ outside `K` lies inside `H △ S`. Inside `K`, `S'` is the exact blended region 
 old facets the rewrite replaced, and `Δ_true` for the exact area of the blend
 face less the exact area of the annulus and the wall band it removes. Both
 bodies have the same area elsewhere, so the held total differs from the true one
-by the old difference plus `Δ_held − Δ_true`. The new `AreaSlack` is the old one
-plus `|Δ_held − Δ_true|` and the rounding of the two area sums
-(`proofbound.FacetAreaTermSlop` per facet).
+by the old difference plus `Δ_held − Δ_true`. The old difference was proven
+only with every face's geometric term (the smaller of its largest facet bound
+times its perimeter and its facets' perturbation allowance), and the rebuilt
+body charges the rewritten faces' terms afresh from their new facets, which can
+be smaller: a rewrite drops high-bound rim vertices and whole facets. The new
+`AreaSlack` is therefore the old one plus `|Δ_held − Δ_true|`, the rounding of
+the two area sums (`proofbound.FacetAreaTermSlop` per facet), and the old
+geometric term of each face the rewrite took facets from
+(`facetedrecord.FaceAreaGeom`).
 
 **Volume.** The new `VolSymDiff` is the old one plus `ε·(A_strip + A_true)`, with
 `ε` the largest vertex bound of the strip and `A_strip`, `A_true` the held and
@@ -529,6 +541,9 @@ published bound, never with a pinned literal.
 | R6 two-distance chamfer, and both rims of a twice-cut ball | the plane takes `dA`, the sphere's meridian `dB`; the second rim is found again on the partly blended body | |
 | R6 refusals | a snapped centre, a rounded radius and a rotated revolve refuse SR1 with their own messages; a ball too large, a plane setback past the axis and a sphere setback past the pole refuse SR3; a grazing crossing refuses SR5 (unit test) | delete each check: its fixture builds, and the rotated one panics on the unread record |
 | R6 inner wall vertices | a sphere zone that holds tessellation vertices builds | gate inner vertices as R2 gates the cylinder's: "the blend consumes the wall" |
+| R6 kept inner vertex bound (unit test) | a vertex held `β` outside the sphere off a point inside the zone gets a bound that reaches the nearest point of the new boundary | keep its old bound: the bound falls short |
+| R6 pocket and dome foot | `Cut(slab, ball)` (convex, plane outside the rim, material outside the sphere) and `Union(ball, slab)` (concave, sphere rising): fillet and chamfer change the volume and the area by the meridian's closed forms; the torus and cone parameters match and the blend's normal points away from the material | flip the chamfer normal's sphere term for an outside material: the cone's normal points into the material |
+| Area slack carries the old face terms | the fillet's area change lies within the bound's growth | drop the old terms: the rebuilt bound grows by less than the change's error |
 | Result is an ordinary retained body | a second blend on another edge, a `Cut` through the blended region and `Transform` all build; `NormalAt` on the blend face has a bound below 1 | store the blend with `Retained = false`: the chain loses the tag |
 | New vertex bounds | every new vertex lies within its stated bound of its exact point | skip the rounding charge: the bound is zero and the check fails |
 | Verify | `Verify` of a blended plate passes with no `Suspect` in watertightness | |

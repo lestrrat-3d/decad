@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -35,6 +36,9 @@ type work struct {
 	dir float64
 	// cuts are the vertices a wall cut made, by the mesh edge it cut.
 	cuts map[[2]int]int
+	// raised is the largest bound rewriteWall gave a kept inner vertex of a
+	// curved wall.
+	raised float64
 }
 
 type ringPt struct {
@@ -291,12 +295,17 @@ func (w *work) segmentRadialRange(p, q r3.Vec) (float64, float64) {
 // exact area is 2π·bandRadius·tb either way. A cylinder's held facets have
 // their vertices on the wall's boundary, so every vertex but the rim's must
 // clear the band: a vertex in it is another face's corner the blend would
-// meet. A sphere's facets also hold vertices inside the face, the tessellation
-// of a doubly curved surface and no feature of it: with curved set, only the
-// boundary loops' vertices must clear the band, and the cut removes an inner
-// vertex with its facets or keeps it, by which side of the cut plane its held
-// position lies on. It returns the cut ring, sorted by angle.
-func (w *work) rewriteWall(fi int, tb, bandRadius float64, curved bool) ([]ringPt, int, error) {
+// meet; blendDist is nil. A sphere's facets also hold vertices inside the
+// face, the tessellation of a doubly curved surface and no feature of it: with
+// blendDist set, only the boundary loops' vertices must clear the band, and
+// the cut removes an inner vertex with its facets or keeps it, by which side
+// of the cut plane its held position lies on. A kept inner vertex within its
+// bound of the cut plane may have its true point in the removed zone, which
+// is no longer boundary; its bound grows to its distance from the blend face,
+// blendDist, plus the rounding (§4.5). It returns the cut ring, sorted by
+// angle.
+func (w *work) rewriteWall(fi int, tb, bandRadius float64, blendDist func(r3.Vec) float64) ([]ringPt, int, error) {
+	curved := blendDist != nil
 	r := w.r
 	facets := facetsOfFace(w.fp.FaceOf, fi)
 	group, err := w.groupOf(facets)
@@ -333,6 +342,10 @@ func (w *work) rewriteWall(fi int, tb, bandRadius float64, curved bool) ([]ringP
 			gv := r.side*r.height(p) - tb
 			if _, onLoop := inLoop[v]; curved && !onLoop {
 				g[v] = gv
+				if gv > 0 && gv <= w.beta[v]+slack {
+					w.beta[v] = proofbound.AbsSumUpper(max(w.beta[v], blendDist(p)), slack)
+					w.raised = max(w.raised, w.beta[v])
+				}
 				continue
 			}
 			if err := clearance(gv, w.beta[v]+slack+w.tau, "the wall"); err != nil {

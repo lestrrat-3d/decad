@@ -409,6 +409,29 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 	return body, faceOf, diameterReading, nil
 }
 
+// FaceAreaGeom is the geometric area term AssembleBody charged face f of the
+// body it assembled from verts, beta and tris, whose facets are f's own: the
+// smaller of its largest facet bound times its upper perimeter and its
+// facets' summed perturbation allowance. A caller that replaces f's facets
+// reads the term the old body published for f before it rebuilds.
+func FaceAreaGeom(budget *proofbound.WorkBudget, f *topo.Face, verts []r3.Vec, beta []float64, tris [][3]int,
+	facets []int) (float64, error) {
+	own := make([][3]int, len(facets))
+	faces := make([]*topo.Face, len(facets))
+	for i, t := range facets {
+		own[i], faces[i] = tris[t], f
+	}
+	faceDelta, faceFacetArea, err := facetproof.FaceProofs(budget, verts, own, faces, facetproof.FacetDeltas(own, beta))
+	if err != nil {
+		return 0, err
+	}
+	loopLen, err := facePerimeterUpper(f, budget)
+	if err != nil {
+		return 0, err
+	}
+	return facetproof.FacetedAreaGeom(faceDelta[f], loopLen, faceFacetArea[f]), nil
+}
+
 // facePerimeterUpper reads every loop's edge lengths and error bounds
 // and returns proofbound.PerimeterUpper over them.
 func facePerimeterUpper(f *topo.Face, budget *proofbound.WorkBudget) (float64, error) {

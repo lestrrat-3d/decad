@@ -22,10 +22,11 @@ const (
 	ballR, ballCut = 2.0, -1.0
 )
 
-// revolvedBall revolves the half-disk of radius r centred at (cu, cv) about
-// the x axis.
-func revolvedBall(t *testing.T, sc *retentionScene, cu, cv, r float64) *decad.Body {
+// revolvedBall revolves the half-disk of radius ballR centred at (cu, cv)
+// about the x axis.
+func revolvedBall(t *testing.T, sc *retentionScene, cu, cv float64) *decad.Body {
 	t.Helper()
+	const r = ballR
 	s, err := sc.w.CreateSketch(sc.w.XY())
 	require.NoError(t, err)
 	o := s.CreatePoint(cu-r, cv)
@@ -67,7 +68,7 @@ func ballCap(t *testing.T, sc *retentionScene, h float64) *decad.Body {
 func flatBall(t *testing.T, cu, cv float64) *decad.Body {
 	t.Helper()
 	sc := newRetentionScene()
-	cut, err := decad.Cut(t.Context(), revolvedBall(t, sc, cu, cv, ballR), ballCap(t, sc, ballCut))
+	cut, err := decad.Cut(t.Context(), revolvedBall(t, sc, cu, cv), ballCap(t, sc, ballCut))
 	require.NoError(t, err)
 	return cut
 }
@@ -142,6 +143,8 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		cut := flatBall(t, 0, 0)
 		before, err := cut.Volume()
 		require.NoError(t, err)
+		beforeArea, err := cut.Area()
+		require.NoError(t, err)
 		blended, err := decad.Fillet(t.Context(), cut, discRim(t, cut), units.Millimeters(r))
 		require.NoError(t, err)
 		after, err := blended.Volume()
@@ -151,8 +154,11 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		decadtest.MeasuresVolume(t, blended, units.CubicMillimeters(capVolume-removed))
 		// The torus replaces the annulus out from ρc and the sphere's zone of
 		// height |zB| (Archimedes: 2πR·|zB|).
-		decadtest.MeasuresArea(t, blended,
-			units.SquareMillimeters(capArea+torusArea-math.Pi*(rim*rim-rhoC*rhoC)+2*math.Pi*ballR*zB))
+		areaChange := torusArea - math.Pi*(rim*rim-rhoC*rhoC) + 2*math.Pi*ballR*zB
+		afterArea, err := blended.Area()
+		require.NoError(t, err)
+		requireAreaChange(t, beforeArea, afterArea, areaChange)
+		decadtest.MeasuresArea(t, blended, units.SquareMillimeters(capArea+areaChange))
 
 		kinds := map[decad.SurfaceKind]int{}
 		for _, f := range blended.Faces() {
@@ -182,6 +188,8 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		cut := flatBall(t, 0, 0)
 		before, err := cut.Volume()
 		require.NoError(t, err)
+		beforeArea, err := cut.Area()
+		require.NoError(t, err)
 		blended, err := decad.Chamfer(t.Context(), cut, discRim(t, cut), units.Millimeters(d))
 		require.NoError(t, err)
 		after, err := blended.Volume()
@@ -191,8 +199,11 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		decadtest.MeasuresVolume(t, blended, units.CubicMillimeters(capVolume-removed))
 		// The frustum's side replaces the annulus out from ρA and the sphere's
 		// zone of height |zB|.
-		decadtest.MeasuresArea(t, blended, units.SquareMillimeters(capArea+
-			math.Pi*(rhoA+rhoB)*math.Hypot(rhoB-rhoA, zB)-math.Pi*(rim*rim-rhoA*rhoA)+2*math.Pi*ballR*zB))
+		areaChange := math.Pi*(rhoA+rhoB)*math.Hypot(rhoB-rhoA, zB) - math.Pi*(rim*rim-rhoA*rhoA) + 2*math.Pi*ballR*zB
+		afterArea, err := blended.Area()
+		require.NoError(t, err)
+		requireAreaChange(t, beforeArea, afterArea, areaChange)
+		decadtest.MeasuresArea(t, blended, units.SquareMillimeters(capArea+areaChange))
 
 		kinds := map[decad.SurfaceKind]int{}
 		for _, f := range blended.Faces() {
@@ -252,7 +263,7 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		// plane's outward normal is -z, so it sees the centre at −low.
 		const r, low = 0.2, -1.5
 		sc := newRetentionScene()
-		top, err := decad.Cut(t.Context(), revolvedBall(t, sc, 0, 0, ballR), ballCap(t, sc, ballCut))
+		top, err := decad.Cut(t.Context(), revolvedBall(t, sc, 0, 0), ballCap(t, sc, ballCut))
 		require.NoError(t, err)
 		slice, err := decad.Cut(t.Context(), top, ballCap(t, sc, low-20))
 		require.NoError(t, err)
@@ -317,7 +328,7 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		// A rotated placement makes the record's axis frame a held float, not
 		// an exact frame.
 		sc := newRetentionScene()
-		turned, err := decad.Transform(t.Context(), revolvedBall(t, sc, 0, 0, ballR),
+		turned, err := decad.Transform(t.Context(), revolvedBall(t, sc, 0, 0),
 			rotation(t, r3.Vec{}, r3.NewVec(0, 0, 1), 0.3))
 		require.NoError(t, err)
 		cut, err := decad.Cut(t.Context(), turned, ballCap(t, sc, ballCut))
@@ -346,4 +357,191 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "the sphere's tag radius is not exactly its recorded radius")
 	})
+}
+
+// slabBelow is the 200 mm box z in [top − 20, top], placed by a translation.
+func slabBelow(t *testing.T, sc *retentionScene, top float64) *decad.Body {
+	t.Helper()
+	return ballCap(t, sc, top-20)
+}
+
+// sideBlend is a blend of the rim where the plane z = ballCut meets the ball,
+// in the rim's meridian: ρ from the axis through the ball's centre, z up from
+// the plane, so the centre stands at zs = −ballCut. outside is true when the
+// plane face lies outside the rim, and up when the sphere's face rises from
+// the plane. The two other faces' numbers follow from that alone.
+type sideBlend struct {
+	rhoA, rhoB, zB float64 // the setback circles on the plane and the sphere
+	rhoC, zC       float64 // a fillet ball's centre
+	volume         float64 // the volume between the sphere and the blend
+	blendArea      float64
+}
+
+// sideFillet solves a fillet of radius r. The ball sits on the plane's side
+// the sphere's face rises to, and outside the sphere: |C − S| = R + r. It
+// touches the sphere on the line from S through C. The solid's radius under
+// the blend is ρc − √(r² − (z − zc)²), since the arc runs on the tube's side
+// toward the axis.
+func sideFillet(up bool, r float64) sideBlend {
+	R, zs := ballR, -ballCut
+	sz := -1.0
+	if up {
+		sz = 1
+	}
+	var b sideBlend
+	b.zC = sz * r
+	b.rhoC = math.Sqrt((R+r)*(R+r) - (b.zC-zs)*(b.zC-zs))
+	b.rhoA = b.rhoC
+	b.rhoB, b.zB = b.rhoC*R/(R+r), zs+(b.zC-zs)*R/(R+r)
+	z0, z1 := min(0, b.zB), max(0, b.zB)
+	prim := func(x float64) float64 { return (x*math.Sqrt(r*r-x*x) + r*r*math.Asin(x/r)) / 2 }
+	x0, x1 := z0-b.zC, z1-b.zC
+	blend := (b.rhoC*b.rhoC+r*r)*(x1-x0) - (x1*x1*x1-x0*x0*x0)/3 - 2*b.rhoC*(prim(x1)-prim(x0))
+	b.volume = math.Pi * math.Abs(blend-sphereSlice(z0, z1))
+	// Pappus over the arc from T_A to T_B about the ball's centre, the short
+	// way round.
+	b0 := math.Atan2(-b.zC, 0)
+	b1 := math.Atan2(b.zB-b.zC, b.rhoB-b.rhoC)
+	sweep := math.Remainder(b1-b0, 2*math.Pi)
+	b.blendArea = 2 * math.Pi * r * math.Abs(b.rhoC*sweep+r*(math.Sin(b0+sweep)-math.Sin(b0)))
+	return b
+}
+
+// sideChamfer is a chamfer of distances dA out along the plane from the rim
+// and dB along the sphere's meridian toward its face.
+func sideChamfer(up bool, dA, dB float64) sideBlend {
+	R, zs := ballR, -ballCut
+	rim := math.Sqrt(R*R - zs*zs)
+	theta := math.Atan2(-zs, rim) - dB/R
+	if up {
+		theta = math.Atan2(-zs, rim) + dB/R
+	}
+	var b sideBlend
+	b.rhoA, b.rhoB, b.zB = rim+dA, R*math.Cos(theta), zs+R*math.Sin(theta)
+	frustum := math.Abs(b.zB) * (b.rhoA*b.rhoA + b.rhoA*b.rhoB + b.rhoB*b.rhoB) / 3
+	b.volume = math.Pi * math.Abs(frustum-sphereSlice(min(0, b.zB), max(0, b.zB)))
+	b.blendArea = math.Pi * (b.rhoA + b.rhoB) * math.Hypot(b.rhoA-b.rhoB, b.zB)
+	return b
+}
+
+// sphereSlice is ∫(R² − (z − zs)²) dz over [z0, z1]: the ball's cross-section
+// areas over π.
+func sphereSlice(z0, z1 float64) float64 {
+	zs := -ballCut
+	return ballR*ballR*(z1-z0) - ((z1-zs)*(z1-zs)*(z1-zs)-(z0-zs)*(z0-zs)*(z0-zs))/3
+}
+
+// TestFacetedRetainedBlendSphereRimSides blends the two rims a slab and the
+// ball make with the plane face outside the rim: the spherical pocket that
+// Cut(slab, ball) leaves (convex, material outside the sphere) and the dome's
+// foot that Union(ball, slab) leaves (concave, the sphere rising from the
+// plane).
+func TestFacetedRetainedBlendSphereRimSides(t *testing.T) {
+	t.Parallel()
+	rim := math.Sqrt(ballR*ballR - ballCut*ballCut)
+	for _, tc := range []struct {
+		name   string
+		up     bool // the dome's foot; else the pocket
+		fillet bool
+		size   float64
+		// other is the sphere's distance of a two-distance chamfer whose
+		// reference is the plane; zero for an equal one. A bevel that leans
+		// toward the sphere's tangent makes its normal's side turn on the
+		// sphere's outward normal, which an outside material negates.
+		other float64
+	}{
+		{"pocket fillet", false, true, 0.8, 0}, {"pocket chamfer", false, false, 0.6, 0},
+		{"pocket two-distance chamfer", false, false, 0.15, 0.9},
+		{"dome foot fillet", true, true, 0.3, 0}, {"dome foot chamfer", true, false, 0.6, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			sc := newRetentionScene()
+			ball, slab := revolvedBall(t, sc, 0, 0), slabBelow(t, sc, ballCut)
+			var body *decad.Body
+			var err error
+			if tc.up {
+				body, err = decad.Union(t.Context(), ball, slab)
+			} else {
+				body, err = decad.Cut(t.Context(), slab, ball)
+			}
+			require.NoError(t, err)
+			before, err := body.Volume()
+			require.NoError(t, err)
+			beforeArea, err := body.Area()
+			require.NoError(t, err)
+			var blended *decad.Body
+			var want sideBlend
+			if tc.fillet {
+				want = sideFillet(tc.up, tc.size)
+				blended, err = decad.Fillet(t.Context(), body, discRim(t, body), units.Millimeters(tc.size))
+			} else if tc.other > 0 {
+				want = sideChamfer(tc.up, tc.size, tc.other)
+				blended, err = decad.Chamfer(t.Context(), body, discRim(t, body), units.Millimeters(tc.size),
+					decad.WithAsymmetricChamfer(decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(tc.other)))
+			} else {
+				want = sideChamfer(tc.up, tc.size, tc.size)
+				blended, err = decad.Chamfer(t.Context(), body, discRim(t, body), units.Millimeters(tc.size))
+			}
+			require.NoError(t, err)
+			after, err := blended.Volume()
+			require.NoError(t, err)
+			afterArea, err := blended.Area()
+			require.NoError(t, err)
+			// The pocket's blend removes material and the dome foot's adds it.
+			removed := want.volume
+			if tc.up {
+				removed = -removed
+			}
+			requireVolumeChange(t, before, after, removed)
+			requireAreaChange(t, beforeArea, afterArea,
+				want.blendArea-math.Pi*(want.rhoA*want.rhoA-rim*rim)-2*math.Pi*ballR*math.Abs(want.zB))
+
+			// The blend face's normal points away from the material: for a
+			// fillet away from the ball's centre in the pocket and toward it at
+			// the dome's foot; for a chamfer along the sum of the plane's and
+			// the sphere's outward normals at the rim.
+			sphereOut := 1.0
+			if !tc.up {
+				sphereOut = -1 // the pocket's material lies outside the sphere
+			}
+			blends := 0
+			for _, f := range blended.Faces() {
+				var toward r3.Vec
+				p := firstVertex(t, f)
+				radial := r3.NewVec(p.X, p.Y, 0)
+				unit, ok := radial.Normalize()
+				require.True(t, ok)
+				switch s := f.Surface().(type) {
+				case decad.Torus:
+					require.InDelta(t, want.rhoC, s.Major.Base(), 1e-12)
+					require.InDelta(t, ballCut+want.zC, s.Center.Z, 1e-12)
+					centre := unit.Scale(want.rhoC).Add(r3.NewVec(0, 0, ballCut+want.zC))
+					toward = p.Sub(centre)
+					if tc.up {
+						toward = toward.Scale(-1)
+					}
+				case decad.Cone:
+					// Both rims bevel from the wider plane circle to the sphere's.
+					require.Less(t, want.rhoB, want.rhoA)
+					require.InDelta(t, want.rhoB, s.Radius.Base(), 1e-12)
+					require.InDelta(t, ballCut+want.zB, s.Origin.Z, 1e-12)
+					require.InDelta(t, math.Atan((want.rhoA-want.rhoB)/math.Abs(want.zB)), s.HalfAngle.Base(), 1e-12)
+					k := unit.Scale(rim).Add(r3.NewVec(0, 0, ballCut))
+					toward = r3.NewVec(0, 0, 1).Add(k.Scale(sphereOut / ballR))
+				default:
+					continue
+				}
+				blends++
+				n, err := f.NormalAt(p)
+				require.NoError(t, err)
+				require.Positive(t, n.Value.Dot(toward))
+			}
+			require.Equal(t, 1, blends)
+			mesh, err := blended.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+			require.NoError(t, err)
+			require.True(t, mesh.BoundaryVerified())
+			require.True(t, mesh.VolumeVerified())
+		})
+	}
 }

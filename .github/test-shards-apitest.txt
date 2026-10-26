@@ -2131,6 +2131,7 @@
 10	0.02	TestCutStarHoleOuterLoopIsNotTheLongest
 10	0.00	TestDegenerateSplineRecordRefuses
 10	0.00	TestFacetedRetainedBlendSphereRim
+10	0.00	TestFacetedRetainedBlendSphereRimSides
 10	0.66	TestDirectLoftVaryingCircleHolesPublishCurvedWalls
 10	0.72	TestDisplacedSupportSetBottle
 10	0.06	TestDraftCircleEndRimChamferPlacement

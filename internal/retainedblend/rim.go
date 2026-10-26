@@ -76,8 +76,8 @@ type refTag struct {
 
 func tagOf(f *topo.Face) refTag { return refTag{surface: f.Surface, reversed: f.Reversed} }
 
-// is reports whether f carries the tag. Retained faces are planes and
-// cylinders, whose values compare by field.
+// is reports whether f carries the tag. Retained faces are planes, cylinders
+// and spheres, whose values compare by field.
 func (t refTag) is(f *topo.Face) bool { return f.Reversed == t.reversed && f.Surface == t.surface }
 
 // assign returns the spec of one step: dA is the setback along f1 and dB the
@@ -100,7 +100,9 @@ func (s blendSpec) assign(ref refTag, f1, f2 *topo.Face) (blendSpec, error) {
 }
 
 // rim is a closed circular edge between a retained plane and a coaxial
-// retained cylinder, read from the two tags (§4.2).
+// retained cylinder, read from the two tags (§4.2). sphereRim embeds it for a
+// plane-sphere rim (§4.5): the frame, kappa, side and convexity read the same,
+// and radius is the rim's, not the sphere's.
 type rim struct {
 	center, n, u, w r3.Vec
 	radius          float64

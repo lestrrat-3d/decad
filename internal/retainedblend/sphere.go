@@ -139,7 +139,9 @@ type meridian struct {
 	rhoA      float64      // the plane's setback circle, at z = 0
 	rhoB, zB  float64      // the wall's setback circle
 	rows      [][2]float64 // the fillet's rows between them, as (ρ, z)
+	zA        float64      // the plane's setback circle's height, 0 to rounding
 	rhoC, zC  float64      // the fillet ball's centre
+	r         float64      // the fillet's radius, 0 for a chamfer
 	trueArea  float64      // the exact area of the blend face
 	outwardMR [2]float64   // a chamfer's outward normal, as (ρ, z)
 }
@@ -165,7 +167,7 @@ func (s sphereRim) section(spec blendSpec, tau float64) (meridian, error) {
 		q := p.Sub(s.center)
 		return q.Dot(s.u), q.Dot(s.n)
 	}
-	m.rhoA, _ = at(sec.ta)
+	m.rhoA, m.zA = at(sec.ta)
 	m.rhoB, m.zB = at(sec.tb)
 	if !(m.rhoA > margin) {
 		return m, fmt.Errorf("%w: the blend reaches the rim's axis: setback %g mm against rim radius %g mm",
@@ -191,6 +193,7 @@ func (s sphereRim) section(spec blendSpec, tau float64) (meridian, error) {
 		return m, nil
 	}
 	r := spec.r
+	m.r = r
 	m.rhoC, m.zC = at(sec.centre)
 	for _, p := range sec.rows[1 : len(sec.rows)-1] {
 		rho, z := at(p)
@@ -279,9 +282,50 @@ func rewriteSphereRim(ctx context.Context, env topo.Env, fp facetedrecord.Payloa
 	if err != nil {
 		return nil, err
 	}
-	ringB, groupB, err := w.rewriteWall(faceIndex[s.wallFace], s.side*m.zB, s.sphereRadius, true)
+	ringB, groupB, err := w.rewriteWall(faceIndex[s.wallFace], s.side*m.zB, s.sphereRadius,
+		func(p r3.Vec) float64 { return m.dist(s.meridianOf(p)) })
 	if err != nil {
 		return nil, err
 	}
-	return w.finishRim(ctx, env, s.tag(spec, m), ringA, ringB, [2]int{groupA, groupB}, role, ord)
+	return w.finishRim(ctx, env, s.tag(spec, m), ringA, ringB, [2]int{groupA, groupB}, role, ord, faceIndex)
+}
+
+// meridianOf is p in the rim's meridian coordinates: its distance from the
+// axis and its height above the plane.
+func (s sphereRim) meridianOf(p r3.Vec) (float64, float64) {
+	return s.radial(p), s.height(p)
+}
+
+// dist is the distance from the meridian point (rho, z) to the blend's
+// profile: the fillet's arc from T_A to T_B about the ball's centre, or the
+// chamfer's segment. A surface of revolution is as far from a point as its
+// profile is from the point's meridian image.
+func (m meridian) dist(rho, z float64) float64 {
+	ta, tb := [2]float64{m.rhoA, m.zA}, [2]float64{m.rhoB, m.zB}
+	ends := math.Min(math.Hypot(rho-ta[0], z-ta[1]), math.Hypot(rho-tb[0], z-tb[1]))
+	if m.r == 0 {
+		return segmentDist2(rho, z, ta, tb)
+	}
+	// The arc spans less than π, so a direction from the centre lies on it
+	// when it turns from a0 the same way as a1 and not past a1.
+	c := [2]float64{m.rhoC, m.zC}
+	a0 := [2]float64{ta[0] - c[0], ta[1] - c[1]}
+	a1 := [2]float64{tb[0] - c[0], tb[1] - c[1]}
+	d := [2]float64{rho - c[0], z - c[1]}
+	cross := func(u, v [2]float64) float64 { return u[0]*v[1] - u[1]*v[0] }
+	turn := cross(a0, a1)
+	if cross(a0, d)*turn >= 0 && cross(d, a1)*turn >= 0 && d[0]*(a0[0]+a1[0])+d[1]*(a0[1]+a1[1]) > 0 {
+		return math.Abs(math.Hypot(d[0], d[1]) - m.r)
+	}
+	return ends
+}
+
+// segmentDist2 is the distance from (x, y) to the segment ab of the plane.
+func segmentDist2(x, y float64, a, b [2]float64) float64 {
+	dx, dy := b[0]-a[0], b[1]-a[1]
+	t := 0.0
+	if l := dx*dx + dy*dy; l > 0 {
+		t = math.Min(1, math.Max(0, ((x-a[0])*dx+(y-a[1])*dy)/l))
+	}
+	return math.Hypot(x-a[0]-t*dx, y-a[1]-t*dy)
 }

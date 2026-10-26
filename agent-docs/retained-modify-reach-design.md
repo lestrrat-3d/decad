@@ -316,7 +316,7 @@ Claim K (blend §6.3) holds with `K = ∪ K_k`: outside it the rewritten mesh eq
 the strip's chords leave the exact blend by at most `τ`. The shared junction rows add no term, because both
 neighbouring strips use the same vertices, which lie on both exact blend surfaces (Claim J). A junction vertex
 takes `τ` plus the rounding of its computation. `VolSymDiff` and `AreaSlack` add each edge's terms as blend §6.3
-states them. The exact areas are blend §5.0's for an R1 edge with `μ = 0` (its end planes are normal to it) and
+states them, and `AreaSlack` the old geometric term of each face the chain rewrites, once. The exact areas are blend §5.0's for an R1 edge with `μ = 0` (its end planes are normal to it) and
 blend §4.4's for an R4 edge over its azimuth span.
 
 ## 6. Exact-rotation `Copy` keeps its tags (GAP-A)

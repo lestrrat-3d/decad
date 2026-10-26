@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
@@ -295,18 +296,18 @@ func rewriteRim(ctx context.Context, env topo.Env, fp facetedrecord.Payload, r r
 	if err != nil {
 		return nil, err
 	}
-	ringB, groupB, err := w.rewriteWall(faceIndex[r.wallFace], spec.wallSetback(), r.radius, false)
+	ringB, groupB, err := w.rewriteWall(faceIndex[r.wallFace], spec.wallSetback(), r.radius, nil)
 	if err != nil {
 		return nil, err
 	}
-	return w.finishRim(ctx, env, w.tag(), ringA, ringB, [2]int{groupA, groupB}, role, ord)
+	return w.finishRim(ctx, env, w.tag(), ringA, ringB, [2]int{groupA, groupB}, role, ord, faceIndex)
 }
 
 // finishRim adds the blend face's group, emits the strip between the plane's
 // ring and the wall's, and builds the body. shrunk are the groups of the plane
 // and the wall.
 func (w *work) finishRim(ctx context.Context, env topo.Env, tag blendTag, ringA, ringB []ringPt, shrunk [2]int,
-	role string, ord int) (*topo.Body, error) {
+	role string, ord int, faceIndex map[*topo.Face]int) (*topo.Body, error) {
 	groups := append([]facetedrecord.Group(nil), w.fp.Groups...)
 	blendGroup := len(groups)
 	groups = append(groups, facetedrecord.Group{
@@ -324,12 +325,13 @@ func (w *work) finishRim(ctx context.Context, env topo.Env, tag blendTag, ringA,
 	}
 	stripFrom := len(w.out)
 	w.strip(tag, ringA, ringB, blendGroup)
-	return w.build(ctx, env, groups, stripFrom, tag)
+	return w.build(ctx, env, groups, stripFrom, tag, faceIndex)
 }
 
-// build assembles the rewritten payload and the body over it.
+// build assembles the rewritten payload and the body over it. faceIndex
+// numbers the faces of the body w.fp holds, as w.fp.FaceOf does.
 func (w *work) build(ctx context.Context, env topo.Env, groups []facetedrecord.Group, stripFrom int,
-	tag blendTag) (*topo.Body, error) {
+	tag blendTag, faceIndex map[*topo.Face]int) (*topo.Body, error) {
 	fp := w.fp
 	gone := map[int]bool{}
 	for _, f := range w.removed {
@@ -348,7 +350,10 @@ func (w *work) build(ctx context.Context, env topo.Env, groups []facetedrecord.G
 
 	verts, beta, facets := compact(w.verts, w.beta, facets)
 	meshBound := facetproof.FacetBoundMax(facets, beta)
-	area, vol := w.measureChange(tag, stripFrom)
+	area, vol, err := w.measureChange(ctx, tag, stripFrom, faceIndex)
+	if err != nil {
+		return nil, err
+	}
 	next := facetedrecord.Payload{
 		Verts: verts, VertexBound: beta, Tris: facets, Src: src, Groups: groups,
 		MeshBound:   meshBound,
@@ -402,8 +407,12 @@ func heldArea(verts []r3.Vec, facets [][3]int) (float64, float64) {
 // measureChange returns the area slack and volume bound the rewrite adds
 // (agent-docs/retained-edge-blend-design.md §6.3, Claim K). The area change of the
 // held mesh is compared with the exact change: the annulus and band removed
-// and the blend face added.
-func (w *work) measureChange(tag blendTag, stripFrom int) (areaSlack, volSymDiff float64) {
+// and the blend face added. The old body's area error was proven only with
+// the geometric terms of every face, and the rebuilt body charges the
+// rewritten faces' terms afresh from their new facets, which can be smaller:
+// the slack therefore carries the old terms of the rewritten faces.
+func (w *work) measureChange(ctx context.Context, tag blendTag, stripFrom int,
+	faceIndex map[*topo.Face]int) (areaSlack, volSymDiff float64, err error) {
 	oldArea, oldSlop := heldArea(w.fp.Verts, pick(w.fp.Tris, w.removed))
 	newArea, newSlop := heldArea(w.verts, w.out)
 	stripArea, _ := heldArea(w.verts, w.out[stripFrom:])
@@ -412,15 +421,55 @@ func (w *work) measureChange(tag blendTag, stripFrom int) (areaSlack, volSymDiff
 	deltaTrue := tag.trueArea - w.removedTrue
 	// Every term is a float evaluation; charge the areas' own rounding.
 	scale := math.Max(math.Abs(deltaHeld), math.Abs(deltaTrue)) + oldArea + newArea + w.removedTrue
-	areaSlack = proofbound.AbsSumUpper(math.Abs(deltaHeld-deltaTrue), oldSlop, newSlop, 64*0x1p-52*scale)
+	oldGeom, err := w.rewrittenGeom(ctx, faceIndex)
+	if err != nil {
+		return 0, 0, err
+	}
+	areaSlack = proofbound.AbsSumUpper(math.Abs(deltaHeld-deltaTrue), oldSlop, newSlop, 64*0x1p-52*scale, oldGeom)
 
-	eps := 0.0
+	// A raised inner vertex of a curved wall bounds the facets beside the
+	// strip that now face the blend.
+	eps := w.raised
 	for _, t := range w.out[stripFrom:] {
 		eps = max(eps, w.beta[t[0]], w.beta[t[1]], w.beta[t[2]])
 	}
 	volSymDiff = proofbound.AbsSumUpper(proofbound.ProductUpper(eps, proofbound.AbsSumUpper(stripArea, tag.trueArea)),
 		64*0x1p-52*eps*scale)
-	return areaSlack, volSymDiff
+	return areaSlack, volSymDiff, nil
+}
+
+// rewrittenGeom sums the geometric area term the old body published for each
+// face the rewrite takes facets from (facetedrecord.FaceAreaGeom).
+func (w *work) rewrittenGeom(ctx context.Context, faceIndex map[*topo.Face]int) (float64, error) {
+	faces := map[int]*topo.Face{}
+	for f, i := range faceIndex {
+		faces[i] = f
+	}
+	var rewritten []int
+	seen := map[int]struct{}{}
+	for _, t := range w.removed {
+		fi := w.fp.FaceOf[t]
+		if _, ok := seen[fi]; !ok {
+			seen[fi] = struct{}{}
+			rewritten = append(rewritten, fi)
+		}
+	}
+	slices.Sort(rewritten)
+	budget := proofbound.NewWorkBudget(ctx)
+	total := 0.0
+	for _, fi := range rewritten {
+		f, ok := faces[fi]
+		if !ok {
+			return 0, fmt.Errorf("%w: a rewritten face is not a face of the body", decaderr.ErrUnsupported)
+		}
+		g, err := facetedrecord.FaceAreaGeom(budget, f, w.fp.Verts, w.fp.VertexBound, w.fp.Tris,
+			facetsOfFace(w.fp.FaceOf, fi))
+		if err != nil {
+			return 0, err
+		}
+		total = proofbound.AbsSumUpper(total, g)
+	}
+	return total, nil
 }
 
 func pick(all [][3]int, idx []int) [][3]int {
