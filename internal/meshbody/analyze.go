@@ -95,6 +95,10 @@ func Analyze(ctx context.Context, verts []r3.Vec, tris [][3]int) (Analysis, erro
 		out.SignedVolume.Add(out.SignedVolume, new(big.Rat).Quo(triple, six))
 		low := proofarith.FloatRat(proofbound.RatSqrtDown(lengthSquared))
 		high := proofarith.FloatRat(proofbound.RatSqrtUp(lengthSquared))
+		if low == nil || high == nil {
+			// A triangle's area past the largest float has no float bound.
+			return Analysis{}, fmt.Errorf(`%w: triangle %d is too large to bound its area`, decaderr.ErrUnsupported, ti)
+		}
 		out.AreaLow.Add(out.AreaLow, low)
 		out.AreaHigh.Add(out.AreaHigh, high)
 	}

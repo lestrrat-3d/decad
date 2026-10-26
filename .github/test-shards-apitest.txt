@@ -2415,3 +2415,9 @@
 10	0.01	TestReadSTEPRefusals
 10	0.01	TestReadSTEPHonoursAnOrientedVoidShellsFlag
 10	0.01	TestReadSTEPReadsAWallBetweenTwoCircularLoops
+10	0.01	TestScaleMeshStretchesEachAxis
+10	0.01	TestScaleMeshAboutAnAnchorKeepsTheAnchorFixed
+10	0.01	TestScaleMeshMirrorsWithANegativeFactor
+10	0.01	TestScaleMeshDoesNotChangeItsSource
+10	0.01	TestScaleMeshRefusals
+10	0.01	TestScaleMeshOverflowingVerticesAreNotFinite

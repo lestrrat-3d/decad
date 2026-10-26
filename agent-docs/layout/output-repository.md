@@ -14,6 +14,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `mesh_body.go` | Public `MeshBody`, `MeshReport` and `NewMeshBody`: the imported triangle mesh and its bounds, area, volume and point readings. `internal/meshbody/` reads the triangles. See mesh-import design. |
 | `mesh_import.go` | Public `ReadSTL`, `ReadOBJ`, `ReadThreeMF`, `ReadSTEP`, their options and `ErrMalformedMesh`, `ErrMeshTooLarge`: limits, then `internal/meshparse/` parses and `NewMeshBody` reads the result. See mesh-import design. |
 | `mesh_repair.go` | Public `RepairMesh`, its options and `MeshRepairReport`: option gates, then `internal/meshrepair/` mends and `NewMeshBody` reads the result. See mesh-import design §7. |
+| `mesh_scale.go` | Public `ScaleMesh`: gates, per-axis stretch about an anchor, reversed winding under an odd number of negative factors, then `NewMeshBody`. See mesh-import design §10. |
 | `mesh_reduce.go` | Public `ReduceMesh` and `MeshReduceReport`: gates, then `internal/meshreduce/` clusters vertices and `NewMeshBody` reads the result. See mesh-import design §9. |
 | `internal/meshreduce/` | Vertex-clustering reduction of an indexed triangle mesh. See mesh-import design §9. |
 | `internal/meshrepair/` | Weld, degenerate-triangle drop, shell orientation and boundary-loop fill of an indexed triangle mesh. See mesh-import design §7. |

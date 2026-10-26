@@ -193,7 +193,7 @@ moves its row to the matching section above, with that doc as owner.
 | Toolpath generation (CAM) | No entry point exists |
 | Finite-element stress or thermal simulation | No entry point exists |
 | Rendered images with hidden edges, outlines on a perspective camera, materials, shadows or a separate colour for each body | `export.PNG` and `export.PNGBodies` draw orthographically with flat shading (`export/png.go`, `export/png_bodies.go`; `agent-docs/png-export-design.md` §4) |
-| Per-axis (non-uniform) scaling of a body | No entry point exists; `ScaledAt` scales uniformly (`point_plane_scale.go`) and `Transform`/`Copy` take a rigid motion only (`document.go`) |
+| Per-axis (non-uniform) scaling of a solid body | `ScaledAt` scales uniformly (`point_plane_scale.go`) and `Transform`/`Copy` take a rigid motion only (`document.go`); only a held mesh stretches, by `ScaleMesh` (`mesh_scale.go`) |
 | Saving a `Document` to a file or loading one back | No entry point exists; a model is rebuilt by rerunning the Go program that built it |
 | Lettering beyond left-to-right runs in one TrueType font: kerning, shaping, text on a curve or surface, true curves | `TextProfiles` sets lines of text in a font as polygons for `Emboss` (`text.go`; `agent-docs/text-design.md` §4) |
 | 2D drawings with dimensions, analytic arcs and circles, scale or paper size, hatching or a title block | `export.DXF` writes one orthographic view of tessellation edges as LINEs, and `export.DXFViews` several in a row, with hidden-line runs from a depth buffer (`export/dxf.go`, `export/dxf_sheet.go`; `agent-docs/dxf-export-design.md` §4) |
