@@ -108,19 +108,22 @@ func TestEachInlineStartsNoGoroutine(t *testing.T) {
 }
 
 func TestEachNestedCallKeepsPollingAndReleasesWorkers(t *testing.T) {
-	prior := runtime.GOMAXPROCS(2)
+	prior := runtime.GOMAXPROCS(3)
 	defer runtime.GOMAXPROCS(prior)
 	stop := errors.New("nested stop")
 	release := make(chan struct{})
 	var innerStarted atomic.Int32
 	polls := 0
-	first, err := orderedwork.Each(2, 2, 1, nil, func(i int) error {
+	first, err := orderedwork.Each(3, 3, 1, nil, func(i int) error {
 		if i != 0 {
 			return nil
 		}
 		// The parent holds the available extra worker until its call joins.
-		// A nested call must still poll while its single worker is blocked.
-		_, err := orderedwork.Each(4, 2, 1, func() error {
+		// A nested call must still poll while its two base workers are blocked.
+		_, err := orderedwork.Each(4, 3, 1, func() error {
+			if innerStarted.Load() != 2 {
+				return nil
+			}
 			polls++
 			close(release)
 			return stop
@@ -134,15 +137,15 @@ func TestEachNestedCallKeepsPollingAndReleasesWorkers(t *testing.T) {
 	require.Equal(t, 0, first)
 	require.ErrorIs(t, err, stop)
 	require.Equal(t, 1, polls)
-	require.Equal(t, int32(1), innerStarted.Load())
+	require.Equal(t, int32(2), innerStarted.Load())
 
-	// Both workers must be available again after the failed nested call and
-	// its parent have joined. Neither callback can finish before the other starts.
+	// All three workers must be available again after the failed nested call
+	// and its parent have joined. No callback can finish before all have started.
 	release = make(chan struct{})
 	var started atomic.Int32
 	released := false
-	first, err = orderedwork.Each(2, 2, 1, func() error {
-		if started.Load() == 2 && !released {
+	first, err = orderedwork.Each(3, 3, 1, func() error {
+		if started.Load() == 3 && !released {
 			close(release)
 			released = true
 		}
@@ -153,7 +156,7 @@ func TestEachNestedCallKeepsPollingAndReleasesWorkers(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	require.Equal(t, 2, first)
-	require.Equal(t, int32(2), started.Load())
+	require.Equal(t, 3, first)
+	require.Equal(t, int32(3), started.Load())
 	require.True(t, released)
 }
