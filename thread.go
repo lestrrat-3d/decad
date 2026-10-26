@@ -124,7 +124,7 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	cut := func(target *Body) (*Body, error) {
+	cut := func(target *Body, consumed ...OperationInput) (*Body, error) {
 		toolCtx, capture := privateConstructionContext(ctx)
 		coil, err := buildThreadCoil(toolCtx, d, frame, plan, pitch, spec.LeftHand)
 		if err != nil {
@@ -132,7 +132,7 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 		}
 		tools := []*Body{coil}
 		defer removeTools(tools)
-		return combineTools(ctx, d, OperationThread, target, meshbool.OpCut, tools, false, nil, capture)
+		return combineTools(ctx, d, OperationThread, target, meshbool.OpCut, tools, false, nil, capture, consumed...)
 	}
 	if spec.LeadIn == (units.Value{}) {
 		return cut(b)
@@ -151,9 +151,8 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 	chamfer := func(target *Body) (*Body, error) {
 		return Chamfer(ctx, target, edgesQuery(ends), units.Millimeters(leadIn))
 	}
-	// The lead-in and the thread are tried on a copy first, so a chamfer or a thread
-	// the evaluator refuses leaves b live and the document unchanged. The thread's
-	// frame and plan come from b's own face, which the chamfer leaves where it was.
+	// Build on a copy, then retire b together with the chamfered copy only when
+	// the cut succeeds. The frame and plan still come from b's unchamfered face.
 	probe, err := Copy(ctx, b)
 	if err != nil {
 		return nil, err
@@ -163,16 +162,8 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 	if err != nil {
 		return nil, err
 	}
-	threaded, err := cut(chamfered)
-	removeTools([]*Body{chamfered, threaded})
-	if err != nil {
-		return nil, err
-	}
-	bevelled, err := chamfer(b)
-	if err != nil {
-		return nil, err
-	}
-	return cut(bevelled)
+	defer removeTools([]*Body{chamfered})
+	return cut(chamfered, OperationInput{Body: b, Role: operationRoleSource, Use: InputConsumed})
 }
 
 // threadLeadInEdges lists the convex circular edges of face, the rims at its

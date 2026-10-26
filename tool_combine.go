@@ -14,11 +14,18 @@ import (
 // planes meet each other on the prism path before they meet b. Nothing is registered until every step has
 // succeeded and accept, when not nil, has approved the result, so a failure
 // leaves b live and the document unchanged. The tools remain private to this call.
+// Additional inputs marked InputConsumed retire with b only at that commit.
 func combineTools(ctx context.Context, d *Document, kind OperationKind, b *Body, op meshbool.OperationKind,
 	tools []*Body, merge bool,
 	accept func(result *Body) error, capture *operationHistoryCapture,
 	additionalInputs ...OperationInput) (*Body, error) {
-	if err := d.requireSameContainer([]*Body{b}); err != nil {
+	consumed := []*Body{b}
+	for _, input := range additionalInputs {
+		if input.Use == InputConsumed && !slices.Contains(consumed, input.Body) {
+			consumed = append(consumed, input.Body)
+		}
+	}
+	if err := d.requireSameContainer(consumed); err != nil {
 		return nil, err
 	}
 	privateSpan := capture.producerSpan(d)
@@ -63,11 +70,13 @@ func combineTools(ctx context.Context, d *Document, kind OperationKind, b *Body,
 			return nil, err
 		}
 	}
-	if err := d.requireLive(b); err != nil {
-		return nil, err
+	for _, body := range consumed {
+		if err := d.requireLive(body); err != nil {
+			return nil, err
+		}
 	}
 	inputs := append([]OperationInput{{Body: b, Role: operationRoleTarget, Use: InputConsumed}}, additionalInputs...)
-	if err := d.commitOperationSpanPrefixIn(ctx, nil, kind, inputs, acc, privateSpan, ref-start, b); err != nil {
+	if err := d.commitOperationSpanPrefixIn(ctx, nil, kind, inputs, acc, privateSpan, ref-start, consumed...); err != nil {
 		return nil, err
 	}
 	return acc, nil
