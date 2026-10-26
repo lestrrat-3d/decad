@@ -264,3 +264,7 @@
 10	22.29	TestSectorUnionAcceptsGeneralCertificate
 10	0.02	TestSweepPairFacetedFloorRefusesUnprovedPath
 10	0.00	TestFacetedSourcePatchSlabControl
+10	0.00	TestBooleanGroupsRecordSource
+10	0.00	TestRetainedBlendGroupsRecordSource
+10	0.00	TestSplitPlaneSharesOneSourceRecord
+10	0.00	TestShiftedRetryGroupsKeepSource

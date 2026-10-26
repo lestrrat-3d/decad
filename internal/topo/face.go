@@ -119,6 +119,9 @@ type Face struct {
 	// were merged. A merged face carries all contributing roles. Root
 	// Face.Origins converts it to the public FeatureRef form.
 	Origins []provenance.Ref
+	// Source is the record of the faceted group this face was assembled from,
+	// nil for any other face. It only traces origin and admits nothing.
+	Source *provenance.SourcePatch
 	// Centroid is present only for a face with its own proved area-centroid
 	// certificate; whole-group readings are not copied onto split patches.
 	// Root Face.Centroid converts it to the public VecMeasurement form.

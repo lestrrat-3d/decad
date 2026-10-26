@@ -160,6 +160,7 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 				NormalBound: in.Groups[in.Src[i]].NormalBound,
 				Reversed:    in.Groups[in.Src[i]].Reversed,
 				Origins:     append([]provenance.Ref(nil), in.Groups[in.Src[i]].Origins...),
+				Source:      in.Groups[in.Src[i]].Source,
 				Body:        body,
 			})
 			group := in.Groups[in.Src[i]]

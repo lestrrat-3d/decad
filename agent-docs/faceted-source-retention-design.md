@@ -102,6 +102,7 @@ recorded it, not because the polygons happen to sit near it.
 | `NormalBound` | the tag's own departure `ε_F`: zero for a built operand face, the operand's `TagDeparture` for a retained one, the operand's own `NormalBound` for a denoted face (§3.3) |
 | `Denoted` | the operand face's denoted patch, when it has one |
 | `CapRecord`, `AxialDelta`, `HasAxialDelta` | for a `Plane` group, the operand face's. A Boolean never moves a plane, so the exact-plane record transfers verbatim; every placement and similarity drops it |
+| `Source` | an immutable `SourcePatch`: the operand body's `Origin.Producer`, the operand position, the face's ordinal in `topobuild.Faces`, and `Parent`, the operand face's own record when it is faceted (nil for a built face). It also rides a moved operand's group on the shifted retry, where the tag is dropped. It traces origin only: no admission rule, bound or reader consults it |
 
 `Union` and `Intersect` keep both operands' orientations; `Cut` keeps the
 target's and flips the tool's, because the tool's natural normal points into

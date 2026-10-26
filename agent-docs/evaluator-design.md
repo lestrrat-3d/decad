@@ -1406,6 +1406,9 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   A structural Loft/cylinder `Union` and its centered bore `Cut` instead tag
   their audited planar cap patches `Plane` and mint result cap roles; their
   other patches use the held facet groups.
+  Each patch's group also carries `Group.Source`, an immutable `SourcePatch` (producer, operand, face ordinal,
+  parent) that traces origin only and admits nothing; the patch's face holds the same pointer. A retained
+  blend's new group carries its own record (modify producer, edge ordinal).
 - **The rim is NOT bounded by δ_t.** A vertex an operand's tessellation
   contributed lies on that operand's surface; a vertex the BOOLEAN creates does
   not lie on either. It is the crossing of two chord PLANES, and the true

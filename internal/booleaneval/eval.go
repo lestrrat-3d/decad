@@ -225,11 +225,17 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		// pointing into the result (agent-docs/faceted-source-retention-design.md §3.1).
 		group, _ := facetedrecord.SourceTag(f, op == meshbool.OpCut && i >= targetFaces)
 		group.Origins = append([]provenance.Ref(nil), f.Origins...)
+		// Identity only: no reader derives a plane or a bound from Source.
+		operand, ordinal, owner := 0, i, a
+		if i >= targetFaces {
+			operand, ordinal, owner = 1, i-targetFaces, b
+		}
+		group.Source = facetedrecord.FaceSource(owner.Origin.Producer, operand, ordinal, f)
 		group.Planar = f.Surface.Kind() == surfacegeom.KindPlane || f.HeldPlanar
 		if len(shifts) > 0 && i >= targetFaces {
 			// A moved operand's facets no longer lie on the surfaces they were
 			// cut from, so the result keeps no retained tag for them.
-			group = facetedrecord.Group{Origins: group.Origins}
+			group = facetedrecord.Group{Origins: group.Origins, Source: group.Source}
 		}
 		groups = append(groups, group)
 	}
