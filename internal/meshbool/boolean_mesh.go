@@ -505,36 +505,48 @@ func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 
 	// The cut facets: exact subdivision along the contact chains, then the
 	// exact local side-of-contact classification per region.
+	var cutFacets []int
 	for i := range m.Tris {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
 		}
-		segs, ok := cuts[i]
-		if !ok {
-			continue
+		if _, ok := cuts[i]; ok {
+			cutFacets = append(cutFacets, i)
 		}
-		regions, err := CutTriangle(ctx, XtriCorners(m, i), m.Norms[i], segs)
+	}
+	// Limit live subdivision output while independent facets use separate
+	// workers. Consume each batch in the original facet and region order.
+	const cutBatchSize = 128
+	for start := 0; start < len(cutFacets); start += cutBatchSize {
+		facets := cutFacets[start:min(start+cutBatchSize, len(cutFacets))]
+		results, err := subdivideCutFacets(ctx, m, cuts, facets)
 		if err != nil {
 			return nil, err
 		}
-		corners := m.Tris[i]
-		cornerKeys := [3]string{keyOf(m.Xverts[corners[0]]), keyOf(m.Xverts[corners[1]]), keyOf(m.Xverts[corners[2]])}
-		for _, reg := range regions {
-			inside, err := ClassifyRegion(ctx, reg, other)
-			if err != nil {
-				return nil, err
+		for slot, i := range facets {
+			result := results[slot]
+			if result.err != nil {
+				return nil, result.err
 			}
-			if inside != wantInside {
-				continue
-			}
-			for _, tri := range reg.Tris {
-				var beta [3]float64
-				for k, p := range tri {
-					beta[k] = CutCornerBound(m, i, cornerKeys, keyOf(p), rims)
+			corners := m.Tris[i]
+			cornerKeys := [3]string{keyOf(m.Xverts[corners[0]]), keyOf(m.Xverts[corners[1]]), keyOf(m.Xverts[corners[2]])}
+			for _, reg := range result.regions {
+				inside, err := ClassifyRegion(ctx, reg, other)
+				if err != nil {
+					return nil, err
 				}
-				emit(tri, beta, m.Src[i])
+				if inside != wantInside {
+					continue
+				}
+				for _, tri := range reg.Tris {
+					var beta [3]float64
+					for k, p := range tri {
+						beta[k] = CutCornerBound(m, i, cornerKeys, keyOf(p), rims)
+					}
+					emit(tri, beta, m.Src[i])
+				}
 			}
 		}
 	}
