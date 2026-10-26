@@ -515,23 +515,22 @@ func PlaneCrossings(xt [3]proof.Xpt, xo [3]proof.Xpt, signs [3]int) []proof.Xpt 
 func planeCrossingsPrepared(xt [3]proof.Xpt, origin, normal proof.Xpt, signs [3]int) []proof.Xpt {
 	var out []proof.Xpt
 	nums := [3]*big.Int{}
-	dens := [3]*big.Int{}
 	var base *big.Int
-	val := func(i int) (*big.Int, *big.Int) {
+	val := func(i int) *big.Int {
 		if nums[i] == nil {
 			if base == nil {
 				base = proof.XdotNum(normal, origin)
 			}
 			point := proof.XdotNum(normal, xt[i])
 			if xt[i].W.Cmp(origin.W) == 0 {
-				nums[i], dens[i] = point.Sub(point, base), big.NewInt(1)
+				nums[i] = point.Sub(point, base)
+				nums[i].Mul(nums[i], xt[i].W)
 			} else {
 				nums[i] = point.Mul(point, origin.W)
 				nums[i].Sub(nums[i], new(big.Int).Mul(base, xt[i].W))
-				dens[i] = xt[i].W
 			}
 		}
-		return nums[i], dens[i]
+		return nums[i]
 	}
 	for i := range 3 {
 		if signs[i] == 0 {
@@ -539,12 +538,7 @@ func planeCrossingsPrepared(xt [3]proof.Xpt, origin, normal proof.Xpt, signs [3]
 		}
 		j := (i + 1) % 3
 		if signs[i]*signs[j] < 0 {
-			// t = vi/(vi − vj) is in (0, 1): the edge crosses the plane.
-			ni, di := val(i)
-			nj, dj := val(j)
-			tn := new(big.Int).Mul(ni, dj)
-			td := new(big.Int).Sub(tn, new(big.Int).Mul(nj, di))
-			out = append(out, proof.Xlerp(xt[i], xt[j], tn, td))
+			out = append(out, proof.XplaneCrossing(xt[i], xt[j], val(i), val(j)))
 		}
 	}
 	return out

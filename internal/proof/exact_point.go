@@ -403,6 +403,29 @@ func XhpLerp(a, b Xhp, tn, td *big.Int) Xhp {
 	return Xhp{X: axis(a.X, b.X), Y: axis(a.Y, b.Y), Z: axis(a.Z, b.Z), W: w}
 }
 
+// XplaneCrossing is the point where the line from a to b crosses a plane.
+// an/a.W and bn/b.W must be proportional to the two signed plane values,
+// with the same nonzero factor. The caller has proved opposite signs.
+// Cancelling the endpoint weights from the interpolation gives
+// (an*b - bn*a)/(an*b.W - bn*a.W) directly in homogeneous coordinates.
+// Every result integer is owned, and its weight is positive.
+// All point fields, an and bn must be nonnil.
+func XplaneCrossing(a, b Xpt, an, bn *big.Int) Xpt {
+	var term big.Int
+	axis := func(av, bv *big.Int) *big.Int {
+		out := new(big.Int).Mul(an, bv)
+		return out.Sub(out, term.Mul(bn, av))
+	}
+	p := Xhp{X: axis(a.X, b.X), Y: axis(a.Y, b.Y), Z: axis(a.Z, b.Z), W: axis(a.W, b.W)}
+	if p.W.Sign() < 0 {
+		p.X.Neg(p.X)
+		p.Y.Neg(p.Y)
+		p.Z.Neg(p.Z)
+		p.W.Neg(p.W)
+	}
+	return Xpt(XhpStripTwosOwned(p))
+}
+
 // XhpOrientSign is the exact sign of det[b−a, c−a, d−a], decided as a plain
 // integer sign with no big.Rat and no normalisation anywhere in the chain:
 // every intermediate xhp carries a positive denominator by construction, so
