@@ -101,16 +101,10 @@ func MeshClosest(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int) (
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	point := exactVec(p)
-	converted := make([]ratVec, len(verts))
-	for i, v := range verts {
-		if err := budget.Step(); err != nil {
-			return nil, [3]*big.Rat{}, err
-		}
-		if !proofbound.FiniteVec(v) {
-			return nil, [3]*big.Rat{}, fmt.Errorf(`%w: point query mesh has a non-finite vertex`, decaderr.ErrUnsupported)
-		}
-		converted[i] = exactVec(v)
+	if err := checkFiniteVertices(budget, verts); err != nil {
+		return nil, [3]*big.Rat{}, err
 	}
+	exact := newLazyVertices(verts)
 	var best *big.Rat
 	var bestUpper float64
 	var bestPoint ratVec
@@ -119,13 +113,15 @@ func MeshClosest(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int) (
 			return nil, [3]*big.Rat{}, err
 		}
 		for _, index := range tri {
-			if index < 0 || index >= len(converted) {
+			if index < 0 || index >= len(verts) {
 				return nil, [3]*big.Rat{}, fmt.Errorf(`%w: point query mesh has an invalid triangle index`, decaderr.ErrUnsupported)
 			}
 		}
-		a, b, c := converted[tri[0]], converted[tri[1]], converted[tri[2]]
-		if best != nil && (boxDistanceSquaredLower(p, verts[tri[0]], verts[tri[1]], verts[tri[2]]) >= bestUpper ||
-			boxDistanceSquared(point, a, b, c).Cmp(best) >= 0) {
+		if best != nil && boxDistanceSquaredLower(p, verts[tri[0]], verts[tri[1]], verts[tri[2]]) >= bestUpper {
+			continue
+		}
+		a, b, c := exact.at(tri[0]), exact.at(tri[1]), exact.at(tri[2])
+		if best != nil && boxDistanceSquared(point, a, b, c).Cmp(best) >= 0 {
 			continue
 		}
 		d, q, err := triangleNearest(point, a, b, c)

@@ -145,6 +145,39 @@ func boxDistanceSquaredLower(p, a, b, c r3.Vec) float64 {
 	return result
 }
 
+// checkFiniteVertices spends one budget step per vertex, in order, and
+// rejects the first non-finite vertex.
+func checkFiniteVertices(budget *proofbound.WorkBudget, verts []r3.Vec) error {
+	for _, v := range verts {
+		if err := budget.Step(); err != nil {
+			return err
+		}
+		if !proofbound.FiniteVec(v) {
+			return fmt.Errorf(`%w: point query mesh has a non-finite vertex`, decaderr.ErrUnsupported)
+		}
+	}
+	return nil
+}
+
+// lazyVertices converts a vertex to its exact rational form the first time a
+// triangle needs it. The float filter rejects most triangles before then.
+type lazyVertices struct {
+	verts []r3.Vec
+	exact []ratVec
+}
+
+func newLazyVertices(verts []r3.Vec) *lazyVertices {
+	return &lazyVertices{verts: verts, exact: make([]ratVec, len(verts))}
+}
+
+// at returns vertex i, which must be in range and finite, as exact rationals.
+func (l *lazyVertices) at(i int) ratVec {
+	if l.exact[i][0] == nil {
+		l.exact[i] = exactVec(l.verts[i])
+	}
+	return l.exact[i]
+}
+
 // MeshDistanceSquared returns the exact squared distance from p to the held
 // triangle set, which may be a selected face patch. All coordinates are finite
 // float64 values interpreted as exact dyadics. The caller must provide a
@@ -155,16 +188,10 @@ func MeshDistanceSquared(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	point := exactVec(p)
-	converted := make([]ratVec, len(verts))
-	for i, v := range verts {
-		if err := budget.Step(); err != nil {
-			return nil, err
-		}
-		if !proofbound.FiniteVec(v) {
-			return nil, fmt.Errorf(`%w: point query mesh has a non-finite vertex`, decaderr.ErrUnsupported)
-		}
-		converted[i] = exactVec(v)
+	if err := checkFiniteVertices(budget, verts); err != nil {
+		return nil, err
 	}
+	exact := newLazyVertices(verts)
 	var minimum *big.Rat
 	var minimumUpper float64
 	for _, tri := range tris {
@@ -172,13 +199,15 @@ func MeshDistanceSquared(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][
 			return nil, err
 		}
 		for _, index := range tri {
-			if index < 0 || index >= len(converted) {
+			if index < 0 || index >= len(verts) {
 				return nil, fmt.Errorf(`%w: point query mesh has an invalid triangle index`, decaderr.ErrUnsupported)
 			}
 		}
-		a, b, c := converted[tri[0]], converted[tri[1]], converted[tri[2]]
-		if minimum != nil && (boxDistanceSquaredLower(p, verts[tri[0]], verts[tri[1]], verts[tri[2]]) >= minimumUpper ||
-			boxDistanceSquared(point, a, b, c).Cmp(minimum) >= 0) {
+		if minimum != nil && boxDistanceSquaredLower(p, verts[tri[0]], verts[tri[1]], verts[tri[2]]) >= minimumUpper {
+			continue
+		}
+		a, b, c := exact.at(tri[0]), exact.at(tri[1]), exact.at(tri[2])
+		if minimum != nil && boxDistanceSquared(point, a, b, c).Cmp(minimum) >= 0 {
 			continue
 		}
 		distance, err := triangleDistanceSquared(point, a, b, c)
