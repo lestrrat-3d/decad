@@ -2362,3 +2362,7 @@
 10	0.01	TestHoleThreadStartsAtTheFloorOfACounterbore
 10	0.01	TestHoleThreadHandedness
 10	0.01	TestHoleThreadRefusals
+10	0.01	TestBossPilotWithACounterbore
+10	0.01	TestBossPilotWithACountersink
+10	0.01	TestBossPilotTapped
+10	0.01	TestBossBoreRefusals

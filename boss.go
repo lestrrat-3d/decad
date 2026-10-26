@@ -14,10 +14,15 @@ import (
 
 // BossBore is the blind pilot hole of a [BossSpec], a round hole drilled down
 // from the boss's top face. Depth is measured from that top face and is a
-// positive length.
+// positive length. Head is optional and widens the pilot's mouth with a
+// [Counterbore] or [Countersink], as [HoleSpec].Head does. Thread is optional
+// and taps the pilot, as [HoleSpec].Thread does, with Diameter as the tap drill
+// (agent-docs/boss-design.md §4).
 type BossBore struct {
 	Diameter units.Value
 	Depth    units.Value
+	Head     HoleHead
+	Thread   *HoleThread
 }
 
 // BossSpec describes one round boss standing on a planar face.
@@ -95,9 +100,22 @@ func Boss(ctx context.Context, b *Body, spec BossSpec) (result *Body, retErr err
 			return nil, err
 		}
 		tools = append(tools, bore...)
-		for _, tool := range bore {
-			steps = append(steps, toolStep{op: meshbool.OpCut, tool: tool})
+		pilot := bore
+		if in.tap != nil {
+			tap, err := planHoleThread(in.tap, false, *in.bore, plan)
+			if err != nil {
+				return nil, err
+			}
+			coil, err := buildThreadCoil(toolCtx, d, tap.frame, tap.plan, tap.pitch, tap.leftHand)
+			if err != nil {
+				return nil, err
+			}
+			tools = append(tools, coil)
+			pilot = append(append([]*Body(nil), bore...), coil)
 		}
+		// One cut by the united pilot tools: a second cut of the boss would meet a
+		// target that already holds the first cut's coarse mesh.
+		steps = append(steps, toolStep{op: meshbool.OpCut, merge: pilot})
 	}
 	return combineToolSteps(ctx, d, OperationBoss, b, steps, capture)
 }
@@ -112,8 +130,10 @@ type bossRequest struct {
 	// diameter and height are the boss's size, embed how far it reaches into
 	// the body behind the face.
 	diameter, height, embed float64
-	// bore, when set, is the pilot hole's request on the boss's top face.
+	// bore, when set, is the pilot hole's request on the boss's top face, and
+	// tap the thread to cut in it.
 	bore *holeplan.Input
+	tap  *HoleThread
 }
 
 func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
@@ -184,7 +204,8 @@ func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
 		Depth:    depth,
 		Reach:    in.height + reach,
 	}
-	return in, nil
+	in.tap = spec.Bore.Thread
+	return in, holeHeadInput(in.bore, spec.Bore.Head)
 }
 
 // buildBossPillar extrudes the boss's cylinder out of the face, starting embed

@@ -60,3 +60,52 @@ func Example_boss() {
 	// Output:
 	// volume: 8360 mm^3
 }
+
+// A BossBore can carry a Head and a Thread, as a hole does. Here the post's
+// pilot is a 3 mm tap drill with a counterbore at its mouth and an M3.5 x 0.5
+// thread cut 4 mm into it below the recess, so a screw threads in under a collar.
+func Example_boss_tapped() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(0, 0, 40, 40)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+
+	boss, err := decad.Boss(context.Background(), plate, decad.BossSpec{
+		Face:     decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
+		At:       r3.Vec{X: 20, Y: 20, Z: 5},
+		Diameter: units.Millimeters(8),
+		Height:   units.Millimeters(8),
+		Bore: &decad.BossBore{
+			Diameter: units.Millimeters(3),
+			Depth:    units.Millimeters(6),
+			Head:     decad.Counterbore{Diameter: units.Millimeters(6), Depth: units.Millimeters(2)},
+			Thread:   &decad.HoleThread{Pitch: units.Millimeters(0.5), Length: units.Millimeters(4)},
+		},
+	})
+	if err != nil {
+		fmt.Printf("failed to raise the boss: %s\n", err)
+		return
+	}
+	volume, err := boss.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
+	// Output:
+	// volume: 8311 mm^3
+}
