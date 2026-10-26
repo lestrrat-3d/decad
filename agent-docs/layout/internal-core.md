@@ -56,6 +56,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/brepbandmesh/` | Meshes a brep body: walls, planar faces, closure audits and the occupied-volume sum. Chords route L and shell bands, imposes their counts on the walls beside them, places and emits them, and states their motion, volume terms and admission. See general-boolean §4.4, modify-general DG3/DG4, §4.3a. |
 | `internal/brepfilletmesh/` | Places full and selected BRep fillet rings, emits patch triangles, and computes their area and motion bounds. See loop-fillet §7.1. |
 | `internal/throughshell/` | Through-cut record recognition, section and cavity construction, strips, rim assembly, audits, and the shell route over them. See modify-general §3. |
+| `internal/arrangeplan/` | Shelf packing of rectangular footprints onto a bed with a gap; plain millimetre data. See arrange design. |
 | `internal/capedge/` | Convex cap-edge cutter admission, quarter-cylinder profile, chamfer wedge and the P8 top front edge test. See vertex-blend §2. |
 | `internal/gatewitness/` | Selects payload witness prisms and their displacement for Verify's fallback diameter; root reads their stations. See verification §3. |
 | `internal/cuptess/` | Builds a cup payload's chorded mesh node and its face, area and occupied-volume bounds. See tessellation §6. |

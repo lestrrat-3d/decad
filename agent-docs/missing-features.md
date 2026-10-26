@@ -190,7 +190,7 @@ moves its row to the matching section above, with that doc as owner.
 | T-spline (Form) sculpting | No entry point exists; free-form surfaces are NURBS (`decad.NURBSSurface`) |
 | Mesh bodies as input: convert to a solid, reduce, repair, remesh | No entry point exists; `decad.Mesh` is an output only |
 | Lattice or volumetric infill for printing | No entry point exists |
-| Nesting parts on a sheet or build plate | No entry point exists |
+| Nesting that turns bodies, follows their outlines or stacks them in three dimensions | `Arrange` packs bounding rectangles by translation only (`arrange.go`) |
 | Toolpath generation (CAM) | No entry point exists |
 | Finite-element stress or thermal simulation | No entry point exists |
 | Rendered images | No entry point exists |

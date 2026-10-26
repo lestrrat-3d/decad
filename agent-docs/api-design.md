@@ -1457,6 +1457,9 @@ func Transform(ctx context.Context, body *Body, t r3.Transform) (*Body, error)
 func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (*Body, error)
 ```
 
+`Arrange(ctx, bodies, bed)` places several bodies on a flat bed by one `Transform` each, in shelves of their bounding
+boxes, and `agent-docs/arrange-design.md` owns its rules.
+
 This is the whole of the "explicit transforms" story: a body is positioned by an
 argument the caller states — an `r3.Transform`, a rigid motion (§5.2) — never by
 an ambient assembly context (§4). The zero `Transform{}` is invalid

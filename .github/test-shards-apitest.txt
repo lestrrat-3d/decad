@@ -2270,3 +2270,6 @@
 10	0.01	TestFilletChordRefusals
 10	0.01	TestFilletChordRefusesAnEdgeThatIsNotRightAngled
 10	0.01	TestFilletChordSetsTheRadius
+10	0.01	TestArrangePlacesBodiesInShelves
+10	0.01	TestArrangeRefusals
+10	0.01	TestArrangeRefusesBadBodyLists
