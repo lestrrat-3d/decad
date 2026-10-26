@@ -156,3 +156,18 @@ func ReduceMesh(ctx context.Context, m *MeshBody, cell units.Value) (*MeshBody, 
 | R4 | The mean lies inside its cell, so a convex corner is pulled in. A cell smaller than the vertex spacing changes nothing, and one larger than the mesh drops every triangle. |
 | R5 | A cell that is not positive is `ErrDegenerate` for zero, `ErrNegativeMagnitude` for a negative and `ErrUnitKind` for a wrong kind. A reduction that leaves no triangle, a nil context and a nil mesh are `ErrDegenerate`. |
 
+## 10. Scaling
+
+`ScaleMesh` stretches a `MeshBody` along the world axes into a new one.
+
+```go
+func ScaleMesh(ctx context.Context, m *MeshBody, anchor r3.Vec, x, y, z units.Value) (*MeshBody, error)
+```
+
+| Decision | Rule |
+|---|---|
+| Z1 | Each vertex `p` moves to `anchor + (p − anchor)` with its components multiplied by `x`, `y` and `z`. The triangles keep their vertex indices, so the result has the source's triangle and vertex counts. |
+| Z2 | The volume of a closed mesh is multiplied by `\|x·y·z\|`. Areas follow no one factor, and a uniform stretch keeps every angle while any other does not. |
+| Z3 | A negative factor mirrors across the plane through the anchor square to its axis. When the product of the factors is negative the triangles' second and third corners are swapped, so a mesh wound outward stays wound outward. |
+| Z4 | A factor must be dimensionless (`ErrUnitKind`), finite (`ErrNotFinite`) and not zero (`ErrDegenerate`), as must the anchor be finite. A nil context or mesh is `ErrDegenerate`, and the result is read by `NewMeshBody`, so overflowing vertices are `ErrNotFinite`. |
+| Z5 | The solid kernel has no per-axis scale: `ScaledAt` is uniform and `Transform` is rigid. Only a held mesh stretches. |

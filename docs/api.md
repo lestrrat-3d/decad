@@ -354,7 +354,8 @@ area and enclosed volume.
 `decad.RepairMesh` returns a mended copy of a mesh body and a `decad.MeshRepairReport` of what changed. It always drops
 triangles that carry no surface, and `decad.WithMeshWeld`, `decad.WithMeshOrient` and `decad.WithMeshFillHoles` merge
 close vertices, wind shells consistently and close simple holes. Read `MeshBody.Report` on the result to see whether
-the mesh closed. `decad.ReduceMesh` thins a mesh body by clustering its vertices into cells of a stated size.
+the mesh closed. `decad.ReduceMesh` thins a mesh body by clustering its vertices into cells of a stated size. `decad.ScaleMesh`
+stretches a mesh body by a separate factor along each axis about a point; a negative factor mirrors it.
 
 ## Export
 
