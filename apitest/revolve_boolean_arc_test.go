@@ -30,12 +30,23 @@ func requireArcResultMesh(t *testing.T, b *decad.Body) {
 	require.True(t, mesh.VolumeVerified())
 }
 
+func requireFaceKind(t *testing.T, b *decad.Body, kind decad.SurfaceKind) {
+	t.Helper()
+	for _, f := range b.Faces() {
+		if f.Surface().Kind() == kind {
+			return
+		}
+	}
+	require.Fail(t, "no face of the expected surface kind", "want %v", kind)
+}
+
 // A sphere is a half-disk meridian with an arc. Common-axis Booleans arrange
 // the arc and the tool's lines in one private scene, so the result stays an
 // exact revolve instead of a faceted mesh.
 //
 // Shown to fail with the ArcSeg arm of PrepareCommonAxis removed: each row
-// takes the mesh path, whose result is Faceted (requireAnalyticVolume).
+// falls to the mesh path, which refuses at require.NoError with "this chord
+// tolerance asks for more than 65536 facets in one revolve mesh".
 func TestCommonAxisRevolveArcMeridianBooleans(t *testing.T) {
 	t.Parallel()
 	const capVolume = 625 * math.Pi / 3
@@ -54,6 +65,7 @@ func TestCommonAxisRevolveArcMeridianBooleans(t *testing.T) {
 			result, err := tc.run(t.Context(), sphere, tool)
 			require.NoError(t, err)
 			requireAnalyticVolume(t, result, tc.want)
+			requireFaceKind(t, result, decad.KindSphere)
 			requireArcResultMesh(t, result)
 		})
 	}
@@ -88,7 +100,8 @@ func TestCommonAxisRevolveArcMeridianLens(t *testing.T) {
 }
 
 // A disk touching the sphere only at its pole is a point contact, not a
-// solid join, and a disk spanning past the pole cuts the arc on the axis.
+// solid join, and two equal spheres share their whole arc span. Neither is
+// joined by this route, and both continue to the mesh path's refusal.
 func TestCommonAxisRevolveArcMeridianMisses(t *testing.T) {
 	t.Parallel()
 	t.Run("tangent at pole", func(t *testing.T) {
@@ -97,7 +110,8 @@ func TestCommonAxisRevolveArcMeridianMisses(t *testing.T) {
 		sphere, tool := arcBooleanOperands(t, doc, 10, 15)
 		before := doc.Bodies()
 		_, err := decad.Union(t.Context(), sphere, tool)
-		require.Error(t, err)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "more than 65536 facets")
 		require.Equal(t, before, doc.Bodies())
 	})
 	t.Run("shared arc span", func(t *testing.T) {
@@ -111,7 +125,8 @@ func TestCommonAxisRevolveArcMeridianMisses(t *testing.T) {
 		require.NoError(t, err)
 		before := doc.Bodies()
 		_, err = decad.Union(t.Context(), a, b)
-		require.Error(t, err)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "more than 65536 facets")
 		require.Equal(t, before, doc.Bodies())
 	})
 }
@@ -121,7 +136,8 @@ func TestCommonAxisRevolveArcMeridianMisses(t *testing.T) {
 // volume is 2 pi^2 R r^2 = 108 pi^2 for R = 6, r = 3.
 //
 // Shown to fail with the CircleSeg arm of PrepareCommonAxis removed: both rows
-// take the mesh path and return Faceted faces.
+// fall to the mesh path, which refuses at require.NoError with the same facet
+// limit as the sphere rows.
 func TestCommonAxisRevolveCircleMeridianTorus(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -147,6 +163,7 @@ func TestCommonAxisRevolveCircleMeridianTorus(t *testing.T) {
 			result, err := tc.run(t.Context(), torus, tool)
 			require.NoError(t, err)
 			requireAnalyticVolume(t, result, 54*math.Pi*math.Pi)
+			requireFaceKind(t, result, decad.KindTorus)
 			requireArcResultMesh(t, result)
 		})
 	}

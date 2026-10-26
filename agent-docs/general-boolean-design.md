@@ -660,16 +660,16 @@ wall retains its source face's origins; a coincident wall retains both source
 faces' origins. Every shared span must lie on exactly the same recorded line
 carrier, with both ends inside both finite segments. Sketch's identity band
 alone cannot join a positive gap. A span shared by two arcs or circles is
-not a line carrier, so an arc meridian shared whole (a hemisphere unioned onto
-a hemisphere) continues to the mesh path.
+not a line carrier, so a shared arc or circle span (a sphere unioned onto an
+equal sphere) continues to the mesh path.
 
-An arc cut parameter is certified by Sketch (`TExact`) and charged through
-`ChargeCrossings` exactly as for a prism arc. A cut arc keeps its source
+An arc cut parameter is certified by Sketch (`TExact`) and its rounding is charged
+through `CutDelta` in `MergeWithChain`. A cut arc keeps its source
 face's origins, so a sphere or torus wall cut by a coaxial plane or cylinder stays
 a sphere or torus. The pole
 needs no new rule: the arc meets the axis only at its own recorded end, a
 disk that touches that point is a point contact and is not promoted, and the
-facet ceiling of the mesh path no longer applies because the Boolean does not
+facet ceiling of the mesh path does not apply because the Boolean does not
 mesh the sphere. An empty `Cut` or `Intersect` returns
 `BooleanEmpty`.
 An unresolved arrangement, a disconnected result, a different axis, a
