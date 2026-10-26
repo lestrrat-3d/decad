@@ -2098,6 +2098,7 @@
 10	0.00	TestFacetedRetainedBlendParallelCylinders
 10	0.00	TestFacetedRetainedBlendChain
 10	0.00	TestFacetedRetainedBlendOpenChain
+10	0.00	TestFacetedRetainedBlendArcEnd
 10	0.00	TestFacetedRetainedChamferTwoDistance
 10	0.03	TestFilletArcArcCorner
 10	0.00	TestFitSplineAllCoincidentFitPointsRefuses

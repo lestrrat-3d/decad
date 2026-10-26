@@ -124,7 +124,7 @@ retained cylinder wall `W_k` whose axis is normal to `P`, and consecutive edges 
 | RC | Chain | Ends | Staged |
 |---|---|---|---|
 | **C1** | closed: every edge of one loop of `P` | none | increment M3 |
-| **C2** | open | each end at a three-face corner of a straight R1 edge that blend §5.0 admits, on an end plane normal to the edge | increment M4 |
+| **C2** | open | each end at a three-face corner of a straight R1 edge that blend §5.0 admits, on an end plane normal to the edge, or of an R4 arc that blend §4.4 admits, on an end plane parallel to its axis | increments M4, M4b |
 
 At a junction both walls are perpendicular to `P`: a cylinder wall's axis is normal to `P`, and a plane wall
 tangent to it along a generator contains that generator. So every edge of a chain has dihedral angle `π/2`, and
@@ -218,8 +218,16 @@ The rewrite touches `P`, every wall `W_k`, every seam between consecutive walls,
    an end face `G` that is a retained plane normal to the edge. The end column is the junction row's construction
    with `V` the corner `P ∩ W ∩ G`; its rows lie in `G`, and its last vertex is the cut of `W` on `G ∩ W`, shared
    with the wall. `G` gives up the corner and the chain vertices nearer than the setbacks, and takes the column. `P`'s
-   loop gives up the chain's run and the removed part of `G ∩ P` at each end. A first or last arc (R4) and a reflex
-   foot corner refuse (`ErrUnsupported`).
+   loop gives up the chain's run and the removed part of `G ∩ P` at each end. A first or last arc (R4) takes blend
+   §4.4's end: its end column holds, per row `j` of the junction rows' tube angles, the point where the row's circle of
+   the torus (or cone) meets `G`, a root of `n_G · x = h_G` in the azimuth nearest the previous row's (blend §4.4).
+   The plane's setback point is row 0, on `G ∩ P`; the wall's is the cut of the generator `G ∩ W` at depth `t_W`. The
+   edge's interior columns fan out from the end curve: row `j` of column `i` lies at the fraction `i / n_a` of the
+   way from its azimuth on `G` to the azimuth of the other end's meridian, so every vertex lies on the torus. The end
+   curve stays a chain of exact points (it is no conic). A chamfer's arc end takes extra rows, as blend §4.4's cone
+   does, so that its chords follow the section `G` cuts in the cone to within `τ`. The end of a convex chain on a
+   face that is reflex at the corner (a reflex foot) refuses (`ErrUnsupported`); it occurs only where a concave
+   chain meets a wall, and no concave chain is built.
 6. **Build.** `facetedrecord.Build`, as blend §5 step 5. Each chain edge gets its own blend group with role
    `fillet(k)` or `chamfer(k)`, `k` the edge's ordinal in the expanded selection.
 
@@ -445,6 +453,7 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | One straight edge, no option | SM2 naming `WithTangentChain` and `(3,0,20)` | drop SM2: the message is blend SR5's "not a retained plane" |
 | All 8 edges named, no option | builds the C1 result; volume equal within both bounds | treat shared junction corners as SR2: refused |
 | Open chain (C2): one lateral fillet, seed its top edge | chain of line, arc, line; removed `A_f·(L1 + L2) + (π/2)·(R − x̄)·A_f` | stop the walk at the junction and use the R1 end rule: refused as grazing |
+| Open chain ending on an arc (C2, R4): the corner-rounded box trimmed by a plane through its arc; seed the arc | line and arc ending on `G`; removed volume `A_f·L + ∫∫ ρ·Δφ(ρ)` over the section's corner, `Δφ` the angle from `G` to the tangent point | start every row at the corner's azimuth: the end rows leave `G` (unit test) |
 | Concave chain: rounded boss on a plate, cut by a placed tool | fill `A_f·(ΣL + 2π·(R + x̄))`; blend normals point into the void | build the convex blend: the normals point into the material |
 | Chain clearance | a pocket whose chord crosses a band while its vertices lie outside it refuses SM5; a hole deep inside a band refuses SM4 | test vertices only: the crossing chord builds and SR7 or the volume check fails |
 | `internal/tangentchain` retained oracle | exactly tangent plane/cylinder tags prove "tangent"; tags one float step off are undecided; a clear miss is "not tangent" | replace the identity by a tolerance: the one-step case proves "tangent" |
@@ -491,15 +500,16 @@ Each increment is one PR. M1 ships this document.
 | M1 | §4: two-distance chamfer on R1–R4 | the five two-distance rows of §12 pass; `go test ./...` on CI |
 | M2 | §6: exact-rotation `Copy` keeps its tags (independent of M1) | the four exact-copy rows pass on CI |
 | M3 | §5.2–§5.7 for C1: retained expansion, junctions, closed chains, SM1–SM5 | the expansion, C1, chamfer, seed-merge, SM2, all-8 and oracle rows pass, and the example's output is verified |
-| M4 | C2: open chains with blend §5.0 straight ends; E11 for the fillet junction `Arc3` | the C2 row passes; the concave and arc-end cases stay refused and tested |
+| M4 | C2: open chains with blend §5.0 straight ends; E11 for the fillet junction `Arc3` | the C2 row passes; the concave case stays refused and tested |
+| M4b | C2: open chains whose first or last edge is a blend §4.4 arc | the arc-end rows pass; the concave and reflex-foot cases stay refused |
 | M5 | §7: `ScaledAt` keeps curved tags | the two scale rows pass |
 | M6 | §8: E10 and R5 | the R5 row passes |
 
 Chains are built for convex outlines of lines and arcs. `retainedblend.Tangent` decides each junction
 (`chain_tangent.go`), `planChains` groups and orders the selection (`chain.go`) and `rewriteChain` builds one chain
-(`chain_rewrite.go`); the ends of an open chain live in `chain_open.go`. A closed chain has at least three edges
-and an open chain at least two. A concave chain, an open chain whose first or last edge is an arc, and an end face
-that is not normal to its edge are refused. The edge between a `Cylinder` and a `Torus` blend of a fillet chain is an
+(`chain_rewrite.go`); the ends of an open chain live in `chain_open.go`, and an arc end in `chain_arc_end.go`. A
+closed chain has at least three edges and an open chain at least two. A concave chain, a reflex foot, a straight end
+on a face that is not normal to its edge and an arc end on a face that is not parallel to the axis are refused. The edge between a `Cylinder` and a `Torus` blend of a fillet chain is an
 `Arc3` (retention §10.1 E11).
 
 M3 starts with one real end-to-end run on the P2 fixture before any other fixture. If that run refuses, the

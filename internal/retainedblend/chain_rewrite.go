@@ -43,6 +43,9 @@ type chainEntry struct {
 	cols   []chainCol
 	run    []int
 	step   blendSpec
+	// freeStart and freeEnd are set for an arc that ends the chain on a
+	// plane G (chain_arc_end.go).
+	freeStart, freeEnd *arcEnd
 }
 
 // chainCol is one cross-section of the chain: the point on the chain, the way
@@ -248,6 +251,12 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		if err := w.readChainEdge(en, fp, faceIndex, nP, ats, slack); err != nil {
 			return nil, err
 		}
+		if open && t == 0 {
+			en.freeStart = ecuts[0].arc
+		}
+		if open && t == n-1 {
+			en.freeEnd = ecuts[1].arc
+		}
 	}
 	if !open && covered != len(loop) {
 		return nil, fmt.Errorf("%w: the chain is not the whole of its base loop", decaderr.ErrUnsupported)
@@ -261,9 +270,28 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		step := 2 * math.Acos(1-math.Min(w.tau/spec.r, 1))
 		rowsM = max(2, int(math.Ceil(math.Pi/2/step)))
 	}
+	if !fillet {
+		// A chamfer's section is one segment; an arc end needs rows along it
+		// for the chords to follow the section G cuts in the cone.
+		for k, ec := range ecuts {
+			if ec == nil || ec.arc == nil {
+				continue
+			}
+			en := entries[0]
+			if k == 1 {
+				en = entries[n-1]
+			}
+			p, _ := ec.arc.a.profile(en.step)
+			rowsM = max(rowsM, ec.arc.chamferEndRows(p, ec.exact, w.tau))
+		}
+	}
 	rowPoint := func(v, m r3.Vec, j int) r3.Vec {
 		if !fillet {
-			return v.Add(m.Scale(tP))
+			s := float64(j) / float64(rowsM)
+			if j == 0 {
+				return v.Add(m.Scale(tP))
+			}
+			return v.Add(m.Scale(tP * (1 - s))).Sub(nP.Scale(tW * s))
 		}
 		alpha := float64(j) * math.Pi / 2 / float64(rowsM)
 		return v.Add(m.Scale(spec.r * (1 - math.Sin(alpha)))).Sub(nP.Scale(spec.r * (1 - math.Cos(alpha))))
@@ -286,6 +314,12 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		return rows
 	}
 	for t := range entries {
+		if open && t == 0 && ecuts[0].arc != nil {
+			if jrows[0], err = w.arcEndColumn(ecuts[0], entries[0].step, rowsM, bound); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		if open && t == 0 {
 			jrows[0] = endRows(entries[0].p0, entries[0].m[0], entries[0].d, ecuts[0].g)
 			continue
@@ -293,7 +327,11 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		prev := entries[(t-1+n)%n]
 		jrows[entries[t].ja] = newRows(entries[t].p0, prev.m[1])
 	}
-	if open {
+	if open && ecuts[1].arc != nil {
+		if jrows[n], err = w.arcEndColumn(ecuts[1], entries[n-1].step, rowsM, bound); err != nil {
+			return nil, err
+		}
+	} else if open {
 		last := entries[n-1]
 		jrows[n] = endRows(last.p1, last.m[1], last.d, ecuts[1].g)
 	}
@@ -303,16 +341,25 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 			en.cols = []chainCol{{s: 0, rows: jrows[en.ja]}, {s: en.length, rows: jrows[en.jb]}}
 			continue
 		}
+		fan := en.freeStart != nil || en.freeEnd != nil
+		if fan {
+			if err := en.checkFan(rowsM); err != nil {
+				return nil, err
+			}
+		}
 		rhoMax := max(en.rim.radius, en.rim.radius+en.rim.kappa*tP)
 		dTheta := 2 * math.Acos(1-math.Min(w.tau/rhoMax, 1))
 		na := max(2, int(math.Ceil(en.span/dTheta)))
 		for i := 0; i <= na; i++ {
 			f := float64(i) / float64(na)
-			switch i {
-			case 0:
+			switch {
+			case i == 0:
 				en.cols = append(en.cols, chainCol{s: 0, rows: jrows[en.ja]})
-			case na:
+			case i == na:
 				en.cols = append(en.cols, chainCol{s: en.span, rows: jrows[en.jb]})
+			case fan:
+				rows := w.fanRows(en, f, rowsM, bound)
+				en.cols = append(en.cols, chainCol{s: en.param(w.verts[rows[rowsM-1]]), rows: rows})
 			default:
 				phi := en.phi0 + en.sigma*en.span*f
 				v := en.rim.at(en.rim.radius, phi, 0)
@@ -413,7 +460,12 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 	seam := make([]int, nj)
 	for t := range entries {
 		if open && t == 0 {
-			if seam[0], err = w.findEndCut(cutsOf[0], jp[0], nP, slack); err != nil {
+			if ecuts[0].arc != nil {
+				seam[0], err = w.seamCut(ecuts[0], cutsOf[0])
+			} else {
+				seam[0], err = w.findEndCut(cutsOf[0], jp[0], nP, slack)
+			}
+			if err != nil {
 				return nil, err
 			}
 			continue
@@ -430,7 +482,12 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		seam[t] = common[0]
 	}
 	if open {
-		if seam[n], err = w.findEndCut(cutsOf[n-1], jp[n], nP, slack); err != nil {
+		if ecuts[1].arc != nil {
+			seam[n], err = w.seamCut(ecuts[1], cutsOf[n-1])
+		} else {
+			seam[n], err = w.findEndCut(cutsOf[n-1], jp[n], nP, slack)
+		}
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -510,6 +567,9 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 			bi++
 		}
 		pa, wa, ba := en.areas(tP, tW, spec)
+		if en.freeStart != nil || en.freeEnd != nil {
+			pa, wa, ba = en.areasFree(tP, tW)
+		}
 		removedTrue += pa + wa
 		blendTrue += ba
 		groups = append(groups, facetedrecord.Group{
@@ -665,15 +725,21 @@ func (w *work) checkBaseClear(fl faceLoops, li int, path []int, entries []chainE
 	if !closed {
 		nseg--
 	}
-	sag := 0.0
-	for i := range nseg {
-		sag = max(sag, w.verts[path[i]].Sub(w.verts[path[(i+1)%len(path)]]).Len())
-	}
-	// The longest chord of the held outline bounds the sagitta of its arcs.
+	// The longest chord of the held outline's arcs bounds their sagitta; a
+	// chord of a straight edge has none.
 	rMin := math.Inf(1)
 	for _, en := range entries {
 		if en.arc {
 			rMin = math.Min(rMin, en.rim.radius)
+		}
+	}
+	sag := 0.0
+	for i := range nseg {
+		p, q := path[i], path[(i+1)%len(path)]
+		for _, en := range entries {
+			if en.arc && en.rim.onRim(w.verts[p], w.beta[p]) && en.rim.onRim(w.verts[q], w.beta[q]) {
+				sag = max(sag, w.verts[p].Sub(w.verts[q]).Len())
+			}
 		}
 	}
 	allow := 0.0
