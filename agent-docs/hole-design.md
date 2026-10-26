@@ -11,7 +11,7 @@ func Hole(ctx context.Context, b *Body, spec HoleSpec) (*Body, error)
 ```
 
 `HoleSpec` holds `Face` (a `FaceSelector`), `At` (a world `r3.Vec`), `Diameter`, `Depth` (`ThroughHole` or
-`BlindHole`), an optional `Head` (`Counterbore` or `Countersink`) and an optional `Shape` (`RectangularHole`, §5). `Hole` retires `b` and returns the drilled body.
+`BlindHole`), an optional `Head` (`Counterbore` or `Countersink`) and an optional `Shape` (`RectangularHole`, §5, or `SlotHole`, §6). `Hole` retires `b` and returns the drilled body.
 
 | Decision | Rule |
 |---|---|
@@ -47,7 +47,7 @@ face. A countersink cut gives a faceted result whose planar faces are split into
 ## 4. Not covered
 
 - A hole in a face that is not an analytic plane, or in a sheet.
-- A noncircular hole other than `RectangularHole`, a threaded hole, and a tapped-hole annotation.
+- A noncircular hole other than `RectangularHole` and `SlotHole`, a threaded hole, and a tapped-hole annotation.
 - Several holes in one call. Call `Hole` per hole, or build one hole and use `Patterned`.
 
 ## 5. Rectangular holes
@@ -65,3 +65,17 @@ counter-clockwise about the hole axis.
 
 The cut is a prism cut, so a rectangle turned by a multiple of a quarter turn about the face frame keeps the planar
 walls of the prism classes. Every wall is a plane, and a blind hole adds one planar floor.
+
+## 6. Slot holes
+
+`SlotHole` holds `Length`, `Width` and `Angle`. The bore is a stadium: a strip `Width` wide whose two ends are half
+circles, `Length` long end to end, centred on `At`. Its long axis lies along the face frame's U axis before `Angle`
+turns it counter-clockwise about the hole axis.
+
+| Decision | Rule |
+|---|---|
+| L1 | R1 and R3 apply. |
+| L2 | `Length` and `Width` are positive finite lengths with `Length` greater than `Width`, and `Angle` is a finite angle. A violation is `ErrDegenerate`, or `ErrUnitKind` for a wrong unit kind. A `Length` equal to `Width` is a round hole and is refused. |
+| L3 | The bore tool is the stadium sketched on the mouth plane and extruded inward as in R4. Two fixed lines join two counter-clockwise arcs about the end centres, which are `(Length − Width)/2` from the axis along the slot. |
+
+The walls are two planes and two cylinders, so a slot hole is `Approximate` as a round hole is (§3).

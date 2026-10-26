@@ -50,8 +50,8 @@ type Countersink struct {
 func (Counterbore) holeHead() {}
 func (Countersink) holeHead() {}
 
-// HoleShape is the cross-section of a hole that is not round. Its only
-// variant is RectangularHole.
+// HoleShape is the cross-section of a hole that is not round. Its variants are
+// RectangularHole and SlotHole.
 type HoleShape interface{ holeShape() }
 
 // RectangularHole is a hole whose bore is a Width by Height rectangle centred
@@ -64,6 +64,18 @@ type RectangularHole struct {
 }
 
 func (RectangularHole) holeShape() {}
+
+// SlotHole is a hole whose bore is a stadium: a strip Width wide with a half
+// circle on each end, Length long from end to end. Length is a positive length
+// greater than Width. Its long axis lies along the face frame's U axis before
+// Angle turns it counter-clockwise about the hole axis. The bore is centred on
+// the hole axis.
+type SlotHole struct {
+	Length, Width units.Value
+	Angle         units.Value
+}
+
+func (SlotHole) holeShape() {}
 
 // HoleSpec describes one hole.
 //
@@ -181,29 +193,44 @@ func holeInput(b *Body, spec HoleSpec) (holeplan.Input, error) {
 
 // holeShapeInput reads a non-round bore into in.
 func holeShapeInput(in *holeplan.Input, spec HoleSpec) error {
-	rect, ok := spec.Shape.(RectangularHole)
-	if !ok {
-		return fmt.Errorf(`%w: unknown hole shape %T`, ErrDegenerate, spec.Shape)
-	}
 	if spec.Diameter != (units.Value{}) {
 		return fmt.Errorf(`%w: a shaped hole takes its size from the shape, so Diameter must be zero`, ErrDegenerate)
 	}
 	if spec.Head != nil {
-		return fmt.Errorf(`%w: a rectangular hole takes no counterbore or countersink`, ErrDegenerate)
+		return fmt.Errorf(`%w: a shaped hole takes no counterbore or countersink`, ErrDegenerate)
 	}
-	width, err := sectionrecord.MagnitudeIn(rect.Width, units.Length, units.Millimeter, "the rectangular hole width")
-	if err != nil {
-		return err
+	switch shape := spec.Shape.(type) {
+	case RectangularHole:
+		width, err := sectionrecord.MagnitudeIn(shape.Width, units.Length, units.Millimeter, "the rectangular hole width")
+		if err != nil {
+			return err
+		}
+		height, err := sectionrecord.MagnitudeIn(shape.Height, units.Length, units.Millimeter, "the rectangular hole height")
+		if err != nil {
+			return err
+		}
+		angle, err := sectionrecord.MagnitudeIn(shape.Angle, units.Angle, units.Radian, "the rectangular hole angle")
+		if err != nil {
+			return err
+		}
+		in.Rect = &holeplan.Rect{Width: width, Height: height, Angle: angle}
+	case SlotHole:
+		length, err := sectionrecord.MagnitudeIn(shape.Length, units.Length, units.Millimeter, "the slot length")
+		if err != nil {
+			return err
+		}
+		width, err := sectionrecord.MagnitudeIn(shape.Width, units.Length, units.Millimeter, "the slot width")
+		if err != nil {
+			return err
+		}
+		angle, err := sectionrecord.MagnitudeIn(shape.Angle, units.Angle, units.Radian, "the slot angle")
+		if err != nil {
+			return err
+		}
+		in.Slot = &holeplan.Slot{Length: length, Width: width, Angle: angle}
+	default:
+		return fmt.Errorf(`%w: unknown hole shape %T`, ErrDegenerate, spec.Shape)
 	}
-	height, err := sectionrecord.MagnitudeIn(rect.Height, units.Length, units.Millimeter, "the rectangular hole height")
-	if err != nil {
-		return err
-	}
-	angle, err := sectionrecord.MagnitudeIn(rect.Angle, units.Angle, units.Radian, "the rectangular hole angle")
-	if err != nil {
-		return err
-	}
-	in.Rect = &holeplan.Rect{Width: width, Height: height, Angle: angle}
 	return nil
 }
 
@@ -301,10 +328,10 @@ func buildHoleTools(ctx context.Context, d *Document, plan holeplan.Plan) ([]*Bo
 	return tools, nil
 }
 
-// holeBore builds the main drill: a rectangular prism when plan holds
-// corners, a cylinder otherwise.
+// holeBore builds the main drill: a prism over the rectangle or stadium when
+// plan holds one, a cylinder otherwise.
 func holeBore(ctx context.Context, d *Document, plan holeplan.Plan) (*Body, error) {
-	if plan.Corners == nil {
+	if plan.Corners == nil && plan.SlotTool == nil {
 		return holeCylinder(ctx, d, plan, plan.Bore)
 	}
 	w := sketch.NewWorld()
@@ -316,13 +343,27 @@ func holeBore(ctx context.Context, d *Document, plan holeplan.Plan) (*Body, erro
 	if err != nil {
 		return nil, err
 	}
-	var points [4]*sketch.Point
-	for i, c := range plan.Corners {
-		points[i] = s.CreatePoint(c[0], c[1])
-		s.Fix(points[i])
+	fixed := func(p [2]float64) *sketch.Point {
+		pt := s.CreatePoint(p[0], p[1])
+		s.Fix(pt)
+		return pt
 	}
-	for i := range points {
-		s.CreateLine(points[i], points[(i+1)%len(points)])
+	if plan.Corners != nil {
+		var points [4]*sketch.Point
+		for i, c := range plan.Corners {
+			points[i] = fixed(c)
+		}
+		for i := range points {
+			s.CreateLine(points[i], points[(i+1)%len(points)])
+		}
+	} else {
+		t := plan.SlotTool
+		p0, p1, p2, p3 := fixed(t.P0), fixed(t.P1), fixed(t.P2), fixed(t.P3)
+		start, end := fixed(t.Start), fixed(t.End)
+		s.CreateLine(p0, p1)
+		s.CreateArc(end, p1, p2)
+		s.CreateLine(p2, p3)
+		s.CreateArc(start, p3, p0)
 	}
 	if _, err := s.Solve(ctx); err != nil {
 		return nil, err

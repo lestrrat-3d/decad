@@ -54,6 +54,13 @@ type Rect struct {
 	Width, Height, Angle float64
 }
 
+// Slot is a stadium-shaped bore in millimetres and radians: a Width-wide strip
+// with a half circle on each end, Length long end to end. Angle turns it
+// counter-clockwise about the hole axis, measured from the frame's U axis.
+type Slot struct {
+	Length, Width, Angle float64
+}
+
 // Input is the request in millimetres and radians. Frame is the face's plane
 // frame and Outward the face's outward unit normal, which equals Frame.N() or
 // its negation. Reach is the distance from the face plane to the far side of
@@ -70,6 +77,19 @@ type Input struct {
 	// Rect, when set, replaces the round bore: Diameter is then ignored and
 	// Head must be HeadNone.
 	Rect *Rect
+	// Slot, when set, replaces the round bore like Rect. Rect and Slot are
+	// not both set.
+	Slot *Slot
+}
+
+// SlotTool is a stadium bore in the sketch plane's coordinates. Start and End
+// are the centres of the two end half circles, P0 to P3 the straight sides'
+// ends in counter-clockwise order: P0 to P1 is one side, an arc about End runs
+// from P1 to P2, P2 to P3 is the other side, and an arc about Start runs from
+// P3 to P0.
+type SlotTool struct {
+	Start, End     [2]float64
+	P0, P1, P2, P3 [2]float64
 }
 
 // Cylinder is a hole tool swept inward. Length is the depth below the face
@@ -107,6 +127,8 @@ type Plan struct {
 	// Corners, when set, are the four corners of the rectangular bore in
 	// Plane's coordinates, counter-clockwise. Bore.Radius is then unused.
 	Corners *[4][2]float64
+	// SlotTool, when set, is the stadium bore. Bore.Radius is then unused.
+	SlotTool *SlotTool
 	// Counterbore is the recess cylinder, set when the head is a counterbore.
 	Counterbore *Cylinder
 	// Sink is the countersink cone, set when the head is a countersink.
@@ -115,8 +137,8 @@ type Plan struct {
 
 // Compute checks the request and returns its tools.
 func Compute(in Input) (Plan, error) {
-	if in.Rect != nil {
-		return computeRect(in)
+	if in.Rect != nil || in.Slot != nil {
+		return computeShape(in)
 	}
 	if !positive(in.Diameter) {
 		return Plan{}, fmt.Errorf(`%w: the hole diameter must be positive and finite`, decaderr.ErrDegenerate)
@@ -159,37 +181,73 @@ func Compute(in Input) (Plan, error) {
 	}
 }
 
-// computeRect plans a rectangular bore. It shares the placement and depth
-// gates of the round hole and refuses a head.
-func computeRect(in Input) (Plan, error) {
-	r := in.Rect
-	if !positive(r.Width) || !positive(r.Height) {
-		return Plan{}, fmt.Errorf(`%w: the rectangular hole width and height must be positive and finite`,
-			decaderr.ErrDegenerate)
-	}
-	if math.IsNaN(r.Angle) || math.IsInf(r.Angle, 0) {
-		return Plan{}, fmt.Errorf(`%w: the rectangular hole angle must be finite`, decaderr.ErrDegenerate)
+// computeShape plans a rectangular or slot bore. It shares the placement and
+// depth gates of the round hole and refuses a head.
+func computeShape(in Input) (Plan, error) {
+	if in.Rect != nil && in.Slot != nil {
+		return Plan{}, fmt.Errorf(`%w: a hole has one shape`, decaderr.ErrDegenerate)
 	}
 	if in.Head.Kind != HeadNone {
-		return Plan{}, fmt.Errorf(`%w: a rectangular hole takes no counterbore or countersink`, decaderr.ErrDegenerate)
+		return Plan{}, fmt.Errorf(`%w: a shaped hole takes no counterbore or countersink`, decaderr.ErrDegenerate)
+	}
+	switch {
+	case in.Rect != nil:
+		if !positive(in.Rect.Width) || !positive(in.Rect.Height) || !finite(in.Rect.Angle) {
+			return Plan{}, fmt.Errorf(`%w: the rectangular hole needs a positive finite width and height and a finite angle`,
+				decaderr.ErrDegenerate)
+		}
+	default:
+		if !positive(in.Slot.Length) || !positive(in.Slot.Width) || !finite(in.Slot.Angle) {
+			return Plan{}, fmt.Errorf(`%w: the slot needs a positive finite length and width and a finite angle`,
+				decaderr.ErrDegenerate)
+		}
+		if in.Slot.Length <= in.Slot.Width {
+			return Plan{}, fmt.Errorf(`%w: the slot length %g mm must exceed its width %g mm`,
+				decaderr.ErrDegenerate, in.Slot.Length, in.Slot.Width)
+		}
 	}
 	round := in
-	round.Rect = nil
+	round.Rect, round.Slot = nil, nil
 	round.Diameter = 1
 	plan, err := Compute(round)
 	if err != nil {
 		return Plan{}, err
 	}
+	plan.Bore.Radius = 0
+	if in.Rect != nil {
+		plan.Corners = rectCorners(plan, *in.Rect)
+		return plan, nil
+	}
+	plan.SlotTool = slotTool(plan, *in.Slot)
+	return plan, nil
+}
+
+// rectCorners returns the corners of r about the hole axis in plan's coordinates.
+func rectCorners(plan Plan, r Rect) *[4][2]float64 {
 	sin, cos := math.Sincos(r.Angle)
 	hw, hh := r.Width/2, r.Height/2
 	var corners [4][2]float64
 	for i, c := range [4][2]float64{{-hw, -hh}, {hw, -hh}, {hw, hh}, {-hw, hh}} {
 		corners[i] = [2]float64{plan.U + c[0]*cos - c[1]*sin, plan.V + c[0]*sin + c[1]*cos}
 	}
-	plan.Corners = &corners
-	plan.Bore.Radius = 0
-	return plan, nil
+	return &corners
 }
+
+// slotTool returns the stadium of sl about the hole axis in plan's coordinates.
+func slotTool(plan Plan, sl Slot) *SlotTool {
+	sin, cos := math.Sincos(sl.Angle)
+	half := (sl.Length - sl.Width) / 2
+	radius := sl.Width / 2
+	at := func(along, across float64) [2]float64 {
+		return [2]float64{plan.U + along*cos - across*sin, plan.V + along*sin + across*cos}
+	}
+	return &SlotTool{
+		Start: at(-half, 0), End: at(half, 0),
+		P0: at(-half, -radius), P1: at(half, -radius), P2: at(half, radius), P3: at(-half, radius),
+	}
+}
+
+func finite(x float64) bool { return !math.IsInf(x, 0) && !math.IsNaN(x) }
 
 func (p Plan) withCounterbore(in Input) (Plan, error) {
 	h := in.Head
