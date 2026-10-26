@@ -2260,3 +2260,7 @@
 10	0.01	TestHoleRectangularRefusals
 10	0.01	TestHoleRectangularThrough
 10	0.01	TestHoleRectangularTurned
+10	0.01	TestChamferAngleHonoursTheReferenceFace
+10	0.01	TestChamferAngleRefusals
+10	0.01	TestChamferAngleRefusesAnEdgeThatIsNotRightAngled
+10	0.01	TestChamferAngleSetsTheOtherDistance

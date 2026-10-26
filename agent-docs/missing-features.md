@@ -184,7 +184,7 @@ moves its row to the matching section above, with that doc as owner.
 | Split a body or face at its silhouette from a view direction; untrim a surface | No entry point exists; `Split` cuts with a tool body (`surface_trim.go`) |
 | Standard threads (ISO, UN) on a cylindrical face, cosmetic or modeled, chosen from a thread table | No entry point exists; `Coil` sweeps a profile along a helix and reads no thread table |
 | Pattern along a path or curve | `PatternSpec` holds `LinearPattern` and `CircularPattern` only (`pattern.go`) |
-| Fillet by chord length, with setback corners or with a curvature-continuous blend; chamfer by distance and angle | `Fillet` takes one radius and no options (`fillet.go`); `Chamfer` takes one distance, or two with `WithAsymmetricChamfer` (`chamfer.go`) |
+| Fillet by chord length, with setback corners or with a curvature-continuous blend; chamfer by distance and angle on an edge that is not a right angle | `Fillet` takes one radius and no options (`fillet.go`); `Chamfer` takes one distance, or two with `WithAsymmetricChamfer` (`chamfer.go`); `ChamferAngle` converts an angle on right-angled planar edges only (`chamfer_angle.go`) |
 | Shell with a different thickness per face, or a wall on both sides of the original surface | `Shell` takes one thickness, and `WithShellSense` picks one side (`shell.go`) |
 | Screw boss for a plastic part | No entry point exists |
 | T-spline (Form) sculpting | No entry point exists; free-form surfaces are NURBS (`decad.NURBSSurface`) |
