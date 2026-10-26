@@ -781,6 +781,13 @@ type sweepOrder struct {
 	axis  int
 }
 
+// sweepKey is one member's sort key: its lower bound on the sweep axis and
+// its index.
+type sweepKey struct {
+	lo  float64
+	idx int32
+}
+
 func boxAxis(b [2]r3.Vec, axis int) (float64, float64) {
 	switch axis {
 	case 0:
@@ -810,18 +817,25 @@ func newSweepOrder(boxes [][2]r3.Vec, members []int) sweepOrder {
 			s.axis = k
 		}
 	}
-	slices.SortFunc(s.order, func(a, b int32) int {
-		la, _ := boxAxis(boxes[a], s.axis)
-		lb, _ := boxAxis(boxes[b], s.axis)
+	// Sort keys carry the lower bound so the comparator loads no box.
+	keys := make([]sweepKey, len(s.order))
+	for k, i := range s.order {
+		lo, _ := boxAxis(boxes[i], s.axis)
+		keys[k] = sweepKey{lo: lo, idx: i}
+	}
+	slices.SortFunc(keys, func(a, b sweepKey) int {
 		switch {
-		case la < lb:
+		case a.lo < b.lo:
 			return -1
-		case la > lb:
+		case a.lo > b.lo:
 			return 1
 		default:
-			return int(a) - int(b)
+			return int(a.idx) - int(b.idx)
 		}
 	})
+	for k, key := range keys {
+		s.order[k] = key.idx
+	}
 	return s
 }
 
