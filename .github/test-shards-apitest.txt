@@ -1007,6 +1007,8 @@
 5	0.01	TestLoftSectionsFourIndependentRectanglesKeepVolumeAndMeshProof
 5	0.02	TestLoftSectionsManyRectanglesRefuseUnprovedInputs
 5	0.03	TestLoftSectionsSixIndependentRectanglesHoldEverySection
+10	0.00	TestPartialRevolveScaledAtPreservesSectorVolumeAndFaceRoles
+10	0.00	TestScaledAtRefusesPartialSheetRevolveWithoutRetiringSource
 5	0.20	TestLoftThroughBoreCutPublishesCircularTopology
 5	0.00	TestLoopCoEdgeEdgesAreTheBodyEdges
 5	0.01	TestMassPropertiesCircularPrism
@@ -1282,7 +1284,6 @@
 6	0.01	TestRevolveTessellateRefusals
 6	0.02	TestRevolveToFaceAngularGates
 6	0.01	TestRevolveWallNormalCoversNearParallelSegment
-6	0.00	TestScaledAtRefusesPartialRevolveWithoutRetiringSource
 6	0.02	TestSectionCardinalConePlacementAndAxisSense
 6	0.44	TestSectionCardinalConeRoundedProxyCarriesDisplacement
 6	0.01	TestSectionCardinalSphereCutsAcrossRevolveAxis

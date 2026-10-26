@@ -3,9 +3,6 @@ package decad
 import (
 	"context"
 	"fmt"
-
-	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/revolvemesh"
 )
 
 // stackedScaleSource converts only exact line-section stacks. The stack's
@@ -81,15 +78,9 @@ func certifiedLineStackScaleSource(ctx context.Context, b *Body) (facetedPayload
 	if err != nil {
 		return facetedPayload{}, err
 	}
-	// A stack/BRep's structural audit proves its analytic boundary. Check
-	// every held facet pair as well, so rounded tessellation coordinates
-	// cannot introduce an unproven contact before ScaleMesh moves them.
-	budget := proofbound.NewWorkBudget(ctx)
-	data, err := revolvemesh.RequireRevolveFacetAreas(budget, fp.Verts, fp.Tris, 0)
-	if err != nil {
-		return facetedPayload{}, err
-	}
-	if err := revolvemesh.RevolveContactAudit(budget, data, fp.Tris, 0); err != nil {
+	// A stack/BRep's structural audit proves its analytic boundary; the held
+	// facet pairs are audited too.
+	if err := auditHeldScaleContact(ctx, fp); err != nil {
 		return facetedPayload{}, err
 	}
 	return fp, nil
