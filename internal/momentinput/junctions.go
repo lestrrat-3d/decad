@@ -38,6 +38,19 @@ func lineExactEnds(line LineSeg) (*freeform.RatPoint, *freeform.RatPoint) {
 	return at(line.TStart), at(line.TEnd)
 }
 
+// ExactLineEnds states a line's two denoted walk ends exactly, the points
+// its record denotes at TStart and TEnd. Either is nil where a field is not
+// finite.
+func ExactLineEnds(line LineSeg) (start, end *freeform.RatPoint) { return lineExactEnds(line) }
+
+// JunctionCorner is the corner through which a loop's junction from prev's
+// denoted end p to next's denoted start q closes (lineCorner). It reports
+// false where the junction closes with the straight chord from p to q
+// instead (agent-docs/evaluator-design.md §4).
+func JunctionCorner(prev, next CurveSegment, p, q *freeform.RatPoint) (freeform.RatPoint, bool) {
+	return lineCorner(prev, next, p, q)
+}
+
 // copyRatPoint detaches a converted chain's control point from the chain,
 // which the moments pass later shifts in place.
 func copyRatPoint(p freeform.RatPoint) *freeform.RatPoint {

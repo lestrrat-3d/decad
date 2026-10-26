@@ -389,14 +389,15 @@ the cap centroid intervals do not strictly separate every side-face centroid.
 See `agent-docs/loft-point-design.md` for the source proof.
 
 `LocatePoint` returns `PointInside`, `PointOutside`, `PointOnBoundary` or
-`PointUndecided`. It uses the body's verified mesh and returns only classifications
-proved for the body, including retired bodies. `agent-docs/point-containment-design.md`
+`PointUndecided`. It classifies an undisplaced straight prism against its exact
+record and every other body or point against the body's verified mesh, and
+returns only classifications proved for the body, including retired bodies. `agent-docs/point-containment-design.md`
 owns its proof and refusal rules.
 
 `DistanceToPoint` measures the minimum distance from `p` to the solid, so a
 point inside or on its boundary has distance zero. Its `Measurement` encloses
-the true distance using the verified mesh and its boundary bound. When
-`LocatePoint` cannot prove membership, its lower bound is zero. The point
+the true distance using the verified mesh and its boundary bound. When the
+mesh proof cannot prove membership, its lower bound is zero. The point
 query design owns its proof and refusal rules.
 
 `ClosestPoint` returns the mesh point that attains that distance, as a `ClosestPoint` holding the point, the same

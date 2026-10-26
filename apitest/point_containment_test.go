@@ -46,7 +46,7 @@ func TestPointLocationAcrossPocketsAndBores(t *testing.T) {
 	}{
 		{name: "bore void", at: r3.NewVec(0, 0, 5), want: decad.PointOutside},
 		{name: "material", at: r3.NewVec(5, 0, 5), want: decad.PointInside},
-		{name: "curved wall", at: r3.NewVec(2, 0, 5), want: decad.PointUndecided},
+		{name: "curved wall", at: r3.NewVec(2, 0, 5), want: decad.PointOnBoundary},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := part.LocatePoint(t.Context(), tc.at, units.Millimeters(0.1))

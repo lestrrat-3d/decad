@@ -250,6 +250,11 @@
 1	0.01	TestWallCubeSound
 1	0.01	TestWallThinPieWedge
 1	0.00	TestZeroPathHasNoSegments
+10	0.00	TestPointLocationExactArc
+10	0.00	TestPointLocationExactCutFragments
+10	0.00	TestPointLocationExactCylinder
+10	0.00	TestPointLocationExactPlacedPlate
+10	0.00	TestPointLocationOffRadiusArcFallsBackToMesh
 2	0.02	TestAsymmetricChamferOnBrepRestatedEndFaces
 2	0.01	TestAsymmetricChamferOverrunEachSide
 2	0.13	TestBlindBoreThenCircularThroughHoles
