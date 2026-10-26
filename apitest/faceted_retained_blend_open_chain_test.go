@@ -286,21 +286,6 @@ func TestFacetedRetainedBlendOpenChain(t *testing.T) {
 		require.ErrorContains(t, err, "WithTangentChain")
 	})
 
-	t.Run("a chain that ends on an arc edge is refused", func(t *testing.T) {
-		t.Parallel()
-		sc := newRetentionScene()
-		corner := roundedCornerBox(t, sc)
-		// A placed block takes the part of the corner arc below x = 1.5 away, so
-		// the arc ends on the new face x = 1.5.
-		block := placed(t, rectBox(t, sc.w, sc.doc, -5, -5, 1.5, 25, 30), -5)
-		trimmed, err := decad.Cut(t.Context(), corner, block)
-		require.NoError(t, err)
-		_, err = decad.Fillet(t.Context(), trimmed, arcSeedAt(t, trimmed, 20), units.Millimeters(1),
-			decad.WithTangentChain())
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "only a straight edge end is built")
-	})
-
 	t.Run("a concave closed chain is refused", func(t *testing.T) {
 		t.Parallel()
 		pocket := roundedPocket(t, true)

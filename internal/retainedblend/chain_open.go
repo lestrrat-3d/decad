@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
@@ -32,6 +33,13 @@ type chainEndCut struct {
 	remW    []int // G's chain along G ∩ wall that the setback removes
 	prevP   bool  // G's loop reaches the corner from the P side
 	beyondP int   // the first vertex of G ∩ P beyond the setback point
+
+	// arc is set when the chain's end edge is an arc: the end curve is then a
+	// chain of exact points, not a quarter circle (chain_arc_end.go).
+	arc *arcEnd
+	// seamEdge is the held edge of G ∩ wall that the wall's setback cut
+	// crosses; its cut vertex is the end column's last vertex.
+	seamEdge [2]int
 }
 
 // readEndCorner reads the corner at which the chain edge e ends at vertex v.
@@ -45,6 +53,9 @@ func (w *work) readEndCorner(v *topo.Vertex, e *topo.Edge, base *topo.Face, bp p
 	}
 	wp, ok := retainedPlane(wall)
 	if !ok {
+		if _, isArc := e.Curve.(surfacegeom.Arc3); isArc {
+			return w.readArcEndCorner(v, e, base, wall, fp, faceIndex)
+		}
 		return nil, fmt.Errorf("%w: an open tangent chain ends on a wall that is not a retained plane; "+
 			"only a straight edge end is built", decaderr.ErrUnsupported)
 	}
@@ -94,6 +105,11 @@ func (w *work) readEndCut(ec *chainEndCut, nP r3.Vec, tP, tW, margin, slack floa
 	at := indexIn(loop, ec.v)
 	dirP, okP := nP.Cross(ec.g.n).Normalize()
 	dirW, okW := ec.wallN.Cross(ec.g.n).Normalize()
+	if ec.arc != nil {
+		// The wall is a cylinder about the base's normal: it meets G in a
+		// generator.
+		dirW, okW = nP, true
+	}
 	if !okP || !okW {
 		return fmt.Errorf("%w: an end face is parallel to a face of the chain", decaderr.ErrUnsupported)
 	}
@@ -134,12 +150,25 @@ func (w *work) readEndCut(ec *chainEndCut, nP r3.Vec, tP, tW, margin, slack floa
 		if tau(w.verts[last], ec.exact, dirs[k]) < 0 {
 			dirs[k] = dirs[k].Scale(-1)
 		}
+		if k == 0 && ec.arc != nil {
+			// The plane's setback point is where the setback circle meets
+			// G ∩ P, not a fixed distance from the corner.
+			if setback[0] = tau(ec.arc.pt0, ec.exact, dirs[0]); setback[0] <= margin {
+				return fmt.Errorf("%w: a setback point lies behind an arc end", decaderr.ErrUnsupported)
+			}
+		}
 		if err := clearance(tau(w.verts[last], ec.exact, dirs[k])-setback[k], w.beta[last]+margin,
 			"the end face"); err != nil {
 			return err
 		}
+		prevC, keptC := ec.v, -1
 		for _, c := range chain {
 			tc := tau(w.verts[c], ec.exact, dirs[k])
+			if tc < setback[k] && keptC < 0 {
+				prevC = c
+			} else if keptC < 0 {
+				keptC = c
+			}
 			if math.Abs(tc-setback[k]) <= 4*margin {
 				return fmt.Errorf("%w: a setback point falls on a vertex of the end face's boundary",
 					decaderr.ErrUnsupported)
@@ -150,10 +179,16 @@ func (w *work) readEndCut(ec *chainEndCut, nP r3.Vec, tP, tW, margin, slack floa
 				ec.beyondP = c
 			}
 		}
+		if k == 1 && keptC >= 0 {
+			ec.seamEdge = [2]int{min(prevC, keptC), max(prevC, keptC)}
+		}
 	}
 	ec.remP, ec.remW = rem[0], rem[1]
 	// Nothing else of the end face comes near the corner.
 	reach := math.Max(tP, tW)*math.Sqrt2 + margin
+	if ec.arc != nil {
+		reach = ec.arc.reach + margin
+	}
 	skip := map[int]bool{ec.v: true}
 	for _, chain := range chains {
 		for _, c := range chain {
@@ -173,6 +208,17 @@ func (w *work) readEndCut(ec *chainEndCut, nP r3.Vec, tP, tW, margin, slack floa
 		}
 	}
 	return nil
+}
+
+// seamCut is the cut vertex the wall's setback made on the held edge of the
+// generator at an arc end. Near the generator, bounds can place several cuts
+// on the line, so it is read from the edge the end face's own chain crosses.
+func (w *work) seamCut(ec *chainEndCut, cuts map[int]bool) (int, error) {
+	id, ok := w.cuts[ec.seamEdge]
+	if !ok || !cuts[id] {
+		return 0, fmt.Errorf("%w: a wall's cut does not reach the end face", decaderr.ErrUnsupported)
+	}
+	return id, nil
 }
 
 // findEndCut picks, among the vertices a wall's cut made, the one on the line
@@ -227,6 +273,9 @@ func (w *work) rebuildEnd(ec *chainEndCut, seq []int, fillet bool, r, tP, tW flo
 		return 0, err
 	}
 	w.removed = append(w.removed, ec.fl.facets...)
+	if ec.arc != nil {
+		return ec.arc.cornerArea, nil
+	}
 	if fillet {
 		return r * r * (1 - math.Pi/4), nil
 	}
