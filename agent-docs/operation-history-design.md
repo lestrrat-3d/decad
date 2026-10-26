@@ -912,14 +912,18 @@ Add each new test name to shard 10 of `.github/test-shards.txt`.
   a straight retained edge (R1) and cut across the chamfer face.
 - Assertions: After the blend, the top face is still a `RetainedTag` `Plane`
   with `NormalBound == 0`, and its frame is bit-equal to the bored plate's.
-  The control cannot be relied on to build: the later cut builds in the real
-  run, and the control refuses it on the touched plane bound. The top-plane rim
-  vertex bounds all lie below the bound the control's refusal quotes. A cut that
-  touches only the torus rim refuses in both runs, because a curved group takes
-  no slab. The chamfer face is a `RetainedTag` `Plane` with `NormalBound == 0`,
-  and its rim vertex bounds lie below the bound the control's refusal quotes. Every rim vertex lies within its bound of the
-  exact circle. The volume removed by the later cut matches its closed form
-  within the published bounds.
+  The chain is one level deep, so the control does not reach the chain-depth
+  gate of Task 7.1: the later cut builds in both runs, and the two runs place
+  every vertex at the same coordinates. The slab shows as bounds. Every
+  top-plane rim vertex bound of the real run is strictly below the control's
+  bound for the same vertex, and each vertex lies within its bound of the exact
+  circle. The volume removed by the later cut matches its closed form within the
+  published bounds. A cut through the torus rim, which also pierces the bottom
+  plane, builds in both runs. The torus-rim vertices carry equal bounds in both
+  runs, because a curved group takes no slab, and the bottom plane's vertices
+  are strictly tighter in the real run. The chamfer face is a `RetainedTag`
+  `Plane` with `NormalBound == 0`, and its rim vertex bounds are strictly below
+  the control's for the same vertices.
 - Red leg: In a scratch edit, clear `Retained` on the copied groups in
   `retainedblend` `work.build`. The top plane then loses its slab, and the
   strictness check fails.
