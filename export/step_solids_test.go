@@ -88,13 +88,13 @@ func TestMeshSolidsRefusesAMeshThatDoesNotMatchTheBody(t *testing.T) {
 		want   string
 	}
 	cases := map[string]refusal{
-		"sources shorter than facets": refusal{func(in *meshInput) { in.sources = in.sources[:len(in.sources)-1] }, "does not map its facets"},
-		"facet of a foreign face":     refusal{func(in *meshInput) { in.sources[0] = other.Faces()[0] }, "no face in the body"},
-		"one set spans two shells": refusal{func(in *meshInput) {
+		"sources shorter than facets": {func(in *meshInput) { in.sources = in.sources[:len(in.sources)-1] }, "does not map its facets"},
+		"facet of a foreign face":     {func(in *meshInput) { in.sources[0] = other.Faces()[0] }, "no face in the body"},
+		"one set spans two shells": {func(in *meshInput) {
 			in.components = make([]int, len(in.components))
 			in.count = 1
 		}, "spans two shells"},
-		"one shell spans two sets": refusal{func(in *meshInput) {
+		"one shell spans two sets": {func(in *meshInput) {
 			in.components = slices.Clone(in.components)
 			for i, c := range in.components {
 				if c == in.outer {
@@ -104,7 +104,7 @@ func TestMeshSolidsRefusesAMeshThatDoesNotMatchTheBody(t *testing.T) {
 			}
 			in.count = 3
 		}, "spans two connected facet sets"},
-		"a shell without facets": refusal{func(in *meshInput) {
+		"a shell without facets": {func(in *meshInput) {
 			var sources []*decad.Face
 			var triangles [][3]int
 			var components []int
@@ -118,8 +118,8 @@ func TestMeshSolidsRefusesAMeshThatDoesNotMatchTheBody(t *testing.T) {
 			}
 			in.sources, in.triangles, in.components, in.count = sources, triangles, components, 1
 		}, "has no facets"},
-		"a cavity wound outward":  refusal{func(in *meshInput) { in.triangles = in.flipSet(in.cav) }, "do not wind into it"},
-		"an outer shell wound in": refusal{func(in *meshInput) { in.triangles = in.flipSet(in.outer) }, "do not wind outward"},
+		"a cavity wound outward":  {func(in *meshInput) { in.triangles = in.flipSet(in.cav) }, "do not wind into it"},
+		"an outer shell wound in": {func(in *meshInput) { in.triangles = in.flipSet(in.outer) }, "do not wind outward"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
