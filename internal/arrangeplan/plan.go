@@ -77,3 +77,71 @@ func PackTurning(items []Item, bed Bed) (positions [][2]float64, turned []bool, 
 	positions, ok = Pack(items, bed)
 	return positions, make([]bool, len(items)), ok
 }
+
+// Layout is where PackLayers puts each item: its minimum corner on the bed, the
+// height of the bed's surface it rests on, and whether it turned a quarter.
+type Layout struct {
+	Positions [][2]float64
+	Turned    []bool
+	// ZBase is each item's base above the bed's surface, in millimetres.
+	ZBase []float64
+	// Layers counts the layers used.
+	Layers int
+}
+
+// PackLayers lays items on the bed in layers, one above another. heights are the
+// items' extents along Z, in the order of items. Items are taken in order: each
+// joins the current layer if that layer still packs, by Pack, or by PackTurning
+// when turning is set, and otherwise waits for a later layer. A layer rests above
+// the tallest item of the one below, by a clear gap of bed.Gap. ok is false when
+// an item fits no empty layer, or when the layers together stand higher than
+// maxHeight.
+func PackLayers(items []Item, heights []float64, bed Bed, maxHeight float64, turning bool) (layout Layout, ok bool) {
+	layout = Layout{
+		Positions: make([][2]float64, len(items)),
+		Turned:    make([]bool, len(items)),
+		ZBase:     make([]float64, len(items)),
+	}
+	pack := func(set []int) ([][2]float64, []bool, bool) {
+		sub := make([]Item, len(set))
+		for k, i := range set {
+			sub[k] = items[i]
+		}
+		if turning {
+			return PackTurning(sub, bed)
+		}
+		pos, fits := Pack(sub, bed)
+		return pos, make([]bool, len(set)), fits
+	}
+	remaining := make([]int, len(items))
+	for i := range remaining {
+		remaining[i] = i
+	}
+	base := 0.0
+	for len(remaining) > 0 {
+		var layer, waiting []int
+		for _, i := range remaining {
+			if _, _, fits := pack(append(append([]int(nil), layer...), i)); fits {
+				layer = append(layer, i)
+			} else {
+				waiting = append(waiting, i)
+			}
+		}
+		if len(layer) == 0 {
+			return Layout{}, false
+		}
+		positions, turned, _ := pack(layer)
+		tallest := 0.0
+		for k, i := range layer {
+			layout.Positions[i], layout.Turned[i], layout.ZBase[i] = positions[k], turned[k], base
+			tallest = max(tallest, heights[i])
+		}
+		base += tallest + bed.Gap
+		layout.Layers++
+		remaining = waiting
+	}
+	if top := base - bed.Gap; top > maxHeight {
+		return Layout{}, false
+	}
+	return layout, true
+}

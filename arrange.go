@@ -42,6 +42,11 @@ type ArrangeBed struct {
 	Origin       r3.Vec
 	Width, Depth units.Value
 	Gap          units.Value
+	// Height, when set, lets bodies that do not fit the bed's surface stack in
+	// layers above one another: each layer rests Gap above the tallest body of
+	// the one below, and all of them stay within Height of the surface
+	// (agent-docs/arrange-design.md §7). The zero Value is a single layer.
+	Height units.Value
 }
 
 // Arrange moves bodies by translation so they lie side by side on bed, and
@@ -109,7 +114,18 @@ func Arrange(ctx context.Context, bodies []*Body, bed ArrangeBed, opts ...Arrang
 	if width == 0 || depth == 0 {
 		return nil, fmt.Errorf(`%w: the bed needs a positive width and depth`, ErrDegenerate)
 	}
+	layered := bed.Height != (units.Value{})
+	var limit float64
+	if layered {
+		if limit, err = sectionrecord.MagnitudeIn(bed.Height, units.Length, units.Millimeter, "the bed height"); err != nil {
+			return nil, err
+		}
+		if limit == 0 {
+			return nil, fmt.Errorf(`%w: the bed height must be positive`, ErrDegenerate)
+		}
+	}
 	items := make([]arrangeplan.Item, len(bodies))
+	heights := make([]float64, len(bodies))
 	margins := make([]float64, len(bodies))
 	angles := make([]float64, len(bodies))
 	for i, b := range bodies {
@@ -119,6 +135,7 @@ func Arrange(ctx context.Context, bodies []*Body, bed ArrangeBed, opts ...Arrang
 				return nil, err
 			}
 			items[i] = arrangeplan.Item{Width: w, Depth: dp}
+			heights[i] = zExtent(b, margins[i])
 			continue
 		}
 		box, err := b.Bounds()
@@ -134,16 +151,26 @@ func Arrange(ctx context.Context, bodies []*Body, bed ArrangeBed, opts ...Arrang
 			Width: box.Max.X - box.Min.X + 2*margin,
 			Depth: box.Max.Y - box.Min.Y + 2*margin,
 		}
+		heights[i] = box.Max.Z - box.Min.Z + margin
 	}
 	var positions [][2]float64
 	var turned []bool
 	var ok bool
-	if turns {
+	zBase := make([]float64, len(bodies))
+	if layered {
+		var layout arrangeplan.Layout
+		layout, ok = arrangeplan.PackLayers(items, heights, arrangeplan.Bed{Width: width, Depth: depth, Gap: gap}, limit, turns)
+		positions, turned, zBase = layout.Positions, layout.Turned, layout.ZBase
+	} else if turns {
 		positions, turned, ok = arrangeplan.PackTurning(items, arrangeplan.Bed{Width: width, Depth: depth, Gap: gap})
 	} else {
 		positions, ok = arrangeplan.Pack(items, arrangeplan.Bed{Width: width, Depth: depth, Gap: gap})
 	}
 	if !ok {
+		if layered {
+			return nil, fmt.Errorf(`%w: the %d bodies do not fit in layers on a %g by %g mm bed %g mm high with a %g mm gap`,
+				ErrDegenerate, len(bodies), width, depth, limit, gap)
+		}
 		return nil, fmt.Errorf(`%w: the %d bodies do not fit on a %g by %g mm bed with a %g mm gap`,
 			ErrDegenerate, len(bodies), width, depth, gap)
 	}
@@ -176,7 +203,7 @@ func Arrange(ctx context.Context, bodies []*Body, bed ArrangeBed, opts ...Arrang
 		shift := r3.Vec{
 			X: bed.Origin.X + positions[i][0] + margins[i] - box.Min.X,
 			Y: bed.Origin.Y + positions[i][1] + margins[i] - box.Min.Y,
-			Z: bed.Origin.Z - box.Min.Z,
+			Z: bed.Origin.Z + zBase[i] - box.Min.Z,
 		}
 		t, err := r3.Translation(shift)
 		if err != nil {
@@ -214,4 +241,14 @@ func boundMillimetres(b *Body) (float64, error) {
 		return 0, fmt.Errorf(`%w: the bounds of a body are not representable: %s`, ErrNotFinite, err)
 	}
 	return margin, nil
+}
+
+// zExtent is b's extent along Z grown by the bound of its box, the height a layer
+// of bodies must clear, or zero for a body whose bounds do not read.
+func zExtent(b *Body, margin float64) float64 {
+	box, err := b.Bounds()
+	if err != nil {
+		return 0
+	}
+	return box.Max.Z - box.Min.Z + margin
 }

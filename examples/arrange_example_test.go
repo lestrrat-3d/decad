@@ -169,3 +169,55 @@ func Example_arrange_angle() {
 	// Output:
 	// x 1..31, y 1..5
 }
+
+// ArrangeBed.Height lets bodies that do not fit the bed's surface stack in layers.
+// Here three 8 mm blocks go on a bed that holds two: the third rests in a second
+// layer, a 1 mm gap above the first layer's tallest block.
+func Example_arrange_layers() {
+	doc := decad.New()
+	var parts []*decad.Body
+	for _, height := range []float64{5, 3, 4} {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		if err != nil {
+			fmt.Printf("failed to create sketch: %s\n", err)
+			return
+		}
+		rect := s.CreateRectangle(0, 0, 8, 8)
+		s.Fix(rect.A)
+		if _, err := s.Solve(context.Background()); err != nil {
+			fmt.Printf("failed to solve: %s\n", err)
+			return
+		}
+		part, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+		if err != nil {
+			fmt.Printf("failed to extrude: %s\n", err)
+			return
+		}
+		parts = append(parts, part)
+	}
+	placed, err := decad.Arrange(context.Background(), parts, decad.ArrangeBed{
+		Origin: r3.Vec{},
+		Width:  units.Millimeters(20),
+		Depth:  units.Millimeters(10),
+		Gap:    units.Millimeters(1),
+		Height: units.Millimeters(30),
+	})
+	if err != nil {
+		fmt.Printf("failed to arrange: %s\n", err)
+		return
+	}
+	for _, part := range placed {
+		box, err := part.Bounds()
+		if err != nil {
+			fmt.Printf("failed to read bounds: %s\n", err)
+			return
+		}
+		fmt.Printf("x %.0f..%.0f, z %.0f..%.0f\n", box.Min.X, box.Max.X, box.Min.Z, box.Max.Z)
+	}
+	// Output:
+	// x 1..9, z 0..5
+	// x 10..18, z 0..3
+	// x 1..9, z 6..10
+}

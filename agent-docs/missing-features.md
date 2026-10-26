@@ -189,7 +189,7 @@ moves its row to the matching section above, with that doc as owner.
 | T-spline (Form) sculpting | No entry point exists; free-form surfaces are NURBS (`decad.NURBSSurface`) |
 | Mesh bodies as input: convert to a solid, reduce within a stated surface distance, remesh to even triangles | No entry point exists for those; a `MeshBody` is read, queried, repaired, thinned by vertex clustering, stretched, refined by edge splitting and written, and no feature takes it |
 | Volumetric infill of a body, and lattices other than the gyroid | `GyroidLattice` fills a box with a gyroid as a closed `MeshBody` (`lattice.go`, `agent-docs/lattice-design.md`); no feature or Boolean takes a `MeshBody`, so it cannot be intersected with a part |
-| Nesting that follows body outlines or stacks bodies in three dimensions | `Arrange` packs bounding rectangles by translation, with an optional quarter turn about +Z or a footprint-minimising turn through any angle step (`arrange.go`, `arrange_angle.go`) |
+| Nesting that follows body outlines, or stacks one body in the space above another | `Arrange` packs bounding rectangles by translation, with an optional quarter turn about +Z, a footprint-minimising turn through any angle step and whole layers up to a bed height (`arrange.go`, `arrange_angle.go`) |
 | Toolpath generation (CAM) | No entry point exists |
 | Finite-element stress or thermal simulation | No entry point exists |
 | Rendered images with outlines or hidden edges on a perspective camera, materials or soft shadows | `export.PNG` and `export.PNGBodies` draw orthographically with flat shading, each body in its own `View.Colors` colour if given (`export/png.go`, `export/png_bodies.go`; `agent-docs/png-export-design.md` §4) |

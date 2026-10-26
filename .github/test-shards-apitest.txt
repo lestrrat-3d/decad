@@ -2503,3 +2503,6 @@
 10	0.01	TestTextProfilesAlongAnArcStandEachLetterOnTheCircle
 10	0.01	TestTextProfilesAlongAnArcKeepEachLettersArea
 10	0.01	TestTextProfilesAlongAnArcRefusals
+10	0.01	TestArrangeStacksWhatTheBedCannotHoldInLayers
+10	0.01	TestArrangeLayersKeepToTheHeightLimit
+10	0.01	TestArrangeLayersRefusals
