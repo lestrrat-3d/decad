@@ -13,6 +13,31 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
+// placementCharge is what a twisted sweep's plane-local readings owe its
+// placement. Every admitted twist sketches on the world XY frame through the
+// origin (Eval, TwistCardinalPathOf), so the map its record denotes through is
+// the placement's held basis B alone, read as exact rationals. The volume,
+// area and boundary closed forms are plane-local, while r3 keeps B
+// orthonormal only to rounding and a placement composed through
+// r3.Transform.Then drifts further (agent-docs/sweep-design.md §17). An
+// exactly orthonormal B, such as a translation's identity, charges nothing.
+func placementCharge(xform r3.Transform) (massmoment.MapCharge, error) {
+	linear, err := massmoment.PlacementRotation(xform)
+	if err != nil {
+		return massmoment.MapCharge{}, err
+	}
+	return massmoment.MapChargeOf(linear)
+}
+
+// chargeBoundary widens a twist's boundary displacement delta and occupied
+// symmetric-difference volume to cover their images under the placement.
+// Both mix plane-local terms with the held Loft's own placed terms; charging
+// the whole of each over-covers the placed terms by the same tiny factor.
+func chargeBoundary(charge massmoment.MapCharge, delta, volSymDiff float64) (float64, float64) {
+	return charge.LengthBound(0, delta),
+		charge.VolumeOf(proofbound.MeasuredScalar(0, volSymDiff)).Bound
+}
+
 // twistShellPlacedGap compares the affine image of a local shell with the
 // denoted world-normal shell on an almost rigidly placed source. Every amount
 // is expressed in local coordinates, before facetedPayload.Placed applies L.

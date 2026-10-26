@@ -196,6 +196,10 @@ func evalStationedCells(ctx context.Context, env topo.Env,
 	profile profileRecord, plane planeRecord, path *sweepinput.Path, angle units.Value,
 	recordArea float64, xform r3.Transform, poly TwistPolygon, theta float64,
 	thetaIv proofbound.RatInterval, absTheta *big.Rat, cells int, optional bool) (*topo.Body, error) {
+	charge, err := placementCharge(xform)
+	if err != nil {
+		return nil, err
+	}
 	stations, err := StraightTwistStations(path.End.Z, theta, thetaIv, poly, cells)
 	if err != nil {
 		return nil, err
@@ -272,10 +276,13 @@ func evalStationedCells(ctx context.Context, env topo.Env,
 			twistSymDiff(cellHeight, poly.PerimeterUpper, ideal),
 			axialMove, loft.Proof.VolSymDiff)
 	}
+	// The station departures and section tubes are plane-local; the mesh
+	// and every reading below are of their images under the placement.
+	delta, volSymDiff = chargeBoundary(charge, delta, volSymDiff)
 	if proofbound.IsNonFinite(delta) || proofbound.IsNonFinite(volSymDiff) {
 		return nil, fmt.Errorf(`%w: stationed twist has no finite boundary proof`, decaderr.ErrUnsupported)
 	}
-	volumeIv := proofbound.IntervalScale(poly.AreaInterval, TwistRat(path.End.Z))
+	volumeIv := charge.VolumeInterval(proofbound.IntervalScale(poly.AreaInterval, TwistRat(path.End.Z)))
 	if TwistRat(volSymDiff).Cmp(volumeIv.Lo) >= 0 {
 		return nil, fmt.Errorf(`%w: stationed twist boundary tube exceeds the true occupied volume`, decaderr.ErrUnsupported)
 	}
@@ -294,6 +301,7 @@ func evalStationedCells(ctx context.Context, env topo.Env,
 	if err != nil {
 		return nil, err
 	}
+	trueAreaIv = charge.AreaInterval(trueAreaIv)
 	if poly.HasArc {
 		wallBound, wallErr := TwistMixedWallAreaL1(held, stations, poly,
 			proofbound.RatFloatUp(absTheta), path.End.Z)
@@ -304,6 +312,9 @@ func evalStationedCells(ctx context.Context, env topo.Env,
 		if err != nil {
 			return nil, err
 		}
+		// The wall and cap allowances compare the held facets with the
+		// plane-local surface; its image lies within the stretch of it.
+		mesh.AreaSlack = charge.AreaSlackOf(mesh.AreaSlack, trueAreaIv)
 	} else {
 		mesh.AreaSlack = proofbound.RatFloatUp(proofbound.IntervalAbsUpper(
 			proofbound.IntervalSub(trueAreaIv, heldAreaIv)))

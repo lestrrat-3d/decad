@@ -206,6 +206,10 @@ func Eval(ctx context.Context, env topo.Env, profile profileRecord,
 	if err != nil {
 		return nil, err
 	}
+	charge, err := placementCharge(xform)
+	if err != nil {
+		return nil, err
+	}
 	theta, err := angle.In(units.Radian)
 	if err != nil {
 		return nil, err
@@ -270,6 +274,9 @@ func Eval(ctx context.Context, env topo.Env, profile profileRecord,
 	if err != nil {
 		return nil, err
 	}
+	// The closed-form area is plane-local; its image under the placement is
+	// what the body publishes and what the held Loft's area is compared with.
+	areaIv = charge.AreaInterval(areaIv)
 	trueArea, trueAreaBound := sweepmitre.Enclosure(areaIv.Lo, areaIv.Hi)
 	heldArea := heldBody.Area
 	heldAreaIv := proofbound.Interval(
@@ -285,12 +292,13 @@ func Eval(ctx context.Context, env topo.Env, profile profileRecord,
 		twistSymDiff(path.End.Z, poly.PerimeterUpper, idealDelta),
 		held.Proof.VolSymDiff,
 	)
+	delta, volSymDiff = chargeBoundary(charge, delta, volSymDiff)
 	if proofbound.IsNonFinite(trueArea) || proofbound.IsNonFinite(trueAreaBound) ||
-		proofbound.IsNonFinite(areaSlack) || proofbound.IsNonFinite(volSymDiff) {
+		proofbound.IsNonFinite(areaSlack) || proofbound.IsNonFinite(volSymDiff) || proofbound.IsNonFinite(delta) {
 		return nil, fmt.Errorf(`%w: the twisted sweep's proof is not finite`, decaderr.ErrUnsupported)
 	}
-	volume := new(big.Rat).Mul(poly.Area, TwistRat(path.End.Z))
-	vol, volBound := sweepmitre.Enclosure(volume, volume)
+	volumeIv := charge.VolumeInterval(proofbound.PointInterval(new(big.Rat).Mul(poly.Area, TwistRat(path.End.Z))))
+	vol, volBound := sweepmitre.Enclosure(volumeIv.Lo, volumeIv.Hi)
 	heldBody.Volume = measurement.Measurement{Value: units.CubicMillimeters(vol), Exactness: measurement.ExactnessOf(volBound), Bound: units.CubicMillimeters(volBound)}
 	heldBody.Area = measurement.Measurement{Value: units.SquareMillimeters(trueArea), Exactness: measurement.Approximate, Bound: units.SquareMillimeters(trueAreaBound)}
 	center := r3.NewVec(0, 0, path.End.Z/2)

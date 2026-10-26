@@ -1326,6 +1326,8 @@
 6	0.03	TestStraightSweepShellCapOpenings
 6	0.01	TestSurfaceExtrudeHoledSheetMultiLumpTessellates
 6	0.00	TestSurfaceExtrudePlateIsASheet
+10	0.00	TestSweepTwistChargesPlacementMap
+10	0.00	TestSweepTwistExactPlacementKeepsReadings
 6	0.00	TestSurfaceLoftWithSurfaceResultIsIdempotent
 6	0.01	TestSurfaceRevolvePartialMeetingAxisSheetFreeBoundaryIsOneCycle
 6	0.04	TestSurfaceRevolveSheetTessellationDeterminism

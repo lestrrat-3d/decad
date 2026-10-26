@@ -565,6 +565,9 @@ placement whose bases are exactly orthonormal, every axis-aligned sketch plane
 under the identity among them, read det L = 1 and e = 0, and every reading is
 then unchanged bit for bit; `Transform` under a general rotation keeps each value
 and may widen its bound. A defect at or above 1/2 refuses `ErrUnsupported`.
+The twisted sweep reads its volume, area and boundary allowances from
+plane-local closed forms on the world XY sketch plane, so it takes the charge
+of its placement's held basis B alone (`agent-docs/sweep-design.md` §17.5).
 The loft, the mitred sweep, the faceted boolean and the stitch compute their
 readings from world coordinates their own vertex bounds already cover, and
 take no charge.
