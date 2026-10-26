@@ -2352,3 +2352,7 @@
 10	0.01	TestReadThreeMFFollowsComponents
 10	0.01	TestReadThreeMFSkipsSupports
 10	0.01	TestReadThreeMFRefusals
+10	0.01	TestReduceMeshThinsAGrid
+10	0.01	TestReduceMeshThinsASphereAndKeepsItsShape
+10	0.01	TestReduceMeshWithAFineCellChangesNothing
+10	0.01	TestReduceMeshRefusals
