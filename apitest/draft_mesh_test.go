@@ -156,15 +156,15 @@ func TestDraftMesh(t *testing.T) {
 
 // TestDraftMeshExports pins DD3 and DD4: STL, OBJ and 3MF write F1 and F2,
 // STL and OBJ byte-identically on a second run, and STEP writes F1 through
-// the analytic writer (every face a Plane) and F2 through the faceted one
-// (its Cone wall).
+// the analytic writer (every face a Plane) and F2 through it too (its Cone
+// wall is full, between two circles).
 func TestDraftMeshExports(t *testing.T) {
 	t.Parallel()
 	cases := draftCases()
 	for _, tc := range []struct {
 		fixture draftCase
 		step    string
-	}{{cases[0], "analytic decad solid"}, {cases[1], "faceted decad solid"}} {
+	}{{cases[0], "analytic decad solid"}, {cases[1], "analytic decad solid"}} {
 		t.Run(tc.fixture.name, func(t *testing.T) {
 			t.Parallel()
 			b := tc.fixture.build(t, decad.New())

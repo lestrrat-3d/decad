@@ -28,7 +28,7 @@ according to the writer path.
 - Admit one valid `BodySolid` with one outer shell and any number of void
   shells (§9). Refuse sheets, a body of several outer shells, and a mesh whose
   connected facet sets do not match the body's shells.
-- Use analytic AP214 faces when every body face is a `Plane`, a `Cylinder` or a
+- Use analytic AP214 faces when every body face is a `Plane`, a `Cylinder`, a `Cone` or a
   `Torus` and every edge is a `Line3`, an `Arc3`, an `Ellipse3` or a full `Circle3`. A plane's loops
   are one full circle each, or chains of lines and arcs (at least three
   edges, or two when one is an arc). A cylindrical wall is either full —
@@ -38,7 +38,11 @@ according to the writer path.
   along it (an exactly zero cross product), with lines and arcs or ellipses
   both present, since a side line split by a neighbouring face's vertex is
   several `Line3`s. A loop fillet's straight-walk patch is such a wall, closed
-  by quarter-meridian arcs or by mitre ellipses. Emit one `ADVANCED_FACE`
+  by quarter-meridian arcs or by mitre ellipses.
+  A conical wall is full only: exactly two one-circle boundary loops whose
+  start vertices lie on one meridian. It is written as a `CONICAL_SURFACE` placed at the cone's `Origin`,
+  with the cone's `Radius` there and its `HalfAngle`, and a seam along the generator between the starts.
+  A cone that reaches its apex, or whose wall is partial, takes the faceted writer. Emit one `ADVANCED_FACE`
   per body face. Share `VERTEX_POINT`s and `EDGE_CURVE`s by body topology
   identity. An `Arc3` edge is a `CIRCLE` placed about its own `Axis`, with the
   reference direction to its start vertex, trimmed by its two vertices; it
