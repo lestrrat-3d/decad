@@ -62,6 +62,15 @@ func TestOpposedCellsReadsFloorsAndCeilings(t *testing.T) {
 		{name: "near-shared-1e-12", lower: rectHole(-4, -2, 1, 2+1e-12), upper: rectHole(-6, -2, -2, 2), refused: true},
 		{name: "near-shared-ulp", lower: rectHole(-4, -2, 1, math.Nextafter(2, 3)), upper: rectHole(-6, -2, -2, 2),
 			refused: true},
+		// The same near-shared tops with the displaced line's own endpoint
+		// ending the merged span: no span reaches the coincident reading, so
+		// the edge ending off its own carrier refuses.
+		{name: "near-shared-upper-1e-12", lower: rectHole(-4, -2, 1, 2), upper: rectHole(-6, -2, -2, 2+1e-12),
+			refused: true},
+		{name: "near-shared-upper-ulp", lower: rectHole(-4, -2, 1, 2), upper: rectHole(-6, -2, -2, math.Nextafter(2, 3)),
+			refused: true},
+		{name: "near-shared-mirrored-1e-12", lower: rectHole(-6, -2, -2, 2), upper: rectHole(-4, -2, 1, 2+1e-12),
+			refused: true},
 		{name: "edge-touch", lower: rectHole(-2, -2, 2, 2), upper: rectHole(-6, -2, -2, 2), refused: true},
 		{name: "corner-touch", lower: rectHole(-2, 2, 2, 6), upper: rectHole(-6, -2, -2, 2), refused: true},
 		// Both holes reflex at the origin: the lower one misses the first

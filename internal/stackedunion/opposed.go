@@ -120,10 +120,10 @@ func OpposedCut(ctx context.Context, budget *proofbound.WorkBudget, oc stackedre
 		}
 	}
 	geom.RecordJunctions(n)
-	// Every scene vertex is two axis-aligned lines' crossing, and every span
-	// both sides share lies on one exact line, so each vertex sits at exact
-	// levels. The only allowance is the one the engine records for the slab
-	// loops' own junctions.
+	// Every scene vertex is two axis-aligned lines' crossing, every span both
+	// sides share lies on one exact line, and every line edge ends exactly on
+	// its own carrier, so each vertex sits at exact levels. The only allowance
+	// is the one the engine records for the slab loops' own junctions.
 	return breprecord.StackedRecord(ctx, budget, geom, levels, oc.Frame, oc.Xform, geom.Allow())
 }
 
@@ -136,8 +136,9 @@ type opposedCell struct {
 
 // opposedCells arranges the exclusive holes' interiors in one private scene
 // and records its floor and ceiling cells. Every partial edge must carry
-// TExact, the scene no walk charge, and every shared span exact carriers;
-// every cell must classify.
+// TExact, every line edge must end exactly on its own carrier, the scene must
+// carry no walk charge, every shared span must have exact carriers, and every
+// cell must classify.
 func opposedCells(ctx context.Context, budget *proofbound.WorkBudget,
 	lowerOnly, upperOnly []sectionrecord.LoopRecord) ([]opposedCell, error) {
 	regionsA, err := stackedrecord.Exposed(ctx, lowerOnly)
@@ -179,6 +180,17 @@ func opposedCells(ctx context.Context, budget *proofbound.WorkBudget,
 				}
 				if edge.Partial && !edge.TExact {
 					return nil, errUBMiss
+				}
+				// Sketch merges two lines whose carriers differ within its
+				// identity band. Where the displaced line's own endpoint ends
+				// the merged span, no span reaches the coincident reading, but
+				// the edge then ends off its own carrier.
+				if _, isLine := edge.Entity.(*sketch.Line); isLine {
+					if len(edge.Polyline) == 0 ||
+						!prismcells.OnLineCarrier(edge.Polyline[0], edge.Entity) ||
+						!prismcells.OnLineCarrier(edge.Polyline[len(edge.Polyline)-1], edge.Entity) {
+						return nil, errUBMiss
+					}
 				}
 			}
 		}

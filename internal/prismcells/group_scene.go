@@ -222,8 +222,9 @@ func ProveGroupApart(ctx context.Context, budget *proofbound.WorkBudget,
 
 // curvedContact reports whether sketch's intersection query finds any point
 // shared by two entities of different regions where at least one is curved.
-// A line's reported point counts when it lies on the segment, read with the
-// same band the query uses.
+// A line's reported point counts when its parameter along the segment lies
+// within 1e-9 of [0, 1], a fraction of the segment's length, not the
+// distance band the query itself uses; a wider reading only refuses more.
 func curvedContact(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin) (bool, error) {
 	entities := make([]sketch.Entity, 0, len(tags))
 	for e := range tags {
