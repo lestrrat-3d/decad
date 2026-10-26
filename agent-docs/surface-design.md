@@ -769,21 +769,44 @@ join, and both edges stay free — it is not an error (§6.3).
 | J4 | Both endpoint vertices' positions are bit-identical held `float64` coordinates, matched as an unordered pair. | exact comparison |
 | J5 | Every one of those held values carries a **zero bound**. | `Vertex`'s own bound and the edge's `Curve` |
 
-**Table J amendment — J5 is undecidable for every variant but `Line3`.**
-`Circle3` and `Arc3` carry `Center`, `Axis` and `Radius` with no bound field
-at all, so there is no held value on the variant itself to ask "does this
-carry a zero bound" of — J5 cannot be answered either way for them, and an
-undecidable row admits nothing (`CLAUDE.md`'s reject-only rule). `Line3`
-alone answers it, and answers it **vacuously**: a straight edge's whole
-geometry lives in its two vertices, which J4 already compares, so J3 states
+**Table J amendment — J5 for a `Line3`, and for a `Circle3` or `Arc3` with a
+proven curve bound.** A `Line3` answers J5 **vacuously**: a straight edge's
+whole geometry lives in its two vertices, which J4 already compares, so J3 states
 nothing further about the variant itself to prove, and J5's vertex half is
 exactly what `stitchrecord.VertexTable`'s own merge rule enforces (`internal/stitchrecord/plan.go`)
 — two vertices merge into one table class only when both carry a zero bound,
-so a shared class already proves J4 and J5's vertex half together. A free
-edge whose `Curve` is `Circle3`, `Arc3`, `NURBSCurve` or `FacetedCurve`
-therefore declines outright at J2/J5 and stays free — Table C's first row,
-and never an error — until a later increment states a bound for the
-variant's own parameters.
+so a shared class already proves J4 and J5's vertex half together.
+
+`Circle3` and `Arc3` carry `Center`, `Axis` and `Radius` with no bound field, but
+the edge carries one: `Edge.CurveBounded` and `Edge.CurveBound` bound how far the
+denoted curve lies from the held circle (`internal/topo/edge.go`), and builders such
+as the prism, patch-disk and revolve builders set it. Two such edges join when all of these hold:
+
+- both edges are `CurveBounded` with `CurveBound == 0`, and all four end vertices
+  carry a zero bound, so the held circle is the true curve;
+- the two edges' end vertices fall in the same two table classes;
+- both variants are `Circle3`, or both are `Arc3`, of positive radius, with
+  bit-identical `Center` and `Radius`. Two `Circle3` edges need equal axes: a whole
+  circle has no endpoints to fix its sense, and the weld derives coedge
+  directions from the vertex classes alone, so opposite axes would leave the two
+  faces with inconsistent normals. An opposite-axis zero-bound `Circle3` pair is
+  declined and both rims stay free; when the two seam vertices coincide the
+  unwelded rims pinch there and `Stitch` refuses with `ErrDegenerate` (R7, as T78).
+  Two `Arc3` edges need an axis equal up to sign, as the next paragraph states.
+
+An `Arc3` has no range field. Its range is its start and end vertex, swept
+counter-clockwise about `Axis`, so two arcs of one circle between the same two
+vertices can be complementary. Edges that meet start to start join only with equal
+axes, and edges that meet start to end join only with opposite axes. An arc whose
+two end positions are equal declines. A zero bound makes held equality true
+coincidence, so this admits by proof and never by a residual. A `Circle3` or `Arc3`
+of positive radius claims weld keys apart from every other edge; every other edge,
+straight or curved, claims together, so a spline or faceted claim still counts
+against a straight pair.
+
+Any other curved edge (`Ellipse3`, `FilletMiter3`, spline, faceted), and a
+`Circle3` or `Arc3` that lacks a zero curve bound and shares no curve token,
+declines at J5 and stays free — Table C's first row, and never an error.
 
 **Table J amendment — the gap tolerance (J4′).** A document whose gap tolerance
 is positive (`agent-docs/gap-tolerance-design.md` §5.3) replaces J4's
@@ -813,10 +836,12 @@ choice among equally-claimed edges, and welding all three is non-manifold
 or more stays free, and the result's own residual free edges name the
 ambiguity exactly as they name any other unjoined pair (§6.3).
 
-Orientation is **not** a join condition. J1–J5 decide the welding, and the
-consistent orientation is derived afterwards over the welded graph (§6.3); a set
-that admits no consistent choice is refused there as a whole (R7) rather than
-leaving individual pairs unjoined.
+Orientation is **not** a join condition for a straight edge or an arc. J1–J5
+decide the welding, and the consistent orientation is derived afterwards over the
+welded graph (§6.3); a set that admits no consistent choice is refused there as a
+whole (R7) rather than leaving individual pairs unjoined. A whole `Circle3` is the
+exception: its zero-bound arm needs equal axes, so an opposite-axis pair stays
+unjoined, because the weld derives coedge directions from vertex classes alone.
 
 **J5 is the load-bearing row, and it is what makes this sound rather than
 merely strict.** Bit-identical held coordinates prove the two edges' *held*
@@ -865,11 +890,11 @@ route beside the existing zero-bound one: two vertices with the bit-identical
 held key that also carry an equal non-zero token merge into one class too,
 whatever bound either carries — narrowed by the same bit-identical key the
 zero-bound route already requires, so a token match at a DIFFERENT held
-coordinate never merges. `stitchrecord.BuildPlan`'s own edge gate widens from
-"Line3 only" to "Line3, or a non-zero token": a `Line3` pair still joins
+coordinate never merges. `stitchrecord.BuildPlan`'s own edge gate admits a `Line3`, an edge with a
+non-zero token, or a zero-bound circular edge: a `Line3` pair still joins
 vacuously (J3 states nothing beyond what the shared vertex class already
-proves), while any other pair — a revolve's own `Circle3`/`Arc3` junction,
-which carries no bound field to decide J5 on at all — joins only through an
+proves), while any other pair — a revolve's own `Circle3`/`Arc3` junction —
+joins through the zero-bound arm above, or through an
 equal non-zero token AND `sameCurveVariant`'s own bit-identical guard
 (`Center`/`Radius` bit-identical, `Axis` up to sign). Dropping this guard
 would let a token match alone admit a pair whose HELD geometry disagrees,
@@ -2803,7 +2828,7 @@ The row-9 curved-mesh obligations are:
 | T32 | the same profile built as a solid `Revolve` with no option, and separately stitched from the surface-result build | the two bodies' `Volume` and `Centroid` agree within the two independently-composed bounds — the independent-producer cross-check, which proves the flux arms against the unrelated revolve engine rather than against its own arithmetic |
 | T33 | T31's fixture swept across a family of radii and heights | `\|published − analytic\| <= Bound` on `Volume` and each `Centroid` coordinate for every member |
 | T34 | a surface-extruded tube capped on both rims by `PatchEdges` in one call, stitched (`TestStitchPatchCappedTubeClosesToASolid`) | `Kind() == BodySolid`; `Volume` 1000π mm³, `Area` 400π mm², `Centroid` (0, 0, 5), all `Approximate`; `Edges(Free())` matches nothing — Rule P admits: the receiver's own `prismPayload` proves simple under Rule S, and each of the two chains is the receiver's own complete end rim under its own shared level id |
-| T35 | a hand-built two-body face set, driven directly at `stitchrecord.RuleSAdmits` (internal — Table J's own J5 admits a free `Line3` edge alone, so no two curved rims from different features ever weld into a closed set through the public seam to reach this gate at all) | `stitchrecord.RuleSAdmits` reports `false` |
+| T35 | a hand-built two-body face set, driven directly at `stitchrecord.RuleSAdmits` (internal — a wall plus two disks welds both rims and does reach `RuleSAdmits`, which refuses it at R8; this hand-built set exercises the gate itself) | `stitchrecord.RuleSAdmits` reports `false` |
 | T36 | `offAxisSemicircleSketch` revolved a full turn as a surface, stitched alone | closes to a solid from T53 onward |
 | T37 | a hand-built face carrying a `NURBSSurface`, driven directly at `stitchrecord.FaceFluxAndMoment` (internal — `PatchEdges` itself refuses any chain carrying a `NURBSCurve` edge, so a free-form-walled sheet can never be closed through the public seam at all) | `ErrUnsupported` (R8), permanently: `NURBSSurface` exports no control net to integrate |
 | T38 | a hand-built face carrying a nonzero `normalBound`, driven directly at `stitchrecord.FaceFluxAndMoment` (internal — a fillet or chamfer's `Unstitch`-then-`Stitch` round trip never re-closes, §6.5's own "no further" limit for any non-all-planar body, so no public fixture reaches this gate) | `ErrUnsupported` (R8) |

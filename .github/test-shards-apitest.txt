@@ -1829,6 +1829,14 @@
 9	0.01	TestBodyPatchContextCancellationLeavesDocumentUnchanged
 9	1.23	TestBooleanBoundComposition
 9	2.43	TestBooleanChainOfConesContinuesPastEachJoint
+10	0.00	TestStitchWeldsAZeroBoundCircularRim
+10	0.00	TestStitchLeavesANonzeroBoundCircularRimFree
+10	0.00	TestStitchLeavesComplementaryArcsFree
+10	0.00	TestStitchedCylinderRimKeepsConsistentNormals
+10	0.00	TestStitchDoesNotWeldAnOppositeAxisCircle
+10	0.00	TestStitchWeldsAZeroBoundArcRim
+10	0.00	TestStitchWeldsAnOppositeAxisArcRim
+10	0.00	TestStitchLeavesAComplementaryOppositeAxisArcFree
 9	0.40	TestBrepChamferAllStraightOuterEdgesPlacement
 9	0.10	TestBrepChamferAllStraightOuterEdgesPlacementRefusal
 9	0.05	TestBrepChamferAllStraightOuterEdgesSetbackAdmission
