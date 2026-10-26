@@ -878,7 +878,9 @@ Add each new test name to shard 10 of `.github/test-shards.txt`.
   option on the real producer's result; never construct a payload by hand.
 - Fixture: Build retention §1's P3 scene in the root package: a 40×20×20 box,
   four lateral edges filleted at 3 mm, and a Ø8 y-bore at x = 20 placed by
-  `Transform`. Run each second y-cut with and without the option.
+  `Transform`. A `Copy` of the first cut's result ends the Boolean chain, so
+  the second cut meets the sequential gate and no regroup rebuilds it. Run each
+  second y-cut with and without the option.
   - Measured: Across second cuts at x from 5 to 37 and radii from 0.25 to 9,
     the real run builds and the control refuses every one that is not itself
     unbuildable. The control's refusal is the chain-depth gate: the first cut's

@@ -59,11 +59,15 @@ func (sc *slabScene) yTool(ctx context.Context, t *testing.T, cx, r float64) *Bo
 	return placed
 }
 
-// slabRun cuts the first bore, then the second at (cx, r), in a fresh document.
+// slabRun cuts the first bore, copies it, then cuts the second at (cx, r), in a fresh document.
 func slabRun(t *testing.T, ctx context.Context, cx, r float64) (*Body, error) {
 	t.Helper()
 	sc := &slabScene{w: sketch.NewWorld(), doc: New()}
-	first, err := Cut(ctx, sc.roundedBox(ctx, t), sc.yTool(ctx, t, 20, 4))
+	built, err := Cut(ctx, sc.roundedBox(ctx, t), sc.yTool(ctx, t, 20, 4))
+	require.NoError(t, err)
+	// A Copy ends the operation history's Boolean chain, so the control's refusal is
+	// the sequential gate, not a chain the regroup rebuilds.
+	first, err := Copy(ctx, built)
 	require.NoError(t, err)
 	return Cut(ctx, first, sc.yTool(ctx, t, cx, r))
 }
