@@ -9,6 +9,7 @@ geometry kernel. The public contract is in `agent-docs/api-design.md` §8; this 
 ```go
 func Rib(ctx context.Context, b *Body, s *sketch.Sketch, line *sketch.Line, thickness units.Value, e Extent, opts ...RibOption) (*Body, error)
 func Web(ctx context.Context, b *Body, s *sketch.Sketch, lines []*sketch.Line, thickness units.Value, e Extent, opts ...RibOption) (*Body, error)
+func RibArc(ctx context.Context, b *Body, s *sketch.Sketch, arc *sketch.Arc, thickness units.Value, e Extent, opts ...RibOption) (*Body, error)
 func WithRibOverrun(overrun units.Value) RibOption
 ```
 
@@ -16,7 +17,7 @@ func WithRibOverrun(overrun units.Value) RibOption
 
 | Decision | Rule |
 |---|---|
-| R1 | A rib is one straight `*sketch.Line` of the sketch `s`. A chain, an arc or a polyline is not accepted. A line that is nil, not an entity of `s`, stale or of zero length is `ErrDegenerate`. |
+| R1 | A rib of `Rib` and `Web` is one straight `*sketch.Line` of the sketch `s`. A chain or a polyline is not accepted, and an arc is `RibArc`'s (§5). A line that is nil, not an entity of `s`, stale or of zero length is `ErrDegenerate`. |
 | R2 | The rib outline is the line thickened across its width by `thickness`, centred on the line, and lengthened by the overrun past both ends. `ribplan.Footprint` computes its four corners in sketch-plane coordinates. |
 | R3 | `thickness` is a positive length and the overrun a non-negative length. The last `WithRibOverrun` wins and the default is zero. A violation is `ErrDegenerate`, `ErrUnitKind` or `ErrNegativeMagnitude`. |
 | R4 | The outline is extruded by `e` from the plane of `s`. `e` is any `Extent` that `Extrude` accepts, resolved against that plane exactly as for an `Extrude` of the outline. |
@@ -42,6 +43,25 @@ func WithRibOverrun(overrun units.Value) RibOption
 
 ## 4. Not covered
 
-- A rib along a chain, an arc or a polyline, and a rib that follows the surface of the body.
+- A rib along a chain or a polyline, a rib along an arc in `Web`, and a rib that follows the surface of the body.
 - A rib that extends itself to the body. The caller draws the line and the extent so that the rib reaches the walls.
 - A rib thickened perpendicular to the sketch plane. The thickness lies in the sketch plane.
+
+## 5. Rib along an arc
+
+`RibArc` thickens one `*sketch.Arc` into an annular band and joins it as `Rib` joins a rectangle. `ribplan.ArcBand`
+computes the band.
+
+| Decision | Rule |
+|---|---|
+| A1 | The arc sweeps counter-clockwise from its `Start` to its `End` about its `Center`, as every sketch arc does. An arc whose end points share an angle sweeps a full turn, and any rib that would wrap a full turn once lengthened is `ErrDegenerate`. |
+| A2 | The arc's end points MUST lie on one circle about its centre, within 1e-9 of the radius, and the radius is positive. Otherwise the arc is `ErrDegenerate`. |
+| A3 | The band lies between the radii `R − thickness/2` and `R + thickness/2`. An inner radius of zero or less is `ErrDegenerate`. |
+| A4 | `WithRibOverrun` lengthens the band at each end by that arc length along the arc, which is `overrun / R` radians. |
+| A5 | The tool is the band's two arcs and two straight ends on fixed sketch points, extruded by `e` from the plane of `s`. R3 to R7 apply, with the rib's outline in place of the rectangle. |
+| A6 | `RibArc` and `Rib` record one `OperationRib` entry each. |
+
+The volume a rib adds, above the body it stands on, is the band's area times its height: `θ·R·t·h` for a sweep of `θ`
+radians. The tests compare against it and check on which side of the arc material lies, so a rib swept the wrong way
+round the circle turns them red.
+

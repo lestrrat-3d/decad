@@ -66,37 +66,56 @@ func Web(ctx context.Context, b *Body, s *sketch.Sketch, lines []*sketch.Line, t
 	return web(ctx, OperationWeb, b, s, lines, thickness, e, opts...)
 }
 
-func web(ctx context.Context, kind OperationKind, b *Body, s *sketch.Sketch, lines []*sketch.Line,
-	thickness units.Value, e Extent, opts ...RibOption) (*Body, error) {
+// ribSetup is what Rib, Web and RibArc read from their common arguments.
+type ribSetup struct {
+	d              *Document
+	thick, overrun float64
+	frame          r3.Frame
+}
+
+// newRibSetup runs the gates the rib calls share: a context, a live solid body,
+// a sketch, a thickness and an overrun.
+func newRibSetup(ctx context.Context, b *Body, s *sketch.Sketch, thickness units.Value, opts []RibOption) (ribSetup, error) {
+	var rs ribSetup
 	if ctx == nil {
-		return nil, fmt.Errorf(`%w: a nil context cannot control a rib`, ErrDegenerate)
+		return rs, fmt.Errorf(`%w: a nil context cannot control a rib`, ErrDegenerate)
 	}
 	if b == nil || b.n.Doc == nil {
-		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
+		return rs, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
-	d := documentHandle(b.n.Doc)
-	if err := d.requireLive(b); err != nil {
-		return nil, err
+	rs.d = documentHandle(b.n.Doc)
+	if err := rs.d.requireLive(b); err != nil {
+		return rs, err
 	}
 	if b.Kind() != BodySolid {
-		return nil, fmt.Errorf(`%w: a rib needs a solid body`, ErrNotSolid)
+		return rs, fmt.Errorf(`%w: a rib needs a solid body`, ErrNotSolid)
 	}
-	if s == nil || len(lines) == 0 {
-		return nil, fmt.Errorf(`%w: a rib needs a sketch and at least one line`, ErrDegenerate)
+	if s == nil {
+		return rs, fmt.Errorf(`%w: a rib needs a sketch`, ErrDegenerate)
 	}
-	thick, err := sectionrecord.MagnitudeIn(thickness, units.Length, units.Millimeter, "the rib thickness")
+	var err error
+	if rs.thick, err = sectionrecord.MagnitudeIn(thickness, units.Length, units.Millimeter, "the rib thickness"); err != nil {
+		return rs, err
+	}
+	if rs.overrun, err = ribOverrun(opts); err != nil {
+		return rs, err
+	}
+	if rs.frame, err = s.Plane().Frame(); err != nil {
+		return rs, fmt.Errorf(`%w: the sketch plane has no frame: %s`, ErrDegenerate, err)
+	}
+	return rs, nil
+}
+
+func web(ctx context.Context, kind OperationKind, b *Body, s *sketch.Sketch, lines []*sketch.Line,
+	thickness units.Value, e Extent, opts ...RibOption) (*Body, error) {
+	rs, err := newRibSetup(ctx, b, s, thickness, opts)
 	if err != nil {
 		return nil, err
 	}
-	overrun, err := ribOverrun(opts)
-	if err != nil {
-		return nil, err
+	if len(lines) == 0 {
+		return nil, fmt.Errorf(`%w: a rib needs at least one line`, ErrDegenerate)
 	}
-	frame, err := s.Plane().Frame()
-	if err != nil {
-		return nil, fmt.Errorf(`%w: the sketch plane has no frame: %s`, ErrDegenerate, err)
-	}
-	var footprints [][4][2]float64
+	var outlines []ribOutline
 	for _, line := range lines {
 		if line == nil || !slices.Contains(s.Entities(), sketch.Entity(line)) {
 			return nil, fmt.Errorf(`%w: a rib line is nil or is not an entity of the sketch`, ErrDegenerate)
@@ -104,23 +123,70 @@ func web(ctx context.Context, kind OperationKind, b *Body, s *sketch.Sketch, lin
 		if line.IsStale() {
 			return nil, fmt.Errorf(`%w: a rib line is stale`, ErrDegenerate)
 		}
-		corners, err := ribplan.Footprint(line.Start.X(), line.Start.Y(), line.End.X(), line.End.Y(), thick, overrun)
+		corners, err := ribplan.Footprint(line.Start.X(), line.Start.Y(), line.End.X(), line.End.Y(), rs.thick, rs.overrun)
 		if err != nil {
 			return nil, err
 		}
-		footprints = append(footprints, corners)
+		outlines = append(outlines, ribOutline{corners: &corners})
 	}
+	return joinRibs(ctx, kind, rs, b, s, outlines, e)
+}
+
+// RibArc adds a rib to b along arc and returns the result, retiring b.
+//
+// arc is a circular arc of s, which sweeps counter-clockwise from its Start to
+// its End. The rib is the arc thickened across its width by thickness, centred
+// on the arc, extruded by e from the plane of s and joined to b with Union, as
+// Rib does for a line (agent-docs/rib-design.md §5). WithRibOverrun lengthens
+// the rib by that arc length beyond both ends.
+//
+// The arc's end points MUST lie on one circle about its centre. A nil context,
+// sketch, arc or body, an arc that is not an entity of s or is stale, a
+// non-positive thickness, a negative overrun, a rib so thick that its inner edge
+// reaches the arc's centre and an overrun that would wrap the rib a full turn
+// are ErrDegenerate. Every other rule is Rib's.
+func RibArc(ctx context.Context, b *Body, s *sketch.Sketch, arc *sketch.Arc, thickness units.Value, e Extent,
+	opts ...RibOption) (result *Body, retErr error) {
+	defer func() { retErr = operationError(OperationRib, retErr) }()
+	rs, err := newRibSetup(ctx, b, s, thickness, opts)
+	if err != nil {
+		return nil, err
+	}
+	if arc == nil || !slices.Contains(s.Entities(), sketch.Entity(arc)) {
+		return nil, fmt.Errorf(`%w: a rib arc is nil or is not an entity of the sketch`, ErrDegenerate)
+	}
+	if arc.IsStale() {
+		return nil, fmt.Errorf(`%w: a rib arc is stale`, ErrDegenerate)
+	}
+	band, err := ribplan.ArcBand(arc.Center.X(), arc.Center.Y(), arc.Start.X(), arc.Start.Y(),
+		arc.End.X(), arc.End.Y(), rs.thick, rs.overrun)
+	if err != nil {
+		return nil, err
+	}
+	return joinRibs(ctx, OperationRib, rs, b, s, []ribOutline{{band: &band}}, e)
+}
+
+// ribOutline is the footprint of one rib on the sketch plane: the four corners
+// of a thickened line, or the band of a thickened arc.
+type ribOutline struct {
+	corners *[4][2]float64
+	band    *ribplan.Band
+}
+
+// joinRibs builds a tool for each outline and joins the tools to b.
+func joinRibs(ctx context.Context, kind OperationKind, rs ribSetup, b *Body, s *sketch.Sketch,
+	outlines []ribOutline, e Extent) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if err := d.requireSameContainer([]*Body{b}, s); err != nil {
+	if err := rs.d.requireSameContainer([]*Body{b}, s); err != nil {
 		return nil, err
 	}
 	var tools []*Body
 	defer func() { removeTools(tools) }()
 	toolCtx, history := privateConstructionContext(ctx)
-	for _, corners := range footprints {
-		tool, err := ribTool(toolCtx, d, frame, corners, e)
+	for _, outline := range outlines {
+		tool, err := ribTool(toolCtx, rs.d, rs.frame, outline, e)
 		if err != nil {
 			return nil, err
 		}
@@ -129,7 +195,7 @@ func web(ctx context.Context, kind OperationKind, b *Body, s *sketch.Sketch, lin
 			return nil, err
 		}
 	}
-	return combineTools(ctx, d, kind, b, meshbool.OpUnion, tools, true, func(result *Body) error {
+	return combineTools(ctx, rs.d, kind, b, meshbool.OpUnion, tools, true, func(result *Body) error {
 		return requireRibAddsVolume(b, result)
 	}, history, history.snapshot()...)
 }
@@ -150,8 +216,8 @@ func ribOverrun(opts []RibOption) (float64, error) {
 	return sectionrecord.MagnitudeIn(overrun, units.Length, units.Millimeter, "the rib overrun")
 }
 
-// ribTool extrudes one rib outline, a rectangle on the plane of frame.
-func ribTool(ctx context.Context, d *Document, frame r3.Frame, corners [4][2]float64, e Extent) (*Body, error) {
+// ribTool extrudes one rib outline on the plane of frame.
+func ribTool(ctx context.Context, d *Document, frame r3.Frame, outline ribOutline, e Extent) (*Body, error) {
 	w := sketch.NewWorld()
 	pl, err := w.CreatePlaneFromFrame(frame)
 	if err != nil {
@@ -161,13 +227,32 @@ func ribTool(ctx context.Context, d *Document, frame r3.Frame, corners [4][2]flo
 	if err != nil {
 		return nil, err
 	}
-	var points [4]*sketch.Point
-	for i, c := range corners {
-		points[i] = rs.CreatePoint(c[0], c[1])
-		rs.Fix(points[i])
+	fixed := func(u, v float64) *sketch.Point {
+		p := rs.CreatePoint(u, v)
+		rs.Fix(p)
+		return p
 	}
-	for i := range points {
-		rs.CreateLine(points[i], points[(i+1)%len(points)])
+	switch {
+	case outline.corners != nil:
+		var points [4]*sketch.Point
+		for i, c := range outline.corners {
+			points[i] = fixed(c[0], c[1])
+		}
+		for i := range points {
+			rs.CreateLine(points[i], points[(i+1)%len(points)])
+		}
+	default:
+		band := outline.band
+		centre := fixed(band.CentreU, band.CentreV)
+		u0, v0 := band.Point(band.Inner, band.Start)
+		u1, v1 := band.Point(band.Inner, band.End)
+		u2, v2 := band.Point(band.Outer, band.End)
+		u3, v3 := band.Point(band.Outer, band.Start)
+		innerStart, innerEnd, outerEnd, outerStart := fixed(u0, v0), fixed(u1, v1), fixed(u2, v2), fixed(u3, v3)
+		rs.CreateArc(centre, innerStart, innerEnd)
+		rs.CreateLine(innerEnd, outerEnd)
+		rs.CreateArc(centre, outerStart, outerEnd)
+		rs.CreateLine(outerStart, innerStart)
 	}
 	if _, err := rs.Solve(ctx); err != nil {
 		return nil, err

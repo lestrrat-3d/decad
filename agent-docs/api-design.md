@@ -1578,6 +1578,7 @@ atomic commit, and retires `b`. `agent-docs/hole-design.md` owns the placement, 
 
 **A rib is a thickened line.** `Rib(ctx, b, s, line, thickness, e)` thickens one straight sketch line across its width,
 extrudes the outline by `e`, and joins it to `b`; `Web` does the same for several lines in one commit.
+`RibArc(ctx, b, s, arc, thickness, e)` does the same for one sketch arc, thickened into an annular band.
 `WithRibOverrun` buries the ends of a rib in the walls it spans. `agent-docs/rib-design.md` owns the rules.
 
 **A relief is a profile on a face.** `Emboss(ctx, b, s, profiles, face, mode, height)` extrudes closed profiles of a sketch

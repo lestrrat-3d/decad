@@ -2319,3 +2319,6 @@
 10	0.01	TestHoleRadialOutOfABore
 10	0.01	TestHoleOnACylinderRefusals
 10	0.01	TestHoleRadialOutOfATightBore
+10	0.01	TestRibArcStandsOnThePocketFloor
+10	0.01	TestRibArcOverrunLengthensEachEndByArcLength
+10	0.01	TestRibArcRefusals
