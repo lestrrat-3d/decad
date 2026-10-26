@@ -198,4 +198,4 @@ moves its row to the matching section above, with that doc as owner.
 | Text profiles from a font, for engraved or embossed lettering | No entry point exists |
 | 2D drawings: projected views, silhouette and hidden lines, DXF output | No entry point exists |
 | PMI or GD&T, as data or in STEP AP242 | No entry point exists; `export.STEP` writes AP214 geometry only |
-| IGES, glTF or Parasolid export | `export` writes STL, OBJ, 3MF and STEP only (`agent-docs/api-design.md` §11) |
+| IGES or Parasolid export | `export` writes STL, OBJ, 3MF, glTF and STEP only (`agent-docs/api-design.md` §11) |
