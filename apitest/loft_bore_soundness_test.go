@@ -2,9 +2,11 @@ package apitest_test
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -13,22 +15,17 @@ import (
 
 func TestLoftDirectBoreExactLiftRefusals(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
-		origin  r3.Vec
-		u, v    r3.Vec
-		height  float64
-		center  r3.Vec
-		top     r3.Vec
-		shifted bool
+		name   string
+		origin r3.Vec
+		u, v   r3.Vec
+		height float64
+		center r3.Vec
+		top    r3.Vec
 	}{
 		{"Y axis lift", r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), 2,
-			r3.NewVec(0, 0, 0), r3.NewVec(0, 1, 2), true},
+			r3.NewVec(0, 0, 0), r3.NewVec(0, 1, 2)},
 		{"Z axis lift", r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 0, -1), 2,
-			r3.NewVec(0, 0, 0), r3.NewVec(0, 2, 1), true},
-		{"rounded center", r3.NewVec(1e9, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), 2,
-			r3.NewVec(.427, 0, 0), r3.Vec{}, false},
-		{"tilted circle map", r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 4), r3.NewVec(0, 1, 0), 2,
-			r3.NewVec(0, 0, 0), r3.Vec{}, false},
+			r3.NewVec(0, 0, 0), r3.NewVec(0, 2, 1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			frame, err := r3.NewFrame(tc.origin, tc.u, tc.v)
@@ -36,34 +33,120 @@ func TestLoftDirectBoreExactLiftRefusals(t *testing.T) {
 			world := sketch.NewWorld()
 			lower, err := world.CreatePlaneFromFrame(frame)
 			require.NoError(t, err)
-			upper, err := world.CreateOffsetPlane(lower, tc.height)
-			if tc.shifted {
-				top, frameErr := r3.NewFrame(tc.top, tc.u, tc.v)
-				require.NoError(t, frameErr)
-				upper, err = world.CreatePlaneFromFrame(top)
-			}
+			top, err := r3.NewFrame(tc.top, tc.u, tc.v)
 			require.NoError(t, err)
-			var sections [2]*sketch.Sketch
-			var profiles [2]*sketch.Profile
-			for i, plane := range []*sketch.Plane{lower, upper} {
-				s, err := world.CreateSketch(plane)
-				require.NoError(t, err)
-				rect := s.CreateRectangle(-5, -5, 5, 5)
-				s.Fix(rect.A)
-				center := s.CreatePoint(tc.center.X, tc.center.Y)
-				s.Fix(center)
-				s.CreateCircle(center, 1)
-				_, err = s.Solve(t.Context())
-				require.NoError(t, err)
-				sections[i], profiles[i] = s, s.Profiles()[0]
-			}
-			body, err := decad.Loft(t.Context(), decad.New(), sections[0], profiles[0], sections[1], profiles[1])
+			upper, err := world.CreatePlaneFromFrame(top)
 			require.NoError(t, err)
+			body := loftBoredSquares(t, world, lower, upper, tc.center)
 			cylinders, err := decad.Faces(decad.Cylindrical()).SelectFaces(body)
 			require.ErrorIs(t, err, decad.ErrNoMatch)
 			require.Empty(t, cylinders)
 		})
 	}
+}
+
+// TestLoftDirectBoreBoundsRoundedCylinder lofts a square with a radius-1
+// bore whose exact axis is proved, but whose held center rounds or whose frame
+// map is not exactly orthonormal. The bore publishes its cylinder and rims,
+// and the cylinder's normal carries the departure of its tag.
+func TestLoftDirectBoreBoundsRoundedCylinder(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		origin r3.Vec
+		u      r3.Vec
+		center r3.Vec
+	}{
+		{"rounded center", r3.NewVec(1e9, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(.427, 0, 0)},
+		{"tilted circle map", r3.Vec{}, r3.NewVec(1, 0, 4), r3.Vec{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			frame, err := r3.NewFrame(tc.origin, tc.u, r3.NewVec(0, 1, 0))
+			require.NoError(t, err)
+			world := sketch.NewWorld()
+			lower, err := world.CreatePlaneFromFrame(frame)
+			require.NoError(t, err)
+			upper, err := world.CreateOffsetPlane(lower, 2)
+			require.NoError(t, err)
+			body := loftBoredSquares(t, world, lower, upper, tc.center)
+			requireBoundedBoreCylinder(t, body)
+		})
+	}
+}
+
+// TestLoftDirectBoreRoundedCenterChargesNormalBound reads the cylinder's
+// normal at a point where the tag's own arithmetic is exact, so the whole
+// bound NormalAt reports is the wall's departure from its tag.
+func TestLoftDirectBoreRoundedCenterChargesNormalBound(t *testing.T) {
+	frame, err := r3.NewFrame(r3.NewVec(1e9, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	world := sketch.NewWorld()
+	lower, err := world.CreatePlaneFromFrame(frame)
+	require.NoError(t, err)
+	upper, err := world.CreateOffsetPlane(lower, 2)
+	require.NoError(t, err)
+	body := loftBoredSquares(t, world, lower, upper, r3.NewVec(.427, 0, 0))
+	walls, err := decad.Faces(decad.Cylindrical()).Exactly(1).SelectFaces(body)
+	require.NoError(t, err)
+	cylinder, ok := walls[0].Surface().(decad.Cylinder)
+	require.True(t, ok)
+	require.Equal(t, r3.NewVec(0, 0, 1), cylinder.Axis)
+	// 1e9 + 0.427 has no float, so the held axis sits off the true one.
+	exact := new(big.Rat).Add(big.NewRat(1e9, 1), proofarith.FloatRat(.427))
+	require.NotZero(t, exact.Cmp(proofarith.FloatRat(cylinder.Origin.X)))
+	at := cylinder.Origin.Add(r3.NewVec(1, 0, 1))
+	normal, err := walls[0].NormalAt(at)
+	require.NoError(t, err)
+	require.Equal(t, r3.NewVec(-1, 0, 0), normal.Value)
+	require.Positive(t, normal.Bound.Base())
+	require.Less(t, normal.Bound.Base(), 1e-6)
+}
+
+// loftBoredSquares lofts a 10 x 10 square with a radius-1 hole at center
+// between two planes of world.
+func loftBoredSquares(t *testing.T, world *sketch.World, lower, upper *sketch.Plane, at r3.Vec) *decad.Body {
+	t.Helper()
+	var sections [2]*sketch.Sketch
+	var profiles [2]*sketch.Profile
+	for i, plane := range []*sketch.Plane{lower, upper} {
+		s, err := world.CreateSketch(plane)
+		require.NoError(t, err)
+		rect := s.CreateRectangle(-5, -5, 5, 5)
+		s.Fix(rect.A)
+		center := s.CreatePoint(at.X, at.Y)
+		s.Fix(center)
+		s.CreateCircle(center, 1)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		sections[i], profiles[i] = s, s.Profiles()[0]
+	}
+	body, err := decad.Loft(t.Context(), decad.New(), sections[0], profiles[0], sections[1], profiles[1])
+	require.NoError(t, err)
+	return body
+}
+
+// requireBoundedBoreCylinder checks a two-high square loft with a radius-1
+// bore: one cylinder rimmed by two whole circles, a normal that is never an
+// Exact reading, a wall area of 4π and a volume of 2(100 − π).
+func requireBoundedBoreCylinder(t *testing.T, body *decad.Body) {
+	t.Helper()
+	walls, err := decad.Faces(decad.Cylindrical()).Exactly(1).SelectFaces(body)
+	require.NoError(t, err)
+	wall := walls[0]
+	require.Len(t, wall.Loops(), 2)
+	for _, loop := range wall.Loops() {
+		require.Len(t, loop.Edges(), 1)
+		require.IsType(t, decad.Circle3{}, loop.Edges()[0].Curve())
+	}
+	at := wall.Loops()[0].CoEdges()[0].Start().Position().Value
+	normal, err := wall.NormalAt(at)
+	require.NoError(t, err)
+	require.Positive(t, normal.Bound.Base())
+	area, err := wall.Area()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(area.Value.Base()-4*math.Pi), area.Bound.Base())
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-2*(100-math.Pi)), volume.Bound.Base())
 }
 
 func TestLoftCutExactToolCenterRefusesRewrite(t *testing.T) {
@@ -102,22 +185,16 @@ func TestLoftCutRoundedZToolCenterKeepsFacetedTopology(t *testing.T) {
 	requireLoftCutFacetedVolume(t, cut)
 }
 
-func TestLoftCutTiltedFrameMapKeepsFacetedTopology(t *testing.T) {
+func TestLoftCutTiltedFrameMapBoundsCylinder(t *testing.T) {
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 4), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	blank, doc := loftBoreSoundnessBlank(t, frame)
 	tool := loftBoreSoundnessTool(t, doc, frame, 0, 0, 4, decad.Along)
 	cut, err := decad.Cut(t.Context(), blank, tool)
 	require.NoError(t, err)
-	// The tilted tool's wall states a tilt from its tag, so A2 declines it
-	// (agent-docs/faceted-source-retention-design.md §3.2) and the bore stays
-	// Faceted.
-	cylinders, err := decad.Faces(decad.Cylindrical()).SelectFaces(cut)
-	require.ErrorIs(t, err, decad.ErrNoMatch)
-	require.Empty(t, cylinders)
-	volume, err := cut.Volume()
-	require.NoError(t, err)
-	require.LessOrEqual(t, math.Abs(volume.Value.Base()-2*(100-math.Pi)), volume.Bound.Base())
+	// The certified Cut keeps the Loft, and its bore cylinder charges the
+	// tilted frame map's departure to every normal reading.
+	requireBoundedBoreCylinder(t, cut)
 }
 
 // requireRetainedBoreWall pins what the Cut publishes for a bore whose held

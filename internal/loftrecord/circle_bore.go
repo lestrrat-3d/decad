@@ -83,12 +83,14 @@ func DirectCircularHole(pl Payload) WallKind {
 	// The cylindrical builder uses the first section's entire circle record
 	// for both rims, so equal world radii alone do not authorize that reuse.
 	if sameAxes && sectionrecord.IdenticalRecord(bottom, top) {
-		if BoreHasExactAxis(pl.Frame0, pl.Frame1,
-			bottom.Center.U, bottom.Center.V, level.Z) &&
-			BoreCylinderExactGeometry(pl.Frame0, pl.Xform, bottom.Center.U, bottom.Center.V) {
-			return WallCylinder
+		if !BoreHasExactAxis(pl.Frame0, pl.Frame1, bottom.Center.U, bottom.Center.V, level.Z) {
+			return WallNone
 		}
-		return WallNone
+		if _, ok := BoreCylinderNormalBound(pl.Frame0, pl.Xform, bottom.Center.U, bottom.Center.V,
+			level.Z, bottom.Radius.Base()); !ok {
+			return WallNone
+		}
+		return WallCylinder
 	}
 	if sameAxes && bottom.Center == top.Center && bottom.Radius.Base() == top.Radius.Base() {
 		return WallNone
@@ -114,23 +116,6 @@ func DirectCircularHole(pl Payload) WallKind {
 		return WallCone
 	}
 	return WallRuled
-}
-
-// BoreCylinderExactGeometry reports whether the shared cylinder builder, which
-// publishes no normal departure, may be used: its held center and the exact
-// frame map must denote a true round cylinder.
-func BoreCylinderExactGeometry(frame r3.Frame, xform r3.Transform, u, v float64) bool {
-	pp := prismrecord.Payload{Frame: frame, Xform: xform}
-	center := pp.Point(u, v, 0)
-	if pp.PointRound(u, v, 0, center) != 0 {
-		return false
-	}
-	linear, err := massmoment.PrismRotation(frame, xform)
-	if err != nil {
-		return false
-	}
-	charge, err := massmoment.MapChargeOf(linear)
-	return err == nil && charge.Stretch == 0
 }
 
 // coneWallArea bounds the lateral area of the exact circular frustum
@@ -461,6 +446,8 @@ func boreTopologyCircle(pl Payload, a loftmesh.Assembly, start, end *topo.Face, 
 // buildAnalyticBoreTopology replaces only the certified hole's triangle
 // faces. The loft assembly and its mass and tessellation proofs stay intact:
 // each former hole triangle role maps to the one cylindrical source face.
+// The cylinder carries BoreCylinderNormalBound for the payload's own frame
+// and placement. A placement whose bound fails keeps the faceted walls.
 func buildAnalyticBoreTopology(ctx context.Context, env topo.Env, body *topo.Body, pl Payload,
 	a loftmesh.Assembly, start, end *topo.Face, walls []*topo.Face) ([]*topo.Face, error) {
 	circle, ok := boreTopologyCircle(pl, a, start, end, walls)
@@ -470,6 +457,11 @@ func buildAnalyticBoreTopology(ctx context.Context, env topo.Env, body *topo.Bod
 	level := pl.Frame0.ToLocal(pl.Frame1.Origin())
 	if !BoreHasExactAxis(pl.Frame0, pl.Frame1, circle.Center.U, circle.Center.V, level.Z) {
 		return nil, fmt.Errorf("%w: a through-bore loft has no common circle axis", decaderr.ErrUnsupported)
+	}
+	normalBound, ok := BoreCylinderNormalBound(pl.Frame0, pl.Xform, circle.Center.U, circle.Center.V,
+		level.Z, circle.Radius.Base())
+	if !ok {
+		return walls, nil
 	}
 	pp := prismrecord.Payload{
 		Frame: pl.Frame0, Z0: 0, Z1: level.Z, Xform: pl.Xform,
@@ -484,6 +476,7 @@ func buildAnalyticBoreTopology(ctx context.Context, env topo.Env, body *topo.Bod
 	}
 	wall := faces[0]
 	wall.Origins = nil
+	wall.NormalBound = normalBound
 	// The prism builder states these circle loops in its local sweep order.
 	// Carry the Loft assembly's whole-shell reversal onto the cylinder too;
 	// the cap loops below already receive the same reversal.

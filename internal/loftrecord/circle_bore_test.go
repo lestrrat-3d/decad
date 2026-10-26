@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -92,4 +93,25 @@ func TestBoreTopologyShapeRefusals(t *testing.T) {
 			require.False(t, ok)
 		})
 	}
+}
+
+// TestDirectCircularHoleNeedsBoundedCylinder keeps one far section pair and
+// changes only the bore radius. Radius 1 publishes the bounded cylinder; at
+// 1e-8 the center's lift rounding bounds no normal, so the wall stays faceted.
+func TestDirectCircularHoleNeedsBoundedCylinder(t *testing.T) {
+	bottom, err := r3.NewFrame(r3.NewVec(1e9, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	top, err := r3.NewFrame(r3.NewVec(1e9, 0, 2), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	payload := func(radius float64) Payload {
+		hole := sectionrecord.CircleSeg{Center: sectionrecord.Point2{U: .427}, Radius: units.Millimeters(radius), TStart: 1}
+		profile := momentinput.Profile{Holes: []sectionrecord.LoopRecord{{Segments: []sectionrecord.CurveSegment{hole}}}}
+		return Payload{
+			AuthenticatedReconstruction: true,
+			Profile0:                    profile, Profile1: profile,
+			Frame0: bottom, Frame1: top, Xform: r3.Identity(),
+		}
+	}
+	require.Equal(t, WallCylinder, DirectCircularHole(payload(1)))
+	require.Equal(t, WallNone, DirectCircularHole(payload(1e-8)))
 }

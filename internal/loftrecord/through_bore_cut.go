@@ -85,10 +85,12 @@ func ThroughBoreCut(ctx context.Context, env topo.Env, a, b topo.Payload) (*topo
 	next.Profile0, next.Profile1 = profile, profile
 	next.ThroughBoreCut = true
 	next.RecordArea = [2]float64{ig.Area, ig.Area}
-	// The analytic wall has no normal-departure allowance. A rounded center
-	// or a non-isometric frame map keeps the Loft's tessellated bore topology.
-	next.AnalyticBore = BoreHasExactAxis(pl.Frame0, pl.Frame1, hole.Center.U, hole.Center.V, end.Z) &&
-		BoreCylinderExactGeometry(pl.Frame0, pl.Xform, hole.Center.U, hole.Center.V)
+	// The analytic wall carries the normal departure a rounded center, a
+	// non-isometric frame map or a tilted held axis leaves on its tag. A bore
+	// whose departure has no bound keeps the Loft's tessellated topology.
+	_, bounded := BoreCylinderNormalBound(pl.Frame0, pl.Xform, hole.Center.U, hole.Center.V,
+		end.Z, hole.Radius.Base())
+	next.AnalyticBore = BoreHasExactAxis(pl.Frame0, pl.Frame1, hole.Center.U, hole.Center.V, end.Z) && bounded
 	out, err := Build(ctx, env, next, budget, work0, work1)
 	if err != nil {
 		return nil, false, err

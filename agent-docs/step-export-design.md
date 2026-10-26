@@ -63,6 +63,15 @@ according to the writer path.
   circle, and its loop is reversed when its signed area in the (azimuth, tube
   angle) plane disagrees with that sense. A horn torus patch is a three-edge
   loop and keeps the faceted writer.
+  The analytic writer copies each face's tag as it is held: the STEP surface
+  is the float image of the `Plane`, `Cylinder`, `Cone` or `Torus` tag, not an
+  exact claim about the surface the body denotes. It does not read
+  `topo.Face.NormalBound`, so a face whose tag departs from its true surface
+  by a stated bound is written at its tag all the same. A Loft bore cylinder
+  with a rounded center or an inexact frame map (`agent-docs/loft-design.md`
+  §18) and a cap-blend band patch (`agent-docs/modify-reach-design.md` §8.3)
+  are such faces. Gating every bounded face out of the analytic writer is a
+  separate change.
   A full cylindrical wall receives one synthetic straight seam edge, used
   twice in opposite directions in its STEP loop. This seam changes STEP
   topology, not the body's geometry. Plane faces use their source outer and

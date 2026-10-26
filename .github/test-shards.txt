@@ -251,6 +251,7 @@
 10	0.43	TestLoftFacesToConeTangentCancelledDuringEvaluation
 10	0.22	TestLoftOutputBoundaryRefusesTinyTranslatedSeam
 10	0.08	TestLoftThroughBoreCutGates
+10	0.00	TestPlacedLoftBoreChargesPlacement
 10	0.11	TestLoftVolumeComposeKeepsBoundaryOperationBudget
 10	2.20	TestObliqueBossJunctionFilletDiagonalTiltPublicWorkflow
 10	0.00	TestOperationErrorCopiesOptionalDetailsAndUnwrapsOriginal

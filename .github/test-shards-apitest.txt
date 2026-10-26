@@ -991,6 +991,8 @@
 5	0.01	TestExtrudeThroughAllSides
 5	0.00	TestExtrudeToFaceComputedLevelIsBounded
 5	0.01	TestExtrudeToTranslatedRevolveStartCapChargesStopLevel
+10	0.00	TestLoftDirectBoreBoundsRoundedCylinder
+10	0.00	TestLoftDirectBoreRoundedCenterChargesNormalBound
 5	0.02	TestExtrudedBoxThroughBoreCutPublishesCircularTopology
 5	0.03	TestFacetedBooleanScaledAtCarriesVolumeRolesAndVerification
 5	0.11	TestFacetedUnionNestedBossShellVerified
@@ -1458,7 +1460,7 @@
 7	0.00	TestLinkageConstructorRefusals
 7	0.08	TestLoftBetweenConeOverACircle
 7	0.00	TestLoftCoplanarSectionsRefuse
-7	0.15	TestLoftCutTiltedFrameMapKeepsFacetedTopology
+7	0.15	TestLoftCutTiltedFrameMapBoundsCylinder
 7	0.45	TestLoftDirectBoreExactLiftRefusals
 7	16.77	TestLoftFilletEveryCornerOfLobesOnADisc
 7	0.00	TestLoftHoledProfilesMakePassage
