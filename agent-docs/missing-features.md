@@ -192,7 +192,7 @@ moves its row to the matching section above, with that doc as owner.
 | Nesting that turns bodies, follows their outlines or stacks them in three dimensions | `Arrange` packs bounding rectangles by translation only (`arrange.go`) |
 | Toolpath generation (CAM) | No entry point exists |
 | Finite-element stress or thermal simulation | No entry point exists |
-| Rendered images | No entry point exists |
+| Rendered images with perspective, outlines, materials, shadows or more than one body | `export.PNG` draws one body orthographically with flat shading (`export/png.go`; `agent-docs/png-export-design.md` §4) |
 | Per-axis (non-uniform) scaling of a body | No entry point exists; `ScaledAt` scales uniformly (`point_plane_scale.go`) and `Transform`/`Copy` take a rigid motion only (`document.go`) |
 | Saving a `Document` to a file or loading one back | No entry point exists; a model is rebuilt by rerunning the Go program that built it |
 | Text profiles from a font, for engraved or embossed lettering | No entry point exists |
