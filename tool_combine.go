@@ -78,6 +78,11 @@ func combineTools(ctx context.Context, d *Document, kind OperationKind, b *Body,
 type toolStep struct {
 	op   meshbool.OperationKind
 	tool *Body
+	// merge, when it holds a body, replaces tool: the bodies are
+	// united with one another in order first, and the step applies the united
+	// body. A chain of mesh steps can refuse a second cut whose target already
+	// holds a coarse mesh, which one cut by the united tool does not meet.
+	merge []*Body
 }
 
 // combineToolSteps applies each step to b in order, with the running result as
@@ -99,7 +104,20 @@ func combineToolSteps(ctx context.Context, d *Document, kind OperationKind, b *B
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		next, err := booleanBody(ctx, step.op, acc, step.tool, ref)
+		tool := step.tool
+		if len(step.merge) > 0 {
+			tool = step.merge[0]
+			for _, member := range step.merge[1:] {
+				united, err := booleanBody(ctx, meshbool.OpUnion, tool, member, ref)
+				if err != nil {
+					return nil, err
+				}
+				warnings.Add(united.n.OperationWarnings, int(kind))
+				tool = united
+				ref++
+			}
+		}
+		next, err := booleanBody(ctx, step.op, acc, tool, ref)
 		if err != nil {
 			return nil, err
 		}
