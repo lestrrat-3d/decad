@@ -118,3 +118,73 @@ func TestHeldEmbeddingScanPollsAcrossChunks(t *testing.T) {
 	require.False(t, clean)
 	require.Equal(t, 4, e.pollRemaining)
 }
+
+func TestHeldParallelScanDefersRepairState(t *testing.T) {
+	h := heldQueryGrid(false)
+	h.ScanAxes = [3]r3.Vec{{X: 1, Y: 1}, {X: -1, Y: 1}, {Z: 1}}
+	for _, stride := range []int{1, 7} {
+		e := newHeldEmbeddingScan(h, proofbound.NewWorkBudget(t.Context()), true)
+		var query []int
+		for i := 0; i < len(h.Tris); i += stride {
+			query = append(query, i)
+		}
+		clean, err := e.parallelClean(t.Context(), query)
+		require.NoError(t, err)
+		require.True(t, clean)
+		require.True(t, e.inc == nil && e.taken == nil, "a clean scan needs no vertex-move indexes")
+		require.Equal(t, 0, len(e.cells), "the tree scan needs no repair grid")
+		for i, ready := range e.boxOK {
+			require.True(t, ready, "world box %d was prepared before workers shared it", i)
+		}
+		e.prepareRepair()
+		require.Equal(t, len(h.Verts), len(e.inc))
+		require.Equal(t, len(h.Verts), len(e.taken))
+		require.True(t, slices.Equal([]int{0}, e.inc[0]), "the first corner belongs to facet 0")
+		original := &e.inc[0]
+		e.prepareRepair()
+		require.True(t, original == &e.inc[0], "preparing repair twice keeps the existing index")
+		e.setVert(0, r3.Vec{X: -1})
+		_, old := e.taken[r3.Vec{}]
+		require.False(t, old)
+		vertex, present := e.taken[r3.Vec{X: -1}]
+		require.True(t, present)
+		require.Equal(t, 0, vertex)
+	}
+}
+
+func TestUnmovedHeldMeshAvoidsPredicateCaches(t *testing.T) {
+	h := heldQueryGrid(false)
+	h.Moved = make([]bool, len(h.Verts))
+	var larger HeldRounding
+	for tile := range 4 {
+		base := len(larger.Verts)
+		for _, p := range h.Verts {
+			larger.Verts = append(larger.Verts, p.Add(r3.Vec{X: float64(tile) * 16}))
+		}
+		for _, tri := range h.Tris {
+			larger.Tris = append(larger.Tris, [3]int{base + tri[0], base + tri[1], base + tri[2]})
+		}
+	}
+	larger.Moved = make([]bool, len(larger.Verts))
+	larger.Movable = make([]bool, len(larger.Verts))
+	ctx := t.Context()
+	var moved int
+	var folds [][2]int
+	var err error
+	input := h
+	enforce := func() { moved, err = EnforceHeldEmbedding(ctx, input) }
+	smallAllocations := testing.AllocsPerRun(10, enforce)
+	input = larger
+	largeAllocations := testing.AllocsPerRun(10, enforce)
+	require.NoError(t, err)
+	require.Zero(t, moved)
+	require.LessOrEqual(t, largeAllocations, smallAllocations, "unchanged mesh size must not increase cache allocations")
+	input = h
+	findFolds := func() { folds, err = HeldFolds(ctx, input) }
+	smallAllocations = testing.AllocsPerRun(10, findFolds)
+	input = larger
+	largeAllocations = testing.AllocsPerRun(10, findFolds)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(folds))
+	require.LessOrEqual(t, largeAllocations, smallAllocations, "unchanged mesh size must not increase cache allocations")
+}
