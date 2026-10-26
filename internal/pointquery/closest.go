@@ -112,6 +112,7 @@ func MeshClosest(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int) (
 		converted[i] = exactVec(v)
 	}
 	var best *big.Rat
+	var bestUpper float64
 	var bestPoint ratVec
 	for _, tri := range tris {
 		if err := budget.Step(); err != nil {
@@ -123,7 +124,8 @@ func MeshClosest(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int) (
 			}
 		}
 		a, b, c := converted[tri[0]], converted[tri[1]], converted[tri[2]]
-		if best != nil && boxDistanceSquared(point, a, b, c).Cmp(best) >= 0 {
+		if best != nil && (boxDistanceSquaredLower(p, verts[tri[0]], verts[tri[1]], verts[tri[2]]) >= bestUpper ||
+			boxDistanceSquared(point, a, b, c).Cmp(best) >= 0) {
 			continue
 		}
 		d, q, err := triangleNearest(point, a, b, c)
@@ -132,6 +134,7 @@ func MeshClosest(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int) (
 		}
 		if best == nil || d.Cmp(best) < 0 {
 			best, bestPoint = d, q
+			bestUpper = proofbound.RatFloatUp(best)
 		}
 	}
 	return best, bestPoint, nil
