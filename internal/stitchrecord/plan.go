@@ -56,8 +56,10 @@ func (p *Plan) MaxMerged() float64 {
 // BuildPlan registers operand vertices, then groups eligible free
 // edges in their original walk order. Line3's geometry is stated entirely by
 // its endpoint classes. Other variants need a nonzero curve token and the
-// variant check in edgesJoin. Exactly two edges may claim a weld key;
-// one or three or more leave every member free.
+// variant check in edgesJoin, except a Circle3 or Arc3 of positive radius,
+// which also joins when both edges prove a zero curve bound. Exactly two edges
+// may claim a weld key; one or three or more leave every member free. A
+// positive-radius Circle3 or Arc3 claims keys apart from every other edge.
 func BuildPlan(faces []*topo.Face) *Plan {
 	return buildPlan(faces, nil)
 }
@@ -242,17 +244,18 @@ func buildPlan(faces []*topo.Face, merged map[*topo.Vertex]mergedVertex) *Plan {
 				c := stitchweld.Candidate[*topo.Edge]{
 					Edge: e, Start: table.classOf(e.Start), End: table.classOf(e.End),
 				}
-				if isLine {
-					lines = append(lines, c)
+				if circular(e) {
+					curves = append(curves, c)
 					continue
 				}
-				curves = append(curves, c)
+				lines = append(lines, c)
 			}
 		}
 	}
-	// A straight edge and a curved edge between the same two classes are
-	// different edges, so each kind claims its weld keys on its own: a curved
-	// pair never makes a straight pair one claim too many, nor the reverse.
+	// A circle or arc of positive radius and any other edge between the same
+	// two classes are different edges, so the circular kind claims its weld
+	// keys on its own. Every other edge, straight or curved, claims together:
+	// a spline or faceted claim still counts against a straight pair.
 	group, groups := stitchweld.WeldPairs(lines, edgesJoin)
 	curveGroup, curveGroups := stitchweld.WeldPairs(curves, edgesJoin)
 	for e, id := range curveGroup {
@@ -279,20 +282,32 @@ func edgesJoin(a, b *topo.Edge) bool {
 	return zeroBoundCircular(a) && zeroBoundCircular(b) && sameZeroBoundCircle(a, b)
 }
 
+// circular reports whether e is a Circle3 or Arc3 of positive radius.
+func circular(e *topo.Edge) bool {
+	switch c := e.Curve.(type) {
+	case surfacegeom.Circle3:
+		return c.Radius.Base() > 0
+	case surfacegeom.Arc3:
+		return c.Radius.Base() > 0
+	}
+	return false
+}
+
 // zeroBoundCircular reports whether e is a Circle3 or Arc3 edge whose builder
 // proved CurveBound zero and whose end vertices all carry a zero bound, so
 // that its held data is the true curve.
 func zeroBoundCircular(e *topo.Edge) bool {
-	switch e.Curve.(type) {
-	case surfacegeom.Circle3, surfacegeom.Arc3:
-	default:
+	if !circular(e) {
 		return false
 	}
 	return e.CurveBounded && e.CurveBound == 0 && e.Start.Bound.Base() == 0 && e.End.Bound.Base() == 0
 }
 
 // sameZeroBoundCircle compares the held circles of two zero-bound circular
-// edges bit for bit. A Circle3 pairs only with a Circle3. An Arc3 pairs only
+// edges bit for bit. A Circle3 pairs only with a Circle3 of the same axis
+// direction: a whole circle has no endpoints to fix its sense, and the weld
+// derives its coedge directions from the vertex classes alone, so opposite
+// axes would leave the two faces with inconsistent normals. An Arc3 pairs only
 // with an Arc3 sweeping the same angular range: an arc is counter-clockwise
 // about its axis from its start to its end, so edges that meet start to start
 // need equal axes and edges that meet start to end need opposite axes. Any
@@ -301,10 +316,11 @@ func sameZeroBoundCircle(a, b *topo.Edge) bool {
 	switch av := a.Curve.(type) {
 	case surfacegeom.Circle3:
 		bv, ok := b.Curve.(surfacegeom.Circle3)
-		return ok && sameHeldCircle(av.Center, av.Axis, av.Radius.Base(), bv.Center, bv.Axis, bv.Radius.Base())
+		return ok && av.Center == bv.Center && av.Radius.Base() == bv.Radius.Base() && av.Axis == bv.Axis
 	case surfacegeom.Arc3:
 		bv, ok := b.Curve.(surfacegeom.Arc3)
-		if !ok || !sameHeldCircle(av.Center, av.Axis, av.Radius.Base(), bv.Center, bv.Axis, bv.Radius.Base()) {
+		if !ok || av.Center != bv.Center || av.Radius.Base() != bv.Radius.Base() ||
+			(av.Axis != bv.Axis && av.Axis != bv.Axis.Scale(-1)) {
 			return false
 		}
 		if a.Start.Position == a.End.Position {
@@ -318,10 +334,6 @@ func sameZeroBoundCircle(a, b *topo.Edge) bool {
 		}
 	}
 	return false
-}
-
-func sameHeldCircle(ac, aa r3.Vec, ar float64, bc, ba r3.Vec, br float64) bool {
-	return ac == bc && ar == br && (aa == ba || aa == ba.Scale(-1))
 }
 
 // sameCurveVariant compares held Circle3 and Arc3 parameters, allowing
