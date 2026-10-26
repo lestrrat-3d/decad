@@ -25,7 +25,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `surface.go` | `WithSurfaceResult` and the sheet refusal. See surface §2–§4, §7, §11. |
 | `feature_options.go` | Public feature option tiers and adapters to `internal/featureoption/`. See surface §4, sweep §2 and loft §2. |
 | `patch.go` | `PatchProfile`: records the profile and builds its face through `patchchain.Build`. See surface §5.1. |
-| `hole.go` | Public `Hole`, `HoleSpec`, depth and head variants: gates, tool sketches, chained cut and the commit; `internal/holeplan/` computes the tools. See hole design. |
+| `hole.go` | Public `Hole`, `HoleSpec`, depth, head and shape variants: gates, tool sketches, chained cut and the commit; `internal/holeplan/` computes the tools. See hole design. |
 | `rib.go` | Public `Rib`, `Web` and `WithRibOverrun`: line, thickness and extent gates, rib tool extrusion, touch and volume checks. See rib design. |
 | `emboss.go` | Public `Emboss` and `EmbossMode`: gates, sketch-plane check, tool extrusion, join and volume checks. See emboss design. |
 | `planar_face.go` | Resolves a selector to one analytic planar face and its outward normal; `Hole` and `Emboss` share it. |

@@ -123,7 +123,9 @@ configuration option.
 | `decad.LoftEnd` | struct | One end of a `decad.LoftBetween`: a profile or a point. | The caller |
 | `decad.LoftSplit` | struct | One recorded segment of one loop and the parameter fractions at which `decad.WithLoftSplits` cuts it. | The caller |
 | `decad.ConeTangentEnd` | struct | The cone that the last section of `decad.LoftFacesToConeTangent` touches. | The caller |
-| `decad.HoleSpec` | struct | One hole: the face, a world point on it, the diameter, a depth and an optional head. | The caller |
+| `decad.HoleSpec` | struct | One hole: the face, a world point on it, the diameter, a depth, an optional head and an optional shape. | The caller |
+| `decad.HoleShape` | sealed interface | The cross-section of a hole that is not round. | The caller |
+| `decad.RectangularHole` | struct | A hole with a rectangular bore: width, height and a turn about the hole axis. | The caller |
 | `decad.HoleDepth` | sealed interface | How deep a hole runs. | The caller |
 | `decad.ThroughHole` | struct | A hole that runs out of the far side. | The caller |
 | `decad.BlindHole` | struct | A hole that stops at a depth below the face. | The caller |

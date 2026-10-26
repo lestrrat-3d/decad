@@ -11,7 +11,7 @@ func Hole(ctx context.Context, b *Body, spec HoleSpec) (*Body, error)
 ```
 
 `HoleSpec` holds `Face` (a `FaceSelector`), `At` (a world `r3.Vec`), `Diameter`, `Depth` (`ThroughHole` or
-`BlindHole`) and an optional `Head` (`Counterbore` or `Countersink`). `Hole` retires `b` and returns the drilled body.
+`BlindHole`), an optional `Head` (`Counterbore` or `Countersink`) and an optional `Shape` (`RectangularHole`, §5). `Hole` retires `b` and returns the drilled body.
 
 | Decision | Rule |
 |---|---|
@@ -47,5 +47,21 @@ face. A countersink cut gives a faceted result whose planar faces are split into
 ## 4. Not covered
 
 - A hole in a face that is not an analytic plane, or in a sheet.
-- A noncircular hole, a threaded hole, and a tapped-hole annotation.
+- A noncircular hole other than `RectangularHole`, a threaded hole, and a tapped-hole annotation.
 - Several holes in one call. Call `Hole` per hole, or build one hole and use `Patterned`.
+
+## 5. Rectangular holes
+
+A non-nil `HoleSpec.Shape` replaces the round bore. `RectangularHole` holds `Width` and `Height` (positive lengths) and
+`Angle`. The rectangle is centred on `At`, with `Width` along the face frame's U axis before `Angle` turns it
+counter-clockwise about the hole axis.
+
+| Decision | Rule |
+|---|---|
+| R1 | `Diameter` MUST be the zero `units.Value` and `Head` MUST be nil when `Shape` is set. Either one set is `ErrDegenerate`. |
+| R2 | `Width` and `Height` are positive finite lengths and `Angle` is a finite angle. A violation is `ErrDegenerate`, or `ErrUnitKind` for a wrong unit kind. |
+| R3 | Placement (H2, H3), depth (H6, H7) and the axis check (H8) are the round hole's. |
+| R4 | The bore tool is the rectangle sketched on the mouth plane and extruded inward by the bore depth plus `holeplan.MouthMargin`. Its four corners are fixed sketch points joined by lines. |
+
+The cut is a prism cut, so a rectangle turned by a multiple of a quarter turn about the face frame keeps the planar
+walls of the prism classes. Every wall is a plane, and a blind hole adds one planar floor.

@@ -69,3 +69,46 @@ func TestReach(t *testing.T) {
 	require.Equal(t, 10+0.5+holeplan.ThroughMargin, holeplan.Reach(lo, hi, r3.Vec{}, r3.Vec{Z: -1}, 0.5))
 	require.Zero(t, holeplan.Reach(lo, hi, r3.Vec{Z: 0}, r3.Vec{Z: 1}, 0.5), "no material behind a face looking at the body")
 }
+
+func TestComputeRectCorners(t *testing.T) {
+	t.Parallel()
+	in := holeplan.Input{
+		Frame: topFrame(t), Outward: r3.Vec{Z: 1}, At: r3.Vec{X: 3, Y: 4, Z: 10}, Through: true, Reach: 11,
+		Rect: &holeplan.Rect{Width: 6, Height: 4},
+	}
+	plan, err := holeplan.Compute(in)
+	require.NoError(t, err)
+	require.NotNil(t, plan.Corners)
+	require.Equal(t, [4][2]float64{{0, 2}, {6, 2}, {6, 6}, {0, 6}}, *plan.Corners, "an unturned rectangle is exact")
+
+	in.Rect = &holeplan.Rect{Width: 6, Height: 4, Angle: math.Pi / 2}
+	plan, err = holeplan.Compute(in)
+	require.NoError(t, err)
+	// A quarter turn about (3, 4) takes the corner (-3, -2) offset to (2, -3).
+	require.InDelta(t, 5.0, plan.Corners[0][0], 1e-12)
+	require.InDelta(t, 1.0, plan.Corners[0][1], 1e-12)
+}
+
+func TestComputeRectRefusals(t *testing.T) {
+	t.Parallel()
+	base := holeplan.Input{
+		Frame: topFrame(t), Outward: r3.Vec{Z: 1}, At: r3.Vec{Z: 10}, Through: true, Reach: 11,
+		Rect: &holeplan.Rect{Width: 6, Height: 4},
+	}
+	cases := map[string]func(*holeplan.Input){
+		"zero width": func(in *holeplan.Input) { in.Rect = &holeplan.Rect{Width: 0, Height: 4} },
+		"nan angle":  func(in *holeplan.Input) { in.Rect = &holeplan.Rect{Width: 6, Height: 4, Angle: math.NaN()} },
+		"with a head": func(in *holeplan.Input) {
+			in.Head = holeplan.Head{Kind: holeplan.HeadCountersink, Diameter: 8, Angle: 1}
+		},
+	}
+	for name, edit := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			in := base
+			edit(&in)
+			_, err := holeplan.Compute(in)
+			require.Error(t, err)
+		})
+	}
+}

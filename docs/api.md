@@ -196,7 +196,7 @@ Each of these returns a new body and retires its input.
 | `decad.Chamfer` | Bevels selected edges. `decad.WithAsymmetricChamfer` sets a second distance. Selecting the whole outer cap loop of a prism whose section is a smooth chain of fit splines bevels it within a measured ratio of the ideal chamfer, as a cut. |
 | `decad.Shell` | Removes the selected faces and lines the rest with a wall. `decad.WithShellSense` picks `decad.Inward` or `decad.Outward`. |
 | `decad.Draft` | Leans selected walls about a `decad.NeutralPlane` (`decad.NeutralFace`). |
-| `decad.Hole` | Cuts a round hole at a point on a planar face, through or blind, with an optional `decad.Counterbore` or `decad.Countersink` head. |
+| `decad.Hole` | Cuts a round hole at a point on a planar face, through or blind, with an optional `decad.Counterbore` or `decad.Countersink` head. A `decad.RectangularHole` shape cuts a rectangular hole instead, without a head. |
 | `decad.Rib` | Thickens one straight sketch line, extrudes it by an `decad.Extent` and joins it to the body. `decad.WithRibOverrun` buries its ends in the walls. |
 | `decad.Web` | Adds one such rib for each of several lines in one step. |
 | `decad.Emboss` | Raises or engraves closed profiles on a planar face. `decad.EmbossRaised` or `decad.EmbossEngraved` picks the mode. |
