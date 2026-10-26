@@ -25,19 +25,35 @@ const dihedralTolerance = 1e-12
 // edge as at a right angle. It is a method because it reads the edge's own
 // topology.
 //
-// An edge that is not shared by exactly two planar faces is ErrUnsupported: a
-// chamfer or fillet of it is not a bevel or a round of a corner between two
-// planes.
+// The faces are planes, or on a circular edge (a Circle3 or an Arc3) a plane, cylinder,
+// cone or sphere: a circle on such a surface of revolution about its own axis
+// meets the other face at one angle all round, so one angle states the edge. A
+// curved face beside a straight or free-form edge, or a torus, meets the other
+// at an angle that varies along it. An edge that is not shared by exactly two
+// such faces is ErrUnsupported: a chamfer or fillet of it is not a bevel or a
+// round of a corner at one angle.
 func (e *Edge) planarDihedral(what string) (float64, error) {
 	faces := e.Faces()
 	if len(faces) != 2 {
 		return 0, fmt.Errorf(`%w: %s needs an edge between two faces, got %d`, ErrUnsupported, what, len(faces))
 	}
 	at := e.Start().Position().Value
+	var circular bool
+	switch e.Curve().(type) {
+	case Circle3, Arc3:
+		circular = true
+	}
 	var normals [2]r3.Vec
 	for i, f := range faces {
-		if _, ok := f.Surface().(Plane); !ok {
-			return 0, fmt.Errorf(`%w: %s needs planar faces beside the edge`, ErrUnsupported, what)
+		switch f.Surface().(type) {
+		case Plane:
+		case Cylinder, Cone, Sphere:
+			if !circular {
+				return 0, fmt.Errorf(`%w: %s needs planar faces beside a straight or free-form edge, as a curved face meets the other at a changing angle`,
+					ErrUnsupported, what)
+			}
+		default:
+			return 0, fmt.Errorf(`%w: %s needs planar faces, or a plane, cylinder, cone or sphere beside a circular edge`, ErrUnsupported, what)
 		}
 		n, err := f.NormalAt(at)
 		if err != nil {

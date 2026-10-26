@@ -19,7 +19,7 @@ import (
 // FilletChord states that radius and builds the result with [Fillet], so the
 // receivers, routes and refusals of Fillet apply.
 //
-// Every selected edge MUST lie between two planar faces, and may be convex or
+// Every selected edge MUST lie between two planar faces, or be circular between a plane and a cylinder, cone or sphere, and may be convex or
 // concave: a concave edge's fillet adds the round's material to the corner. Any
 // other edge is ErrUnsupported. All the selected edges MUST give the same radius,
 // within a relative 1e-12, which equal dihedrals do; edges at different angles

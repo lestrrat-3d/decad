@@ -39,7 +39,7 @@ angle from the volume independently of the formula.
 
 ## 4. Not covered
 
-- A curved face beside the edge.
+- A curved face beside a straight or free-form edge, and a torus: the angle there varies along the edge.
 - The angle measured from the other face. Name the other face as `reference`.
 - `WithTangentChain`.
 
@@ -48,3 +48,10 @@ angle from the volume independently of the formula.
 The hexagonal prism's 120 degree edges and a right-isosceles prism's 45 degree edge take the sine rule. A 120 degree
 edge with a bevel angle of 60 degrees or more never meets the other face and is `ErrDegenerate`, and a bevel that
 reaches past the face's own width is `Chamfer`'s refusal.
+
+## 5. A circular edge between a plane and a surface of revolution
+
+`ChamferAngle` takes the edges `FilletChord` does in §6 of its design (`agent-docs/fillet-chord-design.md`): a circular edge
+between a plane and a `Cylinder`, `Cone` or `Sphere`, whose angle is one all round. φ is read as A1 says and the second
+distance follows A1. A curved face beside a straight or free-form edge is `ErrUnsupported`. The tests compare a rod's rims
+with the ring a triangle of legs `d` and `d·tan(angle)` sweeps about the axis.
