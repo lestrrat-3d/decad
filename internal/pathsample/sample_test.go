@@ -104,3 +104,48 @@ func TestTurn(t *testing.T) {
 	_, _, err = pathsample.Turn(r3.Vec{X: 1}, r3.Vec{X: -1})
 	require.ErrorIs(t, err, pathsample.ErrDegenerate)
 }
+
+func TestSampleSpacedStraightLine(t *testing.T) {
+	t.Parallel()
+	got, err := pathsample.SampleSpaced(r3.Vec{}, []pathsample.Segment{{End: r3.Vec{X: 10}}}, 3)
+	require.NoError(t, err)
+	require.Len(t, got, 4, "points at 0, 3, 6 and 9; 12 lies past the end")
+	for i, st := range got {
+		require.True(t, st.Point.Equal(r3.Vec{X: 3 * float64(i)}, 1e-12), "point %d is %v", i, st.Point)
+	}
+}
+
+func TestSampleSpacedPlacesAPointAtTheEndWhenItDivides(t *testing.T) {
+	t.Parallel()
+	segs := []pathsample.Segment{{End: r3.Vec{X: 0.3}}}
+	got, err := pathsample.SampleSpaced(r3.Vec{}, segs, 0.1)
+	require.NoError(t, err)
+	require.Len(t, got, 4, "0.3 / 0.1 is 2.9999999999999996 in floating point, and the end still gets its point")
+	require.Equal(t, r3.Vec{X: 0.3}, got[3].Point)
+}
+
+func TestSampleSpacedWalksAcrossSegments(t *testing.T) {
+	t.Parallel()
+	// An L of 6 + 6 with a spacing of 4: points at 0, 4 and 8 mm of length.
+	segs := []pathsample.Segment{{End: r3.Vec{X: 6}}, {End: r3.Vec{X: 6, Y: 6}}}
+	got, err := pathsample.SampleSpaced(r3.Vec{}, segs, 4)
+	require.NoError(t, err)
+	require.Len(t, got, 4)
+	want := []r3.Vec{{}, {X: 4}, {X: 6, Y: 2}, {X: 6, Y: 6}}
+	// 12 / 4 is exact, so the last point is the end.
+	for i := range want {
+		require.True(t, got[i].Point.Equal(want[i], 1e-12), "point %d is %v, want %v", i, got[i].Point, want[i])
+	}
+	require.True(t, got[2].Tangent.Equal(r3.Vec{Y: 1}, 1e-12))
+}
+
+func TestSampleSpacedRefusals(t *testing.T) {
+	t.Parallel()
+	segs := []pathsample.Segment{{End: r3.Vec{X: 10}}}
+	for _, spacing := range []float64{0, -1, math.NaN(), math.Inf(1)} {
+		_, err := pathsample.SampleSpaced(r3.Vec{}, segs, spacing)
+		require.ErrorIs(t, err, pathsample.ErrDegenerate, "spacing %v", spacing)
+	}
+	_, err := pathsample.SampleSpaced(r3.Vec{}, segs, 1e-9)
+	require.ErrorIs(t, err, pathsample.ErrTooMany)
+}

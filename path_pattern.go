@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/pathsample"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
@@ -68,15 +69,85 @@ func PathPatternCopies(ctx context.Context, b *Body, path *Path, count int, opts
 	if err := documentHandle(b.n.Doc).requireLive(b); err != nil {
 		return nil, err
 	}
+	follow, err := pathPatternFollows(opts)
+	if err != nil {
+		return nil, err
+	}
+	samples, err := patternSegments(path)
+	if err != nil {
+		return nil, err
+	}
+	stations, err := pathsample.SampleStations(path.Start(), samples, count)
+	if err != nil {
+		return nil, pathSampleError(err)
+	}
+	return pathCopies(ctx, b, stations, follow)
+}
+
+// PathPatternSpaced repeats b along path at a stated distance and returns the
+// extra copies as separate live bodies, leaving b live
+// (agent-docs/path-pattern-design.md §6). Instance 0 is b, taken to sit at the
+// path's start, and instance i sits i·spacing of arc length along the path, for
+// every i that lies within the path's length. A spacing that divides the length
+// puts the last instance at the path's end. Orientation, [WithPathFollow], the
+// path's segments and every other rule are those of [PathPatternCopies].
+//
+// spacing is a positive length no longer than the path, and a spacing that
+// leaves no copy is ErrDegenerate, as is one that would place over 100000
+// copies. A wrong unit kind is ErrUnitKind and a negative spacing is
+// ErrNegativeMagnitude.
+func PathPatternSpaced(ctx context.Context, b *Body, path *Path, spacing units.Value, opts ...PathPatternOption) (result []*Body, retErr error) {
+	defer func() { retErr = operationError(OperationCopy, retErr) }()
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control a pattern`, ErrDegenerate)
+	}
+	if b == nil || b.n.Doc == nil {
+		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
+	}
+	if path == nil {
+		return nil, fmt.Errorf(`%w: a path pattern needs a path`, ErrDegenerate)
+	}
+	step, err := sectionrecord.MagnitudeIn(spacing, units.Length, units.Millimeter, "the path pattern spacing")
+	if err != nil {
+		return nil, err
+	}
+	if err := documentHandle(b.n.Doc).requireLive(b); err != nil {
+		return nil, err
+	}
+	follow, err := pathPatternFollows(opts)
+	if err != nil {
+		return nil, err
+	}
+	samples, err := patternSegments(path)
+	if err != nil {
+		return nil, err
+	}
+	stations, err := pathsample.SampleSpaced(path.Start(), samples, step)
+	if err != nil {
+		return nil, pathSampleError(err)
+	}
+	if len(stations) < 2 {
+		return nil, fmt.Errorf(`%w: a spacing of %g mm leaves no copy along the path`, ErrDegenerate, step)
+	}
+	return pathCopies(ctx, b, stations, follow)
+}
+
+// pathPatternFollows reads the options of a path pattern.
+func pathPatternFollows(opts []PathPatternOption) (bool, error) {
 	follow := false
 	for _, o := range opts {
 		if o == nil {
-			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+			return false, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
 		if _, ok := o.Ident().(identPathFollow); ok {
 			follow = true
 		}
 	}
+	return follow, nil
+}
+
+// patternSegments converts the segments of path for the sampler.
+func patternSegments(path *Path) ([]pathsample.Segment, error) {
 	segments := path.Segments()
 	samples := make([]pathsample.Segment, len(segments))
 	for i, seg := range segments {
@@ -89,16 +160,23 @@ func PathPatternCopies(ctx context.Context, b *Body, path *Path, count int, opts
 			return nil, fmt.Errorf(`%w: unknown path segment %T`, ErrDegenerate, seg)
 		}
 	}
-	points, err := pathsample.SampleStations(path.Start(), samples, count)
-	if errors.Is(err, pathsample.ErrDegenerate) {
-		return nil, fmt.Errorf(`%w: %s`, ErrDegenerate, err)
+	return samples, nil
+}
+
+// pathSampleError maps a sampler refusal to the public error it is.
+func pathSampleError(err error) error {
+	if errors.Is(err, pathsample.ErrDegenerate) || errors.Is(err, pathsample.ErrTooMany) {
+		return fmt.Errorf(`%w: %s`, ErrDegenerate, err)
 	}
-	if err != nil {
-		return nil, err
-	}
-	copies := make([]*Body, 0, count-1)
-	for _, st := range points[1:] {
-		t, err := pathStep(points[0], st, follow)
+	return err
+}
+
+// pathCopies makes a Copy of b at each station but the first. A failure
+// retires the copies already made.
+func pathCopies(ctx context.Context, b *Body, stations []pathsample.Station, follow bool) ([]*Body, error) {
+	copies := make([]*Body, 0, len(stations)-1)
+	for _, st := range stations[1:] {
+		t, err := pathStep(stations[0], st, follow)
 		if err != nil {
 			removeTools(copies)
 			return nil, err
