@@ -521,10 +521,10 @@ func buildAnalyticBoreTopology(ctx context.Context, env topo.Env, body *topo.Bod
 // recorded whole-circle integral. Each cap keeps its existing triangle and
 // placement bounds; the subtraction composes the circle integral's bound.
 func circleCapAreas(ctx context.Context, pl Payload, a loftmesh.Assembly, start, end *topo.Face) error {
-	for cap, face := range []*topo.Face{start, end} {
+	for endCap, face := range []*topo.Face{start, end} {
 		hole := pl.Profile0.Holes[0]
 		pts, loops := a.Pts0, a.LoopIdx0
-		if cap == 1 {
+		if endCap == 1 {
 			hole = pl.Profile1.Holes[0]
 			pts, loops = a.Pts1, a.LoopIdx1
 		}

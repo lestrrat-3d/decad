@@ -96,11 +96,11 @@ func (j *Join) sourceGroups() error {
 	for i := range j.Teeth {
 		part := &j.Teeth[i]
 		lp, n := part.Loft, len(part.Loft.Verts)/2
-		for cap := range 2 {
-			part.Vertex[cap] = make([]int, part.RootStart+1)
-			for k := range part.Vertex[cap] {
-				part.Vertex[cap][k] = len(mesh.Verts)
-				mesh.Verts = append(mesh.Verts, lp.Verts[cap*n+k])
+		for capIndex := range 2 {
+			part.Vertex[capIndex] = make([]int, part.RootStart+1)
+			for k := range part.Vertex[capIndex] {
+				part.Vertex[capIndex][k] = len(mesh.Verts)
+				mesh.Verts = append(mesh.Verts, lp.Verts[capIndex*n+k])
 			}
 		}
 		proof := j.Proofs[part.Operand]
@@ -144,15 +144,15 @@ func (j *Join) ring(ctx context.Context) error {
 	for i := range parts {
 		part := &parts[i]
 		next := &parts[(i+1)%len(parts)]
-		for cap := range 2 {
-			j.outlines[cap] = append(j.outlines[cap], part.Vertex[cap]...)
+		for capIndex := range 2 {
+			j.outlines[capIndex] = append(j.outlines[capIndex], part.Vertex[capIndex]...)
 		}
 		var gap [2][2]float64
 		var gapIV [2][2]proofbound.RatInterval
-		for cap := range 2 {
+		for capIndex := range 2 {
 			a, b := part.Bottom, next.Bottom
 			ai, bi := part.BottomIV, next.BottomIV
-			if cap == 1 {
+			if capIndex == 1 {
 				a, b = part.Top, next.Top
 				ai, bi = part.TopIV, next.TopIV
 			}
@@ -160,8 +160,8 @@ func (j *Join) ring(ctx context.Context) error {
 				b[0] += 2 * math.Pi
 				bi[0] = proofbound.IntervalAdd(bi[0], proofbound.TwoPiInterval())
 			}
-			gap[cap] = [2]float64{a[1], b[0]}
-			gapIV[cap] = [2]proofbound.RatInterval{ai[1], bi[0]}
+			gap[capIndex] = [2]float64{a[1], b[0]}
+			gapIV[capIndex] = [2]proofbound.RatInterval{ai[1], bi[0]}
 		}
 		width := max(gap[0][1]-gap[0][0], gap[1][1]-gap[1][0])
 		steps := int(math.Ceil(width / 0.02))
@@ -170,20 +170,20 @@ func (j *Join) ring(ctx context.Context) error {
 		}
 		j.step = max(j.step, width/float64(steps))
 		var rings [2][]int
-		for cap := range 2 {
-			rings[cap] = make([]int, steps+1)
-			rings[cap][0] = part.Vertex[cap][part.RootStart]
-			rings[cap][steps] = next.Vertex[cap][0]
+		for capIndex := range 2 {
+			rings[capIndex] = make([]int, steps+1)
+			rings[capIndex][0] = part.Vertex[capIndex][part.RootStart]
+			rings[capIndex][steps] = next.Vertex[capIndex][0]
 			for step := 1; step < steps; step++ {
 				t := float64(step) / float64(steps)
-				angle := gap[cap][0] + t*(gap[cap][1]-gap[cap][0])
+				angle := gap[capIndex][0] + t*(gap[capIndex][1]-gap[capIndex][0])
 				fraction := big.NewRat(int64(step), int64(steps))
 				trueAngle := proofbound.IntervalAdd(
-					proofbound.IntervalScale(gapIV[cap][0], new(big.Rat).Sub(big.NewRat(1, 1), fraction)),
-					proofbound.IntervalScale(gapIV[cap][1], fraction))
+					proofbound.IntervalScale(gapIV[capIndex][0], new(big.Rat).Sub(big.NewRat(1, 1), fraction)),
+					proofbound.IntervalScale(gapIV[capIndex][1], fraction))
 				angleError := proofbound.IntervalFloatError(trueAngle, angle)
 				z := j.Z0
-				if cap == 1 {
+				if capIndex == 1 {
 					z = j.Z1
 				}
 				p := r3.Vec{X: j.Radius * math.Cos(angle), Y: j.Radius * math.Sin(angle), Z: z}
@@ -200,9 +200,9 @@ func (j *Join) ring(ctx context.Context) error {
 					proofbound.IntervalFloatError(proofbound.IntervalScale(sine, r), p.Y)))
 				j.round = max(j.round, proofbound.AbsSumUpper(pointRound,
 					proofbound.ProductUpper(j.Radius, angleError)))
-				rings[cap][step] = len(mesh.Verts)
+				rings[capIndex][step] = len(mesh.Verts)
 				mesh.Verts = append(mesh.Verts, p)
-				j.outlines[cap] = append(j.outlines[cap], rings[cap][step])
+				j.outlines[capIndex] = append(j.outlines[capIndex], rings[capIndex][step])
 			}
 		}
 		j.twist = max(j.twist,
@@ -218,7 +218,7 @@ func (j *Join) ring(ctx context.Context) error {
 			mesh.Add([3]int{b0, t1, t0}, j.groups[0])
 		}
 	}
-	for cap, outline := range j.outlines {
+	for endCap, outline := range j.outlines {
 		points := make([]triangulation.Point2, len(outline))
 		loop := make([]int, len(outline))
 		for i, index := range outline {
@@ -232,10 +232,10 @@ func (j *Join) ring(ctx context.Context) error {
 		}
 		for _, tri := range triangles {
 			mapped := [3]int{outline[tri[0]], outline[tri[1]], outline[tri[2]]}
-			if cap == 0 {
+			if endCap == 0 {
 				mapped[1], mapped[2] = mapped[2], mapped[1]
 			}
-			mesh.Add(mapped, j.groups[cap+1])
+			mesh.Add(mapped, j.groups[endCap+1])
 		}
 	}
 	if j.twist > 0.4 || j.step > 0.025 {
@@ -333,18 +333,18 @@ func (j *Join) Payload(ctx context.Context, blankMesh *topo.Mesh) (facetedrecord
 		loftmesh.MaxLoftAuditTriangles, AuditMaxScans); err != nil {
 		return facetedrecord.Payload{}, err
 	}
-	for cap, outline := range j.outlines {
+	for endCap, outline := range j.outlines {
 		z := j.Z0
-		if cap == 1 {
+		if endCap == 1 {
 			z = j.Z1
 		}
-		if !AuditCap(ctx, mesh.Verts, mesh.Tris, mesh.Src, outline, j.groups[cap+1], z, cap == 0) {
+		if !AuditCap(ctx, mesh.Verts, mesh.Tris, mesh.Src, outline, j.groups[endCap+1], z, endCap == 0) {
 			if err := ctx.Err(); err != nil {
 				return facetedrecord.Payload{}, err
 			}
 			return facetedrecord.Payload{}, fmt.Errorf("%w: circular join cap does not tile its recorded outline", decaderr.ErrUnsupported)
 		}
-		if !rootChordsInsideCap(ctx, mesh.Verts, outline, j.Teeth, cap) {
+		if !rootChordsInsideCap(ctx, mesh.Verts, outline, j.Teeth, endCap) {
 			if err := ctx.Err(); err != nil {
 				return facetedrecord.Payload{}, err
 			}

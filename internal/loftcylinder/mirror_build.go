@@ -49,12 +49,12 @@ func BuildMirrorJoin(ctx context.Context, env topo.Env, blank *topo.Body, pairs 
 	if !ok {
 		return nil, fmt.Errorf("%w: mirrored cylinder lost its circular blank", decaderr.ErrUnsupported)
 	}
-	for cap, outline := range shell.CapOutlines {
+	for endCap, outline := range shell.CapOutlines {
 		z := fullBlank.Z0
-		if cap == 1 {
+		if endCap == 1 {
 			z = fullBlank.Z1
 		}
-		if !AuditCap(ctx, shell.Payload.Verts, shell.Payload.Tris, shell.Payload.Src, outline, shell.CapGroups[cap], z, cap == 0) {
+		if !AuditCap(ctx, shell.Payload.Verts, shell.Payload.Tris, shell.Payload.Src, outline, shell.CapGroups[endCap], z, endCap == 0) {
 			return nil, fmt.Errorf("%w: mirrored cylinder cap does not tile its recorded outline", decaderr.ErrUnsupported)
 		}
 	}
@@ -114,13 +114,13 @@ func BuildMirrorBore(ctx context.Context, env topo.Env, record *facetedrecord.Lo
 	if !ok || !MirrorBlank(fullBlank) {
 		return nil, fmt.Errorf("%w: reflected circular bore lost its exact blank", decaderr.ErrUnsupported)
 	}
-	for cap, group := range shell.CapGroups {
+	for endCap, group := range shell.CapGroups {
 		z := fullBlank.Z0
-		if cap == 1 {
+		if endCap == 1 {
 			z = fullBlank.Z1
 		}
 		if !AuditAnnulus(ctx, shell.Payload.Verts, shell.Payload.Tris, shell.Payload.Src,
-			shell.Outer[cap], shell.Inner[cap], group, z, cap == 0) {
+			shell.Outer[endCap], shell.Inner[endCap], group, z, endCap == 0) {
 			return nil, fmt.Errorf("%w: reflected circular bore cap does not tile its annulus", decaderr.ErrUnsupported)
 		}
 	}
@@ -162,9 +162,9 @@ func buildMirrorWithWarnings(ctx context.Context, env topo.Env, payload facetedr
 // role, then every origin of each pair's source cap group.
 func mirrorCapOrigins(fp *facetedrecord.Payload, blank *topo.Body, pairs []*topo.Body,
 	groups [2]int) error {
-	for cap, group := range groups {
+	for endCap, group := range groups {
 		role := provenance.RoleCapStart
-		if cap == 1 {
+		if endCap == 1 {
 			role = provenance.RoleCapEnd
 		}
 		seen := make(map[provenance.Ref]struct{})
@@ -193,11 +193,11 @@ func mirrorCapOrigins(fp *facetedrecord.Payload, blank *topo.Body, pairs []*topo
 			if record == nil && payload.LoftMirrorCopy != nil {
 				record = payload.LoftMirrorCopy.Source
 			}
-			if record == nil || record.CapGroups[cap] < 0 ||
-				record.CapGroups[cap] >= len(payload.Groups) {
+			if record == nil || record.CapGroups[endCap] < 0 ||
+				record.CapGroups[endCap] >= len(payload.Groups) {
 				return fmt.Errorf("%w: mirrored tooth lost a source cap role", decaderr.ErrUnsupported)
 			}
-			for _, origin := range payload.Groups[record.CapGroups[cap]].Origins {
+			for _, origin := range payload.Groups[record.CapGroups[endCap]].Origins {
 				add(origin)
 			}
 		}

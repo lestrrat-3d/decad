@@ -23,20 +23,20 @@ func RootCollar(xform r3.Transform, profiles [2]momentinput.Profile, radius, hei
 	basis := xform.Basis()
 	c, s := proofarith.FloatRat(basis.EX.X), proofarith.FloatRat(basis.EX.Y)
 	scale2 := new(big.Rat).Add(new(big.Rat).Mul(c, c), new(big.Rat).Mul(s, s))
-	for cap, profile := range profiles {
+	for endCap, profile := range profiles {
 		arc, ok := profile.Outer.Segments[5].(sectionrecord.ArcSeg)
 		if !ok {
 			return 0, false
 		}
 		x, y := proofarith.FloatRat(arc.Start.U), proofarith.FloatRat(arc.Start.V)
-		q[cap] = new(big.Rat).Mul(scale2,
+		q[endCap] = new(big.Rat).Mul(scale2,
 			new(big.Rat).Add(new(big.Rat).Mul(x, x), new(big.Rat).Mul(y, y)))
 		for end, p := range []sectionrecord.Point2{arc.Start, arc.End} {
-			angles[cap][end] = proofbound.Atan2Interval(
+			angles[endCap][end] = proofbound.Atan2Interval(
 				proofarith.FloatRat(p.V), proofarith.FloatRat(p.U), false)
 		}
-		if angles[cap][1].Hi.Cmp(angles[cap][0].Lo) <= 0 {
-			angles[cap][1] = proofbound.IntervalAdd(angles[cap][1], proofbound.TwoPiInterval())
+		if angles[endCap][1].Hi.Cmp(angles[endCap][0].Lo) <= 0 {
+			angles[endCap][1] = proofbound.IntervalAdd(angles[endCap][1], proofbound.TwoPiInterval())
 		}
 	}
 	r2 := new(big.Rat).Mul(proofarith.FloatRat(radius), proofarith.FloatRat(radius))
@@ -112,23 +112,23 @@ func SourceStrictRootCollar(xform r3.Transform, profiles [2]momentinput.Profile,
 	r2 := new(big.Rat).Mul(proofarith.FloatRat(radius), proofarith.FloatRat(radius))
 	var q [2]*big.Rat
 	var angles [2][2]proofbound.RatInterval
-	for cap, profile := range profiles {
+	for endCap, profile := range profiles {
 		arc, valid := profile.Outer.Segments[5].(sectionrecord.ArcSeg)
 		if !valid {
 			return 0, false
 		}
 		x, y := proofarith.FloatRat(arc.Start.U), proofarith.FloatRat(arc.Start.V)
-		q[cap] = new(big.Rat).Mul(scale2,
+		q[endCap] = new(big.Rat).Mul(scale2,
 			new(big.Rat).Add(new(big.Rat).Mul(x, x), new(big.Rat).Mul(y, y)))
-		if q[cap].Cmp(r2) > 0 {
+		if q[endCap].Cmp(r2) > 0 {
 			return 0, false
 		}
 		for end, p := range []sectionrecord.Point2{arc.Start, arc.End} {
-			angles[cap][end] = proofbound.Atan2Interval(
+			angles[endCap][end] = proofbound.Atan2Interval(
 				proofarith.FloatRat(p.V), proofarith.FloatRat(p.U), false)
 		}
-		if angles[cap][1].Hi.Cmp(angles[cap][0].Lo) <= 0 {
-			angles[cap][1] = proofbound.IntervalAdd(angles[cap][1], proofbound.TwoPiInterval())
+		if angles[endCap][1].Hi.Cmp(angles[endCap][0].Lo) <= 0 {
+			angles[endCap][1] = proofbound.IntervalAdd(angles[endCap][1], proofbound.TwoPiInterval())
 		}
 	}
 	if q[0].Cmp(r2) < 0 || q[1].Cmp(r2) < 0 {

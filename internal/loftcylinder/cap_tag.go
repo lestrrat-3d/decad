@@ -27,11 +27,11 @@ func TagCaps(pp *facetedrecord.Payload, blank *topo.Body, groups [2]int,
 	}
 	roles := [2]string{provenance.RoleCapStart, provenance.RoleCapEnd}
 	faces := topobuild.Faces(blank)
-	for cap, group := range groups {
+	for endCap, group := range groups {
 		if group < 0 || group >= len(pp.Groups) {
 			return fmt.Errorf("%w: loft/cylinder cap names no source group", decaderr.ErrUnsupported)
 		}
-		want := provenance.Ref{Producer: blank.Origin.Producer, Role: roles[cap]}
+		want := provenance.Ref{Producer: blank.Origin.Producer, Role: roles[endCap]}
 		var source *topo.Face
 		for _, face := range faces {
 			for _, origin := range face.Origins {
@@ -48,11 +48,11 @@ func TagCaps(pp *facetedrecord.Payload, blank *topo.Body, groups [2]int,
 			return fmt.Errorf("%w: loft/cylinder blank has no cap source", decaderr.ErrUnsupported)
 		}
 		plane, ok := source.Surface.(surfacegeom.Plane)
-		if !ok || plane.Frame.Origin().Z != levels[cap] {
+		if !ok || plane.Frame.Origin().Z != levels[endCap] {
 			return fmt.Errorf("%w: loft/cylinder blank cap has no matching plane", decaderr.ErrUnsupported)
 		}
 		normal := float64(1)
-		if cap == 0 {
+		if endCap == 0 {
 			normal = -1
 		}
 		if plane.Frame.N() != (r3.Vec{Z: normal}) {
@@ -65,7 +65,7 @@ func TagCaps(pp *facetedrecord.Payload, blank *topo.Body, groups [2]int,
 			}
 			count++
 			for _, index := range tri {
-				if index < 0 || index >= len(pp.Verts) || pp.Verts[index].Z != levels[cap] {
+				if index < 0 || index >= len(pp.Verts) || pp.Verts[index].Z != levels[endCap] {
 					return fmt.Errorf("%w: loft/cylinder cap facet leaves its source plane", decaderr.ErrUnsupported)
 				}
 			}
@@ -75,7 +75,7 @@ func TagCaps(pp *facetedrecord.Payload, blank *topo.Body, groups [2]int,
 		}
 		g := &pp.Groups[group]
 		g.Origins = append(append([]provenance.Ref(nil), g.Origins...),
-			provenance.Ref{Producer: ref, Role: roles[cap]})
+			provenance.Ref{Producer: ref, Role: roles[endCap]})
 		g.Surface = plane
 		g.Planar = true
 		g.NormalBound = source.NormalBound

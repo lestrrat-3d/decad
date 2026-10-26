@@ -484,9 +484,9 @@ func TestLoftQuarterHeldPairRealProducerGate(t *testing.T) {
 	require.NoError(t, err)
 	var sections [2]*sketch.Sketch
 	var profiles [2]*sketch.Profile
-	for cap, radius := range [2]float64{5, 5.5} {
+	for endCap, radius := range [2]float64{5, 5.5} {
 		plane := world.XY()
-		if cap == 1 {
+		if endCap == 1 {
 			plane = upper
 		}
 		s, createErr := world.CreateSketch(plane)
@@ -503,7 +503,7 @@ func TestLoftQuarterHeldPairRealProducerGate(t *testing.T) {
 		found := s.Profiles()
 		require.Len(t, found, 1)
 		require.True(t, found[0].Valid)
-		sections[cap], profiles[cap] = s, found[0]
+		sections[endCap], profiles[endCap] = s, found[0]
 	}
 	loft, err := Loft(ctx, doc, sections[0], profiles[0], sections[1], profiles[1])
 	require.NoError(t, err)
@@ -771,9 +771,9 @@ func TestLoftQuarterOriginalHeldY1RealProducer(t *testing.T) {
 
 	var sections [2]*sketch.Sketch
 	var profiles [2]*sketch.Profile
-	for cap, radius := range [2]float64{5, 5.5} {
+	for endCap, radius := range [2]float64{5, 5.5} {
 		plane := world.XY()
-		if cap == 1 {
+		if endCap == 1 {
 			plane = upper
 		}
 		s, createErr := world.CreateSketch(plane)
@@ -790,7 +790,7 @@ func TestLoftQuarterOriginalHeldY1RealProducer(t *testing.T) {
 		found := s.Profiles()
 		require.Len(t, found, 1)
 		require.True(t, found[0].Valid)
-		sections[cap], profiles[cap] = s, found[0]
+		sections[endCap], profiles[endCap] = s, found[0]
 	}
 	loft, err := Loft(ctx, doc, sections[0], profiles[0], sections[1], profiles[1])
 	require.NoError(t, err)
@@ -984,9 +984,9 @@ func TestLoftQuarterJunctionOneRealCase(t *testing.T) {
 	}
 	var sections [2]*sketch.Sketch
 	var profiles [2]*sketch.Profile
-	for cap, radius := range [2]float64{5, 5.5} {
+	for endCap, radius := range [2]float64{5, 5.5} {
 		plane := world.XY()
-		if cap == 1 {
+		if endCap == 1 {
 			plane = upper
 		}
 		s, e := world.CreateSketch(plane)
@@ -1005,9 +1005,9 @@ func TestLoftQuarterJunctionOneRealCase(t *testing.T) {
 		}
 		found := s.Profiles()
 		if len(found) != 1 || !found[0].Valid {
-			t.Fatalf("producer cap %d: profiles=%d", cap, len(found))
+			t.Fatalf("producer cap %d: profiles=%d", endCap, len(found))
 		}
-		sections[cap], profiles[cap] = s, found[0]
+		sections[endCap], profiles[endCap] = s, found[0]
 	}
 	doc := New()
 	loft, err := Loft(ctx, doc, sections[0], profiles[0],
@@ -1064,29 +1064,29 @@ func TestLoftQuarterJunctionOneRealCase(t *testing.T) {
 	if work.Pairs != 24 {
 		t.Fatalf("original pair scans=%d, want 24", work.Pairs)
 	}
-	for cap := range 2 {
-		if len(order.Quarter[cap]) != 2 {
-			t.Fatalf("cap %d: junctions=%d, want 2", cap, len(order.Quarter[cap]))
+	for capIndex := range 2 {
+		if len(order.Quarter[capIndex]) != 2 {
+			t.Fatalf("cap %d: junctions=%d, want 2", capIndex, len(order.Quarter[capIndex]))
 		}
 		seen := map[float64]bool{}
-		for _, event := range order.Quarter[cap] {
+		for _, event := range order.Quarter[capIndex] {
 			line := event.Line.Curve.(sectionrecord.LineSeg)
 			if line.Start.V != line.End.V || event.Appearances == 0 {
-				t.Fatalf("cap %d: unverified source occurrence", cap)
+				t.Fatalf("cap %d: unverified source occurrence", capIndex)
 			}
 			y := line.Start.V
 			var want *big.Rat
 			switch {
-			case cap == 0 && y == 1:
+			case capIndex == 0 && y == 1:
 				want = big.NewRat(24, 1)
-			case cap == 0 && y == 3:
+			case capIndex == 0 && y == 3:
 				want = big.NewRat(16, 1)
-			case cap == 1 && y == 1:
+			case capIndex == 1 && y == 1:
 				want = big.NewRat(117, 4)
-			case cap == 1 && y == 3:
+			case capIndex == 1 && y == 3:
 				want = big.NewRat(85, 4)
 			default:
-				t.Fatalf("cap %d: unexpected line y=%g", cap, y)
+				t.Fatalf("cap %d: unexpected line y=%g", capIndex, y)
 			}
 			x, yBox := event.Witness.Point()
 			xlo, xhi := x.Bounds()
@@ -1096,10 +1096,10 @@ func TestLoftQuarterJunctionOneRealCase(t *testing.T) {
 				yhi.Cmp(new(big.Rat).SetFloat64(y)) < 0 ||
 				new(big.Rat).Mul(xlo, xlo).Cmp(want) > 0 ||
 				new(big.Rat).Mul(xhi, xhi).Cmp(want) < 0 {
-				t.Fatalf("cap %d y=%g: root bracket misses x squared=%s", cap, y, want)
+				t.Fatalf("cap %d y=%g: root bracket misses x squared=%s", capIndex, y, want)
 			}
 			if seen[y] {
-				t.Fatalf("cap %d y=%g: duplicate root", cap, y)
+				t.Fatalf("cap %d y=%g: duplicate root", capIndex, y)
 			}
 			seen[y] = true
 		}
@@ -1125,10 +1125,10 @@ func TestLoftQuarterJunctionOneRealCase(t *testing.T) {
 			t.Fatalf("shared quarter source: certified=%t err=%v visits=%d steps=%d",
 				certified, e, envelope.Visits, total)
 		}
-		for cap := range envelope.Order.Quarter {
-			if len(envelope.Order.Quarter[cap]) != 2 {
-				t.Fatalf("cap %d: envelope junctions=%d", cap,
-					len(envelope.Order.Quarter[cap]))
+		for endCap := range envelope.Order.Quarter {
+			if len(envelope.Order.Quarter[endCap]) != 2 {
+				t.Fatalf("cap %d: envelope junctions=%d", endCap,
+					len(envelope.Order.Quarter[endCap]))
 			}
 		}
 		total = 0
@@ -1190,9 +1190,9 @@ func TestLoftQuarterWallOrderRealSketchPair(t *testing.T) {
 	require.NoError(t, err)
 	var sections [2]*sketch.Sketch
 	var profiles [2]*sketch.Profile
-	for cap, radius := range [2]float64{5, 5.5} {
+	for endCap, radius := range [2]float64{5, 5.5} {
 		plane := world.XY()
-		if cap == 1 {
+		if endCap == 1 {
 			plane = upper
 		}
 		s, createErr := world.CreateSketch(plane)
@@ -1209,7 +1209,7 @@ func TestLoftQuarterWallOrderRealSketchPair(t *testing.T) {
 		found := s.Profiles()
 		require.Len(t, found, 1)
 		require.True(t, found[0].Valid)
-		sections[cap], profiles[cap] = s, found[0]
+		sections[endCap], profiles[endCap] = s, found[0]
 	}
 	loft, err := Loft(t.Context(), New(), sections[0], profiles[0],
 		sections[1], profiles[1])

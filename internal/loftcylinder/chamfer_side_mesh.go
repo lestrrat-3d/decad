@@ -96,9 +96,9 @@ func ChamferClipSide(ctx context.Context, mesh *facetedrecord.JoinedMesh,
 		new(big.Rat).Add(proofarith.FloatRat(source.Z0), proofarith.FloatRat(d)),
 		new(big.Rat).Sub(proofarith.FloatRat(source.Z1), proofarith.FloatRat(d)),
 	}
-	for cap, level := range levels {
-		result.Rings[cap] = make([]int, 2*n)
-		result.Exact[cap] = make([]proofarith.Xpt, 2*n)
+	for endCap, level := range levels {
+		result.Rings[endCap] = make([]int, 2*n)
+		result.Exact[endCap] = make([]proofarith.Xpt, 2*n)
 		for i := range n {
 			if i%64 == 0 && ctx.Err() != nil {
 				return result, ctx.Err()
@@ -108,14 +108,14 @@ func ChamferClipSide(ctx context.Context, mesh *facetedrecord.JoinedMesh,
 			next := source.Outer[1][(i+1)%n]
 			for k, end := range [2]int{t, next} {
 				p, exact, round, err := ChamferLerp(fp.Verts[b], fp.Verts[end],
-					trueLevels[cap], level)
+					trueLevels[endCap], level)
 
 				if err != nil {
 					return result, err
 				}
 				result.ClipBound = max(result.ClipBound, round)
-				result.Rings[cap][2*i+k] = len(mesh.Verts)
-				result.Exact[cap][2*i+k] = exact
+				result.Rings[endCap][2*i+k] = len(mesh.Verts)
+				result.Exact[endCap][2*i+k] = exact
 				mesh.Verts = append(mesh.Verts, p)
 				*vertexBound = append(*vertexBound, proofbound.AbsSumUpper(fp.MeshBound, round))
 			}
@@ -148,14 +148,14 @@ func ChamferContactAudit(ctx context.Context, fp facetedrecord.Payload,
 	for i, tri := range fp.Tris {
 		oldBoxes[i] = meshbool.TriBox(fp.Verts, tri)
 	}
-	for cap, band := range bands {
+	for endCap, band := range bands {
 		if band[0] == band[1] {
 			continue
 		}
 		pointTouches := make(map[string]struct{})
 		segmentEnds := make(map[string]struct{})
-		sideVertexKeys := make(map[string]struct{}, len(side.Rings[cap]))
-		for _, vertex := range side.Rings[cap] {
+		sideVertexKeys := make(map[string]struct{}, len(side.Rings[endCap]))
+		for _, vertex := range side.Rings[endCap] {
 			sideVertexKeys[xverts[vertex].Key()] = struct{}{}
 		}
 		tri := mesh.Tris[band[0]]
@@ -169,7 +169,7 @@ func ChamferContactAudit(ctx context.Context, fp facetedrecord.Payload,
 		}
 		level := source.Z0 + setback
 		trueLevel := new(big.Rat).Add(proofarith.FloatRat(source.Z0), proofarith.FloatRat(setback))
-		if cap == 1 {
+		if endCap == 1 {
 			level = source.Z1 - setback
 			trueLevel = new(big.Rat).Sub(proofarith.FloatRat(source.Z1), proofarith.FloatRat(setback))
 		}
@@ -212,9 +212,9 @@ func ChamferContactAudit(ctx context.Context, fp facetedrecord.Payload,
 					if meshbool.RatCoordOf(contact.P0, 2).Cmp(trueLevel) != 0 ||
 						!contact.P0OnA ||
 						(!atSideVertex && !ChamferContactOnSide(
-							contact.P0, tri, xverts, sideEdges[cap])) {
+							contact.P0, tri, xverts, sideEdges[endCap])) {
 						return fmt.Errorf("%w: ideal cap band touches an old wall away from its side ring: cap=%d band=%d old=%d point=%v tri=%v level=%g",
-							decaderr.ErrUnsupported, cap, i, j, contact.P0.Vec(), tri, level)
+							decaderr.ErrUnsupported, endCap, i, j, contact.P0.Vec(), tri, level)
 					}
 					continue
 				}
@@ -232,7 +232,7 @@ func ChamferContactAudit(ctx context.Context, fp facetedrecord.Payload,
 					return fmt.Errorf("%w: ideal cap band crosses an old wall away from its side ring", decaderr.ErrUnsupported)
 				}
 				a, b := tri[contact.EdgeA], tri[(contact.EdgeA+1)%3]
-				if _, ok := sideEdges[cap][ChamferEdge(a, b)]; !ok {
+				if _, ok := sideEdges[endCap][ChamferEdge(a, b)]; !ok {
 					return fmt.Errorf("%w: ideal cap band touches an old wall on a non-rim edge", decaderr.ErrUnsupported)
 				}
 			}

@@ -99,12 +99,12 @@ func (fp Payload) PlacedWith(ctx context.Context, env topo.Env, composed r3.Tran
 		return nil, fmt.Errorf("%w: a loft mirror join lost its outer-cap groups", decaderr.ErrUnsupported)
 	}
 	if fp.MirrorCapGroups != nil {
-		for cap, group := range fp.MirrorCapGroups {
+		for endCap, group := range fp.MirrorCapGroups {
 			if group < 0 || group >= len(next.Groups) {
 				return nil, fmt.Errorf("%w: placed mirror join lost an outer cap", decaderr.ErrUnsupported)
 			}
 			role := provenance.RoleCapStart
-			if cap == 1 {
+			if endCap == 1 {
 				role = provenance.RoleCapEnd
 			}
 			origins := append([]provenance.Ref(nil), next.Groups[group].Origins...)

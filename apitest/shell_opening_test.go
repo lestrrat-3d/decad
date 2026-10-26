@@ -189,8 +189,8 @@ func TestShellSideOpeningUChannel(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, decad.Exact, vol.Exactness)
 		require.Equal(t, 1920.0, volumeMM(t, vol))
-		for _, cap := range []decad.FeatureRef{decad.CapStart(body), decad.CapEnd(body)} {
-			faces, err := decad.Faces(decad.FaceCreatedBy(cap)).SelectFaces(body)
+		for _, endCap := range []decad.FeatureRef{decad.CapStart(body), decad.CapEnd(body)} {
+			faces, err := decad.Faces(decad.FaceCreatedBy(endCap)).SelectFaces(body)
 			require.NoError(t, err)
 			require.Len(t, faces, 1)
 		}
@@ -619,8 +619,8 @@ func TestShellSideOpeningOblique(t *testing.T) {
 		// 10 + 2.5 long.
 		requireVolumeAreaNear(t, body, 300, 60+440)
 		require.Len(t, body.Faces(), 8)
-		for _, cap := range []decad.FeatureRef{decad.CapStart(body), decad.CapEnd(body)} {
-			faces, err := decad.Faces(decad.FaceCreatedBy(cap)).SelectFaces(body)
+		for _, endCap := range []decad.FeatureRef{decad.CapStart(body), decad.CapEnd(body)} {
+			faces, err := decad.Faces(decad.FaceCreatedBy(endCap)).SelectFaces(body)
 			require.NoError(t, err)
 			require.Len(t, faces, 1)
 		}

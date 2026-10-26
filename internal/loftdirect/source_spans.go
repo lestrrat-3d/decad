@@ -74,13 +74,13 @@ func CertifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 	}
 	result := loftCapSourceOrder{source: source}
 	shared := [2]bool{}
-	for cap := range 2 {
+	for capIndex := range 2 {
 		loftLoop := lp.Profile0.Outer
-		if cap == 1 {
+		if capIndex == 1 {
 			loftLoop = lp.Profile1.Outer
 		}
-		if len(source.PrismCaps[cap]) != len(pp.Profile.Outer.Segments) ||
-			len(source.LoftCaps[cap]) != len(loftLoop.Segments) {
+		if len(source.PrismCaps[capIndex]) != len(pp.Profile.Outer.Segments) ||
+			len(source.LoftCaps[capIndex]) != len(loftLoop.Segments) {
 			return no, false, nil
 		}
 		_, withinCap, err := prismcells.RegionsWithinWorkCap(budget,
@@ -96,13 +96,13 @@ func CertifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 			return no, false, err
 		}
 		// TaggedSegments scans the tags and both source-index arrays.
-		_, err = budget.StepN(uint64(len(tags) + len(source.PrismCaps[cap]) +
-			len(source.LoftCaps[cap])))
+		_, err = budget.StepN(uint64(len(tags) + len(source.PrismCaps[capIndex]) +
+			len(source.LoftCaps[capIndex])))
 		if err != nil {
 			return no, false, err
 		}
-		if !prismcells.TaggedSegments(tags, len(source.PrismCaps[cap]),
-			len(source.LoftCaps[cap])) {
+		if !prismcells.TaggedSegments(tags, len(source.PrismCaps[capIndex]),
+			len(source.LoftCaps[capIndex])) {
 			return no, false, nil
 		}
 		var cells []*sketch.Profile
@@ -116,7 +116,7 @@ func CertifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 			if readErr != nil {
 				return no, false, readErr
 			}
-			quarter[0].Cap = cap
+			quarter[0].Cap = capIndex
 			quarter[0].tags = tags
 			witnesses, ok, certErr := scene.CertifyQuarterArcJunctions(
 				ctx, raw, quarter[0])
@@ -128,8 +128,8 @@ func CertifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 			if splitErr != nil || !resolved {
 				return no, false, splitErr
 			}
-			result.Quarter[cap], ok, certErr = mapLoftQuarterWitnesses(
-				ctx, budget, raw, split, lineage, tags, source, cap, witnesses)
+			result.Quarter[capIndex], ok, certErr = mapLoftQuarterWitnesses(
+				ctx, budget, raw, split, lineage, tags, source, capIndex, witnesses)
 			if certErr != nil || !ok {
 				return no, false, certErr
 			}
@@ -149,7 +149,7 @@ func CertifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 		if len(coincident.Spans) != 0 {
 			return no, false, nil
 		}
-		result.Caps[cap] = make([]loftCapSourceCell, len(cells))
+		result.Caps[capIndex] = make([]loftCapSourceCell, len(cells))
 		for i, cell := range cells {
 			if err := budget.Step(); err != nil {
 				return no, false, err
@@ -166,9 +166,9 @@ func CertifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 					(edge.Partial && !edge.TExact) {
 					return no, false, nil
 				}
-				spans := source.PrismCaps[cap]
+				spans := source.PrismCaps[capIndex]
 				if origin.IsB {
-					spans = source.LoftCaps[cap]
+					spans = source.LoftCaps[capIndex]
 				}
 				if origin.Segment < 0 || origin.Segment >= len(spans) {
 					return no, false, nil
@@ -192,21 +192,21 @@ func CertifyLoftCapSourceOrder(ctx context.Context, budget *proofbound.WorkBudge
 				}
 				return no, false, err
 			}
-			shared[cap] = shared[cap] || owned.Prism && owned.Loft
-			result.Caps[cap][i] = owned
+			shared[capIndex] = shared[capIndex] || owned.Prism && owned.Loft
+			result.Caps[capIndex][i] = owned
 			result.Visits++
 		}
-		if !shared[cap] {
+		if !shared[capIndex] {
 			return no, false, nil
 		}
 		if len(quarter) == 1 {
 			pairsOK, pairErr := quarterSourcePairs(
-				budget, quarter[0], source, cap, result.Quarter[cap])
+				budget, quarter[0], source, capIndex, result.Quarter[capIndex])
 			if pairErr != nil || !pairsOK {
 				return no, false, pairErr
 			}
 			intervalsOK, intervalErr := quarterSourceIntervals(
-				budget, source, cap, result.Caps[cap])
+				budget, source, capIndex, result.Caps[capIndex])
 			if intervalErr != nil || !intervalsOK {
 				return no, false, intervalErr
 			}
@@ -313,16 +313,16 @@ func CertifyLoftSourceSpanCaps(ctx context.Context, budget *proofbound.WorkBudge
 	result := LoftSourceSpanCaps{Prism: prism, Loft: loft,
 		Levels: [3]*big.Rat{big.NewRat(0, 1), new(big.Rat).Set(axis.Shift), prismTop},
 		Visits: fitVisits}
-	for cap := range 2 {
+	for capIndex := range 2 {
 		prismRole := provenance.RoleCapStart
 		loftRole := provenance.RoleCapStart
-		if cap == 1 {
+		if capIndex == 1 {
 			prismRole, loftRole = provenance.RoleCapEnd, provenance.RoleCapEnd
 		}
-		result.PrismCaps[cap] = make([]loftSourceCapSpan, len(prismSegments))
-		result.LoftCaps[cap] = make([]loftSourceCapSpan, len(lower))
+		result.PrismCaps[capIndex] = make([]loftSourceCapSpan, len(prismSegments))
+		result.LoftCaps[capIndex] = make([]loftSourceCapSpan, len(lower))
 		loftSegments := lower
-		if cap == 1 {
+		if capIndex == 1 {
 			loftSegments = upper
 		}
 		for i, curve := range prismSegments {
@@ -333,7 +333,7 @@ func CertifyLoftSourceSpanCaps(ctx context.Context, budget *proofbound.WorkBudge
 			if !ok {
 				return no, false, nil
 			}
-			result.PrismCaps[cap][i] = span
+			result.PrismCaps[capIndex][i] = span
 			result.Visits++
 		}
 		for i, curve := range loftSegments {
@@ -347,7 +347,7 @@ func CertifyLoftSourceSpanCaps(ctx context.Context, budget *proofbound.WorkBudge
 			if !ok {
 				return no, false, nil
 			}
-			result.LoftCaps[cap][i] = span
+			result.LoftCaps[capIndex][i] = span
 			result.Visits++
 		}
 	}
@@ -372,9 +372,9 @@ func CertifyLoftSourceSpanCaps(ctx context.Context, budget *proofbound.WorkBudge
 		if source < 0 || source >= len(lower) || seen[cell] != [2]uint8{1, 1} {
 			return no, false, nil
 		}
-		for cap := range 2 {
-			role := fmt.Sprintf("side(0,%d,%d)", cell, cap)
-			span := &result.LoftCaps[cap][source]
+		for capIndex := range 2 {
+			role := fmt.Sprintf("side(0,%d,%d)", cell, capIndex)
+			span := &result.LoftCaps[capIndex][source]
 			span.WallFaces = append(span.WallFaces, provenance.Ref{
 				Producer: lp.SourceIdentity.Origin, Role: role})
 		}

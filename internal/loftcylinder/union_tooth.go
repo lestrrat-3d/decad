@@ -126,8 +126,8 @@ func (t *Tooth) Admit(radius, z0, z1 float64) bool {
 	}
 	lp, root := t.Loft, t.RootStart
 	n := len(lp.Verts) / 2
-	for cap := range 2 {
-		offset := cap * n
+	for capIndex := range 2 {
+		offset := capIndex * n
 		p0, p1 := lp.Verts[offset], lp.Verts[offset+root]
 		start, end := math.Atan2(p0.Y, p0.X), math.Atan2(p1.Y, p1.X)
 		startIV := proofbound.Atan2Interval(proofarith.FloatRat(p0.Y), proofarith.FloatRat(p0.X), false)
@@ -139,7 +139,7 @@ func (t *Tooth) Admit(radius, z0, z1 float64) bool {
 		if end-start <= 0 || end-start >= math.Pi/2 {
 			return false
 		}
-		if cap == 0 {
+		if capIndex == 0 {
 			t.Bottom = [2]float64{start, end}
 			t.BottomIV = [2]proofbound.RatInterval{startIV, endIV}
 			continue
@@ -252,9 +252,9 @@ func Separate(teeth []Tooth) bool {
 	}
 	for i := range teeth {
 		j := (i + 1) % len(teeth)
-		for cap := range 2 {
+		for capIndex := range 2 {
 			a, b := teeth[i].Bottom, teeth[j].Bottom
-			if cap == 1 {
+			if capIndex == 1 {
 				a, b = teeth[i].Top, teeth[j].Top
 			}
 			for b[0] <= a[0] {
@@ -293,17 +293,17 @@ func movingSeparate(a, b Tooth, remaining *int) bool {
 	}
 	var normals [2][2]*big.Rat
 	maxNorm := 0.0
-	for cap := range 2 {
-		ax, ay := center(a, cap)
-		bx, by := center(b, cap)
+	for capIndex := range 2 {
+		ax, ay := center(a, capIndex)
+		bx, by := center(b, capIndex)
 		nx, ny := bx-ax, by-ay
 		if !proofbound.FiniteVec(r3.Vec{X: nx, Y: ny}) {
 			return false
 		}
-		normals[cap] = [2]*big.Rat{proofarith.FloatRat(nx), proofarith.FloatRat(ny)}
+		normals[capIndex] = [2]*big.Rat{proofarith.FloatRat(nx), proofarith.FloatRat(ny)}
 		squared := new(big.Rat).Add(
-			new(big.Rat).Mul(normals[cap][0], normals[cap][0]),
-			new(big.Rat).Mul(normals[cap][1], normals[cap][1]))
+			new(big.Rat).Mul(normals[capIndex][0], normals[capIndex][0]),
+			new(big.Rat).Mul(normals[capIndex][1], normals[capIndex][1]))
 		maxNorm = max(maxNorm, proofbound.RatSqrtUp(squared))
 	}
 	if maxNorm <= 0 || proofbound.IsNonFinite(maxNorm) {

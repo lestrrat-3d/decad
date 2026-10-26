@@ -88,7 +88,7 @@ func SourceConnectorOf(verts []r3.Vec, tris [][3]int, segments [][]int,
 		return Connector{}, false
 	}
 	var result Connector
-	for cap, profile := range profiles {
+	for endCap, profile := range profiles {
 		line, ok := profile.Outer.Segments[segment].(sectionrecord.LineSeg)
 		if !ok || !proofbound.FiniteVec(r3.Vec{X: line.Start.U, Y: line.Start.V}) ||
 			!proofbound.FiniteVec(r3.Vec{X: line.End.U, Y: line.End.V}) {
@@ -98,13 +98,13 @@ func SourceConnectorOf(verts []r3.Vec, tris [][3]int, segments [][]int,
 		if cell != 0 {
 			points[0], points[1] = points[1], points[0]
 		}
-		result.a[cap] = SourcePoint(ex, points[0])
-		result.f[cap] = SourcePoint(ex, points[1])
-		switch diagonal[cap] {
+		result.a[endCap] = SourcePoint(ex, points[0])
+		result.f[endCap] = SourcePoint(ex, points[1])
+		switch diagonal[endCap] {
 		case near:
-			result.d[cap] = result.a[cap]
+			result.d[endCap] = result.a[endCap]
 		case far:
-			result.d[cap] = result.f[cap]
+			result.d[endCap] = result.f[endCap]
 		default:
 			return Connector{}, false
 		}
