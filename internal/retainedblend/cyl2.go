@@ -55,7 +55,7 @@ func looksLikeCylCyl(edge *topo.Edge) bool {
 	}
 	var axes [2]r3.Vec
 	for i, f := range edge.Faces {
-		if f == nil || !f.RetainedTag || f.TagDeparture != 0 || f.Denoted != nil {
+		if f == nil || !f.RetainedTag || f.TagDeparture != 0 || !tagIsRecord(f) {
 			return false
 		}
 		cyl, ok := f.Surface.(surfacegeom.Cylinder)

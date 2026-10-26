@@ -33,7 +33,11 @@ func rewriteCylCyl(ctx context.Context, env topo.Env, fp facetedrecord.Payload, 
 	var faces [4]faceLoops
 	for k, f := range []*topo.Face{c.wall[0].face, c.wall[1].face, c.ends[0].face, c.ends[1].face} {
 		var err error
-		if faces[k], err = w.faceLoops(faceIndex[f]); err != nil {
+		var end *plane
+		if k >= 2 {
+			end = &c.ends[k-2].g
+		}
+		if faces[k], err = w.faceLoops(faceIndex[f], end); err != nil {
 			return nil, err
 		}
 	}

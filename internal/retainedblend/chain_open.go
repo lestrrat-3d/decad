@@ -92,7 +92,7 @@ func (w *work) readEndCorner(v *topo.Vertex, e *topo.Edge, base *topo.Face, bp p
 // the gates of blend §5.0 step 2 and blend SR5.
 func (w *work) readEndCut(ec *chainEndCut, nP r3.Vec, tP, tW, margin, slack float64) error {
 	var err error
-	if ec.fl, err = w.faceLoops(ec.faceIx); err != nil {
+	if ec.fl, err = w.faceLoops(ec.faceIx, &ec.g); err != nil {
 		return err
 	}
 	li, ok := ec.fl.loopWith(ec.v)

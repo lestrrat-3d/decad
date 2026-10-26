@@ -95,14 +95,14 @@ the box before the Cut takes reach §8's complete cap-loop blend.
 
 | Input | Source | Used for |
 |---|---|---|
-| Retained tags with `NormalBound == 0` and no denoted patch | retention §3 | every exact surface in §4, §5, §8 |
+| Retained tags with `NormalBound == 0` and no denoted patch, or a revolve patch whose tag is exactly its denoted surface (blend §2) | retention §3 | every exact surface in §4, §5, §8 |
 | Retained edge curves (`Line3`, `Arc3`, `Circle3`) | retention §10 | edge classes and chain topology |
 | Held vertices, facets and vertex bounds | retention §3.3, faceted-vertex-bounds §2 | rewrite and clearance gates |
 | `brepmodify.Asymmetric.Refs` | reach §6, `modify_options.go` `resolveAsymmetricReference` | which face takes which distance (§4) |
 | `exactrotation.Rotation` (`Linear`, `Translation`) | `document.go` `copyUnder` | the exact image of a tag (§6) |
 | Anchor and factor of `ScaledAt` | `point_plane_scale.go` | the exact similar image of a tag (§7) |
 
-Faces with a stated departure or a denoted patch are not read by §4, §5 or §8, for blend §2's reason.
+Faces with a stated departure, or a denoted patch whose tag is not exactly the surface it denotes, are not read by §4, §5 or §8, for blend §2's reason. A Revolve `Plane` or `Cylinder` face is read; its cut by a placed tool blends through R1 to R5 like an Extrude face.
 
 ## 3. Verdicts
 
@@ -443,7 +443,8 @@ belongs to that owner.
 - **`Cone` and `Torus` faces.** In the meridian of a coaxial pair the blend is a `Torus`, so the geometry exists.
   The retained cones and tori that reach a mesh result come from revolves. Their tag is a float re-expression (the
   cone's half-angle is an `Atan2`, `internal/revolveplan/payload.go`) whose departure is stated only through the
-  face's denoted interval surface (`topo.Face.Denoted`), which blend §2 does not read. A cone or torus that a blend
+  face's denoted interval surface (`topo.Face.Denoted`), which blend §2 reads only for a `Plane` or `Cylinder` tag
+  equal to it. A cone or torus that a blend
   built (blend §4.2) meets its neighbours tangentially, so it has no edge to blend, and a later cut through it
   gives a non-coaxial rim. SR1. §16 lists the denoted-surface route.
 
@@ -601,7 +602,8 @@ increment stops and reports the refusal.
   separate design of about three PRs.
 - **`Cone` and `Torus`.** The coaxial class's meridian blend is a `Torus`, built from the denoted interval
   surfaces. It gains blends on revolved shafts after a placed cut. It costs an interval construction and a proof
-  that two denoted walls share one axis. A caller can blend on the revolve (reach RX2) before the cut today.
+  that two denoted walls share one axis. A revolved shaft's plane and cylinder faces already blend after a placed
+  cut (blend §2); only the cone and torus classes wait.
 - **Increment order.** Chains first lands the highest-value case one PR sooner. M3's two-distance chain chamfer
   row then waits for M1.
 - **R5.** Dropping it saves M6. Two parallel cylinders meeting in a transversal edge are rare in machined parts.

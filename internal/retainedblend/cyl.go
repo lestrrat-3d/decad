@@ -48,7 +48,7 @@ func looksLikeCylLine(edge *topo.Edge) bool {
 	}
 	planes, cylinders := 0, 0
 	for _, f := range edge.Faces {
-		if f == nil || !f.RetainedTag || f.TagDeparture != 0 || f.Denoted != nil {
+		if f == nil || !f.RetainedTag || f.TagDeparture != 0 || !tagIsRecord(f) {
 			return false
 		}
 		switch f.Surface.(type) {

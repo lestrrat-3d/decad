@@ -144,7 +144,7 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 			return nil, fmt.Errorf("%w: a chain junction is not where its tags meet", decaderr.ErrUnsupported)
 		}
 	}
-	fl, err := w.faceLoops(faceIndex[base])
+	fl, err := w.faceLoops(faceIndex[base], nil)
 	if err != nil {
 		return nil, err
 	}
