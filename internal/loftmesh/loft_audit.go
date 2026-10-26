@@ -265,7 +265,7 @@ func newLoftAuditDataSelected(verts []r3.Vec, exact []proof.Xpt, tris [][3]int,
 			d.Corners[i] = LoftTriCorners(verts, tri)
 			d.Xtris[i] = xt
 		}
-		d.Norms[i] = proof.Xcross(proof.Xsub(xt[1], xt[0]), proof.Xsub(xt[2], xt[0]))
+		d.Norms[i] = proof.XtriangleNormal(xt[0], xt[1], xt[2])
 		d.floatNorms[i] = d.Norms[i].Vec()
 		d.Planes[i] = NewLoftExactPlane(xt[0], d.Norms[i])
 		corners := LoftTriCorners(verts, tri)
