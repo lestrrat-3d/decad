@@ -11,6 +11,7 @@ flat shading, with no dependency beyond the standard library's `image/png`.
 type View struct {
     Direction, Up r3.Vec
     Width, Height int
+    Outlines      bool
 }
 
 func IsometricView(width, height int) View
@@ -27,7 +28,7 @@ func PNG(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, vi
 | P5 | A pixel takes the colour of the nearest triangle whose area covers the pixel's centre. A pixel centre on a shared edge belongs to both triangles, and the depth test keeps one. Every other pixel is opaque white. |
 | P6 | A triangle with a zero-area normal draws nothing. A face whose outward normal looks toward the camera takes the blue base colour, and one that looks away takes the orange base colour. Both sides are shaded the same way, as if the normal faced the camera. |
 | P7 | The shade is `0.3 + 0.7·max(0, n·L)` of the base colour, with `n` the unit normal turned to face the camera and `L` the unit vector of the camera's reverse direction raised by 0.5 and moved 0.35 to the left of the image. The offset makes faces at equal angles to the view take different shades, as an isometric view needs. |
-| P8 | No outline, axis, label or anti-aliasing is drawn. A pixel is either covered or white. |
+| P8 | No axis, label or anti-aliasing is drawn, and no outline unless `View.Outlines` is set (§6). A pixel is either covered or white. |
 | P9 | A nil context, writer or body is `ErrDegenerate`, and tessellation errors, including a wrong unit kind for `tol` and cancellation, propagate. The image is fully drawn and encoded before the first write, so a failure leaves the writer untouched. |
 
 ## 2. Determinism
@@ -46,7 +47,7 @@ image axis flipped, turns the tests red.
 
 ## 4. Not covered
 
-- Perspective cameras, outlines, hidden or feature edges, axes, dimensions and text.
+- Perspective cameras, hidden edges, axes, dimensions and text.
 - Colours, materials, textures, shadows and anti-aliasing.
 - A transparent background and image formats other than PNG.
 - Colouring bodies apart, or drawing a mesh body together with bodies.
@@ -65,4 +66,17 @@ func PNGBodies(ctx context.Context, w io.Writer, bodies []*decad.Body, tol units
 | B3 | A nearer body hides a farther one by the depth test of P5, so the order of `bodies` changes nothing in the image. |
 | B4 | All bodies share the colour scheme of P6. One body gives the bytes `PNG` gives. |
 | B5 | A nil context or writer, an empty list and a nil body are `ErrDegenerate`. A wrong unit kind for `tol` and a canceled context propagate, and a failure writes nothing. |
+
+## 6. Outlines
+
+`View.Outlines` draws the body's visible feature edges over the shading. The edges come from `drawing.Project`, the
+projection `export.DXF` uses (`agent-docs/dxf-export-design.md`), so they are the same edges that drawing shows.
+
+| Decision | Rule |
+|---|---|
+| O1 | An edge is a feature as `drawing.Project` says: an edge used once or three or more times, a crease of more than 30 degrees, or a silhouette. The diagonal of a flat face is not drawn. |
+| O2 | Only the visible runs are drawn. A hidden run, one behind a surface, is not. |
+| O3 | A segment is drawn one pixel wide in dark grey, `(32, 32, 32)`, by `raster.DrawSegments`: points about every half pixel along it, each in the pixel that holds it, so an edge at a pixel's boundary lies in the pixel to its right or below. The outline is drawn over the shading and hides it. |
+| O4 | The edges are mapped with the same projection as the shading, so each outline pixel lies on the edge between its shaded faces, to a pixel. |
+| O5 | The zero value draws no outline, and the bytes are those of §1 to §5. `PNGBodies` and `MeshPNG` take the field too. |
 

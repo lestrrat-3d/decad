@@ -174,6 +174,14 @@ func (p Projection) Project(v r3.Vec) (x, y, depth float64) {
 		p.dir.Dot(v)
 }
 
+// Plane returns the pixel position of the point (x, y) of the image plane,
+// measured in millimetres from the world origin's projection with x to the
+// right and y up, as [Projection.Project] places a world point there. y grows
+// downward in the result.
+func (p Projection) Plane(x, y float64) (px, py float64) {
+	return float64(p.Width)/2 + (x-p.centreX)*p.scale, float64(p.Height)/2 - (y-p.centreY)*p.scale
+}
+
 // PixelSize is the length in millimetres one pixel spans in the image plane.
 func (p Projection) PixelSize() float64 { return 1 / p.scale }
 
@@ -289,6 +297,25 @@ func fillTriangle(img *image.RGBA, depths []float64, width int, a, b, c screenVe
 			depths[at] = depth
 			if img != nil {
 				img.SetRGBA(x, y, fill)
+			}
+		}
+	}
+}
+
+// DrawSegments draws each segment, given in the image plane as for
+// [Projection.Plane], one pixel wide in colour c over img. A segment's pixels are
+// taken at steps of about half a pixel along it, each rounded down to the pixel
+// that holds the point, and those outside the image are skipped.
+func DrawSegments(img *image.RGBA, proj Projection, segments [][2][2]float64, c color.RGBA) {
+	for _, s := range segments {
+		ax, ay := proj.Plane(s[0][0], s[0][1])
+		bx, by := proj.Plane(s[1][0], s[1][1])
+		steps := int(math.Ceil(2 * math.Max(math.Abs(bx-ax), math.Abs(by-ay))))
+		for i := 0; i <= max(steps, 1); i++ {
+			t := float64(i) / float64(max(steps, 1))
+			x, y := int(math.Floor(ax+(bx-ax)*t)), int(math.Floor(ay+(by-ay)*t))
+			if x >= 0 && y >= 0 && x < proj.Width && y < proj.Height {
+				img.SetRGBA(x, y, c)
 			}
 		}
 	}

@@ -2,6 +2,8 @@ package raster_test
 
 import (
 	"context"
+	"image"
+	"image/color"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/raster"
@@ -138,4 +140,31 @@ func TestRenderRefusals(t *testing.T) {
 	cancel()
 	_, err := raster.Render(ctx, v, tris, topView, 100, 100)
 	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestDrawSegmentsDrawsALineBetweenItsEnds(t *testing.T) {
+	t.Parallel()
+	// A 10 x 10 mm square seen from above fills the image but for its margin, so
+	// the image plane's origin maps to the middle of the 100-pixel image.
+	verts := []r3.Vec{{X: -5, Y: -5}, {X: 5, Y: -5}, {X: 5, Y: 5}, {X: -5, Y: 5}}
+	cam := raster.Camera{Direction: r3.Vec{Z: -1}, Up: r3.Vec{Y: 1}}
+	proj, err := raster.NewProjection(verts, cam, 100, 100)
+	require.NoError(t, err)
+	px, py := proj.Plane(0, 0)
+	require.InDelta(t, 50, px, 1e-9)
+	require.InDelta(t, 50, py, 1e-9)
+	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	red := color.RGBA{R: 255, A: 255}
+	// The scale is 9 px per mm (a 5% margin each side leaves 90 px for 10 mm).
+	raster.DrawSegments(img, proj, [][2][2]float64{{{-5, 0}, {5, 0}}}, red)
+	for x := 5; x <= 95; x++ {
+		require.Equal(t, red, img.RGBAAt(x, 50), "pixel %d of the horizontal line", x)
+	}
+	require.Equal(t, color.RGBA{}, img.RGBAAt(50, 49), "the line is one pixel wide")
+	require.Equal(t, color.RGBA{}, img.RGBAAt(50, 51))
+	// A vertical segment up the image runs toward smaller y.
+	raster.DrawSegments(img, proj, [][2][2]float64{{{0, 0}, {0, 5}}}, red)
+	require.Equal(t, red, img.RGBAAt(50, 10))
+	// A segment past the image is clipped without a panic.
+	raster.DrawSegments(img, proj, [][2][2]float64{{{-500, 0}, {500, 500}}}, red)
 }
