@@ -900,6 +900,25 @@ the cache. Key every exact rational control coordinate, and return the stored
 two-sided bracket unchanged. A cache hit therefore consumes the same work
 budget and reports the same interval; bound the cache across documents.
 
+**The bracket keeps every power of two in its exponents.** Before subdividing,
+it moves the power of two in the span's shared denominator into the points'
+exponents, leaving an odd `den`. Each split keeps all of a child's values at
+one exponent: a de Casteljau round adds neighbours without halving, so every
+entry of a round shares one exponent, and each child value is shifted once to
+the children's common exponent as it is taken. Both are changes of
+representation only. Every value `u / (den · 2^exp)` stays the same rational,
+so each exact comparison decides the same way. The square-root seed reads the
+ratio `num / den²` only through its leading 64 bits and binary exponent, or
+through that ratio rounded to 64 bits, and multiplying the numerator or the
+denominator by a power of two changes neither. So the reported interval is the
+same bit for bit; `internal/freeform`'s `TestSpanLengthBracketMatchesReference`
+holds it to a copy of the per-midpoint aligned form on degenerate, wide,
+extreme-scale and random spans. The gain is cost. On the gear-tooth loft
+records measured (2026-10), a converted fit-spline span's `den` was 3 or 9
+times `2^159` to `2^169`, so lifting it turns `den²` in every leaf comparison
+from six words into one, and a split no longer aligns two operands at every
+midpoint.
+
 Consumers: a prism's side-face `Area` (`length × height`), `Edge.Length()`, and
 the setback R5 refuses. A revolve's lateral area is NOT one of them — length
 alone cannot determine it, and §6.1.1 supplies what it needs.

@@ -220,6 +220,7 @@ func spanLengthBracket(span BezierSpan, depth int) (float64, float64) {
 	// how FreeformWork.step spells "already accounted for". The error a metered
 	// conversion could return is unreachable here for that reason.
 	s, _ := DyadicSpanOf(nil, span)
+	s.liftDenominatorTwos()
 	// This square is part of the bracket's already-paid subtree, not the
 	// conversion shared with other dyadic-span consumers.
 	s.DenSq = new(big.Int).Mul(s.Den, s.Den)
@@ -231,6 +232,27 @@ func spanLengthBracket(span BezierSpan, depth int) (float64, float64) {
 		frames[i].Init(len(s.Points))
 	}
 	return s.LengthBracketScratch(frames, &LengthDistanceScratch{})
+}
+
+// liftDenominatorTwos moves the power of two in the span's shared denominator
+// into every point's exponent, leaving Den odd. Each value u/(den·2^exp) is
+// unchanged, so every exact comparison below decides the same way, and the
+// square-root seed reads only the ratio's leading bits and binary exponent,
+// which a power-of-two rescaling of numerator and denominator leaves
+// identical (agent-docs/spline-design.md §6.1). What changes is the cost: a
+// recorded float carries its precision as a power of two, so a converted
+// fit-spline span's den can be a small odd factor times 2^160, and every leaf
+// comparison multiplies by den². The receiver's points are its own fresh
+// conversion, so their exponents are updated in place.
+func (s *DyadicSpan) liftDenominatorTwos() {
+	twos := s.Den.TrailingZeroBits()
+	if twos == 0 {
+		return
+	}
+	s.Den = new(big.Int).Rsh(s.Den, twos)
+	for i := range s.Points {
+		s.Points[i].Exp += twos
+	}
 }
 
 // DyadicPoint is one split value: the plane-local coordinate
@@ -331,7 +353,6 @@ func ScaledNumerator(r *big.Rat, den *big.Int) *big.Int {
 // sibling subtrees reuse it without changing the order of leaf summation.
 type LengthSplitScratch struct {
 	Work, Left, Right []DyadicPoint
-	Tmp               big.Int
 }
 
 func (f *LengthSplitScratch) Init(n int) {
@@ -361,41 +382,47 @@ func (s DyadicSpan) LengthBracketScratch(
 	return DownRound(leftLo + rightLo), proofbound.UpRound(leftHi + rightHi)
 }
 
+// Split is the de Casteljau bisection at t = 1/2 over ONE shared exponent.
+// The input values are first raised to their widest exponent e (a copy when,
+// as on every call the bracket makes, they already share it). Each round then
+// adds neighbours WITHOUT halving: after round r every work entry is 2^r times
+// the true blend, so it reads at exponent e+r, and all entries of a round
+// share that exponent and need no alignment. Each child value is shifted once
+// to exponent e+n−1 as it is taken, so both children leave sharing one
+// exponent too. A value of den·2^exp form read at a larger exponent with a
+// numerator shifted by the same amount is the same rational, so the children
+// are exactly the halves a per-midpoint aligned bisection produces.
 func (f *LengthSplitScratch) Split(points []DyadicPoint) {
 	n := len(points)
+	exp := points[0].Exp
+	for _, p := range points[1:] {
+		exp = max(exp, p.Exp)
+	}
 	for i, p := range points {
-		f.Work[i].U.Set(p.U)
-		f.Work[i].V.Set(p.V)
-		f.Work[i].Exp = p.Exp
+		f.Work[i].U.Lsh(p.U, exp-p.Exp)
+		f.Work[i].V.Lsh(p.V, exp-p.Exp)
 	}
-	f.Left[0].U.Set(f.Work[0].U)
-	f.Left[0].V.Set(f.Work[0].V)
-	f.Left[0].Exp = f.Work[0].Exp
-	f.Right[n-1].U.Set(f.Work[n-1].U)
-	f.Right[n-1].V.Set(f.Work[n-1].V)
-	f.Right[n-1].Exp = f.Work[n-1].Exp
-	for round := n - 1; round > 0; round-- {
-		for i := range round {
-			midpointInto(&f.Work[i], f.Work[i], f.Work[i+1], &f.Tmp)
+	top := uint(n - 1)
+	f.Left[0].U.Lsh(f.Work[0].U, top)
+	f.Left[0].V.Lsh(f.Work[0].V, top)
+	f.Right[n-1].U.Lsh(f.Work[n-1].U, top)
+	f.Right[n-1].V.Lsh(f.Work[n-1].V, top)
+	for round := 1; round < n; round++ {
+		for i := range n - round {
+			f.Work[i].U.Add(f.Work[i].U, f.Work[i+1].U)
+			f.Work[i].V.Add(f.Work[i].V, f.Work[i+1].V)
 		}
-		f.Left[n-round].U.Set(f.Work[0].U)
-		f.Left[n-round].V.Set(f.Work[0].V)
-		f.Left[n-round].Exp = f.Work[0].Exp
-		f.Right[round-1].U.Set(f.Work[round-1].U)
-		f.Right[round-1].V.Set(f.Work[round-1].V)
-		f.Right[round-1].Exp = f.Work[round-1].Exp
+		shift := top - uint(round)
+		last := n - 1 - round
+		f.Left[round].U.Lsh(f.Work[0].U, shift)
+		f.Left[round].V.Lsh(f.Work[0].V, shift)
+		f.Right[last].U.Lsh(f.Work[last].U, shift)
+		f.Right[last].V.Lsh(f.Work[last].V, shift)
 	}
-}
-
-func midpointInto(dst *DyadicPoint, a, b DyadicPoint, tmp *big.Int) {
-	exp := max(a.Exp, b.Exp)
-	dst.U.Lsh(a.U, exp-a.Exp)
-	tmp.Lsh(b.U, exp-b.Exp)
-	dst.U.Add(dst.U, tmp)
-	dst.V.Lsh(a.V, exp-a.Exp)
-	tmp.Lsh(b.V, exp-b.Exp)
-	dst.V.Add(dst.V, tmp)
-	dst.Exp = exp + 1
+	for i := range n {
+		f.Left[i].Exp = exp + top
+		f.Right[i].Exp = exp + top
+	}
 }
 
 // split halves a span by de Casteljau at t = 1/2, exactly: every blend is a
@@ -537,12 +564,18 @@ func (s DyadicSpan) DistanceSquaredScratch(
 	a, b DyadicPoint, scratch *LengthDistanceScratch,
 ) SpanSquaredDistance {
 	exp := max(a.Exp, b.Exp)
-	scratch.Du.Lsh(b.U, exp-b.Exp)
-	scratch.Tmp.Lsh(a.U, exp-a.Exp)
-	scratch.Du.Sub(&scratch.Du, &scratch.Tmp)
-	scratch.Dv.Lsh(b.V, exp-b.Exp)
-	scratch.Tmp.Lsh(a.V, exp-a.Exp)
-	scratch.Dv.Sub(&scratch.Dv, &scratch.Tmp)
+	if a.Exp == b.Exp {
+		// Split leaves every point of a child at one exponent.
+		scratch.Du.Sub(b.U, a.U)
+		scratch.Dv.Sub(b.V, a.V)
+	} else {
+		scratch.Du.Lsh(b.U, exp-b.Exp)
+		scratch.Tmp.Lsh(a.U, exp-a.Exp)
+		scratch.Du.Sub(&scratch.Du, &scratch.Tmp)
+		scratch.Dv.Lsh(b.V, exp-b.Exp)
+		scratch.Tmp.Lsh(a.V, exp-a.Exp)
+		scratch.Dv.Sub(&scratch.Dv, &scratch.Tmp)
+	}
 	scratch.Num.Mul(&scratch.Du, &scratch.Du)
 	scratch.Tmp.Mul(&scratch.Dv, &scratch.Dv)
 	scratch.Num.Add(&scratch.Num, &scratch.Tmp)
