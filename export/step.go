@@ -115,7 +115,7 @@ func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 		}
 	}
 	if !analytic {
-		if solids, err = meshSolids(body, mesh.SourceFaces(), components, count); err != nil {
+		if solids, err = meshSolids(body, mesh.SourceFaces(), vertices, triangles, components, count); err != nil {
 			return step.File{}, err
 		}
 	}

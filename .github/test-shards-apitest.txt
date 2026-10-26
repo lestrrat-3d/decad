@@ -2406,6 +2406,7 @@
 10	0.01	TestReadSTEPRoundTripsAConcavePrism
 10	0.01	TestReadSTEPRoundTripsACavity
 10	0.01	TestReadSTEPRoundTripsALumpWithACavityBesideALump
+10	0.01	TestSTEPWritesACavityThatTouchesTheOuterShell
 10	0.01	TestReadSTEPRoundTripsAFacetedCone
 10	0.01	TestReadSTEPReadsADrilledPlate
 10	0.01	TestReadSTEPReadsARod

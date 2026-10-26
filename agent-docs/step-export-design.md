@@ -103,12 +103,13 @@ alone: the analytic arm builds the faces of one outer shell.
 | Decision | Rule |
 |---|---|
 | V1 | Every lump has exactly one non-void shell (`FaceShell.IsVoid` is false). Any number of void shells may follow. A lump without one outer shell is `ErrUnsupported`. |
-| V2 | The verified mesh has one connected facet set for each shell, and `Mesh.SourceFaces` places every facet in one shell of the body. A count that differs, a facet set that spans two shells, or a shell without facets is `ErrUnsupported`. No construction reaches the first case today: a cavity that touches its outer shell is merged into it, so the body holds one shell. |
+| V2 | The verified mesh has one connected facet set for each shell, and `Mesh.SourceFaces` places every facet in one shell of the body. A count that differs, a facet set that spans two shells, or a shell without facets is `ErrUnsupported`. A cavity that touches its outer shell along an edge or at a vertex, as `Cut` returns it, is one shell of the body and one facet set of the mesh, so STEP writes it as that one shell (`TestSTEPWritesACavityThatTouchesTheOuterShell`). |
 | V3 | The body, not the mesh, names the outer shell of a lump. The mesh only locates each shell's facets. |
 | V4 | The outer shell is a `CLOSED_SHELL` of its triangles' planar `ADVANCED_FACE`s. Each void is a `CLOSED_SHELL` of its own faces, taken as the mesh winds them, which look into the cavity and away from the material, inside an `ORIENTED_CLOSED_SHELL` with the orientation `.T.`. |
 | V5 | `BREP_WITH_VOIDS(name, outer, (voids))` names the product's solid, the name being the header's. Entity IDs follow the same deterministic order as every file. |
 | V6 | A lump with no cavity is a `MANIFOLD_SOLID_BREP` named by the header. A single-lump solid with no cavity is analytic where the faces allow it. |
 | V7 | One `ADVANCED_BREP_SHAPE_REPRESENTATION` holds one item per lump, in `Body.Lumps` order. |
+| V8 | The signed volume of each facet set only refuses: an outer set whose volume is not positive, or a void set whose volume is not negative, is `ErrUnsupported`, so a mesh wound against its shell's kind is never written as an `ORIENTED_CLOSED_SHELL`. |
 
 The tests build a cube with a cubic cavity, a disjoint union of two blocks, and a cavity cube beside a block, check the entity counts, and check that every outer face's normal points away
 from the cube's middle and every void face's toward the cavity's. A body of a closed shell (`WithNoOpenings`) is such a
