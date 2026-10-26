@@ -49,9 +49,13 @@ func Thicken(ctx context.Context, env topo.Env, b *topo.Body, side Side, tmm, tD
 
 // thickenSweep builds through a one-span sheet's analytic reduction, then
 // publishes the result as a Sweep. The reduced builder proves the offset and
-// solid; the finishing step restores the path's wall and cap roles.
+// solid; the finishing step restores the path's wall and cap roles. A
+// hole-free multi-span sheet instead re-sweeps one generated annulus.
 func thickenSweep(ctx context.Context, env topo.Env, sp sweeprecord.Payload, side Side, tmm, tDelta float64) (*topo.Body, error) {
-	if !sp.SurfaceResult || len(sp.Spans) != 0 {
+	if sp.SurfaceResult && len(sp.Spans) != 0 {
+		return thickenCompositeSweep(ctx, env, sp, side, tmm, tDelta)
+	}
+	if !sp.SurfaceResult {
 		return nil, fmt.Errorf(`%w: this sweep sheet has no admitted Thicken join proof`, decaderr.ErrUnsupported)
 	}
 	if sp.Arc {
@@ -78,6 +82,65 @@ func thickenSweep(ctx context.Context, env topo.Env, sp sweeprecord.Payload, sid
 	sp.SurfaceResult = false
 	sweeprecord.FinishStraight(body, sp)
 	return body, nil
+}
+
+// thickenCompositeSweep offsets the one closed profile of a multi-span sheet
+// and sweeps the resulting annulus along the same path again. Every arc span's
+// radial gate (surface-design.md section 16.5) must keep the swept offset off
+// that span's axis; each span's existence gates and compositesweep's
+// separation audit then rerun on the thickened section, so no offset join is
+// trusted without its own proof (section 16.8). Contact and crossing both
+// refuse with ErrUnsupported from the radial gate.
+func thickenCompositeSweep(ctx context.Context, env topo.Env, sp sweeprecord.Payload,
+	side Side, tmm, tDelta float64) (*topo.Body, error) {
+	if sp.Path == nil || sp.ClosedComposite || sp.ClosedCircle || sp.Arc ||
+		sp.Prism.SectionDelta != 0 || sp.Prism.Xform != r3.Identity() ||
+		len(sp.Prism.Profile.Holes) != 0 {
+		return nil, fmt.Errorf(`%w: this sweep sheet has no admitted Thicken join proof`, decaderr.ErrUnsupported)
+	}
+	amount, err := Amount(tmm, tDelta, side)
+	if err != nil {
+		return nil, err
+	}
+	budget := proofbound.NewWorkBudget(ctx)
+	if err := budget.Err(); err != nil {
+		return nil, err
+	}
+	// Each arc span turns the section about its own plane-local axis, so the
+	// §16.5 radial gate runs once per arc span: an offset that touches or
+	// crosses any axis refuses here, as the one-span arc sheet does.
+	var sec thickenaxis.SectionPair
+	spun := false
+	for _, span := range sp.Spans {
+		if !span.Arc {
+			continue
+		}
+		radial, err := thickenRadialOf(span.Revolve.Ax)
+		if err != nil {
+			return nil, err
+		}
+		if sec, err = SectionOf(ctx, sp.Prism.Profile, side, amount, budget, &radial); err != nil {
+			return nil, err
+		}
+		spun = true
+	}
+	if !spun {
+		var err error
+		if sec, err = SectionOf(ctx, sp.Prism.Profile, side, amount, budget, nil); err != nil {
+			return nil, err
+		}
+	}
+	annulus, err := sec.Annulus(ctx)
+	if err != nil {
+		return nil, err
+	}
+	frame := sp.Prism.Frame
+	plane := sectionrecord.PlaneRecord{Origin: frame.Origin(), U: frame.U(), V: frame.V()}
+	if err := sweepinput.ValidateAnalyticProfile(annulus); err != nil {
+		return nil, err
+	}
+	return sweeprecord.BuildComposite(ctx, env, annulus, plane, frame, sp.Path,
+		freeform.NewFreeformWork(), false)
 }
 
 func thickenPatch(ctx context.Context, env topo.Env, pp patchchain.Payload, side Side, tmm, tDelta float64) (*topo.Body, error) {

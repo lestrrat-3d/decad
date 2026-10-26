@@ -729,6 +729,9 @@
 4	0.03	TestContactPairExactPlanarCancels
 4	0.00	TestContactPairKeepsAbsentResultsNil
 4	0.01	TestContactPairPlanarManifoldEdgeCrossing
+10	0.00	TestThickenCompositeSweepSheetBuildsExactSolid
+10	0.00	TestThickenCompositeSweepSheetRefusesAxisContact
+10	0.00	TestThickenCompositeSweepSheetKeepsR24
 4	0.02	TestContactPairPlanarManifoldRotatedBox
 4	0.01	TestContactPairSourceBoxes
 4	0.00	TestCopyPlacement
