@@ -758,8 +758,10 @@ func (s *FaceShell) IsOpen() bool // true when the shell has at least one free e
 type Vertex struct{ /* ... */ }
 func (v *Vertex) Position() VecMeasurement // millimetres (§5.2); a computed coordinate, so it is bounded (§6)
 
-// MeshBody is imported triangle soup. It NEVER claims to be a solid B-rep —
-// invariant #5 — and mesh import is a v1 non-goal (§13).
+// MeshBody is an imported triangle mesh (STL, OBJ). It NEVER claims to be a solid
+// B-rep — invariant #5. It reports its bounds, area, closed-surface status and,
+// when closed and consistently wound, its volume; no feature or Boolean takes it.
+// agent-docs/mesh-import-design.md owns it.
 type MeshBody struct{ /* ... */ }
 ```
 
@@ -2254,8 +2256,10 @@ the resulting bodies, measurements, and verification reports directly.
 Assemblies (`Component`/`Occurrence` instancing and the DAG that comes with it; a
 `Container` that only groups members of one document is not one,
 `agent-docs/container-design.md`), a
-feature tree / timeline / rollback, native analytic STEP export, sheet metal, mesh import,
-GUI or view state of any kind, and Fusion code generation.
+feature tree / timeline / rollback, native analytic STEP export, sheet metal, STEP, IGES
+and 3MF import, turning an imported mesh into a `Body`, GUI or view state of any kind, and
+Fusion code generation. STL and OBJ import into the separate `MeshBody` type is in
+(`agent-docs/mesh-import-design.md`).
 
 Sheet bodies themselves are **not** a non-goal — `agent-docs/surface-design.md` owns
 them. `Thicken` admits the sheet families §16.1 names and `Offset` the two

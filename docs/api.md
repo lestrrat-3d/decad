@@ -24,6 +24,7 @@ Root-package identifiers carry the `decad.` prefix. `apitest/api_reference_test.
 - [Reading bodies](#reading-bodies)
 - [Verification](#verification)
 - [Motion, linkages and contact](#motion-linkages-and-contact)
+- [Import](#import)
 - [Export](#export)
 - [Errors](#errors)
 - [Test helpers](#test-helpers)
@@ -325,6 +326,20 @@ A `decad.Diagnostic` states each reason a report is not sound, with its `decad.D
   two paths.
 - The `dynamics` package builds a `dynamics.World` from a document, steps it, and records a `dynamics.Timeline`.
 
+## Import
+
+`decad.ReadSTL` and `decad.ReadOBJ` read a triangle mesh file into a `decad.MeshBody`. A `decad.MeshBody` is not a
+`decad.Body`: no feature or Boolean takes it. It reports whether its triangles close into a surface, and its bounds,
+area and enclosed volume.
+
+| Reading | Method |
+|---|---|
+| Connectivity | `MeshBody.Report` counts boundary, non-manifold and misoriented edges, shells and zero-area triangles. |
+| Size | `MeshBody.Bounds`, `MeshBody.Area`, `MeshBody.Volume` |
+| Triangles | `MeshBody.Vertices`, `MeshBody.Triangles` |
+
+`MeshBody.Volume` is `decad.ErrNotSolid` unless the mesh is closed and wound counter-clockwise seen from outside.
+
 ## Export
 
 `export.STEP`, `export.STL`, `export.OBJ` and `export.ThreeMF` write a body to an `io.Writer` at a chord tolerance.
@@ -349,6 +364,7 @@ Branch on a sentinel with `errors.Is`.
 | `decad.ErrForeignBody` | A body belongs to another document. |
 | `decad.ErrCrossContainer` | One operation read bodies or sketches from different containers. |
 | `decad.ErrRetiredBody` | A body was already consumed by a feature. |
+| `decad.ErrMalformedMesh`, `decad.ErrMeshTooLarge` | An STL or OBJ file was malformed, or held more than the import limits allow. |
 | `decad.ErrForeignProfile`, `decad.ErrStaleProfile`, `decad.ErrInvalidProfile`, `decad.ErrUnrecordableProfile` | A sketch profile was rejected. |
 
 ## Test helpers
