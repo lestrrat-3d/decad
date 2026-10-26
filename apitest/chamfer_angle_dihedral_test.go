@@ -108,15 +108,33 @@ func TestChamferAngleRefusesWhatHasNoSecondDistance(t *testing.T) {
 	require.Equal(t, []*decad.Body{prism}, doc.Bodies(), "a refused chamfer leaves the prism live and alone")
 }
 
-func TestChamferAngleRefusesAConcaveEdge(t *testing.T) {
+func TestChamferAngleBevelsAConcaveEdge(t *testing.T) {
 	t.Parallel()
-	_, prism := polygonPrism(t, [][2]float64{{0, 0}, {20, 0}, {20, 10}, {10, 10}, {10, 20}, {0, 20}})
-	// The L's inner corner at (10, 10) is a reflex edge.
-	edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(10, 10, 0))).Exactly(1)
-	_, err := decad.ChamferAngle(t.Context(), prism, edge, units.Millimeters(2),
-		decad.Faces(decad.Facing(r3.NewVec(0, 1, 0))), units.Degrees(30))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "convex")
+	// A notched shape whose reflex vertex (10, 5) is a concave edge, and whose walls all face
+	// different ways, so a reference face is one face. Its area is 20·20 less the notch's 100.
+	pts := [][2]float64{{0, 0}, {20, 0}, {20, 20}, {10, 5}, {0, 20}}
+	area := 0.0
+	for i := range pts {
+		j := (i + 1) % len(pts)
+		area += pts[i][0]*pts[j][1] - pts[j][0]*pts[i][1]
+	}
+	area = math.Abs(area) / 2
+	// The notch's two walls face (-15, 10) and (15, 10), so they turn by acos(-125/325) and the
+	// open wedge between them is the rest of a half turn.
+	phi := math.Pi - math.Acos(-125.0/325.0)
+	ref := decad.Faces(decad.Facing(r3.NewVec(-15, 10, 0)))
+	for _, deg := range []float64{30, 60} {
+		doc, prism := polygonPrism(t, pts)
+		edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(10, 5, 0))).Exactly(1)
+		out, err := decad.ChamferAngle(t.Context(), prism, edge, units.Millimeters(2), ref, units.Degrees(deg))
+		require.NoError(t, err)
+		require.Equal(t, []*decad.Body{out}, doc.Bodies())
+		theta := deg * math.Pi / 180
+		other := 2 * math.Sin(theta) / math.Sin(phi+theta)
+		// The bevel fills a triangle with sides 2 and other about the open wedge's angle.
+		decadtest.MeasuresVolume(t, out, units.CubicMillimeters((area+0.5*2*other*math.Sin(phi))*10),
+			decadtest.WithinRel(units.Scalar(1e-9)))
+	}
 }
 
 func TestFilletChordOnAHexagonEdge(t *testing.T) {
@@ -146,7 +164,20 @@ func TestFilletChordOnEverySideEdgeOfTheHexagon(t *testing.T) {
 	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(hexArea*10-6*removed), decadtest.WithinRel(units.Scalar(1e-6)))
 }
 
-func TestFilletChordRefusesMixedAnglesAndConcaveEdges(t *testing.T) {
+func TestFilletChordRoundsAConcaveEdge(t *testing.T) {
+	t.Parallel()
+	doc, lshape := polygonPrism(t, [][2]float64{{0, 0}, {20, 0}, {20, 10}, {10, 10}, {10, 20}, {0, 20}})
+	reflex := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(10, 10, 0))).Exactly(1)
+	// A right-angled corner's arc turns 90 degrees, so a chord of 2√2 is a radius of 2. The
+	// round fills (1 − π/4)·r² of the open corner.
+	out, err := decad.FilletChord(t.Context(), lshape, reflex, units.Millimeters(2*math.Sqrt2))
+	require.NoError(t, err)
+	require.Equal(t, []*decad.Body{out}, doc.Bodies())
+	decadtest.MeasuresVolume(t, out, units.CubicMillimeters((300+(1-math.Pi/4)*4)*10),
+		decadtest.WithinRel(units.Scalar(1e-9)))
+}
+
+func TestFilletChordRefusesMixedAngles(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	prism := rightTrianglePrism(t, doc)
@@ -154,10 +185,6 @@ func TestFilletChordRefusesMixedAnglesAndConcaveEdges(t *testing.T) {
 	_, err := decad.FilletChord(t.Context(), prism, all, units.Millimeters(2))
 	require.ErrorIs(t, err, decad.ErrUnsupported, "edges at 45, 45 and 90 degrees need different radii")
 	require.Equal(t, []*decad.Body{prism}, doc.Bodies())
-	_, lshape := polygonPrism(t, [][2]float64{{0, 0}, {20, 0}, {20, 10}, {10, 10}, {10, 20}, {0, 20}})
-	reflex := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(10, 10, 0))).Exactly(1)
-	_, err = decad.FilletChord(t.Context(), lshape, reflex, units.Millimeters(2))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
 // rightTrianglePrism is the 20 x 20 right-isosceles triangle with its right angle at

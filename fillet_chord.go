@@ -13,13 +13,15 @@ import (
 // straight line between its two tangent edges, is chord long, returning the
 // new body and retiring b (agent-docs/fillet-chord-design.md).
 //
-// Where the faces meet at the interior angle φ the arc turns π − φ, so its
+// Where the faces meet at the angle φ across the corner (the interior angle of a
+// convex edge, the open wedge of a concave one) the arc turns π − φ, so its
 // radius is chord/(2·cos(φ/2)), which is chord/√2 on a right angle.
 // FilletChord states that radius and builds the result with [Fillet], so the
 // receivers, routes and refusals of Fillet apply.
 //
-// Every selected edge MUST be convex and lie between two planar faces. Any other
-// edge is ErrUnsupported. All the selected edges MUST give the same radius,
+// Every selected edge MUST lie between two planar faces, and may be convex or
+// concave: a concave edge's fillet adds the round's material to the corner. Any
+// other edge is ErrUnsupported. All the selected edges MUST give the same radius,
 // within a relative 1e-12, which equal dihedrals do; edges at different angles
 // take separate calls, and a selection that mixes them is ErrUnsupported. chord
 // MUST be a positive length; a zero or negative one is ErrDegenerate or
@@ -52,7 +54,7 @@ func FilletChord(ctx context.Context, b *Body, sel EdgeSelector, chord units.Val
 	}
 	var radius float64
 	for i, e := range edges {
-		phi, err := e.convexDihedral("a chord-length fillet")
+		phi, err := e.planarDihedral("a chord-length fillet")
 		if err != nil {
 			return nil, err
 		}

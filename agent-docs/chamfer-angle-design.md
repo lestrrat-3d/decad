@@ -17,13 +17,13 @@ func ChamferAngle(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 | A2 | `ChamferAngle` calls `Chamfer(ctx, b, sel, d, WithAsymmetricChamfer(reference, other))`. Receivers, routes, history entry (`OperationChamfer`) and refusals are `Chamfer`'s. |
 | A3 | `angle` is strictly between 0 and a half turn. Zero or a half turn or more is `ErrDegenerate`, a negative value is `ErrNegativeMagnitude`, and a wrong unit kind is `ErrUnitKind`. An edge whose φ makes `φ + angle` reach a half turn has a bevel that never meets the other face: `ErrDegenerate`. |
 | A4 | `d` is a positive length under `Chamfer`'s own gates. |
-| A5 | Each selected edge is convex and has exactly two faces, both `Plane`. Any other edge is `ErrUnsupported`. |
+| A5 | Each selected edge has exactly two faces, both `Plane`, and is convex or concave. A concave edge's φ is the open wedge the faces make in the air, which the bevel fills, so the same formula holds. Any other edge is `ErrUnsupported`. |
 | A6 | A nil context, body or reference is `ErrDegenerate`. A selector `Chamfer` would refuse is passed to `Chamfer` for its own error. |
 | A7 | `WithAsymmetricChamfer` takes one second distance, so every selected edge MUST give the same one within a relative 1e-12, which equal dihedrals do. A selection that mixes angles is `ErrUnsupported`: take the angles in separate calls. |
 
 ## 2. The dihedral
 
-`Edge.convexDihedral` (`edge_dihedral.go`) reads φ from the unit outward normals of the edge's two planes, as
+`Edge.planarDihedral` (`edge_dihedral.go`) reads φ from the unit outward normals of the edge's two planes, as
 `agent-docs/fillet-chord-design.md` §2 states: the angle between them is `atan2(|n₁ × n₂|, n₁ · n₂)` and φ is π less
 that. The second distance is a float function of those recorded planes and blesses no claim about them, so a result
 is as exact as `Chamfer`'s asymmetric result for a distance of that value. The same-distance test of A7 only groups
@@ -39,7 +39,7 @@ angle from the volume independently of the formula.
 
 ## 4. Not covered
 
-- A concave edge, or a curved face beside the edge.
+- A curved face beside the edge.
 - The angle measured from the other face. Name the other face as `reference`.
 - `WithTangentChain`.
 
