@@ -14,23 +14,24 @@ import (
 // result a chamfer or fillet publishes.
 const dihedralTolerance = 1e-12
 
-// convexDihedral returns the interior angle, in radians, between the two planar
-// faces of the convex edge e: strictly between 0 and π. what names the operation
-// in the error. The angle is read from the unit outward normals of the two
-// planes by the angle between them, atan2(|n1 × n2|, n1 · n2), which is as
-// accurate near a flat edge or a knife edge as at a right angle; the interior
-// angle is π less that. It is a method because it reads the edge's own topology.
+// planarDihedral returns the angle, in radians, between the two planar faces of
+// the edge e on the side a bevel or a round cuts across: strictly between 0 and
+// π. On a convex edge that is the interior angle of the material. On a concave
+// edge it is the angle of the open wedge the faces make in the air, which a
+// chamfer or fillet fills; it is π less the turn between the faces' normals
+// either way. what names the operation in the error. The angle is read from the
+// unit outward normals of the two planes by the angle between them,
+// atan2(|n1 × n2|, n1 · n2), which is as accurate near a flat edge or a knife
+// edge as at a right angle. It is a method because it reads the edge's own
+// topology.
 //
-// An edge that is not shared by exactly two planar faces, or is not convex, is
-// ErrUnsupported: a chamfer or fillet of it is not a bevel or a round of a
-// corner between two planes.
-func (e *Edge) convexDihedral(what string) (float64, error) {
+// An edge that is not shared by exactly two planar faces is ErrUnsupported: a
+// chamfer or fillet of it is not a bevel or a round of a corner between two
+// planes.
+func (e *Edge) planarDihedral(what string) (float64, error) {
 	faces := e.Faces()
 	if len(faces) != 2 {
 		return 0, fmt.Errorf(`%w: %s needs an edge between two faces, got %d`, ErrUnsupported, what, len(faces))
-	}
-	if !e.IsConvex() {
-		return 0, fmt.Errorf(`%w: %s needs a convex edge`, ErrUnsupported, what)
 	}
 	at := e.Start().Position().Value
 	var normals [2]r3.Vec

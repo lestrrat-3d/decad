@@ -2390,10 +2390,11 @@
 10	0.01	TestChamferAngleOnAHexagonEdge
 10	0.01	TestChamferAngleOnAnAcuteEdge
 10	0.01	TestChamferAngleRefusesWhatHasNoSecondDistance
-10	0.01	TestChamferAngleRefusesAConcaveEdge
+10	0.01	TestChamferAngleBevelsAConcaveEdge
 10	0.01	TestFilletChordOnAHexagonEdge
 10	0.01	TestFilletChordOnEverySideEdgeOfTheHexagon
-10	0.01	TestFilletChordRefusesMixedAnglesAndConcaveEdges
+10	0.01	TestFilletChordRefusesMixedAngles
+10	0.01	TestFilletChordRoundsAConcaveEdge
 10	0.01	TestEmbossDraftRaisedNarrowsTowardTheTop
 10	0.01	TestEmbossDraftNegativeWidensTowardTheTop
 10	0.01	TestEmbossDraftEngravedNarrowsTowardTheFloor

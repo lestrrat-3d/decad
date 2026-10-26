@@ -15,13 +15,15 @@ import (
 //
 // The bevel leaves the reference face d from each edge and makes angle with it.
 // It meets the other face d·sin(angle)/sin(φ + angle) from the edge, where φ is
-// the interior angle between the two faces, which is d·tan(angle) on a right
+// the angle between the two faces across the corner the bevel cuts (the interior
+// angle of a convex edge, the open wedge of a concave one), which is d·tan(angle) on a right
 // angle. ChamferAngle states that second distance and builds the result with
 // [Chamfer] and [WithAsymmetricChamfer], so the receivers, routes and refusals of
 // those apply.
 //
-// Every selected edge MUST be convex and lie between two planar faces. Any other
-// edge is ErrUnsupported. All the selected edges MUST give the same second
+// Every selected edge MUST lie between two planar faces, and may be convex or
+// concave: a concave edge's bevel adds a wedge of material to the corner. Any
+// other edge is ErrUnsupported. All the selected edges MUST give the same second
 // distance, within a relative 1e-12, which equal dihedrals do; edges at different
 // angles take separate calls, and a selection that mixes them is ErrUnsupported.
 // angle MUST be an angle strictly between 0 and a half turn, and an edge whose
@@ -66,7 +68,7 @@ func ChamferAngle(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 	}
 	var second float64
 	for i, e := range edges {
-		phi, err := e.convexDihedral("a distance-and-angle chamfer")
+		phi, err := e.planarDihedral("a distance-and-angle chamfer")
 		if err != nil {
 			return nil, err
 		}

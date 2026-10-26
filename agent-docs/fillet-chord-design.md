@@ -13,16 +13,16 @@ func FilletChord(ctx context.Context, b *Body, sel EdgeSelector, chord units.Val
 
 | Decision | Rule |
 |---|---|
-| C1 | Where the two faces meet at the interior angle φ the arc turns π − φ, so its radius is `chord/(2·cos(φ/2))`, which is `chord/√2` on a right angle. |
+| C1 | Where the two faces meet at the angle φ across the corner the arc turns π − φ, so its radius is `chord/(2·cos(φ/2))`, which is `chord/√2` on a right angle. |
 | C2 | `FilletChord` calls `Fillet(ctx, b, sel, radius)`. Receivers, routes, history entry (`OperationFillet`) and refusals are `Fillet`'s. |
 | C3 | `chord` is a positive length. Zero is `ErrDegenerate`, a negative value is `ErrNegativeMagnitude`, and a wrong unit kind is `ErrUnitKind`. |
-| C4 | Each selected edge is convex and has exactly two faces, both `Plane`. Any other edge is `ErrUnsupported`. |
+| C4 | Each selected edge has exactly two faces, both `Plane`, and is convex or concave. φ is the interior angle of a convex edge and the open wedge between the faces of a concave one, which the round fills. Any other edge is `ErrUnsupported`. |
 | C5 | A nil context or body is `ErrDegenerate`. A selector `Fillet` would refuse is passed to `Fillet` for its own error. |
 | C6 | `Fillet` takes one radius, so every selected edge MUST give the same one within a relative 1e-12, which equal dihedrals do. A selection that mixes angles is `ErrUnsupported`: take the angles in separate calls. |
 
 ## 2. The dihedral
 
-`Edge.convexDihedral` (`edge_dihedral.go`) reads φ from the unit outward normals of the edge's two planes: the angle
+`Edge.planarDihedral` (`edge_dihedral.go`) reads φ from the unit outward normals of the edge's two planes: the angle
 between them is `atan2(|n₁ × n₂|, n₁ · n₂)`, accurate near a flat edge and near a knife edge as well as at a right angle,
 and φ is π less that. It is data of the recorded planes, not a test of a claim, so it blesses nothing: the radius is a
 float function of those planes, and the result is `Fillet`'s result for a radius of that value. `ChamferAngle` reads its
@@ -42,7 +42,7 @@ on the 120 degree edges of a hexagonal prism.
 
 ## 4. Not covered
 
-- A concave edge, or a curved face beside the edge.
+- A curved face beside the edge.
 - `WithTangentChain`.
 - Setback corners and curvature-continuous blends, which have no entry point.
 
@@ -51,4 +51,4 @@ on the 120 degree edges of a hexagonal prism.
 The hexagonal prism's six vertical edges meet at 120 degrees. `FilletChord` of one gives the radius `chord`, and the
 tests compare the volume with the area `R²(cot 60° − 30°)` a fillet of that radius removes from the corner. All six
 together give one radius and are one call. A right-isosceles triangular prism's 45, 45 and 90 degree edges together are
-`ErrUnsupported`, and the L-shaped prism's reflex edge is `ErrUnsupported` for being concave.
+`ErrUnsupported`, and the L-shaped prism's reflex edge is a concave edge: its faces turn 90 degrees, so a chord of `2√2` is a radius of 2 and the round adds `(1 − π/4)·r²·height` to the corner.
