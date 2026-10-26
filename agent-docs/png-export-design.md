@@ -52,7 +52,7 @@ image axis flipped, turns the tests red.
 
 ## 4. Not covered
 
-- Axes, dimensions and text, and outlines or hidden edges on a perspective camera.
+- Axes, dimensions and text.
 - Materials, textures and anti-aliasing and soft or multiple-light shadows.
 - A transparent background and image formats other than PNG.
 - Drawing a mesh body together with bodies.
@@ -96,7 +96,7 @@ projection `export.DXF` uses (`agent-docs/dxf-export-design.md`), so they are th
 | V3 | A point projects to its camera-right and camera-up components over its distance from the eye along the view direction. The projected scene is then centred and scaled to fit with the margin of P4. |
 | V4 | The depth test reads minus the reciprocal of that distance, which is linear in screen space across a triangle, so a nearer triangle hides a farther one in either drawing order. |
 | V5 | A face looks away when its normal points along the line of sight from the eye to the face's centre, not along the camera's axis, so two faces of one body can differ in facing where an orthographic camera would agree. |
-| V6 | Shading uses the camera's axes and headlight as P7 does. Outlines are drawn from the orthographic projection of `export.DXF`, so `Outlines` with `FieldOfView` is `ErrDegenerate`. |
+| V6 | Shading uses the camera's axes and headlight as P7 does. Outlines take the field as §12 says. |
 | V7 | `PNGBodies` and `MeshPNG` take the field too. |
 
 ## 8. A colour for each body
@@ -120,7 +120,7 @@ finds behind a surface (`agent-docs/dxf-export-design.md` D5, D6).
 | E1 | Each hidden run is drawn in light grey, `(150, 150, 150)`, by `raster.DrawDashed`: along it, from its start, 4 pixels drawn and 3 skipped, in the half-pixel steps of `DrawSegments`. A run shorter than 4 pixels is drawn whole. |
 | E2 | The dashes are drawn over the shading and under the outlines, so with `Outlines` set a visible edge covers a dash where the two cross. |
 | E3 | The zero value draws none, and the bytes are those of §1 to §8. `HiddenEdges` is independent of `Outlines`. |
-| E4 | `HiddenEdges` with `FieldOfView` is `ErrDegenerate`, as `Outlines` with it is. `PNGBodies` and `MeshPNG` take the field too, and a hidden run is hidden by any body. |
+| E4 | `HiddenEdges` takes `FieldOfView` as §12 says. `PNGBodies` and `MeshPNG` take the field too, and a hidden run is hidden by any body. |
 
 ## 10. Shadows
 
@@ -143,3 +143,15 @@ finds behind a surface (`agent-docs/dxf-export-design.md` D5, D6).
 | B1 | Nil keeps the orange, `(220, 130, 60)`, and the bytes are those of §1 to §10. A set colour replaces it for every face that looks away, shaded at the same light level, so an open sheet or an inside-out mesh still shows, in the colour the caller picked. Its alpha is ignored. |
 | B2 | A face that looks toward the camera is unchanged, so `Colors` and the default blue are untouched. With `Shadows`, a shadowed face that looks away takes the back colour at the ambient level. |
 | B3 | `BackColor` is one colour for the image, not one for each body: `Colors` colours the faces toward the camera, one for each body. |
+
+## 12. Edges under a perspective camera
+
+`Outlines` and `HiddenEdges` draw with `FieldOfView` set, from the same `drawing.Project` as the orthographic camera, given the perspective projection.
+
+| Decision | Rule |
+|---|---|
+| Q1 | An edge is a feature as §6 says, except that a silhouette is an edge whose two faces differ in facing, a face looking toward the camera when its normal points against the line of sight from the eye to the face's centre (V5), not against the camera's axis. |
+| Q2 | An edge's ends are placed in the plane at distance 1 from the eye, as V3 places any point, and the edge is the straight line between them: a straight edge projects to a straight line under a pinhole camera. The result is in those plane units and meant for the pixels of the same view. |
+| Q3 | An edge is cut into visible and hidden runs by the depth buffer of V4. A sample is hidden when a face in front of it covers its pixel or a neighbouring one, within a tolerance of two pixels: the depth there is minus the reciprocal of the distance, so two pixels' length at distance `d` is `2·PixelSize/d` in depth, and the tolerance is that at the sample's own depth. |
+| Q4 | `Shadows` with `FieldOfView` is still `ErrDegenerate`. A view's other fields and the order of drawing, dashes under outlines, are those of §6 and §9. |
+| Q5 | The tests state the near and far squares' pixel positions of a block seen from above from the distances of V2, and require that the dashed far edge lies there and that the near outline lies on the near face, and `raster`'s own tests state the plane point, the facing and the tolerance by their formulas. |

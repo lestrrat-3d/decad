@@ -226,6 +226,10 @@ func Project(ctx context.Context, verts []r3.Vec, tris [][3]int, cam raster.Came
 		n, _ := verts[t[1]].Sub(verts[t[0]]).Cross(verts[t[2]].Sub(verts[t[0]])).Normalize()
 		normals[i] = n // the zero vector for a triangle of no area
 	}
+	centres := make([]r3.Vec, len(tris))
+	for i, t := range tris {
+		centres[i] = verts[t[0]].Add(verts[t[1]]).Add(verts[t[2]]).Scale(1.0 / 3)
+	}
 	incident := make(map[edgeKey][]int, 3*len(tris))
 	for ti, t := range tris {
 		if normals[ti] == (r3.Vec{}) {
@@ -238,7 +242,7 @@ func Project(ctx context.Context, verts []r3.Vec, tris [][3]int, cam raster.Came
 	}
 	edges := make([]edgeKey, 0, len(incident))
 	for e, owners := range incident {
-		if isFeature(owners, normals, proj) {
+		if isFeature(owners, normals, centres, proj) {
 			edges = append(edges, e)
 		}
 	}
@@ -255,12 +259,12 @@ func Project(ctx context.Context, verts []r3.Vec, tris [][3]int, cam raster.Came
 				return Lines{}, err
 			}
 		}
-		splitEdge(verts[e[0]], verts[e[1]], proj, depths, cam, &lines)
+		splitEdge(verts[e[0]], verts[e[1]], proj, depths, &lines)
 	}
 	return lines, nil
 }
 
-func isFeature(owners []int, normals []r3.Vec, proj raster.Projection) bool {
+func isFeature(owners []int, normals, centres []r3.Vec, proj raster.Projection) bool {
 	if len(owners) != 2 {
 		return true
 	}
@@ -268,20 +272,19 @@ func isFeature(owners []int, normals []r3.Vec, proj raster.Projection) bool {
 	if a.Dot(b) < CreaseCosine {
 		return true
 	}
-	return proj.Facing(a)*proj.Facing(b) < 0
+	return proj.FacingAt(a, centres[owners[0]])*proj.FacingAt(b, centres[owners[1]]) < 0
 }
 
 // splitEdge cuts the edge from p to q into visible and hidden runs and appends
 // them to lines.
-func splitEdge(p, q r3.Vec, proj raster.Projection, depths []float64, cam raster.Camera, lines *Lines) {
+func splitEdge(p, q r3.Vec, proj raster.Projection, depths []float64, lines *Lines) {
 	px, py, _ := proj.Project(p)
 	qx, qy, _ := proj.Project(q)
 	samples := min(max(int(math.Ceil(math.Hypot(qx-px, qy-py))), 1), 8192)
-	base := 2 * proj.PixelSize()
 	visibleAt := func(t float64) bool {
 		x, y, depth := proj.Project(p.Add(q.Sub(p).Scale(t)))
 		near, slope := nearest(depths, proj, x, y)
-		return depth <= near+base+2*slope
+		return depth <= near+proj.DepthTolerance(depth)+2*slope
 	}
 	runs := []run{{first: 0, visible: visibleAt(0.5 / float64(samples))}}
 	for k := 1; k < samples; k++ {
@@ -296,7 +299,7 @@ func splitEdge(p, q r3.Vec, proj raster.Projection, depths []float64, cam raster
 	runs = absorbShortRuns(runs)
 	for _, r := range runs {
 		t0, t1 := float64(r.first)/float64(samples), float64(r.end)/float64(samples)
-		seg := Segment{A: plane(p.Add(q.Sub(p).Scale(t0)), cam), B: plane(p.Add(q.Sub(p).Scale(t1)), cam)}
+		seg := Segment{A: plane(p.Add(q.Sub(p).Scale(t0)), proj), B: plane(p.Add(q.Sub(p).Scale(t1)), proj)}
 		if r.visible {
 			lines.Visible = append(lines.Visible, seg)
 		} else {
@@ -381,9 +384,9 @@ func nearest(depths []float64, proj raster.Projection, x, y float64) (depth, slo
 	return depth, slope
 }
 
-// plane returns the drawing-plane coordinates of v under cam: along the view's
-// right and up axes.
-func plane(v r3.Vec, cam raster.Camera) [2]float64 {
-	right, up, _ := cam.Axes()
-	return [2]float64{right.Dot(v), up.Dot(v)}
+// plane returns the drawing-plane coordinates of v under proj: along the view's
+// right and up axes, or over the distance from the eye for a perspective one.
+func plane(v r3.Vec, proj raster.Projection) [2]float64 {
+	x, y := proj.PlanePoint(v)
+	return [2]float64{x, y}
 }

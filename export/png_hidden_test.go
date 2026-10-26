@@ -50,17 +50,3 @@ func TestPNGHiddenEdgesDrawsTheFarCornerOfABlock(t *testing.T) {
 		"the outlines are drawn over the dashes, covering only where the edges cross")
 	require.Greater(t, countGrey(withOutlines, image.Rect(0, 0, 300, 300), 32), 100, "the visible outlines are drawn")
 }
-
-func TestPNGHiddenEdgesRefusesAPerspectiveCamera(t *testing.T) {
-	t.Parallel()
-	body := decadtest.NewBlock(t, decad.New(), 0, 0, 20, 20, units.Millimeters(20))
-	view := export.IsometricView(100, 100)
-	view.HiddenEdges = true
-	view.FieldOfView = units.Degrees(60)
-	require.ErrorIs(t, export.PNG(t.Context(), &discard{}, body, units.Millimeters(0.1), view), decad.ErrDegenerate)
-}
-
-// discard is a writer that drops what it is given.
-type discard struct{}
-
-func (*discard) Write(p []byte) (int, error) { return len(p), nil }

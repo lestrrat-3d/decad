@@ -77,7 +77,7 @@ func TestPNGPerspectiveRefusals(t *testing.T) {
 		"180 degrees":     {func(v *export.View) { v.FieldOfView = units.Degrees(180) }, decad.ErrDegenerate},
 		"negative":        {func(v *export.View) { v.FieldOfView = units.Degrees(-10) }, decad.ErrNegativeMagnitude},
 		"a length":        {func(v *export.View) { v.FieldOfView = units.Millimeters(5) }, decad.ErrUnitKind},
-		"with outlines":   {func(v *export.View) { v.FieldOfView = units.Degrees(60); v.Outlines = true }, decad.ErrDegenerate},
+		"with shadows":    {func(v *export.View) { v.FieldOfView = units.Degrees(60); v.Shadows = true }, decad.ErrDegenerate},
 		"zero as degrees": {func(v *export.View) { v.FieldOfView = units.Degrees(0) }, decad.ErrDegenerate},
 	} {
 		view := topDown(64)

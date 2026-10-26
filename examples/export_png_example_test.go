@@ -410,3 +410,58 @@ f 4 8 5
 	// Output:
 	// green dominates: true
 }
+
+// Outlines and HiddenEdges take a perspective camera too. Looked at from straight
+// above, a block's far face is smaller than its near one, so its hidden edges
+// show as a dashed square inside the near face's outline.
+func Example_export_png_perspective_edges() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(-10, -10, 10, 10)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	block, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	var out bytes.Buffer
+	if err := export.PNG(context.Background(), &out, block, units.Millimeters(0.1), export.View{
+		Direction: r3.NewVec(0, 0, -1), Up: r3.NewVec(0, 1, 0),
+		Width: 200, Height: 200, FieldOfView: units.Degrees(60),
+		Outlines: true, HiddenEdges: true,
+	}); err != nil {
+		fmt.Printf("failed to export: %s\n", err)
+		return
+	}
+	img, err := png.Decode(&out)
+	if err != nil {
+		fmt.Printf("failed to read the image: %s\n", err)
+		return
+	}
+	// The near face's outline is 90 pixels left of the middle and the far face's 64, so a
+	// few columns around the far one hold its dashes.
+	grey := func(x, y int) bool {
+		r, g, b, _ := img.At(x, y).RGBA()
+		return r>>8 == 32 && g>>8 == 32 && b>>8 == 32
+	}
+	dashes := 0
+	for y := 44; y < 156; y++ {
+		for x := 34; x < 39; x++ {
+			if r, _, _, _ := img.At(x, y).RGBA(); r>>8 == 150 {
+				dashes++
+			}
+		}
+	}
+	fmt.Printf("near outline drawn: %t, far edge dashed: %t\n", grey(10, 100), dashes > 40)
+	// Output:
+	// near outline drawn: true, far edge dashed: true
+}
