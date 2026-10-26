@@ -1211,7 +1211,7 @@
 6	0.01	TestDraftMeshOfBodyDraft
 6	0.01	TestDraftUndercutFlare
 6	0.09	TestDraftUndercutSlot
-6	0.02	TestEmbossRefusesTiltedSketchAndCurvedFace
+6	0.02	TestEmbossRefusesTiltedSketchAndUntangentCurvedFace
 6	0.00	TestExtrudeAuthenticatedUnionProfile
 6	1.06	TestExtrudeBoundsSweepEnclosesArcApex
 6	0.00	TestExtrudeChainRejectsStaleChain
@@ -2558,3 +2558,7 @@
 10	0.01	TestHoleThreadInARod
 10	0.01	TestHoleThreadOutOfABore
 10	0.01	TestHoleThreadInAThinRodIsTheBooleansRefusal
+10	0.01	TestEmbossRaisesAReliefOnARod
+10	0.01	TestEmbossEngravesIntoARod
+10	0.01	TestEmbossRaisesAReliefInABore
+10	0.01	TestEmbossOnACylinderRefusals

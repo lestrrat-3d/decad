@@ -37,6 +37,17 @@ type Sweep struct {
 // tool reaches height outward and Margin inward. An engraved tool reaches
 // height inward and Margin outward.
 func Plan(sketch r3.Frame, face r3.Frame, outward r3.Vec, height float64, raised bool) (Sweep, error) {
+	return PlanCurved(sketch, face, outward, height, raised, 0)
+}
+
+// PlanCurved is Plan for a face that curves away from its tangent plane: extra
+// millimetres more are added to the side the tool leaves open, so the tool still
+// overlaps the body at the edge of its section, where the wall has moved from the
+// plane by up to extra less Margin.
+func PlanCurved(sketch r3.Frame, face r3.Frame, outward r3.Vec, height float64, raised bool, extra float64) (Sweep, error) {
+	if !(extra >= 0) || math.IsInf(extra, 0) {
+		return Sweep{}, fmt.Errorf(`%w: the extra reach must be finite and not negative`, decaderr.ErrDegenerate)
+	}
 	if !(height > 0) || math.IsInf(height, 0) {
 		return Sweep{}, fmt.Errorf(`%w: the relief height must be positive and finite`, decaderr.ErrDegenerate)
 	}
@@ -47,9 +58,9 @@ func Plan(sketch r3.Frame, face r3.Frame, outward r3.Vec, height float64, raised
 	if cross := n.Cross(outward); math.Sqrt(cross.Dot(cross)) > ParallelTol {
 		return Sweep{}, fmt.Errorf(`%w: the sketch plane is not parallel to the face plane`, decaderr.ErrDegenerate)
 	}
-	out, in := height, float64(Margin)
+	out, in := height, float64(Margin)+extra
 	if !raised {
-		out, in = Margin, height
+		out, in = float64(Margin)+extra, height
 	}
 	if n.Dot(outward) > 0 {
 		return Sweep{Along: out, Against: in}, nil

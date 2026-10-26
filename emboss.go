@@ -3,11 +3,13 @@ package decad
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/decad/internal/embossplan"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/ribplan"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
@@ -68,11 +70,12 @@ func WithEmbossDraft(angle units.Value) EmbossOption {
 	return embossOption{option.New(identEmbossDraft{}, angle)}
 }
 
-// Emboss raises or engraves the profiles on a planar face of b and returns the
-// result, retiring b.
+// Emboss raises or engraves the profiles on a planar or cylindrical face of b and
+// returns the result, retiring b.
 //
-// face selects the planar face and must resolve to exactly one face. s is a
-// sketch whose plane is the plane of that face, and profiles are closed
+// face selects the face and must resolve to exactly one face. s is a sketch whose
+// plane is the plane of that face, or on a cylindrical face a plane tangent to the
+// cylinder (agent-docs/emboss-design.md §8), and profiles are closed
 // profiles of s, such as the outlines of letters or a logo; a profile with
 // holes keeps them. The relief is height tall: a raised relief stands height
 // out of the face, and an engraved one is cut height into the body. The tool
@@ -84,7 +87,7 @@ func WithEmbossDraft(angle units.Value) EmbossOption {
 // or nil profile list, a non-positive height, a sketch plane that is more than
 // 1e-6 mm off the face plane or not parallel to it, and a relief that
 // certifiably misses b or changes no volume are ErrDegenerate. A face that is
-// not an analytic plane is ErrUnsupported. Profiles must not touch each other
+// not an analytic plane or cylinder is ErrUnsupported. Profiles must not touch each other
 // in a shared plane. A boolean the evaluator cannot decide is the boolean's
 // own error. Every failure leaves the document unchanged and b live.
 func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.Profile, face FaceSelector,
@@ -140,15 +143,25 @@ func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.P
 	if err != nil {
 		return nil, err
 	}
-	plane, outward, err := resolvePlanarFace(b, face, "Emboss")
-	if err != nil {
-		return nil, err
-	}
 	frame, err := s.Plane().Frame()
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the sketch plane has no frame: %s`, ErrDegenerate, err)
 	}
-	sweep, err := embossplan.Plan(frame, plane.Frame, outward.Value, h, mode == EmbossRaised)
+	site, err := resolveEmbossSite(b, face, frame)
+	if err != nil {
+		return nil, err
+	}
+	plane, outward := site.plane, VecMeasurement{Value: site.outward}
+	extra := 0.0
+	if site.cylinder != nil {
+		if rim != nil {
+			return nil, fmt.Errorf(`%w: a relief on a cylindrical face takes no rim fillet`, ErrUnsupported)
+		}
+		if extra, err = embossCurvedReach(ctx, d, s, profiles, frame, site, mode); err != nil {
+			return nil, err
+		}
+	}
+	sweep, err := embossplan.PlanCurved(frame, plane.Frame, outward.Value, h, mode == EmbossRaised, extra)
 	if err != nil {
 		return nil, err
 	}
@@ -244,4 +257,132 @@ func requireReliefChangesVolume(before, after *Body, mode EmbossMode) error {
 		return fmt.Errorf(`%w: the engraving lies outside the material and removes none`, ErrDegenerate)
 	}
 	return nil
+}
+
+// embossSite is the plane an emboss lies on, its outward normal, and for a
+// cylindrical face the cylinder.
+type embossSite struct {
+	plane   Plane
+	outward r3.Vec
+	// cylinder, when set, says the face is a cylinder and plane is tangent to it.
+	cylinder *embossCylinder
+}
+
+// embossCylinder is the cylindrical face an emboss lies on.
+type embossCylinder struct {
+	radius  float64
+	concave bool
+	// axis is the cylinder's unit axis and lateral the unit direction in the
+	// tangent plane at right angles to it. line is the signed position of the
+	// line the plane touches the cylinder along, on lateral.
+	axis, lateral r3.Vec
+	line          float64
+}
+
+// resolveEmbossSite resolves face to a plane: a planar face is its own plane, and a
+// cylindrical face gives the plane of the sketch frame when that is tangent to the
+// cylinder.
+func resolveEmbossSite(b *Body, face FaceSelector, sketchFrame r3.Frame) (embossSite, error) {
+	if faces, err := face.SelectFaces(b); err == nil && len(faces) == 1 {
+		if cyl, ok := faces[0].Surface().(Cylinder); ok {
+			return cylinderEmbossSite(faces[0], cyl, sketchFrame)
+		}
+	}
+	plane, normal, err := resolvePlanarFace(b, face, "Emboss")
+	if err != nil {
+		return embossSite{}, err
+	}
+	return embossSite{plane: plane, outward: normal.Value}, nil
+}
+
+// cylinderEmbossSite checks that the sketch plane is tangent to cyl and reads the
+// face's outward normal where it touches.
+func cylinderEmbossSite(face *Face, cyl Cylinder, sketchFrame r3.Frame) (embossSite, error) {
+	radius, err := sectionrecord.MagnitudeIn(cyl.Radius, units.Length, units.Millimeter, "the cylinder radius")
+	if err != nil {
+		return embossSite{}, err
+	}
+	axis, ok := cyl.Axis.Normalize()
+	if !ok {
+		return embossSite{}, fmt.Errorf(`%w: the cylinder has no axis direction`, ErrDegenerate)
+	}
+	n := sketchFrame.N()
+	if math.Abs(n.Dot(axis)) > embossplan.ParallelTol {
+		return embossSite{}, fmt.Errorf(`%w: the sketch plane is not parallel to the cylinder's axis, so it is not tangent to it`, ErrDegenerate)
+	}
+	rel := sketchFrame.Origin().Sub(cyl.Origin)
+	dist := rel.Dot(n)
+	if off := math.Abs(math.Abs(dist) - radius); off > embossplan.PlaneTol {
+		return embossSite{}, fmt.Errorf(`%w: the sketch plane lies %g mm from the cylinder's surface, so it is not tangent to it`, ErrDegenerate, off)
+	}
+	toward := n
+	if dist < 0 {
+		toward = n.Scale(-1)
+	}
+	// The line of contact: on the axis' side of the plane, radius along the normal's pointing back.
+	axial := cyl.Origin.Add(axis.Scale(rel.Dot(axis)))
+	touch := axial.Add(toward.Scale(radius))
+	normal, err := face.NormalAt(touch)
+	if err != nil {
+		return embossSite{}, err
+	}
+	outward, ok := normal.Value.Normalize()
+	if !ok {
+		return embossSite{}, fmt.Errorf(`%w: the cylindrical face has no normal where the sketch plane touches it`, ErrDegenerate)
+	}
+	lateral, ok := n.Cross(axis).Normalize()
+	if !ok {
+		return embossSite{}, fmt.Errorf(`%w: the cylinder's axis and the sketch normal are parallel`, ErrDegenerate)
+	}
+	plane := Plane{Frame: sketchFrame}
+	return embossSite{plane: plane, outward: outward, cylinder: &embossCylinder{
+		radius: radius, concave: outward.Dot(toward) < 0, axis: axis, lateral: lateral,
+		line: touch.Sub(sketchFrame.Origin()).Dot(lateral),
+	}}, nil
+}
+
+// embossCurvedReach returns how much farther the relief's tool must reach past the
+// tangent plane on its open side so it overlaps the cylinder across the whole width
+// of the profiles: the sagitta R - sqrt(R² - w²) at the widest distance w of a
+// profile from the line of contact, for a raised relief on a rod or an engraving in a
+// bore, where the wall moves away from the tool's start. A relief that is wider than
+// the cylinder is ErrDegenerate.
+func embossCurvedReach(ctx context.Context, d *Document, s *sketch.Sketch, profiles []*sketch.Profile,
+	frame r3.Frame, site embossSite, mode EmbossMode) (float64, error) {
+	c := site.cylinder
+	// A relief reaches the wall that falls away from the tangent plane (a convex wall) on its
+	// inward side when raised, and the wall that rises toward it (a concave wall) on its
+	// outward side when engraved.
+	if (mode != EmbossRaised || c.concave) && (mode != EmbossEngraved || !c.concave) {
+		return 0, nil
+	}
+	toolCtx, _ := privateConstructionContext(ctx)
+	width := 0.0
+	for _, p := range profiles {
+		if p == nil {
+			return 0, fmt.Errorf(`%w: a nil profile names no relief`, ErrDegenerate)
+		}
+		probe, err := Extrude(toolCtx, d, s, p, Distance{D: units.Millimeters(1), Dir: Along})
+		if err != nil {
+			return 0, err
+		}
+		box, err := probe.Bounds()
+		removeTools([]*Body{probe})
+		if err != nil {
+			return 0, err
+		}
+		for _, x := range []float64{box.Min.X, box.Max.X} {
+			for _, y := range []float64{box.Min.Y, box.Max.Y} {
+				for _, z := range []float64{box.Min.Z, box.Max.Z} {
+					at := r3.Vec{X: x, Y: y, Z: z}.Sub(frame.Origin()).Dot(c.lateral)
+					width = math.Max(width, math.Abs(at-c.line))
+				}
+			}
+		}
+	}
+	if width >= c.radius {
+		return 0, fmt.Errorf(`%w: a relief %g mm from the line of contact is as wide as the %g mm radius cylinder it lies on`,
+			ErrDegenerate, width, c.radius)
+	}
+	return c.radius - math.Sqrt(c.radius*c.radius-width*width), nil
 }
