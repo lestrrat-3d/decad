@@ -1179,6 +1179,14 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   identity and a homogeneous point has many spellings. Retriangulation along
   intersection curves, classification by exact winding tests, stitching by
   shared exact vertices.
+- **Subdivide cut facets in bounded batches.** Each facet owns its cutter and
+  cancellation budget. Independent subdivisions run concurrently; region
+  classification, point-key caching and facet emission run on the caller in
+  facet order. Keep each subdivision error in its facet's result until that
+  result is consumed, so a later subdivision error cannot replace an earlier
+  classification error. Join every worker before returning, including on
+  cancellation. `internal/meshbool/boolean_cut_batch.go` owns worker selection;
+  `keepSide` owns the batch bound.
 - **One symmetric classifier per facet pair.** Two closed triangles are convex
   sets, so their intersection is empty, a point, a segment, or a 2-D region —
   and the pair pass computes exactly *which*, never "how many of A's vertices
