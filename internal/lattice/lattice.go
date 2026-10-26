@@ -1,4 +1,4 @@
-// Package lattice builds the triangle mesh of a gyroid lattice inside a box
+// Package lattice builds the triangle mesh of a gyroid, Schwarz-P or diamond lattice inside a box
 // (agent-docs/lattice-design.md). It works on plain millimetre data and touches
 // no body, document or sketch.
 package lattice
@@ -23,9 +23,52 @@ const (
 	maxTriangles = 2_000_000
 )
 
-// MaxLevel is the largest value |g| reaches, 3/2 for the gyroid field; a level at
-// or above it fills the whole box.
+// MaxLevel is the largest value |g| reaches for the gyroid field, 3/2; a level at
+// or above it fills the whole box. [Kind.MaxLevel] is the largest of any kind.
 const MaxLevel = 1.5
+
+// Kind is a triply periodic surface, the zero set of a field g whose solid is
+// where |g| ≤ level.
+type Kind int
+
+const (
+	// KindGyroid is sin kx·cos ky + sin ky·cos kz + sin kz·cos kx, which runs from
+	// −3/2 to 3/2.
+	KindGyroid Kind = iota
+	// KindSchwarzP is cos kx + cos ky + cos kz, which runs from −3 to 3.
+	KindSchwarzP
+	// KindDiamond is sin kx·sin ky·sin kz + sin kx·cos ky·cos kz +
+	// cos kx·sin ky·cos kz + cos kx·cos ky·sin kz, which runs from −√2 to √2.
+	KindDiamond
+)
+
+// MaxLevel is the largest value |g| reaches for the kind; a level at or above it
+// fills the whole box.
+func (k Kind) MaxLevel() float64 {
+	switch k {
+	case KindSchwarzP:
+		return 3
+	case KindDiamond:
+		return math.Sqrt2
+	default:
+		return MaxLevel
+	}
+}
+
+// field is g at the point whose phases kx, ky and kz are given.
+func (k Kind) field(x, y, z float64) float64 {
+	sx, cx := math.Sincos(x)
+	sy, cy := math.Sincos(y)
+	sz, cz := math.Sincos(z)
+	switch k {
+	case KindSchwarzP:
+		return cx + cy + cz
+	case KindDiamond:
+		return sx*sy*sz + sx*cy*cz + cx*sy*cz + cx*cy*sz
+	default:
+		return sx*cy + sy*cz + sz*cx
+	}
+}
 
 // Gyroid returns the mesh of the solid {|g(p)| ≤ level} inside the box from min
 // to max, where g(p) = sin kx·cos ky + sin ky·cos kz + sin kz·cos kx and
@@ -38,11 +81,18 @@ const MaxLevel = 1.5
 // Every length is in millimetres. min is below max on every axis, cell is
 // positive, level lies strictly between 0 and MaxLevel and res is at least 4.
 func Gyroid(ctx context.Context, lo, hi r3.Vec, cell, level float64, res int) (vertices []r3.Vec, triangles [][3]int, err error) {
+	return Surface(ctx, KindGyroid, lo, hi, cell, level, res)
+}
+
+// Surface is [Gyroid] for any [Kind]: the mesh of {|g(p)| ≤ level} inside the box
+// from lo to hi, with g the kind's field and level strictly between 0 and the
+// kind's MaxLevel.
+func Surface(ctx context.Context, kind Kind, lo, hi r3.Vec, cell, level float64, res int) (vertices []r3.Vec, triangles [][3]int, err error) {
 	if !(cell > 0) || math.IsInf(cell, 0) {
 		return nil, nil, fmt.Errorf("%w: the cell must be positive and finite", ErrDegenerate)
 	}
-	if !(level > 0 && level < MaxLevel) {
-		return nil, nil, fmt.Errorf("%w: the level must lie between 0 and %g", ErrDegenerate, MaxLevel)
+	if !(level > 0 && level < kind.MaxLevel()) {
+		return nil, nil, fmt.Errorf("%w: the level must lie between 0 and %g", ErrDegenerate, kind.MaxLevel())
 	}
 	if res < 4 {
 		return nil, nil, fmt.Errorf("%w: at least 4 samples to a cell", ErrDegenerate)
@@ -73,7 +123,7 @@ func Gyroid(ctx context.Context, lo, hi r3.Vec, cell, level float64, res int) (v
 		for j := range n[1] {
 			for i := range n[0] {
 				p := at(i, j, l)
-				g := math.Sin(k*p.X)*math.Cos(k*p.Y) + math.Sin(k*p.Y)*math.Cos(k*p.Z) + math.Sin(k*p.Z)*math.Cos(k*p.X)
+				g := kind.field(k*p.X, k*p.Y, k*p.Z)
 				d := math.Min(math.Min(p.X-lo.X, hi.X-p.X), math.Min(math.Min(p.Y-lo.Y, hi.Y-p.Y), math.Min(p.Z-lo.Z, hi.Z-p.Z)))
 				f := math.Min(level-math.Abs(g), d)
 				if f == 0 {

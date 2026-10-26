@@ -16,7 +16,8 @@ import (
 // Resolution takes.
 const defaultLatticeResolution = 16
 
-// LatticeSpec describes a gyroid lattice for [GyroidLattice].
+// LatticeSpec describes a lattice for [GyroidLattice], [SchwarzPLattice] and
+// [DiamondLattice].
 type LatticeSpec struct {
 	// Min and Max are the box's corners in millimetres; Min is below Max on every
 	// axis.
@@ -24,10 +25,12 @@ type LatticeSpec struct {
 	// Cell is the length after which the lattice repeats along each axis, a
 	// positive length.
 	Cell units.Value
-	// Level is a dimensionless wall thickness: the solid is where the gyroid field
-	// g lies within Level of zero, |g| ≤ Level, and g runs from −3/2 to 3/2. A
-	// level of 0.3 gives a thin wall, 1 a heavy one and values near 3/2 a nearly
-	// full box. It lies strictly between 0 and 3/2.
+	// Level is a dimensionless wall thickness: the solid is where the lattice's
+	// field g lies within Level of zero, |g| ≤ Level. The gyroid's g runs from
+	// −3/2 to 3/2, so a level of 0.3 gives a thin wall, 1 a heavy one and values
+	// near 3/2 a nearly full box; the Schwarz-P field runs from −3 to 3 and the
+	// diamond's from −√2 to √2. Level lies strictly between 0 and the field's
+	// largest value (agent-docs/lattice-design.md §4).
 	Level units.Value
 	// Resolution is the number of samples to a cell along each axis, from 4 up.
 	// The zero value takes 16. A finer grid follows the surface more closely and
@@ -46,12 +49,36 @@ type LatticeSpec struct {
 // lattice fills a box, not a body: nothing here takes a mesh body into a Boolean.
 //
 // ctx MUST NOT be nil. A nil context, a box with no volume, a cell that is not
-// positive, a level not between 0 and 3/2, a Resolution below 4, and a lattice
+// positive, a level not between 0 and 3/2 (the gyroid field's largest value), a Resolution below 4, and a lattice
 // that needs more than 8 million samples or 2 million triangles are
 // ErrDegenerate. A cell of the wrong unit kind is ErrUnitKind and a negative one
 // ErrNegativeMagnitude. A level that is not dimensionless is ErrUnitKind.
 // Non-finite corners are ErrNotFinite. A canceled context returns its error.
 func GyroidLattice(ctx context.Context, spec LatticeSpec) (*MeshBody, error) {
+	return buildLattice(ctx, spec, lattice.KindGyroid)
+}
+
+// SchwarzPLattice builds a Schwarz primitive (P) lattice, cos kx + cos ky + cos kz,
+// a triply periodic wall of cubic symmetry whose solid is where |g| ≤ Level, as a
+// closed [MeshBody] filling the box of spec (agent-docs/lattice-design.md §4).
+// Everything GyroidLattice says holds, except that the field runs from −3 to 3 and
+// Level lies strictly between 0 and 3.
+func SchwarzPLattice(ctx context.Context, spec LatticeSpec) (*MeshBody, error) {
+	return buildLattice(ctx, spec, lattice.KindSchwarzP)
+}
+
+// DiamondLattice builds a Schwarz diamond lattice, the field
+// sin kx·sin ky·sin kz + sin kx·cos ky·cos kz + cos kx·sin ky·cos kz +
+// cos kx·cos ky·sin kz, whose solid is where |g| ≤ Level, as a closed
+// [MeshBody] filling the box of spec (agent-docs/lattice-design.md §4).
+// Everything GyroidLattice says holds, except that the field runs from −√2 to √2
+// and Level lies strictly between 0 and √2.
+func DiamondLattice(ctx context.Context, spec LatticeSpec) (*MeshBody, error) {
+	return buildLattice(ctx, spec, lattice.KindDiamond)
+}
+
+// buildLattice is the gates and the build shared by the lattice kinds.
+func buildLattice(ctx context.Context, spec LatticeSpec, kind lattice.Kind) (*MeshBody, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a lattice`, ErrDegenerate)
 	}
@@ -75,7 +102,7 @@ func GyroidLattice(ctx context.Context, spec LatticeSpec) (*MeshBody, error) {
 	if res == 0 {
 		res = defaultLatticeResolution
 	}
-	vertices, triangles, err := lattice.Gyroid(ctx, spec.Min, spec.Max, cell, level, res)
+	vertices, triangles, err := lattice.Surface(ctx, kind, spec.Min, spec.Max, cell, level, res)
 	if errors.Is(err, lattice.ErrDegenerate) {
 		return nil, fmt.Errorf("%w: %s", ErrDegenerate, err)
 	}
