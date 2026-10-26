@@ -49,7 +49,7 @@ determinism of the bytes. A crease rule that marks every edge, or no absorption 
 
 ## 4. Not covered
 
-- Hatching, centre lines, dimensions other than the overall size, diameters and radii, and a title block with more than a title, three fields and a scale.
+- Hatching other than a section cut (§10), centre lines, dimensions other than the overall size, diameters and radii, and a title block with more than a title, three fields and a scale.
 - Arcs and ellipses, a circle only partly seen, and DXF versions after release 12.
 - View labels and a layout other than one row.
 - A tolerance on the hidden-line test finer than the depth buffer's pixel.
@@ -145,3 +145,16 @@ With `DXFPaper.Dimensions`, `DXFSheet` also states the size of each circle and a
 | T1 | A `DXFField` is a label and a value, each printable ASCII, the label not empty: `PART` and `BK-100` are written `PART: BK-100`. More than three fields, an empty label or a character outside printable ASCII is `ErrDegenerate` and nothing is written. |
 | T2 | The fields are `TEXT` 2.5 mm high on the `TEXT` layer, stacked from the top of the title block, the first 4 mm below it and each 4 mm under the last, at 0.55 of the way from the sheet's left border to the scale's divider. The title keeps its place at the left. |
 | T3 | No fields adds nothing, so a sheet without them is as it was. The tests read the texts back and require the stack's spacing and that each lies inside the block and left of the scale. |
+
+## 10. A hatched section view
+
+`export.DXFSection` writes the cut of a body by a plane, hatched, as one drawing. The outline of the cut comes from
+`Body.SectionOutline` (`agent-docs/section-outline-design.md`) and the hatching from `internal/drawing.Hatch`.
+
+| Decision | Rule |
+|---|---|
+| S1 | The drawing's X and Y are the plane's U and V in millimetres at full scale, measured from the plane's origin, so `plane.ToLocal` of an outline point is its drawing point. The loops are `LINE` entities on the `SECTION` layer, one for each side of the tessellated outline, and the hatch lines are `LINE` entities on the `HATCH` layer. The file is release 12 like the others, with those two layers and the continuous linetype. |
+| S2 | The hatch fills the region the loops enclose by the even-odd rule, so a hole inside an outline is empty whichever way the loops run. Lines run at `Angle` from the X axis, 45 degrees for the zero `units.Value`, and sit at whole multiples of `Spacing` across their direction measured from the drawing's origin, so two sections of one spacing and angle carry one family of lines. A line along a boundary edge is drawn when the region lies on the side of increasing offset and not when it lies on the other. Each segment is the part of one line inside the region, ordered by line and then along it. |
+| S3 | `Spacing` is a positive length (`ErrDegenerate` for zero, `ErrNegativeMagnitude` for a negative, `ErrUnitKind` for a wrong kind, and for a missing one, a dimensionless zero). `Angle` is an angle; its sign is a direction. A cut that needs over 100000 hatch lines is `ErrDegenerate`. A nil context, writer or body and an invalid plane are `ErrDegenerate`, and a refusal writes nothing. |
+| S4 | A plane that misses the body gives a complete file with no entity. `SectionOutline`'s own refusals, a sheet or unsound solid (`ErrNotSolid`) and a mesh whose cut does not close (`ErrUnsupported`), return as they are. |
+| S5 | The outline is a reading of the tessellation, not of the exact solid (`SectionOutline`'s contract), so a curved wall is chords and the hatch fills the polygon. The tests read the entities back: lines of the right layer, spacing and ends for a block, a hole left empty with the hatch's length times the spacing equal to the plate's area less the hole's within 1 percent, the plane's origin and angle honoured, and unit tests of `Hatch` on its own. |
