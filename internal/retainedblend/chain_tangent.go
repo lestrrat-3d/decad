@@ -92,9 +92,9 @@ type chainWall struct {
 }
 
 // readChainTag reads a retained plane or cylinder face. It returns false for
-// any other face and for a face with a stated tag departure or denoted patch.
+// any other face and for a face with a stated tag departure or a denoted patch its tag does not equal.
 func readChainTag(f *topo.Face) (chainWall, bool) {
-	if f == nil || !f.RetainedTag || f.TagDeparture != 0 || f.Denoted != nil {
+	if f == nil || !f.RetainedTag || f.TagDeparture != 0 || !tagIsRecord(f) {
 		return chainWall{}, false
 	}
 	w := chainWall{face: f, reversed: f.Reversed}

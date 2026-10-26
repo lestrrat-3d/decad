@@ -362,6 +362,8 @@
 2	0.01	TestRevolveEdgeAxisDirectionSense
 2	0.23	TestRevolveFilletTessellates
 2	0.01	TestRevolveQuarterCapRadialRimFilletRefusesOtherSources
+10	0.00	TestFacetedRetainedBlendRevolvedShaft
+10	0.00	TestFacetedRetainedBlendRevolvedRim
 2	0.02	TestRevolveReflexSweepBoundsTightenTiltedAxis
 2	6.21	TestRevolveSectorRepeatedAnnularCylinderCutVerified
 2	0.28	TestRevolveShellSideOpening

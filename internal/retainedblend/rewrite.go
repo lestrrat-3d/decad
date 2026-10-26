@@ -108,8 +108,9 @@ func clearance(gap, margin float64, what string) error {
 
 // rewritePlane replaces the plane face's facets: the rim loop gives way to a
 // polygon on the plane's setback circle, and the face is triangulated again
-// over its remaining boundary loops (§5 step 2, R2).
-func (w *work) rewritePlane(fi int) ([]ringPt, int, error) {
+// over its remaining boundary loops (§5 step 2, R2). A vertex no loop reaches
+// is dropped with the old facets when it lies exactly on the plane g.
+func (w *work) rewritePlane(fi int, g plane) ([]ringPt, int, error) {
 	r := w.r
 	facets := facetsOfFace(w.fp.FaceOf, fi)
 	group, err := w.groupOf(facets)
@@ -146,7 +147,7 @@ func (w *work) rewritePlane(fi int) ([]ringPt, int, error) {
 	}
 	for _, f := range facets {
 		for _, v := range w.fp.Tris[f] {
-			if !inLoop[v] {
+			if !inLoop[v] && !g.holds(w.verts[v]) {
 				return nil, 0, fmt.Errorf("%w: the plane face holds a vertex off its boundary", decaderr.ErrUnsupported)
 			}
 		}

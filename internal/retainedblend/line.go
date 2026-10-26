@@ -3,10 +3,12 @@ package retainedblend
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/stitchflux"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -51,7 +53,7 @@ type lineKey struct{ p0, p1 r3.Vec }
 func (l line) key() lineKey { return lineKey{l.ends[0].exact, l.ends[1].exact} }
 
 func retainedPlane(f *topo.Face) (plane, bool) {
-	if f == nil || !f.RetainedTag || f.TagDeparture != 0 || f.Denoted != nil {
+	if f == nil || !f.RetainedTag || f.TagDeparture != 0 || !tagIsRecord(f) {
 		return plane{}, false
 	}
 	pl, ok := f.Surface.(surfacegeom.Plane)
@@ -209,7 +211,29 @@ func distToSegment(p, a, b r3.Vec) float64 {
 	return p.Sub(a.Add(ab.Scale(t))).Len()
 }
 
-// faceLoops is a face's facets and boundary loops.
+// holds reports whether x lies exactly on the plane, decided in rationals on
+// the held normal and origin. A vertex that is off the plane by any amount, or
+// not finite, is not held.
+func (p plane) holds(x r3.Vec) bool {
+	n, okN := stitchflux.RatVecOf(p.n)
+	o, okO := stitchflux.RatVecOf(p.o)
+	q, okQ := stitchflux.RatVecOf(x)
+	if !okN || !okO || !okQ {
+		return false
+	}
+	sum := new(big.Rat)
+	for k := range 3 {
+		sum.Add(sum, new(big.Rat).Mul(n[k], new(big.Rat).Sub(q[k], o[k])))
+	}
+	return sum.Sign() == 0
+}
+
+// faceLoops is a face's facets and boundary loops. A vertex that no boundary
+// loop reaches refuses the face, except on an end face (g non-nil) where it
+// lies exactly on the end plane: the rewrite re-triangulates every face it
+// touches from its boundary loops alone, so such a vertex (the centre of a
+// fan-triangulated end cap) is dropped with the old facets and never reaches
+// the result (agent-docs/retained-edge-blend-design.md).
 type faceLoops struct {
 	index  int
 	facets []int
@@ -217,7 +241,7 @@ type faceLoops struct {
 	loops  [][]int
 }
 
-func (w *work) faceLoops(fi int) (faceLoops, error) {
+func (w *work) faceLoops(fi int, g *plane) (faceLoops, error) {
 	f := faceLoops{index: fi, facets: facetsOfFace(w.fp.FaceOf, fi)}
 	var err error
 	if f.group, err = w.groupOf(f.facets); err != nil {
@@ -234,7 +258,7 @@ func (w *work) faceLoops(fi int) (faceLoops, error) {
 	}
 	for _, facet := range f.facets {
 		for _, v := range w.fp.Tris[facet] {
-			if !in[v] {
+			if !in[v] && (g == nil || !g.holds(w.verts[v])) {
 				return f, fmt.Errorf("%w: a face holds a vertex off its boundary", decaderr.ErrUnsupported)
 			}
 		}
