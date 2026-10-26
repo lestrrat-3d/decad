@@ -30,7 +30,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `patch.go` | `PatchProfile`: records the profile and builds its face through `patchchain.Build`. See surface §5.1. |
 | `boss.go` | Public `Boss`, `BossSpec` and `BossBore`: face and size gates, the cylinder tool, then a union and the pilot cut through `combineToolSteps`. See boss design. |
 | `hole.go` | Public `Hole`, `HoleSpec`, depth, head and shape variants: gates, tool sketches, chained cut and the commit; `internal/holeplan/` computes the tools. See hole design. |
-| `rib.go` | Public `Rib`, `Web` and `WithRibOverrun`: line, thickness and extent gates, rib tool extrusion, touch and volume checks. See rib design. |
+| `rib.go` | Public `Rib`, `RibArc`, `Web` and `WithRibOverrun`: line, thickness and extent gates, rib tool extrusion, touch and volume checks. See rib design. |
 | `emboss.go` | Public `Emboss` and `EmbossMode`: gates, sketch-plane check, tool extrusion, join and volume checks. See emboss design. |
 | `planar_face.go` | Resolves a selector to one analytic planar face and its outward normal; `Hole` and `Emboss` share it. |
 | `tool_combine.go` | Shared by composite features: chains Boolean steps, of one kind (`combineTools`) or several (`combineToolSteps`), over temporary tools, commits once, and retires tools without public history entries. |

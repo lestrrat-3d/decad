@@ -59,3 +59,52 @@ func TestAddsNothing(t *testing.T) {
 	require.False(t, ribplan.AddsNothing(100, 0, 100.5, 0))
 	require.False(t, ribplan.AddsNothing(100, 1, 100, 0), "a bound on the reading before keeps the answer open")
 }
+
+func TestArcBandQuarterTurn(t *testing.T) {
+	t.Parallel()
+	// A quarter of the radius-10 circle about (1, 2), from angle 0 to 90 degrees.
+	got, err := ribplan.ArcBand(1, 2, 11, 2, 1, 12, 2, 0)
+	require.NoError(t, err)
+	require.InDelta(t, 9, got.Inner, 1e-12)
+	require.InDelta(t, 11, got.Outer, 1e-12)
+	require.InDelta(t, 0, got.Start, 1e-12)
+	require.InDelta(t, math.Pi/2, got.End, 1e-12)
+	u, v := got.Point(got.Outer, got.End)
+	require.InDelta(t, 1, u, 1e-12)
+	require.InDelta(t, 13, v, 1e-12)
+}
+
+func TestArcBandOverrunExtendsBothEndsByArcLength(t *testing.T) {
+	t.Parallel()
+	got, err := ribplan.ArcBand(0, 0, 10, 0, 0, 10, 2, 5)
+	require.NoError(t, err)
+	// 5 mm along a radius-10 arc is half a radian at each end.
+	require.InDelta(t, -0.5, got.Start, 1e-12)
+	require.InDelta(t, math.Pi/2+0.5, got.End, 1e-12)
+}
+
+func TestArcBandSweepsCounterClockwiseAcrossTheCut(t *testing.T) {
+	t.Parallel()
+	// From 270 degrees round through 0 to 90 degrees: a half turn.
+	got, err := ribplan.ArcBand(0, 0, 0, -10, 0, 10, 2, 0)
+	require.NoError(t, err)
+	require.InDelta(t, math.Pi, got.End-got.Start, 1e-12)
+}
+
+func TestArcBandRefusals(t *testing.T) {
+	t.Parallel()
+	cases := map[string]func() error{
+		"zero thickness":         func() error { _, err := ribplan.ArcBand(0, 0, 10, 0, 0, 10, 0, 0); return err },
+		"negative overrun":       func() error { _, err := ribplan.ArcBand(0, 0, 10, 0, 0, 10, 2, -1); return err },
+		"ends on two circles":    func() error { _, err := ribplan.ArcBand(0, 0, 10, 0, 0, 11, 2, 0); return err },
+		"end on the centre":      func() error { _, err := ribplan.ArcBand(0, 0, 10, 0, 0, 0, 2, 0); return err },
+		"rib too thick":          func() error { _, err := ribplan.ArcBand(0, 0, 3, 0, 0, 3, 8, 0); return err },
+		"overrun wraps the turn": func() error { _, err := ribplan.ArcBand(0, 0, 10, 0, 0, 10, 2, 40); return err },
+	}
+	for name, call := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			require.Error(t, call())
+		})
+	}
+}

@@ -203,6 +203,7 @@ Each of these returns a new body and retires its input.
 | `decad.Thread` | Cuts a right-handed ISO metric thread into a cylindrical face, a rod or a bore, from its pitch. |
 | `decad.Boss` | Raises a round boss on a planar face, with an optional blind pilot hole. |
 | `decad.Rib` | Thickens one straight sketch line, extrudes it by an `decad.Extent` and joins it to the body. `decad.WithRibOverrun` buries its ends in the walls. |
+| `decad.RibArc` | Thickens one sketch arc and joins it to the body as a rib, like `decad.Rib` for a line. |
 | `decad.Web` | Adds one such rib for each of several lines in one step. |
 | `decad.Emboss` | Raises or engraves closed profiles on a planar face. `decad.EmbossRaised` or `decad.EmbossEngraved` picks the mode. |
 | `decad.Thicken` | Turns a sheet into a solid. `decad.WithThickenSide` picks the side. |
