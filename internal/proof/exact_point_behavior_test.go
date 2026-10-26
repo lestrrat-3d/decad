@@ -166,6 +166,64 @@ func assertXHPRatEqual(t *testing.T, got proof.Xhp, want refPoint) {
 	require.Zero(t, z.Cmp(want.z))
 }
 
+func TestXHPCoordinatesRemainIndependentlyOwned(t *testing.T) {
+	t.Parallel()
+	a := proof.XhpOf(r3.NewVec(0.1, -2.25, 3.5))
+	b := proof.XhpOf(r3.NewVec(-1.75, 0.375, 4.125))
+	generalA := proof.Xhp{X: big.NewInt(2), Y: big.NewInt(-3), Z: big.NewInt(5), W: big.NewInt(7)}
+	generalB := proof.Xhp{X: big.NewInt(-11), Y: big.NewInt(13), Z: big.NewInt(17), W: big.NewInt(19)}
+	aBefore, bBefore := xhpKeyOf(a), xhpKeyOf(b)
+	gaBefore, gbBefore := xhpKeyOf(generalA), xhpKeyOf(generalB)
+	coordinates := func(p proof.Xhp) [4]*big.Int { return [4]*big.Int{p.X, p.Y, p.Z, p.W} }
+	for _, test := range []struct {
+		name string
+		make func() proof.Xhp
+	}{
+		{"float", func() proof.Xhp { return proof.XhpOf(r3.NewVec(0.1, -2.25, 3.5)) }},
+		{"zero", func() proof.Xhp { return proof.XhpOf(r3.Vec{}) }},
+		{"extreme", func() proof.Xhp {
+			return proof.XhpOf(r3.NewVec(math.SmallestNonzeroFloat64, -math.MaxFloat64, 0))
+		}},
+		{"dyadic", func() proof.Xhp {
+			return proof.XhpOfDyadics(proof.MustDyOf(0.1), proof.MustDyOf(-2.25), proof.MustDyOf(3.5))
+		}},
+		{"same-weight subtraction", func() proof.Xhp { return proof.XhpSub(a, a) }},
+		{"different-weight subtraction", func() proof.Xhp { return proof.XhpSub(a, b) }},
+		{"general subtraction", func() proof.Xhp { return proof.XhpSub(generalA, generalB) }},
+		{"aligned subtraction", func() proof.Xhp { return proof.Xhp(proof.Xsub(proof.Xpt(a), proof.Xpt(b))) }},
+		{"cross product", func() proof.Xhp { return proof.XhpCross(a, b) }},
+		{"general cross product", func() proof.Xhp { return proof.XhpCross(generalA, generalB) }},
+		{"lerp", func() proof.Xhp { return proof.XhpLerp(a, b, big.NewInt(3), big.NewInt(-7)) }},
+		{"canonical", func() proof.Xhp { return proof.XhpCanon(a) }},
+		{"general canonical", func() proof.Xhp { return proof.XhpCanon(generalA) }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			for changed := range 4 {
+				point, other := test.make(), test.make()
+				got, unchanged := coordinates(point), coordinates(other)
+				var before [4]big.Int
+				for axis := range 4 {
+					before[axis].Set(unchanged[axis])
+				}
+				got[changed].SetInt64(int64(1000 + changed))
+				for _, shift := range []uint{0, 128, 512} {
+					got[changed].Lsh(got[changed], shift)
+					for axis := range 4 {
+						if axis != changed {
+							require.Zero(t, got[axis].Cmp(&before[axis]), "writing coordinate %d changed %d", changed, axis)
+						}
+						require.Zero(t, unchanged[axis].Cmp(&before[axis]), "writing coordinate %d changed another point", changed)
+					}
+					require.Equal(t, aBefore, xhpKeyOf(a))
+					require.Equal(t, bBefore, xhpKeyOf(b))
+					require.Equal(t, gaBefore, xhpKeyOf(generalA))
+					require.Equal(t, gbBefore, xhpKeyOf(generalB))
+				}
+			}
+		})
+	}
+}
+
 // TestOrientRatAgreesWithOrientSignExact checks the split orientVal was cut
 // into: proof.OrientRat's materialised value and proof.OrientSignExact's plain integer
 // sign must agree over the same probes, sign consumer and value consumer

@@ -42,19 +42,28 @@ func XhpOfDyadics(dx, dy, dz Dyadic) Xhp {
 	lower(dx)
 	lower(dy)
 	lower(dz)
-	coord := func(d Dyadic) *big.Int {
+	// The usual float-derived coordinates fit in three words each. Bound
+	// every segment's capacity so growth allocates independent storage rather
+	// than overwriting another coordinate. Larger integers grow as usual.
+	storage := new(struct {
+		coordinates [4]big.Int
+		words       [12]big.Word
+	})
+	out := Xhp{X: &storage.coordinates[0], Y: &storage.coordinates[1], Z: &storage.coordinates[2], W: &storage.coordinates[3]}
+	coord := func(dst *big.Int, words []big.Word, d Dyadic) {
 		if d.IsZero() {
-			return new(big.Int)
+			return
 		}
-		mant := d.MantInto(new(big.Int))
-		return mant.Lsh(mant, uint(d.Exp()-base))
+		dst.SetBits(words[:0:len(words)])
+		d.MantInto(dst)
+		dst.Lsh(dst, uint(d.Exp()-base))
 	}
-	return Xhp{
-		X: coord(dx),
-		Y: coord(dy),
-		Z: coord(dz),
-		W: new(big.Int).Lsh(big.NewInt(1), uint(-base)),
-	}
+	coord(out.X, storage.words[0:3], dx)
+	coord(out.Y, storage.words[3:6], dy)
+	coord(out.Z, storage.words[6:9], dz)
+	out.W.SetBits(storage.words[9:9:12])
+	out.W.Lsh(big.NewInt(1), uint(-base))
+	return out
 }
 
 // XptDenotes reports whether the exact point p is exactly the float vertex v,
