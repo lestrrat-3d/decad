@@ -2945,19 +2945,23 @@ map and the axis are exact, which keeps every exact bore's cylinder at
 `NormalBound` 0. A bound that is not finite or reaches 1 refuses the
 cylinder, and the wall stays faceted.
 
-Every other reader of a `Cylinder` tag either charges this bound or never sees
-a Loft bore wall. `Face.NormalAt` and the edge dihedral reading built on it
-charge it. Mesh Boolean retention (`facetedrecord.SourceTag`) declines a built
-face with a nonzero `NormalBound`, so retained-edge blends and every
-`facetedrecord` placement and scaling arm never receive the tag. Stitch
+Every other reader of a `Cylinder` tag charges this bound, never sees a Loft
+bore wall, or reads the tag without making a proof claim from it.
+`Face.NormalAt` charges it. Mesh Boolean retention (`facetedrecord.SourceTag`)
+declines a built face with a nonzero `NormalBound`, so retained-edge blends and
+every `facetedrecord` placement and scaling arm never receive the tag. Stitch
 refuses such a face in its flux proof and in a placed rebuild, and Unstitch and
 patch chains refuse to place one. The contact, revolve sector bore,
 loft-cylinder join bore, brep all-edge, cap-blend and patch-chain readers
 take only prism, revolve, brep or cap-blend bodies, and clearance builds its
 carriers from those payloads, never from face tags. The tangent-chain oracle
 reads face normals only beside a continuing open edge, and the bore wall is
-bounded only by its two closed rim circles. Hole, Boss and Thread read the tag only to place a new tool, and the
-selector and STEP export read it as the published held geometry.
+bounded only by its two closed rim circles. Hole, Boss and Thread read the tag
+only to place a new tool. The edge dihedral (`Edge.planarDihedral`) keeps only
+`NormalAt`'s value and drops its bound; `ChamferAngle` and `FilletChord` use
+that angle only to size a tool. The selector reads the tag's kind. STEP export
+writes the tag's float image without reading `NormalBound`
+(`agent-docs/step-export-design.md`).
 
 A direct Loft also publishes one `Circle3` per cap rim and one curved hole
 wall when its authenticated sections have identical outer records, one whole

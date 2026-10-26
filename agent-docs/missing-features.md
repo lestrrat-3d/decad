@@ -139,6 +139,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 |---|---|---|
 | Import of IGES, of STEP with torus or free-form faces, or sphere faces other than a cap with one circular bound, or ellipse or curve edges, or of STEP assemblies (refused, not placed); import of any format as a solid `Body`; repair of an imported mesh beyond weld, orient and flat-hole fill | `ReadSTL`, `ReadOBJ`, `ReadThreeMF` and `ReadSTEP` read STL, OBJ, 3MF and STEP of planes, cylinders, cones and sphere caps into a `MeshBody` that no feature, Boolean or `Verify` takes, and `RepairMesh` mends it (`mesh_import.go`, `mesh_repair.go`) | `agent-docs/mesh-import-design.md` §5, §7, §8, `agent-docs/step-import-design.md` §3, I15 |
 <<<<<<< HEAD
+| STEP analytic export that refuses or marks a face whose tag carries a nonzero normal departure | `export/step_analytic.go` writes every `Plane`, `Cylinder`, `Cone` and `Torus` tag at its float image without reading `NormalBound` (Loft bore cylinders with a rounded center, cap-blend band patches) | `agent-docs/step-export-design.md` |
 | STEP of a body whose cavity shell touches its outer shell | No construction reaches it: a touching cavity merges into the outer shell, so the body holds one shell. A mesh whose facet sets do not match the body's shells one to one is `ErrUnsupported` (`export/step_solids.go`). A body of several lumps writes one solid per lump, and a cavity writes a faceted `BREP_WITH_VOIDS` | `agent-docs/step-export-design.md` §9 |
 
 ## Queries
