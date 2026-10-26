@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/compositesweep"
@@ -46,62 +47,70 @@ func (sp *ChainSpanPayload) build(ctx context.Context, env topo.Env,
 	return chainrecord.Build(ctx, env, sp.Chain, work)
 }
 
+// ReplayChainWork builds every span of a composite chain Sweep and sews each
+// join by recorded segment index (agent-docs/sweep-design.md §15.1, §15.8).
+// Each span publishes one wall per coalesced walk of the one recorded chain;
+// wall j of span k and wall j of span k+1 must carry the same recorded
+// segment roles, and the end rim of the first is replaced by the start rim of
+// the second. The coordinate comparison at each pair can only reject.
 func ReplayChainWork(ctx context.Context, env topo.Env,
 	payload ChainPayload, work *freeform.FreeformWork) (*topo.Body, error) {
-	if len(payload.Spans) != 2 || payload.Spans[0].Arc || !payload.Spans[1].Arc {
+	if len(payload.Spans) < 2 {
 		return nil, fmt.Errorf(`%w: composite chain Sweep has no admitted span sequence`, decaderr.ErrUnsupported)
 	}
-	parts := make([]*topo.Body, 2)
+	parts := make([]*topo.Body, len(payload.Spans))
+	rims := make([][]chainRimPair, len(payload.Spans))
 	for i := range payload.Spans {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		part, err := payload.Spans[i].build(ctx, env, work)
 		if err != nil {
 			return nil, fmt.Errorf("sweep path span %d: %w", i, err)
 		}
-		if len(topobuild.Faces(part)) != 1 || part.Kind != topo.BodySheet {
-			return nil, fmt.Errorf(`%w: composite chain Sweep span %d has no single source wall`, decaderr.ErrUnsupported, i)
+		if part.Kind != topo.BodySheet || len(topobuild.Faces(part)) == 0 {
+			return nil, fmt.Errorf(`%w: composite chain Sweep span %d has no source wall`, decaderr.ErrUnsupported, i)
 		}
 		parts[i] = part
+		rims[i], err = chainSpanRims(part, payload.Spans[i].Arc, payload.Spans[i].ReverseArcRims)
+		if err != nil {
+			return nil, fmt.Errorf("sweep path span %d: %w", i, err)
+		}
 	}
 	if err := auditChainSeparation(ctx, payload, parts); err != nil {
 		return nil, err
 	}
-	previous, err := chainSpanRims(parts[0], false, false)
-	if err != nil {
-		return nil, err
+	sewn := make(map[*topo.Edge]struct{})
+	for k := 0; k+1 < len(parts); k++ {
+		if err := sewChainJoin(ctx, parts[k], rims[k], rims[k+1], k, sewn); err != nil {
+			return nil, err
+		}
 	}
-	following, err := chainSpanRims(parts[1], true, payload.Spans[1].ReverseArcRims)
-	if err != nil {
-		return nil, err
-	}
-	if err := certifyChainRimPair(previous.end, following.start); err != nil {
-		return nil, err
-	}
-	// Both edges denote the same two endpoints of the one recorded source
-	// line. The coordinate comparison above only rejects a failed restatement;
-	// it does not establish their source identity.
-	compositesweep.RewriteVertex(parts[0], previous.end.Start, following.start.Start)
-	compositesweep.RewriteVertex(parts[0], previous.end.End, following.start.End)
-	compositesweep.RewriteEdge(parts[0], previous.end, following.start)
-	following.start.Faces = append(following.start.Faces, previous.end.Faces...)
 
 	body := env.Alloc.NewBody()
 	body.Origin = provenance.Ref{Producer: env.Ref, Role: provenance.RoleBody}
 	body.Kind = topo.BodySheet
 	body.Doc = env.Doc
-	faces := []*topo.Face{topobuild.Faces(parts[0])[0], topobuild.Faces(parts[1])[0]}
-	for i, face := range faces {
-		compositesweep.RewriteFaceSideRoles(face, i)
-		face.Body = body
+	var faces []*topo.Face
+	area := proofbound.BoundedScalar{}
+	box := parts[0].Bounds
+	for i, part := range parts {
+		for _, face := range topobuild.Faces(part) {
+			compositesweep.RewriteFaceSideRoles(face, i)
+			face.Body = body
+			faces = append(faces, face)
+			area = proofbound.BoundedAdd(area, proofbound.MeasuredScalar(face.Area, face.AreaBound))
+		}
+		if i > 0 {
+			box = chainBox(box, part.Bounds)
+		}
 	}
 	body.Lumps = topobuild.SheetLumps(env.Alloc, faces)
-	if err := compositesweep.AuditBoundary(ctx, body, map[*topo.Edge]struct{}{following.start: {}}); err != nil {
+	if err := compositesweep.AuditBoundary(ctx, body, sewn); err != nil {
 		return nil, err
 	}
-	area := proofbound.BoundedAdd(
-		proofbound.MeasuredScalar(faces[0].Area, faces[0].AreaBound),
-		proofbound.MeasuredScalar(faces[1].Area, faces[1].AreaBound))
 	body.Area = compositesweep.ScalarMeasurement(area, units.SquareMillimeter)
-	body.Bounds = chainBox(parts[0].Bounds, parts[1].Bounds)
+	body.Bounds = box
 	if err := topobuild.ValidateAnalyticMeasurements(body); err != nil {
 		return nil, err
 	}
@@ -109,28 +118,94 @@ func ReplayChainWork(ctx context.Context, env topo.Env,
 	return body, nil
 }
 
-type chainRimPair struct{ start, end *topo.Edge }
+// sewChainJoin sews the join between span k (previous) and span k+1. Wall j's
+// end rim on the previous span and wall j's start rim on the next span denote
+// the same recorded segment j under the same exact section placement; the
+// face roles prove that both walls come from the same recorded segments. The
+// next span's rim edge and vertices are kept.
+func sewChainJoin(ctx context.Context, previous *topo.Body, from, to []chainRimPair, k int,
+	sewn map[*topo.Edge]struct{}) error {
+	if len(from) != len(to) {
+		return fmt.Errorf(`%w: composite chain Sweep spans %d and %d have %d and %d source walls`,
+			decaderr.ErrUnsupported, k, k+1, len(from), len(to))
+	}
+	vertices := make(map[*topo.Vertex]*topo.Vertex)
+	pairVertex := func(old, replacement *topo.Vertex) error {
+		if prior, ok := vertices[old]; ok && prior != replacement {
+			return fmt.Errorf(`%w: composite chain Sweep join %d pairs one rim post with two`, decaderr.ErrUnsupported, k)
+		}
+		vertices[old] = replacement
+		return nil
+	}
+	for j := range from {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if !slices.Equal(from[j].roles, to[j].roles) {
+			return fmt.Errorf(`%w: composite chain Sweep join %d wall %d does not pair one recorded segment set`,
+				decaderr.ErrUnsupported, k, j)
+		}
+		if err := certifyChainRimPair(from[j].end, to[j].start); err != nil {
+			return err
+		}
+		if err := pairVertex(from[j].end.Start, to[j].start.Start); err != nil {
+			return err
+		}
+		if err := pairVertex(from[j].end.End, to[j].start.End); err != nil {
+			return err
+		}
+	}
+	// Both edges of every pair denote the same endpoints of one recorded
+	// source segment. The coordinate comparison above only rejects a failed
+	// restatement; it does not establish their source identity.
+	for old, replacement := range vertices {
+		compositesweep.RewriteVertex(previous, old, replacement)
+	}
+	for j := range from {
+		compositesweep.RewriteEdge(previous, from[j].end, to[j].start)
+		to[j].start.Faces = append(to[j].start.Faces, from[j].end.Faces...)
+		sewn[to[j].start] = struct{}{}
+	}
+	return nil
+}
 
-func chainSpanRims(part *topo.Body, arc, reverse bool) (chainRimPair, error) {
-	face := topobuild.Faces(part)[0]
-	if len(face.Loops) != 1 || len(face.Loops[0].CoEdges) != 4 {
-		return chainRimPair{}, fmt.Errorf(`%w: a composite chain span has no four-edge source wall`, decaderr.ErrUnsupported)
+// chainRimPair is one wall's path-start and path-end rim, beside the
+// recorded-segment roles of the wall that owns them.
+type chainRimPair struct {
+	start, end *topo.Edge
+	roles      []string
+}
+
+// chainSpanRims reads one rim pair per wall face of a built chain span, in
+// the walk order the span builder published.
+func chainSpanRims(part *topo.Body, arc, reverse bool) ([]chainRimPair, error) {
+	faces := topobuild.Faces(part)
+	out := make([]chainRimPair, len(faces))
+	for i, face := range faces {
+		if len(face.Loops) != 1 || len(face.Loops[0].CoEdges) != 4 {
+			return nil, fmt.Errorf(`%w: a composite chain span has no four-edge source wall`, decaderr.ErrUnsupported)
+		}
+		coedges := face.Loops[0].CoEdges
+		start, end := coedges[0].Edge, coedges[2].Edge
+		if arc && reverse {
+			start, end = end, start
+		}
+		if start == nil || end == nil || start == end {
+			return nil, fmt.Errorf(`%w: a composite chain span has incomplete path rims`, decaderr.ErrUnsupported)
+		}
+		if _, ok := start.Curve.(surfacegeom.Line3); !ok {
+			return nil, fmt.Errorf(`%w: a composite chain start rim is not source-linear`, decaderr.ErrUnsupported)
+		}
+		if _, ok := end.Curve.(surfacegeom.Line3); !ok {
+			return nil, fmt.Errorf(`%w: a composite chain end rim is not source-linear`, decaderr.ErrUnsupported)
+		}
+		roles := make([]string, len(face.Origins))
+		for oi, origin := range face.Origins {
+			roles[oi] = origin.Role
+		}
+		out[i] = chainRimPair{start: start, end: end, roles: roles}
 	}
-	coedges := face.Loops[0].CoEdges
-	start, end := coedges[0].Edge, coedges[2].Edge
-	if arc && reverse {
-		start, end = end, start
-	}
-	if start == nil || end == nil || start == end {
-		return chainRimPair{}, fmt.Errorf(`%w: a composite chain span has incomplete path rims`, decaderr.ErrUnsupported)
-	}
-	if _, ok := start.Curve.(surfacegeom.Line3); !ok {
-		return chainRimPair{}, fmt.Errorf(`%w: a composite chain start rim is not source-linear`, decaderr.ErrUnsupported)
-	}
-	if _, ok := end.Curve.(surfacegeom.Line3); !ok {
-		return chainRimPair{}, fmt.Errorf(`%w: a composite chain end rim is not source-linear`, decaderr.ErrUnsupported)
-	}
-	return chainRimPair{start: start, end: end}, nil
+	return out, nil
 }
 
 func certifyChainRimPair(from, to *topo.Edge) error {
@@ -164,7 +239,10 @@ func auditChainSeparation(ctx context.Context, payload ChainPayload, parts []*to
 	if err != nil {
 		return err
 	}
-	audit := make([]compositesweep.AuditSpan, 2)
+	if len(frames) != len(parts)+1 {
+		return fmt.Errorf(`%w: composite chain Sweep has no complete transported frame chain`, decaderr.ErrUnsupported)
+	}
+	audit := make([]compositesweep.AuditSpan, len(parts))
 	for i := range audit {
 		box := parts[i].Bounds
 		// Audit takes the incoming start-cap normal. A chain span has no cap,

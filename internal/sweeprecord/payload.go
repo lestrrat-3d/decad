@@ -123,7 +123,8 @@ func (sp Payload) ProvesSimple(context.Context) bool {
 func (Payload) SurveyClass() string { return "sweepPayload" }
 
 // ChainPayload is the chain Sweep's own record of a ribbon body: one chain
-// prism or Revolve reduction, or two built chain spans, beside its source Path.
+// prism or Revolve reduction, or one built chain span per composite path span,
+// beside its source Path.
 // It stays DISTINCT from chainPayload for the reason sweepPayload stays
 // distinct from prismPayload — a downstream consumer whose Sweep proof has not
 // landed dispatches on this type and refuses, rather than reading the analytic
@@ -148,7 +149,7 @@ func (sp ChainPayload) Transform() r3.Transform {
 }
 
 // Placed re-evaluates either one-span reduction under the composed motion
-// (core §8). The cardinal composite refuses until its transformed join plane
+// (core §8). A composite refuses until its transformed join plane
 // and mesh stations have their own bound.
 func (sp ChainPayload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	if len(sp.Spans) != 0 {

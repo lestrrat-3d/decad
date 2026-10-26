@@ -651,7 +651,6 @@
 3	0.00	TestSurfaceSweepLineSheetVerifiesSound
 3	0.02	TestSurfaceSweepOneSpanTessellates
 3	0.05	TestSurfaceSweepStaysASheetThroughPlacement
-3	0.00	TestSweepChainCardinalLineArcRefusesNonradialSource
 3	0.00	TestSweepChainSingleArcMultiSegmentMeshRefuses
 3	0.03	TestSweepChainSingleArcNoncardinalAndReflectedMesh
 3	0.77	TestSweepClosedRacetrackBuildsVerifiedTubeAndReplaysPlacement
@@ -1270,6 +1269,10 @@
 6	0.00	TestQueryStringNegativeZeroNormalized
 6	0.00	TestRecordProfileRecordsSnapThresholdTrim
 6	0.00	TestRegionAreaAndCentroidRectangle
+10	0.00	TestSweepChainCompositeNSpanSheets
+10	0.00	TestSweepChainCompositeNSpanThickenSquare
+10	0.00	TestSweepChainCompositeNonradialHalfCircle
+10	0.00	TestSweepChainCompositeRefusals
 6	0.01	TestRegionAreaWholeCircle
 6	1.46	TestRegionCentroidBoundContainsArcEndpointDriftGreenIntegral
 6	0.24	TestRevolveBooleanRefusesAHiddenTangency
@@ -1771,7 +1774,7 @@
 8	0.00	TestSurfaceTrimRefusesAMixedFamilyPair
 8	0.01	TestSweepArcMatchesQuarterRevolveAndReplaysPlacement
 8	0.02	TestSweepChainArcThickenSides
-8	0.00	TestSweepChainRefusesCompositeOutsideCardinalClass
+8	0.00	TestSweepChainCompositeRefusesSourceAcrossArcAxis
 10	0.00	TestSweepClosedCardinalRefusesNonQuarterArcs
 10	0.00	TestSweepClosedCardinalSquareRoundedRectangle
 10	0.00	TestSweepClosedCardinalSquareStadium

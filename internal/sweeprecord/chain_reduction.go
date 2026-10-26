@@ -15,21 +15,23 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// CompositeChainPayload reduces one open Sketch walk swept along the admitted
-// straight-then-arc path to its two-span record: the cardinal class gate, the
-// transported frame chain (exactly three frames, each exact), the straight
-// span's chain prism and the arc span's chain revolve. The caller replays the
-// returned payload with ReplayChainWork and the returned work.
+// CompositeChainPayload reduces one open Sketch walk swept along a composite
+// path to one chain span per path record: the path gate, the transported
+// frame chain (one frame per join, each exact), a chain prism for every line
+// and a chain revolve for every arc. Every span carries the same recorded
+// walk, so the sew in ReplayChainWork can pair rims by recorded segment
+// index. The caller replays the returned payload with ReplayChainWork and the
+// returned work.
 func CompositeChainPayload(ctx context.Context, chain sectionrecord.ChainRecord, plane sectionrecord.PlaneRecord,
 	path *sweepinput.Path) (ChainPayload, *freeform.FreeformWork, error) {
-	if err := sweepinput.CardinalChainSweepClass(chain, plane, path); err != nil {
+	if err := sweepinput.CompositeChainSweepPath(path); err != nil {
 		return ChainPayload{}, nil, err
 	}
 	frames, err := sweeptransport.TransportSweepFramesContext(ctx, path, plane)
 	if err != nil {
 		return ChainPayload{}, nil, err
 	}
-	if len(frames) != 3 {
+	if len(frames) != len(path.Records)+1 {
 		return ChainPayload{}, nil, fmt.Errorf(`%w: composite chain Sweep has no complete transported frame chain`, decaderr.ErrUnsupported)
 	}
 	for i, frame := range frames {
@@ -39,28 +41,37 @@ func CompositeChainPayload(ctx context.Context, chain sectionrecord.ChainRecord,
 	}
 	work := freeform.NewFreeformWork()
 	view := momentinput.Profile{Outer: sectionrecord.LoopRecord(chain)}
-	straight, err := LineSpan(view, frames[0].Frame, path.Records[0])
-	if err != nil {
-		return ChainPayload{}, nil, err
-	}
-	arcPlane := sectionrecord.PlaneRecord{Origin: frames[1].Frame.Origin(), U: frames[1].Frame.U(), V: frames[1].Frame.V()}
-	arc, err := ArcSpan(ctx, view, arcPlane, frames[1].Frame, path.Records[1], work)
-	if err != nil {
-		return ChainPayload{}, nil, err
-	}
-	return ChainPayload{Path: path, Spans: []ChainSpanPayload{
-		{Chain: chainrecord.Payload{
-			Chains: []sectionrecord.ChainRecord{chain}, Frame: straight.Prism.Frame,
-			Z0: straight.Prism.Z0, Z1: straight.Prism.Z1,
-			Z0Delta: straight.Prism.Z0Delta, Z1Delta: straight.Prism.Z1Delta,
-			Xform: r3.Identity(),
-		}},
-		{Revolve: revolveplan.ChainPayload{
+	spans := make([]ChainSpanPayload, len(path.Records))
+	for i, record := range path.Records {
+		if err := ctx.Err(); err != nil {
+			return ChainPayload{}, nil, err
+		}
+		current := frames[i].Frame
+		if record.Arc == nil {
+			straight, err := LineSpan(view, current, record)
+			if err != nil {
+				return ChainPayload{}, nil, fmt.Errorf(`sweep path span %d: %w`, i, err)
+			}
+			spans[i] = ChainSpanPayload{Chain: chainrecord.Payload{
+				Chains: []sectionrecord.ChainRecord{chain}, Frame: straight.Prism.Frame,
+				Z0: straight.Prism.Z0, Z1: straight.Prism.Z1,
+				Z0Delta: straight.Prism.Z0Delta, Z1Delta: straight.Prism.Z1Delta,
+				Xform: r3.Identity(),
+			}}
+			continue
+		}
+		spanPlane := sectionrecord.PlaneRecord{Origin: current.Origin(), U: current.U(), V: current.V()}
+		arc, err := ArcSpan(ctx, view, spanPlane, current, record, work)
+		if err != nil {
+			return ChainPayload{}, nil, fmt.Errorf(`sweep path span %d: %w`, i, err)
+		}
+		spans[i] = ChainSpanPayload{Revolve: revolveplan.ChainPayload{
 			Chains: []sectionrecord.ChainRecord{chain}, Frame: arc.Revolve.Frame, Ax: arc.Revolve.Ax,
 			Phi0: arc.Revolve.Phi0, Phi1: arc.Revolve.Phi1,
 			Den: arc.Revolve.Den, Xform: r3.Identity(),
-		}, Arc: true, ReverseArcRims: arc.ReverseArcCaps},
-	}}, work, nil
+		}, Arc: true, ReverseArcRims: arc.ReverseArcCaps}
+	}
+	return ChainPayload{Path: path, Spans: spans}, work, nil
 }
 
 // ArcChainReduction reduces one spatial arc and one open Sketch walk to the
