@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/sweeparc"
 	"github.com/lestrrat-3d/r3"
 )
@@ -65,12 +66,10 @@ func ClosedCardinalLoop(records []PathRecord) error {
 				return closedLoopRefusal("span %d turns about a different coordinate axis", i)
 			}
 			axisIndex = index
-			angle := record.ArcAngle
-			if angle.Turn == nil || angle.Rad == nil || angle.Rad.Sign() != 0 || angle.Span != nil ||
-				(angle.Turn.Cmp(big.NewRat(1, 4)) != 0 && angle.Turn.Cmp(big.NewRat(1, 2)) != 0) {
+			if !quarterOrHalfTurn(record.ArcAngle) {
 				return closedLoopRefusal("span %d is not an exact quarter or half turn", i)
 			}
-			turns.Add(turns, new(big.Rat).Mul(angle.Turn, big.NewRat(int64(sign), 1)))
+			turns.Add(turns, new(big.Rat).Mul(record.ArcAngle.Turn, big.NewRat(int64(sign), 1)))
 		}
 	}
 	if arcCount < 2 || axisIndex < 0 {
@@ -90,6 +89,13 @@ func ClosedCardinalLoop(records []PathRecord) error {
 		return closedLoopRefusal("the signed arc turns sum to %s, not one whole turn", turns.RatString())
 	}
 	return nil
+}
+
+// quarterOrHalfTurn reports whether angle is exactly a quarter or a half
+// turn, with no radian or span part.
+func quarterOrHalfTurn(angle revolveangle.Angle) bool {
+	return angle.Turn != nil && angle.Rad != nil && angle.Rad.Sign() == 0 && angle.Span == nil &&
+		(angle.Turn.Cmp(big.NewRat(1, 4)) == 0 || angle.Turn.Cmp(big.NewRat(1, 2)) == 0)
 }
 
 func closedLoopRefusal(format string, args ...any) error {

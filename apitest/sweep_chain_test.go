@@ -285,9 +285,10 @@ func TestSweepChainRefusesAnOffNormalPath(t *testing.T) {
 	require.Empty(t, doc.Bodies())
 }
 
-// TestSweepChainRefusesCompositeOutsideCardinalClass is agent-docs/surface-design.md's
-// T194: a source extending beyond the half-circle radius refuses at SC7.
-func TestSweepChainRefusesCompositeOutsideCardinalClass(t *testing.T) {
+// TestSweepChainCompositeRefusesSourceAcrossArcAxis is
+// agent-docs/surface-design.md's T194: a source extending beyond the
+// half-circle radius crosses the arc span's axis and refuses at SC8.
+func TestSweepChainCompositeRefusesSourceAcrossArcAxis(t *testing.T) {
 	t.Parallel()
 	s, ch := lineChainSketch(t)
 	doc := decad.New()
@@ -299,8 +300,9 @@ func TestSweepChainRefusesCompositeOutsideCardinalClass(t *testing.T) {
 	)
 	require.NoError(t, err)
 	_, err = decad.Sweep(t.Context(), doc, s, ch, composite)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "radial source inside its radius")
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.ErrorContains(t, err, "sweep path span 1")
+	require.ErrorContains(t, err, "the revolve axis passes through the region")
 
 	require.Empty(t, doc.Bodies())
 }

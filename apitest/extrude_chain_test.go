@@ -395,11 +395,11 @@ func TestExtrudeChainFreeformWallAreaNeverPublishesTheLengthUnderestimate(t *tes
 		"Chain.Length's sampling-convergent underestimate must sit at or below the enclosure's own lower end, never inside it")
 }
 
-// TestChainFedRefusals is agent-docs/surface-design.md's T139: a SweepChain over a
-// COMPOSITE path is ErrUnsupported (R34) ahead of the increment that builds
-// agent-docs/sweep-design.md §15.1's join, and chain Revolve handed a chain with both
-// free ends on the resolved axis is ErrUnsupported (R22), pending its
-// closed-sheet pole topology. A one-span straight path builds instead, which
+// TestChainFedRefusals is agent-docs/surface-design.md's T139: a chain Sweep over a
+// composite path whose arc is not an exact quarter or half turn is
+// ErrUnsupported (R34, agent-docs/sweep-design.md §15.8), and chain Revolve handed a
+// chain with both free ends on the resolved axis is ErrUnsupported (R22),
+// pending its closed-sheet pole topology. A one-span straight path builds instead, which
 // sweep_chain_test.go owns; LoftChain's own staged refusal is the curved pair
 // (R36), which loft_chain_test.go owns beside the pairing it does build.
 func TestChainFedRefusals(t *testing.T) {
@@ -413,11 +413,13 @@ func TestChainFedRefusals(t *testing.T) {
 	path, err := decad.NewPath(
 		r3.NewVec(0, 0, 0),
 		decad.LineTo{End: r3.NewVec(0, 0, 20)},
-		decad.ArcThrough{Through: r3.NewVec(5, 0, 25), End: r3.NewVec(10, 0, 20)},
+		// A radius-5 arc about (5,0,20) of angle acos(0.6).
+		decad.ArcThrough{Through: r3.NewVec(1, 0, 23), End: r3.NewVec(2, 0, 24)},
 	)
 	require.NoError(t, err)
 	_, err = decad.Sweep(t.Context(), doc, s, ch, path)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "span 1 is not an exact quarter or half turn")
 	require.Empty(t, doc.Bodies())
 
 	// R22: a half-circle chain with both free ends on the resolved axis.

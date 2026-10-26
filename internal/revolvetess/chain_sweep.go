@@ -163,8 +163,10 @@ func TessellateChainSweep(ctx context.Context, b *topo.Body, sp chainSweepPayloa
 	return mesh, nil
 }
 
-// chainSweepMeshClass admits exactly the producer's cardinal one-line class.
-// Other line and arc orientations need a separate certified station map.
+// chainSweepMeshClass admits only the radial line/half-circle class of
+// agent-docs/sweep-design.md §15.8: one forward source line on the world XY
+// sketch, a +Z line and an XZ half-circle. Other composite chain sheets, line
+// and arc orientations need a separate certified station map.
 func chainSweepMeshClass(b *topo.Body, sp chainSweepPayload) (float64, float64, float64, *topo.Face, *topo.Face, error) {
 	refuse := func() (float64, float64, float64, *topo.Face, *topo.Face, error) {
 		return 0, 0, 0, nil, nil,

@@ -72,23 +72,3 @@ func TestSweepChainCardinalLineArcSheet(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, len(doc.Bodies()))
 }
-
-func TestSweepChainCardinalLineArcRefusesNonradialSource(t *testing.T) {
-	t.Parallel()
-	_, _, path := cardinalLineArcChain(t)
-	w := sketch.NewWorld()
-	other, err := w.CreateSketch(w.XY())
-	require.NoError(t, err)
-	a := other.CreatePoint(0, 0)
-	b := other.CreatePoint(4, 1)
-	other.Fix(a)
-	other.Fix(b)
-	other.CreateLine(a, b)
-	_, err = other.Solve(t.Context())
-	require.NoError(t, err)
-	require.Len(t, other.Chains(), 1)
-	doc := decad.New()
-	_, err = decad.Sweep(t.Context(), doc, other, other.Chains()[0], path)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Empty(t, doc.Bodies())
-}

@@ -2,16 +2,11 @@ package sweepinput
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 )
-
-type chainRecord = sectionrecord.ChainRecord
-
-type lineSeg = sectionrecord.LineSeg
 
 type planeRecord = sectionrecord.PlaneRecord
 
@@ -60,43 +55,37 @@ func SamePathPoint(a, b r3.Vec) bool {
 	return a.X == b.X && a.Y == b.Y && a.Z == b.Z
 }
 
-// CardinalChainSweepClass admits the source-backed class whose line and arc
-// spans lie on opposite sides of their common XY section. Every equality is
-// checked over the exact binary-rational values of the public inputs; rounded
-// arithmetic cannot turn a near-half-circle into this exact class.
-func CardinalChainSweepClass(chain chainRecord, plane planeRecord, path *Path) error {
-	if plane.Origin != (r3.Vec{}) || plane.U != r3.NewVec(1, 0, 0) ||
-		plane.V != r3.NewVec(0, 1, 0) || len(chain.Segments) != 1 ||
-		len(path.Records) != 2 || path.Start != (r3.Vec{}) {
-		return fmt.Errorf(`%w: composite chain Sweep requires one XY line and a cardinal two-span path`, decaderr.ErrUnsupported)
+// CompositeChainSweepPath is Table SC row SC7's path gate for a composite
+// chain Sweep (agent-docs/sweep-design.md §15.8). The first span must be a
+// line: every arc then has a preceding span whose box holds the arc's start
+// section, which is what lets the separation audit's non-neighbour box check
+// cover contact in a half turn's start plane. Every arc must be an exact
+// quarter or half turn about an axis parallel to a coordinate axis: those are
+// the turns whose sine and cosine are exact, so the transported section frames
+// can carry zero displacement. The gate reads the recorded exact axis and turn
+// fraction, never a rounded angle, so a near-quarter arc cannot pass it. The
+// caller still refuses any transported frame with nonzero displacement, every
+// span reruns its own builder gates, and the separation audit decides contact.
+func CompositeChainSweepPath(path *Path) error {
+	if len(path.Records) < 2 {
+		return fmt.Errorf(`%w: a composite chain Sweep path has %d spans, fewer than two`,
+			decaderr.ErrUnsupported, len(path.Records))
 	}
-	line, ok := chain.Segments[0].(lineSeg)
-	if !ok || line.Start.U != 0 || line.Start.V != 0 || line.End.V != 0 ||
-		line.TStart != 0 || line.TEnd != 1 {
-		return fmt.Errorf(`%w: composite chain Sweep requires one forward radial source line`, decaderr.ErrUnsupported)
+	if path.Records[0].Arc != nil {
+		return fmt.Errorf(`%w: composite chain Sweep: the first span must be a line`, decaderr.ErrUnsupported)
 	}
-	width := line.End.U
-	straight := path.Records[0]
-	arc := path.Records[1]
-	arcSegment, ok := path.Segments[1], path.Segments[1].Arc
-	if !ok {
-		return fmt.Errorf(`%w: composite chain Sweep requires an ArcThrough second span`, decaderr.ErrUnsupported)
-	}
-	radius := arcSegment.Through.X
-	height := straight.End.Z
-	if width <= 0 || radius <= width || height <= 0 || straight.Arc != nil || arc.Arc == nil ||
-		straight.End.X != 0 || straight.End.Y != 0 ||
-		arc.Start != straight.End || arcSegment.Through.Y != 0 || arc.End.Y != 0 || arc.End.Z != height ||
-		!dyadicSumEquals(height, radius, arcSegment.Through.Z) ||
-		!dyadicSumEquals(radius, radius, arc.End.X) ||
-		!dyadicSumEquals(radius-width, width, radius) ||
-		!dyadicSumEquals(arc.End.X-width, width, arc.End.X) {
-		return fmt.Errorf(`%w: composite chain Sweep requires a positive-Z line, tangent XZ half-circle, and radial source inside its radius`, decaderr.ErrUnsupported)
+	for i, record := range path.Records {
+		if record.Arc == nil {
+			continue
+		}
+		if _, _, ok := cardinalAxis(record.Arc.Axis); !ok {
+			return fmt.Errorf(`%w: composite chain Sweep span %d is an arc about a non-coordinate axis`,
+				decaderr.ErrUnsupported, i)
+		}
+		if !quarterOrHalfTurn(record.ArcAngle) {
+			return fmt.Errorf(`%w: composite chain Sweep span %d is not an exact quarter or half turn`,
+				decaderr.ErrUnsupported, i)
+		}
 	}
 	return nil
-}
-
-func dyadicSumEquals(a, b, sum float64) bool {
-	return new(big.Rat).Add(new(big.Rat).SetFloat64(a), new(big.Rat).SetFloat64(b)).Cmp(
-		new(big.Rat).SetFloat64(sum)) == 0
 }

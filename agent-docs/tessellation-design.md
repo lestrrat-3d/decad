@@ -239,9 +239,9 @@ both formats are triangle lists and neither requires closure — and `STL`'s doc
 comment states that an open body produces a file that is **not** a solid, so a
 caller learns it before handing the file to a slicer rather than after.
 
-A chain `Sweep`'s cardinal line/arc composite (`agent-docs/sweep-design.md` §15.8)
-uses the same sheet audit. Its straight wall contributes one exact quad;
-the half-annulus contributes angular cells sampled with exact-turn trig
+A chain `Sweep`'s radial line/half-circle composite (`agent-docs/sweep-design.md`
+§15.8) uses the same sheet audit; other composite chain sheets refuse. Its
+straight wall contributes one exact quad; the half-annulus contributes angular cells sampled with exact-turn trig
 intervals. Both walls reuse the source-indexed join vertices. The outer
 radius bounds each chord's sagitta, and certified station errors add to the
 per-face boundary bound. At `VerifyAll`, each face's certified area interval

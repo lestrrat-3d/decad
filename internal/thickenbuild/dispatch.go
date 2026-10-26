@@ -3,17 +3,16 @@ package thickenbuild
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"github.com/lestrrat-3d/r3"
 
 	"github.com/lestrrat-3d/decad/internal/chainrecord"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -240,20 +239,32 @@ func thickenArcChainSweep(ctx context.Context, env topo.Env, sp sweeprecord.Chai
 	return body, nil
 }
 
-// thickenCompositeChainSweep closes the authenticated radial line into a
-// rectangular section and sends that one section through both path spans.
+// thickenCompositeChainSweep closes the authenticated open walk into one
+// generated section and sends that one section through every path span. Each
+// arc span's exact radial gate (surface-design.md section 16.5) checks the
+// whole moving section against that span's own axis, so no offset hoop folds;
+// each span's existence gates and compositesweep's separation audit then rerun
+// on the thickened section (section 16.8).
 func thickenCompositeChainSweep(ctx context.Context, env topo.Env, sp sweeprecord.ChainPayload,
 	side Side, tmm, tDelta float64) (*topo.Body, error) {
-	if len(sp.Spans) != 2 || sp.Spans[0].Arc || !sp.Spans[1].Arc || sp.Path == nil ||
-		len(sp.Spans[0].Chain.Chains) != 1 || len(sp.Spans[1].Revolve.Chains) != 1 ||
-		sp.Spans[0].Chain.SectionDelta != 0 || sp.Spans[1].Revolve.SectionDelta != 0 ||
-		sp.Spans[0].Chain.Xform != r3.Identity() || sp.Spans[1].Revolve.Xform != r3.Identity() {
-		return nil, fmt.Errorf(`%w: this chain sweep has no admitted Thicken section`, decaderr.ErrUnsupported)
+	refuse := fmt.Errorf(`%w: this chain sweep has no admitted Thicken section`, decaderr.ErrUnsupported)
+	if len(sp.Spans) < 2 || sp.Path == nil || sp.Spans[0].Arc || len(sp.Spans[0].Chain.Chains) != 1 {
+		return nil, refuse
+	}
+	for _, span := range sp.Spans {
+		if span.Arc && (len(span.Revolve.Chains) != 1 || span.Revolve.SectionDelta != 0 ||
+			span.Revolve.Xform != r3.Identity()) {
+			return nil, refuse
+		}
+		if !span.Arc && (len(span.Chain.Chains) != 1 || span.Chain.SectionDelta != 0 ||
+			span.Chain.Xform != r3.Identity()) {
+			return nil, refuse
+		}
 	}
 	straight := sp.Spans[0].Chain
 	frame := straight.Frame
 	plane := sectionrecord.PlaneRecord{Origin: frame.Origin(), U: frame.U(), V: frame.V()}
-	if err := sweepinput.CardinalChainSweepClass(straight.Chains[0], plane, sp.Path); err != nil {
+	if err := sweepinput.CompositeChainSweepPath(sp.Path); err != nil {
 		return nil, err
 	}
 	amount, err := Amount(tmm, tDelta, side)
@@ -263,18 +274,25 @@ func thickenCompositeChainSweep(ctx context.Context, env topo.Env, sp sweeprecor
 	budget := proofbound.NewWorkBudget(ctx)
 	work := freeform.NewFreeformWork()
 	right, left := RibbonSteps(side)
-	// The path's exact half-circle rotates about U=R along +V. RibbonProfile's
-	// interval scan checks every moving piece against that axis, so the whole
-	// offset family has positive hoop radius before either solid span builds.
-	arc, ok := sp.Path.Segments[1], sp.Path.Segments[1].Arc
-	if !ok {
-		return nil, fmt.Errorf(`%w: the chain sweep has no cardinal arc source`, decaderr.ErrUnsupported)
+	var section momentinput.Profile
+	spun := false
+	for _, span := range sp.Spans {
+		if !span.Arc {
+			continue
+		}
+		radial, err := thickenRadialOf(span.Revolve.Ax)
+		if err != nil {
+			return nil, err
+		}
+		if section, err = thickenaxis.RibbonProfile(ctx, straight.Chains[0], right, left, amount, budget, work, &radial); err != nil {
+			return nil, err
+		}
+		spun = true
 	}
-	radial := thickenaxis.NewRadial(proofarith.FloatRat(arc.Through.X), big.NewRat(0, 1),
-		big.NewRat(0, 1), big.NewRat(1, 1))
-	section, err := thickenaxis.RibbonProfile(ctx, straight.Chains[0], right, left, amount, budget, work, &radial)
-	if err != nil {
-		return nil, err
+	if !spun {
+		if section, err = thickenaxis.RibbonProfile(ctx, straight.Chains[0], right, left, amount, budget, work, nil); err != nil {
+			return nil, err
+		}
 	}
 	return sweeprecord.BuildComposite(ctx, env, section, plane,
 		frame, sp.Path, work, false)
