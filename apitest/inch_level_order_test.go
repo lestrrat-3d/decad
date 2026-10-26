@@ -11,13 +11,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// pocketToolFromTop extrudes a rectangle downward from the plane z=top by
-// depth, so the tool's inner end sits at top-depth. An inch depth is a
+// plateTop is the plane the pocket tools start from.
+const plateTop = 10.0
+
+// pocketToolFromTop extrudes a rectangle downward from the plane z=plateTop by
+// depth, so the tool's inner end sits at plateTop-depth. An inch depth is a
 // converted magnitude and carries a level displacement.
-func pocketToolFromTop(t *testing.T, doc *decad.Document, x0, y0, x1, y1, top float64, depth units.Value) *decad.Body {
+func pocketToolFromTop(t *testing.T, doc *decad.Document, x0, y0, x1, y1 float64, depth units.Value) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
-	plane, err := w.CreateOffsetPlane(w.XY(), top)
+	plane, err := w.CreateOffsetPlane(w.XY(), plateTop)
 	require.NoError(t, err)
 	s, err := w.CreateSketch(plane)
 	require.NoError(t, err)
@@ -38,8 +41,8 @@ func requireIntendedNestedPockets(t *testing.T, outerDepth, innerDepth units.Val
 	t.Helper()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 10)
-	outer := pocketToolFromTop(t, doc, 2, 2, 18, 18, 10, outerDepth)
-	inner := pocketToolFromTop(t, doc, 6, 6, 14, 14, 10, innerDepth)
+	outer := pocketToolFromTop(t, doc, 2, 2, 18, 18, outerDepth)
+	inner := pocketToolFromTop(t, doc, 6, 6, 14, 14, innerDepth)
 
 	step, err := decad.Cut(t.Context(), plate, outer)
 	if err != nil {
@@ -139,8 +142,8 @@ func requireNestedByDenotation(t *testing.T, outerDepth, innerDepth units.Value,
 	t.Helper()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 10)
-	outer := pocketToolFromTop(t, doc, 2, 2, 18, 18, 10, outerDepth)
-	inner := pocketToolFromTop(t, doc, 6, 6, 14, 14, 10, innerDepth)
+	outer := pocketToolFromTop(t, doc, 2, 2, 18, 18, outerDepth)
+	inner := pocketToolFromTop(t, doc, 6, 6, 14, 14, innerDepth)
 	step, err := decad.Cut(t.Context(), plate, outer)
 	if err != nil {
 		t.Logf("first cut refused: %v", err)
@@ -173,8 +176,8 @@ func TestInchPocketUnionLevelsFollowDenotation(t *testing.T) {
 	doc := decad.New()
 	plateA := boxBody(t, doc, 0, 0, 20, 20, 10)
 	plateB := boxBody(t, doc, 10, 0, 30, 20, 10)
-	toolA := pocketToolFromTop(t, doc, 2, 2, 8, 18, 10, units.Inches(0.2))
-	toolB := pocketToolFromTop(t, doc, 22, 2, 28, 18, 10, units.Millimeters(5.08))
+	toolA := pocketToolFromTop(t, doc, 2, 2, 8, 18, units.Inches(0.2))
+	toolB := pocketToolFromTop(t, doc, 22, 2, 28, 18, units.Millimeters(5.08))
 	a, err := decad.Cut(t.Context(), plateA, toolA)
 	require.NoError(t, err)
 	b, err := decad.Cut(t.Context(), plateB, toolB)
