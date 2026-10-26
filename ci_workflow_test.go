@@ -27,7 +27,7 @@ import (
 //
 // This test is the mechanical check that class of loss cannot come back. It
 // reads the workflow as text — the repository has no YAML parser among its
-// approved modules (agent-docs/modules.md) and gains none for a guard — and asserts five
+// approved modules (agent-docs/modules.md) and gains none for a guard — and asserts these
 // properties, each of which fails loudly rather than degrading quietly:
 //
 //   - no shard command combines a `-run` filter with `./...`;
@@ -46,6 +46,8 @@ import (
 //   - every assignment file uses exactly the shards the matrix declares, so
 //     adding a shard entry without regenerating the files cannot leave a
 //     runner with nothing, nor a bucket with no runner;
+//   - the arithmetic runner tests exactly the packages excluded from the
+//     general package runner, without test-name filters or an artifact dependency;
 //   - the unfiltered whole-suite step is gated on a runner having neither a
 //     shard nor a package operand, so the runner that owns the non-root
 //     packages cannot also re-run everything.
@@ -158,6 +160,61 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 					"%s runs in no race shard: add ./%s/ or an approved recursive operand to a runner's `packages:` operand in %s", dir, dir, ciWorkflowPath)
 			})
 		}
+	})
+
+	t.Run("arithmetic packages run once without waiting for artifacts", func(t *testing.T) {
+		jobRe := regexp.MustCompile(`(?ms)^  test-arithmetic:\n(.*?)(?:^  [a-z][a-z0-9-]*:|\z)`)
+		job := jobRe.FindStringSubmatch(workflow)
+		require.Len(t, job, 2, "the arithmetic job must exist")
+		require.NotContains(t, job[1], "\n    needs:", "arithmetic has no artifact dependency")
+		runRe := regexp.MustCompile(`(?m)^\s*run: go test ([^\n]+)$`)
+		runs := runRe.FindAllStringSubmatch(job[1], -1)
+		require.Len(t, runs, 1, "the arithmetic job must run one unfiltered package command")
+		args := strings.Fields(runs[0][1])
+		require.Contains(t, args, "-race")
+		require.Contains(t, args, "-count=1")
+		var dedicated []string
+		seen := make(map[string]struct{})
+		for _, arg := range args {
+			for _, filter := range []string{"-run", "-skip", "-list", "-bench", "-fuzz", "-short"} {
+				require.Falsef(t, strings.HasPrefix(arg, filter) || strings.HasPrefix(arg, "-test."+filter[1:]),
+					"the arithmetic job must run whole packages: %s", arg)
+			}
+			if strings.HasPrefix(arg, "-count") {
+				require.Equal(t, "-count=1", arg, "the arithmetic tests must execute")
+			}
+			if !strings.HasPrefix(arg, "./") {
+				continue
+			}
+			require.True(t, strings.HasPrefix(arg, "./internal/"))
+			require.NotContains(t, arg, "...", "the arithmetic job names individual packages")
+			dir := strings.TrimSuffix(strings.TrimPrefix(arg, "./"), "/")
+			_, duplicate := seen[dir]
+			require.Falsef(t, duplicate, "arithmetic package %s runs twice", dir)
+			seen[dir] = struct{}{}
+			dedicated = append(dedicated, dir)
+		}
+		require.NotEmpty(t, dedicated)
+		exclusionRe := regexp.MustCompile(`(?m)^\s*arithmetic_re="\$\{mod\}/([^"\n]+)"$`)
+		exclusion := exclusionRe.FindAllStringSubmatch(workflow, -1)
+		require.Len(t, exclusion, 1, "the general runner must exclude the arithmetic packages")
+		pattern, err := regexp.Compile("^(" + exclusion[0][1] + ")$")
+		require.NoError(t, err)
+		var excluded []string
+		for _, dir := range goPackageDirs(t) {
+			if pattern.MatchString(dir) {
+				excluded = append(excluded, dir)
+			}
+		}
+		slices.Sort(dedicated)
+		slices.Sort(excluded)
+		require.Equal(t, dedicated, excluded, "dedicated packages must exactly match the general runner's exclusions")
+		selectorRe := regexp.MustCompile(`(?m)^\s*rest=(.*)$`)
+		selectors := selectorRe.FindAllStringSubmatch(workflow, -1)
+		require.Len(t, selectors, 1)
+		require.Contains(t, selectors[0][1], "go list ${{ matrix.packages }}")
+		require.Contains(t, selectors[0][1], "grep -v -x -E")
+		require.Contains(t, selectors[0][1], `|$arithmetic_re")"`, "the general runner must apply the exclusion")
 	})
 
 	t.Run("each sharded binary runs once from its own package", func(t *testing.T) {
