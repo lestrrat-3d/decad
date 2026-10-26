@@ -2480,3 +2480,6 @@
 10	0.01	TestRefineMeshKeepsEveryOriginalCorner
 10	0.01	TestRefineMeshWithNoLongEdgeIsACopy
 10	0.01	TestRefineMeshRefusals
+10	0.01	TestUnionOfSeveralBodiesFoldsThemTwoAtATime
+10	0.01	TestUnionFoldIsTheSameWhateverTheOrder
+10	0.01	TestUnionFoldRefusalsLeaveEveryBodyLive
