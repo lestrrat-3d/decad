@@ -171,3 +171,19 @@ func ScaleMesh(ctx context.Context, m *MeshBody, anchor r3.Vec, x, y, z units.Va
 | Z3 | A negative factor mirrors across the plane through the anchor square to its axis. When the product of the factors is negative the triangles' second and third corners are swapped, so a mesh wound outward stays wound outward. |
 | Z4 | A factor must be dimensionless (`ErrUnitKind`), finite (`ErrNotFinite`) and not zero (`ErrDegenerate`), as must the anchor be finite. A nil context or mesh is `ErrDegenerate`, and the result is read by `NewMeshBody`, so overflowing vertices are `ErrNotFinite`. |
 | Z5 | The solid kernel has no per-axis scale: `ScaledAt` is uniform and `Transform` is rigid. Only a held mesh stretches. |
+
+## 11. Refinement
+
+`RefineMesh` splits the long edges of a `MeshBody` into a new one. The work is plain-data code in `internal/meshrefine/`.
+
+```go
+func RefineMesh(ctx context.Context, m *MeshBody, maxEdge units.Value) (*MeshBody, error)
+```
+
+| Decision | Rule |
+|---|---|
+| N1 | In each round every edge longer than `maxEdge` is split at its midpoint, and the rounds repeat until no edge is longer. The midpoint of an edge is one vertex, shared by every triangle that uses the edge, so a closed mesh stays closed. |
+| N2 | A triangle with one split edge becomes two triangles, with two split edges three, with three four. The quad left by two split edges is cut along its shorter diagonal. Every piece is wound as its triangle was, so the orientation readings of the mesh stand. |
+| N3 | No vertex moves, and every new vertex lies on an edge of the mesh, so the refined mesh covers the same surface. Its area and volume are the mesh's, to the exactness of the arithmetic: midpoints of dyadic coordinates are dyadic, so a mesh of exact floats keeps its exact volume. |
+| N4 | `maxEdge` is a positive length (`ErrDegenerate` for zero, `ErrNegativeMagnitude` for a negative, `ErrUnitKind` for a wrong kind). A nil context or mesh is `ErrDegenerate`. A refinement that passes five million triangles, or whose edges are still long after 40 rounds, is `ErrUnsupported`. A mesh with no long edge comes back as a copy. |
+| N5 | A diagonal cut in a quad can be longer than `maxEdge` and is split in the next round, so the result has no edge longer than `maxEdge` whatever the diagonals. |

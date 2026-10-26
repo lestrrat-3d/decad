@@ -2476,3 +2476,7 @@
 10	0.01	TestGyroidLatticeThickensWithItsLevel
 10	0.01	TestGyroidLatticeRepeatsEveryCell
 10	0.01	TestGyroidLatticeRefusals
+10	0.01	TestRefineMeshShortensEdgesAndKeepsTheSolid
+10	0.01	TestRefineMeshKeepsEveryOriginalCorner
+10	0.01	TestRefineMeshWithNoLongEdgeIsACopy
+10	0.01	TestRefineMeshRefusals
