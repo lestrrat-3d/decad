@@ -5,10 +5,13 @@ import (
 	"errors"
 	"math"
 	"math/rand/v2"
+	"runtime"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
@@ -216,6 +219,48 @@ func TestParallelLoftPairsTalliesMatchReplay(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestParallelLoftPairsSharesWorkersAndReleasesAfterFailure(t *testing.T) {
+	prior := runtime.GOMAXPROCS(2)
+	defer runtime.GOMAXPROCS(prior)
+	_, held := orderedwork.ReserveWorkers(2)
+	defer func() { orderedwork.ReleaseWorkers(held) }()
+	cands := loftCandidates{starts: []int{0, 2, 4}, js: []int32{1, 2, 2, 3}}
+	failure := errors.New("pair 0,2 refused")
+	var calls, active atomic.Int32
+	classify := func(i, j int) (uint8, error) {
+		calls.Add(1)
+		active.Add(1)
+		defer active.Add(-1)
+		if i == 0 && j == 2 {
+			return pairClassified, failure
+		}
+		return pairClassified, nil
+	}
+	var work LoftAuditWork
+	i, j, err := parallelLoftPairsWorkers(proofbound.NewWorkBudget(t.Context()), 4,
+		cands, classify, &work)
+	require.ErrorIs(t, err, failure)
+	require.Equal(t, 0, i)
+	require.Equal(t, 2, j)
+	require.Equal(t, 2, work.Classifications)
+	require.Equal(t, int32(2), calls.Load(), "the saturated audit has one worker")
+	require.Zero(t, active.Load(), "the classifier joined before return")
+
+	orderedwork.ReleaseWorkers(held)
+	held = 0
+	work = LoftAuditWork{}
+	i, j, err = parallelLoftPairsWorkers(proofbound.NewWorkBudget(t.Context()), 4,
+		cands, classify, &work)
+	require.ErrorIs(t, err, failure)
+	require.Equal(t, 0, i)
+	require.Equal(t, 2, j)
+	require.Equal(t, 2, work.Classifications)
+	require.Zero(t, active.Load())
+	workers, reserved := orderedwork.ReserveWorkers(2)
+	orderedwork.ReleaseWorkers(reserved)
+	require.Equal(t, 2, workers, "a failed audit released its extra worker")
 }
 
 func rowOf(c loftCandidates, k int) int {

@@ -23,32 +23,11 @@ func EachWorkers(n, minItems int) int {
 // eachPollInterval is how often Each runs poll while its workers run.
 const eachPollInterval = 50 * time.Millisecond
 
-var eachExtraWorkers atomic.Int64
-
-// reserveEachWorkers never waits: contending and nested calls retain their
-// two base workers. Each documents the shared limit.
-func reserveEachWorkers(workers int) (int, int) {
-	if workers == 2 {
-		return 2, 0
-	}
-	limit := max(0, runtime.GOMAXPROCS(0)-2)
-	for {
-		used := eachExtraWorkers.Load()
-		extra := min(workers-2, max(0, limit-int(used)))
-		if extra == 0 {
-			return 2, 0
-		}
-		if eachExtraWorkers.CompareAndSwap(used, used+int64(extra)) {
-			return 2 + extra, extra
-		}
-	}
-}
-
 // Each runs fn(i) for every i in [0, n), handing out blocks of grain
 // consecutive indices in ascending order to up to workers goroutines.
-// Extra workers are shared across concurrent calls, up to GOMAXPROCS-2 in
-// total. A call with no extra worker available keeps two workers and the same
-// caller-side polling while its work runs.
+// ReserveWorkers shares extra workers across concurrent calls. A call with
+// no extra worker available keeps one worker and the same caller-side polling
+// while its work runs.
 //
 // fn must write only state owned by index i, and read only state that nothing
 // writes during the call. fn must not call poll, a WorkBudget, or any method
@@ -81,9 +60,9 @@ func Each(n, workers, grain int, poll func() error, fn func(i int) error) (int, 
 		return n, nil
 	}
 	workers = min(workers, blocks)
-	workers, reserved := reserveEachWorkers(workers)
+	workers, reserved := ReserveWorkers(workers)
 	if reserved != 0 {
-		defer eachExtraWorkers.Add(-int64(reserved))
+		defer ReleaseWorkers(reserved)
 	}
 	errs := make([]error, workers)
 	errAt := make([]int, workers)

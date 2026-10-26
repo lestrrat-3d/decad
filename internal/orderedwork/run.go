@@ -27,8 +27,10 @@ func Workers(ctx context.Context, fallback int) int {
 
 // Run returns results in job order. A failure returns the error at the lowest
 // failing index, after all preceding jobs finish. The caller supplies a
-// parallel context for work that needs different nested concurrency settings;
-// the single-worker path uses ctx itself. Both contexts must share cancellation.
+// parallel context for work that needs different nested concurrency settings.
+// With at most one requested worker or one job, the serial path uses ctx.
+// Otherwise ReserveWorkers shares extra workers across calls; even a single
+// granted worker uses parallelCtx. Both contexts must share cancellation.
 func Run[Job, Result any](ctx, parallelCtx context.Context, jobs []Job, workers int,
 	work func(context.Context, Job) (Result, error)) ([]Result, error) {
 	return RunWithWorker(ctx, parallelCtx, jobs, workers, func() func(context.Context, Job) (Result, error) {
@@ -63,6 +65,8 @@ func RunWithWorker[Job, Result any](ctx, parallelCtx context.Context, jobs []Job
 		return out, nil
 	}
 
+	workers, reserved := ReserveWorkers(workers)
+	defer ReleaseWorkers(reserved)
 	errs := make([]error, len(jobs))
 	var next atomic.Int64
 	var firstErr atomic.Int64

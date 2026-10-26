@@ -73,6 +73,8 @@ func TestProofsBothFailingReturnsTheFirst(t *testing.T) {
 }
 
 func TestProofsCancelsLaterProofs(t *testing.T) {
+	prior := runtime.GOMAXPROCS(2)
+	defer runtime.GOMAXPROCS(prior)
 	boom := errors.New("proof 0 failed")
 	var saw atomic.Bool
 	started := make(chan struct{})
