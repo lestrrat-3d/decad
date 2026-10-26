@@ -156,6 +156,8 @@ exposure records the match derives, and the implementation PR changes that
 document on the same branch. The inner level a shifted operand contributes
 rounds once and is charged by `rationalFloatError` into that interface's
 `z0Delta`/`z1Delta`, exactly as stacked's blind cut charges its floor. A
+union-built slab records no denoted level (stacked §2.1), so a later blind
+cut ending at a displaced union level declines stacked §7's interface arm. A
 stacked operand in a stacked union splits at every level of both.
 
 A stacked union whose only interface is a boss on a plate has `Volume` the
@@ -531,7 +533,9 @@ A tool that spans the whole interval, lies wholly inside it, matches it, is
 disjoint from it, or touches it only at a cap continues to the ordinary boolean dispatch. A level may carry an axial
 displacement (an inch-converted depth does). Two levels compare by their exact
 rationals and order only when their gap exceeds the sum of both displacements.
-Equal levels count as one only when both are undisplaced. A gap inside the
+Equal levels count as one only when both are undisplaced; A7 compares held
+levels and does not read the denoted levels stacked §2.1 records, which only
+stacked §7's interface arm uses. A gap inside the
 displacements, or equal levels that carry one, orders nothing and the pair
 continues to the ordinary dispatch. A displacement therefore never admits an
 order: it only has to be smaller than the gap. A displaced level reaches the

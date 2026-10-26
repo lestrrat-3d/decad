@@ -4,19 +4,34 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 	"reflect"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
-// Slab is one recorded section over one axial interval.
+// Slab is one recorded section over one axial interval. Z0Denoted and
+// Z1Denoted record the exact rational a displaced level denotes, where the
+// producer knows it; the zero value records nothing (§2.1).
 type Slab struct {
 	Regions                  []momentinput.Profile
 	Z0, Z1, Z0Delta, Z1Delta float64
+	Z0Denoted, Z1Denoted     prismplacement.LevelDenotation
+}
+
+// DenotedZ0 is the exact level Z0 denotes, or nil when no record proves it.
+func (s Slab) DenotedZ0() *big.Rat {
+	return prismplacement.DenotedLevel(s.Z0, s.Z0Delta, s.Z0Denoted)
+}
+
+// DenotedZ1 is the exact level Z1 denotes, or nil when no record proves it.
+func (s Slab) DenotedZ1() *big.Rat {
+	return prismplacement.DenotedLevel(s.Z1, s.Z1Delta, s.Z1Denoted)
 }
 
 // Interface records the exposed patches on either side of a slab boundary.
@@ -209,6 +224,9 @@ func Falsify(ctx context.Context, sp Record) error {
 		prev := sp.Slabs[i-1]
 		if prev.Z1 != slab.Z0 || prev.Z1Delta != slab.Z0Delta {
 			return fmt.Errorf(`%w: slabs %d and %d do not share one level`, decaderr.ErrDegenerate, i-1, i)
+		}
+		if below, above := prev.DenotedZ1(), slab.DenotedZ0(); below != nil && above != nil && below.Cmp(above) != 0 {
+			return fmt.Errorf(`%w: slabs %d and %d record two denoted levels for one interface`, decaderr.ErrDegenerate, i-1, i)
 		}
 		if len(prev.Regions) != 1 || len(slab.Regions) != 1 {
 			// I2: a slab holds several regions only as the narrow side of a

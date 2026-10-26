@@ -19,7 +19,9 @@ The blind cut reads prism-boolean §3.1's G3 with its shared-axis offset-plane
 arm and its exact rational G5 shift: a tool sketched on the target's datum
 plane, or on a `CreateOffsetPlane` of it, is compared over `big.Rat`, and the
 one level the tool contributes to the result (its inner end) is that exact
-rational rounded to a float once, charged with `rationalFloatError`.
+rational rounded to a float once, charged with `rationalFloatError`. Where the
+tool's own level is known exactly, the slabs also record the rational that
+inner end denotes (§2.1).
 
 ## 1. Problem
 
@@ -45,7 +47,8 @@ different heights.
 ### 2.1 Record
 
 `internal/stackedrecord` owns `Slab` and `Interface`. A slab records its regions,
-its axial interval `Z0`–`Z1`, and the two levels' displacement bounds. An
+its axial interval `Z0`–`Z1`, the two levels' displacement bounds, and, where
+the producer knows it, the exact rational each level denotes. An
 interface records `LowerExposed` and `UpperExposed`, the material exposed on
 one side of its plane. A slab holds one region, or several under §2.2's group
 and lining readings. The root payload holds `[]stackedrecord.Slab` and
@@ -60,6 +63,31 @@ accumulated placement in `xform` exactly as `prismPayload` does.
 `sectionDelta` is one bound for the whole payload: the largest section
 displacement any slab's region carries (prism-boolean §7). Every reading that
 charges a section displacement charges this one.
+
+**Denoted levels.** A level with zero displacement denotes its own held
+float. A displaced level denotes a rational the float only rounds:
+`fl(x) · fl(Inch.Factor) / fl(Millimeter.Factor)` for an inch depth
+(`extent.ExactConversion`), or `12 − 3.175` for a 3.175 mm pocket below an
+offset plane at 12. `prismplacement.LevelDenotation` records that rational
+beside the held float and displacement it was proven against, on
+`prismrecord.Payload` (`Z0Denoted`, `Z1Denoted`) and on `Slab`. `DenoteLevel`
+refuses a rational farther from the held float than the displacement, and
+`DenotedLevel` answers only for the same held float and displacement, so a
+copy that rewrites a level without restating its denotation reads nothing
+there. The zero value records nothing, and every producer that does not set
+it behaves as an undisplaced-or-unknown level always did.
+
+Two producers record denotations. `Extrude` with a `Distance`, `Symmetric`
+or `DistanceSide` extent records the exact rescale of the magnitude, halved
+for a full-length `Symmetric` and negated for the side below the plane. The
+blind cut records its inner end as G5's exact shift plus the tool's denoted
+level, and carries the target's own end denotations onto the stack's ends. A
+`Transform` or `Copy` keeps them with the rest of the record. A `ToFace` or `ThroughAll` stop, a chamfered end, a shell level and
+every union-built level record none.
+
+The denotation decides only the interface arm (§7 stage 3). Measurements,
+tessellation and every bound read the held floats and their displacements
+as before, so a displaced level still reads `Approximate` (§4).
 
 Modify-reach §9.1 wrote a `Shared` field on the interface for the material on
 both sides of the plane. It is not stored: that material is the narrower side's
@@ -78,7 +106,7 @@ evaluator does not build — never repaired.
 | I1 | At least two slabs, or one slab holding two or more regions (a prism group, below). A one-slab stack with one region is a prism and is recorded as `prismPayload`. | `ErrUnsupported` |
 | I2 | Each slab holds exactly one region, except a prism group's one slab, whose regions are proven pairwise disjoint when the group is built, and the narrow side of a lining interface (below). (A region enclosing no area is refused by the build's own integrals, `ErrDegenerate`.) | `ErrUnsupported` |
 | I3 | Each slab has `z0 < z1`. | `ErrDegenerate` |
-| I4 | Consecutive slabs meet: `slabs[i].z1 == slabs[i+1].z0` and `slabs[i].z1Delta == slabs[i+1].z0Delta`, both as stored floats. One plane, one displacement. | `ErrDegenerate` |
+| I4 | Consecutive slabs meet: `slabs[i].z1 == slabs[i+1].z0` and `slabs[i].z1Delta == slabs[i+1].z0Delta`, both as stored floats. Where both sides record a denoted level, the two rationals are equal. One plane, one displacement, one denotation. | `ErrDegenerate` |
 | I5 | Consecutive slabs carry one outer loop record (`loopRecordsEqual`), or their interface meets the union reading below. A clean-nesting cut never touches the outer loop, and a mirror join rewrites every slab's outer the same way, so a cut-built stack's outer wall runs the whole height. | `ErrUnsupported` |
 | I6 | Hole sets are monotone, one new hole replaces enclosed old holes through §7's two-cell sketch proof, or the exclusive holes on both sides are pairwise separate through the private scene below. | `ErrUnsupported` |
 | I7 | A monotone interface exposes each exclusive hole's interior; an enclosing interface exposes one patch with the new hole's reversed loop as outer and the enclosed old holes as holes; a separated opposed interface exposes every exclusive hole on its material side. | `ErrDegenerate` |
@@ -367,8 +395,19 @@ Each admitted arm ships its implementation and tests together.
    splits it and proves a clean cut or no change inside a hole in every slab
    it reaches. The new interface and all earlier ones re-derive their exposed
    patches; the record audit checks them before evaluation. A tool ending
-   exactly at an existing interface uses that level when both the tool end and
-   stored level have zero displacement, and the reached slabs' private scenes
+   at an existing interface uses that level when the tool end's denoted level
+   equals the rational both slabs record there (§2.1), compared exactly; a
+   zero displacement on both sides is the case where each rational is the held
+   float itself. Equal held floats never stand in for equal denoted levels:
+   0.2 in and 5.08 mm hold one float and denote two planes, so that pair
+   declines, while 0.125 in and 3.175 mm denote one plane and share the
+   interface whatever rounding the floor level carries. A tool end with a
+   displacement and no recorded denotation, or an interface whose slabs record
+   none or disagree, declines this arm. The split arm compares held levels; where the
+   tool end and the split slab's levels are all denoted, those rationals must
+   keep the same strict order, and the blind cut on a prism checks the same
+   against the target's ends, so the denoted levels a stack records stay
+   monotone. The reached slabs' private scenes
    plus the interface audit prove the new hole set is monotone. Opposed
    exclusive holes also build when the private scene above proves their
    separation without a charge and the section displacement is zero. A tool
@@ -415,6 +454,18 @@ arm64.
   proves their holes separate, with analytic volume, verified watertight mesh,
   and placement. Touching or overlapping opposed pockets still take the mesh
   path.
+- Denoted levels: on a plate 12 mm thick, two pockets beside each other cut
+  from z = 12 by 3.175 mm and 0.125 in, in either order, by 0.2 in twice, or
+  by 0.2 in against a full-length `Symmetric` 0.4 in or a `TwoSided` 0.2 in
+  side, share one displaced floor level: the result is analytic with sixteen
+  faces, one lump, an `Approximate` volume whose bound covers the rational
+  answer, a `VerifyAll` mesh and a `Sound` report. A nested pocket ending on
+  the outer pocket's floor leaves eleven faces. A level split at 0.2 in under
+  a deeper pocket is reused by a third pocket at 0.2 in. 0.2 in beside
+  5.08 mm takes the mesh path. Record tests decline a displaced tool end or
+  interface with no denotation, an interface whose two sides record different
+  rationals (and the audit refuses it), and a split whose denoted order
+  contradicts the held one.
 - Level displacement, incoming: a tool whose inner end is a converted magnitude
   (`units.Inches`) publishes a positive axial delta on that end, asserted first
   on the tool so the fixture cannot silently stop exercising it, and the

@@ -57,3 +57,11 @@ func ExactConversion(v units.Value, unit units.Unit) *big.Rat {
 	}
 	return new(big.Rat).Quo(new(big.Rat).Mul(mag, from), to)
 }
+
+// ScaledExact is r·num/den, or nil when r is nil or den is zero.
+func ScaledExact(r *big.Rat, num, den int64) *big.Rat {
+	if r == nil || den == 0 {
+		return nil
+	}
+	return new(big.Rat).Mul(r, big.NewRat(num, den))
+}
