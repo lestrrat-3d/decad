@@ -211,18 +211,40 @@ func EdgeCross2Fracs(e0, e1, a, b Xp2) (ClipFrac, ClipFrac) {
 			ClipFrac{Num: new(big.Int).Set(fb.Num()), Den: new(big.Int).Set(fb.Denom())}
 	}
 	// The edge's own homogeneous difference, computed once for both points.
-	baU := new(big.Int).Sub(new(big.Int).Mul(e1.Hu, e0.Hw), new(big.Int).Mul(e0.Hu, e1.Hw))
-	baV := new(big.Int).Sub(new(big.Int).Mul(e1.Hv, e0.Hw), new(big.Int).Mul(e0.Hv, e1.Hw))
-	return HomCross2Frac(e0, baU, baV, a), HomCross2Frac(e0, baU, baV, b)
+	var baU, baV, scratch big.Int
+	baU.Mul(e1.Hu, e0.Hw)
+	scratch.Mul(e0.Hu, e1.Hw)
+	baU.Sub(&baU, &scratch)
+	baV.Mul(e1.Hv, e0.Hw)
+	scratch.Mul(e0.Hv, e1.Hw)
+	baV.Sub(&baV, &scratch)
+	cross := func(p Xp2) ClipFrac {
+		// An endpoint's exact determinant is zero, including when its
+		// weight is zero or negative. Keep its denominator unchanged.
+		// Incomplete inputs still take the arithmetic path and panic there.
+		if homComplete(e0) && homComplete(e1) && homComplete(p) &&
+			(homSharedPoint(p, e0) || homSharedPoint(p, e1)) {
+			return ClipFrac{Num: new(big.Int), Den: p.Hw}
+		}
+		return HomCross2Frac(e0, &baU, &baV, p)
+	}
+	return cross(a), cross(b)
 }
 
 // HomCross2Frac finishes EdgeCross2Fracs for one point: the cross product's
 // homogeneous numerator over that point's own weight, the edge's shared factor
 // already dropped.
 func HomCross2Frac(e0 Xp2, baU, baV *big.Int, p Xp2) ClipFrac {
-	caU := new(big.Int).Sub(new(big.Int).Mul(p.Hu, e0.Hw), new(big.Int).Mul(e0.Hu, p.Hw))
-	caV := new(big.Int).Sub(new(big.Int).Mul(p.Hv, e0.Hw), new(big.Int).Mul(e0.Hv, p.Hw))
-	num := new(big.Int).Sub(new(big.Int).Mul(baU, caV), new(big.Int).Mul(baV, caU))
+	var caU, caV, scratch big.Int
+	caU.Mul(p.Hu, e0.Hw)
+	scratch.Mul(e0.Hu, p.Hw)
+	caU.Sub(&caU, &scratch)
+	caV.Mul(p.Hv, e0.Hw)
+	scratch.Mul(e0.Hv, p.Hw)
+	caV.Sub(&caV, &scratch)
+	scratch.Mul(baV, &caU)
+	num := new(big.Int).Mul(baU, &caV)
+	num.Sub(num, &scratch)
 	return ClipFrac{Num: num, Den: p.Hw}
 }
 
