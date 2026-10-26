@@ -1207,6 +1207,8 @@ otherwise relations only, with the appended reason `ContactNonConvex` on an abse
 Kinematic body needs no certificate. `ContactPair` does not know motion types: it names
 `ContactNonConvex` on an overlapping pair when neither body carries the certificate, since §9.3 and §9.6 need one convex side, and on a
 touching pair of two such bodies that §10.5's non-convex guest rule does not cover.
+A float pre-test skips an exact signed volume only where it proves the vertex on or behind the plane, so
+the certificate and its work charge equal the all-exact loop's (`agent-docs/planar-convex-filter-design.md`).
 
 ### 9.3 Manifold
 
