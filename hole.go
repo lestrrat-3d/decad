@@ -112,7 +112,8 @@ type HoleThread struct {
 // face, an analytic plane or cylinder. At is a world point in millimetres that
 // lies on that face's plane, or on the cylinder; the hole axis runs through it,
 // into the body, square to the plane or along the cylinder's radius. Diameter is a length. Depth is
-// required. Head is optional, and nil makes a plain hole.
+// required. Head is optional, and nil makes a plain hole; on a cylindrical face it cuts
+// from the plane tangent there (agent-docs/hole-design.md §11).
 //
 // Shape is optional. A nil Shape makes a round hole of Diameter. A non-nil
 // Shape replaces the round bore: Diameter MUST then be the zero units.Value and
@@ -218,7 +219,11 @@ func Hole(ctx context.Context, b *Body, spec HoleSpec) (result *Body, retErr err
 		// The coil is cut after the bore and its head, as Thread cuts a bore that exists.
 		tools = append(tools, coil)
 	}
-	return combineTools(ctx, d, OperationHole, b, meshbool.OpCut, tools, false, nil, capture)
+	// A hole on a cylindrical face (in.Margin is set only for one) meets the body on
+	// the mesh path, where a second cut of the bore's head would find a target that
+	// already holds the first cut's coarse mesh. The tools are united first, so one
+	// cut serves.
+	return combineTools(ctx, d, OperationHole, b, meshbool.OpCut, tools, in.Margin != 0 && tap == nil, nil, capture)
 }
 
 // holeInput resolves spec into the plain-data request holeplan reads.
@@ -263,15 +268,15 @@ func holeInput(b *Body, spec HoleSpec) (holeplan.Input, error) {
 	if err := holeDepthInput(&in, spec.Depth); err != nil {
 		return in, err
 	}
+	if err := holeHeadInput(&in, spec.Head); err != nil {
+		return in, err
+	}
 	if site.cylinder != nil {
-		if spec.Head != nil {
-			return in, fmt.Errorf(`%w: a hole on a cylindrical face takes no counterbore or countersink`, ErrUnsupported)
-		}
 		if in.Margin, err = site.cylinder.margin(in); err != nil {
 			return in, err
 		}
 	}
-	return in, holeHeadInput(&in, spec.Head)
+	return in, nil
 }
 
 // holeSite is where a hole starts: the frame whose plane is tangent to the
@@ -293,6 +298,11 @@ type curvedHole struct {
 // largest radius the bore's section reaches.
 func (c *curvedHole) margin(in holeplan.Input) (float64, error) {
 	reach := in.Diameter / 2
+	if in.Head.Kind != holeplan.HeadNone {
+		// A head is wider than the bore and the tool that cuts it must clear the wall as
+		// far out as it reaches.
+		reach = math.Max(reach, in.Head.Diameter/2)
+	}
 	switch {
 	case in.Rect != nil:
 		reach = math.Hypot(in.Rect.Width, in.Rect.Height) / 2
@@ -490,6 +500,13 @@ func buildHoleTools(ctx context.Context, d *Document, plan holeplan.Plan) ([]*Bo
 		removeTools(tools)
 		return nil, err
 	}
+	if plan.Sink != nil && plan.Sink.IncludesBore {
+		whole, err := holeSink(ctx, d, plan.Sink)
+		if err != nil {
+			return fail(err)
+		}
+		return []*Body{whole}, nil
+	}
 	bore, err := holeBore(ctx, d, plan)
 	if err != nil {
 		return fail(err)
@@ -601,7 +618,7 @@ func holeSink(ctx context.Context, d *Document, sink *holeplan.Sink) (*Body, err
 	if err != nil {
 		return nil, err
 	}
-	var points [4]*sketch.Point
+	points := make([]*sketch.Point, len(sink.Profile))
 	for i, p := range sink.Profile {
 		points[i] = s.CreatePoint(p[0], p[1])
 		s.Fix(points[i])

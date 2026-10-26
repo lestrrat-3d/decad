@@ -106,3 +106,48 @@ func Example_hole_draft() {
 	// Output:
 	// volume: 3848 mm^3
 }
+
+// A hole can carry its counterbore on a cylinder too. The recess is cut from the plane
+// tangent to the rod at the hole's centre, so on a rod it is shallower where the wall
+// falls away. Here a 10 mm radius, 16 mm long rod takes a 3 mm hole 6 mm deep with a
+// 6 mm counterbore 2 mm deep.
+func Example_hole_counterbore_on_a_cylinder() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	centre := s.CreatePoint(0, 0)
+	s.Fix(centre)
+	s.CreateCircle(centre, 10)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	rod, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(16), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	drilled, err := decad.Hole(context.Background(), rod, decad.HoleSpec{
+		Face:     decad.Faces(decad.Cylindrical()),
+		At:       r3.Vec{X: 10, Y: 0, Z: 8},
+		Diameter: units.Millimeters(3),
+		Depth:    decad.BlindHole{Depth: units.Millimeters(6)},
+		Head:     decad.Counterbore{Diameter: units.Millimeters(6), Depth: units.Millimeters(2)},
+	})
+	if err != nil {
+		fmt.Printf("failed to drill: %s\n", err)
+		return
+	}
+	volume, err := drilled.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
+	// Output:
+	// volume: 4945 mm^3
+}

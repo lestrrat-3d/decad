@@ -157,7 +157,10 @@ func CurvedMargin(radius, toolRadius float64, concave bool) (float64, error) {
 // axis.
 type Sink struct {
 	Plane   r3.Frame
-	Profile [4][2]float64
+	Profile [][2]float64
+	// IncludesBore says the profile also holds the bore proper, from the cone's
+	// foot down to the hole's depth, so that the one revolve is the whole hole.
+	IncludesBore bool
 }
 
 // Plan is the tool shapes of one hole.
@@ -377,21 +380,32 @@ func (p Plan) withSink(in Input) (Plan, error) {
 			decaderr.ErrDegenerate, depth, p.Bore.Length)
 	}
 	p.HeadDepth = depth
-	over := h.Diameter * sinkOvershoot
+	over := math.Max(h.Diameter*sinkOvershoot, p.Bore.Margin)
 	centre := in.Frame.ToWorldUV(p.U, p.V)
 	plane, err := r3.NewFrame(centre, in.Frame.U(), in.Outward)
 	if err != nil {
 		return Plan{}, fmt.Errorf(`%w: the countersink plane is degenerate: %s`, decaderr.ErrDegenerate, err)
 	}
-	p.Sink = &Sink{
-		Plane: plane,
-		Profile: [4][2]float64{
-			{0, -depth},
+	profile := [][2]float64{
+		{0, -depth},
+		{in.Diameter / 2, -depth},
+		{rim + over*slope, over},
+		{0, over},
+	}
+	if in.Margin != 0 {
+		// On a cylindrical face the hole meets the body on the mesh path, where a second
+		// cut would find a target that already holds the first cut's coarse mesh, so the
+		// bore and the cone are one tool: the bore runs from the cone's foot to the hole's
+		// depth, measured from the tangent plane as the cone's depth is.
+		profile = [][2]float64{
+			{0, -p.Bore.Length},
+			{in.Diameter / 2, -p.Bore.Length},
 			{in.Diameter / 2, -depth},
 			{rim + over*slope, over},
 			{0, over},
-		},
+		}
 	}
+	p.Sink = &Sink{Plane: plane, Profile: profile, IncludesBore: in.Margin != 0}
 	return p, nil
 }
 

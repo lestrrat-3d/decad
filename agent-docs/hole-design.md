@@ -46,7 +46,7 @@ face. A countersink cut gives a faceted result whose planar faces are split into
 
 ## 4. Not covered
 
-- A hole in a face that is not an analytic plane or cylinder, or in a sheet.
+- A hole in a face that is not an analytic plane or cylinder, or in a sheet. A draft or a thread in a hole on a cylindrical face.
 - A noncircular hole other than `RectangularHole`, `SlotHole` and a regular `PolygonHole`, a threaded shaped hole, a threaded hole on a cylindrical face, and a thread on a counterbore or countersink.
 - Several holes in one call. Call `Hole` per hole, or build one hole and use `Patterned`.
 
@@ -90,8 +90,8 @@ material, whether the face is a rod's outer wall or a bore's inner wall.
 | Y1 | `At` lies within `holeplan.OnPlaneTol` of the cylinder's surface, a distance from its axis within 1e-6 mm of the radius, and not on the axis. A violation is `ErrDegenerate`. |
 | Y2 | The site is the plane tangent to the cylinder at `At`, with the face's outward normal there as its normal. Placement, depth, reach and the axis check (H2 to H8) then read it as they read a plane. A blind `Depth` is measured from the surface at `At`. |
 | Y3 | The tools start `holeplan.CurvedMargin` outside the tangent plane. A rod's wall falls away from the plane, so the margin is `holeplan.MouthMargin`. A bore's wall rises toward it by the sagitta `R − sqrt(R² − r²)` at distance `r`, so the margin is `MouthMargin` plus the sagitta of the largest radius the bore's section reaches, and no sliver of wall stands above the tool's start. |
-| Y4 | The largest radius is half the diameter of a round hole, half the diagonal of a `RectangularHole` and half the length of a `SlotHole`. In a bore it MUST be less than the bore's radius, or the hole is `ErrUnsupported`. |
-| Y5 | A `Head` on a cylindrical face is `ErrUnsupported`. |
+| Y4 | The largest radius is half the diameter of a round hole or of its head if wider, half the diagonal of a `RectangularHole` and half the length of a `SlotHole`. In a bore it MUST be less than the bore's radius, or the hole is `ErrUnsupported`. |
+| Y5 | A `Head` on a cylindrical face follows §11. |
 
 The result is a mesh Boolean's, faceted, with the Cut's own bounds. The tests compare volumes against integrals
 computed independently: the chord of the rod weighted by the hole's section, and the wall's thickness weighted by the
@@ -144,3 +144,16 @@ a prism over the polygon from `holeplan.Plan.Corners`.
 | P2 | The corners lie at the circumradius `AcrossFlats / (2·cos(π/Sides))` from the axis, at the angles `Angle + π/Sides + 2π·i/Sides`, counter-clockwise from the face frame's U axis. With a zero `Angle` a flat faces +U, between the corners at ±π/Sides, whatever the number of sides. |
 | P3 | The polygon replaces the round bore as `RectangularHole` does: `Diameter` stays zero, a head is `ErrDegenerate`, and a through or blind depth reads as for a round hole. The mouth margin and the reach gates take the circumradius as the largest radius of the bore (Y4). |
 | P4 | The removed volume is `Sides · (AcrossFlats/2)² · tan(π/Sides) · depth`, which the tests compute independently, and the polygon's walls are planes. |
+
+## 11. A head on a cylindrical face
+
+A `Counterbore` or `Countersink` on a hole in a cylindrical face (§7) cuts its recess from the plane tangent to the
+cylinder at `At`, the plane Y2 reads a blind `Depth` from.
+
+| Decision | Rule |
+|---|---|
+| Z1 | The head's depth is measured from the tangent plane, as the bore's is: a counterbore of depth `d` ends `d` from that plane along the hole axis, and a countersink's cone has its stated diameter in that plane and narrows from there. Where the wall of a rod has fallen away from the plane the recess is the shallower there, and where a bore's wall has risen toward it the recess takes the lens of wall between them. The head's gates of H5 to H7 are those of a plane. |
+| Z2 | Y3's margin reads the head's radius when it is wider than the bore, so the tools clear the wall as far out as the head reaches. A head as wide as a bore it starts in is `ErrUnsupported`, as Y4 says of the bore. |
+| Z3 | A countersink's cone rises at least that margin over the plane, so a bore's wall that has risen into it is cut. |
+| Z4 | The bore and its head are one cut. On the mesh path a second cut would meet a target that already holds the first cut's coarse mesh and be refused, so a counterbore's cylinders are united before the cut, and a countersink on a cylindrical face is one revolve of the bore and the cone together. |
+| Z5 | The tests state the removed volume of each case from an integral over the hole's section of the length between the wall and the recess floor, the wall at `√(R² − y²)`, and require it inside the result's own bound. A counterbore wide enough that the wall rises more than `MouthMargin` toward the plane checks Z2. |
