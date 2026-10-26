@@ -2096,6 +2096,9 @@
 10	0.01	TestFacetedPrismUnionChamferRefusesToolInCornerBand
 10	8.09	TestFacetedRetainedBlend
 10	0.00	TestFacetedRetainedBlendParallelCylinders
+10	0.00	TestFacetedRetainedBlendParallelCylindersConcave
+10	0.00	TestFacetedRetainedBlendParallelCylindersTwoDistance
+10	0.00	TestFacetedRetainedBlendParallelCylindersGrazing
 10	0.00	TestFacetedRetainedBlendChain
 10	0.00	TestFacetedRetainedBlendOpenChain
 10	0.00	TestFacetedRetainedBlendArcEnd
