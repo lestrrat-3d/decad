@@ -61,12 +61,12 @@ func TestPrismGroupDisjointUnion(t *testing.T) {
 	require.Equal(t, 0.0, box.Min.X)
 	require.Equal(t, 15.0, box.Max.X)
 	requireMeshWatertightAt(t, got, 0.1)
-	// Two shells: STEP's single-shell writer refuses the group.
+	// Two outer shells: STEP writes one solid, so the group is refused.
 	require.Len(t, got.Shells(), 2)
 	err = export.STEP(t.Context(), io.Discard, got, units.Millimeters(0.1),
 		export.WithSTEPName("group"), export.WithSTEPAuthor("apitest"), export.WithSTEPOrganization("decad"))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Contains(t, err.Error(), "single non-void shell")
+	require.Contains(t, err.Error(), "exactly one outer shell")
 
 	moved, err := decad.Transform(t.Context(), got, mustTranslation(t, 0, 0, 7))
 	require.NoError(t, err)
