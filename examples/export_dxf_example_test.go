@@ -261,3 +261,44 @@ func Example_export_dxf_sheet_dimensions() {
 	// Output:
 	// diameter stated: true
 }
+
+// DXFPaper.Fields adds labelled entries to the title block, such as the part
+// number, the author and the revision, beside the title.
+func Example_export_dxf_title_fields() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(0, 0, 20, 30)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	block, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	var out bytes.Buffer
+	if err := export.DXFSheet(context.Background(), &out, block, units.Millimeters(0.1), export.DXFPaper{
+		Views:  []export.DrawingView{{Direction: r3.NewVec(0, 0, -1), Up: r3.NewVec(0, 1, 0)}},
+		Width:  units.Millimeters(297),
+		Height: units.Millimeters(210),
+		Scale:  units.Scalar(1),
+		Margin: units.Millimeters(10),
+		Gap:    units.Millimeters(0),
+		Title:  "BLOCK",
+		Fields: []export.DXFField{{Label: "PART", Value: "BK-100"}, {Label: "REV", Value: "C"}},
+	}); err != nil {
+		fmt.Printf("failed to export: %s\n", err)
+		return
+	}
+	fmt.Printf("part number written: %t, revision written: %t\n",
+		strings.Contains(out.String(), "PART: BK-100"), strings.Contains(out.String(), "REV: C"))
+	// Output:
+	// part number written: true, revision written: true
+}

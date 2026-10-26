@@ -200,3 +200,48 @@ func TestDXFSheetRefusals(t *testing.T) {
 	require.ErrorIs(t, export.DXFSheet(t.Context(), nil, body, tol, a4Sheet(true)), decad.ErrDegenerate)
 	require.ErrorIs(t, export.DXFSheet(t.Context(), &out, nil, tol, a4Sheet(true)), decad.ErrDegenerate)
 }
+
+func TestDXFSheetWritesTheTitleBlockFields(t *testing.T) {
+	t.Parallel()
+	body := decadtest.NewBlock(t, decad.New(), 0, 0, 20, 30, units.Millimeters(10))
+	paper := a4Sheet(false)
+	paper.Fields = []export.DXFField{{"PART", "BK-100"}, {"AUTHOR", "A. N. OTHER"}, {"REV", "C"}}
+	var out bytes.Buffer
+	require.NoError(t, export.DXFSheet(t.Context(), &out, body, units.Millimeters(0.1), paper))
+	byValue := map[string]dxfText{}
+	for _, tx := range readDXFTexts(t, out.String()) {
+		byValue[tx.value] = tx
+	}
+	// The fields stack down the right of the title, small, each four millimetres under the last.
+	part, author, rev := byValue["PART: BK-100"], byValue["AUTHOR: A. N. OTHER"], byValue["REV: C"]
+	require.Equal(t, export.DXFTextLayer, part.layer)
+	require.InDelta(t, 2.5, part.height, 1e-9)
+	require.InDelta(t, part.at[0], author.at[0], 1e-9)
+	require.InDelta(t, part.at[1]-4, author.at[1], 1e-9)
+	require.InDelta(t, part.at[1]-8, rev.at[1], 1e-9)
+	// They sit inside the title block: above its bottom line and below its top, left of the scale.
+	require.Greater(t, part.at[1], 10.0)
+	require.Less(t, part.at[1], 10+14.0)
+	require.Less(t, part.at[0], 297-10-60.0)
+	// No fields, no extra text.
+	var plain bytes.Buffer
+	require.NoError(t, export.DXFSheet(t.Context(), &plain, body, units.Millimeters(0.1), a4Sheet(false)))
+	require.Len(t, readDXFTexts(t, plain.String()), 2)
+}
+
+func TestDXFSheetTitleBlockFieldRefusals(t *testing.T) {
+	t.Parallel()
+	body := decadtest.NewBlock(t, decad.New(), 0, 0, 20, 30, units.Millimeters(10))
+	with := func(fields ...export.DXFField) error {
+		paper := a4Sheet(false)
+		paper.Fields = fields
+		var out bytes.Buffer
+		err := export.DXFSheet(t.Context(), &out, body, units.Millimeters(0.1), paper)
+		require.Zero(t, out.Len(), "a refused sheet writes nothing")
+		return err
+	}
+	require.ErrorIs(t, with(export.DXFField{"A", "1"}, export.DXFField{"B", "2"}, export.DXFField{"C", "3"}, export.DXFField{"D", "4"}), decad.ErrDegenerate)
+	require.ErrorIs(t, with(export.DXFField{"", "1"}), decad.ErrDegenerate)
+	require.ErrorIs(t, with(export.DXFField{"NAME", "café"}), decad.ErrDegenerate)
+	require.ErrorIs(t, with(export.DXFField{"NA\nME", "x"}), decad.ErrDegenerate)
+}
