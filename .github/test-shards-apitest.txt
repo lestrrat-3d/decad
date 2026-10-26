@@ -2294,3 +2294,7 @@
 10	0.01	TestMeshBodyDistanceToPoint
 10	0.01	TestMeshBodyClosestPoint
 10	0.01	TestMeshBodyQueriesRefuseWhatEncloseNothing
+10	0.01	TestThreadExternalRod
+10	0.01	TestThreadInternalBore
+10	0.01	TestThreadIsRightHanded
+10	0.01	TestThreadRefusals

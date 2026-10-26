@@ -26,6 +26,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/sweeprecord/` | The sweep and chain sweep records, their span payloads, builders over nodes (`BuildComposite`, `BuildArc`, `BuildClosedCyclic`, `ReplayChainWork`, `Placed`, finishing roles) and chain reductions. Root `sweepPayload` aliases it. See sweep §3, §15, evaluator §8. |
 | `internal/sweepbuild/` | The profile-fed and chain-fed Sweep builds over nodes: twisted, mitred, closed, composite, arc and straight paths. See sweep §3–§17. |
 | `internal/coil/` | Coil magnitude, profile side and pitch gates, preflight gates, stations, axis coordinates, moments and closed forms. See helix §4, §5, §7. |
+| `internal/threadplan/` | The ISO metric groove polygon and coil turns of a thread, from radius, pitch and length; plain millimetre data. See thread design. |
 | `internal/coilshell/` | The coil payload and its builder over nodes: the held shell, Table CB topology, Table CM readings, the held-shell mesh, its proofs and wall-area enclosures. Root `coilPayload` aliases it. See helix §5, §7, §8, evaluator §8. |
 | `internal/sweeptransport/` | Bounded rotation-minimizing endpoint frames over recorded line and arc spans, and frames along a recorded path. See sweep §3.2. |
 | `internal/revolvemesh/` | Revolve rings, cells, caps, cap frames, construction and area proofs, quarter-turn cap-rim blend stations, faceted mesh and bounds, and sector-bore cap fans, station steps and projected patches. |

@@ -47,7 +47,7 @@ face. A countersink cut gives a faceted result whose planar faces are split into
 ## 4. Not covered
 
 - A hole in a face that is not an analytic plane, or in a sheet.
-- A noncircular hole other than `RectangularHole` and `SlotHole`, a threaded hole, and a tapped-hole annotation.
+- A noncircular hole other than `RectangularHole` and `SlotHole`, a threaded hole, and a tapped-hole annotation. `Thread` (`agent-docs/thread-design.md`) threads a bored hole afterward.
 - Several holes in one call. Call `Hole` per hole, or build one hole and use `Patterned`.
 
 ## 5. Rectangular holes
