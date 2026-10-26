@@ -16,12 +16,20 @@ import (
 // ThreadSpec describes one ISO metric thread. Face selects the cylindrical face
 // to thread and must resolve to exactly one face. Pitch is the axial advance
 // per turn, a positive length.
+//
+// The thread is right-handed unless LeftHand is set. Length is the axial length
+// to thread, measured from the end of the face with the least position along
+// the axis: the zero Value threads the whole face, and a positive length no
+// longer than the face stops the thread there, with the coil's flat end and no
+// runout (agent-docs/thread-design.md §5).
 type ThreadSpec struct {
-	Face  FaceSelector
-	Pitch units.Value
+	Face     FaceSelector
+	Pitch    units.Value
+	LeftHand bool
+	Length   units.Value
 }
 
-// Thread cuts a right-handed 60 degree ISO metric thread into a cylindrical
+// Thread cuts a 60 degree ISO metric thread into a cylindrical
 // face of b and returns the threaded body, retiring b (agent-docs/thread-design.md).
 //
 // A face whose outward normal points away from the axis is a rod: it is the
@@ -29,9 +37,10 @@ type ThreadSpec struct {
 // normal points toward the axis is a bore: it is the thread's minor (drilled)
 // diameter and the groove is cut out of the wall around it. The groove follows
 // the ISO basic profile, with an external root flat of an eighth of the pitch
-// and an internal one of a quarter, and runs the whole length of the face. The
-// groove runs out past both of the face's ends, so a larger face or a shoulder
-// beside the threaded one is cut as well: thread a rod that ends at the thread.
+// and an internal one of a quarter, and runs the whole length of the face, or
+// the spec's Length of it. A groove over the whole face runs out past both of
+// its ends, so a larger face or a shoulder beside the threaded one is cut as
+// well: thread a rod that ends at the thread, or give a Length.
 //
 // The thread is a Coil of the groove profile cut from b, so the result is a
 // mesh Boolean's: faceted, with the Cut's own bounds (agent-docs/helix-design.md
@@ -75,7 +84,18 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 	if err != nil {
 		return nil, err
 	}
-	plan, err := threadplan.Compute(radius, pitch, length, external)
+	partial := spec.Length != (units.Value{})
+	if partial {
+		threaded, err := sectionrecord.MagnitudeIn(spec.Length, units.Length, units.Millimeter, "the thread length")
+		if err != nil {
+			return nil, err
+		}
+		if threaded > length {
+			return nil, fmt.Errorf(`%w: a thread length of %g mm is longer than the %g mm face`, ErrDegenerate, threaded, length)
+		}
+		length = threaded
+	}
+	plan, err := threadplan.Compute(radius, pitch, length, external, partial)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +103,7 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 		return nil, err
 	}
 	toolCtx, capture := privateConstructionContext(ctx)
-	coil, err := buildThreadCoil(toolCtx, d, frame, plan, pitch)
+	coil, err := buildThreadCoil(toolCtx, d, frame, plan, pitch, spec.LeftHand)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +179,7 @@ func threadFrame(face *Face, cyl Cylinder) (frame r3.Frame, length float64, exte
 
 // buildThreadCoil sketches the groove profile of plan in the axis plane frame
 // and coils it.
-func buildThreadCoil(ctx context.Context, d *Document, frame r3.Frame, plan threadplan.Plan, pitch float64) (*Body, error) {
+func buildThreadCoil(ctx context.Context, d *Document, frame r3.Frame, plan threadplan.Plan, pitch float64, leftHand bool) (*Body, error) {
 	w := sketch.NewWorld()
 	pl, err := w.CreatePlaneFromFrame(frame)
 	if err != nil {
@@ -181,5 +201,9 @@ func buildThreadCoil(ctx context.Context, d *Document, frame r3.Frame, plan thre
 		return nil, err
 	}
 	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 0, V: 1}}
-	return Coil(ctx, d, s, s.Profiles()[0], axis, units.Millimeters(pitch), units.Scalar(plan.Turns))
+	var opts []CoilOption
+	if leftHand {
+		opts = append(opts, WithLeftHand())
+	}
+	return Coil(ctx, d, s, s.Profiles()[0], axis, units.Millimeters(pitch), units.Scalar(plan.Turns), opts...)
 }

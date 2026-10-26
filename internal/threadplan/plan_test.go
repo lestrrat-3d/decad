@@ -10,7 +10,7 @@ import (
 
 func TestComputeExternalM10(t *testing.T) {
 	t.Parallel()
-	plan, err := threadplan.Compute(5, 1.5, 20, true)
+	plan, err := threadplan.Compute(5, 1.5, 20, true, false)
 	require.NoError(t, err)
 	root, mouth := plan.Profile[0][0], plan.Profile[3][0]
 	require.InDelta(t, 5-0.61343*1.5, root, 1e-4, "the root sits h3 under the major radius")
@@ -23,7 +23,7 @@ func TestComputeExternalM10(t *testing.T) {
 
 func TestComputeInternalReachesPastTheBore(t *testing.T) {
 	t.Parallel()
-	plan, err := threadplan.Compute(4.5, 1.5, 12, false)
+	plan, err := threadplan.Compute(4.5, 1.5, 12, false, false)
 	require.NoError(t, err)
 	mouth, root := plan.Profile[0][0], plan.Profile[1][0]
 	require.Less(t, mouth, 4.5, "the mouth opens into the bore")
@@ -34,7 +34,7 @@ func TestComputeInternalReachesPastTheBore(t *testing.T) {
 func TestComputeTurnsCarryTheGrooveClearOfBothEnds(t *testing.T) {
 	t.Parallel()
 	for _, external := range []bool{true, false} {
-		plan, err := threadplan.Compute(5, 1.5, 20, external)
+		plan, err := threadplan.Compute(5, 1.5, 20, external, false)
 		require.NoError(t, err)
 		lowest, highest := math.Inf(1), math.Inf(-1)
 		for _, c := range plan.Profile {
@@ -50,7 +50,7 @@ func TestComputeTurnsCarryTheGrooveClearOfBothEnds(t *testing.T) {
 func TestComputeProfileStaysNarrowerThanThePitch(t *testing.T) {
 	t.Parallel()
 	for _, external := range []bool{true, false} {
-		plan, err := threadplan.Compute(8, 2, 10, external)
+		plan, err := threadplan.Compute(8, 2, 10, external, false)
 		require.NoError(t, err)
 		lowest, highest := math.Inf(1), math.Inf(-1)
 		for _, c := range plan.Profile {
@@ -72,8 +72,27 @@ func TestComputeRefusals(t *testing.T) {
 	for name, a := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			_, err := threadplan.Compute(a[0].(float64), a[1].(float64), a[2].(float64), a[3].(bool))
+			_, err := threadplan.Compute(a[0].(float64), a[1].(float64), a[2].(float64), a[3].(bool), false)
 			require.Error(t, err)
 		})
+	}
+}
+
+func TestComputePartialEndsTheLastGrooveAtTheLength(t *testing.T) {
+	t.Parallel()
+	const pitch, length = 1.5, 8.0
+	for _, external := range []bool{true, false} {
+		plan, err := threadplan.Compute(5, pitch, length, external, true)
+		require.NoError(t, err)
+		lowest, highest := math.Inf(1), math.Inf(-1)
+		for _, c := range plan.Profile {
+			lowest, highest = math.Min(lowest, c[1]), math.Max(highest, c[1])
+		}
+		require.Less(t, highest, 0.0, "the first groove still starts wholly before the start plane")
+		// The last groove has advanced Turns·pitch, and its far flank sits at the length.
+		require.InDelta(t, length, highest+plan.Turns*pitch, 1e-12, "the last groove's far flank lands on the length")
+		full, err := threadplan.Compute(5, pitch, length, external, false)
+		require.NoError(t, err)
+		require.Less(t, plan.Turns, full.Turns, "a partial thread is shorter than one that runs out")
 	}
 }

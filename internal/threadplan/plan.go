@@ -39,9 +39,14 @@ type Plan struct {
 // Compute plans a thread cut into a cylindrical surface of the given radius.
 // An external thread cuts a groove into a rod, and radius is its major radius.
 // An internal thread cuts a groove out of a bore, and radius is its minor
-// (drilled) radius. length is the axial length of the threaded face. All three
-// numbers are positive and finite.
-func Compute(radius, pitch, length float64, external bool) (Plan, error) {
+// (drilled) radius. length is the axial length to thread. All three numbers are
+// positive and finite.
+//
+// With partial false the groove runs out past the far end of length, so every
+// point of it is cut at every angle. With partial true the coil stops where its
+// last groove's far flank meets length, so the thread ends there with the
+// coil's flat end and the groove never reaches past length.
+func Compute(radius, pitch, length float64, external, partial bool) (Plan, error) {
 	for name, v := range map[string]float64{"radius": radius, "pitch": pitch, "length": length} {
 		if !(v > 0) || math.IsInf(v, 0) {
 			return Plan{}, fmt.Errorf(`%w: the thread %s must be positive and finite`, decaderr.ErrDegenerate, name)
@@ -70,5 +75,9 @@ func Compute(radius, pitch, length float64, external bool) (Plan, error) {
 		p = [4][2]float64{{mouth, first - half}, {root, first - flat/2}, {root, first + flat/2}, {mouth, first + half}}
 	}
 	turns := (length + 2*half + 2*startMargin*pitch) / pitch
+	if partial {
+		// The last groove's centre advances to length-half, from -half-margin.
+		turns = (length + startMargin*pitch) / pitch
+	}
 	return Plan{Profile: p, Turns: turns}, nil
 }

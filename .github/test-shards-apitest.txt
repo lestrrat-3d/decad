@@ -2333,3 +2333,6 @@
 10	0.01	TestPathPatternSpacedMeasuresAlongAnArc
 10	0.01	TestPathPatternSpacedFollowsThePath
 10	0.01	TestPathPatternSpacedRefusals
+10	0.01	TestThreadLeftHandRod
+10	0.01	TestThreadPartialLengthStopsShortOfTheFaceEnd
+10	0.01	TestThreadLengthRefusals
