@@ -292,15 +292,22 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 		return false, err
 	}
 	queryFacet := make([]bool, len(e.h.Tris))
+	queryCount := 0
 	for _, i := range query {
+		if !queryFacet[i] {
+			queryCount++
+		}
 		queryFacet[i] = true
 	}
+	allQuery := queryCount == len(e.h.Tris) && queryCount != 0
 	tree, err := newHeldScanTree(ctx, e)
 	if err != nil {
 		return false, err
 	}
-	if err := tree.prepareQueryCeilings(ctx, queryFacet); err != nil {
-		return false, err
+	if !allQuery {
+		if err := tree.prepareQueryCeilings(ctx, queryFacet); err != nil {
+			return false, err
+		}
 	}
 	// The first scan cannot move vertices. Build its projected certificates
 	// once before workers share them; repair invalidates incident facets only
@@ -312,6 +319,18 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 			}
 		}
 		e.projection(i)
+		if allQuery && !e.facetOpenFloat(i) {
+			if _, _, n := e.facet(i); zeroXpt(n) {
+				return false, nil
+			}
+		}
+	}
+	var tasks []heldNodePair
+	if allQuery {
+		tasks, err = tree.selfPairTasks(ctx, 16*workers)
+		if err != nil {
+			return false, err
+		}
 	}
 	clean := make([]bool, workers)
 	errors := make([]error, workers)
@@ -327,7 +346,10 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 	// Nearby facets can have very different candidate counts. Small shared
 	// chunks keep one dense patch from occupying a worker for the whole scan.
 	var next atomic.Int64
-	const chunkSize = 32
+	chunkSize, count := 32, len(query)
+	if allQuery {
+		chunkSize, count = 1, len(tasks)
+	}
 	group.Add(workers)
 	for worker := range workers {
 		local := locals[worker]
@@ -335,12 +357,16 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 			defer group.Done()
 			clean[worker] = true
 			for {
-				start := int(next.Add(chunkSize)) - chunkSize
-				if start >= len(query) {
+				start := int(next.Add(int64(chunkSize))) - chunkSize
+				if start >= count {
 					return
 				}
-				end := min(start+chunkSize, len(query))
-				clean[worker], errors[worker] = local.cleanPairs(query[start:end], queryFacet, &tree)
+				end := min(start+chunkSize, count)
+				if allQuery {
+					clean[worker], errors[worker] = local.cleanSelfPairs(tasks[start:end], &tree)
+				} else {
+					clean[worker], errors[worker] = local.cleanPairs(query[start:end], queryFacet, &tree)
+				}
 				if !clean[worker] || errors[worker] != nil {
 					return
 				}
