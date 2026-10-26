@@ -27,9 +27,74 @@ type Segment struct {
 	A, B [2]float64
 }
 
-// Lines are the feature edges split by visibility.
+// Circle is a whole circle in the drawing plane, in millimetres, as Segment's
+// axes measure it.
+type Circle struct {
+	Centre [2]float64
+	Radius float64
+}
+
+// Lines are the feature edges split by visibility. VisibleCircles and
+// HiddenCircles are circles that Circulate took out of Visible and Hidden.
 type Lines struct {
-	Visible, Hidden []Segment
+	Visible, Hidden               []Segment
+	VisibleCircles, HiddenCircles []Circle
+}
+
+// circleOnTolerance is how far, relative to a circle's radius (at least 1 mm), a
+// segment end may lie from the circle and still be one of its chords.
+const circleOnTolerance = 1e-7
+
+// Circulate replaces the segments that make up each candidate circle with the
+// circle itself. A circle is taken when the visible segments lying on it, both
+// ends on the circle, together go all the way round it, so that every one of its
+// chords is a whole visible segment; then those segments are removed and the
+// circle joins VisibleCircles. Otherwise the same test is made against the hidden
+// segments. A circle some of whose chords are cut by a surface, or whose chords
+// are not all there, is left as the segments it is. A segment lying on a taken
+// circle is removed from its list only; a candidate that coincides with another
+// circle's segments takes its own.
+func (l *Lines) Circulate(candidates []Circle) {
+	for _, c := range candidates {
+		if rest, ok := coverCircle(l.Visible, c); ok {
+			l.Visible = rest
+			l.VisibleCircles = append(l.VisibleCircles, c)
+		}
+		if rest, ok := coverCircle(l.Hidden, c); ok {
+			l.Hidden = rest
+			l.HiddenCircles = append(l.HiddenCircles, c)
+		}
+	}
+}
+
+// coverCircle splits segments into those on circle c and the rest, and reports
+// whether those on c go all the way round it.
+func coverCircle(segments []Segment, c Circle) (rest []Segment, covered bool) {
+	eps := circleOnTolerance * math.Max(1, c.Radius)
+	on := func(p [2]float64) bool {
+		return math.Abs(math.Hypot(p[0]-c.Centre[0], p[1]-c.Centre[1])-c.Radius) <= eps
+	}
+	span := 0.0
+	mine := make([]bool, len(segments))
+	for i, s := range segments {
+		if !on(s.A) || !on(s.B) {
+			continue
+		}
+		mine[i] = true
+		a := math.Atan2(s.A[1]-c.Centre[1], s.A[0]-c.Centre[0])
+		b := math.Atan2(s.B[1]-c.Centre[1], s.B[0]-c.Centre[0])
+		d := math.Mod(b-a+3*math.Pi, 2*math.Pi) - math.Pi
+		span += math.Abs(d)
+	}
+	if span < 2*math.Pi-1e-6 {
+		return segments, false
+	}
+	for i, s := range segments {
+		if !mine[i] {
+			rest = append(rest, s)
+		}
+	}
+	return rest, true
 }
 
 type edgeKey [2]int

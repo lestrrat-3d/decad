@@ -48,7 +48,7 @@ func DXFViews(ctx context.Context, w io.Writer, body *decad.Body, tol units.Valu
 	var sheet drawing.Lines
 	x := 0.0
 	for _, view := range views {
-		lines, err := projectDrawing(ctx, mesh, view)
+		lines, err := projectBodyDrawing(ctx, body, mesh, view)
 		if err != nil {
 			return err
 		}
@@ -65,6 +65,12 @@ func DXFViews(ctx context.Context, w io.Writer, body *decad.Body, tol units.Valu
 		}
 		sheet.Visible = append(sheet.Visible, move(lines.Visible)...)
 		sheet.Hidden = append(sheet.Hidden, move(lines.Hidden)...)
+		for _, c := range lines.VisibleCircles {
+			sheet.VisibleCircles = append(sheet.VisibleCircles, drawing.Circle{Centre: [2]float64{c.Centre[0] - minX + x, c.Centre[1] - minY}, Radius: c.Radius})
+		}
+		for _, c := range lines.HiddenCircles {
+			sheet.HiddenCircles = append(sheet.HiddenCircles, drawing.Circle{Centre: [2]float64{c.Centre[0] - minX + x, c.Centre[1] - minY}, Radius: c.Radius})
+		}
 		x += maxX - minX + space
 	}
 	return writeDXFFile(ctx, w, sheet)
@@ -79,6 +85,11 @@ func extent(lines drawing.Lines) (minX, maxX, minY float64) {
 			for _, p := range [2][2]float64{s.A, s.B} {
 				minX, maxX, minY = math.Min(minX, p[0]), math.Max(maxX, p[0]), math.Min(minY, p[1])
 			}
+		}
+	}
+	for _, group := range [][]drawing.Circle{lines.VisibleCircles, lines.HiddenCircles} {
+		for _, c := range group {
+			minX, maxX, minY = math.Min(minX, c.Centre[0]-c.Radius), math.Max(maxX, c.Centre[0]+c.Radius), math.Min(minY, c.Centre[1]-c.Radius)
 		}
 	}
 	if math.IsInf(minX, 1) {

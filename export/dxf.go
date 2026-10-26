@@ -64,7 +64,14 @@ func DXF(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, vi
 	if err != nil {
 		return err
 	}
-	return writeDXFDrawing(ctx, w, mesh, view)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	lines, err := projectBodyDrawing(ctx, body, mesh, view)
+	if err != nil {
+		return err
+	}
+	return writeDXFFile(ctx, w, lines)
 }
 
 // writeDXFDrawing writes the mesh's feature edges as a DXF drawing.
@@ -77,6 +84,36 @@ func writeDXFDrawing(ctx context.Context, w io.Writer, mesh meshSource, view Dra
 		return err
 	}
 	return writeDXFFile(ctx, w, lines)
+}
+
+// projectBodyDrawing is projectDrawing with the whole circles of body that face
+// the view drawn as circles: a circular edge whose axis lies along the view
+// direction is a true circle in the drawing, and where every chord of its polygon
+// is a whole visible (or hidden) segment, those chords are replaced by the circle.
+func projectBodyDrawing(ctx context.Context, body *decad.Body, mesh meshSource, view DrawingView) (drawing.Lines, error) {
+	lines, err := projectDrawing(ctx, mesh, view)
+	if err != nil {
+		return drawing.Lines{}, err
+	}
+	right, up, dir := raster.Camera{Direction: view.Direction, Up: view.Up}.Axes()
+	var candidates []drawing.Circle
+	for _, e := range body.Edges() {
+		c, ok := e.Curve().(decad.Circle3)
+		if !ok || e.Start() != e.End() {
+			continue
+		}
+		axis, ok := c.Axis.Normalize()
+		if !ok || axis.Cross(dir).Len() > 1e-9 {
+			continue
+		}
+		radius, err := c.Radius.In(units.Millimeter)
+		if err != nil {
+			continue
+		}
+		candidates = append(candidates, drawing.Circle{Centre: [2]float64{right.Dot(c.Center), up.Dot(c.Center)}, Radius: radius})
+	}
+	lines.Circulate(candidates)
+	return lines, nil
 }
 
 // projectDrawing projects the feature edges of mesh along view.
@@ -121,6 +158,14 @@ const dxfHeader = "  0\nSECTION\n  2\nHEADER\n  9\n$ACADVER\n  1\nAC1009\n  0\nE
 func writeDXF(out *bytes.Buffer, lines drawing.Lines) {
 	out.WriteString(dxfHeader)
 	for _, layer := range []struct {
+		name    string
+		circles []drawing.Circle
+	}{{DXFVisibleLayer, lines.VisibleCircles}, {DXFHiddenLayer, lines.HiddenCircles}} {
+		for _, c := range layer.circles {
+			writeDXFCircle(out, layer.name, c)
+		}
+	}
+	for _, layer := range []struct {
 		name     string
 		segments []drawing.Segment
 	}{{DXFVisibleLayer, lines.Visible}, {DXFHiddenLayer, lines.Hidden}} {
@@ -130,6 +175,12 @@ func writeDXF(out *bytes.Buffer, lines drawing.Lines) {
 		}
 	}
 	out.WriteString("  0\nENDSEC\n  0\nEOF\n")
+}
+
+// writeDXFCircle writes one CIRCLE entity on layer.
+func writeDXFCircle(out *bytes.Buffer, layer string, c drawing.Circle) {
+	fmt.Fprintf(out, "  0\nCIRCLE\n  8\n%s\n 10\n%s\n 20\n%s\n 30\n0\n 40\n%s\n",
+		layer, dxfNumber(c.Centre[0]), dxfNumber(c.Centre[1]), dxfNumber(c.Radius))
 }
 
 // dxfNumber formats x in plain decimal, never in exponent form, with negative
