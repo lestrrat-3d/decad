@@ -143,7 +143,11 @@ func TestFacetedSourcePatchFallback(t *testing.T) {
 		run := func(ctx context.Context) (*Body, error) {
 			sc := &slabScene{w: sketch.NewWorld(), doc: New()}
 			part := sc.revolvedShaft(ctx, t)
-			first, err := Cut(ctx, part, sc.zPin(ctx, t, 4, 6))
+			built, err := Cut(ctx, part, sc.zPin(ctx, t, 4, 6))
+			require.NoError(t, err)
+			// A Copy ends the operation history's Boolean chain, so the later cut meets the
+			// sequential gate and not a chain the regroup rebuilds.
+			first, err := Copy(ctx, built)
 			require.NoError(t, err)
 			caps := planesThrough(first, r3.Vec{X: 4, Y: 6})
 			require.Len(t, caps, 1, "the pin pierces one cap")
@@ -161,7 +165,14 @@ func TestFacetedSourcePatchFallback(t *testing.T) {
 		run := func(ctx context.Context) error {
 			// The tool's wall crosses the first bore's wall, whose facets hold
 			// the rim's bound: a cylinder states no thinner slab.
-			_, err := slabRun(t, ctx, 22, 3)
+			sc := &slabScene{w: sketch.NewWorld(), doc: New()}
+			built, err := Cut(ctx, sc.roundedBox(ctx, t), sc.yTool(ctx, t, 20, 4))
+			require.NoError(t, err)
+			// A Copy ends the operation history's Boolean chain, so the refusal under test
+			// is the sequential gate and not a chain the regroup rebuilds.
+			first, err := Copy(ctx, built)
+			require.NoError(t, err)
+			_, err = Cut(ctx, first, sc.yTool(ctx, t, 22, 3))
 			return err
 		}
 		realErr := run(t.Context())
