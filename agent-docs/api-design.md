@@ -1355,7 +1355,12 @@ Modify operations return a new body, retiring the receiver, on the same terms:
 func Fillet(ctx context.Context, b *Body, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
 func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
 func Shell(ctx context.Context, b *Body, sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
+func ChamferAngle(ctx context.Context, b *Body, sel EdgeSelector, d units.Value, reference FaceSelector,
+    angle units.Value) (*Body, error)
 ```
+
+`ChamferAngle` sets back `d` on `reference` and `d·tan(angle)` on the other face of each right-angled planar edge, and
+builds the result with `Chamfer`. `agent-docs/chamfer-angle-design.md` owns its rules.
 
 Each bounds cancellation latency in its cancellable construction
 and audit paths, including Shell's shared offset-construction, crossing, and
