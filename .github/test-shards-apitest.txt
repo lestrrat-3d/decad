@@ -135,6 +135,7 @@
 1	0.00	TestRecordChainRejectsChangedSnapshot
 1	0.00	TestRecordProfileRejectsUnclosedConstrainedLoop
 1	0.03	TestRegionMomentsRejectMalformedTopology
+10	0.40	TestRegroupPlansBuildByHand
 1	0.00	TestReportPassedRejectsZeroAndUnknownStatus
 1	0.01	TestRevolveAxisDerivedOverflow
 1	0.02	TestRevolveBlendNonJunctionRefused

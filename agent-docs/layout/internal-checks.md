@@ -60,7 +60,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/freeform/` | Free-form curve proofs. |
 | `internal/meshbool/` | Pair chord inputs, mesh boolean contact, the tangency gate and its source-pair roles, subdivision, stitching, embedding, exact similarity images, audits, and staging and rim refusals. See evaluator §9. |
 | `internal/booloperand/` | Per-operand mesh boolean readings from the topology node: the pair chord tolerance and each operand's share of it, the restating held floor, and the payload-class occupied-volume precheck. See evaluator §9. |
-| `internal/booleandispatch/` | The Boolean route order over nodes: LoftFaces, cylinder, sector, cone, prism, stacked, class B and common-axis routes, then the mesh pipeline; and the read-only analytic Intersect. See evaluator §9, prism-boolean §14. |
+| `internal/booleandispatch/` | The Boolean route order over nodes: LoftFaces, cylinder, sector, cone, prism, stacked, class B and common-axis routes (`Analytic` route prefix), then the mesh pipeline; and the read-only analytic Intersect. See evaluator §9, prism-boolean §14. |
 | `internal/booleaneval/` | The mesh-boolean pipeline: both operand meshes, proximity and spiral-join gates, the exact mesh boolean and stitch, the proof bounds, the faceted payload and the audited volume reading. See evaluator §9. |
 | `internal/pointquery/` | Exact point-to-mesh distance and nearest point, the body and face distance and closest-point readings and the occupied-volume transfer proof. See point-containment design. |
 | `internal/facetedtopology/` | Chains audited mesh face boundaries, proves axial chain directions, selects loops, resolves source-group faces and matches cap patches. See evaluator §9. |
