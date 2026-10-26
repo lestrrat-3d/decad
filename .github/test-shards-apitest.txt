@@ -541,7 +541,7 @@
 3	0.06	TestFreeformPrismFilletChamferRefuse
 3	0.01	TestFreeformPrismMinWallThicknessUndecided
 3	0.73	TestFullRevolveScaledAtRepeatsAfterRigidPlacement
-3	0.03	TestHoleRefusesNonPlanarFace
+3	0.03	TestHoleRefusesAFaceThatIsNeitherPlaneNorCylinder
 3	0.00	TestImplicitExactlyOneStopUnassertedZeroRewritten
 3	0.01	TestLinkagePoseAtWaypoints
 3	0.00	TestLoftChainOneCellRibbonPinsTheSideToExtrudeChain
@@ -2314,3 +2314,8 @@
 10	0.01	TestFacetedWallSurveyDoesNotCallAThickBodyThin
 10	0.01	TestFacetedUndercutSurveyFindsAnOverhang
 10	0.01	TestFacetedUndercutSurveyClaimsNothingForAFreePull
+10	0.01	TestHoleRadialThroughARod
+10	0.01	TestHoleRadialBlindIntoARod
+10	0.01	TestHoleRadialOutOfABore
+10	0.01	TestHoleOnACylinderRefusals
+10	0.01	TestHoleRadialOutOfATightBore

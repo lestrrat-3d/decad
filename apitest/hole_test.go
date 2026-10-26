@@ -161,24 +161,19 @@ func TestHoleRefusals(t *testing.T) {
 	}
 }
 
-func TestHoleRefusesNonPlanarFace(t *testing.T) {
+// A face that is neither a plane nor a cylinder, here a sphere, is refused.
+func TestHoleRefusesAFaceThatIsNeitherPlaneNorCylinder(t *testing.T) {
 	t.Parallel()
-	doc, plate := drillPlate(t)
-	withBore, err := decad.Hole(t.Context(), plate, decad.HoleSpec{
-		Face:     capFace(true, plate),
-		At:       r3.Vec{X: 10, Y: 10, Z: 10},
-		Diameter: units.Millimeters(6),
-		Depth:    decad.ThroughHole{},
-	})
-	require.NoError(t, err)
-	_, err = decad.Hole(t.Context(), withBore, decad.HoleSpec{
-		Face:     decad.Faces(decad.Cylindrical()),
-		At:       r3.Vec{X: 13, Y: 10, Z: 5},
+	doc := decad.New()
+	ball := sphereBody(t, doc)
+	_, err := decad.Hole(t.Context(), ball, decad.HoleSpec{
+		Face:     decad.Faces(),
+		At:       r3.Vec{X: 10, Y: 0, Z: 0},
 		Diameter: units.Millimeters(1),
 		Depth:    decad.ThroughHole{},
 	})
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Equal(t, []*decad.Body{withBore}, doc.Bodies())
+	require.Equal(t, []*decad.Body{ball}, doc.Bodies())
 }
 
 // A plate turned onto its side takes the hole in its rotated top cap: the hole

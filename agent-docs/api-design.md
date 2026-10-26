@@ -1573,7 +1573,7 @@ producer identity so callers can use its returned provenance values without
 persisting or constructing internal identifiers.
 
 **A hole is one call.** `Hole(ctx, b, HoleSpec)` cuts a round, rectangular or slot-shaped, through or blind hole, with an optional
-counterbore or countersink head on a round hole, at a world point on a planar face of `b`. It builds the tool bodies, cuts them from `b` in one
+counterbore or countersink head on a round hole, at a world point on a planar face of `b`, or radially at a point on a cylindrical one. It builds the tool bodies, cuts them from `b` in one
 atomic commit, and retires `b`. `agent-docs/hole-design.md` owns the placement, size and refusal rules.
 
 **A rib is a thickened line.** `Rib(ctx, b, s, line, thickness, e)` thickens one straight sketch line across its width,

@@ -157,3 +157,17 @@ func TestComputeSlotRefusals(t *testing.T) {
 		})
 	}
 }
+
+func TestCurvedMargin(t *testing.T) {
+	t.Parallel()
+	got, err := holeplan.CurvedMargin(5, 2, false)
+	require.NoError(t, err)
+	require.Equal(t, float64(holeplan.MouthMargin), got, "a convex face falls away from the tangent plane")
+	got, err = holeplan.CurvedMargin(3, 2.5, true)
+	require.NoError(t, err)
+	require.InDelta(t, holeplan.MouthMargin+3-math.Sqrt(9-6.25), got, 1e-12, "a concave face rises by the sagitta")
+	_, err = holeplan.CurvedMargin(3, 3, true)
+	require.Error(t, err, "a tool as wide as the bore reaches its axis")
+	_, err = holeplan.CurvedMargin(0, 1, false)
+	require.Error(t, err)
+}

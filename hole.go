@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/decad/internal/holeplan"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -79,9 +80,10 @@ func (SlotHole) holeShape() {}
 
 // HoleSpec describes one hole.
 //
-// Face selects the planar face the hole starts in and must resolve to exactly
-// one face. At is a world point in millimetres that lies on that face's plane;
-// the hole axis runs through it, into the body. Diameter is a length. Depth is
+// Face selects the face the hole starts in and must resolve to exactly one
+// face, an analytic plane or cylinder. At is a world point in millimetres that
+// lies on that face's plane, or on the cylinder; the hole axis runs through it,
+// into the body, square to the plane or along the cylinder's radius. Diameter is a length. Depth is
 // required. Head is optional, and nil makes a plain hole.
 //
 // Shape is optional. A nil Shape makes a round hole of Diameter. A non-nil
@@ -162,7 +164,7 @@ func Hole(ctx context.Context, b *Body, spec HoleSpec) (result *Body, retErr err
 // holeInput resolves spec into the plain-data request holeplan reads.
 func holeInput(b *Body, spec HoleSpec) (holeplan.Input, error) {
 	var in holeplan.Input
-	plane, normal, err := resolvePlanarFace(b, spec.Face, "Hole")
+	site, err := resolveHoleSite(b, spec)
 	if err != nil {
 		return in, err
 	}
@@ -170,8 +172,8 @@ func holeInput(b *Body, spec HoleSpec) (holeplan.Input, error) {
 	if err != nil {
 		return in, err
 	}
-	in.Frame = plane.Frame
-	in.Outward = normal.Value
+	in.Frame = site.frame
+	in.Outward = site.outward
 	in.At = spec.At
 	if spec.Shape != nil {
 		if err := holeShapeInput(&in, spec); err != nil {
@@ -184,11 +186,108 @@ func holeInput(b *Body, spec HoleSpec) (holeplan.Input, error) {
 	if err != nil {
 		return in, fmt.Errorf(`%w: the body bounds are not representable: %s`, ErrNotFinite, err)
 	}
-	in.Reach = holeplan.Reach(box.Min, box.Max, plane.Frame.Origin(), normal.Value, bound)
+	in.Reach = holeplan.Reach(box.Min, box.Max, site.frame.Origin(), site.outward, bound)
 	if err := holeDepthInput(&in, spec.Depth); err != nil {
 		return in, err
 	}
+	if site.cylinder != nil {
+		if spec.Head != nil {
+			return in, fmt.Errorf(`%w: a hole on a cylindrical face takes no counterbore or countersink`, ErrUnsupported)
+		}
+		if in.Margin, err = site.cylinder.margin(in); err != nil {
+			return in, err
+		}
+	}
 	return in, holeHeadInput(&in, spec.Head)
+}
+
+// holeSite is where a hole starts: the frame whose plane is tangent to the
+// face at the hole axis, the face's outward normal there, and for a cylinder
+// the cylinder.
+type holeSite struct {
+	frame    r3.Frame
+	outward  r3.Vec
+	cylinder *curvedHole
+}
+
+// curvedHole is the cylindrical face a hole starts in.
+type curvedHole struct {
+	radius  float64
+	concave bool
+}
+
+// margin returns how far the tools start outside the tangent plane, from the
+// largest radius the bore's section reaches.
+func (c *curvedHole) margin(in holeplan.Input) (float64, error) {
+	reach := in.Diameter / 2
+	switch {
+	case in.Rect != nil:
+		reach = math.Hypot(in.Rect.Width, in.Rect.Height) / 2
+	case in.Slot != nil:
+		reach = in.Slot.Length / 2
+	}
+	return holeplan.CurvedMargin(c.radius, reach, c.concave)
+}
+
+// resolveHoleSite resolves spec.Face to exactly one analytic plane or cylinder.
+// On a plane the site is the plane. On a cylinder the hole axis runs along the
+// radial line through spec.At, which MUST lie on the cylinder, and the site is
+// the plane tangent to the cylinder there.
+func resolveHoleSite(b *Body, spec HoleSpec) (holeSite, error) {
+	faces, err := spec.Face.SelectFaces(b)
+	if err != nil {
+		return holeSite{}, err
+	}
+	if len(faces) != 1 {
+		return holeSite{}, fmt.Errorf(`%w: Hole needs exactly one face, the selector matched %d`, ErrDegenerate, len(faces))
+	}
+	switch surface := faces[0].Surface().(type) {
+	case Plane:
+		normal, err := faces[0].NormalAt(surface.Frame.Origin())
+		if err != nil {
+			return holeSite{}, err
+		}
+		return holeSite{frame: surface.Frame, outward: normal.Value}, nil
+	case Cylinder:
+		return cylinderHoleSite(faces[0], surface, spec.At)
+	default:
+		return holeSite{}, fmt.Errorf(`%w: Hole needs an analytic planar or cylindrical face, this one is %T`,
+			ErrUnsupported, surface)
+	}
+}
+
+// cylinderHoleSite builds the site of a hole whose centre is the point centre on the cylinder of face.
+func cylinderHoleSite(face *Face, cyl Cylinder, centre r3.Vec) (holeSite, error) {
+	radius, err := sectionrecord.MagnitudeIn(cyl.Radius, units.Length, units.Millimeter, "the cylinder radius")
+	if err != nil {
+		return holeSite{}, err
+	}
+	axis, ok := cyl.Axis.Normalize()
+	if !ok {
+		return holeSite{}, fmt.Errorf(`%w: the cylinder has no axis direction`, ErrDegenerate)
+	}
+	rel := centre.Sub(cyl.Origin)
+	radial, ok := rel.Sub(axis.Scale(rel.Dot(axis))).Normalize()
+	if !ok {
+		return holeSite{}, fmt.Errorf(`%w: the hole centre lies on the cylinder's axis`, ErrDegenerate)
+	}
+	if off := rel.Sub(axis.Scale(rel.Dot(axis))).Len() - radius; off > holeplan.OnPlaneTol || off < -holeplan.OnPlaneTol {
+		return holeSite{}, fmt.Errorf(`%w: the hole centre lies %g mm off the cylindrical face`, ErrDegenerate, off)
+	}
+	normal, err := face.NormalAt(centre)
+	if err != nil {
+		return holeSite{}, err
+	}
+	outward := radial
+	if normal.Value.Dot(radial) < 0 {
+		outward = radial.Scale(-1)
+	}
+	frame, err := r3.NewFrame(centre, axis, outward.Cross(axis))
+	if err != nil {
+		return holeSite{}, fmt.Errorf(`%w: the hole frame is degenerate: %s`, ErrDegenerate, err)
+	}
+	return holeSite{frame: frame, outward: outward,
+		cylinder: &curvedHole{radius: radius, concave: outward.Dot(radial) < 0}}, nil
 }
 
 // holeShapeInput reads a non-round bore into in.
