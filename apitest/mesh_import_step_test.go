@@ -76,6 +76,26 @@ func TestReadSTEPRoundTripsACavity(t *testing.T) {
 	requireMeshVolume(t, m, 8000-14*14*14)
 }
 
+func TestReadSTEPRoundTripsALumpWithACavityBesideALump(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	closed, err := decad.Shell(t.Context(), decadtest.NewBlock(t, doc, 0, 0, 20, 20, units.Millimeters(20)), nil,
+		units.Millimeters(3), decad.WithNoOpenings())
+	require.NoError(t, err)
+	beside := decadtest.NewBlock(t, doc, 40, 0, 50, 10, units.Millimeters(10))
+	both, err := decad.Union(t.Context(), closed, beside)
+	require.NoError(t, err)
+	require.Len(t, both.Lumps(), 2)
+	require.Len(t, both.Shells(), 3)
+	data := string(writeSTEP(t, both))
+	require.Equal(t, 1, strings.Count(data, "BREP_WITH_VOIDS("))
+	require.Equal(t, 1, strings.Count(data, "MANIFOLD_SOLID_BREP("))
+	m, err := readSTEPBytes(t, []byte(data))
+	require.NoError(t, err)
+	require.Equal(t, 3, m.Report().Shells)
+	requireMeshVolume(t, m, 8000-14*14*14+1000)
+}
+
 func TestReadSTEPHonoursAnOrientedVoidShellsFlag(t *testing.T) {
 	t.Parallel()
 	closed, err := decad.Shell(t.Context(), decadtest.NewBlock(t, decad.New(), 0, 0, 20, 20, units.Millimeters(20)), nil,

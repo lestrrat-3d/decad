@@ -65,8 +65,8 @@ func WithSTEPOrganization(organization string) STEPOption {
 // circles and ellipses. Other boundaries use one planar ADVANCED_FACE per mesh triangle.
 // A solid with cavities writes a BREP_WITH_VOIDS: the outer shell and each void
 // shell as an ORIENTED_CLOSED_SHELL, all as planar faces per mesh triangle
-// (agent-docs/step-export-design.md §9). A sheet, or a body that is not one
-// outer shell and any number of cavities, is refused. ctx and body must not be nil.
+// (agent-docs/step-export-design.md §9). A body of several lumps writes one
+// solid per lump, all as items of one representation. A sheet is refused. ctx and body must not be nil.
 func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header step.Header) (step.File, error) {
 	if ctx == nil {
 		return step.File{}, fmt.Errorf("export: STEP: %w: nil context", decad.ErrDegenerate)
@@ -87,10 +87,6 @@ func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 			voids++
 		}
 	}
-	if len(shells)-voids != 1 {
-		return step.File{}, fmt.Errorf("export: STEP: %w: a solid needs exactly one outer shell, this one has %d",
-			decad.ErrUnsupported, len(shells)-voids)
-	}
 
 	mesh, err := body.Tessellate(ctx, tol, decad.WithVerification(decad.VerifyBoundary))
 	if err != nil {
@@ -109,23 +105,29 @@ func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 			decad.ErrUnsupported, count, len(shells))
 	}
 
-	// A cavity writes through the faceted arm only: the analytic arm builds the
-	// faces of one outer shell.
+	// A cavity or a second lump writes through the faceted arm only: the analytic
+	// arm builds the faces of one outer shell.
 	analytic := false
-	if voids == 0 {
+	var solids []meshSolid
+	if voids == 0 && len(shells) == 1 {
 		if analytic, err = supportsAnalyticSTEP(ctx, body); err != nil {
 			return step.File{}, err
 		}
 	}
-	return assembleSTEPFile(ctx, body, header, analytic, vertices, triangles, components, count)
+	if !analytic {
+		if solids, err = meshSolids(body, mesh.SourceFaces(), components, count); err != nil {
+			return step.File{}, err
+		}
+	}
+	return assembleSTEPFile(ctx, body, header, analytic, vertices, triangles, components, solids)
 }
 
 // assembleSTEPFile writes the product structure and the shell of one admitted
-// solid: its analytic faces when analytic, else one planar face per triangle
-// of the verified mesh (vertices, triangles).
+// body: its analytic faces when analytic, else one planar face per triangle
+// of the verified mesh (vertices, triangles), grouped into solids.
 func assembleSTEPFile(
 	ctx context.Context, body *decad.Body, header step.Header, analytic bool, vertices []r3.Vec, triangles [][3]int,
-	components []int, count int,
+	components []int, solids []meshSolid,
 ) (step.File, error) {
 	productDescription := "faceted decad solid"
 	if analytic {
@@ -179,37 +181,40 @@ func assembleSTEPFile(
 			faceComponent = append(faceComponent, components[i])
 		}
 	}
-	var brep step.Reference
-	if count <= 1 || analytic {
+	var items []step.Reference
+	if analytic {
 		shell := b.add(ap214.ClosedShell(0, "", faces...))
-		brep = b.add(ap214.ManifoldSolidBrep(0, header.Name, shell))
+		items = append(items, b.add(ap214.ManifoldSolidBrep(0, header.Name, shell)))
 	} else {
-		outer, err := outerComponent(vertices, triangles, components, count)
-		if err != nil {
-			return step.File{}, err
+		count := 0
+		for _, solid := range solids {
+			count += 1 + len(solid.voids)
 		}
 		perComponent := make([][]step.Reference, count)
 		for i, face := range faces {
 			perComponent[faceComponent[i]] = append(perComponent[faceComponent[i]], face)
 		}
-		outerShell := b.add(ap214.ClosedShell(0, "", perComponent[outer]...))
-		var voids []step.Value
-		for c, group := range perComponent {
-			if c == outer {
+		for _, solid := range solids {
+			outerShell := b.add(ap214.ClosedShell(0, "", perComponent[solid.outer]...))
+			if len(solid.voids) == 0 {
+				items = append(items, b.add(ap214.ManifoldSolidBrep(0, header.Name, outerShell)))
 				continue
 			}
-			// A void's faces already look into the cavity, away from the material, which
-			// is the orientation BREP_WITH_VOIDS asks of its void shells.
-			closed := b.add(ap214.ClosedShell(0, "", group...))
-			voids = append(voids, b.add(step.Entity{Name: "ORIENTED_CLOSED_SHELL", Parameters: []step.Value{
-				step.String(""), step.Omitted{}, closed, step.Enumeration("T"),
+			var voids []step.Value
+			for _, c := range solid.voids {
+				// A void's faces already look into the cavity, away from the material, which
+				// is the orientation BREP_WITH_VOIDS asks of its void shells.
+				closed := b.add(ap214.ClosedShell(0, "", perComponent[c]...))
+				voids = append(voids, b.add(step.Entity{Name: "ORIENTED_CLOSED_SHELL", Parameters: []step.Value{
+					step.String(""), step.Omitted{}, closed, step.Enumeration("T"),
+				}}))
+			}
+			items = append(items, b.add(step.Entity{Name: "BREP_WITH_VOIDS", Parameters: []step.Value{
+				step.String(header.Name), outerShell, step.List(voids),
 			}}))
 		}
-		brep = b.add(step.Entity{Name: "BREP_WITH_VOIDS", Parameters: []step.Value{
-			step.String(header.Name), outerShell, step.List(voids),
-		}})
 	}
-	representation := b.add(ap214.AdvancedBrepShapeRepresentation(0, header.Name, representationContext, brep))
+	representation := b.add(ap214.AdvancedBrepShapeRepresentation(0, header.Name, representationContext, items...))
 	b.add(ap214.ShapeDefinitionRepresentation(0, shape, representation))
 	if err := ctx.Err(); err != nil {
 		return step.File{}, err
@@ -420,31 +425,6 @@ func checkMesh(ctx context.Context, vertices []r3.Vec, triangles [][3]int) ([]in
 		components[i] = id
 	}
 	return components, len(ids), nil
-}
-
-// outerComponent returns the component of the mesh that is the body's outer
-// shell: the one whose signed volume is positive, wound outward. Every other
-// component is a cavity, wound into it, with a negative volume. A mesh with no
-// such single component is refused.
-func outerComponent(vertices []r3.Vec, triangles [][3]int, components []int, count int) (int, error) {
-	volume := make([]float64, count)
-	for i, tri := range triangles {
-		a, b, c := vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
-		volume[components[i]] += a.Dot(b.Cross(c)) / 6
-	}
-	outer := -1
-	for c, v := range volume {
-		if v > 0 {
-			if outer >= 0 {
-				return 0, fmt.Errorf("export: STEP: %w: more than one shell encloses material", decad.ErrUnsupported)
-			}
-			outer = c
-		}
-	}
-	if outer < 0 {
-		return 0, fmt.Errorf("export: STEP: %w: no shell encloses material", decad.ErrUnsupported)
-	}
-	return outer, nil
 }
 
 func meshRoot(parents []int, i int) int {
