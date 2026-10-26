@@ -58,6 +58,9 @@ func oracleOrientSign(a, b, c, d proof.Xhp) int {
 // limb slice of a zero is not part of the comparison; no caller can see it
 // through the big.Int API except by comparing Bits() with nil.
 func requireSameInt(t *testing.T, want, got *big.Int, msg string) {
+	if sameIntRepresentation(want, got) {
+		return
+	}
 	t.Helper()
 	require.NotNil(t, got, msg)
 	require.Zero(t, want.Cmp(got), msg)
@@ -66,7 +69,16 @@ func requireSameInt(t *testing.T, want, got *big.Int, msg string) {
 	require.True(t, slices.Equal(want.Bits(), got.Bits()), msg)
 }
 
+func sameIntRepresentation(want, got *big.Int) bool {
+	return got != nil && want.Cmp(got) == 0 && want.Sign() == got.Sign() &&
+		want.String() == got.String() && slices.Equal(want.Bits(), got.Bits())
+}
+
 func requireSameXhp(t *testing.T, want, got proof.Xhp, msg string) {
+	if sameIntRepresentation(want.X, got.X) && sameIntRepresentation(want.Y, got.Y) &&
+		sameIntRepresentation(want.Z, got.Z) && sameIntRepresentation(want.W, got.W) {
+		return
+	}
 	t.Helper()
 	requireSameInt(t, want.X, got.X, msg+" X")
 	requireSameInt(t, want.Y, got.Y, msg+" Y")
@@ -94,7 +106,9 @@ func requireOwned(t *testing.T, got proof.Xhp, inputs []proof.Xhp, clones []proo
 	}
 	for _, v := range []*big.Int{got.X, got.Y, got.Z, got.W} {
 		_, dup := seen[v]
-		require.False(t, dup, msg+" result integer is shared")
+		if dup {
+			require.False(t, dup, msg+" result integer is shared")
+		}
 		seen[v] = struct{}{}
 	}
 	for _, v := range []*big.Int{got.X, got.Y, got.Z, got.W} {
