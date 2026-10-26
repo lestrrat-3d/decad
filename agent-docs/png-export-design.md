@@ -16,6 +16,7 @@ type View struct {
     Colors        []color.RGBA
     HiddenEdges   bool
     Shadows       bool
+    BackColor     *color.RGBA
 }
 
 func IsometricView(width, height int) View
@@ -52,7 +53,7 @@ image axis flipped, turns the tests red.
 ## 4. Not covered
 
 - Axes, dimensions and text, and outlines or hidden edges on a perspective camera.
-- Materials, textures and anti-aliasing, soft or multiple-light shadows, and a colour for the faces that look away from the camera.
+- Materials, textures and anti-aliasing and soft or multiple-light shadows.
 - A transparent background and image formats other than PNG.
 - Drawing a mesh body together with bodies.
 
@@ -132,3 +133,13 @@ finds behind a surface (`agent-docs/dxf-export-design.md` D5, D6).
 | H3 | A pixel in shadow takes its face's base colour at the ambient level, 0.3, which is the level of a face turned from the light. A face turned from the light is left as it was. So a convex part shows no shadow on itself, and the bytes of a lone block are those without `Shadows`. |
 | H4 | The shadow of a body falls on the others drawn in the same image by `PNGBodies`. The shadow is hard, one light, one sample, so its edge is as fine as the map and the image. |
 | H5 | The zero value draws none, and the bytes are those of §1 to §9. `Shadows` with `FieldOfView` is `ErrDegenerate`. `MeshPNG` and `PNGBodies` take the field too. |
+
+## 11. A colour for the faces that look away
+
+`View.BackColor` sets the base colour of the faces that look away from the camera, which are orange by default.
+
+| Decision | Rule |
+|---|---|
+| B1 | Nil keeps the orange, `(220, 130, 60)`, and the bytes are those of §1 to §10. A set colour replaces it for every face that looks away, shaded at the same light level, so an open sheet or an inside-out mesh still shows, in the colour the caller picked. Its alpha is ignored. |
+| B2 | A face that looks toward the camera is unchanged, so `Colors` and the default blue are untouched. With `Shadows`, a shadowed face that looks away takes the back colour at the ambient level. |
+| B3 | `BackColor` is one colour for the image, not one for each body: `Colors` colours the faces toward the camera, one for each body. |

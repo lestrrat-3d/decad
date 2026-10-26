@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"strings"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/export"
@@ -360,4 +361,52 @@ func Example_export_png_shadows() {
 	fmt.Printf("shadow pixels: %t\n", darker > 200)
 	// Output:
 	// shadow pixels: true
+}
+
+// BackColor sets the colour of the faces that look away from the camera. They are
+// orange by default, which is how an open shell or an inside-out mesh shows; pick
+// another colour to match a palette or to stand out against the part's own.
+func Example_export_png_back_color() {
+	mesh, err := decad.ReadOBJ(context.Background(), strings.NewReader(`v 0 0 0
+v 10 0 0
+v 10 10 0
+v 0 10 0
+v 0 0 10
+v 10 0 10
+v 10 10 10
+v 0 10 10
+f 1 2 3
+f 1 3 4
+f 5 7 6
+f 5 8 7
+f 1 6 2
+f 1 5 6
+f 2 7 3
+f 2 6 7
+f 3 8 4
+f 3 7 8
+f 4 5 1
+f 4 8 5
+`))
+	if err != nil {
+		fmt.Printf("failed to read mesh: %s\n", err)
+		return
+	}
+	// The cube's triangles wind clockwise seen from outside, so every face the camera sees looks away.
+	view := export.View{Direction: r3.NewVec(0, 0, -1), Up: r3.NewVec(0, 1, 0), Width: 100, Height: 100}
+	view.BackColor = &color.RGBA{R: 30, G: 200, B: 60}
+	var out bytes.Buffer
+	if err := export.MeshPNG(context.Background(), &out, mesh, view); err != nil {
+		fmt.Printf("failed to export: %s\n", err)
+		return
+	}
+	img, err := png.Decode(&out)
+	if err != nil {
+		fmt.Printf("failed to read the image: %s\n", err)
+		return
+	}
+	c := color.RGBAModel.Convert(img.At(50, 50)).(color.RGBA)
+	fmt.Printf("green dominates: %t\n", c.G > c.R && c.G > c.B)
+	// Output:
+	// green dominates: true
 }
