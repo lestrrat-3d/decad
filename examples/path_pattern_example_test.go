@@ -211,3 +211,52 @@ func Example_path_pattern_pivot() {
 	// pivot (0, 0): x 6..10, y 10..14
 	// pivot (2, 2): x 10..14, y 10..14
 }
+
+// PathPatternJoin repeats a part along a path and unites every copy with a base
+// body in one step: here three 4 mm pegs on a bar, 10 mm apart along its length.
+func Example_path_pattern_join() {
+	doc := decad.New()
+	build := func(x1, y1 float64, height float64) (*decad.Body, error) {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		if err != nil {
+			return nil, err
+		}
+		rect := s.CreateRectangle(0, 0, x1, y1)
+		s.Fix(rect.A)
+		if _, err := s.Solve(context.Background()); err != nil {
+			return nil, err
+		}
+		return decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	}
+	bar, err := build(30, 4, 1)
+	if err != nil {
+		fmt.Printf("failed to build the bar: %s\n", err)
+		return
+	}
+	peg, err := build(4, 4, 2)
+	if err != nil {
+		fmt.Printf("failed to build the peg: %s\n", err)
+		return
+	}
+	path, err := decad.NewPath(r3.Vec{}, decad.LineTo{End: r3.Vec{X: 20}})
+	if err != nil {
+		fmt.Printf("failed to build path: %s\n", err)
+		return
+	}
+	joined, err := decad.PathPatternJoin(context.Background(), bar, peg, path, 3)
+	if err != nil {
+		fmt.Printf("failed to join: %s\n", err)
+		return
+	}
+	volume, err := joined.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	// The bar holds 120 mm^3 and each peg adds the 16 mm^3 that stands above it.
+	fmt.Printf("bodies: %d, volume: %.0f mm^3\n", len(doc.Bodies()), volume.Value.Base())
+	// Output:
+	// bodies: 1, volume: 168 mm^3
+}

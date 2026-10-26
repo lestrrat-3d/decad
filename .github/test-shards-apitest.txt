@@ -2468,3 +2468,6 @@
 10	0.01	TestEmbossRimFilletRefusalsLeaveTheBodyLive
 10	0.01	TestThreadLeadInChamfersBothEndsBeforeTheThread
 10	0.01	TestThreadLeadInRefusals
+10	0.01	TestPathPatternJoinUnitesTheInstancesWithTheTarget
+10	0.01	TestPathPatternJoinSpacedPlacesTheCopiesByDistance
+10	0.01	TestPathPatternJoinRefusalsLeaveBothBodiesLive
