@@ -128,6 +128,7 @@ configuration option.
 | `decad.MeshImportOption` | option set | A limit on `decad.ReadSTL` or `decad.ReadOBJ`: `decad.WithMaxMeshTriangles` or `decad.WithMaxMeshBytes`. | The caller |
 | `decad.MeshReport` | struct | The counts a mesh body reads from its triangles: edges by use, shells, zero-area triangles, closed and inverted. | `MeshBody.Report` |
 | `decad.ArrangeBed` | struct | The flat area `decad.Arrange` fills: a corner, a width, a depth and a gap. | The caller |
+| `decad.ThreadSpec` | struct | One thread: the cylindrical face to cut and the pitch. | The caller |
 | `decad.HoleSpec` | struct | One hole: the face, a world point on it, the diameter, a depth, an optional head and an optional shape. | The caller |
 | `decad.HoleShape` | sealed interface | The cross-section of a hole that is not round. | The caller |
 | `decad.RectangularHole` | struct | A hole with a rectangular bore: width, height and a turn about the hole axis. | The caller |
