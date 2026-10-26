@@ -27,11 +27,33 @@ type piece struct {
 	start  r3.Vec
 	length float64
 	at     func(s float64) r3.Vec
+	// dir is the unit direction of travel at the length s.
+	dir func(s float64) r3.Vec
+}
+
+// Station is a point on the path and the unit direction of travel there.
+type Station struct {
+	Point, Tangent r3.Vec
 }
 
 // Sample returns count points, the first at start and the last at the path's
 // end, spaced at equal arc length along the path. count is at least 2.
 func Sample(start r3.Vec, segments []Segment, count int) ([]r3.Vec, error) {
+	stations, err := SampleStations(start, segments, count)
+	if err != nil {
+		return nil, err
+	}
+	points := make([]r3.Vec, len(stations))
+	for i, st := range stations {
+		points[i] = st.Point
+	}
+	return points, nil
+}
+
+// SampleStations is Sample with the direction of travel at each point. A point
+// where two segments meet takes the direction of the segment that holds it, and
+// the last point takes the direction at the path's end.
+func SampleStations(start r3.Vec, segments []Segment, count int) ([]Station, error) {
 	pieces := make([]piece, 0, len(segments))
 	total := 0.0
 	prev := start
@@ -44,7 +66,7 @@ func Sample(start r3.Vec, segments []Segment, count int) ([]r3.Vec, error) {
 		total += p.length
 		prev = seg.End
 	}
-	points := make([]r3.Vec, count)
+	points := make([]Station, count)
 	piece, offset := 0, 0.0
 	for i := range points {
 		want := total * float64(i) / float64(count-1)
@@ -53,10 +75,11 @@ func Sample(start r3.Vec, segments []Segment, count int) ([]r3.Vec, error) {
 			piece++
 		}
 		p := pieces[piece]
-		points[i] = p.at(min(max(want-offset, 0), p.length))
+		along := min(max(want-offset, 0), p.length)
+		points[i] = Station{Point: p.at(along), Tangent: p.dir(along)}
 	}
-	points[0] = start
-	points[count-1] = prev
+	points[0].Point = start
+	points[count-1].Point = prev
 	return points, nil
 }
 
@@ -69,7 +92,7 @@ func resolve(start r3.Vec, seg Segment) (piece, error) {
 		}
 		return piece{start: start, length: length, at: func(s float64) r3.Vec {
 			return start.Add(span.Scale(s / length))
-		}}, nil
+		}, dir: func(float64) r3.Vec { return span.Scale(1 / length) }}, nil
 	}
 	return resolveArc(start, seg.Through, seg.End)
 }
@@ -107,5 +130,28 @@ func resolveArc(a, b, c r3.Vec) (piece, error) {
 	return piece{start: a, length: sweep * radius, at: func(s float64) r3.Vec {
 		theta := s / radius
 		return centre.Add(e1.Scale(radius * math.Cos(theta))).Add(e2.Scale(radius * math.Sin(theta)))
+	}, dir: func(s float64) r3.Vec {
+		theta := s / radius
+		return e2.Scale(math.Cos(theta)).Sub(e1.Scale(math.Sin(theta)))
 	}}, nil
+}
+
+// turnTolerance is the sine of the angle below which two directions count as
+// parallel (or opposed) for Turn.
+const turnTolerance = 1e-12
+
+// Turn returns the shortest rotation that takes the unit direction from onto
+// the unit direction to: its axis, perpendicular to both, and its angle in
+// radians in [0, π). Equal directions turn by angle zero about the zero axis.
+// Opposite directions have no shortest turn and are ErrDegenerate.
+func Turn(from, to r3.Vec) (axis r3.Vec, angle float64, err error) {
+	cross := from.Cross(to)
+	sin, cos := cross.Len(), from.Dot(to)
+	if sin <= turnTolerance {
+		if cos < 0 {
+			return r3.Vec{}, 0, ErrDegenerate
+		}
+		return r3.Vec{}, 0, nil
+	}
+	return cross.Scale(1 / sin), math.Atan2(sin, cos), nil
 }

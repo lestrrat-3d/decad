@@ -2322,3 +2322,6 @@
 10	0.01	TestRibArcStandsOnThePocketFloor
 10	0.01	TestRibArcOverrunLengthensEachEndByArcLength
 10	0.01	TestRibArcRefusals
+10	0.01	TestPathPatternFollowTurnsCopiesWithThePath
+10	0.01	TestPathPatternFollowOnAStraightPathKeepsTheOrientation
+10	0.01	TestPathPatternFollowRefusals
