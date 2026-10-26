@@ -1562,6 +1562,7 @@
 10	0.00	TestDenotedLevelNestedPocketEndsOnTheFloor
 10	0.00	TestDenotedLevelEqualFloatsDifferentRationalsDecline
 10	0.00	TestDenotedLevelSplitInterfaceIsReused
+10	0.00	TestBrepLoopFilletReflexMeridiansLieOnTheirCircles
 7	0.01	TestSurfaceRevolveSheetReachesNoBoolean
 7	0.07	TestSurfaceSplitRevolveRefusals
 7	0.00	TestSurfaceTrimKeepOutsideSplitsIntoTwoRibbons

@@ -302,7 +302,11 @@ func attachFilletBand(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 					return nil, bandMass{}, fmt.Errorf(`%w: fillet band %d's LF6 corner %d has no connector arc`, decaderr.ErrUnsupported, bi, k)
 				}
 				arc.Convex = convex
-				trail[k] = meridian(j.PA, w, straightWalk(w, nil), arc.Start, sideV)
+				// The connector arc runs from the previous walk's offset foot
+				// PA to this walk's PB, so the trailing meridian stands on the
+				// previous walk's wall and takes that walk's axis.
+				prev := fr.Walks[(k+n-1)%n]
+				trail[k] = meridian(j.PA, w, straightWalk(prev, nil), arc.Start, sideV)
 				lead[k] = meridian(j.PB, w, straightWalk(w, nil), arc.End, sideV)
 			case filletband.Tangent:
 				prev := fr.Walks[(k+n-1)%n]

@@ -265,3 +265,85 @@ func TestBrepLoopFilletPublicRevolveCapRefuses(t *testing.T) {
 	require.ErrorContains(t, err, "not a swept meridian junction")
 	require.Equal(t, []*decad.Body{ring}, doc.Bodies())
 }
+
+// arcRat is a float vector's exact rational coordinates.
+type arcRat [3]*big.Rat
+
+func arcRatOf(v r3.Vec) arcRat {
+	return arcRat{new(big.Rat).SetFloat64(v.X), new(big.Rat).SetFloat64(v.Y), new(big.Rat).SetFloat64(v.Z)}
+}
+
+func (a arcRat) sub(b arcRat) arcRat {
+	var out arcRat
+	for i := range a {
+		out[i] = new(big.Rat).Sub(a[i], b[i])
+	}
+	return out
+}
+
+func (a arcRat) dot(b arcRat) *big.Rat {
+	s := new(big.Rat)
+	for i := range a {
+		s.Add(s, new(big.Rat).Mul(a[i], b[i]))
+	}
+	return s
+}
+
+func (a arcRat) cross(b arcRat) arcRat {
+	term := func(i, j int) *big.Rat {
+		return new(big.Rat).Sub(new(big.Rat).Mul(a[i], b[j]), new(big.Rat).Mul(a[j], b[i]))
+	}
+	return arcRat{term(1, 2), term(2, 0), term(0, 1)}
+}
+
+// TestBrepLoopFilletReflexMeridiansLieOnTheirCircles reads every Arc3 of the
+// L prism's filleted loops, whose one reflex corner records a connector arc
+// and the two meridians from its ends down to the side vertex, and checks in
+// exact rational arithmetic that each recorded circle holds its own edge:
+// both end vertices lie at the recorded radius from the centre, in the plane
+// through the centre perpendicular to Axis, and the quarter turn from Start
+// to End runs counter-clockwise about Axis. Each meridian stands on the wall
+// of the walk whose offset foot it starts from, so its Axis is that walk's
+// direction; every coordinate here is a dyadic rational, so the circles hold
+// exactly.
+func TestBrepLoopFilletReflexMeridiansLieOnTheirCircles(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name       string
+		normal, at r3.Vec
+	}{
+		{"top loop", r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 10)},
+		{"bottom loop", r3.NewVec(0, 0, -1), r3.Vec{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, l := polygonPrism(t, lPrism)
+			face := planeFacing(t, l, tc.normal, tc.at)
+			got, err := decad.Fillet(t.Context(), l, loopEdgeQuery(face.Loops()[0]), units.Millimeters(1.5))
+			require.NoError(t, err)
+			r2 := big.NewRat(9, 4)
+			meridians := 0
+			for _, e := range got.Edges() {
+				arc, ok := e.Curve().(decad.Arc3)
+				if !ok {
+					continue
+				}
+				r, err := arc.Radius.In(units.Millimeter)
+				require.NoError(t, err)
+				require.Equal(t, 1.5, r)
+				c, axis := arcRatOf(arc.Center), arcRatOf(arc.Axis)
+				s := arcRatOf(e.Start().Position().Value).sub(c)
+				en := arcRatOf(e.End().Position().Value).sub(c)
+				for _, d := range []arcRat{s, en} {
+					require.Zero(t, d.dot(d).Cmp(r2), "arc at %v: an end vertex is off the radius", arc.Center)
+					require.Zero(t, d.dot(axis).Sign(), "arc at %v about %v: an end vertex is off the circle's plane", arc.Center, arc.Axis)
+				}
+				require.Positive(t, s.cross(en).dot(axis).Sign(), "arc at %v about %v: the quarter turn runs clockwise", arc.Center, arc.Axis)
+				if arc.Axis.Z == 0 {
+					meridians++
+				}
+			}
+			require.Equal(t, 2, meridians, "the reflex corner records two meridians")
+		})
+	}
+}
