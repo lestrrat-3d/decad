@@ -328,7 +328,7 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 		// read those boxes, so prepare them before sharing their cache.
 		e.triBox(i)
 		if allQuery && !e.facetOpenFloat(i) {
-			if _, _, n := e.facet(i); zeroXpt(n) {
+			if zeroXpt(e.normal(i)) {
 				return false, nil
 			}
 		}
@@ -468,7 +468,7 @@ func (e *heldEmbedding) cleanPairs(query []int, queryFacet []bool, tree *heldBox
 	oriented := tree.oriented
 	for _, i := range query {
 		if !e.facetOpenFloat(i) {
-			if _, _, n := e.facet(i); zeroXpt(n) {
+			if zeroXpt(e.normal(i)) {
 				return false, nil
 			}
 		}
@@ -755,19 +755,29 @@ func (e *heldEmbedding) facet(i int) ([3]r3.Vec, [3]proof.Xpt, proof.Xpt) {
 	t := e.h.Tris[i]
 	f := [3]r3.Vec{e.h.Verts[t[0]], e.h.Verts[t[1]], e.h.Verts[t[2]]}
 	x := [3]proof.Xpt{e.lift(t[0]), e.lift(t[1]), e.lift(t[2])}
+	return f, x, e.normal(i)
+}
+
+// normal computes the held facet's exact normal without materializing
+// homogeneous vertex lifts.
+func (e *heldEmbedding) normal(i int) proof.Xpt {
 	if !e.normOK[i] {
-		e.norm[i] = proof.Xcross(proof.Xsub(x[1], x[0]), proof.Xsub(x[2], x[0]))
+		t, v := e.h.Tris[i], e.h.Verts
+		a, b, c := proof.DyVec(v[t[0]]), proof.DyVec(v[t[1]]), proof.DyVec(v[t[2]])
+		n := proof.DvCross(proof.DvSub(b, a), proof.DvSub(c, a))
+		// A stripped power-of-two weight gives the same unique integer
+		// representation as the homogeneous subtraction and cross-product path.
+		e.norm[i] = proof.Xpt(proof.XhpStripTwosOwned(proof.XhpOfDyadics(n[0], n[1], n[2])))
 		e.normOK[i] = true
 	}
-	return f, x, e.norm[i]
+	return e.norm[i]
 }
 
 // floatNorm is facet i's exact normal rounded to float64, computed on first
 // use: only the triangle-pair classifier reads it.
 func (e *heldEmbedding) floatNorm(i int) r3.Vec {
 	if !e.fnormOK[i] {
-		_, _, n := e.facet(i)
-		e.fnorm[i] = n.Vec()
+		e.fnorm[i] = e.normal(i).Vec()
 		e.fnormOK[i] = true
 	}
 	return e.fnorm[i]
@@ -1075,8 +1085,7 @@ func (e *heldEmbedding) pairSeparated(i, j int, sharedI, sharedJ []int) (bool, b
 		// A nondegenerate facet sharing this edge is coplanar exactly when
 		// its other corner lies on i's plane. The repair and serial scans
 		// need no canonical plane key for this decision.
-		_, _, ni := e.facet(i)
-		_, _, nj := e.facet(j)
+		ni, nj := e.normal(i), e.normal(j)
 		if zeroXpt(ni) || zeroXpt(nj) {
 			return false, true, pairSideSigns{}
 		}
@@ -1161,7 +1170,7 @@ func (e *heldEmbedding) planeOf(i int) int {
 	if e.plane[i] != -1 {
 		return e.plane[i]
 	}
-	_, x, n := e.facet(i)
+	n := e.normal(i)
 	if zeroXpt(n) {
 		e.plane[i] = -2
 		return -2
@@ -1184,10 +1193,11 @@ func (e *heldEmbedding) planeOf(i int) int {
 	} else {
 		e.planeSense[i] = 1
 	}
-	off := new(big.Int).Mul(d[0], x[0].X)
-	off.Add(off, new(big.Int).Mul(d[1], x[0].Y))
-	off.Add(off, new(big.Int).Mul(d[2], x[0].Z))
-	key := planeKey(d, off, x[0].W)
+	x := e.lift(e.h.Tris[i][0])
+	off := new(big.Int).Mul(d[0], x.X)
+	off.Add(off, new(big.Int).Mul(d[1], x.Y))
+	off.Add(off, new(big.Int).Mul(d[2], x.Z))
+	key := planeKey(d, off, x.W)
 	id, ok := e.planes[string(key)]
 	if !ok {
 		id = len(e.planes)
@@ -1226,7 +1236,7 @@ func planeKey(d [3]*big.Int, off, w *big.Int) []byte {
 // planeAxes is the projection that keeps facet i's plane non-degenerate, or
 // false for a facet with no plane.
 func (e *heldEmbedding) planeAxes(i int) (int, int, bool) {
-	_, _, n := e.facet(i)
+	n := e.normal(i)
 	if zeroXpt(n) {
 		return 0, 0, false
 	}
@@ -1298,8 +1308,8 @@ func (e *heldEmbedding) planeSign(f, p int) int {
 		}
 		return s
 	}
-	_, x, n := e.facet(f)
-	sign := proof.XdotDiffSign(n, e.lift(p), x[0])
+	n := e.normal(f)
+	sign := proof.XdotDiffSign(n, e.lift(p), e.lift(t[0]))
 	if cache {
 		e.sideSigns[key] = int(e.planeSense[f]) * sign
 	}
@@ -1309,7 +1319,7 @@ func (e *heldEmbedding) planeSign(f, p int) int {
 // facetFailures returns the facets j that facet i meets improperly, and
 // whether i itself has collapsed to no plane.
 func (e *heldEmbedding) facetFailures(i int) ([]int, bool, error) {
-	if _, _, n := e.facet(i); zeroXpt(n) {
+	if zeroXpt(e.normal(i)) {
 		return nil, true, nil
 	}
 	cands, err := e.candidates(i)
@@ -1722,7 +1732,7 @@ func ExactRigidImage(b r3.Basis, t, p r3.Vec) proof.Xpt {
 func (e *heldEmbedding) serialClean(query []int, queryFacet []bool) (bool, error) {
 	for _, i := range query {
 		if !e.facetOpenFloat(i) {
-			if _, _, n := e.facet(i); zeroXpt(n) {
+			if zeroXpt(e.normal(i)) {
 				return false, nil
 			}
 		}

@@ -3,6 +3,7 @@ package meshbool
 import (
 	"math"
 	"math/big"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -10,6 +11,61 @@ import (
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
+
+func TestHeldFacetNormalMatchesHomogeneousArithmetic(t *testing.T) {
+	t.Parallel()
+	check := func(points [3]r3.Vec, sample int) {
+		t.Helper()
+		reference := func() proof.Xpt {
+			a, b, c := proof.XptOf(points[0]), proof.XptOf(points[1]), proof.XptOf(points[2])
+			return proof.Xcross(proof.Xsub(b, a), proof.Xsub(c, a))
+		}
+		same := func(got, want proof.Xpt) {
+			t.Helper()
+			for axis, pair := range [4][2]*big.Int{{got.X, want.X}, {got.Y, want.Y}, {got.Z, want.Z}, {got.W, want.W}} {
+				require.Zero(t, pair[0].Cmp(pair[1]), "sample %d coordinate %d", sample, axis)
+			}
+		}
+		e := newHeldEmbedding(HeldRounding{Verts: append([]r3.Vec(nil), points[:]...), Tris: [][3]int{{0, 1, 2}}},
+			proofbound.NewWorkBudget(t.Context()), false)
+		want := reference()
+		first := e.normal(0)
+		same(first, want)
+		for axis := range 3 {
+			require.False(t, e.xvOK[axis], "sample %d: normal materialized vertex %d", sample, axis)
+		}
+		_, _, cached := e.facet(0)
+		same(cached, want)
+		points[1] = points[1].Scale(-1)
+		e.setVert(1, points[1])
+		changed := e.normal(0)
+		same(changed, reference())
+		same(first, want)
+	}
+	for i, points := range [][3]r3.Vec{
+		{},
+		{{}, {X: 1}, {X: 2}},
+		{{X: 0.1, Y: -2.25, Z: 3.5}, {X: -1.75, Y: 0.375, Z: 4.125}, {Y: 2.5}},
+		{{X: math.SmallestNonzeroFloat64}, {Y: math.MaxFloat64}, {Z: -1}},
+	} {
+		check(points, i)
+	}
+	rng := rand.New(rand.NewPCG(229, 257))
+	for sample := range 200 {
+		var points [3]r3.Vec
+		finite := func() float64 {
+			if sample%2 != 0 {
+				return math.Ldexp(rng.Float64()-0.5, rng.IntN(41)-20)
+			}
+			bits := rng.Uint64() &^ (uint64(0x7ff) << 52)
+			return math.Float64frombits(bits | (rng.Uint64()%0x7ff)<<52)
+		}
+		for i := range points {
+			points[i] = r3.NewVec(finite(), finite(), finite())
+		}
+		check(points, sample+4)
+	}
+}
 
 func TestHeldOrient2MatchesRationalCross(t *testing.T) {
 	t.Parallel()
