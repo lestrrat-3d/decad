@@ -216,7 +216,8 @@ func (p Projection) plane(v r3.Vec) (x, y, depth float64) {
 // carries meaning for a perspective one.
 func (p Projection) Project(v r3.Vec) (x, y, depth float64) {
 	px, py, depth := p.plane(v)
-	return float64(p.Width)/2 + (px-p.centreX)*p.scale, float64(p.Height)/2 - (py-p.centreY)*p.scale, depth
+	x, y = p.Plane(px, py)
+	return x, y, depth
 }
 
 // Plane returns the pixel position of the point (x, y) of the image plane,
@@ -224,7 +225,12 @@ func (p Projection) Project(v r3.Vec) (x, y, depth float64) {
 // right and y up, as [Projection.Project] places a world point there. y grows
 // downward in the result.
 func (p Projection) Plane(x, y float64) (px, py float64) {
-	return float64(p.Width)/2 + (x-p.centreX)*p.scale, float64(p.Height)/2 - (y-p.centreY)*p.scale
+	// Round each scaled displacement before adding the pixel origin. A fused
+	// multiply-add can otherwise place a fitted edge just below its integer
+	// pixel boundary, where floor selects the neighbouring pixel.
+	dx := float64((x - p.centreX) * p.scale)
+	dy := float64((y - p.centreY) * p.scale)
+	return float64(p.Width)/2 + dx, float64(p.Height)/2 - dy
 }
 
 // PixelSize is the length in millimetres one pixel spans in the image plane.
