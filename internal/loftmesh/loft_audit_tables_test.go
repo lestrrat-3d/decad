@@ -331,6 +331,32 @@ func TestLoftAuditConstructorsMatchSerialReference(t *testing.T) {
 	requireSameLoftTables(t, tris, nil, wantCompact, newCompactLoftAuditData(verts, tris))
 }
 
+func TestLoftAuditNormalsUseExactCoordinates(t *testing.T) {
+	t.Parallel()
+	var exact []proof.Xpt
+	for _, p := range []r3.Vec{{X: 0.1}, {Y: 0.3}, {Z: 0.7}, {X: -0.4, Y: 0.6}} {
+		exact = append(exact, proof.ExactAffineImage(r3.Vec{X: 0.1, Y: 0.2}, r3.Vec{Y: 0.3, Z: 0.1},
+			r3.Vec{X: 0.7, Z: 0.9}, r3.Vec{X: 0.4, Y: 0.2}, p))
+	}
+	tris := [][3]int{{0, 1, 2}, {0, 2, 3}}
+	for _, denominator := range []int64{2, 3} {
+		points := slices.Clone(exact)
+		points[0] = proof.Xlerp(exact[0], exact[1], big.NewInt(1), big.NewInt(denominator))
+		verts := make([]r3.Vec, len(points))
+		for i, p := range points {
+			verts[i] = p.Vec()
+		}
+		require.False(t, proof.XptDenotes(points[0], verts[0]), "the exact producer differs from its rounded image")
+		for _, compact := range []bool{false, true} {
+			want := legacyLoftAuditDataSelected(verts, points, tris, nil, compact)
+			got := newLoftAuditDataSelected(verts, points, tris, nil, compact, 1)
+			requireSameLoftTables(t, tris, nil, want, got)
+		}
+		want := legacyLoftAuditDataSelected(verts, points, tris, nil, false)
+		requireSameLoftTables(t, tris, nil, want, NewLoftAuditDataWithExact(verts, points, tris))
+	}
+}
+
 func TestLoftDataWorkersSerialOnNonFiniteVertex(t *testing.T) {
 	verts, tris := loftTableTube(520)
 	require.GreaterOrEqual(t, len(tris), loftDataParallelMin)
