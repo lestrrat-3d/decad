@@ -15,7 +15,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `mesh_import.go` | Public `ReadSTL`, `ReadOBJ`, their options and `ErrMalformedMesh`, `ErrMeshTooLarge`: limits, then `internal/meshparse/` parses and `NewMeshBody` reads the result. See mesh-import design. |
 | `internal/meshparse/` | STL and OBJ parsing into welded vertices and triangles, with size limits. See mesh-import design. |
 | `internal/meshbody/` | Exact edge classification, shell count, signed volume and area interval of an imported mesh. See mesh-import design. |
-| `export/` | STL, OBJ, 3MF and AP214 writers. See `agent-docs/step-export-design.md`, `agent-docs/3mf-export-design.md`. |
+| `export/` | STL, OBJ, 3MF, glTF and AP214 writers. See `agent-docs/step-export-design.md`, `agent-docs/3mf-export-design.md`, `agent-docs/gltf-export-design.md`. |
 | `linkage/` | The generic linkage model, its loop and drive solver, and the linkage and joint-box checks over the motion engine. `decad` aliases it. See `agent-docs/linkage-check-design.md`. |
 | `report/` | Result vocabulary generic over body, face, edge and vertex references: measurements, outcome enums, contact, sweep and Verify records. `decad` aliases it. See api-design §6.4. |
 
