@@ -16,10 +16,10 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// Fillet fillets the selected rims of b, a mesh Boolean result with retained
-// tags. recognized is false when some selected edge is not a closed circular
-// rim between a retained plane and a coaxial retained cylinder; the caller
-// then keeps its own refusal. All edges must be non-nil.
+// Fillet fillets the selected edges of b, a mesh Boolean result with retained
+// tags. recognized is false when some selected edge is in no class of
+// agent-docs/retained-edge-blend-design.md Table RR; the caller then keeps its own
+// refusal. All edges must be non-nil.
 func Fillet(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Payload, edges []*topo.Edge,
 	radius, radiusDelta float64) (*topo.Body, bool, error) {
 	return blend(ctx, env, b, fp, edges, blendSpec{fillet: true, r: radius}, radiusDelta, "fillet")
@@ -52,6 +52,7 @@ type edgeKind int
 
 const (
 	closedRim edgeKind = iota
+	sphereRimKind
 	straightLine
 	cylinderLine
 	openArc
@@ -64,8 +65,8 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 		return nil, false, nil
 	}
 	for _, e := range edges {
-		if !looksLikeRim(e) && !looksLikeLine(e) && !looksLikeCylLine(e) && !looksLikeArc(e) &&
-			!looksLikeCylCyl(e) {
+		if !looksLikeRim(e) && !looksLikeSphereRim(e) && !looksLikeLine(e) && !looksLikeCylLine(e) &&
+			!looksLikeArc(e) && !looksLikeCylCyl(e) {
 			return nil, false, nil
 		}
 	}
@@ -164,6 +165,15 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				return nil, true, err
 			}
 			targets[i].lineKey, targets[i].kind = c.key(), cylinderLine
+		case looksLikeSphereRim(e):
+			s, err := readSphereRim(e, fp, faceIndex)
+			if err != nil {
+				return nil, true, err
+			}
+			if err := s.checkSize(spec); err != nil {
+				return nil, true, err
+			}
+			targets[i].rimKey, targets[i].kind = s.key(), sphereRimKind
 		default:
 			r, err := readRim(e, fp, faceIndex)
 			if err != nil {
@@ -173,10 +183,11 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				return nil, true, err
 			}
 			targets[i].rimKey, targets[i].kind = r.key(), closedRim
-			for _, earlier := range targets[:i] {
-				if earlier.kind == closedRim && earlier.rimKey == targets[i].rimKey {
-					return nil, true, fmt.Errorf("%w: the selection names one rim twice", decaderr.ErrDegenerate)
-				}
+		}
+		for _, earlier := range targets[:i] {
+			if (earlier.kind == closedRim || earlier.kind == sphereRimKind) && earlier.kind == targets[i].kind &&
+				earlier.rimKey == targets[i].rimKey {
+				return nil, true, fmt.Errorf("%w: the selection names one rim twice", decaderr.ErrDegenerate)
 			}
 		}
 	}
@@ -193,8 +204,12 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				e, ok = findCylCyl(cur, targets[i].lineKey, 64*ulp*math.Max(1, math.Abs(targets[i].lineKey.p0.X)))
 			case cylinderLine:
 				e, ok = findCylLine(cur, targets[i].lineKey, 64*ulp*math.Max(1, math.Abs(targets[i].lineKey.p0.X)))
+			case sphereRimKind:
+				e, ok = findRim(cur, targets[i].rimKey, 64*ulp*math.Max(1, math.Abs(targets[i].rimKey.radius)),
+					looksLikeSphereRim)
 			default:
-				e, ok = findRim(cur, targets[i].rimKey, 64*ulp*math.Max(1, math.Abs(targets[i].rimKey.radius)))
+				e, ok = findRim(cur, targets[i].rimKey, 64*ulp*math.Max(1, math.Abs(targets[i].rimKey.radius)),
+					looksLikeRim)
 			}
 			if !ok {
 				return nil, true, fmt.Errorf("%w: a selected edge is no longer an edge of the partly blended body", decaderr.ErrUnsupported)
@@ -238,6 +253,14 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			if err == nil {
 				next, err = rewriteCylLine(ctx, env, curFP, c, step, role, i, faceIndex)
 			}
+		case sphereRimKind:
+			var s sphereRim
+			if s, err = readSphereRim(e, curFP, faceIndex); err == nil {
+				step, err = spec.assign(targets[i].ref, s.planeFace, s.wallFace)
+			}
+			if err == nil {
+				next, err = rewriteSphereRim(ctx, env, curFP, s, step, role, i, faceIndex)
+			}
 		default:
 			var r rim
 			if r, err = readRim(e, curFP, faceIndex); err == nil {
@@ -268,16 +291,23 @@ func rewriteRim(ctx context.Context, env topo.Env, fp facetedrecord.Payload, r r
 	w := newWork(fp, r, spec)
 	// looksLikeRim admitted the face, so its plane tag reads.
 	planeTag, _ := retainedPlane(r.planeFace)
-	ringA, groupA, err := w.rewritePlane(faceIndex[r.planeFace], planeTag)
+	ringA, groupA, err := w.rewritePlane(faceIndex[r.planeFace], planeTag, spec.planeSetback())
 	if err != nil {
 		return nil, err
 	}
-	ringB, groupB, err := w.rewriteWall(faceIndex[r.wallFace])
+	ringB, groupB, err := w.rewriteWall(faceIndex[r.wallFace], spec.wallSetback(), r.radius, false)
 	if err != nil {
 		return nil, err
 	}
-	tag := w.tag()
-	groups := append([]facetedrecord.Group(nil), fp.Groups...)
+	return w.finishRim(ctx, env, w.tag(), ringA, ringB, [2]int{groupA, groupB}, role, ord)
+}
+
+// finishRim adds the blend face's group, emits the strip between the plane's
+// ring and the wall's, and builds the body. shrunk are the groups of the plane
+// and the wall.
+func (w *work) finishRim(ctx context.Context, env topo.Env, tag blendTag, ringA, ringB []ringPt, shrunk [2]int,
+	role string, ord int) (*topo.Body, error) {
+	groups := append([]facetedrecord.Group(nil), w.fp.Groups...)
 	blendGroup := len(groups)
 	groups = append(groups, facetedrecord.Group{
 		Origins:  []provenance.Ref{{Producer: env.Ref, Role: role}},
@@ -286,9 +316,9 @@ func rewriteRim(ctx context.Context, env topo.Env, fp facetedrecord.Payload, r r
 		Retained: true,
 		Reversed: tag.reversed,
 	})
-	// The two shrunk faces keep their planes and cylinders but lose the
-	// whole-group centroid certificate.
-	for _, g := range []int{groupA, groupB} {
+	// The two shrunk faces keep their surfaces but lose the whole-group
+	// centroid certificate.
+	for _, g := range shrunk {
 		groups[g].HasCentroid = false
 		groups[g].Centroid = measurement.VecMeasurement{}
 	}

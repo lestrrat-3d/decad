@@ -107,10 +107,11 @@ func clearance(gap, margin float64, what string) error {
 }
 
 // rewritePlane replaces the plane face's facets: the rim loop gives way to a
-// polygon on the plane's setback circle, and the face is triangulated again
-// over its remaining boundary loops (§5 step 2, R2). A vertex no loop reaches
-// is dropped with the old facets when it lies exactly on the plane g.
-func (w *work) rewritePlane(fi int, g plane) ([]ringPt, int, error) {
+// polygon on the plane's setback circle, at distance ta from the rim along the
+// plane, and the face is triangulated again over its remaining boundary loops
+// (§5 step 2, R2 and R6). A vertex no loop reaches is dropped with the old
+// facets when it lies exactly on the plane g.
+func (w *work) rewritePlane(fi int, g plane, ta float64) ([]ringPt, int, error) {
 	r := w.r
 	facets := facetsOfFace(w.fp.FaceOf, fi)
 	group, err := w.groupOf(facets)
@@ -153,7 +154,6 @@ func (w *work) rewritePlane(fi int, g plane) ([]ringPt, int, error) {
 		}
 	}
 
-	ta := w.spec.planeSetback()
 	rhoA := r.radius + r.kappa*ta
 	lo, hi := min(r.radius, rhoA), max(r.radius, rhoA)
 	for li, loop := range loops {
@@ -285,9 +285,18 @@ func (w *work) segmentRadialRange(p, q r3.Vec) (float64, float64) {
 	return low, math.Max(math.Hypot(a.u, a.w), math.Hypot(b.u, b.w))
 }
 
-// rewriteWall cuts the wall at the blend's setback height and keeps the part
-// beyond it (§5 step 2, R2). It returns the cut ring, sorted by angle.
-func (w *work) rewriteWall(fi int) ([]ringPt, int, error) {
+// rewriteWall cuts the wall by the plane at depth tb below the rim's plane, on
+// the wall's side, and keeps the part beyond it (§5 step 2, R2 and R6). The
+// removed band is a zone of a cylinder or a sphere of radius bandRadius, whose
+// exact area is 2π·bandRadius·tb either way. A cylinder's held facets have
+// their vertices on the wall's boundary, so every vertex but the rim's must
+// clear the band: a vertex in it is another face's corner the blend would
+// meet. A sphere's facets also hold vertices inside the face, the tessellation
+// of a doubly curved surface and no feature of it: with curved set, only the
+// boundary loops' vertices must clear the band, and the cut removes an inner
+// vertex with its facets or keeps it, by which side of the cut plane its held
+// position lies on. It returns the cut ring, sorted by angle.
+func (w *work) rewriteWall(fi int, tb, bandRadius float64, curved bool) ([]ringPt, int, error) {
 	r := w.r
 	facets := facetsOfFace(w.fp.FaceOf, fi)
 	group, err := w.groupOf(facets)
@@ -295,7 +304,19 @@ func (w *work) rewriteWall(fi int) ([]ringPt, int, error) {
 		return nil, 0, err
 	}
 	slack := r.slack()
-	tb := w.spec.wallSetback()
+	var inLoop map[int]struct{}
+	if curved {
+		loops, err := boundaryLoops(w.fp.Tris, facets)
+		if err != nil {
+			return nil, 0, err
+		}
+		inLoop = map[int]struct{}{}
+		for _, loop := range loops {
+			for _, v := range loop {
+				inLoop[v] = struct{}{}
+			}
+		}
+	}
 	rimVerts := 0
 	g := map[int]float64{}
 	for _, f := range facets {
@@ -310,6 +331,10 @@ func (w *work) rewriteWall(fi int) ([]ringPt, int, error) {
 				continue
 			}
 			gv := r.side*r.height(p) - tb
+			if _, onLoop := inLoop[v]; curved && !onLoop {
+				g[v] = gv
+				continue
+			}
 			if err := clearance(gv, w.beta[v]+slack+w.tau, "the wall"); err != nil {
 				return nil, 0, err
 			}
@@ -363,7 +388,7 @@ func (w *work) rewriteWall(fi int) ([]ringPt, int, error) {
 		}
 	}
 	w.removed = append(w.removed, facets...)
-	w.removedTrue += 2 * math.Pi * r.radius * tb
+	w.removedTrue += 2 * math.Pi * bandRadius * tb
 
 	ring := make([]ringPt, 0, len(cuts))
 	seen := map[int]bool{}

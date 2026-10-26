@@ -1,6 +1,9 @@
 package retainedblend
 
 import (
+	"fmt"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/stitchflux"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -33,4 +36,34 @@ func tagIsRecord(f *topo.Face) bool {
 		}
 	}
 	return stitchflux.TagIsDenoted(tagged)
+}
+
+// sphereIsRecord refuses a retained Sphere face whose tag is not exactly the
+// sphere its revolve record denotes (agent-docs/retained-edge-blend-design.md
+// §4.5). A face with no denoted patch is its own record. Otherwise every leaf of
+// the circular patch must be a point and its axis frame exactly orthonormal; the
+// recorded centre must lie on the axis and the tag's centre must be that axis
+// point exactly; and the recorded radius must be a point equal to the tag's
+// radius exactly. stitchflux.TagIsDenoted reads no radius, so the radius rule is
+// this route's own. Each test compares recorded rationals by exact equality and
+// never admits on a residual.
+func sphereIsRecord(f *topo.Face, s surfacegeom.Sphere) error {
+	if f.Denoted == nil {
+		return nil
+	}
+	r := *f.Denoted
+	ex, ok := stitchflux.ExactRevolveOf(r)
+	if !r.Valid || r.Cap || !r.Circular || !ok {
+		return fmt.Errorf("%w: the sphere's revolve record is not exact: its axis frame or centre is widened",
+			decaderr.ErrUnsupported)
+	}
+	if ex.Centre[1].Sign() != 0 || !ex.AtAxis(s.Center, ex.Centre[0]) {
+		return fmt.Errorf("%w: the sphere's tag centre is not exactly its recorded centre on the revolve axis",
+			decaderr.ErrUnsupported)
+	}
+	radius, ok := stitchflux.RatMillimetres(s.Radius)
+	if !ok || ex.Radius == nil || ex.Radius.Cmp(radius) != 0 {
+		return fmt.Errorf("%w: the sphere's tag radius is not exactly its recorded radius", decaderr.ErrUnsupported)
+	}
+	return nil
 }

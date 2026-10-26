@@ -54,12 +54,15 @@ is read only where its tag IS the surface its record denotes, decided by
 `stitchflux.TagIsDenoted` on recorded data by exact equality: every leaf of the
 patch is a point, the axis frame is exactly orthonormal in rationals, and the
 tag equals the denoted cylinder or plane exactly. Nothing is admitted on a
-residual. Only a `Plane` or `Cylinder` tag is considered: the route refuses a
-`Cone`, `Sphere` or `Torus` tag before it asks `TagIsDenoted`. A widened patch,
+residual. Only a `Plane` or `Cylinder` tag is considered here: R1–R5 refuse a
+`Cone`, `Sphere` or `Torus` tag before they ask `TagIsDenoted`. A widened patch,
 a partial-sweep cap, a rotated placement and an off-axis sketch line fail the
 test and stay SR1. An admitted face is read as a retained `Plane` or `Cylinder`
 tag, and every other gate of the route (the edge class, the end faces, the
 setback and clearance gates) applies to it as to any retained face.
+
+A `Sphere` face is read only by R6, through its own exact-record rule (§4.5):
+`TagIsDenoted`'s sphere arm reads the centre and no radius, and R6 needs both.
 
 **Interior vertices of an end face.** A revolve's end disc is triangulated as a
 fan around a centre vertex on the axis, so the held end face has a vertex that
@@ -84,6 +87,7 @@ Table RR lists the edges a blend can be built on. The others are refused.
 | **R3** | `Line3` of retention E4 | retained `Plane` and a `Cylinder` whose axis lies in the plane, ending on retained planes normal to the axis | `Cylinder` / `Plane` | increment B3; equal or two-distance chamfer |
 | **R4** | `Arc3` | as R2, open, ending on planes parallel to the axis | as R2 | ends on two distinct retained planes; equal or two-distance chamfer; an arc whose ends meet one face is refused |
 | **R5** | `Line3` of retention E10 | two retained `Cylinder`s with parallel axes, ending on retained planes normal to the axes | `Cylinder` / `Plane` | reach §8; equal or two-distance chamfer |
+| **R6** | `Circle3` of retention E5, closed | retained `Plane` and a retained `Sphere` whose tag is exactly its record (§4.5) | `Torus` / `Cone` | §4.5; equal or two-distance chamfer |
 
 Refused, with the reason a caller can act on:
 
@@ -93,8 +97,8 @@ Refused, with the reason a caller can act on:
   vocabulary has is `NURBSSurface`, an opaque marker with no geometry to carry
   a proof (spline §7). The rim keeps its published ellipse and the blend
   refuses (SR1).
-- **A `Cylinder`/`Cylinder` rim with crossing axes, a `Sphere` rim, a `Cone` or `Torus` face.**
-  No Table RR row; SR1.
+- **A `Cylinder`/`Cylinder` rim with crossing axes, an open (`Arc3`) plane-sphere
+  rim, a `Cone` or `Torus` face.** No Table RR row; SR1.
 - **A rim with a face that is not retained,** or whose edge is a chord chain
   because retention §10 declined it. SR1.
 
@@ -213,6 +217,74 @@ chain of exact points.
 
 The faces are rewritten as in R2 for the plane (a polygon on the setback arc)
 and the wall (the cut at the setback height), and as in R1 for the ends.
+
+### 4.5 R6, a plane-sphere rim
+
+The edge is the closed `Circle3` of retention E5 between a retained `Plane`
+(outward normal `n`, origin `o`) and a retained `Sphere` (centre `S`, radius
+`R_s`). It is the rim a placed cut leaves on a revolved ball or dome.
+
+**Exact record.** A `Sphere` face with a denoted patch (every Revolve sphere)
+is read only where its tag is exactly the sphere its record states. Each test
+compares recorded rationals by exact equality, and nothing is admitted on a
+residual:
+
+1. every leaf of the circular patch is a point and the axis frame is exactly
+   orthonormal (`stitchflux.ExactRevolveOf`);
+2. the recorded centre lies on the axis (`ρ = 0`), and the tag's centre is the
+   axis point at the recorded `z` exactly;
+3. the recorded radius is a point and equals the tag's radius exactly.
+
+`stitchflux.TagIsDenoted` reads the first two and no radius, so the third is
+this route's own. Each failure refuses SR1 with a message naming the leaf: a
+rotated placement fails the first, a half-disk centre within the snap
+tolerance of the axis fails the second, and a meridian whose recorded radius is
+no float (an arc to `2.1` about `0.1`) fails the third. A `Sphere` face with no
+denoted patch is its own record, as for every other kind (§2).
+
+**Rim.** Let `zs = n·(S − o)`. The rim's centre is `c = S − zs·n` and its radius
+`ρ0 = √(R_s² − zs²)`. `ρ0 / R_s` is the sine of the angle at which the plane
+crosses the sphere. A plane that misses or touches the sphere, or crosses it
+below `minSine` (`10⁻³`), refuses SR5: a nearly tangent rim is no edge the
+section can resolve. The published circle must be `(c, ρ0)` within slack (SR6).
+The wall's side, the convexity and the side of the rim the plane face lies on
+read as R2's: the held wall lies on one side of the plane, the edge's `Convex`
+flag must agree, and the plane face lies outside the rim exactly when the rim's
+convexity equals "the sphere's material is outside it" (`Reversed`).
+
+**Section.** Take the meridian half-plane `(ρ, z)` about the axis through `S`
+along `n`, with the plane at `z = 0`, the rim's point `K = (ρ0, 0)` and the
+sphere the circle of radius `R_s` about `(0, zs)`. This is R3's line-circle
+cross-section (§4.3): the plane's face runs from `K` along `±ρ`, toward the
+plane face, and the wall along the circle's tangent at `K` toward the wall's
+side. The same solve gives the fillet ball's centre `(ρc, zc)`, its tangent
+points `T_A = (ρA, 0)` and `T_B = (ρB, zB)`, and the arc's rows. A chamfer's
+setbacks are `dA` along the plane and the arc length `dB` along the meridian.
+Revolving the section about the axis gives the blend: the `Torus` with
+`Center = c + zc·n`, `Axis = n`, `Major = ρc` and `Minor = r` (`Reversed` for
+a concave rim), or the `Cone` through the circles `(ρA, 0)` and `(ρB, zB)`,
+whose `Origin` is the narrower circle.
+
+**Size (SR3).** The rim refuses when no ball of radius `r` touches both faces,
+when the plane's setback circle reaches the axis (`ρA` within slack of 0), when
+the sphere's setback runs past the pole (`ρB` within slack of 0), and when the
+tangent point or the arc is degenerate (R3's tests).
+
+**Construction.** As R2 (§5). The plane's rim loop gives way to the polygon on
+the circle `ρA`, and the wall is cut by the plane `z = zB`, which meets the
+sphere in exactly the setback circle. A sphere's held facets carry vertices
+inside the face. Such a vertex is the tessellation of a doubly curved surface,
+not a feature of the face, so only the wall's boundary loops must clear the
+band (§6.2). The cut removes an inner vertex with its facets or keeps it, by the
+side of the cut plane its held position lies on. Where the band is thin against
+the wall's held vertex bounds, the clipped facets can fold; the rebuilt mesh
+then fails its audit (SR7).
+
+**Exact areas.** The plane loses the annulus `π·|ρA² − ρ0²|` and the sphere the
+zone `2π·R_s·|zB|` (Archimedes). The torus patch has area
+`2π·r·(ρc·φ + r·∫a_ρ dα)` by Pappus, with `a(α)` the unit vector from the ball's
+centre along the arc and `a_ρ` its radial part. The cone's frustum has
+`π·(ρA + ρB)·|T_A T_B|`.
 
 ## 5. Construction
 
@@ -336,11 +408,11 @@ of that computation.
 
 | SR | Call | Existence | Sentinel |
 |---|---|---|---|
-| **SR1** | an edge outside Table RR: a curve that is not `Line3` or `Circle3`, a face that is not `RetainedTag`, a face with `NormalBound != 0` or a denoted patch whose tag is not exactly the surface it denotes, or a `Convex` flag that disagrees with §4.1 | body exists; no admitted source for the selected edge | `ErrUnsupported` (reach SX9's text) |
+| **SR1** | an edge outside Table RR: a curve that is not `Line3` or `Circle3`, a face that is not `RetainedTag`, a face with `NormalBound != 0` or a denoted patch whose tag is not exactly the surface it denotes (for R6's sphere, its record's exact centre and radius, §4.5), or a `Convex` flag that disagrees with §4.1 | body exists; no admitted source for the selected edge | `ErrUnsupported` (reach SX9's text) |
 | **SR2** | two selected edges share a vertex, or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
-| **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, or a chamfer distance of zero or below | no regular blend | `ErrDegenerate` |
+| **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, a chamfer distance of zero or below, or an R6 setback that reaches the axis or runs past the sphere's pole (§4.5) | no regular blend | `ErrDegenerate` |
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
-| **SR5** | the setback might not fit and the held bounds cannot decide it, or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or `G`'s corner at the vertex does not match the edge (a convex edge needs a convex corner of `G`, a concave edge a reflex one), or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face, or another part of `G` comes within the blend's reach of the vertex | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
+| **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or `G`'s corner at the vertex does not match the edge (a convex edge needs a convex corner of `G`, a concave edge a reflex one), or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face, or another part of `G` comes within the blend's reach of the vertex | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
 | **SR6** | the held mesh disagrees with the exact vertex of its three tags by more than the vertex bound plus slack (§6.3) | the record and the mesh do not describe one solid | `ErrUnsupported` |
 | **SR7** | the rewritten mesh fails the held audit (watertight, no remote self-intersection, shells positive) | the result is invalid | `ErrDegenerate` when the audit proves a face inside out (modify S8), else `ErrUnsupported` |
 
@@ -368,6 +440,10 @@ nothing fitted.
   `σ` of §4.2 points. On the cylinder, every boundary vertex other than the
   rim's must lie at axial distance at least `t + b + slack` from the rim's
   plane.
+- **R6.** The plane as R2's, out to `ρA`. On the sphere, every vertex of a
+  boundary loop other than the rim's must lie at least `|zB| + b + slack` from
+  the rim's plane on the wall's side. A vertex inside the face is no feature and
+  is not gated (§4.5).
 
 ### 6.3 Bounds of the result
 
@@ -449,6 +525,10 @@ published bound, never with a pinned literal.
 | Clearance | a radius past the face width refuses `ErrDegenerate`; a radius within `b` of it refuses `ErrUnsupported` | drop the `− b_v` term of §6.2: the near case builds an invalid solid |
 | Shared vertex / tangent chain | refuse SR2 | |
 | Oblique plane/cylinder rim | refuse SR1 and keep the `Ellipse3` of retention §10.5 | |
+| Plane-sphere rim (R6): a Revolve ball cut by a placed box, fillet and chamfer | the removed volume equals the zone of the sphere down to `zB` less the solid under the torus (or the frustum), from the meridian's closed form; the area matches the cap's less the annulus and the zone plus the blend; the `Torus` has `Major = ρc` and `Minor = r`, the `Cone` starts at the narrower setback circle; `VerifyAll` passes | drop R6 from dispatch: SX9 |
+| R6 two-distance chamfer, and both rims of a twice-cut ball | the plane takes `dA`, the sphere's meridian `dB`; the second rim is found again on the partly blended body | |
+| R6 refusals | a snapped centre, a rounded radius and a rotated revolve refuse SR1 with their own messages; a ball too large, a plane setback past the axis and a sphere setback past the pole refuse SR3; a grazing crossing refuses SR5 (unit test) | delete each check: its fixture builds, and the rotated one panics on the unread record |
+| R6 inner wall vertices | a sphere zone that holds tessellation vertices builds | gate inner vertices as R2 gates the cylinder's: "the blend consumes the wall" |
 | Result is an ordinary retained body | a second blend on another edge, a `Cut` through the blended region and `Transform` all build; `NormalAt` on the blend face has a bound below 1 | store the blend with `Retained = false`: the chain loses the tag |
 | New vertex bounds | every new vertex lies within its stated bound of its exact point | skip the rounding charge: the bound is zero and the check fails |
 | Verify | `Verify` of a blended plate passes with no `Suspect` in watertightness | |
@@ -457,7 +537,7 @@ published bound, never with a pinned literal.
 
 | Area | Change |
 |---|---|
-| `internal/retainedblend/` | new: classification (Table RR), exact geometry (§4), clip, strip and end construction (§5), gates (§6) |
+| `internal/retainedblend/` | new: classification (Table RR), exact geometry (§4), clip, strip and end construction (§5), gates (§6); R6 in `sphere.go`, its exact-record rule in `denoted.go` |
 | `internal/facetedrecord/` | an entry that builds a payload from new vertices, triangles, groups and bounds; no change to `Build` |
 | `fillet.go`, `chamfer.go` | call the route before SX9 for a `facetedPayload`; thin wrappers only |
 | `agent-docs/modify-reach-design.md` | RX6 row and SX9 text; the sentence in §11 about what SX9 leaves a caller proving |
@@ -474,6 +554,7 @@ published bound, never with a pinned literal.
 | B2 | R1 fillet and equal-distance chamfer with planar end faces, SR5 | the 90° and 45° edge rows, the oblique-end row and the L-section concave row pass |
 | B3 | R3, a line between a plane and a parallel cylinder, ending on planes normal to the axis | the groove, chamfer and boss-foot rows of §9 pass |
 | B4 | R4, an open arc | as B1 for an arc with end faces |
+| B5 | R6, a closed plane-sphere rim (§4.5) | the R6 rows of §9 pass |
 
 ## 12. Rejected shortcuts
 
