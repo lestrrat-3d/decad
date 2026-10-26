@@ -527,8 +527,8 @@ tool is clipped to the target's interval, so it takes one of two arms:
 - The bottom arm: the tool ends strictly inside the target and starts at the
   target's first cap or before it.
 
-A tool that spans the whole interval, lies wholly inside it, or matches it
-continues to the ordinary boolean dispatch. A level may carry an axial
+A tool that spans the whole interval, lies wholly inside it, matches it, is
+disjoint from it, or touches it only at a cap continues to the ordinary boolean dispatch. A level may carry an axial
 displacement (an inch-converted depth does). Two levels compare by their exact
 rationals and order only when their gap exceeds the sum of both displacements.
 Equal levels count as one only when both are undisplaced. A gap inside the
@@ -538,7 +538,9 @@ order: it only has to be smaller than the gap. A displaced level reaches the
 result's face levels, so the volume reads `Approximate` with a proven bound,
 and a result with no displaced level reads `Exact`.
 
-The target's original section is the lower slab. For the reached slab, a
+In the top arm the target's original section is the lower slab and the cut
+section the upper; in the bottom arm the cut section is the lower slab and the
+target's section the upper. For the reached slab, a
 private Sketch scene requires `TExact` on every partial edge and classifies
 every cell, including cells with a hole, by each source region's recorded edge
 orientation. It retains cells inside the

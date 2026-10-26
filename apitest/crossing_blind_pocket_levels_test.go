@@ -166,10 +166,8 @@ func TestCrossingBlindPocketOnDisplacedPlate(t *testing.T) {
 
 // TestCrossingBlindPocketDeclinesUnprovenLevels cuts pockets whose end level
 // is not provably ordered against a plate cap. Each plate is built through an
-// inch conversion, so its top level carries a displacement. The millimetre
-// pocket ends at the top the conversion denotes, which is equal with a
-// displacement, and the inch pocket ends inside the plate's displacement. The
-// crossing route does not build, and the pair never becomes an exact brep.
+// inch conversion, so its top level carries a displacement. The crossing route
+// does not build, and the pair never becomes an exact brep.
 func TestCrossingBlindPocketDeclinesUnprovenLevels(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -177,10 +175,17 @@ func TestCrossingBlindPocketDeclinesUnprovenLevels(t *testing.T) {
 		height   float64
 		inchTool bool
 	}{
-		// 7.5 mm denotes exactly 7.5 with a displacement of 3.6e-16.
+		// The millimetre pocket ends at the top the conversion denotes, which
+		// is exactly 7.5 with a displacement of 3.6e-16: equal, but displaced.
 		{"equal-with-displacement", 7.5, false},
-		// Both tops are inch conversions 4.4e-16 mm apart, inside their displacements.
-		{"unequal-within-displacement", 9.25, true},
+		// The inch pocket's top lies above the plate's top by 1.1e-16 and
+		// 2.2e-16 mm, inside the sum of the two displacements. Without the
+		// margin rule these build as an overshoot.
+		{"above-within-displacement-1", 6.825, true},
+		{"above-within-displacement-2", 7.65, true},
+		// The inch pocket's top lies 4.4e-16 mm below the plate's top, so the
+		// tool ends inside the plate and no arm applies.
+		{"wholly-inside", 9.25, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -192,9 +197,7 @@ func TestCrossingBlindPocketDeclinesUnprovenLevels(t *testing.T) {
 			}
 			pocket := crossingPocketTool(t, doc, 6, depth, decad.Along)
 			part, err := decad.Cut(t.Context(), plate, pocket)
-			if err != nil {
-				return
-			}
+			require.NoError(t, err)
 			require.True(t, tookMeshPath(part), "class %s", decadtest.PayloadClass(part))
 		})
 	}

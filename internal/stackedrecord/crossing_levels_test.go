@@ -17,7 +17,7 @@ func oneSlab(z0, z1, d0, d1 float64) []stackedrecord.Slab {
 // equal levels that carry a displacement, give no levels.
 func TestCrossingBlindLevels(t *testing.T) {
 	t.Parallel()
-	const hair = 0x1p-50
+	const hair = 0x1p-50 // one ulp of 10 is 2*hair
 	target := oneSlab(0, 10, 0, 0)
 	for _, tc := range []struct {
 		name     string
@@ -41,7 +41,7 @@ func TestCrossingBlindLevels(t *testing.T) {
 		{"equal-cap-target-displaced", oneSlab(6, 10, 0, 0), oneSlab(0, 10, 0, hair), nil, nil, false},
 		{"equal-start-tool-displaced", oneSlab(0, 4, hair, 0), target, nil, nil, false},
 		// A gap inside the combined displacement orders nothing.
-		{"gap-inside-displacement-above-cap", oneSlab(6, 10+hair, 0, 0), oneSlab(0, 10, 0, 2*hair), nil, nil, false},
+		{"gap-inside-displacement-above-cap", oneSlab(6, 10+2*hair, 0, 0), oneSlab(0, 10, 0, 3*hair), nil, nil, false},
 		{"gap-inside-displacement-below-start", oneSlab(-hair, 4, 0, 0), oneSlab(0, 10, 2*hair, 0), nil, nil, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
