@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -15,13 +16,14 @@ import (
 )
 
 // ScaleImage returns the payload of body's positive uniform image about
-// anchor by factor s, from the certified similarity source fp. It refuses a
-// source that is neither an authenticated point-loft Split slab, a similarity
-// source, nor a Boolean result whose proof is complete, and a source that
-// retains an unretained denoted or curved surface.
+// anchor by factor s, from the certified similarity source fp. A source is an
+// authenticated point-loft Split slab, a marked similarity source, a marked
+// Boolean result whose proof fields are complete, or an unmarked faceted
+// solid whose proof fields are complete and whose held mesh passes
+// massmoment.AuditMesh now. Every other source refuses.
 // A retained Plane, Cylinder, Sphere or Torus tag keeps its tag at ScaleTag's image; a
-// retained Cone or denoted tag reads Faceted. Source roles are dropped; the
-// held mesh and its bounds follow the image.
+// retained Cone, any denoted tag and any unretained curved tag read Faceted.
+// Source records are dropped; the held mesh and its bounds follow the image.
 func ScaleImage(ctx context.Context, body *topo.Body, fp Payload, anchor r3.Vec, s float64) (Payload, error) {
 	next, _, err := ScaleImageWithSummary(ctx, body, fp, anchor, s)
 	return next, err
@@ -32,24 +34,29 @@ func ScaleImage(ctx context.Context, body *topo.Body, fp Payload, anchor r3.Vec,
 func ScaleImageWithSummary(ctx context.Context, body *topo.Body, fp Payload, anchor r3.Vec,
 	s float64) (Payload, *meshbool.EmbeddingReach, error) {
 	pointSlab := fp.PointPlane != nil && fp.PointPlane.Base.PointSection != nil
-	booleanSource := fp.BooleanSimilaritySource && body.Kind == topo.BodySolid && body.Solid
-	if (!pointSlab && !fp.SimilaritySource && !booleanSource) || !fp.Xform.IsValid() ||
+	solid := body.Kind == topo.BodySolid && body.Solid
+	booleanSource := fp.BooleanSimilaritySource && solid
+	// An unmarked faceted solid has no similarity mark, but its held mesh
+	// carries the same proof fields every faceted reading trusts. The mesh
+	// audit below supplies the embedding that ScaleMesh assumes.
+	facetedSource := !pointSlab && !fp.SimilaritySource && !fp.BooleanSimilaritySource && solid
+	if (!pointSlab && !fp.SimilaritySource && !booleanSource && !facetedSource) || !fp.Xform.IsValid() ||
 		len(fp.Verts) == 0 || len(fp.VertexBound) != len(fp.Verts) {
 		return Payload{}, nil, fmt.Errorf("%w: this body has no certified similarity source", decaderr.ErrUnsupported)
 	}
-	if booleanSource && !CertifiedBooleanSimilaritySource(fp, len(topobuild.Faces(body))) {
+	if booleanSource && !CertifiedFacetedSimilaritySource(fp, len(topobuild.Faces(body))) {
 		return Payload{}, nil, fmt.Errorf("%w: the Boolean similarity source has no complete proof", decaderr.ErrUnsupported)
+	}
+	if facetedSource {
+		if !CertifiedFacetedSimilaritySource(fp, len(topobuild.Faces(body))) {
+			return Payload{}, nil, fmt.Errorf("%w: the faceted similarity source has no complete proof", decaderr.ErrUnsupported)
+		}
+		if err := massmoment.AuditMesh(ctx, fp.Verts, fp.Tris, fp.ContactAudited); err != nil {
+			return Payload{}, nil, fmt.Errorf("the faceted similarity source failed its mesh audit: %w", err)
+		}
 	}
 	if fp.PointSimilarity != nil && fp.PointSimilarity.Slice != fp.PointPlane {
 		return Payload{}, nil, fmt.Errorf("%w: the slab similarity source does not match its Split source", decaderr.ErrUnsupported)
-	}
-	for _, group := range fp.Groups {
-		if group.Denoted != nil && !group.Retained {
-			return Payload{}, nil, fmt.Errorf("%w: a denoted surface has no similarity proof", decaderr.ErrUnsupported)
-		}
-		if _, ok := group.Surface.(surfacegeom.Plane); group.Surface != nil && !ok && !group.Retained {
-			return Payload{}, nil, fmt.Errorf("%w: a retained curved surface has no similarity proof", decaderr.ErrUnsupported)
-		}
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	mesh, err := facetproof.ScaleMesh(ctx, budget, fp.Verts, fp.Tris, fp.VertexBound,
@@ -105,6 +112,12 @@ func ScaleImageWithSummary(ctx context.Context, body *topo.Body, fp Payload, anc
 				return Payload{}, nil, err
 			}
 		}
+		if _, plane := group.Surface.(surfacegeom.Plane); !group.Retained &&
+			(group.Denoted != nil || group.Surface != nil && !plane) {
+			// An unretained curved or denoted tag has no similarity image
+			// here. Dropping it to Faceted claims less than the source did.
+			group.Surface, group.Denoted, group.NormalBound, group.Reversed = nil, nil, 0, false
+		}
 		if group.Retained && group.Denoted == nil {
 			// A uniform scale keeps every normal, so a retained Plane,
 			// Cylinder, Sphere or Torus keeps its tag at the image of ScaleTag.
@@ -137,6 +150,9 @@ func ScaleImageWithSummary(ctx context.Context, body *topo.Body, fp Payload, anc
 	}
 	if pointSlab {
 		CarryPointPlaneScale(fp, &next, anchor, s, mesh.Round)
+	} else {
+		// Only a Split slab carries its rational cut maps through a scale.
+		next.PointPlane, next.PointSimilarity, next.PointPlaneCapDisplacement = nil, nil, 0
 	}
 	if proofbound.IsNonFinite(next.DPair) || proofbound.IsNonFinite(next.PointPlaneCapDisplacement) {
 		return Payload{}, nil, fmt.Errorf("%w: the scaled source proof is not finite", decaderr.ErrUnsupported)

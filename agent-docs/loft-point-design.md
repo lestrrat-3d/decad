@@ -139,6 +139,12 @@ the original-source marker, so `Split` cannot re-enter the structural arm.
 Rebuilding a cap `Plane` frame may round its normal again; `NormalAt` reports
 the conservative two-unit direction bound used for placed planar tags.
 
+A point loft that is not a Split slab scales as an unmarked faceted solid
+(`agent-docs/evaluator-design.md` "Positive uniform scale of a prism, stack,
+solid Revolve, or faceted solid"). Its image drops the `PointSection` and
+`PointCone` records, so it no longer feeds a cone trim, a `Split` or a
+face-fed loft as a point-loft source.
+
 ## Coaxial finite cone trims
 
 `Cut` and `Intersect` retain the point loft's authenticated fan when the

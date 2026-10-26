@@ -12,13 +12,16 @@ import (
 
 // ScaledAt returns the positive uniform image of an authenticated point-loft
 // Split slab, exact line/circular solid prism, line-only stack or stack-backed
-// BRep, solid Revolve (complete or partial), or audited faceted Boolean result about anchor,
-// then retires b. A nil context or a nil b is ErrDegenerate.
+// BRep, solid Revolve (complete or partial), audited faceted Boolean result,
+// or other faceted solid whose held mesh passes its shell and crossing audit
+// about anchor, then retires b. A nil context or a nil b is ErrDegenerate.
 // Source roles and certified boundary and occupied-volume bounds follow the
 // image. A faceted Boolean result keeps the retained Plane, Cylinder, Sphere
 // and Torus surfaces of its faces, scaled with the body; a retained Cone or
-// denoted face reads Faceted. A refused or canceled call leaves the document
-// unchanged.
+// denoted face reads Faceted. Another faceted solid follows the same rule:
+// plane faces and retained Cylinder, Sphere and Torus faces keep their scaled
+// surfaces, and retained Cone, denoted and unretained curved faces read
+// Faceted. A refused or canceled call leaves the document unchanged.
 func ScaledAt(ctx context.Context, b *Body, anchor r3.Vec, factor units.Value) (result *Body, retErr error) {
 	defer func() { retErr = operationError(OperationScaledAt, retErr) }()
 	if ctx == nil {
