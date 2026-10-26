@@ -31,8 +31,8 @@ func TestThickenCompositeSweepSheetBuildsExactSolid(t *testing.T) {
 		area float64 // section area of the thickened annulus; an outward offset of the
 		// square rounds its corners
 	}{
-		{"outward", decad.ThickenPositive, 1, 8 + math.Pi},
-		{"inward", decad.ThickenNegative, 0.5, 4 - 1},
+		{"outward offset", decad.ThickenPositive, 1, 8 + math.Pi},
+		{"inward offset", decad.ThickenNegative, 0.5, 4 - 1},
 		{"both sides", decad.ThickenCentered, 1, 7 + math.Pi/4},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
