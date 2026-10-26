@@ -256,3 +256,31 @@ func TestPerspectiveBackFacesFollowTheLineOfSight(t *testing.T) {
 	got := img.RGBAAt(50, 50)
 	require.Greater(t, got.R, got.B, "a back face is orange")
 }
+
+func TestDrawDashedSkipsAfterEachDash(t *testing.T) {
+	t.Parallel()
+	verts := []r3.Vec{{X: -5, Y: -5}, {X: 5, Y: -5}, {X: 5, Y: 5}, {X: -5, Y: 5}}
+	cam := raster.Camera{Direction: r3.Vec{Z: -1}, Up: r3.Vec{Y: 1}}
+	proj, err := raster.NewProjection(verts, cam, 100, 100)
+	require.NoError(t, err)
+	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	red := color.RGBA{R: 255, A: 255}
+	// A horizontal line from pixel 5 to pixel 95, drawn 4 pixels and skipped 3, from its start.
+	raster.DrawDashed(img, proj, [][2][2]float64{{{-5, 0}, {5, 0}}}, red, 4, 3)
+	// A dash's end pixels can fall one pixel either way as the step positions round, so the
+	// pixels inside each dash and inside each gap are the ones checked.
+	for x := 5; x <= 95; x++ {
+		switch (x - 5) % 7 {
+		case 1, 2:
+			require.Equal(t, red, img.RGBAAt(x, 50), "pixel %d inside a dash", x)
+		case 5:
+			require.Equal(t, color.RGBA{}, img.RGBAAt(x, 50), "pixel %d inside a gap", x)
+		}
+	}
+	// Each segment restarts its dash, so a second one drawn down from its start begins on.
+	raster.DrawDashed(img, proj, [][2][2]float64{{{0, 5}, {0, -5}}}, red, 4, 3)
+	require.Equal(t, red, img.RGBAAt(50, 5))
+	require.Equal(t, color.RGBA{}, img.RGBAAt(50, 9))
+	// A segment past the image is clipped without a panic, and an off of zero is solid.
+	raster.DrawDashed(img, proj, [][2][2]float64{{{-500, 0}, {500, 500}}}, red, 4, 0)
+}

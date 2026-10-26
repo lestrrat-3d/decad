@@ -251,3 +251,51 @@ func Example_export_png_perspective() {
 	// Output:
 	// the nearer block is wider: true
 }
+
+// HiddenEdges draws the edges behind the part's surfaces as grey dashes, so the
+// far side shows through the shading as in an engineering view. Here a cube's
+// three hidden edges meet at the far corner, which the isometric camera draws at
+// the middle of the image.
+func Example_export_png_hidden_edges() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(0, 0, 20, 20)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	cube, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	view := export.IsometricView(300, 300)
+	view.HiddenEdges = true
+	var out bytes.Buffer
+	if err := export.PNG(context.Background(), &out, cube, units.Millimeters(0.1), view); err != nil {
+		fmt.Printf("failed to export: %s\n", err)
+		return
+	}
+	img, err := png.Decode(&out)
+	if err != nil {
+		fmt.Printf("failed to read the image: %s\n", err)
+		return
+	}
+	grey := 0
+	for y := 100; y < 200; y++ {
+		for x := 100; x < 200; x++ {
+			if c := color.RGBAModel.Convert(img.At(x, y)).(color.RGBA); c.R == 150 && c.G == 150 && c.B == 150 {
+				grey++
+			}
+		}
+	}
+	fmt.Printf("dashed hidden edges in the middle: %t\n", grey > 60)
+	// Output:
+	// dashed hidden edges in the middle: true
+}
