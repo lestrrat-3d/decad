@@ -35,7 +35,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/sectionrecord/` | Curve records and validation. |
 | `internal/selectorquery/` | Selector matching on node views, query rendering, residual counts, face-role indexes. See API §9. |
 | `internal/modifyselect/` | Modify's selected-edge context and corner match. See modify §6. |
-| `internal/provenance/` | Producer identity, feature-role reference and the `RoleBody`/`RoleCapStart`/`RoleCapEnd` names the topology nodes hold; root `FeatureRef` is the public form. `SourcePatch` is the immutable record a faceted `Group` and its faces carry to trace the operand face or blend they came from. See evaluator §3. |
+| `internal/provenance/` | Producer identity, feature-role reference, `RoleBody`/`RoleCapStart`/`RoleCapEnd` names, and the immutable `SourcePatch` a faceted `Group` and its faces carry to trace their operand face or blend. Root `FeatureRef` is the public form. See evaluator §3. |
 | `internal/surfacegeom/` | Private face and edge geometry carriers, the public type names that errors print, and Verify's diagnostic plane key. Public variants live in `topology.go`; `Edge.Curve` and `Face.Surface` adapt the nodes. See API §6.1, surface §6. |
 | `internal/surfaceplace/` | Rigid placement of face surfaces and edge curves, and the placed circle bound. See surface §6. |
 | `internal/verifypublish/` | Verify report publication: body, validity, wall, undercut and radius rows, survey diagnostics, and the survey reading helpers. See verification §1, §6. |
