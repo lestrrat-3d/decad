@@ -120,7 +120,6 @@ func repairHeldEmbeddingSummary(ctx context.Context, h HeldRounding, memo bool, 
 	if err := budget.Err(); err != nil {
 		return 0, nil, err
 	}
-	e := newHeldEmbedding(h, budget, memo)
 	var query []int
 	for i, t := range h.Tris {
 		if err := budget.Step(); err != nil {
@@ -132,6 +131,19 @@ func repairHeldEmbeddingSummary(ctx context.Context, h HeldRounding, memo bool, 
 	}
 	if len(query) == 0 {
 		return 0, nil, nil
+	}
+	e := newHeldEmbeddingScan(h, budget, memo)
+	// The tree reads fixed facet boxes. Only a failed first scan needs the
+	// padded grid that keeps covering facets while repair moves vertices.
+	parallelFirst := memo && len(query) >= 4096 && runtime.GOMAXPROCS(0) > 1
+	if parallelFirst {
+		clean, err := e.parallelClean(ctx, query)
+		if err != nil {
+			return 0, nil, err
+		}
+		if clean {
+			return 0, nil, nil
+		}
 	}
 	if err := e.buildGrid(); err != nil {
 		return 0, nil, err
@@ -151,15 +163,7 @@ func repairHeldEmbeddingSummary(ctx context.Context, h HeldRounding, memo bool, 
 			}
 		}
 		for sweep := range heldEmbeddingSweeps {
-			if stage == 0 && sweep == 0 && memo && len(check) >= 4096 && runtime.GOMAXPROCS(0) > 1 {
-				clean, err := e.parallelClean(ctx, check)
-				if err != nil {
-					return 0, nil, err
-				}
-				if clean {
-					return 0, nil, nil
-				}
-			} else if stage == 0 && sweep == 0 && memo {
+			if stage == 0 && sweep == 0 && memo && !parallelFirst {
 				queryFacet := make([]bool, len(e.h.Tris))
 				for _, i := range check {
 					queryFacet[i] = true
@@ -177,6 +181,7 @@ func repairHeldEmbeddingSummary(ctx context.Context, h HeldRounding, memo bool, 
 					return 0, nil, nil
 				}
 			}
+			e.prepareRepair()
 			if memo && e.pairs == nil {
 				// Repair needs replayable pair answers; a clean first scan does not.
 				e.pairs = make(map[uint64]heldPair, 32*len(query))
@@ -249,7 +254,6 @@ func HeldFolds(ctx context.Context, h HeldRounding) ([][2]int, error) {
 	if err := budget.Err(); err != nil {
 		return nil, err
 	}
-	e := newHeldEmbedding(h, budget, true)
 	var query []int
 	for i, t := range h.Tris {
 		if err := budget.Step(); err != nil {
@@ -262,6 +266,7 @@ func HeldFolds(ctx context.Context, h HeldRounding) ([][2]int, error) {
 	if len(query) == 0 {
 		return nil, nil
 	}
+	e := newHeldEmbeddingScan(h, budget, true)
 	if err := e.buildGrid(); err != nil {
 		return nil, err
 	}
@@ -319,6 +324,9 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 			}
 		}
 		e.projection(i)
+		// Alternate scan axes do not populate the world boxes. Workers also
+		// read those boxes, so prepare them before sharing their cache.
+		e.triBox(i)
 		if allQuery && !e.facetOpenFloat(i) {
 			if _, _, n := e.facet(i); zeroXpt(n) {
 				return false, nil
@@ -544,7 +552,7 @@ func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int) *held
 	local.sideSigns = make(map[[2]int]int)
 	local.stamp = nil
 	local.cands = nil
-	// buildGrid filled every box before the read-only first scan. Repair
+	// parallelClean filled every box before starting its workers. Repair
 	// starts only after all workers have joined.
 	local.box = e.box
 	local.boxOK = e.boxOK
@@ -560,8 +568,9 @@ type heldEmbedding struct {
 	pollErr       func() error
 	pollInterval  int
 	pollRemaining int
-	inc           [][]int
-	taken         map[r3.Vec]int
+	// inc and taken are needed only when the ordered repair may move vertices.
+	inc   [][]int
+	taken map[r3.Vec]int
 
 	// Exact lifts of the held float vertices and facets, invalidated when a
 	// vertex moves.
@@ -631,12 +640,18 @@ type heldPair struct {
 }
 
 func newHeldEmbedding(h HeldRounding, budget *proofbound.WorkBudget, memo bool) *heldEmbedding {
+	e := newHeldEmbeddingScan(h, budget, memo)
+	e.prepareRepair()
+	return e
+}
+
+// newHeldEmbeddingScan allocates predicate caches without the vertex incidence
+// lists and occupied-position map used only by repair.
+func newHeldEmbeddingScan(h HeldRounding, budget *proofbound.WorkBudget, memo bool) *heldEmbedding {
 	e := &heldEmbedding{
 		h:           h,
 		budget:      budget,
 		memoOn:      memo,
-		inc:         make([][]int, len(h.Verts)),
-		taken:       make(map[r3.Vec]int, len(h.Verts)),
 		xv:          make([]proof.Xpt, len(h.Verts)),
 		xvOK:        make([]bool, len(h.Verts)),
 		norm:        make([]proof.Xpt, len(h.Tris)),
@@ -652,14 +667,6 @@ func newHeldEmbedding(h HeldRounding, budget *proofbound.WorkBudget, memo bool) 
 		planes:      map[string]int{},
 		stamp:       make([]int, len(h.Tris)),
 	}
-	for i, t := range h.Tris {
-		for _, v := range t {
-			e.inc[v] = append(e.inc[v], i)
-		}
-	}
-	for v, p := range h.Verts {
-		e.taken[p] = v
-	}
 	for i := range e.plane {
 		e.plane[i] = -1
 	}
@@ -670,6 +677,22 @@ func newHeldEmbedding(h HeldRounding, budget *proofbound.WorkBudget, memo bool) 
 		e.nextGen = 1
 	}
 	return e
+}
+
+func (e *heldEmbedding) prepareRepair() {
+	if e.inc != nil {
+		return
+	}
+	e.inc = make([][]int, len(e.h.Verts))
+	e.taken = make(map[r3.Vec]int, len(e.h.Verts))
+	for i, t := range e.h.Tris {
+		for _, v := range t {
+			e.inc[v] = append(e.inc[v], i)
+		}
+	}
+	for v, p := range e.h.Verts {
+		e.taken[p] = v
+	}
 }
 
 // triBox is facet i's float box, TriBox over the held vertices.
