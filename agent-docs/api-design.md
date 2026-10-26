@@ -376,6 +376,7 @@ func (b *Body) Centroid() (VecMeasurement, error)
 func (b *Body) ExtremeFacesByCentroid(ctx context.Context, axis r3.Vec) (least, greatest *Face, err error)
 func (b *Body) LocatePoint(ctx context.Context, p r3.Vec, tol units.Value) (PointLocation, error)
 func (b *Body) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (Measurement, error)
+func (b *Body) ClosestPoint(ctx context.Context, p r3.Vec, tol units.Value) (ClosestPoint, error)
 func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*sketch.Profile, error)
 
 func (b *Body) Origin() FeatureRef  // which feature created this body
@@ -397,6 +398,11 @@ point inside or on its boundary has distance zero. Its `Measurement` encloses
 the true distance using the verified mesh and its boundary bound. When
 `LocatePoint` cannot prove membership, its lower bound is zero. The point
 query design owns its proof and refusal rules.
+
+`ClosestPoint` returns the mesh point that attains that distance, as a `ClosestPoint` holding the point, the same
+`Distance` and an `OffSurface` bound on how far the point lies from the true boundary; a point inside the solid is its
+own closest point. `Face.ClosestPoint` does the same for one trimmed face. `agent-docs/point-containment-design.md` §6
+owns it.
 
 `Section` returns Sketch profiles on the requested plane for admitted exact
 prisms, exact cardinal cylinder chords, cardinal or central oblique source-sphere
@@ -461,6 +467,7 @@ func (f *Face) Edges() []*Edge
 func (f *Face) Area() (Measurement, error)
 func (f *Face) Centroid() (VecMeasurement, error) // area centroid when the face has a proof
 func (f *Face) DistanceToPoint(ctx context.Context, p r3.Vec, tol units.Value) (Measurement, error)
+func (f *Face) ClosestPoint(ctx context.Context, p r3.Vec, tol units.Value) (ClosestPoint, error)
 func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) // a computed direction: a measurement
 func (f *Face) Origins() []FeatureRef // provenance: every feature role that created it — canonicalization
                                       // may merge coplanar faces, and a merged face carries ALL contributing

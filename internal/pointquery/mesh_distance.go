@@ -44,21 +44,29 @@ func BodyDistance(ctx context.Context, p r3.Vec, mesh *topo.Mesh) (measurement.M
 	if err != nil {
 		return measurement.Measurement{}, err
 	}
+	result, _, err := bodyDistanceFrom(ctx, p, mesh, distanceSquared)
+	return result, err
+}
+
+// bodyDistanceFrom reads the body distance from the exact squared distance to
+// the mesh and reports where the point lies.
+func bodyDistanceFrom(ctx context.Context, p r3.Vec, mesh *topo.Mesh, distanceSquared *big.Rat) (measurement.Measurement, Location, error) {
 	location := Undecided
 	if mesh.SymDiffOK {
+		var err error
 		location, err = LocateWithDistance(ctx, p, mesh.Vertices, mesh.Triangles,
 			mesh.Bound, mesh.VolSymDiff, distanceSquared)
 		if err != nil {
-			return measurement.Measurement{}, err
+			return measurement.Measurement{}, location, err
 		}
 	}
 	if location == Inside || location == OnBoundary {
-		return measurement.Measurement{Value: units.Millimeters(0), Exactness: measurement.Exact, Bound: units.Millimeters(0)}, nil
+		return measurement.Measurement{Value: units.Millimeters(0), Exactness: measurement.Exact, Bound: units.Millimeters(0)}, location, nil
 	}
 	distanceLo := proofbound.RatSqrtDown(distanceSquared)
 	distanceHi := proofbound.RatSqrtUp(distanceSquared)
 	if proofbound.IsNonFinite(distanceLo) || proofbound.IsNonFinite(distanceHi) {
-		return measurement.Measurement{}, fmt.Errorf(`%w: point distance exceeds the representable range`, decaderr.ErrUnsupported)
+		return measurement.Measurement{}, location, fmt.Errorf(`%w: point distance exceeds the representable range`, decaderr.ErrUnsupported)
 	}
 	bound := proofarith.FloatRat(mesh.Bound)
 	lo := new(big.Rat)
@@ -71,9 +79,9 @@ func BodyDistance(ctx context.Context, p r3.Vec, mesh *topo.Mesh) (measurement.M
 	hi := new(big.Rat).Add(proofarith.FloatRat(distanceHi), bound)
 	result, ok := RatIntervalMeasurement(lo, hi)
 	if !ok {
-		return measurement.Measurement{}, fmt.Errorf(`%w: point distance has no finite measurement`, decaderr.ErrUnsupported)
+		return measurement.Measurement{}, location, fmt.Errorf(`%w: point distance has no finite measurement`, decaderr.ErrUnsupported)
 	}
-	return result, nil
+	return result, location, nil
 }
 
 // FaceDistance bounds the distance from p to the trimmed patch of face, read

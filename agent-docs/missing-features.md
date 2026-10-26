@@ -147,7 +147,6 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Gap | Today | Owner |
 |---|---|---|
 | Point containment near an approximate boundary or on a body without a verified occupied-volume mesh | `Body.LocatePoint` returns `PointUndecided` or the mesh's `ErrUnsupported`; certified interior, exterior and exact-boundary points build | `agent-docs/point-containment-design.md` |
-| Closest point from a point to a body or face | `Body.DistanceToPoint` measures a solid and `Face.DistanceToPoint` measures a trimmed face; neither returns a nearest point | `agent-docs/point-containment-design.md` §§4–5, `agent-docs/clearance-design.md` |
 | Planar cross-section outside certified prism, BRep, direct Loft, independent rectangular or three-section homothetic `LoftSections`, sphere or cone classes | `Body.Section` returns `ErrUnsupported` | `agent-docs/section-design.md` |
 | Surveys (undercut, wall, concave radius) of bodies other than prisms, revolves, cups, cap blends and one-sided draft bodies; the wall and concave-radius surveys of a draft body | `Verify` reports `Suspect`; a draft body's with `DiagUnsupportedSurveyPayload` | `agent-docs/verification-design.md`, `agent-docs/draft-design.md` DD8 |
 | Wall survey of a sphere's revolve, solid or hollow (its meridian arcs meet the axis at both ends) | `Verify` reports `Suspect` (`DiagUndecidedWall`) | `agent-docs/verification-design.md` |

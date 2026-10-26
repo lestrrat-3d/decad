@@ -137,3 +137,34 @@ classification.
 Verify a box cap for points on the patch, inside the body, and beyond one
 corner. Verify a curved wall using its analytic radius and a surface-extruded
 sheet face.
+
+## 6. Closest point
+
+```go
+type ClosestPoint struct {
+    Point      r3.Vec
+    Distance   Measurement
+    OffSurface units.Value
+}
+
+func (b *Body) ClosestPoint(ctx context.Context, p r3.Vec, tol units.Value) (ClosestPoint, error)
+func (f *Face) ClosestPoint(ctx context.Context, p r3.Vec, tol units.Value) (ClosestPoint, error)
+```
+
+Both methods take `DistanceToPoint`'s inputs and return its input and tessellation errors. `Distance` is the reading
+`DistanceToPoint` gives for the same call, and `Point` is the mesh point that attains it.
+
+| Decision | Rule |
+|---|---|
+| Q1 | `pointquery.MeshClosest` finds the exact minimum squared distance `D²` over the held triangles, as `MeshDistanceSquared` does, together with the triangle point that attains it. A point whose projection falls inside the triangle takes the foot of the perpendicular. Otherwise it takes the nearest point of the three edges. All of it is exact rational arithmetic. |
+| Q2 | `Point` is that rational point rounded to the nearest floats. `OffSurface` is the verified mesh bound `B` (the face's source bound for a face) plus the distance from the rational point to `Point`, rounded up. |
+| Q3 | `Body.ClosestPoint` returns `p` itself with `OffSurface` zero when §2 proves `p` inside or on the solid. Otherwise it returns the mesh point of Q2, also when membership is undecided. |
+| Q4 | `Point` lies within `OffSurface` of the true boundary, because the mesh departs from it by at most `B`. Its distance from `p` is `sqrt(D²)` and so lies within `OffSurface` of the true distance. |
+
+`Point` is one nearest mesh point. Where two places on the boundary are almost equally near, `Point` can sit at
+either, and the other can be much farther along the boundary than `OffSurface`; only Q4's distance statement is
+guaranteed. A face's `Point` lies on the face's own patch.
+
+Verify a box for interior, boundary, face, edge and corner queries against the analytic nearest point. Verify a box
+cap for a point beside it and above it.
+

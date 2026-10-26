@@ -284,7 +284,7 @@ Features choose edges and faces with queries.
 | Reading | Methods |
 |---|---|
 | Size | `Body.Volume`, `Body.Area`, `Body.Centroid`, `Body.Bounds`, `Body.MassProperties` |
-| Position | `Body.LocatePoint`, `Body.DistanceToPoint`, `Face.DistanceToPoint` |
+| Position | `Body.LocatePoint`, `Body.DistanceToPoint`, `Face.DistanceToPoint`, `Body.ClosestPoint`, `Face.ClosestPoint` |
 | Topology | `Body.Lumps`, `Body.Shells`, `Body.Faces`, `Body.Edges`, `Body.Vertices`, `Face.Loops`, `Edge.Faces` |
 | Geometry | `Face.Surface`, `Edge.Curve`, `Face.NormalAt`, `Edge.Length`, `Vertex.Position` |
 | Cross-section | `Body.Section` returns a sketch and its profiles on a plane. |
