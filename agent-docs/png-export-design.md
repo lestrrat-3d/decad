@@ -13,6 +13,7 @@ type View struct {
     Width, Height int
     Outlines      bool
     FieldOfView   units.Value
+    Colors        []color.RGBA
 }
 
 func IsometricView(width, height int) View
@@ -49,9 +50,9 @@ image axis flipped, turns the tests red.
 ## 4. Not covered
 
 - Hidden edges, axes, dimensions and text, and outlines on a perspective camera.
-- Colours, materials, textures, shadows and anti-aliasing.
+- Materials, textures, shadows and anti-aliasing, and a colour for the faces that look away from the camera.
 - A transparent background and image formats other than PNG.
-- Colouring bodies apart, or drawing a mesh body together with bodies.
+- Drawing a mesh body together with bodies.
 
 ## 5. Several bodies
 
@@ -95,3 +96,12 @@ projection `export.DXF` uses (`agent-docs/dxf-export-design.md`), so they are th
 | V6 | Shading uses the camera's axes and headlight as P7 does. Outlines are drawn from the orthographic projection of `export.DXF`, so `Outlines` with `FieldOfView` is `ErrDegenerate`. |
 | V7 | `PNGBodies` and `MeshPNG` take the field too. |
 
+## 8. A colour for each body
+
+`View.Colors` sets the colour of the faces that look toward the camera, one colour for each body drawn.
+
+| Decision | Rule |
+|---|---|
+| K1 | An empty `Colors` is the default scheme, and the bytes are those of §1 to §7. Otherwise `Colors` has one entry for each body drawn: `PNG` and `MeshPNG` draw one body and take one, and `PNGBodies` takes one for each of its bodies, in order. Any other length is `ErrDegenerate` and nothing is written. |
+| K2 | A triangle of body `i` is shaded with `Colors[i]` in place of the default blue, by the same headlight and ambient level (`raster.Shaded`'s). A face that looks away keeps the orange of §1, so an open sheet or an inside-out mesh still shows. The alpha channel of a colour is ignored: the image is opaque. |
+| K3 | The default blue, 120, 160, 200, as a colour gives the bytes of no colour. Outlines and the perspective camera draw as before. |

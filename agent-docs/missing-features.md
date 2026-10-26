@@ -192,7 +192,7 @@ moves its row to the matching section above, with that doc as owner.
 | Nesting that follows body outlines or stacks bodies in three dimensions | `Arrange` packs bounding rectangles by translation, with an optional quarter turn about +Z or a footprint-minimising turn through any angle step (`arrange.go`, `arrange_angle.go`) |
 | Toolpath generation (CAM) | No entry point exists |
 | Finite-element stress or thermal simulation | No entry point exists |
-| Rendered images with hidden edges, outlines on a perspective camera, materials, shadows or a separate colour for each body | `export.PNG` and `export.PNGBodies` draw orthographically with flat shading (`export/png.go`, `export/png_bodies.go`; `agent-docs/png-export-design.md` §4) |
+| Rendered images with hidden edges, outlines on a perspective camera, materials, shadows or a colour for the faces that look away | `export.PNG` and `export.PNGBodies` draw orthographically with flat shading, each body in its own `View.Colors` colour if given (`export/png.go`, `export/png_bodies.go`; `agent-docs/png-export-design.md` §4) |
 | Per-axis (non-uniform) scaling of a solid body | `ScaledAt` scales uniformly (`point_plane_scale.go`) and `Transform`/`Copy` take a rigid motion only (`document.go`); only a held mesh stretches, by `ScaleMesh` (`mesh_scale.go`) |
 | Saving a `Document` to a file or loading one back | No entry point exists; a model is rebuilt by rerunning the Go program that built it |
 | Lettering beyond left-to-right runs in one TrueType font: kerning, shaping, text on a curve or surface, true curves | `TextProfiles` sets lines of text in a font as polygons for `Emboss` (`text.go`; `agent-docs/text-design.md` §4) |

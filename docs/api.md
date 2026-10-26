@@ -366,7 +366,7 @@ stretches a mesh body by a separate factor along each axis about a point; a nega
 
 `export.STEP`, `export.STL`, `export.OBJ`, `export.ThreeMF` and `export.GLTF` write a body to an `io.Writer` at a chord tolerance.
 `export.GLTF` writes a glTF 2.0 JSON file with its mesh embedded, in metres.
-`export.PNG` draws a body as an orthographic, flat-shaded PNG image from a `export.View`, such as `export.IsometricView`. `export.PNGBodies` draws several bodies together in one image. Set `export.View.Outlines` to draw the visible feature edges over the shading, or `export.View.FieldOfView` for a perspective camera.
+`export.PNG` draws a body as an orthographic, flat-shaded PNG image from a `export.View`, such as `export.IsometricView`. `export.PNGBodies` draws several bodies together in one image, each in its own colour when `export.View.Colors` gives them. Set `export.View.Outlines` to draw the visible feature edges over the shading, or `export.View.FieldOfView` for a perspective camera.
 `export.DXF` writes the feature edges of a body as an ASCII DXF drawing along an `export.DrawingView`, with hidden edges on their own dashed layer. `export.DXFViews` lays several views of a body in a row on one sheet. `export.DXFSheet` draws them at a stated scale on paper of a stated size, inside a border with a title block, with the overall size of each view as a dimension.
 `export.MeshSTL`, `export.MeshOBJ`, `export.MeshGLTF`, `export.MeshPNG` and `export.MeshDXF` write a `decad.MeshBody` in the same formats, as it is, with no tolerance.
 `export.STEP` writes a solid with a cavity as a `BREP_WITH_VOIDS` of its outer shell and the cavity shells, and a body of several lumps as one solid per lump.
