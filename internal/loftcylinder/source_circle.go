@@ -543,22 +543,34 @@ func (r SourceCircle) ContainsTriangleSector(zLo, zHi *big.Rat,
 // call returned boxes without an error.
 func triangleInSector(boxes [2]XYBox, zLo, zHi *big.Rat, tri [3]proofarith.Xpt) bool {
 	for _, p := range tri {
-		if p.X == nil || p.Y == nil || p.Z == nil || p.W == nil || p.W.Sign() <= 0 {
-			return false
-		}
-		z := new(big.Rat).SetFrac(p.Z, p.W)
-		if z.Cmp(zLo) < 0 || z.Cmp(zHi) > 0 {
-			return false
-		}
-		xy := XY{
-			X: new(big.Rat).SetFrac(p.X, p.W),
-			Y: new(big.Rat).SetFrac(p.Y, p.W),
-		}
-		point := sourceBoxOf(xy)
-		if sourceCrossLower(boxes[0], point).Sign() <= 0 ||
-			sourceCrossLower(point, boxes[1]).Sign() <= 0 {
+		if !pointInSector(boxes, zLo, zHi, p) {
 			return false
 		}
 	}
 	return true
+}
+
+// segmentInSector is triangleInSector for the degenerate triangle {a, b, b}:
+// it tests each distinct point once.
+func segmentInSector(boxes [2]XYBox, zLo, zHi *big.Rat, a, b proofarith.Xpt) bool {
+	return pointInSector(boxes, zLo, zHi, a) && pointInSector(boxes, zLo, zHi, b)
+}
+
+// pointInSector reports whether one point lies in [zLo,zHi] and strictly
+// between both crossing boxes. A nil coordinate or W <= 0 is outside.
+func pointInSector(boxes [2]XYBox, zLo, zHi *big.Rat, p proofarith.Xpt) bool {
+	if p.X == nil || p.Y == nil || p.Z == nil || p.W == nil || p.W.Sign() <= 0 {
+		return false
+	}
+	z := new(big.Rat).SetFrac(p.Z, p.W)
+	if z.Cmp(zLo) < 0 || z.Cmp(zHi) > 0 {
+		return false
+	}
+	xy := XY{
+		X: new(big.Rat).SetFrac(p.X, p.W),
+		Y: new(big.Rat).SetFrac(p.Y, p.W),
+	}
+	point := sourceBoxOf(xy)
+	return sourceCrossLower(boxes[0], point).Sign() > 0 &&
+		sourceCrossLower(point, boxes[1]).Sign() > 0
 }

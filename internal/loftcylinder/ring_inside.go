@@ -111,16 +111,12 @@ func RingEdgesInsideShared(ctx context.Context, edges [][2]proofarith.Xpt, teeth
 		}
 		sectorCount := 0
 		for toothIndex, tooth := range teeth {
-			mappedEdge := [2]proofarith.Xpt{
-				RingMappedPoint(edge[0], tooth.Level),
-				RingMappedPoint(edge[1], tooth.Level),
-			}
 			seam := &seams[toothIndex]
 			if !seam.built {
 				*seam = ringSeamLevelOf(tooth)
 			}
-			if seam.sectorOK && triangleInSector(seam.sector, tooth.Level, tooth.Level,
-				[3]proofarith.Xpt{mappedEdge[0], mappedEdge[1], mappedEdge[1]}) {
+			if seam.sectorOK && segmentInSector(seam.sector, tooth.Level, tooth.Level,
+				RingMappedPoint(edge[0], tooth.Level), RingMappedPoint(edge[1], tooth.Level)) {
 				sectorCount++
 			}
 			for _, slice := range seam.connectors {
