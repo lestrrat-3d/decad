@@ -57,3 +57,41 @@ func Example_export_step() {
 	// is a STEP file: true
 	// faces written: 6
 }
+
+// A solid with a cavity writes to STEP as a BREP_WITH_VOIDS: the outer shell and
+// the cavity's shell, which a CAD system reads back as a hollow part. Here a
+// 20 mm cube is shelled into a closed box with 3 mm walls.
+func Example_export_step_cavity() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(0, 0, 20, 20)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	cube, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	hollow, err := decad.Shell(context.Background(), cube, nil, units.Millimeters(3), decad.WithNoOpenings())
+	if err != nil {
+		fmt.Printf("failed to shell: %s\n", err)
+		return
+	}
+	var out bytes.Buffer
+	if err := export.STEP(context.Background(), &out, hollow, units.Millimeters(0.1),
+		export.WithSTEPName("hollow"), export.WithSTEPAuthor("decad"), export.WithSTEPOrganization("example")); err != nil {
+		fmt.Printf("failed to export: %s\n", err)
+		return
+	}
+	fmt.Printf("holds a cavity: %t\n", strings.Contains(out.String(), "BREP_WITH_VOIDS"))
+	// Output:
+	// holds a cavity: true
+}

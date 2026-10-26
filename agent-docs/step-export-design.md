@@ -25,9 +25,9 @@ according to the writer path.
 
 - Request `Body.Tessellate` at `VerifyBoundary` before either writer path.
   Its closed and embedded boundary is the shared admission check.
-- Admit one valid `BodySolid` with one non-void shell. Refuse sheets, multiple
-  shells, and disconnected facet sets. Multiple shells need separate solids or
-  void relationships, which this adapter cannot safely infer.
+- Admit one valid `BodySolid` with one outer shell and any number of void
+  shells (§9). Refuse sheets, a body of several outer shells, and a mesh whose
+  connected facet sets do not match the body's shells.
 - Use analytic AP214 faces when every body face is a `Plane`, a `Cylinder` or a
   `Torus` and every edge is a `Line3`, an `Arc3`, an `Ellipse3` or a full `Circle3`. A plane's loops
   are one full circle each, or chains of lines and arcs (at least three
@@ -75,9 +75,9 @@ according to the writer path.
   facet side, one `EDGE_LOOP`, `FACE_OUTER_BOUND`, and planar `ADVANCED_FACE`
   per facet. The resulting file represents the held facets exactly, but does
   not carry `Mesh.Bound()` or claim analytic faces survived.
-- Require each mesh edge twice with opposite directions and one connected
-  facet set. These checks only reject an inconsistent mesh; they never admit
-  a body that `Tessellate` refused.
+- Require each mesh edge twice with opposite directions, and as many
+  connected facet sets as the body has shells. These checks only reject an
+  inconsistent mesh; they never admit a body that `Tessellate` refused.
 
 ## File contract
 
@@ -89,3 +89,22 @@ according to the writer path.
 - Honor context cancellation while building records. `STEP` validates and
   builds the complete file before touching its writer; `step.File.Write`
   validates its model before output. I/O errors may leave a partial file.
+
+## 9. A solid with a cavity
+
+A solid whose evaluator holds an outer shell and one or more void shells writes a `BREP_WITH_VOIDS` in place of the
+`MANIFOLD_SOLID_BREP`. It is the faceted arm's alone: the analytic arm builds the faces of one outer shell.
+
+| Decision | Rule |
+|---|---|
+| V1 | The body has exactly one non-void shell. Any number of void shells may follow. A body of two outer shells is `ErrUnsupported`. |
+| V2 | The verified mesh has one connected facet set for each shell. A count that differs, as when a cavity's shell touches the outer shell, is `ErrUnsupported`. |
+| V3 | The outer shell is the facet set whose signed volume is positive, wound outward. The others have negative volumes. A mesh with no single positive facet set is `ErrUnsupported`. |
+| V4 | The outer shell is a `CLOSED_SHELL` of its triangles' planar `ADVANCED_FACE`s. Each void is a `CLOSED_SHELL` of its own faces, taken as the mesh winds them, which look into the cavity and away from the material, inside an `ORIENTED_CLOSED_SHELL` with the orientation `.T.`. |
+| V5 | `BREP_WITH_VOIDS(name, outer, (voids))` names the product's solid, the name being the header's. Entity IDs follow the same deterministic order as every file. |
+| V6 | A solid with no cavity is written as before: `MANIFOLD_SOLID_BREP`, analytic where the faces allow it. |
+
+The tests build a cube with a cubic cavity, check the entity counts, and check that every outer face's normal points away
+from the cube's middle and every void face's toward the cavity's. A body of a closed shell (`WithNoOpenings`) is such a
+solid.
+
