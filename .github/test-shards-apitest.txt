@@ -2500,3 +2500,6 @@
 10	0.01	TestFilletChordRoundsTheRimsOfARod
 10	0.01	TestChamferAngleBevelsTheRimsOfARod
 10	0.01	TestFilletChordStillRefusesACurvedFaceBesideAStraightEdge
+10	0.01	TestTextProfilesAlongAnArcStandEachLetterOnTheCircle
+10	0.01	TestTextProfilesAlongAnArcKeepEachLettersArea
+10	0.01	TestTextProfilesAlongAnArcRefusals

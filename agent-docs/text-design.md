@@ -13,6 +13,14 @@ type TextSpec struct {
     At        Point2
     Tolerance units.Value
     Font      []byte
+    Arc       *TextArc
+}
+
+type TextArc struct {
+    Center    Point2
+    Radius    units.Value
+    Start     units.Value
+    Clockwise bool
 }
 
 func TextProfiles(ctx context.Context, w *sketch.World, plane *sketch.Plane, spec TextSpec) (*sketch.Sketch, []*sketch.Profile, error)
@@ -49,5 +57,18 @@ round turns them red.
 
 - Kerning, ligatures, right-to-left text, bold and italic synthesis, and any layout beyond lines of left-to-right runes.
 - A font that is not TrueType outlines, such as a bitmap or colour font.
-- Text along a curve, text in a box that wraps, and text that follows a face's surface.
+- Text bent along a curve (letters are turned, not bent), text along a free-form curve, text in a box that wraps, and text that follows a face's surface.
 - True curves: the letters are polygons, so a letter's faces are planes.
+
+## 6. Lettering along an arc
+
+`TextSpec.Arc` sets the one line of text along a circle instead of a straight baseline, for a badge, a dial or a rim.
+
+| Decision | Rule |
+|---|---|
+| A1 | The baseline runs along the circle of `Radius` about `Center`, from the angle `Start` counter-clockwise from the plane's U axis, and `At` is unused. The pen distance of §1 along the baseline becomes arc length: a glyph whose advance is centred at pen distance `s` stands at the angle `Start ± s/Radius`, minus when the text runs clockwise. |
+| A2 | Each glyph is turned and moved as a whole, never bent: its own outline, in its own frame with the origin at the middle of its advance on the baseline, is laid on the circle at that point with its baseline along the tangent. Its area is therefore its flat area. |
+| A3 | A clockwise text has its tops outward, as text reads along the top of a badge. A counter-clockwise text has its tops inward, as it reads along the bottom. The pair of directions is right-handed either way, so no letter is mirrored. |
+| A4 | Glyphs touching or overlapping is the `ErrDegenerate` of §1: inside a small circle the tops of neighbouring letters draw together. |
+| A5 | `Radius` is a positive length (`ErrDegenerate` for zero, `ErrNegativeMagnitude` for a negative, `ErrUnitKind` for a wrong kind) and `Start` an angle (`ErrUnitKind`). Lettering of more than one line is `ErrDegenerate`. |
+| A6 | The tests lay each profile back into the frame of its glyph's point on the circle and require its box to be the font's glyph box about the middle of the advance, clockwise and counter-clockwise, and each letter's area to be its flat area. |

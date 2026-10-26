@@ -150,7 +150,8 @@ configuration option.
 | `decad.BlindHole` | struct | A hole that stops at a depth below the face. | The caller |
 | `decad.HoleHead` | sealed interface | The widening at a hole's mouth. | The caller |
 | `decad.Counterbore` | struct | A flat-bottomed cylindrical recess. | The caller |
-| `decad.TextSpec` | struct | A line of lettering: the text, the font size, where its baseline starts, an optional tolerance and an optional font. | The caller |
+| `decad.TextSpec` | struct | A line of lettering: the text, the font size, where its baseline starts, an optional tolerance, an optional font and an optional arc to set it along. | The caller |
+| `decad.TextArc` | struct | A circle to set lettering along: centre, radius, start angle and the way round. | `decad.TextSpec` |
 | `decad.EmbossMode` | enum | `decad.EmbossRaised` or `decad.EmbossEngraved`. | The caller |
 | `decad.EmbossOption` | option set | A setting on `decad.Emboss`: `decad.WithEmbossDraft` leans the relief's walls and `decad.WithEmbossRimFillet` rounds its rim. | The caller |
 | `decad.Countersink` | struct | A conical recess with an included angle. | The caller |
