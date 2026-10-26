@@ -2325,3 +2325,6 @@
 10	0.01	TestPathPatternFollowTurnsCopiesWithThePath
 10	0.01	TestPathPatternFollowOnAStraightPathKeepsTheOrientation
 10	0.01	TestPathPatternFollowRefusals
+10	0.01	TestArrangeTurnsBodiesToFitTheBed
+10	0.01	TestArrangeTurnsLeavesAFlatBodyAlone
+10	0.01	TestArrangeTurnsRefusals

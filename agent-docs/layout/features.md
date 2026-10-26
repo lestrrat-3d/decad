@@ -21,7 +21,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `gap_tolerance.go` | `WithGapTolerance`, `ExactOnly` and the context the root hands the evaluator. See gap-tolerance §1. |
 | `mirror.go` | `MirrorPlane` and `Mirrored`/`MirroredCopy`. See mirror-pattern §4. |
 | `mirror_join.go` | `WithJoin`, face selection and document commit around `internal/mirrorjoin/`'s record rewrite. See mirror-pattern §5. |
-| `arrange.go` | Public `Arrange` and `ArrangeBed`: gates, footprints, then one `Transform` per body. `internal/arrangeplan/` packs the footprints. See arrange design. |
+| `arrange.go` | Public `Arrange`, `ArrangeBed` and `WithArrangeTurns`: gates, footprints, then one `Transform` per body. `internal/arrangeplan/` packs the footprints. See arrange design. |
 | `thread.go` | Public `Thread` and `ThreadSpec`: face and pitch gates, the axis-plane frame, then a private `Coil` and `Cut`. `internal/threadplan/` plans the groove. See thread design. |
 | `path_pattern.go` | Public `PathPatternCopies` and `WithPathFollow`: gates, path sampling through `internal/pathsample/`, then one `Copy` per instance. See path-pattern design. |
 | `pattern.go` | Public pattern specs, admission, Copy/Union fallback, `PatternJoin` and publication; `internal/patternassembly/` plans frame-keeping instances and disjoint groups. See mirror-pattern §4.3, §6. |

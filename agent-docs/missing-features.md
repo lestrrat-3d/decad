@@ -189,7 +189,7 @@ moves its row to the matching section above, with that doc as owner.
 | T-spline (Form) sculpting | No entry point exists; free-form surfaces are NURBS (`decad.NURBSSurface`) |
 | Mesh bodies as input: convert to a solid, reduce, repair, remesh | No entry point exists; `decad.Mesh` is an output only |
 | Lattice or volumetric infill for printing | No entry point exists |
-| Nesting that turns bodies, follows their outlines or stacks them in three dimensions | `Arrange` packs bounding rectangles by translation only (`arrange.go`) |
+| Nesting that turns bodies by other than a quarter turn, follows their outlines or stacks them in three dimensions | `Arrange` packs bounding rectangles by translation, with an optional quarter turn about +Z (`arrange.go`) |
 | Toolpath generation (CAM) | No entry point exists |
 | Finite-element stress or thermal simulation | No entry point exists |
 | Rendered images with perspective, outlines, materials, shadows or more than one body | `export.PNG` draws one body orthographically with flat shading (`export/png.go`; `agent-docs/png-export-design.md` §4) |
