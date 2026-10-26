@@ -213,8 +213,8 @@ func TestOuterCapChamferKeepsBoreCircular(t *testing.T) {
 	chamfered, err := decad.Chamfer(t.Context(), body, selection, units.Millimeters(0.5))
 	require.NoError(t, err)
 	require.True(t, chamfered.IsSolid())
-	for _, cap := range []decad.FeatureRef{decad.CapStart(chamfered), decad.CapEnd(chamfered)} {
-		faces, err := decad.Faces(decad.FaceCreatedBy(cap)).Exactly(1).SelectFaces(chamfered)
+	for _, endCap := range []decad.FeatureRef{decad.CapStart(chamfered), decad.CapEnd(chamfered)} {
+		faces, err := decad.Faces(decad.FaceCreatedBy(endCap)).Exactly(1).SelectFaces(chamfered)
 		require.NoError(t, err)
 		require.Len(t, faces[0].Loops(), 2)
 		inner := faces[0].Loops()[1]

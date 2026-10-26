@@ -93,8 +93,8 @@ func Shell(ctx context.Context, blank *topo.Body, source *facetedrecord.PrismPat
 	maxStep, ringRound := 0.0, 0.0
 	for i := range parts {
 		part, next := &parts[i], &parts[(i+1)%len(parts)]
-		for cap := range 2 {
-			outlines[cap] = append(outlines[cap], part.Vertex[cap]...)
+		for capIndex := range 2 {
+			outlines[capIndex] = append(outlines[capIndex], part.Vertex[capIndex]...)
 		}
 		start, end := part.End, next.Start
 		startIV, endIV := part.EndIV, next.StartIV
@@ -110,10 +110,10 @@ func Shell(ctx context.Context, blank *topo.Body, source *facetedrecord.PrismPat
 		}
 		maxStep = max(maxStep, width/float64(steps))
 		var rings [2][]int
-		for cap := range 2 {
-			rings[cap] = make([]int, steps+1)
-			rings[cap][0] = part.Vertex[cap][part.RootStart]
-			rings[cap][steps] = next.Vertex[cap][0]
+		for capIndex := range 2 {
+			rings[capIndex] = make([]int, steps+1)
+			rings[capIndex][0] = part.Vertex[capIndex][part.RootStart]
+			rings[capIndex][steps] = next.Vertex[capIndex][0]
 			for step := 1; step < steps; step++ {
 				fraction := big.NewRat(int64(step), int64(steps))
 				angleIV := proofbound.IntervalAdd(
@@ -122,7 +122,7 @@ func Shell(ctx context.Context, blank *topo.Body, source *facetedrecord.PrismPat
 					proofbound.IntervalScale(endIV, fraction))
 				angle := start + float64(step)*width/float64(steps)
 				z := source.Blank.Z0
-				if cap == 1 {
+				if capIndex == 1 {
 					z = source.Blank.Z1
 				}
 				point, round, err := RingPoint(radius, z, angle, angleIV)
@@ -130,9 +130,9 @@ func Shell(ctx context.Context, blank *topo.Body, source *facetedrecord.PrismPat
 					return nil, [2][]int{}, blankGroup, 0, 0, err
 				}
 				ringRound = max(ringRound, round)
-				rings[cap][step] = len(mesh.Verts)
+				rings[capIndex][step] = len(mesh.Verts)
 				mesh.Verts = append(mesh.Verts, point)
-				outlines[cap] = append(outlines[cap], rings[cap][step])
+				outlines[capIndex] = append(outlines[capIndex], rings[capIndex][step])
 			}
 		}
 		for step := range steps {
@@ -147,7 +147,7 @@ func Shell(ctx context.Context, blank *topo.Body, source *facetedrecord.PrismPat
 			mesh.Add([3]int{b0, t1, t0}, blankGroup[0])
 		}
 	}
-	for cap, outline := range outlines {
+	for endCap, outline := range outlines {
 		points := make([]triangulation.Point2, len(outline))
 		loop := make([]int, len(outline))
 		for i, index := range outline {
@@ -161,10 +161,10 @@ func Shell(ctx context.Context, blank *topo.Body, source *facetedrecord.PrismPat
 		}
 		for _, tri := range tris {
 			mapped := [3]int{outline[tri[0]], outline[tri[1]], outline[tri[2]]}
-			if cap == 0 {
+			if endCap == 0 {
 				mapped[1], mapped[2] = mapped[2], mapped[1]
 			}
-			mesh.Add(mapped, blankGroup[cap+1])
+			mesh.Add(mapped, blankGroup[endCap+1])
 		}
 	}
 	if err := tessellation.OrientJoinedMesh(mesh.Verts, mesh.Tris); err != nil {
@@ -174,13 +174,13 @@ func Shell(ctx context.Context, blank *topo.Body, source *facetedrecord.PrismPat
 		loftmesh.MaxLoftAuditTriangles, loftcylinder.AuditMaxScans); err != nil {
 		return nil, [2][]int{}, blankGroup, 0, 0, err
 	}
-	for cap, outline := range outlines {
+	for endCap, outline := range outlines {
 		z := source.Blank.Z0
-		if cap == 1 {
+		if endCap == 1 {
 			z = source.Blank.Z1
 		}
-		if !loftcylinder.AuditCap(ctx, mesh.Verts, mesh.Tris, mesh.Src, outline, blankGroup[cap+1], z, cap == 0) ||
-			!RootChordsInsideCap(ctx, mesh, outline, parts, cap) {
+		if !loftcylinder.AuditCap(ctx, mesh.Verts, mesh.Tris, mesh.Src, outline, blankGroup[endCap+1], z, endCap == 0) ||
+			!RootChordsInsideCap(ctx, mesh, outline, parts, endCap) {
 			if err := ctx.Err(); err != nil {
 				return nil, [2][]int{}, blankGroup, 0, 0, err
 			}

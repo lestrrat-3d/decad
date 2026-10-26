@@ -216,10 +216,10 @@ func AssembleMirrorChamfer(ctx context.Context, old, lower, upper facetedrecord.
 		inner[1][i] = mapUpper[index]
 	}
 	levels := [2]float64{blank.Z0, blank.Z1}
-	for cap, group := range capGroups {
-		if !AuditAnnulus(ctx, verts, tris, src, outer[cap], inner[cap], group, levels[cap], cap == 0) {
+	for endCap, group := range capGroups {
+		if !AuditAnnulus(ctx, verts, tris, src, outer[endCap], inner[endCap], group, levels[endCap], endCap == 0) {
 			return MirrorChamfer{}, fmt.Errorf("%w: mirrored cap chamfer does not tile exterior annulus %d",
-				decaderr.ErrUnsupported, cap)
+				decaderr.ErrUnsupported, endCap)
 		}
 	}
 	if !mirrorChamferBoreUnchanged(old, verts, tris, src, record.WallGroups, wallGroups) {
@@ -417,8 +417,8 @@ func BuildMirrorCapChamfer(ctx context.Context, env topo.Env, old facetedrecord.
 		return nil, err
 	}
 	result := assembled.Payload
-	for cap, group := range assembled.CapGroups {
-		result.Groups[group].Origins = append([]provenance.Ref(nil), old.Groups[record.CapGroups[cap]].Origins...)
+	for endCap, group := range assembled.CapGroups {
+		result.Groups[group].Origins = append([]provenance.Ref(nil), old.Groups[record.CapGroups[endCap]].Origins...)
 	}
 	if err := TagCaps(&result, record.Join.Blank, assembled.CapGroups,
 		assembled.CapLevels, env.Ref); err != nil {

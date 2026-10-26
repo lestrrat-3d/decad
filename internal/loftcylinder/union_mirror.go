@@ -167,13 +167,13 @@ func MirrorBoreCut(ctx context.Context, op meshbool.OperationKind,
 		!MirrorLevels(blank.Z0, lower.LoftCylinderJoin.Z1, blank.Z1) {
 		return nil, true, fmt.Errorf("%w: mirrored circular Join lost its exact axial levels", decaderr.ErrUnsupported)
 	}
-	for cap, group := range record.CapGroups {
+	for endCap, group := range record.CapGroups {
 		level := blank.Z0
-		if cap == 1 {
+		if endCap == 1 {
 			level = blank.Z1
 		}
 		if group < 0 || group >= len(joined.Groups) ||
-			!AuditCap(ctx, joined.Verts, joined.Tris, joined.Src, record.CapOutlines[cap], group, level, cap == 0) {
+			!AuditCap(ctx, joined.Verts, joined.Tris, joined.Src, record.CapOutlines[endCap], group, level, endCap == 0) {
 			return nil, true, fmt.Errorf("%w: mirrored circular Join lost an outer cap disk", decaderr.ErrUnsupported)
 		}
 	}

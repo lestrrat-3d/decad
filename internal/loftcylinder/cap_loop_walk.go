@@ -44,9 +44,9 @@ func ChamferSelectsOuterLoops(body *topo.Body, start, end provenance.Ref,
 	if len(selected) != len(edges) {
 		return fmt.Errorf("%w: loft/cylinder chamfer repeats an edge", decaderr.ErrUnsupported)
 	}
-	for cap, face := range caps {
-		if len(face.Loops) == 0 || !ChamferCapWalk(face.Loops[0], verts, outer[cap], cap == 0) {
-			return fmt.Errorf("%w: loft/cylinder cap %d has no outer loop", decaderr.ErrUnsupported, cap)
+	for endCap, face := range caps {
+		if len(face.Loops) == 0 || !ChamferCapWalk(face.Loops[0], verts, outer[endCap], endCap == 0) {
+			return fmt.Errorf("%w: loft/cylinder cap %d has no outer loop", decaderr.ErrUnsupported, endCap)
 		}
 		for _, ce := range face.Loops[0].CoEdges {
 			if _, yes := selected[ce.Edge]; !yes {

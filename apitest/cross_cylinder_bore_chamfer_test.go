@@ -80,8 +80,8 @@ func TestCrossCylinderBoreMouthChamferVerified(t *testing.T) {
 				crossBoreMouth(t, bored, tc.c, tc.r, true), units.Millimeters(tc.setback))
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{out}, doc.Bodies())
-			for _, cap := range []decad.FeatureRef{decad.CapStart(target), decad.CapEnd(target)} {
-				faces, err := decad.Faces(decad.FaceCreatedBy(cap)).Exactly(1).SelectFaces(out)
+			for _, endCap := range []decad.FeatureRef{decad.CapStart(target), decad.CapEnd(target)} {
+				faces, err := decad.Faces(decad.FaceCreatedBy(endCap)).Exactly(1).SelectFaces(out)
 				require.NoError(t, err)
 				require.Len(t, faces, 1)
 			}

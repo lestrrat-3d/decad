@@ -110,8 +110,8 @@ func RadialGate(verts []r3.Vec, tris [][3]int, segment [][]int, root int, radius
 		return 0, false
 	}
 	inset := 0.0
-	for cap := range 2 {
-		offset := cap * n
+	for capIndex := range 2 {
+		offset := capIndex * n
 		for j := range n {
 			p := verts[offset+j]
 			if !proofbound.FiniteVec(p) {

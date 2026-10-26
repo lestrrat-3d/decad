@@ -282,7 +282,7 @@ func ChamferIdealBandAudit(ctx context.Context, vertexCount int, tris [][3]int,
 	pad := math.Nextafter(maxRound, math.Inf(1))
 	const maxPairs = 32_000_000
 	budget := proofbound.NewWorkBudget(ctx)
-	for cap, band := range bands {
+	for endCap, band := range bands {
 		if band[0] == band[1] {
 			continue
 		}
@@ -322,7 +322,7 @@ func ChamferIdealBandAudit(ctx context.Context, vertexCount int, tris [][3]int,
 				if _, err := loftmesh.AuditLoftPairData(data, tris, i, j,
 					loftmesh.LoftAuditShortcuts{ExactInput: true}); err != nil {
 					return fmt.Errorf("%w: ideal cap band %d facets %d,%d make contact: %v",
-						decaderr.ErrUnsupported, cap, i, j, err)
+						decaderr.ErrUnsupported, endCap, i, j, err)
 				}
 			}
 		}

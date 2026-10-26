@@ -244,14 +244,14 @@ func OutputMiddleContact(budget *proofbound.WorkBudget,
 		if len(trace) == 0 {
 			continue
 		}
-		for ci, cap := range shell.Triangles {
+		for ci, endCap := range shell.Triangles {
 			if err := budget.Step(); err != nil {
 				return false, err
 			}
 			if shell.Faces[ci].Kind != 0 || shell.Faces[ci].Level != 1 {
 				continue
 			}
-			lo, hi, hit := outputTraceInCapTriangle(trace, cap, shell, c)
+			lo, hi, hit := outputTraceInCapTriangle(trace, endCap, shell, c)
 			if !c.OK {
 				return false, nil
 			}

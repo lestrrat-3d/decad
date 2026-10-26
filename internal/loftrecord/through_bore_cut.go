@@ -148,7 +148,7 @@ func loftToolSpansExactCaps(tool prismrecord.Payload, lower, upper r3.Frame) boo
 	if err != nil {
 		return false
 	}
-	for end, cap := range [2][3]*big.Rat{bottom, top} {
+	for end, endCap := range [2][3]*big.Rat{bottom, top} {
 		z := proofarith.FloatRat(tool.Z0)
 		if end == 1 {
 			z = proofarith.FloatRat(tool.Z1)
@@ -159,7 +159,7 @@ func loftToolSpansExactCaps(tool prismrecord.Payload, lower, upper r3.Frame) boo
 		side := new(big.Rat)
 		for i := range toolOrigin {
 			point := new(big.Rat).Add(toolOrigin[i], new(big.Rat).Mul(toolMap[i][2], z))
-			delta := new(big.Rat).Sub(point, cap[i])
+			delta := new(big.Rat).Sub(point, endCap[i])
 			side.Add(side, new(big.Rat).Mul(delta, loftMap[i][2]))
 		}
 		if (end == 0 && side.Sign() > 0) || (end == 1 && side.Sign() < 0) {

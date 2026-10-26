@@ -269,13 +269,13 @@ func AssembleMirrorBore(ctx context.Context, lower, upper facetedrecord.Payload,
 		return mapped, nil
 	}
 	var outer, inner [2][]int
-	for cap := range 2 {
+	for capIndex := range 2 {
 		var err error
-		outer[cap], err = copyLoop(lower.LoftCylinderBore.Outer[0], cap == 1)
+		outer[capIndex], err = copyLoop(lower.LoftCylinderBore.Outer[0], capIndex == 1)
 		if err != nil {
 			return MirrorHalfShell{}, err
 		}
-		inner[cap], err = copyLoop(lower.LoftCylinderBore.Inner[0], cap == 1)
+		inner[capIndex], err = copyLoop(lower.LoftCylinderBore.Inner[0], capIndex == 1)
 		if err != nil {
 			return MirrorHalfShell{}, err
 		}

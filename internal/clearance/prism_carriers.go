@@ -72,11 +72,11 @@ func BuildPrismCarriers(budget *proofbound.WorkBudget, p PrismCarrierFrame,
 	}
 	if !surfaceResult {
 		region := NewRegion2(capElems)
-		for _, cap := range []struct {
+		for _, endCap := range []struct {
 			z    float64
 			sign float64
 		}{{z: p.Z0, sign: -1}, {z: p.Z1, sign: 1}} {
-			out.Faces = append(out.Faces, PrismPlaneCarrier(p, cap.z, cap.sign, region))
+			out.Faces = append(out.Faces, PrismPlaneCarrier(p, endCap.z, endCap.sign, region))
 		}
 	}
 	return out, true, nil

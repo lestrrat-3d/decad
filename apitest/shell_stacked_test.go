@@ -117,8 +117,8 @@ func TestShellBothCapsHoledBands(t *testing.T) {
 			requireVolumeNear(t, body, total*h)
 
 			// Every band's rims answer CapStart / CapEnd, one per lump.
-			for _, cap := range []decad.FeatureRef{decad.CapStart(body), decad.CapEnd(body)} {
-				rims, err := decad.Faces(decad.FaceCreatedBy(cap)).SelectFaces(body)
+			for _, endCap := range []decad.FeatureRef{decad.CapStart(body), decad.CapEnd(body)} {
+				rims, err := decad.Faces(decad.FaceCreatedBy(endCap)).SelectFaces(body)
 				require.NoError(t, err)
 				require.Len(t, rims, 3)
 			}

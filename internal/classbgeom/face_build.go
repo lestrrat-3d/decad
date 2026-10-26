@@ -265,11 +265,11 @@ func TraceCrossingChords[C comparable](ctx context.Context, op int, face C,
 			delta := proofbound.AbsSumUpper(proofbound.CutDisplacementAllow(CarrierSpeed(trace)),
 				proofbound.WalkEndBoundAllow(traced.Bounds[k]))
 			var point [3]float64
-			for _, cap := range caps {
-				axial, capLevel := geometry(cap)
+			for _, endCap := range caps {
+				axial, capLevel := geometry(endCap)
 				at := x
 				at[axial] = capLevel
-				point, err = canonical(face, traced.Crossed[k], cap, at, delta)
+				point, err = canonical(face, traced.Crossed[k], endCap, at, delta)
 				if err != nil {
 					return nil, err
 				}
