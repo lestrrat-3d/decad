@@ -79,6 +79,10 @@ func Arrange(ctx context.Context, bodies []*Body, bed ArrangeBed, opts ...Arrang
 			turns = true
 		}
 	}
+	angleStep, err := arrangeAngleStep(opts)
+	if err != nil {
+		return nil, err
+	}
 	d := documentHandle(bodies[0].n.Doc)
 	seen := make(map[*Body]struct{}, len(bodies))
 	for _, b := range bodies {
@@ -107,7 +111,16 @@ func Arrange(ctx context.Context, bodies []*Body, bed ArrangeBed, opts ...Arrang
 	}
 	items := make([]arrangeplan.Item, len(bodies))
 	margins := make([]float64, len(bodies))
+	angles := make([]float64, len(bodies))
 	for i, b := range bodies {
+		if angleStep > 0 {
+			var w, dp float64
+			if angles[i], w, dp, margins[i], err = footprintTurned(ctx, b, angleStep); err != nil {
+				return nil, err
+			}
+			items[i] = arrangeplan.Item{Width: w, Depth: dp}
+			continue
+		}
 		box, err := b.Bounds()
 		if err != nil {
 			return nil, err
@@ -136,6 +149,15 @@ func Arrange(ctx context.Context, bodies []*Body, bed ArrangeBed, opts ...Arrang
 	}
 	moved := make([]*Body, len(bodies))
 	for i, b := range bodies {
+		if angles[i] != 0 {
+			var err error
+			if b, err = turnAbout(ctx, b, angles[i]); err != nil {
+				return nil, err
+			}
+			if margins[i], err = boundMillimetres(b); err != nil {
+				return nil, err
+			}
+		}
 		if turned != nil && turned[i] {
 			var err error
 			if b, err = turnQuarter(ctx, b); err != nil {

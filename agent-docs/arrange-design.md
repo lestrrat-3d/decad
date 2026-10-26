@@ -15,6 +15,7 @@ type ArrangeBed struct {
 
 func Arrange(ctx context.Context, bodies []*Body, bed ArrangeBed, opts ...ArrangeOption) ([]*Body, error)
 func WithArrangeTurns() ArrangeOption
+func WithArrangeAngle(step units.Value) ArrangeOption
 ```
 
 | Decision | Rule |
@@ -44,7 +45,7 @@ and the rest where they were. Every refusal G2, G3 and G7 name is raised before 
 
 ## 4. Not covered
 
-- Turning bodies by any angle but a quarter turn about +Z, or following their outlines. Packing is by bounding rectangle.
+- Turning bodies about any axis but +Z, or following their outlines. Packing is by bounding rectangle.
 - Packing in three dimensions or stacking bodies.
 - A bed that is not a rectangle aligned with X and Y.
 
@@ -60,3 +61,17 @@ and the rest where they were. Every refusal G2, G3 and G7 name is raised before 
 | T4 | A turn changes no volume. The footprint is read from the turned body's own bounds, grown by the bound of that box. |
 | T5 | A nil option is `ErrDegenerate`. Bodies that fit neither way are `ErrDegenerate` and none moves. |
 
+## 6. Free angles
+
+`WithArrangeAngle` turns each body about +Z to the angle that makes its bounding-box footprint smallest. It reads
+each trial's footprint from a copy of the body, so it needs no geometry of its own.
+
+| Decision | Rule |
+|---|---|
+| A1 | The angles tried are the multiples of `step` from zero below a quarter turn. A further quarter turn swaps a footprint's width and depth and keeps its area, so nothing past it is tried. |
+| A2 | The footprint of an angle is the bounding box of a `Copy` turned by it about the body's bounding-box centre, grown on every side by that box's own bound as in G4. The copy is retired once read. Angle zero reads the body itself. |
+| A3 | The least footprint area wins, and the least angle among equals, so a body square to the axes does not turn. A step that misses the best angle gets the best multiple, which can leave a set refused that a finer step fits. |
+| A4 | A chosen angle is a `Transform` about the bounding-box centre before the move, so a turned body costs two `OperationTransform` entries as in T3. The probe copies add `Copy` entries to the history. |
+| A5 | The option combines with `WithArrangeTurns`: the quarter-turn packer then works on the turned footprints. |
+| A6 | `step` is an angle (`ErrUnitKind`), finite (`ErrNotFinite`), not negative (`ErrNegativeMagnitude`), and nonzero with at most 360 multiples below a quarter turn (`ErrDegenerate`). The last option wins. A body that cannot be copied turned carries `Copy`'s refusal. |
+| A7 | Refusals A6 names are raised before any trial, and a set that does not fit is `ErrDegenerate` with no body moved, as G7 says. |

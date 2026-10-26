@@ -131,7 +131,7 @@ configuration option.
 | `decad.MeshRepairReport` | struct | The counts `decad.RepairMesh` changed: vertices welded, triangles dropped and flipped, loops filled or skipped, triangles added. | `decad.RepairMesh` |
 | `decad.MeshReport` | struct | The counts a mesh body reads from its triangles: edges by use, shells, zero-area triangles, closed and inverted. | `MeshBody.Report` |
 | `decad.PathPatternOption` | option set | A setting on `decad.PathPatternCopies`: `decad.WithPathFollow` turns each copy to follow the path, about its start or the point `decad.WithPathPivot` names. | The caller |
-| `decad.ArrangeOption` | option set | A setting on `decad.Arrange`: `decad.WithArrangeTurns` lets bodies turn a quarter turn to fit. | The caller |
+| `decad.ArrangeOption` | option set | A setting on `decad.Arrange`: `decad.WithArrangeTurns` lets bodies turn a quarter turn to fit and `decad.WithArrangeAngle` turns each to the angle of least footprint. | The caller |
 | `decad.ArrangeBed` | struct | The flat area `decad.Arrange` fills: a corner, a width, a depth and a gap. | The caller |
 | `decad.ThreadSpec` | struct | One thread: the cylindrical face to cut, the pitch, the hand and an optional length. | The caller |
 | `decad.BossSpec` | struct | One boss: the face it stands on, a world point, its diameter and height, an optional pilot and an optional draft. | The caller |
