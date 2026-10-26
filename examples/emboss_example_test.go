@@ -207,3 +207,66 @@ func Example_emboss_rim_fillet() {
 	// Output:
 	// volume: 12099.2 mm^3
 }
+
+// Emboss takes a cylindrical face too, from a sketch on a plane tangent to it. The
+// profile is projected square to that plane, so a rectangle gives a pad with flat
+// sides that stands out of the rod. Here a 12 x 6 mm pad stands 4 mm out of a rod of
+// radius 10 mm, measured from the tangent plane.
+func Example_emboss_cylinder() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	centre := s.CreatePoint(0, 0)
+	s.Fix(centre)
+	s.CreateCircle(centre, 10)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	rod, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(16), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	// The plane x = 10 touches the rod along its length, its U along +Y and V along +Z.
+	frame, err := r3.NewFrame(r3.NewVec(10, 0, 8), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
+	if err != nil {
+		fmt.Printf("failed to make the plane: %s\n", err)
+		return
+	}
+	pw := sketch.NewWorld()
+	plane, err := pw.CreatePlaneFromFrame(frame)
+	if err != nil {
+		fmt.Printf("failed to place the plane: %s\n", err)
+		return
+	}
+	ps, err := pw.CreateSketch(plane)
+	if err != nil {
+		fmt.Printf("failed to create the pad sketch: %s\n", err)
+		return
+	}
+	rect := ps.CreateRectangle(-6, -3, 6, 3)
+	ps.Fix(rect.A)
+	if _, err := ps.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	padded, err := decad.Emboss(context.Background(), rod, ps, ps.Profiles(), decad.Faces(decad.Cylindrical()),
+		decad.EmbossRaised, units.Millimeters(4))
+	if err != nil {
+		fmt.Printf("failed to emboss: %s\n", err)
+		return
+	}
+	box, err := padded.Bounds()
+	if err != nil {
+		fmt.Printf("failed to read bounds: %s\n", err)
+		return
+	}
+	fmt.Printf("pad top at x = %.0f mm\n", box.Max.X)
+	// Output:
+	// pad top at x = 14 mm
+}

@@ -174,7 +174,7 @@ func TestEmbossRefusals(t *testing.T) {
 	}
 }
 
-func TestEmbossRefusesTiltedSketchAndCurvedFace(t *testing.T) {
+func TestEmbossRefusesTiltedSketchAndUntangentCurvedFace(t *testing.T) {
 	t.Parallel()
 	doc, plate := embossPlate(t)
 	w := sketch.NewWorld()
@@ -206,6 +206,8 @@ func TestEmbossRefusesTiltedSketchAndCurvedFace(t *testing.T) {
 		Face: embossFace(true, plate), At: r3.Vec{X: 20, Y: 15, Z: 10}, Diameter: units.Millimeters(6), Depth: decad.ThroughHole{},
 	})
 	require.NoError(t, err)
+	// A sketch on the top face's plane is not tangent to the hole's wall, so it names no relief on it.
 	_, err = decad.Emboss(t.Context(), drilled, flat, profiles, decad.Faces(decad.Cylindrical()), decad.EmbossRaised, units.Millimeters(2))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.ErrorContains(t, err, "not parallel")
 }
