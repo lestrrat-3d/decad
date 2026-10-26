@@ -12,6 +12,7 @@ Navigation only; the sections own the content.
 
 | Question | Section |
 |---|---|
+| What each call does on a mesh Boolean result today | §1.1 |
 | Which gaps build and which stay refused | §3 |
 | Two-distance chamfer of a retained edge | §4 |
 | Fillet or chamfer of a rounded outline (line, arc, line …) | §5 |
@@ -23,31 +24,71 @@ Navigation only; the sections own the content.
 | Tests and their red legs | §12 |
 | PR order | §14 |
 
-## 1. Problem
+## 1. Probe
 
-Probe on `main` at 02ae79969 on 2026-10-26 (dated illustration). The fixture is retention §1's: a 40×20×20 box with
-its four z-parallel edges filleted at r=3, cut by a Ø8 tool along y that a `Transform` placed (P2) or placed and
-rotated 20° about z (P3). Both results are mesh Boolean results whose faces read 6 `Plane` and 5 `Cylinder`, and
-whose edges publish `Line3`, `Arc3` and `Circle3` (retention §10).
+The fixture is retention §1's: a 40×20×20 box with its four z-parallel edges filleted at r=3, cut by a Ø8 tool
+along y. The tool is unplaced (P1), translated by a `Transform` (P2), or translated and then rotated 20° about z
+(P3). P1's Cut is a `brepPayload` (class B). P2 and P3 are mesh Boolean results whose faces read 6 `Plane` and
+5 `Cylinder`, and whose edges publish `Line3`, `Arc3` and `Circle3` (retention §10). The **x-parallel edges** are
+the four edges along x at `y ∈ {0, 20}`, `z ∈ {0, 20}`; the top front one runs from `(3,0,20)` to `(37,0,20)`.
 
-| Row | Call on the P2/P3 result | Outcome |
-|---|---|---|
-| — | `Hole` on a retained plane, `PatternCopies`, `Mirrored`/`MirroredCopy` across a retained plane, `Transform`, `Copy`, `WithCopyPlacement` | builds; tags kept |
-| GAP-A | `Copy` with `WithCopyRotation` | builds; every face reads `Faceted` (`internal/facetedrecord/place.go` `ExactGroupPlaced`) |
-| GAP-B | `Shell` inward, top face removed | `ErrUnsupported`, "shells a straight prism or its one-line Sweep reduction only" (`internal/brepmodify/shell.go`) |
-| GAP-C | `Draft` of the walls about the bottom face | `ErrUnsupported`, draft SD23 (`internal/draftrecord/gates.go`) |
-| GAP-D | `Chamfer` with `WithAsymmetricChamfer` of a top edge | `ErrUnsupported`: `retainedblend.Chamfer` declines it, then `internal/brepmodify/chamfer.go` refuses |
-| GAP-E | `Fillet`/`Chamfer` of an x-parallel top edge | `ErrUnsupported`, "an edge end meets a face that is not a retained plane" (`internal/retainedblend/line.go`) |
-| GAP-E | the same with `WithTangentChain` | `ErrUnsupported`, SX9 at expansion (`brep_modify_partial.go`) |
-| GAP-F | `PatternJoin` of a box feature, two copies | `ErrUnsupported`, "Union of three or more bodies needs a certified prism, axial or copied-tooth set" (`boolean_many.go`) |
-| — | `Offset` | `ErrUnsupported`, "Offset requires a sheet body" |
-| — | `ScaledAt` by 2 or 1.1 | builds; 6 `Plane` (bound 2) and 5 `Faceted` (`internal/facetedrecord/point_plane_scale.go`) |
+### 1.1 Table P — calls on a mesh Boolean result
 
-GAP-E is the common case. The x-parallel top edge runs from `(3,0,20)` to `(37,0,20)`. At each end it continues
-tangentially into an `Arc3` of radius 3 between the top face and a lateral blend cylinder, because the front face
-is tangent to that cylinder along the generator `x = 3, y = 0`. The edge has no end face: it is one edge of the
-top face's closed outline of 4 lines and 4 arcs. The same outline on the box before the Cut takes reach §8's
-complete cap-loop blend.
+P2 and P3 give the same result on every row (probe on `main` at e36f26819, 2026-10-26; dated illustration).
+Every refusal is `ErrUnsupported`; the quoted text follows `decad: not supported by the current evaluator:`.
+"Kinds" counts the result's faces by `Face.Surface()` kind.
+
+| Call on P2/P3 | Result | Kinds | Closed by, or why refused |
+|---|---|---|---|
+| `Hole` blind on the top face | builds | 7 `Plane`, 6 `Cylinder` | retention |
+| `PatternCopies`, linear and circular | builds | 6 `Plane`, 5 `Cylinder` | retention |
+| `Mirrored`, `MirroredCopy` across the +x face | builds | 6 `Plane`, 5 `Cylinder` | retention |
+| `Transform`, translation or 20° about z | builds | 6 `Plane`, 5 `Cylinder` | retention |
+| `Copy`, no option or `WithCopyPlacement` | builds | 6 `Plane`, 5 `Cylinder` | retention |
+| `Copy` with `WithCopyRotation`, 20° about z | builds | 6 `Plane`, 5 `Cylinder` | GAP-A; M2 (§6) |
+| `ScaledAt` 1.5 about `(20,10,0)` | builds | 6 `Plane`, 5 `Cylinder` | M5 (§7) |
+| `Fillet` r=1 or `Chamfer` d=1 of one or all four x-parallel edges | refused (SM2) | — | GAP-E; §5.3, §15 |
+| `Chamfer` of the four, `WithAsymmetricChamfer` 1 and 2 | refused (SM2) | — | as above |
+| `Fillet` r=1 of the four, `WithTangentChain` | builds two chains | 6 `Plane`, 13 `Cylinder`, 8 `Torus` | M3 (§5) |
+| `Chamfer` d=1 of the four, `WithTangentChain` | builds two chains | 14 `Plane`, 5 `Cylinder`, 8 `Cone` | M3 (§5) |
+| `Chamfer` of the four, asymmetric, `WithTangentChain` | refused (text A) | — | open; see below |
+| `Shell` inward, top face removed | refused (text S) | — | GAP-B; §9.1 |
+| `Draft` 2° of the walls about the bottom face | refused (SD23) | — | GAP-C; §9.2 |
+| `Offset` | refused (text O) | — | §9.3 |
+| `PatternJoin` of a linear pattern of a feature | refused (text J) | — | GAP-F; §9.4 |
+
+The refusal texts are these.
+
+- **SM2**: "the selected edge ends at the tangent junction 37,0,20 whose continuation is not selected;
+  WithTangentChain selects the whole chain" (`internal/retainedblend/chain.go`).
+- **Text A**: "the reference face is not a face of the selected edge" (`internal/retainedblend/rim.go`, `assign`).
+- **Text S**: "this evaluator shells a straight prism or its one-line Sweep reduction only"
+  (`internal/brepmodify/shell.go`).
+- **SD23**: "this evaluator drafts a straight prism only (an extrude, its filleted or chamfered result, a tube, or
+  any of these placed) (draft SD23)".
+- **Text O**: "Offset requires a sheet body" (`offset.go`).
+- **Text J**: "Union of three or more bodies needs a certified prism, axial or copied-tooth set; join them two at
+  a time" (`boolean_many.go`).
+
+The asymmetric chain row names a reference that holds both base planes, the top and the bottom face. Reach SX3
+admits it: each expanded edge borders exactly one of the two. The four seeds expand to two closed chains, one on
+each base plane, and the retained route then refuses with text A. One chain with the base as its reference builds
+(§12); §5.6 states the rule for each chain. Why two chains in one call refuse is not traced.
+
+The probe calls neither the two-distance chamfer of a single edge (GAP-D, M1, §4) nor the parallel-cylinder blend
+(M6, §8); §12's fixtures cover both.
+
+On P1 the brep routes answer instead. A plain `Fillet` or `Chamfer` of an x-parallel edge refuses brep-modify SB7,
+because the face across the edge's axis at `(3,0,20)` is the curved wall. All three `WithTangentChain` rows build,
+the asymmetric one included. `Shell` builds (11 `Plane`, 10 `Cylinder`). `ScaledAt` refuses "scale needs an exact
+line-section stack BRep".
+
+### 1.2 The x-parallel edge
+
+At each end the x-parallel top edge continues tangentially into an `Arc3` of radius 3 between the top face and a
+lateral blend cylinder, because the front face is tangent to that cylinder along the generator `x = 3, y = 0`. The
+edge has no end face: it is one edge of the top face's closed outline of 4 lines and 4 arcs. The same outline on
+the box before the Cut takes reach §8's complete cap-loop blend.
 
 ## 2. What the design reads
 
@@ -157,10 +198,10 @@ never proves "tangent".
 
 ### 5.3 Expansion
 
-`expandTangentChain` (`brep_modify_partial.go`) refuses every `facetedPayload` today. It admits one whose seeds are
-all retained-curve edges between two faces that §2 reads. The walk calls a retained continuation test in place
-of `tangentchain.Continues`: §5.2 decides a candidate edge at `v`; an incident edge whose faces fail §2, or whose
-curve is a chord chain, is undecided (SX2). At a junction the third incident edge is the seam `{W_k, W_{k+1}}`; its
+`expandTangentChain` (`brep_modify_partial.go`) expands a `facetedPayload` only when every seed is a retained line or
+arc between two faces that §2 reads (`retainedblend.Chainable`); any other faceted seed set is SX9. The walk calls
+a retained continuation test in place of `tangentchain.Continues`: §5.2 decides a candidate edge at `v`; an
+incident edge whose faces fail §2, or whose curve is a chord chain, is undecided (SX2). At a junction the third incident edge is the seam `{W_k, W_{k+1}}`; its
 face map sends `P` to a wall, test 4 of reach §5 fails, and it is "not a continuation". Seeds whose chains overlap
 merge into one chain (reach §5's fixed point), so the four x-parallel seeds of §1 give two closed chains.
 
@@ -256,7 +297,8 @@ the largest vertex bound of the tested chord. The inflation only refuses more.
   `R − t_P > 0` (chamfer).
 - **Asymmetric.** `P` borders every edge of the chain, so a reference that names `P` names it for every edge. A
   reference naming walls names each edge's own wall. A mix gives some edge two reference faces, and SX3 refuses it
-  first (reach §6's cap-loop argument); SM5 is the second check.
+  first (reach §6's cap-loop argument); SM5 is the second check. A two-distance call over two chains refuses
+  (§1.1, text A).
 
 A chord inside a band deflated by `b + slack` proves the blend consumes another face (SR4). A chord that meets the
 inflated band but not the deflated one is undecided (SR5). Every band of a chain lies in the prism over its base
@@ -450,7 +492,7 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | Same, torus side | as above | take `κ` the other way: `Major = R + r` and the volume is off |
 | Closed chain chamfer, equal and with reference `P` | removed `(t_P·t_W / 2)·(ΣL + 2π·(R − t_P/3))` | let the arcs take `t_W` along `P`: the two-distance volume is off |
 | Four x-parallel seeds | two closed chains; removed volume twice the C1 row's | skip merging overlapping chains: the corners are claimed twice and SR2 refuses |
-| One straight edge, no option | SM2 naming `WithTangentChain` and `(3,0,20)` | drop SM2: the message is blend SR5's "not a retained plane" |
+| One straight edge, no option | SM2 naming `WithTangentChain` and the junction point | drop SM2: the message is blend SR5's "not a retained plane" |
 | All 8 edges named, no option | builds the C1 result; volume equal within both bounds | treat shared junction corners as SR2: refused |
 | Open chain (C2): one lateral fillet, seed its top edge | chain of line, arc, line; removed `A_f·(L1 + L2) + (π/2)·(R − x̄)·A_f` | stop the walk at the junction and use the R1 end rule: refused as grazing |
 | Open chain ending on an arc (C2, R4): the corner-rounded box trimmed by a plane through its arc; seed the arc | line and arc ending on `G`; removed volume `A_f·L + ∫∫ ρ·Δφ(ρ)` over the section's corner, `Δφ` the angle from `G` to the tangent point | start every row at the corner's azimuth: the end rows leave `G` (unit test) |
