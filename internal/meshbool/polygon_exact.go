@@ -351,27 +351,52 @@ func OnSegment2(a, b, p Xp2) (bool, bool) {
 	if Cross2xSign(a, b, p) != 0 {
 		return false, false
 	}
-	// Collinear: order along the dominant axis of the segment.
-	du := proof.SubRat(new(big.Rat), b.U, a.U)
-	dv := proof.SubRat(new(big.Rat), b.V, a.V)
+	// Collinear: order along the first nonconstant coordinate.
+	cached := a.floatFromExact && b.floatFromExact && p.floatFromExact
+	uOrder := compareProjectedCoordinate(a.U, b.U, a.Fu, b.Fu, cached)
 	var lo, hi, x *big.Rat
-	if du.Sign() != 0 {
+	var flo, fhi, fx float64
+	if uOrder != 0 {
 		lo, hi, x = a.U, b.U, p.U
-	} else if dv.Sign() != 0 {
-		lo, hi, x = a.V, b.V, p.V
+		flo, fhi, fx = a.Fu, b.Fu, p.Fu
 	} else {
-		// A zero-length segment holds only its own point.
-		eq := proof.CmpRat(p.U, a.U) == 0 && proof.CmpRat(p.V, a.V) == 0
-		return eq, false
+		vOrder := compareProjectedCoordinate(a.V, b.V, a.Fv, b.Fv, cached)
+		if vOrder == 0 {
+			// A zero-length segment holds only its own point.
+			eq := compareProjectedCoordinate(p.U, a.U, p.Fu, a.Fu, cached) == 0 &&
+				compareProjectedCoordinate(p.V, a.V, p.Fv, a.Fv, cached) == 0
+			return eq, false
+		}
+		lo, hi, x = a.V, b.V, p.V
+		flo, fhi, fx = a.Fv, b.Fv, p.Fv
+		uOrder = vOrder
 	}
-	if proof.CmpRat(lo, hi) > 0 {
+	if uOrder > 0 {
 		lo, hi = hi, lo
+		flo, fhi = fhi, flo
 	}
-	if proof.CmpRat(x, lo) < 0 || proof.CmpRat(x, hi) > 0 {
+	lower := compareProjectedCoordinate(x, lo, fx, flo, cached)
+	upper := compareProjectedCoordinate(x, hi, fx, fhi, cached)
+	if lower < 0 || upper > 0 {
 		return false, false
 	}
-	interior := proof.CmpRat(x, lo) > 0 && proof.CmpRat(x, hi) < 0
-	return true, interior
+	return true, lower > 0 && upper < 0
+}
+
+// compareProjectedCoordinate uses the monotonicity of exact-to-float rounding:
+// unequal rounded values have the same order as their exact coordinates.
+// Equal roundings, NaNs and coordinates without constructor caches compare
+// exactly. cached must certify both rounded values came from a and b.
+func compareProjectedCoordinate(a, b *big.Rat, fa, fb float64, cached bool) int {
+	if cached {
+		if fa < fb {
+			return -1
+		}
+		if fa > fb {
+			return 1
+		}
+	}
+	return proof.CmpRat(a, b)
 }
 
 // PointInPoly2 reports whether p lies strictly inside the simple polygon —
@@ -394,8 +419,8 @@ func PointInPoly2(budget *proofbound.WorkBudget, poly []Xp2, p Xp2) (bool, bool,
 			return false, false, err
 		}
 		a, b := poly[i], poly[(i+1)%n]
-		belowA := proof.CmpRat(a.V, p.V) <= 0
-		if belowA == (proof.CmpRat(b.V, p.V) <= 0) {
+		belowA := compareProjectedCoordinate(a.V, p.V, a.Fv, p.Fv, a.floatFromExact && p.floatFromExact) <= 0
+		if belowA == (compareProjectedCoordinate(b.V, p.V, b.Fv, p.Fv, b.floatFromExact && p.floatFromExact) <= 0) {
 			continue
 		}
 		// An upward edge crosses right of p when its orientation with p is
