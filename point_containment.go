@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/pointquery"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -37,9 +38,13 @@ func (l PointLocation) String() string {
 }
 
 // LocatePoint classifies a world-coordinate point in millimetres against b.
-// tol is the positive tessellation chord tolerance. An approximate boundary
-// can leave points near it undecided; a finer tolerance may decide them.
-// Retired bodies remain readable. A sheet or unsound solid is ErrNotSolid.
+// An undisplaced straight prism is classified against its own record in
+// exact arithmetic where its boundary is exact rational data
+// (agent-docs/point-containment-design.md §7); every other body and point
+// reads the verified mesh. tol is the positive tessellation chord tolerance.
+// An approximate boundary can leave points near it undecided; a finer
+// tolerance may decide them. Retired bodies remain readable. A sheet or
+// unsound solid is ErrNotSolid.
 func (b *Body) LocatePoint(ctx context.Context, p r3.Vec, tol units.Value) (PointLocation, error) {
 	if ctx == nil || b == nil || b.n.Doc == nil {
 		return PointUndecided, fmt.Errorf(`%w: point location requires a body and context`, ErrDegenerate)
@@ -52,6 +57,24 @@ func (b *Body) LocatePoint(ctx context.Context, p r3.Vec, tol units.Value) (Poin
 	}
 	if !b.n.Solid {
 		return PointUndecided, ErrNotSolid
+	}
+	if pp, ok := b.n.Payload.(prismPayload); ok {
+		// The exact route answers without a mesh, so it applies
+		// Tessellate's tolerance gates itself first.
+		chord, err := sectionrecord.MagnitudeIn(tol, units.Length, units.Millimeter, "the chord tolerance")
+		if err != nil {
+			return PointUndecided, err
+		}
+		if chord == 0 {
+			return PointUndecided, fmt.Errorf(`%w: a zero chord tolerance admits no chord`, ErrDegenerate)
+		}
+		result, decided, err := pointquery.LocatePrism(ctx, p, pp)
+		if err != nil {
+			return PointUndecided, err
+		}
+		if decided {
+			return PointLocation(result), nil
+		}
 	}
 	mesh, err := tessellateContext(ctx, b, tol, VerifyAll)
 	if err != nil {
