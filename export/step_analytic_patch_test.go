@@ -1,6 +1,7 @@
 package export
 
 import (
+	"math"
 	"slices"
 	"testing"
 
@@ -121,32 +122,91 @@ func patchSenses(f step.File, surface string) []step.Enumeration {
 	return out
 }
 
-// bodyConeHalfAngles is the HalfAngle, in radians, of every cone face of body.
-func bodyConeHalfAngles(t *testing.T, body *decad.Body) []float64 {
+// patchSurface is a CONICAL_SURFACE or SPHERICAL_SURFACE read back from a
+// file: its placement's location and axis, its radius and, for a cone, its
+// semi-angle.
+type patchSurface struct {
+	name              string
+	location, axis    r3.Vec
+	radius, semiAngle float64
+}
+
+// readPatchSurface reads the surface an ADVANCED_FACE names when it is a
+// CONICAL_SURFACE or SPHERICAL_SURFACE, from the file's entities alone.
+func readPatchSurface(t *testing.T, f step.File, face step.Entity) (patchSurface, bool) {
 	t.Helper()
-	var out []float64
-	for _, f := range body.Faces() {
-		if cone, ok := f.Surface().(decad.Cone); ok {
-			a, err := cone.HalfAngle.In(units.Radian)
-			require.NoError(t, err)
-			out = append(out, a)
-		}
+	byID := map[uint64]step.Entity{}
+	for _, e := range f.Entities {
+		byID[e.ID] = e
 	}
-	slices.Sort(out)
-	return out
+	ref := func(v step.Value) step.Entity { return byID[uint64(v.(step.Reference))] }
+	triple := func(e step.Entity) r3.Vec {
+		list := e.Parameters[1].(step.List)
+		return r3.NewVec(float64(list[0].(step.Real)), float64(list[1].(step.Real)), float64(list[2].(step.Real)))
+	}
+	surface := ref(face.Parameters[2])
+	if surface.Name != "CONICAL_SURFACE" && surface.Name != "SPHERICAL_SURFACE" {
+		return patchSurface{}, false
+	}
+	placement := ref(surface.Parameters[1])
+	out := patchSurface{
+		name:     surface.Name,
+		location: triple(ref(placement.Parameters[1])),
+		axis:     triple(ref(placement.Parameters[2])),
+		radius:   float64(surface.Parameters[2].(step.Real)),
+	}
+	if surface.Name == "CONICAL_SURFACE" {
+		out.semiAngle = float64(surface.Parameters[3].(step.Real))
+	}
+	return out, true
+}
+
+// requireFileVerticesOnPatchSurfaces reads every cone and sphere ADVANCED_FACE
+// back from the file and requires each vertex its loop walks to lie on the
+// surface the file states: at its radius from a sphere's location, or, for a
+// cone, at R + h·tan(semi-angle) from the axis, h its height along the axis
+// from the location (ISO 10303-42's conical_surface, h at or above −R/tan).
+// The oracle reads only the file, so a writer that states a wrong centre,
+// radius or half-angle fails it; 1e-9 mm is far above the rounding of these
+// coordinates and far below any wrong placement. It returns how many faces it
+// checked.
+func requireFileVerticesOnPatchSurfaces(t *testing.T, f step.File) int {
+	t.Helper()
+	checked := 0
+	for _, face := range bandEntities(f)["ADVANCED_FACE"] {
+		surface, ok := readPatchSurface(t, f, face)
+		if !ok {
+			continue
+		}
+		for _, p := range faceLoopPoints(t, f, face) {
+			d := p.Sub(surface.location)
+			if surface.name == "SPHERICAL_SURFACE" {
+				require.InDelta(t, surface.radius, d.Len(), 1e-9, "vertex %v off the sphere", p)
+				continue
+			}
+			h := d.Dot(surface.axis)
+			require.GreaterOrEqual(t, surface.radius+h*math.Tan(surface.semiAngle), -1e-9, "vertex %v on the far nappe", p)
+			radial := d.Sub(surface.axis.Scale(h)).Len()
+			require.InDelta(t, surface.radius+h*math.Tan(surface.semiAngle), radial, 1e-9, "vertex %v off the cone", p)
+		}
+		checked++
+	}
+	return checked
 }
 
 // TestAnalyticConePatchesConvexCorners writes the rounded box's top chamfer:
-// four CONICAL_SURFACE patches at radius 0 (the apex) with the body's own
-// half-angles, each of sense T, since the chamfer's outward normal leans away
+// four CONICAL_SURFACE patches at radius 0 (the apex), every vertex of each on
+// the cone the file states, each of sense T, since the chamfer's outward normal leans away
 // from the corner's axis as the cone's own does. Besides the four cones
 // there are six planes, four corner cylinders and the four chamfer planes.
 // Every edge is used once in each direction and every cone loop runs
 // counter-clockwise about its outward normal, read back from the file. Shown
 // to fail with supportsAnalyticConePatch refusing every loop (the body fell
 // to the faceted writer), with addConePatchFace's sense inverted (the senses
-// read F), and with patchWalks' decided walk inverted (every edge a patch
-// shares was used twice in one direction).
+// read F), with patchWalks' decided walk inverted (every edge a patch shares
+// was used twice in one direction), and with conicalSurface writing the
+// half-angle 1% wide or its placement 0.5 mm along the axis (the vertices left
+// the stated cone).
 func TestAnalyticConePatchesConvexCorners(t *testing.T) {
 	t.Parallel()
 	body := patchRoundedBoxChamfer(t, 0)
@@ -156,7 +216,7 @@ func TestAnalyticConePatchesConvexCorners(t *testing.T) {
 	require.Len(t, byName["PLANE"], 10)
 	require.Len(t, byName["CYLINDRICAL_SURFACE"], 4)
 	require.Equal(t, []float64{0, 0, 0, 0}, bandReals(byName["CONICAL_SURFACE"], 2))
-	require.Equal(t, bodyConeHalfAngles(t, body), bandReals(byName["CONICAL_SURFACE"], 3))
+	require.Equal(t, 4, requireFileVerticesOnPatchSurfaces(t, f))
 	require.Equal(t, []step.Enumeration{"T", "T", "T", "T"}, patchSenses(f, "CONICAL_SURFACE"))
 	requireEveryEdgeCurveInBothSenses(t, f)
 	require.Equal(t, 4, requirePatchFacesRunCounterClockwise(t, f, body, isConePatch))
@@ -164,10 +224,13 @@ func TestAnalyticConePatchesConvexCorners(t *testing.T) {
 
 // TestAnalyticConePatchesReflexCorners writes the pocket mouth's chamfer: four
 // three-edge cone patches, one arc and two generators meeting at the apex
-// vertex. Each is of sense F: the body's outward normal points into the
+// vertex, every vertex on the cone the file states. Each is of sense F: the body's outward normal points into the
 // pocket, toward the cone's axis, against the cone's own. Shown to fail with
 // supportsAnalyticConePatch's minimum of three edges raised to four (the body
 // fell to the faceted writer) and with addConePatchFace's sense inverted.
+// addConePatchFace skips a vertex at the apex when it reads the sense, since
+// no normal exists there. That skip is not shown red: no fixture's loop
+// starts at its apex vertex, so the first vertex already lies off the axis.
 func TestAnalyticConePatchesReflexCorners(t *testing.T) {
 	t.Parallel()
 	body := patchPocketMouthChamfer(t)
@@ -175,7 +238,7 @@ func TestAnalyticConePatchesReflexCorners(t *testing.T) {
 	byName := bandEntities(f)
 	require.Len(t, byName["ADVANCED_FACE"], len(body.Faces()))
 	require.Equal(t, []float64{0, 0, 0, 0}, bandReals(byName["CONICAL_SURFACE"], 2))
-	require.Equal(t, bodyConeHalfAngles(t, body), bandReals(byName["CONICAL_SURFACE"], 3))
+	require.Equal(t, 4, requireFileVerticesOnPatchSurfaces(t, f))
 	require.Equal(t, []step.Enumeration{"F", "F", "F", "F"}, patchSenses(f, "CONICAL_SURFACE"))
 	requireEveryEdgeCurveInBothSenses(t, f)
 	require.Equal(t, 4, requirePatchFacesRunCounterClockwise(t, f, body, isConePatch))
@@ -183,11 +246,13 @@ func TestAnalyticConePatchesReflexCorners(t *testing.T) {
 
 // TestAnalyticSpherePatchesFilletedCube writes the cube with every edge
 // filleted r = 2: six planes, twelve cylinder patches and eight
-// SPHERICAL_SURFACE corners of radius 2 centred 2 in from each corner, each of
+// SPHERICAL_SURFACE corners of radius 2 centred 2 in from each corner, read
+// from the file's placements with every vertex on the stated sphere, each of
 // sense T, bounded by three great-circle arcs. The only circles are the
 // patches' 24 arcs, each of radius 2. Shown to fail with the Sphere arm of
 // supportsAnalyticSTEP deleted (the body fell to the faceted writer), with
-// addSphereFace's sense inverted, and with patchWalks' decided walk inverted.
+// addSphereFace's sense inverted, with patchWalks' decided walk inverted, and
+// with addSphereFace placing the sphere 0.5 mm off its Center.
 func TestAnalyticSpherePatchesFilletedCube(t *testing.T) {
 	t.Parallel()
 	body := patchFilletedCube(t)
@@ -199,11 +264,12 @@ func TestAnalyticSpherePatchesFilletedCube(t *testing.T) {
 	require.Equal(t, slices.Repeat([]float64{2}, 8), bandReals(byName["SPHERICAL_SURFACE"], 2))
 	require.Equal(t, slices.Repeat([]float64{2}, 24), bandReals(byName["CIRCLE"], 2))
 	var centres []r3.Vec
-	for _, face := range body.Faces() {
-		if sphere, ok := face.Surface().(decad.Sphere); ok {
-			centres = append(centres, sphere.Center)
+	for _, face := range byName["ADVANCED_FACE"] {
+		if surface, ok := readPatchSurface(t, f, face); ok {
+			centres = append(centres, surface.location)
 		}
 	}
+	require.Equal(t, 8, requireFileVerticesOnPatchSurfaces(t, f))
 	require.ElementsMatch(t, []r3.Vec{
 		r3.NewVec(2, 2, 2), r3.NewVec(18, 2, 2), r3.NewVec(2, 18, 2), r3.NewVec(18, 18, 2),
 		r3.NewVec(2, 2, 18), r3.NewVec(18, 2, 18), r3.NewVec(2, 18, 18), r3.NewVec(18, 18, 18),
@@ -327,4 +393,48 @@ func TestPatchWalksDecideAndRefuse(t *testing.T) {
 		require.ErrorIs(t, err, errPatchUnoriented)
 		require.ErrorContains(t, err, "no decided face shares an edge")
 	})
+}
+
+// TestArcInItsPlaneRefusesASwappedAxis runs arcInItsPlane on real patch arcs,
+// a cone patch's and a sphere patch's, and on the same edges with each arc's
+// Axis swapped for a perpendicular one, which no longer holds the edge's
+// vertices. The admissions cannot be handed a foreign arc, since an edge's
+// curve is the body's own, so this is the leg's red case. Shown to fail with
+// arcInItsPlane always reporting true.
+func TestArcInItsPlaneRefusesASwappedAxis(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		body *decad.Body
+		pick func(*decad.Face) bool
+	}{
+		{"cone patch", patchRoundedBoxChamfer(t, 0), isConePatch},
+		{"sphere patch", patchFilletedCube(t), isSpherePatch},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			checked := 0
+			for _, face := range tc.body.Faces() {
+				if !tc.pick(face) {
+					continue
+				}
+				for _, ce := range face.Loops()[0].CoEdges() {
+					arc, ok := ce.Edge().Curve().(decad.Arc3)
+					if !ok {
+						continue
+					}
+					require.True(t, arcInItsPlane(ce.Edge(), arc))
+					// The arc's start radial is perpendicular to its Axis; the
+					// swapped axis is that radial, which the start leaves.
+					swapped := arc
+					radial, ok := ce.Edge().Start().Position().Value.Sub(arc.Center).Normalize()
+					require.True(t, ok)
+					swapped.Axis = radial
+					require.False(t, arcInItsPlane(ce.Edge(), swapped), "an axis that does not hold the arc's vertices")
+					checked++
+				}
+			}
+			require.Positive(t, checked)
+		})
+	}
 }

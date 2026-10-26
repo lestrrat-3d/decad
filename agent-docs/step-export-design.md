@@ -57,7 +57,14 @@ according to the writer path.
   of each with its `Axis` from its `Center`), and every vertex of such a patch is `Exact`. Both checks
   only refuse: an arc record whose axis does not hold its vertices, or a vertex whose position carries
   a bound, is not proven to lie on the curves and surface the file states through it, and the body
-  takes the faceted writer.
+  takes the faceted writer. The vertex check covers cone and sphere patches only. The same reason
+  holds for the other arms, which do not apply it: a plane, cylinder or torus face writes its held
+  vertex coordinates through its curves and surface whatever bound they carry, so such a file states
+  points the body does not prove lie on them. The bounds those faces carry today are rounding, measured on amd64 at
+  most 5.3e-15 mm on a shell with an oblique opening, 7.7e-14 mm and 1.5e-13 mm on the round bosses
+  crossing a plate's outline, and 4.4e-16 mm on a loop fillet's rounded-plate top loop. Applying the
+  check to every arm would send each of those bodies to the faceted writer
+  (`agent-docs/missing-features.md`).
   A cone or sphere patch's loop is walked by the edge-use rule, never by a parameter-plane area, which
   a cone's apex vertex leaves undefined. Every other face is walked as its own rule below decides. A
   closed shell uses each edge once in each direction, so each patch is walked so that every edge it
@@ -90,7 +97,7 @@ according to the writer path.
   angle) plane disagrees with that sense. A horn torus patch is a three-edge
   loop and keeps the faceted writer.
   The analytic writer copies each face's tag as it is held: the STEP surface
-  is the float image of the `Plane`, `Cylinder`, `Cone` or `Torus` tag, not an
+  is the float image of the `Plane`, `Cylinder`, `Cone`, `Sphere` or `Torus` tag, not an
   exact claim about the surface the body denotes. It does not read
   `topo.Face.NormalBound`, so a face whose tag departs from its true surface
   by a stated bound is written at its tag all the same. A Loft bore cylinder
