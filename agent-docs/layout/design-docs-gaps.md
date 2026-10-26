@@ -11,6 +11,7 @@ The rules for rows live in `agent-docs/layout.md`.
 |---|---|
 | `agent-docs/thread-design.md` | `Thread`: ISO metric thread cut into a cylindrical face through a coil, and its groove profile. |
 | `agent-docs/gltf-export-design.md` | The glTF writer's file layout, metre scaling and error contract. |
+| `agent-docs/step-import-design.md` | `ReadSTEP`: the Part 21 parser, the planar B-rep reader and the polygon triangulation. |
 | `agent-docs/text-design.md` | `TextProfiles`: lettering from font outlines as sketch profiles, its layout and fill rule. |
 | `agent-docs/mesh-import-design.md` | `MeshBody`, `ReadSTL` and `ReadOBJ`: the mesh readers, the mesh report and its exact volume. |
 | `agent-docs/path-pattern-design.md` | `PathPatternCopies`: copies spaced at equal arc length along a `Path`, and the path sampler. |
