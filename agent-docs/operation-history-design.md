@@ -967,21 +967,27 @@ Add each new test name to shard 10 of `.github/test-shards.txt`.
 - Files: New root `faceted_source_patch_fallback_test.go`.
 - Fixtures: Each case runs with and without the option of Task 7.1. The control
   refuses in the P3 scene, so a case asserts that the real run refuses with the
-  same touched bound as the control, or builds where the control refuses, plus
-  the volume's closed form within its bound when it builds.
+  same touched bound and chord tolerance as the control, or builds where the
+  control refuses, plus the volume's closed form within its bound when it builds.
+  The later cut's tool is placed by the same `Copy` option as the target.
   - Invalid placement transfer: Make a 20° exact-rotation `Copy` of the P3
-    result, and separately translate it by X = 0.1. First assert that each
-    plane the later cut touches carries a nonzero `NormalBound`. The later cut
-    then matches the control.
-  - Valid transfer: An integer translation keeps `NormalBound == 0`, and the
-    later cut still builds where the control refuses.
-  - Denoted plane: Run a revolved part's cap through a mesh Cut, then a later
-    cut. First assert that the cap carries a denoted patch. The later cut then
-    matches the control.
+    result about the z axis through (20, 10, 10), and separately translate it by
+    X = 0.1. First assert that the two planes the later cut touches, the y = 0
+    and y = 20 faces, carry a `RetainedTag` and a nonzero `NormalBound`. The
+    later cut then matches the control. The X = 0.1 copy keeps `NormalBound == 0`
+    on its x- and z-normal planes, so the assertion names only the touched planes.
+  - Valid transfer: An integer translation (X = 5) keeps `NormalBound == 0` on
+    the touched planes, and the later cut still builds where the control refuses.
+  - Denoted plane: Revolve a stepped profile 270° so its end faces are caps. Cut
+    a z-axis pin of radius 1.5 that pierces the cap in the sketch plane, then a
+    second pin 4 mm along x. Both pins end inside the material, so the second cut
+    meets no wall of the part. First assert that the cap carries a `RetainedTag`
+    and a denoted patch. The later cut then matches the control.
   - Curved rim: The cut through the first bore's wall in
     `TestFacetedPlaneSlab` refuses identically in both runs.
 - Red leg: Drop the `NormalBound == 0` test in `retainedPlaneOf`. The placed
-  cases then tighten.
+  cases then tighten. Drop the `Denoted` test and the denoted case builds. Set
+  every facet's `SlabBound` to 0 in `SetSlabBounds` and the curved-rim case builds.
 
 - Acceptance: A later calculation consumes the real prior builder's evidence.
   Source identity alone upgrades neither geometry nor public completeness.
