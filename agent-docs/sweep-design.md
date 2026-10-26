@@ -295,11 +295,12 @@ construction against a gate that is ever loosened.
 Each arc builder proves the section stays on one side of its carrier axis and
 meets it per Revolve's exact axis-incidence rule (S8). The global audit
 treats the last and first spans as neighbours. Neighbouring span interiors
-must lie on opposite sides of their shared section plane, and every other span
-pair must have a strict bounded-box gap (S9). Short legs and off-centre
-sections therefore build exactly when the audit proves them simple, and a
-section that touches an opposite leg refuses. The audit, not a clearance
-inequality on the section, decides.
+must lie on opposite sides of their shared section plane, two neighbouring
+exact half turns must keep their far sections apart by a strict bounded-box
+gap, and every other span pair must have a strict bounded-box gap (S9, §7).
+Short legs and off-centre sections therefore build exactly when the audit
+proves them simple, and a section that touches an opposite leg refuses. The
+audit, not a clearance inequality on the section, decides.
 
 The span builders provide analytic walls and two temporary caps per span. All
 rims pair by recorded profile station; the last rim pairs with the first. The
@@ -436,9 +437,27 @@ endpoint cap a supporting plane (a prism, or an exact-turn arc of at most a
 half turn) and the extent does not prove it past the plane: the rim pairing
 already proves the two caps denote one section, so that extent reading only
 falsifies. A placement's rounding therefore cannot refuse a composite sweep
-whose spans touch only at their shared sections. Every non-neighbour pair must
-have a strict separating gap between its bound-inflated axis-aligned boxes. A pair without either certificate returns
-`ErrUnsupported`; the evaluator never infers disjointness from samples.
+whose spans touch only at their shared sections.
+
+Opposite closed sides confine neighbour contact to the shared plane, but do
+not confine it to the shared section. A prism, a drafted slab, or an
+exact-turn arc of less than a half turn meets that plane only in the shared
+section. An exact half turn keeps both caps in the plane through its axis.
+Beside any other neighbour, its far cap can therefore meet that neighbour
+only inside the shared section, which is its own other cap. Its two caps
+share at most the axis points where S8 lets the profile touch the axis.
+Those points lie in the shared section itself, so they add no contact
+beyond it. When both neighbours are exact half turns, the first span's far
+(start) section and the second's far (end) section both lie in the shared
+plane. That pair must also have a strict separating gap between the two far
+sections' bound-inflated axis-aligned boxes. Each box is the arc's own bounded extent
+reading with its angular interval closed to that one end angle. Overlapping
+or touching far sections refuse, and so does a gap the boxes cannot prove.
+The closing join of a cyclic composite takes its last span as the first
+neighbour. Every non-neighbour pair must have a strict separating gap
+between its bound-inflated axis-aligned boxes. A pair without the
+certificates its kind needs returns `ErrUnsupported`; the evaluator never
+infers disjointness from samples.
 
 The shared-grid tessellation increment will replace this conservative subset
 with an ephemeral certified facet cover of every lateral patch and both

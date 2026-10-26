@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -59,6 +60,8 @@ func auditBodiesWithClosure(ctx context.Context, spans []SpanPart, closed bool) 
 			StartPlanar:      startPlanar,
 			EndPlanar:        endPlanar,
 			EndpointSupports: endpointSupports(span.Body),
+			CoplanarSections: bodyHalfTurn(span.Body),
+			Sections:         bodySections{body: span.Body},
 			Box: AuditBox{
 				Min: bounds.Min, Max: bounds.Max, Bound: bounds.Bound.Base(),
 			},
@@ -103,14 +106,92 @@ func endpointSupports(body *topo.Body) bool {
 		if payload.Full {
 			return false
 		}
-		from, to := payload.Den.Phi0, payload.Den.Phi1
-		if !from.Valid() || !to.Valid() || from.Span != nil || to.Span != nil ||
-			from.Rad.Sign() != 0 || to.Rad.Sign() != 0 {
-			return false
-		}
-		width := new(big.Rat).Sub(to.Turn, from.Turn)
-		return width.Sign() > 0 && width.Cmp(big.NewRat(1, 2)) <= 0
+		width, ok := exactTurnWidth(payload)
+		return ok && width.Sign() > 0 && width.Cmp(big.NewRat(1, 2)) <= 0
 	default:
 		return false
 	}
+}
+
+// bodyHalfTurn reports whether a span body is an exact half-turn revolve,
+// whose two end caps both lie in the plane through its axis.
+func bodyHalfTurn(body *topo.Body) bool {
+	payload, ok := body.Payload.(revolveplan.Payload)
+	return ok && RevolveHalfTurn(payload)
+}
+
+// RevolveHalfTurn reports whether a partial revolve denotes exactly half a
+// turn. Its two end sections then lie in one plane.
+func RevolveHalfTurn(payload revolveplan.Payload) bool {
+	if payload.Full {
+		return false
+	}
+	width, ok := exactTurnWidth(payload)
+	return ok && width.Cmp(big.NewRat(1, 2)) == 0
+}
+
+func exactTurnWidth(payload revolveplan.Payload) (*big.Rat, bool) {
+	from, to := payload.Den.Phi0, payload.Den.Phi1
+	if !from.Valid() || !to.Valid() || from.Span != nil || to.Span != nil ||
+		from.Rad.Sign() != 0 || to.Rad.Sign() != 0 {
+		return nil, false
+	}
+	return new(big.Rat).Sub(to.Turn, from.Turn), true
+}
+
+// bodySections reads the section boxes of a revolve span body.
+type bodySections struct {
+	body *topo.Body
+}
+
+func (span bodySections) AuditSectionBoxes(
+	ctx context.Context, work *freeform.FreeformWork,
+) (AuditBox, AuditBox, error) {
+	payload, ok := span.body.Payload.(revolveplan.Payload)
+	if !ok {
+		return AuditBox{}, AuditBox{}, fmt.Errorf(`%w: a composite sweep span has no section box certificate`, decaderr.ErrUnsupported)
+	}
+	return RevolveSections{Payload: payload}.AuditSectionBoxes(ctx, work)
+}
+
+// RevolveSections reads the section boxes of a partial revolve built as a
+// sweep span. The span's path-start section is the end whose denoted angle is
+// exactly zero, the section its transported frame names. Each box is the
+// payload's own bounded extent reading with its angular interval closed to
+// that one end angle, so it charges the same frame, placement, boundary and
+// angle bounds as the span's box.
+type RevolveSections struct {
+	Payload revolveplan.Payload
+}
+
+func (span RevolveSections) AuditSectionBoxes(
+	ctx context.Context, work *freeform.FreeformWork,
+) (AuditBox, AuditBox, error) {
+	payload := span.Payload
+	from, to := payload.Den.Phi0, payload.Den.Phi1
+	if payload.Full || !exactZeroAngle(from) && !exactZeroAngle(to) {
+		return AuditBox{}, AuditBox{}, fmt.Errorf(`%w: a composite sweep arc span has no exact path-start section`, decaderr.ErrUnsupported)
+	}
+	first := payload
+	first.Phi1, first.Den.Phi1 = payload.Phi0, payload.Den.Phi0
+	last := payload
+	last.Phi0, last.Den.Phi0 = payload.Phi1, payload.Den.Phi1
+	firstBox, err := revolveplan.Bounds(ctx, first, work)
+	if err != nil {
+		return AuditBox{}, AuditBox{}, err
+	}
+	lastBox, err := revolveplan.Bounds(ctx, last, work)
+	if err != nil {
+		return AuditBox{}, AuditBox{}, err
+	}
+	start := AuditBox{Min: firstBox.Min, Max: firstBox.Max, Bound: firstBox.Bound.Base()}
+	end := AuditBox{Min: lastBox.Min, Max: lastBox.Max, Bound: lastBox.Bound.Base()}
+	if exactZeroAngle(from) {
+		return start, end, nil
+	}
+	return end, start, nil
+}
+
+func exactZeroAngle(angle revolveangle.Angle) bool {
+	return angle.Valid() && angle.Span == nil && angle.Rad.Sign() == 0 && angle.Turn.Sign() == 0
 }

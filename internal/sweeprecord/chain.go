@@ -180,6 +180,11 @@ func auditChainSeparation(ctx context.Context, payload ChainPayload, parts []*to
 			Box:    compositesweep.AuditBox{Min: box.Min, Max: box.Max, Bound: box.Bound.Base()},
 			Extent: chainSweepExtent{span: payload.Spans[i]},
 		}
+		if payload.Spans[i].Arc {
+			revolve := payload.Spans[i].Revolve.Revolve()
+			audit[i].CoplanarSections = compositesweep.RevolveHalfTurn(revolve)
+			audit[i].Sections = compositesweep.RevolveSections{Payload: revolve}
+		}
 	}
 	return compositesweep.Audit(ctx, audit)
 }

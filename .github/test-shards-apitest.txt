@@ -1278,6 +1278,8 @@
 6	0.24	TestRevolveBooleanRefusesAHiddenTangency
 6	0.01	TestRevolveBoundsExactOffsetAnchor
 6	0.00	TestRevolveChainFullTurnWithOnePole
+10	0.00	TestSweepCompositeHalfTurnsRefuseMeetingEndCaps
+10	0.00	TestSweepCompositeHalfTurnsSeparatedEndCapsAdmit
 6	0.00	TestRevolveChainSnappedPoleEnclosesRadialWallArea
 6	0.03	TestRevolveCircularWallAreaTightens
 6	0.02	TestRevolveEdgeAxisGates
