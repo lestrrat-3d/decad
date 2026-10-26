@@ -201,6 +201,7 @@ Each of these returns a new body and retires its input.
 | `decad.Draft` | Leans selected walls about a `decad.NeutralPlane` (`decad.NeutralFace`). |
 | `decad.Hole` | Cuts a round hole at a point on a planar face, through or blind, with an optional `decad.Counterbore` or `decad.Countersink` head. A `decad.RectangularHole` or `decad.SlotHole` shape cuts that cross-section instead, without a head. |
 | `decad.Thread` | Cuts a right-handed ISO metric thread into a cylindrical face, a rod or a bore, from its pitch. |
+| `decad.Boss` | Raises a round boss on a planar face, with an optional blind pilot hole. |
 | `decad.Rib` | Thickens one straight sketch line, extrudes it by an `decad.Extent` and joins it to the body. `decad.WithRibOverrun` buries its ends in the walls. |
 | `decad.Web` | Adds one such rib for each of several lines in one step. |
 | `decad.Emboss` | Raises or engraves closed profiles on a planar face. `decad.EmbossRaised` or `decad.EmbossEngraved` picks the mode. |

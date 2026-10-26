@@ -29,6 +29,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/fillet-chord-design.md` | `FilletChord`: chord-length fillet as a radius, sharing the right-angle gate of `ChamferAngle`. |
 | `agent-docs/arrange-design.md` | `Arrange`: shelf packing of body footprints onto a flat bed by translation. |
 | `agent-docs/chamfer-angle-design.md` | `ChamferAngle`: distance-and-angle bevel as a second setback, and its right-angle gate. |
+| `agent-docs/boss-design.md` | `Boss`: a round boss and its blind pilot hole in one atomic union-and-cut commit. |
 | `agent-docs/hole-design.md` | `Hole`: face and point placement, size gates, tool shapes and the atomic cut. |
 | `agent-docs/rib-design.md` | `Rib` and `Web`: line outline, extent, overrun, touch and volume checks, and the merged join. |
 | `agent-docs/emboss-design.md` | `Emboss`: face-derived sweep, plane checks, margin, volume checks and the shared join. |

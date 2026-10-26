@@ -51,6 +51,7 @@ const (
 	OperationLoftFaces
 	OperationLoftFacesToConeTangent
 	OperationThread
+	OperationBoss
 )
 
 // String returns the stable lower-snake token for k.
@@ -107,4 +108,5 @@ var operationKindNames = [...]string{
 	"loft_faces",
 	"loft_faces_to_cone_tangent",
 	"thread",
+	"boss",
 }

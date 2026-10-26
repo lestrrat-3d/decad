@@ -1,0 +1,41 @@
+# Boss design
+
+`Boss` raises a round boss on a planar face, with an optional blind pilot hole. It builds a cylinder tool, unions it
+to the body and cuts the pilot with the tools `Hole` builds, all in one atomic commit. It adds no geometry kernel.
+
+## 1. Contract
+
+```go
+type BossBore struct{ Diameter, Depth units.Value }
+
+type BossSpec struct {
+    Face     FaceSelector
+    At       r3.Vec
+    Diameter units.Value
+    Height   units.Value
+    Bore     *BossBore
+}
+
+func Boss(ctx context.Context, b *Body, spec BossSpec) (*Body, error)
+```
+
+| Decision | Rule |
+|---|---|
+| B1 | `Face` resolves to exactly one analytic plane of a live solid `b`, as `Hole`'s does (`agent-docs/hole-design.md` H1). `At` is a world point within `holeplan.OnPlaneTol` (1e-6 mm) of the face plane, and is never moved onto it. |
+| B2 | The boss runs `Height` along the face's outward normal, a positive length. `Diameter` is positive. Zero is `ErrDegenerate` and a wrong unit kind is `ErrUnitKind`. |
+| B3 | The cylinder tool starts `embed` behind the face, where `embed` is `holeplan.MouthMargin` (1 mm) or half the body's depth behind the face, whichever is less, so the union crosses the face and nothing lies in its plane. A body with no depth behind the face is `ErrDegenerate`. |
+| B4 | The pilot hole is `Hole`'s plain blind hole, started on the boss's top face at the boss axis: the same tools, `holeplan.Compute` and gates. `Bore.Diameter` is less than `Diameter`, and `Bore.Depth` is positive and less than `Height` plus the body's depth behind the face, so the pilot never leaves through the back. A violation is `ErrDegenerate`. |
+| B5 | One `combineToolSteps` chain applies the union and then each pilot tool as a cut. The history holds one `OperationBoss` entry with `b` consumed, and the tools stay private. A failure in any step leaves `b` live and the document unchanged. |
+
+## 2. Exactness
+
+The union of a round boss with a planar face and the cut of the pilot are the prism Booleans `Hole` and `Union`
+already run, so the result carries their exactness: a round boss is `Approximate` because pi is never exact, and its
+faces are planes and cylinders where the Booleans admit them.
+
+## 3. Not covered
+
+- Ribs, gussets and a root fillet at the boss's foot. Add them with `Rib`, `Web` and `Fillet`.
+- A pilot with a counterbore, a countersink or a draft.
+- A boss that is not round, or one that stands on a curved face.
+- A boss whose axis is tilted from the face normal.

@@ -2298,3 +2298,8 @@
 10	0.01	TestThreadInternalBore
 10	0.01	TestThreadIsRightHanded
 10	0.01	TestThreadRefusals
+10	0.01	TestBossSolid
+10	0.01	TestBossWithPilotHole
+10	0.01	TestBossOnTheUnderside
+10	0.01	TestBossRefusals
+10	0.01	TestBossRefusesAFaceThatIsNotPlanar
