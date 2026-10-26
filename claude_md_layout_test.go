@@ -185,6 +185,7 @@ var (
 		layoutPartSpec("internal-checks.md"),
 		layoutPartSpec("internal-loft.md"),
 		layoutPartSpec("internal-prism.md"),
+		layoutPartSpec("internal-placement.md"),
 		layoutPartSpec("operation-observability.md"),
 	}
 )
