@@ -10,6 +10,7 @@ type BossBore struct {
     Diameter, Depth units.Value
     Head            HoleHead
     Thread          *HoleThread
+    Draft           units.Value
 }
 
 type BossSpec struct {
@@ -41,7 +42,7 @@ faces are planes and cylinders where the Booleans admit them.
 ## 3. Not covered
 
 - Ribs, gussets and a root fillet at the boss's foot. Add them with `Rib`, `Web` and `Fillet`.
-- A pilot with a draft, and a pilot thread whose major diameter exceeds the boss's.
+- A pilot thread whose major diameter exceeds the boss's.
 - A draft that closes the boss or breaks its circle before its top: `Extrude`'s refusal.
 - A boss that is not round, or one that stands on a curved face.
 - A boss whose axis is tilted from the face normal.
@@ -67,4 +68,5 @@ faces are planes and cylinders where the Booleans admit them.
 | Y2 | The pillar's footing starts `embed` behind the face (B3), where the taper begins, so its circle there is wider by `embed·tan(Draft)`: the wall is then the stated diameter at the face. |
 | Y3 | `Draft` is read as a signed angle. A wrong unit kind is `ErrUnitKind`. A draft whose magnitude is at or past a right angle is `ErrDegenerate`, and one that closes or breaks the circle before the top is `Extrude`'s own refusal, `ErrUnsupported`. |
 | Y4 | The pilot opens on the boss's top face, so its diameter MUST be less than the boss's diameter there as well as at the face: a pilot that would break through the narrowed wall is `ErrDegenerate`. |
+| Y5 | `BossBore.Draft` leans the pilot's wall as `HoleSpec.Draft` does (`agent-docs/hole-design.md` §9): narrower toward its bottom for a positive angle. A tapped pilot takes none, `ErrDegenerate`. |
 

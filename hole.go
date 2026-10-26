@@ -108,6 +108,14 @@ type HoleThread struct {
 // Thread is optional. A non-nil Thread taps the round bore in the same commit
 // (agent-docs/hole-design.md §8). It needs a nil Shape, ErrDegenerate otherwise,
 // and a planar face, ErrUnsupported on a cylinder.
+//
+// Draft is optional and leans the round bore's wall (agent-docs/hole-design.md
+// §9): a positive angle makes the bore narrower toward its bottom, a negative one
+// wider, and the zero Value is a straight bore. Diameter is the bore's diameter
+// at the face either way. It needs a nil Shape and a nil Thread, each otherwise
+// ErrDegenerate, and a planar face, ErrUnsupported on a cylinder. An angle whose
+// magnitude is at or past a right angle is ErrDegenerate, and one that closes the
+// bore before its bottom is the drafted extrusion's own refusal.
 type HoleSpec struct {
 	Face     FaceSelector
 	At       r3.Vec
@@ -116,6 +124,7 @@ type HoleSpec struct {
 	Head     HoleHead
 	Shape    HoleShape
 	Thread   *HoleThread
+	Draft    units.Value
 }
 
 // holeTolerance is the chord tolerance, in millimetres, Hole reads At's
@@ -213,6 +222,19 @@ func holeInput(b *Body, spec HoleSpec) (holeplan.Input, error) {
 	in.Frame = site.frame
 	in.Outward = site.outward
 	in.At = spec.At
+	if spec.Draft != (units.Value{}) {
+		if in.Draft, err = readDraft(spec.Draft, "the hole draft"); err != nil {
+			return in, err
+		}
+		switch {
+		case spec.Shape != nil:
+			return in, fmt.Errorf(`%w: a shaped hole takes no draft`, ErrDegenerate)
+		case spec.Thread != nil:
+			return in, fmt.Errorf(`%w: a threaded hole is straight and takes no draft`, ErrDegenerate)
+		case site.cylinder != nil:
+			return in, fmt.Errorf(`%w: a draft in a hole on a cylindrical face is not built`, ErrUnsupported)
+		}
+	}
 	if spec.Shape != nil {
 		if err := holeShapeInput(&in, spec); err != nil {
 			return in, err
@@ -450,7 +472,7 @@ func buildHoleTools(ctx context.Context, d *Document, plan holeplan.Plan) ([]*Bo
 	tools = append(tools, bore)
 	switch {
 	case plan.Counterbore != nil:
-		head, err := holeCylinder(ctx, d, plan, *plan.Counterbore)
+		head, err := holeCylinder(ctx, d, plan, *plan.Counterbore, 0)
 		if err != nil {
 			return fail(err)
 		}
@@ -469,7 +491,7 @@ func buildHoleTools(ctx context.Context, d *Document, plan holeplan.Plan) ([]*Bo
 // plan holds one, a cylinder otherwise.
 func holeBore(ctx context.Context, d *Document, plan holeplan.Plan) (*Body, error) {
 	if plan.Corners == nil && plan.SlotTool == nil {
-		return holeCylinder(ctx, d, plan, plan.Bore)
+		return holeCylinder(ctx, d, plan, plan.Bore, plan.BoreDraft)
 	}
 	w := sketch.NewWorld()
 	pl, err := w.CreatePlaneFromFrame(plan.Plane)
@@ -513,7 +535,7 @@ func holeBore(ctx context.Context, d *Document, plan holeplan.Plan) (*Body, erro
 }
 
 // holeCylinder extrudes one circle on the face plane inward by c.Length.
-func holeCylinder(ctx context.Context, d *Document, plan holeplan.Plan, c holeplan.Cylinder) (*Body, error) {
+func holeCylinder(ctx context.Context, d *Document, plan holeplan.Plan, c holeplan.Cylinder, draft float64) (*Body, error) {
 	w := sketch.NewWorld()
 	pl, err := w.CreatePlaneFromFrame(plan.Plane)
 	if err != nil {
@@ -525,7 +547,10 @@ func holeCylinder(ctx context.Context, d *Document, plan holeplan.Plan, c holepl
 	}
 	centre := s.CreatePoint(plan.U, plan.V)
 	s.Fix(centre)
-	s.CreateCircle(centre, c.Radius)
+	// The tool starts Margin outside the face and a draft leans its wall from
+	// there, so its circle is as much wider than the bore as the wall leans over
+	// that margin: the wall is then the bore's radius at the face.
+	s.CreateCircle(centre, c.Radius+c.Margin*math.Tan(draft))
 	if _, err := s.Solve(ctx); err != nil {
 		return nil, err
 	}
@@ -533,7 +558,11 @@ func holeCylinder(ctx context.Context, d *Document, plan holeplan.Plan, c holepl
 	if plan.Against {
 		dir = Against
 	}
-	return Extrude(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(c.Tool()), Dir: dir})
+	var taper []ExtrudeOption
+	if draft != 0 {
+		taper = []ExtrudeOption{WithTaper(units.Radians(draft))}
+	}
+	return Extrude(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(c.Tool()), Dir: dir}, taper...)
 }
 
 // holeSink revolves the countersink cone profile about the hole axis.
@@ -608,4 +637,17 @@ func planHoleThread(thread *HoleThread, through bool, in holeplan.Input, plan ho
 		return nil, fmt.Errorf(`%w: the thread frame is degenerate: %s`, ErrDegenerate, err)
 	}
 	return &holeTap{frame: frame, plan: threadPlan, pitch: pitch, leftHand: thread.LeftHand}, nil
+}
+
+// readDraft reads a signed draft angle in radians. A wrong unit kind is
+// ErrUnitKind and a magnitude at or past a right angle is ErrDegenerate.
+func readDraft(angle units.Value, what string) (float64, error) {
+	rad, err := angle.In(units.Radian)
+	if err != nil {
+		return 0, fmt.Errorf(`%w: %s must be an angle: %s`, ErrUnitKind, what, err)
+	}
+	if !(math.Abs(rad) < math.Pi/2) {
+		return 0, fmt.Errorf(`%w: %s must lie strictly within a quarter turn of straight`, ErrDegenerate, what)
+	}
+	return rad, nil
 }

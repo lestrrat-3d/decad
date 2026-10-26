@@ -2387,3 +2387,8 @@
 10	0.01	TestBossDraftNegativeWidensIt
 10	0.01	TestBossDraftKeepsThePilotInsideTheNarrowedTop
 10	0.01	TestBossDraftRefusals
+10	0.01	TestHoleDraftBlindNarrowsTowardTheBottom
+10	0.01	TestHoleDraftThroughAndNegative
+10	0.01	TestHoleDraftWithACounterbore
+10	0.01	TestHoleDraftRefusals
+10	0.01	TestBossPilotDraft
