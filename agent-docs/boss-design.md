@@ -18,8 +18,9 @@ type BossSpec struct {
     At       r3.Vec
     Diameter units.Value
     Height   units.Value
-    Bore     *BossBore
-    Draft    units.Value
+    Bore       *BossBore
+    Draft      units.Value
+    RootFillet units.Value
 }
 
 func Boss(ctx context.Context, b *Body, spec BossSpec) (*Body, error)
@@ -41,7 +42,7 @@ faces are planes and cylinders where the Booleans admit them.
 
 ## 3. Not covered
 
-- Ribs, gussets and a root fillet at the boss's foot. Add them with `Rib`, `Web` and `Fillet`.
+- Ribs and gussets at the boss's foot. Add them with `Rib` and `Web`.
 - A pilot thread whose major diameter exceeds the boss's.
 - A draft that closes the boss or breaks its circle before its top: `Extrude`'s refusal.
 - A boss that is not round, or one that stands on a curved face.
@@ -70,3 +71,13 @@ faces are planes and cylinders where the Booleans admit them.
 | Y4 | The pilot opens on the boss's top face, so its diameter MUST be less than the boss's diameter there as well as at the face: a pilot that would break through the narrowed wall is `ErrDegenerate`. |
 | Y5 | `BossBore.Draft` leans the pilot's wall as `HoleSpec.Draft` does (`agent-docs/hole-design.md` §9): narrower toward its bottom for a positive angle. A tapped pilot takes none, `ErrDegenerate`. |
 
+## 6. A root fillet
+
+`RootFillet` rounds the concave circle where the boss meets its face, with the evaluator's `Fillet` of that edge.
+
+| Decision | Rule |
+|---|---|
+| R1 | The zero `Value` leaves the corner sharp. A positive length is the fillet's radius. A negative one is `ErrNegativeMagnitude` and a wrong unit kind `ErrUnitKind`. |
+| R2 | The boss is built as before. The fillet then takes the one circular edge of the result that lies in the face's plane, about the boss's axis, with the boss's radius at the face (a drafted boss's radius at the face is its `Diameter`). The result is a mesh-free torus patch where `Fillet` admits one, and carries the fillet's own bounds. |
+| R3 | A boss and fillet are tried on a copy of `b` first: the copy is built, filleted and retired. A fillet the evaluator refuses, or a root circle not found in the result, therefore leaves `b` live and the document unchanged. The copy and its trial leave history entries. |
+| R4 | The result is `Boss`'s union and pilot cut followed by `Fillet`, so the history holds `OperationBoss` then `OperationFillet`. A fillet too large for the face, for the boss's height or for the body's other edges is `Fillet`'s refusal. |

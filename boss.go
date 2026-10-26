@@ -38,14 +38,17 @@ type BossBore struct {
 // a solid boss. Draft is optional: a positive angle makes the boss narrower
 // toward its top by that lean of its wall, a negative one wider, and the zero
 // Value a straight wall (agent-docs/boss-design.md §5). Diameter is the boss's
-// diameter at Face either way.
+// diameter at Face either way. RootFillet is optional: a positive length rounds
+// the concave edge where the boss meets the face with a fillet of that radius,
+// and the zero Value leaves the corner sharp (agent-docs/boss-design.md §6).
 type BossSpec struct {
-	Face     FaceSelector
-	At       r3.Vec
-	Diameter units.Value
-	Height   units.Value
-	Bore     *BossBore
-	Draft    units.Value
+	Face       FaceSelector
+	At         r3.Vec
+	Diameter   units.Value
+	Height     units.Value
+	Bore       *BossBore
+	Draft      units.Value
+	RootFillet units.Value
 }
 
 // Boss raises a round boss on a planar face of b, with an optional blind pilot
@@ -90,6 +93,42 @@ func Boss(ctx context.Context, b *Body, spec BossSpec) (result *Body, retErr err
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if spec.RootFillet == (units.Value{}) {
+		return bossCombine(ctx, d, b, in)
+	}
+	radius, err := sectionrecord.MagnitudeIn(spec.RootFillet, units.Length, units.Millimeter, "the boss root fillet")
+	if err != nil {
+		return nil, err
+	}
+	if radius == 0 {
+		return nil, fmt.Errorf(`%w: a boss root fillet needs a positive radius`, ErrDegenerate)
+	}
+	// The boss and its fillet are tried on a copy first, so a fillet the evaluator
+	// refuses leaves b live and the document as it was.
+	probe, err := Copy(ctx, b)
+	if err != nil {
+		return nil, err
+	}
+	defer removeTools([]*Body{probe})
+	probed, err := bossCombine(ctx, d, probe, in)
+	if err != nil {
+		return nil, err
+	}
+	filleted, err := filletBossRoot(ctx, probed, in, radius)
+	removeTools([]*Body{probed, filleted})
+	if err != nil {
+		return nil, err
+	}
+	grown, err := bossCombine(ctx, d, b, in)
+	if err != nil {
+		return nil, err
+	}
+	return filletBossRoot(ctx, grown, in, radius)
+}
+
+// bossCombine unions the boss's pillar into b and cuts its pilot, in one atomic
+// commit that retires b.
+func bossCombine(ctx context.Context, d *Document, b *Body, in bossRequest) (*Body, error) {
 	toolCtx, capture := privateConstructionContext(ctx)
 	pillar, err := buildBossPillar(toolCtx, d, in)
 	if err != nil {
