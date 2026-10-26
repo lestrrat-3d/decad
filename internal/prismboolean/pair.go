@@ -14,7 +14,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
@@ -25,7 +24,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedunion"
@@ -187,7 +185,6 @@ func TryCrossingBlindCut(ctx context.Context, a, b topo.Payload) (breprecord.Pay
 		return breprecord.Payload{}, false, err
 	}
 	if pa.SectionDelta != 0 || pb.SectionDelta != 0 ||
-		pa.Z0Delta != 0 || pa.Z1Delta != 0 || pb.Z0Delta != 0 || pb.Z1Delta != 0 ||
 		!momentinput.CrossingBlindAxisLines(pa.Profile) || !momentinput.CrossingBlindAxisLines(pb.Profile) {
 		return breprecord.Payload{}, false, nil
 	}
@@ -195,25 +192,18 @@ func TryCrossingBlindCut(ctx context.Context, a, b topo.Payload) (breprecord.Pay
 	if err != nil || !reexpress.Identity {
 		return breprecord.Payload{}, false, err
 	}
-	z0, z1, ok := prismplacement.ShiftedInterval(pa.PlacementOperand(), pb.PlacementOperand())
-	if !ok || z0.Cmp(proofarith.FloatRat(pa.Z0)) <= 0 ||
-		z0.Cmp(proofarith.FloatRat(pa.Z1)) >= 0 || z1.Cmp(proofarith.FloatRat(pa.Z1)) != 0 {
-		return breprecord.Payload{}, false, nil
-	}
 	va, _ := stackedunion.OperandFromPayload(a)
 	vb, _ := stackedunion.OperandFromPayload(b)
 	shift := prismplacement.ZShift(pa.PlacementOperand(), pb.PlacementOperand())
-	levels, ok := stackedrecord.UnionLevels(va.Slabs, vb.Slabs, shift)
-	if !ok || len(levels) != 3 || levels[0].Delta != 0 || levels[1].Delta != 0 || levels[2].Delta != 0 {
+	levels, reach, ok := stackedrecord.CrossingBlindLevels(va.Slabs, vb.Slabs, shift)
+	if !ok {
 		return breprecord.Payload{}, false, nil
 	}
-	zero := new(big.Rat)
-	reach := make([][2]int, 2)
-	for k := range reach {
-		reach[k][0] = stackedrecord.UnionSlabOf(va.Slabs, zero, levels[k].Exact, levels[k+1].Exact)
-		reach[k][1] = stackedrecord.UnionSlabOf(vb.Slabs, shift, levels[k].Exact, levels[k+1].Exact)
-	}
-	if reach[0] != [2]int{0, -1} || reach[1] != [2]int{0, 0} {
+	// The tool ends at one target cap (or passes it) and starts inside the
+	// target at the other end: the cut slab is the one the tool reaches.
+	topArm := reach[0] == [2]int{0, -1} && reach[1] == [2]int{0, 0}
+	bottomArm := reach[0] == [2]int{0, 0} && reach[1] == [2]int{0, -1}
+	if !topArm && !bottomArm {
 		return breprecord.Payload{}, false, nil
 	}
 	result, err := stackedunion.Cut(ctx, budget, va, vb, reexpress, levels, reach)

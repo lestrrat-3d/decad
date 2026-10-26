@@ -629,6 +629,9 @@
 3	0.00	TestStackedUnionKnifeEdgeNestedWedge
 3	0.01	TestStitchBoundedStitchedSolidGetsClearance
 3	0.15	TestStitchCurvedRevolveMeshVerificationAndExport
+10	0.00	TestCrossingBlindPocketExtensions
+10	0.00	TestCrossingBlindPocketOnDisplacedPlate
+10	0.00	TestCrossingBlindPocketDeclinesUnprovenLevels
 3	0.02	TestStitchCurvedVolumeBoundEncloses
 3	0.01	TestStitchDecimalFrustumEnclosesItsRecord
 3	0.11	TestStitchOpenCurvedRevolveSheetKeepsFreeRims
