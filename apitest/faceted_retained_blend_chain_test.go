@@ -195,6 +195,66 @@ func TestFacetedRetainedBlendChain(t *testing.T) {
 		requireVolumeChange(t, before, after, chainChamferRemoved(2, 1))
 	})
 
+	t.Run("a chamfer of both outlines takes each outline's own base as reference", func(t *testing.T) {
+		t.Parallel()
+		const tp, tw = 2.0, 1.0
+		drilled := crossDrilled(t)
+		before, err := drilled.Volume()
+		require.NoError(t, err)
+		bases := decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Or(decad.Facing(r3.NewVec(0, 0, -1)))
+		out, err := decad.Chamfer(t.Context(), drilled, xParallel(4), units.Millimeters(tp), decad.WithTangentChain(),
+			decad.WithAsymmetricChamfer(bases, units.Millimeters(tw)))
+		require.NoError(t, err)
+		after, err := out.Volume()
+		require.NoError(t, err)
+		requireVolumeChange(t, before, after, 2*chainChamferRemoved(tp, tw))
+		requireVerifiedMesh(t, out)
+
+		// The corner blends are cones about the corner axes: radius R - tp on
+		// the base, widening by tp/tw per millimetre down the wall.
+		cones, planes := 0, 0
+		for _, f := range out.Faces() {
+			switch s := f.Surface().(type) {
+			case decad.Cone:
+				cones++
+				require.InDelta(t, chainBoxR-tp, s.Radius.Base(), 1e-9)
+				require.InDelta(t, math.Atan2(tp, tw), s.HalfAngle.Base(), 1e-9)
+				require.Contains(t, []float64{0, 20}, s.Origin.Z)
+			case decad.Plane:
+				if n := s.Frame.N(); math.Abs(n.Z) > 1e-9 && math.Abs(math.Abs(n.Z)-1) > 1e-9 {
+					planes++
+				}
+			}
+		}
+		require.Equal(t, 8, cones)
+		require.Equal(t, 8, planes)
+
+		// Each straight bevel plane passes through the setback generators: tp
+		// in along the base and tw along the wall, on the top and the bottom.
+		for _, z := range []struct{ base, wall float64 }{{20, 19}, {0, 1}} {
+			for _, g := range [][2]r3.Vec{
+				{r3.NewVec(10, 2, z.base), r3.NewVec(10, 0, z.wall)},
+				{r3.NewVec(10, 18, z.base), r3.NewVec(10, 20, z.wall)},
+				{r3.NewVec(2, 10, z.base), r3.NewVec(0, 10, z.wall)},
+				{r3.NewVec(38, 10, z.base), r3.NewVec(40, 10, z.wall)},
+			} {
+				found := false
+				for _, f := range out.Faces() {
+					pl, ok := f.Surface().(decad.Plane)
+					if !ok {
+						continue
+					}
+					n, o := pl.Frame.N(), pl.Frame.Origin()
+					if math.Abs(n.Dot(g[0].Sub(o))) < 1e-9 && math.Abs(n.Dot(g[1].Sub(o))) < 1e-9 &&
+						math.Abs(math.Abs(n.Z)-1) > 1e-9 {
+						found = true
+					}
+				}
+				require.True(t, found, "no bevel plane through %v and %v", g[0], g[1])
+			}
+		}
+	})
+
 	t.Run("one straight edge without the option names the option", func(t *testing.T) {
 		t.Parallel()
 		_, err := decad.Fillet(t.Context(), crossDrilled(t), topFront(), units.Millimeters(1))

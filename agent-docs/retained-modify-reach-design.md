@@ -51,7 +51,8 @@ Every refusal is `ErrUnsupported`; the quoted text follows `decad: not supported
 | `Chamfer` of the four, `WithAsymmetricChamfer` 1 and 2 | refused (SM2) | — | as above |
 | `Fillet` r=1 of the four, `WithTangentChain` | builds two chains | 6 `Plane`, 13 `Cylinder`, 8 `Torus` | M3 (§5) |
 | `Chamfer` d=1 of the four, `WithTangentChain` | builds two chains | 14 `Plane`, 5 `Cylinder`, 8 `Cone` | M3 (§5) |
-| `Chamfer` of the four, asymmetric, `WithTangentChain` | refused (text A) | — | open; see below |
+| `Chamfer` of the four, asymmetric, `WithTangentChain`, reference `Faces(Facing(+z)).Or(Facing(-z))` | builds two chains | 8 `Plane`, 8 `Cone` | M3 (§5.6) |
+| `Chamfer` of the four, asymmetric, `WithTangentChain`, reference `Facing(+z)` | refused (text A) | — | §5.6 |
 | `Shell` inward, top face removed | refused (text S) | — | GAP-B; §9.1 |
 | `Draft` 2° of the walls about the bottom face | refused (SD23) | — | GAP-C; §9.2 |
 | `Offset` | refused (text O) | — | §9.3 |
@@ -61,7 +62,7 @@ The refusal texts are these.
 
 - **SM2**: "the selected edge ends at the tangent junction 37,0,20 whose continuation is not selected;
   WithTangentChain selects the whole chain" (`internal/retainedblend/chain.go`).
-- **Text A**: "the reference face is not a face of the selected edge" (`internal/retainedblend/rim.go`, `assign`).
+- **Text A**: SX3, "names 0 of the faces adjacent to selected edge" (reach §6), for the chain on the bottom plane.
 - **Text S**: "this evaluator shells a straight prism or its one-line Sweep reduction only"
   (`internal/brepmodify/shell.go`).
 - **SD23**: "this evaluator drafts a straight prism only (an extrude, its filleted or chamfered result, a tube, or
@@ -70,10 +71,10 @@ The refusal texts are these.
 - **Text J**: "Union of three or more bodies needs a certified prism, axial or copied-tooth set; join them two at
   a time" (`boolean_many.go`).
 
-The asymmetric chain row names a reference that holds both base planes, the top and the bottom face. Reach SX3
-admits it: each expanded edge borders exactly one of the two. The four seeds expand to two closed chains, one on
-each base plane, and the retained route then refuses with text A. One chain with the base as its reference builds
-(§12); §5.6 states the rule for each chain. Why two chains in one call refuse is not traced.
+The asymmetric chain rows differ in the reference. `Faces(Facing(+z)).Or(Facing(-z))` holds both base planes, the
+top and the bottom face. Reach SX3 admits it, because each expanded edge borders exactly one of the two. The four
+seeds expand to two closed chains, one on each base plane, and each builds with its own base as reference (§5.6).
+A bare `Facing(+z)` names no face adjacent to the edges of the bottom chain, so SX3 refuses with text A.
 
 The probe calls neither the two-distance chamfer of a single edge (GAP-D, M1, §4) nor the parallel-cylinder blend
 (M6, §8); §12's fixtures cover both.
@@ -297,8 +298,11 @@ the largest vertex bound of the tested chord. The inflation only refuses more.
   `R − t_P > 0` (chamfer).
 - **Asymmetric.** `P` borders every edge of the chain, so a reference that names `P` names it for every edge. A
   reference naming walls names each edge's own wall. A mix gives some edge two reference faces, and SX3 refuses it
-  first (reach §6's cap-loop argument); SM5 is the second check. A two-distance call over two chains refuses
-  (§1.1, text A).
+  first (reach §6's cap-loop argument); SM5 is the second check. Several chains of one selection (the top and
+  bottom outline of a bored plate) each build with their own base as reference. A reference that names every base
+  at once, such as `Facing(+z).Or(Facing(-z))`, resolves to one face per edge. A chain after the first is found
+  again on the partly blended body, possibly directed opposite to its selected edges, and takes each edge's
+  reference by the edge's two end points in either direction.
 
 A chord inside a band deflated by `b + slack` proves the blend consumes another face (SR4). A chord that meets the
 inflated band but not the deflated one is undecided (SR5). Every band of a chain lies in the prism over its base
@@ -491,6 +495,7 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | Closed chain fillet on P2, r = 1 (C1) | 4 `Cylinder`, 4 `Torus` (`Major = R − r`); removed `A_f·(96 + 2π·(R − x̄))`; junctions `Arc3` of radius `r`; `VerifyAll` passes | build each junction row per edge: rows differ in the last bits, SR7 refuses |
 | Same, torus side | as above | take `κ` the other way: `Major = R + r` and the volume is off |
 | Closed chain chamfer, equal and with reference `P` | removed `(t_P·t_W / 2)·(ΣL + 2π·(R − t_P/3))` | let the arcs take `t_W` along `P`: the two-distance volume is off |
+| Two closed chains (top and bottom outline), reference naming both bases | each chain removes `(t_P·t_W / 2)·(ΣL + 2π·(R − t_P/3))`; the 8 corner faces are `Cone` of radius `R − t_P` and half-angle `atan(t_P / t_W)`, the 8 straight bevels `Plane` | a later chain loses its reference: `the reference face is not a face of the selected edge` |
 | Four x-parallel seeds | two closed chains; removed volume twice the C1 row's | skip merging overlapping chains: the corners are claimed twice and SR2 refuses |
 | One straight edge, no option | SM2 naming `WithTangentChain` and the junction point | drop SM2: the message is blend SR5's "not a retained plane" |
 | All 8 edges named, no option | builds the C1 result; volume equal within both bounds | treat shared junction corners as SR2: refused |
