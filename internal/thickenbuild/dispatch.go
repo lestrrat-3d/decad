@@ -51,7 +51,10 @@ func Thicken(ctx context.Context, env topo.Env, b *topo.Body, side Side, tmm, tD
 // publishes the result as a Sweep. The reduced builder proves the offset and
 // solid; the finishing step restores the path's wall and cap roles.
 func thickenSweep(ctx context.Context, env topo.Env, sp sweeprecord.Payload, side Side, tmm, tDelta float64) (*topo.Body, error) {
-	if !sp.SurfaceResult || len(sp.Spans) != 0 {
+	if sp.SurfaceResult && len(sp.Spans) != 0 {
+		return thickenCompositeSweep(ctx, env, sp, side, tmm, tDelta)
+	}
+	if !sp.SurfaceResult {
 		return nil, fmt.Errorf(`%w: this sweep sheet has no admitted Thicken join proof`, decaderr.ErrUnsupported)
 	}
 	if sp.Arc {
@@ -78,6 +81,43 @@ func thickenSweep(ctx context.Context, env topo.Env, sp sweeprecord.Payload, sid
 	sp.SurfaceResult = false
 	sweeprecord.FinishStraight(body, sp)
 	return body, nil
+}
+
+// thickenCompositeSweep offsets the one closed profile of a multi-span sheet
+// and sweeps the resulting annulus along the same path again. Each span's
+// existence gates and compositesweep's separation audit then rerun on the
+// thickened section, so no offset join is trusted without its own proof
+// (agent-docs/surface-design.md section 16.8).
+func thickenCompositeSweep(ctx context.Context, env topo.Env, sp sweeprecord.Payload,
+	side Side, tmm, tDelta float64) (*topo.Body, error) {
+	if sp.Path == nil || sp.ClosedComposite || sp.ClosedCircle || sp.Arc ||
+		sp.Prism.SectionDelta != 0 || sp.Prism.Xform != r3.Identity() ||
+		len(sp.Prism.Profile.Holes) != 0 {
+		return nil, fmt.Errorf(`%w: this sweep sheet has no admitted Thicken join proof`, decaderr.ErrUnsupported)
+	}
+	amount, err := Amount(tmm, tDelta, side)
+	if err != nil {
+		return nil, err
+	}
+	budget := proofbound.NewWorkBudget(ctx)
+	if err := budget.Err(); err != nil {
+		return nil, err
+	}
+	sec, err := SectionOf(ctx, sp.Prism.Profile, side, amount, budget, nil)
+	if err != nil {
+		return nil, err
+	}
+	annulus, err := sec.Annulus(ctx)
+	if err != nil {
+		return nil, err
+	}
+	frame := sp.Prism.Frame
+	plane := sectionrecord.PlaneRecord{Origin: frame.Origin(), U: frame.U(), V: frame.V()}
+	if err := sweepinput.ValidateAnalyticProfile(annulus); err != nil {
+		return nil, err
+	}
+	return sweeprecord.BuildComposite(ctx, env, annulus, plane, frame, sp.Path,
+		freeform.NewFreeformWork(), false)
 }
 
 func thickenPatch(ctx context.Context, env topo.Env, pp patchchain.Payload, side Side, tmm, tDelta float64) (*topo.Body, error) {

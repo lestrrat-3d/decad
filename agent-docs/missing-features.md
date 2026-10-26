@@ -121,7 +121,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Gap | Today | Owner |
 |---|---|---|
 | `Offset` of a solid, a mesh Boolean result included | `ErrUnsupported`: "Offset requires a sheet body" (`offset.go`, surface-design R37) | `agent-docs/surface-design.md` R37, `agent-docs/retained-modify-reach-design.md` §9.3 |
-| `Thicken` of other composite or chain sweeps, loft, stitched, `PatchEdges` or `Unstitch` sheets | `ErrUnsupported` (R24); cardinal composite and exact-axis one-arc chain sweeps build, as do one-span profile sweeps | `agent-docs/surface-design.md` §16.8 |
+| `Thicken` of a holed or placed composite sweep, other chain sweeps, loft, stitched, `PatchEdges` or `Unstitch` sheets | `ErrUnsupported` (R24); cardinal composite and exact-axis one-arc chain sweeps build, as do one-span and composite (hole-free) profile sweeps | `agent-docs/surface-design.md` §16.8 |
 | `PatchEdges` over a rim with a bounded vertex (a cut junction, a trimmed line end, a circle seam whose centre plus radius rounds) that no straight prism build stamped with one level token, such as a `Patch` sheet's rim | `ErrUnsupported` (R6) | `agent-docs/surface-design.md` §5.2 |
 | Tessellation of `PatchEdges` with a curved face or edge outside a single-circle prism sheet filled in one call, or with a nonzero face-normal bound | `ErrUnsupported`: no shared chording for that face or edge | `agent-docs/surface-design.md` §10; `agent-docs/tessellation-design.md` §2 |
 | `Stitch` closing a revolve sheet whose wall tags are not exactly their records: a tilted or round-anchored axis, a near-parallel or near-perpendicular side, a snapped centre | `ErrUnsupported` (R8, `stitchrecord`'s `fluxTagsDenoted`) | `agent-docs/surface-design.md` §6.4 |

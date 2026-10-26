@@ -267,23 +267,10 @@ func TestThickenPrismUnrepresentablePublicOffset(t *testing.T) {
 	require.Len(t, doc.Bodies(), 1)
 }
 
-// TestThickenStagedFamiliesRefuse is T157: a composite sweep sheet needs an
-// offset-join proof, and a loft sheet has no constant section to offset.
+// TestThickenStagedFamiliesRefuse is T157: a loft sheet has no constant
+// section to offset.
 func TestThickenStagedFamiliesRefuse(t *testing.T) {
 	t.Parallel()
-	s, p := plateSketch(t)
-	doc := decad.New()
-	path, err := decad.NewPath(r3.Vec{},
-		decad.LineTo{End: r3.NewVec(0, 0, 5)},
-		decad.LineTo{End: r3.NewVec(0, 0, 10)})
-	require.NoError(t, err)
-	sweepSheet, err := decad.Sweep(t.Context(), doc, s, p, path, decad.WithSurfaceResult())
-	require.NoError(t, err)
-	_, err = decad.Thicken(t.Context(), sweepSheet, units.Millimeters(1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Contains(t, err.Error(), "no admitted Thicken join proof")
-	require.Equal(t, decad.BodySheet, sweepSheet.Kind())
-
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	loftDoc := decad.New()
 	loftSheet, err := decad.Loft(t.Context(), loftDoc, s0, p0, s1, p1, decad.WithSurfaceResult())
@@ -295,7 +282,6 @@ func TestThickenStagedFamiliesRefuse(t *testing.T) {
 	require.NoError(t, err)
 	require.InDelta(t, 1600.0, area.Value.Base(), area.Bound.Base())
 
-	require.Len(t, doc.Bodies(), 1)
 	require.Len(t, loftDoc.Bodies(), 1)
 }
 
