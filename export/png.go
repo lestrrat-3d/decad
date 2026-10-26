@@ -29,7 +29,7 @@ import (
 // pixel wide (agent-docs/png-export-design.md §6). FieldOfView, an angle, makes
 // the camera perspective with that field of view across the smaller image side
 // of the scene's bounding sphere; the zero units.Value is the orthographic camera
-// (agent-docs/png-export-design.md §7). Outlines and HiddenEdges take the perspective
+// (agent-docs/png-export-design.md §7). Outlines, HiddenEdges and Shadows take the perspective
 // camera too (agent-docs/png-export-design.md §12).
 type View struct {
 	Direction, Up r3.Vec
@@ -46,7 +46,6 @@ type View struct {
 	HiddenEdges bool
 	// Shadows casts the key light's shadows: a face a nearer one hides from the
 	// light is drawn at the ambient level (agent-docs/png-export-design.md §10).
-	// It is not combined with a perspective camera.
 	Shadows bool
 	// BackColor, when set, is the colour of the faces that look away from the
 	// camera, in place of orange: they show where a sheet is open or a mesh is
@@ -131,9 +130,6 @@ func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View, coun
 		}
 		if fov == 0 {
 			return fmt.Errorf("export: PNG: %w: a field of view of zero draws nothing; leave it unset for an orthographic camera", decad.ErrDegenerate)
-		}
-		if view.Shadows {
-			return fmt.Errorf("export: PNG: %w: shadows are not drawn with a perspective camera", decad.ErrDegenerate)
 		}
 		cam.FieldOfView = fov
 	}

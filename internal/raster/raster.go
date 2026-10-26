@@ -246,6 +246,28 @@ func (p Projection) FacingAt(n, at r3.Vec) float64 {
 	return -n.Dot(at.Sub(p.eye))
 }
 
+// World is the inverse of [Projection.Project] on the image plane: the world
+// point at the plane position (x, y) of [Projection.PlanePoint] and the depth
+// [Projection.Project] gives. For an orthographic camera it is right·x + up·y +
+// dir·depth, and for a perspective one the point on the ray from the eye through
+// that plane position at distance −1/depth along the view direction.
+func (p Projection) World(x, y, depth float64) r3.Vec {
+	if !p.perspective {
+		return p.right.Scale(x).Add(p.up.Scale(y)).Add(p.dir.Scale(depth))
+	}
+	return p.eye.Add(p.dir.Add(p.right.Scale(x)).Add(p.up.Scale(y)).Scale(-1 / depth))
+}
+
+// Sight is the direction from the camera to the world point at: the view
+// direction for an orthographic camera, and the line from the eye for a
+// perspective one.
+func (p Projection) Sight(at r3.Vec) r3.Vec {
+	if !p.perspective {
+		return p.dir
+	}
+	return at.Sub(p.eye)
+}
+
 // PlanePoint returns the position of v in the image plane before fitting, in
 // the coordinates [Projection.Plane] takes: its right and up components for an
 // orthographic camera, and those over its distance from the eye for a
@@ -452,8 +474,8 @@ func DrawDashed(img *image.RGBA, proj Projection, segments [][2][2]float64, c co
 // RenderShadowed is [RenderTinted] with shadows cast by the key light: a pixel
 // the light cannot reach, because a nearer triangle lies between it and the
 // light, takes its face's base colour at the ambient level, as a face turned
-// from the light does. Only an orthographic camera is drawn; a perspective one is
-// [ErrDegenerate].
+// from the light does. The camera may be perspective: the light stays a
+// direction, and a pixel's world point is rebuilt along its ray from the eye.
 //
 // The shadow map is the scene seen from the light, an orthographic camera along
 // the key light's direction, drawn into a depth buffer of side shadowSize. A
@@ -463,9 +485,6 @@ func DrawDashed(img *image.RGBA, proj Projection, segments [][2][2]float64, c co
 // shadows itself.
 func RenderShadowed(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []color.RGBA, back color.RGBA, cam Camera,
 	width, height, shadowSize int) (*image.RGBA, error) {
-	if cam.FieldOfView != 0 {
-		return nil, fmt.Errorf("%w: shadows are not drawn with a perspective camera", ErrDegenerate)
-	}
 	proj, err := NewProjection(verts, cam, width, height)
 	if err != nil {
 		return nil, err
@@ -517,7 +536,11 @@ func RenderShadowed(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []
 			if !ok {
 				continue
 			}
-			view := proj.dir
+			// The pixel's world point: the image plane's place of the pixel and its depth.
+			px := proj.centreX + (float64(x)+0.5-float64(width)/2)/proj.scale
+			py := proj.centreY - (float64(y)+0.5-float64(height)/2)/proj.scale
+			world := proj.World(px, py, depths[at])
+			view := proj.Sight(world)
 			if normal.Dot(view) > 0 {
 				normal = normal.Scale(-1) // seen from behind: the side that faces the camera
 			}
@@ -525,11 +548,6 @@ func RenderShadowed(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []
 			if cos <= 0 {
 				continue // turned from the light: already at the ambient level
 			}
-			// The pixel's world point: the image plane's right and up by the pixel's place, and
-			// the view direction by its depth.
-			px := proj.centreX + (float64(x)+0.5-float64(width)/2)/proj.scale
-			py := proj.centreY - (float64(y)+0.5-float64(height)/2)/proj.scale
-			world := proj.right.Scale(px).Add(proj.up.Scale(py)).Add(proj.dir.Scale(depths[at]))
 			lx, ly, ld := lproj.Project(world)
 			ix, iy := int(math.Floor(lx)), int(math.Floor(ly))
 			if ix < 0 || iy < 0 || ix >= shadowSize || iy >= shadowSize {
@@ -543,7 +561,7 @@ func RenderShadowed(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []
 					front = tints[ids[at]]
 				}
 				base := front
-				if cosView := proj.dir.Dot(verts[t[1]].Sub(verts[t[0]]).Cross(verts[t[2]].Sub(verts[t[0]]))); cosView > 0 {
+				if cosView := view.Dot(verts[t[1]].Sub(verts[t[0]]).Cross(verts[t[2]].Sub(verts[t[0]]))); cosView > 0 {
 					base = back
 				}
 				img.SetRGBA(x, y, color.RGBA{
