@@ -143,7 +143,10 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 		plate, box2, boss := build(t)
 		first, err := decad.Union(t.Context(), plate, boss)
 		require.NoError(t, err)
-		_, err = decad.Union(t.Context(), first, box2)
+		// A Copy ends the history chain, so the final call is the sequential gate, not a regroup.
+		held, err := decad.Copy(t.Context(), first)
+		require.NoError(t, err)
+		_, err = decad.Union(t.Context(), held, box2)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 
 		plate, box2, boss = build(t)

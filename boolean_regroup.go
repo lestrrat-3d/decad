@@ -22,7 +22,7 @@ func regroupBoolean(ctx context.Context, d *Document, op meshbool.OperationKind,
 		return nil, 0, false, nil
 	}
 	chain, ok := boolchain.Flatten(op, &a.n, &b.n, historyProducers{d})
-	if !ok || chain.Disjunction {
+	if !ok {
 		return nil, 0, false, nil
 	}
 	ectx, err := d.evalContext(ctx)

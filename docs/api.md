@@ -219,7 +219,7 @@ Each of these returns a new body and retires its input.
 | `decad.Intersect` | The volume common to both bodies. |
 | `decad.Split` | One solid per arranged target cell. |
 
-A `Cut` or `Intersect` that would be refused because an operand is the mesh result of earlier Booleans is retried from
+A two-body `Union`, `Cut` or `Intersect` that would be refused because an operand is the mesh result of earlier Booleans is retried from
 the source bodies of that chain, when all but one pair combine by exact routes. The result is the same solid. Its
 history records the one call, and faces made by the exact steps carry fresh roles, so select them by geometry.
 
@@ -362,6 +362,7 @@ the mesh closed. `decad.ReduceMesh` thins a mesh body by clustering its vertices
 `export.PNG` draws a body as an orthographic, flat-shaded PNG image from a `export.View`, such as `export.IsometricView`. `export.PNGBodies` draws several bodies together in one image. Set `export.View.Outlines` to draw the visible feature edges over the shading, or `export.View.FieldOfView` for a perspective camera.
 `export.DXF` writes the feature edges of a body as an ASCII DXF drawing along an `export.DrawingView`, with hidden edges on their own dashed layer. `export.DXFViews` lays several views of a body in a row on one sheet.
 `export.MeshSTL`, `export.MeshOBJ`, `export.MeshGLTF`, `export.MeshPNG` and `export.MeshDXF` write a `decad.MeshBody` in the same formats, as it is, with no tolerance.
+`export.STEP` writes a solid with a cavity as a `BREP_WITH_VOIDS` of its outer shell and the cavity shells.
 `export.NewSTEPFile` builds a STEP file in memory. STEP header fields use `export.WithSTEPAuthor`,
 `export.WithSTEPName`, `export.WithSTEPOrganization` and `export.WithSTEPTimestamp`.
 

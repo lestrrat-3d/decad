@@ -1333,7 +1333,7 @@ chord tolerance. A chorded analytic operand is meshed at that tolerance and
 is not compared. Where one is coarser, the
 boolean is refused before any facet is cut, with a plain `ErrUnsupported`,
 not a `BooleanError`, since the limit is the bound the operand holds there.
-A refused `Cut` or `Intersect` with a mesh Boolean result as an operand is then
+A refused two-body `Union`, `Cut` or `Intersect` with a mesh Boolean result as an operand is then
 rebuilt from the source bodies the operation history names, under a set identity
 that leaves the result unchanged, when every pair but one takes an analytic route
 (`agent-docs/boolean-chain-regroup-design.md`). The result is the same set, its history

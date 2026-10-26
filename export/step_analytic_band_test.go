@@ -155,7 +155,7 @@ func bandFile(t *testing.T, body *decad.Body) step.File {
 	ok, err := supportsAnalyticSTEP(t.Context(), body)
 	require.NoError(t, err)
 	require.True(t, ok, "the analytic arm takes the banded body")
-	f, err := assembleSTEPFile(t.Context(), body, bandHeader(), true, nil, nil)
+	f, err := assembleSTEPFile(t.Context(), body, bandHeader(), true, nil, nil, nil, 1)
 	require.NoError(t, err)
 	data, err := f.Marshal()
 	require.NoError(t, err)
