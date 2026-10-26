@@ -20,7 +20,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | Gap | Section below |
 |---|---|
 | Fillet, chamfer and shell take a boolean result only where it reads as a prism, (shell) as a prism cut by through tools with its caps or a run of straight walls removed, or (fillet, chamfer) at straight edges along an axis, or (chamfer) at complete loops, one or two adjacent rising inner edges, two adjacent outer edges, or every straight outer edge of an admitted axis-aligned box, bored or bare | Modify operations |
-| No import of any file format | Data exchange |
+| No import of STEP, IGES or any format as a solid | Data exchange |
 | Booleans outside the admitted analytic classes fall to a faceted mesh result, and may refuse touching contact | Booleans |
 
 ## Feature operations
@@ -138,7 +138,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 
 | Gap | Today | Owner |
 |---|---|---|
-| Import of STEP, IGES or 3MF; import of any format as a solid `Body`; repair of an imported mesh beyond weld, orient and flat-hole fill | `ReadSTL` and `ReadOBJ` read STL and OBJ into a `MeshBody` that no feature, Boolean or `Verify` takes, and `RepairMesh` mends it (`mesh_import.go`, `mesh_repair.go`) | `agent-docs/mesh-import-design.md` §5, §7 |
+| Import of STEP or IGES; import of any format as a solid `Body`; repair of an imported mesh beyond weld, orient and flat-hole fill | `ReadSTL`, `ReadOBJ` and `ReadThreeMF` read STL, OBJ and 3MF into a `MeshBody` that no feature, Boolean or `Verify` takes, and `RepairMesh` mends it (`mesh_import.go`, `mesh_repair.go`) | `agent-docs/mesh-import-design.md` §5, §7, §8 |
 | Analytic STEP for cones, spheres, horn tori, free-form walls | Whole body falls back to faceted STEP; planes, cylinders and tori with circle, arc, line and ellipse edges write analytic (`export/step_analytic.go`, `export/step_analytic_torus.go`) | `agent-docs/step-export-design.md` |
 | STEP of a body with a cavity: a `WithNoOpenings` closed shell, a full revolve of a cavity meridian or a holed meridian | `ErrUnsupported`: "only a single non-void shell is supported" (`export/step.go`) | `agent-docs/step-export-design.md` |
 

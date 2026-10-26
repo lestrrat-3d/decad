@@ -119,3 +119,32 @@ func ReadOBJ(ctx context.Context, r io.Reader, opts ...MeshImportOption) (*MeshB
 	}
 	return NewMeshBody(ctx, mesh.Vertices, mesh.Triangles)
 }
+
+// ReadThreeMF reads a 3MF package into a [MeshBody]
+// (agent-docs/mesh-import-design.md §8). Every build item that is not a support
+// is read: its mesh, or the meshes of its components, moved by the transforms on
+// the item and its components and scaled from the model's unit to millimetres.
+// Vertices with identical coordinates are welded and nothing else is repaired.
+// Materials, colours, textures and other extensions are ignored.
+//
+// A transform must be rigid: a rotation, a translation or a reflection. A
+// transform that scales or shears is [ErrUnsupported].
+//
+// ctx and r MUST NOT be nil, each otherwise ErrDegenerate. A package that is
+// not a well-formed 3MF model is [ErrMalformedMesh] and input past a limit,
+// including a part that expands past the byte limit, is [ErrMeshTooLarge]. A
+// canceled context returns its error.
+func ReadThreeMF(ctx context.Context, r io.Reader, opts ...MeshImportOption) (*MeshBody, error) {
+	if ctx == nil || r == nil {
+		return nil, fmt.Errorf(`%w: reading a 3MF package needs a context and a reader`, ErrDegenerate)
+	}
+	l, err := meshLimits(opts)
+	if err != nil {
+		return nil, err
+	}
+	mesh, err := meshparse.ThreeMF(ctx, r, l)
+	if err != nil {
+		return nil, err
+	}
+	return NewMeshBody(ctx, mesh.Vertices, mesh.Triangles)
+}

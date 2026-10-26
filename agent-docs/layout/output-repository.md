@@ -12,10 +12,10 @@ The rules for rows live in `agent-docs/layout.md`.
 | `tessellate.go` | `Mesh`, `Body.Tessellate`, its mesh cache and proof withholding, and the call into `internal/tessdispatch/`. See tessellation design, surface §10.1. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and mesh proof publication. See tessellation §1, §4. |
 | `mesh_body.go` | Public `MeshBody`, `MeshReport` and `NewMeshBody`: the imported triangle mesh and its bounds, area, volume and point readings. `internal/meshbody/` reads the triangles. See mesh-import design. |
-| `mesh_import.go` | Public `ReadSTL`, `ReadOBJ`, their options and `ErrMalformedMesh`, `ErrMeshTooLarge`: limits, then `internal/meshparse/` parses and `NewMeshBody` reads the result. See mesh-import design. |
+| `mesh_import.go` | Public `ReadSTL`, `ReadOBJ`, `ReadThreeMF`, their options and `ErrMalformedMesh`, `ErrMeshTooLarge`: limits, then `internal/meshparse/` parses and `NewMeshBody` reads the result. See mesh-import design. |
 | `mesh_repair.go` | Public `RepairMesh`, its options and `MeshRepairReport`: option gates, then `internal/meshrepair/` mends and `NewMeshBody` reads the result. See mesh-import design §7. |
 | `internal/meshrepair/` | Weld, degenerate-triangle drop, shell orientation and boundary-loop fill of an indexed triangle mesh. See mesh-import design §7. |
-| `internal/meshparse/` | STL and OBJ parsing into welded vertices and triangles, with size limits. See mesh-import design. |
+| `internal/meshparse/` | STL, OBJ and 3MF parsing into welded vertices and triangles, with size limits. See mesh-import design. |
 | `internal/meshbody/` | Exact edge classification, shell count, signed volume and area interval of an imported mesh. See mesh-import design. |
 | `export/` | STL, OBJ, 3MF, glTF, PNG, DXF and AP214 writers, and mesh writers for a `MeshBody`. See `agent-docs/step-export-design.md`, `agent-docs/3mf-export-design.md`, `agent-docs/gltf-export-design.md`, `agent-docs/png-export-design.md`, `agent-docs/dxf-export-design.md`. |
 | `internal/meshslice/` | Cuts a triangle mesh with a plane and chains the cut into closed outlines by the mesh edges it crosses. See section-outline design. |
