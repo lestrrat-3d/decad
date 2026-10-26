@@ -133,7 +133,7 @@ configuration option.
 | `decad.PathPatternOption` | option set | A setting on `decad.PathPatternCopies`: `decad.WithPathFollow` turns each copy to follow the path, about its start or the point `decad.WithPathPivot` names. | The caller |
 | `decad.ArrangeOption` | option set | A setting on `decad.Arrange`: `decad.WithArrangeTurns` lets bodies turn a quarter turn to fit and `decad.WithArrangeAngle` turns each to the angle of least footprint. | The caller |
 | `decad.ArrangeBed` | struct | The flat area `decad.Arrange` fills: a corner, a width, a depth and a gap. | The caller |
-| `decad.ThreadSpec` | struct | One thread: the cylindrical face to cut, the pitch, the hand, an optional length and an optional groove form. | The caller |
+| `decad.ThreadSpec` | struct | One thread: the cylindrical face to cut, the pitch, the hand, an optional length, an optional groove form and an optional lead-in chamfer. | The caller |
 | `decad.ThreadForm` | struct | A symmetric trapezoidal thread groove: included flank angle, depth and root flat; the zero value is the ISO profile. | `decad.ThreadSpec` |
 | `decad.BossSpec` | struct | One boss: the face it stands on, a world point, its diameter and height, an optional pilot, an optional draft and an optional root fillet. | The caller |
 | `decad.BossBore` | struct | A boss's blind pilot hole: diameter and depth from the boss's top, an optional head and an optional thread. | The caller |

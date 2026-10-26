@@ -31,6 +31,10 @@ type ThreadSpec struct {
 	// basic profile; any other makes a symmetric trapezoidal groove, such as an
 	// Acme or trapezoidal thread (agent-docs/thread-design.md §6).
 	Form ThreadForm
+	// LeadIn, when set, is the distance of a 45 degree chamfer cut on each
+	// convex end of the threaded face before the thread, so a screw or a nut
+	// starts without a burr: a positive length (agent-docs/thread-design.md §7).
+	LeadIn units.Value
 }
 
 // ThreadForm is a symmetric trapezoidal groove for [ThreadSpec.Form]. Angle is
@@ -120,14 +124,67 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	toolCtx, capture := privateConstructionContext(ctx)
-	coil, err := buildThreadCoil(toolCtx, d, frame, plan, pitch, spec.LeftHand)
+	cut := func(target *Body) (*Body, error) {
+		toolCtx, capture := privateConstructionContext(ctx)
+		coil, err := buildThreadCoil(toolCtx, d, frame, plan, pitch, spec.LeftHand)
+		if err != nil {
+			return nil, err
+		}
+		tools := []*Body{coil}
+		defer removeTools(tools)
+		return combineTools(ctx, d, OperationThread, target, meshbool.OpCut, tools, false, nil, capture)
+	}
+	if spec.LeadIn == (units.Value{}) {
+		return cut(b)
+	}
+	leadIn, err := sectionrecord.MagnitudeIn(spec.LeadIn, units.Length, units.Millimeter, "the thread lead-in")
 	if err != nil {
 		return nil, err
 	}
-	tools := []*Body{coil}
-	defer removeTools(tools)
-	return combineTools(ctx, d, OperationThread, b, meshbool.OpCut, tools, false, nil, capture)
+	if leadIn == 0 {
+		return nil, fmt.Errorf(`%w: a thread lead-in needs a positive distance`, ErrDegenerate)
+	}
+	ends := threadLeadInEdges(face)
+	if len(ends) == 0 {
+		return nil, fmt.Errorf(`%w: the threaded face has no convex circular end to chamfer for a lead-in`, ErrDegenerate)
+	}
+	chamfer := func(target *Body) (*Body, error) {
+		return Chamfer(ctx, target, edgesQuery(ends), units.Millimeters(leadIn))
+	}
+	// The lead-in and the thread are tried on a copy first, so a chamfer or a thread
+	// the evaluator refuses leaves b live and the document unchanged. The thread's
+	// frame and plan come from b's own face, which the chamfer leaves where it was.
+	probe, err := Copy(ctx, b)
+	if err != nil {
+		return nil, err
+	}
+	defer removeTools([]*Body{probe})
+	chamfered, err := chamfer(probe)
+	if err != nil {
+		return nil, err
+	}
+	threaded, err := cut(chamfered)
+	removeTools([]*Body{chamfered, threaded})
+	if err != nil {
+		return nil, err
+	}
+	bevelled, err := chamfer(b)
+	if err != nil {
+		return nil, err
+	}
+	return cut(bevelled)
+}
+
+// threadLeadInEdges lists the convex circular edges of face, the rims at its
+// ends where a lead-in chamfer bevels the thread's start.
+func threadLeadInEdges(face *Face) []*Edge {
+	var out []*Edge
+	for _, e := range face.Edges() {
+		if _, ok := e.Curve().(Circle3); ok && e.IsConvex() {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 // threadForm reads a ThreadForm into the planner's millimetre form: the zero
