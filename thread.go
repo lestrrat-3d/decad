@@ -41,10 +41,17 @@ type ThreadSpec struct {
 // the included angle between the two flanks, Depth how far the groove reaches
 // from the face to its root, and Flat the width of the root. The groove mouth
 // opens a twentieth of the pitch past the face, as the ISO groove's does. Set
-// all three or none: the zero ThreadForm is the ISO profile. Angle is an angle
-// above zero and up to 120 degrees, and Depth and Flat are positive lengths.
+// all of Angle, Depth and Flat or none: the zero ThreadForm is the ISO profile.
+// Angle is an angle above zero and up to 120 degrees, and Depth and Flat are
+// positive lengths. FlankLead and FlankTrail take the place of Angle.
 type ThreadForm struct {
 	Angle, Depth, Flat units.Value
+	// FlankLead and FlankTrail, set in place of Angle, give an asymmetric groove,
+	// a buttress thread's: each is the lean of a flank from the radial direction,
+	// FlankLead of the flank toward the start of the face (its least position
+	// along the axis) and FlankTrail of the one toward its far end. Each is an
+	// angle above zero and below 90 degrees, and both must be set.
+	FlankLead, FlankTrail units.Value
 }
 
 // Thread cuts a 60 degree ISO metric thread into a cylindrical
@@ -184,27 +191,51 @@ func threadForm(f ThreadForm) (threadplan.Form, error) {
 	if f == (ThreadForm{}) {
 		return threadplan.Form{}, nil
 	}
-	if f.Angle == (units.Value{}) || f.Depth == (units.Value{}) || f.Flat == (units.Value{}) {
+	asymmetric := f.FlankLead != (units.Value{}) || f.FlankTrail != (units.Value{})
+	if asymmetric {
+		if f.Angle != (units.Value{}) || f.FlankLead == (units.Value{}) || f.FlankTrail == (units.Value{}) {
+			return threadplan.Form{}, fmt.Errorf(`%w: an asymmetric thread form sets both flanks and no Angle`, ErrDegenerate)
+		}
+	}
+	if f.Depth == (units.Value{}) || f.Flat == (units.Value{}) || (!asymmetric && f.Angle == (units.Value{})) {
 		return threadplan.Form{}, fmt.Errorf(`%w: a thread form needs an angle, a depth and a root flat, all three or none`, ErrDegenerate)
 	}
-	if f.Angle.Kind() != units.Angle {
-		return threadplan.Form{}, fmt.Errorf(`%w: the thread form angle must be an angle`, ErrUnitKind)
-	}
-	angle := f.Angle.Base()
-	if math.IsNaN(angle) || math.IsInf(angle, 0) {
-		return threadplan.Form{}, fmt.Errorf(`%w: the thread form angle is not finite`, ErrNotFinite)
-	}
-	if angle < 0 {
-		return threadplan.Form{}, fmt.Errorf(`%w: the thread form angle is negative`, ErrNegativeMagnitude)
-	}
-	if angle == 0 || angle > 2*math.Pi/3 {
-		return threadplan.Form{}, fmt.Errorf(`%w: the thread form angle must be above zero and at most 120 degrees`, ErrDegenerate)
+	flank := func(v units.Value, what string, limit float64) (float64, error) {
+		if v.Kind() != units.Angle {
+			return 0, fmt.Errorf(`%w: the thread form %s must be an angle`, ErrUnitKind, what)
+		}
+		angle := v.Base()
+		switch {
+		case math.IsNaN(angle) || math.IsInf(angle, 0):
+			return 0, fmt.Errorf(`%w: the thread form %s is not finite`, ErrNotFinite, what)
+		case angle < 0:
+			return 0, fmt.Errorf(`%w: the thread form %s is negative`, ErrNegativeMagnitude, what)
+		case angle == 0 || angle > limit:
+			return 0, fmt.Errorf(`%w: the thread form %s must be above zero and at most %g degrees`, ErrDegenerate, what, limit*180/math.Pi)
+		}
+		return angle, nil
 	}
 	depth, err := sectionrecord.MagnitudeIn(f.Depth, units.Length, units.Millimeter, "the thread form depth")
 	if err != nil {
 		return threadplan.Form{}, err
 	}
 	flat, err := sectionrecord.MagnitudeIn(f.Flat, units.Length, units.Millimeter, "the thread form root flat")
+	if err != nil {
+		return threadplan.Form{}, err
+	}
+	if asymmetric {
+		// A flank leans from the radial direction, so it stays under a right angle.
+		lead, err := flank(f.FlankLead, "lead flank", math.Pi/2-1e-9)
+		if err != nil {
+			return threadplan.Form{}, err
+		}
+		trail, err := flank(f.FlankTrail, "trail flank", math.Pi/2-1e-9)
+		if err != nil {
+			return threadplan.Form{}, err
+		}
+		return threadplan.Form{Slope: math.Tan(lead), BackSlope: math.Tan(trail), Depth: depth, Flat: flat}, nil
+	}
+	angle, err := flank(f.Angle, "angle", 2*math.Pi/3)
 	if err != nil {
 		return threadplan.Form{}, err
 	}

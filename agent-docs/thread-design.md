@@ -16,7 +16,10 @@ type ThreadSpec struct {
     LeadIn   units.Value
 }
 
-type ThreadForm struct{ Angle, Depth, Flat units.Value }
+type ThreadForm struct {
+    Angle, Depth, Flat    units.Value
+    FlankLead, FlankTrail units.Value
+}
 
 func Thread(ctx context.Context, b *Body, spec ThreadSpec) (*Body, error)
 ```
@@ -54,7 +57,7 @@ exactly.
 - A thread on a face beside a larger face or a shoulder. The groove runs out of the face's ends and cuts the
   neighbour. Thread a rod that ends at the thread, or cut the thread before adding the shoulder.
 - A runout that tapers the groove out, and a lead-in of another angle than 45 degrees.
-- Tapered (pipe) forms, asymmetric (buttress) grooves and the UN inch series' own tables: a UN thread is the ISO profile at a pitch of `25.4 / threads per inch`.
+- Tapered (pipe) forms and the UN inch series' own tables: a UN thread is the ISO profile at a pitch of `25.4 / threads per inch`.
 - A thread table lookup. The caller states the pitch.
 - Cosmetic threads that mark a face and cut nothing.
 - Fit classes and tolerances: the profile is the basic profile with no allowance.
@@ -98,3 +101,15 @@ rim.
 | L3 | The chamfer and thread run on a copy of `b`. The successful thread commit consumes `b` and the chamfered copy together. A refusal leaves `b` live. The copy leaves history entries. |
 | L4 | The history holds `OperationChamfer` then `OperationThread`. |
 | L5 | The removed volume of a rod threaded after a lead-in `d` is the chamfered rod's less `∫ 2π·ρ·w(ρ)/P·ℓ(ρ) dρ` over the groove's radii, where `ℓ(ρ)` is the length 20 less `2·max(0, d − (R − ρ))` the chamfer leaves at radius `ρ`. A groove covers `w(ρ)/P` of any axial interval at every radius on average over the turn, so the integral is exact. The tests compute it independently. |
+
+## 8. Asymmetric grooves
+
+`ThreadForm.FlankLead` and `FlankTrail` set the two flanks of the groove apart, for a buttress thread: a flank steep to the load and a shallow
+one behind it. They replace `Angle`.
+
+| Decision | Rule |
+|---|---|
+| B1 | Each flank is an angle above zero and under 90 degrees, its lean from the radial direction: `FlankLead` for the flank toward the start of the face (its least position along the axis) and `FlankTrail` for the one toward its far end. Both are set and `Angle` is not, or `ThreadForm` is symmetric as §6 says. Any other mix is `ErrDegenerate`. `Depth` and `Flat` are required as in F1. |
+| B2 | The groove polygon is T5's with the mouth reaching `Flat/2 + h·tan(FlankLead)` from the middle of the root toward the start and `Flat/2 + h·tan(FlankTrail)` toward the far end, `h` the root's distance from the mouth. `threadplan.Form.BackSlope` is the far flank's slope, zero meaning the start flank's. |
+| B3 | The first groove lies wholly before the start plane, so its middle sits the far reach and the margin before it, and the coil carries on until the start reach clears the far end: `(length + lead + trail + 2·margin)/pitch` turns. A groove whose two reaches together reach `0.95·P` is `ErrDegenerate`. |
+| B4 | The volume of a groove that runs out of both ends depends on the sum of the two slopes alone, so it is F5's with `tan` of the mean: the tests compute that independently, and the polygon's own corners are pinned in `threadplan`. Which flank is which is read from the polygon, not from the volume. |

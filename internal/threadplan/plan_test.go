@@ -117,3 +117,30 @@ func TestComputeFormUsesItsSlopeDepthAndFlat(t *testing.T) {
 	_, err = threadplan.ComputeForm(5, 2, 20, true, false, threadplan.Form{Slope: 0.25, Depth: 1})
 	require.ErrorIs(t, err, decaderr.ErrDegenerate, "a form with no flat")
 }
+
+func TestComputeFormWithAnAsymmetricGroove(t *testing.T) {
+	t.Parallel()
+	// Slope 0.1 toward the start and 0.5 toward the far end, depth 1, flat 0.4, on a 5 mm rod at pitch 3:
+	// the mouth is 1.15 above the root, so it reaches 0.2 + 0.115 toward the start and 0.2 + 0.575 the other way.
+	plan, err := threadplan.ComputeForm(5, 3, 20, true, false, threadplan.Form{Slope: 0.1, BackSlope: 0.5, Depth: 1, Flat: 0.4})
+	require.NoError(t, err)
+	const lead, trail = 0.2 + 0.115, 0.2 + 0.575
+	first := -trail - 0.05*3
+	p := plan.Profile
+	require.InDelta(t, 4, p[0][0], 1e-12)
+	require.InDelta(t, first-0.2, p[0][1], 1e-12)
+	require.InDelta(t, first+0.2, p[1][1], 1e-12)
+	require.InDelta(t, 5.15, p[2][0], 1e-12)
+	require.InDelta(t, first+trail, p[2][1], 1e-12, "the mouth reaches farther toward the far end")
+	require.InDelta(t, first-lead, p[3][1], 1e-12)
+	require.InDelta(t, (20+lead+trail+0.3)/3, plan.Turns, 1e-12, "the groove runs out past both ends")
+	// A zero BackSlope is the symmetric groove of Slope.
+	sym, err := threadplan.ComputeForm(5, 3, 20, true, false, threadplan.Form{Slope: 0.3, Depth: 1, Flat: 0.4})
+	require.NoError(t, err)
+	both, err := threadplan.ComputeForm(5, 3, 20, true, false, threadplan.Form{Slope: 0.3, BackSlope: 0.3, Depth: 1, Flat: 0.4})
+	require.NoError(t, err)
+	require.Equal(t, sym, both)
+	// A groove too wide for the pitch, whatever its sides.
+	_, err = threadplan.ComputeForm(5, 3, 20, true, false, threadplan.Form{Slope: 1, BackSlope: 1.5, Depth: 1.5, Flat: 0.4})
+	require.ErrorIs(t, err, decaderr.ErrDegenerate)
+}

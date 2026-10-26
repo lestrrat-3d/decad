@@ -56,6 +56,10 @@ func Compute(radius, pitch, length float64, external, partial bool) (Plan, error
 // slope. The zero Form is the ISO basic profile of the pitch.
 type Form struct {
 	Slope, Depth, Flat float64
+	// BackSlope is the slope of the flank toward the far end of the thread, when
+	// it differs from Slope, the flank toward the start. Zero means Slope: a
+	// symmetric groove.
+	BackSlope float64
 }
 
 // ComputeForm is [Compute] for a groove of the given form. A zero form is the
@@ -67,6 +71,7 @@ func ComputeForm(radius, pitch, length float64, external, partial bool, form For
 		}
 	}
 	slope := flankSlope
+	backSlope := 0.0
 	depth, flat := externalDepth*pitch, externalFlat*pitch
 	if !external {
 		depth, flat = internalDepth*pitch, internalFlat*pitch
@@ -78,6 +83,12 @@ func ComputeForm(radius, pitch, length float64, external, partial bool, form For
 			}
 		}
 		slope, depth, flat = form.Slope, form.Depth, form.Flat
+		if form.BackSlope != 0 {
+			if !(form.BackSlope > 0) || math.IsInf(form.BackSlope, 0) {
+				return Plan{}, fmt.Errorf(`%w: the thread back flank slope must be positive and finite`, decaderr.ErrDegenerate)
+			}
+			backSlope = form.BackSlope
+		}
 	}
 	root, mouth := radius-depth, radius+mouthOvershoot*pitch
 	if !external {
@@ -87,19 +98,25 @@ func ComputeForm(radius, pitch, length float64, external, partial bool, form For
 		return Plan{}, fmt.Errorf(`%w: a %g mm pitch is too coarse for a %g mm radius: the groove reaches the axis`,
 			decaderr.ErrDegenerate, pitch, radius)
 	}
-	half := flat/2 + math.Abs(mouth-root)*slope
-	if 2*half >= maxProfileRatio*pitch {
-		return Plan{}, fmt.Errorf(`%w: the groove is %g mm wide, too wide for a %g mm pitch`,
-			decaderr.ErrDegenerate, 2*half, pitch)
+	if backSlope == 0 {
+		backSlope = slope
 	}
-	first := -half - startMargin*pitch
+	// lead and trail are how far the groove's mouth reaches from the middle of its root toward
+	// the start of the thread and toward its far end.
+	lead := flat/2 + math.Abs(mouth-root)*slope
+	trail := flat/2 + math.Abs(mouth-root)*backSlope
+	if lead+trail >= maxProfileRatio*pitch {
+		return Plan{}, fmt.Errorf(`%w: the groove is %g mm wide, too wide for a %g mm pitch`,
+			decaderr.ErrDegenerate, lead+trail, pitch)
+	}
+	first := -trail - startMargin*pitch
 	var p [4][2]float64
 	if external {
-		p = [4][2]float64{{root, first - flat/2}, {root, first + flat/2}, {mouth, first + half}, {mouth, first - half}}
+		p = [4][2]float64{{root, first - flat/2}, {root, first + flat/2}, {mouth, first + trail}, {mouth, first - lead}}
 	} else {
-		p = [4][2]float64{{mouth, first - half}, {root, first - flat/2}, {root, first + flat/2}, {mouth, first + half}}
+		p = [4][2]float64{{mouth, first - lead}, {root, first - flat/2}, {root, first + flat/2}, {mouth, first + trail}}
 	}
-	turns := (length + 2*half + 2*startMargin*pitch) / pitch
+	turns := (length + lead + trail + 2*startMargin*pitch) / pitch
 	if partial {
 		// The last groove's centre advances to length-half, from -half-margin.
 		turns = (length + startMargin*pitch) / pitch
