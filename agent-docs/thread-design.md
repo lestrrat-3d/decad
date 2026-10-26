@@ -13,6 +13,7 @@ type ThreadSpec struct {
     LeftHand bool
     Length   units.Value
     Form     ThreadForm
+    LeadIn   units.Value
 }
 
 type ThreadForm struct{ Angle, Depth, Flat units.Value }
@@ -52,7 +53,7 @@ exactly.
 
 - A thread on a face beside a larger face or a shoulder. The groove runs out of the face's ends and cuts the
   neighbour. Thread a rod that ends at the thread, or cut the thread before adding the shoulder.
-- A lead-in chamfer and a runout that tapers the groove out.
+- A runout that tapers the groove out, and a lead-in of another angle than 45 degrees.
 - Tapered (pipe) forms, asymmetric (buttress) grooves and the UN inch series' own tables: a UN thread is the ISO profile at a pitch of `25.4 / threads per inch`.
 - A thread table lookup. The caller states the pitch.
 - Cosmetic threads that mark a face and cut nothing.
@@ -84,3 +85,16 @@ Whitworth-style threads. `threadplan.ComputeForm` takes the form, and `Compute` 
 | F4 | The groove is the four-corner polygon of T5 with these three numbers: root at `Depth`, mouth `0.05·P` past the face, and the width at the mouth `Flat + 2·tan(Angle/2)·(Depth + 0.05·P)`. T6 holds for it: a groove whose width reaches `0.95·P` or whose root reaches the axis is `ErrDegenerate`. |
 | F5 | The removed volume of a groove that runs out of both ends is the integral of §3 with `w(ρ) = Flat + 2·tan(Angle/2)·(ρ − root)` for a rod, and the tests compute it independently. |
 | F6 | A form with the ISO angle, depth and flat of the pitch gives the ISO thread's volume, so `ThreadForm` restates the profile and adds no second path. |
+
+## 7. A lead-in chamfer
+
+`ThreadSpec.LeadIn` bevels the threaded face's ends before the groove is cut, so a screw or a nut starts without a sharp
+rim.
+
+| Decision | Rule |
+|---|---|
+| L1 | The zero `Value` cuts no lead-in. A positive length is the distance of a 45 degree `Chamfer` on each convex circular edge of the threaded face: the rims at the ends of a rod, and the mouths of a bore. A negative value is `ErrNegativeMagnitude`, a wrong unit kind `ErrUnitKind`, and a face with no convex circular edge `ErrDegenerate`. |
+| L2 | The chamfer comes first and the groove is cut from the chamfered body. The groove's frame and plan are those of the unchamfered face, so the thread is the same helix whatever the lead-in. A shoulder's concave edge is not chamfered. |
+| L3 | The lead-in and the thread are tried on a copy of `b` first, retired once read, so a chamfer or a cut the evaluator refuses leaves `b` live and the document unchanged. The copy leaves history entries. |
+| L4 | The history holds `OperationChamfer` then `OperationThread`. |
+| L5 | The removed volume of a rod threaded after a lead-in `d` is the chamfered rod's less `∫ 2π·ρ·w(ρ)/P·ℓ(ρ) dρ` over the groove's radii, where `ℓ(ρ)` is the length 20 less `2·max(0, d − (R − ρ))` the chamfer leaves at radius `ρ`. A groove covers `w(ρ)/P` of any axial interval at every radius on average over the turn, so the integral is exact. The tests compute it independently. |

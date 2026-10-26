@@ -2466,3 +2466,5 @@
 10	0.01	TestEmbossRimFilletRoundsARaisedRelief
 10	0.01	TestEmbossRimFilletRoundsTheMouthOfAnEngraving
 10	0.01	TestEmbossRimFilletRefusalsLeaveTheBodyLive
+10	0.01	TestThreadLeadInChamfersBothEndsBeforeTheThread
+10	0.01	TestThreadLeadInRefusals
