@@ -31,11 +31,25 @@ func Workers(ctx context.Context, fallback int) int {
 // the single-worker path uses ctx itself. Both contexts must share cancellation.
 func Run[Job, Result any](ctx, parallelCtx context.Context, jobs []Job, workers int,
 	work func(context.Context, Job) (Result, error)) ([]Result, error) {
+	return RunWithWorker(ctx, parallelCtx, jobs, workers, func() func(context.Context, Job) (Result, error) {
+		return work
+	})
+}
+
+// RunWithWorker is Run with a separate work function for each worker. The
+// factory must be safe to invoke concurrently. Each returned function runs
+// serially on its worker, so it may own reusable scratch that no result retains.
+func RunWithWorker[Job, Result any](ctx, parallelCtx context.Context, jobs []Job, workers int,
+	newWork func() func(context.Context, Job) (Result, error)) ([]Result, error) {
 	out := make([]Result, len(jobs))
+	if len(jobs) == 0 {
+		return out, nil
+	}
 	if workers > len(jobs) {
 		workers = len(jobs)
 	}
 	if workers <= 1 {
+		work := newWork()
 		for i, job := range jobs {
 			if err := ctx.Err(); err != nil {
 				return nil, err
@@ -67,6 +81,7 @@ func Run[Job, Result any](ctx, parallelCtx context.Context, jobs []Job, workers 
 	for range workers {
 		go func() {
 			defer wg.Done()
+			work := newWork()
 			for {
 				i := int(next.Add(1) - 1)
 				if i >= len(jobs) || int64(i) > firstErr.Load() {

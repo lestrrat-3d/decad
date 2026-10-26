@@ -82,19 +82,28 @@ type ChainAnchor struct {
 
 // TriCutter is the working state of one facet's subdivision.
 type TriCutter struct {
-	Verts []CutVert
-	Index map[string]int
-	Edges []CutEdge
-	Swap  bool // projection coordinate swap that keeps the facet CCW
-	U, V  int  // projection axes
-	Work  *proofbound.WorkBudget
+	Verts       []CutVert
+	Index       map[string]int
+	Edges       []CutEdge
+	Swap        bool // projection coordinate swap that keeps the facet CCW
+	U, V        int  // projection axes
+	Work        *proofbound.WorkBudget
+	projections *cutProjectionScratch
 }
 
 func (tc *TriCutter) Proj(p proof.Xpt) Xp2 {
+	u, v := tc.U, tc.V
 	if tc.Swap {
-		return NewXP2FromXpt(p, tc.V, tc.U)
+		u, v = v, u
 	}
-	return NewXP2FromXpt(p, tc.U, tc.V)
+	return tc.project(p, u, v)
+}
+
+func (tc *TriCutter) project(p proof.Xpt, u, v int) Xp2 {
+	if tc.projections == nil {
+		return NewXP2FromXpt(p, u, v)
+	}
+	return newXP2FromXptInto(p, u, v, tc.projections.rat(), tc.projections.rat())
 }
 
 // addVert interns a vertex by its exact 2D identity; boundary is sticky.
@@ -114,15 +123,22 @@ func (tc *TriCutter) AddVert(p2 Xp2, p3 proof.Xpt, boundary bool) int {
 // CutTriangle subdivides the facet along its contact segments and returns
 // the classified regions.
 func CutTriangle(ctx context.Context, xtri [3]proof.Xpt, normal proof.Xpt, segs []Xseg) ([]CutRegion, error) {
+	return cutTriangle(ctx, xtri, normal, segs, nil)
+}
+
+func cutTriangle(ctx context.Context, xtri [3]proof.Xpt, normal proof.Xpt, segs []Xseg, projections *cutProjectionScratch) ([]CutRegion, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	tc := &TriCutter{Index: map[string]int{}, Work: proofbound.NewWorkBudget(ctx)}
+	if projections != nil {
+		projections.used = 0
+	}
+	tc := &TriCutter{Index: map[string]int{}, Work: proofbound.NewWorkBudget(ctx), projections: projections}
 	tc.U, tc.V = ProjAxes(normal)
 
 	// Keep the projected facet counter-clockwise, so polygon areas and ear
 	// clipping read the facet's own orientation.
-	corner := func(p proof.Xpt) Xp2 { return NewXP2FromXpt(p, tc.U, tc.V) }
+	corner := func(p proof.Xpt) Xp2 { return tc.project(p, tc.U, tc.V) }
 	if Cross2xSign(corner(xtri[0]), corner(xtri[1]), corner(xtri[2])) < 0 {
 		tc.Swap = true
 	}
