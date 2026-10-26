@@ -1,6 +1,6 @@
 # PNG export design
 
-`export.PNG(ctx, w, body, tol, view, opts...)` draws one body's tessellation as a PNG image, so a program can look at a
+`export.PNG(ctx, w, body, tol, view, opts...)` draws one body's tessellation as a PNG image, and `export.PNGBodies` draws several in one (§5), so a program can look at a
 part. It takes the chord tolerance and `decad.TessellateOption` values of the other writers, defaults to `VerifyNone`,
 and adds a `View`. The drawing is plain-data code in `internal/raster/`: an orthographic camera, a depth buffer and
 flat shading, with no dependency beyond the standard library's `image/png`.
@@ -49,4 +49,20 @@ image axis flipped, turns the tests red.
 - Perspective cameras, outlines, hidden or feature edges, axes, dimensions and text.
 - Colours, materials, textures, shadows and anti-aliasing.
 - A transparent background and image formats other than PNG.
-- Drawing more than one body, or a mesh body.
+- Colouring bodies apart, or drawing a mesh body together with bodies.
+
+## 5. Several bodies
+
+```go
+func PNGBodies(ctx context.Context, w io.Writer, bodies []*decad.Body, tol units.Value, view View,
+    opts ...decad.TessellateOption) error
+```
+
+| Decision | Rule |
+|---|---|
+| B1 | Each body is tessellated as `PNG` tessellates one, at the one tolerance and with the same options. The meshes are joined into one, each body's triangles keeping their own vertices shifted past those before, and drawn as P4 to P8 say. |
+| B2 | The scene's bounds, not any one body's, set the centring and the scale, so the whole scene fits with the margin of P4. |
+| B3 | A nearer body hides a farther one by the depth test of P5, so the order of `bodies` changes nothing in the image. |
+| B4 | All bodies share the colour scheme of P6. One body gives the bytes `PNG` gives. |
+| B5 | A nil context or writer, an empty list and a nil body are `ErrDegenerate`. A wrong unit kind for `tol` and a canceled context propagate, and a failure writes nothing. |
+
