@@ -34,7 +34,7 @@ Root-package identifiers carry the `decad.` prefix. `apitest/api_reference_test.
 | Package | Purpose |
 |---|---|
 | `decad` | Documents, bodies, features, selectors, measurement and verification. |
-| `decad/export` | Writes a body as STEP, STL, OBJ, 3MF or glTF, or draws it as a PNG image. |
+| `decad/export` | Writes a body as STEP, STL, OBJ, 3MF or glTF, draws it as a PNG image, or writes a 2D DXF drawing of it. |
 | `decad/dynamics` | Rigid-body worlds, stepping and replayable timelines. |
 | `decad/decadtest` | Assertions for tests that build and verify bodies. |
 
@@ -348,6 +348,7 @@ area and enclosed volume.
 `export.STEP`, `export.STL`, `export.OBJ`, `export.ThreeMF` and `export.GLTF` write a body to an `io.Writer` at a chord tolerance.
 `export.GLTF` writes a glTF 2.0 JSON file with its mesh embedded, in metres.
 `export.PNG` draws a body as an orthographic, flat-shaded PNG image from a `export.View`, such as `export.IsometricView`.
+`export.DXF` writes the feature edges of a body as an ASCII DXF drawing along an `export.DrawingView`, with hidden edges on their own dashed layer.
 `export.NewSTEPFile` builds a STEP file in memory. STEP header fields use `export.WithSTEPAuthor`,
 `export.WithSTEPName`, `export.WithSTEPOrganization` and `export.WithSTEPTimestamp`.
 

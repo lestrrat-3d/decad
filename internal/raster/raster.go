@@ -60,6 +60,17 @@ const (
 	lightLeft = 0.35
 )
 
+// Axes returns the camera's unit right and up vectors and its unit direction.
+// A camera that draws nothing, with no direction or an up vector parallel to
+// it, returns the zero vectors.
+func (c Camera) Axes() (right, up, dir r3.Vec) {
+	dir, right, up, err := c.axes()
+	if err != nil {
+		return r3.Vec{}, r3.Vec{}, r3.Vec{}
+	}
+	return right, up, dir
+}
+
 // axes returns the unit direction, right and up of the camera.
 func (c Camera) axes() (dir, right, up r3.Vec, err error) {
 	dir, ok := c.Direction.Normalize()
@@ -108,27 +119,30 @@ func shade(dir, right, up, n r3.Vec) color.RGBA {
 	}
 }
 
-// Render draws the triangles. The camera's frame decides the image's axes; the
-// mesh is centred and scaled to fit with a margin, keeping its proportions. A
-// triangle takes the colour Shaded gives for its normal.
-func Render(ctx context.Context, verts []r3.Vec, tris [][3]int, cam Camera, width, height int) (*image.RGBA, error) {
+// Projection maps world points to image pixels and depth for one camera and
+// image size. The mesh it was built from is centred and scaled to fit with a
+// margin, keeping its proportions.
+type Projection struct {
+	dir, right, up r3.Vec
+	scale          float64
+	centreX        float64
+	centreY        float64
+	Width, Height  int
+}
+
+// NewProjection builds the projection that fits verts into a width by height
+// image under cam.
+func NewProjection(verts []r3.Vec, cam Camera, width, height int) (Projection, error) {
 	if width < MinSize || width > MaxSize || height < MinSize || height > MaxSize {
-		return nil, fmt.Errorf("%w: an image side must lie in [%d, %d] pixels, got %d x %d",
+		return Projection{}, fmt.Errorf("%w: an image side must lie in [%d, %d] pixels, got %d x %d",
 			ErrDegenerate, MinSize, MaxSize, width, height)
 	}
 	dir, right, up, err := cam.axes()
 	if err != nil {
-		return nil, err
+		return Projection{}, err
 	}
-	if len(verts) == 0 || len(tris) == 0 {
-		return nil, fmt.Errorf("%w: there are no triangles to draw", ErrDegenerate)
-	}
-	for _, t := range tris {
-		for _, i := range t {
-			if i < 0 || i >= len(verts) {
-				return nil, fmt.Errorf("%w: a triangle names vertex %d of %d", ErrDegenerate, i, len(verts))
-			}
-		}
+	if len(verts) == 0 {
+		return Projection{}, fmt.Errorf("%w: there is nothing to project", ErrDegenerate)
 	}
 	minX, maxX := math.Inf(1), math.Inf(-1)
 	minY, maxY := math.Inf(1), math.Inf(-1)
@@ -138,32 +152,90 @@ func Render(ctx context.Context, verts []r3.Vec, tris [][3]int, cam Camera, widt
 		minY, maxY = math.Min(minY, y), math.Max(maxY, y)
 	}
 	margin := marginFraction * float64(min(width, height))
-	spanX, spanY := maxX-minX, maxY-minY
 	scale := math.Inf(1)
-	if spanX > 0 {
-		scale = math.Min(scale, (float64(width)-2*margin)/spanX)
+	if span := maxX - minX; span > 0 {
+		scale = math.Min(scale, (float64(width)-2*margin)/span)
 	}
-	if spanY > 0 {
-		scale = math.Min(scale, (float64(height)-2*margin)/spanY)
+	if span := maxY - minY; span > 0 {
+		scale = math.Min(scale, (float64(height)-2*margin)/span)
 	}
 	if math.IsInf(scale, 1) {
 		scale = 1
 	}
-	centreX, centreY := (minX+maxX)/2, (minY+maxY)/2
-	screen := make([]screenVertex, len(verts))
-	for i, v := range verts {
-		screen[i] = screenVertex{
-			x:     float64(width)/2 + (right.Dot(v)-centreX)*scale,
-			y:     float64(height)/2 - (up.Dot(v)-centreY)*scale,
-			depth: dir.Dot(v),
+	return Projection{dir: dir, right: right, up: up, scale: scale,
+		centreX: (minX + maxX) / 2, centreY: (minY + maxY) / 2, Width: width, Height: height}, nil
+}
+
+// Project returns the pixel position of v, with y growing downward, and its
+// depth along the view direction: a larger depth is farther from the camera.
+func (p Projection) Project(v r3.Vec) (x, y, depth float64) {
+	return float64(p.Width)/2 + (p.right.Dot(v)-p.centreX)*p.scale,
+		float64(p.Height)/2 - (p.up.Dot(v)-p.centreY)*p.scale,
+		p.dir.Dot(v)
+}
+
+// PixelSize is the length in millimetres one pixel spans in the image plane.
+func (p Projection) PixelSize() float64 { return 1 / p.scale }
+
+// Facing is positive for a triangle with unit normal n that looks toward the
+// camera, negative for one that looks away and zero for one seen edge on.
+func (p Projection) Facing(n r3.Vec) float64 { return -n.Dot(p.dir) }
+
+// checkMesh refuses an empty mesh or a triangle naming a missing vertex.
+func checkMesh(verts []r3.Vec, tris [][3]int) error {
+	if len(verts) == 0 || len(tris) == 0 {
+		return fmt.Errorf("%w: there are no triangles to draw", ErrDegenerate)
+	}
+	for _, t := range tris {
+		for _, i := range t {
+			if i < 0 || i >= len(verts) {
+				return fmt.Errorf("%w: a triangle names vertex %d of %d", ErrDegenerate, i, len(verts))
+			}
 		}
 	}
+	return nil
+}
 
+// Render draws the triangles. The camera's frame decides the image's axes; the
+// mesh is centred and scaled to fit with a margin, keeping its proportions. A
+// triangle takes the colour Shaded gives for its normal.
+func Render(ctx context.Context, verts []r3.Vec, tris [][3]int, cam Camera, width, height int) (*image.RGBA, error) {
+	proj, err := NewProjection(verts, cam, width, height)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkMesh(verts, tris); err != nil {
+		return nil, err
+	}
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	for i := range img.Pix {
 		img.Pix[i] = 0xff // opaque white
 	}
-	depths := make([]float64, width*height)
+	if _, err := draw(ctx, verts, tris, proj, img); err != nil {
+		return nil, err
+	}
+	return img, nil
+}
+
+// DepthBuffer draws the triangles into a depth buffer and returns it, row by
+// row from the top of the image: the depth of the nearest triangle at each
+// pixel, or +Inf where none covers it.
+func DepthBuffer(ctx context.Context, verts []r3.Vec, tris [][3]int, proj Projection) ([]float64, error) {
+	if err := checkMesh(verts, tris); err != nil {
+		return nil, err
+	}
+	return draw(ctx, verts, tris, proj, nil)
+}
+
+// draw rasterizes the triangles, colouring img when it is not nil, and returns
+// the depth buffer.
+func draw(ctx context.Context, verts []r3.Vec, tris [][3]int, proj Projection, img *image.RGBA) ([]float64, error) {
+	screen := make([]screenVertex, len(verts))
+	for i, v := range verts {
+		x, y, depth := proj.Project(v)
+		screen[i] = screenVertex{x: x, y: y, depth: depth}
+	}
+	depths := make([]float64, proj.Width*proj.Height)
 	for i := range depths {
 		depths[i] = math.Inf(1)
 	}
@@ -177,25 +249,27 @@ func Render(ctx context.Context, verts []r3.Vec, tris [][3]int, cam Camera, widt
 		if !ok {
 			continue // a triangle of no area draws nothing
 		}
-		fill := shade(dir, right, up, normal)
-		fillTriangle(img, depths, screen[t[0]], screen[t[1]], screen[t[2]], fill)
+		fill := color.RGBA{}
+		if img != nil {
+			fill = shade(proj.dir, proj.right, proj.up, normal)
+		}
+		fillTriangle(img, depths, proj.Width, screen[t[0]], screen[t[1]], screen[t[2]], fill)
 	}
-	return img, nil
+	return depths, nil
 }
 
-// fillTriangle colours every pixel whose centre lies in the triangle and that
-// is nearer than what is drawn there.
-func fillTriangle(img *image.RGBA, depths []float64, a, b, c screenVertex, fill color.RGBA) {
+// fillTriangle records every pixel whose centre lies in the triangle and that
+// is nearer than what is drawn there, colouring img when it is not nil.
+func fillTriangle(img *image.RGBA, depths []float64, width int, a, b, c screenVertex, fill color.RGBA) {
 	area := (b.x-a.x)*(c.y-a.y) - (b.y-a.y)*(c.x-a.x)
 	if area == 0 {
 		return
 	}
-	bounds := img.Bounds()
-	x0 := max(bounds.Min.X, int(math.Floor(min(a.x, b.x, c.x))))
-	x1 := min(bounds.Max.X-1, int(math.Ceil(max(a.x, b.x, c.x))))
-	y0 := max(bounds.Min.Y, int(math.Floor(min(a.y, b.y, c.y))))
-	y1 := min(bounds.Max.Y-1, int(math.Ceil(max(a.y, b.y, c.y))))
-	width := bounds.Dx()
+	height := len(depths) / width
+	x0 := max(0, int(math.Floor(min(a.x, b.x, c.x))))
+	x1 := min(width-1, int(math.Ceil(max(a.x, b.x, c.x))))
+	y0 := max(0, int(math.Floor(min(a.y, b.y, c.y))))
+	y1 := min(height-1, int(math.Ceil(max(a.y, b.y, c.y))))
 	for y := y0; y <= y1; y++ {
 		py := float64(y) + 0.5
 		for x := x0; x <= x1; x++ {
@@ -213,7 +287,9 @@ func fillTriangle(img *image.RGBA, depths []float64, a, b, c screenVertex, fill 
 				continue
 			}
 			depths[at] = depth
-			img.SetRGBA(x, y, fill)
+			if img != nil {
+				img.SetRGBA(x, y, fill)
+			}
 		}
 	}
 }
