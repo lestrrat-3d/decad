@@ -113,6 +113,7 @@ func TestEachNestedCallKeepsPollingAndReleasesWorkers(t *testing.T) {
 	stop := errors.New("nested stop")
 	release := make(chan struct{})
 	var innerStarted atomic.Int32
+	blockedAtCancellation := int32(0)
 	polls := 0
 	first, err := orderedwork.Each(3, 3, 1, nil, func(i int) error {
 		if i != 0 {
@@ -124,6 +125,7 @@ func TestEachNestedCallKeepsPollingAndReleasesWorkers(t *testing.T) {
 			if innerStarted.Load() != 2 {
 				return nil
 			}
+			blockedAtCancellation = innerStarted.Load()
 			polls++
 			close(release)
 			return stop
@@ -137,7 +139,7 @@ func TestEachNestedCallKeepsPollingAndReleasesWorkers(t *testing.T) {
 	require.Equal(t, 0, first)
 	require.ErrorIs(t, err, stop)
 	require.Equal(t, 1, polls)
-	require.Equal(t, int32(2), innerStarted.Load())
+	require.Equal(t, int32(2), blockedAtCancellation)
 
 	// All three workers must be available again after the failed nested call
 	// and its parent have joined. No callback can finish before all have started.
