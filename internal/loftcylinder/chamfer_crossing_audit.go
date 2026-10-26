@@ -25,37 +25,37 @@ func ChamferCrossingAudit(ctx context.Context, mesh *facetedrecord.JoinedMesh,
 	}
 	var vertices [2]map[int]struct{}
 	var edges [2]map[[2]int]struct{}
-	for cap := range 2 {
+	for capIndex := range 2 {
 		z := source.Z0
-		if cap == 1 {
+		if capIndex == 1 {
 			z = source.Z1
 		}
-		if !BoreRingSimple(ctx, mesh.Verts, outer[cap]) {
-			return fmt.Errorf("%w: cap %d has no simple outer loop", decaderr.ErrUnsupported, cap)
+		if !BoreRingSimple(ctx, mesh.Verts, outer[capIndex]) {
+			return fmt.Errorf("%w: cap %d has no simple outer loop", decaderr.ErrUnsupported, capIndex)
 		}
-		if len(source.Inner[cap]) > 0 {
-			if !BoreRingSimple(ctx, mesh.Verts, source.Inner[cap]) {
-				return fmt.Errorf("%w: cap %d has no simple bore loop", decaderr.ErrUnsupported, cap)
+		if len(source.Inner[capIndex]) > 0 {
+			if !BoreRingSimple(ctx, mesh.Verts, source.Inner[capIndex]) {
+				return fmt.Errorf("%w: cap %d has no simple bore loop", decaderr.ErrUnsupported, capIndex)
 			}
-			nested, err := ChamferRingNested(ctx, mesh.Verts, outer[cap], source.Inner[cap])
+			nested, err := ChamferRingNested(ctx, mesh.Verts, outer[capIndex], source.Inner[capIndex])
 			if err != nil {
 				return err
 			}
-			if !nested || !AuditAnnulus(ctx, mesh.Verts, mesh.Tris, mesh.Src, outer[cap],
-				source.Inner[cap], source.CapGroups[cap], z, cap == 0) {
-				return fmt.Errorf("%w: cap %d does not tile a nested annulus", decaderr.ErrUnsupported, cap)
+			if !nested || !AuditAnnulus(ctx, mesh.Verts, mesh.Tris, mesh.Src, outer[capIndex],
+				source.Inner[capIndex], source.CapGroups[capIndex], z, capIndex == 0) {
+				return fmt.Errorf("%w: cap %d does not tile a nested annulus", decaderr.ErrUnsupported, capIndex)
 			}
-		} else if !AuditCap(ctx, mesh.Verts, mesh.Tris, mesh.Src, outer[cap],
-			source.CapGroups[cap], z, cap == 0) {
-			return fmt.Errorf("%w: cap %d does not tile its loop", decaderr.ErrUnsupported, cap)
+		} else if !AuditCap(ctx, mesh.Verts, mesh.Tris, mesh.Src, outer[capIndex],
+			source.CapGroups[capIndex], z, capIndex == 0) {
+			return fmt.Errorf("%w: cap %d does not tile its loop", decaderr.ErrUnsupported, capIndex)
 		}
-		vertices[cap] = make(map[int]struct{}, len(outer[cap])+len(source.Inner[cap]))
-		edges[cap] = make(map[[2]int]struct{}, len(outer[cap])+len(source.Inner[cap]))
-		for _, ring := range [][]int{outer[cap], source.Inner[cap]} {
+		vertices[capIndex] = make(map[int]struct{}, len(outer[capIndex])+len(source.Inner[capIndex]))
+		edges[capIndex] = make(map[[2]int]struct{}, len(outer[capIndex])+len(source.Inner[capIndex]))
+		for _, ring := range [][]int{outer[capIndex], source.Inner[capIndex]} {
 			for i, a := range ring {
 				b := ring[(i+1)%len(ring)]
-				vertices[cap][a] = struct{}{}
-				edges[cap][ChamferEdge(a, b)] = struct{}{}
+				vertices[capIndex][a] = struct{}{}
+				edges[capIndex][ChamferEdge(a, b)] = struct{}{}
 			}
 		}
 	}
@@ -68,9 +68,9 @@ func ChamferCrossingAudit(ctx context.Context, mesh *facetedrecord.JoinedMesh,
 			continue
 		}
 		wall = append(wall, tri)
-		for cap := range 2 {
+		for capIndex := range 2 {
 			z := source.Z0
-			if cap == 1 {
+			if capIndex == 1 {
 				z = source.Z1
 			}
 			var on []int
@@ -80,7 +80,7 @@ func ChamferCrossingAudit(ctx context.Context, mesh *facetedrecord.JoinedMesh,
 					return fmt.Errorf("%w: cap chamfer wall leaves its axial slab", decaderr.ErrUnsupported)
 				}
 				if mesh.Verts[index].Z == z {
-					if _, ok := vertices[cap][index]; !ok {
+					if _, ok := vertices[capIndex][index]; !ok {
 						return fmt.Errorf("%w: cap chamfer wall meets a cap away from its loop", decaderr.ErrUnsupported)
 					}
 					on = append(on, index)
@@ -90,7 +90,7 @@ func ChamferCrossingAudit(ctx context.Context, mesh *facetedrecord.JoinedMesh,
 				return fmt.Errorf("%w: cap chamfer wall lies in a cap plane", decaderr.ErrUnsupported)
 			}
 			if len(on) == 2 {
-				if _, ok := edges[cap][ChamferEdge(on[0], on[1])]; !ok {
+				if _, ok := edges[capIndex][ChamferEdge(on[0], on[1])]; !ok {
 					return fmt.Errorf("%w: cap chamfer wall has no shared cap edge", decaderr.ErrUnsupported)
 				}
 			}

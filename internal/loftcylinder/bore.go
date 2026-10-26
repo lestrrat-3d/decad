@@ -122,13 +122,13 @@ func buildBore(ctx context.Context, env topo.Env, joined facetedrecord.Payload,
 	if len(joined.Tris) != len(joined.Src) || len(joined.Verts) != len(joined.VertexBound) {
 		return nil, fmt.Errorf("%w: circular join has an incomplete mesh record", decaderr.ErrUnsupported)
 	}
-	for cap := range 2 {
+	for capIndex := range 2 {
 		z := record.Z0
-		if cap == 1 {
+		if capIndex == 1 {
 			z = record.Z1
 		}
-		if !AuditCap(ctx, joined.Verts, joined.Tris, joined.Src, record.CapOutlines[cap],
-			record.CapGroups[cap], z, cap == 0) {
+		if !AuditCap(ctx, joined.Verts, joined.Tris, joined.Src, record.CapOutlines[capIndex],
+			record.CapGroups[capIndex], z, capIndex == 0) {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
@@ -172,24 +172,24 @@ func buildBore(ctx context.Context, env topo.Env, joined facetedrecord.Payload,
 		Reversed: !wall.Reversed})
 	vertexBound := append([]float64(nil), joined.VertexBound...)
 	var inner [2][]int
-	for cap := range 2 {
-		inner[cap] = make([]int, boreStations)
+	for capIndex := range 2 {
+		inner[capIndex] = make([]int, boreStations)
 		z := record.Z0
-		if cap == 1 {
+		if capIndex == 1 {
 			z = record.Z1
 		}
 		for i, point := range innerStations {
-			inner[cap][i] = len(mesh.Verts)
+			inner[capIndex][i] = len(mesh.Verts)
 			mesh.Verts = append(mesh.Verts, r3.Vec{X: point.U, Y: point.V, Z: z})
 			vertexBound = append(vertexBound, boreBound)
 		}
-		if cap == 0 && !BoreRingSimple(ctx, mesh.Verts, inner[cap]) {
+		if capIndex == 0 && !BoreRingSimple(ctx, mesh.Verts, inner[capIndex]) {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
 			return nil, fmt.Errorf("%w: circular bore ring does not enclose its axis", decaderr.ErrUnsupported)
 		}
-		outline := record.CapOutlines[cap]
+		outline := record.CapOutlines[capIndex]
 		points := make([]triangulation.Point2, len(outline)+boreStations)
 		outerLoop := make([]int, len(outline))
 		for i, index := range outline {
@@ -199,7 +199,7 @@ func buildBore(ctx context.Context, env topo.Env, joined facetedrecord.Payload,
 		}
 		holeLoop := make([]int, boreStations)
 		for i := range boreStations {
-			p := mesh.Verts[inner[cap][i]]
+			p := mesh.Verts[inner[capIndex][i]]
 			points[len(outline)+i] = triangulation.Point2{U: p.X, V: p.Y}
 			holeLoop[i] = len(outline) + boreStations - 1 - i
 		}
@@ -213,13 +213,13 @@ func buildBore(ctx context.Context, env topo.Env, joined facetedrecord.Payload,
 				if index < len(outline) {
 					mapped[k] = outline[index]
 				} else {
-					mapped[k] = inner[cap][index-len(outline)]
+					mapped[k] = inner[capIndex][index-len(outline)]
 				}
 			}
-			if cap == 0 {
+			if capIndex == 0 {
 				mapped[1], mapped[2] = mapped[2], mapped[1]
 			}
-			mesh.Add(mapped, record.CapGroups[cap])
+			mesh.Add(mapped, record.CapGroups[capIndex])
 		}
 	}
 	for i := range boreStations {
@@ -283,18 +283,18 @@ func buildBore(ctx context.Context, env topo.Env, joined facetedrecord.Payload,
 		Z0: record.Z0, Z1: record.Z1,
 		InnerInset: record.InnerInset, OuterExcess: record.OuterExcess, RootCollar: record.RootCollar,
 	}
-	for cap := range 2 {
-		result.LoftCylinderBore.Outer[cap] = append([]int(nil), record.CapOutlines[cap]...)
-		result.LoftCylinderBore.Inner[cap] = append([]int(nil), inner[cap]...)
+	for capIndex := range 2 {
+		result.LoftCylinderBore.Outer[capIndex] = append([]int(nil), record.CapOutlines[capIndex]...)
+		result.LoftCylinderBore.Inner[capIndex] = append([]int(nil), inner[capIndex]...)
 	}
 	result.ContactAudited = true
-	for cap := range 2 {
+	for capIndex := range 2 {
 		z := record.Z0
-		if cap == 1 {
+		if capIndex == 1 {
 			z = record.Z1
 		}
-		if !AuditAnnulus(ctx, mesh.Verts, mesh.Tris, mesh.Src, result.LoftCylinderBore.Outer[cap],
-			result.LoftCylinderBore.Inner[cap], record.CapGroups[cap], z, cap == 0) {
+		if !AuditAnnulus(ctx, mesh.Verts, mesh.Tris, mesh.Src, result.LoftCylinderBore.Outer[capIndex],
+			result.LoftCylinderBore.Inner[capIndex], record.CapGroups[capIndex], z, capIndex == 0) {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}

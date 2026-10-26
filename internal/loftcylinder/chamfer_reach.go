@@ -150,12 +150,12 @@ func chamferBoreInheritance(fp facetedrecord.Payload, mesh *facetedrecord.Joined
 		len(mesh.Tris) != len(mesh.Src) {
 		return fmt.Errorf("%w: chamfer bore has incomplete held triangles", decaderr.ErrUnsupported)
 	}
-	for cap, ring := range source.Inner {
-		if len(ring) < 3 || len(ring) != len(record.Inner[cap]) {
+	for endCap, ring := range source.Inner {
+		if len(ring) < 3 || len(ring) != len(record.Inner[endCap]) {
 			return fmt.Errorf("%w: chamfer bore lost its inner cap loop", decaderr.ErrUnsupported)
 		}
 		for i, index := range ring {
-			if index != record.Inner[cap][i] || index < 0 || index >= len(fp.Verts) ||
+			if index != record.Inner[endCap][i] || index < 0 || index >= len(fp.Verts) ||
 				mesh.Verts[index] != fp.Verts[index] {
 				return fmt.Errorf("%w: chamfer bore changed an inner cap station", decaderr.ErrUnsupported)
 			}

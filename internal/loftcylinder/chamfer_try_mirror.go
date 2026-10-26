@@ -119,16 +119,16 @@ func mirrorChamferSelect(ctx context.Context, b *topo.Body, fp facetedrecord.Pay
 	if !ok || !MirrorBlank(blank) || caps[0] == nil || caps[1] == nil {
 		return fmt.Errorf("%w: mirrored bore lost its two exterior annuli", decaderr.ErrUnsupported)
 	}
-	for cap, face := range caps {
+	for endCap, face := range caps {
 		z := blank.Z0
-		if cap == 1 {
+		if endCap == 1 {
 			z = blank.Z1
 		}
-		if record.CapGroups[cap] < 0 || record.WallGroups[cap] < 0 ||
-			!AuditAnnulus(ctx, fp.Verts, fp.Tris, fp.Src, record.Outer[cap], record.Inner[cap],
-				record.CapGroups[cap], z, cap == 0) || len(face.Loops) != 2 ||
-			!ChamferCapWalk(face.Loops[0], fp.Verts, record.Outer[cap], cap == 0) {
-			return fmt.Errorf("%w: mirrored bore cap %d has no audited outer loop", decaderr.ErrUnsupported, cap)
+		if record.CapGroups[endCap] < 0 || record.WallGroups[endCap] < 0 ||
+			!AuditAnnulus(ctx, fp.Verts, fp.Tris, fp.Src, record.Outer[endCap], record.Inner[endCap],
+				record.CapGroups[endCap], z, endCap == 0) || len(face.Loops) != 2 ||
+			!ChamferCapWalk(face.Loops[0], fp.Verts, record.Outer[endCap], endCap == 0) {
+			return fmt.Errorf("%w: mirrored bore cap %d has no audited outer loop", decaderr.ErrUnsupported, endCap)
 		}
 		for _, ce := range face.Loops[0].CoEdges {
 			edge := ce.Edge

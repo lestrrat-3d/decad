@@ -22,9 +22,9 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 	require.NoError(t, err)
 	var sections [2]*sketch.Sketch
 	var profiles [2]*sketch.Profile
-	for cap, radius := range [2]float64{5, 5.5} {
+	for endCap, radius := range [2]float64{5, 5.5} {
 		plane := world.XY()
-		if cap == 1 {
+		if endCap == 1 {
 			plane = upper
 		}
 		s, createErr := world.CreateSketch(plane)
@@ -41,7 +41,7 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 		found := s.Profiles()
 		require.Equal(t, 1, len(found))
 		require.True(t, found[0].Valid)
-		sections[cap], profiles[cap] = s, found[0]
+		sections[endCap], profiles[endCap] = s, found[0]
 	}
 	loft, err := Loft(t.Context(), New(), sections[0], profiles[0], sections[1], profiles[1])
 	require.NoError(t, err)
@@ -85,11 +85,11 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 	})
 	require.Positive(t, certificate.Visits)
 	require.Less(t, certificate.Visits, uint64(4096))
-	for cap := range 2 {
-		require.Equal(t, 4, len(certificate.PrismCaps[cap]))
-		require.Equal(t, 3, len(certificate.LoftCaps[cap]))
+	for capIndex := range 2 {
+		require.Equal(t, 4, len(certificate.PrismCaps[capIndex]))
+		require.Equal(t, 3, len(certificate.LoftCaps[capIndex]))
 		var arcsWithWalls int
-		for _, span := range certificate.LoftCaps[cap] {
+		for _, span := range certificate.LoftCaps[capIndex] {
 			require.True(t, span.Body == bodyNode(loft))
 			require.Equal(t, float64(0), span.TStart)
 			require.Equal(t, float64(1), span.TEnd)
@@ -106,10 +106,10 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 	require.NoError(t, orderErr)
 	require.True(t, certifiedOrder)
 	require.Positive(t, ordered.Visits)
-	for cap := range 2 {
-		require.NotEmpty(t, ordered.Caps[cap])
+	for capIndex := range 2 {
+		require.NotEmpty(t, ordered.Caps[capIndex])
 		var sharedCells, cutArcs int
-		for _, cell := range ordered.Caps[cap] {
+		for _, cell := range ordered.Caps[capIndex] {
 			require.NotEmpty(t, cell.Edges)
 			if cell.Prism && cell.Loft {
 				sharedCells++
@@ -157,9 +157,9 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 		require.NoError(t, upperErr)
 		var arcSections [2]*sketch.Sketch
 		var arcProfiles [2]*sketch.Profile
-		for cap, radius := range [2]float64{5, 5.5} {
+		for endCap, radius := range [2]float64{5, 5.5} {
 			plane := arcWorld.XY()
-			if cap == 1 {
+			if endCap == 1 {
 				plane = arcUpper
 			}
 			s, createErr := arcWorld.CreateSketch(plane)
@@ -181,7 +181,7 @@ func TestLoftCurvedSourceCapsRealIndependentWedgeRefusesWithoutBoundaryProof(t *
 			found := s.Profiles()
 			require.Len(t, found, 1)
 			require.True(t, found[0].Valid)
-			arcSections[cap], arcProfiles[cap] = s, found[0]
+			arcSections[endCap], arcProfiles[endCap] = s, found[0]
 		}
 		arcLoft, loftErr := Loft(t.Context(), New(), arcSections[0], arcProfiles[0],
 			arcSections[1], arcProfiles[1])
@@ -242,9 +242,9 @@ func TestLoftCircleSourceCapsRealDiscRefusesWithoutBoundaryProof(t *testing.T) {
 	require.NoError(t, err)
 	var sections [2]*sketch.Sketch
 	var profiles [2]*sketch.Profile
-	for cap, radius := range [2]float64{5, 5.5} {
+	for endCap, radius := range [2]float64{5, 5.5} {
 		plane := world.XY()
-		if cap == 1 {
+		if endCap == 1 {
 			plane = upper
 		}
 		s, createErr := world.CreateSketch(plane)
@@ -261,7 +261,7 @@ func TestLoftCircleSourceCapsRealDiscRefusesWithoutBoundaryProof(t *testing.T) {
 		found := s.Profiles()
 		require.Equal(t, 1, len(found))
 		require.True(t, found[0].Valid)
-		sections[cap], profiles[cap] = s, found[0]
+		sections[endCap], profiles[endCap] = s, found[0]
 	}
 	loft, err := Loft(t.Context(), doc, sections[0], profiles[0], sections[1], profiles[1])
 	require.NoError(t, err)
@@ -296,13 +296,13 @@ func TestLoftCircleSourceCapsRealDiscRefusesWithoutBoundaryProof(t *testing.T) {
 	require.True(t, accepted)
 	require.Positive(t, spans.Visits)
 	require.Less(t, spans.Visits, uint64(4096))
-	for cap := range 2 {
-		require.Equal(t, 1, len(spans.PrismCaps[cap]))
-		span := spans.PrismCaps[cap][0]
+	for capIndex := range 2 {
+		require.Equal(t, 1, len(spans.PrismCaps[capIndex]))
+		span := spans.PrismCaps[capIndex][0]
 		require.True(t, span.Body == bodyNode(prism))
 		require.Equal(t, 0, span.Segment)
 		role := provenance.RoleCapStart
-		if cap == 1 {
+		if capIndex == 1 {
 			role = provenance.RoleCapEnd
 		}
 		require.Equal(t, role, span.CapFace.Role)
@@ -393,16 +393,16 @@ func TestLoftFitSplineSourceCapsRealWedge(t *testing.T) {
 	require.Positive(t, spans.Visits)
 	require.Less(t, spans.Visits, uint64(4096))
 	lp := loft.n.Payload.(loftPayload)
-	for cap := range 2 {
+	for capIndex := range 2 {
 		want := lp.Profile0.Outer.Segments
 		role := provenance.RoleCapStart
-		if cap == 1 {
+		if capIndex == 1 {
 			want = lp.Profile1.Outer.Segments
 			role = provenance.RoleCapEnd
 		}
-		require.Len(t, spans.LoftCaps[cap], 3)
+		require.Len(t, spans.LoftCaps[capIndex], 3)
 		var fitCount int
-		for i, span := range spans.LoftCaps[cap] {
+		for i, span := range spans.LoftCaps[capIndex] {
 			require.True(t, span.Body == bodyNode(loft))
 			require.Equal(t, i, span.Segment)
 			require.Equal(t, loft.n.Origin.Producer, span.CapFace.Producer)

@@ -300,10 +300,10 @@ func TestPointLoftParallelSheetEightSlices(t *testing.T) {
 			require.True(t, mesh.BoundaryVerified())
 			require.True(t, mesh.VolumeVerified())
 		}
-		for _, cap := range []decad.FeatureRef{
+		for _, endCap := range []decad.FeatureRef{
 			decad.CapStart(pieces[1]), decad.CapEnd(pieces[1]),
 		} {
-			faces, err := decad.Faces(decad.FaceCreatedBy(cap)).SelectFaces(pieces[1])
+			faces, err := decad.Faces(decad.FaceCreatedBy(endCap)).SelectFaces(pieces[1])
 			require.NoError(t, err)
 			require.Len(t, faces, 1)
 		}

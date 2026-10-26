@@ -62,8 +62,8 @@ func CertifyOutputBoundary(ctx context.Context, operation *proofbound.WorkBudget
 		return no, false, err
 	}
 	shell := NewOutputShell()
-	for cap := range 3 {
-		ok, err = OutputCap(ctx, budget, pp.Frame, prismLines, bottom, top, source, &shell, cap, arithmetic)
+	for capIndex := range 3 {
+		ok, err = OutputCap(ctx, budget, pp.Frame, prismLines, bottom, top, source, &shell, capIndex, arithmetic)
 		if err != nil || !ok || !arithmetic.OK {
 			return no, false, err
 		}

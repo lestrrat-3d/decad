@@ -64,11 +64,11 @@ func LoftCapChamfer(ctx context.Context, env topo.Env, b *topo.Body, pl loftreco
 	for _, edge := range edges {
 		selected[edge] = struct{}{}
 	}
-	for _, cap := range caps {
-		if len(cap.Loops) == 0 || !cap.Loops[0].Outer {
+	for _, endCap := range caps {
+		if len(endCap.Loops) == 0 || !endCap.Loops[0].Outer {
 			return nil, false, nil
 		}
-		for _, ce := range cap.Loops[0].CoEdges {
+		for _, ce := range endCap.Loops[0].CoEdges {
 			edge := ce.Edge
 			if _, ok := selected[edge]; !ok {
 				return nil, false, nil

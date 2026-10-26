@@ -237,12 +237,12 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 				require.NoError(t, err)
 				var sections [2]*sketch.Sketch
 				var profiles [2]*sketch.Profile
-				for cap, corners := range [2][4][2]float64{
+				for endCap, corners := range [2][4][2]float64{
 					{{8, 4}, {12, 4}, {13, 6}, {8, 6}},
 					{{8, 4}, {13, 4}, {14, 6}, {8, 6}},
 				} {
 					plane := base
-					if cap == 1 {
+					if endCap == 1 {
 						plane = upper
 					}
 					s, createErr := world.CreateSketch(plane)
@@ -260,7 +260,7 @@ func TestLoftContactDirectShellUnionVaryingRectangleBothOrders(t *testing.T) {
 					found := s.Profiles()
 					require.Equal(t, 1, len(found))
 					require.True(t, found[0].Valid)
-					sections[cap], profiles[cap] = s, found[0]
+					sections[endCap], profiles[endCap] = s, found[0]
 				}
 				d := New()
 				prismSketch, err := world.CreateSketch(base)

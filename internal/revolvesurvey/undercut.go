@@ -64,14 +64,14 @@ func UndercutRoles(
 	sin1, cos1 := math.Sincos(phi1)
 	// A cap's outward normal opposes the sweep at the start and follows
 	// the sweep at the end.
-	for _, cap := range []struct {
+	for _, endCap := range []struct {
 		role string
 		v    float64
 	}{
 		{role: capRoles[0], v: -(c1*cos0 - c0*sin0)},
 		{role: capRoles[1], v: c1*cos1 - c0*sin1},
 	} {
-		roles = append(roles, UndercutRole{Role: cap.role, Opposes: survey2d.OpposesPull(cap.v, cap.v)})
+		roles = append(roles, UndercutRole{Role: endCap.role, Opposes: survey2d.OpposesPull(endCap.v, endCap.v)})
 	}
 	return roles
 }

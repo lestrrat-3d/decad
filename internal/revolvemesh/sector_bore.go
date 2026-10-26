@@ -120,15 +120,15 @@ func SectorBorePatchesOnto(src []int, oldCount, stations int,
 	}
 	// A complete annulus has two boundary loops. Each angular half is a
 	// single-boundary patch that the existing projected proof can check.
-	for cap := range 2 {
-		if band && cap == 0 {
+	for capIndex := range 2 {
+		if band && capIndex == 0 {
 			continue
 		}
 		for half := range 2 {
 			start, end := half*stations/2, (half+1)*stations/2
 			indices := make([]int, 0, 2*(end-start))
 			for cell := start; cell < end; cell++ {
-				base := oldCount + 6*cell + 2*cap
+				base := oldCount + 6*cell + 2*capIndex
 				indices = append(indices, base, base+1)
 			}
 			patches = append(patches, loftmesh.ProjectedPatch{

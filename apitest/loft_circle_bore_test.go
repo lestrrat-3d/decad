@@ -186,21 +186,21 @@ func TestLoftThroughBoreCutPublishesCircularTopology(t *testing.T) {
 	require.NoError(t, err)
 	requireManifold(t, cut)
 
-	for _, cap := range []struct {
+	for _, endCap := range []struct {
 		ref    decad.FeatureRef
 		center r3.Vec
 	}{
 		{decad.CapStart(cut), r3.NewVec(1, 0.5, 0)},
 		{decad.CapEnd(cut), r3.NewVec(1, 0.5, 2)},
 	} {
-		faces, err := decad.Faces(decad.FaceCreatedBy(cap.ref)).Exactly(1).SelectFaces(cut)
+		faces, err := decad.Faces(decad.FaceCreatedBy(endCap.ref)).Exactly(1).SelectFaces(cut)
 		require.NoError(t, err)
 		require.Len(t, faces[0].Loops(), 2)
 		require.Len(t, faces[0].Loops()[1].Edges(), 1)
 		edge := faces[0].Loops()[1].Edges()[0]
 		circle, ok := edge.Curve().(decad.Circle3)
 		require.True(t, ok)
-		require.Equal(t, cap.center, circle.Center)
+		require.Equal(t, endCap.center, circle.Center)
 		require.Equal(t, units.Millimeters(1), circle.Radius)
 		require.Same(t, edge.Start(), edge.End())
 		require.Len(t, edge.Faces(), 2)

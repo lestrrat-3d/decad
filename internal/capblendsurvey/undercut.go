@@ -123,15 +123,15 @@ func CapBlendUndercuts(b *topo.Body, cbp capblend.Payload, pull r3.Vec) verifypu
 			}
 		}
 	}
-	for _, cap := range []struct {
+	for _, endCap := range []struct {
 		role string
 		sign float64
 	}{{role: provenance.RoleCapStart, sign: -1}, {role: provenance.RoleCapEnd, sign: 1}} {
-		f := roles[cap.role]
+		f := roles[endCap.role]
 		if f == nil {
 			return undercutOutcome{}
 		}
-		verdict, ok := survey2d.CapNormalDecision(m, pull, cap.sign)
+		verdict, ok := survey2d.CapNormalDecision(m, pull, endCap.sign)
 		if !listVerdict(&faces, &undecided, f, verdict, ok) {
 			return undercutOutcome{}
 		}

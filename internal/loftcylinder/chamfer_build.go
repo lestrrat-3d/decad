@@ -83,8 +83,8 @@ func chamferCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	if len(fp.VertexBound) != len(fp.Verts) || len(fp.Src) != len(fp.Tris) {
 		return nil, fmt.Errorf("%w: loft/cylinder source has incomplete mesh proof", decaderr.ErrUnsupported)
 	}
-	for cap := range 2 {
-		if !chamferCapTiles(ctx, fp.Verts, fp.Tris, fp.Src, source, cap, source.Outer[cap]) {
+	for capIndex := range 2 {
+		if !chamferCapTiles(ctx, fp.Verts, fp.Tris, fp.Src, source, capIndex, source.Outer[capIndex]) {
 			return nil, fmt.Errorf("%w: loft/cylinder source cap no longer tiles its ring", decaderr.ErrUnsupported)
 		}
 	}
@@ -115,11 +115,11 @@ func chamferCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 			return nil, err
 		}
 	}
-	for cap := range 2 {
-		if !active[cap] {
+	for capIndex := range 2 {
+		if !active[capIndex] {
 			continue
 		}
-		if !BoreRingSimple(ctx, mesh.Verts, clipped.Rings[cap]) {
+		if !BoreRingSimple(ctx, mesh.Verts, clipped.Rings[capIndex]) {
 			return nil, fmt.Errorf("%w: loft/cylinder side level is not one simple outer ring", decaderr.ErrUnsupported)
 		}
 	}
@@ -127,35 +127,35 @@ func chamferCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	var bands [2][2]int
 	var radialReach [2]float64
 	maxInset := 0.0
-	for cap := range 2 {
-		if !active[cap] {
-			inset[cap] = source.Outer[cap]
-			bands[cap] = [2]int{len(mesh.Tris), len(mesh.Tris)}
+	for capIndex := range 2 {
+		if !active[capIndex] {
+			inset[capIndex] = source.Outer[capIndex]
+			bands[capIndex] = [2]int{len(mesh.Tris), len(mesh.Tris)}
 			continue
 		}
-		samples, err := ChamferInset(ctx, fp.Verts, source.Outer[cap], setback)
+		samples, err := ChamferInset(ctx, fp.Verts, source.Outer[capIndex], setback)
 		if err != nil {
-			return nil, fmt.Errorf("loft/cylinder cap %d inset: %w", cap, err)
+			return nil, fmt.Errorf("loft/cylinder cap %d inset: %w", capIndex, err)
 		}
 		if len(samples.Points) > maxInsetVertices {
 			return nil, fmt.Errorf("%w: loft/cylinder inset exceeds the chamfer work ceiling", decaderr.ErrUnsupported)
 		}
 		maxInset = max(maxInset, samples.Bound)
 		level := source.Z0
-		if cap == 1 {
+		if capIndex == 1 {
 			level = source.Z1
 		}
-		inset[cap] = make([]int, len(samples.Points))
+		inset[capIndex] = make([]int, len(samples.Points))
 		for i, p := range samples.Points {
 			p.Z = level
-			inset[cap][i] = len(mesh.Verts)
+			inset[capIndex][i] = len(mesh.Verts)
 			mesh.Verts = append(mesh.Verts, p)
 			bounds = append(bounds, proofbound.AbsSumUpper(fp.MeshBound, samples.Bound))
 		}
-		if !BoreRingSimple(ctx, mesh.Verts, inset[cap]) {
+		if !BoreRingSimple(ctx, mesh.Verts, inset[capIndex]) {
 			return nil, fmt.Errorf("%w: loft/cylinder inset is not one simple outer ring", decaderr.ErrUnsupported)
 		}
-		inSource, err := ChamferRingNested(ctx, mesh.Verts, source.Outer[cap], inset[cap])
+		inSource, err := ChamferRingNested(ctx, mesh.Verts, source.Outer[capIndex], inset[capIndex])
 		if err != nil {
 			return nil, err
 		}
@@ -163,7 +163,7 @@ func chamferCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 			return nil, fmt.Errorf("%w: loft/cylinder inset crosses its source cap", decaderr.ErrUnsupported)
 		}
 		if active[1] {
-			inSide, err := ChamferRingNested(ctx, mesh.Verts, clipped.Rings[cap], inset[cap])
+			inSide, err := ChamferRingNested(ctx, mesh.Verts, clipped.Rings[capIndex], inset[capIndex])
 			if err != nil {
 				return nil, err
 			}
@@ -172,60 +172,60 @@ func chamferCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 			}
 		}
 		if err := ChamferHeldOutlineGap(ctx, mesh.Verts,
-			source.Outer[cap], inset[cap], fp.MeshBound); err != nil {
+			source.Outer[capIndex], inset[capIndex], fp.MeshBound); err != nil {
 			return nil, err
 		}
-		if err := ChamferExteriorLineage(fp, source, cap); err != nil {
+		if err := ChamferExteriorLineage(fp, source, capIndex); err != nil {
 			return nil, err
 		}
 		outerRadius := proofbound.AbsSumUpper(source.BlankRadius, 0.01)
-		radialReach[cap], err = ChamferCapRadialReach(source, mesh.Verts,
-			inset[cap], cap, outerRadius)
+		radialReach[capIndex], err = ChamferCapRadialReach(source, mesh.Verts,
+			inset[capIndex], capIndex, outerRadius)
 		if err != nil {
 			return nil, err
 		}
 		if err := ChamferExteriorRimInside(ctx, source, mesh.Verts,
-			inset[cap], cap, outerRadius); err != nil {
+			inset[capIndex], capIndex, outerRadius); err != nil {
 			return nil, err
 		}
-		if len(source.Inner[cap]) > 0 {
+		if len(source.Inner[capIndex]) > 0 {
 			boreReach := proofbound.AbsSumUpper(source.BoreRadius, fp.MeshBound, samples.Bound,
 				clipped.ClipBound)
-			for i, index := range inset[cap] {
-				next := inset[cap][(i+1)%len(inset[cap])]
+			for i, index := range inset[capIndex] {
+				next := inset[capIndex][(i+1)%len(inset[capIndex])]
 				if TriangleMinRadius(mesh.Verts, [3]int{index, next, next}) <= boreReach {
 					return nil, fmt.Errorf("%w: loft/cylinder inset edge reaches the exact bore", decaderr.ErrUnsupported)
 				}
 			}
 		}
-		capGroup := source.CapGroups[cap]
+		capGroup := source.CapGroups[capIndex]
 		role := provenance.RoleCapStart
-		if cap == 1 {
+		if capIndex == 1 {
 			role = provenance.RoleCapEnd
 		}
 		mesh.Groups[capGroup].Origins = append(append([]provenance.Ref(nil), mesh.Groups[capGroup].Origins...),
 			provenance.Ref{Producer: env.Ref, Role: role})
-		capTris, err := ChamferCapTriangles(ctx, mesh.Verts, inset[cap], source.Inner[cap], cap == 0)
+		capTris, err := ChamferCapTriangles(ctx, mesh.Verts, inset[capIndex], source.Inner[capIndex], capIndex == 0)
 		if err != nil {
-			return nil, fmt.Errorf("loft/cylinder cap %d: %w", cap, err)
+			return nil, fmt.Errorf("loft/cylinder cap %d: %w", capIndex, err)
 		}
 		for _, t := range capTris {
 			mesh.Add(t, capGroup)
 		}
 		bandGroup := len(mesh.Groups)
 		mesh.Groups = append(mesh.Groups, facetedrecord.Group{Origins: []provenance.Ref{{Producer: env.Ref,
-			Role: fmt.Sprintf("chamferCap(%d,0,0)", cap)}}})
+			Role: fmt.Sprintf("chamferCap(%d,0,0)", capIndex)}}})
 		bandFirst := len(mesh.Tris)
-		bandTris, err := ChamferBandTriangles(clipped.Rings[cap], inset[cap],
+		bandTris, err := ChamferBandTriangles(clipped.Rings[capIndex], inset[capIndex],
 			samples.LineStart, samples.ArcStart, len(samples.Points))
 		if err != nil {
-			return nil, fmt.Errorf("loft/cylinder band %d: %w", cap, err)
+			return nil, fmt.Errorf("loft/cylinder band %d: %w", capIndex, err)
 		}
 		for _, t := range bandTris {
 			mesh.Add(t, bandGroup)
 		}
-		bands[cap] = [2]int{bandFirst, len(mesh.Tris)}
-		if len(source.Inner[cap]) > 0 {
+		bands[capIndex] = [2]int{bandFirst, len(mesh.Tris)}
+		if len(source.Inner[capIndex]) > 0 {
 			boreReach := proofbound.AbsSumUpper(source.BoreRadius, fp.MeshBound, samples.Bound,
 				clipped.ClipBound)
 			for _, tri := range mesh.Tris[bandFirst:] {
@@ -243,21 +243,21 @@ func chamferCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	}
 	ideal := chamferIdealVertices(mesh.Verts, clipped)
 	var bandSideEdges [2]map[[2]int]struct{}
-	for cap := range 2 {
-		if !active[cap] {
+	for capIndex := range 2 {
+		if !active[capIndex] {
 			continue
 		}
 		capLevel := proofarith.FloatRat(source.Z0)
 		sideLevel := new(big.Rat).Add(capLevel, proofarith.FloatRat(setback))
-		if cap == 1 {
+		if capIndex == 1 {
 			capLevel = proofarith.FloatRat(source.Z1)
 			sideLevel = new(big.Rat).Sub(capLevel, proofarith.FloatRat(setback))
 		}
-		if !ChamferExactRingSimple(ctx, ideal, clipped.Rings[cap]) {
+		if !ChamferExactRingSimple(ctx, ideal, clipped.Rings[capIndex]) {
 			return nil, fmt.Errorf("%w: ideal loft/cylinder side section is not simple", decaderr.ErrUnsupported)
 		}
 		if active[1] {
-			nested, err := ChamferExactNested(ctx, ideal, clipped.Rings[cap], inset[cap])
+			nested, err := ChamferExactNested(ctx, ideal, clipped.Rings[capIndex], inset[capIndex])
 			if err != nil {
 				return nil, err
 			}
@@ -265,11 +265,11 @@ func chamferCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 				return nil, fmt.Errorf("%w: ideal loft/cylinder inset crosses its side section", decaderr.ErrUnsupported)
 			}
 		}
-		bandSideEdges[cap], err = ChamferBandBoundary(mesh.Tris, bands[cap], clipped.Rings[cap], inset[cap])
+		bandSideEdges[capIndex], err = ChamferBandBoundary(mesh.Tris, bands[capIndex], clipped.Rings[capIndex], inset[capIndex])
 		if err != nil {
 			return nil, err
 		}
-		if err := ChamferIdealBandLevels(mesh.Tris, ideal, bands[cap], inset[cap],
+		if err := ChamferIdealBandLevels(mesh.Tris, ideal, bands[capIndex], inset[capIndex],
 			capLevel, sideLevel); err != nil {
 			return nil, err
 		}
@@ -297,16 +297,16 @@ func chamferCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	if needed > allowance || allowance > 0.1 || allowance <= 0 || proofbound.IsNonFinite(allowance) {
 		return nil, fmt.Errorf("%w: cap chamfer has no finite boundary allowance", decaderr.ErrUnsupported)
 	}
-	for cap, reach := range radialReach {
-		if !active[cap] {
+	for endCap, reach := range radialReach {
+		if !active[endCap] {
 			continue
 		}
-		if cap == 1 {
+		if endCap == 1 {
 			reach = proofbound.AbsSumUpper(reach, bridgeReach)
 		}
 		if proofbound.AbsSumUpper(reach, clipped.ClipBound) >= allowance {
 			return nil, fmt.Errorf("%w: cap %d radial reach exceeds the published boundary bound",
-				decaderr.ErrUnsupported, cap)
+				decaderr.ErrUnsupported, endCap)
 		}
 	}
 	// The near-band and middle-side proofs read only the finished mesh and
@@ -334,8 +334,8 @@ func chamferCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	if err := ChamferCrossingAudit(ctx, mesh, source, inset, maxTriangles); err != nil {
 		return nil, err
 	}
-	for cap := range 2 {
-		if !chamferCapTiles(ctx, mesh.Verts, mesh.Tris, mesh.Src, source, cap, inset[cap]) {
+	for capIndex := range 2 {
+		if !chamferCapTiles(ctx, mesh.Verts, mesh.Tris, mesh.Src, source, capIndex, inset[capIndex]) {
 			return nil, fmt.Errorf("%w: loft/cylinder inset cap does not tile its ring", decaderr.ErrUnsupported)
 		}
 	}
@@ -389,14 +389,14 @@ func chamferCaps(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	if oneCap != nil {
 		oneCap.CapGroups = source.CapGroups
 		oneCap.BoreGroup = source.BoreGroup
-		for cap := range 2 {
-			oneCap.Outer[cap] = make([]int, len(inset[cap]))
-			for i, index := range inset[cap] {
-				oneCap.Outer[cap][i] = remap[index]
+		for capIndex := range 2 {
+			oneCap.Outer[capIndex] = make([]int, len(inset[capIndex]))
+			for i, index := range inset[capIndex] {
+				oneCap.Outer[capIndex][i] = remap[index]
 			}
-			oneCap.Inner[cap] = make([]int, len(source.Inner[cap]))
-			for i, index := range source.Inner[cap] {
-				oneCap.Inner[cap][i] = remap[index]
+			oneCap.Inner[capIndex] = make([]int, len(source.Inner[capIndex]))
+			for i, index := range source.Inner[capIndex] {
+				oneCap.Inner[capIndex][i] = remap[index]
 			}
 		}
 	}
@@ -410,9 +410,9 @@ func chamferIdealVertices(verts []r3.Vec, side ChamferSideResult) []proofarith.X
 	for i, v := range verts {
 		xverts[i] = proofarith.XptOf(v)
 	}
-	for cap, ring := range side.Rings {
+	for endCap, ring := range side.Rings {
 		for i, vertex := range ring {
-			xverts[vertex] = side.Exact[cap][i]
+			xverts[vertex] = side.Exact[endCap][i]
 		}
 	}
 	return xverts

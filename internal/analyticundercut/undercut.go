@@ -85,15 +85,15 @@ func Prism(b *topo.Body, pp prismrecord.Payload, pull r3.Vec) verifypublish.Unde
 		}
 	}
 	if !pp.SurfaceResult {
-		for _, cap := range []struct {
+		for _, endCap := range []struct {
 			role string
 			sign float64
 		}{{role: provenance.RoleCapStart, sign: -1}, {role: provenance.RoleCapEnd, sign: 1}} {
-			f := roles[cap.role]
+			f := roles[endCap.role]
 			if f == nil {
 				return outcome{}
 			}
-			verdict, ok := survey2d.CapNormalDecision(m, pull, cap.sign)
+			verdict, ok := survey2d.CapNormalDecision(m, pull, endCap.sign)
 			if !listVerdict(&faces, &undecided, f, verdict, ok) {
 				return outcome{}
 			}

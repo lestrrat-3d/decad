@@ -217,11 +217,11 @@ func BuildRevolveCarriers(in RevolveCarrierInput) RevolveCarrierResult {
 
 	if !in.Full {
 		region := NewRegion2(capElems)
-		for _, cap := range []struct {
+		for _, endCap := range []struct {
 			phi  float64
 			sign float64
 		}{{phi: in.Phi0, sign: -1}, {phi: in.Phi1, sign: 1}} {
-			sin, cos := math.Sincos(cap.phi)
+			sin, cos := math.Sincos(endCap.phi)
 			radial := e0p.Scale(cos).Add(e1p.Scale(sin))
 			vel := e0p.Scale(-sin).Add(e1p.Scale(cos))
 			f := &CFace{
@@ -229,7 +229,7 @@ func BuildRevolveCarriers(in RevolveCarrierInput) RevolveCarrierResult {
 				O:         a3p,
 				U:         wp,
 				V:         radial,
-				N:         vel.Scale(cap.sign),
+				N:         vel.Scale(endCap.sign),
 				Region:    region,
 				LiftRound: a3Round,
 			}

@@ -24,8 +24,8 @@ func TestRevolveQuarterCapRadialRimChamferVerified(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, []*decad.Body{out}, doc.Bodies())
 			require.Len(t, out.Faces(), 6)
-			for _, cap := range []decad.FeatureRef{decad.CapStart(source), decad.CapEnd(source)} {
-				found, err := decad.Faces(decad.FaceCreatedBy(cap)).Exactly(1).SelectFaces(out)
+			for _, endCap := range []decad.FeatureRef{decad.CapStart(source), decad.CapEnd(source)} {
+				found, err := decad.Faces(decad.FaceCreatedBy(endCap)).Exactly(1).SelectFaces(out)
 				require.NoError(t, err)
 				require.Len(t, found, 1)
 			}

@@ -101,8 +101,8 @@ func TestLoftCapBandReflexVolumeProofAndSharpBore(t *testing.T) {
 	require.True(t, mesh.VolumeVerified())
 	require.Greater(t, mesh.n.VolSymDiff, source.Proof.VolSymDiff)
 	require.NoError(t, booloperand.RequireVolumeProof(t.Context(), &out.n, 0))
-	for _, cap := range []provenance.Ref{refOf(CapStart(out)), refOf(CapEnd(out))} {
-		faces, err := Faces(FaceCreatedBy(featureRefOf(cap))).Exactly(1).SelectFaces(out)
+	for _, endCap := range []provenance.Ref{refOf(CapStart(out)), refOf(CapEnd(out))} {
+		faces, err := Faces(FaceCreatedBy(featureRefOf(endCap))).Exactly(1).SelectFaces(out)
 		require.NoError(t, err)
 		require.Len(t, faces[0].Loops(), 2)
 		require.Len(t, faces[0].Loops()[1].Edges(), 1, "the bore rim is an unchamfered circle")
@@ -133,10 +133,10 @@ func TestLoftCapBandNoBoreChamfersBothOuterLoops(t *testing.T) {
 	require.True(t, band.EndLoops[0])
 	require.Empty(t, band.Profile.Holes)
 	require.IsType(t, fitSplineSeg{}, band.LoftSource.Profile.Outer.Segments[0])
-	for _, cap := range [][2]provenance.Ref{{refOf(CapStart(body)), refOf(CapStart(out))}, {refOf(CapEnd(body)), refOf(CapEnd(out))}} {
-		original, err := Faces(FaceCreatedBy(featureRefOf(cap[0]))).Exactly(1).SelectFaces(body)
+	for _, endCap := range [][2]provenance.Ref{{refOf(CapStart(body)), refOf(CapStart(out))}, {refOf(CapEnd(body)), refOf(CapEnd(out))}} {
+		original, err := Faces(FaceCreatedBy(featureRefOf(endCap[0]))).Exactly(1).SelectFaces(body)
 		require.NoError(t, err)
-		faces, err := Faces(FaceCreatedBy(featureRefOf(cap[1]))).Exactly(1).SelectFaces(out)
+		faces, err := Faces(FaceCreatedBy(featureRefOf(endCap[1]))).Exactly(1).SelectFaces(out)
 		require.NoError(t, err)
 		require.Len(t, faces[0].Loops(), 1)
 		originalArea, err := original[0].Area()

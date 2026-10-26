@@ -269,12 +269,12 @@ func CertifyLoftQuarterSourceEnvelope(ctx context.Context, first, second *topo.B
 	if err != nil || !accepted {
 		return no, false, err
 	}
-	for cap := range order.Quarter {
-		if len(order.Quarter[cap]) != 2 {
+	for endCap := range order.Quarter {
+		if len(order.Quarter[endCap]) != 2 {
 			return no, false, nil
 		}
 		seen := [2]bool{}
-		for _, event := range order.Quarter[cap] {
+		for _, event := range order.Quarter[endCap] {
 			if err := budget.Step(); err != nil {
 				return no, false, err
 			}
@@ -626,14 +626,14 @@ func CertifyLoftQuarterWallOrder(ctx context.Context, budget *proofbound.WorkBud
 	}
 	proof := loftQuarterWallOrderProof{Prism: source.Prism, Loft: source.Loft,
 		Lower: edges[0], Upper: edges[1], ArcSegment: -1}
-	for cap, loop := range [2]sectionrecord.LoopRecord{lp.Profile0.Outer, lp.Profile1.Outer} {
+	for endCap, loop := range [2]sectionrecord.LoopRecord{lp.Profile0.Outer, lp.Profile1.Outer} {
 		arcIndex := -1
 		axisLines := [2]bool{}
 		for i, raw := range loop.Segments {
 			if err := budget.Step(); err != nil {
 				return no, false, err
 			}
-			span := source.LoftCaps[cap][i]
+			span := source.LoftCaps[endCap][i]
 			if span.Body != source.Loft || span.Segment != i {
 				return no, false, nil
 			}
@@ -650,8 +650,8 @@ func CertifyLoftQuarterWallOrder(ctx context.Context, budget *proofbound.WorkBud
 					return no, false, nil
 				}
 				arcIndex = i
-				proof.Radius[cap] = proofarith.FloatRat(segment.Start.U)
-				proof.WallFaces[cap] = span.WallFaces
+				proof.Radius[endCap] = proofarith.FloatRat(segment.Start.U)
+				proof.WallFaces[endCap] = span.WallFaces
 			case sectionrecord.LineSeg:
 				borrowed, same := span.Curve.(sectionrecord.LineSeg)
 				if !same || borrowed != segment ||
@@ -674,10 +674,10 @@ func CertifyLoftQuarterWallOrder(ctx context.Context, budget *proofbound.WorkBud
 			}
 		}
 		if arcIndex < 0 || !axisLines[0] || !axisLines[1] ||
-			cap == 1 && arcIndex != proof.ArcSegment {
+			endCap == 1 && arcIndex != proof.ArcSegment {
 			return no, false, nil
 		}
-		if cap == 1 {
+		if endCap == 1 {
 			if len(lp.Segment) != 1 || len(lp.Segment[0]) > 512 ||
 				len(proof.WallFaces[0]) != len(proof.WallFaces[1]) {
 				return no, false, nil
@@ -763,8 +763,8 @@ func loftQuarterWallRectangle(ctx context.Context, budget *proofbound.WorkBudget
 		if !ok {
 			return bounds, horizontal, false, nil
 		}
-		for cap := range 2 {
-			span := source.PrismCaps[cap][i]
+		for capIndex := range 2 {
+			span := source.PrismCaps[capIndex][i]
 			borrowed, same := span.Curve.(sectionrecord.LineSeg)
 			if !same || borrowed != line || span.Body != source.Prism || span.Segment != i {
 				return bounds, horizontal, false, nil

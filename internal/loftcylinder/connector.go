@@ -313,14 +313,14 @@ func heldConnectorOf(verts []r3.Vec, cell, root int,
 	if cell != 0 {
 		near, far = root, root-1
 	}
-	for cap := range 2 {
-		held.a[cap] = ExactXY(verts[cap*n+near])
-		held.f[cap] = ExactXY(verts[cap*n+far])
+	for capIndex := range 2 {
+		held.a[capIndex] = ExactXY(verts[capIndex*n+near])
+		held.f[capIndex] = ExactXY(verts[capIndex*n+far])
 		switch {
-		case sameXY(source.d[cap], source.a[cap]):
-			held.d[cap] = held.a[cap]
-		case sameXY(source.d[cap], source.f[cap]):
-			held.d[cap] = held.f[cap]
+		case sameXY(source.d[capIndex], source.a[capIndex]):
+			held.d[capIndex] = held.a[capIndex]
+		case sameXY(source.d[capIndex], source.f[capIndex]):
+			held.d[capIndex] = held.f[capIndex]
 		default:
 			return Connector{}, false
 		}

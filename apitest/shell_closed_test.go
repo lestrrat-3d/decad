@@ -95,8 +95,8 @@ func TestShellClosedPrism(t *testing.T) {
 			}
 
 			// Both caps stay selectable by their roles.
-			for _, cap := range []decad.FeatureRef{decad.CapStart(closed), decad.CapEnd(closed)} {
-				faces, err := decad.Faces(decad.FaceCreatedBy(cap)).SelectFaces(closed)
+			for _, endCap := range []decad.FeatureRef{decad.CapStart(closed), decad.CapEnd(closed)} {
+				faces, err := decad.Faces(decad.FaceCreatedBy(endCap)).SelectFaces(closed)
 				require.NoError(t, err)
 				require.Len(t, faces, 1)
 			}

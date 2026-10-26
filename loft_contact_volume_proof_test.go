@@ -161,9 +161,9 @@ func TestLoftOutputBoundaryRefusesTinyTranslatedSeam(t *testing.T) {
 			require.NoError(t, sourceErr)
 			require.True(t, admitted)
 			require.Positive(t, source.SourceVisits)
-			for _, cap := range source.Prepared {
-				require.NotNil(t, cap.Scene)
-				require.Positive(t, len(cap.Raw))
+			for _, endCap := range source.Prepared {
+				require.NotNil(t, endCap.Scene)
+				require.Positive(t, len(endCap.Raw))
 			}
 
 			boundary, accepted, boundaryErr := loftdirect.CertifyLoftOutputBoundary(t.Context(),
@@ -734,14 +734,14 @@ func checkLoftBoundedCapCertificates(t *testing.T, source loftcontact.SourcePart
 	require.Greater(t, source.SourceVisits, uint64(0))
 	require.LessOrEqual(t, source.SourceVisits, uint64(4_096))
 	require.True(t, source.Prepared[0].Scene != source.Prepared[1].Scene)
-	for capIndex, cap := range source.Prepared {
-		require.True(t, cap.Scene != nil)
-		require.Equal(t, capIndex, cap.CapIndex)
-		require.True(t, cap.Level == source.CapLevels[capIndex])
-		require.Equal(t, 3, len(cap.Raw))
-		for _, cell := range cap.Raw {
+	for capIndex, endCap := range source.Prepared {
+		require.True(t, endCap.Scene != nil)
+		require.Equal(t, capIndex, endCap.CapIndex)
+		require.True(t, endCap.Level == source.CapLevels[capIndex])
+		require.Equal(t, 3, len(endCap.Raw))
+		for _, cell := range endCap.Raw {
 			require.True(t, cell != nil)
-			require.True(t, cell.Sketch() == cap.Scene)
+			require.True(t, cell.Sketch() == endCap.Scene)
 			require.False(t, cell.IsStale())
 		}
 	}
@@ -754,12 +754,12 @@ func TestLoftContactTwoLineCapsRealTrapezoid524(t *testing.T) {
 	require.NoError(t, err)
 	var sections [2]*sketch.Sketch
 	var profiles [2]*sketch.Profile
-	for cap, corners := range [2][4][2]float64{
+	for endCap, corners := range [2][4][2]float64{
 		{{8, 4}, {12, 4}, {13, 6}, {8, 6}},
 		{{8, 4}, {13, 4}, {14, 6}, {8, 6}},
 	} {
 		plane := world.XY()
-		if cap == 1 {
+		if endCap == 1 {
 			plane = upper
 		}
 		s, createErr := world.CreateSketch(plane)
@@ -777,7 +777,7 @@ func TestLoftContactTwoLineCapsRealTrapezoid524(t *testing.T) {
 		found := s.Profiles()
 		require.Equal(t, 1, len(found))
 		require.True(t, found[0].Valid)
-		sections[cap], profiles[cap] = s, found[0]
+		sections[endCap], profiles[endCap] = s, found[0]
 	}
 
 	doc := New()
@@ -804,7 +804,7 @@ func TestLoftContactTwoLineCapsRealTrapezoid524(t *testing.T) {
 		{{U: 10, V: 4}, {U: 10, V: 6}},
 		{{U: 10, V: 4}, {U: 10, V: 6}},
 	}, source.Junction)
-	for cap, prepared := range source.Prepared {
+	for endCap, prepared := range source.Prepared {
 		require.NotNil(t, prepared.Scene)
 		require.Equal(t, 8, len(prepared.Tags))
 		require.Equal(t, 8, len(prepared.Scene.Entities()))
@@ -828,11 +828,11 @@ func TestLoftContactTwoLineCapsRealTrapezoid524(t *testing.T) {
 				}
 			}
 		}
-		require.Equal(t, 2, len(junctions), "cap %d junctions", cap)
+		require.Equal(t, 2, len(junctions), "cap %d junctions", endCap)
 		_, hasLower := junctions[[2]float64{10, 4}]
 		_, hasUpper := junctions[[2]float64{10, 6}]
-		require.True(t, hasLower, "cap %d lower junction", cap)
-		require.True(t, hasUpper, "cap %d upper junction", cap)
+		require.True(t, hasLower, "cap %d lower junction", endCap)
+		require.True(t, hasUpper, "cap %d upper junction", endCap)
 	}
 
 	pp := prism.n.Payload.(prismPayload)
@@ -864,12 +864,12 @@ func TestLoftContactTwoLineCapsNarrowTranslated524(t *testing.T) {
 	require.NoError(t, err)
 	var sections [2]*sketch.Sketch
 	var profiles [2]*sketch.Profile
-	for cap, corners := range [2][4][2]float64{
+	for endCap, corners := range [2][4][2]float64{
 		{{119, 0}, {163 - 896*epsilon, 0}, {163 - 896*epsilon, 1}, {119, 1}},
 		{{119, 0}, {165 - 1024*epsilon, 0}, {165 - 1024*epsilon, 1}, {119, 1}},
 	} {
 		plane := base
-		if cap == 1 {
+		if endCap == 1 {
 			plane = upper
 		}
 		s, createErr := world.CreateSketch(plane)
@@ -887,7 +887,7 @@ func TestLoftContactTwoLineCapsNarrowTranslated524(t *testing.T) {
 		found := s.Profiles()
 		require.Equal(t, 1, len(found))
 		require.True(t, found[0].Valid)
-		sections[cap], profiles[cap] = s, found[0]
+		sections[endCap], profiles[endCap] = s, found[0]
 	}
 	doc := New()
 	prismSketch, err := world.CreateSketch(base)

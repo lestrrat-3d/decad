@@ -11,11 +11,11 @@ import (
 func checkDraftCircleModifyRoles(t *testing.T, body *decad.Body,
 	wantSurfaces map[decad.SurfaceKind]int, rolePrefix string) {
 	t.Helper()
-	for _, cap := range []decad.FeatureRef{decad.CapStart(body), decad.CapEnd(body)} {
-		faces, err := decad.Faces(decad.FaceCreatedBy(cap)).Exactly(1).SelectFaces(body)
+	for _, endCap := range []decad.FeatureRef{decad.CapStart(body), decad.CapEnd(body)} {
+		faces, err := decad.Faces(decad.FaceCreatedBy(endCap)).Exactly(1).SelectFaces(body)
 		require.NoError(t, err)
 		require.Equal(t, decad.KindPlane, faces[0].Surface().Kind())
-		edges, err := decad.Edges(decad.OuterLoopOf(cap), decad.Circular()).Exactly(1).SelectEdges(body)
+		edges, err := decad.Edges(decad.OuterLoopOf(endCap), decad.Circular()).Exactly(1).SelectEdges(body)
 		require.NoError(t, err)
 		require.Len(t, edges[0].Faces(), 2)
 	}

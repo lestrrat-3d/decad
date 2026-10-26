@@ -190,12 +190,12 @@ func chamferNearBandReach(ctx context.Context, mesh *facetedrecord.JoinedMesh,
 		fractions = []*big.Rat{big.NewRat(1, 4), big.NewRat(1, 2), big.NewRat(3, 4)}
 	}
 	teeth := make(chamferRingTeeth)
-	for cap, band := range bands {
+	for endCap, band := range bands {
 		if band[0] == band[1] {
 			continue
 		}
 		capLevel := proofarith.FloatRat(source.Z0)
-		if cap == 1 {
+		if endCap == 1 {
 			capLevel = proofarith.FloatRat(source.Z1)
 		}
 		var near [][3]proofarith.Xpt
@@ -261,7 +261,7 @@ func chamferNearBandReach(ctx context.Context, mesh *facetedrecord.JoinedMesh,
 					}
 				}
 				return fmt.Errorf("%w: near cap band %d facet %d has no certified split-ring reach after %d checks: distances=%v bound=%.17g",
-					decaderr.ErrUnsupported, cap, i, steps, diagnostic, publishedBound)
+					decaderr.ErrUnsupported, endCap, i, steps, diagnostic, publishedBound)
 			}
 		}
 	}
