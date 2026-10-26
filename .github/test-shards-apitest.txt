@@ -2262,13 +2262,11 @@
 10	0.01	TestHoleRectangularTurned
 10	0.01	TestChamferAngleHonoursTheReferenceFace
 10	0.01	TestChamferAngleRefusals
-10	0.01	TestChamferAngleRefusesAnEdgeThatIsNotRightAngled
 10	0.01	TestChamferAngleSetsTheOtherDistance
 10	0.01	TestHoleSlotBlindTurned
 10	0.01	TestHoleSlotRefusals
 10	0.01	TestHoleSlotThrough
 10	0.01	TestFilletChordRefusals
-10	0.01	TestFilletChordRefusesAnEdgeThatIsNotRightAngled
 10	0.01	TestFilletChordSetsTheRadius
 10	0.01	TestArrangePlacesBodiesInShelves
 10	0.01	TestArrangeRefusals
@@ -2369,3 +2367,10 @@
 10	0.01	TestWebPathJoinsALineArcLineChain
 10	0.01	TestWebPathOfOneLineIsARib
 10	0.01	TestWebPathRefusals
+10	0.01	TestChamferAngleOnAHexagonEdge
+10	0.01	TestChamferAngleOnAnAcuteEdge
+10	0.01	TestChamferAngleRefusesWhatHasNoSecondDistance
+10	0.01	TestChamferAngleRefusesAConcaveEdge
+10	0.01	TestFilletChordOnAHexagonEdge
+10	0.01	TestFilletChordOnEverySideEdgeOfTheHexagon
+10	0.01	TestFilletChordRefusesMixedAnglesAndConcaveEdges

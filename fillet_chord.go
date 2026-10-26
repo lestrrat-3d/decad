@@ -13,15 +13,16 @@ import (
 // straight line between its two tangent edges, is chord long, returning the
 // new body and retiring b (agent-docs/fillet-chord-design.md).
 //
-// On a right-angled edge the arc turns a quarter turn, so its radius is
-// chord/√2. FilletChord states that radius and builds the result with
-// [Fillet], so the receivers, routes and refusals of Fillet apply.
+// Where the faces meet at the interior angle φ the arc turns π − φ, so its
+// radius is chord/(2·cos(φ/2)), which is chord/√2 on a right angle.
+// FilletChord states that radius and builds the result with [Fillet], so the
+// receivers, routes and refusals of Fillet apply.
 //
-// Every selected edge MUST lie between two planar faces whose normals are
-// exactly perpendicular, which a right-angled box or prism edge meets. Any
-// other edge is ErrUnsupported: the radius is chord/√2 only at a right angle,
-// and decad does not accept a dihedral that is merely close to one. chord MUST
-// be a positive length; a zero or negative one is ErrDegenerate or
+// Every selected edge MUST be convex and lie between two planar faces. Any other
+// edge is ErrUnsupported. All the selected edges MUST give the same radius,
+// within a relative 1e-12, which equal dihedrals do; edges at different angles
+// take separate calls, and a selection that mixes them is ErrUnsupported. chord
+// MUST be a positive length; a zero or negative one is ErrDegenerate or
 // ErrNegativeMagnitude, and a wrong unit kind is ErrUnitKind. A nil context,
 // body or selector is ErrDegenerate. Every failure leaves b live and the
 // document unchanged.
@@ -49,10 +50,18 @@ func FilletChord(ctx context.Context, b *Body, sel EdgeSelector, chord units.Val
 	if err != nil {
 		return nil, err
 	}
-	for _, e := range edges {
-		if err := e.requireRightAngle("a chord-length fillet"); err != nil {
+	var radius float64
+	for i, e := range edges {
+		phi, err := e.convexDihedral("a chord-length fillet")
+		if err != nil {
 			return nil, err
 		}
+		r := cmm / (2 * math.Cos(phi/2))
+		if i == 0 {
+			radius = r
+		} else if !sameWithinDihedralTolerance(radius, r) {
+			return nil, fmt.Errorf(`%w: the selected edges meet at different angles, so they need different radii`, ErrUnsupported)
+		}
 	}
-	return Fillet(ctx, b, sel, units.Millimeters(cmm/math.Sqrt2))
+	return Fillet(ctx, b, sel, units.Millimeters(radius))
 }

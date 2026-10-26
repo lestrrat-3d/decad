@@ -93,27 +93,3 @@ func TestChamferAngleRefusals(t *testing.T) {
 		})
 	}
 }
-
-// A triangular prism's acute lateral edge is not a right angle, so the
-// tangent reading of the second distance does not apply.
-func TestChamferAngleRefusesAnEdgeThatIsNotRightAngled(t *testing.T) {
-	t.Parallel()
-	doc := decad.New()
-	s := decadtest.NewSketch(t)
-	a := s.CreatePoint(0, 0)
-	b := s.CreatePoint(20, 0)
-	c := s.CreatePoint(0, 20)
-	s.Fix(a)
-	s.Fix(b)
-	s.Fix(c)
-	s.CreateLine(a, b)
-	s.CreateLine(b, c)
-	s.CreateLine(c, a)
-	prism := decadtest.NewPrism(t, doc, s, decadtest.SolveRegion(t, s), units.Millimeters(10))
-	edge := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.EndpointAt(r3.NewVec(20, 0, 0))).Exactly(1)
-	_, err := decad.ChamferAngle(t.Context(), prism, edge, units.Millimeters(2),
-		decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))), units.Degrees(30))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "right angle")
-	require.Equal(t, []*decad.Body{prism}, doc.Bodies())
-}
