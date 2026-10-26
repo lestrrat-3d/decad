@@ -1,12 +1,11 @@
 package apitest_test
 
 import (
-	"io"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
-	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -61,12 +60,14 @@ func TestPrismGroupDisjointUnion(t *testing.T) {
 	require.Equal(t, 0.0, box.Min.X)
 	require.Equal(t, 15.0, box.Max.X)
 	requireMeshWatertightAt(t, got, 0.1)
-	// Two outer shells: STEP writes one solid, so the group is refused.
+	// Two outer shells: STEP writes one solid per lump, and reads back as two.
 	require.Len(t, got.Shells(), 2)
-	err = export.STEP(t.Context(), io.Discard, got, units.Millimeters(0.1),
-		export.WithSTEPName("group"), export.WithSTEPAuthor("apitest"), export.WithSTEPOrganization("decad"))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Contains(t, err.Error(), "exactly one outer shell")
+	data := writeSTEP(t, got)
+	require.Equal(t, 2, strings.Count(string(data), "MANIFOLD_SOLID_BREP("))
+	read, err := readSTEPBytes(t, data)
+	require.NoError(t, err)
+	require.Equal(t, 2, read.Report().Shells)
+	requireMeshVolume(t, read, 1000)
 
 	moved, err := decad.Transform(t.Context(), got, mustTranslation(t, 0, 0, 7))
 	require.NoError(t, err)

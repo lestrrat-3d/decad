@@ -76,6 +76,76 @@ func TestReadSTEPRoundTripsACavity(t *testing.T) {
 	requireMeshVolume(t, m, 8000-14*14*14)
 }
 
+func TestReadSTEPRoundTripsALumpWithACavityBesideALump(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	closed, err := decad.Shell(t.Context(), decadtest.NewBlock(t, doc, 0, 0, 20, 20, units.Millimeters(20)), nil,
+		units.Millimeters(3), decad.WithNoOpenings())
+	require.NoError(t, err)
+	beside := decadtest.NewBlock(t, doc, 40, 0, 50, 10, units.Millimeters(10))
+	both, err := decad.Union(t.Context(), closed, beside)
+	require.NoError(t, err)
+	require.Len(t, both.Lumps(), 2)
+	require.Len(t, both.Shells(), 3)
+	data := string(writeSTEP(t, both))
+	require.Equal(t, 1, strings.Count(data, "BREP_WITH_VOIDS("))
+	require.Equal(t, 1, strings.Count(data, "MANIFOLD_SOLID_BREP("))
+	m, err := readSTEPBytes(t, []byte(data))
+	require.NoError(t, err)
+	require.Equal(t, 3, m.Report().Shells)
+	requireMeshVolume(t, m, 8000-14*14*14+1000)
+}
+
+// A cavity that touches the outer shell along an edge or at a vertex comes back
+// from Cut as one shell, so STEP writes that one shell and the file reads back
+// closed with the body's volume (agent-docs/step-export-design.md §9, V2).
+func TestSTEPWritesACavityThatTouchesTheOuterShell(t *testing.T) {
+	t.Parallel()
+	edgeDoc := decad.New()
+	box := decadtest.NewBlock(t, edgeDoc, 0, 0, 20, 20, units.Millimeters(20))
+	s, p := polygonSketch(t, [][2]float64{{0, 10}, {5, 5}, {10, 10}, {5, 15}})
+	prism, err := decad.Extrude(t.Context(), edgeDoc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	prism, err = decad.Transform(t.Context(), prism, mustTranslation(t, 0, 0, 5))
+	require.NoError(t, err)
+	edgeTouch, err := decad.Cut(t.Context(), box, prism)
+	require.NoError(t, err)
+
+	vertexDoc := decad.New()
+	vbox := decadtest.NewBlock(t, vertexDoc, -5, -10, 10, 10, units.Millimeters(20))
+	w := sketch.NewWorld()
+	cs, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	origin, apex, top := cs.CreatePoint(0, 0), cs.CreatePoint(10, 0), cs.CreatePoint(0, 5)
+	cs.Fix(origin)
+	cs.CreateLine(origin, apex)
+	cs.CreateLine(apex, top)
+	cs.CreateLine(top, origin)
+	_, err = cs.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	cone, err := decad.Revolve(t.Context(), vertexDoc, cs, cs.Profiles()[0], axis, decad.FullRevolution{})
+	require.NoError(t, err)
+	cone, err = decad.Transform(t.Context(), cone, mustTranslation(t, 0, 0, 10))
+	require.NoError(t, err)
+	vertexTouch, err := decad.Cut(t.Context(), vbox, cone)
+	require.NoError(t, err)
+
+	for name, body := range map[string]*decad.Body{"edge": edgeTouch, "vertex": vertexTouch} {
+		require.Len(t, body.Shells(), 1, name)
+		volume, err := body.Volume()
+		require.NoError(t, err, name)
+		m, err := readSTEPBytes(t, writeSTEP(t, body))
+		require.NoError(t, err, name)
+		require.Equal(t, 1, m.Report().Shells, name)
+		// The file holds the body's tessellation, a little under a curved body's volume.
+		require.True(t, m.Report().Closed, name)
+		held, err := m.Volume()
+		require.NoError(t, err, name)
+		require.InDelta(t, volume.Value.Base(), held.Value.Base(), 1, name)
+	}
+}
+
 func TestReadSTEPHonoursAnOrientedVoidShellsFlag(t *testing.T) {
 	t.Parallel()
 	closed, err := decad.Shell(t.Context(), decadtest.NewBlock(t, decad.New(), 0, 0, 20, 20, units.Millimeters(20)), nil,

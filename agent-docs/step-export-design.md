@@ -25,9 +25,9 @@ according to the writer path.
 
 - Request `Body.Tessellate` at `VerifyBoundary` before either writer path.
   Its closed and embedded boundary is the shared admission check.
-- Admit one valid `BodySolid` with one outer shell and any number of void
-  shells (§9). Refuse sheets, a body of several outer shells, and a mesh whose
-  connected facet sets do not match the body's shells.
+- Admit one valid `BodySolid` of one or more lumps, each with one outer shell
+  and any number of void shells (§9). Refuse sheets and a mesh whose connected
+  facet sets do not match the body's shells one to one.
 - Use analytic AP214 faces when every body face is a `Plane`, a `Cylinder`, a `Cone` or a
   `Torus` and every edge is a `Line3`, an `Arc3`, an `Ellipse3` or a full `Circle3`. A plane's loops
   are one full circle each, or chains of lines and arcs (at least three
@@ -94,21 +94,24 @@ according to the writer path.
   builds the complete file before touching its writer; `step.File.Write`
   validates its model before output. I/O errors may leave a partial file.
 
-## 9. A solid with a cavity
+## 9. A solid with a cavity, and a body of several lumps
 
-A solid whose evaluator holds an outer shell and one or more void shells writes a `BREP_WITH_VOIDS` in place of the
-`MANIFOLD_SOLID_BREP`. It is the faceted arm's alone: the analytic arm builds the faces of one outer shell.
+Each lump (`Body.Lumps`) is one solid: its outer shell and its void shells. A lump with a cavity writes a
+`BREP_WITH_VOIDS` in place of the `MANIFOLD_SOLID_BREP`. A body with a cavity or with several lumps is the faceted arm's
+alone: the analytic arm builds the faces of one outer shell.
 
 | Decision | Rule |
 |---|---|
-| V1 | The body has exactly one non-void shell. Any number of void shells may follow. A body of two outer shells is `ErrUnsupported`. |
-| V2 | The verified mesh has one connected facet set for each shell. A count that differs, as when a cavity's shell touches the outer shell, is `ErrUnsupported`. |
-| V3 | The outer shell is the facet set whose signed volume is positive, wound outward. The others have negative volumes. A mesh with no single positive facet set is `ErrUnsupported`. |
+| V1 | Every lump has exactly one non-void shell (`FaceShell.IsVoid` is false). Any number of void shells may follow. A lump without one outer shell is `ErrUnsupported`. |
+| V2 | The verified mesh has one connected facet set for each shell, and `Mesh.SourceFaces` places every facet in one shell of the body. A count that differs, a facet set that spans two shells, or a shell without facets is `ErrUnsupported`. A cavity that touches its outer shell along an edge or at a vertex, as `Cut` returns it, is one shell of the body and one facet set of the mesh, so STEP writes it as that one shell (`TestSTEPWritesACavityThatTouchesTheOuterShell`). |
+| V3 | The body, not the mesh, names the outer shell of a lump. The mesh only locates each shell's facets. |
 | V4 | The outer shell is a `CLOSED_SHELL` of its triangles' planar `ADVANCED_FACE`s. Each void is a `CLOSED_SHELL` of its own faces, taken as the mesh winds them, which look into the cavity and away from the material, inside an `ORIENTED_CLOSED_SHELL` with the orientation `.T.`. |
 | V5 | `BREP_WITH_VOIDS(name, outer, (voids))` names the product's solid, the name being the header's. Entity IDs follow the same deterministic order as every file. |
-| V6 | A solid with no cavity is written as before: `MANIFOLD_SOLID_BREP`, analytic where the faces allow it. |
+| V6 | A lump with no cavity is a `MANIFOLD_SOLID_BREP` named by the header. A single-lump solid with no cavity is analytic where the faces allow it. |
+| V7 | One `ADVANCED_BREP_SHAPE_REPRESENTATION` holds one item per lump, in `Body.Lumps` order. |
+| V8 | The signed volume of each facet set only refuses: an outer set whose volume is not positive, or a void set whose volume is not negative, is `ErrUnsupported`, so a mesh wound against its shell's kind is never written as an `ORIENTED_CLOSED_SHELL`. |
 
-The tests build a cube with a cubic cavity, check the entity counts, and check that every outer face's normal points away
+The tests build a cube with a cubic cavity, a disjoint union of two blocks, and a cavity cube beside a block, check the entity counts, and check that every outer face's normal points away
 from the cube's middle and every void face's toward the cavity's. A body of a closed shell (`WithNoOpenings`) is such a
 solid.
 

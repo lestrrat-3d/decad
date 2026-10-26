@@ -165,3 +165,61 @@ func TestNewSTEPFileWritesAClosedShellAsBrepWithVoids(t *testing.T) {
 		}
 	}
 }
+
+// shellPoints returns the placement point of every face of the CLOSED_SHELL ref.
+func shellPoints(t *testing.T, byID map[step.Reference]step.Entity, shell step.Reference) []r3.Vec {
+	t.Helper()
+	var out []r3.Vec
+	for _, ref := range byID[shell].Parameters[1].(step.List) {
+		_, point := faceNormalAndPoint(t, byID, byID[ref.(step.Reference)])
+		out = append(out, point)
+	}
+	require.NotEmpty(t, out)
+	return out
+}
+
+func requirePointsInBox(t *testing.T, points []r3.Vec, lo, hi r3.Vec) {
+	t.Helper()
+	for _, p := range points {
+		require.True(t, p.X >= lo.X && p.X <= hi.X && p.Y >= lo.Y && p.Y <= hi.Y && p.Z >= lo.Z && p.Z <= hi.Z,
+			"a shell point lies outside its lump's box")
+	}
+}
+
+// A lump with a cavity beside a lump without one: each cavity pairs with the
+// outer shell of its own lump.
+func TestNewSTEPFilePairsACavityWithItsOwnLump(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	closed, err := decad.Shell(t.Context(), decadtest.NewBlock(t, doc, 0, 0, 20, 20, units.Millimeters(20)), nil,
+		units.Millimeters(3), decad.WithNoOpenings())
+	require.NoError(t, err)
+	beside := decadtest.NewBlock(t, doc, 40, 0, 50, 10, units.Millimeters(10))
+	both, err := decad.Union(t.Context(), closed, beside)
+	require.NoError(t, err)
+	require.Len(t, both.Lumps(), 2)
+
+	f, err := export.NewSTEPFile(t.Context(), both, units.Millimeters(0.1), voidsHeader())
+	require.NoError(t, err)
+	byID := stepIndex(f)
+	var brep, solid step.Entity
+	for _, e := range f.Entities {
+		switch e.Name {
+		case "BREP_WITH_VOIDS":
+			brep = e
+		case "MANIFOLD_SOLID_BREP":
+			solid = e
+		}
+	}
+	require.NotZero(t, brep.ID)
+	require.NotZero(t, solid.ID)
+	requirePointsInBox(t, shellPoints(t, byID, brep.Parameters[1].(step.Reference)),
+		r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 20))
+	voids := brep.Parameters[2].(step.List)
+	require.Len(t, voids, 1)
+	oriented := byID[voids[0].(step.Reference)]
+	requirePointsInBox(t, shellPoints(t, byID, oriented.Parameters[2].(step.Reference)),
+		r3.NewVec(3, 3, 3), r3.NewVec(17, 17, 17))
+	requirePointsInBox(t, shellPoints(t, byID, solid.Parameters[1].(step.Reference)),
+		r3.NewVec(40, 0, 0), r3.NewVec(50, 10, 10))
+}
