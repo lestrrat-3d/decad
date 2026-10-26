@@ -146,3 +146,61 @@ func Example_export_png_outlines() {
 	// Output:
 	// edge pixel: 32 32 32
 }
+
+// Set FieldOfView on the view for a perspective camera, which makes nearer parts
+// look larger as an eye or a lens sees them. The zero value is the orthographic
+// camera of the other examples. Here two equal 4 mm blocks side by side, one 10 mm
+// tall and one 2 mm, are drawn from above: the taller block's top is nearer the
+// camera and takes more of the picture.
+func Example_export_png_perspective() {
+	doc := decad.New()
+	var blocks []*decad.Body
+	for _, spec := range []struct{ x, height float64 }{{-6, 10}, {2, 2}} {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		if err != nil {
+			fmt.Printf("failed to create sketch: %s\n", err)
+			return
+		}
+		rect := s.CreateRectangle(spec.x, -2, spec.x+4, 2)
+		s.Fix(rect.A)
+		if _, err := s.Solve(context.Background()); err != nil {
+			fmt.Printf("failed to solve: %s\n", err)
+			return
+		}
+		block, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(spec.height), Dir: decad.Along})
+		if err != nil {
+			fmt.Printf("failed to extrude: %s\n", err)
+			return
+		}
+		blocks = append(blocks, block)
+	}
+
+	view := export.View{
+		Direction: r3.NewVec(0, 0, -1), Up: r3.NewVec(0, 1, 0),
+		Width: 200, Height: 200, FieldOfView: units.Degrees(60),
+	}
+	var out bytes.Buffer
+	if err := export.PNGBodies(context.Background(), &out, blocks, units.Millimeters(0.1), view); err != nil {
+		fmt.Printf("failed to export: %s\n", err)
+		return
+	}
+	img, err := png.Decode(&out)
+	if err != nil {
+		fmt.Printf("failed to read the image: %s\n", err)
+		return
+	}
+	// Count the columns across the middle row that each block covers.
+	count := func(from, to int) (n int) {
+		for x := from; x < to; x++ {
+			if r, g, b, _ := img.At(x, 100).RGBA(); r != 0xffff || g != 0xffff || b != 0xffff {
+				n++
+			}
+		}
+		return n
+	}
+	fmt.Printf("the nearer block is wider: %t\n", count(0, 100) > count(100, 200))
+	// Output:
+	// the nearer block is wider: true
+}
