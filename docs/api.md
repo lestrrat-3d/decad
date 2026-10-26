@@ -337,6 +337,7 @@ area and enclosed volume.
 | Connectivity | `MeshBody.Report` counts boundary, non-manifold and misoriented edges, shells and zero-area triangles. |
 | Size | `MeshBody.Bounds`, `MeshBody.Area`, `MeshBody.Volume` |
 | Triangles | `MeshBody.Vertices`, `MeshBody.Triangles` |
+| Position | `MeshBody.LocatePoint`, `MeshBody.DistanceToPoint`, `MeshBody.ClosestPoint` answer exactly for a closed mesh. |
 
 `MeshBody.Volume` is `decad.ErrNotSolid` unless the mesh is closed and wound counter-clockwise seen from outside.
 

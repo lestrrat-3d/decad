@@ -11,7 +11,7 @@ The rules for rows live in `agent-docs/layout.md`.
 |---|---|
 | `tessellate.go` | `Mesh`, `Body.Tessellate`, its mesh cache and proof withholding, and the call into `internal/tessdispatch/`. See tessellation design, surface §10.1. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and mesh proof publication. See tessellation §1, §4. |
-| `mesh_body.go` | Public `MeshBody`, `MeshReport` and `NewMeshBody`: the imported triangle mesh and its bounds, area and volume readings. `internal/meshbody/` reads the triangles. See mesh-import design. |
+| `mesh_body.go` | Public `MeshBody`, `MeshReport` and `NewMeshBody`: the imported triangle mesh and its bounds, area, volume and point readings. `internal/meshbody/` reads the triangles. See mesh-import design. |
 | `mesh_import.go` | Public `ReadSTL`, `ReadOBJ`, their options and `ErrMalformedMesh`, `ErrMeshTooLarge`: limits, then `internal/meshparse/` parses and `NewMeshBody` reads the result. See mesh-import design. |
 | `internal/meshparse/` | STL and OBJ parsing into welded vertices and triangles, with size limits. See mesh-import design. |
 | `internal/meshbody/` | Exact edge classification, shell count, signed volume and area interval of an imported mesh. See mesh-import design. |

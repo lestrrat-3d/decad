@@ -17,6 +17,9 @@ func (m *MeshBody) Report() MeshReport
 func (m *MeshBody) Bounds() Box
 func (m *MeshBody) Area() (Measurement, error)
 func (m *MeshBody) Volume() (Measurement, error)
+func (m *MeshBody) LocatePoint(ctx context.Context, p r3.Vec) (PointLocation, error)
+func (m *MeshBody) DistanceToPoint(ctx context.Context, p r3.Vec) (Measurement, error)
+func (m *MeshBody) ClosestPoint(ctx context.Context, p r3.Vec) (ClosestPoint, error)
 
 func ReadSTL(ctx context.Context, r io.Reader, opts ...MeshImportOption) (*MeshBody, error)
 func ReadOBJ(ctx context.Context, r io.Reader, opts ...MeshImportOption) (*MeshBody, error)
@@ -49,14 +52,27 @@ edge counts and the zero-area test are computed over those rationals with no tol
 degenerate only when its area is exactly zero. A mesh that is closed in the file is closed here, and one with a
 one-ulp gap between two corners reports the gap as two boundary edges, as M9 states.
 
-## 3. Verification
+## 3. Point queries
+
+The mesh is its own boundary, so the three queries of `agent-docs/point-containment-design.md` run on it with a
+mesh bound of zero and an occupied-volume bound of zero. No tolerance argument exists.
+
+| Decision | Rule |
+|---|---|
+| Q1 | Each query is `ErrNotSolid` unless `Report().Closed`. A nil context or mesh is `ErrDegenerate` and a point that is not finite is `ErrNotFinite`. |
+| Q2 | `LocatePoint` is the exact ray-crossing parity of the point over the triangles, and a point on a triangle is `PointOnBoundary`. It is never `PointUndecided` for a closed mesh. Where the mesh crosses itself the parity decides, so a region covered twice reads as outside. An inverted mesh encloses the same region as its flip. |
+| Q3 | `DistanceToPoint` is zero for a point inside or on the mesh, and otherwise the exact distance to the nearest triangle, published as the nearest float with a bound that is the rounding of that float alone. |
+| Q4 | `ClosestPoint` returns the point itself when it is inside or on the mesh, and otherwise the nearest point of the nearest triangle, rounded to floats. `OffSurface` is that rounding alone. |
+
+## 4. Verification
 
 The tests take the output of the real writers, `export.STL` and `export.OBJ` for a block, through the real readers and
-compare the volume, bounds and area against the block's. A tetrahedron checks an inexact volume and its bound. Mutated
+compare the volume, bounds and area against the block's. A cube checks the point queries at inside, outside,
+face, edge, corner and one-ulp-off points, in both windings. A tetrahedron checks an inexact volume and its bound. Mutated
 meshes check each report count: a dropped face, a flipped triangle, a third triangle on one edge, degenerate
 triangles, two shells and an inverted mesh.
 
-## 4. Not covered
+## 5. Not covered
 
 - STEP, IGES and 3MF import.
 - Turning a `MeshBody` into a `Body`, or taking one in a feature, a Boolean or `Verify`.

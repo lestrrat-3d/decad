@@ -6,6 +6,9 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/meshbody"
+	"github.com/lestrrat-3d/decad/internal/pointquery"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -149,4 +152,66 @@ func exactnessOfBound(bound float64) Exactness {
 		return Exact
 	}
 	return Approximate
+}
+
+// held returns the mesh as the exact held mesh the point queries read: its
+// triangles are the boundary, so every bound is zero. It refuses a mesh that
+// is not closed, which encloses no region to locate a point against.
+func (m *MeshBody) held(ctx context.Context, p r3.Vec) (topo.Mesh, error) {
+	if ctx == nil || m == nil {
+		return topo.Mesh{}, fmt.Errorf(`%w: a point query needs a mesh body and a context`, ErrDegenerate)
+	}
+	if err := ctx.Err(); err != nil {
+		return topo.Mesh{}, err
+	}
+	if !proofbound.FiniteVec(p) {
+		return topo.Mesh{}, fmt.Errorf(`%w: the query point must be finite`, ErrNotFinite)
+	}
+	if !m.report.Closed {
+		return topo.Mesh{}, fmt.Errorf(`%w: the mesh is not closed and consistently wound`, ErrNotSolid)
+	}
+	return topo.Mesh{Vertices: m.vertices, Triangles: m.triangles, BoundaryOK: true, SymDiffOK: true}, nil
+}
+
+// LocatePoint classifies p against the region the closed mesh encloses
+// (agent-docs/mesh-import-design.md §5). The answer is exact, with no
+// tolerance: a ray crossing count over the triangles decides inside from
+// outside, and a point on a triangle is PointOnBoundary. Where the mesh crosses
+// itself the count decides, so a region covered twice reads as outside. The
+// mesh need not wind counter-clockwise seen from outside: an inverted mesh
+// encloses the same region. A mesh that is not closed is ErrNotSolid. A nil
+// context or mesh is ErrDegenerate, and a point that is not finite is
+// ErrNotFinite.
+func (m *MeshBody) LocatePoint(ctx context.Context, p r3.Vec) (PointLocation, error) {
+	held, err := m.held(ctx, p)
+	if err != nil {
+		return PointUndecided, err
+	}
+	result, err := pointquery.Locate(ctx, p, held.Vertices, held.Triangles, 0, 0)
+	return PointLocation(result), err
+}
+
+// DistanceToPoint measures the minimum distance in millimetres from p to the
+// region the closed mesh encloses: zero for a point inside or on it, and
+// otherwise the distance to the nearest triangle. The reading is computed in
+// exact arithmetic from the mesh itself, so it carries only the rounding of
+// the float it is published as. Errors are LocatePoint's.
+func (m *MeshBody) DistanceToPoint(ctx context.Context, p r3.Vec) (Measurement, error) {
+	held, err := m.held(ctx, p)
+	if err != nil {
+		return Measurement{}, err
+	}
+	return distanceResult(pointquery.BodyDistance(ctx, p, &held))
+}
+
+// ClosestPoint finds the point of the closed mesh's region nearest p: p itself
+// when it lies inside or on the mesh, and otherwise the nearest point of the
+// nearest triangle, rounded to floats. Its OffSurface is that rounding alone.
+// Errors are LocatePoint's.
+func (m *MeshBody) ClosestPoint(ctx context.Context, p r3.Vec) (ClosestPoint, error) {
+	held, err := m.held(ctx, p)
+	if err != nil {
+		return ClosestPoint{}, err
+	}
+	return closestResult(pointquery.BodyClosest(ctx, p, &held))
 }

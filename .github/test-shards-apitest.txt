@@ -2290,3 +2290,7 @@
 10	0.01	TestMeshImportRefusesMalformedInput
 10	0.01	TestMeshImportLimitsRefuseLargeInput
 10	0.01	TestMeshImportNilArgumentsAreDegenerate
+10	0.01	TestMeshBodyLocatePoint
+10	0.01	TestMeshBodyDistanceToPoint
+10	0.01	TestMeshBodyClosestPoint
+10	0.01	TestMeshBodyQueriesRefuseWhatEncloseNothing
