@@ -129,12 +129,20 @@ func sewChainJoin(ctx context.Context, previous *topo.Body, from, to []chainRimP
 		return fmt.Errorf(`%w: composite chain Sweep spans %d and %d have %d and %d source walls`,
 			decaderr.ErrUnsupported, k, k+1, len(from), len(to))
 	}
+	// The post pairing must be one-to-one: one old post with two new posts
+	// would split a vertex, and two old posts with one new post would merge
+	// two source endpoints.
 	vertices := make(map[*topo.Vertex]*topo.Vertex)
+	sources := make(map[*topo.Vertex]*topo.Vertex)
 	pairVertex := func(old, replacement *topo.Vertex) error {
 		if prior, ok := vertices[old]; ok && prior != replacement {
 			return fmt.Errorf(`%w: composite chain Sweep join %d pairs one rim post with two`, decaderr.ErrUnsupported, k)
 		}
+		if prior, ok := sources[replacement]; ok && prior != old {
+			return fmt.Errorf(`%w: composite chain Sweep join %d pairs two rim posts with one`, decaderr.ErrUnsupported, k)
+		}
 		vertices[old] = replacement
+		sources[replacement] = old
 		return nil
 	}
 	for j := range from {
@@ -232,6 +240,11 @@ func (e chainSweepExtent) AuditExtent(ctx context.Context, direction r3.Vec,
 }
 
 func auditChainSeparation(ctx context.Context, payload ChainPayload, parts []*topo.Body) error {
+	// The section plane is read off the first span's chain prism, which
+	// sweepinput.CompositeChainSweepPath's line-first gate guarantees.
+	if payload.Spans[0].Arc {
+		return fmt.Errorf(`%w: the composite chain Sweep separation audit has no first line span`, decaderr.ErrUnsupported)
+	}
 	frames, err := sweeptransport.TransportSweepFramesContext(ctx, payload.Path, sectionrecord.PlaneRecord{
 		Origin: payload.Spans[0].Chain.Frame.Origin(),
 		U:      payload.Spans[0].Chain.Frame.U(), V: payload.Spans[0].Chain.Frame.V(),

@@ -231,6 +231,12 @@ func TestSweepChainCompositeNonradialHalfCircle(t *testing.T) {
 	_, err = sheet.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "one cardinal line and one positive half-circle")
+	// The generated ribbon section needs axis-parallel source lines.
+	_, err = decad.Thicken(t.Context(), sheet, units.Millimeters(1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "the open walk is not axis-parallel")
+	require.Len(t, doc.Bodies(), 1)
+	require.Same(t, sheet, doc.Bodies()[0])
 }
 
 // TestSweepChainCompositeRefusals pins the specific refusal of each path a
@@ -242,6 +248,15 @@ func TestSweepChainCompositeRefusals(t *testing.T) {
 		segments []decad.PathSegment
 		want     string
 	}{
+		{
+			// A quarter about (5,0,0) that leaves the sketch plane at once.
+			name: "arc first",
+			segments: []decad.PathSegment{
+				decad.ArcThrough{Through: r3.NewVec(1, 0, 3), End: r3.NewVec(5, 0, 5)},
+				decad.LineTo{End: r3.NewVec(13, 0, 5)},
+			},
+			want: "the first span must be a line",
+		},
 		{
 			// A radius-5 arc of angle acos(0.6) about +Y: rational points,
 			// but no exact sine or cosine.
@@ -287,6 +302,57 @@ func TestSweepChainCompositeRefusals(t *testing.T) {
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.ErrorContains(t, err, tc.want)
 			require.Empty(t, doc.Bodies())
+		})
+	}
+}
+
+// TestSweepChainCompositeThickenRadialGate thickens a sheet swept through a
+// quarter turn about +X, whose axis sits at v = 5 in the section. Thickening
+// toward +v by 5 mm or more reaches or crosses that axis and refuses at the
+// arc span's radial gate; the other cases build with their Pappus volumes.
+func TestSweepChainCompositeThickenRadialGate(t *testing.T) {
+	t.Parallel()
+	quarter := math.Pi / 2
+	for _, tc := range []struct {
+		name      string
+		thickness float64
+		side      decad.ThickenSide
+		// volume is zero for a refusal.
+		volume float64
+	}{
+		{"negative 5 touches the axis", 5, decad.ThickenNegative, 0},
+		{"negative 6 crosses the axis", 6, decad.ThickenNegative, 0},
+		// v in [0,2]: area 4, centroid radius 4.
+		{"negative 2", 2, decad.ThickenNegative, 4*18 + quarter*4*4},
+		// v in [-6,0]: area 12, centroid radius 8.
+		{"positive 6", 6, decad.ThickenPositive, 12*18 + quarter*12*8},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			s, chain := polylineChain(t, [2]float64{0, 0}, [2]float64{2, 0})
+			path, err := decad.NewPath(r3.Vec{},
+				decad.LineTo{End: r3.NewVec(0, 0, 10)},
+				decad.ArcThrough{Through: r3.NewVec(0, 1, 13), End: r3.NewVec(0, 5, 15)},
+				decad.LineTo{End: r3.NewVec(0, 13, 15)})
+			require.NoError(t, err)
+			doc := decad.New()
+			sheet, err := decad.Sweep(t.Context(), doc, s, chain, path)
+			require.NoError(t, err)
+			solid, err := decad.Thicken(t.Context(), sheet, units.Millimeters(tc.thickness),
+				decad.WithThickenSide(tc.side))
+			if tc.volume == 0 {
+				require.ErrorIs(t, err, decad.ErrUnsupported)
+				require.ErrorContains(t, err, "the swept offset reaches the revolve axis")
+				require.Len(t, doc.Bodies(), 1)
+				require.Same(t, sheet, doc.Bodies()[0])
+				return
+			}
+			require.NoError(t, err)
+			requireManifold(t, solid)
+			volume, err := solid.Volume()
+			require.NoError(t, err)
+			require.LessOrEqual(t, math.Abs(volume.Value.Base()-tc.volume), volume.Bound.Base()+1e-12,
+				"volume %g, want %g, bound %g", volume.Value.Base(), tc.volume, volume.Bound.Base())
 		})
 	}
 }

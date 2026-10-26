@@ -56,7 +56,10 @@ func SamePathPoint(a, b r3.Vec) bool {
 }
 
 // CompositeChainSweepPath is Table SC row SC7's path gate for a composite
-// chain Sweep (agent-docs/sweep-design.md §15.8). Every arc must be an exact
+// chain Sweep (agent-docs/sweep-design.md §15.8). The first span must be a
+// line: every arc then has a preceding span whose box holds the arc's start
+// section, which is what lets the separation audit's non-neighbour box check
+// cover contact in a half turn's start plane. Every arc must be an exact
 // quarter or half turn about an axis parallel to a coordinate axis: those are
 // the turns whose sine and cosine are exact, so the transported section frames
 // can carry zero displacement. The gate reads the recorded exact axis and turn
@@ -67,6 +70,9 @@ func CompositeChainSweepPath(path *Path) error {
 	if len(path.Records) < 2 {
 		return fmt.Errorf(`%w: a composite chain Sweep path has %d spans, fewer than two`,
 			decaderr.ErrUnsupported, len(path.Records))
+	}
+	if path.Records[0].Arc != nil {
+		return fmt.Errorf(`%w: composite chain Sweep: the first span must be a line`, decaderr.ErrUnsupported)
 	}
 	for i, record := range path.Records {
 		if record.Arc == nil {

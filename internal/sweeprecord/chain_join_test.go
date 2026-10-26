@@ -57,6 +57,11 @@ func TestSewChainJoinRefusals(t *testing.T) {
 			from: joinRims(two, true), to: joinRims(two, false),
 			want: "join 3 pairs one rim post with two",
 		},
+		{
+			name: "two posts pair with one",
+			from: joinRims(two, false), to: joinRims(two, true),
+			want: "join 3 pairs two rim posts with one",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

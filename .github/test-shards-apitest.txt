@@ -1273,6 +1273,7 @@
 10	0.00	TestSweepChainCompositeNSpanThickenSquare
 10	0.00	TestSweepChainCompositeNonradialHalfCircle
 10	0.00	TestSweepChainCompositeRefusals
+10	0.00	TestSweepChainCompositeThickenRadialGate
 6	0.01	TestRegionAreaWholeCircle
 6	1.46	TestRegionCentroidBoundContainsArcEndpointDriftGreenIntegral
 6	0.24	TestRevolveBooleanRefusesAHiddenTangency

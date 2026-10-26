@@ -863,7 +863,7 @@ chain through `RecordChain` instead of a profile through `RecordProfile`.
 | **SC4** | every path condition S3, S4, S7 and S13 through S15 already state — a non-finite point, a degenerate segment, a closed path, a non-finite derived bound, an exhausted budget, a collapse from computed-coordinate rounding | those rows' own sentinels, unchanged |
 | **SC5** | an internal path join is not tangent | `ErrUnsupported`, S6 |
 | **SC6** | a recorded chain segment outside the line, circle and arc set the span builders admit | `ErrUnsupported`, S10 |
-| **SC7** | a composite path with an arc that is not an exact quarter or half turn about a coordinate axis, a transported frame with nonzero displacement, a span wall without four edges or line rims, two joined spans whose walls do not pair by recorded segment, or spans that §7's separation audit cannot certify (§15.8) | `ErrUnsupported` |
+| **SC7** | a composite path whose first span is an arc, or with an arc that is not an exact quarter or half turn about a coordinate axis, a transported frame with nonzero displacement, a span wall without four edges or line rims, two joined spans whose walls do not pair by recorded segment, or spans that §7's separation audit cannot certify (§15.8) | `ErrUnsupported` |
 | **SC8** | an arc span the chain shell refuses — a walk that does not lie in one closed half-plane of the arc axis, both free ends on that axis, or an interior on-axis junction | exactly what a chain `Revolve` answers: `ErrDegenerate`, or `ErrUnsupported` under `agent-docs/surface-design.md` R22 and R33 |
 
 **SC2 is decided before SC3, and that order is load-bearing.** A foreign,
@@ -896,7 +896,7 @@ a chain sweep adds that neither sibling has is §15.2's path height bound.
 | **C1** | `Sweep` over a chain along a one-span `LineTo` path: Table SC rows SC1 through SC4 and SC6, the chain prism reduction, and the four readings §15.5 states for it | a standalone arc and composite paths outside §15.8 |
 | **C2** | a one-span `ArcThrough` reduction with the chain shell's own axis gates (SC8), plus §15.9's one-line sheet mesh | other chain-arc meshes |
 | **C3a** | §15.8's radial line/half-circle composite with one source `LineSeg`: its certified sheet mesh | other composite sheet meshes and a placed composite sheet |
-| **C3** | §15.8's composite join over `N` tangent line/arc spans of exact coordinate-axis quarter and half turns: wall-face rim lists per recorded segment, indexed sew, separation and boundary audits, area and bounds, and `Thicken` of a line-only source walk | curved source segments, other arcs, other sheet meshes and placement |
+| **C3** | §15.8's composite join over `N` tangent line/arc spans that start with a line and turn only by exact coordinate-axis quarter and half turns: wall-face rim lists per recorded segment, indexed sew, separation and boundary audits, area and bounds, and `Thicken` of a source walk of axis-parallel lines with right-angle corners | an arc-first path, curved source segments, other arcs, other sheet meshes, `Thicken` of other line walks and placement |
 
 The one-span straight chain sweep reuses the chain prism's exact-quad mesh.
 §15.9 meshes one straight source line swept through a single arc. §15.8's
@@ -913,9 +913,10 @@ chain-fed obligation rather than in two places.
 
 ### 15.8 Composite chain sheet over exact quarter and half turns
 
-**Path gate.** A composite chain path has two or more tangent spans. Every
-arc is an exact quarter or half turn about an axis parallel to a coordinate
-axis: `sweepinput.CompositeChainSweepPath` reads the recorded exact axis and
+**Path gate.** A composite chain path has two or more tangent spans, and its
+first span is a line; an arc-first path refuses SC7 with "the first span must
+be a line". Every arc is an exact quarter or half turn about an axis parallel
+to a coordinate axis: `sweepinput.CompositeChainSweepPath` reads the recorded exact axis and
 turn fraction, never a rounded angle, so a near-quarter arc cannot pass. Those
 are the turns whose sine and cosine are exact, and the transported section
 frames must then carry zero displacement; any frame that does not refuses
@@ -949,8 +950,34 @@ after all joins are sewn.
 **Separation.** `compositesweep.Audit` runs over all spans. Adjacent spans
 must lie on opposite sides of their shared section plane, read from each
 span's chain prism or chain revolve extent along the plane normal. Every
-non-adjacent pair must have a strict bounded-box gap, so a path that brings a
-later span back to touch or cross an earlier one refuses SC7.
+non-adjacent pair must have a strict bounded-box gap. A pair whose boxes
+touch or overlap refuses SC7, even where the spans themselves stay apart.
+
+What this proves is that two spans meet only at their shared section. The
+adjacent check alone leaves the shared plane itself open: span `k` and span
+`k+1` each lie in a closed half-space of the plane `P` through their join
+section, so they can meet only inside `P`. A line span meets `P` only in that
+join section. A partial revolve of at most a half turn, of a section in one
+closed half-plane of its axis, lies in the wedge between its start and end
+half-planes, so it meets `P` only in its sections that lie in `P`: the join
+section, plus its far section when the turn is a half turn. So beyond the join
+section, span `k+1` can reach only span `k`'s start section, and span `k` only
+span `k+1`'s end section. Span `k`'s start section is also the end section of
+span `k−1`, and so lies in span `k−1`'s box. Contact there makes the boxes of
+spans `k−1` and `k+1` meet, and the non-adjacent check refuses. Span
+`k+1`'s end section is span `k+2`'s start section, and contact there makes the
+boxes of spans `k` and `k+2` meet. If span `k+1` is the last span, that end
+section can only reach span `k`'s start section, which the first case already
+covers. The line-first gate makes sure every arc has a span before it, so the
+first case always applies. For an arc-first path, a half turn's start section
+has no earlier span to put it in a box, and two consecutive half turns could
+touch there unseen.
+
+Within one span, the per-span builder owns the walls' simplicity. A section
+point on an arc axis does not reach this argument: a free walk end on the
+axis leaves a three-edge wall that the rim check refuses, an interior on-axis
+junction refuses SC8, and a segment lying on the axis mints no wall, so the
+wall counts differ and the sew refuses.
 
 **Readings.** The sheet has one wall per walk per span. Its area is the
 `boundedAdd` of every wall's own area, and its box joins the span boxes.
@@ -974,10 +1001,13 @@ publishes no occupied-volume proof. `VerifyNone` keeps identical triangles
 and withholds area and contact results. A placed composite sheet refuses until
 its transformed join-plane and station bounds have their own proof.
 
-**Thicken.** `Thicken` admits an unplaced composite chain sheet from one
-line-only source walk on its three thickness sides through
-`agent-docs/surface-design.md` §16.8's generated section. Other chain sweeps
-still refuse at that consumer.
+**Thicken.** `Thicken` admits an unplaced composite chain sheet on its three
+thickness sides through `agent-docs/surface-design.md` §16.8's generated
+section. Its one source walk must be in that document's §16.6 class:
+axis-parallel lines with right-angle corners (R44). A slanted source line
+refuses with "the open walk is not axis-parallel". Every arc span's own axis
+feeds that document's §16.5 radial gate, so an offset that reaches or crosses an arc axis refuses. Other chain
+sweeps still refuse at that consumer.
 
 ### 15.9 One-arc chain sheet and mesh
 
