@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/decad/internal/holeplan"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -31,13 +32,17 @@ type BossBore struct {
 // one face. At is a world point in millimetres that lies on that face's plane;
 // the boss axis runs through it, out of the body. Diameter and Height are
 // positive lengths, Height measured from Face. Bore is optional, and nil makes
-// a solid boss.
+// a solid boss. Draft is optional: a positive angle makes the boss narrower
+// toward its top by that lean of its wall, a negative one wider, and the zero
+// Value a straight wall (agent-docs/boss-design.md §5). Diameter is the boss's
+// diameter at Face either way.
 type BossSpec struct {
 	Face     FaceSelector
 	At       r3.Vec
 	Diameter units.Value
 	Height   units.Value
 	Bore     *BossBore
+	Draft    units.Value
 }
 
 // Boss raises a round boss on a planar face of b, with an optional blind pilot
@@ -128,8 +133,8 @@ type bossRequest struct {
 	// u and v are the boss axis in frame's coordinates.
 	u, v float64
 	// diameter and height are the boss's size, embed how far it reaches into
-	// the body behind the face.
-	diameter, height, embed float64
+	// the body behind the face, and draft the lean of its wall in radians.
+	diameter, height, embed, draft float64
 	// bore, when set, is the pilot hole's request on the boss's top face, and
 	// tap the thread to cut in it.
 	bore *holeplan.Input
@@ -151,6 +156,15 @@ func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
 	}
 	if in.diameter == 0 || in.height == 0 {
 		return in, fmt.Errorf(`%w: a boss needs a positive diameter and height`, ErrDegenerate)
+	}
+	if spec.Draft != (units.Value{}) {
+		// A draft is signed, so it is read as an angle rather than as a magnitude.
+		if in.draft, err = spec.Draft.In(units.Radian); err != nil {
+			return in, fmt.Errorf(`%w: the boss draft must be an angle: %s`, ErrUnitKind, err)
+		}
+		if !(math.Abs(in.draft) < math.Pi/2) {
+			return in, fmt.Errorf(`%w: the boss draft must lie strictly within a quarter turn of straight`, ErrDegenerate)
+		}
 	}
 	local := plane.Frame.ToLocal(spec.At)
 	if local.Z > holeplan.OnPlaneTol || local.Z < -holeplan.OnPlaneTol {
@@ -184,9 +198,11 @@ func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
 	if diameter == 0 || depth == 0 {
 		return in, fmt.Errorf(`%w: a pilot hole needs a positive diameter and depth`, ErrDegenerate)
 	}
-	if diameter >= in.diameter {
-		return in, fmt.Errorf(`%w: the pilot diameter %g mm must be less than the boss diameter %g mm`,
-			ErrDegenerate, diameter, in.diameter)
+	// The pilot opens on the boss's top face, where a drafted boss is narrower.
+	topDiameter := in.diameter - 2*in.height*math.Tan(in.draft)
+	if diameter >= min(in.diameter, topDiameter) {
+		return in, fmt.Errorf(`%w: the pilot diameter %g mm must be less than the boss diameter %g mm at its top`,
+			ErrDegenerate, diameter, min(in.diameter, topDiameter))
 	}
 	if depth >= in.height+reach {
 		return in, fmt.Errorf(`%w: a pilot %g mm deep would leave the boss's footing through the back of the body`,
@@ -226,7 +242,10 @@ func buildBossPillar(ctx context.Context, d *Document, in bossRequest) (*Body, e
 	}
 	centre := s.CreatePoint(in.u, in.v)
 	s.Fix(centre)
-	s.CreateCircle(centre, in.diameter/2)
+	// The taper runs from the footing plane, embed below the face, so the circle
+	// there is as much wider as the wall leans over that depth: the wall is then
+	// the stated diameter at the face.
+	s.CreateCircle(centre, in.diameter/2+in.embed*math.Tan(in.draft))
 	if _, err := s.Solve(ctx); err != nil {
 		return nil, err
 	}
@@ -234,5 +253,9 @@ func buildBossPillar(ctx context.Context, d *Document, in bossRequest) (*Body, e
 	if in.outward.Dot(footing.N()) > 0 {
 		dir = Along
 	}
-	return Extrude(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(in.height + in.embed), Dir: dir})
+	var taper []ExtrudeOption
+	if in.draft != 0 {
+		taper = []ExtrudeOption{WithTaper(units.Radians(in.draft))}
+	}
+	return Extrude(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(in.height + in.embed), Dir: dir}, taper...)
 }

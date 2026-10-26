@@ -12,6 +12,7 @@ func Web(ctx context.Context, b *Body, s *sketch.Sketch, lines []*sketch.Line, t
 func RibArc(ctx context.Context, b *Body, s *sketch.Sketch, arc *sketch.Arc, thickness units.Value, e Extent, opts ...RibOption) (*Body, error)
 func WebPath(ctx context.Context, b *Body, s *sketch.Sketch, path []sketch.Entity, thickness units.Value, e Extent, opts ...RibOption) (*Body, error)
 func WithRibOverrun(overrun units.Value) RibOption
+func WithRibDraft(angle units.Value) RibOption
 ```
 
 `Rib` is `Web` with one line. Both retire `b` and return the joined body.
@@ -77,4 +78,17 @@ round the circle turns them red.
 | P3 | The ribs are united with one another in path order and the single merged tool joins `b` once (§2), so a rib that crosses or meets another needs no special case. |
 | P4 | Ribs that meet end to end, the legs of a polyline or an arc and the lines either side of it, overlap only through the overrun of R7. With the default of zero their end faces touch in a coplanar contact that `Union` refuses, so a run that is one chain sets an overrun. |
 | P5 | A corner is not mitred: the overrun of each leg fills the corner on the outside and the legs overlap inside it. |
+
+## 7. Draft
+
+`WithRibDraft` leans every rib's walls. It passes `WithTaper` to the `Extrude` that builds each tool, so the lean, its
+sign and its refusals are `Extrude`'s (`agent-docs/draft-design.md` §2).
+
+| Decision | Rule |
+|---|---|
+| F1 | The lean is measured from the sketch plane, upward along the extent: at the height `t` above the plane a drafted line rib is `thickness − 2·t·tan(angle)` thick, and its ends lean in the same way. A positive angle makes the rib thinner as it rises and a negative one thicker. |
+| F2 | The overrun (R3, R7) is its length at the sketch plane. The ends of a rib that spans a cavity shorten by `t·tan(angle)` at height `t`, so the overrun MUST bury them at the top of the rib as well as at the plane. |
+| F3 | The angle is `WithTaper`'s: a wrong unit kind is `ErrUnitKind` and an angle at or past a right angle is `ErrDegenerate`. The last occurrence wins and the default is a straight wall. |
+| F4 | `WithRibDraft` applies to `Rib`, `Web`, `RibArc` and `WebPath`. A rib whose outline has arcs, such as the band of `RibArc`, meets the drafted `Extrude`'s refusals, so a corner of an arc and a line that is not tangent is `ErrUnsupported`. |
+| F5 | The tests compare the volume a drafted line rib adds against `length · ∫ (thickness − 2·t·tan(angle)) dt` over the height above the cavity floor within a relative `1e-9`. |
 
