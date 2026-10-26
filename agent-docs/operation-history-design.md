@@ -839,8 +839,9 @@ A retained plane therefore reaches a later mesh Cut through mesh Booleans,
 exact-translation placements and retained blends. `apitest/faceted_plane_slab_test.go`
 checks the Cut-then-Cut case against a fixed bound literal.
 Root `faceted_source_patch_test.go` checks it against the full-displacement
-control of Task 7.1. No test checks the slab after a blend. `Group` records no source identity, and
-`Group.Origins` holds roles only, so no record says which earlier patch a group
+control of Task 7.1. Root `faceted_source_patch_blend_test.go` checks the slab
+after a retained blend (`TestFacetedSourcePatchBlendThenCut`) the same way.
+`Group` records no source identity, and `Group.Origins` holds roles only, so no record says which earlier patch a group
 descends from.
 
 Phase 7 consists of four tasks. Each merges on its own, and the first PR also
