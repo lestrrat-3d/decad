@@ -2264,3 +2264,6 @@
 10	0.01	TestChamferAngleRefusals
 10	0.01	TestChamferAngleRefusesAnEdgeThatIsNotRightAngled
 10	0.01	TestChamferAngleSetsTheOtherDistance
+10	0.01	TestHoleSlotBlindTurned
+10	0.01	TestHoleSlotRefusals
+10	0.01	TestHoleSlotThrough

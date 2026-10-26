@@ -1555,7 +1555,7 @@ Copies do not consume their source. Each successful copy gets a fresh private
 producer identity so callers can use its returned provenance values without
 persisting or constructing internal identifiers.
 
-**A hole is one call.** `Hole(ctx, b, HoleSpec)` cuts a round or rectangular, through or blind hole, with an optional
+**A hole is one call.** `Hole(ctx, b, HoleSpec)` cuts a round, rectangular or slot-shaped, through or blind hole, with an optional
 counterbore or countersink head on a round hole, at a world point on a planar face of `b`. It builds the tool bodies, cuts them from `b` in one
 atomic commit, and retires `b`. `agent-docs/hole-design.md` owns the placement, size and refusal rules.
 

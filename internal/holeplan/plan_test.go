@@ -112,3 +112,48 @@ func TestComputeRectRefusals(t *testing.T) {
 		})
 	}
 }
+
+func TestComputeSlotTool(t *testing.T) {
+	t.Parallel()
+	in := holeplan.Input{
+		Frame: topFrame(t), Outward: r3.Vec{Z: 1}, At: r3.Vec{X: 3, Y: 4, Z: 10}, Through: true, Reach: 11,
+		Slot: &holeplan.Slot{Length: 10, Width: 4},
+	}
+	plan, err := holeplan.Compute(in)
+	require.NoError(t, err)
+	require.NotNil(t, plan.SlotTool)
+	require.Equal(t, holeplan.SlotTool{
+		Start: [2]float64{0, 4}, End: [2]float64{6, 4},
+		P0: [2]float64{0, 2}, P1: [2]float64{6, 2}, P2: [2]float64{6, 6}, P3: [2]float64{0, 6},
+	}, *plan.SlotTool, "an unturned slot is exact")
+
+	in.Slot = &holeplan.Slot{Length: 10, Width: 4, Angle: math.Pi / 2}
+	plan, err = holeplan.Compute(in)
+	require.NoError(t, err)
+	// A quarter turn about (3, 4) lays the end centres along y.
+	require.InDelta(t, 3.0, plan.SlotTool.Start[0], 1e-12)
+	require.InDelta(t, 1.0, plan.SlotTool.Start[1], 1e-12)
+	require.InDelta(t, 7.0, plan.SlotTool.End[1], 1e-12)
+}
+
+func TestComputeSlotRefusals(t *testing.T) {
+	t.Parallel()
+	base := holeplan.Input{
+		Frame: topFrame(t), Outward: r3.Vec{Z: 1}, At: r3.Vec{Z: 10}, Through: true, Reach: 11,
+		Slot: &holeplan.Slot{Length: 10, Width: 4},
+	}
+	cases := map[string]func(*holeplan.Input){
+		"length equals width": func(in *holeplan.Input) { in.Slot = &holeplan.Slot{Length: 4, Width: 4} },
+		"nan angle":           func(in *holeplan.Input) { in.Slot = &holeplan.Slot{Length: 10, Width: 4, Angle: math.NaN()} },
+		"both shapes":         func(in *holeplan.Input) { in.Rect = &holeplan.Rect{Width: 1, Height: 1} },
+	}
+	for name, edit := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			in := base
+			edit(&in)
+			_, err := holeplan.Compute(in)
+			require.Error(t, err)
+		})
+	}
+}
