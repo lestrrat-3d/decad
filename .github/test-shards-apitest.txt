@@ -1842,6 +1842,8 @@
 8	0.39	TestVerifyMotionBetweenOffsetAxis
 8	0.12	TestVerifyMotionProjectionPendulum
 8	0.00	TestVerifyResultEnumTokens
+10	0.00	TestRevolvedShaftClassBCut
+10	0.00	TestRevolvedShaftClassBMisses
 8	0.01	TestVerifySingleRegionOverlapOrderIsNormative
 8	0.14	TestVertexFrameOriginBoundEnclosesLift
 8	0.01	TestVertexPlacedPrismBoundEnclosesDisplacement
