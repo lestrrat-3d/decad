@@ -118,3 +118,59 @@ func TestProjectRefusals(t *testing.T) {
 	_, err = drawing.Project(t.Context(), v, nil, oblique)
 	require.ErrorIs(t, err, raster.ErrDegenerate)
 }
+
+// ringSegments are the n chords of a polygon with its corners on the circle c.
+func ringSegments(c drawing.Circle, n int) []drawing.Segment {
+	pt := func(i int) [2]float64 {
+		a := 2 * math.Pi * float64(i%n) / float64(n)
+		return [2]float64{c.Centre[0] + c.Radius*math.Cos(a), c.Centre[1] + c.Radius*math.Sin(a)}
+	}
+	out := make([]drawing.Segment, n)
+	for i := range out {
+		out[i] = drawing.Segment{A: pt(i), B: pt(i + 1)}
+	}
+	return out
+}
+
+func TestCirculateTakesAWholeRingAndLeavesOtherSegments(t *testing.T) {
+	t.Parallel()
+	c := drawing.Circle{Centre: [2]float64{3, 4}, Radius: 5}
+	other := drawing.Segment{A: [2]float64{0, 0}, B: [2]float64{1, 0}}
+	lines := drawing.Lines{Visible: append(ringSegments(c, 48), other)}
+	lines.Circulate([]drawing.Circle{c})
+	require.Equal(t, []drawing.Circle{c}, lines.VisibleCircles)
+	require.Equal(t, []drawing.Segment{other}, lines.Visible, "only the ring's chords are taken")
+	require.Empty(t, lines.HiddenCircles)
+}
+
+func TestCirculateTakesAHiddenRingToo(t *testing.T) {
+	t.Parallel()
+	c := drawing.Circle{Radius: 2}
+	lines := drawing.Lines{Hidden: ringSegments(c, 32)}
+	lines.Circulate([]drawing.Circle{c})
+	require.Equal(t, []drawing.Circle{c}, lines.HiddenCircles)
+	require.Empty(t, lines.Hidden)
+	require.Empty(t, lines.VisibleCircles)
+}
+
+func TestCirculateLeavesARingWithAChordMissing(t *testing.T) {
+	t.Parallel()
+	c := drawing.Circle{Radius: 5}
+	ring := ringSegments(c, 48)
+	lines := drawing.Lines{Visible: ring[1:]}
+	lines.Circulate([]drawing.Circle{c})
+	require.Empty(t, lines.VisibleCircles, "one chord short of the whole way round")
+	require.Len(t, lines.Visible, 47)
+}
+
+func TestCirculateLeavesARingWhoseChordIsCutShort(t *testing.T) {
+	t.Parallel()
+	c := drawing.Circle{Radius: 5}
+	ring := ringSegments(c, 48)
+	// A surface hides the far half of one chord: its visible run ends inside the chord, off the circle.
+	ring[3].B = [2]float64{(ring[3].A[0] + ring[3].B[0]) / 2, (ring[3].A[1] + ring[3].B[1]) / 2}
+	lines := drawing.Lines{Visible: ring}
+	lines.Circulate([]drawing.Circle{c})
+	require.Empty(t, lines.VisibleCircles)
+	require.Len(t, lines.Visible, 48)
+}

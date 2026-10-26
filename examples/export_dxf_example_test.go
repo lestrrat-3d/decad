@@ -139,3 +139,38 @@ func Example_export_dxf_sheet() {
 	// Output:
 	// border lines: 6, texts: 6
 }
+
+// A circular edge that faces the view is a circle in the drawing, and DXF writes it
+// as a CIRCLE entity, not a polygon of short lines, so a CAD program can snap to its
+// centre and dimension its radius. Here a 10 mm rod seen from above is two circles,
+// the top rim and the bottom rim behind it, and nothing else.
+func Example_export_dxf_circles() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	centre := s.CreatePoint(0, 0)
+	s.Fix(centre)
+	s.CreateCircle(centre, 5)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	rod, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	top := export.DrawingView{Direction: r3.NewVec(0, 0, -1), Up: r3.NewVec(0, 1, 0)}
+	var out bytes.Buffer
+	if err := export.DXF(context.Background(), &out, rod, units.Millimeters(0.1), top); err != nil {
+		fmt.Printf("failed to export: %s\n", err)
+		return
+	}
+	fmt.Printf("circles: %d, lines: %d\n", strings.Count(out.String(), "CIRCLE\n"), strings.Count(out.String(), "LINE\n"))
+	// Output:
+	// circles: 2, lines: 0
+}

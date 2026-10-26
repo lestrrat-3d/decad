@@ -117,7 +117,7 @@ func DXFSheet(ctx context.Context, w io.Writer, body *decad.Body, tol units.Valu
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		lines, err := projectDrawing(ctx, mesh, view)
+		lines, err := projectBodyDrawing(ctx, body, mesh, view)
 		if err != nil {
 			return err
 		}
@@ -126,6 +126,11 @@ func DXFSheet(ctx context.Context, w io.Writer, body *decad.Body, tol units.Valu
 		for _, group := range [][]drawing.Segment{lines.Visible, lines.Hidden} {
 			for _, s := range group {
 				maxY = math.Max(maxY, math.Max(s.A[1], s.B[1]))
+			}
+		}
+		for _, group := range [][]drawing.Circle{lines.VisibleCircles, lines.HiddenCircles} {
+			for _, c := range group {
+				maxY = math.Max(maxY, c.Centre[1]+c.Radius)
 			}
 		}
 		p := placed{lines: lines, minX: minX, minY: minY, trueW: maxX - minX, trueH: maxY - minY}
@@ -175,9 +180,17 @@ func DXFSheet(ctx context.Context, w io.Writer, body *decad.Body, tol units.Valu
 			line(layer, (s.A[0]-p.minX)*scale+x, (s.A[1]-p.minY)*scale+y, (s.B[0]-p.minX)*scale+x, (s.B[1]-p.minY)*scale+y)
 		}
 	}
+	moveCircles := func(p placed, group []drawing.Circle, layer string) {
+		for _, c := range group {
+			writeDXFCircle(&out, layer, drawing.Circle{
+				Centre: [2]float64{(c.Centre[0]-p.minX)*scale + x, (c.Centre[1]-p.minY)*scale + y}, Radius: c.Radius * scale})
+		}
+	}
 	for _, p := range views {
 		move(p, p.lines.Visible, DXFVisibleLayer)
 		move(p, p.lines.Hidden, DXFHiddenLayer)
+		moveCircles(p, p.lines.VisibleCircles, DXFVisibleLayer)
+		moveCircles(p, p.lines.HiddenCircles, DXFHiddenLayer)
 		if paper.Dimensions {
 			// The width: extension lines down from both sides, a dimension line with
 			// a tick at each end, and the true width centred above it.
