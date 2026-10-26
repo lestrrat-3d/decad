@@ -2548,3 +2548,6 @@
 10	0.01	TestHoleCountersinkInARod
 10	0.01	TestHoleHeadOnACylinderRefusals
 10	0.01	TestHoleCountersinkOutOfABore
+10	0.01	TestHoleThreadInARod
+10	0.01	TestHoleThreadOutOfABore
+10	0.01	TestHoleThreadInAThinRodIsTheBooleansRefusal

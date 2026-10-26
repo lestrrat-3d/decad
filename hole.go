@@ -120,8 +120,10 @@ type HoleThread struct {
 // Head MUST be nil, each otherwise ErrDegenerate.
 //
 // Thread is optional. A non-nil Thread taps the round bore in the same commit
-// (agent-docs/hole-design.md §8). It needs a nil Shape, ErrDegenerate otherwise,
-// and a planar face, ErrUnsupported on a cylinder.
+// (agent-docs/hole-design.md §8). It needs a nil Shape, ErrDegenerate otherwise.
+// On a cylindrical face the thread starts at the tangent plane at At, and the
+// cut is the evaluator's own ErrUnsupported where it cannot hold the pair
+// (agent-docs/hole-design.md §12).
 //
 // Draft is optional and leans the round bore's wall (agent-docs/hole-design.md
 // §9): a positive angle makes the bore narrower toward its bottom, a negative one
@@ -223,7 +225,7 @@ func Hole(ctx context.Context, b *Body, spec HoleSpec) (result *Body, retErr err
 	// the mesh path, where a second cut of the bore's head would find a target that
 	// already holds the first cut's coarse mesh. The tools are united first, so one
 	// cut serves.
-	return combineTools(ctx, d, OperationHole, b, meshbool.OpCut, tools, in.Margin != 0 && tap == nil, nil, capture)
+	return combineTools(ctx, d, OperationHole, b, meshbool.OpCut, tools, in.Margin != 0, nil, capture)
 }
 
 // holeInput resolves spec into the plain-data request holeplan reads.
@@ -646,9 +648,6 @@ type holeTap struct {
 // and its U axis in the face plane. through is whether the hole runs through the
 // body, so that the groove may run out of its far end.
 func planHoleThread(thread *HoleThread, through bool, in holeplan.Input, plan holeplan.Plan) (*holeTap, error) {
-	if in.Margin != 0 {
-		return nil, fmt.Errorf(`%w: a thread in a hole on a cylindrical face is not built`, ErrUnsupported)
-	}
 	pitch, err := sectionrecord.MagnitudeIn(thread.Pitch, units.Length, units.Millimeter, "the thread pitch")
 	if err != nil {
 		return nil, err
