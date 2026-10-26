@@ -126,29 +126,7 @@ type Xhp struct{ X, Y, Z, W *big.Int }
 // directly gives one shared power-of-two denominator without constructing
 // three big.Rat values or multiplying their denominators.
 func XhpOf(v r3.Vec) Xhp {
-	dx, dy, dz := MustDyOf(v.X), MustDyOf(v.Y), MustDyOf(v.Z)
-	base := 0
-	lower := func(d Dyadic) {
-		if !d.IsZero() && d.Exp() < base {
-			base = d.Exp()
-		}
-	}
-	lower(dx)
-	lower(dy)
-	lower(dz)
-	coord := func(d Dyadic) *big.Int {
-		if d.IsZero() {
-			return new(big.Int)
-		}
-		mant := d.MantInto(new(big.Int))
-		return mant.Lsh(mant, uint(d.Exp()-base))
-	}
-	return Xhp{
-		X: coord(dx),
-		Y: coord(dy),
-		Z: coord(dz),
-		W: new(big.Int).Lsh(big.NewInt(1), uint(-base)),
-	}
+	return XhpOfDyadics(MustDyOf(v.X), MustDyOf(v.Y), MustDyOf(v.Z))
 }
 
 // XhpSub is p − q, exact: a homogeneous vector over the positive denominator
