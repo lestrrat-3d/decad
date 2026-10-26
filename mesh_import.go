@@ -161,8 +161,8 @@ func ReadThreeMF(ctx context.Context, r io.Reader, opts ...MeshImportOption) (*M
 // into the cavity, so the volume of a solid with one reads as the material
 // alone. Lengths are converted from the file's unit to millimetres.
 //
-// Only planes, cylinders and cones, with straight and circular edges, are read. A
-// face on a sphere, torus or free-form surface, a cone at its apex, a wall with
+// Only planes, cylinders, cones and sphere caps, with straight and circular edges, are read. A
+// face on a torus or free-form surface, a sphere face other than a cap with one circular bound, a cone at its apex, a wall with
 // holes or an oblique boundary, or an edge that is an ellipse or a curve, is
 // [ErrUnsupported]. A file that is
 // not well-formed STEP, or whose entities do not make the B-rep they name, is
