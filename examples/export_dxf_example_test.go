@@ -92,3 +92,50 @@ func Example_export_dxf_views() {
 	// Output:
 	// layers: 8 visible entities, ends with EOF: true
 }
+
+// export.DXFSheet draws views at a stated scale on a sheet of stated paper size,
+// inside a border with a title block, and can dimension each view with the
+// model's true width and height. Here a 20 x 30 x 10 mm block goes on A4
+// landscape paper at 1:2, so the 20 mm top view is drawn 10 mm wide and its
+// dimension still reads 20.
+func Example_export_dxf_sheet() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(0, 0, 20, 30)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	block, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	var out bytes.Buffer
+	if err := export.DXFSheet(context.Background(), &out, block, units.Millimeters(0.1), export.DXFPaper{
+		Views: []export.DrawingView{
+			{Direction: r3.NewVec(0, 0, -1), Up: r3.NewVec(0, 1, 0)},
+			{Direction: r3.NewVec(0, 1, 0), Up: r3.NewVec(0, 0, 1)},
+		},
+		Width:      units.Millimeters(297),
+		Height:     units.Millimeters(210),
+		Scale:      units.Scalar(0.5),
+		Margin:     units.Millimeters(10),
+		Gap:        units.Millimeters(15),
+		Title:      "BLOCK",
+		Dimensions: true,
+	}); err != nil {
+		fmt.Printf("failed to export: %s\n", err)
+		return
+	}
+	fmt.Printf("border lines: %d, texts: %d\n",
+		strings.Count(out.String(), "BORDER\n 10"), strings.Count(out.String(), "TEXT\n  8"))
+	// Output:
+	// border lines: 6, texts: 6
+}
