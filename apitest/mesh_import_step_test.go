@@ -133,9 +133,16 @@ func TestReadSTEPRoundTripsAFacetedCone(t *testing.T) {
 	require.InDelta(t, 10, m.Bounds().Max.X, 1e-9)
 }
 
-func TestReadSTEPRefusesACurvedBody(t *testing.T) {
+// inscribedSteps is how many chords ReadSTEP cuts an arc of the given radius and
+// sweep into: at most 2·acos(1 − 0.01/r) radians each.
+func inscribedSteps(radius, sweep float64) int {
+	return int(math.Ceil(sweep / (2 * math.Acos(1-0.01/radius))))
+}
+
+func TestReadSTEPReadsADrilledPlate(t *testing.T) {
 	t.Parallel()
-	// A drilled plate's STEP carries the bore as a cylinder, which is not read.
+	// The bore is a cylinder wall between two circular loops, and the plate's top and
+	// bottom faces are planes with a circular hole each.
 	doc := decad.New()
 	plate := decadtest.NewBlock(t, doc, 0, 0, 20, 20, units.Millimeters(10))
 	drilled, err := decad.Hole(t.Context(), plate, decad.HoleSpec{
@@ -145,9 +152,78 @@ func TestReadSTEPRefusesACurvedBody(t *testing.T) {
 		Depth:    decad.ThroughHole{},
 	})
 	require.NoError(t, err)
-	_, err = readSTEPBytes(t, writeSTEP(t, drilled))
+	data := writeSTEP(t, drilled)
+	require.Contains(t, string(data), "CYLINDRICAL_SURFACE")
+	m, err := readSTEPBytes(t, data)
+	require.NoError(t, err)
+	require.True(t, m.Report().Closed, "the bore's chords meet the plate's holes' chords")
+	volume, err := m.Volume()
+	require.NoError(t, err)
+	// The bore is a polygon inscribed in its circle: arcs are cut into steps of at most
+	// 2·acos(1 − 0.01/r) radians, so its 3 mm radius takes ceil(2π / step) of them.
+	sides := inscribedSteps(3, 2*math.Pi)
+	holeArea := float64(sides) / 2 * 9 * math.Sin(2*math.Pi/float64(sides))
+	require.InDelta(t, 4000-10*holeArea, volume.Value.Base(), 1e-6)
+	require.Greater(t, volume.Value.Base(), 4000-math.Pi*9*10, "the polygon encloses less than the circle, so the hole is a little small")
+	require.True(t, m.Bounds().Max.Equal(r3.NewVec(20, 20, 10), 1e-9))
+}
+
+func TestReadSTEPReadsARod(t *testing.T) {
+	t.Parallel()
+	rod := circleBodyAtZ(t, decad.New(), 0, 5, 0, 20)
+	m, err := readSTEPBytes(t, writeSTEP(t, rod))
+	require.NoError(t, err)
+	require.True(t, m.Report().Closed)
+	volume, err := m.Volume()
+	require.NoError(t, err)
+	sides := inscribedSteps(5, 2*math.Pi)
+	area := float64(sides) / 2 * 25 * math.Sin(2*math.Pi/float64(sides))
+	require.InDelta(t, 20*area, volume.Value.Base(), 1e-6)
+	require.Less(t, volume.Value.Base(), math.Pi*25*20, "an inscribed polygon encloses a little less")
+	box := m.Bounds()
+	require.InDelta(t, 5, box.Max.X, 1e-9)
+	require.InDelta(t, 20, box.Max.Z, 1e-9)
+}
+
+func TestReadSTEPReadsPartialCylinderWalls(t *testing.T) {
+	t.Parallel()
+	// A slot: two straight sides and two half-round ends, extruded 10 mm.
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	fixed := func(x, y float64) *sketch.Point {
+		p := s.CreatePoint(x, y)
+		s.Fix(p)
+		return p
+	}
+	a, b, c, d, left, right := fixed(0, -5), fixed(20, -5), fixed(20, 5), fixed(0, 5), fixed(0, 0), fixed(20, 0)
+	s.CreateLine(a, b)
+	s.CreateArc(right, b, c)
+	s.CreateLine(c, d)
+	s.CreateArc(left, d, a)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	slot, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	data := writeSTEP(t, slot)
+	require.Contains(t, string(data), "CYLINDRICAL_SURFACE")
+	m, err := readSTEPBytes(t, data)
+	require.NoError(t, err)
+	require.True(t, m.Report().Closed)
+	volume, err := m.Volume()
+	require.NoError(t, err)
+	// Each half-round end is a half-polygon of ceil(π / step) steps about its centre.
+	steps := inscribedSteps(5, math.Pi)
+	half := float64(steps) / 2 * 25 * math.Sin(math.Pi/float64(steps))
+	require.InDelta(t, (20*10+2*half)*10, volume.Value.Base(), 1e-6)
+	require.Less(t, volume.Value.Base(), (20*10+math.Pi*25)*10)
+}
+
+func TestReadSTEPRefusesAConeFace(t *testing.T) {
+	t.Parallel()
+	_, err := readSTEPBytes(t, []byte(plateWithSquareHoleFile("CONICAL_SURFACE")))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Contains(t, err.Error(), "CYLINDRICAL_SURFACE")
+	require.Contains(t, err.Error(), "CONICAL_SURFACE")
 }
 
 func TestReadSTEPHandWrittenPlateWithAHoleAndInches(t *testing.T) {
@@ -184,8 +260,6 @@ func TestReadSTEPRefusals(t *testing.T) {
 	_, err = readSTEPBytes(t, good, decad.WithMaxMeshBytes(100))
 	require.ErrorIs(t, err, decad.ErrMeshTooLarge)
 	// A cylinder face is not read.
-	_, err = readSTEPBytes(t, []byte(plateWithSquareHoleFile("CYLINDRICAL_SURFACE")))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
 	var nilContext context.Context
 	_, err = decad.ReadSTEP(nilContext, bytes.NewReader(good))
 	require.ErrorIs(t, err, decad.ErrDegenerate)
@@ -309,4 +383,72 @@ func plateWithSquareHoleFile(firstSurface string) string {
 	b.add("MANIFOLD_SOLID_BREP('plate',#%d)", shell)
 	return "ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION(('hand written'),'2;1');\nENDSEC;\nDATA;\n" +
 		strings.Join(b.lines, "\n") + "\nENDSEC;\nEND-ISO-10303-21;\n"
+}
+
+// circleLoop adds an EDGE_LOOP of one full circle of the given radius about the Z
+// axis at height z, walked forward or backward, its one edge shared by every
+// loop built for the same z.
+func (b *stepBuilder) circleLoop(z, radius float64, forward bool, shared map[float64]int) int {
+	edge, ok := shared[z]
+	if !ok {
+		start, vertex := b.point([3]float64{radius, 0, z})
+		_ = start
+		origin := b.add("CARTESIAN_POINT('',(0.,0.,%v))", z)
+		axis := b.add("DIRECTION('',(0.,0.,1.))")
+		ref := b.add("DIRECTION('',(1.,0.,0.))")
+		placement := b.add("AXIS2_PLACEMENT_3D('',#%d,#%d,#%d)", origin, axis, ref)
+		circle := b.add("CIRCLE('',#%d,%v)", placement, radius)
+		edge = b.add("EDGE_CURVE('',#%d,#%d,#%d,.T.)", vertex, vertex, circle)
+		shared[z] = edge
+	}
+	flag := ".T."
+	if !forward {
+		flag = ".F."
+	}
+	oriented := b.add("ORIENTED_EDGE('',*,*,#%d,%s)", edge, flag)
+	return b.add("EDGE_LOOP('',(#%d))", oriented)
+}
+
+// rodWithoutSeamFile is a rod of radius 5 and height 20 whose wall is one
+// cylindrical face bounded by two circular loops and no seam, in millimetres.
+func rodWithoutSeamFile() string {
+	b := &stepBuilder{}
+	shared := map[float64]int{}
+	plane := func(z float64, normal float64) string {
+		origin := b.add("CARTESIAN_POINT('',(0.,0.,%v))", z)
+		axis := b.add("DIRECTION('',(0.,0.,%v))", normal)
+		ref := b.add("DIRECTION('',(1.,0.,0.))")
+		placement := b.add("AXIS2_PLACEMENT_3D('',#%d,#%d,#%d)", origin, axis, ref)
+		return fmt.Sprintf("#%d", b.add("PLANE('',#%d)", placement))
+	}
+	disc := func(z, normal float64) int {
+		loop := b.circleLoop(z, 5, normal > 0, shared)
+		bound := b.add("FACE_OUTER_BOUND('',#%d,.T.)", loop)
+		return b.add("ADVANCED_FACE('',(#%d),%s,.T.)", bound, plane(z, normal))
+	}
+	top, bottom := disc(20, 1), disc(0, -1)
+	bottomLoop, topLoop := b.circleLoop(0, 5, true, shared), b.circleLoop(20, 5, false, shared)
+	outer := b.add("FACE_OUTER_BOUND('',#%d,.T.)", bottomLoop)
+	other := b.add("FACE_BOUND('',#%d,.T.)", topLoop)
+	origin := b.add("CARTESIAN_POINT('',(0.,0.,0.))")
+	axis := b.add("DIRECTION('',(0.,0.,1.))")
+	ref := b.add("DIRECTION('',(1.,0.,0.))")
+	placement := b.add("AXIS2_PLACEMENT_3D('',#%d,#%d,#%d)", origin, axis, ref)
+	cylinder := b.add("CYLINDRICAL_SURFACE('',#%d,5.)", placement)
+	wall := b.add("ADVANCED_FACE('',(#%d,#%d),#%d,.T.)", outer, other, cylinder)
+	shell := b.add("CLOSED_SHELL('',(#%d,#%d,#%d))", top, bottom, wall)
+	b.add("MANIFOLD_SOLID_BREP('rod',#%d)", shell)
+	return "ISO-10303-21;\nHEADER;\nENDSEC;\nDATA;\n" + strings.Join(b.lines, "\n") + "\nENDSEC;\nEND-ISO-10303-21;\n"
+}
+
+func TestReadSTEPReadsAWallBetweenTwoCircularLoops(t *testing.T) {
+	t.Parallel()
+	m, err := readSTEPBytes(t, []byte(rodWithoutSeamFile()))
+	require.NoError(t, err)
+	require.True(t, m.Report().Closed)
+	sides := inscribedSteps(5, 2*math.Pi)
+	area := float64(sides) / 2 * 25 * math.Sin(2*math.Pi/float64(sides))
+	volume, err := m.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, 20*area, volume.Value.Base(), 1e-6)
 }

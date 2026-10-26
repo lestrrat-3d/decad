@@ -2406,7 +2406,11 @@
 10	0.01	TestReadSTEPRoundTripsAConcavePrism
 10	0.01	TestReadSTEPRoundTripsACavity
 10	0.01	TestReadSTEPRoundTripsAFacetedCone
-10	0.01	TestReadSTEPRefusesACurvedBody
+10	0.01	TestReadSTEPReadsADrilledPlate
+10	0.01	TestReadSTEPReadsARod
+10	0.01	TestReadSTEPReadsPartialCylinderWalls
+10	0.01	TestReadSTEPRefusesAConeFace
 10	0.01	TestReadSTEPHandWrittenPlateWithAHoleAndInches
 10	0.01	TestReadSTEPRefusals
 10	0.01	TestReadSTEPHonoursAnOrientedVoidShellsFlag
+10	0.01	TestReadSTEPReadsAWallBetweenTwoCircularLoops
