@@ -233,7 +233,7 @@ proven exact may return a faceted body whose measurements are `decad.Approximate
 | `Document.Bindings` | Lists every parameter read in call order: name, source text, value and direct dependencies. |
 | `decad.ExactOnly` | A `decad.New` option. Refuses any operation that only such a move would allow. |
 | `decad.Transform` | Moves a body by an `r3.Transform` and retires the input. |
-| `decad.ScaledAt` | Scales a supported body uniformly about an anchor point. |
+| `decad.ScaledAt` | Scales a supported body uniformly about an anchor point. A scaled mesh Boolean result keeps the retained plane, cylinder, sphere and torus surfaces of its faces with their radii scaled; its other faces read `Faceted`. |
 | `decad.Patterned` | Returns one body holding every instance of a `decad.PatternSpec`. |
 | `decad.PatternCopies` | Returns the extra instances as separate bodies. |
 | `decad.PatternJoin` | Repeats a feature by a `decad.PatternSpec` and joins every instance to a target body in one Union. |
