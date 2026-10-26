@@ -299,7 +299,46 @@ jobs:
             exit 1
           fi
 
-  # The packages outside the root run on two Ubuntu runners. The main-only
+  # These arithmetic tests do not import the root package, so they compile
+  # independently of the root race binaries.
+  test-arithmetic:
+    name: test (ubuntu-latest, -race, arithmetic)
+    runs-on: ubuntu-latest
+    env:
+      GORACE: atexit_sleep_ms=0
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Describe the runner CPU
+        run: |
+          model=$(lscpu | sed -n 's/^Model name:[[:space:]]*//p')
+          printf 'runner-cpu: %s x%s\n' "$model" "$(nproc)"
+
+      - name: Install Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Restore Go build cache
+        uses: ./.github/actions/go-build-cache-restore
+        with:
+          name: race-arithmetic
+          sources: |
+            :(glob)internal/**/*.go
+            :(glob)report/*.go
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run arithmetic race tests
+        run: go test -race -count=1 -v -timeout 10m ./internal/proof/ ./internal/proofbound/
+
+      - name: Save Go build cache
+        uses: ./.github/actions/go-build-cache-save
+
+  # The packages outside the root run on three Ubuntu runners. The main-only
   # platform job below runs the whole suite on macOS and Windows.
   #
   # ./dynamics/ has a runner of its own. Its top-level tests call t.Parallel(),
@@ -426,8 +465,9 @@ jobs:
           start=$SECONDS
           mod="$(go list -m)"
           norace_re="${mod}/internal/(loftface|polynomial|linkagebound)"
+          arithmetic_re="${mod}/internal/(proof|proofbound)"
           norace="$(go list ${{ matrix.packages }} | grep -x -E "$norace_re")"
-          rest="$(go list ${{ matrix.packages }} | grep -v -x -E "${mod}/(examples|decadtest|export|internal/decaderr)|$norace_re")"
+          rest="$(go list ${{ matrix.packages }} | grep -v -x -E "${mod}/(examples|decadtest|export|internal/decaderr)|$norace_re|$arithmetic_re")"
           logdir="$(mktemp -d)"
           (
             rc=0
