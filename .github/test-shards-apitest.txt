@@ -2379,3 +2379,11 @@
 10	0.01	TestEmbossDraftEngravedNarrowsTowardTheFloor
 10	0.01	TestEmbossDraftZeroIsAStraightWall
 10	0.01	TestEmbossDraftRefusals
+10	0.01	TestRibDraftThinsTheRibAsItRises
+10	0.01	TestRibDraftNegativeThickensTheRib
+10	0.01	TestRibDraftOfAWebAndLastWins
+10	0.01	TestRibDraftRefusals
+10	0.01	TestBossDraftNarrowsTheBossTowardItsTop
+10	0.01	TestBossDraftNegativeWidensIt
+10	0.01	TestBossDraftKeepsThePilotInsideTheNarrowedTop
+10	0.01	TestBossDraftRefusals

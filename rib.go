@@ -13,12 +13,27 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// RibOption configures Rib and Web. WithRibOverrun makes one.
+// RibOption configures Rib, RibArc, Web and WebPath. WithRibOverrun and
+// WithRibDraft make one.
 type RibOption interface{ ribOption() }
 
 type ribOverrunOption struct{ overrun units.Value }
 
 func (ribOverrunOption) ribOption() {}
+
+type ribDraftOption struct{ angle units.Value }
+
+func (ribDraftOption) ribOption() {}
+
+// WithRibDraft leans the rib's walls by a draft angle
+// (agent-docs/rib-design.md §7). A positive angle makes the rib thinner as it
+// rises from the plane of the sketch, the way a moulded or cast rib releases
+// from its tool, and a negative one thicker. The angle is [WithTaper]'s, so the
+// lean is measured from the sketch plane, the ends lean too, and a draft at or
+// past a right angle is ErrDegenerate. The last occurrence wins and the default
+// is a straight wall. A rib whose outline has a corner that an arc meets, such
+// as one of [RibArc], takes the refusals of the drafted [Extrude] it builds.
+func WithRibDraft(angle units.Value) RibOption { return ribDraftOption{angle: angle} }
 
 // WithRibOverrun lengthens every rib by overrun beyond both ends of its line.
 // A rib whose ends only touch a wall of the body is a coplanar contact that
@@ -176,7 +191,7 @@ func webEntities(ctx context.Context, kind OperationKind, b *Body, s *sketch.Ske
 			return nil, fmt.Errorf(`%w: a rib follows a line or an arc, not a %T`, ErrDegenerate, entity)
 		}
 	}
-	return joinRibs(ctx, kind, rs, b, s, outlines, e)
+	return joinRibs(ctx, kind, rs, b, s, outlines, e, ribDraft(opts))
 }
 
 // RibArc adds a rib to b along arc and returns the result, retiring b.
@@ -210,7 +225,7 @@ func RibArc(ctx context.Context, b *Body, s *sketch.Sketch, arc *sketch.Arc, thi
 	if err != nil {
 		return nil, err
 	}
-	return joinRibs(ctx, OperationRib, rs, b, s, []ribOutline{{band: &band}}, e)
+	return joinRibs(ctx, OperationRib, rs, b, s, []ribOutline{{band: &band}}, e, ribDraft(opts))
 }
 
 // ribOutline is the footprint of one rib on the sketch plane: the four corners
@@ -220,9 +235,21 @@ type ribOutline struct {
 	band    *ribplan.Band
 }
 
+// ribDraft returns the extrude options that lean the rib's walls: WithTaper of
+// the last WithRibDraft, or none.
+func ribDraft(opts []RibOption) []ExtrudeOption {
+	var out []ExtrudeOption
+	for _, raw := range opts {
+		if o, ok := raw.(ribDraftOption); ok {
+			out = []ExtrudeOption{WithTaper(o.angle)}
+		}
+	}
+	return out
+}
+
 // joinRibs builds a tool for each outline and joins the tools to b.
 func joinRibs(ctx context.Context, kind OperationKind, rs ribSetup, b *Body, s *sketch.Sketch,
-	outlines []ribOutline, e Extent) (*Body, error) {
+	outlines []ribOutline, e Extent, taper []ExtrudeOption) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -233,7 +260,7 @@ func joinRibs(ctx context.Context, kind OperationKind, rs ribSetup, b *Body, s *
 	defer func() { removeTools(tools) }()
 	toolCtx, history := privateConstructionContext(ctx)
 	for _, outline := range outlines {
-		tool, err := ribTool(toolCtx, rs.d, rs.frame, outline, e)
+		tool, err := ribTool(toolCtx, rs.d, rs.frame, outline, e, taper)
 		if err != nil {
 			return nil, err
 		}
@@ -251,11 +278,13 @@ func joinRibs(ctx context.Context, kind OperationKind, rs ribSetup, b *Body, s *
 func ribOverrun(opts []RibOption) (float64, error) {
 	var overrun units.Value
 	for _, raw := range opts {
-		o, ok := raw.(ribOverrunOption)
-		if !ok {
+		switch o := raw.(type) {
+		case ribOverrunOption:
+			overrun = o.overrun
+		case ribDraftOption:
+		default:
 			return 0, fmt.Errorf(`%w: the rib option is not a decad rib option (%T)`, ErrDegenerate, raw)
 		}
-		overrun = o.overrun
 	}
 	if overrun == (units.Value{}) {
 		return 0, nil
@@ -264,7 +293,7 @@ func ribOverrun(opts []RibOption) (float64, error) {
 }
 
 // ribTool extrudes one rib outline on the plane of frame.
-func ribTool(ctx context.Context, d *Document, frame r3.Frame, outline ribOutline, e Extent) (*Body, error) {
+func ribTool(ctx context.Context, d *Document, frame r3.Frame, outline ribOutline, e Extent, taper []ExtrudeOption) (*Body, error) {
 	w := sketch.NewWorld()
 	pl, err := w.CreatePlaneFromFrame(frame)
 	if err != nil {
@@ -304,7 +333,7 @@ func ribTool(ctx context.Context, d *Document, frame r3.Frame, outline ribOutlin
 	if _, err := rs.Solve(ctx); err != nil {
 		return nil, err
 	}
-	return Extrude(ctx, d, rs, rs.Profiles()[0], e)
+	return Extrude(ctx, d, rs, rs.Profiles()[0], e, taper...)
 }
 
 // requireRibTouches refuses a rib whose bounding box certifiably misses b's.

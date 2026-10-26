@@ -18,6 +18,7 @@ type BossSpec struct {
     Diameter units.Value
     Height   units.Value
     Bore     *BossBore
+    Draft    units.Value
 }
 
 func Boss(ctx context.Context, b *Body, spec BossSpec) (*Body, error)
@@ -41,6 +42,7 @@ faces are planes and cylinders where the Booleans admit them.
 
 - Ribs, gussets and a root fillet at the boss's foot. Add them with `Rib`, `Web` and `Fillet`.
 - A pilot with a draft, and a pilot thread whose major diameter exceeds the boss's.
+- A draft that closes the boss or breaks its circle before its top: `Extrude`'s refusal.
 - A boss that is not round, or one that stands on a curved face.
 - A boss whose axis is tilted from the face normal.
 
@@ -54,4 +56,15 @@ faces are planes and cylinders where the Booleans admit them.
 | W2 | `Thread` taps the pilot as `Hole` does: `Diameter` is the tap drill, and `Length` is measured from where the pilot proper starts, which is the top face or a head's floor. The zero `Length` threads the pilot's whole depth and stops at its bottom, since a pilot is blind. |
 | W3 | The pilot's tools (the bore, a head and the coil) are united with one another and cut from the boss in one step. A second cut of the boss would meet a target that already holds the first cut's coarse mesh, which the evaluator refuses when the cut's own chord tolerance is finer. |
 | W4 | One `OperationBoss` entry holds the whole. A thread whose major diameter would pass the boss's wall leaves a wall thinner than its groove: choose a boss wider than the thread's major diameter. |
+
+## 5. A drafted boss
+
+`BossSpec.Draft` leans the boss's wall. It passes `WithTaper` to the `Extrude` that builds the pillar.
+
+| Decision | Rule |
+|---|---|
+| Y1 | `Diameter` is the boss's diameter at `Face`. A positive `Draft` makes the boss narrower toward its top, `Diameter − 2·Height·tan(Draft)` across there, and a negative one wider. The zero `Value` is a straight wall. |
+| Y2 | The pillar's footing starts `embed` behind the face (B3), where the taper begins, so its circle there is wider by `embed·tan(Draft)`: the wall is then the stated diameter at the face. |
+| Y3 | `Draft` is read as a signed angle. A wrong unit kind is `ErrUnitKind`. A draft whose magnitude is at or past a right angle is `ErrDegenerate`, and one that closes or breaks the circle before the top is `Extrude`'s own refusal, `ErrUnsupported`. |
+| Y4 | The pilot opens on the boss's top face, so its diameter MUST be less than the boss's diameter there as well as at the face: a pilot that would break through the narrowed wall is `ErrDegenerate`. |
 
