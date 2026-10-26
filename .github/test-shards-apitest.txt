@@ -2256,3 +2256,7 @@
 10	0.01	TestVertexPlacedRevolveBoundEnclosesDisplacement
 10	0.01	TestWallReflexSweep
 10	0.10	TestRetainedScaledAtKeepsCurvedTags
+10	0.01	TestHoleRectangularBlind
+10	0.01	TestHoleRectangularRefusals
+10	0.01	TestHoleRectangularThrough
+10	0.01	TestHoleRectangularTurned

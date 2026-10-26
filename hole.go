@@ -50,18 +50,38 @@ type Countersink struct {
 func (Counterbore) holeHead() {}
 func (Countersink) holeHead() {}
 
+// HoleShape is the cross-section of a hole that is not round. Its only
+// variant is RectangularHole.
+type HoleShape interface{ holeShape() }
+
+// RectangularHole is a hole whose bore is a Width by Height rectangle centred
+// on the hole axis, with Width along the face frame's U axis before Angle
+// turns it counter-clockwise about the axis. Width and Height are positive
+// lengths and Angle is an angle.
+type RectangularHole struct {
+	Width, Height units.Value
+	Angle         units.Value
+}
+
+func (RectangularHole) holeShape() {}
+
 // HoleSpec describes one hole.
 //
 // Face selects the planar face the hole starts in and must resolve to exactly
 // one face. At is a world point in millimetres that lies on that face's plane;
 // the hole axis runs through it, into the body. Diameter is a length. Depth is
 // required. Head is optional, and nil makes a plain hole.
+//
+// Shape is optional. A nil Shape makes a round hole of Diameter. A non-nil
+// Shape replaces the round bore: Diameter MUST then be the zero units.Value and
+// Head MUST be nil, each otherwise ErrDegenerate.
 type HoleSpec struct {
 	Face     FaceSelector
 	At       r3.Vec
 	Diameter units.Value
 	Depth    HoleDepth
 	Head     HoleHead
+	Shape    HoleShape
 }
 
 // holeTolerance is the chord tolerance, in millimetres, Hole reads At's
@@ -141,7 +161,11 @@ func holeInput(b *Body, spec HoleSpec) (holeplan.Input, error) {
 	in.Frame = plane.Frame
 	in.Outward = normal.Value
 	in.At = spec.At
-	if in.Diameter, err = sectionrecord.MagnitudeIn(spec.Diameter, units.Length, units.Millimeter, "the hole diameter"); err != nil {
+	if spec.Shape != nil {
+		if err := holeShapeInput(&in, spec); err != nil {
+			return in, err
+		}
+	} else if in.Diameter, err = sectionrecord.MagnitudeIn(spec.Diameter, units.Length, units.Millimeter, "the hole diameter"); err != nil {
 		return in, err
 	}
 	bound, err := box.Bound.In(units.Millimeter)
@@ -153,6 +177,34 @@ func holeInput(b *Body, spec HoleSpec) (holeplan.Input, error) {
 		return in, err
 	}
 	return in, holeHeadInput(&in, spec.Head)
+}
+
+// holeShapeInput reads a non-round bore into in.
+func holeShapeInput(in *holeplan.Input, spec HoleSpec) error {
+	rect, ok := spec.Shape.(RectangularHole)
+	if !ok {
+		return fmt.Errorf(`%w: unknown hole shape %T`, ErrDegenerate, spec.Shape)
+	}
+	if spec.Diameter != (units.Value{}) {
+		return fmt.Errorf(`%w: a shaped hole takes its size from the shape, so Diameter must be zero`, ErrDegenerate)
+	}
+	if spec.Head != nil {
+		return fmt.Errorf(`%w: a rectangular hole takes no counterbore or countersink`, ErrDegenerate)
+	}
+	width, err := sectionrecord.MagnitudeIn(rect.Width, units.Length, units.Millimeter, "the rectangular hole width")
+	if err != nil {
+		return err
+	}
+	height, err := sectionrecord.MagnitudeIn(rect.Height, units.Length, units.Millimeter, "the rectangular hole height")
+	if err != nil {
+		return err
+	}
+	angle, err := sectionrecord.MagnitudeIn(rect.Angle, units.Angle, units.Radian, "the rectangular hole angle")
+	if err != nil {
+		return err
+	}
+	in.Rect = &holeplan.Rect{Width: width, Height: height, Angle: angle}
+	return nil
 }
 
 func holeDepthInput(in *holeplan.Input, depth HoleDepth) error {
@@ -227,7 +279,7 @@ func buildHoleTools(ctx context.Context, d *Document, plan holeplan.Plan) ([]*Bo
 		removeTools(tools)
 		return nil, err
 	}
-	bore, err := holeCylinder(ctx, d, plan, plan.Bore)
+	bore, err := holeBore(ctx, d, plan)
 	if err != nil {
 		return fail(err)
 	}
@@ -247,6 +299,39 @@ func buildHoleTools(ctx context.Context, d *Document, plan holeplan.Plan) ([]*Bo
 		tools = append(tools, head)
 	}
 	return tools, nil
+}
+
+// holeBore builds the main drill: a rectangular prism when plan holds
+// corners, a cylinder otherwise.
+func holeBore(ctx context.Context, d *Document, plan holeplan.Plan) (*Body, error) {
+	if plan.Corners == nil {
+		return holeCylinder(ctx, d, plan, plan.Bore)
+	}
+	w := sketch.NewWorld()
+	pl, err := w.CreatePlaneFromFrame(plan.Plane)
+	if err != nil {
+		return nil, err
+	}
+	s, err := w.CreateSketch(pl)
+	if err != nil {
+		return nil, err
+	}
+	var points [4]*sketch.Point
+	for i, c := range plan.Corners {
+		points[i] = s.CreatePoint(c[0], c[1])
+		s.Fix(points[i])
+	}
+	for i := range points {
+		s.CreateLine(points[i], points[(i+1)%len(points)])
+	}
+	if _, err := s.Solve(ctx); err != nil {
+		return nil, err
+	}
+	dir := Along
+	if plan.Against {
+		dir = Against
+	}
+	return Extrude(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(plan.Bore.Tool()), Dir: dir})
 }
 
 // holeCylinder extrudes one circle on the face plane inward by c.Length.

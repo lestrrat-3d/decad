@@ -48,6 +48,12 @@ type Head struct {
 	Angle    float64
 }
 
+// Rect is a rectangular bore in millimetres and radians. Angle turns it
+// counter-clockwise about the hole axis, measured from the frame's U axis.
+type Rect struct {
+	Width, Height, Angle float64
+}
+
 // Input is the request in millimetres and radians. Frame is the face's plane
 // frame and Outward the face's outward unit normal, which equals Frame.N() or
 // its negation. Reach is the distance from the face plane to the far side of
@@ -61,6 +67,9 @@ type Input struct {
 	Depth    float64
 	Reach    float64
 	Head     Head
+	// Rect, when set, replaces the round bore: Diameter is then ignored and
+	// Head must be HeadNone.
+	Rect *Rect
 }
 
 // Cylinder is a hole tool swept inward. Length is the depth below the face
@@ -95,6 +104,9 @@ type Plan struct {
 	Against bool
 	// Bore is the main drill.
 	Bore Cylinder
+	// Corners, when set, are the four corners of the rectangular bore in
+	// Plane's coordinates, counter-clockwise. Bore.Radius is then unused.
+	Corners *[4][2]float64
 	// Counterbore is the recess cylinder, set when the head is a counterbore.
 	Counterbore *Cylinder
 	// Sink is the countersink cone, set when the head is a countersink.
@@ -103,6 +115,9 @@ type Plan struct {
 
 // Compute checks the request and returns its tools.
 func Compute(in Input) (Plan, error) {
+	if in.Rect != nil {
+		return computeRect(in)
+	}
 	if !positive(in.Diameter) {
 		return Plan{}, fmt.Errorf(`%w: the hole diameter must be positive and finite`, decaderr.ErrDegenerate)
 	}
@@ -142,6 +157,38 @@ func Compute(in Input) (Plan, error) {
 	default:
 		return Plan{}, fmt.Errorf(`%w: unknown hole head %d`, decaderr.ErrDegenerate, in.Head.Kind)
 	}
+}
+
+// computeRect plans a rectangular bore. It shares the placement and depth
+// gates of the round hole and refuses a head.
+func computeRect(in Input) (Plan, error) {
+	r := in.Rect
+	if !positive(r.Width) || !positive(r.Height) {
+		return Plan{}, fmt.Errorf(`%w: the rectangular hole width and height must be positive and finite`,
+			decaderr.ErrDegenerate)
+	}
+	if math.IsNaN(r.Angle) || math.IsInf(r.Angle, 0) {
+		return Plan{}, fmt.Errorf(`%w: the rectangular hole angle must be finite`, decaderr.ErrDegenerate)
+	}
+	if in.Head.Kind != HeadNone {
+		return Plan{}, fmt.Errorf(`%w: a rectangular hole takes no counterbore or countersink`, decaderr.ErrDegenerate)
+	}
+	round := in
+	round.Rect = nil
+	round.Diameter = 1
+	plan, err := Compute(round)
+	if err != nil {
+		return Plan{}, err
+	}
+	sin, cos := math.Sincos(r.Angle)
+	hw, hh := r.Width/2, r.Height/2
+	var corners [4][2]float64
+	for i, c := range [4][2]float64{{-hw, -hh}, {hw, -hh}, {hw, hh}, {-hw, hh}} {
+		corners[i] = [2]float64{plan.U + c[0]*cos - c[1]*sin, plan.V + c[0]*sin + c[1]*cos}
+	}
+	plan.Corners = &corners
+	plan.Bore.Radius = 0
+	return plan, nil
 }
 
 func (p Plan) withCounterbore(in Input) (Plan, error) {

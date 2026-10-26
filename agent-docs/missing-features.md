@@ -49,7 +49,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 | `Extrude` over a chain with `WithTaper` (any angle) or `WithSurfaceResult()` | `ErrUnsupported` after the seam gates and before the extent; a chain extrude always returns a sheet and has no draft build | `agent-docs/surface-design.md` §13.2 |
 | `Emboss` on a non-planar face, or a relief with draft or a rim fillet | `Emboss` takes closed profiles on an analytic planar face (`emboss.go`) | `agent-docs/emboss-design.md` §5 |
 | `Rib` or `Web` along a chain, arc or polyline, or one that extends itself to the body | `Rib` accepts one straight `*sketch.Line` and the caller sets the extent and overrun (`rib.go`) | `agent-docs/rib-design.md` §4 |
-| `Hole` with a thread or a noncircular shape | `HoleSpec` holds a round diameter, a depth and an optional counterbore or countersink; it has no thread or shape field (`hole.go`) | `agent-docs/hole-design.md` §4 |
+| `Hole` with a thread, or a shape other than round or `RectangularHole` | `HoleSpec` holds a diameter or a `RectangularHole`, a depth and an optional counterbore or countersink; it has no thread field and no other shape (`hole.go`) | `agent-docs/hole-design.md` §4 |
 | `Hole` in a face that is not an analytic plane, or in a sheet | `ErrUnsupported` (`hole.go`) | `agent-docs/hole-design.md` §4 |
 | `Sweep` along guide rails or guide surfaces, or between a second profile | `Sweep` takes one section and one `Path`; it has no guide input | `agent-docs/sweep-design.md` §16 |
 
