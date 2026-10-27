@@ -30,9 +30,11 @@ type LoftSection struct {
 // straight prism. Two varying fitted flanks with unchanged circular arcs
 // use the source interpolants' quadratic height wall. Four rounded rectangles
 // with a common radius and height use a cubic-width wall. Three to thirty-two
-// centered rectangles may vary width and height independently. All routes require
-// ascending, equally spaced world-XY planes and interpolate every section exactly
-// (agent-docs/loft-sections-design.md). Other shapes refuse.
+// centered rectangles may vary width and height independently. All of those routes
+// require ascending, equally spaced world-XY planes and interpolate every section
+// exactly. Three to sixty-four sections of one fitted edge and whole lines may turn
+// about the plane origin on strictly ascending world-XY planes (agent-docs/loft-sections-design.md).
+// Other shapes refuse.
 func LoftSections(ctx context.Context, d *Document, sections ...LoftSection) (*Body, error) {
 	if ctx == nil || d == nil || len(sections) < 3 {
 		return nil, fmt.Errorf("%w: LoftSections needs a context, document and at least three sections", ErrDegenerate)
@@ -50,12 +52,24 @@ func LoftSections(ctx context.Context, d *Document, sections ...LoftSection) (*B
 	if sketches[0] != nil {
 		defer d.resultIn(d.ContainerOfSketch(sketches[0]))()
 	}
+	if len(sections) > 3 && twistedFitCandidate(sections[0]) {
+		return d.buildTwistedFitSections(ctx, sections)
+	}
 	if len(sections) == 4 {
 		return d.buildFourRoundedSections(ctx, sections)
 	}
 	if len(sections) >= 5 {
 		return d.buildManyRectangularSections(ctx, sections)
 	}
+	body, err := d.buildThreeSections(ctx, sections)
+	if err != nil && errors.Is(err, ErrUnsupported) && twistedFitCandidate(sections[0]) {
+		return d.buildTwistedFitSections(ctx, sections)
+	}
+	return body, err
+}
+
+// buildThreeSections owns the routes of §§1–8, which take exactly three sections.
+func (d *Document) buildThreeSections(ctx context.Context, sections []LoftSection) (*Body, error) {
 	var records [3]profileRecord
 	var planes [3]planeRecord
 	var work [3]*freeform.FreeformWork
@@ -104,6 +118,58 @@ func LoftSections(ctx context.Context, d *Document, sections ...LoftSection) (*B
 		return nil, err
 	}
 	return d.buildSmoothSectionBody(ctx, built, planes[0], planes[2])
+}
+
+// twistedFitCandidate reports whether the first section is one fit spline
+// closed by whole lines, the class of the twisted route (§13). It reads only
+// the profile's entity kinds; the builder authenticates the records.
+func twistedFitCandidate(section LoftSection) bool {
+	if section.Profile == nil || len(section.Profile.Holes) != 0 ||
+		len(section.Profile.Outer) < 3 || len(section.Profile.Outer) > 9 {
+		return false
+	}
+	fits := 0
+	for _, edge := range section.Profile.Outer {
+		switch edge.Entity.(type) {
+		case *sketch.FitSpline:
+			fits++
+		case *sketch.Line:
+		default:
+			return false
+		}
+	}
+	return fits == 1
+}
+
+// buildTwistedFitSections builds §13's loft through sections that turn about
+// the plane origin and carry one fitted edge.
+func (d *Document) buildTwistedFitSections(ctx context.Context, sections []LoftSection) (*Body, error) {
+	if len(sections) > smoothloft.MaxTwistedSections {
+		return nil, fmt.Errorf("%w: twisted LoftSections accepts at most %d sections",
+			ErrUnsupported, smoothloft.MaxTwistedSections)
+	}
+	records := make([]profileRecord, len(sections))
+	planes := make([]planeRecord, len(sections))
+	work := make([]*freeform.FreeformWork, len(sections))
+	for i, section := range sections {
+		if section.Sketch == nil || section.Profile == nil {
+			return nil, fmt.Errorf("%w: LoftSections section %d needs a sketch and profile", ErrDegenerate, i)
+		}
+		profile, plane, sketchArea, err := sectioncert.RecordProfile(section.Sketch, section.Profile)
+		if err != nil {
+			return nil, err
+		}
+		work[i] = freeform.NewFreeformWork()
+		if _, err := profile.FalsifyRecordedArea(sketchArea, work[i]); err != nil {
+			return nil, err
+		}
+		records[i], planes[i] = profile, plane
+	}
+	built, err := smoothloft.BuildTwistedFits(ctx, records, planes, work)
+	if err != nil {
+		return nil, err
+	}
+	return d.buildSmoothSectionBody(ctx, built, planes[0], planes[len(planes)-1])
 }
 
 func (d *Document) buildManyRectangularSections(ctx context.Context, sections []LoftSection) (*Body, error) {
