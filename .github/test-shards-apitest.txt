@@ -2468,6 +2468,10 @@
 9	0.21	TestVerifyLinkageTwoArms
 9	0.30	TestVerifyMitredSweepMeetingPrismArmIsNotSound
 9	0.13	TestVerifyMotionBetweenKnownCollision
+9	0.00	TestClassBPinIntoFarProng
+9	0.00	TestClassBPinToFarOuterWall
+9	0.00	TestClassBPinThroughSlottedPlate
+9	0.00	TestClassBMultiFacePinMisses
 9	0.18	TestVerifyMotionNearMissBetweenSamples
 9	0.01	TestVerifyMotionPoseDeviationIsCharged
 9	0.02	TestVerifyMotionSweptBoxCoversTravelFromRest

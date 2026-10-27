@@ -247,9 +247,16 @@ onto the face (such as an inch distance), and a section touching the face's edge
 A pin whose two end caps lie flat in two opposite faces combines exactly in the same way. A `Union` of a pin bridging
 the gap of a U-shaped plate, from one prong's inner face to the other's, adds the pin with no end cap. A `Cut` of a
 pin running from one wall of a plate exactly to the opposite wall drills a through hole, and an `Intersect` of it is
-the pin. A pin that bridges the gap and runs on into the far prong takes the faceted path. A `Cut` or `Intersect` of
-the bridging pin, which touches the plate only in its two end disks, returns a `BooleanError` with code
-`BooleanUnsupportedContact`.
+the pin. A `Cut` or `Intersect` of the bridging pin, which touches the plate only in its two end disks, returns a
+`BooleanError` with code `BooleanUnsupportedContact`.
+
+A pin that passes through several faces of a plate combines exactly too, such as a pin through both prongs of a
+U-shaped plate, a pin across a slotted plate, or a pin that bridges the U's gap and runs on into the far prong. Each
+end may lie strictly inside the plate, strictly outside it, or flat in a face. A `Union` adds the pin's parts outside
+the plate, and a `Cut` removes its parts inside the plate. An `Intersect` is exact when the pin lies inside the plate
+over one stretch only; through two prongs it takes the faceted path. Every face the pin meets must lie across it with
+the pin's section strictly inside the face. A section that crosses a face's edge, and a pin or face level that
+carries rounding (such as an inch distance), take the faceted path.
 
 A tapered `decad.Extrude` (`decad.WithTaper`) is an operand when every corner where a circular wall meets its
 neighbour is tangent. A line and an arc, or two arcs, that meet tangent up to rounding, turning by an angle whose sine
