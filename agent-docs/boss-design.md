@@ -47,7 +47,7 @@ faces are planes and cylinders where the Booleans admit them.
 - A pilot thread whose major diameter exceeds the boss's.
 - A draft that closes the boss or breaks its circle before its top: `Extrude`'s refusal.
 - A boss that stands on a curved face other than a cylinder's (§8), a boss on a cylinder with a root fillet or a draft, and a shaped boss with a root fillet.
-- A tilted boss with a pilot, a draft, a root fillet, ribs or a shape, a tilt past 60 degrees, and one on a cylindrical face (§10).
+- A tilted boss with a draft, a root fillet, ribs or a shape, a tilt past 60 degrees, and one on a cylindrical face (§10).
 
 ## 4. A pilot with a head or a thread
 
@@ -135,5 +135,5 @@ through it, out of the body's material.
 | D1 | `Tilt` is an angle above zero and at most 60 degrees: zero as an angle or past 60 is `ErrDegenerate`, negative `ErrNegativeMagnitude`, a wrong unit kind `ErrUnitKind`. The zero `Value` is an upright boss. `TiltDirection` is the angle about the face's outward normal from the face frame's U axis to the direction the boss leans toward, the zero `Value` being along U; it needs a `Tilt` (`ErrDegenerate`) and is an angle. |
 | D2 | The axis is `n·cos a + t·sin a`, `n` the outward normal, `t` the unit lean direction in the face and `a` the tilt. `Height` is measured along it from the point `At` on the face to the centre of the boss's top disc, and `Diameter` is the cylinder's, square to the axis. |
 | D3 | The pillar is the circle in the plane square to the axis, centred `e = (r·sin a + MouthMargin)/cos a` along the axis behind `At`, swept by `Height + e`. Its base disc is tilted, so its highest point is `MouthMargin` under the face and its lowest `2·r·sin a + MouthMargin` under it; a body with no more depth than that behind the face is `ErrDegenerate`. |
-| D4 | A tilted boss is round and stands on a plane: a `Bore`, `Draft`, `RootFillet`, `Ribs`, `Shape` or a cylindrical face with it is `ErrUnsupported`. The result is the union of the pillar with the body and carries its bound. |
+| D4 | A tilted boss is round and stands on a plane: a `Draft`, `RootFillet`, `Ribs`, `Shape` or a cylindrical face with it is `ErrUnsupported`. The result is the union of the pillar with the body and carries its bound. |
 | D5 | The volume above the face is exactly `π·r²·Height`: the face cuts a right cylinder through a point of its axis, and the oblique cut is balanced about that point, whatever the tilt. The tests require it inside the result's bound, the top disc's highest point `Height·cos a + r·sin a` over the face, a point on the axis inside the boss, and a point `4 + 4·cos a` mm back along the lean outside. |

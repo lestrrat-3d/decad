@@ -263,8 +263,8 @@ func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
 		switch {
 		case in.curved != nil:
 			return in, fmt.Errorf(`%w: a boss on a cylindrical face stands upright`, ErrUnsupported)
-		case spec.Shape != nil || spec.Bore != nil || spec.Ribs != nil || spec.Draft != (units.Value{}) || spec.RootFillet != (units.Value{}):
-			return in, fmt.Errorf(`%w: a tilted boss is round and takes no pilot, ribs, draft or root fillet`, ErrUnsupported)
+		case spec.Shape != nil || spec.Ribs != nil || spec.Draft != (units.Value{}) || spec.RootFillet != (units.Value{}):
+			return in, fmt.Errorf(`%w: a tilted boss is round and takes no ribs, draft or root fillet`, ErrUnsupported)
 		}
 	} else if spec.TiltDirection != (units.Value{}) {
 		return in, fmt.Errorf(`%w: a tilt direction needs a tilt`, ErrDegenerate)
@@ -388,21 +388,38 @@ func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
 		return in, fmt.Errorf(`%w: the pilot diameter %g mm must be less than the boss diameter %g mm at its top`,
 			ErrDegenerate, diameter, min(in.diameter, topDiameter))
 	}
-	if depth >= in.height+reach {
+	// The pilot runs along the boss's axis from the middle of its top face: the face's normal for an upright boss, and for
+	// a tilted one the tilt axis, with the pilot's bottom disc square to it, so its lowest point is half its diameter
+	// times sin(tilt) below the middle of the bottom along the face's normal.
+	var topFrame r3.Frame
+	axis, base, cosTilt, sinTilt := in.outward, in.frame.ToWorldUV(in.u, in.v), 1.0, 0.0
+	if in.tilt != nil {
+		axis, cosTilt, sinTilt = in.tilt.axis, math.Cos(in.tilt.angle), math.Sin(in.tilt.angle)
+	}
+	reachAlong := in.height + (reach-diameter/2*sinTilt)/cosTilt
+	if depth >= reachAlong {
 		return in, fmt.Errorf(`%w: a pilot %g mm deep would leave the boss's footing through the back of the body`,
 			ErrDegenerate, depth)
 	}
-	top, err := r3.NewFrame(in.frame.Origin().Add(in.outward.Scale(in.height)), in.frame.U(), in.frame.V())
-	if err != nil {
+	origin := base.Add(axis.Scale(in.height))
+	if in.tilt != nil {
+		if topFrame, err = r3.NewFrame(origin, in.tilt.across, axis.Cross(in.tilt.across)); err != nil {
+			return in, fmt.Errorf(`%w: the tilted top frame is degenerate: %s`, ErrDegenerate, err)
+		}
+	} else if topFrame, err = r3.NewFrame(in.frame.Origin().Add(in.outward.Scale(in.height)), in.frame.U(), in.frame.V()); err != nil {
 		return in, fmt.Errorf(`%w: the face frame is degenerate: %s`, ErrDegenerate, err)
 	}
+	at := topFrame.ToWorldUV(in.u, in.v)
+	if in.tilt != nil {
+		at = origin
+	}
 	in.bore = &holeplan.Input{
-		Frame:    top,
-		Outward:  in.outward,
-		At:       top.ToWorldUV(in.u, in.v),
+		Frame:    topFrame,
+		Outward:  axis,
+		At:       at,
 		Diameter: diameter,
 		Depth:    depth,
-		Reach:    in.height + reach,
+		Reach:    reachAlong,
 	}
 	in.tap = spec.Bore.Thread
 	if spec.Bore.Draft != (units.Value{}) {

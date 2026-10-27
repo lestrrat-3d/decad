@@ -1816,6 +1816,9 @@
 7	1.37	TestCutTwistedOffAxisSweepThroughTubeWall
 7	0.00	TestDegenerateSplineRecordRefuses
 7	0.01	TestDenotedLevelSplitInterfaceIsReused
+10	0.01	TestTiltedBossTakesAPilotAlongItsAxis
+10	0.01	TestTiltedBossPilotTakesAHead
+10	0.01	TestTiltedBossPilotFollowsABossOffTheFaceCentre
 7	0.02	TestDisplacedPenetrationWallMargin
 7	0.03	TestDisplacedSupportSetChamferedBlock
 7	0.04	TestDraftCircleShellRefusals
