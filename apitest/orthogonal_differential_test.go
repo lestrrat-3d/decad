@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"errors"
+	"math"
 	"math/rand/v2"
 	"testing"
 
@@ -418,4 +419,49 @@ func TestQuarterTurnAgreesWithTheTurnedCubes(t *testing.T) {
 		}
 	}
 	require.Greater(t, checked, 12)
+}
+
+func TestStretchAgreesWithTheStretchedCubes(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(29, 30))
+	factors := []float64{2, 3, 0.5, -1, -2}
+	checked := 0
+	for range 40 {
+		c := randomCubes(rng)
+		doc := decad.New()
+		b, ok := c.solid(t, doc)
+		if !ok {
+			continue
+		}
+		var f [3]float64
+		for a := range 3 {
+			f[a] = factors[rng.IntN(len(factors))]
+		}
+		anchor := r3.NewVec(float64(rng.IntN(voxelSide)), float64(rng.IntN(voxelSide)), float64(rng.IntN(voxelSide)))
+		out, err := decad.Stretch(t.Context(), b, anchor, units.Scalar(f[0]), units.Scalar(f[1]), units.Scalar(f[2]))
+		if err != nil {
+			continue
+		}
+		checked++
+		got, bound := volumeOf(t, out)
+		want := float64(c.count()) * math.Abs(f[0]*f[1]*f[2])
+		require.InDelta(t, want, got, bound+1e-9, "stretching %d cubes by %v", c.count(), f)
+		// The centre of the cube at (x, y, z) goes to the anchor plus each of its offsets times its factor, and the cube
+		// it stood in is wholly the stretched set's box there, so the point is inside when the cube was solid.
+		for range 40 {
+			x, y, z := rng.IntN(voxelSide), rng.IntN(voxelSide), rng.IntN(voxelSide)
+			p := r3.NewVec(
+				anchor.X+(float64(x)+0.5-anchor.X)*f[0],
+				anchor.Y+(float64(y)+0.5-anchor.Y)*f[1],
+				anchor.Z+(float64(z)+0.5-anchor.Z)*f[2])
+			at, err := out.LocatePoint(t.Context(), p, units.Millimeters(0.05))
+			require.NoError(t, err)
+			wantAt := decad.PointOutside
+			if c[x][y][z] {
+				wantAt = decad.PointInside
+			}
+			require.Equal(t, wantAt, at, "cube %d,%d,%d stretched by %v about %v", x, y, z, f, anchor)
+		}
+	}
+	require.Greater(t, checked, 20)
 }
