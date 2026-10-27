@@ -113,6 +113,11 @@ type KeptFacet struct {
 	// RimBound, or, for a point the cutter placed on the operand facet, that
 	// facet's δ. Each is a two-sided claim the corner carries into the stitch.
 	Beta [3]float64
+	// Keys is each corner's canonical identity, V[k].Key(), when the producer
+	// has already read it; the stitch welds by it and reads Key itself for an
+	// empty entry. A producer that fills an entry must fill exactly
+	// V[k].Key(): the stitch never checks it.
+	Keys [3]string
 }
 
 // BooleanKeep is the classification table of §9: which side of the other
@@ -190,13 +195,17 @@ func touchOf(ma *BoolMesh, i, j int) TouchContact {
 	return TouchContact{NormalA: na, Decisive: true, FacetsB: []int{j}}
 }
 
-// meshBoolean is MeshBoolean with the exact-point key function KeepSide uses
-// supplied per call, so a test can hold the memoized keys to Xpt.Key.
+// meshBoolean is MeshBoolean with the exact-point key function supplied, so a
+// test can hold the memoized keys to Xpt.Key. One key function serves the
+// whole call — the rim map, the point-touch check and both KeepSide passes —
+// and its keys travel on the kept facets into the stitch, so a point the two
+// operands share is canonicalized once.
 func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *ContactMemo, newKeyOf func() func(proof.Xpt) string) ([]KeptFacet, float64, error) {
 	wantA, wantB, flipB, err := BooleanKeep(op)
 	if err != nil {
 		return nil, 0, err
 	}
+	keyOf := newKeyOf()
 
 	// Exact contacts, per facet of each operand. Facet boxes prune the pairs.
 	cutsA := map[int][]Xseg{}
@@ -243,7 +252,7 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 		rim := RimBound(ma.SlabBound[i], mb.SlabBound[j], c.Sin2)
 		maxRim = max(maxRim, rim)
 		for _, p := range []proof.Xpt{c.P0, c.P1} {
-			k := p.Key()
+			k := keyOf(p)
 			if prev, ok := rims[k]; !ok || rim > prev {
 				rims[k] = rim
 			}
@@ -379,11 +388,11 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 	if len(pointTouches) > 0 {
 		ends := map[string]struct{}{}
 		for _, p := range segEnds {
-			ends[p.Key()] = struct{}{}
+			ends[keyOf(p)] = struct{}{}
 		}
 		var isolated []TouchContact
 		for k, p := range pointTouches {
-			if _, ok := ends[p.Key()]; !ok && len(isolated) < maxTouchContacts {
+			if _, ok := ends[keyOf(p)]; !ok && len(isolated) < maxTouchContacts {
 				isolated = append(isolated, touchOf(ma, pointFacets[k][0], pointFacets[k][1]))
 			}
 		}
@@ -396,12 +405,12 @@ func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 	if err := ctx.Err(); err != nil {
 		return nil, 0, err
 	}
-	keep, err := keepSide(ctx, ma, mb, cutsA, blockedA, rims, wantA, false, newKeyOf())
+	keep, err := keepSide(ctx, ma, mb, cutsA, blockedA, rims, wantA, false, keyOf)
 	if err != nil {
 		return nil, 0, err
 	}
 	kept = append(kept, keep...)
-	keep, err = keepSide(ctx, mb, ma, cutsB, blockedB, rims, wantB, flipB, newKeyOf())
+	keep, err = keepSide(ctx, mb, ma, cutsB, blockedB, rims, wantB, flipB, keyOf)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -478,7 +487,9 @@ func XtriCorners(m *BoolMesh, i int) [3]proof.Xpt {
 // newKeyMemo returns a function that reads an exact point's canonical Key
 // (a GCD) once per distinct integer pointer set. Cut pieces share corners, and
 // an exact point is immutable once built, so the same four pointers always
-// give the same key; the memo lives for one KeepSide call.
+// give the same key. The memo lives for one MeshBoolean call and holds every
+// pointer it was asked about, so no address it keys can be freed and reused
+// for another point while it lives.
 func newKeyMemo() func(proof.Xpt) string {
 	keys := map[[4]*big.Int]string{}
 	return func(p proof.Xpt) string {
@@ -495,12 +506,13 @@ func newKeyMemo() func(proof.Xpt) string {
 // keepSide is KeepSide with the exact-point key function supplied.
 func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, blocked map[[2]int]struct{}, rims map[string]float64, wantInside, flip bool, keyOf func(proof.Xpt) string) ([]KeptFacet, error) {
 	var kept []KeptFacet
-	emit := func(tri [3]proof.Xpt, beta [3]float64, src int) {
+	emit := func(tri [3]proof.Xpt, beta [3]float64, keys [3]string, src int) {
 		if flip {
 			tri[1], tri[2] = tri[2], tri[1]
 			beta[1], beta[2] = beta[2], beta[1]
+			keys[1], keys[2] = keys[2], keys[1]
 		}
-		kept = append(kept, KeptFacet{V: tri, Src: src, Beta: beta})
+		kept = append(kept, KeptFacet{V: tri, Src: src, Beta: beta, Keys: keys})
 	}
 
 	// The cut facets: exact subdivision along the contact chains, then the
@@ -542,10 +554,12 @@ func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 				}
 				for _, tri := range reg.Tris {
 					var beta [3]float64
+					var keys [3]string
 					for k, p := range tri {
-						beta[k] = CutCornerBound(m, i, cornerKeys, keyOf(p), rims)
+						keys[k] = keyOf(p)
+						beta[k] = CutCornerBound(m, i, cornerKeys, keys[k], rims)
 					}
-					emit(tri, beta, m.Src[i])
+					emit(tri, beta, keys, m.Src[i])
 				}
 			}
 		}
@@ -614,7 +628,9 @@ func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, bloc
 		}
 		for _, f := range members {
 			t := m.Tris[f]
-			emit(XtriCorners(m, f), [3]float64{m.VertexBound[t[0]], m.VertexBound[t[1]], m.VertexBound[t[2]]}, m.Src[f])
+			x := XtriCorners(m, f)
+			emit(x, [3]float64{m.VertexBound[t[0]], m.VertexBound[t[1]], m.VertexBound[t[2]]},
+				[3]string{keyOf(x[0]), keyOf(x[1]), keyOf(x[2])}, m.Src[f])
 		}
 	}
 	return kept, nil
