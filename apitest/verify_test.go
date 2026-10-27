@@ -825,18 +825,16 @@ func TestVerifyDiagnosticsUnsupportedFacetedSurveys(t *testing.T) {
 
 	require.Equal(t, decad.Suspect, report.Status)
 	requireDiagnosticInvariants(t, report)
-	// The body is two cubes joined, every face square to an axis with no vertex bound, so its wall is read exactly from
-	// its grid (agent-docs/orthogonal-wall-design.md): the thinnest run of material is 10 mm against a 1 mm tool, a proven
-	// wall that leaves no finding. The undercut survey of a faceted body reads rays through its mesh and cannot prove
-	// the opposite of an undercut, so the pull stays undecided, and the concave-radius survey stays staged and names
-	// its own refusal.
-	require.Len(t, report.Diagnostics, 2)
-	require.Equal(t, decad.SurveyUndercut, report.Diagnostics[0].Survey)
-	require.Equal(t, decad.DiagUndecidedUndercut, report.Diagnostics[0].Code)
-	require.Equal(t, decad.Suspect, report.Diagnostics[0].Status)
+	// The body is two cubes joined, every face square to an axis with no vertex bound, so its wall and its undercuts
+	// against a pull along an axis are read exactly from its grid (agent-docs/orthogonal-wall-design.md): the thinnest run
+	// of material is 10 mm against a 1 mm tool and no face is shadowed along z, both proven and so without a finding. The
+	// concave-radius survey stays staged and names its own refusal.
+	require.Len(t, report.Diagnostics, 1)
 	require.NotNil(t, report.Bodies[0].Wall.Minimum)
 	require.InDelta(t, 10, report.Bodies[0].Wall.Minimum.Value.Base(), 1e-9)
-	radius := report.Diagnostics[1]
+	require.NotNil(t, report.Bodies[0].Undercut.Faces)
+	require.Empty(t, report.Bodies[0].Undercut.Faces)
+	radius := report.Diagnostics[0]
 	require.Equal(t, decad.SurveyConcaveRadius, radius.Survey)
 	require.Equal(t, decad.DiagUnsupportedSurveyPayload, radius.Code)
 	require.Equal(t, decad.Suspect, radius.Status)
