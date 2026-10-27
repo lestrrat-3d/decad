@@ -226,7 +226,7 @@ func Hole(ctx context.Context, b *Body, spec HoleSpec) (result *Body, retErr err
 	}
 	defer func() { removeTools(tools) }()
 	if tap != nil {
-		coil, err := buildThreadCoil(toolCtx, d, tap.frame, tap.plan, tap.pitch, tap.leftHand, false)
+		coil, err := buildThreadCoil(toolCtx, d, tap.frame, tap.plan, tap.pitch, tap.leftHand, in.Margin == 0)
 		if err != nil {
 			return nil, err
 		}
