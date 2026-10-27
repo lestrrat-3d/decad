@@ -146,16 +146,16 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 	}
 
 	// Closure audit: each directed edge exactly once, each with its reverse.
-	directed := make(map[[2]int]int, 3*min(len(tris), 1024))
-	for _, tri := range tris {
-		for k := range 3 {
-			directed[[2]int{tri[k], tri[(k+1)%3]}]++
-		}
+	// A closed boundary has three edge uses per triangle and two per key.
+	// Open boundaries may grow the table; this hint admits no geometry.
+	edges := make(map[[2]int]uint8, len(tris)+len(tris)/2)
+	if !stitchEdgesPaired(tris, edges) {
+		return nil, fmt.Errorf(`%w: the stitched boundary does not close`, decaderr.ErrBooleanFailed)
 	}
-	for e, n := range directed {
-		if n != 1 || directed[[2]int{e[1], e[0]}] != 1 {
-			return nil, fmt.Errorf(`%w: the stitched boundary does not close`, decaderr.ErrBooleanFailed)
-		}
+	// Retain only a small table for the rounded audit. Release a large one
+	// before the rounding and embedding work allocates its own geometry.
+	if len(tris) > 4096 {
+		edges = nil
 	}
 
 	// Round to float64, welding vertices whose roundings coincide — two exact
@@ -258,24 +258,47 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 	}
 	out.DropArea = proofbound.PerturbedAreaUpper(out.Verts, droppedTris, out.Round)
 
-	// Keep the first audit's storage only while its size stays bounded.
-	// A very large exact mesh may weld down to a much smaller rounded one.
-	if len(tris) <= 4096 {
-		clear(directed)
+	if edges == nil {
+		edges = make(map[[2]int]uint8, len(out.Tris)+len(out.Tris)/2)
 	} else {
-		directed = make(map[[2]int]int, 3*min(len(out.Tris), 1024))
+		clear(edges)
 	}
-	for _, tri := range out.Tris {
-		for k := range 3 {
-			directed[[2]int{tri[k], tri[(k+1)%3]}]++
-		}
-	}
-	for e, n := range directed {
-		if n != 1 || directed[[2]int{e[1], e[0]}] != 1 {
-			return nil, fmt.Errorf(`%w: the rounded boundary does not close`, decaderr.ErrBooleanFailed)
-		}
+	if !stitchEdgesPaired(out.Tris, edges) {
+		return nil, fmt.Errorf(`%w: the rounded boundary does not close`, decaderr.ErrBooleanFailed)
 	}
 	return out, nil
+}
+
+// stitchEdgesPaired proves that every directed edge appears once and has its
+// reverse. edges must be empty. Each undirected key records the two directions
+// as bits; a repeated bit fails immediately, so a third use cannot cancel a
+// duplicate in the opposite direction. No reverse-key lookup is needed.
+func stitchEdgesPaired(tris [][3]int, edges map[[2]int]uint8) bool {
+	for _, tri := range tris {
+		for k, a := range tri {
+			b := tri[(k+1)%3]
+			var direction uint8 = 1
+			if a > b {
+				a, b = b, a
+				direction = 2
+			} else if a == b {
+				// A self-edge is its own reverse in the directed census.
+				direction = 3
+			}
+			key := [2]int{a, b}
+			seen := edges[key]
+			if seen&direction != 0 {
+				return false
+			}
+			edges[key] = seen | direction
+		}
+	}
+	for _, seen := range edges {
+		if seen != 3 {
+			return false
+		}
+	}
+	return true
 }
 
 // maxGap is the largest of gaps, polling ctx every 256 vertices.
