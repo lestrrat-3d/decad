@@ -116,3 +116,71 @@ func TestBossRibsRefusals(t *testing.T) {
 	}
 	require.Equal(t, []*decad.Body{plate}, doc.Bodies(), "every refusal leaves the plate live")
 }
+
+// shapedRibbed is a boss of the given shape and height 8 on the top face of the plate of boss_test.go, braced by the ribs.
+func shapedRibbed(plate *decad.Body, shape decad.HoleShape, ribs *decad.BossRibs) decad.BossSpec {
+	return decad.BossSpec{
+		Face: capFace(true, plate), At: r3.Vec{X: 0, Y: 0, Z: 5}, Height: units.Millimeters(8), Shape: shape, Ribs: ribs,
+	}
+}
+
+func TestBossRibsStandAtTheWallOfARectangularBoss(t *testing.T) {
+	t.Parallel()
+	const thick, length, height = 2.0, 6.0, 5.0
+	for name, tc := range map[string]struct {
+		angle   units.Value
+		inside  r3.Vec // a point in a rib's foot
+		outside r3.Vec // a point on the face where no rib stands
+	}{
+		// A 20 x 10 boss: its wall is 10 mm from the axis along U and 5 mm along V, and a rib stands where its plane meets that
+		// wall, so it is a triangle of length x height / 2 across its thickness outside the boss.
+		"along U": {units.Degrees(0), r3.Vec{X: 12, Y: 0, Z: 5.5}, r3.Vec{X: 0, Y: 7, Z: 5.5}},
+		"along V": {units.Degrees(90), r3.Vec{X: 0, Y: 7, Z: 5.5}, r3.Vec{X: 12, Y: 0, Z: 5.5}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			doc, plate := bossPlate(t)
+			out, err := decad.Boss(t.Context(), plate, shapedRibbed(plate,
+				decad.RectangularHole{Width: units.Millimeters(20), Height: units.Millimeters(10), Angle: units.Degrees(0)},
+				&decad.BossRibs{Count: 2, Thickness: units.Millimeters(thick), Length: units.Millimeters(length),
+					Height: units.Millimeters(height), Angle: tc.angle}))
+			require.NoError(t, err)
+			require.Equal(t, []*decad.Body{out}, doc.Bodies())
+			requireVolumeWithin(t, out, bossPlateVolume+20*10*8+2*thick*length*height/2)
+			foot, err := out.LocatePoint(t.Context(), tc.inside, units.Millimeters(0.05))
+			require.NoError(t, err)
+			require.Equal(t, decad.PointInside, foot)
+			bare, err := out.LocatePoint(t.Context(), tc.outside, units.Millimeters(0.05))
+			require.NoError(t, err)
+			require.Equal(t, decad.PointOutside, bare)
+		})
+	}
+}
+
+func TestBossRibsStandAtTheFlatsOfAPolygonalBoss(t *testing.T) {
+	t.Parallel()
+	const thick, length, height = 2.0, 6.0, 5.0
+	_, plate := bossPlate(t)
+	// A hexagon 10 mm across flats with a flat toward U: six ribs at 60 degrees from one another meet its six flats square.
+	out, err := decad.Boss(t.Context(), plate, shapedRibbed(plate,
+		decad.PolygonHole{Sides: 6, AcrossFlats: units.Millimeters(10), Angle: units.Degrees(0)},
+		&decad.BossRibs{Count: 6, Thickness: units.Millimeters(thick), Length: units.Millimeters(length),
+			Height: units.Millimeters(height)}))
+	require.NoError(t, err)
+	hexagon := 6 * 25 * math.Tan(math.Pi/6)
+	requireVolumeWithin(t, out, bossPlateVolume+hexagon*8+6*thick*length*height/2)
+}
+
+func TestBossRibsStandAtTheEndOfASlot(t *testing.T) {
+	t.Parallel()
+	const thick, length, height = 2.0, 6.0, 5.0
+	_, plate := bossPlate(t)
+	// A slot 20 long and 8 wide: a rib along its long axis meets the round end 10 mm from the axis, so it reaches the wall as
+	// a rib of a boss of radius 4 does.
+	out, err := decad.Boss(t.Context(), plate, shapedRibbed(plate,
+		decad.SlotHole{Length: units.Millimeters(20), Width: units.Millimeters(8), Angle: units.Degrees(0)},
+		&decad.BossRibs{Count: 2, Thickness: units.Millimeters(thick), Length: units.Millimeters(length),
+			Height: units.Millimeters(height)}))
+	require.NoError(t, err)
+	slot := 8*12 + math.Pi*16
+	requireVolumeWithin(t, out, bossPlateVolume+slot*8+2*ribOutside(4, thick, length, height))
+}
