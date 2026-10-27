@@ -20,8 +20,14 @@ func RatioSqrtSeed(n, d *big.Int, denomExp int) (float64, bool) {
 	if n.Sign() <= 0 || d.Sign() <= 0 {
 		return 0, false
 	}
-	num, den := leading64(n), leading64(d)
-	exp := n.BitLen() - d.BitLen() + 1 - denomExp
+	return ratioSqrtSeedLeading(leading64(n), leading64(d), n.BitLen()-d.BitLen()+1-denomExp)
+}
+
+// ratioSqrtSeedLeading is RatioSqrtSeed over the operands' leading 64 bits,
+// num and den (each in [2^63, 2^64)), and the quotient exponent exp =
+// n.BitLen() − d.BitLen() + 1 − denomExp. The seed reads nothing else, so a
+// caller holding the numerator as machine words seeds without a big.Int.
+func ratioSqrtSeedLeading(num, den uint64, exp int) (float64, bool) {
 	hi, lo := num>>1, num<<63
 	if num < den {
 		hi, lo = num, 0
