@@ -151,6 +151,7 @@ a sheet. The `decad.Section` type constraint covers both.
 |---|---|
 | `decad.Extrude` | A prism along the sketch normal, sized by a `decad.Extent`. |
 | `decad.Revolve` | A solid of revolution about a `decad.Axis`, sized by a `decad.AngularExtent`. |
+| `decad.SheetMetal` | A bent strip of flat legs and circular bends as a solid, with its flat pattern length from the K-factor. |
 | `decad.Sweep` | A section moved along a `*decad.Path`. |
 | `decad.Loft` | A ruled solid between two profiles on different planes. |
 | `decad.LoftChain` | A ruled sheet between two open chains. |
