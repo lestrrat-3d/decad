@@ -275,3 +275,73 @@ func TestDyQuoFloatDownFormsNoRat(t *testing.T) {
 		require.Equal(t, math.Float64bits(want), math.Float64bits(result), "sample %d", sample)
 	}
 }
+
+// randomOddMantissa is a random odd magnitude of exactly width bits.
+func randomOddMantissa(r *rand.Rand, width int) *big.Int {
+	m := new(big.Int)
+	for i := 0; i < width; i += 64 {
+		m.Lsh(m, 64)
+		m.Or(m, new(big.Int).SetUint64(r.Uint64()))
+	}
+	m.And(m, quotientMantissaMask(width))
+	m.SetBit(m, width-1, 1)
+	return m.SetBit(m, 0, 1)
+}
+
+// DyQuoFloatUpMul agrees bit for bit with DyQuoFloatUp over the built product,
+// and with the big.Rat reference, across factor widths on each side of the
+// 64- and 127-bit inline limits, wide (big.Int) factors and numerators, both
+// signs, a zero numerator, and exponents that leave the normal float64 range.
+func TestDyQuoFloatUpMulMatchesDyQuoFloatUp(t *testing.T) {
+	t.Parallel()
+	r := rand.New(rand.NewPCG(29, 31))
+	widths := []int{1, 2, 20, 53, 63, 64, 65, 106, 126, 127, 128, 200}
+	nWidths := []int{1, 53, 64, 65, 110, 127, 128, 300}
+	signs := [][3]int{{1, 1, 1}, {1, 1, 1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, 1}, {0, 1, 1}}
+	sample := 0
+	for _, aw := range widths {
+		for _, bw := range widths {
+			for range 6 {
+				nw := nWidths[r.IntN(len(nWidths))]
+				sign := signs[r.IntN(len(signs))]
+				offset := []int{0, r.IntN(200) - 100, -1100, 1100}[r.IntN(4)]
+				parts := [3]proof.Dyadic{
+					dyadicFromParts(t, randomOddMantissa(r, nw), offset-nw),
+					dyadicFromParts(t, randomOddMantissa(r, aw), r.IntN(60)-30-aw),
+					dyadicFromParts(t, randomOddMantissa(r, bw), r.IntN(60)-30-bw),
+				}
+				for k, s := range sign {
+					switch s {
+					case 0:
+						parts[k] = proof.DyZero()
+					case -1:
+						parts[k] = proof.DyNeg(parts[k])
+					}
+				}
+				n, a, b := parts[0], parts[1], parts[2]
+				d := proof.DyMul(a, b)
+				want := proof.DyQuoFloatUp(n, d)
+				got := proof.DyQuoFloatUpMul(n, a, b)
+				require.Equal(t, math.Float64bits(want), math.Float64bits(got),
+					"sample %d: widths n=%d a=%d b=%d signs %v", sample, nw, aw, bw, sign)
+				if n.Sign() >= 0 && d.Sign() > 0 {
+					q := new(big.Rat).Quo(n.Rat(), d.Rat())
+					require.Equal(t, math.Float64bits(ratFloatUpRef(q)), math.Float64bits(got), "sample %d", sample)
+				}
+				sample++
+			}
+		}
+	}
+}
+
+// DyQuoFloatUpMul over two inline factors whose product leaves 127 bits forms
+// no big.Int.
+func TestDyQuoFloatUpMulFormsNoProduct(t *testing.T) {
+	n := dyadicFromParts(t, quotientMantissaMask(110), -110)
+	a := dyadicFromParts(t, quotientMantissaMask(110), -110)
+	b := dyadicFromParts(t, quotientMantissaMask(55), -55)
+	var result float64
+	allocations := testing.AllocsPerRun(100, func() { result = proof.DyQuoFloatUpMul(n, a, b) })
+	require.Zero(t, allocations)
+	require.Equal(t, math.Float64bits(proof.DyQuoFloatUp(n, proof.DyMul(a, b))), math.Float64bits(result))
+}

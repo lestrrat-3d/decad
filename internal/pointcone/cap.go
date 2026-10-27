@@ -460,17 +460,20 @@ func TriangleBound(geom CellGeom, c *Consts) (float64, float64, float64, error) 
 		return 0, 0, 0, fmt.Errorf("%w: the point-cone cap has no positive ray denominator", decaderr.ErrUnsupported)
 	}
 	h2 := proofarith.DyMul(hd, hd)
-	g2 := proofarith.DyMul(g, g)
-	g3 := proofarith.DyMul(g2, g)
-	adG2 := proofarith.DyMul(c.ad, g2)
+	// ad·G and ad·G² chain off one another, and ad·G³ = (ad·G²)·G and
+	// 2·rhoMin·ad·G² reach DyQuoFloatUpMul as their last two factors. DyMul is
+	// exact and a Dyadic is canonical, so each denominator is the same value,
+	// field for field, as the product in the formulas above, and
+	// DyQuoFloatUpMul(n, a, b) is DyQuoFloatUp(n, DyMul(a, b)) bit for bit.
+	adG := proofarith.DyMul(c.ad, g)
+	adG2 := proofarith.DyMul(adG, g)
 	alphaBound := proofbound.AbsSumUpper(
-		proofarith.DyQuoFloatUp(proofarith.DyMul(c.cRec, h2), proofarith.DyMul(c.ad, g3)),
-		proofarith.DyQuoFloatUp(proofarith.DyMul(c.cRad, h2),
-			proofarith.DyMul(proofarith.DyShift(rho, 1), adG2)))
+		proofarith.DyQuoFloatUpMul(proofarith.DyMul(c.cRec, h2), adG2, g),
+		proofarith.DyQuoFloatUpMul(proofarith.DyMul(c.cRad, h2), proofarith.DyShift(rho, 1), adG2))
 	capBound := proofbound.AbsSumUpper(
 		proofbound.ProductUpper(reach, alphaBound),
 		proofarith.DyQuoFloatUp(proofarith.DyMul(c.cProd, h2), adG2))
-	alphaMax := proofarith.DyQuoFloatUp(c.cAlpha, proofarith.DyMul(c.ad, g))
+	alphaMax := proofarith.DyQuoFloatUp(c.cAlpha, adG)
 	lip := proofbound.AbsSumUpper(alphaMax,
 		proofbound.ProductUpper(reach, proofarith.DyQuoFloatUp(c.cProd, adG2)))
 	return capBound, alphaBound, lip, nil

@@ -97,6 +97,24 @@ func TestPointConeCapParallelMatchesSerial(t *testing.T) {
 	}
 }
 
+// BenchmarkTriangleBound forms TriangleBound over every cell of a subdivided
+// fan against each test cone on one goroutine, the per-cell work CapBound does.
+func BenchmarkTriangleBound(b *testing.B) {
+	far, caps := capTestFan(b, 4)
+	geom := capGeometry(far, caps, coneaxis.X(), 1)
+	cones := capTestCones()
+	b.ReportAllocs()
+	for b.Loop() {
+		for _, c := range cones {
+			for _, g := range geom {
+				if _, _, _, err := TriangleBound(g, c); err != nil {
+					b.Fatal(err)
+				}
+			}
+		}
+	}
+}
+
 func TestPointConeCapBoundReportsTheFirstFailingCell(t *testing.T) {
 	t.Parallel()
 	far, caps := capTestRandom(rand.New(rand.NewPCG(23, 24)), 1500)
