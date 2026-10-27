@@ -137,3 +137,35 @@ func TestSolidFromMeshRefusals(t *testing.T) {
 	require.Error(t, err)
 	require.Empty(t, doc.Bodies(), "a refusal leaves the document unchanged")
 }
+
+func TestSolidFromMeshBodyKeepsWorkingAfterPlacementAndReadings(t *testing.T) {
+	t.Parallel()
+	_, body := solidFromBlock(t)
+	// Mass properties read the exact mesh: density 0.5 kg/mm^3 over 24 mm^3 is 12 kg, the centre is
+	// the block's middle, and a solid block's inertia about z is m·(a² + b²)/12 = 12·(16 + 9)/12 = 25.
+	props, err := body.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(0.5))
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(props.Mass.Value.Base()-12), props.Mass.Bound.Base()+1e-12)
+	require.True(t, props.Center.Value.Equal(r3.NewVec(2, 1.5, 1), 1e-9))
+	require.LessOrEqual(t, math.Abs(props.Inertia.ZZ.Value.Base()-25), props.Inertia.ZZ.Bound.Base()+1e-9)
+	// A translated copy lands where it should and keeps its faces and volume.
+	move, err := r3.Translation(r3.NewVec(5, 0, 0))
+	require.NoError(t, err)
+	moved, err := decad.Transform(t.Context(), body, move)
+	require.NoError(t, err)
+	box, err := moved.Bounds()
+	require.NoError(t, err)
+	require.True(t, box.Min.Equal(r3.NewVec(5, 0, 0), 1e-9))
+	require.True(t, box.Max.Equal(r3.NewVec(9, 3, 2), 1e-9))
+	require.Len(t, moved.Faces(), 6)
+	mv, err := moved.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, 24, mv.Value.Base(), 1e-9)
+	// And the result writes out as STL and reads back as the same closed mesh.
+	var out bytes.Buffer
+	require.NoError(t, export.STL(t.Context(), &out, moved, units.Millimeters(0.1)))
+	back, err := decad.ReadSTL(t.Context(), &out)
+	require.NoError(t, err)
+	require.True(t, back.Report().Closed)
+	require.Equal(t, 12, back.Report().Triangles)
+}
