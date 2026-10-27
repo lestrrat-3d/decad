@@ -27,6 +27,8 @@ const (
 	FischerKochSInfill
 	// LidinoidInfill is the Lidinoid lattice of [LidinoidLattice].
 	LidinoidInfill
+	// SplitPInfill is the Split P lattice of [SplitPLattice].
+	SplitPInfill
 )
 
 // String renders the kind for diagnostics.
@@ -46,6 +48,8 @@ func (k LatticeKind) String() string {
 		return "FischerKochSInfill"
 	case LidinoidInfill:
 		return "LidinoidInfill"
+	case SplitPInfill:
+		return "SplitPInfill"
 	default:
 		return fmt.Sprintf("LatticeKind(%d)", int(k))
 	}
@@ -172,6 +176,8 @@ func infillInterior(ctx context.Context, b *Body, spec InfillSpec) (*Body, error
 		build = FischerKochSLattice
 	case LidinoidInfill:
 		build = LidinoidLattice
+	case SplitPInfill:
+		build = SplitPLattice
 	default:
 		return nil, fmt.Errorf(`%w: unknown infill lattice %s`, ErrDegenerate, spec.Kind)
 	}

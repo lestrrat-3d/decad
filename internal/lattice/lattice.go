@@ -1,4 +1,4 @@
-// Package lattice builds the triangle mesh of a gyroid, Schwarz-P, diamond, Neovius, IWP, Fischer-Koch S or Lidinoid lattice inside a box
+// Package lattice builds the triangle mesh of a gyroid, Schwarz-P, diamond, Neovius, IWP, Fischer-Koch S, Lidinoid or Split P lattice inside a box
 // (agent-docs/lattice-design.md). It works on plain millimetre data and touches
 // no body, document or sketch.
 package lattice
@@ -53,6 +53,10 @@ const (
 	// ½(cos 2kx·cos 2ky + cos 2ky·cos 2kz + cos 2kz·cos 2kx) + 0.15, which runs from −1.35 to 1.15, so the
 	// largest |g| is 1.35.
 	KindLidinoid
+	// KindSplitP is 1.1(sin 2kx·sin kz·cos ky + sin 2ky·sin kx·cos kz + sin 2kz·sin ky·cos kx) −
+	// 0.2(cos 2kx·cos 2ky + cos 2ky·cos 2kz + cos 2kz·cos 2kx) − 0.4(cos 2kx + cos 2ky + cos 2kz), which runs from
+	// −1.8 to about 1.81; the bound used is 1.8, the least |g| reaches.
+	KindSplitP
 )
 
 // MaxLevel is the largest value |g| reaches for the kind; a level at or above it
@@ -71,6 +75,8 @@ func (k Kind) MaxLevel() float64 {
 		return math.Sqrt2
 	case KindLidinoid:
 		return 1.35
+	case KindSplitP:
+		return 1.8
 	default:
 		return MaxLevel
 	}
@@ -95,6 +101,10 @@ func (k Kind) field(x, y, z float64) float64 {
 	case KindLidinoid:
 		return 0.5*(math.Sin(2*x)*cy*sz+math.Sin(2*y)*cz*sx+math.Sin(2*z)*cx*sy) -
 			0.5*(math.Cos(2*x)*math.Cos(2*y)+math.Cos(2*y)*math.Cos(2*z)+math.Cos(2*z)*math.Cos(2*x)) + 0.15
+	case KindSplitP:
+		return 1.1*(math.Sin(2*x)*sz*cy+math.Sin(2*y)*sx*cz+math.Sin(2*z)*sy*cx) -
+			0.2*(math.Cos(2*x)*math.Cos(2*y)+math.Cos(2*y)*math.Cos(2*z)+math.Cos(2*z)*math.Cos(2*x)) -
+			0.4*(math.Cos(2*x)+math.Cos(2*y)+math.Cos(2*z))
 	default:
 		return sx*cy + sy*cz + sz*cx
 	}
