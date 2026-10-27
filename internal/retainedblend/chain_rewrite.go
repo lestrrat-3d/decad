@@ -591,7 +591,7 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		groups[g].Centroid = measurement.VecMeasurement{}
 	}
 	w.removedTrue = removedTrue
-	return w.build(ctx, env, groups, stripFrom, blendTag{trueArea: blendTrue})
+	return w.build(ctx, env, groups, stripFrom, blendTag{trueArea: blendTrue}, faceIndex)
 }
 
 // param is the position of p along the entry: the distance from its start for

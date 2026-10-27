@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
@@ -16,10 +17,10 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// Fillet fillets the selected rims of b, a mesh Boolean result with retained
-// tags. recognized is false when some selected edge is not a closed circular
-// rim between a retained plane and a coaxial retained cylinder; the caller
-// then keeps its own refusal. All edges must be non-nil.
+// Fillet fillets the selected edges of b, a mesh Boolean result with retained
+// tags. recognized is false when some selected edge is in no class of
+// agent-docs/retained-edge-blend-design.md Table RR; the caller then keeps its own
+// refusal. All edges must be non-nil.
 func Fillet(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Payload, edges []*topo.Edge,
 	radius, radiusDelta float64) (*topo.Body, bool, error) {
 	return blend(ctx, env, b, fp, edges, blendSpec{fillet: true, r: radius}, radiusDelta, "fillet")
@@ -52,6 +53,7 @@ type edgeKind int
 
 const (
 	closedRim edgeKind = iota
+	sphereRimKind
 	straightLine
 	cylinderLine
 	openArc
@@ -64,8 +66,8 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 		return nil, false, nil
 	}
 	for _, e := range edges {
-		if !looksLikeRim(e) && !looksLikeLine(e) && !looksLikeCylLine(e) && !looksLikeArc(e) &&
-			!looksLikeCylCyl(e) {
+		if !looksLikeRim(e) && !looksLikeSphereRim(e) && !looksLikeLine(e) && !looksLikeCylLine(e) &&
+			!looksLikeArc(e) && !looksLikeCylCyl(e) {
 			return nil, false, nil
 		}
 	}
@@ -164,6 +166,15 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				return nil, true, err
 			}
 			targets[i].lineKey, targets[i].kind = c.key(), cylinderLine
+		case looksLikeSphereRim(e):
+			s, err := readSphereRim(e, fp, faceIndex)
+			if err != nil {
+				return nil, true, err
+			}
+			if err := s.checkSize(spec); err != nil {
+				return nil, true, err
+			}
+			targets[i].rimKey, targets[i].kind = s.key(), sphereRimKind
 		default:
 			r, err := readRim(e, fp, faceIndex)
 			if err != nil {
@@ -173,10 +184,11 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				return nil, true, err
 			}
 			targets[i].rimKey, targets[i].kind = r.key(), closedRim
-			for _, earlier := range targets[:i] {
-				if earlier.kind == closedRim && earlier.rimKey == targets[i].rimKey {
-					return nil, true, fmt.Errorf("%w: the selection names one rim twice", decaderr.ErrDegenerate)
-				}
+		}
+		for _, earlier := range targets[:i] {
+			if (earlier.kind == closedRim || earlier.kind == sphereRimKind) && earlier.kind == targets[i].kind &&
+				earlier.rimKey == targets[i].rimKey {
+				return nil, true, fmt.Errorf("%w: the selection names one rim twice", decaderr.ErrDegenerate)
 			}
 		}
 	}
@@ -193,8 +205,12 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 				e, ok = findCylCyl(cur, targets[i].lineKey, 64*ulp*math.Max(1, math.Abs(targets[i].lineKey.p0.X)))
 			case cylinderLine:
 				e, ok = findCylLine(cur, targets[i].lineKey, 64*ulp*math.Max(1, math.Abs(targets[i].lineKey.p0.X)))
+			case sphereRimKind:
+				e, ok = findRim(cur, targets[i].rimKey, 64*ulp*math.Max(1, math.Abs(targets[i].rimKey.radius)),
+					looksLikeSphereRim)
 			default:
-				e, ok = findRim(cur, targets[i].rimKey, 64*ulp*math.Max(1, math.Abs(targets[i].rimKey.radius)))
+				e, ok = findRim(cur, targets[i].rimKey, 64*ulp*math.Max(1, math.Abs(targets[i].rimKey.radius)),
+					looksLikeRim)
 			}
 			if !ok {
 				return nil, true, fmt.Errorf("%w: a selected edge is no longer an edge of the partly blended body", decaderr.ErrUnsupported)
@@ -238,6 +254,14 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			if err == nil {
 				next, err = rewriteCylLine(ctx, env, curFP, c, step, role, i, faceIndex)
 			}
+		case sphereRimKind:
+			var s sphereRim
+			if s, err = readSphereRim(e, curFP, faceIndex); err == nil {
+				step, err = spec.assign(targets[i].ref, s.planeFace, s.wallFace)
+			}
+			if err == nil {
+				next, err = rewriteSphereRim(ctx, env, curFP, s, step, role, i, faceIndex)
+			}
 		default:
 			var r rim
 			if r, err = readRim(e, curFP, faceIndex); err == nil {
@@ -268,16 +292,23 @@ func rewriteRim(ctx context.Context, env topo.Env, fp facetedrecord.Payload, r r
 	w := newWork(fp, r, spec)
 	// looksLikeRim admitted the face, so its plane tag reads.
 	planeTag, _ := retainedPlane(r.planeFace)
-	ringA, groupA, err := w.rewritePlane(faceIndex[r.planeFace], planeTag)
+	ringA, groupA, err := w.rewritePlane(faceIndex[r.planeFace], planeTag, spec.planeSetback())
 	if err != nil {
 		return nil, err
 	}
-	ringB, groupB, err := w.rewriteWall(faceIndex[r.wallFace])
+	ringB, groupB, err := w.rewriteWall(faceIndex[r.wallFace], spec.wallSetback(), r.radius, nil)
 	if err != nil {
 		return nil, err
 	}
-	tag := w.tag()
-	groups := append([]facetedrecord.Group(nil), fp.Groups...)
+	return w.finishRim(ctx, env, w.tag(), ringA, ringB, [2]int{groupA, groupB}, role, ord, faceIndex)
+}
+
+// finishRim adds the blend face's group, emits the strip between the plane's
+// ring and the wall's, and builds the body. shrunk are the groups of the plane
+// and the wall.
+func (w *work) finishRim(ctx context.Context, env topo.Env, tag blendTag, ringA, ringB []ringPt, shrunk [2]int,
+	role string, ord int, faceIndex map[*topo.Face]int) (*topo.Body, error) {
+	groups := append([]facetedrecord.Group(nil), w.fp.Groups...)
 	blendGroup := len(groups)
 	groups = append(groups, facetedrecord.Group{
 		Origins:  []provenance.Ref{{Producer: env.Ref, Role: role}},
@@ -286,20 +317,21 @@ func rewriteRim(ctx context.Context, env topo.Env, fp facetedrecord.Payload, r r
 		Retained: true,
 		Reversed: tag.reversed,
 	})
-	// The two shrunk faces keep their planes and cylinders but lose the
-	// whole-group centroid certificate.
-	for _, g := range []int{groupA, groupB} {
+	// The two shrunk faces keep their surfaces but lose the whole-group
+	// centroid certificate.
+	for _, g := range shrunk {
 		groups[g].HasCentroid = false
 		groups[g].Centroid = measurement.VecMeasurement{}
 	}
 	stripFrom := len(w.out)
 	w.strip(tag, ringA, ringB, blendGroup)
-	return w.build(ctx, env, groups, stripFrom, tag)
+	return w.build(ctx, env, groups, stripFrom, tag, faceIndex)
 }
 
-// build assembles the rewritten payload and the body over it.
+// build assembles the rewritten payload and the body over it. faceIndex
+// numbers the faces of the body w.fp holds, as w.fp.FaceOf does.
 func (w *work) build(ctx context.Context, env topo.Env, groups []facetedrecord.Group, stripFrom int,
-	tag blendTag) (*topo.Body, error) {
+	tag blendTag, faceIndex map[*topo.Face]int) (*topo.Body, error) {
 	fp := w.fp
 	gone := map[int]bool{}
 	for _, f := range w.removed {
@@ -318,7 +350,10 @@ func (w *work) build(ctx context.Context, env topo.Env, groups []facetedrecord.G
 
 	verts, beta, facets := compact(w.verts, w.beta, facets)
 	meshBound := facetproof.FacetBoundMax(facets, beta)
-	area, vol := w.measureChange(tag, stripFrom)
+	area, vol, err := w.measureChange(ctx, tag, stripFrom, faceIndex)
+	if err != nil {
+		return nil, err
+	}
 	next := facetedrecord.Payload{
 		Verts: verts, VertexBound: beta, Tris: facets, Src: src, Groups: groups,
 		MeshBound:   meshBound,
@@ -372,8 +407,12 @@ func heldArea(verts []r3.Vec, facets [][3]int) (float64, float64) {
 // measureChange returns the area slack and volume bound the rewrite adds
 // (agent-docs/retained-edge-blend-design.md §6.3, Claim K). The area change of the
 // held mesh is compared with the exact change: the annulus and band removed
-// and the blend face added.
-func (w *work) measureChange(tag blendTag, stripFrom int) (areaSlack, volSymDiff float64) {
+// and the blend face added. The old body's area error was proven only with
+// the geometric terms of every face, and the rebuilt body charges the
+// rewritten faces' terms afresh from their new facets, which can be smaller:
+// the slack therefore carries the old terms of the rewritten faces.
+func (w *work) measureChange(ctx context.Context, tag blendTag, stripFrom int,
+	faceIndex map[*topo.Face]int) (areaSlack, volSymDiff float64, err error) {
 	oldArea, oldSlop := heldArea(w.fp.Verts, pick(w.fp.Tris, w.removed))
 	newArea, newSlop := heldArea(w.verts, w.out)
 	stripArea, _ := heldArea(w.verts, w.out[stripFrom:])
@@ -382,15 +421,55 @@ func (w *work) measureChange(tag blendTag, stripFrom int) (areaSlack, volSymDiff
 	deltaTrue := tag.trueArea - w.removedTrue
 	// Every term is a float evaluation; charge the areas' own rounding.
 	scale := math.Max(math.Abs(deltaHeld), math.Abs(deltaTrue)) + oldArea + newArea + w.removedTrue
-	areaSlack = proofbound.AbsSumUpper(math.Abs(deltaHeld-deltaTrue), oldSlop, newSlop, 64*0x1p-52*scale)
+	oldGeom, err := w.rewrittenGeom(ctx, faceIndex)
+	if err != nil {
+		return 0, 0, err
+	}
+	areaSlack = proofbound.AbsSumUpper(math.Abs(deltaHeld-deltaTrue), oldSlop, newSlop, 64*0x1p-52*scale, oldGeom)
 
-	eps := 0.0
+	// A raised inner vertex of a curved wall bounds the facets beside the
+	// strip that now face the blend.
+	eps := w.raised
 	for _, t := range w.out[stripFrom:] {
 		eps = max(eps, w.beta[t[0]], w.beta[t[1]], w.beta[t[2]])
 	}
 	volSymDiff = proofbound.AbsSumUpper(proofbound.ProductUpper(eps, proofbound.AbsSumUpper(stripArea, tag.trueArea)),
 		64*0x1p-52*eps*scale)
-	return areaSlack, volSymDiff
+	return areaSlack, volSymDiff, nil
+}
+
+// rewrittenGeom sums the geometric area term the old body published for each
+// face the rewrite takes facets from (facetedrecord.FaceAreaGeom).
+func (w *work) rewrittenGeom(ctx context.Context, faceIndex map[*topo.Face]int) (float64, error) {
+	faces := map[int]*topo.Face{}
+	for f, i := range faceIndex {
+		faces[i] = f
+	}
+	var rewritten []int
+	seen := map[int]struct{}{}
+	for _, t := range w.removed {
+		fi := w.fp.FaceOf[t]
+		if _, ok := seen[fi]; !ok {
+			seen[fi] = struct{}{}
+			rewritten = append(rewritten, fi)
+		}
+	}
+	slices.Sort(rewritten)
+	budget := proofbound.NewWorkBudget(ctx)
+	total := 0.0
+	for _, fi := range rewritten {
+		f, ok := faces[fi]
+		if !ok {
+			return 0, fmt.Errorf("%w: a rewritten face is not a face of the body", decaderr.ErrUnsupported)
+		}
+		g, err := facetedrecord.FaceAreaGeom(budget, f, w.fp.Verts, w.fp.VertexBound, w.fp.Tris,
+			facetsOfFace(w.fp.FaceOf, fi))
+		if err != nil {
+			return 0, err
+		}
+		total = proofbound.AbsSumUpper(total, g)
+	}
+	return total, nil
 }
 
 func pick(all [][3]int, idx []int) [][3]int {
