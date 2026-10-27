@@ -1295,7 +1295,10 @@ the material):
    `C(−o)`. The lofted wall between the two outlines is the bevel: it runs at 45° and crosses the cap's level at
    `C(d)` and the receiver's side wall at `d` below the cap. The circle makes the loft chord at a coarse target,
    which the loft's station cap needs, and its radius, `scale` times the outline's farthest point from the box's
-   middle, sets the pair diameter the Boolean's chord tolerance follows.
+   middle, sets the pair diameter the Boolean's chord tolerance follows. With both rims selected, the second
+   cutter lofts the first one's two rings at the other cap. Its records match the first cutter's bit for bit, so it
+   takes the first cutter's area falsifiers and pairing from `loftrecord.PairingReuse`. It runs again only the
+   coplanar-plane gate (loft S5) and the build steps that read the planes.
 3. `Cut` removes it. The cut's result is held as a mesh, so its readings and bounds are the Boolean's own.
 
 Which `o` and `scale` build depends on the shape. `rimAttempts` tries `(0.5d, 1.5)`, then `(0.35d, 1.5)` for a

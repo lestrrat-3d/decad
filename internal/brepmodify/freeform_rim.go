@@ -110,6 +110,9 @@ func cutRims(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, pp
 	}
 	out := body
 	var warnings opdiagnostic.CompositeSummaries
+	// Every rim's cutter lofts the same two rings, so a later rim's cutter reads
+	// the first one's record-only work (loftrecord.PairingReuse).
+	reuse := new(loftrecord.PairingReuse)
 	for _, r := range rims {
 		// The cutter runs from the level beyond the cap, where its hole is the deepest offset, to the level
 		// beyond the bevel's far edge, where its hole is the outline pushed outward.
@@ -117,7 +120,7 @@ func cutRims(ctx context.Context, env topo.Env, hooks Hooks, body *topo.Body, pp
 		if !r.start {
 			capLevel, bevelLevel = pp.Z1+over, pp.Z1-d-over
 		}
-		cutter, err := rimCutter(ctx, next(), pp, capLevel, bevelLevel, outer, into.Segments, away.Segments)
+		cutter, err := rimCutter(ctx, next(), pp, capLevel, bevelLevel, outer, into.Segments, away.Segments, reuse)
 		if err != nil {
 			return nil, used, true, err
 		}
@@ -215,9 +218,9 @@ func rimBoundary(loop sectionrecord.LoopRecord, scale float64) []sectionrecord.C
 }
 
 // rimCutter lofts the band between two private sketches: outer around hole0 at level z0 and around hole1 at
-// level z1, each drawn in the receiver's frame.
+// level z1, each drawn in the receiver's frame. It reads and fills reuse; a nil reuse builds afresh.
 func rimCutter(ctx context.Context, env topo.Env, pp prismrecord.Payload, z0, z1 float64,
-	outer, hole0, hole1 []sectionrecord.CurveSegment) (*topo.Body, error) {
+	outer, hole0, hole1 []sectionrecord.CurveSegment, reuse *loftrecord.PairingReuse) (*topo.Body, error) {
 	s0, p0, err := rimRing(ctx, pp, z0, outer, hole0)
 	if err != nil {
 		return nil, err
@@ -226,7 +229,7 @@ func rimCutter(ctx context.Context, env topo.Env, pp prismrecord.Payload, z0, z1
 	if err != nil {
 		return nil, err
 	}
-	cutter, err := loftrecord.FromProfiles(ctx, env, s0, p0, s1, p1, featureoption.LoftConfig{})
+	cutter, err := loftrecord.FromProfilesReusing(ctx, env, s0, p0, s1, p1, featureoption.LoftConfig{}, reuse)
 	if err != nil {
 		return nil, fmt.Errorf("the free-form rim chamfer's cutter: %w", err)
 	}

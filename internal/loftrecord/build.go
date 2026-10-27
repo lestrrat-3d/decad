@@ -60,18 +60,47 @@ func Build(ctx context.Context, env topo.Env, pl Payload, budget *proofbound.Wor
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	ref := env.Ref
+	paired, err := pairPayload(pl, work0, work1)
+	if err != nil {
+		return nil, err
+	}
+	return buildPaired(ctx, env, pl, budget, paired)
+}
+
+// recordPairing is what Build's record-only half hands the rest of the build:
+// loftmesh.PairRecords' correspondence and its three displacements.
+type recordPairing struct {
+	pairs                                           []loftmesh.LoopPair
+	sectionDelta, sectionMatchedDelta, stationRound float64
+}
+
+// pairPayload is Build's record-only half: the Table S gates and the pairing.
+// Of everything it reads, only the S5 gate reads the planes; the rest reads the
+// two profile records, the alignment, RecordArea and the two work counters.
+// Nothing after it in Build reads work0 or work1.
+func pairPayload(pl Payload, work0, work1 *freeform.FreeformWork) (recordPairing, error) {
 	pl.RaiseReconstructionLimit(work0, work1)
 
 	offsets, walks0, walks1, target, err := loftmesh.ValidateLoftRecords(pl.Profile0, pl.Profile1, pl.Plane0, pl.Plane1, pl.Alignment, pl.RecordArea, work0, work1)
 	if err != nil {
-		return nil, err
+		return recordPairing{}, err
 	}
 
 	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftmesh.PairRecords(pl.Profile0, pl.Profile1, offsets, walks0, walks1, target, work0, work1)
 	if err != nil {
-		return nil, err
+		return recordPairing{}, err
 	}
+	return recordPairing{pairs: pairs, sectionDelta: sectionDelta,
+		sectionMatchedDelta: sectionMatchedDelta, stationRound: stationRound}, nil
+}
+
+// buildPaired is the rest of Build after pairPayload. It may write to
+// paired.pairs.
+func buildPaired(ctx context.Context, env topo.Env, pl Payload, budget *proofbound.WorkBudget,
+	paired recordPairing) (*topo.Body, error) {
+	ref := env.Ref
+	pairs, sectionDelta, sectionMatchedDelta, stationRound := paired.pairs, paired.sectionDelta,
+		paired.sectionMatchedDelta, paired.stationRound
 	if pl.JoinDelta > 0 {
 		if proofbound.IsNonFinite(pl.JoinDelta) {
 			return nil, fmt.Errorf(`%w: the loft join displacement is not finite`, decaderr.ErrUnsupported)
