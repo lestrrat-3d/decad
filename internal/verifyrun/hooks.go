@@ -15,6 +15,9 @@ import (
 type Hooks struct {
 	// Mesher meshes a body for the mesh-intersection pair proof.
 	Mesher verifiedmesh.Mesher
+	// Draft meshes a body at the lowest verification level for the body
+	// check's per-shell winding reading, which needs no boundary proof.
+	Draft verifiedmesh.DraftMesher
 	// Operand meshes a pair operand the verification cache holds no mesh for,
 	// as the public Booleans mesh theirs.
 	Operand booleaneval.OperandMesher

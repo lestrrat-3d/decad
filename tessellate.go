@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/tessaudit"
 	"github.com/lestrrat-3d/decad/internal/tessdispatch"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -252,6 +253,11 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 	if err != nil {
 		return nil, err
 	}
+	// agent-docs/tessellation-design.md §4: every outer shell winds outward and
+	// every void shell into its cavity, at every verification level.
+	if err := topobuild.RequireShellWinding(ctx, node, b.n.Lumps); err != nil {
+		return nil, err
+	}
 	mesh := bornMesh(&Mesh{n: *node})
 	if verify < VerifyAll {
 		mesh.withholdProofs()
@@ -262,6 +268,15 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 	}
 	b.n.Tess.Store(&topo.TessEntry{ChordBits: key, Verify: int(verify), Mesh: meshNode(mesh)})
 	return mesh, nil
+}
+
+// VerifyNone is the same tessellation at VerifyNone (verifiedmesh.DraftMesher).
+func (verifyAllMesher) VerifyNone(ctx context.Context, b *topo.Body, tolMM float64) (*topo.Mesh, error) {
+	m, err := tessellateContext(ctx, bodyHandle(b), units.Millimeters(tolMM), VerifyNone)
+	if err != nil {
+		return nil, err
+	}
+	return &m.n, nil
 }
 
 // verifyAllMesher gives the internal builders a body's mesh at VerifyAll

@@ -576,6 +576,24 @@ than the embedding, and demoting its exact rational arithmetic to floats would
 install an admission gate on a float comparison, which `CLAUDE.md`'s
 reject-only rule forbids.
 
+Each payload's tessellator reads the whole mesh's sign. A body whose lumps
+hold two or more closed shells also takes the per-shell reading
+(`topobuild.RequireShellWinding`, `internal/tessellation/shell_winding.go`),
+which `Body.Tessellate` runs on every mesh before caching it: each facet
+belongs to the closed shell holding its source face, and each shell's own
+facet set sums to an exact dyadic sign. An outer shell must be positive and a
+void shell negative; either wound against its kind is a
+`tessellation.ShellWindingError` (`ErrUnsupported`), the proof that the body's
+lump reading disagrees with its facets (a cavity read as a second, inside-out
+lump). The reading only falsifies: a shell whose facets do not close on their
+own, an open shell, and a facet of no closed shell decide nothing and are
+left out. `Document.Verify` meshes a solid of two or more closed shells at its
+single-body chord (`meshbool.PairChordFrom` over the body alone) at
+`VerifyNone` (`verifiedmesh.DraftMesher`), since the reading needs no boundary
+or occupied-volume proof, and reads a
+`ShellWindingError` as `DiagInvalidBody` (`agent-docs/verification-design.md`);
+any other tessellation outcome leaves the structural verdict standing.
+
 **Below `VerifyBoundary`, "outward" is the construction's own convention and
 not a geometric reading.** The audits above prove the winding consistent across
 every shared edge and the signed tetrahedron sum positive, and both hold at

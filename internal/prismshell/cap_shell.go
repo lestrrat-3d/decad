@@ -190,22 +190,31 @@ func BuildBands(ctx context.Context, env topo.Env, in CapShellInput, offset mome
 }
 
 // BuildClosed is reach BX5 (agent-docs/modify-reach-design.md §9.2): WithNoOpenings
-// on a hole-free straight prism keeps every face and lines it with a wall of
-// thickness t, closing a cavity. The record is three stacked slabs: inward,
-// the section P on [z0, z0 + t], the band between P and its erosion Q on
+// on a straight prism keeps every face and lines it with a wall of thickness
+// t, closing a cavity. The record is three stacked slabs: inward, the section
+// P on [z0, z0 + t], the wall bands between P and its erosion Q on
 // [z0 + t, z1 − t], and P on [z1 − t, z1]; outward, the dilation Q on
 // [z0 − t, z0], the band between Q and P on [z0, z1], and Q on [z1, z1 + t].
 // The two interfaces expose the cavity region (Q inward, P outward) as the
 // cavity's floor and ceiling, and the cavity walls with them form one void
-// shell inside the outer one.
+// shell inside the outer one. A section with k holes builds inward only: its
+// wall slab holds 1 + k bands (ShellWallBands), each hole lined by a band
+// whose outer loop is Q's hole, and the cavity is a ring around every lining
+// (agent-docs/stacked-prism-design.md §2.4). The record carries
+// stackedrecord.Payload.ClosedShell, and the built body must read as one lump
+// of one outer shell around one void shell.
 //
 // The gates are the cup's with both caps kept: S18 and S10's section limit
 // (inward), then SX11, the axial cavity h − 2t, which must stay positive
 // (inward; ErrDegenerate), then S11a as the offset is built and the §5 audit.
-// The offset loops carry their proven displacement as the stack's section
-// displacement. in.KeptCaps must be 2.
+// An outward shell of a holed section is SX8. The offset loops carry their
+// proven displacement as the stack's section displacement. in.KeptCaps must
+// be 2.
 func BuildClosed(ctx context.Context, env topo.Env, in CapShellInput) (*topo.Body, error) {
 	pp := in.Prism
+	if len(pp.Profile.Holes) > 0 && in.Sense < 0 {
+		return nil, fmt.Errorf(`%w: an outward closed shell of a holed prism section is outside the shell extension; only an inward one builds (modify-reach SX8)`, decaderr.ErrUnsupported)
+	}
 	if err := pp.RequireExactSection("shells"); err != nil {
 		return nil, err
 	}
@@ -247,11 +256,39 @@ func BuildClosed(ctx context.Context, env topo.Env, in CapShellInput) (*topo.Bod
 		last.Z0, last.Z0Delta, last.Z1, last.Z1Delta = pp.Z1, pp.Z1Delta, hi, hiDelta
 	}
 	exposed := []momentinput.Profile{cavity}
-	return stackedrecord.Build(ctx, env, stackedrecord.Payload{
+	body, err := stackedrecord.Build(ctx, env, stackedrecord.Payload{
 		Slabs:        []stackedrecord.Slab{first, middle, last},
 		Interfaces:   []stackedrecord.Interface{{LowerExposed: exposed}, {UpperExposed: exposed}},
 		Frame:        pp.Frame,
 		Xform:        pp.Xform,
 		SectionDelta: offsetDelta,
+		ClosedShell:  true,
 	}, stackedrecord.OwnPlan{})
+	if err != nil {
+		return nil, err
+	}
+	if err := requireOneCavity(body.Lumps); err != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+// requireOneCavity is the closed shell's lump reading
+// (agent-docs/stacked-prism-design.md §3): one lump of one closed outer shell
+// around exactly one closed void shell. Any other reading disproves the
+// record's ClosedShell mark, and the shell refuses it.
+func requireOneCavity(lumps []*topo.Lump) error {
+	if len(lumps) != 1 || len(lumps[0].Shells) != 2 {
+		shells := 0
+		for _, l := range lumps {
+			shells += len(l.Shells)
+		}
+		return fmt.Errorf(`%w: the closed shell's faces read as %d lump(s) of %d shell(s), not one outer shell around one cavity (modify-reach BX5)`,
+			decaderr.ErrUnsupported, len(lumps), shells)
+	}
+	outer, cavity := lumps[0].Shells[0], lumps[0].Shells[1]
+	if outer.Void || outer.Open || !cavity.Void || cavity.Open {
+		return fmt.Errorf(`%w: the closed shell's faces do not close into one outer shell around one cavity (modify-reach BX5)`, decaderr.ErrUnsupported)
+	}
+	return nil
 }

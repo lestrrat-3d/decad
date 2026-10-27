@@ -51,10 +51,18 @@ func CutSlabs(ctx context.Context, budget *proofbound.WorkBudget, sp Payload,
 
 // cutActiveSlabs replaces each active slab's region with its proven cut
 // region, or keeps it where the tool lies wholly in an existing hole. The
-// interfaces stay a copy of prior; the caller derives them.
+// interfaces stay a copy of prior; the caller derives them. It cuts one
+// region per slab, so an active slab holding several regions — a prism
+// group, or a closed shell's wall slab beside its hole linings (§2.4) — is
+// not-ok and the pair goes to another route.
 func cutActiveSlabs(ctx context.Context, budget *proofbound.WorkBudget, sp Payload,
 	outer, tool prismrecord.Payload, reexpress *prismcells.Reexpression, active []bool,
 	prior []Interface) (Payload, bool, error) {
+	for k, slab := range sp.Slabs {
+		if active[k] && len(slab.Regions) != 1 {
+			return Payload{}, false, nil
+		}
+	}
 	result := sp
 	result.Slabs = append([]Slab(nil), sp.Slabs...)
 	result.Interfaces = make([]Interface, len(prior))

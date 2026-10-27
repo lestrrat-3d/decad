@@ -229,8 +229,22 @@ hole `i`, the band between `C`'s hole `i` reversed (an outer) and `O`'s hole
 | Result | Record |
 |---|---|
 | both caps removed, `k >= 1` holes (reach BX8) | a prism group: one slab over the receiver's sweep holding the `1 + k` bands; `sectionDelta` is the offset's proven displacement |
-| no opening, `k = 0` (reach BX5, `WithNoOpenings`) | three slabs: the cap region (`P` inward, `Q` outward) under the band `{O.Outer, reverse(C.Outer)}` under the cap region, both interfaces monotone, each exposing `C`; `sectionDelta` is the offset's proven displacement; the cavity is a void shell (§3) |
+| no opening, `k = 0` (reach BX5, `WithNoOpenings`) | three slabs: the cap region (`P` inward, `Q` outward) under the band `{O.Outer, reverse(C.Outer)}` under the cap region, both interfaces monotone, each exposing `C`; `sectionDelta` is the offset's proven displacement; `closedShell` is set; the cavity is a void shell (§3) |
+| no opening, `k >= 1`, inward (reach BX5) | three slabs: `P` under the `1 + k` bands under `P`, both interfaces lining readings, each exposing `C`, a region with `k` holes; `sectionDelta` is the offset's proven displacement; `closedShell` is set; the cavity is one void shell around every lining (§3) |
 | one cap removed, any `k` (a cup, modify B5/B6) | a floor slab over `O` and a wall slab over the bands, meeting at a lining interface (`k >= 1`) or a monotone one (`k = 0`) whose one exposed record is `C` itself; `sectionDelta` is zero |
+
+`closedShell` marks a closed shell's record. A lining band's outer loop is
+`C`'s hole reversed, so its column starts at the floor interface, ends at the
+ceiling interface and faces the cavity, not the exterior. The mark is on the
+payload, not on a naming plan, so `Placed` and every record copied from this
+one keep it. A stacked through cut cuts one region per slab and leaves a
+pair whose reached slab holds several regions to another route
+(`cutActiveSlabs`), so it never copies the record of a closed shell whose
+wall slab holds several regions (`k >= 1`) while it reaches that slab. A
+hole-free closed shell (`k = 0`) has one region per slab, so a through cut
+copies its marked record and builds it exactly. The blind and opposed blind
+cuts refuse a stack with any multi-region slab, reached or not
+(`prismboolean.TryStackedBlindCut`, `TryOpposedBlindCut`).
 
 A cup is not handed over as a bare `stackedPrismPayload`: `cupPayload` (`internal/cupwall`) holds
 the record beside its shell morphology, and its consumers read the cup's own
@@ -268,9 +282,17 @@ interface's ceiling. `stackedrecord.Build` derives the lump set from face adjace
 each connected face set holding a region outer's wall or an end cap is one
 lump's outer shell, and a connected set holding neither — hole walls closed
 by a floor below and a ceiling above, a closed shell's cavity (§2.4) — is a
-void shell of the one outer lump. Several outer lumps beside a cavity would
-need a nesting proof and are `ErrUnsupported`. A stage-1 body is one lump
-with one shell.
+void shell of the one outer lump. On a record marked `closedShell`, no outer
+column that starts and ends at an interface anchors a shell. In the closed
+shell's own record those columns are exactly the hole linings, whose walls
+face the cavity. A record copied from a marked one keeps the mark, and there
+such a column need not be a lining; a set that reaches an end cap stays an
+outer shell whatever its columns, and tessellation's per-shell winding audit
+(`agent-docs/tessellation-design.md` §4) refuses any body whose lump reading
+disagrees with its facets. The closed shell's own build requires one lump of
+one outer shell around one void shell (`prismshell.BuildClosed`). Several
+outer lumps beside a cavity would need a nesting proof and are
+`ErrUnsupported`. A stage-1 body is one lump with one shell.
 
 A prism group carries one bottom cap and one top cap per region, every one
 under `capStart` or `capEnd`, so `CapStart(body)` selects one face per lump,
@@ -370,7 +392,7 @@ reads its `sectionDelta` through `booloperand.sectionDisplacement`, as it reads 
 |---|---|
 | `Transform` / `Copy` | re-evaluates the payload under the composed motion |
 | `ScaledAt` | Exact line-only solid sections with zero section and level displacement become a certified faceted image; source roles and planar tags follow the scale (evaluator §8). |
-| later `Cut` with a prism tool | A spanning tool or a blind tool ending inside a slab or exactly at an interface builds when each reached slab proves a clean cut or no change inside a hole; opposed interface holes require exact, separated sections, and overlapping ones build a BRep (§7). |
+| later `Cut` with a prism tool | A spanning tool or a blind tool ending inside a slab or exactly at an interface builds when each reached slab holds one region and proves a clean cut or no change inside a hole; a reached slab of several regions leaves the pair to another route; opposed interface holes require exact, separated sections, and overlapping ones build a BRep (§7). |
 | `Union` with a stacked operand | `agent-docs/general-boolean-design.md` §3 A1: every slab region hole-free, the stack splits at every level of both operands; a prism-group operand over the partner's interval is A5's |
 | `Cut` by a prism-group tool | `agent-docs/general-boolean-design.md` §3 A5 on a prism target: one arrangement for every lump |
 | `Intersect` with a stacked operand | mesh path, over this payload's own tessellation |

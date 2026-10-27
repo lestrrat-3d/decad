@@ -21,6 +21,15 @@ type Payload struct {
 	Frame        r3.Frame
 	Xform        r3.Transform
 	SectionDelta float64
+	// ClosedShell marks the record of a closed shell (WithNoOpenings,
+	// agent-docs/stacked-prism-design.md §2.4). Its wall slab lines each hole
+	// of the section with a band whose OUTER loop is the cavity's hole, so
+	// that band's outer column bounds the cavity, not the body's exterior.
+	// Build then leaves every outer column that starts and ends at an
+	// interface out of the exterior anchors (§3). A record derived from this
+	// one by copying it keeps the mark; a component that reaches an end cap
+	// stays an outer shell whatever the mark says.
+	ClosedShell bool
 }
 
 // Transform is the accumulated rigid placement.

@@ -1,6 +1,7 @@
 package topobuild
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -77,6 +78,41 @@ func VertexBounds(m *topo.Mesh) ([]float64, error) {
 // LiftAuditError.
 func RequireClosedMesh(m *topo.Mesh) error {
 	return LiftAuditError(tessellation.RequireClosedMesh(m.Triangles))
+}
+
+// RequireShellWinding runs agent-docs/tessellation-design.md §4's per-shell
+// orientation audit (tessellation.RequireShellWinding) over m's facets
+// against the lump reading in lumps: each facet belongs to the closed shell
+// holding its source face. It runs only when the body holds two or more
+// closed shells; a single closed shell's winding is the whole mesh's, which
+// each payload's own tessellator reads. Open shells, and facets whose face no
+// closed shell holds, decide nothing and are left out.
+func RequireShellWinding(ctx context.Context, m *topo.Mesh, lumps []*topo.Lump) error {
+	shellOf := map[*topo.Face]int{}
+	var void []bool
+	for _, lump := range lumps {
+		for _, shell := range lump.Shells {
+			if shell.Open {
+				continue
+			}
+			for _, f := range shell.Faces {
+				shellOf[f] = len(void)
+			}
+			void = append(void, shell.Void)
+		}
+	}
+	if len(void) < 2 || len(m.Source) != len(m.Triangles) {
+		return nil
+	}
+	index := make([]int, len(m.Triangles))
+	for i, f := range m.Source {
+		s, ok := shellOf[f]
+		if !ok {
+			s = -1
+		}
+		index[i] = s
+	}
+	return tessellation.RequireShellWinding(ctx, m.Vertices, m.Triangles, index, void)
 }
 
 // LiftAuditError maps an internal/tessellation refusal onto the public

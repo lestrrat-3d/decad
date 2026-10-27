@@ -230,9 +230,12 @@ func TestShellNoOpenings(t *testing.T) {
 			}
 		}
 		require.NotNil(t, holed)
-		_, err = decad.Shell(t.Context(), holed, nil, units.Millimeters(2), decad.WithNoOpenings())
+		// A holed section's closed shell builds inward only; its outward
+		// shell is SX8.
+		_, err = decad.Shell(t.Context(), holed, nil, units.Millimeters(2), decad.WithNoOpenings(), decad.WithShellSense(decad.Outward))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "SX8")
+		require.Equal(t, []*decad.Body{holed}, doc.Bodies())
 	})
 }
 
