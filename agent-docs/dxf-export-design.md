@@ -49,7 +49,7 @@ determinism of the bytes. A crease rule that marks every edge, or no absorption 
 
 ## 4. Not covered
 
-- Hatching other than a section cut (§10), centre lines, dimensions other than the overall size, diameters and radii, and a title block with more than a title, three fields and a scale.
+- Hatching other than a section cut (§10), centre lines, dimensions other than the overall size, diameters and radii, and a title block with more than a title, six fields and a scale.
 - Arcs and ellipses, a circle only partly seen, and DXF versions after release 12.
 - View labels and a layout other than one row.
 - A tolerance on the hidden-line test finer than the depth buffer's pixel.
@@ -138,12 +138,13 @@ With `DXFPaper.Dimensions`, `DXFSheet` also states the size of each circle and a
 
 ## 9. Title block fields
 
-`DXFPaper.Fields` adds up to three labelled entries to the title block: a part number, an author, a revision.
+`DXFPaper.Fields` adds up to six labelled entries to the title block: a part number, an author, a revision, a date, a material, a sheet number.
 
 | Decision | Rule |
 |---|---|
-| T1 | A `DXFField` is a label and a value, each printable ASCII, the label not empty: `PART` and `BK-100` are written `PART: BK-100`. More than three fields, an empty label or a character outside printable ASCII is `ErrDegenerate` and nothing is written. |
+| T1 | A `DXFField` is a label and a value, each printable ASCII, the label not empty: `PART` and `BK-100` are written `PART: BK-100`. More than six fields, an empty label, a character outside printable ASCII or, once there are more than three fields, a `LABEL: value` over 24 characters is `ErrDegenerate` and nothing is written. |
 | T2 | The fields are `TEXT` 2.5 mm high on the `TEXT` layer, stacked from the top of the title block, the first 4 mm below it and each 4 mm under the last, at 0.55 of the way from the sheet's left border to the scale's divider. The title keeps its place at the left. |
+| T4 | More than three fields fill a second column: the fourth to sixth start again at the top of the block, half the room between the first column and 3 mm short of the scale's divider to its right, so each column is about 49 mm wide on A4 and a 24-character field of 2.5 mm text (about 36 mm) fits. The tests read six fields back, with the first three stacked as in T2 and the next three level with them one column over, and refuse a seventh field and a long field among four; folding the second column back onto the first fails the first and removing the length limit fails the second. |
 | T3 | No fields adds nothing, so a sheet without them is as it was. The tests read the texts back and require the stack's spacing and that each lies inside the block and left of the scale. |
 
 ## 10. A hatched section view

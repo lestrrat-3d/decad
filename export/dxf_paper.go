@@ -36,8 +36,13 @@ type DXFField struct {
 	Label, Value string
 }
 
-// maxDXFFields is how many fields a title block holds.
-const maxDXFFields = 3
+// maxDXFFields is how many fields a title block holds, in two columns of three once there are more than three, and
+// maxWideDXFField the longest "LABEL: value" a field of such a block may be.
+const (
+	maxDXFFields    = 6
+	dxfFieldRows    = 3
+	maxWideDXFField = 24
+)
 
 // DXFPaper describes a drawing sheet for [DXFSheet]: its paper size, the scale
 // of the views on it, a border with a title block, and optionally the overall
@@ -54,9 +59,11 @@ type DXFPaper struct {
 	Margin, Gap units.Value
 	// Title is written in the title block. It holds printable ASCII only.
 	Title string
-	// Fields are up to three labelled entries of the title block, such as the
+	// Fields are up to six labelled entries of the title block, such as the
 	// part number, the author and the revision, written small beside the title
-	// as "LABEL: value" (agent-docs/dxf-export-design.md §9).
+	// as "LABEL: value". Up to three stack in one column; more fill a second
+	// column and each then holds at most 24 characters
+	// (agent-docs/dxf-export-design.md §9).
 	Fields []DXFField
 	// Dimensions adds, for each view, its overall width below it and its overall
 	// height left of it, as the model's true size and not the drawn one, and the
@@ -120,6 +127,10 @@ func DXFSheet(ctx context.Context, w io.Writer, body *decad.Body, tol units.Valu
 		return fmt.Errorf("export: DXF: %w: a title block holds %d fields, got %d", decad.ErrDegenerate, maxDXFFields, len(paper.Fields))
 	}
 	for _, f := range paper.Fields {
+		if len(paper.Fields) > dxfFieldRows && len(f.Label)+2+len(f.Value) > maxWideDXFField {
+			return fmt.Errorf("export: DXF: %w: with more than %d fields each holds at most %d characters, %q is longer",
+				decad.ErrDegenerate, dxfFieldRows, maxWideDXFField, f.Label+": "+f.Value)
+		}
 		if f.Label == "" {
 			return fmt.Errorf("export: DXF: %w: a title block field has no label", decad.ErrDegenerate)
 		}
@@ -208,8 +219,9 @@ func DXFSheet(ctx context.Context, w io.Writer, body *decad.Body, tol units.Valu
 	text(left+3, bottom+5, 5, 0, paper.Title)
 	// The fields stack in the right half of the space between the title and the scale.
 	fieldX := left + 0.55*(divide-left)
+	column := (divide - 3 - fieldX) / 2
 	for i, f := range paper.Fields {
-		text(fieldX, bottom+paperTitleHeight-4-float64(i)*4, 2.5, 0, f.Label+": "+f.Value)
+		text(fieldX+float64(i/dxfFieldRows)*column, bottom+paperTitleHeight-4-float64(i%dxfFieldRows)*4, 2.5, 0, f.Label+": "+f.Value)
 	}
 	text(divide+3, bottom+5, 5, 0, "SCALE "+scaleLabel(scale))
 	x := left + (areaW-rowW-dimLeft)/2 + dimLeft
