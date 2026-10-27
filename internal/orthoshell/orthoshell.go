@@ -44,6 +44,20 @@ func uniqueSorted(vals []float64, eps float64) []float64 {
 	return out
 }
 
+// nearCoincident reports whether two of vals differ by a nonzero amount within eps. A grid merges coordinates that close
+// into one line, which would move a face of the solid; a solid whose vertex coordinates do that is refused instead,
+// so that a result built on the grid stands on the coordinates it was given, exactly.
+func nearCoincident(vals []float64, eps float64) bool {
+	sorted := append([]float64(nil), vals...)
+	sort.Float64s(sorted)
+	for i := 1; i < len(sorted); i++ {
+		if d := sorted[i] - sorted[i-1]; d > 0 && d <= eps {
+			return true
+		}
+	}
+	return false
+}
+
 // indexOf finds the coordinate within eps of v.
 func indexOf(coords []float64, v, eps float64) int {
 	i := sort.SearchFloat64s(coords, v-eps)
@@ -214,6 +228,9 @@ func gridEps(verts []r3.Vec) float64 {
 func newSolidEps(verts []r3.Vec, tris [][3]int, axes, signs []int, extra [3][]float64, eps float64) (*solidGrid, error) {
 	coords := cornerCoords(verts, tris, axes, eps)
 	for a := range 3 {
+		if nearCoincident(coords[a], eps) {
+			return nil, fmt.Errorf("%w: two vertex coordinates along axis %d differ by less than the grid tolerance %g", ErrUnsupported, a, eps)
+		}
 		coords[a] = append(coords[a], extra[a]...)
 	}
 	var u grid

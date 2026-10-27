@@ -262,3 +262,21 @@ func TestCenteredWallsStraddleTheSurface(t *testing.T) {
 	_, _, err = orthoshell.CenteredWalls(v, tris, none, 20)
 	require.ErrorIs(t, err, orthoshell.ErrDegenerate, "walls so thick the cavity vanishes")
 }
+
+func TestCombineRefusesCoordinatesThatAlmostCoincide(t *testing.T) {
+	t.Parallel()
+	a, ta, _ := box(r3.NewVec(0, 0, 0), r3.NewVec(10, 10, 10))
+	// A box whose face is 1e-12 beyond the other's: not the same plane, and too close for the grid to keep apart.
+	b, tb, _ := box(r3.NewVec(10+1e-12, 0, 0), r3.NewVec(20, 10, 10))
+	_, _, err := orthoshell.Combine(a, ta, b, tb, orthoshell.Union)
+	require.ErrorIs(t, err, orthoshell.ErrUnsupported)
+	// Exactly equal coordinates are one line.
+	c, tc, _ := box(r3.NewVec(10, 0, 0), r3.NewVec(20, 10, 10))
+	v, tr, err := orthoshell.Combine(a, ta, c, tc, orthoshell.Union)
+	require.NoError(t, err)
+	require.InDelta(t, 2000, volume(v, tr), 1e-9)
+	// A solid with two of its own coordinates almost equal is refused on its own.
+	d, td, _ := box(r3.NewVec(0, 0, 0), r3.NewVec(1e-12, 10, 10))
+	_, _, err = orthoshell.Walls(d, td, make([]bool, len(td)), 1e-13, false)
+	require.Error(t, err)
+}
