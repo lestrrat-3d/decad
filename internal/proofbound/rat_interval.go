@@ -326,19 +326,26 @@ func atan2Key(y, x *big.Rat) string {
 	return string(buf)
 }
 
+// appendRatKey appends q's sign byte, then |num| and den each as a uvarint
+// byte length followed by big-endian bytes. Num and Denom are only ever the
+// receiver of BitLen and FillBytes here, never handed to another function:
+// they alias q's storage (internal/proof's TestNoRatWritesThroughNumDenom).
 func appendRatKey(buf []byte, q *big.Rat) []byte {
 	buf = append(buf, byte(q.Sign()+1))
-	buf = appendNatKey(buf, q.Num())
-	return appendNatKey(buf, q.Denom())
+	buf, slot := growNatKey(buf, q.Num().BitLen())
+	q.Num().FillBytes(slot)
+	buf, slot = growNatKey(buf, q.Denom().BitLen())
+	q.Denom().FillBytes(slot)
+	return buf
 }
 
-// appendNatKey appends |v| as a uvarint byte length followed by its
-// big-endian bytes, written in place without an intermediate slice.
-func appendNatKey(buf []byte, v *big.Int) []byte {
-	n := (v.BitLen() + 7) / 8
+// growNatKey appends the uvarint byte length of a bits-wide magnitude and
+// that many zero bytes, returning the zero bytes for FillBytes to write. The
+// caller fills the slot before appending again.
+func growNatKey(buf []byte, bits int) ([]byte, []byte) {
+	n := (bits + 7) / 8
 	buf = binary.AppendUvarint(buf, uint64(n))
 	start := len(buf)
 	buf = append(buf, make([]byte, n)...)
-	v.FillBytes(buf[start:])
-	return buf
+	return buf, buf[start:]
 }
