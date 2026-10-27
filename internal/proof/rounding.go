@@ -33,6 +33,25 @@ func FloatRat(value float64) *big.Rat {
 	return r
 }
 
+// SetFloatRat writes FloatRat(value) into dst, reusing its integer storage.
+// dst must be non-nil. A NaN or infinity returns nil without changing dst.
+func SetFloatRat(dst *big.Rat, value float64) *big.Rat {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return nil
+	}
+	if value == 0 {
+		return dst.SetInt64(0)
+	}
+	mant, exp := floatOddMantissa(value)
+	dst.SetInt64(mant)
+	if exp >= 0 {
+		dst.Num().Lsh(dst.Num(), uint(exp))
+	} else {
+		dst.Denom().Lsh(dst.Denom(), uint(-exp))
+	}
+	return dst
+}
+
 // floatOddMantissa splits a nonzero finite float into mant × 2^exp exactly,
 // with mant odd and carrying value's sign. It reads the bit pattern: a
 // subnormal has no implicit leading bit and the exponent of the smallest

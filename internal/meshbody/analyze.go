@@ -81,6 +81,7 @@ func Analyze(ctx context.Context, verts []r3.Vec, tris [][3]int) (Analysis, erro
 		return x
 	}
 	var volume proofarith.DyAcc
+	var lowScratch, highScratch big.Rat
 	for ti, tri := range tris {
 		if err := budget.Step(); err != nil {
 			return Analysis{}, err
@@ -134,8 +135,8 @@ func Analyze(ctx context.Context, verts []r3.Vec, tris [][3]int) (Analysis, erro
 		// dividing once, instead of reducing one rational per triangle.
 		volume.Add(proofarith.DvDot(a, normal))
 		lowFloat, highFloat := proofarith.DvNormBounds(normal)
-		low := proofarith.FloatRat(lowFloat)
-		high := proofarith.FloatRat(highFloat)
+		low := proofarith.SetFloatRat(&lowScratch, lowFloat)
+		high := proofarith.SetFloatRat(&highScratch, highFloat)
 		if low == nil || high == nil {
 			// A triangle's area past the largest float has no float bound.
 			return Analysis{}, fmt.Errorf(`%w: triangle %d is too large to bound its area`, decaderr.ErrUnsupported, ti)
