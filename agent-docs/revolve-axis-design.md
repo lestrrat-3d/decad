@@ -273,6 +273,29 @@ Its general inputs are:
 The canonical branch skips every conversion. The predicate (§3.3) decides
 that, not the value of `A·A`.
 
+`CapGeometry` converts two values per cap cell about one axis. It reads the
+norm bracket once, as `coneaxis.Scaler`, and converts each cell's `s_min` and
+`σ_min` through `Scaler.ScaledDown`, which returns the same float as
+`Axis.ScaledDown` for every input:
+
+- `NormBracket` is a function of `A` alone, so one reading per cap gives the
+  `|A|↓` and `|A|↑` that each per-value reading gave. `Scaler` refuses exactly
+  when `ScaledDown` does: `|A|↓` not positive or `|A|↑` not finite.
+- `s_min` is a Dyadic and `σ_min` a float, so `q` and the divisor are exact
+  Dyadics, and `q/|A|` is the same exact rational either way.
+- Both round that rational to the largest float at or below it, or saturate
+  to the same infinity, which both then refuse. `Axis.ScaledDown` rounds a
+  `big.Rat` with `RatFloatDown`. `proof.DyQuoFloatDown` rounds `n/d` from the
+  Dyadics. For `n < 0` it returns `−ceil(|n|/d)`. For `n ≥ 0` it returns
+  `ceil(n/d)` when the quotient is exact, and `NextDown` of it otherwise. The
+  ceiling comes from `dyQuoRound`, the routine `DyQuoFloatUp` uses. Any
+  quotient whose ceiling falls outside the normal range takes `RatFloatDown`'s
+  own `big.Rat` steps.
+
+The tests compare every result to the `big.Rat` form bit for bit:
+`TestDyQuoFloatDown*`, `TestScalerMatchesScaledDown` and
+`TestCellGeometryAxisMatchesRatConversion`.
+
 ### 3.5 Radial lower bound
 
 A cap cell's lower bound on `σ` uses an exactly orthogonal pair. The admitted
