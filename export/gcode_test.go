@@ -228,3 +228,42 @@ func TestGCodeInfillSpacingRefusals(t *testing.T) {
 		require.Empty(t, out.String(), "%s writes nothing", name)
 	}
 }
+
+func TestGCodeSolidLayersFillTheBottomAndTheTop(t *testing.T) {
+	t.Parallel()
+	// A 20 x 10 x 6 mm block in twelve layers with two solid layers at each end and a sparse line every 5 mm
+	// between. A solid even layer has 25 lines along X at y = 0.2, 0.6, ... of 19.2 mm, and a solid odd one 50 along
+	// Y of 9.2 mm; the eight sparse layers are 4 x 38.4 + 4 x 36.8 = 300.8 mm.
+	block := decadtest.NewBlock(t, decad.New(), 0, 0, 20, 10, units.Millimeters(6))
+	spec := gcodeSpec()
+	spec.InfillSpacing = units.Millimeters(5)
+	spec.SolidLayers = 2
+	var out bytes.Buffer
+	require.NoError(t, export.GCodePerimeters(t.Context(), &out, block, units.Millimeters(0.1), spec))
+	layers := gcodeLayers(t, out.String())
+	require.Len(t, layers, 12)
+	wantLines := []int{25, 50, 2, 4, 2, 4, 2, 4, 2, 4, 25, 50}
+	for i, groups := range layers {
+		require.Len(t, groups[1:], wantLines[i], "layer %d", i)
+	}
+	solid := 2*25*19.2 + 2*50*9.2
+	require.InDelta(t, (720+solid+300.8)*gcodeExtrusion, lastExtrusion(t, out.String()), 1e-2)
+
+	// Solid layers alone, with no sparse infill between.
+	spec.InfillSpacing = units.Value{}
+	out.Reset()
+	require.NoError(t, export.GCodePerimeters(t.Context(), &out, block, units.Millimeters(0.1), spec))
+	layers = gcodeLayers(t, out.String())
+	for i, groups := range layers {
+		want := 0
+		if i < 2 || i >= 10 {
+			want = wantLines[i]
+		}
+		require.Len(t, groups[1:], want, "layer %d", i)
+	}
+
+	spec.SolidLayers = -1
+	out.Reset()
+	require.ErrorIs(t, export.GCodePerimeters(t.Context(), &out, block, units.Millimeters(0.1), spec), decad.ErrDegenerate)
+	require.Empty(t, out.String())
+}
