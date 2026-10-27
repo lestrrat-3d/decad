@@ -229,6 +229,9 @@ func TestCylinderSteps(t *testing.T) {
 		"equal neighbouring rims": loopOf(pt(0, 0), pt(40, 0), pt(40, 5), pt(40, 10), pt(20, 10), pt(0, 10)),
 		// Two slanted lines cross between the steps' ends.
 		"slanted risers": loopOf(pt(0, 0), pt(40, 0), pt(40, 8), pt(20, 8), pt(0, 10), pt(20, 10)),
+		// A zero-area spike out along the axis and back adds two axis lines
+		// whose ends pair with each other; the main axis line comes last.
+		"axis spike": loopOf(pt(0, 0), pt(-10, 0), pt(0, 0), pt(0, 10), pt(20, 10), pt(20, 8), pt(40, 8), pt(40, 0)),
 		"two axis lines": loopOf(pt(0, 0), pt(20, 0), pt(20, 10), pt(40, 10), pt(40, 0), pt(30, 0),
 			pt(30, -5), pt(0, -5)),
 		"extra riser": loopOf(pt(0, 0), pt(40, 0), pt(40, 10), pt(40, 12), pt(40, 10), pt(0, 10)),

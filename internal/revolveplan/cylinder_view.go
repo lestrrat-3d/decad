@@ -135,7 +135,9 @@ type meridianStep struct {
 // riser ends. The n+1 risers have 2n+2 ends, so each point is the end of
 // exactly one riser and no riser ends anywhere else; a riser keeps its along
 // value, so it joins the two points at one along value. The meridian is the
-// staircase, and its revolution the stack of coaxial cylinders.
+// staircase, and its revolution the stack of coaxial cylinders. The one axis
+// line is needed: a zero-area spike out along the axis and back adds two axis
+// lines whose ends pair with each other.
 func axisStaircase(profile momentinput.Profile, along, across func(sectionrecord.Point2) float64,
 	axisAt float64) ([]meridianStep, bool) {
 	segs := profile.Outer.Segments

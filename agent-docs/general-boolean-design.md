@@ -1052,8 +1052,11 @@ lines and needs an odd number of riser ends. The `n + 1` risers have
 anywhere else, and a riser keeps its along value, so it joins the two points
 at one along value: the riser at `lo` from the axis to the first rim, the one
 at `hi` from the axis to the last, and one at each step boundary between the
-two rims there. The one-axis-line and at-least-one-rim conditions follow
-from the closed walk and the riser count; the code keeps them as guards.
+two rims there. The at-least-one-rim condition follows from the closed walk
+and the riser count; the code keeps it as a guard. The one-axis-line
+condition does not follow: a zero-area spike out along the axis and back
+adds two axis lines whose ends pair with each other, and without the
+condition the last axis line read would set the span.
 
 The prisms use the same frame vectors as the plane in permuted order and
 state the same set in the frame's coordinates, so no lift differs and the
@@ -1735,14 +1738,17 @@ are relations, never literals.
   circle a hole of the shoulder), 6/10 (a shoulder facing −x) and 8/10/9 each
   build (`apitest/revolve_stepped_shaft_class_b_test.go`). A flat meeting the
   10 and 9 steps of 10/6/9 but not the step between, a 1 mm slot splitting
-  the wide step of 10/6, a flat tangent to the 8 step of 10/8, a keyseat
+  the wide step of 10/6, a slot y in [4, 6] from z = 5 beside the 6 step of
+  10/6 (apart from that step but inside its shoulder hole's box, its
+  faceted volume holding `20·(136π − A)` with `A` the r = 10 disc's area in
+  the slot), a flat tangent to the 8 step of 10/8, a keyseat
   ending inside the span, a tool wall in the end plane and a
   `Transform`-placed tool keep the mesh path.
   `internal/classbgeom/stepped_cut_test.go` misses each envelope condition
   on its own, and `internal/revolveplan/cylinder_view_test.go` reads two- and
   three-step meridians and misses rims on both sides of the axis, an
-  overhanging rim, equal neighbouring rims, slanted risers and an extra
-  riser.
+  overhanging rim, equal neighbouring rims, slanted risers, an extra riser
+  and a spike along the axis.
 - **B blind cross hole**: a drill ending at y = 11 inside the box builds with
   8 faces and volume within its bound of `16000 − 9π·11`.
 - **B tool crossing a wall**: a 10×10 slot ending inside the box and crossing

@@ -240,7 +240,8 @@ with one side on the axis, is cut the same way: the flat or keyway may cross any
 it misses keeps its whole wall, and each shoulder keeps the part the tool leaves. Both operands must keep the same
 placement: a shaft or a tool placed by `decad.Transform` takes the faceted path, as do a tool that ends inside the
 shaft's length, a tool that meets two steps but not a narrower step between them in one of its planes, a slot
-that splits a step holding a narrower step's shoulder, and a tube. `Fillet` and `Chamfer` refuse the exact flat's
+that splits a step holding a narrower step's shoulder, a tool passing beside a narrower step within its
+shoulder's bounding square, and a tube. `Fillet` and `Chamfer` refuse the exact flat's
 edges, as they do for an extruded shaft. To blend those edges, place the tool by `decad.Transform`: the faceted
 result keeps the shaft's plane and cylinder faces, and the blend builds on them.
 

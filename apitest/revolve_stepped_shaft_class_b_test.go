@@ -234,6 +234,41 @@ func TestSteppedShaftClassBMisses(t *testing.T) {
 		requireShaftMeshPath(t, got, err)
 	})
 
+	t.Run("slot beside the narrow step", func(t *testing.T) {
+		t.Parallel()
+		// The slot y in [4, 6], z >= 5 is apart from the r = 6 step
+		// (y² + z² >= 41 there) but enters the box of the shoulder's r = 6
+		// hole, so the shoulder's scene holds the hole and misses. The mesh
+		// path's volume holds 20·(100π + 36π − A), with A the r = 10 disc's
+		// area in the slot: ∫(√(100 − y²) − 5) dy over [4, 6] =
+		// (48 + 100·asin(0.6))/2 − (4·√84 + 100·asin(0.4))/2 − 10, with
+		// asin(0.6) = atan(6/8) and asin(0.4) = atan(4/√84).
+		sc := newRetentionScene()
+		plane, err := sc.w.CreateOffsetPlane(sc.w.XY(), 5)
+		require.NoError(t, err)
+		got, err := decad.Cut(t.Context(), stepRevolve(t, sc, 10, 6), shaftTool(t, sc, plane, -5, 4, 45, 6))
+		requireShaftMeshPath(t, got, err)
+
+		at := func(y float64, root, asin *big.Float) *big.Float {
+			v := new(big.Float).SetPrec(junctionPrec).Mul(jf(y), root)
+			return v.Add(v, new(big.Float).SetPrec(junctionPrec).Mul(jf(100), asin))
+		}
+		hi := at(6, jf(8), junctionAtan(new(big.Float).SetPrec(junctionPrec).Quo(jf(6), jf(8))))
+		s84 := shaftSqrt(84)
+		lo := at(4, s84, junctionAtan(new(big.Float).SetPrec(junctionPrec).Quo(jf(4), s84)))
+		area := hi.Sub(hi, lo)
+		area.Quo(area, jf(2))
+		area.Sub(area, jf(10))
+		truth := stepsVolume(discLess(10, area), discLess(6, big.NewFloat(0)))
+		volume, err := got.Volume()
+		require.NoError(t, err)
+		value, err := volume.Value.In(units.CubicMillimeter)
+		require.NoError(t, err)
+		bound, err := volume.Bound.In(units.CubicMillimeter)
+		require.NoError(t, err)
+		requireJunctionEncloses(t, `slotted stepped shaft volume`, value, bound, truth)
+	})
+
 	t.Run("flat tangent to the narrow step", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
