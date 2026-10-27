@@ -39,8 +39,9 @@ const eachPollInterval = 50 * time.Millisecond
 // over [0, n) returns, whatever the scheduling.
 //
 // poll, when non-nil, runs only on the calling goroutine, every
-// eachPollInterval while the workers run. When it fails, no new block starts,
-// Each waits for the running blocks and returns -1 and poll's error.
+// eachPollInterval while the workers run. Workers keep starting blocks while
+// poll runs. Once poll has returned an error, no new block starts, Each waits
+// for the running blocks and returns -1 and poll's error.
 //
 // With workers < 2, or a single block, Each starts no goroutine: it runs fn in
 // index order on the calling goroutine and stops at the first failure, without
