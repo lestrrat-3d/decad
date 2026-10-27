@@ -2612,3 +2612,7 @@
 10	0.01	TestReduceMeshWithinStaysWithinItsStatedDistance
 10	0.01	TestReduceMeshWithinThinsAFinelyCutBlock
 10	0.01	TestReduceMeshWithinRefusals
+10	0.01	TestLoftSectionsTwistedRibbonKeepsVolumeAndMeshProof
+10	0.01	TestLoftSectionsTwistedThreeSectionsFallBackToTwistedRoute
+10	0.01	TestLoftSectionsTwistedRefusesUnprovedInputs
+10	0.01	TestLoftSectionsTwistedRefusesExcessAndUnevenSections

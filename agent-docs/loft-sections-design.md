@@ -639,148 +639,152 @@ turn about the plane origin from section to section. Every section has the
 same number of lines, the same number of fit points, and the fit spline in the
 same cyclic position relative to its lines. The recorded walk may start at any
 segment: the fit spline anchors the correspondence, so segment `k` of section
-`i` is the one `k` steps after the fit spline, and edge `k` in section order of
-the first profile names the face `side(0,k)`. A loop with two fit splines, an
+`i` is the one `k` steps after the fit spline, and edge `k` in the first
+profile's order names the face `side(0,k)`. A loop with two fit splines, an
 arc, a trimmed record or a different fit-point count returns `ErrUnsupported`.
 This route is tried for three sections only after §§1–8 refuse, and for four
 or more sections it replaces §§9–12, which cannot admit a fit spline.
 
-The planes keep §12's world-XY axes, common XY origin and ascending, equally
-spaced Z levels. Plane-local points are free to differ between sections; the
-rotation of a section about the plane origin is not a parameter of the route.
-Every join between consecutive records must be exactly the recorded join: a
-line's walked end equals the next walked start, and the first and last control
-points of the converted fit chain equal the neighbouring lines' recorded
-endpoints. The walk must run counterclockwise about the plane origin.
+The planes keep world-XY axes and a common XY origin. Z levels only need to
+ascend strictly: float stations such as `i·0.26` are never exactly equally
+spaced, so the blend below uses the exact rational spacing of the recorded
+levels. Plane-local points differ freely between sections; a rotation about
+the origin is not a parameter of the route. Every join between consecutive
+records must be exactly the recorded join: a line's walked end equals the next
+walked start, and the first and last control points of the converted fit chain
+equal the neighbouring lines' recorded endpoints. The walk must run
+counterclockwise about the plane origin.
 
 Sketch's exported natural-cubic `FitInterpolant` converts each fit record to
 exact rational cubic Bézier spans in walk order (the §8.1 conversion). A line
 is the degree-elevated cubic on thirds. All sections must give the fit the
 same span count, so the span-index coordinate of §8.1 is the shared curve
 parameter `u` and no span is refined. Edge `e` of section `i` is then a chain
-of cubic Bézier spans `B_{e,k,i}(u)` with exact rational controls.
+of cubic Bézier spans with exact rational controls.
 
-Along height, use §12's C1 piecewise cubic Hermite blend through the section
-curves. Let `x_i` be a control point (or whole curve) of section `i` with
-`m_0 = x_1 - x_0`, `m_{n-1} = x_{n-1} - x_{n-2}` and
-`m_i = (x_{i+1} - x_{i-1})/2` inside. Height span `i`, with `t∈[0,1]`, has
-Bernstein controls `[x_i, x_i + m_i/3, x_{i+1} - m_{i+1}/3, x_{i+1}]`. The
-blend is linear in the data, so the span-`k` patch of edge `e` between
-sections `i` and `i+1` is the exact bicubic
-`S(u,t) = (C(u,t), z_i + h t)` with 4×4 rational control points `C_{jl}`, and
-`h` the common Z step. It equals every recorded section at `t=0,1` and meets
-its neighbour with matching first derivative in `t`. Fitted side faces and
-line side faces all report `NURBSSurface`; the caps report `Plane`. No
-section creates a seam face.
+Along height, use a C1 piecewise cubic Hermite blend through the section
+curves, the Catmull-Rom blend of §12 with exact spacing. For a control point
+`x_i` of section `i` at level `z_i`, the slope per unit Z is
+`d_i = (x_{i+1} - x_{i-1})/(z_{i+1} - z_{i-1})` inside and the one-sided
+quotient at either end. Height span `i`, `t∈[0,1]`, `h_i = z_{i+1} - z_i`,
+has Bernstein controls `[x_i, x_i + h_i d_i/3, x_{i+1} - h_i d_{i+1}/3,
+x_{i+1}]`. The blend is linear in the data, so the span-`k` patch of edge `e`
+between sections `i` and `i+1` is the exact bicubic
+`S(u,t) = (C(u,t), z_i + h_i t)` with 4×4 rational control points. It equals
+every recorded section at `t=0,1`, and neighbouring spans share a first
+derivative in `t`. Fitted and line side faces report `NURBSSurface`; the
+caps report `Plane`. No interior section creates a seam face.
 
 ### 13.2 Continuous-section admission
 
-The polar-angle derivative of the boundary at height `t` is positive when
+The polar angle of the boundary at height `t` increases strictly when
 `cross(C, C_u) > 0`. Take this function on each patch in exact Bernstein form,
 degree `(5,6)` in `(u,t)`; accept a cell only when every coefficient is
 strictly positive, otherwise bisect `u` and `t` alternately, to depth 12 and
-under the shared work budget, as §8.2. Exhaustion refuses with
+under the shared work budget, as §8.2. A cell with a non-positive corner
+coefficient is a counterexample and refuses at once. Exhaustion refuses with
 `ErrUnsupported`. Strict positivity keeps `C` off the origin at every height.
 A closed curve whose polar angle strictly increases turns an integer number of
-times, and at least once. The first section is a valid Sketch loop and so
-simple; a simple closed curve with strictly increasing angle turns once. The
+times, at least once. The first section is a valid Sketch loop and so simple;
+a simple closed curve turning with strictly increasing angle turns once. The
 turn count is constant in `t` because `C` never reaches the origin, so every
 intermediate boundary is a simple radial graph. Strictly increasing Z
 separates different heights, so the wall is embedded. The gate does not need
-the section to be a rotation of the first: it proves only what the solid
-needs. A section the origin does not see radially (a notch behind the axis)
-refuses.
+the sections to be rotations of the first: it proves only what the solid
+needs. A section whose boundary the origin does not see radially refuses.
 
 ### 13.3 Held mesh and certified distance
 
-Call a patch `P` one edge-span `k` between sections `i` and `i+1`. Write, over
-its control net and in the L1 norm, with `Δ` the control differences in the
-named direction:
+Call a patch `P` one edge span `k` between sections `i` and `i+1`. Over its
+control net, in the L1 norm and with `Δ` the control differences in the named
+direction, write
 
 ```text
-B_u = 3 max |Δ_u C|            B_t = 3 max |Δ_t C| + h
+B_u = 3 max |Δ_u C|            B_t = 3 max |Δ_t C|
 M_uu = 6 max |Δ_u² C|          M_tt = 6 max |Δ_t² C|
 M_ut = 9 max |Δ_u Δ_t C|
 ```
 
-The first two bound `|S_u|` and `|S_t|`; the others bound the second
-derivatives of `C` (`S` is linear in `z`). Choose a power-of-two `n_u(k)` in
-1..64 for each edge-span, the same at every height, and a power-of-two
-`n_t(i)` in 1..32 for each height span, the same for every edge. Pick the
-least counts with `max_i M_uu/(8 n_u²) <= 0.004 mm` and
-`max_k M_tt/(8 n_t²) <= 0.004 mm`. Larger counts refuse. The held vertex at
-`(u=a/n_u, t=b/n_t)` is the exact rational patch point, rounded to float64
-once per coordinate; the rounding distance (L1) is charged as `ρ`. Rings at
-the first and last section are the recorded coordinates and Z; intermediate Z
-levels are rounded and charged in `ρ` too. One ring is shared by neighbouring
-height spans, and one station table by every height. Each cell has two
-triangles on a fixed diagonal. The caps triangulate the first and last ring.
+These bound `|C_u|`, `|C_t|` and the second derivatives of `C`; `S` adds only
+the constant `h_i` to `S_t` (`S` is linear in `z`). Each patch gets integer
+counts `n_u(k)`, the same at every height, and `n_t(i)`, the same for every
+edge span, so one station table serves every ring and the mesh conforms.
+With target `τ = 0.02 mm`, set `n_t(i)` to the least integer with
+`M_tt/(8 n_t²) <= τ/3` over all `k`, and `n_u(k)` to the least integer with
+`M_uu/(8 n_u²) <= τ/3` and `M_ut/(4 n_u n_t) <= τ/3` over all `i`. More than
+64 `n_u` or 32 `n_t`, more than 60000 triangles, or a published bound above
+0.05 mm refuses.
 
-For a cell, `A,B,C,D` are its exact corners at `(0,0),(1,0),(1,1),(0,1)` of
-the cell, and `tw = A - B + C - D`. The cell's bilinear interpolant differs
-from `S` by at most `M_uu/(8 n_u²) + M_tt/(8 n_t²)` (separable linear
-interpolation, vector valued). Either held triangle differs from the bilinear
-interpolant by at most `|tw|/4` (`r(1-s)<=1/4` on the triangle's half-square),
-with `|tw|` read exactly from the rational corners. With rounding,
+The held vertex at `(u=a/n_u, t=b/n_t)` is the exact rational patch point
+rounded to float64 once per coordinate. The L1 rounding distance, including
+the rounded intermediate Z, is charged as `ρ`. The first and last ring are the
+recorded coordinates and Z levels. A cell has two triangles on a fixed
+diagonal. The caps triangulate the first and last ring.
+
+For a cell, let `A,B,C,D` be its corners at `(0,0),(1,0),(1,1),(0,1)` of the
+cell and `tw = A - B + C - D`. Separable linear interpolation differs from `S`
+by at most `M_uu/(8 n_u²) + M_tt/(8 n_t²)` (vector valued). Either triangle
+differs from the bilinear interpolant by `|tw| r(1-s)` with `r<=s` in the
+triangle's parameters, at most `|tw|/4`, and `|tw| <= M_ut/(n_u n_t)`. So
 
 ```text
-d_cell = M_uu/(8 n_u²) + M_tt/(8 n_t²) + |tw|/4 + ρ
+d_P = M_uu/(8 n_u²) + M_tt/(8 n_t²) + M_ut/(4 n_u n_t) + ρ
 ```
 
-bounds the distance of any wall point to the held triangle with the same
-parameters, and the same map covers the held wall in the other direction
-(`MeshBound`, each vertex certificate). Cap rings sit on the true boundary
-up to `ρ` and the sagitta term. The `MeshBound` is the largest `d_cell`;
-above 0.05 mm the route refuses.
-
-The proof is certified for the mesh in the honest sense of this repository: it
-bounds the distance between the held wall and the denoted bicubic patches, not
-Fusion's own loft. Nothing here depends on the sections being a rotation.
+bounds the distance from any wall point to the held triangle with the same
+parameters, and the same map covers the held wall in the other direction.
+`MeshBound` and each vertex certificate carry the largest `d_P`. The proof
+bounds the distance between the held wall and the denoted bicubic patches. It
+does not claim anything about Fusion's own loft.
 
 ### 13.4 Occupied volume, area and consumers
 
-The held mesh passes `loftmesh.LoftCrossingAudit` and the faceted shell audit
-before commit, so it is a closed embedded oriented surface. The denoted
-boundary is closed and embedded too by §13.2. Join each wall point to its
-parameter-matched held point by a straight segment. Caps lie in the planes
-`z=z_0,z_{n-1}` and sweep zero volume. A point at which the two closed
-surfaces have different winding number lies on one of those segments, so the
-occupied symmetric difference lies in the sweep. The sweep's volume is at most
-`∫∫∫ |E| |F_u| |F_t|`, where `E=H-S` and
-`F=(1-λ)S+λH`. Both `S` and the held affine pieces have derivative at most
-the patch derivative bound (`H_u`, `H_t` are means of `S_u`, `S_t` along a
-cell edge, plus `2ρ n` for the rounding), so
+The held mesh passes `loftmesh.LoftCrossingAuditBounded` (ceiling 128 million
+pair-enumeration steps, fixed by the 60000-triangle limit) and the faceted
+shell audit before commit, so it is a closed embedded oriented surface. The
+denoted boundary is closed and embedded by §13.2. Join each wall point to its
+parameter-matched held point by a straight segment. The caps lie in the planes
+of the first and last section and sweep zero volume. Where the two closed
+surfaces have different winding number, the point lies on one of the segments,
+so the occupied symmetric difference lies in the sweep. The sweep's volume is
+at most `∫∫∫ |E| |F_u| |F_t|` with `E = H - S` and `F = (1-λ)S + λH`. The
+derivatives of `H` are means of `S_u`, `S_t` along a cell edge, so
+`|F_u| <= B_u + 2ρ n_u` and `|F_t| <= B_t + h_i + 2ρ n_t`. Integrating the
+pointwise distance, whose mean over a cell is two thirds of its supremum for
+each linear-interpolation term and one third for the twist term,
 
 ```text
-VolSymDiff <= Σ_P  d_P (B_u + 2ρ n_u)(B_t + 2ρ n_t)
+VolSymDiff <= Σ_P (2/3 (uu + tt) + ut/3 + ρ)(B_u + 2ρ n_u)(B_t + h_i + 2ρ n_t)
 ```
 
-with `d_P` the largest `d_cell` of the patch, rounded upward. A signed
-difference of volumes cannot replace this non-cancelling sum.
+where `uu, tt, ut` are `d_P`'s three terms. A signed difference of volumes
+cannot replace this non-cancelling sum.
 
-The area allowance bounds `|∫|S_u × S_t| - Σ tri areas|`. For a cell
-`|H_u - S_u| <= M_uu/n_u + M_ut/n_t` and `|H_t - S_t| <= M_ut/n_u + M_tt/n_t`
-pointwise, up to `2ρ n`, so each patch contributes at most
-`(M_uu/n_u + M_ut/n_t + 2ρn_u)B_t + B_u(M_ut/n_u + M_tt/n_t + 2ρn_t)`. A cap
-differs by the area swept between the true ring and its polygon, at most
-`Σ_k (M_uu/(8 n_u²) + ρ) B_u` for each cap. The faceted body adds its own
-held arithmetic charge. All terms round upward into `AreaSlack`. The diameter
-bound is `2 max |C|_1 + Σ h`, where the maximum is over every control point.
+The area allowance bounds `|∫|S_u × S_t| - Σ triangle areas|` by
+`∫ |S_u - H_u||S_t| + |H_u||S_t - H_t|`. On a cell, the mean deviations are
+`|H_u - S_u| <= M_uu/(3 n_u) + M_ut/(2 n_t) + 2ρ n_u` and
+`|H_t - S_t| <= M_ut/(2 n_u) + M_tt/(3 n_t) + 2ρ n_t`. A cap differs from its
+ring polygon by the area swept between ring and polygon, at most
+`(M_uu/(8 n_u²) + ρ)(B_u + 2ρ n_u)` per edge span, for each cap. Every term
+rounds upward into `AreaSlack`. This bound is first order in the cell size,
+unlike the second-order distance and volume bounds, and is loose at this
+resolution (about 40% of the area for the screw-gear ribbon). The diameter
+bound is `2 max |C|_1 + (z_{n-1} - z_0)`, over every control point.
 
 Placement, `Tessellate(VerifyAll)`, mesh booleans and export use the standard
 faceted payload. `Body.Section` has no source certificate for this route and
 reports its usual refusal. Refusals, all `ErrUnsupported` with the document
-unchanged: wrong record kinds, count or fit-point mismatch, unequal Z spacing
-or different plane axes or origin, an inexact join, a clockwise walk, a failed
-polar proof, a mesh count above its ceiling, `MeshBound` above 0.05 mm, a
-non-finite proof term, or more than sixty-four sections.
+unchanged: wrong record kinds, count or fit-point mismatch, differing plane
+axes or origin, Z levels that do not strictly ascend, an inexact join, a
+clockwise walk, a failed polar proof, a station or triangle ceiling,
+`MeshBound` above 0.05 mm, a non-finite proof term, or more than sixty-four
+sections.
 
 ### 13.5 Size and provability
 
-The route adds about 900 lines of Go in `internal/smoothloft/` (patch algebra,
-admission, mesh and bounds) and 60 in the root glue. Every bound above is a
-closed-form rational expression over exact control nets, so the bound is
-provable as stated; no numeric search or sampled residual admits input. The
-cost drivers are the polar proof (about 200 big-rational products per cell
-tried, 13 patches per height span) and the exact crossing audit over the
-resulting mesh.
+The route is about 700 lines of Go in `internal/smoothloft/` (patch algebra
+and admission, gathering, mesh and bounds) plus 60 in the root glue. Every
+bound above is a closed-form rational expression over exact control nets, so
+the error bound is provable as stated. No numeric search or sampled residual
+admits input. For 41 screw-gear ribbon sections the polar proof takes about a
+second and the mesh has about 39000 triangles with `MeshBound` 0.014 mm.
