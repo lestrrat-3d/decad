@@ -79,6 +79,9 @@ func ProvenDepthExceeds(ctx context.Context, bmA *BoolMesh, closeA []int, bmB *B
 // centroid are sampled too. Reject-only: sampling and the facet cap can only
 // miss a witness and refuse, never admit a shallow meet.
 func DeepWitnessInside(ctx context.Context, m *BoolMesh, closeFacets []int, other *BoolMesh, b float64) (bool, error) {
+	// Neighbouring sample points tend to sit within b of the same facet of
+	// other, so the facet that dismissed one is tried first on the next.
+	hint := -1
 	for n, i := range closeFacets {
 		if n >= MaxDepthWitnessFacets {
 			break
@@ -88,7 +91,7 @@ func DeepWitnessInside(ctx context.Context, m *BoolMesh, closeFacets []int, othe
 		}
 		tri := m.Tris[i]
 		for _, p := range facetSamplePoints(m.Xverts[tri[0]], m.Xverts[tri[1]], m.Xverts[tri[2]]) {
-			deep, err := DeepWitnessAt(ctx, p, other, b)
+			deep, err := deepWitnessAt(ctx, p, other, b, &hint)
 			if err != nil || deep {
 				return deep, err
 			}

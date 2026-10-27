@@ -373,6 +373,8 @@ func WalkFacetFromSpan(ctx context.Context, mid proof.Xpt, m *BoolMesh, fi int, 
 	origin, normal := other.Xverts[ot[0]], other.Norms[fj]
 	midF := mid.Vec()
 	one := big.NewInt(1)
+	// mid lies on facet fj, so the walk's points start out nearest it.
+	hint := fj
 	for _, vi := range m.Tris[fi] {
 		c := m.Xverts[vi]
 		if proof.XdotSign(normal, proof.Xsub(c, origin)) >= 0 {
@@ -389,7 +391,7 @@ func WalkFacetFromSpan(ctx context.Context, mid proof.Xpt, m *BoolMesh, fi int, 
 				break
 			}
 			p := proof.Xlerp(mid, c, one, den)
-			deep, err := DeepWitnessAt(ctx, p, other, b)
+			deep, err := deepWitnessAt(ctx, p, other, b, &hint)
 			if err != nil || deep {
 				return deep, err
 			}
@@ -406,7 +408,14 @@ func WalkFacetFromSpan(ctx context.Context, mid proof.Xpt, m *BoolMesh, fi int, 
 // exact parity: a point no deeper than b is no witness however it classifies,
 // so the order changes which points are tested, never which become witnesses.
 func DeepWitnessAt(ctx context.Context, p proof.Xpt, other *BoolMesh, b float64) (bool, error) {
-	if CertifiedInteriorDepth(p, other) <= b {
+	return deepWitnessAt(ctx, p, other, b, nil)
+}
+
+// deepWitnessAt is DeepWitnessAt with a nearest-facet hint the caller carries
+// from one candidate point to the next (depthBeyond). The hint changes how
+// fast a shallow point is dismissed, never which points become witnesses.
+func deepWitnessAt(ctx context.Context, p proof.Xpt, other *BoolMesh, b float64, hint *int) (bool, error) {
+	if !depthBeyond(p, other, b, hint) {
 		return false, nil
 	}
 	inside, onBoundary, err := MeshParityAllContext(ctx, p, other.Parity)
@@ -451,6 +460,46 @@ func CertifiedInteriorDepth(p proof.Xpt, other *BoolMesh) float64 {
 	// from the exact point p is at least (best, nudged down for the distance
 	// evaluation's own float error) minus how far pf sits from p.
 	return best*(1-1e-12) - PointRoundBound(p, pf)
+}
+
+// depthBeyond reports !(CertifiedInteriorDepth(p, other) <= b) for every
+// input. It stops the facet scan once the running minimum, or the distance
+// bound at the hint facet, settles that p is no deeper than b; the soundness
+// argument is agent-docs/evaluator-design.md §9, "The witness depth scan stops
+// once a candidate is settled as no deeper than b". A candidate it does not
+// settle finishes CertifiedInteriorDepth's own scan. A non-nil hint is updated
+// to the facet that settled a shallow answer.
+func depthBeyond(p proof.Xpt, other *BoolMesh, b float64, hint *int) bool {
+	pf := p.Vec()
+	if hint != nil && *hint >= 0 && *hint < len(other.Tris) {
+		h := *hint
+		up := math.Max(PointBoxDist(pf, other.Boxes[h]), PointTriDistance(pf, TriCorners(other, h)))
+		if up*(1-1e-12) <= b {
+			return false
+		}
+	}
+	best := math.Inf(1)
+	for i := range other.Tris {
+		// The same distance prune CertifiedInteriorDepth applies, in the same
+		// facet order, so the scan visits the same facets up to the stop.
+		if PointBoxDist(pf, other.Boxes[i]) >= best {
+			continue
+		}
+		best = math.Min(best, PointTriDistance(pf, TriCorners(other, i)))
+		if best*(1-1e-12) <= b {
+			if hint != nil {
+				*hint = i
+			}
+			return false
+		}
+	}
+	depth := 0.0
+	if best > 0 && !proofbound.IsNonFinite(best) {
+		depth = best*(1-1e-12) - PointRoundBound(p, pf)
+	}
+	// Negated rather than written as depth > b, so a NaN b answers as
+	// DeepWitnessAt's original "depth <= b" test answered it.
+	return !(depth <= b)
 }
 
 // PointRoundBound upper-bounds the 3D displacement between the exact point p and
@@ -586,6 +635,11 @@ func minFloat64(x, y float64) float64 {
 // PointBoxDist is the Euclidean distance from a point to an axis-aligned box
 // (zero when the point is inside it). It lower-bounds the distance to anything
 // the box contains, so it is a sound distance prune for a nearest-facet scan.
+//
+// It stays out of line so depthBeyond's hint reading and its scan run the same
+// compiled code (agent-docs/evaluator-design.md §9).
+//
+//go:noinline
 func PointBoxDist(p r3.Vec, box [2]r3.Vec) float64 {
 	axis := func(v, lo, hi float64) float64 {
 		switch {
@@ -605,6 +659,11 @@ func PointBoxDist(p r3.Vec, box [2]r3.Vec) float64 {
 
 // PointTriDistance is the distance from a point to a closed triangle: the
 // perpendicular foot when it lands inside, otherwise the nearest edge.
+//
+// It stays out of line so depthBeyond's hint reading and its scan run the same
+// compiled code (agent-docs/evaluator-design.md §9).
+//
+//go:noinline
 func PointTriDistance(p r3.Vec, t [3]r3.Vec) float64 {
 	n := t[1].Sub(t[0]).Cross(t[2].Sub(t[0]))
 	if nn := n.Dot(n); nn > 0 {
