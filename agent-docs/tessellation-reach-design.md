@@ -599,7 +599,7 @@ built, and `tessellateCapBlend` when it publishes. Every loop of the payload mus
 
 A draft band (`capblend.Payload.Draft`) also admits (iii) a near-tangent join: a `LineSeg` and an `ArcSeg` with
 one recorded junction point whose exact tangents run the same way, turn by `sin²θ ≤ 2⁻⁶⁴`, and move by one amount,
-the moved circle clear of the corner (`capband.NearTangentCorner`), and each straight wall at it proven to survive
+the moved circle clear of the corner (`capband.NearTangentCorner`), and each wall at it proven to survive
 every level (`capband.NearTangentWallRefusal`). Its proof adds the corner charge
 `capblend.NearTangentVolume` to `volSymDiff` below; `agent-docs/draft-design.md` §9.1.1 states and proves it. A
 chamfer band admits none, since its shell offset takes a connector arc at a reflex sliver.

@@ -120,33 +120,10 @@ func nearTangentCharge(arc sectionrecord.ArcSeg, v [2]*big.Rat, sinSq *big.Rat, 
 	rho.Mul(rho, new(big.Rat).Add(big.NewRat(1, 1), sinSq))
 	eps := new(big.Rat).Mul(reach, sinSq)
 
-	center, ok := ratPoint2(arc.Center)
+	radiusHi, movedLo, ok := movedRadius(arc, v, amount, width)
 	if !ok {
 		return NearTangentCharge{}, false
 	}
-	du := new(big.Rat).Sub(v[0], center[0])
-	dv := new(big.Rat).Sub(v[1], center[1])
-	radiusSq := new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
-	radiusLo := proofarith.FloatRat(proofbound.RatSqrtDown(radiusSq))
-	radiusHi := proofarith.FloatRat(proofbound.RatSqrtUp(radiusSq))
-	signed := proofarith.FloatRat(amount)
-	if radiusLo == nil || radiusHi == nil || signed == nil {
-		return NearTangentCharge{}, false
-	}
-	// A counter-clockwise walk holds its material inside, so its circle moves
-	// to R − t; a clockwise one moves to R + t. The radius falls by at most the
-	// largest inward step any level takes.
-	inside := big.NewRat(1, 1)
-	if arc.TStart == 1 {
-		inside = big.NewRat(-1, 1)
-	}
-	shrink := new(big.Rat)
-	for _, t := range []*big.Rat{new(big.Rat).Add(signed, width), new(big.Rat).Sub(signed, width)} {
-		if s := new(big.Rat).Mul(inside, t); s.Cmp(shrink) > 0 {
-			shrink = s
-		}
-	}
-	movedLo := new(big.Rat).Sub(radiusLo, shrink)
 	need := new(big.Rat).Add(rho, new(big.Rat).Mul(radiusHi, sinSq))
 	if movedLo.Cmp(need) <= 0 {
 		return NearTangentCharge{}, false
@@ -218,6 +195,39 @@ func ratDot(a, b [2]*big.Rat) *big.Rat {
 	return new(big.Rat).Add(new(big.Rat).Mul(a[0], b[0]), new(big.Rat).Mul(a[1], b[1]))
 }
 
+// movedRadius bounds the circle of arc through the recorded point v: R_hi, an
+// upper bound on R = |v − Center|, and r_lo, a lower bound on the moved radius
+// at every level of an amount within width of amount. A counter-clockwise walk
+// holds its material inside, so its circle moves to R − t; a clockwise one
+// moves to R + t. The radius falls by at most the largest inward step any
+// level takes.
+func movedRadius(arc sectionrecord.ArcSeg, v [2]*big.Rat, amount float64, width *big.Rat) (*big.Rat, *big.Rat, bool) {
+	center, ok := ratPoint2(arc.Center)
+	if !ok {
+		return nil, nil, false
+	}
+	du := new(big.Rat).Sub(v[0], center[0])
+	dv := new(big.Rat).Sub(v[1], center[1])
+	radiusSq := new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
+	radiusLo := proofarith.FloatRat(proofbound.RatSqrtDown(radiusSq))
+	radiusHi := proofarith.FloatRat(proofbound.RatSqrtUp(radiusSq))
+	signed := proofarith.FloatRat(amount)
+	if radiusLo == nil || radiusHi == nil || signed == nil {
+		return nil, nil, false
+	}
+	inside := big.NewRat(1, 1)
+	if arc.TStart == 1 {
+		inside = big.NewRat(-1, 1)
+	}
+	shrink := new(big.Rat)
+	for _, t := range []*big.Rat{new(big.Rat).Add(signed, width), new(big.Rat).Sub(signed, width)} {
+		if s := new(big.Rat).Mul(inside, t); s.Cmp(shrink) > 0 {
+			shrink = s
+		}
+	}
+	return radiusHi, new(big.Rat).Sub(radiusLo, shrink), true
+}
+
 // ratAbs is |q|, or nil for a nil q.
 func ratAbs(q *big.Rat) *big.Rat {
 	if q == nil {
@@ -234,9 +244,10 @@ func ratPoint2(p sectionrecord.Point2) ([2]*big.Rat, bool) {
 }
 
 // NearTangentWallRefusal checks Lemma 2's survival assumption
-// (agent-docs/draft-design.md §9.1.1) for straight walk i of a draft loop with a
+// (agent-docs/draft-design.md §9.1.1) for walk i of a draft loop with a
 // near-tangent join at an end: the true edge runs forward from its start corner
-// to its end corner at every level. B1's two corner points move affinely
+// to its end corner at every level. A circular walk reads
+// nearTangentArcRefusal; for a straight one, B1's two corner points move affinely
 // between the near and far sections, and each true corner lies within its ρ of
 // B1's (rhoStart, rhoEnd; zero at an exact end), so the edge survives when its
 // advance along the recorded direction exceeds rhoStart + rhoEnd at both
@@ -247,11 +258,14 @@ func ratPoint2(p sectionrecord.Point2) ([2]*big.Rat, bool) {
 // upward root of the recorded length. It returns the refusal's reason, or ""
 // when the wall survives.
 func NearTangentWallRefusal(loop sectionrecord.LoopRecord, walks []survey2d.SideWalk, i int, amounts []float64, amountDelta, rhoStart, rhoEnd float64) string {
-	const why = `a straight wall at a near-tangent join whose advance at the near or far section does not exceed the near-tangent corner charge, so its edge is not proven to survive every level`
+	const why = nearTangentWallWhy
 	n := len(walks)
 	w := walks[i]
-	if w.IsCircular() || len(amounts) != n || len(w.Segs) == 0 {
+	if len(amounts) != n || len(w.Segs) == 0 {
 		return why
+	}
+	if w.IsCircular() {
+		return nearTangentArcRefusal(loop, w, amounts[i], amountDelta, rhoStart, rhoEnd)
 	}
 	first, err := sectionrecord.NormalizeSegment(loop.Segments[w.Segs[0]])
 	if err != nil {
@@ -333,4 +347,72 @@ func farCorner(prev, cur survey2d.SideWalk, span func(int) (proofbound.RatInterv
 		return capcontour.Point{}, false
 	}
 	return capcontour.Nearest(cands, cur.StartU, cur.StartV)
+}
+
+// nearTangentWallWhy is the refusal of a straight wall the survival gate does
+// not prove; nearTangentArcWhy is that of a circular wall.
+const (
+	nearTangentWallWhy = `a straight wall at a near-tangent join whose advance at the near or far section does not exceed the near-tangent corner charge, so its edge is not proven to survive every level`
+	nearTangentArcWhy  = `a circular wall at a near-tangent join whose window does not exceed the turn the near-tangent corner charge allows its ends, so its arc is not proven to survive every level`
+)
+
+// nearTangentArcRefusal is NearTangentWallRefusal for circular walk w. B1
+// holds its ends at the recorded window's two radial feet, and each true end
+// lies on the moved circle within its ρ of B1's, so it turns from B1's by at
+// most 2·asin(ρ/2r) <= (π/2)·ρ/r_lo. The arc survives every level when those
+// two turns together stay below the window W. W is at least π where the window
+// passes a half turn, and at least |v₂ − v₁|/R otherwise (a chord of length c
+// subtends 2·asin(c/2R) >= c/R), so the gate asks for (π/2)(ρ_start + ρ_end)
+// < W_lo·r_lo over the rationals with π/2 rounded up and π rounded down.
+func nearTangentArcRefusal(loop sectionrecord.LoopRecord, w survey2d.SideWalk, amount, amountDelta, rhoStart, rhoEnd float64) string {
+	first, err := sectionrecord.NormalizeSegment(loop.Segments[w.Segs[0]])
+	if err != nil {
+		return nearTangentArcWhy
+	}
+	last, err := sectionrecord.NormalizeSegment(loop.Segments[w.Segs[len(w.Segs)-1]])
+	if err != nil {
+		return nearTangentArcWhy
+	}
+	arc, okA := first.(sectionrecord.ArcSeg)
+	fe, okF := joinEnds(first)
+	le, okL := joinEnds(last)
+	rs, re := proofarith.FloatRat(rhoStart), proofarith.FloatRat(rhoEnd)
+	width := new(big.Rat)
+	if amount != 0 {
+		width = proofarith.FloatRat(amountDelta)
+	}
+	if !okA || !okF || !okL || rs == nil || re == nil || width == nil {
+		return nearTangentArcWhy
+	}
+	v1, v2 := fe.start, le.end
+	radiusHi, movedLo, ok := movedRadius(arc, v1, amount, width)
+	center, okC := ratPoint2(arc.Center)
+	if !ok || !okC || movedLo.Sign() <= 0 {
+		return nearTangentArcWhy
+	}
+	a := [2]*big.Rat{new(big.Rat).Sub(v1[0], center[0]), new(big.Rat).Sub(v1[1], center[1])}
+	b := [2]*big.Rat{new(big.Rat).Sub(v2[0], center[0]), new(big.Rat).Sub(v2[1], center[1])}
+	cross := new(big.Rat).Sub(new(big.Rat).Mul(a[0], b[1]), new(big.Rat).Mul(a[1], b[0]))
+	if arc.TStart == 1 {
+		cross.Neg(cross)
+	}
+	// 1.5708 > π/2 and 3 < π.
+	turn := new(big.Rat).Mul(new(big.Rat).Add(rs, re), big.NewRat(15708, 10000))
+	if cross.Sign() <= 0 {
+		// The window passes a half turn: W >= π > 3.
+		if turn.Cmp(new(big.Rat).Mul(big.NewRat(3, 1), movedLo)) >= 0 {
+			return nearTangentArcWhy
+		}
+		return ""
+	}
+	chord := [2]*big.Rat{new(big.Rat).Sub(v2[0], v1[0]), new(big.Rat).Sub(v2[1], v1[1])}
+	chordLo := proofarith.FloatRat(proofbound.RatSqrtDown(ratDot(chord, chord)))
+	if chordLo == nil {
+		return nearTangentArcWhy
+	}
+	// (π/2)(ρ_start + ρ_end) < (|v₂ − v₁|/R_hi)·r_lo.
+	if new(big.Rat).Mul(turn, radiusHi).Cmp(new(big.Rat).Mul(chordLo, movedLo)) >= 0 {
+		return nearTangentArcWhy
+	}
+	return ""
 }

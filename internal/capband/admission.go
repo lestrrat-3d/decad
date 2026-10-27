@@ -42,7 +42,7 @@ import (
 // sharp is a draft band's per-walk amounts, nil for a chamfer band. With it, a
 // corner JoinIsG1 rejects is admitted when NearTangentCorner reads it as a
 // near-tangent join (agent-docs/draft-design.md §9.1.1), and refused with that
-// function's reason otherwise; every straight wall with such a join at an end
+// function's reason otherwise; every wall with such a join at an end
 // must then pass NearTangentWallRefusal.
 func OccupiedVolumeAdmission(
 	budget *proofbound.WorkBudget,
@@ -143,14 +143,14 @@ func OccupiedVolumeAdmission(
 			}
 			charges[i] = &charge
 		}
-		// Lemma 2 of agent-docs/draft-design.md §9.1.1 assumes every straight wall
+		// Lemma 2 of agent-docs/draft-design.md §9.1.1 assumes every wall
 		// at a near-tangent join survives at every level.
 		for i, w := range walks {
 			if charges == nil {
 				break
 			}
 			start, end := charges[i], charges[(i+1)%n]
-			if w.IsCircular() || (start == nil && end == nil) {
+			if start == nil && end == nil {
 				continue
 			}
 			if err := budget.Step(); err != nil {

@@ -150,12 +150,17 @@ func wedgeLoop(length, shift float64) sectionrecord.LoopRecord {
 	}}
 }
 
-// wedgeAdmission runs the occupied-volume admission over wedgeLoop as a draft
-// band moved by amount on every walk.
+// wedgeAdmission runs the occupied-volume admission over wedgeLoop.
 func wedgeAdmission(t *testing.T, length, shift, amount float64) error {
 	t.Helper()
+	return draftAdmission(t, wedgeLoop(length, shift), amount)
+}
+
+// draftAdmission runs the occupied-volume admission over loop as a draft band
+// moved by amount on every walk.
+func draftAdmission(t *testing.T, loop sectionrecord.LoopRecord, amount float64) error {
+	t.Helper()
 	budget := proofbound.NewWorkBudget(t.Context())
-	loop := wedgeLoop(length, shift)
 	refusal, err := capband.OccupiedVolumeAdmission(budget, "tapered extrude", []sectionrecord.LoopRecord{loop},
 		map[int]bool{}, map[int]bool{0: true},
 		func(int, sectionrecord.LoopRecord) ([]survey2d.SideWalk, func() ([]bool, error), error) {
@@ -203,6 +208,83 @@ func TestNearTangentWallMustSurvive(t *testing.T) {
 			require.ErrorIs(t, refusal, decaderr.ErrUnsupported)
 			require.ErrorContains(t, refusal, "advance at the near or far section does not exceed the near-tangent corner charge")
 			require.ErrorContains(t, refusal, "no proof of the volume")
+		})
+	}
+}
+
+// riserLoop is a CCW loop whose short riser, recorded segment 2, leaves a
+// near-tangent quarter arc at its start and ends at a mitered corner. The
+// bottom wall (0, 0) → (10, 0) meets the arc, centre (10 + shift, 5), near
+// tangent; the arc ends at (15 + shift, 5 − shift), off the bottom wall's
+// axis, and the riser climbs length mm from there before turning to (0, 10)
+// and back down to the origin.
+func riserLoop(length, shift float64) sectionrecord.LoopRecord {
+	p := func(u, v float64) sectionrecord.Point2 { return sectionrecord.Point2{U: u, V: v} }
+	a, b := p(0, 0), p(10, 0)
+	c := p(15+shift, 5-shift)
+	d := p(15+shift, 5-shift+length)
+	e := p(0, 10)
+	return sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.LineSeg{Start: a, End: b, TStart: 0, TEnd: 1},
+		sectionrecord.ArcSeg{Center: p(10+shift, 5), Start: b, End: c, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: c, End: d, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: d, End: e, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: e, End: a, TStart: 0, TEnd: 1},
+	}}
+}
+
+// tinyArcLoop is a CCW loop whose arc about the origin spans 2⁻⁴⁰ rad, from
+// (1 + 2⁻⁴⁰, 1) to (1, 1 + 2⁻⁴⁰), between two long walls that meet it near
+// tangent, sin θ ≈ 7.3e-12, at both ends: moved 1 mm inward, the true corners
+// slide along the arc past each other and its window reverses, while both
+// straight walls survive.
+func tinyArcLoop() sectionrecord.LoopRecord {
+	p := func(u, v float64) sectionrecord.Point2 { return sectionrecord.Point2{U: u, V: v} }
+	e40, e36 := math.Ldexp(1, -40), math.Ldexp(1, -36)
+	p0 := p(2+e40, -e40-e36)
+	p1 := p(1+e40, 1)
+	p2 := p(1, 1+e40)
+	p3 := p(-e40, 2+e40-e36)
+	q := p(-2, -2)
+	return sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.LineSeg{Start: p0, End: p1, TStart: 0, TEnd: 1},
+		sectionrecord.ArcSeg{Center: p(0, 0), Start: p1, End: p2, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: p2, End: p3, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: p3, End: q, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: q, End: p0, TStart: 0, TEnd: 1},
+	}}
+}
+
+// TestNearTangentWallSurvivalBothEnds pins the survival gate where the
+// near-tangent join sits at a wall's start and on a circular wall. The riser
+// leaves its arc near tangent: a unit riser drafted 0.5 mm inward is admitted;
+// drafted 3 mm inward, its end miter overruns it at the far section, which
+// reading the arc's start foot for its end foot would hide; a 2⁻³⁶ mm riser
+// drafted outward is shorter than its start corner's ρ, which reading that ρ
+// as zero would hide. tinyArcLoop's 2⁻⁴⁰ rad window is shorter than the turn
+// its two ends' ρ allow at a 1 mm draft. Removing each mutation's target turns
+// its row red, and removing the gate admits every refusal.
+func TestNearTangentWallSurvivalBothEnds(t *testing.T) {
+	t.Parallel()
+	shift := 5 * math.Ldexp(1, -33)
+	require.NoError(t, draftAdmission(t, riserLoop(1, shift), 0.5))
+	for _, tc := range []struct {
+		name   string
+		loop   sectionrecord.LoopRecord
+		amount float64
+		want   string
+		wall   string
+	}{
+		{"riser overrun at the far section", riserLoop(1, shift), 3, "a straight wall at a near-tangent join", "[2]"},
+		{"riser within its start charge", riserLoop(math.Ldexp(1, -36), shift), -0.5, "a straight wall at a near-tangent join", "[2]"},
+		{"arc window within its ends' charge", tinyArcLoop(), 1, "a circular wall at a near-tangent join", "[1]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			refusal := draftAdmission(t, tc.loop, tc.amount)
+			require.ErrorIs(t, refusal, decaderr.ErrUnsupported)
+			require.ErrorContains(t, refusal, tc.want)
+			require.ErrorContains(t, refusal, "the wall over recorded segments "+tc.wall)
 		})
 	}
 }
