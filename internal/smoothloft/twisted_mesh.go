@@ -17,13 +17,15 @@ import (
 const (
 	twistMaxU         = 64
 	twistMaxT         = 32
-	twistMaxTriangles = 60000
-	twistMaxScans     = 128_000_000
+	twistMaxTriangles = 500_000
+	twistMaxScans     = 4096 * twistMaxTriangles
 )
 
 var (
-	twistTarget = big.NewRat(1, 50) // mesh distance each patch is refined to, mm
-	twistLimit  = big.NewRat(1, 20) // refusal ceiling for the published bound, mm
+	twistLimit = big.NewRat(1, 20) // refusal ceiling for the published bound, mm
+	// twistTargets are the mesh distances each patch may be refined to, finest
+	// first. The first that fits twistMaxTriangles is used.
+	twistTargets = []*big.Rat{big.NewRat(1, 50), big.NewRat(3, 100), big.NewRat(49, 1000)}
 )
 
 // twistTerms are §13.3's three distance terms of one patch at counts nu, nt.
@@ -55,8 +57,8 @@ func ratFloat(q *big.Rat) float64 {
 // twistCounts picks the station counts. Each of the three distance terms of
 // every patch gets a third of the target; the integer counts are the least
 // that meet it, so the table is shared and conforming.
-func twistCounts(ctx context.Context, bounds [][]twistBounds) ([]int, []int, error) {
-	third := div(twistTarget, rint(3))
+func twistCounts(ctx context.Context, bounds [][]twistBounds, target *big.Rat) ([]int, []int, error) {
+	third := div(target, rint(3))
 	nu, nt := make([]int, len(bounds)), make([]int, len(bounds[0]))
 	for i := range nt {
 		nt[i] = 1
@@ -105,9 +107,25 @@ func buildTwistedMesh(ctx context.Context, patches [][]twistPatch, edgeOf []int,
 			bounds[k][i] = patches[k][i].bounds()
 		}
 	}
-	nu, nt, err := twistCounts(ctx, bounds)
-	if err != nil {
-		return Build{}, err
+	var nu, nt []int
+	for _, target := range twistTargets {
+		var err error
+		nu, nt, err = twistCounts(ctx, bounds, target)
+		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return Build{}, ctxErr
+			}
+			nu = nil
+			continue
+		}
+		if twistTriangleCount(nu, nt) <= twistMaxTriangles {
+			break
+		}
+		nu = nil
+	}
+	if nu == nil {
+		return Build{}, twistUnsupported("twisted loft needs more than %d triangles or its station ceilings for a 0.05 mm mesh bound",
+			twistMaxTriangles)
 	}
 	var stations []twistStation
 	var stationEdge []int
@@ -128,33 +146,48 @@ func buildTwistedMesh(ctx context.Context, patches [][]twistPatch, edgeOf []int,
 			rings = append(rings, ring{span: i, band: b})
 		}
 	}
-	if triangles := 2*ringSize*(len(rings)-1) + 4*(ringSize-2); triangles > twistMaxTriangles {
-		return Build{}, twistUnsupported("twisted loft mesh of %d triangles exceeds %d", triangles, twistMaxTriangles)
-	}
-
 	origin := planes[0].Origin
-	rho := new(big.Rat)
+	ox, oy := rf(origin.X), rf(origin.Y)
+	weights := make([][4]*big.Rat, ringSize)
+	spanStart := make([]int, len(patches)+1)
+	for q, st := range stations {
+		weights[q] = twistBernstein3(st.u)
+		spanStart[st.span+1] = q + 1
+	}
+	rhos := make([]*big.Rat, len(rings))
+	var err error
 	verts := make([]r3.Vec, len(rings)*ringSize)
-	for r, rg := range rings {
-		if err := ctx.Err(); err != nil {
-			return Build{}, err
-		}
+	err = twistParallel(ctx, len(rings), func(r int) error {
+		rg := rings[r]
 		t := big.NewRat(int64(rg.band), int64(nt[rg.span]))
 		z := add(zs[rg.span], mul(sub(zs[rg.span+1], zs[rg.span]), t))
 		zf, _ := z.Float64()
-		for q, st := range stations {
-			p := patches[st.span][rg.span].At(st.u, t)
-			x, y := add(p.U, rf(origin.X)), add(p.V, rf(origin.Y))
-			xf, _ := x.Float64()
-			yf, _ := y.Float64()
-			v := r3.Vec{X: xf, Y: yf, Z: zf}
-			if !proofbound.FiniteVec(v) {
-				return Build{}, twistUnsupported("twisted loft station exceeds float64")
+		bt := twistBernstein3(t)
+		rho := new(big.Rat)
+		for k := range patches {
+			row := patches[k][rg.span].blendT(bt)
+			for q := spanStart[k]; q < spanStart[k+1]; q++ {
+				p := blendRow(row, weights[q])
+				x, y := add(p.U, ox), add(p.V, oy)
+				xf, _ := x.Float64()
+				yf, _ := y.Float64()
+				v := r3.Vec{X: xf, Y: yf, Z: zf}
+				if !proofbound.FiniteVec(v) {
+					return twistUnsupported("twisted loft station exceeds float64")
+				}
+				verts[r*ringSize+q] = v
+				rho = maxRat(rho, add(add(abs(sub(x, rf(xf))), abs(sub(y, rf(yf)))), abs(sub(z, rf(zf)))))
 			}
-			verts[r*ringSize+q] = v
-			round := add(add(abs(sub(x, rf(xf))), abs(sub(y, rf(yf)))), abs(sub(z, rf(zf))))
-			rho = maxRat(rho, round)
 		}
+		rhos[r] = rho
+		return nil
+	})
+	if err != nil {
+		return Build{}, err
+	}
+	rho := new(big.Rat)
+	for _, r := range rhos {
+		rho = maxRat(rho, r)
 	}
 	tris := make([][3]int, 0, 2*ringSize*(len(rings)-1)+4*(ringSize-2))
 	sources := make([]int, 0, cap(tris))
@@ -235,4 +268,16 @@ func buildTwistedMesh(ctx context.Context, patches [][]twistPatch, edgeOf []int,
 		}
 	}
 	return result, nil
+}
+
+// twistTriangleCount is the held triangle count of a station table.
+func twistTriangleCount(nu, nt []int) int {
+	ring, bands := 0, 0
+	for _, n := range nu {
+		ring += n
+	}
+	for _, n := range nt {
+		bands += n
+	}
+	return 2*ring*bands + 4*(ring-2)
 }

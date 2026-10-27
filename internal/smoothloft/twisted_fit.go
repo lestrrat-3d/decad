@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"runtime"
+	"sync"
+	"sync/atomic"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -14,7 +17,7 @@ import (
 )
 
 // MaxTwistedSections is §13's ceiling on the number of sections.
-const MaxTwistedSections = 64
+const MaxTwistedSections = 1024
 
 // twistSection is one section's edges in the first section's cyclic order:
 // edges[a][s] is span s of edge a.
@@ -66,75 +69,84 @@ func twistSame(a, b freeform.RatPoint) bool { return a.U.Cmp(b.U) == 0 && a.V.Cm
 
 // twistGather resolves every section to exact cubic spans, aligned to the
 // first section's cyclic order by the fit spline, and checks the exact joins.
-func twistGather(profiles []momentinput.Profile, work []*freeform.FreeformWork) ([]twistSection, error) {
+func twistGather(ctx context.Context, profiles []momentinput.Profile,
+	work []*freeform.FreeformWork) ([]twistSection, error) {
+	fitAt0, err := twistFitIndex(profiles[0])
+	if err != nil {
+		return nil, err
+	}
+	count := len(profiles[0].Outer.Segments)
 	sections := make([]twistSection, len(profiles))
-	var fitAt0, count int
-	var spanCount []int
-	for i, profile := range profiles {
-		fit, err := twistFitIndex(profile)
-		if err != nil {
-			return nil, err
-		}
-		m := len(profile.Outer.Segments)
-		if i == 0 {
-			fitAt0, count = fit, m
-		}
-		if m != count {
-			return nil, twistUnsupported("twisted loft sections have different edge counts")
-		}
-		walks, err := momentinput.ResolveProfileWalks(profile, work[i])
-		if err != nil {
-			return nil, err
-		}
-		edges := make([][]twistSpan, m)
-		for a := range m {
-			orig := ((fit+a-fitAt0)%m + m) % m
-			switch seg := profile.Outer.Segments[orig].(type) {
-			case sectionrecord.LineSeg:
-				start, end := twistRat(seg.Start), twistRat(seg.End)
-				if seg.TStart == 1 {
-					start, end = end, start
-				}
-				edges[a] = []twistSpan{twistLineSpan(start, end)}
-			case sectionrecord.FitSplineSeg:
-				spans := fitWalkSpans(walks.At(0, orig))
-				if len(spans) == 0 || len(spans) > 32 {
-					return nil, twistUnsupported("a twisted loft fit spline needs 1 to 32 curve spans")
-				}
-				edges[a] = make([]twistSpan, len(spans))
-				for s, span := range spans {
-					if len(span) != 4 {
-						return nil, twistUnsupported("a twisted loft fit spline needs cubic Bézier spans")
-					}
-					copy(edges[a][s][:], span)
-				}
-			}
-		}
-		if i == 0 {
-			spanCount = make([]int, m)
-			for a := range edges {
-				spanCount[a] = len(edges[a])
-			}
-		}
-		for a := range edges {
-			if len(edges[a]) != spanCount[a] {
+	err = twistParallel(ctx, len(profiles), func(i int) error {
+		edges, err := twistGatherOne(profiles[i], work[i], fitAt0, count)
+		sections[i] = twistSection{edges: edges}
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	for i := 1; i < len(sections); i++ {
+		for a := range sections[i].edges {
+			if len(sections[i].edges[a]) != len(sections[0].edges[a]) {
 				return nil, twistUnsupported("twisted loft sections have different fit-point counts or record kinds")
 			}
 		}
-		for a := range edges {
-			last := edges[a][len(edges[a])-1][3]
-			if !twistSame(last, edges[(a+1)%m][0][0]) {
-				return nil, twistUnsupported("a twisted loft section has unequal recorded joins")
-			}
-			for s := 1; s < len(edges[a]); s++ {
-				if !twistSame(edges[a][s-1][3], edges[a][s][0]) {
-					return nil, twistUnsupported("a twisted loft fit spline has disjoint spans")
-				}
-			}
-		}
-		sections[i] = twistSection{edges: edges}
 	}
 	return sections, nil
+}
+
+// twistGatherOne converts one section to cubic spans in the first section's
+// cyclic order and checks its own exact joins.
+func twistGatherOne(profile momentinput.Profile, work *freeform.FreeformWork,
+	fitAt0, count int) ([][]twistSpan, error) {
+	fit, err := twistFitIndex(profile)
+	if err != nil {
+		return nil, err
+	}
+	m := len(profile.Outer.Segments)
+	if m != count {
+		return nil, twistUnsupported("twisted loft sections have different edge counts")
+	}
+	walks, err := momentinput.ResolveProfileWalks(profile, work)
+	if err != nil {
+		return nil, err
+	}
+	edges := make([][]twistSpan, m)
+	for a := range m {
+		orig := ((fit+a-fitAt0)%m + m) % m
+		switch seg := profile.Outer.Segments[orig].(type) {
+		case sectionrecord.LineSeg:
+			start, end := twistRat(seg.Start), twistRat(seg.End)
+			if seg.TStart == 1 {
+				start, end = end, start
+			}
+			edges[a] = []twistSpan{twistLineSpan(start, end)}
+		case sectionrecord.FitSplineSeg:
+			spans := fitWalkSpans(walks.At(0, orig))
+			if len(spans) == 0 || len(spans) > 32 {
+				return nil, twistUnsupported("a twisted loft fit spline needs 1 to 32 curve spans")
+			}
+			edges[a] = make([]twistSpan, len(spans))
+			for s, span := range spans {
+				if len(span) != 4 {
+					return nil, twistUnsupported("a twisted loft fit spline needs cubic Bézier spans")
+				}
+				copy(edges[a][s][:], span)
+			}
+		}
+	}
+	for a := range edges {
+		last := edges[a][len(edges[a])-1][3]
+		if !twistSame(last, edges[(a+1)%m][0][0]) {
+			return nil, twistUnsupported("a twisted loft section has unequal recorded joins")
+		}
+		for s := 1; s < len(edges[a]); s++ {
+			if !twistSame(edges[a][s-1][3], edges[a][s][0]) {
+				return nil, twistUnsupported("a twisted loft fit spline has disjoint spans")
+			}
+		}
+	}
+	return edges, nil
 }
 
 // twistPlanes checks the shared world-XY frame and strictly ascending Z, and
@@ -159,35 +171,43 @@ func twistPlanes(planes []sectionrecord.PlaneRecord) ([]*big.Rat, error) {
 // [span][height span], where span runs over all edge spans in edge order.
 func twistPatches(ctx context.Context, sections []twistSection, zs []*big.Rat) ([][]twistPatch, []int, error) {
 	n := len(sections)
-	var edgeOf []int
-	var patches [][]twistPatch
-	budget := proofbound.NewWorkBudget(ctx)
+	var edgeOf, edgeSpan []int
 	for a := range sections[0].edges {
 		for s := range sections[0].edges[a] {
-			// tangents[i][j] is section i's Z slope of control point j.
-			tangents := make([]twistSpan, n)
-			for j := range 4 {
-				points := make([]freeform.RatPoint, n)
-				for i := range sections {
-					points[i] = sections[i].edges[a][s][j]
-				}
-				for i, m := range twistSlopes(points, zs) {
-					tangents[i][j] = m
-				}
-			}
-			row := make([]twistPatch, n-1)
-			for i := range row {
-				if err := ctx.Err(); err != nil {
-					return nil, nil, err
-				}
-				row[i] = twistPatchOf(sections[i].edges[a][s], sections[i+1].edges[a][s], tangents[i], tangents[i+1], sub(zs[i+1], zs[i]))
-				if err := row[i].provePolarPositive(ctx, budget); err != nil {
-					return nil, nil, err
-				}
-			}
-			patches = append(patches, row)
 			edgeOf = append(edgeOf, a)
+			edgeSpan = append(edgeSpan, s)
 		}
+	}
+	patches := make([][]twistPatch, len(edgeOf))
+	// Each edge span is independent: its tangents, patches and proofs read
+	// only the shared sections.
+	err := twistParallel(ctx, len(edgeOf), func(k int) error {
+		a, s := edgeOf[k], edgeSpan[k]
+		budget := proofbound.NewWorkBudget(ctx)
+		// tangents[i][j] is section i's Z slope of control point j.
+		tangents := make([]twistSpan, n)
+		for j := range 4 {
+			points := make([]freeform.RatPoint, n)
+			for i := range sections {
+				points[i] = sections[i].edges[a][s][j]
+			}
+			for i, m := range twistSlopes(points, zs) {
+				tangents[i][j] = m
+			}
+		}
+		row := make([]twistPatch, n-1)
+		for i := range row {
+			row[i] = twistPatchOf(sections[i].edges[a][s], sections[i+1].edges[a][s], tangents[i], tangents[i+1],
+				sub(zs[i+1], zs[i]))
+			if err := row[i].provePolarPositive(ctx, budget); err != nil {
+				return err
+			}
+		}
+		patches[k] = row
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
 	}
 	return patches, edgeOf, nil
 }
@@ -208,7 +228,7 @@ func BuildTwistedFits(ctx context.Context, profiles []momentinput.Profile,
 	if err != nil {
 		return Build{}, err
 	}
-	sections, err := twistGather(profiles, work)
+	sections, err := twistGather(ctx, profiles, work)
 	if err != nil {
 		return Build{}, err
 	}
@@ -217,4 +237,41 @@ func BuildTwistedFits(ctx context.Context, profiles []momentinput.Profile,
 		return Build{}, err
 	}
 	return buildTwistedMesh(ctx, patches, edgeOf, len(sections[0].edges), planes, zs)
+}
+
+// twistParallel runs fn(0..n-1) on all CPUs and returns the error of the
+// lowest failing index, so a refusal does not depend on scheduling. The calls
+// must not share mutable state.
+func twistParallel(ctx context.Context, n int, fn func(int) error) error {
+	var next atomic.Int64
+	var mu sync.Mutex
+	var first error
+	firstAt := n
+	var failed atomic.Bool
+	var wg sync.WaitGroup
+	for range min(runtime.GOMAXPROCS(0), max(n, 1)) {
+		wg.Go(func() {
+			for !failed.Load() {
+				i := int(next.Add(1) - 1)
+				if i >= n {
+					return
+				}
+				err := ctx.Err()
+				if err == nil {
+					err = fn(i)
+				}
+				if err == nil {
+					continue
+				}
+				mu.Lock()
+				if i < firstAt {
+					first, firstAt = err, i
+				}
+				mu.Unlock()
+				failed.Store(true)
+			}
+		})
+	}
+	wg.Wait()
+	return first
 }
