@@ -309,7 +309,7 @@ faces `G₀` and `G₁`. Everything else in the held mesh is copied unchanged.
    bridge from each hole to the outer loop. The ear clipping uses every loop
    vertex, collinear ones included, so the face keeps the vertices its
    neighbours share. A face with a vertex off its boundary loops refuses
-   (SR5), except a plane face's vertex exactly on its plane (§2). The wall's facets are cut by the setback plane: a facet wholly beyond
+   (SR5), except a plane face's vertex exactly on its plane (§2), and the straight edge's own two faces' vertex exactly on that face's retained plane: the rewrite triangulates those faces again from their loops, so the point a mesh adds to fan a face is dropped. The wall's facets are cut by the setback plane: a facet wholly beyond
    it stays, one wholly before it goes, and a crossing facet is clipped, with one
    new vertex per cut mesh edge shared by the facets on either side. A new wall
    vertex lies on a held facet edge, so it takes that edge's larger vertex bound,
