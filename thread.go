@@ -359,8 +359,9 @@ func buildThreadCoil(ctx context.Context, d *Document, frame r3.Frame, plan thre
 	if leftHand {
 		opts = append(opts, WithLeftHand())
 	}
-	if allowReduced && threadCoilStationsPerTurn(plan, pitch) == 96 {
-		opts = append(opts, stationsPerTurnOption(96))
+	stations := threadCoilStationsPerTurn(plan, pitch)
+	if allowReduced && stations < coilshell.StationsPerTurn {
+		opts = append(opts, stationsPerTurnOption(stations))
 	}
 	return Coil(ctx, d, s, s.Profiles()[0], axis, units.Millimeters(pitch), units.Scalar(plan.Turns), opts...)
 }
@@ -370,6 +371,7 @@ func buildThreadCoil(ctx context.Context, d *Document, frame r3.Frame, plan thre
 // The shell's recorded displacement remains the authoritative bound.
 func threadCoilStationsPerTurn(plan threadplan.Plan, pitch float64) int64 {
 	const reducedStations = 96
+	const priorReducedStations = 128
 	const maxEstimatedDeparture = 0.003
 
 	rhoMin, rhoMax := math.Inf(1), math.Inf(-1)
@@ -385,12 +387,18 @@ func threadCoilStationsPerTurn(plan threadplan.Plan, pitch float64) int64 {
 	if !(rhoMin > 0) || maxRadialStep > rhoMin {
 		return coilshell.StationsPerTurn
 	}
-	h := math.Pi / reducedStations
+	allowedDeparture := min(maxEstimatedDeparture, 0.0006*rhoMax)
 	k := pitch / (2 * math.Pi)
-	departure := rhoMax*h*h/2 + maxRadialStep*h/2*(h+k/rhoMin) +
-		maxRadialStep*maxRadialStep*h*h/(8*rhoMin)
-	if departure <= min(maxEstimatedDeparture, 0.0006*rhoMax) {
+	departure := func(stations int64) float64 {
+		h := math.Pi / float64(stations)
+		return rhoMax*h*h/2 + maxRadialStep*h/2*(h+k/rhoMin) +
+			maxRadialStep*maxRadialStep*h*h/(8*rhoMin)
+	}
+	if departure(reducedStations) <= allowedDeparture {
 		return reducedStations
+	}
+	if departure(priorReducedStations) <= allowedDeparture {
+		return priorReducedStations
 	}
 	return coilshell.StationsPerTurn
 }
