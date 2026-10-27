@@ -1014,6 +1014,31 @@ or wholly inside it, the exact reading must give that same answer, so the
 audit takes it. Otherwise the exact arithmetic runs. The audit returns the same
 verdict and names the same refused pair with or without the pre-test.
 
+Every pre-test interval has one reference form: an interval product takes the
+`math.Min` and `math.Max` of its four end products, and every end steps outward
+by `proof.NextDown` or `proof.NextUp`. The pre-test may compute an interval
+faster only when the shortcut gives the same two ends, bit for bit, for every
+input, NaN and infinite ends included. Its shortcuts are these:
+
+- An interval product takes the builtin `min` and `max` unless a product is
+  NaN, and then `math.Min` and `math.Max` themselves. The two agree on every
+  non-NaN operand, signed zeros included. They differ only when a NaN meets an
+  infinity.
+- A product with a zero-width interval, a stored corner coordinate, takes its
+  two distinct end products. The other two are copies, and `math.Min(m, m)` is
+  `m` for every `m`.
+- The outward step inlines `x ± x·(1 + 2^-52)·2^-53` for an `x` stepping away
+  from zero with `|x| ≥ 2^-969`. The product rounds to between half an ulp and
+  one and a half ulps of `x`, so the sum rounds to `x`'s neighbour, as `proof`'s
+  own step does. Every other `x` calls `proof`.
+- A triangle's projection onto its own normal enclosure depends only on that
+  triangle. `NewRevolveAuditTri` computes it once and stores it, and the
+  separating-axis pre-test reads the stored ends for every pair.
+
+Differential tests check each shortcut against the reference form bit for bit.
+A shortcut cannot change an interval, so it cannot change what the pre-test
+settles.
+
 A mesh built at `VerifyNone` declines this audit and states no embedding: it
 sets `BoundaryVerified()` false, publishes no `areaSlack` and no `volSymDiff`,
 and no boolean composes it. It keeps every other row of §1 — the section

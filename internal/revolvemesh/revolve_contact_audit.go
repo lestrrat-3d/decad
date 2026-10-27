@@ -28,7 +28,9 @@ import (
 // Every predicate below reads these rather than rebuilding them per pair,
 // exactly as internal/loftmesh/loft_audit.go's own audit data does. fp holds the stored float
 // corners, and fu, fv, fw and fn enclose u, v, w and n in float intervals for
-// the pre-test (tessellate_revolve_filter.go).
+// the pre-test (tessellate_revolve_filter.go). FnProj is RevIvProject(Fp,
+// Fn), the pre-test's projection of the triangle onto its own normal, which no
+// pair changes.
 type RevolveAuditTri struct {
 	P              [3]proofarith.DyV3
 	U, V, W, N     proofarith.DyV3
@@ -36,6 +38,7 @@ type RevolveAuditTri struct {
 	Box            [2]r3.Vec
 	Fp             [3]r3.Vec
 	Fu, Fv, Fw, Fn RevIvVec
+	FnProj         [2]float64
 	// off[k] holds the two corner offsets measured from corner k, in
 	// increasing corner order, each with its proven length bound.
 	Off [3][2]RevolveOffset
@@ -58,6 +61,7 @@ func NewRevolveAuditTri(verts []r3.Vec, tri [3]int) (RevolveAuditTri, bool) {
 	out.Fv = RevIvPointDiff(out.Fp[2], out.Fp[0])
 	out.Fw = RevIvPointDiff(out.Fp[2], out.Fp[1])
 	out.Fn = RevIvCross(out.Fu, out.Fv)
+	out.FnProj[0], out.FnProj[1] = RevIvProject(out.Fp, out.Fn)
 	out.Lu = proofbound.DvLenUpper(out.U)
 	out.Lv = proofbound.DvLenUpper(out.V)
 	out.Lw = proofbound.DvLenUpper(out.W)
