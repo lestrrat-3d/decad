@@ -83,6 +83,9 @@ func TestCutProjectionScratchDoesNotEscapeIntoRegions(t *testing.T) {
 		for i := range scratch.cutter.raw.entries {
 			scratch.cutter.raw.entries[i] = cutRawEntry{}
 		}
+		for i := range scratch.cutter.regionPoints {
+			scratch.cutter.regionPoints[i] = Xp2{}
+		}
 		for i, regions := range retained {
 			actual := cutRegionSnapshot(regions)
 			require.Len(t, actual, len(snapshots[i]))
@@ -98,6 +101,7 @@ func TestCutWorkspaceDropsOversizedStorage(t *testing.T) {
 	old := &scratch.cutter
 	old.Verts = make([]CutVert, cutWorkspaceRetainLimit+1)
 	old.Edges = make([]CutEdge, cutWorkspaceRetainLimit+1)
+	old.regionPoints = make([]Xp2, cutWorkspaceRetainLimit+1)
 	old.index = cutVertIndex{head: map[uint64]int{}, next: make([]int, cutWorkspaceRetainLimit+1)}
 	old.raw = cutRawIndex{head: map[uint64]int{}, entries: make([]cutRawEntry, cutWorkspaceRetainLimit+1)}
 	old.seen = map[[2]int]struct{}{}
@@ -114,6 +118,8 @@ func TestCutWorkspaceDropsOversizedStorage(t *testing.T) {
 	require.Zero(t, len(tc.Edges))
 	require.LessOrEqual(t, cap(tc.Verts), cutWorkspaceRetainLimit)
 	require.LessOrEqual(t, cap(tc.Edges), cutWorkspaceRetainLimit)
+	require.Zero(t, len(tc.regionPoints))
+	require.LessOrEqual(t, cap(tc.regionPoints), cutWorkspaceRetainLimit)
 	require.Zero(t, len(tc.index.head))
 	require.Zero(t, len(tc.index.next))
 	require.LessOrEqual(t, cap(tc.index.next), cutWorkspaceRetainLimit)

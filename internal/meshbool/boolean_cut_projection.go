@@ -31,8 +31,9 @@ func newTriCutter(ctx context.Context, projections *cutProjectionScratch) *TriCu
 		projections.used = 0
 	}
 	*tc = TriCutter{
-		Verts: resetCutSlice(tc.Verts),
-		Edges: resetCutSlice(tc.Edges),
+		Verts:        resetCutSlice(tc.Verts),
+		Edges:        resetCutSlice(tc.Edges),
+		regionPoints: resetCutSlice(tc.regionPoints),
 		index: cutVertIndex{
 			head: resetCutMap(tc.index.head),
 			next: resetCutSlice(tc.index.next),
