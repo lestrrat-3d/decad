@@ -1498,6 +1498,9 @@
 6	0.01	TestBooleanNilContextIsDegenerate
 6	0.13	TestBooleanVerifyUsesProvenToleranceBound
 6	0.32	TestBossDraftNarrowsTheBossTowardItsTop
+10	0.01	TestQuarterTurnExchangesCoordinatesExactly
+10	0.01	TestQuarterTurnedSolidsJoinExactly
+10	0.01	TestQuarterTurnRefusals
 6	0.00	TestBossRibsRefusals
 6	0.46	TestBossStandsOnTheWallOfABore
 6	0.01	TestBrepPartialChamferBlindPocket

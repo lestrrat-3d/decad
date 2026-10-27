@@ -260,3 +260,33 @@ func Example_offset_solid() {
 	// Output:
 	// volume: 1680 mm^3
 }
+
+// QuarterTurn turns a faceted solid by whole quarter turns about a world axis. It exchanges coordinates
+// instead of multiplying by a rotation, so the turned solid is exact and stays on the exact routes. Here a
+// 10 x 8 x 6 mm block read from OBJ is turned a quarter about +Z through the origin, so that its x extent
+// becomes the y extent.
+func Example_quarter_turn() {
+	mesh, err := decad.ReadOBJ(context.Background(), strings.NewReader(boxOBJ))
+	if err != nil {
+		fmt.Printf("failed to read mesh: %s\n", err)
+		return
+	}
+	box, err := decad.SolidFromMesh(context.Background(), decad.New(), mesh)
+	if err != nil {
+		fmt.Printf("failed to make a solid: %s\n", err)
+		return
+	}
+	turned, err := decad.QuarterTurn(context.Background(), box, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 0), 1)
+	if err != nil {
+		fmt.Printf("failed to turn: %s\n", err)
+		return
+	}
+	bounds, err := turned.Bounds()
+	if err != nil {
+		fmt.Printf("failed to read the bounds: %s\n", err)
+		return
+	}
+	fmt.Printf("x: %.0f to %.0f, y: %.0f to %.0f\n", bounds.Min.X, bounds.Max.X, bounds.Min.Y, bounds.Max.Y)
+	// Output:
+	// x: -8 to 0, y: 0 to 10
+}

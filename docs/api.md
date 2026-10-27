@@ -213,6 +213,7 @@ Each of these returns a new body and retires its input.
 | `decad.TextProfiles` | Draws lines of text from a TrueType font (Go Regular by default) as closed sketch profiles for `decad.Emboss`. |
 | `decad.Emboss` | Raises or engraves closed profiles on a planar face, or on a cylindrical face from a sketch plane tangent to it. `decad.EmbossRaised` or `decad.EmbossEngraved` picks the mode, `decad.WithEmbossDraft` leans the walls and `decad.WithEmbossRimFillet` rounds the rim. |
 | `decad.Thicken` | Turns a sheet into a solid. `decad.WithThickenSide` picks the side. |
+| `decad.QuarterTurn` | Turns a mesh solid by whole quarter turns about a world axis, exchanging coordinates so the result stays exact. |
 | `decad.Offset` | Builds a second sheet at a normal distance and leaves the source live; for a mesh solid whose faces all square to an axis it moves every face and builds a second solid. |
 
 ## Booleans
