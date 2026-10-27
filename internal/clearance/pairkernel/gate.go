@@ -26,7 +26,10 @@ func BodyGateDiameter(ctx context.Context, body *topo.Body) (float64, bool, erro
 	if d, ok, handled, err := gatediameter.DirectBodyGateDiameter(ctx, body); handled || err != nil {
 		return d, ok, err
 	}
-	budget := proofbound.NewWorkBudget(ctx)
+	// The carrier build and the gate readers use this budget only through
+	// Step, StepN and Err, so the poll budget returns what NewWorkBudget's
+	// would at every step (see PairGateDiameter).
+	budget := proofbound.NewPollWorkBudget(ctx)
 	_, carrierOK, err := newBodyGeomBudget(budget, body)
 	if err != nil {
 		return 0, false, err
@@ -59,7 +62,13 @@ func bodyGatePoints(ctx context.Context, budget *proofbound.WorkBudget, body *to
 // empty and Join only appends into it, so a stored reading's slice is never
 // appended to; keep it that way. A nil cache reads every body fresh.
 func PairGateDiameter(ctx context.Context, a, b *topo.Body, cache *Cache) (float64, error) {
-	budget := proofbound.NewWorkBudget(ctx)
+	// The gate readers use this budget only through Step, StepN and Err. The
+	// poll budget counts steps as NewWorkBudget's does and calls ctx.Err at
+	// the same multiples of WorkPollInterval, so every call returns what
+	// NewWorkBudget's would, and the reading and the step at which a cancel
+	// stops it are the same. Its StepN charges the diameter scan's skipped
+	// blocks in one move per poll instead of one call per pair.
+	budget := proofbound.NewPollWorkBudget(ctx)
 	var g diameter.GatePoints
 	for _, body := range [2]*topo.Body{a, b} {
 		points, ok, err := cache.gatePoints(ctx, budget, body)
