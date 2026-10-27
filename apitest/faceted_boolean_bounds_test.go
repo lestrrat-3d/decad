@@ -160,7 +160,10 @@ func TestFacetedPlacementKeepsNearOriginVertexBoundTight(t *testing.T) {
 	}
 	nearBound := boundAt(motion.Apply(origin))
 	farBound := boundAt(motion.Apply(far))
-	require.Positive(t, nearBound.Mag())
+	// The origin vertex's image under the stored motion is the translation itself, a float, so it pays no
+	// rounding at all; the distant corner's image is not a float and pays its own.
+	require.Zero(t, nearBound.Mag())
+	require.Positive(t, farBound.Mag())
 	require.Less(t, 2*nearBound.Mag(), farBound.Mag(),
 		"the origin vertex pays less rounding than a distant exact corner")
 }

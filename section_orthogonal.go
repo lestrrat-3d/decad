@@ -16,7 +16,7 @@ import (
 // world axes, the plane lies on a grid line or outside the solid, the cut is not one region, or a corner does
 // not map back into the plane's frame exactly.
 func orthogonalSection(ctx context.Context, fp facetedPayload, plane r3.Frame) (*sketch.Sketch, []*sketch.Profile, bool) {
-	if len(fp.Tris) == 0 || fp.Xform != r3.Identity() {
+	if len(fp.Tris) == 0 {
 		return nil, nil, false
 	}
 	for _, beta := range fp.VertexBound {

@@ -106,6 +106,11 @@ func placeMeshGap(ctx context.Context, budget *proofbound.WorkBudget, verts []r3
 		}
 		exact[i] = proof.ExactAffineImage(basis.EX, basis.EY, basis.EZ, tr, v)
 		next.Verts[i] = exact[i].Vec()
+		// An image that is itself a float, as a whole-number translation of whole-number coordinates is, has no
+		// rounding to allow for: the placed vertex is the exact image.
+		if proofbound.FiniteVec(next.Verts[i]) && proof.XptDenotes(exact[i], next.Verts[i]) {
+			vertexAllow[i] = 0
+		}
 		return nil
 	}
 	if workers >= 2 {
