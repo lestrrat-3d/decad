@@ -366,3 +366,95 @@ func TestUndercutsAgreeWithTheCubeByCubeColumns(t *testing.T) {
 	}
 	require.Greater(t, checked, 100)
 }
+
+func TestSectionAreaAgreesWithTheCubeCountOfTheLayer(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(9, 10))
+	checked := 0
+	for range 250 {
+		a := randomVoxels(rng)
+		v, tris, _, ok := a.mesh()
+		if !ok {
+			continue
+		}
+		for axis := range 3 {
+			ia, iv := (axis+1)%3, (axis+2)%3
+			for layer := range gridSide {
+				want := 0
+				for x := range gridSide {
+					for y := range gridSide {
+						for z := range gridSide {
+							if a[x][y][z] && [3]int{x, y, z}[axis] == layer {
+								want++
+							}
+						}
+					}
+				}
+				loops, err := orthoshell.SectionLoops(v, tris, axis, float64(layer)+0.5, ia, iv)
+				if err != nil {
+					require.True(t, declines(err), "%v", err)
+					continue
+				}
+				checked++
+				// An outer loop runs counter-clockwise and a hole clockwise, so the shoelace areas add up to the layer's cubes.
+				area := 0.0
+				for _, loop := range loops {
+					for i, p := range loop {
+						q := loop[(i+1)%len(loop)]
+						area += (p[0]*q[1] - q[0]*p[1]) / 2
+					}
+				}
+				require.InDelta(t, float64(want), area, 1e-9, "axis %d layer %d of %d cubes", axis, layer, a.count())
+			}
+		}
+	}
+	require.Greater(t, checked, 500)
+}
+
+func TestConcaveEdgeAgreesWithTheEdgeScan(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(11, 12))
+	concave, convexOnly := 0, 0
+	for range 400 {
+		a := randomVoxels(rng)
+		v, tris, _, ok := a.mesh()
+		if !ok {
+			continue
+		}
+		// A grid edge is concave when three of the four cubes round it are solid: the material turns inward there.
+		want := false
+		for axis := range 3 {
+			u, w := (axis+1)%3, (axis+2)%3
+			for k := range gridSide {
+				for cu := 0; cu <= gridSide; cu++ {
+					for cw := 0; cw <= gridSide; cw++ {
+						n := 0
+						for du := -1; du <= 0; du++ {
+							for dw := -1; dw <= 0; dw++ {
+								var cell [3]int
+								cell[axis], cell[u], cell[w] = k, cu+du, cw+dw
+								if a.at(cell[0], cell[1], cell[2]) {
+									n++
+								}
+							}
+						}
+						want = want || n == 3
+					}
+				}
+			}
+		}
+		got, err := orthoshell.HasConcaveEdge(v, tris)
+		if err != nil {
+			require.True(t, declines(err), "%v", err)
+			continue
+		}
+		require.Equal(t, want, got, "a set of %d cubes", a.count())
+		if got {
+			concave++
+		} else {
+			convexOnly++
+		}
+	}
+	require.Greater(t, concave, 50)
+	require.Greater(t, convexOnly, 20, "a single box has no concave edge")
+}
