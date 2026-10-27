@@ -30,8 +30,10 @@ import (
 // and every boolean of X and Y is Y's section swept over an interval, joined
 // to X's faces by those one or two faces taking Y's section as a hole. Y caps
 // lying in the planes of every face the tube meets are the flush reach
-// (FlushReach), the one coplanar contact B8 lets through. Every other pair
-// misses silently and takes the mesh path.
+// (FlushReach), the one coplanar contact B8 lets through. A tube meeting
+// several faces, each across d, takes the sweep walk (WalkReach), which reads
+// each layer of the tube between consecutive faces as inside or outside X.
+// Every other pair misses silently and takes the mesh path.
 
 // Pair is an admitted pair stated in X's reference frame: X's face view
 // with each face's map onto the reference, Y's axes as signed reference axes,
@@ -86,8 +88,10 @@ func OfPayloads(ctx context.Context, op meshbool.OperationKind, a, b topo.Payloa
 		if !ok {
 			continue
 		}
-		if cp.flush[0] || cp.flush[1] {
-			// B8's flush lift: only the flush reach reads a shared plane.
+		flush := cp.flush[0] || cp.flush[1]
+		if flush {
+			// B8's flush lift: only the flush reach and the sweep walk read a
+			// shared plane.
 			slabs, side, ok, err := FlushReach(ctx, cp.faces, cp.tool, cp.flush)
 			if err != nil {
 				return nil, false, err
@@ -95,14 +99,31 @@ func OfPayloads(ctx context.Context, op meshbool.OperationKind, a, b topo.Payloa
 			if ok && flushOpAdmitted(op, side) {
 				return buildClassB(ctx, op, cp, slabs)
 			}
+		} else {
+			slabs, ok, err := ThroughReach(ctx, cp.faces, cp.tool, delta)
+			if err != nil {
+				return nil, false, err
+			}
+			if ok {
+				return buildClassB(ctx, op, cp, slabs)
+			}
+		}
+		// A tube meeting several faces, or two the reaches above do not
+		// build, takes the sweep walk when no displacement is charged.
+		if delta == 0 {
+			walk, ok, err := WalkReach(ctx, cp.faces, cp.tool)
+			if err != nil {
+				return nil, false, err
+			}
+			if ok {
+				bp, built, err := buildClassBWalk(ctx, op, cp, walk)
+				if err != nil || built {
+					return bp, built, err
+				}
+			}
+		}
+		if flush {
 			continue
-		}
-		slabs, ok, err := ThroughReach(ctx, cp.faces, cp.tool, delta)
-		if err != nil {
-			return nil, false, err
-		}
-		if ok {
-			return buildClassB(ctx, op, cp, slabs)
 		}
 		// A Cut of a prism outside the through reach takes the crossing
 		// reach (crossing_cut.go).

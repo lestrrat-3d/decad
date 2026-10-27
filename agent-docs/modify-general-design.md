@@ -448,8 +448,9 @@ With `s = +1`, `t` the thickness in millimetres with its conversion bound
    crossings from the zero-displacement records, and the crossing-angle
    charge (prism-boolean §3.4, A6) amplifies only a displacement the records
    carry, so a cut crossing at a grazing angle would publish vertices the
-   flat `c` does not cover. A cut whose `c` is zero takes the crossing reach
-   as class B does. Class B also needs every line exactly along a reference
+   flat `c` does not cover. A cut whose `c` is zero lifts B8 and takes the
+   flush reach, the sweep walk and the crossing reach as class B does
+   (general-boolean §3 "Flush cap contact", "Pin across several faces"). Class B also needs every line exactly along a reference
    axis (B6), so an eroded polygon whose float miters drift off the axis — any convex
    corner at a thickness that is no exact float, such as 0.1 in — is SG6; a
    section whose corners are arcs erodes through G1 joins that keep each line

@@ -17,7 +17,7 @@ import (
 // tube without lying across the sweep makes the reach miss. Class B's own
 // boolean passes zero.
 func ThroughReach(ctx context.Context, faces []FaceRecord, tool ToolRecord, widen float64) ([]Slab, bool, error) {
-	slabs, ok, err := tubeSlabs(ctx, faces, tool, widen)
+	slabs, ok, err := tubeSlabs(ctx, faces, tool, widen, 2)
 	if err != nil || !ok {
 		return nil, false, err
 	}
@@ -29,11 +29,11 @@ func ThroughReach(ctx context.Context, faces []FaceRecord, tool ToolRecord, wide
 	return slabs, true, nil
 }
 
-// tubeSlabs lists the one or two target faces whose boxes, grown by widen,
-// are not strictly apart from the tool's section tube, each read across the
-// tool's sweep. ok is false when no face, more than two faces, or a face not
-// across the sweep meets the tube.
-func tubeSlabs(ctx context.Context, faces []FaceRecord, tool ToolRecord, widen float64) ([]Slab, bool, error) {
+// tubeSlabs lists the target faces whose boxes, grown by widen, are not
+// strictly apart from the tool's section tube, each read across the tool's
+// sweep. ok is false when no face, more than limit faces, or a face not
+// across the sweep meets the tube; a limit of zero sets no count.
+func tubeSlabs(ctx context.Context, faces []FaceRecord, tool ToolRecord, widen float64, limit int) ([]Slab, bool, error) {
 	rat := proofarith.FloatRat
 	grow := rat(widen)
 	d := tool.Axis[2]
@@ -72,7 +72,7 @@ func tubeSlabs(ctx context.Context, faces []FaceRecord, tool ToolRecord, widen f
 		slab.Face = fi
 		slabs = append(slabs, slab)
 	}
-	if len(slabs) == 0 || len(slabs) > 2 {
+	if len(slabs) == 0 || (limit > 0 && len(slabs) > limit) {
 		return nil, false, nil
 	}
 	return slabs, true, nil
@@ -103,7 +103,7 @@ const (
 // otherwise. Two faces must say the same side, or the pair misses. ok=false
 // is a silent miss.
 func FlushReach(ctx context.Context, faces []FaceRecord, tool ToolRecord, flush [2]bool) ([]Slab, FlushSide, bool, error) {
-	slabs, ok, err := tubeSlabs(ctx, faces, tool, 0)
+	slabs, ok, err := tubeSlabs(ctx, faces, tool, 0, 2)
 	if err != nil || !ok {
 		return nil, 0, false, err
 	}

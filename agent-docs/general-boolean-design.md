@@ -751,11 +751,15 @@ a U-shaped plate from wall to wall, and a through hole whose tool runs
 exactly from one wall of the target to the opposite one share one or two
 planes across a perpendicular pair, which B8 refuses. `classbgeom.OfPayloads` lifts B8 for
 exactly this contact when the caller charges no displacement beyond the
-records (`delta == 0`; route S's shell cavity cuts charge one and keep B8).
+records (`delta == 0`). Route S's shell cavity cuts pass their charge `c`
+(modify-general §3.3 step 4), which is zero when no cavity level or tool
+level carries a displacement; such a cut lifts B8 as class B's own booleans
+do, and a positive charge keeps B8.
 `CoplanarFaces` compares every target cap and wall plane with every tool
 plane by exact equality of recorded axis and level. A target plane on a tool
 wall's plane still misses. A target plane on a tool cap's plane marks that
-cap, and a marked pair takes only the flush reach (`FlushReach`), never the
+cap, and a marked pair takes only the flush reach (`FlushReach`) and, where
+it misses, the sweep walk of "Pin across several faces" below, never the
 through or crossing reach:
 
 - The tool's tube meets one or two target faces' boxes (the through reach's
@@ -798,8 +802,128 @@ tool one ulp off the face, a cap level that rounds onto the face's
 float (an inch length converted to 10 mm), and a face whose level carries a
 displacement keep the mesh path. A pin bridging the gap and running on into
 the far wall, by any length down to one ulp, meets that wall strictly inside
-its interval and misses; one stopping one ulp short of the far wall meets
-the near face alone and builds as a pin standing on it.
+its interval, so the flush reach misses it and the sweep walk below builds
+it; one stopping one ulp short of the far wall meets the near face alone and
+builds as a pin standing on it.
+
+#### Pin across several faces
+
+A pin through both prongs of a U-shaped plate, a pin through a slotted
+plate, and a pin bridging the U's gap and running on into the far prong meet
+more than two faces of the target, or two faces in a pattern neither the
+through reach nor the flush reach builds. When both of those miss and the
+caller charges no displacement (`delta == 0`), class B walks the tool's
+sweep (`WalkReach` in `internal/classbgeom/walk_reach.go`, built by
+`buildClassBWalk` in `internal/classbgeom/walk_build.go`). Every comparison
+is between recorded floats, and every gate misses silently to the mesh path:
+
+| # | Condition |
+|---|---|
+| W1 | The tube (the through reach's box test, unwidened) meets at least one face's box, and every face whose box meets it lies across the tool's sweep (`Across`). |
+| W2 | Every such face's level displacement is zero, and so are both of the tool's cap displacements. |
+| W3 | In `g` the tool spans `[a, b]` with `a < b`, and the faces' levels `s_1 < … < s_N` are strictly increasing. |
+| W4 | Consecutive faces point opposite ways along the sweep: `up_i ≠ up_{i+1}`, where `up_i` says face `i`'s outward normal is `g`'s `+N`. |
+| W5 | Each face's region holds the tool's section by the clean-nesting match of its perpendicular-face scene (§5). |
+| W6 | The operation changes the target in the tube and states one body: below. |
+
+The box test places every level in `[a, b]`, so a level equal to `a` or `b`
+is a flush cap, and only `s_1` or `s_N` can be one. Write `S` for the tool's
+section (one outer loop and no hole, so its interior is connected),
+`T = S × [a, b]` for the tube and `B` for its box.
+
+The proof that W1–W5 decide the target's membership around the tube runs
+in five steps.
+
+1. A face whose box is strictly apart from `B` lies at a positive distance
+   from it, so some open box `U` around `B` meets no face but `F_1 … F_N`.
+   Each `F_i` lies across the sweep at level `s_i`, so inside `U` the
+   target's boundary lies in the `N` planes `z = s_i`.
+2. The planes cut `U` into `N + 1` open layers, each an open box holding no
+   boundary point. Membership in the target is therefore constant on each
+   layer: `x_0` below `s_1`, `x_k` between `s_k` and `s_{k+1}`, and `x_N`
+   above `s_N`.
+3. By W5, `S` lies strictly inside `F_i`'s region, so over `S` the face is a
+   boundary patch of the target whose outward normal is `up_i`. The layer
+   above it is outside exactly when `up_i`: `x_i = ¬up_i` and
+   `x_{i−1} = up_i`. W4 is the condition that face `i` and face `i + 1`
+   agree on the layer between them. Flags that break it describe no solid,
+   and the pair misses. Together, `x_0 = up_1` and the layers alternate.
+4. The tool's interval splits into `I_0 = [a, s_1]`, `I_k = [s_k, s_{k+1}]`
+   and `I_N = [s_N, b]`. `I_0` is empty exactly when `a = s_1` and `I_N`
+   exactly when `s_N = b`, a flush cap. Every interior interval is nonempty
+   by W3.
+5. Inside `T` the tool's membership is 1, so on `I_k` the result is
+   `op(x_k, 1)`: 1 for `Union`, 0 for `Cut`, `x_k` for `Intersect`. Outside
+   `T` it is 0, so the result is the target for `Union` and `Cut` and empty
+   for `Intersect`.
+
+The result's boundary inside `U` lies where the result differs across a
+surface. For `Union` and `Cut` write `t` for the tube's value (1 and 0):
+
+- Face `F_i` over `S` has the tube on both sides unless it is a flush cap.
+  At a flush cap at `a` the side below lies outside `T` and holds `x_0`; at
+  `b` the side above holds `x_N`. With `t` on both sides the patch leaves
+  the boundary, and the face takes `S` as a hole strictly inside its region
+  (W5). Where the two sides differ, the patch stays with the face's own
+  sense: at `a` they are `x_0 = up_1` below and `t` above, which differ only
+  when the material lies on the side `F_1`'s outward normal points away from.
+  The face is kept whole, its record unchanged.
+- The tool's cap at `a < s_1` has `x_0` below and `t` above. It is a face of
+  `S` when they differ: outward `−N` for `Union` (`x_0 = 0`) and `+N` for
+  `Cut` (`x_0 = 1`, the floor of a blind hole). The cap at `b > s_N` is the
+  mirror case: outward `+N` for `Union` and `−N` for `Cut`.
+- The tool's walls over `I_k` have `t` inside and `x_k` outside: `Union`
+  keeps them where `x_k = 0`, and `Cut` keeps them reversed where `x_k = 1`.
+- Outside `U` the result is the target, so every face apart from the tube is
+  kept, and each `F_i` keeps its region outside `S`.
+
+`Intersect` is the union of `S × I_k` over the nonempty `I_k` with `x_k = 1`.
+Two such intervals never touch, because the layers alternate.
+
+| Op | W6: builds when | Result |
+|---|---|---|
+| `Union` | some nonempty `I_k` has `x_k = 0` | faces apart from the tube; each `F_i` holed or kept whole; the walls over each outside `I_k`; the caps above |
+| `Cut` | some nonempty `I_k` has `x_k = 1` | faces apart from the tube; each `F_i` holed or kept whole; the walls reversed over each inside `I_k`; the floors above |
+| `Intersect` | exactly one nonempty `I_k` has `x_k = 1` | the prism `S × I_k` |
+
+A `Union` or `Cut` that W6 refuses is the target itself, and an `Intersect`
+with no inside interval meets the target in disks at most. The mesh path
+decides those, as for the flush reach. An `Intersect` over two or more
+inside intervals is several separate prisms, which this build does not state,
+and it keeps the mesh path.
+
+The edges pair. Under `Union` an interior face has an outside interval on one
+side and an inside one on the other, by the alternation, so exactly one wall
+piece ends at its hole's rim. A holed flush face at `a` has `x_0 = 1`, so
+`x_1 = 0` and the wall over `I_1` ends at its rim. A cap at `a` has
+`x_0 = 0` and the wall over `I_0` ends at it. `Cut` is the same with the
+inside intervals. No two wall pieces meet, so §4.2's refusal of a rim shared
+by two cylinder pieces does not arise.
+
+On the U plate of "Flush cap contact" (500 mm² × 10 mm), a Ø6 pin from the near prong's
+inner wall `x = 10` to `x = 35` has `x_0 = 1`, a flush low cap, `x_1 = 0`
+over the gap, and `x_2 = 1` in the far prong. `Union` holes both walls and
+adds the wall over the gap, 5000 + 180π. `Cut` keeps the near wall whole,
+holes the far wall and drills a blind hole of depth 5, 5000 − 45π.
+`Intersect` is the prism over `[30, 35]`, 45π. A tool cap level that carries
+a displacement (an inch length), a section that crosses a face not across
+the sweep (the plate's top), and an `Intersect` through two prongs keep the
+mesh path. A pin ending exactly at a face is a flush cap, and pins one ulp
+short or long of it meet one face fewer or one face strictly inside. All
+three build.
+
+Once W1–W4 hold, the face scenes of W5 run inside `buildClassBWalk`, as they
+do in `buildClassB`. A scene that returns no clean nesting misses, but a
+scene past its work cap and a scene error refuse the operation instead of
+falling back to the mesh path.
+
+Route S's shell cavity cuts reach the walk too, because they call
+`OfPayloads` with a zero charge whenever no cavity or tool level is
+displaced (modify-general §3.3 step 4). The walk's proof holds for any pair
+of records that pass W1–W6, so such a cut builds the exact eroded prism less
+the dilated tool. The cavity record then still passes Stage 7's
+`breprecord.Build` checks (its falsification, its edge pairing and its
+volume check), which reject a record that does not close.
 
 ### Revolved shaft as a prism
 
@@ -1451,14 +1575,37 @@ are relations, never literals.
   through hole of 7 faces, `8000 − 360π`, and intersects with either operand
   first to its own prism, `360π`. Each is non-`Faceted`, pairs every edge,
   verifies its mesh at `VerifyAll` and is `Sound`. The bridging pin one ulp
-  short builds the standing pin of 12 faces. A pin running on into the far
-  prong, one ulp past the far wall, or with its section crossing the plate's
-  top, and a `Union` of the through pin keep the mesh path; the bridging
-  pin's `Cut` and `Intersect` refuse there with `BooleanUnsupportedContact`.
+  short builds the standing pin of 12 faces. A pin with its section crossing
+  the plate's top and a `Union` of the through pin keep the mesh path; the
+  bridging pin's `Cut` and `Intersect` refuse there with
+  `BooleanUnsupportedContact`.
   Two faces whose outward flags disagree, two faces at one cap's level, a
   displaced face level and a displaced tool cap miss
   (`apitest/classb_bridging_pin_test.go`,
   `internal/classbgeom/flush_reach_test.go`).
+- **B pin across several faces**: on the U plate, a Ø6 pin from x = 10 to
+  35, drawn from either end, unions with either operand first into 11 faces,
+  `5000 + 180π`, cuts into 12 faces, `5000 − 45π`, and intersects with either
+  operand first to the prism over `[30, 35]`, `45π`; the pin one ulp past the
+  far wall x = 30 unions into 11 faces and cuts a blind hole one ulp deep.
+  The pin from x = 10 to the far outer wall x = 40 unions into 11 faces,
+  `5000 + 180π`, cuts into 11 faces, `5000 − 90π`, and intersects to `90π`.
+  One ulp short of x = 40 it cuts a blind hole of 12 faces and unions into
+  11; one ulp long it cuts 11 faces, intersects to `90π` and unions into 13
+  faces with a one-ulp stub past the wall. On a slotted 6500 mm³ plate a pin
+  from x = −5 to 45 unions into 15 faces, `6500 + 180π`, and cuts into 12,
+  `6500 − 270π`; the pin from x = 0 to 40, both caps flush, unions into 11
+  faces, `6500 + 90π`, and cuts into 12, `6500 − 270π`. Each is
+  non-`Faceted`, pairs every edge, verifies its mesh at `VerifyAll` and is
+  `Sound`. The slotted plate's `Intersect` (two prisms), a far cap displaced
+  by an inch length, and a section crossing the U plate's top keep the mesh
+  path. Unit tests miss W1–W4 over hand-written face records (a face along
+  the sweep, one level twice, two faces of one sense, a displaced face or
+  tool cap, a backwards interval) and W5 over two faces too small for the
+  section, and build a boss from a brep plate's bottom z = 0 through its top
+  to z = 15, which a displaced top keeps off
+  (`apitest/classb_multi_face_pin_test.go`,
+  `internal/classbgeom/walk_reach_test.go`).
 - **B stacked target**: a cross hole under a blind pocket builds a brep of
   `4000 − 400 − 80π`.
 - **B with a hole breaking out**: a through cross hole whose circle crosses
