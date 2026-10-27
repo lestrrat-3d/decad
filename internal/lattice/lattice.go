@@ -173,11 +173,39 @@ func Surface(ctx context.Context, kind Kind, lo, hi r3.Vec, cell, level float64,
 			}
 		}
 	}
-	b := &builder{field: field, vertexAt: map[[2]int]int{}}
 	// The six tetrahedra of a cube, all about its diagonal from corner 0 to corner 6, so
 	// neighbouring cubes agree on the faces they share.
 	tets := [6][4]int{{0, 5, 1, 6}, {0, 1, 2, 6}, {0, 2, 3, 6}, {0, 3, 7, 6}, {0, 7, 4, 6}, {0, 4, 5, 6}}
 	corner := [8][3]int{{0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0}, {0, 0, 1}, {1, 0, 1}, {1, 1, 1}, {0, 1, 1}}
+	// Count emitted triangles from the sampled signs before constructing any
+	// vertices. This reserves the output once instead of repeatedly copying
+	// its growing slices. Stop counting at the existing output limit; the
+	// construction pass still owns that refusal.
+	triangleCount := 0
+	counts := [5]int{0, 1, 2, 1, 0}
+	for l := 0; l+1 < n[2] && triangleCount <= maxTriangles; l++ {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		for j := 0; j+1 < n[1] && triangleCount <= maxTriangles; j++ {
+			for i := 0; i+1 < n[0] && triangleCount <= maxTriangles; i++ {
+				var inside [8]int
+				for c, o := range corner {
+					if field[index(i+o[0], j+o[1], l+o[2])] > 0 {
+						inside[c] = 1
+					}
+				}
+				for _, t := range tets {
+					triangleCount += counts[inside[t[0]]+inside[t[1]]+inside[t[2]]+inside[t[3]]]
+				}
+			}
+		}
+	}
+	// Half the triangle count is a vertex capacity hint for closed surfaces.
+	// Disconnected components may need more; their storage grows as usual.
+	vertexCapacity := triangleCount/2 + 2
+	b := &builder{field: field, vertexAt: make(map[[2]int]int, vertexCapacity),
+		vertices: make([]r3.Vec, 0, vertexCapacity), triangles: make([][3]int, 0, triangleCount)}
 	for l := 0; l+1 < n[2]; l++ {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
@@ -238,7 +266,8 @@ func (b *builder) crossing(a, c int, pos func(int) r3.Vec) int {
 // positive. The triangles it adds wind so that their normal points from the
 // inside nodes toward the outside ones.
 func (b *builder) tet(ids [4]int, pos func(int) r3.Vec) {
-	var in, out []int
+	var inStorage, outStorage [4]int
+	in, out := inStorage[:0], outStorage[:0]
 	for _, id := range ids {
 		if b.field[id] > 0 {
 			in = append(in, id)
