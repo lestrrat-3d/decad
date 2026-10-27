@@ -16,19 +16,9 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Lint and test jobs run independently. The race shards share the two test
-  # binaries race-binary builds: the root package's and apitest's. The job
-  # that runs the packages outside the root also takes the binaries of the four
-  # packages whose tests import the root package, so it compiles the root
-  # package under -race zero times.
-  #
-  # Each Linux job that compiles keeps its own Go build cache through
-  # .github/actions/go-build-cache-restore and go-build-cache-save, so it
-  # restores what it built itself; those actions explain the key and the
-  # save policy. setup-go's own cache is off in those jobs. It keys on the OS
-  # and go.sum alone, so every Linux job would share one entry, saved by
-  # whichever job finished first. verify, macOS and Windows each still use
-  # setup-go's cache, since each is the only job with its key.
+  # The binary builder supplies root/API shards and tiny dependent packages.
+  # Examples, internal packages, dynamics, lint and verification start independently.
+  # Linux compile jobs use separate build-cache entries per workload.
   lint:
     name: golangci-lint
     runs-on: ubuntu-latest
@@ -79,7 +69,7 @@ jobs:
           cache: false
 
       # The sources are every package the test binaries compile: the root
-      # package, apitest/, examples/, and everything outside dynamics/. A pull
+      # package, apitest/, and their dependencies outside dynamics/. A pull
       # request that changes none of them restores every binary, links
       # included.
       - name: Restore Go build cache
@@ -89,21 +79,19 @@ jobs:
           sources: |
             :(glob)**/*.go
             :(exclude)dynamics
+            :(exclude)examples
             :(exclude)_gallery
             :(exclude)_shardgen
 
       - name: Download dependencies
         run: go mod download
 
-      # With an -o directory, go test -c writes one <package>.test per package:
-      # race-bin/decad.test, apitest.test, examples.test, decadtest.test,
-      # export.test and decaderr.test. The last four are the packages outside
-      # the root whose tests import it; the job that runs them below needs no
-      # root compile of its own.
+      # Each package writes its own named binary and shares the root compile.
+      # The independent examples job compiles its own whole packages.
       - name: Build race test binaries
-        run: go test -c -race -o race-bin/ . ./apitest/ ./examples/ ./decadtest/ ./export/ ./internal/decaderr/
+        run: go test -c -race -o race-bin/ . ./apitest/ ./decadtest/ ./export/ ./internal/decaderr/
 
-      # The shards download race-tests, so it holds their two binaries alone.
+      # Shards download the two binaries with recorded name assignments.
       - name: Upload race test binaries
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -119,7 +107,6 @@ jobs:
         with:
           name: race-tests-packages
           path: |
-            race-bin/examples.test
             race-bin/decadtest.test
             race-bin/export.test
             race-bin/decaderr.test
@@ -129,7 +116,7 @@ jobs:
       - name: Save Go build cache
         uses: ./.github/actions/go-build-cache-save
 
-  # Every shard runner runs its shard of both race binaries.
+  # Root/API tests still need measured test-name shards to bound execution.
   test-root-race:
     name: test (${{ matrix.os }}, ${{ matrix.race }}, ${{ matrix.shard }})
     needs: [race-binary]
@@ -140,7 +127,7 @@ jobs:
           - os: ubuntu-latest
             race: "-race"
             shard: "0"
-            packages: ""
+            packages: "./decadtest/ ./export/ ./internal/decaderr/"
           - os: ubuntu-latest
             race: "-race"
             shard: "1"
@@ -213,15 +200,13 @@ jobs:
       # Examples and Fuzz seed corpora as well as Test functions, so the
       # enumeration takes all three.
       #
-      # Which shard a test belongs to is READ from its binary's assignment file
-      # (.github/test-shards.txt for the root package,
-      # .github/test-shards-apitest.txt for apitest), not computed from its
+      # Root and apitest read their own .github/test-shards*.txt assignment.
+      # Assignments are not computed from a test's
       # position in the enumeration. A positional split moves half the suite
       # between shards whenever a test is added, so a balance that held
       # yesterday is re-rolled by the next commit; the recorded assignment is
       # packed by measured cost and moves nothing when the suite grows.
-      # ci_workflow_test.go and apitest/ci_shards_test.go fail when a test on
-      # disk is in no shard.
+      # Each sharded package's CI guard fails when a name on disk has no shard.
       #
       # run_shard runs a binary from its package directory, as go test does,
       # so a test reading a path relative to its package finds it. Both
@@ -235,11 +220,7 @@ jobs:
         shell: bash
         run: |
           timeout=10m
-          budget=300
-          case '${{ matrix.shard }}' in
-            0|10) timeout=45m; budget=2400 ;;
-            1|2) budget=420 ;;
-          esac
+          budget=240
           run_shard() {
             local bin="$GITHUB_WORKSPACE/race-bin/$1" shards="$2" dir="$3"
             chmod +x "$bin"
@@ -259,7 +240,7 @@ jobs:
             ' "$shards" -)"
             tests="${tests%|}"
             test -n "$tests"
-            (cd "$dir" && "$bin" -test.timeout "$timeout" -test.run "^(${tests})$")
+            (cd "$dir" && "$bin" -test.v -test.timeout "$timeout" -test.run "^(${tests})$")
           }
           start=$SECONDS
           logdir="$(mktemp -d)"
@@ -287,17 +268,59 @@ jobs:
           fi
           elapsed=$(( SECONDS - start ))
           echo "shard ${{ matrix.shard }} finished in ${elapsed}s"
-          # Shard 0 holds a two-tooth bevel join. Shard 10 holds
-          # the one-tooth mass regression and three-tooth bevel race slice;
-          # normal CI runs all eight teeth. Both have 2400s budgets below their
-          # 45m timeouts. Shards 1 and 2 carry other costly tests
-          # and allow 420s; all other shards retain 300s.
-          # A budget failure reports test-cost drift before a timeout does.
-          # Re-measure and regenerate with the command in _shardgen/main.go.
+          # This measures execution, not runner queue or artifact-build time.
+          # Re-measure and regenerate when costs drift.
           if [ "$elapsed" -gt "$budget" ]; then
-            echo "::error::shard ${{ matrix.shard }} took ${elapsed}s, over the ${budget}s budget; re-measure and regenerate .github/test-shards.txt and .github/test-shards-apitest.txt (see _shardgen/main.go)"
+            echo "::error::shard ${{ matrix.shard }} took ${elapsed}s, over the ${budget}s budget; re-measure and regenerate .github/test-shards.txt and the companion manifests (see _shardgen/main.go)"
             exit 1
           fi
+
+      - name: Download dependent package race binaries
+        if: matrix.shard == '0'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: race-tests-packages
+          path: race-bin
+
+      - name: Run dependent package race tests
+        if: matrix.shard == '0'
+        shell: bash
+        run: |
+          chmod +x race-bin/*.test
+          (cd decadtest && ../race-bin/decadtest.test -test.count=1 -test.v -test.timeout 10m)
+          (cd export && ../race-bin/export.test -test.count=1 -test.v -test.timeout 10m)
+          (cd internal/decaderr && ../../race-bin/decaderr.test -test.count=1 -test.v -test.timeout 10m)
+
+  # Go runs these ordinary packages concurrently, with no test-name filters.
+  # A dedicated cache keeps the examples' build output between runs.
+  test-examples:
+    name: examples (-race)
+    runs-on: ubuntu-latest
+    env:
+      GORACE: atexit_sleep_ms=0
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Restore Go build cache
+        uses: ./.github/actions/go-build-cache-restore
+        with:
+          name: race-examples
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run whole example packages
+        run: go test -race -count=1 -v -timeout 10m ./examples/...
+
+      - name: Save Go build cache
+        uses: ./.github/actions/go-build-cache-save
 
   # These arithmetic tests do not import the root package, so they compile
   # independently of the root race binaries.
@@ -338,28 +361,34 @@ jobs:
       - name: Save Go build cache
         uses: ./.github/actions/go-build-cache-save
 
-  # The packages outside the root run on three Ubuntu runners. The main-only
-  # platform job below runs the whole suite on macOS and Windows.
-  #
-  # ./dynamics/ has a runner of its own. Its top-level tests call t.Parallel(),
-  # so they run concurrently, and their time under -race depends on the
-  # hardware the job lands on: the same tests take about twice as long on the
-  # slowest ubuntu-latest runners as on the fastest. The 30m -timeout covers
-  # the slowest runner with room for more scenes. The 600s soft budget
-  # (`budget:`) sits far below it, so growth in the scenes is reported long
-  # before the timeout would fail the job.
+  # Keep the longest internal packages on separate runners. The general
+  # runner discovers all other internal packages, including newly added ones.
+  # Internal jobs compile without the root package; dynamics builds it itself.
   test:
-    needs: [race-binary]
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
+            group: packages
             race: "-race"
             shard: ""
-            packages: "./examples/ ./decadtest/ ./export/ ./report/ ./linkage/ ./internal/..."
+            packages: "./report/ ./linkage/ ./internal/..."
             timeout: "10m"
           - os: ubuntu-latest
+            group: meshbool
+            race: "-race"
+            shard: ""
+            packages: "./internal/meshbool/"
+            timeout: "10m"
+          - os: ubuntu-latest
+            group: loft
+            race: "-race"
+            shard: ""
+            packages: "./internal/loftmesh/ ./internal/loftcylinder/ ./internal/crossbore/"
+            timeout: "10m"
+          - os: ubuntu-latest
+            group: dynamics
             race: "-race"
             shard: ""
             packages: "./dynamics/"
@@ -390,32 +419,16 @@ jobs:
           go-version-file: go.mod
           cache: false
 
-      # Both runners compile the root package, which changes in nearly every
-      # pull request, so their keys cover go.mod and go.sum alone. The cache
-      # name comes from the existing matrix fields.
+      # Each workload restores its own compile cache. Source changes are
+      # checked by Go; the cache key covers the module's dependencies.
       - name: Restore Go build cache
         uses: ./.github/actions/go-build-cache-restore
         with:
-          name: race-${{ matrix.packages == './dynamics/' && 'dynamics' || 'packages' }}
+          name: race-${{ matrix.group }}
 
       - name: Download dependencies
         run: go mod download
 
-      - name: Download race test binaries of the other packages
-        if: startsWith(matrix.packages, './examples/')
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: race-tests-packages
-          path: race-bin
-
-      # Every package outside the root, apart from apitest/, runs UNFILTERED on
-      # one runner, so these runners and the race shards together cover what an
-      # unsharded `go test ./...` covers. `./internal/...` includes new internal
-      # packages automatically. ci_workflow_test.go fails when a package on disk
-      # is named by no runner.
-      # Dynamics builds its race binary separately so compilation and test
-      # execution each stay below one minute. The binary runs from its package
-      # directory, as go test would, and the soft budget still includes build.
       - name: Build dynamics race test binary
         if: matrix.packages == './dynamics/'
         shell: bash
@@ -436,70 +449,26 @@ jobs:
             exit 1
           fi
 
-      # -v prints each test's duration, so a slow run shows which tests grew.
-      # A runner with a `budget:` fails once the run takes longer than that
-      # many seconds, far below its -timeout; see the comment above the matrix.
-      # The restored build cache also holds test results, and go test replays
-      # a stored result instead of running the test when nothing it depends on
-      # changed. -count=1 makes every test run, so the cache saves compile
-      # time only.
-      #
-      # The four packages whose tests import the root package run from the
-      # binaries race-binary built, one after another in the background while
-      # go test runs the rest. Each binary runs from its package directory, as
-      # go test does, with the same -race build, -count=1, -v and timeout. The
-      # rest is the operand list minus those four and minus the packages in
-      # `norace`, so a new internal package still runs here, and go test
-      # compiles the root package only if one of them imports it.
-      #
-      # `norace` runs without -race, in a go test of its own after the four
-      # binaries, with the same -count, -v and timeout. Those packages' tests
-      # call t.Parallel nowhere and start no goroutine, and no library code
-      # they reach starts one, so the race detector has nothing to observe in
-      # them. A package that gains concurrent tests or code must leave this
-      # list. The step waits for both and fails when either failed.
+      - name: Run dedicated internal race tests
+        if: matrix.group == 'meshbool' || matrix.group == 'loft'
+        run: go test -race -count=1 -v -timeout 10m ${{ matrix.packages }}
+
+      # The exclusions have dedicated unfiltered runners above. Three purely
+      # sequential arithmetic packages keep their existing non-race coverage.
       - name: Run tests outside the root package (Ubuntu shard)
-        if: matrix.packages != '' && matrix.packages != './dynamics/'
+        if: matrix.group == 'packages'
         shell: bash
         run: |
-          start=$SECONDS
           mod="$(go list -m)"
           norace_re="${mod}/internal/(loftface|polynomial|linkagebound)"
           arithmetic_re="${mod}/internal/(proof|proofbound)"
+          dedicated_re="${mod}/internal/(meshbool|loftmesh|loftcylinder|crossbore|decaderr)"
           norace="$(go list ${{ matrix.packages }} | grep -x -E "$norace_re")"
-          rest="$(go list ${{ matrix.packages }} | grep -v -x -E "${mod}/(examples|decadtest|export|internal/decaderr)|$norace_re|$arithmetic_re")"
-          logdir="$(mktemp -d)"
-          (
-            rc=0
-            for dir in examples decadtest export internal/decaderr; do
-              bin="$GITHUB_WORKSPACE/race-bin/$(basename "$dir").test"
-              chmod +x "$bin"
-              echo "=== $dir"
-              (cd "$dir" && "$bin" -test.count=1 -test.v -test.timeout ${{ matrix.timeout }}) || rc=1
-            done
-            echo "=== without -race: $(echo $norace)"
-            go test -count=1 -v -timeout ${{ matrix.timeout }} $norace || rc=1
-            exit "$rc"
-          ) >"$logdir/prebuilt.log" 2>&1 &
-          prebuilt_pid=$!
-          rest_rc=0
-          prebuilt_rc=0
-          go test ${{ matrix.race }} -count=1 -v -timeout ${{ matrix.timeout }} $rest || rest_rc=$?
-          wait "$prebuilt_pid" || prebuilt_rc=$?
-          echo "::group::prebuilt race test binaries"
-          cat "$logdir/prebuilt.log"
-          echo "::endgroup::"
-          if [ "$rest_rc" -ne 0 ] || [ "$prebuilt_rc" -ne 0 ]; then
-            echo "::error::${{ matrix.packages }} failed: go test exit ${rest_rc}, prebuilt binaries exit ${prebuilt_rc}"
-            exit 1
-          fi
-          elapsed=$(( SECONDS - start ))
-          echo "${{ matrix.packages }} finished in ${elapsed}s"
-          budget='${{ matrix.budget }}'
-          if [ -n "$budget" ] && [ "$elapsed" -gt "$budget" ]; then
-            echo "::error::${{ matrix.packages }} took ${elapsed}s, over the ${budget}s budget; find the tests that grew in the -v durations above"
-            exit 1
-          fi
+          rest="$(go list ${{ matrix.packages }} | grep -v -x -E "$norace_re|$dedicated_re|$arithmetic_re")"
+          test -n "$rest"
+          test -n "$norace"
+          go test -race -count=1 -v -timeout 10m $rest
+          go test -count=1 -v -timeout 10m $norace
 
       - name: Save Go build cache
         uses: ./.github/actions/go-build-cache-save
