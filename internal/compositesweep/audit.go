@@ -22,19 +22,35 @@ type ExtentReader interface {
 	AuditExtent(context.Context, r3.Vec, *freeform.FreeformWork) (float64, float64, float64, error)
 }
 
+// SectionReader supplies the bounded boxes of a built span's path-start and
+// path-end sections, in that order.
+type SectionReader interface {
+	AuditSectionBoxes(context.Context, *freeform.FreeformWork) (AuditBox, AuditBox, error)
+}
+
 // AuditSpan holds the geometry needed to certify one closed sweep span.
+//
+// CoplanarSections reports that the span's two end sections lie in one
+// plane, as an exact half turn's do: its far section then lies in the plane
+// it shares with either neighbour. Sections reads those two sections' boxes;
+// Audit consults it only for an adjacent pair whose spans both report
+// CoplanarSections.
 type AuditSpan struct {
 	StartPlane       surfacegeom.Plane
 	StartPlanar      bool
 	EndPlanar        bool
 	EndpointSupports bool
+	CoplanarSections bool
 	Box              AuditBox
 	Extent           ExtentReader
+	Sections         SectionReader
 }
 
 // Audit proves that adjacent spans occupy opposite sides of their shared
-// section and that every non-neighbour pair has a strict bounded-box gap.
-// The caller first proves matching rim topology at each shared section.
+// section, that two adjacent spans with coplanar sections keep their far
+// sections apart by a strict bounded-box gap, and that every non-neighbour
+// pair has a strict bounded-box gap. The caller first proves matching rim
+// topology at each shared section.
 func Audit(ctx context.Context, spans []AuditSpan) error {
 	return audit(ctx, spans, false)
 }
@@ -69,9 +85,9 @@ func audit(ctx context.Context, spans []AuditSpan, closed bool) error {
 			}
 			var err error
 			if closed && i == 0 && j == len(spans)-1 {
-				err = auditAdjacentSpans(ctx, spans[j], spans[i], geometry)
+				err = auditAdjacentPair(ctx, spans, j, i, geometry)
 			} else if j == i+1 {
-				err = auditAdjacentSpans(ctx, spans[i], spans[j], geometry)
+				err = auditAdjacentPair(ctx, spans, i, j, geometry)
 			} else if !BoxesStrictlySeparated(spans[i].Box, spans[j].Box) {
 				err = fmt.Errorf(`%w: sweep spans %d and %d have no strict bounded-box separation`,
 					decaderr.ErrUnsupported, i, j)
@@ -82,6 +98,40 @@ func audit(ctx context.Context, spans []AuditSpan, closed bool) error {
 		}
 	}
 	return operation.Err()
+}
+
+// auditAdjacentPair certifies the join from span before to span after. Two
+// spans on opposite closed sides of their shared plane can meet only in that
+// plane. A span whose sections are not coplanar meets the plane only in its
+// shared section, so contact elsewhere needs both spans to carry their far
+// section in the plane too. Their far sections must then have a strict
+// bounded-box gap; touching or an undecided gap refuses.
+func auditAdjacentPair(
+	ctx context.Context, spans []AuditSpan, before, after int, geometry *freeform.FreeformWork,
+) error {
+	if err := auditAdjacentSpans(ctx, spans[before], spans[after], geometry); err != nil {
+		return err
+	}
+	if !spans[before].CoplanarSections || !spans[after].CoplanarSections {
+		return nil
+	}
+	if spans[before].Sections == nil || spans[after].Sections == nil {
+		return fmt.Errorf(`%w: sweep spans %d and %d have coplanar sections but no section boxes`,
+			decaderr.ErrUnsupported, before, after)
+	}
+	far, _, err := spans[before].Sections.AuditSectionBoxes(ctx, geometry)
+	if err != nil {
+		return err
+	}
+	_, next, err := spans[after].Sections.AuditSectionBoxes(ctx, geometry)
+	if err != nil {
+		return err
+	}
+	if !BoxesStrictlySeparated(far, next) {
+		return fmt.Errorf(`%w: sweep spans %d and %d both keep their far sections in their shared plane, `+
+			`and those sections have no strict bounded-box separation`, decaderr.ErrUnsupported, before, after)
+	}
+	return nil
 }
 
 func auditAdjacentSpans(
