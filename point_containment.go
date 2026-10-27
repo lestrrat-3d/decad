@@ -75,8 +75,15 @@ func (b *Body) LocatePoint(ctx context.Context, p r3.Vec, tol units.Value) (Poin
 	if !mesh.n.BoundaryOK || !mesh.n.SymDiffOK {
 		return PointUndecided, nil
 	}
-	result, err = pointquery.Locate(ctx, p, mesh.n.Vertices, mesh.n.Triangles, mesh.n.Bound, mesh.n.VolSymDiff)
+	result, err = pointquery.LocatePrepared(ctx, p, mesh.pointQueryData(), mesh.n.Bound, mesh.n.VolSymDiff)
 	return PointLocation(result), err
+}
+
+func (m *Mesh) pointQueryData() *pointquery.PreparedMesh {
+	m.queryOnce.Do(func() {
+		m.queryData = pointquery.NewPreparedMesh(m.n.Vertices, m.n.Triangles)
+	})
+	return m.queryData
 }
 
 // locateExact runs LocatePoint's routes that answer without a mesh: the
