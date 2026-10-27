@@ -22,6 +22,8 @@ const maxWedgeEdges = 32
 type wedge struct {
 	a, b, n1, n2 r3.Vec
 	m, e0, e1    float64
+	// concave marks an edge whose wedge is added to the solid (the void behind it is filled) and not cut from it.
+	concave bool
 }
 
 // chamferByWedges chamfers edges of the axis-square faceted solid b by d (agent-docs/orthogonal-boolean-design.md B17):
@@ -41,13 +43,18 @@ func chamferByWedges(ctx context.Context, d *Document, b *Body, edges []*Edge, d
 	wedges := make([]wedge, 0, len(edges))
 	for k, e := range edges {
 		w, ok := orthogonalWedge(e, dmm, k)
-		if !ok {
+		if !ok || w.concave == edges[0].IsConvex() {
+			// A selection is all convex edges, cut, or all concave ones, filled.
 			return nil, false, nil
 		}
 		if !wedgeFits(payload, w, dmm) {
 			return nil, false, nil
 		}
 		wedges = append(wedges, w)
+	}
+	op := meshbool.OpCut
+	if wedges[0].concave {
+		op = meshbool.OpUnion
 	}
 	toolCtx, capture := privateConstructionContext(ctx)
 	var tools []*Body
@@ -59,7 +66,7 @@ func chamferByWedges(ctx context.Context, d *Document, b *Body, edges []*Edge, d
 		}
 		tools = append(tools, tool)
 	}
-	out, err := combineTools(ctx, d, OperationChamfer, b, meshbool.OpCut, tools, false, nil, capture)
+	out, err := combineTools(ctx, d, OperationChamfer, b, op, tools, false, nil, capture)
 	if err != nil {
 		return nil, false, err
 	}
@@ -70,6 +77,9 @@ func chamferByWedges(ctx context.Context, d *Document, b *Body, edges []*Edge, d
 // the two faces or past the ends, so the part of the solid in the box is the part in the box's quadrant behind both faces,
 // and the block d deep behind both faces along the whole edge is solid, so the wedge in it is material to remove.
 func wedgeFits(payload facetedPayload, w wedge, d float64) bool {
+	if w.concave {
+		return concaveWedgeFits(payload, w, d)
+	}
 	length := w.b.Sub(w.a).Len()
 	lo, hi := wedgeBox(w, d)
 	verts, tris := axisBox(lo, hi)
@@ -94,6 +104,39 @@ func wedgeFits(payload facetedPayload, w wedge, d float64) bool {
 	return err == nil && math.Abs(inBlock-d*d*length) <= boundB+1e-9*math.Max(1, d*d*length)
 }
 
+// concaveWedgeFits reports whether the fill of a concave edge's tool adds the wedge and nothing else to the solid. In the
+// tool's box, from m behind both faces to d plus m in front of them, the solid holds exactly what is behind a face (the
+// box less the (d+m)-square of void along the whole edge), and the extensions past the edge's ends are wholly solid, so
+// the tool's end faces lie in material and the fill meets no void outside the wedge.
+func concaveWedgeFits(payload facetedPayload, w wedge, d float64) bool {
+	length := w.b.Sub(w.a).Len()
+	dir := w.b.Sub(w.a).Scale(1 / length)
+	corner := func(s, t, u float64) r3.Vec {
+		return w.a.Add(w.n1.Scale(s)).Add(w.n2.Scale(t)).Add(dir.Scale(u))
+	}
+	read := func(lo, hi r3.Vec) (float64, float64, bool) {
+		l, h := orderedCorners(lo, hi)
+		v, tr := axisBox(l, h)
+		in, bound, err := orthoshell.OverlapVolume(payload.Verts, payload.Tris, v, tr)
+		return in, bound, err == nil
+	}
+	within := func(got, want, bound float64) bool {
+		return math.Abs(got-want) <= bound+1e-9*math.Max(1, want)
+	}
+	side := d + 2*w.m
+	in, bound, ok := read(corner(-w.m, -w.m, 0), corner(d+w.m, d+w.m, length))
+	if !ok || !within(in, (side*side-(d+w.m)*(d+w.m))*length, bound) {
+		return false
+	}
+	for _, ext := range [][2]float64{{-w.e0, 0}, {length, length + w.e1}} {
+		in, bound, ok := read(corner(-w.m, -w.m, ext[0]), corner(d+w.m, d+w.m, ext[1]))
+		if !ok || !within(in, side*side*(ext[1]-ext[0]), bound) {
+			return false
+		}
+	}
+	return true
+}
+
 // orderedCorners returns the componentwise least and greatest of two corners.
 func orderedCorners(p, q r3.Vec) (lo, hi r3.Vec) {
 	return r3.NewVec(math.Min(p.X, q.X), math.Min(p.Y, q.Y), math.Min(p.Z, q.Z)),
@@ -104,7 +147,7 @@ func orderedCorners(p, q r3.Vec) (lo, hi r3.Vec) {
 // along a world axis between two faces whose outward normals are world axes square to it and to each other.
 func orthogonalWedge(e *Edge, d float64, k int) (wedge, bool) {
 	faces := e.Faces()
-	if len(faces) != 2 || !e.IsConvex() {
+	if len(faces) != 2 {
 		return wedge{}, false
 	}
 	a, b := e.Start().Position().Value, e.End().Position().Value
@@ -134,7 +177,7 @@ func orthogonalWedge(e *Edge, d float64, k int) (wedge, bool) {
 	margin := func(i int) float64 { return d * (0.5 + float64(i)/(2*3*maxWedgeEdges)) }
 	return wedge{
 		a: a, b: b, n1: normals[0], n2: normals[1],
-		m: margin(3*k + 1), e0: margin(3*k + 2), e1: margin(3*k + 3),
+		m: margin(3*k + 1), e0: margin(3*k + 2), e1: margin(3*k + 3), concave: !e.IsConvex(),
 	}, true
 }
 
@@ -150,6 +193,10 @@ func unitVec(axis int, sign float64) r3.Vec {
 func wedgeBox(w wedge, d float64) (lo, hi r3.Vec) {
 	dir := w.b.Sub(w.a)
 	dir = dir.Scale(1 / dir.Len())
+	if w.concave {
+		return orderedCorners(w.a.Sub(dir.Scale(w.e0)).Sub(w.n1.Scale(w.m)).Sub(w.n2.Scale(w.m)),
+			w.b.Add(dir.Scale(w.e1)).Add(w.n1.Scale(d+w.m)).Add(w.n2.Scale(d+w.m)))
+	}
 	p := w.a.Sub(dir.Scale(w.e0)).Add(w.n1.Scale(w.m)).Add(w.n2.Scale(w.m))
 	q := w.b.Add(dir.Scale(w.e1)).Sub(w.n1.Scale(d + w.m)).Sub(w.n2.Scale(d + w.m))
 	return orderedCorners(p, q)
@@ -190,6 +237,9 @@ func buildWedgeTool(ctx context.Context, d *Document, w wedge, dmm float64) (*Bo
 		return nil, err
 	}
 	corners := [][2]float64{{w.m, w.m}, {w.m, -dmm - w.m}, {-dmm - w.m, w.m}}
+	if w.concave {
+		corners = [][2]float64{{-w.m, -w.m}, {dmm + w.m, -w.m}, {-w.m, dmm + w.m}}
+	}
 	points := make([]*sketch.Point, len(corners))
 	for i, c := range corners {
 		points[i] = s.CreatePoint(c[0], c[1])
