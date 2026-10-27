@@ -94,7 +94,8 @@ type BossSpec struct {
 //
 // b MUST be a live solid; a nil context, body or selector is ErrDegenerate. A
 // selector that does not resolve to one face is the selector's own error or
-// ErrDegenerate, and a face that is not an analytic plane or cylinder is ErrUnsupported. A
+// ErrDegenerate, and a face that is not an analytic plane or cylinder, nor a convex planar face of a faceted
+// solid with exact vertices, is ErrUnsupported. A
 // Diameter or Height that is not positive and finite is ErrDegenerate or
 // ErrUnitKind. A bore as wide as the boss, or one deep enough to leave the
 // boss's footing through the back of the body, is ErrDegenerate. An At more
@@ -119,7 +120,7 @@ func Boss(ctx context.Context, b *Body, spec BossSpec) (result *Body, retErr err
 	if spec.Face == nil {
 		return nil, errNilSelector
 	}
-	in, err := bossInput(b, spec)
+	in, err := bossInput(ctx, b, spec)
 	if err != nil {
 		return nil, err
 	}
@@ -239,10 +240,13 @@ type bossRequest struct {
 // resolveBossSite resolves spec.Face to the plane the boss stands on: a planar
 // face is its own plane, and a cylindrical face gives the plane tangent to it at
 // spec.At, which MUST lie on the cylinder, as a hole's site does.
-func resolveBossSite(b *Body, spec BossSpec) (holeSite, error) {
+func resolveBossSite(ctx context.Context, b *Body, spec BossSpec) (holeSite, error) {
 	if faces, err := spec.Face.SelectFaces(b); err == nil && len(faces) == 1 {
 		if cyl, ok := faces[0].Surface().(Cylinder); ok {
 			return cylinderHoleSite(faces[0], cyl, spec.At)
+		}
+		if _, ok := faces[0].Surface().(Faceted); ok {
+			return facetedHoleSite(ctx, b, faces[0])
 		}
 	}
 	plane, normal, err := resolvePlanarFace(b, spec.Face, "Boss")
@@ -252,9 +256,9 @@ func resolveBossSite(b *Body, spec BossSpec) (holeSite, error) {
 	return holeSite{frame: plane.Frame, outward: normal.Value}, nil
 }
 
-func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
+func bossInput(ctx context.Context, b *Body, spec BossSpec) (bossRequest, error) {
 	var in bossRequest
-	site, err := resolveBossSite(b, spec)
+	site, err := resolveBossSite(ctx, b, spec)
 	if err != nil {
 		return in, err
 	}
