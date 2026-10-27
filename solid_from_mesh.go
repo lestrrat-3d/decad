@@ -53,6 +53,14 @@ func SolidFromMesh(ctx context.Context, d *Document, m *MeshBody) (result *Body,
 // solidFromMeshBody proves m a solid and builds its Faceted body without registering it, for
 // SolidFromMesh and for an operation that commits the body as its own result.
 func solidFromMeshBody(ctx context.Context, d *Document, m *MeshBody) (*Body, error) {
+	if ctx == nil || d == nil {
+		return nil, fmt.Errorf(`%w: a conversion needs a context and a document`, ErrDegenerate)
+	}
+	return solidFromMeshBodyAt(ctx, d, m, d.producerID(ctx))
+}
+
+// solidFromMeshBodyAt is solidFromMeshBody under the producer identity ref, for an operation that evaluates under one.
+func solidFromMeshBodyAt(ctx context.Context, d *Document, m *MeshBody, ref producerID) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a conversion`, ErrDegenerate)
 	}
@@ -101,7 +109,6 @@ func solidFromMeshBody(ctx context.Context, d *Document, m *MeshBody) (*Body, er
 	if proofbound.IsNonFinite(diameter) || !(diameter > 0) {
 		return nil, fmt.Errorf(`%w: the mesh has no finite diameter`, ErrNotFinite)
 	}
-	ref := d.producerID(ctx)
 	env := envOf(documentNode(d), ref)
 	src, groups := meshPlaneGroups(env.Ref, verts, tris)
 	node, err := facetedrecord.BuildWithProof(ctx, env, facetedrecord.Payload{
