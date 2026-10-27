@@ -529,39 +529,58 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 // The shared budget and work counts are replayed in the
 // original pair order, so the first refusal and all completed-call counts
 // agree with the serial audit. Only the caller touches the budget closures.
+//
+// Each worker owns a loftPlaneSignMemo, so the broad phase signs a vertex
+// shared by several partners of one row against that row's plane once.
 func parallelLoftPairs(budget *proofbound.WorkBudget, tris [][3]int, boxes [][2]r3.Vec,
 	data *LoftAuditData, shortcuts LoftAuditShortcuts, cands loftCandidates,
 	work *LoftAuditWork) (int, int, error) {
 	// Read the shared cache marker once. Complete-table audits use their
 	// original predicates without a shared flag read for every pair.
-	separate, classifyPair := loftPlaneSeparatedExactSigns, auditLoftPairDataExactSigned
-	if data.preflightProofs {
-		separate, classifyPair = loftPlaneSeparatedSigns, auditLoftPairDataSigned
+	preflight := data.preflightProofs
+	classifyPair := auditLoftPairDataExactSigned
+	if preflight {
+		classifyPair = auditLoftPairDataSigned
 	}
-	classify := func(i, j int) (uint8, error) {
-		_, shared := tessellation.SharedVertexIndices(tris[i], tris[j])
-		var knownA, knownB *[3]int
-		if shortcuts.BroadPhase && shared == 0 {
-			if !meshbool.BoxesOverlap(boxes[i], boxes[j]) {
-				return pairSkipped, nil
-			}
-			separated, sa, sb := separate(data, i, j)
-			if separated {
-				return pairSkipped, nil
-			}
-			knownA, knownB = &sa, &sb
+	newClassify := func() func(i, j int) (uint8, error) {
+		var memo *loftPlaneSignMemo
+		if shortcuts.BroadPhase {
+			memo = newLoftPlaneSignMemo(data)
 		}
-		outcome, err := classifyPair(data, tris, i, j, shortcuts, knownA, knownB)
-		switch outcome {
-		case LoftPairEdgeCertificate:
-			return pairEdgeCertified, err
-		case LoftPairVertexCertificate:
-			return pairVertexCertified, err
-		default:
-			return pairClassified, err
+		return func(i, j int) (uint8, error) {
+			_, shared := tessellation.SharedVertexIndices(tris[i], tris[j])
+			var knownA, knownB *[3]int
+			if shortcuts.BroadPhase && shared == 0 {
+				if !meshbool.BoxesOverlap(boxes[i], boxes[j]) {
+					return pairSkipped, nil
+				}
+				// loftPlaneSeparatedSigns reads a cached preflight contact and
+				// otherwise is loftPlaneSeparatedExactSigns, which the memo
+				// variant returns.
+				var separated bool
+				var sa, sb [3]int
+				if preflight && data.preflightCertified(i, j) {
+					separated, sa, sb = loftPlaneSeparatedSigns(data, i, j)
+				} else {
+					separated, sa, sb = loftPlaneSeparatedSignsMemo(data, memo, i, j)
+				}
+				if separated {
+					return pairSkipped, nil
+				}
+				knownA, knownB = &sa, &sb
+			}
+			outcome, err := classifyPair(data, tris, i, j, shortcuts, knownA, knownB)
+			switch outcome {
+			case LoftPairEdgeCertificate:
+				return pairEdgeCertified, err
+			case LoftPairVertexCertificate:
+				return pairVertexCertified, err
+			default:
+				return pairClassified, err
+			}
 		}
 	}
-	return parallelLoftPairsWorkers(budget, min(runtime.GOMAXPROCS(0), 4), cands, classify, work)
+	return parallelLoftPairsWorkers(budget, min(runtime.GOMAXPROCS(0), 4), cands, newClassify, work)
 }
 
 // Outcomes of one candidate pair in parallelLoftPairs.
@@ -573,10 +592,12 @@ const (
 )
 
 // parallelLoftPairsWorkers is parallelLoftPairs with an explicit worker count
-// and the per-pair classification as classify, which workers call
-// concurrently and which must not touch budget.
+// and the per-pair classification made by newClassify. Each worker calls
+// newClassify once, on its own goroutine, before its first pair, and then
+// calls its classifier for its pairs alone. Classifiers run concurrently and
+// must not touch budget.
 func parallelLoftPairsWorkers(budget *proofbound.WorkBudget, workers int, cands loftCandidates,
-	classify func(i, j int) (uint8, error), work *LoftAuditWork) (int, int, error) {
+	newClassify func() func(i, j int) (uint8, error), work *LoftAuditWork) (int, int, error) {
 	workers, reserved := orderedwork.ReserveWorkers(workers)
 	defer orderedwork.ReleaseWorkers(reserved)
 	results := make([]uint8, len(cands.js))
@@ -599,6 +620,10 @@ func parallelLoftPairsWorkers(budget *proofbound.WorkBudget, workers int, cands 
 			defer group.Done()
 			var tally loftPairTally
 			defer func() { tallies[worker] = tally }()
+			if start == end {
+				return
+			}
+			classify := newClassify()
 			i := sort.Search(len(cands.starts)-1, func(row int) bool {
 				return cands.starts[row+1] > start
 			}) + cands.baseRow

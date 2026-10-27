@@ -585,16 +585,142 @@ func loftPlaneSeparatedSigns(data *LoftAuditData, i, j int) (bool, [3]int, [3]in
 
 // loftPlaneSeparatedExactSigns reads prepared tables without checking for a
 // preflight cache. Complete-table audits select it once before their pair loop.
+//
+// A table whose lifts are the float corners' own values and which keeps its
+// float planes takes liftedPlaneSigns, which returns planeSigns' triple
+// without reading the exact corners first; every other table takes
+// planeSigns.
 func loftPlaneSeparatedExactSigns(data *LoftAuditData, i, j int) (bool, [3]int, [3]int) {
-	ta, tb := data.corners(i), data.corners(j)
-	xta, xtb := data.xtri(i), data.xtri(j)
 	var sa, sb [3]int
-	sb = data.planeSigns(i, xtb, tb)
+	if data.exactLifts || data.floatPlanes == nil {
+		ta, tb := data.corners(i), data.corners(j)
+		xta, xtb := data.xtri(i), data.xtri(j)
+		sb = data.planeSigns(i, xtb, tb)
+		if meshbool.AllOneSide(sb) {
+			return true, sa, sb
+		}
+		sa = data.planeSigns(j, xta, ta)
+		return meshbool.AllOneSide(sa), sa, sb
+	}
+	sb = data.liftedPlaneSigns(i, j)
 	if meshbool.AllOneSide(sb) {
 		return true, sa, sb
 	}
-	sa = data.planeSigns(j, xta, ta)
+	sa = data.liftedPlaneSigns(j, i)
 	return meshbool.AllOneSide(sa), sa, sb
+}
+
+// liftedPlaneSigns is planeSigns(i, d.xtri(j), d.corners(j)) for a table
+// whose exact lifts are proof.XptOf of its float vertices and whose float
+// planes are kept (not exactLifts, floatPlanes non-nil).
+//
+// planeSigns first gives sign zero to a point whose exact lift is identical
+// to one of plane i's corner lifts, then tries the float plane, the float
+// expansion and the exact numerator in turn. liftedPlaneSigns starts at the
+// float plane, so it never loads the exact lifts on the common path. The two
+// agree point for point. Every step either declines or returns the exact sign
+// of det[c1-c0, c2-c0, p-c0] for p's corner and the corners c of triangle i,
+// the same exact value on both paths: the float corners are the lifts' own
+// values, so the float plane (certain only when its error bound proves the
+// sign), the expansion (exact when it accepts) and the exact plane (the sign
+// of n . (p - c0), n being (c1-c0) x (c2-c0) with a positive weight) all sign
+// one determinant. A lift identical to a corner lift is XptOf of the same
+// value, so that point is a corner of triangle i and its determinant is
+// exactly zero: whichever later step decides it returns zero, the value the
+// identity test gives.
+func (d *LoftAuditData) liftedPlaneSigns(i, j int) [3]int {
+	plane := &d.floatPlanes[i]
+	other := d.corners(j)
+	var signs [3]int
+	for k := range signs {
+		if s, certain := plane.Sign(other[k]); certain {
+			signs[k] = s
+			continue
+		}
+		signs[k] = d.exactPlaneSign(i, j, k, other[k])
+	}
+	return signs
+}
+
+// loftPlaneSignMemo remembers, for one worker of parallelLoftPairs, the sign
+// of each vertex against the last plane that signed it. entry[v] is
+// (i+1)<<2 | (s+1) after vertex v took sign s against plane i, and zero
+// before any plane signed it. A worker walks its candidates row by row, so
+// the vertices that row i's partners share are signed against plane i once.
+type loftPlaneSignMemo struct {
+	entry []uint32
+}
+
+// newLoftPlaneSignMemo returns a memo for data's vertices, or nil when
+// liftedPlaneSigns does not serve data or a plane index does not fit an entry.
+func newLoftPlaneSignMemo(data *LoftAuditData) *loftPlaneSignMemo {
+	if data.exactLifts || data.floatPlanes == nil || len(data.tris) >= 1<<30 {
+		return nil
+	}
+	return &loftPlaneSignMemo{entry: make([]uint32, len(data.Xverts))}
+}
+
+// loftPlaneSeparatedSignsMemo is loftPlaneSeparatedExactSigns with sb read
+// through memo; a nil memo is loftPlaneSeparatedExactSigns itself. Like it,
+// it does not check for a preflight cache.
+func loftPlaneSeparatedSignsMemo(data *LoftAuditData, memo *loftPlaneSignMemo, i, j int) (bool, [3]int, [3]int) {
+	if memo == nil {
+		return loftPlaneSeparatedExactSigns(data, i, j)
+	}
+	var sa, sb [3]int
+	sb = data.memoPlaneSigns(memo, i, j)
+	if meshbool.AllOneSide(sb) {
+		return true, sa, sb
+	}
+	sa = data.liftedPlaneSigns(j, i)
+	return meshbool.AllOneSide(sa), sa, sb
+}
+
+// memoPlaneSigns is liftedPlaneSigns(i, j) with each sign taken from memo
+// when memo holds that vertex's sign against plane i.
+//
+// liftedPlaneSigns' sign for corner k of triangle j depends on plane i and
+// that corner's vertex v = d.tris[j][k] alone: the float corner it reads is
+// v's float vertex (the table's Corners and its compact corners are both read
+// off its vertex table), and the exact numerator reads v's lift. So a sign
+// memo recorded for (i, v), from any triangle with corner v, is the value
+// liftedPlaneSigns computes here. A memo serves one table only, and an entry
+// for another plane does not match the tag.
+func (d *LoftAuditData) memoPlaneSigns(memo *loftPlaneSignMemo, i, j int) [3]int {
+	tag := uint32(i+1) << 2
+	tri := d.tris[j]
+	var signs [3]int
+	var other [3]r3.Vec
+	loaded := false
+	for k, v := range tri {
+		if e := memo.entry[v]; e&^3 == tag {
+			signs[k] = int(e&3) - 1
+			continue
+		}
+		if !loaded {
+			other = d.corners(j)
+			loaded = true
+		}
+		s, certain := d.floatPlanes[i].Sign(other[k])
+		if !certain {
+			s = d.exactPlaneSign(i, j, k, other[k])
+		}
+		memo.entry[v] = tag | uint32(s+1)
+		signs[k] = s
+	}
+	return signs
+}
+
+// exactPlaneSign is planeSigns' path below the float plane for corner k of
+// triangle j against plane i, whose float corner is p: the float expansion,
+// then the exact numerator.
+func (d *LoftAuditData) exactPlaneSign(i, j, k int, p r3.Vec) int {
+	corners := d.corners(i)
+	if s, certain := proof.OrientSignExpansion(corners[0], corners[1], corners[2], p); certain {
+		return s
+	}
+	var sum, term big.Int
+	return d.Planes[i].Sign(d.xtri(j)[k], &sum, &term)
 }
 
 // AuditLoftPairData classifies pair (i, j) and reports which decision path

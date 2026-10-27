@@ -212,7 +212,7 @@ func TestParallelLoftPairsTalliesMatchReplay(t *testing.T) {
 					want.failI, want.failJ, want.err = refParallelPairs(newBudget(wantCtx), cands, results, refFail,
 						errRefused, &want.work)
 					got.failI, got.failJ, got.err = parallelLoftPairsWorkers(newBudget(gotCtx), workers, cands,
-						classify, &got.work)
+						func() func(i, j int) (uint8, error) { return classify }, &got.work)
 					want.errCalls, got.errCalls = wantCtx.calls, gotCtx.calls
 					require.Equal(t, want, got, "%s fail %d ctx %d workers %d", name, failAt, failFrom, workers)
 				}
@@ -240,7 +240,7 @@ func TestParallelLoftPairsSharesWorkersAndReleasesAfterFailure(t *testing.T) {
 	}
 	var work LoftAuditWork
 	i, j, err := parallelLoftPairsWorkers(proofbound.NewWorkBudget(t.Context()), 4,
-		cands, classify, &work)
+		cands, func() func(i, j int) (uint8, error) { return classify }, &work)
 	require.ErrorIs(t, err, failure)
 	require.Equal(t, 0, i)
 	require.Equal(t, 2, j)
@@ -252,7 +252,7 @@ func TestParallelLoftPairsSharesWorkersAndReleasesAfterFailure(t *testing.T) {
 	held = 0
 	work = LoftAuditWork{}
 	i, j, err = parallelLoftPairsWorkers(proofbound.NewWorkBudget(t.Context()), 4,
-		cands, classify, &work)
+		cands, func() func(i, j int) (uint8, error) { return classify }, &work)
 	require.ErrorIs(t, err, failure)
 	require.Equal(t, 0, i)
 	require.Equal(t, 2, j)
