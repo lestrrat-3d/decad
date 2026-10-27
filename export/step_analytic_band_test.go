@@ -155,6 +155,15 @@ func bandFile(t *testing.T, body *decad.Body) step.File {
 	ok, err := supportsAnalyticSTEP(t.Context(), body)
 	require.NoError(t, err)
 	require.True(t, ok, "the analytic arm takes the banded body")
+	return armFile(t, body)
+}
+
+// armFile writes body through the analytic arm's writer alone, whatever
+// supportsAnalyticSTEP says of it. NewSTEPFile never does this for a body the
+// admission refuses; the tests that call it directly state what the
+// admission says and why the writer is still read on that body.
+func armFile(t *testing.T, body *decad.Body) step.File {
+	t.Helper()
 	f, err := assembleSTEPFile(t.Context(), body, bandHeader(), true, nil, nil, nil, nil)
 	require.NoError(t, err)
 	data, err := f.Marshal()
@@ -335,14 +344,42 @@ func isCylinderPatch(f *decad.Face) bool {
 // circle radii are the closed forms: the four top contours at 1, the eight
 // meridians at 2, and ten arcs and circles at 3 (the corner walls' two rims
 // each and the bore's two circles). Every torus patch's loop runs
-// counter-clockwise about its outward normal, read back from the file. Shown
-// to fail with supportsAnalyticTorusPatch refusing every loop (the body fell
-// to the faceted writer), with torusPatchArea's parallel sweep sign inverted
-// (the patches then walked clockwise), and with torusFaceSense inverted.
+// counter-clockwise about its outward normal, read back from the file.
+//
+// On amd64 the admission refuses this body, so NewSTEPFile writes it
+// faceted: the patch at the (0, 0) corner has one meridian whose Center is
+// held at y = 2.9999999999999996 while its Exact end vertex (0, 3, 18) lies
+// at y = 3, so that vertex is off the meridian circle's plane and
+// arcInItsPlane refuses the arc. That Center is a rounding of the fillet
+// build, which another architecture's fused arithmetic may not repeat, so the
+// test requires the admission to refuse exactly when some arc misses its
+// plane, and every such arc to be a meridian. It then writes the body through
+// armFile to keep the torus patch writer's surfaces, circles and walks
+// checked. That writing leg was shown to fail with torusPatchArea's
+// parallel sweep sign inverted (the patches then walked clockwise) and with
+// torusFaceSense inverted; the refusal leg with torusPatchArc's
+// arcInItsPlane leg deleted (the body was admitted).
 func TestAnalyticBandRoundedPlateTopLoop(t *testing.T) {
 	t.Parallel()
 	body := bandFillet(t, bandDrilledBox(t, 3), 20, 0, 2)
-	f := bandFile(t, body)
+	offPlane := 0
+	for _, face := range body.Faces() {
+		torus, ok := face.Surface().(decad.Torus)
+		if !ok {
+			continue
+		}
+		for _, ce := range face.Loops()[0].CoEdges() {
+			arc := ce.Edge().Curve().(decad.Arc3)
+			if !arcInItsPlane(ce.Edge(), arc) {
+				require.True(t, torusArcIsMeridian(arc, torus))
+				offPlane++
+			}
+		}
+	}
+	ok, err := supportsAnalyticSTEP(t.Context(), body)
+	require.NoError(t, err)
+	require.Equal(t, offPlane == 0, ok, "a meridian off its own circle's plane sends the body to the faceted writer")
+	f := armFile(t, body)
 	byName := bandEntities(f)
 	require.Len(t, byName["ADVANCED_FACE"], 19)
 	require.Len(t, byName["PLANE"], 6)
@@ -391,6 +428,58 @@ func TestAnalyticBandCrossDrilledTopLoop(t *testing.T) {
 // writer keeps it.
 func TestAnalyticBandHornTorusKeepsFaceted(t *testing.T) {
 	t.Parallel()
+	ok, err := supportsAnalyticSTEP(t.Context(), bandPocketMouthFillet(t))
+	require.NoError(t, err)
+	require.False(t, ok, "a horn torus patch has no analytic arm")
+}
+
+// TestTorusPatchArcRefusesAMeridianOffItsPlane runs torusPatchArc on the real
+// meridians of the pocket mouth fillet's horn torus patches (loop-fillet
+// LF6), each a quarter circle about the walk direction of the wall it
+// bounds, and on the same edges with the Axis swapped for the other walk's
+// direction: the torus axis crossed with the meridian's own, still
+// perpendicular to the torus axis, so only arcInItsPlane can refuse it. The
+// swapped Axis is the one an LF6 trailing meridian carried before it took its
+// own wall's axis, and its circle's plane misses the meridian's vertices. A
+// horn patch's loop has three edges, so supportsAnalyticTorusPatch refuses it
+// before reading any arc; torusPatchArc is the per-arc admission a four-edge
+// patch passes through. Shown to fail with torusPatchArc's arcInItsPlane leg
+// deleted (the swapped meridian was admitted).
+func TestTorusPatchArcRefusesAMeridianOffItsPlane(t *testing.T) {
+	t.Parallel()
+	checked := 0
+	for _, face := range bandPocketMouthFillet(t).Faces() {
+		torus, ok := face.Surface().(decad.Torus)
+		if !ok || len(face.Loops()) != 1 {
+			continue
+		}
+		require.Len(t, face.Loops()[0].CoEdges(), 3, "a horn torus patch")
+		require.False(t, supportsAnalyticTorus(face.Loops(), torus))
+		for _, ce := range face.Loops()[0].CoEdges() {
+			arc, ok := ce.Edge().Curve().(decad.Arc3)
+			if !ok || !torusArcIsMeridian(arc, torus) {
+				continue
+			}
+			parallel, ok := torusPatchArc(ce.Edge(), arc, torus)
+			require.True(t, ok, "the meridian at %v about %v holds its own vertices", arc.Center, arc.Axis)
+			require.False(t, parallel)
+			swapped := arc
+			swapped.Axis = torus.Axis.Cross(arc.Axis)
+			require.True(t, torusArcIsMeridian(swapped, torus))
+			require.False(t, arcInItsPlane(ce.Edge(), swapped))
+			_, ok = torusPatchArc(ce.Edge(), swapped, torus)
+			require.False(t, ok, "the meridian at %v about the swapped %v is off its circle's plane", arc.Center, swapped.Axis)
+			checked++
+		}
+	}
+	require.Equal(t, 8, checked, "two meridians at each of the mouth's four reflex corners")
+}
+
+// bandPocketMouthFillet is P2: the 40x40x10 plate with a 20x10 pocket 5 deep,
+// its mouth filleted r = 1.5. Each of the mouth's four reflex corners is a
+// horn torus patch bounded by a connector arc and two meridians.
+func bandPocketMouthFillet(t *testing.T) *decad.Body {
+	t.Helper()
 	doc := decad.New()
 	plate := bandBox(t, doc, 0, 0, 40, 40, 10)
 	w := sketch.NewWorld()
@@ -406,8 +495,5 @@ func TestAnalyticBandHornTorusKeepsFaceted(t *testing.T) {
 	require.NoError(t, err)
 	cut, err := decad.Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
-	body := bandFillet(t, cut, 10, 1, 1.5)
-	ok, err := supportsAnalyticSTEP(t.Context(), body)
-	require.NoError(t, err)
-	require.False(t, ok, "a horn torus patch has no analytic arm")
+	return bandFillet(t, cut, 10, 1, 1.5)
 }

@@ -821,7 +821,7 @@ below reads the bands where the plain brep reader would miss them:
 | **DG7** | undercut survey | per face | per face, and per patch through `Face.NormalAt` with reach DX7's three-valued rule and allowance |
 | **DG8** | concave-radius survey | the cavity's dilated hole walls are read; undecided when any face carries `delta > 0` | undecided when any band holds a patch whose stamped departure is not exactly zero (reach DX8) |
 | **DG9** | wall survey | staged `Suspect`, as for every brep. The wall behind every kept face is `t` by construction, but the material between two features the erosion left solid is not, and no reader proves which is which | staged `Suspect` |
-| **DG10** | STEP | analytic: planes and cylinders | analytic where every patch is a `Plane` or a cone patch of arcs and generators on a cone whose `Radius` is zero, a convex corner's or a reflex corner's; a cone with one circle loop sends the whole body to the faceted writer (`agent-docs/step-export-design.md`) |
+| **DG10** | STEP | analytic: planes and cylinders | analytic where every patch is a `Plane` whose stamped departure is exactly zero; a corner cone patch, convex or reflex, states a nonzero departure from its tag and sends the whole body to the faceted writer, as does a cone with one circle loop (`agent-docs/step-export-design.md`) |
 | **DG11** | a later `Fillet`/`Chamfer`/`Shell` | Tables RB/EB/SB/TC/LB over the record; RB1 needs `delta = 0`, so a shell whose offsets are exact floats takes route E or L again, and one whose offsets rounded is SB1 | the same over the rewritten record; an edge of a band patch is not in the record and matches nothing (route E's SB6, route L's SL1) |
 | **DG12** | `Transform`, `Mirrored`, `PatternCopies` | re-lifts every face frame | the same; `loopBands` are re-attached by the re-evaluation, as `capBlendPayload.Placed` re-derives its bands |
 
@@ -1054,9 +1054,9 @@ Route L (L-2):
   their meshes are export-only, within the chord times the curved faces' area
   of `15000 − 135/2 − 9π/8`, and a `Cut` over them refuses.
 - P3's rim chamfer tessellates with one count on the cone's two circles;
-  P8's top-loop chamfer exports analytic STEP, each corner cone a
-  `CONICAL_SURFACE` patch, its hole-rim chamfer faceted, and P2's top loop
-  analytic; `Verify`
+  P8's top-loop chamfer and its hole-rim chamfer export faceted STEP, the
+  top loop's corner cones being band patches whose tags state a departure
+  (`agent-docs/step-export-design.md`), and P2's top loop analytic; `Verify`
   `Sound` on each.
 - The undercut survey lists P3's rim cone, which faces up and out, under a
   pull along `−z` and clears the body along `+z`. The concave-radius survey

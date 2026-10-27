@@ -239,6 +239,8 @@
 10	0.01	TestConeFromFaceShallowGeneratorKeepsDocument
 10	0.03	TestContactPairBoundedFacetedFloorStrictClear
 10	0.00	TestDyadicDirectedRoundingMatchesTheRationalOnes
+10	0.00	TestFaceDepartureReader
+10	0.00	TestFaceTagDepartsOnRevolveRecords
 10	0.27	TestExactCopyUsesContainedCutSourceMassProperties
 10	2.58	TestFacetedCopyLineageDirectTransfer
 10	0.33	TestLoftBoundedProfilesRealRightXPrismFirst

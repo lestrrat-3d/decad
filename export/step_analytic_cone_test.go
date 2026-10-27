@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/step"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,9 +33,30 @@ func coneFrustum(t *testing.T, r0, r1 float64) *decad.Body {
 	return body
 }
 
+// frustumArmFile writes a revolved frustum through the analytic arm's writer.
+// The frustum's Cone tag is built from a float apex and an atan2 half-angle,
+// so it is not proven to be the cone its revolve record denotes
+// (facedeparture.TagDeparts), and NewSTEPFile writes the body faceted. The
+// face admission still takes it, so the full conical wall writer is read on
+// it through armFile.
+func frustumArmFile(t *testing.T, body *decad.Body) step.File {
+	t.Helper()
+	require.False(t, tagsUndeparted(body), "a revolved Cone tag is not proven to be its record")
+	ok, err := supportsAnalyticSTEP(t.Context(), body)
+	require.NoError(t, err)
+	require.False(t, ok)
+	ok, err = supportsAnalyticFaces(t.Context(), body)
+	require.NoError(t, err)
+	require.True(t, ok, "the face admission takes the frustum")
+	return armFile(t, body)
+}
+
+// TestAnalyticConeFrustumWritesAConicalSurface writes a revolved frustum
+// through the full conical wall writer (frustumArmFile): one CONICAL_SURFACE
+// placed at its apex with the half-angle atan(0.2), between two circles.
 func TestAnalyticConeFrustumWritesAConicalSurface(t *testing.T) {
 	t.Parallel()
-	f := bandFile(t, coneFrustum(t, 5, 3))
+	f := frustumArmFile(t, coneFrustum(t, 5, 3))
 	byName := bandEntities(f)
 	require.Len(t, byName["CONICAL_SURFACE"], 1)
 	require.Equal(t, []float64{0}, bandReals(byName["CONICAL_SURFACE"], 2), "the reference circle is at the apex")
@@ -44,7 +66,8 @@ func TestAnalyticConeFrustumWritesAConicalSurface(t *testing.T) {
 }
 
 // TestAnalyticConeFrustumReadsBackToItsVolume writes a frustum that narrows and
-// one that widens along its axis, and reads each file with decad.ReadSTEP: the
+// one that widens along its axis through the full conical wall writer
+// (frustumArmFile), and reads each file with decad.ReadSTEP: the
 // mesh is closed and holds the frustum's volume less the chord tolerance's sliver.
 // Shown to fail with the sense of the face inverted (the wall's triangles then
 // face inward and the volume reads negative or the mesh opens).
@@ -56,7 +79,7 @@ func TestAnalyticConeFrustumReadsBackToItsVolume(t *testing.T) {
 	}{{"narrowing", 5, 3}, {"widening", 3, 5}} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			f := bandFile(t, coneFrustum(t, tc.r0, tc.r1))
+			f := frustumArmFile(t, coneFrustum(t, tc.r0, tc.r1))
 			data, err := f.Marshal()
 			require.NoError(t, err)
 			mesh, err := decad.ReadSTEP(t.Context(), bytes.NewReader(data))

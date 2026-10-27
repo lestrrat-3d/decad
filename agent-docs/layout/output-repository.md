@@ -30,6 +30,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `export/` | STL, OBJ, 3MF, glTF, PNG, DXF and AP214 writers, and mesh writers for a `MeshBody`. See `agent-docs/step-export-design.md`, `agent-docs/3mf-export-design.md`, `agent-docs/gltf-export-design.md`, `agent-docs/png-export-design.md`, `agent-docs/dxf-export-design.md`. |
 | `internal/meshslice/` | Cuts a triangle mesh with a plane and chains the cut into closed outlines by the mesh edges it crosses. See section-outline design. |
 | `internal/drawing/` | Feature-edge projection of a mesh with depth-buffer hidden-line runs, and the even-odd hatch of a section, for `export.DXF` and `export.DXFSection`; plain millimetre data. See dxf-export design. |
+| `internal/facedeparture/` | The hook through which `export`'s STEP writer reads whether a face's tag is not proven to be its surface: a stated bound, or a revolve record the tag is not exactly. See step-export design. |
 | `internal/raster/` | Orthographic flat-shaded triangle rasterizer, projection and depth buffer, for `export.PNG` and `export.DXF`; plain millimetre data. See png-export design. |
 | `linkage/` | The generic linkage model, its loop and drive solver, and the linkage and joint-box checks over the motion engine. `decad` aliases it. See `agent-docs/linkage-check-design.md`. |
 | `report/` | Result vocabulary generic over body, face, edge and vertex references: measurements, outcome enums, contact, sweep and Verify records. `decad` aliases it. See api-design §6.4. |
@@ -43,6 +44,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `dynamics/` | Rigid-body worlds and their scheduled step. See `agent-docs/multibody-dynamics-design.md`. |
 | `apitest/` | Tests of the exported API alone. See `apitest/doc.go`. |
 | `decadtest/` | The public test kit. See `decadtest/doc.go`. |
+| `face_departure.go` | Installs the reader behind `internal/facedeparture`, so the STEP writer can keep a face whose tag departs from its surface out of its analytic arm. See step-export design. |
 | `payload_class.go` | Installs the reader behind `decadtest.PayloadClass`, so tests can tell a mesh Boolean result from an analytic one. See faceted-source-retention §10. |
 | `_gallery/` | Nested module for README images, landing and linkage clips, dynamics scenes; excludes SolidLens. See `main.go`. |
 | `_shardgen/` | Nested module packing root and `apitest` tests into race shards. See `main.go`. |

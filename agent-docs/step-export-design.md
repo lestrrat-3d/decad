@@ -29,7 +29,8 @@ according to the writer path.
   and any number of void shells (§9). Refuse sheets and a mesh whose connected
   facet sets do not match the body's shells one to one.
 - Use analytic AP214 faces when every body face is a `Plane`, a `Cylinder`, a `Cone`, a `Sphere` or a
-  `Torus` and every edge is a `Line3`, an `Arc3`, an `Ellipse3` or a full `Circle3`. A plane's loops
+  `Torus` whose tag states no departure from the face's surface (below), and every edge is a `Line3`, an
+  `Arc3`, an `Ellipse3` or a full `Circle3`. A plane's loops
   are one full circle each, or chains of lines and arcs (at least three
   edges, or two when one is an arc). A cylindrical wall is either full —
   exactly two one-circle boundary loops whose start vertices align along its
@@ -45,19 +46,25 @@ according to the writer path.
   A cone patch has one loop of at least three edges on a cone whose `Radius` is exactly zero, so its
   `Origin` is the apex. Each edge is an `Arc3` about the cone's axis (its `Axis` the cone's or its
   negation and its `Center` on the axis, exactly) or a `Line3` along a generator (an exactly zero cross
-  product of its two ends taken from the apex), with both kinds present. A chamfer's convex corner gives
-  two arcs and two generators; a reflex corner gives one arc and two generators meeting at the apex
-  vertex. Its face sense is its outward normal against the radial direction at its first vertex off the
-  axis, since the `CONICAL_SURFACE` normal leans away from the axis at every point off it.
+  product of its two ends taken from the apex), with both kinds present. A loop chamfer's convex corner
+  gives two arcs and two generators; a reflex corner gives one arc and two generators meeting at the apex
+  vertex. Every such corner cone is a cap-blend band patch whose tag states a departure, so a chamfered
+  body takes the faceted writer, and no producer builds a cone patch the analytic writer receives. The
+  arm's own tests write the chamfer corners through the writer directly. Its face sense is its outward
+  normal against the radial direction at its first vertex off the axis, since the `CONICAL_SURFACE`
+  normal leans away from the axis at every point off it.
   A sphere patch has one loop of at least three `Arc3` edges, each a great circle: its `Center` and
   `Radius` the sphere's, exactly. A box corner's fillet ball is three quarter arcs. It is written as a
   `SPHERICAL_SURFACE` at the sphere's `Center`, placed about the world z axis, with the sphere's
   `Radius`; its sense is its outward normal against the direction from the centre.
-  Every arc of a cone or sphere patch has both vertices in its own plane (an exactly zero dot product
-  of each with its `Axis` from its `Center`), and every vertex of such a patch is `Exact`. Both checks
-  only refuse: an arc record whose axis does not hold its vertices, or a vertex whose position carries
-  a bound, is not proven to lie on the curves and surface the file states through it, and the body
-  takes the faceted writer. The vertex check covers cone and sphere patches only. The same reason
+  Every arc of a cone, sphere or torus patch has both vertices in its own plane (an exactly zero dot
+  product of each with its `Axis` from its `Center`), and every vertex of a cone or sphere patch is
+  `Exact`. Both checks only refuse: an arc record whose axis does not hold its vertices, or a vertex
+  whose position carries a bound, is not proven to lie on the curves and surface the file states
+  through it, and the body takes the faceted writer. On amd64 the plane check refuses one meridian of
+  the rounded plate's top-loop fillet (loop-fillet P8 with its top loop filleted r = 2): its `Center`
+  is held at y = 2.9999999999999996 while its `Exact` end vertex lies at y = 3, so that body takes the
+  faceted writer. The vertex check covers cone and sphere patches only. The same reason
   holds for the other arms, which do not apply it: a plane, cylinder or torus face writes its held
   vertex coordinates through its curves and surface whatever bound they carry, so such a file states
   points the body does not prove lie on them. The bounds those faces carry today are rounding, measured on amd64 at
@@ -75,7 +82,8 @@ according to the writer path.
   loop, a whole revolved ball, take the faceted writer: each would need a synthetic bound through a
   point where the surface has no normal, and `ReadSTEP` reads neither a cone's apex nor a whole sphere's
   seam (`agent-docs/step-import-design.md` I12, I15), so no reader in this repository can check that
-  bound. Emit one `ADVANCED_FACE`
+  bound. A torus with no loop, a whole revolved ring, takes the faceted writer too: the whole-turn arm
+  needs two circle loops and the patch arm one. Emit one `ADVANCED_FACE`
   per body face. Share `VERTEX_POINT`s and `EDGE_CURVE`s by body topology
   identity. An `Arc3` edge is a `CIRCLE` placed about its own `Axis`, with the
   reference direction to its start vertex, trimmed by its two vertices; it
@@ -97,14 +105,38 @@ according to the writer path.
   angle) plane disagrees with that sense. A horn torus patch is a three-edge
   loop and keeps the faceted writer.
   The analytic writer copies each face's tag as it is held: the STEP surface
-  is the float image of the `Plane`, `Cylinder`, `Cone`, `Sphere` or `Torus` tag, not an
-  exact claim about the surface the body denotes. It does not read
-  `topo.Face.NormalBound`, so a face whose tag departs from its true surface
-  by a stated bound is written at its tag all the same. A Loft bore cylinder
-  with a rounded center or an inexact frame map (`agent-docs/loft-design.md`
-  §18) and a cap-blend band patch (`agent-docs/modify-reach-design.md` §8.3)
-  are such faces. Gating every bounded face out of the analytic writer is a
-  separate change.
+  is the float image of the `Plane`, `Cylinder`, `Cone`, `Sphere` or `Torus` tag. A face whose tag
+  is not proven to be the surface the face carries sends the whole body to the faceted writer before
+  any face is read. Such a face states a nonzero `topo.Face.NormalBound` or
+  `topo.Face.HeldNormalBound`, states a nonzero `topo.Face.AxialDelta` (a planar face displaced along
+  its own normal from the level its tag holds), or carries a denoted surface (`topo.Face.Denoted`, a
+  revolve face's record, which a mesh Boolean's retained face keeps) that its tag does not equal
+  exactly. A `Plane`, `Cylinder` or `Torus` tag equals its record when `stitchflux.TagIsDenoted` says
+  so, by exact rational equality on the record's own points; a `Sphere` tag also needs its radius to
+  equal the recorded radius, which `TagIsDenoted` does not read. A `Cone` tag never does:
+  `TagIsDenoted` checks that the meridian lines meet at one apex and that the axis is the record's, but
+  not the tag's own apex or half-angle, and the revolve builds both from a float apex and an `atan2`
+  half-angle. `TagIsDenoted` refuses every cap record, so both caps of a partial revolution depart,
+  the start cap even where it is placed exactly; the body's output is the same either way, since its
+  end cap's angular displacement already refuses it. The check only refuses: such a face is not proven
+  to lie on its tag, so a file stating that surface would claim more than the body proves. `export`
+  reads the face through `internal/facedeparture`, which the root package installs
+  (`face_departure.go`), since a public `Face` exposes none of these fields.
+  The bodies the check sends to the faceted writer include every Loft whose caps state a vertex
+  displacement (every loft with a circle in its sections, whose stations round), a Loft bore cylinder
+  with a rounded center or an inexact frame map (`agent-docs/loft-design.md` §18), an extrusion up to
+  a face at an offset whose level no float holds (a `ToFace` stop 0.1 mm above a cap at z = 10), every
+  loop chamfer's corner cone, which is a cap-blend band patch (`agent-docs/modify-reach-design.md`
+  §8.3), every drafted wall, plane or cone, whose tag is a rounding of the tilted surface
+  (`agent-docs/draft-design.md` DD4), every partial revolution, and every revolved cone. Their
+  departures are rounding-sized, measured on amd64 at 9.6e-16 mm on the caps of a loft with a radius-1
+  hole, 3.6e-16 mm on the offset `ToFace` cap, 4.3e-17 to 2.2e-16 on the chamfer cones, 1.5e-16 to
+  2.9e-16 on the drafted walls, and 2.3e-15 mm on the apex of a frustum revolved from radius 3 to 7.1.
+  A revolved tube's cylinders and annular caps equal their records and keep the analytic writer. A
+  revolved ball's sphere and a revolved ring's torus equal their records too, but have no loop, so
+  those bodies take the faceted writer as stated above. No producer builds a full conical wall or a
+  cone patch that the analytic writer receives; the arm's own tests write a revolved frustum and the
+  loop chamfer corners through the writer directly.
   A full cylindrical wall receives one synthetic straight seam edge, used
   twice in opposite directions in its STEP loop. This seam changes STEP
   topology, not the body's geometry. Plane faces use their source outer and

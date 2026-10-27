@@ -194,23 +194,42 @@ func requireFileVerticesOnPatchSurfaces(t *testing.T, f step.File) int {
 	return checked
 }
 
-// TestAnalyticConePatchesConvexCorners writes the rounded box's top chamfer:
-// four CONICAL_SURFACE patches at radius 0 (the apex), every vertex of each on
-// the cone the file states, each of sense T, since the chamfer's outward normal leans away
-// from the corner's axis as the cone's own does. Besides the four cones
-// there are six planes, four corner cylinders and the four chamfer planes.
-// Every edge is used once in each direction and every cone loop runs
-// counter-clockwise about its outward normal, read back from the file. Shown
-// to fail with supportsAnalyticConePatch refusing every loop (the body fell
-// to the faceted writer), with addConePatchFace's sense inverted (the senses
-// read F), with patchWalks' decided walk inverted (every edge a patch shares
-// was used twice in one direction), and with conicalSurface writing the
-// half-angle 1% wide or its placement 0.5 mm along the axis (the vertices left
-// the stated cone).
+// conePatchArmFile writes a loop chamfer through the analytic arm's writer.
+// Every corner cone of a loop chamfer is a cap-blend band patch whose tag
+// departs from the ruled patch the build assembles by a stated bound
+// (agent-docs/modify-reach-design.md §8.3), so tagsUndeparted refuses the body
+// and NewSTEPFile writes it faceted. The face admission still takes it, and
+// these bodies are the only ones that build cone patches, so the cone patch
+// writer is read on them through armFile.
+func conePatchArmFile(t *testing.T, body *decad.Body) step.File {
+	t.Helper()
+	require.False(t, tagsUndeparted(body), "a loop chamfer's corner cones state a departure from their tags")
+	ok, err := supportsAnalyticSTEP(t.Context(), body)
+	require.NoError(t, err)
+	require.False(t, ok)
+	ok, err = supportsAnalyticFaces(t.Context(), body)
+	require.NoError(t, err)
+	require.True(t, ok, "the face admission takes the chamfered body")
+	return armFile(t, body)
+}
+
+// TestAnalyticConePatchesConvexCorners writes the rounded box's top chamfer
+// through the cone patch writer (conePatchArmFile): four CONICAL_SURFACE
+// patches at radius 0 (the apex), every vertex of each on the cone the file
+// states, each of sense T, since the chamfer's outward normal leans away from
+// the corner's axis as the cone's own does. Besides the four cones there are
+// six planes, four corner cylinders and the four chamfer planes. Every edge
+// is used once in each direction and every cone loop runs counter-clockwise
+// about its outward normal, read back from the file. Shown to fail with
+// supportsAnalyticConePatch refusing every loop (the face admission refused
+// the body), with addConePatchFace's sense inverted (the senses read F), with
+// patchWalks' decided walk inverted (every edge a patch shares was used twice
+// in one direction), and with conicalSurface writing the half-angle 1% wide
+// or its placement 0.5 mm along the axis (the vertices left the stated cone).
 func TestAnalyticConePatchesConvexCorners(t *testing.T) {
 	t.Parallel()
 	body := patchRoundedBoxChamfer(t, 0)
-	f := bandFile(t, body)
+	f := conePatchArmFile(t, body)
 	byName := bandEntities(f)
 	require.Len(t, byName["ADVANCED_FACE"], 18)
 	require.Len(t, byName["PLANE"], 10)
@@ -222,19 +241,21 @@ func TestAnalyticConePatchesConvexCorners(t *testing.T) {
 	require.Equal(t, 4, requirePatchFacesRunCounterClockwise(t, f, body, isConePatch))
 }
 
-// TestAnalyticConePatchesReflexCorners writes the pocket mouth's chamfer: four
-// three-edge cone patches, one arc and two generators meeting at the apex
-// vertex, every vertex on the cone the file states. Each is of sense F: the body's outward normal points into the
-// pocket, toward the cone's axis, against the cone's own. Shown to fail with
-// supportsAnalyticConePatch's minimum of three edges raised to four (the body
-// fell to the faceted writer) and with addConePatchFace's sense inverted.
-// addConePatchFace skips a vertex at the apex when it reads the sense, since
-// no normal exists there. That skip is not shown red: no fixture's loop
-// starts at its apex vertex, so the first vertex already lies off the axis.
+// TestAnalyticConePatchesReflexCorners writes the pocket mouth's chamfer
+// through the cone patch writer (conePatchArmFile): four three-edge cone
+// patches, one arc and two generators meeting at the apex vertex, every
+// vertex on the cone the file states. Each is of sense F: the body's outward
+// normal points into the pocket, toward the cone's axis, against the cone's
+// own. Shown to fail with supportsAnalyticConePatch's minimum of three edges
+// raised to four (the face admission refused the body) and with
+// addConePatchFace's sense inverted. addConePatchFace skips a vertex at the
+// apex when it reads the sense, since no normal exists there. That skip is
+// not shown red: no fixture's loop starts at its apex vertex, so the first
+// vertex already lies off the axis.
 func TestAnalyticConePatchesReflexCorners(t *testing.T) {
 	t.Parallel()
 	body := patchPocketMouthChamfer(t)
-	f := bandFile(t, body)
+	f := conePatchArmFile(t, body)
 	byName := bandEntities(f)
 	require.Len(t, byName["ADVANCED_FACE"], len(body.Faces()))
 	require.Equal(t, []float64{0, 0, 0, 0}, bandReals(byName["CONICAL_SURFACE"], 2))
@@ -281,10 +302,10 @@ func TestAnalyticSpherePatchesFilletedCube(t *testing.T) {
 
 // TestAnalyticConePatchWithBoundedVertexKeepsFaceted builds the rounded box's
 // chamfer at (0.2, 0.2), whose patch vertices carry rounding bounds while
-// every arc and generator still passes its exact test, and requires the
-// analytic arm to refuse it. Shown to fail with
-// supportsAnalyticConePatch's loopVerticesExact leg deleted (the arm took the
-// body).
+// every arc and generator still passes its exact test, and requires the face
+// admission to refuse it, which the tag gate (tagsUndeparted) does first on
+// its own. Shown to fail with supportsAnalyticConePatch's loopVerticesExact
+// leg deleted (the face admission took the body).
 func TestAnalyticConePatchWithBoundedVertexKeepsFaceted(t *testing.T) {
 	t.Parallel()
 	body := patchRoundedBoxChamfer(t, 0.2)
@@ -295,7 +316,7 @@ func TestAnalyticConePatchWithBoundedVertexKeepsFaceted(t *testing.T) {
 		}
 	}
 	require.Equal(t, 4, bounded, "every corner patch has a vertex with a bound")
-	ok, err := supportsAnalyticSTEP(t.Context(), body)
+	ok, err := supportsAnalyticFaces(t.Context(), body)
 	require.NoError(t, err)
 	require.False(t, ok, "a patch vertex with a bound sends the body to the faceted writer")
 	f, err := NewSTEPFile(t.Context(), body, units.Millimeters(0.2), bandHeader())
