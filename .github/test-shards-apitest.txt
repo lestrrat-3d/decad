@@ -1398,6 +1398,8 @@
 5	0.04	TestPrismUnionDownstreamFilletAndWallSurvey
 10	0.01	TestOrthogonalConcaveRadiusIsAbsentFromABlockAndZeroFromAnL
 5	0.00	TestPrismUnionReflectedOperandInsideBox
+10	0.01	TestMeshSolidBooleansAgreeWithTheCubeByCubeBoolean
+10	0.01	TestMeshSolidShellAndOffsetAgreeWithTheCubeByCubeErosionAndDilation
 5	0.00	TestReadSTEPHandWrittenPlateWithAHoleAndInches
 5	0.01	TestReadSTEPReadsPartialCylinderWalls
 5	0.00	TestReadThreeMFKeepsAMirroredCubeRightWayOut
