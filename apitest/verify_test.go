@@ -825,20 +825,18 @@ func TestVerifyDiagnosticsUnsupportedFacetedSurveys(t *testing.T) {
 
 	require.Equal(t, decad.Suspect, report.Status)
 	requireDiagnosticInvariants(t, report)
-	// The wall and undercut surveys of a faceted body read rays through its mesh.
-	// They can prove a wall too thin or a face blocked and cannot prove the
-	// opposite, so a thick, free body reads the wall interval straddling the tool
-	// and beyond the tolerance and the pull undecided. The concave-radius survey
-	// stays staged and names its own refusal.
-	require.Len(t, report.Diagnostics, 4)
-	require.Equal(t, decad.SurveyWall, report.Diagnostics[0].Survey)
-	require.Equal(t, decad.DiagUndecidedWall, report.Diagnostics[0].Code)
-	require.Equal(t, decad.SurveyWall, report.Diagnostics[1].Survey)
-	require.Equal(t, decad.DiagMeasurementBeyondTolerance, report.Diagnostics[1].Code)
-	require.Equal(t, decad.SurveyUndercut, report.Diagnostics[2].Survey)
-	require.Equal(t, decad.DiagUndecidedUndercut, report.Diagnostics[2].Code)
-	require.Equal(t, decad.Suspect, report.Diagnostics[2].Status)
-	radius := report.Diagnostics[3]
+	// The body is two cubes joined, every face square to an axis with no vertex bound, so its wall is read exactly from
+	// its grid (agent-docs/orthogonal-wall-design.md): the thinnest run of material is 10 mm against a 1 mm tool, a proven
+	// wall that leaves no finding. The undercut survey of a faceted body reads rays through its mesh and cannot prove
+	// the opposite of an undercut, so the pull stays undecided, and the concave-radius survey stays staged and names
+	// its own refusal.
+	require.Len(t, report.Diagnostics, 2)
+	require.Equal(t, decad.SurveyUndercut, report.Diagnostics[0].Survey)
+	require.Equal(t, decad.DiagUndecidedUndercut, report.Diagnostics[0].Code)
+	require.Equal(t, decad.Suspect, report.Diagnostics[0].Status)
+	require.NotNil(t, report.Bodies[0].Wall.Minimum)
+	require.InDelta(t, 10, report.Bodies[0].Wall.Minimum.Value.Base(), 1e-9)
+	radius := report.Diagnostics[1]
 	require.Equal(t, decad.SurveyConcaveRadius, radius.Survey)
 	require.Equal(t, decad.DiagUnsupportedSurveyPayload, radius.Code)
 	require.Equal(t, decad.Suspect, radius.Status)

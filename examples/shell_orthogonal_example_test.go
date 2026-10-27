@@ -321,3 +321,35 @@ func Example_shell_face_thickness() {
 	// Output:
 	// volume: 336 mm^3
 }
+
+// Verify can prove that no wall of a faceted solid whose faces all square to an axis is thinner than
+// the tool. Here a block shelled open at the top with 1 mm walls is checked against a 0.5 mm tool, which
+// every wall clears, and against a 2 mm tool, which they do not.
+func Example_verify_wall_orthogonal() {
+	mesh, err := decad.ReadOBJ(context.Background(), strings.NewReader(boxOBJ))
+	if err != nil {
+		fmt.Printf("failed to read mesh: %s\n", err)
+		return
+	}
+	doc := decad.New()
+	box, err := decad.SolidFromMesh(context.Background(), doc, mesh)
+	if err != nil {
+		fmt.Printf("failed to make a solid: %s\n", err)
+		return
+	}
+	if _, err := decad.Shell(context.Background(), box, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1)); err != nil {
+		fmt.Printf("failed to shell: %s\n", err)
+		return
+	}
+	for _, tool := range []float64{0.5, 2} {
+		report, err := doc.Verify(context.Background(), decad.WithMinWallThickness(units.Millimeters(tool)))
+		if err != nil {
+			fmt.Printf("failed to verify: %s\n", err)
+			return
+		}
+		fmt.Printf("tool %.1f mm: %s\n", tool, report.Status)
+	}
+	// Output:
+	// tool 0.5 mm: Sound
+	// tool 2.0 mm: Violating
+}

@@ -540,14 +540,13 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	meshReport, err := meshDoc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	require.Len(t, meshReport.Bodies, 1)
-	// The faceted wall survey reads rays through the mesh and publishes the
-	// enclosure [0, upper] of the thinnest wall: the two 10 mm boxes' true
-	// minimum is 10 mm, at the upper end, never above it.
+	// The two 10 mm boxes' mesh Boolean result has every face square to an axis and no vertex bound, so the faceted
+	// wall survey reads its grid (agent-docs/orthogonal-wall-design.md) and publishes the exact thinnest wall, 10 mm.
 	wall := meshReport.Bodies[0].Wall
 	require.Equal(t, decad.ScalarMeasured, wall.Outcome)
 	require.NotNil(t, wall.Minimum)
-	require.LessOrEqual(t, wall.Minimum.Value.Base()-wall.Minimum.Bound.Base(), 1e-9, "the enclosure starts at zero")
-	require.GreaterOrEqual(t, wall.Minimum.Value.Base()+wall.Minimum.Bound.Base(), 10.0-1e-9)
+	require.InDelta(t, 10, wall.Minimum.Value.Base(), 1e-9)
+	require.Less(t, wall.Minimum.Bound.Base(), 1e-9, "the reading is exact, not an enclosure from zero")
 }
 
 // This file is design A7's own acceptance fixture: the analytic prism
