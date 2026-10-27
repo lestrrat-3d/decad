@@ -8,7 +8,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/gaptol"
-	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -341,16 +340,22 @@ func heldVertexBoundsFromGaps(ctx context.Context, gaps []*big.Rat, xbeta []floa
 
 // CoordDistance is the exact largest per-coordinate distance from p to v.
 func CoordDistance(p proof.Xpt, v r3.Vec) *big.Rat {
-	px, py, pz := proof.XhpRat(proof.Xhp(p))
-	d := new(big.Rat)
-	for _, pair := range [][2]*big.Rat{{px, polynomial.MustRatOf(v.X)}, {py, polynomial.MustRatOf(v.Y)}, {pz, polynomial.MustRatOf(v.Z)}} {
-		dd := proof.SubRat(new(big.Rat), pair[0], pair[1])
-		dd.Abs(dd)
-		if proof.CmpRat(dd, d) > 0 {
-			d = dd
-		}
+	// All three exact differences share one denominator. Compare their
+	// absolute numerators, then reduce only the largest distance. Xsub owns
+	// its result, so taking absolute values cannot mutate p or its aliases.
+	d := proof.Xsub(p, proof.XptOf(v))
+	d.X.Abs(d.X)
+	d.Y.Abs(d.Y)
+	d.Z.Abs(d.Z)
+	d.W.Abs(d.W)
+	n := d.X
+	if d.Y.Cmp(n) > 0 {
+		n = d.Y
 	}
-	return d
+	if d.Z.Cmp(n) > 0 {
+		n = d.Z
+	}
+	return proof.RatFrac(new(big.Rat), n, d.W)
 }
 
 // keepRoundedEmbedded runs EnforceHeldEmbedding over the rounded result. A
