@@ -235,11 +235,14 @@ meridians, and a contact at a pole or an edge are not joined this way.
 A plain turned shaft, a full `decad.Revolve` of a rectangle with one side on an axis that runs along the sketch's
 U or V, is cut exactly as the circular `decad.Extrude` it equals. A box tool at right angles to the shaft, drawn
 on a datum plane and running past both shaft ends, gives a D-flat or a keyway with no `Faceted` face, and a
-`decad.Thread` on its cut wall builds. Both operands must keep the same placement: a shaft or a tool placed by
-`decad.Transform` takes the faceted path, as do a tool that ends inside the shaft's length, a stepped shaft and a
-tube. `Fillet` and `Chamfer` refuse the exact flat's edges, as they do for an extruded shaft. To blend those edges,
-place the tool by `decad.Transform`: the faceted result keeps the shaft's plane and cylinder faces, and the blend
-builds on them.
+`decad.Thread` on its cut wall builds. A stepped shaft, a full `decad.Revolve` of a staircase of such rectangles
+with one side on the axis, is cut the same way: the flat or keyway may cross any run of consecutive steps, a step
+it misses keeps its whole wall, and each shoulder keeps the part the tool leaves. Both operands must keep the same
+placement: a shaft or a tool placed by `decad.Transform` takes the faceted path, as do a tool that ends inside the
+shaft's length, a tool that meets two steps but not a narrower step between them in one of its planes, a slot
+that splits a step holding a narrower step's shoulder, and a tube. `Fillet` and `Chamfer` refuse the exact flat's
+edges, as they do for an extruded shaft. To blend those edges, place the tool by `decad.Transform`: the faceted
+result keeps the shaft's plane and cylinder faces, and the blend builds on them.
 
 A pin drawn at right angles to a plate, on a datum plane, whose end cap lies flat inside one of the plate's faces
 combines exactly, with no `Faceted` face. A `Union` of a pin standing on the face from outside adds it, and a `Cut`

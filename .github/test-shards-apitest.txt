@@ -967,6 +967,9 @@
 10	0.01	TestOrthogonalUnionOfSeveralBodiesTakesAnExtrudedPartner
 10	0.01	TestPatternJoinOfAMeshSolidIsExact
 10	0.01	TestOrthogonalUnionOfSeveralBodiesLeavesNearCoincidentFacesToTheGeneralRoute
+10	0.00	TestSteppedShaftClassBCut
+10	0.00	TestSteppedShaftClassBBlendsRefuse
+10	0.00	TestSteppedShaftClassBMisses
 3	0.05	TestTaperTwoSidedBuild
 3	0.00	TestTessellatePlate
 3	0.01	TestTessellateRejectsTangentHole

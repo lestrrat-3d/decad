@@ -78,6 +78,10 @@ type cbBuild struct {
 	vertices *VertexTable[cbCarrier]
 	faces    []cbFace
 	budget   *proofbound.WorkBudget
+	// steps is a stepped X's stack of coaxial circular prisms
+	// (stepped_cut.go), nil for a single prism X. When set, x is the
+	// stack's envelope and every X carrier reads from steps.
+	steps []prismrecord.Payload
 }
 
 // errCBMiss marks a topology this increment's reach does not cover, decided
@@ -160,12 +164,20 @@ func (b *cbBuild) geom(c cbCarrier) cbGeom {
 	}
 	if c.idx < 0 {
 		z := op.Z0
-		if c.idx == -2 {
+		switch {
+		case c.idx == -2:
 			z = op.Z1
+		case c.idx < -2:
+			z = b.steps[cbShoulderStep(c)].Z0
 		}
 		return cbGeom{axis: frame.axis[2], level: frame.sign[2]*z + 0}
 	}
-	seg := op.Profile.Outer.Segments[c.idx]
+	segs := op.Profile.Outer.Segments
+	if c.op == cbX && b.steps != nil {
+		segs = b.steps[c.idx].Profile.Outer.Segments
+		c.idx = 0
+	}
+	seg := segs[c.idx]
 	switch s := seg.(type) {
 	case sectionrecord.LineSeg:
 		if s.Start.U == s.End.U {
@@ -188,6 +200,16 @@ func (b *cbBuild) run(ctx context.Context) (breprecord.Payload, error) {
 		{Frame: b.fE.frame, Axis: b.fE.axis, Sign: b.fE.sign},
 	}
 	x := CrossingPrism{Segments: b.x.Profile.Outer.Segments, Z0: b.x.Z0, Z1: b.x.Z1}
+	xWalls := b.x.Profile.Outer.Segments
+	if b.steps != nil {
+		// A stepped X has no corner to seed: every step's section is one
+		// circle. Its walls are the steps' circles, by step.
+		x.Segments = nil
+		xWalls = make([]sectionrecord.CurveSegment, len(b.steps))
+		for i, s := range b.steps {
+			xWalls[i] = s.Profile.Outer.Segments[0]
+		}
+	}
 	y := CrossingPrism{Segments: b.cp.y.Profile.Outer.Segments, Z0: b.cp.y.Z0, Z1: b.cp.y.Z1}
 	if err := b.vertices.SeedRecordedCorners([2]CrossingPrism{x, y},
 		[2]CrossingFrame{frames[0], frames[1]}, cbCarrierOf); err != nil {
@@ -215,11 +237,18 @@ func (b *cbBuild) run(ctx context.Context) (breprecord.Payload, error) {
 		},
 		Decide: func(ctx context.Context, c cbCarrier, frame int, level float64, outward bool,
 			own []cbSeg, other [][]cbSeg, cut bool) error {
-			return b.decide(ctx, c, []cbFrame{b.fX, b.fG, b.fE}[frame], level, outward, own, other, cut)
+			return b.decide(ctx, c, []cbFrame{b.fX, b.fG, b.fE}[frame], level, outward, own, nil, other, cut)
 		},
 		Miss: errCBMiss,
 	}
-	if err := BuildXCrossingFaces(ctx, x, y, b.e(), frames, hooks); err != nil {
+	if b.steps != nil {
+		hooks.XSlice = func(ctx context.Context, f cbCarrier, frame CrossingFrame) ([][]cbSeg, error) {
+			return b.steppedSlice(ctx, f, frame)
+		}
+		if err := b.buildSteppedXFaces(ctx, hooks); err != nil {
+			return breprecord.Payload{}, err
+		}
+	} else if err := BuildXCrossingFaces(ctx, x, y, b.e(), frames, hooks); err != nil {
 		return breprecord.Payload{}, err
 	}
 	if err := BuildYCrossingFaces(ctx, x, y, b.e(), frames, hooks); err != nil {
@@ -290,7 +319,7 @@ func (b *cbBuild) run(ctx context.Context) (breprecord.Payload, error) {
 		}
 	}
 	pieces, err := CylinderPieces(pieceFaces, [2]CrossingFrame{frames[0], frames[1]},
-		[2][]sectionrecord.CurveSegment{b.x.Profile.Outer.Segments, b.cp.y.Profile.Outer.Segments},
+		[2][]sectionrecord.CurveSegment{xWalls, b.cp.y.Profile.Outer.Segments},
 		func(c cbCarrier) (int, int, bool, int) {
 			g := b.geom(c)
 			return c.op, c.idx, g.cyl, g.axis
@@ -333,11 +362,12 @@ type cbSeg = CarrierSegment[cbCarrier]
 type cbChord = CrossingChord[cbCarrier]
 
 // decide resolves one planar face's scene (§5): A is the face's own loop,
-// B the other operand's slice of it, both in frame. A Cut keeps A outside B,
-// an Intersect A inside B, through prism-boolean's clean-nesting match or
-// crossing sub-case. Each returned region becomes one face; an empty one
-// drops the face.
-func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level float64, outward bool, own []cbSeg, other [][]cbSeg, cut bool) error {
+// with the holes ownHoles (a stepped X's shoulder), B the other operand's
+// slice of it, both in frame. A Cut keeps A outside B, an Intersect A inside
+// B, through prism-boolean's clean-nesting match or crossing sub-case. Each
+// returned region becomes one face; an empty one drops the face.
+func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level float64, outward bool,
+	own []cbSeg, ownHoles [][]cbSeg, other [][]cbSeg, cut bool) error {
 	toLoop := func(segs []cbSeg) sectionrecord.LoopRecord {
 		var l sectionrecord.LoopRecord
 		for _, s := range segs {
@@ -345,7 +375,30 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 		}
 		return l
 	}
+	if b.steps != nil && len(other) != 0 {
+		// A stepped X's face may lie wholly apart from Y's slice (a step
+		// the tool does not reach): the slice then changes nothing on it.
+		apart, err := loopsApart([][]cbSeg{own}, other)
+		if err != nil {
+			return err
+		}
+		if apart {
+			other = nil
+		}
+	}
+	if len(ownHoles) != 0 && len(other) != 0 {
+		apart, err := loopsApart(ownHoles, other)
+		if err != nil {
+			return err
+		}
+		if apart {
+			return b.decideAroundHoles(ctx, f, frame, level, outward, own, ownHoles, other, cut)
+		}
+	}
 	inputs := slices.Clone(own)
+	for _, h := range ownHoles {
+		inputs = append(inputs, h...)
+	}
 	for _, o := range other {
 		inputs = append(inputs, o...)
 	}
@@ -359,6 +412,9 @@ func (b *cbBuild) decide(ctx context.Context, f cbCarrier, frame cbFrame, level 
 		return nil
 	}
 	a := momentinput.Profile{Outer: toLoop(own)}
+	for _, h := range ownHoles {
+		a.Holes = append(a.Holes, toLoop(h))
+	}
 	if len(other) == 0 {
 		if cut {
 			return add(a)

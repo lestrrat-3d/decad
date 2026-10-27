@@ -284,18 +284,6 @@ func TestRevolvedShaftClassBMisses(t *testing.T) {
 		requireShaftMeshPath(t, got, err)
 	})
 
-	t.Run("stepped shaft", func(t *testing.T) {
-		t.Parallel()
-		// Radius 10 over x in [0, 20] and 8 over [20, 40]: the meridian is
-		// no rectangle, so the shaft has no prism view.
-		s, profile := polygonSketch(t, [][2]float64{{0, 0}, {40, 0}, {40, 8}, {20, 8}, {20, 10}, {0, 10}})
-		sc := newRetentionScene()
-		shaft, err := decad.Revolve(t.Context(), sc.doc, s, profile, uAxis, decad.FullRevolution{})
-		require.NoError(t, err)
-		got, err := decad.Cut(t.Context(), shaft, shaftTool(t, sc, flatPlane(t, sc), -5, -20, shaftL+5, 20))
-		requireShaftMeshPath(t, got, err)
-	})
-
 	t.Run("tube", func(t *testing.T) {
 		t.Parallel()
 		s, profile := polygonSketch(t, [][2]float64{{0, 4}, {40, 4}, {40, 10}, {0, 10}})
