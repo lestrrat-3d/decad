@@ -47,7 +47,7 @@ faces are planes and cylinders where the Booleans admit them.
 - A pilot thread whose major diameter exceeds the boss's.
 - A draft that closes the boss or breaks its circle before its top: `Extrude`'s refusal.
 - A boss that stands on a curved face other than a cylinder's (§8), a boss on a cylinder with a root fillet or a draft, and a shaped boss with a root fillet.
-- A boss whose axis is tilted from the face normal.
+- A tilted boss with a pilot, a draft, a root fillet, ribs or a shape, a tilt past 60 degrees, and one on a cylindrical face (§10).
 
 ## 4. A pilot with a head or a thread
 
@@ -123,3 +123,15 @@ through it, out of the body's material.
 | G3 | Its section in that plane, with a the distance from the axis and z the height above the face, is the polygon `(r/2, −e/2)`, `(r + Length, −e/2)`, `(r + Length, 0)`, `(r, Height)`, `(r/2, Height)`, `e` the footing depth `embed` of B3: it is flat across the top inside the boss, slopes down to the face at its outer end, and is buried in the boss and the plate, but lies above the pillar's footing plane so no two facets of the tools overlap in one plane (the evaluator refuses that). |
 | G4 | The pillar and the ribs are united into one tool and that tool into the body, and the pilot and its head are cut after, so a rib never closes a pilot. A boss with ribs takes no `Draft` (the wall leans from the rib's top vertex), no `RootFillet`, no `Shape`, and no cylindrical face, each `ErrUnsupported`. |
 | G5 | The volume the ribs add outside the boss and above the face is, for each rib, `Height · (Thickness·Length/2 + ∫ (r − √(r² − y²)) dy)` over `y` across its thickness: the flat top before the wall's radius and the slope after it. The tests state it independently, require it inside the result's volume bound, and check a point in a rib's foot and a point beside it. |
+
+## 10. A tilted boss
+
+`BossSpec.Tilt` leans the boss's axis from the face's normal, and `TiltDirection` says which way.
+
+| Decision | Rule |
+|---|---|
+| D1 | `Tilt` is an angle above zero and at most 60 degrees: zero as an angle or past 60 is `ErrDegenerate`, negative `ErrNegativeMagnitude`, a wrong unit kind `ErrUnitKind`. The zero `Value` is an upright boss. `TiltDirection` is the angle about the face's outward normal from the face frame's U axis to the direction the boss leans toward, the zero `Value` being along U; it needs a `Tilt` (`ErrDegenerate`) and is an angle. |
+| D2 | The axis is `n·cos a + t·sin a`, `n` the outward normal, `t` the unit lean direction in the face and `a` the tilt. `Height` is measured along it from the point `At` on the face to the centre of the boss's top disc, and `Diameter` is the cylinder's, square to the axis. |
+| D3 | The pillar is the circle in the plane square to the axis, centred `e = (r·sin a + MouthMargin)/cos a` along the axis behind `At`, swept by `Height + e`. Its base disc is tilted, so its highest point is `MouthMargin` under the face and its lowest `2·r·sin a + MouthMargin` under it; a body with no more depth than that behind the face is `ErrDegenerate`. |
+| D4 | A tilted boss is round and stands on a plane: a `Bore`, `Draft`, `RootFillet`, `Ribs`, `Shape` or a cylindrical face with it is `ErrUnsupported`. The result is the union of the pillar with the body and carries its bound. |
+| D5 | The volume above the face is exactly `π·r²·Height`: the face cuts a right cylinder through a point of its axis, and the oblique cut is balanced about that point, whatever the tilt. The tests require it inside the result's bound, the top disc's highest point `Height·cos a + r·sin a` over the face, a point on the axis inside the boss, and a point `4 + 4·cos a` mm back along the lean outside. |

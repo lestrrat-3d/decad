@@ -74,6 +74,14 @@ type BossSpec struct {
 	Shape      HoleShape
 	// Ribs, when not nil, braces the boss's root with gusset ribs (agent-docs/boss-design.md §9).
 	Ribs *BossRibs
+	// Tilt, when set, leans the boss's axis from the face's normal by this angle, in the
+	// direction TiltDirection names (agent-docs/boss-design.md §10). It is an angle above
+	// zero and at most 60 degrees, and the zero Value is an upright boss. Height is then
+	// measured along the tilted axis from the face. TiltDirection is the angle about the face
+	// normal from the face frame's U axis to the direction the boss leans toward, and its
+	// zero Value is along U. A tilted boss is round and takes no Bore, Draft, RootFillet or
+	// Ribs, and stands on a planar face.
+	Tilt, TiltDirection units.Value
 }
 
 // Boss raises a round boss on a planar face of b, with an optional blind pilot
@@ -214,6 +222,9 @@ type bossRequest struct {
 	diameter, height, embed, draft float64
 	// shape, when set, is the section in place of a circle of diameter.
 	shape *bossShape
+	// tilt, when set, leans the boss: its axis, the direction square to the axis in the plane of
+	// the lean, and how far along the axis the pillar starts behind the face.
+	tilt *bossTilt
 	// ribs, when set, are the gusset ribs round the boss's root, in the order of their angles.
 	ribs []bossRibRequest
 	// curved, when set, says the boss stands on a cylindrical face: frame is then the
@@ -248,6 +259,16 @@ func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
 		return in, err
 	}
 	in.frame, in.outward, in.curved = site.frame, site.outward, site.cylinder
+	if spec.Tilt != (units.Value{}) {
+		switch {
+		case in.curved != nil:
+			return in, fmt.Errorf(`%w: a boss on a cylindrical face stands upright`, ErrUnsupported)
+		case spec.Shape != nil || spec.Bore != nil || spec.Ribs != nil || spec.Draft != (units.Value{}) || spec.RootFillet != (units.Value{}):
+			return in, fmt.Errorf(`%w: a tilted boss is round and takes no pilot, ribs, draft or root fillet`, ErrUnsupported)
+		}
+	} else if spec.TiltDirection != (units.Value{}) {
+		return in, fmt.Errorf(`%w: a tilt direction needs a tilt`, ErrDegenerate)
+	}
 	if spec.Ribs != nil {
 		switch {
 		case in.curved != nil:
@@ -286,6 +307,11 @@ func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
 	}
 	if in.diameter == 0 || in.height == 0 {
 		return in, fmt.Errorf(`%w: a boss needs a positive diameter and height`, ErrDegenerate)
+	}
+	if spec.Tilt != (units.Value{}) {
+		if in.tilt, err = readBossTilt(spec, in); err != nil {
+			return in, err
+		}
 	}
 	if spec.Ribs != nil {
 		if in.ribs, err = readBossRibs(spec.Ribs, in.diameter/2, in.height); err != nil {
@@ -333,6 +359,15 @@ func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
 		}
 		if in.embed >= reach {
 			return in, fmt.Errorf(`%w: the body is too thin behind the cylindrical face for the boss's footing`, ErrDegenerate)
+		}
+	}
+	if in.tilt != nil {
+		// The pillar's base disc is tilted, so its far edge dips r·sin(a) below the middle of
+		// the base and the footing is embed·cos(a) below the face there: both must lie in the body.
+		in.tilt.embed = (in.diameter/2*math.Sin(in.tilt.angle) + holeplan.MouthMargin) / math.Cos(in.tilt.angle)
+		if low := in.tilt.embed*math.Cos(in.tilt.angle) + in.diameter/2*math.Sin(in.tilt.angle); low >= reach {
+			return in, fmt.Errorf(`%w: the body is too thin behind the face for a boss tilted %g degrees`,
+				ErrDegenerate, in.tilt.angle*180/math.Pi)
 		}
 	}
 	if spec.Bore == nil {
@@ -386,6 +421,9 @@ func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
 // buildBossPillar extrudes the boss's cylinder out of the face, starting embed
 // behind it.
 func buildBossPillar(ctx context.Context, d *Document, in bossRequest) (*Body, error) {
+	if in.tilt != nil {
+		return buildTiltedPillar(ctx, d, in)
+	}
 	footing, err := r3.NewFrame(in.frame.Origin().Sub(in.outward.Scale(in.embed)), in.frame.U(), in.frame.V())
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the face frame is degenerate: %s`, ErrDegenerate, err)
@@ -532,4 +570,81 @@ func buildBossRibs(ctx context.Context, d *Document, in bossRequest) ([]*Body, e
 		tools = append(tools, tool)
 	}
 	return tools, nil
+}
+
+// bossTilt is a tilted boss in plain data: angle is the lean from the face's normal in
+// radians, axis the boss's unit axis, across a unit vector square to it in the plane of the
+// lean, and embed how far along the axis the pillar starts behind the face's point.
+type bossTilt struct {
+	angle  float64
+	axis   r3.Vec
+	across r3.Vec
+	embed  float64
+}
+
+// maxBossTilt is the largest lean, in radians, a boss may take: 60 degrees.
+const maxBossTilt = math.Pi / 3
+
+// readBossTilt reads spec.Tilt and spec.TiltDirection against the face frame of in.
+func readBossTilt(spec BossSpec, in bossRequest) (*bossTilt, error) {
+	angle, err := spec.Tilt.In(units.Radian)
+	if err != nil {
+		return nil, fmt.Errorf(`%w: the boss tilt must be an angle: %s`, ErrUnitKind, err)
+	}
+	switch {
+	case math.IsNaN(angle) || math.IsInf(angle, 0):
+		return nil, fmt.Errorf(`%w: the boss tilt is not finite`, ErrNotFinite)
+	case angle < 0:
+		return nil, fmt.Errorf(`%w: the boss tilt is negative`, ErrNegativeMagnitude)
+	case angle == 0 || angle > maxBossTilt:
+		return nil, fmt.Errorf(`%w: a boss tilt must lie above zero and at most 60 degrees`, ErrDegenerate)
+	}
+	direction := 0.0
+	if spec.TiltDirection != (units.Value{}) {
+		if direction, err = spec.TiltDirection.In(units.Radian); err != nil {
+			return nil, fmt.Errorf(`%w: the boss tilt direction must be an angle: %s`, ErrUnitKind, err)
+		}
+		if math.IsNaN(direction) || math.IsInf(direction, 0) {
+			return nil, fmt.Errorf(`%w: the boss tilt direction is not finite`, ErrNotFinite)
+		}
+	}
+	lean := in.frame.U().Scale(math.Cos(direction)).Add(in.frame.V().Scale(math.Sin(direction)))
+	sin, cos := math.Sincos(angle)
+	return &bossTilt{
+		angle:  angle,
+		axis:   in.outward.Scale(cos).Add(lean.Scale(sin)),
+		across: lean.Scale(cos).Sub(in.outward.Scale(sin)),
+	}, nil
+}
+
+// buildTiltedPillar extrudes the tilted boss's cylinder: a circle in the plane square to its
+// axis, centred embed along the axis behind the boss's point on the face, swept along the axis
+// by the boss's height plus that embed.
+func buildTiltedPillar(ctx context.Context, d *Document, in bossRequest) (*Body, error) {
+	t := in.tilt
+	centre := in.frame.ToWorldUV(in.u, in.v).Sub(t.axis.Scale(t.embed))
+	footing, err := r3.NewFrame(centre, t.across, t.axis.Cross(t.across))
+	if err != nil {
+		return nil, fmt.Errorf(`%w: the tilted footing frame is degenerate: %s`, ErrDegenerate, err)
+	}
+	w := sketch.NewWorld()
+	pl, err := w.CreatePlaneFromFrame(footing)
+	if err != nil {
+		return nil, err
+	}
+	s, err := w.CreateSketch(pl)
+	if err != nil {
+		return nil, err
+	}
+	middle := s.CreatePoint(0, 0)
+	s.Fix(middle)
+	s.CreateCircle(middle, in.diameter/2)
+	if _, err := s.Solve(ctx); err != nil {
+		return nil, err
+	}
+	dir := Against
+	if t.axis.Dot(footing.N()) > 0 {
+		dir = Along
+	}
+	return Extrude(ctx, d, s, s.Profiles()[0], Distance{D: units.Millimeters(in.height + t.embed), Dir: dir})
 }
