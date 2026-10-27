@@ -6,7 +6,12 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/capblend"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/survey2d"
 	"github.com/stretchr/testify/require"
 )
 
@@ -127,4 +132,77 @@ func TestNearTangentCornerRefuses(t *testing.T) {
 		_, why, _ := capband.NearTangentCorner(cwLine, cwArc, 6, 6, 0)
 		require.Empty(t, why)
 	})
+}
+
+// wedgeLoop is a CCW loop whose bottom wall (0, 0) → (length, 0), recorded
+// segment 0, meets a mitered corner at its start and a near-tangent right arc
+// at its end: the arc's centre (length + shift, 5) sits shift past the wall's
+// end. The top wall (length, 10) → (−1, 10) meets the arc near-tangent too,
+// and the side (−1, 10) → (0, 0) closes it with two convex miters.
+func wedgeLoop(length, shift float64) sectionrecord.LoopRecord {
+	p := func(u, v float64) sectionrecord.Point2 { return sectionrecord.Point2{U: u, V: v} }
+	a, b, c, d := p(0, 0), p(length, 0), p(length, 10), p(-1, 10)
+	return sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.LineSeg{Start: a, End: b, TStart: 0, TEnd: 1},
+		sectionrecord.ArcSeg{Center: p(length+shift, 5), Start: b, End: c, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: c, End: d, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: d, End: a, TStart: 0, TEnd: 1},
+	}}
+}
+
+// wedgeAdmission runs the occupied-volume admission over wedgeLoop as a draft
+// band moved by amount on every walk.
+func wedgeAdmission(t *testing.T, length, shift, amount float64) error {
+	t.Helper()
+	budget := proofbound.NewWorkBudget(t.Context())
+	loop := wedgeLoop(length, shift)
+	refusal, err := capband.OccupiedVolumeAdmission(budget, "tapered extrude", []sectionrecord.LoopRecord{loop},
+		map[int]bool{}, map[int]bool{0: true},
+		func(int, sectionrecord.LoopRecord) ([]survey2d.SideWalk, func() ([]bool, error), error) {
+			cl, err := capblend.OneLoopCornerLoop(budget, loop, freeform.NewFreeformWork())
+			if err != nil {
+				return nil, nil, err
+			}
+			return cl.Walks, func() ([]bool, error) { return make([]bool, len(cl.Walks)), nil }, nil
+		},
+		func(_ int, walks []survey2d.SideWalk) ([]float64, float64) {
+			amounts := make([]float64, len(walks))
+			for i := range amounts {
+				amounts[i] = amount
+			}
+			return amounts, 1e-16
+		})
+	require.NoError(t, err)
+	return refusal
+}
+
+// TestNearTangentWallMustSurvive pins Lemma 2's survival gate
+// (NearTangentWallRefusal): a wall at a near-tangent join must advance by more
+// than its corners' ρ at the near and the far section. The wedge drafted
+// inward 0.5 mm keeps its unit bottom wall and is admitted. Drafted inward
+// 2 mm, the start miter overruns the wall at the far section. With the bottom
+// wall 2⁻³⁶ mm long and an outward draft, the far wall grows but the near one
+// is shorter than the near-tangent corner's ρ (about 5.8e-11 mm), while a
+// 2⁻³⁰ mm wall outruns it. Removing the gate from the admission admits both
+// refusals.
+func TestNearTangentWallMustSurvive(t *testing.T) {
+	t.Parallel()
+	shift := 5 * math.Ldexp(1, -33)
+	require.NoError(t, wedgeAdmission(t, 1, shift, 0.5))
+	require.NoError(t, wedgeAdmission(t, math.Ldexp(1, -30), shift, -0.5), "a 2⁻³⁰ mm wall outruns ρ")
+	for _, tc := range []struct {
+		name           string
+		length, amount float64
+	}{
+		{"far wall overrun", 1, 2},
+		{"near wall within the charge", math.Ldexp(1, -36), -0.5},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			refusal := wedgeAdmission(t, tc.length, shift, tc.amount)
+			require.ErrorIs(t, refusal, decaderr.ErrUnsupported)
+			require.ErrorContains(t, refusal, "advance at the near or far section does not exceed the near-tangent corner charge")
+			require.ErrorContains(t, refusal, "no proof of the volume")
+		})
+	}
 }

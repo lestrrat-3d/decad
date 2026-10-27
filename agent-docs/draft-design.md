@@ -561,9 +561,19 @@ closed 1-chains:
 
 The split assumes every wall survives at every level, so each wall's true
 edge runs from its start corner to its end corner in the walk's order; a wall
-shorter than about `2ρ` could reverse and break it. The build's consumed-wall
-check enforces it: `offset2d.WalkConsumed` refuses a wall whose held advance
-falls to its tolerance, at `d` (SD7) and at the top of its span (SD10).
+shorter than about `2ρ` could reverse and break it. The admission proves it
+for every straight wall with a near-tangent end (`capband.NearTangentWallRefusal`):
+B1's two corner points move affinely between the near and far sections and
+each true corner lies within its `ρ` of B1's, so the true edge advances at
+every level when the wall's advance along its recorded direction exceeds
+`ρ_start + ρ_end` at both sections. The near advance is the recorded length,
+compared exactly; the far corners are enclosed over the span of `d` (the
+circle's radial foot at a circular neighbour, the moved carriers' miter at a
+straight one), and the enclosure's least advance is compared against the
+upward root of the recorded length. A wall that fails refuses "a straight
+wall at a near-tangent join whose advance at the near or far section does not
+exceed the near-tangent corner charge". The build's float consumed-wall check
+(`offset2d.WalkConsumed`, SD7, SD10) runs first and proves nothing here.
 Winding numbers add over chains, so `area(S1 △ S0)`
 is at most the sum of the areas those chains enclose. The corner's arc starts at zero length and its
 chord stays below `ρ < r_lo`, under `√2` times the moved radius, so it never
@@ -884,8 +894,10 @@ charges nothing, the `5·2⁻³⁴` slot charges a positive volume whose rate pe
 unit height covers Lemma 2's slice area at every eighth of the sweep, and its
 `volSymDiff` exceeds the exact slot's (`internal/draftrecord/near_tangent_test.go`).
 Lemma 1 is checked against a 256-bit reference of the true miter at amounts
-of either sign, and each refusal of §9.1.1 has a row
-(`internal/capband/near_tangent_test.go`); the two-sided slot of `2⁻⁴⁰` sews a
+of either sign, each refusal of §9.1.1 has a row, and the survival gate
+admits a wedge whose unit wall survives, or whose `2⁻³⁰` mm wall outruns `ρ`,
+and refuses it drafted until the far miter overruns the wall or with a
+`2⁻³⁶` mm wall inside `ρ` (`internal/capband/near_tangent_test.go`); the two-sided slot of `2⁻⁴⁰` sews a
 mesh that carries the proof (`internal/draftrecord/tessellate_test.go`).
 
 **PR 5 fixtures** (`apitest/draft_subset_test.go`): F1's box with its `+u`
@@ -934,6 +946,7 @@ undecided.
 | the near-tangent arm of the admission | `capblend.OccupiedVolumeAdmission` passes no `SharpAmounts` | the near-tangent slot: no volume proof at any tolerance, and its `Cut` refuses |
 | the near-tangent turn limit | condition 4 skipped | the `5·2⁻³¹` slot's `Cut` builds; the limit row of `capband` admits |
 | the other near-tangent gates | condition 1, 5 or 6 skipped, or condition 6 read with every arc counter-clockwise | the matching `capband` refusal row admits, for condition 6 on a counter-clockwise arc moved inward and on a clockwise arc moved outward |
+| the survival gate (`NearTangentWallRefusal`) | skipped in the admission | the wedge's far-overrun and short-wall rows admit |
 | Lemma 1's `ρ` and `ε` | each quartered | the 256-bit miter reference at an amount of 0.26 mm |
 | the strip term `3ελ` | dropped from `NearTangentVolume` | the `5·2⁻³⁴` slot: the charge falls below the slice area from the first eighth of the sweep |
 | the disc term `πρ²/4` | dropped | no fixture: the segment it covers sits below `1e-33` mm² on the slot |

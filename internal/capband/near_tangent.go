@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -230,4 +231,106 @@ func ratAbs(q *big.Rat) *big.Rat {
 func ratPoint2(p sectionrecord.Point2) ([2]*big.Rat, bool) {
 	u, v := proofarith.FloatRat(p.U), proofarith.FloatRat(p.V)
 	return [2]*big.Rat{u, v}, u != nil && v != nil
+}
+
+// NearTangentWallRefusal checks Lemma 2's survival assumption
+// (agent-docs/draft-design.md §9.1.1) for straight walk i of a draft loop with a
+// near-tangent join at an end: the true edge runs forward from its start corner
+// to its end corner at every level. B1's two corner points move affinely
+// between the near and far sections, and each true corner lies within its ρ of
+// B1's (rhoStart, rhoEnd; zero at an exact end), so the edge survives when its
+// advance along the recorded direction exceeds rhoStart + rhoEnd at both
+// sections. The near section's advance is the recorded length, compared
+// exactly; the far section's corners are enclosed over the amount span, the
+// circle's radial foot at a circular neighbour and the moved carriers' miter
+// at a straight one, and the enclosure's least advance is compared against the
+// upward root of the recorded length. It returns the refusal's reason, or ""
+// when the wall survives.
+func NearTangentWallRefusal(loop sectionrecord.LoopRecord, walks []survey2d.SideWalk, i int, amounts []float64, amountDelta, rhoStart, rhoEnd float64) string {
+	const why = `a straight wall at a near-tangent join whose advance at the near or far section does not exceed the near-tangent corner charge, so its edge is not proven to survive every level`
+	n := len(walks)
+	w := walks[i]
+	if w.IsCircular() || len(amounts) != n || len(w.Segs) == 0 {
+		return why
+	}
+	first, err := sectionrecord.NormalizeSegment(loop.Segments[w.Segs[0]])
+	if err != nil {
+		return why
+	}
+	last, err := sectionrecord.NormalizeSegment(loop.Segments[w.Segs[len(w.Segs)-1]])
+	if err != nil {
+		return why
+	}
+	fe, okF := joinEnds(first)
+	le, okL := joinEnds(last)
+	rs, re := proofarith.FloatRat(rhoStart), proofarith.FloatRat(rhoEnd)
+	if !okF || !okL || rs == nil || re == nil {
+		return why
+	}
+	dir := [2]*big.Rat{new(big.Rat).Sub(le.end[0], fe.start[0]), new(big.Rat).Sub(le.end[1], fe.start[1])}
+	need := new(big.Rat).Add(rs, re)
+	lengthSq := ratDot(dir, dir)
+	if lengthSq.Cmp(new(big.Rat).Mul(need, need)) <= 0 {
+		return why
+	}
+	span := func(k int) (proofbound.RatInterval, bool) {
+		width := amountDelta
+		if amounts[k] == 0 {
+			width = 0
+		}
+		return capcontour.OffsetSpan(amounts[k], width)
+	}
+	p, q := (i+n-1)%n, (i+1)%n
+	start, okS := farCorner(walks[p], w, span, p, i, true)
+	end, okE := farCorner(w, walks[q], span, i, q, false)
+	lengthUp := proofarith.FloatRat(proofbound.RatSqrtUp(lengthSq))
+	if !okS || !okE || lengthUp == nil {
+		return why
+	}
+	advance := proofbound.IntervalAdd(
+		proofbound.IntervalScale(proofbound.IntervalSub(end.U, start.U), dir[0]),
+		proofbound.IntervalScale(proofbound.IntervalSub(end.V, start.V), dir[1]),
+	)
+	if advance.Lo.Cmp(new(big.Rat).Mul(need, lengthUp)) <= 0 {
+		return why
+	}
+	return ""
+}
+
+// farCorner encloses B1's far-section point at the corner where prev arrives
+// at cur over the two walks' amount spans: the radial foot of the circular
+// one (atWallStart says the straight wall is cur, so the neighbour is prev)
+// when the neighbour is circular, else the miter of the two moved carriers
+// nearest the corner.
+func farCorner(prev, cur survey2d.SideWalk, span func(int) (proofbound.RatInterval, bool), pi, ci int, atWallStart bool) (capcontour.Point, bool) {
+	sp, okP := span(pi)
+	sc, okC := span(ci)
+	if !okP || !okC {
+		return capcontour.Point{}, false
+	}
+	neighbour, atEnd, s := cur, false, sc
+	if atWallStart {
+		neighbour, atEnd, s = prev, true, sp
+	}
+	if neighbour.IsCircular() {
+		u, v, bound := neighbour.StartU, neighbour.StartV, neighbour.StartBound
+		if atEnd {
+			u, v, bound = neighbour.EndU, neighbour.EndV, neighbour.EndBound
+		}
+		corner, ok := capcontour.WalkPointEnclosure(u, v, bound)
+		if !ok {
+			return capcontour.Point{}, false
+		}
+		return capcontour.OffsetFootEnclosure(corner, neighbour, atEnd, s)
+	}
+	ca, okA := capcontour.CarrierOver(prev, sp)
+	cb, okB := capcontour.CarrierOver(cur, sc)
+	if !okA || !okB {
+		return capcontour.Point{}, false
+	}
+	cands, ok := capcontour.Intersect(ca, cb)
+	if !ok {
+		return capcontour.Point{}, false
+	}
+	return capcontour.Nearest(cands, cur.StartU, cur.StartV)
 }

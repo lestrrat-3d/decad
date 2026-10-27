@@ -42,7 +42,8 @@ import (
 // sharp is a draft band's per-walk amounts, nil for a chamfer band. With it, a
 // corner JoinIsG1 rejects is admitted when NearTangentCorner reads it as a
 // near-tangent join (agent-docs/draft-design.md §9.1.1), and refused with that
-// function's reason otherwise.
+// function's reason otherwise; every straight wall with such a join at an end
+// must then pass NearTangentWallRefusal.
 func OccupiedVolumeAdmission(
 	budget *proofbound.WorkBudget,
 	noun string,
@@ -93,6 +94,7 @@ func OccupiedVolumeAdmission(
 		}
 		var amounts []float64
 		var amountDelta float64
+		var charges []*NearTangentCharge // corner i's near-tangent charge, nil where exact
 		for i := range n {
 			if err := budget.Step(); err != nil {
 				return nil, err
@@ -132,8 +134,37 @@ func OccupiedVolumeAdmission(
 					return nil, fmt.Errorf(`%w: %d offset amounts for the %d walks of loop %d`, decaderr.ErrDegenerate, len(amounts), n, li)
 				}
 			}
-			if _, why, hint := NearTangentCorner(prevSeg, curSeg, amounts[(i+n-1)%n], amounts[i], amountDelta); why != "" {
+			charge, why, hint := NearTangentCorner(prevSeg, curSeg, amounts[(i+n-1)%n], amounts[i], amountDelta)
+			if why != "" {
 				return admissionRefusal(noun, li, cornerAt(prev, cur), why, hint), nil
+			}
+			if charges == nil {
+				charges = make([]*NearTangentCharge, n)
+			}
+			charges[i] = &charge
+		}
+		// Lemma 2 of agent-docs/draft-design.md §9.1.1 assumes every straight wall
+		// at a near-tangent join survives at every level.
+		for i, w := range walks {
+			if charges == nil {
+				break
+			}
+			start, end := charges[i], charges[(i+1)%n]
+			if w.IsCircular() || (start == nil && end == nil) {
+				continue
+			}
+			if err := budget.Step(); err != nil {
+				return nil, err
+			}
+			var rhoStart, rhoEnd float64
+			if start != nil {
+				rhoStart = start.Rho
+			}
+			if end != nil {
+				rhoEnd = end.Rho
+			}
+			if why := NearTangentWallRefusal(loop, walks, i, amounts, amountDelta, rhoStart, rhoEnd); why != "" {
+				return admissionRefusal(noun, li, wallAt(w), why), nil
 			}
 		}
 	}
