@@ -55,7 +55,7 @@ func Run(ctx context.Context, h Hooks, bodies []*topo.Body, cfg verifyConfig) (*
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		br, err := verifyBody(ctx, h.Mesher, b, cfg, req)
+		br, err := verifyBody(ctx, h.Draft, b, cfg, req)
 		if err != nil {
 			return nil, err
 		}
@@ -184,7 +184,7 @@ func UndecidedPairDiag[B comparable](a, b B, nodeA, nodeB *topo.Body, verdict bo
 // not sampled. Exposed at package scope so an in-package test can construct
 // a body directly and assert on the returned BodyReport (task-list §4
 // item 4's validity fixtures).
-func verifyBody(ctx context.Context, mesher verifiedmesh.Mesher, b *topo.Body, cfg verifyConfig, req vocab.VerifyRequest) (*BodyReport, error) {
+func verifyBody(ctx context.Context, mesher verifiedmesh.DraftMesher, b *topo.Body, cfg verifyConfig, req vocab.VerifyRequest) (*BodyReport, error) {
 	area := b.Area
 	bounds := b.Bounds
 
@@ -411,12 +411,13 @@ func BodyValidityEvidence(ctx context.Context, b *topo.Body) ValidityEvidence {
 // shellWindingDisproved is agent-docs/tessellation-design.md §4's per-shell
 // winding audit read as validity evidence (agent-docs/verification-design.md):
 // a solid whose lumps hold two or more closed shells is meshed at its own
-// single-body chord, and a ShellWindingError from that mesh proves its lump
+// single-body chord at the lowest verification level (the reading needs no
+// boundary proof), and a ShellWindingError from that mesh proves its lump
 // reading wrong, returned as the refusal's text. The audit only falsifies:
 // a body with fewer closed shells, or one whose mesh fails for any other
 // reason, is left as the structural audit decided it. Only a context error
 // is returned as an error.
-func shellWindingDisproved(ctx context.Context, mesher verifiedmesh.Mesher, b *topo.Body) (string, error) {
+func shellWindingDisproved(ctx context.Context, mesher verifiedmesh.DraftMesher, b *topo.Body) (string, error) {
 	closed := 0
 	for _, l := range b.Lumps {
 		for _, s := range l.Shells {
@@ -433,7 +434,7 @@ func shellWindingDisproved(ctx context.Context, mesher verifiedmesh.Mesher, b *t
 	if !ok {
 		return "", nil
 	}
-	_, err := mesher.VerifyAll(ctx, b, chord)
+	_, err := mesher.VerifyNone(ctx, b, chord)
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return "", ctxErr
 	}

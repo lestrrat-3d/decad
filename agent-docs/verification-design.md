@@ -956,7 +956,7 @@ number of facets in A multiplied by the number in B in pair-box checks. Total
 work also grows with the number of unresolved body pairs, before any opt-in
 survey or clearance work is counted. Interference design §7.2 owns the
 algorithm and its cancellation checks. A solid of two or more closed shells
-is meshed once more during its body check, for §6's per-shell winding
+is meshed once more, at `VerifyNone`, during its body check, for §6's per-shell winding
 reading.
 
 There is no useful universal timeout: bodies differ in facet count, pair-box
@@ -1451,7 +1451,7 @@ The body flow is normative:
 1. Decide validity and populate unconditional boundary readings; populate region
    readings only for a proven solid (§1). A solid the structural audit passes
    whose lumps hold two or more closed shells is also meshed at its own
-   single-body chord, and a shell wound against its kind there
+   single-body chord at `VerifyNone`, and a shell wound against its kind there
    (`agent-docs/tessellation-design.md` §4's per-shell reading) proves the
    lump reading wrong: the body is invalid, with one `DiagInvalidBody` naming
    that shell. The reading only falsifies; any other mesh outcome leaves the

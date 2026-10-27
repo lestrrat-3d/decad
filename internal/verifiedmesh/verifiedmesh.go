@@ -14,3 +14,11 @@ import (
 type Mesher interface {
 	VerifyAll(ctx context.Context, b *topo.Body, tolMM float64) (*topo.Mesh, error)
 }
+
+// DraftMesher tessellates a body at VerifyNone with chord tolerance tolMM: the
+// same mesh, without the boundary and occupied-volume proofs a lower level
+// withholds. Every audit that runs at every level, the per-shell winding
+// reading among them (agent-docs/tessellation-design.md §4), still runs.
+type DraftMesher interface {
+	VerifyNone(ctx context.Context, b *topo.Body, tolMM float64) (*topo.Mesh, error)
+}

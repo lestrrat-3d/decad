@@ -187,3 +187,36 @@ func TestShellClosedDrilledBarRefusals(t *testing.T) {
 		require.Equal(t, []*decad.Body{bar}, doc.Bodies())
 	})
 }
+
+// TestShellClosedDrilledBarThroughCut cuts the axial drilled bar's closed
+// shell with a radius-0.3 rod along z at x = 9.5, wholly inside the outer wall
+// band, so the result keeps every face of the shell and loses only the rod's
+// π·0.3²·10. The stacked through-cut arms cut one region per slab, and the
+// closed shell's wall slab holds the outer band beside the hole's lining, so
+// they leave the pair to the mesh path, whose verified volume bound keeps the
+// lining: one lump, an outer shell around the ring cavity.
+func TestShellClosedDrilledBarThroughCut(t *testing.T) {
+	t.Parallel()
+	bar := axialDrilledBar(t)
+	doc := bar.Document()
+	closed, err := decad.Shell(t.Context(), bar, nil, units.Millimeters(1), decad.WithNoOpenings())
+	require.NoError(t, err)
+	rod := circleBodyAtZ(t, doc, 9.5, 0.3, -1, 12)
+	cut, err := decad.Cut(t.Context(), closed, rod)
+	require.NoError(t, err)
+	want := (400-9*math.Pi)*10 - (18*18-16*math.Pi)*8 - 0.09*math.Pi*10
+	vol, err := cut.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-want), vol.Bound.Base()+1e-9,
+		`volume %v must lie within its bound %v of the closed form %v`, volumeMM(t, vol), vol.Bound.Base(), want)
+	require.Less(t, vol.Bound.Base(), 7*math.Pi*8, `the bound must not cover the lining's own volume`)
+	require.True(t, tookMeshPath(cut))
+	require.Len(t, cut.Lumps(), 1)
+	shells := cut.Shells()
+	require.Len(t, shells, 2)
+	require.False(t, shells[0].IsVoid())
+	require.True(t, shells[1].IsVoid(), `the ring cavity stays closed`)
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+}

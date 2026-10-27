@@ -237,7 +237,10 @@ hole `i`, the band between `C`'s hole `i` reversed (an outer) and `O`'s hole
 `C`'s hole reversed, so its column starts at the floor interface, ends at the
 ceiling interface and faces the cavity, not the exterior. The mark is on the
 payload, not on a naming plan, so `Placed` and every record copied from this
-one (a stacked `Cut` copies the payload before it edits the slabs) keep it.
+one keep it. The stacked through and blind cuts cut one region per slab and
+leave a pair whose reached slab holds several regions to another route
+(`cutActiveSlabs`), so no cut copies a marked record while it reaches the
+wall slab.
 
 A cup is not handed over as a bare `stackedPrismPayload`: `cupPayload` (`internal/cupwall`) holds
 the record beside its shell morphology, and its consumers read the cup's own
@@ -275,13 +278,15 @@ interface's ceiling. `stackedrecord.Build` derives the lump set from face adjace
 each connected face set holding a region outer's wall or an end cap is one
 lump's outer shell, and a connected set holding neither — hole walls closed
 by a floor below and a ceiling above, a closed shell's cavity (§2.4) — is a
-void shell of the one outer lump. On a record marked `closedShell`, an outer
-column that starts and ends at an interface is a lining's cavity wall and
-anchors nothing; a set that still reaches an end cap stays an outer shell.
-The closed shell then requires one lump of one outer shell around one void
-shell (`prismshell.BuildClosed`), and tessellation's per-shell winding audit
+void shell of the one outer lump. On a record marked `closedShell`, no outer
+column that starts and ends at an interface anchors a shell. In the closed
+shell's own record those columns are exactly the hole linings, whose walls
+face the cavity. A record copied from a marked one keeps the mark, and there
+such a column need not be a lining; a set that reaches an end cap stays an
+outer shell whatever its columns, and tessellation's per-shell winding audit
 (`agent-docs/tessellation-design.md` §4) refuses any body whose lump reading
-disagrees with its facets. Several outer lumps beside a cavity would
+disagrees with its facets. The closed shell's own build requires one lump of
+one outer shell around one void shell (`prismshell.BuildClosed`). Several outer lumps beside a cavity would
 need a nesting proof and are `ErrUnsupported`. A stage-1 body is one lump
 with one shell.
 

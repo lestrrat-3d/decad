@@ -588,7 +588,9 @@ lump reading disagrees with its facets (a cavity read as a second, inside-out
 lump). The reading only falsifies: a shell whose facets do not close on their
 own, an open shell, and a facet of no closed shell decide nothing and are
 left out. `Document.Verify` meshes a solid of two or more closed shells at its
-single-body chord (`meshbool.PairChordFrom` over the body alone) and reads a
+single-body chord (`meshbool.PairChordFrom` over the body alone) at
+`VerifyNone` (`verifiedmesh.DraftMesher`), since the reading needs no boundary
+or occupied-volume proof, and reads a
 `ShellWindingError` as `DiagInvalidBody` (`agent-docs/verification-design.md`);
 any other tessellation outcome leaves the structural verdict standing.
 

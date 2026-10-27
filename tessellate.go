@@ -268,6 +268,15 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 	return mesh, nil
 }
 
+// VerifyNone is the same tessellation at VerifyNone (verifiedmesh.DraftMesher).
+func (verifyAllMesher) VerifyNone(ctx context.Context, b *topo.Body, tolMM float64) (*topo.Mesh, error) {
+	m, err := tessellateContext(ctx, bodyHandle(b), units.Millimeters(tolMM), VerifyNone)
+	if err != nil {
+		return nil, err
+	}
+	return &m.n, nil
+}
+
 // verifyAllMesher gives the internal builders a body's mesh at VerifyAll
 // (internal/verifiedmesh), tessellated as Body.Tessellate would.
 type verifyAllMesher struct{}
