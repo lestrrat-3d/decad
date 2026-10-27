@@ -227,8 +227,10 @@ Each of these returns a new body and retires its input.
 
 Two full `decad.Revolve` bodies about one axis combine exactly, with no `Faceted` face, when their meridians
 are lines, arcs or circles: a sphere cut by a coaxial disk or shaft, or two coaxial spheres, keep their
-sphere, torus, cone, cylinder and plane faces (an off-axis circle meridian gives torus faces). A shared arc or
-circle span between the operands, or a contact at a pole or an edge, is not joined this way.
+sphere, torus, cone, cylinder and plane faces (an off-axis circle meridian gives torus faces). Meridians may share an
+arc span when both record the same circle exactly, so a dome intersected with a ball of its radius is the dome and a
+ball unioned onto an equal ball is that ball. Arcs whose recorded centres or radii differ, two equal whole-circle
+meridians, and a contact at a pole or an edge are not joined this way.
 
 A plain turned shaft, a full `decad.Revolve` of a rectangle with one side on an axis that runs along the sketch's
 U or V, is cut exactly as the circular `decad.Extrude` it equals. A box tool at right angles to the shaft, drawn
