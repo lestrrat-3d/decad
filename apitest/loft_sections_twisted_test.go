@@ -341,7 +341,7 @@ func TestLoftSectionsTwistedRefusesUnprovedInputs(t *testing.T) {
 func TestLoftSectionsTwistedRefusesExcessAndUnevenSections(t *testing.T) {
 	ribbon := twistedRibbon{sections: 5}.defaults()
 	sections, _ := ribbon.build(t)
-	tooMany := make([]decad.LoftSection, 65)
+	tooMany := make([]decad.LoftSection, 1025)
 	for i := range tooMany {
 		tooMany[i] = sections[i%len(sections)]
 	}
@@ -349,7 +349,7 @@ func TestLoftSectionsTwistedRefusesExcessAndUnevenSections(t *testing.T) {
 	body, err := decad.LoftSections(t.Context(), doc, tooMany...)
 	require.Nil(t, body)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "at most 64 sections")
+	require.ErrorContains(t, err, "at most 1024 sections")
 	require.Empty(t, doc.Bodies())
 
 	// Reordering two sections breaks the ascending equal spacing.
@@ -360,4 +360,47 @@ func TestLoftSectionsTwistedRefusesExcessAndUnevenSections(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "strictly ascending")
 	require.Empty(t, doc.Bodies())
+}
+
+// TestLoftSectionsTwistedLongRibbonIsOneVerifiedLoft lofts the whole 68-tooth
+// screw-gear ribbon, 685 steps of 0.26 mm, as one solid.
+func TestLoftSectionsTwistedLongRibbonIsOneVerifiedLoft(t *testing.T) {
+	ribbon := twistedRibbon{sections: 686}.defaults()
+	sections, _ := ribbon.build(t)
+	doc := decad.New()
+	body, err := decad.LoftSections(t.Context(), doc, sections...)
+	require.NoError(t, err)
+	require.Equal(t, decad.BodySolid, body.Kind())
+	require.Len(t, body.Faces(), 6)
+
+	reference, _ := twistedReference(t, sections, ribbon.step)
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	t.Logf("volume %.3f reference %.3f bound %.3f", volume.Value.Base(), reference, volume.Bound.Base())
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-reference), volume.Bound.Base())
+	require.Less(t, volume.Bound.Base(), 0.03*reference)
+
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.BoundaryVerified())
+	require.True(t, mesh.VolumeVerified())
+	require.LessOrEqual(t, mesh.Bound().Base(), 0.05)
+	closed, signed := meshIsWatertight(mesh)
+	require.True(t, closed)
+	require.LessOrEqual(t, math.Abs(signed-reference), volume.Bound.Base())
+	t.Logf("mesh: %d triangles, bound %.5f", len(mesh.Triangles()), mesh.Bound().Base())
+
+	// A rigid motion keeps the body usable and its readings.
+	motion, err := r3.RotationAround(r3.NewVec(1, 2, 3), r3.NewVec(1, 1, 0), units.Radians(0.7))
+	require.NoError(t, err)
+	moved, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(motion))
+	require.NoError(t, err)
+	movedVolume, err := moved.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(movedVolume.Value.Base()-volume.Value.Base()),
+		movedVolume.Bound.Base()+volume.Bound.Base())
+	movedMesh, err := moved.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, movedMesh.BoundaryVerified())
+	require.True(t, movedMesh.VolumeVerified())
 }

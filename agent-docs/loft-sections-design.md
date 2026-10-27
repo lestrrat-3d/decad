@@ -1,6 +1,6 @@
 # Smooth Section Loft Design
 
-`LoftSections` builds one smooth solid through three to sixty-four
+`LoftSections` builds one smooth solid through three to 1024
 recorded Sketch profiles. `agent-docs/loft-design.md` continues to own the two-profile ruled
 `Loft`. This document owns the separate smooth constructions, their
 admission gates, and the proofs attached to their held meshes.
@@ -28,7 +28,7 @@ four-arc circles. Section 8 admits varying fitted flanks with fixed arcs.
 Section 9 admits four non-affine rounded-rectangle sections.
 Sections 10–12 admit three to thirty-two axis-aligned rectangular sections
 whose half-width and half-height vary independently. Section 13 admits three
-to sixty-four sections that turn about the origin and carry one fitted edge.
+to 1024 sections that turn about the origin and carry one fitted edge.
 Any other five or more sections must be rectangles and stop at thirty-two.
 
 For the three-section homothetic route, all three planes have world-XY `U` and
@@ -155,7 +155,7 @@ outside §§10–12,
 varying curved profiles outside §§7–9, arbitrary planes, guides, centerlines,
 and hole loops remain `ErrUnsupported`. Nil context or document, or fewer than
 three sections, returns `ErrDegenerate`; more than thirty-two sections returns
-`ErrUnsupported` unless §13 admits them (at most sixty-four). A seam failure returns its own sentinel and leaves the
+`ErrUnsupported` unless §13 admits them (at most 1024). A seam failure returns its own sentinel and leaves the
 document unchanged.
 
 ## 6. Exact constant curved sections
@@ -633,7 +633,7 @@ world-XY polygon only when every scaled coordinate is representable. See
 
 ### 13.1 Source class and denoted wall
 
-Three to sixty-four authenticated, hole-free profiles whose outer loop has
+Three to 1024 authenticated, hole-free profiles whose outer loop has
 one whole `FitSplineSeg` record and two to eight whole `LineSeg` records may
 turn about the plane origin from section to section. Every section has the
 same number of lines, the same number of fit points, and the fit spline in the
@@ -709,11 +709,13 @@ These bound `|C_u|`, `|C_t|` and the second derivatives of `C`; `S` adds only
 the constant `h_i` to `S_t` (`S` is linear in `z`). Each patch gets integer
 counts `n_u(k)`, the same at every height, and `n_t(i)`, the same for every
 edge span, so one station table serves every ring and the mesh conforms.
-With target `τ = 0.02 mm`, set `n_t(i)` to the least integer with
+For a target `τ`, set `n_t(i)` to the least integer with
 `M_tt/(8 n_t²) <= τ/3` over all `k`, and `n_u(k)` to the least integer with
-`M_uu/(8 n_u²) <= τ/3` and `M_ut/(4 n_u n_t) <= τ/3` over all `i`. More than
-64 `n_u` or 32 `n_t`, more than 60000 triangles, or a published bound above
-0.05 mm refuses.
+`M_uu/(8 n_u²) <= τ/3` and `M_ut/(4 n_u n_t) <= τ/3` over all `i`. The targets
+`τ = 0.02, 0.03, 0.049 mm` are tried in turn and the first whose table holds
+at most 500000 triangles is used, so a short loft gets the tightest bound.
+More than 64 `n_u` or 32 `n_t` at a target skips it; no target left, or a
+published bound above 0.05 mm, refuses.
 
 The held vertex at `(u=a/n_u, t=b/n_t)` is the exact rational patch point
 rounded to float64 once per coordinate. The L1 rounding distance, including
@@ -739,8 +741,8 @@ does not claim anything about Fusion's own loft.
 
 ### 13.4 Occupied volume, area and consumers
 
-The held mesh passes `loftmesh.LoftCrossingAuditBounded` (ceiling 128 million
-pair-enumeration steps, fixed by the 60000-triangle limit) and the faceted
+The held mesh passes `loftmesh.LoftCrossingAuditBounded` (ceiling 4096 pair-enumeration
+steps per triangle, fixed by the 500000-triangle limit) and the faceted
 shell audit before commit, so it is a closed embedded oriented surface. The
 denoted boundary is closed and embedded by §13.2. Join each wall point to its
 parameter-matched held point by a straight segment. The caps lie in the planes
@@ -776,15 +778,34 @@ faceted payload. `Body.Section` has no source certificate for this route and
 reports its usual refusal. Refusals, all `ErrUnsupported` with the document
 unchanged: wrong record kinds, count or fit-point mismatch, differing plane
 axes or origin, Z levels that do not strictly ascend, an inexact join, a
-clockwise walk, a failed polar proof, a station or triangle ceiling,
-`MeshBound` above 0.05 mm, a non-finite proof term, or more than sixty-four
+clockwise walk, a failed polar proof, a station or triangle ceiling (500000 triangles),
+`MeshBound` above 0.05 mm, a non-finite proof term, or more than 1024
 sections.
 
-### 13.5 Size and provability
+### 13.5 Long lofts and cost
+
+Proof, gathering and station work are per patch, per section or per ring, so
+cost is linear in the section count, and they run on all CPUs. The crossing
+audit is the only global step, bounded by the triangle and scan ceilings. The
+mesh needs rings about every 0.04 mm of height for a moving tooth, whatever
+the section spacing, so the triangle count follows the height and the
+tolerance and not the section count. The whole 68-tooth screw-gear ribbon,
+686 sections at 0.26 mm (178.1 mm), holds 449684 triangles at `τ = 0.03 mm`
+(`MeshBound` 0.0188 mm, volume bound 2.4%). The bound is certified for any
+spacing; a coarser spacing (69 sections at 2.6 mm, 19 at 10.4 mm) also meets
+0.05 mm but denotes a different, smoother solid, because Catmull-Rom through
+undersampled tooth phases is not the helical tooth.
+
+A mesh boolean tessellates the pair at a chord tolerance proportional to the
+pair's diameter (about 0.0036 mm for this ribbon with a box). `Intersect` and
+`Cut` therefore refuse the long ribbon: its held bound is 5 times coarser,
+and a table that fine would need about two million triangles.
+
+### 13.6 Size and provability
 
 The route is about 700 lines of Go in `internal/smoothloft/` (patch algebra
 and admission, gathering, mesh and bounds) plus 60 in the root glue. Every
 bound above is a closed-form rational expression over exact control nets, so
 the error bound is provable as stated. No numeric search or sampled residual
-admits input. For 41 screw-gear ribbon sections the polar proof takes about a
-second and the mesh has about 39000 triangles with `MeshBound` 0.014 mm.
+admits input. For 41 screw-gear ribbon sections the mesh has about 39000
+triangles with `MeshBound` 0.014 mm.

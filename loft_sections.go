@@ -32,7 +32,7 @@ type LoftSection struct {
 // with a common radius and height use a cubic-width wall. Three to thirty-two
 // centered rectangles may vary width and height independently. All of those routes
 // require ascending, equally spaced world-XY planes and interpolate every section
-// exactly. Three to sixty-four sections of one fitted edge and whole lines may turn
+// exactly. Three to 1024 sections of one fitted edge and whole lines may turn
 // about the plane origin on strictly ascending world-XY planes (agent-docs/loft-sections-design.md).
 // Other shapes refuse.
 func LoftSections(ctx context.Context, d *Document, sections ...LoftSection) (*Body, error) {

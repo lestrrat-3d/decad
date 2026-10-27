@@ -2622,3 +2622,4 @@
 10	0.01	TestLoftSectionsTwistedThreeSectionsFallBackToTwistedRoute
 10	0.01	TestLoftSectionsTwistedRefusesUnprovedInputs
 10	0.01	TestLoftSectionsTwistedRefusesExcessAndUnevenSections
+10	0.01	TestLoftSectionsTwistedLongRibbonIsOneVerifiedLoft

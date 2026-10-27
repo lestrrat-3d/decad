@@ -76,6 +76,27 @@ var twistBinomial = [7][]int64{
 	{1}, {1, 1}, {1, 2, 1}, {1, 3, 3, 1}, {1, 4, 6, 4, 1}, {1, 5, 10, 10, 5, 1}, {1, 6, 15, 20, 15, 6, 1},
 }
 
+// blendT collapses the height direction at fixed Bernstein weights, leaving
+// the four cubic control points of the curve at that height.
+func (p twistPatch) blendT(bt [4]*big.Rat) [4]freeform.RatPoint {
+	var out [4]freeform.RatPoint
+	for j := range p {
+		out[j] = freeform.RatPoint{U: new(big.Rat), V: new(big.Rat)}
+		for l := range p[j] {
+			out[j] = twistAdd(out[j], twistScale(p[j][l], bt[l]))
+		}
+	}
+	return out
+}
+
+func blendRow(row [4]freeform.RatPoint, bu [4]*big.Rat) freeform.RatPoint {
+	out := freeform.RatPoint{U: new(big.Rat), V: new(big.Rat)}
+	for j := range row {
+		out = twistAdd(out, twistScale(row[j], bu[j]))
+	}
+	return out
+}
+
 // At evaluates the patch at exact rational (u, t).
 func (p twistPatch) At(u, t *big.Rat) freeform.RatPoint {
 	bu, bt := twistBernstein3(u), twistBernstein3(t)
