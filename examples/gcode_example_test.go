@@ -49,3 +49,47 @@ func Example_gcode_perimeters() {
 	// Output:
 	// layers: 12
 }
+
+// GCodeSpec.InfillSpacing adds rectilinear infill inside the perimeters: lines a stated distance apart, along X on
+// one layer and along Y on the next. Here the same block is printed with a line every 5 mm, and the file holds
+// the infill's extruding lines as well as the perimeter's.
+func Example_gcode_infill() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to start a sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(0, 0, 20, 10)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	block, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	spec := export.GCodeSpec{
+		LayerHeight:      units.Millimeters(0.5),
+		LineWidth:        units.Millimeters(0.4),
+		FilamentDiameter: units.Millimeters(1.75),
+		FeedRate:         units.MillimetersPerSecond(30),
+	}
+	var perimeters, filled bytes.Buffer
+	if err := export.GCodePerimeters(context.Background(), &perimeters, block, units.Millimeters(0.1), spec); err != nil {
+		fmt.Printf("failed to write G-code: %s\n", err)
+		return
+	}
+	spec.InfillSpacing = units.Millimeters(5)
+	if err := export.GCodePerimeters(context.Background(), &filled, block, units.Millimeters(0.1), spec); err != nil {
+		fmt.Printf("failed to write G-code: %s\n", err)
+		return
+	}
+	// Two layers: two lines along X on the first and four along Y on the second.
+	fmt.Printf("infill lines: %d\n", strings.Count(filled.String(), "G1 ")-strings.Count(perimeters.String(), "G1 "))
+	// Output:
+	// infill lines: 6
+}

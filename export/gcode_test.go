@@ -108,3 +108,123 @@ func TestGCodePerimetersRefusals(t *testing.T) {
 	require.ErrorIs(t, export.GCodePerimeters(t.Context(), &bytes.Buffer{}, nil, units.Millimeters(0.1), gcodeSpec()), decad.ErrDegenerate)
 	require.ErrorIs(t, export.GCodePerimeters(nil, &bytes.Buffer{}, block, units.Millimeters(0.1), gcodeSpec()), decad.ErrDegenerate) //nolint:staticcheck // a nil context is the case under test
 }
+
+// gcodeExtrusion is the plastic length of one millimetre of line for gcodeSpec: a 0.5 x 0.4 mm² line from 1.75 mm
+// filament's π·0.875² mm² cross-section.
+const gcodeExtrusion = 0.5 * 0.4 / (math.Pi * 0.875 * 0.875)
+
+// gcodeLayers splits a file into the layers and, in each, the groups of extruding moves that follow one travel move
+// (a loop of the perimeter, or one line of infill), each move as the X and Y it ends on.
+func gcodeLayers(t *testing.T, file string) [][][][2]float64 {
+	t.Helper()
+	var layers [][][][2]float64
+	for line := range strings.SplitSeq(file, "\n") {
+		switch {
+		case strings.HasPrefix(line, "; layer"):
+			layers = append(layers, nil)
+		case strings.HasPrefix(line, "G0 "):
+			layers[len(layers)-1] = append(layers[len(layers)-1], nil)
+		case strings.HasPrefix(line, "G1 "):
+			var xy [2]float64
+			for f := range strings.FieldsSeq(line) {
+				if num, ok := strings.CutPrefix(f, "X"); ok {
+					v, err := strconv.ParseFloat(num, 64)
+					require.NoError(t, err)
+					xy[0] = v
+				}
+				if num, ok := strings.CutPrefix(f, "Y"); ok {
+					v, err := strconv.ParseFloat(num, 64)
+					require.NoError(t, err)
+					xy[1] = v
+				}
+			}
+			groups := layers[len(layers)-1]
+			groups[len(groups)-1] = append(groups[len(groups)-1], xy)
+		}
+	}
+	return layers
+}
+
+func lastExtrusion(t *testing.T, file string) float64 {
+	t.Helper()
+	last := 0.0
+	for line := range strings.SplitSeq(file, "\n") {
+		if !strings.HasPrefix(line, "G1 ") {
+			continue
+		}
+		for f := range strings.FieldsSeq(line) {
+			if num, ok := strings.CutPrefix(f, "E"); ok {
+				v, err := strconv.ParseFloat(num, 64)
+				require.NoError(t, err)
+				last = v
+			}
+		}
+	}
+	return last
+}
+
+func TestGCodeInfillFillsABlockWithAlternatingLines(t *testing.T) {
+	t.Parallel()
+	// A 20 x 10 x 6 mm block with a line every 5 mm: an even layer holds two lines along X at y = 2.5 and 7.5, each
+	// 19.2 mm between the 0.4 mm insets, and an odd layer four along Y at x = 2.5, 7.5, 12.5 and 17.5, each 9.2 mm.
+	block := decadtest.NewBlock(t, decad.New(), 0, 0, 20, 10, units.Millimeters(6))
+	spec := gcodeSpec()
+	spec.InfillSpacing = units.Millimeters(5)
+	var out bytes.Buffer
+	require.NoError(t, export.GCodePerimeters(t.Context(), &out, block, units.Millimeters(0.1), spec))
+	layers := gcodeLayers(t, out.String())
+	require.Len(t, layers, 12)
+	for i, groups := range layers {
+		infill := groups[1:] // the one loop of the perimeter comes first
+		if i%2 == 0 {
+			require.Len(t, infill, 2, "layer %d", i)
+			for _, g := range infill {
+				require.Len(t, g, 1)
+				require.InDelta(t, 0, math.Mod(g[0][1]-2.5, 5), 1e-9, "a line along X at y = 2.5 or 7.5")
+			}
+			continue
+		}
+		require.Len(t, infill, 4, "layer %d", i)
+		for _, g := range infill {
+			require.Len(t, g, 1)
+			require.InDelta(t, 0, math.Mod(g[0][0]-2.5, 5), 1e-9, "a line along Y at x = 2.5, 7.5, ...")
+		}
+	}
+	// 720 mm of perimeter and 6 x (2 x 19.2 + 4 x 9.2) = 451.2 mm of infill.
+	require.InDelta(t, (720+451.2)*gcodeExtrusion, lastExtrusion(t, out.String()), 1e-2)
+}
+
+func TestGCodeInfillSkipsTheHoleOfAPlate(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	plate := decadtest.NewBlock(t, doc, 0, 0, 20, 20, units.Millimeters(1))
+	hole := decadtest.NewBlock(t, doc, 7, 7, 13, 13, units.Millimeters(3))
+	holed, err := decad.Cut(t.Context(), plate, hole)
+	require.NoError(t, err)
+	spec := gcodeSpec()
+	spec.InfillSpacing = units.Millimeters(5)
+	var out bytes.Buffer
+	require.NoError(t, export.GCodePerimeters(t.Context(), &out, holed, units.Millimeters(0.1), spec))
+	require.Len(t, gcodeLayers(t, out.String()), 2)
+	// Two layers of 80 + 24 = 104 mm of perimeter. A layer's four lines at 2.5, 7.5, 12.5 and 17.5 take two full
+	// lengths of 19.2 mm, and the two that cross the 6 mm hole each break into two pieces of 6.2 mm, 63.2 mm in all.
+	require.InDelta(t, (2*104+2*63.2)*gcodeExtrusion, lastExtrusion(t, out.String()), 1e-2)
+}
+
+func TestGCodeInfillSpacingRefusals(t *testing.T) {
+	t.Parallel()
+	block := decadtest.NewBlock(t, decad.New(), 0, 0, 20, 10, units.Millimeters(6))
+	for name, tc := range map[string]struct {
+		spacing units.Value
+		want    error
+	}{
+		"negative": {units.Millimeters(-1), decad.ErrNegativeMagnitude},
+		"kind":     {units.Degrees(5), decad.ErrUnitKind},
+	} {
+		spec := gcodeSpec()
+		spec.InfillSpacing = tc.spacing
+		var out bytes.Buffer
+		require.ErrorIs(t, export.GCodePerimeters(t.Context(), &out, block, units.Millimeters(0.1), spec), tc.want, name)
+		require.Empty(t, out.String(), "%s writes nothing", name)
+	}
+}

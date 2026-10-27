@@ -1,6 +1,6 @@
 # G-code perimeter export design
 
-`export.GCodePerimeters` writes the first stage of a slicer: the toolpath that prints a body's outline layer by layer.
+`export.GCodePerimeters` writes the first stage of a slicer: the toolpath that prints a body's outline layer by layer, with rectilinear infill when asked.
 It reads the same section outline as `export.DXFSection` (`agent-docs/section-outline-design.md`).
 
 ## 1. Contract
@@ -16,9 +16,11 @@ func GCodePerimeters(ctx context.Context, w io.Writer, body *decad.Body, tol uni
 | G3 | The section is `Body.SectionOutline` at `tol`: every loop, an outer loop and a hole alike, is a travel move (`G0`) to its first point at the layer's height and then extruding moves (`G1`) along it and back to the start. The outline is the mesh's, so a curved wall is chords. |
 | G4 | The extrusion of a move is its length times `LayerHeight·LineWidth` over the filament's cross-section `π(d/2)²`, accumulated into the absolute `E`. The feed rate, a velocity, is written in millimetres a minute on each extruding move. |
 | G5 | A length of the spec is positive (`ErrDegenerate` for zero, `ErrNegativeMagnitude`, `ErrUnitKind`), as is the feed rate; a nil context, writer or body is `ErrDegenerate`. Every failure writes nothing. |
+| G7 | With `InfillSpacing` set (a positive length, else `ErrDegenerate`, `ErrNegativeMagnitude` or `ErrUnitKind`; the zero value writes none) each layer follows its perimeters with rectilinear infill: lines parallel to X on even layers and to Y on odd ones, one every spacing across the outline's extent from half a spacing in. A line is cut at every crossing with a loop, an outer loop and a hole alike, by the even-odd rule, so it runs through material between crossings in pairs, and each piece is shortened by `LineWidth` at both ends so that it does not pile onto a perimeter; a piece no longer than that is dropped. Each piece is a `G0` to its first point and one `G1`, and alternate lines run opposite ways. |
 | G6 | The tests print a 20 x 10 x 6 mm block as twelve layers, require each layer top, each coordinate inside the block's outline, the feed rate and an `E` that never backs up, and read the final `E` against the 720 mm of line and the filament's area. A wrong filament area fails them. |
+| G8 | The infill tests print the block with a 5 mm spacing (two lines of 19.2 mm on an even layer and four of 9.2 mm on an odd one, at the stated coordinates, 451.2 mm of infill in all) and a 20 x 20 plate with a 6 x 6 hole (the lines through the hole break into two pieces of 6.2 mm, 63.2 mm of infill a layer), read the final `E` against the lengths, and refuse a negative or wrongly typed spacing. An infill without the inset, or one that ignores the hole, or one that never turns, fails them. |
 
 ## 2. Not covered
 
-- Infill, top and bottom skin, support, perimeter offset by half the line width, retraction, temperatures, fan and a start or end sequence.
+- Infill other than rectilinear lines, top and bottom skin, support, perimeter offset by half the line width, retraction, temperatures, fan and a start or end sequence.
 - A toolpath for a mill or a lathe, and a body whose section the outline refuses.
