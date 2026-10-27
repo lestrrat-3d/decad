@@ -316,7 +316,7 @@ func newSolidEps(verts []r3.Vec, tris [][3]int, axes, signs []int, extra [3][]fl
 // half-side t of the solid, less the solid, and over a removed face the footprint's prism is left
 // open, so the solid is the cavity.
 func Walls(verts []r3.Vec, tris [][3]int, removed []bool, t float64, outward bool) ([]r3.Vec, [][3]int, error) {
-	r, rd, walls, err := wallCells(verts, tris, removed, t, outward)
+	r, rd, walls, _, err := wallCells(verts, tris, removed, t, outward)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -331,11 +331,11 @@ func Walls(verts []r3.Vec, tris [][3]int, removed []bool, t float64, outward boo
 // wound outward from the wall.
 func CenteredWalls(verts []r3.Vec, tris [][3]int, removed []bool, t float64) ([]r3.Vec, [][3]int, error) {
 	h := t / 2
-	r, rd, in, err := wallCells(verts, tris, removed, h, false)
+	r, rd, in, _, err := wallCells(verts, tris, removed, h, false)
 	if err != nil {
 		return nil, nil, err
 	}
-	r2, rd2, out, err := wallCells(verts, tris, removed, h, true)
+	r2, rd2, out, _, err := wallCells(verts, tris, removed, h, true)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -354,16 +354,16 @@ func CenteredWalls(verts []r3.Vec, tris [][3]int, removed []bool, t float64) ([]
 }
 
 // wallCells returns the refined grid of Walls and which of its cells are wall.
-func wallCells(verts []r3.Vec, tris [][3]int, removed []bool, t float64, outward bool) (grid, [3]int, []bool, error) {
+func wallCells(verts []r3.Vec, tris [][3]int, removed []bool, t float64, outward bool) (grid, [3]int, []bool, []bool, error) {
 	if !(t > 0) || math.IsInf(t, 0) {
-		return grid{}, [3]int{}, nil, fmt.Errorf("%w: the thickness must be positive and finite", ErrDegenerate)
+		return grid{}, [3]int{}, nil, nil, fmt.Errorf("%w: the thickness must be positive and finite", ErrDegenerate)
 	}
 	if len(verts) == 0 || len(tris) == 0 || len(removed) != len(tris) {
-		return grid{}, [3]int{}, nil, fmt.Errorf("%w: no triangles, or a removed mark for each is missing", ErrUnsupported)
+		return grid{}, [3]int{}, nil, nil, fmt.Errorf("%w: no triangles, or a removed mark for each is missing", ErrUnsupported)
 	}
 	axes, signs, err := classify(verts, tris)
 	if err != nil {
-		return grid{}, [3]int{}, nil, err
+		return grid{}, [3]int{}, nil, nil, err
 	}
 	var extra [3][]float64
 	for i, tri := range tris {
@@ -374,7 +374,7 @@ func wallCells(verts []r3.Vec, tris [][3]int, removed []bool, t float64, outward
 	}
 	sg, err := newSolid(verts, tris, axes, signs, extra)
 	if err != nil {
-		return grid{}, [3]int{}, nil, err
+		return grid{}, [3]int{}, nil, nil, err
 	}
 	u, ud, occ, eps, at := sg.u, sg.ud, sg.occ, sg.eps, sg.at
 	occS := append([]bool(nil), occ...)
@@ -389,7 +389,7 @@ func wallCells(verts []r3.Vec, tris [][3]int, removed []bool, t float64, outward
 		}
 		p := indexOf(u.c[axes[i]], comp(verts[tris[i][0]], axes[i]), eps)
 		if p < 0 {
-			return grid{}, [3]int{}, nil, fmt.Errorf("%w: a removed face's plane is missing from the grid", ErrUnsupported)
+			return grid{}, [3]int{}, nil, nil, fmt.Errorf("%w: a removed face's plane is missing from the grid", ErrUnsupported)
 		}
 		k := slabKey{axes[i], p, signs[i]}
 		slabs[k] = append(slabs[k], i)
@@ -406,7 +406,7 @@ func wallCells(verts []r3.Vec, tris [][3]int, removed []bool, t float64, outward
 		plane := u.c[a][key.p]
 		q := indexOf(u.c[a], plane+float64(key.sign)*2*t, eps)
 		if q < 0 {
-			return grid{}, [3]int{}, nil, fmt.Errorf("%w: a removed face's slab is missing from the grid", ErrUnsupported)
+			return grid{}, [3]int{}, nil, nil, fmt.Errorf("%w: a removed face's slab is missing from the grid", ErrUnsupported)
 		}
 		lo2, hi2 := min(key.p, q), max(key.p, q)
 		footprint := make([]float64, ud[v]*ud[w])
@@ -471,7 +471,7 @@ func wallCells(verts []r3.Vec, tris [][3]int, removed []bool, t float64, outward
 	}
 	rd := r.dims()
 	if rd[0]*rd[1]*rd[2] > MaxCells {
-		return grid{}, [3]int{}, nil, fmt.Errorf("%w: the cavity needs more than %d grid cells", ErrUnsupported, MaxCells)
+		return grid{}, [3]int{}, nil, nil, fmt.Errorf("%w: the cavity needs more than %d grid cells", ErrUnsupported, MaxCells)
 	}
 	// span returns the range of u-cells whose interior meets the open interval (c - t, c + t) on axis a,
 	// or ok false when it reaches past the grid.
@@ -535,9 +535,9 @@ func wallCells(verts []r3.Vec, tris [][3]int, removed []bool, t float64, outward
 	}
 	if !hasCavity {
 		if outward {
-			return grid{}, [3]int{}, nil, fmt.Errorf("%w: the solid has no reach", ErrDegenerate)
+			return grid{}, [3]int{}, nil, nil, fmt.Errorf("%w: the solid has no reach", ErrDegenerate)
 		}
-		return grid{}, [3]int{}, nil, fmt.Errorf("%w: the walls meet", ErrDegenerate)
+		return grid{}, [3]int{}, nil, nil, fmt.Errorf("%w: the walls meet", ErrDegenerate)
 	}
 	// The walls are the solid's own cells that the cavity does not take.
 	var uCell [3][]int
@@ -553,11 +553,13 @@ func wallCells(verts []r3.Vec, tris [][3]int, removed []bool, t float64, outward
 		}
 	}
 	walls := make([]bool, len(in))
+	inside := make([]bool, len(in)) // the solid's own cells on the refined grid
 	solid := false
 	for k := range rd[2] {
 		for j := range rd[1] {
 			for i := range rd[0] {
 				x, y, z := uCell[0][i], uCell[1][j], uCell[2][k]
+				inside[rat(i, j, k)] = x >= 0 && y >= 0 && z >= 0 && occS[at(x, y, z)]
 				if outward {
 					// Within reach of the solid, and neither in it nor in the opening over a removed face.
 					if !in[rat(i, j, k)] || (x >= 0 && y >= 0 && z >= 0 && occ[at(x, y, z)]) {
@@ -614,9 +616,9 @@ func wallCells(verts []r3.Vec, tris [][3]int, removed []bool, t float64, outward
 		}
 	}
 	if !solid {
-		return grid{}, [3]int{}, nil, fmt.Errorf("%w: the walls leave no cells", ErrDegenerate)
+		return grid{}, [3]int{}, nil, nil, fmt.Errorf("%w: the walls leave no cells", ErrDegenerate)
 	}
-	return r, rd, walls, nil
+	return r, rd, walls, inside, nil
 }
 
 // boundary meshes the faces between occupied and empty cells of the grid, wound outward from the occupied cells.

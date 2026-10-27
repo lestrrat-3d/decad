@@ -2,9 +2,11 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/orthoshell"
 	"github.com/lestrrat-3d/decad/internal/thickenbuild"
 
 	"github.com/lestrrat-3d/units"
@@ -66,8 +68,11 @@ func WithOffsetSide(side OffsetSide) OffsetOption { return offsetSideOption{side
 // recorded planar patch offsets by translation along its own frame normal; a
 // profile-fed prism sheet offsets by the certified per-feature section offset
 // of agent-docs/modify-design.md §8, growing a radius-distance arc at each convex
-// corner and mitering each concave one. Every other sheet family, and every
-// solid, is ErrUnsupported (agent-docs/surface-design.md Table R row R37).
+// corner and mitering each concave one. Every other sheet family is ErrUnsupported (agent-docs/surface-design.md Table R row R37). A solid
+// offsets only when it is a faceted solid whose faces all square to a world axis, such as a mesh solid
+// (agent-docs/orthogonal-offset-design.md): each face moves along its outward normal, outward for OffsetPositive
+// and inward for OffsetNegative, the neighbouring faces extended or trimmed to meet, and the result is a second
+// solid; any other solid is ErrUnsupported.
 //
 // A nil context, a nil b or an option this package did not mint is
 // ErrDegenerate, as is a zero distance; a wrong-kind, non-finite or negative distance keeps
@@ -108,6 +113,9 @@ func Offset(ctx context.Context, b *Body, distance units.Value,
 	if dmm == 0 {
 		return nil, fmt.Errorf(`%w: a zero distance names no offset surface`, ErrDegenerate)
 	}
+	if b.Kind() == BodySolid {
+		return offsetSolid(ctx, d, b, side, dmm)
+	}
 	if b.Kind() != BodySheet {
 		return nil, fmt.Errorf(`%w: Offset requires a sheet body`, ErrUnsupported)
 	}
@@ -125,6 +133,55 @@ func Offset(ctx context.Context, b *Body, distance units.Value,
 	// The source is DEPENDED ON, never consumed: commit with no consumed input,
 	// exactly as copyUnder does, so the receiver stays in Document.Bodies()
 	// beside its offset (agent-docs/surface-design.md §17.1).
+	if err := d.commitOperationIn(ctx, d.bodyContainer(b), OperationOffset,
+		[]OperationInput{{Body: b, Role: operationRoleSource, Use: InputReferenced}}, result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// offsetSolid offsets a faceted solid every face of which squares to a world axis (agent-docs/orthogonal-offset-design.md):
+// each face moves along its outward normal by the distance, outward for OffsetPositive and inward for OffsetNegative, and
+// the result is a second solid, the receiver staying live as for a sheet. Any other solid is ErrUnsupported.
+func offsetSolid(ctx context.Context, d *Document, b *Body, side OffsetSide, dmm float64) (*Body, error) {
+	payload, ok := b.n.Payload.(facetedPayload)
+	if !ok || len(payload.Tris) == 0 {
+		return nil, fmt.Errorf(`%w: Offset requires a sheet body (or a faceted solid whose faces all square to an axis, such as a mesh solid)`, ErrUnsupported)
+	}
+	for _, beta := range payload.VertexBound {
+		if beta != 0 {
+			return nil, fmt.Errorf(`%w: Offset takes a faceted solid whose held vertices carry no bound`, ErrUnsupported)
+		}
+	}
+	distance := dmm
+	if side == OffsetNegative {
+		distance = -dmm
+	}
+	verts, tris, err := orthoshell.Offset(payload.Verts, payload.Tris, distance)
+	switch {
+	case errors.Is(err, orthoshell.ErrNotOrthogonal):
+		return nil, fmt.Errorf(`%w: Offset takes a solid whose faces all square to an axis: %s`, ErrUnsupported, err)
+	case errors.Is(err, orthoshell.ErrDegenerate):
+		return nil, fmt.Errorf("%w: %s", ErrDegenerate, err)
+	case errors.Is(err, orthoshell.ErrUnsupported):
+		return nil, fmt.Errorf("%w: %s", ErrUnsupported, err)
+	case err != nil:
+		return nil, err
+	}
+	mesh, err := NewMeshBody(ctx, verts, tris)
+	if err != nil {
+		return nil, err
+	}
+	result, err := solidFromMeshBody(ctx, d, mesh)
+	if err != nil {
+		return nil, fmt.Errorf("%w: the offset solid is not one the evaluator can prove: %s", ErrUnsupported, err)
+	}
+	if err := d.requireLive(b); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err := d.commitOperationIn(ctx, d.bodyContainer(b), OperationOffset,
 		[]OperationInput{{Body: b, Role: operationRoleSource, Use: InputReferenced}}, result); err != nil {
 		return nil, err

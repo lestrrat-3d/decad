@@ -1223,6 +1223,10 @@
 4	0.00	TestUnstitchedCapToFaceStopMatchesUnUnstitchedCap
 4	0.00	TestVerifyContextCancellation
 4	0.00	TestVerifyDisjointPairIsSound
+10	0.01	TestOffsetGrowsAndShrinksABlock
+10	0.01	TestOffsetMitresAnLShapedSolidAtItsCorners
+10	0.01	TestOffsetClosesANarrowSlotAndDropsAThinPart
+10	0.01	TestOffsetOfASolidRefusals
 4	0.02	TestVerifyInterferenceRowsKeepDocumentPairOrder
 4	0.86	TestVerifyJointBoxClearReading
 4	0.01	TestVerifyJointBoxErrors
