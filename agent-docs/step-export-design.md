@@ -102,7 +102,9 @@ according to the writer path.
   receives one synthetic seam, the tube circle through both start vertices,
   used twice in opposite directions. A torus patch has one loop of at least
   four `Arc3` edges, each about the torus axis (a parallel) or in a plane
-  holding it (a meridian), both kinds present. Its sense follows its outward
+  holding it (a meridian), both kinds present, every meridian's `Radius` the
+  torus's `Minor`, exactly, so the tag holds the tube the meridians run round.
+  Its sense follows its outward
   normal against the torus's own, which points away from the tube's centre
   circle, and its loop is reversed when its signed area in the (azimuth, tube
   angle) plane disagrees with that sense. A horn torus patch is a torus whose
@@ -115,8 +117,12 @@ according to the writer path.
   `TOROIDAL_SURFACE` with both radii equal, walked by the edge-use rule, since
   its apex has no azimuth, and its sense is its outward normal against the
   torus's own at its first vertex off the axis, where the surface has a
-  normal. Every leg only refuses; P2's pocket mouth fillet, r = 1.5, writes
-  its four corners so.
+  normal. Its meridians' `Radius` is the torus's `Minor`, exactly, as on a
+  four-edge patch. Every leg only refuses; P2's pocket mouth fillet, r = 1.5,
+  writes its four corners so. The horn patch is a plain `TOROIDAL_SURFACE`
+  because that entity has no rule comparing its radii, while
+  `DEGENERATE_TOROIDAL_SURFACE` requires its major radius below its minor, and
+  no outside STEP reader in this repository checks the result.
   The analytic writer copies each face's tag as it is held: the STEP surface
   is the float image of the `Plane`, `Cylinder`, `Cone`, `Sphere` or `Torus` tag. A face whose tag
   is not proven to be the surface the face carries sends the whole body to the faceted writer before

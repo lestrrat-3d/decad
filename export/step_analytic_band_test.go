@@ -503,8 +503,10 @@ func TestAnalyticBandPocketMouthHornTori(t *testing.T) {
 // (no longer a horn torus), one whose Center moved 1 along its axis (no loop
 // vertex is its apex), and one about the x axis, under which the connector
 // arc reads as a meridian and the meridian about x as a parallel, so an edge
-// at the apex is not a meridian. Each was shown to fail with its leg deleted.
-// The one-parallel leg is not shown red: a real three-edge loop's arcs lie
+// at the apex is not a meridian, and a horn torus of radii 1.6 and 1.6 at the
+// apex, whose tube the loop's meridians of radius 1.5 do not run round. Each
+// was shown to fail with its leg deleted (the 1.6 horn with torusPatchArc's
+// meridian radius leg deleted). The one-parallel leg is not shown red: a real three-edge loop's arcs lie
 // about three mutually perpendicular axes, so any torus axis under which all
 // three classify reads exactly one of them as a parallel.
 func TestHornPatchAdmissionRefusesForeignTags(t *testing.T) {
@@ -529,6 +531,32 @@ func TestHornPatchAdmissionRefusesForeignTags(t *testing.T) {
 	turned := tag
 	turned.Axis = r3.NewVec(1, 0, 0)
 	require.False(t, supportsAnalyticHornPatch(loop, turned), "both edges at the apex must be meridians")
+	wider := tag
+	wider.Major, wider.Minor = units.Millimeters(1.6), units.Millimeters(1.6)
+	require.False(t, supportsAnalyticHornPatch(loop, wider), "each meridian's radius must be the tag's Minor")
+}
+
+// TestTorusPatchAdmissionRefusesAForeignMinor runs supportsAnalyticTorusPatch
+// on the real four-arc patch loops of P8's top-loop fillet, r = 2 (spindle
+// torus patches of major 1 and minor 2), and against each tag with its Minor
+// set to 2.5, which the loop's meridians of radius 2 do not run round. Shown
+// to fail with torusPatchArc's meridian radius leg deleted (the foreign tag
+// was admitted).
+func TestTorusPatchAdmissionRefusesAForeignMinor(t *testing.T) {
+	t.Parallel()
+	checked := 0
+	for _, face := range bandFillet(t, bandDrilledBox(t, 3), 20, 0, 2).Faces() {
+		tag, ok := face.Surface().(decad.Torus)
+		if !ok {
+			continue
+		}
+		require.True(t, supportsAnalyticTorusPatch(face.Loops()[0], tag))
+		wider := tag
+		wider.Minor = units.Millimeters(2.5)
+		require.False(t, supportsAnalyticTorusPatch(face.Loops()[0], wider), "each meridian's radius must be the tag's Minor")
+		checked++
+	}
+	require.Equal(t, 4, checked, "four torus patches")
 }
 
 // TestAnalyticHornPatchWithBoundedVertexKeepsFaceted builds the pocket mouth

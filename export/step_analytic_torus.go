@@ -117,7 +117,9 @@ func torusArcIsMeridian(arc decad.Arc3, torus decad.Torus) bool {
 // parallel (else a meridian), and whether the patch admits it at all. An arc
 // that is neither, or whose vertices are not both in its own plane
 // (arcInItsPlane), is refused: the file would state a CIRCLE the edge does
-// not run on.
+// not run on. A meridian whose Radius is not the torus's Minor, exactly, is
+// refused too: the tag would not hold the tube the meridian runs round, and
+// the file would state a torus through vertices off it.
 func torusPatchArc(edge *decad.Edge, arc decad.Arc3, torus decad.Torus) (bool, bool) {
 	if !arcInItsPlane(edge, arc) {
 		return false, false
@@ -126,9 +128,20 @@ func torusPatchArc(edge *decad.Edge, arc decad.Arc3, torus decad.Torus) (bool, b
 	case torusArcIsParallel(arc, torus):
 		return true, true
 	case torusArcIsMeridian(arc, torus):
-		return false, true
+		return false, meridianRadiusIsMinor(arc, torus)
 	}
 	return false, false
+}
+
+// meridianRadiusIsMinor reports whether a meridian arc's Radius equals the
+// torus's Minor, both in millimetres, exactly. It only refuses.
+func meridianRadiusIsMinor(arc decad.Arc3, torus decad.Torus) bool {
+	r, err := arc.Radius.In(units.Millimeter)
+	if err != nil {
+		return false
+	}
+	minor, err := torus.Minor.In(units.Millimeter)
+	return err == nil && r == minor
 }
 
 // supportsAnalyticTorusPatch admits one loop of at least four Arc3 edges,
