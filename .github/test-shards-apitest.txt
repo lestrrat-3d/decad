@@ -2577,3 +2577,7 @@
 10	0.01	TestBossRibsRefusals
 10	0.01	TestBossLeansAlongAnAxis
 10	0.01	TestBossTiltRefusals
+10	0.01	TestSubDMeshOfACubeIsTheCatmullClarkSurface
+10	0.01	TestSubDMeshRefinesToTheLimitFromInside
+10	0.01	TestSubDMeshKeepsAnOpenCagesBoundary
+10	0.01	TestSubDMeshRefusals
