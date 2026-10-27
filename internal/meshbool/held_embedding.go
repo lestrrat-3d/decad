@@ -932,7 +932,7 @@ func (e *heldEmbedding) projection(i int) *heldProjectedFacet {
 			point := e.h.Verts[v]
 			p.points[axis][k] = [2]float64{AxisCoord(point, axes[0]), AxisCoord(point, axes[1])}
 			for _, coord := range p.points[axis][k] {
-				magnitude := math.Abs(coord)
+				magnitude := proof.Abs(coord)
 				if !(magnitude == 0 || magnitude >= 1e-100 && magnitude <= 1e100) {
 					p.stable[axis] = false
 				}
@@ -978,15 +978,13 @@ func projectedEdgeSeparates(a, b *heldProjectedFacet, axis, edge int) bool {
 	start := a.points[axis][edge]
 	end := a.points[axis][(edge+1)%3]
 	bx, by := end[0]-start[0], end[1]-start[1]
-	// These differences take either sign, so the branch-free math.Abs beats
-	// proof.Abs here; the two agree bit for bit.
-	mxEdge, myEdge := math.Abs(bx), math.Abs(by)
+	mxEdge, myEdge := proof.Abs(bx), proof.Abs(by)
 	// A nonzero cached sign means Orient2Float admitted both edge
 	// differences. Compute them once for all three queried points and check
 	// only each point's new differences, with the same error bound.
 	for _, point := range b.points[axis] {
 		cx, cy := point[0]-start[0], point[1]-start[1]
-		mx, my := math.Abs(cx), math.Abs(cy)
+		mx, my := proof.Abs(cx), proof.Abs(cy)
 		if !(cx == 0 || mx >= 0x1p-300 && mx <= 0x1p250) ||
 			!(cy == 0 || my >= 0x1p-300 && my <= 0x1p250) {
 			return false
@@ -1024,7 +1022,7 @@ func (e *heldEmbedding) coneBox(i, k int) [2]r3.Vec {
 	whole := [2]r3.Vec{r3.NewVec(-2, -2, -2), r3.NewVec(2, 2, 2)}
 	t := e.h.Tris[i]
 	v, a, b := e.h.Verts[t[k]], e.h.Verts[t[(k+1)%3]], e.h.Verts[t[(k+2)%3]]
-	scale := math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z)))
+	scale := math.Max(proof.Abs(v.X), math.Max(proof.Abs(v.Y), proof.Abs(v.Z)))
 	s := math.Max(scale, math.SmallestNonzeroFloat64)
 	var floor float64
 	if s >= 0x1p-1000 {
