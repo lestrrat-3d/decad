@@ -100,6 +100,47 @@ func (b *bossShape) across() float64 {
 	}
 }
 
+// wallDistance is how far the section's wall lies from its centre along the direction at theta radians from the face
+// frame's U axis: the boss's own radius for a rib's plane to meet, the rectangle's, the slot's or the polygon's wall
+// along that ray.
+func (b *bossShape) wallDistance(theta float64) float64 {
+	phi := theta - b.angle // the direction in the section's own frame
+	sin, cos := math.Sincos(phi)
+	sin, cos = math.Abs(sin), math.Abs(cos)
+	switch b.kind {
+	case bossRect:
+		t := math.Inf(1)
+		if cos > 1e-12 {
+			t = math.Min(t, b.width/2/cos)
+		}
+		if sin > 1e-12 {
+			t = math.Min(t, b.height/2/sin)
+		}
+		return t
+	case bossSlot:
+		// Along the slot's long axis x the wall is a pair of flats y = ±w/2 between two half circles of radius w/2 about
+		// (±half, 0), half = (length − width)/2.
+		half, radius := (b.height-b.width)/2, b.width/2
+		if sin > 1e-12 && radius/sin*cos <= half {
+			return radius / sin
+		}
+		// The ray meets the half circle: t = half·cos + √((half·cos)² − half² + radius²).
+		return half*cos + math.Sqrt(math.Max(0, half*cos*half*cos-half*half+radius*radius))
+	default:
+		// A regular polygon with a flat toward U: its flats are at angles 2πk/n from U, the nearest one to the ray
+		// being within π/n of it.
+		step := 2 * math.Pi / float64(b.sides)
+		off := math.Mod(phi, step)
+		if off < 0 {
+			off += step
+		}
+		if off > step/2 {
+			off -= step
+		}
+		return b.flats / 2 / math.Cos(off)
+	}
+}
+
 // sketchSection draws the section about (u, v) in s, each side moved out by grow
 // millimetres (inward when negative), as a closed loop of fixed points.
 func (b *bossShape) sketchSection(s *sketch.Sketch, u, v, grow float64) {

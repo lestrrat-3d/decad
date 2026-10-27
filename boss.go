@@ -273,8 +273,6 @@ func bossInput(b *Body, spec BossSpec) (bossRequest, error) {
 		switch {
 		case in.curved != nil:
 			return in, fmt.Errorf(`%w: a boss on a cylindrical face takes no ribs`, ErrUnsupported)
-		case spec.Shape != nil:
-			return in, fmt.Errorf(`%w: a shaped boss takes no ribs`, ErrUnsupported)
 		case spec.Draft != (units.Value{}) || spec.RootFillet != (units.Value{}):
 			return in, fmt.Errorf(`%w: a boss with ribs takes no draft and no root fillet`, ErrUnsupported)
 		}
@@ -519,9 +517,9 @@ func readBossRibs(r *BossRibs, radius, height float64) ([]bossRibRequest, error)
 // buildBossRibs extrudes one gusset rib for each request: a polygon in the plane through
 // the boss's axis at the rib's angle, its coordinates the distance along the rib out from
 // the axis and the height above the face, extruded half its thickness each way. The polygon
-// starts half way to the axis and half of embed below the face so it overlaps the boss and the body without lying in the pillar's footing plane,
-// runs out to the boss's wall plus the rib's length, and slopes from the face at that end up
-// to the rib's height at the wall.
+// starts half way to the axis (the boss's smallest radius, for a shaped boss) and half of embed below the face so it overlaps the
+// boss and the body without lying in the pillar's footing plane, runs out to the boss's wall along the rib's plane plus the rib's length,
+// and slopes from the face at that end up to the rib's height at the wall.
 func buildBossRibs(ctx context.Context, d *Document, in bossRequest) ([]*Body, error) {
 	radius := in.diameter / 2
 	var tools []*Body
@@ -544,11 +542,15 @@ func buildBossRibs(ctx context.Context, d *Document, in bossRequest) ([]*Body, e
 		if err != nil {
 			return fail(err)
 		}
+		wall := radius // the distance from the axis to the boss's wall along the rib's plane
+		if in.shape != nil {
+			wall = in.shape.wallDistance(rib.angle)
+		}
 		corners := [][2]float64{
 			{radius / 2, -in.embed / 2},
-			{radius + rib.length, -in.embed / 2},
-			{radius + rib.length, 0},
-			{radius, rib.height},
+			{wall + rib.length, -in.embed / 2},
+			{wall + rib.length, 0},
+			{wall, rib.height},
 			{radius / 2, rib.height},
 		}
 		points := make([]*sketch.Point, len(corners))

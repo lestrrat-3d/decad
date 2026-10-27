@@ -836,6 +836,9 @@
 3	0.00	TestHolePolygonHexagonThrough
 3	0.00	TestImplicitExactlyOneStopForeignSelectorRejected
 3	0.03	TestInchPocketLevelsCoincidingAfterRounding
+10	0.01	TestBossRibsStandAtTheWallOfARectangularBoss
+10	0.01	TestBossRibsStandAtTheFlatsOfAPolygonalBoss
+10	0.01	TestBossRibsStandAtTheEndOfASlot
 3	0.02	TestInchPocketLevelsInvertedAfterRounding
 3	0.00	TestLinkageJointLimits
 3	0.01	TestLinkagePoseAt
