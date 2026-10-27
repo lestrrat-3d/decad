@@ -99,8 +99,8 @@ func Analyze(ctx context.Context, verts []r3.Vec, tris [][3]int) (Analysis, erro
 			// A triangle's area past the largest float has no float bound.
 			return Analysis{}, fmt.Errorf(`%w: triangle %d is too large to bound its area`, decaderr.ErrUnsupported, ti)
 		}
-		out.AreaLow.Add(out.AreaLow, low)
-		out.AreaHigh.Add(out.AreaHigh, high)
+		proofarith.AddRat(out.AreaLow, out.AreaLow, low)
+		proofarith.AddRat(out.AreaHigh, out.AreaHigh, high)
 	}
 	half := big.NewRat(1, 2)
 	out.AreaLow.Mul(out.AreaLow, half)
