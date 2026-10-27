@@ -60,11 +60,15 @@ type lineFrag struct {
 // CoincidentSpan is one span sketch resolved between two operands'
 // coincident entities: the named entity the span is emitted under, the
 // losing entity it is withdrawn from, and, for an open span, the two
-// vertices bounding it (Whole marks a circle withdrawn whole).
+// vertices bounding it (Whole marks a circle withdrawn whole). LosingT is the
+// window's parameter range on the losing entity (a circle's window across
+// its seam starts below 0), and NamedT the named entity's fragment
+// parameters at A and at B.
 type CoincidentSpan struct {
-	Named, Losing sketch.Entity
-	A, B          [2]float64
-	Whole         bool
+	Named, Losing   sketch.Entity
+	A, B            [2]float64
+	LosingT, NamedT [2]float64
+	Whole           bool
 }
 
 // CoincidentReading is a scene's coincident spans and, keyed by entity and
@@ -95,42 +99,217 @@ func (r CoincidentReading) Lookup(entity sketch.Entity, t0, t1 float64) (Coincid
 // spans whose carriers differ within its identity band; those spans cannot
 // certify exact solid contact.
 func (r CoincidentReading) ExactLineCarriers(budget *proofbound.WorkBudget) (bool, error) {
+	return r.exactSpans(budget, false)
+}
+
+// ExactCarriers is ExactLineCarriers that also reads a span shared by two
+// arcs or circles (agent-docs/general-boolean-design.md §3 "Common-axis full
+// revolutions"). Both circular entities must hold one exact carrier: the same
+// recorded centre, and one squared radius read exactly from every recorded
+// value that defines either (a circle's radius, an arc's start and end). An
+// open span must run counter-clockwise from its first end to its second
+// inside each arc; an end that is an entity's own endpoint is read from that
+// entity's record (spanEnd). A circle withdrawn whole has a partner with the
+// same recorded centre and radius bit for bit (CoincidentEdges), which the
+// same reading confirms. The check reads exact rationals over the held floats
+// and only refuses: it falsifies sketch's identity band, which also resolves
+// carriers that differ within it.
+func (r CoincidentReading) ExactCarriers(budget *proofbound.WorkBudget) (bool, error) {
+	return r.exactSpans(budget, true)
+}
+
+func (r CoincidentReading) exactSpans(budget *proofbound.WorkBudget, circular bool) (bool, error) {
 	for _, span := range r.Spans {
 		if err := budget.Step(); err != nil {
 			return false, err
 		}
-		losing, ok := span.Losing.(*sketch.Line)
-		if !ok || span.A == span.B {
+		if _, ok := span.Losing.(*sketch.Line); ok {
+			if !exactLineSpan(span) {
+				return false, nil
+			}
+			continue
+		}
+		if !circular || !exactCircleSpan(span) {
 			return false, nil
-		}
-		g := losing.Geometry()
-		for _, p := range [][2]float64{{g.Start.X, g.Start.Y}, {g.End.X, g.End.Y}} {
-			if pointLineDistanceUpper(p, span.Named) != 0 {
-				return false, nil
-			}
-		}
-		for _, entity := range []sketch.Entity{span.Named, span.Losing} {
-			line, ok := entity.(*sketch.Line)
-			if !ok {
-				return false, nil
-			}
-			g := line.Geometry()
-			axis := 0
-			if g.Start.X == g.End.X {
-				axis = 1
-			}
-			lo, hi := [2]float64{g.Start.X, g.Start.Y}[axis], [2]float64{g.End.X, g.End.Y}[axis]
-			if lo > hi {
-				lo, hi = hi, lo
-			}
-			for _, p := range [][2]float64{span.A, span.B} {
-				if pointLineDistanceUpper(p, entity) != 0 || p[axis] < lo || p[axis] > hi {
-					return false, nil
-				}
-			}
 		}
 	}
 	return true, nil
+}
+
+// exactLineSpan reports whether both recorded lines of span lie on precisely
+// one line and cover the reported span.
+func exactLineSpan(span CoincidentSpan) bool {
+	losing, ok := span.Losing.(*sketch.Line)
+	if !ok || span.A == span.B {
+		return false
+	}
+	g := losing.Geometry()
+	for _, p := range [][2]float64{{g.Start.X, g.Start.Y}, {g.End.X, g.End.Y}} {
+		if pointLineDistanceUpper(p, span.Named) != 0 {
+			return false
+		}
+	}
+	for _, entity := range []sketch.Entity{span.Named, span.Losing} {
+		line, ok := entity.(*sketch.Line)
+		if !ok {
+			return false
+		}
+		g := line.Geometry()
+		axis := 0
+		if g.Start.X == g.End.X {
+			axis = 1
+		}
+		lo, hi := [2]float64{g.Start.X, g.Start.Y}[axis], [2]float64{g.End.X, g.End.Y}[axis]
+		if lo > hi {
+			lo, hi = hi, lo
+		}
+		for _, p := range [][2]float64{span.A, span.B} {
+			if pointLineDistanceUpper(p, entity) != 0 || p[axis] < lo || p[axis] > hi {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// exactCircleSpan reports whether span's two circular entities hold one exact
+// carrier and, for an open span, whether the span runs inside every arc.
+func exactCircleSpan(span CoincidentSpan) bool {
+	nx, ny, nr, okN := circleCarrier(span.Named)
+	lx, ly, lr, okL := circleCarrier(span.Losing)
+	if !okN || !okL || nx.Cmp(lx) != 0 || ny.Cmp(ly) != 0 {
+		return false
+	}
+	r2 := nr[0]
+	for _, q := range append(nr[1:], lr...) {
+		if q.Cmp(r2) != 0 {
+			return false
+		}
+	}
+	if span.Whole {
+		_, namedCircle := span.Named.(*sketch.Circle)
+		_, losingCircle := span.Losing.(*sketch.Circle)
+		return namedCircle && losingCircle
+	}
+	if span.A == span.B {
+		return false
+	}
+	centre := [2]*big.Rat{nx, ny}
+	a, okA := spanEnd(centre, span.A, span.Named, span.NamedT[0], span.Losing, span.LosingT[0])
+	b, okB := spanEnd(centre, span.B, span.Named, span.NamedT[1], span.Losing, span.LosingT[1])
+	if !okA || !okB {
+		return false
+	}
+	for _, entity := range []sketch.Entity{span.Named, span.Losing} {
+		arc, isArc := entity.(*sketch.Arc)
+		if !isArc {
+			continue // a circle holds every counter-clockwise span on it
+		}
+		g := arc.Geometry()
+		s, okS := ratOffset(centre, [2]float64{g.Start.X, g.Start.Y})
+		e, okE := ratOffset(centre, [2]float64{g.End.X, g.End.Y})
+		// A lies on the arc S→E, and B on its remainder A→E, so the span
+		// A→B runs inside the arc.
+		if !okS || !okE || !onCCWArc(a, s, e) || !onCCWArc(b, a, e) {
+			return false
+		}
+	}
+	return true
+}
+
+// spanEnd is one end of a circular span as an exact offset from the carrier's
+// centre. Where the end is an entity's own endpoint (an arc's start or end at
+// parameter 0 or 1, a circle's seam), it is read from that entity's record,
+// and two such readings must agree exactly. Otherwise the end is a cut both
+// entities share, read from sketch's reported vertex, which the arc test
+// reads only as a direction from the centre.
+func spanEnd(centre [2]*big.Rat, reported [2]float64, named sketch.Entity, namedT float64,
+	losing sketch.Entity, losingT float64) ([2]*big.Rat, bool) {
+	var end [2]*big.Rat
+	have := false
+	for _, own := range []struct {
+		ent sketch.Entity
+		t   float64
+	}{{named, namedT}, {losing, losingT}} {
+		p, ok := ownEnd(centre, own.ent, own.t)
+		if !ok {
+			continue
+		}
+		if have && (p[0].Cmp(end[0]) != 0 || p[1].Cmp(end[1]) != 0) {
+			return [2]*big.Rat{}, false
+		}
+		end, have = p, true
+	}
+	if have {
+		return end, true
+	}
+	end, ok := ratOffset(centre, reported)
+	if !ok || (end[0].Sign() == 0 && end[1].Sign() == 0) {
+		return [2]*big.Rat{}, false
+	}
+	return end, true
+}
+
+// ownEnd is the offset from centre of the recorded point ent holds at
+// parameter t, when t is one of its own ends: an arc's start (0) or end (1),
+// or a circle's seam (0 or 1), the point one radius along +x from its centre.
+func ownEnd(centre [2]*big.Rat, ent sketch.Entity, t float64) ([2]*big.Rat, bool) {
+	if t != 0 && t != 1 {
+		return [2]*big.Rat{}, false
+	}
+	switch e := ent.(type) {
+	case *sketch.Arc:
+		g := e.Geometry()
+		if t == 0 {
+			return ratOffset(centre, [2]float64{g.Start.X, g.Start.Y})
+		}
+		return ratOffset(centre, [2]float64{g.End.X, g.End.Y})
+	case *sketch.Circle:
+		g := e.Geometry()
+		c, ok := floatRats(g.Center.X, g.Center.Y, g.Radius)
+		if !ok {
+			return [2]*big.Rat{}, false
+		}
+		return [2]*big.Rat{new(big.Rat).Sub(new(big.Rat).Add(c[0], c[2]), centre[0]), new(big.Rat).Sub(c[1], centre[1])}, true
+	}
+	return [2]*big.Rat{}, false
+}
+
+// ratOffset is p − centre in exact rationals over p's held floats.
+func ratOffset(centre [2]*big.Rat, p [2]float64) ([2]*big.Rat, bool) {
+	r, ok := floatRats(p[0], p[1])
+	if !ok {
+		return [2]*big.Rat{}, false
+	}
+	return [2]*big.Rat{new(big.Rat).Sub(r[0], centre[0]), new(big.Rat).Sub(r[1], centre[1])}, true
+}
+
+// onCCWArc reports whether the direction p lies on the counter-clockwise arc
+// from s to e, ends included, where p, s and e are nonzero exact offsets from
+// the arc's centre. It decides by exact cross and dot signs: an arc
+// sweeping less than a half turn holds p on the left of s and the right of
+// e; an arc sweeping more holds every p not strictly inside its complement;
+// a half turn holds p on the left of s. s equal to e (a zero or full sweep)
+// reads false.
+func onCCWArc(p, s, e [2]*big.Rat) bool {
+	sweep := ratCross(s, e).Sign()
+	switch {
+	case sweep > 0:
+		return ratCross(s, p).Sign() >= 0 && ratCross(p, e).Sign() >= 0
+	case sweep < 0:
+		return ratCross(e, p).Sign() <= 0 || ratCross(p, s).Sign() <= 0
+	case ratDot(s, e).Sign() < 0:
+		return ratCross(s, p).Sign() >= 0
+	}
+	return false
+}
+
+func ratCross(a, b [2]*big.Rat) *big.Rat {
+	return new(big.Rat).Sub(new(big.Rat).Mul(a[0], b[1]), new(big.Rat).Mul(a[1], b[0]))
+}
+
+func ratDot(a, b [2]*big.Rat) *big.Rat {
+	return new(big.Rat).Add(new(big.Rat).Mul(a[0], b[0]), new(big.Rat).Mul(a[1], b[1]))
 }
 
 // window is one parameter range of a losing entity no fragment covers.
@@ -240,7 +419,7 @@ func coincidentEdges(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 			return CoincidentReading{}, false, nil
 		}
 		for _, w := range windows {
-			partner, edges, found, ok := spanPartner(tags, origin, other, ent, frags, w.pLo, w.pHi)
+			partner, edges, namedT, found, ok := spanPartner(tags, origin, other, ent, frags, w.pLo, w.pHi)
 			if !ok {
 				return CoincidentReading{}, false, nil
 			}
@@ -260,7 +439,8 @@ func coincidentEdges(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 			if !claim(edges, Coincidence{Partner: ent, Opposite: opposite}) {
 				return CoincidentReading{}, false, nil
 			}
-			out.Spans = append(out.Spans, CoincidentSpan{Named: partner, Losing: ent, A: w.pLo, B: w.pHi})
+			out.Spans = append(out.Spans, CoincidentSpan{Named: partner, Losing: ent, A: w.pLo, B: w.pHi,
+				LosingT: [2]float64{w.lo, w.hi}, NamedT: namedT})
 		}
 	}
 	return out, true, nil
@@ -357,12 +537,14 @@ func entityEnds(windows []window, start, end [2]float64) ([]window, bool) {
 // without a gap. On a line the span runs between the two parameters in
 // either order; on an arc or a circle it runs counter-clockwise from a to b,
 // as the losing entity's window does, across a circle's seam if it must.
-// found=false with ok=true means no such entity; ok=false means two of them,
-// or one whose fragments leave a gap.
-func spanPartner(tags map[sketch.Entity]Origin, losingOrigin Origin, other func(losing, candidate Origin) bool, losing sketch.Entity, frags map[sketch.Entity][]lineFrag, a, b [2]float64) (sketch.Entity, []edgeSpan, bool, bool) {
+// It also returns the partner's parameters at a and at b. found=false with
+// ok=true means no such entity; ok=false means two of them, or one whose
+// fragments leave a gap.
+func spanPartner(tags map[sketch.Entity]Origin, losingOrigin Origin, other func(losing, candidate Origin) bool, losing sketch.Entity, frags map[sketch.Entity][]lineFrag, a, b [2]float64) (sketch.Entity, []edgeSpan, [2]float64, bool, bool) {
 	_, losingLine := losing.(*sketch.Line)
 	var partner sketch.Entity
 	var edges []edgeSpan
+	var params [2]float64
 	for ent, origin := range tags {
 		if !other(losingOrigin, origin) {
 			continue
@@ -398,19 +580,19 @@ func spanPartner(tags map[sketch.Entity]Origin, losingOrigin Origin, other func(
 			continue
 		}
 		if partner != nil {
-			return nil, nil, false, false
+			return nil, nil, [2]float64{}, false, false
 		}
-		partner = ent
+		partner, params = ent, [2]float64{tA, tB}
 		edges = edges[:0]
 		for _, r := range ranges {
 			covered, ok := coveringFrags(ent, fs, r[0], r[1])
 			if !ok {
-				return nil, nil, false, false
+				return nil, nil, [2]float64{}, false, false
 			}
 			edges = append(edges, covered...)
 		}
 	}
-	return partner, edges, partner != nil, true
+	return partner, edges, params, partner != nil, true
 }
 
 // coveringFrags returns ent's sorted fragments inside [lo, hi], which must

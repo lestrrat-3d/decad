@@ -1003,11 +1003,45 @@ entity so its source-face role is unambiguous. The existing prism-cell work
 cap and cancellation apply. A result cut through a source line or arc carries the
 cut parameter's displacement through `revolvePayload.SectionDelta`. A kept
 wall retains its source face's origins; a coincident wall retains both source
-faces' origins. Every shared span must lie on exactly the same recorded line
-carrier, with both ends inside both finite segments. Sketch's identity band
-alone cannot join a positive gap. A span shared by two arcs or circles is
-not a line carrier, so a shared arc or circle span (a sphere unioned onto an
-equal sphere) continues to the mesh path.
+faces' origins. Every shared span must lie on exactly the same recorded
+carrier (`prismcells.CoincidentReading.ExactCarriers`). Sketch's identity band
+alone cannot join a positive gap, so the reading only refuses:
+
+- A span of two lines lies on precisely one line, with both ends inside both
+  finite segments.
+- A span of two arcs or circles (a dome on a ball of its radius, a ball on an
+  equal ball, a half-torus on its torus) lies on one circle: both entities
+  record the same centre, and every recorded value that defines either (a
+  circle's radius, an arc's start and end) gives the same squared radius,
+  compared as exact rationals over the held floats. A span end that is an
+  entity's own endpoint (an arc's start or end, a circle's seam at one radius
+  along +u) is read from that record, and two such readings must agree
+  exactly. Sketch's reported vertex there is a sampled point that can lie off
+  the circle (a circle's seam at parameter 1). An end both entities share as
+  a cut is Sketch's reported vertex, read only as a direction from the centre.
+  Each arc must hold the span counter-clockwise from its first end to its
+  second, by exact cross and dot signs (the first end on the arc, the second on
+  the arc's remainder after it). A circle withdrawn whole must have a circle
+  partner.
+
+Classification reads an admitted span as a boundary of both operands (A3),
+so a dome `Intersect` a ball of its radius is the dome, their `Union` the
+ball, and the ball `Cut` by the dome the other hemisphere. Two arcs Sketch
+resolves onto one carrier that the reading falsifies (an arc centred 1e-13 mm
+from the other's centre, or one whose endpoint is a cos/sin rounding off the
+radius) continue to the mesh path. Two equal whole circles are not reached:
+Sketch publishes no cell for the pair, and the scene misses. An arc withdrawn
+into a window whose ends meet no partner's fragment ends (radii one ulp apart)
+is not a shared span, and the exact-carrier reading never sees it. The cells
+Sketch publishes without that arc are classified as in any other scene, and
+the outcome depends on which operand holds which arc. A dome of radius 10
+`Intersect` a ball one ulp larger, and a ball of radius 10 `Union` or `Cut` by
+a dome one ulp larger, build a body whose published volume bound contains the
+true volume. A ball one ulp larger than a radius-10 dome, under any of the
+three operations, and a dome one ulp larger `Intersect` a radius-10 ball miss
+and continue to the mesh path
+(`apitest/revolve_boolean_shared_arc_test.go`,
+`TestCommonAxisRevolveSharedArcSpanUlpRadii`).
 
 An arc cut parameter is certified by Sketch (`TExact`) and its rounding is charged
 through `CutDelta` in `MergeWithChain`. A cut arc keeps its source
@@ -1019,8 +1053,8 @@ facet ceiling of the mesh path does not apply because the Boolean does not
 mesh the sphere. An empty `Cut` or `Intersect` returns
 `BooleanEmpty`.
 An unresolved arrangement, a disconnected result, a different axis, a
-free-form meridian, or a shared arc span continues to the existing mesh path and its documented
-error behavior. An edge-only or point-only contact is not promoted to a
+free-form meridian, or a shared span the exact-carrier reading refuses
+continues to the existing mesh path and its documented error behavior. An edge-only or point-only contact is not promoted to a
 solid join.
 
 ## 4. The `brepPayload`

@@ -78,7 +78,7 @@ func PrepareCommonAxis(ctx context.Context, op meshbool.OperationKind,
 	if err != nil || !ok {
 		return Payload{}, false, false, err
 	}
-	if exact, err := coincident.ExactLineCarriers(budget); err != nil || !exact {
+	if exact, err := coincident.ExactCarriers(budget); err != nil || !exact {
 		return Payload{}, false, false, err
 	}
 	matterA, matterB, resolved, err := prismcells.Classify(budget, tags, profiles)
