@@ -1242,12 +1242,18 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   classification error. Join every worker before returning, including on
   cancellation. `internal/meshbool/boolean_cut_batch.go` owns worker selection;
   `keepSide` owns the batch bound. `cutProjectionScratch` defines reusable
-  reusable cutter-storage ownership and retention limits.
+  cutter-storage ownership and retention limits. Worker-private projections
+  defer canonical 2D rationals until a reader requires them; exact homogeneous
+  coordinates decide predicates and correctly rounded float caches decide
+  conservative filters. `materializeXP2` owns their cache state and lifetime.
 - **Intern cut vertices by exact identity.** A cutter vertex is its two
   projected coordinates, compared as their `RatString` texts are, and a
   segment endpoint whose homogeneous integers equal an interned one's is that
   vertex. Hashes only choose which vertices to compare, and exact integer
   comparison confirms every hit, so a collision never merges two vertices.
+  Worker-private projections hash rounded coordinates first; dense rounded
+  buckets promote to canonical integer hashes. Manual non-reduced rational
+  inputs keep their distinct textual identities.
   `internal/meshbool/cut_vertex_index.go` owns both tables.
 - **Build a facet's edge planes once per run of its pairs.** A contact
   segment's boundary flags and along-edge record test each end against each

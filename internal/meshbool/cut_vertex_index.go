@@ -1,6 +1,7 @@
 package meshbool
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -15,15 +16,64 @@ import (
 // one vertex exactly when their U texts and their V texts agree, which is
 // what an index keyed by U.RatString()+"|"+V.RatString() reads.
 // proof.RatTextEqual decides that from the numerator and denominator
-// integers, so no decimal text is built.
+// integers, so no decimal text is built. Worker-private projections first hash
+// correctly rounded floats, whose equality is necessary but never sufficient
+// for exact identity. A bucket promotes after eight unequal comparisons to
+// canonical integer hashes; close points cannot create an unbounded float chain.
 type cutVertIndex struct {
-	head map[uint64]int // hash → newest vertex with that hash
-	next []int          // per vertex: the previous vertex with its hash, or -1
+	floatKeys bool
+	promoted  map[uint64]struct{}
+	exactHead map[[2]uint64]int
+	head      map[uint64]int // hash → newest vertex with that hash
+	next      []int          // per vertex: the previous vertex with its hash, or -1
 }
 
 // lookup returns the vertex of verts whose 2D identity equals p's.
 func (x *cutVertIndex) lookup(verts []CutVert, h uint64, p Xp2) (int, bool) {
+	if _, ok := x.promoted[h]; ok {
+		return x.lookupExact(verts, h, p)
+	}
 	i, ok := x.head[h]
+	first, compared := i, 0
+	for ok && i >= 0 {
+		if x.floatKeys && sameCutProjection(verts[i].P2, p) || !x.floatKeys &&
+			proof.RatTextEqual(verts[i].P2.U, p.U) && proof.RatTextEqual(verts[i].P2.V, p.V) {
+			return i, true
+		}
+		compared++
+		if x.floatKeys && compared == 8 {
+			if x.promoted == nil {
+				x.promoted = make(map[uint64]struct{})
+			}
+			if x.exactHead == nil {
+				x.exactHead = make(map[[2]uint64]int)
+			}
+			// At most eight entries belong to this bucket. Rewrite only their
+			// links; other float buckets have disjoint vertex lists. Save the
+			// old link before inserting into the exact-hash collision chain.
+			for j := first; j >= 0; {
+				oldNext := x.next[j]
+				materializeXP2(verts[j].P2)
+				key := [2]uint64{h, xp2Hash(verts[j].P2)}
+				prev, exists := x.exactHead[key]
+				if !exists {
+					prev = -1
+				}
+				x.next[j] = prev
+				x.exactHead[key] = j
+				j = oldNext
+			}
+			x.promoted[h] = struct{}{}
+			return x.lookupExact(verts, h, p)
+		}
+		i = x.next[i]
+	}
+	return 0, false
+}
+
+func (x *cutVertIndex) lookupExact(verts []CutVert, h uint64, p Xp2) (int, bool) {
+	materializeXP2(p)
+	i, ok := x.exactHead[[2]uint64{h, xp2Hash(p)}]
 	for ok && i >= 0 {
 		if proof.RatTextEqual(verts[i].P2.U, p.U) && proof.RatTextEqual(verts[i].P2.V, p.V) {
 			return i, true
@@ -31,6 +81,22 @@ func (x *cutVertIndex) lookup(verts []CutVert, h uint64, p Xp2) (int, bool) {
 		i = x.next[i]
 	}
 	return 0, false
+}
+
+// addForPoint appends the vertex to its float or promoted integer-hash chain.
+func (x *cutVertIndex) addForPoint(h uint64, i int, p Xp2) {
+	if _, ok := x.promoted[h]; !ok {
+		x.add(h, i)
+		return
+	}
+	materializeXP2(p)
+	key := [2]uint64{h, xp2Hash(p)}
+	prev, ok := x.exactHead[key]
+	if !ok {
+		prev = -1
+	}
+	x.next = append(x.next, prev)
+	x.exactHead[key] = i
 }
 
 // add records vertex i, which must be the next vertex in order.
@@ -117,4 +183,36 @@ func (tc *TriCutter) addPoint(p proof.Xpt, boundary bool) int {
 	i := tc.AddVert(tc.project(p, u, v), p, boundary)
 	tc.raw.add(h, hu, hv, p.W, i)
 	return i
+}
+
+func sameCutProjection(a, b Xp2) bool {
+	if a.deferredRats && b.deferredRats {
+		// Both would be canonicalized by RatFrac. A manual non-reduced Rat
+		// must instead keep the textual identity checked below.
+		return compareXP2Coordinate(a, b, 0) == 0 && compareXP2Coordinate(a, b, 1) == 0
+	}
+	materializeXP2(a)
+	materializeXP2(b)
+	return proof.RatTextEqual(a.U, b.U) && proof.RatTextEqual(a.V, b.V)
+}
+
+// cutProjectionHash hashes exact identity or its necessarily equal rounding.
+// Normalize signed zero because both spellings denote the same rational zero.
+func cutProjectionHash(p Xp2, floatKeys bool) uint64 {
+	if !floatKeys {
+		return xp2Hash(p)
+	}
+	u, v := p.Fu, p.Fv
+	if !p.floatFromExact {
+		materializeXP2(p)
+		u, _ = p.U.Float64()
+		v, _ = p.V.Float64()
+	}
+	if u == 0 {
+		u = 0
+	}
+	if v == 0 {
+		v = 0
+	}
+	return proof.HashWord(proof.HashWord(proof.HashSeed, math.Float64bits(u)), math.Float64bits(v))
 }

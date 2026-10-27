@@ -30,13 +30,22 @@ func newTriCutter(ctx context.Context, projections *cutProjectionScratch) *TriCu
 		tc = &projections.cutter
 		projections.used = 0
 	}
+	if tc.index.promoted != nil {
+		tc.index.promoted = resetCutMap(tc.index.promoted)
+	}
+	if tc.index.exactHead != nil {
+		tc.index.exactHead = resetCutMap(tc.index.exactHead)
+	}
 	*tc = TriCutter{
 		Verts:        resetCutSlice(tc.Verts),
 		Edges:        resetCutSlice(tc.Edges),
 		regionPoints: resetCutSlice(tc.regionPoints),
 		index: cutVertIndex{
-			head: resetCutMap(tc.index.head),
-			next: resetCutSlice(tc.index.next),
+			floatKeys: projections != nil,
+			promoted:  tc.index.promoted,
+			exactHead: tc.index.exactHead,
+			head:      resetCutMap(tc.index.head),
+			next:      resetCutSlice(tc.index.next),
 		},
 		raw: cutRawIndex{
 			head:    resetCutMap(tc.raw.head),

@@ -89,6 +89,7 @@ func countingCutter(normal proof.Xpt, projections *cutProjectionScratch) (*TriCu
 			ErrFn:  func() error { return nil },
 		},
 		projections: projections,
+		index:       cutVertIndex{floatKeys: projections != nil},
 	}
 	tc.U, tc.V = ProjAxes(normal)
 	return tc, steps
@@ -98,6 +99,7 @@ func countingCutter(normal proof.Xpt, projections *cutProjectionScratch) (*TriCu
 // vertex index and the field that differs.
 func requireSameVert(t *testing.T, want, got CutVert, label string) {
 	t.Helper()
+	materializeXP2(got.P2)
 	require.Equal(t, want.P2.U.RatString(), got.P2.U.RatString(), "%s U", label)
 	require.Equal(t, want.P2.V.RatString(), got.P2.V.RatString(), "%s V", label)
 	require.Equal(t, math.Float64bits(want.P2.Fu), math.Float64bits(got.P2.Fu), "%s Fu", label)

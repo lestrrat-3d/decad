@@ -14,8 +14,10 @@ import (
 
 // Xp2 is an exact 2D point (a plane projection of an xpt). The cached float
 // coordinates only accelerate conservative filters; the rational coordinates
-// remain the source of truth whenever a filter cannot decide. Callers must not
-// mutate either coordinate or its float cache after construction.
+// remain the source of truth whenever a filter cannot decide. A cutter worker
+// can defer its private rational caches; its homogeneous coordinates then
+// supply the exact value until materializeXP2 fills U and V. Public constructors
+// always fill the rationals. Callers must not mutate coordinates or float caches.
 // FloatFinite means both float coordinates are usable by the sign filter.
 type Xp2 struct {
 	U, V        *big.Rat
@@ -23,6 +25,7 @@ type Xp2 struct {
 	FloatFinite bool
 	// Only the constructors set this; a struct literal has no proven float cache.
 	floatFromExact bool
+	deferredRats   bool
 	Hu, Hv, Hw     *big.Int
 }
 
@@ -129,6 +132,9 @@ func Cross2x(a, b, c Xp2) *big.Rat {
 		den := new(big.Int).Mul(new(big.Int).Mul(a.Hw, a.Hw), new(big.Int).Mul(b.Hw, c.Hw))
 		return new(big.Rat).SetFrac(cross2xHomNumerator(a, b, c), den)
 	}
+	materializeXP2(a)
+	materializeXP2(b)
+	materializeXP2(c)
 	bu := proof.SubRat(new(big.Rat), b.U, a.U)
 	bv := proof.SubRat(new(big.Rat), b.V, a.V)
 	cu := proof.SubRat(new(big.Rat), c.U, a.U)
@@ -300,6 +306,9 @@ func Cross2xSign(a, b, c Xp2) int {
 		}
 		return cross2xHomNumerator(a, b, c).Sign()
 	}
+	materializeXP2(a)
+	materializeXP2(b)
+	materializeXP2(c)
 	// Two points that hold the same coordinate pointers are one exact point.
 	if ratComplete(a) && ratComplete(b) && ratComplete(c) &&
 		(ratSharedPoint(a, b) || ratSharedPoint(a, c) || ratSharedPoint(b, c)) {
@@ -355,52 +364,23 @@ func OnSegment2(a, b, p Xp2) (bool, bool) {
 	if Cross2xSign(a, b, p) != 0 {
 		return false, false
 	}
-	// Collinear: order along the first nonconstant coordinate.
-	cached := a.floatFromExact && b.floatFromExact && p.floatFromExact
-	uOrder := compareProjectedCoordinate(a.U, b.U, a.Fu, b.Fu, cached)
-	var lo, hi, x *big.Rat
-	var flo, fhi, fx float64
-	if uOrder != 0 {
-		lo, hi, x = a.U, b.U, p.U
-		flo, fhi, fx = a.Fu, b.Fu, p.Fu
-	} else {
-		vOrder := compareProjectedCoordinate(a.V, b.V, a.Fv, b.Fv, cached)
-		if vOrder == 0 {
-			// A zero-length segment holds only its own point.
-			eq := compareProjectedCoordinate(p.U, a.U, p.Fu, a.Fu, cached) == 0 &&
-				compareProjectedCoordinate(p.V, a.V, p.Fv, a.Fv, cached) == 0
-			return eq, false
+	axis := 0
+	order := compareXP2Coordinate(a, b, axis)
+	if order == 0 {
+		axis = 1
+		order = compareXP2Coordinate(a, b, axis)
+		if order == 0 {
+			return compareXP2Coordinate(p, a, 0) == 0 && compareXP2Coordinate(p, a, 1) == 0, false
 		}
-		lo, hi, x = a.V, b.V, p.V
-		flo, fhi, fx = a.Fv, b.Fv, p.Fv
-		uOrder = vOrder
 	}
-	if uOrder > 0 {
-		lo, hi = hi, lo
-		flo, fhi = fhi, flo
+	if order > 0 {
+		a, b = b, a
 	}
-	lower := compareProjectedCoordinate(x, lo, fx, flo, cached)
-	upper := compareProjectedCoordinate(x, hi, fx, fhi, cached)
-	if lower < 0 || upper > 0 {
+	lo, hi := compareXP2Coordinate(p, a, axis), compareXP2Coordinate(p, b, axis)
+	if lo < 0 || hi > 0 {
 		return false, false
 	}
-	return true, lower > 0 && upper < 0
-}
-
-// compareProjectedCoordinate uses the monotonicity of exact-to-float rounding:
-// unequal rounded values have the same order as their exact coordinates.
-// Equal roundings, NaNs and coordinates without constructor caches compare
-// exactly. cached must certify both rounded values came from a and b.
-func compareProjectedCoordinate(a, b *big.Rat, fa, fb float64, cached bool) int {
-	if cached {
-		if fa < fb {
-			return -1
-		}
-		if fa > fb {
-			return 1
-		}
-	}
-	return proof.CmpRat(a, b)
+	return true, lo > 0 && hi < 0
 }
 
 // PointInPoly2 reports whether p lies strictly inside the simple polygon —
@@ -423,8 +403,8 @@ func PointInPoly2(budget *proofbound.WorkBudget, poly []Xp2, p Xp2) (bool, bool,
 			return false, false, err
 		}
 		a, b := poly[i], poly[(i+1)%n]
-		belowA := compareProjectedCoordinate(a.V, p.V, a.Fv, p.Fv, a.floatFromExact && p.floatFromExact) <= 0
-		if belowA == (compareProjectedCoordinate(b.V, p.V, b.Fv, p.Fv, b.floatFromExact && p.floatFromExact) <= 0) {
+		belowA := compareXP2Coordinate(a, p, 1) <= 0
+		if belowA == (compareXP2Coordinate(b, p, 1) <= 0) {
 			continue
 		}
 		// An upward edge crosses right of p when its orientation with p is
@@ -492,6 +472,8 @@ func PolyArea2Sign(budget *proofbound.WorkBudget, poly []Xp2) (int, error) {
 			return 0, err
 		}
 		a, b := poly[i], poly[(i+1)%n]
+		materializeXP2(a)
+		materializeXP2(b)
 		leftDen.Mul(a.U.Denom(), b.V.Denom())
 		rightDen.Mul(b.U.Denom(), a.V.Denom())
 		termDen.Mul(&leftDen, &rightDen)
@@ -611,11 +593,11 @@ func EarBlockedX(budget *proofbound.WorkBudget, pts []Xp2, idx []int, i int) (bo
 		// Unequal finite roundings disprove exact endpoint identity. Equal
 		// roundings, absent caches, and nonfinite values still compare exactly.
 		if (!finiteP || !finiteA || (p.Fu == a.Fu && p.Fv == a.Fv)) &&
-			p.U.Cmp(a.U) == 0 && p.V.Cmp(a.V) == 0 {
+			compareXP2Coordinate(p, a, 0) == 0 && compareXP2Coordinate(p, a, 1) == 0 {
 			continue
 		}
 		if (!finiteP || !finiteC || (p.Fu == c.Fu && p.Fv == c.Fv)) &&
-			p.U.Cmp(c.U) == 0 && p.V.Cmp(c.V) == 0 {
+			compareXP2Coordinate(p, c, 0) == 0 && compareXP2Coordinate(p, c, 1) == 0 {
 			continue
 		}
 		if PointInTriX(p, a, b, c) {
@@ -623,4 +605,73 @@ func EarBlockedX(budget *proofbound.WorkBudget, pts []Xp2, idx []int, i int) (bo
 		}
 	}
 	return false, nil
+}
+
+// materializeXP2 fills only worker-private rational caches. Both start at zero;
+// a nonzero coordinate records completion without another allocation or pointer
+// in Xp2. The exact origin may repeat the two cheap zero assignments. Copies,
+// including swapped projections, share these same two scratch-owned headers.
+// No deferred projection may escape its cutter worker or outlive its scratch.
+func materializeXP2(p Xp2) {
+	if p.deferredRats && p.U.Sign() == 0 && p.V.Sign() == 0 {
+		proof.RatFrac(p.U, p.Hu, p.Hw)
+		proof.RatFrac(p.V, p.Hv, p.Hw)
+	}
+}
+
+// newDeferredXP2 requires w > 0 and two distinct worker-owned Rat headers.
+// FracFloat64 rounds the exact fraction just as the canonical Rat does, so the
+// existing conservative filters and monotone coordinate comparisons apply.
+func newDeferredXP2(u, v, w *big.Int, ur, vr *big.Rat) Xp2 {
+	ur.SetInt64(0)
+	vr.SetInt64(0)
+	fu, fv := proof.FracFloat64(u, w), proof.FracFloat64(v, w)
+	safe := func(n *big.Int, f float64) bool {
+		if n.Sign() == 0 {
+			return f == 0
+		}
+		return math.Abs(f) >= 0x1p-300 && math.Abs(f) <= 0x1p250
+	}
+	return Xp2{U: ur, V: vr, Fu: fu, Fv: fv,
+		floatFromExact: true, FloatFinite: safe(u, fu) && safe(v, fv),
+		Hu: u, Hv: v, Hw: w, deferredRats: true}
+}
+
+// compareXP2Coordinate orders axis 0 (U) or 1 (V). Exact-to-float rounding is
+// monotone, so unequal proven roundings decide the exact order. Equal caches
+// compare positive-denominator homogeneous fractions or materialized rationals.
+func compareXP2Coordinate(a, b Xp2, axis int) int {
+	af, bf := a.Fu, b.Fu
+	an, bn := a.Hu, b.Hu
+	ar, br := a.U, b.U
+	if axis == 1 {
+		af, bf, an, bn, ar, br = a.Fv, b.Fv, a.Hv, b.Hv, a.V, b.V
+	}
+	if a.floatFromExact && b.floatFromExact {
+		if af < bf {
+			return -1
+		}
+		if af > bf {
+			return 1
+		}
+	}
+	if a.deferredRats && b.deferredRats {
+		var x, y big.Int
+		return x.Mul(an, b.Hw).Cmp(y.Mul(bn, a.Hw))
+	}
+	materializeXP2(a)
+	materializeXP2(b)
+	return proof.CmpRat(ar, br)
+}
+
+// deferredMidpointXP2 averages two worker-private points without reducing their
+// fractions: (au/aw + bu/bw)/2 = (au*bw + bu*aw)/(2*aw*bw).
+func deferredMidpointXP2(a, b Xp2) Xp2 {
+	u := new(big.Int).Mul(a.Hu, b.Hw)
+	u.Add(u, new(big.Int).Mul(b.Hu, a.Hw))
+	v := new(big.Int).Mul(a.Hv, b.Hw)
+	v.Add(v, new(big.Int).Mul(b.Hv, a.Hw))
+	w := new(big.Int).Mul(a.Hw, b.Hw)
+	w.Lsh(w, 1)
+	return newDeferredXP2(u, v, w, new(big.Rat), new(big.Rat))
 }

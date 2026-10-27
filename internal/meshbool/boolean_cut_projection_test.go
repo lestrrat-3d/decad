@@ -103,16 +103,21 @@ func TestCutWorkspaceDropsOversizedStorage(t *testing.T) {
 	old.Edges = make([]CutEdge, cutWorkspaceRetainLimit+1)
 	old.regionPoints = make([]Xp2, cutWorkspaceRetainLimit+1)
 	old.index = cutVertIndex{head: map[uint64]int{}, next: make([]int, cutWorkspaceRetainLimit+1)}
+	old.index.promoted = map[uint64]struct{}{}
+	old.index.exactHead = map[[2]uint64]int{}
 	old.raw = cutRawIndex{head: map[uint64]int{}, entries: make([]cutRawEntry, cutWorkspaceRetainLimit+1)}
 	old.seen = map[[2]int]struct{}{}
 	old.anchors = map[[2]int]ChainAnchor{}
 	for i := range cutWorkspaceRetainLimit + 1 {
 		old.index.head[uint64(i)] = i
+		old.index.promoted[uint64(i)] = struct{}{}
+		old.index.exactHead[[2]uint64{uint64(i), 0}] = i
 		old.raw.head[uint64(i)] = i
 		old.seen[[2]int{i, i + 1}] = struct{}{}
 		old.anchors[[2]int{i, i + 1}] = ChainAnchor{}
 	}
 	index, raw, seen, anchors := old.index.head, old.raw.head, old.seen, old.anchors
+	promoted, exact := old.index.promoted, old.index.exactHead
 	tc := newTriCutter(t.Context(), &scratch)
 	require.Zero(t, len(tc.Verts))
 	require.Zero(t, len(tc.Edges))
@@ -122,6 +127,12 @@ func TestCutWorkspaceDropsOversizedStorage(t *testing.T) {
 	require.LessOrEqual(t, cap(tc.regionPoints), cutWorkspaceRetainLimit)
 	require.Zero(t, len(tc.index.head))
 	require.Zero(t, len(tc.index.next))
+	require.Empty(t, tc.index.promoted)
+	require.Empty(t, tc.index.exactHead)
+	tc.index.promoted[0] = struct{}{}
+	tc.index.exactHead[[2]uint64{}] = 0
+	require.Len(t, promoted, cutWorkspaceRetainLimit+1, "oversized promotion map was dropped")
+	require.Len(t, exact, cutWorkspaceRetainLimit+1, "oversized exact index was dropped")
 	require.LessOrEqual(t, cap(tc.index.next), cutWorkspaceRetainLimit)
 	require.Zero(t, len(tc.raw.head))
 	require.Zero(t, len(tc.raw.entries))
