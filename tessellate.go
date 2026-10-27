@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sync"
 
+	"github.com/lestrrat-3d/decad/internal/pointquery"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessaudit"
@@ -30,7 +32,9 @@ import (
 type Mesh struct {
 	_ noCopy
 	// n is the node data internal packages read and build (internal/topo).
-	n topo.Mesh
+	n         topo.Mesh
+	queryOnce sync.Once
+	queryData *pointquery.PreparedMesh
 }
 
 // Vertices returns the mesh vertex positions in millimetres (core §5.2).

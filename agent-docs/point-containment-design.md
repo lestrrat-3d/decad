@@ -53,6 +53,9 @@ from their held `float64` values; neither is rounded down.
 The exact mesh parity kernel classifies the query against `M`. A point on a
 held facet is `PointOnBoundary` only if `B = 0`; otherwise it is undecided. A
 parity cast that cannot avoid every facet edge also returns undecided.
+Repeated queries reuse the held mesh's exact vertex projections and parity
+index. The cache is built lazily and guarded while queries fill it, so
+concurrent calls keep the same answer without changing the mesh.
 
 For every held facet, compute the exact squared distance from `p` to its
 closed triangle over rational coordinates. Let `D²` be the minimum. Round

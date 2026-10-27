@@ -5,12 +5,34 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
+
+// PreparedMesh keeps the exact parity projections and index for repeated
+// queries against one immutable held mesh.
+type PreparedMesh struct {
+	verts  []r3.Vec
+	tris   [][3]int
+	subset []int
+	mu     sync.Mutex
+	parity *meshbool.ParityMesh
+}
+
+// NewPreparedMesh prepares reusable query data for one immutable held mesh.
+func NewPreparedMesh(verts []r3.Vec, tris [][3]int) *PreparedMesh {
+	subset := make([]int, len(tris))
+	for i := range subset {
+		subset[i] = i
+	}
+	return &PreparedMesh{
+		verts: verts, tris: tris, subset: subset, parity: meshbool.NewParityMesh(verts, tris),
+	}
+}
 
 // Location is the proof result over a verified mesh and its true body.
 type Location uint8
@@ -26,7 +48,18 @@ const (
 // boundary and occupied-volume bounds exclude a different answer.
 func Locate(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int,
 	boundaryBound, symDiffBound float64) (Location, error) {
-	return locate(ctx, p, verts, tris, boundaryBound, symDiffBound, nil)
+	return locate(ctx, p, verts, tris, boundaryBound, symDiffBound, nil, nil)
+}
+
+// LocatePrepared reuses the parity projections and index in prepared across
+// repeated queries. Prepared mesh data is immutable, while its lazy parity
+// caches are guarded so concurrent queries remain safe.
+func LocatePrepared(ctx context.Context, p r3.Vec, prepared *PreparedMesh,
+	boundaryBound, symDiffBound float64) (Location, error) {
+	if prepared == nil {
+		return Undecided, nil
+	}
+	return locate(ctx, p, prepared.verts, prepared.tris, boundaryBound, symDiffBound, nil, prepared)
 }
 
 // LocateWithDistance reuses an exact held-mesh distance already computed for
@@ -34,21 +67,34 @@ func Locate(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int,
 // result, or nil to compute it here.
 func LocateWithDistance(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int,
 	boundaryBound, symDiffBound float64, distanceSquared *big.Rat) (Location, error) {
-	return locate(ctx, p, verts, tris, boundaryBound, symDiffBound, distanceSquared)
+	return locate(ctx, p, verts, tris, boundaryBound, symDiffBound, distanceSquared, nil)
 }
 
 func locate(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int,
-	boundaryBound, symDiffBound float64, distanceSquared *big.Rat) (Location, error) {
+	boundaryBound, symDiffBound float64, distanceSquared *big.Rat, prepared *PreparedMesh) (Location, error) {
 	if len(tris) == 0 || math.IsNaN(boundaryBound) || math.IsInf(boundaryBound, 0) ||
 		math.IsNaN(symDiffBound) || math.IsInf(symDiffBound, 0) ||
 		boundaryBound < 0 || symDiffBound < 0 {
 		return Undecided, nil
 	}
-	subset := make([]int, len(tris))
-	for i := range subset {
-		subset[i] = i
+	var subset []int
+	if prepared != nil {
+		subset = prepared.subset
+	} else {
+		subset = make([]int, len(tris))
+		for i := range subset {
+			subset[i] = i
+		}
 	}
-	inside, onBoundary, err := meshbool.MeshParityContext(ctx, proof.XptOf(p), verts, tris, subset)
+	var inside, onBoundary bool
+	var err error
+	if prepared == nil {
+		inside, onBoundary, err = meshbool.MeshParityContext(ctx, proof.XptOf(p), verts, tris, subset)
+	} else {
+		prepared.mu.Lock()
+		inside, onBoundary, err = meshbool.MeshParityPreparedContext(ctx, proof.XptOf(p), prepared.parity, subset)
+		prepared.mu.Unlock()
+	}
 	if err != nil && !errors.Is(err, decaderr.ErrBooleanFailed) {
 		return Undecided, err
 	}
