@@ -34,6 +34,67 @@ func OrientSignExpansion(a, b, c, d r3.Vec) (int, bool) {
 	return orientSignGrow(ba, ca, da), true
 }
 
+// Orient2SignExpansion is the exact sign of (b - a) × (c - a) =
+// (bu - au)(cv - av) - (bv - av)(cu - au) over three float points, when the
+// four coordinate differences are exact and zero or in [2^-200, 2^200]. Other
+// inputs return uncertain and must use exact rational arithmetic.
+//
+// Each admitted difference lies on the 2^-252 grid, so each product lies on
+// the 2^-504 grid and below 2^400: its FMA remainder is exact, and the
+// rounded product and remainder are a nonoverlapping pair (Shewchuk, Theorem
+// 18). The determinant is therefore the exact sum of two nonoverlapping
+// pairs, and Two_Two_Sum (Shewchuk, Theorem 12; it adds without overflow
+// below 2^402, and TwoSum is exact through underflow) rewrites that sum as a
+// nonoverlapping expansion x3, x2, x1, x0 whose nonzero components grow in
+// magnitude toward x3. The sign of a nonoverlapping expansion is the sign of
+// its largest nonzero component, and an all-zero expansion is an exact zero.
+// See https://www.cs.cmu.edu/~quake/robust.html. Each product is wrapped in
+// float64(), so no compiler fuses it into an addition.
+func Orient2SignExpansion(au, av, bu, bv, cu, cv float64) (int, bool) {
+	bau, bav, cau, cav := bu-au, bv-av, cu-au, cv-av
+	if !exactDifference(bu, au, bau) || !exactDifference(bv, av, bav) ||
+		!exactDifference(cu, au, cau) || !exactDifference(cv, av, cav) {
+		return 0, false
+	}
+	a1 := float64(bau * cav)
+	a0 := math.FMA(bau, cav, -a1)
+	b1 := float64(-bav * cau)
+	b0 := math.FMA(-bav, cau, -b1)
+	// Two_One_Sum(a1, a0, b0) -> j, z, x0.
+	i, x0 := twoSum(a0, b0)
+	j, z := twoSum(a1, i)
+	// Two_One_Sum(j, z, b1) -> x3, x2, x1.
+	k, x1 := twoSum(z, b1)
+	x3, x2 := twoSum(j, k)
+	switch {
+	case x3 != 0:
+		return floatSign(x3), true
+	case x2 != 0:
+		return floatSign(x2), true
+	case x1 != 0:
+		return floatSign(x1), true
+	}
+	return floatSign(x0), true
+}
+
+// floatSign is the sign of a non-NaN float, zero for either zero.
+func floatSign(x float64) int {
+	switch {
+	case x > 0:
+		return 1
+	case x < 0:
+		return -1
+	}
+	return 0
+}
+
+// twoSum is Knuth's TwoSum: the rounded a + b and its exact error.
+func twoSum(a, b float64) (float64, float64) {
+	sum := a + b
+	virtual := sum - a
+	return sum, (a - (sum - virtual)) + (b - virtual)
+}
+
 // exactDifference reports whether diff, the rounded p - q, is zero or in
 // [2^-200, 2^200] and exact. TwoDiff reconstructs the subtraction's error; a
 // nonzero tail requires the general integer path, rather than a rounded
