@@ -118,11 +118,14 @@ func TestInfillRefusals(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Len(t, doc.Bodies(), 1, "every refusal leaves the block alone")
 	require.Equal(t, "SchwarzPInfill", decad.SchwarzPInfill.String())
+	require.Equal(t, "NeoviusInfill", decad.NeoviusInfill.String())
+	require.Equal(t, "IWPInfill", decad.IWPInfill.String())
 }
 
 func TestInfillTakesEachLatticeKind(t *testing.T) {
 	t.Parallel()
-	for kind, level := range map[decad.LatticeKind]float64{decad.SchwarzPInfill: 1, decad.DiamondInfill: 0.5} {
+	for kind, level := range map[decad.LatticeKind]float64{
+		decad.SchwarzPInfill: 1, decad.DiamondInfill: 0.5, decad.NeoviusInfill: 4, decad.IWPInfill: 2} {
 		doc := decad.New()
 		block := boxBody(t, doc, 5, 5, 15, 15, 12)
 		out, err := decad.Infill(t.Context(), block, decad.InfillSpec{

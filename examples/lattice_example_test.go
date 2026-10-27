@@ -74,6 +74,42 @@ func Example_schwarz_diamond_lattice() {
 	// diamond: closed: true, solid fraction: 0.41
 }
 
+// NeoviusLattice and IWPLattice add two more triply periodic walls: the Neovius
+// surface, whose field runs from -13 to 13, and the IWP surface, whose field runs
+// from -5 to 3 so that Level runs up to 5.
+func Example_neovius_iwp_lattice() {
+	spec := decad.LatticeSpec{
+		Min:        r3.Vec{},
+		Max:        r3.Vec{X: 20, Y: 20, Z: 20},
+		Cell:       units.Millimeters(10),
+		Resolution: 16,
+	}
+	for _, kind := range []struct {
+		name  string
+		build func(context.Context, decad.LatticeSpec) (*decad.MeshBody, error)
+		level float64
+	}{
+		{"Neovius", decad.NeoviusLattice, 4},
+		{"IWP", decad.IWPLattice, 2},
+	} {
+		spec.Level = units.Scalar(kind.level)
+		lattice, err := kind.build(context.Background(), spec)
+		if err != nil {
+			fmt.Printf("failed to build the %s lattice: %s\n", kind.name, err)
+			return
+		}
+		volume, err := lattice.Volume()
+		if err != nil {
+			fmt.Printf("failed to measure volume: %s\n", err)
+			return
+		}
+		fmt.Printf("%s: closed: %t, solid fraction: %.2f\n", kind.name, lattice.Report().Closed, volume.Value.Base()/8000)
+	}
+	// Output:
+	// Neovius: closed: true, solid fraction: 0.74
+	// IWP: closed: true, solid fraction: 0.55
+}
+
 // Infill fills a solid with a lattice and keeps the lattice material inside it, the
 // way a slicer fills a print. Here a 10 x 10 x 12 mm block is filled with a gyroid
 // repeating every 10 mm, and the infill is lighter than the block.

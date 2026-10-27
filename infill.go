@@ -19,6 +19,10 @@ const (
 	SchwarzPInfill
 	// DiamondInfill is the diamond lattice of [DiamondLattice].
 	DiamondInfill
+	// NeoviusInfill is the Neovius lattice of [NeoviusLattice].
+	NeoviusInfill
+	// IWPInfill is the IWP lattice of [IWPLattice].
+	IWPInfill
 )
 
 // String renders the kind for diagnostics.
@@ -30,6 +34,10 @@ func (k LatticeKind) String() string {
 		return "SchwarzPInfill"
 	case DiamondInfill:
 		return "DiamondInfill"
+	case NeoviusInfill:
+		return "NeoviusInfill"
+	case IWPInfill:
+		return "IWPInfill"
 	default:
 		return fmt.Sprintf("LatticeKind(%d)", int(k))
 	}
@@ -91,6 +99,10 @@ func Infill(ctx context.Context, b *Body, spec InfillSpec) (*Body, error) {
 		build = SchwarzPLattice
 	case DiamondInfill:
 		build = DiamondLattice
+	case NeoviusInfill:
+		build = NeoviusLattice
+	case IWPInfill:
+		build = IWPLattice
 	default:
 		return nil, fmt.Errorf(`%w: unknown infill lattice %s`, ErrDegenerate, spec.Kind)
 	}
