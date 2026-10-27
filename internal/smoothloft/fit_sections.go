@@ -33,14 +33,18 @@ type fitSectionPart struct {
 }
 
 func fitWalkSpans(w survey2d.SegmentWalk) []freeform.BezierSpan {
-	if !w.Reversed {
-		return w.Spans
+	return fitSpansInWalkOrder(w.Spans, w.Reversed)
+}
+
+func fitSpansInWalkOrder(spans []freeform.BezierSpan, reversed bool) []freeform.BezierSpan {
+	if !reversed {
+		return spans
 	}
-	out := make([]freeform.BezierSpan, len(w.Spans))
-	for i, span := range w.Spans {
-		reversed := slices.Clone(span)
-		slices.Reverse(reversed)
-		out[len(w.Spans)-1-i] = reversed
+	out := make([]freeform.BezierSpan, len(spans))
+	for i, span := range spans {
+		controls := slices.Clone(span)
+		slices.Reverse(controls)
+		out[len(spans)-1-i] = controls
 	}
 	return out
 }

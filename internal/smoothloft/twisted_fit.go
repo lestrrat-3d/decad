@@ -8,11 +8,13 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/splinebezier"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -107,9 +109,26 @@ func twistGatherOne(profile momentinput.Profile, work *freeform.FreeformWork,
 	if m != count {
 		return nil, twistUnsupported("twisted loft sections have different edge counts")
 	}
-	walks, err := momentinput.ResolveProfileWalks(profile, work)
-	if err != nil {
-		return nil, err
+	// The patch reads exact cubic controls, not a curve length or tangent
+	// enclosure. Keep the line walk's validation in recorded order, but ask
+	// the existing spline converter only for the fitted edge's exact spans.
+	// twistPatches' polar proof also certifies a nonzero u tangent everywhere.
+	var fittedSpans []freeform.BezierSpan
+	for _, segment := range profile.Outer.Segments {
+		if _, ok := segment.(sectionrecord.LineSeg); ok {
+			if _, err := boundarywalk.WalkOf(segment, work); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		spans, reversed, err := splinebezier.FreeformBezierSpans(segment, work)
+		if err != nil {
+			return nil, err
+		}
+		if _, _, err := splinebezier.FreeformEndpoints(spans, reversed); err != nil {
+			return nil, err
+		}
+		fittedSpans = fitSpansInWalkOrder(spans, reversed)
 	}
 	edges := make([][]twistSpan, m)
 	for a := range m {
@@ -122,12 +141,11 @@ func twistGatherOne(profile momentinput.Profile, work *freeform.FreeformWork,
 			}
 			edges[a] = []twistSpan{twistLineSpan(start, end)}
 		case sectionrecord.FitSplineSeg:
-			spans := fitWalkSpans(walks.At(0, orig))
-			if len(spans) == 0 || len(spans) > 32 {
+			if len(fittedSpans) == 0 || len(fittedSpans) > 32 {
 				return nil, twistUnsupported("a twisted loft fit spline needs 1 to 32 curve spans")
 			}
-			edges[a] = make([]twistSpan, len(spans))
-			for s, span := range spans {
+			edges[a] = make([]twistSpan, len(fittedSpans))
+			for s, span := range fittedSpans {
 				if len(span) != 4 {
 					return nil, twistUnsupported("a twisted loft fit spline needs cubic Bézier spans")
 				}
@@ -214,7 +232,8 @@ func twistPatches(ctx context.Context, sections []twistSection, zs []*big.Rat) (
 
 // BuildTwistedFits constructs agent-docs/loft-sections-design.md §13's loft:
 // three to MaxTwistedSections sections of one fit spline and whole lines
-// that may turn about the plane origin.
+// that may turn about the plane origin. Each profile must have a non-nil
+// record counter in work.
 func BuildTwistedFits(ctx context.Context, profiles []momentinput.Profile,
 	planes []sectionrecord.PlaneRecord, work []*freeform.FreeformWork) (Build, error) {
 	if len(profiles) < 3 || len(profiles) > MaxTwistedSections ||
@@ -227,6 +246,11 @@ func BuildTwistedFits(ctx context.Context, profiles []momentinput.Profile,
 	zs, err := twistPlanes(planes)
 	if err != nil {
 		return Build{}, err
+	}
+	for _, counter := range work {
+		if counter == nil {
+			return Build{}, twistUnsupported("a twisted loft section needs its record's free-form work counter")
+		}
 	}
 	sections, err := twistGather(ctx, profiles, work)
 	if err != nil {
