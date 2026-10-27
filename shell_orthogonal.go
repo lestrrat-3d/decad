@@ -6,9 +6,12 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/brepmodify"
+	"github.com/lestrrat-3d/decad/internal/extent"
+	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/orthoshell"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 )
 
 // shellOrthogonal shells a faceted solid every one of whose faces squares to a world axis, such as a
@@ -84,6 +87,49 @@ func commitShellWalls(ctx context.Context, d *Document, b *Body, wallVerts []r3.
 	}
 	out, err := commitModifyResult(ctx, OperationShell, b, walls)
 	return out, true, err
+}
+
+// shellOrthogonalPerDirection is shellOrthogonal for walls whose thickness depends on the direction they face
+// (WithShellFaceThickness): the cavity is the solid eroded by the box that reaches each direction's own thickness.
+func shellOrthogonalPerDirection(ctx context.Context, d *Document, b *Body, call brepmodify.ShellCall,
+	faces []modifyoption.FaceThickness, sense ShellSense) (*Body, bool, error) {
+	if sense != Inward {
+		return nil, true, fmt.Errorf(`%w: WithShellFaceThickness takes an Inward shell`, ErrDegenerate)
+	}
+	tNeg := [3]float64{call.Tmm, call.Tmm, call.Tmm}
+	tPos := tNeg
+	for _, f := range faces {
+		if f.Axis < 0 || f.Axis > 2 {
+			return nil, true, fmt.Errorf(`%w: WithShellFaceThickness names a direction that is not a world axis direction`, ErrDegenerate)
+		}
+		mm, _, err := extent.MagnitudeInBounded(f.T, units.Length, units.Millimeter, "the face thickness")
+		if err != nil {
+			return nil, true, err
+		}
+		if mm == 0 {
+			return nil, true, fmt.Errorf(`%w: a zero face thickness leaves no wall`, ErrDegenerate)
+		}
+		if f.Sign < 0 {
+			tNeg[f.Axis] = mm
+		} else {
+			tPos[f.Axis] = mm
+		}
+	}
+	payload, isFaceted := b.n.Payload.(facetedPayload)
+	if !isFaceted || len(payload.Tris) == 0 {
+		return nil, false, nil
+	}
+	for _, beta := range payload.VertexBound {
+		if beta != 0 {
+			return nil, false, nil
+		}
+	}
+	removed := make([]bool, len(payload.Tris))
+	if !call.NoOpenings {
+		removed = faceTriangles(b, payload, call.Removed)
+	}
+	wallVerts, wallTris, err := orthoshell.WallsPerDirection(payload.Verts, payload.Tris, removed, tNeg, tPos)
+	return commitShellWalls(ctx, d, b, wallVerts, wallTris, err)
 }
 
 // faceTriangles marks the facets of payload that belong to the given faces of b.

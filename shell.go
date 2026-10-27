@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/modifyoption"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -67,6 +68,20 @@ func (s ShellSense) String() string {
 // is Inward (agent-docs/modify-design.md §8).
 func WithShellSense(s ShellSense) ShellOption {
 	return shellOptionValue{encoded: modifyoption.WithShellSense(int(s))}
+}
+
+// WithShellFaceThickness gives the walls whose outward normal is the world axis direction normal (+X, +Y, +Z or a
+// negative one) the thickness t in place of Shell's own, so a part can have a heavy floor and thin sides
+// (agent-docs/orthogonal-shell-design.md). It applies to an Inward shell of a faceted solid whose faces all square to a
+// world axis; any other body, a sense other than Inward, a normal that is not exactly a world axis direction
+// (ErrDegenerate) and a direction named twice (ErrDegenerate) are refused. t is a positive length. Directions the
+// option does not name take Shell's thickness, and the walls of two directions meet in a mitred corner.
+func WithShellFaceThickness(normal r3.Vec, t units.Value) ShellOption {
+	axis, sign, ok := unitAxis(normal)
+	if !ok {
+		axis = -1
+	}
+	return shellOptionValue{encoded: modifyoption.WithFaceThickness(modifyoption.FaceThickness{Axis: axis, Sign: int(sign), T: t})}
 }
 
 // Shell removes the faces of b that sel selects and lines the rest
@@ -220,6 +235,13 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value,
 			return nil, err
 		}
 		call.Removed = faceNodes(removed)
+	}
+	if len(o.FaceThickness) > 0 {
+		out, ok, err := shellOrthogonalPerDirection(ctx, d, b, call, o.FaceThickness, sense)
+		if err == nil && !ok {
+			return nil, fmt.Errorf(`%w: a thickness for each direction takes a faceted solid whose faces all square to a world axis`, ErrUnsupported)
+		}
+		return out, err
 	}
 	if sense == Centered {
 		out, ok, err := shellOrthogonalCentered(ctx, d, b, call)

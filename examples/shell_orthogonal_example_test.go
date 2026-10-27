@@ -290,3 +290,34 @@ func Example_quarter_turn() {
 	// Output:
 	// x: -8 to 0, y: 0 to 10
 }
+
+// WithShellFaceThickness gives the walls that face one direction a thickness of their own, so a
+// shelled part can have a heavy floor and thin sides. Here the 10 x 8 x 6 mm block read from OBJ is shelled
+// open at the top with 1 mm walls and a 3 mm floor.
+func Example_shell_face_thickness() {
+	mesh, err := decad.ReadOBJ(context.Background(), strings.NewReader(boxOBJ))
+	if err != nil {
+		fmt.Printf("failed to read mesh: %s\n", err)
+		return
+	}
+	box, err := decad.SolidFromMesh(context.Background(), decad.New(), mesh)
+	if err != nil {
+		fmt.Printf("failed to make a solid: %s\n", err)
+		return
+	}
+	cup, err := decad.Shell(context.Background(), box, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1),
+		decad.WithShellFaceThickness(r3.NewVec(0, 0, -1), units.Millimeters(3)))
+	if err != nil {
+		fmt.Printf("failed to shell: %s\n", err)
+		return
+	}
+	volume, err := cup.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	// The cavity is 8 x 6 x 3 mm, so the walls are 480 - 144 mm^3.
+	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
+	// Output:
+	// volume: 336 mm^3
+}
