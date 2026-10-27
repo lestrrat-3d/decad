@@ -69,6 +69,16 @@ var latticeKinds = []latticeKind{
 		},
 		1.35,
 	},
+	{
+		"Split P", decad.SplitPLattice,
+		func(x, y, z float64) float64 {
+			return 1.1*(math.Sin(2*x)*math.Sin(z)*math.Cos(y)+math.Sin(2*y)*math.Sin(x)*math.Cos(z)+
+				math.Sin(2*z)*math.Sin(y)*math.Cos(x)) -
+				0.2*(math.Cos(2*x)*math.Cos(2*y)+math.Cos(2*y)*math.Cos(2*z)+math.Cos(2*z)*math.Cos(2*x)) -
+				0.4*(math.Cos(2*x)+math.Cos(2*y)+math.Cos(2*z))
+		},
+		1.8,
+	},
 }
 
 // fieldFraction is the share of one cell where |g| ≤ level, sampled on a grid so fine
@@ -119,7 +129,7 @@ func TestLatticeKindsAreClosedSolidsOfTheExpectedFraction(t *testing.T) {
 func TestNeoviusAndIWPFollowTheirOwnFieldAtAThinWall(t *testing.T) {
 	t.Parallel()
 	for _, kind := range latticeKinds {
-		if kind.name != "Neovius" && kind.name != "IWP" && kind.name != "Fischer-Koch S" && kind.name != "Lidinoid" {
+		if kind.name != "Neovius" && kind.name != "IWP" && kind.name != "Fischer-Koch S" && kind.name != "Lidinoid" && kind.name != "Split P" {
 			continue
 		}
 		t.Run(kind.name, func(t *testing.T) {
@@ -135,7 +145,12 @@ func TestNeoviusAndIWPFollowTheirOwnFieldAtAThinWall(t *testing.T) {
 			volume, err := m.Volume()
 			require.NoError(t, err)
 			want := fieldFraction(kind.field, level) * 10 * 10 * 10
-			require.InDelta(t, want, volume.Value.Base(), 0.025*want)
+			// The Split P's wall is the most folded, and 48 samples leave it a little farther from its field.
+			tolerance := 0.025
+			if kind.name == "Split P" {
+				tolerance = 0.04
+			}
+			require.InDelta(t, want, volume.Value.Base(), tolerance*want)
 		})
 	}
 }
@@ -178,7 +193,7 @@ func TestLatticeKindsDifferFromTheGyroidAndEachOther(t *testing.T) {
 	for name, build := range map[string]func(context.Context, decad.LatticeSpec) (*decad.MeshBody, error){
 		"gyroid": decad.GyroidLattice, "schwarz": decad.SchwarzPLattice, "diamond": decad.DiamondLattice,
 		"neovius": decad.NeoviusLattice, "iwp": decad.IWPLattice,
-		"fischerkoch": decad.FischerKochSLattice, "lidinoid": decad.LidinoidLattice,
+		"fischerkoch": decad.FischerKochSLattice, "lidinoid": decad.LidinoidLattice, "splitp": decad.SplitPLattice,
 	} {
 		m, err := build(t.Context(), latticeSpec(0.6, 12))
 		require.NoError(t, err)
@@ -193,6 +208,7 @@ func TestLatticeKindsDifferFromTheGyroidAndEachOther(t *testing.T) {
 	require.Greater(t, math.Abs(volumes["iwp"]-volumes["gyroid"]), 0.05*volumes["iwp"])
 	require.Greater(t, math.Abs(volumes["fischerkoch"]-volumes["gyroid"]), 0.05*volumes["fischerkoch"])
 	require.Greater(t, math.Abs(volumes["lidinoid"]-volumes["diamond"]), 0.05*volumes["lidinoid"])
+	require.Greater(t, math.Abs(volumes["splitp"]-volumes["schwarz"]), 0.05*volumes["splitp"])
 }
 
 func TestLatticeKindsRefusals(t *testing.T) {

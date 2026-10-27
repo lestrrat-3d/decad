@@ -17,7 +17,7 @@ import (
 const defaultLatticeResolution = 16
 
 // LatticeSpec describes a lattice for [GyroidLattice], [SchwarzPLattice],
-// [DiamondLattice], [NeoviusLattice], [IWPLattice], [FischerKochSLattice] and [LidinoidLattice].
+// [DiamondLattice], [NeoviusLattice], [IWPLattice], [FischerKochSLattice], [LidinoidLattice] and [SplitPLattice].
 type LatticeSpec struct {
 	// Min and Max are the box's corners in millimetres; Min is below Max on every
 	// axis.
@@ -30,7 +30,7 @@ type LatticeSpec struct {
 	// −3/2 to 3/2, so a level of 0.3 gives a thin wall, 1 a heavy one and values
 	// near 3/2 a nearly full box; the Schwarz-P field runs from −3 to 3 and the
 	// diamond's from −√2 to √2, the Neovius field from −13 to 13, the IWP field
-	// from −5 to 3, the Fischer-Koch S field from −√2 to √2 and the Lidinoid from −1.35 to 1.15. Level lies strictly between 0 and the field's largest absolute
+	// from −5 to 3, the Fischer-Koch S field from −√2 to √2 and the Lidinoid from −1.35 to 1.15 and the Split P from −1.8 to about 1.81. Level lies strictly between 0 and the field's largest absolute
 	// value (agent-docs/lattice-design.md §4).
 	Level units.Value
 	// Resolution is the number of samples to a cell along each axis, from 4 up.
@@ -102,6 +102,16 @@ func FischerKochSLattice(ctx context.Context, spec LatticeSpec) (*MeshBody, erro
 // that the field runs from −1.35 to 1.15, so Level lies strictly between 0 and 1.35, the largest |g|.
 func LidinoidLattice(ctx context.Context, spec LatticeSpec) (*MeshBody, error) {
 	return buildLattice(ctx, spec, lattice.KindLidinoid)
+}
+
+// SplitPLattice builds a Split P lattice, the field
+// 1.1(sin 2kx·sin kz·cos ky + sin 2ky·sin kx·cos kz + sin 2kz·sin ky·cos kx) −
+// 0.2(cos 2kx·cos 2ky + cos 2ky·cos 2kz + cos 2kz·cos 2kx) − 0.4(cos 2kx + cos 2ky + cos 2kz), whose solid is where
+// |g| ≤ Level, as a closed [MeshBody] filling the box of spec (agent-docs/lattice-design.md §4). Everything
+// GyroidLattice says holds, except that the field runs from −1.8 to about 1.81 and Level lies strictly between 0 and
+// 1.8.
+func SplitPLattice(ctx context.Context, spec LatticeSpec) (*MeshBody, error) {
+	return buildLattice(ctx, spec, lattice.KindSplitP)
 }
 
 // IWPLattice builds an I-graph and wrapped package (IWP) lattice, the field

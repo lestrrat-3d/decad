@@ -42,7 +42,7 @@ solid fraction by sampling `g` directly on a grid of its own and compare the vol
 
 ## 4. Other surfaces
 
-`SchwarzPLattice`, `DiamondLattice`, `NeoviusLattice`, `IWPLattice`, `FischerKochSLattice` and `LidinoidLattice` take the same `LatticeSpec` and cut the same way: only the field `g` changes, so G1
+`SchwarzPLattice`, `DiamondLattice`, `NeoviusLattice`, `IWPLattice`, `FischerKochSLattice`, `LidinoidLattice` and `SplitPLattice` take the same `LatticeSpec` and cut the same way: only the field `g` changes, so G1
 to G6 hold with that field and its range.
 
 | Decision | Rule |
@@ -53,6 +53,7 @@ to G6 hold with that field and its range.
 | K6 | The IWP surface is `g = 2(cos kx·cos ky + cos ky·cos kz + cos kz·cos kx) − (cos 2kx + cos 2ky + cos 2kz)`, from −5 (at `kx = π`, `ky = kz = 0`) to 3. Its largest `|g|` is 5, so `Level` lies strictly between 0 and 5. |
 | K7 | The Fischer-Koch S surface is `g = cos 2kx·sin ky·cos kz + cos kx·cos 2ky·sin kz + sin kx·cos ky·cos 2kz`, from −√2 to √2. `Level` lies strictly between 0 and √2. |
 | K8 | The Lidinoid is `g = ½(sin 2kx·cos ky·sin kz + sin 2ky·cos kz·sin kx + sin 2kz·cos kx·sin ky) − ½(cos 2kx·cos 2ky + cos 2ky·cos 2kz + cos 2kz·cos 2kx) + 0.15`, from −1.35 to 1.15. Its largest `|g|` is 1.35, so `Level` lies strictly between 0 and 1.35. |
+| K9 | The Split P surface is `g = 1.1(sin 2kx·sin kz·cos ky + sin 2ky·sin kx·cos kz + sin 2kz·sin ky·cos kx) − 0.2(cos 2kx·cos 2ky + cos 2ky·cos 2kz + cos 2kz·cos 2kx) − 0.4(cos 2kx + cos 2ky + cos 2kz)`, from −1.8 to about 1.81. `Level` lies strictly between 0 and 1.8, the least `|g|` reaches (a level between 1.8 and the true maximum is refused though a surface exists). Its thin wall follows the field within 4 per cent at 48 samples a cell, where the other kinds follow it within 2.5. |
 | K3 | A level at or above the kind's largest `|g|`, or at or below zero, is `ErrDegenerate`; the other gates are G6's. `internal/lattice.Surface` takes the kind and `Gyroid` is its gyroid case. |
 | K4 | The tests write each field out from the definition, read the solid fraction by sampling it on a grid of their own as §2 does, and require the closed mesh, the capped bounds, the convergence with `Resolution` and the growth with `Level` of every kind, and that the kinds' volumes differ at one level. A thin wall (a level of 0.15 of the range, one cell sampled 48 times to a cell) follows the Neovius and IWP fields within 2.5 per cent, so a wrong coefficient fails it. `Infill` takes every kind (`NeoviusInfill`, `IWPInfill`). |
 
