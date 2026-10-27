@@ -109,7 +109,7 @@ admits takes it unchanged.
 | A5 | a multi-region operand or result: a prism-group tool (N holes in one arrangement), a `Union` of disjoint footprints | S5 (through mirror §6), S12, P2 | one-slab multi-region `stackedPrismPayload` (mirror §6.3) |
 | A6 | a split boundary under a non-identity re-expression, a prior section displacement or a walk charge | S9 (45° in plane), rotated and translated overlaps; not P1 (A6 below) | `prismPayload` carrying a certified crossing-sensitivity charge |
 | A7 | one blind pocket crossing one through hole, opening at either cap, clipped to the target, every loop of axis-aligned lines, circles and arcs | a pocket that partly overlaps a through opening: a rectangle across a round hole or a slot, a round pocket across a square hole | `brepPayload` with split hole walls and a partial floor |
-| A8 | a blind pocket ending exactly at an interface of a stack, overlapping in plan an opposed pocket that ends there | pockets from opposite faces that meet at one level | `brepPayload` with a partial floor and ceiling |
+| A8 | a blind pocket ending exactly at an interface of a stack, overlapping in plan an opposed pocket that ends there, every exclusive hole a loop of axis-aligned lines, circles and arcs | pockets from opposite faces that meet at one level: rectangles, a round pocket across a rectangle, a slot, a counterbore drilled from both faces | `brepPayload` with a partial floor and ceiling |
 
 #### A1 — stacked union
 
@@ -641,8 +641,10 @@ region per slab. The tool ends at an interface with zero level displacement.
 Every reached slab passes its own whole-loop cut proof
 (`stackedrecord.ApplyOpposedBlindCut`, which shares `CutSlabs`'s slab cut).
 The result's section displacement is zero, and every exclusive hole at that
-interface is a loop of lines along the section axes. Every other interface
-keeps the exposed records `stackedrecord.Derive` reads for it.
+interface is a loop of lines along the section axes, circles and arcs
+(`stackedrecord`'s `opposedLoop`). An oblique line, an ellipse and a
+free-form segment miss. Every other interface keeps the exposed records
+`stackedrecord.Derive` reads for it.
 
 The opposed interface's faces come from one private Sketch scene over only the
 exclusive holes' interiors: each lower-only hole, reversed, as an A region and
@@ -661,9 +663,32 @@ reading records no span, and only this check sees the edge ending off its
 carrier. Every shared span the reading does record must also pass
 `prismcells.CoincidentReading.ExactLineCarriers`: both recorded lines lie on
 precisely one line. A lower or upper hole's edge 1e-12 mm or one ulp off the
-other side's edge misses, in either orientation. Two crossing axis-aligned
-lines meet at their exact levels, and with both checks every vertex is exact.
-The incoming displacements are all zero, so A6 charges nothing.
+other side's edge misses, in either orientation. A span on a circle carrier,
+an arc of one side lying on a circle of the other, has no exact line, so the
+same reading misses it. Two crossing axis-aligned lines meet at their exact
+levels, and with both checks such a vertex is exact. A line crossing a circle
+or an arc is a cut `sketch` computed and certified with `TExact`, and the
+engine places it as A7 does: the line's walked point with its fixed
+coordinate exact, keyed by the side of the circle's centre, and charged its
+walk, cut and proven crossing distances. The engine's largest vertex
+allowance is the face displacement the BRep record states. Any circle or
+arc in the result makes its volume `Approximate` with a proven bound; a
+result whose loops are all lines reads `Exact`. The incoming displacements
+are all zero, so A6 charges nothing.
+
+A curve can meet the other side without a scene vertex. Among line, circle
+and arc sources `sketch` never cuts a tangency (`agent-docs/sketch-seam-design.md`),
+so a circle touching the other side's edge leaves no point for the touch
+reading below. `prismcells.CurvedCrossingsCut` therefore puts every pair of
+entities from opposite sides with a curved member to `sketch`'s own
+intersection query. Two curves miss on any point it reports, so two
+crossing circles miss as well as two tangent ones, and no exact vertex
+record is needed for them. A line and a curve miss when the query reads
+their carriers as tangent (one point) at a point on both. Every other
+point the query reads on both must be an arranged vertex where an edge of
+each ends, within `1e-9` relative to the coordinates and the radius. A
+crossing the arrangement left uncut, or read as a tangency, has none and
+misses. The check only refuses: a matched vertex admits nothing by itself.
 
 Opposed holes that only touch have no manifold result. Along an edge, the
 floor, the ceiling and both hole walls would share one edge. At a corner, the
@@ -671,12 +696,17 @@ body would meet itself at one point. `stackedunion.opposedManifold` reads
 every point where a floor and a ceiling cell meet. Each of the two cells must
 turn there from an edge of one side to an edge of the other, and neither edge
 may be a span both sides share. That is a proper crossing of one lower and one
-upper boundary. Under the axis-line gate at most four scene edges meet at a
-point, so every touch fails this reading: two touching corners, two reflex
-corners whose outsides meet, or a shared span at its ends. The points and
-edges are Sketch's own, compared by exact equality. The check only refuses. A
-corner touch also leaves cells that classification cannot reach, which misses
-as well.
+upper boundary. Each side's boundary passes a point at most once, so at
+most four scene edges meet there, and after the curve reading above they
+leave it in distinct directions unless two lines share a span. Every touch
+where a floor meets a ceiling fails this reading: two touching corners, two
+reflex corners whose outsides meet, or a shared span at its ends. A corner
+of one side on the other side's circle from inside it, such as a
+rectangle's corner on a round pocket that encloses it there, meets no floor
+and ceiling pair: one side's void lies inside the other's at that point,
+and the faces round it close one cycle, so it builds. The points and edges are Sketch's own,
+compared by exact equality. The check only refuses. A corner touch also
+leaves cells that classification cannot reach, which misses as well.
 
 `stackedunion.OpposedCut` emits the record through the A1
 `stackedbrep.Engine`. It adds the slab loops, both end caps, every other
@@ -688,9 +718,12 @@ later `Cut` of it does not reach the stacked arms. Any miss, including a
 touch, leaves the pair to the mesh path. That path refuses the coplanar
 contact under `ExactOnly`. With a gap tolerance it builds an `Approximate`
 result with the tool moved, where a shift opens the contact
-(`agent-docs/gap-tolerance-design.md` §5.2). A round or oblique exclusive hole
-at the interface, a displaced level or section, and a union-built or
-multi-region stack stay outside this path.
+(`agent-docs/gap-tolerance-design.md` §5.2). An exclusive hole with an
+oblique line, an ellipse or a free-form segment, two curves of opposite sides
+that meet, a displaced level or section, and a union-built or multi-region
+stack stay outside this path. So does a side whose second exclusive hole
+meets nothing of the other side: no shared edge carries membership to its
+cell, which classification cannot reach.
 
 ### Class B — perpendicular prism pairs with planar contacts
 

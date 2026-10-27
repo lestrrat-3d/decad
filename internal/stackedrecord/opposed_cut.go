@@ -63,7 +63,7 @@ func ApplyOpposedBlindCut(ctx context.Context, budget *proofbound.WorkBudget, sp
 		return OpposedCut{}, false, nil
 	}
 	for _, hole := range append(append([]sectionrecord.LoopRecord(nil), lowerOnly...), upperOnly...) {
-		if !axisLineLoop(hole) {
+		if !opposedLoop(hole) {
 			return OpposedCut{}, false, nil
 		}
 	}
@@ -81,15 +81,23 @@ func ApplyOpposedBlindCut(ctx context.Context, budget *proofbound.WorkBudget, sp
 		LowerOnly: lowerOnly, UpperOnly: upperOnly, Frame: sp.Frame, Xform: sp.Xform}, true, nil
 }
 
-// axisLineLoop reports whether every segment of loop is a line along one
-// section axis: two such lines meet at their exact levels.
-func axisLineLoop(loop sectionrecord.LoopRecord) bool {
+// opposedLoop reports whether every segment of loop is a line along one
+// section axis, a circle or an arc. Two axis-aligned lines meet at their
+// exact levels; a line crossing a circle is a cut sketch certifies, which the
+// A1 engine places as A7 places it. An oblique line, an ellipse or a
+// free-form segment is refused: the engine states no exact crossing for it.
+func opposedLoop(loop sectionrecord.LoopRecord) bool {
 	if len(loop.Segments) == 0 {
 		return false
 	}
 	for _, segment := range loop.Segments {
-		line, ok := segment.(sectionrecord.LineSeg)
-		if !ok || (line.Start.U != line.End.U && line.Start.V != line.End.V) {
+		switch s := segment.(type) {
+		case sectionrecord.LineSeg:
+			if s.Start.U != s.End.U && s.Start.V != s.End.V {
+				return false
+			}
+		case sectionrecord.CircleSeg, sectionrecord.ArcSeg:
+		default:
 			return false
 		}
 	}

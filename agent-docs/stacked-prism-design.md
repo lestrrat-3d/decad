@@ -501,10 +501,14 @@ Each admitted arm ships its implementation and tests together.
    BRep through general-boolean §3 A8. The reached slabs keep this stage's
    cut proofs. A private scene over only the exclusive holes gives the
    partial floor and ceiling as cells, which this payload's whole column
-   rings cannot hold. Opposed holes that only touch, along an edge or at a
-   corner, have no manifold result and take the mesh path. So do opposed
-   holes at a displaced level, holes that carry a section displacement, and
-   holes that are not loops of axis-aligned lines.
+   rings cannot hold. Every exclusive hole is a loop of axis-aligned lines,
+   circles and arcs: a round pocket across a rectangular one, a rectangle
+   inside a round pocket, a slot across a rectangle, or a counterbore drilled
+   from both faces. Opposed holes that only touch, along an edge, at a corner
+   or at a tangency, have no manifold result and take the mesh path. So do
+   two circles or arcs of opposite sides that meet, opposed holes at a
+   displaced level, holes that carry a section displacement, and holes with
+   an oblique line, an ellipse or a free-form segment.
 
    A blind tool crossing one existing through hole on a prism target, every
    loop of axis-aligned lines, circles and arcs (a rectangle across a round
@@ -561,7 +565,11 @@ arm64.
   and placement. Opposed pockets touching along an edge or at a corner take
   the mesh path, which refuses them under `ExactOnly`. Overlapping opposed
   pockets build general-boolean §3 A8's BRep with an `Exact` volume, every
-  edge on two faces, a verified watertight mesh and a `Sound` report.
+  edge on two faces, a verified watertight mesh and a `Sound` report. Where a
+  plan loop holds a circle or an arc, the volume is `Approximate` and its
+  bound covers the closed form with its π terms; a pocket tangent to the
+  other side's edge, or two crossing circles, take the mesh path
+  (`apitest/stacked_opposed_arc_test.go`).
 - Denoted levels: on a plate 12 mm thick, two pockets beside each other cut
   from z = 12 by 3.175 mm and 0.125 in, in either order, by 0.2 in twice, or
   by 0.2 in against a full-length `Symmetric` 0.4 in or a `TwoSided` 0.2 in
