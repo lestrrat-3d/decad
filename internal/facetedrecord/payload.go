@@ -1,6 +1,10 @@
 package facetedrecord
 
 import (
+	"fmt"
+	"math"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/smoothloft"
@@ -190,4 +194,27 @@ func CertifiedFacetedSimilaritySource(fp Payload, faceCount int) bool {
 		}
 	}
 	return true
+}
+
+// ExtentAlong is the through-all stop's reading of a held mesh whose vertices carry no bound: the least and greatest
+// projection of a vertex on g, beside the rounding of that projection (three products and two sums, charged at four
+// units in the last place of their absolute sum). A mesh with a vertex bound has no proven interval and is refused,
+// as is an empty one (agent-docs/mesh-solid-design.md §6).
+func (fp Payload) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
+	if len(fp.Verts) == 0 {
+		return 0, 0, 0, fmt.Errorf("%w: a through-all stop cannot use a body with no vertex", decaderr.ErrUnsupported)
+	}
+	for _, beta := range fp.VertexBound {
+		if beta != 0 {
+			return 0, 0, 0, fmt.Errorf("%w: a through-all stop cannot use a faceted body whose vertices carry a bound", decaderr.ErrUnsupported)
+		}
+	}
+	lo, hi, mag := math.Inf(1), math.Inf(-1), 0.0
+	for _, v := range fp.Verts {
+		d := g.X*v.X + g.Y*v.Y + g.Z*v.Z
+		lo, hi = math.Min(lo, d), math.Max(hi, d)
+		mag = math.Max(mag, math.Abs(g.X*v.X)+math.Abs(g.Y*v.Y)+math.Abs(g.Z*v.Z))
+	}
+	const unit = 1.0 / (1 << 52)
+	return lo, hi, 4 * unit * mag, nil
 }

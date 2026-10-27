@@ -16,6 +16,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -177,6 +178,10 @@ func meshPlaneGroups(producer provenance.Producer, verts []r3.Vec, tris [][3]int
 				// The plane's coordinate is a float vertex's own and its normal an exact unit axis,
 				// so the tag is the true plane with no departure: a retained plane.
 				group.Surface, group.Retained = surfacegeom.Plane{Frame: frame}, true
+				// The plane is also its own record at level zero, held and denoted alike with no displacement, so
+				// a ToFace stop can read it (agent-docs/mesh-solid-design.md §6).
+				group.CapRecord = &topo.CapRecord{Frame: frame, Xform: r3.Identity(), Z: 0, ZDenoted: new(big.Rat)}
+				group.HasAxialDelta = true
 			}
 			groups = append(groups, group)
 		}
