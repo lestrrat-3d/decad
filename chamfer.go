@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/brepmodify"
@@ -157,7 +158,9 @@ type ChamferOption interface{ chamferOption() }
 // plane, faceted where a cone is), and its undercut and concave-radius
 // surveys read the patches. It is a boolean operand where each band is a whole
 // turn, line-line miters or exact tangent joins; a band with a cone at a
-// reflex corner is export-only and ErrUnsupported as an operand. A clearance
+// reflex corner is export-only and ErrUnsupported as an operand. Several convex edges of a faceted solid every face of
+// which squares to a world axis, which share corners and so have no route of their own, are the solid less the wedge
+// of each edge (agent-docs/orthogonal-boolean-design.md B17), a faceted result with a bound. A clearance
 // pair its boxes do not decide reads Suspect. A selection that is part of a loop, mixes loops with lone edges or
 // holds two loops sharing an edge is SL1, a face beside a loop that is curved,
 // oblique, split or on both sides of the loop's face is SL2, and a band
@@ -239,6 +242,15 @@ func Chamfer(ctx context.Context, b *Body, sel EdgeSelector, d units.Value,
 		Sel: fmt.Sprint(sel), Edges: edgeNodes(edges), D: dmm, DDelta: dDelta, Asym: asym, Hooks: modifyHooks(),
 	})
 	if err != nil {
+		// Convex edges of an axis-square solid that share a corner have no route of their own: the solid less the wedge of
+		// each edge is their chamfer (agent-docs/orthogonal-boolean-design.md B17).
+		if errors.Is(err, ErrUnsupported) && asym == nil && !o.TangentChain {
+			if out, handled, werr := chamferByWedges(ctx, doc, b, edges, dmm); werr != nil {
+				return nil, werr
+			} else if handled {
+				return out, nil
+			}
+		}
 		return nil, err
 	}
 	return commitResult(ctx, OperationChamfer, b, res)
