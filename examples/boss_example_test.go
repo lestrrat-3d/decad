@@ -288,3 +288,52 @@ func Example_boss_cylinder() {
 	// Output:
 	// post top at x = 30 mm, volume: 7341 mm^3
 }
+
+// BossSpec.Ribs braces a round boss with triangular gusset ribs spaced round its
+// root, the way a moulded post is stiffened against a bending load. Here an 8 mm
+// post 8 mm tall carries four 2 mm thick ribs that reach 6 mm out along the plate
+// and climb 5 mm up the post.
+func Example_boss_ribs() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(-20, -20, 20, 20)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	boss, err := decad.Boss(context.Background(), plate, decad.BossSpec{
+		Face:     decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
+		At:       r3.Vec{X: 0, Y: 0, Z: 5},
+		Diameter: units.Millimeters(8),
+		Height:   units.Millimeters(8),
+		Ribs: &decad.BossRibs{
+			Count:     4,
+			Thickness: units.Millimeters(2),
+			Length:    units.Millimeters(6),
+			Height:    units.Millimeters(5),
+		},
+	})
+	if err != nil {
+		fmt.Printf("failed to raise the boss: %s\n", err)
+		return
+	}
+	volume, err := boss.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
+	// Output:
+	// volume: 8524 mm^3
+}

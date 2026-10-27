@@ -43,7 +43,7 @@ faces are planes and cylinders where the Booleans admit them.
 
 ## 3. Not covered
 
-- Ribs and gussets at the boss's foot. Add them with `Rib` and `Web`.
+- Ribs other than the triangular gussets of §9, and gussets on a shaped, drafted, filleted or cylinder boss. Add others with `Rib` and `Web`.
 - A pilot thread whose major diameter exceeds the boss's.
 - A draft that closes the boss or breaks its circle before its top: `Extrude`'s refusal.
 - A boss that stands on a curved face other than a cylinder's (§8), a boss on a cylinder with a root fillet or a draft, and a shaped boss with a root fillet.
@@ -111,3 +111,15 @@ through it, out of the body's material.
 | C3 | A boss on a cylindrical face takes no `RootFillet` and no `Draft`: both are `ErrUnsupported`. A pilot `Bore`, its head, its thread and the shape of §7 follow the tangent frame as on a plane. Everything else of §1 holds, and the result is the union of the pillar with the body, a mesh Boolean where the evaluator has no analytic route, with its own proven volume bound. |
 | C4 | The pillar's footprint along the cylinder's axis is the caller's to keep on the wall: a boss wider than the rod is long overhangs its ends and adds the overhang. |
 | C5 | The tests state the volume of a rod with a boss and of a bore with a boss from the integral of the pillar over its footprint, `∫ 2√(r² − y²)·(R + h − √(R² − y²)) dy` for a rod and `∫ 2√(r² − y²)·(√(R² − y²) − (R − h)) dy` for a bore, and require it inside the result's own volume bound; the sagitta embed is checked by a boss wide enough that dropping it leaves a gap the volume shows. |
+
+## 9. Gusset ribs at the foot
+
+`BossSpec.Ribs` braces the boss's root with `BossRibs.Count` triangular gusset ribs spaced evenly round its axis.
+
+| Decision | Rule |
+|---|---|
+| G1 | `Count` is from 1 to 16 and `Thickness`, `Length` and `Height` are positive lengths (`ErrDegenerate` for zero or a count out of range, `ErrNegativeMagnitude`, `ErrUnitKind`). `Height` is at most the boss's `Height`, and `Thickness` is less than the boss's diameter, each otherwise `ErrDegenerate`. With several ribs, half the thickness is less than `r·sin(π/Count)`, `r` the boss's radius, so neighbouring ribs do not meet at the wall: otherwise `ErrDegenerate`. |
+| G2 | Rib `k` lies in the plane through the boss's axis at the angle `Angle + 2πk/Count` from the face frame's U axis, `Angle` read as an angle (the zero Value is zero) and `ErrUnitKind` for any other kind. It is `Thickness` thick, half each way from that plane. |
+| G3 | Its section in that plane, with a the distance from the axis and z the height above the face, is the polygon `(r/2, −e/2)`, `(r + Length, −e/2)`, `(r + Length, 0)`, `(r, Height)`, `(r/2, Height)`, `e` the footing depth `embed` of B3: it is flat across the top inside the boss, slopes down to the face at its outer end, and is buried in the boss and the plate, but lies above the pillar's footing plane so no two facets of the tools overlap in one plane (the evaluator refuses that). |
+| G4 | The pillar and the ribs are united into one tool and that tool into the body, and the pilot and its head are cut after, so a rib never closes a pilot. A boss with ribs takes no `Draft` (the wall leans from the rib's top vertex), no `RootFillet`, no `Shape`, and no cylindrical face, each `ErrUnsupported`. |
+| G5 | The volume the ribs add outside the boss and above the face is, for each rib, `Height · (Thickness·Length/2 + ∫ (r − √(r² − y²)) dy)` over `y` across its thickness: the flat top before the wall's radius and the slope after it. The tests state it independently, require it inside the result's volume bound, and check a point in a rib's foot and a point beside it. |
