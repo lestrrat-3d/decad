@@ -101,11 +101,19 @@ func (e *heldEmbedding) cleanSelfPairs(tasks []heldNodePair, tree *heldBoxTree) 
 				continue
 			}
 			self := pair.a == pair.b
+			end := b.leafStart + b.leafCount
 			for s := a.leafStart; s < a.leafStart+a.leafCount; s++ {
 				box := tree.slotBoxes[s]
+				// Most rows and candidates miss, in no pattern a branch
+				// predictor learns, so the box tests below are BoxesOverlap
+				// read through axisMeet: the same six comparisons, all
+				// evaluated and joined without a branch. Comparisons have no
+				// side effects, so the answer and every step stay the same.
+				lx, hx, ly, hy, lz, hz := box[0].X, box[1].X, box[0].Y, box[1].Y, box[0].Z, box[1].Z
 				// The two leaf hulls may overlap even when this facet is
 				// disjoint from the entire other leaf. Reject that row first.
-				if !self && !BoxesOverlap(box, b.box) {
+				if !self && axisMeet(lx, hx, b.box[0].X, b.box[1].X)&axisMeet(ly, hy, b.box[0].Y, b.box[1].Y)&
+					axisMeet(lz, hz, b.box[0].Z, b.box[1].Z) == 0 {
 					continue
 				}
 				var world [2]r3.Vec
@@ -117,11 +125,13 @@ func (e *heldEmbedding) cleanSelfPairs(tasks []heldNodePair, tree *heldBoxTree) 
 				if self {
 					start = s + 1
 				}
-				for t := start; t < b.leafStart+b.leafCount; t++ {
+				for t := start; t < end; t++ {
 					if err := step(); err != nil {
 						return false, err
 					}
-					if !BoxesOverlap(box, tree.slotBoxes[t]) {
+					c := tree.slotBoxes[t]
+					if axisMeet(lx, hx, c[0].X, c[1].X)&axisMeet(ly, hy, c[0].Y, c[1].Y)&
+						axisMeet(lz, hz, c[0].Z, c[1].Z) == 0 {
 						continue
 					}
 					if tree.oriented && !BoxesOverlap(world, tree.slotWorld[t]) {
@@ -140,4 +150,21 @@ func (e *heldEmbedding) cleanSelfPairs(tasks []heldNodePair, tree *heldBoxTree) 
 		}
 	}
 	return true, nil
+}
+
+// axisMeet is 1 when lo <= otherHi and otherLo <= hi, BoxesOverlap's two
+// comparisons on one axis, and 0 otherwise; a comparison with a NaN is
+// false, as there. The AND of the three axes' values is 1 exactly when
+// BoxesOverlap is true. Each comparison becomes a flag, not a branch, and
+// axisMeet inlines where a whole-box helper would not.
+func axisMeet(lo, hi, otherLo, otherHi float64) uint8 {
+	return meetBit(lo <= otherHi) & meetBit(otherLo <= hi)
+}
+
+// meetBit is 1 for true and 0 for false.
+func meetBit(b bool) uint8 {
+	if b {
+		return 1
+	}
+	return 0
 }
