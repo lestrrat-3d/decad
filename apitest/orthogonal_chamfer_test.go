@@ -131,7 +131,7 @@ func TestChamferOfEveryEdgeOfAPocketStopsFlushAtTheMouth(t *testing.T) {
 	volume, err := out.Volume()
 	require.NoError(t, err)
 	require.InDelta(t, 8527, volume.Value.Base(), volume.Bound.Base()+1e-6)
-	require.Less(t, volume.Bound.Base(), 1.0, "the flush ends are charged their shift and no more")
+	require.Less(t, volume.Bound.Base(), 0.1, "the flush ends are charged their shift and no more")
 	box, err := out.Bounds()
 	require.NoError(t, err)
 	require.InDelta(t, 10, box.Max.Z, 0.01, "nothing stands above the slab")
@@ -151,7 +151,7 @@ func TestChamferOfAGrooveRunsFlushOutOfBothEnds(t *testing.T) {
 	require.NoError(t, err)
 	// The 30 x 10 x 5 groove leaves 7500; the two 30 mm floor edges add a wedge of 15 each.
 	require.InDelta(t, 7530, volume.Value.Base(), volume.Bound.Base()+1e-6)
-	require.Less(t, volume.Bound.Base(), 1.0)
+	require.Less(t, volume.Bound.Base(), 0.1)
 }
 
 func TestChamferOfConcaveEdgesLargerThanTheirWallsIsRefused(t *testing.T) {
