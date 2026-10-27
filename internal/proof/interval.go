@@ -196,8 +196,9 @@ func ScaledNum(r *big.Rat, den *big.Int) *big.Int {
 // always in lowest terms: AddRat(3/9, 0) returns 3/9 where big.Rat returns
 // 1/3. Two readers see the form:
 //
-//   - Key2 (internal/meshbool) interns a vertex by its value text, so a
-//     non-reduced coordinate would split one vertex into two (AddVert). The
+//   - AddVert (internal/meshbool) interns a vertex by its value text
+//     (RatTextEqual), so a non-reduced coordinate would split one vertex
+//     into two. The
 //     memo keys motionbound AppendRatKey and proofbound radSinCosKey would
 //     only miss their cache.
 //   - EdgeCross2Fracs keeps a Cross2x result's Num and Denom in a ClipFrac,

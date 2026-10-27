@@ -120,9 +120,6 @@ func xp2FloatSafe(exact *big.Rat, rounded float64) bool {
 	return m >= 0x1p-300 && m <= 0x1p250
 }
 
-// key2 is the exact 2D identity.
-func (p Xp2) Key2() string { return p.U.RatString() + "|" + p.V.RatString() }
-
 // Cross2x is the exact value of (b − a) × (c − a): positive when a, b, c turn
 // counter-clockwise.
 //
