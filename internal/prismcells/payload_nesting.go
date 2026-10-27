@@ -76,6 +76,10 @@ func ResolveAndBuildCut(ctx context.Context, budget *proofbound.WorkBudget, targ
 		Z1:      target.Z1,
 		Z0Delta: target.Z0Delta,
 		Z1Delta: target.Z1Delta,
+		// The levels are the target's own, so they keep what they denote
+		// (agent-docs/stacked-prism-design.md §2.1).
+		Z0Denoted: target.Z0Denoted,
+		Z1Denoted: target.Z1Denoted,
 		// §7/Task 4.4: every matched edge is whole, so the cut charge is
 		// zero — there is no fresh cut parameter to charge at all. What
 		// remains is the same formula PR1's Union path uses for its own

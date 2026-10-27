@@ -534,14 +534,27 @@ A tool that spans the whole interval, lies wholly inside it, matches it, is
 disjoint from it, or touches it only at a cap continues to the ordinary boolean dispatch. A level may carry an axial
 displacement (an inch-converted depth does). Two levels compare by their exact
 rationals and order only when their gap exceeds the sum of both displacements.
-Equal levels count as one only when both are undisplaced; A7 compares held
-levels and does not read the denoted levels stacked §2.1 records, which
-stacked §7's blind cuts and the stacked I4 audit read. A gap inside the
-displacements, or equal levels that carry one, orders nothing and the pair
-continues to the ordinary dispatch. A displacement therefore never admits an
-order: it only has to be smaller than the gap. A displaced level reaches the
-result's face levels, so the volume reads `Approximate` with a proven bound,
-and a result with no displaced level reads `Exact`.
+Equal levels count as one when both are undisplaced. A tool end and a target
+cap also count as one when both record a denoted level (stacked §2.1) and the
+two rationals are equal, whatever their displacements and held floats: 0.2 in
+reached by a `Distance` and by a `TwoSided` side, or by half a full-length
+`Symmetric` 0.4 in, denotes one plane. The tool's denoted level is lifted
+onto the target's axis by G5's exact shift first.
+`stackedunion.OperandFromPayload` carries a prism's denotations onto its
+slab for this comparison, and a through `Cut` that nests the hole inside the
+target keeps the target's. Equal held floats never stand in for equal denoted
+levels: 0.2 in and 5.08 mm hold one float and denote two planes, and a
+displaced level with no recorded denotation matches nothing. A gap inside the
+displacements, or equal levels that carry one without one shared denoted
+level, orders nothing and the pair continues to the ordinary dispatch. A
+displacement therefore never admits an order: it only has to be smaller than
+the gap. A denotation never contradicts an order the margin proves, since
+each lies within its own level's displacement. The tool is clipped to the
+target, so a tool end that meets a cap reaches the slab beside it, and the
+result takes the cap's held level and displacement. A displaced level reaches
+the result's face levels, so the volume reads `Approximate` with a proven
+bound, and a result with no displaced level reads `Exact`. The BRep stack A7
+outputs records no denoted level.
 
 In the top arm the target's original section is the lower slab and the cut
 section the upper; in the bottom arm the cut section is the lower slab and the
