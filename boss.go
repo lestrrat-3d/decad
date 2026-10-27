@@ -196,7 +196,7 @@ func bossCombine(ctx context.Context, d *Document, b *Body, in bossRequest) (*Bo
 			if err != nil {
 				return nil, err
 			}
-			coil, err := buildThreadCoil(toolCtx, d, tap.frame, tap.plan, tap.pitch, tap.leftHand)
+			coil, err := buildThreadCoil(toolCtx, d, tap.frame, tap.plan, tap.pitch, tap.leftHand, false)
 			if err != nil {
 				return nil, err
 			}

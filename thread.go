@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/threadplan"
@@ -139,7 +140,7 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 	}
 	cut := func(target *Body, consumed ...OperationInput) (*Body, error) {
 		toolCtx, capture := privateConstructionContext(ctx)
-		coil, err := buildThreadCoil(toolCtx, d, frame, plan, pitch, spec.LeftHand)
+		coil, err := buildThreadCoil(toolCtx, d, frame, plan, pitch, spec.LeftHand, external)
 		if err != nil {
 			return nil, err
 		}
@@ -332,7 +333,7 @@ func threadFrame(face *Face, cyl Cylinder) (frame r3.Frame, length float64, exte
 
 // buildThreadCoil sketches the groove profile of plan in the axis plane frame
 // and coils it.
-func buildThreadCoil(ctx context.Context, d *Document, frame r3.Frame, plan threadplan.Plan, pitch float64, leftHand bool) (*Body, error) {
+func buildThreadCoil(ctx context.Context, d *Document, frame r3.Frame, plan threadplan.Plan, pitch float64, leftHand, external bool) (*Body, error) {
 	w := sketch.NewWorld()
 	pl, err := w.CreatePlaneFromFrame(frame)
 	if err != nil {
@@ -358,5 +359,38 @@ func buildThreadCoil(ctx context.Context, d *Document, frame r3.Frame, plan thre
 	if leftHand {
 		opts = append(opts, WithLeftHand())
 	}
+	if external && threadCoilStationsPerTurn(plan, pitch) == 128 {
+		opts = append(opts, stationsPerTurnOption(128))
+	}
 	return Coil(ctx, d, s, s.Profiles()[0], axis, units.Millimeters(pitch), units.Scalar(plan.Turns), opts...)
+}
+
+// threadCoilStationsPerTurn lowers the held mesh cost for ordinary thread
+// grooves when the helix chord estimate stays well inside Verify's tolerance.
+// The shell's recorded displacement remains the authoritative bound.
+func threadCoilStationsPerTurn(plan threadplan.Plan, pitch float64) int64 {
+	const reducedStations = 128
+	const maxEstimatedDeparture = 0.003
+
+	rhoMin, rhoMax := math.Inf(1), math.Inf(-1)
+	maxRadialStep := 0.0
+	for i, point := range plan.Profile {
+		rhoMin = min(rhoMin, point[0])
+		rhoMax = max(rhoMax, point[0])
+		if i > 0 {
+			maxRadialStep = max(maxRadialStep, math.Abs(point[0]-plan.Profile[i-1][0]))
+		}
+	}
+	maxRadialStep = max(maxRadialStep, math.Abs(plan.Profile[0][0]-plan.Profile[len(plan.Profile)-1][0]))
+	if !(rhoMin > 0) || maxRadialStep > rhoMin {
+		return coilshell.StationsPerTurn
+	}
+	h := math.Pi / reducedStations
+	k := pitch / (2 * math.Pi)
+	departure := rhoMax*h*h/2 + maxRadialStep*h/2*(h+k/rhoMin) +
+		maxRadialStep*maxRadialStep*h*h/(8*rhoMin)
+	if departure <= min(maxEstimatedDeparture, 0.0006*rhoMax) {
+		return reducedStations
+	}
+	return coilshell.StationsPerTurn
 }
