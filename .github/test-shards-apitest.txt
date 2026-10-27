@@ -1193,6 +1193,13 @@
 4	0.00	TestSweepLineBuildsVerifiesAndReevaluatesPlacement
 4	0.02	TestSweepMitredRefusals
 4	0.18	TestSweepMitredZigzagRestatesAndPlaces
+10	0.00	TestSectionRevolveMeridianAxialStepped
+10	0.00	TestSectionRevolveMeridianAxialTubeTwoRegions
+10	0.00	TestSectionRevolveMeridianAxialArcEnd
+10	0.00	TestSectionRevolveMeridianNormalLevels
+10	0.00	TestSectionRevolveMeridianPlacement
+10	0.00	TestSectionRevolveMeridianRefusesUnprovedCuts
+10	0.00	TestSectionRevolveMeridianCircles
 4	0.07	TestSweepPairObliqueBoxesIntervalSeparation
 4	0.00	TestSweepPairOffCenterBoxImpactAtEndpoint
 4	0.01	TestSweepPairPlanarExactTouchTrack
