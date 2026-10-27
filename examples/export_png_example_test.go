@@ -533,3 +533,55 @@ func Example_export_png_perspective_edges() {
 	// Output:
 	// near outline drawn: true, far edge dashed: true
 }
+
+// Gloss gives lit faces a specular highlight, so a part reads as shiny rather than flat.
+// It runs from 0, matte, to 1, and the highlight is white added where a face turns the key light
+// toward the camera. Here a block seen from above is drawn matte and glossy and the top face's
+// brightest channel is compared.
+func Example_export_png_gloss() {
+	doc := decad.New()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to start a sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(0, 0, 40, 40)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	block, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	blue := func(gloss units.Value) (uint32, error) {
+		view := export.View{Direction: r3.NewVec(0, 0, -1), Up: r3.NewVec(0, 1, 0), Width: 200, Height: 200, Gloss: gloss}
+		var out bytes.Buffer
+		if err := export.PNG(context.Background(), &out, block, units.Millimeters(0.1), view); err != nil {
+			return 0, err
+		}
+		img, err := png.Decode(&out)
+		if err != nil {
+			return 0, err
+		}
+		_, _, b, _ := img.At(100, 100).RGBA()
+		return b >> 8, nil
+	}
+	matte, err := blue(units.Value{})
+	if err != nil {
+		fmt.Printf("failed to draw: %s\n", err)
+		return
+	}
+	glossy, err := blue(units.Scalar(1))
+	if err != nil {
+		fmt.Printf("failed to draw: %s\n", err)
+		return
+	}
+	fmt.Printf("brighter with a gloss: %t\n", glossy > matte)
+	// Output:
+	// brighter with a gloss: true
+}
