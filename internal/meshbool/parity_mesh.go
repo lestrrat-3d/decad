@@ -111,6 +111,12 @@ type ParityMesh struct {
 	// maxMemberships overrides ParityIndexMaxMemberships when positive; only
 	// tests set it.
 	maxMemberships int
+	// singleUse marks a cache MeshParityContext prepares for one query. Its
+	// plain scan builds each facet's box into a local value instead of Boxes:
+	// a box is a pure function of the mesh, the axis and the facet, so a
+	// rebuilt box equals a stored one, and a single query reads a facet's box
+	// on one axis once per ray, never often enough to repay the slice.
+	singleUse bool
 }
 
 // ParityAreaErrCoef and ParityAreaFloor bound projectedFacetBox's own float
@@ -171,12 +177,13 @@ func (b *ParityFacetBox) Rejects(fu, fv float64) bool {
 // make.
 //
 // The area is decided adaptively, the same discipline as OrientSign: a float
-// determinant whose magnitude clears its own error bound proves the sign, and
-// anything inside that bound falls back to the exact 2D cross over the cached
-// projections. The exact leg is what a coarse tessellation needs — a thin
-// facet's float determinant can sit inside the bound while its true area is
-// plainly nonzero — and it is paid once per facet and axis, against the many
-// queries that then read the answer.
+// determinant whose magnitude clears its own error bound proves the sign;
+// inside that bound projectedAreaSign settles the exact sign from the floats
+// when it can; and anything left falls back to the exact 2D cross over the
+// cached projections. The exact legs are what a coarse tessellation needs — a
+// thin facet's float determinant can sit inside the bound while its true area
+// is plainly nonzero — and they are paid once per facet and axis, against the
+// many queries that then read the answer.
 func (pm *ParityMesh) BuildFacetBox(axis, u, v, ti int) ParityFacetBox {
 	tri := pm.Tris[ti]
 	a, b, c := pm.Verts[tri[0]], pm.Verts[tri[1]], pm.Verts[tri[2]]
@@ -200,11 +207,36 @@ func (pm *ParityMesh) BuildFacetBox(axis, u, v, ti int) ParityFacetBox {
 		box.Nondegenerate = true
 		return box
 	}
+	if s, ok := projectedAreaSign(au, av, bu, bv, cu, cv); ok {
+		box.Nondegenerate = s != 0
+		return box
+	}
 	qa := pm.VertexProjection(axis, u, v, tri[0])
 	qb := pm.VertexProjection(axis, u, v, tri[1])
 	qc := pm.VertexProjection(axis, u, v, tri[2])
 	box.Nondegenerate = Cross2xSign(qa, qb, qc) != 0
 	return box
+}
+
+// projectedAreaSign is the exact sign of (b − a) × (c − a) for three finite
+// projected float points, the value Cross2xSign returns over their exact
+// projections, whenever the floats alone can decide it; ok is false
+// otherwise. A projection's rationals are exactly its floats (newXP2FromFloats;
+// -0 and +0 lift to the same zero and compare equal), so a float equality is
+// an exact equality of the projected coordinates. Three points sharing one u
+// or one v lie on one axis-parallel line, and two coincident points leave a
+// degenerate triangle: either way the cross product is exactly zero. Anything
+// else goes to proof.Orient2SignExpansion, exact whenever it is certain. Every
+// answer this returns is therefore the exact sign itself, and an uncertain one
+// leaves the caller on the rational path.
+func projectedAreaSign(au, av, bu, bv, cu, cv float64) (int, bool) {
+	if au == bu && bu == cu || av == bv && bv == cv {
+		return 0, true
+	}
+	if au == bu && av == bv || au == cu && av == cv || bu == cu && bv == cv {
+		return 0, true
+	}
+	return proof.Orient2SignExpansion(au, av, bu, bv, cu, cv)
 }
 
 // FacetBoxes returns the per-facet projected-box slice for one swept axis,
@@ -251,10 +283,13 @@ func (pm *ParityMesh) VertexProjection(axis, u, v, vi int) Xp2 {
 // onBoundary. All six axes ambiguous is a genuine failure — never a guess.
 //
 // This is the raw-buffer entry point: it prepares a single-use projection cache
-// and answers one query through it. A caller holding an operand across many
-// queries wants MeshParityPreparedContext with that operand's own cache.
+// (singleUse) and answers one query through it. A caller holding an operand
+// across many queries wants MeshParityPreparedContext with that operand's own
+// cache.
 func MeshParityContext(ctx context.Context, p proof.Xpt, verts []r3.Vec, tris [][3]int, subset []int) (bool, bool, error) {
-	return MeshParityPreparedContext(ctx, p, NewParityMesh(verts, tris), subset)
+	pm := NewParityMesh(verts, tris)
+	pm.singleUse = true
+	return MeshParityPreparedContext(ctx, p, pm, subset)
 }
 
 // MeshParityPreparedContext is MeshParityContext over a prepared mesh whose
@@ -288,7 +323,7 @@ func MeshParityPreparedContext(ctx context.Context, p proof.Xpt, prepared *Parit
 			if i == 0 {
 				pa = NewXP2(RatCoordOf(p, ray.U), RatCoordOf(p, ray.V))
 				boxFilter = !prepared.Unfiltered && pa.FloatFinite
-				if boxFilter {
+				if boxFilter && !prepared.singleUse {
 					boxes = prepared.FacetBoxes(ray.Axis)
 				}
 			}
@@ -299,10 +334,18 @@ func MeshParityPreparedContext(ctx context.Context, p proof.Xpt, prepared *Parit
 				// (ParityFacetBox). Skipping it therefore removes three exact
 				// sign tests and changes no answer, and because it is exactly
 				// the facets that would `continue` that go, the subset's order
-				// and the facet an ambiguity is first seen at are untouched.
-				box := &boxes[ti]
-				if !box.Built {
-					*box = prepared.BuildFacetBox(ray.Axis, ray.U, ray.V, ti)
+				// and the facet an ambiguity is first seen at are untouched. A
+				// single-use cache builds the same box without storing it
+				// (singleUse).
+				var box ParityFacetBox
+				switch {
+				case prepared.singleUse:
+					box = prepared.BuildFacetBox(ray.Axis, ray.U, ray.V, ti)
+				case boxes[ti].Built:
+					box = boxes[ti]
+				default:
+					box = prepared.BuildFacetBox(ray.Axis, ray.U, ray.V, ti)
+					boxes[ti] = box
 				}
 				if box.Rejects(pa.Fu, pa.Fv) {
 					continue
