@@ -57,6 +57,23 @@ func TestLookupThreadReadsUnifiedSizes(t *testing.T) {
 	}
 }
 
+func TestLookupThreadReadsUnifiedNumberedSizes(t *testing.T) {
+	t.Parallel()
+	// Size #n is 0.060 + 0.013 n inch across: #4 is 0.112, #6 0.138, #8 0.164, #10 0.190 and #12 0.216 inch.
+	for designation, size := range map[string][2]float64{
+		"#0-80": {0.060, 80}, "#1-64": {0.073, 64}, "#1-72": {0.073, 72}, "#2-56": {0.086, 56}, "#2-64": {0.086, 64},
+		"#3-48": {0.099, 48}, "#3-56": {0.099, 56}, "#4-40": {0.112, 40}, "#4-48": {0.112, 48}, "#5-40": {0.125, 40},
+		"#5-44": {0.125, 44}, "#6-32": {0.138, 32}, "#6-40": {0.138, 40}, "#8-32": {0.164, 32}, "#8-36": {0.164, 36},
+		"#10-24": {0.190, 24}, "#10-32": {0.190, 32}, "#12-24": {0.216, 24}, "#12-28": {0.216, 28},
+	} {
+		requireThreadSize(t, designation, size[0]*25.4, 25.4/size[1])
+	}
+	for _, bad := range []string{"#", "#-24", "#10", "#10-", "#10-20", "#7-32", "#13-20", "#0-64", "#x-32", "#10-24x", "# 10-24", "#-1-24"} {
+		_, err := decad.LookupThread(bad)
+		require.ErrorIs(t, err, decad.ErrDegenerate, "%q", bad)
+	}
+}
+
 func TestLookupThreadRefusals(t *testing.T) {
 	t.Parallel()
 	for _, bad := range []string{
