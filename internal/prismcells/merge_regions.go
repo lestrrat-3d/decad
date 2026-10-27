@@ -156,6 +156,9 @@ func MergeRegionsExact(ctx context.Context, budget *proofbound.WorkBudget, scene
 			continue
 		}
 		if hasOuter[r] {
+			// A connected region lies inside exactly one of its boundary
+			// loops, so no consistent verdict set reaches a second outer
+			// loop and no fixture does.
 			return ExactRegions{}, false, nil
 		}
 		hasOuter[r] = true
@@ -196,6 +199,8 @@ func outerLoops(ctx context.Context, budget *proofbound.WorkBudget, scene *sketc
 	if err != nil || len(fresh) != len(profiles) {
 		return nil, false, err
 	}
+	// Declaring loops changes neither the entities nor the revision, so no
+	// consistent publication reaches a changed cell and no fixture does.
 	for _, i := range first {
 		if ok, err := sameCell(budget, profiles[i], fresh[i]); err != nil || !ok {
 			return nil, false, err
@@ -211,6 +216,8 @@ func outerLoops(ctx context.Context, budget *proofbound.WorkBudget, scene *sketc
 			outer[c] = true
 		case sketch.ContainmentOutside:
 		default:
+			// The merged loops are simple closed walks of published edges, so
+			// Sketch proves each of them; no fixture reaches an unproven verdict.
 			return nil, false, nil
 		}
 	}

@@ -130,10 +130,21 @@ func combine(ctx context.Context, pa, pb []momentinput.Profile, keep func(a, b b
 	if !resolved {
 		return nil, fmt.Errorf(`%w: %s: Sketch does not prove each cell's containment`, decaderr.ErrUnsupported, msgRegion)
 	}
+	// A recorded loop Sketch dropped below its area floor has edges no cell
+	// walks, while its verdicts still read as proven.
+	if walked, err := prismcells.LoopEntitiesWalked(budget, tags, profiles); err != nil || !walked {
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf(`%w: %s: Sketch publishes no cell along part of a recorded loop`, decaderr.ErrUnsupported, msgRegion)
+	}
 	reading, read, err := prismcells.ClassifyNested(budget, tags, profiles)
 	if err != nil {
 		return nil, err
 	}
+	// Sketch's verdicts and the edge directions describe one arrangement, so no
+	// consistent arrangement reaches a disagreement and no fixture does; the
+	// check keeps the verdicts falsifiable rather than trusted.
 	if !read || !agrees(reading, matterA, matterB) {
 		return nil, fmt.Errorf(`%w: %s`, decaderr.ErrUnsupported, msgRegion)
 	}

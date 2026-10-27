@@ -250,9 +250,18 @@ operand when Sketch proves it inside the outer loop of one of the operand's
 regions and outside every hole of that region. A verdict Sketch leaves
 unproven, a missing verdict and an invalid cell refuse. This covers the cells
 an edge-direction reading cannot reach, such as a section lying apart from the
-other, and the cells it would misread, such as the outside of a loop whose
-area falls below the floor Sketch arranges as a face: Sketch reports that loop
-`ReasonCoincident` and the section refuses.
+other. A loop so thin that Sketch's map of it is degenerate, such as a dart a
+few 2^-30 mm wide, reads `ReasonCoincident` and refuses here.
+
+Sketch leaves out a cycle whose area falls below its per-cycle floor without
+flagging it, and still proves the other cells' verdicts against the loop. A
+triangle of area 3·2^-38 mm² inside a square is such a loop: the square's cell
+reads outside it, yet no cell carries it as a hole, so its loss would return
+the whole square. `prismcells.LoopEntitiesWalked` therefore requires every
+entity of every recorded loop to be walked over its whole parameter domain by
+the published cells, counting a window a coincident span withdraws from it
+under the other operand's entity. It reads only the ranges Sketch reported, so
+it can only refuse.
 
 `prismcells.ClassifyNested` reads membership a second way, from Sketch's edge
 directions (§4.2) over every loop of the cell, holes included: a cell walks
@@ -920,9 +929,10 @@ reusing its bound.
   disjoint union, a circular hole, an island inside a hole, a disk inside a
   square, a hole inside an overlap, a split holed square and a whole arc
   beside certified line cuts, and refuse a line crossing an arc or a circle,
-  two regions touching at a corner, an empty result, and a square cut by a
-  dart of area 6·2^-30 to 6·2^-44 mm² whose containment Sketch leaves
-  unproven.
+  two regions touching at a corner, an empty result, a square cut by a dart
+  of width 2^-30 to 2^-44 mm whose containment Sketch leaves unproven, and a
+  square combined with a triangle of area 3·2^-38 to 3·2^-50 mm², axis-aligned
+  or not, that Sketch drops below its area floor.
 - Cut a real 4×4×4 mm blind pocket from a 10 mm cube. Section at z=8 gives
   84 mm² with one hole spanning (3..7, 3..7), and at z=3 gives 100 mm². Each
   2 mm Extrude passes `Tessellate(0.1 mm, VerifyAll)`. The pocket floor, caps

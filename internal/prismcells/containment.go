@@ -139,3 +139,71 @@ func loopVerdict(cell *sketch.Profile, k int) sketch.ContainmentState {
 	}
 	return verdicts[k].State
 }
+
+// LoopEntitiesWalked reports whether every entity of every declared operand
+// loop is walked over its whole domain by the published cells, counting the
+// window a coincident span withdraws from it under the other operand's entity
+// (CoincidentEdges). Sketch leaves out a cycle whose area falls below its
+// per-cycle floor, and then publishes no cell that walks that cycle's edges,
+// though its containment verdicts still read the rest of the scene as proven.
+// A part of a recorded loop that no cell walks is such a loss, so a false
+// answer refuses. The check reads only which parameter ranges Sketch reported;
+// it compares no coordinate and can only refuse.
+func LoopEntitiesWalked(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
+	profiles []*sketch.Profile) (bool, error) {
+	type interval struct{ t0, t1 float64 }
+	walked := map[sketch.Entity][]interval{}
+	for _, p := range profiles {
+		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
+			for _, e := range loop {
+				if err := budget.Step(); err != nil {
+					return false, err
+				}
+				walked[e.Entity] = append(walked[e.Entity], interval{e.TStart, e.TEnd})
+			}
+		}
+	}
+	coincident, ok, err := CoincidentEdges(budget, tags, profiles)
+	if err != nil || !ok {
+		return false, err
+	}
+	windows := map[sketch.Entity][]CoincidentSpan{}
+	for _, span := range coincident.Spans {
+		windows[span.Losing] = append(windows[span.Losing], span)
+	}
+	covered := func(ent sketch.Entity, g0, g1 float64) bool {
+		for _, w := range windows[ent] {
+			switch {
+			case w.Whole:
+				return true
+			case w.LosingT[0] < 0:
+				// A circle's window across its seam is the gap before its
+				// first fragment together with the gap after its last.
+				if g0 == 0 || g1 == 1 {
+					return true
+				}
+			case w.LosingT[0] <= g0 && g1 <= w.LosingT[1]:
+				return true
+			}
+		}
+		return false
+	}
+	for ent := range tags {
+		if err := budget.Step(); err != nil {
+			return false, err
+		}
+		spans := walked[ent]
+		slices.SortFunc(spans, func(a, b interval) int { return cmp.Or(cmp.Compare(a.t0, b.t0), cmp.Compare(a.t1, b.t1)) })
+		reach := 0.0
+		for _, s := range spans {
+			if s.t0 > reach && !covered(ent, reach, s.t0) {
+				return false, nil
+			}
+			reach = max(reach, s.t1)
+		}
+		if reach < 1 && !covered(ent, reach, 1) {
+			return false, nil
+		}
+	}
+	return true, nil
+}

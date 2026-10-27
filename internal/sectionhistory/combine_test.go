@@ -162,6 +162,17 @@ func TestCombineNestedAndSeveralRegions(t *testing.T) {
 		require.ElementsMatch(t, [][2]float64{{0, 9.5}, {10, 9.5}, {10, 10}, {0, 10}}, lineCorners(t, regions[1].Outer))
 		require.Empty(t, regions[1].Holes)
 	})
+	t.Run("squares sharing a wall join", func(t *testing.T) {
+		t.Parallel()
+		// Sketch emits the shared wall x = 10 under one square's line only;
+		// the other's walk counts it through the coincident window.
+		regions, err := combine(t.Context(), []momentinput.Profile{square(0, 0, 10, 10)},
+			[]momentinput.Profile{square(10, 0, 13, 10)}, union)
+		require.NoError(t, err)
+		require.Len(t, regions, 1)
+		require.Empty(t, regions[0].Holes)
+		require.Equal(t, 130.0, loopArea(t, regions[0].Outer))
+	})
 	t.Run("a whole arc survives beside certified line cuts", func(t *testing.T) {
 		t.Parallel()
 		regions, err := combine(t.Context(), []momentinput.Profile{archedSquare()},
@@ -202,12 +213,12 @@ func TestCombineRefusals(t *testing.T) {
 			[]momentinput.Profile{disk(10, 10, 3)}, cut)
 		requireRefusal(t, err, msgCurveCut)
 	})
-	t.Run("a dart below Sketch's area floor", func(t *testing.T) {
+	t.Run("a dart whose map Sketch cannot certify", func(t *testing.T) {
 		t.Parallel()
-		// The dart (2, 5), (5, 5-eps), (8, 5), (5, 5+eps) encloses 6*eps mm^2,
-		// below the area Sketch arranges as a face. Sketch cannot prove which
-		// side of it the square's cell lies on, so the cut refuses rather than
-		// return the whole square.
+		// The dart (2, 5), (5, 5-eps), (8, 5), (5, 5+eps) is so thin that
+		// Sketch's map of it is degenerate. It reports the containment of the
+		// square's cell unproven (ReasonCoincident), so the cut refuses rather
+		// than return the whole square.
 		for _, exp := range []int{-30, -37, -44} {
 			eps := math.Ldexp(1, exp)
 			p := func(u, v float64) sectionrecord.Point2 { return sectionrecord.Point2{U: u, V: v} }
@@ -219,6 +230,39 @@ func TestCombineRefusals(t *testing.T) {
 			}
 			_, err := combine(t.Context(), []momentinput.Profile{square(0, 0, 10, 10)}, []momentinput.Profile{dart}, cut)
 			requireRefusal(t, err, "Sketch does not prove each cell's containment")
+		}
+	})
+	t.Run("a triangle below Sketch's area floor", func(t *testing.T) {
+		t.Parallel()
+		// The triangle encloses 3*h mm^2, below the area Sketch arranges as a
+		// face, so no published cell walks its edges while every containment
+		// verdict reads proven. The true cut has a triangular hole and the
+		// true intersect is the triangle; each operation refuses.
+		p := func(u, v float64) sectionrecord.Point2 { return sectionrecord.Point2{U: u, V: v} }
+		loop := func(corners ...sectionrecord.Point2) momentinput.Profile {
+			var out momentinput.Profile
+			for i, c := range corners {
+				out.Outer.Segments = append(out.Outer.Segments,
+					sectionrecord.LineSeg{Start: c, End: corners[(i+1)%len(corners)], TStart: 0, TEnd: 1})
+			}
+			return out
+		}
+		for _, exp := range []int{-38, -42, -50} {
+			h := math.Ldexp(1, exp)
+			for _, sliver := range []momentinput.Profile{
+				loop(p(2, 5), p(8, 5), p(5, 5+h)),
+				loop(p(2, 3), p(8, 6), p(5-h, 4.5+2*h)),
+			} {
+				for _, op := range []func(a, b bool) bool{cut, union, intersect} {
+					_, err := combine(t.Context(), []momentinput.Profile{square(0, 0, 10, 10)},
+						[]momentinput.Profile{sliver}, op)
+					require.ErrorIs(t, err, decaderr.ErrUnsupported)
+					require.ErrorContains(t, err, msgRegion)
+				}
+				_, err := combine(t.Context(), []momentinput.Profile{square(0, 0, 10, 10)},
+					[]momentinput.Profile{sliver}, cut)
+				requireRefusal(t, err, "Sketch publishes no cell along part of a recorded loop")
+			}
 		}
 	})
 	t.Run("two regions touching at a corner", func(t *testing.T) {
