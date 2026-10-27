@@ -2643,10 +2643,11 @@
 10	0.00	TestSweepTwistOffAxisAngles
 10	0.00	TestCutTwistedOffAxisSweepThroughTubeWall
 10	0.00	TestCutTwistedSweepCrossesTubeWall
-10	0.00	TestCutTwistedSweepRefusesTubeWallNearMiss
 10	0.00	TestCutTwistedSweepThroughBothCaps
 10	0.00	TestCutTwistedSweepTiltedAcrossTubeWall
 10	0.01	TestStretchScalesEachAxisOfAMeshSolid
 10	0.01	TestStretchAboutAnAnchorAndOfAnLShape
 10	0.01	TestStretchMirrorsOnANegativeFactor
 10	0.01	TestStretchRefusals
+10	0.01	TestCutChainedTwistedBoresAndWindows
+10	0.01	TestCutChainedWindowOnBoreRims

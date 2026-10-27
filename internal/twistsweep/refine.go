@@ -21,12 +21,53 @@ import (
 // the result to the live sweep's own faces, so the sweep itself, its volume,
 // its area and its identity stay as they were published.
 
-// refinable reports the geometry of a one-cell sweep's refinement, and false
-// for a sweep that is already stationed or that the stationed build would
-// refuse.
+// refineTargetScale sets the per-cell departure a refinement aims at, as a
+// fraction of the profile's largest L1 radius. It is a tenth of the stationed
+// build's own 4% target (StationedTwistCellCounts), so a refined sweep holds
+// its wall within about 0.25% of the profile radius.
+const refineTargetScale = 0.0025
+
+// maxRefinedTwistCells is the cell ceiling of a refinement. A sweep whose
+// target needs more cells is refined to this count instead, when that is
+// still closer than the sweep's own Delta.
+const maxRefinedTwistCells = 512
+
+// refinedCellCount is the cell count a refinement of a twist through
+// angleUpper radians uses: the fewest that reach refineTargetScale, else the
+// most the cell and facet-pair ceilings allow.
+func refinedCellCount(poly TwistPolygon, angleUpper float64) (int, error) {
+	if angleUpper <= 0 || proofbound.IsNonFinite(angleUpper) ||
+		poly.MaxRadiusL1 <= 0 || proofbound.IsNonFinite(poly.MaxRadiusL1) {
+		return 0, fmt.Errorf(`%w: twist refinement has no finite angle or profile radius`, decaderr.ErrUnsupported)
+	}
+	target := proofbound.ProductUpper(poly.MaxRadiusL1, refineTargetScale)
+	best := 0
+	for cells := 2; cells <= maxRefinedTwistCells; cells++ {
+		perCell := proofbound.DivUpper(angleUpper, float64(cells))
+		if perCell > 1 {
+			continue
+		}
+		if err := stationedTwistFitsWork(poly, cells); err != nil {
+			break
+		}
+		best = cells
+		if twistDeparture(poly, perCell, 0, 0) <= target {
+			break
+		}
+	}
+	if best == 0 {
+		return 0, fmt.Errorf(`%w: twist refinement needs more cells than its ceilings allow`, decaderr.ErrUnsupported)
+	}
+	return best, nil
+}
+
+// refinable reports the geometry of a twisted sweep's refinement, and false
+// for a sweep the stationed build would refuse. A sweep that already holds a
+// stationed mesh refines to a finer one as well; RefinedDelta decides whether
+// the result is closer than the sweep's own.
 func (p Payload) refinable() (poly TwistPolygon, theta float64,
 	thetaIv proofbound.RatInterval, cells int, ok bool) {
-	if p.Mesh != nil || p.Path == nil {
+	if p.Path == nil {
 		return poly, 0, thetaIv, 0, false
 	}
 	poly, err := TwistPolygonOf(p.Profile)
@@ -42,7 +83,7 @@ func (p Payload) refinable() (poly TwistPolygon, theta float64,
 		return poly, 0, thetaIv, 0, false
 	}
 	upper := proofbound.RatFloatUp(proofbound.IntervalAbsUpper(thetaIv))
-	cells, _, err = StationedTwistCellCounts(poly, upper)
+	cells, err = refinedCellCount(poly, upper)
 	if err != nil {
 		return poly, 0, thetaIv, 0, false
 	}

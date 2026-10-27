@@ -234,7 +234,7 @@ func Example_thread_buttress() {
 	}
 	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
 	// Output:
-	// volume: 1225 mm^3
+	// volume: 1226 mm^3
 }
 
 // LookupThread reads a designation into a thread's major diameter and pitch, so

@@ -292,7 +292,7 @@ func newVerifyMeshCache(ctx context.Context, h Hooks, jobs []verifyPairJob) (*ve
 		if job.boxProven || job.a.Kind == topo.BodySheet || job.b.Kind == topo.BodySheet {
 			continue
 		}
-		tol, _, ok := meshbool.PairChordFrom(share(job.a), share(job.b))
+		tol, diameter, ok := meshbool.PairChordFrom(share(job.a), share(job.b))
 		if !ok {
 			continue
 		}
@@ -302,12 +302,13 @@ func newVerifyMeshCache(ctx context.Context, h Hooks, jobs []verifyPairJob) (*ve
 			if _, restating := booloperand.HeldFloor(b); restating {
 				continue
 			}
+			chord := meshbool.OperandChord(tol, diameter, share(b).Floor, false)
 			e, ok := cache.entries[b]
 			if !ok {
-				cache.entries[b] = &verifyMeshEntry{chord: tol}
+				cache.entries[b] = &verifyMeshEntry{chord: chord}
 				continue
 			}
-			e.chord = math.Min(e.chord, tol)
+			e.chord = math.Min(e.chord, chord)
 		}
 	}
 	return cache, nil

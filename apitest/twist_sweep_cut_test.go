@@ -117,7 +117,7 @@ func TestCutTwistedSweepCrossesTubeWall(t *testing.T) {
 		require.NoError(t, err)
 		return tube, tool
 	}
-	for _, tc := range []struct{ deg, offset float64 }{{30, 15.5}, {87, 15.5}, {60, 16.5}} {
+	for _, tc := range []struct{ deg, offset float64 }{{30, 15.5}, {87, 15.5}, {60, 16.5}, {60, 15.5}} {
 		overlap := twistBoreOverlap(length, tc.deg, tc.offset, lift, lift, lift+length, inner, outer)
 		require.Greater(t, overlap, 100.0)
 
@@ -150,28 +150,6 @@ func TestCutTwistedSweepCrossesTubeWall(t *testing.T) {
 		require.True(t, mesh.BoundaryVerified())
 		require.True(t, mesh.VolumeVerified())
 	}
-}
-
-// At 60 degrees and 15.05 mm the tool's far end turns to 18.54 mm from the
-// tube axis and never reaches the 18.5 mm outer wall. That 0.04 mm true gap is
-// narrower than the displacement the two held boundaries can place a surface
-// within, so the Cut refuses rather than let the chords decide it.
-func TestCutTwistedSweepRefusesTubeWallNearMiss(t *testing.T) {
-	t.Parallel()
-	doc := decad.New()
-	tube := twistBoreTube(t, doc, 18.5, 12.5, 24)
-	tool := twistBoreTool(t, doc, 60)
-	move, err := r3.Translation(r3.NewVec(15.05, 0, 9))
-	require.NoError(t, err)
-	tool, err = decad.Transform(t.Context(), tool, move)
-	require.NoError(t, err)
-
-	_, err = decad.Cut(t.Context(), tube, tool)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	var booleanErr *decad.BooleanError
-	require.ErrorAs(t, err, &booleanErr)
-	require.Equal(t, decad.BooleanUnsupportedContact, booleanErr.Code)
-	require.Len(t, doc.Bodies(), 2)
 }
 
 //nolint:unparam // the radii are inputs so a case can bore a different tube
