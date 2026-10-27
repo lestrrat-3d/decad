@@ -3,6 +3,7 @@ package prismcells
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -305,6 +306,152 @@ func curvedPairContact(a, b sketch.Entity) (bool, bool) {
 		}
 	}
 	return false, false
+}
+
+// CurvedCrossingsCut reports whether every point at which a curved entity of
+// one operand meets an entity of the other is a transverse crossing the
+// arrangement cut. Two operands whose boundaries cross elsewhere can still
+// touch: sketch's arrangement neither cuts nor flags a clean tangency, so a
+// circle tangent to the other operand's line or circle leaves no vertex for
+// a caller's cell reading to see. Each such pair is put to sketch's own
+// intersection query, as curvedContact puts it:
+//
+//   - two curved entities of different operands refuse on any point the
+//     query reports, so a crossing of two circles refuses as well as a
+//     tangency;
+//   - a line and a curve refuse when the query reads one point on the line's
+//     carrier (its tangent reading) lying on both entities;
+//   - every other point the query reads on both entities must be a scene
+//     vertex where an edge of each entity ends, within crossingMatchBand of
+//     the reported point relative to the coordinates and the radius. A
+//     crossing the arrangement read as a tangency, or did not place, has no
+//     such vertex and refuses.
+//
+// A curve kind the query does not cover refuses. Two lines are the caller's
+// to read. The check only refuses: a matched vertex never admits anything, it
+// only leaves the arrangement's own cut standing for the caller's checks.
+func CurvedCrossingsCut(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
+	profiles []*sketch.Profile) (bool, error) {
+	at := map[[2]float64]map[sketch.Entity]struct{}{}
+	for _, cell := range profiles {
+		for _, ring := range append([][]sketch.BoundaryEdge{cell.Outer}, cell.Holes...) {
+			for _, e := range ring {
+				if err := budget.Step(); err != nil {
+					return false, err
+				}
+				if len(e.Polyline) == 0 {
+					return false, nil
+				}
+				for _, p := range [][2]float64{e.Polyline[0], e.Polyline[len(e.Polyline)-1]} {
+					if at[p] == nil {
+						at[p] = map[sketch.Entity]struct{}{}
+					}
+					at[p][e.Entity] = struct{}{}
+				}
+			}
+		}
+	}
+	entities := make([]sketch.Entity, 0, len(tags))
+	for e := range tags {
+		entities = append(entities, e)
+	}
+	for i, a := range entities {
+		for _, b := range entities[i+1:] {
+			if err := budget.Step(); err != nil {
+				return false, err
+			}
+			if tags[a].IsB == tags[b].IsB {
+				continue
+			}
+			line, aLine := a.(*sketch.Line)
+			bl, bLine := b.(*sketch.Line)
+			switch {
+			case aLine && bLine:
+				continue
+			case !aLine && !bLine:
+				if touch, covered := curvedPairContact(a, b); !covered || touch {
+					return false, nil
+				}
+				continue
+			}
+			curve := b
+			if bLine {
+				line, curve = bl, a
+			}
+			points, tangent, covered := lineCurvePoints(line, curve)
+			if !covered || tangent {
+				return false, nil
+			}
+			for _, q := range points {
+				cut, err := crossingVertex(budget, at, line, curve, q)
+				if err != nil || !cut {
+					return false, err
+				}
+			}
+		}
+	}
+	return true, nil
+}
+
+// crossingMatchBand is CurvedCrossingsCut's relative distance between a point
+// sketch's query reports and the arranged vertex standing for it. A narrower
+// band only refuses more.
+const crossingMatchBand = 1e-9
+
+// lineCurvePoints is sketch's reading of where a line meets a circle or an
+// arc: the points on both entities, and whether the query read the carriers
+// as tangent (one point) at a point on both. covered is false for a curve
+// kind the query does not cover.
+func lineCurvePoints(line *sketch.Line, curve sketch.Entity) ([]*geom.Point, bool, bool) {
+	l := line.Geometry()
+	var circle *geom.Circle
+	var arc *geom.Arc
+	switch c := curve.(type) {
+	case *sketch.Circle:
+		circle = c.Geometry()
+	case *sketch.Arc:
+		arc = c.Geometry()
+		circle = &geom.Circle{Center: arc.Center, Radius: arc.Radius()}
+	default:
+		return nil, false, false
+	}
+	raw := geom.LineCircleIntersections(l, circle)
+	var on []*geom.Point
+	for _, p := range raw {
+		if !withinSegment(l, p) || (arc != nil && !arc.Contains(p)) {
+			continue
+		}
+		on = append(on, p)
+	}
+	return on, len(raw) == 1 && len(on) == 1, true
+}
+
+// crossingVertex reports whether some arranged vertex where an edge of line
+// and an edge of curve both end lies within crossingMatchBand of q.
+func crossingVertex(budget *proofbound.WorkBudget, at map[[2]float64]map[sketch.Entity]struct{},
+	line *sketch.Line, curve sketch.Entity, q *geom.Point) (bool, error) {
+	scale := max(1, math.Abs(q.X), math.Abs(q.Y))
+	switch c := curve.(type) {
+	case *sketch.Circle:
+		scale = max(scale, c.Geometry().Radius)
+	case *sketch.Arc:
+		scale = max(scale, c.Geometry().Radius())
+	}
+	for p, incident := range at {
+		if err := budget.Step(); err != nil {
+			return false, err
+		}
+		if _, ok := incident[line]; !ok {
+			continue
+		}
+		if _, ok := incident[curve]; !ok {
+			continue
+		}
+		if math.Hypot(p[0]-q.X, p[1]-q.Y) <= crossingMatchBand*scale {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // proveGroupCells returns the one matched cell per region, and the scene's

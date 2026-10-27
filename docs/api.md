@@ -269,6 +269,16 @@ round hole or a slot, or a round pocket across a square hole. Any circle or arc 
 axes, a pocket edge tangent to the hole, a pocket drawn with lines overshooting its corners, and a pocket that also
 crosses the plate's outline take the faceted path.
 
+Blind pockets `Cut` from the two caps of an extruded plate that meet at one level and overlap there in plan build with
+no `Faceted` face under the same drawing conditions: every outline is made of lines along the sketch axes, circles and
+arcs, such as a round pocket across a rectangular one, a slot across a rectangle, or a counterbore drilled from both
+faces. The level must hold no rounding. Any circle or arc in the result makes the volume read `Approximate` with a
+small proven bound; rectangles alone read `Exact`. A second pocket on one face that meets nothing of the other
+face's pockets at that level takes the faceted path. Pockets that only touch, along an edge, at a corner or where a
+circle is tangent to the other pocket's edge, two circles of opposite pockets that meet, and a pocket wall at an angle
+to the sketch axes take the faceted path, which refuses the coplanar contact under `ExactOnly` with a `BooleanError`
+of code `BooleanUnsupportedContact`.
+
 A `Cut` whose round tool touches a wall of the target at one point without crossing it, such as a round pocket
 tangent to a square hole or to the plate's side, takes the faceted path. A blind pocket gives an `Approximate`
 faceted result that meshes. A tool through the whole target takes the faceted path too, which may refuse the

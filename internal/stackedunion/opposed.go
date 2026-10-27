@@ -22,8 +22,9 @@ import (
 // are cells of one private scene over only the exclusive holes' interiors:
 // the lower side's holes as the scene's A regions, the upper side's as its
 // B regions. A cell inside B and outside A is a floor, one inside A and
-// outside B a ceiling. The A1 engine then splits the hole walls where the
-// cells' vertices fall on them, as it does for A7.
+// outside B a ceiling. The holes are loops of axis-aligned lines, circles and
+// arcs. The A1 engine then splits the hole walls where the cells' vertices
+// fall on them, as it does for A7.
 
 // opposedClass is one interface cell's reading: material below exposed
 // upwards, material above exposed downwards, or neither.
@@ -120,10 +121,12 @@ func OpposedCut(ctx context.Context, budget *proofbound.WorkBudget, oc stackedre
 		}
 	}
 	geom.RecordJunctions(n)
-	// Every scene vertex is two axis-aligned lines' crossing, every span both
-	// sides share lies on one exact line, and every line edge ends exactly on
-	// its own carrier, so each vertex sits at exact levels. The only allowance
-	// is the one the engine records for the slab loops' own junctions.
+	// Every span both sides share lies on one exact line, and every line edge
+	// ends exactly on its own carrier, so two axis-aligned lines meet at exact
+	// levels. A line crossing a circle is the engine's keyed vertex: the
+	// line's walked point with its fixed coordinate exact, charged its walk,
+	// cut and proven crossing distances. The engine's largest vertex allowance
+	// therefore bounds every face, as in A7.
 	return breprecord.StackedRecord(ctx, budget, geom, levels, oc.Frame, oc.Xform, geom.Allow())
 }
 
@@ -137,8 +140,10 @@ type opposedCell struct {
 // opposedCells arranges the exclusive holes' interiors in one private scene
 // and records its floor and ceiling cells. Every partial edge must carry
 // TExact, every line edge must end exactly on its own carrier, the scene must
-// carry no walk charge, every shared span must have exact carriers, and every
-// cell must classify.
+// carry no walk charge, every shared span must lie on one exact line, every
+// cell must classify, every meeting of a curve with the other side must be a
+// crossing the arrangement cut (prismcells.CurvedCrossingsCut), and the holes
+// must not touch (opposedManifold).
 func opposedCells(ctx context.Context, budget *proofbound.WorkBudget,
 	lowerOnly, upperOnly []sectionrecord.LoopRecord) ([]opposedCell, error) {
 	regionsA, err := stackedrecord.Exposed(ctx, lowerOnly)
@@ -227,12 +232,25 @@ func opposedCells(ctx context.Context, budget *proofbound.WorkBudget,
 	}
 	// Sketch resolves two lines as one shared span when their carriers differ
 	// within its identity band. Such a span states no exact face edge, so both
-	// recorded lines of every span must lie on precisely one line.
+	// recorded lines of every span must lie on precisely one line. A span on a
+	// circle carrier, an arc of one side on a circle of the other, refuses here
+	// too.
 	exact, err := coincident.ExactLineCarriers(budget)
 	if err != nil {
 		return nil, err
 	}
 	if !exact {
+		return nil, errUBMiss
+	}
+	// A tangency is no vertex of the scene, so opposedManifold cannot see a
+	// circle touching the other side's boundary there; sketch's intersection
+	// query must read every meeting of a curve with the other side as a
+	// crossing the arrangement cut.
+	crossed, err := prismcells.CurvedCrossingsCut(budget, tags, profiles)
+	if err != nil {
+		return nil, err
+	}
+	if !crossed {
 		return nil, errUBMiss
 	}
 	manifold, err := opposedManifold(budget, tags, coincident, profiles, classes)
@@ -262,10 +280,15 @@ func opposedCells(ctx context.Context, budget *proofbound.WorkBudget,
 // point from one side's edge to the other side's. Every other meeting puts
 // one of them between two edges of one side (holes touching at a corner,
 // or two reflex corners whose outsides meet) or on a span both sides share
-// (holes touching along an edge, whose ends are such points). Under the
-// axis-line gate at most four scene edges meet at any point, one per axis
-// direction, so no other configuration reaches here. Every point and edge
-// is sketch's own, matched by exact equality; the check only refuses.
+// (holes touching along an edge, whose ends are such points). Each side's
+// boundary passes a point at most once, so at most four scene edges meet
+// there. A curve meeting the other side tangentially is refused before this
+// check (prismcells.CurvedCrossingsCut), so the edges leave the point in
+// distinct directions, or two lines share a span. A corner of one side lying
+// on the other side's boundary from inside it meets no floor and ceiling
+// pair: one side's void lies inside the other's there, and the faces round
+// the point close one cycle. Every point and edge is sketch's own, matched by
+// exact equality; the check only refuses.
 func opposedManifold(budget *proofbound.WorkBudget, tags map[sketch.Entity]prismcells.Origin,
 	coincident prismcells.CoincidentReading, profiles []*sketch.Profile, classes []opposedClass) (bool, error) {
 	type point struct {

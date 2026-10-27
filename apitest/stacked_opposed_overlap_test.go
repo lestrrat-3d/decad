@@ -118,10 +118,10 @@ func TestStackedOpposedTouchingPocketsRefuse(t *testing.T) {
 
 // TestStackedOpposedOverlapGates keeps overlapping opposed pockets this
 // route does not state exactly on the mesh path, which refuses their
-// coplanar contact under ExactOnly: a round pocket, whose crossings with a
-// rectangle are no exact levels, and a pocket moved in its plane, whose
-// re-expression carries a section displacement the planar walls cannot
-// state.
+// coplanar contact under ExactOnly: a round pocket that passes through the
+// rectangle's corners (-2, ±2) tangent to its edges y = ±2 there, and a
+// pocket moved in its plane, whose re-expression carries a section
+// displacement the planar walls cannot state.
 func TestStackedOpposedOverlapGates(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
