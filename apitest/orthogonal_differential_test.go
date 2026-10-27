@@ -374,3 +374,48 @@ func TestVerifySurveysAgreeWithTheCubeByCubeRunsAndColumns(t *testing.T) {
 	require.Greater(t, blocked, 4)
 	require.Greater(t, free, 25)
 }
+
+func TestQuarterTurnAgreesWithTheTurnedCubes(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(27, 28))
+	checked := 0
+	for range 30 {
+		c := randomCubes(rng)
+		doc := decad.New()
+		b, ok := c.solid(t, doc)
+		if !ok {
+			continue
+		}
+		about := r3.NewVec(float64(rng.IntN(voxelSide)), float64(rng.IntN(voxelSide)), 0)
+		turns := 1 + rng.IntN(3)
+		out, err := decad.QuarterTurn(t.Context(), b, r3.NewVec(0, 0, 1), about, turns)
+		if err != nil {
+			continue
+		}
+		checked++
+		got, bound := volumeOf(t, out)
+		require.InDelta(t, float64(c.count()), got, bound+1e-9, "a turn keeps the volume")
+		require.Zero(t, bound, "a quarter turn is exact")
+		// A cube at (x, y, z) goes to the cube whose centre is its centre turned about the axis, a quarter turn at a time
+		// counter-clockwise: (dx, dy) to (-dy, dx).
+		for x := range voxelSide {
+			for y := range voxelSide {
+				dx, dy := float64(x)+0.5-about.X, float64(y)+0.5-about.Y
+				for range turns {
+					dx, dy = -dy, dx
+				}
+				for z := range voxelSide {
+					p := r3.NewVec(about.X+dx, about.Y+dy, float64(z)+0.5)
+					at, err := out.LocatePoint(t.Context(), p, units.Millimeters(0.05))
+					require.NoError(t, err)
+					want := decad.PointOutside
+					if c[x][y][z] {
+						want = decad.PointInside
+					}
+					require.Equal(t, want, at, "cube %d,%d,%d after %d turns about %v", x, y, z, turns, about)
+				}
+			}
+		}
+	}
+	require.Greater(t, checked, 12)
+}
