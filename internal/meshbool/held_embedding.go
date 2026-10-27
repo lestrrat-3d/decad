@@ -183,8 +183,10 @@ func repairHeldEmbeddingSummary(ctx context.Context, h HeldRounding, memo bool, 
 			}
 			e.prepareRepair()
 			if memo && e.pairs == nil {
-				// Repair needs replayable pair answers; a clean first scan does not.
-				e.pairs = make(map[uint64]heldPair, 32*len(query))
+				// Repair needs replayable pair answers; a clean first scan does
+				// not. It grows as improve decides pairs: offenders stores only
+				// the few the exact predicates decide.
+				e.pairs = map[uint64]uint64{}
 			}
 			offenders, failing, err := e.offenders(check)
 			if err != nil {
@@ -270,7 +272,7 @@ func HeldFolds(ctx context.Context, h HeldRounding) ([][2]int, error) {
 	if err := e.buildGrid(); err != nil {
 		return nil, err
 	}
-	e.pairs = make(map[uint64]heldPair, 32*len(query))
+	e.pairs = make(map[uint64]uint64, 32*len(query))
 	var out [][2]int
 	for _, f := range query {
 		bad, collapsed, err := e.facetFailures(f)
@@ -619,14 +621,15 @@ type heldEmbedding struct {
 	// for an unordered pair of facets: gen stamps each facet's current
 	// vertex positions, a move gives every incident facet a fresh stamp, and
 	// an entry holds only while both facets carry the stamps it was stored
-	// under. pairEmbedded is symmetric in its facets and depends on nothing
-	// but their six vertex positions, so a replayed answer is the answer.
+	// under (heldPairStampLimit packs them). pairEmbedded is symmetric in its
+	// facets and depends on nothing but their six vertex positions, so a
+	// replayed answer is the answer.
 	memoOn  bool
 	box     [][2]r3.Vec
 	boxOK   []bool
 	gen     []uint64
 	nextGen uint64
-	pairs   map[uint64]heldPair
+	pairs   map[uint64]uint64
 
 	// The grid every query reads, built over facet boxes padded by pad so a
 	// vertex's move inside its float box never leaves its facets' cells.
@@ -638,12 +641,12 @@ type heldEmbedding struct {
 	wide   []int32
 }
 
-// heldPair is one replayable pairEmbedded answer: the stamps of the lower and
-// the higher facet when it was decided, and whether the pair was embedded.
-type heldPair struct {
-	genLo, genHi uint64
-	ok           bool
-}
+// heldPairStampLimit bounds the stamps a pair memo entry packs. An entry is
+// one word: the lower facet's stamp in bits 32 to 62, the higher facet's in
+// bits 1 to 31, and whether the pair was embedded in bit 0. Distinct stamp
+// pairs below the limit give distinct words. A pair with a stamp at or above
+// it is decided afresh and not stored.
+const heldPairStampLimit = 1 << 31
 
 func newHeldEmbedding(h HeldRounding, budget *proofbound.WorkBudget, memo bool) *heldEmbedding {
 	e := newHeldEmbeddingScan(h, budget, memo)
@@ -714,8 +717,9 @@ func (e *heldEmbedding) triBox(i int) [2]r3.Vec {
 }
 
 // pairOK is pairEmbedded, replayed from the pair memo when neither facet has
-// changed since the pair was last decided.
-func (e *heldEmbedding) pairOK(i, j int) bool {
+// changed since the pair was last decided. A pair it decides is stored when
+// the exact predicates decided it, or when keepFloat is set.
+func (e *heldEmbedding) pairOK(i, j int, keepFloat bool) bool {
 	if !e.memoOn {
 		return e.pairEmbedded(i, j)
 	}
@@ -723,12 +727,23 @@ func (e *heldEmbedding) pairOK(i, j int) bool {
 		return true
 	}
 	lo, hi := min(i, j), max(i, j)
-	key := uint64(lo)<<32 | uint64(hi)
-	if p, ok := e.pairs[key]; ok && p.genLo == e.gen[lo] && p.genHi == e.gen[hi] {
-		return p.ok
+	gLo, gHi := e.gen[lo], e.gen[hi]
+	if gLo >= heldPairStampLimit || gHi >= heldPairStampLimit {
+		return e.pairEmbeddedOverlapping(i, j)
 	}
-	ok := e.pairEmbeddedOverlapping(i, j)
-	e.pairs[key] = heldPair{genLo: e.gen[lo], genHi: e.gen[hi], ok: ok}
+	key := uint64(lo)<<32 | uint64(hi)
+	stamp := gLo<<32 | gHi<<1
+	if p, ok := e.pairs[key]; ok && p&^1 == stamp {
+		return p&1 == 1
+	}
+	ok, exact := e.pairEmbeddedPath(i, j)
+	if !exact && !keepFloat {
+		return ok
+	}
+	if ok {
+		stamp |= 1
+	}
+	e.pairs[key] = stamp
 	return ok
 }
 
@@ -826,6 +841,13 @@ func (e *heldEmbedding) pairEmbedded(i, j int) bool {
 // pairEmbeddedOverlapping classifies a pair whose facet boxes are already
 // known to overlap. Callers must establish that precondition before entry.
 func (e *heldEmbedding) pairEmbeddedOverlapping(i, j int) bool {
+	ok, _ := e.pairEmbeddedPath(i, j)
+	return ok
+}
+
+// pairEmbeddedPath is pairEmbeddedOverlapping, and reports whether the exact
+// predicates decided the pair rather than the shared corners or a float sign.
+func (e *heldEmbedding) pairEmbeddedPath(i, j int) (bool, bool) {
 	ti, tj := e.h.Tris[i], e.h.Tris[j]
 	var bufI, bufJ [3]int
 	sharedI, sharedJ := bufI[:0], bufJ[:0]
@@ -840,18 +862,18 @@ func (e *heldEmbedding) pairEmbeddedOverlapping(i, j int) bool {
 		}
 	}
 	if len(sharedI) == 3 {
-		return false
+		return false, false
 	}
 	if len(sharedI) == 0 && e.projectionsSeparated(i, j) {
-		return true
+		return true, false
 	}
 	if len(sharedI) == 1 && !BoxesOverlap(e.coneBox(i, sharedI[0]), e.coneBox(j, sharedJ[0])) {
-		return true
+		return true, false
 	}
 	if e.pairApartFloat(i, j, sharedI, sharedJ) {
-		return true
+		return true, false
 	}
-	return e.pairEmbeddedExact(i, j, sharedI, sharedJ)
+	return e.pairEmbeddedExact(i, j, sharedI, sharedJ), true
 }
 
 // sharesCorner reports whether facets t and u name a common vertex. Most
@@ -1346,6 +1368,18 @@ func (e *heldEmbedding) planeSignScratch(f, p int, scratch *[3]big.Int) int {
 // facetFailures returns the facets j that facet i meets improperly, and
 // whether i itself has collapsed to no plane.
 func (e *heldEmbedding) facetFailures(i int) ([]int, bool, error) {
+	return e.facetFailuresAfter(i, nil, nil)
+}
+
+// facetFailuresAfter is facetFailures inside one offenders pass, which moves
+// no vertex. done marks the facets whose full scan this pass has finished,
+// and earlier lists those of them that found their pair with i failing. Such
+// a scan decided its pair with i whenever the two boxes overlap, because the
+// grid lists each of two overlapping facets among the other's candidates
+// (serialClean); a pair whose boxes do not overlap is embedded. So the pair's
+// answer is whether earlier names j: it is the answer the pair memo would
+// replay, read without the memo. done is nil outside such a pass.
+func (e *heldEmbedding) facetFailuresAfter(i int, done []bool, earlier []int) ([]int, bool, error) {
 	if zeroXpt(e.normal(i)) {
 		return nil, true, nil
 	}
@@ -1358,7 +1392,16 @@ func (e *heldEmbedding) facetFailures(i int) ([]int, bool, error) {
 		if err := e.budget.Step(); err != nil {
 			return nil, false, err
 		}
-		if j == i || e.pairOK(i, j) {
+		if j == i {
+			continue
+		}
+		if done != nil && done[j] {
+			if len(earlier) > 0 && slices.Contains(earlier, j) {
+				bad = append(bad, j)
+			}
+			continue
+		}
+		if e.pairOK(i, j, done == nil) {
 			continue
 		}
 		bad = append(bad, j)
@@ -1396,10 +1439,31 @@ func (e *heldEmbedding) offenders(query []int) ([]int, []int, error) {
 	movable := make([]bool, len(e.h.Verts))
 	vertices := make([]int, 0)
 	var failing []int
+	// With the memo on, a pair two query facets share is decided once, by the
+	// one scanned first (facetFailuresAfter), and only the pairs the exact
+	// predicates decide are stored. Storing every box-overlapping pair of the
+	// pass costs a lookup each in a large memo the search asks again for few
+	// of them, and a float filter decides a pair in about that time. The
+	// memo-free path recomputes every pair, the reference the memo tests
+	// compare against.
+	var done []bool
+	var earlier map[int][]int
+	if e.memoOn {
+		done = make([]bool, len(e.h.Tris))
+	}
 	for _, i := range query {
-		bad, collapsed, err := e.facetFailures(i)
+		bad, collapsed, err := e.facetFailuresAfter(i, done, earlier[i])
 		if err != nil {
 			return nil, nil, err
+		}
+		if done != nil && !collapsed {
+			done[i] = true
+			for _, j := range bad {
+				if earlier == nil {
+					earlier = map[int][]int{}
+				}
+				earlier[j] = append(earlier[j], i)
+			}
 		}
 		if !collapsed && len(bad) == 0 {
 			continue
