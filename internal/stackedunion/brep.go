@@ -476,12 +476,34 @@ func (b *ubBuild) cutSlabRegion(sc *ubScene) ([]profileRecord, error) {
 	return []profileRecord{region}, nil
 }
 
+// sameRegion reports whether two records of one operand are one region: the
+// same outer loop and the same holes, in order, compared exactly. Two slabs
+// whose outers match but whose holes differ, such as a counterbore's shoulder
+// slab and its bore slab, are two records, so the interface scene sees the
+// shoulder between them.
+func sameRegion(budget *proofbound.WorkBudget, a, b profileRecord) (bool, error) {
+	if len(a.Holes) != len(b.Holes) {
+		return false, nil
+	}
+	pairs := [][2]loopRecord{{a.Outer, b.Outer}}
+	for i := range a.Holes {
+		pairs = append(pairs, [2]loopRecord{a.Holes[i], b.Holes[i]})
+	}
+	for _, pair := range pairs {
+		equal, err := momentinput.ExactLoopEqual(budget, pair[0], pair[1])
+		if err != nil || !equal {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
 // interfaceFaces classifies the interface at level k: the scene of every
 // record reaching the slab below or the slab above it, each cell's
 // membership in every record read by prismcells.ClassifyRegions, and the
 // cells inside some record of one side and none of the other recorded as
-// that side's exposed faces. A stacked operand's equal regions on both sides
-// enter once.
+// that side's exposed faces. A stacked operand's equal regions on both sides,
+// outer and holes alike (sameRegion), enter once.
 func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 	type side struct {
 		ref          ubRef
@@ -499,7 +521,7 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 				have.below, have.above = have.below || below, have.above || !below
 				return nil
 			}
-			equal, err := momentinput.ExactLoopEqual(b.st.budget, b.record(have.ref).Outer, b.record(ref).Outer)
+			equal, err := sameRegion(b.st.budget, b.record(have.ref), b.record(ref))
 			if err != nil {
 				return err
 			}

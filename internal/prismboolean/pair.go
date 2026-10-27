@@ -212,9 +212,10 @@ func TryStackedThroughCut(ctx context.Context, a, b topo.Payload) (stackedrecord
 	return stackedrecord.CutSlabs(ctx, budget, sp, outer, tool, reexpress, active, sp.Interfaces, -1)
 }
 
-// TryCrossingBlindCut builds the exact rectangular case where a blind tool
-// crosses one existing through hole. Its section and interface scenes are
-// Sketch's; stackedbrep splits the partial hole walls at the pocket floor.
+// TryCrossingBlindCut builds the case where a blind tool crosses one existing
+// through hole, every loop of both operands made of axis-aligned lines, circles
+// and arcs. Its section and interface scenes are Sketch's; stackedbrep splits
+// the partial hole walls at the pocket floor.
 func TryCrossingBlindCut(ctx context.Context, a, b topo.Payload) (breprecord.Payload, bool, error) {
 	target, targetOK := a.(prismrecord.Payload)
 	tool, toolOK := b.(prismrecord.Payload)
@@ -227,7 +228,7 @@ func TryCrossingBlindCut(ctx context.Context, a, b topo.Payload) (breprecord.Pay
 		return breprecord.Payload{}, false, err
 	}
 	if pa.SectionDelta != 0 || pb.SectionDelta != 0 ||
-		!momentinput.CrossingBlindAxisLines(pa.Profile) || !momentinput.CrossingBlindAxisLines(pb.Profile) {
+		!momentinput.CrossingBlindLoops(pa.Profile) || !momentinput.CrossingBlindLoops(pb.Profile) {
 		return breprecord.Payload{}, false, nil
 	}
 	reexpress, err := prismcells.NewReexpression(pa.PlacementOperand(), pb.PlacementOperand())

@@ -13,16 +13,22 @@ import (
 // rectangle's least and greatest u and v.
 type AxisRect struct{ U0, V0, U1, V1 float64 }
 
-// CrossingBlindAxisLines accepts profiles whose loops contain exactly four
-// axis-aligned line records for the crossing-blind Cut route.
-func CrossingBlindAxisLines(p Profile) bool {
+// CrossingBlindLoops accepts profiles whose loops hold only axis-aligned line,
+// circle and arc records, for the crossing-blind Cut route
+// (agent-docs/general-boolean-design.md §3 A7). An oblique line, an ellipse or a
+// free-form segment is refused: the A1 BRep build states no exact crossing for
+// it. Whether two circles cross, and whether each crossing is certified, is the
+// private scene's answer, read later.
+func CrossingBlindLoops(p Profile) bool {
 	for _, loop := range append([]LoopRecord{p.Outer}, p.Holes...) {
-		if len(loop.Segments) != 4 {
-			return false
-		}
 		for _, segment := range loop.Segments {
-			line, ok := segment.(sectionrecord.LineSeg)
-			if !ok || (line.Start.U != line.End.U && line.Start.V != line.End.V) {
+			switch s := segment.(type) {
+			case sectionrecord.LineSeg:
+				if s.Start.U != s.End.U && s.Start.V != s.End.V {
+					return false
+				}
+			case sectionrecord.CircleSeg, sectionrecord.ArcSeg:
+			default:
 				return false
 			}
 		}

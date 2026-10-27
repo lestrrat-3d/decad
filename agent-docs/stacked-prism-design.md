@@ -479,11 +479,14 @@ Each admitted arm ships its implementation and tests together.
    holes at a displaced level, holes that carry a section displacement, and
    holes that are not loops of axis-aligned lines.
 
-   A blind rectangle crossing one existing rectangular through hole on a
-   prism target uses general-boolean §3 A7's BRep path. Its partial floor
-   cannot be represented by this payload's whole column rings. A7 reads the
-   tool's and the target's denoted levels (§2.1) where the tool ends at a
-   target cap.
+   A blind tool crossing one existing through hole on a prism target, every
+   loop of axis-aligned lines, circles and arcs (a rectangle across a round
+   hole or a slot, a round pocket across a square hole), uses general-boolean
+   §3 A7's BRep path. Its partial floor cannot be represented by this
+   payload's whole column rings. A7 reads the tool's and the target's denoted
+   levels (§2.1) where the tool ends at a target cap. A round pocket across a
+   round hole, where two circles cross, takes the mesh path, and a pocket
+   enclosing the hole keeps stage 2's payload.
 4. **Surveys and clearance.** DX7, DX8, DX6 and `analyticBodiesEqual` for the
    stacked payload.
 
