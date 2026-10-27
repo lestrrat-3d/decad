@@ -157,20 +157,62 @@ func classify(verts []r3.Vec, tris [][3]int) (axes, signs []int, err error) {
 	return axes, signs, nil
 }
 
+// cornerCoords returns the coordinates, on each axis, of the vertices of a solid that lie on an edge or at a
+// corner. A vertex that lies in one plane only is interior to a face, a point a mesh adds to fan the face, and
+// would put a grid line through the solid where there is no corner: only vertices on two planes give lines.
+func cornerCoords(verts []r3.Vec, tris [][3]int, axes []int, eps float64) [3][]float64 {
+	// A vertex that lies in one plane only is interior to a face, a point a mesh adds to fan the face, and
+	// would put a grid line through the solid where there is no corner: only vertices on two planes, on an
+	// edge or at a corner, give grid lines.
+	type placed struct {
+		axis  int
+		plane float64
+		many  bool
+	}
+	seen := make([]placed, len(verts))
+	marked := make([]bool, len(verts))
+	for i, tri := range tris {
+		plane := comp(verts[tri[0]], axes[i])
+		for _, vi := range tri {
+			switch {
+			case !marked[vi]:
+				seen[vi], marked[vi] = placed{axis: axes[i], plane: plane}, true
+			case seen[vi].axis != axes[i] || math.Abs(seen[vi].plane-plane) > eps:
+				seen[vi].many = true
+			}
+		}
+	}
+	var coords [3][]float64
+	for i, v := range verts {
+		if !seen[i].many {
+			continue
+		}
+		coords[0] = append(coords[0], v.X)
+		coords[1] = append(coords[1], v.Y)
+		coords[2] = append(coords[2], v.Z)
+	}
+	return coords
+}
+
 // newSolid reads the solid onto the grid of its vertex coordinates and the extra ones on each axis.
 func newSolid(verts []r3.Vec, tris [][3]int, axes, signs []int, extra [3][]float64) (*solidGrid, error) {
+	return newSolidEps(verts, tris, axes, signs, extra, gridEps(verts))
+}
+
+// gridEps is the tolerance within which two coordinates are one grid line: a billionth of the larger of 1 mm
+// and the extent of verts.
+func gridEps(verts []r3.Vec) float64 {
 	lo, hi := verts[0], verts[0]
 	for _, v := range verts[1:] {
 		lo = r3.Vec{X: math.Min(lo.X, v.X), Y: math.Min(lo.Y, v.Y), Z: math.Min(lo.Z, v.Z)}
 		hi = r3.Vec{X: math.Max(hi.X, v.X), Y: math.Max(hi.Y, v.Y), Z: math.Max(hi.Z, v.Z)}
 	}
-	eps := 1e-9 * math.Max(1, math.Max(hi.X-lo.X, math.Max(hi.Y-lo.Y, hi.Z-lo.Z)))
-	var coords [3][]float64
-	for _, v := range verts {
-		coords[0] = append(coords[0], v.X)
-		coords[1] = append(coords[1], v.Y)
-		coords[2] = append(coords[2], v.Z)
-	}
+	return 1e-9 * math.Max(1, math.Max(hi.X-lo.X, math.Max(hi.Y-lo.Y, hi.Z-lo.Z)))
+}
+
+// newSolidEps is newSolid with the grid tolerance stated, so that two solids can be read onto one grid.
+func newSolidEps(verts []r3.Vec, tris [][3]int, axes, signs []int, extra [3][]float64, eps float64) (*solidGrid, error) {
+	coords := cornerCoords(verts, tris, axes, eps)
 	for a := range 3 {
 		coords[a] = append(coords[a], extra[a]...)
 	}

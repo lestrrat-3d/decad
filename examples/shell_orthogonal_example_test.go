@@ -212,3 +212,43 @@ f 4 5 8
 	// Output:
 	// volume: 768 mm^3
 }
+
+// Two faceted solids every face of which squares to an axis, such as parts read from STL,
+// combine exactly under Union, Cut and Intersect, whatever the contact between them. Here
+// two 10 mm cubes that touch at a face are joined into one bar.
+func Example_orthogonal_union() {
+	cube := func(x float64) string {
+		var src strings.Builder
+		for _, c := range [][3]float64{{0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0}, {0, 0, 1}, {1, 0, 1}, {1, 1, 1}, {0, 1, 1}} {
+			fmt.Fprintf(&src, "v %g %g %g\n", x+10*c[0], 10*c[1], 10*c[2])
+		}
+		src.WriteString("f 1 3 2\nf 1 4 3\nf 5 6 7\nf 5 7 8\nf 1 2 6\nf 1 6 5\nf 3 4 8\nf 3 8 7\nf 2 3 7\nf 2 7 6\nf 4 1 5\nf 4 5 8\n")
+		return src.String()
+	}
+	doc := decad.New()
+	var solids [2]*decad.Body
+	for i, x := range []float64{0, 10} {
+		mesh, err := decad.ReadOBJ(context.Background(), strings.NewReader(cube(x)))
+		if err != nil {
+			fmt.Printf("failed to read mesh: %s\n", err)
+			return
+		}
+		if solids[i], err = decad.SolidFromMesh(context.Background(), doc, mesh); err != nil {
+			fmt.Printf("failed to make a solid: %s\n", err)
+			return
+		}
+	}
+	bar, err := decad.Union(context.Background(), solids[0], solids[1])
+	if err != nil {
+		fmt.Printf("failed to join: %s\n", err)
+		return
+	}
+	volume, err := bar.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	fmt.Printf("volume: %.0f mm^3, faces: %d\n", volume.Value.Base(), len(bar.Faces()))
+	// Output:
+	// volume: 2000 mm^3, faces: 6
+}

@@ -269,6 +269,13 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, 
 	if a == b {
 		return nil, fmt.Errorf(`%w: a boolean needs two distinct bodies`, ErrDegenerate)
 	}
+	if body, ok := orthogonalBoolean(ctx, d, op, a, b); ok {
+		kind := operationKindForBoolean(op)
+		if err := d.commitOperationIn(ctx, nil, kind, operationInputsForBoolean(op, a, b), body, a, b); err != nil {
+			return nil, err
+		}
+		return body, nil
+	}
 	body, err := booleanBodyWith(ctx, op, a, b, d.nextProducerID(), cfg)
 	span := producerID(1)
 	if err != nil {

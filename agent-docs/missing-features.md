@@ -21,7 +21,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 |---|---|
 | Fillet, chamfer and shell take a boolean result only where it reads as a prism, (shell) as a prism cut by through tools with its caps or a run of straight walls removed, or (fillet, chamfer) at straight edges along an axis, or (chamfer) at complete loops, one or two adjacent rising inner edges, two adjacent outer edges, or every straight outer edge of an admitted axis-aligned box, bored or bare | Modify operations |
 | No import of IGES, of STEP faces other than planes, cylinders, cones and sphere caps, or of any mesh beyond 65,528 triangles as a solid | Data exchange |
-| Booleans outside the admitted analytic classes fall to a faceted mesh result, and may refuse touching contact | Booleans |
+| Booleans outside the admitted analytic classes fall to a faceted mesh result, and may refuse touching contact, except two axis-square faceted solids, which combine exactly on a grid (`agent-docs/orthogonal-boolean-design.md`) | Booleans |
 
 ## Feature operations
 
