@@ -359,8 +359,8 @@ func buildThreadCoil(ctx context.Context, d *Document, frame r3.Frame, plan thre
 	if leftHand {
 		opts = append(opts, WithLeftHand())
 	}
-	if allowReduced && threadCoilStationsPerTurn(plan, pitch) == 128 {
-		opts = append(opts, stationsPerTurnOption(128))
+	if allowReduced && threadCoilStationsPerTurn(plan, pitch) == 96 {
+		opts = append(opts, stationsPerTurnOption(96))
 	}
 	return Coil(ctx, d, s, s.Profiles()[0], axis, units.Millimeters(pitch), units.Scalar(plan.Turns), opts...)
 }
@@ -369,7 +369,7 @@ func buildThreadCoil(ctx context.Context, d *Document, frame r3.Frame, plan thre
 // grooves when the helix chord estimate stays well inside Verify's tolerance.
 // The shell's recorded displacement remains the authoritative bound.
 func threadCoilStationsPerTurn(plan threadplan.Plan, pitch float64) int64 {
-	const reducedStations = 128
+	const reducedStations = 96
 	const maxEstimatedDeparture = 0.003
 
 	rhoMin, rhoMax := math.Inf(1), math.Inf(-1)
