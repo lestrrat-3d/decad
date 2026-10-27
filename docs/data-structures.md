@@ -149,6 +149,7 @@ configuration option.
 | `decad.HoleThread` | struct | The thread of a tapped hole: pitch, hand and an optional length. | The caller |
 | `decad.HoleShape` | sealed interface | The cross-section of a hole that is not round. | The caller |
 | `decad.RectangularHole` | struct | A hole with a rectangular bore: width, height and a turn about the hole axis. | The caller |
+| `decad.OutlineHole` | struct | A hole with an arbitrary simple polygonal bore: corners about the hole axis in the face frame and a turn about it. | The caller |
 | `decad.PolygonHole` | struct | A hole with a regular polygonal bore: sides, width across flats and a turn about the hole axis. | The caller |
 | `decad.SlotHole` | struct | A hole with a stadium bore: length, width and a turn about the hole axis. | The caller |
 | `decad.HoleDepth` | sealed interface | How deep a hole runs. | The caller |

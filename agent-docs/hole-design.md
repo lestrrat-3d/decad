@@ -167,3 +167,14 @@ cylinder at `At`, the plane Y2 reads a blind `Depth` from.
 | T1 | The thread's frame, span and handedness are §8's, read from the tangent plane at `At`: the groove starts there, a head's floor if there is one, and runs the bore's depth or `HoleThread.Length`. The groove's first turn lies in the plane's side of the wall by the margin a plain hole takes (Y3). |
 | T2 | The bore, its head and the coil are one cut by their union (Z4): on the mesh path a second cut meets a target that already holds the first cut's coarse mesh and is refused. A united tool is coarser than a pair's tolerance on a thin rod, whose cylinder asks for a finer one, and the cut is then the evaluator's own `ErrUnsupported`, which leaves the body live. A bore's wall and a rod of radius 14 mm or more are cut. |
 | T3 | The tests state the removed volume of a tapped blind hole as the bore's integral plus the groove's: the groove's axial overlap with the material along the hole axis, at each radius and angle about the bore, the angle taken from the cylinder's axis, and require it inside the result's own volume bound. A thin rod's refusal is tested as such. |
+
+## 13. Outline holes
+
+`HoleSpec.Shape` may be an `OutlineHole{Corners, Angle}`: an arbitrary simple polygon, such as a keyed or L-shaped bore.
+
+| Decision | Rule |
+|---|---|
+| H1 | `Corners` are `Point2` values in millimetres in the face frame's U and V about the hole axis, in order round the polygon either way; `Angle` turns them counter-clockwise about the axis, as for the other shapes, and the zero `units.Value` is no turn. A shaped hole takes no `Diameter`, head or thread, as before. |
+| H2 | The polygon has from 3 to 256 corners, all finite, encloses an area, repeats no corner, and no side crosses or touches a non-neighbouring one (`holeplan.checkOutline`, `segmentsTouch`): each failure is `ErrDegenerate`. The gate only rejects; the section the sketch closes is what the tool is cut from. |
+| H3 | The bore is the same prism as a rectangular or regular polygonal one, from `Plan.Corners`, so depth, blind and through holes, the tool margin and the axis-inside-body check hold unchanged. On a cylindrical face the margin is taken from the farthest corner's distance from the axis (`Outline.Reach`). `Boss` does not take the shape. |
+| H4 | The tests cut an L-shaped bore through a plate and read the volume (the bore's 48 mm² times the depth), the bounds, twelve plane faces and points in each arm, in the removed quadrant and past a side; the same bore listed clockwise and turned a quarter; a blind irregular triangle; and the refusals. A corner lying on another side is a refusal only this gate makes. |
