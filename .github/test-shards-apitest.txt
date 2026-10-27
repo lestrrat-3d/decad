@@ -844,12 +844,14 @@
 3	0.01	TestLinkagePoseAt
 3	0.00	TestLoftChainRefusesANonParallelOrNegativePlanePair
 10	0.01	TestChamferOfAPocketsFloorEdgesFillsTheirWedges
-10	0.01	TestChamferOfConcaveEdgesEndingInOpenAirIsRefused
 3	0.21	TestLoftCircleBoreRoundedAdmissionRefusals
 3	0.11	TestLoftDirectBoreBoundsRoundedCylinder
 3	2.04	TestLoftFacesEightSourceSlabsKeepVolumeAndRejectBadCapOrder
 3	0.05	TestLoftFacesTwoAndThreeCapsFromPointSlabs
 3	0.00	TestLoftFromPointRejectsApexInPlaneAndHoles
+10	0.01	TestChamferOfEveryEdgeOfAPocketStopsFlushAtTheMouth
+10	0.01	TestChamferOfAGrooveRunsFlushOutOfBothEnds
+10	0.01	TestChamferOfConcaveEdgesLargerThanTheirWallsIsRefused
 3	0.08	TestLoftHugeCircleRefusesNonFiniteVolume
 3	0.26	TestLoftLineAgainstFitSpline
 3	2.81	TestLoftMirrorCylinderBorePreservesNearAxialBridge
