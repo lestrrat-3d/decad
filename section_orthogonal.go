@@ -35,10 +35,14 @@ func orthogonalSection(ctx context.Context, fp facetedPayload, plane r3.Frame) (
 	if err != nil {
 		return nil, nil, false
 	}
-	var profile profileRecord
-	outers := 0
+	// Each loop in the plane's frame, with its sense in the world axes (ia, iv): positive area is an outer loop.
+	type ring struct {
+		points []planePoint
+		world  [][2]float64
+		area   float64
+	}
+	var outers, holes []ring
 	for _, loop := range loops {
-		// The grid loops run counter-clockwise round material in (ia, iv): an outer loop has positive area.
 		area := 0.0
 		for i, p := range loop {
 			q := loop[(i+1)%len(loop)]
@@ -58,25 +62,58 @@ func orthogonalSection(ctx context.Context, fp facetedPayload, plane r3.Frame) (
 				local[i], local[j] = local[j], local[i]
 			}
 		}
-		segments := make([]curveSegment, len(local))
-		for i, p := range local {
-			segments[i] = lineSeg{Start: p, End: local[(i+1)%len(local)], TStart: 0, TEnd: 1}
-		}
+		r := ring{points: local, world: loop, area: area}
 		if area > 0 {
-			outers++
-			profile.Outer = loopRecord{Segments: segments}
+			outers = append(outers, r)
 		} else {
-			profile.Holes = append(profile.Holes, loopRecord{Segments: segments})
+			holes = append(holes, r)
 		}
 	}
-	if outers != 1 {
+	if len(outers) == 0 {
 		return nil, nil, false
 	}
-	s, ps, err := sectionclip.ReconstructExactSection(ctx, profile, plane)
+	segments := func(points []planePoint) loopRecord {
+		out := make([]curveSegment, len(points))
+		for i, p := range points {
+			out[i] = lineSeg{Start: p, End: points[(i+1)%len(points)], TStart: 0, TEnd: 1}
+		}
+		return loopRecord{Segments: out}
+	}
+	records := make([]profileRecord, len(outers))
+	for i, o := range outers {
+		records[i].Outer = segments(o.points)
+	}
+	// A hole belongs to the smallest outer loop that contains it: its first corner lies inside that loop.
+	for _, h := range holes {
+		best := -1
+		for i, o := range outers {
+			if pointInLoop(h.world[0], o.world) && (best < 0 || o.area < outers[best].area) {
+				best = i
+			}
+		}
+		if best < 0 {
+			return nil, nil, false
+		}
+		records[best].Holes = append(records[best].Holes, segments(h.points))
+	}
+	s, ps, err := sectionclip.ReconstructExactSections(ctx, records, plane)
 	if err != nil {
 		return nil, nil, false
 	}
 	return s, ps, true
+}
+
+// pointInLoop reports whether p lies strictly inside the polygon loop, by counting the crossings of a ray to +x. A
+// corner of the loop being tested lies on no other loop's boundary, since the cells of the cut meet only along sides.
+func pointInLoop(p [2]float64, loop [][2]float64) bool {
+	in := false
+	for i, a := range loop {
+		b := loop[(i+1)%len(loop)]
+		if (a[1] > p[1]) != (b[1] > p[1]) && p[0] < a[0]+(p[1]-a[1])*(b[0]-a[0])/(b[1]-a[1]) {
+			in = !in
+		}
+	}
+	return in
 }
 
 // unitAxis reports the world axis a vector is, exactly, and its sign.

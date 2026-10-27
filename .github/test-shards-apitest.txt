@@ -1643,6 +1643,7 @@
 6	0.01	TestSTLChordTolerance
 6	0.00	TestScaledAtRefusesSheetRevolveWithoutRetiringSource
 6	0.01	TestSectionCardinalCylinderRefusesUnprovedOffsetChords
+10	0.01	TestSectionOfAMeshSolidListsEachRegion
 6	0.00	TestSectionClearanceOfASquareInsideASquareOverlaps
 6	0.00	TestSectionDirectHoleFreeLoftRefusesTwistedCorrespondence
 6	0.07	TestSectionDirectLoftMovingCircleRefusesNonexactY

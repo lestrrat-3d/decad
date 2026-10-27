@@ -28,6 +28,23 @@ func sectionArea(t *testing.T, body *decad.Body, frame r3.Frame, outer, holes in
 	return area.Value.Base()
 }
 
+// sectionAreas sections body and returns the exact area of each region, in the order Section lists them.
+func sectionAreas(t *testing.T, body *decad.Body, frame r3.Frame) []float64 {
+	t.Helper()
+	section, profiles, err := body.Section(t.Context(), frame)
+	require.NoError(t, err)
+	var areas []float64
+	for _, profile := range profiles {
+		measured, err := decad.MeasureProfile(section, profile)
+		require.NoError(t, err)
+		area, err := measured.Area()
+		require.NoError(t, err)
+		require.Equal(t, decad.Exact, area.Exactness)
+		areas = append(areas, area.Value.Base())
+	}
+	return areas
+}
+
 func planeFrame(t *testing.T, origin, u, v r3.Vec) r3.Frame {
 	t.Helper()
 	f, err := r3.NewFrame(origin, u, v)
@@ -81,12 +98,30 @@ func TestSectionOfAMeshSolidRefusals(t *testing.T) {
 		_, _, err := l.Section(t.Context(), frame)
 		require.ErrorIs(t, err, decad.ErrUnsupported, name)
 	}
-	// A cut that leaves two separate regions is not one profile.
+}
+
+func TestSectionOfAMeshSolidListsEachRegion(t *testing.T) {
+	t.Parallel()
+	x, y := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)
 	doc := decad.New()
 	bar := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(30, 10, 10))
 	slot := blockIn(t, doc, r3.NewVec(10, -1, -1), r3.NewVec(20, 11, 11))
 	split, err := decad.Cut(t.Context(), bar, slot)
 	require.NoError(t, err)
-	_, _, err = split.Section(t.Context(), planeFrame(t, r3.NewVec(0, 0, 5), x, y))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	// A slot through the bar leaves two blocks, each a profile of the one sketch.
+	require.ElementsMatch(t, []float64{100, 100}, sectionAreas(t, split, planeFrame(t, r3.NewVec(0, 0, 5), x, y)))
+	// A post standing inside a hollow frame is a region of its own beside the frame's wall. A small block stands first
+	// in the order of the loops, so the frame's hole must find its own outer loop and not the first.
+	frameDoc := decad.New()
+	wall := blockIn(t, frameDoc, r3.NewVec(10, 10, 0), r3.NewVec(40, 40, 10))
+	cavity := blockIn(t, frameDoc, r3.NewVec(15, 15, -1), r3.NewVec(35, 35, 11))
+	ring, err := decad.Cut(t.Context(), wall, cavity)
+	require.NoError(t, err)
+	post := blockIn(t, frameDoc, r3.NewVec(22, 22, 0), r3.NewVec(28, 28, 10))
+	both, err := decad.Union(t.Context(), ring, post)
+	require.NoError(t, err)
+	corner := blockIn(t, frameDoc, r3.NewVec(0, 0, 0), r3.NewVec(4, 4, 10))
+	three, err := decad.Union(t.Context(), both, corner)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []float64{16, 900 - 400, 36}, sectionAreas(t, three, planeFrame(t, r3.NewVec(0, 0, 5), x, y)))
 }
