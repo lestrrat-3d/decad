@@ -28,8 +28,10 @@ import (
 // constant d) whose region holds Y's section. Over the tube, X is then the
 // slab between two such faces (through) or the half-space past one (rooted),
 // and every boolean of X and Y is Y's section swept over an interval, joined
-// to X's faces by those one or two faces taking Y's section as a hole. Every
-// other pair misses silently and takes the mesh path.
+// to X's faces by those one or two faces taking Y's section as a hole. A Y
+// cap lying in the one face's plane is the flush reach (FlushReach), the one
+// coplanar contact B8 lets through. Every other pair misses silently and takes
+// the mesh path.
 
 // Pair is an admitted pair stated in X's reference frame: X's face view
 // with each face's map onto the reference, Y's axes as signed reference axes,
@@ -47,6 +49,9 @@ type Pair struct {
 	// with sign[i]; axis[2] is d.
 	axis [3]int
 	sign [3]float64
+	// flush names each tool cap (Z0, Z1) lying in a target plane, which only
+	// the flush reach admits (FlushReach).
+	flush [2]bool
 }
 
 // d is the reference axis Y sweeps along.
@@ -74,11 +79,22 @@ func OfPayloads(ctx context.Context, op meshbool.OperationKind, a, b topo.Payloa
 		pairs = append(pairs, [2]topo.Payload{b, a})
 	}
 	for _, pair := range pairs {
-		cp, ok, err := AdmitPair(ctx, pair[0], pair[1], placement, delta)
+		cp, ok, err := admitPair(ctx, pair[0], pair[1], placement, delta, delta == 0)
 		if err != nil {
 			return nil, false, err
 		}
 		if !ok {
+			continue
+		}
+		if cp.flush[0] || cp.flush[1] {
+			// B8's flush lift: only the flush reach reads a shared plane.
+			slabs, side, ok, err := FlushReach(ctx, cp.faces, cp.tool, cp.flush)
+			if err != nil {
+				return nil, false, err
+			}
+			if ok && flushOpAdmitted(op, side) {
+				return buildClassB(ctx, op, cp, slabs)
+			}
 			continue
 		}
 		slabs, ok, err := ThroughReach(ctx, cp.faces, cp.tool, delta)
@@ -145,11 +161,30 @@ func classBFaceView(ctx context.Context, payload topo.Payload) (breprecord.Paylo
 	}
 }
 
+// flushOpAdmitted reports whether op over a flush pair builds the solid the
+// rooted build states: a Union of a tool standing outside the face, and a Cut
+// or Intersect of a tool inside the target. The other three miss: a Union of
+// a tool inside is the target itself, and a Cut or Intersect of a tool
+// outside meets the target in the shared disk alone.
+func flushOpAdmitted(op meshbool.OperationKind, side FlushSide) bool {
+	if op == meshbool.OpUnion {
+		return side == FlushOutside
+	}
+	return side == FlushInside
+}
+
 // AdmitPair runs §3's entry gate B1–B8 in order, plus the two conditions
 // the brep record itself needs: one shared placement, and Y's axes carried
 // bit for bit as signed reference axes at the reference origin (§4.1). Every
 // miss is silent. delta widens B7's boxes (OfPayloads).
 func AdmitPair(ctx context.Context, xPayload, yPayload topo.Payload, placement r3.Transform, delta float64) (Pair, bool, error) {
+	return admitPair(ctx, xPayload, yPayload, placement, delta, false)
+}
+
+// admitPair is AdmitPair with B8's flush lift: when allowFlush is true, a
+// tool cap may lie in target planes (CoplanarFaces), and the pair records
+// which caps do in flush.
+func admitPair(ctx context.Context, xPayload, yPayload topo.Payload, placement r3.Transform, delta float64, allowFlush bool) (Pair, bool, error) {
 	// B1: X exposes a face view; Y is a prism.
 	y, okY := yPayload.(prismrecord.Payload)
 	if !okY || y.SurfaceResult {
@@ -254,7 +289,7 @@ func AdmitPair(ctx context.Context, xPayload, yPayload topo.Payload, placement r
 	if err != nil || !ok {
 		return Pair{}, false, err
 	}
-	ok, err = NoCoplanarFaces(ctx, cp.faces, cp.tool)
+	cp.flush, ok, err = CoplanarFaces(ctx, cp.faces, cp.tool, allowFlush)
 	if err != nil || !ok {
 		return Pair{}, false, err
 	}

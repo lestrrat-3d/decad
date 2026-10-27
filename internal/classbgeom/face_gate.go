@@ -115,8 +115,15 @@ func CurvedApart(ctx context.Context, faces []FaceRecord, tool ToolRecord, widen
 	return true, nil
 }
 
-// NoCoplanarFaces is B8: no target cap or wall lies in a tool cap or wall plane.
-func NoCoplanarFaces(ctx context.Context, faces []FaceRecord, tool ToolRecord) (bool, error) {
+// CoplanarFaces is B8 with its flush lift (agent-docs/general-boolean-design.md
+// §3 "Flush cap contact"). It compares every target cap and wall plane with
+// every tool cap and wall plane by exact equality of their recorded axis and
+// level. ok is false when a target plane is a tool wall's plane, and, with
+// allowFlush false, when a target plane is a tool cap's plane: B8 itself.
+// With allowFlush true a target plane may be a tool cap's plane, and flush
+// names each tool cap (Z0, Z1) that is. A shared plane admits nothing by
+// itself: FlushReach still has to find the one face the tool meets there.
+func CoplanarFaces(ctx context.Context, faces []FaceRecord, tool ToolRecord, allowFlush bool) ([2]bool, bool, error) {
 	var xs []Plane
 	for _, f := range faces {
 		if f.Region != nil {
@@ -125,20 +132,31 @@ func NoCoplanarFaces(ctx context.Context, faces []FaceRecord, tool ToolRecord) (
 		}
 		xs = append(xs, RecordPlanes(f.loops(), f.Axis, f.Sign)...)
 	}
-	ys := RecordPlanes(append([]sectionrecord.LoopRecord{tool.Profile.Outer}, tool.Profile.Holes...),
+	walls := RecordPlanes(append([]sectionrecord.LoopRecord{tool.Profile.Outer}, tool.Profile.Holes...),
 		tool.Axis, tool.Sign)
-	for _, z := range []float64{tool.Z0, tool.Z1} {
-		ys = append(ys, Plane{Axis: tool.Axis[2], Level: proofarith.FloatRat(tool.Sign[2]*z + 0)})
+	caps := [2]Plane{
+		{Axis: tool.Axis[2], Level: proofarith.FloatRat(tool.Sign[2]*tool.Z0 + 0)},
+		{Axis: tool.Axis[2], Level: proofarith.FloatRat(tool.Sign[2]*tool.Z1 + 0)},
 	}
+	same := func(a, b Plane) bool { return a.Axis == b.Axis && a.Level.Cmp(b.Level) == 0 }
+	var flush [2]bool
 	for _, a := range xs {
 		if err := ctx.Err(); err != nil {
-			return false, err
+			return [2]bool{}, false, err
 		}
-		for _, b := range ys {
-			if a.Axis == b.Axis && a.Level.Cmp(b.Level) == 0 {
-				return false, nil
+		for _, b := range walls {
+			if same(a, b) {
+				return [2]bool{}, false, nil
+			}
+		}
+		for k, b := range caps {
+			if same(a, b) {
+				flush[k] = true
 			}
 		}
 	}
-	return true, nil
+	if !allowFlush && (flush[0] || flush[1]) {
+		return [2]bool{}, false, nil
+	}
+	return flush, true, nil
 }

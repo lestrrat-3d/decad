@@ -17,6 +17,23 @@ import (
 // tube without lying across the sweep makes the reach miss. Class B's own
 // boolean passes zero.
 func ThroughReach(ctx context.Context, faces []FaceRecord, tool ToolRecord, widen float64) ([]Slab, bool, error) {
+	slabs, ok, err := tubeSlabs(ctx, faces, tool, widen)
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	lowY := tool.Sign[2]*tool.Z0 + 0
+	highY := tool.Sign[2]*tool.Z1 + 0
+	if !QualifySlabs(slabs, lowY, highY, tool.Z0Delta, tool.Z1Delta, widen) {
+		return nil, false, nil
+	}
+	return slabs, true, nil
+}
+
+// tubeSlabs lists the one or two target faces whose boxes, grown by widen,
+// are not strictly apart from the tool's section tube, each read across the
+// tool's sweep. ok is false when no face, more than two faces, or a face not
+// across the sweep meets the tube.
+func tubeSlabs(ctx context.Context, faces []FaceRecord, tool ToolRecord, widen float64) ([]Slab, bool, error) {
 	rat := proofarith.FloatRat
 	grow := rat(widen)
 	d := tool.Axis[2]
@@ -58,12 +75,60 @@ func ThroughReach(ctx context.Context, faces []FaceRecord, tool ToolRecord, wide
 	if len(slabs) == 0 || len(slabs) > 2 {
 		return nil, false, nil
 	}
-	lowY := tool.Sign[2]*tool.Z0 + 0
-	highY := tool.Sign[2]*tool.Z1 + 0
-	if !QualifySlabs(slabs, lowY, highY, tool.Z0Delta, tool.Z1Delta, widen) {
-		return nil, false, nil
-	}
 	return slabs, true, nil
+}
+
+// FlushSide says where the tool lies against the target face its cap is
+// flush with.
+type FlushSide int
+
+const (
+	// FlushOutside: the tool lies on the face's outward side, a pin standing
+	// on the face.
+	FlushOutside FlushSide = iota + 1
+	// FlushInside: the tool lies inside the target, a blind hole opening in
+	// the face.
+	FlushInside
+)
+
+// FlushReach is the through reach with a tool cap lying in the plane of the
+// one target face the tube meets (agent-docs/general-boolean-design.md §3
+// "Flush cap contact"). flush names the tool caps CoplanarFaces found in a
+// target plane. The face must sit at one of those caps' levels, compared as
+// recorded floats, with the face's and that cap's level displacements zero,
+// so the face and the cap denote one plane. The tube meets no other face's
+// box, so the tool lies wholly on one side of the face: outside when the
+// face's outward normal points from the cap into the tool, inside otherwise.
+// ok=false is a silent miss.
+func FlushReach(ctx context.Context, faces []FaceRecord, tool ToolRecord, flush [2]bool) ([]Slab, FlushSide, bool, error) {
+	slabs, ok, err := tubeSlabs(ctx, faces, tool, 0)
+	if err != nil || !ok || len(slabs) != 1 {
+		return nil, 0, false, err
+	}
+	s := slabs[0]
+	ends := [2]struct{ at, other, delta float64 }{
+		{tool.Z0, tool.Z1, tool.Z0Delta},
+		{tool.Z1, tool.Z0, tool.Z1Delta},
+	}
+	for k, e := range ends {
+		level := tool.Sign[2]*e.at + 0
+		if !flush[k] || s.Level != level {
+			continue
+		}
+		far := tool.Sign[2]*e.other + 0
+		if s.LevelDelta != 0 || e.delta != 0 {
+			return nil, 0, false, nil
+		}
+		into := 1
+		if far < level {
+			into = -1
+		}
+		if s.Outward == into {
+			return slabs, FlushOutside, true, nil
+		}
+		return slabs, FlushInside, true, nil
+	}
+	return nil, 0, false, nil
 }
 
 // Slab names a face across the tool's sweep axis and its exact level test.

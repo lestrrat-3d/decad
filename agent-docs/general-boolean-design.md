@@ -85,7 +85,7 @@ its source surface tags.
 | B2 | Ø20×40 rod `Cut` by a 4 mm keyway box | mesh | 7 `Faceted` faces, bound 2.0 mm³ |
 | B3 | plate `Union` Ø10 boss standing on its top (z 10..25) | mesh | `BooleanUnsupportedContact` (held facets within tolerance) |
 | B4 | plate `Union` the boss rooted inside (z 5..25) | mesh | 8 `Faceted` faces, bound 0.51 mm³, no analytic edge |
-| B5 | plate `Union` a side pin whose end cap lies in the plate's face | mesh | `BooleanUnsupportedContact` |
+| B5 | plate `Union` a side pin whose end cap lies in the plate's face | mesh at the survey commit; class B "Flush cap contact" when both are perpendicular datum-placed prisms | `BooleanUnsupportedContact` at the survey commit; analytic brep now |
 | P1 | hub ∪ six teeth placed by `RotationAround` | analytic → mesh | tooth 2 `BooleanUnsupportedContact` (prism-boolean §3.4 reroute) |
 | P2 | plate `Cut` by a four-lump faceted tool | mesh | `BooleanUnsupportedContact` |
 | M2–M5, T1 | reflected operands (mirror §2) | mesh | coplanar refusal, or a `Faceted` result |
@@ -658,7 +658,7 @@ then lines and circles only. The result is the `brepPayload` of §4.
 | B5 | Both operands carry `sectionDelta == 0`. | the traces and chords of §5 inherit no displacement to amplify |
 | B6 | Every segment of each operand is parallel or perpendicular to the OTHER operand's normal, read in its own frame: with `n' = (N_other · U, N_other · V)` (exact by B4: a signed unit axis or zero), a `LineSeg` has `d · n' == 0` or `d × n' == 0` exactly over the recorded endpoints; a `CircleSeg`/`ArcSeg` has no direction and passes. | a line wall neither parallel nor perpendicular to the other sweep meets a cylinder in an ellipse (class C) |
 | B7 | No curved wall of one operand comes within reach of a curved wall of the other: for every pair of circular segments across the operands, the two walls' bounding boxes (prism-extent, outward-rounded) are separated along some axis by an exact comparison. | cylinder × cylinder is a quartic; refused unless provably apart, which may refuse a valid pair |
-| B8 | No cap or wall of one operand is coplanar with a face of the other (same plane, exact: the two planes' recorded normals bit-identical and their origins' difference exactly along it), unless the pair is also co-directional, which class A owns. | a coplanar contact across a perpendicular pair is an edge-on contact the per-face scenes do not classify |
+| B8 | No cap or wall of one operand is coplanar with a face of the other (same plane, exact: the two planes' recorded normals bit-identical and their origins' difference exactly along it), unless the pair is also co-directional, which class A owns. "Flush cap contact" below lifts B8 for a tool cap alone. | a coplanar contact across a perpendicular pair is an edge-on contact the per-face scenes do not classify |
 
 Every miss takes the mesh path with no error. The arrangement cap
 (`prismMaxArrangementSegments`) and cancellation are prism-boolean §10's,
@@ -736,6 +736,49 @@ and each cylinder's pieces are read off the planar faces across its axis
 key, a scene whose cells this reach does not cover, and a crossing result
 with a hole each send the pair to the mesh path; a face that fails modify
 §5's audit, or a result whose edges do not pair, refuses.
+
+#### Flush cap contact
+
+A pin whose end cap lies flat in a wall of the target (§2 B5), and a blind
+hole whose tool ends exactly in the target's face, share one plane across a
+perpendicular pair, which B8 refuses. `classbgeom.OfPayloads` lifts B8 for
+exactly this contact when the caller charges no displacement beyond the
+records (`delta == 0`; route S's shell cavity cuts charge one and keep B8).
+`CoplanarFaces` compares every target cap and wall plane with every tool
+plane by exact equality of recorded axis and level. A target plane on a tool
+wall's plane still misses. A target plane on a tool cap's plane marks that
+cap, and a marked pair takes only the flush reach (`FlushReach`), never the
+through or crossing reach:
+
+- The tool's tube meets exactly one target face's box (the through reach's
+  box test, unwidened), and that face lies across the tool's sweep.
+- The face sits at a marked cap's level, compared as recorded floats, and
+  the face's level displacement and that cap's are both zero, so the face and
+  the cap denote one plane. A marked cap whose plane holds only faces apart
+  from the tube is not the contact; when the face meets the tool at no marked
+  cap, the pair misses.
+- No other face's box meets the tube, so over the tube the target is the
+  half-space behind the face, and the tool lies wholly on one side of it:
+  outside when the face's outward normal points from the cap into the tool,
+  inside otherwise.
+
+The result is the rooted build of B.3 with one part of the tool's interval
+empty. `Union` of a tool outside keeps the face with the tool's section as a
+hole, the tool's walls over its whole interval and its far cap. `Cut` of a
+tool inside keeps the face with that hole, the tool's walls reversed over its
+whole interval and the hole's floor at the far cap. `Intersect` of a tool
+inside is the tool's own prism. The other three pairs miss, and the mesh
+path decides them: a `Union` of a tool inside is the target itself, and a
+tool outside meets the target in the disk alone, so its `Cut` leaves the
+target whole and its `Intersect` is empty. The
+face's region takes the section as a hole through the same clean-nesting
+match, so a section touching the face's boundary misses. The hole's rim is
+the wall's rim at the shared level, one circle bounding one swept wall, so
+§4.2's refusal of a rim shared by two cylinder pieces does not arise. A
+tool one ulp off the face, a cap level that rounds onto the face's
+float (an inch length converted to 10 mm), and a face whose level carries a
+displacement keep the mesh path. A tool running exactly between two target
+faces (both caps flush) meets two faces and misses.
 
 ### Revolved shaft as a prism
 
@@ -1357,13 +1400,29 @@ are relations, never literals.
   takes the mesh path, pinned.
 - **B gate misses**: S10 (tilted plane), S7 (cylinder × cylinder), a
   non-perpendicular pair 1e-12 off, a non-permutation frame pair, a slanted
-  tool wall (B6) and a tool face in the target's cap plane (B8) each take the
+  tool wall (B6) and a tool wall in the target's cap plane (B8) each take the
   mesh path; the non-perpendicular fixture asserts `N_A · N_B != 0` itself.
 - **B rooted and through, every op**: a Ø6 pin rooted in a 40×20×10 plate's
   wall x = 40 from x = 30 to 50: `Union` 8 faces, volume within its bound of
   `8000 + 90π`; `Cut` a blind hole of 8 faces, `8000 − 90π`; `Intersect` a
   prism of `90π`. The same pin from x = −5 to 45: `Union` 10 faces,
   `8000 + 90π`, and `Intersect` `360π`, each with either operand first.
+- **B flush cap**: a Ø6 pin standing on a 40×20×10 plate's wall x = 40
+  from x = 40 to 55 unions, with either operand first, into 8 faces,
+  `8000 + 135π`; the pin from x = 30 to 40 cuts a blind hole of 8 faces,
+  `8000 − 90π`, and intersects to its own prism, `90π`; a boss standing on a
+  cross-drilled brep's top unions into 9 faces, `8000 − 225π`; a notched
+  plate whose far wall shares the pin's other cap plane still cuts its blind
+  hole. Pins drawn `Against` the YZ normal (an inside `Cut` from x = 40, an
+  outside `Union` from x = 55) and pins on the wall x = 0 (an outside `Union`
+  from x = −15, an inside `Cut` to x = 10) build the same 8-face results,
+  `8000 ± 9π·L`. Each is non-`Faceted`, pairs every edge, verifies its mesh at
+  `VerifyAll` and is `Sound`. A `Union` of the inside pin, a `Cut` of the
+  outside pin, the notched plate's `Union`, a pin one ulp off the wall and a
+  pin whose inch length rounds onto the wall keep the mesh path; an
+  `Intersect` of the outside pin is `BooleanEmpty`; a displaced face level
+  and a positive caller charge miss (`apitest/classb_flush_pin_test.go`,
+  `internal/classbgeom/flush_reach_test.go`).
 - **B stacked target**: a cross hole under a blind pocket builds a brep of
   `4000 − 400 − 80π`.
 - **B with a hole breaking out**: a through cross hole whose circle crosses
