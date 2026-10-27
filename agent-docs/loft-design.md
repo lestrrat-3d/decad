@@ -2979,9 +2979,34 @@ only to place a new tool. The edge dihedral (`Edge.planarDihedral`) keeps only
 `NormalAt`'s value and drops its bound; `ChamferAngle` and `FilletChord` use
 that angle only to size a tool. The selector reads the tag's kind. STEP export
 refuses a face with a nonzero `NormalBound` or `AxialDelta` from its analytic
-writer, so a bored loft writes faceted: its caps state the loft's vertex
-displacement, never zero once a section holds a circle, and its bore may state
-a departure too (`agent-docs/step-export-design.md`).
+writer (`agent-docs/step-export-design.md`), so a bored loft writes analytic
+only when its bore and both caps state no departure.
+
+Each Loft cap states the loft's vertex displacement `delta` as its
+`AxialDelta`, except where the build proves the cap lies exactly on its
+section plane (`internal/loftrecord/cap_level.go` `CapOnRecord`). The plane is
+the cap's `CapRecord`, `{B(O + u*U + v*V) + t}` with every held value of the
+section frame and placement read as an exact rational, and its normal is
+`m = (B*U) x (B*V)`. The proof holds when all of these are exact rational
+equalities: the `Plane` tag's `U` and `V` are orthogonal to `m` and its `N` is
+parallel to it; the tag origin and every vertex of every cap loop lie on the
+plane; and every `Circle3` or `Arc3` rim has its center on the plane and its
+axis parallel to `m`. Any other edge curve refuses. The cap then states
+`AxialDelta` 0. A join loft (`JoinDelta` nonzero,
+`agent-docs/axial-pattern-join-design.md`) never clears its caps: its
+`JoinDelta` also carries how far each placed operand's end plane sits from the
+reference's, so its record's section plane is not the ideal join's end plane.
+The other terms folded into `delta` are in-plane: the fillet's
+`ConstructionDelta` is a matched displacement inside each section plane, and
+the station and section terms are plane-local. The check runs after the bore rewrite above, so it reads the
+cap's final rim circles. In-plane station rounding does not displace a cap
+along its normal, so a section plane on which every held coordinate along the
+normal rounds to the plane itself, such as a world-axis plane under the
+identity or an exact translation, gets exact caps even when its circle
+stations and frame origin round. Each held vertex keeps its own `delta`
+bound, and the payload-wide `AxialDelta()` that a `ThroughAll` stop reads
+stays `delta`. `ToFace` reads the cap's own zero against the record's exact
+level, which the cap lies on.
 
 A direct Loft also publishes one `Circle3` per cap rim and one curved hole
 wall when its authenticated sections have identical outer records, one whole

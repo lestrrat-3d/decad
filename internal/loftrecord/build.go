@@ -218,6 +218,15 @@ func Build(ctx context.Context, env topo.Env, pl Payload, budget *proofbound.Wor
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	// A cap whose tag and loops lie exactly on its section plane is not
+	// displaced from it, whatever the in-plane station rounding. This runs
+	// after the hole rewrites above, so it reads each cap's final rim edges.
+	// A join loft's JoinDelta also carries how far each placed operand's end
+	// plane sits from the reference's (axialsection.Place), so its
+	// caps keep the whole displacement: their record is not the ideal join's.
+	if pl.JoinDelta == 0 {
+		clearExactCapLevels(capStart, capEnd)
+	}
 	// Each cap holds a plane-local area, so it takes its section map's charge
 	// before any reading below composes its bound.
 	capStretch, err := chargeCapMaps(pl, capStart, capEnd)
