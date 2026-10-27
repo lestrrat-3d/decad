@@ -118,10 +118,16 @@ func FixedMulDown(a, b *big.Int) *big.Int {
 
 // FixedMulUp multiplies two non-negative fixed-point values and rounds the
 // product up, FixedMulDown's outward (ceiling) mirror.
+// A nonzero bit below the fixed-point boundary is the remainder: shift the
+// product down and add one exactly when that remainder is nonzero.
 func FixedMulUp(a, b *big.Int) *big.Int {
 	p := new(big.Int).Mul(a, b)
-	p.Add(p, new(big.Int).Sub(TrigFixedOne, big.NewInt(1)))
-	return p.Rsh(p, TrigFixedBits)
+	roundUp := p.Sign() != 0 && p.TrailingZeroBits() < TrigFixedBits
+	p.Rsh(p, TrigFixedBits)
+	if roundUp {
+		p.Add(p, big.NewInt(1))
+	}
+	return p
 }
 
 // FixedDivDown divides a non-negative fixed-point value by a positive
