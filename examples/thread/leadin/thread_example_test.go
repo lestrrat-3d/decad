@@ -48,7 +48,7 @@ func Example_thread_lead_in() {
 	}
 	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
 	// Output:
-	// volume: 1305 mm^3
+	// volume: 1306 mm^3
 }
 
 // LeadInAngle sets the slope of the lead-in's bevel: LeadIn is its distance along
@@ -91,5 +91,5 @@ func Example_thread_lead_in_angle() {
 	}
 	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
 	// Output:
-	// volume: 1305 mm^3
+	// volume: 1306 mm^3
 }

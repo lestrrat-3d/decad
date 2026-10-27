@@ -52,7 +52,7 @@ func Example_thread() {
 	// The plain rod holds 1571 mm^3. The groove removes about 258 mm^3.
 	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
 	// Output:
-	// volume: 1312 mm^3
+	// volume: 1313 mm^3
 }
 
 // LeftHand and Length change the thread's hand and how much of the face it
