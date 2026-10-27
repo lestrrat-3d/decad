@@ -580,3 +580,45 @@ func TestMeshSolidWithAPrismAgreesWithTheCubeByCubeBoolean(t *testing.T) {
 	require.Greater(t, checked, 60)
 	require.Greater(t, exact, checked*8/10, "the mixed route answers nearly every pair exactly")
 }
+
+func TestMirroredCopyAndUnionAgreeWithTheMirroredCubes(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(35, 36))
+	checked := 0
+	for range 40 {
+		c := randomCubes(rng)
+		doc := decad.New()
+		b, ok := c.solid(t, doc)
+		if !ok {
+			continue
+		}
+		// Mirror across the plane x = k, k a whole number from 0 to the grid's side: the cube at x goes to the cube at
+		// 2k - 1 - x, along each of y and z unchanged.
+		k := rng.IntN(voxelSide + 1)
+		frame, err := r3.NewFrame(r3.NewVec(float64(k), 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
+		require.NoError(t, err)
+		image, err := decad.MirroredCopy(t.Context(), b, decad.MirrorFrame{Frame: frame})
+		require.NoError(t, err)
+		got, bound := volumeOf(t, image)
+		require.InDelta(t, float64(c.count()), got, bound+1e-9, "a mirror keeps the volume")
+		both, err := decad.Union(t.Context(), b, image)
+		if err != nil {
+			continue // cubes that meet only along an edge are refused, never a wrong volume
+		}
+		checked++
+		covered := map[[3]int]bool{}
+		for x := range voxelSide {
+			for y := range voxelSide {
+				for z := range voxelSide {
+					if c[x][y][z] {
+						covered[[3]int{x, y, z}] = true
+						covered[[3]int{2*k - 1 - x, y, z}] = true
+					}
+				}
+			}
+		}
+		got, bound = volumeOf(t, both)
+		require.InDelta(t, float64(len(covered)), got, bound+1e-9, "a set of %d cubes joined to its mirror at x = %d", c.count(), k)
+	}
+	require.Greater(t, checked, 15)
+}
