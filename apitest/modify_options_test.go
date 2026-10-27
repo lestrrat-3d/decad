@@ -230,12 +230,19 @@ func TestShellNoOpenings(t *testing.T) {
 			}
 		}
 		require.NotNil(t, holed)
-		// A holed section's closed shell builds inward only; its outward
-		// shell is SX8.
-		_, err = decad.Shell(t.Context(), holed, nil, units.Millimeters(2), decad.WithNoOpenings(), decad.WithShellSense(decad.Outward))
+		// Outward, a hole whose radius the thickness reaches fills in, which
+		// the offset refuses as a dropped feature (S11a).
+		_, err = decad.Shell(t.Context(), holed, nil, units.Millimeters(5), decad.WithNoOpenings(), decad.WithShellSense(decad.Outward))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "SX8")
+		require.ErrorContains(t, err, "drops a section feature")
 		require.Equal(t, []*decad.Body{holed}, doc.Bodies())
+		// A thinner outward wall builds: the 40² section dilated by 2 (its
+		// corners rounded, the hole shrunk to radius 3) over 14, less the
+		// receiver.
+		closed, err := decad.Shell(t.Context(), holed, nil, units.Millimeters(2), decad.WithNoOpenings(), decad.WithShellSense(decad.Outward))
+		require.NoError(t, err)
+		requireVolumeNear(t, closed, (1920+4*math.Pi-9*math.Pi)*14-(1600-25*math.Pi)*10)
+		require.Len(t, closed.Shells(), 2)
 	})
 }
 

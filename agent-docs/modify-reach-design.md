@@ -101,7 +101,7 @@ Base Table R still admits the shipped straight-prism cases. RX adds these rows:
 
 | RX | Receiver | Fillet / Chamfer | Shell |
 |---|---|---|---|
-| **RX1** | `prismPayload` | base lateral junctions; one straight cap edge through route E or the bounded cutter; OR every geometric edge of one or more complete cap loops. Route V admits both classes in one `Fillet` call where its partition holds (`agent-docs/vertex-blend-design.md`) | base cap openings, with BX8 replacing base S12; OR, for a hole-free section, one proper connected run of outer side faces with any cap openings; OR `WithNoOpenings`, inward only for a holed section |
+| **RX1** | `prismPayload` | base lateral junctions; one straight cap edge through route E or the bounded cutter; OR every geometric edge of one or more complete cap loops. Route V admits both classes in one `Fillet` call where its partition holds (`agent-docs/vertex-blend-design.md`) | base cap openings, with BX8 replacing base S12; OR, for a hole-free section, one proper connected run of outer side faces with any cap openings; OR `WithNoOpenings`, in either sense |
 | **RX2** | `revolvePayload` | off-axis swept meridian junctions: a full-turn latitude `Circle3` or partial-turn junction `Arc3`; one bounded quarter-turn rectangular cap rim (§7.2) | full turn: one proper connected run of generated side faces, or `WithNoOpenings`; partial turn: both angular caps MUST be removed, with an optional proper connected side-face run |
 | **RX3** | `stackedPrismPayload` | through its face view, `agent-docs/brep-modify-design.md` Table RB; a view that refuses is SX10 | the same, plus `WithNoOpenings` for a nested two-slab rectangular boss (modify-general §3.1a) |
 | **RX4** | `capBlendPayload` | SX10 | SX10 |
@@ -143,7 +143,7 @@ more specific SX row replaces that base refusal.
 | **SX5** | selected revolve edge is neither a swept meridian junction nor §7.2's single quarter-turn rectangular cap rim | body exists; other cap-edge/general rolling blends are not built | `ErrUnsupported` |
 | **SX6** | cap-loop offset loses a carrier, reaches an empty circular offset, or has no regular radius-`r` envelope; LF9's exact-radius inward arc with straight G1 neighbours is the fillet exception (`agent-docs/vertex-blend-design.md`) | no regular requested blend | `ErrDegenerate` |
 | **SX7** | cap-loop center paths cross/touch non-adjacent paths, a patch self-intersects, two cap bands meet, or trims need merging | body exists under trimming/merge kernel | `ErrUnsupported` |
-| **SX8** | a side opening, or an outward `WithNoOpenings`, on a holed prism section; a non-empty side selection is not one proper outer-loop run; offset changes topology; partial revolve keeps either angular cap; revolve meridian is holed or meets the axis along more than one walk; a revolve wall's offset reaches the axis | body exists outside extension | `ErrUnsupported` |
+| **SX8** | a side opening on a holed prism section; a non-empty side selection is not one proper outer-loop run; offset changes topology; partial revolve keeps either angular cap; revolve meridian is holed or meets the axis along more than one walk; a revolve wall's offset reaches the axis | body exists outside extension | `ErrUnsupported` |
 | **SX9** | any modify op on `facetedPayload` outside RX6's certified classes | body exists; no admitted source and topology certificate for the selected modification | `ErrUnsupported` |
 | **SX10** | another modify op on `capBlendPayload`, or on a `stackedPrismPayload` whose face view refuses (`agent-docs/brep-modify-design.md` SB2) | body exists; compound feature composition not built | `ErrUnsupported` |
 | **SX11** | inward closed/side-opening prism shell leaves axial cavity height `h - k*t <= 0`, where `k` is kept cap count; or section cavity is empty | no cavity | `ErrDegenerate` |
@@ -1440,21 +1440,81 @@ the one outer lump. Roles are the stack's own: outer walls
 `slab(0).region(0).side(0,j)`, cavity walls `slab(1).region(0).side(1,j)`,
 `capStart`/`capEnd`, the floor `floor(0,0)` and the ceiling `ceiling(1,0)`.
 
-A section with `k >= 1` holes builds inward only. Its middle slab holds the
-`1 + k` wall bands `ShellWallBands` lists (`{P.Outer, reverse(Q.Outer)}`,
-then per hole `i` the lining `{reverse(Q.Holes[i]), P.Holes[i]}`); each
-interface takes stacked-prism §2.2's lining reading, and each exposes `Q`,
-a ring with `k` holes, as the cavity's floor or ceiling. The cavity wraps
-every lining, so its void shell holds the inset walls, each lining's outer
-cylinder or wall, the floor and the ceiling. A lining's outer column starts
-and ends at an interface and faces the cavity, so the record carries
-`ClosedShell` (stacked-prism §2.4) and that column anchors no outer shell.
-The built body must read as one lump of one outer shell around one void
-shell; any other reading is `ErrUnsupported`. The volume is
-`area(P)·h − area(Q)·(h − 2t)`, the slab sum. An outward closed shell of a
-holed section is SX8: the hole's dilation shrinks it, and this record is
-built and tested inward only. A hole the erosion makes meet the inset outer
-loop changes the cavity's topology and is the offset audit's refusal (S11).
+A section with `k >= 1` holes builds in either sense, with `O` the outer
+region and `C` the cavity region (`P` and `Q` inward, `Q` and `P` outward).
+Its middle slab holds the `1 + k` wall bands `ShellWallBands` lists
+(`{O.Outer, reverse(C.Outer)}`, then per hole `i` the lining
+`{reverse(C.Holes[i]), O.Holes[i]}`); each interface takes stacked-prism
+§2.2's lining reading, and each exposes `C`, a ring with `k` holes, as the
+cavity's floor or ceiling. The cavity wraps every lining, so its void shell
+holds `C`'s outer walls, each lining's outer cylinder or wall, the floor and
+the ceiling. A lining's outer column starts and ends at an interface and faces
+the cavity, so the record carries `ClosedShell` (stacked-prism §2.4) and that
+column anchors no outer shell. The built body must read as one lump of one
+outer shell around one void shell; any other reading is `ErrUnsupported`.
+The volume is the slab sum: `area(P)·h − area(Q)·(h − 2t)` inward and
+`area(Q)·(h + 2t) − area(P)·h` outward. A hole the erosion makes meet the
+inset outer loop changes the cavity's topology and is the offset audit's
+refusal (S11).
+
+**The outward closed shell of a holed section.** The denoted solid is
+`(Q × [z0 − t, z1 + t]) \ (P × (z0, z1))` with `Q = P ⊕ t`, base §8's
+outward offset: the cap slabs B6 grows below a kept cap, on both ends. The
+record above denotes it, by these steps:
+
+1. `Q` is the per-loop offset. Write `E` for the open exterior of `P`'s
+   outer loop and `H_i` for the open region of hole `i`. The complement of
+   `P` is the disjoint union of the open sets `E` and `H_i`, and an open disk
+   of radius `t` is connected, so it lies in that complement exactly when it
+   lies in one of them. Hence `P ⊕ t`'s complement is
+   `(E ⊖ t) ∪ ⋃ (H_i ⊖ t)`: the outer loop dilates on its own, and each hole
+   erodes on its own, its walls moving `t` into the hole. `OffsetProfile`
+   offsets each loop in its own walk sense with `s = −1`, which is exactly this
+   split: a convex corner of the material rounds with an arc of radius `t`,
+   whether it sits on the outer loop or is a hole's reflex corner, and a
+   reflex corner of the material miters (base §7). Each loop's per-feature
+   offset is that loop's true offset while it keeps its feature set, which
+   S11a (at construction) and the §5 audit's S8, S11b and S9 (after it)
+   decide on the built section, the same gates B4 and B6 run on an outward
+   holed section.
+2. A hole that the offset empties drops a feature: a circle whose radius `r`
+   is at most `t` (`OffsetRadius`), or a polygonal hole narrower than `2t`,
+   whose trimmed walks run backward (`WalkConsumed`). Either is S11a,
+   `offset2d.ErrDrop` (`ErrUnsupported`). The body exists — the hole fills
+   in, and the cavity, the whole of `P`, keeps its hole — but its outer shell
+   loses the through hole, a feature set this record does not hold.
+3. Outward, holes cannot meet each other or the outer loop. `H_i ⊖ t ⊂ H_i`,
+   and `E ⊖ t ⊂ E`, so the offset loops lie in pairwise disjoint regions that
+   `P`'s own loops separate. Two outer-loop walls that close on each other
+   across a notch narrower than `2t` are the one merge the dilation makes. A
+   notch whose walls the trim runs backward is S11a (`WalkConsumed`) as the
+   offset is built; one that survives the trim is the audit's crossing test,
+   S11b. A hole's own erosion can still change its topology: a hole whose
+   narrow waist is under `2t` wide splits into two (a dumbbell), its offset
+   walk crossing itself at the waist, and that is S11b too.
+4. `Q \ P` is the `1 + k` bands. `Q \ P = (D \ D_P) ∪ ⋃ (H_i \ (H_i ⊖ t))`,
+   with `D` and `D_P` the closed regions inside `Q`'s and `P`'s outer loops:
+   the outer band `{Q.Outer, reverse(P.Outer)}` and, per hole, the lining
+   `{reverse(P.Holes[i]), Q.Holes[i]}`, pairwise disjoint by step 3.
+5. The interfaces read. At each interface the cap side holds `Q`, one region
+   with `k` holes, and the wall side the `1 + k` bands: the first band's outer
+   is `Q.Outer` and band `m >= 1` has `Q`'s hole `m − 1` as its one hole
+   (lining I5); the exposed record is `P` (I6, I7).
+6. The faces close as the denoted boundary. `Q`'s outer loop and each
+   `Q.Holes[i]` are one column over all three slabs (the body's outer wall and
+   its through-hole walls); `P`'s outer loop and each lining's outer
+   `reverse(P.Holes[i])` are columns of the middle slab alone, and with the
+   floor and ceiling exposing `P` they bound `P × [z0, z1]`, the cavity. The
+   lining columns start and end at an interface, so `ClosedShell` keeps them
+   out of the exterior anchors, and the lump reading must be one outer shell
+   around one void shell (`requireOneCavity`); tessellation's per-shell
+   winding audit falsifies a reading that disagrees with the facets.
+
+The offset loops are the float evaluation of these shapes at the held
+thickness, and the stack carries their proven displacement as its
+`sectionDelta` (base §9), so a curved or rounded record is `Sound` with a
+bound, not `Exact`. No gate is new: S11a, the §5 audit and
+`requireOneCavity` are the ones the inward record and B6 already run.
 A stack enclosing a cavity has no brep face view, so a later modify op on the
 closed shell is `agent-docs/brep-modify-design.md` SB2.
 
@@ -1479,7 +1539,7 @@ hole lining lies inside the outer band's own hole, which a scene of outers alone
 would read as nesting. The offset loops sit within the offset displacement of
 the offset the thickness denotes, and the group carries it as its
 `sectionDelta`. The resulting `1 + k` connected components lift base S12
-without admitting holed side-opening or no-opening shells.
+without admitting holed side-opening shells.
 
 ### 9.3 Revolve shell
 
@@ -1982,7 +2042,9 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
   one floor region into exactly one lump;
 - both-caps cap-only shell with `k` holes produces exactly `1 + k` regions,
   lumps, and rim sets in stable outer-then-hole order;
-- side run disconnected/all-side, or side/no-opening on a holed section → SX8;
+- side run disconnected/all-side, or a side opening on a holed section → SX8;
+- no-opening on a holed section builds inward and outward; an outward one
+  whose offset empties a hole → S11a;
 - full-revolve side opening and closed shell;
 - axis-touching cylinder/sphere shell has no fabricated axis wall;
 - partial revolve builds only with both angular caps selected;

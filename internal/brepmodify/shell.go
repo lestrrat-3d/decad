@@ -64,16 +64,15 @@ func Shell(ctx context.Context, env topo.Env, b *topo.Body, call ShellCall) (*to
 			return shellRevolve(ctx, env, b, rp, nil, s, t, tmm, tDelta)
 		}
 		// Reach BX5: a straight prism keeps both caps and lines them with a
-		// wall, closing a cavity. A holed section builds inward only, and
-		// prismshell.BuildClosed refuses the outward one (SX8).
+		// wall, closing a cavity, holed or not, in either sense.
 		if pp, ok := b.Payload.(prismrecord.Payload); ok {
 			return shellClosedPrism(ctx, env, pp, s, t, tmm, tDelta)
 		}
 		// Modify-general §3.2: a brep record that route P reads as a prism
-		// along some reference axis is that prism, whatever the axis, and
-		// takes the same closed shell inward.
-		if bp, ok := b.Payload.(breprecord.Payload); ok && call.Inward {
-			if pp, read, err := closedShellPrismReading(ctx, b, bp); err != nil || read {
+		// is that prism and takes its closed shell: inward along any reading
+		// axis, outward only along its one reading axis.
+		if bp, ok := b.Payload.(breprecord.Payload); ok {
+			if pp, read, err := closedShellPrismReading(ctx, bp, call.Inward); err != nil || read {
 				if err != nil {
 					return nil, err
 				}
@@ -186,7 +185,7 @@ func Shell(ctx context.Context, env topo.Env, b *topo.Body, call ShellCall) (*to
 // shellClosedPrism is reach BX5 (agent-docs/modify-reach-design.md §9.2), built by
 // prismshell.BuildClosed: WithNoOpenings on a straight prism keeps every face
 // and lines it with a wall of thickness t, closing a cavity whose walls form
-// one void shell (FaceShell.IsVoid). A holed section builds inward only.
+// one void shell (FaceShell.IsVoid), holed or not, in either sense.
 func shellClosedPrism(ctx context.Context, env topo.Env, pp prismrecord.Payload, s float64, t units.Value, tmm, tDelta float64) (*topo.Body, error) {
 	return prismshell.BuildClosed(ctx, env, prismshell.CapShellInput{
 		Prism: pp, KeptCaps: 2, Sense: s, Thickness: t, HeldThickness: tmm, ThicknessDelta: tDelta,

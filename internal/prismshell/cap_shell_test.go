@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -172,10 +173,53 @@ func TestCapShellBuilds(t *testing.T) {
 		err = topobuild.RequireShellWinding(t.Context(), mesh, unmarked.Lumps)
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 		require.ErrorContains(t, err, "do not wind outward")
-
-		_, err = prismshell.BuildClosed(t.Context(), capShellEnv(), capShell(t, holed, 10, -1, 1, 2))
-		require.ErrorIs(t, err, decaderr.ErrUnsupported)
-		require.ErrorContains(t, err, "outward closed shell of a holed prism section")
+	})
+	t.Run("closed holed outward", func(t *testing.T) {
+		t.Parallel()
+		// The same section wrapped outward by 0.5: the outer wall is the 11²
+		// square with its four corners rounded (120 + π/4), the hole erodes to
+		// the 1² square at (4.5, 4.5) with mitered corners, and the cavity is
+		// the section itself over [0, 10], a ring around the hole's lining.
+		holed := momentinput.Profile{Outer: squareAt(0, 0, 10), Holes: []sectionrecord.LoopRecord{reversed(squareAt(4, 4, 2))}}
+		body, err := prismshell.BuildClosed(t.Context(), capShellEnv(), capShell(t, holed, 10, -1, 0.5, 2))
+		require.NoError(t, err)
+		requireVolume(t, (120+math.Pi/4-1)*11-96*10, body)
+		require.Len(t, body.Lumps, 1)
+		shells := body.Lumps[0].Shells
+		require.Len(t, shells, 2)
+		require.False(t, shells[0].Void)
+		require.True(t, shells[1].Void, "the ring around the hole's lining is the void shell")
+		sp, ok := body.Payload.(stackedrecord.Payload)
+		require.True(t, ok)
+		require.True(t, sp.ClosedShell)
+		require.Len(t, sp.Slabs, 3)
+		require.Equal(t, []float64{-0.5, 0, 10}, []float64{sp.Slabs[0].Z0, sp.Slabs[1].Z0, sp.Slabs[2].Z0})
+		require.Equal(t, 10.5, sp.Slabs[2].Z1)
+		require.Len(t, sp.Slabs[1].Regions, 2, "the outer band and the hole's lining")
+		// The cavity's floor and ceiling expose the receiver's own section.
+		require.Equal(t, []momentinput.Profile{holed}, sp.Interfaces[0].LowerExposed)
+		require.Equal(t, []momentinput.Profile{holed}, sp.Interfaces[1].UpperExposed)
+		mesh, err := stackedrecord.Tessellate(t.Context(), body, sp, 0.05, true)
+		require.NoError(t, err)
+		require.NoError(t, topobuild.RequireShellWinding(t.Context(), mesh, body.Lumps))
+	})
+	t.Run("closed holed outward fills a hole", func(t *testing.T) {
+		t.Parallel()
+		// Outward the hole erodes by t: the 2² hole empties at t = 1 and past
+		// it, and a radius-1 round hole at t = 1. Each drops a feature (S11a).
+		square := momentinput.Profile{Outer: squareAt(0, 0, 10), Holes: []sectionrecord.LoopRecord{reversed(squareAt(4, 4, 2))}}
+		round := momentinput.Profile{Outer: squareAt(0, 0, 10), Holes: []sectionrecord.LoopRecord{{Segments: []sectionrecord.CurveSegment{
+			sectionrecord.CircleSeg{Center: sectionrecord.Point2{U: 5, V: 5}, Radius: units.Millimeters(1), CCW: false, TStart: 1, TEnd: 0},
+		}}}}
+		for _, tc := range []struct {
+			name    string
+			section momentinput.Profile
+			t       float64
+		}{{"square at its half-width", square, 1}, {"square past it", square, 1.5}, {"circle at its radius", round, 1}} {
+			_, err := prismshell.BuildClosed(t.Context(), capShellEnv(), capShell(t, tc.section, 10, -1, tc.t, 2))
+			require.ErrorIs(t, err, offset2d.ErrDrop, tc.name)
+			require.ErrorIs(t, err, decaderr.ErrUnsupported, tc.name)
+		}
 	})
 	t.Run("closed refusals", func(t *testing.T) {
 		t.Parallel()
