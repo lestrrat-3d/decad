@@ -49,6 +49,11 @@ type GCodeSpec struct {
 	// StartCode and EndCode are lines written as they are after the header and the heating, and after the last layer:
 	// the machine's own start and end sequence. A line break in them starts a line of the file.
 	StartCode, EndCode string
+	// FanSpeed, a dimensionless fraction above 0 and at most 1, turns the part cooling fan on at that share of its full
+	// speed (M106) at the start of layer FanFromLayer, counted from zero, and off (M107) after the last layer. The zero
+	// value leaves the fan alone. FanFromLayer is from 0 to one less than the number of layers.
+	FanSpeed     units.Value
+	FanFromLayer int
 }
 
 // GCodePerimeters writes the toolpath that prints body's outline layer by layer as G-code
@@ -139,6 +144,19 @@ func GCodePerimeters(ctx context.Context, w io.Writer, body *decad.Body, tol uni
 	if err != nil {
 		return err
 	}
+	fan := 0.0
+	if spec.FanSpeed != (units.Value{}) {
+		if spec.FanSpeed.Kind() != units.Dimensionless {
+			return fmt.Errorf("export: G-code: %w: the fan speed must be dimensionless", decad.ErrUnitKind)
+		}
+		fan = spec.FanSpeed.Base()
+		if !(fan > 0 && fan <= 1) {
+			return fmt.Errorf("export: G-code: %w: the fan speed must lie in (0, 1], got %g", decad.ErrDegenerate, fan)
+		}
+		if spec.FanFromLayer < 0 || spec.FanFromLayer >= layers {
+			return fmt.Errorf("export: G-code: %w: the fan layer %d is not one of the %d layers", decad.ErrDegenerate, spec.FanFromLayer, layers)
+		}
+	}
 	if spec.SolidLayers < 0 {
 		return fmt.Errorf("export: G-code: %w: the solid layers are negative", decad.ErrDegenerate)
 	}
@@ -185,6 +203,9 @@ func GCodePerimeters(ctx context.Context, w io.Writer, body *decad.Body, tol uni
 		if err != nil {
 			return err
 		}
+		if fan > 0 && i == spec.FanFromLayer {
+			fmt.Fprintf(&out, "M106 S%.0f\n", math.Round(fan*255))
+		}
 		fmt.Fprintf(&out, "; layer %d z=%.4f\n", i, top)
 		perimeters := outline.Loops
 		if spec.PerimeterInset {
@@ -216,6 +237,9 @@ func GCodePerimeters(ctx context.Context, w io.Writer, body *decad.Body, tol uni
 			fmt.Fprintf(&out, "G1 X%.4f Y%.4f E%.5f F%.1f\n", seg.b.X, seg.b.Y, extruded, feed*60)
 			printed = true
 		}
+	}
+	if fan > 0 {
+		out.WriteString("M107\n")
 	}
 	if spec.EndCode != "" {
 		out.WriteString(strings.TrimRight(spec.EndCode, "\n") + "\n")
