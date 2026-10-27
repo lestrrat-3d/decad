@@ -244,14 +244,14 @@ func TestGatherNearContactsCancelAtEveryPoll(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, want.CloseA)
 			free := &pollCtx{Context: base, limit: math.MaxInt64}
-			_, _, err = gatherNearContacts(free, ma, fa, mb, fb, slack, NewContactMemo(ma, mb), NearContactRunner(), limit)
+			_, _, err = gatherNearContacts(free, ma, fa, mb, fb, slack, NewContactMemo(ma, mb), NearContactRunner(slack), limit)
 			require.NoError(t, err)
 			total := free.polls.Load()
 			stride := max(1, total/200)
 			for k := int64(0); k <= total+2; k += stride {
 				c := &pollCtx{Context: base, limit: k}
 				label := fmt.Sprintf("workers=%d limit=%d cancel after %d of %d polls", workers, limit, k, total)
-				got, deferred, err := gatherNearContacts(c, ma, fa, mb, fb, slack, NewContactMemo(ma, mb), NearContactRunner(), limit)
+				got, deferred, err := gatherNearContacts(c, ma, fa, mb, fb, slack, NewContactMemo(ma, mb), NearContactRunner(slack), limit)
 				if c.cancelled.Load() {
 					require.ErrorIs(t, err, context.Canceled, label)
 					require.False(t, deferred, label)
@@ -275,7 +275,7 @@ func TestGatherNearContactsCancelBetweenBatches(t *testing.T) {
 	fa, fb := allFacets(ma), allFacets(mb)
 	for _, workers := range []int{1, 4} {
 		ctx, cancel := context.WithCancel(WithContactWorkers(t.Context(), workers))
-		inner := NearContactRunner()
+		inner := NearContactRunner(3)
 		batches := 0
 		run := func(c context.Context, a, b *BoolMesh, pairs []ContactPair, results []ContactBatchResult, w int) error {
 			batches++
@@ -307,7 +307,7 @@ func TestRunContactBatchReportsCancelAfterWorkers(t *testing.T) {
 	for _, workers := range []int{1, 4} {
 		c := &pollCtx{Context: WithContactWorkers(t.Context(), workers), limit: 1}
 		results := make([]ContactBatchResult, len(pairs))
-		err := NearContactRunner()(c, ma, mb, pairs, results, workers)
+		err := NearContactRunner(0.5)(c, ma, mb, pairs, results, workers)
 		require.ErrorIs(t, err, context.Canceled, "workers=%d", workers)
 	}
 }
@@ -327,11 +327,14 @@ func TestNearContactExecutorOrderAndBatches(t *testing.T) {
 			all = append(all, ContactPair{I: i, J: j})
 		}
 	}
+	// The slack splits the crossing fixture's ContactNone pairs into far and
+	// near ones.
+	const slack = 0.3
 	type consumed struct {
 		pair     ContactPair
 		contact  TriContact
 		measured bool
-		dist     float64
+		far      bool
 	}
 	expect := func(p ContactPair, hit bool) consumed {
 		ma.PrepareFloatNormal(p.I)
@@ -341,7 +344,7 @@ func TestNearContactExecutorOrderAndBatches(t *testing.T) {
 		c := consumed{pair: p, contact: r.Contact}
 		if r.Contact.Kind == ContactNone && !hit {
 			c.measured = true
-			c.dist = TriTriDistance(TriCorners(ma, p.I), TriCorners(mb, p.J))
+			c.far = TriTriDistance(TriCorners(ma, p.I), TriCorners(mb, p.J)) > slack
 		}
 		return c
 	}
@@ -364,7 +367,7 @@ func TestNearContactExecutorOrderAndBatches(t *testing.T) {
 				}
 				var got []consumed
 				var batches []int
-				inner := NearContactRunner()
+				inner := NearContactRunner(slack)
 				e := NewContactBatchExecutor(t.Context(), ma, mb, memo, workers, nil)
 				e.Limit = limit
 				e.Run = func(ctx context.Context, a, b *BoolMesh, ps []ContactPair, rs []ContactBatchResult, w int) error {
@@ -372,7 +375,7 @@ func TestNearContactExecutorOrderAndBatches(t *testing.T) {
 					return inner(ctx, a, b, ps, rs, w)
 				}
 				e.ConsumeResult = func(p ContactPair, r ContactBatchResult) error {
-					got = append(got, consumed{pair: p, contact: r.Contact, measured: r.Measured, dist: r.Dist})
+					got = append(got, consumed{pair: p, contact: r.Contact, measured: r.Measured, far: r.Far})
 					return nil
 				}
 				for k := range n {
@@ -385,7 +388,7 @@ func TestNearContactExecutorOrderAndBatches(t *testing.T) {
 					require.Equal(t, want.pair, got[k].pair, label)
 					require.Equal(t, want.contact.Kind, got[k].contact.Kind, label)
 					require.Equal(t, want.measured, got[k].measured, "%s pair %d", label, k)
-					require.Equal(t, want.dist, got[k].dist, "%s pair %d", label, k)
+					require.Equal(t, want.far, got[k].far, "%s pair %d", label, k)
 				}
 				// Runner batches hold only the misses of each full or final
 				// batch of Limit queued pairs.
@@ -422,7 +425,7 @@ func TestNearContactExecutorFirstErrorWins(t *testing.T) {
 			first := rng.IntN(n - 1)
 			second := first + 1 + rng.IntN(n-first-1)
 			label := fmt.Sprintf("workers=%d first=%d second=%d n=%d", workers, first, second, n)
-			inner := NearContactRunner()
+			inner := NearContactRunner(0.5)
 			e := NewContactBatchExecutor(t.Context(), ma, mb, NewContactMemo(ma, mb), workers, nil)
 			e.Limit = 1 << 20 // one batch: the flush sees both errors at once
 			e.Run = func(ctx context.Context, a, b *BoolMesh, ps []ContactPair, rs []ContactBatchResult, w int) error {

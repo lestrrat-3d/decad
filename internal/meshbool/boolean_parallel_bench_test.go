@@ -77,7 +77,7 @@ func boxPairs(tb testing.TB, ma, mb *BoolMesh) []ContactPair {
 // GatherNearContacts does, on one worker and on four.
 func BenchmarkNearContactBatch(b *testing.B) {
 	rod, thread, pairs := threadContactPairs(b, 24, 8, 160, 64)
-	run := NearContactRunner()
+	run := NearContactRunner(0.01)
 	for _, workers := range []int{1, 4} {
 		b.Run(map[int]string{1: "workers=1", 4: "workers=4"}[workers], func(b *testing.B) {
 			results := make([]ContactBatchResult, ContactBatchSize)
@@ -101,4 +101,36 @@ func BenchmarkNearContactBatch(b *testing.B) {
 			b.ReportMetric(float64(segments), "segments/op")
 		})
 	}
+}
+
+// BenchmarkGatherNearContactsApart gathers the near contacts of a rod inside a
+// coaxial tube 0.4 mm farther out, at a 0.01 mm slack. Their oblique facets'
+// boxes overlap, so the gate classifies and measures those pairs, and none
+// comes within the slack. "fresh" measures on the batch workers; "memo"
+// repeats the gather with a filled memo, so the producer measures each pair.
+func BenchmarkGatherNearContactsApart(b *testing.B) {
+	rod := threadContactMesh(b, 24, 8, 10, func(_, _ float64) float64 { return 5 })
+	tube := threadContactMesh(b, 160, 64, 12, func(_, _ float64) float64 { return 5.4 })
+	fa, fb := AllFacets(rod), AllFacets(tube)
+	const slack = 0.01
+	gather := func(b *testing.B, memo *ContactMemo) {
+		nc, deferred, err := GatherNearContacts(b.Context(), rod, fa, tube, fb, slack, memo)
+		require.NoError(b, err)
+		require.False(b, deferred)
+		require.Empty(b, nc.CloseA)
+	}
+	b.Run("fresh", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			gather(b, NewContactMemo(rod, tube))
+		}
+	})
+	b.Run("memo", func(b *testing.B) {
+		memo := NewContactMemo(rod, tube)
+		gather(b, memo)
+		b.ReportAllocs()
+		for b.Loop() {
+			gather(b, memo)
+		}
+	})
 }
