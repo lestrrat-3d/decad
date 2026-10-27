@@ -200,3 +200,18 @@ func RefineMesh(ctx context.Context, m *MeshBody, maxEdge units.Value) (*MeshBod
 | W4 | The cell is chosen by trying `0.9·distance/√3`, whose every vertex moves less than `distance`, and 24 cells coarser in steps of 1.25, and keeping the proven reduction with the fewest triangles. Clustering is not monotone in the cell, so a coarser distance can keep more triangles. A distance no cell proves, or one that leaves no triangle, is `ErrUnsupported`. |
 | W5 | The bound says nothing of the result's topology: it may be open, non-manifold or self-intersecting even when the input is closed, as `ReduceMesh` says. A mesh that was a thin sheet can thicken or pinch within the bound. |
 | W6 | The tests measure both directions by brute force from outside: the distance from a sample of each mesh (vertices, edge midpoints and triangle centroids) to the other's triangles stays within `SurfaceBound`, for a UV sphere and a finely cut block; a bound understated to `0.4·M` fails them. The internal test builds a collapsed piece no kept triangle covers and requires the refusal. |
+
+## 13. Reduction by edge collapse
+
+`CollapseMesh(ctx, m, triangles)` thins a closed mesh by merging edges until it has at most `triangles` triangles.
+
+| Decision | Rule |
+|---|---|
+| C1 | The mesh must be closed, every directed edge occurring once and its reverse once; otherwise `ErrUnsupported`. A target under 4 is `ErrDegenerate`. |
+| C2 | The shortest edge is merged first, at its midpoint, then the next, from a queue that drops an entry when either end has moved or gone since it was queued. Ties go to the lower vertex indices, so the result is deterministic. |
+| C3 | An edge is merged only when the vertices its ends share are exactly the two opposite it (the link condition), so no vertex pinches and no triangle doubles and the surface stays a closed manifold. |
+| C4 | A merge is refused when a triangle around the edge would turn so that the cosine of its normals falls to 0.2 or below, about 78 degrees, so a collapse never folds a neighbour over. |
+| C5 | At least four triangles remain. Each merge removes two, so the result has `triangles` or one fewer, or more when no remaining edge passes C3 and C4. |
+| C6 | The report's `MergedVertices` counts the merges, `DroppedTriangles` is twice that and `MaxVertexMove` is the greatest distance from an input vertex to the vertex its merges ended it at. `SurfaceBound` is the zero Value: no distance to the input surface is proven, and the result can pass through itself where a coarse mesh pinches a thin feature. |
+| C7 | The tests thin a sphere to three targets and read the closed manifold, the volume loss and the vertices staying within the sphere, read a mesh already coarse enough unchanged, thin bipyramids (a regular octahedron, a tall and a flat one and two stars with concave corners) to every target and require a closed, consistently wound, positively enclosing result, and check the refusals. Dropping the link condition fails the bipyramids, and loosening C4 to any turn short of a reversal fails them too. |
+

@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/meshreduce"
@@ -122,5 +123,45 @@ func ReduceMeshWithin(ctx context.Context, m *MeshBody, distance units.Value) (*
 	return out, MeshReduceReport{
 		MergedVertices: got.MergedVertices, DroppedTriangles: got.DroppedTriangles,
 		MaxVertexMove: units.Millimeters(got.MaxMove), SurfaceBound: units.Millimeters(bound),
+	}, nil
+}
+
+// CollapseMesh thins the closed mesh m by edge collapse until it has at most triangles triangles, and returns the
+// result as a new [MeshBody] with a report (agent-docs/mesh-import-design.md §13). m is not changed.
+//
+// The shortest edge is merged first, at its midpoint, then the next shortest, and so on. An edge is merged only when
+// the surface stays a closed manifold (its two ends share just the two vertices opposite it), no triangle around it
+// turns more than about 78 degrees, and at least four triangles remain, so the result is closed and wound as m is.
+// Each merge removes two triangles, so the result has triangles or one fewer, or more when no remaining edge can be
+// merged. The report's MergedVertices counts the merges, DroppedTriangles is twice that and MaxVertexMove is the
+// greatest distance from a vertex of m to the vertex it ended at. SurfaceBound stays the zero Value: a collapse
+// moves the surface by a distance the evaluator does not prove, and the result can pass through itself where a
+// coarse mesh pinches a thin feature.
+//
+// ctx and m MUST NOT be nil, each otherwise ErrDegenerate, and triangles is at least 4 or ErrDegenerate. A mesh that
+// is not closed, consistently wound and manifold is ErrUnsupported. A canceled context returns its error.
+func CollapseMesh(ctx context.Context, m *MeshBody, triangles int) (*MeshBody, MeshReduceReport, error) {
+	if ctx == nil {
+		return nil, MeshReduceReport{}, fmt.Errorf(`%w: a nil context cannot control a mesh collapse`, ErrDegenerate)
+	}
+	if m == nil {
+		return nil, MeshReduceReport{}, fmt.Errorf(`%w: a mesh collapse needs a mesh body`, ErrDegenerate)
+	}
+	if triangles < 4 {
+		return nil, MeshReduceReport{}, fmt.Errorf(`%w: a closed mesh keeps at least 4 triangles, not %d`, ErrDegenerate, triangles)
+	}
+	got, err := meshreduce.Collapse(ctx, m.vertices, m.triangles, triangles)
+	if err != nil {
+		if errors.Is(err, meshreduce.ErrNotClosed) {
+			return nil, MeshReduceReport{}, fmt.Errorf(`%w: %s`, ErrUnsupported, err)
+		}
+		return nil, MeshReduceReport{}, err
+	}
+	out, err := NewMeshBody(ctx, got.Vertices, got.Triangles)
+	if err != nil {
+		return nil, MeshReduceReport{}, err
+	}
+	return out, MeshReduceReport{
+		MergedVertices: got.Collapses, DroppedTriangles: 2 * got.Collapses, MaxVertexMove: units.Millimeters(got.MaxMove),
 	}, nil
 }
