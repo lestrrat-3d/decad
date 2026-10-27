@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strings"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -37,6 +38,17 @@ type GCodeSpec struct {
 	// PerimeterInset moves each perimeter half a line width into the material, so that the printed line's edge and
 	// not its middle lies on the body's outline (agent-docs/gcode-design.md G10). The infill is unchanged.
 	PerimeterInset bool
+	// Retraction is the length of filament pulled back before each travel move between two extruded lines and pushed
+	// forward again after it, a positive length. The zero value writes no retraction. The first travel of the print,
+	// which follows no extrusion, has none.
+	Retraction units.Value
+	// NozzleTemperature and BedTemperature, when set, heat the nozzle and the bed to that temperature, waiting for it,
+	// before the first layer, and turn both off after the last. A temperature is positive in degrees Celsius and below
+	// 1000 degrees, and the zero values leave the heaters alone.
+	NozzleTemperature, BedTemperature units.AffineValue
+	// StartCode and EndCode are lines written as they are after the header and the heating, and after the last layer:
+	// the machine's own start and end sequence. A line break in them starts a line of the file.
+	StartCode, EndCode string
 }
 
 // GCodePerimeters writes the toolpath that prints body's outline layer by layer as G-code
@@ -113,13 +125,52 @@ func GCodePerimeters(ctx context.Context, w io.Writer, body *decad.Body, tol uni
 			return err
 		}
 	}
+	retract := 0.0
+	if spec.Retraction != (units.Value{}) {
+		if retract, err = positive(spec.Retraction, units.Length, units.Millimeter, "the retraction"); err != nil {
+			return err
+		}
+	}
+	nozzle, err := celsius(spec.NozzleTemperature, "the nozzle temperature")
+	if err != nil {
+		return err
+	}
+	bed, err := celsius(spec.BedTemperature, "the bed temperature")
+	if err != nil {
+		return err
+	}
 	if spec.SolidLayers < 0 {
 		return fmt.Errorf("export: G-code: %w: the solid layers are negative", decad.ErrDegenerate)
 	}
 	perMillimetre := layer * line / (math.Pi * filament * filament / 4)
 	var out bytes.Buffer
 	fmt.Fprintf(&out, "; perimeters of a %d layer print, %g mm layers\nG21\nG90\nM82\nG92 E0\n", layers, layer)
+	if bed > 0 {
+		fmt.Fprintf(&out, "M140 S%.0f\n", bed)
+	}
+	if nozzle > 0 {
+		fmt.Fprintf(&out, "M104 S%.0f\n", nozzle)
+	}
+	if bed > 0 {
+		fmt.Fprintf(&out, "M190 S%.0f\n", bed)
+	}
+	if nozzle > 0 {
+		fmt.Fprintf(&out, "M109 S%.0f\n", nozzle)
+	}
+	if spec.StartCode != "" {
+		out.WriteString(strings.TrimRight(spec.StartCode, "\n") + "\n")
+	}
 	extruded := 0.0
+	printed := false // an extruding move has been written, so a travel after it retracts
+	travel := func(x, y, z float64) {
+		if retract > 0 && printed {
+			fmt.Fprintf(&out, "G1 E%.5f F%.1f\n", extruded-retract, feed*60)
+		}
+		fmt.Fprintf(&out, "G0 X%.4f Y%.4f Z%.4f\n", x, y, z)
+		if retract > 0 && printed {
+			fmt.Fprintf(&out, "G1 E%.5f F%.1f\n", extruded, feed*60)
+		}
+	}
 	for i := range layers {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -143,11 +194,12 @@ func GCodePerimeters(ctx context.Context, w io.Writer, body *decad.Body, tol uni
 			if len(loop) < 2 {
 				continue
 			}
-			fmt.Fprintf(&out, "G0 X%.4f Y%.4f Z%.4f\n", loop[0].X, loop[0].Y, top)
+			travel(loop[0].X, loop[0].Y, top)
 			for k := 1; k <= len(loop); k++ {
 				from, to := loop[k-1], loop[k%len(loop)]
 				extruded += to.Sub(from).Len() * perMillimetre
 				fmt.Fprintf(&out, "G1 X%.4f Y%.4f E%.5f F%.1f\n", to.X, to.Y, extruded, feed*60)
+				printed = true
 			}
 		}
 		gap := spacing
@@ -159,10 +211,20 @@ func GCodePerimeters(ctx context.Context, w io.Writer, body *decad.Body, tol uni
 		}
 		// Layers alternate the infill's direction, so each lies across the one below it.
 		for _, seg := range rectilinearInfill(outline.Loops, i%2 == 0, gap, line) {
-			fmt.Fprintf(&out, "G0 X%.4f Y%.4f Z%.4f\n", seg.a.X, seg.a.Y, top)
+			travel(seg.a.X, seg.a.Y, top)
 			extruded += seg.b.Sub(seg.a).Len() * perMillimetre
 			fmt.Fprintf(&out, "G1 X%.4f Y%.4f E%.5f F%.1f\n", seg.b.X, seg.b.Y, extruded, feed*60)
+			printed = true
 		}
+	}
+	if spec.EndCode != "" {
+		out.WriteString(strings.TrimRight(spec.EndCode, "\n") + "\n")
+	}
+	if nozzle > 0 {
+		out.WriteString("M104 S0\n")
+	}
+	if bed > 0 {
+		out.WriteString("M140 S0\n")
 	}
 	if n, err := w.Write(out.Bytes()); err != nil {
 		return fmt.Errorf("export: G-code write failed: %w", err)
@@ -170,4 +232,23 @@ func GCodePerimeters(ctx context.Context, w io.Writer, body *decad.Body, tol uni
 		return fmt.Errorf("export: G-code write failed: %w", io.ErrShortWrite)
 	}
 	return nil
+}
+
+// celsius is a temperature in degrees Celsius, zero for the unset value. A temperature of another kind is
+// decad.ErrUnitKind, and one that is not above 0 or is 1000 or more, or not finite, decad.ErrDegenerate.
+func celsius(t units.AffineValue, what string) (float64, error) {
+	if t == (units.AffineValue{}) {
+		return 0, nil
+	}
+	if t.Kind() != units.Temperature {
+		return 0, fmt.Errorf("export: G-code: %w: %s must be a temperature", decad.ErrUnitKind, what)
+	}
+	c, err := t.InAffine(units.Celsius)
+	if err != nil {
+		return 0, fmt.Errorf("export: G-code: %w: %s: %s", decad.ErrDegenerate, what, err)
+	}
+	if !(c > 0 && c < 1000) {
+		return 0, fmt.Errorf("export: G-code: %w: %s must lie between 0 and 1000 degrees Celsius, got %g", decad.ErrDegenerate, what, c)
+	}
+	return c, nil
 }

@@ -329,3 +329,82 @@ func TestGCodePerimeterInsetMovesAHoleOutward(t *testing.T) {
 	// 4 x 19.6 + 4 x 6.4 mm of line.
 	require.InDelta(t, (78.4+25.6)*gcodeExtrusion, lastExtrusion(t, out.String()), 1e-2)
 }
+
+func TestGCodeRetractsBeforeEachTravelAfterTheFirst(t *testing.T) {
+	t.Parallel()
+	block := decadtest.NewBlock(t, decad.New(), 0, 0, 20, 10, units.Millimeters(1))
+	spec := gcodeSpec()
+	spec.InfillSpacing = units.Millimeters(5)
+	var plain bytes.Buffer
+	require.NoError(t, export.GCodePerimeters(t.Context(), &plain, block, units.Millimeters(0.1), spec))
+	spec.Retraction = units.Millimeters(0.8)
+	var out bytes.Buffer
+	require.NoError(t, export.GCodePerimeters(t.Context(), &out, block, units.Millimeters(0.1), spec))
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	field := func(line, prefix string) float64 {
+		for f := range strings.FieldsSeq(line) {
+			if num, ok := strings.CutPrefix(f, prefix); ok {
+				v, err := strconv.ParseFloat(num, 64)
+				require.NoError(t, err)
+				return v
+			}
+		}
+		t.Fatalf("no %s in %q", prefix, line)
+		return 0
+	}
+	travels, lastE := 0, 0.0
+	for i, line := range lines {
+		switch {
+		case strings.HasPrefix(line, "G0 "):
+			travels++
+			if travels == 1 {
+				require.False(t, strings.HasPrefix(lines[i-1], "G1 E"), "no retraction before the first travel")
+				continue
+			}
+			// Each later travel is between a pull back of 0.8 mm and the push forward to where the filament was.
+			require.True(t, strings.HasPrefix(lines[i-1], "G1 E"), "a retraction before travel %d", travels)
+			require.True(t, strings.HasPrefix(lines[i+1], "G1 E"), "and a push forward after it")
+			require.InDelta(t, lastE-0.8, field(lines[i-1], "E"), 1e-5)
+			require.InDelta(t, lastE, field(lines[i+1], "E"), 1e-5)
+			require.InDelta(t, 1800, field(lines[i-1], "F"), 1e-6)
+		case strings.HasPrefix(line, "G1 X"):
+			lastE = field(line, "E")
+		}
+	}
+	require.Equal(t, 8, travels, "the loop and two lines of the first layer, the loop and four lines of the second")
+	// The retractions net to nothing: the filament used is the same as without them.
+	require.InDelta(t, lastExtrusion(t, plain.String()), lastExtrusion(t, out.String()), 1e-9)
+}
+
+func TestGCodeHeatsAndWrapsTheLayers(t *testing.T) {
+	t.Parallel()
+	block := decadtest.NewBlock(t, decad.New(), 0, 0, 20, 10, units.Millimeters(1))
+	spec := gcodeSpec()
+	spec.NozzleTemperature = units.DegreesCelsius(210)
+	spec.BedTemperature = units.DegreesCelsius(60)
+	spec.StartCode = "G28 ; home\nM107\n"
+	spec.EndCode = "G28 X0\n"
+	var out bytes.Buffer
+	require.NoError(t, export.GCodePerimeters(t.Context(), &out, block, units.Millimeters(0.1), spec))
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	require.Equal(t, []string{"G21", "G90", "M82", "G92 E0"}, lines[1:5], "the header is as without heating")
+	require.Equal(t, []string{"M140 S60", "M104 S210", "M190 S60", "M109 S210", "G28 ; home", "M107"}, lines[5:11],
+		"the bed and the nozzle are set, waited for, and the machine's start code follows")
+	require.True(t, strings.HasPrefix(lines[11], "; layer 0"))
+	require.Equal(t, []string{"G28 X0", "M104 S0", "M140 S0"}, lines[len(lines)-3:], "the end code, then both heaters off")
+
+	// A temperature of 1500 degrees or a Fahrenheit one that reads back in Celsius.
+	spec.NozzleTemperature = units.DegreesCelsius(1500)
+	out.Reset()
+	require.ErrorIs(t, export.GCodePerimeters(t.Context(), &out, block, units.Millimeters(0.1), spec), decad.ErrDegenerate)
+	require.Empty(t, out.String())
+	spec.NozzleTemperature = units.NewAffine(410, units.Fahrenheit)
+	require.NoError(t, export.GCodePerimeters(t.Context(), &out, block, units.Millimeters(0.1), spec))
+	require.Contains(t, out.String(), "M104 S210\n", "410 degrees Fahrenheit is 210 Celsius")
+	spec.NozzleTemperature = units.DegreesCelsius(-5)
+	out.Reset()
+	require.ErrorIs(t, export.GCodePerimeters(t.Context(), &out, block, units.Millimeters(0.1), spec), decad.ErrDegenerate)
+	spec.NozzleTemperature = units.AffineValue{}
+	spec.Retraction = units.Millimeters(-1)
+	require.ErrorIs(t, export.GCodePerimeters(t.Context(), &out, block, units.Millimeters(0.1), spec), decad.ErrNegativeMagnitude)
+}
