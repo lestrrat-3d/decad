@@ -2589,3 +2589,4 @@
 10	0.01	TestSolidFromMeshFilletsAnEdge
 10	0.01	TestSolidFromMeshChamfersAnEdge
 10	0.01	TestSolidFromMeshTiltedFacesStayFaceted
+10	0.01	TestSolidFromMeshBodyKeepsWorkingAfterPlacementAndReadings
