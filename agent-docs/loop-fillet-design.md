@@ -165,7 +165,20 @@ rDelta, dsDelta: rDelta}`), sense `σ` from LB6:
 
 1. **Record rewrite.** Modify-general §4.2 steps 1–4 and 6 verbatim with
    `d = r`: the cap contour, `F`'s region rewritten, `sideZ = L_F + σ·r`
-   (`brepLoopBand.sideLevel`), the (sw)/(pl) trims and audits.
+   (`brepLoopBand.sideLevel`), the (sw)/(pl) trims and audits. The cap
+   contour's feet come from `filletband.OffsetJoins`, which holds a G1 join's
+   foot and a connector arc's two feet at the exact point the record denotes
+   wherever a float64 holds that point: the recorded corner moved `r` along a
+   rational unit normal, evaluated in exact rational arithmetic
+   (`capcontour.ExactJoinFoot`), and taken at a G1 join only when both walks'
+   feet are that one point. Elsewhere the foot is `offset2d.CornerJoin`'s
+   float step along the held tangent, which for a circular walk is a
+   `math.Sincos` at a computed angle; the contour's displacement bound covers
+   it either way. The LF5 and LF6 meridians stand on these feet (step 4), so
+   where the feet are exact a meridian's `Center` and both its vertices lie
+   in its own plane exactly, as DF10's analytic writer requires: P8's
+   tangent join at `(0, 3)` holds its foot at `(2, 3)`, which the float step
+   puts at `(2, 2.9999999999999996)`.
 2. **Corner classes.** Each corner of `ℓ`'s coalesced walk is classified from
    the record's own floats as `capband.OccupiedVolumeAdmission` classifies
    them: a reflex corner (`joins[i].arc`) is LF6; a line–line miter is LF4;
@@ -396,7 +409,7 @@ modify §4's stage 1 and reach SX10:
 | **DF7** | undercut survey | per patch through `Face.NormalAt`: the normal of an LF1 patch sweeps the quarter from `n̂_F` to the wall's outward normal, an LF2/LF3 patch the quarter at every azimuth of its window, an LF6 patch the quarter at every azimuth of `ψ` short of the apex; the component range along the pull is the closed-form range of `A·cos φ + B·sin φ` over the window, read with reach DX7's three-valued rule and its arithmetic allowance alone, since the stamped departure is zero |
 | **DF8** | concave-radius survey | a band with `σ = +1` (a fill) contributes `r` exactly, the tag's `Minor`/`Radius`, which a placement leaves unchanged; a band with `σ = −1` is convex in its tube direction and contributes nothing; an LF6 patch's other principal radius is `ρ/sin φ`, which vanishes at the apex where the receiver's own sharp reflex edge already reads as `brepMinRadius` reads it today (a sharp corner enters no aggregate), so it adds nothing. `brepMinRadius` drops its `capblend.PatchWindowSkew`/`normalBound` refusal for fillet bands, keeps it for chamfer bands |
 | **DF9** | wall survey | staged `Suspect`, as for every brep |
-| **DF10** | STEP | analytic: `supportsAnalyticSTEP` takes a whole-turn torus (LF7), a four-arc torus patch (LF2/LF3) whose arcs each hold both their vertices in their own plane, and a straight-walk cylinder patch closed by `Ellipse3` edges (`agent-docs/step-export-design.md`). A horn torus patch (LF6, a three-edge loop closing on the axis) keeps the faceted writer, and so does P8's top loop on amd64, where one meridian's held `Center` leaves its `Exact` end vertex off the circle's plane. `Body.Tessellate` admits a banded body (F-2), so `export.STEP` reaches the writer |
+| **DF10** | STEP | analytic: `supportsAnalyticSTEP` takes a whole-turn torus (LF7), a four-arc torus patch (LF2/LF3) whose arcs each hold both their vertices in their own plane, and a straight-walk cylinder patch closed by `Ellipse3` edges (`agent-docs/step-export-design.md`). A horn torus patch (LF6, a three-edge loop closing on the axis) keeps the faceted writer. `Body.Tessellate` admits a banded body (F-2), so `export.STEP` reaches the writer |
 | **DF11** | a later `Fillet`/`Chamfer`/`Shell` | DG11: Tables RB/EB/SB/TC/LB over the rewritten record; a patch's edge is in no record and matches nothing (SL1); a trimmed wall's rim at `sideZ` ends on a patch, so route E's SB7 refuses an edge there; a record carrying bands reads as no prism (route P and Table TC refuse); a second loop fillet or chamfer on another loop appends to `loopBands`, provided the first left `delta = 0` |
 | **DF12** | `Transform`, `Mirrored`, `PatternCopies` | re-lifts every face frame; `loopBands` re-attach on re-evaluation; a reflection flips `outward` and the ellipse's `Axis` sense with every winding (general-boolean A4) |
 
@@ -594,7 +607,7 @@ functions' doc comments, a `agent-docs/layout/` row per new root file, and
 | **F-0** | Sonnet, file-by-file | `Ellipse3` (api §4; `surfacegeom/geometry.go`, `surfaceplace/placement.go`, `topology.go` alias, `modifyselect.EdgeContext`, `brepEdgeMatches` default); `brepLoopBand.kind`; `brepLoopRoute`'s fillet arm as a stub keeping SL3's refusal; `fillet.go`'s cap-edge arm calling `breprecord.OfPrism` into the stub | `internal/surfacegeom/`, `internal/surfaceplace/`, `topology.go`, `fillet.go`, `tessellate_brep.go`, `brep_modify_loop.go`, `agent-docs/api-design.md` | every existing fillet, chamfer, brep-modify and route L fixture bit for bit; an `Ellipse3` placed and mirrored | — |
 | **F-1** | Opus, proof spec | the fillet arm: LF classification (SF1), `attachFilletBand` (LF1–LF7 faces, `Ellipse3`/`Arc3`/`Circle3` edges, shared vertices, roles), `internal/filletband/` (Table CF coefficients with interval enclosures, `J_k`/`H_k`, patch areas, extents), `breprecord`'s `measureBody`'s restored-face sum plus `σ·V_strip`/`σ·M_strip`, `ExtentAlong`; tessellation, surveys and the boolean operand refuse a fillet-banded body (`ErrUnsupported`, naming F-2); reach §8.2, modify-general §6/SL3, brep-modify SB4/SB5/SB7 text, `missing-features.md`, `doc.go` | `tessellate_brep.go`, `internal/verifyrun/brep.go` (holds the fillet-band pull survey), `internal/breprecord/convert.go`, `brep_modify_loop.go`, `fillet.go`, `internal/filletband/` (new), `brep_loop_fillet_internal_test.go`, `apitest/brep_loop_fillet_test.go` | §8's volumes, areas, centroids, topology and roles; the bound fixture's two legs; every refusal | F-0 |
 | **F-2** (landed) | Sonnet, file-by-file, copying `internal/brepbandmesh/` with §7.1 as its term table | DF4 rings and the proof terms, DF5 admission, DF7/DF8 surveys, DF12 re-attachment tests, DF10 export confirmed | `internal/brepbandmesh/`, `internal/brepfilletmesh/`, `tessellate_brep.go`, `tessellate_brep.go` (admission), `internal/verifyrun/brep.go` and `internal/survey2d/fillet_pull.go` (surveys), tests | every §8 fixture's mesh closed and within its published bound; P2's floor loop reads `1.5` in the concave-radius survey; P3's root is listed by the undercut survey under a pull along `−z`; a `Cut` by a box over P1's filleted corner builds through the mesh path | F-1 |
-| **F-3** (landed) | Sonnet, file-by-file | analytic STEP: `TOROIDAL_SURFACE` faces bounded by `Circle3`/`Arc3` edges, `ELLIPSE` edges on partial cylinders, `supportsAnalyticSTEP` arms | `export/step_analytic.go`, `export/step_analytic_torus.go`, `export/step_analytic_band_internal_test.go` | P3's root and rim export analytic STEP; P8's top loop writes its four `TOROIDAL_SURFACE` patches through the analytic writer, which its admission refuses on amd64 (DF10); P1's top loop exports analytic STEP with four `ELLIPSE` edges | F-1, and the `step` module release of §12 |
+| **F-3** (landed) | Sonnet, file-by-file | analytic STEP: `TOROIDAL_SURFACE` faces bounded by `Circle3`/`Arc3` edges, `ELLIPSE` edges on partial cylinders, `supportsAnalyticSTEP` arms | `export/step_analytic.go`, `export/step_analytic_torus.go`, `export/step_analytic_band_internal_test.go` | P3's root and rim and P8's top loop export analytic STEP; P1's top loop exports analytic STEP with four `ELLIPSE` edges | F-1, and the `step` module release of §12 |
 
 F-2 and F-3 run in parallel after F-1: they share no file. F-0 runs alone;
 F-1 runs alone.

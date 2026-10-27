@@ -138,3 +138,33 @@ func requireEnclosesRat(t *testing.T, iv proofbound.RatInterval, x *big.Rat, wha
 	require.True(t, iv.Lo.Cmp(x) <= 0 && x.Cmp(iv.Hi) <= 0, `%s: [%s, %s] must hold %s`,
 		what, iv.Lo.FloatString(20), iv.Hi.FloatString(20), x.FloatString(20))
 }
+
+// TestExactJoinFoot reads the foot joinFoot encloses as one float64 point
+// only where that enclosure is a single rational a float64 holds. On the arc
+// about the origin from (3, 4), the counterclockwise foot at d = 5/8 is
+// (3, 4)·(1 − 1/8) = (2.625, 3.5); at d = 1/4 it is (2.85, 3.8), which no
+// float64 holds. A wall trimmed at t = 1/2 states a bound on its start, so
+// its foot's enclosure has width and is no point. An enclosure [1, 2] has a
+// float64 at each end and is still no point. Shown to fail with exactFloat's
+// width check deleted (the interval read as 1).
+func TestExactJoinFoot(t *testing.T) {
+	t.Parallel()
+	w, err := boundarywalk.WalkOf(sectionrecord.ArcSeg{
+		Center: sectionrecord.Point2{}, Start: sectionrecord.Point2{U: 3, V: 4}, End: sectionrecord.Point2{U: -4, V: 3}, TStart: 0, TEnd: 1,
+	}, freeform.NewFreeformWork())
+	require.NoError(t, err)
+	arc := survey2d.SideWalk{SegmentWalk: w}
+	foot, ok := ExactJoinFoot(arc, false, 0.625)
+	require.True(t, ok)
+	require.Equal(t, sectionrecord.Point2{U: 2.625, V: 3.5}, foot)
+	_, ok = ExactJoinFoot(arc, false, 0.25)
+	require.False(t, ok, "(2.85, 3.8) is no float64 point")
+
+	trimmed := roundedTangentWall(t, 0.5)
+	require.NotZero(t, proofbound.WalkEndBoundAllow(trimmed.StartBound), "the fixture needs a bounded start")
+	_, ok = ExactJoinFoot(trimmed, false, 0.25)
+	require.False(t, ok, "a bounded corner's foot is no point")
+
+	_, ok = exactFloat(proofbound.Interval(big.NewRat(1, 1), big.NewRat(2, 1)))
+	require.False(t, ok, "an interval of width 1 is no point")
+}

@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -40,7 +41,9 @@ func SphereWalk(w survey2d.SideWalk, r float64) bool {
 
 // OffsetJoins reads an inward circular walk whose radius equals the fillet
 // radius as a pole. Its neighbours must be straight and exactly G1; the
-// ordinary offset's computed feet are replaced by the recorded centre.
+// ordinary offset's computed feet are replaced by the recorded centre. Every
+// other G1 or connector-arc foot is held exactly where the recorded data
+// denotes a float64 point (exactFeet).
 func OffsetJoins(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, r, rDelta, tol float64) ([]offset2d.Join, error) {
 	n := len(walks)
 	if n == 0 {
@@ -75,6 +78,7 @@ func OffsetJoins(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, r, rD
 	if err != nil {
 		return nil, err
 	}
+	exactFeet(walks, joins, r)
 	for i, on := range collapsed {
 		if !on {
 			continue
@@ -87,6 +91,41 @@ func OffsetJoins(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, r, rD
 		joins[i].M, joins[next].M = pole, pole
 	}
 	return joins, nil
+}
+
+// exactFeet replaces a join's float feet by the exact offset feet of its
+// walks wherever capcontour.ExactJoinFoot finds a float64 that holds one
+// (loop-fillet §4 step 1). offset2d.CornerJoin steps a foot along the held
+// tangent, which for a circular walk is a math.Sincos at a computed angle, so
+// it lands a rounding off the point the record denotes even where that point
+// is a float: P8's tangent join at (0, 3) puts its foot at
+// (2, 2.9999999999999996) for (2, 3). A G1 join takes the exact foot only
+// when both walks' exact feet are the same point, which an exactly tangent
+// join's are; a connector arc's PA is the previous walk's foot and its PB the
+// current walk's. A miter's intersection is kept. The feet are computed at
+// the held radius r alone, so every caller of OffsetJoins holds the same
+// contour vertices and LF5 and LF6 meridian centres whatever radius span it
+// reads.
+func exactFeet(walks []survey2d.SideWalk, joins []offset2d.Join, r float64) {
+	n := len(walks)
+	for i := range joins {
+		prev, cur := walks[(i+n-1)%n], walks[i]
+		switch {
+		case joins[i].Arc:
+			if pa, ok := capcontour.ExactJoinFoot(prev, true, r); ok {
+				joins[i].PA = pa
+			}
+			if pb, ok := capcontour.ExactJoinFoot(cur, false, r); ok {
+				joins[i].PB = pb
+			}
+		case joins[i].G1:
+			a, okA := capcontour.ExactJoinFoot(prev, true, r)
+			b, okB := capcontour.ExactJoinFoot(cur, false, r)
+			if okA && okB && a == b {
+				joins[i].M = a
+			}
+		}
+	}
 }
 
 // OffsetLoop records the cap contour. A collapsed circular walk leaves one
