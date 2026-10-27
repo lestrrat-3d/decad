@@ -148,3 +148,43 @@ func Example_infill() {
 	// Output:
 	// lighter than the block: true
 }
+
+// InfillSpec.Skin keeps a solid skin of the stated thickness round the part, the way a slicer's perimeters do, and
+// fills only what the skin encloses. Here the same block keeps a 1 mm skin, so it holds more than its 560 mm^3 skin
+// and less than the block.
+func Example_infill_skin() {
+	doc := decad.New()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to start a sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(5, 5, 15, 15)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	block, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(12), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	filled, err := decad.Infill(context.Background(), block, decad.InfillSpec{
+		Kind: decad.GyroidInfill, Cell: units.Millimeters(10), Level: units.Scalar(0.6), Resolution: 8,
+		Skin: units.Millimeters(1)})
+	if err != nil {
+		fmt.Printf("failed to fill: %s\n", err)
+		return
+	}
+	volume, err := filled.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	fmt.Printf("between the skin and the block: %t\n", volume.Value.Base() > 560 && volume.Value.Base() < 1200)
+	// Output:
+	// between the skin and the block: true
+}

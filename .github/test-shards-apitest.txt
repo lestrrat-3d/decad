@@ -1533,6 +1533,8 @@
 6	0.04	TestBrepPartialChamferMirroredCrossDrilledBar
 6	0.02	TestBrepSectionRefusesBodyWithoutCertifiedSlabs
 6	0.07	TestCapBlendApexPatchAreaBoundIsTight
+10	0.01	TestInfillKeepsASkinRoundThePart
+10	0.01	TestInfillSkinRefusalsLeaveTheBlockLive
 6	0.01	TestCapBlendBooleanReceiverRefusedSX9
 6	0.00	TestCapBlendBothCapsBuildsWhenClear
 6	0.22	TestCapBlendChamferedPinAsTool

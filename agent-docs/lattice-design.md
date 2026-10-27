@@ -56,12 +56,13 @@ to G6 hold with that field and its range.
 
 ## 5. Infill
 
-`Infill(ctx, b, InfillSpec{Kind, Cell, Level, Resolution})` fills a solid with a lattice.
+`Infill(ctx, b, InfillSpec{Kind, Cell, Level, Resolution, Skin})` fills a solid with a lattice.
 
 | Decision | Rule |
 |---|---|
 | I1 | The lattice is built over `b`'s bounding box grown by a quarter cell on every side, so the box's faces are clear of the body's and no face of the lattice lies in one of the body's (the mesh Boolean refuses coplanar overlap). The field is that of §1 and §4 measured from the world origin, so the same spec fills two bodies in step. |
-| I2 | The lattice mesh is made a solid by `SolidFromMesh` and intersected with `b` by `Intersect`; both are consumed and the result replaces them in `b`'s document. The result is the lattice material inside the body: the body's skin is not kept, and a body that needs one is shelled and the infill united into its cavity. |
+| I2 | The lattice mesh is made a solid by `SolidFromMesh` and intersected with `b` by `Intersect`; both are consumed and the result replaces them in `b`'s document. The result is the lattice material inside the body: with no `Skin` the body's skin is not kept. |
+| I5 | A `Skin` (a positive length) keeps a solid skin round the part: `Infill` copies `b` twice, closes one copy with `Shell` of the skin's thickness and no opening, fills the other as I1 to I3 say, and unites the two with `Union`, so the result is the skin and the lattice inside the cavity. `b` is consumed when the whole join has built, and a refusal at any step, among them a `Shell` that cannot build the part or a skin as thick as the part, retires the copies made and leaves `b` live. The tests read the volume and the points of a block with a 1 mm skin against the skin and the field written out from their definitions, and the refusals of a skin that is not a length, too thick or negative. Ignoring the skin fails the first. |
 | I3 | The result is the Boolean's: a faceted body whose volume reads inside the bound the Boolean proves, and whose own refusals (an ambiguous parity ray at some resolutions, a lattice past 65,528 triangles) surface unchanged, the latter as `ErrUnsupported`. An unknown kind, a non-positive cell, a non-length cell or a level outside the kind's range are the lattice builders' errors. |
 | I4 | The tests fill a 10 x 10 x 12 mm block with the gyroid and read the result against the field written out from its definition: points well inside the wall are inside and points well clear are outside, to 99% (the lattice mesh at 8 samples to a cell misplaces a few points at its saddles even unfilled), the volume agrees with the field's sampled fraction to a tenth, the bounds stay inside the block, and the block and the lattice are consumed. Returning the unfilled lattice fails them. |
 
