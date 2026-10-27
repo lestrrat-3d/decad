@@ -279,8 +279,16 @@ func triTriSpan(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xpt, pa, p
 	if len(ptsA) > 2 || len(ptsB) > 2 {
 		return TriContactSpan{}, false, fmt.Errorf(`%w: a facet crosses a plane more than twice`, decaderr.ErrBooleanFailed)
 	}
-	dir := proof.Xcross(na, nb)
-	var order lineOrder
+	axis, reverse, hasLine := commonLineAxis(na, nb)
+	var dir proof.Xpt
+	if !hasLine {
+		// The non-coplanar branch above guarantees a common line. Keep the
+		// former exact dot ordering as a defensive fallback if that invariant
+		// ever changes.
+		dir = proof.Xcross(na, nb)
+		axis = -1
+	}
+	order := lineOrder{axis: axis, reverse: reverse}
 	loA, hiA := order.sorted(ptsA, dir)
 	loB, hiB := order.sorted(ptsB, dir)
 	lo, hi := loA, hiA
@@ -314,9 +322,20 @@ type linePoint struct {
 // every comparison. Its two integers are scratch for one goroutine.
 type lineOrder struct {
 	left, right big.Int
+	axis        int
+	reverse     bool
 }
 
 func (o *lineOrder) cmp(a, b linePoint) int {
+	if o.axis >= 0 {
+		o.left.Mul(Coord(a.P, o.axis), b.P.W)
+		o.right.Mul(Coord(b.P, o.axis), a.P.W)
+		cmp := o.left.Cmp(&o.right)
+		if o.reverse {
+			return -cmp
+		}
+		return cmp
+	}
 	o.left.Mul(a.D, b.P.W)
 	o.right.Mul(b.D, a.P.W)
 	return o.left.Cmp(&o.right)
@@ -324,15 +343,47 @@ func (o *lineOrder) cmp(a, b linePoint) int {
 
 // sorted is OrderOnLine over linePoints.
 func (o *lineOrder) sorted(pts []proof.Xpt, dir proof.Xpt) (linePoint, linePoint) {
-	first := linePoint{P: pts[0], D: proof.XdotNum(pts[0], dir)}
+	first := linePoint{P: pts[0]}
+	if o.axis < 0 {
+		first.D = proof.XdotNum(pts[0], dir)
+	}
 	if len(pts) == 1 {
 		return first, first
 	}
-	second := linePoint{P: pts[1], D: proof.XdotNum(pts[1], dir)}
+	second := linePoint{P: pts[1]}
+	if o.axis < 0 {
+		second.D = proof.XdotNum(pts[1], dir)
+	}
 	if o.cmp(first, second) > 0 {
 		return second, first
 	}
 	return first, second
+}
+
+// commonLineAxis selects a coordinate that changes along the intersection of
+// the planes with normals a and b. On that line, the coordinate orders points
+// exactly as their dot product with a×b, accounting for the component's sign.
+func commonLineAxis(a, b proof.Xpt) (axis int, reverse, ok bool) {
+	var left, right big.Int
+	left.Mul(a.Y, b.Z)
+	right.Mul(a.Z, b.Y)
+	left.Sub(&left, &right)
+	if sign := left.Sign(); sign != 0 {
+		return 0, sign < 0, true
+	}
+	left.Mul(a.Z, b.X)
+	right.Mul(a.X, b.Z)
+	left.Sub(&left, &right)
+	if sign := left.Sign(); sign != 0 {
+		return 1, sign < 0, true
+	}
+	left.Mul(a.X, b.Y)
+	right.Mul(a.Y, b.X)
+	left.Sub(&left, &right)
+	if sign := left.Sign(); sign != 0 {
+		return 2, sign < 0, true
+	}
+	return -1, false, false
 }
 
 // AllOneSide reports whether all three plane-side signs are strictly the same:

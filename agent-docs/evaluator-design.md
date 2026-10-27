@@ -1263,8 +1263,11 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   Each contact-batch goroutine therefore keeps the first operand's last facet's
   planes, keyed by facet index, for one batch run over one mesh. A hit returns
   the value a rebuild would, so every sign and every result is unchanged. The
-  pair's interval ends read each point's dot with the planes' common line once,
-  and comparisons cross-multiply the same integers as before. `sin²θ` stays an
+  pair's interval ends choose one coordinate that varies along the planes'
+  common line. Exact cross-product signs select the coordinate and its
+  direction; exact cross-multiplication orders its rational values as the
+  former dot products did, without building a line vector or a dot product for
+  each endpoint. `sin²θ` stays an
   unreduced fraction: its one reader, `RimBound`, needs only the nearest
   float64, and that depends on the value alone (`proof.FracFloat64`).
   `internal/meshbool/triangle_contact.go` owns all three.
