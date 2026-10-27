@@ -151,7 +151,7 @@ func TestChamferOfAGrooveRunsFlushOutOfBothEnds(t *testing.T) {
 	require.NoError(t, err)
 	// The 30 x 10 x 5 groove leaves 7500; the two 30 mm floor edges add a wedge of 15 each.
 	require.InDelta(t, 7530, volume.Value.Base(), volume.Bound.Base()+1e-6)
-	require.Less(t, volume.Bound.Base(), 0.1)
+	require.Less(t, volume.Bound.Base(), 0.25, "two 30 mm flush edges are charged more than the pocket's short ones")
 }
 
 func TestChamferOfConcaveEdgesLargerThanTheirWallsIsRefused(t *testing.T) {
