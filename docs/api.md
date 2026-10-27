@@ -166,7 +166,7 @@ a sheet. The `decad.Section` type constraint covers both.
 ### Extents
 
 `decad.Extent` is what `decad.Extrude` accepts: `decad.Distance`, `decad.Symmetric`, `decad.TwoSided`,
-`decad.ThroughAll` and `decad.ToFace`. A `decad.Direction` is `decad.Along` or `decad.Against` the sketch normal.
+`decad.ThroughAll` and `decad.ToFace`. `Extrude` to a planar face of a mesh solid that is tilted from the sweep cuts the extrusion at the face's plane, if the face is a convex outline holding the whole profile seen along the sweep. A `decad.Direction` is `decad.Along` or `decad.Against` the sketch normal.
 `decad.Between` joins two placements along a screw path for motion checks.
 
 `decad.AngularExtent` is what `decad.Revolve` accepts: `decad.FullRevolution`, `decad.AngleExtent`,
