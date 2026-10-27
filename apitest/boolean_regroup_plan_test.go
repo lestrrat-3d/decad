@@ -143,11 +143,13 @@ func TestRegroupPlansBuildByHand(t *testing.T) {
 		plate, box2, boss := build(t)
 		first, err := decad.Union(t.Context(), plate, boss)
 		require.NoError(t, err)
-		// A Copy ends the history chain, so the final call is the sequential gate, not a regroup.
+		// A Copy ends the history chain, so the final call is not a regroup. The copy of an axis-square result keeps
+		// its exact vertices, so the grid route joins it with the box where the sequential gate once refused.
 		held, err := decad.Copy(t.Context(), first)
 		require.NoError(t, err)
-		_, err = decad.Union(t.Context(), held, box2)
-		require.ErrorIs(t, err, decad.ErrUnsupported)
+		joined, err := decad.Union(t.Context(), held, box2)
+		require.NoError(t, err)
+		requireRegroupResult(t, joined, 12240)
 
 		plate, box2, boss = build(t)
 		step, err := decad.Union(t.Context(), plate, box2)

@@ -9,7 +9,7 @@ the orthogonal Boolean (`agent-docs/orthogonal-boolean-design.md`) or of `MoveFa
 
 | Decision | Rule |
 |---|---|
-| X1 | The route applies to a faceted body with an identity placement, no vertex bound and every triangle exactly square to an axis, cut by a plane whose `U`, `V` and normal are exactly world axes (either sign, any pairing). Any other body or plane takes the other routes, and the route declines to them on every refusal below. |
+| X1 | The route applies to a faceted body with no vertex bound and every triangle exactly square to an axis, cut by a plane whose `U`, `V` and normal are exactly world axes (either sign, any pairing). Any other body or plane takes the other routes, and the route declines to them on every refusal below. |
 | X2 | The plane lies strictly inside one layer of the grid along its normal, farther than the grid tolerance from every grid line, so the cut reads the same just either side of it. A plane on a grid line, outside the solid, or through a layer with no cell declines. |
 | X3 | The cut is the boundary of the union of that layer's occupied cells, traced with collinear corners merged: every corner is a coordinate of the solid, an outer loop runs counter-clockwise round material and a hole clockwise. Cells that meet only at a corner decline. |
 | X4 | The loops are stated in the plane's frame as `u = ±(p − origin)` along `U` and likewise `v`; a corner whose frame coordinate does not give back the world coordinate exactly (`origin + u = p`) declines, and a frame that flips handedness reverses its loops to keep their sense. |
@@ -18,5 +18,5 @@ the orthogonal Boolean (`agent-docs/orthogonal-boolean-design.md`) or of `MoveFa
 
 ## 2. Not covered
 
-- A placed body, a body with a vertex bound, and a plane that is not square to an axis.
+- A body with a vertex bound, such as one placed by a motion whose vertex images are not floats, and a plane that is not square to an axis.
 - A cut of several regions, which a single returned profile cannot hold.

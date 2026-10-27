@@ -224,14 +224,18 @@ func TestSectionMeshBooleanHistoryRefusals(t *testing.T) {
 		require.Equal(t, decad.OpDiagGapShiftApplied, diagnostics[0].Code)
 		refuses(t, notched, 7, historyRefusal)
 	})
-	t.Run("copy of a mesh result", func(t *testing.T) {
+	t.Run("copy of a mesh result is read from the grid", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		notched, err := decad.Cut(t.Context(), historyCube(t, doc), boxBodyAtZ(t, doc, 5, 5, 15, 15, 5, 10))
 		require.NoError(t, err)
 		duplicate, err := decad.Copy(t.Context(), notched)
 		require.NoError(t, err)
-		refuses(t, duplicate, 7, historyRefusal)
+		// The history gate refuses a copy, but a copy of an axis-square result keeps its exact vertices, so the grid
+		// reads the same notch (agent-docs/orthogonal-section-design.md).
+		requireExactHistorySection(t, duplicate, historyLevel(t, 7), [][2]float64{
+			{0, 0}, {10, 0}, {10, 5}, {5, 5}, {5, 10}, {0, 10},
+		}, 75)
 	})
 	t.Run("plane on the tool's cap", func(t *testing.T) {
 		t.Parallel()

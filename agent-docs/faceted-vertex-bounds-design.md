@@ -280,7 +280,10 @@ extreme widens `e`, which the extreme vertex's own bound alone would miss.
 each vertex's own `β(v)`, at that vertex's own largest coordinate magnitude
 rather than the body's, since the rounding a rigid motion commits on one
 vertex depends on that vertex's inputs alone (`internal/proofbound/bounds.go`,
-`RigidRoundAllow`). `MeshBound` is recomputed as the maximum `δ(t)` after the
+`RigidRoundAllow`). A vertex whose exact image under the stored basis and
+translation is itself a float (`proof.XptDenotes`) commits no rounding and adds
+nothing, so a whole-number translation of whole-number coordinates leaves every
+bound where it was. `MeshBound` is recomputed as the maximum `δ(t)` after the
 addition. The exact-source record for a translation-only placement is kept or
 dropped under the same conditions as today, with §4.1's zero condition.
 Ordinary placement keeps a point loft's `PointSection` source record only for

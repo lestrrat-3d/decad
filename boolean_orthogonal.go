@@ -5,7 +5,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/orthoshell"
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -58,10 +57,12 @@ func orthogonalBoolean(ctx context.Context, d *Document, op meshbool.OperationKi
 	return body, true
 }
 
-// orthogonalOperand returns b's faceted payload when it is unplaced and holds no vertex bound.
+// orthogonalOperand returns b's faceted payload when it holds no vertex bound. A placed body qualifies: its
+// held vertices are its world coordinates, and a placement that every vertex image survives exactly (a
+// whole-number translation of whole-number coordinates, say) charges no rounding.
 func orthogonalOperand(b *Body) (facetedPayload, bool) {
 	payload, ok := b.n.Payload.(facetedPayload)
-	if !ok || len(payload.Tris) == 0 || payload.Xform != r3.Identity() {
+	if !ok || len(payload.Tris) == 0 {
 		return facetedPayload{}, false
 	}
 	for _, beta := range payload.VertexBound {

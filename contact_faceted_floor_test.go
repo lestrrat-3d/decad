@@ -472,7 +472,9 @@ func TestSweepPairFacetedFloorRefusesUnprovedPath(t *testing.T) {
 		facetedSweepRequest(ContinueCertifiedTouch))
 	require.NoError(t, err)
 	require.Equal(t, SweepUndecided, edge.Outcome)
-	frame, err := r3.NewFrame(r3.Vec{}, r3.Vec{Y: 1}, r3.Vec{Z: 1})
+	// A mirror through the origin leaves every whole-number vertex a float, which the placement now proves
+	// exact; a mirror across x = 0.1 sends x to 0.2 − x, which rounds, and keeps the unproved placement this test needs.
+	frame, err := r3.NewFrame(r3.Vec{X: 0.1}, r3.Vec{Y: 1}, r3.Vec{Z: 1})
 	require.NoError(t, err)
 	reflection, err := r3.Reflection(frame)
 	require.NoError(t, err)
