@@ -1407,6 +1407,9 @@
 5	0.01	TestPrismUnionCutDisplacementBoundEnclosesTheError
 5	0.04	TestPrismUnionDownstreamFilletAndWallSurvey
 10	0.01	TestOrthogonalConcaveRadiusIsAbsentFromABlockAndZeroFromAnL
+10	0.01	TestExtrudeToATiltedMeshFaceStopsOnTheFacesPlane
+10	0.01	TestExtrudeToATiltedMeshFaceRefusesAFootprintThePolygonDoesNotHold
+10	0.01	TestExtrudeToATiltedMeshFaceFromAboveSweepsDown
 5	0.00	TestPrismUnionReflectedOperandInsideBox
 10	0.01	TestMeshSolidBooleansAgreeWithTheCubeByCubeBoolean
 10	0.01	TestVerifySurveysAgreeWithTheCubeByCubeRunsAndColumns
