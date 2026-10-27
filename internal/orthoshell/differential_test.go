@@ -628,3 +628,74 @@ func TestPressAgreesWithTheCubeByCubeSlab(t *testing.T) {
 	require.Greater(t, outward, 30)
 	require.Greater(t, inward, 30)
 }
+
+// scaled returns the vertices multiplied by s, a cube's side, so the coordinates are not whole numbers.
+func scaled(verts []r3.Vec, s float64) []r3.Vec {
+	out := make([]r3.Vec, len(verts))
+	for i, v := range verts {
+		out[i] = r3.Vec{X: v.X * s, Y: v.Y * s, Z: v.Z * s}
+	}
+	return out
+}
+
+func TestGridOperationsOnCubesOfInexactSideAgreeOrDecline(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(37, 38))
+	for _, side := range []float64{0.1, 0.3, 1.0 / 3, 0.7} {
+		answered := 0
+		for range 120 {
+			a, b := randomVoxels(rng), randomVoxels(rng)
+			va, ta, _, okA := a.mesh()
+			vb, tb, _, okB := b.mesh()
+			if !okA || !okB {
+				continue
+			}
+			va, vb = scaled(va, side), scaled(vb, side)
+			cube := side * side * side
+			// Coordinates that are multiples of a side that is no float are float multiples: the same multiple in two
+			// solids is the same float, so the grid joins them.
+			verts, tris, err := orthoshell.Combine(va, ta, vb, tb, orthoshell.Union)
+			if err == nil {
+				answered++
+				want := float64(a.combine(b, orthoshell.Union).count()) * cube
+				require.InDelta(t, want, volume(verts, tris), 1e-9*want, "union at side %g", side)
+			} else {
+				require.True(t, declines(err), "%v", err)
+			}
+			// An offset by one side adds and subtracts floats that may land an ulp from the next multiple: the grid
+			// either counts them as one coordinate within its tolerance or refuses, and never reads two.
+			if out, tri, err := orthoshell.Offset(va, ta, side); err == nil {
+				answered++
+				require.InDelta(t, float64(bigGrow(a))*cube, volume(out, tri), 1e-9*float64(bigGrow(a))*cube, "dilation at side %g", side)
+			} else {
+				require.True(t, declines(err), "%v", err)
+			}
+			// A wall thinner than a side is the shortest run of cubes times the side.
+			if got, bound, err := orthoshell.MinWall(va, ta); err == nil {
+				answered++
+				want := math.Inf(1)
+				for axis := range 3 {
+					for p := range gridSide {
+						for q := range gridSide {
+							run := 0
+							for k := 0; k <= gridSide; k++ {
+								var cell [3]int
+								cell[axis], cell[(axis+1)%3], cell[(axis+2)%3] = k, p, q
+								if a.at(cell[0], cell[1], cell[2]) {
+									run++
+									continue
+								}
+								if run > 0 {
+									want = math.Min(want, float64(run)*side)
+								}
+								run = 0
+							}
+						}
+					}
+				}
+				require.InDelta(t, want, got, bound+1e-12, "thinnest wall at side %g", side)
+			}
+		}
+		require.Greater(t, answered, 150, "side %g: most operations are answered", side)
+	}
+}
