@@ -1255,22 +1255,18 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   buckets promote to canonical integer hashes. Manual non-reduced rational
   inputs keep their distinct textual identities.
   `internal/meshbool/cut_vertex_index.go` owns both tables.
-- **Build a facet's edge planes once per run of its pairs.** A contact
-  segment's boundary flags and along-edge record test each end against each
-  facet edge k: the side of `n × (b−a)` and its dot with corner a, then the
-  edge's dominant axis and end order. These values depend only on the facet's
-  exact corners and normal, which never change while the prepared mesh lives.
-  Each contact-batch goroutine therefore keeps the first operand's last facet's
-  planes, keyed by facet index, for one batch run over one mesh. A hit returns
-  the value a rebuild would, so every sign and every result is unchanged. The
-  pair's interval ends choose one coordinate that varies along the planes'
-  common line. Exact cross-product signs select the coordinate and its
-  direction; exact cross-multiplication orders its rational values as the
-  former dot products did, without building a line vector or a dot product for
-  each endpoint. `sin²θ` stays an
-  unreduced fraction: its one reader, `RimBound`, needs only the nearest
-  float64, and that depends on the value alone (`proof.FracFloat64`).
-  `internal/meshbool/triangle_contact.go` owns all three.
+- **Derive contact boundary records from exact span comparisons.** The
+  non-coplanar classifier intersects each triangle with the other plane and
+  overlaps the two exact intervals. Read each endpoint's membership in both
+  triangle boundaries from those comparisons, including equality. When two
+  corners have zero exact plane-side signs, their edge contains the whole
+  interval. `contactSpanBoundary` in `internal/meshbool/triangle_contact.go`
+  owns the proof that these records equal the closed edge predicates. No
+  additional edge planes are constructed for this classification.
+  The pair's interval ends use one changing exact coordinate along the common
+  line, with its direction accounted for (`commonLineAxis`). `sin²θ` stays an
+  unreduced fraction: its reader `RimBound` needs only the nearest float64,
+  which depends on the value alone (`proof.FracFloat64`).
 - **Share extra workers across independent core loops.** `orderedwork.ReserveWorkers`
   owns worker reservations for subdivision, `orderedwork.Each` loops and Loft
   pair classification. Keep caller polling and join workers before releasing
@@ -1292,10 +1288,10 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   §8 / H2), never `ErrDegenerate` — which stays reserved for a genuinely
   malformed region, a zero-area or self-crossing one. The classifier still
   DETECTS the region-or-point shape; only the public error a valid such contact
-  yields is decided against H2. Which triangle's boundary an endpoint lies on is
-  decided by testing the point against *each* triangle, not by which list it was
-  drawn from. The classification is direction-free by construction, which is what
-  keeps it from disagreeing with itself.
+  yields is decided against H2. Each endpoint's boundary membership is decided
+  for both triangles by the exact span comparisons above; an endpoint equal
+  to both interval ends belongs to both boundaries. The classification is
+  direction-free by construction, which keeps it from disagreeing with itself.
 - **Graze versus crossing is not a property of a facet pair.** When a contact
   segment runs ALONG a facet edge, the pair cannot tell whether the operand's
   boundary touches the other's plane and comes back (a graze — a tangency no

@@ -1,7 +1,9 @@
 package meshbool
 
 import (
+	"fmt"
 	"math/big"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -67,6 +69,23 @@ func TestTriTriClassifyBoundaryMembershipMatchesReference(t *testing.T) {
 		"vertex point": {
 			b:    [3]r3.Vec{{}, {X: -1, Z: 1}, {Y: -1, Z: -1}},
 			kind: ContactPoint,
+		},
+		"point inside face": {
+			b: [3]r3.Vec{{X: 0.5, Y: 0.5}, {X: 0.5, Y: 0.75, Z: 1},
+				{X: 0.5, Y: 0.25, Z: 1}},
+			kind: ContactPoint,
+		},
+		"point at opposed interval ends": {
+			b:    [3]r3.Vec{{X: 1}, {X: 1, Y: -1, Z: 1}, {X: 1, Y: -1, Z: -1}},
+			kind: ContactPoint,
+		},
+		"equal interval ends": {
+			b:    [3]r3.Vec{{X: 0.5}, {X: 0.5, Y: 1.5}, {X: 0.5, Y: 0.75, Z: 1}},
+			kind: ContactSegment,
+		},
+		"both in-plane edges": {
+			b:    [3]r3.Vec{{}, {X: 2}, {Z: 1}},
+			kind: ContactSegment,
 		},
 		"coplanar point": {
 			b:    [3]r3.Vec{{X: 2}, {X: 3}, {X: 2, Y: -1}},
@@ -154,6 +173,53 @@ func scaleContactPoint(p proof.Xpt, shift int) proof.Xpt {
 		X: new(big.Int).Mul(p.X, scale), Y: new(big.Int).Mul(p.Y, scale),
 		Z: new(big.Int).Mul(p.Z, scale), W: new(big.Int).Mul(p.W, scale),
 	}
+}
+
+// TestContactBoundaryRationalCoordinatesMatchEdgePredicates uses exact points
+// that their rounded float coordinates cannot represent. Plane-side signs
+// come from the exact points, and the independent edge predicates check every
+// boundary flag and edge index after the interval overlap.
+func TestContactBoundaryRationalCoordinatesMatchEdgePredicates(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(311, 79))
+	var stats contactCacheStats
+	checked := 0
+	for sample := range 400 {
+		var a, b [3]r3.Vec
+		var xa, xb [3]proof.Xpt
+		for _, vertices := range []*[3]proof.Xpt{&xa, &xb} {
+			for k := range 3 {
+				// Different odd weights also prevent a shared-denominator
+				// assumption from deciding a boundary comparison.
+				vertices[k] = proof.Xpt{
+					X: big.NewInt(int64(rng.IntN(17) - 8)),
+					Y: big.NewInt(int64(rng.IntN(17) - 8)),
+					Z: big.NewInt(int64(rng.IntN(17) - 8)),
+					W: big.NewInt(int64(3 + 2*rng.IntN(4))),
+				}
+			}
+		}
+		na := proof.Xcross(proof.Xsub(xa[1], xa[0]), proof.Xsub(xa[2], xa[0]))
+		nb := proof.Xcross(proof.Xsub(xb[1], xb[0]), proof.Xsub(xb[2], xb[0]))
+		if zeroXpt(na) || zeroXpt(nb) {
+			continue
+		}
+		var sa, sb [3]int
+		for k := range 3 {
+			a[k], b[k] = xa[k].Vec(), xb[k].Vec()
+			sa[k] = proof.OrientSignExact(xb[0], xb[1], xb[2], xa[k])
+			sb[k] = proof.OrientSignExact(xa[0], xa[1], xa[2], xb[k])
+		}
+		want, sin2, wantErr := legacyClassify(a, b, xa, xb, na, nb, nil, nil, &sa, &sb,
+			false, r3.Vec{}, r3.Vec{}, false)
+		got, gotErr := TriTriClassifyCore(a, b, xa, xb, na, nb, nil, nil, &sa, &sb,
+			false, r3.Vec{}, r3.Vec{}, false)
+		requireSameContact(t, &stats, want, sin2, wantErr, got, gotErr, fmt.Sprintf("sample %d", sample))
+		checked++
+	}
+	require.Greater(t, checked, 390)
+	require.Positive(t, stats.kinds[ContactNone])
+	require.Positive(t, stats.kinds[ContactSegment])
 }
 
 func BenchmarkTriTriClassifyMembership(b *testing.B) {
