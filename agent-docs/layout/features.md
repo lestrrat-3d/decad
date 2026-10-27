@@ -34,6 +34,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `boss_shape.go` | The non-round section of a `Boss`: reads a `HoleShape` and sketches it, grown for the draft. See boss design §7. |
 | `boss_fillet.go` | Root fillet of a `Boss`: finds the boss's root circle in the result and calls `Fillet`, after a trial on a copy. See boss design §6. |
 | `hole.go` | Public `Hole`, `HoleSpec`, depth, head and shape variants: gates, tool sketches, chained cut and the commit; `internal/holeplan/` computes the tools. See hole design. |
+| `hole_faceted_site.go` | `facetedHoleSite`: the hole site of a convex planar face of an exact-vertex faceted solid, its normal read exactly and rounded once, its outward side from the centroid. See orthogonal Boolean B20. |
 | `rib.go` | Public `Rib`, `RibArc`, `Web`, `WebPath` and `WithRibOverrun`: line, thickness and extent gates, rib tool extrusion, touch and volume checks. See rib design. |
 | `text.go` | Public `TextProfiles` and `TextSpec`: gates, then `internal/glyphs/` lays the text out and the contours are drawn into a sketch and filtered to filled regions. See text design. |
 | `emboss.go` | Public `Emboss`, `EmbossMode`, `WithEmbossDraft` and `WithEmbossRimFillet`: gates, sketch-plane check, tool extrusion, join and volume checks. See emboss design. |

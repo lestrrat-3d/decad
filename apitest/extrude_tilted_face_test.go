@@ -14,7 +14,8 @@ import (
 // solid that is tilted from the sweep.
 
 // rampSolid is a 20 x 10 mesh block whose top slopes from 4 mm at x = 0 to 14 mm at x = 20 (z = 4 + x/2).
-func rampSolid(t *testing.T, doc *decad.Document, ramp float64) (*decad.Body, decad.FaceSelector) {
+func rampSolid(t *testing.T, doc *decad.Document) (*decad.Body, decad.FaceSelector) {
+	const ramp = 10.0
 	t.Helper()
 	verts := []r3.Vec{
 		r3.NewVec(0, 0, 0), r3.NewVec(20, 0, 0), r3.NewVec(20, 10, 0), r3.NewVec(0, 10, 0),
@@ -56,7 +57,7 @@ func rectOnXY(t *testing.T, u0, v0, u1, v1 float64) (*sketch.Sketch, *sketch.Pro
 func TestExtrudeToATiltedMeshFaceStopsOnTheFacesPlane(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	stop, face := rampSolid(t, doc, 10)
+	stop, face := rampSolid(t, doc)
 	s, p := rectOnXY(t, 5, 2, 15, 8)
 	out, err := decad.Extrude(t.Context(), doc, s, p, decad.ToFace{Body: stop, Face: face})
 	require.NoError(t, err)
@@ -86,7 +87,7 @@ func TestExtrudeToATiltedMeshFaceStopsOnTheFacesPlane(t *testing.T) {
 func TestExtrudeToATiltedMeshFaceRefusesAFootprintThePolygonDoesNotHold(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	stop, face := rampSolid(t, doc, 10)
+	stop, face := rampSolid(t, doc)
 	// The footprint reaches x = 25, past the ramp's 20 mm: the face does not stop the whole profile.
 	s, p := rectOnXY(t, 5, 2, 25, 8)
 	_, err := decad.Extrude(t.Context(), doc, s, p, decad.ToFace{Body: stop, Face: face})
@@ -97,7 +98,7 @@ func TestExtrudeToATiltedMeshFaceRefusesAFootprintThePolygonDoesNotHold(t *testi
 func TestExtrudeToATiltedMeshFaceFromAboveSweepsDown(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	stop, face := rampSolid(t, doc, 10)
+	stop, face := rampSolid(t, doc)
 	// A rectangle on the plane z = 20, above the whole ramp, swept down onto it: the prism between z = 4 + x/2 and 20.
 	w := sketch.NewWorld()
 	pl, err := w.CreatePlaneFromFrame(mustFrame(t, r3.NewVec(0, 0, 20), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)))
