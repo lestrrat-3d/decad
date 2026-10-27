@@ -890,7 +890,7 @@ func coplanarContactPairDocument(t *testing.T) *decad.Document {
 	require.NoError(t, err)
 	p := s.Profiles()[0]
 
-	doc := decad.New()
+	doc := decad.New(decad.ExactOnly())
 	_, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	box2, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -901,6 +901,40 @@ func coplanarContactPairDocument(t *testing.T) *decad.Document {
 	_, err = decad.Transform(t.Context(), box2, shift)
 	require.NoError(t, err)
 	return doc
+}
+
+// TestVerifyReadsTheCoplanarPairAsInterferingWithAGapTolerance is the same pair as
+// TestVerifyDiagnosticsUnsupportedPairStagedContact's, in a document with the default gap tolerance: the two boxes
+// overlap by 10 x 5 x 5 and share the planes of their sides, and the shifted retry grows the second so that the
+// read-only intersection decides the pair.
+func TestVerifyReadsTheCoplanarPairAsInterferingWithAGapTolerance(t *testing.T) {
+	t.Parallel()
+	ws := sketch.NewWorld()
+	s, err := ws.CreateSketch(ws.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 10, 10)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	p := s.Profiles()[0]
+	doc := decad.New()
+	_, err = decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	box2, err := decad.Extrude(t.Context(), doc, s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.NewVec(0, 5, 5))
+	require.NoError(t, err)
+	_, err = decad.Transform(t.Context(), box2, shift)
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Interfering, report.Status)
+	_, staged := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairContact)
+	require.False(t, staged, "the pair is no longer a staged contact")
+	d, ok := findDiagnostic(report.Diagnostics, decad.DiagInterference)
+	require.True(t, ok)
+	require.NotNil(t, d.Pair)
 }
 
 func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {

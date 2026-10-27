@@ -68,9 +68,13 @@ func (e *TouchContactError) Error() string {
 
 func (e *TouchContactError) Unwrap() error { return decaderr.ErrUnsupported }
 
+// TouchCoplanar is the What of a TouchContactError whose contacts are all coplanar facet overlaps, no edge graze or point
+// touch among them.
+const TouchCoplanar = `two operand facets overlap in one plane`
+
 // The contacts a TouchContactError names.
 const (
-	touchCoplanar = `two operand facets overlap in one plane`
+	touchCoplanar = TouchCoplanar
 	touchGraze    = `an operand edge grazes along the other operand's facet`
 	touchPoint    = `the operand boundaries touch at an isolated point`
 	touchNear     = `the operands' held facets come within the chord tolerance`

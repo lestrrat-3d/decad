@@ -196,16 +196,28 @@ func TestBooleanGapTolerance(t *testing.T) {
 		requireCoplanarFaceRefusal(t, err)
 	})
 
-	t.Run("a refused retry leaves the operands live", func(t *testing.T) {
+	t.Run("a tool flush with both walls of a slot is grown", func(t *testing.T) {
 		t.Parallel()
-		// A tool flush with both walls of a slot has no shift that pokes through
-		// both, so the refusal stands.
+		// No translation pokes the tool through both walls, so the retry grows it about its centre.
 		doc := decad.New()
+		a := boxBody(t, doc, 0, 0, 10, 10, 10)
+		slot := translated(t, boxBody(t, doc, 0, 0, 4, 10, 4), 3, 0, 6)
+		out, err := decad.Cut(t.Context(), a, slot)
+		require.NoError(t, err)
+		volume, err := out.Volume()
+		require.NoError(t, err)
+		require.InDelta(t, 1000-160, volume.Value.Base(), volume.Bound.Base()+1e-9)
+		require.Less(t, volume.Bound.Base(), 1.0)
+	})
+
+	t.Run("ExactOnly leaves a tool flush with both walls refused", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New(decad.ExactOnly())
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		slot := translated(t, boxBody(t, doc, 0, 0, 4, 10, 4), 3, 0, 6)
 		_, err := decad.Cut(t.Context(), a, slot)
 		requireCoplanarFaceRefusal(t, err)
-		require.Len(t, doc.Bodies(), 2)
+		require.Len(t, doc.Bodies(), 2, "a refusal leaves the operands live")
 	})
 }
 

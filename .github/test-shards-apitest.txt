@@ -2270,6 +2270,10 @@
 8	0.20	TestSweepPairColumnEndsDepartureAtWall
 8	0.03	TestSweepPairDepartsFromTrayFloor
 8	0.02	TestSweepPairPlanarAffineWedgeTouchesFloor
+10	0.01	TestCutByAToolFlushWithBothFacesOfAMeshPlate
+10	0.01	TestIntersectWithAToolFlushWithBothFacesOfAMeshPlate
+10	0.01	TestUnionWithAToolFlushWithBothFacesOfAMeshPlate
+10	0.01	TestVerifyReadsTheCoplanarPairAsInterferingWithAGapTolerance
 8	0.01	TestSweepPairRollingReplayResolution
 8	0.00	TestSweepPairSourceBoxSlideEdgeTransition
 8	0.01	TestSweepStraightIsABooleanOperand
