@@ -34,7 +34,7 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (*Body, error)
 | T6 | A groove too wide for the pitch (its axial width at or above `0.95·P`), or one whose root reaches the axis, is `ErrDegenerate`. |
 | T7 | The coil starts with its first groove wholly before the face's start plane and carries past the face's far end, so the groove runs out of both ends and every point of the face's length is cut at every angle. |
 | T8 | The coil is cut from `b` by one `Cut` with a private tool. The result is a mesh Boolean's, faceted, and the history entry is `OperationThread`. A failure leaves `b` live and the document unchanged. |
-| T9 | An external thread's private coil uses 128 stations per turn when the §5.4 departure estimate is at most `min(0.003 mm, 0.0006·ρ_max)` and each radial profile step is at most the inner radius; otherwise it uses 256. Internal thread tools use 256 stations per turn for their combined bore cuts. The shell's recorded displacement remains the bound for the result. |
+| T9 | A private coil built by `Thread` uses 128 stations per turn when the §5.4 departure estimate is at most `min(0.003 mm, 0.0006·ρ_max)` and each radial profile step is at most the inner radius; otherwise it uses 256. `Hole` and `Boss` thread tools use 256 stations per turn for their combined bore cuts. The shell's recorded displacement remains the bound for the result. |
 
 ## 2. Frame
 

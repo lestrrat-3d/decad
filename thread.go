@@ -140,7 +140,7 @@ func Thread(ctx context.Context, b *Body, spec ThreadSpec) (result *Body, retErr
 	}
 	cut := func(target *Body, consumed ...OperationInput) (*Body, error) {
 		toolCtx, capture := privateConstructionContext(ctx)
-		coil, err := buildThreadCoil(toolCtx, d, frame, plan, pitch, spec.LeftHand, external)
+		coil, err := buildThreadCoil(toolCtx, d, frame, plan, pitch, spec.LeftHand, true)
 		if err != nil {
 			return nil, err
 		}
@@ -333,7 +333,7 @@ func threadFrame(face *Face, cyl Cylinder) (frame r3.Frame, length float64, exte
 
 // buildThreadCoil sketches the groove profile of plan in the axis plane frame
 // and coils it.
-func buildThreadCoil(ctx context.Context, d *Document, frame r3.Frame, plan threadplan.Plan, pitch float64, leftHand, external bool) (*Body, error) {
+func buildThreadCoil(ctx context.Context, d *Document, frame r3.Frame, plan threadplan.Plan, pitch float64, leftHand, allowReduced bool) (*Body, error) {
 	w := sketch.NewWorld()
 	pl, err := w.CreatePlaneFromFrame(frame)
 	if err != nil {
@@ -359,7 +359,7 @@ func buildThreadCoil(ctx context.Context, d *Document, frame r3.Frame, plan thre
 	if leftHand {
 		opts = append(opts, WithLeftHand())
 	}
-	if external && threadCoilStationsPerTurn(plan, pitch) == 128 {
+	if allowReduced && threadCoilStationsPerTurn(plan, pitch) == 128 {
 		opts = append(opts, stationsPerTurnOption(128))
 	}
 	return Coil(ctx, d, s, s.Profiles()[0], axis, units.Millimeters(pitch), units.Scalar(plan.Turns), opts...)
