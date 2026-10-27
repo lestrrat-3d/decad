@@ -145,6 +145,11 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 	// facet's cross product cancels, and its rounding tracks its edge products
 	// rather than the area SumSlop's relative charge reads.
 	faceTermSlop := map[*topo.Face]float64{}
+	// facetArea and facetSlop hold each facet's area term and evaluation
+	// charge for the body totals below, which sum the same per-facet values in
+	// the same facet order.
+	facetArea := make([]float64, len(tris))
+	facetSlop := make([]float64, len(tris))
 	for i, t := range tris {
 		if err := budget.Step(); err != nil {
 			return nil, nil, 0, err
@@ -173,8 +178,10 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 			compFaces[comp[i]] = append(compFaces[comp[i]], f)
 		}
 		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
-		f.Area += b.Sub(a).Cross(c.Sub(a)).Len() / 2
-		faceTermSlop[f] = proofbound.AbsSumUpper(faceTermSlop[f], proofbound.FacetAreaTermSlop(a, b, c))
+		facetArea[i] = b.Sub(a).Cross(c.Sub(a)).Len() / 2
+		facetSlop[i] = proofbound.FacetAreaTermSlop(a, b, c)
+		f.Area += facetArea[i]
+		faceTermSlop[f] = proofbound.AbsSumUpper(faceTermSlop[f], facetSlop[i])
 		facetFace[i] = f
 	}
 	// A face's bound is the largest δ(t) over its own facets, and its
@@ -320,13 +327,12 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 	}
 
 	areaF, termSlop := 0.0, 0.0
-	for _, t := range tris {
+	for i := range tris {
 		if err := budget.Step(); err != nil {
 			return nil, nil, 0, err
 		}
-		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
-		areaF += b.Sub(a).Cross(c.Sub(a)).Len() / 2
-		termSlop = proofbound.AbsSumUpper(termSlop, proofbound.FacetAreaTermSlop(a, b, c))
+		areaF += facetArea[i]
+		termSlop = proofbound.AbsSumUpper(termSlop, facetSlop[i])
 	}
 	// The float area accumulation itself rounds, and the loop above sums
 	// NAIVELY: charge the proven naive-summation bound, never a pairwise one
