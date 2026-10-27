@@ -197,7 +197,7 @@ Each of these returns a new body and retires its input.
 | `decad.Chamfer` | Bevels selected edges. `decad.WithAsymmetricChamfer` sets a second distance. Selecting the whole outer cap loop of a prism whose section is a smooth chain of fit splines bevels it within a measured ratio of the ideal chamfer, as a cut. |
 | `decad.FilletChord` | Rounds convex or concave edges between two planar faces, or circular ones between a plane and a surface of revolution, with an arc stated by its chord length. |
 | `decad.ChamferAngle` | Bevels convex or concave edges between two planar faces, or circular ones between a plane and a surface of revolution, by a distance along a reference face and an angle from that face. |
-| `decad.Shell` | Removes the selected faces and lines the rest with a wall. `decad.WithShellSense` picks `decad.Inward` or `decad.Outward`. |
+| `decad.Shell` | Removes the selected faces and lines the rest with a wall. `decad.WithShellSense` picks `decad.Inward` or `decad.Outward`. A mesh solid whose faces all square to an axis shells inward with mitered corners. |
 | `decad.Draft` | Leans selected walls about a `decad.NeutralPlane` (`decad.NeutralFace`). |
 | `decad.Hole` | Cuts a round hole (or a rectangular, slot or regular polygonal one from `HoleSpec.Shape`), optionally drafted with `HoleSpec.Draft` or tapped with a `decad.HoleThread`, at a point on a planar face, or radially into a cylindrical one, through or blind, with an optional `decad.Counterbore` or `decad.Countersink` head. A `decad.RectangularHole` or `decad.SlotHole` shape cuts that cross-section instead, without a head. |
 | `decad.LookupThread` | Reads a thread designation such as `M10`, `M10x1.25` or `1/4-20` into its major diameter and pitch. |

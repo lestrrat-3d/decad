@@ -103,6 +103,13 @@ func WithShellSense(s ShellSense) ShellOption {
 // meeting the axis along more than one walk and an offset reaching the axis
 // are ErrUnsupported.
 //
+// A faceted solid whose every face squares to a world axis and whose held vertices carry no bound,
+// such as a part read from STL and made a solid by SolidFromMesh, shells inward on a grid:
+// the cavity is the solid eroded by a cube of side twice t, so the walls are mitered at
+// every edge, the removed faces open it, and the result is a mesh solid whose axis faces keep
+// their planes (agent-docs/orthogonal-shell-design.md). A wall is t thick to the rounding
+// of x ± t; walls that meet are ErrDegenerate.
+//
 // A positive-taper one-sided full-circle draft with its far cap removed
 // inward builds a conical cup through draft §10.6's bounded meridian.
 //
@@ -201,6 +208,9 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value,
 			return nil, err
 		}
 		call.Removed = faceNodes(removed)
+	}
+	if out, ok, err := shellOrthogonal(ctx, d, b, call); ok || err != nil {
+		return out, err
 	}
 	node, err := brepmodify.Shell(ctx, envOf(b.n.Doc, b.n.Doc.NextProducer), &b.n, call)
 	if err != nil {

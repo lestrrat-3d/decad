@@ -40,6 +40,19 @@ const solidFromMeshScans = 16_000_000
 // context, document or mesh is ErrDegenerate. A failure leaves d unchanged.
 func SolidFromMesh(ctx context.Context, d *Document, m *MeshBody) (result *Body, retErr error) {
 	defer func() { retErr = operationError(OperationSolidFromMesh, retErr) }()
+	body, err := solidFromMeshBody(ctx, d, m)
+	if err != nil {
+		return nil, err
+	}
+	if err := d.commitOperationIn(ctx, nil, OperationSolidFromMesh, nil, body); err != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+// solidFromMeshBody proves m a solid and builds its Faceted body without registering it, for
+// SolidFromMesh and for an operation that commits the body as its own result.
+func solidFromMeshBody(ctx context.Context, d *Document, m *MeshBody) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a conversion`, ErrDegenerate)
 	}
@@ -99,11 +112,7 @@ func SolidFromMesh(ctx context.Context, d *Document, m *MeshBody) (result *Body,
 	if err != nil {
 		return nil, err
 	}
-	body := bodyHandle(node)
-	if err := d.commitOperationIn(ctx, nil, OperationSolidFromMesh, nil, body); err != nil {
-		return nil, err
-	}
-	return body, nil
+	return bodyHandle(node), nil
 }
 
 // meshPlaneGroups assigns each triangle a source group: triangles whose vertices lie on

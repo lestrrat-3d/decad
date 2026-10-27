@@ -2590,3 +2590,7 @@
 10	0.01	TestSolidFromMeshChamfersAnEdge
 10	0.01	TestSolidFromMeshTiltedFacesStayFaceted
 10	0.01	TestSolidFromMeshBodyKeepsWorkingAfterPlacementAndReadings
+10	0.01	TestShellOpensABoxMeshSolid
+10	0.01	TestShellHollowsAClosedBoxMeshSolid
+10	0.01	TestShellOfAMeshSolidRefusals
+10	0.01	TestShellOpensAnLShapedMeshSolid
