@@ -1503,6 +1503,7 @@
 7	2.05	TestExtrudeSplineProfileSpendsOneWorkCeiling
 7	0.01	TestExtrudeToFace
 7	0.00	TestExtrudeToNearlyPlanarRevolveFaceRefuses
+7	0.00	TestBrepLoopFilletPublicRoundedPlateAnalyticSTEP
 10	0.00	TestDraftNearTangentJoinBooleans
 10	0.00	TestDraftNearTangentJoinPastLimitRefuses
 7	0.02	TestFacetedEdgeLengthNeverClaimsExact

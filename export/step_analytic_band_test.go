@@ -344,42 +344,32 @@ func isCylinderPatch(f *decad.Face) bool {
 // circle radii are the closed forms: the four top contours at 1, the eight
 // meridians at 2, and ten arcs and circles at 3 (the corner walls' two rims
 // each and the bore's two circles). Every torus patch's loop runs
-// counter-clockwise about its outward normal, read back from the file.
-//
-// On amd64 the admission refuses this body, so NewSTEPFile writes it
-// faceted: the patch at the (0, 0) corner has one meridian whose Center is
-// held at y = 2.9999999999999996 while its Exact end vertex (0, 3, 18) lies
-// at y = 3, so that vertex is off the meridian circle's plane and
-// arcInItsPlane refuses the arc. That Center is a rounding of the fillet
-// build, which another architecture's fused arithmetic may not repeat, so the
-// test requires the admission to refuse exactly when some arc misses its
-// plane, and every such arc to be a meridian. It then writes the body through
-// armFile to keep the torus patch writer's surfaces, circles and walks
-// checked. That writing leg was shown to fail with torusPatchArea's
-// parallel sweep sign inverted (the patches then walked clockwise) and with
-// torusFaceSense inverted; the refusal leg with torusPatchArc's
-// arcInItsPlane leg deleted (the body was admitted).
+// counter-clockwise about its outward normal, read back from the file, and
+// every arc holds both its vertices in its own plane: the fillet build holds
+// each tangent join's foot at the exact point the record denotes, so the
+// meridian at the (0, 0) corner stands at y = 3 with both its vertices
+// (offset2d.ExactCornerFeet). Shown to fail with supportsAnalyticTorusPatch
+// refusing every loop (the body fell to the faceted writer), with
+// torusPatchArea's parallel sweep sign inverted (the patches then walked
+// clockwise), with torusFaceSense inverted, and with ExactCornerFeet's G1
+// arm deleted (on amd64 that meridian's Center was held at y = 2.9999999999999996 off its
+// end vertex's plane, and the admission refused the body).
 func TestAnalyticBandRoundedPlateTopLoop(t *testing.T) {
 	t.Parallel()
 	body := bandFillet(t, bandDrilledBox(t, 3), 20, 0, 2)
-	offPlane := 0
+	arcs := 0
 	for _, face := range body.Faces() {
-		torus, ok := face.Surface().(decad.Torus)
-		if !ok {
+		if _, ok := face.Surface().(decad.Torus); !ok {
 			continue
 		}
 		for _, ce := range face.Loops()[0].CoEdges() {
 			arc := ce.Edge().Curve().(decad.Arc3)
-			if !arcInItsPlane(ce.Edge(), arc) {
-				require.True(t, torusArcIsMeridian(arc, torus))
-				offPlane++
-			}
+			require.True(t, arcInItsPlane(ce.Edge(), arc), "the arc at %v about %v holds its vertices", arc.Center, arc.Axis)
+			arcs++
 		}
 	}
-	ok, err := supportsAnalyticSTEP(t.Context(), body)
-	require.NoError(t, err)
-	require.Equal(t, offPlane == 0, ok, "a meridian off its own circle's plane sends the body to the faceted writer")
-	f := armFile(t, body)
+	require.Equal(t, 16, arcs, "four torus patches of four arcs")
+	f := bandFile(t, body)
 	byName := bandEntities(f)
 	require.Len(t, byName["ADVANCED_FACE"], 19)
 	require.Len(t, byName["PLANE"], 6)

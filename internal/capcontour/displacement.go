@@ -155,3 +155,39 @@ func joinFoot(w survey2d.SideWalk, atEnd bool, span proofbound.RatInterval) (Poi
 	}
 	return OffsetFootEnclosure(corner, w, atEnd, span)
 }
+
+// ExactJoinFoot is one wall's offset foot at a corner, moved by exactly
+// amount along its left unit normal (joinFoot over a span of one value), as
+// the float64 point that holds it exactly. ok is true only when joinFoot's
+// enclosure is a single rational on both axes and a float64 holds each: the
+// corner is a recorded endpoint (a zero end bound), the unit normal is
+// rational (the line's chord, or the circle's radius at that corner, has a
+// rational length), and every product and sum stayed exact. It is the very
+// point Displacement encloses there, so a contour holding it states no
+// rounding at that foot. Otherwise the caller keeps its float construction.
+func ExactJoinFoot(w survey2d.SideWalk, atEnd bool, amount float64) (sectionrecord.Point2, bool) {
+	span, ok := OffsetSpan(amount, 0)
+	if !ok {
+		return sectionrecord.Point2{}, false
+	}
+	foot, ok := joinFoot(w, atEnd, span)
+	if !ok {
+		return sectionrecord.Point2{}, false
+	}
+	u, okU := exactFloat(foot.U)
+	v, okV := exactFloat(foot.V)
+	if !okU || !okV {
+		return sectionrecord.Point2{}, false
+	}
+	return sectionrecord.Point2{U: u, V: v}, true
+}
+
+// exactFloat is the float64 an enclosure of one rational holds exactly, ok
+// false for a wider enclosure or a rational no float64 holds.
+func exactFloat(iv proofbound.RatInterval) (float64, bool) {
+	if iv.Lo.Cmp(iv.Hi) != 0 {
+		return 0, false
+	}
+	f, exact := iv.Lo.Float64()
+	return f, exact
+}

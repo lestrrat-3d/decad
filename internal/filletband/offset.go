@@ -40,7 +40,9 @@ func SphereWalk(w survey2d.SideWalk, r float64) bool {
 
 // OffsetJoins reads an inward circular walk whose radius equals the fillet
 // radius as a pole. Its neighbours must be straight and exactly G1; the
-// ordinary offset's computed feet are replaced by the recorded centre.
+// ordinary offset's computed feet are replaced by the recorded centre. Every
+// other G1 or connector-arc foot is held exactly where the recorded data
+// denotes a float64 point (exactFeet).
 func OffsetJoins(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, r, rDelta, tol float64) ([]offset2d.Join, error) {
 	n := len(walks)
 	if n == 0 {
@@ -75,6 +77,7 @@ func OffsetJoins(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, r, rD
 	if err != nil {
 		return nil, err
 	}
+	exactFeet(walks, joins, r)
 	for i, on := range collapsed {
 		if !on {
 			continue
@@ -87,6 +90,20 @@ func OffsetJoins(budget *proofbound.WorkBudget, walks []survey2d.SideWalk, r, rD
 		joins[i].M, joins[next].M = pole, pole
 	}
 	return joins, nil
+}
+
+// exactFeet holds every join's feet exactly where the recorded data denotes
+// a float64 point (offset2d.ExactCornerFeet, loop-fillet §4 step 1), at the
+// held radius r alone: whatever radius span a caller reads, every caller of
+// OffsetJoins holds the same contour vertices and LF5 and LF6 meridian
+// centres. offset2d.PartialFilletContour applies the same rule to its
+// selected pairs, so a partial fillet's contour and meridians stand on the
+// same feet.
+func exactFeet(walks []survey2d.SideWalk, joins []offset2d.Join, r float64) {
+	n := len(walks)
+	for i := range joins {
+		joins[i] = offset2d.ExactCornerFeet(walks[(i+n-1)%n], walks[i], joins[i], r)
+	}
 }
 
 // OffsetLoop records the cap contour. A collapsed circular walk leaves one

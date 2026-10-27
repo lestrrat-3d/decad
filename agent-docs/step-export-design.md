@@ -61,15 +61,16 @@ according to the writer path.
   product of each with its `Axis` from its `Center`), and every vertex of a cone or sphere patch is
   `Exact`. Both checks only refuse: an arc record whose axis does not hold its vertices, or a vertex
   whose position carries a bound, is not proven to lie on the curves and surface the file states
-  through it, and the body takes the faceted writer. On amd64 the plane check refuses one meridian of
-  the rounded plate's top-loop fillet (loop-fillet P8 with its top loop filleted r = 2): its `Center`
-  is held at y = 2.9999999999999996 while its `Exact` end vertex lies at y = 3, so that body takes the
-  faceted writer. The vertex check covers cone and sphere patches only. The same reason
+  through it, and the body takes the faceted writer. A loop fillet's meridians pass the plane check
+  where the record denotes their feet exactly: the fillet holds those feet at the exact point
+  (`agent-docs/loop-fillet-design.md` §4 step 1), so the rounded plate's top-loop fillet (loop-fillet
+  P8 with its top loop filleted r = 2) holds every vertex `Exact` and writes analytic. The vertex
+  check covers cone and sphere patches only. The same reason
   holds for the other arms, which do not apply it: a plane, cylinder or torus face writes its held
   vertex coordinates through its curves and surface whatever bound they carry, so such a file states
   points the body does not prove lie on them. The bounds those faces carry today are rounding, measured on amd64 at
-  most 5.3e-15 mm on a shell with an oblique opening, 7.7e-14 mm and 1.5e-13 mm on the round bosses
-  crossing a plate's outline, and 4.4e-16 mm on a loop fillet's rounded-plate top loop. Applying the
+  most 5.3e-15 mm on a shell with an oblique opening, and 7.7e-14 mm and 1.5e-13 mm on the round bosses
+  crossing a plate's outline. Applying the
   check to every arm would send each of those bodies to the faceted writer
   (`agent-docs/missing-features.md`).
   A cone or sphere patch's loop is walked by the edge-use rule, never by a parameter-plane area, which
