@@ -757,8 +757,12 @@ work cap applies to the sum of all input segments. `SplitRuns` resolves
 shared stations, `CellsHaveNoVoid` refuses an enclosed void, and
 `MergeLoops` keeps the exterior boundary. Each resulting loop passes
 `prismcells.AuditMergeSection`; multiple loops also pass
-`ProveGroupDisjoint`. One loop builds a `prismPayload`, while proven
-disjoint loops build one one-slab `stackedPrismPayload`. The result carries
+`prismcells.ProveGroupApart` (stacked §2.2). One loop builds a
+`prismPayload`, while loops proven apart build one one-slab
+`stackedPrismPayload`. Loops that touch at one point, such as a triangle's
+apex on a square's side, which the arrangement leaves uncut, are no group:
+the evaluator misses, and the bodies join two at a time, where the
+touching pair takes the mesh path. The result carries
 the maximum of the inputs' axial endpoint bounds and one cut-parameter
 section charge. A group also carries its disjointness walk charge. One
 document commit retires every input after result evaluation succeeds and

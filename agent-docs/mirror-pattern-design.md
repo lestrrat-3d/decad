@@ -488,7 +488,13 @@ extra or missing cell, or any invalid cell means "not proven disjoint", and
 `Patterned` takes §6.1 rule 3. Two instances sharing a wall arrive as
 coincident carriers whose shared span bounds two cells, never one instance's
 whole outer, so they take rule 3 as well, where `Union` joins them
-(general-boolean class A3). The scene is capped by `prismMaxArrangementSegments`
+(general-boolean class A3). Instances that touch at one point are not
+proven disjoint either. The arrangement cuts neither a tangency nor a line
+at another line's endpoint lying on it, so two tangent discs come back as
+two whole cells. `prismcells.ProveGroupApart` therefore also refuses two
+cells sharing a walked vertex and any point sketch's own intersection
+queries report between two instances' entities (stacked §2.2). Touching
+instances take rule 3, where `Union` takes the mesh path. The scene is capped by `prismMaxArrangementSegments`
 (prism-boolean §10); exhaustion is `ErrUnsupported`.
 
 Topology, roles and measurements are stacked §3–§4 with the region index
@@ -526,7 +532,7 @@ loop clearance proven per slab, which is the one slab. `Lumps()` reports
 | Simplicity, orientation, nesting of the assembled record | modify §5 audit, empty blend map | the diameter-anchored floor is verification §4's | S7 refuses near contact; S8/S9 refuse a decided break; none admits |
 | Instance translation | exact rational offset on the placed axes, per-coordinate interval sums | `δ_pattern`: `IntervalFloatError` per coordinate, covering offset, enclosure, conversion and sum, into `sectionDelta` | — |
 | Instance rotation | `TurnSinCosInterval` enclosures over an exact centre, exact quarter and half turns | `IntervalFloatError` per coordinate into `δ_pattern` | — |
-| Disjointness of a group | `sketch` arrangement of the outers, read structurally | — | any `Partial` edge, hole or invalid cell refuses the group; nothing admits one but `Count` whole valid cells |
+| Disjointness of a group | `sketch` arrangement of the outers, read structurally | — | any `Partial` edge, hole or invalid cell, a vertex two cells share, or a point sketch's intersection queries report between two instances refuses the group; nothing admits one but `Count` whole valid cells |
 | Group measurements | stacked §4 bounded sums | each term's own bound; `exactSumRound` on the sum | — |
 
 No step evaluates a residual against a curve to decide anything. The two
@@ -604,6 +610,10 @@ Every test asserts computed geometry; bounds are asserted as relations
   Two Ø6 discs crossing about the origin join into one lump the same way.
 - **Touching instances**: a 10 mm peg at 10 mm steps: `Patterned` returns
   `Union`'s one analytic prism of 500 mm³, pinned to `Union`'s own outcome.
+- **Tangent instances**: an r = 2 disc at 4 mm steps, and one at (2, 0)
+  turned a half turn, touch at one point: `Patterned` returns `Union`'s
+  mesh-path result, which meshes under `VerifyAll` with its volume bound
+  covering 80π mm³ (`apitest/union_tangent_contact_test.go`).
 - **Non-co-directional**: a 5 mm peg patterned along +z at 5 mm: a
   `Copy` instance and, for `Patterned`, `Union`'s own result: the
   mesh path's coplanar refusal, since the instance's own placement keeps the

@@ -324,6 +324,11 @@ feature and its copies to one `decad.Union` with the base. When the feature and 
 pattern keeps those planes (a turn about the sweep axis, or a slide in the plane), the result is one extrusion of the
 joined section, and its bound includes the rounding of the placed copies. A pattern that tilts the planes is refused.
 
+A `Union` or `Patterned` whose extrusions touch at one point without crossing, such as a disc tangent to a plate's side
+or to another disc, a boss on a plate's top tangent inside its edge, or a triangle's apex on a square's side, takes the
+faceted path and gives an `Approximate` result that meshes. A disc tangent inside the plate at the same height adds
+nothing and stays exact.
+
 ## Sheets and surfaces
 
 A sheet encloses no material, so `Body.Volume` and `Body.Centroid` return `decad.ErrNotSolid` for it.

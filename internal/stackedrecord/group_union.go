@@ -12,7 +12,8 @@ import (
 )
 
 // GroupUnionTail audits each assembled loop and publishes one prism or a
-// group after proving its regions disjoint. The caller routes its errors
+// group after proving its regions apart: disjoint, and touching nowhere, not
+// even at one tangent point (prismcells.ProveGroupApart). The caller routes its errors
 // through prismcells.AmplifiedFallback.
 func GroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, scene prismcells.GroupScene,
 	a, b prismrecord.Payload) (topo.Payload, bool, error) {
@@ -41,7 +42,7 @@ func GroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, scene pr
 			Z0: a.Z0, Z1: a.Z1, Z0Delta: z0Delta, Z1Delta: z1Delta, Z0Denoted: z0Denoted, Z1Denoted: z1Denoted,
 			SectionDelta: proofbound.AbsSumUpper(inputDelta, cutDelta)}, true, nil
 	}
-	disjoint, disjointWalk, err := prismcells.ProveGroupDisjoint(ctx, budget, regions)
+	disjoint, disjointWalk, err := prismcells.ProveGroupApart(ctx, budget, regions)
 	if err != nil || !disjoint {
 		return nil, false, err
 	}

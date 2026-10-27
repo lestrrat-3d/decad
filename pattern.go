@@ -201,7 +201,8 @@ func (rp resolvedPattern) placedInstance(ctx context.Context, d *Document, ref p
 //  1. A straight prism or a prism group on the frame-keeping arm whose
 //     instances sketch proves pairwise disjoint becomes one prism group: a
 //     one-slab stacked prism holding every instance's regions on the
-//     receiver's frame and interval. No boolean runs.
+//     receiver's frame and interval. No boolean runs. Instances that touch
+//     at one point, such as tangent discs, are not disjoint.
 //  2. Any other receiver whose instances are proven disjoint is
 //     ErrUnsupported: no payload holds disjoint lumps of it. Use
 //     PatternCopies and keep the instances as separate bodies.
