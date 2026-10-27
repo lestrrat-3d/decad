@@ -3,6 +3,7 @@ package meshbody_test
 import (
 	"math"
 	"math/big"
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/meshbody"
@@ -112,6 +113,67 @@ func TestAnalyzeCountsShells(t *testing.T) {
 	require.True(t, got.Closed())
 	require.Equal(t, 2, got.Shells)
 	require.Equal(t, "16", got.SignedVolume.RatString())
+}
+
+func TestAnalyzeShellsWithInterleavedDegenerateTriangles(t *testing.T) {
+	t.Parallel()
+	vertices, faces := cube()
+	for _, p := range slices.Clone(vertices) {
+		vertices = append(vertices, p.Add(r3.Vec{X: 10}))
+	}
+	triangles := [][3]int{{0, 12, 12}}
+	for _, tri := range faces {
+		triangles = append(triangles, tri, [3]int{0, 12, 12},
+			[3]int{tri[0] + 8, tri[1] + 8, tri[2] + 8}, [3]int{0, 12, 12})
+	}
+	for order := range 2 {
+		got, err := meshbody.Analyze(t.Context(), vertices, triangles)
+		require.NoError(t, err)
+		require.True(t, got.Closed())
+		require.Equal(t, 2, got.Shells, "degenerate triangles cannot join the cubes")
+		require.Equal(t, 25, got.DegenerateTriangles)
+		require.Equal(t, "16", got.SignedVolume.RatString())
+		require.Equal(t, "48", got.AreaLow.RatString())
+		require.Equal(t, "48", got.AreaHigh.RatString())
+		// These two live faces connect edges from the separate cubes.
+		bridged := append(slices.Clone(triangles), [3]int{0, 1, 12}, [3]int{1, 12, 13})
+		got, err = meshbody.Analyze(t.Context(), vertices, bridged)
+		require.NoError(t, err)
+		require.False(t, got.Closed())
+		require.Equal(t, 1, got.Shells, "order %d", order)
+		require.Equal(t, 2, got.NonManifoldEdges)
+		require.Equal(t, 1, got.MisorientedEdges)
+		require.Equal(t, 2, got.BoundaryEdges)
+		require.Equal(t, 25, got.DegenerateTriangles)
+		volume, low, high, _ := rationalGeometry(vertices, bridged)
+		require.Zero(t, got.SignedVolume.Cmp(volume))
+		require.Zero(t, got.AreaLow.Cmp(low))
+		require.Zero(t, got.AreaHigh.Cmp(high))
+		slices.Reverse(triangles)
+	}
+}
+
+func TestAnalyzeRepeatedEdgesStayNonManifold(t *testing.T) {
+	t.Parallel()
+	vertices, faces := cube()
+	triangles := make([][3]int, 512)
+	for i := range triangles {
+		triangles[i] = faces[0]
+		if i%2 != 0 {
+			triangles[i][1], triangles[i][2] = triangles[i][2], triangles[i][1]
+		}
+	}
+	got, err := meshbody.Analyze(t.Context(), vertices, triangles)
+	require.NoError(t, err)
+	require.False(t, got.Closed())
+	require.Equal(t, 3, got.NonManifoldEdges)
+	require.Zero(t, got.BoundaryEdges)
+	require.Zero(t, got.MisorientedEdges)
+	require.Zero(t, got.DegenerateTriangles)
+	require.Equal(t, 1, got.Shells)
+	require.Equal(t, "0", got.SignedVolume.RatString())
+	require.Equal(t, "1024", got.AreaLow.RatString())
+	require.Equal(t, "1024", got.AreaHigh.RatString())
 }
 
 func TestAnalyzeAreaEnclosesIrrationalSides(t *testing.T) {
