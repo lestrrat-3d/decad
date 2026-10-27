@@ -465,3 +465,47 @@ func TestStretchAgreesWithTheStretchedCubes(t *testing.T) {
 	}
 	require.Greater(t, checked, 20)
 }
+
+func TestCircularPatternAgreesWithTheUnionOfTurnedCubes(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(31, 32))
+	checked := 0
+	for range 40 {
+		c := randomCubes(rng)
+		doc := decad.New()
+		b, ok := c.solid(t, doc)
+		if !ok {
+			continue
+		}
+		count := []int{2, 4}[rng.IntN(2)]
+		centre := r3.NewVec(float64(rng.IntN(voxelSide+1)), float64(rng.IntN(voxelSide+1)), 0)
+		out, err := decad.Patterned(t.Context(), b, decad.CircularPattern{Center: centre, Axis: r3.NewVec(0, 0, 1), Count: count})
+		if err != nil {
+			// A union whose kept cubes meet only along an edge, or too many cubes: refused, never a wrong volume.
+			continue
+		}
+		checked++
+		// The cubes covered by the cube set and its copies turned 360/count degrees at a time about the axis: a cube turns to
+		// the cube whose centre is the turned centre.
+		covered := map[[3]int]bool{}
+		for x := range voxelSide {
+			for y := range voxelSide {
+				for z := range voxelSide {
+					if !c[x][y][z] {
+						continue
+					}
+					dx, dy := float64(x)+0.5-centre.X, float64(y)+0.5-centre.Y
+					for range count {
+						covered[[3]int{int(math.Floor(centre.X + dx)), int(math.Floor(centre.Y + dy)), z}] = true
+						for range 4 / count {
+							dx, dy = -dy, dx
+						}
+					}
+				}
+			}
+		}
+		got, bound := volumeOf(t, out)
+		require.InDelta(t, float64(len(covered)), got, bound+1e-9, "%d turned copies of %d cubes about %v", count, c.count(), centre)
+	}
+	require.Greater(t, checked, 12)
+}
