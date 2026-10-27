@@ -63,12 +63,24 @@ func SmoothHomotheticSectionRecord(fp facetedPayload, plane r3.Frame) (profileRe
 func SectionBrepStack(ctx context.Context, proxy prismPayload, slabs []stackedrecord.Slab, plane r3.Frame) (
 	*sketch.Sketch, []*sketch.Profile, error,
 ) {
+	region, err := SectionBrepStackRecord(ctx, proxy, slabs, plane)
+	if err != nil {
+		return nil, nil, err
+	}
+	return ReconstructExactSection(ctx, region, plane)
+}
+
+// SectionBrepStackRecord is SectionBrepStack's exact slab region before it is
+// rebuilt on a Sketch, in the plane frame's local coordinates.
+func SectionBrepStackRecord(ctx context.Context, proxy prismPayload, slabs []stackedrecord.Slab, plane r3.Frame) (
+	profileRecord, error,
+) {
 	if proxy.SectionDelta != 0 {
-		return nil, nil, fmt.Errorf(`%w: a slab stack has a displaced source profile`, decaderr.ErrUnsupported)
+		return profileRecord{}, fmt.Errorf(`%w: a slab stack has a displaced source profile`, decaderr.ErrUnsupported)
 	}
 	for _, slab := range slabs {
 		if err := ctx.Err(); err != nil {
-			return nil, nil, err
+			return profileRecord{}, err
 		}
 		candidate := proxy
 		candidate.Z0, candidate.Z1 = slab.Z0, slab.Z1
@@ -76,11 +88,11 @@ func SectionBrepStack(ctx context.Context, proxy prismPayload, slabs []stackedre
 			continue
 		}
 		if slab.Z0Delta != 0 || slab.Z1Delta != 0 || len(slab.Regions) != 1 {
-			return nil, nil, fmt.Errorf(`%w: a slab stack section needs one exact slab region`, decaderr.ErrUnsupported)
+			return profileRecord{}, fmt.Errorf(`%w: a slab stack section needs one exact slab region`, decaderr.ErrUnsupported)
 		}
-		return ReconstructExactSection(ctx, slab.Regions[0], plane)
+		return slab.Regions[0], nil
 	}
-	return nil, nil, fmt.Errorf(`%w: section plane lies outside slab stack interiors`, decaderr.ErrUnsupported)
+	return profileRecord{}, fmt.Errorf(`%w: section plane lies outside slab stack interiors`, decaderr.ErrUnsupported)
 }
 
 // ReconstructExactSection charges the profile record and rebuilds it as a

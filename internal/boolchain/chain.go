@@ -129,7 +129,8 @@ func literals(bodies []*topo.Body, negated bool) []Literal {
 // expandable body): n is a mesh Boolean result with no point-cone record whose
 // every operation warning is classified as moving no geometry. ok is false
 // otherwise. Point location reads the same eligibility
-// (agent-docs/point-containment-design.md §8).
+// (agent-docs/point-containment-design.md §8), and so does Body.Section of a
+// mesh Boolean result (agent-docs/section-design.md).
 func Expandable(src Source, n *topo.Body) (meshbool.OperationKind, []*topo.Body, bool) {
 	p, ok := n.Payload.(facetedrecord.Payload)
 	if !ok || p.PointCone != nil {

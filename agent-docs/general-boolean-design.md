@@ -196,8 +196,10 @@ both sides enters once and counts on both. The scene is cached by its
 record set, so a slab merge and an interface over the same records share
 one arrangement and its cut points, and two scenes that cut one carrier
 pair record the crossing once through the keyed table below.
-Only this authenticated A1 BRep Union path can re-express a complete
-all-line loop at certified exact line crossings. Each crossing must have
+Only this authenticated A1 BRep Union path and `Body.Section` of a mesh
+Boolean result read from its history (`agent-docs/section-design.md`) can
+re-express a complete all-line loop at certified exact line crossings; the
+section refuses any loop that keeps a cut charge. Each crossing must have
 one paired Sketch event, an exactly representable binary64 coordinate,
 and strict source-range and walk-order checks. Any failed check keeps the
 original fragments and cut charge. Ordinary Union, Cut, Intersect, and

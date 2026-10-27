@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/boolchain"
 	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/sectioncert"
 	"github.com/lestrrat-3d/decad/internal/sectionclip"
+	"github.com/lestrrat-3d/decad/internal/sectionhistory"
 	"github.com/lestrrat-3d/decad/internal/stackedunion"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
@@ -32,7 +34,11 @@ import (
 // exact slab profiles of a stack-backed BRep or of any stacked prism (a blind
 // pocket, a boss, a cavity) can be cut strictly inside one
 // slab by a plane preserving their recorded coordinates. A stack with a displaced
-// profile or level, or a slab of several regions, is refused. The
+// profile or level, or a slab of several regions, is refused. A mesh Union, Cut
+// or Intersect result whose history proves it is exactly the operation over
+// two such prism or slab bodies sections as the planar operation of their
+// straight-line sections, when that is one region whose every junction Sketch
+// certifies exact; a gap-shifted result is refused. The
 // bounded result enters only straight solid Extrude with an independent Distance.
 // Other body or plane classes return [ErrUnsupported]. A nil body or context,
 // or an invalid plane, returns [ErrDegenerate]. A sheet or unsound solid returns
@@ -127,7 +133,7 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 			profile, admitted = sectionclip.SmoothHomotheticSectionRecord(fp, plane)
 		}
 		if !admitted {
-			return nil, nil, fmt.Errorf(`%w: section needs an original certified smooth loft`, ErrUnsupported)
+			return booleanHistorySection(ctx, b, plane)
 		}
 		return sectionclip.ReconstructExactSection(ctx, profile, plane)
 	}
@@ -161,6 +167,19 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 		}
 	}
 	return sectionclip.ReconstructExactSection(ctx, profile, plane)
+}
+
+// booleanHistorySection sections a mesh Union, Cut or Intersect result from
+// the two operands its public record names, when that record proves the result
+// denotes the operation over them exactly (agent-docs/section-design.md). It
+// stays in root because it reads Document.producers.
+func booleanHistorySection(ctx context.Context, b *Body, plane r3.Frame) (*sketch.Sketch, []*sketch.Profile, error) {
+	op, inputs, ok := boolchain.Expandable(historyProducers{b.Document()}, &b.n)
+	if !ok || len(inputs) != 2 {
+		return nil, nil, fmt.Errorf(`%w: section needs an original certified smooth loft or an exact two-body Boolean history`,
+			ErrUnsupported)
+	}
+	return sectionhistory.Section(ctx, op, inputs[0].Payload, inputs[1].Payload, plane)
 }
 
 // Section is the sketch geometry a section-fed operation consumes: a closed

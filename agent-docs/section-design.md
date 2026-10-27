@@ -28,8 +28,8 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 The returned Sketch uses `plane` as its construction frame. The profiles are
 fresh, valid Sketch snapshots; changing the Sketch makes them stale under the
 ordinary seam rules or the bounded-source certificate below. A later body
-class may return several regions, so the result is a slice even though the
-admitted prism carries one material region.
+class may return several regions, so the result is a slice even though every
+admitted class returns one material region.
 The caller may read a retired body. A nil body or context, or an invalid frame,
 is `ErrDegenerate`; a sheet or unsound solid is `ErrNotSolid`.
 
@@ -88,6 +88,139 @@ The selected region is reconstructed on a fresh Sketch and checked against its
 record through the same seam proof as an exact prism. This is an exact planar
 section, including any recorded holes, and can enter ordinary profile
 consumers. It does not treat a tessellated BRep face as a source profile.
+
+## Mesh Boolean result read through its operation history
+
+A mesh `Union`, `Cut` or `Intersect` result holds a mesh and keeps no section
+record. `Body.Section` reads its section from the two operands its public
+operation record names, when that record proves the result denotes the
+operation over them exactly. The query reads the retained operands, retired or
+not, and consumes nothing. It replays no feature call.
+
+### Admission of the result
+
+The body must be a `facetedPayload` that misses both smooth-loft classes and
+that `boolchain.Expandable` accepts (`agent-docs/boolean-chain-regroup-design.md`,
+"Eligibility of an expandable body"): no point-cone trim and no operation
+warning naming an accepted change, such as a gap shift or an embedding reach.
+Its producer must be a public `Cut`, `Union` or `Intersect` with exactly two
+consumed inputs; a `Cut` reads its target, then its tool. Such a body denotes
+`A op B` over its two recorded inputs exactly (same document, "Assumptions").
+This is the set-equality certificate that `agent-docs/operation-history-design.md`
+requires before a source payload is reused. A gap-shifted result, a `Copy` or
+`Transform` of a result, a many-body `Union` and a body without a Boolean
+producer return `ErrUnsupported`.
+
+### Admission of each operand
+
+Each operand must have an exact section at the requested plane in one of these
+existing classes: the parallel exact prism, a strictly interior slab of a
+stacked prism or stack-backed BRep (both read through
+`sectionclip.SectionBrepStackRecord`), or the cardinal vertical plane of a
+rectangular or whole-circle prism. Each class keeps all its own gates. The
+section must be loops of whole `LineSeg` records. A narrowed line range enters
+at a computed walked end, and an arc or circle has no certified junction, so
+either returns `ErrUnsupported`. An operand that is itself a mesh Boolean
+result is not read through its own history, and an operand the plane misses
+has no section, so the result refuses.
+
+One requested frame rarely suits both operands. A box swept along Z is read in
+(X, Y), but a box swept along X must be read in a frame whose V axis is ±X. So
+each operand tries eight candidate frames in a fixed order: the requested
+(U, V), then (−U, −V), (V, −U) and (−V, U), then the reflections (U, −V),
+(−U, V), (V, U) and (−V, −U). Each candidate keeps the requested origin, and
+after `r3.NewFrame` its held U and V must equal the signed permutation of the
+requested held axes exactly; otherwise it is skipped. All eight span the
+requested plane. The first candidate a class admits gives the operand's
+section. A point at `u'U' + v'V'` is the same world point at the signed
+permutation of `(u', v')` in the requested frame, because U' and V' are the
+requested axes negated or swapped. Negating and swapping binary64 values is
+exact. A reflection (`U'×V' = −N`) reverses every loop's walk, so outer loops
+stay counter-clockwise and holes clockwise in the requested frame.
+
+### Proof that the section commutes with the Boolean
+
+Write `X°` for the interior of a closed set X in R³, and `int_P`, `cl_P` for
+interior and closure inside the plane P. The section of a solid X is its
+material region `σ(X) = cl_P(int_P(X ∩ P))`: the slice with any
+lower-dimensional pieces removed. The Booleans are regularized: `A ∪ B`,
+`cl(A° ∩ B°)` and `cl(A° \ B)` (boolean-chain-regroup-design, "Assumptions").
+The 2D operations on regions in P are the same regularized operations.
+
+**Hypothesis H for an operand X at P.** (H1) `X° ∩ P = int_P(X ∩ P)`, and
+(H2) `X ∩ P = cl_P(X° ∩ P)`. Under H, `σ(X) = cl_P(X° ∩ P) = X ∩ P` and
+`int_P σ(X) = X° ∩ P`.
+
+**Every admitted operand class satisfies H.**
+
+- Parallel prism or stack slab: the plane is normal to the sweep at a level
+  strictly inside the slab's open level interval I. Consecutive slabs meet only
+  at their end levels (`agent-docs/stacked-prism-design.md` I4). So near P the
+  operand is `Σ × I` and its interior is `int Σ × I`, with Σ the recorded
+  region. `X ∩ P = Σ`, `X° ∩ P = int Σ`, and `Σ = cl(int Σ)` because a recorded
+  region is the closure of its interior.
+- Rectangular prism, vertical plane: in its placed axes the operand is
+  `[a, b] × [c, d] × [z0, z1]` and P is `u = k`, where `a < k < b` holds by
+  the class's strict opposite signs at opposite corners. Then
+  `X ∩ P = [c, d] × [z0, z1]` and `X° ∩ P = (c, d) × (z0, z1)`.
+- Whole-circle prism, vertical plane at offset `d` with `d² < r²`: a secant
+  line meets the open disk in the open chord, so `X ∩ P = [−h, h] × [z0, z1]`
+  and `X° ∩ P = (−h, h) × (z0, z1)`.
+
+**Lemma.** If A and B satisfy H at P, then `σ(A op B) = σ(A) op σ(B)` for the
+regularized 3D op and its regularized 2D counterpart.
+
+- Union. `R ∩ P = (A ∩ P) ∪ (B ∩ P) = σA ∪ σB`, and `σ(R) ⊆ R ∩ P`. The sets
+  `A° ∩ P` and `B° ∩ P` are open in P and lie in `R ∩ P`, so they lie in
+  `int_P(R ∩ P)`. Their closures σA and σB therefore lie in σ(R). So
+  `σ(R) = σA ∪ σB`.
+- Intersect. `R = cl(A° ∩ B°) ⊆ A ∩ B`, so
+  `int_P(R ∩ P) ⊆ int_P(A ∩ P) ∩ int_P(B ∩ P) = A° ∩ B° ∩ P` by H1.
+  `A° ∩ B° ∩ P` is open in P and lies in `R ∩ P`, so equality holds:
+  `int_P(R ∩ P) = int σA ∩ int σB`, and `σ(R) = cl_P(int σA ∩ int σB)`.
+- Cut. The 2D result is `cl_P(int σA \ σB) = cl_P((A° \ B) ∩ P)`. That set is
+  open in P (B is closed) and lies in `R ∩ P`, so `σ(R)` contains its closure.
+  Conversely `R ⊆ A`, and `R ∩ B° = ∅` because B° is open and disjoint from
+  `A° \ B`, hence from its closure. With H1 for both,
+  `int_P(R ∩ P) ⊆ int σA \ int σB`. A point of `int σA` on the boundary of σB
+  is a limit of points of `int σA \ σB`: `int σA` is open, and every
+  neighbourhood of a boundary point leaves σB. So
+  `cl_P(int σA \ int σB) = cl_P(int σA \ σB)`, and σ(R) lies in it.
+
+The identity is a theorem over the two recorded sets. It uses no geometric test
+and neither operand's class proves anything about the other. Where H fails it
+can fail. For a notch cut by a box whose bottom cap lies in P, the result's
+material at P is the whole square, while `σA \ σB` removes the tool's footprint.
+Every admitted class refuses a plane on its own cap, which is this case.
+
+### The 2D operation
+
+The operand sections, both in the requested frame, form one private Sketch
+scene (`prismcells.BuildScene` with the identity map), the default shape
+`agent-docs/prism-boolean-design.md` §4.1 describes. Whole lines enter at their
+recorded points, so the scene's walk charge is zero. `prismcells.Classify`
+reads each cell's membership in A and in B from Sketch's edge directions
+(§4.2), and the cells `a ∨ b`, `a ∧ ¬b` or `a ∧ b` select are kept.
+Membership is constant on each open cell and the arrangement's edges enclose
+no area, so the closure of the kept cells is the regularized 2D operation of
+the lemma. The scene's
+coincident-span gap must be zero. A span Sketch merged from two near-coincident
+lines would otherwise join or split regions that the exact sets do not.
+`prismcells.MergeLoopsExactLineCuts` drops the walls between selected cells and
+records the survivors through the seam's `TExact` and loop-closure falsifiers.
+Every cut end must be one paired Sketch line crossing that
+`Sketch.CertifyLineLineJunction` solves from the two lines' endpoint bits as an
+exact binary64 point. Exact rational membership on both source lines then
+restates each loop as whole lines between exact points. The cut charge must be
+zero, so a fragment whose junction Sketch does not certify returns
+`ErrUnsupported`; decad never rounds or fits a junction itself.
+
+The merged survivors must close into exactly one loop. `Classify` refuses a
+cell carrying its own hole, so nested sections and sections with holes refuse,
+as do several separate regions. The loop is rebuilt through
+`sectionclip.ReconstructExactSection` on the requested plane, and Sketch's
+fresh record must match it. The result is an ordinary exact profile and may
+enter any profile consumer.
 
 ## Exact interior section of a rectangular LoftSections result
 
@@ -569,6 +702,17 @@ reusing its bound.
 
 ## Verification
 
+- Section real mesh Boolean results of a 10 mm cube with a second box. A
+  Union with a 20×4×8 mm beam along X sectioned through the overlap at z=8
+  gives 140 mm², a Cut by a 10 mm box over one top corner at z=7 gives 75 mm²,
+  and an Intersect with the beam at z=8 gives 40 mm². Each corner matches
+  exactly, and each 2 mm Extrude encloses twice the area and passes
+  `Tessellate(0.1 mm, VerifyAll)`. A corner tool drawn on a plane facing down
+  takes a reflected candidate frame. Refuse a gap-shifted result, a copied
+  result, the tool's cap level, a plane missing an operand, a curved operand
+  section, a junction Sketch does not certify, a slot that splits the section
+  and a section nested in the other. A unit fixture refuses two regions that
+  Sketch welds across a 2^-40 mm gap.
 - Cut a real 4×4×4 mm blind pocket from a 10 mm cube. Section at z=8 gives
   84 mm² with one hole spanning (3..7, 3..7), and at z=3 gives 100 mm². Each
   2 mm Extrude passes `Tessellate(0.1 mm, VerifyAll)`. The pocket floor, caps
