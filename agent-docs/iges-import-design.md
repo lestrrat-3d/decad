@@ -26,4 +26,4 @@ func ReadIGES(ctx context.Context, r io.Reader, opts ...MeshImportOption) (*Mesh
 - Surfaces and curves with no B-rep (trimmed NURBS surfaces, entities 128, 144, 126), the surface-of-revolution and cylinder entities, arcs, and any curved edge.
 - Transformation matrices (124), assemblies and subfigures, and the other entity types of the file, which are ignored.
 - A file this reader has not met in practice: the tests are written from the specification, and a real exporter's file that departs from it is refused (`ErrMalformedMesh` or `ErrUnsupported`) and never repaired.
-- IGES export.
+- IGES export is `export.IGES` (`agent-docs/iges-export-design.md`).
