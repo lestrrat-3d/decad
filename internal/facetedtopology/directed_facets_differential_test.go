@@ -217,14 +217,6 @@ func TestBuildMatchesDirectedFacetsReference(t *testing.T) {
 	for _, c := range topologyCases(t) {
 		want := runTopology(t.Context(), referenceBuild, c, -1)
 		got := runTopology(t.Context(), build, c, -1)
-		if strings.Contains(want.err, "has no boundary loop") {
-			// build visits faces in map order to find one without a loop, so
-			// the steps taken before that refusal vary from run to run in the
-			// reference too. Only the refusal itself is comparable.
-			require.Equal(t, want.err, got.err, c.name)
-			statuses[want.err]++
-			continue
-		}
 		requireSameRun(t, c.name, want, got)
 		if !strings.Contains(c.name, "/") && !strings.HasPrefix(c.name, "random-") {
 			// Every unmodified closed mesh builds, so its edges and loops compare.
