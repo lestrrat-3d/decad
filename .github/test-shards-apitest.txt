@@ -1076,6 +1076,7 @@
 5	0.02	TestRevolveTiltedAxisBoundsTighten
 5	0.01	TestRevolveWallNormalCoversFarAnchoredTorus
 5	0.00	TestSTLPlate
+10	0.01	TestOrthogonalBooleanTakesAnExtrudedPartnerForAMeshSolid
 5	0.02	TestSectionCardinalConeFeedsVerifiedExtrude
 5	0.01	TestSectionCardinalRectanglePlacementAndAxisSense
 5	0.47	TestSectionCardinalSphereNonSquareFeedsVerifiedExtrude
