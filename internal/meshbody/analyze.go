@@ -48,6 +48,11 @@ func (a Analysis) Closed() bool {
 
 type edge [2]int
 
+type edgeUse struct {
+	first             int // dense live-triangle index of the first use
+	forward, backward uint8
+}
+
 // Analyze reads the mesh. Every vertex must be finite and every triangle index
 // in range; anything else is ErrUnsupported.
 func Analyze(ctx context.Context, verts []r3.Vec, tris [][3]int) (Analysis, error) {
@@ -64,9 +69,18 @@ func Analyze(ctx context.Context, verts []r3.Vec, tris [][3]int) (Analysis, erro
 		}
 		exact[i] = proofarith.DyVec(v)
 	}
-	directed := make(map[edge]int, 3*len(tris))
-	live := make([]int, 0, len(tris))
-	six := big.NewRat(6, 1)
+	// A closed mesh uses an edge twice. This is only a capacity hint;
+	// open or non-manifold inputs grow the same table as needed.
+	edges := make(map[edge]edgeUse, len(tris)+len(tris)/2)
+	parent := make([]int, 0, len(tris))
+	find := func(x int) int {
+		for parent[x] != x {
+			parent[x] = parent[parent[x]]
+			x = parent[x]
+		}
+		return x
+	}
+	var volume proofarith.DyAcc
 	for ti, tri := range tris {
 		if err := budget.Step(); err != nil {
 			return Analysis{}, err
@@ -87,12 +101,38 @@ func Analyze(ctx context.Context, verts []r3.Vec, tris [][3]int) (Analysis, erro
 			out.DegenerateTriangles++
 			continue
 		}
-		live = append(live, ti)
+		component := len(parent)
+		parent = append(parent, component)
+		out.Shells++
 		for k := range tri {
-			directed[edge{tri[k], tri[(k+1)%3]}]++
+			a, b := tri[k], tri[(k+1)%3]
+			forward := a < b
+			if !forward {
+				a, b = b, a
+			}
+			key := edge{a, b}
+			use, seen := edges[key]
+			if !seen {
+				use.first = component
+			} else if left, right := find(component), find(use.first); left != right {
+				parent[left] = right
+				out.Shells--
+			}
+			// Reports distinguish one, two and at least three uses. Saturate
+			// at three so even a heavily repeated edge cannot overflow.
+			if use.forward+use.backward < 3 {
+				if forward {
+					use.forward++
+				} else {
+					use.backward++
+				}
+			}
+			edges[key] = use
 		}
-		triple := proofarith.DvDot(a, proofarith.DvCross(b, c)).Rat()
-		out.SignedVolume.Add(out.SignedVolume, new(big.Rat).Quo(triple, six))
+		// a·((b-a)×(c-a)) = a·(b×c), so the area normal also gives
+		// the signed tetrahedron numerator. Sum the dyadics exactly before
+		// dividing once, instead of reducing one rational per triangle.
+		volume.Add(proofarith.DvDot(a, normal))
 		low := proofarith.FloatRat(proofbound.RatSqrtDown(lengthSquared))
 		high := proofarith.FloatRat(proofbound.RatSqrtUp(lengthSquared))
 		if low == nil || high == nil {
@@ -102,66 +142,27 @@ func Analyze(ctx context.Context, verts []r3.Vec, tris [][3]int) (Analysis, erro
 		proofarith.AddRat(out.AreaLow, out.AreaLow, low)
 		proofarith.AddRat(out.AreaHigh, out.AreaHigh, high)
 	}
+	out.SignedVolume.Quo(volume.Rat(), big.NewRat(6, 1))
 	half := big.NewRat(1, 2)
 	out.AreaLow.Mul(out.AreaLow, half)
 	out.AreaHigh.Mul(out.AreaHigh, half)
-	countEdges(&out, directed)
-	out.Shells = shells(tris, live)
+	countEdges(&out, edges)
 	return out, nil
 }
 
 // countEdges classifies every undirected edge by how many triangles use it
 // and in which directions.
-func countEdges(out *Analysis, directed map[edge]int) {
-	for e, forward := range directed {
-		back := directed[edge{e[1], e[0]}]
-		if e[0] > e[1] && back > 0 {
-			continue // the pair is read once, from its smaller end
-		}
-		switch total := forward + back; {
+func countEdges(out *Analysis, edges map[edge]edgeUse) {
+	for _, use := range edges {
+		switch total := use.forward + use.backward; {
 		case total == 1:
 			out.BoundaryEdges++
 		case total > 2:
 			out.NonManifoldEdges++
-		case forward == 2 || back == 2:
+		case use.forward == 2 || use.backward == 2:
 			out.MisorientedEdges++
 		}
 	}
-}
-
-// shells counts the groups of live triangles joined across shared edges.
-func shells(tris [][3]int, live []int) int {
-	parent := make(map[int]int, len(live))
-	for _, ti := range live {
-		parent[ti] = ti
-	}
-	find := func(x int) int {
-		for parent[x] != x {
-			parent[x] = parent[parent[x]]
-			x = parent[x]
-		}
-		return x
-	}
-	owner := make(map[edge]int, 3*len(live))
-	for _, ti := range live {
-		tri := tris[ti]
-		for k := range tri {
-			a, b := tri[k], tri[(k+1)%3]
-			if a > b {
-				a, b = b, a
-			}
-			if other, ok := owner[edge{a, b}]; ok {
-				parent[find(ti)] = find(other)
-				continue
-			}
-			owner[edge{a, b}] = ti
-		}
-	}
-	roots := make(map[int]struct{})
-	for _, ti := range live {
-		roots[find(ti)] = struct{}{}
-	}
-	return len(roots)
 }
 
 // Interval publishes the exact interval [low, high] as its nearest midpoint
