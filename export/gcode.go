@@ -27,13 +27,17 @@ type GCodeSpec struct {
 	FilamentDiameter units.Value
 	// FeedRate is the speed along an extruding move.
 	FeedRate units.Value
+	// InfillSpacing is the distance between the lines of rectilinear infill, a positive length. The zero value
+	// writes none, and a layer is its perimeters alone.
+	InfillSpacing units.Value
 }
 
 // GCodePerimeters writes the toolpath that prints body's outline layer by layer as G-code
 // (agent-docs/gcode-design.md): the perimeter of each layer, traced once along the body's section at the
-// middle of the layer, a hole traced as well. It is the first stage of a slicer, with no infill, top
-// or bottom skin, support or perimeter offset, and it answers whether a print would stand: each
-// layer's line is where the part's outline is.
+// middle of the layer, a hole traced as well, and, when the spec sets InfillSpacing, rectilinear infill
+// inside the perimeters, its lines alternating between the X and Y directions from one layer to the next.
+// It is the first stage of a slicer, with no top or bottom skin, support or perimeter offset, and it
+// answers whether a print would stand: each layer's line is where the part's outline is.
 //
 // The file uses millimetres, absolute positioning and absolute extrusion (G21, G90, M82). The bed is
 // the plane z = 0 of the world and the print starts at the body's lowest point, so layer i is
@@ -95,6 +99,12 @@ func GCodePerimeters(ctx context.Context, w io.Writer, body *decad.Body, tol uni
 	if layers > maxGCodeLayers {
 		return fmt.Errorf("export: G-code: %w: %d layers is more than %d", decad.ErrDegenerate, layers, maxGCodeLayers)
 	}
+	var spacing float64
+	if spec.InfillSpacing != (units.Value{}) {
+		if spacing, err = positive(spec.InfillSpacing, units.Length, units.Millimeter, "the infill spacing"); err != nil {
+			return err
+		}
+	}
 	perMillimetre := layer * line / (math.Pi * filament * filament / 4)
 	var out bytes.Buffer
 	fmt.Fprintf(&out, "; perimeters of a %d layer print, %g mm layers\nG21\nG90\nM82\nG92 E0\n", layers, layer)
@@ -124,6 +134,15 @@ func GCodePerimeters(ctx context.Context, w io.Writer, body *decad.Body, tol uni
 				extruded += to.Sub(from).Len() * perMillimetre
 				fmt.Fprintf(&out, "G1 X%.4f Y%.4f E%.5f F%.1f\n", to.X, to.Y, extruded, feed*60)
 			}
+		}
+		if spacing == 0 {
+			continue
+		}
+		// Layers alternate the infill's direction, so each lies across the one below it.
+		for _, seg := range rectilinearInfill(outline.Loops, i%2 == 0, spacing, line) {
+			fmt.Fprintf(&out, "G0 X%.4f Y%.4f Z%.4f\n", seg.a.X, seg.a.Y, top)
+			extruded += seg.b.Sub(seg.a).Len() * perMillimetre
+			fmt.Fprintf(&out, "G1 X%.4f Y%.4f E%.5f F%.1f\n", seg.b.X, seg.b.Y, extruded, feed*60)
 		}
 	}
 	if n, err := w.Write(out.Bytes()); err != nil {
