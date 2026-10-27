@@ -250,7 +250,7 @@ func TestSweepLineGatesLeaveDocumentUnchanged(t *testing.T) {
 		{name: "foreign option", sketch: s, profile: profile, path: validPath, opts: []decad.SweepOption{foreignSweepOption{}}, want: decad.ErrDegenerate},
 		{name: "wrong twist unit", sketch: s, profile: profile, path: validPath, opts: []decad.SweepOption{decad.WithSweepTwist(units.Millimeters(1))}, want: decad.ErrUnitKind},
 		{name: "non-finite twist", sketch: s, profile: profile, path: validPath, opts: []decad.SweepOption{decad.WithSweepTwist(units.Degrees(math.Inf(1)))}, want: decad.ErrNotFinite},
-		{name: "nonzero twist", sketch: s, profile: profile, path: validPath, opts: []decad.SweepOption{decad.WithSweepTwist(units.Degrees(1))}, want: decad.ErrUnsupported},
+		{name: "over-turn twist", sketch: s, profile: profile, path: validPath, opts: []decad.SweepOption{decad.WithSweepTwist(units.Degrees(400))}, want: decad.ErrUnsupported},
 		{
 			name:    "repeated twist",
 			sketch:  s,

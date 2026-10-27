@@ -43,7 +43,7 @@ func StationedTwistCellCounts(poly TwistPolygon, angleUpper float64) (int, int, 
 		poly.MaxRadiusL1 <= 0 || proofbound.IsNonFinite(poly.MaxRadiusL1) {
 		return 0, 0, fmt.Errorf(`%w: stationed twist has no finite angle or profile radius`, decaderr.ErrUnsupported)
 	}
-	// The curved source needs a finer station than the straight polygon.
+	// The curved source needs a finer base station than the straight polygon.
 	// The final proof still decides the caller's requested mesh tolerance.
 	targetScale := 0.04
 	if poly.HasArc {
@@ -54,7 +54,7 @@ func StationedTwistCellCounts(poly TwistPolygon, angleUpper float64) (int, int, 
 	if err != nil {
 		return 0, 0, err
 	}
-	if !poly.HasArc || baseTarget <= 0.08 {
+	if baseTarget <= 0.08 {
 		return base, base, nil
 	}
 	// The finer target is optional. When it exceeds the fixed station or
@@ -329,13 +329,9 @@ func evalStationedCells(ctx context.Context, env topo.Env,
 		Exactness: measurement.ExactnessOf(volumeBound)}
 	body.Area = measurement.Measurement{Value: units.SquareMillimeters(area), Bound: units.SquareMillimeters(areaBound),
 		Exactness: measurement.ExactnessOf(areaBound)}
-	center := r3.NewVec(0, 0, path.End.Z/2)
-	worldCenter := xform.Apply(center)
-	centerBound := 0.0
-	if xform != r3.Identity() {
-		tr := xform.Translation()
-		centerBound = proofbound.RigidRoundAllow(path.End.Z/2,
-			max(math.Abs(tr.X), math.Abs(tr.Y), math.Abs(tr.Z)))
+	worldCenter, centerBound, err := straightTwistCentroid(poly, path.End.Z, thetaIv, xform)
+	if err != nil {
+		return nil, err
 	}
 	body.Centroid = measurement.VecMeasurement{Value: worldCenter, Bound: units.Millimeters(centerBound),
 		Exactness: measurement.ExactnessOf(centerBound)}

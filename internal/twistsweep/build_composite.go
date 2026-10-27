@@ -210,6 +210,9 @@ func evalComposite(ctx context.Context, env topo.Env,
 	if poly.HasArc {
 		return nil, fmt.Errorf(`%w: a composite twisted sweep needs straight profile edges`, decaderr.ErrUnsupported)
 	}
+	if poly.OffAxis() {
+		return nil, fmt.Errorf(`%w: a composite twisted sweep needs its centroid on the path axis`, decaderr.ErrUnsupported)
+	}
 	geometry, err := TwistCardinalPathOf(path, plane, poly)
 	if err != nil {
 		return nil, err
