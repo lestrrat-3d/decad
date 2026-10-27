@@ -1,4 +1,4 @@
-# Orthogonal wall and undercut survey design
+# Orthogonal wall, undercut and concave-radius survey design
 
 `Verify` with `WithMinWallThickness` reads the thinnest wall of a faceted solid every face of which squares to a world
 axis exactly, from the grid of its coordinates (`internal/orthoshell/wall.go`, called by
@@ -22,7 +22,14 @@ thin and never thick enough; this reading proves both. The undercut survey of su
 | E6 | The test is made on every line over every covered cell, so the survey decides each face: the blocked faces are listed and are `DiagUndercut`, `Violating`, and a body with none has a proven all-clear, an empty listing with no finding and no undecided mark, so a part free to pull can be `Sound`. A pull that is not exactly an axis, or a body outside E1, takes the rays and their refusal to prove a pull free. |
 | E7 | The tests pull a block along four axis directions to `Sound`, pull a T-shaped part with a cap along z (the cap's underside and the base's top are the two blocked faces) and free along x and y, and find a closed cavity blocked. A survey that falls back to the rays leaves the free pulls undecided and fails them. |
 
+## 4. Concave radius
+
+| Decision | Rule |
+|---|---|
+| E8 | On a body that meets E1 every edge is sharp, so a concave edge is a concave feature of radius zero. A concave edge is a grid line with three of the four cells around it occupied (`orthoshell.HasConcaveEdge`). A body with one reads `ScalarMeasured` with an exact zero minimum, and a body with none has no concave feature, `ScalarAbsent`, proven. |
+| E9 | The tests read a block (`ScalarAbsent`, `Sound`), an L-shaped union and a shelled cup (`ScalarMeasured`, zero with a zero bound). A survey that falls back to the staged refusal fails them. A slanted faceted body keeps the staged `DiagUnsupportedSurveyPayload`. |
+
 ## 2. Not covered
 
 - A faceted body with a slanted or curved face, or with a vertex bound, which keeps the ray survey and its refusal to prove a wall thick enough.
-- A pull that is not along a world axis, and the concave-radius survey of an axis-square solid.
+- A pull that is not along a world axis, and the concave-radius survey of a faceted body that is not axis-square.
