@@ -136,8 +136,27 @@ func RevolveSeparatedFloat(a, b RevolveAuditTri, delta float64) bool {
 		if proofbound.IsNonFinite(cheap) {
 			continue
 		}
-		aLo, aHi := RevIvProject(a.Fp, g)
-		bLo, bHi := RevIvProject(b.Fp, g)
+		var aLo, aHi, bLo, bHi float64
+		if gi == 0 {
+			// All three corners have the same exact dot with their own
+			// plane normal. One corner's enclosure therefore bounds them all.
+			d := RevIvDot(RevIvPoint(a.Fp[0]), g)
+			if !d.Finite() {
+				continue
+			}
+			aLo, aHi = d.Lo, d.Hi
+		} else {
+			aLo, aHi = RevIvProject(a.Fp, g)
+		}
+		if gi == 1 {
+			d := RevIvDot(RevIvPoint(b.Fp[0]), g)
+			if !d.Finite() {
+				continue
+			}
+			bLo, bHi = d.Lo, d.Hi
+		} else {
+			bLo, bHi = RevIvProject(b.Fp, g)
+		}
 		gap := math.Max(RevDown(bLo-aHi), RevDown(aLo-bHi))
 		if !proofbound.IsNonFinite(gap) && gap > cheap {
 			return true
