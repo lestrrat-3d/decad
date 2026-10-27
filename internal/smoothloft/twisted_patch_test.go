@@ -2,6 +2,7 @@ package smoothloft
 
 import (
 	"math/big"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -89,4 +90,79 @@ func TestTwistedBoundsOfLinePatch(t *testing.T) {
 	require.Zero(t, b.mtt.Sign())
 	require.Zero(t, b.mut.Sign())
 	require.Zero(t, b.bu.Cmp(rint(4)))
+}
+
+func TestTwistedPolarCoefficientsMatchDerivativeProduct(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(17, 29))
+	coordinate := func(sample int) *big.Rat {
+		num := big.NewInt(int64(rng.IntN(2001) - 1000))
+		num.Lsh(num, uint((sample%4)*40))
+		den := big.NewInt(int64(2*rng.IntN(7) + 1))
+		den.Lsh(den, uint(rng.IntN(20)))
+		return new(big.Rat).SetFrac(num, den)
+	}
+	for sample := range 48 {
+		var patch twistPatch
+		for i := range patch {
+			for j := range patch[i] {
+				patch[i][j] = freeform.RatPoint{U: coordinate(sample), V: coordinate(sample)}
+			}
+		}
+		if sample == 0 {
+			patch = twistTestLinePatch(twistTestPoint(0, 0), twistTestPoint(0, 0))
+		}
+		if sample == 1 {
+			patch = twistTestLinePatch(twistTestPoint(4, -2), twistTestPoint(4, 2))
+		}
+		var before [4][4][2]string
+		for i := range patch {
+			for j, point := range patch[i] {
+				before[i][j] = [2]string{point.U.RatString(), point.V.RatString()}
+			}
+		}
+		want := twistPolarDerivativeProduct(patch)
+		got := patch.polarCoefficients()
+		for i := range got {
+			for j := range got[i] {
+				require.Zero(t, got[i][j].Cmp(want[i][j]), "case %d coefficient (%d,%d)", sample, i, j)
+			}
+		}
+		for i := range patch {
+			for j, point := range patch[i] {
+				require.Equal(t, before[i][j][0], point.U.RatString(), "case %d input U (%d,%d)", sample, i, j)
+				require.Equal(t, before[i][j][1], point.V.RatString(), "case %d input V (%d,%d)", sample, i, j)
+			}
+		}
+	}
+}
+
+// twistPolarDerivativeProduct multiplies the patch by its literal cubic
+// derivative in Bernstein form, without combining antisymmetric cross terms.
+func twistPolarDerivativeProduct(p twistPatch) [6][7]*big.Rat {
+	var coeff [6][7]*big.Rat
+	for k := range coeff {
+		for l := range coeff[k] {
+			coeff[k][l] = new(big.Rat)
+		}
+	}
+	var d [3][4]freeform.RatPoint
+	for m := range d {
+		for n := range d[m] {
+			d[m][n] = twistScale(twistSub(p[m+1][n], p[m][n]), rint(3))
+		}
+	}
+	for i := range p {
+		for m := range d {
+			wu := big.NewRat(twistBinomial[3][i]*twistBinomial[2][m], twistBinomial[5][i+m])
+			for j := range p[i] {
+				for n := range d[m] {
+					wt := big.NewRat(twistBinomial[3][j]*twistBinomial[3][n], twistBinomial[6][j+n])
+					cross := sub(mul(p[i][j].U, d[m][n].V), mul(p[i][j].V, d[m][n].U))
+					coeff[i+m][j+n].Add(coeff[i+m][j+n], mul(cross, mul(wu, wt)))
+				}
+			}
+		}
+	}
+	return coeff
 }

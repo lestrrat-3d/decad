@@ -118,29 +118,42 @@ func twistBernstein3(x *big.Rat) [4]*big.Rat {
 // polarCoefficients gives cross(C, ∂C/∂u) in Bernstein form of degree (5,6).
 // Positive coefficients prove a positive polar-angle derivative on the patch.
 func (p twistPatch) polarCoefficients() [6][7]*big.Rat {
-	var coeff [6][7]*big.Rat
-	for k := range coeff {
-		for l := range coeff[k] {
-			coeff[k][l] = new(big.Rat)
+	// For the four cubic control curves P_i(t), let C_ij = cross(P_i, P_j).
+	// Antisymmetry combines cross(C, C_u)'s twelve derivative products into
+	// six products. Its six u coefficients are
+	// [3C01, (3C01+6C02)/5, (3C03+6C02+9C12)/10,
+	//  (3C03+6C13+9C12)/10, (6C13+3C23)/5, 3C23].
+	// Each C_ij is a degree-six Bernstein polynomial in t.
+	pairs := [6][2]int{{0, 1}, {0, 2}, {0, 3}, {1, 2}, {1, 3}, {2, 3}}
+	var products [6][7]*big.Rat
+	for k, pair := range pairs {
+		for l := range products[k] {
+			products[k][l] = new(big.Rat)
 		}
-	}
-	var d [3][4]freeform.RatPoint
-	for m := range d {
-		for n := range d[m] {
-			d[m][n] = twistScale(twistSub(p[m+1][n], p[m][n]), rint(3))
-		}
-	}
-	for i := range p {
-		for m := range d {
-			wu := big.NewRat(twistBinomial[3][i]*twistBinomial[2][m], twistBinomial[5][i+m])
-			for j := range p[i] {
-				for n := range d[m] {
-					wt := big.NewRat(twistBinomial[3][j]*twistBinomial[3][n], twistBinomial[6][j+n])
-					cross := sub(mul(p[i][j].U, d[m][n].V), mul(p[i][j].V, d[m][n].U))
-					coeff[i+m][j+n].Add(coeff[i+m][j+n], mul(cross, mul(wu, wt)))
-				}
+		a, b := p[pair[0]], p[pair[1]]
+		for j := range a {
+			for n := range b {
+				wt := big.NewRat(twistBinomial[3][j]*twistBinomial[3][n], twistBinomial[6][j+n])
+				cross := sub(mul(a[j].U, b[n].V), mul(a[j].V, b[n].U))
+				products[k][j+n].Add(products[k][j+n], mul(cross, wt))
 			}
 		}
+	}
+	three, six, nine := rint(3), rint(6), rint(9)
+	fifth, tenth := big.NewRat(1, 5), big.NewRat(1, 10)
+	var coeff [6][7]*big.Rat
+	for l := range coeff[0] {
+		a := mul(three, products[0][l])
+		b := mul(six, products[1][l])
+		c := add(mul(three, products[2][l]), mul(nine, products[3][l]))
+		d := mul(six, products[4][l])
+		e := mul(three, products[5][l])
+		coeff[0][l] = a
+		coeff[1][l] = mul(add(a, b), fifth)
+		coeff[2][l] = mul(add(b, c), tenth)
+		coeff[3][l] = mul(add(c, d), tenth)
+		coeff[4][l] = mul(add(d, e), fifth)
+		coeff[5][l] = e
 	}
 	return coeff
 }
