@@ -336,7 +336,7 @@ func requireRevolveLugSourceFaces(t *testing.T, joined *decad.Body, splitCap []d
 	require.True(t, rootConeFace, "joined root must retain its analytic cone")
 }
 
-func taperedHubAndRadialLug(t *testing.T, splitU, toeApex, rootRadius float64, fitted bool) (
+func taperedHubAndRadialLug(t testing.TB, splitU, toeApex, rootRadius float64, fitted bool) (
 	*decad.Document, *decad.Body, *decad.Body, *sketch.Sketch, []decad.FeatureRef,
 ) {
 	t.Helper()
