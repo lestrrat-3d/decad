@@ -2463,6 +2463,8 @@
 10	0.01	TestPathPatternSpacedRefusals
 10	0.01	TestThreadLeftHandRod
 10	0.01	TestThreadPartialLengthStopsShortOfTheFaceEnd
+10	0.00	TestDraftTwoArcNearTangentJoinBooleans
+10	0.00	TestDraftTwoArcNearTangentPastLimitRefuses
 10	0.00	TestSectionMeshBooleanFromHistory
 10	0.00	TestSectionMeshBooleanHistoryRefusals
 10	0.01	TestThreadLengthRefusals

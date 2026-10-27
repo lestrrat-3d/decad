@@ -30,7 +30,8 @@ func RequireNotReceiver(payload topo.Payload, op string) error {
 // A draft view's corners are read under its own sharp rule (offsetJoins), so
 // a reflex line-line corner there is the miter it is built as, never the
 // chamfer's apex arc, and its per-walk amounts let capband admit a
-// near-tangent line–arc join whose sliver NearTangentVolume charges.
+// near-tangent line–arc or arc–arc join whose sliver NearTangentVolume
+// charges.
 // The delayed join builder runs only after the wall checks, preserving the
 // proof budget charges and the first refusal reported.
 func OccupiedVolumeAdmission(budget *proofbound.WorkBudget, cbp Payload) (error, error) {

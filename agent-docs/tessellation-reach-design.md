@@ -597,12 +597,14 @@ built, and `tessellateCapBlend` when it publishes. Every loop of the payload mus
   a zero cross product and a positive dot product, where a line's direction is `end − start` and an arc's is
   its walk sense times `rot90(P − Center)`.
 
-A draft band (`capblend.Payload.Draft`) also admits (iii) a near-tangent join: a `LineSeg` and an `ArcSeg` with
-one recorded junction point whose exact tangents run the same way, turn by `sin²θ ≤ 2⁻⁶⁴`, and move by one amount,
-the moved circle clear of the corner (`capband.NearTangentCorner`), and each wall at it proven to survive
-every level (`capband.NearTangentWallRefusal`). Its proof adds the corner charge
-`capblend.NearTangentVolume` to `volSymDiff` below; `agent-docs/draft-design.md` §9.1.1 states and proves it. A
-chamfer band admits none, since its shell offset takes a connector arc at a reflex sliver.
+A draft band (`capblend.Payload.Draft`) also admits (iii) a near-tangent join: a `LineSeg` and an `ArcSeg`, or two
+`ArcSeg`s, with one recorded junction point whose exact tangents run the same way, turn by `sin²θ ≤ 2⁻⁶⁴`, and move
+by one amount, each moved circle clear of the corner (`capband.NearTangentCorner`), and each wall at it proven to
+survive every level (`capband.NearTangentWallRefusal`). At two arcs B1's corner is the leaving arc's radial foot, so
+the arriving arc's last cell is not a planar trapezoid; the charge covers that cell's twist beside the sliver. Its
+proof adds the corner charge `capblend.NearTangentVolume` to `volSymDiff` below; `agent-docs/draft-design.md`
+§9.1.1 states and proves it. A chamfer band admits none, since its shell offset takes a connector arc at a reflex
+sliver.
 
 A reflex corner (`cornerJoin.arc`) is not admitted. Every test is exact rational arithmetic over the record's
 own floats; none is a tolerance, so the predicate classifies the denoted geometry and never admits on a

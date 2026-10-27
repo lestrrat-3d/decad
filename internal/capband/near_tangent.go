@@ -13,10 +13,11 @@ import (
 )
 
 // This file is agent-docs/draft-design.md §9.1.1: the near-tangent join of a
-// draft band, a line–arc corner the build reads as G1 whose exact tangents
-// turn by a sliver θ. Its true corner m(t), where the moved line meets the
-// moved circle, leaves the radial foot f(t) the ideal polyhedron B1 holds
-// there, and the slice-wise proof charges the gap instead of refusing it.
+// draft band, a line–arc or arc–arc corner the build reads as G1 whose exact
+// tangents turn by a sliver θ. Its true corner m(t), where the moved line
+// meets the moved circle or the two moved circles meet, leaves the radial
+// foot f(t) the ideal polyhedron B1 holds there, and the slice-wise proof
+// charges the gap instead of refusing it.
 // Every test here is exact rational arithmetic over the record's floats, and
 // every published number is rounded upward from a rational.
 
@@ -31,9 +32,13 @@ type SharpAmounts func(li int, walks []survey2d.SideWalk) ([]float64, float64)
 // NearTangentCharge is one corner's terms in the near-tangent volume charge:
 // Rho bounds |m(t) − f(t)| at every level, and Eps bounds the distance of f(t)
 // from the moved line. Both are zero at a line-line miter, at an exactly
-// tangent join and at a corner neither of whose walks moves.
+// tangent join and at a corner neither of whose walks moves. TwoArcs marks a
+// corner of two circular walls (Lemma 1′), where Rho also bounds the gap
+// between the two walks' radial feet and Eps is zero, since no straight wall
+// meets it.
 type NearTangentCharge struct {
 	Rho, Eps float64
+	TwoArcs  bool
 }
 
 // notTangentWhy and notTangentHint are the refusal of a corner no rule here
@@ -55,11 +60,11 @@ var nearTangentSinSqLimit = new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh
 // as agent-docs/draft-design.md §9.1.1's near-tangent join. prevAmount and
 // curAmount are the two walks' offset amounts and amountDelta the half-width
 // of a nonzero amount's span. It returns the corner's charge, or the reason
-// and hint of the refusal: a corner whose recorded ends differ or whose exact
-// tangents do not run the same way keeps the exact-tangent refusal, and a
-// join of two circular walls, a turn past sin²θ = 2⁻⁶⁴, two walks moving by
-// different amounts, or a moved circle within the charge of the corner each
-// refuses by name.
+// and hint of the refusal: a corner whose recorded ends differ, whose exact
+// tangents do not run the same way, or whose walks are neither a line and an
+// arc nor two arcs keeps the exact-tangent refusal, and a turn past
+// sin²θ = 2⁻⁶⁴, two walks moving by different amounts, or a moved circle
+// within the charge of the corner each refuses by name.
 func NearTangentCorner(prev, cur sectionrecord.CurveSegment, prevAmount, curAmount, amountDelta float64) (NearTangentCharge, string, string) {
 	p, okP := joinEnds(prev)
 	c, okC := joinEnds(cur)
@@ -75,8 +80,9 @@ func NearTangentCorner(prev, cur sectionrecord.CurveSegment, prevAmount, curAmou
 		return NearTangentCharge{}, notTangentWhy, notTangentHint
 	}
 	arc, ok := lineArcPair(prev, cur)
-	if !ok {
-		return NearTangentCharge{}, `a near-tangent join between two circular walls, which the near-tangent corner charge does not cover`, ""
+	first, second, twoArcs := arcArcPair(prev, cur)
+	if !ok && !twoArcs {
+		return NearTangentCharge{}, notTangentWhy, notTangentHint
 	}
 	if prevAmount != curAmount {
 		return NearTangentCharge{}, `a near-tangent join whose two walls move by different amounts`, ""
@@ -86,6 +92,13 @@ func NearTangentCorner(prev, cur sectionrecord.CurveSegment, prevAmount, curAmou
 	sinSq.Quo(sinSq, new(big.Rat).Mul(ratDot(a, a), ratDot(b, b)))
 	if sinSq.Cmp(nearTangentSinSqLimit) > 0 {
 		return NearTangentCharge{}, `a near-tangent join whose exact turn exceeds the admitted sin²θ ≤ 2⁻⁶⁴`, ""
+	}
+	if twoArcs {
+		charge, ok := twoArcCharge(first, second, v, sinSq, curAmount, amountDelta)
+		if !ok {
+			return NearTangentCharge{}, nearTangentArcsWhy, ""
+		}
+		return charge, "", ""
 	}
 	charge, ok := nearTangentCharge(arc, v, sinSq, curAmount, amountDelta)
 	if !ok {
@@ -101,25 +114,10 @@ func NearTangentCorner(prev, cur sectionrecord.CurveSegment, prevAmount, curAmou
 // and the arc from f to m under a quarter turn. ok is false where it does not,
 // or where a number does not lift.
 func nearTangentCharge(arc sectionrecord.ArcSeg, v [2]*big.Rat, sinSq *big.Rat, amount, amountDelta float64) (NearTangentCharge, bool) {
-	held := ratAbs(proofarith.FloatRat(amount))
-	width := new(big.Rat)
-	if amount != 0 {
-		width = proofarith.FloatRat(amountDelta)
-	}
-	if held == nil || width == nil || width.Sign() < 0 {
+	rho, eps, width, ok := nearTangentReach(sinSq, amount, amountDelta)
+	if !ok {
 		return NearTangentCharge{}, false
 	}
-	// t spans [min(0, amount − width), max(0, amount + width)] over the sweep,
-	// so |t| <= reach at every level.
-	reach := new(big.Rat).Add(held, width)
-	sinUp := proofarith.FloatRat(proofbound.RatSqrtUp(sinSq))
-	if sinUp == nil {
-		return NearTangentCharge{}, false
-	}
-	rho := new(big.Rat).Mul(reach, sinUp)
-	rho.Mul(rho, new(big.Rat).Add(big.NewRat(1, 1), sinSq))
-	eps := new(big.Rat).Mul(reach, sinSq)
-
 	radiusHi, movedLo, ok := movedRadius(arc, v, amount, width)
 	if !ok {
 		return NearTangentCharge{}, false
@@ -129,6 +127,57 @@ func nearTangentCharge(arc sectionrecord.ArcSeg, v [2]*big.Rat, sinSq *big.Rat, 
 		return NearTangentCharge{}, false
 	}
 	return NearTangentCharge{Rho: proofbound.RatFloatUp(rho), Eps: proofbound.RatFloatUp(eps)}, true
+}
+
+// nearTangentReach composes ρ = T·sinUp·(1 + S) and ε = T·S
+// (agent-docs/draft-design.md §9.1.1) from the exact sin²θ and the common
+// amount, with T = |amount| + width bounding |t| at every level, and returns
+// width, the span's half-width (zero for a walk that does not move). ok is
+// false where a number does not lift.
+func nearTangentReach(sinSq *big.Rat, amount, amountDelta float64) (*big.Rat, *big.Rat, *big.Rat, bool) {
+	held := ratAbs(proofarith.FloatRat(amount))
+	width := new(big.Rat)
+	if amount != 0 {
+		width = proofarith.FloatRat(amountDelta)
+	}
+	if held == nil || width == nil || width.Sign() < 0 {
+		return nil, nil, nil, false
+	}
+	// t spans [min(0, amount − width), max(0, amount + width)] over the sweep,
+	// so |t| <= reach at every level.
+	reach := new(big.Rat).Add(held, width)
+	sinUp := proofarith.FloatRat(proofbound.RatSqrtUp(sinSq))
+	if sinUp == nil {
+		return nil, nil, nil, false
+	}
+	rho := new(big.Rat).Mul(reach, sinUp)
+	rho.Mul(rho, new(big.Rat).Add(big.NewRat(1, 1), sinSq))
+	return rho, new(big.Rat).Mul(reach, sinSq), width, true
+}
+
+// nearTangentArcsWhy is the refusal of a corner of two circular walls whose
+// moved circles do not meet condition 6 (agent-docs/draft-design.md §9.1.1).
+const nearTangentArcsWhy = `a near-tangent join of two circular walls whose moved circles do not both clear the near-tangent corner charge`
+
+// twoArcCharge composes the charge of a near-tangent corner where arc first
+// arrives at v and arc second leaves it (agent-docs/draft-design.md §9.1.1,
+// Lemma 1′), after checking condition 6 for two arcs: each moved radius stays
+// above ρ at every level. That keeps each arc from a radial foot to the true
+// corner under a quarter turn and, with sin θ ≤ 2⁻³², the two moved circles
+// meeting in two distinct points at every level. ok is false where it does
+// not, or where a number does not lift.
+func twoArcCharge(first, second sectionrecord.ArcSeg, v [2]*big.Rat, sinSq *big.Rat, amount, amountDelta float64) (NearTangentCharge, bool) {
+	rho, _, width, ok := nearTangentReach(sinSq, amount, amountDelta)
+	if !ok {
+		return NearTangentCharge{}, false
+	}
+	for _, arc := range []sectionrecord.ArcSeg{first, second} {
+		_, movedLo, ok := movedRadius(arc, v, amount, width)
+		if !ok || movedLo.Cmp(rho) <= 0 {
+			return NearTangentCharge{}, false
+		}
+	}
+	return NearTangentCharge{Rho: proofbound.RatFloatUp(rho), TwoArcs: true}, true
 }
 
 // NearTangentCharges reads every corner of one coalesced loop of a draft band
@@ -188,6 +237,14 @@ func lineArcPair(prev, cur sectionrecord.CurveSegment) (sectionrecord.ArcSeg, bo
 		return arc, isArc
 	}
 	return sectionrecord.ArcSeg{}, false
+}
+
+// arcArcPair returns the two ArcSegs of a corner joining two arcs, the one
+// arriving first, and ok == false for any other pair.
+func arcArcPair(prev, cur sectionrecord.CurveSegment) (sectionrecord.ArcSeg, sectionrecord.ArcSeg, bool) {
+	first, okP := prev.(sectionrecord.ArcSeg)
+	second, okC := cur.(sectionrecord.ArcSeg)
+	return first, second, okP && okC
 }
 
 // ratDot is a·b over the rationals.

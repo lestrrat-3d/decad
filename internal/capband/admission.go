@@ -17,7 +17,7 @@ import (
 // band section of the ideal polyhedron B1 is the chord polygon of the true
 // offset section at the same azimuths: a whole turn, a line-line miter, and a
 // join whose two walks meet exactly tangent (G1). A draft band also admits a
-// near-tangent line–arc join, whose sliver its mesh charges
+// near-tangent line–arc or arc–arc join, whose sliver its mesh charges
 // (near_tangent.go, agent-docs/draft-design.md §9.1.1). Every test here is exact
 // rational arithmetic over the record's own floats. None is a tolerance or a
 // residual, so the predicate classifies the denoted geometry and never admits
@@ -124,7 +124,7 @@ func OccupiedVolumeAdmission(
 			// true corner then turns by a sliver and its foot locus is a conic.
 			// A chamfer band has no term for the volume between that locus and
 			// the ruled cells; a draft band charges it for a near-tangent
-			// line–arc join (agent-docs/draft-design.md §9.1.1).
+			// line–arc or arc–arc join (agent-docs/draft-design.md §9.1.1).
 			if sharp == nil {
 				return admissionRefusal(noun, li, cornerAt(prev, cur), notTangentWhy, notTangentHint), nil
 			}
