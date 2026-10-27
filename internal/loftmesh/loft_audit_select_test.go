@@ -240,15 +240,27 @@ func TestTreeBuildNaNMidpointDetection(t *testing.T) {
 	require.False(t, hasNaN([][2]r3.Vec{inf}))
 }
 
-func intCmp(a, b int32) int { return int(a) - int(b) }
+// valueKeys returns one treeKey per value: in[l] as the midpoint, l as the
+// id and the local index, so the keys order by value, ties by l.
+func valueKeys(in []int32) []treeKey {
+	keys := make([]treeKey, len(in))
+	for l, v := range in {
+		keys[l] = treeKey{mid: float64(v), id: int32(l), l: int32(l)}
+	}
+	return keys
+}
 
 func TestSelectNthPartitions(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(71, 73))
 	check := func(label string, in []int32, k, rounds int) {
 		t.Helper()
-		x := slices.Clone(in)
-		selectNthRounds(x, k, intCmp, rounds)
+		keys := valueKeys(in)
+		selectNthRounds(keys, k, rounds)
+		x := make([]int32, len(keys))
+		for i, key := range keys {
+			x[i] = in[key.l]
+		}
 		sorted := slices.Clone(in)
 		slices.Sort(sorted)
 		require.Equal(t, sorted[k], x[k], "%s: k=%d", label, k)
@@ -301,12 +313,13 @@ func b2i(b bool) int {
 	return 0
 }
 
-// TestSelectNthProductionCapFires builds the 100 000-member organ-pipe order
-// the tree's root split sees, and requires that the production round cap
-// stops the selection (the sort fallback runs) where an uncapped selection
-// finishes without it, and that the tree built from it equals the sort build.
-// Removing the cap, or raising it past the rounds this input needs, fails it.
-func TestSelectNthProductionCapFires(t *testing.T) {
+// TestSelectNthOrganPipe builds the 100 000-member organ-pipe order the
+// tree's root split sees. A median-of-three pivot needs more than
+// selectRounds rounds there; the ninther pivot finishes without the sort
+// fallback, so removing the ninther fails it. A cap of two rounds forces the
+// fallback, which must put the same members left of the median, and the tree
+// built from the order must equal the sort build.
+func TestSelectNthOrganPipe(t *testing.T) {
 	t.Parallel()
 	const n = 100000
 	boxes := make([][2]r3.Vec, n)
@@ -317,34 +330,30 @@ func TestSelectNthProductionCapFires(t *testing.T) {
 		boxes[i] = cube(r3.Vec{X: x}, r3.Vec{X: x + 1, Y: 1, Z: 1})
 		members[i] = i
 	}
-	cmp := func(a, b int32) int {
-		alo, ahi := boxAxis(boxes[a], 0)
-		blo, bhi := boxAxis(boxes[b], 0)
-		amid, bmid := alo/2+ahi/2, blo/2+bhi/2
-		switch {
-		case amid < bmid:
-			return -1
-		case amid > bmid:
-			return 1
-		default:
-			return int(a) - int(b)
-		}
-	}
 	in := make([]int32, n)
 	for i := range in {
 		in[i] = int32(i)
 	}
-	capped := slices.Clone(in)
-	require.True(t, selectNth(capped, n/2, cmp), "the production cap of %d rounds must fire", selectRounds)
-	uncapped := slices.Clone(in)
-	require.False(t, selectNthRounds(uncapped, n/2, cmp, math.MaxInt), "the uncapped selection needs more than the cap")
+	mids, nan := treeMidpoints(boxes, in)
+	require.False(t, nan)
+	keys := make([]treeKey, n)
+	for i := range keys {
+		keys[i] = treeKey{mid: mids[3*i], id: int32(i), l: int32(i)}
+	}
+	selected := slices.Clone(keys)
+	require.False(t, selectNth(selected, n/2), "the ninther pivot must finish within %d rounds", selectRounds)
+	capped := slices.Clone(keys)
+	require.True(t, selectNthRounds(capped, n/2, 2), "a cap of two rounds must fire")
 	// Both put the same members left of the median, which is the tree's invariant.
-	left := func(x []int32) []int32 {
-		l := slices.Clone(x[:n/2])
+	left := func(x []treeKey) []int32 {
+		l := make([]int32, n/2)
+		for i := range l {
+			l[i] = x[i].id
+		}
 		slices.Sort(l)
 		return l
 	}
-	require.Equal(t, left(uncapped), left(capped))
+	require.Equal(t, left(selected), left(capped))
 
 	requireSameTree(t, newSortTreeScan(boxes, members), newTreeScan(boxes, members), "organ-pipe 100000")
 }
