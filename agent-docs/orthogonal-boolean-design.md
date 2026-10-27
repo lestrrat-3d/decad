@@ -31,4 +31,4 @@ general dispatch.
 
 - A mixed pair whose second operand tessellates with a bound or a slanted triangle.
 - A pair with a slanted or curved face, or an operand with a vertex bound (the result of a general mesh Boolean, or a body placed by a motion whose vertex images are not floats).
-- Many-operand `Union` as one step: it folds two at a time through this route when its pairs qualify.
+- A many-operand `Union` whose operands are not all faceted solids that meet B1 or B7: B11 takes three or more of that kind in one step, and any other set folds two at a time through the pair route when its pairs qualify.
