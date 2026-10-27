@@ -23,6 +23,10 @@ const (
 	NeoviusInfill
 	// IWPInfill is the IWP lattice of [IWPLattice].
 	IWPInfill
+	// FischerKochSInfill is the Fischer-Koch S lattice of [FischerKochSLattice].
+	FischerKochSInfill
+	// LidinoidInfill is the Lidinoid lattice of [LidinoidLattice].
+	LidinoidInfill
 )
 
 // String renders the kind for diagnostics.
@@ -38,6 +42,10 @@ func (k LatticeKind) String() string {
 		return "NeoviusInfill"
 	case IWPInfill:
 		return "IWPInfill"
+	case FischerKochSInfill:
+		return "FischerKochSInfill"
+	case LidinoidInfill:
+		return "LidinoidInfill"
 	default:
 		return fmt.Sprintf("LatticeKind(%d)", int(k))
 	}
@@ -160,6 +168,10 @@ func infillInterior(ctx context.Context, b *Body, spec InfillSpec) (*Body, error
 		build = NeoviusLattice
 	case IWPInfill:
 		build = IWPLattice
+	case FischerKochSInfill:
+		build = FischerKochSLattice
+	case LidinoidInfill:
+		build = LidinoidLattice
 	default:
 		return nil, fmt.Errorf(`%w: unknown infill lattice %s`, ErrDegenerate, spec.Kind)
 	}

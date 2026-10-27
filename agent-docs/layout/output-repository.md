@@ -22,7 +22,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `mesh_scale.go` | Public `ScaleMesh` and `ScaleBodyMesh`: gates, per-axis stretch about an anchor, reversed winding under an odd number of negative factors, then `NewMeshBody`. See mesh-import design §10. |
 | `subd.go` | Public `SubDMesh` and `SubDCage`: gates, then `internal/subd/` refines the cage and `NewMeshBody` reads the result. See subd design. |
 | `infill.go` | Public `Infill`, `InfillSpec` and `LatticeKind`: builds the lattice over the body's box plus a margin, makes it a solid by `SolidFromMesh` and intersects it with the body. See lattice design §5. |
-| `lattice.go` | Public `GyroidLattice`, `SchwarzPLattice`, `DiamondLattice`, `NeoviusLattice`, `IWPLattice` and `LatticeSpec`: gates, then `internal/lattice/` samples and cuts the field and `NewMeshBody` reads the result. See lattice design. |
+| `lattice.go` | Public `GyroidLattice`, `SchwarzPLattice`, `DiamondLattice`, `NeoviusLattice`, `IWPLattice`, `FischerKochSLattice`, `LidinoidLattice` and `LatticeSpec`: gates, then `internal/lattice/` samples and cuts the field and `NewMeshBody` reads the result. See lattice design. |
 | `internal/orthoshell/` | Grid erosion of an orthogonal polyhedron by a cube, the removed-face slab, the wall mesh and the face press, for `Shell` and `MoveFace`. See orthogonal-shell and orthogonal-move designs. |
 | `internal/lattice/` | Gyroid field sampled on a grid and cut by marching tetrahedra into a closed triangle mesh. See lattice design. |
 | `mesh_reduce.go` | Public `ReduceMesh`, `ReduceMeshWithin` and `MeshReduceReport`: gates, then `internal/meshreduce/` clusters vertices and `NewMeshBody` reads the result. See mesh-import design §9. |
