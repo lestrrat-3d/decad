@@ -108,20 +108,23 @@ func (tc *TriCutter) project(p proof.Xpt, u, v int) Xp2 {
 	if tc.projections == nil {
 		return NewXP2FromXpt(p, u, v)
 	}
+	if p.W.Sign() > 0 {
+		return newDeferredXP2(XIntCoordOf(p, u), XIntCoordOf(p, v), p.W, tc.projections.rat(), tc.projections.rat())
+	}
 	return newXP2FromXptInto(p, u, v, tc.projections.rat(), tc.projections.rat())
 }
 
 // AddVert interns a vertex by its exact 2D identity (cutVertIndex); boundary
 // is sticky.
 func (tc *TriCutter) AddVert(p2 Xp2, p3 proof.Xpt, boundary bool) int {
-	h := xp2Hash(p2)
+	h := cutProjectionHash(p2, tc.index.floatKeys)
 	if i, ok := tc.index.lookup(tc.Verts, h, p2); ok {
 		if boundary {
 			tc.Verts[i].Boundary = true
 		}
 		return i
 	}
-	tc.index.add(h, len(tc.Verts))
+	tc.index.addForPoint(h, len(tc.Verts), p2)
 	tc.Verts = append(tc.Verts, CutVert{P2: p2, P3: p3, Boundary: boundary})
 	return len(tc.Verts) - 1
 }
@@ -349,6 +352,11 @@ func (tc *TriCutter) chainProbe(ch ChainPath) (Xp2, int, error) {
 		}
 	}
 	a, b := tc.Verts[ch.Verts[0]].P2, tc.Verts[ch.Verts[1]].P2
+	if a.deferredRats && b.deferredRats {
+		return deferredMidpointXP2(a, b), steps, nil
+	}
+	materializeXP2(a)
+	materializeXP2(b)
 	half := big.NewRat(1, 2)
 	return NewXP2(
 		proof.MulRat(new(big.Rat), half, proof.AddRat(new(big.Rat), a.U, b.U)),
@@ -524,11 +532,13 @@ func (tc *TriCutter) BuildChains() ([]ChainPath, []ChainPath, error) {
 // that passes through no existing vertex, bisecting toward the span's low
 // end until it clears — finitely many vertex ordinates, so it terminates.
 func (tc *TriCutter) ChooseSplitU(loop ChainPath) (*big.Rat, error) {
+	materializeXP2(tc.Verts[loop.Verts[0]].P2)
 	lo, hi := tc.Verts[loop.Verts[0]].P2.U, tc.Verts[loop.Verts[0]].P2.U
 	for _, vi := range loop.Verts {
 		if err := tc.Work.Step(); err != nil {
 			return nil, err
 		}
+		materializeXP2(tc.Verts[vi].P2)
 		u := tc.Verts[vi].P2.U
 		if u.Cmp(lo) < 0 {
 			lo = u
@@ -551,6 +561,7 @@ func (tc *TriCutter) ChooseSplitU(loop ChainPath) (*big.Rat, error) {
 			if err := tc.Work.Step(); err != nil {
 				return nil, err
 			}
+			materializeXP2(v.P2)
 			if v.P2.U.Cmp(c) == 0 {
 				hit = true
 				break
@@ -572,6 +583,8 @@ func (tc *TriCutter) SplitEdgesAtU(c *big.Rat) error {
 		if err := tc.Work.Step(); err != nil {
 			return err
 		}
+		materializeXP2(tc.Verts[e.A].P2)
+		materializeXP2(tc.Verts[e.B].P2)
 		ua := tc.Verts[e.A].P2.U
 		ub := tc.Verts[e.B].P2.U
 		sa := ua.Cmp(c)
@@ -605,6 +618,8 @@ func (tc *TriCutter) SplitConvexByU(piece []int, c *big.Rat) ([]int, []int, erro
 			return nil, nil, err
 		}
 		vi, vj := piece[i], piece[(i+1)%n]
+		materializeXP2(tc.Verts[vi].P2)
+		materializeXP2(tc.Verts[vj].P2)
 		si := tc.Verts[vi].P2.U.Cmp(c)
 		sj := tc.Verts[vj].P2.U.Cmp(c)
 		if si <= 0 {
