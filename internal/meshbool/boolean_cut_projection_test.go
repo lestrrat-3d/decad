@@ -74,6 +74,18 @@ func TestCutProjectionScratchDoesNotEscapeIntoRegions(t *testing.T) {
 		for i, r := range scratch.rats {
 			r.SetFrac64(int64(i+17), int64(i+19))
 		}
+		for i := range scratch.cutter.Verts {
+			scratch.cutter.Verts[i] = CutVert{}
+		}
+		for i := range scratch.cutter.Edges {
+			scratch.cutter.Edges[i] = CutEdge{}
+		}
+		for i := range scratch.cutter.raw.entries {
+			scratch.cutter.raw.entries[i] = cutRawEntry{}
+		}
+		for i := range scratch.cutter.regionPoints {
+			scratch.cutter.regionPoints[i] = Xp2{}
+		}
 		for i, regions := range retained {
 			actual := cutRegionSnapshot(regions)
 			require.Len(t, actual, len(snapshots[i]))
@@ -81,5 +93,77 @@ func TestCutProjectionScratchDoesNotEscapeIntoRegions(t *testing.T) {
 				require.Equal(t, snapshots[i][field], value, "retained result %d field %d", i, field)
 			}
 		}
+	}
+}
+
+func TestCutWorkspaceDropsOversizedStorage(t *testing.T) {
+	var scratch cutProjectionScratch
+	old := &scratch.cutter
+	old.Verts = make([]CutVert, cutWorkspaceRetainLimit+1)
+	old.Edges = make([]CutEdge, cutWorkspaceRetainLimit+1)
+	old.regionPoints = make([]Xp2, cutWorkspaceRetainLimit+1)
+	old.index = cutVertIndex{head: map[uint64]int{}, next: make([]int, cutWorkspaceRetainLimit+1)}
+	old.raw = cutRawIndex{head: map[uint64]int{}, entries: make([]cutRawEntry, cutWorkspaceRetainLimit+1)}
+	old.seen = map[[2]int]struct{}{}
+	old.anchors = map[[2]int]ChainAnchor{}
+	for i := range cutWorkspaceRetainLimit + 1 {
+		old.index.head[uint64(i)] = i
+		old.raw.head[uint64(i)] = i
+		old.seen[[2]int{i, i + 1}] = struct{}{}
+		old.anchors[[2]int{i, i + 1}] = ChainAnchor{}
+	}
+	index, raw, seen, anchors := old.index.head, old.raw.head, old.seen, old.anchors
+	tc := newTriCutter(t.Context(), &scratch)
+	require.Zero(t, len(tc.Verts))
+	require.Zero(t, len(tc.Edges))
+	require.LessOrEqual(t, cap(tc.Verts), cutWorkspaceRetainLimit)
+	require.LessOrEqual(t, cap(tc.Edges), cutWorkspaceRetainLimit)
+	require.Zero(t, len(tc.regionPoints))
+	require.LessOrEqual(t, cap(tc.regionPoints), cutWorkspaceRetainLimit)
+	require.Zero(t, len(tc.index.head))
+	require.Zero(t, len(tc.index.next))
+	require.LessOrEqual(t, cap(tc.index.next), cutWorkspaceRetainLimit)
+	require.Zero(t, len(tc.raw.head))
+	require.Zero(t, len(tc.raw.entries))
+	require.LessOrEqual(t, cap(tc.raw.entries), cutWorkspaceRetainLimit)
+	require.Zero(t, len(tc.seen))
+	require.Zero(t, len(tc.anchors))
+	index[math.MaxUint64] = 1
+	raw[math.MaxUint64] = 1
+	seen[[2]int{-1, -1}] = struct{}{}
+	anchors[[2]int{-1, -1}] = ChainAnchor{}
+	_, reusedIndex := tc.index.head[math.MaxUint64]
+	_, reusedRaw := tc.raw.head[math.MaxUint64]
+	_, reusedSeen := tc.seen[[2]int{-1, -1}]
+	_, reusedAnchors := tc.anchors[[2]int{-1, -1}]
+	require.False(t, reusedIndex)
+	require.False(t, reusedRaw)
+	require.False(t, reusedSeen)
+	require.False(t, reusedAnchors)
+}
+
+func TestCutWorkspaceResetsCollisionLinks(t *testing.T) {
+	var scratch cutProjectionScratch
+	points := []CutVert{
+		{P2: NewXP2(big.NewRat(1, 3), big.NewRat(2, 5))},
+		{P2: NewXP2(big.NewRat(3, 7), big.NewRat(4, 9))},
+	}
+	old := newTriCutter(t.Context(), &scratch)
+	old.Verts = append(old.Verts, points...)
+	old.index.add(11, 0)
+	old.index.add(22, 1)
+	old.raw.add(11, big.NewInt(1), big.NewInt(2), big.NewInt(3), 0)
+
+	tc := newTriCutter(t.Context(), &scratch)
+	require.Zero(t, len(tc.index.next))
+	require.Zero(t, len(tc.raw.entries))
+	tc.Verts = append(tc.Verts, points...)
+	// The second facet deliberately puts both vertices in one hash chain.
+	tc.index.add(99, 0)
+	tc.index.add(99, 1)
+	for want, p := range points {
+		got, ok := tc.index.lookup(tc.Verts, 99, p.P2)
+		require.True(t, ok, "vertex %d", want)
+		require.Equal(t, want, got)
 	}
 }

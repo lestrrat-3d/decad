@@ -1240,7 +1240,7 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   classification error. Join every worker before returning, including on
   cancellation. `internal/meshbool/boolean_cut_batch.go` owns worker selection;
   `keepSide` owns the batch bound. `cutProjectionScratch` defines reusable
-  projection-buffer ownership.
+  reusable cutter-storage ownership and retention limits.
 - **Intern cut vertices by exact identity.** A cutter vertex is its two
   projected coordinates, compared as their `RatString` texts are, and a
   segment endpoint whose homogeneous integers equal an interned one's is that

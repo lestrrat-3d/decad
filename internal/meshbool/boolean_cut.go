@@ -83,14 +83,17 @@ type ChainAnchor struct {
 // TriCutter is the working state of one facet's subdivision. The zero value
 // has no vertices; Work must be set before any method that steps it.
 type TriCutter struct {
-	Verts       []CutVert
-	Edges       []CutEdge
-	Swap        bool // projection coordinate swap that keeps the facet CCW
-	U, V        int  // projection axes
-	Work        *proofbound.WorkBudget
-	projections *cutProjectionScratch
-	index       cutVertIndex
-	raw         cutRawIndex
+	Verts        []CutVert
+	Edges        []CutEdge
+	Swap         bool // projection coordinate swap that keeps the facet CCW
+	U, V         int  // projection axes
+	Work         *proofbound.WorkBudget
+	projections  *cutProjectionScratch
+	index        cutVertIndex
+	raw          cutRawIndex
+	seen         map[[2]int]struct{}
+	anchors      map[[2]int]ChainAnchor
+	regionPoints []Xp2
 }
 
 func (tc *TriCutter) Proj(p proof.Xpt) Xp2 {
@@ -133,10 +136,7 @@ func cutTriangle(ctx context.Context, xtri [3]proof.Xpt, normal proof.Xpt, segs 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if projections != nil {
-		projections.used = 0
-	}
-	tc := &TriCutter{Work: proofbound.NewWorkBudget(ctx), projections: projections}
+	tc := newTriCutter(ctx, projections)
 	tc.U, tc.V = ProjAxes(normal)
 	cornerIdx, err := tc.internFacet(xtri, segs)
 	if err != nil {
@@ -211,7 +211,7 @@ func cutTriangle(ctx context.Context, xtri [3]proof.Xpt, normal proof.Xpt, segs 
 		}
 	}
 
-	chainEdges := map[[2]int]ChainAnchor{}
+	chainEdges := tc.anchors
 	for _, e := range tc.Edges {
 		if err := tc.Work.Step(); err != nil {
 			return nil, err
@@ -275,7 +275,11 @@ func (tc *TriCutter) internFacet(xtri [3]proof.Xpt, segs []Xseg) ([3]int, error)
 		tc.raw.add(rawHash(c.Hu, c.Hv, c.Hw), c.Hu, c.Hv, c.Hw, cornerIdx[i])
 	}
 
-	seen := map[[2]int]struct{}{}
+	seen := tc.seen
+	if seen == nil {
+		seen = map[[2]int]struct{}{}
+		tc.seen = seen
+	}
 	for _, s := range segs {
 		if err := tc.Work.Step(); err != nil {
 			return cornerIdx, err
@@ -787,10 +791,12 @@ func (tc *TriCutter) IndexOf(poly []int, vi int) (int, error) {
 // classification anchor: the region triangle adjacent to a chain edge, whose
 // exact centroid probes the partner facet's plane side.
 func (tc *TriCutter) RegionOf(poly []int, chainEdges map[[2]int]ChainAnchor) (CutRegion, error) {
-	points, err := tc.CollectP2()
+	points, err := tc.collectP2Into(tc.regionPoints)
 	if err != nil {
 		return CutRegion{}, err
 	}
+	// EarClipX only reads the projections; the result carries copied 3D points.
+	tc.regionPoints = points
 	tris2, err := EarClipX(tc.Work, points, poly)
 	if err != nil {
 		return CutRegion{}, err
@@ -833,7 +839,15 @@ func (tc *TriCutter) RegionOf(poly []int, chainEdges map[[2]int]ChainAnchor) (Cu
 // CollectP2 is the projected-point view of the vertex table, as EarClipX
 // wants it.
 func (tc *TriCutter) CollectP2() ([]Xp2, error) {
-	out := make([]Xp2, len(tc.Verts))
+	return tc.collectP2Into(make([]Xp2, len(tc.Verts)))
+}
+
+func (tc *TriCutter) collectP2Into(out []Xp2) ([]Xp2, error) {
+	if cap(out) < len(tc.Verts) {
+		out = make([]Xp2, len(tc.Verts))
+	} else {
+		out = out[:len(tc.Verts)]
+	}
 	for i, v := range tc.Verts {
 		if err := tc.Work.Step(); err != nil {
 			return nil, err
