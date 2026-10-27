@@ -919,6 +919,38 @@ times `2^159` to `2^169`, so lifting it turns `den²` in every leaf comparison
 from six words into one, and a split no longer aligns two operands at every
 midpoint.
 
+**The subdivision carries the control polygon's LEGS, never its points.**
+Every bound a leaf takes reads either a leg `Pᵢ₊₁ − Pᵢ` or the chord
+`P_last − P₀`, and the chord is the sum of the legs, so the points are not
+needed below the conversion. The legs of a Bézier's two halves are themselves
+de Casteljau blends of its legs: with `W_k` the `k`-th round of neighbour sums
+taken without halving, the left half's leg `k` is `W_k[0] / 2^(k+1)` and the
+right half's leg `m−1−k` is `W_k[m−1−k] / 2^(k+1)`, over the `m = n−1` legs.
+Read at the point form's child exponent, its parent's plus `m`, each is that
+work entry shifted up by `m−1−k ≥ 0`. This is exact, and the soundness argument
+is uniqueness, not closeness: a value's numerator over a fixed `den · 2^exp` is
+unique, the leg form reaches every leaf at the same exponent the point form
+reaches it at, and so each leaf leg and chord numerator is the very integer the
+point form's aligned difference gives. Every squared distance, seed and
+comparison downstream therefore receives identical integers. The split works in
+its input's storage, which the depth-first walk never reads again once the
+children are taken. A cubic's split costs 9 big-integer operations per
+coordinate, half what the same split over points needs, and a leaf's legs need
+no subtraction at all.
+
+**A leaf comparison never materialises a shifted operand.** `f² ≥ d` is the
+integer comparison `m²·den²·2^s` against `num`, with `f = m·2^e`. The bit
+lengths of the two sides decide it whenever they differ; when they are equal
+the words are compared from the top, each word of the shifted side assembled
+from the two words it straddles. Where `den²` is one machine word, as the small
+odd `den` left after lifting usually makes it, `m²·den²` is formed on 64-bit
+words. Both are the same exact comparison computed another way, never a float
+filter, so the answer cannot differ; `TestSpanSquareCmpScratchMatchesSpanSquareCmp`
+and `TestShiftedCmpMatchesShiftedBigIntCmp` hold them to the big-integer
+`Lsh`-then-`Cmp` form, at equality and one unit either side of it. The work
+charge, `FreeformBracketCost`, is unchanged and still bounds the leg form,
+which blends fewer pairs than it counts.
+
 Consumers: a prism's side-face `Area` (`length × height`), `Edge.Length()`, and
 the setback R5 refuses. A revolve's lateral area is NOT one of them — length
 alone cannot determine it, and §6.1.1 supplies what it needs.

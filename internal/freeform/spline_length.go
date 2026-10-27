@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"math/bits"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -129,17 +131,19 @@ var ErrFreeformLengthDegenerate = fmt.Errorf(
 // lets an arbitrarily wide span through: a single degree-1000 span is 1024
 // leaves and over five hundred million rational midpoints.
 //
-// This preflight is why the fixed-depth bracket calls DyadicSpan.split
-// UNMETERED: the whole subtree is paid for here, before the first level
-// allocates anything, and charging each split again would charge the same work
-// twice.
+// This preflight is why the fixed-depth bracket's LengthSplitScratch.Split
+// carries no counter: the whole subtree is paid for here, before the first
+// level allocates anything, and charging each split again would charge the
+// same work twice. That split works on the span's n−1 legs, so it blends
+// (n−1)(n−2)/2 pairs where this charge counts n(n−1)/2, and the charge stays
+// an upper bound on the work it pays for.
 //
 // ITS UNIT IS NOT THE METERED UNIT. perSplit counts one unit per COORDINATE
 // blend — a split's n(n−1)/2 de Casteljau pairs over two coordinates — while
 // DyadicSplitOps (spline_sagitta.go) counts the big.Int OPERATIONS the same
 // bisection performs, which is 6 per blend plus the split's own allocations and
 // copies. So this bracket charges about a third of what the sagitta walk
-// charges for the identical code. That gap is deliberate and is NOT closed
+// charges for the same bisection. That gap is deliberate and is NOT closed
 // here: this ceiling is a whole-record one shared with conversion, integration
 // and reconstruction (§5.2), the involute fit-spline record already spends 91%
 // of it, and raising the per-split term to the metered count would refuse a
@@ -227,11 +231,12 @@ func spanLengthBracket(span BezierSpan, depth int) (float64, float64) {
 	if depth <= 0 || len(s.Points) < 2 {
 		return s.ChordLower(), s.PolygonUpper()
 	}
+	net := lengthEdgeNetOf(s)
 	frames := make([]LengthSplitScratch, depth)
 	for i := range frames {
-		frames[i].Init(len(s.Points))
+		frames[i].Init(len(net.Edges))
 	}
-	return s.LengthBracketScratch(frames, &LengthDistanceScratch{})
+	return net.LengthBracketScratch(frames, &LengthDistanceScratch{})
 }
 
 // liftDenominatorTwos moves the power of two in the span's shared denominator
@@ -348,80 +353,98 @@ func ScaledNumerator(r *big.Rat, den *big.Int) *big.Int {
 	return out.Mul(out, r.Num())
 }
 
-// LengthSplitScratch owns the three control nets used at one subdivision
-// level. Its integer storage remains live for the whole depth-first walk, so
-// sibling subtrees reuse it without changing the order of leaf summation.
-type LengthSplitScratch struct {
-	Work, Left, Right []DyadicPoint
+// LengthEdge is one control-polygon leg b−a of a span in the bracket's edge
+// form: its two integer numerators over the net's shared den · 2^Exp.
+type LengthEdge struct {
+	U, V big.Int
 }
 
-func (f *LengthSplitScratch) Init(n int) {
-	f.Work = make([]DyadicPoint, n)
-	f.Left = make([]DyadicPoint, n)
-	f.Right = make([]DyadicPoint, n)
-	for _, points := range [][]DyadicPoint{f.Work, f.Left, f.Right} {
-		for i := range points {
-			points[i].U = new(big.Int)
-			points[i].V = new(big.Int)
-		}
+// LengthEdgeNet is a span's control polygon held as its legs instead of its
+// points. Every bound the bracket takes reads a leg or the chord, and the chord
+// is the sum of the legs, so the points themselves are never needed below the
+// conversion (agent-docs/spline-design.md §6.1). All legs share Exp, and each
+// one's numerator is the exact integer the point form's own aligned difference
+// gives at that exponent, because den and the exponent fix the numerator of a
+// value uniquely.
+type LengthEdgeNet struct {
+	Edges []LengthEdge
+	Exp   uint
+	DenSq *big.Int
+}
+
+// lengthEdgeNetOf takes the legs of the bracket's own lifted conversion.
+// DyadicSpanOf gives every point exponent zero and liftDenominatorTwos raises
+// them all by the same count, so the points share one exponent and each leg is
+// a plain difference of numerators.
+func lengthEdgeNetOf(s DyadicSpan) LengthEdgeNet {
+	edges := make([]LengthEdge, len(s.Points)-1)
+	for i := range edges {
+		a, b := s.Points[i], s.Points[i+1]
+		edges[i].U.Sub(b.U, a.U)
+		edges[i].V.Sub(b.V, a.V)
 	}
+	return LengthEdgeNet{Edges: edges, Exp: s.Points[0].Exp, DenSq: s.DenSq}
 }
 
-func (s DyadicSpan) LengthBracketScratch(
+// LengthSplitScratch owns the two child leg nets one subdivision level
+// produces. Its integer storage remains live for the whole depth-first walk,
+// so sibling subtrees reuse it without changing the order of leaf summation.
+type LengthSplitScratch struct {
+	Left, Right []LengthEdge
+}
+
+// Init sizes the scratch for nets of m legs.
+func (f *LengthSplitScratch) Init(m int) {
+	f.Left = make([]LengthEdge, m)
+	f.Right = make([]LengthEdge, m)
+}
+
+// LengthBracketScratch brackets the net to len(frames) further levels. It
+// consumes the net: each level's split works in its input's storage, which the
+// walk never reads again once the children are taken.
+func (n LengthEdgeNet) LengthBracketScratch(
 	frames []LengthSplitScratch, distance *LengthDistanceScratch,
 ) (float64, float64) {
 	if len(frames) == 0 {
-		return s.ChordLowerScratch(distance), s.PolygonUpperScratch(distance)
+		return n.ChordLowerScratch(distance), n.PolygonUpperScratch(distance)
 	}
 	f := &frames[len(frames)-1]
-	f.Split(s.Points)
-	left := DyadicSpan{Points: f.Left, Den: s.Den, DenSq: s.DenSq}
-	right := DyadicSpan{Points: f.Right, Den: s.Den, DenSq: s.DenSq}
+	f.Split(n.Edges)
+	exp := n.Exp + uint(len(n.Edges))
+	left := LengthEdgeNet{Edges: f.Left, Exp: exp, DenSq: n.DenSq}
+	right := LengthEdgeNet{Edges: f.Right, Exp: exp, DenSq: n.DenSq}
 	leftLo, leftHi := left.LengthBracketScratch(frames[:len(frames)-1], distance)
 	rightLo, rightHi := right.LengthBracketScratch(frames[:len(frames)-1], distance)
 	return DownRound(leftLo + rightLo), proofbound.UpRound(leftHi + rightHi)
 }
 
-// Split is the de Casteljau bisection at t = 1/2 over ONE shared exponent.
-// The input values are first raised to their widest exponent e (a copy when,
-// as on every call the bracket makes, they already share it). Each round then
-// adds neighbours WITHOUT halving: after round r every work entry is 2^r times
-// the true blend, so it reads at exponent e+r, and all entries of a round
-// share that exponent and need no alignment. Each child value is shifted once
-// to exponent e+n−1 as it is taken, so both children leave sharing one
-// exponent too. A value of den·2^exp form read at a larger exponent with a
-// numerator shifted by the same amount is the same rational, so the children
-// are exactly the halves a per-midpoint aligned bisection produces.
-func (f *LengthSplitScratch) Split(points []DyadicPoint) {
-	n := len(points)
-	exp := points[0].Exp
-	for _, p := range points[1:] {
-		exp = max(exp, p.Exp)
-	}
-	for i, p := range points {
-		f.Work[i].U.Lsh(p.U, exp-p.Exp)
-		f.Work[i].V.Lsh(p.V, exp-p.Exp)
-	}
-	top := uint(n - 1)
-	f.Left[0].U.Lsh(f.Work[0].U, top)
-	f.Left[0].V.Lsh(f.Work[0].V, top)
-	f.Right[n-1].U.Lsh(f.Work[n-1].U, top)
-	f.Right[n-1].V.Lsh(f.Work[n-1].V, top)
-	for round := 1; round < n; round++ {
-		for i := range n - round {
-			f.Work[i].U.Add(f.Work[i].U, f.Work[i+1].U)
-			f.Work[i].V.Add(f.Work[i].V, f.Work[i+1].V)
+// Split is the de Casteljau bisection at t = 1/2 of a leg net, read at the
+// point form's child exponent: the input's exponent plus m, the leg count.
+//
+// The legs of a Bézier's halves are the halves of the de Casteljau blends of
+// its legs. With W_k the k-th round of neighbour sums taken WITHOUT halving
+// (so W_k is 2^k times the true blend), the left child's leg k is
+// W_k[0] / 2^(k+1) and the right child's leg m−1−k is W_k[m−1−k] / 2^(k+1).
+// Read at the input exponent plus m, each is that work entry shifted up by
+// m−1−k, which is never negative. The halves' points therefore have exactly
+// these legs, at exactly the exponent the point form gives them.
+//
+// The input is the work storage, so Split consumes it.
+func (f *LengthSplitScratch) Split(in []LengthEdge) {
+	m := len(in)
+	for k := range m {
+		if k > 0 {
+			for i := range m - k {
+				in[i].U.Add(&in[i].U, &in[i+1].U)
+				in[i].V.Add(&in[i].V, &in[i+1].V)
+			}
 		}
-		shift := top - uint(round)
-		last := n - 1 - round
-		f.Left[round].U.Lsh(f.Work[0].U, shift)
-		f.Left[round].V.Lsh(f.Work[0].V, shift)
-		f.Right[last].U.Lsh(f.Work[last].U, shift)
-		f.Right[last].V.Lsh(f.Work[last].V, shift)
-	}
-	for i := range n {
-		f.Left[i].Exp = exp + top
-		f.Right[i].Exp = exp + top
+		shift := uint(m - 1 - k)
+		last := m - 1 - k
+		f.Left[k].U.Lsh(&in[0].U, shift)
+		f.Left[k].V.Lsh(&in[0].V, shift)
+		f.Right[last].U.Lsh(&in[last].U, shift)
+		f.Right[last].V.Lsh(&in[last].V, shift)
 	}
 }
 
@@ -494,10 +517,6 @@ func (s DyadicSpan) ChordLower() float64 {
 	return SpanSqrtDown(s.DistanceSquared(s.Points[0], s.Points[len(s.Points)-1]))
 }
 
-func (s DyadicSpan) ChordLowerScratch(scratch *LengthDistanceScratch) float64 {
-	return SpanSqrtDownScratch(s.DistanceSquaredScratch(s.Points[0], s.Points[len(s.Points)-1], scratch), scratch)
-}
-
 // PolygonUpper is a proven upper bound on a control polygon's length.
 func (s DyadicSpan) PolygonUpper() float64 {
 	total := 0.0
@@ -507,19 +526,33 @@ func (s DyadicSpan) PolygonUpper() float64 {
 	return total
 }
 
-func (s DyadicSpan) PolygonUpperScratch(scratch *LengthDistanceScratch) float64 {
+// ChordLowerScratch is ChordLower on a leg net: the chord is the sum of the
+// legs, an exact integer sum at the net's shared exponent.
+func (n LengthEdgeNet) ChordLowerScratch(scratch *LengthDistanceScratch) float64 {
+	scratch.Du.Set(&n.Edges[0].U)
+	scratch.Dv.Set(&n.Edges[0].V)
+	for i := 1; i < len(n.Edges); i++ {
+		scratch.Du.Add(&scratch.Du, &n.Edges[i].U)
+		scratch.Dv.Add(&scratch.Dv, &n.Edges[i].V)
+	}
+	return SpanSqrtDownScratch(n.squaredLength(&scratch.Du, &scratch.Dv, scratch), scratch)
+}
+
+// PolygonUpperScratch is PolygonUpper on a leg net.
+func (n LengthEdgeNet) PolygonUpperScratch(scratch *LengthDistanceScratch) float64 {
 	total := 0.0
-	for i := 0; i+1 < len(s.Points); i++ {
+	for i := range n.Edges {
 		// Uniform halves of one Bézier have the same derivative at their
 		// shared endpoint. Their adjoining control edges therefore have
 		// equal exact lengths, so the previous leaf's last upper bound is
 		// this leaf's first upper bound. Keep every outward sum in place.
 		edge := scratch.LastUpper
 		if i != 0 || !scratch.HasLastUpper {
-			edge = SpanSqrtUpScratch(s.DistanceSquaredScratch(s.Points[i], s.Points[i+1], scratch), scratch)
+			e := &n.Edges[i]
+			edge = SpanSqrtUpScratch(n.squaredLength(&e.U, &e.V, scratch), scratch)
 		}
 		total = proofbound.UpRound(total + edge)
-		if i+2 == len(s.Points) {
+		if i+1 == len(n.Edges) {
 			scratch.LastUpper = edge
 			scratch.HasLastUpper = true
 		}
@@ -527,12 +560,22 @@ func (s DyadicSpan) PolygonUpperScratch(scratch *LengthDistanceScratch) float64 
 	return total
 }
 
+// squaredLength is |(du, dv)|² over the net's denominator, written into the
+// scratch's Num.
+func (n LengthEdgeNet) squaredLength(du, dv *big.Int, scratch *LengthDistanceScratch) SpanSquaredDistance {
+	scratch.Num.Mul(du, du)
+	scratch.Tmp.Mul(dv, dv)
+	scratch.Num.Add(&scratch.Num, &scratch.Tmp)
+	return SpanSquaredDistance{Num: &scratch.Num, DenSq: n.DenSq, Exp: n.Exp}
+}
+
 // LengthDistanceScratch reuses exact integer operands across successive leaf
 // distances. A leaf completes each square-root comparison before the next
 // distance overwrites num, so no returned interval holds one of these values.
 type LengthDistanceScratch struct {
-	Du, Dv, Tmp, Num, Lhs, Rhs, SquareMant big.Int
-	SeedMant, SeedRatio, SeedNum, SeedDen  big.Float
+	Du, Dv, Tmp, Num, Lhs, SquareMant     big.Int
+	LhsWords                              [3]big.Word
+	SeedMant, SeedRatio, SeedNum, SeedDen big.Float
 	// SpanLengthBracket creates one scratch per original span, so this
 	// bound is never reused across unrelated control nets.
 	LastUpper    float64
@@ -560,28 +603,6 @@ func (s DyadicSpan) DistanceSquared(a, b DyadicPoint) SpanSquaredDistance {
 	return SpanSquaredDistance{Num: num, DenSq: denSq, Exp: exp}
 }
 
-func (s DyadicSpan) DistanceSquaredScratch(
-	a, b DyadicPoint, scratch *LengthDistanceScratch,
-) SpanSquaredDistance {
-	exp := max(a.Exp, b.Exp)
-	if a.Exp == b.Exp {
-		// Split leaves every point of a child at one exponent.
-		scratch.Du.Sub(b.U, a.U)
-		scratch.Dv.Sub(b.V, a.V)
-	} else {
-		scratch.Du.Lsh(b.U, exp-b.Exp)
-		scratch.Tmp.Lsh(a.U, exp-a.Exp)
-		scratch.Du.Sub(&scratch.Du, &scratch.Tmp)
-		scratch.Dv.Lsh(b.V, exp-b.Exp)
-		scratch.Tmp.Lsh(a.V, exp-a.Exp)
-		scratch.Dv.Sub(&scratch.Dv, &scratch.Tmp)
-	}
-	scratch.Num.Mul(&scratch.Du, &scratch.Du)
-	scratch.Tmp.Mul(&scratch.Dv, &scratch.Dv)
-	scratch.Num.Add(&scratch.Num, &scratch.Tmp)
-	return SpanSquaredDistance{Num: &scratch.Num, DenSq: s.DenSq, Exp: exp}
-}
-
 // SpanSquareCmp compares f² to the exact squared distance without a rational
 // reduction. A finite float is an integer mantissa times a power of two, so
 // multiplying by the shared denSq and shifting preserves the exact ordering.
@@ -603,6 +624,14 @@ func SpanSquareCmp(f float64, d SpanSquaredDistance) int {
 	return lhs.Cmp(new(big.Int).Lsh(d.Num, uint(-shift)))
 }
 
+// SpanSquareCmpScratch is SpanSquareCmp deciding the same exact integer
+// comparison, mant²·denSq·2^shift against num, without materialising either
+// shifted operand: shiftedCmp reads the shift off the two bit lengths and then
+// the words themselves. Where denSq is one 64-bit word — the odd den the
+// bracket lifts its powers of two out of is usually a small one — the
+// left-hand product is formed on machine words. f's mantissa need not be
+// reduced to odd for this: any integer m with |f| = m·2^e gives the same
+// product.
 func SpanSquareCmpScratch(f float64, d SpanSquaredDistance, scratch *LengthDistanceScratch) int {
 	if math.IsNaN(f) || math.IsInf(f, 0) {
 		return 1
@@ -610,15 +639,104 @@ func SpanSquareCmpScratch(f float64, d SpanSquaredDistance, scratch *LengthDista
 	if f == 0 {
 		return -d.Num.Sign()
 	}
+	if d.Num.Sign() < 0 {
+		// The left-hand side is positive. A sum of squares never takes this
+		// branch; it keeps the comparison total.
+		return 1
+	}
+	den := d.DenSq.Bits()
+	if bits.UintSize == 64 && len(den) == 1 {
+		mag, exp := floatMagnitude(f)
+		hi, lo := bits.Mul64(mag, mag)
+		w := uint64(den[0])
+		c0, r0 := bits.Mul64(lo, w)
+		c1, r1 := bits.Mul64(hi, w)
+		r1, carry := bits.Add64(r1, c0, 0)
+		// mag < 2^53 and w < 2^64, so the product is below 2^170 and r2
+		// cannot wrap.
+		r2 := c1 + carry
+		lhs := scratch.LhsWords[:3]
+		lhs[0], lhs[1], lhs[2] = big.Word(r0), big.Word(r1), big.Word(r2)
+		for len(lhs) > 0 && lhs[len(lhs)-1] == 0 {
+			lhs = lhs[:len(lhs)-1]
+		}
+		return orderedShiftCmp(lhs, 2*(exp+int(d.Exp)), d.Num.Bits())
+	}
 	square := proofarith.DyOfFinite(f)
 	mant := square.MantInto(&scratch.SquareMant)
 	scratch.Lhs.Mul(mant, mant)
 	scratch.Lhs.Mul(&scratch.Lhs, d.DenSq)
-	shift := 2 * (square.Exp() + int(d.Exp))
-	if shift >= 0 {
-		return scratch.Lhs.Lsh(&scratch.Lhs, uint(shift)).Cmp(d.Num)
+	return orderedShiftCmp(scratch.Lhs.Bits(), 2*(square.Exp()+int(d.Exp)), d.Num.Bits())
+}
+
+// floatMagnitude is |f| = mag·2^exp for a finite non-zero f, read off its
+// bits: the significand with its hidden bit, and the unbiased exponent of its
+// last place.
+func floatMagnitude(f float64) (uint64, int) {
+	b := math.Float64bits(f)
+	mag, exp := b&(1<<52-1), int(b>>52&0x7ff)
+	if exp == 0 {
+		return mag, -1074
 	}
-	return scratch.Lhs.Cmp(scratch.Rhs.Lsh(d.Num, uint(-shift)))
+	return mag | 1<<52, exp - 1075
+}
+
+// orderedShiftCmp compares a·2^shift against b for non-negative magnitudes in
+// big.Int's normalised little-endian word form; a negative shift scales b
+// instead.
+func orderedShiftCmp(a []big.Word, shift int, b []big.Word) int {
+	if shift >= 0 {
+		return shiftedCmp(a, uint(shift), b)
+	}
+	return -shiftedCmp(b, uint(-shift), a)
+}
+
+// shiftedCmp compares a·2^s against b, both normalised magnitudes, exactly.
+// Unequal bit lengths decide it at once; equal ones compare word by word from
+// the top, each word of a·2^s assembled from the two words of a it straddles.
+func shiftedCmp(a []big.Word, s uint, b []big.Word) int {
+	la, lb := wordsBitLen(a), wordsBitLen(b)
+	if la == 0 {
+		// A zero a·2^s ties a zero b and is below any other. A zero b
+		// against a positive a is left to the width test below.
+		if lb == 0 {
+			return 0
+		}
+		return -1
+	}
+	if width := uint64(la) + uint64(s); width != uint64(lb) {
+		if width < uint64(lb) {
+			return -1
+		}
+		return 1
+	}
+	ws, bs := int(s/bits.UintSize), s%bits.UintSize
+	for i, bw := range slices.Backward(b) {
+		var w big.Word
+		if j := i - ws; j >= 0 && j < len(a) {
+			w = a[j] << bs
+		}
+		// At bs = 0 the shift below is by the full word width, which Go
+		// defines as zero.
+		if j := i - ws - 1; j >= 0 && j < len(a) {
+			w |= a[j] >> (bits.UintSize - bs)
+		}
+		if w != bw {
+			if w < bw {
+				return -1
+			}
+			return 1
+		}
+	}
+	return 0
+}
+
+// wordsBitLen is the bit length of a normalised magnitude.
+func wordsBitLen(x []big.Word) int {
+	if len(x) == 0 {
+		return 0
+	}
+	return (len(x)-1)*bits.UintSize + bits.Len(uint(x[len(x)-1]))
 }
 
 // SpanSqrtSeed matches proofbound.RatSqrtSeed's 64-bit quotient, keeping the

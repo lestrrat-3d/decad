@@ -111,6 +111,9 @@ func TestSpanLengthBracketMatchesReference(t *testing.T) {
 		{"wide dyadic denominators", wideSpan(r, 4, 2, 600, 1)},
 		{"quintic", wideSpan(r, 6, 3, 40, 5)},
 		{"degree 31", wideSpan(r, 32, 4, 60, 3)},
+		// An odd denominator of 3^39 squares past one 64-bit word.
+		{"wide odd denominator", wideSpan(r, 4, 7, 160, 4052555153018976267)},
+		{"wide odd denominator, quintic", wideSpan(r, 6, 3, 40, 4052555153018976267)},
 	}
 	named := len(spans)
 	random := 200
