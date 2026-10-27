@@ -2211,6 +2211,8 @@
 8	0.00	TestSweepPairSourceBoxSlideEdgeTransition
 8	0.01	TestSweepStraightIsABooleanOperand
 8	0.78	TestSweepTwistRoundedProfileUnionKeepsHeldProof
+10	0.01	TestOrthogonalUndercutSurveyProvesAPullFree
+10	0.01	TestOrthogonalUndercutSurveyListsEveryBlockedFace
 8	1.22	TestSweepTwistRoundedProfileVerifyUsesHeldDiameter
 8	0.04	TestTangentJoinedSlotChamferAtOffsetOrigin
 8	0.00	TestTaperFlare

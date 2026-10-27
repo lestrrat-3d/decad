@@ -44,7 +44,7 @@ bound turns the second test red, and a survey that casts no rays turns the first
 
 - Proving a wall thick enough, and so a `Sound` wall verdict for a faceted body that is not an axis-square solid with no vertex bound, which `agent-docs/orthogonal-wall-design.md` reads exactly.
 - A sheet body, which has no inward side.
-- Proving a pull free of undercuts, and a concave-radius survey of a faceted body, which stays unsupported.
+- Proving a pull free of undercuts, except for an axis-square solid pulled along a world axis (`agent-docs/orthogonal-wall-design.md` §3), and a concave-radius survey of a faceted body, which stays unsupported.
 
 ## 6. Undercuts against a pull
 
