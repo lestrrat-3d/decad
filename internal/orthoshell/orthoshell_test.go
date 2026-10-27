@@ -47,7 +47,7 @@ func bounds(v []r3.Vec) (r3.Vec, r3.Vec) {
 func TestWallsOfAClosedBoxAreTheBoxLessItsCavity(t *testing.T) {
 	t.Parallel()
 	v, tris, _ := box(r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
-	wv, wt, err := orthoshell.Walls(v, tris, make([]bool, len(tris)), 1)
+	wv, wt, err := orthoshell.Walls(v, tris, make([]bool, len(tris)), 1, false)
 	require.NoError(t, err)
 	lo, hi := bounds(wv)
 	require.True(t, lo.Equal(r3.NewVec(0, 0, 0), 1e-9))
@@ -63,7 +63,7 @@ func TestWallsOfABoxWithATopRemovedAreOpen(t *testing.T) {
 	for i, f := range face {
 		removed[i] = f == 1
 	}
-	wv, wt, err := orthoshell.Walls(v, tris, removed, 1)
+	wv, wt, err := orthoshell.Walls(v, tris, removed, 1, false)
 	require.NoError(t, err)
 	// The cavity runs from the floor 1 up out of the top, 8 x 6 x 5 of the box: 480 - 240.
 	require.InDelta(t, 480-8*6*5, volume(wv, wt), 1e-9)
@@ -110,7 +110,7 @@ func TestWallsOfAnLShapeKeepTheMiteredCorner(t *testing.T) {
 	t.Parallel()
 	v, tris := lShape()
 	require.InDelta(t, 24, volume(v, tris), 1e-9, "the fixture is a closed L of area 12 and height 2")
-	wv, wt, err := orthoshell.Walls(v, tris, make([]bool, len(tris)), 0.5)
+	wv, wt, err := orthoshell.Walls(v, tris, make([]bool, len(tris)), 0.5, false)
 	require.NoError(t, err)
 	// The cavity is the L eroded by 0.5: the horizontal arm [0.5,3.5] x [0.5,1.5] and the vertical arm
 	// [0.5,1.5] x [1.5,3.5], a sharp corner at (1.5, 1.5), one mm in z: 3 + 2 = 5.
@@ -122,15 +122,49 @@ func TestWallsRefusals(t *testing.T) {
 	v, tris, _ := box(r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
 	none := make([]bool, len(tris))
 	// Walls that meet leave no cavity: a box 6 thick in z with t = 3 (cube erosion by 6 swallows it).
-	_, _, err := orthoshell.Walls(v, tris, none, 3)
+	_, _, err := orthoshell.Walls(v, tris, none, 3, false)
 	require.ErrorIs(t, err, orthoshell.ErrDegenerate)
-	_, _, err = orthoshell.Walls(v, tris, none, 0)
+	_, _, err = orthoshell.Walls(v, tris, none, 0, false)
 	require.ErrorIs(t, err, orthoshell.ErrDegenerate)
-	_, _, err = orthoshell.Walls(v, tris, none[:3], 1)
+	_, _, err = orthoshell.Walls(v, tris, none[:3], 1, false)
 	require.ErrorIs(t, err, orthoshell.ErrUnsupported)
 	// A slanted triangle is not square to an axis.
 	slant := append([]r3.Vec{}, v...)
 	slant[6] = r3.NewVec(10, 8, 5)
-	_, _, err = orthoshell.Walls(slant, tris, none, 1)
+	_, _, err = orthoshell.Walls(slant, tris, none, 1, false)
 	require.ErrorIs(t, err, orthoshell.ErrNotOrthogonal)
+}
+
+func TestOutwardWallsGrowOffTheSolid(t *testing.T) {
+	t.Parallel()
+	v, tris, face := box(r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
+	none := make([]bool, len(tris))
+	wv, wt, err := orthoshell.Walls(v, tris, none, 1, true)
+	require.NoError(t, err)
+	lo, hi := bounds(wv)
+	require.True(t, lo.Equal(r3.NewVec(-1, -1, -1), 1e-9))
+	require.True(t, hi.Equal(r3.NewVec(11, 9, 7), 1e-9))
+	// The walls are the 12 x 10 x 8 box dilated by the cube, less the box: 960 - 480, with the box as the cavity.
+	require.InDelta(t, 960-480, volume(wv, wt), 1e-9)
+	removed := make([]bool, len(tris))
+	for i, f := range face {
+		removed[i] = f == 1
+	}
+	ov, ot, err := orthoshell.Walls(v, tris, removed, 1, true)
+	require.NoError(t, err)
+	// Open at the top: the wall ends flush with the top plane, so nothing of the 12 x 10 x 8 dilation stands above
+	// z = 6 and the box's lid, 10 x 8 x 1 over its top, is left out too: 960 - 480 - (12 x 10 x 1) = 360.
+	require.InDelta(t, 960-480-12*10*1, volume(ov, ot), 1e-9)
+	olo, ohi := bounds(ov)
+	require.True(t, olo.Equal(r3.NewVec(-1, -1, -1), 1e-9))
+	require.True(t, ohi.Equal(r3.NewVec(11, 9, 6), 1e-9))
+}
+
+func TestOutwardWallsOfAnLShapeKeepTheMiteredCorner(t *testing.T) {
+	t.Parallel()
+	v, tris := lShape()
+	wv, wt, err := orthoshell.Walls(v, tris, make([]bool, len(tris)), 0.5, true)
+	require.NoError(t, err)
+	// The L dilated by 0.5: [-0.5,4.5] x [-0.5,2.5] and [-0.5,2.5] x [2.5,4.5], area 15 + 6 = 21, 3 high: 63, less the L's 24.
+	require.InDelta(t, 63-24, volume(wv, wt), 1e-9)
 }

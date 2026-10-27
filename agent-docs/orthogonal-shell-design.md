@@ -13,7 +13,7 @@ solid. No Boolean runs.
 
 | Decision | Rule |
 |---|---|
-| O1 | The route applies to a faceted receiver whose held vertices all carry a zero bound, every triangle of which has its three corners on one world-axis plane exactly, in floats. Any other receiver, a receiver with a vertex bound, and an `Outward` sense take the receiver's own route and its own refusal. |
+| O1 | The route applies to a faceted receiver whose held vertices all carry a zero bound, every triangle of which has its three corners on one world-axis plane exactly, in floats, inward or `Outward`. Any other receiver, and a receiver with a vertex bound, take the receiver's own route and its own refusal. |
 | O2 | The coordinates of the grid are the solid's vertex coordinates on each axis, plus, for each removed face, its plane moved `2t` outward. Cells of that grid are occupied by the exact signed coverage of the x-facing triangles along each column, which must be 0 or 1 everywhere, and the grid's volume must equal the mesh's own; otherwise the solid is `ErrUnsupported`. |
 | O3 | The solid joined to a slab `2t` thick over each removed face (the cells between its plane and `2t` out, over its footprint, the footprint summed over the face's triangles and taken where it exceeds half a cell) gives the occupancy `S⁺`. |
 | O4 | The grid is refined by every coordinate `± t`. A refined cell is in the cavity when every cell of `S⁺` that the cube of half-side `t` about the cell's middle meets is occupied, which is constant over a refined cell because of the refinement. The cavity reaches `t` past a removed face, so it opens it. |
@@ -22,11 +22,12 @@ solid. No Boolean runs.
 | O7 | `solidFromMeshBody` proves the walls a solid as `SolidFromMesh` does, and the result is committed as one `OperationShell` entry with the receiver consumed. Coplanar triangles group into faces by exact plane, and every face keeps its axis plane as a retained tag, so `Fillet` and `Chamfer` build on its edges. |
 | O8 | `WithNoOpenings` builds the closed hollow body: an outer shell around the cavity's inner shell, with no slab. A selector removes faces as for any shell. |
 | O9 | The offsets are float sums `x ± t`, so a wall is `t` thick to the rounding of that sum, and the volume the body reads is exact for the mesh built. Coordinates of the grid within `1e-9` of the body's size are one coordinate. |
+| O10 | An `Outward` shell grows the walls off the solid, which becomes the cavity. The walls are the cells within a cube of half-side `t` of the solid, less the solid: the solid dilated by a cube, its planes offset and met in a sharp corner at every convex edge. At a removed face the wall ends flush with that face's plane: over the footprint grown by `t` nothing of the wall stands beyond the plane, and no slab joins the solid. `WithNoOpenings` gives the closed wrap. |
 
 ## 2. Not covered
 
-- A receiver that is not orthogonal, one with a vertex bound (a Boolean result, whose held vertices carry the evaluator's
-  bound), and an `Outward` shell.
+- A receiver that is not orthogonal, and one with a vertex bound (a Boolean result, whose held vertices carry the evaluator's
+  bound).
 - A grid of more than four million cells.
 - Walls whose boundary touches itself along an edge.
 - Rounded inside corners: the offset is mitered, as the planes of a CAD shell are.

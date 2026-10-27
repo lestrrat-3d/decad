@@ -2606,3 +2606,4 @@
 10	0.01	TestShellHollowsAClosedBoxMeshSolid
 10	0.01	TestShellOfAMeshSolidRefusals
 10	0.01	TestShellOpensAnLShapedMeshSolid
+10	0.01	TestShellGrowsOutwardFromAMeshSolid

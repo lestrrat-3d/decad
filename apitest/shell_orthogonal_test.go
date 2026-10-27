@@ -68,9 +68,6 @@ func TestShellOfAMeshSolidRefusals(t *testing.T) {
 	// Walls that meet leave no cavity: the block is 6 thick in z and t = 3 takes the cavity to nothing.
 	_, err := decad.Shell(t.Context(), block, nil, units.Millimeters(3), decad.WithNoOpenings())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	// An outward shell of a mesh solid keeps the receiver's own refusal.
-	_, err = decad.Shell(t.Context(), block, top, units.Millimeters(1), decad.WithShellSense(decad.Outward))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
 	_, err = decad.Shell(t.Context(), block, top, units.Millimeters(0))
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	// A slanted face is not orthogonal: the tetrahedron keeps the refusal of every other receiver.
@@ -129,4 +126,40 @@ func TestShellOpensAnLShapedMeshSolid(t *testing.T) {
 	cavity, err := out.LocatePoint(t.Context(), r3.NewVec(1.4, 1.4, 1), units.Millimeters(0.01))
 	require.NoError(t, err)
 	require.Equal(t, decad.PointOutside, cavity)
+}
+
+func TestShellGrowsOutwardFromAMeshSolid(t *testing.T) {
+	t.Parallel()
+	doc, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
+	top := decad.Faces(decad.Facing(r3.NewVec(0, 0, 1)))
+	out, err := decad.Shell(t.Context(), block, top, units.Millimeters(1), decad.WithShellSense(decad.Outward))
+	require.NoError(t, err)
+	require.Equal(t, []*decad.Body{out}, doc.Bodies())
+	volume, err := out.Volume()
+	require.NoError(t, err)
+	// The 12 x 10 x 8 dilation less the 480 box is 480; the wall ends flush with the open top, so the 12 x 10 x 1 above z = 6 goes too.
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-(960-480-120)), volume.Bound.Base()+1e-9)
+	box, err := out.Bounds()
+	require.NoError(t, err)
+	require.True(t, box.Min.Equal(r3.NewVec(-1, -1, -1), 1e-9))
+	require.True(t, box.Max.Equal(r3.NewVec(11, 9, 6), 1e-9), "open at the top, so no wall rises over the original top")
+	// The original solid is the cavity: its middle is empty, and the wall at 0.5 outside a side is material.
+	cavity, err := out.LocatePoint(t.Context(), r3.NewVec(5, 4, 3), units.Millimeters(0.01))
+	require.NoError(t, err)
+	require.Equal(t, decad.PointOutside, cavity)
+	wall, err := out.LocatePoint(t.Context(), r3.NewVec(-0.5, 4, 3), units.Millimeters(0.01))
+	require.NoError(t, err)
+	require.Equal(t, decad.PointInside, wall)
+	closed, err := decad.Shell(t.Context(), mustSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6)), nil, units.Millimeters(1),
+		decad.WithNoOpenings(), decad.WithShellSense(decad.Outward))
+	require.NoError(t, err)
+	cv, err := closed.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(cv.Value.Base()-480), cv.Bound.Base()+1e-9)
+}
+
+func mustSolid(t *testing.T, lo, hi r3.Vec) *decad.Body {
+	t.Helper()
+	_, b := blockSolid(t, lo, hi)
+	return b
 }
