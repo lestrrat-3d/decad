@@ -1309,6 +1309,33 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   with no witness is refused. Reject-only in the undecidable band: it may
   refuse a valid model whose operands genuinely pass that close, and that is
   the accepted price.
+- **The witness depth scan stops once a candidate is settled as no deeper than
+  `b`.** `meshbool.CertifiedInteriorDepth` defines the certified lower-bound
+  distance: the float minimum `F` of the point-to-facet distances over a
+  box-pruned scan of the other operand's facets, read as `0` when `F <= 0` or
+  `F` is not finite and as `fl(F·c) − R` otherwise, with `c = 1 − 1e-12` and
+  `R = PointRoundBound ∈ [0, +Inf]`. A witness needs that value `> b`.
+  `meshbool.depthBeyond` (`internal/meshbool/boolean.go`) gives the same answer
+  for every input and stops early on a shallow candidate. Any `M >= F` with
+  `fl(M·c) <= b` settles "not deeper than `b`": `M` is a distance, so `b >= 0`
+  and `0 <= b`, and `fl(F·c) − R <= fl(F·c) <= fl(M·c) <= b`, because rounding
+  a product by a positive constant is monotone and `R >= 0`. Two values of `M`
+  are available before the scan ends:
+  - The running minimum at any step bounds `F`, because the scan only lowers
+    it. The scan keeps the definition's facet order and prune, so it stops on
+    the first step whose minimum settles the answer.
+  - A hint facet `h` bounds `F` by `max(PointBoxDist, PointTriDistance)` at
+    `h`. The full scan reaches `h` with running minimum `B`. It either skips
+    `h` because `PointBoxDist >= B`, so `F <= B <= PointBoxDist`, or it takes
+    the minimum with `PointTriDistance`, so `F <= PointTriDistance`. Both
+    functions are `//go:noinline`, so the hint reading runs the code the scan
+    runs and returns the same bits. The hint is the facet that settled the
+    previous candidate of the same search.
+  Both shortcuts only answer "not deeper", so they cannot make a witness. A NaN
+  `b` fails every shortcut comparison. A candidate the shortcuts do not settle
+  finishes the definition's own scan and pays `PointRoundBound`. Exact parity
+  still runs only for a candidate past `b`, so the witness verdicts and the
+  context polls are those of the definition.
   A TANGENCY — facets that touch without crossing — has no positive-bound contact
   certificate in this evaluator increment and stays refused; deciding such a
   pair for real is the clearance kernel's job (`agent-docs/clearance-design.md`), not
