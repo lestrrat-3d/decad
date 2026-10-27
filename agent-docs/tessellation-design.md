@@ -352,7 +352,9 @@ Each span runs its own positive-area and facet-contact audits. The combined
 mesh runs the closed-boundary or sheet-boundary audit, vertex-link audit,
 positive-area audit and cross-span facet-contact audit. The cross-span audit
 charges construction and placement coordinate movement, including join
-movement. Chording is covered by each span's own proof and by the analytic
+movement. It reads its pairs from the revolve audit's box sweep, which lists
+every pair the box-gap test keeps and every pair sharing a vertex. It audits
+them in the all-pairs walk's order, so it returns the same first refusal. Chording is covered by each span's own proof and by the analytic
 composite separation audit. For a solid, the occupied-volume symmetric
 difference is at most the nonnegative sum of each span's bound and its
 join-movement swept-volume allowance. No generic `Bound × Area` replacement

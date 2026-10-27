@@ -1629,6 +1629,15 @@ builds the original certified count. Each successful build publishes its
 own computed boundary and occupied-volume bounds. A caller's finer mesh
 tolerance still refuses.
 
+The stationed build runs the first cell's Loft on the calling goroutine and,
+from eight cells on, the remaining cells on several goroutines
+(`internal/orderedwork`). The cells share only the Loft's per-record work
+counters. Each later cell starts from a copy of the counters' state after the
+first cell. The parallel cells are kept only when every cell up to the lowest
+failing one ends with that state unchanged; the serial loop would then have
+handed each of them the same state. Otherwise the build reruns those cells
+serially. The result and the first refusal are the serial loop's.
+
 The first refined Loft cell supplies a skip-only estimate of the full
 arc-chorded mesh's facet-pair cost. The complete candidate still receives
 its own audit, since later cells can have different chord counts. A late
