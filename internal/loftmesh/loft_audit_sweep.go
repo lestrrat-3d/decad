@@ -428,6 +428,10 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 	if data == nil {
 		data = NewLoftAuditData(verts, tris)
 	}
+	separate, classifyPair := loftPlaneSeparatedExactSigns, auditLoftPairDataExactSigned
+	if data.preflightProofs {
+		separate, classifyPair = loftPlaneSeparatedSigns, auditLoftPairDataSigned
+	}
 
 	// S7: every candidate, classified against its recorded adjacency. The
 	// broad-phase short-circuit runs ONLY for a pair sharing no recorded
@@ -457,14 +461,14 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 				work.Skips++
 				return nil
 			}
-			separated, sa, sb := loftPlaneSeparatedSigns(data, i, j)
+			separated, sa, sb := separate(data, i, j)
 			if separated {
 				work.Skips++
 				return nil
 			}
 			knownA, knownB = &sa, &sb
 		}
-		outcome, err := auditLoftPairDataSigned(data, tris, i, j, shortcuts, knownA, knownB)
+		outcome, err := classifyPair(data, tris, i, j, shortcuts, knownA, knownB)
 		switch outcome {
 		case LoftPairEdgeCertificate:
 			work.EdgeCerts++
@@ -528,6 +532,12 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 func parallelLoftPairs(budget *proofbound.WorkBudget, tris [][3]int, boxes [][2]r3.Vec,
 	data *LoftAuditData, shortcuts LoftAuditShortcuts, cands loftCandidates,
 	work *LoftAuditWork) (int, int, error) {
+	// Read the shared cache marker once. Complete-table audits use their
+	// original predicates without a shared flag read for every pair.
+	separate, classifyPair := loftPlaneSeparatedExactSigns, auditLoftPairDataExactSigned
+	if data.preflightProofs {
+		separate, classifyPair = loftPlaneSeparatedSigns, auditLoftPairDataSigned
+	}
 	classify := func(i, j int) (uint8, error) {
 		_, shared := tessellation.SharedVertexIndices(tris[i], tris[j])
 		var knownA, knownB *[3]int
@@ -535,13 +545,13 @@ func parallelLoftPairs(budget *proofbound.WorkBudget, tris [][3]int, boxes [][2]
 			if !meshbool.BoxesOverlap(boxes[i], boxes[j]) {
 				return pairSkipped, nil
 			}
-			separated, sa, sb := loftPlaneSeparatedSigns(data, i, j)
+			separated, sa, sb := separate(data, i, j)
 			if separated {
 				return pairSkipped, nil
 			}
 			knownA, knownB = &sa, &sb
 		}
-		outcome, err := auditLoftPairDataSigned(data, tris, i, j, shortcuts, knownA, knownB)
+		outcome, err := classifyPair(data, tris, i, j, shortcuts, knownA, knownB)
 		switch outcome {
 		case LoftPairEdgeCertificate:
 			return pairEdgeCertified, err

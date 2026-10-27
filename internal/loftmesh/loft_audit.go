@@ -580,6 +580,12 @@ func loftPlaneSeparatedSigns(data *LoftAuditData, i, j int) (bool, [3]int, [3]in
 		_, shared := tessellation.SharedVertexIndices(data.tris[i], data.tris[j])
 		return shared == 0, [3]int{}, [3]int{}
 	}
+	return loftPlaneSeparatedExactSigns(data, i, j)
+}
+
+// loftPlaneSeparatedExactSigns reads prepared tables without checking for a
+// preflight cache. Complete-table audits select it once before their pair loop.
+func loftPlaneSeparatedExactSigns(data *LoftAuditData, i, j int) (bool, [3]int, [3]int) {
 	ta, tb := data.corners(i), data.corners(j)
 	xta, xtb := data.xtri(i), data.xtri(j)
 	var sa, sb [3]int
@@ -674,14 +680,20 @@ func AuditLoftPairData(data *LoftAuditData, tris [][3]int, i, j int, shortcuts L
 // auditLoftPairDataSigned is AuditLoftPairData for a pair whose exact plane
 // signs the broad phase already decided (loftPlaneSeparatedSigns). The
 // signs are read only for a pair sharing no vertex; nil means compute them.
+//
+//nolint:unparam // Pair loops select this classifier dynamically and pass non-nil plane signs.
 func auditLoftPairDataSigned(data *LoftAuditData, tris [][3]int, i, j int, shortcuts LoftAuditShortcuts,
 	knownA, knownB *[3]int) (LoftPairOutcome, error) {
+	if !data.preflightProofs {
+		return auditLoftPairDataExactSigned(data, tris, i, j, shortcuts, knownA, knownB)
+	}
 	if tris[i] != data.tris[i] || tris[j] != data.tris[j] {
 		return LoftPairClassified, fmt.Errorf("%w: pair %d,%d is %v,%v but the table holds %v,%v",
 			ErrLoftAuditOrder, i, j, tris[i], tris[j], data.tris[i], data.tris[j])
 	}
-	shared, sharedCount := tessellation.SharedVertexIndices(tris[i], tris[j])
-	if data.preflightCertified(i, j) && !shortcuts.ExactInput {
+	_, sharedCount := tessellation.SharedVertexIndices(tris[i], tris[j])
+	certified := data.Norms[i].X == nil || data.Norms[j].X == nil
+	if certified && !shortcuts.ExactInput {
 		switch sharedCount {
 		case 0:
 			if shortcuts.BroadPhase {
@@ -697,9 +709,21 @@ func auditLoftPairDataSigned(data *LoftAuditData, tris [][3]int, i, j int, short
 			}
 		}
 	}
-	if data.preflightProofs && (data.Norms[i].X == nil || data.Norms[j].X == nil) {
+	if certified {
 		return LoftPairClassified, fmt.Errorf("%w: a loft pair lacks its exact tables", decaderr.ErrUnsupported)
 	}
+	return auditLoftPairDataExactSigned(data, tris, i, j, shortcuts, knownA, knownB)
+}
+
+// auditLoftPairDataExactSigned is the complete-table classifier. Partial-table
+// callers must first resolve a cached proof or establish both exact tables.
+func auditLoftPairDataExactSigned(data *LoftAuditData, tris [][3]int, i, j int, shortcuts LoftAuditShortcuts,
+	knownA, knownB *[3]int) (LoftPairOutcome, error) {
+	if tris[i] != data.tris[i] || tris[j] != data.tris[j] {
+		return LoftPairClassified, fmt.Errorf("%w: pair %d,%d is %v,%v but the table holds %v,%v",
+			ErrLoftAuditOrder, i, j, tris[i], tris[j], data.tris[i], data.tris[j])
+	}
+	shared, sharedCount := tessellation.SharedVertexIndices(tris[i], tris[j])
 	if shortcuts.Certificates && sharedCount == 1 && data.fans != nil {
 		// Both triangles are flat at the common vertex's z, so they are exactly
 		// coplanar and the table's value is CoplanarIsolatedSharedVertex's.
