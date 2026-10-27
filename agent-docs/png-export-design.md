@@ -177,3 +177,14 @@ finds behind a surface (`agent-docs/dxf-export-design.md` D5, D6).
 | F2 | The light is sampled in 32 directions over a disc of radius `tan(softness)` about the key direction, placed on a Vogel spiral so they fill the disc evenly. Each direction has its own shadow map, 2048 pixels at most, built one at a time so only one is held. |
 | F3 | A pixel counts the samples whose light a nearer triangle blocks, with §10's bias. A pixel blocked in every sample takes the ambient shade of §10 exactly, one blocked in none keeps its lit shade, and any other takes the lit and ambient shades mixed in the blocked fraction. A face turned from the key light is at the ambient level as before. |
 | F4 | A shadow so grades from dark to light across a penumbra whose width grows with the distance from the occluder, about twice that distance times `tan(softness)`. The tests count the pixels strictly between the lit and shadowed plate levels: a hard shadow has a handful at its edge, a 5 degree one hundreds, and a 12 degree one more; the pillar's top and the far plate are unchanged. A render that mixes by a fixed fraction fails them. |
+
+## 15. Gloss
+
+`View.Gloss`, a dimensionless strength from 0 to 1, gives lit faces a specular highlight.
+
+| Decision | Rule |
+|---|---|
+| L1 | The zero `units.Value` is matte, and the bytes of every render without it are unchanged. A value outside [0, 1] is `ErrDegenerate` and a non-dimensionless one `ErrUnitKind`. |
+| L2 | A face the key light of §1 reaches (positive diffuse term) adds white to each channel: `255 · gloss · (n · h)^32`, with `h` the unit halfway vector of the unit direction to the key light and the unit direction to the eye (along the line of sight to the face for a perspective camera), clamped at 255. A face the light does not reach, and a back face seen from behind, take none. |
+| L3 | A pixel in a shadow (§10, §14) is at the ambient shade with or without a gloss, since the highlight is added to the lit shade only, and a soft shadow mixes the glossy lit shade with the ambient one. |
+| L4 | The shading is flat per triangle, so a flat face takes one highlight and a tessellated curved face takes it in bands. The tests read the top face of a block viewed from above against the formula of L2 at gloss 1 and one half, where the highlight is about 61 of 255, leave the background and a face off the highlight unchanged, keep every shadowed pixel of a plate and pillar scene as dark as without a gloss while the lit plate takes the highlight, and refuse the bad values. A sharpness exponent of 8 in place of 32 fails them. |

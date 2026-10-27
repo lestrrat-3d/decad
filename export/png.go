@@ -54,6 +54,10 @@ type View struct {
 	// (agent-docs/png-export-design.md §14). The zero units.Value is a point light with hard
 	// shadows. It needs Shadows, and is at most 45 degrees.
 	ShadowSoftness units.Value
+	// Gloss, dimensionless from 0 to 1, gives the lit faces a specular highlight of that strength: white added
+	// where a face turns the key light toward the camera (agent-docs/png-export-design.md §15). The zero
+	// units.Value is matte; shadows are as dark as without it.
+	Gloss units.Value
 	// BackColor, when set, is the colour of the faces that look away from the
 	// camera, in place of orange: they show where a sheet is open or a mesh is
 	// wound inside out, and a part's far side through an open shell. Its alpha is
@@ -139,6 +143,16 @@ func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View, coun
 			return fmt.Errorf("export: PNG: %w: a field of view of zero draws nothing; leave it unset for an orthographic camera", decad.ErrDegenerate)
 		}
 		cam.FieldOfView = fov
+	}
+	if view.Gloss != (units.Value{}) {
+		if view.Gloss.Kind() != units.Dimensionless {
+			return fmt.Errorf("export: PNG: %w: the gloss must be dimensionless", decad.ErrUnitKind)
+		}
+		g := view.Gloss.Base()
+		if !(g >= 0 && g <= 1) {
+			return fmt.Errorf("export: PNG: %w: the gloss must lie in [0, 1], got %g", decad.ErrDegenerate, g)
+		}
+		cam.Gloss = g
 	}
 	soft := 0.0
 	if view.ShadowSoftness != (units.Value{}) {
