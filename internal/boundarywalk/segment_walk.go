@@ -53,6 +53,13 @@ func circularLengthInterval(segment CurveSegment) (proofbound.RatInterval, bool)
 	return circularbounds.LengthInterval(circularbounds.RecordSegment(segment))
 }
 func exactCoordinateDelta(a, b float64) *big.Rat { return circularbounds.ExactCoordinateDelta(a, b) }
+
+// lerp2 is a line's walked point. The general arm rounds the product
+// t·(end − start) before adding start: the float64() conversion forbids
+// fusing it into the sum, so every target walks the same point. A fused
+// multiply-add can land one ulp from the junction an adjacent recorded
+// segment holds, and walk coalescing then keeps a vertex the other targets
+// drop.
 func lerp2(start, end Point2, t float64) (float64, float64) {
 	switch t {
 	case 0:
@@ -60,7 +67,7 @@ func lerp2(start, end Point2, t float64) (float64, float64) {
 	case 1:
 		return end.U, end.V
 	}
-	return start.U + t*(end.U-start.U), start.V + t*(end.V-start.V)
+	return start.U + float64(t*(end.U-start.U)), start.V + float64(t*(end.V-start.V))
 }
 func arcRadiusUpper(segment ArcSeg) float64 {
 	return proofbound.AbsSumUpper(segment.Start.U, segment.Center.U, segment.Start.V, segment.Center.V)

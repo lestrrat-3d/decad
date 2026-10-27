@@ -21,7 +21,9 @@ func lerp2(start, end Point2, t float64) (float64, float64) {
 	case 1:
 		return end.U, end.V
 	}
-	return start.U + t*(end.U-start.U), start.V + t*(end.V-start.V)
+	// The float64() conversion rounds the product before the sum, as
+	// boundarywalk's lerp2 does, so no target fuses it.
+	return start.U + float64(t*(end.U-start.U)), start.V + float64(t*(end.V-start.V))
 }
 
 // LoopSignedArea is one loop's signed area (positive counter-clockwise): the
