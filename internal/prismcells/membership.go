@@ -68,9 +68,37 @@ func CellsHaveNoVoid(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 // more than two cells, or an entity this scene did not create) — the whole
 // attempt is unresolved, as required by prism boolean §4.4.
 func Classify(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, profiles []*sketch.Profile) (matterA, matterB []bool, resolved bool, err error) {
+	return classify(budget, tags, profiles, false)
+}
+
+// ClassifyNested is Classify for cells that may carry holes, with the
+// unbounded face as one more node outside both operands
+// (agent-docs/section-design.md, "The 2D operation"). A cell walks every edge
+// of its outer loop and of each hole with the cell on its left, so the
+// direction comparison reads a hole loop's edges as it reads an outer loop's.
+// An edge exactly one cell walks has the unbounded face on its other side,
+// because Sketch publishes every bounded face of the arrangement and a nested
+// face's outer edges are the enclosing cell's hole edges. Crossing that edge
+// leaves the other operand's membership unchanged, so a cell no edge of an
+// operand bounds still reads that operand's membership from the outside: a
+// section and a disjoint one resolve.
+func ClassifyNested(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, profiles []*sketch.Profile) ([]bool, []bool, bool, error) {
+	return classify(budget, tags, profiles, true)
+}
+
+func classify(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, profiles []*sketch.Profile,
+	nested bool) ([]bool, []bool, bool, error) {
 	n := len(profiles)
-	memberA := make([]membership, n)
-	memberB := make([]membership, n)
+	nodes := n
+	if nested {
+		nodes++ // the unbounded face, node n
+	}
+	memberA := make([]membership, nodes)
+	memberB := make([]membership, nodes)
+	if nested {
+		memberA[n] = membership{known: true}
+		memberB[n] = membership{known: true}
+	}
 
 	type edgeKey struct {
 		entity sketch.Entity
@@ -105,13 +133,17 @@ func Classify(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, prof
 		if err := budget.Step(); err != nil {
 			return nil, nil, false, err
 		}
-		if !p.Valid || len(p.Holes) != 0 {
+		if !p.Valid || (!nested && len(p.Holes) != 0) {
 			// Not a shape this classifier covers: an invalid cell, or one
 			// carrying its own hole (both operands are hole-free on this
 			// path, so a holed cell here is defensive, not expected).
 			return nil, nil, false, nil
 		}
-		for _, e := range p.Outer {
+		loops := [][]sketch.BoundaryEdge{p.Outer}
+		if nested {
+			loops = append(loops, p.Holes...)
+		}
+		for _, e := range slices.Concat(loops...) {
 			if err := budget.Step(); err != nil {
 				return nil, nil, false, err
 			}
@@ -160,6 +192,9 @@ func Classify(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, prof
 		}
 		switch len(os) {
 		case 1:
+			if nested {
+				links = append(links, link{a: os[0].cell, b: n, isB: os[0].isB, both: os[0].both})
+			}
 		case 2:
 			links = append(links, link{a: os[0].cell, b: os[1].cell, isB: os[0].isB, both: os[0].both})
 		default:
@@ -174,8 +209,8 @@ func Classify(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, prof
 		return nil, nil, false, err
 	}
 
-	matterA = make([]bool, n)
-	matterB = make([]bool, n)
+	matterA := make([]bool, n)
+	matterB := make([]bool, n)
 	for i := range profiles {
 		if !memberA[i].known || !memberB[i].known {
 			return nil, nil, false, nil // §4.4: isolated from an operand's own boundary

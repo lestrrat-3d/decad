@@ -39,9 +39,10 @@ import (
 // slab by a plane preserving their recorded coordinates. A stack with a displaced
 // profile or level, or a slab of several regions, is refused. A mesh Union, Cut
 // or Intersect result whose history proves it is exactly the operation over
-// two such prism or slab bodies sections as the planar operation of their
-// straight-line sections, when that is one region whose every junction Sketch
-// certifies exact; a gap-shifted result is refused. The
+// two such prism, slab or full Revolve bodies sections as the planar operation
+// of their sections, one profile per region with its holes, when every
+// segment is a whole line, arc or circle, no arc or circle is cut, and every
+// line junction Sketch certifies exact; a gap-shifted result is refused. The
 // bounded result enters only straight solid Extrude with an independent Distance.
 // Other body or plane classes return [ErrUnsupported]. A nil body or context,
 // or an invalid plane, returns [ErrDegenerate]. A sheet or unsound solid returns
