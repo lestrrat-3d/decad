@@ -11,19 +11,20 @@ const ParityIndexMinFacets = 64
 
 // ParityIndexMaxMemberships caps the (cell, facet) memberships of one index:
 // an axis whose placement lists more gets no index and runs the plain scan.
-// Each membership costs 8 bytes while the lists are collected (a cell and a
-// facet id, up to 16 with slice growth) and 4 bytes once built, so the cap
-// bounds the membership lists at about 130 MB while collected (one facet may
-// append up to c² = 66 564 more before the check) and a built index at 32 MB.
-// This is a bound on the memberships only: the build also holds the facet boxes
-// (40 bytes per facet) and, for facets that project to a segment, the vertex
-// projection cache, all allocated before the check, and they are not part of
-// the bound. The real shells list about 43 thousand memberships per index (3 996 facets, 129 by 129
-// cells), a factor of 190 below it. The count is taken on the int slices'
-// lengths while collecting and checked after every facet, before the int32
-// offsets are summed or any list is filled, so the offsets cannot overflow:
-// the cap is far below MaxInt32. The cap is a count compared with >, so an
-// index of exactly the cap is built.
+// The placement collects memberships as runs (parityPlacement) of 8 bytes,
+// each listing at least one membership, in a slice allocated once at its
+// final bound; one facet adds at most c = 258 runs before the check, so the
+// cap bounds the collected runs at about 64 MiB. The built index costs 4 bytes
+// per membership, at most 32 MiB. This is a bound on the memberships only: the
+// build also holds the facet boxes (40 bytes per facet), the facet kinds and
+// run offsets (5 bytes per facet), two count arrays of c²+1 int32 and, for
+// facets that project to a segment, the vertex projection cache, and they are
+// not part of the bound. The real shells list about 43 thousand memberships
+// per index (3 996 facets, 129 by 129 cells), a factor of 190 below it. The
+// count is the runs' membership total, checked after every facet, before the
+// int32 offsets are summed or any list is filled, so the offsets cannot
+// overflow: the cap is far below MaxInt32. The cap is a count compared with >,
+// so an index of exactly the cap is built.
 const ParityIndexMaxMemberships = 1 << 23
 
 // The range guard. Every float quantity the placement rounds is zero or lies
@@ -232,9 +233,22 @@ func (pm *ParityMesh) membershipLimit() int {
 // buildParityIndex builds the index for one swept axis, or returns nil when
 // the mesh is too small or has a facet the grid cannot place.
 func (pm *ParityMesh) buildParityIndex(axis, u, v int) *ParityIndex {
+	idx, pl := pm.placeParityIndex(axis, u, v)
+	if idx == nil {
+		return nil
+	}
+	pl.fill(idx)
+	return idx
+}
+
+// placeParityIndex lays out the grid for one swept axis and places every
+// facet, returning the index with its lists still unfilled and the placement
+// that fills them, or nil when the mesh is too small, has a facet the grid
+// cannot place or lists more than the membership cap.
+func (pm *ParityMesh) placeParityIndex(axis, u, v int) (*ParityIndex, *parityPlacement) {
 	n := len(pm.Tris)
 	if n < ParityIndexMinFacets || n > math.MaxInt32 {
-		return nil
+		return nil, nil
 	}
 	limit := pm.membershipLimit()
 	boxes := pm.FacetBoxes(axis)
@@ -248,45 +262,82 @@ func (pm *ParityMesh) buildParityIndex(axis, u, v int) *ParityIndex {
 		for _, vi := range pm.Tris[ti] {
 			vert := pm.Verts[vi]
 			if !parityCoordGuarded(CoordOf(vert, u)) || !parityCoordGuarded(CoordOf(vert, v)) {
-				return nil
+				return nil, nil
 			}
 		}
 		if proofbound.IsNonFinite(b.MinU) || proofbound.IsNonFinite(b.MaxU) ||
 			proofbound.IsNonFinite(b.MinV) || proofbound.IsNonFinite(b.MaxV) {
-			return nil
+			return nil, nil
 		}
 		umin, umax = math.Min(umin, b.MinU), math.Max(umax, b.MaxU)
 		vmin, vmax = math.Min(vmin, b.MinV), math.Max(vmax, b.MaxV)
 	}
 	if !(umin < umax) || !(vmin < vmax) {
-		return nil
+		return nil, nil
 	}
 	inner := min(max(int(math.Ceil(2*math.Sqrt(float64(n)))), 4), 256)
 	idx := &ParityIndex{u: newParityGridAxis(umin, umax, inner), v: newParityGridAxis(vmin, vmax, inner)}
 	c := inner + 2
-	var cells, facets []int32
+	kinds, bound, ok := pm.parityFacetKinds(idx, u, v, boxes)
+	if !ok {
+		return nil, nil
+	}
+	// One facet adds at most c runs, and a facet is placed only while the
+	// memberships, which are at least the runs, are within the cap, so the
+	// runs never outgrow min(bound, limit+c) and the slice is allocated once.
+	pl := &parityPlacement{c: c, facetRuns: make([]int32, n+1), runs: make([][2]int32, 0, min(bound, limit+c))}
+	for ti, tri := range pm.Tris {
+		if pl.memberships > limit {
+			return nil, nil // too many memberships: the scan stays plain
+		}
+		placed := true
+		switch kinds[ti] {
+		case parityFacetArea:
+			placed = idx.addTriangle(pm, pl, tri, u, v, &boxes[ti])
+		case parityFacetLine:
+			placed = idx.addLine(pm, pl, tri, u, v)
+		}
+		if !placed {
+			return nil, nil
+		}
+		pl.facetRuns[ti+1] = int32(len(pl.runs))
+	}
+	if pl.memberships > limit {
+		return nil, nil
+	}
+	return idx, pl
+}
+
+// How the placement lists one facet.
+const (
+	parityFacetSkipped int8 = iota // a later facet on a listed axis-parallel line
+	parityFacetArea                // nonzero projected area: addTriangle
+	parityFacetLine                // a segment projection: addLine
+)
+
+// parityFacetKinds sorts every facet into how the placement lists it and
+// bounds the runs the placement can record: one per column of the box for a
+// facet with area, and one per cell of the run axis for a listed line. It
+// reports false for a facet that projects to one point, which the grid cannot
+// place. Facets on one axis-parallel line answer alike: off the line every one
+// continues, and on it the first in index order is ambiguous and ends the
+// scan. Only that first facet is listed.
+func (pm *ParityMesh) parityFacetKinds(idx *ParityIndex, u, v int, boxes []ParityFacetBox) ([]int8, int, bool) {
+	kinds := make([]int8, len(pm.Tris))
+	c := len(idx.u.lo)
+	bound := 0
 	flat, upright := map[float64]struct{}{}, map[float64]struct{}{}
 	for ti, tri := range pm.Tris {
-		if len(cells) > limit {
-			return nil // too many memberships: the scan stays plain
-		}
-		b := &boxes[ti]
-		if b.Nondegenerate {
-			var ok bool
-			cells, facets, ok = idx.addTriangle(pm, tri, u, v, ti, b, cells, facets)
-			if !ok {
-				return nil
-			}
+		if b := &boxes[ti]; b.Nondegenerate {
+			kinds[ti] = parityFacetArea
+			bound += idx.u.cellOf(b.MaxU) - idx.u.cellOf(b.MinU) + 1
 			continue
 		}
-		// Facets on one axis-parallel line answer alike: off the line every
-		// one continues, and on it the first in index order is ambiguous and
-		// ends the scan. Only that first facet is listed.
 		a, b2, c2 := pm.Verts[tri[0]], pm.Verts[tri[1]], pm.Verts[tri[2]]
 		sameU := CoordOf(a, u) == CoordOf(b2, u) && CoordOf(a, u) == CoordOf(c2, u)
 		sameV := CoordOf(a, v) == CoordOf(b2, v) && CoordOf(a, v) == CoordOf(c2, v)
 		if sameU && sameV {
-			return nil // one point: every query on this ray is ambiguous there
+			return nil, 0, false // one point: every query on this ray is ambiguous there
 		}
 		if fv := CoordOf(a, v); sameV {
 			if _, seen := flat[fv]; seen {
@@ -299,40 +350,97 @@ func (pm *ParityMesh) buildParityIndex(axis, u, v int) *ParityIndex {
 			}
 			upright[fu] = struct{}{}
 		}
-		var ok bool
-		cells, facets, ok = idx.addLine(pm, tri, u, v, ti, cells, facets)
-		if !ok {
-			return nil
+		kinds[ti] = parityFacetLine
+		bound += c
+	}
+	return kinds, bound, true
+}
+
+// parityPlacement collects the (cell, facet) memberships of one index build as
+// runs: a run is count cells starting at cell, consecutive in v (cells cell,
+// cell+1, ...) for a positive count, or consecutive in u (cells cell, cell+c,
+// ...) for a negative one. Facet ti's runs are runs[facetRuns[ti]:
+// facetRuns[ti+1]], in the order the placement visits them. Expanding the runs
+// in that order lists exactly the memberships, in exactly the order, that one
+// append per membership would, so the counting sort in fill builds the same
+// start and ids.
+type parityPlacement struct {
+	c           int
+	runs        [][2]int32
+	facetRuns   []int32
+	memberships int
+}
+
+// addRun records the cells j0..j1 of column i, or of row i when across is
+// true (the cells j*c+i of a steep line). An empty range records nothing.
+func (pl *parityPlacement) addRun(i, j0, j1 int, across bool) {
+	if j1 < j0 {
+		return
+	}
+	k := int32(j1 - j0 + 1)
+	cell := int32(i*pl.c + j0)
+	if across {
+		cell, k = int32(j0*pl.c+i), -k
+	}
+	pl.runs = append(pl.runs, [2]int32{cell, k})
+	pl.memberships += j1 - j0 + 1
+}
+
+// fill counting-sorts the runs' memberships by cell into idx.start and
+// idx.ids. Runs are expanded in ascending facet order, so each cell's list
+// stays ascending. The per-cell counts come from two difference arrays, one
+// over the cells in u-major order for runs along v and one in v-major order
+// for runs along u, so counting costs one step per run and per cell, not per
+// membership.
+func (pl *parityPlacement) fill(idx *ParityIndex) {
+	c := pl.c
+	along := make([]int32, c*c+1)
+	across := make([]int32, c*c+1)
+	for _, r := range pl.runs {
+		if r[1] > 0 {
+			along[r[0]]++
+			along[r[0]+r[1]]--
+			continue
+		}
+		// v-major position of cell j*c+i is i*c+j.
+		t := (r[0]%int32(c))*int32(c) + r[0]/int32(c)
+		across[t]++
+		across[t-r[1]]--
+	}
+	for k := 1; k < c*c; k++ {
+		along[k] += along[k-1]
+		across[k] += across[k-1]
+	}
+	idx.start = make([]int32, c*c+1)
+	for i := range c {
+		for j := range c {
+			cell := i*c + j
+			idx.start[cell+1] = idx.start[cell] + along[cell] + across[j*c+i]
 		}
 	}
-	if len(cells) > limit {
-		return nil
-	}
-	// Counting sort by cell; entries arrive in ascending facet order, so each
-	// cell's list stays ascending.
-	idx.start = make([]int32, c*c+1)
-	for _, cell := range cells {
-		idx.start[cell+1]++
-	}
-	for k := 1; k <= c*c; k++ {
-		idx.start[k] += idx.start[k-1]
-	}
-	idx.ids = make([]int32, len(cells))
-	fill := make([]int32, c*c)
+	idx.ids = make([]int32, pl.memberships)
+	fill := along[:c*c]
 	copy(fill, idx.start[:c*c])
-	for e, cell := range cells {
-		idx.ids[fill[cell]] = facets[e]
-		fill[cell]++
+	for ti := range len(pl.facetRuns) - 1 {
+		for _, r := range pl.runs[pl.facetRuns[ti]:pl.facetRuns[ti+1]] {
+			cell, k, step := r[0], r[1], int32(1)
+			if k < 0 {
+				k, step = -k, int32(c)
+			}
+			for range k {
+				idx.ids[fill[cell]] = int32(ti)
+				fill[cell]++
+				cell += step
+			}
+		}
 	}
-	return idx
 }
 
 // addLine lists a facet whose projection has exactly zero area in every cell
 // its line may pass through. It reports false for a facet the grid cannot
 // place: a projection that is one point (every query is then ambiguous on
 // this ray) or a band that is not finite.
-func (idx *ParityIndex) addLine(pm *ParityMesh, tri [3]int, u, v, ti int,
-	cells, facets []int32) ([]int32, []int32, bool) {
+func (idx *ParityIndex) addLine(pm *ParityMesh, pl *parityPlacement, tri [3]int, u, v int) bool {
 	var pu, pv [3]float64
 	for k := range 3 {
 		vert := pm.Verts[tri[k]]
@@ -351,7 +459,7 @@ func (idx *ParityIndex) addLine(pm *ParityMesh, tri [3]int, u, v, ti int,
 		}
 	}
 	if bk < 0 {
-		return cells, facets, false
+		return false
 	}
 	l := (bk + 1) % 3
 	a, b, ra, rb := pu[bk], pv[bk], pu[l], pv[l]
@@ -363,7 +471,7 @@ func (idx *ParityIndex) addLine(pm *ParityMesh, tri [3]int, u, v, ti int,
 	}
 	s, ok := parityLineSlope(float64(ra-a), float64(rb-b))
 	if !ok {
-		return cells, facets, false
+		return false
 	}
 	absB, onePlusS := absf(b), 1+absf(s)
 	c := len(run.lo)
@@ -382,7 +490,7 @@ func (idx *ParityIndex) addLine(pm *ParityMesh, tri [3]int, u, v, ti int,
 			}
 			y, m, ok := lineAt(a, b, s, absB, onePlusS, xf, xa)
 			if !ok {
-				return cells, facets, false
+				return false
 			}
 			lo, hi = y-m, y+m
 			if s != 0 {
@@ -396,25 +504,17 @@ func (idx *ParityIndex) addLine(pm *ParityMesh, tri [3]int, u, v, ti int,
 			y0, m0, ok0 := lineAt(a, b, s, absB, onePlusS, x0, run.abs[2*i])
 			y1, m1, ok1 := lineAt(a, b, s, absB, onePlusS, x1, run.abs[2*i+1])
 			if !ok0 || !ok1 {
-				return cells, facets, false
+				return false
 			}
 			m := math.Max(m0, m1)
 			lo, hi = math.Min(y0, y1)-m, math.Max(y0, y1)+m
 		}
 		if lo != lo || hi != hi || math.IsInf(lo, 1) || math.IsInf(hi, -1) {
-			return cells, facets, false
+			return false
 		}
-		j0, j1 := cross.cellOf(lo), cross.cellOf(hi)
-		for j := j0; j <= j1; j++ {
-			cell := i*c + j
-			if !shallow {
-				cell = j*c + i
-			}
-			cells = append(cells, int32(cell))
-			facets = append(facets, int32(ti))
-		}
+		pl.addRun(i, cross.cellOf(lo), cross.cellOf(hi), !shallow)
 	}
-	return cells, facets, true
+	return true
 }
 
 // addTriangle lists a facet whose projection has nonzero area in every cell
@@ -423,9 +523,7 @@ func (idx *ParityIndex) addLine(pm *ParityMesh, tri [3]int, u, v, ti int,
 // strip, clipped to the box. A query outside the closed triangle classifies
 // strictly outside. It reports false when a slope or band is outside the
 // range guard, which refuses the index.
-func (idx *ParityIndex) addTriangle(pm *ParityMesh, tri [3]int, u, v, ti int, box *ParityFacetBox,
-	cells, facets []int32) ([]int32, []int32, bool) {
-	c := len(idx.v.lo)
+func (idx *ParityIndex) addTriangle(pm *ParityMesh, pl *parityPlacement, tri [3]int, u, v int, box *ParityFacetBox) bool {
 	var pu, pv [3]float64
 	for k := range 3 {
 		vert := pm.Verts[tri[k]]
@@ -450,7 +548,7 @@ func (idx *ParityIndex) addTriangle(pm *ParityMesh, tri [3]int, u, v, ti int, bo
 			}
 			s, ok := parityLineSlope(float64(bu-au), float64(bv-av))
 			if !ok {
-				return cells, facets, false
+				return false
 			}
 			absB, onePlusS := absf(av), 1+absf(s)
 			for _, x := range [2]float64{math.Max(x0, au), math.Min(x1, bu)} {
@@ -462,26 +560,22 @@ func (idx *ParityIndex) addTriangle(pm *ParityMesh, tri [3]int, u, v, ti int, bo
 				default:
 					y, m, ok := lineAt(au, av, s, absB, onePlusS, x, absf(x))
 					if !ok {
-						return cells, facets, false
+						return false
 					}
 					lo, hi = math.Min(lo, y-m), math.Max(hi, y+m)
 				}
 			}
 		}
 		if lo != lo || hi != hi {
-			return cells, facets, false
+			return false
 		}
 		lo, hi = math.Max(lo, box.MinV), math.Min(hi, box.MaxV)
 		if lo > hi {
 			continue
 		}
-		jHi := idx.v.cellOf(hi)
-		for j := idx.v.cellOf(lo); j <= jHi; j++ {
-			cells = append(cells, int32(i*c+j))
-			facets = append(facets, int32(ti))
-		}
+		pl.addRun(i, idx.v.cellOf(lo), idx.v.cellOf(hi), false)
 	}
-	return cells, facets, true
+	return true
 }
 
 // lineAt evaluates the line through (a, b) with slope s at the finite x, with
