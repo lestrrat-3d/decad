@@ -19,6 +19,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/orthogonal-move-design.md` | `MoveFace`: the press-pull of one face of an orthogonal mesh solid on the shell's grid. |
 | `agent-docs/sheet-metal-design.md` | `SheetMetal`: a bent strip of legs and circular bends as one solid, and its flat pattern. |
 | `agent-docs/orthogonal-boolean-design.md` | `Union`, `Cut` and `Intersect` of two axis-square faceted solids on a shared grid: exact, any contact. |
+| `agent-docs/orthogonal-offset-design.md` | `Offset` of an axis-square faceted solid: every face moved along its normal on the shell's grid. |
 | `agent-docs/orthogonal-shell-design.md` | `Shell` of a faceted solid whose faces all square to an axis: the grid erosion, the removed-face slab and the wall mesh. |
 | `agent-docs/lattice-design.md` | `GyroidLattice`: the gyroid field, its box cap and the marching tetrahedra that cut it into a closed `MeshBody`. |
 | `agent-docs/mesh-solid-design.md` | `SolidFromMesh`: a closed `MeshBody` as a Faceted solid `Body`, its proofs and exact plane groups. |

@@ -231,3 +231,32 @@ func Example_section_mesh_solid() {
 	// Output:
 	// section area: 80 mm^2
 }
+
+// Offset moves every face of a solid along its normal. For a faceted solid whose faces all
+// square to an axis, such as a part read from STL, the faces meet in sharp corners, and the
+// result is a second solid beside the first. Here a 10 x 8 x 6 mm block read from OBJ grows by 2 mm.
+func Example_offset_solid() {
+	mesh, err := decad.ReadOBJ(context.Background(), strings.NewReader(boxOBJ))
+	if err != nil {
+		fmt.Printf("failed to read mesh: %s\n", err)
+		return
+	}
+	box, err := decad.SolidFromMesh(context.Background(), decad.New(), mesh)
+	if err != nil {
+		fmt.Printf("failed to make a solid: %s\n", err)
+		return
+	}
+	grown, err := decad.Offset(context.Background(), box, units.Millimeters(2))
+	if err != nil {
+		fmt.Printf("failed to offset: %s\n", err)
+		return
+	}
+	volume, err := grown.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
+	// Output:
+	// volume: 1680 mm^3
+}
