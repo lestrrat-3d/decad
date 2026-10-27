@@ -15,6 +15,49 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestCoordDistanceMatchesRationalAtFloatExtremes(t *testing.T) {
+	t.Parallel()
+	shared := big.NewInt(3)
+	points := []proof.Xpt{
+		{X: big.NewInt(-1), Y: big.NewInt(2), Z: big.NewInt(-3), W: big.NewInt(7)},
+		{X: shared, Y: shared, Z: shared, W: shared},
+		{X: big.NewInt(1), Y: big.NewInt(-2), Z: big.NewInt(3), W: new(big.Int).Lsh(big.NewInt(1), 1100)},
+		{X: new(big.Int).Lsh(big.NewInt(1), 1100), Y: big.NewInt(-1), Z: big.NewInt(0), W: big.NewInt(3)},
+		proof.XptOf(r3.Vec{X: math.MaxFloat64, Y: math.SmallestNonzeroFloat64, Z: -math.MaxFloat64}),
+	}
+	held := []r3.Vec{
+		{},
+		{X: math.Copysign(0, -1), Y: math.SmallestNonzeroFloat64, Z: -math.SmallestNonzeroFloat64},
+		{X: 1, Y: math.Nextafter(1, 2), Z: math.Nextafter(-1, -2)},
+		{X: math.MaxFloat64, Y: -math.MaxFloat64, Z: math.SmallestNonzeroFloat64},
+	}
+	for pi, p := range points {
+		fields := [4]*big.Int{p.X, p.Y, p.Z, p.W}
+		var before [4]string
+		for i, n := range fields {
+			before[i] = n.Text(16)
+		}
+		for vi, v := range held {
+			want, got := rawCoordDistance(p, v), CoordDistance(p, v)
+			require.Zero(t, want.Cmp(got), "point %d held %d", pi, vi)
+			require.Equal(t, want.RatString(), got.RatString(), "point %d held %d canonical value", pi, vi)
+			wf, we := want.Float64()
+			gf, ge := got.Float64()
+			require.Equal(t, math.Float64bits(wf), math.Float64bits(gf), "point %d held %d float", pi, vi)
+			require.Equal(t, we, ge, "point %d held %d exactness", pi, vi)
+			got.SetInt64(-9)
+			for i, n := range fields {
+				require.Equal(t, before[i], n.Text(16), "point %d held %d input %d", pi, vi, i)
+			}
+		}
+		// Exact float lifts must have a zero gap, including a non-reduced
+		// homogeneous spelling whose four fields share one integer.
+		if pi == 1 || pi == 4 {
+			require.Zero(t, CoordDistance(p, p.Vec()).Sign(), "point %d exact float", pi)
+		}
+	}
+}
+
 // keepRoundedEmbeddedBeforeGapReuse freezes the original final-gap loop.
 func keepRoundedEmbeddedBeforeGapReuse(ctx context.Context, xverts []proof.Xpt, remap []int,
 	out *StitchedMesh,
