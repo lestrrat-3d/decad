@@ -737,7 +737,7 @@
 2	0.00	TestUnstitchRestitchRoundTripClosesABoundedBox
 2	0.00	TestVerifyCoincidentAnalyticBodiesUseStableFirstVolume
 2	0.00	TestVerifyDiagnosticsUndercut
-2	0.02	TestVerifyFacetedMultiRegionPairStaysAsBefore
+2	0.02	TestVerifyFacetedMultiRegionPairReadsOnItsGrid
 2	0.01	TestVerifyGapToleranceDecidesAFlushPair
 2	0.76	TestVerifyJointBoxLoopHeld
 2	1.66	TestVerifyLinkageLoopNonMutationAndDeterminism
@@ -968,6 +968,7 @@
 10	0.01	TestPatternJoinOfAMeshSolidIsExact
 10	0.01	TestOrthogonalUnionOfSeveralBodiesLeavesNearCoincidentFacesToTheGeneralRoute
 3	0.05	TestTaperTwoSidedBuild
+10	0.01	TestOrthogonalInterferenceReadsTheOverlapVolumeExactly
 3	0.00	TestTessellatePlate
 3	0.01	TestTessellateRejectsTangentHole
 3	0.00	TestTextProfilesBreaksLinesAndPlacesTheOrigin

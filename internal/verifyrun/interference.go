@@ -6,7 +6,9 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/cupwall"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/orthoshell"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
@@ -120,6 +122,13 @@ func MeasuredInterference(ctx context.Context, alloc topo.Alloc, a, b *topo.Body
 		return overlap, boundaryaudit.InterferenceMeasured, nil
 	}
 
+	if overlap, ok := orthogonalOverlapVolume(a, b); ok {
+		if !positiveVolume(overlap) {
+			return vocab.Measurement{}, boundaryaudit.InterferenceUndecided, nil
+		}
+		return overlap, boundaryaudit.InterferenceMeasured, nil
+	}
+
 	eval, err := evaluateBooleanMeshes(ctx, meshbool.OpIntersect, a, b, meshes, 1)
 	if err != nil {
 		if expected, ok := asExpectedBoolean(err); ok {
@@ -202,4 +211,35 @@ func prismOverlapVolume(ctx context.Context, alloc topo.Alloc, a, b *topo.Body) 
 		Exactness: measurement.ExactnessOf(bound),
 		Bound:     units.CubicMillimeters(bound),
 	}, true, nil
+}
+
+// orthogonalOverlapVolume reads the volume two faceted bodies share, each of which has every face square to a world axis
+// and no vertex bound, exactly on their common grid (agent-docs/orthogonal-boolean-design.md): the sum of the cells
+// both occupy, with the bound of its own rounding. It also reads a pair that shares a face plane, which the mesh route
+// refuses as contact. ok is false when either body is outside that class, and the mesh route takes the pair.
+func orthogonalOverlapVolume(a, b *topo.Body) (vocab.Measurement, bool) {
+	pa, okA := a.Payload.(facetedrecord.Payload)
+	pb, okB := b.Payload.(facetedrecord.Payload)
+	if !okA || !okB || !zeroBound(pa) || !zeroBound(pb) {
+		return vocab.Measurement{}, false
+	}
+	sum, bound, err := orthoshell.OverlapVolume(pa.Verts, pa.Tris, pb.Verts, pb.Tris)
+	if err != nil {
+		return vocab.Measurement{}, false
+	}
+	return vocab.Measurement{
+		Value:     units.CubicMillimeters(sum),
+		Exactness: measurement.ExactnessOf(bound),
+		Bound:     units.CubicMillimeters(bound),
+	}, true
+}
+
+// zeroBound reports whether every vertex of the faceted payload is held exactly.
+func zeroBound(pl facetedrecord.Payload) bool {
+	for _, beta := range pl.VertexBound {
+		if beta != 0 {
+			return false
+		}
+	}
+	return true
 }

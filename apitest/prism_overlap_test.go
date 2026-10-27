@@ -266,12 +266,10 @@ func TestVerifyExactlyTangentPairStaysUndecided(t *testing.T) {
 	}
 }
 
-// TestVerifyFacetedMultiRegionPairStaysAsBefore is §15's "a bored (faceted)
-// pair stays undecided" row: G1 excludes a facetedPayload operand from every
-// analytic path (the twin and §4.5's reading alike), so a pair whose operands
-// were forced through the mesh boolean reports exactly what it did before
-// this PR — no new row.
-func TestVerifyFacetedMultiRegionPairStaysAsBefore(t *testing.T) {
+// TestVerifyFacetedMultiRegionPairReadsOnItsGrid is §15's "a bored (faceted) pair" row: G1 excludes a facetedPayload
+// operand from every analytic path (the twin and §4.5's reading alike), so a pair whose operands were forced through
+// the mesh boolean used to stay undecided. Both are axis-square, so their overlap is read on their common grid.
+func TestVerifyFacetedMultiRegionPairReadsOnItsGrid(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	u, bar := uAndBarBodies(t, doc)
@@ -291,8 +289,12 @@ func TestVerifyFacetedMultiRegionPairStaysAsBefore(t *testing.T) {
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Empty(t, report.Interferences,
-		"neither operand is a prismPayload, so G1 excludes the pair from every analytic path")
+	// Neither operand is a prismPayload, so G1 excludes the pair from every analytic path and the mesh route refuses it as
+	// coplanar contact. Both are axis-square faceted solids, so their common grid reads the overlap exactly
+	// (agent-docs/orthogonal-boolean-design.md), the same 120 mm^3 the prisms' own reading gives.
+	require.Len(t, report.Interferences, 1)
+	require.InDelta(t, 120.0, report.Interferences[0].Volume.Value.Base(), 1e-9)
+	require.Less(t, report.Interferences[0].Volume.Bound.Base(), 1e-9)
 }
 
 // TestPublicBooleansUnchangedOnMultiRegionPair is §15's "public booleans
