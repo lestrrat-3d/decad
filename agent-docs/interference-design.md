@@ -225,9 +225,10 @@ If A's lump is inside B, report A's volume. If B's lump is inside A, report B's.
 Strict boundary separation prevents both directions from holding for non-empty
 solids.
 
-**All multi-lump analytic containment is staged.** Shipped multi-lump bodies are
-faceted Boolean results, and `bodyGeom` does not represent their held facets.
-They skip analytic nesting entirely and proceed to read-only intersection; an
+**All multi-lump analytic containment is staged.** A multi-lump body is faceted,
+such as a mesh Boolean result or a mesh solid of several pieces, or an analytic
+prism group. `bodyGeom` builds no model of a body with more than one lump, so such
+a body skips analytic nesting entirely and proceeds to read-only intersection; an
 unsupported or unmeasurable intersection reads `Suspect`. Never reuse a whole
 multi-lump body's volume from a partial witness set, and never sum only known
 inside lumps.
