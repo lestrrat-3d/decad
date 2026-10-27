@@ -91,6 +91,8 @@ type TriCutter struct {
 	projections *cutProjectionScratch
 	index       cutVertIndex
 	raw         cutRawIndex
+	seen        map[[2]int]struct{}
+	anchors     map[[2]int]ChainAnchor
 }
 
 func (tc *TriCutter) Proj(p proof.Xpt) Xp2 {
@@ -133,10 +135,7 @@ func cutTriangle(ctx context.Context, xtri [3]proof.Xpt, normal proof.Xpt, segs 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if projections != nil {
-		projections.used = 0
-	}
-	tc := &TriCutter{Work: proofbound.NewWorkBudget(ctx), projections: projections}
+	tc := newTriCutter(ctx, projections)
 	tc.U, tc.V = ProjAxes(normal)
 	cornerIdx, err := tc.internFacet(xtri, segs)
 	if err != nil {
@@ -211,7 +210,7 @@ func cutTriangle(ctx context.Context, xtri [3]proof.Xpt, normal proof.Xpt, segs 
 		}
 	}
 
-	chainEdges := map[[2]int]ChainAnchor{}
+	chainEdges := tc.anchors
 	for _, e := range tc.Edges {
 		if err := tc.Work.Step(); err != nil {
 			return nil, err
@@ -275,7 +274,11 @@ func (tc *TriCutter) internFacet(xtri [3]proof.Xpt, segs []Xseg) ([3]int, error)
 		tc.raw.add(rawHash(c.Hu, c.Hv, c.Hw), c.Hu, c.Hv, c.Hw, cornerIdx[i])
 	}
 
-	seen := map[[2]int]struct{}{}
+	seen := tc.seen
+	if seen == nil {
+		seen = map[[2]int]struct{}{}
+		tc.seen = seen
+	}
 	for _, s := range segs {
 		if err := tc.Work.Step(); err != nil {
 			return cornerIdx, err
