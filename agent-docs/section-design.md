@@ -27,9 +27,10 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 
 The returned Sketch uses `plane` as its construction frame. The profiles are
 fresh, valid Sketch snapshots; changing the Sketch makes them stale under the
-ordinary seam rules or the bounded-source certificate below. A later body
-class may return several regions, so the result is a slice even though every
-admitted class returns one material region.
+ordinary seam rules or the bounded-source certificate below. The result is a
+slice because a section can hold several material regions: the full Revolve
+classes below and the orthogonal class return one profile per region, and every
+other admitted class returns one.
 The caller may read a retired body. A nil body or context, or an invalid frame,
 is `ErrDegenerate`; a sheet or unsound solid is `ErrNotSolid`.
 
@@ -37,8 +38,8 @@ is `ErrDegenerate`; a sheet or unsound solid is `ErrNotSolid`.
 
 The parallel class admits a `prismPayload` with zero `sectionDelta`,
 `z0Delta`, and `z1Delta`. It refuses a plane that touches either cap. A body
-outside this prism class tries the authenticated sphere and cone classes below or returns
-`ErrUnsupported` without changing the document.
+outside this prism class tries the authenticated sphere, cone and full Revolve
+classes below or returns `ErrUnsupported` without changing the document.
 
 The gate reads the stored source frame and rigid placement as exact dyadic
 values. It proves that the placed images of source `U`, `V`, and `N` equal the
@@ -431,6 +432,116 @@ the private revision-bound Sketch certificate. Only straight solid `Extrude`
 with an independent `Distance` may consume this bounded profile; its prism
 proof carries the displacement.
 
+## Plane through or normal to the axis of a full Revolve
+
+A full solid `Revolve` that misses the sphere and cone classes above may take
+one of two exact classes, both read from its recorded meridian by
+`sectionclip.RevolveAxialSection` and `sectionclip.RevolveNormalSection`
+(`internal/sectionclip/revolve_meridian.go`). A common-axis Boolean result
+that keeps a revolve record reaches them through the same gates.
+
+### Source admission
+
+The record must be a full turn of a solid with zero section displacement. Its
+resolved axis must lie along one source-plane axis with zero anchor and
+direction bounds, zero radial admission allowance and zero snap allowance. The
+source frame must be cardinal and the placement a signed-axis transform. No
+binary64 direction off the world axes has unit length, so the cardinal axis is
+also what makes the meridian map exact. Every loop must hold whole lines, arcs
+and circles with finite coordinates; a partial range, a spline or any other kind
+refuses. An arc's two pinned points must lie exactly equally far from its
+centre, so the record names one circular arc under any reflection.
+
+Read every point in exact axis coordinates: `a = (p − A)·D` along the oriented
+axis and `ρ = cross(D, p − A)` across it, with `A` the anchor and `D` the axis.
+That map is a rotation of the source plane, so loops keep their winding. A
+point or arc or circle centre with `ρ < 0` refuses. So does one with
+`0 < ρ ≤ SnapTol`, because the build reads such a point as on the axis and a
+wall about such a centre as a sphere. The placed anchor `A_w` and axial
+direction `D_w` are exact dyadic images through the frame and placement.
+
+The solid is `X = {A_w + a·D_w + ρ·(cos φ·R + sin φ·S)}` over the meridian
+region `M` and every angle, with `R`, `S` the unit world axes across `D_w`. The
+admitted planes are cardinal and their stored normal is the exact cross
+product of their axes.
+
+### Plane holding the axis
+
+The plane must hold the anchor exactly and its normal `n` must be
+perpendicular to `D_w`. Both are signed world axes, so either `n` is parallel
+to `D_w` and `e = n × D_w` is zero, or `e` is the unit in-plane direction
+across the axis. With `t` the signed offset along `e`, a plane point is
+`A_w + a·D_w + t·e`, and it lies in `X` exactly when `(a, |t|) ∈ M`. So
+`X ∩ P = M ∪ M'`, where `M'` is the mirror `t = −ρ`. Both copies are closures
+of their interiors, so their union is the regularized section. The requested
+local coordinates are a signed permutation of `(a, t)` plus the anchor's
+offset. Its determinant is `(D_w × e)·n = n·n = 1` when the plane holds the
+axis, and zero when `n` is parallel to `D_w`, which refuses. Every mapped coordinate must
+be finite and exactly representable in binary64.
+
+The union's loops depend on how `M` meets the axis.
+
+- No point of the outer loop is on the axis. Then `M` and `M'` are disjoint and
+  the section is two regions, each with its copy of every hole.
+- The outer loop holds exactly one cyclically contiguous run of whole axis
+  lines (both ends at `ρ = 0`). Every other segment must meet the axis at most
+  at its ends, and every vertex but the run's two ends must have `ρ > 0`; a
+  second run or contact puts a chain junction on the axis and refuses. Then
+  `M ∩ M'` is the run, and the union is one region. Its outer loop is the
+  off-axis chain from the run's end back to its start, followed by the mirror of
+  that chain walked backwards. The holes are every hole of `M` and its mirror.
+- A vertex on the axis outside a run pinches `M ∪ M'` at a point, and refuses.
+
+A hole must clear the axis entirely. A line meets the axis inside it only when
+both ends are on it. A whole circle clears it when `ρ_c² > r²`. On an arc's
+circle, `ρ = ρ_c + r·sin θ` is least at the point `B` straight towards the axis,
+and the points with `ρ ≤ 0` form one arc about `B`. With both ends at `ρ ≥ 0`,
+the arc keeps `ρ > 0` inside it exactly when `ρ_c² > r²` or `B` is neither inside
+its sweep nor one of its ends; exact cross products about the centre decide
+it. An arc arriving on the axis tangent to it ends at `B` and refuses.
+
+The copy's map has determinant 1 and keeps the meridian's winding. The
+mirror's map is the copy's composed with a reflection, so it reverses the
+winding and the mirror is walked backwards: a line swaps its range, an arc
+swaps its pinned ends and keeps its range, and a circle keeps its record,
+because the reflection and the reversed walk cancel.
+
+### Plane normal to the axis
+
+The plane normal must equal `±D_w` exactly. The level is
+`h = (O − A_w)·D_w` and the circle centre is the anchor's local coordinates,
+which must be finite and exact. The plane meets `X` in
+`{ρ : (h, ρ) ∈ M}` turned about the centre.
+
+Every segment end must lie off level `h`; a cap, shoulder or vertex level
+refuses. Then a line crosses the level only between ends on strictly opposite
+sides, at the rational `ρ = ρ0 + (h − a0)(ρ1 − ρ0)/(a1 − a0)`. An arc or circle
+crosses it at `ρ_c ± w` with `w² = r² − (h − a_c)²`. A negative square misses,
+and `w` must be the exact binary64 square root, found by the downward dyadic
+square root and an exact square comparison. An arc keeps only the candidates
+inside its counter-clockwise sweep, decided by exact cross products about its
+centre. Every crossing is transversal. Each radius must be a dyadic rational
+held exactly as a finite binary64 value with `ρ ≥ 0`. An arc or circle crossing
+at `ρ = 0` refuses; a line can cross there only when it is an axis line.
+
+Sorted, the radii must be strictly increasing and even in number. A tangent
+level gives one radius twice and refuses, as do two loops meeting on the level.
+Along the level line, membership in `M` flips at each transversal crossing, so
+the material is the union of the intervals between the first and second
+radius, the third and fourth, and so on. Each interval becomes one region: a
+counter-clockwise outer circle, with a clockwise hole circle when its inner
+radius is positive. No crossing means the plane misses the body and refuses.
+
+### Reconstruction
+
+`sectionclip.ReconstructExactSections` charges each region and
+`momentinput.ReconstructProfilesOnFrame` builds every entity on one fresh
+Sketch on the requested frame. Each record must match a valid Sketch profile
+whose fresh certified record equals it, and the profiles return in record
+order; a region Sketch arranges that no record names, such as the gap between
+two rings, is left out. The profiles are exact and may enter any profile consumer,
+including `Extrude`.
+
 ## Oblique plane of an authenticated source sphere
 
 This class uses the same `sourceSphereAtPose` occupied-ball certificate. It
@@ -791,6 +902,19 @@ reusing its bound.
   must still enclose the source. With a 10 mm cone shifted by X = 0.1 mm or
   Y = 0.1 mm, a plane origin at 1,048,576 mm in the corresponding local axis
   must refuse when that projected centre is not exactly representable.
+- Revolve a stepped meridian (r=10 for z 0..20, r=6 for z 20..40) about world
+  Z. The XZ plane, its quarter turn and its reflection each give one region of
+  area 2·(10·20 + 6·20) = 640 mm² with the exact ten corners; a 1 mm Extrude
+  gives 640 mm³ and passes `Tessellate(0.1 mm, VerifyAll)`. A tube r 4..10
+  gives two 120 mm² regions, a capsule with a hemisphere end gives
+  100 + 12.5π mm², a torus gives two 25π mm² disks, and a shaft with a toroidal
+  void gives one region with two circular holes. Normal planes give a disk of
+  100π mm² at z=10, of 16π and 9π mm² on the dome, an annulus of 84π mm² on the
+  tube and a disk inside an annulus through the void. A signed-axis placement
+  keeps the same sections. Refuse the shoulder, caps, an exterior level, an
+  offset or parallel plane, an oblique plane, a pinched meridian, an inexact
+  crossing radius or square root, and the dome apex. Unit fixtures refuse each
+  source, axial and normal gate on its own.
 - Check translated and rigidly placed rectangular prisms, reversed section
   axes, triangle through hexagon section rings, and cuts that refuse at a
   source vertex, tangent, exterior or uncertain topology.
