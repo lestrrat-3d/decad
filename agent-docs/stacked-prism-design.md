@@ -176,7 +176,8 @@ segment, within 1e-9 of [0, 1]. Parallel carriers report no point; the
 arrangement cuts collinear lines where they overlap or meet. A union-built
 stack's interface reads `RegionContact` over its nesting match
 (general-boolean §3 A1), so a boss outline touching the plate's edge at one
-point is a miss there. A vertex lying on another region's line whose two
+point is a miss there, and `Cut`'s clean-nesting, enclosing and group matches
+read it too (prism-boolean §4.2). A vertex lying on another region's line whose two
 edges leave that line within sketch's parallel band (about 1e-9 rad) is
 reported by neither line query; sketch's arrangement reports such a region
 invalid, and the pair is refused before any contact reading runs

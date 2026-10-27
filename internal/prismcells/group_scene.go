@@ -138,7 +138,7 @@ func GroupCutMatch(budget *proofbound.WorkBudget, profiles []*sketch.Profile,
 	if !match.Valid {
 		return nil, false, InvalidRegionError("cut")
 	}
-	if touch, err := curvedContact(budget, tags); err != nil || touch {
+	if touch, err := RegionContact(budget, tags); err != nil || touch {
 		return nil, false, err
 	}
 	return match, true, nil
@@ -230,6 +230,7 @@ func ProveGroupApart(ctx context.Context, budget *proofbound.WorkBudget,
 
 // curvedContact reports whether sketch's intersection query finds any point
 // shared by two entities of different regions where at least one is curved.
+// Two lines are RegionContact's line reading.
 // A line's reported point counts when its parameter along the segment lies
 // within 1e-9 of [0, 1], a fraction of the segment's length, not the
 // distance band the query itself uses; a wider reading only refuses more.
