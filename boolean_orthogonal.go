@@ -16,6 +16,11 @@ import (
 // caller takes the general route: an operand outside the class, a result with no cell, a grid past its cells, or a
 // result the solid proof refuses (kept cells that meet only along an edge).
 func orthogonalBoolean(ctx context.Context, d *Document, op meshbool.OperationKind, a, b *Body) (*Body, bool) {
+	return orthogonalBooleanAt(ctx, d, op, a, b, d.producerID(ctx))
+}
+
+// orthogonalBooleanAt is orthogonalBoolean under the producer identity ref, for a caller that evaluates under one.
+func orthogonalBooleanAt(ctx context.Context, d *Document, op meshbool.OperationKind, a, b *Body, ref producerID) (*Body, bool) {
 	var mode orthoshell.Op
 	switch op {
 	case meshbool.OpUnion:
@@ -50,7 +55,7 @@ func orthogonalBoolean(ctx context.Context, d *Document, op meshbool.OperationKi
 	if err != nil {
 		return nil, false
 	}
-	body, err := solidFromMeshBody(ctx, d, mesh)
+	body, err := solidFromMeshBodyAt(ctx, d, mesh, ref)
 	if err != nil {
 		return nil, false
 	}

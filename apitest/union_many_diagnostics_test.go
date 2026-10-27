@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -19,7 +20,9 @@ func TestUnionManyOperationWarnings(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := decad.New()
 			first := boxBody(t, doc, 0, 0, 10, 10, 10)
-			touching := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 0.5, 0, 10)
+			// A round operand keeps the pair on the mesh route, where a coplanar face takes a gap shift: two boxes meet
+			// exactly on a grid (agent-docs/orthogonal-boolean-design.md) and need none.
+			touching := translated(t, discBody(t, doc, 5, 3, 10), 0, 5, 10)
 			inside := translated(t, boxBody(t, doc, 2, 2, 4, 4, 2), 0, 0, 2)
 			others := []*decad.Body{touching, inside}
 			if tc.ordinal == 1 {
@@ -28,7 +31,7 @@ func TestUnionManyOperationWarnings(t *testing.T) {
 
 			joined, err := decad.Union(t.Context(), first, others...)
 			require.NoError(t, err)
-			requireVolumeWithin(t, joined, 2000)
+			requireVolumeWithin(t, joined, 1000+math.Pi*9*10)
 			live := doc.Bodies()
 			require.Len(t, live, 1)
 			require.Same(t, joined, live[0])
