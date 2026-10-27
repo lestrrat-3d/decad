@@ -333,6 +333,17 @@ and a point on an arc's chord or on two loops at once are classified through
 the verified mesh at the given tolerance and can read `PointUndecided` near
 the boundary.
 
+A mesh `Union`, `Cut` or `Intersect` result first combines its operands'
+exact answers through the operation history. A point inside either operand
+of a `Union` is inside it; a point inside the target of a `Cut` and on the
+tool's boundary is on its boundary; a point outside either operand of an
+`Intersect` is outside it. An operand that is itself such a result is read
+the same way. A point on the boundary of two operands at once, or where an
+operand has no exact answer, falls back to the verified mesh. A result whose
+operation diagnostics report a geometry change (`OpDiagGapShiftApplied`, for
+example), a Boolean that trims a `LoftFromPoint` cone, and a moved or copied
+result always read the verified mesh.
+
 Surfaces are `decad.Plane`, `decad.Cylinder`, `decad.Cone`, `decad.Sphere`, `decad.Torus`, `decad.Faceted`,
 `decad.NURBSSurface` and others, told apart by `decad.SurfaceKind`. A `decad.Mesh` is an output only. It is never
 the body representation.

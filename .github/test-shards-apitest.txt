@@ -2086,6 +2086,12 @@
 9	0.46	TestVerifyMitredSweepUnderPrismArmIsDisjoint
 9	0.00	TestVerifyMotionBetweenErrors
 9	0.29	TestVerifyMotionBetweenKnownCollision
+10	0.00	TestPointLocationHistoryCrossedPlates
+10	0.00	TestPointLocationHistoryNestedCut
+10	0.00	TestPointLocationHistoryPinCut
+10	0.00	TestPointLocationHistoryPinIntersect
+10	0.00	TestPointLocationHistoryRefusals
+10	0.00	TestPointLocationHistoryUndecidedOperand
 9	0.17	TestVerifyMotionBetweenNonMutationAndDeterminism
 9	0.75	TestVerifyMotionNonMutationAndDeterminism
 9	0.03	TestVerifyMotionPoseDeviationIsCharged

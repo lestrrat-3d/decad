@@ -390,7 +390,9 @@ See `agent-docs/loft-point-design.md` for the source proof.
 
 `LocatePoint` returns `PointInside`, `PointOutside`, `PointOnBoundary` or
 `PointUndecided`. It classifies an undisplaced straight prism against its exact
-record and every other body or point against the body's verified mesh, and
+record, a mesh Boolean result by combining its operands' exact answers through
+the operation history, and every other body or point against the body's
+verified mesh, and
 returns only classifications proved for the body, including retired bodies. `agent-docs/point-containment-design.md`
 owns its proof and refusal rules.
 

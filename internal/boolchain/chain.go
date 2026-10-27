@@ -90,7 +90,7 @@ func (w *walker) walk(l Literal) bool {
 
 // replacement returns the expansion of l, or nil when l stays a leaf.
 func (w *walker) replacement(l Literal) []Literal {
-	kind, in, ok := expandable(w.src, l.Body)
+	kind, in, ok := Expandable(w.src, l.Body)
 	if !ok {
 		return nil
 	}
@@ -124,9 +124,13 @@ func literals(bodies []*topo.Body, negated bool) []Literal {
 	return out
 }
 
-// expandable returns n's producer when n denotes that operation over its recorded
-// inputs exactly (Eligibility of an expandable body).
-func expandable(src Source, n *topo.Body) (meshbool.OperationKind, []*topo.Body, bool) {
+// Expandable returns n's recorded Boolean producer and consumed inputs when n
+// denotes that operation over those inputs exactly (Eligibility of an
+// expandable body): n is a mesh Boolean result with no point-cone record and
+// no operation warning that moved accepted geometry. ok is false otherwise.
+// Point location reads the same eligibility
+// (agent-docs/point-containment-design.md §8).
+func Expandable(src Source, n *topo.Body) (meshbool.OperationKind, []*topo.Body, bool) {
 	p, ok := n.Payload.(facetedrecord.Payload)
 	if !ok || p.PointCone != nil {
 		return 0, nil, false

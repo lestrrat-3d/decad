@@ -27,9 +27,7 @@ An operand of `Union`/`Cut`/`Intersect` that is a mesh Boolean result (`facetedr
 mesh. The next pair's local gate refuses a contact on held facets coarser than the pair's chord tolerance
 (vertex-bounds §5, `meshbool.RefuseCoarseHeldContact`), and the mesh path refuses coplanar or grazing contact against
 the held facets. The operation history (`operation_history.go`: `Document.OperationHistory`, `Producer`,
-`Operation.Inputs`) records which bodies produced the operand. No library code reads it today: outside
-`operation_history.go`, `Document.producers`/`consumers`/`operations` are only initialized (`New`) and appended
-(`appendOperationLocked` from the commit paths and `Remove`, `document.go`).
+`Operation.Inputs`) records which bodies produced the operand.
 
 Success criteria:
 
@@ -129,7 +127,8 @@ composite tools under `privateConstructionContext` never regroup.
 
 ### Eligibility of an expandable body
 
-`boolchain` expands body `n` only when all hold; any failure makes `n` a leaf:
+`boolchain` expands body `n` only when all hold; any failure makes `n` a leaf. `boolchain.Expandable` implements
+these rules, and point location reads the same function (`agent-docs/point-containment-design.md` §8):
 
 - `n.Payload` is a `facetedrecord.Payload` value.
 - The `Source` reports a public producer of kind `Cut`, `Union` or `Intersect` with `n` as its output.
