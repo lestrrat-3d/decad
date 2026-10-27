@@ -28,7 +28,17 @@ unchanged. An edge that meets a slanted face has no plane to blend against and i
 state a block's filleted and chamfered volumes from the section removed, `(1 − π/4)·r²·L` and `r²·L/2`, and require them inside
 the result's bound, and check that the tetrahedron's slanted face is Faceted and its blend refused.
 
-## 3. Not covered
+## 3. Stretching a mesh solid
+
+`Stretch(ctx, b, anchor, x, y, z)` scales a faceted solid by a separate factor along each world axis about `anchor`
+and returns a new solid, retiring `b`. `b` MUST be faceted with all-zero vertex bounds, otherwise `ErrUnsupported`;
+a body with a vertex bound would need the bound charged through the stretch, which this route does not do. The
+mesh is stretched by `ScaleMesh`, which reorders corners under an odd number of negative factors, and read back by
+`solidFromMeshBody`, so the stretched planes are exact over the stretched coordinates. Each factor is dimensionless,
+finite and not zero. The tests state the volume as the product of the factors, the bounds and a point inside the
+widened part, and a swapped pair of factors fails them.
+
+## 4. Not covered
 
 - Welding, orienting and hole filling: repair the mesh first with `RepairMesh`.
 - Recovering planes, cylinders or cones from a curved mesh, and so a retained analytic tag. A cylinder read from STL is a
