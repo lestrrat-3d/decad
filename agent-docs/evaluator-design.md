@@ -1235,6 +1235,12 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   cancellation. `internal/meshbool/boolean_cut_batch.go` owns worker selection;
   `keepSide` owns the batch bound. `cutProjectionScratch` defines reusable
   projection-buffer ownership.
+- **Intern cut vertices by exact identity.** A cutter vertex is its two
+  projected coordinates, compared as their `RatString` texts are, and a
+  segment endpoint whose homogeneous integers equal an interned one's is that
+  vertex. Hashes only choose which vertices to compare, and exact integer
+  comparison confirms every hit, so a collision never merges two vertices.
+  `internal/meshbool/cut_vertex_index.go` owns both tables.
 - **Share extra workers across independent core loops.** `orderedwork.ReserveWorkers`
   owns worker reservations for subdivision, `orderedwork.Each` loops and Loft
   pair classification. Keep caller polling and join workers before releasing

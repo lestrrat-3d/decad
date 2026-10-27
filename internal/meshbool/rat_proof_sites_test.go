@@ -273,14 +273,14 @@ func TestRoundingBoundsMatchRawRat(t *testing.T) {
 
 // TestChainProbeMidpointOfNonReducedEndpoint pins the value of a midpoint
 // whose endpoint U is the non-reduced 3/9. The value is 1/6 by Cmp. The
-// representation is 3/18, where big.Rat gives 1/6, so Key2 would read
-// "3/18|0" and not "1/6|0"; no production input has such an endpoint, because
+// representation is 3/18, where big.Rat gives 1/6, so its 2D identity
+// would be the text "3/18|0" and not "1/6|0"; no production input has such an endpoint, because
 // every coordinate comes from a constructor that returns lowest terms
 // (proof.TestNoRatWritesThroughNumDenom scans for any other writer).
 func TestChainProbeMidpointOfNonReducedEndpoint(t *testing.T) {
 	third := big.NewRat(1, 9)
 	third.Num().SetInt64(3) // 3/9
-	tc := &TriCutter{Index: map[string]int{}, Work: proofbound.NewWorkBudget(t.Context())}
+	tc := &TriCutter{Work: proofbound.NewWorkBudget(t.Context())}
 	a := NewXP2(third, new(big.Rat))
 	b := NewXP2(new(big.Rat), new(big.Rat))
 	tc.AddVert(a, proof.XptOf(r3.NewVec(0, 0, 0)), true)
