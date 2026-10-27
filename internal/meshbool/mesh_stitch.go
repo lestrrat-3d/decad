@@ -64,7 +64,19 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 	// Exact vertices are immutable after construction. Reuse the stitched
 	// index when another incident facet carries the same four integer pointers.
 	indexByRaw := map[[4]*big.Int]int{}
-	addVert := func(p proof.Xpt) int {
+	// addVert welds p by its canonical key: key when the kept facet carries
+	// it (KeptFacet.Keys), else p.Key(), read once per pointer set.
+	addVert := func(p proof.Xpt, key string) int {
+		if key != "" {
+			i, ok := index[key]
+			if !ok {
+				i = len(xverts)
+				index[key] = i
+				xverts = append(xverts, p)
+				xbeta = append(xbeta, 0)
+			}
+			return i
+		}
 		raw := [4]*big.Int{p.X, p.Y, p.Z, p.W}
 		if i, ok := indexByRaw[raw]; ok {
 			return i
@@ -92,7 +104,7 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 				return nil, err
 			}
 		}
-		a, b, c := addVert(f.V[0]), addVert(f.V[1]), addVert(f.V[2])
+		a, b, c := addVert(f.V[0], f.Keys[0]), addVert(f.V[1], f.Keys[1]), addVert(f.V[2], f.Keys[2])
 		if a == b || b == c || c == a {
 			return nil, fmt.Errorf(`%w: a kept facet collapsed`, decaderr.ErrBooleanFailed)
 		}
