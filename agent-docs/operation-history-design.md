@@ -9,7 +9,7 @@ Navigation only; the named sections own their rules.
 | What can callers inspect? | Public API proposal; Face correspondence and completeness |
 | What is collected and published atomically? | Atomic publication and storage |
 | What should an implementation agent do, in order? | Ordered implementation tasks |
-| May internal code read public records? | Boolean chain regroup |
+| May internal code read public records? | Boolean chain regroup; Point location through history |
 
 ## Status and scope
 
@@ -30,7 +30,8 @@ and inspection of successful calls.
 The caller's Go function remains the feature tree. Proof records describe evaluated
 sets and constructions; they contain no replayable feature commands, rebuild mechanism,
 undo, or file format. Internal code may read public records to re-run Boolean geometry
-over the retained bodies they name; Boolean chain regroup below owns the rules.
+over the retained bodies they name, or to combine their point classifications; Boolean
+chain regroup and Point location through history below own the rules.
 
 The owning contracts are `api-design.md` §2, §3, §5.3, §6 and §12;
 `evaluator-design.md` §3 and §8; `prism-boolean-design.md` §11;
@@ -169,8 +170,8 @@ faceted result. Do not re-tessellate an unknown trim as if it were an analytic p
 
 ### Boolean chain regroup
 
-`agent-docs/boolean-chain-regroup-design.md` owns the one designed reader of public
-records. When a two-body Boolean refuses and an operand is a mesh Boolean result, it
+`agent-docs/boolean-chain-regroup-design.md` owns one of the two designed readers of
+public records. When a two-body Boolean refuses and an operand is a mesh Boolean result, it
 walks producer records to the retained source bodies and evaluates a set-equal
 regrouping of the chain. It is not replay:
 
@@ -178,6 +179,15 @@ regrouping of the chain. It is not replay:
 - It replays no feature call, re-solves no sketch and reads no parameter.
 - It publishes no record beyond the caller's own Boolean and consumes no retired body.
 - A missing producer record or an ineligible body makes it decline; it never refuses.
+
+### Point location through history
+
+`agent-docs/point-containment-design.md` §8 owns the other reader. `Body.LocatePoint`
+on a mesh Boolean result walks the same producer records, under the same eligibility
+regroup uses, to the retained operand bodies, and combines their exact point
+classifications by the set algebra of the recorded operation. It re-runs no geometry,
+builds no body and publishes nothing. A missing record or an ineligible body reads
+undecided and leaves the point to the verified mesh.
 
 ## Computational evidence
 
@@ -428,8 +438,8 @@ strong references to input and output bodies, so retired geometry stays reachabl
 for the document's lifetime and for any surviving snapshot. Memory grows with
 recorded bodies and face links, including bodies no caller otherwise retains.
 This retention is the memory cost of complete run history for verification.
-Boolean chain regroup reads retired source bodies through these references; an eviction
-API would also have to state how that reader declines.
+Boolean chain regroup and point location read retired source bodies through these
+references; an eviction API would also have to state how those readers decline.
 No eviction or clearing API is proposed because it would invalidate producer
 lookup and completeness claims. Computational proof lineage remains distinct
 from these public records and supplies its consumers directly from result payloads.

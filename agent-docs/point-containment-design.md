@@ -2,8 +2,9 @@
 
 `Body.LocatePoint` classifies one world-coordinate point against a solid body.
 An undisplaced straight prism is first classified against its own record in
-exact arithmetic (§7). Every other body, and every prism point §7 leaves open,
-reads a verified mesh and its occupied-volume proof (§2). The query does not
+exact arithmetic (§7). A mesh Boolean result first combines its operands' exact
+answers through the operation history (§8). Every other body, and every point
+§7 or §8 leaves open, reads a verified mesh and its occupied-volume proof (§2). The query does not
 change the body or the document.
 
 ## 1. Public result
@@ -23,19 +24,20 @@ const (
 
 `p` is a world coordinate in millimetres. `tol` is the positive chord tolerance
 passed to `Body.Tessellate` at `VerifyAll`. A solid whose payload cannot produce
-a mesh returns that tessellation's `ErrUnsupported` when §7 does not decide the
-point. A sheet or an unsound solid returns `ErrNotSolid`. A nil body or context
+a mesh returns that tessellation's `ErrUnsupported` when §7 or §8 does not
+decide the point. A sheet or an unsound solid returns `ErrNotSolid`. A nil body or context
 returns `ErrDegenerate`; non-finite point coordinates return `ErrNotFinite`. The
-tolerance uses `Tessellate`'s kind, finiteness and zero gates, which the prism
-route applies itself before it reads the record, so an invalid tolerance fails
-the same way on every body. Retired bodies remain readable.
+tolerance uses `Tessellate`'s kind, finiteness and zero gates, which §7 and §8
+apply themselves before they read a record, so an invalid tolerance fails the
+same way on every body. Retired bodies remain readable.
 
 `PointUndecided` means the proof cannot classify this point at the requested
 tolerance. It is not an outside reading. The caller may request a finer mesh;
 the query can still return `PointUndecided` if a payload publishes no occupied
 volume proof or the point is too close to its boundary. `PointOnBoundary` is
-reported only when the record places the point on its boundary exactly (§7) or
-the mesh boundary is exact at that point (§2).
+reported only when the record places the point on its boundary exactly (§7),
+the operands' records do so under §8's set algebra, or the mesh boundary is
+exact at that point (§2).
 
 ## 2. Proof
 
@@ -104,7 +106,7 @@ inequality puts the true boundary distance in
 `[max(0, sqrt(D²) − B), sqrt(D²) + B]`. The query computes these interval
 ends over exact rationals from the directed square-root floats and `B`.
 
-The distance query reads §2's mesh proof only; it does not consult §7.
+The distance query reads §2's mesh proof only; it does not consult §7 or §8.
 When §2 proves the point outside, that interval encloses the distance to the
 solid. When §2 proves inside or on the boundary, return exact zero. When the
 occupied-volume proof is missing or membership is undecided, use
@@ -186,8 +188,8 @@ the point to §2 unchanged.
 The body's payload must be a `prismPayload` with `SectionDelta`, `Z0Delta` and
 `Z1Delta` all zero, no `SurfaceResult`, and `Z0 < Z1` compared exactly. Only
 then is the record the set it denotes (`prismrecord.Payload`'s doc,
-`agent-docs/prism-boolean-design.md` §7). A displaced record, a stacked prism,
-a BRep, a faceted Boolean result and every other payload go to §2.
+`agent-docs/prism-boolean-design.md` §7). A faceted Boolean result goes to §8.
+A displaced record, a stacked prism, a BRep and every other payload go to §2.
 
 ### 7.2 Plane coordinates
 
@@ -305,3 +307,159 @@ before it.
   circle, an arc whose `Start` equals its `End`, an ellipse, a one-line loop,
   two holes holding one point, a hole outside the outer loop, and a point on
   the outer loop inside a hole. A reversed record answers as its forward twin.
+
+## 8. Boolean results through history
+
+`pointquery.LocateBoolean` classifies a point against a mesh Boolean result
+by combining its operands' answers through the operation history
+(`agent-docs/operation-history-design.md`, "Point location through history").
+It answers about the set §2 proves its answers for, or hands the point to §2
+unchanged. It re-runs no geometry and builds no body.
+
+### 8.1 What the history proves
+
+A body built by a public `Cut`, `Union` or `Intersect` denotes that
+regularized operation over its recorded consumed inputs, unless the build
+moved accepted geometry. Its published bounds relate its held mesh to that set
+(`agent-docs/faceted-vertex-bounds-design.md` §2), so that set is §2's true
+region `T`. `agent-docs/boolean-chain-regroup-design.md`, "Eligibility of an
+expandable body", states when the record is that set-equality proof, and
+`boolchain.Expandable` decides it. The route reads the same function and
+nothing else:
+
+- The payload is a `facetedrecord.Payload`. An analytic result is classified
+  by its own record (§7) or by §2.
+- The document's producer record for the body is a `Cut`, `Union` or
+  `Intersect` with the body as its output, read through `historyProducers`
+  (`boolean_regroup.go`). A `Cut` must carry exactly a `target` and a `tool`.
+- `PointCone` is nil. `decad.WithMatchingFaces` reaches only the point-cone
+  route, and its result denotes the declared match with its effect charged
+  into the bounds, not the operation over its inputs.
+- Every `OperationWarnings` record is classified as moving no geometry: a
+  `CodeChainAllowanceApplied` with no `Change` mechanism, which relaxes a
+  gate and moves nothing. Any other record, including a code added later,
+  makes the body a leaf. A gap-shifted retry or an embedding reach moved
+  accepted geometry, so the result is not the operation over its inputs,
+  however small the move.
+
+Every other body is a leaf.
+
+### 8.2 Leaves and placements
+
+A leaf whose payload is a `prismrecord.Payload` is classified by §7. A leaf
+§7 does not decide, and every other leaf, reads undecided. The route reads no
+leaf's mesh: that would tessellate each retired operand at `VerifyAll`.
+
+The route does not walk `Transform` or `Copy`. A placed mesh result denotes
+its source's set under its own placement record (an exact rotation or the
+float delta, `facetedrecord.PlacedWith`), and §7 takes only a float query
+point, so classifying the inverse-placed point would need a rational query
+route §7 does not have. Such a body, as a query or as an operand, is a leaf
+and reads undecided. A placed prism leaf, such as a rotated `Copy` operand,
+is solved through its own held placement (§7.2).
+
+### 8.3 Set algebra
+
+Every operand is a regular closed set. Each operand gives `p` one of four
+answers: inside (in its interior), on its boundary, outside (in the interior
+of its complement) or undecided (any of the three). Write `A ∧ B` for the
+regularized intersection, `¬A` for the closure of the complement, and
+`A ∨ B = ¬(¬A ∧ ¬B)` for the union. Then `Intersect(A, B) = A ∧ B`,
+`Cut(A, B) = A ∧ ¬B` and `Union(A, B) = A ∨ B`. Complement swaps inside and
+outside and keeps the boundary, because a regular closed set and the closure
+of its complement share one boundary.
+
+| `A ∧ B` | B inside | B on boundary | B outside | B undecided |
+|---|---|---|---|---|
+| A inside | inside | on boundary | outside | undecided |
+| A on boundary | on boundary | undecided | outside | undecided |
+| A outside | outside | outside | outside | outside |
+| A undecided | undecided | undecided | outside | undecided |
+
+Union is the complement of the meet of the complements, so its table
+follows from the one above with inside and outside swapped:
+
+| `A ∨ B` | B inside | B on boundary | B outside | B undecided |
+|---|---|---|---|---|
+| A inside | inside | inside | inside | inside |
+| A on boundary | inside | undecided | on boundary | undecided |
+| A outside | inside | on boundary | outside | undecided |
+| A undecided | inside | undecided | undecided | undecided |
+
+| `¬A` | A inside | A on boundary | A outside | A undecided |
+|---|---|---|---|---|
+| answer | outside | on boundary | inside | undecided |
+
+Proof of each row of the meet table:
+
+- Outside either operand: a ball about `p` misses that operand, so it misses
+  `A ∧ B`, which lies in both.
+- Inside both: a ball about `p` lies in both interiors, so in the interior of
+  `A ∧ B`.
+- Inside `A`, on `B`'s boundary: take an open ball `N` about `p` inside
+  `A`'s interior. Then `int A ∩ int B ∩ N = int B ∩ N`, so
+  `(A ∧ B) ∩ N = cl(int B ∩ N) ∩ N = cl(int B) ∩ N = B ∩ N`, since `N` is
+  open and `B` is regular. Near `p` the result is `B`, so `p` is on its
+  boundary.
+- On both boundaries: two boxes that share one face meet in no volume, so a
+  point of that face is outside their meet, while a box met with itself keeps
+  the point on its boundary. The answer is undecided.
+- Undecided with any answer other than outside: the row's answers differ over
+  the three classes the undecided operand may have.
+
+`Intersect` and `Union` records with `k` inputs fold the table left to right;
+each step is sound for every class consistent with its inputs, and `∧` and
+`∨` are associative. The walk stops a `Union` at the first inside and an
+`Intersect` or `Cut` at the first outside, and reads a `Cut`'s tool only when
+its target is not outside. These answers hold whatever the remaining operands
+are.
+
+The route combines answers by these theorems over exact leaf answers. It
+admits no geometry: eligibility is the record and payload facts of §8.1, and
+no residual, sampled distance or tolerance takes part. It computes no 2D
+answer of its own; the plane-local tests are §7's.
+
+### 8.4 Walk
+
+The walk is depth first over each producer's recorded consumed inputs, in
+recorded order (a `Cut`'s target, then its tool). A body is consumed at most
+once, so the walk is a tree over the document's finite history. The route
+polls the context through a `proofbound.WorkBudget` once per body visited.
+An inside, outside or on-boundary answer at the root is returned; undecided
+hands the point to §2, whose decided answers agree with §8's because both
+are about the same set.
+
+### 8.5 Verification
+
+- A 30 × 30 × 4 plate united with a 20 mm wide plate copied with a 45° turn
+  about the x axis, a mesh result with no warning, answers inside 0.001 mm
+  and 1e-9 mm under the flat top face, on that face, and outside 0.001 mm and
+  1e-9 mm over it. An identity `Copy` of it reads §2 alone, which leaves the
+  face and the 1e-9 mm points undecided. A point on the top face inside the
+  turned plate answers inside; one on the turned plate's end face stays
+  undecided.
+- A 20 × 20 × 8 plate cut by a radius-2 pin through it answers on the pin's
+  wall and the plate's top face, and inside or outside 1e-9 mm either side of
+  the wall. A point on the bore's rim is on both operands' boundaries and
+  stays undecided. The same pin intersected with the plate answers on the
+  wall, on the top face inside the pin, and inside or outside 1e-9 mm either
+  side of them.
+- A `Cut` of the pin through the crossed plates answers through two levels of
+  history: on the pin's wall inside both plates, inside or outside 1e-9 mm
+  either side of it, and inside 0.001 mm under the top face.
+- A quarter pie whose arc end lies 500 ulps off its radius (§7.4), united
+  with a box, answers inside 1e-9 mm inside a box face because the box alone
+  decides it. On the box face beyond the pie, and 1e-9 mm inside the pie's
+  arc beyond the box, the pie's answer is undecided and so is the result.
+- The 30 × 30 × 4 plate united with its full-width turned copy shares the
+  plates' end faces, takes a gap-shifted retry, and stays undecided on its top
+  face and 0.001 mm under it. A `Transform` of the warning-free crossed plates
+  stays undecided on the image of the top face and 1e-9 mm under it.
+- Unit fixtures check the meet, union and complement tables of §8.3 for
+  every answer, each operation over two overlapping cubes, the
+  fold over three inputs, a `Cut` over a `Union`, and each stop, which reads
+  no later operand. They decline a point-cone record, a gap shift, an
+  embedding reach, an analytic payload, a missing producer record, a
+  one-input `Cut`, a mesh operand with no record and a displaced prism
+  operand; a chain allowance still combines, and a canceled context returns
+  its error.

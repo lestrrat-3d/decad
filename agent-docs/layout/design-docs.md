@@ -19,7 +19,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/evaluator-design.md` | Evaluator topology, payloads, mass properties, feature builds, and mesh booleans. |
 | `agent-docs/tessellation-design.md` | Tessellation: curve samples, manifold proofs, source faces, certificates, boolean handoff. |
 | `agent-docs/clearance-design.md` | Pair disjointness and bounded gap proofs. |
-| `agent-docs/point-containment-design.md` | Public point classification, distance, mesh-to-body proofs and the exact prism-record route. |
+| `agent-docs/point-containment-design.md` | Public point classification, distance, mesh-to-body proofs, the exact prism-record route and the Boolean-history route. |
 | `agent-docs/section-design.md` | Read-only planar section gate and Sketch reconstruction proof. |
 | `agent-docs/interference-design.md` | Read-only pair overlap and bounded volume proofs. |
 | `agent-docs/hole-design.md` | `Hole`: face and point placement, size gates, tool shapes and the atomic cut. |

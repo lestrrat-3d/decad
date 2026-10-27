@@ -142,6 +142,9 @@ func TestFlattenEligibility(t *testing.T) {
 		{"an embedding reach", 0, opdiagnostic.ChangeEmbeddingReach, false},
 		{"a stitch merge", 0, opdiagnostic.ChangeStitchMerge, false},
 		{"a chain allowance", opdiagnostic.CodeChainAllowanceApplied, opdiagnostic.ChangeUnknown, true},
+		{"an unclassified code with no change", opdiagnostic.Code(99), opdiagnostic.ChangeUnknown, false},
+		{"a gap-shift code with no change", opdiagnostic.CodeGapShiftApplied, opdiagnostic.ChangeUnknown, false},
+		{"a chain allowance with a change", opdiagnostic.CodeChainAllowanceApplied, opdiagnostic.ChangeGapShift, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

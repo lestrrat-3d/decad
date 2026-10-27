@@ -27,9 +27,7 @@ An operand of `Union`/`Cut`/`Intersect` that is a mesh Boolean result (`facetedr
 mesh. The next pair's local gate refuses a contact on held facets coarser than the pair's chord tolerance
 (vertex-bounds §5, `meshbool.RefuseCoarseHeldContact`), and the mesh path refuses coplanar or grazing contact against
 the held facets. The operation history (`operation_history.go`: `Document.OperationHistory`, `Producer`,
-`Operation.Inputs`) records which bodies produced the operand. No library code reads it today: outside
-`operation_history.go`, `Document.producers`/`consumers`/`operations` are only initialized (`New`) and appended
-(`appendOperationLocked` from the commit paths and `Remove`, `document.go`).
+`Operation.Inputs`) records which bodies produced the operand.
 
 Success criteria:
 
@@ -129,16 +127,18 @@ composite tools under `privateConstructionContext` never regroup.
 
 ### Eligibility of an expandable body
 
-`boolchain` expands body `n` only when all hold; any failure makes `n` a leaf:
+`boolchain` expands body `n` only when all hold; any failure makes `n` a leaf. `boolchain.Expandable` implements
+these rules, and point location reads the same function (`agent-docs/point-containment-design.md` §8):
 
 - `n.Payload` is a `facetedrecord.Payload` value.
 - The `Source` reports a public producer of kind `Cut`, `Union` or `Intersect` with `n` as its output.
 - `n.Payload.(facetedrecord.Payload).PointCone == nil`. A point-cone trim may record `MatchingFaces`
   (`internal/facetedrecord/point.go`), which history does not record.
-- No `n.OperationWarnings` record has `Change != opdiagnostic.ChangeUnknown`. A gap shift or embedding reach moved
-  accepted geometry (`internal/booleaneval/eval.go` `Diagnostics`, `internal/meshbool/held_embedding_diagnostics.go`),
-  so `n` does not denote the operation over its inputs. `CodeChainAllowanceApplied` has no change mechanism and does
-  not block.
+- Every `n.OperationWarnings` record is classified as moving no geometry. The only such record is a
+  `CodeChainAllowanceApplied` with `Change == opdiagnostic.ChangeUnknown`: it relaxes a gate and moves nothing. Any
+  other record makes `n` a leaf, including a code added later. A gap shift or embedding reach moved accepted geometry
+  (`internal/booleaneval/eval.go` `Diagnostics`, `internal/meshbool/held_embedding_diagnostics.go`), so `n` does not
+  denote the operation over its inputs.
 
 A body whose producer is `Transform`, `Copy`, a modify operation, `Hole`/`Rib`/`Web`/`Emboss`/`Boss`, `Patterned`
 or any non-Boolean kind is a leaf. An analytic (non-faceted) Boolean result is a leaf: it is already exact.

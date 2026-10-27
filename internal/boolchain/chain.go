@@ -90,7 +90,7 @@ func (w *walker) walk(l Literal) bool {
 
 // replacement returns the expansion of l, or nil when l stays a leaf.
 func (w *walker) replacement(l Literal) []Literal {
-	kind, in, ok := expandable(w.src, l.Body)
+	kind, in, ok := Expandable(w.src, l.Body)
 	if !ok {
 		return nil
 	}
@@ -124,17 +124,29 @@ func literals(bodies []*topo.Body, negated bool) []Literal {
 	return out
 }
 
-// expandable returns n's producer when n denotes that operation over its recorded
-// inputs exactly (Eligibility of an expandable body).
-func expandable(src Source, n *topo.Body) (meshbool.OperationKind, []*topo.Body, bool) {
+// Expandable returns n's recorded Boolean producer and consumed inputs when n
+// denotes that operation over those inputs exactly (Eligibility of an
+// expandable body): n is a mesh Boolean result with no point-cone record whose
+// every operation warning is classified as moving no geometry. ok is false
+// otherwise. Point location reads the same eligibility
+// (agent-docs/point-containment-design.md §8).
+func Expandable(src Source, n *topo.Body) (meshbool.OperationKind, []*topo.Body, bool) {
 	p, ok := n.Payload.(facetedrecord.Payload)
 	if !ok || p.PointCone != nil {
 		return 0, nil, false
 	}
 	for _, r := range n.OperationWarnings {
-		if r.Change != opdiagnostic.ChangeUnknown {
+		if !movesNoGeometry(r) {
 			return 0, nil, false
 		}
 	}
 	return src.BooleanProducer(n)
+}
+
+// movesNoGeometry reports whether r is a warning classified as leaving the
+// accepted geometry unchanged. It fails closed: only a chain allowance with no
+// change mechanism qualifies, so a record with any other code, including one
+// added later, makes the body a leaf.
+func movesNoGeometry(r opdiagnostic.Record) bool {
+	return r.Code == opdiagnostic.CodeChainAllowanceApplied && r.Change == opdiagnostic.ChangeUnknown
 }
