@@ -783,10 +783,13 @@ outside bridges a gap of the target whose two faces point at each other:
 over its whole interval, and no cap. A tool inside runs from face to face:
 the through build of B.3 with both outside parts empty, so `Cut` keeps both
 faces holed and the tool's walls reversed over its whole interval, and
-`Intersect` is the tool's own prism. The other three pairs miss, and the
-mesh path decides them: a `Union` of a tool inside is the target itself,
-and a tool outside meets the target in its end disks alone, so its `Cut`
-leaves the target whole and its `Intersect` is empty. Each
+`Intersect` is the tool's own prism. The other three pairs miss to the
+mesh path. A `Union` of a tool inside is the target itself, which the mesh
+path builds. A tool outside meets the target in its end disks alone. With
+one face the mesh path decides it: its `Cut` leaves the target whole and
+its `Intersect` is empty. With two faces the mesh path refuses its `Cut`
+and `Intersect` with `BooleanUnsupportedContact`, because the held facets
+of both disks come within the chord tolerance without provably crossing. Each
 face's region takes the section as a hole through the same clean-nesting
 match, so a section touching the face's boundary misses. Each hole's rim is
 the wall's rim at the shared level, one circle bounding one swept wall, so
