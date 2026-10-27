@@ -202,6 +202,25 @@ func TestCombineRefusals(t *testing.T) {
 			[]momentinput.Profile{disk(10, 10, 3)}, cut)
 		requireRefusal(t, err, msgCurveCut)
 	})
+	t.Run("a dart below Sketch's area floor", func(t *testing.T) {
+		t.Parallel()
+		// The dart (2, 5), (5, 5-eps), (8, 5), (5, 5+eps) encloses 6*eps mm^2,
+		// below the area Sketch arranges as a face. Sketch cannot prove which
+		// side of it the square's cell lies on, so the cut refuses rather than
+		// return the whole square.
+		for _, exp := range []int{-30, -37, -44} {
+			eps := math.Ldexp(1, exp)
+			p := func(u, v float64) sectionrecord.Point2 { return sectionrecord.Point2{U: u, V: v} }
+			corners := []sectionrecord.Point2{p(2, 5), p(5, 5-eps), p(8, 5), p(5, 5+eps)}
+			var dart momentinput.Profile
+			for i, c := range corners {
+				dart.Outer.Segments = append(dart.Outer.Segments,
+					sectionrecord.LineSeg{Start: c, End: corners[(i+1)%len(corners)], TStart: 0, TEnd: 1})
+			}
+			_, err := combine(t.Context(), []momentinput.Profile{square(0, 0, 10, 10)}, []momentinput.Profile{dart}, cut)
+			requireRefusal(t, err, "Sketch does not prove each cell's containment")
+		}
+	})
 	t.Run("two regions touching at a corner", func(t *testing.T) {
 		t.Parallel()
 		_, err := combine(t.Context(), []momentinput.Profile{square(0, 0, 10, 10)},

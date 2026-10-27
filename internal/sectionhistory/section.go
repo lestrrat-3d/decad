@@ -79,10 +79,11 @@ func keeper(op meshbool.OperationKind) (func(a, b bool) bool, error) {
 // combine arranges the two exact sections, each a list of regions, in one
 // private Sketch scene and keeps the cells keep selects
 // (agent-docs/prism-boolean-design.md §4.1-§4.2, agent-docs/section-design.md
-// "The 2D operation"). Cells may carry holes, and the unbounded face is outside
-// both operands. The kept cells merge into one record per connected region,
-// with its holes, whose every cut end Sketch certified as an exact line
-// crossing and whose every arc and circle is whole.
+// "The 2D operation"). Every recorded loop is declared to Sketch, and each
+// cell's membership is Sketch's containment verdict against those loops; the
+// edge-direction reading may only falsify it. The kept cells merge into one
+// record per connected region, with its holes, whose every cut end Sketch
+// certified as an exact line crossing and whose every arc and circle is whole.
 func combine(ctx context.Context, pa, pb []momentinput.Profile, keep func(a, b bool) bool) ([]momentinput.Profile, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	if _, within, err := prismcells.RegionsWithinWorkCap(budget, slices.Concat(pa, pb)...); err != nil || !within {
@@ -103,6 +104,13 @@ func combine(ctx context.Context, pa, pb []momentinput.Profile, keep func(a, b b
 	if delta.A != 0 || delta.B != 0 {
 		return nil, fmt.Errorf(`%w: %s`, decaderr.ErrUnsupported, msgRegion)
 	}
+	loops, declared, err := prismcells.DeclareOperandLoops(budget, s, tags)
+	if err != nil {
+		return nil, err
+	}
+	if !declared {
+		return nil, fmt.Errorf(`%w: %s`, decaderr.ErrUnsupported, msgRegion)
+	}
 	profiles, err := prismcells.CellProfiles(ctx, budget, s)
 	if err != nil {
 		return nil, err
@@ -115,25 +123,32 @@ func combine(ctx context.Context, pa, pb []momentinput.Profile, keep func(a, b b
 		}
 		return nil, fmt.Errorf(`%w: %s`, decaderr.ErrUnsupported, msgRegion)
 	}
-	matterA, matterB, resolved, err := prismcells.ClassifyNested(budget, tags, profiles)
+	matterA, matterB, resolved, err := prismcells.ContainedMembership(budget, profiles, loops)
 	if err != nil {
 		return nil, err
 	}
 	if !resolved {
+		return nil, fmt.Errorf(`%w: %s: Sketch does not prove each cell's containment`, decaderr.ErrUnsupported, msgRegion)
+	}
+	reading, read, err := prismcells.ClassifyNested(budget, tags, profiles)
+	if err != nil {
+		return nil, err
+	}
+	if !read || !agrees(reading, matterA, matterB) {
 		return nil, fmt.Errorf(`%w: %s`, decaderr.ErrUnsupported, msgRegion)
 	}
 	selected := make([]bool, len(profiles))
 	for i := range profiles {
 		selected[i] = keep(matterA[i], matterB[i])
 	}
-	merged, resolved, err := prismcells.MergeRegionsExact(budget, s, profiles, selected)
+	merged, resolved, err := prismcells.MergeRegionsExact(ctx, budget, s, profiles, selected)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, err
 		}
 		return nil, fmt.Errorf(`%w: %s: %w`, decaderr.ErrUnsupported, msgRegion, err)
 	}
-	if !resolved || len(merged.Regions) == 0 {
+	if !resolved {
 		return nil, fmt.Errorf(`%w: %s`, decaderr.ErrUnsupported, msgRegion)
 	}
 	if merged.CurvedCut {
@@ -143,6 +158,21 @@ func combine(ctx context.Context, pa, pb []momentinput.Profile, keep func(a, b b
 		return nil, fmt.Errorf(`%w: %s`, decaderr.ErrUnsupported, msgJunction)
 	}
 	return merged.Regions, nil
+}
+
+// agrees reports whether every membership the edge-direction reading reached
+// matches Sketch's containment verdict. A cell the reading did not reach
+// proves nothing either way.
+func agrees(reading prismcells.NestedReading, matterA, matterB []bool) bool {
+	for i := range matterA {
+		if reading.KnownA[i] && reading.A[i] != matterA[i] {
+			return false
+		}
+		if reading.KnownB[i] && reading.B[i] != matterB[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // operandSection finds an exact section of one operand, made of whole lines,

@@ -1,6 +1,7 @@
 package prismcells
 
 import (
+	"context"
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -25,35 +26,37 @@ type ExactRegions struct {
 // the survivors chain into simple loops by exact walked ends; a vertex two
 // survivors leave, such as two regions touching at a point, is unresolved.
 //
-// Every answer about regions is read from Sketch's own arrangement: selected
-// cells sharing a wall form one region, and of that region's loops the outer
-// one is the loop whose far side reaches the unbounded face without entering
-// the region. Each region must have exactly one such loop; its other loops
-// are its holes. No coordinate is compared to place a loop.
+// Selected cells sharing a wall are one region, which is Sketch's own cell
+// adjacency. Which loop of a region is its outer loop is Sketch's containment
+// verdict: every merged loop is declared as a loop of spans of the scene's
+// entities, the scene is published again, and a cell of the region must lie
+// inside exactly one of its loops, the outer one, and outside the rest, its
+// holes. A missing or unproven verdict is unresolved. No coordinate is
+// compared to place a loop.
 //
 // A loop is restated exactly when every cut end is a certified line-line
 // crossing and every arc and circle is whole. Otherwise it keeps its
 // fragments and their cut charge, which the caller must refuse.
 // resolved=false (err nil) means a shape this merge does not cover.
-func MergeRegionsExact(budget *proofbound.WorkBudget, scene *sketch.Sketch, profiles []*sketch.Profile,
-	selected []bool) (ExactRegions, bool, error) {
+func MergeRegionsExact(ctx context.Context, budget *proofbound.WorkBudget, scene *sketch.Sketch,
+	profiles []*sketch.Profile, selected []bool) (ExactRegions, bool, error) {
 	type edgeKey struct {
 		entity sketch.Entity
 		t0, t1 float64
 	}
 	keyOf := func(e sketch.BoundaryEdge) edgeKey { return edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd} }
 	n := len(profiles)
-	// sides lists every cell walking each arrangement edge. A key walked by
-	// one cell has the unbounded face, node n, on its far side.
+	// sides lists every selected cell walking each arrangement edge.
 	sides := map[edgeKey][]int{}
 	var picked []*sketch.Profile
 	for i, p := range profiles {
 		if err := budget.Step(); err != nil {
 			return ExactRegions{}, false, err
 		}
-		if selected[i] {
-			picked = append(picked, p)
+		if !selected[i] {
+			continue
 		}
+		picked = append(picked, p)
 		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
 			for _, e := range loop {
 				if err := budget.Step(); err != nil {
@@ -63,34 +66,20 @@ func MergeRegionsExact(budget *proofbound.WorkBudget, scene *sketch.Sketch, prof
 			}
 		}
 	}
-	links := make([][]int, n+1)
-	for k, cells := range sides {
-		if err := budget.Step(); err != nil {
-			return ExactRegions{}, false, err
-		}
-		switch len(cells) {
-		case 1:
-			sides[k] = append(cells, n)
-		case 2:
-		default:
-			return ExactRegions{}, false, nil
-		}
-		a, b := sides[k][0], sides[k][1]
-		links[a] = append(links[a], b)
-		links[b] = append(links[b], a)
-	}
 
 	// Selected cells sharing a wall are one region.
 	region := make([]int, n)
 	for i := range region {
 		region[i] = -1
 	}
-	regions := 0
+	var first []int // a representative cell of each region
 	for i := range n {
 		if !selected[i] || region[i] >= 0 {
 			continue
 		}
-		region[i] = regions
+		r := len(first)
+		first = append(first, i)
+		region[i] = r
 		queue := []int{i}
 		for len(queue) > 0 {
 			if err := budget.Step(); err != nil {
@@ -98,14 +87,17 @@ func MergeRegionsExact(budget *proofbound.WorkBudget, scene *sketch.Sketch, prof
 			}
 			cur := queue[0]
 			queue = queue[1:]
-			for _, nb := range links[cur] {
-				if nb < n && selected[nb] && region[nb] < 0 {
-					region[nb] = regions
-					queue = append(queue, nb)
+			for _, loop := range append([][]sketch.BoundaryEdge{profiles[cur].Outer}, profiles[cur].Holes...) {
+				for _, e := range loop {
+					for _, nb := range sides[keyOf(e)] {
+						if region[nb] < 0 {
+							region[nb] = r
+							queue = append(queue, nb)
+						}
+					}
 				}
 			}
 		}
-		regions++
 	}
 
 	survivors, resolved, err := mergeSurvivors(budget, picked, "section")
@@ -117,70 +109,22 @@ func MergeRegionsExact(budget *proofbound.WorkBudget, scene *sketch.Sketch, prof
 		return ExactRegions{}, false, err
 	}
 
-	// outside[r][c] marks the cells reached from the unbounded face without
-	// entering region r.
-	outside := make([][]bool, regions)
-	reach := func(r int) ([]bool, error) {
-		seen := make([]bool, n+1)
-		seen[n] = true
-		queue := []int{n}
-		for len(queue) > 0 {
-			if err := budget.Step(); err != nil {
-				return nil, err
-			}
-			cur := queue[0]
-			queue = queue[1:]
-			for _, nb := range links[cur] {
-				if seen[nb] || (nb < n && region[nb] == r) {
-					continue
-				}
-				seen[nb] = true
-				queue = append(queue, nb)
-			}
-		}
-		return seen, nil
-	}
-
-	// The refusals in this loop falsify Sketch's topology rather than test the
-	// geometry: a survivor between two selected cells, a loop bordering two
-	// regions or two complement components, and a region with no outer loop
-	// or two. No consistent arrangement reaches them, so no fixture does.
-	out := ExactRegions{Regions: make([]momentinput.Profile, regions)}
-	hasOuter := make([]bool, regions)
-	for _, chain := range chains {
-		owner, far := -1, -1
+	// A survivor is walked by one selected cell, so every edge of a loop names
+	// its region. A loop bordering two regions falsifies the chaining.
+	out := ExactRegions{Regions: make([]momentinput.Profile, len(first))}
+	owners := make([]int, len(chains))
+	records := make([]sectionrecord.LoopRecord, len(chains))
+	for c, chain := range chains {
+		owner := -1
 		for _, e := range chain {
 			if err := budget.Step(); err != nil {
 				return ExactRegions{}, false, err
 			}
 			cells := sides[keyOf(e)]
-			inner, other := cells[0], cells[1]
-			if inner == n || !selected[inner] {
-				inner, other = other, inner
-			}
-			if inner == n || !selected[inner] || (other < n && selected[other]) {
+			if len(cells) != 1 || (owner >= 0 && owner != region[cells[0]]) {
 				return ExactRegions{}, false, nil
 			}
-			if owner >= 0 && owner != region[inner] {
-				return ExactRegions{}, false, nil
-			}
-			owner = region[inner]
-			if outside[owner] == nil {
-				seen, err := reach(owner)
-				if err != nil {
-					return ExactRegions{}, false, err
-				}
-				outside[owner] = seen
-			}
-			// Every edge of one boundary loop faces one complement component.
-			reached := 0
-			if outside[owner][other] {
-				reached = 1
-			}
-			if far >= 0 && far != reached {
-				return ExactRegions{}, false, nil
-			}
-			far = reached
+			owner = region[cells[0]]
 			if e.Partial {
 				if _, isLine := e.Entity.(*sketch.Line); !isLine {
 					out.CurvedCut = true
@@ -197,15 +141,25 @@ func MergeRegionsExact(budget *proofbound.WorkBudget, scene *sketch.Sketch, prof
 			}
 		}
 		out.CutDelta = math.Max(out.CutDelta, delta)
-		if far == 1 {
-			if hasOuter[owner] {
-				return ExactRegions{}, false, nil
-			}
-			hasOuter[owner] = true
-			out.Regions[owner].Outer = loop
+		owners[c], records[c] = owner, loop
+	}
+
+	outer, resolved, err := outerLoops(ctx, budget, scene, profiles, chains, owners, first)
+	if err != nil || !resolved {
+		return ExactRegions{}, false, err
+	}
+	hasOuter := make([]bool, len(first))
+	for c, record := range records {
+		r := owners[c]
+		if !outer[c] {
+			out.Regions[r].Holes = append(out.Regions[r].Holes, record)
 			continue
 		}
-		out.Regions[owner].Holes = append(out.Regions[owner].Holes, loop)
+		if hasOuter[r] {
+			return ExactRegions{}, false, nil
+		}
+		hasOuter[r] = true
+		out.Regions[r].Outer = record
 	}
 	for _, ok := range hasOuter {
 		if !ok {
@@ -213,6 +167,79 @@ func MergeRegionsExact(budget *proofbound.WorkBudget, scene *sketch.Sketch, prof
 		}
 	}
 	return out, true, nil
+}
+
+// outerLoops declares every merged loop on the scene, publishes the scene
+// again, and reads whether each loop holds its region's representative cell:
+// inside is the region's outer loop and outside is a hole. The republished
+// cells must walk exactly the edges the first publication's cells walked, so
+// the verdicts describe the same cells.
+func outerLoops(ctx context.Context, budget *proofbound.WorkBudget, scene *sketch.Sketch,
+	profiles []*sketch.Profile, chains [][]sketch.BoundaryEdge, owners, first []int) ([]bool, bool, error) {
+	if len(first) == 0 {
+		return nil, false, nil
+	}
+	before := len(profiles[first[0]].Containments())
+	for _, chain := range chains {
+		spans := make([]sketch.LoopSpan, len(chain))
+		for i, e := range chain {
+			if err := budget.Step(); err != nil {
+				return nil, false, err
+			}
+			spans[i] = sketch.LoopSpan{Entity: e.Entity, TStart: e.TStart, TEnd: e.TEnd}
+		}
+		if _, err := scene.DeclareLoopSpans(spans...); err != nil {
+			return nil, false, nil //nolint:nilerr // a loop Sketch will not declare is a miss
+		}
+	}
+	fresh, err := CellProfiles(ctx, budget, scene)
+	if err != nil || len(fresh) != len(profiles) {
+		return nil, false, err
+	}
+	for _, i := range first {
+		if ok, err := sameCell(budget, profiles[i], fresh[i]); err != nil || !ok {
+			return nil, false, err
+		}
+	}
+	outer := make([]bool, len(chains))
+	for c := range chains {
+		if err := budget.Step(); err != nil {
+			return nil, false, err
+		}
+		switch loopVerdict(fresh[first[owners[c]]], before+c) {
+		case sketch.ContainmentInside:
+			outer[c] = true
+		case sketch.ContainmentOutside:
+		default:
+			return nil, false, nil
+		}
+	}
+	return outer, true, nil
+}
+
+// sameCell reports whether two publications of one cell walk the same edges,
+// entity, range and direction alike, in the same order.
+func sameCell(budget *proofbound.WorkBudget, a, b *sketch.Profile) (bool, error) {
+	loopsA := append([][]sketch.BoundaryEdge{a.Outer}, a.Holes...)
+	loopsB := append([][]sketch.BoundaryEdge{b.Outer}, b.Holes...)
+	if len(loopsA) != len(loopsB) {
+		return false, nil
+	}
+	for l := range loopsA {
+		if len(loopsA[l]) != len(loopsB[l]) {
+			return false, nil
+		}
+		for i, e := range loopsA[l] {
+			if err := budget.Step(); err != nil {
+				return false, err
+			}
+			f := loopsB[l][i]
+			if e.Entity != f.Entity || e.TStart != f.TStart || e.TEnd != f.TEnd || e.Reversed != f.Reversed {
+				return false, nil
+			}
+		}
+	}
+	return true, nil
 }
 
 // reparameterizeExactCurveLoop is reparameterizeExactLineLoop for a loop that

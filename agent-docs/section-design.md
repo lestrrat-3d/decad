@@ -241,31 +241,41 @@ and radii, so the scene's walk charge is zero. The scene's coincident-span gap
 must be zero. A span Sketch merged from two near-coincident carriers would
 otherwise join or split regions that the exact sets do not.
 
-`prismcells.ClassifyNested` reads each cell's membership in A and in B from
-Sketch's edge directions (§4.2), over every loop of the cell, holes included:
-a cell walks each of its loops with itself on the left, as an operand walks
-its outer loops counter-clockwise and its holes clockwise, so a matching
-direction puts the cell on that operand's material side. Membership crosses an
-edge of the other operand unchanged. Sketch publishes every bounded face of
-the arrangement, and the face nested in a cell's hole walks the hole's edges
-as its own outer edges, so an edge exactly one cell walks has the unbounded
-face on its other side. That face lies outside both bounded operands, which
-settles the membership of a cell no edge of one operand bounds, such as a
-section lying apart from the other. Membership is constant on each open cell
-and the arrangement's edges enclose no area, so the closure of the cells
-`a ∨ b`, `a ∧ ¬b` or `a ∧ b` selects is the regularized 2D operation of the
-lemma. A cell whose membership stays unknown, an invalid cell and an edge more
-than two cells walk refuse.
+Each cell's membership in A and in B is Sketch's answer, not decad's.
+`prismcells.DeclareOperandLoops` declares every recorded loop of both operands,
+outer loops and holes, as a Sketch loop of the scene's own entities in recorded
+segment order, before the scene is published. `prismcells.ContainedMembership`
+then reads each cell's `Profile.Containments()` verdicts: a cell is in an
+operand when Sketch proves it inside the outer loop of one of the operand's
+regions and outside every hole of that region. A verdict Sketch leaves
+unproven, a missing verdict and an invalid cell refuse. This covers the cells
+an edge-direction reading cannot reach, such as a section lying apart from the
+other, and the cells it would misread, such as the outside of a loop whose
+area falls below the floor Sketch arranges as a face: Sketch reports that loop
+`ReasonCoincident` and the section refuses.
+
+`prismcells.ClassifyNested` reads membership a second way, from Sketch's edge
+directions (§4.2) over every loop of the cell, holes included: a cell walks
+each of its loops with itself on the left, as an operand walks its outer loops
+counter-clockwise and its holes clockwise, so a matching direction puts the
+cell on that operand's material side, and membership crosses an edge of the
+other operand unchanged. This reading can only falsify: a cell it reaches
+must agree with Sketch's verdict, and a cell it does not reach proves nothing.
+Membership is constant on each open cell and the arrangement's edges enclose
+no area, so the closure of the cells `a ∨ b`, `a ∧ ¬b` or `a ∧ b` selects is
+the regularized 2D operation of the lemma.
 
 `prismcells.MergeRegionsExact` drops the walls between selected cells and
 chains the survivors into simple loops by their exact walked ends. A vertex two
-survivors leave, such as two regions touching at a point, refuses. Every
-answer about regions is read from Sketch's arrangement, not from coordinates.
-Selected cells that share a wall are one region. Every edge of one of its loops
-faces one component of the region's complement; the loop whose far side
-reaches the unbounded face without entering the region is its outer loop, and
-its other loops are its holes. Each region must have exactly one outer loop.
-The seam's loop-closure check can only refuse.
+survivors leave refuses; this catches two regions that meet at a shared chain
+vertex. Selected cells that share a wall are one region, by Sketch's own cell
+adjacency. Which loop of a region is its outer loop is again Sketch's verdict:
+every merged loop is declared as a loop of spans of the scene's entities, the
+scene is published again, each republished representative cell must walk the
+same edges as before, and that cell must lie inside exactly one of its
+region's loops, the outer one, and outside the others, its holes. An unproven
+verdict refuses. No coordinate is compared to place a loop. The seam's
+loop-closure check can only refuse.
 
 Each loop is then stated exactly or refused. A whole segment records from its
 entity's own data. A cut end must be one paired Sketch line crossing that
@@ -910,7 +920,9 @@ reusing its bound.
   disjoint union, a circular hole, an island inside a hole, a disk inside a
   square, a hole inside an overlap, a split holed square and a whole arc
   beside certified line cuts, and refuse a line crossing an arc or a circle,
-  two regions touching at a corner and an empty result.
+  two regions touching at a corner, an empty result, and a square cut by a
+  dart of area 6·2^-30 to 6·2^-44 mm² whose containment Sketch leaves
+  unproven.
 - Cut a real 4×4×4 mm blind pocket from a 10 mm cube. Section at z=8 gives
   84 mm² with one hole spanning (3..7, 3..7), and at z=3 gives 100 mm². Each
   2 mm Extrude passes `Tessellate(0.1 mm, VerifyAll)`. The pocket floor, caps
