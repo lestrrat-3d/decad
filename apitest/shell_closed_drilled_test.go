@@ -220,3 +220,28 @@ func TestShellClosedDrilledBarThroughCut(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
 }
+
+// TestShellClosedBoxThroughCut is the hole-free counterpart: the 20×20×10
+// box's closed shell keeps one region per slab, so the same rod at x = 9.5,
+// inside the wall, takes the exact stacked through cut, which copies the
+// closed shell's record and keeps the cavity as its one void shell.
+func TestShellClosedBoxThroughCut(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	box := boxBodyAtZ(t, doc, -10, -10, 10, 10, 0, 10)
+	closed, err := decad.Shell(t.Context(), box, nil, units.Millimeters(1), decad.WithNoOpenings())
+	require.NoError(t, err)
+	rod := circleBodyAtZ(t, doc, 9.5, 0.3, -1, 12)
+	cut, err := decad.Cut(t.Context(), closed, rod)
+	require.NoError(t, err)
+	require.False(t, tookMeshPath(cut), `the stacked through cut builds the result exactly`)
+	requireVolumeNear(t, cut, 400*10-18*18*8-0.09*math.Pi*10)
+	require.Len(t, cut.Lumps(), 1)
+	shells := cut.Shells()
+	require.Len(t, shells, 2)
+	require.False(t, shells[0].IsVoid())
+	require.True(t, shells[1].IsVoid(), `the cavity stays closed`)
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+}
