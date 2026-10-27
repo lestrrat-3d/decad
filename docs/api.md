@@ -273,7 +273,8 @@ Blind pockets `Cut` from the two caps of an extruded plate that meet at one leve
 no `Faceted` face under the same drawing conditions: every outline is made of lines along the sketch axes, circles and
 arcs, such as a round pocket across a rectangular one, a slot across a rectangle, or a counterbore drilled from both
 faces. The level must hold no rounding. Any circle or arc in the result makes the volume read `Approximate` with a
-small proven bound; rectangles alone read `Exact`. Pockets that only touch, along an edge, at a corner or where a
+small proven bound; rectangles alone read `Exact`. A second pocket on one face that meets nothing of the other
+face's pockets at that level takes the faceted path. Pockets that only touch, along an edge, at a corner or where a
 circle is tangent to the other pocket's edge, two circles of opposite pockets that meet, and a pocket wall at an angle
 to the sketch axes take the faceted path, which refuses the coplanar contact under `ExactOnly` with a `BooleanError`
 of code `BooleanUnsupportedContact`.

@@ -60,11 +60,18 @@ func opposedArcPockets(t *testing.T, doc *decad.Document, plate, top, bottom opp
 //   - slot-across-rect: a slot (24 + 4*pi mm^2) 6 deep over a 6 x 2 bottom
 //     pocket crossing its right arc at x = 3 + sqrt(3): 4000 - 144 - 24*pi - 48;
 //   - round-across-rect/x1024: the first scene moved 1024 mm along x, where
-//     the line-circle vertices' rounding grows with the coordinates.
+//     the line-circle vertices' rounding grows with the coordinates;
+//   - round-across-rect/wide: the first scene scaled up on a 60,000 mm
+//     square plate, a 18,000 mm square top pocket over an r = 9000 bottom
+//     pocket about (3000, 0): 34056000000 - 324000000*pi. Its line-circle
+//     vertices sit far enough from the origin that their placement error
+//     moves the volume past every other term of the bound.
 //
 // Shown red: restoring the axis-line gate (stackedrecord's opposedLoop
 // refusing circles and arcs) sends every case to the mesh path, which
-// refuses the coplanar contact.
+// refuses the coplanar contact. Zeroing the vertex allowance OpposedCut
+// hands breprecord.StackedRecord fails round-across-rect/wide in both
+// orders: the volume misses its closed form by more than the bound left.
 func TestStackedOpposedArcLoops(t *testing.T) {
 	t.Parallel()
 	slot := func(t *testing.T, doc *decad.Document) *decad.Body {
@@ -94,6 +101,11 @@ func TestStackedOpposedArcLoops(t *testing.T) {
 				return boxBody(t, doc, 1014, -10, 1034, 10, 10)
 			}, top: opposedArcBox(1018, -3, 1024, 3, 4, 6),
 			bottom: opposedArcRound(1025, 3, 0, 4), k: "3784", p: "-36", maxBound: 1e-8},
+		{name: "round-across-rect/wide",
+			plate: func(t *testing.T, doc *decad.Document) *decad.Body {
+				return boxBody(t, doc, -30000, -30000, 30000, 30000, 10)
+			}, top: opposedArcBox(-18000, -9000, 0, 9000, 4, 6),
+			bottom: opposedArcRound(3000, 9000, 0, 4), k: "34056000000", p: "-324000000", maxBound: 1e-3},
 	} {
 		for _, topFirst := range []bool{true, false} {
 			order := map[bool]string{true: "top-first", false: "bottom-first"}[topFirst]
@@ -153,11 +165,18 @@ func TestStackedOpposedArcLoops(t *testing.T) {
 //   - crossing-circles: two r = 2 pockets whose circles cross, which no exact
 //     vertex record states.
 //   - oblique: a top pocket with an oblique edge crossing a bottom rectangle.
+//   - slot-tangent-edge: a bottom slot under a top rectangle whose edge
+//     y = 2 runs along the slot's straight edge and on past the arc's end
+//     (3, 2), tangent to the arc there. The arrangement places a vertex at
+//     that point, so only the tangent reading refuses it.
 //
 // Shown red: dropping the CurvedCrossingsCut refusal from stackedunion's
-// opposedCells builds l-tangent as a brep. The other cases also miss later
-// in the build (the face audit for tangent-inside, the engine's two-circle
-// junction for crossing-circles) or before it (the oblique-line gate).
+// opposedCells builds l-tangent and slot-tangent-edge as breps. Dropping only
+// its line-curve tangent check builds slot-tangent-edge, the one fixture
+// that shows that check deciding: l-tangent has no vertex at its tangency,
+// so the vertex match refuses it too. The other cases also miss later in the
+// build (the face audit for tangent-inside, the engine's two-circle junction
+// for crossing-circles) or before it (the oblique-line gate).
 func TestStackedOpposedArcLoopsRefuse(t *testing.T) {
 	t.Parallel()
 	lPocket := func(t *testing.T, doc *decad.Document) *decad.Body {

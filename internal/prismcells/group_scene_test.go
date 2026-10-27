@@ -57,7 +57,10 @@ func sceneCircle(x, r float64) func(*sketch.Sketch) []sketch.Entity {
 // reported points, and refuses.
 //
 // Shown red: dropping the two-curve leg passes crossing-circles, and
-// dropping the vertex match passes no-vertex.
+// dropping the vertex match passes no-vertex. Dropping the tangent check
+// leaves tangent-line refused, since its uncut tangency has no vertex for
+// the vertex match either; apitest's slot-tangent-edge shows that check
+// deciding.
 func TestCurvedCrossingsCut(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
