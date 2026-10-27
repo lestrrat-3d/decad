@@ -64,6 +64,16 @@ refused. The tests sweep a sketch to the top of a mesh plate with `ToFace` (exac
 the pocket, sweep it through all with `ThroughAll`, and send a sweep to a side face. Removing the record fails the
 first, and removing the extent fails the second.
 
+## 7. Face centroids
+
+`SolidFromMesh` gives each planar face its area centroid. Coplanar triangles of one orientation have areas in the ratio
+of the dot products of their normals with the first one's, so the centroid is the exact rational
+`Σ wᵢ(aᵢ+bᵢ+cᵢ)/3 / Σ wᵢ` over the vertices' exact float values, rounded to the nearest float per coordinate. Its bound is
+the largest rounding error, Exact when that is zero. A group that falls into several disconnected patches gives none of
+them a centroid, as for every group. A Boolean result, a placement or a mesh Boolean does not carry the reading. The tests
+read the five faces of a triangular prism, and a square top face split into unequal triangles, where an unweighted mean
+of the triangles' centroids fails.
+
 ## 5. Not covered
 
 - Welding, orienting and hole filling: repair the mesh first with `RepairMesh`.

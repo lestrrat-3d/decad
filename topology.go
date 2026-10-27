@@ -474,8 +474,8 @@ func (f *Face) Area() (Measurement, error) {
 }
 
 // Centroid returns the area centroid of a face with a proved certificate.
-// Point-loft far caps and their planar Split caps provide one; other faces
-// currently return ErrUnsupported.
+// Point-loft far caps, their planar Split caps and the planar faces of a
+// SolidFromMesh body provide one; other faces currently return ErrUnsupported.
 func (f *Face) Centroid() (VecMeasurement, error) {
 	if !f.n.HasCentroid {
 		return VecMeasurement{}, fmt.Errorf("%w: this face has no bounded area centroid", ErrUnsupported)
