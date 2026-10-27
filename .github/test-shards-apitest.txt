@@ -1980,6 +1980,10 @@
 7	0.01	TestStackBrepScaledAtVerified
 7	0.03	TestStackedUnionBrepOperandChain
 7	0.17	TestStackedUnionCrossingBossStanding
+10	0.01	TestRemeshMeshEvensTheEdgesAndTheValences
+10	0.01	TestRemeshMeshCoarsensAsWellAsRefines
+10	0.01	TestRemeshMeshRefusals
+10	0.01	TestRemeshMeshFlipsEdgesTowardSixNeighbours
 7	0.00	TestStitchCurvedVolumeBoundWidensWhenPlaced
 7	0.01	TestStitchCurvedWeldedRevolveSiblingPlacementRefusesMesh
 7	0.02	TestStitchGapTolerance
