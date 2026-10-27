@@ -17,6 +17,9 @@ import (
 // maxGCodeLayers bounds the layers GCodePerimeters slices.
 const maxGCodeLayers = 100000
 
+// maxGCodeSkirt bounds the loops of a skirt.
+const maxGCodeSkirt = 20
+
 // GCodeSpec describes the print GCodePerimeters writes G-code for. LayerHeight, LineWidth and
 // FilamentDiameter are positive lengths, and FeedRate a positive velocity.
 type GCodeSpec struct {
@@ -54,6 +57,12 @@ type GCodeSpec struct {
 	// value leaves the fan alone. FanFromLayer is from 0 to one less than the number of layers.
 	FanSpeed     units.Value
 	FanFromLayer int
+	// Skirt is the number of loops traced round the part in the first layer before its perimeters, from the one nearest
+	// the part outward, each a line width outside the last (agent-docs/gcode-design.md G16). SkirtDistance is the gap from
+	// the part's outline to the first loop, a positive length that Skirt requires. The zero Skirt writes none, and a
+	// negative one is decad.ErrDegenerate.
+	Skirt         int
+	SkirtDistance units.Value
 }
 
 // GCodePerimeters writes the toolpath that prints body's outline layer by layer as G-code
@@ -160,6 +169,20 @@ func GCodePerimeters(ctx context.Context, w io.Writer, body *decad.Body, tol uni
 	if spec.SolidLayers < 0 {
 		return fmt.Errorf("export: G-code: %w: the solid layers are negative", decad.ErrDegenerate)
 	}
+	if spec.Skirt < 0 || spec.Skirt > maxGCodeSkirt {
+		return fmt.Errorf("export: G-code: %w: the skirt of %d loops is not from 0 to %d", decad.ErrDegenerate, spec.Skirt, maxGCodeSkirt)
+	}
+	skirtGap := 0.0
+	if spec.Skirt > 0 {
+		if spec.SkirtDistance == (units.Value{}) {
+			return fmt.Errorf("export: G-code: %w: a skirt needs its distance from the part", decad.ErrDegenerate)
+		}
+		if skirtGap, err = positive(spec.SkirtDistance, units.Length, units.Millimeter, "the skirt distance"); err != nil {
+			return err
+		}
+	} else if spec.SkirtDistance != (units.Value{}) {
+		return fmt.Errorf("export: G-code: %w: a skirt distance needs a skirt of at least one loop", decad.ErrDegenerate)
+	}
 	perMillimetre := layer * line / (math.Pi * filament * filament / 4)
 	var out bytes.Buffer
 	fmt.Fprintf(&out, "; perimeters of a %d layer print, %g mm layers\nG21\nG90\nM82\nG92 E0\n", layers, layer)
@@ -211,18 +234,27 @@ func GCodePerimeters(ctx context.Context, w io.Writer, body *decad.Body, tol uni
 		if spec.PerimeterInset {
 			perimeters = insetLoops(outline.Loops, line/2)
 		}
-		for _, loop := range perimeters {
-			if len(loop) < 2 {
-				continue
-			}
-			travel(loop[0].X, loop[0].Y, top)
-			for k := 1; k <= len(loop); k++ {
-				from, to := loop[k-1], loop[k%len(loop)]
-				extruded += to.Sub(from).Len() * perMillimetre
-				fmt.Fprintf(&out, "G1 X%.4f Y%.4f E%.5f F%.1f\n", to.X, to.Y, extruded, feed*60)
-				printed = true
+		trace := func(loops [][]r3.Vec) {
+			for _, loop := range loops {
+				if len(loop) < 2 {
+					continue
+				}
+				travel(loop[0].X, loop[0].Y, top)
+				for k := 1; k <= len(loop); k++ {
+					from, to := loop[k-1], loop[k%len(loop)]
+					extruded += to.Sub(from).Len() * perMillimetre
+					fmt.Fprintf(&out, "G1 X%.4f Y%.4f E%.5f F%.1f\n", to.X, to.Y, extruded, feed*60)
+					printed = true
+				}
 			}
 		}
+		if i == 0 && spec.Skirt > 0 {
+			outer := outerLoops(outline.Loops)
+			for n := range spec.Skirt {
+				trace(insetLoops(outer, -(skirtGap + float64(n)*line)))
+			}
+		}
+		trace(perimeters)
 		gap := spacing
 		if i < spec.SolidLayers || i >= layers-spec.SolidLayers {
 			gap = line // a solid layer, a line against the next
