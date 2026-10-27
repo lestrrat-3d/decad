@@ -826,6 +826,8 @@
 3	0.01	TestFilletBoxAllConvexEdges
 3	0.00	TestFilletOverLargeRadiusFlippingLoopIsUnsupported
 3	0.10	TestFilletSmallRadiusArcRadiiRoundApart
+10	0.01	TestMeshSolidTakesStraightSidedPocketsAndBossesExactly
+10	0.01	TestMeshSolidTakesRoundHolesWithinTheirBound
 3	0.01	TestFreeformCentroidRoundsOnce
 3	0.00	TestFreeformPrismMinRadiusUndecided
 3	0.92	TestHoleDraftWithACounterbore
