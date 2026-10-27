@@ -54,7 +54,12 @@ func capLevelFrame(t *testing.T, origin, u, v r3.Vec) r3.Frame {
 // plane only when its tag and every loop point it holds lie on that plane in
 // exact rationals, and that every departure, however small, refuses. Shown to
 // fail with each refusal leg of CapOnRecord deleted in turn: the vertex, tag
-// origin, tag direction, circle centre, circle axis and curve-kind legs.
+// origin, tag N, circle centre, circle axis and curve-kind legs. The tag N
+// leg alone refuses a tilted cap whose tag is its own record frame: U and V
+// are exactly orthogonal to the record normal, but N is their rounded cross
+// product. The U and V orthogonality legs are shown to fail only together
+// with the N leg, on the tilted tag: no case here has a tag whose N is exactly
+// parallel to the record normal while U or V is off the plane.
 func TestCapOnRecord(t *testing.T) {
 	t.Parallel()
 	x, y := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)
@@ -94,6 +99,12 @@ func TestCapOnRecord(t *testing.T) {
 			}},
 			{"tag origin off the plane", func(f *topo.Face) {
 				f.Surface = surfacegeom.Plane{Frame: capLevelFrame(t, r3.NewVec(0, 0, up), x, y)}
+			}},
+			{"tag N rounded off a tilted record normal", func(f *topo.Face) {
+				tilted := capLevelFrame(t, r3.Vec{}, r3.NewVec(1, 2, 3), r3.NewVec(-2, 1, 0.5))
+				f.Surface = surfacegeom.Plane{Frame: tilted}
+				f.CapRecord = &topo.CapRecord{Frame: tilted, Xform: r3.Identity()}
+				f.Loops = nil
 			}},
 			{"tag tilted", func(f *topo.Face) {
 				f.Surface = surfacegeom.Plane{Frame: capLevelFrame(t, r3.Vec{}, r3.NewVec(1, 0, 1e-12), y)}

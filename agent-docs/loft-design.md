@@ -2992,7 +2992,13 @@ equalities: the `Plane` tag's `U` and `V` are orthogonal to `m` and its `N` is
 parallel to it; the tag origin and every vertex of every cap loop lie on the
 plane; and every `Circle3` or `Arc3` rim has its center on the plane and its
 axis parallel to `m`. Any other edge curve refuses. The cap then states
-`AxialDelta` 0. The check runs after the bore rewrite above, so it reads the
+`AxialDelta` 0. A join loft (`JoinDelta` nonzero,
+`agent-docs/axial-pattern-join-design.md`) never clears its caps: its
+`JoinDelta` also carries how far each placed operand's end plane sits from the
+reference's, so its record's section plane is not the ideal join's end plane.
+The other terms folded into `delta` are in-plane: the fillet's
+`ConstructionDelta` is a matched displacement inside each section plane, and
+the station and section terms are plane-local. The check runs after the bore rewrite above, so it reads the
 cap's final rim circles. In-plane station rounding does not displace a cap
 along its normal, so a section plane on which every held coordinate along the
 normal rounds to the plane itself, such as a world-axis plane under the

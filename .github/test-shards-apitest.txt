@@ -1919,6 +1919,7 @@
 9	0.04	TestAsymmetricChamferOnBrepStraightEdge
 9	0.01	TestAsymmetricChamferOnPrismCapEdge
 9	0.68	TestAxialSectionUnionPlateAndTongue
+10	0.00	TestAxialSectionUnionLiftedLobeKeepsCapLevel
 9	0.00	TestBodyPatchCapsBothRimsOfATubeInOneCall
 9	0.01	TestBodyPatchContextCancellationLeavesDocumentUnchanged
 9	1.23	TestBooleanBoundComposition

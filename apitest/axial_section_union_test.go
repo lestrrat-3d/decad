@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -171,4 +172,57 @@ func TestAxialSectionUnionPlateAndTongue(t *testing.T) {
 	want := pv.Value.Base() + tv.Value.Base() - 8*height
 	require.InDelta(t, want, v.Value.Base(), v.Bound.Base()+pv.Bound.Base()+tv.Bound.Base()+1e-9)
 	require.True(t, joined.IsSolid())
+}
+
+// TestAxialSectionUnionLiftedLobeKeepsCapLevel joins eight lobes to a disc,
+// one lobe lifted by 1e-15 mm, and extrudes a pin from the XY plane up to the
+// join's end cap. The join loft's caps lie on the reference's section plane
+// exactly, but the joined record stands for operands whose end planes do not
+// all sit there: the lifted lobe's top rounds to a float above 2. The pin's
+// top vertices must state a bound covering that gap. Shown to fail with the
+// loft build's JoinDelta gate on clearing exact cap levels deleted (the top
+// vertices read Exact at z = 2).
+func TestAxialSectionUnionLiftedLobeKeepsCapLevel(t *testing.T) {
+	t.Parallel()
+	const r, height, n = 3.0, 2.0, 8
+	doc := decad.New()
+	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
+	lift, err := r3.Translation(r3.NewVec(0, 0, 1e-15))
+	require.NoError(t, err)
+	lobes := make([]*decad.Body, n)
+	liftedTop := 0.0
+	for k := range lobes {
+		lobes[k] = lobeLoft(t, doc, r, 2*math.Pi*float64(k)/float64(n), 0.4*math.Pi/float64(n), height)
+		if k != 0 {
+			continue
+		}
+		lobes[k], err = decad.Transform(t.Context(), lobes[k], lift)
+		require.NoError(t, err)
+		for _, v := range lobes[k].Vertices() {
+			liftedTop = max(liftedTop, v.Position().Value.Z)
+		}
+	}
+	require.Greater(t, liftedTop, height, "the lifted lobe's top rounds above the disc's")
+	joined, err := decad.Union(t.Context(), disc, lobes...)
+	require.NoError(t, err)
+
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	s.CreateCircle(s.Origin(), 0.5)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	pin, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.ToFace{Body: joined, Face: capEndFace(joined)})
+	require.NoError(t, err)
+	tops := 0
+	for _, v := range pin.Vertices() {
+		p := v.Position()
+		if p.Value.Z < height/2 {
+			continue
+		}
+		tops++
+		require.Equal(t, decad.Approximate, p.Exactness)
+		require.GreaterOrEqual(t, p.Bound.Base(), liftedTop-height, "the top must cover the lifted lobe's end plane")
+	}
+	require.Positive(t, tops)
 }
