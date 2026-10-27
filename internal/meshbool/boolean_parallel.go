@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 )
 
 var ErrContactBatchStop = errors.New("decad: contact batch stopped")
@@ -261,6 +263,12 @@ func runContactBatch(ctx context.Context, ma, mb *BoolMesh, pairs []ContactPair,
 	}
 	if workers > len(pairs) {
 		workers = len(pairs)
+	}
+	// Several booleans can classify contacts at once. Share the package-wide
+	// worker budget so each call does not start its full cap independently.
+	workers, reserved := orderedwork.ReserveWorkers(workers)
+	if reserved != 0 {
+		defer orderedwork.ReleaseWorkers(reserved)
 	}
 	if workers <= 1 {
 		return runContactBatchSerial(ctx, ma, mb, pairs, results, classify)
