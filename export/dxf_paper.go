@@ -19,6 +19,8 @@ const (
 	DXFBorderLayer    = "BORDER"
 	DXFTextLayer      = "TEXT"
 	DXFDimensionLayer = "DIMENSION"
+	// DXFCentreLayer holds the centre marks of a sheet whose paper sets CentreLines.
+	DXFCentreLayer = "CENTRE"
 )
 
 // Sheet geometry in paper millimetres: the title block's height and the room a
@@ -28,6 +30,10 @@ const (
 	paperDimRoom     = 12.0
 	paperTextHeight  = 3.5
 	paperTick        = 1.5
+	// paperCentreOver is how far a circle's centre lines reach past its edge, paperCentreArc how far an arc's reach from
+	// its centre.
+	paperCentreOver = 2.0
+	paperCentreArc  = 1.5
 )
 
 // DXFField is one labelled entry of a sheet's title block. Label and Value hold
@@ -70,6 +76,10 @@ type DXFPaper struct {
 	// diameter of each whole circle and the radius of each whole arc the view draws
 	// as one (agent-docs/dxf-export-design.md §8).
 	Dimensions bool
+	// CentreLines marks the centre of each whole circle and arc a view draws as one with a cross of two chain-dashed
+	// lines on the CENTRE layer: a circle's reaching 2 mm past its edge, an arc's 3 mm across
+	// (agent-docs/dxf-export-design.md §11).
+	CentreLines bool
 }
 
 // DXFSheet writes several views of body at a stated scale on a sheet of stated
@@ -251,6 +261,18 @@ func DXFSheet(ctx context.Context, w io.Writer, body *decad.Body, tol units.Valu
 		moveCircles(p, p.lines.HiddenCircles, DXFHiddenLayer)
 		moveArcs(p, p.lines.VisibleArcs, DXFVisibleLayer)
 		moveArcs(p, p.lines.HiddenArcs, DXFHiddenLayer)
+		if paper.CentreLines {
+			for _, c := range p.lines.VisibleCircles {
+				cx, cy, reach := (c.Centre[0]-p.minX)*scale+x, (c.Centre[1]-p.minY)*scale+y, c.Radius*scale+paperCentreOver
+				line(DXFCentreLayer, cx-reach, cy, cx+reach, cy)
+				line(DXFCentreLayer, cx, cy-reach, cx, cy+reach)
+			}
+			for _, a := range p.lines.VisibleArcs {
+				cx, cy := (a.Centre[0]-p.minX)*scale+x, (a.Centre[1]-p.minY)*scale+y
+				line(DXFCentreLayer, cx-paperCentreArc, cy, cx+paperCentreArc, cy)
+				line(DXFCentreLayer, cx, cy-paperCentreArc, cx, cy+paperCentreArc)
+			}
+		}
 		if paper.Dimensions {
 			// The width: extension lines down from both sides, a dimension line with
 			// a tick at each end, and the true width centred above it.
@@ -343,19 +365,21 @@ func dimensionLabel(v float64) string { return strconv.FormatFloat(round2(v), 'f
 func round2(v float64) float64 { return math.Round(v*100) / 100 }
 
 // dxfPaperHeader holds the sections before a sheet's entities: the two
-// linetypes and the five layers.
+// three linetypes and the six layers.
 const dxfPaperHeader = "  0\nSECTION\n  2\nHEADER\n  9\n$ACADVER\n  1\nAC1009\n  0\nENDSEC\n" +
 	"  0\nSECTION\n  2\nTABLES\n" +
-	"  0\nTABLE\n  2\nLTYPE\n 70\n     2\n" +
+	"  0\nTABLE\n  2\nLTYPE\n 70\n     3\n" +
 	"  0\nLTYPE\n  2\nCONTINUOUS\n 70\n     0\n  3\nSolid line\n 72\n    65\n 73\n     0\n 40\n0.0\n" +
 	"  0\nLTYPE\n  2\nHIDDEN\n 70\n     0\n  3\n__ __ __ __\n 72\n    65\n 73\n     2\n 40\n0.75\n 49\n0.5\n 49\n-0.25\n" +
+	"  0\nLTYPE\n  2\nCENTER\n 70\n     0\n  3\nChain line\n 72\n    65\n 73\n     4\n 40\n2.0\n 49\n1.25\n 49\n-0.25\n 49\n0.25\n 49\n-0.25\n" +
 	"  0\nENDTAB\n" +
-	"  0\nTABLE\n  2\nLAYER\n 70\n     5\n" +
+	"  0\nTABLE\n  2\nLAYER\n 70\n     6\n" +
 	"  0\nLAYER\n  2\n" + DXFVisibleLayer + "\n 70\n     0\n 62\n     7\n  6\nCONTINUOUS\n" +
 	"  0\nLAYER\n  2\n" + DXFHiddenLayer + "\n 70\n     0\n 62\n     8\n  6\nHIDDEN\n" +
 	"  0\nLAYER\n  2\n" + DXFBorderLayer + "\n 70\n     0\n 62\n     7\n  6\nCONTINUOUS\n" +
 	"  0\nLAYER\n  2\n" + DXFTextLayer + "\n 70\n     0\n 62\n     7\n  6\nCONTINUOUS\n" +
 	"  0\nLAYER\n  2\n" + DXFDimensionLayer + "\n 70\n     0\n 62\n     3\n  6\nCONTINUOUS\n" +
+	"  0\nLAYER\n  2\n" + DXFCentreLayer + "\n 70\n     0\n 62\n     1\n  6\nCENTER\n" +
 	"  0\nENDTAB\n" +
 	"  0\nENDSEC\n" +
 	"  0\nSECTION\n  2\nENTITIES\n"
