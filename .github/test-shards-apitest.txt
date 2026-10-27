@@ -1823,6 +1823,10 @@
 8	0.00	TestSelectorUnionEdgesOnAPrism
 8	0.03	TestSharedAnalyticEntityIsChargedOnce
 8	0.01	TestSheetSolidPairContainedProvenSound
+8	0.00	TestClassBBridgingPinUnion
+8	0.00	TestClassBThroughPinCutAndIntersect
+8	0.00	TestClassBBridgingPinOneUlpShort
+8	0.00	TestClassBBridgingPinMisses
 8	2.36	TestShellCoaxialCounterbore
 8	0.00	TestShellContextCancellationDuringOffsetSetupLeavesReceiverLive
 8	0.02	TestShellCupDownstream

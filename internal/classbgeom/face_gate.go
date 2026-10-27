@@ -122,7 +122,8 @@ func CurvedApart(ctx context.Context, faces []FaceRecord, tool ToolRecord, widen
 // allowFlush false, when a target plane is a tool cap's plane: B8 itself.
 // With allowFlush true a target plane may be a tool cap's plane, and flush
 // names each tool cap (Z0, Z1) that is. A shared plane admits nothing by
-// itself: FlushReach still has to find the one face the tool meets there.
+// itself: FlushReach still has to find every face the tool meets at a marked
+// cap's level.
 func CoplanarFaces(ctx context.Context, faces []FaceRecord, tool ToolRecord, allowFlush bool) ([2]bool, bool, error) {
 	var xs []Plane
 	for _, f := range faces {

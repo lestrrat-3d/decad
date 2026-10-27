@@ -28,10 +28,10 @@ import (
 // constant d) whose region holds Y's section. Over the tube, X is then the
 // slab between two such faces (through) or the half-space past one (rooted),
 // and every boolean of X and Y is Y's section swept over an interval, joined
-// to X's faces by those one or two faces taking Y's section as a hole. A Y
-// cap lying in the one face's plane is the flush reach (FlushReach), the one
-// coplanar contact B8 lets through. Every other pair misses silently and takes
-// the mesh path.
+// to X's faces by those one or two faces taking Y's section as a hole. Y caps
+// lying in the planes of every face the tube meets are the flush reach
+// (FlushReach), the one coplanar contact B8 lets through. Every other pair
+// misses silently and takes the mesh path.
 
 // Pair is an admitted pair stated in X's reference frame: X's face view
 // with each face's map onto the reference, Y's axes as signed reference axes,
@@ -162,10 +162,11 @@ func classBFaceView(ctx context.Context, payload topo.Payload) (breprecord.Paylo
 }
 
 // flushOpAdmitted reports whether op over a flush pair builds the solid the
-// rooted build states: a Union of a tool standing outside the face, and a Cut
-// or Intersect of a tool inside the target. The other three miss: a Union of
-// a tool inside is the target itself, and a Cut or Intersect of a tool
-// outside meets the target in the shared disk alone.
+// rooted, through or bridging build states: a Union of a tool standing
+// outside one face or bridging the gap between two, and a Cut or Intersect
+// of a tool inside the target. The other three miss: a Union of a tool
+// inside is the target itself, and a Cut or Intersect of a tool outside
+// meets the target in the shared disks alone.
 func flushOpAdmitted(op meshbool.OperationKind, side FlushSide) bool {
 	if op == meshbool.OpUnion {
 		return side == FlushOutside

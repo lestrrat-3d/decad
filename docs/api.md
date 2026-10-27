@@ -243,6 +243,11 @@ of a pin ending in the face from inside leaves a blind hole that opens there; an
 The cap and the face must hold the same level exactly. A pin that stops short by any gap, a length that only rounds
 onto the face (such as an inch distance), and a section touching the face's edge take the faceted path.
 
+A pin whose two end caps lie flat in two facing faces combines exactly in the same way. A `Union` of a pin bridging
+the gap of a U-shaped plate, from one prong's inner face to the other's, adds the pin with no end cap. A `Cut` of a
+pin running from one wall of a plate exactly to the opposite wall drills a through hole, and an `Intersect` of it is
+the pin. A pin that bridges the gap and runs on into the far prong takes the faceted path.
+
 A tapered `decad.Extrude` (`decad.WithTaper`) is an operand when every corner where a circular wall meets its
 neighbour is tangent. A line and an arc that meet tangent up to rounding, turning by an angle whose sine is at most 2⁻³², count as
 tangent, and the sliver between them is charged into the result's volume bound. Two arcs that meet that way, or a
