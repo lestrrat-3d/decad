@@ -1489,8 +1489,9 @@ before the candidate pass and keeps the smallest, the sweep on a tie:
 - the sweep sorts the boxes along the axis of largest extent and compares
   every pair that overlaps on that axis; a shape whose boxes all overlap
   there (a tall tube, a coil of many turns) compares nearly every pair;
-- the grid sizes a uniform grid — each axis's cell the boxes' median extent
-  when that exceeds the span over `F`, else the span over `⌈∛F⌉` — and
+- the grid sizes a uniform grid — each axis's cell the median of up to 1,024
+  evenly spaced box extents when that exceeds the span over `F`, else the span
+  over `⌈∛F⌉` — and
   records every box once per (x, y) column of the cells its extent meets,
   with its z cell range; it compares every pair of boxes sharing a cell,
   once per shared cell, and reports an overlapping pair only from the cell

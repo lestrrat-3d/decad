@@ -11,6 +11,8 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
+const gridMedianExtentSamples = 1024
+
 // This file is the crossing audit's second way to enumerate box-overlapping
 // pairs (agent-docs/loft-design.md §6): a uniform grid over the member boxes.
 // newPairScan counts, before any runs, the sweep, grid and tree work and
@@ -131,17 +133,21 @@ func newGridScanBelow(boxes [][2]r3.Vec, members []int, budget, beat uint64) (gr
 	}
 	count := float64(len(members))
 	side := math.Ceil(math.Cbrt(count))
-	extents := make([]float64, len(members))
+	extents := make([]float64, min(len(members), gridMedianExtentSamples))
 	for axis := range 3 {
 		lo, hi := math.Inf(1), math.Inf(-1)
-		for k, i := range members {
+		for _, i := range members {
 			a, b := vecAxis(boxes[i][0], axis), vecAxis(boxes[i][1], axis)
 			lo, hi = math.Min(lo, a), math.Max(hi, b)
-			extents[k] = b - a
 		}
 		span := hi - lo
 		if proofbound.IsNonFinite(span) {
 			return g, false
+		}
+		for sample := range extents {
+			i := members[sample*len(members)/len(extents)]
+			a, b := vecAxis(boxes[i][0], axis), vecAxis(boxes[i][1], axis)
+			extents[sample] = b - a
 		}
 		slices.Sort(extents)
 		size := extents[len(extents)/2]
