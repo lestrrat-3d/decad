@@ -44,3 +44,37 @@ func Example_mesh_reduce() {
 	// triangles: 32 -> 8
 	// vertices moved at most 0.71 mm
 }
+
+// ReduceMeshWithin thins a mesh as ReduceMesh does, but you state how far the
+// result may lie from the original surface and it proves the distance: the report's
+// SurfaceBound holds from the original to the result and back. Here a 8 by 8 grid
+// of unit squares is thinned within 0.8 mm.
+func Example_mesh_reduce_within() {
+	var src strings.Builder
+	for y := range 9 {
+		for x := range 9 {
+			fmt.Fprintf(&src, "v %d %d 0\n", x, y)
+		}
+	}
+	at := func(x, y int) int { return y*9 + x + 1 }
+	for y := range 8 {
+		for x := range 8 {
+			fmt.Fprintf(&src, "f %d %d %d\nf %d %d %d\n",
+				at(x, y), at(x+1, y), at(x+1, y+1), at(x, y), at(x+1, y+1), at(x, y+1))
+		}
+	}
+	mesh, err := decad.ReadOBJ(context.Background(), strings.NewReader(src.String()))
+	if err != nil {
+		fmt.Printf("failed to read mesh: %s\n", err)
+		return
+	}
+	reduced, report, err := decad.ReduceMeshWithin(context.Background(), mesh, units.Millimeters(0.8))
+	if err != nil {
+		fmt.Printf("failed to reduce: %s\n", err)
+		return
+	}
+	fmt.Printf("thinned: %t, within 0.8 mm: %t\n",
+		reduced.Report().Triangles < mesh.Report().Triangles, report.SurfaceBound.Base() <= 0.8)
+	// Output:
+	// thinned: true, within 0.8 mm: true
+}

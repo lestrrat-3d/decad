@@ -2607,3 +2607,6 @@
 10	0.01	TestShellOfAMeshSolidRefusals
 10	0.01	TestShellOpensAnLShapedMeshSolid
 10	0.01	TestShellGrowsOutwardFromAMeshSolid
+10	0.01	TestReduceMeshWithinStaysWithinItsStatedDistance
+10	0.01	TestReduceMeshWithinThinsAFinelyCutBlock
+10	0.01	TestReduceMeshWithinRefusals

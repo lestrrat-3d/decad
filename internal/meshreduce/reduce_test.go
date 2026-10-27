@@ -113,3 +113,30 @@ func TestReduceDropsATriangleThatRepeatsAnothersCells(t *testing.T) {
 	require.Equal(t, 1, got.DroppedTriangles)
 	require.Len(t, got.Vertices, 3)
 }
+
+func TestSurfaceBoundRefusesAReductionThatLeavesACollapsedPieceUncovered(t *testing.T) {
+	t.Parallel()
+	// A 10 mm triangle and, apart from it, one 0.1 mm triangle. A 1 mm cell collapses the small one to a
+	// point that no kept triangle has as a corner, so part of the input has no counterpart in the result.
+	verts := []r3.Vec{
+		{X: 0, Y: 0}, {X: 10, Y: 0}, {X: 0, Y: 10},
+		{X: 20, Y: 20}, {X: 20.1, Y: 20}, {X: 20, Y: 20.1},
+	}
+	tris := [][3]int{{0, 1, 2}, {3, 4, 5}}
+	got, err := meshreduce.Reduce(t.Context(), verts, tris, 1)
+	require.NoError(t, err)
+	require.Len(t, got.Triangles, 1)
+	require.False(t, got.Covered)
+	_, ok := meshreduce.SurfaceBound(got, verts)
+	require.False(t, ok)
+	// With a cell no vertex shares, nothing collapses and the bound is the rounding alone.
+	whole, err := meshreduce.Reduce(t.Context(), verts, tris, 0.01)
+	require.NoError(t, err)
+	require.True(t, whole.Covered)
+	bound, ok := meshreduce.SurfaceBound(whole, verts)
+	require.True(t, ok)
+	require.Less(t, bound, 1e-9)
+	_, _, found, err := meshreduce.ReduceWithin(t.Context(), verts, tris, 0.2)
+	require.NoError(t, err)
+	require.True(t, found, "some cell proves 0.2 mm")
+}

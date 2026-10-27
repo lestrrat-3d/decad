@@ -22,6 +22,10 @@ type Result struct {
 	// MaxMove is the greatest distance from an input vertex to the vertex that
 	// replaced it, in millimetres.
 	MaxMove float64
+	// Covered says every triangle that collapsed to a segment or a point lies, as
+	// that segment or point, on a triangle the result kept, so no part of the input
+	// surface is left without a counterpart.
+	Covered bool
 }
 
 type cell [3]int64
@@ -67,6 +71,7 @@ func Reduce(ctx context.Context, vertices []r3.Vec, triangles [][3]int, cellSize
 
 	seen := map[[3]int]bool{}
 	var kept [][3]int
+	var collapsed [][3]int
 	dropped := 0
 	for i, t := range triangles {
 		if i%65536 == 0 {
@@ -77,6 +82,7 @@ func Reduce(ctx context.Context, vertices []r3.Vec, triangles [][3]int, cellSize
 		a, b, c := cellOf[t[0]], cellOf[t[1]], cellOf[t[2]]
 		if a == b || b == c || a == c {
 			dropped++
+			collapsed = append(collapsed, [3]int{a, b, c})
 			continue
 		}
 		key := sorted(a, b, c)
@@ -88,6 +94,36 @@ func Reduce(ctx context.Context, vertices []r3.Vec, triangles [][3]int, cellSize
 		kept = append(kept, [3]int{a, b, c})
 	}
 
+	// A collapsed triangle's image is a segment or a point, and the surface is still covered where
+	// that segment is an edge of a kept triangle, or the point one of its corners.
+	edges := map[[2]int]bool{}
+	corners := map[int]bool{}
+	for _, t := range kept {
+		for k := range 3 {
+			x, y := t[k], t[(k+1)%3]
+			if x > y {
+				x, y = y, x
+			}
+			edges[[2]int{x, y}] = true
+			corners[x] = true
+		}
+	}
+	covered := true
+	for _, t := range collapsed {
+		switch {
+		case t[0] == t[1] && t[1] == t[2]:
+			covered = covered && corners[t[0]]
+		default:
+			x, y := t[0], t[1]
+			if x == y {
+				y = t[2]
+			}
+			if x > y {
+				x, y = y, x
+			}
+			covered = covered && edges[[2]int{x, y}]
+		}
+	}
 	// Renumber the cells in the order the kept triangles first use them.
 	index := make([]int, len(means))
 	for i := range index {
@@ -104,7 +140,50 @@ func Reduce(ctx context.Context, vertices []r3.Vec, triangles [][3]int, cellSize
 		}
 	}
 	return Result{Vertices: out, Triangles: kept, MergedVertices: len(vertices) - len(means),
-		DroppedTriangles: dropped, MaxMove: maxMove}, nil
+		DroppedTriangles: dropped, MaxMove: maxMove, Covered: covered}, nil
+}
+
+// SurfaceBound returns an upper bound, in millimetres, on how far a reduction that moved its
+// vertices by at most maxMove is from the mesh it reduced, in both directions, and whether it
+// holds. The reduced surface is the image of the input under the map that is affine on each
+// input triangle and takes each corner to its replacement, so every input point is within
+// maxMove of its image, which is on the result where its triangle survived and on a kept edge or
+// corner where it collapsed (Result.Covered); and every point of the result is the image of an
+// input point. The bound is maxMove raised above the rounding of the distances it was measured
+// with: a relative 1e-12 and eight ulps of the largest coordinate.
+func SurfaceBound(r Result, vertices []r3.Vec) (float64, bool) {
+	if !r.Covered || len(r.Triangles) == 0 {
+		return 0, false
+	}
+	largest := 0.0
+	for _, v := range vertices {
+		largest = math.Max(largest, math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))))
+	}
+	ulp := math.Nextafter(largest, math.Inf(1)) - largest
+	return r.MaxMove*(1+1e-12) + 8*ulp, true
+}
+
+// ReduceWithin reduces the mesh by the coarsest cell it can prove stays within distance of the
+// input surface (SurfaceBound): it tries the cell 0.9·distance/√3, whose every vertex moves less than
+// distance, then coarser cells in steps of 1.25, and keeps the proven reduction with the fewest
+// triangles. ok is false when no cell can be proven, and the bound of the kept reduction is
+// returned with it.
+func ReduceWithin(ctx context.Context, vertices []r3.Vec, triangles [][3]int, distance float64) (Result, float64, bool, error) {
+	var best Result
+	bestBound := 0.0
+	found := false
+	size := 0.9 * distance / math.Sqrt(3)
+	for range 25 {
+		r, err := Reduce(ctx, vertices, triangles, size)
+		if err != nil {
+			return Result{}, 0, false, err
+		}
+		if bound, ok := SurfaceBound(r, vertices); ok && bound <= distance && (!found || len(r.Triangles) < len(best.Triangles)) {
+			best, bestBound, found = r, bound, true
+		}
+		size *= 1.25
+	}
+	return best, bestBound, found, nil
 }
 
 func sorted(a, b, c int) [3]int {
