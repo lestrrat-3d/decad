@@ -121,8 +121,8 @@ slabs. Each level is also read as its exact range (prism-boolean §3.2): two
 tied levels merge only when both denote one rational, and neighbouring
 distinct levels must lie strictly in order across their ranges, so a 0.2 in
 top and a block drawn at 5.08 mm, which hold one float, neither touch nor
-order and take the mesh path. In a slab both operands reach, the region is `Union`'s select-all
-merge (prism-boolean §4.2, with its enclosed-void check) over the two
+order and take the mesh path. In a slab both operands reach, the region is
+`Union`'s select-all merge (prism-boolean §4.2, with its enclosed-void check) over the two
 records, with its §6 audit and §7 displacement; where the clean-nesting
 match below proves one region carries the other's outer whole as a hole,
 that merge is the containing region, and

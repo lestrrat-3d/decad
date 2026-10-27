@@ -180,8 +180,8 @@ transformed axis vector `R·N` (`N` when the common transform basis is the
 identity). The coplanar arm uses zero. `prismplacement.ShiftedInterval` adds `s` to each B
 endpoint as a `big.Rat`; every §3.2 comparison is exact. `Union` and `Cut`
 keep an operand's own endpoint. `Intersect` rounds a selected shifted B
-endpoint once and charges `rationalFloatError` plus B's incoming axial
-displacement (§7). No rounded float sum admits a short tool.
+endpoint once and charges `rationalFloatError` beside the displacement §7
+selects. No rounded float sum admits a short tool.
 
 `Intersect` has one additional G6 arm: exactly one operand may have exactly
 one hole when the other is hole-free. Reorder this symmetric operation so the
@@ -208,10 +208,10 @@ discipline: two teeth swept to visibly-the-same but not exactly equal heights
 (e.g. built through two different construction paths) refuse to the mesh
 path rather than being blessed as "close enough." All three relations are
 `big.Rat` comparisons over the operands' own recorded floats and G5's exact
-rational shift — no new rounding. So are the stacked and blind rows. An offset plane 0.1 mm below a target and a
-tool 0.3 mm tall put B's cap at the exact rational `fl(0.1) + fl(0.3)`, which
-is no float; G5 compares it as it is, and only `Intersect`'s result rounds it,
-charged (§7).
+rational shift — no new rounding. So are the stacked and blind rows. An
+offset plane 0.1 mm below a target and a tool 0.3 mm tall put B's cap at the
+exact rational `fl(0.1) + fl(0.3)`, which is no float; G5 compares it as it
+is, and only `Intersect`'s result rounds it, charged (§7).
 
 Each relation in every row must hold for the levels the held floats denote,
 not only for the floats. A level with zero displacement denotes its own float.
@@ -971,12 +971,16 @@ of publishing a section with a displacement no term here bounds.
 Each sweep endpoint is A's recorded endpoint after G5 proves the two intervals
 coincide, so its axial displacement is the per-end maximum of A and B's
 incoming displacement. The G5 shift is an exact rational, so `Union` and `Cut`
-add no new axial term. `Intersect` alone can take B's shifted endpoint
-`z + s`, which it rounds to the nearest float once; `rationalFloatError` over
-the exact rational charges that rounding into that end's `z0Delta`/`z1Delta`
-on top of B's own incoming displacement, and a tie between A's endpoint and
-B's shifted one (exact `big.Rat` equality) takes A's float with the larger of
-the two incoming displacements. The term is zero whenever `z + s` is a float
+add no new axial term. `Intersect` takes, at each end, the
+winning operand's endpoint: the higher lower end and the lower upper end. That
+end's displacement is the winner's own unless the loser's range, its held
+level widened by its displacement, reaches past the winner's range (exact over
+`big.Rat`); then the loser's true level may be the result, and the end takes
+the larger of the two displacements, which covers either. A tie (exact
+`big.Rat` equality) takes A's float with the larger of the two. When B's
+shifted endpoint `z + s` wins it rounds to the nearest float once, and
+`rationalFloatError` over the exact rational charges that rounding into that
+end's `z0Delta`/`z1Delta` beside the displacement. The rounding term is zero whenever `z + s` is a float
 — every datum-plane offset by a whole number of millimetres — and positive
 for an offset such as 0.1 mm under a 0.3 mm tool.
 

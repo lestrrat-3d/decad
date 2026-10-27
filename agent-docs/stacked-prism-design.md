@@ -102,11 +102,13 @@ competing far side, a chamfered end, a shell level, every stacked union level
 and the BRep stack of general-boolean §3 A7 record none.
 
 The denotations decide the interface arm, enter the split arm's level
-ranges (§7 stage 3), enter the I4 audit (§2.2) and decide when general-boolean §3
-A7's tool end meets a target cap. They also decide prism-boolean G5's span,
-match and overlap relations (prism-boolean §3.2), where a stack's first and
-last slab ends stand for the stack's own ends. Measurements,
-tessellation and every bound read the held floats and their displacements
+ranges (§7 stage 3), order and merge the stacked union's levels
+(`UnionLevels`, general-boolean §3 A1), enter the I4 audit (§2.2) and decide
+when general-boolean §3 A7's tool end meets a target cap. They also decide
+prism-boolean G5's span, match and overlap relations (prism-boolean §3.2),
+where a stack's first and last slab ends stand for the stack's own ends.
+Measurements, tessellation and every bound read the held floats and their
+displacements
 as before, so a displaced level still reads `Approximate` (§4).
 
 Modify-reach §9.1 wrote a `Shared` field on the interface for the material on

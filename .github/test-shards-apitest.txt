@@ -1175,6 +1175,7 @@
 10	0.00	TestBlindLevelRangeStackedOuterEnd
 10	0.00	TestBlindLevelRangeStackedUnion
 10	0.00	TestBlindLevelRangeToFaceOffset
+10	0.00	TestBlindLevelRangeIntersectExactEnds
 5	4.34	TestVerifyJointBoxLoopCrossingZero
 5	1.11	TestVerifyJointBoxLoopErrors
 5	7.74	TestVerifyJointBoxLoopGate

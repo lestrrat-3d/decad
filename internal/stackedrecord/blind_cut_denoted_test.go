@@ -211,16 +211,18 @@ func TestApplyBlindCutUndenotedInnerEnd(t *testing.T) {
 	t.Parallel()
 	// The first pocket's floor denotes 12 - 0.2 in. A tool whose end records
 	// no denotation is known only to its displacement, 1e-5: an end 1e-6 below
-	// the floor's float may lie above or below the floor, and one 1e-4 below
-	// lies inside the lower slab whatever its displacement.
+	// or above the floor's float may lie on either side of the floor, and one
+	// 1e-4 away lies inside the slab on its side whatever its displacement.
 	sp := firstPocket(t)
 	for _, tc := range []struct {
 		name   string
 		offset float64
 		splits bool
 	}{
-		{"within the displacement of the floor declines", 1e-6, false},
+		{"within the displacement below the floor declines", 1e-6, false},
+		{"within the displacement above the floor declines", -1e-6, false},
 		{"clear of the floor splits the lower slab", 1e-4, true},
+		{"clear of the floor splits the upper slab", -1e-4, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -229,7 +231,11 @@ func TestApplyBlindCutUndenotedInnerEnd(t *testing.T) {
 			require.Equal(t, tc.splits, ok)
 			if tc.splits {
 				require.Len(t, got.Slabs, 3)
-				require.Nil(t, got.Slabs[0].DenotedZ1(), "an undenoted end records no level")
+				split := 0
+				if tc.offset < 0 {
+					split = 1
+				}
+				require.Nil(t, got.Slabs[split].DenotedZ1(), "an undenoted end records no level")
 			}
 		})
 	}
@@ -266,4 +272,29 @@ func TestUnionLevelsReadRanges(t *testing.T) {
 		require.True(t, ok)
 		require.Len(t, levels, 3)
 	})
+}
+
+func TestBuildBlindCutUndenotedCap(t *testing.T) {
+	t.Parallel()
+	// The plate's bottom holds 0 with a 1e-5 displacement and no denotation.
+	// A pocket from the top whose floor lies 1e-6 above that float may break
+	// through the bottom, so no pocket is proven; one 1e-4 above it is.
+	plate := plateRecord(t)
+	plate.Z0Delta = 1e-5
+	for _, tc := range []struct {
+		name  string
+		floor float64
+		ok    bool
+	}{
+		{"floor within the bottom's displacement declines", 1e-6, false},
+		{"floor clear of the bottom's displacement builds", 1e-4, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tool := toolRecord(t, 2, 8, tc.floor-plateTop, 0, nil)
+			_, ok, err := stackedrecord.BuildBlindCut(t.Context(), proofbound.NewWorkBudget(t.Context()), plate, tool)
+			require.NoError(t, err)
+			require.Equal(t, tc.ok, ok)
+		})
+	}
 }

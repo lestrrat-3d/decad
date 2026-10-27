@@ -122,8 +122,9 @@ func ResolveAndBuildIntersect(ctx context.Context, budget *proofbound.WorkBudget
 	// §3.2's Intersect row, after G5's exact shift (prismplacement.ZShift) is applied
 	// to B's own recorded interval. Each result endpoint is A's own recorded
 	// float, or B's shifted endpoint rounded once with that rounding charged
-	// (prismplacement.IntersectLowerEnd and IntersectUpperEnd); a tie takes
-	// the larger displacement, since both operands' coordinates denote it.
+	// (prismplacement.IntersectLowerEnd and IntersectUpperEnd). The end keeps
+	// the winner's displacement unless the loser's range reaches past the
+	// winner's, or the two tie; then it takes the larger of both.
 	pbZ0, pbZ1 := prismplacement.AdmittedShiftedInterval(pa.PlacementOperand(), pb.PlacementOperand())
 	z0, z0Delta := prismplacement.IntersectLowerEnd(pa.Z0, pa.Z0Delta, pbZ0, pb.Z0Delta)
 	z1, z1Delta := prismplacement.IntersectUpperEnd(pa.Z1, pa.Z1Delta, pbZ1, pb.Z1Delta)

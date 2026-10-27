@@ -194,3 +194,22 @@ func TestBlindLevelRangeToFaceOffset(t *testing.T) {
 		})
 	}
 }
+
+// TestBlindLevelRangeIntersectExactEnds intersects a 20x20 plate over -3
+// mm..0.2 in with a 10x10 block over -1..2 mm. The result's ends are the
+// block's own exact levels, and the plate's displaced top lies 3 mm away, so
+// it cannot be the result's top: the volume is exactly 300 mm³.
+func TestBlindLevelRangeIntersectExactEnds(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	plate := twoSidedRect(t, doc, 0, 0, 20, 20, units.Inches(0.2), units.Millimeters(3))
+	block := twoSidedRect(t, doc, 5, 5, 15, 15, units.Millimeters(2), units.Millimeters(1))
+	got, err := decad.Intersect(t.Context(), plate, block)
+	require.NoError(t, err)
+	require.False(t, tookMeshPath(got))
+	volume, err := got.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, volume.Exactness)
+	require.Equal(t, 300.0, volumeMM(t, volume))
+	require.Zero(t, boundMM3(t, volume))
+}

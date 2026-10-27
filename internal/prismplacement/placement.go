@@ -97,32 +97,58 @@ func AdmittedShiftedInterval(pa, pb Operand) (*big.Rat, *big.Rat) {
 }
 
 // IntersectLowerEnd chooses the higher of A's lower level and B's exact
-// shifted lower level. The result's true level is the higher of the two true
-// levels, which may be the other operand's when their ranges overlap, so the
-// chosen endpoint carries the larger of both axial displacements: below the
-// held winner the true level lies within the winner's own displacement, and
-// above it within the larger of the two, since the loser's held level lies
-// lower. A tie takes A's float. A shifted B endpoint rounds once, and
+// shifted lower level, and the displacement that covers the true result: the
+// higher of the two true levels. The winner's own displacement covers it
+// unless the loser's range, its held level widened by its displacement,
+// reaches past the winner's; then the loser's true level may be the result,
+// and the larger of the two displacements covers either, since the loser's
+// held level lies on the winner's far side. A tie takes A's float and the
+// larger displacement. A shifted B endpoint rounds once, and
 // RationalFloatError charges that rounding beside the displacement.
 func IntersectLowerEnd(aVal, aDelta float64, bVal *big.Rat, bDelta float64) (float64, float64) {
 	return intersectEnd(aVal, aDelta, bVal, bDelta, true)
 }
 
 // IntersectUpperEnd chooses the lower of A's upper level and B's exact
-// shifted upper level, charging the larger displacement and B's rounding when
-// B supplies the result.
+// shifted upper level, with IntersectLowerEnd's displacement rule mirrored.
 func IntersectUpperEnd(aVal, aDelta float64, bVal *big.Rat, bDelta float64) (float64, float64) {
 	return intersectEnd(aVal, aDelta, bVal, bDelta, false)
 }
 
 func intersectEnd(aVal, aDelta float64, bVal *big.Rat, bDelta float64, lower bool) (float64, float64) {
-	cmp := proofarith.FloatRat(aVal).Cmp(bVal)
+	a := proofarith.FloatRat(aVal)
+	cmp := a.Cmp(bVal)
+	aWins := cmp == 0 || lower && cmp > 0 || !lower && cmp < 0
 	delta := max(aDelta, bDelta)
-	if cmp == 0 || lower && cmp > 0 || !lower && cmp < 0 {
+	if cmp != 0 {
+		win, winDelta, lose, loseDelta := a, aDelta, bVal, bDelta
+		if !aWins {
+			win, winDelta, lose, loseDelta = bVal, bDelta, a, aDelta
+		}
+		if !loserReaches(win, winDelta, lose, loseDelta, lower) {
+			delta = winDelta
+		}
+	}
+	if aWins {
 		return aVal, delta
 	}
 	held, _ := bVal.Float64()
 	return held, proofbound.AbsSumUpper(delta, proofarith.RationalFloatError(bVal, held))
+}
+
+// loserReaches reports whether the losing end's range reaches past the
+// winner's: for a lower end (the higher level wins) the loser's top lies above
+// the winner's bottom, and mirrored for an upper end. A non-finite
+// displacement reaches.
+func loserReaches(win *big.Rat, winDelta float64, lose *big.Rat, loseDelta float64, lower bool) bool {
+	wd, ld := proofarith.FloatRat(winDelta), proofarith.FloatRat(loseDelta)
+	if wd == nil || ld == nil {
+		return true
+	}
+	if lower {
+		return new(big.Rat).Add(lose, ld).Cmp(new(big.Rat).Sub(win, wd)) > 0
+	}
+	return new(big.Rat).Sub(lose, ld).Cmp(new(big.Rat).Add(win, wd)) < 0
 }
 
 // CutZIntervalSpans reports that the shifted tool interval provably spans the

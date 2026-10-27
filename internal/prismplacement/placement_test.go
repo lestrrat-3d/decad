@@ -127,19 +127,39 @@ func TestIntersectZIntervalOverlaps(t *testing.T) {
 
 func TestIntersectEndChargesBothDisplacements(t *testing.T) {
 	t.Parallel()
-	// A's upper end holds 5 exactly; B's holds one ulp above with a 1e-14
-	// displacement, so B's true end may lie below A's and become the result.
-	b := math.Nextafter(5, 6)
-	bVal := new(big.Rat).SetFloat64(b)
-	// The lowest true end B allows sits b - 1e-14 below the held winner 5.
-	lowest := new(big.Rat).Sub(bVal, new(big.Rat).SetFloat64(1e-14))
-	gap := new(big.Rat).Sub(big.NewRat(5, 1), lowest)
-	held, delta := prismplacement.IntersectUpperEnd(5, 0, bVal, 1e-14)
-	require.Equal(t, 5.0, held)
-	require.GreaterOrEqual(t, new(big.Rat).SetFloat64(delta).Cmp(gap), 0, "the bound covers B's lowest true end")
-	held, delta = prismplacement.IntersectLowerEnd(b, 0, new(big.Rat).SetInt64(5), 1e-14)
-	require.Equal(t, b, held)
-	highest := new(big.Rat).Add(big.NewRat(5, 1), new(big.Rat).SetFloat64(1e-14))
-	require.GreaterOrEqual(t, new(big.Rat).SetFloat64(delta).Cmp(highest.Sub(highest, bVal)), 0,
-		"the bound covers B's highest true start")
+	five, up := big.NewRat(5, 1), math.Nextafter(5, 6)
+	upRat := new(big.Rat).SetFloat64(up)
+	// covers reports whether delta reaches from held to the farthest true
+	// result end, far.
+	covers := func(held float64, delta float64, far *big.Rat) bool {
+		gap := new(big.Rat).Sub(far, new(big.Rat).SetFloat64(held))
+		return new(big.Rat).SetFloat64(delta).Cmp(gap.Abs(gap)) >= 0
+	}
+	t.Run("A wins, B's range reaches past it", func(t *testing.T) {
+		t.Parallel()
+		// B's upper end holds one ulp above 5 with a 1e-14 displacement, so
+		// B's true end may lie below A's and become the result.
+		held, delta := prismplacement.IntersectUpperEnd(5, 0, upRat, 1e-14)
+		require.Equal(t, 5.0, held)
+		require.True(t, covers(held, delta, new(big.Rat).Sub(upRat, new(big.Rat).SetFloat64(1e-14))))
+	})
+	t.Run("B wins, A's range reaches past it", func(t *testing.T) {
+		t.Parallel()
+		// A's lower end holds 5 with a 1e-14 displacement and B's one ulp
+		// above it with none: A's true start may lie above B's.
+		held, delta := prismplacement.IntersectLowerEnd(5, 1e-14, upRat, 0)
+		require.Equal(t, up, held)
+		require.True(t, covers(held, delta, new(big.Rat).Add(five, new(big.Rat).SetFloat64(1e-14))))
+	})
+	t.Run("a loser that cannot reach keeps the winner's displacement", func(t *testing.T) {
+		t.Parallel()
+		// B's upper end is 3 above A's: its displacement cannot make it the
+		// result, so A's exact end stays exact.
+		held, delta := prismplacement.IntersectUpperEnd(2, 0, big.NewRat(5, 1), 1e-14)
+		require.Equal(t, 2.0, held)
+		require.Zero(t, delta)
+		held, delta = prismplacement.IntersectLowerEnd(-3, 1e-14, big.NewRat(-1, 1), 0)
+		require.Equal(t, -1.0, held)
+		require.Zero(t, delta)
+	})
 }
