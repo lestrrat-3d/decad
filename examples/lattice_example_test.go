@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -71,4 +72,43 @@ func Example_schwarz_diamond_lattice() {
 	// Output:
 	// Schwarz P: closed: true, solid fraction: 0.57
 	// diamond: closed: true, solid fraction: 0.41
+}
+
+// Infill fills a solid with a lattice and keeps the lattice material inside it, the
+// way a slicer fills a print. Here a 10 x 10 x 12 mm block is filled with a gyroid
+// repeating every 10 mm, and the infill is lighter than the block.
+func Example_infill() {
+	doc := decad.New()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to start a sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(5, 5, 15, 15)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	block, err := decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(12), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	filled, err := decad.Infill(context.Background(), block, decad.InfillSpec{
+		Kind: decad.GyroidInfill, Cell: units.Millimeters(10), Level: units.Scalar(0.8), Resolution: 8})
+	if err != nil {
+		fmt.Printf("failed to fill: %s\n", err)
+		return
+	}
+	volume, err := filled.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	fmt.Printf("lighter than the block: %t\n", volume.Value.Base() < 1200)
+	// Output:
+	// lighter than the block: true
 }

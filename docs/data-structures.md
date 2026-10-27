@@ -127,6 +127,8 @@ configuration option.
 | `decad.MeshBody` | struct | An imported triangle mesh: vertices, triangles and what they say. Not a `decad.Body`. | `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP`, `decad.NewMeshBody` |
 | `decad.MeshImportOption` | option set | A limit on `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF` or `decad.ReadSTEP`: `decad.WithMaxMeshTriangles` or `decad.WithMaxMeshBytes`. | The caller |
 | `decad.SubDCage` | struct | A polygon cage: vertices and the faces that index them, wound counter-clockwise seen from outside. | `decad.SubDMesh` |
+| `decad.InfillSpec` | struct | An infill: the lattice kind, the cell length, the wall level and the samples to a cell. | `decad.Infill` |
+| `decad.LatticeKind` | enum | Which lattice an infill uses: `GyroidInfill`, `SchwarzPInfill` or `DiamondInfill`. | `decad.InfillSpec` |
 | `decad.LatticeSpec` | struct | A lattice: the box, the cell length, the wall level and the samples to a cell. | `decad.GyroidLattice`, `decad.SchwarzPLattice`, `decad.DiamondLattice` |
 | `decad.MeshReduceReport` | struct | The counts and the greatest vertex move `decad.ReduceMesh` reports: vertices merged, triangles dropped. | `decad.ReduceMesh` |
 | `decad.MeshRepairOption` | option set | A repair step of `decad.RepairMesh`: `decad.WithMeshWeld`, `decad.WithMeshOrient` or `decad.WithMeshFillHoles`. | The caller |
