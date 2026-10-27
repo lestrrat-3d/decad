@@ -1,9 +1,12 @@
 package pointquery
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"math"
 	"math/big"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -41,53 +44,80 @@ func cross(a, b ratVec) ratVec {
 	}
 }
 
-func segmentDistanceSquared(p, a, b ratVec) *big.Rat {
-	axis := subtract(b, a)
-	lengthSquared := dot(axis, axis)
-	fromStart := subtract(p, a)
-	if lengthSquared.Sign() == 0 {
-		return dot(fromStart, fromStart)
-	}
-	along := dot(fromStart, axis)
-	if along.Sign() <= 0 {
-		return dot(fromStart, fromStart)
-	}
-	if along.Cmp(lengthSquared) >= 0 {
-		fromEnd := subtract(p, b)
-		return dot(fromEnd, fromEnd)
-	}
-	parallelSquared := new(big.Rat).Quo(new(big.Rat).Mul(along, along), lengthSquared)
-	return new(big.Rat).Sub(dot(fromStart, fromStart), parallelSquared)
+// dyFraction is the exact value num/den, den positive.
+type dyFraction struct{ num, den proof.Dyadic }
+
+// less reports whether f < g, by cross-multiplying the positive denominators.
+func (f dyFraction) less(g dyFraction) bool {
+	return proof.DyCmp(proof.DyMul(f.num, g.den), proof.DyMul(g.num, f.den)) < 0
 }
 
-func triangleDistanceSquared(p, a, b, c ratVec) (*big.Rat, error) {
-	normal := cross(subtract(b, a), subtract(c, a))
-	normalSquared := dot(normal, normal)
-	if normalSquared.Sign() == 0 {
+// rat is the fraction as a reduced big.Rat, the one normalisation a triangle
+// distance pays.
+func (f dyFraction) rat() *big.Rat {
+	return new(big.Rat).Quo(f.num.Rat(), f.den.Rat())
+}
+
+var dyOne = proof.MustDyOf(1)
+
+// segmentDistanceSquared is the exact squared distance from p to the closed
+// segment ab, as a fraction of dyadics.
+func segmentDistanceSquared(p, a, b proof.DyV3) dyFraction {
+	axis := proof.DvSub(b, a)
+	lengthSquared := proof.DvDot(axis, axis)
+	fromStart := proof.DvSub(p, a)
+	startSquared := proof.DvDot(fromStart, fromStart)
+	if lengthSquared.IsZero() {
+		return dyFraction{startSquared, dyOne}
+	}
+	along := proof.DvDot(fromStart, axis)
+	if along.Sign() <= 0 {
+		return dyFraction{startSquared, dyOne}
+	}
+	if proof.DyCmp(along, lengthSquared) >= 0 {
+		fromEnd := proof.DvSub(p, b)
+		return dyFraction{proof.DvDot(fromEnd, fromEnd), dyOne}
+	}
+	// |p−a|² − along²/|b−a|², over the positive |b−a|².
+	num := proof.DySubScalar(proof.DyMul(startSquared, lengthSquared), proof.DyMul(along, along))
+	return dyFraction{num, lengthSquared}
+}
+
+// triangleNormal is the exact normal (b−a)×(c−a).
+func triangleNormal(a, b, c proof.DyV3) proof.DyV3 {
+	return proof.DvCross(proof.DvSub(b, a), proof.DvSub(c, a))
+}
+
+// triangleDistanceSquared is the exact squared distance from p to the closed
+// triangle abc. Every step is exact dyadic arithmetic; the result divides one
+// dyadic numerator by one positive dyadic denominator. A zero normal is an
+// error.
+func triangleDistanceSquared(p, a, b, c proof.DyV3) (*big.Rat, error) {
+	normal := triangleNormal(a, b, c)
+	if proof.DvIsZero(normal) {
 		return nil, fmt.Errorf(`%w: point query mesh contains a degenerate triangle`, decaderr.ErrUnsupported)
 	}
-	triangle := [3]ratVec{a, b, c}
+	triangle := [3]proof.DyV3{a, b, c}
 	projectionInside := true
 	for i := range triangle {
 		start, end := triangle[i], triangle[(i+1)%3]
-		side := dot(cross(subtract(end, start), subtract(p, start)), normal)
+		side := proof.DvDot(proof.DvCross(proof.DvSub(end, start), proof.DvSub(p, start)), normal)
 		if side.Sign() < 0 {
 			projectionInside = false
 			break
 		}
 	}
 	if projectionInside {
-		offset := dot(subtract(p, a), normal)
-		return new(big.Rat).Quo(new(big.Rat).Mul(offset, offset), normalSquared), nil
+		offset := proof.DvDot(proof.DvSub(p, a), normal)
+		return dyFraction{proof.DyMul(offset, offset), proof.DvDot(normal, normal)}.rat(), nil
 	}
-	var minimum *big.Rat
-	for i := range triangle {
-		distance := segmentDistanceSquared(p, triangle[i], triangle[(i+1)%3])
-		if minimum == nil || distance.Cmp(minimum) < 0 {
+	minimum := segmentDistanceSquared(p, a, b)
+	for i := 1; i < 3; i++ {
+		if distance := segmentDistanceSquared(p, triangle[i], triangle[(i+1)%3]); distance.less(minimum) {
 			minimum = distance
 		}
 	}
-	return minimum, nil
+	return minimum.rat(), nil
 }
 
 // boxDistanceSquared is a lower bound used only to skip a triangle whose
@@ -178,39 +208,165 @@ func (l *lazyVertices) at(i int) ratVec {
 	return l.exact[i]
 }
 
+// normalNonzeroFloat reports whether a float evaluation proves the exact
+// normal (b−a)×(c−a) nonzero. False leaves the triangle undecided, never
+// degenerate. Every nonzero difference must lie in [2^-300, 2^250]; a zero
+// float difference of finite floats is exact. Each component's float value
+// then carries at most three roundings on each product and one on their
+// difference, so its error is below 4.001*2^-53*(|l|+|r|), less than half
+// the 1e-15*(|l|+|r|) the test requires it to exceed. Products of admitted
+// differences are normal or exact zero, and a nonzero sum |l|+|r| is at
+// least 2^-600, so the bound itself stays normal.
+func normalNonzeroFloat(a, b, c r3.Vec) bool {
+	u := [3]float64{b.X - a.X, b.Y - a.Y, b.Z - a.Z}
+	v := [3]float64{c.X - a.X, c.Y - a.Y, c.Z - a.Z}
+	for _, x := range [6]float64{u[0], u[1], u[2], v[0], v[1], v[2]} {
+		x = math.Abs(x)
+		if x != 0 && (x < 0x1p-300 || x > 0x1p250) {
+			return false
+		}
+	}
+	for k := range 3 {
+		i, j := (k+1)%3, (k+2)%3
+		left, right := u[i]*v[j], u[j]*v[i]
+		if math.Abs(left-right) > 1e-15*(math.Abs(left)+math.Abs(right)) {
+			return true
+		}
+	}
+	return false
+}
+
+// degenerateTriangle reports whether the exact normal of finite vertices is
+// zero, the test triangleDistanceSquared rejects.
+func degenerateTriangle(a, b, c r3.Vec) bool {
+	return proof.DvIsZero(triangleNormal(proof.DyVec(a), proof.DyVec(b), proof.DyVec(c)))
+}
+
+// meshCandidate is one triangle and a downward-rounded lower bound on its
+// exact squared distance.
+type meshCandidate struct {
+	lower float64
+	index int
+}
+
 // MeshDistanceSquared returns the exact squared distance from p to the held
-// triangle set, which may be a selected face patch. All coordinates are finite
-// float64 values interpreted as exact dyadics. The caller must provide a
-// verified embedded mesh or a subset of its triangles.
+// triangle set, which may be a selected face patch. p and every vertex are
+// finite float64 values interpreted as exact dyadics; a non-finite p panics.
+// The caller must provide a verified embedded mesh or a subset of its
+// triangles.
+//
+// The result is the exact minimum of triangleDistanceSquared over every
+// triangle. A degenerate triangle makes that distance an error, so the result
+// then depends on whether the index-order scan in scanMeshInOrder reaches it.
+// The first pass spends the budget steps, checks indices and computes each
+// triangle's downward-rounded float box bound in index order. When it proves
+// every triangle non-degenerate, no visiting order can error, and the exact
+// distances are visited nearest box bound first. The triangle with the
+// smallest bound seeds the exact minimum. Only triangles whose bound lies
+// below the seed's upward-rounded minimum are kept, sorted by bound, and the
+// first bound at or above the current upward-rounded minimum ends the visit.
+// A skipped triangle's exact distance is at least its bound, so it cannot
+// lower the minimum: a float bound only ever skips a triangle, and the
+// minimum is always exact. The first exactly degenerate triangle hands the
+// rest of the work to scanMeshInOrder, which keeps the index-order result and
+// error. The visit after the first pass spends no budget steps, so every step
+// and every error arrives in the same order as the index-order scan.
 func MeshDistanceSquared(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int) (*big.Rat, error) {
 	if len(tris) == 0 {
 		return nil, fmt.Errorf(`%w: point query mesh has no triangles`, decaderr.ErrUnsupported)
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-	point := exactVec(p)
 	if err := checkFiniteVertices(budget, verts); err != nil {
 		return nil, err
 	}
-	exact := newLazyVertices(verts)
-	var minimum *big.Rat
-	var minimumUpper float64
-	for _, tri := range tris {
+	lower := make([]float64, len(tris))
+	seed := 0
+	for i, tri := range tris {
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		for _, index := range tri {
-			if index < 0 || index >= len(verts) {
-				return nil, fmt.Errorf(`%w: point query mesh has an invalid triangle index`, decaderr.ErrUnsupported)
+		if err := checkTriangleIndices(tri, len(verts)); err != nil {
+			return nil, err
+		}
+		a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
+		if !normalNonzeroFloat(a, b, c) && degenerateTriangle(a, b, c) {
+			return scanMeshInOrder(budget, p, verts, tris, i)
+		}
+		lower[i] = boxDistanceSquaredLower(p, a, b, c)
+		if lower[i] < lower[seed] {
+			seed = i
+		}
+	}
+	point := proof.DyVec(p)
+	distanceTo := func(tri [3]int) (*big.Rat, error) {
+		return triangleDistanceSquared(point, proof.DyVec(verts[tri[0]]), proof.DyVec(verts[tri[1]]), proof.DyVec(verts[tri[2]]))
+	}
+	minimum, err := distanceTo(tris[seed])
+	if err != nil {
+		return nil, err
+	}
+	minimumUpper := proofbound.RatFloatUp(minimum)
+	var candidates []meshCandidate
+	for i, bound := range lower {
+		if i != seed && bound < minimumUpper {
+			candidates = append(candidates, meshCandidate{lower: bound, index: i})
+		}
+	}
+	slices.SortFunc(candidates, func(x, y meshCandidate) int {
+		return cmp.Or(cmp.Compare(x.lower, y.lower), cmp.Compare(x.index, y.index))
+	})
+	for _, candidate := range candidates {
+		if candidate.lower >= minimumUpper {
+			break
+		}
+		distance, err := distanceTo(tris[candidate.index])
+		if err != nil {
+			return nil, err
+		}
+		if distance.Cmp(minimum) < 0 {
+			minimum = distance
+			minimumUpper = proofbound.RatFloatUp(minimum)
+		}
+	}
+	return minimum, nil
+}
+
+func checkTriangleIndices(tri [3]int, count int) error {
+	for _, index := range tri {
+		if index < 0 || index >= count {
+			return fmt.Errorf(`%w: point query mesh has an invalid triangle index`, decaderr.ErrUnsupported)
+		}
+	}
+	return nil
+}
+
+// scanMeshInOrder visits the triangles in index order. Triangles up to and
+// including checked have already spent their budget step and passed the
+// index check; each later one spends its step and is checked before its
+// distance. A triangle is skipped only when its float or exact box distance
+// is at least the current exact minimum, so the first degenerate triangle
+// the scan reaches is the error.
+func scanMeshInOrder(budget *proofbound.WorkBudget, p r3.Vec, verts []r3.Vec, tris [][3]int, checked int) (*big.Rat, error) {
+	point, dyPoint := exactVec(p), proof.DyVec(p)
+	exact := newLazyVertices(verts)
+	var minimum *big.Rat
+	var minimumUpper float64
+	for i, tri := range tris {
+		if i > checked {
+			if err := budget.Step(); err != nil {
+				return nil, err
+			}
+			if err := checkTriangleIndices(tri, len(verts)); err != nil {
+				return nil, err
 			}
 		}
 		if minimum != nil && boxDistanceSquaredLower(p, verts[tri[0]], verts[tri[1]], verts[tri[2]]) >= minimumUpper {
 			continue
 		}
-		a, b, c := exact.at(tri[0]), exact.at(tri[1]), exact.at(tri[2])
-		if minimum != nil && boxDistanceSquared(point, a, b, c).Cmp(minimum) >= 0 {
+		if minimum != nil && boxDistanceSquared(point, exact.at(tri[0]), exact.at(tri[1]), exact.at(tri[2])).Cmp(minimum) >= 0 {
 			continue
 		}
-		distance, err := triangleDistanceSquared(point, a, b, c)
+		distance, err := triangleDistanceSquared(dyPoint, proof.DyVec(verts[tri[0]]), proof.DyVec(verts[tri[1]]), proof.DyVec(verts[tri[2]]))
 		if err != nil {
 			return nil, err
 		}

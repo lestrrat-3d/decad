@@ -106,6 +106,15 @@ inequality puts the true boundary distance in
 `[max(0, sqrt(D²) − B), sqrt(D²) + B]`. The query computes these interval
 ends over exact rationals from the directed square-root floats and `B`.
 
+`MeshDistanceSquared` computes each triangle distance in exact dyadic
+arithmetic and divides once. A downward-rounded float box bound only skips
+a triangle whose bound is at least the upward-rounded exact minimum; it never
+admits one or decides the value. Triangles are visited smallest bound first
+once a float test with a proven error bound, or the exact normal, shows no
+triangle is degenerate. A mesh with a degenerate triangle keeps the
+index-order scan. Either way the query returns the value, budget steps and
+errors of the index-order scan.
+
 The distance query reads §2's mesh proof only; it does not consult §7 or §8.
 When §2 proves the point outside, that interval encloses the distance to the
 solid. When §2 proves inside or on the boundary, return exact zero. When the
