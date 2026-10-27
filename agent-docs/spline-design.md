@@ -1075,6 +1075,19 @@ before reporting a `Box`, a through-all stop or a `ConcaveRadius`: a candidate s
 that misses an interior root understates the reading, which is the direction that
 breaks the proof rather than merely widening it.
 
+**The restricted hull's splits run over integers.** `internal/freeform`'s
+`BernsteinSplit` and `BernsteinRestrict` put a row's coefficients over their
+least common denominator, run each de Casteljau level at `t = p/q` as
+`(q−p)·x + p·y` on the numerators while the shared denominator gains one `q`,
+and reduce each kept coefficient once. This changes the representation only:
+a `big.Rat` is held in lowest terms, so the exact value fixes it, and every
+coefficient is the one the per-operation rational triangle gives.
+`TestBernsteinSplitAndRestrictMatchRationalTriangle` holds both, and the
+pointers they share, to a copy of that triangle. The gain is cost. The loft
+fillet and cap chamfer rows reach the splits with coefficients of hundreds of
+bits, where a GCD after every product and sum costs more than the arithmetic
+itself.
+
 **A stationarity polynomial that is identically ZERO makes its objective
 constant, and a zero root count is never on its own the proof of anything.**
 Isolation returns an empty list for every polynomial below degree 1 —

@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -59,24 +60,30 @@ func SpanDirectionalValues(span BezierSpan, gu, gv *big.Rat) []*big.Rat {
 // own local [0, 1] — the same triangular scheme spline_length.go's
 // DyadicSpan.split uses, generalized from a fixed t = 1/2 to an arbitrary
 // rational t so it can land on wherever root isolation puts it.
+//
+// The triangle runs over integers (bernsteinIntSplit) and each output is
+// reduced once. Every big.Rat is held in lowest terms with a positive
+// denominator, so the exact value fixes its numerator and denominator: the
+// outputs equal, as canonical big.Rat values, those of the rational triangle
+// work[i] ← (1−t)·work[i] + t·work[i+1].
+//
+// The outputs share pointers the way that triangle shares them: left[0] is
+// values[0], right[n-1] is values[n-1], and right[0] is left[n-1] (the value
+// at t). Every other output is a fresh big.Rat.
 func BernsteinSplit(values []*big.Rat, t *big.Rat) (left, right []*big.Rat) {
 	n := len(values)
-	work := make([]*big.Rat, n)
-	copy(work, values)
-	left = make([]*big.Rat, 0, n)
-	right = make([]*big.Rat, n)
-	left = append(left, work[0])
-	right[n-1] = work[n-1]
-	oneMinusT := new(big.Rat).Sub(big.NewRat(1, 1), t)
-	for round := n - 1; round > 0; round-- {
-		for i := range round {
-			blend := new(big.Rat).Mul(oneMinusT, work[i])
-			blend.Add(blend, new(big.Rat).Mul(t, work[i+1]))
-			work[i] = blend
+	left, right = make([]*big.Rat, n), make([]*big.Rat, n)
+	left[0], right[n-1] = values[0], values[n-1]
+	work, den := bernsteinIntRow(values)
+	split := newBernsteinIntSplit(t)
+	for level := 1; level < n; level++ {
+		split.level(work[:n-level+1], den)
+		left[level] = proofarith.RatFrac(new(big.Rat), work[0], den)
+		if level < n-1 {
+			right[n-1-level] = proofarith.RatFrac(new(big.Rat), work[n-1-level], den)
 		}
-		left = append(left, work[0])
-		right[round-1] = work[round-1]
 	}
+	right[0] = left[n-1]
 	return left, right
 }
 
@@ -88,21 +95,153 @@ func BernsteinSplit(values []*big.Rat, t *big.Rat) (left, right []*big.Rat) {
 // restriction to the single point t = 1 is the polynomial's own endpoint
 // value, repeated, and computing it through the general path would divide by
 // the zero 1−a.
+//
+// Both splits run over integers. The right branch of the first split stays
+// unreduced: for a row of degree d, entry j leaves the triangle over
+// den·q^(d−j) and is scaled by q^j onto the common denominator den·q^d,
+// where q is a's denominator. Only the kept branch of the second split is
+// reduced, once per output, so the outputs are the canonical big.Rat values
+// of the two rational splits. [0, 1] is the identity restriction and returns
+// copies of values. A single value is its own restriction and is returned as
+// it stands, as the rational splits return it. Every other output is a fresh
+// big.Rat. An empty row panics on every path, as the rational splits do.
 func BernsteinRestrict(values []*big.Rat, a, b *big.Rat) []*big.Rat {
+	n := len(values)
+	last := values[n-1]
 	one := big.NewRat(1, 1)
 	if a.Cmp(one) == 0 {
-		out := make([]*big.Rat, len(values))
-		last := values[len(values)-1]
+		out := make([]*big.Rat, n)
 		for i := range out {
 			out[i] = new(big.Rat).Set(last)
 		}
 		return out
 	}
-	_, right := BernsteinSplit(values, a)
+	if n == 1 {
+		return []*big.Rat{values[0]}
+	}
+	if a.Sign() == 0 && b.Cmp(one) == 0 {
+		out := make([]*big.Rat, n)
+		for i, v := range values {
+			out[i] = new(big.Rat).Set(v)
+		}
+		return out
+	}
+	work, den := bernsteinIntRow(values)
+	// The right branch of the split at a = 0 is values itself:
+	// (1−0)·x + 0·y = x.
+	if a.Sign() != 0 {
+		first := newBernsteinIntSplit(a)
+		for level := 1; level < n; level++ {
+			first.level(work[:n-level+1], den)
+		}
+		// Entry j was last written at level n−1−j, over den·q^(n−1−j)
+		// before den reached den·q^(n−1); scaling it by q^j puts it there.
+		qPow := new(big.Int).Set(first.q)
+		for j := 1; j < n; j++ {
+			work[j].Mul(work[j], qPow)
+			if j < n-1 {
+				qPow.Mul(qPow, first.q)
+			}
+		}
+	}
 	span := new(big.Rat).Sub(b, a)
 	span.Quo(span, new(big.Rat).Sub(one, a))
-	left, _ := BernsteinSplit(right, span)
-	return left
+	second := newBernsteinIntSplit(span)
+	out := make([]*big.Rat, n)
+	out[0] = proofarith.RatFrac(new(big.Rat), work[0], den)
+	for level := 1; level < n; level++ {
+		second.level(work[:n-level+1], den)
+		out[level] = proofarith.RatFrac(new(big.Rat), work[0], den)
+	}
+	return out
+}
+
+// bernsteinIntRow returns the coefficients as integer numerators over their
+// least common denominator: values[i] = nums[i]/den, den > 0. The numerators
+// are fresh, so the split triangles may overwrite them.
+func bernsteinIntRow(values []*big.Rat) ([]*big.Int, *big.Int) {
+	den := big.NewInt(1)
+	var gcd big.Int
+	for _, v := range values {
+		d := v.Denom()
+		if d.Cmp(den) == 0 {
+			continue
+		}
+		gcd.GCD(nil, nil, den, d)
+		den.Quo(den, &gcd)
+		den.Mul(den, d)
+	}
+	nums := make([]*big.Int, len(values))
+	var scale big.Int
+	for i, v := range values {
+		scale.Quo(den, v.Denom())
+		nums[i] = new(big.Int).Mul(v.Num(), &scale)
+	}
+	return nums, den
+}
+
+// bernsteinIntSplit is one de Casteljau parameter t = p/q, q > 0, as the
+// integer weights of a level: (1−t)·x + t·y = ((q−p)·x + p·y)/q.
+type bernsteinIntSplit struct {
+	q, p, qp *big.Int
+	// pWeight and qpWeight are 0 for a zero weight, 1 for a unit weight and
+	// 2 otherwise; the level skips a product by 0 or 1 since its exact
+	// result is known.
+	pWeight, qpWeight int
+	scratch           *big.Int
+	term              big.Int
+}
+
+func newBernsteinIntSplit(t *big.Rat) *bernsteinIntSplit {
+	s := &bernsteinIntSplit{
+		q:       new(big.Int).Set(t.Denom()),
+		p:       new(big.Int).Set(t.Num()),
+		scratch: new(big.Int),
+	}
+	s.qp = new(big.Int).Sub(s.q, s.p)
+	s.pWeight, s.qpWeight = intWeight(s.p), intWeight(s.qp)
+	return s
+}
+
+func intWeight(x *big.Int) int {
+	switch {
+	case x.Sign() == 0:
+		return 0
+	case x.IsInt64() && x.Int64() == 1:
+		return 1
+	default:
+		return 2
+	}
+}
+
+// level runs one level of the triangle over row, whose entries are integer
+// numerators over den: row[i] ← (q−p)·row[i] + p·row[i+1] for every i but
+// the last, and den ← den·q. The exact value row[i]/den after the level is
+// (1−t)·x + t·y for the values x, y at i and i+1 before it. The last entry
+// is not updated and so no longer lies over den: callers read it before the
+// level, or rescale it as BernsteinRestrict does. The entries are the
+// triangle's own integers, never a caller's, so a product may swap an entry
+// with the scratch integer instead of copying it back.
+func (s *bernsteinIntSplit) level(row []*big.Int, den *big.Int) {
+	for i := range len(row) - 1 {
+		x, y := row[i], row[i+1]
+		switch s.qpWeight {
+		case 0:
+			x.SetInt64(0)
+		case 2:
+			s.scratch.Mul(s.qp, x)
+			row[i], s.scratch = s.scratch, x
+			x = row[i]
+		}
+		switch s.pWeight {
+		case 1:
+			x.Add(x, y)
+		case 2:
+			s.term.Mul(s.p, y)
+			x.Add(x, &s.term)
+		}
+	}
+	den.Mul(den, s.q)
 }
 
 // BernsteinHull returns the min and max of a Bernstein form's own
