@@ -36,7 +36,10 @@ type Operand struct {
 }
 
 // OperandFromPayload reads one operand as slabs: a prism is one slab over its
-// interval, a stacked prism keeps its slabs, and an A1 brep keeps its stack.
+// interval with its denoted levels, a stacked prism keeps its slabs, and an A1
+// brep keeps its stack. Only the A7 crossing cut reads the denoted levels; the
+// union and brep builders write new slabs that record none
+// (agent-docs/stacked-prism-design.md §2.1).
 // Its proxy carries the frame, placement and section displacement read by
 // prismboolean's admission. A brep without an A1 stack is not an operand.
 func OperandFromPayload(payload topo.Payload) (Operand, bool) {
@@ -45,6 +48,7 @@ func OperandFromPayload(payload topo.Payload) (Operand, bool) {
 		return Operand{Proxy: p, Slabs: []stackedrecord.Slab{{
 			Regions: []profileRecord{p.Profile},
 			Z0:      p.Z0, Z1: p.Z1, Z0Delta: p.Z0Delta, Z1Delta: p.Z1Delta,
+			Z0Denoted: p.Z0Denoted, Z1Denoted: p.Z1Denoted,
 		}}}, true
 	case stackedPrismPayload:
 		return Operand{Proxy: p.OuterPrism(), Slabs: p.Slabs}, true

@@ -82,11 +82,15 @@ or `DistanceSide` extent records the exact rescale of the magnitude, halved
 for a full-length `Symmetric` and negated for the side below the plane. The
 blind cut records its inner end as G5's exact shift plus the tool's denoted
 level, and carries the target's own end denotations onto the stack's ends. A
-`Transform` or `Copy` keeps them with the rest of the record. A `ToFace` or `ThroughAll` stop, a chamfered end, a shell level and
-every union-built level record none.
+`Transform` or `Copy` keeps them with the rest of the record, and so does a
+through `Cut` whose tool nests inside a prism target, since it keeps the
+target's levels. A `ToFace` or `ThroughAll` stop, a chamfered end, a shell
+level, every union-built level and the BRep stack of general-boolean §3 A7
+record none.
 
 The denotations decide the interface arm, guard the split arm's order
-(§7 stage 3) and enter the I4 audit (§2.2). Measurements,
+(§7 stage 3), enter the I4 audit (§2.2) and decide when general-boolean §3
+A7's tool end meets a target cap. Measurements,
 tessellation and every bound read the held floats and their displacements
 as before, so a displaced level still reads `Approximate` (§4).
 
@@ -437,7 +441,9 @@ Each admitted arm ships its implementation and tests together.
 
    A blind rectangle crossing one existing rectangular through hole on a
    prism target uses general-boolean §3 A7's BRep path. Its partial floor
-   cannot be represented by this payload's whole column rings.
+   cannot be represented by this payload's whole column rings. A7 reads the
+   tool's and the target's denoted levels (§2.1) where the tool ends at a
+   target cap.
 4. **Surveys and clearance.** DX7, DX8, DX6 and `analyticBodiesEqual` for the
    stacked payload.
 
