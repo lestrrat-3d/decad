@@ -504,3 +504,127 @@ func TestMinWallAgreesWithTheShortestRunOfCubes(t *testing.T) {
 	require.Greater(t, checked, 200)
 	require.Greater(t, thin, 20, "carving leaves cubes of one thick often enough")
 }
+
+// faceRegions groups the quads of a meshed set into planar faces: quads on one plane facing one way that share an edge
+// there. Each region is the quad indices, the axis and sign of its normal and the cubes just behind it.
+type faceRegion struct {
+	quads  []int
+	axis   int
+	sign   int
+	behind [][3]int
+}
+
+func (v *voxels) regions(verts []r3.Vec, face [][4]int) []faceRegion {
+	type key struct {
+		axis, sign int
+		plane      float64
+	}
+	type quad struct {
+		key    key
+		low    [3]float64
+		behind [3]int
+	}
+	quads := make([]quad, len(face))
+	for i, q := range face {
+		p0, p1, p2 := verts[q[0]], verts[q[1]], verts[q[2]]
+		n := p1.Sub(p0).Cross(p2.Sub(p0))
+		comp := [3]float64{n.X, n.Y, n.Z}
+		axis := 0
+		for a := range 3 {
+			if comp[a] != 0 {
+				axis = a
+			}
+		}
+		sign := 1
+		if comp[axis] < 0 {
+			sign = -1
+		}
+		low := [3]float64{math.Inf(1), math.Inf(1), math.Inf(1)}
+		for _, k := range q {
+			low[0], low[1], low[2] = math.Min(low[0], verts[k].X), math.Min(low[1], verts[k].Y), math.Min(low[2], verts[k].Z)
+		}
+		behind := [3]int{int(low[0]), int(low[1]), int(low[2])}
+		if sign > 0 {
+			behind[axis]-- // a face turned toward +axis is the top of the cube below its plane
+		}
+		quads[i] = quad{key: key{axis, sign, [3]float64{verts[q[0]].X, verts[q[0]].Y, verts[q[0]].Z}[axis]}, low: low, behind: behind}
+	}
+	seen := make([]bool, len(quads))
+	var out []faceRegion
+	for i := range quads {
+		if seen[i] {
+			continue
+		}
+		region := faceRegion{axis: quads[i].key.axis, sign: quads[i].key.sign}
+		stack := []int{i}
+		seen[i] = true
+		for len(stack) > 0 {
+			j := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			region.quads = append(region.quads, j)
+			region.behind = append(region.behind, quads[j].behind)
+			for k := range quads {
+				if seen[k] || quads[k].key != quads[j].key {
+					continue
+				}
+				// Neighbouring cubes on the plane differ by one step along one of the two other axes.
+				d := 0
+				for a := range 3 {
+					d += int(math.Abs(float64(quads[k].behind[a] - quads[j].behind[a])))
+				}
+				if d == 1 {
+					seen[k] = true
+					stack = append(stack, k)
+				}
+			}
+		}
+		out = append(out, region)
+	}
+	return out
+}
+
+func TestPressAgreesWithTheCubeByCubeSlab(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(15, 16))
+	outward, inward := 0, 0
+	for range 300 {
+		a := randomVoxels(rng)
+		v, tris, face, ok := a.mesh()
+		if !ok {
+			continue
+		}
+		regions := a.regions(v, face)
+		region := regions[rng.IntN(len(regions))]
+		mark := make([]bool, len(tris))
+		for _, q := range region.quads {
+			mark[2*q], mark[2*q+1] = true, true
+		}
+		// The slab behind a face is the cubes just under it, and the slab in front the cubes just out from it.
+		front := 0
+		occupied := false
+		for _, c := range region.behind {
+			c[region.axis] += region.sign
+			if a.at(c[0], c[1], c[2]) {
+				occupied = true
+			}
+			front++
+		}
+		if verts, out, err := orthoshell.Press(v, tris, mark, 1); err == nil {
+			outward++
+			require.False(t, occupied, "a face pressed into material is refused")
+			closedAndAxisSquare(t, verts, out)
+			require.InDelta(t, float64(a.count()+front), volume(verts, out), 1e-9, "pressing a face of %d cubes out", a.count())
+		} else {
+			require.True(t, declines(err), "%v", err)
+		}
+		if verts, out, err := orthoshell.Press(v, tris, mark, -1); err == nil {
+			inward++
+			closedAndAxisSquare(t, verts, out)
+			require.InDelta(t, float64(a.count()-len(region.behind)), volume(verts, out), 1e-9, "pressing a face of %d cubes in", a.count())
+		} else {
+			require.True(t, declines(err), "%v", err)
+		}
+	}
+	require.Greater(t, outward, 30)
+	require.Greater(t, inward, 30)
+}
