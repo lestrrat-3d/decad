@@ -198,7 +198,7 @@ Each of these returns a new body and retires its input.
 | `decad.FilletChord` | Rounds convex or concave edges between two planar faces, or circular ones between a plane and a surface of revolution, with an arc stated by its chord length. |
 | `decad.ChamferAngle` | Bevels convex or concave edges between two planar faces, or circular ones between a plane and a surface of revolution, by a distance along a reference face and an angle from that face. |
 | `decad.MoveFace` | Press-pulls one face of a mesh solid whose faces all square to an axis along its normal; a positive distance grows the body and a negative one cuts it, and the walls beside it follow. |
-| `decad.Shell` | Removes the selected faces and lines the rest with a wall. `decad.WithShellSense` picks `decad.Inward` or `decad.Outward`. A mesh solid whose faces all square to an axis shells inward with mitered corners. |
+| `decad.Shell` | Removes the selected faces and lines the rest with a wall. `decad.WithShellSense` picks `decad.Inward` or `decad.Outward`. `decad.WithNoOpenings` keeps every face and hollows the body into one outer shell around a cavity: for a straight prism, a revolve, or a drilled bar whose hole runs straight through, where the cavity is a ring round a tube lining the hole (inward only when the body has a hole). A mesh solid whose faces all square to an axis shells inward with mitered corners. |
 | `decad.Draft` | Leans selected walls about a `decad.NeutralPlane` (`decad.NeutralFace`). |
 | `decad.Hole` | Cuts a round hole (or a rectangular, slot or regular polygonal one from `HoleSpec.Shape`), optionally drafted with `HoleSpec.Draft` or tapped with a `decad.HoleThread`, at a point on a planar face, or radially into a cylindrical one, through or blind, with an optional `decad.Counterbore` or `decad.Countersink` head. A `decad.RectangularHole` or `decad.SlotHole` shape cuts that cross-section instead, without a head. |
 | `decad.LookupThread` | Reads a thread designation such as `M10`, `M10x1.25` or `1/4-20` into its major diameter and pitch. |
@@ -322,7 +322,7 @@ Features choose edges and faces with queries.
 | Topology | `Body.Lumps`, `Body.Shells`, `Body.Faces`, `Body.Edges`, `Body.Vertices`, `Face.Loops`, `Edge.Faces` |
 | Geometry | `Face.Surface`, `Edge.Curve`, `Face.NormalAt`, `Edge.Length`, `Vertex.Position` |
 | Cross-section | `Body.Section` returns a sketch and its profiles on a plane. A mesh `Union`, `Cut` or `Intersect` result of two prism, stacked-prism or slab-stack BRep bodies sections exactly from its operation history when both operands have straight-line sections there and the result is one hole-free region whose corners are exact. `Body.SectionOutline` returns the closed outlines of the verified mesh cut by a plane, for bodies `Body.Section` refuses. |
-| Mesh | `Body.Tessellate` returns a `*decad.Mesh` with its chord error bound. |
+| Mesh | `Body.Tessellate` returns a `*decad.Mesh` with its chord error bound. It refuses a body whose cavity or outer shell winds the wrong way, and `Document.Verify` reports such a body as an invalid solid. |
 
 `Body.MassProperties` uses certified source moments for some strictly
 contained prism Cuts when they produce tighter readings that agree with the

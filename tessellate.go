@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/tessaudit"
 	"github.com/lestrrat-3d/decad/internal/tessdispatch"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -248,6 +249,11 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 		Alloc:   handleAlloc{},
 	})
 	if err != nil {
+		return nil, err
+	}
+	// agent-docs/tessellation-design.md §4: every outer shell winds outward and
+	// every void shell into its cavity, at every verification level.
+	if err := topobuild.RequireShellWinding(ctx, node, b.n.Lumps); err != nil {
 		return nil, err
 	}
 	mesh := bornMesh(&Mesh{n: *node})

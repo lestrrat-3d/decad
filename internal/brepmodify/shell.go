@@ -63,10 +63,22 @@ func Shell(ctx context.Context, env topo.Env, b *topo.Body, call ShellCall) (*to
 		if rp, ok := b.Payload.(revolveplan.Payload); ok && rp.Full && len(rp.Profile.Holes) == 0 {
 			return shellRevolve(ctx, env, b, rp, nil, s, t, tmm, tDelta)
 		}
-		// Reach BX5: a hole-free straight prism keeps both caps and lines
-		// them with a wall, closing a cavity.
-		if pp, ok := b.Payload.(prismrecord.Payload); ok && len(pp.Profile.Holes) == 0 {
+		// Reach BX5: a straight prism keeps both caps and lines them with a
+		// wall, closing a cavity. A holed section builds inward only, and
+		// prismshell.BuildClosed refuses the outward one (SX8).
+		if pp, ok := b.Payload.(prismrecord.Payload); ok {
 			return shellClosedPrism(ctx, env, pp, s, t, tmm, tDelta)
+		}
+		// Modify-general §3.2: a brep record that route P reads as a prism
+		// along some reference axis is that prism, whatever the axis, and
+		// takes the same closed shell inward.
+		if bp, ok := b.Payload.(breprecord.Payload); ok && call.Inward {
+			if pp, read, err := closedShellPrismReading(ctx, b, bp); err != nil || read {
+				if err != nil {
+					return nil, err
+				}
+				return shellClosedPrism(ctx, env, pp, s, t, tmm, tDelta)
+			}
 		}
 		if pp, ok := sweeprecord.StraightPrismReduction(b.Payload); ok && len(pp.Profile.Holes) == 0 {
 			return shellClosedPrism(ctx, env, pp, s, t, tmm, tDelta)
@@ -172,9 +184,9 @@ func Shell(ctx context.Context, env topo.Env, b *topo.Body, call ShellCall) (*to
 }
 
 // shellClosedPrism is reach BX5 (agent-docs/modify-reach-design.md §9.2), built by
-// prismshell.BuildClosed: WithNoOpenings on a hole-free straight prism keeps
-// every face and lines it with a wall of thickness t, closing a cavity whose
-// walls form one void shell (FaceShell.IsVoid).
+// prismshell.BuildClosed: WithNoOpenings on a straight prism keeps every face
+// and lines it with a wall of thickness t, closing a cavity whose walls form
+// one void shell (FaceShell.IsVoid). A holed section builds inward only.
 func shellClosedPrism(ctx context.Context, env topo.Env, pp prismrecord.Payload, s float64, t units.Value, tmm, tDelta float64) (*topo.Body, error) {
 	return prismshell.BuildClosed(ctx, env, prismshell.CapShellInput{
 		Prism: pp, KeptCaps: 2, Sense: s, Thickness: t, HeldThickness: tmm, ThicknessDelta: tDelta,

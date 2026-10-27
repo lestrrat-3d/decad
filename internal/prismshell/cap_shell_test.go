@@ -10,8 +10,10 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topo/topotest"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -134,6 +136,46 @@ func TestCapShellBuilds(t *testing.T) {
 			require.False(t, shells[0].Void)
 			require.True(t, shells[1].Void, "the cavity is a void shell")
 		}
+	})
+	t.Run("closed holed", func(t *testing.T) {
+		t.Parallel()
+		// The 10² section less a 2² hole, 10 tall, hollowed inward by 1: the
+		// cavity is the 8² inset less the hole's dilation (4² with its four
+		// corners rounded, 12 + π) over the 8 between the kept caps, a ring
+		// around the hole's lining.
+		holed := momentinput.Profile{Outer: squareAt(0, 0, 10), Holes: []sectionrecord.LoopRecord{reversed(squareAt(4, 4, 2))}}
+		body, err := prismshell.BuildClosed(t.Context(), capShellEnv(), capShell(t, holed, 10, 1, 1, 2))
+		require.NoError(t, err)
+		requireVolume(t, 96*10-(64-12-math.Pi)*8, body)
+		require.Len(t, body.Lumps, 1)
+		shells := body.Lumps[0].Shells
+		require.Len(t, shells, 2)
+		require.False(t, shells[0].Void)
+		require.True(t, shells[1].Void, "the ring around the hole's lining is the void shell")
+		sp, ok := body.Payload.(stackedrecord.Payload)
+		require.True(t, ok)
+		require.True(t, sp.ClosedShell)
+		mesh, err := stackedrecord.Tessellate(t.Context(), body, sp, 0.05, true)
+		require.NoError(t, err)
+		require.NoError(t, topobuild.RequireShellWinding(t.Context(), mesh, body.Lumps))
+
+		// The same record without the mark reads the lining's outer wall as
+		// exterior, so the cavity becomes a second, inside-out lump. The
+		// per-shell winding audit refuses that mesh.
+		sp.ClosedShell = false
+		unmarked, err := stackedrecord.Build(t.Context(), capShellEnv(), sp, stackedrecord.OwnPlan{})
+		require.NoError(t, err)
+		require.Len(t, unmarked.Lumps, 2)
+		require.False(t, unmarked.Lumps[1].Shells[0].Void)
+		mesh, err = stackedrecord.Tessellate(t.Context(), unmarked, sp, 0.05, true)
+		require.NoError(t, err)
+		err = topobuild.RequireShellWinding(t.Context(), mesh, unmarked.Lumps)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "do not wind outward")
+
+		_, err = prismshell.BuildClosed(t.Context(), capShellEnv(), capShell(t, holed, 10, -1, 1, 2))
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "outward closed shell of a holed prism section")
 	})
 	t.Run("closed refusals", func(t *testing.T) {
 		t.Parallel()

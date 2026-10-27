@@ -119,12 +119,15 @@ func WithShellSense(s ShellSense) ShellOption {
 // ErrDegenerate (agent-docs/modify-reach-design.md §2, SX1). A full-turn revolve
 // builds it: the meridian's wall region swept a whole turn, an outer shell
 // around one void shell (FaceShell.IsVoid) that is the cavity. So does a
-// hole-free straight prism: both caps keep a floor t thick, so an inward wall
-// needs t below half the sweep (SX11, ErrDegenerate). A two-slab rectangular
-// boss Union builds the bounded inward cavity of modify-general §3.1a. Other
-// receivers return ErrUnsupported after the stage-1 gates pass — a holed
-// prism section, a partial revolve, and brep or stacked results outside that
-// boss class (SG2). Two WithShellSense
+// straight prism: both caps keep a floor t thick, so an inward wall needs t
+// below half the sweep (SX11, ErrDegenerate). A holed section builds inward
+// only, its cavity a ring round each hole's lining, and so does a brep result
+// that reads as a prism along some reference axis, such as a drilled bar
+// (modify-general §3.2). A two-slab rectangular boss Union builds the bounded
+// inward cavity of modify-general §3.1a. Other receivers return
+// ErrUnsupported after the stage-1 gates pass — an outward shell of a holed
+// prism section (SX8), a partial revolve, and brep or stacked results outside
+// those classes (SG2). Two WithShellSense
 // options naming different senses are ErrDegenerate (SX1).
 //
 // An analytic boolean result (a brep or stacked body) that reads as a prism

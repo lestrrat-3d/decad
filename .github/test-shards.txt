@@ -163,6 +163,7 @@
 7	4.86	TestCertifyFacetedCopiesPassesExactMaps
 7	11.47	TestCertifySectorAboutPermutedAxisMatchesX
 7	0.00	TestContactBoxAdmissionGates
+10	0.00	TestShellWindingRefusesAnInsideOutCavity
 7	0.02	TestContactCylinderAdmissionGates
 7	0.00	TestLoftCircleSourceSpanRefusesInvalidRecord
 7	0.11	TestLoftContactOutputBoundaryMiddleRegionContact

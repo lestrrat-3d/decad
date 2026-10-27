@@ -265,6 +265,28 @@ func prismRoute(ctx context.Context, b *topo.Body, bp breprecord.Payload, req Re
 	return Route{}, refusal, nil
 }
 
+// closedShellPrismReading is route P for a closed shell
+// (agent-docs/modify-general-design.md §3.2): the first reference axis along
+// which the brep record reads as a prism (brep-modify §4.1). A closed shell
+// removes no face, so there is no cap classification to admit: every reading
+// denotes the same solid, and the first one is taken. A record carrying a
+// stacked shell's rounded cavity or route L bands reads as no prism. The
+// reading must pass SB1's whole-record displacement rule before it is used.
+func closedShellPrismReading(ctx context.Context, b *topo.Body, bp breprecord.Payload) (prismrecord.Payload, bool, error) {
+	if bp.BossShell != nil || bp.PocketShell != nil || len(bp.LoopBands) > 0 {
+		return prismrecord.Payload{}, false, nil
+	}
+	route, _, err := prismRoute(ctx, b, bp, Request{Op: "shells", Shell: true,
+		Admits: func(prismrecord.Payload, PrismCaps) error { return nil }})
+	if err != nil || route.Prism == nil {
+		return prismrecord.Payload{}, false, err
+	}
+	if err := breprecord.RequireExactSection(bp, "shells"); err != nil {
+		return prismrecord.Payload{}, false, err
+	}
+	return *route.Prism, true, nil
+}
+
 // brepPrismRead is one prism reading of a brep record along a reference axis
 // (brep-modify §4.1): the recognised prism, the indices of the record's
 // bottom and top faces, and which section loop each of bottom's region loops

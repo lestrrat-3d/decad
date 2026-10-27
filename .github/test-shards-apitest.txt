@@ -834,6 +834,8 @@
 4	3.40	TestRevolveSectorAnnularCylinderCutVerified
 4	0.10	TestRevolveShellClosedShaft
 4	0.18	TestRevolveShellTessellates
+10	0.00	TestShellClosedDrilledBar
+10	0.00	TestShellClosedDrilledBarRefusals
 4	0.01	TestRevolveTessellateExportIsByteIdentical
 4	0.18	TestRevolveTessellateFullCylinder
 4	0.46	TestRevolveTessellateNarrowBulgeHoleClearance

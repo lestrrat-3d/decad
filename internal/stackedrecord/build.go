@@ -233,6 +233,14 @@ func lumps(alloc topo.Alloc, faces []*topo.Face, anchors map[*topo.Face]struct{}
 	return outer, nil
 }
 
+// liningCavity reports whether col is a closed shell's hole lining: an
+// outer column of a record marked ClosedShell that starts and ends at an
+// interface, so a floor closes it below and a ceiling above and its wall
+// faces the cavity (§2.4).
+func (sp Payload) liningCavity(col Column) bool {
+	return sp.ClosedShell && col.LoopIndex == 0 && col.Start > 0 && col.End < len(sp.Slabs)-1
+}
+
 // slabPart is one (slab, region) prism of a stacked body: its bounded
 // section area and its centroid lifted to the slab's bounded midpoint.
 type slabPart struct {
@@ -324,7 +332,9 @@ func Build(ctx context.Context, env topo.Env, sp Payload, plan Plan) (*topo.Body
 	maxColDelta := 0.0
 	var faces []*topo.Face
 	// anchors are the faces on the body's own exterior: every region outer's
-	// wall and the first and last slabs' caps (lumps).
+	// wall and the first and last slabs' caps (lumps). A closed shell's hole
+	// lining band starts and ends at an interface, and its outer wall faces
+	// the cavity, so it anchors nothing (Payload.ClosedShell).
 	anchors := map[*topo.Face]struct{}{}
 	for ci := range columns {
 		col := &columns[ci]
@@ -346,7 +356,7 @@ func Build(ctx context.Context, env topo.Env, sp Payload, plan Plan) (*topo.Body
 		}
 		col.Bottom, col.Top, col.Perimeter = bottom, top, perimeter
 		faces = append(faces, walls...)
-		if col.LoopIndex == 0 {
+		if col.LoopIndex == 0 && !sp.liningCavity(col.Column) {
 			for _, f := range walls {
 				anchors[f] = struct{}{}
 			}

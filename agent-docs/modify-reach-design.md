@@ -101,7 +101,7 @@ Base Table R still admits the shipped straight-prism cases. RX adds these rows:
 
 | RX | Receiver | Fillet / Chamfer | Shell |
 |---|---|---|---|
-| **RX1** | `prismPayload` | base lateral junctions; one straight cap edge through route E or the bounded cutter; OR every geometric edge of one or more complete cap loops. Route V admits both classes in one `Fillet` call where its partition holds (`agent-docs/vertex-blend-design.md`) | base cap openings, with BX8 replacing base S12; OR, for a hole-free section, one proper connected run of outer side faces with any cap openings; OR, for a hole-free section, `WithNoOpenings` |
+| **RX1** | `prismPayload` | base lateral junctions; one straight cap edge through route E or the bounded cutter; OR every geometric edge of one or more complete cap loops. Route V admits both classes in one `Fillet` call where its partition holds (`agent-docs/vertex-blend-design.md`) | base cap openings, with BX8 replacing base S12; OR, for a hole-free section, one proper connected run of outer side faces with any cap openings; OR `WithNoOpenings`, inward only for a holed section |
 | **RX2** | `revolvePayload` | off-axis swept meridian junctions: a full-turn latitude `Circle3` or partial-turn junction `Arc3`; one bounded quarter-turn rectangular cap rim (§7.2) | full turn: one proper connected run of generated side faces, or `WithNoOpenings`; partial turn: both angular caps MUST be removed, with an optional proper connected side-face run |
 | **RX3** | `stackedPrismPayload` | through its face view, `agent-docs/brep-modify-design.md` Table RB; a view that refuses is SX10 | the same, plus `WithNoOpenings` for a nested two-slab rectangular boss (modify-general §3.1a) |
 | **RX4** | `capBlendPayload` | SX10 | SX10 |
@@ -143,7 +143,7 @@ more specific SX row replaces that base refusal.
 | **SX5** | selected revolve edge is neither a swept meridian junction nor §7.2's single quarter-turn rectangular cap rim | body exists; other cap-edge/general rolling blends are not built | `ErrUnsupported` |
 | **SX6** | cap-loop offset loses a carrier, reaches an empty circular offset, or has no regular radius-`r` envelope; LF9's exact-radius inward arc with straight G1 neighbours is the fillet exception (`agent-docs/vertex-blend-design.md`) | no regular requested blend | `ErrDegenerate` |
 | **SX7** | cap-loop center paths cross/touch non-adjacent paths, a patch self-intersects, two cap bands meet, or trims need merging | body exists under trimming/merge kernel | `ErrUnsupported` |
-| **SX8** | shell side/no-opening extension is used on a holed prism section; a non-empty side selection is not one proper outer-loop run; offset changes topology; partial revolve keeps either angular cap; revolve meridian is holed or meets the axis along more than one walk; a revolve wall's offset reaches the axis | body exists outside extension | `ErrUnsupported` |
+| **SX8** | a side opening, or an outward `WithNoOpenings`, on a holed prism section; a non-empty side selection is not one proper outer-loop run; offset changes topology; partial revolve keeps either angular cap; revolve meridian is holed or meets the axis along more than one walk; a revolve wall's offset reaches the axis | body exists outside extension | `ErrUnsupported` |
 | **SX9** | any modify op on `facetedPayload` outside RX6's certified classes | body exists; no admitted source and topology certificate for the selected modification | `ErrUnsupported` |
 | **SX10** | another modify op on `capBlendPayload`, or on a `stackedPrismPayload` whose face view refuses (`agent-docs/brep-modify-design.md` SB2) | body exists; compound feature composition not built | `ErrUnsupported` |
 | **SX11** | inward closed/side-opening prism shell leaves axial cavity height `h - k*t <= 0`, where `k` is kept cap count; or section cavity is empty | no cavity | `ErrDegenerate` |
@@ -1439,6 +1439,22 @@ outer wall and no end cap, which the stacked build reads as the void shell of
 the one outer lump. Roles are the stack's own: outer walls
 `slab(0).region(0).side(0,j)`, cavity walls `slab(1).region(0).side(1,j)`,
 `capStart`/`capEnd`, the floor `floor(0,0)` and the ceiling `ceiling(1,0)`.
+
+A section with `k >= 1` holes builds inward only. Its middle slab holds the
+`1 + k` wall bands `ShellWallBands` lists (`{P.Outer, reverse(Q.Outer)}`,
+then per hole `i` the lining `{reverse(Q.Holes[i]), P.Holes[i]}`); each
+interface takes stacked-prism §2.2's lining reading, and each exposes `Q`,
+a ring with `k` holes, as the cavity's floor or ceiling. The cavity wraps
+every lining, so its void shell holds the inset walls, each lining's outer
+cylinder or wall, the floor and the ceiling. A lining's outer column starts
+and ends at an interface and faces the cavity, so the record carries
+`ClosedShell` (stacked-prism §2.4) and that column anchors no outer shell.
+The built body must read as one lump of one outer shell around one void
+shell; any other reading is `ErrUnsupported`. The volume is
+`area(P)·h − area(Q)·(h − 2t)`, the slab sum. An outward closed shell of a
+holed section is SX8: the hole's dilation shrinks it, and this record is
+built and tested inward only. A hole the erosion makes meet the inset outer
+loop changes the cavity's topology and is the offset audit's refusal (S11).
 A stack enclosing a cavity has no brep face view, so a later modify op on the
 closed shell is `agent-docs/brep-modify-design.md` SB2.
 
