@@ -68,6 +68,26 @@ type Poly struct {
 // Circumradius is the distance from the centre of the polygon to a corner.
 func (p Poly) Circumradius() float64 { return p.AcrossFlats / (2 * math.Cos(math.Pi/float64(p.Sides))) }
 
+// MaxOutlineCorners is the most corners an outline bore may have.
+const MaxOutlineCorners = 256
+
+// Outline is an arbitrary simple polygonal bore in millimetres and radians: Corners about the hole
+// axis in the face frame's coordinates, in order round the polygon either way, Angle turning them
+// counter-clockwise about the axis.
+type Outline struct {
+	Corners [][2]float64
+	Angle   float64
+}
+
+// Reach is the distance from the hole axis to the farthest corner, before any turn.
+func (o Outline) Reach() float64 {
+	far := 0.0
+	for _, c := range o.Corners {
+		far = math.Max(far, math.Hypot(c[0], c[1]))
+	}
+	return far
+}
+
 // Slot is a stadium-shaped bore in millimetres and radians: a Width-wide strip
 // with a half circle on each end, Length long end to end. Angle turns it
 // counter-clockwise about the hole axis, measured from the frame's U axis.
@@ -104,6 +124,9 @@ type Input struct {
 	// Poly, when set, replaces the round bore like Rect. At most one of Rect,
 	// Slot and Poly is set.
 	Poly *Poly
+	// Outline, when set, replaces the round bore like Rect. At most one of Rect, Slot, Poly
+	// and Outline is set.
+	Outline *Outline
 }
 
 // SlotTool is a stadium bore in the sketch plane's coordinates. Start and End
@@ -192,7 +215,7 @@ type Plan struct {
 
 // Compute checks the request and returns its tools.
 func Compute(in Input) (Plan, error) {
-	if in.Rect != nil || in.Slot != nil || in.Poly != nil {
+	if in.Rect != nil || in.Slot != nil || in.Poly != nil || in.Outline != nil {
 		return computeShape(in)
 	}
 	if !positive(in.Diameter) {
@@ -248,7 +271,7 @@ func Compute(in Input) (Plan, error) {
 // depth gates of the round hole and refuses a head.
 func computeShape(in Input) (Plan, error) {
 	shapes := 0
-	for _, set := range []bool{in.Rect != nil, in.Slot != nil, in.Poly != nil} {
+	for _, set := range []bool{in.Rect != nil, in.Slot != nil, in.Poly != nil, in.Outline != nil} {
 		if set {
 			shapes++
 		}
@@ -274,6 +297,10 @@ func computeShape(in Input) (Plan, error) {
 			return Plan{}, fmt.Errorf(`%w: the polygonal hole needs a positive finite width across flats and a finite angle`,
 				decaderr.ErrDegenerate)
 		}
+	case in.Outline != nil:
+		if err := checkOutline(*in.Outline); err != nil {
+			return Plan{}, err
+		}
 	default:
 		if !positive(in.Slot.Length) || !positive(in.Slot.Width) || !finite(in.Slot.Angle) {
 			return Plan{}, fmt.Errorf(`%w: the slot needs a positive finite length and width and a finite angle`,
@@ -285,7 +312,7 @@ func computeShape(in Input) (Plan, error) {
 		}
 	}
 	round := in
-	round.Rect, round.Slot, round.Poly = nil, nil, nil
+	round.Rect, round.Slot, round.Poly, round.Outline = nil, nil, nil, nil
 	round.Diameter = 1
 	plan, err := Compute(round)
 	if err != nil {
@@ -298,6 +325,10 @@ func computeShape(in Input) (Plan, error) {
 	}
 	if in.Poly != nil {
 		plan.Corners = polyCorners(plan, *in.Poly)
+		return plan, nil
+	}
+	if in.Outline != nil {
+		plan.Corners = outlineCorners(plan, *in.Outline)
 		return plan, nil
 	}
 	plan.SlotTool = slotTool(plan, *in.Slot)
@@ -432,4 +463,76 @@ func Reach(lo, hi, origin, outward r3.Vec, bound float64) float64 {
 		return 0
 	}
 	return deepest + bound + ThroughMargin
+}
+
+// checkOutline refuses an outline that is not a simple polygon of finite corners and some area: fewer than
+// three or more than MaxOutlineCorners corners, a repeated corner, a side that crosses or touches a
+// non-neighbouring one, or no area.
+func checkOutline(o Outline) error {
+	n := len(o.Corners)
+	if n < 3 || n > MaxOutlineCorners {
+		return fmt.Errorf(`%w: an outline hole has from 3 to %d corners, got %d`, decaderr.ErrDegenerate, MaxOutlineCorners, n)
+	}
+	if !finite(o.Angle) {
+		return fmt.Errorf(`%w: the outline hole angle must be finite`, decaderr.ErrDegenerate)
+	}
+	for _, c := range o.Corners {
+		if !finite(c[0]) || !finite(c[1]) {
+			return fmt.Errorf(`%w: an outline hole corner is not finite`, decaderr.ErrDegenerate)
+		}
+	}
+	if OutlineArea(o.Corners) == 0 {
+		return fmt.Errorf(`%w: the outline hole encloses no area`, decaderr.ErrDegenerate)
+	}
+	for i := range n {
+		a, b := o.Corners[i], o.Corners[(i+1)%n]
+		if a == b {
+			return fmt.Errorf(`%w: the outline hole repeats a corner`, decaderr.ErrDegenerate)
+		}
+		for j := i + 1; j < n; j++ {
+			if j == i+1 || (i == 0 && j == n-1) {
+				continue // neighbouring sides meet at their shared corner
+			}
+			if segmentsTouch(a, b, o.Corners[j], o.Corners[(j+1)%n]) {
+				return fmt.Errorf(`%w: the outline hole crosses itself between sides %d and %d`, decaderr.ErrDegenerate, i, j)
+			}
+		}
+	}
+	return nil
+}
+
+// OutlineArea is the signed area of the polygon, positive when it runs counter-clockwise.
+func OutlineArea(corners [][2]float64) float64 {
+	twice := 0.0
+	for i, c := range corners {
+		d := corners[(i+1)%len(corners)]
+		twice += c[0]*d[1] - d[0]*c[1]
+	}
+	return twice / 2
+}
+
+// segmentsTouch reports whether the closed segments ab and cd share a point.
+func segmentsTouch(a, b, c, d [2]float64) bool {
+	orient := func(p, q, r [2]float64) float64 { return (q[0]-p[0])*(r[1]-p[1]) - (q[1]-p[1])*(r[0]-p[0]) }
+	within := func(p, q, r [2]float64) bool { // r on the line pq: is it between p and q
+		return math.Min(p[0], q[0]) <= r[0] && r[0] <= math.Max(p[0], q[0]) &&
+			math.Min(p[1], q[1]) <= r[1] && r[1] <= math.Max(p[1], q[1])
+	}
+	o1, o2, o3, o4 := orient(a, b, c), orient(a, b, d), orient(c, d, a), orient(c, d, b)
+	if ((o1 > 0 && o2 < 0) || (o1 < 0 && o2 > 0)) && ((o3 > 0 && o4 < 0) || (o3 < 0 && o4 > 0)) {
+		return true
+	}
+	return (o1 == 0 && within(a, b, c)) || (o2 == 0 && within(a, b, d)) ||
+		(o3 == 0 && within(c, d, a)) || (o4 == 0 && within(c, d, b))
+}
+
+// outlineCorners returns the corners of o turned by its angle about the hole axis in plan's coordinates,
+// in the order given: the sketch reads the loop either way round.
+func outlineCorners(plan Plan, o Outline) [][2]float64 {
+	sin, cos := math.Sincos(o.Angle)
+	out := make([][2]float64, len(o.Corners))
+	for i, c := range o.Corners {
+		out[i] = [2]float64{plan.U + c[0]*cos - c[1]*sin, plan.V + c[0]*sin + c[1]*cos}
+	}
+	return out
 }

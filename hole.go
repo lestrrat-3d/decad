@@ -53,7 +53,7 @@ func (Counterbore) holeHead() {}
 func (Countersink) holeHead() {}
 
 // HoleShape is the cross-section of a hole that is not round. Its variants are
-// RectangularHole, SlotHole and PolygonHole.
+// RectangularHole, SlotHole, PolygonHole and OutlineHole.
 type HoleShape interface{ holeShape() }
 
 // RectangularHole is a hole whose bore is a Width by Height rectangle centred
@@ -91,6 +91,18 @@ type PolygonHole struct {
 }
 
 func (PolygonHole) holeShape() {}
+
+// OutlineHole is a hole whose bore is an arbitrary simple polygon: Corners are its corners about the
+// hole axis in the face frame's U and V, in millimetres, in order round the polygon either way, with
+// Angle turning them counter-clockwise about the axis (the zero Value is no turn). It takes from 3 to 256 corners that enclose
+// an area and whose sides do not cross or touch but at a shared corner, otherwise ErrDegenerate. Boss
+// does not take it.
+type OutlineHole struct {
+	Corners []Point2
+	Angle   units.Value
+}
+
+func (OutlineHole) holeShape() {}
 
 // HoleThread is a thread tapped into a round hole. The hole's Diameter is then
 // the thread's minor (tap drill) diameter. Pitch is the axial advance per turn,
@@ -310,6 +322,8 @@ func (c *curvedHole) margin(in holeplan.Input) (float64, error) {
 		reach = math.Hypot(in.Rect.Width, in.Rect.Height) / 2
 	case in.Poly != nil:
 		reach = in.Poly.Circumradius()
+	case in.Outline != nil:
+		reach = in.Outline.Reach()
 	case in.Slot != nil:
 		reach = in.Slot.Length / 2
 	}
@@ -410,6 +424,19 @@ func holeShapeInput(in *holeplan.Input, spec HoleSpec) error {
 			return err
 		}
 		in.Poly = &holeplan.Poly{Sides: shape.Sides, AcrossFlats: flats, Angle: angle}
+	case OutlineHole:
+		angle := 0.0 // the zero Value is no turn
+		if shape.Angle != (units.Value{}) {
+			var err error
+			if angle, err = sectionrecord.MagnitudeIn(shape.Angle, units.Angle, units.Radian, "the outline hole angle"); err != nil {
+				return err
+			}
+		}
+		corners := make([][2]float64, len(shape.Corners))
+		for i, c := range shape.Corners {
+			corners[i] = [2]float64{c.U, c.V}
+		}
+		in.Outline = &holeplan.Outline{Corners: corners, Angle: angle}
 	case SlotHole:
 		length, err := sectionrecord.MagnitudeIn(shape.Length, units.Length, units.Millimeter, "the slot length")
 		if err != nil {
