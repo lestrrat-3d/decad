@@ -155,14 +155,14 @@ type NearContacts struct {
 // reports a coplanar face-on-face overlap, which FacesNearMiss leaves to the
 // mesh pass's own refusal.
 func GatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int, slack float64, memo *ContactMemo) (NearContacts, bool, error) {
-	return gatherNearContacts(ctx, bmA, fis, bmB, fjs, slack, memo, NearContactRunner(), ContactBatchSize)
+	return gatherNearContacts(ctx, bmA, fis, bmB, fjs, slack, memo, NearContactRunner(slack), ContactBatchSize)
 }
 
 // gatherNearContacts is GatherNearContacts with the batch runner and the batch
 // size as parameters, so tests can observe batches and cancel between them.
 // The gate uses ContactBatchSize: the batch size fixes where ctx.Err is polled
 // relative to each read, and the poll schedule is the one the gate always had.
-// run must fill Measured and Dist as NearContactRunner does.
+// run must fill Measured and Far as NearContactRunner(slack) does.
 func gatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int, slack float64, memo *ContactMemo, run ContactBatchRunner, limit int) (NearContacts, bool, error) {
 	var nc NearContacts
 	seenA := map[int]bool{}
@@ -178,11 +178,11 @@ func gatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *Bool
 			return ErrContactBatchStop
 		}
 		if c.Kind == ContactNone {
-			dist := r.Dist
+			far := r.Far
 			if !r.Measured { // a memo hit: no worker measured it
-				dist = TriTriDistance(TriCorners(bmA, i), TriCorners(bmB, j))
+				far = TriTriDistanceExceeds(TriCorners(bmA, i), TriCorners(bmB, j), slack)
 			}
-			if dist > slack {
+			if far {
 				return nil
 			}
 		}
@@ -665,19 +665,34 @@ func PointBoxDist(p r3.Vec, box [2]r3.Vec) float64 {
 //
 //go:noinline
 func PointTriDistance(p r3.Vec, t [3]r3.Vec) float64 {
-	n := t[1].Sub(t[0]).Cross(t[2].Sub(t[0]))
-	if nn := n.Dot(n); nn > 0 {
-		h := n.Dot(p.Sub(t[0])) / nn
-		foot := p.Sub(n.Scale(h))
-		if PointInTriangle(foot, t, n) {
-			return p.Sub(foot).Len()
-		}
+	if d, ok := pointTriFoot(p, t, triNormal(t)); ok {
+		return d
 	}
 	best := posInf
 	for i := range 3 {
 		best = minFloat64(best, SegSegDist3(p, p, t[i], t[(i+1)%3]))
 	}
 	return best
+}
+
+// triNormal is the unnormalised facet normal PointTriDistance projects along.
+func triNormal(t [3]r3.Vec) r3.Vec { return t[1].Sub(t[0]).Cross(t[2].Sub(t[0])) }
+
+// pointTriFoot is PointTriDistance's perpendicular-foot reading, for
+// n = triNormal(t): the distance from p to its foot on t's plane and true when
+// the foot lands inside t, and false when PointTriDistance falls back to the
+// nearest edge. Every product in it is rounded on its own (r3's explicit
+// float64 conversions), so no fused multiply-add can make its value depend on
+// the function it is inlined into.
+func pointTriFoot(p r3.Vec, t [3]r3.Vec, n r3.Vec) (float64, bool) {
+	if nn := n.Dot(n); nn > 0 {
+		h := n.Dot(p.Sub(t[0])) / nn
+		foot := p.Sub(n.Scale(h))
+		if PointInTriangle(foot, t, n) {
+			return p.Sub(foot).Len(), true
+		}
+	}
+	return 0, false
 }
 
 // PointInTriangle reports whether a point already on the triangle's plane lies

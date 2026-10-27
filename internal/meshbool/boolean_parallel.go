@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 )
 
 var ErrContactBatchStop = errors.New("decad: contact batch stopped")
@@ -55,14 +57,15 @@ type ContactPair struct {
 	J int
 }
 
-// ContactBatchResult is one pair's slot. Measured and Dist are set only by
-// NearContactRunner, for a ContactNone pair: Dist is TriTriDistance of the
-// pair's two facets. A memo hit reaches ConsumeResult with Measured false.
+// ContactBatchResult is one pair's slot. Measured and Far are set only by
+// NearContactRunner(slack), for a ContactNone pair: Far is
+// TriTriDistanceExceeds of the pair's two facets and slack, which is
+// TriTriDistance > slack. A memo hit reaches ConsumeResult with Measured false.
 type ContactBatchResult struct {
 	Contact  TriContact
 	Err      error
 	Measured bool
-	Dist     float64
+	Far      bool
 }
 
 // ContactBatchRunner is injectable so internal tests can force arbitrary
@@ -233,13 +236,17 @@ func RunContactBatch(ctx context.Context, ma, mb *BoolMesh, pairs []ContactPair,
 }
 
 // NearContactRunner is RunContactBatch, except a worker that classifies a
-// ContactNone pair also measures TriTriDistance of its two facets and stores
-// it in the pair's slot, so GatherNearContacts does not measure on its single
-// producer goroutine. The distance is the same function of the same facet
-// corners the producer would pass, and the slots are still read in order.
-func NearContactRunner() ContactBatchRunner {
+// ContactNone pair also decides whether TriTriDistance of its two facets
+// exceeds slack and stores that in the pair's slot, so GatherNearContacts does
+// not measure on its single producer goroutine. The answer is the same
+// function of the same facet corners and slack the producer would pass, and
+// the slots are still read in order.
+func NearContactRunner(slack float64) ContactBatchRunner {
+	classify := func(ma, mb *BoolMesh, pair ContactPair) ContactBatchResult {
+		return classifyNearContactPair(ma, mb, pair, slack)
+	}
 	return func(ctx context.Context, ma, mb *BoolMesh, pairs []ContactPair, results []ContactBatchResult, workers int) error {
-		return runContactBatch(ctx, ma, mb, pairs, results, workers, classifyNearContactPair)
+		return runContactBatch(ctx, ma, mb, pairs, results, workers, classify)
 	}
 }
 
@@ -261,6 +268,12 @@ func runContactBatch(ctx context.Context, ma, mb *BoolMesh, pairs []ContactPair,
 	}
 	if workers > len(pairs) {
 		workers = len(pairs)
+	}
+	// Several booleans can classify contacts at once. Share the package-wide
+	// worker budget so each call does not start its full cap independently.
+	workers, reserved := orderedwork.ReserveWorkers(workers)
+	if reserved != 0 {
+		defer orderedwork.ReleaseWorkers(reserved)
 	}
 	if workers <= 1 {
 		return runContactBatchSerial(ctx, ma, mb, pairs, results, classify)
@@ -324,13 +337,14 @@ func classifyContactPair(ma, mb *BoolMesh, pair ContactPair) ContactBatchResult 
 	return ContactBatchResult{Contact: contact, Err: err}
 }
 
-// classifyNearContactPair classifies a pair, then measures a ContactNone pair.
-func classifyNearContactPair(ma, mb *BoolMesh, pair ContactPair) ContactBatchResult {
+// classifyNearContactPair classifies a pair, then measures a ContactNone pair
+// against slack.
+func classifyNearContactPair(ma, mb *BoolMesh, pair ContactPair, slack float64) ContactBatchResult {
 	result := classifyContactPair(ma, mb, pair)
 	if result.Err != nil || result.Contact.Kind != ContactNone {
 		return result
 	}
 	result.Measured = true
-	result.Dist = TriTriDistance(TriCorners(ma, pair.I), TriCorners(mb, pair.J))
+	result.Far = TriTriDistanceExceeds(TriCorners(ma, pair.I), TriCorners(mb, pair.J), slack)
 	return result
 }

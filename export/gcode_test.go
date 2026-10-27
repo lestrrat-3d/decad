@@ -449,3 +449,74 @@ func TestGCodeFanStartsAtALayerAndStopsAtTheEnd(t *testing.T) {
 		require.Empty(t, refused.String(), "%s writes nothing", name)
 	}
 }
+
+func TestGCodeSkirtSurroundsTheFirstLayer(t *testing.T) {
+	t.Parallel()
+	// The 20 x 10 block with a two loop skirt 3 mm out: the first loop reaches -3 to 23 in x and -3 to 13 in y, the
+	// second a line width (0.4 mm) beyond, and both come before the block's own perimeter and only in layer 0.
+	block := decadtest.NewBlock(t, decad.New(), 0, 0, 20, 10, units.Millimeters(1))
+	spec := gcodeSpec()
+	spec.Skirt, spec.SkirtDistance = 2, units.Millimeters(3)
+	var out bytes.Buffer
+	require.NoError(t, export.GCodePerimeters(t.Context(), &out, block, units.Millimeters(0.1), spec))
+	layers := gcodeLayers(t, out.String())
+	require.Len(t, layers, 2)
+	require.Len(t, layers[0], 3, "two skirt loops and the perimeter")
+	require.Len(t, layers[1], 1, "the second layer has the perimeter only")
+	extent := func(moves [][2]float64) (minX, maxX, minY, maxY float64) {
+		minX, maxX, minY, maxY = math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)
+		for _, m := range moves {
+			minX, maxX = math.Min(minX, m[0]), math.Max(maxX, m[0])
+			minY, maxY = math.Min(minY, m[1]), math.Max(maxY, m[1])
+		}
+		return minX, maxX, minY, maxY
+	}
+	for i, want := range [][4]float64{{-3, 23, -3, 13}, {-3.4, 23.4, -3.4, 13.4}, {0, 20, 0, 10}} {
+		minX, maxX, minY, maxY := extent(layers[0][i])
+		require.InDelta(t, want[0], minX, 1e-4, "loop %d", i)
+		require.InDelta(t, want[1], maxX, 1e-4, "loop %d", i)
+		require.InDelta(t, want[2], minY, 1e-4, "loop %d", i)
+		require.InDelta(t, want[3], maxY, 1e-4, "loop %d", i)
+	}
+	// The skirt adds its two loops' length of line: 2 x (26 + 16) and 2 x (26.8 + 16.8).
+	var plain bytes.Buffer
+	spec.Skirt, spec.SkirtDistance = 0, units.Value{}
+	require.NoError(t, export.GCodePerimeters(t.Context(), &plain, block, units.Millimeters(0.1), spec))
+	require.InDelta(t, (84+87.2)*gcodeExtrusion, lastExtrusion(t, out.String())-lastExtrusion(t, plain.String()), 1e-2)
+}
+
+func TestGCodeSkirtSkipsTheHolesOfAPlate(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	plate := decadtest.NewBlock(t, doc, 0, 0, 20, 20, units.Millimeters(0.5))
+	hole := decadtest.NewBlock(t, doc, 7, 7, 13, 13, units.Millimeters(3))
+	holed, err := decad.Cut(t.Context(), plate, hole)
+	require.NoError(t, err)
+	spec := gcodeSpec()
+	spec.Skirt, spec.SkirtDistance = 1, units.Millimeters(2)
+	var out bytes.Buffer
+	require.NoError(t, export.GCodePerimeters(t.Context(), &out, holed, units.Millimeters(0.1), spec))
+	layers := gcodeLayers(t, out.String())
+	require.Len(t, layers, 1)
+	require.Len(t, layers[0], 3, "the skirt round the plate, then the outer loop and the hole's")
+}
+
+func TestGCodeSkirtRefusals(t *testing.T) {
+	t.Parallel()
+	block := decadtest.NewBlock(t, decad.New(), 0, 0, 20, 10, units.Millimeters(1))
+	with := func(edit func(*export.GCodeSpec)) error {
+		spec := gcodeSpec()
+		edit(&spec)
+		var out bytes.Buffer
+		err := export.GCodePerimeters(t.Context(), &out, block, units.Millimeters(0.1), spec)
+		require.Zero(t, out.Len(), "a refused print writes nothing")
+		return err
+	}
+	require.ErrorIs(t, with(func(s *export.GCodeSpec) { s.Skirt = -1 }), decad.ErrDegenerate)
+	require.ErrorIs(t, with(func(s *export.GCodeSpec) { s.Skirt = 21; s.SkirtDistance = units.Millimeters(1) }), decad.ErrDegenerate)
+	require.ErrorIs(t, with(func(s *export.GCodeSpec) { s.Skirt = 2 }), decad.ErrDegenerate, "a skirt needs its distance")
+	require.ErrorIs(t, with(func(s *export.GCodeSpec) { s.SkirtDistance = units.Millimeters(1) }), decad.ErrDegenerate,
+		"a distance needs a skirt")
+	require.ErrorIs(t, with(func(s *export.GCodeSpec) { s.Skirt = 1; s.SkirtDistance = units.Millimeters(-1) }), decad.ErrNegativeMagnitude)
+	require.ErrorIs(t, with(func(s *export.GCodeSpec) { s.Skirt = 1; s.SkirtDistance = units.Scalar(1) }), decad.ErrUnitKind)
+}

@@ -49,7 +49,7 @@ determinism of the bytes. A crease rule that marks every edge, or no absorption 
 
 ## 4. Not covered
 
-- Hatching other than a section cut (§10), centre lines, dimensions other than the overall size, diameters and radii, and a title block with more than a title, three fields and a scale.
+- Hatching other than a section cut (§10), centre lines of anything but a whole circle or arc (§11), dimensions other than the overall size, diameters and radii, and a title block with more than a title, six fields and a scale.
 - Arcs and ellipses, a circle only partly seen, and DXF versions after release 12.
 - View labels and a layout other than one row.
 - A tolerance on the hidden-line test finer than the depth buffer's pixel.
@@ -138,12 +138,13 @@ With `DXFPaper.Dimensions`, `DXFSheet` also states the size of each circle and a
 
 ## 9. Title block fields
 
-`DXFPaper.Fields` adds up to three labelled entries to the title block: a part number, an author, a revision.
+`DXFPaper.Fields` adds up to six labelled entries to the title block: a part number, an author, a revision, a date, a material, a sheet number.
 
 | Decision | Rule |
 |---|---|
-| T1 | A `DXFField` is a label and a value, each printable ASCII, the label not empty: `PART` and `BK-100` are written `PART: BK-100`. More than three fields, an empty label or a character outside printable ASCII is `ErrDegenerate` and nothing is written. |
+| T1 | A `DXFField` is a label and a value, each printable ASCII, the label not empty: `PART` and `BK-100` are written `PART: BK-100`. More than six fields, an empty label, a character outside printable ASCII or, once there are more than three fields, a `LABEL: value` over 24 characters is `ErrDegenerate` and nothing is written. |
 | T2 | The fields are `TEXT` 2.5 mm high on the `TEXT` layer, stacked from the top of the title block, the first 4 mm below it and each 4 mm under the last, at 0.55 of the way from the sheet's left border to the scale's divider. The title keeps its place at the left. |
+| T4 | More than three fields fill a second column: the fourth to sixth start again at the top of the block, half the room between the first column and 3 mm short of the scale's divider to its right, so each column is about 49 mm wide on A4 and a 24-character field of 2.5 mm text (about 36 mm) fits. The tests read six fields back, with the first three stacked as in T2 and the next three level with them one column over, and refuse a seventh field and a long field among four; folding the second column back onto the first fails the first and removing the length limit fails the second. |
 | T3 | No fields adds nothing, so a sheet without them is as it was. The tests read the texts back and require the stack's spacing and that each lies inside the block and left of the scale. |
 
 ## 10. A hatched section view
@@ -158,3 +159,14 @@ With `DXFPaper.Dimensions`, `DXFSheet` also states the size of each circle and a
 | S3 | `Spacing` is a positive length (`ErrDegenerate` for zero, `ErrNegativeMagnitude` for a negative, `ErrUnitKind` for a wrong kind, and for a missing one, a dimensionless zero). `Angle` is an angle; its sign is a direction. A cut that needs over 100000 hatch lines is `ErrDegenerate`. A nil context, writer or body and an invalid plane are `ErrDegenerate`, and a refusal writes nothing. |
 | S4 | A plane that misses the body gives a complete file with no entity. `SectionOutline`'s own refusals, a sheet or unsound solid (`ErrNotSolid`) and a mesh whose cut does not close (`ErrUnsupported`), return as they are. |
 | S5 | The outline is a reading of the tessellation, not of the exact solid (`SectionOutline`'s contract), so a curved wall is chords and the hatch fills the polygon. The tests read the entities back: lines of the right layer, spacing and ends for a block, a hole left empty with the hatch's length times the spacing equal to the plate's area less the hole's within 1 percent, the plane's origin and angle honoured, and unit tests of `Hatch` on its own. |
+
+## 11. Centre lines
+
+`DXFPaper.CentreLines` marks the centre of each whole circle and arc a sheet's views draw as one.
+
+| Decision | Rule |
+|---|---|
+| L1 | With the flag set, each visible whole circle gets a horizontal and a vertical `LINE` through its centre on the `CENTRE` layer, each reaching its radius plus 2 mm (paper) either way, so the cross stands 2 mm clear of the circle's edge. Each visible arc gets the same cross 3 mm across at its centre. Hidden circles and arcs get none. |
+| L2 | The `CENTRE` layer is red and has the `CENTER` chain-dashed linetype (a 2 mm pattern of a 1.25 mm dash, a 0.25 mm gap, a 0.25 mm dot and a 0.25 mm gap), declared with the other layers in the header whether or not the flag is set. The flag is off by default, so a sheet without it has the same entities as before. |
+| L3 | The tests read the cross of a rod's circle back (two lines through the circle's centre, one horizontal and one vertical, each `2·(r+2)` long), the eight lines of a rounded plate's four corner arcs (3 mm each), and no `CENTRE` entity without the flag. Shortening the reach fails the first, and switching the flag off fails both. |
+

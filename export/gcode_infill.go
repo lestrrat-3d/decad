@@ -110,6 +110,27 @@ func insetLoops(loops [][]r3.Vec, d float64) [][]r3.Vec {
 	return out
 }
 
+// outerLoops returns the loops of a layer's outline that no other loop encloses an odd number of times: the outlines
+// of the material and not of its holes, or of an island inside a hole, which is material again and kept.
+func outerLoops(loops [][]r3.Vec) [][]r3.Vec {
+	var out [][]r3.Vec
+	for i, loop := range loops {
+		if len(loop) < 3 {
+			continue
+		}
+		depth := 0
+		for j, other := range loops {
+			if j != i && pointInLoop(loop[0], other) {
+				depth++
+			}
+		}
+		if depth%2 == 0 {
+			out = append(out, loop)
+		}
+	}
+	return out
+}
+
 // signedArea is the shoelace area of a loop in the XY plane, positive when it runs counter-clockwise.
 func signedArea(loop []r3.Vec) float64 {
 	area := 0.0

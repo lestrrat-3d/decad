@@ -2,7 +2,9 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/decad/internal/meshreduce"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -124,3 +126,91 @@ func ReduceMeshWithin(ctx context.Context, m *MeshBody, distance units.Value) (*
 		MaxVertexMove: units.Millimeters(got.MaxMove), SurfaceBound: units.Millimeters(bound),
 	}, nil
 }
+
+// CollapseMesh thins the closed mesh m by edge collapse until it has at most triangles triangles, and returns the
+// result as a new [MeshBody] with a report (agent-docs/mesh-import-design.md §13). m is not changed.
+//
+// The shortest edge is merged first, at its midpoint, then the next shortest, and so on. An edge is merged only when
+// the surface stays a closed manifold (its two ends share just the two vertices opposite it), no triangle around it
+// turns more than about 78 degrees, and at least four triangles remain, so the result is closed and wound as m is.
+// Each merge removes two triangles, so the result has triangles or one fewer, or more when no remaining edge can be
+// merged. The report's MergedVertices counts the merges, DroppedTriangles is twice that and MaxVertexMove is the
+// greatest distance from a vertex of m to the vertex it ended at. SurfaceBound stays the zero Value: a collapse
+// moves the surface by a distance the evaluator does not prove, and the result can pass through itself where a
+// coarse mesh pinches a thin feature.
+//
+// ctx and m MUST NOT be nil, each otherwise ErrDegenerate, and triangles is at least 4 or ErrDegenerate. A mesh that
+// is not closed, consistently wound and manifold is ErrUnsupported. A canceled context returns its error.
+func CollapseMesh(ctx context.Context, m *MeshBody, triangles int) (*MeshBody, MeshReduceReport, error) {
+	if ctx == nil {
+		return nil, MeshReduceReport{}, fmt.Errorf(`%w: a nil context cannot control a mesh collapse`, ErrDegenerate)
+	}
+	if m == nil {
+		return nil, MeshReduceReport{}, fmt.Errorf(`%w: a mesh collapse needs a mesh body`, ErrDegenerate)
+	}
+	if triangles < 4 {
+		return nil, MeshReduceReport{}, fmt.Errorf(`%w: a closed mesh keeps at least 4 triangles, not %d`, ErrDegenerate, triangles)
+	}
+	got, err := meshreduce.Collapse(ctx, m.vertices, m.triangles, triangles)
+	if err != nil {
+		if errors.Is(err, meshreduce.ErrNotClosed) {
+			return nil, MeshReduceReport{}, fmt.Errorf(`%w: %s`, ErrUnsupported, err)
+		}
+		return nil, MeshReduceReport{}, err
+	}
+	out, err := NewMeshBody(ctx, got.Vertices, got.Triangles)
+	if err != nil {
+		return nil, MeshReduceReport{}, err
+	}
+	return out, MeshReduceReport{
+		MergedVertices: got.Collapses, DroppedTriangles: 2 * got.Collapses, MaxVertexMove: units.Millimeters(got.MaxMove),
+	}, nil
+}
+
+// RemeshMesh rebuilds the closed mesh m from near-equilateral triangles with edges near edge, and returns the result
+// as a new [MeshBody] (agent-docs/mesh-import-design.md §14). m is not changed.
+//
+// It makes eight passes of incremental isotropic remeshing: split the edges longer than 4/3 of edge, merge the edges
+// shorter than 4/5 of it, flip edges toward six neighbours to a vertex, and slide each vertex toward its neighbours'
+// centroid along the surface. Every step keeps the surface closed, manifold and wound as m is, and refuses a move
+// that would turn a triangle by about 78 degrees or more. The vertices are not projected back onto m, so a convex
+// surface shrinks a little in each pass and the result stands within a few per cent of m's volume, with no proven
+// distance; a thin feature narrower than edge can pinch or pass through itself.
+//
+// ctx and m MUST NOT be nil, each otherwise ErrDegenerate. edge is a positive length: zero is ErrDegenerate, a
+// negative value ErrNegativeMagnitude and a wrong unit kind ErrUnitKind. A mesh that is not closed, consistently
+// wound and manifold is ErrUnsupported, and so is an edge so short that the result would pass a million triangles.
+// A canceled context returns its error.
+func RemeshMesh(ctx context.Context, m *MeshBody, edge units.Value) (*MeshBody, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control a remesh`, ErrDegenerate)
+	}
+	if m == nil {
+		return nil, fmt.Errorf(`%w: a remesh needs a mesh body`, ErrDegenerate)
+	}
+	length, err := sectionrecord.MagnitudeIn(edge, units.Length, units.Millimeter, "the remesh edge length")
+	if err != nil {
+		return nil, err
+	}
+	if length == 0 {
+		return nil, fmt.Errorf(`%w: the remesh edge length must be positive`, ErrDegenerate)
+	}
+	area, err := m.Area()
+	if err != nil {
+		return nil, err
+	}
+	if area.Value.Base()/(math.Sqrt(3)/4*length*length) > maxRemeshTriangles {
+		return nil, fmt.Errorf(`%w: a %g mm edge would make over %d triangles`, ErrUnsupported, length, maxRemeshTriangles)
+	}
+	got, err := meshreduce.Remesh(ctx, m.vertices, m.triangles, length)
+	if err != nil {
+		if errors.Is(err, meshreduce.ErrNotClosed) {
+			return nil, fmt.Errorf(`%w: %s`, ErrUnsupported, err)
+		}
+		return nil, err
+	}
+	return NewMeshBody(ctx, got.Vertices, got.Triangles)
+}
+
+// maxRemeshTriangles bounds the triangles a remesh may be asked to make.
+const maxRemeshTriangles = 1_000_000

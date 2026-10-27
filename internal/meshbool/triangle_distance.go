@@ -5,7 +5,136 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/r3"
 )
+
+// TriTriDistanceExceeds reports TriTriDistance(ta, tb) > slack for every
+// input, including NaN, infinite and out-of-range ones. It skips the distance
+// candidates that a separating axis proves exceed slack, and answers from the
+// rest exactly as TriTriDistance's minimum would.
+//
+// TriTriDistance(ta, tb) > slack holds exactly when every one of its fifteen
+// candidates d satisfies d > 0 and fl(d*(1-1e-12)) > slack: the minimum is
+// one of them (NaN wins the fold, and x -> fl(x*c) is monotone for x > 0),
+// and a candidate failing the test makes the result 0, or a value no larger
+// than its own, that is not above slack.
+//
+// The skip applies only to finite slack >= 0 and corners whose coordinates
+// are finite with magnitude at most m <= 2^200, so no step of TriTriDistance
+// overflows or produces a NaN. Let n be the facet normal PointTriDistance
+// projects along (triNormal). The interval of the corners' projections onto
+// n is separated by a gap G from the other facet's: then every point of one
+// facet lies at least G/|n| from every point of the other, and from the
+// other's corner along n. axisGapExceeds proves G/|n| >= thr with
+// thr = slack + (slack+m)*2^-26 + 2^-199, charging each projection's float
+// error at 2^-49*|n|_1*m (above 4*gamma3*|n|_1*m) and the remaining few
+// roundings to its 2^-40 margins.
+//
+// Every candidate is the float length of the difference of two computed
+// points. A segment candidate's points lie within 9*eps*m of points of the
+// two closed segments (s and t are clamped into [0, 1]), and a foot
+// candidate's length is within 18*eps of the point's distance along n to the
+// facet's first corner, less 16*eps*m (eps = 2^-53, nn >= 2^-300 keeps the
+// underflow terms below 2^-900). So each skipped candidate is at least
+// D*(1-2^-48) - 2^-47*m with D >= thr, which exceeds slack*(1+2^-27) + 2^-200,
+// and its fl(d*(1-1e-12)) exceeds slack. An axis along A's normal bounds the
+// edge candidates and B's corners' foot candidates on A; B's normal bounds
+// the edge candidates and A's corners' foot candidates on B. The foot
+// candidates no axis bounds are computed by PointTriDistance's own foot code
+// (pointTriFoot): an edge fallback it takes is bounded by either axis.
+// Without an axis the answer is TriTriDistance's own.
+func TriTriDistanceExceeds(ta, tb [3]r3.Vec, slack float64) bool {
+	m, ok := triPairScale(ta, tb)
+	if !ok || !(slack >= 0 && slack <= math.MaxFloat64) {
+		return TriTriDistance(ta, tb) > slack
+	}
+	thr := slack + (slack+m)*0x1p-26 + 0x1p-199
+	na, nb := triNormal(ta), triNormal(tb)
+	clearA := axisGapExceeds(na, ta, tb, m, thr)
+	clearB := axisGapExceeds(nb, ta, tb, m, thr)
+	if !clearA && !clearB {
+		return TriTriDistance(ta, tb) > slack
+	}
+	for i := range 3 {
+		if !clearB {
+			if d, foot := pointTriFoot(ta[i], tb, nb); foot && !distanceCandidateExceeds(d, slack) {
+				return false
+			}
+		}
+		if !clearA {
+			if d, foot := pointTriFoot(tb[i], ta, na); foot && !distanceCandidateExceeds(d, slack) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// distanceCandidateExceeds reports whether the TriTriDistance candidate d,
+// were it the minimum, would make TriTriDistance exceed slack.
+func distanceCandidateExceeds(d, slack float64) bool {
+	return d > 0 && d*(1-1e-12) > slack
+}
+
+// triPairScale is the largest coordinate magnitude of the six corners, and
+// whether every coordinate is finite with magnitude at most 2^200.
+func triPairScale(ta, tb [3]r3.Vec) (float64, bool) {
+	m := 0.0
+	for _, t := range [2]*[3]r3.Vec{&ta, &tb} {
+		for _, v := range t {
+			for _, c := range [3]float64{v.X, v.Y, v.Z} {
+				if c < 0 {
+					c = -c
+				}
+				if !(c <= 0x1p200) {
+					return 0, false
+				}
+				if c > m {
+					m = c
+				}
+			}
+		}
+	}
+	return m, true
+}
+
+// axisGapExceeds reports whether the corners of ta and tb project onto n in
+// intervals whose gap, divided by |n|, provably exceeds thr. m bounds every
+// coordinate magnitude, as triPairScale returns it. It refuses an axis with
+// n·n below 2^-300.
+func axisGapExceeds(n r3.Vec, ta, tb [3]r3.Vec, m, thr float64) bool {
+	if !(n.Dot(n) >= 0x1p-300) {
+		return false
+	}
+	loA, hiA := n.Dot(ta[0]), n.Dot(ta[0])
+	loB, hiB := n.Dot(tb[0]), n.Dot(tb[0])
+	for i := 1; i < 3; i++ {
+		if p := n.Dot(ta[i]); p < loA {
+			loA = p
+		} else if p > hiA {
+			hiA = p
+		}
+		if p := n.Dot(tb[i]); p < loB {
+			loB = p
+		} else if p > hiB {
+			hiB = p
+		}
+	}
+	gap := loB - hiA
+	if g := loA - hiB; g > gap {
+		gap = g
+	}
+	l1 := absFloat(n.X) + absFloat(n.Y) + absFloat(n.Z)
+	return gap-l1*m*0x1p-49 > n.Len()*thr*(1+0x1p-40)
+}
+
+// absFloat is |x| by comparison: the race build instruments math.Abs.
+func absFloat(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
 
 // DisjointTriDistanceAbove proves that two closed, nondegenerate triangles
 // have Euclidean distance strictly greater than bound. It refuses a pair that

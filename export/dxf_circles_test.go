@@ -2,6 +2,7 @@ package export_test
 
 import (
 	"bytes"
+	"math"
 	"strconv"
 	"strings"
 	"testing"
@@ -301,4 +302,61 @@ func TestDXFSheetDimensionsTheRadiusOfEachCorner(t *testing.T) {
 	require.Equal(t, 4, radii, "one radius for each corner arc: %v", texts)
 	require.Contains(t, texts, "40", "the overall width is still stated")
 	require.Contains(t, texts, "30")
+}
+
+func centreLines(t *testing.T, body *decad.Body, paper export.DXFPaper) []dxfLine {
+	t.Helper()
+	var out bytes.Buffer
+	require.NoError(t, export.DXFSheet(t.Context(), &out, body, units.Millimeters(0.05), paper))
+	lines, _ := readDXFLines(t, out.String())
+	var centre []dxfLine
+	for _, l := range lines {
+		if l.layer == export.DXFCentreLayer {
+			centre = append(centre, l)
+		}
+	}
+	return centre
+}
+
+func TestDXFSheetCrossesTheCentreOfACircle(t *testing.T) {
+	t.Parallel()
+	rod := circleBodyForDXF(t, decad.New())
+	paper := a4Sheet(false)
+	paper.Views = []export.DrawingView{topView}
+	require.Empty(t, centreLines(t, rod, paper), "centre lines are off unless asked for")
+	paper.CentreLines = true
+	centre := centreLines(t, rod, paper)
+	require.Len(t, centre, 2, "one cross for the one visible circle")
+	var out bytes.Buffer
+	require.NoError(t, export.DXFSheet(t.Context(), &out, rod, units.Millimeters(0.05), paper))
+	var circle dxfCircle
+	for _, c := range readDXFCircles(t, out.String()) {
+		if c.layer == export.DXFVisibleLayer {
+			circle = c
+		}
+	}
+	// At 1:2 the circle of diameter 10 is 5 across on paper; each line crosses its centre and reaches 2 mm past the edge.
+	reach := circle.r + 2
+	for _, l := range centre {
+		mid := [2]float64{(l.a[0] + l.b[0]) / 2, (l.a[1] + l.b[1]) / 2}
+		require.InDelta(t, circle.at[0], mid[0], 1e-6)
+		require.InDelta(t, circle.at[1], mid[1], 1e-6)
+		require.InDelta(t, 2*reach, math.Hypot(l.b[0]-l.a[0], l.b[1]-l.a[1]), 1e-6)
+	}
+	horizontal := math.Abs(centre[0].b[1]-centre[0].a[1]) < 1e-9
+	vertical := math.Abs(centre[1].b[0]-centre[1].a[0]) < 1e-9
+	require.True(t, horizontal && vertical, "a horizontal line and a vertical one: %v", centre)
+}
+
+func TestDXFSheetMarksTheCentreOfEachCornerArc(t *testing.T) {
+	t.Parallel()
+	plate := roundedPlate(t)
+	paper := a4Sheet(false)
+	paper.Views = []export.DrawingView{topView}
+	paper.CentreLines = true
+	centre := centreLines(t, plate, paper)
+	require.Len(t, centre, 8, "a cross of two short lines for each of the four corner arcs")
+	for _, l := range centre {
+		require.InDelta(t, 3, math.Hypot(l.b[0]-l.a[0], l.b[1]-l.a[1]), 1e-6)
+	}
 }

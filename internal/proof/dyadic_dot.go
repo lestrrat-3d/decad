@@ -135,6 +135,88 @@ func DvNormUp(v DyV3, shift int) float64 {
 	return DySqrtUp(DyShift(DvDot(v, v), shift))
 }
 
+// DvNormBounds returns DySqrtDown(DvDot(v, v)) and DySqrtUp(DvDot(v, v)),
+// bit for bit. Inline components share one exact square sum. A wide sum is
+// rooted directly over its words, sharing the seed and its first comparison.
+// Inputs outside that word path use the general dot product and root walks.
+func DvNormBounds(v DyV3) (float64, float64) {
+	var sum [8]uint64
+	n, exp, ok := dvSquareSum(v, &sum)
+	if ok {
+		for n > 0 && sum[n-1] == 0 {
+			n--
+		}
+		if n == 0 {
+			return 0, 0
+		}
+		w := sum[:n]
+		width := (n-1)*64 + bits.Len64(w[n-1])
+		tz := 0
+		for w[tz/64] == 0 {
+			tz += 64
+		}
+		tz += bits.TrailingZeros64(w[tz/64])
+		if width-tz <= dyBits {
+			lo, hi := wordsField128(w, tz)
+			d := fromMag(lo, hi, false, exp+tz)
+			return DySqrtDown(d), DySqrtUp(d)
+		}
+		if low, high, ok := dvWordsSqrtBounds(w, width, exp); ok {
+			return low, high
+		}
+	}
+	d := DvDot(v, v)
+	return DySqrtDown(d), DySqrtUp(d)
+}
+
+// dvWordsSqrtBounds repeats the two directed walks from the same seed. The
+// first exact comparison settles one bound; only the other needs to step.
+func dvWordsSqrtBounds(w []uint64, width, exp int) (float64, float64, bool) {
+	f, ok := ratioSqrtSeedLeading(wordsLeading64(w, width), 1<<63, width+exp)
+	if !ok {
+		return 0, 0, false
+	}
+	if isNonFinite(f) {
+		f = math.MaxFloat64
+	}
+	c, ok := cmpSquareWords(f, w, width, exp)
+	if !ok {
+		return 0, 0, false
+	}
+	if c == 0 {
+		return f, f, true
+	}
+	if c < 0 {
+		low := f
+		for range SqrtAdjustLimit - 1 {
+			f = NextUp(f)
+			if isNonFinite(f) {
+				return low, f, true
+			}
+			c, ok = cmpSquareWords(f, w, width, exp)
+			if !ok {
+				return 0, 0, false
+			}
+			if c >= 0 {
+				return low, f, true
+			}
+		}
+		return low, math.Inf(1), true
+	}
+	high := f
+	for range SqrtAdjustLimit - 1 {
+		f = NextDown(f)
+		c, ok = cmpSquareWords(f, w, width, exp)
+		if !ok {
+			return 0, 0, false
+		}
+		if c <= 0 {
+			return f, high, true
+		}
+	}
+	return 0, high, true
+}
+
 // wordsField128 returns bits [at, at+128) of the integer w as two words.
 func wordsField128(w []uint64, at int) (uint64, uint64) {
 	word := func(i int) uint64 {

@@ -381,6 +381,7 @@ func contactCacheFixtures(t *testing.T) map[string]struct {
 // unprepared entry point.
 func TestContactBatchMatchesLegacyClassify(t *testing.T) {
 	t.Parallel()
+	const nearSlack = 0.05
 	var stats contactCacheStats
 	for name, fx := range contactCacheFixtures(t) {
 		want := make([]TriContact, len(fx.pairs))
@@ -393,7 +394,7 @@ func TestContactBatchMatchesLegacyClassify(t *testing.T) {
 			for _, near := range []bool{false, true} {
 				run := RunContactBatch
 				if near {
-					run = NearContactRunner()
+					run = NearContactRunner(nearSlack)
 				}
 				results := make([]ContactBatchResult, len(fx.pairs))
 				for start := 0; start < len(fx.pairs); start += ContactBatchSize {
@@ -409,11 +410,9 @@ func TestContactBatchMatchesLegacyClassify(t *testing.T) {
 					requireSameContact(t, s, want[k], wantSin2[k], wantErr[k], results[k].Contact, results[k].Err, label)
 					measured := near && wantErr[k] == nil && want[k].Kind == ContactNone
 					require.Equal(t, measured, results[k].Measured, label)
-					wantDist := 0.0
-					if measured {
-						wantDist = TriTriDistance(TriCorners(fx.ma, pair.I), TriCorners(fx.mb, pair.J))
-					}
-					require.Equal(t, math.Float64bits(wantDist), math.Float64bits(results[k].Dist), label)
+					wantFar := measured &&
+						TriTriDistance(TriCorners(fx.ma, pair.I), TriCorners(fx.mb, pair.J)) > nearSlack
+					require.Equal(t, wantFar, results[k].Far, label)
 				}
 			}
 		}

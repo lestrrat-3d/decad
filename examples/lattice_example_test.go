@@ -110,9 +110,9 @@ func Example_neovius_iwp_lattice() {
 	// IWP: closed: true, solid fraction: 0.55
 }
 
-// FischerKochSLattice and LidinoidLattice add two more triply periodic walls: the Fischer-Koch S
+// FischerKochSLattice, LidinoidLattice and SplitPLattice add three more triply periodic walls: the Fischer-Koch S
 // surface, whose field runs from -sqrt(2) to sqrt(2), and the Lidinoid, whose field runs from
-// -1.35 to 1.15 so that Level runs up to 1.35.
+// -1.35 to 1.15 so that Level runs up to 1.35, and the Split P, whose field runs from -1.8 so that Level runs up to 1.8.
 func Example_fischer_koch_lidinoid_lattice() {
 	spec := decad.LatticeSpec{
 		Min:        r3.Vec{},
@@ -127,6 +127,7 @@ func Example_fischer_koch_lidinoid_lattice() {
 	}{
 		{"Fischer-Koch S", decad.FischerKochSLattice, 0.5},
 		{"Lidinoid", decad.LidinoidLattice, 0.5},
+		{"Split P", decad.SplitPLattice, 0.5},
 	} {
 		spec.Level = units.Scalar(kind.level)
 		lattice, err := kind.build(context.Background(), spec)
@@ -144,6 +145,7 @@ func Example_fischer_koch_lidinoid_lattice() {
 	// Output:
 	// Fischer-Koch S: closed: true, solid fraction: 0.51
 	// Lidinoid: closed: true, solid fraction: 0.60
+	// Split P: closed: true, solid fraction: 0.33
 }
 
 // Infill fills a solid with a lattice and keeps the lattice material inside it, the

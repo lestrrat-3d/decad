@@ -1,4 +1,4 @@
-// Package lattice builds the triangle mesh of a gyroid, Schwarz-P, diamond, Neovius, IWP, Fischer-Koch S or Lidinoid lattice inside a box
+// Package lattice builds the triangle mesh of a gyroid, Schwarz-P, diamond, Neovius, IWP, Fischer-Koch S, Lidinoid or Split P lattice inside a box
 // (agent-docs/lattice-design.md). It works on plain millimetre data and touches
 // no body, document or sketch.
 package lattice
@@ -53,6 +53,10 @@ const (
 	// ½(cos 2kx·cos 2ky + cos 2ky·cos 2kz + cos 2kz·cos 2kx) + 0.15, which runs from −1.35 to 1.15, so the
 	// largest |g| is 1.35.
 	KindLidinoid
+	// KindSplitP is 1.1(sin 2kx·sin kz·cos ky + sin 2ky·sin kx·cos kz + sin 2kz·sin ky·cos kx) −
+	// 0.2(cos 2kx·cos 2ky + cos 2ky·cos 2kz + cos 2kz·cos 2kx) − 0.4(cos 2kx + cos 2ky + cos 2kz), which runs from
+	// −1.8 to about 1.81; the bound used is 1.8, the least |g| reaches.
+	KindSplitP
 )
 
 // MaxLevel is the largest value |g| reaches for the kind; a level at or above it
@@ -71,6 +75,8 @@ func (k Kind) MaxLevel() float64 {
 		return math.Sqrt2
 	case KindLidinoid:
 		return 1.35
+	case KindSplitP:
+		return 1.8
 	default:
 		return MaxLevel
 	}
@@ -95,6 +101,10 @@ func (k Kind) field(x, y, z float64) float64 {
 	case KindLidinoid:
 		return 0.5*(math.Sin(2*x)*cy*sz+math.Sin(2*y)*cz*sx+math.Sin(2*z)*cx*sy) -
 			0.5*(math.Cos(2*x)*math.Cos(2*y)+math.Cos(2*y)*math.Cos(2*z)+math.Cos(2*z)*math.Cos(2*x)) + 0.15
+	case KindSplitP:
+		return 1.1*(math.Sin(2*x)*sz*cy+math.Sin(2*y)*sx*cz+math.Sin(2*z)*sy*cx) -
+			0.2*(math.Cos(2*x)*math.Cos(2*y)+math.Cos(2*y)*math.Cos(2*z)+math.Cos(2*z)*math.Cos(2*x)) -
+			0.4*(math.Cos(2*x)+math.Cos(2*y)+math.Cos(2*z))
 	default:
 		return sx*cy + sy*cz + sz*cx
 	}
@@ -163,11 +173,39 @@ func Surface(ctx context.Context, kind Kind, lo, hi r3.Vec, cell, level float64,
 			}
 		}
 	}
-	b := &builder{field: field, vertexAt: map[[2]int]int{}}
 	// The six tetrahedra of a cube, all about its diagonal from corner 0 to corner 6, so
 	// neighbouring cubes agree on the faces they share.
 	tets := [6][4]int{{0, 5, 1, 6}, {0, 1, 2, 6}, {0, 2, 3, 6}, {0, 3, 7, 6}, {0, 7, 4, 6}, {0, 4, 5, 6}}
 	corner := [8][3]int{{0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0}, {0, 0, 1}, {1, 0, 1}, {1, 1, 1}, {0, 1, 1}}
+	// Count emitted triangles from the sampled signs before constructing any
+	// vertices. This reserves the output once instead of repeatedly copying
+	// its growing slices. Stop counting at the existing output limit; the
+	// construction pass still owns that refusal.
+	triangleCount := 0
+	counts := [5]int{0, 1, 2, 1, 0}
+	for l := 0; l+1 < n[2] && triangleCount <= maxTriangles; l++ {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		for j := 0; j+1 < n[1] && triangleCount <= maxTriangles; j++ {
+			for i := 0; i+1 < n[0] && triangleCount <= maxTriangles; i++ {
+				var inside [8]int
+				for c, o := range corner {
+					if field[index(i+o[0], j+o[1], l+o[2])] > 0 {
+						inside[c] = 1
+					}
+				}
+				for _, t := range tets {
+					triangleCount += counts[inside[t[0]]+inside[t[1]]+inside[t[2]]+inside[t[3]]]
+				}
+			}
+		}
+	}
+	// Half the triangle count is a vertex capacity hint for closed surfaces.
+	// Disconnected components may need more; their storage grows as usual.
+	vertexCapacity := triangleCount/2 + 2
+	b := &builder{field: field, vertexAt: make(map[[2]int]int, vertexCapacity),
+		vertices: make([]r3.Vec, 0, vertexCapacity), triangles: make([][3]int, 0, triangleCount)}
 	for l := 0; l+1 < n[2]; l++ {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
@@ -228,7 +266,8 @@ func (b *builder) crossing(a, c int, pos func(int) r3.Vec) int {
 // positive. The triangles it adds wind so that their normal points from the
 // inside nodes toward the outside ones.
 func (b *builder) tet(ids [4]int, pos func(int) r3.Vec) {
-	var in, out []int
+	var inStorage, outStorage [4]int
+	in, out := inStorage[:0], outStorage[:0]
 	for _, id := range ids {
 		if b.field[id] > 0 {
 			in = append(in, id)

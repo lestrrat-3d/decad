@@ -1834,6 +1834,12 @@
 7	1.85	TestCommonAxisRevolveBooleanRefusalsLeaveInputsLive
 7	0.01	TestContactPairExactPlanarNesting
 7	0.01	TestContactPairRevolvedCylinderRefusesUnprovedDiskCorridor
+10	0.01	TestCollapseMeshThinsASphereAndKeepsItClosed
+10	0.01	TestCollapseMeshLeavesAMeshThatIsAlreadyCoarseEnough
+10	0.01	TestCollapseMeshStopsWhereNoEdgeCanBeMerged
+10	0.01	TestCollapseMeshRefusals
+10	0.01	TestCollapseMeshMovesVerticesByHalfTheirEdge
+10	0.01	TestCollapseMeshKeepsSmallSolidsClosedAndWoundOutward
 7	0.00	TestContactPairRotatedBoxContainedHorizontalFace
 7	0.00	TestContainerCrossRefusal
 10	0.01	TestShellGivesEachDirectionItsOwnThickness
@@ -1974,6 +1980,10 @@
 7	0.01	TestStackBrepScaledAtVerified
 7	0.03	TestStackedUnionBrepOperandChain
 7	0.17	TestStackedUnionCrossingBossStanding
+10	0.01	TestRemeshMeshEvensTheEdgesAndTheValences
+10	0.01	TestRemeshMeshCoarsensAsWellAsRefines
+10	0.01	TestRemeshMeshRefusals
+10	0.01	TestRemeshMeshFlipsEdgesTowardSixNeighbours
 7	0.00	TestStitchCurvedVolumeBoundWidensWhenPlaced
 7	0.01	TestStitchCurvedWeldedRevolveSiblingPlacementRefusesMesh
 7	0.02	TestStitchGapTolerance
