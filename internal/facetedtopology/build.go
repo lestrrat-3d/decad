@@ -4,6 +4,7 @@ package facetedtopology
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -478,7 +479,7 @@ func build(
 	// as the deterministic bookkeeping choice: validity never reads it, and
 	// Faceted faces expose their polygons through Tessellate, not through loop
 	// nesting.
-	for f := range collectFaces(facetFace) {
+	for _, f := range collectFaces(facetFace) {
 		if err := budget.Step(); err != nil {
 			return err
 		}
@@ -527,10 +528,18 @@ func build(
 	return budget.Err()
 }
 
-func collectFaces(facetFace []int) map[int]struct{} {
-	out := map[int]struct{}{}
+// collectFaces lists the distinct face ids in ascending order, so the walk over
+// them spends the same budget steps before any refusal on every run.
+func collectFaces(facetFace []int) []int {
+	seen := make(map[int]struct{}, len(facetFace))
+	out := make([]int, 0, len(facetFace))
 	for _, f := range facetFace {
-		out[f] = struct{}{}
+		if _, ok := seen[f]; ok {
+			continue
+		}
+		seen[f] = struct{}{}
+		out = append(out, f)
 	}
+	slices.Sort(out)
 	return out
 }

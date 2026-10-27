@@ -425,7 +425,7 @@ func referenceBuild(
 	// as the deterministic bookkeeping choice: validity never reads it, and
 	// Faceted faces expose their polygons through Tessellate, not through loop
 	// nesting.
-	for f := range collectFaces(facetFace) {
+	for _, f := range collectFaces(facetFace) {
 		if err := budget.Step(); err != nil {
 			return err
 		}
