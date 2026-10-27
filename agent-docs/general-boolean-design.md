@@ -117,7 +117,11 @@ Admission is prism-boolean's G1–G4 and G6 (hole-free operands until A5), G3
 in any arm, and G5 read for `Union` as "the intervals overlap or touch"
 (`z0_b' <= z1_a && z0_a <= z1_b'`, exact over `big.Rat`). The distinct levels
 `{z0_a, z1_a, z0_b', z1_b'}` sorted exactly cut the union into at most three
-slabs. In a slab both operands reach, the region is `Union`'s select-all
+slabs. Each level is also read as its exact range (prism-boolean §3.2): two
+tied levels merge only when both denote one rational, and neighbouring
+distinct levels must lie strictly in order across their ranges, so a 0.2 in
+top and a block drawn at 5.08 mm, which hold one float, neither touch nor
+order and take the mesh path. In a slab both operands reach, the region is `Union`'s select-all
 merge (prism-boolean §4.2, with its enclosed-void check) over the two
 records, with its §6 audit and §7 displacement; where the clean-nesting
 match below proves one region carries the other's outer whole as a hole,

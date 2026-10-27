@@ -61,7 +61,7 @@ func OuterRuns(slabs []Slab) []Slab {
 	for k, slab := range slabs {
 		if k > 0 && equalLoop(slabs[k-1].Regions[0].Outer, slab.Regions[0].Outer) {
 			last := &runs[len(runs)-1]
-			last.Z1, last.Z1Delta = slab.Z1, slab.Z1Delta
+			last.Z1, last.Z1Delta, last.Z1Denoted = slab.Z1, slab.Z1Delta, slab.Z1Denoted
 			continue
 		}
 		slab.Regions = []momentinput.Profile{{Outer: slab.Regions[0].Outer}}

@@ -124,3 +124,22 @@ func TestIntersectZIntervalOverlaps(t *testing.T) {
 		})
 	}
 }
+
+func TestIntersectEndChargesBothDisplacements(t *testing.T) {
+	t.Parallel()
+	// A's upper end holds 5 exactly; B's holds one ulp above with a 1e-14
+	// displacement, so B's true end may lie below A's and become the result.
+	b := math.Nextafter(5, 6)
+	bVal := new(big.Rat).SetFloat64(b)
+	// The lowest true end B allows sits b - 1e-14 below the held winner 5.
+	lowest := new(big.Rat).Sub(bVal, new(big.Rat).SetFloat64(1e-14))
+	gap := new(big.Rat).Sub(big.NewRat(5, 1), lowest)
+	held, delta := prismplacement.IntersectUpperEnd(5, 0, bVal, 1e-14)
+	require.Equal(t, 5.0, held)
+	require.GreaterOrEqual(t, new(big.Rat).SetFloat64(delta).Cmp(gap), 0, "the bound covers B's lowest true end")
+	held, delta = prismplacement.IntersectLowerEnd(b, 0, new(big.Rat).SetInt64(5), 1e-14)
+	require.Equal(t, b, held)
+	highest := new(big.Rat).Add(big.NewRat(5, 1), new(big.Rat).SetFloat64(1e-14))
+	require.GreaterOrEqual(t, new(big.Rat).SetFloat64(delta).Cmp(highest.Sub(highest, bVal)), 0,
+		"the bound covers B's highest true start")
+}

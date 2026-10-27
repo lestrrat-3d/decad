@@ -97,101 +97,66 @@ func AdmittedShiftedInterval(pa, pb Operand) (*big.Rat, *big.Rat) {
 }
 
 // IntersectLowerEnd chooses the higher of A's lower level and B's exact
-// shifted lower level. The chosen endpoint carries its own axial displacement.
-// A tie takes A's float with the larger displacement because both operands'
-// coordinates then equally denote the result. A shifted B endpoint rounds
-// once, and RationalFloatError charges that rounding beside B's displacement.
+// shifted lower level. The result's true level is the higher of the two true
+// levels, which may be the other operand's when their ranges overlap, so the
+// chosen endpoint carries the larger of both axial displacements: below the
+// held winner the true level lies within the winner's own displacement, and
+// above it within the larger of the two, since the loser's held level lies
+// lower. A tie takes A's float. A shifted B endpoint rounds once, and
+// RationalFloatError charges that rounding beside the displacement.
 func IntersectLowerEnd(aVal, aDelta float64, bVal *big.Rat, bDelta float64) (float64, float64) {
 	return intersectEnd(aVal, aDelta, bVal, bDelta, true)
 }
 
 // IntersectUpperEnd chooses the lower of A's upper level and B's exact
-// shifted upper level, charging B's rounding when B supplies the result.
+// shifted upper level, charging the larger displacement and B's rounding when
+// B supplies the result.
 func IntersectUpperEnd(aVal, aDelta float64, bVal *big.Rat, bDelta float64) (float64, float64) {
 	return intersectEnd(aVal, aDelta, bVal, bDelta, false)
 }
 
 func intersectEnd(aVal, aDelta float64, bVal *big.Rat, bDelta float64, lower bool) (float64, float64) {
 	cmp := proofarith.FloatRat(aVal).Cmp(bVal)
-	switch {
-	case cmp == 0:
-		return aVal, max(aDelta, bDelta)
-	case lower && cmp > 0 || !lower && cmp < 0:
-		return aVal, aDelta
+	delta := max(aDelta, bDelta)
+	if cmp == 0 || lower && cmp > 0 || !lower && cmp < 0 {
+		return aVal, delta
 	}
 	held, _ := bVal.Float64()
-	return held, proofbound.AbsSumUpper(bDelta, proofarith.RationalFloatError(bVal, held))
-}
-
-// levelRange is the exact range a level's true value lies in, lifted by
-// shift: the single rational DenotedLevel proves, or else the held float
-// widened by its displacement on both sides. ok is false for a non-finite
-// level or displacement, or a negative displacement.
-type levelRange struct {
-	lo, hi *big.Rat
-}
-
-func rangeOf(held, delta float64, d LevelDenotation, shift *big.Rat) (levelRange, bool) {
-	if exact := DenotedLevel(held, delta, d); exact != nil {
-		exact.Add(exact, shift)
-		return levelRange{lo: exact, hi: exact}, true
-	}
-	h, dr := proofarith.FloatRat(held), proofarith.FloatRat(delta)
-	if h == nil || dr == nil || dr.Sign() < 0 {
-		return levelRange{}, false
-	}
-	h.Add(h, shift)
-	return levelRange{lo: new(big.Rat).Sub(h, dr), hi: new(big.Rat).Add(h, dr)}, true
-}
-
-// zRanges is the exact range of each sweep level of op on A's axis.
-func zRanges(op Operand, shift *big.Rat) (levelRange, levelRange, bool) {
-	r0, ok0 := rangeOf(op.Z0, op.Z0Delta, op.Z0Denoted, shift)
-	r1, ok1 := rangeOf(op.Z1, op.Z1Delta, op.Z1Denoted, shift)
-	return r0, r1, ok0 && ok1
-}
-
-// operandRanges is A's two level ranges and B's after G5's exact shift.
-func operandRanges(pa, pb Operand) (a0, a1, b0, b1 levelRange, ok bool) {
-	a0, a1, okA := zRanges(pa, new(big.Rat))
-	b0, b1, okB := zRanges(pb, ZShift(pa, pb))
-	return a0, a1, b0, b1, okA && okB
+	return held, proofbound.AbsSumUpper(delta, proofarith.RationalFloatError(bVal, held))
 }
 
 // CutZIntervalSpans reports that the shifted tool interval provably spans the
 // target's. Each comparison holds for every true level the held floats and
-// displacements allow: the tool's lower level lies at or below the target's
-// whatever their displacements, or both levels denote rationals in that order,
-// and likewise above. A cap meeting the target endpoint is a valid span when
-// both denote one rational. Equal held floats within a displacement prove
-// nothing, so such a pair declines.
+// displacements allow (LevelRange.AtOrBelow): a cap meeting the target
+// endpoint is a valid span when both denote one rational. Equal held floats
+// within a displacement prove nothing, so such a pair declines.
 func CutZIntervalSpans(target, tool Operand) bool {
-	t0, t1, z0, z1, ok := operandRanges(target, tool)
-	return ok && z0.hi.Cmp(t0.lo) <= 0 && z1.lo.Cmp(t1.hi) >= 0
+	t0, t1, z0, z1, ok := IntervalRanges(target, tool)
+	return ok && z0.AtOrBelow(t0) && t1.AtOrBelow(z1)
 }
 
 // UnionZIntervalMatches reports that the shifted B interval provably equals
 // A's: the held floats agree exactly after the shift, and each pair of levels
-// denotes one rational. A displaced level without a denotation proves no
-// equality.
+// denotes one rational (LevelRange.SameLevel). A displaced level without a
+// denotation proves no equality.
 func UnionZIntervalMatches(pa, pb Operand) bool {
 	a0, a1 := proofarith.FloatRat(pa.Z0), proofarith.FloatRat(pa.Z1)
 	z0, z1, ok := ShiftedInterval(pa, pb)
 	if a0 == nil || a1 == nil || !ok || a0.Cmp(z0) != 0 || a1.Cmp(z1) != 0 {
 		return false
 	}
-	r0, r1, s0, s1, ok := operandRanges(pa, pb)
-	return ok && r0.lo.Cmp(r0.hi) == 0 && r0.lo.Cmp(s0.lo) == 0 && s0.lo.Cmp(s0.hi) == 0 &&
-		r1.lo.Cmp(r1.hi) == 0 && r1.lo.Cmp(s1.lo) == 0 && s1.lo.Cmp(s1.hi) == 0
+	r0, r1, s0, s1, ok := IntervalRanges(pa, pb)
+	return ok && r0.SameLevel(s0) && r1.SameLevel(s1)
 }
 
 // IntersectZIntervalOverlaps reports that the shifted B interval provably
 // overlaps A's: each lower level lies strictly below the other's upper level
-// for every true level the displacements allow. A pair touching only at a
-// cap, or whose caps meet within their displacements, has no proven overlap.
+// for every true level the displacements allow (LevelRange.Below). A pair
+// touching only at a cap, or whose caps meet within their displacements, has
+// no proven overlap.
 func IntersectZIntervalOverlaps(pa, pb Operand) bool {
-	a0, a1, z0, z1, ok := operandRanges(pa, pb)
-	return ok && a0.hi.Cmp(z1.lo) < 0 && z0.hi.Cmp(a1.lo) < 0
+	a0, a1, z0, z1, ok := IntervalRanges(pa, pb)
+	return ok && a0.Below(z1) && z0.Below(a1)
 }
 
 // Relative is the composed map from B's plane-local coordinates into A's.

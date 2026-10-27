@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
@@ -19,11 +20,27 @@ type UnionLevel struct {
 // B's shifted levels round once, with that rounding added to their axial
 // displacement. An exact tie keeps A's held value and the larger bound.
 // Distinct exact levels that round to one held value cannot form a slab.
+//
+// Each level is also read as its exact range (prismplacement.LevelRange):
+// its denoted rational where the slab records one, else its held level
+// widened by its own displacement. Two tied levels merge only when both
+// denote one rational, and every pair of neighbouring distinct levels must
+// lie strictly in held order across their ranges. Otherwise the held order
+// may not be the true one, so ok is false and the pair declines.
 func UnionLevels(a, b []Slab, shift *big.Rat) ([]UnionLevel, bool) {
-	var levels []UnionLevel
-	add := func(z, delta float64, shifted bool) bool {
+	type ranged struct {
+		UnionLevel
+		r prismplacement.LevelRange
+	}
+	var levels []ranged
+	add := func(z, delta float64, d prismplacement.LevelDenotation, shifted bool) bool {
 		exact := proofarith.FloatRat(z)
-		if exact == nil {
+		lift := new(big.Rat)
+		if shifted {
+			lift = shift
+		}
+		r, ok := prismplacement.LevelRangeOf(z, delta, d, lift)
+		if exact == nil || !ok {
 			return false
 		}
 		held := z
@@ -38,7 +55,7 @@ func UnionLevels(a, b []Slab, shift *big.Rat) ([]UnionLevel, bool) {
 				}
 			}
 		}
-		levels = append(levels, UnionLevel{Exact: exact, Held: held, Delta: delta})
+		levels = append(levels, ranged{UnionLevel{Exact: exact, Held: held, Delta: delta}, r})
 		return true
 	}
 	for _, op := range []struct {
@@ -46,22 +63,38 @@ func UnionLevels(a, b []Slab, shift *big.Rat) ([]UnionLevel, bool) {
 		shifted bool
 	}{{a, false}, {b, true}} {
 		for i, slab := range op.slabs {
-			if i == 0 && !add(slab.Z0, slab.Z0Delta, op.shifted) {
+			if i == 0 && !add(slab.Z0, slab.Z0Delta, slab.Z0Denoted, op.shifted) {
 				return nil, false
 			}
-			if !add(slab.Z1, slab.Z1Delta, op.shifted) {
+			if !add(slab.Z1, slab.Z1Delta, slab.Z1Denoted, op.shifted) {
 				return nil, false
 			}
 		}
 	}
 	sort.SliceStable(levels, func(i, j int) bool { return levels[i].Exact.Cmp(levels[j].Exact) < 0 })
-	out := levels[:0]
+	merged := levels[:0]
 	for _, level := range levels {
-		if n := len(out); n > 0 && out[n-1].Exact.Cmp(level.Exact) == 0 {
-			out[n-1].Delta = max(out[n-1].Delta, level.Delta)
+		n := len(merged)
+		if n == 0 {
+			merged = append(merged, level)
 			continue
 		}
-		out = append(out, level)
+		prev := &merged[n-1]
+		if prev.Exact.Cmp(level.Exact) == 0 {
+			if !prev.r.SameLevel(level.r) {
+				return nil, false
+			}
+			prev.Delta = max(prev.Delta, level.Delta)
+			continue
+		}
+		if !prev.r.Below(level.r) {
+			return nil, false
+		}
+		merged = append(merged, level)
+	}
+	out := make([]UnionLevel, len(merged))
+	for i, level := range merged {
+		out[i] = level.UnionLevel
 	}
 	for i := 1; i < len(out); i++ {
 		if out[i-1].Held >= out[i].Held {

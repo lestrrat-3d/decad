@@ -83,8 +83,9 @@ func (sp Payload) OuterRuns() []prismrecord.Payload {
 	for i, slab := range planned {
 		run := base
 		run.Profile = slab.Regions[0]
-		run.Z0, run.Z0Delta = slab.Z0, slab.Z0Delta
-		run.Z1, run.Z1Delta = slab.Z1, slab.Z1Delta
+		// Each run keys its levels, and what they denote, on its own slabs.
+		run.Z0, run.Z0Delta, run.Z0Denoted = slab.Z0, slab.Z0Delta, slab.Z0Denoted
+		run.Z1, run.Z1Delta, run.Z1Denoted = slab.Z1, slab.Z1Delta, slab.Z1Denoted
 		runs[i] = run
 	}
 	return runs

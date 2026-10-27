@@ -101,8 +101,8 @@ stack, a BRep, a revolve, a faceted result), a `ThroughAll` stop with a
 competing far side, a chamfered end, a shell level, every stacked union level
 and the BRep stack of general-boolean §3 A7 record none.
 
-The denotations decide the interface arm, guard the split arm's order
-(§7 stage 3), enter the I4 audit (§2.2) and decide when general-boolean §3
+The denotations decide the interface arm, enter the split arm's level
+ranges (§7 stage 3), enter the I4 audit (§2.2) and decide when general-boolean §3
 A7's tool end meets a target cap. They also decide prism-boolean G5's span,
 match and overlap relations (prism-boolean §3.2), where a stack's first and
 last slab ends stand for the stack's own ends. Measurements,
@@ -454,15 +454,16 @@ Each admitted arm ships its implementation and tests together.
    declines, while 0.125 in and 3.175 mm denote one plane and share the
    interface whatever rounding the floor level carries. A tool end with a
    displacement and no recorded denotation, or an interface whose slabs record
-   none or disagree, declines this arm. The split arm compares held levels;
-   where the tool end is denoted, it must lie strictly between whichever of
-   the containing slab's two ends are denoted, and the blind cut on a prism
-   checks the same against the target's ends. Only those two ends are
-   checked: when one of them is displaced with no recorded denotation, a
-   denoted level farther along the stack could still sit out of order with
-   the new one. That needs a displacement larger than a slab's thickness,
-   while a unit conversion or a shift rounding displaces a level by about
-   1e-15 mm. The reached slabs' private scenes
+   none or disagree, declines this arm. The split arm reads levels as
+   prism-boolean §3.2's exact ranges (`prismplacement.LevelRange`): the tool
+   end must lie strictly above the containing slab's lower level and
+   strictly below its upper one across both ranges, a denoted level being a
+   single rational and an undenoted one its held float widened by its
+   displacement. The blind cut on a prism, and the outer end of either blind
+   cut, read the target's caps the same way, so a tool end within its
+   displacement of a cap or an interface declines rather than claiming an
+   open pocket or a slab, and an inner end whose held float rounds onto a cap
+   declines too. The reached slabs' private scenes
    plus the interface audit prove the new hole set is monotone. Opposed
    exclusive holes also build when the private scene above proves their
    separation without a charge and the section displacement is zero.

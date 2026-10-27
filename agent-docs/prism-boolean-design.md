@@ -196,30 +196,36 @@ of §4.5 on its existing admission gate.
 | Op | Required relation (after G5's shift) | Result z-interval |
 |---|---|---|
 | `Union(a, b)` | `[z0_a, z1_a] == [z0_b', z1_b']`, exactly | the common interval |
-| `Union(a, b)`, stacked | the intervals differ and overlap or touch: `z0_b' <= z1_a && z0_a <= z1_b'` | a `stackedPrismPayload` with one slab per pair of adjacent distinct levels; `agent-docs/general-boolean-design.md` §3 A1 |
+| `Union(a, b)`, stacked | the intervals differ and overlap or touch: `z0_b' <= z1_a && z0_a <= z1_b'`, with every pair of neighbouring levels of both operands strictly ordered across their ranges, or one shared denoted rational where two coincide | a `stackedPrismPayload` with one slab per pair of adjacent distinct levels; `agent-docs/general-boolean-design.md` §3 A1 |
 | `Cut(target, tool)` | `z0_tool' <= z0_target && z1_tool' >= z1_target` (tool spans target) | `[z0_target, z1_target]`, unchanged; a clean-nesting cut keeps the target's denoted levels (stacked §2.1) |
-| `Cut(target, tool)`, blind | `z0_target < z0_tool' < z1_target && z1_tool' >= z1_target` (a pocket from the top, floor at `z0_tool'`), or `z0_tool' <= z0_target && z0_target < z1_tool' < z1_target` (a pocket from the bottom, ceiling at `z1_tool'`) | a two-slab `stackedPrismPayload` (`agent-docs/stacked-prism-design.md`): the target's own interval, split at the tool's inner end. Both inequalities are `big.Rat` comparisons over G5's shifted interval, and the inner end is that exact rational rounded to the nearest float once, carrying the tool's own axial displacement plus `rationalFloatError` of the rounding — the same charge `Intersect`'s shifted endpoint takes; the slabs also record the level that end denotes when the tool's own level is known exactly (stacked §2.1) |
+| `Cut(target, tool)`, blind | `z0_target < z0_tool' < z1_target && z1_tool' >= z1_target` (a pocket from the top, floor at `z0_tool'`), or `z0_tool' <= z0_target && z0_target < z1_tool' < z1_target` (a pocket from the bottom, ceiling at `z1_tool'`) | a two-slab `stackedPrismPayload` (`agent-docs/stacked-prism-design.md`): the target's own interval, split at the tool's inner end. Every inequality is read on the level ranges below over G5's shifted interval, an inner end whose held float rounds onto a cap declines, and the inner end is that exact rational rounded to the nearest float once, carrying the tool's own axial displacement plus `rationalFloatError` of the rounding — the same charge `Intersect`'s shifted endpoint takes; the slabs also record the level that end denotes when the tool's own level is known exactly (stacked §2.1) |
 | `Cut(target, tool)`, stacked target | the tool spans the whole stack: `z0_tool' <= z0_first && z1_tool' >= z1_last` | the same slabs; each is cut or proven unchanged because the tool lies inside a hole |
-| `Cut(target, tool)`, stacked target, blind | the tool opens at one outer cap and ends inside a slab or exactly at an interface | an interior slab splits; each reached slab is cut or proven unchanged by its own scene; opposed holes at an interface require exact, separated sections, and exact overlapping ones build general-boolean §3 A8's BRep |
-| `Intersect(a, b)` | `z0_a < z1_b' && z0_b' < z1_a` (intervals overlap) | `[max(z0_a, z0_b'), min(z1_a, z1_b')]` |
+| `Cut(target, tool)`, stacked target, blind | the tool opens at one outer cap and ends strictly inside a slab across the level ranges, or at an interface both slabs and the tool denote as one rational | an interior slab splits; each reached slab is cut or proven unchanged by its own scene; opposed holes at an interface require exact, separated sections, and exact overlapping ones build general-boolean §3 A8's BRep |
+| `Intersect(a, b)` | `z0_a < z1_b' && z0_b' < z1_a` (intervals overlap) | `[max(z0_a, z0_b'), min(z1_a, z1_b')]`, each end charged the larger of both operands' displacements |
 
 `Union`'s equality is exact float equality — not a tolerance — matching G3's
 discipline: two teeth swept to visibly-the-same but not exactly equal heights
 (e.g. built through two different construction paths) refuse to the mesh
 path rather than being blessed as "close enough." All three relations are
 `big.Rat` comparisons over the operands' own recorded floats and G5's exact
-rational shift — no new rounding. An offset plane 0.1 mm below a target and a
+rational shift — no new rounding. So are the stacked and blind rows. An offset plane 0.1 mm below a target and a
 tool 0.3 mm tall put B's cap at the exact rational `fl(0.1) + fl(0.3)`, which
 is no float; G5 compares it as it is, and only `Intersect`'s result rounds it,
 charged (§7).
 
-Each relation must hold for the levels the held floats denote, not only for
-the floats. A level with zero displacement denotes its own float. A displaced
-level denotes the rational stacked §2.1 records for it, or, with no record,
-any value within its displacement of its float. `prismplacement` reads each
-level as that exact range, lifted by G5's shift, and admits an inequality only
-when it holds across both ranges: the tool's lower level at or below the
-target's whatever their displacements, and likewise the other three ends.
+Each relation in every row must hold for the levels the held floats denote,
+not only for the floats. A level with zero displacement denotes its own float.
+A displaced level denotes the rational stacked §2.1 records for it, or, with
+no record, any value within its displacement of its float.
+`prismplacement.LevelRange` reads each level as that exact range, lifted by
+G5's shift, and an inequality is admitted only when it holds across both
+ranges: the tool's lower level at or below the target's whatever their
+displacements, and likewise the other ends. The blind rows read their outer
+and inner ends this way (`stackedrecord.blindArmsOf`), as does the split of
+a stacked target's slab (`rangeSplit`); the stacked `Union` row orders and
+merges every level of both operands this way (`stackedrecord.UnionLevels`).
+`Intersect`'s result end can be either operand's true end where the two
+ranges overlap, so it takes the larger of both displacements.
 `Union`'s equality needs equal held floats and one shared denoted rational at
 each end. A cap meeting a cap is therefore a valid span only when both denote
 one rational, as two undisplaced equal floats or two 0.2 in levels do, and
@@ -698,7 +704,10 @@ hidden as an undecided pair.
 ### 4.6 One-scene Union of three or more prisms
 
 `Union(ctx, first, others...)` builds one section arrangement for three or more
-same-frame, same-placement prisms with equal recorded sweep intervals. Every
+same-frame, same-placement prisms whose sweep intervals G5 proves equal
+(`prismplacement.UnionZIntervalMatches`: equal held floats and one shared
+denoted rational at each end), and the result keeps that shared denotation.
+Every
 input section must have no holes, zero section displacement, and only whole
 `LineSeg` edges. Two input edges on the same infinite line carrier are
 refused because this path has no proof for their shared source span. A
