@@ -31,6 +31,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/meshbody/` | Exact edge classification, shell count, signed volume and area interval of an imported mesh. See mesh-import design. |
 | `export/` | STL, OBJ, 3MF, glTF, PNG, DXF and AP214 writers, and mesh writers for a `MeshBody`. See `agent-docs/step-export-design.md`, `agent-docs/3mf-export-design.md`, `agent-docs/gltf-export-design.md`, `agent-docs/png-export-design.md`, `agent-docs/dxf-export-design.md`. |
 | `internal/meshslice/` | Cuts a triangle mesh with a plane and chains the cut into closed outlines by the mesh edges it crosses. See section-outline design. |
+| `internal/outlineclear/` | Least distance between the material regions of two sets of closed plane polylines: bounding-box trees, crossing and containment tests. See section-outline design §5. |
 | `internal/drawing/` | Feature-edge projection of a mesh with depth-buffer hidden-line runs, and the even-odd hatch of a section, for `export.DXF` and `export.DXFSection`; plain millimetre data. See dxf-export design. |
 | `internal/facedeparture/` | The hook through which `export`'s STEP writer reads whether a face's tag is not proven to be its surface: a stated bound, or a revolve record the tag is not exactly. See step-export design. |
 | `internal/raster/` | Orthographic flat-shaded triangle rasterizer, projection and depth buffer, for `export.PNG` and `export.DXF`; plain millimetre data. See png-export design. |

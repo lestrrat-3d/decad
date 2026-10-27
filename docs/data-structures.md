@@ -144,6 +144,7 @@ configuration option.
 | `decad.BossRibs` | struct | The gusset ribs that brace a boss's root: their count, thickness, length, height and starting angle. | The caller |
 | `decad.BossBore` | struct | A boss's blind pilot hole: diameter and depth from the boss's top, an optional head and an optional thread. | The caller |
 | `decad.SectionOutline` | struct | The closed outlines where a body's verified mesh meets a plane, and how far they lie from the true surface. | `Body.SectionOutline` |
+| `decad.SectionClearance` | struct | The least distance between the material two section outlines enclose in their plane, the closest pair of points and whether the regions overlap. | `SectionOutline.Clearance` |
 | `decad.HoleSpec` | struct | One hole: the face, a world point on it, the diameter, a depth, an optional head, an optional shape, an optional thread and an optional draft. | The caller |
 | `decad.HoleThread` | struct | The thread of a tapped hole: pitch, hand and an optional length. | The caller |
 | `decad.HoleShape` | sealed interface | The cross-section of a hole that is not round. | The caller |

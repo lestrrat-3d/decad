@@ -50,3 +50,40 @@ counting an on-plane vertex as below turns them red.
 - An enclosure of the true section's outline or area.
 - Sheets, and meshes whose cut does not close.
 - Polyline simplification: a loop holds every cut point, including collinear ones.
+
+## 5. Clearance
+
+```go
+type SectionClearance struct {
+    Distance Measurement
+    A, B     r3.Vec
+    Overlaps bool
+}
+
+func (c SectionClearance) Lower() units.Value
+func (s SectionOutline) Clearance(other SectionOutline) (SectionClearance, error)
+```
+
+`Clearance` reads how closely two outlines cut by the same plane come, such as the two ribbons of a screw gear pair.
+It measures the material regions the outlines enclose, in the plane. It is a pure reading of the polylines: it runs no
+tessellation and takes no context.
+
+| Decision | Rule |
+|---|---|
+| C1 | The planes must be one frame: origin, `U` and `V` agree within 1e-9 (millimetres in the origin, and in each component of the unit axes). Otherwise, or for an outline without a loop, a loop of fewer than three points, a point that is not finite or an `OffSurface` that is negative or not finite, the result is `ErrDegenerate`. |
+| C2 | Points are projected into the first outline's plane. Material is where the winding numbers of an outline's loops sum to a positive number, so an outer loop adds material and a hole removes it, and a loop inside a hole inside an outer loop is material again. |
+| C3 | The regions overlap when a segment of one outline properly crosses a segment of the other (each end strictly on both sides of the other's line), or when a loop of one outline lies, away from the other's boundary, inside the other's material. Then `Distance` is zero, `Overlaps` is true and `A` and `B` are the crossing point or a vertex of the contained loop. |
+| C4 | Otherwise `Distance` is the least distance between any segment of one outline and any segment of the other, and `A` and `B` are the points of the loops that attain it. Outlines that touch or coincide without a proper crossing read zero with `Overlaps` false. |
+| C5 | Both outlines' segments sit in bounding-box trees. A crossing search descends only box pairs that meet. The distance search descends the nearer pair first and prunes every pair no nearer than the best found, so outlines that stay apart cost near `(n+m)log(n+m)`. Two outlines of 5,000 segments take milliseconds. |
+| C6 | `Distance` is `Approximate`. Its `Bound` is the sum of both `OffSurface` values plus thirty-two units of float64 rounding at the largest coordinate magnitude and the effect of the plane tolerance on a point at that magnitude, rounded up. |
+| C7 | `Lower` is `Distance` less `Bound`, not below zero, and zero when `Overlaps` is true. A gap is certified only when `Lower` is positive: a reading whose `Bound` reaches `Distance` certifies nothing. |
+
+The bound inherits the limit of §2. `OffSurface` bounds how far each loop point lies from the true boundary and the
+plane, so the bound covers the points' displacement. It does not cover a true section whose outline differs from the
+polylines by more, which happens where the plane meets the surface at a shallow angle. A reading whose points lie
+near such a place states a gap no tighter than its mesh can support.
+
+The tests check two squares at a known gap, a corner gap, touching squares, overlapping squares, a square inside a
+square, a square in a hole and a plate with a hole and an island, the bound arithmetic, the refusals, and two boxes
+built in decad and cut by one plane. A property test compares the result with an O(n*m) brute force on random
+polygons, and a timing test runs two circles of 5,000 segments.

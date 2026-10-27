@@ -2664,6 +2664,16 @@
 10	0.01	TestLoftSectionsTwistedRefusesExcessAndUnevenSections
 10	0.01	TestLoftSectionsTwistedLongRibbonIsOneVerifiedLoft
 10	0.00	TestSweepTwistOffAxisAngles
+10	0.00	TestSectionClearanceOfTwoSquaresIsTheirGap
+10	0.00	TestSectionClearanceOfACornerGapIsDiagonal
+10	0.00	TestSectionClearanceOfTouchingSquaresIsZeroWithoutOverlap
+10	0.00	TestSectionClearanceOfOverlappingSquaresOverlaps
+10	0.00	TestSectionClearanceOfASquareInsideASquareOverlaps
+10	0.00	TestSectionClearanceOfASquareInAHoleIsTheHoleGap
+10	0.00	TestSectionClearanceOfNestedLoops
+10	0.00	TestSectionClearanceBoundSumsTheOffSurfaceBounds
+10	0.00	TestSectionClearanceRefusals
+10	0.00	TestSectionClearanceOfTwoBoxesIsTheirGap
 10	0.00	TestCutTwistedOffAxisSweepThroughTubeWall
 10	0.00	TestCutTwistedSweepCrossesTubeWall
 10	0.00	TestCutTwistedSweepThroughBothCaps
