@@ -183,6 +183,9 @@ type resolvedPattern struct{ patternrecord.Spec }
 // placedInstance is the Copy arm: the payload re-evaluated under its
 // placement composed with instance i's motion.
 func (rp resolvedPattern) placedInstance(ctx context.Context, d *Document, ref producerID, payload topo.Payload, i int) (*Body, error) {
+	if body, ok := rp.quarterTurnedInstance(ctx, d, ref, payload, i); ok {
+		return body, nil
+	}
 	m, err := rp.WorldMotion(i)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: pattern instance %d has no rigid motion: %s`, ErrDegenerate, i, err)
@@ -371,4 +374,43 @@ func (rp resolvedPattern) joinPlacedLofts(ctx context.Context, d *Document, base
 		return nil, false, err
 	}
 	return bodyHandle(node), true, ctx.Err()
+}
+
+// quarterTurnedInstance is instance i of a circular pattern of a faceted solid that holds no vertex bound, when the
+// instance is a whole number of quarter turns about a world axis (a count of 2 or 4, the axis exactly +X, +Y or +Z or a
+// negative one): the turn only exchanges and negates coordinates, so the instance is exact where the 90 degree
+// rotation is not, and the instances stay on the exact routes of an axis-square solid
+// (agent-docs/orthogonal-boolean-design.md B14). ok is false when the instance is not such a turn, or its coordinates
+// cannot be held exactly, and the placed copy takes it.
+func (rp resolvedPattern) quarterTurnedInstance(ctx context.Context, d *Document, ref producerID, payload topo.Payload, i int) (*Body, bool) {
+	held, isFaceted := payload.(facetedPayload)
+	if !rp.Circular || !isFaceted || len(held.Tris) == 0 || (4*i)%rp.Count != 0 {
+		return nil, false
+	}
+	for _, beta := range held.VertexBound {
+		if beta != 0 {
+			return nil, false
+		}
+	}
+	index, sign, ok := unitAxis(rp.Axis)
+	if !ok {
+		return nil, false
+	}
+	quarters := ((int(sign)*(4*i/rp.Count))%4 + 4) % 4
+	if quarters == 0 {
+		return nil, false
+	}
+	verts, err := quarterTurnVerts(held.Verts, index, quarters, rp.Center)
+	if err != nil {
+		return nil, false
+	}
+	mesh, err := NewMeshBody(ctx, verts, held.Tris)
+	if err != nil {
+		return nil, false
+	}
+	body, err := solidFromMeshBodyAt(ctx, d, mesh, ref)
+	if err != nil {
+		return nil, false
+	}
+	return body, true
 }

@@ -1948,6 +1948,7 @@
 10	0.01	TestPlacementByARoundedMotionStillPaysItsRounding
 7	0.00	TestStraightPrismScaledAtAcceptsPlacedSource
 7	0.00	TestStretchMirrorsOnANegativeFactor
+10	0.01	TestCircularPatternOfAMeshSolidReadsExactly
 7	0.00	TestSurfaceExtrudeAreaComposesCapSubtraction
 7	0.01	TestSurfaceExtrudeHoledSheetMultiLumpTessellates
 7	0.00	TestSurfaceLoftStaysASheetThroughPlacement

@@ -57,11 +57,30 @@ func QuarterTurn(ctx context.Context, b *Body, axis, about r3.Vec, turns int) (r
 			return nil, fmt.Errorf(`%w: QuarterTurn takes a faceted solid whose held vertices carry no bound`, ErrUnsupported)
 		}
 	}
+	verts, err := quarterTurnVerts(payload.Verts, index, quarters, about)
+	if err != nil {
+		return nil, err
+	}
+	mesh, err := NewMeshBody(ctx, verts, payload.Tris)
+	if err != nil {
+		return nil, err
+	}
+	turned, err := solidFromMeshBody(ctx, d, mesh)
+	if err != nil {
+		return nil, fmt.Errorf("%w: the turned solid is not one the evaluator can prove: %s", ErrUnsupported, err)
+	}
+	return commitModifyResult(ctx, OperationQuarterTurn, b, turned)
+}
+
+// quarterTurnVerts turns the held vertices by quarters (1 to 3) quarter turns about the world axis index through about,
+// in the right-hand sense: a quarter turn only exchanges and negates coordinates, so each result is exact, and a vertex
+// whose coordinate relative to the centre, or the turned one added back, would round is ErrUnsupported.
+func quarterTurnVerts(held []r3.Vec, index, quarters int, about r3.Vec) ([]r3.Vec, error) {
 	// One quarter turn about +X sends (y, z) to (-z, y), about +Y (z, x) to (-x, z) and about +Z (x, y) to (-y, x).
 	u, v := (index+1)%3, (index+2)%3
-	verts := make([]r3.Vec, len(payload.Verts))
+	verts := make([]r3.Vec, len(held))
 	o := [3]float64{about.X, about.Y, about.Z}
-	for i, p := range payload.Verts {
+	for i, p := range held {
 		pc := [3]float64{p.X, p.Y, p.Z}
 		var c [3]float64
 		for k := range 3 {
@@ -85,15 +104,7 @@ func QuarterTurn(ctx context.Context, b *Body, axis, about r3.Vec, turns int) (r
 		}
 		verts[i] = r3.NewVec(q[0], q[1], q[2])
 	}
-	mesh, err := NewMeshBody(ctx, verts, payload.Tris)
-	if err != nil {
-		return nil, err
-	}
-	turned, err := solidFromMeshBody(ctx, d, mesh)
-	if err != nil {
-		return nil, fmt.Errorf("%w: the turned solid is not one the evaluator can prove: %s", ErrUnsupported, err)
-	}
-	return commitModifyResult(ctx, OperationQuarterTurn, b, turned)
+	return verts, nil
 }
 
 // exactSum returns a + b and whether that float is the exact sum, by the error-free transformation of Knuth's
