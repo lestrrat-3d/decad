@@ -120,7 +120,7 @@ larger shortfall refuses. The refusal names the shortfall, and when it is within
 the 64 steps it says to pass `WithMatchingFaces` to the Cut or Intersect that made
 the cone cut. Every sector carries the same cap, so the joined mesh grows with the sector
 count. With fewer than four sources, the first attempt subdivides each cap four
-times; with four or more sources, it subdivides each cap three times. When the
+times; with four or more sources, it subdivides each cap twice. When the
 mesh would pass the triangle ceiling or the crossing audit's scan allowance, the builder
 retries with one fewer subdivision, down to none, without using up an attempt, and cap refinement adds cells back only
 where the bound needs them. The sector count has no fixed limit of its own.
