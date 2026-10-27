@@ -17,10 +17,10 @@ import (
 // thick over each removed face joined to the solid first so the cavity opens through it; the
 // result is the body cut by that cavity, made a mesh solid. ok is false when the route does not
 // apply, and the caller takes the receiver's own route: the receiver is not a faceted body, it
-// holds a vertex with a bound, the sense is Outward, or a triangle is not square to an axis.
+// or holds a vertex with a bound, or a triangle is not square to an axis.
 func shellOrthogonal(ctx context.Context, d *Document, b *Body, call brepmodify.ShellCall) (result *Body, ok bool, err error) {
 	payload, isFaceted := b.n.Payload.(facetedPayload)
-	if !isFaceted || !call.Inward || len(payload.Tris) == 0 {
+	if !isFaceted || len(payload.Tris) == 0 {
 		return nil, false, nil
 	}
 	for _, beta := range payload.VertexBound {
@@ -46,12 +46,12 @@ func shellOrthogonal(ctx context.Context, d *Document, b *Body, call brepmodify.
 			}
 		}
 	}
-	return shellOrthogonalOnce(ctx, d, b, payload, removed, call.Tmm)
+	return shellOrthogonalOnce(ctx, d, b, payload, removed, call.Tmm, !call.Inward)
 }
 
 // shellOrthogonalOnce builds the walls of thickness t as a mesh and makes them the body that replaces b.
-func shellOrthogonalOnce(ctx context.Context, d *Document, b *Body, payload facetedPayload, removed []bool, t float64) (*Body, bool, error) {
-	wallVerts, wallTris, err := orthoshell.Walls(payload.Verts, payload.Tris, removed, t)
+func shellOrthogonalOnce(ctx context.Context, d *Document, b *Body, payload facetedPayload, removed []bool, t float64, outward bool) (*Body, bool, error) {
+	wallVerts, wallTris, err := orthoshell.Walls(payload.Verts, payload.Tris, removed, t, outward)
 	switch {
 	case errors.Is(err, orthoshell.ErrNotOrthogonal):
 		return nil, false, nil

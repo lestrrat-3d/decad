@@ -139,7 +139,11 @@ func clipArea(a, b, c [2]float64, x0, x1, y0, y1 float64) float64 {
 // conforming (a grid cell's face is a quad of four triangles fanned from a point inside it) and
 // wound outward from the walls, and a cavity with no volume is ErrDegenerate. The coordinates of
 // the offsets are float sums x ± t, so a wall is t thick to the rounding of that sum.
-func Walls(verts []r3.Vec, tris [][3]int, removed []bool, t float64) ([]r3.Vec, [][3]int, error) {
+//
+// With outward set the walls grow off the solid instead: they are the cells within a cube of
+// half-side t of the solid, less the solid, and over a removed face the footprint's prism is left
+// open, so the solid is the cavity.
+func Walls(verts []r3.Vec, tris [][3]int, removed []bool, t float64, outward bool) ([]r3.Vec, [][3]int, error) {
 	if !(t > 0) || math.IsInf(t, 0) {
 		return nil, nil, fmt.Errorf("%w: the thickness must be positive and finite", ErrDegenerate)
 	}
@@ -255,6 +259,12 @@ func Walls(verts []r3.Vec, tris [][3]int, removed []bool, t float64) ([]r3.Vec, 
 		k := slabKey{axes[i], p, signs[i]}
 		slabs[k] = append(slabs[k], i)
 	}
+	type opening struct {
+		axis, sign int
+		plane      float64
+		footprint  []float64
+	}
+	var openings []opening
 	for key, members := range slabs {
 		a := key.axis
 		v, w := other(a)
@@ -277,6 +287,7 @@ func Walls(verts []r3.Vec, tris [][3]int, removed []bool, t float64) ([]r3.Vec, 
 				}
 			}
 		}
+		openings = append(openings, opening{axis: a, sign: key.sign, plane: plane, footprint: footprint})
 		for cw := range ud[w] {
 			for cv := range ud[v] {
 				if footprint[cw*ud[v]+cv] <= 0.5 {
@@ -292,13 +303,17 @@ func Walls(verts []r3.Vec, tris [][3]int, removed []bool, t float64) ([]r3.Vec, 
 	}
 	// prefix[i][j][k] counts occupied cells below (i, j, k), so a box of cells is all occupied when
 	// its sum equals its size.
+	src := occ
+	if outward {
+		src = occS
+	}
 	pre := make([]int32, (ud[0]+1)*(ud[1]+1)*(ud[2]+1))
 	pat := func(i, j, k int) int { return (k*(ud[1]+1)+j)*(ud[0]+1) + i }
 	for k := range ud[2] {
 		for j := range ud[1] {
 			for i := range ud[0] {
 				n := int32(0)
-				if occ[at(i, j, k)] {
+				if src[at(i, j, k)] {
 					n = 1
 				}
 				pre[pat(i+1, j+1, k+1)] = n + pre[pat(i, j+1, k+1)] + pre[pat(i+1, j, k+1)] + pre[pat(i+1, j+1, k)] -
@@ -334,6 +349,14 @@ func Walls(verts []r3.Vec, tris [][3]int, removed []bool, t float64) ([]r3.Vec, 
 		i1 := sort.SearchFloat64s(u.c[a], hi3-eps)           // one past the last cell whose left edge is below hi3
 		return i0, i1, i0 < i1
 	}
+	// reach returns the range of u-cells whose interior meets the open interval (c - t, c + t) on axis a,
+	// clipped to the grid, for the outward walls, which may reach past it; the range is empty
+	// when nothing is there.
+	reach := func(a int, c float64) (int, int) {
+		i0 := max(0, sort.SearchFloat64s(u.c[a], c-t+eps)-1)
+		i1 := min(ud[a], sort.SearchFloat64s(u.c[a], c+t-eps))
+		return i0, i1
+	}
 	rat := func(i, j, k int) int { return (k*rd[1]+j)*rd[0] + i }
 	in := make([]bool, rd[0]*rd[1]*rd[2])
 	hasCavity := false
@@ -344,6 +367,11 @@ func Walls(verts []r3.Vec, tris [][3]int, removed []bool, t float64) ([]r3.Vec, 
 		spanOK[a] = make([]bool, rd[a])
 		for i := range rd[a] {
 			c := (r.c[a][i] + r.c[a][i+1]) / 2
+			if outward {
+				i0, i1 := reach(a, c)
+				spans[a][i], spanOK[a][i] = [2]int{i0, i1}, i0 < i1
+				continue
+			}
 			i0, i1, ok := span(a, c)
 			spans[a][i], spanOK[a][i] = [2]int{i0, i1}, ok
 		}
@@ -362,7 +390,8 @@ func Walls(verts []r3.Vec, tris [][3]int, removed []bool, t float64) ([]r3.Vec, 
 				}
 				x, y, z := spans[0][i], spans[1][j], spans[2][k]
 				size := int32((x[1] - x[0]) * (y[1] - y[0]) * (z[1] - z[0]))
-				if box(x[0], x[1], y[0], y[1], z[0], z[1]) == size {
+				sum := box(x[0], x[1], y[0], y[1], z[0], z[1])
+				if (!outward && sum == size) || (outward && sum > 0) {
 					in[rat(i, j, k)] = true
 					hasCavity = true
 				}
@@ -370,6 +399,9 @@ func Walls(verts []r3.Vec, tris [][3]int, removed []bool, t float64) ([]r3.Vec, 
 		}
 	}
 	if !hasCavity {
+		if outward {
+			return nil, nil, fmt.Errorf("%w: the solid has no reach", ErrDegenerate)
+		}
 		return nil, nil, fmt.Errorf("%w: the walls meet", ErrDegenerate)
 	}
 	// The walls are the solid's own cells that the cavity does not take.
@@ -391,7 +423,12 @@ func Walls(verts []r3.Vec, tris [][3]int, removed []bool, t float64) ([]r3.Vec, 
 		for j := range rd[1] {
 			for i := range rd[0] {
 				x, y, z := uCell[0][i], uCell[1][j], uCell[2][k]
-				if x < 0 || y < 0 || z < 0 || !occS[at(x, y, z)] || in[rat(i, j, k)] {
+				if outward {
+					// Within reach of the solid, and neither in it nor in the opening over a removed face.
+					if !in[rat(i, j, k)] || (x >= 0 && y >= 0 && z >= 0 && occ[at(x, y, z)]) {
+						continue
+					}
+				} else if x < 0 || y < 0 || z < 0 || !occS[at(x, y, z)] || in[rat(i, j, k)] {
 					continue
 				}
 				walls[rat(i, j, k)] = true
@@ -399,8 +436,50 @@ func Walls(verts []r3.Vec, tris [][3]int, removed []bool, t float64) ([]r3.Vec, 
 			}
 		}
 	}
+	if outward {
+		// An outward wall ends flush with the plane of a removed face: over the footprint grown by t,
+		// nothing of the wall stands beyond that plane.
+		for _, op := range openings {
+			a := op.axis
+			v, w := other(a)
+			pre := make([]int32, (ud[v]+1)*(ud[w]+1))
+			pp := func(cv, cw int) int { return cw*(ud[v]+1) + cv }
+			for cw := range ud[w] {
+				for cv := range ud[v] {
+					n := int32(0)
+					if op.footprint[cw*ud[v]+cv] > 0.5 {
+						n = 1
+					}
+					pre[pp(cv+1, cw+1)] = n + pre[pp(cv, cw+1)] + pre[pp(cv+1, cw)] - pre[pp(cv, cw)]
+				}
+			}
+			for k := range rd[2] {
+				for j := range rd[1] {
+					for i := range rd[0] {
+						idx := [3]int{i, j, k}
+						ca := (r.c[a][idx[a]] + r.c[a][idx[a]+1]) / 2
+						if d := float64(op.sign) * (ca - op.plane); !(d > 0 && d < t) {
+							continue
+						}
+						cv0, cv1 := reach(v, (r.c[v][idx[v]]+r.c[v][idx[v]+1])/2)
+						cw0, cw1 := reach(w, (r.c[w][idx[w]]+r.c[w][idx[w]+1])/2)
+						if cv0 >= cv1 || cw0 >= cw1 {
+							continue
+						}
+						if pre[pp(cv1, cw1)]-pre[pp(cv0, cw1)]-pre[pp(cv1, cw0)]+pre[pp(cv0, cw0)] > 0 {
+							walls[rat(i, j, k)] = false
+						}
+					}
+				}
+			}
+		}
+		solid = false
+		for _, wall := range walls {
+			solid = solid || wall
+		}
+	}
 	if !solid {
-		return nil, nil, fmt.Errorf("%w: the cavity takes the whole solid", ErrDegenerate)
+		return nil, nil, fmt.Errorf("%w: the walls leave no cells", ErrDegenerate)
 	}
 	return boundary(r, rd, walls)
 }

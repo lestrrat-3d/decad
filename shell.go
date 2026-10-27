@@ -108,7 +108,8 @@ func WithShellSense(s ShellSense) ShellOption {
 // the cavity is the solid eroded by a cube of side twice t, so the walls are mitered at
 // every edge, the removed faces open it, and the result is a mesh solid whose axis faces keep
 // their planes (agent-docs/orthogonal-shell-design.md). A wall is t thick to the rounding
-// of x ± t; walls that meet are ErrDegenerate.
+// of x ± t; walls that meet are ErrDegenerate. An Outward shell of such a solid wraps it
+// instead, the solid dilated by a cube less itself, ending flush with a removed face's plane.
 //
 // A positive-taper one-sided full-circle draft with its far cap removed
 // inward builds a conical cup through draft §10.6's bounded meridian.
