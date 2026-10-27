@@ -81,19 +81,17 @@ func TestNearTangentCornerEnclosesTheMiter(t *testing.T) {
 	}
 }
 
-// TestNearTangentCornerRefuses pins each of §9.1.1's refusals by its reason,
-// and the exact-tangent refusal for a corner whose ends differ or whose
-// tangents oppose. Deleting the matching gate in NearTangentCorner turns its
-// row red, and reading every arc as counter-clockwise turns both clockwise
-// rows red.
+// TestNearTangentCornerRefuses pins each of §9.1.1's refusals of a line and
+// an arc by its reason, and the exact-tangent refusal for a corner whose ends
+// differ or whose tangents oppose (near_tangent_arcs_test.go pins two arcs).
+// Deleting the matching gate in NearTangentCorner turns its row red, and
+// reading every arc as counter-clockwise turns both clockwise rows red.
 func TestNearTangentCornerRefuses(t *testing.T) {
 	t.Parallel()
 	p := func(u, v float64) sectionrecord.Point2 { return sectionrecord.Point2{U: u, V: v} }
 	line, arc := nearTangentPair(5 * math.Ldexp(1, -34))
 	wide, wideArc := nearTangentPair(5 * math.Ldexp(1, -31))
 	shift := 5 * math.Ldexp(1, -34)
-	first := sectionrecord.ArcSeg{Center: p(0, 0), Start: p(0, -5), End: p(5, 0), TStart: 0, TEnd: 1}
-	second := sectionrecord.ArcSeg{Center: p(2, shift), Start: p(5, 0), End: p(2-shift, 3+shift), TStart: 0, TEnd: 1}
 	// The slot's top line and right arc, walked clockwise as a hole wall: the
 	// arc's material lies outside its circle, so an outward amount shrinks it.
 	cwLine := sectionrecord.LineSeg{Start: p(-15, 5), End: p(15, 5), TStart: 0, TEnd: 1}
@@ -108,7 +106,6 @@ func TestNearTangentCornerRefuses(t *testing.T) {
 		curAmount  float64
 		want       string
 	}{
-		{"two circular walls", first, second, 0.4, 0.4, "between two circular walls"},
 		{"turn past the limit", wide, wideArc, 0.4, 0.4, "exceeds the admitted sin²θ ≤ 2⁻⁶⁴"},
 		{"different amounts", line, arc, 0.4, 0, "move by different amounts"},
 		{"moved circle at the corner", line, arc, 5 - 1e-12, 5 - 1e-12, "moved circle comes within"},

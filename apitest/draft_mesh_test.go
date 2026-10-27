@@ -458,3 +458,77 @@ func TestDraftNearTangentJoinPastLimitRefuses(t *testing.T) {
 	require.ErrorContains(t, err, "exceeds the admitted sin²θ ≤ 2⁻⁶⁴")
 	require.Regexp(t, `the corner \(15, (-5|5)\) between recorded segments \d+ and \d+`, err.Error())
 }
+
+// splitDiscSketch draws a radius-5 circle as two half arcs: the upper one
+// about the origin and the lower one about (0, shift). Both recorded ends of
+// the lower arc lie √(25 + shift²) from its centre, so each half meets the
+// other a sliver off tangent, sin θ ≈ shift/5, at (±5, 0): tangent by the
+// build's held-tangent rule, two near-tangent corners of two arcs over the
+// rationals.
+func splitDiscSketch(shift float64) func(*sketch.Sketch) {
+	return func(s *sketch.Sketch) {
+		pt := func(u, v float64) *sketch.Point {
+			p := s.CreatePoint(u, v)
+			s.Fix(p)
+			return p
+		}
+		a, b := pt(5, 0), pt(-5, 0)
+		s.CreateArc(pt(0, 0), a, b)
+		s.CreateArc(pt(0, shift), b, a)
+	}
+}
+
+// TestDraftTwoArcNearTangentJoinBooleans pins agent-docs/draft-design.md
+// §9.1.1 on corners of two arcs whose centres sit a few ulps apart: the split
+// disc with its lower centre moved 2⁻⁴⁸ mm (four ulps of 5) meshes with its
+// volume proof at VerifyAll, charging the sliver at its two corners, and a
+// Cut by a 4 mm square post through it removes the post's 128 mm³ from the
+// closed form πh(25 − 5d + d²/3) − 2δh(5 − d/2), δ the shift, up to terms of
+// order δ² (below 1e-27 mm³), within the result's bound. Shown to fail
+// first: with the two-arc branch removed from capband.NearTangentCorner, the
+// mesh carried no volume proof.
+func TestDraftTwoArcNearTangentJoinBooleans(t *testing.T) {
+	t.Parallel()
+	shift := math.Ldexp(1, -48)
+	doc := decad.New()
+	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, splitDiscSketch(shift))
+	b := taperExtrude(t, doc, s, p, 8, 3, decad.Along)
+	mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	requireWatertight(t, mesh)
+	require.True(t, mesh.VolumeVerified())
+
+	post := boxBodyAtZ(t, doc, -2, -2, 2, 2, -5, 20)
+	got, err := decad.Cut(t.Context(), b, post)
+	require.NoError(t, err)
+	d := bfMul(bf(8), taperTan(3))
+	round := bfMul(bigPi, bfAdd(bfSub(bf(25), bfMul(bf(5), d)), bfQuo(bfMul(d, d), bf(3))))
+	lift := bfMul(bf(2), bf(shift), bfSub(bf(5), bfQuo(d, bf(2))))
+	requireVolumeCovers(t, "cut", got, bfSub(bfMul(bf(8), bfSub(round, lift)), bf(128)), 1e-3)
+	requireBodyWatertight(t, got)
+}
+
+// TestDraftTwoArcNearTangentPastLimitRefuses pins §9.1.1's stated class at
+// corners of two arcs: with the lower centre moved 5·2⁻³¹ mm the build still
+// reads both joins as tangent, but each turns by about 2⁻³¹ rad, past the
+// admitted 2⁻³², so the mesh carries no volume proof and a boolean refuses
+// it naming the corner and the limit. Shown to fail first: without the limit
+// gate in capband.NearTangentCorner, the mesh carried the proof.
+func TestDraftTwoArcNearTangentPastLimitRefuses(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, splitDiscSketch(5*math.Ldexp(1, -31)))
+	b := taperExtrude(t, doc, s, p, 8, 3, decad.Along)
+	mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	requireWatertight(t, mesh)
+	require.False(t, mesh.VolumeVerified())
+
+	post := boxBodyAtZ(t, doc, -2, -2, 2, 2, -5, 20)
+	_, err = decad.Cut(t.Context(), b, post)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "no proof of the volume")
+	require.ErrorContains(t, err, "tapered extrude")
+	require.ErrorContains(t, err, "exceeds the admitted sin²θ ≤ 2⁻⁶⁴")
+	require.Regexp(t, `the corner \((-5|5), 0\) between recorded segments \d+ and \d+`, err.Error())
+}
