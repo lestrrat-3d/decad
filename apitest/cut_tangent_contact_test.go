@@ -282,7 +282,8 @@ func polygonPrismAtZ(t *testing.T, doc *decad.Document, z0, h float64, pts ...[2
 // sketch cuts the wall there and the clean-nesting match misses on the
 // Partial edges before prismcells.RegionContact's line reading runs. A blind tool takes the mesh
 // path and meshes with its volume bound covering the closed form; a tool
-// through the whole target reaches the mesh path's tangent-contact refusal.
+// through the whole target is flush with both caps as well, so the shifted retry grows it
+// (agent-docs/gap-tolerance-design.md §5.2 item 5) and the volume covers the closed form too.
 func TestCutLineEndTouch(t *testing.T) {
 	t.Parallel()
 	holeTriangle := [][2]float64{{0, 0}, {3, -1}, {3, 1}}    // 3 mm²
@@ -293,22 +294,22 @@ func TestCutLineEndTouch(t *testing.T) {
 		stacked bool
 		pts     [][2]float64
 		z0, h   float64
-		volume  float64 // 0 for a through tool
+		volume  float64
 	}{
 		{name: "triangle on the hole wall from the top", pts: holeTriangle, z0: 6, h: 4, volume: 3840 - 12},
 		{name: "triangle on the hole wall from the bottom", pts: holeTriangle, z0: 0, h: 4, volume: 3840 - 12},
-		{name: "triangle on the hole wall, through", pts: holeTriangle, z0: 0, h: 10},
+		{name: "triangle on the hole wall, through", pts: holeTriangle, z0: 0, h: 10, volume: 3840 - 30},
 		{name: "triangle on the outer wall from the top", pts: outerTriangle, z0: 6, h: 4, volume: 3840 - 12},
-		{name: "triangle on the outer wall, through", pts: outerTriangle, z0: 0, h: 10},
+		{name: "triangle on the outer wall, through", pts: outerTriangle, z0: 0, h: 10, volume: 3840 - 30},
 		{name: "diamond on the hole wall from the top", pts: diamond, z0: 6, h: 4, volume: 3840 - 16},
-		{name: "diamond on the hole wall, through", pts: diamond, z0: 0, h: 10},
+		{name: "diamond on the hole wall, through", pts: diamond, z0: 0, h: 10, volume: 3840 - 40},
 		// A 72 mm² triangle enclosing the hole, its long side through the
 		// hole's (0, 2) corner: 3840 − (72 − 16)·4.
 		{name: "triangle enclosing the hole, touching its corner", pts: [][2]float64{{-6, -4}, {6, -4}, {-6, 8}},
 			z0: 6, h: 4, volume: 3616},
 		{name: "stacked target, from the top", stacked: true, pts: holeTriangle, z0: 7, h: 3, volume: 3776 - 9},
 		{name: "stacked target, from the bottom", stacked: true, pts: holeTriangle, z0: 0, h: 3, volume: 3776 - 9},
-		{name: "stacked target, through", stacked: true, pts: holeTriangle, z0: 0, h: 10},
+		{name: "stacked target, through", stacked: true, pts: holeTriangle, z0: 0, h: 10, volume: 3776 - 30},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -319,12 +320,6 @@ func TestCutLineEndTouch(t *testing.T) {
 				target = touchStackedPlate(t, doc)
 			}
 			got, err := decad.Cut(t.Context(), target, polygonPrismAtZ(t, doc, tc.z0, tc.h, tc.pts...))
-			if tc.volume == 0 {
-				var be *decad.BooleanError
-				require.ErrorAs(t, err, &be)
-				require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
-				return
-			}
 			require.NoError(t, err)
 			require.True(t, tookMeshPath(got))
 			volume, err := got.Volume()

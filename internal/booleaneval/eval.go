@@ -140,7 +140,7 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if terr != nil {
 		return ev, err
 	}
-	return retryShifted(ctx, err, op, piecesOf(mb), func(shifts map[int]r3.Vec) (Evaluation, error) {
+	return retryShifted(ctx, err, op, piecesOf(mb), func(shifts map[int]pieceShift) (Evaluation, error) {
 		return evaluate(ctx, op, a, b, meshes, chordScale, capFace, coneFace, shifts)
 	})
 }
@@ -148,7 +148,7 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 // evaluate is Evaluate's single attempt, with the pieces of b's mesh moved by
 // shifts when there are any.
 func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
-	meshes OperandMesher, chordScale float64, capFace, coneFace *topo.Face, shifts map[int]r3.Vec) (Evaluation, error) {
+	meshes OperandMesher, chordScale float64, capFace, coneFace *topo.Face, shifts map[int]pieceShift) (Evaluation, error) {
 	if err := ctx.Err(); err != nil {
 		return Evaluation{}, err
 	}
