@@ -118,12 +118,49 @@ func TestChamferOfAPocketsFloorEdgesFillsTheirWedges(t *testing.T) {
 	}
 }
 
-func TestChamferOfConcaveEdgesEndingInOpenAirIsRefused(t *testing.T) {
+func TestChamferOfEveryEdgeOfAPocketStopsFlushAtTheMouth(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	pocket := pocketSlab(t, doc)
-	// The wall corners end at the pocket's mouth, where the fill's tool would stand in air above the solid.
-	_, err := decad.Chamfer(t.Context(), pocket, decad.Edges(decad.Concave()), units.Millimeters(1))
+	// The four wall corners end at the pocket's mouth, where the fill's tool stops flush with the slab's top; the
+	// four floor edges run on into the walls. All eight together are 8500 + 30 − 3 mm³, as in the floor-only case less
+	// what the three wedges meeting at each floor corner share.
+	out, err := decad.Chamfer(t.Context(), pocket, decad.Edges(decad.Concave()), units.Millimeters(1))
+	require.NoError(t, err)
+	require.Equal(t, []*decad.Body{out}, doc.Bodies())
+	volume, err := out.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, 8527, volume.Value.Base(), volume.Bound.Base()+1e-6)
+	require.Less(t, volume.Bound.Base(), 1.0, "the flush ends are charged their shift and no more")
+	box, err := out.Bounds()
+	require.NoError(t, err)
+	require.InDelta(t, 10, box.Max.Z, 0.01, "nothing stands above the slab")
+}
+
+func TestChamferOfAGrooveRunsFlushOutOfBothEnds(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	slab := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(30, 30, 10))
+	tool := blockIn(t, doc, r3.NewVec(-1, 10, 5), r3.NewVec(31, 20, 12))
+	groove, err := decad.Cut(t.Context(), slab, tool)
+	require.NoError(t, err)
+	out, err := decad.Chamfer(t.Context(), groove, decad.Edges(decad.Concave(), decad.LongerThan(units.Millimeters(20))),
+		units.Millimeters(1))
+	require.NoError(t, err)
+	volume, err := out.Volume()
+	require.NoError(t, err)
+	// The 30 x 10 x 5 groove leaves 7500; the two 30 mm floor edges add a wedge of 15 each.
+	require.InDelta(t, 7530, volume.Value.Base(), volume.Bound.Base()+1e-6)
+	require.Less(t, volume.Bound.Base(), 1.0)
+}
+
+func TestChamferOfConcaveEdgesLargerThanTheirWallsIsRefused(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	pocket := pocketSlab(t, doc)
+	// The pocket's walls are 5 mm tall, so a 6 mm fill up the wall would stand above the slab.
+	_, err := decad.Chamfer(t.Context(), pocket, decad.Edges(decad.Concave(), decad.LongerThan(units.Millimeters(7))),
+		units.Millimeters(6))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{pocket}, doc.Bodies(), "a refusal leaves the pocket live")
 }
