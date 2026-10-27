@@ -1151,6 +1151,7 @@
 10	0.00	TestClassBFlushPinBothCapsInTargetPlanes
 10	0.00	TestClassBFlushPinCutAndIntersect
 10	0.00	TestClassBFlushPinMisses
+10	0.00	TestClassBFlushPinSenses
 10	0.00	TestClassBFlushPinUnion
 5	4.34	TestVerifyJointBoxLoopCrossingZero
 5	1.11	TestVerifyJointBoxLoopErrors

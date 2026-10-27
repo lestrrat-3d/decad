@@ -767,9 +767,10 @@ empty. `Union` of a tool outside keeps the face with the tool's section as a
 hole, the tool's walls over its whole interval and its far cap. `Cut` of a
 tool inside keeps the face with that hole, the tool's walls reversed over its
 whole interval and the hole's floor at the far cap. `Intersect` of a tool
-inside is the tool's own prism. The other three pairs meet the target in the
-disk alone (a `Union` that is the target, a `Cut` that leaves it whole, an
-empty `Intersect`) and miss, so the mesh path decides them. The
+inside is the tool's own prism. The other three pairs miss, and the mesh
+path decides them: a `Union` of a tool inside is the target itself, and a
+tool outside meets the target in the disk alone, so its `Cut` leaves the
+target whole and its `Intersect` is empty. The
 face's region takes the section as a hole through the same clean-nesting
 match, so a section touching the face's boundary misses. The hole's rim is
 the wall's rim at the shared level, one circle bounding one swept wall, so
@@ -1412,7 +1413,10 @@ are relations, never literals.
   `8000 − 90π`, and intersects to its own prism, `90π`; a boss standing on a
   cross-drilled brep's top unions into 9 faces, `8000 − 225π`; a notched
   plate whose far wall shares the pin's other cap plane still cuts its blind
-  hole. Each is non-`Faceted`, pairs every edge, verifies its mesh at
+  hole. Pins drawn `Against` the YZ normal (an inside `Cut` from x = 40, an
+  outside `Union` from x = 55) and pins on the wall x = 0 (an outside `Union`
+  from x = −15, an inside `Cut` to x = 10) build the same 8-face results,
+  `8000 ± 9π·L`. Each is non-`Faceted`, pairs every edge, verifies its mesh at
   `VerifyAll` and is `Sound`. A `Union` of the inside pin, a `Cut` of the
   outside pin, the notched plate's `Union`, a pin one ulp off the wall and a
   pin whose inch length rounds onto the wall keep the mesh path; an

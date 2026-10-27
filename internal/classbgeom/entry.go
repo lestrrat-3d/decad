@@ -163,8 +163,9 @@ func classBFaceView(ctx context.Context, payload topo.Payload) (breprecord.Paylo
 
 // flushOpAdmitted reports whether op over a flush pair builds the solid the
 // rooted build states: a Union of a tool standing outside the face, and a Cut
-// or Intersect of a tool inside the target. The other three meet the target
-// in the shared disk alone and miss.
+// or Intersect of a tool inside the target. The other three miss: a Union of
+// a tool inside is the target itself, and a Cut or Intersect of a tool
+// outside meets the target in the shared disk alone.
 func flushOpAdmitted(op meshbool.OperationKind, side FlushSide) bool {
 	if op == meshbool.OpUnion {
 		return side == FlushOutside

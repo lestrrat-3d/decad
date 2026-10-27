@@ -59,6 +59,27 @@ func wantRounding(want float64) float64 {
 	return 2 * (math.Nextafter(math.Abs(want), math.Inf(1)) - math.Abs(want))
 }
 
+// pinFromYZ extrudes the Ø6 section about (y, z) = (10, 5) from the YZ
+// plane offset to x = planeX, by length in dir.
+func pinFromYZ(t *testing.T, doc *decad.Document, planeX float64, dir decad.Direction, length float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	plane, err := w.CreateOffsetPlane(w.YZ(), planeX)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	center := s.CreatePoint(10, 5)
+	s.Fix(center)
+	s.CreateCircle(center, 3)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{
+		D: units.Millimeters(length), Dir: dir,
+	})
+	require.NoError(t, err)
+	return body
+}
+
 // requireExactFlushResult asserts the class-B brep reading of a flush pair:
 // no faceted face, faceCount faces, every edge on two faces, a volume within
 // its bound of want, a mesh whose occupied volume VerifyAll proves, and a
@@ -139,6 +160,47 @@ func TestClassBFlushBossOnBrep(t *testing.T) {
 	got, err := decad.Union(t.Context(), drilled, bossAlongZ(t, doc, 20, 10, 10, 15))
 	require.NoError(t, err)
 	requireExactFlushResult(t, got, 9, 8000-225*math.Pi)
+}
+
+// TestClassBFlushPinSenses reads the tool's side from each face's outward
+// normal and each pin's own sweep sense. Pins drawn Against the YZ normal
+// meet the wall x = 40 from inside (x = 30 to 40, drawn from x = 40) and
+// from outside (x = 40 to 55, drawn from x = 55). Pins on the wall x = 0,
+// whose outward normal is −x, stand outside from x = −15 to 0 and run inside
+// from x = 0 to 10. A Union of a Ø6 pin of length L outside the 40×20×10
+// plate encloses 8000 + 9πL, and a Cut of one inside removes 9πL: 8 faces
+// each.
+func TestClassBFlushPinSenses(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name   string
+		planeX float64
+		dir    decad.Direction
+		length float64
+		union  bool
+	}{
+		{name: "against_inside_cut", planeX: 40, dir: decad.Against, length: 10},
+		{name: "against_outside_union", planeX: 55, dir: decad.Against, length: 15, union: true},
+		{name: "low_wall_outside_union", planeX: -15, dir: decad.Along, length: 15, union: true},
+		{name: "low_wall_inside_cut", planeX: 0, dir: decad.Along, length: 10},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			plate := boxBody(t, doc, 0, 0, 40, 20, 10)
+			pin := pinFromYZ(t, doc, tc.planeX, tc.dir, tc.length)
+			pinVolume := 9 * math.Pi * tc.length
+			if tc.union {
+				got, err := decad.Union(t.Context(), plate, pin)
+				require.NoError(t, err)
+				requireExactFlushResult(t, got, 8, 8000+pinVolume)
+				return
+			}
+			got, err := decad.Cut(t.Context(), plate, pin)
+			require.NoError(t, err)
+			requireExactFlushResult(t, got, 8, 8000-pinVolume)
+		})
+	}
 }
 
 // notchedPlate is an L-shaped 10 mm plate: x in [0, 40] for y in [0, 20] and
