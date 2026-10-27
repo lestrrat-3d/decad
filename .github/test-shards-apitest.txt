@@ -838,6 +838,7 @@
 4	0.10	TestRevolveShellClosedShaft
 4	0.18	TestRevolveShellTessellates
 10	0.00	TestShellClosedDrilledBar
+10	0.00	TestShellClosedDrilledBarOutward
 10	0.00	TestShellClosedDrilledBarRefusals
 10	0.00	TestShellClosedDrilledBarThroughCut
 10	0.00	TestShellClosedBoxThroughCut
@@ -2140,7 +2141,6 @@
 9	0.46	TestVerifyMitredSweepUnderPrismArmIsDisjoint
 9	0.00	TestVerifyMotionBetweenErrors
 9	0.29	TestVerifyMotionBetweenKnownCollision
-9	0.00	TestShellClosedDrilledBarOutward
 10	0.00	TestPointLocationHistoryCrossedPlates
 10	0.00	TestPointLocationHistoryNestedCut
 10	0.00	TestPointLocationHistoryPinCut

@@ -369,9 +369,11 @@ The removed faces are read against the recognised record:
 | a tool wall outside §3.1d, a tool's floor, a face of a hole of `S` | — | SG4 |
 | two removed faces sharing an edge, other than the runs above | — | SG5 |
 
-Only `Inward` builds. The dilation `(A \ T) ⊕ t` does not distribute over the
-difference and rounds every convex edge of the receiver — a hole mouth's rim
-into a torus, a box corner into a sphere — so `Outward` is SG1.
+A shell that removes faces (route S) builds `Inward` only. The dilation
+`(A \ T) ⊕ t` does not distribute over the difference and rounds every convex
+edge of the receiver — a hole mouth's rim into a torus, a box corner into a
+sphere — so an outward one is SG1. A closed shell removes no face and is not
+route S: it runs first, in either sense, through the cases below.
 `WithNoOpenings` takes §3.1a's closed rectangular-boss case, and a closed
 shell of a brep record that route P reads as a prism along some reference
 axis (brep-modify §4.1); the shell is the prism's own closed shell (reach
@@ -525,7 +527,7 @@ Modify §1's test picks every sentinel.
 
 | SG | Call | Exists? | Sentinel |
 |---|---|---|---|
-| **SG1** | `WithShellSense(Outward)` on a brep or stacked receiver | yes; the dilation rounds the receiver's convex edges into tori and spheres this record does not hold | `ErrUnsupported` |
+| **SG1** | `WithShellSense(Outward)` with removed faces on a brep or stacked receiver (an outward closed shell through §3.2's prism reading builds) | yes; the dilation rounds the receiver's convex edges into tori and spheres this record does not hold | `ErrUnsupported` |
 | **SG2** | `WithNoOpenings` on a brep or stacked receiver outside §3.1a's nested rectangular boss and outside a shell of a brep record route P reads as a prism (§3.2); an outward one of a record that reads as a prism along more than one axis | yes; no other brep record carries a certified void shell | `ErrUnsupported` (replaces SX16's text for this call) |
 | **SG3** | the record is no through-cut record (Table TC) and is outside §3.1a–§3.1e: a blind port, a keyway, a crossing boss, a split or oblique wall, a displaced tool level | yes; its erosion may hold surfaces beyond the admitted cases | `ErrUnsupported`, naming the first face Table TC does not take |
 | **SG4** | a removed face that is a tool wall outside §3.1d, a tool floor or a hole wall of `S` | yes | `ErrUnsupported` |
@@ -540,7 +542,7 @@ reach SX10:
 |---|---|
 | 2a. record | RB dispatch; SB2; SB1 |
 | 2b. route P | brep-modify §4.2 unchanged: an axis whose prism takes the removed faces as caps builds the prism's own cup or tube |
-| 2c. route S entry | SG1; §3.1a's closed-boss case, a closed shell through route P's prism reading (§3.2), or SG2; Table TC (SG3); §3.1d's exact circular-wall case; the remaining removed faces against the record (SG4, SG5's face and straight-wall tests) |
+| 2c. route S entry | `WithNoOpenings` first: §3.1a's closed-boss case, a closed shell through route P's prism reading (§3.2), or SG2; then SG1; Table TC (SG3); §3.1d's exact circular-wall case; the remaining removed faces against the record (SG4, SG5's face and straight-wall tests) |
 | 3. existence | caps alone: S18; S10 (section and height limits); S11a on `S`. A wall run: `sideOpeningRegions` in shell-opening §5's stages 2–5 (SO6, SO3's height half, S11a and SO1, SO2, SO4 per end, S8, S11b and S9 on `W` and `C`, the area identity), then SG5's reflex-end test. Then S11a on each tool |
 | 4. offset audit | S8, S11b, S9 on `S ⊖ t` (caps alone) and on each `Tᵢ ⊕ t`; TC7 (SG6) |
 | 5. cavity | the private cuts (SG6) |

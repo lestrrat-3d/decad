@@ -1486,8 +1486,12 @@ record above denotes it, by these steps:
 3. Outward, holes cannot meet each other or the outer loop. `H_i ⊖ t ⊂ H_i`,
    and `E ⊖ t ⊂ E`, so the offset loops lie in pairwise disjoint regions that
    `P`'s own loops separate. Two outer-loop walls that close on each other
-   across a notch narrower than `2t` are the one merge the dilation makes, and
-   the audit's crossing test refuses it (S11b).
+   across a notch narrower than `2t` are the one merge the dilation makes. A
+   notch whose walls the trim runs backward is S11a (`WalkConsumed`) as the
+   offset is built; one that survives the trim is the audit's crossing test,
+   S11b. A hole's own erosion can still change its topology: a hole whose
+   narrow waist is under `2t` wide splits into two (a dumbbell), its offset
+   walk crossing itself at the waist, and that is S11b too.
 4. `Q \ P` is the `1 + k` bands. `Q \ P = (D \ D_P) ∪ ⋃ (H_i \ (H_i ⊖ t))`,
    with `D` and `D_P` the closed regions inside `Q`'s and `P`'s outer loops:
    the outer band `{Q.Outer, reverse(P.Outer)}` and, per hole, the lining
