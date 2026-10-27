@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - name: Profile the real thread model
+      - name: Profile the real API workload
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force .tmp | Out-Null
@@ -27,23 +27,23 @@ jobs:
           go version | Out-File -Append .tmp/runner.txt
           go env GOARCH GOOS GOMAXPROCS | Out-File -Append .tmp/runner.txt
           $testArgs = @(
-            'test', './apitest', '-run', '^TestThreadExternalRod$', '-count=1', '-v',
-            "-cpuprofile=$profileDir/thread.cpu", "-memprofile=$profileDir/thread.mem",
+            'test', './apitest', '-count=1', '-v', '-timeout=12m',
+            "-cpuprofile=$profileDir/api.cpu", "-memprofile=$profileDir/api.mem",
             '-o', "$profileDir/apitest.test.exe"
           )
-          & go @testArgs 2>&1 | Tee-Object -FilePath .tmp/thread.log
+          & go @testArgs 2>&1 | Tee-Object -FilePath .tmp/api.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Get-Item "$profileDir/thread.cpu", "$profileDir/thread.mem" |
+          Get-Item "$profileDir/api.cpu", "$profileDir/api.mem" |
             ForEach-Object {
               if ($_.Length -eq 0) { throw "Empty profile: $($_.FullName)" }
             }
       - name: Upload the native profiles
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: windows-thread-profile
+          name: windows-api-profile
           include-hidden-files: true
           path: |
             .tmp/runner.txt
-            .tmp/thread.log
-            .tmp/thread.cpu
-            .tmp/thread.mem
+            .tmp/api.log
+            .tmp/api.cpu
+            .tmp/api.mem
