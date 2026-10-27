@@ -17,6 +17,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `mesh_repair.go` | Public `RepairMesh`, its options and `MeshRepairReport`: option gates, then `internal/meshrepair/` mends and `NewMeshBody` reads the result. See mesh-import design §7. |
 | `mesh_refine.go` | Public `RefineMesh`: gates, then `internal/meshrefine/` splits long edges and `NewMeshBody` reads the result. See mesh-import design §11. |
 | `internal/meshrefine/` | Midpoint splitting of the long edges of an indexed triangle mesh. See mesh-import design §11. |
+| `stretch.go` | Public `Stretch`: gates a faceted solid with no vertex bound, stretches its mesh by `ScaleMesh` and reads it back by `solidFromMeshBody`. See mesh-solid design §3. |
 | `mesh_scale.go` | Public `ScaleMesh` and `ScaleBodyMesh`: gates, per-axis stretch about an anchor, reversed winding under an odd number of negative factors, then `NewMeshBody`. See mesh-import design §10. |
 | `subd.go` | Public `SubDMesh` and `SubDCage`: gates, then `internal/subd/` refines the cage and `NewMeshBody` reads the result. See subd design. |
 | `lattice.go` | Public `GyroidLattice`, `SchwarzPLattice`, `DiamondLattice` and `LatticeSpec`: gates, then `internal/lattice/` samples and cuts the field and `NewMeshBody` reads the result. See lattice design. |
