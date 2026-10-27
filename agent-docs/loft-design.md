@@ -1528,11 +1528,44 @@ candidate list would be too large. Other projected-patch audits keep the
 complete-list route after S8: their row queries can exceed the ceiling even
 when the grouped tree's single counting pass fits it.
 
-The unstructured batch path keeps exact vertices, triangle normals and planes,
-and one exact projection for each vertex and used axis. It derives each
-triangle's float corners, exact corners and projected corners from those
-immutable tables when classifying a pair. This removes three duplicate
-per-triangle tables without changing the coordinates or exact predicates.
+### Exact tables in row batches
+
+Prepare exact tables only after row preflight succeeds. With no projected
+patch proofs, and both broad-phase and contact certificates enabled on
+float-lifted input, preflight also runs
+`loft_audit_projection.go`'s certified float proofs. Prepare a facet's exact
+data when any candidate pair remains undecided. Always prepare z-flat facets
+to retain `loft_audit_fan.go`'s exact fan tables. Rational-source audits and
+disabled shortcut sets retain complete exact preparation. Projected-patch
+audits retain their existing preparation path, since their patch proofs
+already remove within-patch pairs.
+
+The projection proofs lift a separating line in a coordinate projection to a
+3D separating plane. They prove disjointness, the expected common edge, or the
+expected common vertex; an uncertain or zero orientation takes no shortcut.
+The helper's comments own each convexity proof and its strict-side conditions.
+These are exact triangle-contact predicates over decad's own held geometry;
+they reuse the mesh kernel's guarded orientation rather than constructing a
+separate sketch scene for each pair.
+
+Each prepared facet keeps exact vertices, its normal and plane, and one exact
+projection for each vertex and used axis. Pair classification derives float,
+exact and projected corners from immutable shared tables. Selection requires
+an ordinary box tree covering every triangle: preflight proves every
+box-overlapping pair involving an unselected facet, and disjoint boxes prove
+every omitted pair apart. Thus an unselected facet carries a completed proof
+of its expected contact with every other facet. Read that cached verdict from
+the shared indices without repeating the float checks. This uses completed
+pair proofs, never adjacency alone. Filtered or partial row sets cannot create
+this cache. The constructor in `loft_audit_selection.go` owns the proof and
+the table owns copies of the indexed geometry it certifies.
+
+Proof workers start after row workers join and the caller replays the chunk's
+original budget steps. They read immutable geometry and set only per-facet
+atomic uncertainty flags. The caller materializes the selection mask after
+all workers join. Retain only bounded rows and per-facet flags, never a
+complete candidate or verdict list. S8 ceilings, S7 pair charging and
+lexicographic refusal order remain the row audit's.
 
 `Loft` threads a shared `workBudget` (`internal/proofbound/budget.go`) through the audit,
 polling at `workPollInterval` exactly as `Fillet` / `Chamfer`

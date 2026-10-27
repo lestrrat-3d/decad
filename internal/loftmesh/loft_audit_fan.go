@@ -45,8 +45,8 @@ type loftFanInfo struct {
 }
 
 // newLoftAuditFans builds the fan tables of d over tris, or returns nil when no
-// vertex qualifies. d must hold the projections of every triangle (it must not
-// be a selected-only table) and its exact lifts must be the float vertices'
+// vertex qualifies. d must hold the projections of every z-flat triangle,
+// including in a selected table, and its exact lifts must be the float vertices'
 // own lifts: a triangle whose corner z values are equal floats is then exactly
 // flat at that z. NewLoftAuditDataWithExact data must not be passed.
 func newLoftAuditFans(d *LoftAuditData, tris [][3]int) *loftAuditFans {

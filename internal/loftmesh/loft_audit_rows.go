@@ -169,10 +169,14 @@ func replayLoftRow(budget *proofbound.WorkBudget, r *loftRowResult, limit uint64
 // The count from the selected S8 scanner remains authoritative. This second
 // bounded scan proves the row-ordered producer fits the same ceiling and
 // reports the same candidate count for every triangle.
+// An optional observer sees serial pairs on the caller, or a joined chunk
+// after its row counts and budget steps are replayed.
+// It receives every candidate of a completed preflight without changing the
+// charged steps. Workers retain bounded rows only when an observer needs them.
 func preflightLoftRows(budget *proofbound.WorkBudget, tree loftRowScan, members, starts []int,
-	ceiling uint64) error {
+	ceiling uint64, observer ...loftRowObserver) error {
 	return preflightLoftRowsWorkers(budget, tree, members, starts, ceiling,
-		orderedwork.EachWorkers(len(members), loftRowParallelMin))
+		orderedwork.EachWorkers(len(members), loftRowParallelMin), observer...)
 }
 
 // preflightLoftRowsWorkers is preflightLoftRows with an explicit worker count;
@@ -181,15 +185,19 @@ func preflightLoftRows(budget *proofbound.WorkBudget, tree loftRowScan, members,
 // over from the first row not yet replayed. It fails at the step a serial run
 // fails at, with that step's error, whenever the poll happens to fire.
 func preflightLoftRowsWorkers(budget *proofbound.WorkBudget, tree loftRowScan, members, starts []int,
-	ceiling uint64, workers int) error {
+	ceiling uint64, workers int, observer ...loftRowObserver) error {
+	var observe loftRowObserver
+	if len(observer) != 0 {
+		observe = observer[0]
+	}
 	var scanned uint64
 	if workers >= 2 {
 		out := make([]loftRowResult, min(loftRowChunkRows, len(members)))
 		for lo := 0; lo < len(members); {
 			hi := loftRowChunkEnd(members, starts, lo)
-			if err := walkLoftRows(budget, tree, members, lo, hi, ceiling, false, workers, out); err != nil {
+			if err := walkLoftRows(budget, tree, members, lo, hi, ceiling, observe != nil, workers, out); err != nil {
 				if errors.Is(err, proofbound.ErrWallWorkBudget) {
-					return preflightLoftRowsSerial(budget, tree, members[lo:], starts, ceiling, scanned)
+					return preflightLoftRowsSerial(budget, tree, members[lo:], starts, ceiling, scanned, observer...)
 				}
 				return err
 			}
@@ -207,20 +215,34 @@ func preflightLoftRowsWorkers(budget *proofbound.WorkBudget, tree loftRowScan, m
 					return fmt.Errorf("%w: row-ordered loft candidates differ from S8 count", decaderr.ErrUnsupported)
 				}
 			}
+			if observe != nil {
+				if err := observe.ObserveRows(budget, members[lo:hi], out[:hi-lo], workers); err != nil {
+					return err
+				}
+			}
 			lo = hi
 		}
 		return budget.Err()
 	}
-	return preflightLoftRowsSerial(budget, tree, members, starts, ceiling, scanned)
+	return preflightLoftRowsSerial(budget, tree, members, starts, ceiling, scanned, observer...)
 }
 
 // preflightLoftRowsSerial walks members one row at a time against the budget,
 // given the work scanned by the rows before them.
 func preflightLoftRowsSerial(budget *proofbound.WorkBudget, tree loftRowScan, members, starts []int,
-	ceiling, scanned uint64) error {
+	ceiling, scanned uint64, observer ...loftRowObserver) error {
+	var observe loftRowObserver
+	if len(observer) != 0 {
+		observe = observer[0]
+	}
 	for _, i := range members {
 		rowCount := 0
-		work, exceeded, err := tree.visitRow(budget, i, ceiling-scanned, func(int) { rowCount++ })
+		work, exceeded, err := tree.visitRow(budget, i, ceiling-scanned, func(j int) {
+			rowCount++
+			if observe != nil {
+				observe.Observe(i, j)
+			}
+		})
 		if err != nil {
 			return err
 		}
