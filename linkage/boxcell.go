@@ -292,7 +292,7 @@ func (b *boxRun[B]) cellProjection(c *boxCell[B], i, k int, readings map[cellRea
 				}
 				params[j] = jointParam(dr.spec.joints[j], c.centre(j))
 			}
-			if corners, ok = linkagebound.RoundCorners(readPoints(dr.spec, dr.frames, params, bound, below, points)); !ok {
+			if corners, ok = readPoints(dr.spec, dr.frames, params, bound, below, points); !ok {
 				return projectionSide{}, false
 			}
 			readings[key] = corners

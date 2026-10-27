@@ -537,7 +537,7 @@ func (dr *linkageDriver[B]) cornersAt(pose *motionengine.Pose, m int, b linkBoun
 		}
 		params[i] = motionbound.MotionParam{Turn: new(big.Rat), Base: linkagebound.Midpoint(at)}
 	}
-	reading, ok := linkagebound.RoundCorners(readPoints(dr.spec, dr.frames, params, b, below, points))
+	reading, ok := readPoints(dr.spec, dr.frames, params, b, below, points)
 	if !ok {
 		return cornerBounds{}, false
 	}

@@ -247,13 +247,14 @@ func layerLower[B comparable](spec *linkageSpec[B], frames []motionbound.MotionF
 	})
 }
 
-// readPoints maps a static point reading through the link's relative joint path.
-func readPoints[B comparable](spec *linkageSpec[B], frames []motionbound.MotionFrame, params []motionbound.MotionParam, b linkBound, below int, out cornerReading) cornerReading {
+// readPoints maps a static point reading through the link's relative joint
+// path and rounds it outward (linkagebound.ReadPointBounds).
+func readPoints[B comparable](spec *linkageSpec[B], frames []motionbound.MotionFrame, params []motionbound.MotionParam, b linkBound, below int, out cornerReading) (cornerBounds, bool) {
 	revolute := make([]bool, len(spec.joints))
 	for i := range revolute {
 		revolute[i] = spec.joints[i].revolute
 	}
-	return linkagebound.ReadPoints(frames, params, b.Path, revolute, below, out)
+	return linkagebound.ReadPointBounds(frames, params, b.Path, revolute, below, out)
 }
 
 // jointStep reads a joint's signed interval step when no interior waypoint bends it.

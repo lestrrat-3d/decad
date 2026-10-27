@@ -84,6 +84,53 @@ func CmpFloatRat(f float64, q *big.Rat) int {
 	return lhs.Cmp(new(big.Int).Lsh(rhs, uint(-exp)))
 }
 
+// cmpFloatFrac is CmpFloatRat(f, q) for q = n/d, d > 0, a fraction that need
+// not be in lowest terms: the sign of f − n/d is the sign of m·d·2^e − n for
+// f = m·2^e, since d is positive. n and d are only read.
+func cmpFloatFrac(f float64, n, d *big.Int) int {
+	qs := n.Sign()
+	if f == 0 {
+		return -qs
+	}
+	fs := 1
+	if f < 0 {
+		fs = -1
+	}
+	if fs != qs {
+		return fs
+	}
+	mant, exp := floatOddMantissa(f)
+	lhs := new(big.Int).Mul(big.NewInt(mant), d)
+	if exp >= 0 {
+		return lhs.Lsh(lhs, uint(exp)).Cmp(n)
+	}
+	return lhs.Cmp(new(big.Int).Lsh(n, uint(-exp)))
+}
+
+// FracFloatDown is proofbound.RatFloatDown(n/d) for d > 0, n/d in any terms:
+// the largest float at or below n/d, or the non-finite nearest float when n/d
+// overflows. RatFloatDown reads q.Float64(), which quotientFloat64 returns bit
+// for bit from any numerator and denominator of the same value, and keeps it
+// when it is at or below q (CmpFloatRat, whose sign cmpFloatFrac decides from
+// n and d), else steps one float down. Each step depends on the value alone,
+// so no GCD normalises n/d first. n and d are only read.
+func FracFloatDown(n, d *big.Int) float64 {
+	f, _ := quotientFloat64(n, d)
+	if math.IsNaN(f) || math.IsInf(f, 0) || cmpFloatFrac(f, n, d) <= 0 {
+		return f
+	}
+	return NextDown(f)
+}
+
+// FracFloatUp is proofbound.RatFloatUp(n/d), FracFloatDown's mirror.
+func FracFloatUp(n, d *big.Int) float64 {
+	f, _ := quotientFloat64(n, d)
+	if math.IsNaN(f) || math.IsInf(f, 0) || cmpFloatFrac(f, n, d) >= 0 {
+		return f
+	}
+	return NextUp(f)
+}
+
 // RatFloat64 is q.Float64(): the nearest float64 (ties to even) and
 // big.Rat.Float64's exactness flag, the same bits and the same flag for every
 // q. A power-of-two denominator, which every FloatRat difference has, rounds by
