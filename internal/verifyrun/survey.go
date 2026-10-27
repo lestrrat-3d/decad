@@ -289,7 +289,11 @@ func runSurveys(budget *proofbound.WorkBudget, b *topo.Body, cfg verifyConfig) (
 		case breprecord.Payload:
 			out, ok = brepMinRadius(b, pl)
 		case facetedrecord.Payload:
-			out.reason = surveyFacetedUnsupported
+			if o, found := orthogonalRadius(pl); found {
+				out, ok = o, true
+			} else {
+				out.reason = surveyFacetedUnsupported
+			}
 		default:
 			out.reason = surveyPayloadStaged
 		}

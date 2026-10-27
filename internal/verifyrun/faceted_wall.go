@@ -59,3 +59,24 @@ func orthogonalWall(budget *proofbound.WorkBudget, pl facetedrecord.Payload) (wa
 	}
 	return wallOutcome{reading: &thinnest, bound: slack, ok: true}, true
 }
+
+// orthogonalRadius reads the concave radius of a faceted body every face of which squares to a world axis, with no vertex
+// bound (agent-docs/orthogonal-wall-design.md §4): every edge is sharp, so a concave edge is a concave feature of radius
+// zero, read exactly, and a body with none has no concave feature at all, which is a proven absence. ok is false when
+// the body is outside that class.
+func orthogonalRadius(pl facetedrecord.Payload) (radiusOutcome, bool) {
+	for _, beta := range pl.VertexBound {
+		if beta != 0 {
+			return radiusOutcome{}, false
+		}
+	}
+	concave, err := orthoshell.HasConcaveEdge(pl.Verts, pl.Tris)
+	if err != nil {
+		return radiusOutcome{}, false
+	}
+	if !concave {
+		return radiusOutcome{ok: true}, true // a reading of nil is the proven absence of a concave feature
+	}
+	zero := 0.0
+	return radiusOutcome{reading: &zero, bound: 0, ok: true}, true
+}

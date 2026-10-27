@@ -1383,6 +1383,7 @@
 5	0.02	TestPrismCutG6HoledToolFallsBackKeepingTheStandingPost
 5	0.01	TestPrismUnionCutDisplacementBoundEnclosesTheError
 5	0.04	TestPrismUnionDownstreamFilletAndWallSurvey
+10	0.01	TestOrthogonalConcaveRadiusIsAbsentFromABlockAndZeroFromAnL
 5	0.00	TestPrismUnionReflectedOperandInsideBox
 5	0.00	TestReadSTEPHandWrittenPlateWithAHoleAndInches
 5	0.01	TestReadSTEPReadsPartialCylinderWalls
