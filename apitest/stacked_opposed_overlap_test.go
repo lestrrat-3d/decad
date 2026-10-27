@@ -168,3 +168,47 @@ func TestStackedOpposedSeparatePocketsStayStacked(t *testing.T) {
 	require.Equal(t, decad.Exact, volume.Exactness)
 	require.Equal(t, float64(4000-4*4*4-4*4*6), volumeMM(t, volume))
 }
+
+// TestStackedOpposedOverlapDisplacedLevelDeclines keeps overlapping opposed
+// pockets that meet at a displaced level off the A8 BRep. On a 12 mm plate a
+// top pocket 0.125 in deep has its floor at 12 − fl(3.175), which is no
+// float, and a bottom tool sketched on z = −3.175 and extruded 12 mm ends at
+// that same rational. The stacked interface arm shares that interface
+// (separated pockets build analytically), but the A8 faces state held
+// levels, so overlapping pockets there take the mesh path, which refuses the
+// coplanar contact under ExactOnly.
+func TestStackedOpposedOverlapDisplacedLevelDeclines(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		bottom  [4]float64
+		refused bool
+	}{
+		{name: "separate", bottom: [4]float64{2, -2, 6, 2}},
+		{name: "overlap", bottom: [4]float64{-4, -2, 1, 2}, refused: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New(decad.ExactOnly())
+			plate := boxBody(t, doc, -10, -10, 10, 10, denotedTop)
+			part, err := decad.Cut(t.Context(), plate, pocketBelow(t, doc, -6, -2, -2, 2, down(units.Inches(0.125))))
+			require.NoError(t, err)
+			require.Equal(t, "decad.stackedPrismPayload", decadtest.PayloadClass(part))
+			first, err := part.Volume()
+			require.NoError(t, err)
+			require.Positive(t, boundMM3(t, first), "the floor carries a level displacement")
+			bottom := boxBodyAtZ(t, doc, tc.bottom[0], tc.bottom[1], tc.bottom[2], tc.bottom[3], -3.175, denotedTop)
+			part, err = decad.Cut(t.Context(), part, bottom)
+			if !tc.refused {
+				require.NoError(t, err)
+				require.Equal(t, "decad.stackedPrismPayload", decadtest.PayloadClass(part),
+					"equal denoted levels share the displaced interface")
+				return
+			}
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			var be *decad.BooleanError
+			require.ErrorAs(t, err, &be)
+			require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
+		})
+	}
+}
