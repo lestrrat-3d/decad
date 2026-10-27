@@ -751,7 +751,10 @@ a U-shaped plate from wall to wall, and a through hole whose tool runs
 exactly from one wall of the target to the opposite one share one or two
 planes across a perpendicular pair, which B8 refuses. `classbgeom.OfPayloads` lifts B8 for
 exactly this contact when the caller charges no displacement beyond the
-records (`delta == 0`; route S's shell cavity cuts charge one and keep B8).
+records (`delta == 0`). Route S's shell cavity cuts pass their charge `c`
+(modify-general §3.3 step 4), which is zero when no cavity level or tool
+level carries a displacement; such a cut lifts B8 as class B's own booleans
+do, and a positive charge keeps B8.
 `CoplanarFaces` compares every target cap and wall plane with every tool
 plane by exact equality of recorded axis and level. A target plane on a tool
 wall's plane still misses. A target plane on a tool cap's plane marks that
@@ -908,6 +911,19 @@ the sweep (the plate's top), and an `Intersect` through two prongs keep the
 mesh path. A pin ending exactly at a face is a flush cap, and pins one ulp
 short or long of it meet one face fewer or one face strictly inside. All
 three build.
+
+Once W1–W4 hold, the face scenes of W5 run inside `buildClassBWalk`, as they
+do in `buildClassB`. A scene that returns no clean nesting misses, but a
+scene past its work cap and a scene error refuse the operation instead of
+falling back to the mesh path.
+
+Route S's shell cavity cuts reach the walk too, because they call
+`OfPayloads` with a zero charge whenever no cavity or tool level is
+displaced (modify-general §3.3 step 4). The walk's proof holds for any pair
+of records that pass W1–W6, so such a cut builds the exact eroded prism less
+the dilated tool. The cavity record then still passes Stage 7's
+`breprecord.Build` checks (its falsification, its edge pairing and its
+volume check), which reject a record that does not close.
 
 ### Revolved shaft as a prism
 

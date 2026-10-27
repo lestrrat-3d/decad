@@ -14,14 +14,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// walkTool is a Ø6 tool about (10, 10) from z = z0 to z1, its top level
-// displaced by topDelta.
-func walkTool(z0, z1, topDelta float64) classbgeom.ToolRecord {
+// walkTool is a Ø6 tool about (10, 10) from z = z0 to z1, its bottom and top
+// levels displaced by bottomDelta and topDelta.
+func walkTool(z0, z1, bottomDelta, topDelta float64) classbgeom.ToolRecord {
 	circle := sectionrecord.CircleSeg{Center: sectionrecord.Point2{U: 10, V: 10}, Radius: units.Millimeters(3),
 		CCW: true, TStart: 0, TEnd: 1}
 	return classbgeom.ToolRecord{
 		Profile: momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{circle}}},
-		Z0:      z0, Z1: z1, Z1Delta: topDelta, Axis: [3]int{0, 1, 2}, Sign: [3]float64{1, 1, 1},
+		Z0:      z0, Z1: z1, Z0Delta: bottomDelta, Z1Delta: topDelta, Axis: [3]int{0, 1, 2}, Sign: [3]float64{1, 1, 1},
 	}
 }
 
@@ -29,14 +29,14 @@ func walkTool(z0, z1, topDelta float64) classbgeom.ToolRecord {
 // z = 0, 5, 12 and 20 whose outward normals alternate, and reads each layer
 // of the tube. The walk misses when a face meeting the tube runs along the
 // sweep, when two faces share a level, when
-// consecutive faces point the same way, when a face level or the tool's top
-// carries a displacement, and when the tool's interval runs backwards.
+// consecutive faces point the same way, when a face level or either of the
+// tool's caps carries a displacement, and when the tool's interval runs backwards.
 func TestWalkReachReadsLayers(t *testing.T) {
 	t.Parallel()
 	faces := func(f ...classbgeom.FaceRecord) []classbgeom.FaceRecord { return f }
 	layered := faces(squareFace(0, 20, 12, true), squareFace(0, 20, 0, true), squareFace(0, 20, 5, false),
 		squareFace(0, 20, 20, false))
-	w, ok, err := classbgeom.WalkReach(t.Context(), layered, walkTool(0, 20, 0))
+	w, ok, err := classbgeom.WalkReach(t.Context(), layered, walkTool(0, 20, 0, 0))
 	require.NoError(t, err)
 	require.True(t, ok)
 	levels := make([]float64, len(w.Slabs))
@@ -62,16 +62,18 @@ func TestWalkReachReadsLayers(t *testing.T) {
 		tool  classbgeom.ToolRecord
 	}{
 		{name: "face_along_sweep", faces: faces(squareFace(0, 20, 5, false), squareFace(0, 20, 12, true), along),
-			tool: walkTool(0, 20, 0)},
+			tool: walkTool(0, 20, 0, 0)},
 		{name: "one_level_twice", faces: faces(squareFace(0, 10, 5, true), squareFace(10, 20, 5, false)),
-			tool: walkTool(0, 20, 0)},
+			tool: walkTool(0, 20, 0, 0)},
 		{name: "same_sense", faces: faces(squareFace(0, 20, 5, true), squareFace(0, 20, 12, true)),
-			tool: walkTool(0, 20, 0)},
-		{name: "displaced_face", faces: faces(squareFace(0, 20, 5, false), displaced), tool: walkTool(0, 20, 0)},
+			tool: walkTool(0, 20, 0, 0)},
+		{name: "displaced_face", faces: faces(squareFace(0, 20, 5, false), displaced), tool: walkTool(0, 20, 0, 0)},
 		{name: "displaced_tool", faces: faces(squareFace(0, 20, 5, false), squareFace(0, 20, 12, true)),
-			tool: walkTool(0, 20, 1e-15)},
+			tool: walkTool(0, 20, 0, 1e-15)},
+		{name: "displaced_tool_bottom", faces: faces(squareFace(0, 20, 5, false), squareFace(0, 20, 12, true)),
+			tool: walkTool(0, 20, 1e-15, 0)},
 		{name: "backwards", faces: faces(squareFace(0, 20, 5, false), squareFace(0, 20, 12, true)),
-			tool: walkTool(20, 0, 0)},
+			tool: walkTool(20, 0, 0, 0)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
