@@ -152,16 +152,16 @@ func TestCutTwistedSweepCrossesTubeWall(t *testing.T) {
 	}
 }
 
-// At 60 degrees and 15.5 mm the tool's far end turns to 18.99 mm from the
-// tube axis and never reaches the 18.5 mm outer wall. That 0.49 mm true gap is
-// narrower than the 0.73 mm the two held boundaries can place a surface
+// At 60 degrees and 15.05 mm the tool's far end turns to 18.54 mm from the
+// tube axis and never reaches the 18.5 mm outer wall. That 0.04 mm true gap is
+// narrower than the displacement the two held boundaries can place a surface
 // within, so the Cut refuses rather than let the chords decide it.
 func TestCutTwistedSweepRefusesTubeWallNearMiss(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	tube := twistBoreTube(t, doc, 18.5, 12.5, 24)
 	tool := twistBoreTool(t, doc, 60)
-	move, err := r3.Translation(r3.NewVec(15.5, 0, 9))
+	move, err := r3.Translation(r3.NewVec(15.05, 0, 9))
 	require.NoError(t, err)
 	tool, err = decad.Transform(t.Context(), tool, move)
 	require.NoError(t, err)
@@ -174,6 +174,7 @@ func TestCutTwistedSweepRefusesTubeWallNearMiss(t *testing.T) {
 	require.Len(t, doc.Bodies(), 2)
 }
 
+//nolint:unparam // the radii are inputs so a case can bore a different tube
 func twistBoreTube(t *testing.T, doc *decad.Document, outer, inner, height float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()

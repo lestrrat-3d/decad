@@ -312,12 +312,9 @@ func Eval(ctx context.Context, env topo.Env, profile profileRecord,
 	vol, volBound := sweepmitre.Enclosure(volumeIv.Lo, volumeIv.Hi)
 	heldBody.Volume = measurement.Measurement{Value: units.CubicMillimeters(vol), Exactness: measurement.ExactnessOf(volBound), Bound: units.CubicMillimeters(volBound)}
 	heldBody.Area = measurement.Measurement{Value: units.SquareMillimeters(trueArea), Exactness: measurement.Approximate, Bound: units.SquareMillimeters(trueAreaBound)}
-	center := r3.NewVec(0, 0, path.End.Z/2)
-	heldCenter := xform.Apply(center)
-	centerBound := 0.0
-	if xform != r3.Identity() {
-		tr := xform.Translation()
-		centerBound = proofbound.RigidRoundAllow(path.End.Z/2, max(math.Abs(tr.X), math.Abs(tr.Y), math.Abs(tr.Z)))
+	heldCenter, centerBound, err := straightTwistCentroid(poly, path.End.Z, angleIv, xform)
+	if err != nil {
+		return nil, err
 	}
 	heldBody.Centroid = measurement.VecMeasurement{Value: heldCenter, Exactness: measurement.ExactnessOf(centerBound), Bound: units.Millimeters(centerBound)}
 	heldBody.Bounds.Bound = units.Millimeters(proofbound.AbsSumUpper(heldBody.Bounds.Bound.Base(), delta))

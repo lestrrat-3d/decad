@@ -1375,8 +1375,12 @@ deleted once and watched fail before it is trusted.
 ### 17.1 One straight span
 
 `WithSweepTwist` admits one whole, strictly convex polygon with 3–256 straight
-edges and no holes, drawn on the origin XY sketch plane. Its exact shoelace
-centroid must lie on the Z axis. The path is one positive-Z `LineTo` from the
+edges and no holes, drawn on the origin XY sketch plane. The section may lie
+anywhere relative to the Z axis, which is the twist axis: each section is a
+rigid rotation about that axis, so neither the volume nor any radius bound
+needs the centroid, or even the origin, inside the polygon. A curved section
+still needs exact central symmetry (§17.4), and a line-and-arc path still
+needs its centroid on the axis (§17.2). The path is one positive-Z `LineTo` from the
 origin, and the absolute denoted angle is at most one radian. One Loft cell
 builds it. A wide thin section can fold the long walls of one flat cell
 through each other (a 15.4 × 4.75 mm rectangle does at 35°–55°); Loft's facet
@@ -1395,8 +1399,13 @@ multiple certified Loft cells.
 
 At height `h`, the true section is the input polygon rotated by `theta*z/h`.
 Every section is a rigid copy, and the positive Z coordinate keeps distinct
-sections disjoint. Thus the true volume is exactly profile area times `h`;
-the centroid is `(0,0,h/2)` before placement. The wall area is the integral
+sections disjoint. Thus the true volume is exactly profile area times `h`.
+With the exact section centroid `c=(cu,cv)` relative to the axis, the centroid
+before placement is `(x, y, h/2)` for
+`x = (sin t*cu - (1-cos t)*cv)/t` and `y = ((1-cos t)*cu + sin t*cv)/t`,
+the average of `R(phi)*c` over the turn `t`. Rational sine/cosine intervals
+enclose it; the published bound adds the enclosure width and the held and
+placement rounding. A section with `c=0` publishes `(0,0,h/2)`. The wall area is the integral
 over each edge `p(s)=p0+s*v` of
 `sqrt(h²*|v|² + theta²*(p(s)·v)²)`. Exact rational intervals enclose the
 angle, square roots and inverse hyperbolic sine in its antiderivative. Both
@@ -1521,6 +1530,16 @@ The real public gate sweeps Sketch's solved 15.4 × 4.75 mm centred rectangle
 over 6 mm at 43.6° and at every 2.5° step through 90°: each is a solid with
 volume `15.4*4.75*6` and passes `Tessellate(VerifyAll)`. A 0.5° scan through
 360° over 6 mm and 24 mm admits every angle for this section.
+
+A straight-edged section is built like the curved class below: after the
+least count at the four-percent target it optionally tries the least count at
+an absolute 0.08 mm target when that is finer, within the same ceilings, and
+keeps the original count if the finer build refuses. A 15.4 mm wide section
+therefore publishes about 0.08 mm of boundary bound rather than 0.4 mm.
+The screw gear's off-axis section (u in [-7.7, 7.7], v in [-2.075, 2.675]
+turning 58.2° over 8 mm) passes through a 12.5/18.5 mm tube wall with
+`Cut` and `Tessellate(VerifyAll)`; with only the four-percent count the
+tool's 0.40 mm bound left a 0.69 mm clearance undecidable.
 
 Station `k` uses exact height `h*k/cells` and the interval enclosure of
 `theta*k/cells`. Rational sine/cosine intervals enclose the true frame;

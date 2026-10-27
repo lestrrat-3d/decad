@@ -2636,6 +2636,8 @@
 10	0.01	TestLoftSectionsTwistedRefusesUnprovedInputs
 10	0.01	TestLoftSectionsTwistedRefusesExcessAndUnevenSections
 10	0.01	TestLoftSectionsTwistedLongRibbonIsOneVerifiedLoft
+10	0.00	TestSweepTwistOffAxisAngles
+10	0.00	TestCutTwistedOffAxisSweepThroughTubeWall
 10	0.00	TestCutTwistedSweepCrossesTubeWall
 10	0.00	TestCutTwistedSweepRefusesTubeWallNearMiss
 10	0.00	TestCutTwistedSweepThroughBothCaps

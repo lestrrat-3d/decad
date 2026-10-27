@@ -41,7 +41,7 @@ or the Cut is wrong; the held boundary is too coarse for the question.
 
 The same section at 60 or 87 degrees already sweeps and already Cuts, because
 an angle above one radian takes the stationed build (§17.3), whose cells keep
-the departure near four percent of the profile radius.
+the departure near four percent of the profile radius, or 0.08 mm when the optional finer count fits.
 
 ## 3. Stationed refinement
 

@@ -20,7 +20,13 @@ type TwistPolygon struct {
 	MaxEdgeL1      float64
 	HasArc         bool
 	AreaInterval   proofbound.RatInterval
+	// CentroidU and CentroidV are the exact section centroid relative to the
+	// twist axis. A curved section proves them zero by central symmetry.
+	CentroidU, CentroidV *big.Rat
 }
+
+// OffAxis reports whether the section centroid is not on the twist axis.
+func (p TwistPolygon) OffAxis() bool { return p.CentroidU.Sign() != 0 || p.CentroidV.Sign() != 0 }
 
 // Opposite source edges have the same parameter walk after a half-turn.
 // This proves the exact curved section's first moments vanish, rather than
@@ -46,7 +52,9 @@ func TwistRat(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
 
 // TwistPolygonOf admits a strictly convex chord outline. A curved outline
 // must also have exact opposite source edges, which proves its true centroid
-// lies on the axis. Monotone Z keeps different true sections disjoint.
+// lies on the axis. A straight outline may lie anywhere relative to the axis:
+// every section is a rigid rotation about it, and monotone Z keeps different
+// true sections disjoint.
 func TwistPolygonOf(profile profileRecord) (TwistPolygon, error) {
 	if len(profile.Holes) != 0 {
 		return TwistPolygon{}, fmt.Errorf(`%w: a twisted sweep with holes is not implemented`, decaderr.ErrUnsupported)
@@ -149,8 +157,16 @@ func TwistPolygonOf(profile profileRecord) (TwistPolygon, error) {
 			maxRadius = radiusL1
 		}
 	}
-	if area2.Sign() == 0 || momentX6.Sign() != 0 || momentY6.Sign() != 0 {
+	if area2.Sign() == 0 || (hasArc && (momentX6.Sign() != 0 || momentY6.Sign() != 0)) {
 		return TwistPolygon{}, fmt.Errorf(`%w: the twisted profile must have its centroid on the path axis`, decaderr.ErrUnsupported)
+	}
+	// The polygon centroid is the shoelace first moment over three times
+	// twice the signed area.
+	denom := new(big.Rat).Mul(big.NewRat(3, 1), area2)
+	centroidU, centroidV := new(big.Rat), new(big.Rat)
+	if !hasArc {
+		centroidU.Quo(momentX6, denom)
+		centroidV.Quo(momentY6, denom)
 	}
 	area := new(big.Rat).Quo(new(big.Rat).Abs(area2), big.NewRat(2, 1))
 	areaInterval := proofbound.PointInterval(area)
@@ -172,5 +188,6 @@ func TwistPolygonOf(profile profileRecord) (TwistPolygon, error) {
 		MaxRadiusL1:    proofbound.RatFloatUp(maxRadius),
 		MaxEdgeL1:      proofbound.RatFloatUp(maxEdge),
 		HasArc:         hasArc,
+		CentroidU:      centroidU, CentroidV: centroidV,
 	}, nil
 }
