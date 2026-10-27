@@ -3,6 +3,7 @@ package export_test
 import (
 	"bytes"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -407,4 +408,44 @@ func TestGCodeHeatsAndWrapsTheLayers(t *testing.T) {
 	spec.NozzleTemperature = units.AffineValue{}
 	spec.Retraction = units.Millimeters(-1)
 	require.ErrorIs(t, export.GCodePerimeters(t.Context(), &out, block, units.Millimeters(0.1), spec), decad.ErrNegativeMagnitude)
+}
+
+func TestGCodeFanStartsAtALayerAndStopsAtTheEnd(t *testing.T) {
+	t.Parallel()
+	block := decadtest.NewBlock(t, decad.New(), 0, 0, 20, 10, units.Millimeters(3))
+	spec := gcodeSpec()
+	spec.FanSpeed = units.Scalar(0.5)
+	spec.FanFromLayer = 2
+	spec.EndCode = "G28 X0\n"
+	var out bytes.Buffer
+	require.NoError(t, export.GCodePerimeters(t.Context(), &out, block, units.Millimeters(0.1), spec))
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	on := slices.Index(lines, "M106 S128")
+	require.Positive(t, on, "half of 255, rounded, turns the fan on")
+	require.True(t, strings.HasPrefix(lines[on+1], "; layer 2 "), "just before the third layer")
+	require.Equal(t, 1, strings.Count(out.String(), "M106"))
+	require.Equal(t, []string{"M107", "G28 X0"}, lines[len(lines)-2:], "the fan stops after the last layer, before the end code")
+
+	for name, edit := range map[string]func(*export.GCodeSpec){
+		"zero speed is no fan": nil,
+		"speed above one":      func(s *export.GCodeSpec) { s.FanSpeed = units.Scalar(1.5) },
+		"negative speed":       func(s *export.GCodeSpec) { s.FanSpeed = units.Scalar(-0.1) },
+		"layer past the end":   func(s *export.GCodeSpec) { s.FanFromLayer = 6 },
+		"negative layer":       func(s *export.GCodeSpec) { s.FanFromLayer = -1 },
+		"length for a speed":   func(s *export.GCodeSpec) { s.FanSpeed = units.Millimeters(1) },
+	} {
+		bad := spec
+		if edit == nil {
+			bad.FanSpeed = units.Value{}
+			var plain bytes.Buffer
+			require.NoError(t, export.GCodePerimeters(t.Context(), &plain, block, units.Millimeters(0.1), bad), name)
+			require.NotContains(t, plain.String(), "M106")
+			require.NotContains(t, plain.String(), "M107")
+			continue
+		}
+		edit(&bad)
+		var refused bytes.Buffer
+		require.Error(t, export.GCodePerimeters(t.Context(), &refused, block, units.Millimeters(0.1), bad), name)
+		require.Empty(t, refused.String(), "%s writes nothing", name)
+	}
 }
