@@ -49,6 +49,21 @@ inside the bound that route states. The tests cut a rectangular pocket, an L-sha
 and raise a rectangular boss on a plate, and read volumes, face counts and points. `Emboss` of a rectangular
 relief reads the same way, through the tool-body combine of B13.
 
+## 6. Extents against a mesh solid
+
+`SolidFromMesh` gives each face square to a world axis its plane and a record of that plane: the plane's own frame at
+level zero, held and denoted alike, with no displacement. `ToFace` reads that record as it reads a prism's cap, so a
+sketch swept up to such a face stops at its coordinate exactly, and a face square to another axis is refused as before.
+A placement or a similarity drops the record, as for every record. A face that is not axis-square has no record and is
+no stop.
+
+A held mesh whose vertices carry no bound states its extent along any direction as the least and greatest projection of
+a vertex, beside the rounding of that projection, so `ThroughAll` meets a mesh solid: the sweep ends at its far side
+and the stop reads Approximate with the rounding as its bound. A mesh with a vertex bound states no interval and is
+refused. The tests sweep a sketch to the top of a mesh plate with `ToFace` (exact bounds and an exact volume) and cut
+the pocket, sweep it through all with `ThroughAll`, and send a sweep to a side face. Removing the record fails the
+first, and removing the extent fails the second.
+
 ## 5. Not covered
 
 - Welding, orienting and hole filling: repair the mesh first with `RepairMesh`.

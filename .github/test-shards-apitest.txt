@@ -1252,6 +1252,9 @@
 4	0.86	TestVerifyJointBoxClearReading
 4	0.01	TestVerifyJointBoxErrors
 4	2.23	TestVerifyJointBoxLoopClearMargins
+10	0.01	TestToFaceStopsAtAMeshSolidFace
+10	0.01	TestToFaceRefusesAMeshSolidFaceSquareToAnotherAxis
+10	0.01	TestThroughAllMeetsAMeshSolid
 4	0.58	TestVerifyJointBoxLoopErrors
 4	3.52	TestVerifyJointBoxLoopGate
 4	2.19	TestVerifyJointBoxLoopOneAxis
