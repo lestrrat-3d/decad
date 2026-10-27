@@ -240,8 +240,48 @@ func TestDXFSheetTitleBlockFieldRefusals(t *testing.T) {
 		require.Zero(t, out.Len(), "a refused sheet writes nothing")
 		return err
 	}
-	require.ErrorIs(t, with(export.DXFField{"A", "1"}, export.DXFField{"B", "2"}, export.DXFField{"C", "3"}, export.DXFField{"D", "4"}), decad.ErrDegenerate)
+	require.ErrorIs(t, with(export.DXFField{"A", "1"}, export.DXFField{"B", "2"}, export.DXFField{"C", "3"}, export.DXFField{"D", "4"},
+		export.DXFField{"E", "5"}, export.DXFField{"F", "6"}, export.DXFField{"G", "7"}), decad.ErrDegenerate)
+	// With more than three fields the block has two columns and a field holds 24 characters at most.
+	long := export.DXFField{"DESCRIPTION", "TWELVE CHARS"}
+	require.ErrorIs(t, with(long, export.DXFField{"B", "2"}, export.DXFField{"C", "3"}, export.DXFField{"D", "4"}), decad.ErrDegenerate)
+	// Three fields stay in one column, where the limit does not apply.
+	paper := a4Sheet(false)
+	paper.Fields = []export.DXFField{{"DESCRIPTION", "TWELVE CHARS"}, {"B", "2"}, {"C", "3"}}
+	var out bytes.Buffer
+	require.NoError(t, export.DXFSheet(t.Context(), &out, body, units.Millimeters(0.1), paper))
 	require.ErrorIs(t, with(export.DXFField{"", "1"}), decad.ErrDegenerate)
 	require.ErrorIs(t, with(export.DXFField{"NAME", "café"}), decad.ErrDegenerate)
 	require.ErrorIs(t, with(export.DXFField{"NA\nME", "x"}), decad.ErrDegenerate)
 }
+
+func TestDXFSheetSetsMoreThanThreeFieldsInTwoColumns(t *testing.T) {
+	t.Parallel()
+	body := decadtest.NewBlock(t, decad.New(), 0, 0, 20, 30, units.Millimeters(10))
+	paper := a4Sheet(false)
+	paper.Fields = []export.DXFField{
+		{"PART", "BK-100"}, {"AUTHOR", "A. N. OTHER"}, {"REV", "C"},
+		{"DATE", "2026-10-28"}, {"MATERIAL", "AL 6061"}, {"SHEET", "1 OF 2"},
+	}
+	var out bytes.Buffer
+	require.NoError(t, export.DXFSheet(t.Context(), &out, body, units.Millimeters(0.1), paper))
+	at := map[string]dxfText{}
+	for _, tx := range readDXFTexts(t, out.String()) {
+		at[tx.value] = tx
+	}
+	part, rev, date, sheet := at["PART: BK-100"], at["REV: C"], at["DATE: 2026-10-28"], at["SHEET: 1 OF 2"]
+	// The first three stack in the first column, the next three start again at the top of a second to its right.
+	require.InDelta(t, part.at[0], rev.at[0], 1e-9)
+	require.InDelta(t, part.at[1]-8, rev.at[1], 1e-9)
+	require.InDelta(t, part.at[1], date.at[1], 1e-9)
+	require.InDelta(t, part.at[1]-8, sheet.at[1], 1e-9)
+	require.InDelta(t, date.at[0], sheet.at[0], 1e-9)
+	require.Greater(t, date.at[0]-part.at[0], 30.0)
+	// Both columns stay left of the scale's divider, 60 mm in from the right border, and the second leaves room.
+	require.Less(t, date.at[0]+maxWideDXFFieldWidth, 297-10-60.0)
+	require.Len(t, readDXFTexts(t, out.String()), 8)
+}
+
+// maxWideDXFFieldWidth is the width in millimetres of a 24-character field of 2.5 mm text, about 0.6 of its height
+// a letter.
+const maxWideDXFFieldWidth = 24 * 0.6 * 2.5
