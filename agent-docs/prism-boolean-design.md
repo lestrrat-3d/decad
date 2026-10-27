@@ -504,6 +504,40 @@ returns from a clean-nesting cut as `LineSeg{(1,0)→(5,0), t=[0,1]}` — a
 different, computed corner recorded as though it were exact. §7's `δ_walk`
 is what charges that gap into the result's own `sectionDelta`.
 
+**A tangent contact is not clean nesting.** Sketch's arrangement neither cuts
+nor flags a clean tangency: a tool circle or arc touching a target wall at one
+interior point leaves both loops whole, so the match above succeeds. The cut
+section would then hold two loops meeting at that point. The body pinches
+there, and no cap mesh can separate the two loops. So every `Cut` match that
+puts the tool's outer into the result as a hole — this one, stacked §7's
+enclosing match (`prismcells.MatchEnclosingCut`) and general-boolean §3 A5's
+group match (`prismcells.GroupCutMatch`) — also puts every pair of entities
+from the two operands, or from two tool regions, with a curved member to
+sketch's own intersection query, the query `prismcells.ProveGroupApart` reads
+(stacked §2.2). The contact answer comes from that query
+(`geom.LineCircleIntersections` and its circle and arc kin), not from the
+arrangement's `TExact`. The query reports a point within its own band,
+`1e-9·max(1, R)` with `R` the larger radius, and a line's point counts within
+`1e-9` of the segment's parameter range. Any point it reports turns the match
+into a miss, and the pair takes its next route, usually the mesh path. So a
+near-tangent gap of `1e-9` mm or less (scaled by `R` past 1 mm) is refused as a
+touch, and a larger gap keeps the exact route. The check only refuses: a
+reported point never admits anything. On the mesh path a blind pocket builds an
+`Approximate` faceted result. A tool through the whole target also takes the
+mesh path, which may refuse the contact with `BooleanUnsupportedContact`: a
+round tool tangent to a square hole or a box's side wall refuses there, while
+one tangent inside a cylinder's wall builds a faceted result. The query reports
+no contact between two lines; those touches rest on the arrangement. It splits
+two lines that cross, two that share a span (a square pocket along a hole's
+wall) and two corners that meet, so those touches never match whole. It does
+not split a line where another line's endpoint touches its interior (a
+T-touch, such as a diamond's apex on a hole's side), but no `Cut` route above
+reaches an analytic match with one: blind, through and stacked probes with an
+apex on a hole wall, on the outer wall, or a hole's apex on the tool's side
+all take the mesh path. `Intersect`'s result and the no-op match of a tool inside an
+existing hole (`prismcells.MatchCutNoOp`) are one operand's own unchanged
+cell, whose loops meet nothing, so they take no query.
+
 For the one-hole `Intersect` arm, the proof cell has A's whole outer loop
 and B's whole outer loop as its only hole. A second cell must reproduce B's
 whole outer and hole loops. Both cells must report `Valid`, and the result
@@ -596,6 +630,7 @@ regardless of who authored the input curves it was cut from.
 | A shared span `prismcells.CoincidentEdges` cannot attribute to one partner, or a cell walking a circular run past another cell's vertex | unresolved, mesh path (`agent-docs/general-boolean-design.md` §3 A3) |
 | A displaced pair whose shared span lies inside or outside the result | mesh path: the true walls can part, and no recorded edge bounds the sliver (`agent-docs/general-boolean-design.md` §3 A3) |
 | A holed `Cut` target whose tool does not clear it via clean nesting (the crossing classifier is scoped to hole-free operands on both sides, §4.2) | mesh path, except general-boolean §3 A7's blind Cut across one through hole; the clean-nesting path above still covers a holed target whose tool does not touch it |
+| A `Cut` tool whose circle or arc touches a target wall at one point without crossing it (a round pocket tangent to a hole or to the outer wall) | mesh path through §4.2's tangent-contact query: a blind pocket builds a faceted result; a tool through the whole target takes the mesh path too, which may refuse it with `BooleanUnsupportedContact` |
 | A `Cut`/`Intersect` selection covering two or more disjoint regions (a multi-region coplanar overlap) | no BODY is built: a `ProfileRecord` carries one outer loop, so resolution fails to close one (§4.2) and the pair takes the mesh path, waiting on a multi-lump prism payload that is not currently planned. `Verify`'s interference reading answers such a pair anyway, without a body, through §4.5's overlap-area reading |
 | A disjoint-footprint `Union` (two separate lumps) | resolution fails to close one loop (§4.2); `agent-docs/general-boolean-design.md` §3 A5 builds a prism group when the loops are proven disjoint. `Verify` answers the pair through its disjoint/overlap partition (`agent-docs/verification-design.md` §1) rather than through §4.5 |
 | A free-form (Tier A spline) segment that never touches the other operand | excluded by G4 today (whole-scene `TExact` gate, §3.1); worth revisiting once the two-operand scene construction is proven, since the segment itself would ride through untouched |

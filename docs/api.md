@@ -269,6 +269,12 @@ round hole or a slot, or a round pocket across a square hole. Any circle or arc 
 axes, a pocket edge tangent to the hole, a pocket drawn with lines overshooting its corners, and a pocket that also
 crosses the plate's outline take the faceted path.
 
+A `Cut` whose round tool touches a wall of the target at one point without crossing it, such as a round pocket
+tangent to a square hole or to the plate's side, takes the faceted path. A blind pocket gives an `Approximate`
+faceted result that meshes. A tool through the whole target takes the faceted path too, which may refuse the
+contact with a `BooleanError` of code `BooleanUnsupportedContact`, as for a round tool tangent to a box's side, or
+build a faceted result, as for one tangent inside a cylinder's wall.
+
 A tapered `decad.Extrude` (`decad.WithTaper`) is an operand when every corner where a circular wall meets its
 neighbour is tangent. A line and an arc, or two arcs, that meet tangent up to rounding, turning by an angle whose sine
 is at most 2⁻³², count as tangent, and the sliver between them is charged into the result's volume bound. A larger

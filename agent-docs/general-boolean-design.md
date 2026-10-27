@@ -432,7 +432,9 @@ all-line loop passes the paired Sketch-event and exact crossing proof above.
 A prism-group tool (mirror §6.3) enters the scene as `Count` operand-B
 loops, each tagged with its region index. `Cut`'s clean-nesting match then
 requires the target's outer whole plus exactly `Count` new holes, each
-reproducing one region's outer whole; any `Partial` edge takes the crossing
+reproducing one region's outer whole, with no curved contact between the
+target and a region or between two regions (prism-boolean §4.2's
+tangent-contact query); any `Partial` edge takes the crossing
 sub-case with the group's regions classified as B-material each. A
 `Union` whose select-all survivors chain into several closed loops that are
 pairwise disjoint (the structural disjointness read of mirror §6.3, on the

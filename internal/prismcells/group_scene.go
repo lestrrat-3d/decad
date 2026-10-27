@@ -108,6 +108,8 @@ func BuildGroupScene(ctx context.Context, budget *proofbound.WorkBudget,
 
 // GroupCutMatch finds the one cell whose whole outer reproduces the target
 // and whose holes reproduce its holes plus every tool region's whole outer.
+// A curve of one region touching the target or another region misses, as in
+// MatchCut.
 func GroupCutMatch(budget *proofbound.WorkBudget, profiles []*sketch.Profile,
 	tags map[sketch.Entity]Origin, targetHoles, toolRegions int) (*sketch.Profile, bool, error) {
 	targetOuter, err := RegionLoopEntitySet(budget, tags, false, 0, -1)
@@ -135,6 +137,9 @@ func GroupCutMatch(budget *proofbound.WorkBudget, profiles []*sketch.Profile,
 	}
 	if !match.Valid {
 		return nil, false, InvalidRegionError("cut")
+	}
+	if touch, err := curvedContact(budget, tags); err != nil || touch {
+		return nil, false, err
 	}
 	return match, true, nil
 }
@@ -231,7 +236,11 @@ func curvedContact(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin)
 		entities = append(entities, e)
 	}
 	for i, a := range entities {
+		_, aLine := a.(*sketch.Line)
 		for _, b := range entities[i+1:] {
+			if _, bLine := b.(*sketch.Line); aLine && bLine {
+				continue // curvedPairContact reports no contact between lines
+			}
 			if err := budget.Step(); err != nil {
 				return false, err
 			}
