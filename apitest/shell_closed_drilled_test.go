@@ -198,7 +198,7 @@ func TestShellClosedDrilledBarOutward(t *testing.T) {
 			name: "cross drill (brep)", build: crossBar,
 			volume: (920+math.Pi-4*math.Pi)*22 - (800-9*math.Pi)*20,
 			curved: 2*math.Pi*(2+3)*22 + 2*math.Pi*22,
-			outer: 11, void: 7,
+			outer:  11, void: 7,
 		},
 		{
 			// The L hole erodes to [6, 14]×[6, 8] ∪ [6, 8]×[6, 14] with its
