@@ -272,3 +272,6 @@
 10	0.00	TestFacetedSourcePatchBlendThenCut
 10	0.00	TestFacetedSourcePatchFallback
 10	0.00	TestCombineToolsAdditionalConsumptionIsAtomic
+10	0.00	TestTwistWideThinRectangleAngles
+10	0.00	TestTwistWideThinRectangleFullTurn
+10	0.00	TestTwistWideThinRectangleTransform

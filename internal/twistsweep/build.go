@@ -2,6 +2,7 @@ package twistsweep
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -255,6 +256,16 @@ func Eval(ctx context.Context, env topo.Env, profile profileRecord,
 		RecordArea: [2]float64{recordArea, recordArea},
 	}, proofbound.NewWorkBudget(ctx), work0, work1)
 	if err != nil {
+		// One flat Loft cell of a wide thin section can fold its long walls
+		// through each other: the audit then finds facets in contact that
+		// share no vertex. Finer stations avoid that fold. Any other
+		// refusal stands, and the stationed build keeps its own gates.
+		if errors.Is(err, decaderr.ErrDegenerate) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			return evalStationed(ctx, env, profile, plane, path, angle, recordArea, xform)
+		}
 		return nil, err
 	}
 	held, ok := heldBody.Payload.(loftrecord.Payload)
