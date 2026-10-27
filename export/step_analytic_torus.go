@@ -34,16 +34,19 @@ func torusAzimuth(torus decad.Torus, p r3.Vec) (r3.Vec, bool) {
 }
 
 // supportsAnalyticTorus selects a torus face the writer states exactly: a
-// whole turn (two one-circle loops, see supportsAnalyticWholeTorus) or a
-// patch of one loop of Arc3 edges (supportsAnalyticTorusPatch). A horn
-// torus's patch, which closes on the axis at a vertex with a three-edge
-// loop, is neither.
+// whole turn (two one-circle loops, see supportsAnalyticWholeTorus), a patch
+// of one loop of at least four Arc3 edges (supportsAnalyticTorusPatch), or a
+// horn torus's patch of three, closing on the axis at a vertex
+// (supportsAnalyticHornPatch).
 func supportsAnalyticTorus(loops []*decad.Loop, torus decad.Torus) bool {
 	if _, _, ok := torusRadii(torus); !ok {
 		return false
 	}
 	switch len(loops) {
 	case 1:
+		if isHornPatch(loops[0]) {
+			return supportsAnalyticHornPatch(loops[0], torus)
+		}
 		return supportsAnalyticTorusPatch(loops[0], torus)
 	case 2:
 		return supportsAnalyticWholeTorus(loops, torus)
@@ -114,7 +117,9 @@ func torusArcIsMeridian(arc decad.Arc3, torus decad.Torus) bool {
 // parallel (else a meridian), and whether the patch admits it at all. An arc
 // that is neither, or whose vertices are not both in its own plane
 // (arcInItsPlane), is refused: the file would state a CIRCLE the edge does
-// not run on.
+// not run on. A meridian whose Radius is not the torus's Minor, exactly, is
+// refused too: the tag would not hold the tube the meridian runs round, and
+// the file would state a torus through vertices off it.
 func torusPatchArc(edge *decad.Edge, arc decad.Arc3, torus decad.Torus) (bool, bool) {
 	if !arcInItsPlane(edge, arc) {
 		return false, false
@@ -123,9 +128,20 @@ func torusPatchArc(edge *decad.Edge, arc decad.Arc3, torus decad.Torus) (bool, b
 	case torusArcIsParallel(arc, torus):
 		return true, true
 	case torusArcIsMeridian(arc, torus):
-		return false, true
+		return false, meridianRadiusIsMinor(arc, torus)
 	}
 	return false, false
+}
+
+// meridianRadiusIsMinor reports whether a meridian arc's Radius equals the
+// torus's Minor, both in millimetres, exactly. It only refuses.
+func meridianRadiusIsMinor(arc decad.Arc3, torus decad.Torus) bool {
+	r, err := arc.Radius.In(units.Millimeter)
+	if err != nil {
+		return false
+	}
+	minor, err := torus.Minor.In(units.Millimeter)
+	return err == nil && r == minor
 }
 
 // supportsAnalyticTorusPatch admits one loop of at least four Arc3 edges,
@@ -155,6 +171,65 @@ func supportsAnalyticTorusPatch(loop *decad.Loop, torus decad.Torus) bool {
 		}
 	}
 	return parallels > 0 && meridians > 0
+}
+
+// isHornPatch reports whether a torus face's one loop has three edges, the
+// shape a horn torus's patch takes (supportsAnalyticHornPatch). Such a patch
+// is walked by the edge-use rule (patchWalks), since the azimuth its (θ, φ)
+// area reads has no value at its apex vertex on the axis.
+func isHornPatch(loop *decad.Loop) bool {
+	return len(loop.CoEdges()) == 3
+}
+
+// supportsAnalyticHornPatch admits a horn torus's patch: a torus whose Minor
+// equals its Major, exactly, so its tube touches its axis at its Center, and
+// one loop of three Arc3 edges, each holding both its vertices in its own
+// plane (torusPatchArc), every vertex Exact (loopVerticesExact), exactly one
+// vertex at the torus's Center (the apex), every edge at the apex a meridian
+// of the tube, and exactly one parallel. A pocket mouth fillet's reflex corner
+// (loop fillet LF6) is such a patch: its connector arc and the two meridians
+// that run down from the arc's ends to the apex. Every leg only refuses.
+func supportsAnalyticHornPatch(loop *decad.Loop, torus decad.Torus) bool {
+	major, minor, ok := torusRadii(torus)
+	coedges := loop.CoEdges()
+	if !ok || major != minor || len(coedges) != 3 || !loopVerticesExact(loop) {
+		return false
+	}
+	apexes, parallels := 0, 0
+	for _, ce := range coedges {
+		arc, ok := ce.Edge().Curve().(decad.Arc3)
+		if !ok {
+			return false
+		}
+		parallel, ok := torusPatchArc(ce.Edge(), arc, torus)
+		if !ok {
+			return false
+		}
+		if parallel {
+			parallels++
+		}
+		start, end := ce.Start().Position().Value == torus.Center, ce.End().Position().Value == torus.Center
+		if start {
+			apexes++
+		}
+		if parallel && (start || end) {
+			return false
+		}
+	}
+	return apexes == 1 && parallels == 1
+}
+
+// torusOffAxisVertex is the first vertex a torus face's first loop walks that
+// lies off the torus axis, and its azimuth. A horn patch's apex lies on the
+// axis, where the azimuth has no value and the surface no normal.
+func torusOffAxisVertex(torus decad.Torus, loop *decad.Loop) (r3.Vec, r3.Vec, bool) {
+	for _, ce := range loop.CoEdges() {
+		p := ce.Start().Position().Value
+		if azimuth, ok := torusAzimuth(torus, p); ok {
+			return p, azimuth, true
+		}
+	}
+	return r3.Vec{}, r3.Vec{}, false
 }
 
 // torusTubeAngle is p's angle about the tube's centre circle, from the
@@ -239,16 +314,18 @@ func torusFaceSense(face *decad.Face, torus decad.Torus, major float64, p r3.Vec
 	return normal.Value.Dot(own) > 0, nil
 }
 
-// addTorusFace writes a torus face: a whole turn with a synthetic seam, or a
-// patch (supportsAnalyticTorus).
+// addTorusFace writes a torus face: a whole turn with a synthetic seam, a
+// patch walked by its (θ, φ) area, or a horn patch walked as patchWalks
+// decided (supportsAnalyticTorus). The placement's reference and the face
+// sense are read at the loop's first vertex off the axis
+// (torusOffAxisVertex).
 func (b *analyticSTEPBuilder) addTorusFace(ctx context.Context, face *decad.Face, torus decad.Torus) (step.Reference, error) {
 	major, minor, ok := torusRadii(torus)
 	if !ok {
 		return 0, fmt.Errorf("%w: torus has no positive radii", decad.ErrDegenerate)
 	}
 	loops := face.Loops()
-	start := loops[0].CoEdges()[0].Start().Position().Value
-	reference, ok := torusAzimuth(torus, start)
+	start, reference, ok := torusOffAxisVertex(torus, loops[0])
 	if !ok {
 		return 0, fmt.Errorf("%w: torus has no azimuth reference", decad.ErrDegenerate)
 	}
@@ -257,6 +334,9 @@ func (b *analyticSTEPBuilder) addTorusFace(ctx context.Context, face *decad.Face
 	sameSense, err := torusFaceSense(face, torus, major, start)
 	if err != nil {
 		return 0, err
+	}
+	if len(loops) == 1 && isHornPatch(loops[0]) {
+		return b.addWalkedLoopFace(ctx, face, surface, sameSense)
 	}
 	if len(loops) == 1 {
 		return b.addTorusPatchFace(ctx, torus, major, loops[0], surface, sameSense)

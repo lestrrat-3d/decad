@@ -58,23 +58,23 @@ according to the writer path.
   `SPHERICAL_SURFACE` at the sphere's `Center`, placed about the world z axis, with the sphere's
   `Radius`; its sense is its outward normal against the direction from the centre.
   Every arc of a cone, sphere or torus patch has both vertices in its own plane (an exactly zero dot
-  product of each with its `Axis` from its `Center`), and every vertex of a cone or sphere patch is
-  `Exact`. Both checks only refuse: an arc record whose axis does not hold its vertices, or a vertex
+  product of each with its `Axis` from its `Center`), and every vertex of a cone, sphere or horn torus
+  patch is `Exact`. Both checks only refuse: an arc record whose axis does not hold its vertices, or a vertex
   whose position carries a bound, is not proven to lie on the curves and surface the file states
   through it, and the body takes the faceted writer. A loop fillet's meridians pass the plane check
   where the record denotes their feet exactly: the fillet holds those feet at the exact point
   (`agent-docs/loop-fillet-design.md` §4 step 1), so the rounded plate's top-loop fillet (loop-fillet
   P8 with its top loop filleted r = 2) holds every vertex `Exact` and writes analytic. The vertex
-  check covers cone and sphere patches only. The same reason
-  holds for the other arms, which do not apply it: a plane, cylinder or torus face writes its held
+  check covers cone, sphere and horn torus patches only. The same reason
+  holds for the other arms, which do not apply it: a plane, cylinder or other torus face writes its held
   vertex coordinates through its curves and surface whatever bound they carry, so such a file states
   points the body does not prove lie on them. The bounds those faces carry today are rounding, measured on amd64 at
   most 5.3e-15 mm on a shell with an oblique opening, and 7.7e-14 mm and 1.5e-13 mm on the round bosses
   crossing a plate's outline. Applying the
   check to every arm would send each of those bodies to the faceted writer
   (`agent-docs/missing-features.md`).
-  A cone or sphere patch's loop is walked by the edge-use rule, never by a parameter-plane area, which
-  a cone's apex vertex leaves undefined. Every other face is walked as its own rule below decides. A
+  A cone, sphere or horn torus patch's loop is walked by the edge-use rule, never by a parameter-plane
+  area, which a cone's or horn torus's apex vertex leaves undefined. Every other face is walked as its own rule below decides. A
   closed shell uses each edge once in each direction, so each patch is walked so that every edge it
   shares with a face already decided runs opposite to that face's use, and the decided set grows until
   no patch is left. A patch that no decided face reaches, or whose shared edges ask for both walks,
@@ -84,7 +84,9 @@ according to the writer path.
   point where the surface has no normal, and `ReadSTEP` reads neither a cone's apex nor a whole sphere's
   seam (`agent-docs/step-import-design.md` I12, I15), so no reader in this repository can check that
   bound. A torus with no loop, a whole revolved ring, takes the faceted writer too: the whole-turn arm
-  needs two circle loops and the patch arm one. Emit one `ADVANCED_FACE`
+  needs two circle loops and the patch arms one. Each of these faces would need a bound the body does
+  not have, a `VERTEX_LOOP` or seams used twice, and which of them a reader expects is a choice no
+  reader in this repository checks (`ReadSTEP` reads no torus face, I4). Emit one `ADVANCED_FACE`
   per body face. Share `VERTEX_POINT`s and `EDGE_CURVE`s by body topology
   identity. An `Arc3` edge is a `CIRCLE` placed about its own `Axis`, with the
   reference direction to its start vertex, trimmed by its two vertices; it
@@ -100,11 +102,27 @@ according to the writer path.
   receives one synthetic seam, the tube circle through both start vertices,
   used twice in opposite directions. A torus patch has one loop of at least
   four `Arc3` edges, each about the torus axis (a parallel) or in a plane
-  holding it (a meridian), both kinds present. Its sense follows its outward
+  holding it (a meridian), both kinds present, every meridian's `Radius` the
+  torus's `Minor`, exactly, so the tag holds the tube the meridians run round.
+  Its sense follows its outward
   normal against the torus's own, which points away from the tube's centre
   circle, and its loop is reversed when its signed area in the (azimuth, tube
-  angle) plane disagrees with that sense. A horn torus patch is a three-edge
-  loop and keeps the faceted writer.
+  angle) plane disagrees with that sense. A horn torus patch is a torus whose
+  `Minor` equals its `Major`, exactly, so its tube touches its axis at its
+  `Center`, bounded by one loop of three `Arc3` edges, each a parallel or a
+  meridian holding both its vertices in its own plane: exactly one vertex at
+  the `Center` (the apex), every edge at the apex a meridian, and exactly one
+  parallel. A pocket mouth fillet's reflex corner (loop-fillet LF6) is one:
+  its connector arc and the two meridians that run down to the apex. It is a
+  `TOROIDAL_SURFACE` with both radii equal, walked by the edge-use rule, since
+  its apex has no azimuth, and its sense is its outward normal against the
+  torus's own at its first vertex off the axis, where the surface has a
+  normal. Its meridians' `Radius` is the torus's `Minor`, exactly, as on a
+  four-edge patch. Every leg only refuses; P2's pocket mouth fillet, r = 1.5,
+  writes its four corners so. The horn patch is a plain `TOROIDAL_SURFACE`
+  because that entity has no rule comparing its radii, while
+  `DEGENERATE_TOROIDAL_SURFACE` requires its major radius below its minor, and
+  no outside STEP reader in this repository checks the result.
   The analytic writer copies each face's tag as it is held: the STEP surface
   is the float image of the `Plane`, `Cylinder`, `Cone`, `Sphere` or `Torus` tag. A face whose tag
   is not proven to be the surface the face carries sends the whole body to the faceted writer before

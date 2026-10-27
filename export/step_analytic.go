@@ -23,7 +23,8 @@ import (
 // lines (supportsAnalyticConePatch); a sphere is a patch of great-circle arcs
 // (supportsAnalyticSpherePatch); every vertex of a cone or sphere patch is
 // Exact (loopVerticesExact); a torus is a whole turn (two one-circle loops
-// whose starts share an azimuth) or a patch of parallel and meridian arcs
+// whose starts share an azimuth), a patch of parallel and meridian arcs, or a
+// horn torus's three-edge patch closing on its axis at an Exact apex vertex
 // (supportsAnalyticTorus). Every patch's walk must follow from its
 // neighbours' (patchWalks). A face whose tag departs from its surface by a
 // stated bound (tagsUndeparted), or an unsupported edge or wall, sends the
