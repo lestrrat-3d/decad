@@ -257,7 +257,9 @@
 // them or a selected subset, the same way about one of its caps.
 // WithSweepTwist names a sweep's distributed twist. Its admitted straight
 // polygon, symmetric Line/Arc, and cardinal curved polygon cases are
-// described in agent-docs/sweep-design.md §17.
+// described in agent-docs/sweep-design.md §17. A boolean restates a one-cell
+// twisted sweep through its stationed boundary
+// (agent-docs/twist-sweep-cut-design.md).
 // WithLoftAlignment
 // picks a loft's per-loop correspondence rotation
 // and is accepted at most once; a repeat is [ErrDegenerate], as is a repeated

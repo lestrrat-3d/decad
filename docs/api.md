@@ -217,7 +217,7 @@ Each of these returns a new body and retires its input.
 | Function | Result |
 |---|---|
 | `decad.Union` | The volume enclosed by two or more bodies. |
-| `decad.Cut` | The target minus the tool. |
+| `decad.Cut` | The target minus the tool. A straight-profile twisted `Sweep` is an admitted tool: a boolean restates its closer stationed boundary, and refuses a crossing or gap narrower than the two operands' held bounds together. |
 | `decad.Intersect` | The volume common to both bodies. |
 | `decad.Split` | One solid per arranged target cell. |
 

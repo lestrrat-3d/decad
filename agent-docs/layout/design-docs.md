@@ -27,6 +27,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/emboss-design.md` | `Emboss`: face-derived sweep, plane checks, margin, volume checks and the shared join. |
 | `agent-docs/modify-design.md` | `Fillet`/`Chamfer`/`Shell` tables, section rewrite, exact offset, and build audit. |
 | `agent-docs/shell-twisted-sweep-design.md` | Inward top-cap Shell of a one-line twisted rounded Sweep: offset, held cup and bounds. |
+| `agent-docs/twist-sweep-cut-design.md` | Stationed refinement of a one-cell twisted Sweep so Cut, Union and Intersect admit it. |
 | `agent-docs/spline-design.md` | Free-form kinds, exactness tiers, refusals, Tier A moments, work budget, proven brackets, and reach. |
 | `agent-docs/modify-reach-design.md` | Modify reach: tangent chains, asymmetric chamfers, cap-loop blends, shell reach and staging. |
 | `agent-docs/brep-modify-design.md` | Modify ops on brep and stacked receivers; Tables RB/EB/SB/BB/DB. |
