@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/polynomial"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
 
@@ -54,7 +55,7 @@ func requireSameXP2(t *testing.T, want, got Xp2, msg string, args ...any) {
 	require.Nil(t, got.Hu)
 	require.Nil(t, got.Hv)
 	require.Nil(t, got.Hw)
-	require.Equal(t, want.Key2(), got.Key2(), msg, args)
+	require.True(t, proof.RatTextEqual(want.U, got.U) && proof.RatTextEqual(want.V, got.V), msg, args)
 }
 
 func TestXP2FromFloatsMatchesLegacy(t *testing.T) {

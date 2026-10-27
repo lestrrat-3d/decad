@@ -80,15 +80,17 @@ type ChainAnchor struct {
 	ViaParity bool
 }
 
-// TriCutter is the working state of one facet's subdivision.
+// TriCutter is the working state of one facet's subdivision. The zero value
+// has no vertices; Work must be set before any method that steps it.
 type TriCutter struct {
 	Verts       []CutVert
-	Index       map[string]int
 	Edges       []CutEdge
 	Swap        bool // projection coordinate swap that keeps the facet CCW
 	U, V        int  // projection axes
 	Work        *proofbound.WorkBudget
 	projections *cutProjectionScratch
+	index       cutVertIndex
+	raw         cutRawIndex
 }
 
 func (tc *TriCutter) Proj(p proof.Xpt) Xp2 {
@@ -106,16 +108,17 @@ func (tc *TriCutter) project(p proof.Xpt, u, v int) Xp2 {
 	return newXP2FromXptInto(p, u, v, tc.projections.rat(), tc.projections.rat())
 }
 
-// addVert interns a vertex by its exact 2D identity; boundary is sticky.
+// AddVert interns a vertex by its exact 2D identity (cutVertIndex); boundary
+// is sticky.
 func (tc *TriCutter) AddVert(p2 Xp2, p3 proof.Xpt, boundary bool) int {
-	k := p2.Key2()
-	if i, ok := tc.Index[k]; ok {
+	h := xp2Hash(p2)
+	if i, ok := tc.index.lookup(tc.Verts, h, p2); ok {
 		if boundary {
 			tc.Verts[i].Boundary = true
 		}
 		return i
 	}
-	tc.Index[k] = len(tc.Verts)
+	tc.index.add(h, len(tc.Verts))
 	tc.Verts = append(tc.Verts, CutVert{P2: p2, P3: p3, Boundary: boundary})
 	return len(tc.Verts) - 1
 }
@@ -133,40 +136,11 @@ func cutTriangle(ctx context.Context, xtri [3]proof.Xpt, normal proof.Xpt, segs 
 	if projections != nil {
 		projections.used = 0
 	}
-	tc := &TriCutter{Index: map[string]int{}, Work: proofbound.NewWorkBudget(ctx), projections: projections}
+	tc := &TriCutter{Work: proofbound.NewWorkBudget(ctx), projections: projections}
 	tc.U, tc.V = ProjAxes(normal)
-
-	// Keep the projected facet counter-clockwise, so polygon areas and ear
-	// clipping read the facet's own orientation.
-	corner := func(p proof.Xpt) Xp2 { return tc.project(p, tc.U, tc.V) }
-	if Cross2xSign(corner(xtri[0]), corner(xtri[1]), corner(xtri[2])) < 0 {
-		tc.Swap = true
-	}
-	var cornerIdx [3]int
-	for i := range 3 {
-		if err := tc.Work.Step(); err != nil {
-			return nil, err
-		}
-		cornerIdx[i] = tc.AddVert(tc.Proj(xtri[i]), xtri[i], true)
-	}
-
-	// Intern the contact segments as chain edges.
-	seen := map[[2]int]struct{}{}
-	for _, s := range segs {
-		if err := tc.Work.Step(); err != nil {
-			return nil, err
-		}
-		ia := tc.AddVert(tc.Proj(s.A), s.A, s.AOnEdge)
-		ib := tc.AddVert(tc.Proj(s.B), s.B, s.BOnEdge)
-		if ia == ib {
-			continue
-		}
-		k := [2]int{min(ia, ib), max(ia, ib)}
-		if _, ok := seen[k]; ok {
-			continue
-		}
-		seen[k] = struct{}{}
-		tc.Edges = append(tc.Edges, CutEdge{A: ia, B: ib, Partner: s.Partner, ViaParity: s.ViaParity})
+	cornerIdx, err := tc.internFacet(xtri, segs)
+	if err != nil {
+		return nil, err
 	}
 	if len(tc.Edges) == 0 {
 		// Every contact collapsed to a point: the facet is whole, classified
@@ -269,6 +243,64 @@ func cutTriangle(ctx context.Context, xtri [3]proof.Xpt, normal proof.Xpt, segs 
 		return nil, err
 	}
 	return regions, nil
+}
+
+// internFacet interns the facet's corners and its contact segments, the
+// latter as chain edges, and returns the corners' vertex indices. It sets
+// Swap, so the projected facet is counter-clockwise and polygon areas and ear
+// clipping read the facet's own orientation. tc.U and tc.V must be set.
+//
+// Each corner is projected once. Projecting on the swapped axes builds the
+// same rationals, floats and homogeneous integers with the U and V fields
+// exchanged, which is what xp2Swapped does to the orientation projection.
+// Segment endpoints intern through addPoint.
+func (tc *TriCutter) internFacet(xtri [3]proof.Xpt, segs []Xseg) ([3]int, error) {
+	var corners [3]Xp2
+	for i, p := range xtri {
+		corners[i] = tc.project(p, tc.U, tc.V)
+	}
+	if Cross2xSign(corners[0], corners[1], corners[2]) < 0 {
+		tc.Swap = true
+		for i := range corners {
+			corners[i] = xp2Swapped(corners[i])
+		}
+	}
+	var cornerIdx [3]int
+	for i, p := range xtri {
+		if err := tc.Work.Step(); err != nil {
+			return cornerIdx, err
+		}
+		c := corners[i]
+		cornerIdx[i] = tc.AddVert(c, p, true)
+		tc.raw.add(rawHash(c.Hu, c.Hv, c.Hw), c.Hu, c.Hv, c.Hw, cornerIdx[i])
+	}
+
+	seen := map[[2]int]struct{}{}
+	for _, s := range segs {
+		if err := tc.Work.Step(); err != nil {
+			return cornerIdx, err
+		}
+		ia := tc.addPoint(s.A, s.AOnEdge)
+		ib := tc.addPoint(s.B, s.BOnEdge)
+		if ia == ib {
+			continue
+		}
+		k := [2]int{min(ia, ib), max(ia, ib)}
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		tc.Edges = append(tc.Edges, CutEdge{A: ia, B: ib, Partner: s.Partner, ViaParity: s.ViaParity})
+	}
+	return cornerIdx, nil
+}
+
+// xp2Swapped exchanges a projection's U and V fields.
+func xp2Swapped(p Xp2) Xp2 {
+	p.U, p.V = p.V, p.U
+	p.Fu, p.Fv = p.Fv, p.Fu
+	p.Hu, p.Hv = p.Hv, p.Hu
+	return p
 }
 
 // ChainPath is one open chain: an ordered vertex walk whose endpoints lie on
