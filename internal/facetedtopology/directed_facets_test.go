@@ -17,7 +17,7 @@ func TestDirectedFacetsPreservesDirectionAndFullIndexRange(t *testing.T) {
 		counts = append(counts, int(boundary), int(boundary+1))
 	}
 	for _, vertices := range counts {
-		owners := newDirectedFacets(vertices)
+		owners := newDirectedFacets(vertices, 0)
 		pairs := [][2]int{
 			{0, 1}, {1, 0}, {0, vertices - 1}, {vertices - 1, 0},
 			{1, vertices - 1}, {vertices - 1, 1},

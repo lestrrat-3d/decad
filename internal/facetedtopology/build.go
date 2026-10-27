@@ -81,26 +81,27 @@ func build(
 	}
 
 	// Directed halfedge → facet, and the boundary predicate: the twin facet
-	// belongs to a different face.
-	halfOwner := newDirectedFacets(len(verts))
+	// belongs to a different face. Each halfedge is named by its ordinal
+	// 3i+k. halfOwner holds the map's answers for the directed edge each
+	// ordinal carries and for its reverse; every lookup below asks about a
+	// halfedge whose ordinal it knows, or the reverse of one, so reading the
+	// table returns what the map lookup returned.
+	directed := newDirectedFacets(len(verts), 3*len(tris))
 	for i, t := range tris {
 		for k := range 3 {
 			if err := budget.Step(); err != nil {
 				return err
 			}
-			halfOwner.set(t[k], t[(k+1)%3], i)
+			directed.set(t[k], t[(k+1)%3], i)
 		}
 	}
-	isBoundary := func(u, v int) bool {
-		mine, ok := halfOwner.get(u, v)
-		if !ok {
+	halfOwner := newHalfedgeOwners(directed, tris)
+	isBoundary := func(o int) bool {
+		twin := halfOwner.twin[o]
+		if twin < 0 {
 			return false
 		}
-		twin, ok := halfOwner.get(v, u)
-		if !ok {
-			return false
-		}
-		return facetFace[mine] != facetFace[twin]
+		return facetFace[halfOwner.owner(o)] != facetFace[twin]
 	}
 
 	// Undirected boundary edges with their face pair and exact hinge sign.
@@ -116,11 +117,11 @@ func build(
 				return err
 			}
 			u, v := t[k], t[(k+1)%3]
-			if u > v || !isBoundary(u, v) {
+			if u > v || !isBoundary(3*i+k) {
 				continue
 			}
 			mine := i
-			twin, _ := halfOwner.get(v, u)
+			twin := halfOwner.twin[3*i+k]
 			// The hinge: the twin's opposite vertex against this facet's
 			// plane — below (negative) is material bending away: convex.
 			tw := tris[twin]
@@ -134,7 +135,7 @@ func build(
 		// A closed one-face patch, such as a whole sphere, has no B-rep
 		// edges or loops. Check closure and edge connectivity before naming
 		// that topology; disconnected shells must not collapse to one face.
-		if len(tris) == 0 || len(facetFace) != len(tris) || halfOwner.len() != 3*len(tris) {
+		if len(tris) == 0 || len(facetFace) != len(tris) || halfOwner.distinct != 3*len(tris) {
 			return fmt.Errorf(`%w: a faceted body carries no face boundaries`, decaderr.ErrBooleanFailed)
 		}
 		face := facetFace[0]
@@ -149,10 +150,9 @@ func build(
 			if facetFace[i] != face {
 				return fmt.Errorf(`%w: a faceted body carries no face boundaries`, decaderr.ErrBooleanFailed)
 			}
-			tri := tris[i]
 			for k := range 3 {
-				twin, ok := halfOwner.get(tri[(k+1)%3], tri[k])
-				if !ok || facetFace[twin] != face {
+				twin := halfOwner.twin[3*i+k]
+				if twin < 0 || facetFace[twin] != face {
 					return fmt.Errorf(`%w: a faceted body carries no face boundaries`, decaderr.ErrBooleanFailed)
 				}
 				if _, ok := seen[twin]; !ok {
@@ -353,31 +353,36 @@ func build(
 	loopMoment := map[*Loop]r3.Vec{}
 	faceLoops := map[int][]*Loop{}
 	visited := map[[2]int]struct{}{}
-	nextBoundary := func(h [2]int) ([2]int, error) {
-		cur := h
+	// nextBoundary walks on from boundary halfedge h, whose ordinal is ho,
+	// and returns the next boundary halfedge with its ordinal. f is always the
+	// facet the map named for cur's directed edge: h's owner, and for the
+	// reverse of a followed halfedge its twin, or the map's zero facet 0 where
+	// it has none.
+	nextBoundary := func(h [2]int, ho int) ([2]int, int, error) {
+		cur, f := h, halfOwner.owner(ho)
 		for range len(tris)*3 + 3 {
 			if err := budget.Step(); err != nil {
-				return [2]int{}, err
+				return [2]int{}, 0, err
 			}
-			f, _ := halfOwner.get(cur[0], cur[1])
 			t := tris[f]
 			var follow [2]int
+			var fo int
 			switch {
 			case t[0] == cur[0] && t[1] == cur[1]:
-				follow = [2]int{t[1], t[2]}
+				follow, fo = [2]int{t[1], t[2]}, 3*f+1
 			case t[1] == cur[0] && t[2] == cur[1]:
-				follow = [2]int{t[2], t[0]}
+				follow, fo = [2]int{t[2], t[0]}, 3*f+2
 			case t[2] == cur[0] && t[0] == cur[1]:
-				follow = [2]int{t[0], t[1]}
+				follow, fo = [2]int{t[0], t[1]}, 3*f
 			default:
-				return [2]int{}, fmt.Errorf(`%w: a halfedge lost its facet`, decaderr.ErrBooleanFailed)
+				return [2]int{}, 0, fmt.Errorf(`%w: a halfedge lost its facet`, decaderr.ErrBooleanFailed)
 			}
-			if isBoundary(follow[0], follow[1]) {
-				return follow, nil
+			if isBoundary(fo) {
+				return follow, fo, nil
 			}
-			cur = [2]int{follow[1], follow[0]}
+			cur, f = [2]int{follow[1], follow[0]}, max(halfOwner.twin[fo], 0)
 		}
-		return [2]int{}, fmt.Errorf(`%w: a face boundary walk did not close`, decaderr.ErrBooleanFailed)
+		return [2]int{}, 0, fmt.Errorf(`%w: a face boundary walk did not close`, decaderr.ErrBooleanFailed)
 	}
 	for i, t := range tris {
 		for k := range 3 {
@@ -385,7 +390,7 @@ func build(
 				return err
 			}
 			h := [2]int{t[k], t[(k+1)%3]}
-			if !isBoundary(h[0], h[1]) {
+			if !isBoundary(3*i + k) {
 				continue
 			}
 			if _, ok := visited[h]; ok {
@@ -393,7 +398,7 @@ func build(
 			}
 			face := facetFace[i]
 			var cycle [][2]int
-			cur := h
+			cur, co := h, 3*i+k
 			// A boundary walk must consume each boundary halfedge at most once.
 			// Keep the walk bounded even if malformed adjacency causes nextBoundary
 			// to cycle without returning to its start.
@@ -406,14 +411,14 @@ func build(
 				}
 				visited[cur] = struct{}{}
 				cycle = append(cycle, cur)
-				nxt, err := nextBoundary(cur)
+				nxt, no, err := nextBoundary(cur, co)
 				if err != nil {
 					return err
 				}
 				if nxt == h {
 					break
 				}
-				cur = nxt
+				cur, co = nxt, no
 			}
 			loop := &Loop{}
 			firstChain, lastChain := -1, -1

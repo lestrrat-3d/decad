@@ -14,3 +14,9 @@ var ClosedFacetEdges = closedFacetEdges
 
 // ClosedFacetAdjacency builds adjacency rows from the validated edge slots.
 var ClosedFacetAdjacency = closedFacetAdjacency
+
+// ReferenceClosedFacetEdges is closedFacetEdges's map form for every mesh.
+var ReferenceClosedFacetEdges = referenceClosedFacetEdges
+
+// GroupedVertexRange reports the vertex range closedFacetEdges groups over.
+var GroupedVertexRange = groupedVertexRange
