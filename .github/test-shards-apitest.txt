@@ -1085,6 +1085,12 @@
 4	0.00	TestLoftSectionsInterpolatesThreeSketchesWithCertifiedMesh
 4	0.00	TestLoftVerifySound
 4	0.01	TestMassPropertiesCompositeSweepSumsSpans
+10	0.01	TestReadIGESReadsABoxAsASolid
+10	0.01	TestReadIGESWindsFacesWrittenBothWays
+10	0.01	TestReadIGESConvertsTheFilesUnit
+10	0.01	TestReadIGESReadsASolidWithAVoid
+10	0.01	TestReadIGESRefusals
+10	0.01	TestReadIGESCutsFacesWithHoles
 4	0.01	TestMassPropertiesRevolvedCylinder
 4	0.00	TestMassPropertiesRevolvedSphere
 4	0.00	TestMeshImportASCIISTLWeldsRepeatedCornersAndStoresPositiveZero

@@ -398,7 +398,7 @@ A `decad.Diagnostic` states each reason a report is not sound, with its `decad.D
 
 ## Import
 
-`decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF` and `decad.ReadSTEP` read a triangle mesh file or a planar STEP solid into a `decad.MeshBody`. A `decad.MeshBody` is not a
+`decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP` and `decad.ReadIGES` read a triangle mesh file, a STEP solid or a planar-faced IGES solid B-rep into a `decad.MeshBody`. A `decad.MeshBody` is not a
 `decad.Body`: no feature or Boolean takes it. `decad.SolidFromMesh` turns a closed one into a solid body that does take part, after proving the mesh does not cross itself. It reports whether its triangles close into a surface, and its bounds,
 area and enclosed volume.
 
