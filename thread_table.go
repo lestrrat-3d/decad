@@ -33,8 +33,16 @@ var unified = map[int][2]float64{
 	40: {11, 18}, 48: {10, 16}, 56: {9, 14}, 64: {8, 12},
 }
 
+// numbered holds the threads per inch of the Unified numbered sizes #0 to #12 by number, coarse (UNC) then fine
+// (UNF), zero where the size has none: #0 has only a fine thread. The nominal diameter of size #n is
+// 0.060 + 0.013·n inch.
+var numbered = map[int][2]float64{
+	0: {0, 80}, 1: {64, 72}, 2: {56, 64}, 3: {48, 56}, 4: {40, 48}, 5: {40, 44}, 6: {32, 40}, 8: {32, 36},
+	10: {24, 32}, 12: {24, 28},
+}
+
 // LookupThread reads a thread designation into its major diameter and pitch
-// (agent-docs/thread-design.md §9). It reads three forms:
+// (agent-docs/thread-design.md §9). It reads four forms:
 //
 //   - "M10", an ISO metric thread at its coarse pitch: 10 mm and 1.5 mm. The
 //     nominal diameter is one of the preferred sizes from M1 to M64.
@@ -43,6 +51,9 @@ var unified = map[int][2]float64{
 //   - "1/4-20" and "1/4-28", and "1-8", a Unified thread by nominal fraction and
 //     threads per inch: 6.35 mm and 25.4/20 mm. The size is a multiple of 1/16 inch
 //     from 1/4 to 1 inch, and the threads per inch are its UNC or UNF value.
+//   - "#10-24" and "#10-32", a Unified numbered size by its number and threads per
+//     inch: 0.190 inch and 25.4/24 mm. The size is #0 to #6, #8, #10 or #12, and the
+//     threads per inch are its UNC or UNF value.
 //
 // The designation is case-insensitive in its M and x and takes no spaces. The
 // pitch is the thread's own and the major diameter is its nominal one: tolerance
@@ -56,7 +67,27 @@ func LookupThread(designation string) (ThreadSize, error) {
 	if d[0] == 'M' || d[0] == 'm' {
 		return lookupMetric(d)
 	}
+	if d[0] == '#' {
+		return lookupNumbered(d)
+	}
 	return lookupUnified(d)
+}
+
+func lookupNumbered(d string) (ThreadSize, error) {
+	number, tpiText, ok := strings.Cut(d[1:], "-")
+	if !ok {
+		return ThreadSize{}, fmt.Errorf(`%w: %q is not a numbered Unified designation like #10-24`, ErrDegenerate, d)
+	}
+	n, errN := strconv.Atoi(number)
+	tpi, errT := strconv.ParseFloat(tpiText, 64)
+	if errN != nil || errT != nil || n < 0 || !(tpi > 0) || math.IsInf(tpi, 0) {
+		return ThreadSize{}, fmt.Errorf(`%w: %q is not a numbered Unified designation like #10-24`, ErrDegenerate, d)
+	}
+	rates, listed := numbered[n]
+	if !listed || (tpi != rates[0] && tpi != rates[1]) {
+		return ThreadSize{}, fmt.Errorf(`%w: %q is not a coarse or fine Unified size from #0 to #12`, ErrDegenerate, d)
+	}
+	return ThreadSize{Major: units.Inches(0.060 + 0.013*float64(n)), Pitch: units.Inches(1 / tpi)}, nil
 }
 
 func lookupMetric(d string) (ThreadSize, error) {
