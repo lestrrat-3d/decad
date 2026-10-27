@@ -78,3 +78,87 @@ func rectilinearInfill(loops [][]r3.Vec, alongX bool, spacing, inset float64) []
 	}
 	return out
 }
+
+// insetLoops moves every loop of a layer's outline d towards the material (agent-docs/gcode-design.md G10): the outer
+// loops inward and the loops of holes outward, each corner at the meeting of its two moved sides, so that a line
+// traced along the result lays its edge, and not its middle, on the outline. A loop is wound with the material on its
+// left, an outer loop counter-clockwise and a hole clockwise, decided by how many other loops enclose it. A corner
+// sharper than about 170 degrees is cut off at d from the corner in place of reaching the meeting of its sides, and a
+// repeated point or a loop of fewer than three points is left as it is.
+func insetLoops(loops [][]r3.Vec, d float64) [][]r3.Vec {
+	out := make([][]r3.Vec, len(loops))
+	for i, loop := range loops {
+		if len(loop) < 3 {
+			out[i] = loop
+			continue
+		}
+		depth := 0
+		for j, other := range loops {
+			if j != i && pointInLoop(loop[0], other) {
+				depth++
+			}
+		}
+		wound := loop
+		if ccw := signedArea(loop) > 0; ccw != (depth%2 == 0) {
+			wound = make([]r3.Vec, len(loop))
+			for k, p := range loop {
+				wound[len(loop)-1-k] = p
+			}
+		}
+		out[i] = insetWound(wound, d)
+	}
+	return out
+}
+
+// signedArea is the shoelace area of a loop in the XY plane, positive when it runs counter-clockwise.
+func signedArea(loop []r3.Vec) float64 {
+	area := 0.0
+	for i, p := range loop {
+		q := loop[(i+1)%len(loop)]
+		area += p.X*q.Y - q.X*p.Y
+	}
+	return area / 2
+}
+
+// pointInLoop reports whether p lies inside the loop, by the even-odd rule.
+func pointInLoop(p r3.Vec, loop []r3.Vec) bool {
+	inside := false
+	for i, a := range loop {
+		b := loop[(i+1)%len(loop)]
+		if (a.Y <= p.Y) != (b.Y <= p.Y) && p.X < a.X+(p.Y-a.Y)/(b.Y-a.Y)*(b.X-a.X) {
+			inside = !inside
+		}
+	}
+	return inside
+}
+
+// insetWound moves a loop with its material on its left d to the left.
+func insetWound(loop []r3.Vec, d float64) []r3.Vec {
+	n := len(loop)
+	// The unit left normal of the side from loop[i] to loop[i+1], zero for a repeated point.
+	normal := make([]r3.Vec, n)
+	for i := range loop {
+		side := loop[(i+1)%n].Sub(loop[i])
+		if length := math.Hypot(side.X, side.Y); length > 0 {
+			normal[i] = r3.Vec{X: -side.Y / length, Y: side.X / length}
+		}
+	}
+	out := make([]r3.Vec, n)
+	for i, p := range loop {
+		n1, n2 := normal[(i+n-1)%n], normal[i]
+		switch {
+		case n1 == (r3.Vec{}):
+			n1 = n2
+		case n2 == (r3.Vec{}):
+			n2 = n1
+		}
+		// The corner of the two moved sides is p + (n1 + n2)·d/(1 + n1·n2); a sharp corner is cut off.
+		denominator := 1 + n1.Dot(n2)
+		if denominator < 0.0152 { // the sides turn back by more than 170 degrees: 1 + cos 170°
+			out[i] = p.Add(n1.Add(n2).Scale(0.5 * d))
+			continue
+		}
+		out[i] = p.Add(n1.Add(n2).Scale(d / denominator))
+	}
+	return out
+}
