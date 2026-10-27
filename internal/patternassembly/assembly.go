@@ -145,8 +145,9 @@ func FrameKeepingInstance(ctx context.Context, env topo.Env, rp patternrecord.Sp
 
 // Group applies §6.1's rules 1 and 2 on the frame-keeping arm. For a prism
 // or a prism group it moves every region into every instance (§6.2) and asks
-// prismcells.ProveGroupDisjoint whether sketch's structural read proves the
-// outers pairwise disjoint; proven, the group is the one-slab stacked prism
+// prismcells.ProveGroupApart whether sketch proves the outers pairwise
+// disjoint and touching nowhere, not even at one tangent point or one
+// vertex; proven, the group is the one-slab stacked prism
 // over all of them (ok), and not proven is a silent miss to rule 3. A
 // multi-slab stack proven disjoint the same way, over its one outer loop, is
 // rule 2's ErrUnsupported. A union-built stack, whose outer changes between
@@ -199,7 +200,7 @@ func Group(ctx context.Context, rp patternrecord.Spec, payload topo.Payload) (st
 			delta = math.Max(delta, charge)
 		}
 	}
-	disjoint, walk, err := prismcells.ProveGroupDisjoint(ctx, budget, all)
+	disjoint, walk, err := prismcells.ProveGroupApart(ctx, budget, all)
 	if err != nil || !disjoint {
 		return stackedrecord.Payload{}, false, err
 	}

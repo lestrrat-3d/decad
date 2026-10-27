@@ -151,8 +151,10 @@ func TryGroupCut(ctx context.Context, a, b topo.Payload) (prismrecord.Payload, b
 // TryGroupUnion is A5's Union over equal intervals where either operand is a
 // prism group, or two prisms whose select-all survivors close into several
 // loops. The survivors of the select-all merge are chained into closed loops.
-// One loop is a prism. Two or more loops proven pairwise disjoint by
-// prismcells.ProveGroupDisjoint form a prism group.
+// One loop is a prism. Two or more loops proven pairwise apart by
+// prismcells.ProveGroupApart form a prism group. Loops that touch at one
+// point, which the arrangement leaves uncut, are a silent miss to the mesh
+// path.
 func TryGroupUnion(ctx context.Context, a, b topo.Payload) (topo.Payload, bool, error) {
 	oa, aok := groupOperandOf(a)
 	ob, bok := groupOperandOf(b)

@@ -126,7 +126,7 @@ evaluator does not build — never repaired.
 | # | Invariant | Sentinel |
 |---|---|---|
 | I1 | At least two slabs, or one slab holding two or more regions (a prism group, below). A one-slab stack with one region is a prism and is recorded as `prismPayload`. | `ErrUnsupported` |
-| I2 | Each slab holds exactly one region, except a prism group's one slab, whose regions are proven pairwise disjoint when the group is built, and the narrow side of a lining interface (below). (A region enclosing no area is refused by the build's own integrals, `ErrDegenerate`.) | `ErrUnsupported` |
+| I2 | Each slab holds exactly one region, except a prism group's one slab, whose regions are proven pairwise apart, touching nowhere, when the group is built (`prismcells.ProveGroupApart`, below), and the narrow side of a lining interface (below). (A region enclosing no area is refused by the build's own integrals, `ErrDegenerate`.) | `ErrUnsupported` |
 | I3 | Each slab has `z0 < z1`. | `ErrDegenerate` |
 | I4 | Consecutive slabs meet: `slabs[i].z1 == slabs[i+1].z0` and `slabs[i].z1Delta == slabs[i+1].z0Delta`, both as stored floats. Where both sides record a denoted level, the two rationals are equal. One plane, one displacement, one denotation. | `ErrDegenerate` |
 | I5 | Consecutive slabs carry one outer loop record (`loopRecordsEqual`), or their interface meets the union reading below. A clean-nesting cut never touches the outer loop, and a mirror join rewrites every slab's outer the same way, so a cut-built stack's outer wall runs the whole height. | `ErrUnsupported` |
@@ -166,6 +166,23 @@ Construction refuses this reading when the section has a nonzero displacement:
 the scene proves separation of the recorded loops, while that displacement
 could close their gap. A rigid placement re-evaluates the same local record.
 
+The same proof decides a prism group's regions (I2) and a `Union`'s several
+loops (general-boolean §3 A5). The arrangement does not cut a line at another
+line's endpoint lying on it either, such as a triangle's apex on a square's
+side, so `prismcells.RegionContact` also puts every two lines of two regions
+to sketch's line query: `geom.LineLineIntersection` gives the carriers'
+common point, and `geom.ClosestPointOnLine` reads its parameter along each
+segment, within 1e-9 of [0, 1]. Parallel carriers report no point; the
+arrangement cuts collinear lines where they overlap or meet. A union-built
+stack's interface reads `RegionContact` over its nesting match
+(general-boolean §3 A1), so a boss outline touching the plate's edge at one
+point is a miss there, and `Cut`'s clean-nesting, enclosing and group matches
+read it too (prism-boolean §4.2). A vertex lying on another region's line whose two
+edges leave that line within sketch's parallel band (about 1e-9 rad) is
+reported by neither line query; sketch's arrangement reports such a region
+invalid, and the pair is refused before any contact reading runs
+(`apitest/union_tangent_contact_test.go`).
+
 A mirror join (`agent-docs/mirror-pattern-design.md` §5) builds a stacked payload by
 rewriting every slab's region with one splice. The splice is a function of the
 loop record alone, so equal loops in two slabs rewrite to equal loops: the
@@ -179,7 +196,7 @@ one record, the rows above apply unchanged. Where they differ:
 
 | # | Union reading | Sentinel |
 |---|---|---|
-| I5 | Both regions are hole-free, and the narrower outer is proven nested in the wider region by prism-boolean §4.2's clean-nesting match when the union is built: the wider region's cell carries the narrower outer, whole, as its one hole | `ErrUnsupported` |
+| I5 | Both regions are hole-free, and the narrower outer is proven nested in the wider region by prism-boolean §4.2's clean-nesting match when the union is built: the wider region's cell carries the narrower outer, whole, as its one hole, and `prismcells.RegionContact` reports no point between the two outers | `ErrUnsupported` |
 | I6 | Exactly one side records exposed material: `lowerExposed` when the lower region is the wider one, `upperExposed` when the upper is | `ErrDegenerate` |
 | I7 | That side holds exactly one record, `{Outer: wider.Outer, Holes: [reverse(narrower.Outer)]}`. The audit re-derives it from the two regions and compares it record for record | `ErrDegenerate` |
 
@@ -209,11 +226,14 @@ A **prism group** (`agent-docs/mirror-pattern-design.md` §6.3) is one slab hold
 two or more regions, each a separate lump over the slab's interval. It has
 no interface, so I3 is its only level rule and I4–I7 do not apply. The audit
 checks the slab, the empty interface list and that every region has an outer
-loop; that the regions are pairwise disjoint is proven when the group is
-built, by `provePrismRegionsDisjoint`: a private scene of every region's outer
-must return one valid cell per region, each reproducing that outer with
-every edge whole and no hole. A `Union` whose survivors close into several
-such loops builds one (`agent-docs/general-boolean-design.md` §3 A5).
+loop; that the regions are pairwise apart is proven when the group is
+built, by `prismcells.ProveGroupApart`: a private scene of every region's
+outer must return one valid cell per region, each reproducing that outer
+with every edge whole and no hole, no two cells may share a vertex, and
+`RegionContact` (above) must report no point between two regions. A
+`Union` whose survivors close into several such loops builds one
+(`agent-docs/general-boolean-design.md` §3 A5); loops that touch at one
+point take the mesh path.
 
 ### 2.3 Loop columns
 

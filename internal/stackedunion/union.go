@@ -343,6 +343,20 @@ func (st *stackedUnionState) interfaceOf(ctx context.Context, lower, upper profi
 		return stackedrecord.Interface{}, false, err
 	}
 	st.walkInterface = max(st.walkInterface, m.SceneDelta.A, m.SceneDelta.B)
+	if m.Nest != NestNone {
+		// The narrower outer becomes a hole of the exposed face. The arrangement
+		// does not cut a tangency, so a narrower curve touching the wider
+		// outline at one point still nests whole, and the exposed face would
+		// pinch there (agent-docs/stacked-prism-design.md §2.2). Any point
+		// sketch's intersection query reports is a miss.
+		touch, err := prismcells.RegionContact(st.budget, m.Tags)
+		if err != nil {
+			return stackedrecord.Interface{}, false, err
+		}
+		if touch {
+			return stackedrecord.Interface{}, false, nil
+		}
+	}
 	switch m.Nest {
 	case NestBInA:
 		exposed, err := stackedrecord.UnionExposed(ctx, lower, upper)

@@ -526,15 +526,20 @@ reported point never admits anything. On the mesh path a blind pocket builds an
 `Approximate` faceted result. A tool through the whole target also takes the
 mesh path, which may refuse the contact with `BooleanUnsupportedContact`: a
 round tool tangent to a square hole or a box's side wall refuses there, while
-one tangent inside a cylinder's wall builds a faceted result. The query reports
-no contact between two lines; those touches rest on the arrangement. It splits
-two lines that cross, two that share a span (a square pocket along a hole's
-wall) and two corners that meet, so those touches never match whole. It does
-not split a line where another line's endpoint touches its interior (a
-T-touch, such as a diamond's apex on a hole's side), but no `Cut` route above
-reaches an analytic match with one: blind, through and stacked probes with an
-apex on a hole wall, on the outer wall, or a hole's apex on the tool's side
-all take the mesh path. `Intersect`'s result and the no-op match of a tool inside an
+one tangent inside a cylinder's wall builds a faceted result. Two lines go to
+the line reading of `prismcells.RegionContact`, which these matches call for
+both kinds and which `Union`'s groups and stacked interfaces read too (stacked
+§2.2): sketch's `geom.LineLineIntersection` point, read along each segment
+within `1e-9` of its parameter range. The arrangement splits two lines that
+cross, two that share a span (a square pocket along a hole's wall) and two
+corners that meet, so those touches never match whole. It does not split a
+line where another line's endpoint touches its interior (a T-touch) in a scene
+whose cells keep the two loops apart, as a `Union`'s can. In a `Cut` scene the
+walk around the touching hole passes that point, so sketch cuts the wall there
+and the match misses on the `Partial` edges first: blind, through, stacked and
+enclosing T-touches with an apex on a hole wall or on the outer wall take the
+mesh path before the line reading runs (`apitest/cut_tangent_contact_test.go`).
+`Intersect`'s result and the no-op match of a tool inside an
 existing hole (`prismcells.MatchCutNoOp`) are one operand's own unchanged
 cell, whose loops meet nothing, so they take no query.
 
@@ -755,10 +760,16 @@ operand live.
 Every source region enters `BuildSceneRegions` once, in the same plane. The
 work cap applies to the sum of all input segments. `SplitRuns` resolves
 shared stations, `CellsHaveNoVoid` refuses an enclosed void, and
-`MergeLoops` keeps the exterior boundary. Each resulting loop passes
+`MergeLoops` keeps the exterior boundary; a boundary that does not chain into
+closed loops, as where two loops meet at a shared corner, is a miss, and the
+bodies join two at a time. Each resulting loop passes
 `prismcells.AuditMergeSection`; multiple loops also pass
-`ProveGroupDisjoint`. One loop builds a `prismPayload`, while proven
-disjoint loops build one one-slab `stackedPrismPayload`. The result carries
+`prismcells.ProveGroupApart` (stacked §2.2). One loop builds a
+`prismPayload`, while loops proven apart build one one-slab
+`stackedPrismPayload`. Loops that touch at one point, such as a triangle's
+apex on a square's side, which the arrangement leaves uncut, are no group:
+the evaluator misses, and the bodies join two at a time, where the
+touching pair takes the mesh path. The result carries
 the maximum of the inputs' axial endpoint bounds and one cut-parameter
 section charge. A group also carries its disjointness walk charge. One
 document commit retires every input after result evaluation succeeds and

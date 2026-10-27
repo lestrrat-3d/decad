@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -243,6 +244,92 @@ func TestCutLineTouchPocket(t *testing.T) {
 				require.True(t, tookMeshPath(got))
 				require.LessOrEqual(t, math.Abs(volumeMM(t, volume)-tc.volume), boundMM3(t, volume))
 			}
+			mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.5))
+			require.NoError(t, err)
+			require.True(t, mesh.BoundaryVerified())
+			require.True(t, mesh.VolumeVerified())
+		})
+	}
+}
+
+// polygonPrismAtZ extrudes a polygon on the plane z = z0 by h along +z.
+func polygonPrismAtZ(t *testing.T, doc *decad.Document, z0, h float64, pts ...[2]float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	plane, err := w.CreateOffsetPlane(w.XY(), z0)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	corners := make([]*sketch.Point, len(pts))
+	for i, p := range pts {
+		corners[i] = s.CreatePoint(p[0], p[1])
+	}
+	s.Fix(corners[0])
+	for i := range corners {
+		s.CreateLine(corners[i], corners[(i+1)%len(corners)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
+// TestCutLineEndTouch cuts with straight-walled tools whose vertex lies on a
+// target wall without crossing it: a triangle's apex or a diamond's corner on
+// the square hole's x = 0 wall, a triangle's apex on the plate's x = 10
+// side, or a triangle enclosing the hole whose side passes the hole's corner. The cut scene's walk around the touching hole passes that vertex, so
+// sketch cuts the wall there and the clean-nesting match misses on the
+// Partial edges before prismcells.RegionContact's line reading runs. A blind tool takes the mesh
+// path and meshes with its volume bound covering the closed form; a tool
+// through the whole target reaches the mesh path's tangent-contact refusal.
+func TestCutLineEndTouch(t *testing.T) {
+	t.Parallel()
+	holeTriangle := [][2]float64{{0, 0}, {3, -1}, {3, 1}}    // 3 mm²
+	outerTriangle := [][2]float64{{10, 0}, {7, 1}, {7, -1}}  // 3 mm²
+	diamond := [][2]float64{{0, 0}, {2, -1}, {4, 0}, {2, 1}} // 4 mm²
+	cases := []struct {
+		name    string
+		stacked bool
+		pts     [][2]float64
+		z0, h   float64
+		volume  float64 // 0 for a through tool
+	}{
+		{name: "triangle on the hole wall from the top", pts: holeTriangle, z0: 6, h: 4, volume: 3840 - 12},
+		{name: "triangle on the hole wall from the bottom", pts: holeTriangle, z0: 0, h: 4, volume: 3840 - 12},
+		{name: "triangle on the hole wall, through", pts: holeTriangle, z0: 0, h: 10},
+		{name: "triangle on the outer wall from the top", pts: outerTriangle, z0: 6, h: 4, volume: 3840 - 12},
+		{name: "triangle on the outer wall, through", pts: outerTriangle, z0: 0, h: 10},
+		{name: "diamond on the hole wall from the top", pts: diamond, z0: 6, h: 4, volume: 3840 - 16},
+		{name: "diamond on the hole wall, through", pts: diamond, z0: 0, h: 10},
+		// A 72 mm² triangle enclosing the hole, its long side through the
+		// hole's (0, 2) corner: 3840 − (72 − 16)·4.
+		{name: "triangle enclosing the hole, touching its corner", pts: [][2]float64{{-6, -4}, {6, -4}, {-6, 8}},
+			z0: 6, h: 4, volume: 3616},
+		{name: "stacked target, from the top", stacked: true, pts: holeTriangle, z0: 7, h: 3, volume: 3776 - 9},
+		{name: "stacked target, from the bottom", stacked: true, pts: holeTriangle, z0: 0, h: 3, volume: 3776 - 9},
+		{name: "stacked target, through", stacked: true, pts: holeTriangle, z0: 0, h: 10},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			target := touchHoledPlate(t, doc)
+			if tc.stacked {
+				target = touchStackedPlate(t, doc)
+			}
+			got, err := decad.Cut(t.Context(), target, polygonPrismAtZ(t, doc, tc.z0, tc.h, tc.pts...))
+			if tc.volume == 0 {
+				var be *decad.BooleanError
+				require.ErrorAs(t, err, &be)
+				require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
+				return
+			}
+			require.NoError(t, err)
+			require.True(t, tookMeshPath(got))
+			volume, err := got.Volume()
+			require.NoError(t, err)
+			require.LessOrEqual(t, math.Abs(volumeMM(t, volume)-tc.volume), boundMM3(t, volume))
 			mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.5))
 			require.NoError(t, err)
 			require.True(t, mesh.BoundaryVerified())

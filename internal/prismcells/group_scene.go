@@ -138,7 +138,7 @@ func GroupCutMatch(budget *proofbound.WorkBudget, profiles []*sketch.Profile,
 	if !match.Valid {
 		return nil, false, InvalidRegionError("cut")
 	}
-	if touch, err := curvedContact(budget, tags); err != nil || touch {
+	if touch, err := RegionContact(budget, tags); err != nil || touch {
 		return nil, false, err
 	}
 	return match, true, nil
@@ -191,8 +191,11 @@ func ProveGroupDisjoint(ctx context.Context, budget *proofbound.WorkBudget,
 // every pair of entities from two regions with a curved member is also put to
 // sketch's own intersection query (geom.LineCircleIntersections and its
 // circle and arc kin), which reports a tangency within its band as one point.
-// Any point it reports touches. A curve kind the query does not cover refuses.
-// The check only refuses: a reported point never admits anything.
+// The arrangement does not cut a line at another line's endpoint lying on it
+// either, so RegionContact also puts every two lines of two regions to
+// sketch's line query. Any point either query reports touches. A curve kind
+// the query does not cover refuses. The check only refuses: a reported point
+// never admits anything.
 func ProveGroupApart(ctx context.Context, budget *proofbound.WorkBudget,
 	regions []momentinput.Profile) (bool, float64, error) {
 	cells, tags, separate, charge, err := proveGroupCells(ctx, budget, regions)
@@ -218,7 +221,7 @@ func ProveGroupApart(ctx context.Context, budget *proofbound.WorkBudget,
 			}
 		}
 	}
-	touch, err := curvedContact(budget, tags)
+	touch, err := RegionContact(budget, tags)
 	if err != nil || touch {
 		return false, charge, err
 	}
@@ -227,6 +230,7 @@ func ProveGroupApart(ctx context.Context, budget *proofbound.WorkBudget,
 
 // curvedContact reports whether sketch's intersection query finds any point
 // shared by two entities of different regions where at least one is curved.
+// Two lines are RegionContact's line reading.
 // A line's reported point counts when its parameter along the segment lies
 // within 1e-9 of [0, 1], a fraction of the segment's length, not the
 // distance band the query itself uses; a wider reading only refuses more.
@@ -349,4 +353,58 @@ func proveGroupCells(ctx context.Context, budget *proofbound.WorkBudget,
 		}
 	}
 	return profiles, tags, true, charge.A, nil
+}
+
+// RegionContact reports whether two entities of different regions meet at a
+// point sketch's arrangement leaves uncut. Two entities belong to different
+// regions when their operand side or region index differs. It asks
+// curvedContact for every pair with a curved member. The arrangement cuts two
+// lines that cross, but not a line at another line's endpoint lying on it,
+// such as a triangle whose apex touches a square's side. So every pair of
+// lines is also put to sketch's own query: geom.LineLineIntersection gives
+// the carriers' common point, and geom.ClosestPointOnLine reads its parameter
+// along each segment. A point within lineContactBand of [0, 1] on both
+// segments touches. Parallel carriers report no point. Collinear segments
+// share a carrier, which the arrangement cuts where they overlap or meet. The
+// answer only refuses: a reported point never admits anything.
+func RegionContact(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin) (bool, error) {
+	touch, err := curvedContact(budget, tags)
+	if err != nil || touch {
+		return touch, err
+	}
+	var lines []*sketch.Line
+	for e := range tags {
+		if l, ok := e.(*sketch.Line); ok {
+			lines = append(lines, l)
+		}
+	}
+	for i, a := range lines {
+		for _, b := range lines[i+1:] {
+			if err := budget.Step(); err != nil {
+				return false, err
+			}
+			if tags[a].IsB == tags[b].IsB && tags[a].Region == tags[b].Region {
+				continue
+			}
+			la, lb := a.Geometry(), b.Geometry()
+			p, ok := geom.LineLineIntersection(la, lb)
+			if !ok {
+				continue
+			}
+			if withinSegment(la, p) && withinSegment(lb, p) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+// lineContactBand is the parameter slack of RegionContact's line reading, a
+// fraction of the segment's length as curvedPairContact's is. A wider reading
+// only refuses more.
+const lineContactBand = 1e-9
+
+func withinSegment(l *geom.Line, p *geom.Point) bool {
+	_, t := geom.ClosestPointOnLine(l, p)
+	return t >= -lineContactBand && t <= 1+lineContactBand
 }

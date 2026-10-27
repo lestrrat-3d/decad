@@ -134,7 +134,15 @@ differ; its exposed records are decided by the clean-nesting structural match
 prism-boolean §4.2 already runs: the smaller region's outer must reproduce
 whole as a hole of the larger region's cell, in which case the exposed
 record is the larger region with that hole, and the smaller region is the
-material on both sides. A boss whose footprint crosses the plate's outline,
+material on both sides. A smaller outer touching the larger one at one
+point, such as a boss circle tangent inside the plate's edge, still
+reproduces whole, since the arrangement does not cut a tangency, and the
+exposed face would pinch there. So a nesting match at an interface also
+puts the two regions' entities to `prismcells.RegionContact` (stacked
+§2.2), and any point it reports makes the match a miss: the pair tries the
+brep build below and otherwise takes the mesh path, which meshes the boss
+as one `Approximate` body. A slab both operands reach keeps a tangent
+nesting, because the slab's region is the containing record alone. A boss whose footprint crosses the plate's outline,
 or sits flush with it (a wall of each on one carrier), meets it at the
 interface with `Partial` edges, which the match leaves unresolved. The 2D
 answer is not what is missing: `Classify` resolves the interface scene's
@@ -454,6 +462,17 @@ result whose survivors close into one loop is a prism. A group scene whose
 cuts carry a displaced operand's displacement (a placed group, for one)
 takes A6's crossing charge on both the `Cut` crossing sub-case and the
 `Union` merge, and falls back to the mesh path where A6 does.
+
+A `Union`'s several loops are a group only when they are apart as well as
+disjoint, since a body meeting itself at one point is not a manifold. The
+arrangement cuts neither a tangency nor a line at another line's endpoint
+lying on it, so a circle tangent to the plate's side, two tangent circles,
+or a triangle's apex on a square's side close as separate whole loops. A5's
+`Union` and prism-boolean §4.6's one-scene `Union` therefore prove their
+loops with `prismcells.ProveGroupApart` (stacked §2.2): no vertex two loops
+share, and no point sketch's intersection queries report between two
+loops' entities. A touching pair takes the mesh path, which meshes it as
+one `Approximate` body.
 
 #### A6 — the crossing-sensitivity charge
 
@@ -1548,6 +1567,15 @@ are relations, never literals.
   keeps the mesh path's coplanar refusal.
 - **A5 N-hole cut**: mirror §8's N-hole test, and the disjoint `Union` of
   S12 reporting two lumps with `Exact` 1000 mm³ and no `Faceted` face.
+- **A5 and A1 touching loops**: a circle tangent to a plate's side, two
+  tangent circles, a triangle's apex on a square's side (two bodies, and
+  three through the one-scene `Union`), three line-only bodies two of
+  which meet at a shared corner, a circle tangent to a group's
+  plate, and a boss tangent inside a square or round plate's edge on its
+  top each take the mesh path, mesh under `VerifyAll`, and carry a volume
+  bound covering the closed form with its π terms. A circle tangent inside
+  the plate at one level stays `Exact`, and loops with a gap stay a group
+  (`apitest/union_tangent_contact_test.go`).
 - **A6 crossing charge**: a Ø40 hub unioned with a 7×3 tooth rooted inside
   it and placed by `RotationAround` through 60° builds analytically within
   its bound of the closed form; P1's own tooth, its root arc on the hub
