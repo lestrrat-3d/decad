@@ -623,23 +623,29 @@ func planeCrossingsPrepared(xt [3]proof.Xpt, origin, normal proof.Xpt, signs [3]
 
 func planeCrossingsPreparedInto(out *[3]proof.Xpt, xt [3]proof.Xpt, origin, normal proof.Xpt, signs [3]int) int {
 	n := 0
-	nums := [3]*big.Int{}
-	var base *big.Int
+	var nums [3]big.Int
+	var numsReady [3]bool
+	var base, scaledBase big.Int
+	baseReady := false
 	val := func(i int) *big.Int {
-		if nums[i] == nil {
-			if base == nil {
-				base = proof.XdotNum(normal, origin)
+		if !numsReady[i] {
+			if !baseReady {
+				proof.XdotNumScratch(&base, normal, origin)
+				baseReady = true
 			}
-			point := proof.XdotNum(normal, xt[i])
+			point := &nums[i]
+			proof.XdotNumScratch(point, normal, xt[i])
 			if xt[i].W.Cmp(origin.W) == 0 {
-				nums[i] = point.Sub(point, base)
-				nums[i].Mul(nums[i], xt[i].W)
+				point.Sub(point, &base)
+				point.Mul(point, xt[i].W)
 			} else {
-				nums[i] = point.Mul(point, origin.W)
-				nums[i].Sub(nums[i], new(big.Int).Mul(base, xt[i].W))
+				point.Mul(point, origin.W)
+				scaledBase.Mul(&base, xt[i].W)
+				point.Sub(point, &scaledBase)
 			}
+			numsReady[i] = true
 		}
-		return nums[i]
+		return &nums[i]
 	}
 	for i := range 3 {
 		if signs[i] == 0 {
