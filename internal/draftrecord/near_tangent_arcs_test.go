@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/capband"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -200,9 +201,10 @@ func twoArcSliceArea(prev, cur splitDiscArc, v bfPt, d *big.Float, frac float64)
 //
 // Shown to fail first: with the ρλ term dropped from NearTangentVolume, the
 // charge per unit height (the 2.08ρ² terms, 2.5e-21 mm²) fell below the
-// slice area from the first eighth of the sweep (9.7e-13 mm²). Dropping the
-// 2.08ρ² term leaves no fixture: the curvilinear triangle it covers is at
-// most 1.3e-21 mm² per corner here, far under ρλ.
+// slice area from the first eighth of the sweep (9.7e-13 mm²). The
+// curvilinear triangle the 2.08ρ² term covers is at most 1.3e-21 mm² per
+// corner here, far under ρλ, so no slice area pins that term;
+// TestDraftNearTangentChargeCoversEveryTerm pins its place in the sum.
 func TestDraftTwoArcMeshChargesTheCorner(t *testing.T) {
 	t.Parallel()
 	exact := splitDiscMesh(t, 0)
@@ -254,4 +256,107 @@ func TestDraftTwoArcChargeJoinsTheProofSum(t *testing.T) {
 	want := bfSum(bf(base), bf(got.charge))
 	require.GreaterOrEqualf(t, bf(got.mesh.VolSymDiff).Cmp(want), 0,
 		"VolSymDiff %v is below the chord and motion terms %v plus the charge %g", got.mesh.VolSymDiff, base, got.charge)
+}
+
+// nearTangentChargeTerms is the corner charge agent-docs/draft-design.md
+// §9.1.1 states for a meshed draft band, in 256-bit arithmetic from the
+// exported loop meshes: hUpper times, per loop, πρ²/4 per line–arc corner,
+// 3ελ per straight walk with a near-tangent end (ε the larger of its ends'),
+// and ρλ + ((1 + π)/2)ρ² per corner of two arcs, with ρ and ε read from
+// capband.NearTangentCharges. λ is read as the production reads it: √2 times
+// the longer side of the held samples' bounding box (an upper bound on its
+// diagonal), plus twice the largest vertex motion and twice the largest ρ.
+// Every term is exact here, so a charge at least this large includes each
+// term the lemma charges.
+func nearTangentChargeTerms(t *testing.T, cbp capblend.Payload, lms []capblend.LoopMesh) *big.Float {
+	t.Helper()
+	sqrt2 := new(big.Float).SetPrec(meshVolumePrec).Sqrt(bf(2))
+	total := bf(0)
+	for li := range lms {
+		lm := &lms[li]
+		if !lm.Chamfered || lm.Whole {
+			continue
+		}
+		amounts := cbp.WalkAmounts(lm.LoopIndex, lm.Walks, cbp.LoopOffset(lm.LoopIndex))
+		charges, err := capband.NearTangentCharges(proofbound.NewWorkBudget(t.Context()), lm.Loop, lm.Walks, amounts, cbp.LoopSetback(lm.LoopIndex).DcDelta)
+		require.NoError(t, err)
+		minU, minV := math.Inf(1), math.Inf(1)
+		maxU, maxV := math.Inf(-1), math.Inf(-1)
+		for _, pts := range [][]sectionrecord.Point2{lm.SidePts, lm.CapPts} {
+			for _, p := range pts {
+				minU, maxU = math.Min(minU, p.U), math.Max(maxU, p.U)
+				minV, maxV = math.Min(minV, p.V), math.Max(maxV, p.V)
+			}
+		}
+		side := bfSum(bf(maxU), bfNeg(bf(minU)))
+		if other := bfSum(bf(maxV), bfNeg(bf(minV))); other.Cmp(side) > 0 {
+			side = other
+		}
+		motion, rhoMax := 0.0, 0.0
+		for _, b := range lm.SideBound {
+			motion = math.Max(motion, proofbound.WalkEndBoundAllow(b))
+		}
+		for _, m := range lm.CapMotion {
+			motion = math.Max(motion, m)
+		}
+		for _, c := range charges {
+			rhoMax = math.Max(rhoMax, c.Rho)
+		}
+		lambda := bfSum(bfProd(sqrt2, side), bfProd(bf(2), bf(motion)), bfProd(bf(2), bf(rhoMax)))
+		for i, c := range charges {
+			rho := bf(c.Rho)
+			switch {
+			case c.TwoArcs:
+				half := bfQuo(bfSum(bf(1), meshVolumePi), bf(2))
+				total = bfSum(total, bfProd(rho, lambda), bfProd(half, rho, rho))
+			default:
+				total = bfSum(total, bfQuo(bfProd(meshVolumePi, rho, rho), bf(4)))
+			}
+			if lm.Walks[i].IsCircular() {
+				continue
+			}
+			eps := math.Max(c.Eps, charges[(i+1)%len(charges)].Eps)
+			total = bfSum(total, bfProd(bf(3), bf(eps), lambda))
+		}
+	}
+	return bfProd(bf(cbp.DraftBandHeightUpper()), total)
+}
+
+// TestDraftNearTangentChargeCoversEveryTerm pins the charge's composition
+// term by term: on the 5·2⁻³⁴ slot (two line–arc corners) and the
+// 5·2⁻³⁴ split disc (two corners of two arcs), NearTangentVolume is at
+// least the 256-bit sum nearTangentChargeTerms states.
+//
+// Shown to fail first: with the 2.08ρ² term dropped from NearTangentVolume,
+// the split disc's charge (5.52205683563507e-09) fell below the sum
+// (5.52205683565480e-09) by about 2e-20; with the πρ²/4 term dropped, the
+// slot's (3.85711214200592e-18) fell below its sum (3.86459627760650e-18).
+func TestDraftNearTangentChargeCoversEveryTerm(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		profile momentinput.Profile
+	}{
+		{"slot", nearTangentSlot(nearTangentShift)},
+		{"split disc", splitDisc(splitDiscShift)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			env := topo.Env{Doc: &topo.Document{}, Ref: 1, Alloc: topotest.Alloc{}}
+			body, err := draftrecord.Build(t.Context(), env, taperPayload(t, tc.profile, xyFrame(t), 8, 3, false))
+			require.NoError(t, err)
+			dp, ok := body.Payload.(draftrecord.Payload)
+			require.True(t, ok)
+			cbp := dp.Band()
+			mesh := new(topo.Mesh)
+			lms, _, err := capblend.TessellateMesh(t.Context(), body, cbp, 0.05, true, mesh)
+			require.NoError(t, err)
+			require.True(t, mesh.SymDiffOK)
+			charge, err := capblend.NearTangentVolume(proofbound.NewWorkBudget(t.Context()), cbp, lms)
+			require.NoError(t, err)
+			want := nearTangentChargeTerms(t, cbp, lms)
+			require.Positive(t, want.Sign())
+			require.GreaterOrEqualf(t, bf(charge).Cmp(want), 0, "the charge %v is below its terms' sum %v", charge, want)
+		})
+	}
 }

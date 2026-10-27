@@ -1032,8 +1032,10 @@ volume within `volSymDiff` of the closed form
 disc charges a positive volume whose rate per unit height covers Lemma 2's
 two-arc slice area (the twisted last cell and the curvilinear triangle) at
 every eighth of the sweep, its `volSymDiff` exceeds the exact disc's, and it
-is at least the 256-bit sum of the chord and motion terms and the charge
-(`internal/draftrecord/near_tangent_arcs_test.go`). Lemma 1′ is checked
+is at least the 256-bit sum of the chord and motion terms and the charge;
+on both the slot and the split disc at `5·2⁻³⁴`, the charge is at least the
+256-bit sum of each term §9.1.1 names, read from `capband.NearTangentCharges`
+and the loop meshes (`internal/draftrecord/near_tangent_arcs_test.go`). Lemma 1′ is checked
 against a 256-bit reference of the two moved circles' meeting point in each
 of its four cases at amounts of either sign; the limit, mixed-amount and
 condition-6 refusals have rows, condition 6 for an inner counter-clockwise
@@ -1095,7 +1097,7 @@ undecided.
 | the circular neighbour's foot at a wall's start | read at the arc's start instead of its end | the overrun riser admits |
 | Lemma 1's `ρ` and `ε` | each quartered | the 256-bit miter reference at an amount of 0.26 mm |
 | the strip term `3ελ` | dropped from `NearTangentVolume` | the `5·2⁻³⁴` slot: the charge falls below the slice area from the first eighth of the sweep |
-| the disc term `πρ²/4` | dropped | no fixture: the segment it covers sits below `1e-33` mm² on the slot |
+| the disc term `πρ²/4` | dropped | the `5·2⁻³⁴` slot's charge falls below the 256-bit sum of its terms (`TestDraftNearTangentChargeCoversEveryTerm`); no slice area pins it, since the segment it covers sits below `1e-33` mm² |
 | `NearTangentVolume` in the proof sum | not appended | the `5·2⁻³⁴` slot: its `volSymDiff` falls below the 256-bit sum of the chord and motion terms and the charge; the `5·2⁻³⁴` split disc likewise |
 | the two-arc arm of `NearTangentCorner` | a corner of two arcs read as no near-tangent join | the split disc: no volume proof at any tolerance, and its `2⁻⁴⁸` mesh at `VerifyAll` carries none |
 | the turn limit at two arcs | condition 4 skipped | the `5·2⁻³¹` split disc's mesh carries the proof; the two-arc limit row admits |
@@ -1103,7 +1105,7 @@ undecided.
 | the survival gate at two arcs | skipped in the admission | the `2⁻⁴⁰` rad arc drafted `0.6` mm admits |
 | Lemma 1′'s `ρ` | quartered | the 256-bit reference in all four cases at an amount of `0.1575` mm |
 | the twisted-cell term `ρλ` | dropped from `NearTangentVolume` | the `5·2⁻³⁴` split disc: the charge falls below the two-arc slice area from the first eighth of the sweep |
-| the curvilinear-triangle term `2.08ρ²` | dropped | no fixture: the triangle sits under `1.3e-21` mm² per corner on the split disc, far under `ρλ` |
+| the curvilinear-triangle term `2.08ρ²` | dropped | the `5·2⁻³⁴` split disc's charge falls about `2e-20` below the 256-bit sum of its terms (`TestDraftNearTangentChargeCoversEveryTerm`); no slice area pins it, since the triangle sits under `1.3e-21` mm² per corner |
 
 ## 12. Do not do this
 

@@ -83,9 +83,9 @@ func TestNearTangentCornerEnclosesTheMiter(t *testing.T) {
 
 // TestNearTangentCornerRefuses pins each of §9.1.1's refusals of a line and
 // an arc by its reason, and the exact-tangent refusal for a corner whose ends
-// differ or whose tangents oppose (near_tangent_arcs_test.go pins two arcs). Deleting the matching gate in NearTangentCorner turns its
-// row red, and reading every arc as counter-clockwise turns both clockwise
-// rows red.
+// differ or whose tangents oppose (near_tangent_arcs_test.go pins two arcs).
+// Deleting the matching gate in NearTangentCorner turns its row red, and
+// reading every arc as counter-clockwise turns both clockwise rows red.
 func TestNearTangentCornerRefuses(t *testing.T) {
 	t.Parallel()
 	p := func(u, v float64) sectionrecord.Point2 { return sectionrecord.Point2{U: u, V: v} }

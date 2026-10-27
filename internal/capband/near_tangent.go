@@ -413,14 +413,16 @@ const (
 	nearTangentArcWhy  = `a circular wall at a near-tangent join whose window does not exceed the turn the near-tangent corner charge allows its ends, so its arc is not proven to survive every level`
 )
 
-// nearTangentArcRefusal is NearTangentWallRefusal for circular walk w. B1
-// holds its ends at the recorded window's two radial feet, and each true end
-// lies on the moved circle within its ρ of B1's, so it turns from B1's by at
-// most 2·asin(ρ/2r) <= (π/2)·ρ/r_lo. The arc survives every level when those
-// two turns together stay below the window W. W is at least π where the window
-// passes a half turn, and at least |v₂ − v₁|/R otherwise (a chord of length c
-// subtends 2·asin(c/2R) >= c/R), so the gate asks for (π/2)(ρ_start + ρ_end)
-// < W_lo·r_lo over the rationals with π/2 rounded up and π rounded down.
+// nearTangentArcRefusal is NearTangentWallRefusal for circular walk w. Each
+// true end lies on the moved circle within its ρ of the wall's own radial
+// foot at the recorded window's end (Lemma 1, or Lemma 1′ at a corner of two
+// arcs, where B1 holds the other arc's foot instead), so it turns from that
+// foot by at most 2·asin(ρ/2r) <= (π/2)·ρ/r_lo. The arc survives every level
+// when those two turns together stay below the window W. W is at least π
+// where the window passes a half turn, and at least |v₂ − v₁|/R otherwise (a
+// chord of length c subtends 2·asin(c/2R) >= c/R), so the gate asks for
+// (π/2)(ρ_start + ρ_end) < W_lo·r_lo over the rationals with π/2 rounded up
+// and π rounded down.
 func nearTangentArcRefusal(loop sectionrecord.LoopRecord, w survey2d.SideWalk, amount, amountDelta, rhoStart, rhoEnd float64) string {
 	first, err := sectionrecord.NormalizeSegment(loop.Segments[w.Segs[0]])
 	if err != nil {
