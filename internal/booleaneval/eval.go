@@ -132,11 +132,11 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if !errors.As(err, &touch) || !(gaptol.Reach(ctx) > 0) {
 		return ev, err
 	}
-	tolMM, _, perr := booloperand.PairChord(ctx, a, b)
+	tolMM, dPair, perr := booloperand.PairChord(ctx, a, b)
 	if perr != nil {
 		return ev, err
 	}
-	mb, _, terr := meshes.TessellateOperand(ctx, b, tolMM*chordScale)
+	mb, _, terr := meshes.TessellateOperand(ctx, b, operandChord(ctx, b, tolMM*chordScale, dPair, chordScale))
 	if terr != nil {
 		return ev, err
 	}
@@ -178,7 +178,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	// cache keys on the level, so a caller's own earlier unverified mesh at
 	// this same internal tolerance is a different entry and is never handed
 	// back here.
-	ma, restatingA, err := meshes.TessellateOperand(ctx, a, tolMM)
+	ma, restatingA, err := meshes.TessellateOperand(ctx, a, operandChord(ctx, a, tolMM, dPair, chordScale))
 	if err != nil {
 		if _, ok := errors.AsType[*tessellation.ExpectedError](err); ok {
 			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedCoarseTessellation, err)
@@ -193,7 +193,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if err := ctx.Err(); err != nil {
 		return Evaluation{}, err
 	}
-	mb, restatingB, err := meshes.TessellateOperand(ctx, b, tolMM)
+	mb, restatingB, err := meshes.TessellateOperand(ctx, b, operandChord(ctx, b, tolMM, dPair, chordScale))
 	if err != nil {
 		if _, ok := errors.AsType[*tessellation.ExpectedError](err); ok {
 			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedCoarseTessellation, err)
@@ -483,4 +483,11 @@ func booleanProofBounds(symA, symB, roundVol, slackA, slackB, dropArea float64) 
 ) {
 	return proofbound.AbsSumUpper(symA, symB, roundVol),
 		proofbound.AbsSumUpper(slackA, slackB, dropArea)
+}
+
+// operandChord is the chord request for operand b of a pair whose tolerance,
+// already scaled by chordScale, is pairTol (meshbool.OperandChord).
+func operandChord(ctx context.Context, b *topo.Body, pairTol, dPair, chordScale float64) float64 {
+	_, restating := booloperand.HeldFloor(b)
+	return meshbool.OperandChord(pairTol, dPair*chordScale, booloperand.ChordShare(ctx, b).Floor*chordScale, restating)
 }

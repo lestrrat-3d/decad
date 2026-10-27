@@ -1,7 +1,8 @@
-# Twisted-Sweep Cut: Stationed Refinement of a One-Cell Twist
+# Twisted-Sweep Cut: Stationed Refinement of a Twist
 
 `Cut`, `Union` and `Intersect` of a twisted `Sweep` against a prism or
-cylinder. Companion to `agent-docs/sweep-design.md` §17 (the twisted Sweep),
+cylinder. `agent-docs/chained-cut-design.md` §4.2 sets the refinement target
+and cell ceilings and applies it to stationed sweeps; §3 states the rule. Companion to `agent-docs/sweep-design.md` §17 (the twisted Sweep),
 `agent-docs/general-boolean-design.md` (the mesh path) and
 `agent-docs/tessellation-design.md` §11 step 4 (the tangency gate).
 
@@ -45,17 +46,18 @@ the departure near four percent of the profile radius, or 0.08 mm when the optio
 
 ## 3. Stationed refinement
 
-The refinement restates a one-cell twisted sweep's true section as the
-stationed build's held mesh, for a consumer that asks for a boundary closer
-than the sweep's own `Delta`. The sweep is not rebuilt, republished or
+The refinement restates a twisted sweep's true section as a stationed
+build's held mesh, for a consumer that asks for a boundary closer than the
+sweep's own `Delta`. A one-cell sweep and a sweep that already holds a
+stationed mesh both refine, to the finer target of chained-cut §4.2. The sweep is not rebuilt, republished or
 re-measured; only its held mesh is.
 
 - `Payload.RefinedDelta` computes the stationed build's per-cell departure
-  `R*a*a/8 + E*a/4 + e` at the cell count `StationedTwistCellCounts` chooses,
+  `R*a*a/8 + E*a/4 + e` at the cell count `refinedCellCount` chooses,
   plus `refineSlack` (1e-9 relative and absolute) for each cell Loft's
-  rounding-sized facet departure. It answers false for a sweep that is already
-  stationed (`Mesh != nil`), has an arc, has no refinement under the station
-  and work ceilings, or whose refinement is no closer than `Delta`.
+  rounding-sized facet departure. It answers false for a sweep that has an
+  arc, has no refinement under the cell and work ceilings, or whose
+  refinement is no closer than `Delta`.
 - `Payload.RefinedMesh` runs `evalStationedCells` over the same record
   (profile, path, angle, placement), takes the resulting mesh, and rebinds each
   facet and face bound to the live sweep's own face with the same source role
@@ -106,12 +108,11 @@ Refused, soundly:
 - A sweep that is stationed already: it has no coarser mesh to refine.
 - A tool whose refinement exceeds the station or facet-pair ceilings.
 
-Bound quality. The Cut's volume bound is inherited from the mesh path's
-occupied-volume proof for the whole pair, which charges the target's chorded
-cylinders. For a 24 mm tall tube of radii 12.5 and 18.5 mm the bound is about
-1150 mm3, larger than the 180 mm3 bore. The value lies within it, and the
-bound is honest, not tight. A tighter bound needs a per-face volume allowance
-for the target, not a finer tool.
+Bound quality. The Cut's volume bound is the mesh path's occupied-volume proof
+for the whole pair: each operand's displacement times its held area. The
+target's share falls with its chord request, and the tool's with its
+refinement (chained-cut §4). For the 37.5 mm tube bored four times the bound
+is 104 mm3, 26 mm3 for each bore.
 
 ## 6. What else would close the screw gear gap
 

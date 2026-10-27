@@ -37,3 +37,19 @@ func PairChordFrom(a, b ChordOperand) (tol, diameter float64, ok bool) {
 	}
 	return math.Max(diameter*ChordFactor, math.Max(a.Floor, b.Floor)), diameter, true
 }
+
+// OperandChord is the chord tolerance one operand is requested at for a pair
+// whose own tolerance is pairTol. An operand that restates a held mesh takes
+// the pair's tolerance: its request only has to sit at or above its floor, and
+// it chords nothing. Every other operand is chorded at the diameter-derived
+// tolerance alone, raised only to its own floor, so a partner that holds a
+// coarse fixed mesh (a twisted sweep, a coil, a mitred sweep) does not coarsen
+// it (agent-docs/chained-cut-design.md §4). The result never exceeds pairTol.
+// diameter is the pair diameter scaled as pairTol is, and floor is the
+// operand's own ChordOperand.Floor scaled likewise.
+func OperandChord(pairTol, diameter, floor float64, restating bool) float64 {
+	if restating {
+		return pairTol
+	}
+	return math.Min(pairTol, math.Max(diameter*ChordFactor, floor))
+}

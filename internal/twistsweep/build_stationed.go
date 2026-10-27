@@ -72,18 +72,27 @@ func stationedTwistCountAtTarget(poly TwistPolygon, angleUpper, target float64) 
 		if perCell > 1 || twistDeparture(poly, perCell, 0, 0) > target {
 			continue
 		}
-		facets := 2*len(poly.Points)*cells + 2*(len(poly.Points)-2)
-		pairs, ok := proofbound.WallChoose2(uint64(facets))
-		if !ok || pairs > proofbound.MaxFacetPairTestsPerCall {
-			err := fmt.Errorf(`%w: stationed twist exceeds the fixed facet-pair work ceiling`, decaderr.ErrUnsupported)
-			if ok {
-				return 0, proofbound.WithWorkLimit(err, "facet_pairs", pairs, proofbound.MaxFacetPairTestsPerCall)
-			}
+		if err := stationedTwistFitsWork(poly, cells); err != nil {
 			return 0, err
 		}
 		return cells, nil
 	}
 	return 0, fmt.Errorf(`%w: stationed twist needs more than %d cells`, decaderr.ErrUnsupported, maxStationedTwistCells)
+}
+
+// stationedTwistFitsWork refuses a cell count whose facet pairs exceed the
+// fixed per-call work ceiling.
+func stationedTwistFitsWork(poly TwistPolygon, cells int) error {
+	facets := 2*len(poly.Points)*cells + 2*(len(poly.Points)-2)
+	pairs, ok := proofbound.WallChoose2(uint64(facets))
+	if ok && pairs <= proofbound.MaxFacetPairTestsPerCall {
+		return nil
+	}
+	err := fmt.Errorf(`%w: stationed twist exceeds the fixed facet-pair work ceiling`, decaderr.ErrUnsupported)
+	if ok {
+		return proofbound.WithWorkLimit(err, "facet_pairs", pairs, proofbound.MaxFacetPairTestsPerCall)
+	}
+	return err
 }
 
 // StraightTwistStations places the cells+1 stations of a straight-path twist
