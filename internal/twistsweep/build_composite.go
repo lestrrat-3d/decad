@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -213,6 +214,10 @@ func evalComposite(ctx context.Context, env topo.Env,
 	if err != nil {
 		return nil, err
 	}
+	charge, err := placementCharge(xform)
+	if err != nil {
+		return nil, err
+	}
 	theta, err := angle.In(units.Radian)
 	if err != nil {
 		return nil, err
@@ -297,12 +302,15 @@ func evalComposite(ctx context.Context, env topo.Env,
 		delta = max(delta, proofbound.AbsSumUpper(ideal, held[i].Delta))
 		volSymDiff = proofbound.AbsSumUpper(volSymDiff, swept, held[i].Proof.VolSymDiff)
 	}
+	// The cell departures and section tubes are plane-local; the mesh and
+	// every reading below are of their images under the placement.
+	delta, volSymDiff = chargeBoundary(charge, delta, volSymDiff)
 	if proofbound.IsNonFinite(delta) || proofbound.IsNonFinite(volSymDiff) {
 		return nil, fmt.Errorf(`%w: twisted sweep has no finite boundary proof`, decaderr.ErrUnsupported)
 	}
 	length := proofbound.IntervalAdd(proofbound.PointInterval(TwistRat(geometry.Height)),
 		proofbound.IntervalScale(proofbound.HalfPiIv, TwistRat(geometry.Radius)))
-	volumeIv := proofbound.IntervalScale(length, poly.Area)
+	volumeIv := charge.VolumeInterval(proofbound.IntervalScale(length, poly.Area))
 	// This gate rejects a certificate that merely permits the whole true
 	// body to be missing. The admitted mesh must have a local, useful bound.
 	if TwistRat(volSymDiff).Cmp(volumeIv.Lo) >= 0 {
@@ -321,6 +329,7 @@ func evalComposite(ctx context.Context, env topo.Env,
 	if err != nil {
 		return nil, err
 	}
+	trueAreaIv = charge.AreaInterval(trueAreaIv)
 	mesh.AreaSlack = proofbound.RatFloatUp(proofbound.IntervalAbsUpper(
 		proofbound.IntervalSub(trueAreaIv, heldAreaIv)))
 	if proofbound.IsNonFinite(mesh.AreaSlack) {
@@ -332,7 +341,7 @@ func evalComposite(ctx context.Context, env topo.Env,
 		Exactness: measurement.ExactnessOf(volumeBound)}
 	body.Area = measurement.Measurement{Value: units.SquareMillimeters(area), Bound: units.SquareMillimeters(areaBound),
 		Exactness: measurement.ExactnessOf(areaBound)}
-	if err := publishCompositeTwistCentroid(body, xform, geometry, poly, length); err != nil {
+	if err := publishCompositeTwistCentroid(body, xform, charge, geometry, poly, length); err != nil {
 		return nil, err
 	}
 	minV, maxV := mesh.Vertices[0], mesh.Vertices[0]
@@ -368,7 +377,7 @@ func evalComposite(ctx context.Context, env topo.Env,
 	return body, nil
 }
 
-func publishCompositeTwistCentroid(body *topo.Body, xform r3.Transform,
+func publishCompositeTwistCentroid(body *topo.Body, xform r3.Transform, charge massmoment.MapCharge,
 	geometry TwistCardinalPath, poly TwistPolygon, length proofbound.RatInterval) error {
 	h, radius := TwistRat(geometry.Height), TwistRat(geometry.Radius)
 	xNum := proofbound.IntervalScale(proofbound.IntervalSub(proofbound.HalfPiIv,
@@ -395,6 +404,12 @@ func publishCompositeTwistCentroid(body *topo.Body, xform r3.Transform,
 	round := proofbound.RigidRoundAllow(max(math.Abs(x), math.Abs(z)),
 		max(math.Abs(translation.X), math.Abs(translation.Y), math.Abs(translation.Z)))
 	bound := proofbound.AbsSumUpper(xb, zb, correction, round)
+	if charge.Stretch > 0 {
+		// The plane-local centroid's error moves through B, which stretches
+		// a length by at most its defect; Apply's rounding is already placed.
+		bound = proofbound.AbsSumUpper(bound,
+			proofbound.ProductUpper(charge.Stretch, proofbound.AbsSumUpper(xb, zb, correction)))
+	}
 	if proofbound.IsNonFinite(bound) || !proofbound.FiniteVec(world) {
 		return fmt.Errorf(`%w: twisted sweep centroid has no finite bound`, decaderr.ErrUnsupported)
 	}

@@ -160,6 +160,45 @@ func (c MapCharge) AreaOf(x proofbound.BoundedScalar) proofbound.BoundedScalar {
 	return proofbound.BoundedStretch(x, c.Stretch)
 }
 
+// VolumeInterval widens an exact plane-coordinate volume enclosure to cover
+// its image: L scales the volume by exactly |det L|, which lies within Volume
+// of 1, so the image of any x in iv lies within Volume·max(|lo|, |hi|) of x.
+// A zero Volume returns iv itself.
+func (c MapCharge) VolumeInterval(iv proofbound.RatInterval) proofbound.RatInterval {
+	return stretchInterval(iv, c.Volume)
+}
+
+// AreaInterval widens an exact plane-coordinate enclosure of a nonnegative
+// area to cover its image, which lies within Stretch·|x| of the area x. A zero
+// Stretch returns iv itself.
+func (c MapCharge) AreaInterval(iv proofbound.RatInterval) proofbound.RatInterval {
+	return stretchInterval(iv, c.Stretch)
+}
+
+// AreaSlackOf widens slack, an allowance on how far a held mesh's area lies
+// from a true area enclosed by iv, when the allowance's own terms are
+// plane-coordinate lengths and areas while the mesh it was read against is
+// placed. Each such term grows by at most the factor 1 + Stretch under the
+// map, and the true area's image lies within Stretch·max(|lo|, |hi|) of the
+// plane-coordinate area, so the result is slack·(1 + Stretch) +
+// Stretch·max(|lo|, |hi|). A zero Stretch returns slack itself.
+func (c MapCharge) AreaSlackOf(slack float64, iv proofbound.RatInterval) float64 {
+	if c.Stretch <= 0 {
+		return slack
+	}
+	stretched := proofbound.BoundedStretch(proofbound.MeasuredScalar(0, slack), c.Stretch).Bound
+	return proofbound.AbsSumUpper(stretched,
+		proofbound.ProductUpper(c.Stretch, proofbound.RatFloatUp(proofbound.IntervalAbsUpper(iv))))
+}
+
+func stretchInterval(iv proofbound.RatInterval, r float64) proofbound.RatInterval {
+	if r <= 0 {
+		return iv
+	}
+	w := new(big.Rat).Mul(proofarith.FloatRat(r), proofbound.IntervalAbsUpper(iv))
+	return proofbound.Interval(new(big.Rat).Sub(iv.Lo, w), new(big.Rat).Add(iv.Hi, w))
+}
+
 // LengthBound is the bound a plane-coordinate length and its bound carry
 // once widened to cover the curve's image.
 func (c MapCharge) LengthBound(value, bound float64) float64 {
