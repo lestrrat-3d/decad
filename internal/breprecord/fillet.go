@@ -269,12 +269,14 @@ func attachFilletBand(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 		// under the contour foot, from that foot at F's level down to the side
 		// vertex.
 		//
-		// Its axis is the straight neighbour's own walk direction, the very
-		// value that wall's cylinder carries as its Axis, up to sign, so a
+		// Given a straight walk, its axis is that walk's own direction, the
+		// very value the walk's cylinder carries as its Axis, up to sign, so a
 		// consumer comparing the two compares equal values: the cross product
 		// of the foot's normal with up is perpendicular to the walk only to
-		// rounding. A meridian with no straight wall beside it (two circular
-		// walks) keeps that cross product.
+		// rounding. Given none it keeps that cross product. An LF5 meridian
+		// passes the first straight walk of the two it joins; an LF6 meridian
+		// passes only the one walk whose wall it bounds, so it keeps the cross
+		// product whenever that walk is circular, even beside a straight walk.
 		meridian := func(foot sectionrecord.Point2, v survey2d.SideWalk, straight *survey2d.SideWalk, capV, sideV *topo.Vertex) *topo.Edge {
 			nu, nv := foot.U-v.StartU, foot.V-v.StartV
 			l := math.Hypot(nu, nv)
@@ -302,7 +304,11 @@ func attachFilletBand(ctx context.Context, alloc topo.Alloc, body *topo.Body, re
 					return nil, bandMass{}, fmt.Errorf(`%w: fillet band %d's LF6 corner %d has no connector arc`, decaderr.ErrUnsupported, bi, k)
 				}
 				arc.Convex = convex
-				trail[k] = meridian(j.PA, w, straightWalk(w, nil), arc.Start, sideV)
+				// The connector arc runs from the previous walk's offset foot
+				// PA to this walk's PB, so the trailing meridian stands on the
+				// previous walk's wall and takes that walk's axis.
+				prev := fr.Walks[(k+n-1)%n]
+				trail[k] = meridian(j.PA, w, straightWalk(prev, nil), arc.Start, sideV)
 				lead[k] = meridian(j.PB, w, straightWalk(w, nil), arc.End, sideV)
 			case filletband.Tangent:
 				prev := fr.Walks[(k+n-1)%n]
