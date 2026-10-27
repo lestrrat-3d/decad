@@ -458,3 +458,49 @@ func TestConcaveEdgeAgreesWithTheEdgeScan(t *testing.T) {
 	require.Greater(t, concave, 50)
 	require.Greater(t, convexOnly, 20, "a single box has no concave edge")
 }
+
+func TestMinWallAgreesWithTheShortestRunOfCubes(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(13, 14))
+	checked, thin := 0, 0
+	for range 400 {
+		a := randomVoxels(rng)
+		v, tris, _, ok := a.mesh()
+		if !ok {
+			continue
+		}
+		// The thinnest wall is the shortest maximal run of solid cubes along any line of cubes parallel to an axis.
+		want := math.Inf(1)
+		for axis := range 3 {
+			for p := range gridSide {
+				for q := range gridSide {
+					run := 0
+					for k := 0; k <= gridSide; k++ {
+						var c [3]int
+						c[axis], c[(axis+1)%3], c[(axis+2)%3] = k, p, q
+						if a.at(c[0], c[1], c[2]) {
+							run++
+							continue
+						}
+						if run > 0 {
+							want = math.Min(want, float64(run))
+						}
+						run = 0
+					}
+				}
+			}
+		}
+		got, bound, err := orthoshell.MinWall(v, tris)
+		if err != nil {
+			require.True(t, declines(err), "%v", err)
+			continue
+		}
+		checked++
+		require.InDelta(t, want, got, bound+1e-9, "a set of %d cubes", a.count())
+		if want == 1 {
+			thin++
+		}
+	}
+	require.Greater(t, checked, 200)
+	require.Greater(t, thin, 20, "carving leaves cubes of one thick often enough")
+}
