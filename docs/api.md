@@ -226,6 +226,15 @@ are lines, arcs or circles: a sphere cut by a coaxial disk or shaft, or two coax
 sphere, torus, cone, cylinder and plane faces (an off-axis circle meridian gives torus faces). A shared arc or
 circle span between the operands, or a contact at a pole or an edge, is not joined this way.
 
+A plain turned shaft, a full `decad.Revolve` of a rectangle with one side on an axis that runs along the sketch's
+U or V, is cut exactly as the circular `decad.Extrude` it equals. A box tool at right angles to the shaft, drawn
+on a datum plane and running past both shaft ends, gives a D-flat or a keyway with no `Faceted` face, and a
+`decad.Thread` on its cut wall builds. Both operands must keep the same placement: a shaft or a tool placed by
+`decad.Transform` takes the faceted path, as do a tool that ends inside the shaft's length, a stepped shaft and a
+tube. `Fillet` and `Chamfer` refuse the exact flat's edges, as they do for an extruded shaft. To blend those edges,
+place the tool by `decad.Transform`: the faceted result keeps the shaft's plane and cylinder faces, and the blend
+builds on them.
+
 A two-body `Union`, `Cut` or `Intersect` that would be refused because an operand is the mesh result of earlier Booleans is retried from
 the source bodies of that chain, when all but one pair combine by exact routes. The result is the same solid. Its
 history records the one call, and faces made by the exact steps carry fresh roles, so select them by geometry.
