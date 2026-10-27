@@ -281,8 +281,9 @@ func triTriSpan(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xpt, pa, p
 			return span, false, nil
 		}
 	}
-	ptsA := planeCrossingsPrepared(xta, xtb[0], nb, signsA)
-	ptsB := planeCrossingsPrepared(xtb, xta[0], na, signsB)
+	var ptsABuf, ptsBBuf [3]proof.Xpt
+	ptsA := ptsABuf[:planeCrossingsPreparedInto(&ptsABuf, xta, xtb[0], nb, signsA)]
+	ptsB := ptsBBuf[:planeCrossingsPreparedInto(&ptsBBuf, xtb, xta[0], na, signsB)]
 	if len(ptsA) == 0 || len(ptsB) == 0 {
 		return span, false, nil
 	}
@@ -615,7 +616,13 @@ func PlaneCrossings(xt [3]proof.Xpt, xo [3]proof.Xpt, signs [3]int) []proof.Xpt 
 // and origin weights are common to all plane-side values and cancel from the
 // edge crossing ratio.
 func planeCrossingsPrepared(xt [3]proof.Xpt, origin, normal proof.Xpt, signs [3]int) []proof.Xpt {
-	var out []proof.Xpt
+	var out [3]proof.Xpt
+	n := planeCrossingsPreparedInto(&out, xt, origin, normal, signs)
+	return out[:n]
+}
+
+func planeCrossingsPreparedInto(out *[3]proof.Xpt, xt [3]proof.Xpt, origin, normal proof.Xpt, signs [3]int) int {
+	n := 0
 	nums := [3]*big.Int{}
 	var base *big.Int
 	val := func(i int) *big.Int {
@@ -636,14 +643,16 @@ func planeCrossingsPrepared(xt [3]proof.Xpt, origin, normal proof.Xpt, signs [3]
 	}
 	for i := range 3 {
 		if signs[i] == 0 {
-			out = append(out, xt[i])
+			out[n] = xt[i]
+			n++
 		}
 		j := (i + 1) % 3
 		if signs[i]*signs[j] < 0 {
-			out = append(out, proof.XplaneCrossing(xt[i], xt[j], val(i), val(j)))
+			out[n] = proof.XplaneCrossing(xt[i], xt[j], val(i), val(j))
+			n++
 		}
 	}
-	return out
+	return n
 }
 
 func CountZero(s [3]int) int {
