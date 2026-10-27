@@ -786,8 +786,21 @@ sections.
 
 Proof, gathering and station work are per patch, per section or per ring, so
 cost is linear in the section count, and they run on all CPUs. The crossing
-audit is the only global step, bounded by the triangle and scan ceilings. The
-mesh needs rings about every 0.04 mm of height for a moving tooth, whatever
+audit is the only global step, bounded by the triangle and scan ceilings.
+Each patch's exact work runs on integers: its 32 control coordinates are
+written as numerators over one positive denominator `d`, the least common
+multiple of theirs (`twistCommon`). A positive scale keeps every sign and
+every order, so the polar coefficients of §13.2 decide the same cells and
+verdicts from their numerators, and the §13.3 maxima select the same control
+differences; each bound is reduced once, as numerator times its factor over
+`d`. A held station is a numerator over `d·n_u³·n_t³` (the Bernstein weights
+at `a/n_u` and `b/n_t` are integers over those cubes, and the float origin
+is a dyadic). It rounds from that numerator and denominator to the float
+that `big.Rat` rounding of the same value gives (`proof.FracFloat64`), and
+its rounding distance is the exact difference from that float, compared
+with the ring's largest by cross multiplication. No float decides anything,
+and every vertex and published number equals the reduced-rational
+evaluation bit for bit. The mesh needs rings about every 0.04 mm of height for a moving tooth, whatever
 the section spacing, so the triangle count follows the height and the
 tolerance and not the section count. The whole 68-tooth screw-gear ribbon,
 686 sections at 0.26 mm (178.1 mm), holds 449684 triangles at `τ = 0.03 mm`
@@ -803,7 +816,7 @@ and a table that fine would need about two million triangles.
 
 ### 13.6 Size and provability
 
-The route is about 700 lines of Go in `internal/smoothloft/` (patch algebra
+The route is about 1000 lines of Go in `internal/smoothloft/` (patch algebra
 and admission, gathering, mesh and bounds) plus 60 in the root glue. Every
 bound above is a closed-form rational expression over exact control nets, so
 the error bound is provable as stated. No numeric search or sampled residual

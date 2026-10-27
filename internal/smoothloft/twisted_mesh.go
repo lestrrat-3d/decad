@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/triangulation"
@@ -93,18 +94,22 @@ func twistCounts(ctx context.Context, bounds [][]twistBounds, target *big.Rat) (
 	return nu, nt, nil
 }
 
+// twistStation is the station u = a/nu[span].
 type twistStation struct {
 	span int
-	u    *big.Rat
+	a    int64
 }
 
 func buildTwistedMesh(ctx context.Context, patches [][]twistPatch, edgeOf []int, edges int,
 	planes []sectionrecord.PlaneRecord, zs []*big.Rat) (Build, error) {
 	bounds := make([][]twistBounds, len(patches))
+	commons := make([][]*twistCommon, len(patches))
 	for k := range patches {
 		bounds[k] = make([]twistBounds, len(patches[k]))
+		commons[k] = make([]*twistCommon, len(patches[k]))
 		for i := range patches[k] {
-			bounds[k][i] = patches[k][i].bounds()
+			commons[k][i] = patches[k][i].overCommon()
+			bounds[k][i] = commons[k][i].bounds()
 		}
 	}
 	var nu, nt []int
@@ -131,7 +136,7 @@ func buildTwistedMesh(ctx context.Context, patches [][]twistPatch, edgeOf []int,
 	var stationEdge []int
 	for k := range patches {
 		for a := range nu[k] {
-			stations = append(stations, twistStation{span: k, u: big.NewRat(int64(a), int64(nu[k]))})
+			stations = append(stations, twistStation{span: k, a: int64(a)})
 			stationEdge = append(stationEdge, edgeOf[k])
 		}
 	}
@@ -147,11 +152,11 @@ func buildTwistedMesh(ctx context.Context, patches [][]twistPatch, edgeOf []int,
 		}
 	}
 	origin := planes[0].Origin
-	ox, oy := rf(origin.X), rf(origin.Y)
-	weights := make([][4]*big.Rat, ringSize)
+	o := twistOriginOf(rf(origin.X), rf(origin.Y))
+	weights := make([][4]int64, ringSize)
 	spanStart := make([]int, len(patches)+1)
 	for q, st := range stations {
-		weights[q] = twistBernstein3(st.u)
+		weights[q] = twistBernsteinScaled(st.a, int64(nu[st.span]))
 		spanStart[st.span+1] = q + 1
 	}
 	rhos := make([]*big.Rat, len(rings))
@@ -162,24 +167,26 @@ func buildTwistedMesh(ctx context.Context, patches [][]twistPatch, edgeOf []int,
 		t := big.NewRat(int64(rg.band), int64(nt[rg.span]))
 		z := add(zs[rg.span], mul(sub(zs[rg.span+1], zs[rg.span]), t))
 		zf, _ := z.Float64()
-		bt := twistBernstein3(t)
-		rho := new(big.Rat)
+		wt := twistBernsteinScaled(int64(rg.band), int64(nt[rg.span]))
+		var rho twistRoundMax
+		var x, y big.Int
 		for k := range patches {
-			row := patches[k][rg.span].blendT(bt)
+			curve := commons[k][rg.span].curveAt(wt, nu[k], nt[rg.span], o)
 			for q := spanStart[k]; q < spanStart[k+1]; q++ {
-				p := blendRow(row, weights[q])
-				x, y := add(p.U, ox), add(p.V, oy)
-				xf, _ := x.Float64()
-				yf, _ := y.Float64()
+				curve.point(weights[q], &x, &y)
+				xf := proof.FracFloat64(&x, &curve.den)
+				yf := proof.FracFloat64(&y, &curve.den)
 				v := r3.Vec{X: xf, Y: yf, Z: zf}
 				if !proofbound.FiniteVec(v) {
 					return twistUnsupported("twisted loft station exceeds float64")
 				}
 				verts[r*ringSize+q] = v
-				rho = maxRat(rho, add(add(abs(sub(x, rf(xf))), abs(sub(y, rf(yf)))), abs(sub(z, rf(zf)))))
+				rho.keep(&x, &y, &curve.den, xf, yf)
 			}
 		}
-		rhos[r] = rho
+		// Z is the same at every station of the ring, so its rounding adds
+		// to the largest planar rounding.
+		rhos[r] = add(rho.rat(), abs(sub(z, rf(zf))))
 		return nil
 	})
 	if err != nil {
@@ -268,6 +275,61 @@ func buildTwistedMesh(ctx context.Context, patches [][]twistPatch, edgeOf []int,
 		}
 	}
 	return result, nil
+}
+
+// twistRoundMax keeps the largest exact planar rounding |x/d − xf| +
+// |y/d − yf| of a ring's stations as the fraction num/den, comparing
+// fractions by cross multiplication so no GCD reduces them. Its zero value
+// holds zero.
+type twistRoundMax struct {
+	num, den    big.Int
+	n, dn, t, u big.Int
+}
+
+// keep charges one station: x/d and y/d are its exact coordinates, d > 0,
+// and xf, yf the finite floats they round to. With f = m·2^e, |x/d − f| is
+// |x·2^s − m·d·2^(e+s)| / (d·2^s) for any s >= −e.
+func (r *twistRoundMax) keep(x, y, d *big.Int, xf, yf float64) {
+	mx, ex := twistMantExp(xf)
+	my, ey := twistMantExp(yf)
+	s := max(0, -ex, -ey)
+	r.n.Lsh(x, uint(s))
+	r.t.Lsh(r.t.Mul(d, big.NewInt(mx)), uint(ex+s))
+	r.n.Sub(&r.n, &r.t)
+	r.n.Abs(&r.n)
+	r.u.Lsh(y, uint(s))
+	r.t.Lsh(r.t.Mul(d, big.NewInt(my)), uint(ey+s))
+	r.u.Sub(&r.u, &r.t)
+	r.n.Add(&r.n, r.u.Abs(&r.u))
+	r.dn.Lsh(d, uint(s))
+	if r.den.Sign() == 0 {
+		r.num.Set(&r.n)
+		r.den.Set(&r.dn)
+		return
+	}
+	// n/dn > num/den exactly when n·den > num·dn, both denominators positive.
+	if r.t.Mul(&r.n, &r.den).Cmp(r.u.Mul(&r.num, &r.dn)) > 0 {
+		r.num.Set(&r.n)
+		r.den.Set(&r.dn)
+	}
+}
+
+// rat is the largest charged rounding, zero when nothing was charged.
+func (r *twistRoundMax) rat() *big.Rat {
+	if r.den.Sign() == 0 {
+		return new(big.Rat)
+	}
+	return new(big.Rat).SetFrac(&r.num, &r.den)
+}
+
+// twistMantExp writes a finite f as m·2^e with m an integer of at most 53
+// bits.
+func twistMantExp(f float64) (int64, int) {
+	if f == 0 {
+		return 0, 0
+	}
+	frac, exp := math.Frexp(f)
+	return int64(frac * (1 << 53)), exp - 53
 }
 
 // twistTriangleCount is the held triangle count of a station table.
