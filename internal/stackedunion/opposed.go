@@ -121,8 +121,8 @@ func OpposedCut(ctx context.Context, budget *proofbound.WorkBudget, oc stackedre
 		}
 	}
 	geom.RecordJunctions(n)
-	// Every span both sides share lies on one exact line, and every line edge
-	// ends exactly on its own carrier, so two axis-aligned lines meet at exact
+	// Every span both sides share lies on one exact line, and every genuinely
+	// cut line end lies on its own carrier, so axis-aligned lines meet at exact
 	// levels. A line crossing a circle is the engine's keyed vertex: the
 	// line's walked point with its fixed coordinate exact, charged its walk,
 	// cut and proven crossing distances. The engine's largest vertex allowance
@@ -139,7 +139,7 @@ type opposedCell struct {
 
 // opposedCells arranges the exclusive holes' interiors in one private scene
 // and records its floor and ceiling cells. Every partial edge must carry
-// TExact, every line edge must end exactly on its own carrier, the scene must
+// TExact, every cut line end must lie exactly on its own carrier, the scene must
 // carry no walk charge, every shared span must lie on one exact line, every
 // cell must classify, every meeting of a curve with the other side must be a
 // crossing the arrangement cut (prismcells.CurvedCrossingsCut), and the holes
@@ -190,12 +190,8 @@ func opposedCells(ctx context.Context, budget *proofbound.WorkBudget,
 				// identity band. Where the displaced line's own endpoint ends
 				// the merged span, no span reaches the coincident reading, but
 				// the edge then ends off its own carrier.
-				if _, isLine := edge.Entity.(*sketch.Line); isLine {
-					if len(edge.Polyline) == 0 ||
-						!prismcells.OnLineCarrier(edge.Polyline[0], edge.Entity) ||
-						!prismcells.OnLineCarrier(edge.Polyline[len(edge.Polyline)-1], edge.Entity) {
-						return nil, errUBMiss
-					}
+				if !opposedLineCutsOnCarrier(edge) {
+					return nil, errUBMiss
 				}
 			}
 		}
@@ -272,6 +268,26 @@ func opposedCells(ctx context.Context, budget *proofbound.WorkBudget,
 		out = append(out, opposedCell{region: region, floor: classes[i] == opposedFloor})
 	}
 	return out, nil
+}
+
+// opposedLineCutsOnCarrier falsifies sampled line ends only where sketch cut
+// them. Whole edges and natural bounds record their own defining endpoints;
+// their snapped polyline nodes may instead come from a rounded circle walk.
+// RecordArrangedProfileContext checks closure using those authored endpoints
+// (sketch-seam §1). The separate TExact gate still decides every fragment.
+func opposedLineCutsOnCarrier(edge sketch.BoundaryEdge) bool {
+	if _, line := edge.Entity.(*sketch.Line); !line || !edge.Partial {
+		return true
+	}
+	if len(edge.Polyline) < 2 {
+		return false
+	}
+	cutStart, cutEnd := edge.TStart != 0, edge.TEnd != 1
+	if edge.Reversed {
+		cutStart, cutEnd = cutEnd, cutStart
+	}
+	return (!cutStart || prismcells.OnLineCarrier(edge.Polyline[0], edge.Entity)) &&
+		(!cutEnd || prismcells.OnLineCarrier(edge.Polyline[len(edge.Polyline)-1], edge.Entity))
 }
 
 // opposedManifold refuses opposed holes that touch. A floor and a ceiling

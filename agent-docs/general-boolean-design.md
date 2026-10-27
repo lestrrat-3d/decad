@@ -655,12 +655,16 @@ some B region and no A region is a floor: the lower slab's material under an
 upper hole, facing up. A cell inside some A region and no B region is a
 ceiling, facing down. A cell inside both is open through both slabs and has no
 face. Sketch also merges two lines as one shared span when their carriers
-differ within its identity band, so two more checks refuse. Every line edge's
-walked ends must lie exactly on its own entity's carrier
+differ within its identity band, so two more checks refuse. Every genuinely
+cut line end must lie exactly on its own entity's carrier
 (`prismcells.OnLineCarrier`, exact rational arithmetic over the held floats).
 Where the displaced line's own endpoint ends the merged span, the coincident
-reading records no span, and only this check sees the edge ending off its
-carrier. Every shared span the reading does record must also pass
+reading records no span, and only this check sees the cut end off its
+carrier. Read sampled ends only at genuinely cut bounds: whole edges and
+uncut bounds use their authored endpoints, under sketch-seam §1's recording
+and loop-closure rules. A circle's shared sampled junction may round off a
+whole line's carrier without changing that line's authored endpoint.
+Every shared span the reading does record must also pass
 `prismcells.CoincidentReading.ExactLineCarriers`: both recorded lines lie on
 precisely one line. A lower or upper hole's edge 1e-12 mm or one ulp off the
 other side's edge misses, in either orientation. A span on a circle carrier,
