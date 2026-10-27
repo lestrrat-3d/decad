@@ -12,7 +12,8 @@ The rules for rows live in `agent-docs/layout.md`.
 | `tessellate.go` | `Mesh`, `Body.Tessellate`, its mesh cache and proof withholding, and the call into `internal/tessdispatch/`. See tessellation design, surface §10.1. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and mesh proof publication. See tessellation §1, §4. |
 | `mesh_body.go` | Public `MeshBody`, `MeshReport` and `NewMeshBody`: the imported triangle mesh and its bounds, area, volume and point readings. `internal/meshbody/` reads the triangles. See mesh-import design. |
-| `solid_from_mesh.go` | Public `SolidFromMesh`: gates, the exact crossing audit and mesh audit, exact plane groups, then `facetedrecord.BuildWithProof` and one commit. See mesh-solid design. |
+| `solid_from_mesh.go` | Public `SolidFromMesh`: gates, the exact crossing audit and mesh audit, plane groups by `internal/meshplane/` tagged when square to an axis, then `facetedrecord.BuildWithProof` and one commit. See mesh-solid design. |
+| `internal/meshplane/` | Exact dyadic plane groups of a mesh's triangles and each group's exact area centroid. See mesh-solid design M4, §7. |
 | `mesh_import.go` | Public `ReadSTL`, `ReadOBJ`, `ReadThreeMF`, `ReadSTEP`, their options and `ErrMalformedMesh`, `ErrMeshTooLarge`: limits, then `internal/meshparse/` parses and `NewMeshBody` reads the result. See mesh-import design. |
 | `mesh_repair.go` | Public `RepairMesh`, its options and `MeshRepairReport`: option gates, then `internal/meshrepair/` mends and `NewMeshBody` reads the result. See mesh-import design §7. |
 | `mesh_refine.go` | Public `RefineMesh`: gates, then `internal/meshrefine/` splits long edges and `NewMeshBody` reads the result. See mesh-import design §11. |

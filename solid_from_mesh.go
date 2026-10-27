@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/meshplane"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -123,143 +124,39 @@ func solidFromMeshBodyAt(ctx context.Context, d *Document, m *MeshBody, ref prod
 	return bodyHandle(node), nil
 }
 
-// meshPlaneGroups assigns each triangle a source group: triangles whose vertices lie on
-// one plane share a group, the plane found exactly from the floats the vertices hold, as
-// the normal (b−a)×(c−a) and offset n·a of each triangle divided by the first non-zero
-// magnitude among its normal's parts, so a plane and its triangles' orientation have one key.
-// A triangle of no area is a group of its own.
+// meshPlaneGroups assigns each triangle a source group by meshplane.Groups: triangles whose vertices lie on one
+// oriented plane share a group, found exactly from the floats the vertices hold, and a triangle of no area is a
+// group of its own. It stays in the root to tag a group square to a world axis by axisAlignedFrame.
 func meshPlaneGroups(producer provenance.Producer, verts []r3.Vec, tris [][3]int) ([]int, []facetedrecord.Group) {
-	exact := func(v r3.Vec) [3]*big.Rat {
-		return [3]*big.Rat{proofarith.FloatRat(v.X), proofarith.FloatRat(v.Y), proofarith.FloatRat(v.Z)}
-	}
-	sub := func(a, b [3]*big.Rat) [3]*big.Rat {
-		var out [3]*big.Rat
-		for i := range out {
-			out[i] = new(big.Rat).Sub(a[i], b[i])
+	src, planes := meshplane.Groups(verts, tris)
+	groups := make([]facetedrecord.Group, len(planes))
+	for gi, p := range planes {
+		group := facetedrecord.Group{
+			Origins:     []provenance.Ref{{Producer: producer, Role: fmt.Sprintf("mesh_face(%d)", gi)}},
+			Planar:      p.Planar,
+			Centroid:    p.Centroid,
+			HasCentroid: p.HasCentroid,
 		}
-		return out
-	}
-	cross := func(u, v [3]*big.Rat) [3]*big.Rat {
-		term := func(a, b, c, d *big.Rat) *big.Rat {
-			return new(big.Rat).Sub(new(big.Rat).Mul(a, b), new(big.Rat).Mul(c, d))
+		at := verts[tris[p.First][0]]
+		if frame, ok := axisAlignedFrame(p.Normal, at); ok {
+			// The plane's coordinate is a float vertex's own and its normal an exact unit axis,
+			// so the tag is the true plane with no departure: a retained plane.
+			group.Surface, group.Retained = surfacegeom.Plane{Frame: frame}, true
+			// The plane is also its own record at level zero, held and denoted alike with no displacement, so
+			// a ToFace stop can read it (agent-docs/mesh-solid-design.md §6).
+			group.CapRecord = &topo.CapRecord{Frame: frame, Xform: r3.Identity(), Z: 0, ZDenoted: new(big.Rat)}
+			group.HasAxialDelta = true
 		}
-		return [3]*big.Rat{term(u[1], v[2], u[2], v[1]), term(u[2], v[0], u[0], v[2]), term(u[0], v[1], u[1], v[0])}
-	}
-	index := map[string]int{}
-	src := make([]int, len(tris))
-	var groups []facetedrecord.Group
-	var sums []planeSums
-	for ti, t := range tris {
-		a, b, c := exact(verts[t[0]]), exact(verts[t[1]]), exact(verts[t[2]])
-		n := cross(sub(b, a), sub(c, a))
-		key, planar := fmt.Sprintf("triangle %d", ti), false
-		for _, part := range n {
-			if part.Sign() == 0 {
-				continue
-			}
-			scale := new(big.Rat).Abs(part)
-			offset := new(big.Rat)
-			for i := range n {
-				offset.Add(offset, new(big.Rat).Mul(n[i], a[i]))
-			}
-			key = fmt.Sprintf("%s %s %s %s", new(big.Rat).Quo(n[0], scale).RatString(), new(big.Rat).Quo(n[1], scale).RatString(),
-				new(big.Rat).Quo(n[2], scale).RatString(), new(big.Rat).Quo(offset, scale).RatString())
-			planar = true
-			break
-		}
-		gi, ok := index[key]
-		if !ok {
-			gi = len(groups)
-			index[key] = gi
-			group := facetedrecord.Group{
-				Origins: []provenance.Ref{{Producer: producer, Role: fmt.Sprintf("mesh_face(%d)", gi)}},
-				Planar:  planar,
-			}
-			if frame, ok := axisAlignedFrame(n, verts[t[0]]); ok {
-				// The plane's coordinate is a float vertex's own and its normal an exact unit axis,
-				// so the tag is the true plane with no departure: a retained plane.
-				group.Surface, group.Retained = surfacegeom.Plane{Frame: frame}, true
-				// The plane is also its own record at level zero, held and denoted alike with no displacement, so
-				// a ToFace stop can read it (agent-docs/mesh-solid-design.md §6).
-				group.CapRecord = &topo.CapRecord{Frame: frame, Xform: r3.Identity(), Z: 0, ZDenoted: new(big.Rat)}
-				group.HasAxialDelta = true
-			}
-			groups = append(groups, group)
-			sums = append(sums, planeSums{normal: n})
-		}
-		src[ti] = gi
-		if planar {
-			// Coplanar triangles of one orientation have areas in the ratio of their normals' dot products with the
-			// group's first normal, so the centroid weights are exact rationals.
-			sums[gi].add(n, a, b, c)
-		}
-	}
-	for gi := range groups {
-		if groups[gi].Planar {
-			groups[gi].Centroid, groups[gi].HasCentroid = sums[gi].centroid()
-		}
+		groups[gi] = group
 	}
 	return src, groups
-}
-
-// planeSums accumulates, for the triangles of one plane group, the exact weighted sum of their centroids.
-type planeSums struct {
-	normal [3]*big.Rat
-	weight *big.Rat
-	moment [3]*big.Rat
-}
-
-// add counts the triangle abc of normal n, its weight the dot product of n and the group's first normal.
-func (p *planeSums) add(n, a, b, c [3]*big.Rat) {
-	w := new(big.Rat)
-	for i := range n {
-		w.Add(w, new(big.Rat).Mul(n[i], p.normal[i]))
-	}
-	if p.weight == nil {
-		p.weight = new(big.Rat)
-		for i := range p.moment {
-			p.moment[i] = new(big.Rat)
-		}
-	}
-	p.weight.Add(p.weight, w)
-	for i := range p.moment {
-		corner := new(big.Rat).Add(a[i], b[i])
-		corner.Add(corner, c[i])
-		p.moment[i].Add(p.moment[i], corner.Mul(corner, w))
-	}
-}
-
-// centroid is the area centroid of the group's triangles, the exact rational rounded to the nearest float per
-// coordinate, with the largest rounding error as its bound, rounded upward. The vertices are held exactly, so
-// that rounding is the whole error.
-func (p *planeSums) centroid() (measurement.VecMeasurement, bool) {
-	if p.weight == nil || p.weight.Sign() <= 0 {
-		return measurement.VecMeasurement{}, false
-	}
-	var coords [3]float64
-	var bound float64
-	three := big.NewRat(3, 1)
-	for i := range coords {
-		q := new(big.Rat).Quo(p.moment[i], new(big.Rat).Mul(p.weight, three))
-		f, _ := proofarith.RatFloat64(q)
-		coords[i] = f
-		bound = math.Max(bound, proofarith.RationalFloatError(q, f))
-	}
-	if math.IsInf(bound, 0) || math.IsNaN(bound) {
-		return measurement.VecMeasurement{}, false
-	}
-	return measurement.VecMeasurement{
-		Value:     r3.NewVec(coords[0], coords[1], coords[2]),
-		Exactness: measurement.ExactnessOf(bound),
-		Bound:     units.Millimeters(bound),
-	}, true
 }
 
 // axisAlignedFrame returns the frame of the plane through the float vertex at, when the
 // exact normal n has one non-zero part, so the plane is square to a world axis and its unit
 // normal and its offset are exact floats. The frame's normal is n's direction and its origin
 // is at.
-func axisAlignedFrame(n [3]*big.Rat, at r3.Vec) (r3.Frame, bool) {
+func axisAlignedFrame(n proofarith.DyV3, at r3.Vec) (r3.Frame, bool) {
 	axis := -1
 	for i, part := range n {
 		if part.Sign() == 0 {
