@@ -50,6 +50,9 @@ type InfillSpec struct {
 	Kind        LatticeKind
 	Cell, Level units.Value
 	Resolution  int
+	// Skin is the thickness of a solid skin the infill keeps round the part, a positive length. The zero value
+	// keeps none, and the lattice is the part's whole interior.
+	Skin units.Value
 }
 
 // Infill fills b with a lattice and returns the lattice material inside it: the lattice over a box
@@ -65,6 +68,60 @@ type InfillSpec struct {
 // The spec's errors are those of the lattice builders, an unknown Kind is ErrDegenerate and a nil
 // context or body ErrDegenerate. An intersection that leaves nothing is the Boolean's own error.
 func Infill(ctx context.Context, b *Body, spec InfillSpec) (*Body, error) {
+	if spec.Skin == (units.Value{}) {
+		return infillInterior(ctx, b, spec)
+	}
+	return infillWithSkin(ctx, b, spec)
+}
+
+// infillWithSkin is Infill for a spec with a Skin: the part's closed [Shell] of the skin's thickness joined by [Union]
+// to the lattice cut to the part, each built from its own copy of b. b is consumed when the whole join has built, and a
+// refusal at any step retires the copies made so far and leaves b live.
+func infillWithSkin(ctx context.Context, b *Body, spec InfillSpec) (result *Body, retErr error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control an infill`, ErrDegenerate)
+	}
+	if b == nil || b.n.Doc == nil {
+		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
+	}
+	var temporaries []*Body
+	defer func() {
+		if retErr != nil {
+			removeTools(temporaries)
+		}
+	}()
+	skinSource, err := Copy(ctx, b)
+	if err != nil {
+		return nil, err
+	}
+	temporaries = append(temporaries, skinSource)
+	fillSource, err := Copy(ctx, b)
+	if err != nil {
+		return nil, err
+	}
+	temporaries = append(temporaries, fillSource)
+	skin, err := Shell(ctx, skinSource, nil, spec.Skin, WithNoOpenings())
+	if err != nil {
+		return nil, fmt.Errorf("decad: the infill skin: %w", err)
+	}
+	temporaries = append(temporaries, skin)
+	interior := spec
+	interior.Skin = units.Value{}
+	fill, err := infillInterior(ctx, fillSource, interior)
+	if err != nil {
+		return nil, err
+	}
+	temporaries = append(temporaries, fill)
+	joined, err := Union(ctx, skin, fill)
+	if err != nil {
+		return nil, err
+	}
+	removeTools([]*Body{b})
+	return joined, nil
+}
+
+// infillInterior fills the whole of b with the lattice (Infill without a Skin).
+func infillInterior(ctx context.Context, b *Body, spec InfillSpec) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control an infill`, ErrDegenerate)
 	}
