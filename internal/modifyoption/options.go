@@ -51,6 +51,7 @@ type identTangentChain struct{}
 type identAsymmetricChamfer struct{}
 type identNoOpenings struct{}
 type identShellSense struct{}
+type identFaceThickness struct{}
 
 const (
 	shellInward = iota
@@ -96,6 +97,18 @@ func WithNoOpenings() ShellOption {
 	return shellOption{option.New(identNoOpenings{}, struct{}{})}
 }
 
+// FaceThickness is the thickness a shell gives the walls whose outward normal is a stated world axis direction.
+type FaceThickness struct {
+	// Axis is 0, 1 or 2 for X, Y or Z and Sign is +1 or -1 for the direction along it.
+	Axis, Sign int
+	T          units.Value
+}
+
+// WithFaceThickness records a wall thickness for the faces turned the way Axis and Sign say.
+func WithFaceThickness(f FaceThickness) ShellOption {
+	return shellOption{option.New(identFaceThickness{}, f)}
+}
+
 // WithShellSense records the root package's wall sense as its numeric value.
 func WithShellSense(s int) ShellOption {
 	return shellOption{option.New(identShellSense{}, s)}
@@ -114,8 +127,9 @@ type ChamferConfig[Q any] struct {
 
 // ShellConfig is the decoded Shell option set.
 type ShellConfig struct {
-	Sense      int
-	NoOpenings bool
+	Sense         int
+	NoOpenings    bool
+	FaceThickness []FaceThickness
 }
 
 // ErrOptionConflict reports an option list that names no single intent.
@@ -216,6 +230,17 @@ func DecodeShell(opts []ShellOption) (ShellConfig, error) {
 					shellSenseName(out.Sense), shellSenseName(v))
 			}
 			out.Sense, sensed = v, true
+		case identFaceThickness:
+			f, ok := option.Get[FaceThickness](o)
+			if !ok {
+				return ShellConfig{}, fmt.Errorf(`%w: WithShellFaceThickness carries no thickness`, decaderr.ErrDegenerate)
+			}
+			for _, have := range out.FaceThickness {
+				if have.Axis == f.Axis && have.Sign == f.Sign {
+					return ShellConfig{}, ErrOptionConflict(`WithShellFaceThickness names the same direction twice`)
+				}
+			}
+			out.FaceThickness = append(out.FaceThickness, f)
 		case identNoOpenings:
 			out.NoOpenings = true
 		default:

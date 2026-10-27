@@ -1786,6 +1786,8 @@
 7	0.01	TestContactPairRevolvedCylinderRefusesUnprovedDiskCorridor
 7	0.00	TestContactPairRotatedBoxContainedHorizontalFace
 7	0.00	TestContainerCrossRefusal
+10	0.01	TestShellGivesEachDirectionItsOwnThickness
+10	0.01	TestShellFaceThicknessRefusals
 7	0.00	TestCopyPreservesFilletRoles
 7	1.37	TestCutTwistedOffAxisSweepThroughTubeWall
 7	0.00	TestDegenerateSplineRecordRefuses
