@@ -1241,6 +1241,19 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   vertex. Hashes only choose which vertices to compare, and exact integer
   comparison confirms every hit, so a collision never merges two vertices.
   `internal/meshbool/cut_vertex_index.go` owns both tables.
+- **Build a facet's edge planes once per run of its pairs.** A contact
+  segment's boundary flags and along-edge record test each end against each
+  facet edge k: the side of `n × (b−a)` and its dot with corner a, then the
+  edge's dominant axis and end order. These values depend only on the facet's
+  exact corners and normal, which never change while the prepared mesh lives.
+  Each contact-batch goroutine therefore keeps the first operand's last facet's
+  planes, keyed by facet index, for one batch run over one mesh. A hit returns
+  the value a rebuild would, so every sign and every result is unchanged. The
+  pair's interval ends read each point's dot with the planes' common line once,
+  and comparisons cross-multiply the same integers as before. `sin²θ` stays an
+  unreduced fraction: its one reader, `RimBound`, needs only the nearest
+  float64, and that depends on the value alone (`proof.FracFloat64`).
+  `internal/meshbool/triangle_contact.go` owns all three.
 - **Share extra workers across independent core loops.** `orderedwork.ReserveWorkers`
   owns worker reservations for subdivision, `orderedwork.Each` loops and Loft
   pair classification. Keep caller polling and join workers before releasing

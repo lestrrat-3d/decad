@@ -113,8 +113,22 @@ type TriContact struct {
 	// sin2 is the exact squared sine of the two facet planes' crossing angle,
 	// nil for a coplanar or empty pair. A rim vertex this pair's segment ends
 	// at is displaced by (δA + δB)/sin θ of THIS pair (RimBound).
-	Sin2 *big.Rat
+	Sin2 *SinSquare
 }
+
+// SinSquare is an exact sin²θ held as the fraction Num/Den, Den > 0, in any
+// terms: the classifier never reduces it, because its one reader needs only
+// the nearest float64, which depends on the value alone.
+type SinSquare struct {
+	Num, Den *big.Int
+}
+
+// Float64 is the nearest float64 to Num/Den, ties to even: the bits
+// big.Rat.Float64 returns for the same value (proof.FracFloat64).
+func (s *SinSquare) Float64() float64 { return proof.FracFloat64(s.Num, s.Den) }
+
+// Rat is Num/Den in lowest terms.
+func (s *SinSquare) Rat() *big.Rat { return new(big.Rat).SetFrac(s.Num, s.Den) }
 
 // TriTriClassify computes the exact intersection of two CLOSED triangles: the
 // single symmetric entry point every contact question goes through. ta/tb are
@@ -149,6 +163,17 @@ type TriContactSpan struct {
 func TriTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xpt, pa, pb *[3]Xp2, sa, sb *[3]int,
 	useFilter bool, fna, fnb r3.Vec, normalsPrepared bool,
 ) (TriContact, error) {
+	return triTriClassify(ta, tb, xta, xtb, na, nb, pa, pb, sa, sb, useFilter, fna, fnb, normalsPrepared, nil, 0)
+}
+
+// triTriClassify is TriTriClassifyCore with an optional cache of the first
+// facet's edge planes. facetA names the first facet in the mesh the cache
+// belongs to; a nil cache builds the planes for this pair alone. The cache
+// changes only where the planes come from, never their value, so the result
+// is the one TriTriClassifyCore returns.
+func triTriClassify(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xpt, pa, pb *[3]Xp2, sa, sb *[3]int,
+	useFilter bool, fna, fnb r3.Vec, normalsPrepared bool, cacheA *edgePlaneCache, facetA int,
+) (TriContact, error) {
 	span, crossing, err := triTriSpan(ta, tb, xta, xtb, na, nb, pa, pb, sa, sb, useFilter, fna, fnb, normalsPrepared)
 	out := TriContact{EdgeA: -1, EdgeB: -1}
 	if err != nil {
@@ -160,8 +185,9 @@ func TriTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xp
 	}
 	out.Sin2 = SinSquared(na, nb)
 	if out.Kind == ContactSegment {
-		out.P0OnA, out.P1OnA, out.EdgeA = segmentBoundaryEdges(out.P0, out.P1, xta, na)
-		out.P0OnB, out.P1OnB, out.EdgeB = segmentBoundaryEdges(out.P0, out.P1, xtb, nb)
+		out.P0OnA, out.P1OnA, out.EdgeA = segmentBoundaryEdgesPlanes(out.P0, out.P1, xta, cacheA.planes(facetA, xta, na))
+		planesB := newEdgePlanes(xtb, nb)
+		out.P0OnB, out.P1OnB, out.EdgeB = segmentBoundaryEdgesPlanes(out.P0, out.P1, xtb, &planesB)
 	} else {
 		out.P0OnA = OnTriBoundary(out.P0, xta, na)
 		out.P0OnB = OnTriBoundary(out.P0, xtb, nb)
@@ -254,24 +280,59 @@ func triTriSpan(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xpt, pa, p
 		return TriContactSpan{}, false, fmt.Errorf(`%w: a facet crosses a plane more than twice`, decaderr.ErrBooleanFailed)
 	}
 	dir := proof.Xcross(na, nb)
-	loA, hiA := OrderOnLine(ptsA, dir)
-	loB, hiB := OrderOnLine(ptsB, dir)
+	var order lineOrder
+	loA, hiA := order.sorted(ptsA, dir)
+	loB, hiB := order.sorted(ptsB, dir)
 	lo, hi := loA, hiA
-	if CmpOnLine(loB, lo, dir) > 0 {
+	if order.cmp(loB, lo) > 0 {
 		lo = loB
 	}
-	if CmpOnLine(hiB, hi, dir) < 0 {
+	if order.cmp(hiB, hi) < 0 {
 		hi = hiB
 	}
-	switch CmpOnLine(lo, hi, dir) {
+	switch order.cmp(lo, hi) {
 	case 1:
 		return span, false, nil // the intervals miss: no contact at all
 	case 0:
-		span.Kind, span.P0, span.P1 = ContactPoint, lo, lo
+		span.Kind, span.P0, span.P1 = ContactPoint, lo.P, lo.P
 	default:
-		span.Kind, span.P0, span.P1 = ContactSegment, lo, hi
+		span.Kind, span.P0, span.P1 = ContactSegment, lo.P, hi.P
 	}
 	return span, true, nil
+}
+
+// linePoint is a point of the planes' common line together with D =
+// XdotNum(P, dir), the numerator CmpOnLine reads for it.
+type linePoint struct {
+	P proof.Xpt
+	D *big.Int
+}
+
+// lineOrder orders linePoints exactly as OrderOnLine and CmpOnLine order
+// their points: it compares the same two cross-multiplied integers, reading
+// each point's dot numerator from the linePoint instead of recomputing it for
+// every comparison. Its two integers are scratch for one goroutine.
+type lineOrder struct {
+	left, right big.Int
+}
+
+func (o *lineOrder) cmp(a, b linePoint) int {
+	o.left.Mul(a.D, b.P.W)
+	o.right.Mul(b.D, a.P.W)
+	return o.left.Cmp(&o.right)
+}
+
+// sorted is OrderOnLine over linePoints.
+func (o *lineOrder) sorted(pts []proof.Xpt, dir proof.Xpt) (linePoint, linePoint) {
+	first := linePoint{P: pts[0], D: proof.XdotNum(pts[0], dir)}
+	if len(pts) == 1 {
+		return first, first
+	}
+	second := linePoint{P: pts[1], D: proof.XdotNum(pts[1], dir)}
+	if o.cmp(first, second) > 0 {
+		return second, first
+	}
+	return first, second
 }
 
 // AllOneSide reports whether all three plane-side signs are strictly the same:
@@ -424,27 +485,111 @@ func SegAlongEdge(p0, p1 proof.Xpt, xt [3]proof.Xpt, n proof.Xpt) int {
 	return -1
 }
 
+// edgePlanes holds one facet's three in-plane edge tests. For edge k, from
+// a = xt[k] to b = xt[(k+1)%3] of a facet with exact normal n, Normal[k] is
+// n × (b−a) and Offset[k] is XdotNum(Normal[k], a). The side of a point p on
+// the facet's plane is the sign of ((b−a)×(p−a))·n = Normal[k]·(p−a), which
+// proof.XdotDiffSignOffset reads from these two values. Axis[k], Lo[k] and
+// Hi[k] are the dominant axis of b−a and the edge's two ends in order along
+// it, the values PointOnSegment3D(a, b, p) derives before it compares p. All
+// of them are functions of the facet's exact corners and normal alone, so
+// every pair the facet takes part in may share them.
+type edgePlanes struct {
+	Normal [3]proof.Xpt
+	Offset [3]*big.Int
+	Axis   [3]int
+	Lo, Hi [3]proof.Xpt
+}
+
+func newEdgePlanes(xt [3]proof.Xpt, n proof.Xpt) edgePlanes {
+	var out edgePlanes
+	var left, right big.Int
+	for k := range 3 {
+		a, b := xt[k], xt[(k+1)%3]
+		delta := proof.Xsub(b, a)
+		out.Normal[k] = proof.Xcross(n, delta)
+		out.Offset[k] = proof.XdotNum(out.Normal[k], a)
+		// PointOnSegment3D's axis and end order, without its allocations.
+		axis := 0
+		if delta.Y.CmpAbs(delta.X) > 0 {
+			axis = 1
+		}
+		if delta.Z.CmpAbs(Coord(delta, axis)) > 0 {
+			axis = 2
+		}
+		lo, hi := a, b
+		if compareCoordScratch(&left, &right, lo, hi, axis) > 0 {
+			lo, hi = hi, lo
+		}
+		out.Axis[k], out.Lo[k], out.Hi[k] = axis, lo, hi
+	}
+	return out
+}
+
+// onSegment is PointOnSegment3D(a, b, p) for edge k's a and b, with scratch
+// integers left and right.
+func (e *edgePlanes) onSegment(left, right *big.Int, k int, p proof.Xpt) bool {
+	return compareCoordScratch(left, right, e.Lo[k], p, e.Axis[k]) <= 0 &&
+		compareCoordScratch(left, right, p, e.Hi[k], e.Axis[k]) <= 0
+}
+
+// compareCoordScratch is CompareCoord with its two products written to left
+// and right.
+func compareCoordScratch(left, right *big.Int, a, b proof.Xpt, axis int) int {
+	left.Mul(Coord(a, axis), b.W)
+	right.Mul(Coord(b, axis), a.W)
+	return left.Cmp(right)
+}
+
+// edgePlaneCache keeps the edge planes of the last facet one goroutine asked
+// about, keyed by its index in one prepared mesh. A contact batch asks about
+// its pairs in the order the producer added them, facet of the first operand
+// outermost, so consecutive pairs usually share that facet. A cache belongs to
+// one goroutine and one mesh for its whole life, and a facet's corners and
+// normal never change while the mesh lives, so a hit returns the value a miss
+// would build. The zero value is not ready: start from newEdgePlaneCache.
+type edgePlaneCache struct {
+	facet int
+	value edgePlanes
+}
+
+func newEdgePlaneCache() edgePlaneCache { return edgePlaneCache{facet: -1} }
+
+// planes returns facet's edge planes, building them when the cache holds
+// another facet's. xt and n must be that facet's exact corners and normal. A
+// nil cache builds them for this call alone.
+func (c *edgePlaneCache) planes(facet int, xt [3]proof.Xpt, n proof.Xpt) *edgePlanes {
+	if c == nil {
+		value := newEdgePlanes(xt, n)
+		return &value
+	}
+	if c.facet != facet {
+		c.value = newEdgePlanes(xt, n)
+		c.facet = facet
+	}
+	return &c.value
+}
+
 // segmentBoundaryEdges shares each exact point-on-edge result between the
 // boundary flags and the first common edge, retaining their short-circuit order.
 func segmentBoundaryEdges(p0, p1 proof.Xpt, xt [3]proof.Xpt, n proof.Xpt) (bool, bool, int) {
+	planes := newEdgePlanes(xt, n)
+	return segmentBoundaryEdgesPlanes(p0, p1, xt, &planes)
+}
+
+// segmentBoundaryEdgesPlanes is segmentBoundaryEdges with the facet's edge
+// planes already built.
+func segmentBoundaryEdgesPlanes(p0, p1 proof.Xpt, xt [3]proof.Xpt, planes *edgePlanes) (bool, bool, int) {
 	points := [2]proof.Xpt{p0, p1}
 	var known, on [2]uint8
-	var edgeKnown uint8
-	var edgeNormals [3]proof.Xpt
 	var sideScratch [3]big.Int
 	onEdge := func(point, edge int) bool {
 		bit := uint8(1 << edge)
 		if known[point]&bit == 0 {
 			known[point] |= bit
-			a, b := xt[edge], xt[(edge+1)%3]
-			if edgeKnown&bit == 0 {
-				// ((b-a)×(p-a))·n = (n×(b-a))·(p-a).
-				// The same edge normal serves both contact endpoints.
-				edgeNormals[edge] = proof.Xcross(n, proof.Xsub(b, a))
-				edgeKnown |= bit
-			}
-			if proof.XdotDiffSignScratch(&sideScratch, edgeNormals[edge], points[point], a) == 0 &&
-				PointOnSegment3D(a, b, points[point]) {
+			// ((b-a)×(p-a))·n = (n×(b-a))·(p-a).
+			if proof.XdotDiffSignOffset(&sideScratch, planes.Normal[edge], points[point], xt[edge], planes.Offset[edge]) == 0 &&
+				planes.onSegment(&sideScratch[0], &sideScratch[1], edge, points[point]) {
 				on[point] |= bit
 			}
 		}
@@ -473,24 +618,24 @@ func segmentBoundaryEdges(p0, p1 proof.Xpt, xt [3]proof.Xpt, n proof.Xpt) (bool,
 
 // SinSquared is the exact sin²θ of the angle between two facet planes:
 // |na × nb|² / (|na|²·|nb|²).
-func SinSquared(na, nb proof.Xpt) *big.Rat {
+func SinSquared(na, nb proof.Xpt) *SinSquare {
 	// Both homogeneous weights cancel from the ratio, so build one fraction
 	// from integer dot products instead of normalizing each intermediate.
 	c := proof.XhpCross(proof.Xhp(na), proof.Xhp(nb))
 	num := proof.XhpDotNum(c, c)
 	den := new(big.Int).Mul(proof.XdotNum(na, na), proof.XdotNum(nb, nb))
 	if den.Sign() == 0 {
-		return new(big.Rat)
+		return &SinSquare{Num: new(big.Int), Den: big.NewInt(1)}
 	}
-	return new(big.Rat).SetFrac(num, den)
+	return &SinSquare{Num: num, Den: den}
 }
 
 // SinLowerBound is a PROVEN lower bound on sin θ from its exact square: the
 // float square root, nudged down twice so neither the rational's rounding nor
 // the root's can push it above the truth. A lower bound on the sine is what
 // makes (δA + δB)/sin θ an UPPER bound on the rim displacement.
-func SinLowerBound(sin2 *big.Rat) float64 {
-	f, _ := sin2.Float64()
+func SinLowerBound(sin2 *SinSquare) float64 {
+	f := sin2.Float64()
 	if f <= 0 {
 		return 0
 	}

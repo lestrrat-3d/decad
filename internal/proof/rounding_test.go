@@ -219,8 +219,9 @@ func TestCmpFloatRatMatchesRatCmp(t *testing.T) {
 	check(2, unstored)
 }
 
-// TestFracFloatMatchesRatFloat checks FracFloatDown and FracFloatUp against
-// proofbound.RatFloatDown and RatFloatUp of the reduced value, bit for bit, on
+// TestFracFloatMatchesRatFloat checks FracFloat64, FracFloatDown and
+// FracFloatUp against big.Rat.Float64, proofbound.RatFloatDown and RatFloatUp
+// of the reduced value, bit for bit, on
 // every fraction of the same value the multipliers make: floats themselves,
 // float neighbours and midpoints, slivers off a float, random rationals, and
 // values that overflow or fall below the subnormals.
@@ -234,10 +235,12 @@ func TestFracFloatMatchesRatFloat(t *testing.T) {
 	check := func(q *big.Rat) {
 		t.Helper()
 		wantDown, wantUp := proofbound.RatFloatDown(q), proofbound.RatFloatUp(q)
+		wantNear, _ := q.Float64()
 		for _, k := range multipliers {
 			n := new(big.Int).Mul(q.Num(), k)
 			d := new(big.Int).Mul(q.Denom(), k)
 			n0, d0 := new(big.Int).Set(n), new(big.Int).Set(d)
+			require.Equal(t, math.Float64bits(wantNear), math.Float64bits(proof.FracFloat64(n, d)), "nearest q=%v k=%v", q, k)
 			require.Equal(t, math.Float64bits(wantDown), math.Float64bits(proof.FracFloatDown(n, d)), "down q=%v k=%v", q, k)
 			require.Equal(t, math.Float64bits(wantUp), math.Float64bits(proof.FracFloatUp(n, d)), "up q=%v k=%v", q, k)
 			require.Zero(t, n0.Cmp(n), "numerator changed")

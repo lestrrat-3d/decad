@@ -107,6 +107,37 @@ func XdotDiffSignScratch(scratch *[3]big.Int, n, p, q Xpt) int {
 	return pNum.Sub(pNum, qNum).Sign()
 }
 
+// XdotDiffSignOffset is XdotDiffSignScratch(scratch, n, p, q) for a caller
+// that already holds nq = XdotNum(n, q), the numerator of n·q over n.w·q.w.
+// It computes the same two cross-multiplied integers XdotDiffSignScratch
+// compares, reading q's from nq instead of recomputing it, so it returns the
+// same sign. With equal weights, Σ n_i·(p_i − q_i) = n·p − n·q as integers.
+// scratch follows XdotDiffSignScratch's rules, and nq is never written.
+func XdotDiffSignOffset(scratch *[3]big.Int, n, p, q Xpt, nq *big.Int) int {
+	pNum, qNum, term := &scratch[0], &scratch[1], &scratch[2]
+	pNum.Mul(n.X, p.X)
+	term.Mul(n.Y, p.Y)
+	pNum.Add(pNum, term)
+	term.Mul(n.Z, p.Z)
+	pNum.Add(pNum, term)
+	if p.W.Cmp(q.W) == 0 {
+		return pNum.Cmp(nq)
+	}
+	qShift := q.W.TrailingZeroBits()
+	if q.W.BitLen() == int(qShift)+1 {
+		pNum.Lsh(pNum, qShift)
+	} else {
+		pNum.Mul(pNum, q.W)
+	}
+	pShift := p.W.TrailingZeroBits()
+	if p.W.BitLen() == int(pShift)+1 {
+		qNum.Lsh(nq, pShift)
+	} else {
+		qNum.Mul(nq, p.W)
+	}
+	return pNum.Cmp(qNum)
+}
+
 // Xlerp is a + t·(b − a) for t = tn/td, exact, with the common power of two
 // stripped on return — the growth control that keeps a chain of lerps from
 // growing its denominator multiplicatively at every link (measured: 14113

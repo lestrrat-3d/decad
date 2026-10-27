@@ -122,6 +122,15 @@ func FracFloatDown(n, d *big.Int) float64 {
 	return NextDown(f)
 }
 
+// FracFloat64 is the nearest float64 to n/d, ties to even, for d > 0 and n/d
+// in any terms: the bits big.Rat.Float64 returns for the same value, which
+// quotientFloat64 returns from any numerator and denominator of that value
+// (FracFloatDown). n and d are only read.
+func FracFloat64(n, d *big.Int) float64 {
+	f, _ := quotientFloat64(n, d)
+	return f
+}
+
 // FracFloatUp is proofbound.RatFloatUp(n/d), FracFloatDown's mirror.
 func FracFloatUp(n, d *big.Int) float64 {
 	f, _ := quotientFloat64(n, d)
