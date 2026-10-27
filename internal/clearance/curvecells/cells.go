@@ -630,12 +630,19 @@ func (k *Kernel) lineLineEE(ea, eb *clearance.CEdge, sink *clearance.CellSink) {
 		sink.Unsure = true
 		return
 	}
-	c, ok := k.lineLinePerp(ea.A, ua, eb.A, ub, clearance.LineLineDist(ea.A, segA, eb.A, segB))
+	// The feet do not depend on the distance, and the sink discards a
+	// candidate whose foot leaves a segment before it reads the distance, so
+	// the exact reading waits until both feet are known to be kept.
+	c, ok := k.lineLinePerp(ea.A, ua, eb.A, ub, clearance.Dist{})
 	if !ok {
 		sink.Coarse(ea.Box, eb.Box, ea.Witnesses(k.tol), eb.Witnesses(k.tol))
 		return
 	}
 	admit := clearance.AdmitState(clearance.LineParamAdmit(ea, c.Fa, k.tol), clearance.LineParamAdmit(eb, c.Fb, k.tol))
+	if admit == -1 {
+		return
+	}
+	c = clearance.CritOf(clearance.LineLineDist(ea.A, segA, eb.A, segB), c.Fa, c.Fb)
 	sink.Candidate(k.tol, admit, c.Lo, c.Hi, c.Exact, c.Fa, c.Fb)
 }
 

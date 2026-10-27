@@ -90,6 +90,11 @@ func (k *Kernel) VertexFace(budget *proofbound.WorkBudget, v r3.Vec, f *clearanc
 		if err != nil {
 			return err
 		}
+		if admit == -1 {
+			// The sink discards a foot the trim excludes before it reads the
+			// distance, so the exact reading below is skipped, not changed.
+			return nil
+		}
 		d := clearance.Height(v, f.O, f.N).Abs().Widen(clearance.DirCharge([]r3.Vec{f.N}, []r3.Vec{v, f.O}))
 		sink.CandidateDist(k.tol, admit, d, foot, v)
 	case clearance.CkCone:
@@ -154,7 +159,12 @@ func (k *Kernel) VertexEdge(v r3.Vec, e *clearance.CEdge, sink *clearance.CellSi
 		if !okSeg {
 			return
 		}
-		sink.CandidateDist(k.tol, clearance.LineParamAdmit(e, foot, k.tol), clearance.PointLineDist(v, e.A, seg), foot, v)
+		admit := clearance.LineParamAdmit(e, foot, k.tol)
+		if admit == -1 {
+			// As in VertexFace: the sink would discard the candidate unread.
+			return
+		}
+		sink.CandidateDist(k.tol, admit, clearance.PointLineDist(v, e.A, seg), foot, v)
 		return
 	}
 	crits, ok := k.pointCircleCrits(v, e.Center, e.Axis, e.RefU, e.RefV, e.Radius, e.Ang)

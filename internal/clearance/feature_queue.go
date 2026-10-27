@@ -2,6 +2,7 @@ package clearance
 
 import (
 	"cmp"
+	"math"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -77,7 +78,7 @@ func EnumerateFeatures(budget *proofbound.WorkBudget, tolerance float64, a, b Fe
 			return err
 		}
 	}
-	cells, err := FeatureCells(budget, a.Faces, b.Faces, a.Edges, b.Edges)
+	cells, err := queueFeatureCells(budget, sink, a.Faces, b.Faces, a.Edges, b.Edges)
 	if err != nil {
 		return err
 	}
@@ -105,18 +106,43 @@ func EnumerateFeatures(budget *proofbound.WorkBudget, tolerance float64, a, b Fe
 	return budget.Err()
 }
 
-// FeatureCells queues face and edge pairs in ascending box-distance order.
-// Stable sorting preserves the face-face, face-edge, edge-face, edge-edge
-// order for ties. The caller's budget also counts every queued pair.
-func FeatureCells(budget *proofbound.WorkBudget, aFaces, bFaces []*CFace,
+// queueFeatureCells queues face and edge pairs in the walk order of
+// EnumerateFeatures: ascending box distance, ties in the face-face,
+// face-edge, edge-face, edge-edge order in which they are queued. The
+// caller's budget also counts every queued pair.
+//
+// A full sort is not needed for that order. The sink's best upper bound only
+// falls as the walk runs cells, so a cell already beyond the bound in hand
+// (CellSink.beyond) is pruned when the walk reaches it, whatever its place.
+// Such a cell's box distance is also larger than that of every finite cell
+// the bound keeps: subtracting the margin is monotone, so a smaller distance
+// than a pruned one could not have been kept. The kept cells are therefore
+// the head of the sorted order, and only they are sorted. Every pruned cell
+// follows them in any order, since the walk only steps the budget and counts
+// it, and the cells at +Inf, which never prune, go last in queue order, where
+// a stable sort of the whole queue puts them.
+func queueFeatureCells(budget *proofbound.WorkBudget, sink *CellSink, aFaces, bFaces []*CFace,
 	aEdges, bEdges []*CEdge) ([]FeatureCell, error) {
 	n := len(aFaces)*(len(bFaces)+len(bEdges)) + len(bFaces)*len(aEdges) + len(aEdges)*len(bEdges)
-	cells := make([]FeatureCell, 0, n)
+	cells := make([]FeatureCell, n)
+	kept, pruned := 0, n
+	var unbounded []FeatureCell
+	best := sink.bestHi()
 	push := func(kind FeatureKind, i, j int, boxA, boxB [2]r3.Vec) error {
 		if err := budget.Step(); err != nil {
 			return err
 		}
-		cells = append(cells, FeatureCell{LowerBound: ClrBoxDist(boxA, boxB), Kind: kind, I: i, J: j})
+		cell := FeatureCell{LowerBound: ClrBoxDist(boxA, boxB), Kind: kind, I: i, J: j}
+		switch {
+		case math.IsInf(cell.LowerBound, 1):
+			unbounded = append(unbounded, cell)
+		case sink.beyond(cell.LowerBound, best):
+			pruned--
+			cells[pruned] = cell
+		default:
+			cells[kept] = cell
+			kept++
+		}
 		return nil
 	}
 	for i, fa := range aFaces {
@@ -147,6 +173,10 @@ func FeatureCells(budget *proofbound.WorkBudget, aFaces, bFaces []*CFace,
 			}
 		}
 	}
-	slices.SortStableFunc(cells, func(x, y FeatureCell) int { return cmp.Compare(x.LowerBound, y.LowerBound) })
+	slices.SortStableFunc(cells[:kept], func(x, y FeatureCell) int { return cmp.Compare(x.LowerBound, y.LowerBound) })
+	if len(unbounded) > 0 {
+		copy(cells[kept:], cells[pruned:])
+		copy(cells[kept+n-pruned:], unbounded)
+	}
 	return cells, nil
 }
