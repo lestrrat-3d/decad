@@ -2581,3 +2581,7 @@
 10	0.01	TestSubDMeshRefinesToTheLimitFromInside
 10	0.01	TestSubDMeshKeepsAnOpenCagesBoundary
 10	0.01	TestSubDMeshRefusals
+10	0.01	TestSolidFromMeshReadsAnImportedBlockAsASolid
+10	0.01	TestSolidFromMeshTakesPartInBooleans
+10	0.01	TestSolidFromMeshReadsATetrahedron
+10	0.01	TestSolidFromMeshRefusals
