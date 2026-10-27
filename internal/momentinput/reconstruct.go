@@ -136,6 +136,64 @@ func ReconstructProfileOnFrame(ctx context.Context, record Profile, frame r3.Fra
 	return nil, nil, fmt.Errorf(`%w: Sketch did not certify the section record`, ErrUnsupported)
 }
 
+// ReconstructProfilesOnFrame is [ReconstructProfileOnFrame] for several disjoint regions on one Sketch: every
+// record's entities are added to one scene, and the profiles returned are the Sketch arrangement's, one for each
+// record in order, each certified equal to its record. A record Sketch does not arrange as exactly that region is
+// ErrUnsupported; regions Sketch arranges that no record names, such as the empty space a hole encloses, are left out.
+func ReconstructProfilesOnFrame(ctx context.Context, records []Profile, frame r3.Frame) (*sketch.Sketch, []*sketch.Profile, error) {
+	world := sketch.NewWorld()
+	plane, err := world.CreatePlaneFromFrame(frame)
+	if err != nil {
+		return nil, nil, err
+	}
+	s, err := world.CreateSketch(plane)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, record := range records {
+		ok, err := addMomentRecordEntities(record, s, ctx.Err)
+		if err != nil {
+			if canceled := ctx.Err(); canceled != nil {
+				return nil, nil, canceled
+			}
+			return nil, nil, fmt.Errorf(`%w: section record cannot be reconstructed by Sketch: %v`, ErrUnsupported, err)
+		}
+		if !ok {
+			return nil, nil, fmt.Errorf(`%w: section record cannot be reconstructed by Sketch`, ErrUnsupported)
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	// Sketch also arranges the empty space a hole encloses as a region of its own; those are not named by a
+	// record and are left out. Every record must be arranged as exactly its region.
+	out := make([]*sketch.Profile, len(records))
+	for _, profile := range s.Profiles() {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		if !profile.Valid {
+			continue
+		}
+		outer, holes, err := sketchrecord.RecordProfileLoops(profile)
+		if err != nil {
+			continue
+		}
+		for i, record := range records {
+			if out[i] == nil && momentRecordsEqual(record, Profile{Outer: outer, Holes: holes}) {
+				out[i] = profile
+				break
+			}
+		}
+	}
+	for _, profile := range out {
+		if profile == nil {
+			return nil, nil, fmt.Errorf(`%w: Sketch did not certify every section region`, ErrUnsupported)
+		}
+	}
+	return s, out, nil
+}
+
 func addMomentRecordEntities(record Profile, s *sketch.Sketch, poll func() error) (bool, error) {
 	interned := make(map[Point2]*sketch.Point)
 	point := func(value Point2) *sketch.Point {

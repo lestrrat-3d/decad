@@ -292,19 +292,20 @@ func TestSectionMeshBooleanHistoryRefusals(t *testing.T) {
 		require.NoError(t, err)
 		refuses(t, notched, 7, junctionRefusal)
 	})
-	t.Run("two separate regions", func(t *testing.T) {
+	t.Run("two separate regions are listed from the grid", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		joined, err := decad.Union(t.Context(), historyCube(t, doc), boxBodyAtZ(t, doc, 12, 3, 15, 7, 5, 10))
 		require.NoError(t, err)
-		refuses(t, joined, 7, regionRefusal)
+		// The history gate refuses two regions, but the grid reads each as a profile of one sketch.
+		require.ElementsMatch(t, []float64{100, 12}, sectionAreas(t, joined, historyLevel(t, 7)))
 	})
-	t.Run("a slot splits the section", func(t *testing.T) {
+	t.Run("a slot splits the section into two profiles", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		slotted, err := decad.Cut(t.Context(), historyCube(t, doc), boxBodyAtZ(t, doc, 4, -5, 6, 15, 5, 10))
 		require.NoError(t, err)
-		refuses(t, slotted, 7, regionRefusal)
+		require.ElementsMatch(t, []float64{40, 40}, sectionAreas(t, slotted, historyLevel(t, 7)))
 	})
 	t.Run("one section inside the other is read from the grid", func(t *testing.T) {
 		t.Parallel()

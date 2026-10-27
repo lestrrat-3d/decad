@@ -95,6 +95,20 @@ func SectionBrepStackRecord(ctx context.Context, proxy prismPayload, slabs []sta
 	return profileRecord{}, fmt.Errorf(`%w: section plane lies outside slab stack interiors`, decaderr.ErrUnsupported)
 }
 
+// ReconstructExactSections charges the profile records and rebuilds them as Sketch profiles on the plane
+// frame, one scene holding every disjoint region.
+func ReconstructExactSections(ctx context.Context, profiles []profileRecord, plane r3.Frame) (
+	*sketch.Sketch, []*sketch.Profile, error,
+) {
+	work := freeform.NewFreeformWork()
+	for _, profile := range profiles {
+		if _, err := momentinput.ChargeReconstruction(profile, work); err != nil {
+			return nil, nil, err
+		}
+	}
+	return momentinput.ReconstructProfilesOnFrame(ctx, profiles, plane)
+}
+
 // ReconstructExactSection charges the profile record and rebuilds it as a
 // Sketch profile on the plane frame.
 func ReconstructExactSection(ctx context.Context, profile profileRecord, plane r3.Frame) (

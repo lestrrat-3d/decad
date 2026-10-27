@@ -3,6 +3,7 @@ package orthoshell
 import (
 	"fmt"
 	"math"
+	"sort"
 
 	"github.com/lestrrat-3d/r3"
 )
@@ -13,7 +14,7 @@ import (
 // layer of the solid's grid, farther than the grid tolerance from every grid line, so the cut is the same
 // at either side of it. The loops are the boundary of the union of the layer's occupied cells: an outer loop
 // runs counter-clockwise in (ia, iv) and a hole clockwise, and collinear points are merged, so each
-// corner of a loop is a coordinate of the solid. A layer with no cell, a plane on a grid line or outside the
+// corner of a loop is a coordinate of the solid. The loops come in the order of their lowest, leftmost corners (by iv, then ia). A layer with no cell, a plane on a grid line or outside the
 // solid, and a cut whose cells meet only at a corner are ErrUnsupported.
 func SectionLoops(verts []r3.Vec, tris [][3]int, axis int, coord float64, ia, iv int) ([][][2]float64, error) {
 	if len(verts) == 0 || len(tris) == 0 || axis < 0 || axis > 2 || ia == iv || ia == axis || iv == axis ||
@@ -84,8 +85,19 @@ func SectionLoops(verts []r3.Vec, tris [][3]int, axis int, coord float64, ia, iv
 	if !filled {
 		return nil, fmt.Errorf("%w: the section layer holds no material", ErrUnsupported)
 	}
-	var loops [][][2]float64
+	// The loops are traced from their lowest, leftmost corner in that order, so the result does not depend on map order.
+	starts := make([]vertex, 0, len(next))
 	for start := range next {
+		starts = append(starts, start)
+	}
+	sort.Slice(starts, func(a, b int) bool {
+		if starts[a].j != starts[b].j {
+			return starts[a].j < starts[b].j
+		}
+		return starts[a].i < starts[b].i
+	})
+	var loops [][][2]float64
+	for _, start := range starts {
 		if _, live := next[start]; !live {
 			continue
 		}
