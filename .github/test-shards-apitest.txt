@@ -1123,6 +1123,8 @@
 4	0.06	TestPathPatternJoinUnitesTheInstancesWithTheTarget
 4	0.00	TestPathPatternSpacedPutsTheLastCopyAtTheEndWhenItDivides
 10	0.01	TestLookupThreadReadsUnifiedNumberedSizes
+10	0.01	TestMeshSolidFaceCentroidsAreTheFacesAreaCentroids
+10	0.01	TestMeshSolidFaceCentroidWeighsUnequalTrianglesByArea
 4	1.60	TestPatternJoinRefusalLeavesTheDocumentUnchanged
 4	1.94	TestPatternJoinRefusesCopiesItCannotCertify
 4	0.01	TestPatternedEnclosedVoidTakesMeshPath

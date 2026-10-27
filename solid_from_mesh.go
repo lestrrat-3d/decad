@@ -148,6 +148,7 @@ func meshPlaneGroups(producer provenance.Producer, verts []r3.Vec, tris [][3]int
 	index := map[string]int{}
 	src := make([]int, len(tris))
 	var groups []facetedrecord.Group
+	var sums []planeSums
 	for ti, t := range tris {
 		a, b, c := exact(verts[t[0]]), exact(verts[t[1]]), exact(verts[t[2]])
 		n := cross(sub(b, a), sub(c, a))
@@ -184,10 +185,74 @@ func meshPlaneGroups(producer provenance.Producer, verts []r3.Vec, tris [][3]int
 				group.HasAxialDelta = true
 			}
 			groups = append(groups, group)
+			sums = append(sums, planeSums{normal: n})
 		}
 		src[ti] = gi
+		if planar {
+			// Coplanar triangles of one orientation have areas in the ratio of their normals' dot products with the
+			// group's first normal, so the centroid weights are exact rationals.
+			sums[gi].add(n, a, b, c)
+		}
+	}
+	for gi := range groups {
+		if groups[gi].Planar {
+			groups[gi].Centroid, groups[gi].HasCentroid = sums[gi].centroid()
+		}
 	}
 	return src, groups
+}
+
+// planeSums accumulates, for the triangles of one plane group, the exact weighted sum of their centroids.
+type planeSums struct {
+	normal [3]*big.Rat
+	weight *big.Rat
+	moment [3]*big.Rat
+}
+
+// add counts the triangle abc of normal n, its weight the dot product of n and the group's first normal.
+func (p *planeSums) add(n, a, b, c [3]*big.Rat) {
+	w := new(big.Rat)
+	for i := range n {
+		w.Add(w, new(big.Rat).Mul(n[i], p.normal[i]))
+	}
+	if p.weight == nil {
+		p.weight = new(big.Rat)
+		for i := range p.moment {
+			p.moment[i] = new(big.Rat)
+		}
+	}
+	p.weight.Add(p.weight, w)
+	for i := range p.moment {
+		corner := new(big.Rat).Add(a[i], b[i])
+		corner.Add(corner, c[i])
+		p.moment[i].Add(p.moment[i], corner.Mul(corner, w))
+	}
+}
+
+// centroid is the area centroid of the group's triangles, the exact rational rounded to the nearest float per
+// coordinate, with the largest rounding error as its bound, rounded upward. The vertices are held exactly, so
+// that rounding is the whole error.
+func (p *planeSums) centroid() (measurement.VecMeasurement, bool) {
+	if p.weight == nil || p.weight.Sign() <= 0 {
+		return measurement.VecMeasurement{}, false
+	}
+	var coords [3]float64
+	var bound float64
+	three := big.NewRat(3, 1)
+	for i := range coords {
+		q := new(big.Rat).Quo(p.moment[i], new(big.Rat).Mul(p.weight, three))
+		f, _ := proofarith.RatFloat64(q)
+		coords[i] = f
+		bound = math.Max(bound, proofarith.RationalFloatError(q, f))
+	}
+	if math.IsInf(bound, 0) || math.IsNaN(bound) {
+		return measurement.VecMeasurement{}, false
+	}
+	return measurement.VecMeasurement{
+		Value:     r3.NewVec(coords[0], coords[1], coords[2]),
+		Exactness: measurement.ExactnessOf(bound),
+		Bound:     units.Millimeters(bound),
+	}, true
 }
 
 // axisAlignedFrame returns the frame of the plane through the float vertex at, when the
