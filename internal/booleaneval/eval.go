@@ -364,12 +364,12 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	}
 	// The final rounding's own volume error is what its vertex displacement
 	// sweeps out over the surface it acted on — the stitched surface BEFORE the
-	// weld dropped any collapsed facet from it (internal/proofbound/bounds.go, proofbound.SweptVolumeAllow).
+	// weld dropped any collapsed facet from it (StitchedMesh.RoundingVolumeBound).
 	// The held mesh's area is the WRONG yardstick here: a dropped facet is
 	// missing from it, and its swept volume would go uncharged. The area the
 	// weld dropped is likewise missing from every area the result reports, so
 	// it joins the operands' own chord deficit in areaSlack.
-	roundVol := proofbound.SweptVolumeAllow(stitched.Round, stitched.PreArea)
+	roundVol := stitched.RoundingVolumeBound()
 	volSymDiff, areaSlack := booleanProofBounds(
 		symA, symB, roundVol,
 		ma.AreaSlack, mb.AreaSlack, stitched.DropArea,
