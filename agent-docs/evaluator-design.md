@@ -1225,9 +1225,12 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
 
   An uncertain binary64 orientation first tries an exact floating expansion
   when its coordinate differences are exactly representable and within
-  `proof.OrientSignExpansion`'s bounds. Product remainders and error-free sums
-  give the exact determinant sign. Rounded differences and out-of-range inputs
-  use the general integer fallback. Rational source points use their integer
+  `proof.OrientSignExpansion`'s bounds. Product remainders split the
+  determinant into 24 floats with an exact sum. A compensated sum (Sum2)
+  decides the sign when it clears its proven error bound. Otherwise
+  error-free sums build the exact expansion, whose leading component gives
+  the sign. The bound proof is on `orientSignSum2`. Rounded differences and
+  out-of-range inputs use the general integer fallback. Rational source points use their integer
   planes directly; an expansion of rounded source coordinates cannot decide them.
 - **Subdivide cut facets in bounded batches.** Each facet owns its cutter and
   cancellation budget. Independent subdivisions run concurrently; region
