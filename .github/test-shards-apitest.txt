@@ -2599,6 +2599,9 @@
 10	0.00	TestPatchSheetTessellates
 10	0.00	TestPathPatternPivotRefusals
 10	0.00	TestPatternCopiesNonCoDirectional
+10	0.00	TestCutTangentPocketTakesMeshPath
+10	0.00	TestCutTangentThroughToolRefuses
+10	0.00	TestCutLineTouchPocket
 10	0.61	TestPatternJoinJoinsCopiesThatShareWholeSides
 10	3.78	TestPatternJoinOnAnObliqueFrame
 10	2.74	TestPatternJoinRefusesLobesThatOnlyTouchOrMissTheBase

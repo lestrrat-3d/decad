@@ -159,7 +159,8 @@ intersection query, and any point it reports, within its band, refuses. Two
 tangent round pockets, or a round pocket tangent to a rectangular one, are not
 separate. `stackedrecord.Derive` and `Falsify` run this proof;
 the reached slabs' cut scenes already prove each hole lies inside its section
-and clears holes on the same side. The lower side exposes each upper-only hole
+and clears holes on the same side, touching none of them (prism-boolean §4.2's
+tangent-contact query). The lower side exposes each upper-only hole
 as a floor, and the upper side exposes each lower-only hole as a ceiling.
 Construction refuses this reading when the section has a nonzero displacement:
 the scene proves separation of the recorded loops, while that displacement
@@ -470,6 +471,12 @@ Each admitted arm ships its implementation and tests together.
    exclusive holes also build when the private scene above proves their
    separation without a charge and the section displacement is zero.
 
+   A tool whose curved wall touches an existing hole, an enclosed hole or the
+   outer wall at one point, without crossing it, matches no cut cell: the
+   blind cut on a prism, the split and interface arms here and the spanning
+   cut all decline it through prism-boolean §4.2's tangent-contact query, and
+   it takes the mesh path.
+
    Opposed exclusive holes that overlap in plan at that interface build a
    BRep through general-boolean §3 A8. The reached slabs keep this stage's
    cut proofs. A private scene over only the exclusive holes gives the
@@ -515,6 +522,15 @@ arm64.
 - A tool touching the target only at a cap (zero depth), a tool strictly inside
   both ends (an enclosed void), and a blind tool crossing the outer boundary
   each still take the mesh path with the mesh path's own result.
+- A round blind pocket touching the square through hole's wall at one point,
+  from either cap, on a prism or a stacked target, and one touching the outer
+  wall or enclosing a round hole it touches, take the mesh path: the result
+  meshes under `VerifyAll` and its volume bound covers the closed form. The
+  same tools run through the whole target return `BooleanUnsupportedContact`,
+  while a through tool tangent inside a cylinder's wall builds a faceted
+  result whose bound covers `960π` and meshes.
+  Square pockets touching the hole along its wall or at a corner mesh and
+  carry the closed-form volume (`apitest/cut_tangent_contact_test.go`).
 - Two blind tools ending at different levels build a three-slab analytic
   result from either face; the mesh and placement retain the volume proof.
 - Two separate blind tools ending exactly at the same interface build an
