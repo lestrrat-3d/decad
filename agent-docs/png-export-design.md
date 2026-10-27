@@ -188,3 +188,15 @@ finds behind a surface (`agent-docs/dxf-export-design.md` D5, D6).
 | L2 | A face the key light of §1 reaches (positive diffuse term) adds white to each channel: `255 · gloss · (n · h)^32`, with `h` the unit halfway vector of the unit direction to the key light and the unit direction to the eye (along the line of sight to the face for a perspective camera), clamped at 255. A face the light does not reach, and a back face seen from behind, take none. |
 | L3 | A pixel in a shadow (§10, §14) is at the ambient shade with or without a gloss, since the highlight is added to the lit shade only, and a soft shadow mixes the glossy lit shade with the ambient one. |
 | L4 | The shading is flat per triangle, so a flat face takes one highlight and a tessellated curved face takes it in bands. The tests read the top face of a block viewed from above against the formula of L2 at gloss 1 and one half, where the highlight is about 61 of 255, leave the background and a face off the highlight unchanged, keep every shadowed pixel of a plate and pillar scene as dark as without a gloss while the lit plate takes the highlight, and refuse the bad values. A sharpness exponent of 8 in place of 32 fails them. |
+
+## 16. Opacity
+
+`View.Opacity` lets a body show what is behind it: one dimensionless value for each body drawn, in order as `Colors` is.
+
+| Decision | Rule |
+|---|---|
+| T1 | An empty `Opacity`, and one whose values are all 1, draw as without it, byte for byte. A count other than the bodies' (a single `PNG` body takes one) is `ErrDegenerate`, a value outside (0, 1] is `ErrDegenerate` and a non-dimensionless one `ErrUnitKind`. It does not combine with `Shadows`, which is `ErrDegenerate`. |
+| T2 | The triangles of opacity 1 are drawn as before, shaded flat and depth tested. The others are blended over that image from the farthest to the nearest, ordered by the mean depth of their vertices, each at the pixels where it is nearer than the opaque surface: a pixel becomes `α` of the triangle's shade and `1 − α` of what was there, rounded to the nearest 8 bit value. A translucent body's own far side, which a back colour shades, therefore shows through its near side. |
+| T3 | A pixel whose centre lies on an edge two translucent triangles share is blended once, by the top-left rule: the triangle is wound one way and an edge it runs upward, or level toward the right, owns such a pixel. The opaque pass needs no rule, its depth test hides a second draw. |
+| T4 | The order is by triangle, not exact: two translucent triangles that cross are blended in one order throughout, and a perspective camera orders by the same depth. |
+| T5 | The tests lay a plate 1 mm above a block seen from above, and read the pixel at the plate's centre, which lies on the diagonal of its two triangles, as a half-clear plate over the block: green half of the near face's, blue `(1 − α)α` of the far face's and red `(1 − α)²` of the block's. The pixels beside the plate and the background are as without opacity, an opacity of 1 matches the plain bytes, and the refusals are listed. A blend of the shared diagonal twice, and an order of nearest first, each fail them. |
