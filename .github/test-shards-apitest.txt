@@ -1228,9 +1228,10 @@
 10	0.01	TestOffsetClosesANarrowSlotAndDropsAThinPart
 10	0.01	TestOffsetOfASolidRefusals
 4	0.02	TestVerifyInterferenceRowsKeepDocumentPairOrder
-5	0.00	TestCommonAxisRevolveSharedArcSpan
-5	0.00	TestCommonAxisRevolveSharedArcSpanEmpty
-5	0.00	TestCommonAxisRevolveSharedArcSpanNearCarrier
+10	0.00	TestCommonAxisRevolveSharedArcSpan
+10	0.00	TestCommonAxisRevolveSharedArcSpanEmpty
+10	0.00	TestCommonAxisRevolveSharedArcSpanNearCarrier
+10	0.00	TestCommonAxisRevolveSharedArcSpanUlpRadii
 4	0.86	TestVerifyJointBoxClearReading
 4	0.01	TestVerifyJointBoxErrors
 4	2.23	TestVerifyJointBoxLoopClearMargins

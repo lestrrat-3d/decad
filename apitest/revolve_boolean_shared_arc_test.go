@@ -3,6 +3,7 @@ package apitest_test
 import (
 	"context"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -10,14 +11,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// sharedArcMeridian revolves a radius-10 meridian about the u axis: the
-// half-disk over the u-axis chord from (−10, 0) to (10, 0), a ball, or with
-// dome set the quarter-disk bounded by the chord from the origin to (10, 0),
-// the counter-clockwise arc to (0, 10) and the line back down, a dome over
+// sharedArcMeridian revolves a radius-r meridian about the u axis: the
+// half-disk over the u-axis chord from (−r, 0) to (r, 0), a ball, or with
+// dome set the quarter-disk bounded by the chord from the origin to (r, 0),
+// the counter-clockwise arc to (0, r) and the line back down, a dome over
 // u ≥ 0.
-func sharedArcMeridian(t *testing.T, doc *decad.Document, dome bool) *decad.Body {
+func sharedArcMeridian(t *testing.T, doc *decad.Document, r float64, dome bool) *decad.Body {
 	t.Helper()
-	const r = 10
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -122,8 +122,8 @@ func TestCommonAxisRevolveSharedArcSpan(t *testing.T) {
 		hemisphere = 2000 * math.Pi / 3
 	)
 	type maker func(*testing.T, *decad.Document) *decad.Body
-	ballOf := func(t *testing.T, doc *decad.Document) *decad.Body { return sharedArcMeridian(t, doc, false) }
-	domeOf := func(t *testing.T, doc *decad.Document) *decad.Body { return sharedArcMeridian(t, doc, true) }
+	ballOf := func(t *testing.T, doc *decad.Document) *decad.Body { return sharedArcMeridian(t, doc, 10, false) }
+	domeOf := func(t *testing.T, doc *decad.Document) *decad.Body { return sharedArcMeridian(t, doc, 10, true) }
 	shellOf := func(t *testing.T, doc *decad.Document) *decad.Body { return hollowBall(t, doc, 6, 10) }
 	ringOf := func(t *testing.T, doc *decad.Document) *decad.Body { return torusOf(t, doc, 6, 3, false) }
 	outerRingOf := func(t *testing.T, doc *decad.Document) *decad.Body { return torusOf(t, doc, 6, 3, true) }
@@ -174,8 +174,8 @@ func TestCommonAxisRevolveSharedArcSpan(t *testing.T) {
 func TestCommonAxisRevolveSharedArcSpanEmpty(t *testing.T) {
 	t.Parallel()
 	doc := decad.New(decad.ExactOnly())
-	dome := sharedArcMeridian(t, doc, true)
-	ball := sharedArcMeridian(t, doc, false)
+	dome := sharedArcMeridian(t, doc, 10, true)
+	ball := sharedArcMeridian(t, doc, 10, false)
 	_, err := decad.Cut(t.Context(), dome, ball)
 	var be *decad.BooleanError
 	require.ErrorAs(t, err, &be)
@@ -194,7 +194,7 @@ func TestCommonAxisRevolveSharedArcSpanEmpty(t *testing.T) {
 func TestCommonAxisRevolveSharedArcSpanNearCarrier(t *testing.T) {
 	t.Parallel()
 	doc := decad.New(decad.ExactOnly())
-	ball := sharedArcMeridian(t, doc, false)
+	ball := sharedArcMeridian(t, doc, 10, false)
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -217,4 +217,106 @@ func TestCommonAxisRevolveSharedArcSpanNearCarrier(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "more than 65536 facets")
 	require.Equal(t, before, doc.Bodies())
+}
+
+// Radii one ulp apart, 10 and the next float above it, are not one carrier.
+// Sketch withdraws one arc into its identity band, but the window's ends are
+// the arc's own endpoints, which meet no fragment end of the other operand,
+// so the reading finds no shared span and ExactCarriers sees none. Whether the
+// cells Sketch publishes without that arc classify depends on which operand
+// holds which arc: the route either builds a body whose published volume
+// bound contains the true volume, or misses, and the pair continues to the
+// mesh path's refusal. The true volume is reference arithmetic (400-bit π and
+// radii): with B = 4πb³/3 the ball, D = 2πd³/3 the dome, and I = 2π·min(b, d)³/3
+// their common hemisphere, Intersect is I, Union B + D − I, and ball Cut dome
+// B − I.
+// ulpOp names the Boolean of one ulp-radii row.
+type ulpOp int
+
+const (
+	ulpIntersect ulpOp = iota
+	ulpUnion
+	ulpCut
+)
+
+func (op ulpOp) run(ctx context.Context, a, b *decad.Body) (*decad.Body, error) {
+	switch op {
+	case ulpIntersect:
+		return decad.Intersect(ctx, a, b)
+	case ulpUnion:
+		return decad.Union(ctx, a, b)
+	}
+	return decad.Cut(ctx, a, b)
+}
+
+func TestCommonAxisRevolveSharedArcSpanUlpRadii(t *testing.T) {
+	t.Parallel()
+	up := math.Nextafter(10, 11)
+	for _, tc := range []struct {
+		name         string
+		op           ulpOp
+		ballR, domeR float64
+		domeFirst    bool
+		admitted     bool
+	}{
+		{name: "dome 10 intersect ball 10+", op: ulpIntersect, ballR: up, domeR: 10, domeFirst: true, admitted: true},
+		{name: "ball 10 union dome 10+", op: ulpUnion, ballR: 10, domeR: up, admitted: true},
+		{name: "ball 10 cut dome 10+", op: ulpCut, ballR: 10, domeR: up, admitted: true},
+		{name: "ball 10+ intersect dome 10", op: ulpIntersect, ballR: up, domeR: 10},
+		{name: "ball 10+ union dome 10", op: ulpUnion, ballR: up, domeR: 10},
+		{name: "ball 10+ cut dome 10", op: ulpCut, ballR: up, domeR: 10},
+		{name: "dome 10+ intersect ball 10", op: ulpIntersect, ballR: 10, domeR: up, domeFirst: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New(decad.ExactOnly())
+			ball := sharedArcMeridian(t, doc, tc.ballR, false)
+			dome := sharedArcMeridian(t, doc, tc.domeR, true)
+			a, b := ball, dome
+			if tc.domeFirst {
+				a, b = dome, ball
+			}
+			before := doc.Bodies()
+			result, err := tc.op.run(t.Context(), a, b)
+			if !tc.admitted {
+				require.ErrorIs(t, err, decad.ErrUnsupported)
+				require.ErrorContains(t, err, "more than 65536 facets")
+				require.Equal(t, before, doc.Bodies())
+				return
+			}
+			require.NoError(t, err)
+			vol, err := result.Volume()
+			require.NoError(t, err)
+			want := ulpPairVolume(t, tc.op, tc.ballR, tc.domeR)
+			held := new(big.Float).SetPrec(volumeRefPrec).SetFloat64(vol.Value.Mag())
+			residual := new(big.Float).SetPrec(volumeRefPrec).Sub(held, want)
+			bound := new(big.Float).SetPrec(volumeRefPrec).SetFloat64(vol.Bound.Mag())
+			require.LessOrEqual(t, new(big.Float).Abs(residual).Cmp(bound), 0,
+				"the published bound must contain the true volume")
+		})
+	}
+}
+
+// ulpPairVolume is the true volume of a ball of radius b and a dome of
+// radius d about one centre under op, in 400-bit reference arithmetic.
+func ulpPairVolume(t *testing.T, op ulpOp, b, d float64) *big.Float {
+	t.Helper()
+	pi, ok := new(big.Float).SetPrec(volumeRefPrec).SetString(piRef)
+	require.True(t, ok)
+	cube := func(r float64) *big.Float {
+		x := new(big.Float).SetPrec(volumeRefPrec).SetFloat64(r)
+		return new(big.Float).SetPrec(volumeRefPrec).Mul(x, new(big.Float).SetPrec(volumeRefPrec).Mul(x, x))
+	}
+	scaled := func(n, m int64, c *big.Float) *big.Float {
+		k := new(big.Float).SetPrec(volumeRefPrec).Quo(big.NewFloat(float64(n)), big.NewFloat(float64(m)))
+		return new(big.Float).SetPrec(volumeRefPrec).Mul(new(big.Float).SetPrec(volumeRefPrec).Mul(k, pi), c)
+	}
+	ball, dome, common := scaled(4, 3, cube(b)), scaled(2, 3, cube(d)), scaled(2, 3, cube(min(b, d)))
+	switch op {
+	case ulpIntersect:
+		return common
+	case ulpUnion:
+		return new(big.Float).SetPrec(volumeRefPrec).Sub(new(big.Float).SetPrec(volumeRefPrec).Add(ball, dome), common)
+	}
+	return new(big.Float).SetPrec(volumeRefPrec).Sub(ball, common)
 }

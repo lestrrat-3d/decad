@@ -1032,8 +1032,16 @@ from the other's centre, or one whose endpoint is a cos/sin rounding off the
 radius) continue to the mesh path. Two equal whole circles are not reached:
 Sketch publishes no cell for the pair, and the scene misses. An arc withdrawn
 into a window whose ends meet no partner's fragment ends (radii one ulp apart)
-is not a shared span. The cells Sketch publishes without it are classified as
-in any other scene, and the result's volume reads `Approximate`.
+is not a shared span, and the exact-carrier reading never sees it. The cells
+Sketch publishes without that arc are classified as in any other scene, and
+the outcome depends on which operand holds which arc. A dome of radius 10
+`Intersect` a ball one ulp larger, and a ball of radius 10 `Union` or `Cut` by
+a dome one ulp larger, build a body whose published volume bound contains the
+true volume. A ball one ulp larger than a radius-10 dome, under any of the
+three operations, and a dome one ulp larger `Intersect` a radius-10 ball miss
+and continue to the mesh path
+(`apitest/revolve_boolean_shared_arc_test.go`,
+`TestCommonAxisRevolveSharedArcSpanUlpRadii`).
 
 An arc cut parameter is certified by Sketch (`TExact`) and its rounding is charged
 through `CutDelta` in `MergeWithChain`. A cut arc keeps its source
