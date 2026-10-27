@@ -406,6 +406,13 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 	e.pollErr = ctx.Err
 	e.pollInterval = proofbound.WorkPollInterval / workers
 	e.pollRemaining = e.pollInterval
+	if allQuery && workers > 1 {
+		// Self-scan workers read the same held vertices. Share exact lifts on
+		// demand so a sparse scan does not eagerly lift unused vertices and
+		// concurrent workers do not build duplicate lifts.
+		e.xvOnce = make([]sync.Once, len(e.xv))
+		e.normOnce = make([]sync.Once, len(e.norm))
+	}
 	// Worker 0 scans with e itself and writes its caches and countdown, so the
 	// other workers copy a snapshot taken before any worker starts. Each copy
 	// is made on its own worker; base is only read while they run.
@@ -448,6 +455,12 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 	}
 	group.Wait()
 	e.pollErr = nil
+	if allQuery && workers > 1 {
+		// Repair may move vertices and invalidate their cached exact lifts.
+		// The shared once guards are only valid for the read-only scan.
+		e.xvOnce = nil
+		e.normOnce = nil
+	}
 	if err := e.budget.Err(); err != nil {
 		return false, err
 	}
@@ -594,18 +607,27 @@ func (e *heldEmbedding) scanStep() error {
 }
 
 // readOnlyScanCopy shares the immutable facet boxes, prepared projections and
-// incident-facet lists. Each worker writes only its own remaining predicate caches.
-// shareCones also shares the corner cones, which the caller has filled for
-// every facet.
+// incident-facet lists. Each worker writes only its own remaining predicate
+// caches. shareCones also shares the corner cones prepared for every facet and
+// the exact vertex and normal caches, which use once guards during the scan.
 func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int, shareCones bool) *heldEmbedding {
 	local := *e
 	local.pollErr = ctx.Err
 	local.pollInterval = proofbound.WorkPollInterval / workers
 	local.pollRemaining = local.pollInterval
-	local.xv = make([]proof.Xpt, len(e.xv))
-	local.xvOK = make([]bool, len(e.xvOK))
-	local.norm = make([]proof.Xpt, len(e.norm))
-	local.normOK = make([]bool, len(e.normOK))
+	if shareCones {
+		local.xv = e.xv
+		local.xvOK = e.xvOK
+		local.xvOnce = e.xvOnce
+		local.norm = e.norm
+		local.normOK = e.normOK
+		local.normOnce = e.normOnce
+	} else {
+		local.xv = make([]proof.Xpt, len(e.xv))
+		local.xvOK = make([]bool, len(e.xvOK))
+		local.norm = make([]proof.Xpt, len(e.norm))
+		local.normOK = make([]bool, len(e.normOK))
+	}
 	local.plane = make([]int, len(e.plane))
 	local.planeSense = make([]int8, len(e.planeSense))
 	for i := range local.plane {
@@ -643,10 +665,12 @@ type heldEmbedding struct {
 
 	// Exact lifts of the held float vertices and facets, invalidated when a
 	// vertex moves.
-	xv     []proof.Xpt
-	xvOK   []bool
-	norm   []proof.Xpt
-	normOK []bool
+	xv       []proof.Xpt
+	xvOK     []bool
+	xvOnce   []sync.Once
+	norm     []proof.Xpt
+	normOK   []bool
+	normOnce []sync.Once
 	// plane is each facet's exact plane, interned so two facets are coplanar
 	// exactly when their ids match; -1 is not yet computed, -2 no plane.
 	plane      []int
@@ -826,6 +850,15 @@ func (e *heldEmbedding) restamp(v int, saved []uint64) {
 }
 
 func (e *heldEmbedding) lift(v int) proof.Xpt {
+	if e.xvOnce != nil {
+		e.xvOnce[v].Do(func() {
+			if !e.xvOK[v] {
+				e.xv[v] = proof.XptOf(e.h.Verts[v])
+				e.xvOK[v] = true
+			}
+		})
+		return e.xv[v]
+	}
 	if !e.xvOK[v] {
 		e.xv[v] = proof.XptOf(e.h.Verts[v])
 		e.xvOK[v] = true
@@ -843,6 +876,18 @@ func (e *heldEmbedding) facet(i int) ([3]r3.Vec, [3]proof.Xpt, proof.Xpt) {
 // normal computes the held facet's exact normal without materializing
 // homogeneous vertex lifts.
 func (e *heldEmbedding) normal(i int) proof.Xpt {
+	if e.normOnce != nil {
+		e.normOnce[i].Do(func() {
+			if !e.normOK[i] {
+				t, v := e.h.Tris[i], e.h.Verts
+				a, b, c := proof.DyVec(v[t[0]]), proof.DyVec(v[t[1]]), proof.DyVec(v[t[2]])
+				n := proof.DvCross(proof.DvSub(b, a), proof.DvSub(c, a))
+				e.norm[i] = proof.Xpt(proof.XhpStripTwosOwned(proof.XhpOfDyadics(n[0], n[1], n[2])))
+				e.normOK[i] = true
+			}
+		})
+		return e.norm[i]
+	}
 	if !e.normOK[i] {
 		t, v := e.h.Tris[i], e.h.Verts
 		a, b, c := proof.DyVec(v[t[0]]), proof.DyVec(v[t[1]]), proof.DyVec(v[t[2]])
