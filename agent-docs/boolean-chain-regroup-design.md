@@ -134,10 +134,11 @@ these rules, and point location reads the same function (`agent-docs/point-conta
 - The `Source` reports a public producer of kind `Cut`, `Union` or `Intersect` with `n` as its output.
 - `n.Payload.(facetedrecord.Payload).PointCone == nil`. A point-cone trim may record `MatchingFaces`
   (`internal/facetedrecord/point.go`), which history does not record.
-- No `n.OperationWarnings` record has `Change != opdiagnostic.ChangeUnknown`. A gap shift or embedding reach moved
-  accepted geometry (`internal/booleaneval/eval.go` `Diagnostics`, `internal/meshbool/held_embedding_diagnostics.go`),
-  so `n` does not denote the operation over its inputs. `CodeChainAllowanceApplied` has no change mechanism and does
-  not block.
+- Every `n.OperationWarnings` record is classified as moving no geometry. The only such record is a
+  `CodeChainAllowanceApplied` with `Change == opdiagnostic.ChangeUnknown`: it relaxes a gate and moves nothing. Any
+  other record makes `n` a leaf, including a code added later. A gap shift or embedding reach moved accepted geometry
+  (`internal/booleaneval/eval.go` `Diagnostics`, `internal/meshbool/held_embedding_diagnostics.go`), so `n` does not
+  denote the operation over its inputs.
 
 A body whose producer is `Transform`, `Copy`, a modify operation, `Hole`/`Rib`/`Web`/`Emboss`/`Boss`, `Patterned`
 or any non-Boolean kind is a leaf. An analytic (non-faceted) Boolean result is a leaf: it is already exact.

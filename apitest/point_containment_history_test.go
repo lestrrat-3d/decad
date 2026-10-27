@@ -181,6 +181,12 @@ func TestPointLocationHistoryRefusals(t *testing.T) {
 		diagnostics := joined.OperationDiagnostics()
 		require.Len(t, diagnostics, 1)
 		require.Equal(t, decad.OpDiagGapShiftApplied, diagnostics[0].Code)
+		// This pins the conservative design choice, not the true answer: the
+		// first point is inside the flat plate, which the diagnostic reports
+		// unshifted, so the true answer is Inside however far the turned plate
+		// moved. The history route still
+		// refuses every gap-shifted result rather than prove which operand
+		// moved and by how much (agent-docs/point-containment-design.md §8.1).
 		requireLocations(t, joined, []locateCase{
 			{name: "0.001 under the top face", at: r3.NewVec(1, 1, 3.999), want: decad.PointUndecided},
 			{name: "top face", at: r3.NewVec(1, 1, 4), want: decad.PointUndecided},

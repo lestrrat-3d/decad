@@ -335,10 +335,12 @@ nothing else:
 - `PointCone` is nil. `decad.WithMatchingFaces` reaches only the point-cone
   route, and its result denotes the declared match with its effect charged
   into the bounds, not the operation over its inputs.
-- No `OperationWarnings` record carries a `Change` mechanism. A gap-shifted
-  retry or an embedding reach moved accepted geometry, so the result is not
-  the operation over its inputs, however small the move.
-  `CodeChainAllowanceApplied` relaxes a gate and moves nothing.
+- Every `OperationWarnings` record is classified as moving no geometry: a
+  `CodeChainAllowanceApplied` with no `Change` mechanism, which relaxes a
+  gate and moves nothing. Any other record, including a code added later,
+  makes the body a leaf. A gap-shifted retry or an embedding reach moved
+  accepted geometry, so the result is not the operation over its inputs,
+  however small the move.
 
 Every other body is a leaf.
 
@@ -374,7 +376,21 @@ of its complement share one boundary.
 | A outside | outside | outside | outside | outside |
 | A undecided | undecided | undecided | outside | undecided |
 
-Proof of each row:
+Union is the complement of the meet of the complements, so its table
+follows from the one above with inside and outside swapped:
+
+| `A ∨ B` | B inside | B on boundary | B outside | B undecided |
+|---|---|---|---|---|
+| A inside | inside | inside | inside | inside |
+| A on boundary | inside | undecided | on boundary | undecided |
+| A outside | inside | on boundary | outside | undecided |
+| A undecided | inside | undecided | undecided | undecided |
+
+| `¬A` | A inside | A on boundary | A outside | A undecided |
+|---|---|---|---|---|
+| answer | outside | on boundary | inside | undecided |
+
+Proof of each row of the meet table:
 
 - Outside either operand: a ball about `p` misses that operand, so it misses
   `A ∧ B`, which lies in both.
@@ -439,8 +455,8 @@ are about the same set.
   plates' end faces, takes a gap-shifted retry, and stays undecided on its top
   face and 0.001 mm under it. A `Transform` of the warning-free crossed plates
   stays undecided on the image of the top face and 1e-9 mm under it.
-- Unit fixtures check the table above and the union and complement tables
-  for every pair of answers, each operation over two overlapping cubes, the
+- Unit fixtures check the meet, union and complement tables of §8.3 for
+  every answer, each operation over two overlapping cubes, the
   fold over three inputs, a `Cut` over a `Union`, and each stop, which reads
   no later operand. They decline a point-cone record, a gap shift, an
   embedding reach, an analytic payload, a missing producer record, a

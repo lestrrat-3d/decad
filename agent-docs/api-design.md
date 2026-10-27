@@ -392,9 +392,9 @@ See `agent-docs/loft-point-design.md` for the source proof.
 `PointUndecided`. It classifies an undisplaced straight prism against its exact
 record, a mesh Boolean result by combining its operands' exact answers through
 the operation history, and every other body or point against the body's
-verified mesh, and
-returns only classifications proved for the body, including retired bodies. `agent-docs/point-containment-design.md`
-owns its proof and refusal rules.
+verified mesh. It returns only classifications proved for the body, including
+retired bodies. `agent-docs/point-containment-design.md` owns its proof and
+refusal rules.
 
 `DistanceToPoint` measures the minimum distance from `p` to the solid, so a
 point inside or on its boundary has distance zero. Its `Measurement` encloses
