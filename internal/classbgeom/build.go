@@ -25,13 +25,16 @@ import (
 //
 // Along g's normal, Y spans [a, b] and the slab faces sit at s (rooted) or
 // s0 < s1 (through). X's material over Y's section is [s0, s1], or the side of
-// s its face's outward normal points away from. Then:
+// s its face's outward normal points away from. Two faces whose outward
+// normals point at each other instead bound a gap of X that a flush tool
+// bridges, its caps at s0 and s1 (FlushReach). Then:
 //
 //   - Cut keeps X's other faces, the slab faces, and Y's walls reversed over
 //     the inside interval; rooted, the inside end is the hole's floor, Y's
 //     section facing back up the hole.
 //   - Union keeps X's other faces, the slab faces, and Y's walls with Y's caps
-//     over the parts of [a, b] outside X.
+//     over the parts of [a, b] outside X; a bridging tool keeps its walls
+//     over [s0, s1] and no cap.
 //   - Intersect is Y's section swept over the inside interval: a prism.
 func buildClassB(ctx context.Context, op meshbool.OperationKind, cp Pair, reach []Slab) (topo.Payload, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
@@ -56,12 +59,22 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp Pair, reach 
 	if len(slabs) == 2 && slabs[1].Level < slabs[0].Level {
 		slabs[0], slabs[1] = slabs[1], slabs[0]
 	}
+	// Two faces whose outward normals point at each other bound a gap of X:
+	// a flush tool bridging it (FlushReach's FlushOutside), which only a
+	// Union reaches.
+	bridge := len(slabs) == 2 && slabs[0].Outward
+	if bridge && op != meshbool.OpUnion {
+		return nil, false, fmt.Errorf(`%w: class B builds a tool bridging the gap between two faces by Union alone, not %s`, decaderr.ErrUnsupported, op)
+	}
 	// The interval of [a, b] inside X, each end with its displacement.
 	type end struct{ level, delta float64 }
 	a, b := end{cp.y.Z0, cp.y.Z0Delta}, end{cp.y.Z1, cp.y.Z1Delta}
 	var inside [2]end
 	var outside [][2]end
 	switch {
+	case bridge:
+		// The tool's caps lie in the two faces: the whole tool is outside X.
+		outside = [][2]end{{{slabs[0].Level, slabs[0].LevelDelta}, {slabs[1].Level, slabs[1].LevelDelta}}}
 	case len(slabs) == 2:
 		inside = [2]end{{slabs[0].Level, slabs[0].LevelDelta}, {slabs[1].Level, slabs[1].LevelDelta}}
 		outside = [][2]end{{a, inside[0]}, {inside[1], b}}
@@ -124,6 +137,10 @@ func buildClassB(ctx context.Context, op meshbool.OperationKind, cp Pair, reach 
 	case meshbool.OpUnion:
 		for _, part := range outside {
 			walls(section.Outer, part[0], part[1])
+		}
+		if bridge {
+			// Both caps lie in X's faces, which take the section as holes.
+			break
 		}
 		if len(slabs) == 2 || !slabs[0].Outward {
 			addCap(a, false)

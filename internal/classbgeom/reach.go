@@ -78,57 +78,69 @@ func tubeSlabs(ctx context.Context, faces []FaceRecord, tool ToolRecord, widen f
 	return slabs, true, nil
 }
 
-// FlushSide says where the tool lies against the target face its cap is
+// FlushSide says where the tool lies against the target faces its caps are
 // flush with.
 type FlushSide int
 
 const (
-	// FlushOutside: the tool lies on the face's outward side, a pin standing
-	// on the face.
+	// FlushOutside: the tool lies on each face's outward side, a pin standing
+	// on one face or bridging the gap between two.
 	FlushOutside FlushSide = iota + 1
 	// FlushInside: the tool lies inside the target, a blind hole opening in
-	// the face.
+	// one face or a through hole from one face to the other.
 	FlushInside
 )
 
-// FlushReach is the through reach with a tool cap lying in the plane of the
-// one target face the tube meets (agent-docs/general-boolean-design.md §3
-// "Flush cap contact"). flush names the tool caps CoplanarFaces found in a
-// target plane. The face must sit at one of those caps' levels, compared as
-// recorded floats, with the face's and that cap's level displacements zero,
-// so the face and the cap denote one plane. The tube meets no other face's
-// box, so the tool lies wholly on one side of the face: outside when the
-// face's outward normal points from the cap into the tool, inside otherwise.
-// ok=false is a silent miss.
+// FlushReach is the through reach with every target face the tube meets lying
+// in the plane of a tool cap (agent-docs/general-boolean-design.md §3 "Flush
+// cap contact"). flush names the tool caps CoplanarFaces found in a target
+// plane. The tube meets one or two faces, and each must sit at a distinct
+// marked cap's level, compared as recorded floats, with the face's and that
+// cap's level displacements zero, so the face and the cap denote one plane.
+// The tube meets no other face's box, so the open tube holds no target
+// boundary and the tool lies wholly on one side of the target: outside when
+// a face's outward normal points from its cap into the tool, inside
+// otherwise. Two faces must say the same side, or the pair misses. ok=false
+// is a silent miss.
 func FlushReach(ctx context.Context, faces []FaceRecord, tool ToolRecord, flush [2]bool) ([]Slab, FlushSide, bool, error) {
 	slabs, ok, err := tubeSlabs(ctx, faces, tool, 0)
-	if err != nil || !ok || len(slabs) != 1 {
+	if err != nil || !ok {
 		return nil, 0, false, err
 	}
-	s := slabs[0]
 	ends := [2]struct{ at, other, delta float64 }{
 		{tool.Z0, tool.Z1, tool.Z0Delta},
 		{tool.Z1, tool.Z0, tool.Z1Delta},
 	}
-	for k, e := range ends {
-		level := tool.Sign[2]*e.at + 0
-		if !flush[k] || s.Level != level {
-			continue
+	var side FlushSide
+	var met [2]bool
+	for _, s := range slabs {
+		k := -1
+		for j, e := range ends {
+			if flush[j] && !met[j] && s.Level == tool.Sign[2]*e.at+0 {
+				k = j
+				break
+			}
 		}
-		far := tool.Sign[2]*e.other + 0
-		if s.LevelDelta != 0 || e.delta != 0 {
+		if k < 0 || s.LevelDelta != 0 || ends[k].delta != 0 {
 			return nil, 0, false, nil
 		}
+		met[k] = true
+		level := tool.Sign[2]*ends[k].at + 0
+		far := tool.Sign[2]*ends[k].other + 0
 		into := 1
 		if far < level {
 			into = -1
 		}
+		got := FlushInside
 		if s.Outward == into {
-			return slabs, FlushOutside, true, nil
+			got = FlushOutside
 		}
-		return slabs, FlushInside, true, nil
+		if side != 0 && got != side {
+			return nil, 0, false, nil
+		}
+		side = got
 	}
-	return nil, 0, false, nil
+	return slabs, side, true, nil
 }
 
 // Slab names a face across the tool's sweep axis and its exact level test.
