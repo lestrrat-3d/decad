@@ -76,8 +76,8 @@ func offsetJoinsOf(t *testing.T, loop sectionrecord.LoopRecord, r float64) ([]of
 // is the recorded corner moved 2 along a rational unit normal, so the cap
 // contour holds it exactly: (2, 3) at the corner (0, 3), where the arc's
 // tangent read through math.Sincos at the angle π puts offset2d's foot at
-// (2, 2.9999999999999996). The contour then states no displacement.
-// Shown to fail with exactFeet's G1 arm deleted (the (0, 3) foot stayed
+// (2, 2.9999999999999996) on amd64. The contour then states no displacement.
+// Shown to fail with offset2d.ExactCornerFeet's G1 arm deleted (the (0, 3) foot stayed
 // off by one ulp and the contour stated it).
 func TestOffsetJoinsHoldExactTangentFeet(t *testing.T) {
 	t.Parallel()
@@ -109,30 +109,60 @@ func TestOffsetJoinsHoldExactTangentFeet(t *testing.T) {
 	require.Zero(t, delta)
 }
 
-// TestOffsetJoinsHoldExactConnectorFeet offsets a loop by 0.5 whose quarter
-// arc about the origin ends at (0, 2) on a reflex corner, where a line
-// leaves straight up. The connector arc runs from the arc's foot to the
-// line's: (0, 1.5), where offset2d steps along the arc's tangent read at the
-// angle π/2 and lands at U = -3.06e-17, and (-0.5, 2). Shown to fail with
-// exactFeet's connector-arc arm deleted (PA kept the rounded U).
-func TestOffsetJoinsHoldExactConnectorFeet(t *testing.T) {
-	t.Parallel()
-	joins, plain := offsetJoinsOf(t, loopOf(
+// connectorCases are loops offset by 0.5 with one reflex corner beside a
+// quarter arc about the origin, where offset2d steps the arc's foot along its
+// tangent read through math.Sincos at a right angle and lands a rounding off
+// the exact foot (U = -3.06e-17 on amd64). In "arc then line" the arc ends at
+// (0, 2) and a line leaves straight up, so the arc's foot is PA = (0, 1.5);
+// in "line then arc" a line arrives straight up at (0, -2) and the arc
+// starts there, so the arc's foot is PB = (0, -1.5). The line's foot is exact
+// either way.
+var connectorCases = []struct {
+	name     string
+	loop     sectionrecord.LoopRecord
+	vertex   [2]float64
+	pa, pb   sectionrecord.Point2
+	arcFootA bool
+}{
+	{"arc then line", loopOf(
 		ccwArc(0, 0, 2, 0, 0, 2), line(0, 2, 0, 5), line(0, 5, -5, 5),
 		line(-5, 5, -5, -5), line(-5, -5, 2, -5), line(2, -5, 2, 0),
-	), 0.5)
-	reflex := 0
-	for i, j := range joins {
-		if !j.Arc {
-			continue
-		}
-		require.Equal(t, [2]float64{0, 2}, [2]float64{j.VertU, j.VertV})
-		require.NotEqual(t, plain[i].PA, j.PA, "offset2d's own foot is a rounding off")
-		require.Equal(t, sectionrecord.Point2{U: 0, V: 1.5}, j.PA)
-		require.Equal(t, sectionrecord.Point2{U: -0.5, V: 2}, j.PB)
-		reflex++
+	), [2]float64{0, 2}, sectionrecord.Point2{U: 0, V: 1.5}, sectionrecord.Point2{U: -0.5, V: 2}, true},
+	{"line then arc", loopOf(
+		line(0, -5, 0, -2), ccwArc(0, 0, 0, -2, 2, 0), line(2, 0, 2, 5),
+		line(2, 5, -5, 5), line(-5, 5, -5, -5), line(-5, -5, 0, -5),
+	), [2]float64{0, -2}, sectionrecord.Point2{U: -0.5, V: -2}, sectionrecord.Point2{U: 0, V: -1.5}, false},
+}
+
+// TestOffsetJoinsHoldExactConnectorFeet runs connectorCases: the connector
+// arc's two feet are the exact ones, and the arc's own foot is one offset2d
+// alone holds a rounding off. Shown to fail with offset2d.ExactCornerFeet's
+// PA assignment deleted ("arc then line" kept the rounded U) and with its PB
+// assignment deleted ("line then arc" kept it).
+func TestOffsetJoinsHoldExactConnectorFeet(t *testing.T) {
+	t.Parallel()
+	for _, tc := range connectorCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			joins, plain := offsetJoinsOf(t, tc.loop, 0.5)
+			reflex := 0
+			for i, j := range joins {
+				if !j.Arc {
+					continue
+				}
+				require.Equal(t, tc.vertex, [2]float64{j.VertU, j.VertV})
+				if tc.arcFootA {
+					require.NotEqual(t, plain[i].PA, j.PA, "offset2d's own foot is a rounding off")
+				} else {
+					require.NotEqual(t, plain[i].PB, j.PB, "offset2d's own foot is a rounding off")
+				}
+				require.Equal(t, tc.pa, j.PA)
+				require.Equal(t, tc.pb, j.PB)
+				reflex++
+			}
+			require.Equal(t, 1, reflex)
+		})
 	}
-	require.Equal(t, 1, reflex)
 }
 
 // TestOffsetJoinsKeepIrrationalFeet offsets a loop whose arc about the

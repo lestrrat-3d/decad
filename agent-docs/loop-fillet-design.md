@@ -171,14 +171,17 @@ rDelta, dsDelta: rDelta}`), sense `σ` from LB6:
    wherever a float64 holds that point: the recorded corner moved `r` along a
    rational unit normal, evaluated in exact rational arithmetic
    (`capcontour.ExactJoinFoot`), and taken at a G1 join only when both walks'
-   feet are that one point. Elsewhere the foot is `offset2d.CornerJoin`'s
+   feet are that one point; that agreement is a choice, not a soundness gate,
+   since the displacement bound covers either foot. Elsewhere the foot is `offset2d.CornerJoin`'s
    float step along the held tangent, which for a circular walk is a
    `math.Sincos` at a computed angle; the contour's displacement bound covers
    it either way. The LF5 and LF6 meridians stand on these feet (step 4), so
    where the feet are exact a meridian's `Center` and both its vertices lie
    in its own plane exactly, as DF10's analytic writer requires: P8's
    tangent join at `(0, 3)` holds its foot at `(2, 3)`, which the float step
-   puts at `(2, 2.9999999999999996)`.
+   puts at `(2, 2.9999999999999996)` on amd64. `offset2d.PartialFilletContour`
+   applies the same rule (`offset2d.ExactCornerFeet`) to its selected pairs,
+   so a partial fillet's contour and meridians stand on the same feet.
 2. **Corner classes.** Each corner of `ℓ`'s coalesced walk is classified from
    the record's own floats as `capband.OccupiedVolumeAdmission` classifies
    them: a reflex corner (`joins[i].arc`) is LF6; a line–line miter is LF4;

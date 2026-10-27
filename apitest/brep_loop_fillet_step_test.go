@@ -90,8 +90,8 @@ func TestBrepLoopFilletPublicSTEP(t *testing.T) {
 // vertices in its own plane, by exact rational arithmetic on the held
 // coordinates. STEP then writes the body analytic, the four patches as
 // TOROIDAL_SURFACE. ReadSTEP reads no torus face, so the file is checked by
-// its surfaces. Shown to fail with filletband's exactFeet G1 arm deleted (the
-// meridian at the (0, 0) corner held its Center at y = 2.9999999999999996
+// its surfaces. Shown to fail with offset2d's ExactCornerFeet G1 arm deleted (on
+// amd64 the meridian at the (0, 0) corner held its Center at y = 2.9999999999999996
 // beside its end vertex at y = 3, eight contour vertices read Approximate, and
 // the body was written faceted).
 func TestBrepLoopFilletPublicRoundedPlateAnalyticSTEP(t *testing.T) {

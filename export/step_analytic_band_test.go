@@ -348,11 +348,11 @@ func isCylinderPatch(f *decad.Face) bool {
 // every arc holds both its vertices in its own plane: the fillet build holds
 // each tangent join's foot at the exact point the record denotes, so the
 // meridian at the (0, 0) corner stands at y = 3 with both its vertices
-// (filletband.exactFeet). Shown to fail with supportsAnalyticTorusPatch
+// (offset2d.ExactCornerFeet). Shown to fail with supportsAnalyticTorusPatch
 // refusing every loop (the body fell to the faceted writer), with
 // torusPatchArea's parallel sweep sign inverted (the patches then walked
-// clockwise), with torusFaceSense inverted, and with exactFeet's G1 arm
-// deleted (that meridian's Center was held at y = 2.9999999999999996 off its
+// clockwise), with torusFaceSense inverted, and with ExactCornerFeet's G1
+// arm deleted (on amd64 that meridian's Center was held at y = 2.9999999999999996 off its
 // end vertex's plane, and the admission refused the body).
 func TestAnalyticBandRoundedPlateTopLoop(t *testing.T) {
 	t.Parallel()
