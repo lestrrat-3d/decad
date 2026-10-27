@@ -90,7 +90,8 @@ func TestHoleThreadOutOfABore(t *testing.T) {
 	thread := removedInternalOnWall(tapRadius, tapPitch, depth, turns, func(float64) float64 { return 0 })
 	volume, err := out.Volume()
 	require.NoError(t, err)
-	requireThreadVolume(t, volume, 40*40*10-math.Pi*Rb*Rb*10-bore-thread)
+	lead := math.Atan(tapPitch / (2 * math.Pi * tapRadius))
+	requireThreadVolumeWithin(t, volume, 40*40*10-math.Pi*Rb*Rb*10-bore-thread, thread*(1/math.Cos(lead)-1))
 }
 
 func TestHoleThreadInAThinRodIsTheBooleansRefusal(t *testing.T) {
