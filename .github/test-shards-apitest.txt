@@ -1264,6 +1264,8 @@
 4	0.86	TestVerifyJointBoxClearReading
 4	0.01	TestVerifyJointBoxErrors
 4	2.23	TestVerifyJointBoxLoopClearMargins
+10	0.01	TestExtremeFacesByCentroidRanksAMeshSolidsFaces
+10	0.01	TestExtremeFacesByCentroidRefusesWhatTheReadingsLeaveTied
 10	0.01	TestToFaceStopsAtAMeshSolidFace
 10	0.01	TestToFaceRefusesAMeshSolidFaceSquareToAnotherAxis
 10	0.01	TestThroughAllMeetsAMeshSolid

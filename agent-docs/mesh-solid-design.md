@@ -74,6 +74,11 @@ them a centroid, as for every group. A Boolean result, a placement or a mesh Boo
 read the five faces of a triangular prism, and a square top face split into unequal triangles, where an unweighted mean
 of the triangles' centroids fails.
 
+`Body.ExtremeFacesByCentroid` ranks a mesh solid's faces by these readings. The least face is the one whose centroid
+interval, along the axis, lies strictly below every other face's, and the greatest the one strictly above; an overlap or
+a tie is `ErrUnsupported`, because the readings do not decide the order. The tests rank the faces of a prism along a
+diagonal and along z, and refuse a tie along x; comparing intervals with `<=` instead of `<` fails the tie test.
+
 ## 5. Not covered
 
 - Welding, orienting and hole filling: repair the mesh first with `RepairMesh`.
