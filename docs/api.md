@@ -235,6 +235,12 @@ tube. `Fillet` and `Chamfer` refuse the exact flat's edges, as they do for an ex
 place the tool by `decad.Transform`: the faceted result keeps the shaft's plane and cylinder faces, and the blend
 builds on them.
 
+A pin drawn at right angles to a plate, on a datum plane, whose end cap lies flat inside one of the plate's faces
+combines exactly, with no `Faceted` face. A `Union` of a pin standing on the face from outside adds it, and a `Cut`
+of a pin ending in the face from inside leaves a blind hole that opens there; an `Intersect` of that pin is the pin.
+The cap and the face must hold the same level exactly. A pin that stops short by any gap, a length that only rounds
+onto the face (such as an inch distance), and a section touching the face's edge take the faceted path.
+
 A two-body `Union`, `Cut` or `Intersect` that would be refused because an operand is the mesh result of earlier Booleans is retried from
 the source bodies of that chain, when all but one pair combine by exact routes. The result is the same solid. Its
 history records the one call, and faces made by the exact steps carry fresh roles, so select them by geometry.
