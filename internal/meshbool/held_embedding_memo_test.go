@@ -45,11 +45,16 @@ func overlappingHeldPair(t *testing.T, e *heldEmbedding) (int, int) {
 // stamps in full. Before every query the packed word must replay exactly when
 // the full stamps match, every answer must be the one the pair gives when
 // decided afresh, and a pair is stored exactly when the exact predicates
-// decided it or keepFloat is set.
+// decided it or keepFloat is set. Under the race detector it walks the first
+// ten seeds.
 func TestHeldPairMemoReplaysWhatStampsAllow(t *testing.T) {
 	t.Parallel()
+	seeds := uint64(40)
+	if raceDetector {
+		seeds = 10
+	}
 	var replays, decides, trials, skipped, exacts int
-	for seed := range uint64(40) {
+	for seed := range seeds {
 		h := stitchLayered(rand.New(rand.NewPCG(seed, 4)), 6+int(seed%20))
 		e := newHeldEmbedding(cloneStitchHeld(h), proofbound.NewWorkBudget(t.Context()), true)
 		require.NoError(t, e.buildGrid())

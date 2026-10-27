@@ -14,6 +14,11 @@ examples, or changing CI shards.
   adding another full-model test.
 - Preserve computed-geometry assertions when replacing a large test. Do not
   drop coverage just to shorten CI.
+- CI runs every test under `-race`. A differential sweep may run a smaller case
+  set there through the package's `raceDetector` constant
+  (`race_enabled_test.go` / `race_disabled_test.go`); the plain build keeps the
+  full sweep. Before shrinking a set, remove each guard the test protects and
+  confirm the smaller set still fails.
 
 ## Shard manifests
 
