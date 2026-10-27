@@ -215,3 +215,15 @@ func RefineMesh(ctx context.Context, m *MeshBody, maxEdge units.Value) (*MeshBod
 | C6 | The report's `MergedVertices` counts the merges, `DroppedTriangles` is twice that and `MaxVertexMove` is the greatest distance from an input vertex to the vertex its merges ended it at. `SurfaceBound` is the zero Value: no distance to the input surface is proven, and the result can pass through itself where a coarse mesh pinches a thin feature. |
 | C7 | The tests thin a sphere to three targets and read the closed manifold, the volume loss and the vertices staying within the sphere, read a mesh already coarse enough unchanged, thin bipyramids (a regular octahedron, a tall and a flat one and two stars with concave corners) to every target and require a closed, consistently wound, positively enclosing result, and check the refusals. Dropping the link condition fails the bipyramids, and loosening C4 to any turn short of a reversal fails them too. |
 
+## 14. Remeshing to even triangles
+
+`RemeshMesh(ctx, m, edge)` rebuilds a closed mesh from near-equilateral triangles of about `edge`.
+
+| Decision | Rule |
+|---|---|
+| R1 | The mesh must be closed, consistently wound and manifold (C1), otherwise `ErrUnsupported`; `edge` is a positive length, and an `edge` that would make over a million triangles from the mesh's area is `ErrUnsupported`. |
+| R2 | The algorithm is Botsch and Kobbelt's incremental isotropic remeshing, eight passes of: split the edges over 4/3 of `edge` at their midpoints, merge the edges under 4/5 of it unless the midpoint would sit over 4/3 of `edge` from a neighbour, flip an edge when that lowers the sum of the squares of the four vertices' distance from six neighbours, and move each vertex half way to its neighbours' centroid within the plane of its area-weighted normal. |
+| R3 | A merge keeps C3 and C4. A flip needs the two opposite vertices not already joined and neither new triangle to turn past C4's cosine from the one it replaces. A smoothing move needs every triangle around the vertex to keep C4. So the result stays closed, manifold and wound as it was. |
+| R4 | The vertices are not projected back onto the input, so a convex surface shrinks a little and a vertex can leave the input surface by a hair on either side; no distance to the input is proven, and a feature thinner than `edge` can pinch. |
+| R5 | The tests remesh the sphere of the reduction tests (2,208 triangles of uneven shape) at 2 mm and require a closed manifold, a mean edge within a quarter of 2 mm, the spread of edge lengths under a quarter of the mean and under half the input's, over 60 per cent of vertices with six neighbours, a mean square valence distance under 0.3, the volume within 6 per cent and no vertex more than 0.05 mm outside the sphere; coarsen at 6 mm and refine at 0.8 mm; flip edges on a 24-sided bipyramid to a greatest valence of 9; and check the refusals. Dropping the smoothing, the splits, the merges or the flips fails a test each (the flips by the valence distance, 0.17 with them against 0.55 without). |
+
