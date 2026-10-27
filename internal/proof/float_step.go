@@ -49,6 +49,9 @@ func NextDown(x float64) float64 {
 }
 
 // Abs is math.Abs, bit for bit, by comparison instead of a bit cast.
+// Under -race, the build CI tests with, math.Abs's bit cast is checked and
+// race-instrumented on every call and runs several times slower than Abs.
+// The plain build favours math.Abs, so measure both builds before switching.
 func Abs(x float64) float64 {
 	if x < 0 {
 		return -x
