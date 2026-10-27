@@ -52,32 +52,51 @@ func newHeldBoxTree(e *heldEmbedding) heldBoxTree {
 // endpoint abandons the entire alternate coordinate system, including earlier
 // projections, and builds the world tree instead.
 func newHeldScanTree(ctx context.Context, e *heldEmbedding) (heldBoxTree, error) {
-	axes := e.h.ScanAxes
-	if axes == [3]r3.Vec{} || coordinateScanAxes(axes) {
+	if !orientedScanAxes(e.h.ScanAxes) {
 		return newHeldBoxTree(e), nil
 	}
-	projected := make([][2]r3.Vec, len(e.h.Verts))
-	for i, vertex := range e.h.Verts {
+	tree, ok, err := newOrientedScanTree(ctx, e.h)
+	if err != nil || ok {
+		return tree, err
+	}
+	return newHeldBoxTree(e), nil
+}
+
+// orientedScanAxes reports whether axes select an alternate projection, as
+// opposed to none or a signed permutation of the world axes, which keep the
+// world boxes.
+func orientedScanAxes(axes [3]r3.Vec) bool {
+	return axes != [3]r3.Vec{} && !coordinateScanAxes(axes)
+}
+
+// newOrientedScanTree is newHeldScanTree's alternate-axes tree. It reads only
+// h's vertices, facets and axes, never the heldEmbedding caches, so it may run
+// beside work that fills them. A false result, with a nil error, means some
+// projected endpoint is not finite and the caller builds the world tree.
+func newOrientedScanTree(ctx context.Context, h HeldRounding) (heldBoxTree, bool, error) {
+	axes := h.ScanAxes
+	projected := make([][2]r3.Vec, len(h.Verts))
+	for i, vertex := range h.Verts {
 		if i%proofbound.WorkPollInterval == 0 {
 			if err := ctx.Err(); err != nil {
-				return heldBoxTree{}, err
+				return heldBoxTree{}, false, err
 			}
 		}
 		var lo, hi [3]float64
 		for k, axis := range axes {
 			iv := FivDot(FivVecOf(vertex), FivVecOf(axis))
 			if proofbound.IsNonFinite(iv.Lo) || proofbound.IsNonFinite(iv.Hi) {
-				return newHeldBoxTree(e), nil
+				return heldBoxTree{}, false, nil
 			}
 			lo[k], hi[k] = iv.Lo, iv.Hi
 		}
 		projected[i] = [2]r3.Vec{r3.NewVec(lo[0], lo[1], lo[2]), r3.NewVec(hi[0], hi[1], hi[2])}
 	}
-	boxes := make([][2]r3.Vec, len(e.h.Tris))
-	for i, tri := range e.h.Tris {
+	boxes := make([][2]r3.Vec, len(h.Tris))
+	for i, tri := range h.Tris {
 		if i%proofbound.WorkPollInterval == 0 {
 			if err := ctx.Err(); err != nil {
-				return heldBoxTree{}, err
+				return heldBoxTree{}, false, err
 			}
 		}
 		box := projected[tri[0]]
@@ -92,7 +111,7 @@ func newHeldScanTree(ctx context.Context, e *heldEmbedding) (heldBoxTree, error)
 	}
 	tree := newBoxTree(boxes)
 	tree.oriented = true
-	return tree, ctx.Err()
+	return tree, true, ctx.Err()
 }
 
 func coordinateScanAxes(axes [3]r3.Vec) bool {

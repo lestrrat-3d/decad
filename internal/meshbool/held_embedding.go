@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/polynomial"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -289,6 +290,14 @@ func HeldFolds(ctx context.Context, h HeldRounding) ([][2]int, error) {
 	return out, nil
 }
 
+// heldPrepareParallelMin is the facet count from which parallelClean prepares
+// its per-facet caches on several goroutines, and heldPrepareGrain the facets
+// one block of that work holds.
+const (
+	heldPrepareParallelMin = 4096
+	heldPrepareGrain       = 512
+)
+
 // parallelClean tests each box-overlapping pair involving a query facet once. A
 // failing pair sends the caller through the original ordered repair scan.
 // Each worker polls after at most 256/workers operations, so their combined
@@ -307,29 +316,72 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 		queryFacet[i] = true
 	}
 	allQuery := queryCount == len(e.h.Tris) && queryCount != 0
-	tree, err := newHeldScanTree(ctx, e)
-	if err != nil {
-		return false, err
+	// The first scan cannot move vertices. Build its projected certificates
+	// once before workers share them; repair invalidates incident facets only
+	// after every worker has joined. Alternate scan axes do not populate the
+	// world boxes. Workers also read those boxes, so prepare them before
+	// sharing their cache.
+	//
+	// Each facet's projection, world box and float openness read only the held
+	// vertices and facets and write only that facet's own cache slots, so
+	// orderedwork.Each prepares them on several goroutines. Each cache holds
+	// the value of a pure function of the facet's held positions, which no one
+	// moves before the workers join, so a slot filled here holds what the serial
+	// loop would have filled; a slot past the facet the serial loop stopped at
+	// is one repair would fill with the same value. An oriented scan tree reads
+	// only the held vertices and facets, not these caches, so it is built on
+	// its own goroutine meanwhile. A world tree, including the fallback of an
+	// oriented one with a non-finite endpoint, reads the world boxes and is
+	// built after them; newHeldScanTree builds the same tree either way.
+	n := len(e.h.Tris)
+	var open []bool
+	if allQuery {
+		open = make([]bool, n)
+	}
+	var tree heldBoxTree
+	var treeErr error
+	var treeDone sync.WaitGroup
+	oriented := false
+	if orientedScanAxes(e.h.ScanAxes) {
+		treeDone.Go(func() { tree, oriented, treeErr = newOrientedScanTree(ctx, e.h) })
+	}
+	_, prepErr := orderedwork.Each(n, orderedwork.EachWorkers(n, heldPrepareParallelMin), heldPrepareGrain,
+		ctx.Err, func(i int) error {
+			e.projection(i)
+			e.triBox(i)
+			if allQuery {
+				open[i] = e.facetOpenFloat(i)
+				// Every facet of a self scan meets its one-corner neighbours,
+				// whose pairs read these cones; each worker would otherwise
+				// compute the same cones again in its own cache.
+				for k := range 3 {
+					e.coneBox(i, k)
+				}
+			}
+			return nil
+		})
+	treeDone.Wait()
+	if treeErr != nil {
+		return false, treeErr
+	}
+	if prepErr != nil {
+		return false, prepErr
+	}
+	if !oriented {
+		tree = newHeldBoxTree(e)
 	}
 	if !allQuery {
 		if err := tree.prepareQueryCeilings(ctx, queryFacet); err != nil {
 			return false, err
 		}
 	}
-	// The first scan cannot move vertices. Build its projected certificates
-	// once before workers share them; repair invalidates incident facets only
-	// after every worker has joined.
-	for i := range e.h.Tris {
+	for i := range n {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
 				return false, err
 			}
 		}
-		e.projection(i)
-		// Alternate scan axes do not populate the world boxes. Workers also
-		// read those boxes, so prepare them before sharing their cache.
-		e.triBox(i)
-		if allQuery && !e.facetOpenFloat(i) {
+		if allQuery && !open[i] {
 			if zeroXpt(e.normal(i)) {
 				return false, nil
 			}
@@ -343,6 +395,7 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 				tree.slotWorld[s] = e.triBox(facet)
 			}
 		}
+		var err error
 		tasks, err = tree.selfPairTasks(ctx, 16*workers)
 		if err != nil {
 			return false, err
@@ -350,14 +403,13 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 	}
 	clean := make([]bool, workers)
 	errors := make([]error, workers)
-	locals := make([]*heldEmbedding, workers)
 	e.pollErr = ctx.Err
 	e.pollInterval = proofbound.WorkPollInterval / workers
 	e.pollRemaining = e.pollInterval
-	locals[0] = e
-	for worker := 1; worker < workers; worker++ {
-		locals[worker] = e.readOnlyScanCopy(ctx, workers)
-	}
+	// Worker 0 scans with e itself and writes its caches and countdown, so the
+	// other workers copy a snapshot taken before any worker starts. Each copy
+	// is made on its own worker; base is only read while they run.
+	base := *e
 	var group sync.WaitGroup
 	// Nearby facets can have very different candidate counts. Small shared
 	// chunks keep one dense patch from occupying a worker for the whole scan.
@@ -368,9 +420,14 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 	}
 	group.Add(workers)
 	for worker := range workers {
-		local := locals[worker]
 		go func() {
 			defer group.Done()
+			local := e
+			if worker > 0 {
+				// A self scan's cones are prepared above, and nothing writes
+				// them until every worker has joined.
+				local = base.readOnlyScanCopy(ctx, workers, allQuery)
+			}
 			clean[worker] = true
 			for {
 				start := int(next.Add(int64(chunkSize))) - chunkSize
@@ -538,7 +595,9 @@ func (e *heldEmbedding) scanStep() error {
 
 // readOnlyScanCopy shares the immutable facet boxes, prepared projections and
 // incident-facet lists. Each worker writes only its own remaining predicate caches.
-func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int) *heldEmbedding {
+// shareCones also shares the corner cones, which the caller has filled for
+// every facet.
+func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int, shareCones bool) *heldEmbedding {
 	local := *e
 	local.pollErr = ctx.Err
 	local.pollInterval = proofbound.WorkPollInterval / workers
@@ -555,8 +614,10 @@ func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int) *held
 	local.planes = map[string]int{}
 	local.fnorm = make([]r3.Vec, len(e.fnorm))
 	local.fnormOK = make([]bool, len(e.fnormOK))
-	local.cone = make([][3][2]r3.Vec, len(e.cone))
-	local.coneOK = make([][3]bool, len(e.coneOK))
+	if !shareCones {
+		local.cone = make([][3][2]r3.Vec, len(e.cone))
+		local.coneOK = make([][3]bool, len(e.coneOK))
+	}
 	local.sideSigns = make(map[[2]int]int)
 	local.stamp = nil
 	local.cands = nil

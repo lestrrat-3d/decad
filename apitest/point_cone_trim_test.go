@@ -39,7 +39,7 @@ func pointConeTooth(t *testing.T, doc *decad.Document) *decad.Body {
 	return tooth
 }
 
-func pointConeTool(t *testing.T, doc *decad.Document, apex float64) *decad.Body {
+func pointConeTool(t testing.TB, doc *decad.Document, apex float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
