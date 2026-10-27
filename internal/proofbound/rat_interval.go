@@ -1,7 +1,9 @@
 package proofbound
 
 import (
+	"encoding/binary"
 	"math/big"
+	"sync"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
@@ -214,8 +216,32 @@ func AtanPositiveInterval(x *big.Rat) RatInterval {
 	return IntervalAdd(QuarterPiInterval(), AtanSmallInterval(q))
 }
 
+// Atan2Interval encloses atan2(y, x) for exact rationals y and x.
+// negativeZeroY picks -π over π when y is zero and x negative.
+//
+// Off the axes the enclosure is a deterministic function of y's and x's
+// numerators and denominators (atan2IntervalSeries reads nothing else), and
+// the circular brackets ask for the same few hundred float-held directions
+// thousands of times in one fillet or chamfer, so it is memoised
+// process-wide on those exact integers (atan2Memo). A memo hit therefore
+// returns the very endpoints a fresh evaluation would. Every call returns
+// freshly allocated endpoints the caller may mutate; the memo never hands
+// out the values it holds. The axis cases are cheap and stay unmemoised.
 func Atan2Interval(y, x *big.Rat, negativeZeroY bool) RatInterval {
-	zero := new(big.Rat)
+	if x.Sign() == 0 || y.Sign() == 0 {
+		return atan2IntervalAxis(y, x, negativeZeroY)
+	}
+	key := atan2Key(y, x)
+	if iv, ok := atan2Memo.get(key); ok {
+		return iv
+	}
+	iv := atan2IntervalSeries(y, x)
+	atan2Memo.put(key, iv)
+	return iv
+}
+
+// atan2IntervalAxis is Atan2Interval for y or x zero.
+func atan2IntervalAxis(y, x *big.Rat, negativeZeroY bool) RatInterval {
 	if x.Sign() == 0 {
 		halfPi := HalfPiInterval()
 		if y.Sign() < 0 {
@@ -223,15 +249,18 @@ func Atan2Interval(y, x *big.Rat, negativeZeroY bool) RatInterval {
 		}
 		return halfPi
 	}
-	if y.Sign() == 0 {
-		if x.Sign() < 0 {
-			if negativeZeroY {
-				return IntervalNeg(Interval(PiLower, PiUpper))
-			}
-			return Interval(PiLower, PiUpper)
+	if x.Sign() < 0 {
+		if negativeZeroY {
+			return IntervalNeg(Interval(PiLower, PiUpper))
 		}
-		return PointInterval(zero)
+		return Interval(PiLower, PiUpper)
 	}
+	return PointInterval(new(big.Rat))
+}
+
+// atan2IntervalSeries is Atan2Interval for y and x both nonzero, without the
+// memo: the octant's AtanPositiveInterval reading mapped to the quadrant.
+func atan2IntervalSeries(y, x *big.Rat) RatInterval {
 	ax, ay := new(big.Rat).Abs(x), new(big.Rat).Abs(y)
 	var base RatInterval
 	if proofarith.CmpRat(ay, ax) <= 0 {
@@ -249,4 +278,67 @@ func Atan2Interval(y, x *big.Rat, negativeZeroY bool) RatInterval {
 	default:
 		return IntervalAdd(IntervalNeg(Interval(PiLower, PiUpper)), base)
 	}
+}
+
+// atan2MemoCap bounds the memo, as radSinCosMemoCap bounds the sine/cosine
+// one; a full memo is cleared before the next insert.
+const atan2MemoCap = 16384
+
+type atan2MemoMap struct {
+	mu      sync.Mutex
+	entries map[string]RatInterval
+}
+
+var atan2Memo = &atan2MemoMap{entries: map[string]RatInterval{}}
+
+// get returns a fresh copy of the enclosure memoised for key, or ok false
+// when none is held.
+func (m *atan2MemoMap) get(key string) (RatInterval, bool) {
+	m.mu.Lock()
+	iv, ok := m.entries[key]
+	m.mu.Unlock()
+	if !ok {
+		return RatInterval{}, false
+	}
+	return Interval(iv.Lo, iv.Hi), true
+}
+
+// put records a copy of iv, so the caller keeps sole ownership of iv itself.
+func (m *atan2MemoMap) put(key string, iv RatInterval) {
+	held := Interval(iv.Lo, iv.Hi)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.entries) >= atan2MemoCap {
+		clear(m.entries)
+	}
+	m.entries[key] = held
+}
+
+// atan2Key encodes y's and then x's exact representation: per rational its
+// sign, then its numerator's magnitude and its denominator, each
+// length-prefixed, so two keys are equal exactly when both numerators and
+// both denominators are.
+func atan2Key(y, x *big.Rat) string {
+	bits := y.Num().BitLen() + y.Denom().BitLen() + x.Num().BitLen() + x.Denom().BitLen()
+	buf := make([]byte, 0, 2*(1+2*binary.MaxVarintLen64)+bits/8+4)
+	buf = appendRatKey(buf, y)
+	buf = appendRatKey(buf, x)
+	return string(buf)
+}
+
+func appendRatKey(buf []byte, q *big.Rat) []byte {
+	buf = append(buf, byte(q.Sign()+1))
+	buf = appendNatKey(buf, q.Num())
+	return appendNatKey(buf, q.Denom())
+}
+
+// appendNatKey appends |v| as a uvarint byte length followed by its
+// big-endian bytes, written in place without an intermediate slice.
+func appendNatKey(buf []byte, v *big.Int) []byte {
+	n := (v.BitLen() + 7) / 8
+	buf = binary.AppendUvarint(buf, uint64(n))
+	start := len(buf)
+	buf = append(buf, make([]byte, n)...)
+	v.FillBytes(buf[start:])
+	return buf
 }
