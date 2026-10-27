@@ -109,6 +109,7 @@ admits takes it unchanged.
 | A5 | a multi-region operand or result: a prism-group tool (N holes in one arrangement), a `Union` of disjoint footprints | S5 (through mirror §6), S12, P2 | one-slab multi-region `stackedPrismPayload` (mirror §6.3) |
 | A6 | a split boundary under a non-identity re-expression, a prior section displacement or a walk charge | S9 (45° in plane), rotated and translated overlaps; not P1 (A6 below) | `prismPayload` carrying a certified crossing-sensitivity charge |
 | A7 | one rectangular blind pocket crossing one rectangular through hole, opening at either cap, clipped to the target | a pocket that partly overlaps a through opening | `brepPayload` with split hole walls and a partial floor |
+| A8 | a blind pocket ending exactly at an interface of a stack, overlapping in plan an opposed pocket that ends there | pockets from opposite faces that meet at one level | `brepPayload` with a partial floor and ceiling |
 
 #### A1 — stacked union
 
@@ -561,6 +562,69 @@ face and topology checks run before publication; `Tessellate(VerifyAll)`
 checks the occupied volume. A pocket crossing the body's outer boundary, a
 second source hole, a displaced section, a rotated footprint, and later Cuts of
 the result remain outside this bounded path.
+
+#### A8 — opposed pockets overlapping at one level
+
+`prismboolean.TryOpposedBlindCut` takes the stacked blind `Cut` that
+`TryStackedBlindCut` leaves to the mesh path: the tool ends exactly at an
+existing interface of a cut-built stack, and after the cut both sides of that
+interface hold exclusive holes that `stackedrecord.SeparatedOpposed` does not
+prove apart (`agent-docs/stacked-prism-design.md` §2.2). Its admission is the
+stacked arm's. The target is a stacked payload with one outer run and one
+region per slab. The tool ends at an interface with zero level displacement.
+Every reached slab passes its own whole-loop cut proof
+(`stackedrecord.ApplyOpposedBlindCut`, which shares `CutSlabs`'s slab cut).
+The result's section displacement is zero, and every exclusive hole at that
+interface is a loop of lines along the section axes. Every other interface
+keeps the exposed records `stackedrecord.Derive` reads for it.
+
+The opposed interface's faces come from one private Sketch scene over only the
+exclusive holes' interiors: each lower-only hole, reversed, as an A region and
+each upper-only hole, reversed, as a B region. Every partial edge must carry
+`TExact`, the scene carries no walk charge, and
+`prismcells.ClassifyRegionsWithHoles` must classify every cell. A cell inside
+some B region and no A region is a floor: the lower slab's material under an
+upper hole, facing up. A cell inside some A region and no B region is a
+ceiling, facing down. A cell inside both is open through both slabs and has no
+face. Sketch also merges two lines as one shared span when their carriers
+differ within its identity band, so two more checks refuse. Every line edge's
+walked ends must lie exactly on its own entity's carrier
+(`prismcells.OnLineCarrier`, exact rational arithmetic over the held floats).
+Where the displaced line's own endpoint ends the merged span, the coincident
+reading records no span, and only this check sees the edge ending off its
+carrier. Every shared span the reading does record must also pass
+`prismcells.CoincidentReading.ExactLineCarriers`: both recorded lines lie on
+precisely one line. A lower or upper hole's edge 1e-12 mm or one ulp off the
+other side's edge misses, in either orientation. Two crossing axis-aligned
+lines meet at their exact levels, and with both checks every vertex is exact.
+The incoming displacements are all zero, so A6 charges nothing.
+
+Opposed holes that only touch have no manifold result. Along an edge, the
+floor, the ceiling and both hole walls would share one edge. At a corner, the
+body would meet itself at one point. `stackedunion.opposedManifold` reads
+every point where a floor and a ceiling cell meet. Each of the two cells must
+turn there from an edge of one side to an edge of the other, and neither edge
+may be a span both sides share. That is a proper crossing of one lower and one
+upper boundary. Under the axis-line gate at most four scene edges meet at a
+point, so every touch fails this reading: two touching corners, two reflex
+corners whose outsides meet, or a shared span at its ends. The points and
+edges are Sketch's own, compared by exact equality. The check only refuses. A
+corner touch also leaves cells that classification cannot reach, which misses
+as well.
+
+`stackedunion.OpposedCut` emits the record through the A1
+`stackedbrep.Engine`. It adds the slab loops, both end caps, every other
+interface's exposed records and the opposed interface's cells. The engine
+splits the hole walls at the cells' vertices, and it joins coplanar hole walls
+of the two slabs into one face. `breprecord.StackedRecord` runs the per-face
+section audit and proves closure by counting. The result keeps no stack, so a
+later `Cut` of it does not reach the stacked arms. Any miss, including a
+touch, leaves the pair to the mesh path. That path refuses the coplanar
+contact under `ExactOnly`. With a gap tolerance it builds an `Approximate`
+result with the tool moved, where a shift opens the contact
+(`agent-docs/gap-tolerance-design.md` §5.2). A round or oblique exclusive hole
+at the interface, a displaced level or section, and a union-built or
+multi-region stack stay outside this path.
 
 ### Class B — perpendicular prism pairs with planar contacts
 

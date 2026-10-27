@@ -550,6 +550,13 @@ func (r CoincidentReading) Gap() float64 {
 	return gap
 }
 
+// OnLineCarrier reports whether p lies exactly on the line ent carries, in
+// exact rational arithmetic over the held floats. Any other entity reads
+// false. A caller uses it only to refuse.
+func OnLineCarrier(p [2]float64, ent sketch.Entity) bool {
+	return pointLineDistanceUpper(p, ent) == 0
+}
+
 // pointLineDistanceUpper bounds the distance from p to the line ent carries:
 // |(p − S) × (E − S)| / |E − S|, exactly to the square root, which rounds up.
 func pointLineDistanceUpper(p [2]float64, ent sketch.Entity) float64 {

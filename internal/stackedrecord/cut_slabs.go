@@ -19,6 +19,42 @@ import (
 func CutSlabs(ctx context.Context, budget *proofbound.WorkBudget, sp Payload,
 	outer, tool prismrecord.Payload, reexpress *prismcells.Reexpression, active []bool,
 	prior []Interface, monotoneAt int) (Payload, bool, error) {
+	result, ok, err := cutActiveSlabs(ctx, budget, sp, outer, tool, reexpress, active, prior)
+	if err != nil || !ok {
+		return Payload{}, false, err
+	}
+	if monotoneAt >= 0 {
+		lowerOnly, upperOnly := ExclusiveHoles(
+			result.Slabs[monotoneAt].Regions[0], result.Slabs[monotoneAt+1].Regions[0])
+		if len(lowerOnly) != 0 && len(upperOnly) != 0 {
+			if result.SectionDelta != 0 {
+				return Payload{}, false, nil
+			}
+			_, separate, err := SeparatedOpposed(ctx, budget, lowerOnly, upperOnly)
+			if err != nil || !separate {
+				return Payload{}, false, err
+			}
+		}
+	}
+	result.Interfaces, err = Derive(ctx, result.Slabs, prior)
+	if err != nil {
+		return Payload{}, false, err
+	}
+	if !result.OpposedSectionExact() {
+		return Payload{}, false, nil
+	}
+	if err := Falsify(ctx, Record{Slabs: result.Slabs, Interfaces: result.Interfaces}); err != nil {
+		return Payload{}, false, err
+	}
+	return result, true, nil
+}
+
+// cutActiveSlabs replaces each active slab's region with its proven cut
+// region, or keeps it where the tool lies wholly in an existing hole. The
+// interfaces stay a copy of prior; the caller derives them.
+func cutActiveSlabs(ctx context.Context, budget *proofbound.WorkBudget, sp Payload,
+	outer, tool prismrecord.Payload, reexpress *prismcells.Reexpression, active []bool,
+	prior []Interface) (Payload, bool, error) {
 	result := sp
 	result.Slabs = append([]Slab(nil), sp.Slabs...)
 	result.Interfaces = make([]Interface, len(prior))
@@ -76,29 +112,6 @@ func CutSlabs(ctx context.Context, budget *proofbound.WorkBudget, sp Payload,
 			proofbound.AbsSumUpper(target.SectionDelta, sceneDelta.A),
 			proofbound.AbsSumUpper(tool.SectionDelta, sceneDelta.B, reexpress.Delta))
 	}
-	if monotoneAt >= 0 {
-		lowerOnly, upperOnly := ExclusiveHoles(
-			result.Slabs[monotoneAt].Regions[0], result.Slabs[monotoneAt+1].Regions[0])
-		if len(lowerOnly) != 0 && len(upperOnly) != 0 {
-			if result.SectionDelta != 0 {
-				return Payload{}, false, nil
-			}
-			_, separate, err := SeparatedOpposed(ctx, budget, lowerOnly, upperOnly)
-			if err != nil || !separate {
-				return Payload{}, false, err
-			}
-		}
-	}
-	var err error
-	result.Interfaces, err = Derive(ctx, result.Slabs, prior)
-	if err != nil {
-		return Payload{}, false, err
-	}
-	if !result.OpposedSectionExact() {
-		return Payload{}, false, nil
-	}
-	if err := Falsify(ctx, Record{Slabs: result.Slabs, Interfaces: result.Interfaces}); err != nil {
-		return Payload{}, false, err
-	}
+	copy(result.Interfaces, prior)
 	return result, true, nil
 }
