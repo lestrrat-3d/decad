@@ -133,6 +133,9 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 			profile, admitted = sectionclip.SmoothHomotheticSectionRecord(fp, plane)
 		}
 		if !admitted {
+			if s, ps, ok := orthogonalSection(ctx, fp, plane); ok {
+				return s, ps, nil
+			}
 			return booleanHistorySection(ctx, b, plane)
 		}
 		return sectionclip.ReconstructExactSection(ctx, profile, plane)

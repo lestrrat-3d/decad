@@ -1616,6 +1616,9 @@
 10	0.00	TestDenotedLevelFixtures
 10	0.00	TestDenotedLevelPocketsShareOneInterface
 10	0.00	TestDenotedLevelNestedPocketEndsOnTheFloor
+10	0.01	TestSectionOfAnLShapedMeshSolidIsExact
+10	0.01	TestSectionOfAMeshSolidWithAThroughHoleHasAHole
+10	0.01	TestSectionOfAMeshSolidRefusals
 10	0.00	TestDenotedLevelEqualFloatsDifferentRationalsDecline
 10	0.00	TestDenotedLevelSplitInterfaceIsReused
 10	0.00	TestBrepLoopFilletReflexMeridiansLieOnTheirCircles

@@ -20,6 +20,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/tessellation-design.md` | Tessellation: curve samples, manifold proofs, source faces, certificates, boolean handoff. |
 | `agent-docs/clearance-design.md` | Pair disjointness and bounded gap proofs. |
 | `agent-docs/point-containment-design.md` | Public point classification, distance, mesh-to-body proofs, the exact prism-record route and the Boolean-history route. |
+| `agent-docs/orthogonal-section-design.md` | `Body.Section` of an axis-square faceted solid by an axis-square plane, read from the grid. |
 | `agent-docs/section-design.md` | Read-only planar section gate and Sketch reconstruction proof. |
 | `agent-docs/interference-design.md` | Read-only pair overlap and bounded volume proofs. |
 | `agent-docs/hole-design.md` | `Hole`: face and point placement, size gates, tool shapes and the atomic cut. |
@@ -101,6 +102,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `record.go` | Root-owned `Point2`, structural record and payload aliases (including the faceted payload and its records), and slice adapters. See sketch-seam §2. |
 | `seam.go` | Sketch chain recording adapters, `MeasureProfile` and `SecondMoments`; profile recording lives in `internal/sectioncert/`. See sketch-seam §1–§2. |
 | `section_outline.go` | Public `SectionOutline`, `Body.SectionOutline` (the verified mesh cut by a plane via `internal/meshslice/`) and `SectionOutline.Clearance`. See section-outline design. |
+| `section_orthogonal.go` | The orthogonal-polyhedron route of `Body.Section`: gates the frame and body, `internal/orthoshell/` traces the cut and `sectionclip` rebuilds the sketch. See orthogonal-section design. |
 | `section.go` | Public planar section query over certified prism, stack-backed BRep, stacked prism, Loft, sphere, cone and mesh Boolean history records; builders live in `internal/sectionclip/` and `internal/sectionhistory/`; also the `Section` constraint. See section design, surface §13.2. |
 | `path.go` | The immutable spatial `Path`, sealed segments and its recorded `internal/sweepinput.Path`. See sweep §2–§3. |
 | `extent.go` | Public linear and angular extent variants and normalization. See API §8.1. |
