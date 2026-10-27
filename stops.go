@@ -3,6 +3,7 @@ package decad
 import (
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
@@ -102,25 +103,30 @@ func builtinFaceQuery(sel FaceSelector, what string) (*FaceQuery, error) {
 // root handles; extent.ToFaceStop then admits the face as a prism cap (§5
 // build table) and computes the level and its displacement. travel is 0 for
 // a standalone ToFace, whose target face supplies the sense, and ±1 for a
-// TwoSided side (core §8.1).
-func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what string) (float64, float64, producerID, error) {
+// TwoSided side (core §8.1). The exact level is the one the stop denotes
+// (extent.ToFaceDenotedLevel), nil when no record proves it.
+func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what string) (float64, float64, *big.Rat, producerID, error) {
 	body, err := d.resolveStopBody(tf.Body, what)
 	if err != nil {
-		return 0, 0, 0, err
+		return 0, 0, nil, 0, err
 	}
 	offset, offsetDelta, err := extent.DisplacementIn(tf.Offset, units.Length, units.Millimeter, "the to-face offset")
 	if err != nil {
-		return 0, 0, 0, err
+		return 0, 0, nil, 0, err
 	}
 	face, err := selectImpliedOneFace(body, tf.Face, "the stop")
 	if err != nil {
-		return 0, 0, 0, err
+		return 0, 0, nil, 0, err
 	}
 	stop, delta, err := extent.ToFaceStop(faceNode(face), frame, travel, offset, offsetDelta, what)
 	if err != nil {
-		return 0, 0, 0, err
+		return 0, 0, nil, 0, err
 	}
-	return stop, delta, body.originProducer(), nil
+	offsetExact := new(big.Rat)
+	if tf.Offset != (units.Value{}) {
+		offsetExact = extent.ExactConversion(tf.Offset, units.Millimeter)
+	}
+	return stop, delta, extent.ToFaceDenotedLevel(faceNode(face), frame, stop, offsetExact), body.originProducer(), nil
 }
 
 // angularStops is what a ToFaceAngular resolution needs of the revolve's

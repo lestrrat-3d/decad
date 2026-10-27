@@ -77,16 +77,29 @@ copy that rewrites a level without restating its denotation reads nothing
 there. The zero value records nothing, and every producer that does not set
 it behaves as an undisplaced-or-unknown level always did.
 
-Two producers record denotations. `Extrude` with a `Distance`, `Symmetric`
-or `DistanceSide` extent records the exact rescale of the magnitude, halved
-for a full-length `Symmetric` and negated for the side below the plane. The
-blind cut records its inner end as G5's exact shift plus the tool's denoted
-level, and carries the target's own end denotations onto the stack's ends. A
-`Transform` or `Copy` keeps them with the rest of the record, and so does a
-through `Cut` whose tool nests inside a prism target, since it keeps the
-target's levels. A `ToFace` or `ThroughAll` stop, a chamfered end, a shell
-level, every union-built level and the BRep stack of general-boolean §3 A7
-record none.
+`Extrude` with a `Distance`, `Symmetric` or `DistanceSide` extent records
+the exact rescale of the magnitude, halved for a full-length `Symmetric` and
+negated for the side below the plane. A prism's caps carry their levels'
+denotations in `topo.CapRecord.ZDenoted`. A `ToFace` stop on such a cap
+records the cap's plane at its denoted level carried exactly onto the sketch
+frame (`extent.PlaneStopAt`), plus the exact offset
+(`extent.ToFaceDenotedLevel`). A `ThroughAll` stop records the far cap of
+its farthest stop body when that body is a prism whose two caps are exact
+level sets of the sketch frame, the sketch normal is exactly a unit vector,
+and every other met body's far-end interval ends at or below the farthest
+one's lower end (`extent.ThroughStops.Finish`). Each stop records through
+`DenoteLevel`, so a rational farther than the stop's displacement from its
+held level records nothing. The blind cut records its inner end as G5's exact
+shift plus the tool's denoted level, and carries the target's own end
+denotations onto the stack's ends. A `Transform` or `Copy` keeps them with the
+rest of the record, and so does a through `Cut` whose tool nests inside a
+prism target, since it keeps the target's levels. A prism `Union` over equal
+intervals, a prism group's union and the one-scene many-operand union keep
+the level their operands share, since G5 admits them only when every operand
+denotes it. A stop on a face or body whose record states no denoted cap (a
+stack, a BRep, a revolve, a faceted result), a `ThroughAll` stop with a
+competing far side, a chamfered end, a shell level, every stacked union level
+and the BRep stack of general-boolean §3 A7 record none.
 
 The denotations decide the interface arm, guard the split arm's order
 (§7 stage 3), enter the I4 audit (§2.2) and decide when general-boolean §3

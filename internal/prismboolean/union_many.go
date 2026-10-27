@@ -11,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -60,8 +61,8 @@ func StraightLoftUnionMany(ctx context.Context, env topo.Env,
 }
 
 // UnionMany arranges all sections in one Sketch scene. Its entry
-// admits whole-line, hole-free prisms on the identical recorded plane and
-// interval. These records have no incoming section displacement, so the
+// admits whole-line, hole-free prisms on the identical recorded plane over
+// intervals G5 proves equal (prismplacement.UnionZIntervalMatches). These records have no incoming section displacement, so the
 // result charges only the arrangement's new cut parameters.
 func UnionMany(ctx context.Context, env topo.Env,
 	operands []*topo.Body) (*topo.Body, bool, error) {
@@ -88,7 +89,7 @@ func UnionMany(ctx context.Context, env topo.Env,
 		if i == 0 {
 			first = p
 		} else if p.Frame != first.Frame || p.Xform != first.Xform ||
-			p.Z0 != first.Z0 || p.Z1 != first.Z1 {
+			!prismplacement.UnionZIntervalMatches(first.PlacementOperand(), p.PlacementOperand()) {
 			return nil, false, nil
 		}
 		if p.SectionDelta != 0 || len(p.Profile.Holes) != 0 || len(p.Profile.Outer.Segments) == 0 {
@@ -170,10 +171,14 @@ func UnionMany(ctx context.Context, env topo.Env,
 			return nil, true, err
 		}
 	}
+	// Every operand's levels denote first's (UnionZIntervalMatches above), so
+	// the shared levels keep them.
+	z0Denoted := prismplacement.DenoteLevel(first.DenotedZ0(), first.Z0, z0Delta)
+	z1Denoted := prismplacement.DenoteLevel(first.DenotedZ1(), first.Z1, z1Delta)
 	if len(regions) == 1 {
 		p := prismrecord.Payload{Profile: regions[0], Frame: first.Frame, Xform: first.Xform,
 			Z0: first.Z0, Z1: first.Z1, Z0Delta: z0Delta, Z1Delta: z1Delta,
-			SectionDelta: cutDelta}
+			Z0Denoted: z0Denoted, Z1Denoted: z1Denoted, SectionDelta: cutDelta}
 		body, err := AnalyticBody(ctx, env, p)
 		return body, true, err
 	}
@@ -186,7 +191,7 @@ func UnionMany(ctx context.Context, env topo.Env,
 	}
 	sp := stackedrecord.Payload{
 		Slabs: []stackedrecord.Slab{{Regions: regions, Z0: first.Z0, Z1: first.Z1,
-			Z0Delta: z0Delta, Z1Delta: z1Delta}},
+			Z0Delta: z0Delta, Z1Delta: z1Delta, Z0Denoted: z0Denoted, Z1Denoted: z1Denoted}},
 		Frame: first.Frame, Xform: first.Xform,
 		SectionDelta: proofbound.AbsSumUpper(disjointWalk, cutDelta),
 	}

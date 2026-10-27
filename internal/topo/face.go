@@ -1,6 +1,8 @@
 package topo
 
 import (
+	"math/big"
+
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -13,10 +15,16 @@ import (
 // The face lies on {Xform(O + u*U + v*V + Z*N) : u, v real}, displaced from it
 // along its normal by at most the face's AxialDelta. It is immutable once a
 // producer sets it.
+//
+// ZDenoted is the exact level Z denotes, where the producer records one
+// (agent-docs/stacked-prism-design.md §2.1): the face then lies on the same
+// plane taken at ZDenoted. nil records nothing, and a reader falls back to Z
+// and AxialDelta.
 type CapRecord struct {
-	Frame r3.Frame
-	Xform r3.Transform
-	Z     float64
+	Frame    r3.Frame
+	Xform    r3.Transform
+	Z        float64
+	ZDenoted *big.Rat
 }
 
 // Under is the plane record of a copy placed by xform: r itself under the

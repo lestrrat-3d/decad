@@ -106,3 +106,10 @@ func (pp Payload) DenotedZ0() *big.Rat {
 func (pp Payload) DenotedZ1() *big.Rat {
 	return prismplacement.DenotedLevel(pp.Z1, pp.Z1Delta, pp.Z1Denoted)
 }
+
+// DenotedCapLevels is the record a through-all stop reads of the prism's two
+// caps: its frame, placement, held levels and the levels they denote, nil
+// where no record proves one (extent.ThroughAll).
+func (pp Payload) DenotedCapLevels() (r3.Frame, r3.Transform, float64, float64, *big.Rat, *big.Rat) {
+	return pp.Frame, pp.Xform, pp.Z0, pp.Z1, pp.DenotedZ0(), pp.DenotedZ1()
+}

@@ -445,7 +445,9 @@ level recorded there sits from the level the extent denotes. A level the caller
 stated denotes itself and carries zero; a level the resolution computed carries
 that computation's own rounding (a `ToFace`/`ThroughAll` stop resolved in float
 against another body's face, a magnitude rescaled from a non-base unit, a
-chamfered end's setback). It is the axial twin of the section displacement:
+chamfered end's setback). A rescaled magnitude, and a `ToFace` or `ThroughAll`
+stop on a prism cap that records its own denoted level, also record the exact
+level they denote (agent-docs/stacked-prism-design.md §2.1). It is the axial twin of the section displacement:
 the two are tracked apart and neither stands in for the other — one moves a
 coordinate IN the plane, the other moves a level ALONG the normal — while a
 reading both displace, a side vertex or `Bounds`, sums them. The per-end pair

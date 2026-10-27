@@ -1166,6 +1166,11 @@
 10	0.00	TestCutSpanDisplacedLevelStackedThroughCut
 10	0.00	TestCutSpanDisplacedLevelSurfaceTrim
 10	0.00	TestCutSpanDisplacedLevelIntersect
+10	0.00	TestThroughStopDenotedLevelFixtures
+10	0.00	TestThroughStopDenotedLevelThroughHole
+10	0.00	TestThroughStopDenotedLevelMisses
+10	0.00	TestThroughStopDenotedLevelUnionKeepsDenotation
+10	0.00	TestThroughStopDenotedLevelGroupToolCut
 5	4.34	TestVerifyJointBoxLoopCrossingZero
 5	1.11	TestVerifyJointBoxLoopErrors
 5	7.74	TestVerifyJointBoxLoopGate

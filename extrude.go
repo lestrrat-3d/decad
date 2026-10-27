@@ -265,8 +265,9 @@ func extrudeProfile(ctx context.Context, d *Document, s *sketch.Sketch, p *sketc
 // caller stated denotes itself and reports a zero displacement; a level the
 // resolution COMPUTED reports the rounding that computation committed, which is
 // what the prism payload carries into every level-derived reading. z0Exact and
-// z1Exact are the exact levels a converted distance denotes, nil where the
-// resolution does not know one (agent-docs/stacked-prism-design.md §2.1).
+// z1Exact are the exact levels a converted distance, or a to-face or
+// through-all stop on a cap that records its denoted level, denotes, nil
+// where the resolution does not know one (agent-docs/stacked-prism-design.md §2.1).
 type linearSweep struct {
 	z0, z1          float64
 	z0Delta         float64
@@ -354,28 +355,28 @@ func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, e
 			return linearSweep{}, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(e.Dir))
 		}
 		live := d.n.Live()
-		stop, delta, refs, err := extent.ThroughAll(frame, travel, live)
+		stop, delta, refs, exact, err := extent.ThroughAll(frame, travel, live)
 		if err != nil {
 			return linearSweep{}, err
 		}
 		if travel > 0 {
 			bodies := bodyHandles(live)
-			return linearSweep{z1: stop, z1Delta: delta, inputs: refs, bodyInputs: bodies,
+			return linearSweep{z1: stop, z1Delta: delta, z1Exact: exact, inputs: refs, bodyInputs: bodies,
 				operationInputs: referencedInputs(bodies, "throughAll")}, nil
 		}
 		bodies := bodyHandles(live)
-		return linearSweep{z0: stop, z0Delta: delta, inputs: refs, bodyInputs: bodies,
+		return linearSweep{z0: stop, z0Delta: delta, z0Exact: exact, inputs: refs, bodyInputs: bodies,
 			operationInputs: referencedInputs(bodies, "throughAll")}, nil
 	case ToFace:
-		stop, delta, ref, err := d.resolveToFace(e, frame, 0, "a to-face extent")
+		stop, delta, exact, ref, err := d.resolveToFace(e, frame, 0, "a to-face extent")
 		if err != nil {
 			return linearSweep{}, err
 		}
 		if stop > 0 {
-			return linearSweep{z1: stop, z1Delta: delta, inputs: []producerID{ref}, bodyInputs: []*Body{e.Body},
+			return linearSweep{z1: stop, z1Delta: delta, z1Exact: exact, inputs: []producerID{ref}, bodyInputs: []*Body{e.Body},
 				operationInputs: []OperationInput{{Body: e.Body, Role: "stop", Use: InputReferenced}}}, nil
 		}
-		return linearSweep{z0: stop, z0Delta: delta, inputs: []producerID{ref}, bodyInputs: []*Body{e.Body},
+		return linearSweep{z0: stop, z0Delta: delta, z0Exact: exact, inputs: []producerID{ref}, bodyInputs: []*Body{e.Body},
 			operationInputs: []OperationInput{{Body: e.Body, Role: "stop", Use: InputReferenced}}}, nil
 	case nil:
 		return linearSweep{}, fmt.Errorf(`%w: a nil extent sweeps nothing`, ErrDegenerate)
@@ -417,19 +418,19 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 		return linearSide{z: travel * m, delta: delta, exact: exact}, nil
 	case ThroughAllSide:
 		live := d.n.Live()
-		stop, delta, refs, err := extent.ThroughAll(frame, travel, live)
+		stop, delta, refs, exact, err := extent.ThroughAll(frame, travel, live)
 		if err != nil {
 			return linearSide{}, err
 		}
 		bodies := bodyHandles(live)
-		return linearSide{z: stop, delta: delta, through: refs, bodyInputs: bodies,
+		return linearSide{z: stop, delta: delta, exact: exact, through: refs, bodyInputs: bodies,
 			operationInputs: referencedInputs(bodies, "throughAll")}, nil
 	case ToFace:
-		stop, delta, ref, err := d.resolveToFace(s, frame, travel, what)
+		stop, delta, exact, ref, err := d.resolveToFace(s, frame, travel, what)
 		if err != nil {
 			return linearSide{}, err
 		}
-		return linearSide{z: stop, delta: delta, named: []producerID{ref}, bodyInputs: []*Body{s.Body},
+		return linearSide{z: stop, delta: delta, exact: exact, named: []producerID{ref}, bodyInputs: []*Body{s.Body},
 			operationInputs: []OperationInput{{Body: s.Body, Role: "stop", Use: InputReferenced}}}, nil
 	case nil:
 		return linearSide{}, fmt.Errorf(`%w: a two-sided extent requires both sides`, ErrDegenerate)

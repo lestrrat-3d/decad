@@ -106,3 +106,26 @@ func ToFaceStop(face *topo.Face, frame r3.Frame, travel, offset, offsetDelta flo
 	}
 	return stop, proofbound.AbsSumUpper(StopLevelError(c, travel, offset, stop), offsetDelta, axial), nil
 }
+
+// ToFaceDenotedLevel is the exact level a to-face stop denotes, for a stop
+// ToFaceStop resolved at face to the held level stop. It is the face's cap
+// record at its denoted level, carried onto the sweep frame exactly
+// (PlaneStopAt), plus the exact offset along the travel the stop's sign
+// gives. It is nil when the face is no cap record with a denoted level, or
+// offsetExact is nil. The caller records it through
+// prismplacement.DenoteLevel, which refuses it unless the held stop lies
+// within its displacement.
+func ToFaceDenotedLevel(face *topo.Face, frame r3.Frame, stop float64, offsetExact *big.Rat) *big.Rat {
+	rec := face.CapRecord
+	if face.Denoted != nil || rec == nil || rec.ZDenoted == nil || !face.HasAxialDelta || offsetExact == nil {
+		return nil
+	}
+	c, _, ok := PlaneStopAt(rec.Frame, rec.Xform, rec.ZDenoted, frame)
+	if !ok {
+		return nil
+	}
+	if stop < 0 {
+		return c.Sub(c, offsetExact)
+	}
+	return c.Add(c, offsetExact)
+}
