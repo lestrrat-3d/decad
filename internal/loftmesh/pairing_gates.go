@@ -146,11 +146,21 @@ func ValidateRecordWalks(p0, p1 momentinput.Profile, pl0, pl1 sectionrecord.Plan
 		}
 	}
 
-	if PlanesCoincide(pl0, pl1) {
-		return nil, nil, nil, fmt.Errorf(`%w: the two profiles lie in the same geometric plane; the loft has zero volume by construction`, decaderr.ErrDegenerate)
+	if err := ProfilePlaneGate(pl0, pl1); err != nil {
+		return nil, nil, nil, err
 	}
 
 	return offsets, walks0, walks1, nil
+}
+
+// ProfilePlaneGate is agent-docs/loft-design.md Table S row S5 for two closed
+// profiles: it refuses two recorded planes that coincide. It is the one gate
+// of ValidateRecordWalks that reads the planes, and it runs last there.
+func ProfilePlaneGate(pl0, pl1 sectionrecord.PlaneRecord) error {
+	if PlanesCoincide(pl0, pl1) {
+		return fmt.Errorf(`%w: the two profiles lie in the same geometric plane; the loft has zero volume by construction`, decaderr.ErrDegenerate)
+	}
+	return nil
 }
 
 // SameKindGate is agent-docs/loft-design.md Table S row S3 and Table P row P5: a
