@@ -367,6 +367,70 @@ func Example_export_png_shadows() {
 	// shadow pixels: true
 }
 
+// ShadowSoftness makes the shadows soft: it is the angular radius of the key light,
+// and a shadow grades from dark to light across a penumbra instead of ending at a
+// sharp edge. Here the pillar of the shadows example is drawn with a 5 degree light
+// and the pixels in the penumbra, neither fully lit nor fully shadowed, are counted.
+func Example_export_png_soft_shadows() {
+	doc := decad.New()
+	block := func(x0, y0, x1, y1, height float64) (*decad.Body, error) {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		if err != nil {
+			return nil, err
+		}
+		rect := s.CreateRectangle(x0, y0, x1, y1)
+		s.Fix(rect.A)
+		if _, err := s.Solve(context.Background()); err != nil {
+			return nil, err
+		}
+		return decad.Extrude(context.Background(), doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	}
+	plate, err := block(0, 0, 60, 40, 2)
+	if err != nil {
+		fmt.Printf("failed to build the plate: %s\n", err)
+		return
+	}
+	pillar, err := block(25, 15, 35, 25, 20)
+	if err != nil {
+		fmt.Printf("failed to build the pillar: %s\n", err)
+		return
+	}
+	draw := func(softness units.Value) (image.Image, error) {
+		view := export.View{Direction: r3.NewVec(0, 0, -1), Up: r3.NewVec(0, 1, 0), Width: 400, Height: 400,
+			Shadows: true, ShadowSoftness: softness}
+		var out bytes.Buffer
+		if err := export.PNGBodies(context.Background(), &out, []*decad.Body{plate, pillar}, units.Millimeters(0.1), view); err != nil {
+			return nil, err
+		}
+		return png.Decode(&out)
+	}
+	levels := func(img image.Image) map[int]int {
+		counts := map[int]int{}
+		for y := range 400 {
+			for x := range 400 {
+				c := color.RGBAModel.Convert(img.At(x, y)).(color.RGBA)
+				counts[int(c.R)+int(c.G)+int(c.B)]++
+			}
+		}
+		return counts
+	}
+	hard, err := draw(units.Value{})
+	if err != nil {
+		fmt.Printf("failed to draw: %s\n", err)
+		return
+	}
+	soft, err := draw(units.Degrees(5))
+	if err != nil {
+		fmt.Printf("failed to draw: %s\n", err)
+		return
+	}
+	fmt.Printf("more shades with a soft light: %t\n", len(levels(soft)) > len(levels(hard))+20)
+	// Output:
+	// more shades with a soft light: true
+}
+
 // BackColor sets the colour of the faces that look away from the camera. They are
 // orange by default, which is how an open shell or an inside-out mesh shows; pick
 // another colour to match a palette or to stand out against the part's own.

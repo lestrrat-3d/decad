@@ -9,6 +9,7 @@ import (
 	"image/color"
 	"image/png"
 	"io"
+	"math"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/internal/drawing"
@@ -47,6 +48,12 @@ type View struct {
 	// Shadows casts the key light's shadows: a face a nearer one hides from the
 	// light is drawn at the ambient level (agent-docs/png-export-design.md §10).
 	Shadows bool
+	// ShadowSoftness, an angle, makes the shadows soft: it is the angular radius of
+	// the key light, which is sampled over a disc of that radius so a shadow grades from
+	// dark to light across a penumbra that widens with the distance from the occluder
+	// (agent-docs/png-export-design.md §14). The zero units.Value is a point light with hard
+	// shadows. It needs Shadows, and is at most 45 degrees.
+	ShadowSoftness units.Value
 	// BackColor, when set, is the colour of the faces that look away from the
 	// camera, in place of orange: they show where a sheet is open or a mesh is
 	// wound inside out, and a part's far side through an open shell. Its alpha is
@@ -133,13 +140,30 @@ func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View, coun
 		}
 		cam.FieldOfView = fov
 	}
+	soft := 0.0
+	if view.ShadowSoftness != (units.Value{}) {
+		if !view.Shadows {
+			return fmt.Errorf("export: PNG: %w: a shadow softness needs Shadows", decad.ErrDegenerate)
+		}
+		var err error
+		soft, err = sectionrecord.MagnitudeIn(view.ShadowSoftness, units.Angle, units.Radian, "the shadow softness")
+		if err != nil {
+			return fmt.Errorf("export: PNG: %w", err)
+		}
+		if soft > math.Pi/4 {
+			return fmt.Errorf("export: PNG: %w: a shadow softness is at most 45 degrees", decad.ErrDegenerate)
+		}
+	}
 	var img *image.RGBA
 	back := raster.Back
 	if view.BackColor != nil {
 		back = *view.BackColor
 		back.A = 255
 	}
-	if view.Shadows {
+	if view.Shadows && soft > 0 {
+		img, err = raster.RenderSoftShadowed(ctx, mesh.Vertices(), mesh.Triangles(), tints, back, cam, view.Width, view.Height,
+			min(max(2*max(view.Width, view.Height), 512), 2048), math.Tan(soft), softShadowSamples)
+	} else if view.Shadows {
 		img, err = raster.RenderShadowed(ctx, mesh.Vertices(), mesh.Triangles(), tints, back, cam, view.Width, view.Height,
 			min(max(2*max(view.Width, view.Height), 512), 4096))
 	} else {
@@ -170,6 +194,9 @@ func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View, coun
 	}
 	return nil
 }
+
+// softShadowSamples is the number of directions a soft shadow samples the key light at.
+const softShadowSamples = 32
 
 // outlineColor is the dark grey of an outline, and hiddenColor the light grey of
 // a hidden edge.
