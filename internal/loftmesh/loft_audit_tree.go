@@ -446,10 +446,16 @@ func boxes6Overlap(a, b []float64) bool {
 // stack pushes right before left, so nodes come in the order a recursion
 // visits them.
 func (f *flatTree) walkRowAppend(row [2]r3.Vec, i int, limit uint64, out []int32) ([]int32, uint64, bool) {
+	bi := box6(row)
+	return f.walkRowAppendBox(&bi, i, limit, out)
+}
+
+// walkRowAppendBox is walkRowAppend with the query box already in box6 form,
+// so a caller walking several trees for one row converts it once.
+func (f *flatTree) walkRowAppendBox(bi *[6]float64, i int, limit uint64, out []int32) ([]int32, uint64, bool) {
 	if len(f.left) == 0 {
 		return out, 0, false
 	}
-	bi := box6(row)
 	var stack [flatWalkStack]int32
 	sp := 1
 	var scanned uint64
@@ -500,10 +506,15 @@ func (f *flatTree) walkRowAppend(row [2]r3.Vec, i int, limit uint64, out []int32
 
 // walkRow is walkRowAppend with each partner passed to fn.
 func (f *flatTree) walkRow(row [2]r3.Vec, i int, limit uint64, fn func(j int)) (uint64, bool) {
+	bi := box6(row)
+	return f.walkRowBox(&bi, i, limit, fn)
+}
+
+// walkRowBox is walkRow with the query box already in box6 form.
+func (f *flatTree) walkRowBox(bi *[6]float64, i int, limit uint64, fn func(j int)) (uint64, bool) {
 	if len(f.left) == 0 {
 		return 0, false
 	}
-	bi := box6(row)
 	var stack [flatWalkStack]int32
 	sp := 1
 	var scanned uint64

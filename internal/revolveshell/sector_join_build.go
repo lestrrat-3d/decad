@@ -356,7 +356,10 @@ func buildSectorsJoinAtSag(ctx context.Context, env topo.Env,
 	if count > sectorJoinStreamTriangles {
 		audit = loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming
 	}
-	if err := audit(proofbound.NewWorkBudget(ctx), mesh.Verts, mesh.Tris, patches, count, scans); err != nil {
+	// The poll budget steps and polls exactly as NewWorkBudget's does, and
+	// replays the audit's bulk steps (its parallel walks' and pair checks'
+	// StepN) in one move per poll instead of one call per step.
+	if err := audit(proofbound.NewPollWorkBudget(ctx), mesh.Verts, mesh.Tris, patches, count, scans); err != nil {
 		if RootCapContact(mesh.Src, ring.Groups, section.RootSpan, plans, err) {
 			return nil, nil, &sectorContactRefineError{cause: err}
 		}

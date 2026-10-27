@@ -41,6 +41,14 @@ func (w *rowWitness) walkRow(i int, limit uint64, fn func(j int)) (uint64, bool)
 	return w.loftRowPairScan.walkRow(i, limit, fn)
 }
 
+func (w *rowWitness) walkRowAppend(i int, limit uint64, out []int32) ([]int32, uint64, bool) {
+	if w.hold != nil {
+		<-w.hold
+	}
+	w.visits[i].Add(1)
+	return w.loftRowPairScan.walkRowAppend(i, limit, out)
+}
+
 // rowFillCases builds the cases: every grouped fixture, then a plain tree. With
 // first set it stops after the first.
 func rowFillCases(t *testing.T, first bool) []rowFillCase {

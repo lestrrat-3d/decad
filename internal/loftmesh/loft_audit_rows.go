@@ -23,6 +23,9 @@ type loftRowScan interface {
 	visitRow(budget *proofbound.WorkBudget, i int, limit uint64,
 		fn func(j int)) (uint64, bool, error)
 	walkRow(i int, limit uint64, fn func(j int)) (uint64, bool)
+	// walkRowAppend is walkRow with the partners appended to out, in the
+	// order walkRow passes them to fn, and the same work count and exceed.
+	walkRowAppend(i int, limit uint64, out []int32) ([]int32, uint64, bool)
 }
 
 const (
@@ -91,7 +94,7 @@ func walkLoftRows(budget *proofbound.WorkBudget, tree loftRowScan, members []int
 			r.work, r.exceeded = tree.walkRow(members[lo+k], ceiling, func(int) { r.count++ })
 			return nil
 		}
-		r.work, r.exceeded = tree.walkRow(members[lo+k], ceiling, func(j int) { r.row = append(r.row, int32(j)) })
+		r.row, r.work, r.exceeded = tree.walkRowAppend(members[lo+k], ceiling, r.row)
 		r.count = len(r.row)
 		slices.Sort(r.row)
 		return nil

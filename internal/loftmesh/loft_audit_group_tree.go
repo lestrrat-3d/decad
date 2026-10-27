@@ -17,6 +17,14 @@ type groupedTreeScan struct {
 	groups []treeScan
 	keys   []int
 	family []int
+	boxes  [][2]r3.Vec
+
+	// rootBox (six per group, as flatTree.nbox) and rootMax are each group's
+	// root node box and largest member id, side by side so a row walk tests
+	// every group's root without loading the group's tree. Every group has at
+	// least one member, so every group has a root.
+	rootBox []float64
+	rootMax []int32
 }
 
 func newGroupedTreeScan(boxes [][2]r3.Vec, members, family []int) groupedTreeScan {
@@ -29,9 +37,13 @@ func newGroupedTreeScan(boxes [][2]r3.Vec, members, family []int) groupedTreeSca
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
-	out := groupedTreeScan{keys: keys, groups: make([]treeScan, len(keys)), family: family}
+	out := groupedTreeScan{keys: keys, groups: make([]treeScan, len(keys)), family: family, boxes: boxes,
+		rootBox: make([]float64, 0, 6*len(keys)), rootMax: make([]int32, len(keys))}
 	for i, key := range keys {
-		out.groups[i] = newTreeScan(boxes, buckets[key])
+		g := newTreeScan(boxes, buckets[key])
+		out.groups[i] = g
+		out.rootBox = append(out.rootBox, g.flat.nbox[:6]...)
+		out.rootMax[i] = g.flat.maxID[0]
 	}
 	return out
 }
@@ -56,19 +68,69 @@ func (s groupedTreeScan) visitRow(budget *proofbound.WorkBudget, i int,
 }
 
 // walkRow is visitRow's walk without a budget; see treeScan.walkRow.
+//
+// A group's walk starts by popping its root: one unit, an exceed when that
+// unit passes the group's remaining limit, and nothing more when the root's
+// largest member id is at most i or its box misses row i's. rootRejects makes
+// that same decision from rootBox and rootMax, with the same comparisons on
+// the same numbers, and charges the same one unit, so a group it rejects
+// contributes exactly what its walk would. Every other group walks as before,
+// in the same group order, so the partners, their order, the work count and
+// the exceed are walkRow's over each group in turn.
 func (s groupedTreeScan) walkRow(i int, limit uint64, fn func(j int)) (uint64, bool) {
+	bi := box6(s.boxes[i])
 	var scanned uint64
-	for k, group := range s.groups {
+	for k := range s.groups {
 		if s.keys[k] >= 0 && s.keys[k] == s.family[i] {
 			continue
 		}
-		used, exceeded := group.walkRow(i, limit-scanned, fn)
+		if s.rootRejects(&bi, i, k) {
+			if scanned == limit {
+				return scanned + 1, true
+			}
+			scanned++
+			continue
+		}
+		used, exceeded := s.groups[k].flat.walkRowBox(&bi, i, limit-scanned, fn)
 		scanned += used
 		if exceeded {
 			return scanned, true
 		}
 	}
 	return scanned, false
+}
+
+// walkRowAppend is walkRow with the partners appended to out in the order
+// walkRow passes them to fn.
+func (s groupedTreeScan) walkRowAppend(i int, limit uint64, out []int32) ([]int32, uint64, bool) {
+	bi := box6(s.boxes[i])
+	var scanned uint64
+	for k := range s.groups {
+		if s.keys[k] >= 0 && s.keys[k] == s.family[i] {
+			continue
+		}
+		if s.rootRejects(&bi, i, k) {
+			if scanned == limit {
+				return out, scanned + 1, true
+			}
+			scanned++
+			continue
+		}
+		var used uint64
+		var exceeded bool
+		out, used, exceeded = s.groups[k].flat.walkRowAppendBox(&bi, i, limit-scanned, out)
+		scanned += used
+		if exceeded {
+			return out, scanned, true
+		}
+	}
+	return out, scanned, false
+}
+
+// rootRejects reports whether group k's root ends row i's walk of that group
+// at once: flatTree.walkRow's own root test, read from rootBox and rootMax.
+func (s groupedTreeScan) rootRejects(bi *[6]float64, i, k int) bool {
+	return s.rootMax[k] <= int32(i) || !boxes6Overlap(bi[:], s.rootBox[6*k:6*k+6:6*k+6])
 }
 
 func (s groupedTreeScan) visit(budget *proofbound.WorkBudget, limit uint64,
