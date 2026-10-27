@@ -38,45 +38,72 @@ func newTreeScan(boxes [][2]r3.Vec, members []int) treeScan {
 		t.order[k] = int32(i)
 	}
 	if len(members) != 0 {
-		t.build(0, len(members), t.hasNaNMidpoint())
+		t.nodes = make([]treeNode, 0, treeNodeCount(len(members)))
+		if mids, nan := treeMidpoints(boxes, t.order); nan {
+			t.buildSorted(0, len(members))
+		} else {
+			t.buildSelected(mids)
+		}
 	}
 	t.flat = newFlatTree(&t)
 	return t
 }
 
-// hasNaNMidpoint reports whether a member's box has a NaN midpoint on some
-// axis, which is the only way the build comparator stops being a strict total
-// order. A NaN coordinate or a -Inf..+Inf extent makes one.
-func (t *treeScan) hasNaNMidpoint() bool {
-	for _, i := range t.order {
-		b := t.boxes[i]
-		for axis := range 3 {
-			lo, hi := boxAxis(b, axis)
-			if math.IsNaN(lo/2 + hi/2) {
-				return true
-			}
-		}
+// treeNodeCount is the number of nodes the build makes over n members: a
+// leaf for treeLeafSize members or fewer, else a node over two subtrees
+// that split n at the middle. Both build paths split that way, so the node
+// slice is sized once.
+func treeNodeCount(n int) int {
+	if n <= treeLeafSize {
+		return 1
 	}
-	return false
+	return 1 + treeNodeCount(n/2) + treeNodeCount(n-n/2)
 }
 
-// build appends the node over order[start:end] and its subtree and returns the
-// node's index. A node splits at the median of its widest axis. The comparator
-// orders by box midpoint on that axis and breaks ties by member id, so it is a
-// strict total order and the left half is exactly the smallest members, in the
-// order a full sort of the node's range puts them. build therefore selects the
-// median (selectNth) instead of sorting the range, and sorts a child's range
-// only when that child is a leaf, because a leaf keeps the order its parent
-// gave it. An inner child reorders its own range, so the order selection left
-// in it does not matter, and a node's box, range and maxID do not depend on
-// the order either. The tree equals the one built by a full sort at every
-// node. fullSort is for member sets whose comparator is not a total order
-// (NaN midpoints); there the result depends on the input order, so every node
-// sorts its whole range, as it always has.
-func (t *treeScan) build(start, end int, fullSort bool) int {
-	box := t.boxes[t.order[start]]
-	maxID := t.order[start]
-	for _, i := range t.order[start+1 : end] {
+// treeMidpoints returns the build comparator's midpoints of the boxes of
+// ids: mids[3·l+axis] is lo/2 + hi/2 of box ids[l] on axis, the value the
+// comparator orders by. nan reports whether any of them is NaN, which is the
+// only way that comparator stops being a strict total order. A NaN
+// coordinate or a -Inf..+Inf extent makes one.
+func treeMidpoints(boxes [][2]r3.Vec, ids []int32) ([]float64, bool) {
+	mids := make([]float64, 3*len(ids))
+	nan := false
+	for l, i := range ids {
+		b := boxes[i]
+		for axis := range 3 {
+			lo, hi := boxAxis(b, axis)
+			// Comparing halves avoids overflow in a midpoint sum.
+			m := lo/2 + hi/2
+			mids[3*l+axis] = m
+			nan = nan || math.IsNaN(m)
+		}
+	}
+	return mids, nan
+}
+
+// hasNaNMidpoint reports whether a member's box has a NaN midpoint on some
+// axis (treeMidpoints).
+func (t *treeScan) hasNaNMidpoint() bool {
+	_, nan := treeMidpoints(t.boxes, t.order)
+	return nan
+}
+
+// appendTreeNode appends the node over the members at positions [start, end)
+// of order and returns its index and its widest axis. order holds member ids
+// when ids is nil, else local indices into ids. A node box is the
+// coordinatewise min/max of its members' boxes and maxID their largest id.
+func (t *treeScan) appendTreeNode(start, end int, order, ids []int32) (int, int) {
+	id := func(k int) int32 {
+		if ids == nil {
+			return order[k]
+		}
+		return ids[order[k]]
+	}
+	first := id(start)
+	box := t.boxes[first]
+	maxID := first
+	for k := start + 1; k < end; k++ {
+		i := id(k)
 		maxID = max(maxID, i)
 		b := t.boxes[i]
 		box[0] = r3.Vec{X: min(box[0].X, b[0].X), Y: min(box[0].Y, b[0].Y), Z: min(box[0].Z, b[0].Z)}
@@ -84,19 +111,41 @@ func (t *treeScan) build(start, end int, fullSort bool) int {
 	}
 	index := len(t.nodes)
 	t.nodes = append(t.nodes, treeNode{box: box, start: start, end: end, left: -1, right: -1, maxID: maxID})
-	if end-start <= treeLeafSize {
-		return index
-	}
 	axis := 0
 	for a := 1; a < 3; a++ {
 		if vecAxis(box[1], a)-vecAxis(box[0], a) > vecAxis(box[1], axis)-vecAxis(box[0], axis) {
 			axis = a
 		}
 	}
-	cmp := func(a, b int32) int {
+	return index, axis
+}
+
+// The tree. A node splits order[start:end] at the middle, mid = start +
+// (end−start)/2, along its widest axis. The comparator orders members by box
+// midpoint on that axis and breaks ties by member id. Where no midpoint is
+// NaN it is a strict total order, so the left half is exactly the
+// mid−start smallest members, which a full sort of the node's range would
+// put there, and the tree is fixed by that order alone: a leaf child's range
+// is sorted by its parent's comparator, which fixes its order; an inner
+// child reorders its own range, so the order its parent left in it does not
+// matter; and a node's box, range and maxID depend only on the members in
+// its range. Every algorithm that puts the smallest members left of mid and
+// sorts each leaf child builds the same tree, the one buildSorted builds,
+// and buildSelected is one. A root that is itself a leaf keeps the members'
+// order, in both builds.
+
+// buildSorted appends the node over order[start:end] and its subtree and
+// returns the node's index. Every inner node sorts its whole range. It is
+// the build for member sets with a NaN midpoint, whose comparator is not a
+// total order: there the result depends on the input order.
+func (t *treeScan) buildSorted(start, end int) int {
+	index, axis := t.appendTreeNode(start, end, t.order, nil)
+	if end-start <= treeLeafSize {
+		return index
+	}
+	slices.SortFunc(t.order[start:end], func(a, b int32) int {
 		alo, ahi := boxAxis(t.boxes[a], axis)
 		blo, bhi := boxAxis(t.boxes[b], axis)
-		// Comparing halves avoids overflow in a midpoint sum.
 		amid, bmid := alo/2+ahi/2, blo/2+bhi/2
 		switch {
 		case amid < bmid:
@@ -106,20 +155,66 @@ func (t *treeScan) build(start, end int, fullSort bool) int {
 		default:
 			return int(a) - int(b)
 		}
+	})
+	mid := start + (end-start)/2
+	left := t.buildSorted(start, mid)
+	right := t.buildSorted(mid, end)
+	t.nodes[index].left, t.nodes[index].right = left, right
+	return index
+}
+
+// treeSelectBuild is buildSelected's state. loc holds local member indices
+// in build order; local index l is member ids[l], whose midpoint on axis is
+// mids[3·l+axis]. keys is the scratch a node selects in.
+type treeSelectBuild struct {
+	t    *treeScan
+	ids  []int32
+	mids []float64
+	loc  []int32
+	keys []treeKey
+}
+
+// buildSelected builds the tree from midpoints with no NaN (treeMidpoints).
+// Each inner node copies its members' keys on its split axis into keys,
+// selects its median there (selectNth) instead of sorting its range, sorts
+// only the children that are leaves (sortTreeKeys), and writes the order
+// back to loc; treeKey.less is the comparator's order. It then replaces
+// t.order by the members in build order.
+func (t *treeScan) buildSelected(mids []float64) {
+	n := len(t.order)
+	b := treeSelectBuild{t: t, ids: t.order, mids: mids, loc: make([]int32, n), keys: make([]treeKey, n)}
+	for l := range b.loc {
+		b.loc[l] = int32(l)
+	}
+	b.build(0, n)
+	for k, l := range b.loc {
+		b.loc[k] = b.ids[l]
+	}
+	t.order = b.loc
+}
+
+func (b *treeSelectBuild) build(start, end int) int {
+	t := b.t
+	index, axis := t.appendTreeNode(start, end, b.loc, b.ids)
+	if end-start <= treeLeafSize {
+		return index
 	}
 	mid := start + (end-start)/2
-	if fullSort {
-		slices.SortFunc(t.order[start:end], cmp)
-	} else {
-		selectNth(t.order[start:end], mid-start, cmp)
-		for _, r := range [2][2]int{{start, mid}, {mid, end}} {
-			if r[1]-r[0] <= treeLeafSize {
-				slices.SortFunc(t.order[r[0]:r[1]], cmp)
-			}
+	keys := b.keys[start:end]
+	for k, l := range b.loc[start:end] {
+		keys[k] = treeKey{mid: b.mids[3*int(l)+axis], id: b.ids[l], l: l}
+	}
+	selectNth(keys, mid-start)
+	for _, r := range [2][2]int{{0, mid - start}, {mid - start, end - start}} {
+		if r[1]-r[0] <= treeLeafSize {
+			sortTreeKeys(keys[r[0]:r[1]])
 		}
 	}
-	left := t.build(start, mid, fullSort)
-	right := t.build(mid, end, fullSort)
+	for k, key := range keys {
+		b.loc[start+k] = key.l
+	}
+	left := b.build(start, mid)
+	right := b.build(mid, end)
 	t.nodes[index].left, t.nodes[index].right = left, right
 	return index
 }

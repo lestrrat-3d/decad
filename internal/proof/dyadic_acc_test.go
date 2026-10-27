@@ -73,3 +73,27 @@ func TestDyAccZeroValueIsZero(t *testing.T) {
 	require.True(t, acc.Dyadic().IsZero())
 	require.Zero(t, acc.Rat().Sign())
 }
+
+func TestDyAccInlineUpdatesAllocateNothingAfterWarmup(t *testing.T) {
+	x, y := proof.MustDyOf(3.141592653589793), proof.MustDyOf(1.4142135623730951)
+	for _, tc := range []struct {
+		name string
+		add  func(*proof.DyAcc)
+	}{
+		{"sum", func(a *proof.DyAcc) { a.Add(x) }},
+		{"product", func(a *proof.DyAcc) { a.AddProduct(x, y) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var acc proof.DyAcc
+			// Fill the accumulator's storage before measuring repeated updates.
+			for range 1024 {
+				tc.add(&acc)
+			}
+			snapshot := acc.Dyadic()
+			before := snapshot.Rat()
+			allocations := testing.AllocsPerRun(100, func() { tc.add(&acc) })
+			require.Zero(t, allocations)
+			require.Zero(t, before.Cmp(snapshot.Rat()), "an update changed the published sum")
+		})
+	}
+}

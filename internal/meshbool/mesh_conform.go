@@ -58,10 +58,17 @@ func ConformOnce(ctx context.Context, verts []proof.Xpt, tris *[][3]int, src *[]
 			}
 		}
 		if inserted[0] == nil && inserted[1] == nil && inserted[2] == nil {
-			outTris = append(outTris, tri)
-			outSrc = append(outSrc, (*src)[ti])
-			outBounds = append(outBounds, (*bounds)[ti])
+			if splitAny {
+				outTris = append(outTris, tri)
+				outSrc = append(outSrc, (*src)[ti])
+				outBounds = append(outBounds, (*bounds)[ti])
+			}
 			continue
+		}
+		if !splitAny {
+			outTris = append(outTris, (*tris)[:ti]...)
+			outSrc = append(outSrc, (*src)[:ti]...)
+			outBounds = append(outBounds, (*bounds)[:ti]...)
 		}
 		splitAny = true
 		for _, hits := range inserted {
@@ -85,9 +92,11 @@ func ConformOnce(ctx context.Context, verts []proof.Xpt, tris *[][3]int, src *[]
 			outBounds = append(outBounds, (*bounds)[ti])
 		}
 	}
-	*tris = outTris
-	*src = outSrc
-	*bounds = outBounds
+	if splitAny {
+		*tris = outTris
+		*src = outSrc
+		*bounds = outBounds
+	}
 	return splitAny, nil
 }
 

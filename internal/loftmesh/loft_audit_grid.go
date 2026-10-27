@@ -3,6 +3,7 @@ package loftmesh
 import (
 	"cmp"
 	"math"
+	"math/bits"
 	"slices"
 	"sort"
 
@@ -161,10 +162,13 @@ func newGridScanBelow(boxes [][2]r3.Vec, members []int, budget, beat uint64) (gr
 		g.n[axis] = int(math.Min(span/size, count)) + 1
 	}
 	// Count the incidences before registering any, so a grid that would cost
-	// more than budget is never built.
+	// more than budget is never built. ranges keeps each member's cell range
+	// for the registration loop below.
 	total, columnTotal := uint64(0), uint64(0)
-	for _, i := range members {
+	ranges := make([][2][3]int, len(members))
+	for k, i := range members {
 		lo, hi := g.cellRange(boxes[i])
+		ranges[k] = [2][3]int{lo, hi}
 		columns := uint64(hi[0]-lo[0]+1) * uint64(hi[1]-lo[1]+1)
 		total += columns * uint64(hi[2]-lo[2]+1)
 		columnTotal += columns
@@ -173,33 +177,28 @@ func newGridScanBelow(boxes [][2]r3.Vec, members []int, budget, beat uint64) (gr
 		}
 	}
 	g.registrations = total
-	// One item per (box, column) incidence: at most total, already within
-	// budget. start is the key of the box's lowest cell in the column, so
-	// sorting by (start, member position) orders the columns by key and each
-	// column's boxes by zLo, ties in member order.
-	type gridItem struct {
-		start int64
-		pos   int32
-		zHi   int32
+	g.work = g.registrations
+	// One entry per (box, column) incidence: columnTotal, at most total, so
+	// already within budget. Every column's entries run in ascending zLo, ties
+	// in member order. A box meets a column once, so that order is strict.
+	if uint64(g.n[0])*uint64(g.n[1]) <= columnTotal {
+		return g.fillColumnsByKey(members, ranges, columnTotal, beat)
 	}
+	// start is the key of the box's lowest cell in the column, so sorting by
+	// (start, member position) orders the columns by key and each column's
+	// boxes by zLo, ties in member order.
 	items := make([]gridItem, 0, columnTotal)
-	for k, i := range members {
-		lo, hi := g.cellRange(boxes[i])
+	for k, r := range ranges {
+		lo, hi := r[0], r[1]
 		for x := lo[0]; x <= hi[0]; x++ {
 			for y := lo[1]; y <= hi[1]; y++ {
 				items = append(items, gridItem{start: g.key([3]int{x, y, lo[2]}), pos: int32(k), zHi: int32(hi[2])})
 			}
 		}
 	}
-	slices.SortFunc(items, func(p, q gridItem) int {
-		if p.start != q.start {
-			return cmp.Compare(p.start, q.start)
-		}
-		return cmp.Compare(p.pos, q.pos)
-	})
+	items = sortGridItems(items, g.key([3]int{g.n[0] - 1, g.n[1] - 1, g.n[2] - 1}))
 	nz := int64(g.n[2])
 	entries := make([]gridEntry, len(items))
-	g.work = g.registrations
 	for a := 0; a < len(items); {
 		key := items[a].start / nz
 		b := a
@@ -207,22 +206,154 @@ func newGridScanBelow(boxes [][2]r3.Vec, members []int, budget, beat uint64) (gr
 			entries[b] = gridEntry{box: int32(members[items[b].pos]), zLo: int32(items[b].start % nz), zHi: items[b].zHi}
 			b++
 		}
-		col := entries[a:b:b]
-		for p, ep := range col {
-			for _, eq := range col[p+1:] {
-				if eq.zLo > ep.zHi {
-					break
-				}
-				g.work += uint64(min(ep.zHi, eq.zHi) - eq.zLo + 1)
-			}
-			if g.work >= beat {
-				return g, false
-			}
+		if !g.addColumn(key, entries[a:b:b], beat) {
+			return g, false
 		}
-		g.columns = append(g.columns, gridColumn{key: key, entries: col})
 		a = b
 	}
 	return g, true
+}
+
+// fillColumnsByKey is newGridScanBelow's registration for a grid of no more
+// (x, y) columns than entries: a counting sort on the column key places
+// every entry in its column, in member order, and each column is then
+// sorted stably by zLo, so its ties stay in member order. The columns and
+// their entries are those the (start, pos) item sort gives, and they reach
+// addColumn in the same ascending key order. The column count array is no
+// larger than the entries, so the budget bounds it as it bounds them.
+func (g *gridScan) fillColumnsByKey(members []int, ranges [][2][3]int, columnTotal, beat uint64) (gridScan, bool) {
+	ny := g.n[1]
+	// ends[c] counts column c's entries, then holds where it starts, and
+	// after the scatter where it ends.
+	ends := make([]int, g.n[0]*ny)
+	for _, r := range ranges {
+		for x := r[0][0]; x <= r[1][0]; x++ {
+			for y := r[0][1]; y <= r[1][1]; y++ {
+				ends[x*ny+y]++
+			}
+		}
+	}
+	sum := 0
+	for c, n := range ends {
+		ends[c] = sum
+		sum += n
+	}
+	entries := make([]gridEntry, columnTotal)
+	for k, r := range ranges {
+		e := gridEntry{box: int32(members[k]), zLo: int32(r[0][2]), zHi: int32(r[1][2])}
+		for x := r[0][0]; x <= r[1][0]; x++ {
+			for y := r[0][1]; y <= r[1][1]; y++ {
+				c := x*ny + y
+				entries[ends[c]] = e
+				ends[c]++
+			}
+		}
+	}
+	byZLo := func(p, q gridEntry) int { return cmp.Compare(p.zLo, q.zLo) }
+	begin := 0
+	for c, end := range ends {
+		if end == begin {
+			continue
+		}
+		col := entries[begin:end:end]
+		begin = end
+		if !slices.IsSortedFunc(col, byZLo) {
+			slices.SortStableFunc(col, byZLo)
+		}
+		if !g.addColumn(int64(c), col, beat) {
+			return *g, false
+		}
+	}
+	return *g, true
+}
+
+// addColumn adds column key's work, every pair of its boxes whose z ranges
+// meet counted once per shared cell, and appends the column. It reports false
+// as soon as the work reaches beat.
+func (g *gridScan) addColumn(key int64, col []gridEntry, beat uint64) bool {
+	for p, ep := range col {
+		for _, eq := range col[p+1:] {
+			if eq.zLo > ep.zHi {
+				break
+			}
+			g.work += uint64(min(ep.zHi, eq.zHi) - eq.zLo + 1)
+		}
+		if g.work >= beat {
+			return false
+		}
+	}
+	g.columns = append(g.columns, gridColumn{key: key, entries: col})
+	return true
+}
+
+// gridItem is one (box, column) incidence while newGridScanBelow builds the
+// columns: start is the key of the box's lowest cell in the column, pos the
+// box's position in members and zHi its highest z cell.
+type gridItem struct {
+	start int64
+	pos   int32
+	zHi   int32
+}
+
+// gridRadixBits is the widest digit of sortGridItems' radix passes, and
+// gridRadixMin the item count below which it sorts by comparison instead.
+const (
+	gridRadixBits = 13
+	gridRadixMin  = 256
+)
+
+// sortGridItems sorts items by (start, pos) and returns the sorted slice,
+// which may be a new one. maxStart bounds every start from above, and no
+// start is negative.
+//
+// newGridScanBelow appends the items in ascending pos, and one box's items
+// lie in distinct columns, so no two items share both start and pos: the
+// (start, pos) order is a strict total order and the sorted result is the
+// one sequence that order allows. A stable sort by start alone keeps equal
+// starts in input order, which is ascending pos, so it yields that same
+// sequence. The radix sort below is such a stable sort: least significant
+// digit first, every pass a stable counting scatter on one gridRadixBits-wide
+// digit of start, the digits splitting maxStart's bits evenly in as few
+// passes of at most gridRadixBits bits as cover them. Below
+// gridRadixMin items it compares (start, pos) directly, which gives the same
+// sequence.
+func sortGridItems(items []gridItem, maxStart int64) []gridItem {
+	if len(items) < gridRadixMin {
+		slices.SortFunc(items, func(p, q gridItem) int {
+			if p.start != q.start {
+				return cmp.Compare(p.start, q.start)
+			}
+			return cmp.Compare(p.pos, q.pos)
+		})
+		return items
+	}
+	nbits := uint(64 - bits.LeadingZeros64(uint64(maxStart)))
+	if nbits == 0 {
+		return items // every start is 0, and items are in ascending pos
+	}
+	passes := (nbits + gridRadixBits - 1) / gridRadixBits
+	width := (nbits + passes - 1) / passes
+	mask := uint64(1)<<width - 1
+	src, dst := items, make([]gridItem, len(items))
+	counts := make([]int, 1<<width)
+	for shift := uint(0); shift < nbits; shift += width {
+		clear(counts)
+		for _, it := range src {
+			counts[(uint64(it.start)>>shift)&mask]++
+		}
+		sum := 0
+		for d, c := range counts {
+			counts[d] = sum
+			sum += c
+		}
+		for _, it := range src {
+			d := (uint64(it.start) >> shift) & mask
+			dst[counts[d]] = it
+			counts[d]++
+		}
+		src, dst = dst, src
+	}
+	return src
 }
 
 // index is the cell along axis holding x, clamped into the grid. It is

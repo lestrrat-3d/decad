@@ -34,6 +34,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `boss_shape.go` | The non-round section of a `Boss`: reads a `HoleShape` and sketches it, grown for the draft. See boss design §7. |
 | `boss_fillet.go` | Root fillet of a `Boss`: finds the boss's root circle in the result and calls `Fillet`, after a trial on a copy. See boss design §6. |
 | `hole.go` | Public `Hole`, `HoleSpec`, depth, head and shape variants: gates, tool sketches, chained cut and the commit; `internal/holeplan/` computes the tools. See hole design. |
+| `hole_faceted_site.go` | `facetedHoleSite`: the hole site of a convex planar face of an exact-vertex faceted solid, its normal read exactly and rounded once, its outward side from the centroid. See orthogonal Boolean B20. |
 | `rib.go` | Public `Rib`, `RibArc`, `Web`, `WebPath` and `WithRibOverrun`: line, thickness and extent gates, rib tool extrusion, touch and volume checks. See rib design. |
 | `text.go` | Public `TextProfiles` and `TextSpec`: gates, then `internal/glyphs/` lays the text out and the contours are drawn into a sketch and filtered to filled regions. See text design. |
 | `emboss.go` | Public `Emboss`, `EmbossMode`, `WithEmbossDraft` and `WithEmbossRimFillet`: gates, sketch-plane check, tool extrusion, join and volume checks. See emboss design. |
@@ -46,6 +47,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `stitch.go` | `Stitch`; builds through `internal/stitchrecord/`. See surface §6.4. |
 | `unstitch.go` | `Unstitch` sheet split; builds through `internal/stitchrecord/`. See surface §6.5. |
 | `extrude.go` | Generic `Extrude` over a profile or chain, `WithTaper`, linear-extent resolution, the chain ribbon entry point. See evaluator §5 and surface §13.2. |
+| `extrude_tilted_face.go` | `extrudeToTiltedFace`: `Extrude` to a planar face of an exact-vertex faceted solid that is tilted from the sweep, as an extrusion past the face cut by a prism on the face's own outline. See orthogonal Boolean B19. |
 | `draft.go` | `Draft`, `NeutralPlane`, `Walls` gates, plus the tapered extrude angle and surface-result gates, extent resolution and slab dispatch. See draft §5, §7, §10. |
 | `sheet_metal.go` | Public `SheetMetal`, `SheetMetalSpec` and `SheetMetalReport`: gates, the thickened centreline as a sketch outline, `Extrude`, and the flat pattern. See sheet-metal design. |
 | `sweep.go` | Generic `Sweep` over a profile or chain: nil, option and seam gates, then `internal/sweepbuild/` builds and root commits. See sweep §3.3, §15.8–§15.9. |

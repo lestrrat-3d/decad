@@ -207,6 +207,26 @@ func DyQuoFloatDown(n, d Dyadic) float64 {
 	return NextDown(f)
 }
 
+// DyQuoFloat64 is RatFloat64's value over the exact quotient n/d, for d > 0
+// and n of either sign: the nearest float64 to n/d, ties to even, bit for bit.
+// Rounding to nearest-even is symmetric about zero, so a negative n answers
+// −round(|n|/d), and a non-zero quotient that rounds to zero is subnormal, which
+// dyQuoRound leaves to the big.Rat path, so no −0 arises. A quotient outside the
+// normal range takes RatFloat64 itself.
+func DyQuoFloat64(n, d Dyadic) float64 {
+	if d.Sign() > 0 {
+		if n.Sign() < 0 {
+			if f, _, ok := dyQuoRound(DyAbs(n), d, false); ok {
+				return -f
+			}
+		} else if f, _, ok := dyQuoRound(n, d, false); ok {
+			return f
+		}
+	}
+	f, _ := RatFloat64(new(big.Rat).Quo(n.Rat(), d.Rat()))
+	return f
+}
+
 // DyQuoFloatError is RationalFloatError(n/d, held) for d > 0: |n/d − held|
 // rounded to nearest and stepped one ulp up when that rounding was inexact.
 func DyQuoFloatError(n, d Dyadic, held float64) float64 {

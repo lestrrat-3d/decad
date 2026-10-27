@@ -40,6 +40,13 @@ func Xsub(a, b Xpt) Xpt {
 // cross-multiplied comparison reads without ever dividing.
 func XdotNum(a, b Xpt) *big.Int { return XhpDotNum(Xhp(a), Xhp(b)) }
 
+// XdotNumScratch computes XdotNum into scratch and returns it. Scratch must
+// be nonnil, must not alias any input field, and must belong to one running
+// calculation.
+func XdotNumScratch(scratch *big.Int, a, b Xpt) *big.Int {
+	return XhpDotNumScratch(scratch, Xhp(a), Xhp(b))
+}
+
 // XdotRat materialises a·b as a big.Rat — the one place this dot product pays
 // a normalisation, and only when a caller genuinely needs the rational VALUE
 // rather than a sign.
@@ -206,11 +213,18 @@ func XhpSub(p, q Xhp) Xhp {
 // numerator's sign, or divides it back out at the one point a value is
 // actually published (XhpRat).
 func XhpDotNum(a, b Xhp) *big.Int {
-	s := new(big.Int).Mul(a.X, b.X)
+	return XhpDotNumScratch(new(big.Int), a, b)
+}
+
+// XhpDotNumScratch computes XhpDotNum into scratch and returns it. Scratch
+// must be nonnil, must not alias any input field, and must belong to one
+// running calculation.
+func XhpDotNumScratch(scratch *big.Int, a, b Xhp) *big.Int {
 	var term big.Int
-	s.Add(s, term.Mul(a.Y, b.Y))
-	s.Add(s, term.Mul(a.Z, b.Z))
-	return s
+	scratch.Mul(a.X, b.X)
+	scratch.Add(scratch, term.Mul(a.Y, b.Y))
+	scratch.Add(scratch, term.Mul(a.Z, b.Z))
+	return scratch
 }
 
 // XhpVec rounds p to the nearest float64 coordinates.

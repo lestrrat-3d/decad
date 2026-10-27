@@ -13,6 +13,7 @@ import (
 
 func TestXdotDiffSignMatchesExactSubtraction(t *testing.T) {
 	t.Parallel()
+	var dotScratch big.Int
 	points := []r3.Vec{
 		{},
 		{X: 1, Y: -2, Z: 3},
@@ -43,6 +44,8 @@ func TestXdotDiffSignMatchesExactSubtraction(t *testing.T) {
 					// The offset form, with p over its own power-of-two weight,
 					// over the same weight as q and over a general weight.
 					nq := proof.XdotNum(n, scaled)
+					require.Zero(t, proof.XdotNumScratch(&dotScratch, n, scaled).Cmp(nq),
+						"reused dot scratch: n=%v q=%v factor=%d", nv, qv, factor)
 					held := new(big.Int).Set(nq)
 					for _, pFactor := range []int64{1, factor, 5} {
 						sp := proof.Xpt{

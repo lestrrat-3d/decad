@@ -336,7 +336,7 @@ func TestNearContactExecutorOrderAndBatches(t *testing.T) {
 	expect := func(p ContactPair, hit bool) consumed {
 		ma.PrepareFloatNormal(p.I)
 		mb.PrepareFloatNormal(p.J)
-		r := classifyContactPair(ma, mb, p, nil)
+		r := classifyContactPair(ma, mb, p)
 		require.NoError(t, r.Err)
 		c := consumed{pair: p, contact: r.Contact}
 		if r.Contact.Kind == ContactNone && !hit {
@@ -357,7 +357,7 @@ func TestNearContactExecutorOrderAndBatches(t *testing.T) {
 						p := all[k]
 						ma.PrepareFloatNormal(p.I)
 						mb.PrepareFloatNormal(p.J)
-						r := classifyContactPair(ma, mb, p, nil)
+						r := classifyContactPair(ma, mb, p)
 						require.NoError(t, r.Err)
 						memo.Store(p.I, p.J, r.Contact)
 					}
@@ -481,10 +481,10 @@ func TestGatherNearContactsPollScheduleMatchesLegacy(t *testing.T) {
 	ma.PrepareFloatNormal(0)
 	mb.PrepareFloatNormal(far)
 	mb.PrepareFloatNormal(0)
-	c := classifyContactPair(ma, mb, ContactPair{I: 0, J: far}, nil)
+	c := classifyContactPair(ma, mb, ContactPair{I: 0, J: far})
 	require.NoError(t, c.Err)
 	require.Equal(t, ContactNone, c.Contact.Kind)
-	c = classifyContactPair(ma, mb, ContactPair{I: 0, J: 0}, nil)
+	c = classifyContactPair(ma, mb, ContactPair{I: 0, J: 0})
 	require.NoError(t, c.Err)
 	require.Equal(t, ContactRegion, c.Contact.Kind)
 	for _, tail := range []int{256, 300, 513, 16_384} {

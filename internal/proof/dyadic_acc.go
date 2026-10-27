@@ -10,6 +10,7 @@ type DyAcc struct {
 	mant big.Int // the sum is mant × 2^exp; mant is zero exactly when the sum is
 	exp  int
 	t    big.Int // scratch
+	x, y big.Int // owned input mantissas reused across additions and products
 }
 
 // Add adds x to the sum.
@@ -17,9 +18,12 @@ func (a *DyAcc) Add(x Dyadic) {
 	if x.IsZero() {
 		return
 	}
-	var tx big.Int
-	var bx dyBuf
-	a.addMant(x.view(&tx, &bx), x.exp)
+	if x.big != nil {
+		a.addMant(x.big, x.exp)
+		return
+	}
+	x.MantInto(&a.t)
+	a.addScratch(x.exp)
 }
 
 // AddProduct adds x·y to the sum.
@@ -27,9 +31,14 @@ func (a *DyAcc) AddProduct(x, y Dyadic) {
 	if x.IsZero() || y.IsZero() {
 		return
 	}
-	var tx, ty big.Int
-	var bx, by dyBuf
-	a.t.Mul(x.view(&tx, &bx), y.view(&ty, &by))
+	xm, ym := x.big, y.big
+	if xm == nil {
+		xm = x.MantInto(&a.x)
+	}
+	if ym == nil {
+		ym = y.MantInto(&a.y)
+	}
+	a.t.Mul(xm, ym)
 	a.addScratch(x.exp + y.exp)
 }
 

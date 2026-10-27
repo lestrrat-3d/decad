@@ -12,7 +12,8 @@ The rules for rows live in `agent-docs/layout.md`.
 | `tessellate.go` | `Mesh`, `Body.Tessellate`, its mesh cache and proof withholding, and the call into `internal/tessdispatch/`. See tessellation design, surface §10.1. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and mesh proof publication. See tessellation §1, §4. |
 | `mesh_body.go` | Public `MeshBody`, `MeshReport` and `NewMeshBody`: the imported triangle mesh and its bounds, area, volume and point readings. `internal/meshbody/` reads the triangles. See mesh-import design. |
-| `solid_from_mesh.go` | Public `SolidFromMesh`: gates, the exact crossing audit and mesh audit, exact plane groups, then `facetedrecord.BuildWithProof` and one commit. See mesh-solid design. |
+| `solid_from_mesh.go` | Public `SolidFromMesh`: gates, the exact crossing audit and mesh audit, plane groups by `internal/meshplane/` tagged when square to an axis, then `facetedrecord.BuildWithProof` and one commit. See mesh-solid design. |
+| `internal/meshplane/` | Exact dyadic plane groups of a mesh's triangles and each group's exact area centroid. See mesh-solid design M4, §7. |
 | `mesh_import.go` | Public `ReadSTL`, `ReadOBJ`, `ReadThreeMF`, `ReadSTEP`, their options and `ErrMalformedMesh`, `ErrMeshTooLarge`: limits, then `internal/meshparse/` parses and `NewMeshBody` reads the result. See mesh-import design. |
 | `mesh_repair.go` | Public `RepairMesh`, its options and `MeshRepairReport`: option gates, then `internal/meshrepair/` mends and `NewMeshBody` reads the result. See mesh-import design §7. |
 | `mesh_refine.go` | Public `RefineMesh`: gates, then `internal/meshrefine/` splits long edges and `NewMeshBody` reads the result. See mesh-import design §11. |
@@ -21,7 +22,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `mesh_scale.go` | Public `ScaleMesh` and `ScaleBodyMesh`: gates, per-axis stretch about an anchor, reversed winding under an odd number of negative factors, then `NewMeshBody`. See mesh-import design §10. |
 | `subd.go` | Public `SubDMesh` and `SubDCage`: gates, then `internal/subd/` refines the cage and `NewMeshBody` reads the result. See subd design. |
 | `infill.go` | Public `Infill`, `InfillSpec` and `LatticeKind`: builds the lattice over the body's box plus a margin, makes it a solid by `SolidFromMesh` and intersects it with the body. See lattice design §5. |
-| `lattice.go` | Public `GyroidLattice`, `SchwarzPLattice`, `DiamondLattice`, `NeoviusLattice`, `IWPLattice` and `LatticeSpec`: gates, then `internal/lattice/` samples and cuts the field and `NewMeshBody` reads the result. See lattice design. |
+| `lattice.go` | Public `GyroidLattice`, `SchwarzPLattice`, `DiamondLattice`, `NeoviusLattice`, `IWPLattice`, `FischerKochSLattice`, `LidinoidLattice` and `LatticeSpec`: gates, then `internal/lattice/` samples and cuts the field and `NewMeshBody` reads the result. See lattice design. |
 | `internal/orthoshell/` | Grid erosion of an orthogonal polyhedron by a cube, the removed-face slab, the wall mesh and the face press, for `Shell` and `MoveFace`. See orthogonal-shell and orthogonal-move designs. |
 | `internal/lattice/` | Gyroid field sampled on a grid and cut by marching tetrahedra into a closed triangle mesh. See lattice design. |
 | `mesh_reduce.go` | Public `ReduceMesh`, `ReduceMeshWithin` and `MeshReduceReport`: gates, then `internal/meshreduce/` clusters vertices and `NewMeshBody` reads the result. See mesh-import design §9. |

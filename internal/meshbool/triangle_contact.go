@@ -100,9 +100,9 @@ const (
 type TriContact struct {
 	Kind   ContactKind
 	P0, P1 proof.Xpt
-	// p0OnA … p1OnB record whether each endpoint lies on each triangle's own
-	// closed BOUNDARY — decided by the exact edge predicates used by
-	// OnTriBoundary, never by which crossing list supplied the point.
+	// P0OnA … P1OnB record whether each endpoint lies on each triangle's own
+	// closed boundary. Exact interval comparisons and plane-side signs decide
+	// the same membership as OnTriBoundary (contactSpanBoundary).
 	P0OnA, P1OnA, P0OnB, P1OnB bool
 	// edgeA and edgeB name the facet edge a SEGMENT contact runs ALONG (−1
 	// when it runs along none): an in-plane edge. Whether such an edge grazes
@@ -163,17 +163,6 @@ type TriContactSpan struct {
 func TriTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xpt, pa, pb *[3]Xp2, sa, sb *[3]int,
 	useFilter bool, fna, fnb r3.Vec, normalsPrepared bool,
 ) (TriContact, error) {
-	return triTriClassify(ta, tb, xta, xtb, na, nb, pa, pb, sa, sb, useFilter, fna, fnb, normalsPrepared, nil, 0)
-}
-
-// triTriClassify is TriTriClassifyCore with an optional cache of the first
-// facet's edge planes. facetA names the first facet in the mesh the cache
-// belongs to; a nil cache builds the planes for this pair alone. The cache
-// changes only where the planes come from, never their value, so the result
-// is the one TriTriClassifyCore returns.
-func triTriClassify(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xpt, pa, pb *[3]Xp2, sa, sb *[3]int,
-	useFilter bool, fna, fnb r3.Vec, normalsPrepared bool, cacheA *edgePlaneCache, facetA int,
-) (TriContact, error) {
 	span, crossing, err := triTriSpan(ta, tb, xta, xtb, na, nb, pa, pb, sa, sb, useFilter, fna, fnb, normalsPrepared)
 	out := TriContact{EdgeA: -1, EdgeB: -1}
 	if err != nil {
@@ -184,15 +173,10 @@ func triTriClassify(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xpt, p
 		return out, nil
 	}
 	out.Sin2 = SinSquared(na, nb)
-	if out.Kind == ContactSegment {
-		out.P0OnA, out.P1OnA, out.EdgeA = segmentBoundaryEdgesPlanes(out.P0, out.P1, xta, cacheA.planes(facetA, xta, na))
-		planesB := newEdgePlanes(xtb, nb)
-		out.P0OnB, out.P1OnB, out.EdgeB = segmentBoundaryEdgesPlanes(out.P0, out.P1, xtb, &planesB)
-	} else {
-		out.P0OnA = OnTriBoundary(out.P0, xta, na)
-		out.P0OnB = OnTriBoundary(out.P0, xtb, nb)
-		out.P1OnA, out.P1OnB = out.P0OnA, out.P0OnB
-	}
+	boundary := span.boundary
+	out.P0OnA, out.P1OnA = boundary.p0A, boundary.p1A
+	out.P0OnB, out.P1OnB = boundary.p0B, boundary.p1B
+	out.EdgeA, out.EdgeB = boundary.edgeA, boundary.edgeB
 	return out, nil
 }
 
@@ -204,7 +188,33 @@ func TriTriContactSpanCore(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof
 	useFilter bool, fna, fnb r3.Vec, normalsPrepared bool,
 ) (TriContactSpan, error) {
 	span, _, err := triTriSpan(ta, tb, xta, xtb, na, nb, pa, pb, sa, sb, useFilter, fna, fnb, normalsPrepared)
-	return span, err
+	return span.TriContactSpan, err
+}
+
+// contactSpanBoundary records OnTriBoundary and SegAlongEdge's answers from
+// the exact intersection intervals. For two distinct nonparallel facet planes,
+// their common line meets each nondegenerate triangle in a closed interval.
+// Unless the line contains a triangle edge, only that interval's endpoints
+// lie on the triangle boundary: a line crossing the relative interior of an
+// edge enters or leaves the convex triangle there. If it contains an edge,
+// the whole interval is that edge, identified by its two zero plane-side signs.
+//
+// For a positive-length overlap, its lower end is on A's boundary exactly
+// when loB <= loA, and on B's exactly when loB >= loA; the upper-end tests
+// reverse those inequalities. Equality counts for both triangles, regardless
+// of which point representation the overlap keeps. The in-plane-edge case
+// marks both ends. For a point overlap, the two end records are combined,
+// because the common point can be either end of either triangle's interval.
+// Every comparison and zero sign is exact, so these are the same memberships
+// the closed edge predicates decide, with no additional integer products.
+type contactSpanBoundary struct {
+	p0A, p1A, p0B, p1B bool
+	edgeA, edgeB       int
+}
+
+type classifiedContactSpan struct {
+	TriContactSpan
+	boundary contactSpanBoundary
 }
 
 // triTriSpan is the classification shared by TriTriClassifyCore and
@@ -212,8 +222,8 @@ func TriTriContactSpanCore(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof
 // produced a point or a segment.
 func triTriSpan(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xpt, pa, pb *[3]Xp2, sa, sb *[3]int,
 	useFilter bool, fna, fnb r3.Vec, normalsPrepared bool,
-) (TriContactSpan, bool, error) {
-	var span TriContactSpan
+) (classifiedContactSpan, bool, error) {
+	var span classifiedContactSpan
 	var signsB, signsA [3]int
 	if sb != nil {
 		signsB = *sb
@@ -271,23 +281,33 @@ func triTriSpan(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xpt, pa, p
 			return span, false, nil
 		}
 	}
-	ptsA := planeCrossingsPrepared(xta, xtb[0], nb, signsA)
-	ptsB := planeCrossingsPrepared(xtb, xta[0], na, signsB)
+	var ptsABuf, ptsBBuf [3]proof.Xpt
+	ptsA := ptsABuf[:planeCrossingsPreparedInto(&ptsABuf, xta, xtb[0], nb, signsA)]
+	ptsB := ptsBBuf[:planeCrossingsPreparedInto(&ptsBBuf, xtb, xta[0], na, signsB)]
 	if len(ptsA) == 0 || len(ptsB) == 0 {
 		return span, false, nil
 	}
 	if len(ptsA) > 2 || len(ptsB) > 2 {
-		return TriContactSpan{}, false, fmt.Errorf(`%w: a facet crosses a plane more than twice`, decaderr.ErrBooleanFailed)
+		return classifiedContactSpan{}, false, fmt.Errorf(`%w: a facet crosses a plane more than twice`, decaderr.ErrBooleanFailed)
 	}
-	dir := proof.Xcross(na, nb)
-	var order lineOrder
+	axis, reverse, hasLine := commonLineAxis(na, nb)
+	var dir proof.Xpt
+	if !hasLine {
+		// The non-coplanar branch above guarantees a common line. Keep the
+		// former exact dot ordering as a defensive fallback if that invariant
+		// ever changes.
+		dir = proof.Xcross(na, nb)
+		axis = -1
+	}
+	order := lineOrder{axis: axis, reverse: reverse}
 	loA, hiA := order.sorted(ptsA, dir)
 	loB, hiB := order.sorted(ptsB, dir)
 	lo, hi := loA, hiA
-	if order.cmp(loB, lo) > 0 {
+	loCmp, hiCmp := order.cmp(loB, loA), order.cmp(hiB, hiA)
+	if loCmp > 0 {
 		lo = loB
 	}
-	if order.cmp(hiB, hi) < 0 {
+	if hiCmp < 0 {
 		hi = hiB
 	}
 	switch order.cmp(lo, hi) {
@@ -298,7 +318,32 @@ func triTriSpan(ta, tb [3]r3.Vec, xta, xtb [3]proof.Xpt, na, nb proof.Xpt, pa, p
 	default:
 		span.Kind, span.P0, span.P1 = ContactSegment, lo.P, hi.P
 	}
+	{
+		boundary := &span.boundary
+		edgeA, edgeB := inPlaneEdge(signsA), inPlaneEdge(signsB)
+		boundary.p0A, boundary.p1A = edgeA >= 0 || loCmp <= 0, edgeA >= 0 || hiCmp >= 0
+		boundary.p0B, boundary.p1B = edgeB >= 0 || loCmp >= 0, edgeB >= 0 || hiCmp <= 0
+		boundary.edgeA, boundary.edgeB = -1, -1
+		if span.Kind == ContactPoint {
+			boundary.p0A = boundary.p0A || boundary.p1A
+			boundary.p0B = boundary.p0B || boundary.p1B
+			boundary.p1A, boundary.p1B = boundary.p0A, boundary.p0B
+		} else {
+			boundary.edgeA, boundary.edgeB = edgeA, edgeB
+		}
+	}
 	return span, true, nil
+}
+
+// inPlaneEdge names the edge in the other facet's plane. signs must be exact
+// plane-side signs of a non-coplanar triangle, so at most two can be zero.
+func inPlaneEdge(signs [3]int) int {
+	for i := range 3 {
+		if signs[i] == 0 && signs[(i+1)%3] == 0 {
+			return i
+		}
+	}
+	return -1
 }
 
 // linePoint is a point of the planes' common line together with D =
@@ -314,9 +359,20 @@ type linePoint struct {
 // every comparison. Its two integers are scratch for one goroutine.
 type lineOrder struct {
 	left, right big.Int
+	axis        int
+	reverse     bool
 }
 
 func (o *lineOrder) cmp(a, b linePoint) int {
+	if o.axis >= 0 {
+		o.left.Mul(Coord(a.P, o.axis), b.P.W)
+		o.right.Mul(Coord(b.P, o.axis), a.P.W)
+		cmp := o.left.Cmp(&o.right)
+		if o.reverse {
+			return -cmp
+		}
+		return cmp
+	}
 	o.left.Mul(a.D, b.P.W)
 	o.right.Mul(b.D, a.P.W)
 	return o.left.Cmp(&o.right)
@@ -324,15 +380,47 @@ func (o *lineOrder) cmp(a, b linePoint) int {
 
 // sorted is OrderOnLine over linePoints.
 func (o *lineOrder) sorted(pts []proof.Xpt, dir proof.Xpt) (linePoint, linePoint) {
-	first := linePoint{P: pts[0], D: proof.XdotNum(pts[0], dir)}
+	first := linePoint{P: pts[0]}
+	if o.axis < 0 {
+		first.D = proof.XdotNum(pts[0], dir)
+	}
 	if len(pts) == 1 {
 		return first, first
 	}
-	second := linePoint{P: pts[1], D: proof.XdotNum(pts[1], dir)}
+	second := linePoint{P: pts[1]}
+	if o.axis < 0 {
+		second.D = proof.XdotNum(pts[1], dir)
+	}
 	if o.cmp(first, second) > 0 {
 		return second, first
 	}
 	return first, second
+}
+
+// commonLineAxis selects a coordinate that changes along the intersection of
+// the planes with normals a and b. On that line, the coordinate orders points
+// exactly as their dot product with a×b, accounting for the component's sign.
+func commonLineAxis(a, b proof.Xpt) (axis int, reverse, ok bool) {
+	var left, right big.Int
+	left.Mul(a.Y, b.Z)
+	right.Mul(a.Z, b.Y)
+	left.Sub(&left, &right)
+	if sign := left.Sign(); sign != 0 {
+		return 0, sign < 0, true
+	}
+	left.Mul(a.Z, b.X)
+	right.Mul(a.X, b.Z)
+	left.Sub(&left, &right)
+	if sign := left.Sign(); sign != 0 {
+		return 1, sign < 0, true
+	}
+	left.Mul(a.X, b.Y)
+	right.Mul(a.Y, b.X)
+	left.Sub(&left, &right)
+	if sign := left.Sign(); sign != 0 {
+		return 2, sign < 0, true
+	}
+	return -1, false, false
 }
 
 // AllOneSide reports whether all three plane-side signs are strictly the same:
@@ -485,137 +573,6 @@ func SegAlongEdge(p0, p1 proof.Xpt, xt [3]proof.Xpt, n proof.Xpt) int {
 	return -1
 }
 
-// edgePlanes holds one facet's three in-plane edge tests. For edge k, from
-// a = xt[k] to b = xt[(k+1)%3] of a facet with exact normal n, Normal[k] is
-// n × (b−a) and Offset[k] is XdotNum(Normal[k], a). The side of a point p on
-// the facet's plane is the sign of ((b−a)×(p−a))·n = Normal[k]·(p−a), which
-// proof.XdotDiffSignOffset reads from these two values. Axis[k], Lo[k] and
-// Hi[k] are the dominant axis of b−a and the edge's two ends in order along
-// it, the values PointOnSegment3D(a, b, p) derives before it compares p. All
-// of them are functions of the facet's exact corners and normal alone, so
-// every pair the facet takes part in may share them.
-type edgePlanes struct {
-	Normal [3]proof.Xpt
-	Offset [3]*big.Int
-	Axis   [3]int
-	Lo, Hi [3]proof.Xpt
-}
-
-func newEdgePlanes(xt [3]proof.Xpt, n proof.Xpt) edgePlanes {
-	var out edgePlanes
-	var left, right big.Int
-	for k := range 3 {
-		a, b := xt[k], xt[(k+1)%3]
-		delta := proof.Xsub(b, a)
-		out.Normal[k] = proof.Xcross(n, delta)
-		out.Offset[k] = proof.XdotNum(out.Normal[k], a)
-		// PointOnSegment3D's axis and end order, without its allocations.
-		axis := 0
-		if delta.Y.CmpAbs(delta.X) > 0 {
-			axis = 1
-		}
-		if delta.Z.CmpAbs(Coord(delta, axis)) > 0 {
-			axis = 2
-		}
-		lo, hi := a, b
-		if compareCoordScratch(&left, &right, lo, hi, axis) > 0 {
-			lo, hi = hi, lo
-		}
-		out.Axis[k], out.Lo[k], out.Hi[k] = axis, lo, hi
-	}
-	return out
-}
-
-// onSegment is PointOnSegment3D(a, b, p) for edge k's a and b, with scratch
-// integers left and right.
-func (e *edgePlanes) onSegment(left, right *big.Int, k int, p proof.Xpt) bool {
-	return compareCoordScratch(left, right, e.Lo[k], p, e.Axis[k]) <= 0 &&
-		compareCoordScratch(left, right, p, e.Hi[k], e.Axis[k]) <= 0
-}
-
-// compareCoordScratch is CompareCoord with its two products written to left
-// and right.
-func compareCoordScratch(left, right *big.Int, a, b proof.Xpt, axis int) int {
-	left.Mul(Coord(a, axis), b.W)
-	right.Mul(Coord(b, axis), a.W)
-	return left.Cmp(right)
-}
-
-// edgePlaneCache keeps the edge planes of the last facet one goroutine asked
-// about, keyed by its index in one prepared mesh. A contact batch asks about
-// its pairs in the order the producer added them, facet of the first operand
-// outermost, so consecutive pairs usually share that facet. A cache belongs to
-// one goroutine and one mesh for its whole life, and a facet's corners and
-// normal never change while the mesh lives, so a hit returns the value a miss
-// would build. The zero value is not ready: start from newEdgePlaneCache.
-type edgePlaneCache struct {
-	facet int
-	value edgePlanes
-}
-
-func newEdgePlaneCache() edgePlaneCache { return edgePlaneCache{facet: -1} }
-
-// planes returns facet's edge planes, building them when the cache holds
-// another facet's. xt and n must be that facet's exact corners and normal. A
-// nil cache builds them for this call alone.
-func (c *edgePlaneCache) planes(facet int, xt [3]proof.Xpt, n proof.Xpt) *edgePlanes {
-	if c == nil {
-		value := newEdgePlanes(xt, n)
-		return &value
-	}
-	if c.facet != facet {
-		c.value = newEdgePlanes(xt, n)
-		c.facet = facet
-	}
-	return &c.value
-}
-
-// segmentBoundaryEdges shares each exact point-on-edge result between the
-// boundary flags and the first common edge, retaining their short-circuit order.
-func segmentBoundaryEdges(p0, p1 proof.Xpt, xt [3]proof.Xpt, n proof.Xpt) (bool, bool, int) {
-	planes := newEdgePlanes(xt, n)
-	return segmentBoundaryEdgesPlanes(p0, p1, xt, &planes)
-}
-
-// segmentBoundaryEdgesPlanes is segmentBoundaryEdges with the facet's edge
-// planes already built.
-func segmentBoundaryEdgesPlanes(p0, p1 proof.Xpt, xt [3]proof.Xpt, planes *edgePlanes) (bool, bool, int) {
-	points := [2]proof.Xpt{p0, p1}
-	var known, on [2]uint8
-	var sideScratch [3]big.Int
-	onEdge := func(point, edge int) bool {
-		bit := uint8(1 << edge)
-		if known[point]&bit == 0 {
-			known[point] |= bit
-			// ((b-a)×(p-a))·n = (n×(b-a))·(p-a).
-			if proof.XdotDiffSignOffset(&sideScratch, planes.Normal[edge], points[point], xt[edge], planes.Offset[edge]) == 0 &&
-				planes.onSegment(&sideScratch[0], &sideScratch[1], edge, points[point]) {
-				on[point] |= bit
-			}
-		}
-		return on[point]&bit != 0
-	}
-	var on0, on1 bool
-	for edge := range 3 {
-		if onEdge(0, edge) {
-			on0 = true
-			break
-		}
-	}
-	for edge := range 3 {
-		if onEdge(1, edge) {
-			on1 = true
-			break
-		}
-	}
-	for edge := range 3 {
-		if onEdge(0, edge) && onEdge(1, edge) {
-			return on0, on1, edge
-		}
-	}
-	return on0, on1, -1
-}
-
 // SinSquared is the exact sin²θ of the angle between two facet planes:
 // |na × nb|² / (|na|²·|nb|²).
 func SinSquared(na, nb proof.Xpt) *SinSquare {
@@ -659,35 +616,49 @@ func PlaneCrossings(xt [3]proof.Xpt, xo [3]proof.Xpt, signs [3]int) []proof.Xpt 
 // and origin weights are common to all plane-side values and cancel from the
 // edge crossing ratio.
 func planeCrossingsPrepared(xt [3]proof.Xpt, origin, normal proof.Xpt, signs [3]int) []proof.Xpt {
-	var out []proof.Xpt
-	nums := [3]*big.Int{}
-	var base *big.Int
+	var out [3]proof.Xpt
+	n := planeCrossingsPreparedInto(&out, xt, origin, normal, signs)
+	return out[:n]
+}
+
+func planeCrossingsPreparedInto(out *[3]proof.Xpt, xt [3]proof.Xpt, origin, normal proof.Xpt, signs [3]int) int {
+	n := 0
+	var nums [3]big.Int
+	var numsReady [3]bool
+	var base, scaledBase big.Int
+	baseReady := false
 	val := func(i int) *big.Int {
-		if nums[i] == nil {
-			if base == nil {
-				base = proof.XdotNum(normal, origin)
+		if !numsReady[i] {
+			if !baseReady {
+				proof.XdotNumScratch(&base, normal, origin)
+				baseReady = true
 			}
-			point := proof.XdotNum(normal, xt[i])
+			point := &nums[i]
+			proof.XdotNumScratch(point, normal, xt[i])
 			if xt[i].W.Cmp(origin.W) == 0 {
-				nums[i] = point.Sub(point, base)
-				nums[i].Mul(nums[i], xt[i].W)
+				point.Sub(point, &base)
+				point.Mul(point, xt[i].W)
 			} else {
-				nums[i] = point.Mul(point, origin.W)
-				nums[i].Sub(nums[i], new(big.Int).Mul(base, xt[i].W))
+				point.Mul(point, origin.W)
+				scaledBase.Mul(&base, xt[i].W)
+				point.Sub(point, &scaledBase)
 			}
+			numsReady[i] = true
 		}
-		return nums[i]
+		return &nums[i]
 	}
 	for i := range 3 {
 		if signs[i] == 0 {
-			out = append(out, xt[i])
+			out[n] = xt[i]
+			n++
 		}
 		j := (i + 1) % 3
 		if signs[i]*signs[j] < 0 {
-			out = append(out, proof.XplaneCrossing(xt[i], xt[j], val(i), val(j)))
+			out[n] = proof.XplaneCrossing(xt[i], xt[j], val(i), val(j))
+			n++
 		}
 	}
-	return out
+	return n
 }
 
 func CountZero(s [3]int) int {

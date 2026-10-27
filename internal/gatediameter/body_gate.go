@@ -420,7 +420,9 @@ func FallbackGateDiameter(budget *proofbound.WorkBudget, body *topo.Body) (float
 // reads the body's vertices with their published bounds instead.
 func draftGateDiameter(ctx context.Context, body *topo.Body, dp draftrecord.Payload) (float64, bool, error) {
 	prisms, displacement := dp.CapPrisms()
-	d, ok, err := diameter.PrismGateDiameter(proofbound.NewWorkBudget(ctx), prisms, displacement)
+	// The poll budget returns what NewWorkBudget's would at every step; its
+	// StepN charges the diameter scan's skipped blocks in one move per poll.
+	d, ok, err := diameter.PrismGateDiameter(proofbound.NewPollWorkBudget(ctx), prisms, displacement)
 	if err != nil || ok {
 		return d, ok, err
 	}

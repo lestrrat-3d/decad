@@ -2,10 +2,12 @@ package apitest_test
 
 import (
 	"errors"
+	"math"
 	"math/rand/v2"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/decadtest"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -418,4 +420,205 @@ func TestQuarterTurnAgreesWithTheTurnedCubes(t *testing.T) {
 		}
 	}
 	require.Greater(t, checked, 12)
+}
+
+func TestStretchAgreesWithTheStretchedCubes(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(29, 30))
+	factors := []float64{2, 3, 0.5, -1, -2}
+	checked := 0
+	for range 40 {
+		c := randomCubes(rng)
+		doc := decad.New()
+		b, ok := c.solid(t, doc)
+		if !ok {
+			continue
+		}
+		var f [3]float64
+		for a := range 3 {
+			f[a] = factors[rng.IntN(len(factors))]
+		}
+		anchor := r3.NewVec(float64(rng.IntN(voxelSide)), float64(rng.IntN(voxelSide)), float64(rng.IntN(voxelSide)))
+		out, err := decad.Stretch(t.Context(), b, anchor, units.Scalar(f[0]), units.Scalar(f[1]), units.Scalar(f[2]))
+		if err != nil {
+			continue
+		}
+		checked++
+		got, bound := volumeOf(t, out)
+		want := float64(c.count()) * math.Abs(f[0]*f[1]*f[2])
+		require.InDelta(t, want, got, bound+1e-9, "stretching %d cubes by %v", c.count(), f)
+		// The centre of the cube at (x, y, z) goes to the anchor plus each of its offsets times its factor, and the cube
+		// it stood in is wholly the stretched set's box there, so the point is inside when the cube was solid.
+		for range 40 {
+			x, y, z := rng.IntN(voxelSide), rng.IntN(voxelSide), rng.IntN(voxelSide)
+			p := r3.NewVec(
+				anchor.X+(float64(x)+0.5-anchor.X)*f[0],
+				anchor.Y+(float64(y)+0.5-anchor.Y)*f[1],
+				anchor.Z+(float64(z)+0.5-anchor.Z)*f[2])
+			at, err := out.LocatePoint(t.Context(), p, units.Millimeters(0.05))
+			require.NoError(t, err)
+			wantAt := decad.PointOutside
+			if c[x][y][z] {
+				wantAt = decad.PointInside
+			}
+			require.Equal(t, wantAt, at, "cube %d,%d,%d stretched by %v about %v", x, y, z, f, anchor)
+		}
+	}
+	require.Greater(t, checked, 20)
+}
+
+func TestCircularPatternAgreesWithTheUnionOfTurnedCubes(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(31, 32))
+	checked := 0
+	for range 40 {
+		c := randomCubes(rng)
+		doc := decad.New()
+		b, ok := c.solid(t, doc)
+		if !ok {
+			continue
+		}
+		count := []int{2, 4}[rng.IntN(2)]
+		centre := r3.NewVec(float64(rng.IntN(voxelSide+1)), float64(rng.IntN(voxelSide+1)), 0)
+		out, err := decad.Patterned(t.Context(), b, decad.CircularPattern{Center: centre, Axis: r3.NewVec(0, 0, 1), Count: count})
+		if err != nil {
+			// A union whose kept cubes meet only along an edge, or too many cubes: refused, never a wrong volume.
+			continue
+		}
+		checked++
+		// The cubes covered by the cube set and its copies turned 360/count degrees at a time about the axis: a cube turns to
+		// the cube whose centre is the turned centre.
+		covered := map[[3]int]bool{}
+		for x := range voxelSide {
+			for y := range voxelSide {
+				for z := range voxelSide {
+					if !c[x][y][z] {
+						continue
+					}
+					dx, dy := float64(x)+0.5-centre.X, float64(y)+0.5-centre.Y
+					for range count {
+						covered[[3]int{int(math.Floor(centre.X + dx)), int(math.Floor(centre.Y + dy)), z}] = true
+						for range 4 / count {
+							dx, dy = -dy, dx
+						}
+					}
+				}
+			}
+		}
+		got, bound := volumeOf(t, out)
+		require.InDelta(t, float64(len(covered)), got, bound+1e-9, "%d turned copies of %d cubes about %v", count, c.count(), centre)
+	}
+	require.Greater(t, checked, 12)
+}
+
+func TestMeshSolidWithAPrismAgreesWithTheCubeByCubeBoolean(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(33, 34))
+	checked, exact := 0, 0
+	for range 60 {
+		c := randomCubes(rng)
+		// A rectangular prism on integer coordinates, lifted to a random height: the mixed route of B7 reads it beside the
+		// mesh solid.
+		lo := [3]int{rng.IntN(voxelSide - 1), rng.IntN(voxelSide - 1), rng.IntN(voxelSide - 1)}
+		var hi [3]int
+		for a := range 3 {
+			hi[a] = lo[a] + 1 + rng.IntN(voxelSide-lo[a])
+		}
+		for _, op := range []differentialOp{opUnion, opCut, opIntersect} {
+			doc := decad.New()
+			mesh, ok := c.solid(t, doc)
+			if !ok {
+				continue
+			}
+			block := decadtest.NewBlock(t, doc, float64(lo[0]), float64(lo[1]), float64(hi[0]), float64(hi[1]), units.Millimeters(float64(hi[2]-lo[2])))
+			lift, err := r3.Translation(r3.NewVec(0, 0, float64(lo[2])))
+			require.NoError(t, err)
+			prism, err := decad.Transform(t.Context(), block, lift)
+			require.NoError(t, err)
+			want := 0
+			for x := range voxelSide {
+				for y := range voxelSide {
+					for z := range voxelSide {
+						inPrism := x >= lo[0] && x < hi[0] && y >= lo[1] && y < hi[1] && z >= lo[2] && z < hi[2]
+						switch op {
+						case opUnion:
+							if c[x][y][z] || inPrism {
+								want++
+							}
+						case opCut:
+							if c[x][y][z] && !inPrism {
+								want++
+							}
+						default:
+							if c[x][y][z] && inPrism {
+								want++
+							}
+						}
+					}
+				}
+			}
+			var out *decad.Body
+			switch op {
+			case opUnion:
+				out, err = decad.Union(t.Context(), mesh, prism)
+			case opCut:
+				out, err = decad.Cut(t.Context(), mesh, prism)
+			default:
+				out, err = decad.Intersect(t.Context(), mesh, prism)
+			}
+			if err != nil {
+				continue
+			}
+			checked++
+			got, bound := volumeOf(t, out)
+			require.InDelta(t, float64(want), got, bound+1e-9, "op %d of %d cubes and a prism %v to %v", op, c.count(), lo, hi)
+			if bound == 0 {
+				exact++
+			}
+		}
+	}
+	require.Greater(t, checked, 60)
+	require.Greater(t, exact, checked*8/10, "the mixed route answers nearly every pair exactly")
+}
+
+func TestMirroredCopyAndUnionAgreeWithTheMirroredCubes(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(35, 36))
+	checked := 0
+	for range 40 {
+		c := randomCubes(rng)
+		doc := decad.New()
+		b, ok := c.solid(t, doc)
+		if !ok {
+			continue
+		}
+		// Mirror across the plane x = k, k a whole number from 0 to the grid's side: the cube at x goes to the cube at
+		// 2k - 1 - x, along each of y and z unchanged.
+		k := rng.IntN(voxelSide + 1)
+		frame, err := r3.NewFrame(r3.NewVec(float64(k), 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
+		require.NoError(t, err)
+		image, err := decad.MirroredCopy(t.Context(), b, decad.MirrorFrame{Frame: frame})
+		require.NoError(t, err)
+		got, bound := volumeOf(t, image)
+		require.InDelta(t, float64(c.count()), got, bound+1e-9, "a mirror keeps the volume")
+		both, err := decad.Union(t.Context(), b, image)
+		if err != nil {
+			continue // cubes that meet only along an edge are refused, never a wrong volume
+		}
+		checked++
+		covered := map[[3]int]bool{}
+		for x := range voxelSide {
+			for y := range voxelSide {
+				for z := range voxelSide {
+					if c[x][y][z] {
+						covered[[3]int{x, y, z}] = true
+						covered[[3]int{2*k - 1 - x, y, z}] = true
+					}
+				}
+			}
+		}
+		got, bound = volumeOf(t, both)
+		require.InDelta(t, float64(len(covered)), got, bound+1e-9, "a set of %d cubes joined to its mirror at x = %d", c.count(), k)
+	}
+	require.Greater(t, checked, 15)
 }

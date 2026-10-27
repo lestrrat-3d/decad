@@ -345,3 +345,51 @@ func TestDyQuoFloatUpMulFormsNoProduct(t *testing.T) {
 	require.Zero(t, allocations)
 	require.Equal(t, math.Float64bits(proof.DyQuoFloatUp(n, proof.DyMul(a, b))), math.Float64bits(result))
 }
+
+// requireDyQuoFloat64 requires DyQuoFloat64(n, d) to have RatFloat64(n/d)'s bits.
+func requireDyQuoFloat64(t *testing.T, n, d proof.Dyadic, sample int) {
+	t.Helper()
+	q := new(big.Rat).Quo(n.Rat(), d.Rat())
+	want, _ := proof.RatFloat64(q)
+	got := proof.DyQuoFloat64(n, d)
+	require.Equal(t, math.Float64bits(want), math.Float64bits(got), "sample %d", sample)
+}
+
+func TestDyQuoFloat64MatchesRatFloat64(t *testing.T) {
+	t.Parallel()
+	r := rand.New(rand.NewPCG(43, 47))
+	three := proof.MustDyOf(3)
+	for i := range 6000 {
+		n, d := randomDyadic(r), randomDyadic(r)
+		switch i % 5 {
+		case 1:
+			// Exactly representable quotients: n = f·d.
+			n = proof.DyMul(proof.MustDyOf(math.Ldexp(r.Float64()+0.5, r.IntN(60)-30)), d)
+		case 2:
+			// Ties: n/d is a 54-bit odd mantissa, halfway between two floats.
+			half := proof.DyShift(proof.DyInt(1<<53|r.Int64N(1<<52)<<1|1), r.IntN(80)-40)
+			n = proof.DyMul(half, d)
+		case 3:
+			// The centroid's denominator: three times a weight.
+			d = proof.DyMul(three, d)
+		}
+		if i%2 == 1 {
+			n = proof.DyNeg(n)
+		}
+		requireDyQuoFloat64(t, n, d, i)
+	}
+	// Every binade, out past both ends of the normal range.
+	for i := range 9000 {
+		e := i%2250 - 1125
+		n := proof.DyShift(proof.MustDyOf(r.Float64()+0.5), e)
+		d := proof.MustDyOf(r.Float64() + 0.5)
+		if i%3 == 0 {
+			n = proof.DyShift(d, e)
+		}
+		if i%2 == 1 {
+			n = proof.DyNeg(n)
+		}
+		requireDyQuoFloat64(t, n, d, 10000+i)
+	}
+	requireDyQuoFloat64(t, proof.DyZero(), three, -1)
+}

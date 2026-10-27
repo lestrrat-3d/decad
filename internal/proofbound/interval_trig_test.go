@@ -22,6 +22,48 @@ func requireSameInterval(t *testing.T, want, got proofbound.RatInterval, msg str
 	require.Equal(t, want.Hi.RatString(), got.Hi.RatString(), msg)
 }
 
+func TestFixedMulUpMatchesIntegerCeiling(t *testing.T) {
+	t.Parallel()
+	check := func(a, b *big.Int) {
+		t.Helper()
+		beforeA, beforeB := new(big.Int).Set(a), new(big.Int).Set(b)
+		product := new(big.Int).Mul(a, b)
+		var want, remainder big.Int
+		want.QuoRem(product, proofbound.TrigFixedOne, &remainder)
+		if remainder.Sign() != 0 {
+			want.Add(&want, big.NewInt(1))
+		}
+		got := proofbound.FixedMulUp(a, b)
+		require.Zero(t, want.Cmp(got), "input widths %d and %d", a.BitLen(), b.BitLen())
+		require.Zero(t, beforeA.Cmp(a), "first input changed")
+		require.Zero(t, beforeB.Cmp(b), "second input changed")
+		got.SetInt64(0)
+		require.Zero(t, beforeA.Cmp(a), "result shares the first input")
+		require.Zero(t, beforeB.Cmp(b), "result shares the second input")
+	}
+	values := []*big.Int{new(big.Int), big.NewInt(1), big.NewInt(3)}
+	for _, shift := range []uint{63, 64, 199, 200, 201, 400, 4096} {
+		x := new(big.Int).Lsh(big.NewInt(1), shift)
+		values = append(values, x, new(big.Int).Sub(x, big.NewInt(1)), new(big.Int).Add(x, big.NewInt(1)))
+	}
+	for _, a := range values {
+		for _, b := range values {
+			check(a, b)
+		}
+	}
+	rng := rand.New(rand.NewPCG(113, 127))
+	for range 256 {
+		var raw [64]byte
+		for i := range raw {
+			raw[i] = byte(rng.UintN(256))
+		}
+		a, b := new(big.Int).SetBytes(raw[:32]), new(big.Int).SetBytes(raw[32:])
+		a.Lsh(a, uint(rng.IntN(401)))
+		b.Lsh(b, uint(rng.IntN(401)))
+		check(a, b)
+	}
+}
+
 // TestRadSinCosIntervalMemoMatchesUncached pins the memo to the reading it
 // replaces: every angle, on its first (filling) call and on later (hitting)
 // calls, must return the uncached enclosure exactly, and a caller mutating the

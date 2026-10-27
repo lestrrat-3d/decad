@@ -15,7 +15,7 @@ func SolidFromMesh(ctx context.Context, d *Document, m *MeshBody) (*Body, error)
 | M1 | `m` MUST be closed with every edge in two triangles, and wound outward: an open or non-manifold mesh and a mesh wound inward are `ErrNotSolid`, as is one whose exact signed volume is not positive. A nil context, document or mesh is `ErrDegenerate`. |
 | M2 | The mesh must not cross itself. `loftmesh.LoftCrossingAuditBounded`, the exact contact audit of the lofted bodies, proves it for at most `loftmesh.MaxLoftAuditTriangles` (65,528) triangles within a 16 million pair-scan budget. A crossing it finds is `ErrDegenerate`; a larger mesh, or one whose audit exceeds its work ceiling, is `ErrUnsupported`. The audit can only refuse: no body is built that it has not cleared. |
 | M3 | The held vertices are the mesh's own floats, so the vertex bound is zero everywhere and so are the mesh bound, the volume's symmetric difference and the area slack. The volume is read from the exact signed volume of the triangles by `facetproof.AuditFacetedMesh` and `booleaneval.VolumeReading`, with whatever bound turning that rational to a float needs; the diameter bound is the bounding box's diagonal, rounded up. |
-| M4 | Triangles share a source group, and so a face, when their planes are the same exactly: the normal `(b − a) × (c − a)` and the offset `n · a` are worked in rational arithmetic from the floats and divided by the first non-zero magnitude of the normal, so a plane and its orientation have one key. The group is `Planar`. A triangle of no area is a group of its own, not `Planar`. Edge-connectivity then splits a group into its patches, as for any faceted body. |
+| M4 | Triangles share a source group, and so a face, when their planes are the same exactly: the normal `(b − a) × (c − a)` and the offset `n · a`, worked exactly from the floats as dyadics and divided by the first non-zero magnitude of the normal, are equal rationals, so a plane and its orientation have one group (`internal/meshplane`). The comparison cross-multiplies by the two magnitudes; a float key, the downward rounding of each quotient, only buckets the planes, since equal planes round alike. The group is `Planar`. A triangle of no area is a group of its own, not `Planar`. Edge-connectivity then splits a group into its patches, as for any faceted body. |
 | M5 | The faces are Faceted: they carry no analytic surface tag, so selection by `Planar` or a normal does not find them, and a Boolean takes them through the generic mesh path with its pair tolerance. The result is registered in the document as one `OperationSolidFromMesh` entry with no input. A refusal leaves the document unchanged. |
 | M6 | A group whose exact normal has one non-zero part, so the plane is square to a world axis, keeps that plane as a retained tag: its frame has the group's first vertex as origin, which lies on the plane exactly, and the unit axes ordered so the frame's normal is the outward one. The tag departs from the exact plane by nothing, so its normal bound is zero. Every other group stays Faceted, because no float unit normal names its plane. |
 
@@ -63,6 +63,22 @@ and the stop reads Approximate with the rounding as its bound. A mesh with a ver
 refused. The tests sweep a sketch to the top of a mesh plate with `ToFace` (exact bounds and an exact volume) and cut
 the pocket, sweep it through all with `ThroughAll`, and send a sweep to a side face. Removing the record fails the
 first, and removing the extent fails the second.
+
+## 7. Face centroids
+
+`SolidFromMesh` gives each planar face its area centroid. Coplanar triangles of one orientation have areas in the ratio
+of the dot products of their normals with the first one's, so the centroid is the exact rational
+`Σ wᵢ(aᵢ+bᵢ+cᵢ)/3 / Σ wᵢ` over the vertices' exact float values, `(a+b+c)/3` for a face of one triangle, rounded to
+the nearest float per coordinate by dyadic quotient rounding, with no rational formed. Its bound is
+the largest rounding error, Exact when that is zero. A group that falls into several disconnected patches gives none of
+them a centroid, as for every group. A Boolean result, a placement or a mesh Boolean does not carry the reading. The tests
+read the five faces of a triangular prism, and a square top face split into unequal triangles, where an unweighted mean
+of the triangles' centroids fails.
+
+`Body.ExtremeFacesByCentroid` ranks a mesh solid's faces by these readings. The least face is the one whose centroid
+interval, along the axis, lies strictly below every other face's, and the greatest the one strictly above; an overlap or
+a tie is `ErrUnsupported`, because the readings do not decide the order. The tests rank the faces of a prism along a
+diagonal and along z, and refuse a tie along x; comparing intervals with `<=` instead of `<` fails the tie test.
 
 ## 5. Not covered
 

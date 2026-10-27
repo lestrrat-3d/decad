@@ -170,3 +170,106 @@ func BenchmarkSegmentBoundaryEdges(b *testing.B) {
 		})
 	}
 }
+
+// These edge-plane predicates independently check the span-derived metadata.
+// edgePlanes holds one facet's three in-plane edge tests. For edge k, from
+// a = xt[k] to b = xt[(k+1)%3] of a facet with exact normal n, Normal[k] is
+// n × (b−a) and Offset[k] is XdotNum(Normal[k], a). The side of a point p on
+// the facet's plane is the sign of ((b−a)×(p−a))·n = Normal[k]·(p−a), which
+// proof.XdotDiffSignOffset reads from these two values. Axis[k], Lo[k] and
+// Hi[k] are the dominant axis of b−a and the edge's two ends in order along
+// it, the values PointOnSegment3D(a, b, p) derives before it compares p. All
+// of them are functions of the facet's exact corners and normal alone, so
+// every pair the facet takes part in may share them.
+type edgePlanes struct {
+	Normal [3]proof.Xpt
+	Offset [3]*big.Int
+	Axis   [3]int
+	Lo, Hi [3]proof.Xpt
+}
+
+func newEdgePlanes(xt [3]proof.Xpt, n proof.Xpt) edgePlanes {
+	var out edgePlanes
+	var left, right big.Int
+	for k := range 3 {
+		a, b := xt[k], xt[(k+1)%3]
+		delta := proof.Xsub(b, a)
+		out.Normal[k] = proof.Xcross(n, delta)
+		out.Offset[k] = proof.XdotNum(out.Normal[k], a)
+		// PointOnSegment3D's axis and end order, without its allocations.
+		axis := 0
+		if delta.Y.CmpAbs(delta.X) > 0 {
+			axis = 1
+		}
+		if delta.Z.CmpAbs(Coord(delta, axis)) > 0 {
+			axis = 2
+		}
+		lo, hi := a, b
+		if compareCoordScratch(&left, &right, lo, hi, axis) > 0 {
+			lo, hi = hi, lo
+		}
+		out.Axis[k], out.Lo[k], out.Hi[k] = axis, lo, hi
+	}
+	return out
+}
+
+// onSegment is PointOnSegment3D(a, b, p) for edge k's a and b, with scratch
+// integers left and right.
+func (e *edgePlanes) onSegment(left, right *big.Int, k int, p proof.Xpt) bool {
+	return compareCoordScratch(left, right, e.Lo[k], p, e.Axis[k]) <= 0 &&
+		compareCoordScratch(left, right, p, e.Hi[k], e.Axis[k]) <= 0
+}
+
+// compareCoordScratch is CompareCoord with its two products written to left
+// and right.
+func compareCoordScratch(left, right *big.Int, a, b proof.Xpt, axis int) int {
+	left.Mul(Coord(a, axis), b.W)
+	right.Mul(Coord(b, axis), a.W)
+	return left.Cmp(right)
+}
+
+// segmentBoundaryEdges shares each exact point-on-edge result between the
+// boundary flags and the first common edge, retaining their short-circuit order.
+func segmentBoundaryEdges(p0, p1 proof.Xpt, xt [3]proof.Xpt, n proof.Xpt) (bool, bool, int) {
+	planes := newEdgePlanes(xt, n)
+	return segmentBoundaryEdgesPlanes(p0, p1, xt, &planes)
+}
+
+// segmentBoundaryEdgesPlanes is segmentBoundaryEdges with the facet's edge
+// planes already built.
+func segmentBoundaryEdgesPlanes(p0, p1 proof.Xpt, xt [3]proof.Xpt, planes *edgePlanes) (bool, bool, int) {
+	points := [2]proof.Xpt{p0, p1}
+	var known, on [2]uint8
+	var sideScratch [3]big.Int
+	onEdge := func(point, edge int) bool {
+		bit := uint8(1 << edge)
+		if known[point]&bit == 0 {
+			known[point] |= bit
+			// ((b-a)×(p-a))·n = (n×(b-a))·(p-a).
+			if proof.XdotDiffSignOffset(&sideScratch, planes.Normal[edge], points[point], xt[edge], planes.Offset[edge]) == 0 &&
+				planes.onSegment(&sideScratch[0], &sideScratch[1], edge, points[point]) {
+				on[point] |= bit
+			}
+		}
+		return on[point]&bit != 0
+	}
+	var on0, on1 bool
+	for edge := range 3 {
+		if onEdge(0, edge) {
+			on0 = true
+			break
+		}
+	}
+	for edge := range 3 {
+		if onEdge(1, edge) {
+			on1 = true
+			break
+		}
+	}
+	for edge := range 3 {
+		if onEdge(0, edge) && onEdge(1, edge) {
+			return on0, on1, edge
+		}
+	}
+	return on0, on1, -1
+}

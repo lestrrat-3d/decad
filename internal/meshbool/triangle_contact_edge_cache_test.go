@@ -442,10 +442,9 @@ func TestContactBatchMatchesLegacyClassify(t *testing.T) {
 	t.Logf("kinds=%v alongEdge=%d onBoundary=%d", stats.kinds, stats.alongEdge, stats.onBoundary)
 }
 
-// TestEdgePlaneCacheSwitchesFacets asks one cache about pairs whose first
-// facet alternates, so a cache that answered for the wrong facet would hand
-// one facet's edge planes to another.
-func TestEdgePlaneCacheSwitchesFacets(t *testing.T) {
+// TestContactBoundaryAcrossFacetsMatchesReference interleaves pairs of different
+// facets and checks each boundary record against the exact edge predicates.
+func TestContactBoundaryAcrossFacetsMatchesReference(t *testing.T) {
 	t.Parallel()
 	rod, thread, pairs := contactThreadPairs(t)
 	var segments []ContactPair
@@ -464,13 +463,12 @@ func TestEdgePlaneCacheSwitchesFacets(t *testing.T) {
 		}
 	}
 	switches := 0
-	cache := newEdgePlaneCache()
 	for k, pair := range order {
 		if k > 0 && order[k-1].I != pair.I {
 			switches++
 		}
 		want, wantSin2, wantErr := legacyPair(rod, thread, pair)
-		got := classifyContactPair(rod, thread, pair, &cache)
+		got := classifyContactPair(rod, thread, pair)
 		requireSameContact(t, nil, want, wantSin2, wantErr, got.Contact, got.Err, fmt.Sprintf("pair=%v", pair))
 	}
 	require.Greater(t, switches, len(order)/2)
