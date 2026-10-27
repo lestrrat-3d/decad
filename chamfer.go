@@ -160,7 +160,8 @@ type ChamferOption interface{ chamferOption() }
 // turn, line-line miters or exact tangent joins; a band with a cone at a
 // reflex corner is export-only and ErrUnsupported as an operand. Several convex edges of a faceted solid every face of
 // which squares to a world axis, which share corners and so have no route of their own, are the solid less the wedge
-// of each edge (agent-docs/orthogonal-boolean-design.md B17), a faceted result with a bound. A clearance
+// of each edge, or with concave edges the solid plus it (agent-docs/orthogonal-boolean-design.md B17, B18), a faceted result
+// with a bound. A clearance
 // pair its boxes do not decide reads Suspect. A selection that is part of a loop, mixes loops with lone edges or
 // holds two loops sharing an edge is SL1, a face beside a loop that is curved,
 // oblique, split or on both sides of the loop's face is SL2, and a band

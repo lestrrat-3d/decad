@@ -81,3 +81,49 @@ func TestChamferOfEdgesMeetingAtAReflexCornerIsRefused(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{l}, doc.Bodies(), "a refusal leaves the L live")
 }
+
+func pocketSlab(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	slab := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(30, 30, 10))
+	tool := blockIn(t, doc, r3.NewVec(10, 10, 5), r3.NewVec(20, 20, 12))
+	out, err := decad.Cut(t.Context(), slab, tool)
+	require.NoError(t, err)
+	return out
+}
+
+func TestChamferOfAPocketsFloorEdgesFillsTheirWedges(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	pocket := pocketSlab(t, doc)
+	// The four 10 mm floor edges end in the pocket's walls; the 5 mm wall corners end at the open mouth.
+	sel := decad.Edges(decad.Concave(), decad.LongerThan(units.Millimeters(7)))
+	out, err := decad.Chamfer(t.Context(), pocket, sel, units.Millimeters(1))
+	require.NoError(t, err)
+	require.Equal(t, []*decad.Body{out}, doc.Bodies())
+	volume, err := out.Volume()
+	require.NoError(t, err)
+	// The 10 x 10 x 5 pocket leaves 9000 - 500. Four wedges of 5 mm³ add 20, less d³/3 shared at each of the four floor
+	// corners where two wedges meet.
+	require.InDelta(t, 8500+20-4.0/3, volume.Value.Base(), volume.Bound.Base()+1e-9)
+	// Beside the pocket's x = 10 wall, 0.2 mm above the floor and 0.2 in from the wall is now material, 0.9 in from it
+	// is still void, and the pocket's middle is void.
+	for point, want := range map[r3.Vec]decad.PointLocation{
+		r3.NewVec(10.2, 15, 5.2): decad.PointInside,
+		r3.NewVec(10.9, 15, 5.2): decad.PointOutside,
+		r3.NewVec(15, 15, 5.2):   decad.PointOutside,
+	} {
+		got, err := out.LocatePoint(t.Context(), point, units.Millimeters(0.05))
+		require.NoError(t, err)
+		require.Equal(t, want, got, "%v", point)
+	}
+}
+
+func TestChamferOfConcaveEdgesEndingInOpenAirIsRefused(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	pocket := pocketSlab(t, doc)
+	// The wall corners end at the pocket's mouth, where the fill's tool would stand in air above the solid.
+	_, err := decad.Chamfer(t.Context(), pocket, decad.Edges(decad.Concave()), units.Millimeters(1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Equal(t, []*decad.Body{pocket}, doc.Bodies(), "a refusal leaves the pocket live")
+}
