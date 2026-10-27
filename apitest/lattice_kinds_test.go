@@ -106,7 +106,7 @@ func TestLatticeKindsAreClosedSolidsOfTheExpectedFraction(t *testing.T) {
 			t.Parallel()
 			// A level a third of the field's range, at 24 samples to a cell.
 			level := kind.maxLevel / 3
-			m, err := kind.build(t.Context(), latticeSpec(level, 24))
+			m, err := sharedLattice(t.Context(), kind.name, kind.build, latticeSpec(level, 24))
 			require.NoError(t, err)
 			report := m.Report()
 			require.True(t, report.Closed, "every edge has two triangles")
@@ -114,7 +114,7 @@ func TestLatticeKindsAreClosedSolidsOfTheExpectedFraction(t *testing.T) {
 			require.Zero(t, report.NonManifoldEdges)
 			volume, err := m.Volume()
 			require.NoError(t, err)
-			want := fieldFraction(kind.field, level) * 20 * 20 * 20
+			want := sharedFraction(kind.name, kind.field, level) * 20 * 20 * 20
 			require.InDelta(t, want, volume.Value.Base(), 0.02*want)
 			box := m.Bounds()
 			require.True(t, box.Min.Equal(r3.Vec{X: 1, Y: 2, Z: 3}, 1e-9))
@@ -140,11 +140,11 @@ func TestNeoviusAndIWPFollowTheirOwnFieldAtAThinWall(t *testing.T) {
 				Min: r3.Vec{}, Max: r3.Vec{X: 10, Y: 10, Z: 10},
 				Cell: units.Millimeters(10), Level: units.Scalar(level), Resolution: 48,
 			}
-			m, err := kind.build(t.Context(), spec)
+			m, err := sharedLattice(t.Context(), kind.name, kind.build, spec)
 			require.NoError(t, err)
 			volume, err := m.Volume()
 			require.NoError(t, err)
-			want := fieldFraction(kind.field, level) * 10 * 10 * 10
+			want := sharedFraction(kind.name, kind.field, level) * 10 * 10 * 10
 			// The Split P's wall is the most folded, and 48 samples leave it a little farther from its field.
 			tolerance := 0.025
 			if kind.name == "Split P" {
@@ -161,10 +161,10 @@ func TestLatticeKindsConvergeAndThicken(t *testing.T) {
 		t.Run(kind.name, func(t *testing.T) {
 			t.Parallel()
 			level := kind.maxLevel / 3
-			want := fieldFraction(kind.field, level) * 20 * 20 * 20
+			want := sharedFraction(kind.name, kind.field, level) * 20 * 20 * 20
 			var errs []float64
 			for _, res := range []int{8, 24} {
-				m, err := kind.build(t.Context(), latticeSpec(level, res))
+				m, err := sharedLattice(t.Context(), kind.name, kind.build, latticeSpec(level, res))
 				require.NoError(t, err)
 				v, err := m.Volume()
 				require.NoError(t, err)
@@ -173,7 +173,7 @@ func TestLatticeKindsConvergeAndThicken(t *testing.T) {
 			require.Less(t, errs[1], errs[0]/2, "a finer grid follows the lattice more closely")
 			volumes := make([]float64, 3)
 			for i, share := range []float64{0.15, 0.3, 0.5} {
-				m, err := kind.build(t.Context(), latticeSpec(share*kind.maxLevel, 12))
+				m, err := sharedLattice(t.Context(), kind.name, kind.build, latticeSpec(share*kind.maxLevel, 12))
 				require.NoError(t, err)
 				v, err := m.Volume()
 				require.NoError(t, err)
@@ -195,7 +195,7 @@ func TestLatticeKindsDifferFromTheGyroidAndEachOther(t *testing.T) {
 		"neovius": decad.NeoviusLattice, "iwp": decad.IWPLattice,
 		"fischerkoch": decad.FischerKochSLattice, "lidinoid": decad.LidinoidLattice, "splitp": decad.SplitPLattice,
 	} {
-		m, err := build(t.Context(), latticeSpec(0.6, 12))
+		m, err := sharedLattice(t.Context(), name, build, latticeSpec(0.6, 12))
 		require.NoError(t, err)
 		v, err := m.Volume()
 		require.NoError(t, err)

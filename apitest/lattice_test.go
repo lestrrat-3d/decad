@@ -1,7 +1,10 @@
 package apitest_test
 
 import (
+	"context"
+	"fmt"
 	"math"
+	"sync"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -17,21 +20,64 @@ import (
 // that the estimate stands apart from the lattice's own mesh: the lattice's solid
 // fraction, read straight from the field.
 func gyroidFraction(level float64) float64 {
-	const n = 160
-	k := 2 * math.Pi
-	inside := 0
-	for i := range n {
-		for j := range n {
-			for l := range n {
-				x, y, z := (float64(i)+0.5)/n*k, (float64(j)+0.5)/n*k, (float64(l)+0.5)/n*k
-				g := math.Sin(x)*math.Cos(y) + math.Sin(y)*math.Cos(z) + math.Sin(z)*math.Cos(x)
-				if math.Abs(g) <= level {
-					inside++
-				}
-			}
-		}
+	return sharedFraction("gyroid", func(x, y, z float64) float64 {
+		return math.Sin(x)*math.Cos(y) + math.Sin(y)*math.Cos(z) + math.Sin(z)*math.Cos(x)
+	}, level)
+}
+
+// sharedOnce is a mutex-guarded map of values computed once per key. Concurrent callers for one key
+// block on the first computation and share its result.
+type sharedOnce[V any] struct {
+	mu      sync.Mutex
+	entries map[string]*sharedEntry[V]
+}
+
+type sharedEntry[V any] struct {
+	once sync.Once
+	val  V
+}
+
+func (s *sharedOnce[V]) get(key string, compute func() V) V {
+	s.mu.Lock()
+	if s.entries == nil {
+		s.entries = map[string]*sharedEntry[V]{}
 	}
-	return float64(inside) / (n * n * n)
+	e, ok := s.entries[key]
+	if !ok {
+		e = &sharedEntry[V]{}
+		s.entries[key] = e
+	}
+	s.mu.Unlock()
+	e.once.Do(func() { e.val = compute() })
+	return e.val
+}
+
+type builtLattice struct {
+	mesh *decad.MeshBody
+	err  error
+}
+
+var (
+	sharedFractions sharedOnce[float64]
+	sharedLattices  sharedOnce[builtLattice]
+)
+
+// sharedFraction is fieldFraction computed once per (name, level) for the whole test binary.
+func sharedFraction(name string, field func(x, y, z float64) float64, level float64) float64 {
+	return sharedFractions.get(fmt.Sprintf("%s/%v", name, level), func() float64 { return fieldFraction(field, level) })
+}
+
+// sharedLattice builds a lattice once per (name, spec) for the whole test binary. The tests only read the
+// returned mesh (Report, Volume, Bounds), which is safe to share between parallel tests.
+func sharedLattice(
+	ctx context.Context, name string,
+	build func(context.Context, decad.LatticeSpec) (*decad.MeshBody, error), spec decad.LatticeSpec,
+) (*decad.MeshBody, error) {
+	b := sharedLattices.get(fmt.Sprintf("%s/%#v", name, spec), func() builtLattice {
+		m, err := build(ctx, spec)
+		return builtLattice{mesh: m, err: err}
+	})
+	return b.mesh, b.err
 }
 
 func latticeSpec(level float64, res int) decad.LatticeSpec {
@@ -51,7 +97,7 @@ func TestGyroidLatticeIsAClosedSolidOfTheExpectedFraction(t *testing.T) {
 		tol   float64
 	}{{0.6, 24, 0.01}, {0.8, 16, 0.02}} {
 		level := c.level
-		m, err := decad.GyroidLattice(t.Context(), latticeSpec(level, c.res))
+		m, err := sharedLattice(t.Context(), "gyroid", decad.GyroidLattice, latticeSpec(level, c.res))
 		require.NoError(t, err)
 		report := m.Report()
 		require.True(t, report.Closed, "level %g: every edge has two triangles", level)
@@ -72,7 +118,7 @@ func TestGyroidLatticeConvergesAsTheGridRefines(t *testing.T) {
 	want := gyroidFraction(0.6) * 20 * 20 * 20
 	var errs []float64
 	for _, res := range []int{8, 24} {
-		m, err := decad.GyroidLattice(t.Context(), latticeSpec(0.6, res))
+		m, err := sharedLattice(t.Context(), "gyroid", decad.GyroidLattice, latticeSpec(0.6, res))
 		require.NoError(t, err)
 		v, err := m.Volume()
 		require.NoError(t, err)
@@ -85,7 +131,7 @@ func TestGyroidLatticeThickensWithItsLevel(t *testing.T) {
 	t.Parallel()
 	volumes := make([]float64, 3)
 	for i, level := range []float64{0.3, 0.6, 0.9} {
-		m, err := decad.GyroidLattice(t.Context(), latticeSpec(level, 12))
+		m, err := sharedLattice(t.Context(), "gyroid", decad.GyroidLattice, latticeSpec(level, 12))
 		require.NoError(t, err)
 		v, err := m.Volume()
 		require.NoError(t, err)
@@ -99,11 +145,11 @@ func TestGyroidLatticeRepeatsEveryCell(t *testing.T) {
 	t.Parallel()
 	// A box of one cell at the lattice's own phase holds half the volume a box of two cells does
 	// per cell count, so its volume is an eighth of the two-cell box's, to within the cap's shrink.
-	big, err := decad.GyroidLattice(t.Context(), latticeSpec(0.6, 12))
+	big, err := sharedLattice(t.Context(), "gyroid", decad.GyroidLattice, latticeSpec(0.6, 12))
 	require.NoError(t, err)
 	spec := latticeSpec(0.6, 12)
 	spec.Min, spec.Max = r3.Vec{}, r3.Vec{X: 10, Y: 10, Z: 10}
-	small, err := decad.GyroidLattice(t.Context(), spec)
+	small, err := sharedLattice(t.Context(), "gyroid", decad.GyroidLattice, spec)
 	require.NoError(t, err)
 	vb, err := big.Volume()
 	require.NoError(t, err)
