@@ -94,7 +94,7 @@ func TestRevolveSectorCylinderCutRequiresSpanningCenteredToolAndPlanarCaps(t *te
 	require.Equal(t, before, shoulderDoc.Bodies())
 }
 
-func revolveSectorCylinderTool(t *testing.T, doc *decad.Document,
+func revolveSectorCylinderTool(t testing.TB, doc *decad.Document,
 	radius, start, height, centerY float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()

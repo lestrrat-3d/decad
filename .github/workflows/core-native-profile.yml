@@ -10,40 +10,140 @@ permissions:
 jobs:
   profile:
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - name: Profile the real API workload
+      - name: Build the per-package profiler
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force .tmp | Out-Null
-          $profileDir = (Resolve-Path .tmp).Path
           Get-CimInstance Win32_Processor |
             Select-Object Name, NumberOfCores, NumberOfLogicalProcessors |
             Format-List | Out-File .tmp/runner.txt
           go version | Out-File -Append .tmp/runner.txt
           go env GOARCH GOOS GOMAXPROCS | Out-File -Append .tmp/runner.txt
-          $testArgs = @(
-            'test', './apitest', '-count=1', '-v', '-timeout=12m',
-            "-cpuprofile=$profileDir/api.cpu", "-memprofile=$profileDir/api.mem",
-            '-o', "$profileDir/apitest.test.exe"
+          git rev-parse HEAD | Out-File -Append .tmp/runner.txt
+          @'
+          package main
+
+          import (
+              "encoding/json"
+              "errors"
+              "fmt"
+              "os"
+              "os/exec"
+              "path/filepath"
+              "time"
           )
-          & go @testArgs 2>&1 | Tee-Object -FilePath .tmp/api.log
+
+          func main() {
+              if len(os.Args) < 2 {
+                  fmt.Fprintln(os.Stderr, "missing test binary")
+                  os.Exit(2)
+              }
+              root := os.Getenv("DECAD_NATIVE_PROFILE_DIR")
+              if root == "" {
+                  fmt.Fprintln(os.Stderr, "missing DECAD_NATIVE_PROFILE_DIR")
+                  os.Exit(2)
+              }
+              if err := os.MkdirAll(root, 0o755); err != nil {
+                  fmt.Fprintln(os.Stderr, err)
+                  os.Exit(2)
+              }
+              dir, err := os.MkdirTemp(root, filepath.Base(os.Args[1])+"-")
+              if err != nil {
+                  fmt.Fprintln(os.Stderr, err)
+                  os.Exit(2)
+              }
+              args := append([]string(nil), os.Args[2:]...)
+              args = append(args, "-test.cpuprofile="+filepath.Join(dir, "cpu.pprof"),
+                  "-test.memprofile="+filepath.Join(dir, "memory.pprof"))
+              child := exec.Command(os.Args[1], args...)
+              child.Stdin, child.Stdout, child.Stderr = os.Stdin, os.Stdout, os.Stderr
+              started := time.Now()
+              err = child.Run()
+              finished := time.Now()
+              code := 0
+              if err != nil {
+                  var exit *exec.ExitError
+                  code = 127
+                  if errors.As(err, &exit) {
+                      code = exit.ExitCode()
+                  }
+                  fmt.Fprintln(os.Stderr, err)
+              }
+              for _, name := range []string{"cpu.pprof", "memory.pprof"} {
+                  info, statErr := os.Stat(filepath.Join(dir, name))
+                  if statErr != nil || info.Size() == 0 {
+                      fmt.Fprintf(os.Stderr, "missing or empty profile %s: %v\n", name, statErr)
+                      if code == 0 {
+                          code = 2
+                      }
+                  }
+              }
+              record := struct {
+                  Binary      string
+                  Args        []string
+                  Started     time.Time
+                  Finished    time.Time
+                  WallSeconds float64
+                  UserSeconds float64
+                  SysSeconds  float64
+                  ExitCode    int
+              }{Binary: filepath.Base(os.Args[1]), Args: os.Args[2:], Started: started.UTC(),
+                  Finished: finished.UTC(), WallSeconds: finished.Sub(started).Seconds(), ExitCode: code}
+              if child.ProcessState != nil {
+                  record.UserSeconds = child.ProcessState.UserTime().Seconds()
+                  record.SysSeconds = child.ProcessState.SystemTime().Seconds()
+              }
+              data, err := json.MarshalIndent(record, "", "  ")
+              if err == nil {
+                  err = os.WriteFile(filepath.Join(dir, "invocation.json"), append(data, '\n'), 0o644)
+              }
+              if err != nil {
+                  fmt.Fprintln(os.Stderr, err)
+                  if code == 0 {
+                      code = 2
+                  }
+              }
+              os.Exit(code)
+          }
+          '@ | Set-Content -Encoding utf8 .tmp/profile-exec.go
+          go build -o .tmp/profile-exec.exe .tmp/profile-exec.go
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Get-Item "$profileDir/api.cpu", "$profileDir/api.mem" |
-            ForEach-Object {
-              if ($_.Length -eq 0) { throw "Empty profile: $($_.FullName)" }
-            }
+      - name: Verify the real profile producer and consumer
+        shell: pwsh
+        run: |
+          $execPath = (Resolve-Path .tmp/profile-exec.exe).Path
+          $env:DECAD_NATIVE_PROFILE_DIR = Join-Path (Resolve-Path .tmp).Path 'probe-profiles'
+          go test "-exec=$execPath" -count=1 -timeout=2m ./internal/triangulation 2>&1 |
+            Tee-Object -FilePath .tmp/probe.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $profiles = @(Get-ChildItem .tmp/probe-profiles -Recurse -Filter cpu.pprof)
+          if ($profiles.Count -ne 1) { throw "Expected one real package profile" }
+          go tool pprof -top $profiles[0].FullName 2>&1 |
+            Tee-Object -FilePath .tmp/probe-consumer.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Profile the complete native workload
+        shell: pwsh
+        run: |
+          $execPath = (Resolve-Path .tmp/profile-exec.exe).Path
+          $env:DECAD_NATIVE_PROFILE_DIR = Join-Path (Resolve-Path .tmp).Path 'full-profiles'
+          $testArgs = @('test', "-exec=$execPath", '-count=1', '-v', '-timeout=30m', './...')
+          & go @testArgs 2>&1 | Tee-Object -FilePath .tmp/all-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Upload the native profiles
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: windows-api-profile
+          name: windows-full-core-profile
           include-hidden-files: true
           path: |
             .tmp/runner.txt
-            .tmp/api.log
-            .tmp/api.cpu
-            .tmp/api.mem
+            .tmp/probe.log
+            .tmp/probe-consumer.txt
+            .tmp/all-tests.log
+            .tmp/full-profiles/

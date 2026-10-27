@@ -448,8 +448,9 @@ With `s = +1`, `t` the thickness in millimetres with its conversion bound
    crossings from the zero-displacement records, and the crossing-angle
    charge (prism-boolean §3.4, A6) amplifies only a displacement the records
    carry, so a cut crossing at a grazing angle would publish vertices the
-   flat `c` does not cover. A cut whose `c` is zero takes the crossing reach
-   as class B does. Class B also needs every line exactly along a reference
+   flat `c` does not cover. A cut whose `c` is zero lifts B8 and takes the
+   flush reach, the sweep walk and the crossing reach as class B does
+   (general-boolean §3 "Flush cap contact", "Pin across several faces"). Class B also needs every line exactly along a reference
    axis (B6), so an eroded polygon whose float miters drift off the axis — any convex
    corner at a thickness that is no exact float, such as 0.1 in — is SG6; a
    section whose corners are arcs erodes through G1 joins that keep each line
@@ -527,7 +528,7 @@ Modify §1's test picks every sentinel.
 
 | SG | Call | Exists? | Sentinel |
 |---|---|---|---|
-| **SG1** | `WithShellSense(Outward)` with removed faces on a brep or stacked receiver (an outward closed shell through §3.2's prism reading builds) | yes; the dilation rounds the receiver's convex edges into tori and spheres this record does not hold | `ErrUnsupported` |
+| **SG1** | `WithShellSense(Outward)` with removed faces on a brep or stacked receiver (an outward closed shell through §3.2's prism reading builds, and so does an outward shell whose removed faces are the caps of a prism the record reads as: route P runs before route S and checks only which caps are removed) | yes; the dilation rounds the receiver's convex edges into tori and spheres this record does not hold | `ErrUnsupported` |
 | **SG2** | `WithNoOpenings` on a brep or stacked receiver outside §3.1a's nested rectangular boss and outside a shell of a brep record route P reads as a prism (§3.2); an outward one of a record that reads as a prism along more than one axis | yes; no other brep record carries a certified void shell | `ErrUnsupported` (replaces SX16's text for this call) |
 | **SG3** | the record is no through-cut record (Table TC) and is outside §3.1a–§3.1e: a blind port, a keyway, a crossing boss, a split or oblique wall, a displaced tool level | yes; its erosion may hold surfaces beyond the admitted cases | `ErrUnsupported`, naming the first face Table TC does not take |
 | **SG4** | a removed face that is a tool wall outside §3.1d, a tool floor or a hole wall of `S` | yes | `ErrUnsupported` |

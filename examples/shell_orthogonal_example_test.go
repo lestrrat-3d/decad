@@ -231,3 +231,125 @@ func Example_section_mesh_solid() {
 	// Output:
 	// section area: 80 mm^2
 }
+
+// Offset moves every face of a solid along its normal. For a faceted solid whose faces all
+// square to an axis, such as a part read from STL, the faces meet in sharp corners, and the
+// result is a second solid beside the first. Here a 10 x 8 x 6 mm block read from OBJ grows by 2 mm.
+func Example_offset_solid() {
+	mesh, err := decad.ReadOBJ(context.Background(), strings.NewReader(boxOBJ))
+	if err != nil {
+		fmt.Printf("failed to read mesh: %s\n", err)
+		return
+	}
+	box, err := decad.SolidFromMesh(context.Background(), decad.New(), mesh)
+	if err != nil {
+		fmt.Printf("failed to make a solid: %s\n", err)
+		return
+	}
+	grown, err := decad.Offset(context.Background(), box, units.Millimeters(2))
+	if err != nil {
+		fmt.Printf("failed to offset: %s\n", err)
+		return
+	}
+	volume, err := grown.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
+	// Output:
+	// volume: 1680 mm^3
+}
+
+// QuarterTurn turns a faceted solid by whole quarter turns about a world axis. It exchanges coordinates
+// instead of multiplying by a rotation, so the turned solid is exact and stays on the exact routes. Here a
+// 10 x 8 x 6 mm block read from OBJ is turned a quarter about +Z through the origin, so that its x extent
+// becomes the y extent.
+func Example_quarter_turn() {
+	mesh, err := decad.ReadOBJ(context.Background(), strings.NewReader(boxOBJ))
+	if err != nil {
+		fmt.Printf("failed to read mesh: %s\n", err)
+		return
+	}
+	box, err := decad.SolidFromMesh(context.Background(), decad.New(), mesh)
+	if err != nil {
+		fmt.Printf("failed to make a solid: %s\n", err)
+		return
+	}
+	turned, err := decad.QuarterTurn(context.Background(), box, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 0), 1)
+	if err != nil {
+		fmt.Printf("failed to turn: %s\n", err)
+		return
+	}
+	bounds, err := turned.Bounds()
+	if err != nil {
+		fmt.Printf("failed to read the bounds: %s\n", err)
+		return
+	}
+	fmt.Printf("x: %.0f to %.0f, y: %.0f to %.0f\n", bounds.Min.X, bounds.Max.X, bounds.Min.Y, bounds.Max.Y)
+	// Output:
+	// x: -8 to 0, y: 0 to 10
+}
+
+// WithShellFaceThickness gives the walls that face one direction a thickness of their own, so a
+// shelled part can have a heavy floor and thin sides. Here the 10 x 8 x 6 mm block read from OBJ is shelled
+// open at the top with 1 mm walls and a 3 mm floor.
+func Example_shell_face_thickness() {
+	mesh, err := decad.ReadOBJ(context.Background(), strings.NewReader(boxOBJ))
+	if err != nil {
+		fmt.Printf("failed to read mesh: %s\n", err)
+		return
+	}
+	box, err := decad.SolidFromMesh(context.Background(), decad.New(), mesh)
+	if err != nil {
+		fmt.Printf("failed to make a solid: %s\n", err)
+		return
+	}
+	cup, err := decad.Shell(context.Background(), box, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1),
+		decad.WithShellFaceThickness(r3.NewVec(0, 0, -1), units.Millimeters(3)))
+	if err != nil {
+		fmt.Printf("failed to shell: %s\n", err)
+		return
+	}
+	volume, err := cup.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	// The cavity is 8 x 6 x 3 mm, so the walls are 480 - 144 mm^3.
+	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
+	// Output:
+	// volume: 336 mm^3
+}
+
+// Verify can prove that no wall of a faceted solid whose faces all square to an axis is thinner than
+// the tool. Here a block shelled open at the top with 1 mm walls is checked against a 0.5 mm tool, which
+// every wall clears, and against a 2 mm tool, which they do not.
+func Example_verify_wall_orthogonal() {
+	mesh, err := decad.ReadOBJ(context.Background(), strings.NewReader(boxOBJ))
+	if err != nil {
+		fmt.Printf("failed to read mesh: %s\n", err)
+		return
+	}
+	doc := decad.New()
+	box, err := decad.SolidFromMesh(context.Background(), doc, mesh)
+	if err != nil {
+		fmt.Printf("failed to make a solid: %s\n", err)
+		return
+	}
+	if _, err := decad.Shell(context.Background(), box, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1)); err != nil {
+		fmt.Printf("failed to shell: %s\n", err)
+		return
+	}
+	for _, tool := range []float64{0.5, 2} {
+		report, err := doc.Verify(context.Background(), decad.WithMinWallThickness(units.Millimeters(tool)))
+		if err != nil {
+			fmt.Printf("failed to verify: %s\n", err)
+			return
+		}
+		fmt.Printf("tool %.1f mm: %s\n", tool, report.Status)
+	}
+	// Output:
+	// tool 0.5 mm: Sound
+	// tool 2.0 mm: Violating
+}

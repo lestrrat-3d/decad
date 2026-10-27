@@ -25,6 +25,9 @@ import (
 // chord, an authenticated sphere cut by a cardinal plane with an exact circle
 // or bounded polygon or by a central oblique plane, an authenticated right cone
 // cut by a cardinal plane with an exact circle or bounded polygon,
+// a full Revolve with an exact cardinal axis cut by a cardinal plane holding
+// that axis (the meridian and its mirror) or normal to it (one disk or annulus
+// per material interval), each returned as one profile per region,
 // a direct matching-profile, full line-boundary or varying circular-boundary Loft
 // cut by an exact world-XY interior plane,
 // an original rectangular or homothetic LoftSections cut by an exact world-XY interior plane,
@@ -103,7 +106,15 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 			}
 		}
 		if !admitted {
-			return nil, nil, fmt.Errorf(`%w: section needs an authenticated sphere or cone and certified plane cut`,
+			records, exact := sectionclip.RevolveAxialSection(rp, plane)
+			if !exact {
+				records, exact = sectionclip.RevolveNormalSection(rp, plane)
+			}
+			if exact {
+				return sectionclip.ReconstructExactSections(ctx, records, plane)
+			}
+			return nil, nil, fmt.Errorf(
+				`%w: section needs an authenticated sphere or cone, or an exact meridian cut through or normal to the axis`,
 				ErrUnsupported)
 		}
 		if polygon != nil {

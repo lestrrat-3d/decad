@@ -233,7 +233,9 @@ func ResolveCrossingCells(ctx context.Context, budget *proofbound.WorkBudget, pa
 // target's own Outer and whose Holes structurally reproduce the target's own
 // Holes plus EXACTLY ONE further hole reproducing the tool's own Outer (G6
 // keeps the tool hole-free, so that one hole is the tool's whole solid).
-// That profile IS the result, verbatim — no assembly.
+// That profile IS the result, verbatim — no assembly. A tool curve tangent
+// to a target loop leaves both whole too, so MatchCut also refuses any point
+// sketch's intersection query reports between them.
 //
 // This is the discriminator the disjoint-footprint trap needs: a structural
 // match on the tool's own cell alone would not by itself prove nesting, since

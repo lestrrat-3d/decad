@@ -5,7 +5,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boolchain"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -15,7 +14,7 @@ import (
 // result denotes, by combining its operands' answers through the operation
 // history src records (agent-docs/point-containment-design.md §8). Only a
 // body boolchain.Expandable accepts is combined; an operand is read through
-// LocatePrism or, when it is itself such a result, through its own operands.
+// LocateRecord or, when it is itself such a result, through its own operands.
 // Every other operand reads Undecided. decided is false when the combination
 // leaves the point open; the caller then classifies against the verified
 // mesh (§2). p must be finite and n and src must not be nil.
@@ -38,19 +37,16 @@ type historyWalk struct {
 	src    boolchain.Source
 }
 
-// locate classifies the walk's point against n: an undisplaced prism through
-// §7, an expandable Boolean result through its recorded operands, and every
-// other body as Undecided.
+// locate classifies the walk's point against n: an analytic record through
+// LocateRecord (§7, §9, §10), an expandable Boolean result through its
+// recorded operands, and every other body as Undecided.
 func (w historyWalk) locate(ctx context.Context, n *topo.Body) (Location, error) {
 	if err := w.budget.Step(); err != nil {
 		return Undecided, err
 	}
-	if pp, ok := n.Payload.(prismrecord.Payload); ok {
-		result, decided, err := LocatePrism(ctx, w.p, pp)
-		if err != nil || !decided {
-			return Undecided, err
-		}
-		return result, nil
+	result, decided, err := LocateRecord(ctx, w.p, n.Payload)
+	if err != nil || decided {
+		return result, err
 	}
 	kind, inputs, ok := boolchain.Expandable(w.src, n)
 	if !ok {

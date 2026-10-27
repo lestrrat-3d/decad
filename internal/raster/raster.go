@@ -50,10 +50,18 @@ const (
 // below π, makes the camera perspective: its eye sits on the line through the
 // middle of the mesh's bounds along Direction, as near as keeps the mesh's
 // bounding sphere inside the field of view.
+//
+// Gloss, from 0 to 1, is the strength of the specular highlight a lit face takes: the share of white added
+// where the face turns the key light toward the eye, falling off as the 32nd power of the cosine between the
+// face normal and the halfway direction of light and eye. The zero value is a matte surface.
 type Camera struct {
 	Direction, Up r3.Vec
 	FieldOfView   float64
+	Gloss         float64
 }
+
+// specularExponent is how sharply a glossy face's highlight falls off away from the mirror direction.
+const specularExponent = 32
 
 // Light offsets of the key light from the camera, in the camera's own axes: a
 // headlight raised 0.5 and moved 0.35 to the left, so faces turned differently
@@ -103,26 +111,32 @@ func Shaded(cam Camera, normal r3.Vec) (color.RGBA, error) {
 	if !ok {
 		return color.RGBA{}, fmt.Errorf("%w: the face normal has no length", ErrDegenerate)
 	}
-	return shade(Front, Back, dir, dir, right, up, n), nil
+	return shade(Front, Back, dir, dir, right, up, n, 0), nil
 }
 
 // shade colours a face with the unit normal n. view is the direction from the
 // eye to the face: dir for an orthographic camera and the line of sight to the
 // face for a perspective one. A face whose normal points along view looks away.
-func shade(front, back color.RGBA, view, dir, right, up, n r3.Vec) color.RGBA {
+func shade(front, back color.RGBA, view, dir, right, up, n r3.Vec, gloss float64) color.RGBA {
 	base := front
 	if n.Dot(view) > 0 { // the normal points away from the camera: a back face
 		base = back
 		n = n.Scale(-1)
 	}
 	light, _ := dir.Scale(-1).Add(up.Scale(lightUp)).Sub(right.Scale(lightLeft)).Normalize()
-	level := ambient + (1-ambient)*math.Max(0, n.Dot(light))
-	return color.RGBA{
-		R: uint8(math.Round(float64(base.R) * level)),
-		G: uint8(math.Round(float64(base.G) * level)),
-		B: uint8(math.Round(float64(base.B) * level)),
-		A: 255,
+	diffuse := n.Dot(light)
+	level := ambient + (1-ambient)*math.Max(0, diffuse)
+	// A highlight only where the light reaches the face: the white added is gloss times the cosine between the normal
+	// and the halfway direction of light and eye, to the specular exponent.
+	spec := 0.0
+	if gloss > 0 && diffuse > 0 {
+		toEye, _ := view.Scale(-1).Normalize()
+		if half, ok := light.Add(toEye).Normalize(); ok {
+			spec = gloss * math.Pow(math.Max(0, n.Dot(half)), specularExponent) * 255
+		}
 	}
+	channel := func(c uint8) uint8 { return uint8(math.Min(255, math.Round(float64(c)*level+spec))) }
+	return color.RGBA{R: channel(base.R), G: channel(base.G), B: channel(base.B), A: 255}
 }
 
 // Projection maps world points to image pixels and depth for one camera and
@@ -140,6 +154,8 @@ type Projection struct {
 	// distance along the view direction.
 	eye         r3.Vec
 	perspective bool
+	// gloss is the camera's specular strength.
+	gloss float64
 }
 
 // NewProjection builds the projection that fits verts into a width by height
@@ -159,7 +175,10 @@ func NewProjection(verts []r3.Vec, cam Camera, width, height int) (Projection, e
 	if cam.FieldOfView != 0 && !(cam.FieldOfView > 0 && cam.FieldOfView < math.Pi) {
 		return Projection{}, fmt.Errorf("%w: a field of view must lie strictly between 0 and π radians, got %g", ErrDegenerate, cam.FieldOfView)
 	}
-	p := Projection{dir: dir, right: right, up: up, Width: width, Height: height}
+	if !(cam.Gloss >= 0 && cam.Gloss <= 1) {
+		return Projection{}, fmt.Errorf("%w: a gloss must lie in [0, 1], got %g", ErrDegenerate, cam.Gloss)
+	}
+	p := Projection{dir: dir, right: right, up: up, Width: width, Height: height, gloss: cam.Gloss}
 	if cam.FieldOfView > 0 {
 		lo, hi := verts[0], verts[0]
 		for _, v := range verts[1:] {
@@ -389,7 +408,7 @@ func draw(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []color.RGBA
 			if tints != nil {
 				front = tints[ti]
 			}
-			fill = shade(front, back, view, proj.dir, proj.right, proj.up, normal)
+			fill = shade(front, back, view, proj.dir, proj.right, proj.up, normal, proj.gloss)
 		}
 		fillTriangle(img, depths, ids, int32(ti), proj.Width, screen[t[0]], screen[t[1]], screen[t[2]], fill)
 	}

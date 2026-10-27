@@ -147,6 +147,66 @@ func TestAssembleBodyRefusesMalformedPayload(t *testing.T) {
 	}
 }
 
+// AssembleBody audits the mesh beside its diameter when no audit is supplied.
+// The body equals the one assembled from the same audit supplied, which takes
+// the serial path, field for field.
+func TestAssembleBodyAuditBesideDiameterMatchesSuppliedAudit(t *testing.T) {
+	t.Parallel()
+	var m Mesh
+	addCube(&m, 0.1, math.Sqrt2*3, false, 3)
+	addCube(&m, 1.3, math.Pi/2, true, 4)
+	env := func() topo.Env { return topo.Env{Doc: &topo.Document{}, Ref: 9, Alloc: topotest.Alloc{}} }
+	got, gotFaceOf, gotDiameter, err := AssembleBody(t.Context(), env(), m, nil, measurement.Measurement{}, nil)
+	require.NoError(t, err)
+	audit, err := facetproof.AuditFacetedMesh(t.Context(), m.Verts, m.Tris)
+	require.NoError(t, err)
+	want, wantFaceOf, wantDiameter, err := AssembleBody(t.Context(), env(), m, audit, measurement.Measurement{}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, math.Float64bits(wantDiameter), math.Float64bits(gotDiameter))
+	require.Equal(t, wantFaceOf, gotFaceOf)
+	require.Equal(t, want.Volume, got.Volume)
+	require.Equal(t, want.Area, got.Area)
+	require.Equal(t, want.Centroid, got.Centroid)
+	require.Equal(t, want.Bounds, got.Bounds)
+	require.Len(t, got.Lumps, len(want.Lumps))
+	wantFaces, gotFaces := topobuild.Faces(want), topobuild.Faces(got)
+	require.Len(t, gotFaces, len(wantFaces))
+	for i := range wantFaces {
+		require.Equal(t, wantFaces[i].Area, gotFaces[i].Area, "face %d area", i)
+		require.Equal(t, wantFaces[i].AreaBound, gotFaces[i].AreaBound, "face %d area bound", i)
+		require.Equal(t, wantFaces[i].Surface, gotFaces[i].Surface, "face %d surface", i)
+	}
+}
+
+// A serial assembly never audits a mesh whose diameter fails. The audit that
+// runs beside the diameter holds back its panic: a failed diameter reports
+// its own error, and a good one audits again on the caller, which panics
+// there.
+func TestAssembleBodyHoldsBackAuditPanic(t *testing.T) {
+	t.Parallel()
+	var cube Mesh
+	addCube(&cube, 0, 2, false, 3)
+	env := topo.Env{Doc: &topo.Document{}, Ref: 9, Alloc: topotest.Alloc{}}
+
+	// The facets close up but name vertices the mesh does not hold, so the
+	// audit panics on its exact lifts.
+	noVerts := cube
+	noVerts.Verts, noVerts.VertexBound = nil, nil
+	body, _, _, err := AssembleBody(t.Context(), env, noVerts, nil, measurement.Measurement{}, nil)
+	require.ErrorContains(t, err, "the held boundary has no usable diameter")
+	require.Nil(t, body)
+
+	shifted := cube
+	shifted.Tris = make([][3]int, len(cube.Tris))
+	for i, tri := range cube.Tris {
+		shifted.Tris[i] = [3]int{tri[0] + 8, tri[1] + 8, tri[2] + 8}
+	}
+	require.Panics(t, func() {
+		_, _, _, _ = AssembleBody(t.Context(), env, shifted, nil, measurement.Measurement{}, nil)
+	})
+}
+
 func TestFacetedAreaBoundCompositionRoundsOutward(t *testing.T) {
 	t.Parallel()
 	// Each edge's stored length plus its proven bound is a rational number.

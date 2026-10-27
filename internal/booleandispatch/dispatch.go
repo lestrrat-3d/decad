@@ -380,14 +380,18 @@ func classB(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body) (to
 	if a.Payload == nil || b.Payload == nil {
 		return nil, false, nil
 	}
-	// A turned shaft's Cut reads the shaft as the prism it denotes exactly
+	// A turned shaft's Cut reads the shaft as the prism, or the stack of
+	// coaxial prisms, it denotes exactly
 	// (agent-docs/general-boolean-design.md §3 "Revolved shaft as a prism").
 	if rp, ok := a.Payload.(revolveplan.Payload); ok && op == meshbool.OpCut {
-		view, ok := rp.CylinderPrism()
+		steps, ok := rp.CylinderSteps()
 		if !ok {
 			return nil, false, nil
 		}
-		return classbgeom.CutPrismView(ctx, view, b.Payload)
+		if len(steps) == 1 {
+			return classbgeom.CutPrismView(ctx, steps[0], b.Payload)
+		}
+		return classbgeom.CutSteppedView(ctx, steps, b.Payload)
 	}
 	return classbgeom.OfPayloads(ctx, op, a.Payload, b.Payload, a.Payload.Transform(), 0)
 }

@@ -6,6 +6,10 @@ import (
 )
 
 // MatchCut finds the target cell with the tool's outer loop as one new hole.
+// The arrangement does not cut a tangency, so a tool curve touching a target
+// loop at one point still matches whole; RegionContact's queries turn that,
+// and a line's end lying on another region's line, into a miss
+// (agent-docs/prism-boolean-design.md §4.2).
 func MatchCut(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, profiles []*sketch.Profile, targetHoleCount int) (*sketch.Profile, bool, error) {
 	targetOuter, err := LoopEntitySet(budget, tags, false, -1)
 	if err != nil {
@@ -39,6 +43,9 @@ func MatchCut(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, prof
 		// covers both claims.
 		return nil, false, InvalidRegionError("cut")
 	}
+	if touch, err := RegionContact(budget, tags); err != nil || touch {
+		return nil, false, err
+	}
 	return match, true, nil
 }
 
@@ -54,6 +61,7 @@ type EnclosingCutMatch struct {
 // MatchEnclosingCut reads whole loops from the arrangement. It never infers
 // nesting from coordinates: the outside cell must hold the tool as a hole, and
 // the inside cell must hold exactly the target holes absent from that cell.
+// A tool curve touching a target loop misses, as in MatchCut.
 func MatchEnclosingCut(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
 	profiles []*sketch.Profile, targetHoleCount int) (EnclosingCutMatch, bool, error) {
 	targetOuter, err := LoopEntitySet(budget, tags, false, -1)
@@ -130,6 +138,9 @@ func MatchEnclosingCut(budget *proofbound.WorkBudget, tags map[sketch.Entity]Ori
 	}
 	if result.Inside == nil {
 		return EnclosingCutMatch{}, false, nil
+	}
+	if touch, err := RegionContact(budget, tags); err != nil || touch {
+		return EnclosingCutMatch{}, false, err
 	}
 	for i, outside := range outsideSet {
 		if outside {

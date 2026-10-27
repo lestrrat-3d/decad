@@ -238,3 +238,29 @@ func TestPlaceMeshDenotingRefusesBadGap(t *testing.T) {
 		require.ErrorIs(t, err, decaderr.ErrUnsupported, "gap %v", gap)
 	}
 }
+
+// A vertex whose exact image is a float pays no rounding, and one whose image is not pays its allowance.
+func TestPlaceMeshChargesNoRoundingForAFloatImage(t *testing.T) {
+	t.Parallel()
+	verts := []r3.Vec{{}, {X: 3}, {Y: 5}, {Z: 7}}
+	tris := [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}
+	place := func(shift r3.Vec) facetproof.PlacedMesh {
+		move, err := r3.Translation(shift)
+		require.NoError(t, err)
+		placed, err := facetproof.PlaceMesh(t.Context(), proofbound.NewWorkBudget(t.Context()), verts, tris,
+			make([]float64, len(verts)), 0, 0, 0, 0, move)
+		require.NoError(t, err)
+		return placed
+	}
+	for _, b := range place(r3.Vec{X: 100, Y: -4, Z: 0.5}).VertexBound {
+		require.Zero(t, b, "whole and dyadic translations of whole coordinates are exact")
+	}
+	// 0.1 is not a dyadic with a short mantissa: 3 + 0.1 rounds, and the coordinate 0 + 0.1 does not.
+	paid := 0
+	for _, b := range place(r3.Vec{X: 0.1, Y: 0.1, Z: 0.1}).VertexBound {
+		if b > 0 {
+			paid++
+		}
+	}
+	require.Positive(t, paid, "a translation whose sums round pays for them")
+}

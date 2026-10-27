@@ -478,9 +478,10 @@ that meet there (or the one segment).
 
 A corner the build reads as G1 that `capband.JoinIsG1` does not prove exactly
 tangent turns by a sliver θ over the rationals. The sharp family's corner
-there (§2) is `m(t)`, where the moved line meets the moved circle, on the
-branch that starts at the recorded corner `v`; it runs along a conic, not
-along the ruling the mesh holds. The build holds the shared-normal foot, and
+there (§2) is `m(t)`, where the moved line meets the moved circle, or the two
+moved circles meet, on the branch that starts at the recorded corner `v`; it
+runs along a conic, not along the ruling the mesh holds. The build holds the
+shared-normal foot, and
 the body's own readings charge that gap through the far contour's G1 hull and
 `capband.ClosureOf` (§8, §12). The mesh proof charges the sliver as a volume
 term, never by admitting a small cross product: the term is a proven upper
@@ -489,30 +490,33 @@ bound, and a corner it does not cover refuses.
 **The class** (`capband.NearTangentCorner`, exact rational arithmetic over
 the record's floats). A draft band admits the corner when all six hold:
 
-1. one walk is a `LineSeg` and the other an `ArcSeg`;
+1. one walk is a `LineSeg` and the other an `ArcSeg`, or both are `ArcSeg`s;
 2. the two recorded junction points are one rational point `v`;
 3. the two exact walk tangents `a` and `b` (as `JoinIsG1` states them) have
    `a·b > 0`;
 4. `S = (a × b)² / (|a|²·|b|²)`, the exact `sin²θ`, is at most `2⁻⁶⁴`, so
    `sin θ ≤ 2⁻³²`, under a quarter of the build's dead zone;
 5. both walks move by one amount;
-6. the moved circle stays clear of the corner: `r_lo > ρ + R_hi·S`, with
-   `R = |v − C|` and `r_lo` the smallest moved radius any level reaches.
+6. the moved circles stay clear of the corner, with `R = |v − C|` and `r_lo`
+   the smallest moved radius any level reaches: for a line and an arc,
+   `r_lo > ρ + R_hi·S`; for two arcs, `r_lo > ρ` on each circle.
 
-Failing 2 or 3 keeps the exact-tangent refusal. Failing 1 refuses "a
-near-tangent join between two circular walls", 4 "a near-tangent join whose
-exact turn exceeds the admitted sin²θ ≤ 2⁻⁶⁴", 5 "a near-tangent join whose two
-walls move by different amounts" (unreachable after SD4), and 6 "a
+Failing 2 or 3 keeps the exact-tangent refusal, and so does failing 1, which
+no corner reaches: a corner of two lines is a miter. Failing 4 refuses "a
+near-tangent join whose exact turn exceeds the admitted sin²θ ≤ 2⁻⁶⁴", 5 "a
+near-tangent join whose two walls move by different amounts" (unreachable after SD4), and 6 "a
 near-tangent join whose moved circle comes within the near-tangent corner
-charge of the corner". The limit in 4 is a stated class, not a soundness step:
+charge of the corner" for a line and an arc, "a near-tangent join of two
+circular walls whose moved circles do not both clear the near-tangent corner
+charge" for two arcs. The limit in 4 is a stated class, not a soundness step:
 a join a sketch tangent constraint solves turns by rounding, orders below
 `2⁻³²`, and a corner turning more was drawn as a corner and keeps the
 refusal a genuine miter has. A chamfer band admits no near-tangent join: its
 offset family is the shell's (modify §7), whose reflex sliver takes a
 connector arc this proof does not follow.
 
-**B1 at the corner.** Write `n_ℓ` and `n_c` for the two walks' unit left
-normals at `v`, `cos θ = n_ℓ·n_c`. The ideal polyhedron B1 of
+**B1 at the corner.** At a line and an arc, write `n_ℓ` and `n_c` for the two
+walks' unit left normals at `v`, `cos θ = n_ℓ·n_c`. The ideal polyhedron B1 of
 `agent-docs/tessellation-reach-design.md` §7 puts the corner's cap vertex at
 the circle's exact offset station at its window end
 (`tessellation.CapBlendCapMotion`: a line's first cap sample after a circle is
@@ -526,7 +530,25 @@ trapezoids. The line wall's one cell no longer has parallel near and cap
 edges; B1 splits it along the mesh's diagonal, and its section at `t` is the
 path `f₁ → q → f₂` with `q` the diagonal's point at that level.
 
-**Lemma 1 (the miter disc).** For every amount `t` of the sweep,
+At a corner of two arcs, walk 1 arriving and walk 2 leaving with unit left
+normals `n₁`, `n₂` at `v` and `cos θ = n₁·n₂`, the corner's cap
+vertex is walk 2's first station, the radial foot `f₂(t) = v + t·n₂` on walk
+2's moved circle. Walk 1's own radial foot `f₁(t) = v + t·n₁`, on its moved
+circle at its window end, is no vertex of B1. Walk 2's cells keep their
+planar trapezoids. Walk 1's last cell joins side station `A` (the station
+before `v`) and `v` to cap station `A'` and `f₂(d)`; its cap edge does not
+parallel its side edge, so the cell is not planar, and B1 splits it along the
+mesh's diagonal. Its section at `t` is the path `P → q → f₂`, where
+`P = P(t)` is the station's point on walk 1's moved circle (affine in `t`,
+since both `A` and `A'` sit at one azimuth about `C₁`), and `q` is the
+diagonal's point. Had the cap vertex been `f₁(d)`, the cell would be planar,
+its section the chord `P → f₁` and its diagonal's point some `q″` on that
+chord. Either diagonal puts `q` at `q″` or `q″ + δ`, with
+`δ = f₂(t) − f₁(t) = t·(n₂ − n₁)`, since moving one cap vertex by
+`f₂(d) − f₁(d)` moves the level's point on a ruling from it by the level's
+fraction of that.
+
+**Lemma 1 (a line and an arc).** For every amount `t` of the sweep,
 `|m(t) − f(t)| ≤ |t|·sinθ·√(1 + sin²θ)`, and `f(t)` lies `|t|·(1 − cos θ) ≤
 |t|·S` from the moved line ℓ(t).
 
@@ -545,19 +567,78 @@ zero is `x = sgn(β)(√Δ − |β|)`. In the frame `(e, n_ℓ)`,
 because `cos θ > 0` (condition 3). So `|X − s_c| = |g − sin θ| ≤ sin θ`, and
 `1 − cos θ = sin²θ/(1 + cos θ) ≤ S`. ∎
 
+**Lemma 1′ (two arcs).** At a corner of two arcs, for every amount `t` of
+the sweep, `|m(t) − f₂(t)|`, `|m(t) − f₁(t)|` and `|f₂(t) − f₁(t)|` are each
+at most `2|t|·tan(θ/2) ≤ |t|·sinθ·(1 + S)`.
+
+Write `n_i = −ι_i·e_i` with `e_i = (v − C_i)/R_i`, so `C_i = v + ι_i·R_i·n_i`,
+the moved radius is `r_i(t) = R_i − ι_i·t`, and `cos θ = n₁·n₂ > 0`
+(condition 3). The centres are `D` apart, where
+`D² = R₁² + R₂² − 2ι₁ι₂·R₁R₂·cos θ`. That gives the four cases:
+
+| `ι₁, ι₂` | Walks | Tangency | `D²` |
+|---|---|---|---|
+| `+1, +1` | both counter-clockwise (material inside both) | internal: one circle inside the other | `(R₁ − R₂)² + 2R₁R₂(1 − cos θ)` |
+| `−1, −1` | both clockwise (two hole walls, or a concave pair) | internal | `(R₁ − R₂)² + 2R₁R₂(1 − cos θ)` |
+| `+1, −1` | counter-clockwise into clockwise (an S bend) | external: the circles lie on either side of `v` | `(R₁ + R₂)² − 2R₁R₂(1 − cos θ)` |
+| `−1, +1` | clockwise into counter-clockwise | external | `(R₁ + R₂)² − 2R₁R₂(1 − cos θ)` |
+
+The proof below carries `ι₁, ι₂` as signs and covers all four at once.
+`f₂(t) = C₂ + r₂·e₂`, so `f₂` lies on the moved circle 2. Write its points as
+`C₂ + r₂(cos ψ·e₂ + sin ψ·τ₂)`, `τ₂ = rot90(e₂)`, and `w = C₂ − C₁`. Such a
+point lies on the moved circle 1 exactly when
+`a(1 − cos ψ) − b·sin ψ = q`, with
+`a = w·e₂ = ι₁ι₂R₁cos θ − R₂`, `b = w·τ₂`, `|b| = R₁ sin θ`, and
+`q = ι₁R₁t(1 − cos θ)/r₂`; the right side is `f₂`'s power about the moved
+circle 1, `|f₂ − C₁|² − r₁² = 2ι₁R₁t(1 − cos θ)`, over `2r₂`. With
+`u = tan(ψ/2)` that is `(2a − q)u² − 2bu − q = 0`, whose discriminant
+(over four) simplifies, using `r₁ + ι₁t = R₁` and `r₂ + ι₂t = R₂`, to
+
+```text
+Δ′ = b² + q(2a − q) = R₁R₂(1 − cos θ)·(2r₁r₂ − (1 − cos θ)R₁R₂) / r₂²
+```
+
+Condition 6 makes `Δ′ > 0` at every level. Write `s = sin θ`. Since
+`ρ ≥ T·s ≥ |t|·s` and `r_i > ρ`, `R_i = r_i + ι_i·t < r_i(1 + 1/s)`, so
+`(1 − cos θ)R₁R₂ = s²R₁R₂/(1 + cos θ) < r₁r₂(1 + s)²/(1 + cos θ) ≤ 2r₁r₂`,
+the last step because `(1 + s)² ≤ 2(1 + cos θ)` for `s ≤ 2⁻³²` (condition 4).
+So the two moved circles meet in
+two distinct points throughout,
+and the root `u = −q/(b + sgn(b)·√Δ′)` is continuous in `t` and zero at
+`t = 0`: it is the branch `m(t)` that starts at `v`. Then
+`|u| ≤ |q|/|b| = |t|(1 − cos θ)/(r₂ sin θ) = |t|·tan(θ/2)/r₂`, and
+`|m − f₂| = 2r₂|sin(ψ/2)| ≤ 2r₂|u| ≤ 2|t|·tan(θ/2)`. The same argument with
+the two circles swapped (`f₁` on the moved circle 1, power `2ι₂R₂t(1 − cos θ)`
+about the moved circle 2, the same `Δ′` times `r₂²/r₁²`) bounds
+`|m − f₁|`; the two small roots are the same point, since both start at `v`
+and the two meeting points never coincide. `|f₂ − f₁| = |t|·|n₂ − n₁| =
+2|t|·sin(θ/2) ≤ 2|t|·tan(θ/2)`. Last, `2 tan(θ/2) = 2 sin θ/(1 + cos θ)` and
+`(1 + S)(1 + cos θ) − 2 = cos θ(1 − cos θ)(2 + cos θ) ≥ 0`. ∎
+
 The charge reads `ρ = T·sinUp·(1 + S)` and `ε = T·S`, where `T = |d| + dDelta`
 bounds `|t|` at every level and `sinUp ≥ √S` is the upward rational root
-(`proofbound.RatSqrtUp`); each is rational before one upward rounding.
+(`proofbound.RatSqrtUp`); each is rational before one upward rounding. A
+corner of two arcs reads the same `ρ` and no `ε`: no straight wall meets it.
 
 **Lemma 2 (one slice).** At each level, `∂S1 − ∂S0` splits as a sum of
 closed 1-chains:
 
 - each B1 cell's chord against its own arc, the circular segments `Mchord`
-  already bounds;
-- per near-tangent corner, the chord from `f` to `m` closed by the moved
-  circle's arc back to `f`;
+  already bounds; at a corner of two arcs, walk 1's last chord is `P → f₁`,
+  its matched window end;
+- per near-tangent corner of a line and an arc, the chord from `f` to `m`
+  closed by the moved circle's arc back to `f`;
 - per straight walk with a near-tangent end, the path `f₁ → q → f₂ → m₂ → m₁
-  → f₁`, where an exact end has `m = f`.
+  → f₁`, where an exact end has `m = f`;
+- per near-tangent corner of two arcs, the polygon `P → q → f₂ → f₁ → P`
+  (walk 1's last cell against its chord), and the curvilinear triangle
+  `m → f₁` along the moved circle 1, `f₁ → f₂` straight, `f₂ → m` along the
+  moved circle 2.
+
+At a corner of two arcs, `∂S1` runs `P → q → f₂` and `∂S0` runs from `P`
+along circle 1 to `m` and along circle 2 to `f₂`; subtracting the chord
+`P → f₁`'s segment and the polygon from that difference leaves exactly the
+curvilinear triangle.
 
 The split assumes every wall survives at every level, so each wall's true
 edge runs from its start corner to its end corner in the walk's order; a wall
@@ -574,9 +655,10 @@ for every wall with a near-tangent end (`capband.NearTangentWallRefusal`).
   is compared against the upward root of the recorded length. A wall that
   fails refuses "a straight wall at a near-tangent join whose advance at the
   near or far section does not exceed the near-tangent corner charge".
-- A circular wall: B1 holds its ends at the recorded window's radial feet,
-  and each true end lies on the moved circle within its `ρ` of B1's, so it
-  turns from B1's by at most `2·asin(ρ/2r) ≤ (π/2)·ρ/r_lo`. The arc survives
+- A circular wall: each true end lies on the moved circle within its `ρ` of
+  the recorded window's radial foot there (Lemma 1, or Lemma 1′ read from the
+  wall's own circle), so it
+  turns from that foot by at most `2·asin(ρ/2r) ≤ (π/2)·ρ/r_lo`. The arc survives
   when those two turns stay below the window `W`, which is at least `π` past
   a half turn and at least `|v₂ − v₁|/R_hi` within one (a chord `c` subtends
   `2·asin(c/2R) ≥ c/R`). The gate asks `(π/2)(ρ_start + ρ_end) < W_lo·r_lo`
@@ -600,21 +682,40 @@ motion plus `2ρ`, because each lies within `ρ` of the hull of its cell's four
 exact vertices. A fan of three triangles from `f₁` covers that path, each
 inside a `2ε × λ` rectangle, so it encloses at most `3ελ`.
 
+At a corner of two arcs, split the polygon `P → q → f₂ → f₁` along `q → f₁`.
+With `q = q″ + δ` (the other diagonal has `q = q″`, and its polygon is the
+one triangle `q″ f₂ f₁`), the triangle `P q f₁` encloses
+`½|δ × (f₁ − P)|`, because `q″ − P` runs along `f₁ − P`, and the triangle
+`q f₂ f₁` encloses `½|(f₁ − q″) × δ|`. Since `q″` lies on the chord,
+the polygon encloses at most `|δ|·|f₁ − P| ≤ ρλ`: `P` lies in the hull of its
+cell's exact vertices and `f₁` within `ρ` of `f₂`, which does too, so
+`|f₁ − P| ≤ λ`. The curvilinear triangle is the straight triangle
+`m f₁ f₂`, at most `½|m − f₂|·|f₁ − f₂| ≤ ρ²/2`, plus the segment each moved
+circle's arc closes against its chord. Each chord is at most `ρ` (Lemma 1′)
+and below `r_lo` (condition 6), so as for the line and arc each arc stays
+under a quarter turn and its segment under `πρ²/4`. The corner encloses at
+most `ρλ + (1 + π)ρ²/2`.
+
 **The charge.** Integrated over the sweep,
 
 ```text
-Ncorner = hUpper · Σ_loops [ Σ_{near-tangent corners} πρ²/4 + Σ_{straight walks with a near-tangent end} 3·ε·λ ]
+Ncorner = hUpper · Σ_loops [ Σ_{line–arc corners} πρ²/4 + Σ_{straight walks with a near-tangent end} 3·ε·λ
+                           + Σ_{two-arc corners} (ρ·λ + 2.08·ρ²) ]
 volSymDiff = upRound(Mchord + sweptVolumeAllow(motionMax, …) + Ncorner)
 ```
 
-with `hUpper` the draft's `draftBandHeightUpper` and a straight walk's `ε` the
+with `hUpper` the draft's `draftBandHeightUpper`, `2.08 > (1 + π)/2`, and a
+straight walk's `ε` the
 larger of its two ends'. `capblend.NearTangentVolume` composes it from
 `capband.NearTangentCharges`, which reads every corner as the admission does.
 A band with no near-tangent join adds no term, so its `volSymDiff` is the sum
-it was. For the near-tangent slot of §11 (F3 with its right centre `2⁻⁴⁰` mm
+it was, and a band without a corner of two arcs sums only its line–arc
+terms. For the near-tangent slot of §11 (F3 with its right centre `2⁻⁴⁰` mm
 off), `S ≈ 2⁻⁸⁰/25` and `Ncorner` is below `10⁻²⁰` mm³; the change a reader
 sees in `volSymDiff` is the vertex-motion term, the held foot sitting about
-`d·sin θ` from B1's.
+`d·sin θ` from B1's. For the split disc of §11 (a radius-5 circle drawn as two
+half arcs, the second's centre `δ = 2⁻⁴⁸` mm off), `ρλ` is near `4·10⁻¹⁵` mm²
+per corner and `Ncorner` near `7·10⁻¹⁴` mm³.
 
 ## 10. `Draft`
 
@@ -918,6 +1019,31 @@ gives only `ρ_start + ρ_end < 2r_lo`, and `(π/2)·2 > 3`
 (`internal/capband/near_tangent_test.go`); the two-sided slot of `2⁻⁴⁰` sews a
 mesh that carries the proof (`internal/draftrecord/tessellate_test.go`).
 
+**Two-arc near-tangent fixtures** (§9.1.1): the split disc, a radius-5
+circle drawn as two half arcs whose lower centre sits `δ = 2⁻⁴⁸` mm (four
+ulps of 5) above the upper one's, meshes with the volume proof at `VerifyAll`,
+and a `Cut` by a square post covers `πh(25 − 5d + d²/3) − 2δh(5 − d/2) − 128`
+(`apitest/draft_mesh_test.go`); moved `5·2⁻³¹` mm, each join turns past
+`sin θ = 2⁻³²` and the `Cut` refuses naming the corner and the limit. The
+same records at `2⁻⁴⁸` and `5·2⁻³⁴` mm mesh at three tolerances with the held
+volume within `volSymDiff` of the closed form
+`h[π(Q(5) + Q(R₂))/2 − 2δ(R₂ − d/2)]`, `Q(R) = R² − Rd + d²/3`,
+`R₂ = √(25 + δ²)`; the exactly tangent disc charges nothing, the `5·2⁻³⁴`
+disc charges a positive volume whose rate per unit height covers Lemma 2's
+two-arc slice area (the twisted last cell and the curvilinear triangle) at
+every eighth of the sweep, its `volSymDiff` exceeds the exact disc's, and it
+is at least the 256-bit sum of the chord and motion terms and the charge;
+on both the slot and the split disc at `5·2⁻³⁴`, the charge is at least the
+256-bit sum of each term §9.1.1 names, read from `capband.NearTangentCharges`
+and the loop meshes (`internal/draftrecord/near_tangent_arcs_test.go`). Lemma 1′ is checked
+against a 256-bit reference of the two moved circles' meeting point in each
+of its four cases at amounts of either sign; the limit, mixed-amount and
+condition-6 refusals have rows, condition 6 for an inner counter-clockwise
+circle moved inward, a clockwise circle moved outward and the arriving
+circle; and a `2⁻⁴⁰` rad arc closed by a near-full arc that meets it near
+tangent at both ends is admitted drafted `0.5` mm and refused by the
+survival gate at `0.6` mm (`internal/capband/near_tangent_arcs_test.go`).
+
 **PR 5 fixtures** (`apitest/draft_subset_test.go`): F1's box with its `+u`
 wall drafted alone, `Volume = h·a(a − d/2)`, its area, centroid, far corners
 and the kept walls' horizontal normals, and the same body placed; F4's L with
@@ -971,8 +1097,15 @@ undecided.
 | the circular neighbour's foot at a wall's start | read at the arc's start instead of its end | the overrun riser admits |
 | Lemma 1's `ρ` and `ε` | each quartered | the 256-bit miter reference at an amount of 0.26 mm |
 | the strip term `3ελ` | dropped from `NearTangentVolume` | the `5·2⁻³⁴` slot: the charge falls below the slice area from the first eighth of the sweep |
-| the disc term `πρ²/4` | dropped | no fixture: the segment it covers sits below `1e-33` mm² on the slot |
-| `NearTangentVolume` in the proof sum | not appended | the `5·2⁻³⁴` slot: its `volSymDiff` falls below the 256-bit sum of the chord and motion terms and the charge |
+| the disc term `πρ²/4` | dropped | the `5·2⁻³⁴` slot's charge falls below the 256-bit sum of its terms (`TestDraftNearTangentChargeCoversEveryTerm`); no slice area pins it, since the segment it covers sits below `1e-33` mm² |
+| `NearTangentVolume` in the proof sum | not appended | the `5·2⁻³⁴` slot: its `volSymDiff` falls below the 256-bit sum of the chord and motion terms and the charge; the `5·2⁻³⁴` split disc likewise |
+| the two-arc arm of `NearTangentCorner` | a corner of two arcs read as no near-tangent join | the split disc: no volume proof at any tolerance, and its `2⁻⁴⁸` mesh at `VerifyAll` carries none |
+| the turn limit at two arcs | condition 4 skipped | the `5·2⁻³¹` split disc's mesh carries the proof; the two-arc limit row admits |
+| condition 6 for two arcs | skipped, read on the leaving circle only, or read with every arc counter-clockwise | the matching two-arc refusal row admits |
+| the survival gate at two arcs | skipped in the admission | the `2⁻⁴⁰` rad arc drafted `0.6` mm admits |
+| Lemma 1′'s `ρ` | quartered | the 256-bit reference in all four cases at an amount of `0.1575` mm |
+| the twisted-cell term `ρλ` | dropped from `NearTangentVolume` | the `5·2⁻³⁴` split disc: the charge falls below the two-arc slice area from the first eighth of the sweep |
+| the curvilinear-triangle term `2.08ρ²` | dropped | the `5·2⁻³⁴` split disc's charge falls about `2e-20` below the 256-bit sum of its terms (`TestDraftNearTangentChargeCoversEveryTerm`); no slice area pins it, since the triangle sits under `1.3e-21` mm² per corner |
 
 ## 12. Do not do this
 
@@ -989,7 +1122,7 @@ undecided.
   the same displacement; the patch flux already exists, is proven, and is
   what the tessellation proof is reconciled against. The polynomial is the
   test's cross-check (§8).
-- **Admit a near-tangent line–arc corner as G1 on a small cross product and
+- **Admit a near-tangent corner as G1 on a small cross product and
   then publish the wall as exact.** The dead-zone rule decides which closed
   form is built; the held foot's hull and the closure sliver charge what it
   cost. Deleting either is the first fail-first leg.
@@ -1026,10 +1159,9 @@ undecided.
   (§2, §12).
 - **Circular corners**: G1 joins only in this design; the ruled stand-in for
   a mitered circular corner is deferred (SD4, §14).
-- **Near-tangent joins**: a line–arc join the build reads as G1 and the record
-  does not make exactly tangent meshes with the volume charge of §9.1.1 while
-  `sin θ ≤ 2⁻³²`; a join of two circular walls or a larger turn keeps
-  the export-only mesh.
+- **Near-tangent joins**: a line–arc or arc–arc join the build reads as G1
+  and the record does not make exactly tangent meshes with the volume charge
+  of §9.1.1 while `sin θ ≤ 2⁻³²`; a larger turn keeps the export-only mesh.
 - **Free-form walks**: refused (SD3); the chorded alternative is a loft and
   is rejected (§12).
 - **Exactness**: every draft measurement is `Approximate` (§8).

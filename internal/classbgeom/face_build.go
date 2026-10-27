@@ -35,6 +35,25 @@ type CrossingFaceHooks[C comparable] struct {
 	Chords   func(context.Context, int, C) ([]CrossingChord[C], error)
 	Decide   func(context.Context, C, int, float64, bool, []CarrierSegment[C], [][]CarrierSegment[C], bool) error
 	Miss     error
+	// XSlice, when set, states X's slice in the plane of Y's face f, in
+	// frame, in place of X's section trace swept between X's caps: a
+	// stepped X's staircase (stepped_cut.go). No loop means X does not
+	// meet the plane. A Y wall across X's sweep strictly inside X then
+	// misses, since X has no one section there.
+	XSlice func(ctx context.Context, f C, frame CrossingFrame) ([][]CarrierSegment[C], error)
+}
+
+// xSlice is X's slice in the plane of Y's face f: hooks.XSlice where set,
+// else X's section trace swept between its caps.
+func xSlice[C comparable](ctx context.Context, f C, frame CrossingFrame, hooks CrossingFaceHooks[C]) ([][]CarrierSegment[C], error) {
+	if hooks.XSlice != nil {
+		return hooks.XSlice(ctx, f, frame)
+	}
+	chords, err := hooks.Chords(ctx, 0, f)
+	if err != nil || len(chords) == 0 {
+		return nil, err
+	}
+	return ChordRectangles(frame, chords, 0, hooks.Carrier, hooks.Geometry, hooks.Miss)
 }
 
 // SectionSegments tags an operand's section edges with their wall carriers.
@@ -129,16 +148,12 @@ func BuildYCrossingFaces[C comparable](ctx context.Context, x, y CrossingPrism, 
 		if end == -2 {
 			level = y.Z1
 		}
-		chords, err := hooks.Chords(ctx, 0, f)
+		other, err := xSlice(ctx, f, frames[1], hooks)
 		if err != nil {
 			return err
 		}
-		if len(chords) == 0 {
+		if len(other) == 0 {
 			continue
-		}
-		other, err := ChordRectangles(frames[1], chords, 0, hooks.Carrier, hooks.Geometry, hooks.Miss)
-		if err != nil {
-			return err
 		}
 		if err := hooks.Decide(ctx, f, 1, level, end == -1,
 			SectionSegments(1, segs, hooks.Carrier), other, false); err != nil {
@@ -164,16 +179,12 @@ func BuildYCrossingFaces[C comparable](ctx context.Context, x, y CrossingPrism, 
 		}
 		if axis == e {
 			own := RectLoop(frames[2].Axis, frames[2].Sign, corners, carriers)
-			chords, err := hooks.Chords(ctx, 0, f)
+			other, err := xSlice(ctx, f, frames[2], hooks)
 			if err != nil {
 				return err
 			}
-			if len(chords) == 0 {
+			if len(other) == 0 {
 				continue
-			}
-			other, err := ChordRectangles(frames[2], chords, 0, hooks.Carrier, hooks.Geometry, hooks.Miss)
-			if err != nil {
-				return err
 			}
 			at := ToLocal(corners[0], frames[2].Axis, frames[2].Sign)[2]
 			if err := hooks.Decide(ctx, f, 2, at, outwardIn(frames[2], inward), own, other, false); err != nil {
@@ -183,6 +194,9 @@ func BuildYCrossingFaces[C comparable](ctx context.Context, x, y CrossingPrism, 
 		}
 		if !strictlyInside(level, x, frames[0]) {
 			continue
+		}
+		if hooks.XSlice != nil {
+			return hooks.Miss
 		}
 		own := RectLoop(frames[0].Axis, frames[0].Sign, corners, carriers)
 		other := [][]CarrierSegment[C]{SectionSegments(0, x.Segments, hooks.Carrier)}

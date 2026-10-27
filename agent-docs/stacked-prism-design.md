@@ -126,7 +126,7 @@ evaluator does not build — never repaired.
 | # | Invariant | Sentinel |
 |---|---|---|
 | I1 | At least two slabs, or one slab holding two or more regions (a prism group, below). A one-slab stack with one region is a prism and is recorded as `prismPayload`. | `ErrUnsupported` |
-| I2 | Each slab holds exactly one region, except a prism group's one slab, whose regions are proven pairwise disjoint when the group is built, and the narrow side of a lining interface (below). (A region enclosing no area is refused by the build's own integrals, `ErrDegenerate`.) | `ErrUnsupported` |
+| I2 | Each slab holds exactly one region, except a prism group's one slab, whose regions are proven pairwise apart, touching nowhere, when the group is built (`prismcells.ProveGroupApart`, below), and the narrow side of a lining interface (below). (A region enclosing no area is refused by the build's own integrals, `ErrDegenerate`.) | `ErrUnsupported` |
 | I3 | Each slab has `z0 < z1`. | `ErrDegenerate` |
 | I4 | Consecutive slabs meet: `slabs[i].z1 == slabs[i+1].z0` and `slabs[i].z1Delta == slabs[i+1].z0Delta`, both as stored floats. Where both sides record a denoted level, the two rationals are equal. One plane, one displacement, one denotation. | `ErrDegenerate` |
 | I5 | Consecutive slabs carry one outer loop record (`loopRecordsEqual`), or their interface meets the union reading below. A clean-nesting cut never touches the outer loop, and a mirror join rewrites every slab's outer the same way, so a cut-built stack's outer wall runs the whole height. | `ErrUnsupported` |
@@ -159,11 +159,29 @@ intersection query, and any point it reports, within its band, refuses. Two
 tangent round pockets, or a round pocket tangent to a rectangular one, are not
 separate. `stackedrecord.Derive` and `Falsify` run this proof;
 the reached slabs' cut scenes already prove each hole lies inside its section
-and clears holes on the same side. The lower side exposes each upper-only hole
+and clears holes on the same side, touching none of them (prism-boolean §4.2's
+tangent-contact query). The lower side exposes each upper-only hole
 as a floor, and the upper side exposes each lower-only hole as a ceiling.
 Construction refuses this reading when the section has a nonzero displacement:
 the scene proves separation of the recorded loops, while that displacement
 could close their gap. A rigid placement re-evaluates the same local record.
+
+The same proof decides a prism group's regions (I2) and a `Union`'s several
+loops (general-boolean §3 A5). The arrangement does not cut a line at another
+line's endpoint lying on it either, such as a triangle's apex on a square's
+side, so `prismcells.RegionContact` also puts every two lines of two regions
+to sketch's line query: `geom.LineLineIntersection` gives the carriers'
+common point, and `geom.ClosestPointOnLine` reads its parameter along each
+segment, within 1e-9 of [0, 1]. Parallel carriers report no point; the
+arrangement cuts collinear lines where they overlap or meet. A union-built
+stack's interface reads `RegionContact` over its nesting match
+(general-boolean §3 A1), so a boss outline touching the plate's edge at one
+point is a miss there, and `Cut`'s clean-nesting, enclosing and group matches
+read it too (prism-boolean §4.2). A vertex lying on another region's line whose two
+edges leave that line within sketch's parallel band (about 1e-9 rad) is
+reported by neither line query; sketch's arrangement reports such a region
+invalid, and the pair is refused before any contact reading runs
+(`apitest/union_tangent_contact_test.go`).
 
 A mirror join (`agent-docs/mirror-pattern-design.md` §5) builds a stacked payload by
 rewriting every slab's region with one splice. The splice is a function of the
@@ -178,7 +196,7 @@ one record, the rows above apply unchanged. Where they differ:
 
 | # | Union reading | Sentinel |
 |---|---|---|
-| I5 | Both regions are hole-free, and the narrower outer is proven nested in the wider region by prism-boolean §4.2's clean-nesting match when the union is built: the wider region's cell carries the narrower outer, whole, as its one hole | `ErrUnsupported` |
+| I5 | Both regions are hole-free, and the narrower outer is proven nested in the wider region by prism-boolean §4.2's clean-nesting match when the union is built: the wider region's cell carries the narrower outer, whole, as its one hole, and `prismcells.RegionContact` reports no point between the two outers | `ErrUnsupported` |
 | I6 | Exactly one side records exposed material: `lowerExposed` when the lower region is the wider one, `upperExposed` when the upper is | `ErrDegenerate` |
 | I7 | That side holds exactly one record, `{Outer: wider.Outer, Holes: [reverse(narrower.Outer)]}`. The audit re-derives it from the two regions and compares it record for record | `ErrDegenerate` |
 
@@ -208,11 +226,14 @@ A **prism group** (`agent-docs/mirror-pattern-design.md` §6.3) is one slab hold
 two or more regions, each a separate lump over the slab's interval. It has
 no interface, so I3 is its only level rule and I4–I7 do not apply. The audit
 checks the slab, the empty interface list and that every region has an outer
-loop; that the regions are pairwise disjoint is proven when the group is
-built, by `provePrismRegionsDisjoint`: a private scene of every region's outer
-must return one valid cell per region, each reproducing that outer with
-every edge whole and no hole. A `Union` whose survivors close into several
-such loops builds one (`agent-docs/general-boolean-design.md` §3 A5).
+loop; that the regions are pairwise apart is proven when the group is
+built, by `prismcells.ProveGroupApart`: a private scene of every region's
+outer must return one valid cell per region, each reproducing that outer
+with every edge whole and no hole, no two cells may share a vertex, and
+`RegionContact` (above) must report no point between two regions. A
+`Union` whose survivors close into several such loops builds one
+(`agent-docs/general-boolean-design.md` §3 A5); loops that touch at one
+point take the mesh path.
 
 ### 2.3 Loop columns
 
@@ -470,20 +491,33 @@ Each admitted arm ships its implementation and tests together.
    exclusive holes also build when the private scene above proves their
    separation without a charge and the section displacement is zero.
 
+   A tool whose curved wall touches an existing hole, an enclosed hole or the
+   outer wall at one point, without crossing it, matches no cut cell: the
+   blind cut on a prism, the split and interface arms here and the spanning
+   cut all decline it through prism-boolean §4.2's tangent-contact query, and
+   it takes the mesh path.
+
    Opposed exclusive holes that overlap in plan at that interface build a
    BRep through general-boolean §3 A8. The reached slabs keep this stage's
    cut proofs. A private scene over only the exclusive holes gives the
    partial floor and ceiling as cells, which this payload's whole column
-   rings cannot hold. Opposed holes that only touch, along an edge or at a
-   corner, have no manifold result and take the mesh path. So do opposed
-   holes at a displaced level, holes that carry a section displacement, and
-   holes that are not loops of axis-aligned lines.
+   rings cannot hold. Every exclusive hole is a loop of axis-aligned lines,
+   circles and arcs: a round pocket across a rectangular one, a rectangle
+   inside a round pocket, a slot across a rectangle, or a counterbore drilled
+   from both faces. Opposed holes that only touch, along an edge, at a corner
+   or at a tangency, have no manifold result and take the mesh path. So do
+   two circles or arcs of opposite sides that meet, opposed holes at a
+   displaced level, holes that carry a section displacement, and holes with
+   an oblique line, an ellipse or a free-form segment.
 
-   A blind rectangle crossing one existing rectangular through hole on a
-   prism target uses general-boolean §3 A7's BRep path. Its partial floor
-   cannot be represented by this payload's whole column rings. A7 reads the
-   tool's and the target's denoted levels (§2.1) where the tool ends at a
-   target cap.
+   A blind tool crossing one existing through hole on a prism target, every
+   loop of axis-aligned lines, circles and arcs (a rectangle across a round
+   hole or a slot, a round pocket across a square hole), uses general-boolean
+   §3 A7's BRep path. Its partial floor cannot be represented by this
+   payload's whole column rings. A7 reads the tool's and the target's denoted
+   levels (§2.1) where the tool ends at a target cap. A round pocket across a
+   round hole, where two circles cross, takes the mesh path, and a pocket
+   enclosing the hole keeps stage 2's payload.
 4. **Surveys and clearance.** DX7, DX8, DX6 and `analyticBodiesEqual` for the
    stacked payload.
 
@@ -512,6 +546,15 @@ arm64.
 - A tool touching the target only at a cap (zero depth), a tool strictly inside
   both ends (an enclosed void), and a blind tool crossing the outer boundary
   each still take the mesh path with the mesh path's own result.
+- A round blind pocket touching the square through hole's wall at one point,
+  from either cap, on a prism or a stacked target, and one touching the outer
+  wall or enclosing a round hole it touches, take the mesh path: the result
+  meshes under `VerifyAll` and its volume bound covers the closed form. The
+  same tools run through the whole target return `BooleanUnsupportedContact`,
+  while a through tool tangent inside a cylinder's wall builds a faceted
+  result whose bound covers `960π` and meshes.
+  Square pockets touching the hole along its wall or at a corner mesh and
+  carry the closed-form volume (`apitest/cut_tangent_contact_test.go`).
 - Two blind tools ending at different levels build a three-slab analytic
   result from either face; the mesh and placement retain the volume proof.
 - Two separate blind tools ending exactly at the same interface build an
@@ -522,7 +565,11 @@ arm64.
   and placement. Opposed pockets touching along an edge or at a corner take
   the mesh path, which refuses them under `ExactOnly`. Overlapping opposed
   pockets build general-boolean §3 A8's BRep with an `Exact` volume, every
-  edge on two faces, a verified watertight mesh and a `Sound` report.
+  edge on two faces, a verified watertight mesh and a `Sound` report. Where a
+  plan loop holds a circle or an arc, the volume is `Approximate` and its
+  bound covers the closed form with its π terms; a pocket tangent to the
+  other side's edge, or two crossing circles, take the mesh path
+  (`apitest/stacked_opposed_arc_test.go`).
 - Denoted levels: on a plate 12 mm thick, two pockets beside each other cut
   from z = 12 by 3.175 mm and 0.125 in, in either order, by 0.2 in twice, or
   by 0.2 in against a full-length `Symmetric` 0.4 in or a `TwoSided` 0.2 in

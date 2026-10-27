@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -90,6 +91,10 @@ func placeMeshGap(ctx context.Context, budget *proofbound.WorkBudget, verts []r3
 	vertexAllow := make([]float64, len(verts))
 	extra := make([]float64, len(verts))
 	exact := make([]proof.Xpt, len(verts))
+	// denotes[i] records that the placed vertex is its exact image. The
+	// embedding check below reads the same predicate on the same two values
+	// for its Moved marks, so it takes this answer instead of deciding it again.
+	denotes := make([]bool, len(verts))
 	basis := delta.Basis()
 	// An image panics on a non-finite coordinate, so such a placement takes
 	// the vertex-order path.
@@ -106,6 +111,12 @@ func placeMeshGap(ctx context.Context, budget *proofbound.WorkBudget, verts []r3
 		}
 		exact[i] = proof.ExactAffineImage(basis.EX, basis.EY, basis.EZ, tr, v)
 		next.Verts[i] = exact[i].Vec()
+		// An image that is itself a float, as a whole-number translation of whole-number coordinates is, has no
+		// rounding to allow for: the placed vertex is the exact image.
+		if proofbound.FiniteVec(next.Verts[i]) && proof.XptDenotes(exact[i], next.Verts[i]) {
+			vertexAllow[i] = 0
+			denotes[i] = true
+		}
 		return nil
 	}
 	if workers >= 2 {
@@ -136,9 +147,16 @@ func placeMeshGap(ctx context.Context, budget *proofbound.WorkBudget, verts []r3
 			next.Tris[i] = [3]int{t[0], t[2], t[1]}
 		}
 	}
+	// The source area reads only verts and tris, which nothing writes during
+	// the call, so it runs beside the embedding check and gives the same float
+	// sum in the same facet order as a serial call would.
+	var heldArea float64
+	var areaDone sync.WaitGroup
+	areaDone.Go(func() { heldArea = MeshAreaUpper(verts, tris) })
 	moved, repair, err := keepPlacedEmbeddedWithAxes(ctx, exact, next.Verts, next.Tris,
-		[3]r3.Vec{basis.EX, basis.EY, basis.EZ})
+		[3]r3.Vec{basis.EX, basis.EY, basis.EZ}, denotes)
 	if err != nil {
+		areaDone.Wait()
 		return PlacedMesh{}, err
 	}
 	next.EmbeddingReach = repair
@@ -158,6 +176,7 @@ func placeMeshGap(ctx context.Context, budget *proofbound.WorkBudget, verts []r3
 	}
 	next.MeshBound = FacetBoundMax(next.Tris, next.VertexBound)
 	areaUpper, allows, err := proofbound.PerturbedAreaUpperAllowsContext(ctx, next.Verts, next.Tris, allow)
+	areaDone.Wait()
 	if err != nil {
 		return PlacedMesh{}, err
 	}
@@ -175,7 +194,6 @@ func placeMeshGap(ctx context.Context, budget *proofbound.WorkBudget, verts []r3
 	// same nearly orthonormal map. Charge each against its own area: if their
 	// old difference is E and held area is H, the new difference is at most
 	// (1+e)E + 2eH before held-coordinate rounding.
-	heldArea := MeshAreaUpper(verts, tris)
 	next.AreaSlack = proofbound.AbsSumUpper(areaSlack,
 		proofbound.ProductUpper(stretch, areaSlack),
 		proofbound.ProductUpper(2, proofbound.ProductUpper(stretch, heldArea)), areaRound)

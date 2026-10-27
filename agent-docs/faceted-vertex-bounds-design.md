@@ -170,8 +170,13 @@ operand vertex (§3.1), and
 β_result(v) = upRound( β_pre(v) + weld(v) )
 ```
 
-The global `round` stays what `SweptVolumeAllow(round, preArea)` charges the
-volume with; §4.2 states what else still reads it.
+`StitchedMesh.RoundingVolumeBound` charges occupied-volume error. Its global
+bound is `SweptVolumeAllow(round, preArea)`. After positive-reach repair it
+also sums each pre-round triangle's swept-volume bound using the largest
+rounding distance of that triangle's corners, and takes the smaller proven
+bound. Collapsed triangles remain in that sum. The bound is owned by
+`proofbound.PerturbedAreaAndRoundingVolumeContext`; inherited vertex bounds
+do not enter this rounding charge.
 
 ### 3.5 Why the result's facets satisfy §2's claim
 
@@ -247,7 +252,7 @@ always writes it.
 | `FacetedCurve.Bound`, `Edge.Length` bound | `MeshBound`; `ChainLengthBound(n, MeshBound, len)` | `max β` over the chain's vertices; `ChainLengthBound(n, that max, len)` |
 | face area bound | `MeshBound × perimeterUpper + AreaSlack + SumSlop + Σ_t FacetAreaTermSlop(t)` | `min(δ_f × perimeterUpper, Σ_t PerturbedTriangleAreaAllow(t, δ(t))) + AreaSlack + SumSlop + Σ_t FacetAreaTermSlop(t)`, with `δ_f` the face's own `Faceted.Bound` and the sum the `stitchPayload` row's term over the face's facets, through `AbsSumUpper` |
 | body area bound | the same with the summed face perimeters | the sum of every face's geometric term, plus `AreaSlack + SumSlop + Σ_t FacetAreaTermSlop(t)` over every facet |
-| `Volume` | `symA + symB + SweptVolumeAllow(round, preArea)` | unchanged; `round` stays the global weld maximum here |
+| `Volume` | `symA + symB + SweptVolumeAllow(round, preArea)` | `symA + symB + StitchedMesh.RoundingVolumeBound()` (§3.4) |
 | `Centroid` | from `VolSymDiff` and `DPair` | unchanged |
 | `Box.Bound` | `Radius3D(MeshBound)` | `Radius3D(e)`, with `e` the largest, over the six extremes, of `max(max_v (v.x + B(v)) − m, m − max_v (v.x − β(v)))` for a held maximum `m` (the minimum mirrored), where `B(v)` is the largest `δ(t)` over the facets touching `v`, formed exactly and rounded up |
 
@@ -275,7 +280,10 @@ extreme widens `e`, which the extreme vertex's own bound alone would miss.
 each vertex's own `β(v)`, at that vertex's own largest coordinate magnitude
 rather than the body's, since the rounding a rigid motion commits on one
 vertex depends on that vertex's inputs alone (`internal/proofbound/bounds.go`,
-`RigidRoundAllow`). `MeshBound` is recomputed as the maximum `δ(t)` after the
+`RigidRoundAllow`). A vertex whose exact image under the stored basis and
+translation is itself a float (`proof.XptDenotes`) commits no rounding and adds
+nothing, so a whole-number translation of whole-number coordinates leaves every
+bound where it was. `MeshBound` is recomputed as the maximum `δ(t)` after the
 addition. The exact-source record for a translation-only placement is kept or
 dropped under the same conditions as today, with §4.1's zero condition.
 Ordinary placement keeps a point loft's `PointSection` source record only for

@@ -125,7 +125,7 @@ configuration option.
 | `decad.ConeTangentEnd` | struct | The cone that the last section of `decad.LoftFacesToConeTangent` touches. | The caller |
 | `decad.ClosestPoint` | struct | The nearest point of a body or face to a query point, its distance reading and how far it can lie from the true surface. | `Body.ClosestPoint`, `Face.ClosestPoint` |
 | `decad.MeshBody` | struct | An imported triangle mesh: vertices, triangles and what they say. Not a `decad.Body`. | `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP`, `decad.NewMeshBody` |
-| `decad.MeshImportOption` | option set | A limit on `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF` or `decad.ReadSTEP`: `decad.WithMaxMeshTriangles` or `decad.WithMaxMeshBytes`. | The caller |
+| `decad.MeshImportOption` | option set | A limit on `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP` or `decad.ReadIGES`: `decad.WithMaxMeshTriangles` or `decad.WithMaxMeshBytes`. | The caller |
 | `decad.SubDCage` | struct | A polygon cage: vertices and the faces that index them, wound counter-clockwise seen from outside. | `decad.SubDMesh` |
 | `decad.InfillSpec` | struct | An infill: the lattice kind, the cell length, the wall level and the samples to a cell. | `decad.Infill` |
 | `decad.LatticeKind` | enum | Which lattice an infill uses: `GyroidInfill`, `SchwarzPInfill` or `DiamondInfill`. | `decad.InfillSpec` |

@@ -101,8 +101,7 @@ func TestClassBBridgingPinOneUlpShort(t *testing.T) {
 }
 
 // TestClassBBridgingPinMisses keeps on the mesh path every pair between two
-// faces that the flush reach does not build: a pin bridging the gap and
-// running on into the far prong, one ulp past the far wall, a pin whose
+// faces that neither the flush reach nor the sweep walk builds: a pin whose
 // section crosses the plate's top, a Cut of the bridging pin (the plate
 // whole), and a Union of the through pin (the plate itself).
 func TestClassBBridgingPinMisses(t *testing.T) {
@@ -121,9 +120,6 @@ func TestClassBBridgingPinMisses(t *testing.T) {
 		op   func(*testing.T, *decad.Body, *decad.Body) (*decad.Body, error)
 		want float64
 	}{
-		{name: "union_into_far_prong", pair: uAnd(10, units.Millimeters(25), 5), op: union, want: 5000 + 180*math.Pi},
-		{name: "union_one_ulp_long", pair: uAnd(10, units.Millimeters(math.Nextafter(20, 21)), 5), op: union,
-			want: 5000 + 180*math.Pi},
 		{name: "union_section_crossing_top", pair: uAnd(10, units.Millimeters(20), 8), op: union, want: 5000 + 180*math.Pi},
 		{name: "union_of_through_pin", pair: func(t *testing.T, doc *decad.Document) (*decad.Body, *decad.Body) {
 			return boxBody(t, doc, 0, 0, 40, 20, 10), pinAlongX(t, doc, 0, 40)

@@ -103,6 +103,14 @@ func TestNestedRunAndEachKeepPollingAndParallelContext(t *testing.T) {
 			if job != 0 {
 				return job, nil
 			}
+			// The outer Run holds the only extra worker, so this Each and every
+			// nested RunWithWorker get one worker each. poll fails only once the
+			// first callback has finished its nested run and is blocked, which
+			// proves Each keeps polling with a single granted worker. The check
+			// happens here, inside poll, because the callbacks run concurrently with poll.
+			// Closing release frees the worker before Each records the failure,
+			// so it may start the remaining blocks: Each promises only that no
+			// block starts after it has seen poll fail.
 			_, err := orderedwork.Each(4, 4, 1, func() error {
 				if calls.Load() != 1 || factories.Load() != 1 {
 					return ctx.Err()
@@ -136,8 +144,11 @@ func TestNestedRunAndEachKeepPollingAndParallelContext(t *testing.T) {
 		})
 	require.ErrorIs(t, err, stop)
 	require.Equal(t, 1, polls)
-	require.Equal(t, int32(1), calls.Load())
-	require.Equal(t, int32(1), factories.Load())
+	// polls == 1 shows poll saw exactly one call and one factory. Blocks that
+	// start while poll closes release are allowed. Every nested run still had
+	// exactly one worker, so it built exactly one work function.
+	require.LessOrEqual(t, calls.Load(), int32(4))
+	require.Equal(t, calls.Load(), factories.Load(), "each nested run got exactly one worker")
 	require.True(t, sawParallel.Load(), "a granted single worker still uses parallelCtx")
 	require.Zero(t, active.Load(), "the nested worker joined before return")
 	workers, reserved := orderedwork.ReserveWorkers(2)

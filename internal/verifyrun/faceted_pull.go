@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshthick"
+	"github.com/lestrrat-3d/decad/internal/orthoshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -21,6 +22,9 @@ func facetedUndercuts(budget *proofbound.WorkBudget, b *topo.Body, pl facetedrec
 	dir, ok := pull.Normalize()
 	if !ok || len(pl.FaceOf) != len(pl.Tris) {
 		return undercutOutcome{reason: surveyFacetedUnsupported}, nil
+	}
+	if out, ok := orthogonalUndercuts(b, pl, dir); ok {
+		return out, nil
 	}
 	tree, err := meshthick.NewTree(budget, pl.Verts, pl.Tris)
 	if err != nil || tree.Empty() {
@@ -46,4 +50,52 @@ func facetedUndercuts(budget *proofbound.WorkBudget, b *topo.Body, pl facetedrec
 		return undercutOutcome{}, nil
 	}
 	return undercutOutcome{faces: listed, ok: true, undecided: true}, nil
+}
+
+// orthogonalUndercuts reads the undercuts of a faceted body every face of which squares to a world axis, with no vertex
+// bound, against a pull along that axis, exactly (agent-docs/orthogonal-wall-design.md): a face square to the pull is
+// blocked when material lies beyond it on any line over it, tested on the solid's grid, so the survey lists the blocked
+// faces and, when there is none, proves the pull free. ok is false when the body is outside that class or the pull is
+// not exactly a world axis, and the rays take it.
+func orthogonalUndercuts(b *topo.Body, pl facetedrecord.Payload, dir r3.Vec) (undercutOutcome, bool) {
+	for _, beta := range pl.VertexBound {
+		if beta != 0 {
+			return undercutOutcome{}, false
+		}
+	}
+	axis := -1
+	for k, c := range [3]float64{dir.X, dir.Y, dir.Z} {
+		switch c {
+		case 0:
+		case 1, -1:
+			if axis >= 0 {
+				return undercutOutcome{}, false
+			}
+			axis = k
+		default:
+			return undercutOutcome{}, false
+		}
+	}
+	if axis < 0 {
+		return undercutOutcome{}, false
+	}
+	blocked, err := orthoshell.Undercuts(pl.Verts, pl.Tris, axis)
+	if err != nil {
+		return undercutOutcome{}, false
+	}
+	faces := topobuild.Faces(b)
+	listed := []*topo.Face{} // non-nil: every face is decided
+	seen := map[int]struct{}{}
+	for tri, isBlocked := range blocked {
+		if !isBlocked {
+			continue
+		}
+		fi := pl.FaceOf[tri]
+		if _, dup := seen[fi]; dup || fi < 0 || fi >= len(faces) {
+			continue
+		}
+		seen[fi] = struct{}{}
+		listed = append(listed, faces[fi])
+	}
+	return undercutOutcome{faces: listed, ok: true}, true
 }

@@ -123,8 +123,8 @@ func nearTangentSliceArea(shift float64, d *big.Float, frac float64) float64 {
 // Shown to fail first: with the strip term 3ελ dropped from NearTangentVolume,
 // the charge per unit height (9.4e-22, the two discs) fell below the slice
 // area from the first level on (5.0e-21 at an eighth of the sweep). The disc
-// term has no fixture: its segment sits below 1e-33 mm² here, as the closure
-// sliver of agent-docs/draft-design.md §11 has none.
+// term's segment sits below 1e-33 mm² here, so no slice area pins it;
+// TestDraftNearTangentChargeCoversEveryTerm pins its place in the sum.
 func TestDraftNearTangentMeshChargesTheCorner(t *testing.T) {
 	t.Parallel()
 	_, exact, exactCharge := slotCornerMesh(t, 0)

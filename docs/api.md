@@ -200,7 +200,7 @@ Each of these returns a new body and retires its input.
 | `decad.ChamferAngle` | Bevels convex or concave edges between two planar faces, or circular ones between a plane and a surface of revolution, by a distance along a reference face and an angle from that face. |
 | `decad.Stretch` | Scales a faceted solid, such as a mesh solid, by a separate factor along each world axis about an anchor, and returns a solid. |
 | `decad.MoveFace` | Press-pulls one face of a mesh solid whose faces all square to an axis along its normal; a positive distance grows the body and a negative one cuts it, and the walls beside it follow. |
-| `decad.Shell` | Removes the selected faces and lines the rest with a wall. `decad.WithShellSense` picks `decad.Inward`, `decad.Outward` or, for a mesh solid whose faces all square to an axis, `decad.Centered`, a wall half the thickness each side of the surface. `decad.WithNoOpenings` keeps every face and hollows the body into one outer shell around a cavity: for a straight prism, a revolve, or a drilled bar whose hole runs straight through, where the cavity is a ring round a tube lining the hole. Outward, the cavity is the original body and each hole's lining grows into the hole, so a hole whose radius is at most the thickness is `decad.ErrUnsupported`. A mesh solid whose faces all square to an axis shells inward with mitered corners. |
+| `decad.Shell` | Removes the selected faces and lines the rest with a wall. `decad.WithShellFaceThickness` gives the walls facing one world axis direction their own thickness on a mesh solid whose faces all square to an axis. `decad.WithShellSense` picks `decad.Inward`, `decad.Outward` or, for a mesh solid whose faces all square to an axis, `decad.Centered`, a wall half the thickness each side of the surface. `decad.WithNoOpenings` keeps every face and hollows the body into one outer shell around a cavity: for a straight prism, a revolve, or a drilled bar whose hole runs straight through, where the cavity is a ring round a tube lining the hole. Outward, the cavity is the original body and each hole's lining grows into the hole, so a hole whose radius is at most the thickness is `decad.ErrUnsupported`. A mesh solid whose faces all square to an axis shells inward with mitered corners. |
 | `decad.Draft` | Leans selected walls about a `decad.NeutralPlane` (`decad.NeutralFace`). |
 | `decad.Hole` | Cuts a round hole (or a rectangular, slot or regular polygonal one from `HoleSpec.Shape`), optionally drafted with `HoleSpec.Draft` or tapped with a `decad.HoleThread`, at a point on a planar face, or radially into a cylindrical one, through or blind, with an optional `decad.Counterbore` or `decad.Countersink` head. A `decad.RectangularHole` or `decad.SlotHole` shape cuts that cross-section instead, without a head. |
 | `decad.LookupThread` | Reads a thread designation such as `M10`, `M10x1.25` or `1/4-20` into its major diameter and pitch. |
@@ -213,7 +213,8 @@ Each of these returns a new body and retires its input.
 | `decad.TextProfiles` | Draws lines of text from a TrueType font (Go Regular by default) as closed sketch profiles for `decad.Emboss`. |
 | `decad.Emboss` | Raises or engraves closed profiles on a planar face, or on a cylindrical face from a sketch plane tangent to it. `decad.EmbossRaised` or `decad.EmbossEngraved` picks the mode, `decad.WithEmbossDraft` leans the walls and `decad.WithEmbossRimFillet` rounds the rim. |
 | `decad.Thicken` | Turns a sheet into a solid. `decad.WithThickenSide` picks the side. |
-| `decad.Offset` | Builds a second sheet at a normal distance and leaves the source live. |
+| `decad.QuarterTurn` | Turns a mesh solid by whole quarter turns about a world axis, exchanging coordinates so the result stays exact. |
+| `decad.Offset` | Builds a second sheet at a normal distance and leaves the source live; for a mesh solid whose faces all square to an axis it moves every face and builds a second solid. |
 
 ## Booleans
 
@@ -226,17 +227,23 @@ Each of these returns a new body and retires its input.
 
 Two full `decad.Revolve` bodies about one axis combine exactly, with no `Faceted` face, when their meridians
 are lines, arcs or circles: a sphere cut by a coaxial disk or shaft, or two coaxial spheres, keep their
-sphere, torus, cone, cylinder and plane faces (an off-axis circle meridian gives torus faces). A shared arc or
-circle span between the operands, or a contact at a pole or an edge, is not joined this way.
+sphere, torus, cone, cylinder and plane faces (an off-axis circle meridian gives torus faces). Meridians may share an
+arc span when both record the same circle exactly, so a dome intersected with a ball of its radius is the dome and a
+ball unioned onto an equal ball is that ball. Arcs whose recorded centres or radii differ, two equal whole-circle
+meridians, and a contact at a pole or an edge are not joined this way.
 
 A plain turned shaft, a full `decad.Revolve` of a rectangle with one side on an axis that runs along the sketch's
 U or V, is cut exactly as the circular `decad.Extrude` it equals. A box tool at right angles to the shaft, drawn
 on a datum plane and running past both shaft ends, gives a D-flat or a keyway with no `Faceted` face, and a
-`decad.Thread` on its cut wall builds. Both operands must keep the same placement: a shaft or a tool placed by
-`decad.Transform` takes the faceted path, as do a tool that ends inside the shaft's length, a stepped shaft and a
-tube. `Fillet` and `Chamfer` refuse the exact flat's edges, as they do for an extruded shaft. To blend those edges,
-place the tool by `decad.Transform`: the faceted result keeps the shaft's plane and cylinder faces, and the blend
-builds on them.
+`decad.Thread` on its cut wall builds. A stepped shaft, a full `decad.Revolve` of a staircase of such rectangles
+with one side on the axis, is cut the same way: the flat or keyway may cross any run of consecutive steps, a step
+it misses keeps its whole wall, and each shoulder keeps the part the tool leaves. Both operands must keep the same
+placement: a shaft or a tool placed by `decad.Transform` takes the faceted path, as do a tool that ends inside the
+shaft's length, a tool that meets two steps but not a narrower step between them in one of its planes, a slot
+that splits a step holding a narrower step's shoulder, a tool passing beside a narrower step within its
+shoulder's bounding square, and a tube. `Fillet` and `Chamfer` refuse the exact flat's
+edges, as they do for an extruded shaft. To blend those edges, place the tool by `decad.Transform`: the faceted
+result keeps the shaft's plane and cylinder faces, and the blend builds on them.
 
 A pin drawn at right angles to a plate, on a datum plane, whose end cap lies flat inside one of the plate's faces
 combines exactly, with no `Faceted` face. A `Union` of a pin standing on the face from outside adds it, and a `Cut`
@@ -247,14 +254,45 @@ onto the face (such as an inch distance), and a section touching the face's edge
 A pin whose two end caps lie flat in two opposite faces combines exactly in the same way. A `Union` of a pin bridging
 the gap of a U-shaped plate, from one prong's inner face to the other's, adds the pin with no end cap. A `Cut` of a
 pin running from one wall of a plate exactly to the opposite wall drills a through hole, and an `Intersect` of it is
-the pin. A pin that bridges the gap and runs on into the far prong takes the faceted path. A `Cut` or `Intersect` of
-the bridging pin, which touches the plate only in its two end disks, returns a `BooleanError` with code
-`BooleanUnsupportedContact`.
+the pin. A `Cut` or `Intersect` of the bridging pin, which touches the plate only in its two end disks, returns a
+`BooleanError` with code `BooleanUnsupportedContact`.
+
+A pin that passes through several faces of a plate combines exactly too, such as a pin through both prongs of a
+U-shaped plate, a pin across a slotted plate, or a pin that bridges the U's gap and runs on into the far prong. Each
+end may lie strictly inside the plate, strictly outside it, or flat in a face. A `Union` adds the pin's parts outside
+the plate, and a `Cut` removes its parts inside the plate. An `Intersect` is exact when the pin lies inside the plate
+over one stretch only; through two prongs it takes the faceted path. Every face the pin meets must lie across it with
+the pin's section strictly inside the face. A section that crosses a face's edge, and a pin or face level that
+carries rounding (such as an inch distance), take the faceted path.
+
+A blind pocket `Cut` from either cap of an extruded plate that partly overlaps the plate's one through hole builds
+with no `Faceted` face when the plate, the hole and the pocket are drawn on parallel sketch planes with the same
+placement and every outline is made of lines along the sketch axes, circles and arcs: a rectangular pocket across a
+round hole or a slot, or a round pocket across a square hole. Any circle or arc in the result makes the volume read
+`Approximate` with a small proven bound. A round pocket across a round hole, a pocket wall at an angle to the sketch
+axes, a pocket edge tangent to the hole, a pocket drawn with lines overshooting its corners, and a pocket that also
+crosses the plate's outline take the faceted path.
+
+Blind pockets `Cut` from the two caps of an extruded plate that meet at one level and overlap there in plan build with
+no `Faceted` face under the same drawing conditions: every outline is made of lines along the sketch axes, circles and
+arcs, such as a round pocket across a rectangular one, a slot across a rectangle, or a counterbore drilled from both
+faces. The level must hold no rounding. Any circle or arc in the result makes the volume read `Approximate` with a
+small proven bound; rectangles alone read `Exact`. A second pocket on one face that meets nothing of the other
+face's pockets at that level takes the faceted path. Pockets that only touch, along an edge, at a corner or where a
+circle is tangent to the other pocket's edge, two circles of opposite pockets that meet, and a pocket wall at an angle
+to the sketch axes take the faceted path, which refuses the coplanar contact under `ExactOnly` with a `BooleanError`
+of code `BooleanUnsupportedContact`.
+
+A `Cut` whose round tool touches a wall of the target at one point without crossing it, such as a round pocket
+tangent to a square hole or to the plate's side, takes the faceted path. A blind pocket gives an `Approximate`
+faceted result that meshes. A tool through the whole target takes the faceted path too, which may refuse the
+contact with a `BooleanError` of code `BooleanUnsupportedContact`, as for a round tool tangent to a box's side, or
+build a faceted result, as for one tangent inside a cylinder's wall.
 
 A tapered `decad.Extrude` (`decad.WithTaper`) is an operand when every corner where a circular wall meets its
-neighbour is tangent. A line and an arc that meet tangent up to rounding, turning by an angle whose sine is at most 2⁻³², count as
-tangent, and the sliver between them is charged into the result's volume bound. Two arcs that meet that way, or a
-larger turn, are refused with `decad.ErrUnsupported`, as is a trimmed segment; the body still meshes for export.
+neighbour is tangent. A line and an arc, or two arcs, that meet tangent up to rounding, turning by an angle whose sine
+is at most 2⁻³², count as tangent, and the sliver between them is charged into the result's volume bound. A larger
+turn is refused with `decad.ErrUnsupported`, as is a trimmed segment; the body still meshes for export.
 
 Two faceted solids every face of which squares to an axis, such as mesh solids, combine exactly on a grid of their coordinates under `Union`, `Cut` and `Intersect`, any contact between them included. A two-body `Union`, `Cut` or `Intersect` that would be refused because an operand is the mesh result of earlier Booleans is retried from
 the source bodies of that chain, when all but one pair combine by exact routes. The result is the same solid. Its
@@ -300,6 +338,12 @@ feature and its copies to one `decad.Union` with the base. When the feature and 
 pattern keeps those planes (a turn about the sweep axis, or a slide in the plane), the result is one extrusion of the
 joined section, and its bound includes the rounding of the placed copies. A pattern that tilts the planes is refused.
 
+A `Union` or `Patterned` whose extrusions touch at one point without crossing, such as a disc tangent to a plate's side
+or to another disc, a boss on a plate's top tangent inside its edge, or a triangle's apex on a square's side, takes the
+faceted path and gives an `Approximate` result that meshes. That path can still refuse: three or more tangent
+`Patterned` copies in a row return `decad.ErrUnsupported`, because the joined mesh is held more coarsely than the next
+pair's chord tolerance. A disc tangent inside the plate at the same height adds nothing and stays exact.
+
 ## Sheets and surfaces
 
 A sheet encloses no material, so `Body.Volume` and `Body.Centroid` return `decad.ErrNotSolid` for it.
@@ -335,7 +379,7 @@ Features choose edges and faces with queries.
 | Position | `Body.LocatePoint`, `Body.DistanceToPoint`, `Face.DistanceToPoint`, `Body.ClosestPoint`, `Face.ClosestPoint` |
 | Topology | `Body.Lumps`, `Body.Shells`, `Body.Faces`, `Body.Edges`, `Body.Vertices`, `Face.Loops`, `Edge.Faces` |
 | Geometry | `Face.Surface`, `Edge.Curve`, `Face.NormalAt`, `Edge.Length`, `Vertex.Position` |
-| Cross-section | `Body.Section` returns a sketch and its profiles on a plane. A faceted solid every face of which squares to an axis, such as a mesh solid, sections exactly by a plane square to an axis when the cut is one region. A mesh `Union`, `Cut` or `Intersect` result of two prism, stacked-prism or slab-stack BRep bodies sections exactly from its operation history when both operands have straight-line sections there and the result is one hole-free region whose corners are exact. `Body.SectionOutline` returns the closed outlines of the verified mesh cut by a plane, for bodies `Body.Section` refuses. `SectionOutline.Clearance` returns the least distance between the material two outlines of one plane enclose, with the closest pair of points, whether the regions overlap, and a bound from both outlines' `OffSurface`. Its `Lower` reading is positive only when the gap is certified. |
+| Cross-section | `Body.Section` returns a sketch and its profiles on a plane. A full `Revolve` about a world-axis line sections exactly by a world-axis plane that holds the axis, as the meridian and its mirror, or that is normal to it, as one disk or ring per material interval. The cut must pass no meridian vertex, every cut radius and corner must be a binary64 value, and a plane holding the axis refuses a meridian that meets the axis outside one run of axis lines. A faceted solid every face of which squares to an axis, such as a mesh solid, sections exactly by a plane square to an axis, each region of the cut a profile of the returned sketch. A mesh `Union`, `Cut` or `Intersect` result of two prism, stacked-prism or slab-stack BRep bodies sections exactly from its operation history when both operands have straight-line sections there and the result is one hole-free region whose corners are exact. `Body.SectionOutline` returns the closed outlines of the verified mesh cut by a plane, for bodies `Body.Section` refuses. `SectionOutline.Clearance` returns the least distance between the material two outlines of one plane enclose, with the closest pair of points, whether the regions overlap, and a bound from both outlines' `OffSurface`. Its `Lower` reading is positive only when the gap is certified. |
 | Mesh | `Body.Tessellate` returns a `*decad.Mesh` with its chord error bound. It refuses a body whose cavity or outer shell winds the wrong way, and `Document.Verify` reports such a body as an invalid solid. |
 
 `Body.MassProperties` uses certified source moments for some strictly
@@ -345,21 +389,29 @@ verified mesh. Other faceted results continue to use their verified mesh.
 `Body.LocatePoint` classifies a point in exact arithmetic against an
 undisplaced prism, for example an extrude to a stated millimetre distance,
 whose profile is made of lines, whole circles with a millimetre radius and
-whole arcs whose end lies exactly on the start's radius. Such a body answers
-`PointOnBoundary` for a point exactly on its boundary and `PointInside` or
-`PointOutside` for a point off it. An extrude to a computed level (`ToFace`,
-`ThroughAll`, a distance in another unit that does not convert exactly, a
-chamfered end), a prism Boolean result whose section moved, every other body
-except the mesh Boolean results described next, and a point on an arc's chord
-or on two loops at once are classified through the verified mesh at the given tolerance and can read `PointUndecided` near
-the boundary.
+whole arcs whose end lies exactly on the start's radius. A blind pocket, a
+boss united onto a plate and other stacked prisms with undisplaced levels and
+such profiles answer the same way, and so does the BRep a `Union` builds when
+a boss stands flush with the plate's outline or crosses it. A full solid `Revolve` answers
+exactly when its meridian is made of whole lines, whole circles and such
+whole arcs, its axis is resolved exactly, and its sweep is `FullRevolution`
+or a whole turn in degrees; points on the axis are included. Such a body
+answers `PointOnBoundary` for a point exactly on its boundary and
+`PointInside` or `PointOutside` for a point off it. An extrude to a computed
+level (`ToFace`, `ThroughAll`, a distance in another unit that does not
+convert exactly, a chamfered end), a prism Boolean result whose section moved,
+a pocket crossing a through hole, a partial or radian-stated revolve, every
+other body except the mesh Boolean results described next, and a point on an
+arc's chord or on two loops at once are classified through the verified mesh
+at the given tolerance and can read `PointUndecided` near the boundary.
 
 A mesh `Union`, `Cut` or `Intersect` result first combines its operands'
 exact answers through the operation history. A point inside either operand
 of a `Union` is inside it; a point inside the target of a `Cut` and on the
 tool's boundary is on its boundary; a point outside either operand of an
-`Intersect` is outside it. An operand that is itself such a result is read
-the same way. A point on the boundary of two operands at once, or where an
+`Intersect` is outside it. Each operand answers from its own exact record as
+described above, and an operand that is itself such a result is read the same
+way. A point on the boundary of two operands at once, or where an
 operand has no exact answer, falls back to the verified mesh. A result with
 any operation diagnostic other than `OpDiagChainAllowanceApplied` (a shifted
 retry or an embedding reach, for example), a Boolean that trims a `LoftFromPoint` cone, and a moved or copied
@@ -398,7 +450,7 @@ A `decad.Diagnostic` states each reason a report is not sound, with its `decad.D
 
 ## Import
 
-`decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF` and `decad.ReadSTEP` read a triangle mesh file or a planar STEP solid into a `decad.MeshBody`. A `decad.MeshBody` is not a
+`decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP` and `decad.ReadIGES` read a triangle mesh file, a STEP solid or a planar-faced IGES solid B-rep into a `decad.MeshBody`. A `decad.MeshBody` is not a
 `decad.Body`: no feature or Boolean takes it. `decad.SolidFromMesh` turns a closed one into a solid body that does take part, after proving the mesh does not cross itself. It reports whether its triangles close into a surface, and its bounds,
 area and enclosed volume.
 
@@ -424,10 +476,12 @@ stretches a mesh body by a separate factor along each axis about a point; a nega
 
 `export.STEP`, `export.STL`, `export.OBJ`, `export.ThreeMF` and `export.GLTF` write a body to an `io.Writer` at a chord tolerance.
 `export.GLTF` writes a glTF 2.0 JSON file with its mesh embedded, in metres.
-`export.PNG` draws a body as an orthographic, flat-shaded PNG image from a `export.View`, such as `export.IsometricView`. `export.PNGBodies` draws several bodies together in one image, each in its own colour when `export.View.Colors` gives them. Set `export.View.Outlines` to draw the visible feature edges over the shading, `export.View.HiddenEdges` for the hidden ones as dashes, `export.View.Shadows` for the key light's shadows, `export.View.ShadowSoftness` for soft ones, `export.View.BackColor` for the colour of faces looking away, or `export.View.FieldOfView` for a perspective camera, which draws outlines, hidden edges and shadows too.
+`export.PNG` draws a body as an orthographic, flat-shaded PNG image from a `export.View`, such as `export.IsometricView`. `export.PNGBodies` draws several bodies together in one image, each in its own colour when `export.View.Colors` gives them. Set `export.View.Outlines` to draw the visible feature edges over the shading, `export.View.HiddenEdges` for the hidden ones as dashes, `export.View.Shadows` for the key light's shadows, `export.View.ShadowSoftness` for soft ones, `export.View.Gloss` for a specular highlight, `export.View.BackColor` for the colour of faces looking away, or `export.View.FieldOfView` for a perspective camera, which draws outlines, hidden edges and shadows too.
 `export.GCodePerimeters` writes the outline of each print layer of a body as G-code from an `export.GCodeSpec` (layer height, line width, filament diameter and feed rate). `export.DXF` writes the feature edges of a body as an ASCII DXF drawing along an `export.DrawingView`, with hidden edges on their own dashed layer. `export.DXFViews` lays several views of a body in a row on one sheet. `export.DXF` and its siblings draw a whole circle that faces the view as a `CIRCLE` and an arc as an `ARC`. `export.DXFSheet` draws them at a stated scale on paper of a stated size, inside a border with a title block of a title, up to three labelled fields and the scale, with the overall size of each view, the diameter of each whole circle and the radius of each whole arc as dimensions. `export.DXFSection` draws the cut of a body by a plane with its outline and hatching, as a section view.
 `export.MeshSTL`, `export.MeshOBJ`, `export.MeshGLTF`, `export.MeshPNG` and `export.MeshDXF` write a `decad.MeshBody` in the same formats, as it is, with no tolerance.
 `export.STEP` writes planes, cylinders, cones, spheres and tori as analytic surfaces when every face of the body allows it, and otherwise writes the body's mesh facets. A face whose surface is not proven to be exactly its tagged surface, such as a drafted wall, a loop chamfer's corner cone, a revolved cone or a loft's cap, sends the body to facets.
+A fillet's horn torus corner, which closes on its axis at a vertex, such as a pocket mouth's, is written as a torus. A
+whole sphere or ring with no edge on it, such as a revolved ball, is written as facets.
 `export.STEP` writes a solid with a cavity as a `BREP_WITH_VOIDS` of its outer shell and the cavity shells, and a body of several lumps as one solid per lump.
 `export.NewSTEPFile` builds a STEP file in memory. STEP header fields use `export.WithSTEPAuthor`,
 `export.WithSTEPName`, `export.WithSTEPOrganization` and `export.WithSTEPTimestamp`.

@@ -40,6 +40,9 @@ func partialContour(budget *proofbound.WorkBudget, walks []survey2d.SideWalk,
 		var err error
 		if selected[prev] && selected[k] && !sharpSelected {
 			join, err = CornerJoin(walks[prev], walks[k], 1, amounts[k], tol)
+			// The fillet's meridians stand on filletband.OffsetJoins' exact
+			// feet, so the contour takes the same ones.
+			join = ExactCornerFeet(walks[prev], walks[k], join, amounts[k])
 		} else {
 			join, err = SharpCornerJoin(walks[prev], walks[k], amounts[prev], amounts[k], tol)
 		}

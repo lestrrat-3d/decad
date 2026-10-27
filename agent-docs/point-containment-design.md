@@ -2,10 +2,12 @@
 
 `Body.LocatePoint` classifies one world-coordinate point against a solid body.
 An undisplaced straight prism is first classified against its own record in
-exact arithmetic (§7). A mesh Boolean result first combines its operands' exact
-answers through the operation history (§8). Every other body, and every point
-§7 or §8 leaves open, reads a verified mesh and its occupied-volume proof (§2). The query does not
-change the body or the document.
+exact arithmetic (§7), and so are an undisplaced stacked prism, the BRep a
+stacked `Union` keeps its slabs on (§9) and a full solid `Revolve` (§10). A
+mesh Boolean result first combines its operands' exact answers through the
+operation history (§8). Every other body, and every point §7 to §10 leave
+open, reads a verified mesh and its occupied-volume proof (§2). The query does
+not change the body or the document.
 
 ## 1. Public result
 
@@ -24,20 +26,20 @@ const (
 
 `p` is a world coordinate in millimetres. `tol` is the positive chord tolerance
 passed to `Body.Tessellate` at `VerifyAll`. A solid whose payload cannot produce
-a mesh returns that tessellation's `ErrUnsupported` when §7 or §8 does not
-decide the point. A sheet or an unsound solid returns `ErrNotSolid`. A nil body or context
+a mesh returns that tessellation's `ErrUnsupported` when no exact route
+decides the point. A sheet or an unsound solid returns `ErrNotSolid`. A nil body or context
 returns `ErrDegenerate`; non-finite point coordinates return `ErrNotFinite`. The
-tolerance uses `Tessellate`'s kind, finiteness and zero gates, which §7 and §8
-apply themselves before they read a record, so an invalid tolerance fails the
+tolerance uses `Tessellate`'s kind, finiteness and zero gates, which the exact
+routes apply themselves before they read a record, so an invalid tolerance fails the
 same way on every body. Retired bodies remain readable.
 
 `PointUndecided` means the proof cannot classify this point at the requested
 tolerance. It is not an outside reading. The caller may request a finer mesh;
 the query can still return `PointUndecided` if a payload publishes no occupied
 volume proof or the point is too close to its boundary. `PointOnBoundary` is
-reported only when the record places the point on its boundary exactly (§7),
-the operands' records do so under §8's set algebra, or the mesh boundary is
-exact at that point (§2).
+reported only when the record places the point on its boundary exactly (§7,
+§9, §10), the operands' records do so under §8's set algebra, or the mesh
+boundary is exact at that point (§2).
 
 ## 2. Proof
 
@@ -80,8 +82,8 @@ outside. No nearest-face selection or local normal decides membership.
 - A box answers inside, outside and exact boundary, including a retired body.
 - A plate with a through bore answers outside inside the bore and inside beside
   it, and on the boundary at a point of its exact circular wall (§7).
-- A stacked blind pocket and a faceted boolean result answer inside or outside
-  at points whose ball proof clears their symmetric-difference bounds.
+- A faceted boolean result answers inside or outside at points whose ball
+  proof clears its symmetric-difference bound.
 - A rotated body answers in world coordinates. A sheet returns `ErrNotSolid`.
 - A canceled context, invalid point and invalid tolerance return their stated
   errors without changing the document.
@@ -105,6 +107,15 @@ Let `D²` be `MeshDistanceSquared`'s exact minimum over every held triangle.
 inequality puts the true boundary distance in
 `[max(0, sqrt(D²) − B), sqrt(D²) + B]`. The query computes these interval
 ends over exact rationals from the directed square-root floats and `B`.
+
+`MeshDistanceSquared` computes each triangle distance in exact dyadic
+arithmetic and divides once. A downward-rounded float box bound only skips
+a triangle whose bound is at least the upward-rounded exact minimum; it never
+admits one or decides the value. Triangles are visited smallest bound first
+once a float test with a proven error bound, or the exact normal, shows no
+triangle is degenerate. A mesh with a degenerate triangle keeps the
+index-order scan. Either way the query returns the value, budget steps and
+errors of the index-order scan.
 
 The distance query reads §2's mesh proof only; it does not consult §7 or §8.
 When §2 proves the point outside, that interval encloses the distance to the
@@ -188,8 +199,9 @@ the point to §2 unchanged.
 The body's payload must be a `prismPayload` with `SectionDelta`, `Z0Delta` and
 `Z1Delta` all zero, no `SurfaceResult`, and `Z0 < Z1` compared exactly. Only
 then is the record the set it denotes (`prismrecord.Payload`'s doc,
-`agent-docs/prism-boolean-design.md` §7). A faceted Boolean result goes to §8.
-A displaced record, a stacked prism, a BRep and every other payload go to §2.
+`agent-docs/prism-boolean-design.md` §7). A faceted Boolean result goes to §8,
+a stacked prism and a BRep to §9, and a revolve to §10. A displaced record and
+every other payload go to §2.
 
 ### 7.2 Plane coordinates
 
@@ -328,7 +340,7 @@ expandable body", states when the record is that set-equality proof, and
 nothing else:
 
 - The payload is a `facetedrecord.Payload`. An analytic result is classified
-  by its own record (§7) or by §2.
+  by its own record (§7, §9, §10) or by §2.
 - The document's producer record for the body is a `Cut`, `Union` or
   `Intersect` with the body as its output, read through `historyProducers`
   (`boolean_regroup.go`). A `Cut` must carry exactly a `target` and a `tool`.
@@ -346,9 +358,10 @@ Every other body is a leaf.
 
 ### 8.2 Leaves and placements
 
-A leaf whose payload is a `prismrecord.Payload` is classified by §7. A leaf
-§7 does not decide, and every other leaf, reads undecided. The route reads no
-leaf's mesh: that would tessellate each retired operand at `VerifyAll`.
+A leaf whose payload is a `prismrecord.Payload` is classified by §7, a
+stacked prism or a BRep by §9, and a revolve by §10. A leaf those routes do
+not decide, and every other leaf, reads undecided. The route reads no leaf's
+mesh: that would tessellate each retired operand at `VerifyAll`.
 
 The route does not walk `Transform` or `Copy`. A placed mesh result denotes
 its source's set under its own placement record (an exact rotation or the
@@ -462,4 +475,251 @@ are about the same set.
   embedding reach, an analytic payload, a missing producer record, a
   one-input `Cut`, a mesh operand with no record and a displaced prism
   operand; a chain allowance still combines, and a canceled context returns
-  its error.
+  its error. They also cut a stacked leaf by a cube and unite a revolve leaf
+  with a cube (§9, §10).
+
+## 9. Stacked prisms and stack BReps
+
+`pointquery.LocateStacked` and `pointquery.LocateStackBrep` classify a point
+against an undisplaced stack of slabs before `LocatePoint` builds a mesh. Like
+§7, they return a decided answer about the set the record denotes or hand the
+point to §2 unchanged.
+
+### 9.1 Admission
+
+Two payloads carry a slab stack:
+
+- A `stackedPrismPayload` (`agent-docs/stacked-prism-design.md` §2.1) denotes
+  the union of every slab's regions swept over that slab's interval, carried
+  through §7.2's map with its own frame and placement (evaluator §5.1). Its
+  interfaces are derived from the slabs, so the route does not read them.
+  `SectionDelta` and every slab's `Z0Delta` and `Z1Delta` must be zero, so
+  each level is its held float.
+- A `brepPayload` that keeps a `Stack` (`agent-docs/general-boolean-design.md`
+  §3 "A1 as a brep", §4.1) is built from exactly the stack's loops at the
+  stack's levels, each face within the stack's section displacement of the
+  set it denotes. The route requires that displacement and every stack level
+  displacement to be zero, at least one face, every face's displacement and
+  both level displacements zero, every side-line split's level displacement
+  zero, no blend face, no loop band, and no boss or pocket shell band. Unlike
+  the BRep's scale conversion, it does not require line-only faces: a curved
+  loop reads through §7.3's own gates.
+  Then the body is the union of the stack's slabs. The BRep joins each
+  junction at one canonical vertex (general-boolean §4.1), so the route also
+  requires every stack loop's junctions to close at two equal ends, where
+  that vertex is the recorded end. The stack is stated in the reference
+  frame: the first face's frame, which the stacked BRep build gives its first
+  cap. The route requires that first face to be a planar cap (a region and no
+  sweep) and reads §7.2's map with its frame and the payload's placement.
+
+A crossing blind cut (general-boolean §3 A7), an opposed-pocket result (A8)
+and a class-B result keep no stack, a cup holds its record in its own payload,
+and a displaced stack is not its held record; all of them go to §2.
+
+The route checks, reject-only, that the stack has a slab, every slab has a
+region, every slab has `Z0 < Z1` exactly, and consecutive slabs share one held
+level (stacked §2.2's I3 and I4). A record that fails goes to §2.
+
+### 9.2 Classification
+
+The route solves the plane coordinates `(u, v, z)` of `p` as §7.2 does. Let
+`L_0 < … < L_n` be the levels and `c_i` the class of `q = (u, v)` in slab
+`i`'s material: §7.3's class against each region, combined by §8.3's union
+table. That table holds for regular closed sets in the plane as in space, so
+a slab whose regions touch reads undecided where two of them meet.
+
+- `z < L_0` or `z > L_n` is outside.
+- `L_i < z < L_{i+1}` reads `c_i`. A ball about `p` short of both levels meets
+  slab `i` alone, where the material is the region times an interval.
+- `z = L_k` combines `a = c_{k−1}` below and `b = c_k` above, with `a` outside
+  at the bottom level and `b` outside at the top level:
+
+| level `z = L_k` | b inside | b on boundary | b outside | b undecided |
+|---|---|---|---|---|
+| a inside | inside | on boundary | on boundary | undecided |
+| a on boundary | on boundary | on boundary | on boundary | on boundary |
+| a outside | on boundary | on boundary | outside | undecided |
+| a undecided | undecided | on boundary | undecided | undecided |
+
+Proof. Near `p` only slabs `k − 1` and `k` meet a ball about `p`: every other
+slab's interval lies a positive distance from `z`. So near `p` the material
+is `R_{k−1} × (−∞, z]` together with `R_k × [z, ∞)`, an empty region standing
+for a missing slab.
+
+- Inside both: a disk about `q` lies in both regions, and the ball over it
+  lies in the material.
+- Outside both: a disk about `q` misses both regions, and so the ball over it
+  misses the material.
+- Inside one and outside the other: `p` is material, and the points straight
+  through the level on the outside side are not.
+- On `a`'s boundary: `q` lies in `R_{k−1}`, so `p` is material, and points
+  `(q′, z − ε)` with `q′` outside `R_{k−1}` lie arbitrarily close to `p`
+  outside the material, whatever `b` is. The same holds for `b` above.
+- Undecided beside inside or outside: the row's answers differ over the
+  classes the undecided side may have.
+
+§7.3's height table is this table with one side outside.
+
+The route polls the context through §7's budget per segment and ring edge
+and once per slab region.
+
+### 9.3 Verification
+
+- A 10 mm cube with a radius-2.5 blind pocket answers on the pocket floor,
+  inside and outside 1e-9 mm either side of it, inside at the interface level
+  in the material, on the foot of the pocket wall, on the wall and 1e-9 mm
+  either side of it, outside at the pocket mouth, and on the rim, the top,
+  the outer wall and the bottom. The mesh alone leaves the floor and every
+  1e-9 mm point undecided.
+- A plate under a union-built round boss answers inside at the interface
+  under the boss, on the boss foot and the plate top beside it, and on the
+  boss wall and 1e-9 mm either side of it.
+- Unit fixtures read a bored stack at every level and region class, and a
+  prism group whose two squares share a side, which reads undecided on that
+  side. The level table is checked for every pair.
+- Unit fixtures hand the record to §2 for each stacked gate (a section or
+  level displacement, a slab with no region, an empty interval, levels that
+  do not meet, no slab, a singular placement) and each BRep gate (no stack,
+  a stack or stack level displacement, no face, a loop band, a boss or
+  pocket shell band, a face or face level displacement, a blend face, a
+  displaced split, an open junction in an outer loop or a hole, a swept or
+  restated first face).
+- Through §8: a mesh `Cut` of the pocketed cube by a turned pin answers on
+  the pocket floor and wall, 1e-9 mm either side of the floor, and inside at
+  the interface level. A mesh `Cut` of the flush corner boss BRep by a turned
+  pin answers on the shared wall, at the interface and 1e-9 mm either side
+  of it, inside under the boss, and on the plate and boss tops and 1e-9 mm
+  from them. The leaf reads no mesh, so without §9 these stay undecided. A
+  stack BRep's own faces are planar here, so its own mesh is exact and §2
+  alone decides it.
+
+## 10. Full solid Revolve
+
+`pointquery.LocateRevolve` classifies a point against a full solid
+`Revolve` from its recorded meridian before `LocatePoint` builds a mesh. It
+returns a decided answer about the set the record denotes or hands the point
+to §2 unchanged.
+
+### 10.1 Admission
+
+The payload must be a `revolvePayload` with `Full` set, no `SurfaceResult`,
+zero `SectionDelta`, and a sweep whose two ends denote exactly one turn apart
+(`revolveangle.Sweep` with equal `Rad` parts and `Turn` parts exactly one
+apart): a radian-stated sweep snapped to full denotes a slightly smaller
+angle. The resolved axis must carry zero anchor and direction bounds, a zero
+radial admission allowance and a zero snap allowance, the axis gates the
+exact meridian section reads (`agent-docs/section-design.md`, "Plane through
+or normal to the axis of a full Revolve"). A zero direction makes §10.2's
+map singular.
+
+Every meridian segment must be a whole line, a whole millimetre circle, or a
+whole arc whose `End` lies exactly on `Start`'s radius (§7.3's table without
+its line fragments), and every junction must close at two equal ends, so the
+meridian is its recorded points. Reject-only, every line end, arc end and
+centre, and circle centre must lie on the material side of the axis: its
+exact radial coordinate `ρ = d × (P − A)` is not negative, and is either zero
+or above the axis frame's `SnapTol`, since the build reads a point that close
+as on the axis. Any other record goes to §2.
+
+### 10.2 The denoted set
+
+A meridian point `P` at angle `φ` denotes
+`T + B·(A3 + W·z + (E0·cos φ + E1·sin φ)·ρ)`, with `z = (P − A)·d` and
+`ρ = d × (P − A)` about the axis anchor `A` and direction `d`,
+`A3 = O + U·a_u + V·a_v`, `W = U·d_u + V·d_v`, `E0 = V·d_u − U·d_v` and
+`E1 = W × E0`, every leaf the held float read exactly. This is the
+construction evaluator §6's swept-vertex comparison proves every vertex
+against (`revolvemesh.RevolveLift.SweptPointGap`); it holds whether or not
+`d` is a unit vector, and whether or not the frame is exactly orthonormal.
+The body is therefore `G(S₀)` for the affine map
+`G(z, x, y) = T + B·(A3 + W·z + E0·x + E1·y)` and the solid of revolution
+`S₀ = {(z, x, y) : (z, √(x² + y²)) ∈ M̂ ∪ M̂′}`, where `M̂` is the meridian
+region `M` mapped by `P − A ↦ (z, ρ)` and `M̂′` is its mirror `ρ ↦ −ρ`.
+
+The route solves `G(z, x, y) = p` by Cramer's rule over exact rationals, as
+§7.2 solves its map and for §7.2's reason: `W`, `E0` and `E1` are orthogonal
+only to rounding. A zero determinant hands the point to §2. `G` is an
+affine bijection, so `p`'s class in the body is `(z, x, y)`'s class in `S₀`.
+Let `R = x² + y²`. The plane points with axis coordinates `(z, ±√R)` are
+`Q± = A + (z·d ± √R·e)/|d|²`, `e = (−d_v, d_u)`, and the map
+`P − A ↦ (z, ρ)` is linear and invertible, so classes in `M̂` are classes
+of these points in `M`.
+
+`S₀` is symmetric about its axis. A ball about `(z, x, y)` turns about the
+axis onto a disk about `(z, √R)` in one meridian half-plane, and `S₀` meets
+that plane in `M̂ ∪ M̂′`. So `(z, x, y)`'s class in `S₀` is `Q+`'s class in
+`M ∪ M′`, `M′` the mirror of `M` across the axis, and this holds for a point
+on the axis too.
+
+The build orients the axis so the meridian lies on its non-negative side
+(`revolveaxis.ResolveSide`), and a zero radial admission allowance states
+the radial minimum was proven non-negative (evaluator §6). So `M` lies in the
+closed half-plane `ρ ≥ 0`, and `M′` in `ρ ≤ 0`.
+
+### 10.3 Classification
+
+- `R > 0`: the answer is §8.3's union of `Q+`'s and `Q−`'s §7.3 classes in
+  `M`, because `Q−`'s class in `M` is `Q+`'s class in `M′`. The union table
+  holds for any regular closed sets; with `M` on `ρ ≥ 0`, `Q−` lies outside
+  it and the answer is `Q+`'s class.
+- `R = 0`: `Q = A + z·d/|d|²` is a rational point on the axis. Inside,
+  outside and undecided carry over. On `M`'s boundary, the point is inside
+  when every boundary piece through `Q` (a ring edge that is not a chord, an
+  arc, a circle) is a line with both ends exactly on the axis line, and on
+  the boundary otherwise.
+
+Proof of the axis rule. If every piece through `Q` lies on the axis, near
+`Q` the boundary of `M` lies on the axis. The open half-disks on either side
+then hold no boundary point, and `M` is regular, so one of them lies in `M`'s
+interior and `M ∪ M′` holds the whole disk: inside. If a piece through `Q`
+leaves the axis, it holds boundary points of `M` with `ρ > 0` arbitrarily
+close to `Q`: a line not along the axis leaves it on one side, and a circle
+meets the axis line at most twice. Near such a point `M′` is absent, so it
+is a boundary point of `M ∪ M′` too, and no disk about `Q` lies in
+`M ∪ M′`: on the boundary.
+
+`Q±` has an irrational coordinate. Each coordinate is `r₀ + r₁·s` with
+rational `r₀`, `r₁` and `s = √R`. Every §7.3 test is a sign of a polynomial
+of degree at most two in the query point's coordinates: a cross product, a
+dot product of two offsets, a squared distance less a squared radius, and a
+height comparison. With `s² = R` each is `a + b·s` for rationals `a` and
+`b`. When `a` and `b·s` have one sign, that is the sign. Otherwise the term
+of larger magnitude decides, found by comparing `a²` with `b²·R`, and equal
+magnitudes give zero. No square root is formed and no comparison is rounded.
+
+The route polls the context through §7's budget per segment and ring edge.
+
+### 10.4 Verification
+
+- The stepped shaft (r = 10 over z ∈ [0, 20], r = 6 over z ∈ [20, 40] about
+  world z) answers on its wall at three angles, inside and outside 1e-9 mm
+  either side of it, inside or outside at `(5√2, 5√2, 5)` by the sign of
+  `x² + y² − 100` over its held coordinates, on the shoulder and 1e-9 mm
+  either side of it, inside at the shoulder level within the neck, on both
+  cap centres, and inside on the axis, at the shoulder level and 1e-9 mm
+  inside the bottom cap. The mesh alone leaves the wall, shoulder, cap and
+  1e-9 mm points undecided.
+- A capsule (r = 5 over z ∈ [0, 10] under a hemisphere) answers on the pole,
+  1e-9 mm either side of it and of the sphere, and on the equator. A tube
+  (r ∈ [4, 10]) answers outside on its axis and on its bore wall. A
+  translated shaft answers on its moved wall and cap centre, and a copy turned
+  45° about x answers 0.001 mm inside and outside its wall.
+- Through §8: the stepped shaft united with a box crossing its wall, a mesh
+  result, answers on the shaft wall beside the box and 1e-9 mm either side of
+  it, inside on the wall within the box, on the box's end face, on the
+  bottom cap centre and inside on the axis.
+- Unit fixtures revolve a rectangle and a quarter pie about the plane's v
+  axis: walls, an irrational radius, axis points, cap centres, the pole and
+  the pie's chord, which falls to §2. A frame turned about z is solved
+  through its held axes. A circle touching the axis, which the build refuses,
+  reads its axis point on the boundary.
+- Unit fixtures hand the record to §2 for each admission gate: a partial
+  sweep, a surface result, a section displacement, a radian-stated sweep, a
+  turn with a radian part, a derived span, no denotation, each axis bound,
+  the radial admission and snap allowances, a negative snap tolerance, a zero
+  direction, a singular placement, a line fragment, an open junction, a point
+  across the axis, a point inside the snap band and an arc centre across the
+  axis.
+- `surdSign` is checked against agreeing terms, vanishing terms, opposed
+  terms of either larger magnitude and exact cancellation, and the surd
+  point's tests against a rational point where `R` is a square.

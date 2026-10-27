@@ -178,8 +178,8 @@ func deriveInterface(ctx context.Context, budget *proofbound.WorkBudget, slabs [
 
 // falsifyPrismGroup is §2.2's I1/I2 reading for a prism group: one slab with
 // two or more non-empty regions over a finite interval, and no interface.
-// That the regions are pairwise disjoint is proven when the group is built,
-// by sketch's arrangement of every region's outer (prismcells.ProveGroupDisjoint);
+// That the regions are pairwise apart is proven when the group is built,
+// by sketch's arrangement of every region's outer (prismcells.ProveGroupApart);
 // this audit compares records and proves no geometry.
 func falsifyPrismGroup(ctx context.Context, sp Record) error {
 	if err := ctx.Err(); err != nil {

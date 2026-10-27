@@ -38,7 +38,17 @@ mesh is stretched by `ScaleMesh`, which reorders corners under an odd number of 
 finite and not zero. The tests state the volume as the product of the factors, the bounds and a point inside the
 widened part, and a swapped pair of factors fails them.
 
-## 4. Not covered
+## 4. Features on a mesh solid
+
+A mesh solid's faces are exact planes (§2), so `Hole`, `Boss` and the other tool features that cut or raise a prism
+take it as they take a prism-faced body, through `Union` and `Cut` of the prism tool with the faceted body. A tool
+with straight sides and an axis-square placement (a rectangular or polygonal pocket, an `OutlineHole`, a rectangular
+boss) is read by the mixed route of `agent-docs/orthogonal-boolean-design.md` B7, so the result is exact; a round
+bore or boss is a tool the grid does not hold, so it takes the general mesh Boolean route and its volume is read
+inside the bound that route states. The tests cut a rectangular pocket, an L-shaped through hole and a round bore
+and raise a rectangular boss on a plate, and read volumes, face counts and points.
+
+## 5. Not covered
 
 - Welding, orienting and hole filling: repair the mesh first with `RepairMesh`.
 - Recovering planes, cylinders or cones from a curved mesh, and so a retained analytic tag. A cylinder read from STL is a

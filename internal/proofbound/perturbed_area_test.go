@@ -23,14 +23,41 @@ import (
 const meshUnreferencedInf = "unreferenced-inf"
 
 func legacyTriangleParts(a, b, c r3.Vec, delta float64) (area, allow float64) {
-	u, v := proofbound.HeldDelta(b, a), proofbound.HeldDelta(c, a)
-	n := proofarith.DvCross(u, v)
-	area = proofarith.DySqrtUp(proofarith.DyShift(proofarith.DvDot(n, n), -2))
+	area, lu, lv := legacyTriangleKernel(a, b, c)
 	allow = proofbound.AbsSumUpper(
-		proofbound.ProductUpper(delta, proofbound.AbsSumUpper(proofbound.DvLenUpper(u), proofbound.DvLenUpper(v))),
+		proofbound.ProductUpper(delta, proofbound.AbsSumUpper(lu, lv)),
 		proofbound.ProductUpper(2, proofbound.ProductUpper(delta, delta)),
 	)
 	return area, allow
+}
+
+// legacyTriangleKernel is the reference for one triangle's held area and edge
+// lengths: DvSub over the lifted corners, the exact cross product, and every
+// root through legacySqrtUp over the dyadic dot product.
+func legacyTriangleKernel(a, b, c r3.Vec) (area, lu, lv float64) {
+	u, v := proofbound.HeldDelta(b, a), proofbound.HeldDelta(c, a)
+	n := proofarith.DvCross(u, v)
+	area = legacySqrtUp(proofarith.DyShift(proofarith.DvDot(n, n), -2))
+	return area, legacySqrtUp(proofarith.DvDot(u, u)), legacySqrtUp(proofarith.DvDot(v, v))
+}
+
+// legacySqrtUp is the DySqrtUp walk kept as the differential reference: two
+// exact tests per step, f² ≤ d and f² = d.
+func legacySqrtUp(d proofarith.Dyadic) float64 {
+	if d.Sign() <= 0 {
+		return 0
+	}
+	f := proofarith.DySqrtSeed(d)
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		f = math.MaxFloat64
+	}
+	for range proofarith.SqrtAdjustLimit {
+		if !proofarith.DySquareAtMost(f, d) || proofarith.DySquareEquals(f, d) {
+			return f
+		}
+		f = proofarith.NextUp(f)
+	}
+	return math.Inf(1)
 }
 
 func legacyTriangleTerm(a, b, c r3.Vec, delta float64) (term, allow float64) {
@@ -216,5 +243,95 @@ func TestPerturbedTriangleTermsBudget(t *testing.T) {
 		} else {
 			require.NoError(t, gotErr)
 		}
+	}
+}
+
+// kernelMeshes are the meshes the per-triangle kernel is checked on: a closed
+// ring with full-mantissa coordinates, random soups at several scales,
+// degenerate facets, and coordinates far from the origin, near overflow and in
+// the subnormal range.
+func kernelMeshes(r *rand.Rand) map[string]struct {
+	verts []r3.Vec
+	tris  [][3]int
+} {
+	type mesh = struct {
+		verts []r3.Vec
+		tris  [][3]int
+	}
+	out := map[string]mesh{}
+	verts, tris := ringMesh(64, 40)
+	out["ring"] = mesh{verts, tris}
+	verts, tris = randomMesh(r, 1500, 3000)
+	out["random"] = mesh{verts, tris}
+
+	scaled := func(scale, offset float64) mesh {
+		verts, tris := ringMesh(48, 24)
+		moved := make([]r3.Vec, len(verts))
+		for i, v := range verts {
+			moved[i] = r3.Vec{X: v.X*scale + offset, Y: v.Y*scale - offset, Z: v.Z*scale + offset/3}
+		}
+		return mesh{moved, tris}
+	}
+	out["far-offset"] = scaled(1, 1e15)
+	out["huge"] = scaled(1e150, 0)
+	out["overflow"] = scaled(1e300, 1e307)
+	out["tiny"] = scaled(1e-300, 0)
+	out["subnormal"] = scaled(1e-318, 0)
+	out["mixed"] = scaled(1e-9, 1e6)
+
+	// Degenerate facets: repeated corners, collinear corners, a needle with
+	// one edge far shorter than the others, and corners differing in one ulp.
+	base := []r3.Vec{
+		{X: 1, Y: 2, Z: 3},
+		{X: 2, Y: 4, Z: 6},
+		{X: 3, Y: 6, Z: 9},
+		{X: 1 + 0x1p-52, Y: 2, Z: 3},
+		{X: 1, Y: 2 + 0x1p-51, Z: 3},
+		{X: 9.1, Y: -0.3, Z: 41.7},
+		{X: 9.1, Y: -0.3, Z: math.Nextafter(41.7, 100)},
+		{X: 1e15, Y: 1e-15, Z: 0},
+		{X: 0, Y: 0, Z: 0},
+		{X: math.Copysign(0, -1), Y: 0, Z: 0},
+		{X: math.SmallestNonzeroFloat64, Y: 0, Z: 0},
+		{X: math.MaxFloat64, Y: -math.MaxFloat64, Z: 0},
+	}
+	var degen [][3]int
+	for i := range base {
+		for j := range base {
+			for k := range base {
+				degen = append(degen, [3]int{i, j, k})
+			}
+		}
+	}
+	out["degenerate"] = mesh{base, degen}
+	return out
+}
+
+func TestPerturbedTriangleTermsMatchPreviousKernel(t *testing.T) {
+	r := rand.New(rand.NewPCG(31, 32))
+	for name, m := range kernelMeshes(r) {
+		t.Run(name, func(t *testing.T) {
+			for _, workers := range []int{1, 4} {
+				got, oks, err := proofbound.PerturbedTriangleTermsForTest(nil, m.verts, m.tris, workers)
+				require.NoError(t, err)
+				for i, tri := range m.tris {
+					a, b, c := m.verts[tri[0]], m.verts[tri[1]], m.verts[tri[2]]
+					require.True(t, oks[i], "triangle %d", i)
+					area, lu, lv := legacyTriangleKernel(a, b, c)
+					requireBits(t, area, got[i][0], fmt.Sprintf("workers %d triangle %d area", workers, i))
+					requireBits(t, lu, got[i][1], fmt.Sprintf("workers %d triangle %d lu", workers, i))
+					requireBits(t, lv, got[i][2], fmt.Sprintf("workers %d triangle %d lv", workers, i))
+				}
+			}
+			for i, tri := range m.tris {
+				a, b, c := m.verts[tri[0]], m.verts[tri[1]], m.verts[tri[2]]
+				want, _ := legacyTriangleTerm(a, b, c, 3e-4)
+				requireBits(t, want, proofbound.PerturbedTriangleAreaUpper(a, b, c, 3e-4), fmt.Sprintf("triangle %d", i))
+			}
+			want := legacyAreaUpper(m.verts, m.tris, 3e-4)
+			got, err := proofbound.PerturbedAreaUpperContext(t.Context(), m.verts, m.tris, 3e-4)
+			require.NoError(t, err)
+			requireBits(t, want, got, "mesh total")
+		})
 	}
 }

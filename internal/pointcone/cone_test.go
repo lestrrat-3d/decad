@@ -200,6 +200,38 @@ func TestPointConeFactorMatchesRationalForm(t *testing.T) {
 	}
 }
 
+// The held crossing rounds the product k·rho before adding x, on every target.
+// For p = (3, 5, 0) on the cone with apex 2 and slope 1/3, rounded separately
+// fl(3 + fl(5·fl(1/3)))/2 is 2.333333333333333; fused into one multiply-add
+// (arm64, or amd64 built with GOAMD64=v3) it is one ulp higher. Both forms hold
+// the unfused value and enclose the exact 7/3 within their QError.
+//
+// Shown to fail under GOAMD64=v3 and on arm64 with heldCrossing's float64()
+// conversion removed: q is 2.3333333333333335.
+func TestPointConeFactorRoundsProductBeforeSum(t *testing.T) {
+	t.Parallel()
+	apex, slope := big.NewRat(2, 1), big.NewRat(1, 3)
+	p := r3.Vec{X: 3, Y: 5}
+	k, _ := slope.Float64()
+	product := float64(k * p.Y)
+	want := (p.X + product) / 2
+	require.Equal(t, 2.333333333333333, want)
+	require.NotEqual(t, math.Float64bits(want), math.Float64bits(math.FMA(k, p.Y, p.X)/2),
+		"the fixture must tell a fused sum from a rounded one")
+
+	rat, err := FactorRat(p, coneaxis.X(), apex, slope)
+	require.NoError(t, err)
+	dyadic, err := FactorDyadic(p, coneaxis.X(), xConsts(apex, slope))
+	require.NoError(t, err)
+	exact := big.NewRat(7, 3)
+	for _, s := range []Sample{rat, dyadic} {
+		require.Equal(t, math.Float64bits(want), math.Float64bits(s.Q))
+		require.Equal(t, math.Float64bits(1/want), math.Float64bits(s.Alpha))
+		gap, _ := new(big.Rat).Sub(exact, proofarith.FloatRat(s.Q)).Float64()
+		require.LessOrEqual(t, math.Abs(gap), s.QError)
+	}
+}
+
 // legacyPointConeTriangleBound is the per-cone geometry pass that
 // TriangleBound ran before the geometry was shared between cones.
 func legacyPointConeTriangleBound(tri [3]r3.Vec, c *Consts) (float64, float64, error) {

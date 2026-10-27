@@ -34,6 +34,9 @@ type StitchedMesh struct {
 	// from the held mesh, and charging the rounding against what survived
 	// would leave that facet's own swept volume out of the bound.
 	PreArea float64
+	// localRoundVolume is a facet-local rounding charge after positive-reach
+	// repair. Nil keeps the global Round times PreArea bound.
+	localRoundVolume *float64
 	// dropArea upper-bounds the area of the facets the weld collapsed, which
 	// the held mesh no longer carries. The reported surface area is short by
 	// exactly this much, so the area bound must cover it.
@@ -44,6 +47,17 @@ type StitchedMesh struct {
 	// held float, rounded up. An exact vertex held at its own float adds
 	// nothing, so an operand vertex keeps its operand β to the bit.
 	VertexBound []float64
+}
+
+// RoundingVolumeBound bounds the occupied-volume change of the final rounding,
+// including facets the weld collapsed. A measured local charge and the global
+// displacement-times-area charge each bound it, so their minimum does too.
+func (m *StitchedMesh) RoundingVolumeBound() float64 {
+	global := proofbound.SweptVolumeAllow(m.Round, m.PreArea)
+	if m.localRoundVolume != nil {
+		return min(global, *m.localRoundVolume)
+	}
+	return global
 }
 
 // stitchFacets welds the kept facets by shared exact vertices, makes the
@@ -223,7 +237,20 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 	// The pre-round surface: every facet the exact stitch produced, dropped
 	// ones included, measured on the held vertices and inflated by the
 	// rounding they may each have travelled (internal/proofbound/bounds.go, proofbound.PerturbedAreaUpper).
-	out.PreArea = proofbound.PerturbedAreaUpper(out.Verts, welded, out.Round)
+	if out.EmbeddingReach == nil {
+		out.PreArea = proofbound.PerturbedAreaUpper(out.Verts, welded, out.Round)
+	} else {
+		// Zero pre-weld bounds isolate rounding from inherited geometry error.
+		rounding, err := heldVertexBoundsFromGaps(ctx, gaps, make([]float64, len(gaps)), remap, len(out.Verts))
+		if err != nil {
+			return nil, err
+		}
+		area, volume, err := proofbound.PerturbedAreaAndRoundingVolumeContext(ctx, out.Verts, welded, out.Round, rounding)
+		if err != nil {
+			return nil, err
+		}
+		out.PreArea, out.localRoundVolume = area, &volume
+	}
 	var droppedTris [][3]int
 	for ti := range tris {
 		if dropped[ti] {

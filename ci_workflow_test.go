@@ -64,13 +64,17 @@ import (
 // Every enumeration below refuses an empty result, so a rename or a
 // reorganisation that stops the scanner from matching fails the test instead
 // of passing it vacuously.
-const ciWorkflowPath = ".github/workflows/ci.yml"
+const (
+	ciWorkflowPath           = ".github/workflows/ci.yml"
+	ciExamplesCommand        = "go test -race -count=1 -v -timeout 10m ./examples/..."
+	ciSupportPackagesCommand = "go test -race -count=1 -v -timeout 10m ./decadtest/ ./export/ ./internal/decaderr/"
+)
 
 var (
 	// ciMatrixShardRe and ciMatrixPackagesRe read the two matrix columns the
 	// shard steps key on.
 	ciMatrixShardRe    = regexp.MustCompile(`(?m)^\s*shard:\s*"([^"]*)"\s*$`)
-	ciMatrixPackagesRe = regexp.MustCompile(`(?m)^\s*packages:\s*"([^"]*)"\s*$`)
+	ciMatrixPackagesRe = regexp.MustCompile(`(?m)^\s*(?:- )?packages:\s*"([^"]*)"\s*$`)
 	// ciListPatternRe reads the regexp handed to the test binary's -test.list, and
 	// ciSelectPatternRe the awk pattern that keeps a listed name. Both gate
 	// which names a shard can ever run.
@@ -136,6 +140,18 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 		covered := make(map[string]struct{})
 		for _, run := range ciShardRuns(t, workflow) {
 			covered[run.dir] = struct{}{}
+		}
+		if strings.Contains(workflow, "run: "+ciExamplesCommand) {
+			for _, dir := range dirs {
+				if dir == "examples" || strings.HasPrefix(dir, "examples/") {
+					covered[dir] = struct{}{}
+				}
+			}
+		}
+		if strings.Contains(workflow, "run: "+ciSupportPackagesCommand) {
+			for _, dir := range []string{"decadtest", "export", "internal/decaderr"} {
+				covered[dir] = struct{}{}
+			}
 		}
 		for _, m := range ciMatrixPackagesRe.FindAllStringSubmatch(workflow, -1) {
 			for operand := range strings.FieldsSeq(m[1]) {
@@ -238,6 +254,76 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 				"package %s builds to %s.test, not %s", run.dir, filepath.Base(run.dir), run.binary)
 		}
 		require.True(t, root, "the shard step never runs the root package's binary")
+	})
+
+	t.Run("dedicated internal packages exactly match general exclusions", func(t *testing.T) {
+		matrixRe := regexp.MustCompile(`(?ms)^\s*group: (meshbool|loft)\n\s*race: "-race"\n\s*shard: ""\n\s*packages: "([^"]+)"`)
+		entries := matrixRe.FindAllStringSubmatch(workflow, -1)
+		require.Len(t, entries, 2)
+		var dedicated []string
+		for _, entry := range entries {
+			for operand := range strings.FieldsSeq(entry[2]) {
+				dedicated = append(dedicated, strings.Trim(operand, "./"))
+			}
+		}
+		// decaderr imports the root package and has its own support-package job.
+		dedicated = append(dedicated, "internal/decaderr")
+		exclusionRe := regexp.MustCompile(`(?m)^\s*dedicated_re="\$\{mod\}/([^"\n]+)"$`)
+		exclusion := exclusionRe.FindAllStringSubmatch(workflow, -1)
+		require.Len(t, exclusion, 1)
+		pattern, err := regexp.Compile("^(" + exclusion[0][1] + ")$")
+		require.NoError(t, err)
+		var excluded []string
+		for _, dir := range goPackageDirs(t) {
+			if pattern.MatchString(dir) {
+				excluded = append(excluded, dir)
+			}
+		}
+		slices.Sort(dedicated)
+		slices.Sort(excluded)
+		require.Equal(t, dedicated, excluded)
+		require.Contains(t, workflow, `grep -v -x -E "$norace_re|$dedicated_re|$arithmetic_re"`)
+		require.Contains(t, workflow, "if: matrix.group == 'meshbool' || matrix.group == 'loft'")
+		require.Contains(t, workflow, "run: go test -race -count=1 -v -timeout 10m ${{ matrix.packages }}")
+		jobRe := regexp.MustCompile(`(?ms)^  test:\n(.*?)(?:^  [a-z][a-z0-9-]*:|\z)`)
+		job := jobRe.FindStringSubmatch(workflow)
+		require.Len(t, job, 2)
+		require.NotContains(t, job[1], "\n    needs:", "independent packages must not wait for artifacts")
+	})
+
+	t.Run("support packages run unfiltered without waiting for binaries", func(t *testing.T) {
+		jobRe := regexp.MustCompile(`(?ms)^  test-support-packages:\n(.*?)(?:^  [a-z][a-z0-9-]*:|\z)`)
+		job := jobRe.FindStringSubmatch(workflow)
+		require.Len(t, job, 2, "the support-package job must exist")
+		require.Equal(t, 1, strings.Count(job[1], "run: "+ciSupportPackagesCommand))
+		require.NotContains(t, job[1], "\n    needs:", "support packages must run without artifact dependencies")
+		require.NotContains(t, job[1], "test-shards", "support packages run as whole packages")
+	})
+
+	t.Run("race binary build contains only the sharded packages", func(t *testing.T) {
+		buildRe := regexp.MustCompile(`(?m)^\s*run: go test -c -race -o race-bin/ ([^\n]+)$`)
+		build := buildRe.FindStringSubmatch(workflow)
+		require.Len(t, build, 2)
+		for _, dir := range []string{".", "apitest"} {
+			operand := "./" + dir + "/"
+			if dir == "." {
+				operand = "."
+			}
+			require.Contains(t, strings.Fields(build[1]), operand)
+		}
+		require.Len(t, strings.Fields(build[1]), 2, "the binary-build job must not compile unrelated packages")
+	})
+
+	t.Run("examples run as whole packages without name assignments", func(t *testing.T) {
+		jobRe := regexp.MustCompile(`(?ms)^  test-examples:\n(.*?)(?:^  [a-z][a-z0-9-]*:|\z)`)
+		job := jobRe.FindStringSubmatch(workflow)
+		require.Len(t, job, 2)
+		require.Equal(t, 1, strings.Count(job[1], "run: "+ciExamplesCommand))
+		require.NotContains(t, job[1], "\n    needs:", "examples must start without artifact dependencies")
+		require.NotContains(t, job[1], "\n    if:", "examples must run on pull requests")
+		for _, filter := range []string{"-test.run", "-test.skip", "-test.short", "-test.fuzz", "-test.list", "test-shards"} {
+			require.NotContains(t, job[1], filter, "whole example packages must execute every name")
+		}
 	})
 
 	t.Run("the shard enumeration selects Examples and Fuzz targets", func(t *testing.T) {

@@ -816,34 +816,36 @@ func TestVerifyDiagnosticsUndercut(t *testing.T) {
 
 func TestVerifyDiagnosticsUnsupportedFacetedSurveys(t *testing.T) {
 	t.Parallel()
-	doc, body := allPlanarBoolean(t, 1)
+	// Two thick plates crossing at 45 degrees: a faceted body with slanted faces, outside the axis-square class whose
+	// wall, undercuts and concave radius are read exactly from a grid (agent-docs/orthogonal-wall-design.md).
+	doc := crossedPlates(t, 8)
 	report, err := doc.Verify(t.Context(),
 		decad.WithMinWallThickness(units.Millimeters(1)),
 		decad.WithPullDirection(r3.NewVec(0, 0, 1)),
 		decad.WithConcaveRadius())
 	require.NoError(t, err)
 
-	require.Equal(t, decad.Suspect, report.Status)
 	requireDiagnosticInvariants(t, report)
-	// The wall and undercut surveys of a faceted body read rays through its mesh.
-	// They can prove a wall too thin or a face blocked and cannot prove the
-	// opposite, so a thick, free body reads the wall interval straddling the tool
-	// and beyond the tolerance and the pull undecided. The concave-radius survey
+	// The wall and undercut surveys of such a body read rays through its mesh. They can prove a wall too thin or a face
+	// blocked and cannot prove the opposite, so a thick body reads the wall interval straddling the tool and beyond the
+	// tolerance, the blocked underside is listed and the rest of the pull stays undecided. The concave-radius survey
 	// stays staged and names its own refusal.
-	require.Len(t, report.Diagnostics, 4)
+	require.Len(t, report.Diagnostics, 5)
 	require.Equal(t, decad.SurveyWall, report.Diagnostics[0].Survey)
 	require.Equal(t, decad.DiagUndecidedWall, report.Diagnostics[0].Code)
 	require.Equal(t, decad.SurveyWall, report.Diagnostics[1].Survey)
 	require.Equal(t, decad.DiagMeasurementBeyondTolerance, report.Diagnostics[1].Code)
 	require.Equal(t, decad.SurveyUndercut, report.Diagnostics[2].Survey)
-	require.Equal(t, decad.DiagUndecidedUndercut, report.Diagnostics[2].Code)
-	require.Equal(t, decad.Suspect, report.Diagnostics[2].Status)
-	radius := report.Diagnostics[3]
+	require.Equal(t, decad.DiagUndercut, report.Diagnostics[2].Code)
+	require.Equal(t, decad.SurveyUndercut, report.Diagnostics[3].Survey)
+	require.Equal(t, decad.DiagUndecidedUndercut, report.Diagnostics[3].Code)
+	require.Equal(t, decad.Suspect, report.Diagnostics[3].Status)
+	radius := report.Diagnostics[4]
 	require.Equal(t, decad.SurveyConcaveRadius, radius.Survey)
 	require.Equal(t, decad.DiagUnsupportedSurveyPayload, radius.Code)
 	require.Equal(t, decad.Suspect, radius.Status)
 	require.Equal(t, decad.ReadingNone, radius.Reading)
-	require.Same(t, body, radius.Body)
+	require.Same(t, report.Bodies[0].Body, radius.Body)
 	require.Contains(t, radius.Message, "facetedPayload")
 	require.Contains(t, radius.Message, "use an analytic body")
 }

@@ -504,6 +504,45 @@ returns from a clean-nesting cut as `LineSeg{(1,0)→(5,0), t=[0,1]}` — a
 different, computed corner recorded as though it were exact. §7's `δ_walk`
 is what charges that gap into the result's own `sectionDelta`.
 
+**A tangent contact is not clean nesting.** Sketch's arrangement neither cuts
+nor flags a clean tangency: a tool circle or arc touching a target wall at one
+interior point leaves both loops whole, so the match above succeeds. The cut
+section would then hold two loops meeting at that point. The body pinches
+there, and no cap mesh can separate the two loops. So every `Cut` match that
+puts the tool's outer into the result as a hole — this one, stacked §7's
+enclosing match (`prismcells.MatchEnclosingCut`) and general-boolean §3 A5's
+group match (`prismcells.GroupCutMatch`) — also puts every pair of entities
+from the two operands, or from two tool regions, with a curved member to
+sketch's own intersection query, the query `prismcells.ProveGroupApart` reads
+(stacked §2.2). The contact answer comes from that query
+(`geom.LineCircleIntersections` and its circle and arc kin), not from the
+arrangement's `TExact`. The query reports a point within its own band,
+`1e-9·max(1, R)` with `R` the larger radius, and a line's point counts within
+`1e-9` of the segment's parameter range. Any point it reports turns the match
+into a miss, and the pair takes its next route, usually the mesh path. So a
+near-tangent gap of `1e-9` mm or less (scaled by `R` past 1 mm) is refused as a
+touch, and a larger gap keeps the exact route. The check only refuses: a
+reported point never admits anything. On the mesh path a blind pocket builds an
+`Approximate` faceted result. A tool through the whole target also takes the
+mesh path, which may refuse the contact with `BooleanUnsupportedContact`: a
+round tool tangent to a square hole or a box's side wall refuses there, while
+one tangent inside a cylinder's wall builds a faceted result. Two lines go to
+the line reading of `prismcells.RegionContact`, which these matches call for
+both kinds and which `Union`'s groups and stacked interfaces read too (stacked
+§2.2): sketch's `geom.LineLineIntersection` point, read along each segment
+within `1e-9` of its parameter range. The arrangement splits two lines that
+cross, two that share a span (a square pocket along a hole's wall) and two
+corners that meet, so those touches never match whole. It does not split a
+line where another line's endpoint touches its interior (a T-touch) in a scene
+whose cells keep the two loops apart, as a `Union`'s can. In a `Cut` scene the
+walk around the touching hole passes that point, so sketch cuts the wall there
+and the match misses on the `Partial` edges first: blind, through, stacked and
+enclosing T-touches with an apex on a hole wall or on the outer wall take the
+mesh path before the line reading runs (`apitest/cut_tangent_contact_test.go`).
+`Intersect`'s result and the no-op match of a tool inside an
+existing hole (`prismcells.MatchCutNoOp`) are one operand's own unchanged
+cell, whose loops meet nothing, so they take no query.
+
 For the one-hole `Intersect` arm, the proof cell has A's whole outer loop
 and B's whole outer loop as its only hole. A second cell must reproduce B's
 whole outer and hole loops. Both cells must report `Valid`, and the result
@@ -586,7 +625,7 @@ regardless of who authored the input curves it was cut from.
 | `Union` with unequal z-intervals | overlapping or touching: a `stackedPrismPayload` (`agent-docs/general-boolean-design.md` §3 A1); disjoint: G5, mesh path |
 | `Cut` whose tool ends inside the target and whose boundary crosses the target's (a side notch) | mesh path; the walls below the floor would split at the crossing, which `agent-docs/stacked-prism-design.md` §7 leaves unplanned |
 | `Cut` whose tool lies strictly inside both target ends (an enclosed void) | G5, mesh path; a void shell is not a stage this design admits |
-| Interface-aligned blind `Cut` whose displaced tool end or interface has no recorded denoted level, whose denoted levels differ, touching opposed holes, or section displacement | Equal denoted levels with monotone holes and proved separate opposed holes build, and overlapping opposed holes of axis-aligned lines at an undisplaced level build general-boolean §3 A8's BRep; these cases take the mesh path (stacked §2.1, §7 stage 3) |
+| Interface-aligned blind `Cut` whose displaced tool end or interface has no recorded denoted level, whose denoted levels differ, touching opposed holes, or section displacement | Equal denoted levels with monotone holes and proved separate opposed holes build, and overlapping opposed holes of axis-aligned lines, circles and arcs at an undisplaced level build general-boolean §3 A8's BRep; these cases take the mesh path (stacked §2.1, §7 stage 3) |
 | `Cut` whose tool crosses an existing hole's boundary instead of enclosing it whole | no whole-loop match, mesh path; `agent-docs/stacked-prism-design.md` §7 stage 2 |
 | `Intersect` with disjoint intervals | G5, mesh path (result is empty; unchanged `BooleanEmpty`) |
 | `Union` with a holed operand | G6, mesh path; §9 PR3 |
@@ -595,7 +634,8 @@ regardless of who authored the input curves it was cut from.
 | `Intersect` with a holed operand outside §3.1's one-hole clean-nesting arm | G6, mesh path; the result may require several regions or a split boundary |
 | A shared span `prismcells.CoincidentEdges` cannot attribute to one partner, or a cell walking a circular run past another cell's vertex | unresolved, mesh path (`agent-docs/general-boolean-design.md` §3 A3) |
 | A displaced pair whose shared span lies inside or outside the result | mesh path: the true walls can part, and no recorded edge bounds the sliver (`agent-docs/general-boolean-design.md` §3 A3) |
-| A holed `Cut` target whose tool does not clear it via clean nesting (the crossing classifier is scoped to hole-free operands on both sides, §4.2) | mesh path, except general-boolean §3 A7's rectangular blind Cut; the clean-nesting path above still covers a holed target whose tool does not touch it |
+| A holed `Cut` target whose tool does not clear it via clean nesting (the crossing classifier is scoped to hole-free operands on both sides, §4.2) | mesh path, except general-boolean §3 A7's blind Cut across one through hole; the clean-nesting path above still covers a holed target whose tool does not touch it |
+| A `Cut` tool whose circle or arc touches a target wall at one point without crossing it (a round pocket tangent to a hole or to the outer wall) | mesh path through §4.2's tangent-contact query: a blind pocket builds a faceted result; a tool through the whole target takes the mesh path too, which may refuse it with `BooleanUnsupportedContact` |
 | A `Cut`/`Intersect` selection covering two or more disjoint regions (a multi-region coplanar overlap) | no BODY is built: a `ProfileRecord` carries one outer loop, so resolution fails to close one (§4.2) and the pair takes the mesh path, waiting on a multi-lump prism payload that is not currently planned. `Verify`'s interference reading answers such a pair anyway, without a body, through §4.5's overlap-area reading |
 | A disjoint-footprint `Union` (two separate lumps) | resolution fails to close one loop (§4.2); `agent-docs/general-boolean-design.md` §3 A5 builds a prism group when the loops are proven disjoint. `Verify` answers the pair through its disjoint/overlap partition (`agent-docs/verification-design.md` §1) rather than through §4.5 |
 | A free-form (Tier A spline) segment that never touches the other operand | excluded by G4 today (whole-scene `TExact` gate, §3.1); worth revisiting once the two-operand scene construction is proven, since the segment itself would ride through untouched |
@@ -720,10 +760,16 @@ operand live.
 Every source region enters `BuildSceneRegions` once, in the same plane. The
 work cap applies to the sum of all input segments. `SplitRuns` resolves
 shared stations, `CellsHaveNoVoid` refuses an enclosed void, and
-`MergeLoops` keeps the exterior boundary. Each resulting loop passes
+`MergeLoops` keeps the exterior boundary; a boundary that does not chain into
+closed loops, as where two loops meet at a shared corner, is a miss, and the
+bodies join two at a time. Each resulting loop passes
 `prismcells.AuditMergeSection`; multiple loops also pass
-`ProveGroupDisjoint`. One loop builds a `prismPayload`, while proven
-disjoint loops build one one-slab `stackedPrismPayload`. The result carries
+`prismcells.ProveGroupApart` (stacked §2.2). One loop builds a
+`prismPayload`, while loops proven apart build one one-slab
+`stackedPrismPayload`. Loops that touch at one point, such as a triangle's
+apex on a square's side, which the arrangement leaves uncut, are no group:
+the evaluator misses, and the bodies join two at a time, where the
+touching pair takes the mesh path. The result carries
 the maximum of the inputs' axial endpoint bounds and one cut-parameter
 section charge. A group also carries its disjointness walk charge. One
 document commit retires every input after result evaluation succeeds and
@@ -871,9 +917,10 @@ pair before the scene is built rather than charge it (below). `internal/proofbou
 `walkEndpointAllow` states the allowance, at the magnitude of the operands
 that walk's OWN arithmetic touches and never at the endpoint it produced:
 `momentregion.Lerp2` computes
-`fl(a + fl(t·fl(b−a)))` from the carrier's own recorded `Start` and `End` — at
-most that, since a target free to fuse the multiply and the add commits one
-rounding fewer — and that difference CANCELS, so a fragment near the plane
+`fl(a + fl(t·fl(b−a)))` from the carrier's own recorded `Start` and `End` — a
+`float64()` conversion rounds the product before the add, so every target
+commits all three roundings and walks the same point — and that difference
+CANCELS, so a fragment near the plane
 origin on a far-reaching carrier rounds by ulps of the CARRIER while its own
 endpoint magnitude stays tiny. A trimmed `LineSeg` therefore charges the
 envelope of its recorded `Start`/`End` coordinates (`walkChargeOf`'s

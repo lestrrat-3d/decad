@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/capcontour"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
@@ -92,6 +93,39 @@ func CornerJoin(prev, cur survey2d.SideWalk, s, t, tol float64) (Join, error) {
 		return Join{}, ErrNoIntersection
 	}
 	return Join{VertU: vU, VertV: vV, M: Point{U: mx, V: my}}, nil
+}
+
+// ExactCornerFeet returns j, a CornerJoin of prev and cur at offset t, with
+// its feet replaced by the exact offset feet of its walks wherever
+// capcontour.ExactJoinFoot finds a float64 that holds one. CornerJoin steps a
+// foot along the held tangent, which for a circular walk is a math.Sincos at
+// a computed angle, so it lands a rounding off the point the record denotes
+// even where that point is a float: on amd64, P8's tangent join at (0, 3)
+// puts its foot at (2, 2.9999999999999996) for (2, 3). A connector arc's PA
+// is prev's exact foot and its PB cur's. A G1 join takes the exact foot when
+// both walks' exact feet are the same point, which an exactly tangent join's
+// are. That agreement is a choice, not a soundness gate: two rational
+// directions a few 1e-10 rad apart pass CornerJoin's G1 tolerance with two
+// different exact feet, and either would be covered by the contour's
+// displacement bound, which encloses the hull of both; the join then keeps
+// its float foot rather than pick one. A miter's intersection is kept.
+func ExactCornerFeet(prev, cur survey2d.SideWalk, j Join, t float64) Join {
+	switch {
+	case j.Arc:
+		if pa, ok := capcontour.ExactJoinFoot(prev, true, t); ok {
+			j.PA = pa
+		}
+		if pb, ok := capcontour.ExactJoinFoot(cur, false, t); ok {
+			j.PB = pb
+		}
+	case j.G1:
+		a, okA := capcontour.ExactJoinFoot(prev, true, t)
+		b, okB := capcontour.ExactJoinFoot(cur, false, t)
+		if okA && okB && a == b {
+			j.M = a
+		}
+	}
+	return j
 }
 
 // MirrorCornerJoin resolves the corner a walk makes with its own mirror image

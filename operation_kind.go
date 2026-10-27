@@ -55,6 +55,7 @@ const (
 	OperationSolidFromMesh
 	OperationMoveFace
 	OperationStretch
+	OperationQuarterTurn
 )
 
 // String returns the stable lower-snake token for k.
@@ -115,4 +116,5 @@ var operationKindNames = [...]string{
 	"solid_from_mesh",
 	"move_face",
 	"stretch",
+	"quarter_turn",
 }

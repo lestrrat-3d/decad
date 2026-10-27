@@ -406,7 +406,12 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 				rowTree = newTreeScan(boxes, members)
 			}
 		}
-		if err := preflightLoftRows(budget, rowTree, members, starts, ceiling); err != nil {
+		var err error
+		// Projected patches already remove within-patch pairs; their remaining
+		// pairs retain the existing preparation path.
+		data, err = prepareLoftStreamAuditData(budget, rowTree, members, starts, ceiling,
+			verts, tris, shortcuts, provenPatches == 0)
+		if err != nil {
 			return work, err
 		}
 	}
@@ -421,11 +426,11 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 		data = newLoftAuditDataForCandidates(verts, tris, cands)
 	}
 	if data == nil {
-		if streamed {
-			data = newCompactLoftAuditData(verts, tris)
-		} else {
-			data = NewLoftAuditData(verts, tris)
-		}
+		data = NewLoftAuditData(verts, tris)
+	}
+	separate, classifyPair := loftPlaneSeparatedExactSigns, auditLoftPairDataExactSigned
+	if data.preflightProofs {
+		separate, classifyPair = loftPlaneSeparatedSigns, auditLoftPairDataSigned
 	}
 
 	// S7: every candidate, classified against its recorded adjacency. The
@@ -456,14 +461,14 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 				work.Skips++
 				return nil
 			}
-			separated, sa, sb := loftPlaneSeparatedSigns(data, i, j)
+			separated, sa, sb := separate(data, i, j)
 			if separated {
 				work.Skips++
 				return nil
 			}
 			knownA, knownB = &sa, &sb
 		}
-		outcome, err := auditLoftPairDataSigned(data, tris, i, j, shortcuts, knownA, knownB)
+		outcome, err := classifyPair(data, tris, i, j, shortcuts, knownA, knownB)
 		switch outcome {
 		case LoftPairEdgeCertificate:
 			work.EdgeCerts++
@@ -527,6 +532,12 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 func parallelLoftPairs(budget *proofbound.WorkBudget, tris [][3]int, boxes [][2]r3.Vec,
 	data *LoftAuditData, shortcuts LoftAuditShortcuts, cands loftCandidates,
 	work *LoftAuditWork) (int, int, error) {
+	// Read the shared cache marker once. Complete-table audits use their
+	// original predicates without a shared flag read for every pair.
+	separate, classifyPair := loftPlaneSeparatedExactSigns, auditLoftPairDataExactSigned
+	if data.preflightProofs {
+		separate, classifyPair = loftPlaneSeparatedSigns, auditLoftPairDataSigned
+	}
 	classify := func(i, j int) (uint8, error) {
 		_, shared := tessellation.SharedVertexIndices(tris[i], tris[j])
 		var knownA, knownB *[3]int
@@ -534,13 +545,13 @@ func parallelLoftPairs(budget *proofbound.WorkBudget, tris [][3]int, boxes [][2]
 			if !meshbool.BoxesOverlap(boxes[i], boxes[j]) {
 				return pairSkipped, nil
 			}
-			separated, sa, sb := loftPlaneSeparatedSigns(data, i, j)
+			separated, sa, sb := separate(data, i, j)
 			if separated {
 				return pairSkipped, nil
 			}
 			knownA, knownB = &sa, &sb
 		}
-		outcome, err := auditLoftPairDataSigned(data, tris, i, j, shortcuts, knownA, knownB)
+		outcome, err := classifyPair(data, tris, i, j, shortcuts, knownA, knownB)
 		switch outcome {
 		case LoftPairEdgeCertificate:
 			return pairEdgeCertified, err
@@ -993,7 +1004,7 @@ func sweepCandidatesByRows(budget *proofbound.WorkBudget, s pairScan, members, s
 }
 
 // sweepCandidatesRowsWorkers fills sweepCandidates' list for keepEveryPair by
-// rows. Row i's partners come from tree.walkRow, which passes exactly the
+// rows. Row i's partners come from tree.walkRowAppend, which gives exactly the
 // partners visit pairs with i as the lower index. Each worker writes only row
 // i's own slots js[starts[i]:starts[i+1]] and sorts them, so the list equals
 // sweepCandidates'. Workers never touch budget: after the walks the caller
@@ -1010,15 +1021,12 @@ func sweepCandidatesRowsWorkers(budget *proofbound.WorkBudget, tree loftRowPairS
 	mismatch := make([]bool, len(members))
 	if _, err := orderedwork.Each(len(members), workers, 64, budget.Err, func(k int) error {
 		i := members[k]
+		// row's capacity ends at the row's last slot, so a row with more
+		// partners than starts allows reallocates instead of writing into the
+		// next row's slots, and its length then differs from the count.
 		row := c.js[starts[i]:starts[i]:starts[i+1]]
-		n := 0
-		_, exceeded := tree.walkRow(i, math.MaxUint64, func(j int) {
-			if n < cap(row) {
-				row = append(row, int32(j))
-			}
-			n++
-		})
-		if exceeded || n != starts[i+1]-starts[i] {
+		row, _, exceeded := tree.walkRowAppend(i, math.MaxUint64, row)
+		if exceeded || len(row) != starts[i+1]-starts[i] {
 			mismatch[k] = true
 			return nil
 		}

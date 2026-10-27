@@ -162,7 +162,10 @@ func UnionMany(ctx context.Context, env topo.Env,
 		return nil, true, err
 	}
 	if !resolved || len(loops) == 0 {
-		return nil, true, fmt.Errorf("%w: Union's prism boundary does not close", decaderr.ErrUnsupported)
+		// The boundary does not chain into closed loops, as where two loops
+		// meet at a shared corner. A miss lets the bodies join two at a
+		// time, where the touching pair takes the mesh path.
+		return nil, false, nil
 	}
 	regions := make([]momentinput.Profile, len(loops))
 	for i, loop := range loops {
@@ -182,12 +185,16 @@ func UnionMany(ctx context.Context, env topo.Env,
 		body, err := AnalyticBody(ctx, env, p)
 		return body, true, err
 	}
-	disjoint, disjointWalk, err := prismcells.ProveGroupDisjoint(ctx, budget, regions)
+	disjoint, disjointWalk, err := prismcells.ProveGroupApart(ctx, budget, regions)
 	if err != nil {
 		return nil, true, err
 	}
 	if !disjoint {
-		return nil, true, fmt.Errorf("%w: Union's prism regions are not proven disjoint", decaderr.ErrUnsupported)
+		// Loops that touch at a point, such as a triangle's apex on a square's
+		// side, are no prism group (agent-docs/general-boolean-design.md §3 A5).
+		// A miss lets the bodies join two at a time, where the mesh path
+		// takes the touching pair.
+		return nil, false, nil
 	}
 	sp := stackedrecord.Payload{
 		Slabs: []stackedrecord.Slab{{Regions: regions, Z0: first.Z0, Z1: first.Z1,

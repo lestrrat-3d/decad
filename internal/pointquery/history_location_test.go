@@ -272,3 +272,34 @@ func TestLocateBooleanDeclines(t *testing.T) {
 		require.False(t, decided)
 	})
 }
+
+// TestLocateBooleanStackedAndRevolveLeaves combines a stacked leaf and a
+// revolve leaf with the unit cube. The bored slabs fill [0, 10]³ less a
+// radius-2 pocket about (5, 5) over z ∈ [5, 10]; the revolve is a cylinder of
+// radius 10 about the y axis over y ∈ [0, 20].
+func TestLocateBooleanStackedAndRevolveLeaves(t *testing.T) {
+	t.Parallel()
+	t.Run("stacked target cut by a cube", func(t *testing.T) {
+		t.Parallel()
+		src := newHistorySource()
+		n := src.result(meshbool.OpCut, &topo.Body{Payload: stackedOf(t, boredSlabs())}, cube(t, 8))
+		requireBooleanLocations(t, n, src, []prismCase{
+			{name: "pocket floor", at: r3.NewVec(5, 5, 5), want: OnBoundary},
+			{name: "pocket wall", at: r3.NewVec(5, 7, 7), want: OnBoundary},
+			{name: "cube face in the material", at: r3.NewVec(8, 5, 3), want: OnBoundary},
+			{name: "inside the cube", at: r3.NewVec(9, 5, 3), want: Outside},
+			{name: "under the pocket", at: r3.NewVec(5, 5, 3), want: Inside},
+		})
+	})
+	t.Run("revolve united with a cube", func(t *testing.T) {
+		t.Parallel()
+		src := newHistorySource()
+		n := src.result(meshbool.OpUnion, &topo.Body{Payload: revolveOf(t, cylinderMeridian())}, cube(t, 5))
+		requireBooleanLocations(t, n, src, []prismCase{
+			{name: "revolve wall outside the cube", at: r3.NewVec(0, 5, -10), want: OnBoundary},
+			{name: "revolve wall inside the cube", at: r3.NewVec(6, 5, 8), want: Inside},
+			{name: "axis", at: r3.NewVec(0, 15, 0), want: Inside},
+			{name: "cube face beyond the revolve", at: r3.NewVec(15, 5, 5), want: OnBoundary},
+		})
+	})
+}

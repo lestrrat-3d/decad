@@ -1528,11 +1528,44 @@ candidate list would be too large. Other projected-patch audits keep the
 complete-list route after S8: their row queries can exceed the ceiling even
 when the grouped tree's single counting pass fits it.
 
-The unstructured batch path keeps exact vertices, triangle normals and planes,
-and one exact projection for each vertex and used axis. It derives each
-triangle's float corners, exact corners and projected corners from those
-immutable tables when classifying a pair. This removes three duplicate
-per-triangle tables without changing the coordinates or exact predicates.
+### Exact tables in row batches
+
+Prepare exact tables only after row preflight succeeds. With no projected
+patch proofs, and both broad-phase and contact certificates enabled on
+float-lifted input, preflight also runs
+`loft_audit_projection.go`'s certified float proofs. Prepare a facet's exact
+data when any candidate pair remains undecided. Always prepare z-flat facets
+to retain `loft_audit_fan.go`'s exact fan tables. Rational-source audits and
+disabled shortcut sets retain complete exact preparation. Projected-patch
+audits retain their existing preparation path, since their patch proofs
+already remove within-patch pairs.
+
+The projection proofs lift a separating line in a coordinate projection to a
+3D separating plane. They prove disjointness, the expected common edge, or the
+expected common vertex; an uncertain or zero orientation takes no shortcut.
+The helper's comments own each convexity proof and its strict-side conditions.
+These are exact triangle-contact predicates over decad's own held geometry;
+they reuse the mesh kernel's guarded orientation rather than constructing a
+separate sketch scene for each pair.
+
+Each prepared facet keeps exact vertices, its normal and plane, and one exact
+projection for each vertex and used axis. Pair classification derives float,
+exact and projected corners from immutable shared tables. Selection requires
+an ordinary box tree covering every triangle: preflight proves every
+box-overlapping pair involving an unselected facet, and disjoint boxes prove
+every omitted pair apart. Thus an unselected facet carries a completed proof
+of its expected contact with every other facet. Read that cached verdict from
+the shared indices without repeating the float checks. This uses completed
+pair proofs, never adjacency alone. Filtered or partial row sets cannot create
+this cache. The constructor in `loft_audit_selection.go` owns the proof and
+the table owns copies of the indexed geometry it certifies.
+
+Proof workers start after row workers join and the caller replays the chunk's
+original budget steps. They read immutable geometry and set only per-facet
+atomic uncertainty flags. The caller materializes the selection mask after
+all workers join. Retain only bounded rows and per-facet flags, never a
+complete candidate or verdict list. S8 ceilings, S7 pair charging and
+lexicographic refusal order remain the row audit's.
 
 `Loft` threads a shared `workBudget` (`internal/proofbound/budget.go`) through the audit,
 polling at `workPollInterval` exactly as `Fillet` / `Chamfer`
@@ -2979,9 +3012,34 @@ only to place a new tool. The edge dihedral (`Edge.planarDihedral`) keeps only
 `NormalAt`'s value and drops its bound; `ChamferAngle` and `FilletChord` use
 that angle only to size a tool. The selector reads the tag's kind. STEP export
 refuses a face with a nonzero `NormalBound` or `AxialDelta` from its analytic
-writer, so a bored loft writes faceted: its caps state the loft's vertex
-displacement, never zero once a section holds a circle, and its bore may state
-a departure too (`agent-docs/step-export-design.md`).
+writer (`agent-docs/step-export-design.md`), so a bored loft writes analytic
+only when its bore and both caps state no departure.
+
+Each Loft cap states the loft's vertex displacement `delta` as its
+`AxialDelta`, except where the build proves the cap lies exactly on its
+section plane (`internal/loftrecord/cap_level.go` `CapOnRecord`). The plane is
+the cap's `CapRecord`, `{B(O + u*U + v*V) + t}` with every held value of the
+section frame and placement read as an exact rational, and its normal is
+`m = (B*U) x (B*V)`. The proof holds when all of these are exact rational
+equalities: the `Plane` tag's `U` and `V` are orthogonal to `m` and its `N` is
+parallel to it; the tag origin and every vertex of every cap loop lie on the
+plane; and every `Circle3` or `Arc3` rim has its center on the plane and its
+axis parallel to `m`. Any other edge curve refuses. The cap then states
+`AxialDelta` 0. A join loft (`JoinDelta` nonzero,
+`agent-docs/axial-pattern-join-design.md`) never clears its caps: its
+`JoinDelta` also carries how far each placed operand's end plane sits from the
+reference's, so its record's section plane is not the ideal join's end plane.
+The other terms folded into `delta` are in-plane: the fillet's
+`ConstructionDelta` is a matched displacement inside each section plane, and
+the station and section terms are plane-local. The check runs after the bore rewrite above, so it reads the
+cap's final rim circles. In-plane station rounding does not displace a cap
+along its normal, so a section plane on which every held coordinate along the
+normal rounds to the plane itself, such as a world-axis plane under the
+identity or an exact translation, gets exact caps even when its circle
+stations and frame origin round. Each held vertex keeps its own `delta`
+bound, and the payload-wide `AxialDelta()` that a `ThroughAll` stop reads
+stays `delta`. `ToFace` reads the cap's own zero against the record's exact
+level, which the cap lies on.
 
 A direct Loft also publishes one `Circle3` per cap rim and one curved hole
 wall when its authenticated sections have identical outer records, one whole

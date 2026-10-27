@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/lestrrat-3d/decad/internal/igesbrep"
+	"github.com/lestrrat-3d/decad/internal/igesread"
 	"github.com/lestrrat-3d/decad/internal/meshparse"
 	"github.com/lestrrat-3d/decad/internal/stepbrep"
 	"github.com/lestrrat-3d/decad/internal/stepread"
@@ -147,6 +149,58 @@ func ReadThreeMF(ctx context.Context, r io.Reader, opts ...MeshImportOption) (*M
 	}
 	mesh, err := meshparse.ThreeMF(ctx, r, l)
 	if err != nil {
+		return nil, err
+	}
+	return NewMeshBody(ctx, mesh.Vertices, mesh.Triangles)
+}
+
+// ReadIGES reads the planar-faced solids of an IGES file into a [MeshBody]
+// (agent-docs/iges-import-design.md). It reads every manifold solid B-rep entity (186) with the shells (514),
+// faces (510), loops (508), edge lists (504) and vertex lists (502) below it: each face on a plane
+// (108, 190) is cut into triangles, a face with holes included, the vertices are welded by coordinate and
+// each solid is wound outward, a void's shell into its cavity. Lengths are converted from the file's unit to
+// millimetres.
+//
+// Only planes with straight line edges (110) are read. A face on any other surface, a curved edge, a vertex
+// entry in a loop, an entity placed by a transformation matrix, a scaled model space, and a file that holds
+// only surfaces and curves with no B-rep, are [ErrUnsupported]. A file that is not well-formed IGES, or whose
+// entities do not make the B-rep they name (a loop that does not close, a shell whose faces are not
+// two-sided), is [ErrMalformed], and input past a limit is [ErrMeshTooLarge]. The mesh is only the file's
+// own faces: nothing is repaired, so [SolidFromMesh] decides whether it is a solid.
+//
+// ctx and r MUST NOT be nil, each otherwise ErrDegenerate. A canceled context returns its error.
+func ReadIGES(ctx context.Context, r io.Reader, opts ...MeshImportOption) (*MeshBody, error) {
+	if ctx == nil || r == nil {
+		return nil, fmt.Errorf(`%w: reading an IGES file needs a context and a reader`, ErrDegenerate)
+	}
+	l, err := meshLimits(opts)
+	if err != nil {
+		return nil, err
+	}
+	data, err := io.ReadAll(io.LimitReader(r, l.Bytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("IGES read failed: %w", err)
+	}
+	if int64(len(data)) > l.Bytes {
+		return nil, fmt.Errorf("%w: more than %d bytes", ErrMeshTooLarge, l.Bytes)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	model, err := igesread.Parse(data)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s", ErrMalformedMesh, err)
+	}
+	mesh, err := igesbrep.Read(model, l.Triangles)
+	switch {
+	case errors.Is(err, igesbrep.ErrTooLarge):
+		return nil, fmt.Errorf("%w: %s", ErrMeshTooLarge, err)
+	case errors.Is(err, igesbrep.ErrMalformed), errors.Is(err, igesread.ErrMalformed):
+		return nil, fmt.Errorf("%w: %s", ErrMalformedMesh, err)
+	case err != nil:
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	return NewMeshBody(ctx, mesh.Vertices, mesh.Triangles)

@@ -37,6 +37,14 @@ func dyQuoRound(n, d Dyadic, up bool) (float64, bool, bool) {
 		q.QuoRem(a, b, &r)
 		mant, sticky = q.Uint64(), r.Sign() != 0
 	}
+	return dyQuoFinish(mant, sticky, exp, n.exp-d.exp, up)
+}
+
+// dyQuoFinish rounds the quotient bits of dyQuoRound to a float64: mant is
+// the floor of the scaled quotient, of 54 or 55 bits, sticky reports a
+// nonzero remainder, exp is the bit-length difference the scaling used, and
+// expDiff is the numerator's exponent less the denominator's.
+func dyQuoFinish(mant uint64, sticky bool, exp, expDiff int, up bool) (float64, bool, bool) {
 	if mant>>54 == 1 {
 		if mant&1 != 0 {
 			sticky = true
@@ -66,7 +74,7 @@ func dyQuoRound(n, d Dyadic, up bool) (float64, bool, bool) {
 		mant >>= 1
 	}
 	// Leading bit of the 53-bit mant sits at 2^52; the value is mant·2^scale.
-	scale := exp - 53 + n.exp - d.exp
+	scale := exp - 53 + expDiff
 	if top := scale + 52; top < -1022 || top > 1023 {
 		return 0, false, false
 	}
@@ -116,6 +124,56 @@ func DyQuoFloatUp(n, d Dyadic) float64 {
 		return f
 	}
 	return math.Nextafter(f, math.Inf(1))
+}
+
+// DyQuoFloatUpMul is DyQuoFloatUp(n, DyMul(a, b)), bit for bit, without
+// building the product as a Dyadic. For inline factors of one sign whose
+// product passes 64 bits, and a positive n, DyQuoFloatUp(n, DyMul(a, b)) takes
+// dyQuoMantissaWords and dyQuoFinish. The product of two odd mantissas is odd,
+// so its four stack words are the magnitude of that canonical Dyadic, with
+// exponent a.exp+b.exp; dyQuoMantissaProduct reads from them the normalized
+// denominator words dyMagnitudeBits reads from the Dyadic, and the same
+// division and rounding follow. Every other case, and a quotient outside the
+// normal range, takes DyQuoFloatUp(n, DyMul(a, b)) itself.
+func DyQuoFloatUpMul(n, a, b Dyadic) float64 {
+	if a.big != nil || b.big != nil || a.IsZero() || b.IsZero() || a.neg() != b.neg() || n.Sign() <= 0 {
+		return DyQuoFloatUp(n, DyMul(a, b))
+	}
+	product := mulMagnitudes(a, b)
+	denBits := 0
+	for i := len(product) - 1; i >= 0; i-- {
+		if product[i] != 0 {
+			denBits = i*64 + bits.Len64(product[i])
+			break
+		}
+	}
+	if denBits <= 64 {
+		return DyQuoFloatUp(n, DyMul(a, b))
+	}
+	exp := n.bitLen() - denBits
+	mant, sticky := dyQuoMantissaProduct(n, &product, denBits, exp)
+	if f, _, ok := dyQuoFinish(mant, sticky, exp, n.exp-(a.exp+b.exp), true); ok {
+		return f
+	}
+	return DyQuoFloatUp(n, DyMul(a, b))
+}
+
+// mulMagnitudes is the full product of two inline magnitudes, least
+// significant word first: the four words DyMul forms for the same factors.
+func mulMagnitudes(a, b Dyadic) [4]uint64 {
+	alo, ahi := a.lo, a.hi&^dySign
+	blo, bhi := b.lo, b.hi&^dySign
+	h0, p0 := bits.Mul64(alo, blo)
+	h1, l1 := bits.Mul64(alo, bhi)
+	h2, l2 := bits.Mul64(ahi, blo)
+	h3, l3 := bits.Mul64(ahi, bhi)
+	p1, c := bits.Add64(h0, l1, 0)
+	p2, c2 := bits.Add64(h1, l3, c)
+	p3 := h3 + c2
+	p1, c = bits.Add64(p1, l2, 0)
+	p2, c2 = bits.Add64(p2, h2, c)
+	p3 += c2
+	return [4]uint64{p0, p1, p2, p3}
 }
 
 // DyQuoFloatDown is proofbound.RatFloatDown over the exact quotient n/d, for

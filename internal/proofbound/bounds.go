@@ -621,18 +621,23 @@ func PerturbedTriangleAreaUpper(a, b, c r3.Vec, delta float64) float64 {
 	if !FiniteVec(a) || !FiniteVec(b) || !FiniteVec(c) {
 		return math.Inf(1)
 	}
-	area, lu, lv := perturbedTriangleAreaLifted(proofarith.DyVec(a), proofarith.DyVec(b), proofarith.DyVec(c))
+	area, lu, lv := perturbedTriangleAreaLifted(a, b, c, proofarith.DyVec(a), proofarith.DyVec(b), proofarith.DyVec(c))
 	return AbsSumUpper(area, perturbedAllow(delta, lu, lv))
 }
 
 // perturbedTriangleAreaLifted is PerturbedTriangleAreaUpper's exact part over
-// vertices already lifted to dyadics: the held area (the root of the exact
-// squared cross product, rounded up) and the proven lengths of both edge
-// vectors u = b-a and v = c-a.
-func perturbedTriangleAreaLifted(xa, xb, xc proofarith.DyV3) (area, lu, lv float64) {
-	u, v := proofarith.DvSub(xb, xa), proofarith.DvSub(xc, xa)
+// finite held vertices a, b, c and their dyadic lifts xa, xb, xc: the held
+// area (the root of the exact squared cross product, rounded up) and the
+// proven lengths of both edge vectors u = b-a and v = c-a.
+//
+// DvSubHeld forms each exact edge vector from the held floats wherever their
+// difference is provably exact, and DvNormUp roots the cross product's square
+// without a big.Int; both return exactly what DvSub and
+// DySqrtUp(DyShift(DvDot(n, n), -2)) return.
+func perturbedTriangleAreaLifted(a, b, c r3.Vec, xa, xb, xc proofarith.DyV3) (area, lu, lv float64) {
+	u, v := proofarith.DvSubHeld(b, a, xb, xa), proofarith.DvSubHeld(c, a, xc, xa)
 	n := proofarith.DvCross(u, v)
-	area = proofarith.DySqrtUp(proofarith.DyShift(proofarith.DvDot(n, n), -2))
+	area = proofarith.DvNormUp(n, -2)
 	return area, DvLenUpper(u), DvLenUpper(v)
 }
 
@@ -823,7 +828,8 @@ func perturbedTriangleTerms(
 			if !ok {
 				continue
 			}
-			terms[i].area, terms[i].lu, terms[i].lv = perturbedTriangleAreaLifted(xa, xb, xc)
+			terms[i].area, terms[i].lu, terms[i].lv = perturbedTriangleAreaLifted(
+				verts[t[0]], verts[t[1]], verts[t[2]], xa, xb, xc)
 			terms[i].ok = true
 		}
 		return terms, nil
@@ -856,7 +862,8 @@ func perturbedTriangleTerms(
 		if state[t[0]] != 1 || state[t[1]] != 1 || state[t[2]] != 1 {
 			return nil
 		}
-		terms[i].area, terms[i].lu, terms[i].lv = perturbedTriangleAreaLifted(lifted[t[0]], lifted[t[1]], lifted[t[2]])
+		terms[i].area, terms[i].lu, terms[i].lv = perturbedTriangleAreaLifted(
+			verts[t[0]], verts[t[1]], verts[t[2]], lifted[t[0]], lifted[t[1]], lifted[t[2]])
 		terms[i].ok = true
 		return nil
 	}); err != nil {
@@ -2362,12 +2369,8 @@ func CutDisplacementAllow(tangentUpper float64) float64 {
 // that through and rounds once more, at the magnitude of t·(b−a), which is the
 // walked endpoint less a and so at most 2E, for another 2uE; the outer sum
 // rounds at |a + t(b−a)| ≤ E, for uE. That totals 5uE + O(u²) per coordinate.
-// A target that FUSES the multiply and the add — the gc arm64 backend
-// compiles lerp2's general arm to a single FMADDD — drops the middle rounding
-// and keeps the other two, so it stays under the same total: fusion only ever
-// removes a rounding from that sequence, and fl(b−a), the term this
-// mechanism's own cancellation makes large, is committed before any fusion
-// and survives it unchanged.
+// lerp2 converts the product to float64 before the sum, so no target fuses
+// the multiply and the add, and every target rounds all three times.
 // The answer charges 16·ulp(2E) ≥ 16·ulp(1)·E = 32uE per coordinate, better
 // than six times that, read as a 3D radius (Radius3D) — the SAME shape
 // RigidRoundAllow states for a rigid map's own rounding, which keeps every

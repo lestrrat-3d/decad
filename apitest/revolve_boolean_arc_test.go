@@ -100,8 +100,8 @@ func TestCommonAxisRevolveArcMeridianLens(t *testing.T) {
 }
 
 // A disk touching the sphere only at its pole is a point contact, not a
-// solid join, and two equal spheres share their whole arc span. Neither is
-// joined by this route, and both continue to the mesh path's refusal.
+// solid join. It is not joined by this route and continues to the mesh
+// path's refusal.
 func TestCommonAxisRevolveArcMeridianMisses(t *testing.T) {
 	t.Parallel()
 	t.Run("tangent at pole", func(t *testing.T) {
@@ -110,21 +110,6 @@ func TestCommonAxisRevolveArcMeridianMisses(t *testing.T) {
 		sphere, tool := arcBooleanOperands(t, doc, 10, 15)
 		before := doc.Bodies()
 		_, err := decad.Union(t.Context(), sphere, tool)
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "more than 65536 facets")
-		require.Equal(t, before, doc.Bodies())
-	})
-	t.Run("shared arc span", func(t *testing.T) {
-		t.Parallel()
-		doc := decad.New(decad.ExactOnly())
-		s, p := circleSketch(t, 0, 0, 10)
-		a, err := decad.Revolve(t.Context(), doc, s, p, uAxis, decad.FullRevolution{})
-		require.NoError(t, err)
-		s2, p2 := circleSketch(t, 0, 0, 10)
-		b, err := decad.Revolve(t.Context(), doc, s2, p2, uAxis, decad.FullRevolution{})
-		require.NoError(t, err)
-		before := doc.Bodies()
-		_, err = decad.Union(t.Context(), a, b)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "more than 65536 facets")
 		require.Equal(t, before, doc.Bodies())

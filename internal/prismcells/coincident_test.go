@@ -3,6 +3,7 @@ package prismcells
 import (
 	"context"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -136,4 +137,113 @@ func TestClassifyReadsASharedArc(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, target[disk])
 	require.False(t, target[outside])
+}
+
+// TestCoincidentReadingRefusesSharedArcInsideIdentityBand reads the
+// shared-arc scene through ExactCarriers. Sketch resolves B's arc onto A's
+// circle, but the arc's 170° endpoint is a cos/sin rounding off radius 20, so
+// the two entities hold no one exact carrier and the reading refuses.
+//
+// Shown to fail with exactCircleSpan's squared-radius comparison removed.
+func TestCoincidentReadingRefusesSharedArcInsideIdentityBand(t *testing.T) {
+	t.Parallel()
+	profiles, tags, _, arc, circle := sharedArcScene(t)
+	budget := proofbound.NewWorkBudget(t.Context())
+	reading, ok, err := CoincidentEdges(budget, tags, profiles)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Len(t, reading.Spans, 1)
+	require.Equal(t, sketch.Entity(arc), reading.Spans[0].Named)
+	require.Equal(t, sketch.Entity(circle), reading.Spans[0].Losing)
+	exact, err := reading.ExactCarriers(budget)
+	require.NoError(t, err)
+	require.False(t, exact)
+}
+
+// TestCoincidentReadingRequiresExactCircleCarrier is one row per refusal of
+// exactCircleSpan, each beside the exact span it departs from. Every refusing
+// row was shown to pass (read exact) with its own check removed: the centre
+// comparison, the squared-radius comparison, spanEnd's agreement of two own
+// endpoints, either arc test, and the whole-span circle check.
+func TestCoincidentReadingRequiresExactCircleCarrier(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	pt := func(x, y float64) *sketch.Point { return s.CreatePoint(x, y) }
+	o := pt(0, 0)
+	half := s.CreateArc(o, pt(10, 0), pt(-10, 0))
+	quarter := s.CreateArc(o, pt(10, 0), pt(0, 10))
+	chord := s.CreateArc(o, pt(6, 8), pt(-6, 8))
+	shifted := s.CreateArc(pt(1, 0), pt(11, 0), pt(1, 10))
+	wider := s.CreateArc(o, pt(10.5, 0), pt(0, 10.5))
+	circle := s.CreateCircle(o, 10)
+	twin := s.CreateCircle(pt(0, 0), 10)
+	for _, tc := range []struct {
+		name string
+		span CoincidentSpan
+		want bool
+	}{
+		{name: "exact quarter of a half", want: true, span: CoincidentSpan{Named: half, Losing: quarter,
+			A: [2]float64{10, 0}, B: [2]float64{0, 10}, NamedT: [2]float64{0, 0.5}, LosingT: [2]float64{0, 1}}},
+		{name: "exact cut ends", want: true, span: CoincidentSpan{Named: half, Losing: chord,
+			A: [2]float64{6, 8}, B: [2]float64{-6, 8}, NamedT: [2]float64{0.3, 0.7}, LosingT: [2]float64{0, 1}}},
+		{name: "exact arc on circle seam", want: true, span: CoincidentSpan{Named: quarter, Losing: circle,
+			A: [2]float64{10, 1e-15}, B: [2]float64{0, 10}, NamedT: [2]float64{0, 1}, LosingT: [2]float64{0, 0.25}}},
+		{name: "exact whole circles", want: true, span: CoincidentSpan{Named: twin, Losing: circle, Whole: true}},
+		{name: "centre differs", span: CoincidentSpan{Named: half, Losing: shifted,
+			A: [2]float64{11, 0}, B: [2]float64{1, 10}, NamedT: [2]float64{0.1, 0.5}, LosingT: [2]float64{0, 1}}},
+		{name: "radius differs", span: CoincidentSpan{Named: half, Losing: wider,
+			A: [2]float64{10.5, 0}, B: [2]float64{0, 10.5}, NamedT: [2]float64{0.1, 0.5}, LosingT: [2]float64{0, 1}}},
+		{name: "own ends disagree", span: CoincidentSpan{Named: half, Losing: circle,
+			A: [2]float64{10, 0}, B: [2]float64{0, 10}, NamedT: [2]float64{1, 0.5}, LosingT: [2]float64{0, 0.25}}},
+		{name: "start outside arc", span: CoincidentSpan{Named: quarter, Losing: circle,
+			A: [2]float64{6, -8}, B: [2]float64{0, 10}, NamedT: [2]float64{0.1, 1}, LosingT: [2]float64{0.9, 0.25}}},
+		{name: "end outside arc", span: CoincidentSpan{Named: quarter, Losing: half,
+			A: [2]float64{10, 0}, B: [2]float64{-6, 8}, NamedT: [2]float64{0, 0.7}, LosingT: [2]float64{0, 0.7}}},
+		{name: "span runs backwards", span: CoincidentSpan{Named: half, Losing: circle,
+			A: [2]float64{0, 10}, B: [2]float64{6, 8}, NamedT: [2]float64{0.5, 0.2}, LosingT: [2]float64{0.25, 0.4}}},
+		{name: "whole span on an arc", span: CoincidentSpan{Named: half, Losing: circle, Whole: true}},
+		{name: "zero span", span: CoincidentSpan{Named: half, Losing: circle,
+			A: [2]float64{0, 10}, B: [2]float64{0, 10}, NamedT: [2]float64{0.5, 0.5}, LosingT: [2]float64{0.25, 0.25}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			reading := CoincidentReading{Spans: []CoincidentSpan{tc.span}}
+			got, err := reading.ExactCarriers(proofbound.NewWorkBudget(t.Context()))
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+			lineOnly, err := reading.ExactLineCarriers(proofbound.NewWorkBudget(t.Context()))
+			require.NoError(t, err)
+			require.False(t, lineOnly, "ExactLineCarriers refuses every circular span")
+		})
+	}
+}
+
+// TestOnCCWArc covers each sweep class of onCCWArc's exact sign test: under
+// a half turn, over one, exactly one, and a zero sweep, each with a direction
+// inside, one at an end, and one outside.
+func TestOnCCWArc(t *testing.T) {
+	t.Parallel()
+	v := func(x, y int64) [2]*big.Rat { return [2]*big.Rat{big.NewRat(x, 1), big.NewRat(y, 1)} }
+	for _, tc := range []struct {
+		name    string
+		p, s, e [2]*big.Rat
+		want    bool
+	}{
+		{name: "quarter inside", p: v(6, 8), s: v(10, 0), e: v(0, 10), want: true},
+		{name: "quarter at start", p: v(10, 0), s: v(10, 0), e: v(0, 10), want: true},
+		{name: "quarter outside", p: v(-6, 8), s: v(10, 0), e: v(0, 10)},
+		{name: "three quarters inside", p: v(-6, -8), s: v(10, 0), e: v(0, -10), want: true},
+		{name: "three quarters at end", p: v(0, -10), s: v(10, 0), e: v(0, -10), want: true},
+		{name: "three quarters outside", p: v(6, -8), s: v(10, 0), e: v(0, -10)},
+		{name: "half inside", p: v(0, 10), s: v(10, 0), e: v(-10, 0), want: true},
+		{name: "half outside", p: v(0, -10), s: v(10, 0), e: v(-10, 0)},
+		{name: "zero sweep", p: v(10, 0), s: v(10, 0), e: v(10, 0)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tc.want, onCCWArc(tc.p, tc.s, tc.e))
+		})
+	}
 }

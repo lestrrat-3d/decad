@@ -663,6 +663,36 @@ func DvSub(a, b DyV3) DyV3 {
 	return DyV3{DySubScalar(a0, b0), DySubScalar(a1, b1), DySubScalar(a2, b2)}
 }
 
+// DvSubHeld returns DvSub(xa, xb) bit for bit, for xa = DyVec(a) and
+// xb = DyVec(b), the lifts of the finite held vectors a and b.
+//
+// Per component it first subtracts the held floats and checks the rounding
+// error exactly with Knuth's TwoSum: under round-to-nearest, with no step
+// overflowing, s = fl(a−b) and err = (a−a′) + (−b−b′) satisfy s + err = a − b
+// exactly, so err = 0 proves s IS the exact difference. A Dyadic is canonical,
+// so DyOf(s) is then the very value DySubScalar forms. A step that overflows
+// yields an infinity or NaN, never an err of 0, and every err other than 0
+// takes DySubScalar over the lifts. The float64 conversions forbid fusing.
+func DvSubHeld(a, b r3.Vec, xa, xb DyV3) DyV3 {
+	xa0, xa1, xa2 := xa[0], xa[1], xa[2]
+	xb0, xb1, xb2 := xb[0], xb[1], xb[2]
+	return DyV3{dySubHeld(a.X, b.X, xa0, xb0), dySubHeld(a.Y, b.Y, xa1, xb1), dySubHeld(a.Z, b.Z, xa2, xb2)}
+}
+
+// dySubHeld is DvSubHeld for one component.
+func dySubHeld(a, b float64, da, db Dyadic) Dyadic {
+	s := float64(a - b)
+	bv := float64(s - a)
+	av := float64(s - bv)
+	if float64(a-av)+float64(-b-bv) != 0 {
+		return DySubScalar(da, db)
+	}
+	if s == 0 {
+		return Dyadic{}
+	}
+	return DyOfFinite(s)
+}
+
 // DvAdd returns a + b componentwise.
 func DvAdd(a, b DyV3) DyV3 {
 	a0, a1, a2 := a[0], a[1], a[2]
@@ -801,6 +831,10 @@ func DySqrtDown(d Dyadic) float64 {
 // DySqrtUp returns a float f with f*f >= d, proven by exact comparison —
 // ratSqrtUp's contract, over this file's arithmetic. It returns +Inf only where
 // sqrt(d) genuinely exceeds MaxFloat64.
+//
+// The walk starts at the seed and stops at the first float whose square is at
+// least d, or at the first non-finite one (NextUp of MaxFloat64), which no
+// exact square can be formed for. One exact comparison decides each step.
 func DySqrtUp(d Dyadic) float64 {
 	if d.Sign() <= 0 {
 		return 0
@@ -810,7 +844,8 @@ func DySqrtUp(d Dyadic) float64 {
 		f = math.MaxFloat64
 	}
 	for range SqrtAdjustLimit {
-		if !DySquareAtMost(f, d) || DySquareEquals(f, d) {
+		square, ok := DyOf(f)
+		if !ok || DyCmp(DyMul(square, square), d) >= 0 {
 			return f
 		}
 		f = NextUp(f)

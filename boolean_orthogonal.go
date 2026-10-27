@@ -5,7 +5,6 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/orthoshell"
-	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -58,10 +57,12 @@ func orthogonalBoolean(ctx context.Context, d *Document, op meshbool.OperationKi
 	return body, true
 }
 
-// orthogonalOperand returns b's faceted payload when it is unplaced and holds no vertex bound.
+// orthogonalOperand returns b's faceted payload when it holds no vertex bound. A placed body qualifies: its
+// held vertices are its world coordinates, and a placement that every vertex image survives exactly (a
+// whole-number translation of whole-number coordinates, say) charges no rounding.
 func orthogonalOperand(b *Body) (facetedPayload, bool) {
 	payload, ok := b.n.Payload.(facetedPayload)
-	if !ok || len(payload.Tris) == 0 || payload.Xform != r3.Identity() {
+	if !ok || len(payload.Tris) == 0 {
 		return facetedPayload{}, false
 	}
 	for _, beta := range payload.VertexBound {
@@ -85,4 +86,38 @@ func orthogonalMeshOf(ctx context.Context, b *Body) (facetedPayload, bool) {
 		return facetedPayload{}, false
 	}
 	return facetedPayload{Verts: mesh.n.Vertices, Tris: mesh.n.Triangles}, true
+}
+
+// orthogonalUnionMany is orthogonalBoolean for the union of three or more bodies, under producer identity ref: every
+// operand is read onto one grid, and at least one is a faceted solid that meets orthogonalOperand (a set of prisms or
+// breps keeps its own certified routes). The result is not committed. ok is false when the route does not apply or
+// declines, and the caller keeps its refusal.
+func orthogonalUnionMany(ctx context.Context, d *Document, ref producerID, operands []*Body) (*Body, bool) {
+	parts := make([]orthoshell.Part, len(operands))
+	faceted := 0
+	for i, operand := range operands {
+		payload, ok := orthogonalOperand(operand)
+		if ok {
+			faceted++
+		} else if payload, ok = orthogonalMeshOf(ctx, operand); !ok {
+			return nil, false
+		}
+		parts[i] = orthoshell.Part{Verts: payload.Verts, Tris: payload.Tris}
+	}
+	if faceted == 0 {
+		return nil, false
+	}
+	verts, tris, err := orthoshell.UnionMany(parts)
+	if err != nil {
+		return nil, false
+	}
+	mesh, err := NewMeshBody(ctx, verts, tris)
+	if err != nil {
+		return nil, false
+	}
+	body, err := solidFromMeshBodyAt(ctx, d, mesh, ref)
+	if err != nil {
+		return nil, false
+	}
+	return body, true
 }
