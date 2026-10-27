@@ -250,7 +250,12 @@ func TryCrossingBlindCut(ctx context.Context, a, b topo.Payload) (breprecord.Pay
 		return breprecord.Payload{}, false, nil
 	}
 	result, err := stackedunion.Cut(ctx, budget, va, vb, reexpress, levels, reach)
-	if errors.Is(err, brepgeom.ErrStackedWallMiss) || errors.Is(err, decaderr.ErrUnsupported) {
+	// A merged loop whose recorded junctions do not meet (a pocket drawn with
+	// lines overshooting its corners) is a scene this build cannot record. The
+	// pair keeps its later routes, ending at the mesh path, as it does for
+	// every other shape the build does not cover.
+	if errors.Is(err, brepgeom.ErrStackedWallMiss) || errors.Is(err, decaderr.ErrUnsupported) ||
+		errors.Is(err, decaderr.ErrUnrecordableProfile) {
 		return breprecord.Payload{}, false, nil
 	}
 	if err != nil {

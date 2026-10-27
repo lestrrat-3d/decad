@@ -594,15 +594,19 @@ fragment misses before any cell is read. The engine places it as "A1 as a
 brep" places a line crossing a circle: the line's walked point with its fixed
 coordinate exact, keyed by the side of the circle's centre, and charged its
 walk, cut and proven crossing distances. A floor arc and the split cylinder
-wall are pinned between those vertices about the recorded centre. A crossing
-point of a line and a circle is irrational in general, so the volume reads
-`Approximate` with a proven bound even when every level is exact. A result
-with exact levels whose vertices all join axis-aligned lines reads `Exact`. Two circles
+wall are pinned between those vertices about the recorded centre. Any circle
+or arc in the result makes its volume `Approximate` with a proven bound, even
+when every level is exact and no line crosses a circle (a disc plate's rim).
+Only a result whose loops are all lines, with exact levels, reads `Exact`. Two circles
 or arcs crossing, a round pocket across a round hole, have no exact vertex
 record: the engine misses unless both loops end at one recorded point, and the
 pair takes the mesh path. A floor or ceiling cell with a hole, such as the
 annulus a round pocket leaves around a smaller round hole, also misses in the
 engine, so a counterbore keeps the stacked payload of A2 (stacked §7 stage 2).
+A merged slab loop whose recorded junctions do not meet, such as a pocket
+drawn as four lines overshooting its corners, is a miss here, not
+prism-boolean's RB9 refusal: the pair continues to the later routes and ends
+on the mesh path. A pocket edge tangent to the hole circle also misses.
 
 #### A8 — opposed pockets overlapping at one level
 

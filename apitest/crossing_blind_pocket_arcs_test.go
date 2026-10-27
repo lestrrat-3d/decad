@@ -31,6 +31,23 @@ func arcPocketBody(t *testing.T, doc *decad.Document, planeZ float64, depth unit
 	return body
 }
 
+// drawOvershootQuad draws a quadrilateral as four lines that each run a
+// fraction over past both corners, so sketch cuts every corner.
+func drawOvershootQuad(over float64, corners ...[2]float64) func(*sketch.Sketch) {
+	return func(s *sketch.Sketch) {
+		n := len(corners)
+		for i := range n {
+			a, b := corners[i], corners[(i+1)%n]
+			dx, dy := b[0]-a[0], b[1]-a[1]
+			p := s.CreatePoint(a[0]-over*dx, a[1]-over*dy)
+			q := s.CreatePoint(b[0]+over*dx, b[1]+over*dy)
+			s.Fix(p)
+			s.Fix(q)
+			s.CreateLine(p, q)
+		}
+	}
+}
+
 func drawRect(x0, y0, x1, y1 float64) func(*sketch.Sketch) {
 	return func(s *sketch.Sketch) {
 		rect := s.CreateRectangle(x0, y0, x1, y1)
@@ -83,12 +100,18 @@ func arcVolume(t *testing.T, k, p, q string) *big.Float {
 // 4. The disc plate of radius 10 has the 4x4 hole and a rectangle x -1..3,
 // y -1..1 that overlaps the hole in 1x2, so depth 4 removes 24.
 //
+// The far cases repeat round-hole/top with the plate moved along x, which
+// keeps the closed form. There the vertices' rounding grows with the
+// coordinates, and the face displacement the BRep build charges carries most
+// of the bound.
+//
 // Shown red: restoring the four-axis-line gate sends every case to the mesh
-// path. Not witnessed here: the face displacement the BRep build charges (the
-// merges' cut charge plus the canonical vertices' allowance). Zeroing it, or
-// either term alone, leaves every case green, because each vertex sits within
-// about 1e-15 mm of its crossing, which moves the volume by about 1e-14 mm^3,
-// while the measurement's own rounding bound is about 1e-11 mm^3.
+// path. Zeroing the whole face displacement (stackedunion's delta, the merges'
+// cut charge plus the canonical vertices' allowance) fails round-hole/x1024.
+// Zeroing the vertex allowance alone fails round-hole/x65536. Zeroing the cut
+// charge alone leaves every case green: each cut vertex is restated as a
+// canonical vertex whose allowance already holds its cut displacement
+// (stackedbrep's ubEnds), so the allowance bounds the same distance.
 func TestCrossingBlindPocketArcLoops(t *testing.T) {
 	t.Parallel()
 	mm := units.Millimeters
@@ -105,15 +128,26 @@ func TestCrossingBlindPocketArcLoops(t *testing.T) {
 		plate, hole, tool func(*testing.T, *decad.Document) *decad.Body
 		k, p, q           string
 		radii             []float64
-		displaced         bool
+		// maxBound caps the volume bound, so a mesh-sized bound fails.
+		maxBound float64
 	}{
 		{name: "round-hole/top", plate: plate, hole: roundHole, tool: pocketTop(drawRect(-2, -1.5, 6, 1.5)),
-			k: "3928", p: "-84", q: "9", radii: []float64{3}},
+			k: "3928", p: "-84", q: "9", radii: []float64{3}, maxBound: 1e-10},
+		{name: "round-hole/x1024", hole: func(t *testing.T, d *decad.Document) *decad.Body {
+			return circleBodyAtZ(t, d, 1024, 3, 0, 10)
+		}, plate: func(t *testing.T, d *decad.Document) *decad.Body { return boxBody(t, d, 1014, -10, 1034, 10, 10) },
+			tool: pocketTop(drawRect(1022, -1.5, 1030, 1.5)),
+			k:    "3928", p: "-84", q: "9", radii: []float64{3}, maxBound: 1e-9},
+		{name: "round-hole/x65536", hole: func(t *testing.T, d *decad.Document) *decad.Body {
+			return circleBodyAtZ(t, d, 65536, 3, 0, 10)
+		}, plate: func(t *testing.T, d *decad.Document) *decad.Body { return boxBody(t, d, 65526, -10, 65546, 10, 10) },
+			tool: pocketTop(drawRect(65534, -1.5, 65542, 1.5)),
+			k:    "3928", p: "-84", q: "9", radii: []float64{3}, maxBound: 1e-7},
 		{name: "round-hole/bottom", plate: plate, hole: roundHole,
 			tool: func(t *testing.T, d *decad.Document) *decad.Body {
 				return arcPocketBody(t, d, 0, mm(4), decad.Along, drawRect(-2, -1.5, 6, 1.5))
-			}, k: "3928", p: "-84", q: "9", radii: []float64{3}},
-		{name: "round-pocket/square-hole", plate: plate, hole: squareHole, radii: []float64{2},
+			}, k: "3928", p: "-84", q: "9", radii: []float64{3}, maxBound: 1e-10},
+		{name: "round-pocket/square-hole", plate: plate, hole: squareHole, radii: []float64{2}, maxBound: 1e-10,
 			k: "3840", p: "-10.666666666666666666666666666666666666666666666666666666666666667", q: "-4",
 			tool: func(t *testing.T, d *decad.Document) *decad.Body { return circleBodyAtZ(t, d, 1, 2, 6, 4) }},
 		{name: "slot-hole", plate: plate,
@@ -121,20 +155,20 @@ func TestCrossingBlindPocketArcLoops(t *testing.T) {
 				return arcPocketBody(t, d, 0, mm(10), decad.Along, drawCrossSlot)
 			}, tool: pocketTop(drawRect(2, -1, 8, 1)),
 			k: "3720", p: "-37.333333333333333333333333333333333333333333333333333333333333333", q: "4",
-			radii: []float64{2}},
+			radii: []float64{2}, maxBound: 1e-10},
 		{name: "l-pocket", plate: plate, hole: roundHole, tool: pocketTop(drawPolygon(
 			[2]float64{-2, -1.5}, [2]float64{6, -1.5}, [2]float64{6, 5}, [2]float64{4, 5},
 			[2]float64{4, 1.5}, [2]float64{-2, 1.5})),
-			k: "3900", p: "-84", q: "9", radii: []float64{3}},
+			k: "3900", p: "-84", q: "9", radii: []float64{3}, maxBound: 1e-10},
 		{name: "disc-plate", hole: squareHole, tool: pocketTop(drawRect(-1, -1, 3, 1)),
-			k: "-184", p: "1000", q: "0", radii: []float64{10},
+			k: "-184", p: "1000", q: "0", radii: []float64{10}, maxBound: 1e-10,
 			plate: func(t *testing.T, d *decad.Document) *decad.Body { return circleBodyAtZ(t, d, 0, 10, 0, 10) }},
 		// 0.2 in is 5.08 mm, whose level carries a displacement:
 		// 4000 - 90*pi - 5.08*(18 - 9*sqrt(3)/4 - 3*pi/2).
 		{name: "round-hole/inch-depth", plate: plate, hole: roundHole,
 			tool: func(t *testing.T, d *decad.Document) *decad.Body {
 				return arcPocketBody(t, d, 10, units.Inches(0.2), decad.Against, drawRect(-2, -1.5, 6, 1.5))
-			}, k: "3908.56", p: "-82.38", q: "11.43", radii: []float64{3}, displaced: true},
+			}, k: "3908.56", p: "-82.38", q: "11.43", radii: []float64{3}, maxBound: 1e-9},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -146,8 +180,10 @@ func TestCrossingBlindPocketArcLoops(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, "decad.brepPayload", decadtest.PayloadClass(part))
 			requireEveryEdgeOnTwoFaces(t, part)
-			// The slot's sketch-solved arc ends sit a few ulps off radius 2, so
-			// a cylinder reads its source radius to within 1e-12.
+			// A cylinder names its source circle by radius, to within 1e-9:
+			// the slot's sketch-solved arc ends sit a few ulps off radius 2,
+			// and far from the origin a pinned arc reads its radius from a
+			// vertex placed within its allowance of the crossing.
 			seen := make([]bool, len(tc.radii))
 			for _, f := range part.Faces() {
 				switch s := f.Surface().(type) {
@@ -155,7 +191,7 @@ func TestCrossingBlindPocketArcLoops(t *testing.T) {
 				case decad.Cylinder:
 					r, err := s.Radius.In(units.Millimeter)
 					require.NoError(t, err)
-					i := slices.IndexFunc(tc.radii, func(want float64) bool { return math.Abs(r-want) <= 1e-12 })
+					i := slices.IndexFunc(tc.radii, func(want float64) bool { return math.Abs(r-want) <= 1e-9 })
 					require.GreaterOrEqual(t, i, 0, "cylinder radius %v", r)
 					seen[i] = true
 				default:
@@ -169,14 +205,11 @@ func TestCrossingBlindPocketArcLoops(t *testing.T) {
 			require.Equal(t, decad.Approximate, volume.Exactness)
 			bound := boundMM3(t, volume)
 			require.Greater(t, bound, 0.0)
-			require.Less(t, bound, 1e-9)
+			require.Less(t, bound, tc.maxBound)
 			gap := new(big.Float).SetPrec(volumeRefPrec).SetFloat64(volumeMM(t, volume))
 			gap.Sub(gap, arcVolume(t, tc.k, tc.p, tc.q)).Abs(gap)
 			require.LessOrEqual(t, gap.Cmp(new(big.Float).SetFloat64(bound)), 0,
 				"volume %v misses the closed form by %s, bound %v", volumeMM(t, volume), gap.Text('g', 6), bound)
-			if !tc.displaced {
-				require.Less(t, bound, 1e-10)
-			}
 
 			mesh, err := part.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 			require.NoError(t, err)
@@ -189,35 +222,67 @@ func TestCrossingBlindPocketArcLoops(t *testing.T) {
 	}
 }
 
-// TestCrossingBlindPocketArcLoopsDecline keeps two crossings on the mesh path.
-// A round pocket crossing a round hole meets it where two circles cross, which
-// no exact record states. An oblique pocket wall crosses the round hole off
-// every axis-aligned plane the BRep build can state exactly.
+// TestCrossingBlindPocketArcLoopsDecline keeps crossings the BRep build does
+// not cover on the mesh path, with no error. A round pocket crossing a round
+// hole meets it where two circles cross, which no exact record states. An
+// oblique pocket wall crosses the round hole off every axis-aligned plane the
+// build can state exactly. A pocket edge tangent to the hole touches it at one
+// point. A pocket drawn as four lines overshooting its corners merges into a
+// loop whose recorded junctions do not meet, across the round hole and the
+// square one alike. The overshoot pockets also check the mesh result's volume
+// against the closed form of TestCrossingBlindPocketArcLoops (round hole) and
+// 4000 - 160 - 4*(24 - 6) (square hole, which the rectangle overlaps in 2x3).
 //
 // Shown red: dropping the oblique-line refusal in momentinput.CrossingBlindLoops
 // builds the oblique case as a brep. Dropping both of stackedbrep's two-circle
 // misses (unequal walked ends, and a second point under one crossing key)
-// builds the two-circle case; either one alone still misses.
+// builds the two-circle case; either one alone still misses. Dropping
+// ErrUnrecordableProfile from TryCrossingBlindCut's misses fails both
+// overshoot cases with that error.
 func TestCrossingBlindPocketArcLoopsDecline(t *testing.T) {
 	t.Parallel()
+	mm := units.Millimeters
+	roundHole := func(t *testing.T, d *decad.Document) *decad.Body { return circleBodyAtZ(t, d, 0, 3, 0, 10) }
+	overshoot := func(t *testing.T, d *decad.Document) *decad.Body {
+		return arcPocketBody(t, d, 6, mm(4), decad.Along, drawOvershootQuad(0.1,
+			[2]float64{-2, -1.5}, [2]float64{6, -1.5}, [2]float64{6, 1.5}, [2]float64{-2, 1.5}))
+	}
 	for _, tc := range []struct {
-		name string
-		tool func(*testing.T, *decad.Document) *decad.Body
+		name       string
+		hole, tool func(*testing.T, *decad.Document) *decad.Body
+		// k, p and q state the closed form as arcVolume reads it; empty
+		// skips the volume check.
+		k, p, q string
 	}{
-		{"two-circles", func(t *testing.T, d *decad.Document) *decad.Body { return circleBodyAtZ(t, d, 3, 2, 6, 4) }},
-		{"oblique-wall", func(t *testing.T, d *decad.Document) *decad.Body {
-			return arcPocketBody(t, d, 6, units.Millimeters(4), decad.Along, drawPolygon(
+		{name: "two-circles", hole: roundHole,
+			tool: func(t *testing.T, d *decad.Document) *decad.Body { return circleBodyAtZ(t, d, 3, 2, 6, 4) }},
+		{name: "oblique-wall", hole: roundHole, tool: func(t *testing.T, d *decad.Document) *decad.Body {
+			return arcPocketBody(t, d, 6, mm(4), decad.Along, drawPolygon(
 				[2]float64{-1, -1}, [2]float64{6, -2}, [2]float64{6, 2}, [2]float64{-1, 1}))
 		}},
+		{name: "tangent-edge", hole: roundHole,
+			tool: func(t *testing.T, d *decad.Document) *decad.Body { return boxBodyAtZ(t, d, -1, -3, 5, 1, 6, 4) }},
+		{name: "overshoot/round-hole", hole: roundHole, tool: overshoot, k: "3928", p: "-84", q: "9"},
+		{name: "overshoot/square-hole", tool: overshoot, k: "3768", p: "0", q: "0",
+			hole: func(t *testing.T, d *decad.Document) *decad.Body { return boxBodyAtZ(t, d, -4, -2, 0, 2, 0, 10) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			doc := decad.New()
-			part, err := decad.Cut(t.Context(), boxBody(t, doc, -10, -10, 10, 10, 10), circleBodyAtZ(t, doc, 0, 3, 0, 10))
+			part, err := decad.Cut(t.Context(), boxBody(t, doc, -10, -10, 10, 10, 10), tc.hole(t, doc))
 			require.NoError(t, err)
 			part, err = decad.Cut(t.Context(), part, tc.tool(t, doc))
 			require.NoError(t, err)
 			require.True(t, tookMeshPath(part), "class %s", decadtest.PayloadClass(part))
+			if tc.k == "" {
+				return
+			}
+			volume, err := part.Volume()
+			require.NoError(t, err)
+			gap := new(big.Float).SetPrec(volumeRefPrec).SetFloat64(volumeMM(t, volume))
+			gap.Sub(gap, arcVolume(t, tc.k, tc.p, tc.q)).Abs(gap)
+			require.LessOrEqual(t, gap.Cmp(new(big.Float).SetFloat64(boundMM3(t, volume))), 0,
+				"volume %v misses the closed form by %s", volumeMM(t, volume), gap.Text('g', 6))
 		})
 	}
 }
