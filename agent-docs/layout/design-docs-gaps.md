@@ -15,6 +15,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/text-design.md` | `TextProfiles`: lettering from font outlines as sketch profiles, its layout and fill rule. |
 | `agent-docs/union-fold-design.md` | The two-at-a-time fold of a many-body `Union` that no certified route takes. |
 | `agent-docs/subd-design.md` | `SubDMesh`: Catmull-Clark subdivision of a polygon cage into a `MeshBody`. |
+| `agent-docs/orthogonal-move-design.md` | `MoveFace`: the press-pull of one face of an orthogonal mesh solid on the shell's grid. |
 | `agent-docs/orthogonal-shell-design.md` | `Shell` of a faceted solid whose faces all square to an axis: the grid erosion, the removed-face slab and the wall mesh. |
 | `agent-docs/lattice-design.md` | `GyroidLattice`: the gyroid field, its box cap and the marching tetrahedra that cut it into a closed `MeshBody`. |
 | `agent-docs/mesh-solid-design.md` | `SolidFromMesh`: a closed `MeshBody` as a Faceted solid `Body`, its proofs and exact plane groups. |

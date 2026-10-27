@@ -30,21 +30,7 @@ func shellOrthogonal(ctx context.Context, d *Document, b *Body, call brepmodify.
 	}
 	removed := make([]bool, len(payload.Tris))
 	if !call.NoOpenings {
-		gone := map[*topo.Face]bool{}
-		for _, f := range call.Removed {
-			gone[f] = true
-		}
-		var faces []*topo.Face
-		for _, l := range b.n.Lumps {
-			for _, sh := range l.Shells {
-				faces = append(faces, sh.Faces...)
-			}
-		}
-		for i, f := range payload.FaceOf {
-			if f >= 0 && f < len(faces) && gone[faces[f]] {
-				removed[i] = true
-			}
-		}
+		removed = faceTriangles(b, payload, call.Removed)
 	}
 	return shellOrthogonalOnce(ctx, d, b, payload, removed, call.Tmm, !call.Inward)
 }
@@ -72,4 +58,25 @@ func shellOrthogonalOnce(ctx context.Context, d *Document, b *Body, payload face
 	}
 	out, err := commitModifyResult(ctx, OperationShell, b, walls)
 	return out, true, err
+}
+
+// faceTriangles marks the facets of payload that belong to the given faces of b.
+func faceTriangles(b *Body, payload facetedPayload, faces []*topo.Face) []bool {
+	gone := map[*topo.Face]bool{}
+	for _, f := range faces {
+		gone[f] = true
+	}
+	var all []*topo.Face
+	for _, l := range b.n.Lumps {
+		for _, sh := range l.Shells {
+			all = append(all, sh.Faces...)
+		}
+	}
+	marked := make([]bool, len(payload.Tris))
+	for i, f := range payload.FaceOf {
+		if f >= 0 && f < len(all) && gone[all[f]] {
+			marked[i] = true
+		}
+	}
+	return marked
 }

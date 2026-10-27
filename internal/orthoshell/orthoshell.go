@@ -130,62 +130,60 @@ func clipArea(a, b, c [2]float64, x0, x1, y0, y1 float64) float64 {
 	return math.Abs(area) / 2
 }
 
-// Walls returns the boundary mesh of the walls of a shell of thickness t: the solid (verts and
-// tris, closed, wound outward, every triangle square to an axis) less its cavity, the set of points
-// whose cube of half-side t lies in the solid joined to the slab of twice t outward from each
-// triangle that removed marks. A point cube-eroded from that union is at least t from every wall and
-// clear of the openings, so the cavity is the solid's inward offset with its walls mitered at
-// every corner, and the walls are what is left of the solid around it. The mesh is closed,
-// conforming (a grid cell's face is a quad of four triangles fanned from a point inside it) and
-// wound outward from the walls, and a cavity with no volume is ErrDegenerate. The coordinates of
-// the offsets are float sums x ± t, so a wall is t thick to the rounding of that sum.
-//
-// With outward set the walls grow off the solid instead: they are the cells within a cube of
-// half-side t of the solid, less the solid, and over a removed face the footprint's prism is left
-// open, so the solid is the cavity.
-func Walls(verts []r3.Vec, tris [][3]int, removed []bool, t float64, outward bool) ([]r3.Vec, [][3]int, error) {
-	if !(t > 0) || math.IsInf(t, 0) {
-		return nil, nil, fmt.Errorf("%w: the thickness must be positive and finite", ErrDegenerate)
-	}
-	if len(verts) == 0 || len(tris) == 0 || len(removed) != len(tris) {
-		return nil, nil, fmt.Errorf("%w: no triangles, or a removed mark for each is missing", ErrUnsupported)
-	}
-	lo, hi := verts[0], verts[0]
-	for _, v := range verts[1:] {
-		lo = r3.Vec{X: math.Min(lo.X, v.X), Y: math.Min(lo.Y, v.Y), Z: math.Min(lo.Z, v.Z)}
-		hi = r3.Vec{X: math.Max(hi.X, v.X), Y: math.Max(hi.Y, v.Y), Z: math.Max(hi.Z, v.Z)}
-	}
-	eps := 1e-9 * math.Max(1, math.Max(hi.X-lo.X, math.Max(hi.Y-lo.Y, hi.Z-lo.Z)))
-	axes := make([]int, len(tris))
-	signs := make([]int, len(tris))
-	var coords [3][]float64
-	for _, v := range verts {
-		coords[0] = append(coords[0], v.X)
-		coords[1] = append(coords[1], v.Y)
-		coords[2] = append(coords[2], v.Z)
-	}
-	comp := func(v r3.Vec, a int) float64 { return [3]float64{v.X, v.Y, v.Z}[a] }
+// solidGrid is an orthogonal polyhedron read onto the grid of its own coordinates, with any extra
+// ones: u holds the coordinates of each axis, ud the cell counts, and occ which cells are inside.
+type solidGrid struct {
+	u   grid
+	ud  [3]int
+	occ []bool
+	eps float64
+}
+
+func (g *solidGrid) at(i, j, k int) int { return (k*g.ud[1]+j)*g.ud[0] + i }
+
+func comp(v r3.Vec, a int) float64 { return [3]float64{v.X, v.Y, v.Z}[a] }
+
+// classify returns, for each triangle, the axis it squares to and the sign of its normal along it.
+func classify(verts []r3.Vec, tris [][3]int) (axes, signs []int, err error) {
+	axes = make([]int, len(tris))
+	signs = make([]int, len(tris))
 	for i, tri := range tris {
 		a, s, ok := triAxis(verts[tri[0]], verts[tri[1]], verts[tri[2]])
 		if !ok {
 			return nil, nil, fmt.Errorf("%w: triangle %d", ErrNotOrthogonal, i)
 		}
 		axes[i], signs[i] = a, s
-		if removed[i] {
-			plane := comp(verts[tri[0]], a)
-			coords[a] = append(coords[a], plane+float64(s)*2*t)
-		}
+	}
+	return axes, signs, nil
+}
+
+// newSolid reads the solid onto the grid of its vertex coordinates and the extra ones on each axis.
+func newSolid(verts []r3.Vec, tris [][3]int, axes, signs []int, extra [3][]float64) (*solidGrid, error) {
+	lo, hi := verts[0], verts[0]
+	for _, v := range verts[1:] {
+		lo = r3.Vec{X: math.Min(lo.X, v.X), Y: math.Min(lo.Y, v.Y), Z: math.Min(lo.Z, v.Z)}
+		hi = r3.Vec{X: math.Max(hi.X, v.X), Y: math.Max(hi.Y, v.Y), Z: math.Max(hi.Z, v.Z)}
+	}
+	eps := 1e-9 * math.Max(1, math.Max(hi.X-lo.X, math.Max(hi.Y-lo.Y, hi.Z-lo.Z)))
+	var coords [3][]float64
+	for _, v := range verts {
+		coords[0] = append(coords[0], v.X)
+		coords[1] = append(coords[1], v.Y)
+		coords[2] = append(coords[2], v.Z)
+	}
+	for a := range 3 {
+		coords[a] = append(coords[a], extra[a]...)
 	}
 	var u grid
 	for a := range 3 {
 		u.c[a] = uniqueSorted(append([]float64(nil), coords[a]...), eps)
 		if len(u.c[a]) < 2 {
-			return nil, nil, fmt.Errorf("%w: the solid has no extent along axis %d", ErrUnsupported, a)
+			return nil, fmt.Errorf("%w: the solid has no extent along axis %d", ErrUnsupported, a)
 		}
 	}
 	ud := u.dims()
 	if ud[0]*ud[1]*ud[2] > MaxCells {
-		return nil, nil, fmt.Errorf("%w: the solid needs more than %d grid cells", ErrUnsupported, MaxCells)
+		return nil, fmt.Errorf("%w: the solid needs more than %d grid cells", ErrUnsupported, MaxCells)
 	}
 	at := func(i, j, k int) int { return (k*ud[1]+j)*ud[0] + i }
 	// cover[p] holds, for the x-facing triangles at plane p, their signed coverage of each (y, z) cell.
@@ -197,7 +195,7 @@ func Walls(verts []r3.Vec, tris [][3]int, removed []bool, t float64, outward boo
 		}
 		p := indexOf(u.c[0], verts[tri[0]].X, eps)
 		if p < 0 {
-			return nil, nil, fmt.Errorf("%w: a triangle plane is missing from the grid", ErrUnsupported)
+			return nil, fmt.Errorf("%w: a triangle plane is missing from the grid", ErrUnsupported)
 		}
 		a := [2]float64{verts[tri[0]].Y, verts[tri[0]].Z}
 		b := [2]float64{verts[tri[1]].Y, verts[tri[1]].Z}
@@ -221,7 +219,7 @@ func Walls(verts []r3.Vec, tris [][3]int, removed []bool, t float64, outward boo
 				depth += cover[coverAt(i, j, k)]
 				r := math.Round(depth)
 				if math.Abs(depth-r) > 1e-6 || r < 0 || r > 1 {
-					return nil, nil, fmt.Errorf("%w: the solid is not a closed outward-wound polyhedron on its grid", ErrUnsupported)
+					return nil, fmt.Errorf("%w: the solid is not a closed outward-wound polyhedron on its grid", ErrUnsupported)
 				}
 				if r == 1 {
 					occ[at(i, j, k)] = true
@@ -229,7 +227,7 @@ func Walls(verts []r3.Vec, tris [][3]int, removed []bool, t float64, outward boo
 				}
 			}
 			if math.Abs(depth+cover[coverAt(ud[0], j, k)]) > 1e-6 {
-				return nil, nil, fmt.Errorf("%w: a column of the solid does not close", ErrUnsupported)
+				return nil, fmt.Errorf("%w: a column of the solid does not close", ErrUnsupported)
 			}
 		}
 	}
@@ -240,8 +238,47 @@ func Walls(verts []r3.Vec, tris [][3]int, removed []bool, t float64, outward boo
 		meshVolume += a.Dot(b.Cross(c)) / 6
 	}
 	if math.Abs(volume-meshVolume) > 1e-9*math.Max(1, math.Abs(meshVolume)) {
-		return nil, nil, fmt.Errorf("%w: the grid volume %g differs from the mesh volume %g", ErrUnsupported, volume, meshVolume)
+		return nil, fmt.Errorf("%w: the grid volume %g differs from the mesh volume %g", ErrUnsupported, volume, meshVolume)
 	}
+	return &solidGrid{u: u, ud: ud, occ: occ, eps: eps}, nil
+}
+
+// Walls returns the boundary mesh of the walls of a shell of thickness t: the solid (verts and
+// tris, closed, wound outward, every triangle square to an axis) less its cavity, the set of points
+// whose cube of half-side t lies in the solid joined to the slab of twice t outward from each
+// triangle that removed marks. A point cube-eroded from that union is at least t from every wall and
+// clear of the openings, so the cavity is the solid's inward offset with its walls mitered at
+// every corner, and the walls are what is left of the solid around it. The mesh is closed,
+// conforming (a grid cell's face is a quad of four triangles fanned from a point inside it) and
+// wound outward from the walls, and a cavity with no volume is ErrDegenerate. The coordinates of
+// the offsets are float sums x ± t, so a wall is t thick to the rounding of that sum.
+//
+// With outward set the walls grow off the solid instead: they are the cells within a cube of
+// half-side t of the solid, less the solid, and over a removed face the footprint's prism is left
+// open, so the solid is the cavity.
+func Walls(verts []r3.Vec, tris [][3]int, removed []bool, t float64, outward bool) ([]r3.Vec, [][3]int, error) {
+	if !(t > 0) || math.IsInf(t, 0) {
+		return nil, nil, fmt.Errorf("%w: the thickness must be positive and finite", ErrDegenerate)
+	}
+	if len(verts) == 0 || len(tris) == 0 || len(removed) != len(tris) {
+		return nil, nil, fmt.Errorf("%w: no triangles, or a removed mark for each is missing", ErrUnsupported)
+	}
+	axes, signs, err := classify(verts, tris)
+	if err != nil {
+		return nil, nil, err
+	}
+	var extra [3][]float64
+	for i, tri := range tris {
+		if removed[i] {
+			a := axes[i]
+			extra[a] = append(extra[a], comp(verts[tri[0]], a)+float64(signs[i])*2*t)
+		}
+	}
+	sg, err := newSolid(verts, tris, axes, signs, extra)
+	if err != nil {
+		return nil, nil, err
+	}
+	u, ud, occ, eps, at := sg.u, sg.ud, sg.occ, sg.eps, sg.at
 	occS := append([]bool(nil), occ...)
 	// The slab over each removed face: the cells between its plane and twice t out, over its footprint.
 	// A face is several triangles that may each cover only part of a cell, so the footprint is summed
