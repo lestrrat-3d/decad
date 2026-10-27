@@ -2015,6 +2015,11 @@
 9	0.00	TestOverBudgetFitInterpolantRefusesBeforeSolving
 9	0.00	TestPatchSheetTessellates
 9	0.02	TestPatternCopiesUnionStack
+10	0.01	TestOrthogonalUnionOfBlocksTouchingAtAFace
+10	0.01	TestOrthogonalBooleansWithCoplanarFaces
+10	0.01	TestOrthogonalCutOpensABlindPocketWithACoplanarFloorAndWalls
+10	0.01	TestOrthogonalBooleanResultsChain
+10	0.01	TestOrthogonalBooleanDisjointIntersectionKeepsItsError
 9	0.20	TestPatternedNHoleCut
 9	0.01	TestPatternedRefusesDisjointStacks
 9	0.01	TestPointDistanceFromBox

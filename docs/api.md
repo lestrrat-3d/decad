@@ -248,7 +248,7 @@ neighbour is tangent. A line and an arc that meet tangent up to rounding, turnin
 tangent, and the sliver between them is charged into the result's volume bound. Two arcs that meet that way, or a
 larger turn, are refused with `decad.ErrUnsupported`, as is a trimmed segment; the body still meshes for export.
 
-A two-body `Union`, `Cut` or `Intersect` that would be refused because an operand is the mesh result of earlier Booleans is retried from
+Two faceted solids every face of which squares to an axis, such as mesh solids, combine exactly on a grid of their coordinates under `Union`, `Cut` and `Intersect`, any contact between them included. A two-body `Union`, `Cut` or `Intersect` that would be refused because an operand is the mesh result of earlier Booleans is retried from
 the source bodies of that chain, when all but one pair combine by exact routes. The result is the same solid. Its
 history records the one call, and faces made by the exact steps carry fresh roles, so select them by geometry.
 
