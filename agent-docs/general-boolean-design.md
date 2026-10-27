@@ -737,7 +737,7 @@ then lines and circles only. The result is the `brepPayload` of §4.
 
 | # | Condition | Why exact |
 |---|---|---|
-| B1 | Both operands expose the face view of §4.1: `prismPayload`, `stackedPrismPayload`, or `brepPayload`. A `Cut` target may also be a Revolve read through its prism view (§3 "Revolved shaft as a prism"). | structural |
+| B1 | Both operands expose the face view of §4.1: `prismPayload`, `stackedPrismPayload`, or `brepPayload`. A `Cut` target may also be a Revolve read through its prism view or its stack of coaxial prisms (§3 "Revolved shaft as a prism"). | structural |
 | B2 | Every recorded segment of both is `LineSeg`/`CircleSeg`/`ArcSeg` (prism-boolean G4's reason). | `TExact` is whole-scene |
 | B3 | The composed world normals are exactly perpendicular: `N_A · N_B == 0.0` over the stored `r3.Vec` floats (`ApplyDir` on each frame's `N()`). | a decision over stored floats, as G3 is; a near-perpendicular pair takes the mesh path |
 | B4 | The relative frame map is a signed axis permutation: every dot product among `{U_A, V_A, N_A}` and `{U_B, V_B, N_B}` (world, through `ApplyDir`) is exactly `0`, `1` or `−1`. | keeps every trace line exact (§5); the datum planes XY/XZ/YZ and their offsets meet it; a general pair waits on A6's charge (§8) |
@@ -1007,15 +1007,18 @@ volume check), which reject a record that does not close.
 
 ### Revolved shaft as a prism
 
-A plain turned shaft is a circular prism. A full solid `Revolve` whose
-meridian is one rectangle with one side exactly on the axis denotes the set
-of points whose axial coordinate lies in the rectangle's span and whose
-distance from the axis is at most its radius. The prism whose section is the
-circle of that radius about the axis point, swept over that span along the
-axis, denotes the same set. `revolveplan.Payload.CylinderPrism` builds that
-prism record, and a `Cut` whose target is such a Revolve and whose tool is a
-prism enters class B with the prism record as X
-(`classbgeom.CutPrismView`, from `booleandispatch.classB`).
+A turned shaft is a stack of coaxial circular prisms. A full solid `Revolve`
+whose meridian is one staircase with one side exactly on the axis denotes the
+set of points whose axial coordinate lies in some step's span and whose
+distance from the axis is at most that step's radius. The prisms whose
+sections are the circles of those radii about the axis point, each swept over
+its step's span along the axis, denote the same set together.
+`revolveplan.Payload.CylinderSteps` builds those prism records, in order
+along the axis, each one's `Z1` the next one's `Z0` bit for bit. A plain
+turned shaft is the stack of one step, which `CylinderPrism` returns. A `Cut`
+whose target is such a Revolve and whose tool is a prism enters class B: with
+one step, the prism record is X (`classbgeom.CutPrismView`); with more, the
+stack is X (`classbgeom.CutSteppedView`), both from `booleandispatch.classB`.
 
 The view admits by exact comparison of recorded data only, and every miss is
 silent, so the pair keeps the mesh path:
@@ -1025,45 +1028,117 @@ silent, so the pair keeps the mesh path:
 - The axis runs along the plane's U or V: the recorded direction is
   `(±1, 0)` or `(0, ±1)`, and the anchor and direction bounds, the radial
   admission allowance and every snap allowance are zero.
-- The meridian is one outer loop of exactly four whole `LineSeg`s, each
-  joined end to start bit for bit and each along or across the axis. Its
-  four distinct corners take two along values and two across values, and
-  one across value is the axis's own.
-- The radius, the other across value less the axis's, is a float exactly
-  (an exact rational difference) and exceeds the axis classification
-  tolerance.
+- The meridian is one outer loop of whole `LineSeg`s, each joined end to
+  start bit for bit, each along or across the axis and of nonzero length.
+  Exactly one line, along the axis itself, spans `[lo, hi]`. The other lines
+  along the axis, the rims, lie on one side of it; sorted by their start
+  (then their end) along it, they tile `[lo, hi]` end to start bit for bit,
+  and neighbouring rims differ. The lines across the axis, the risers, number
+  one more than the rims.
+- Each radius, a rim's across value less the axis's, is a float exactly (an
+  exact rational difference) and exceeds the axis classification tolerance.
 - `r3.NewFrame` rebuilds the prism frame from the plane's axes bit for bit:
   (V, N, U) for an axis on U, (N, U, V) for an axis on V. The frame shares the
-  plane's origin, so the circle's centre is the axis anchor's across
+  plane's origin, so each circle's centre is the axis anchor's across
   coordinate and every level is a recorded along value.
 
-The two records use the same frame vectors in permuted order and state the
-same set in the frame's coordinates, so no lift differs and the view carries
-no displacement. A stepped shaft, a tube (a meridian off the axis) and any
-arc or slanted meridian line have no view: a stacked face view has no crossing
-reach, and class B's crossing reach needs a hole-free prism X.
+These conditions make the meridian the staircase. The lines along the axis
+end at `2n + 2` distinct points for `n` rims, one line at each: the tiling
+and the different neighbouring rims keep two rims from sharing an end, and
+no rim lies on the axis. Two of those points share each along value. The
+loop is a closed walk, so each point is the end of an even number of its
+lines and needs an odd number of riser ends. The `n + 1` risers have
+`2n + 2` ends, so each point ends exactly one riser and no riser ends
+anywhere else, and a riser keeps its along value, so it joins the two points
+at one along value: the riser at `lo` from the axis to the first rim, the one
+at `hi` from the axis to the last, and one at each step boundary between the
+two rims there. The at-least-one-rim condition follows from the closed walk
+and the riser count; the code keeps it as a guard. The one-axis-line
+condition does not follow: a zero-area spike out along the axis and back
+adds two axis lines whose ends pair with each other, and without the
+condition the last axis line read would set the span.
+
+The prisms use the same frame vectors as the plane in permuted order and
+state the same set in the frame's coordinates, so no lift differs and the
+view carries no displacement. A tube (a meridian off the axis), any arc or
+slanted meridian line and a staircase whose rims overhang have no view.
 
 Beside B1–B8 and the crossing reach's own conditions, the view's `Cut`
 misses unless every straight tool wall across the shaft's axis lies at a
 level strictly outside the shaft's span. Under B6 every other tool line runs
 along the axis, and under B7 every tool arc is apart from the whole shaft, so
 inside the shaft the tool's boundary does not change along the axis. Every
-surviving piece of the shaft's wall then runs from one end cap to the other.
-A tool that ends inside the span would cut the wall into pieces of different
-angular extent that share a rim, which §4.2 refuses. The gate keeps that tool
-on the mesh path instead. An Extrude target is not gated this way and
-refuses there. The through reach is not tried: a cylinder X has no face
-across d.
+surviving piece of a step's wall then runs from one of the step's bounding
+planes (an end cap or a shoulder) to the other. A tool that ends inside the
+span would cut the wall into pieces of different angular extent that share a
+rim, which §4.2 refuses. For one step, `CutPrismView`'s gate keeps that tool
+on the mesh path. For a stack, the stepped build misses when a tool wall
+across the axis lies strictly inside the span (`BuildYCrossingFaces` under
+its `XSlice` hook), and B8 misses one in an end plane. An Extrude target is
+not gated this way and refuses there. The through reach is not tried: a
+cylinder X has no face across d.
 
-The result is the class-B `brepPayload` an Extrude shaft gives: the full-length
-D-flat and keyway of `apitest/revolve_shaft_class_b_test.go` measure the same
-value and bound bit for bit as their Extrude twins. The crossing charges the
-flat's section displacement, so brep-modify SB1 refuses `Fillet` and
-`Chamfer` of its edges; `Thread` on the cut wall builds, to its Extrude
-twin's volume. A shaft or a tool placed by `Transform` carries its own
-placement, misses the shared-placement condition of B.3 (`AdmitPair`) as it
-does for an Extrude pair, and keeps the mesh path, where retained-edge-blend
-§2 blends those edges.
+#### The stepped crossing build
+
+A stack's entry gate runs on its envelope, the circle of the largest radius
+swept over the whole span (`steppedEnvelope`): B1–B8 read only its end caps,
+its circular wall and its span, and each bounds every step, so a pair the
+envelope admits meets no step in a way the gate refuses. The envelope needs
+two or more steps sharing one frame and placement, each one whole
+counter-clockwise circle about one centre with no displacement, every span
+positive, each step's `Z1` the next one's `Z0`, and neighbouring radii
+different. The shoulders lie strictly inside the span, and every tool face
+normal to the axis lies outside it, so no tool plane holds a shoulder.
+
+The crossing reach then runs over the stack's own faces (`stepped_cut.go`,
+with the hooks of `crossing_cut.go` and `face_build.go`). The wall of step k
+is X carrier k, the end caps are −1 and −2 as for a prism, and the shoulder
+at the start of step i is −(2+i), a plane across the axis at that step's
+`Z0`:
+
+- Each end cap is its end step's disk, and each shoulder is the annulus
+  between the two steps' circles. The wider step's circle is its outer loop
+  and the narrower one's its hole, and it faces away from the wider step.
+  Each is decided by its own scene against the tool's chord in its plane
+  swept between the tool's caps, as a prism's cap is.
+- In the plane of each tool cap or tool wall along the axis, X's slice is
+  the union of each step's chord swept over its span. Each step's chord is
+  its circle's trace through `sketch`, with each end pinned in the keyed
+  crossing table at the step's two bounding planes. The steps the plane meets
+  must be consecutive, so the slice is one staircase loop: up the chords'
+  high ends, each step's wall joined to the next by the shoulder between
+  them, across the top step's bounding plane, and down the low ends. Steps
+  apart from the plane on both sides of one that meets it would cut the slice
+  into several loops, and the pair misses.
+- A face whose box is apart from every loop of the tool's slice, by an exact
+  comparison of outward segment boxes, keeps its region whole: a step the
+  tool does not reach.
+- A shoulder whose hole is box-apart from the tool's slice is decided by its
+  outer loop's scene alone, and the hole joins the one face that scene keeps.
+  The hole lies strictly inside the outer circle and apart from the slice,
+  so its disk lies in the kept area and its circle touches none of its
+  boundary; with more than one kept face (a slot through the wider step) the
+  pair misses rather than place it. Otherwise the scene holds the hole too,
+  and a cell with a hole is outside `prismcells.Classify`'s reach, so the
+  pair misses.
+- Each step's wall pieces are read off the planar faces across the axis
+  (§5), between the step's two bounding planes, and each crossing takes the
+  one float the keyed table records for its cylinder, plane and side, at
+  every axial level.
+
+The result is a class-B `brepPayload`, and `breprecord.Build`'s
+falsification, edge pairing and volume check run on it.
+
+The class-B result of a plain shaft is the `brepPayload` an Extrude shaft
+gives: the full-length D-flat and keyway of
+`apitest/revolve_shaft_class_b_test.go` measure the same value and bound bit
+for bit as their Extrude twins. The crossing charges the flat's section
+displacement, so brep-modify SB1 refuses `Fillet` and `Chamfer` of its
+edges; `Thread` on the cut wall builds, to its Extrude twin's volume. A shaft
+or a tool placed by `Transform` carries its own placement, misses the
+shared-placement condition of B.3 (`AdmitPair`) as it does for an Extrude
+pair, and keeps the mesh path, where retained-edge-blend §2 blends those
+edges.
 
 ### Common-axis full revolutions
 
@@ -1649,11 +1724,31 @@ are relations, never literals.
   D-flat, and an Acme thread of pitch 8 on the D-flat's wall builds to its
   twin's volume. A tool ending inside the span (drawn either way along the
   axis), a tool wall in the end plane (missed by B8), a tilted tool, a
-  `Transform`-placed tool, a
-  stepped shaft and a tube each keep the mesh path, and `Fillet` and
-  `Chamfer` of the class-B flat's edges refuse with SB1.
+  `Transform`-placed tool and a tube each keep the mesh path, and `Fillet`
+  and `Chamfer` of the class-B flat's edges refuse with SB1.
   `internal/revolveplan/cylinder_view_test.go` misses each view condition
   on its own.
+- **B stepped shaft**: full Revolves of staircases of 20 mm steps about x,
+  `Cut` by the z = 7 box of the turned shaft, build with no `Faceted` face,
+  verify their mesh at `VerifyAll`, and hold their volume within its bound
+  of the sum over steps of `20·(π·r² − A)`, where `A` is the step's cut
+  area: `r²·acos(7/r) − 7·√(r² − 49)` for a flat, and
+  `3·√(r² − 9) + r²·asin(3/r) − 42` for the |y| ≤ 3 keyway. The radii
+  10/8 (flat and keyway across both steps), 10/6 (the narrow step whole, its
+  circle a hole of the shoulder), 6/10 (a shoulder facing −x) and 8/10/9 each
+  build (`apitest/revolve_stepped_shaft_class_b_test.go`). A flat meeting the
+  10 and 9 steps of 10/6/9 but not the step between, a 1 mm slot splitting
+  the wide step of 10/6, a slot y in [4, 6] from z = 5 beside the 6 step of
+  10/6 (apart from that step but inside its shoulder hole's box, its
+  faceted volume holding `20·(136π − A)` with `A` the r = 10 disc's area in
+  the slot), a flat tangent to the 8 step of 10/8, a keyseat
+  ending inside the span, a tool wall in the end plane and a
+  `Transform`-placed tool keep the mesh path.
+  `internal/classbgeom/stepped_cut_test.go` misses each envelope condition
+  on its own, and `internal/revolveplan/cylinder_view_test.go` reads two- and
+  three-step meridians and misses rims on both sides of the axis, an
+  overhanging rim, equal neighbouring rims, slanted risers, an extra riser
+  and a spike along the axis.
 - **B blind cross hole**: a drill ending at y = 11 inside the box builds with
   8 faces and volume within its bound of `16000 − 9π·11`.
 - **B tool crossing a wall**: a 10×10 slot ending inside the box and crossing

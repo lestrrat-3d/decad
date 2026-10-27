@@ -168,3 +168,91 @@ func TestCylinderPrism(t *testing.T) {
 		require.False(t, ok, name)
 	}
 }
+
+func TestCylinderSteps(t *testing.T) {
+	t.Parallel()
+
+	pt := func(u, v float64) sectionrecord.Point2 { return sectionrecord.Point2{U: u, V: v} }
+	circle := func(center sectionrecord.Point2, r float64) []sectionrecord.CurveSegment {
+		return []sectionrecord.CurveSegment{sectionrecord.CircleSeg{
+			Center: center, Radius: units.Millimeters(r), CCW: true, TStart: 0, TEnd: 1,
+		}}
+	}
+
+	t.Run("two steps about u", func(t *testing.T) {
+		t.Parallel()
+		// Radius 10 over u in [0, 20], 8 over [20, 40], walked from the
+		// axis's far end.
+		rp := shaftPayload(t)
+		rp.Profile = loopOf(pt(40, 0), pt(40, 8), pt(20, 8), pt(20, 10), pt(0, 10), pt(0, 0))
+		steps, ok := rp.CylinderSteps()
+		require.True(t, ok)
+		require.Len(t, steps, 2)
+		for i, want := range []struct{ z0, z1, r float64 }{{0, 20, 10}, {20, 40, 8}} {
+			require.Equal(t, want.z0, steps[i].Z0)
+			require.Equal(t, want.z1, steps[i].Z1)
+			require.Equal(t, circle(sectionrecord.Point2{}, want.r), steps[i].Profile.Outer.Segments)
+			require.Equal(t, r3.NewVec(1, 0, 0), steps[i].Frame.N())
+		}
+		_, ok = rp.CylinderPrism()
+		require.False(t, ok, `a stepped meridian has no single prism view`)
+	})
+
+	t.Run("three steps about v, below the axis, walked clockwise", func(t *testing.T) {
+		t.Parallel()
+		// The axis is the line u = -2 pointing down v; the rims lie at
+		// u = -7, -4 and -9 over v in [5, 10], [10, 20] and [20, 30].
+		rp := shaftPayload(t)
+		rp.Ax = revolveaxis.Frame{AU: -2, DV: -1, SnapTol: 4e-8}
+		rp.Profile = loopOf(pt(-2, 5), pt(-7, 5), pt(-7, 10), pt(-4, 10), pt(-4, 20), pt(-9, 20),
+			pt(-9, 30), pt(-2, 30))
+		steps, ok := rp.CylinderSteps()
+		require.True(t, ok)
+		require.Len(t, steps, 3)
+		for i, want := range []struct{ z0, z1, r float64 }{{5, 10, 5}, {10, 20, 2}, {20, 30, 7}} {
+			require.Equal(t, want.z0, steps[i].Z0)
+			require.Equal(t, want.z1, steps[i].Z1)
+			require.Equal(t, circle(sectionrecord.Point2{V: -2}, want.r), steps[i].Profile.Outer.Segments)
+		}
+	})
+
+	// Each meridian is one loop of whole lines along or across the axis that
+	// is no staircase on the axis; each must miss.
+	for name, profile := range map[string]momentinput.Profile{
+		// The rims lie on both sides of the axis, joined by a riser through it.
+		"rims on both sides": loopOf(pt(0, 0), pt(40, 0), pt(40, 8), pt(20, 8), pt(20, -10), pt(0, -10)),
+		// The r = 8 rim runs back over the r = 10 one.
+		"overhanging rim": loopOf(pt(0, 0), pt(40, 0), pt(40, 8), pt(10, 8), pt(10, 10), pt(30, 10),
+			pt(30, 12), pt(0, 12)),
+		// Two rims of radius 10 meet at u = 20, and the riser at u = 40 is
+		// split in two, so the risers still number one more than the rims.
+		"equal neighbouring rims": loopOf(pt(0, 0), pt(40, 0), pt(40, 5), pt(40, 10), pt(20, 10), pt(0, 10)),
+		// Two slanted lines cross between the steps' ends.
+		"slanted risers": loopOf(pt(0, 0), pt(40, 0), pt(40, 8), pt(20, 8), pt(0, 10), pt(20, 10)),
+		// A zero-area spike out along the axis and back adds two axis lines
+		// whose ends pair with each other; the main axis line comes last.
+		"axis spike": loopOf(pt(0, 0), pt(-10, 0), pt(0, 0), pt(0, 10), pt(20, 10), pt(20, 8), pt(40, 8), pt(40, 0)),
+		"two axis lines": loopOf(pt(0, 0), pt(20, 0), pt(20, 10), pt(40, 10), pt(40, 0), pt(30, 0),
+			pt(30, -5), pt(0, -5)),
+		"extra riser": loopOf(pt(0, 0), pt(40, 0), pt(40, 10), pt(40, 12), pt(40, 10), pt(0, 10)),
+		"inexact second radius": func() momentinput.Profile {
+			return loopOf(pt(0, 0.1), pt(40, 0.1), pt(40, 8), pt(20, 8), pt(20, 10.3), pt(0, 10.3))
+		}(),
+	} {
+		rp := shaftPayload(t)
+		if name == "inexact second radius" {
+			rp.Ax.AV = 0.1
+		}
+		rp.Profile = profile
+		_, ok := rp.CylinderSteps()
+		require.False(t, ok, name)
+	}
+
+	t.Run("second step within the snap tolerance", func(t *testing.T) {
+		t.Parallel()
+		rp := shaftPayload(t)
+		rp.Profile = loopOf(pt(0, 0), pt(40, 0), pt(40, 1e-8), pt(20, 1e-8), pt(20, 10), pt(0, 10))
+		_, ok := rp.CylinderSteps()
+		require.False(t, ok)
+	})
+}
