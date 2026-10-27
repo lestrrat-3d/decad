@@ -38,6 +38,15 @@ func Combine(vertsA []r3.Vec, trisA [][3]int, vertsB []r3.Vec, trisB [][3]int, o
 		return nil, nil, err
 	}
 	eps := gridEps(append(append([]r3.Vec(nil), vertsA...), vertsB...))
+	// The two solids' own coordinates must also keep clear of each other: a face of one almost on a face of the
+	// other is neither the same plane nor a different one on the grid.
+	ca, cb := cornerCoords(vertsA, trisA, axesA, eps), cornerCoords(vertsB, trisB, axesB, eps)
+	for a := range 3 {
+		if nearCoincident(append(append([]float64(nil), ca[a]...), cb[a]...), eps) {
+			return nil, nil, fmt.Errorf("%w: a coordinate of one operand lies within the grid tolerance of a different one of the other along axis %d",
+				ErrUnsupported, a)
+		}
+	}
 	ga, err := newSolidEps(vertsA, trisA, axesA, signsA, cornerCoords(vertsB, trisB, axesB, eps), eps)
 	if err != nil {
 		return nil, nil, err

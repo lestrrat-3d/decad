@@ -13,6 +13,7 @@ solid. No Boolean runs.
 
 | Decision | Rule |
 |---|---|
+| O0 | A solid two of whose vertex coordinates along an axis differ by a nonzero amount within the grid tolerance (a billionth of the larger of 1 mm and its extent) is refused, so the grid never moves a face by merging two lines; equal coordinates are one line. |
 | O1 | The route applies to a faceted receiver whose held vertices all carry a zero bound, every triangle of which has its three corners on one world-axis plane exactly, in floats, inward, `Outward` or `Centered`. Any other receiver, and a receiver with a vertex bound, take the receiver's own route and its own refusal. |
 | O2 | The coordinates of the grid are the solid's vertex coordinates on each axis, plus, for each removed face, its plane moved `2t` outward. Cells of that grid are occupied by the exact signed coverage of the x-facing triangles along each column, which must be 0 or 1 everywhere, and the grid's volume must equal the mesh's own; otherwise the solid is `ErrUnsupported`. |
 | O3 | The solid joined to a slab `2t` thick over each removed face (the cells between its plane and `2t` out, over its footprint, the footprint summed over the face's triangles and taken where it exceeds half a cell) gives the occupancy `S⁺`. |
