@@ -29,10 +29,15 @@ var permutations = []permutation{
 	{swap: true, su: -1, sv: -1},
 }
 
-// frame builds the candidate frame at plane's origin. ok is false unless the
-// held origin, U and V are bit for bit the requested origin and the signed
-// permutation of the requested held axes; r3.NewFrame may otherwise adjust V.
+// frame builds the candidate frame at plane's origin. The identity candidate
+// is plane itself. Any other is rebuilt by r3.NewFrame, which normalizes and
+// may move the held axes of a tilted frame, so ok is false unless its held
+// origin, U and V are bit for bit the requested origin and the signed
+// permutation of the requested held axes.
 func (p permutation) frame(plane r3.Frame) (r3.Frame, bool) {
+	if !p.swap && p.su > 0 && p.sv > 0 {
+		return plane, true
+	}
 	a, b := plane.U(), plane.V()
 	if p.swap {
 		a, b = b, a

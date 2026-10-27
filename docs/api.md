@@ -314,7 +314,7 @@ Features choose edges and faces with queries.
 | Position | `Body.LocatePoint`, `Body.DistanceToPoint`, `Face.DistanceToPoint`, `Body.ClosestPoint`, `Face.ClosestPoint` |
 | Topology | `Body.Lumps`, `Body.Shells`, `Body.Faces`, `Body.Edges`, `Body.Vertices`, `Face.Loops`, `Edge.Faces` |
 | Geometry | `Face.Surface`, `Edge.Curve`, `Face.NormalAt`, `Edge.Length`, `Vertex.Position` |
-| Cross-section | `Body.Section` returns a sketch and its profiles on a plane. A mesh `Union`, `Cut` or `Intersect` result of two prism, stacked-prism or slab-stack BRep bodies sections exactly from its operation history when both operands have straight-line sections there and the result is one region whose corners are exact. `Body.SectionOutline` returns the closed outlines of the verified mesh cut by a plane, for bodies `Body.Section` refuses. |
+| Cross-section | `Body.Section` returns a sketch and its profiles on a plane. A mesh `Union`, `Cut` or `Intersect` result of two prism, stacked-prism or slab-stack BRep bodies sections exactly from its operation history when both operands have straight-line sections there and the result is one hole-free region whose corners are exact. `Body.SectionOutline` returns the closed outlines of the verified mesh cut by a plane, for bodies `Body.Section` refuses. |
 | Mesh | `Body.Tessellate` returns a `*decad.Mesh` with its chord error bound. |
 
 `Body.MassProperties` uses certified source moments for some strictly

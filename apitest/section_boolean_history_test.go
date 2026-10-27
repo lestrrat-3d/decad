@@ -161,6 +161,44 @@ func TestSectionMeshBooleanFromHistory(t *testing.T) {
 			{0, 0}, {10, 0}, {10, 5}, {5, 5}, {5, 10}, {0, 10},
 		}, 100-25)
 	})
+	t.Run("tilted sketch plane", func(t *testing.T) {
+		t.Parallel()
+		// Both squares are drawn on one tilted plane, whose held axes no
+		// rebuilt frame reproduces bit for bit, so the section plane is that
+		// plane itself. Each box is moved along the normal by a power of two
+		// times it, which keeps its frame origin exactly on the normal line:
+		// the cube spans levels -4 to 4 and the tool -8 to 2, so no cap is
+		// shared. At level 0 the section is the 10 mm square less the tool's
+		// 5 mm corner square, in the plane's own coordinates.
+		doc := decad.New()
+		w := sketch.NewWorld()
+		tilted, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1, Y: 2, Z: 3}, r3.Vec{X: 3, Z: -1})
+		require.NoError(t, err)
+		plane, err := w.CreatePlaneFromFrame(tilted)
+		require.NoError(t, err)
+		held, err := plane.Frame()
+		require.NoError(t, err)
+		// Extrude holds the plane's frame as r3.NewFrame rebuilds it from the
+		// plane's held axes; the section asks in that same frame.
+		frame, err := r3.NewFrame(held.Origin(), held.U(), held.V())
+		require.NoError(t, err)
+		box := func(lo, hi, length, down float64) *decad.Body {
+			s, err := w.CreateSketch(plane)
+			require.NoError(t, err)
+			rect := s.CreateRectangle(lo, lo, hi, hi)
+			s.Fix(rect.A)
+			move, err := r3.Translation(frame.N().Scale(-down))
+			require.NoError(t, err)
+			moved, err := decad.Transform(t.Context(), extrudeSolved(t, doc, s, length), move)
+			require.NoError(t, err)
+			return moved
+		}
+		notched, err := decad.Cut(t.Context(), box(0, 10, 8, 4), box(5, 15, 10, 8))
+		require.NoError(t, err)
+		requireExactHistorySection(t, notched, frame, [][2]float64{
+			{0, 0}, {10, 0}, {10, 5}, {5, 5}, {5, 10}, {0, 10},
+		}, 100-25)
+	})
 }
 
 // TestSectionMeshBooleanHistoryRefusals reaches each history gate and checks
@@ -228,8 +266,9 @@ func TestSectionMeshBooleanHistoryRefusals(t *testing.T) {
 	})
 	t.Run("inexact line junction", func(t *testing.T) {
 		t.Parallel()
-		// The slanted side from (15, -5) to (8, 20) crosses the cube's edge
-		// y = 10 at x = 9.4, which binary64 does not hold.
+		// The slanted side from (8, 20) to (5, -5) crosses the cube's edge
+		// y = 10 at x = 6.8 and its edge y = 0 at x = 5.6; binary64 holds
+		// neither.
 		doc := decad.New()
 		w := sketch.NewWorld()
 		plane, err := w.CreateOffsetPlane(w.XY(), 5)

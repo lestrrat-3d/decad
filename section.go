@@ -174,7 +174,12 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 // denotes the operation over them exactly (agent-docs/section-design.md). It
 // stays in root because it reads Document.producers.
 func booleanHistorySection(ctx context.Context, b *Body, plane r3.Frame) (*sketch.Sketch, []*sketch.Profile, error) {
-	op, inputs, ok := boolchain.Expandable(historyProducers{b.Document()}, &b.n)
+	d := b.Document()
+	if d == nil {
+		return nil, nil, fmt.Errorf(`%w: section needs an original certified smooth loft or an exact two-body Boolean history`,
+			ErrUnsupported)
+	}
+	op, inputs, ok := boolchain.Expandable(historyProducers{d}, &b.n)
 	if !ok || len(inputs) != 2 {
 		return nil, nil, fmt.Errorf(`%w: section needs an original certified smooth loft or an exact two-body Boolean history`,
 			ErrUnsupported)

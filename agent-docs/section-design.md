@@ -115,9 +115,10 @@ producer return `ErrUnsupported`.
 
 Each operand must have an exact section at the requested plane in one of these
 existing classes: the parallel exact prism, a strictly interior slab of a
-stacked prism or stack-backed BRep (both read through
-`sectionclip.SectionBrepStackRecord`), or the cardinal vertical plane of a
-rectangular or whole-circle prism. Each class keeps all its own gates. The
+stacked prism or stack-backed BRep, or the cardinal vertical plane of a
+rectangular or whole-circle prism. The first three are read through
+`sectionclip.SectionBrepStackRecord`, because `stackedunion.OperandFromPayload`
+states a plain prism as a one-slab stack. Each class keeps all its own gates. The
 section must be loops of whole `LineSeg` records. A narrowed line range enters
 at a computed walked end, and an arc or circle has no certified junction, so
 either returns `ErrUnsupported`. An operand that is itself a mesh Boolean
@@ -128,9 +129,11 @@ One requested frame rarely suits both operands. A box swept along Z is read in
 (X, Y), but a box swept along X must be read in a frame whose V axis is ±X. So
 each operand tries eight candidate frames in a fixed order: the requested
 (U, V), then (−U, −V), (V, −U) and (−V, U), then the reflections (U, −V),
-(−U, V), (V, U) and (−V, −U). Each candidate keeps the requested origin, and
-after `r3.NewFrame` its held U and V must equal the signed permutation of the
-requested held axes exactly; otherwise it is skipped. All eight span the
+(−U, V), (V, U) and (−V, −U). The first candidate is the requested frame
+itself. Every other candidate keeps the requested origin and is rebuilt by
+`r3.NewFrame`, which normalizes and may move the held axes of a tilted frame,
+so its held U and V must equal the signed permutation of the requested held
+axes exactly; otherwise it is skipped. All eight span the
 requested plane. The first candidate a class admits gives the operand's
 section. A point at `u'U' + v'V'` is the same world point at the signed
 permutation of `(u', v')` in the requested frame, because U' and V' are the
@@ -207,7 +210,8 @@ the lemma. The scene's
 coincident-span gap must be zero. A span Sketch merged from two near-coincident
 lines would otherwise join or split regions that the exact sets do not.
 `prismcells.MergeLoopsExactLineCuts` drops the walls between selected cells and
-records the survivors through the seam's `TExact` and loop-closure falsifiers.
+records the survivors. Each fragment is admitted only by Sketch's own `TExact`
+certification, and the seam's loop-closure check can only refuse.
 Every cut end must be one paired Sketch line crossing that
 `Sketch.CertifyLineLineJunction` solves from the two lines' endpoint bits as an
 exact binary64 point. Exact rational membership on both source lines then
@@ -708,7 +712,9 @@ reusing its bound.
   and an Intersect with the beam at z=8 gives 40 mm². Each corner matches
   exactly, and each 2 mm Extrude encloses twice the area and passes
   `Tessellate(0.1 mm, VerifyAll)`. A corner tool drawn on a plane facing down
-  takes a reflected candidate frame. Refuse a gap-shifted result, a copied
+  takes a reflected candidate frame. Two boxes on one tilted Sketch plane,
+  moved along its normal by powers of two, cut on the mesh path and section
+  at 75 mm² in that plane's own frame. Refuse a gap-shifted result, a copied
   result, the tool's cap level, a plane missing an operand, a curved operand
   section, a junction Sketch does not certify, a slot that splits the section
   and a section nested in the other. A unit fixture refuses two regions that

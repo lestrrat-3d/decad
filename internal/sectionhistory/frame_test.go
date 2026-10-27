@@ -96,3 +96,22 @@ func TestCombineRefusesAWeldedGap(t *testing.T) {
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 	require.ErrorContains(t, err, msgRegion)
 }
+
+// TestPermutationFrameRefusesMovedAxes uses a tilted requested frame. The
+// identity candidate is the frame itself; a rebuilt candidate whose held axes
+// r3.NewFrame moves is refused.
+func TestPermutationFrameRefusesMovedAxes(t *testing.T) {
+	t.Parallel()
+	plane, err := r3.NewFrame(r3.Vec{X: 1, Y: -2, Z: 4}, r3.Vec{X: 1, Y: 2, Z: 3}, r3.Vec{X: 3, Z: -1})
+	require.NoError(t, err)
+	f, ok := permutations[0].frame(plane)
+	require.True(t, ok)
+	require.Equal(t, plane, f)
+	refused := 0
+	for _, perm := range permutations[1:] {
+		if _, ok := perm.frame(plane); !ok {
+			refused++
+		}
+	}
+	require.Positive(t, refused)
+}

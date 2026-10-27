@@ -86,11 +86,17 @@ func combine(ctx context.Context, pa, pb momentinput.Profile, keep func(a, b boo
 		}
 		return momentinput.Profile{}, fmt.Errorf(`%w: %s`, decaderr.ErrUnsupported, msgRegion)
 	}
-	// Whole lines enter the scene at their recorded points, so the scene's
-	// walk charge is zero.
 	s, tags, delta, err := prismcells.BuildScene(budget, pa, pb, &prismcells.Reexpression{Identity: true})
 	if err != nil {
 		return momentinput.Profile{}, err
+	}
+	// A narrowed line enters the scene at a computed walked end. No fixture
+	// reaches this refusal: operandSection passes only whole lines, whose walk
+	// charge is zero, and a nonzero charge fed to combine directly also enters
+	// ChargeCrossings below as incoming displacement, which refuses every cut it
+	// touches. It keeps the zero-charge claim checked rather than assumed.
+	if delta.A != 0 || delta.B != 0 {
+		return momentinput.Profile{}, fmt.Errorf(`%w: %s`, decaderr.ErrUnsupported, msgRegion)
 	}
 	profiles, err := prismcells.CellProfiles(ctx, budget, s)
 	if err != nil {
