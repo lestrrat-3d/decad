@@ -981,6 +981,10 @@
 3	0.00	TestTextProfilesBreaksLinesAndPlacesTheOrigin
 3	0.00	TestThickenPatchRectangle
 3	0.01	TestThickenRevolveWasherInward
+10	0.01	TestChamferOfEightEdgesSharingCornersRemovesTheirWedges
+10	0.01	TestChamferOfEveryEdgeOfABoxLeavesTheCornersAsCutByThreePlanes
+10	0.01	TestChamferOfEdgesSharingCornersRefusesWhatItWouldOvercut
+10	0.01	TestChamferOfEdgesMeetingAtAReflexCornerIsRefused
 3	0.02	TestThickenStraightSweepSheetSidesMatchExtrude
 3	7.85	TestThreadFormIsWiderThanTheISOGroove
 3	0.06	TestThreadRefusals
