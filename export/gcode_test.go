@@ -267,3 +267,65 @@ func TestGCodeSolidLayersFillTheBottomAndTheTop(t *testing.T) {
 	require.ErrorIs(t, export.GCodePerimeters(t.Context(), &out, block, units.Millimeters(0.1), spec), decad.ErrDegenerate)
 	require.Empty(t, out.String())
 }
+
+func TestGCodePerimeterInsetMovesTheLineHalfAWidthIntoTheMaterial(t *testing.T) {
+	t.Parallel()
+	// The 20 x 10 block's perimeter is traced half the 0.4 mm line width in: its corners are at 0.2 and 19.8 mm in x, 0.2
+	// and 9.8 mm in y, a loop of 2 x (19.6 + 9.6) = 58.4 mm.
+	block := decadtest.NewBlock(t, decad.New(), 0, 0, 20, 10, units.Millimeters(1))
+	spec := gcodeSpec()
+	spec.PerimeterInset = true
+	var out bytes.Buffer
+	require.NoError(t, export.GCodePerimeters(t.Context(), &out, block, units.Millimeters(0.1), spec))
+	layers := gcodeLayers(t, out.String())
+	require.Len(t, layers, 2)
+	for _, groups := range layers {
+		require.Len(t, groups, 1)
+		minX, maxX, minY, maxY := math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)
+		for _, m := range groups[0] {
+			minX, maxX = math.Min(minX, m[0]), math.Max(maxX, m[0])
+			minY, maxY = math.Min(minY, m[1]), math.Max(maxY, m[1])
+		}
+		require.InDelta(t, 0.2, minX, 1e-4)
+		require.InDelta(t, 19.8, maxX, 1e-4)
+		require.InDelta(t, 0.2, minY, 1e-4)
+		require.InDelta(t, 9.8, maxY, 1e-4)
+	}
+	require.InDelta(t, 2*58.4*gcodeExtrusion, lastExtrusion(t, out.String()), 1e-2)
+}
+
+func TestGCodePerimeterInsetMovesAHoleOutward(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	plate := decadtest.NewBlock(t, doc, 0, 0, 20, 20, units.Millimeters(0.5))
+	hole := decadtest.NewBlock(t, doc, 7, 7, 13, 13, units.Millimeters(3))
+	holed, err := decad.Cut(t.Context(), plate, hole)
+	require.NoError(t, err)
+	spec := gcodeSpec()
+	spec.PerimeterInset = true
+	var out bytes.Buffer
+	require.NoError(t, export.GCodePerimeters(t.Context(), &out, holed, units.Millimeters(0.1), spec))
+	layers := gcodeLayers(t, out.String())
+	require.Len(t, layers, 1)
+	require.Len(t, layers[0], 2, "the outer loop and the hole's")
+	extent := func(moves [][2]float64) (lo, hi float64) {
+		lo, hi = math.Inf(1), math.Inf(-1)
+		for _, m := range moves {
+			lo, hi = math.Min(lo, m[0]), math.Max(hi, m[0])
+		}
+		return lo, hi
+	}
+	for _, loop := range layers[0] {
+		lo, hi := extent(loop)
+		if hi-lo > 10 { // the outer loop, 20 mm across, moves in to 0.2 and 19.8
+			require.InDelta(t, 0.2, lo, 1e-4)
+			require.InDelta(t, 19.8, hi, 1e-4)
+			continue
+		}
+		// The hole's 6 mm square, 7 to 13, moves out into the material to 6.8 and 13.2.
+		require.InDelta(t, 6.8, lo, 1e-4)
+		require.InDelta(t, 13.2, hi, 1e-4)
+	}
+	// 4 x 19.6 + 4 x 6.4 mm of line.
+	require.InDelta(t, (78.4+25.6)*gcodeExtrusion, lastExtrusion(t, out.String()), 1e-2)
+}

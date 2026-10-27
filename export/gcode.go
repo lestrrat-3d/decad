@@ -34,15 +34,18 @@ type GCodeSpec struct {
 	// lines a line width apart, whatever the InfillSpacing. The zero value makes none, and a negative one is
 	// decad.ErrDegenerate.
 	SolidLayers int
+	// PerimeterInset moves each perimeter half a line width into the material, so that the printed line's edge and
+	// not its middle lies on the body's outline (agent-docs/gcode-design.md G10). The infill is unchanged.
+	PerimeterInset bool
 }
 
 // GCodePerimeters writes the toolpath that prints body's outline layer by layer as G-code
 // (agent-docs/gcode-design.md): the perimeter of each layer, traced once along the body's section at the
 // middle of the layer, a hole traced as well, and, when the spec sets InfillSpacing, rectilinear infill
 // inside the perimeters, its lines alternating between the X and Y directions from one layer to the next. The
-// first and last SolidLayers layers are filled solid, their lines a line width apart. It is the first stage of
-// a slicer, with no skin found from what lies above or below, support or perimeter offset, and it
-// answers whether a print would stand: each layer's line is where the part's outline is.
+// first and last SolidLayers layers are filled solid, their lines a line width apart, and PerimeterInset moves
+// each perimeter half a line width into the material. It is the first stage of a slicer, with no skin found
+// from what lies above or below, or support, and it answers whether a print would stand: each layer's line is where the part's outline is.
 //
 // The file uses millimetres, absolute positioning and absolute extrusion (G21, G90, M82). The bed is
 // the plane z = 0 of the world and the print starts at the body's lowest point, so layer i is
@@ -132,7 +135,11 @@ func GCodePerimeters(ctx context.Context, w io.Writer, body *decad.Body, tol uni
 			return err
 		}
 		fmt.Fprintf(&out, "; layer %d z=%.4f\n", i, top)
-		for _, loop := range outline.Loops {
+		perimeters := outline.Loops
+		if spec.PerimeterInset {
+			perimeters = insetLoops(outline.Loops, line/2)
+		}
+		for _, loop := range perimeters {
 			if len(loop) < 2 {
 				continue
 			}
