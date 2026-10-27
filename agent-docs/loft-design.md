@@ -1323,6 +1323,15 @@ pair sharing an edge or a vertex is REQUIRED to touch there, so no tier is
 consulted for it. What the broad-phase prunes is the exact work per PAIR; the
 enumeration below prunes which pairs reach it at all.
 
+The plane-separation tier signs each corner with the guarded float
+orientation filter, then the float expansion, then the exact plane numerator,
+and every step returns the corner's exact sign or declines. When the exact
+lifts are the float vertices' own values, a corner's sign against a plane
+depends on that plane and the corner's vertex alone. Each concurrent pair
+worker therefore keeps one sign per vertex, tagged with the plane that signed
+it. A vertex shared by several partners of one row is signed against that
+row's plane once (`loftPlaneSignMemo`).
+
 **A pair whose EXPECTED contact is already proven reaches its verdict early,
 through an accept-only certificate.** The broad-phase above is the reject side
 of the same idea and only ever fires for a pair Table C gives no shared entity;
