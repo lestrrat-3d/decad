@@ -68,15 +68,20 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 	if len(kept) == 0 {
 		return nil, fmt.Errorf(`%w: the operation leaves no boundary at all`, decaderr.ErrBooleanFailed)
 	}
-	var xverts []proof.Xpt
+	// Each kept facet contributes three corners before welding, so the facet
+	// count is a useful estimate for the unique stitched vertices. The output
+	// triangles, source ids and facet bounds retain one entry per kept facet
+	// unless the conforming pass splits one.
+	vertexCap := len(kept)
+	xverts := make([]proof.Xpt, 0, vertexCap)
 	// xbeta is each exact vertex's pre-weld bound: the largest claim any kept
 	// facet corner makes for it, raised below by every conforming split that
 	// inserts it into another facet's edge.
-	var xbeta []float64
-	index := map[string]int{}
+	xbeta := make([]float64, 0, vertexCap)
+	index := make(map[string]int, vertexCap)
 	// Exact vertices are immutable after construction. Reuse the stitched
 	// index when another incident facet carries the same four integer pointers.
-	indexByRaw := map[[4]*big.Int]int{}
+	indexByRaw := make(map[[4]*big.Int]int)
 	// addVert welds p by its canonical key: key when the kept facet carries
 	// it (KeptFacet.Keys), else p.Key(), read once per pointer set.
 	addVert := func(p proof.Xpt, key string) int {
@@ -105,12 +110,12 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 		indexByRaw[raw] = i
 		return i
 	}
-	var tris [][3]int
-	var src []int
+	tris := make([][3]int, 0, len(kept))
+	src := make([]int, 0, len(kept))
 	// facetBound is each stitched triangle's δ: the largest corner claim of
 	// the kept facet it descends from. A conforming split keeps its parent's
 	// figure, since every sub-triangle lies on that held facet.
-	var facetBound []float64
+	facetBound := make([]float64, 0, len(kept))
 	for i, f := range kept {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -172,8 +177,12 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 	// (its volume, its place in the lump count, its share of the bounds) while
 	// the closure audit, which the surviving components still pass, reports
 	// nothing wrong.
-	out := &StitchedMesh{}
-	floatIdx := map[r3.Vec]int{}
+	out := &StitchedMesh{
+		Verts: make([]r3.Vec, 0, len(xverts)),
+		Tris:  make([][3]int, 0, len(tris)),
+		Src:   make([]int, 0, len(tris)),
+	}
+	floatIdx := make(map[r3.Vec]int, len(xverts))
 	remap := make([]int, len(xverts))
 	for i, p := range xverts {
 		if i%256 == 0 {
