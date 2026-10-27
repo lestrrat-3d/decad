@@ -1691,6 +1691,9 @@
 6	0.11	TestRevolveUnionWithAPrismMeasuresTheAnalyticVolume
 6	0.02	TestRevolveWallNormalCoversConeAngle
 6	0.00	TestRevolveWedgeSharesAxisEdgeBetweenCaps
+10	0.01	TestBossOnATiltedMeshFaceStandsAlongTheFacesNormal
+10	0.01	TestEmbossEngravesIntoATiltedMeshFace
+10	0.01	TestEmbossOnATiltedMeshFaceRaisesAlongTheFacesNormal
 6	0.01	TestSTLChordTolerance
 6	0.00	TestScaledAtRefusesSheetRevolveWithoutRetiringSource
 6	0.01	TestSectionCardinalCylinderRefusesUnprovedOffsetChords

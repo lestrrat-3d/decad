@@ -87,7 +87,8 @@ func WithEmbossDraft(angle units.Value) EmbossOption {
 // or nil profile list, a non-positive height, a sketch plane that is more than
 // 1e-6 mm off the face plane or not parallel to it, and a relief that
 // certifiably misses b or changes no volume are ErrDegenerate. A face that is
-// not an analytic plane or cylinder is ErrUnsupported. Profiles must not touch each other
+// not an analytic plane or cylinder, nor a convex planar face of a faceted solid with exact
+// vertices, is ErrUnsupported. Profiles must not touch each other
 // in a shared plane. A boolean the evaluator cannot decide is the boolean's
 // own error. Every failure leaves the document unchanged and b live.
 func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.Profile, face FaceSelector,
@@ -147,7 +148,7 @@ func Emboss(ctx context.Context, b *Body, s *sketch.Sketch, profiles []*sketch.P
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the sketch plane has no frame: %s`, ErrDegenerate, err)
 	}
-	site, err := resolveEmbossSite(b, face, frame)
+	site, err := resolveEmbossSite(ctx, b, face, frame)
 	if err != nil {
 		return nil, err
 	}
@@ -282,10 +283,17 @@ type embossCylinder struct {
 // resolveEmbossSite resolves face to a plane: a planar face is its own plane, and a
 // cylindrical face gives the plane of the sketch frame when that is tangent to the
 // cylinder.
-func resolveEmbossSite(b *Body, face FaceSelector, sketchFrame r3.Frame) (embossSite, error) {
+func resolveEmbossSite(ctx context.Context, b *Body, face FaceSelector, sketchFrame r3.Frame) (embossSite, error) {
 	if faces, err := face.SelectFaces(b); err == nil && len(faces) == 1 {
 		if cyl, ok := faces[0].Surface().(Cylinder); ok {
 			return cylinderEmbossSite(faces[0], cyl, sketchFrame)
+		}
+		if _, ok := faces[0].Surface().(Faceted); ok {
+			site, err := facetedHoleSite(ctx, b, faces[0])
+			if err != nil {
+				return embossSite{}, err
+			}
+			return embossSite{plane: Plane{Frame: site.frame}, outward: site.outward}, nil
 		}
 	}
 	plane, normal, err := resolvePlanarFace(b, face, "Emboss")
