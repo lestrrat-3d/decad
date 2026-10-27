@@ -161,3 +161,54 @@ f 4 5 8
 	// Output:
 	// volume: 480 mm^3
 }
+
+// A Centered shell puts half the wall on each side of the original surface. Here a
+// 10 x 8 x 6 mm box read from OBJ is wrapped by a closed 2 mm wall: 1 mm outside its
+// surface and 1 mm inside.
+func Example_shell_centered() {
+	src := `v 0 0 0
+v 10 0 0
+v 10 8 0
+v 0 8 0
+v 0 0 6
+v 10 0 6
+v 10 8 6
+v 0 8 6
+f 1 3 2
+f 1 4 3
+f 5 6 7
+f 5 7 8
+f 1 2 6
+f 1 6 5
+f 3 4 8
+f 3 8 7
+f 2 3 7
+f 2 7 6
+f 4 1 5
+f 4 5 8
+`
+	mesh, err := decad.ReadOBJ(context.Background(), strings.NewReader(src))
+	if err != nil {
+		fmt.Printf("failed to read mesh: %s\n", err)
+		return
+	}
+	box, err := decad.SolidFromMesh(context.Background(), decad.New(), mesh)
+	if err != nil {
+		fmt.Printf("failed to make a solid: %s\n", err)
+		return
+	}
+	wall, err := decad.Shell(context.Background(), box, nil, units.Millimeters(2),
+		decad.WithNoOpenings(), decad.WithShellSense(decad.Centered))
+	if err != nil {
+		fmt.Printf("failed to shell: %s\n", err)
+		return
+	}
+	volume, err := wall.Volume()
+	if err != nil {
+		fmt.Printf("failed to measure volume: %s\n", err)
+		return
+	}
+	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
+	// Output:
+	// volume: 768 mm^3
+}

@@ -881,6 +881,9 @@
 4	0.09	TestSurfaceRevolveFullTurnClearOfAxisSheetMeshBitEqualsSolid
 4	0.01	TestSurfaceRevolvePartialClearOfAxisIsASheet
 4	0.02	TestSurfaceSweepShellOpenAgreesWithFreeEdgeDerivation
+9	0.14	TestShellCenteredStackedBoss
+10	0.01	TestShellCenteredStraddlesAMeshSolidSurface
+10	0.01	TestShellCenteredRefusals
 4	0.00	TestSurfaceTrimBoundsChargesAnExtremeWonByACut
 4	0.01	TestSurfaceTrimRefusesASecondTrim
 4	0.05	TestSweepChainArcThickenSolidAndReplay
@@ -2050,7 +2053,6 @@
 9	0.00	TestSelectionErrorCardinalityMiss
 9	0.00	TestSelectorUnionErrorNamesEachEmptiedBranch
 9	0.01	TestSheetSolidPairDiagnosticFollowsDocumentOrder
-9	0.14	TestShellCenteredStackedBoss
 9	0.00	TestShellContextCancellationDuringSectionSurveyLeavesReceiverLive
 9	0.02	TestShellCupHoledMinRadius
 9	0.03	TestShellCupHoledOutward

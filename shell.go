@@ -43,6 +43,10 @@ const (
 	// Outward grows the wall off the original solid; the original solid becomes
 	// the cavity.
 	Outward
+	// Centered straddles the original surface, half the thickness each side. Only
+	// a faceted solid whose faces all square to a world axis takes it
+	// (agent-docs/orthogonal-shell-design.md); any other body is ErrUnsupported.
+	Centered
 )
 
 // String renders the sense for diagnostics.
@@ -52,12 +56,14 @@ func (s ShellSense) String() string {
 		return "Inward"
 	case Outward:
 		return "Outward"
+	case Centered:
+		return "Centered"
 	default:
 		return fmt.Sprintf("ShellSense(%d)", int(s))
 	}
 }
 
-// WithShellSense sets the wall sense (Inward or Outward). Without it the sense
+// WithShellSense sets the wall sense (Inward, Outward or Centered). Without it the sense
 // is Inward (agent-docs/modify-design.md §8).
 func WithShellSense(s ShellSense) ShellOption {
 	return shellOptionValue{encoded: modifyoption.WithShellSense(int(s))}
@@ -212,6 +218,13 @@ func Shell(ctx context.Context, b *Body, sel FaceSelector, t units.Value,
 			return nil, err
 		}
 		call.Removed = faceNodes(removed)
+	}
+	if sense == Centered {
+		out, ok, err := shellOrthogonalCentered(ctx, d, b, call)
+		if err == nil && !ok {
+			return nil, fmt.Errorf(`%w: a centered shell takes a faceted solid whose faces all square to a world axis`, ErrUnsupported)
+		}
+		return out, err
 	}
 	if out, ok, err := shellOrthogonal(ctx, d, b, call); ok || err != nil {
 		return out, err

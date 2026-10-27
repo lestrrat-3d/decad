@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/brepmodify"
 	"github.com/lestrrat-3d/decad/internal/orthoshell"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/r3"
 )
 
 // shellOrthogonal shells a faceted solid every one of whose faces squares to a world axis, such as a
@@ -35,9 +36,34 @@ func shellOrthogonal(ctx context.Context, d *Document, b *Body, call brepmodify.
 	return shellOrthogonalOnce(ctx, d, b, payload, removed, call.Tmm, !call.Inward)
 }
 
+// shellOrthogonalCentered is shellOrthogonal for the Centered sense: the wall is half the thickness
+// either side of the surface (orthoshell.CenteredWalls). ok is false on the same terms.
+func shellOrthogonalCentered(ctx context.Context, d *Document, b *Body, call brepmodify.ShellCall) (*Body, bool, error) {
+	payload, isFaceted := b.n.Payload.(facetedPayload)
+	if !isFaceted || len(payload.Tris) == 0 {
+		return nil, false, nil
+	}
+	for _, beta := range payload.VertexBound {
+		if beta != 0 {
+			return nil, false, nil
+		}
+	}
+	removed := make([]bool, len(payload.Tris))
+	if !call.NoOpenings {
+		removed = faceTriangles(b, payload, call.Removed)
+	}
+	wallVerts, wallTris, err := orthoshell.CenteredWalls(payload.Verts, payload.Tris, removed, call.Tmm)
+	return commitShellWalls(ctx, d, b, wallVerts, wallTris, err)
+}
+
 // shellOrthogonalOnce builds the walls of thickness t as a mesh and makes them the body that replaces b.
 func shellOrthogonalOnce(ctx context.Context, d *Document, b *Body, payload facetedPayload, removed []bool, t float64, outward bool) (*Body, bool, error) {
 	wallVerts, wallTris, err := orthoshell.Walls(payload.Verts, payload.Tris, removed, t, outward)
+	return commitShellWalls(ctx, d, b, wallVerts, wallTris, err)
+}
+
+// commitShellWalls makes the walls the orthoshell built the body that replaces b, or maps its refusal.
+func commitShellWalls(ctx context.Context, d *Document, b *Body, wallVerts []r3.Vec, wallTris [][3]int, err error) (*Body, bool, error) {
 	switch {
 	case errors.Is(err, orthoshell.ErrNotOrthogonal):
 		return nil, false, nil

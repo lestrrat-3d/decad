@@ -305,10 +305,10 @@ func TestShellOptionDispatch(t *testing.T) {
 	t.Run("UnknownSense", func(t *testing.T) {
 		doc, box := shellBox(t)
 
-		body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5), decad.WithShellSense(decad.ShellSense(2)))
+		body, err := decad.Shell(t.Context(), box, topCap(box), units.Millimeters(5), decad.WithShellSense(decad.ShellSense(3)))
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
-		require.ErrorContains(t, err, "unknown shell sense 2")
+		require.ErrorContains(t, err, "unknown shell sense 3")
 		require.Equal(t, []*decad.Body{box}, doc.Bodies())
 	})
 }
