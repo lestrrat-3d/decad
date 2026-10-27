@@ -1401,6 +1401,7 @@
 10	0.01	TestMeshSolidBooleansAgreeWithTheCubeByCubeBoolean
 10	0.01	TestVerifySurveysAgreeWithTheCubeByCubeRunsAndColumns
 10	0.01	TestStretchAgreesWithTheStretchedCubes
+10	0.01	TestMeshSolidWithAPrismAgreesWithTheCubeByCubeBoolean
 10	0.01	TestCircularPatternAgreesWithTheUnionOfTurnedCubes
 10	0.01	TestQuarterTurnAgreesWithTheTurnedCubes
 10	0.01	TestMeshSolidShellAndOffsetAgreeWithTheCubeByCubeErosionAndDilation
