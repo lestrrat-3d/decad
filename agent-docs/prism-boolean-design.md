@@ -906,9 +906,10 @@ pair before the scene is built rather than charge it (below). `internal/proofbou
 `walkEndpointAllow` states the allowance, at the magnitude of the operands
 that walk's OWN arithmetic touches and never at the endpoint it produced:
 `momentregion.Lerp2` computes
-`fl(a + fl(t·fl(b−a)))` from the carrier's own recorded `Start` and `End` — at
-most that, since a target free to fuse the multiply and the add commits one
-rounding fewer — and that difference CANCELS, so a fragment near the plane
+`fl(a + fl(t·fl(b−a)))` from the carrier's own recorded `Start` and `End` — a
+`float64()` conversion rounds the product before the add, so every target
+commits all three roundings and walks the same point — and that difference
+CANCELS, so a fragment near the plane
 origin on a far-reaching carrier rounds by ulps of the CARRIER while its own
 endpoint magnitude stays tiny. A trimmed `LineSeg` therefore charges the
 envelope of its recorded `Start`/`End` coordinates (`walkChargeOf`'s

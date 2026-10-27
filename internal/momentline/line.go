@@ -71,7 +71,9 @@ func lerp(start, end Point, t float64) (float64, float64) {
 	case 1:
 		return end.U, end.V
 	}
-	return start.U + t*(end.U-start.U), start.V + t*(end.V-start.V)
+	// The float64() conversion rounds the product before the sum, as
+	// boundarywalk's lerp2 does, so no target fuses it.
+	return start.U + float64(t*(end.U-start.U)), start.V + float64(t*(end.V-start.V))
 }
 
 // TranslateExactMoments re-references the exact accumulator from the walk

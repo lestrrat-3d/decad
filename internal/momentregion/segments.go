@@ -137,6 +137,9 @@ func (s State) AddCircular(
 }
 
 // Lerp2 returns a line's walked point, preserving natural endpoints verbatim.
+// It rounds t·(end − start) before adding start, as boundarywalk's lerp2
+// does: the float64() conversion forbids a fused multiply-add, so every
+// target reads the same point.
 func Lerp2(start, end sectionrecord.Point2, t float64) (float64, float64) {
 	switch t {
 	case 0:
@@ -144,5 +147,5 @@ func Lerp2(start, end sectionrecord.Point2, t float64) (float64, float64) {
 	case 1:
 		return end.U, end.V
 	}
-	return start.U + t*(end.U-start.U), start.V + t*(end.V-start.V)
+	return start.U + float64(t*(end.U-start.U)), start.V + float64(t*(end.V-start.V))
 }
