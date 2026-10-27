@@ -61,8 +61,8 @@ func WithSTEPOrganization(organization string) STEPOption {
 // NewSTEPFile builds an AP214 file from one boundary-verified solid.
 // tol is Body.Tessellate's chord tolerance. The caller supplies the mandatory
 // header fields, including a timestamp; AP214's schema replaces Header.Schemas.
-// Supported plane, cylinder and torus boundaries retain analytic faces, lines,
-// circles and ellipses. Other boundaries use one planar ADVANCED_FACE per mesh triangle.
+// Supported plane, cylinder, cone, sphere and torus boundaries retain analytic
+// faces, lines, circles and ellipses. Other boundaries use one planar ADVANCED_FACE per mesh triangle.
 // A solid with cavities writes a BREP_WITH_VOIDS: the outer shell and each void
 // shell as an ORIENTED_CLOSED_SHELL, all as planar faces per mesh triangle
 // (agent-docs/step-export-design.md §9). A body of several lumps writes one

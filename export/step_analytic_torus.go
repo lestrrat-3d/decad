@@ -272,18 +272,26 @@ func (b *analyticSTEPBuilder) addTorusFace(ctx context.Context, face *decad.Face
 	return b.add(ap214.AdvancedFace(0, "", surface, sameSense, bound)), nil
 }
 
+// torusPatchReversed is whether a torus patch's loop is written against its
+// source walk so that it runs counter-clockwise about the STEP face normal:
+// when its (θ, φ) orientation (torusPatchArea) disagrees with the face sense.
+func torusPatchReversed(torus decad.Torus, major float64, loop *decad.Loop, sameSense bool) (bool, error) {
+	area, ok := torusPatchArea(loop, torus, major)
+	if !ok || area == 0 {
+		return false, fmt.Errorf("%w: a torus patch loop has no orientation", decad.ErrDegenerate)
+	}
+	return (area > 0) != sameSense, nil
+}
+
 // addTorusPatchFace writes a torus patch bounded by one loop
-// (supportsAnalyticTorusPatch). The loop is walked counter-clockwise about
-// the STEP face normal: reversed when its (θ, φ) orientation (torusPatchArea)
-// disagrees with the face sense.
+// (supportsAnalyticTorusPatch), walked as torusPatchReversed decides.
 func (b *analyticSTEPBuilder) addTorusPatchFace(
 	ctx context.Context, torus decad.Torus, major float64, loop *decad.Loop, surface step.Reference, sameSense bool,
 ) (step.Reference, error) {
-	area, ok := torusPatchArea(loop, torus, major)
-	if !ok || area == 0 {
-		return 0, fmt.Errorf("%w: a torus patch loop has no orientation", decad.ErrDegenerate)
+	reverse, err := torusPatchReversed(torus, major, loop, sameSense)
+	if err != nil {
+		return 0, err
 	}
-	reverse := (area > 0) != sameSense
 	coedges := loop.CoEdges()
 	oriented := make([]step.Reference, 0, len(coedges))
 	for i := range coedges {

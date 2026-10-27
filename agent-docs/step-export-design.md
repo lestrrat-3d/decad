@@ -28,7 +28,7 @@ according to the writer path.
 - Admit one valid `BodySolid` of one or more lumps, each with one outer shell
   and any number of void shells (§9). Refuse sheets and a mesh whose connected
   facet sets do not match the body's shells one to one.
-- Use analytic AP214 faces when every body face is a `Plane`, a `Cylinder`, a `Cone` or a
+- Use analytic AP214 faces when every body face is a `Plane`, a `Cylinder`, a `Cone`, a `Sphere` or a
   `Torus` and every edge is a `Line3`, an `Arc3`, an `Ellipse3` or a full `Circle3`. A plane's loops
   are one full circle each, or chains of lines and arcs (at least three
   edges, or two when one is an arc). A cylindrical wall is either full —
@@ -39,10 +39,43 @@ according to the writer path.
   both present, since a side line split by a neighbouring face's vertex is
   several `Line3`s. A loop fillet's straight-walk patch is such a wall, closed
   by quarter-meridian arcs or by mitre ellipses.
-  A conical wall is full only: exactly two one-circle boundary loops whose
+  A conical wall is full or a patch. A full wall has exactly two one-circle boundary loops whose
   start vertices lie on one meridian. It is written as a `CONICAL_SURFACE` placed at the cone's `Origin`,
   with the cone's `Radius` there and its `HalfAngle`, and a seam along the generator between the starts.
-  A cone that reaches its apex, or whose wall is partial, takes the faceted writer. Emit one `ADVANCED_FACE`
+  A cone patch has one loop of at least three edges on a cone whose `Radius` is exactly zero, so its
+  `Origin` is the apex. Each edge is an `Arc3` about the cone's axis (its `Axis` the cone's or its
+  negation and its `Center` on the axis, exactly) or a `Line3` along a generator (an exactly zero cross
+  product of its two ends taken from the apex), with both kinds present. A chamfer's convex corner gives
+  two arcs and two generators; a reflex corner gives one arc and two generators meeting at the apex
+  vertex. Its face sense is its outward normal against the radial direction at its first vertex off the
+  axis, since the `CONICAL_SURFACE` normal leans away from the axis at every point off it.
+  A sphere patch has one loop of at least three `Arc3` edges, each a great circle: its `Center` and
+  `Radius` the sphere's, exactly. A box corner's fillet ball is three quarter arcs. It is written as a
+  `SPHERICAL_SURFACE` at the sphere's `Center`, placed about the world z axis, with the sphere's
+  `Radius`; its sense is its outward normal against the direction from the centre.
+  Every arc of a cone or sphere patch has both vertices in its own plane (an exactly zero dot product
+  of each with its `Axis` from its `Center`), and every vertex of such a patch is `Exact`. Both checks
+  only refuse: an arc record whose axis does not hold its vertices, or a vertex whose position carries
+  a bound, is not proven to lie on the curves and surface the file states through it, and the body
+  takes the faceted writer. The vertex check covers cone and sphere patches only. The same reason
+  holds for the other arms, which do not apply it: a plane, cylinder or torus face writes its held
+  vertex coordinates through its curves and surface whatever bound they carry, so such a file states
+  points the body does not prove lie on them. The bounds those faces carry today are rounding, measured on amd64 at
+  most 5.3e-15 mm on a shell with an oblique opening, 7.7e-14 mm and 1.5e-13 mm on the round bosses
+  crossing a plate's outline, and 4.4e-16 mm on a loop fillet's rounded-plate top loop. Applying the
+  check to every arm would send each of those bodies to the faceted writer
+  (`agent-docs/missing-features.md`).
+  A cone or sphere patch's loop is walked by the edge-use rule, never by a parameter-plane area, which
+  a cone's apex vertex leaves undefined. Every other face is walked as its own rule below decides. A
+  closed shell uses each edge once in each direction, so each patch is walked so that every edge it
+  shares with a face already decided runs opposite to that face's use, and the decided set grows until
+  no patch is left. A patch that no decided face reaches, or whose shared edges ask for both walks,
+  sends the body to the faceted writer.
+  A cone with one circle loop, which reaches its apex without a vertex there, and a sphere with no
+  loop, a whole revolved ball, take the faceted writer: each would need a synthetic bound through a
+  point where the surface has no normal, and `ReadSTEP` reads neither a cone's apex nor a whole sphere's
+  seam (`agent-docs/step-import-design.md` I12, I15), so no reader in this repository can check that
+  bound. Emit one `ADVANCED_FACE`
   per body face. Share `VERTEX_POINT`s and `EDGE_CURVE`s by body topology
   identity. An `Arc3` edge is a `CIRCLE` placed about its own `Axis`, with the
   reference direction to its start vertex, trimmed by its two vertices; it
@@ -64,7 +97,7 @@ according to the writer path.
   angle) plane disagrees with that sense. A horn torus patch is a three-edge
   loop and keeps the faceted writer.
   The analytic writer copies each face's tag as it is held: the STEP surface
-  is the float image of the `Plane`, `Cylinder`, `Cone` or `Torus` tag, not an
+  is the float image of the `Plane`, `Cylinder`, `Cone`, `Sphere` or `Torus` tag, not an
   exact claim about the surface the body denotes. It does not read
   `topo.Face.NormalBound`, so a face whose tag departs from its true surface
   by a stated bound is written at its tag all the same. A Loft bore cylinder

@@ -2,6 +2,7 @@ package export
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 
@@ -17,9 +18,13 @@ import (
 // cylinder is a full wall (two one-circle loops whose starts align along its
 // axis) or a partial wall (one loop of lines along its axis closed by arcs
 // about it or by ellipses); a cone is a full wall (two one-circle loops whose
-// starts share a meridian); a torus is a whole turn (two one-circle loops
+// starts share a meridian) or a patch of arcs about its axis and generator
+// lines (supportsAnalyticConePatch); a sphere is a patch of great-circle arcs
+// (supportsAnalyticSpherePatch); every vertex of a cone or sphere patch is
+// Exact (loopVerticesExact); a torus is a whole turn (two one-circle loops
 // whose starts share an azimuth) or a patch of parallel and meridian arcs
-// (supportsAnalyticTorus). An unsupported edge or wall sends the entire body
+// (supportsAnalyticTorus). Every patch's walk must follow from its
+// neighbours' (patchWalks). An unsupported edge or wall sends the entire body
 // through the faceted writer, so one file never mixes two unrelated boundary
 // constructions.
 func supportsAnalyticSTEP(ctx context.Context, body *decad.Body) (bool, error) {
@@ -64,12 +69,22 @@ func supportsAnalyticSTEP(ctx context.Context, body *decad.Body) (bool, error) {
 				return false, nil
 			}
 		case decad.Cone:
-			if !supportsAnalyticConeWall(loops, surface) {
+			if !supportsAnalyticCone(loops, surface) {
+				return false, nil
+			}
+		case decad.Sphere:
+			if len(loops) != 1 || !supportsAnalyticSpherePatch(loops[0], surface) {
 				return false, nil
 			}
 		default:
 			return false, nil
 		}
+	}
+	if _, err := patchWalks(ctx, body); err != nil {
+		if errors.Is(err, errPatchUnoriented) {
+			return false, nil
+		}
+		return false, err
 	}
 	return true, nil
 }
@@ -153,10 +168,16 @@ type analyticSTEPBuilder struct {
 	points   map[*decad.Vertex]step.Reference
 	vertices map[*decad.Vertex]step.Reference
 	edges    map[*decad.Edge]step.Reference
+	walks    map[*decad.Face]bool
 }
 
 func (b *fileBuilder) addAnalyticFaces(ctx context.Context, body *decad.Body) ([]step.Reference, error) {
+	walks, err := patchWalks(ctx, body)
+	if err != nil {
+		return nil, fmt.Errorf("export: STEP analytic faces: %w", err)
+	}
 	a := &analyticSTEPBuilder{
+		walks:       walks,
 		fileBuilder: b,
 		points:      make(map[*decad.Vertex]step.Reference),
 		vertices:    make(map[*decad.Vertex]step.Reference),
@@ -178,6 +199,8 @@ func (b *fileBuilder) addAnalyticFaces(ctx context.Context, body *decad.Body) ([
 			ref, err = a.addTorusFace(ctx, face, surface)
 		case decad.Cone:
 			ref, err = a.addConeFace(ctx, face, surface)
+		case decad.Sphere:
+			ref, err = a.addSphereFace(ctx, face, surface)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("export: STEP analytic face %d: %w", i, err)
