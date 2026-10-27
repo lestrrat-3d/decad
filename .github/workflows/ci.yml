@@ -86,10 +86,9 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      # Each package writes its own named binary and shares the root compile.
-      # The independent examples job compiles its own whole packages.
+      # The shards need only the root and exported-API test binaries.
       - name: Build race test binaries
-        run: go test -c -race -o race-bin/ . ./apitest/ ./decadtest/ ./export/ ./internal/decaderr/
+        run: go test -c -race -o race-bin/ . ./apitest/
 
       # Shards download the two binaries with recorded name assignments.
       - name: Upload race test binaries
@@ -102,16 +101,41 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: Upload race test binaries of the other packages
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - name: Save Go build cache
+        uses: ./.github/actions/go-build-cache-save
+
+  # These support packages run independently while the root/API binaries build.
+  test-support-packages:
+    name: test (ubuntu-latest, support packages, -race)
+    runs-on: ubuntu-latest
+    env:
+      GORACE: atexit_sleep_ms=0
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          name: race-tests-packages
-          path: |
-            race-bin/decadtest.test
-            race-bin/export.test
-            race-bin/decaderr.test
-          if-no-files-found: error
-          retention-days: 1
+          go-version-file: go.mod
+          cache: false
+
+      - name: Restore Go build cache
+        uses: ./.github/actions/go-build-cache-restore
+        with:
+          name: race-support-packages
+          sources: |
+            :(glob)**/*.go
+            :(exclude)dynamics
+            :(exclude)examples
+            :(exclude)_gallery
+            :(exclude)_shardgen
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run support package race tests
+        run: go test -race -count=1 -v -timeout 10m ./decadtest/ ./export/ ./internal/decaderr/
 
       - name: Save Go build cache
         uses: ./.github/actions/go-build-cache-save
@@ -274,22 +298,6 @@ jobs:
             echo "::error::shard ${{ matrix.shard }} took ${elapsed}s, over the ${budget}s budget; re-measure and regenerate .github/test-shards.txt and the companion manifests (see _shardgen/main.go)"
             exit 1
           fi
-
-      - name: Download dependent package race binaries
-        if: matrix.shard == '0'
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: race-tests-packages
-          path: race-bin
-
-      - name: Run dependent package race tests
-        if: matrix.shard == '0'
-        shell: bash
-        run: |
-          chmod +x race-bin/*.test
-          (cd decadtest && ../race-bin/decadtest.test -test.count=1 -test.v -test.timeout 10m)
-          (cd export && ../race-bin/export.test -test.count=1 -test.v -test.timeout 10m)
-          (cd internal/decaderr && ../../race-bin/decaderr.test -test.count=1 -test.v -test.timeout 10m)
 
   # Go runs these ordinary packages concurrently, with no test-name filters.
   # A dedicated cache keeps the examples' build output between runs.
