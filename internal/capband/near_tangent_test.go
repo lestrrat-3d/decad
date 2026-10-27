@@ -255,6 +255,19 @@ func tinyArcLoop() sectionrecord.LoopRecord {
 	}}
 }
 
+// nearTangentSlotLoop closes nearTangentPair into the 30 × 10 slot: its right
+// arc, a little past a half turn, meets both lines near tangent, and its left
+// arc meets them exactly tangent.
+func nearTangentSlotLoop(shift float64) sectionrecord.LoopRecord {
+	p := func(u, v float64) sectionrecord.Point2 { return sectionrecord.Point2{U: u, V: v} }
+	line, arc := nearTangentPair(shift)
+	return sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		line, arc,
+		sectionrecord.LineSeg{Start: p(15, 5), End: p(-15, 5), TStart: 0, TEnd: 1},
+		sectionrecord.ArcSeg{Center: p(-15, 0), Start: p(-15, 5), End: p(-15, -5), TStart: 0, TEnd: 1},
+	}}
+}
+
 // TestNearTangentWallSurvivalBothEnds pins the survival gate where the
 // near-tangent join sits at a wall's start and on a circular wall. The riser
 // leaves its arc near tangent: a unit riser drafted 0.5 mm inward is admitted;
@@ -262,12 +275,16 @@ func tinyArcLoop() sectionrecord.LoopRecord {
 // reading the arc's start foot for its end foot would hide; a 2⁻³⁶ mm riser
 // drafted outward is shorter than its start corner's ρ, which reading that ρ
 // as zero would hide. tinyArcLoop's 2⁻⁴⁰ rad window is shorter than the turn
-// its two ends' ρ allow at a 1 mm draft. Removing each mutation's target turns
-// its row red, and removing the gate admits every refusal.
+// its two ends' ρ allow at a 1 mm draft. The slot's right arc passes a half
+// turn: drafted to within 6.2e-10 mm of its radius it is admitted, and to
+// within 6.0e-10 mm, where condition 6 still holds (ρ ≈ 5.8e-10 mm), the
+// half-turn branch refuses it. Removing each mutation's target turns its row
+// red, and removing the gate admits every refusal.
 func TestNearTangentWallSurvivalBothEnds(t *testing.T) {
 	t.Parallel()
 	shift := 5 * math.Ldexp(1, -33)
 	require.NoError(t, draftAdmission(t, riserLoop(1, shift), 0.5))
+	require.NoError(t, draftAdmission(t, nearTangentSlotLoop(shift), 5-6.2e-10))
 	for _, tc := range []struct {
 		name   string
 		loop   sectionrecord.LoopRecord
@@ -278,6 +295,7 @@ func TestNearTangentWallSurvivalBothEnds(t *testing.T) {
 		{"riser overrun at the far section", riserLoop(1, shift), 3, "a straight wall at a near-tangent join", "[2]"},
 		{"riser within its start charge", riserLoop(math.Ldexp(1, -36), shift), -0.5, "a straight wall at a near-tangent join", "[2]"},
 		{"arc window within its ends' charge", tinyArcLoop(), 1, "a circular wall at a near-tangent join", "[1]"},
+		{"arc past a half turn within its ends' charge", nearTangentSlotLoop(shift), 5 - 6e-10, "a circular wall at a near-tangent join", "[1]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

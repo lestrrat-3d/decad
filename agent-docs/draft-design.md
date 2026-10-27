@@ -912,7 +912,11 @@ and refuses it drafted until the far miter overruns the wall or with a
 `2⁻³⁶` mm wall inside `ρ`; a riser that leaves a near-tangent quarter arc off
 the bottom wall's axis refuses the same two ways at its start corner, and a
 `2⁻⁴⁰` rad arc between two near-tangent walls refuses at a 1 mm draft, where
-its true window reverses (`internal/capband/near_tangent_test.go`); the two-sided slot of `2⁻⁴⁰` sews a
+its true window reverses; the slot's right arc, past a half turn, is
+admitted drafted to within `6.2e-10` mm of its radius and refused by the
+half-turn branch at `6.0e-10` mm, where condition 6 still holds: condition 6
+gives only `ρ_start + ρ_end < 2r_lo`, and `(π/2)·2 > 3`
+(`internal/capband/near_tangent_test.go`); the two-sided slot of `2⁻⁴⁰` sews a
 mesh that carries the proof (`internal/draftrecord/tessellate_test.go`).
 
 **PR 5 fixtures** (`apitest/draft_subset_test.go`): F1's box with its `+u`
@@ -963,6 +967,7 @@ undecided.
 | the other near-tangent gates | condition 1, 5 or 6 skipped, or condition 6 read with every arc counter-clockwise | the matching `capband` refusal row admits, for condition 6 on a counter-clockwise arc moved inward and on a clockwise arc moved outward |
 | the survival gate (`NearTangentWallRefusal`) | skipped in the admission | every wedge, riser and tiny-arc refusal row admits |
 | the gate's circular branch | a circular wall read as surviving | the tiny-arc row admits |
+| the gate's half-turn branch | an arc past a half turn read as surviving | the slot row at `6.0e-10` mm admits |
 | the start corner's `ρ` in the gate | read as zero | the short riser admits |
 | the circular neighbour's foot at a wall's start | read at the arc's start instead of its end | the overrun riser admits |
 | Lemma 1's `ρ` and `ε` | each quartered | the 256-bit miter reference at an amount of 0.26 mm |
