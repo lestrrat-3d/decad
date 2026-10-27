@@ -47,8 +47,9 @@ func PrepContext(ctx context.Context, verts []r3.Vec, tris [][3]int, src []int) 
 				return nil, err
 			}
 		}
-		a, b, c := bm.Xverts[tri[0]], bm.Xverts[tri[1]], bm.Xverts[tri[2]]
-		n := proof.Xcross(proof.Xsub(b, a), proof.Xsub(c, a))
+		a, b, c := proof.DyVec(bm.Verts[tri[0]]), proof.DyVec(bm.Verts[tri[1]]), proof.DyVec(bm.Verts[tri[2]])
+		d := proof.DvCross(proof.DvSub(b, a), proof.DvSub(c, a))
+		n := proof.Xpt(proof.XhpStripTwosOwned(proof.XhpOfDyadics(d[0], d[1], d[2])))
 		if n.X.Sign() == 0 && n.Y.Sign() == 0 && n.Z.Sign() == 0 {
 			return nil, fmt.Errorf(`%w: an operand holds a collapsed facet, which carries no plane and no interior — a contact made on it could not be classified at all, so this evaluator refuses the operand rather than examine it in part`, decaderr.ErrUnsupported)
 		}
