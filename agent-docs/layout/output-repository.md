@@ -25,7 +25,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `lattice.go` | Public `GyroidLattice`, `SchwarzPLattice`, `DiamondLattice`, `NeoviusLattice`, `IWPLattice`, `FischerKochSLattice`, `LidinoidLattice` and `LatticeSpec`: gates, then `internal/lattice/` samples and cuts the field and `NewMeshBody` reads the result. See lattice design. |
 | `internal/orthoshell/` | Grid erosion of an orthogonal polyhedron by a cube, the removed-face slab, the wall mesh and the face press, for `Shell` and `MoveFace`. See orthogonal-shell and orthogonal-move designs. |
 | `internal/lattice/` | Gyroid field sampled on a grid and cut by marching tetrahedra into a closed triangle mesh. See lattice design. |
-| `mesh_reduce.go` | Public `ReduceMesh`, `ReduceMeshWithin` and `MeshReduceReport`: gates, then `internal/meshreduce/` clusters vertices and `NewMeshBody` reads the result. See mesh-import design §9. |
+| `mesh_reduce.go` | Public `ReduceMesh`, `ReduceMeshWithin`, `CollapseMesh` and `MeshReduceReport`: gates, then `internal/meshreduce/` clusters vertices or collapses edges and `NewMeshBody` reads the result. See mesh-import design §9, §12 and §13. |
 | `internal/meshreduce/` | Vertex-clustering reduction of an indexed triangle mesh. See mesh-import design §9. |
 | `internal/meshrepair/` | Weld, degenerate-triangle drop, shell orientation and boundary-loop fill of an indexed triangle mesh. See mesh-import design §7. |
 | `internal/meshparse/` | STL, OBJ and 3MF parsing into welded vertices and triangles, with size limits. See mesh-import design. |
