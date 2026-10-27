@@ -166,3 +166,14 @@ finds behind a surface (`agent-docs/dxf-export-design.md` D5, D6).
 | W2 | A face seen from behind is decided against the line of sight from the eye to the pixel's world point (V5), not the camera's axis, so a face the axis sees edge on can still look toward or away from the eye. The shadow's colour is that face's base colour, as H3 says. |
 | W3 | Every other rule of §10 holds: the bias, the map's size, a convex part shadowing none of itself and the bytes without `Shadows`. |
 | W4 | The tests place the shadow of a pillar on a plate from the distances of V2 and the key light's direction and read the pixel's colour, which is the plate's blue at the ambient level, and `raster`'s own tests state the world point and the sight line. |
+
+## 14. Soft shadows
+
+`View.ShadowSoftness`, an angle, makes the key light an area light.
+
+| Decision | Rule |
+|---|---|
+| F1 | The value is the angular radius of the light. It needs `Shadows` (otherwise `ErrDegenerate`), is a positive angle of at most 45 degrees (`ErrUnitKind` for another kind, `ErrDegenerate` beyond the bound), and the zero `units.Value` is the point light of §10, whose bytes are unchanged. |
+| F2 | The light is sampled in 32 directions over a disc of radius `tan(softness)` about the key direction, placed on a Vogel spiral so they fill the disc evenly. Each direction has its own shadow map, 2048 pixels at most, built one at a time so only one is held. |
+| F3 | A pixel counts the samples whose light a nearer triangle blocks, with §10's bias. A pixel blocked in every sample takes the ambient shade of §10 exactly, one blocked in none keeps its lit shade, and any other takes the lit and ambient shades mixed in the blocked fraction. A face turned from the key light is at the ambient level as before. |
+| F4 | A shadow so grades from dark to light across a penumbra whose width grows with the distance from the occluder, about twice that distance times `tan(softness)`. The tests count the pixels strictly between the lit and shadowed plate levels: a hard shadow has a handful at its edge, a 5 degree one hundreds, and a 12 degree one more; the pillar's top and the far plate are unchanged. A render that mixes by a fixed fraction fails them. |

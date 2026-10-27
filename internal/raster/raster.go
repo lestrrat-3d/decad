@@ -491,6 +491,21 @@ func DrawDashed(img *image.RGBA, proj Projection, segments [][2][2]float64, c co
 // shadows itself.
 func RenderShadowed(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []color.RGBA, back color.RGBA, cam Camera,
 	width, height, shadowSize int) (*image.RGBA, error) {
+	return RenderSoftShadowed(ctx, verts, tris, tints, back, cam, width, height, shadowSize, 0, 1)
+}
+
+// RenderSoftShadowed is [RenderShadowed] for a light of angular radius atan(spread) rather than a
+// point at infinity: the light is sampled at `samples` directions spread over a disc of that
+// radius about the key light's direction (a Vogel spiral, so the samples fill the disc evenly), each
+// with its own shadow map, and a pixel takes the fraction of the samples that cannot reach it as its
+// shade between full light and ambient. Beside an occluder the shade grades from dark to light across
+// a penumbra whose width grows with the distance from the occluder. A spread of zero with one
+// sample is the hard shadow of RenderShadowed, pixel for pixel.
+func RenderSoftShadowed(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []color.RGBA, back color.RGBA, cam Camera,
+	width, height, shadowSize int, spread float64, samples int) (*image.RGBA, error) {
+	if samples < 1 || spread < 0 || math.IsNaN(spread) || math.IsInf(spread, 0) {
+		return nil, fmt.Errorf("%w: a soft shadow needs a finite spread of at least zero and one sample", ErrDegenerate)
+	}
 	proj, err := NewProjection(verts, cam, width, height)
 	if err != nil {
 		return nil, err
@@ -513,71 +528,104 @@ func RenderShadowed(ctx context.Context, verts []r3.Vec, tris [][3]int, tints []
 	if err != nil {
 		return nil, err
 	}
-	toLight, _ := proj.dir.Scale(-1).Add(proj.up.Scale(lightUp)).Sub(proj.right.Scale(lightLeft)).Normalize()
-	lightCam := Camera{Direction: toLight.Scale(-1), Up: cam.Up}
-	if _, _, _, err := lightCam.axes(); err != nil {
-		lightCam.Up = proj.right // the light lies along the camera's up: any other way up will do
+	key, _ := proj.dir.Scale(-1).Add(proj.up.Scale(lightUp)).Sub(proj.right.Scale(lightLeft)).Normalize()
+	// Two directions across the key light, to place the samples on its disc.
+	e1, ok := key.Cross(proj.up).Normalize()
+	if !ok {
+		e1, _ = key.Cross(proj.right).Normalize()
 	}
-	lproj, err := NewProjection(verts, lightCam, shadowSize, shadowSize)
-	if err != nil {
-		return nil, err
-	}
-	shadowMap, err := DepthBuffer(ctx, verts, tris, lproj)
-	if err != nil {
-		return nil, err
-	}
-	for y := range height {
-		if y%64 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, err
+	e2, _ := key.Cross(e1).Normalize()
+	shaded := make([]uint16, width*height)
+	shadow := make([]color.RGBA, width*height)
+	for k := range samples {
+		toLight := key
+		if samples > 1 && spread > 0 {
+			rad := spread * math.Sqrt((float64(k)+0.5)/float64(samples))
+			ang := float64(k) * 2.399963229728653
+			toLight, _ = key.Add(e1.Scale(rad * math.Cos(ang))).Add(e2.Scale(rad * math.Sin(ang))).Normalize()
+		}
+		lightCam := Camera{Direction: toLight.Scale(-1), Up: cam.Up}
+		if _, _, _, err := lightCam.axes(); err != nil {
+			lightCam.Up = proj.right // the light lies along the camera's up: any other way up will do
+		}
+		lproj, err := NewProjection(verts, lightCam, shadowSize, shadowSize)
+		if err != nil {
+			return nil, err
+		}
+		shadowMap, err := DepthBuffer(ctx, verts, tris, lproj)
+		if err != nil {
+			return nil, err
+		}
+		for y := range height {
+			if y%64 == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+			}
+			for x := range width {
+				at := y*width + x
+				if ids[at] < 0 {
+					continue
+				}
+				t := tris[ids[at]]
+				normal, ok := verts[t[1]].Sub(verts[t[0]]).Cross(verts[t[2]].Sub(verts[t[0]])).Normalize()
+				if !ok {
+					continue
+				}
+				// The pixel's world point: the image plane's place of the pixel and its depth.
+				px := proj.centreX + (float64(x)+0.5-float64(width)/2)/proj.scale
+				py := proj.centreY - (float64(y)+0.5-float64(height)/2)/proj.scale
+				world := proj.World(px, py, depths[at])
+				view := proj.Sight(world)
+				if normal.Dot(view) > 0 {
+					normal = normal.Scale(-1) // seen from behind: the side that faces the camera
+				}
+				cos := normal.Dot(toLight)
+				if cos <= 0 {
+					continue // turned from the light: already at the ambient level
+				}
+				lx, ly, ld := lproj.Project(world)
+				ix, iy := int(math.Floor(lx)), int(math.Floor(ly))
+				if ix < 0 || iy < 0 || ix >= shadowSize || iy >= shadowSize {
+					continue
+				}
+				slope := math.Sqrt(math.Max(0, 1-cos*cos)) / math.Max(cos, 0.1)
+				bias := lproj.PixelSize() * (1.5 + 2*slope)
+				if ld > shadowMap[iy*shadowSize+ix]+bias {
+					shaded[at]++
+					if shaded[at] == 1 {
+						front := Front
+						if tints != nil {
+							front = tints[ids[at]]
+						}
+						base := front
+						if cosView := view.Dot(verts[t[1]].Sub(verts[t[0]]).Cross(verts[t[2]].Sub(verts[t[0]]))); cosView > 0 {
+							base = back
+						}
+						shadow[at] = color.RGBA{
+							R: uint8(math.Round(float64(base.R) * ambient)),
+							G: uint8(math.Round(float64(base.G) * ambient)),
+							B: uint8(math.Round(float64(base.B) * ambient)),
+							A: 255,
+						}
+					}
+				}
 			}
 		}
-		for x := range width {
-			at := y*width + x
-			if ids[at] < 0 {
-				continue
-			}
-			t := tris[ids[at]]
-			normal, ok := verts[t[1]].Sub(verts[t[0]]).Cross(verts[t[2]].Sub(verts[t[0]])).Normalize()
-			if !ok {
-				continue
-			}
-			// The pixel's world point: the image plane's place of the pixel and its depth.
-			px := proj.centreX + (float64(x)+0.5-float64(width)/2)/proj.scale
-			py := proj.centreY - (float64(y)+0.5-float64(height)/2)/proj.scale
-			world := proj.World(px, py, depths[at])
-			view := proj.Sight(world)
-			if normal.Dot(view) > 0 {
-				normal = normal.Scale(-1) // seen from behind: the side that faces the camera
-			}
-			cos := normal.Dot(toLight)
-			if cos <= 0 {
-				continue // turned from the light: already at the ambient level
-			}
-			lx, ly, ld := lproj.Project(world)
-			ix, iy := int(math.Floor(lx)), int(math.Floor(ly))
-			if ix < 0 || iy < 0 || ix >= shadowSize || iy >= shadowSize {
-				continue
-			}
-			slope := math.Sqrt(math.Max(0, 1-cos*cos)) / math.Max(cos, 0.1)
-			bias := lproj.PixelSize() * (1.5 + 2*slope)
-			if ld > shadowMap[iy*shadowSize+ix]+bias {
-				front := Front
-				if tints != nil {
-					front = tints[ids[at]]
-				}
-				base := front
-				if cosView := view.Dot(verts[t[1]].Sub(verts[t[0]]).Cross(verts[t[2]].Sub(verts[t[0]]))); cosView > 0 {
-					base = back
-				}
-				img.SetRGBA(x, y, color.RGBA{
-					R: uint8(math.Round(float64(base.R) * ambient)),
-					G: uint8(math.Round(float64(base.G) * ambient)),
-					B: uint8(math.Round(float64(base.B) * ambient)),
-					A: 255,
-				})
-			}
+	}
+	for at, n := range shaded {
+		if n == 0 {
+			continue
 		}
+		x, y := at%width, at/width
+		if int(n) == samples {
+			img.SetRGBA(x, y, shadow[at])
+			continue
+		}
+		f := float64(n) / float64(samples)
+		lit, dark := img.RGBAAt(x, y), shadow[at]
+		mix := func(a, b uint8) uint8 { return uint8(math.Round(float64(a)*(1-f) + float64(b)*f)) }
+		img.SetRGBA(x, y, color.RGBA{R: mix(lit.R, dark.R), G: mix(lit.G, dark.G), B: mix(lit.B, dark.B), A: 255})
 	}
 	return img, nil
 }
