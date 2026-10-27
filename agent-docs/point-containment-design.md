@@ -499,9 +499,11 @@ Two payloads carry a slab stack:
   §3 "A1 as a brep", §4.1) is built from exactly the stack's loops at the
   stack's levels, each face within the stack's section displacement of the
   set it denotes. The route requires that displacement and every stack level
-  displacement to be zero, and requires the gates that the BRep's scale
-  conversion requires (`brepScaleSource`): every face's displacement and
-  level displacements zero, no blend face, no loop band and no shell band.
+  displacement to be zero, at least one face, every face's displacement and
+  both level displacements zero, every side-line split's level displacement
+  zero, no blend face, no loop band, and no boss or pocket shell band. Unlike
+  the BRep's scale conversion, it does not require line-only faces: a curved
+  loop reads through §7.3's own gates.
   Then the body is the union of the stack's slabs. The BRep joins each
   junction at one canonical vertex (general-boolean §4.1), so the route also
   requires every stack loop's junctions to close at two equal ends, where

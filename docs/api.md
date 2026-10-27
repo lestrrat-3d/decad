@@ -388,7 +388,7 @@ whose profile is made of lines, whole circles with a millimetre radius and
 whole arcs whose end lies exactly on the start's radius. A blind pocket, a
 boss united onto a plate and other stacked prisms with undisplaced levels and
 such profiles answer the same way, and so does the BRep a `Union` builds when
-a boss stands flush with the plate's outline. A full solid `Revolve` answers
+a boss stands flush with the plate's outline or crosses it. A full solid `Revolve` answers
 exactly when its meridian is made of whole lines, whole circles and such
 whole arcs, its axis is resolved exactly, and its sweep is `FullRevolution`
 or a whole turn in degrees; points on the axis are included. Such a body
