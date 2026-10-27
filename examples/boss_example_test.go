@@ -337,3 +337,49 @@ func Example_boss_ribs() {
 	// Output:
 	// volume: 8524 mm^3
 }
+
+// BossSpec.Tilt leans a boss away from the face's normal, for a post that has to
+// clear a neighbour or meet a part at an angle. TiltDirection says which way it leans,
+// as an angle about the normal from the face's U axis. Height runs along the leaning
+// axis. Here an 8 mm post stands 8 mm tall, 30 degrees off the vertical toward +X.
+func Example_boss_tilt() {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		fmt.Printf("failed to create sketch: %s\n", err)
+		return
+	}
+	rect := s.CreateRectangle(-20, -20, 20, 20)
+	s.Fix(rect.A)
+	if _, err := s.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to solve: %s\n", err)
+		return
+	}
+	plate, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	if err != nil {
+		fmt.Printf("failed to extrude: %s\n", err)
+		return
+	}
+	boss, err := decad.Boss(context.Background(), plate, decad.BossSpec{
+		Face:     decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
+		At:       r3.Vec{X: 0, Y: 0, Z: 10},
+		Diameter: units.Millimeters(8),
+		Height:   units.Millimeters(8),
+		Tilt:     units.Degrees(30),
+	})
+	if err != nil {
+		fmt.Printf("failed to raise the boss: %s\n", err)
+		return
+	}
+	box, err := boss.Bounds()
+	if err != nil {
+		fmt.Printf("failed to read bounds: %s\n", err)
+		return
+	}
+	// The top disc is centred 8 mm along the axis, 6.93 mm up from the face, and its edge
+	// reaches 4 sin 30 = 2 mm further up.
+	fmt.Printf("boss reaches z = %.1f mm\n", box.Max.Z)
+	// Output:
+	// boss reaches z = 18.9 mm
+}

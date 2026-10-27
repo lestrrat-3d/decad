@@ -2575,3 +2575,5 @@
 10	0.01	TestBossWithGussetRibs
 10	0.01	TestBossRibsTurnWithTheirAngleAndLeavePilotHoleClear
 10	0.01	TestBossRibsRefusals
+10	0.01	TestBossLeansAlongAnAxis
+10	0.01	TestBossTiltRefusals
