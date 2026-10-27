@@ -1310,6 +1310,9 @@
 6	0.01	TestRevolveWallNormalCoversNearParallelSegment
 6	0.02	TestSectionCardinalConePlacementAndAxisSense
 6	0.44	TestSectionCardinalConeRoundedProxyCarriesDisplacement
+10	0.01	TestMoveFacePushesAndPullsFacesOfABox
+10	0.01	TestMoveFaceOnAnLShape
+10	0.01	TestMoveFaceRefusals
 6	0.01	TestSectionCardinalSphereCutsAcrossRevolveAxis
 6	0.00	TestSectionDirectHoleFreeLoftRefusesTwistedCorrespondence
 6	0.50	TestSectionObliqueOffsetSpherePlacement

@@ -15,6 +15,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `edge_dihedral.go` | `Edge.planarDihedral`, the angle across the corner of a convex or concave planar edge that `ChamferAngle` and `FilletChord` share. |
 | `chamfer_angle.go` | Public `ChamferAngle`: reads the angle, gates each edge as right-angled, then calls `Chamfer` with the second setback. See chamfer-angle design. |
 | `modify_options.go` | Public reach option tiers, codec adapters and asymmetric reference resolution (SX3). See modify-reach §2, §6. |
+| `move_face.go` | Public `MoveFace`: gates on a faceted receiver and one selected face, then `internal/orthoshell/` presses the face and `solidFromMeshBody` makes the result. See orthogonal-move design. |
 | `shell_orthogonal.go` | The orthogonal-polyhedron route of `Shell`: gates on a faceted receiver, then `internal/orthoshell/` builds the walls and `solidFromMeshBody` makes them the result. See orthogonal-shell design. |
 | `shell.go` | Public `ShellOption`, `ShellSense` and `Shell`: options, selector and thickness gates, then `internal/brepmodify/` builds the shell. Also `shellTol`. See modify §7–§9 and Table R. |
 | `brep_modify.go` | The prism cap faces a modify op classifies against, the modify commit, and the conversions to `internal/brepmodify/`, which owns the brep and stacked receiver routes. See brep-modify. |

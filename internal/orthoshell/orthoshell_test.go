@@ -168,3 +168,71 @@ func TestOutwardWallsOfAnLShapeKeepTheMiteredCorner(t *testing.T) {
 	// The L dilated by 0.5: [-0.5,4.5] x [-0.5,2.5] and [-0.5,2.5] x [2.5,4.5], area 15 + 6 = 21, 3 high: 63, less the L's 24.
 	require.InDelta(t, 63-24, volume(wv, wt), 1e-9)
 }
+
+func TestPressMovesAFaceOfABox(t *testing.T) {
+	t.Parallel()
+	v, tris, face := box(r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
+	mark := func(f int) []bool {
+		m := make([]bool, len(tris))
+		for i, g := range face {
+			m[i] = g == f
+		}
+		return m
+	}
+	for name, tc := range map[string]struct {
+		face   int
+		d      float64
+		volume float64
+		hi     r3.Vec
+	}{
+		"top out":    {1, 2, 10 * 8 * 8, r3.NewVec(10, 8, 8)},
+		"top in":     {1, -2, 10 * 8 * 4, r3.NewVec(10, 8, 4)},
+		"right out":  {5, 3, 13 * 8 * 6, r3.NewVec(13, 8, 6)},
+		"back in":    {3, -3, 10 * 5 * 6, r3.NewVec(10, 5, 6)},
+		"bottom out": {0, 1.5, 10 * 8 * 7.5, r3.NewVec(10, 8, 6)},
+	} {
+		mv, mt, err := orthoshell.Press(v, tris, mark(tc.face), tc.d)
+		require.NoError(t, err, name)
+		require.InDelta(t, tc.volume, volume(mv, mt), 1e-9, name)
+		_, hi := bounds(mv)
+		require.True(t, hi.Equal(tc.hi, 1e-9), "%s: %v", name, hi)
+	}
+}
+
+func TestPressMovesAFaceOfAnLShape(t *testing.T) {
+	t.Parallel()
+	v, tris := lShape()
+	// The vertical arm's right face is x = 2 over y 2..4: every triangle on that plane facing +x.
+	face := make([]bool, len(tris))
+	for i, tri := range tris {
+		a, b, c := v[tri[0]], v[tri[1]], v[tri[2]]
+		face[i] = a.X == 2 && b.X == 2 && c.X == 2 && a.Y >= 2 && b.Y >= 2 && c.Y >= 2
+	}
+	out, ot, err := orthoshell.Press(v, tris, face, 1)
+	require.NoError(t, err)
+	require.InDelta(t, 24+1*2*2, volume(out, ot), 1e-9, "the arm widens by one mm over its 2 x 2 face")
+	in, it, err := orthoshell.Press(v, tris, face, -1)
+	require.NoError(t, err)
+	require.InDelta(t, 24-1*2*2, volume(in, it), 1e-9)
+}
+
+func TestPressRefusals(t *testing.T) {
+	t.Parallel()
+	v, tris, face := box(r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
+	top := make([]bool, len(tris))
+	for i, f := range face {
+		top[i] = f == 1
+	}
+	_, _, err := orthoshell.Press(v, tris, top, -7)
+	require.ErrorIs(t, err, orthoshell.ErrDegenerate, "out through the bottom")
+	_, _, err = orthoshell.Press(v, tris, top, -6)
+	require.ErrorIs(t, err, orthoshell.ErrDegenerate, "all the way through leaves nothing")
+	_, _, err = orthoshell.Press(v, tris, top, 0)
+	require.ErrorIs(t, err, orthoshell.ErrDegenerate)
+	_, _, err = orthoshell.Press(v, tris, make([]bool, len(tris)), 1)
+	require.ErrorIs(t, err, orthoshell.ErrUnsupported)
+	two := append([]bool{}, top...)
+	two[0] = true // a bottom triangle too
+	_, _, err = orthoshell.Press(v, tris, two, 1)
+	require.ErrorIs(t, err, orthoshell.ErrUnsupported, "two faces are not one")
+}
