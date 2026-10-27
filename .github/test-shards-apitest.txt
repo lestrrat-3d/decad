@@ -1877,6 +1877,8 @@
 7	0.00	TestRevolveReflexSweepBoundsTightenTiltedAxis
 7	0.02	TestRevolveShellSlantedRimRefusals
 7	0.09	TestRevolveShellTessellates
+10	0.00	TestCrossingBlindPocketArcLoops
+10	0.00	TestCrossingBlindPocketArcLoopsDecline
 7	0.01	TestRevolveSphere
 7	0.10	TestRevolveTessellateFullCylinder
 7	0.00	TestRevolveToFaceAngularNearerWay

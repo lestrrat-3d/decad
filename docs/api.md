@@ -261,6 +261,14 @@ over one stretch only; through two prongs it takes the faceted path. Every face 
 the pin's section strictly inside the face. A section that crosses a face's edge, and a pin or face level that
 carries rounding (such as an inch distance), take the faceted path.
 
+A blind pocket `Cut` from either cap of an extruded plate that partly overlaps the plate's one through hole builds
+with no `Faceted` face when the plate, the hole and the pocket are drawn on parallel sketch planes with the same
+placement and every outline is made of lines along the sketch axes, circles and arcs: a rectangular pocket across a
+round hole or a slot, or a round pocket across a square hole. Any circle or arc in the result makes the volume read
+`Approximate` with a small proven bound. A round pocket across a round hole, a pocket wall at an angle to the sketch
+axes, a pocket edge tangent to the hole, a pocket drawn with lines overshooting its corners, and a pocket that also
+crosses the plate's outline take the faceted path.
+
 A tapered `decad.Extrude` (`decad.WithTaper`) is an operand when every corner where a circular wall meets its
 neighbour is tangent. A line and an arc, or two arcs, that meet tangent up to rounding, turning by an angle whose sine
 is at most 2⁻³², count as tangent, and the sliver between them is charged into the result's volume bound. A larger

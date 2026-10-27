@@ -108,7 +108,7 @@ admits takes it unchanged.
 | A4 | a reflected operand, or two operands whose relative map is a reflection | M3, M4, M5, T1, T2 | prism-boolean's own paths over a reflected re-expression (§3.2) |
 | A5 | a multi-region operand or result: a prism-group tool (N holes in one arrangement), a `Union` of disjoint footprints | S5 (through mirror §6), S12, P2 | one-slab multi-region `stackedPrismPayload` (mirror §6.3) |
 | A6 | a split boundary under a non-identity re-expression, a prior section displacement or a walk charge | S9 (45° in plane), rotated and translated overlaps; not P1 (A6 below) | `prismPayload` carrying a certified crossing-sensitivity charge |
-| A7 | one rectangular blind pocket crossing one rectangular through hole, opening at either cap, clipped to the target | a pocket that partly overlaps a through opening | `brepPayload` with split hole walls and a partial floor |
+| A7 | one blind pocket crossing one through hole, opening at either cap, clipped to the target, every loop of axis-aligned lines, circles and arcs | a pocket that partly overlaps a through opening: a rectangle across a round hole or a slot, a round pocket across a square hole | `brepPayload` with split hole walls and a partial floor |
 | A8 | a blind pocket ending exactly at an interface of a stack, overlapping in plan an opposed pocket that ends there | pockets from opposite faces that meet at one level | `brepPayload` with a partial floor and ceiling |
 
 #### A1 — stacked union
@@ -196,7 +196,9 @@ walked counter-clockwise, with prism-boolean §4.2's enclosed-void check and
 §6's audit per loop. A slab one operand reaches keeps that operand's
 records verbatim. Each interface arranges every record reaching the slab
 below or the slab above it, again split by owner, once: a record reaching
-both sides enters once and counts on both. The scene is cached by its
+both sides enters once and counts on both. Two records of one operand are one
+record there only when their outer loops and their holes are equal exactly,
+so two slabs that share an outer but not a hole enter as two. The scene is cached by its
 record set, so a slab merge and an interface over the same records share
 one arrangement and its cut points, and two scenes that cut one carrier
 pair record the crossing once through the keyed table below.
@@ -521,12 +523,15 @@ path. A chain of teeth also stops at the
 second tooth on prism-boolean §4.1's trimmed-circular refusal, since the
 first union trims the hub circle.
 
-#### A7 — rectangular blind pocket across a through hole
+#### A7 — blind pocket across a through hole
 
 `prismboolean.TryCrossingBlindCut` admits `Cut(target, tool)` when `target` is a
 prism with exactly one through hole, `tool` is a hole-free prism, and every
-section loop is four axis-aligned lines. The target and tool have zero
-section displacement. Their relative section map is the identity.
+segment of every section loop is an axis-aligned line, a circle or an arc
+(`momentinput.CrossingBlindLoops`): a rectangle, a rectilinear polygon, a
+round hole, a slot. An oblique line, an ellipse and a free-form segment miss.
+The target and tool have zero section displacement. Their relative section map
+is the identity.
 
 `stackedrecord.CrossingBlindLevels` reads the two sweep intervals exactly. The
 tool is clipped to the target's interval, so it takes one of two arms:
@@ -581,6 +586,27 @@ face and topology checks run before publication; `Tessellate(VerifyAll)`
 checks the occupied volume. A pocket crossing the body's outer boundary, a
 second source hole, a displaced section, a rotated footprint, and later Cuts of
 the result remain outside this bounded path.
+
+Circles and arcs reach the same build with no new 2D answer. Each crossing of
+a pocket line with a hole circle, or of a pocket circle or arc with a hole
+line, is a cut `sketch` computed and certified with `TExact`. An uncertified
+fragment misses before any cell is read. The engine places it as "A1 as a
+brep" places a line crossing a circle: the line's walked point with its fixed
+coordinate exact, keyed by the side of the circle's centre, and charged its
+walk, cut and proven crossing distances. A floor arc and the split cylinder
+wall are pinned between those vertices about the recorded centre. Any circle
+or arc in the result makes its volume `Approximate` with a proven bound, even
+when every level is exact and no line crosses a circle (a disc plate's rim).
+Only a result whose loops are all lines, with exact levels, reads `Exact`. Two circles
+or arcs crossing, a round pocket across a round hole, have no exact vertex
+record: the engine misses unless both loops end at one recorded point, and the
+pair takes the mesh path. A floor or ceiling cell with a hole, such as the
+annulus a round pocket leaves around a smaller round hole, also misses in the
+engine, so a counterbore keeps the stacked payload of A2 (stacked §7 stage 2).
+A merged slab loop whose recorded junctions do not meet, such as a pocket
+drawn as four lines overshooting its corners, is a miss here, not
+prism-boolean's RB9 refusal: the pair continues to the later routes and ends
+on the mesh path. A pocket edge tangent to the hole circle also misses.
 
 #### A8 — opposed pockets overlapping at one level
 
