@@ -17,7 +17,7 @@ import (
 // exactly congruent (0, 1, 0), and axes along X of length 2 and 1/2, on which
 // every millimetre conversion is exact.
 
-func mustAxis(t *testing.T, v r3.Vec) coneaxis.Axis {
+func mustAxis(t testing.TB, v r3.Vec) coneaxis.Axis {
 	t.Helper()
 	axis, ok := coneaxis.New(v)
 	require.True(t, ok)

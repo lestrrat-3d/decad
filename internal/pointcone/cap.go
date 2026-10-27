@@ -264,6 +264,7 @@ func CapGeometry(far []r3.Vec, caps [][3]int, axis coneaxis.Axis) []CellGeom {
 // capGeometry is CapGeometry on up to workers goroutines. It runs the serial
 // loop when workers < 2 or a far vertex is not finite.
 func capGeometry(far []r3.Vec, caps [][3]int, axis coneaxis.Axis, workers int) []CellGeom {
+	scale := axisScaler(axis)
 	reach := make([]float64, len(far))
 	out := make([]CellGeom, len(caps))
 	if workers >= 2 && !proofbound.AllFinite(far) {
@@ -280,7 +281,7 @@ func capGeometry(far []r3.Vec, caps [][3]int, axis coneaxis.Axis, workers int) [
 				done[v] = true
 			}
 			out[k] = cellGeometryWith([3]r3.Vec{far[tri[0]], far[tri[1]], far[tri[2]]},
-				[3]float64{reach[tri[0]], reach[tri[1]], reach[tri[2]]}, axis)
+				[3]float64{reach[tri[0]], reach[tri[1]], reach[tri[2]]}, axis, scale)
 		}
 		return out
 	}
@@ -297,7 +298,7 @@ func capGeometry(far []r3.Vec, caps [][3]int, axis coneaxis.Axis, workers int) [
 	_, _ = orderedwork.Each(len(caps), workers, 256, nil, func(k int) error {
 		tri := caps[k]
 		out[k] = cellGeometryWith([3]r3.Vec{far[tri[0]], far[tri[1]], far[tri[2]]},
-			[3]float64{reach[tri[0]], reach[tri[1]], reach[tri[2]]}, axis)
+			[3]float64{reach[tri[0]], reach[tri[1]], reach[tri[2]]}, axis, scale)
 		return nil
 	})
 	return out
@@ -309,18 +310,27 @@ func CellGeometry(tri [3]r3.Vec, axis coneaxis.Axis) CellGeom {
 	for i, p := range tri {
 		reach[i] = proofbound.DvLenUpper(proofbound.HeldDelta(p, r3.Vec{}))
 	}
-	return cellGeometryWith(tri, reach, axis)
+	return cellGeometryWith(tri, reach, axis, axisScaler(axis))
+}
+
+// axisScaler reads a general axis's norm bracket once for every cell about
+// it. A canonical axis converts nothing and gets the zero Scaler.
+func axisScaler(axis coneaxis.Axis) coneaxis.Scaler {
+	if axis.Canonical() {
+		return coneaxis.Scaler{}
+	}
+	return axis.Scaler()
 }
 
 // cellGeometryWith reads one cell's geometry from its vertices and their
 // reaches. Reach and h are millimetre distances for every axis. For a general
 // axis, xMin is the exact smallest s(p) converted down to millimetres, and
 // rhoMin is the §3.5 lower bound on σ divided by |A|↑ (agent-docs/
-// revolve-axis-design.md §3.4, §3.5). A cell whose conversion fails gets
-// rhoMin = 0, which TriangleBound refuses.
-func cellGeometryWith(tri [3]r3.Vec, vertexReach [3]float64, axis coneaxis.Axis) CellGeom {
+// revolve-axis-design.md §3.4, §3.5), both through scale, axis's Scaler. A
+// cell whose conversion fails gets rhoMin = 0, which TriangleBound refuses.
+func cellGeometryWith(tri [3]r3.Vec, vertexReach [3]float64, axis coneaxis.Axis, scale coneaxis.Scaler) CellGeom {
 	if !axis.Canonical() {
-		return cellGeometryAxis(tri, vertexReach, axis)
+		return cellGeometryAxis(tri, vertexReach, axis, scale)
 	}
 	xMin, yMin, yMax, zMin, zMax := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)
 	reach, h := 0.0, 0.0
@@ -341,16 +351,23 @@ func cellGeometryWith(tri [3]r3.Vec, vertexReach [3]float64, axis coneaxis.Axis)
 	return CellGeom{xMin: xMin, rhoMin: rhoMin, reach: reach, h: h}
 }
 
-func cellGeometryAxis(tri [3]r3.Vec, vertexReach [3]float64, axis coneaxis.Axis) CellGeom {
+// cellGeometryAxis is cellGeometryWith for a general axis. scale must be
+// axis.Scaler(); each conversion is then Axis.ScaledDown of the same exact
+// value, bit for bit.
+func cellGeometryAxis(tri [3]r3.Vec, vertexReach [3]float64, axis coneaxis.Axis, scale coneaxis.Scaler) CellGeom {
 	reach, h := 0.0, 0.0
-	sMin := axis.Axial(tri[0])
+	var sMin proofarith.Dyadic
 	for i, p := range tri {
-		sMin = proofarith.DyMin(sMin, axis.Axial(p))
+		if s := axis.Axial(p); i == 0 {
+			sMin = s
+		} else {
+			sMin = proofarith.DyMin(sMin, s)
+		}
 		reach = max(reach, vertexReach[i])
 		h = max(h, proofbound.DvLenUpper(proofbound.HeldDelta(p, tri[(i+1)%3])))
 	}
 	geom := CellGeom{reach: reach, h: h}
-	xMin, ok := axis.ScaledDown(sMin.Rat())
+	xMin, ok := scale.ScaledDown(sMin)
 	if !ok {
 		return geom
 	}
@@ -358,7 +375,7 @@ func cellGeometryAxis(tri [3]r3.Vec, vertexReach [3]float64, axis coneaxis.Axis)
 	if !ok {
 		return geom
 	}
-	rhoMin, ok := axis.ScaledDown(proofarith.FloatRat(sigma))
+	rhoMin, ok := scale.ScaledDown(proofarith.MustDyOf(sigma))
 	if !ok {
 		return geom
 	}

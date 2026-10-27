@@ -291,6 +291,44 @@ func (a Axis) ScaledUp(q *big.Rat) (float64, bool) {
 	return scaled(q, div, lo, hi, proofbound.RatFloatUp)
 }
 
+// Scaler is an axis's norm bracket, read once by Scaler so a loop that
+// converts many A-scaled values about one axis runs NormBracket's two exact
+// square roots once rather than once per value. The zero Scaler refuses every
+// conversion.
+type Scaler struct {
+	lo, hi proofarith.Dyadic
+	ok     bool
+}
+
+// Scaler reads the axis's norm bracket for ScaledDown. It holds the bracket
+// as exact Dyadics, and it refuses, as ScaledDown does, when the bracket is
+// not finite and positive.
+func (a Axis) Scaler() Scaler {
+	lo, hi := a.NormBracket()
+	if !(lo > 0) || proofbound.IsNonFinite(hi) {
+		return Scaler{}
+	}
+	return Scaler{lo: proofarith.MustDyOf(lo), hi: proofarith.MustDyOf(hi), ok: true}
+}
+
+// ScaledDown is Axis.ScaledDown of the exact value q, bit for bit: both round
+// the same exact quotient q/|A|↑ (or q/|A|↓ for a negative q) down to a float,
+// this one through proofarith.DyQuoFloatDown, which forms no big.Rat.
+func (s Scaler) ScaledDown(q proofarith.Dyadic) (float64, bool) {
+	if !s.ok {
+		return 0, false
+	}
+	div := s.hi
+	if q.Sign() < 0 {
+		div = s.lo
+	}
+	out := proofarith.DyQuoFloatDown(q, div)
+	if proofbound.IsNonFinite(out) {
+		return 0, false
+	}
+	return out, true
+}
+
 func scaled(q *big.Rat, div, lo, hi float64, round func(*big.Rat) float64) (float64, bool) {
 	if !(lo > 0) || proofbound.IsNonFinite(hi) {
 		return 0, false

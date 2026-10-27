@@ -13,7 +13,7 @@ import (
 
 // capTestFan subdivides a small point-loft fan, whose far cap lies off the
 // cone axis, rounds times.
-func capTestFan(t *testing.T, rounds int) ([]r3.Vec, [][3]int) {
+func capTestFan(t testing.TB, rounds int) ([]r3.Vec, [][3]int) {
 	t.Helper()
 	const ring = 8
 	verts := []r3.Vec{{X: -1, Y: 3, Z: 3}, {X: 3, Y: 3, Z: 3}}

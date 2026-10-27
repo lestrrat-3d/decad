@@ -118,6 +118,37 @@ func DyQuoFloatUp(n, d Dyadic) float64 {
 	return math.Nextafter(f, math.Inf(1))
 }
 
+// DyQuoFloatDown is proofbound.RatFloatDown over the exact quotient n/d, for
+// d > 0 and n of either sign: the largest float64 at or below n/d, bit for
+// bit, or the saturated nearest float when n/d leaves the range. A negative
+// n answers −ceil(|n|/d), since negation is exact. A nonnegative n answers
+// ceil(n/d) when that is exact and the float below it otherwise: dyQuoRound
+// rounds at 53 bits in the quotient's own binade, so an inexact ceiling f has
+// n/d strictly between f's 53-bit predecessor and f, and that predecessor is
+// NextDown(f), the floor. At f = 2^-1022 the predecessor lies above the largest
+// subnormal, NextDown(f), so the floor is still NextDown(f). A quotient whose
+// ceiling leaves the normal range takes RatFloatDown's own big.Rat path.
+func DyQuoFloatDown(n, d Dyadic) float64 {
+	if d.Sign() > 0 {
+		if n.Sign() < 0 {
+			if f, _, ok := dyQuoRound(DyAbs(n), d, true); ok {
+				return -f
+			}
+		} else if f, exact, ok := dyQuoRound(n, d, true); ok {
+			if exact {
+				return f
+			}
+			return NextDown(f)
+		}
+	}
+	q := new(big.Rat).Quo(n.Rat(), d.Rat())
+	f, _ := RatFloat64(q)
+	if isNonFinite(f) || CmpFloatRat(f, q) <= 0 {
+		return f
+	}
+	return NextDown(f)
+}
+
 // DyQuoFloatError is RationalFloatError(n/d, held) for d > 0: |n/d − held|
 // rounded to nearest and stepped one ulp up when that rounding was inexact.
 func DyQuoFloatError(n, d Dyadic, held float64) float64 {

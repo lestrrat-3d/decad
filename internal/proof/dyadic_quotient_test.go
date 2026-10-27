@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/stretchr/testify/require"
 )
 
@@ -167,5 +168,110 @@ func TestDyQuoFloatReusesNativeLimbs(t *testing.T) {
 		require.Equal(t, math.Float64bits(want), math.Float64bits(result), "sample %d", sample)
 		require.Zero(t, beforeN.Cmp(n.Rat()), "sample %d: numerator changed", sample)
 		require.Zero(t, beforeD.Cmp(d.Rat()), "sample %d: denominator changed", sample)
+	}
+}
+
+// ratFloatDownRef is proofbound.RatFloatDown written over math/big alone.
+func ratFloatDownRef(q *big.Rat) float64 {
+	f, _ := q.Float64()
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return f
+	}
+	if new(big.Rat).SetFloat64(f).Cmp(q) <= 0 {
+		return f
+	}
+	return math.Nextafter(f, math.Inf(-1))
+}
+
+func requireDyQuoFloatDown(t *testing.T, n, d proof.Dyadic, sample int) {
+	t.Helper()
+	q := new(big.Rat).Quo(n.Rat(), d.Rat())
+	want := ratFloatDownRef(q)
+	require.Equal(t, math.Float64bits(want), math.Float64bits(proofbound.RatFloatDown(q)),
+		"sample %d: the reference is not RatFloatDown", sample)
+	require.Equal(t, math.Float64bits(want), math.Float64bits(proof.DyQuoFloatDown(n, d)),
+		"sample %d: n/d=%s", sample, q.FloatString(30))
+}
+
+func TestDyQuoFloatDownMatchesRatFloatDown(t *testing.T) {
+	t.Parallel()
+	r := rand.New(rand.NewPCG(29, 31))
+	for i := range 6000 {
+		n, d := randomDyadic(r), randomDyadic(r)
+		if i%5 == 0 {
+			// Exactly representable quotients: n = f·d.
+			n = proof.DyMul(proof.MustDyOf(math.Ldexp(r.Float64()+0.5, r.IntN(60)-30)), d)
+		}
+		if i%2 == 1 {
+			n = proof.DyNeg(n)
+		}
+		if i%7 == 3 {
+			d = proof.DyNeg(d)
+		}
+		requireDyQuoFloatDown(t, n, d, i)
+	}
+	requireDyQuoFloatDown(t, proof.DyZero(), proof.MustDyOf(3), -1)
+}
+
+// TestDyQuoFloatDownRangeEnds sweeps quotients of both signs from below the
+// subnormal range to past the top of the normal range, so the fast path's
+// range check and the big.Rat path both run.
+func TestDyQuoFloatDownRangeEnds(t *testing.T) {
+	t.Parallel()
+	r := rand.New(rand.NewPCG(37, 41))
+	for i := range 9000 {
+		e := i%2250 - 1125
+		n := proof.DyShift(proof.MustDyOf(r.Float64()+0.5), e)
+		d := proof.MustDyOf(r.Float64() + 0.5)
+		if i%3 == 0 {
+			// An exactly representable quotient where the binade allows one.
+			n = proof.DyShift(d, e)
+		}
+		if i%2 == 1 {
+			n = proof.DyNeg(n)
+		}
+		requireDyQuoFloatDown(t, n, d, i)
+	}
+	// Quotients just below the smallest normal, whose 53-bit ceiling is
+	// 2^-1022 itself, and just above the largest subnormal.
+	three := proof.MustDyOf(3)
+	for k, tail := range []int{-1080, -1100, -1200, -1500} {
+		below := proof.DySubScalar(proof.DyMul(three, proof.MustDyOf(0x1p-1022)), proof.DyShift(proof.DyInt(1), tail))
+		above := proof.DyAdd(proof.DyMul(three, proof.MustDyOf(0x1p-1022-0x1p-1074)), proof.DyShift(proof.DyInt(1), tail))
+		for j, n := range []proof.Dyadic{below, above, proof.DyNeg(below), proof.DyNeg(above)} {
+			requireDyQuoFloatDown(t, n, three, 100000+4*k+j)
+		}
+	}
+}
+
+func TestDyQuoFloatDownLimbBoundaries(t *testing.T) {
+	t.Parallel()
+	nWidths := []int{1, 53, 64, 65, 106, 118, 119, 127, 128, 181, 255, 511, 512, 513, 600, 1024, 2048}
+	dWidths := []int{1, 53, 64, 65, 106, 127, 128, 255, 511, 512, 513, 600}
+	sample := 0
+	for _, nw := range nWidths {
+		for _, dw := range dWidths {
+			for _, offset := range []int{-1100, 0, 1100} {
+				n := dyadicFromParts(t, quotientMantissaMask(nw), offset-nw)
+				d := dyadicFromParts(t, quotientMantissaMask(dw), -dw)
+				requireDyQuoFloatDown(t, n, d, sample)
+				requireDyQuoFloatDown(t, proof.DyNeg(n), d, sample+1)
+				sample += 2
+			}
+		}
+	}
+}
+
+// TestDyQuoFloatDownFormsNoRat pins the fast path: a normal-range quotient of
+// inline mantissas, of either sign, allocates nothing.
+func TestDyQuoFloatDownFormsNoRat(t *testing.T) {
+	n := proof.DyMul(proof.MustDyOf(0.1), proof.MustDyOf(3.7))
+	d := proof.MustDyOf(math.Sqrt(5))
+	for sample, num := range []proof.Dyadic{n, proof.DyNeg(n), proof.DyMul(proof.MustDyOf(0.75), d)} {
+		var result float64
+		allocations := testing.AllocsPerRun(100, func() { result = proof.DyQuoFloatDown(num, d) })
+		require.Zero(t, allocations, "sample %d", sample)
+		want := ratFloatDownRef(new(big.Rat).Quo(num.Rat(), d.Rat()))
+		require.Equal(t, math.Float64bits(want), math.Float64bits(result), "sample %d", sample)
 	}
 }

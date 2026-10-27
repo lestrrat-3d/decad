@@ -612,3 +612,47 @@ func TestTriangleBeyondMatchesRationalOracle(t *testing.T) {
 	require.False(t, coneaxis.X().TriangleBeyond([3]r3.Vec{{Y: 1}, {Y: 2}, {Y: math.NaN()}}, 0.5))
 	require.False(t, coneaxis.X().TriangleBeyond([3]r3.Vec{{Y: 1}, {Y: 2}, {Y: 3}}, math.Inf(1)))
 }
+
+// TestScalerMatchesScaledDown pins Scaler.ScaledDown to Axis.ScaledDown, bit
+// for bit, on the design's axes and on axes whose norm bracket or quotient
+// leaves the float range, for values of both signs and every scale.
+func TestScalerMatchesScaledDown(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(43, 47))
+	axes := append([]r3.Vec{{X: 2}, {X: 0.5}, {X: 1e-300, Y: 3e-300}, {X: 1e300, Z: 7e299},
+		{X: math.MaxFloat64, Y: math.MaxFloat64}, {Y: 0x1p-1074}}, testAxes...)
+	refused := 0
+	for _, v := range axes {
+		axis, ok := coneaxis.New(v)
+		require.True(t, ok)
+		scale := axis.Scaler()
+		for i := range 400 {
+			q := proofarith.DyShift(proofarith.DyMul(proofarith.MustDyOf(rng.Float64()+0.5),
+				proofarith.MustDyOf(rng.Float64()+0.25)), rng.IntN(2400)-1200)
+			switch i % 4 {
+			case 1:
+				q = proofarith.DyNeg(q)
+			case 2:
+				// An exactly divisible value: q = f·hi.
+				_, hi := axis.NormBracket()
+				if !proofbound.IsNonFinite(hi) {
+					q = proofarith.DyMul(proofarith.MustDyOf(float64(rng.IntN(64)+1)), proofarith.MustDyOf(hi))
+				}
+			}
+			if i == 3 {
+				q = proofarith.DyZero()
+			}
+			want, wantOK := axis.ScaledDown(q.Rat())
+			got, gotOK := scale.ScaledDown(q)
+			require.Equal(t, wantOK, gotOK, "axis %v value %s", v, q.Rat().FloatString(20))
+			require.Equal(t, math.Float64bits(want), math.Float64bits(got), "axis %v value %s", v, q.Rat().FloatString(20))
+			if !wantOK {
+				refused++
+			}
+		}
+	}
+	require.Positive(t, refused, "some conversion must refuse")
+	got, ok := coneaxis.Scaler{}.ScaledDown(proofarith.MustDyOf(1))
+	require.False(t, ok, "the zero Scaler refuses")
+	require.Zero(t, got)
+}
