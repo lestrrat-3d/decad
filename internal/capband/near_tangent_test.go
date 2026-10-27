@@ -79,7 +79,8 @@ func TestNearTangentCornerEnclosesTheMiter(t *testing.T) {
 // TestNearTangentCornerRefuses pins each of §9.1.1's refusals by its reason,
 // and the exact-tangent refusal for a corner whose ends differ or whose
 // tangents oppose. Deleting the matching gate in NearTangentCorner turns its
-// row red.
+// row red, and reading every arc as counter-clockwise turns both clockwise
+// rows red.
 func TestNearTangentCornerRefuses(t *testing.T) {
 	t.Parallel()
 	p := func(u, v float64) sectionrecord.Point2 { return sectionrecord.Point2{U: u, V: v} }
@@ -88,6 +89,11 @@ func TestNearTangentCornerRefuses(t *testing.T) {
 	shift := 5 * math.Ldexp(1, -34)
 	first := sectionrecord.ArcSeg{Center: p(0, 0), Start: p(0, -5), End: p(5, 0), TStart: 0, TEnd: 1}
 	second := sectionrecord.ArcSeg{Center: p(2, shift), Start: p(5, 0), End: p(2-shift, 3+shift), TStart: 0, TEnd: 1}
+	// The slot's top line and right arc, walked clockwise as a hole wall: the
+	// arc's material lies outside its circle, so an outward amount shrinks it.
+	cwLine := sectionrecord.LineSeg{Start: p(-15, 5), End: p(15, 5), TStart: 0, TEnd: 1}
+	cwArc := sectionrecord.ArcSeg{Center: p(15+shift, 0), Start: p(15, -5), End: p(15, 5), TStart: 1, TEnd: 0}
+	cwRadius := math.Sqrt(25 + shift*shift)
 	offEnd := sectionrecord.LineSeg{Start: p(-15, -5), End: p(15, -5+math.Ldexp(1, -40)), TStart: 0, TEnd: 1}
 	reversed := sectionrecord.LineSeg{Start: p(15, -5), End: p(-15, -5), TStart: 0, TEnd: 1}
 	for _, tc := range []struct {
@@ -101,6 +107,7 @@ func TestNearTangentCornerRefuses(t *testing.T) {
 		{"turn past the limit", wide, wideArc, 0.4, 0.4, "exceeds the admitted sin²θ ≤ 2⁻⁶⁴"},
 		{"different amounts", line, arc, 0.4, 0, "move by different amounts"},
 		{"moved circle at the corner", line, arc, 5 - 1e-12, 5 - 1e-12, "moved circle comes within"},
+		{"clockwise circle moved outward to the corner", cwLine, cwArc, -(cwRadius - 1e-12), -(cwRadius - 1e-12), "moved circle comes within"},
 		{"recorded ends differ", offEnd, arc, 0.4, 0.4, "exactly tangent join"},
 		{"tangents oppose", reversed, arc, 0.4, 0.4, "exactly tangent join"},
 	} {
@@ -113,6 +120,11 @@ func TestNearTangentCornerRefuses(t *testing.T) {
 	t.Run("an outward amount past the radius stays clear", func(t *testing.T) {
 		t.Parallel()
 		_, why, _ := capband.NearTangentCorner(line, arc, -6, -6, 0)
+		require.Empty(t, why)
+	})
+	t.Run("a clockwise circle moved inward past its radius stays clear", func(t *testing.T) {
+		t.Parallel()
+		_, why, _ := capband.NearTangentCorner(cwLine, cwArc, 6, 6, 0)
 		require.Empty(t, why)
 	})
 }

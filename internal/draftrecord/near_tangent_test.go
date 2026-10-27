@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/draftrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topo/topotest"
 	"github.com/stretchr/testify/require"
@@ -139,4 +140,40 @@ func TestDraftNearTangentMeshChargesTheCorner(t *testing.T) {
 		require.Positive(t, got)
 		require.LessOrEqualf(t, got, perHeight, "level %g: the slice leaves %g mm² past the charge %g", frac, got, perHeight)
 	}
+}
+
+// TestDraftNearTangentChargeJoinsTheProofSum pins the composition: the
+// shifted slot's VolSymDiff is at least the 256-bit sum of the chord term, the
+// vertex-motion term and the corner charge. AbsSumUpper rounds up at every
+// add, so an appended positive term raises the sum even where it sits far
+// below the chord term's last place.
+//
+// Shown to fail first: with the charge left out of the sum in
+// capblend.TessellateMesh, VolSymDiff equalled the two-term sum and fell
+// short of it by the charge.
+func TestDraftNearTangentChargeJoinsTheProofSum(t *testing.T) {
+	t.Parallel()
+	env := topo.Env{Doc: &topo.Document{}, Ref: 1, Alloc: topotest.Alloc{}}
+	body, err := draftrecord.Build(t.Context(), env, taperPayload(t, nearTangentSlot(nearTangentShift), xyFrame(t), 8, 3, false))
+	require.NoError(t, err)
+	dp, ok := body.Payload.(draftrecord.Payload)
+	require.True(t, ok)
+	cbp := dp.Band()
+	mesh := new(topo.Mesh)
+	lms, motion, err := capblend.TessellateMesh(t.Context(), body, cbp, 0.05, true, mesh)
+	require.NoError(t, err)
+	require.True(t, mesh.SymDiffOK)
+	motionMax, err := tessellation.StoreMax(motion)
+	require.NoError(t, err)
+	base, err := tessellation.SymDiff([]float64{
+		capblend.ChordVolume(cbp, lms),
+		proofbound.SweptVolumeAllow(motionMax, proofbound.PerturbedAreaUpper(mesh.Vertices, mesh.Triangles, motionMax)),
+	})
+	require.NoError(t, err)
+	charge, err := capblend.NearTangentVolume(proofbound.NewWorkBudget(t.Context()), cbp, lms)
+	require.NoError(t, err)
+	require.Positive(t, charge)
+	want := bfSum(bf(base), bf(charge))
+	require.GreaterOrEqualf(t, bf(mesh.VolSymDiff).Cmp(want), 0,
+		"VolSymDiff %v is below the chord and motion terms %v plus the charge %g", mesh.VolSymDiff, base, charge)
 }

@@ -494,7 +494,7 @@ the record's floats). A draft band admits the corner when all six hold:
 3. the two exact walk tangents `a` and `b` (as `JoinIsG1` states them) have
    `a·b > 0`;
 4. `S = (a × b)² / (|a|²·|b|²)`, the exact `sin²θ`, is at most `2⁻⁶⁴`, so
-   `θ < 2⁻³²` rad, under a quarter of the build's dead zone;
+   `sin θ ≤ 2⁻³²`, under a quarter of the build's dead zone;
 5. both walks move by one amount;
 6. the moved circle stays clear of the corner: `r_lo > ρ + R_hi·S`, with
    `R = |v − C|` and `r_lo` the smallest moved radius any level reaches.
@@ -559,8 +559,13 @@ closed 1-chains:
 - per straight walk with a near-tangent end, the path `f₁ → q → f₂ → m₂ → m₁
   → f₁`, where an exact end has `m = f`.
 
-Winding numbers add over chains, so `area(S1 △ S0)` is at most the sum of the
-areas those chains enclose. The corner's arc starts at zero length and its
+The split assumes every wall survives at every level, so each wall's true
+edge runs from its start corner to its end corner in the walk's order; a wall
+shorter than about `2ρ` could reverse and break it. The build's consumed-wall
+check enforces it: `offset2d.WalkConsumed` refuses a wall whose held advance
+falls to its tolerance, at `d` (SD7) and at the top of its span (SD10).
+Winding numbers add over chains, so `area(S1 △ S0)`
+is at most the sum of the areas those chains enclose. The corner's arc starts at zero length and its
 chord stays below `ρ < r_lo`, under `√2` times the moved radius, so it never
 reaches a quarter turn; the segment it closes lies inside the disc on the
 chord `fm` as diameter (Thales), of area at most `πρ²/4`. The five points of a
@@ -872,7 +877,7 @@ faceted; `MassProperties` of F1 against the closed form.
 `2⁻⁴⁰` mm meshes with the volume proof at `VerifyAll`, and a `Cut` by a
 square post covers `h[2ℓ(R − d/2) + π(R² − Rd + d²/3)] − 128` with
 `ℓ = 30 + 2⁻⁴⁰` (`apitest/draft_mesh_test.go`); moved `5·2⁻³¹` mm, each join
-turns past `2⁻³²` and the `Cut` refuses naming the corner and the limit. The
+turns past `sin θ = 2⁻³²` and the `Cut` refuses naming the corner and the limit. The
 same records at `2⁻⁴⁰` and `5·2⁻³⁴` mm mesh at three tolerances with the held
 volume within `volSymDiff` of that closed form; the exactly tangent slot
 charges nothing, the `5·2⁻³⁴` slot charges a positive volume whose rate per
@@ -928,11 +933,11 @@ undecided.
 | a kept wall's setback in the band's radius rounding | read against the draft's `d` | the hole-alone mesh `Bound` above F7's |
 | the near-tangent arm of the admission | `capblend.OccupiedVolumeAdmission` passes no `SharpAmounts` | the near-tangent slot: no volume proof at any tolerance, and its `Cut` refuses |
 | the near-tangent turn limit | condition 4 skipped | the `5·2⁻³¹` slot's `Cut` builds; the limit row of `capband` admits |
-| the other near-tangent gates | condition 1, 5 or 6 skipped | the matching `capband` refusal row admits |
+| the other near-tangent gates | condition 1, 5 or 6 skipped, or condition 6 read with every arc counter-clockwise | the matching `capband` refusal row admits, for condition 6 on a counter-clockwise arc moved inward and on a clockwise arc moved outward |
 | Lemma 1's `ρ` and `ε` | each quartered | the 256-bit miter reference at an amount of 0.26 mm |
 | the strip term `3ελ` | dropped from `NearTangentVolume` | the `5·2⁻³⁴` slot: the charge falls below the slice area from the first eighth of the sweep |
 | the disc term `πρ²/4` | dropped | no fixture: the segment it covers sits below `1e-33` mm² on the slot |
-| `NearTangentVolume` in the proof sum | not appended | no fixture: on the slot it is eighteen orders below the chord term, and the sum moves by one rounding step |
+| `NearTangentVolume` in the proof sum | not appended | the `5·2⁻³⁴` slot: its `volSymDiff` falls below the 256-bit sum of the chord and motion terms and the charge |
 
 ## 12. Do not do this
 
@@ -987,8 +992,8 @@ undecided.
 - **Circular corners**: G1 joins only in this design; the ruled stand-in for
   a mitered circular corner is deferred (SD4, §14).
 - **Near-tangent joins**: a line–arc join the build reads as G1 and the record
-  does not make exactly tangent meshes with the volume charge of §9.1.1 up to
-  a turn of `2⁻³²` rad; a join of two circular walls or a larger turn keeps
+  does not make exactly tangent meshes with the volume charge of §9.1.1 while
+  `sin θ ≤ 2⁻³²`; a join of two circular walls or a larger turn keeps
   the export-only mesh.
 - **Free-form walks**: refused (SD3); the chorded alternative is a loft and
   is rejected (§12).

@@ -44,7 +44,7 @@ const (
 )
 
 // nearTangentSinSqLimit is the largest sin²θ a near-tangent join may turn by:
-// 2⁻⁶⁴, so θ stays below 2⁻³² rad, under a quarter of the build's held-tangent
+// 2⁻⁶⁴, so sin θ <= 2⁻³², under a quarter of the build's held-tangent
 // dead zone. A join a sketch tangent constraint solves turns by rounding, many
 // orders below it; a corner turning more was drawn as a corner.
 var nearTangentSinSqLimit = new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 64))

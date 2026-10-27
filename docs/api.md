@@ -242,7 +242,7 @@ The cap and the face must hold the same level exactly. A pin that stops short by
 onto the face (such as an inch distance), and a section touching the face's edge take the faceted path.
 
 A tapered `decad.Extrude` (`decad.WithTaper`) is an operand when every corner where a circular wall meets its
-neighbour is tangent. A line and an arc that meet tangent up to rounding, turning by less than 2⁻³² rad, count as
+neighbour is tangent. A line and an arc that meet tangent up to rounding, turning by an angle whose sine is at most 2⁻³², count as
 tangent, and the sliver between them is charged into the result's volume bound. Two arcs that meet that way, or a
 larger turn, are refused with `decad.ErrUnsupported`, as is a trimmed segment; the body still meshes for export.
 
