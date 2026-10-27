@@ -13,6 +13,8 @@ import (
 )
 
 func TestRunWithWorkerKeepsScratchLocalAndResultsOrdered(t *testing.T) {
+	prior := runtime.GOMAXPROCS(4)
+	defer runtime.GOMAXPROCS(prior)
 	for _, workers := range []int{1, 2, 4} {
 		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 		jobs := make([]int, 64)
@@ -64,6 +66,8 @@ func TestRunWithWorkerKeepsScratchLocalAndResultsOrdered(t *testing.T) {
 }
 
 func TestRunWithWorkerReturnsEarlierFailureAndJoins(t *testing.T) {
+	prior := runtime.GOMAXPROCS(4)
+	defer runtime.GOMAXPROCS(prior)
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	first, later := errors.New("job 1 failed"), errors.New("job 5 failed")

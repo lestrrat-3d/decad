@@ -119,10 +119,10 @@ func TestEachNestedCallKeepsPollingAndReleasesWorkers(t *testing.T) {
 		if i != 0 {
 			return nil
 		}
-		// The parent holds the available extra worker until its call joins.
-		// A nested call must still poll while its two base workers are blocked.
+		// The parent holds the available extra workers until its call joins.
+		// A nested call must still poll while its one worker is blocked.
 		_, err := orderedwork.Each(4, 3, 1, func() error {
-			if innerStarted.Load() != 2 {
+			if innerStarted.Load() != 1 {
 				return nil
 			}
 			blockedAtCancellation = innerStarted.Load()
@@ -139,7 +139,7 @@ func TestEachNestedCallKeepsPollingAndReleasesWorkers(t *testing.T) {
 	require.Equal(t, 0, first)
 	require.ErrorIs(t, err, stop)
 	require.Equal(t, 1, polls)
-	require.Equal(t, int32(2), blockedAtCancellation)
+	require.Equal(t, int32(1), blockedAtCancellation)
 
 	// All three workers must be available again after the failed nested call
 	// and its parent have joined. No callback can finish before all have started.

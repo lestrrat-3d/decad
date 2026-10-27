@@ -4,8 +4,8 @@ import "context"
 
 // Proofs runs proof(ctx', k) for k in [0, n) and returns the error of the
 // lowest failing k, the error a serial loop returns. With workers < 2 it is
-// that serial loop, with the caller's ctx. Otherwise each k runs on its own
-// goroutine with a private context derived from context.WithoutCancel(ctx),
+// that serial loop, with the caller's ctx. Otherwise proofs run on worker
+// goroutines, each call with a private context derived from context.WithoutCancel(ctx),
 // so it keeps ctx's values but never sees ctx itself.
 //
 // Only the calling goroutine cancels a private context. It polls ctx.Err()

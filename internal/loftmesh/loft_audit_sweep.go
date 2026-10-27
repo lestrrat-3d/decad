@@ -566,6 +566,8 @@ const (
 // concurrently and which must not touch budget.
 func parallelLoftPairsWorkers(budget *proofbound.WorkBudget, workers int, cands loftCandidates,
 	classify func(i, j int) (uint8, error), work *LoftAuditWork) (int, int, error) {
+	workers, reserved := orderedwork.ReserveWorkers(workers)
+	defer orderedwork.ReleaseWorkers(reserved)
 	results := make([]uint8, len(cands.js))
 	type failure struct {
 		index int
