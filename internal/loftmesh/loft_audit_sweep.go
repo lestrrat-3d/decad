@@ -406,7 +406,12 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 				rowTree = newTreeScan(boxes, members)
 			}
 		}
-		if err := preflightLoftRows(budget, rowTree, members, starts, ceiling); err != nil {
+		var err error
+		// Projected patches already remove within-patch pairs; their remaining
+		// pairs retain the existing preparation path.
+		data, err = prepareLoftStreamAuditData(budget, rowTree, members, starts, ceiling,
+			verts, tris, shortcuts, provenPatches == 0)
+		if err != nil {
 			return work, err
 		}
 	}
@@ -421,11 +426,7 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 		data = newLoftAuditDataForCandidates(verts, tris, cands)
 	}
 	if data == nil {
-		if streamed {
-			data = newCompactLoftAuditData(verts, tris)
-		} else {
-			data = NewLoftAuditData(verts, tris)
-		}
+		data = NewLoftAuditData(verts, tris)
 	}
 
 	// S7: every candidate, classified against its recorded adjacency. The

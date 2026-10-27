@@ -83,10 +83,13 @@ type LoftAuditData struct {
 	floatPlanes []proof.FloatOrientationPlane
 	Projections [][3]meshbool.Xp2
 	compact     bool
-	verts       []r3.Vec
-	tris        [][3]int
-	projAxes    []uint8
-	projected   [3][]meshbool.Xp2
+	// preflightProofs marks complete per-facet contact proofs. The constructor
+	// in loft_audit_selection.go owns their full-universe precondition.
+	preflightProofs bool
+	verts           []r3.Vec
+	tris            [][3]int
+	projAxes        []uint8
+	projected       [3][]meshbool.Xp2
 	// certAxes, projUV and projFinite are the dense float copies of the
 	// projections vertexCertificateFloat reads: per triangle the axis pair,
 	// per (axis pair, vertex) the Fu, Fv of its Xp2 (two floats) and its
@@ -570,7 +573,13 @@ func loftPlaneSeparatedPrepared(data *LoftAuditData, i, j int) bool {
 // it decided handed back: sa is triangle i's corners against plane j and sb
 // triangle j's against plane i, the same values TrianglePlaneSigns forms.
 // Both triples are complete only when the pair is not separated.
+// A cached preflight contact needs no plane signs; AuditLoftPairData reads
+// that completed proof instead.
 func loftPlaneSeparatedSigns(data *LoftAuditData, i, j int) (bool, [3]int, [3]int) {
+	if data.preflightCertified(i, j) {
+		_, shared := tessellation.SharedVertexIndices(data.tris[i], data.tris[j])
+		return shared == 0, [3]int{}, [3]int{}
+	}
 	ta, tb := data.corners(i), data.corners(j)
 	xta, xtb := data.xtri(i), data.xtri(j)
 	var sa, sb [3]int
@@ -672,6 +681,25 @@ func auditLoftPairDataSigned(data *LoftAuditData, tris [][3]int, i, j int, short
 			ErrLoftAuditOrder, i, j, tris[i], tris[j], data.tris[i], data.tris[j])
 	}
 	shared, sharedCount := tessellation.SharedVertexIndices(tris[i], tris[j])
+	if data.preflightCertified(i, j) && !shortcuts.ExactInput {
+		switch sharedCount {
+		case 0:
+			if shortcuts.BroadPhase {
+				return LoftPairClassified, nil
+			}
+		case 1:
+			if shortcuts.Certificates {
+				return LoftPairVertexCertificate, nil
+			}
+		case 2:
+			if shortcuts.Certificates {
+				return LoftPairEdgeCertificate, nil
+			}
+		}
+	}
+	if data.preflightProofs && (data.Norms[i].X == nil || data.Norms[j].X == nil) {
+		return LoftPairClassified, fmt.Errorf("%w: a loft pair lacks its exact tables", decaderr.ErrUnsupported)
+	}
 	if shortcuts.Certificates && sharedCount == 1 && data.fans != nil {
 		// Both triangles are flat at the common vertex's z, so they are exactly
 		// coplanar and the table's value is CoplanarIsolatedSharedVertex's.
