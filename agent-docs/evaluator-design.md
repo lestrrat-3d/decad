@@ -1386,6 +1386,15 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   error only when its inherited boundary certificate proves that its true patch
   equals the held polygons (`agent-docs/tessellation-design.md` §2/§7, payload
   verification §5).
+- **The near-miss facet distance is read only against the slack.**
+  `GatherNearContacts` reads a `ContactNone` pair's `TriTriDistance` only as
+  `> slack`, and `meshbool.TriTriDistanceExceeds`
+  (`internal/meshbool/triangle_distance.go`) returns that comparison for every
+  input. It skips the candidates that a separating axis along either facet's
+  float normal proves exceed the slack, float error included, and computes the
+  remaining candidates with `TriTriDistance`'s own code. A pair that neither
+  normal separates is measured in full. The function's comment holds the
+  error bounds.
 - **A strict held-triangle gap uses exact distance when projection gaps are too
   small.** `meshbool.DisjointTriDistanceAbove` first proves the two closed
   triangles disjoint with exact separating axes, including in-plane axes for
