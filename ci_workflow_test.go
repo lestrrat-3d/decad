@@ -65,8 +65,9 @@ import (
 // reorganisation that stops the scanner from matching fails the test instead
 // of passing it vacuously.
 const (
-	ciWorkflowPath    = ".github/workflows/ci.yml"
-	ciExamplesCommand = "go test -race -count=1 -v -timeout 10m ./examples/..."
+	ciWorkflowPath           = ".github/workflows/ci.yml"
+	ciExamplesCommand        = "go test -race -count=1 -v -timeout 10m ./examples/..."
+	ciSupportPackagesCommand = "go test -race -count=1 -v -timeout 10m ./decadtest/ ./export/ ./internal/decaderr/"
 )
 
 var (
@@ -145,6 +146,11 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 				if dir == "examples" || strings.HasPrefix(dir, "examples/") {
 					covered[dir] = struct{}{}
 				}
+			}
+		}
+		if strings.Contains(workflow, "run: "+ciSupportPackagesCommand) {
+			for _, dir := range []string{"decadtest", "export", "internal/decaderr"} {
+				covered[dir] = struct{}{}
 			}
 		}
 		for _, m := range ciMatrixPackagesRe.FindAllStringSubmatch(workflow, -1) {
@@ -260,7 +266,7 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 				dedicated = append(dedicated, strings.Trim(operand, "./"))
 			}
 		}
-		// decaderr imports the root package and uses a prebuilt binary on shard 0.
+		// decaderr imports the root package and has its own support-package job.
 		dedicated = append(dedicated, "internal/decaderr")
 		exclusionRe := regexp.MustCompile(`(?m)^\s*dedicated_re="\$\{mod\}/([^"\n]+)"$`)
 		exclusion := exclusionRe.FindAllStringSubmatch(workflow, -1)
@@ -285,25 +291,27 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 		require.NotContains(t, job[1], "\n    needs:", "independent packages must not wait for artifacts")
 	})
 
-	t.Run("dependent binaries build and run unfiltered from their package directories", func(t *testing.T) {
+	t.Run("support packages run unfiltered without waiting for binaries", func(t *testing.T) {
+		jobRe := regexp.MustCompile(`(?ms)^  test-support-packages:\n(.*?)(?:^  [a-z][a-z0-9-]*:|\z)`)
+		job := jobRe.FindStringSubmatch(workflow)
+		require.Len(t, job, 2, "the support-package job must exist")
+		require.Equal(t, 1, strings.Count(job[1], "run: "+ciSupportPackagesCommand))
+		require.NotContains(t, job[1], "\n    needs:", "support packages must run without artifact dependencies")
+		require.NotContains(t, job[1], "test-shards", "support packages run as whole packages")
+	})
+
+	t.Run("race binary build contains only the sharded packages", func(t *testing.T) {
 		buildRe := regexp.MustCompile(`(?m)^\s*run: go test -c -race -o race-bin/ ([^\n]+)$`)
 		build := buildRe.FindStringSubmatch(workflow)
 		require.Len(t, build, 2)
-		for _, dir := range []string{".", "apitest", "decadtest", "export", "internal/decaderr"} {
+		for _, dir := range []string{".", "apitest"} {
 			operand := "./" + dir + "/"
 			if dir == "." {
 				operand = "."
 			}
 			require.Contains(t, strings.Fields(build[1]), operand)
 		}
-		for _, dir := range []string{"decadtest", "export", "internal/decaderr"} {
-			prefix := "../"
-			if strings.Contains(dir, "/") {
-				prefix = "../../"
-			}
-			require.Contains(t, workflow, "(cd "+dir+" && "+prefix+"race-bin/"+filepath.Base(dir)+
-				".test -test.count=1 -test.v -test.timeout 10m)")
-		}
+		require.Len(t, strings.Fields(build[1]), 2, "the binary-build job must not compile unrelated packages")
 	})
 
 	t.Run("examples run as whole packages without name assignments", func(t *testing.T) {
