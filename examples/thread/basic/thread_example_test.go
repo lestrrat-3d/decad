@@ -1,4 +1,4 @@
-package examples_test
+package basic_test
 
 import (
 	"context"
@@ -147,48 +147,6 @@ func Example_thread_form() {
 	// volume: 1252 mm^3
 }
 
-// LeadIn chamfers the threaded face's ends at 45 degrees before the thread is cut,
-// so a screw starts into its nut without a sharp edge to catch. Here an M10 rod
-// gets a 0.8 mm lead-in on both ends.
-func Example_thread_lead_in() {
-	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
-	if err != nil {
-		fmt.Printf("failed to create sketch: %s\n", err)
-		return
-	}
-	centre := s.CreatePoint(0, 0)
-	s.Fix(centre)
-	s.CreateCircle(centre, 5)
-	if _, err := s.Solve(context.Background()); err != nil {
-		fmt.Printf("failed to solve: %s\n", err)
-		return
-	}
-	rod, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
-	if err != nil {
-		fmt.Printf("failed to extrude: %s\n", err)
-		return
-	}
-	threaded, err := decad.Thread(context.Background(), rod, decad.ThreadSpec{
-		Face:   decad.Faces(decad.Cylindrical()),
-		Pitch:  units.Millimeters(1.5),
-		LeadIn: units.Millimeters(0.8),
-	})
-	if err != nil {
-		fmt.Printf("failed to thread: %s\n", err)
-		return
-	}
-	volume, err := threaded.Volume()
-	if err != nil {
-		fmt.Printf("failed to measure volume: %s\n", err)
-		return
-	}
-	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
-	// Output:
-	// volume: 1306 mm^3
-}
-
 // A buttress groove has a steep flank on one side and a shallow one on the other:
 // set FlankLead, the flank toward the face's start, and FlankTrail, the one toward
 // its far end, in place of Angle. Here a 10 mm rod takes a buttress thread of pitch
@@ -264,47 +222,4 @@ func Example_thread_lookup() {
 	// M10: 10 mm at 1.5 mm
 	// M10x1.25: 10 mm at 1.25 mm
 	// 1/4-20: 6.35 mm at 1.27 mm
-}
-
-// LeadInAngle sets the slope of the lead-in's bevel: LeadIn is its distance along
-// the end face and the bevel runs LeadIn·tan(angle) along the rod's side, so a
-// 30 degree bevel is shallow, a gentle start for a screw.
-func Example_thread_lead_in_angle() {
-	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
-	if err != nil {
-		fmt.Printf("failed to create sketch: %s\n", err)
-		return
-	}
-	centre := s.CreatePoint(0, 0)
-	s.Fix(centre)
-	s.CreateCircle(centre, 5)
-	if _, err := s.Solve(context.Background()); err != nil {
-		fmt.Printf("failed to solve: %s\n", err)
-		return
-	}
-	rod, err := decad.Extrude(context.Background(), decad.New(), s, s.Profiles()[0],
-		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
-	if err != nil {
-		fmt.Printf("failed to extrude: %s\n", err)
-		return
-	}
-	threaded, err := decad.Thread(context.Background(), rod, decad.ThreadSpec{
-		Face:        decad.Faces(decad.Cylindrical()),
-		Pitch:       units.Millimeters(1.5),
-		LeadIn:      units.Millimeters(1),
-		LeadInAngle: units.Degrees(30),
-	})
-	if err != nil {
-		fmt.Printf("failed to thread: %s\n", err)
-		return
-	}
-	volume, err := threaded.Volume()
-	if err != nil {
-		fmt.Printf("failed to measure volume: %s\n", err)
-		return
-	}
-	fmt.Printf("volume: %.0f mm^3\n", volume.Value.Base())
-	// Output:
-	// volume: 1306 mm^3
 }

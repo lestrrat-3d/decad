@@ -31,6 +31,19 @@ examples, or changing CI shards.
   shard. Shards are rebalanced only by regenerating them with `_shardgen` from
   measured costs.
 
+## PR execution
+
+- Run example packages whole. `examples/thread/basic/` owns thread forms,
+  handedness and lookup. `examples/thread/leadin/` owns thread lead-in geometry.
+  Other examples stay in `examples/`. The independent examples job runs the
+  whole subtree with Go's package parallelism, without test-name assignments.
+- Keep independent internal-package jobs and dynamics independent of the
+  race-binary artifact. The workflow's dedicated-package exclusions must match
+  its dedicated runners; `TestCIWorkflowRaceShardsCoverEveryPackage` checks them.
+- Measure PR completion from workflow creation through its last required check.
+  Job execution budgets exclude runner queue and artifact-build time. A passing
+  budget does not establish the five-minute PR target.
+
 ## Per-test timing in CI
 
 Each test binary's `TestMain` (`ci_verbose_test.go`, `apitest/ci_verbose_test.go`)
