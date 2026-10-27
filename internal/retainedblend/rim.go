@@ -76,8 +76,8 @@ type refTag struct {
 
 func tagOf(f *topo.Face) refTag { return refTag{surface: f.Surface, reversed: f.Reversed} }
 
-// is reports whether f carries the tag. Retained faces are planes and
-// cylinders, whose values compare by field.
+// is reports whether f carries the tag. Retained faces are planes, cylinders
+// and spheres, whose values compare by field.
 func (t refTag) is(f *topo.Face) bool { return f.Reversed == t.reversed && f.Surface == t.surface }
 
 // assign returns the spec of one step: dA is the setback along f1 and dB the
@@ -100,7 +100,9 @@ func (s blendSpec) assign(ref refTag, f1, f2 *topo.Face) (blendSpec, error) {
 }
 
 // rim is a closed circular edge between a retained plane and a coaxial
-// retained cylinder, read from the two tags (§4.2).
+// retained cylinder, read from the two tags (§4.2). sphereRim embeds it for a
+// plane-sphere rim (§4.5): the frame, kappa, side and convexity read the same,
+// and radius is the rim's, not the sphere's.
 type rim struct {
 	center, n, u, w r3.Vec
 	radius          float64
@@ -229,9 +231,19 @@ func readRim(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face
 	}
 	r.w = n.Cross(r.u)
 	r.matOutside = r.wallFace.Reversed
-	// The wall extends away from the plane's outward normal into the material
-	// (a hole, a shaft end) or toward it (a boss, a pocket floor).
-	wall := faceIndex[r.wallFace]
+	if err := r.readSide(edge, fp, faceIndex[r.wallFace]); err != nil {
+		return rim{}, err
+	}
+	return r, nil
+}
+
+// readSide sets the side the wall face extends to from the held mesh, and
+// with it the rim's convexity and the side of the rim the plane face lies on.
+// The wall extends away from the plane's outward normal into the material (a
+// hole, a shaft end, a ball's cap) or toward it (a boss, a pocket floor). It
+// refuses a wall on both sides and a convexity the edge's flag contradicts.
+func (r *rim) readSide(edge *topo.Edge, fp facetedrecord.Payload, wall int) error {
+	slack := r.slack()
 	below, above := 0, 0
 	for i, tri := range fp.Tris {
 		if fp.FaceOf[i] != wall {
@@ -253,17 +265,21 @@ func readRim(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face
 	case above > 0 && below == 0:
 		r.side = 1
 	default:
-		return rim{}, fmt.Errorf("%w: the rim's wall does not lie on one side of its plane", decaderr.ErrUnsupported)
+		return fmt.Errorf("%w: the rim's wall does not lie on one side of its plane", decaderr.ErrUnsupported)
 	}
 	r.convex = r.side < 0
 	if edge.Convex != r.convex {
-		return rim{}, fmt.Errorf("%w: the rim's convexity disagrees with its two tags", decaderr.ErrUnsupported)
+		return fmt.Errorf("%w: the rim's convexity disagrees with its two tags", decaderr.ErrUnsupported)
 	}
+	// The plane face lies outside the rim when the solid near the rim is the
+	// intersection of the two material sides (a convex rim) and the wall's
+	// material lies outside it, or their union (a concave rim) and the wall's
+	// material lies inside it.
 	r.kappa = -1
 	if r.convex == r.matOutside {
 		r.kappa = 1
 	}
-	return r, nil
+	return nil
 }
 
 func perpendicular(n r3.Vec) (r3.Vec, bool) {
@@ -323,13 +339,13 @@ type rimKey struct {
 
 func (r rim) key() rimKey { return rimKey{r.center, r.n, r.radius} }
 
-// findRim returns the retained-circle edge of body whose circle is key's, and
-// false when there is none or more than one.
-func findRim(body *topo.Body, key rimKey, slack float64) (*topo.Edge, bool) {
+// findRim returns the retained-circle edge of body that satisfies ok and whose
+// circle is key's, and false when there is none or more than one.
+func findRim(body *topo.Body, key rimKey, slack float64, ok func(*topo.Edge) bool) (*topo.Edge, bool) {
 	var found *topo.Edge
 	for _, e := range topobuild.Edges(body) {
-		c, ok := e.Curve.(surfacegeom.Circle3)
-		if !ok || !looksLikeRim(e) {
+		c, isCircle := e.Curve.(surfacegeom.Circle3)
+		if !isCircle || !ok(e) {
 			continue
 		}
 		radius, err := c.Radius.In(units.Millimeter)

@@ -30,6 +30,9 @@ func TestSeparatedOpposedHoleScene(t *testing.T) {
 		{name: "separate", x0: 2, y0: -2, x1: 6, y1: 2, want: true},
 		{name: "overlap", x0: -4, y0: -2, x1: 0, y1: 2},
 		{name: "touch", x0: -2, y0: -2, x1: 2, y1: 2},
+		// Two whole cells meeting at one recorded corner: the scene proves
+		// disjoint interiors, but the body would meet itself at the corner.
+		{name: "corner", x0: -2, y0: 2, x1: 2, y1: 6},
 		{name: "nested", x0: -5, y0: -1, x1: -3, y1: 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

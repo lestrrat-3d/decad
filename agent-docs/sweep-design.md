@@ -1412,7 +1412,8 @@ bounds add without cancellation. The area allowance adds the certified
 true-to-Loft area interval gap to Loft's mesh area allowance. Consequently
 `Tessellate(VerifyAll)` may publish boundary and volume verification for this
 case; boolean consumers receive the same occupied-volume certificate.
-Placement replays the recorded Sketch and path under the new transform.
+Placement replays the recorded Sketch and path under the new transform and
+charges the plane-local readings by the placed basis (§17.5).
 
 The real public acceptance uses Sketch's solved centred rectangle, a 5 mm
 positive-Z line and a 30° twist. It measures 20 mm³ of true volume while the
@@ -1538,7 +1539,8 @@ The true volume, centroid and wall-area interval use §17.1's rotating
 section formulas for the full angle. The mesh area interval is computed
 from its held triangles and compared with the true area interval for
 `VerifyAll`. A mesh tolerance below the maximum boundary bound refuses;
-placement replays all stations and proofs under the placed transform.
+placement replays all stations and proofs under the placed transform and
+charges them by the placed basis (§17.5).
 
 The public acceptance sweeps Sketch's solved 2×2 mm square for 5 mm with
 two radians. Fourteen cells give a 0.07653061224492375 mm boundary bound
@@ -1624,3 +1626,49 @@ is about 6.78 mm²; its complete mixed-face allowance is about 37.92 mm²,
 compared with about 145.71 mm² under the former positive wall charges.
 The real overlapping Union carries that allowance through a cut Arc wall
 and passes `VerifyAll(0.2 mm)` with a result area bound about 58.76 mm².
+
+### 17.5 Placement charge
+
+Every twisted sweep evaluates its true volume, wall-area integral, boundary
+departure and occupied-volume tube in the coordinates of the origin XY sketch
+plane, the only plane §17.1–§17.4 admit. The record denotes that plane-local
+solid carried through the placement's held basis B, read as exact rationals
+(`massmoment.PlacementRotation`). r3 keeps B orthonormal only to rounding, and
+a placement composed through `r3.Transform.Then` drifts further with every
+composition: 5000 composed float rotations hold a B with
+`det B − 1 ≈ −5.6e-13`, which moves the 20000 mm³ volume of a 100×100 mm square
+swept 2 mm by about 1.1e-8 mm³ while its closed form reads `Exact`.
+Each of the three builders (`Eval`, `evalStationed`, `evalComposite`) reads
+B's `massmoment.MapCharge` (`agent-docs/evaluator-design.md` §5.1) and widens
+every plane-local reading before anything composes it:
+
+- The exact volume interval widens by `||det B| − 1|·max(|lo|, |hi|)` on each
+  side (`MapCharge.VolumeInterval`), since B scales every volume by exactly
+  `|det B|`.
+- The true area interval widens by `e·max(|lo|, |hi|)` on each side
+  (`MapCharge.AreaInterval`), for B's orthonormality defect `e`. The body's
+  `Area`, the true-to-held area gap in the mesh's `AreaSlack`, and every
+  face's area bound, which is wider than the body's total area, all read the
+  widened interval. The rounded-profile class's wall and cap allowance reads
+  plane-local arc lengths, energies, radii and heights while
+  `TwistMixedWallAreaL1` evaluates it on the placed held vertices, so the
+  allowance itself takes the factor `(1 + e)` and then adds `e` times the
+  true area's upper end (`MapCharge.AreaSlackOf`).
+- The boundary displacement `Delta` and the occupied-volume allowance
+  `VolSymDiff` take the length charge `(1 + e)` and the volume charge
+  `(1 + ||det B| − 1|)` over their whole totals. Both mix plane-local terms
+  with the held Lofts' own placed terms; the placed terms are over-covered by
+  the same tiny factor.
+- The line-and-arc centroid's plane-local enclosure, path moment and section
+  correction take the length charge before `Apply`'s rounding allowance is
+  added. The straight-path centroid `(0, 0, h/2)` is exact before placement,
+  and an affine map carries it to the placed centroid exactly.
+
+An exactly orthonormal B, such as the identity a translation holds, reads both
+charges as zero, and every reading stays bit for bit. The focused fixture
+places each builder, and the rounded-profile class, under 5000 composed
+rotations. It checks that each
+published volume meets `|det B|` times the unplaced enclosure. It checks that
+each published area, body and face, meets the unplaced enclosure scaled by
+the Gershgorin range of `cof(B)ᵀcof(B)`, which holds the squared area factor
+of every plane.

@@ -711,6 +711,11 @@
 4	0.00	TestBodyDocumentIsTheDocument
 4	0.01	TestBodyPatchFillsASingleClosedCircularRim
 4	0.00	TestBodyPatchPlanarCappedTubeTessellates
+10	0.00	TestStackedOpposedOverlapPockets
+10	0.00	TestStackedOpposedTouchingPocketsRefuse
+10	0.00	TestStackedOpposedOverlapGates
+10	0.00	TestStackedOpposedSeparatePocketsStayStacked
+10	0.00	TestStackedOpposedOverlapDisplacedLevelDeclines
 4	2.63	TestBooleanCutWasherThroughDiscKeepsStandingPost
 4	10.32	TestBooleanDegenerateClusterSoundness
 4	1.50	TestBooleanRefusalConcaveHoleSpuriousContact
@@ -1329,6 +1334,8 @@
 6	0.03	TestStraightSweepShellCapOpenings
 6	0.01	TestSurfaceExtrudeHoledSheetMultiLumpTessellates
 6	0.00	TestSurfaceExtrudePlateIsASheet
+10	0.00	TestSweepTwistChargesPlacementMap
+10	0.00	TestSweepTwistExactPlacementKeepsReadings
 6	0.00	TestSurfaceLoftWithSurfaceResultIsIdempotent
 6	0.01	TestSurfaceRevolvePartialMeetingAxisSheetFreeBoundaryIsOneCycle
 6	0.04	TestSurfaceRevolveSheetTessellationDeterminism
@@ -1565,6 +1572,7 @@
 10	0.00	TestDenotedLevelNestedPocketEndsOnTheFloor
 10	0.00	TestDenotedLevelEqualFloatsDifferentRationalsDecline
 10	0.00	TestDenotedLevelSplitInterfaceIsReused
+10	0.00	TestBrepLoopFilletReflexMeridiansLieOnTheirCircles
 7	0.01	TestSurfaceRevolveSheetReachesNoBoolean
 7	0.07	TestSurfaceSplitRevolveRefusals
 7	0.00	TestSurfaceTrimKeepOutsideSplitsIntoTwoRibbons
@@ -1845,6 +1853,8 @@
 8	0.39	TestVerifyMotionBetweenOffsetAxis
 8	0.12	TestVerifyMotionProjectionPendulum
 8	0.00	TestVerifyResultEnumTokens
+10	0.00	TestRevolvedShaftClassBCut
+10	0.00	TestRevolvedShaftClassBMisses
 8	0.01	TestVerifySingleRegionOverlapOrderIsNormative
 8	0.14	TestVertexFrameOriginBoundEnclosesLift
 8	0.01	TestVertexPlacedPrismBoundEnclosesDisplacement
@@ -2125,6 +2135,8 @@
 10	0.01	TestCutDisjointKeepsTarget
 10	0.02	TestCutStarHoleOuterLoopIsNotTheLongest
 10	0.00	TestDegenerateSplineRecordRefuses
+10	0.00	TestFacetedRetainedBlendSphereRim
+10	0.00	TestFacetedRetainedBlendSphereRimSides
 10	0.66	TestDirectLoftVaryingCircleHolesPublishCurvedWalls
 10	0.72	TestDisplacedSupportSetBottle
 10	0.06	TestDraftCircleEndRimChamferPlacement
@@ -2590,3 +2602,8 @@
 10	0.01	TestSolidFromMeshChamfersAnEdge
 10	0.01	TestSolidFromMeshTiltedFacesStayFaceted
 10	0.01	TestSolidFromMeshBodyKeepsWorkingAfterPlacementAndReadings
+10	0.01	TestShellOpensABoxMeshSolid
+10	0.01	TestShellHollowsAClosedBoxMeshSolid
+10	0.01	TestShellOfAMeshSolidRefusals
+10	0.01	TestShellOpensAnLShapedMeshSolid
+10	0.01	TestShellGrowsOutwardFromAMeshSolid

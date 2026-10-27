@@ -243,6 +243,13 @@ func Analytic(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b
 			}
 			return body, true, nil
 		}
+		// agent-docs/general-boolean-design.md §3 A8: opposed pockets that
+		// overlap in plan at the interface the tool ends at.
+		if bp, ok, err := prismboolean.TryOpposedBlindCut(ctx, a.Payload, b.Payload); err != nil {
+			return nil, false, err
+		} else if ok {
+			return found(prismboolean.AnalyticBody(ctx, env, bp))
+		}
 		if bp, ok, err := prismboolean.TryCrossingBlindCut(ctx, a.Payload, b.Payload); err != nil {
 			return nil, false, err
 		} else if ok {
@@ -372,6 +379,15 @@ func classB(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body) (to
 	// A body this evaluator did not build has no payload and no class.
 	if a.Payload == nil || b.Payload == nil {
 		return nil, false, nil
+	}
+	// A turned shaft's Cut reads the shaft as the prism it denotes exactly
+	// (agent-docs/general-boolean-design.md §3 "Revolved shaft as a prism").
+	if rp, ok := a.Payload.(revolveplan.Payload); ok && op == meshbool.OpCut {
+		view, ok := rp.CylinderPrism()
+		if !ok {
+			return nil, false, nil
+		}
+		return classbgeom.CutPrismView(ctx, view, b.Payload)
 	}
 	return classbgeom.OfPayloads(ctx, op, a.Payload, b.Payload, a.Payload.Transform(), 0)
 }

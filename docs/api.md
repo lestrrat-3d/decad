@@ -197,7 +197,7 @@ Each of these returns a new body and retires its input.
 | `decad.Chamfer` | Bevels selected edges. `decad.WithAsymmetricChamfer` sets a second distance. Selecting the whole outer cap loop of a prism whose section is a smooth chain of fit splines bevels it within a measured ratio of the ideal chamfer, as a cut. |
 | `decad.FilletChord` | Rounds convex or concave edges between two planar faces, or circular ones between a plane and a surface of revolution, with an arc stated by its chord length. |
 | `decad.ChamferAngle` | Bevels convex or concave edges between two planar faces, or circular ones between a plane and a surface of revolution, by a distance along a reference face and an angle from that face. |
-| `decad.Shell` | Removes the selected faces and lines the rest with a wall. `decad.WithShellSense` picks `decad.Inward` or `decad.Outward`. |
+| `decad.Shell` | Removes the selected faces and lines the rest with a wall. `decad.WithShellSense` picks `decad.Inward` or `decad.Outward`. A mesh solid whose faces all square to an axis shells inward with mitered corners. |
 | `decad.Draft` | Leans selected walls about a `decad.NeutralPlane` (`decad.NeutralFace`). |
 | `decad.Hole` | Cuts a round hole (or a rectangular, slot or regular polygonal one from `HoleSpec.Shape`), optionally drafted with `HoleSpec.Draft` or tapped with a `decad.HoleThread`, at a point on a planar face, or radially into a cylindrical one, through or blind, with an optional `decad.Counterbore` or `decad.Countersink` head. A `decad.RectangularHole` or `decad.SlotHole` shape cuts that cross-section instead, without a head. |
 | `decad.LookupThread` | Reads a thread designation such as `M10`, `M10x1.25` or `1/4-20` into its major diameter and pitch. |
@@ -225,6 +225,15 @@ Two full `decad.Revolve` bodies about one axis combine exactly, with no `Faceted
 are lines, arcs or circles: a sphere cut by a coaxial disk or shaft, or two coaxial spheres, keep their
 sphere, torus, cone, cylinder and plane faces (an off-axis circle meridian gives torus faces). A shared arc or
 circle span between the operands, or a contact at a pole or an edge, is not joined this way.
+
+A plain turned shaft, a full `decad.Revolve` of a rectangle with one side on an axis that runs along the sketch's
+U or V, is cut exactly as the circular `decad.Extrude` it equals. A box tool at right angles to the shaft, drawn
+on a datum plane and running past both shaft ends, gives a D-flat or a keyway with no `Faceted` face, and a
+`decad.Thread` on its cut wall builds. Both operands must keep the same placement: a shaft or a tool placed by
+`decad.Transform` takes the faceted path, as do a tool that ends inside the shaft's length, a stepped shaft and a
+tube. `Fillet` and `Chamfer` refuse the exact flat's edges, as they do for an extruded shaft. To blend those edges,
+place the tool by `decad.Transform`: the faceted result keeps the shaft's plane and cylinder faces, and the blend
+builds on them.
 
 A two-body `Union`, `Cut` or `Intersect` that would be refused because an operand is the mesh result of earlier Booleans is retried from
 the source bodies of that chain, when all but one pair combine by exact routes. The result is the same solid. Its

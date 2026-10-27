@@ -568,6 +568,9 @@ placement whose bases are exactly orthonormal, every axis-aligned sketch plane
 under the identity among them, read det L = 1 and e = 0, and every reading is
 then unchanged bit for bit; `Transform` under a general rotation keeps each value
 and may widen its bound. A defect at or above 1/2 refuses `ErrUnsupported`.
+The twisted sweep reads its volume, area and boundary allowances from
+plane-local closed forms on the world XY sketch plane, so it takes the charge
+of its placement's held basis B alone (`agent-docs/sweep-design.md` §17.5).
 The loft, the mitred sweep, the faceted boolean and the stitch compute their
 readings from world coordinates their own vertex bounds already cover, and
 take no charge.
@@ -1437,6 +1440,17 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
     Both scans use exact predicates over the held binary64 values: no shared
     vertex means no contact, one shared vertex means contact only there, one
     shared edge means contact only along it.
+    A repair pass over the facets it checks moves no vertex, and the grid lists
+    each of two facets whose boxes meet among the other's candidates, so the
+    pass decides a pair of two scanned facets once, from the one scanned
+    first, and the other reads that answer. The pair memo replays an answer
+    only while both facets carry the stamps they had when it was decided, and
+    a move gives each facet around the vertex a new stamp. The answer depends
+    only on the facets' six vertex positions, so a replayed answer is the
+    answer. A pass stores only the pairs the exact predicates decided: the
+    shared corners or a certain float sign decide the rest in about the time
+    a memo lookup takes.
+    The search for a vertex's next position stores every pair it decides.
   - **Move a failing vertex within its float box.** Each movable vertex of a
     failing pair — one that stands for exactly one exact vertex — may take
     another corner of its exact point's float box: per coordinate the float at

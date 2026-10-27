@@ -131,6 +131,48 @@ func TryStackedBlindCut(ctx context.Context, a, b topo.Payload) (stackedrecord.P
 	return stackedrecord.ApplyBlindCut(ctx, budget, sp, outer, tool)
 }
 
+// TryOpposedBlindCut builds a blind tool ending exactly at an existing
+// interface whose opposed exclusive holes overlap in plan
+// (agent-docs/general-boolean-design.md §3 A8). TryStackedBlindCut's
+// admission applies; the result is a BRep because the stacked payload cannot
+// hold the partial floor and ceiling. Opposed holes that touch, and any
+// scene or topology the build does not cover, are silent misses.
+func TryOpposedBlindCut(ctx context.Context, a, b topo.Payload) (breprecord.Payload, bool, error) {
+	sp, ok := a.(stackedrecord.Payload)
+	if !ok || len(sp.OuterRuns()) != 1 {
+		return breprecord.Payload{}, false, nil
+	}
+	for _, slab := range sp.Slabs {
+		if len(slab.Regions) != 1 {
+			return breprecord.Payload{}, false, nil
+		}
+	}
+	budget := proofbound.NewWorkBudget(ctx)
+	outer := sp.OuterPrism()
+	_, tool, ok, err := prismcells.AdmitPairBudget(budget, meshbool.OpCut, outer, b)
+	if err != nil || !ok {
+		return breprecord.Payload{}, false, err
+	}
+	oc, ok, err := stackedrecord.ApplyOpposedBlindCut(ctx, budget, sp, outer, tool)
+	if errors.Is(err, decaderr.ErrUnsupported) || errors.Is(err, decaderr.ErrDegenerate) {
+		// TryStackedBlindCut already raised every refusal of the slab cuts it
+		// shares; an interface this arm cannot derive leaves the pair to the
+		// mesh path.
+		return breprecord.Payload{}, false, nil
+	}
+	if err != nil || !ok {
+		return breprecord.Payload{}, false, err
+	}
+	result, err := stackedunion.OpposedCut(ctx, budget, oc)
+	if errors.Is(err, brepgeom.ErrStackedWallMiss) || errors.Is(err, decaderr.ErrUnsupported) {
+		return breprecord.Payload{}, false, nil
+	}
+	if err != nil {
+		return breprecord.Payload{}, false, err
+	}
+	return result, true, nil
+}
+
 // TryStackedThroughCut applies a spanning prism tool to every slab. Each
 // private scene proves either a new region or that the tool lies wholly in an
 // existing hole and leaves that slab unchanged.

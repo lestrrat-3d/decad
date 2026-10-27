@@ -362,7 +362,7 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 		groups[f.group].HasCentroid = false
 		groups[f.group].Centroid = measurement.VecMeasurement{}
 	}
-	return w.build(ctx, env, groups, stripFrom, tag)
+	return w.build(ctx, env, groups, stripFrom, tag, faceIndex)
 }
 
 // endFace builds end face G_i's new loops: the corner and the removed parts of

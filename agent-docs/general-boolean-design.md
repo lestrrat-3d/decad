@@ -109,6 +109,7 @@ admits takes it unchanged.
 | A5 | a multi-region operand or result: a prism-group tool (N holes in one arrangement), a `Union` of disjoint footprints | S5 (through mirror §6), S12, P2 | one-slab multi-region `stackedPrismPayload` (mirror §6.3) |
 | A6 | a split boundary under a non-identity re-expression, a prior section displacement or a walk charge | S9 (45° in plane), rotated and translated overlaps; not P1 (A6 below) | `prismPayload` carrying a certified crossing-sensitivity charge |
 | A7 | one rectangular blind pocket crossing one rectangular through hole, opening at either cap, clipped to the target | a pocket that partly overlaps a through opening | `brepPayload` with split hole walls and a partial floor |
+| A8 | a blind pocket ending exactly at an interface of a stack, overlapping in plan an opposed pocket that ends there | pockets from opposite faces that meet at one level | `brepPayload` with a partial floor and ceiling |
 
 #### A1 — stacked union
 
@@ -562,6 +563,69 @@ checks the occupied volume. A pocket crossing the body's outer boundary, a
 second source hole, a displaced section, a rotated footprint, and later Cuts of
 the result remain outside this bounded path.
 
+#### A8 — opposed pockets overlapping at one level
+
+`prismboolean.TryOpposedBlindCut` takes the stacked blind `Cut` that
+`TryStackedBlindCut` leaves to the mesh path: the tool ends exactly at an
+existing interface of a cut-built stack, and after the cut both sides of that
+interface hold exclusive holes that `stackedrecord.SeparatedOpposed` does not
+prove apart (`agent-docs/stacked-prism-design.md` §2.2). Its admission is the
+stacked arm's. The target is a stacked payload with one outer run and one
+region per slab. The tool ends at an interface with zero level displacement.
+Every reached slab passes its own whole-loop cut proof
+(`stackedrecord.ApplyOpposedBlindCut`, which shares `CutSlabs`'s slab cut).
+The result's section displacement is zero, and every exclusive hole at that
+interface is a loop of lines along the section axes. Every other interface
+keeps the exposed records `stackedrecord.Derive` reads for it.
+
+The opposed interface's faces come from one private Sketch scene over only the
+exclusive holes' interiors: each lower-only hole, reversed, as an A region and
+each upper-only hole, reversed, as a B region. Every partial edge must carry
+`TExact`, the scene carries no walk charge, and
+`prismcells.ClassifyRegionsWithHoles` must classify every cell. A cell inside
+some B region and no A region is a floor: the lower slab's material under an
+upper hole, facing up. A cell inside some A region and no B region is a
+ceiling, facing down. A cell inside both is open through both slabs and has no
+face. Sketch also merges two lines as one shared span when their carriers
+differ within its identity band, so two more checks refuse. Every line edge's
+walked ends must lie exactly on its own entity's carrier
+(`prismcells.OnLineCarrier`, exact rational arithmetic over the held floats).
+Where the displaced line's own endpoint ends the merged span, the coincident
+reading records no span, and only this check sees the edge ending off its
+carrier. Every shared span the reading does record must also pass
+`prismcells.CoincidentReading.ExactLineCarriers`: both recorded lines lie on
+precisely one line. A lower or upper hole's edge 1e-12 mm or one ulp off the
+other side's edge misses, in either orientation. Two crossing axis-aligned
+lines meet at their exact levels, and with both checks every vertex is exact.
+The incoming displacements are all zero, so A6 charges nothing.
+
+Opposed holes that only touch have no manifold result. Along an edge, the
+floor, the ceiling and both hole walls would share one edge. At a corner, the
+body would meet itself at one point. `stackedunion.opposedManifold` reads
+every point where a floor and a ceiling cell meet. Each of the two cells must
+turn there from an edge of one side to an edge of the other, and neither edge
+may be a span both sides share. That is a proper crossing of one lower and one
+upper boundary. Under the axis-line gate at most four scene edges meet at a
+point, so every touch fails this reading: two touching corners, two reflex
+corners whose outsides meet, or a shared span at its ends. The points and
+edges are Sketch's own, compared by exact equality. The check only refuses. A
+corner touch also leaves cells that classification cannot reach, which misses
+as well.
+
+`stackedunion.OpposedCut` emits the record through the A1
+`stackedbrep.Engine`. It adds the slab loops, both end caps, every other
+interface's exposed records and the opposed interface's cells. The engine
+splits the hole walls at the cells' vertices, and it joins coplanar hole walls
+of the two slabs into one face. `breprecord.StackedRecord` runs the per-face
+section audit and proves closure by counting. The result keeps no stack, so a
+later `Cut` of it does not reach the stacked arms. Any miss, including a
+touch, leaves the pair to the mesh path. That path refuses the coplanar
+contact under `ExactOnly`. With a gap tolerance it builds an `Approximate`
+result with the tool moved, where a shift opens the contact
+(`agent-docs/gap-tolerance-design.md` §5.2). A round or oblique exclusive hole
+at the interface, a displaced level or section, and a union-built or
+multi-region stack stay outside this path.
+
 ### Class B — perpendicular prism pairs with planar contacts
 
 Both operands are prisms (or stacked prisms, or class-B results: §4), their
@@ -574,7 +638,7 @@ then lines and circles only. The result is the `brepPayload` of §4.
 
 | # | Condition | Why exact |
 |---|---|---|
-| B1 | Both operands expose the face view of §4.1: `prismPayload`, `stackedPrismPayload`, or `brepPayload`. | structural |
+| B1 | Both operands expose the face view of §4.1: `prismPayload`, `stackedPrismPayload`, or `brepPayload`. A `Cut` target may also be a Revolve read through its prism view (§3 "Revolved shaft as a prism"). | structural |
 | B2 | Every recorded segment of both is `LineSeg`/`CircleSeg`/`ArcSeg` (prism-boolean G4's reason). | `TExact` is whole-scene |
 | B3 | The composed world normals are exactly perpendicular: `N_A · N_B == 0.0` over the stored `r3.Vec` floats (`ApplyDir` on each frame's `N()`). | a decision over stored floats, as G3 is; a near-perpendicular pair takes the mesh path |
 | B4 | The relative frame map is a signed axis permutation: every dot product among `{U_A, V_A, N_A}` and `{U_B, V_B, N_B}` (world, through `ApplyDir`) is exactly `0`, `1` or `−1`. | keeps every trace line exact (§5); the datum planes XY/XZ/YZ and their offsets meet it; a general pair waits on A6's charge (§8) |
@@ -659,6 +723,66 @@ and each cylinder's pieces are read off the planar faces across its axis
 key, a scene whose cells this reach does not cover, and a crossing result
 with a hole each send the pair to the mesh path; a face that fails modify
 §5's audit, or a result whose edges do not pair, refuses.
+
+### Revolved shaft as a prism
+
+A plain turned shaft is a circular prism. A full solid `Revolve` whose
+meridian is one rectangle with one side exactly on the axis denotes the set
+of points whose axial coordinate lies in the rectangle's span and whose
+distance from the axis is at most its radius. The prism whose section is the
+circle of that radius about the axis point, swept over that span along the
+axis, denotes the same set. `revolveplan.Payload.CylinderPrism` builds that
+prism record, and a `Cut` whose target is such a Revolve and whose tool is a
+prism enters class B with the prism record as X
+(`classbgeom.CutPrismView`, from `booleandispatch.classB`).
+
+The view admits by exact comparison of recorded data only, and every miss is
+silent, so the pair keeps the mesh path:
+
+- The record is a full turn of a solid with no section displacement, no
+  whole-section charge and no blend or draft roles.
+- The axis runs along the plane's U or V: the recorded direction is
+  `(±1, 0)` or `(0, ±1)`, and the anchor and direction bounds, the radial
+  admission allowance and every snap allowance are zero.
+- The meridian is one outer loop of exactly four whole `LineSeg`s, each
+  joined end to start bit for bit and each along or across the axis. Its
+  four distinct corners take two along values and two across values, and
+  one across value is the axis's own.
+- The radius, the other across value less the axis's, is a float exactly
+  (an exact rational difference) and exceeds the axis classification
+  tolerance.
+- `r3.NewFrame` rebuilds the prism frame from the plane's axes bit for bit:
+  (V, N, U) for an axis on U, (N, U, V) for an axis on V. The frame shares the
+  plane's origin, so the circle's centre is the axis anchor's across
+  coordinate and every level is a recorded along value.
+
+The two records use the same frame vectors in permuted order and state the
+same set in the frame's coordinates, so no lift differs and the view carries
+no displacement. A stepped shaft, a tube (a meridian off the axis) and any
+arc or slanted meridian line have no view: a stacked face view has no crossing
+reach, and class B's crossing reach needs a hole-free prism X.
+
+Beside B1–B8 and the crossing reach's own conditions, the view's `Cut`
+misses unless every straight tool wall across the shaft's axis lies at a
+level strictly outside the shaft's span. Under B6 every other tool line runs
+along the axis, and under B7 every tool arc is apart from the whole shaft, so
+inside the shaft the tool's boundary does not change along the axis. Every
+surviving piece of the shaft's wall then runs from one end cap to the other.
+A tool that ends inside the span would cut the wall into pieces of different
+angular extent that share a rim, which §4.2 refuses. The gate keeps that tool
+on the mesh path instead. An Extrude target is not gated this way and
+refuses there. The through reach is not tried: a cylinder X has no face
+across d.
+
+The result is the class-B `brepPayload` an Extrude shaft gives: the full-length
+D-flat and keyway of `apitest/revolve_shaft_class_b_test.go` measure the same
+value and bound bit for bit as their Extrude twins. The crossing charges the
+flat's section displacement, so brep-modify SB1 refuses `Fillet` and
+`Chamfer` of its edges; `Thread` on the cut wall builds, to its Extrude
+twin's volume. A shaft or a tool placed by `Transform` carries its own
+placement, misses the shared-placement condition of B.3 (`AdmitPair`) as it
+does for an Extrude pair, and keeps the mesh path, where retained-edge-blend
+§2 blends those edges.
 
 ### Common-axis full revolutions
 
@@ -1190,6 +1314,22 @@ are relations, never literals.
   strip |x| ≤ 2 above its axis, over its 40 mm length), the mesh's
   occupied-volume proof covering the same closed form, and a volume bound
   covering each keyed wall's band `2·δ·L·h`.
+- **B turned shaft**: a full Revolve of the rectangle x in [0, 40],
+  y in [0, 10] about x, `Cut` by a box from z = 7 up drawn on an offset XY
+  plane and spanning x in [−5, 45], builds a D-flat with one cylinder piece
+  and three planes, volume within its bound of
+  `40·(100π − (100·acos(0.7) − 7·√51))`; with the box narrowed to |y| ≤ 3 it
+  builds a keyway with five planes, `40·(100π − (3·√91 + 100·asin(0.3) − 42))`.
+  Each verifies its mesh at `VerifyAll` and matches its Extrude twin's value
+  and bound bit for bit; a shaft about the sketch's V axis builds the same
+  D-flat, and an Acme thread of pitch 8 on the D-flat's wall builds to its
+  twin's volume. A tool ending inside the span (drawn either way along the
+  axis), a tool wall in the end plane (missed by B8), a tilted tool, a
+  `Transform`-placed tool, a
+  stepped shaft and a tube each keep the mesh path, and `Fillet` and
+  `Chamfer` of the class-B flat's edges refuse with SB1.
+  `internal/revolveplan/cylinder_view_test.go` misses each view condition
+  on its own.
 - **B blind cross hole**: a drill ending at y = 11 inside the box builds with
   8 faces and volume within its bound of `16000 − 9π·11`.
 - **B tool crossing a wall**: a 10×10 slot ending inside the box and crossing
