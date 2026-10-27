@@ -23,18 +23,24 @@ func parityBuildHash(idx *ParityIndex) (uint64, int, int) {
 }
 
 // TestParityIndexBuildIsStable pins the exact start and ids slices built for a
-// 6000-facet closed shell on each swept axis.
+// 6000-facet closed shell on each swept axis. Under the race detector it pins
+// those of a 600-facet shell instead.
 func TestParityIndexBuildIsStable(t *testing.T) {
 	t.Parallel()
-	verts, tris := parityCylinder(1500)
-	pm := NewParityMesh(verts, tris)
+	sides, starts := 1500, 24650
 	want := []uint64{0xe233565e4203299, 0xb0a2b33a9c112095, 0x7f885a5cd47948f}
+	if raceDetector {
+		sides, starts = 150, 2602
+		want = []uint64{0x90b4a666739748ba, 0x3636e202af0d22b2, 0x1769950073261d4d}
+	}
+	verts, tris := parityCylinder(sides)
+	pm := NewParityMesh(verts, tris)
 	for i, ax := range []struct{ axis, u, v int }{{0, 1, 2}, {1, 2, 0}, {2, 0, 1}} {
 		idx := pm.buildParityIndex(ax.axis, ax.u, ax.v)
 		require.NotNil(t, idx)
 		sum, ns, ni := parityBuildHash(idx)
 		require.Equal(t, want[i], sum, "axis %d", ax.axis)
-		require.Equal(t, 24650, ns)
+		require.Equal(t, starts, ns)
 		require.Positive(t, ni)
 	}
 }

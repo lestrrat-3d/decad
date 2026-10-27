@@ -192,11 +192,19 @@ func runLockstep(t *testing.T, name string, h HeldRounding) (int, int) {
 // with the pre-replay copy side by side over seeded sliver stacks, alone,
 // beside a tube, and with a positive Reach, and requires every offenders
 // call and every move to leave both sides with the same results, step and
-// poll counts, stamps, memo and held vertices.
+// poll counts, stamps, memo and held vertices. Under the race detector it
+// runs seven of the seeds, stacks of 6 to 12 layers. Two of them are there
+// for one case each: seed 3's reach stack is the first to fail when a memo
+// word packs a stamp over its answer bit, and seed 11's tube is the first to
+// collapse a facet inside an offenders pass.
 func TestHeldOffendersMatchReference(t *testing.T) {
 	t.Parallel()
+	raceSeeds := map[uint64]struct{}{0: {}, 1: {}, 2: {}, 3: {}, 4: {}, 6: {}, 11: {}}
 	var calls, moved, multi, reach int
 	for seed := range uint64(20) {
+		if _, ok := raceSeeds[seed]; raceDetector && !ok {
+			continue
+		}
 		layers := 6 + int(seed%40)
 		cases := map[string]HeldRounding{
 			"layered": stitchLayered(rand.New(rand.NewPCG(seed, 1)), layers),

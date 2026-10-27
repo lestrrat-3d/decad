@@ -76,7 +76,8 @@ func randomSpan(r *rand.Rand) freeform.BezierSpan {
 // reference copy in spline_length_reference_test.go bit for bit, on spans
 // chosen to reach every branch the integer form has: collapsed nets, zero
 // legs, degree 1, near-straight and looping cubics, both ends of the float
-// range, odd denominators and very wide dyadic ones.
+// range, odd denominators and very wide dyadic ones. Under the race detector
+// it draws 40 random spans instead of 200 and splits them at most five times.
 func TestSpanLengthBracketMatchesReference(t *testing.T) {
 	t.Parallel()
 	r := rand.New(rand.NewPCG(11, 12))
@@ -111,13 +112,21 @@ func TestSpanLengthBracketMatchesReference(t *testing.T) {
 		{"quintic", wideSpan(r, 6, 3, 40, 5)},
 		{"degree 31", wideSpan(r, 32, 4, 60, 3)},
 	}
-	for i := range 200 {
+	named := len(spans)
+	random := 200
+	if raceDetector {
+		random = 40
+	}
+	for i := range random {
 		spans = append(spans, namedSpan{fmt.Sprintf("random %d", i), randomSpan(r)})
 	}
-	for _, tc := range spans {
+	for k, tc := range spans {
 		depths := []int{0, 1, 2, 3, 5, freeform.FreeformLengthDepth}
-		if len(tc.span) > 8 {
+		switch {
+		case len(tc.span) > 8:
 			depths = []int{0, 1, 3, 6}
+		case raceDetector && k >= named:
+			depths = []int{0, 1, 2, 3, 5}
 		}
 		for _, depth := range depths {
 			wantLo, wantHi := refSpanLengthBracket(tc.span, depth)

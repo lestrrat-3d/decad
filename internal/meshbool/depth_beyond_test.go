@@ -168,7 +168,8 @@ var depthBounds = []float64{
 
 // TestDepthBeyondMatchesCertifiedDepth compares depthBeyond against the full
 // scan for every bound, with no hint, out-of-range hints and every facet as
-// the hint.
+// the hint. Under the race detector it draws fewer random queries and, on the
+// finer cylinder, takes every fifth facet as the hint.
 func TestDepthBeyondMatchesCertifiedDepth(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(5, 23))
@@ -176,12 +177,16 @@ func TestDepthBeyondMatchesCertifiedDepth(t *testing.T) {
 		"cylinder8":  depthCylinder(t, 8, r3.Vec{}),
 		"cylinder32": depthCylinder(t, 32, r3.NewVec(0.375, -1.25, 0.5)),
 	}
+	queries, hintStride := 48, map[string]int{"cylinder8": 1, "cylinder32": 1}
+	if raceDetector {
+		queries, hintStride["cylinder32"] = 8, 5
+	}
 	for name, m := range meshes {
 		hints := []int{-1, -7, len(m.Tris), len(m.Tris) + 3}
-		for f := range m.Tris {
+		for f := 0; f < len(m.Tris); f += hintStride[name] {
 			hints = append(hints, f)
 		}
-		for qi, p := range depthQueries(rng, m, 48) {
+		for qi, p := range depthQueries(rng, m, queries) {
 			ref := refCertifiedInteriorDepth(p, m)
 			for _, b := range depthBounds {
 				want := !(ref <= b)
@@ -265,11 +270,16 @@ func depthPairs(t testing.TB, n int) []depthPair {
 
 // TestProvenDepthExceedsMatchesReference runs every witness search against
 // its reference copy and requires the same verdict, error and number of
-// context polls.
+// context polls. Under the race detector the cylinders are coarser and the
+// search is cancelled at fewer poll counts.
 func TestProvenDepthExceedsMatchesReference(t *testing.T) {
 	t.Parallel()
+	sides, cancels := 24, int64(16)
+	if raceDetector {
+		sides, cancels = 8, 2
+	}
 	verdicts := map[bool]int{}
-	for _, pc := range depthPairs(t, 24) {
+	for _, pc := range depthPairs(t, sides) {
 		type search func(context.Context) (bool, error)
 		cases := map[string][2]search{
 			"proven": {
@@ -313,7 +323,7 @@ func TestProvenDepthExceedsMatchesReference(t *testing.T) {
 			// Cancelling after every poll count up to the full run fails both
 			// at the same poll.
 			full := wantCtx.polls.Load()
-			for k := int64(0); k < full; k += max(1, full/16) {
+			for k := int64(0); k < full; k += max(1, full/cancels) {
 				gotCtx, wantCtx := newPollRecorder(t.Context(), k), newPollRecorder(t.Context(), k)
 				got, gotErr := c[0](gotCtx)
 				want, wantErr := c[1](wantCtx)

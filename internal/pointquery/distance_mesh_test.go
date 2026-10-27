@@ -91,10 +91,17 @@ func uvSphere(rings, segments int, radius float64) ([]r3.Vec, [][3]int) {
 	return verts, tris
 }
 
+// TestMeshDistanceSquaredMatchesEagerReference holds the lazy conversion to
+// the eager reference on random spheres, whole and cut to a random prefix of
+// shuffled triangles. Under the race detector it runs the first 4 trials.
 func TestMeshDistanceSquaredMatchesEagerReference(t *testing.T) {
 	t.Parallel()
+	trials := 60
+	if raceDetector {
+		trials = 4
+	}
 	rng := rand.New(rand.NewPCG(7, 11))
-	for trial := range 60 {
+	for trial := range trials {
 		verts, tris := uvSphere(3+rng.IntN(6), 3+rng.IntN(8), 0.5+rng.Float64()*4)
 		rng.Shuffle(len(tris), func(i, j int) { tris[i], tris[j] = tris[j], tris[i] })
 		if trial%3 == 0 {

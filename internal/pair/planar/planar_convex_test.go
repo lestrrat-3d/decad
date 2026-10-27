@@ -109,13 +109,22 @@ type convexCase struct {
 // bipyramids and prisms, vertices exactly on, an ulp in front of and an ulp
 // behind a facet plane, each under exact power-of-two scalings across the
 // float range and the range guard, an inexact translation and an inexact
-// shear (both with determinant one, so convexity is unchanged).
+// shear (both with determinant one, so convexity is unchanged). Under the race
+// detector the prism and jitter rings have half as many points, and it keeps
+// three of the jitters and the scalings at both ends of the float range and on
+// both sides of the range guard. The regular bipyramid keeps its 64 points:
+// at that size its skip count fails when the bound counts the coordinate
+// rounding once instead of twice.
 func convexCases() []convexCase {
 	rng := rand.New(rand.NewPCG(101, 103))
 	ten, one := proof.DyInt(10), proof.DyInt(1)
+	prismSize, jitterSize := 40, 48
+	if raceDetector {
+		prismSize, jitterSize = 20, 24
+	}
 	bases := []convexCase{
 		{"bipyramid64", bipyramid(regularRing(64, 0, nil), ten)},
-		{"prism40", prism(regularRing(40, 0, nil), ten)},
+		{fmt.Sprintf("prism%d", prismSize), prism(regularRing(prismSize, 0, nil), ten)},
 		{"cube", prism([]proof.DyV3{ringPoint(-1, -1), ringPoint(1, -1), ringPoint(1, 1), ringPoint(-1, 1)},
 			proof.DyInt(2))},
 		{"lprism", prism([]proof.DyV3{ringPoint(0, 0), ringPoint(2, 0), ringPoint(2, 1), ringPoint(1, 1),
@@ -128,9 +137,13 @@ func convexCases() []convexCase {
 		{"squareOut", bipyramid(squareRing(-0x1p-52), one)},
 		{"squareIn8", bipyramid(squareRing(0x1p-50), one)},
 	}
-	for _, jitter := range []float64{0x1p-10, 0x1p-30, 0x1p-45, 0x1p-50, 0x1p-52} {
+	jitters := []float64{0x1p-10, 0x1p-30, 0x1p-45, 0x1p-50, 0x1p-52}
+	if raceDetector {
+		jitters = []float64{0x1p-10, 0x1p-50, 0x1p-52}
+	}
+	for _, jitter := range jitters {
 		bases = append(bases, convexCase{fmt.Sprintf("jitter%g", jitter),
-			bipyramid(regularRing(48, jitter, rng), ten)})
+			bipyramid(regularRing(jitterSize, jitter, rng), ten)})
 	}
 	offset := proof.DyV3{proof.DyAdd(proof.MustDyOf(1e6), proof.DyShift(one, -60)),
 		proof.DyAdd(proof.MustDyOf(-3e5), proof.DyShift(one, -70)), proof.MustDyOf(0.1)}
@@ -146,7 +159,11 @@ func convexCases() []convexCase {
 				proof.DyAdd(v[1], proof.DyMul(shear, v[2])), v[2]}
 		}},
 	}
-	for _, k := range []int{-1100, -1000, -400, -340, -300, 200, 246, 247, 250, 251, 300, 340, 400, 1100} {
+	scales := []int{-1100, -1000, -400, -340, -300, 200, 246, 247, 250, 251, 300, 340, 400, 1100}
+	if raceDetector {
+		scales = []int{-1100, 250, 251, 1100}
+	}
+	for _, k := range scales {
 		maps = append(maps, struct {
 			name string
 			f    func(proof.DyV3) proof.DyV3
@@ -263,12 +280,17 @@ func nearPlaneDyadic(rng *rand.Rand, scale int) proof.Dyadic {
 //
 // Legs shown to fail (each removed in turn): convexDotEps set to zero, and the
 // coordinate rounding term (round) left at zero; each makes the pre-test skip
-// a vertex in front of the plane on some draws.
+// a vertex in front of the plane on some draws. Under the race detector it
+// draws 1200 triangles instead of 6000.
 func TestConvexPlaneBehindIsSound(t *testing.T) {
 	t.Parallel()
+	trials := 6000
+	if raceDetector {
+		trials = 1200
+	}
 	rng := rand.New(rand.NewPCG(107, 109))
 	skipped, behind, front := 0, 0, 0
-	for trial := range 6000 {
+	for trial := range trials {
 		scale := []int{0, 0, 20, -20, 120, 240, -300, -340}[trial%8]
 		var verts []proof.DyV3
 		for range 3 {

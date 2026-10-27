@@ -49,11 +49,20 @@ var capGeometryAxisTestAxes = []r3.Vec{
 	{X: math.MaxFloat64, Y: math.MaxFloat64}, {X: 1, Y: 1, Z: 1},
 }
 
+// TestCellGeometryAxisMatchesRatConversion holds the general-axis cell
+// geometry to the big.Rat conversion bit for bit, on a subdivided fan and on
+// random cells spread across scales, about every test axis. Under the race
+// detector the fan is subdivided twice instead of three times and it draws
+// 150 random cells instead of 600.
 func TestCellGeometryAxisMatchesRatConversion(t *testing.T) {
 	t.Parallel()
+	rounds, cells := 3, 600
+	if raceDetector {
+		rounds, cells = 2, 150
+	}
 	r := rand.New(rand.NewPCG(53, 59))
-	far, caps := capTestFan(t, 3)
-	randomFar, randomCaps := capTestRandom(r, 600)
+	far, caps := capTestFan(t, rounds)
+	randomFar, randomCaps := capTestRandom(r, cells)
 	for i := range randomFar {
 		// Spread the random vertices across the axis and across scales, so
 		// axial minima of both signs and every binade reach the conversion.

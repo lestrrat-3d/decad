@@ -310,12 +310,17 @@ func (sc walkScene) run(walk func(*proofbound.WorkBudget, float64, clearance.Fea
 // distances tied, some at +Inf, with pruning on and off and the budget
 // failing at random steps, through EnumerateFeatures and through the walk
 // over the fully sorted queue, and requires the same visits at the same
-// budget steps, the same error, the same step count and the same sink.
+// budget steps, the same error, the same step count and the same sink. Under
+// the race detector it walks 600 scenes instead of 3000.
 func TestEnumerateFeaturesMatchesFullSort(t *testing.T) {
 	t.Parallel()
+	trials := 3000
+	if raceDetector {
+		trials = 600
+	}
 	rng := rand.New(rand.NewPCG(2617, 11))
 	var visited, skipped, unbounded int
-	for trial := range 3000 {
+	for trial := range trials {
 		sc := randomWalkScene(rng)
 		want := sc.run(legacyEnumerateFeatures)
 		got := sc.run(clearance.EnumerateFeatures)

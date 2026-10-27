@@ -320,8 +320,21 @@ func randomCrossingMeshes(t *testing.T, seed uint64, n int) (*BoolMesh, *BoolMes
 	return ma, mb
 }
 
+// contactThreadPairs is the rod and thread the contact tests classify, with
+// their candidate pairs. Under the race detector a coarser rod and thread keep
+// every contact kind and boundary case the fine ones reach.
+func contactThreadPairs(t *testing.T) (*BoolMesh, *BoolMesh, []ContactPair) {
+	t.Helper()
+	if raceDetector {
+		return threadContactPairs(t, 8, 2, 8, 4)
+	}
+	return threadContactPairs(t, 12, 4, 64, 24)
+}
+
 // contactCacheFixtures returns the mesh pairs the differential sweep reads,
-// each with its candidate pairs.
+// each with its candidate pairs. Under the race detector the grids are coarser
+// and one random soup of fewer triangles stands in for three; the plain build
+// runs the full sweep.
 func contactCacheFixtures(t *testing.T) map[string]struct {
 	ma, mb *BoolMesh
 	pairs  []ContactPair
@@ -337,14 +350,18 @@ func contactCacheFixtures(t *testing.T) map[string]struct {
 			pairs  []ContactPair
 		}{ma, mb, pairs}
 	}
-	rod, thread, pairs := threadContactPairs(t, 12, 4, 64, 24)
+	seeds, soup, gridSize := uint64(3), 40, 5
+	if raceDetector {
+		seeds, soup, gridSize = 1, 12, 3
+	}
+	rod, thread, pairs := contactThreadPairs(t)
 	add("thread", rod, thread, pairs)
 	add("thread scaled", scaledMesh(t, rod), scaledMesh(t, thread), pairs)
-	for name, pair := range nearGatePairs(t, 5) {
+	for name, pair := range nearGatePairs(t, gridSize) {
 		add("grid "+name, pair[0], pair[1], boxPairs(t, pair[0], pair[1]))
 	}
-	for seed := range uint64(3) {
-		ma, mb := randomCrossingMeshes(t, seed+1, 40)
+	for seed := range seeds {
+		ma, mb := randomCrossingMeshes(t, seed+1, soup)
 		var all []ContactPair
 		for i := range ma.Tris {
 			for j := range mb.Tris {
@@ -430,7 +447,7 @@ func TestContactBatchMatchesLegacyClassify(t *testing.T) {
 // one facet's edge planes to another.
 func TestEdgePlaneCacheSwitchesFacets(t *testing.T) {
 	t.Parallel()
-	rod, thread, pairs := threadContactPairs(t, 12, 4, 64, 24)
+	rod, thread, pairs := contactThreadPairs(t)
 	var segments []ContactPair
 	for _, pair := range pairs {
 		if c, _, err := legacyPair(rod, thread, pair); err == nil && c.Kind == ContactSegment {
