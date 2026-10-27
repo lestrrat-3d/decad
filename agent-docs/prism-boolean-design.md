@@ -130,7 +130,7 @@ that pair.
 | G2 | None: a reflected accumulated placement admits (`agent-docs/general-boolean-design.md` §3 A4). When the composed relative map of §4.1 is a reflection (`Transform.IsReflection`), operand B's record is re-wound before any entity is created; two operands under one reflected placement meet G3's shared-axis arm with no re-expression. | G3 reads the world normal through `ApplyDir`, which maps a reflection's sweep direction like any other. The re-winding restores the "outer CCW, holes CW" convention §4.2's flag comparison reads. |
 | G3 | The composed world normals agree exactly, and the coplanar, shared-frame-axis, or placed-axis arm below holds. | Use stored floats and exact rational arithmetic for the axis arms; a rounded residual never admits a pair. |
 | G4 | Every segment of both operands' `ProfileRecord` (`Outer` and every loop of `Holes`) is a `LineSeg`, `CircleSeg`, or `ArcSeg`. | `geom.BoundaryEdge.TExact`'s own contract is a **whole-scene** gate (`sketch`'s `geom/region.go`): one `Ellipse`/`EllipticalArc`/`Conic`/`Spline`/`ClosedSpline`/`FitSpline`/`NURBS` anywhere in an arrangement makes every bound in it — including unrelated line/circle/arc edges — report `TExact = false`. A single free-form segment on either operand would silently blind the whole combination, not just its own edges, so the gate excludes the kind entirely rather than trying to admit "the free-form parts don't touch." Staged: §9's free-form row. |
-| G5 | Apply G3's exact rational axial shift to B's interval, then check §3.2's interval relation exactly. | A rounded float sum cannot decide whether a tool reaches a target cap. |
+| G5 | Apply G3's exact rational axial shift to B's interval, then check §3.2's interval relation exactly for every level each held float, displacement and denotation allows. | A rounded float sum cannot decide whether a tool reaches a target cap, and neither can two held floats that each round a different level. |
 | G6 | `Union` needs both operands hole-free. `Cut` needs the tool hole-free; the target may carry holes. `Intersect` needs both operands hole-free except for the one-hole clean-nesting arm below. | `Union`'s select-all rule would include a hole's void. A holed `Cut` tool can leave separate lumps that one `ProfileRecord` cannot carry. The admitted holed `Intersect` has one nested result profile, including its hole. |
 
 G1–G6 are the only conditions checked before touching `sketch`. **Passing
@@ -208,11 +208,26 @@ discipline: two teeth swept to visibly-the-same but not exactly equal heights
 (e.g. built through two different construction paths) refuse to the mesh
 path rather than being blessed as "close enough." All three relations are
 `big.Rat` comparisons over the operands' own recorded floats and G5's exact
-rational shift — no new rounding, so a boundary case (tool's cap exactly
-meets target's) is decided exactly and is a valid span/overlap. An offset
-plane 0.1 mm below a target and a tool 0.3 mm tall put B's cap at the exact
-rational `fl(0.1) + fl(0.3)`, which is no float; G5 compares it as it is, and
-only `Intersect`'s result rounds it, charged (§7).
+rational shift — no new rounding. An offset plane 0.1 mm below a target and a
+tool 0.3 mm tall put B's cap at the exact rational `fl(0.1) + fl(0.3)`, which
+is no float; G5 compares it as it is, and only `Intersect`'s result rounds it,
+charged (§7).
+
+Each relation must hold for the levels the held floats denote, not only for
+the floats. A level with zero displacement denotes its own float. A displaced
+level denotes the rational stacked §2.1 records for it, or, with no record,
+any value within its displacement of its float. `prismplacement` reads each
+level as that exact range, lifted by G5's shift, and admits an inequality only
+when it holds across both ranges: the tool's lower level at or below the
+target's whatever their displacements, and likewise the other three ends.
+`Union`'s equality needs equal held floats and one shared denoted rational at
+each end. A cap meeting a cap is therefore a valid span only when both denote
+one rational, as two undisplaced equal floats or two 0.2 in levels do, and
+never an overlap. Equal held floats prove nothing on their own: a tool swept
+to 0.2 in holds the float of a 5.08 mm plate top, denotes a level below it,
+and so leaves a skin over its hole; that `Cut` takes the mesh path. Any
+relation decided inside a displacement window without one shared denotation
+declines to the mesh path the same way.
 
 The two blind `Cut` rows require whole-loop scene matches. `prismcells.ResolveCut`
 proves a tool disjoint from the target's existing holes. An enclosing tool

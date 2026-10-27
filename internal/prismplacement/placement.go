@@ -12,11 +12,17 @@ import (
 )
 
 // Operand holds only the stored placement and sweep fields used by the
-// shared-axis and relative-placement calculations.
+// shared-axis and relative-placement calculations. Z0Delta and Z1Delta bound
+// how far each held level sits from the level it denotes, and Z0Denoted and
+// Z1Denoted record that level where the producer knows it. The G5 interval
+// relations read all three; an operand that leaves them zero states two
+// undisplaced levels.
 type Operand struct {
-	Frame  r3.Frame
-	Xform  r3.Transform
-	Z0, Z1 float64
+	Frame                r3.Frame
+	Xform                r3.Transform
+	Z0, Z1               float64
+	Z0Delta, Z1Delta     float64
+	Z0Denoted, Z1Denoted LevelDenotation
 }
 
 // SharedAxis is G3's exact shared-axis result. Shift is the rational axial
@@ -117,36 +123,75 @@ func intersectEnd(aVal, aDelta float64, bVal *big.Rat, bDelta float64, lower boo
 	return held, proofbound.AbsSumUpper(bDelta, proofarith.RationalFloatError(bVal, held))
 }
 
-// CutZIntervalSpans compares the shifted tool interval against both target
-// endpoints exactly. A cap meeting the target endpoint is a valid span.
-func CutZIntervalSpans(target, tool Operand) bool {
-	t0, t1 := proofarith.FloatRat(target.Z0), proofarith.FloatRat(target.Z1)
-	z0, z1, ok := ShiftedInterval(target, tool)
-	if t0 == nil || t1 == nil || !ok {
-		return false
-	}
-	return z0.Cmp(t0) <= 0 && z1.Cmp(t1) >= 0
+// levelRange is the exact range a level's true value lies in, lifted by
+// shift: the single rational DenotedLevel proves, or else the held float
+// widened by its displacement on both sides. ok is false for a non-finite
+// level or displacement, or a negative displacement.
+type levelRange struct {
+	lo, hi *big.Rat
 }
 
-// UnionZIntervalMatches compares the exact shifted B interval to A's.
+func rangeOf(held, delta float64, d LevelDenotation, shift *big.Rat) (levelRange, bool) {
+	if exact := DenotedLevel(held, delta, d); exact != nil {
+		exact.Add(exact, shift)
+		return levelRange{lo: exact, hi: exact}, true
+	}
+	h, dr := proofarith.FloatRat(held), proofarith.FloatRat(delta)
+	if h == nil || dr == nil || dr.Sign() < 0 {
+		return levelRange{}, false
+	}
+	h.Add(h, shift)
+	return levelRange{lo: new(big.Rat).Sub(h, dr), hi: new(big.Rat).Add(h, dr)}, true
+}
+
+// zRanges is the exact range of each sweep level of op on A's axis.
+func zRanges(op Operand, shift *big.Rat) (levelRange, levelRange, bool) {
+	r0, ok0 := rangeOf(op.Z0, op.Z0Delta, op.Z0Denoted, shift)
+	r1, ok1 := rangeOf(op.Z1, op.Z1Delta, op.Z1Denoted, shift)
+	return r0, r1, ok0 && ok1
+}
+
+// operandRanges is A's two level ranges and B's after G5's exact shift.
+func operandRanges(pa, pb Operand) (a0, a1, b0, b1 levelRange, ok bool) {
+	a0, a1, okA := zRanges(pa, new(big.Rat))
+	b0, b1, okB := zRanges(pb, ZShift(pa, pb))
+	return a0, a1, b0, b1, okA && okB
+}
+
+// CutZIntervalSpans reports that the shifted tool interval provably spans the
+// target's. Each comparison holds for every true level the held floats and
+// displacements allow: the tool's lower level lies at or below the target's
+// whatever their displacements, or both levels denote rationals in that order,
+// and likewise above. A cap meeting the target endpoint is a valid span when
+// both denote one rational. Equal held floats within a displacement prove
+// nothing, so such a pair declines.
+func CutZIntervalSpans(target, tool Operand) bool {
+	t0, t1, z0, z1, ok := operandRanges(target, tool)
+	return ok && z0.hi.Cmp(t0.lo) <= 0 && z1.lo.Cmp(t1.hi) >= 0
+}
+
+// UnionZIntervalMatches reports that the shifted B interval provably equals
+// A's: the held floats agree exactly after the shift, and each pair of levels
+// denotes one rational. A displaced level without a denotation proves no
+// equality.
 func UnionZIntervalMatches(pa, pb Operand) bool {
 	a0, a1 := proofarith.FloatRat(pa.Z0), proofarith.FloatRat(pa.Z1)
 	z0, z1, ok := ShiftedInterval(pa, pb)
-	if a0 == nil || a1 == nil || !ok {
+	if a0 == nil || a1 == nil || !ok || a0.Cmp(z0) != 0 || a1.Cmp(z1) != 0 {
 		return false
 	}
-	return a0.Cmp(z0) == 0 && a1.Cmp(z1) == 0
+	r0, r1, s0, s1, ok := operandRanges(pa, pb)
+	return ok && r0.lo.Cmp(r0.hi) == 0 && r0.lo.Cmp(s0.lo) == 0 && s0.lo.Cmp(s0.hi) == 0 &&
+		r1.lo.Cmp(r1.hi) == 0 && r1.lo.Cmp(s1.lo) == 0 && s1.lo.Cmp(s1.hi) == 0
 }
 
-// IntersectZIntervalOverlaps compares the shifted B interval with A's own
-// interval exactly. A pair touching only at a cap has no overlap.
+// IntersectZIntervalOverlaps reports that the shifted B interval provably
+// overlaps A's: each lower level lies strictly below the other's upper level
+// for every true level the displacements allow. A pair touching only at a
+// cap, or whose caps meet within their displacements, has no proven overlap.
 func IntersectZIntervalOverlaps(pa, pb Operand) bool {
-	a0, a1 := proofarith.FloatRat(pa.Z0), proofarith.FloatRat(pa.Z1)
-	z0, z1, ok := ShiftedInterval(pa, pb)
-	if a0 == nil || a1 == nil || !ok {
-		return false
-	}
-	return a0.Cmp(z1) < 0 && z0.Cmp(a1) < 0
+	a0, a1, z0, z1, ok := operandRanges(pa, pb)
+	return ok && a0.hi.Cmp(z1.lo) < 0 && z0.hi.Cmp(a1.lo) < 0
 }
 
 // Relative is the composed map from B's plane-local coordinates into A's.

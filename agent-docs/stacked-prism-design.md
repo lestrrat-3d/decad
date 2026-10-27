@@ -90,7 +90,9 @@ record none.
 
 The denotations decide the interface arm, guard the split arm's order
 (§7 stage 3), enter the I4 audit (§2.2) and decide when general-boolean §3
-A7's tool end meets a target cap. Measurements,
+A7's tool end meets a target cap. They also decide prism-boolean G5's span,
+match and overlap relations (prism-boolean §3.2), where a stack's first and
+last slab ends stand for the stack's own ends. Measurements,
 tessellation and every bound read the held floats and their displacements
 as before, so a displaced level still reads `Approximate` (§4).
 

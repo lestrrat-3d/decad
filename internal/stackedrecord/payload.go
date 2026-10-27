@@ -63,8 +63,8 @@ func (sp Payload) OuterPrism() prismrecord.Payload {
 	return prismrecord.Payload{
 		Profile: momentinput.Profile{Outer: first.Regions[0].Outer},
 		Frame:   sp.Frame, Xform: sp.Xform, SectionDelta: sp.SectionDelta,
-		Z0: first.Z0, Z0Delta: first.Z0Delta,
-		Z1: last.Z1, Z1Delta: last.Z1Delta,
+		Z0: first.Z0, Z0Delta: first.Z0Delta, Z0Denoted: first.Z0Denoted,
+		Z1: last.Z1, Z1Delta: last.Z1Delta, Z1Denoted: last.Z1Denoted,
 	}
 }
 
