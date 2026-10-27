@@ -993,7 +993,7 @@ func sweepCandidatesByRows(budget *proofbound.WorkBudget, s pairScan, members, s
 }
 
 // sweepCandidatesRowsWorkers fills sweepCandidates' list for keepEveryPair by
-// rows. Row i's partners come from tree.walkRow, which passes exactly the
+// rows. Row i's partners come from tree.walkRowAppend, which gives exactly the
 // partners visit pairs with i as the lower index. Each worker writes only row
 // i's own slots js[starts[i]:starts[i+1]] and sorts them, so the list equals
 // sweepCandidates'. Workers never touch budget: after the walks the caller
@@ -1010,15 +1010,12 @@ func sweepCandidatesRowsWorkers(budget *proofbound.WorkBudget, tree loftRowPairS
 	mismatch := make([]bool, len(members))
 	if _, err := orderedwork.Each(len(members), workers, 64, budget.Err, func(k int) error {
 		i := members[k]
+		// row's capacity ends at the row's last slot, so a row with more
+		// partners than starts allows reallocates instead of writing into the
+		// next row's slots, and its length then differs from the count.
 		row := c.js[starts[i]:starts[i]:starts[i+1]]
-		n := 0
-		_, exceeded := tree.walkRow(i, math.MaxUint64, func(j int) {
-			if n < cap(row) {
-				row = append(row, int32(j))
-			}
-			n++
-		})
-		if exceeded || n != starts[i+1]-starts[i] {
+		row, _, exceeded := tree.walkRowAppend(i, math.MaxUint64, row)
+		if exceeded || len(row) != starts[i+1]-starts[i] {
 			mismatch[k] = true
 			return nil
 		}

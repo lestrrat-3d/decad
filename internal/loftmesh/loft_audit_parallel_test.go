@@ -86,6 +86,14 @@ func TestWalkRowMatchesVisitRow(t *testing.T) {
 					require.Equal(t, wantWork, gotWork)
 					require.Equal(t, wantExceeded, gotExceeded)
 					require.Equal(t, wantPart, gotPart)
+					appended, appendWork, appendExceeded := scan.walkRowAppend(i, limit, []int32{-1})
+					require.Equal(t, wantWork, appendWork)
+					require.Equal(t, wantExceeded, appendExceeded)
+					require.Equal(t, int32(-1), appended[0])
+					require.Equal(t, len(wantPart), len(appended)-1)
+					for k, j := range wantPart {
+						require.EqualValues(t, j, appended[k+1])
+					}
 				}
 				var got []int
 				gotWork, _ := scan.walkRow(i, math.MaxUint64, func(j int) { got = append(got, j) })
@@ -351,6 +359,11 @@ type slowFirstRow struct {
 func (s *slowFirstRow) walkRow(i int, limit uint64, fn func(j int)) (uint64, bool) {
 	s.once.Do(func() { time.Sleep(3 * time.Second / 20) })
 	return s.loftRowScan.walkRow(i, limit, fn)
+}
+
+func (s *slowFirstRow) walkRowAppend(i int, limit uint64, out []int32) ([]int32, uint64, bool) {
+	s.once.Do(func() { time.Sleep(3 * time.Second / 20) })
+	return s.loftRowScan.walkRowAppend(i, limit, out)
 }
 
 // TestRowWalksFailLikeSerialWhenPollFindsBudgetExhausted pins that an
