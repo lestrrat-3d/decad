@@ -74,6 +74,10 @@ func unionManyBodies(ctx context.Context, d *Document, ref producerID, operands 
 	if err == nil || !errors.Is(err, ErrUnsupported) {
 		return body, span, err
 	}
+	// Axis-square faceted solids join exactly on one grid (agent-docs/orthogonal-boolean-design.md).
+	if joined, ok := orthogonalUnionMany(ctx, d, ref, operands); ok {
+		return joined, 1, ctx.Err()
+	}
 	// Every route above refused. A set of prisms with a free-form section can
 	// still join through the union of their sections, which reads a root arc
 	// that lies on the blank's rim and any number of copies. A miss or a refusal

@@ -961,6 +961,10 @@
 3	1.23	TestSweepTwistRoundedLargeProfileVerifyAll
 3	0.01	TestTaperDownstreamRefusals
 3	0.02	TestTaperRing
+10	0.01	TestOrthogonalUnionOfSeveralBodiesJoinsThemOnOneGrid
+10	0.01	TestOrthogonalUnionOfSeveralBodiesTakesAnExtrudedPartner
+10	0.01	TestPatternJoinOfAMeshSolidIsExact
+10	0.01	TestOrthogonalUnionOfSeveralBodiesLeavesNearCoincidentFacesToTheGeneralRoute
 3	0.05	TestTaperTwoSidedBuild
 3	0.00	TestTessellatePlate
 3	0.01	TestTessellateRejectsTangentHole
