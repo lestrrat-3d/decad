@@ -163,13 +163,12 @@ func bernsteinIntRow(values []*big.Rat) ([]*big.Int, *big.Int) {
 	den := big.NewInt(1)
 	var gcd big.Int
 	for _, v := range values {
-		d := v.Denom()
-		if d.Cmp(den) == 0 {
+		if den.Cmp(v.Denom()) == 0 {
 			continue
 		}
-		gcd.GCD(nil, nil, den, d)
+		gcd.GCD(nil, nil, den, v.Denom())
 		den.Quo(den, &gcd)
-		den.Mul(den, d)
+		den.Mul(den, v.Denom())
 	}
 	nums := make([]*big.Int, len(values))
 	var scale big.Int
