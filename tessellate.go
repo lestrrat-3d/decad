@@ -141,7 +141,9 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.n.Bound) }
 // band with no straight slab: one ruled wall per section walk between the near
 // cap's rim and the far section, a sharp miter at every line-line corner,
 // convex or reflex, and both caps triangulated. Where every circular wall
-// meets its neighbours exactly tangent, it also proves the volume it and the
+// meets its neighbours exactly tangent, or a line meets an arc tangent up to a
+// turn below 2⁻³² rad whose sliver the proof charges
+// (agent-docs/draft-design.md §9.1.1), it also proves the volume it and the
 // body differ by, so [Union], [Cut] and [Intersect] take it as an operand.
 //
 // A lofted body RESTATES the flat triangle set its construction already built

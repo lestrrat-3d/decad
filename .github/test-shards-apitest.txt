@@ -1466,6 +1466,8 @@
 7	2.05	TestExtrudeSplineProfileSpendsOneWorkCeiling
 7	0.01	TestExtrudeToFace
 7	0.00	TestExtrudeToNearlyPlanarRevolveFaceRefuses
+10	0.00	TestDraftNearTangentJoinBooleans
+10	0.00	TestDraftNearTangentJoinPastLimitRefuses
 7	0.02	TestFacetedEdgeLengthNeverClaimsExact
 7	0.01	TestFacetedPlacedFarFromOriginBoundHolds
 7	0.03	TestFacetedPrismUnionChamferReversedSources
@@ -2154,7 +2156,6 @@
 10	0.66	TestDirectLoftVaryingCircleHolesPublishCurvedWalls
 10	0.72	TestDisplacedSupportSetBottle
 10	0.06	TestDraftCircleEndRimChamferPlacement
-10	0.13	TestDraftNearTangentJoinRefusesBooleans
 10	0.01	TestDraftOneWall
 10	0.03	TestDraftOverlapIsMeasured
 10	0.00	TestEdgeVerticesAreTheBodyVertices

@@ -241,6 +241,11 @@ of a pin ending in the face from inside leaves a blind hole that opens there; an
 The cap and the face must hold the same level exactly. A pin that stops short by any gap, a length that only rounds
 onto the face (such as an inch distance), and a section touching the face's edge take the faceted path.
 
+A tapered `decad.Extrude` (`decad.WithTaper`) is an operand when every corner where a circular wall meets its
+neighbour is tangent. A line and an arc that meet tangent up to rounding, turning by less than 2⁻³² rad, count as
+tangent, and the sliver between them is charged into the result's volume bound. Two arcs that meet that way, or a
+larger turn, are refused with `decad.ErrUnsupported`, as is a trimmed segment; the body still meshes for export.
+
 A two-body `Union`, `Cut` or `Intersect` that would be refused because an operand is the mesh result of earlier Booleans is retried from
 the source bodies of that chain, when all but one pair combine by exact routes. The result is the same solid. Its
 history records the one call, and faces made by the exact steps carry fresh roles, so select them by geometry.

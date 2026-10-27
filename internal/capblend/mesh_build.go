@@ -229,6 +229,16 @@ func TessellateMesh(ctx context.Context, b *topo.Body, cbp Payload, chord float6
 		ChordVolume(cbp, lms),
 		proofbound.SweptVolumeAllow(motionMax, proofbound.PerturbedAreaUpper(mesh.Vertices, mesh.Triangles, motionMax)),
 	}
+	// A draft band's near-tangent joins (agent-docs/draft-design.md §9.1.1) leave
+	// B1's slices short of chord polygons near each such corner; a band with
+	// none adds no term, so its sum is unchanged.
+	corner, err := NearTangentVolume(budget, cbp, lms)
+	if err != nil {
+		return nil, nil, err
+	}
+	if corner > 0 {
+		terms = append(terms, corner)
+	}
 	total, err := tessellation.SymDiff(terms)
 	if err != nil {
 		return nil, nil, err

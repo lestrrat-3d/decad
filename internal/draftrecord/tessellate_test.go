@@ -85,16 +85,17 @@ func TestTessellateDraftBand(t *testing.T) {
 		requireHalvesCompose(t, body, env, got, m)
 	})
 
-	t.Run("TwoSidedCarriesARefusedHalfProof", func(t *testing.T) {
+	t.Run("TwoSidedChargesANearTangentSlot", func(t *testing.T) {
 		t.Parallel()
 		// A join the build reads as tangent but the record does not make
-		// exactly tangent is not admitted, so neither half's band carries the
-		// occupied-volume proof and the sewn mesh carries none.
-		body, got := twoSidedBody(t, env, nearTangentSlot())
+		// exactly tangent is a near-tangent join (agent-docs/draft-design.md
+		// §9.1.1): each half's band charges its corners, so the sewn mesh
+		// carries the occupied-volume proof both halves compose.
+		body, got := twoSidedBody(t, env, nearTangentSlot(math.Ldexp(1, -40)))
 		m, err := draftrecord.TessellateTwoSided(t.Context(), body, env, got, 0.01, true)
 		require.NoError(t, err)
 		require.NoError(t, tessellation.RequireClosedMesh(m.Triangles))
-		require.False(t, m.SymDiffOK)
+		require.True(t, m.SymDiffOK)
 		requireHalvesCompose(t, body, env, got, m)
 	})
 
@@ -108,15 +109,16 @@ func TestTessellateDraftBand(t *testing.T) {
 	})
 }
 
-// nearTangentSlot is a 30 × 10 slot whose right arc's center sits 2⁻⁴⁰ off
+// nearTangentSlot is a 30 × 10 slot whose right arc's center sits shift off
 // the line ends it meets: the build reads both joins as tangent, but the
-// record does not make that corner exactly tangent.
-func nearTangentSlot() momentinput.Profile {
+// record does not make those corners exactly tangent. A zero shift is the
+// exactly tangent slot.
+func nearTangentSlot(shift float64) momentinput.Profile {
 	p := func(u, v float64) sectionrecord.Point2 { return sectionrecord.Point2{U: u, V: v} }
 	a, b, c, d := p(-15, -5), p(15, -5), p(15, 5), p(-15, 5)
 	return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
 		sectionrecord.LineSeg{Start: a, End: b, TStart: 0, TEnd: 1},
-		sectionrecord.ArcSeg{Center: p(15+math.Ldexp(1, -40), 0), Start: b, End: c, TStart: 0, TEnd: 1},
+		sectionrecord.ArcSeg{Center: p(15+shift, 0), Start: b, End: c, TStart: 0, TEnd: 1},
 		sectionrecord.LineSeg{Start: c, End: d, TStart: 0, TEnd: 1},
 		sectionrecord.ArcSeg{Center: p(-15, 0), Start: d, End: a, TStart: 0, TEnd: 1},
 	}}}

@@ -466,23 +466,128 @@ held coordinates. The closed-mesh audit refuses a mismatch in the two middle
 rings. The outer facets retain their source faces and displacement bounds;
 area slack and occupied-volume difference bounds add over the two slabs.
 
-The admission refuses what it refuses for a chamfer: a circular wall whose
-join is G1 by the held-tangent rule but not exactly tangent over the
-rationals, a trimmed segment, or an arc whose recorded end is off its circle.
-That mesh serves export, and every boolean, interference and mass reading
-refuses it, naming the loop, the corner's plane-local point and the two
-recorded segments that meet there (or the one segment).
+The admission refuses what it refuses for a chamfer, less the near-tangent
+joins of §9.1.1: a trimmed segment, an arc whose recorded end is off its
+circle, and a circular wall whose join is G1 by the held-tangent rule but not
+exactly tangent over the rationals, unless §9.1.1 admits that join. That mesh
+serves export, and every boolean, interference and mass reading refuses it,
+naming the loop, the corner's plane-local point and the two recorded segments
+that meet there (or the one segment).
 
-The refusal of a near-tangent join is required, not a missing tolerance. Such
-a corner turns by a sliver over the rationals, so the sharp offset family's
-foot there runs along a conic, not along the ruling the mesh holds, and the
-slice-wise proof's premise (every band section is a chord polygon of the true
-offset section) fails at that corner. A bound on the tangents' cross product
-would admit on a residual, which `CLAUDE.md` forbids, and a Hausdorff bound
-times area is not an occupied-volume proof (tessellation §11). Admitting it
-needs a proven bound on the area between the conic foot locus and the ruling
-in every slice, integrated over the sweep: the per-cell integral of
-`agent-docs/tessellation-reach-design.md` §9's open question, a separate increment.
+### 9.1.1 Near-tangent joins
+
+A corner the build reads as G1 that `capband.JoinIsG1` does not prove exactly
+tangent turns by a sliver θ over the rationals. The sharp family's corner
+there (§2) is `m(t)`, where the moved line meets the moved circle, on the
+branch that starts at the recorded corner `v`; it runs along a conic, not
+along the ruling the mesh holds. The build holds the shared-normal foot, and
+the body's own readings charge that gap through the far contour's G1 hull and
+`capband.ClosureOf` (§8, §12). The mesh proof charges the sliver as a volume
+term, never by admitting a small cross product: the term is a proven upper
+bound, and a corner it does not cover refuses.
+
+**The class** (`capband.NearTangentCorner`, exact rational arithmetic over
+the record's floats). A draft band admits the corner when all six hold:
+
+1. one walk is a `LineSeg` and the other an `ArcSeg`;
+2. the two recorded junction points are one rational point `v`;
+3. the two exact walk tangents `a` and `b` (as `JoinIsG1` states them) have
+   `a·b > 0`;
+4. `S = (a × b)² / (|a|²·|b|²)`, the exact `sin²θ`, is at most `2⁻⁶⁴`, so
+   `θ < 2⁻³²` rad, under a quarter of the build's dead zone;
+5. both walks move by one amount;
+6. the moved circle stays clear of the corner: `r_lo > ρ + R_hi·S`, with
+   `R = |v − C|` and `r_lo` the smallest moved radius any level reaches.
+
+Failing 2 or 3 keeps the exact-tangent refusal. Failing 1 refuses "a
+near-tangent join between two circular walls", 4 "a near-tangent join whose
+exact turn exceeds the admitted sin²θ ≤ 2⁻⁶⁴", 5 "a near-tangent join whose two
+walls move by different amounts" (unreachable after SD4), and 6 "a
+near-tangent join whose moved circle comes within the near-tangent corner
+charge of the corner". The limit in 4 is a stated class, not a soundness step:
+a join a sketch tangent constraint solves turns by rounding, orders below
+`2⁻³²`, and a corner turning more was drawn as a corner and keeps the
+refusal a genuine miter has. A chamfer band admits no near-tangent join: its
+offset family is the shell's (modify §7), whose reflex sliver takes a
+connector arc this proof does not follow.
+
+**B1 at the corner.** Write `n_ℓ` and `n_c` for the two walks' unit left
+normals at `v`, `cos θ = n_ℓ·n_c`. The ideal polyhedron B1 of
+`agent-docs/tessellation-reach-design.md` §7 puts the corner's cap vertex at
+the circle's exact offset station at its window end
+(`tessellation.CapBlendCapMotion`: a line's first cap sample after a circle is
+bounded against that circle's last station, a circle's first sample against
+its own first station). That is the radial foot `f(t) = v + t·n_c`, and its
+ruling from `v` stays radial, so B1's corner at amount `t` is `f(t)` on the
+moved circle. `stationbound.CapOffsetStationBound` measures the held vertex
+against that exact station, so the vertex-motion term already charges the
+held foot's distance from `f`. The circular wall's cells keep their planar
+trapezoids. The line wall's one cell no longer has parallel near and cap
+edges; B1 splits it along the mesh's diagonal, and its section at `t` is the
+path `f₁ → q → f₂` with `q` the diagonal's point at that level.
+
+**Lemma 1 (the miter disc).** For every amount `t` of the sweep,
+`|m(t) − f(t)| ≤ |t|·sinθ·√(1 + sin²θ)`, and `f(t)` lies `|t|·(1 − cos θ) ≤
+|t|·S` from the moved line ℓ(t).
+
+Let `u = v − C`, `R = |u|`, `ι = +1` for a counter-clockwise arc (material
+inside) and `−1` otherwise, so the moved radius is `r(t) = R − ιt`, and `e`
+the line's unit direction. A point `v + t·n_ℓ + x·e` of ℓ(t) is on the moved
+circle exactly when `x² + 2βx + 2tκ = 0`, with `β = u·e` and
+`κ = u·n_ℓ + ιR`. Since `u = −ιR·n_c`, `κ = ιR(1 − cos θ)` and
+`|β| = R·sin θ`. The discriminant is
+`Δ(t) = R(1 − cos θ)(2r(t) − R(1 − cos θ))`, positive because
+`R(1 − cos θ) ≤ R_hi·S < r_lo` (condition 6), and the root that starts at
+zero is `x = sgn(β)(√Δ − |β|)`. In the frame `(e, n_ℓ)`,
+`m − f = t·(X − s_c, 1 − cos θ)` with `s_c = n_c·e = ±sin θ` and
+`X = x/t = sgn(s_c)·g`, where
+`g = 2R(1 − cos θ)/(√Δ + R·sin θ)` lies in `[0, 2 tan(θ/2)] ⊆ [0, 2 sin θ]`
+because `cos θ > 0` (condition 3). So `|X − s_c| = |g − sin θ| ≤ sin θ`, and
+`1 − cos θ = sin²θ/(1 + cos θ) ≤ S`. ∎
+
+The charge reads `ρ = T·sinUp·(1 + S)` and `ε = T·S`, where `T = |d| + dDelta`
+bounds `|t|` at every level and `sinUp ≥ √S` is the upward rational root
+(`proofbound.RatSqrtUp`); each is rational before one upward rounding.
+
+**Lemma 2 (one slice).** At each level, `∂S1 − ∂S0` splits as a sum of
+closed 1-chains:
+
+- each B1 cell's chord against its own arc, the circular segments `Mchord`
+  already bounds;
+- per near-tangent corner, the chord from `f` to `m` closed by the moved
+  circle's arc back to `f`;
+- per straight walk with a near-tangent end, the path `f₁ → q → f₂ → m₂ → m₁
+  → f₁`, where an exact end has `m = f`.
+
+Winding numbers add over chains, so `area(S1 △ S0)` is at most the sum of the
+areas those chains enclose. The corner's arc starts at zero length and its
+chord stays below `ρ < r_lo`, under `√2` times the moved radius, so it never
+reaches a quarter turn; the segment it closes lies inside the disc on the
+chord `fm` as diameter (Thales), of area at most `πρ²/4`. The five points of a
+straight walk's path lie within `ε` of ℓ at that level: `m₁`, `m₂` lie on it,
+and `f₁`, `f₂` and `q` lie at the level's fraction of their cap points'
+distance, since the signed distance to ℓ is affine along each ruling and the
+near points lie on the recorded line. Their projections onto ℓ span at most
+`λ`, the loop's held bounding-box diagonal plus twice its largest vertex
+motion plus `2ρ`, because each lies within `ρ` of the hull of its cell's four
+exact vertices. A fan of three triangles from `f₁` covers that path, each
+inside a `2ε × λ` rectangle, so it encloses at most `3ελ`.
+
+**The charge.** Integrated over the sweep,
+
+```text
+Ncorner = hUpper · Σ_loops [ Σ_{near-tangent corners} πρ²/4 + Σ_{straight walks with a near-tangent end} 3·ε·λ ]
+volSymDiff = upRound(Mchord + sweptVolumeAllow(motionMax, …) + Ncorner)
+```
+
+with `hUpper` the draft's `draftBandHeightUpper` and a straight walk's `ε` the
+larger of its two ends'. `capblend.NearTangentVolume` composes it from
+`capband.NearTangentCharges`, which reads every corner as the admission does.
+A band with no near-tangent join adds no term, so its `volSymDiff` is the sum
+it was. For the near-tangent slot of §11 (F3 with its right centre `2⁻⁴⁰` mm
+off), `S ≈ 2⁻⁸⁰/25` and `Ncorner` is below `10⁻²⁰` mm³; the change a reader
+sees in `volSymDiff` is the vertex-motion term, the held foot sitting about
+`d·sin θ` from B1's.
 
 ## 10. `Draft`
 
@@ -763,6 +868,21 @@ faces (`internal/draftrecord/draft_fixtures_test.go`); `Union` of F1 with a stra
 prism through it; STEP of F1 analytic (`analytic decad solid`) and of F2
 faceted; `MassProperties` of F1 against the closed form.
 
+**Near-tangent fixtures** (§9.1.1): F3's slot with its right centre moved
+`2⁻⁴⁰` mm meshes with the volume proof at `VerifyAll`, and a `Cut` by a
+square post covers `h[2ℓ(R − d/2) + π(R² − Rd + d²/3)] − 128` with
+`ℓ = 30 + 2⁻⁴⁰` (`apitest/draft_mesh_test.go`); moved `5·2⁻³¹` mm, each join
+turns past `2⁻³²` and the `Cut` refuses naming the corner and the limit. The
+same records at `2⁻⁴⁰` and `5·2⁻³⁴` mm mesh at three tolerances with the held
+volume within `volSymDiff` of that closed form; the exactly tangent slot
+charges nothing, the `5·2⁻³⁴` slot charges a positive volume whose rate per
+unit height covers Lemma 2's slice area at every eighth of the sweep, and its
+`volSymDiff` exceeds the exact slot's (`internal/draftrecord/near_tangent_test.go`).
+Lemma 1 is checked against a 256-bit reference of the true miter at amounts
+of either sign, and each refusal of §9.1.1 has a row
+(`internal/capband/near_tangent_test.go`); the two-sided slot of `2⁻⁴⁰` sews a
+mesh that carries the proof (`internal/draftrecord/tessellate_test.go`).
+
 **PR 5 fixtures** (`apitest/draft_subset_test.go`): F1's box with its `+u`
 wall drafted alone, `Volume = h·a(a − d/2)`, its area, centroid, far corners
 and the kept walls' horizontal normals, and the same body placed; F4's L with
@@ -806,6 +926,13 @@ undecided.
 | the mixed-amount refusal | `offset2d.SharpCornerJoin` reads a mixed circular corner as an equal one | the slot's SD4 fixture refuses as SD13 instead |
 | a kept wall's setback in the mesh | the chord pass's cap radius, or the cap motion, reads the draft's `d` | the hole-alone subset: its `volSymDiff` grows past a tenth of the body's volume, so the proof bounds nothing |
 | a kept wall's setback in the band's radius rounding | read against the draft's `d` | the hole-alone mesh `Bound` above F7's |
+| the near-tangent arm of the admission | `capblend.OccupiedVolumeAdmission` passes no `SharpAmounts` | the near-tangent slot: no volume proof at any tolerance, and its `Cut` refuses |
+| the near-tangent turn limit | condition 4 skipped | the `5·2⁻³¹` slot's `Cut` builds; the limit row of `capband` admits |
+| the other near-tangent gates | condition 1, 5 or 6 skipped | the matching `capband` refusal row admits |
+| Lemma 1's `ρ` and `ε` | each quartered | the 256-bit miter reference at an amount of 0.26 mm |
+| the strip term `3ελ` | dropped from `NearTangentVolume` | the `5·2⁻³⁴` slot: the charge falls below the slice area from the first eighth of the sweep |
+| the disc term `πρ²/4` | dropped | no fixture: the segment it covers sits below `1e-33` mm² on the slot |
+| `NearTangentVolume` in the proof sum | not appended | no fixture: on the slot it is eighteen orders below the chord term, and the sum moves by one rounding step |
 
 ## 12. Do not do this
 
@@ -859,6 +986,10 @@ undecided.
   (§2, §12).
 - **Circular corners**: G1 joins only in this design; the ruled stand-in for
   a mitered circular corner is deferred (SD4, §14).
+- **Near-tangent joins**: a line–arc join the build reads as G1 and the record
+  does not make exactly tangent meshes with the volume charge of §9.1.1 up to
+  a turn of `2⁻³²` rad; a join of two circular walls or a larger turn keeps
+  the export-only mesh.
 - **Free-form walks**: refused (SD3); the chorded alternative is a loft and
   is rejected (§12).
 - **Exactness**: every draft measurement is `Approximate` (§8).

@@ -2,9 +2,12 @@ package capblend
 
 import (
 	"context"
+	"fmt"
+	"math"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/capband"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -109,6 +112,88 @@ func ChordVolume(cbp Payload, lms []LoopMesh) float64 {
 		height = [2]float64{h, h}
 	}
 	return tessellation.CapBlendChordVolume(height, loops)
+}
+
+// NearTangentVolume is agent-docs/draft-design.md §9.1.1's corner charge for a
+// draft view's mesh: over the whole sweep, every near-tangent join's disc
+// πρ²/4 and, for every straight walk with a near-tangent end, the strip 3ελ,
+// with λ the loop's held span plus twice its largest vertex motion and twice
+// its largest ρ. It is zero for a chamfer view and for a band with no
+// near-tangent join, so such a band's proof is unchanged. lms must carry
+// CapMotion.
+func NearTangentVolume(budget *proofbound.WorkBudget, cbp Payload, lms []LoopMesh) (float64, error) {
+	if !cbp.Draft {
+		return 0, nil
+	}
+	// 0.79 > π/4.
+	const quarterPiUpper = 0.79
+	height := cbp.DraftBandHeightUpper()
+	total := 0.0
+	for li := range lms {
+		lm := &lms[li]
+		if !lm.Chamfered || lm.Whole {
+			continue
+		}
+		amounts, amountDelta := cbp.sharpAmounts(lm.LoopIndex, lm.Walks)
+		charges, err := capband.NearTangentCharges(budget, lm.Loop, lm.Walks, amounts, amountDelta)
+		if err != nil {
+			return 0, err
+		}
+		rhoMax, discs := 0.0, 0.0
+		for _, c := range charges {
+			rhoMax = math.Max(rhoMax, c.Rho)
+			discs = proofbound.AbsSumUpper(discs, proofbound.ProductUpper(quarterPiUpper, proofbound.ProductUpper(c.Rho, c.Rho)))
+		}
+		n := len(lm.Walks)
+		epsSum := 0.0
+		for i, w := range lm.Walks {
+			if w.IsCircular() {
+				continue
+			}
+			epsSum = proofbound.AbsSumUpper(epsSum, math.Max(charges[i].Eps, charges[(i+1)%n].Eps))
+		}
+		if discs == 0 && epsSum == 0 {
+			continue
+		}
+		lambda := proofbound.AbsSumUpper(loopSpanUpper(lm), 2*loopMotionUpper(lm), 2*rhoMax)
+		strips := proofbound.ProductUpper(3, proofbound.ProductUpper(epsSum, lambda))
+		total = proofbound.AbsSumUpper(total, proofbound.ProductUpper(height, proofbound.AbsSumUpper(discs, strips)))
+	}
+	if proofbound.IsNonFinite(total) {
+		return 0, fmt.Errorf(`%w: this %s's near-tangent corner charge is not finite`, decaderr.ErrUnsupported, cbp.Noun())
+	}
+	return total, nil
+}
+
+// loopSpanUpper bounds the diameter of a loop's held side and cap samples in
+// the plane: the diagonal of their bounding box.
+func loopSpanUpper(lm *LoopMesh) float64 {
+	minU, minV := math.Inf(1), math.Inf(1)
+	maxU, maxV := math.Inf(-1), math.Inf(-1)
+	for _, pts := range [][]sectionrecord.Point2{lm.SidePts, lm.CapPts} {
+		for _, p := range pts {
+			minU, maxU = math.Min(minU, p.U), math.Max(maxU, p.U)
+			minV, maxV = math.Min(minV, p.V), math.Max(maxV, p.V)
+		}
+	}
+	if minU > maxU {
+		return 0
+	}
+	return proofbound.Radius2D(proofbound.UpRound(maxU-minU), proofbound.UpRound(maxV-minV))
+}
+
+// loopMotionUpper is the largest plane-local distance between a loop's held
+// sample and the ideal polyhedron's point it stands for: each side sample's
+// own bound and each cap sample's CapMotion.
+func loopMotionUpper(lm *LoopMesh) float64 {
+	worst := 0.0
+	for _, b := range lm.SideBound {
+		worst = math.Max(worst, proofbound.WalkEndBoundAllow(b))
+	}
+	for _, m := range lm.CapMotion {
+		worst = math.Max(worst, m)
+	}
+	return worst
 }
 
 // ChordLoop resolves ONE loop's walks the way capblend.BuildBand does and

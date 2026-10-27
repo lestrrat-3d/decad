@@ -61,7 +61,7 @@ while the boolean refuses the operand.
 | **R3** | tess T2 | revolve, line generators only: cylinder/cone/plane/axis, poles, partial caps, both coordinate proofs, `Ecell`, export | first revolve export; largest single increment, so it follows the two cheap ones |
 | **R4** | tess T3 | revolve circular generators: sphere/torus, axis-to-axis minimum, intra-loop tube clearance, circular `Ecell` | extends R3's cells; same files |
 | **R5** | tess T4 | `Mmeridian` + certified `Icell`; `symDiffOK` true; revolve admitted to booleans | the last revolve proof; heaviest proof engineering |
-| **R6** | new: T7 | `capBlendPayload` tessellator: export for every band; `symDiffOK == true` for a band of line-line miters, exactly tangent joins and whole turns (§7), `false` for every other band | depends on R3's cone/pole cells and R1's twist term; last because no other increment waits on it |
+| **R6** | new: T7 | `capBlendPayload` tessellator: export for every band; `symDiffOK == true` for a band of line-line miters, exactly tangent joins and whole turns, and for a draft band's charged near-tangent joins (§7), `false` for every other band | depends on R3's cone/pole cells and R1's twist term; last because no other increment waits on it |
 
 R6 depends on R3 only, so it may be scheduled anywhere after R3. R5 and R6 are independent.
 
@@ -470,7 +470,8 @@ derivation from one, stated below. The occupied-volume proof is complete for a b
 line-line miter or an exactly tangent (G1) join, and for the cornerless whole turn: there the band's true
 section at every axial fraction is the exact offset section, and the held cells' section is its chord polygon
 at fixed azimuths, so the proof is the prism's own two legs — a slice-wise circular-segment integral and a
-vertex-motion `sweptVolumeAllow`. Every other band — a circular wall at a genuine miter, a reflex corner —
+vertex-motion `sweptVolumeAllow`. A draft band's near-tangent join adds a third, its corner charge
+(Admission below). Every other band — a circular wall at a genuine miter, a reflex corner —
 keeps `symDiffOK == false`, which tess §2 permits for an export-only mesh. DX3's "a strip whose densities
 disagree is not watertight" is answered by sharing ONE count per wall walk across the side wall, the band
 patch and the cap contour (below).
@@ -596,6 +597,12 @@ built, and `tessellateCapBlend` when it publishes. Every loop of the payload mus
   a zero cross product and a positive dot product, where a line's direction is `end − start` and an arc's is
   its walk sense times `rot90(P − Center)`.
 
+A draft band (`capblend.Payload.Draft`) also admits (iii) a near-tangent join: a `LineSeg` and an `ArcSeg` with
+one recorded junction point whose exact tangents run the same way, turn by `sin²θ ≤ 2⁻⁶⁴`, and move by one amount,
+the moved circle clear of the corner (`capband.NearTangentCorner`). Its proof adds the corner charge
+`capblend.NearTangentVolume` to `volSymDiff` below; `agent-docs/draft-design.md` §9.1.1 states and proves it. A
+chamfer band admits none, since its shell offset takes a connector arc at a reflex sliver.
+
 A reflex corner (`cornerJoin.arc`) is not admitted. Every test is exact rational arithmetic over the record's
 own floats; none is a tolerance, so the predicate classifies the denoted geometry and never admits on a
 residual. A band it does not prove is export-only, and a boolean over it is the staging `ErrUnsupported`
@@ -646,9 +653,12 @@ from the held offset circle, versus its displacement from the exact-fraction poi
 it with. Then
 
 ```text
-volSymDiff = upRound(Mchord + sweptVolumeAllow(motionMax, perturbedAreaUpper(M, motionMax)))
+volSymDiff = upRound(Mchord + sweptVolumeAllow(motionMax, perturbedAreaUpper(M, motionMax)) [+ Ncorner])
 symDiffOK  = true
 ```
+
+where `Ncorner` is a draft band's near-tangent corner charge (`agent-docs/draft-design.md` §9.1.1), present only
+when it is positive, so every other band's sum is unchanged.
 
 A non-finite term refuses (tess §12). The cap-blend path runs no facet-contact audit
 (`payloadAuditsFacetContact`), so `boundaryOK` is true at every level and `operandSymDiff` reads the proof
