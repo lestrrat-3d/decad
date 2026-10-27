@@ -16,6 +16,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/union-fold-design.md` | The two-at-a-time fold of a many-body `Union` that no certified route takes. |
 | `agent-docs/subd-design.md` | `SubDMesh`: Catmull-Clark subdivision of a polygon cage into a `MeshBody`. |
 | `agent-docs/lattice-design.md` | `GyroidLattice`: the gyroid field, its box cap and the marching tetrahedra that cut it into a closed `MeshBody`. |
+| `agent-docs/mesh-solid-design.md` | `SolidFromMesh`: a closed `MeshBody` as a Faceted solid `Body`, its proofs and exact plane groups. |
 | `agent-docs/mesh-import-design.md` | `MeshBody`, `ReadSTL` and `ReadOBJ`: the mesh readers, the mesh report and its exact volume. |
 | `agent-docs/path-pattern-design.md` | `PathPatternCopies`: copies spaced at equal arc length along a `Path`, and the path sampler. |
 | `agent-docs/fillet-chord-design.md` | `FilletChord`: chord-length fillet as a radius, sharing the right-angle gate of `ChamferAngle`. |

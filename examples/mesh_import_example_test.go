@@ -9,7 +9,8 @@ import (
 )
 
 // ReadOBJ and ReadSTL load a triangle mesh made elsewhere into a MeshBody.
-// A MeshBody is not a solid Body: no feature takes it. Use it to ask what a
+// A MeshBody is not a solid Body: no feature takes it until SolidFromMesh turns it
+// into one (Example_solid_from_mesh). Use it to ask what a
 // mesh file holds before building around it: whether its triangles close into
 // a surface, how big it is and how much volume it encloses.
 func Example_mesh_import() {
