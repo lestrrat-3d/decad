@@ -171,6 +171,54 @@ func TestDySqrtUpMatchesPreviousWalk(t *testing.T) {
 	}
 }
 
+func TestDvNormBoundsMatchesSeparateRoots(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(503, 509))
+	widths := []int{0, 1, 53, 64, 100, 126, 127, 128, 200}
+	for sample := range 4000 {
+		var w [3]int
+		for axis := range w {
+			w[axis] = widths[rng.IntN(len(widths))]
+		}
+		span := []int{0, 3, 40, 140, 1100}[sample%5]
+		v := randomNormVector(t, rng, w, span)
+		if sample%3 == 0 {
+			// Exercise subnormal and overflowing roots with narrow exponent
+			// gaps as well as ordinary area normals.
+			for axis := range v {
+				v[axis] = proof.DyShift(v[axis], []int{-1200, 900}[sample%2])
+			}
+		}
+		d := proof.DvDot(v, v)
+		wantLow, wantHigh := proof.DySqrtDown(d), legacySqrtUp(d)
+		low, high := proof.DvNormBounds(v)
+		require.Equal(t, math.Float64bits(wantLow), math.Float64bits(low), "lower bound, sample %d", sample)
+		require.Equal(t, math.Float64bits(wantHigh), math.Float64bits(high), "upper bound, sample %d", sample)
+	}
+	for _, v := range []proof.DyV3{
+		{}, {proof.DyInt(3), proof.DyInt(4), proof.DyZero()},
+		proof.DyVec(r3.Vec{X: math.SmallestNonzeroFloat64}),
+		proof.DyVec(r3.Vec{X: math.MaxFloat64, Y: math.MaxFloat64}),
+	} {
+		d := proof.DvDot(v, v)
+		low, high := proof.DvNormBounds(v)
+		require.Equal(t, math.Float64bits(proof.DySqrtDown(d)), math.Float64bits(low))
+		require.Equal(t, math.Float64bits(legacySqrtUp(d)), math.Float64bits(high))
+	}
+}
+
+func TestDvNormBoundsWideSumDoesNotAllocate(t *testing.T) {
+	d := proof.DyAdd(proof.DyShift(proof.DyInt(3), 98), proof.DyInt(7))
+	v := proof.DyV3{d, proof.DyMul(d, proof.DyInt(3)), proof.DyMul(d, proof.DyInt(5))}
+	var low, high float64
+	allocs := testing.AllocsPerRun(100, func() {
+		low, high = proof.DvNormBounds(v)
+	})
+	require.Zero(t, allocs)
+	require.Positive(t, low)
+	require.GreaterOrEqual(t, high, low)
+}
+
 func requireSameDyadic(t *testing.T, want, got proof.Dyadic, label string) {
 	t.Helper()
 	require.Zero(t, proof.DyCmp(want, got), "%s: value differs", label)

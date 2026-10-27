@@ -96,8 +96,8 @@ func Analyze(ctx context.Context, verts []r3.Vec, tris [][3]int) (Analysis, erro
 		// Keep intermediate vectors there instead of reducing a rational
 		// after every scalar operation.
 		normal := proofarith.DvCross(proofarith.DvSub(b, a), proofarith.DvSub(c, a))
-		lengthSquared := proofarith.DvDot(normal, normal)
-		if tri[0] == tri[1] || tri[1] == tri[2] || tri[2] == tri[0] || lengthSquared.Sign() == 0 {
+		if tri[0] == tri[1] || tri[1] == tri[2] || tri[2] == tri[0] ||
+			(normal[0].IsZero() && normal[1].IsZero() && normal[2].IsZero()) {
 			out.DegenerateTriangles++
 			continue
 		}
@@ -133,8 +133,9 @@ func Analyze(ctx context.Context, verts []r3.Vec, tris [][3]int) (Analysis, erro
 		// the signed tetrahedron numerator. Sum the dyadics exactly before
 		// dividing once, instead of reducing one rational per triangle.
 		volume.Add(proofarith.DvDot(a, normal))
-		low := proofarith.FloatRat(proofarith.DySqrtDown(lengthSquared))
-		high := proofarith.FloatRat(proofarith.DvNormUp(normal, 0))
+		lowFloat, highFloat := proofarith.DvNormBounds(normal)
+		low := proofarith.FloatRat(lowFloat)
+		high := proofarith.FloatRat(highFloat)
 		if low == nil || high == nil {
 			// A triangle's area past the largest float has no float bound.
 			return Analysis{}, fmt.Errorf(`%w: triangle %d is too large to bound its area`, decaderr.ErrUnsupported, ti)
