@@ -1377,9 +1377,19 @@ deleted once and watched fail before it is trusted.
 `WithSweepTwist` admits one whole, strictly convex polygon with 3–256 straight
 edges and no holes, drawn on the origin XY sketch plane. Its exact shoelace
 centroid must lie on the Z axis. The path is one positive-Z `LineTo` from the
-origin, and the absolute denoted angle is at most one radian. Sheets, mitred
+origin, and the absolute denoted angle is at most one radian. One Loft cell
+builds it. A wide thin section can fold the long walls of one flat cell
+through each other (a 15.4 × 4.75 mm rectangle does at 35°–55°); Loft's facet
+audit then refuses with `ErrDegenerate`, and the build retries with §17.3's
+stationed cells. Any other refusal stands. A one-cell build that succeeds is
+unchanged.
+Sheets, mitred
 joins, section scale, other paths and other profiles remain S11 refusals.
 The preflight uses exact rational coordinates and commits no body on refusal.
+The twist must start on the origin XY sketch; a consumer needing another axis
+builds at the origin and moves the body with `Transform`, which replays the
+recorded twist under the rigid motion and keeps the volume and `VerifyAll`
+certificates.
 Section 17.3 extends this straight-path profile class to one full turn with
 multiple certified Loft cells.
 
@@ -1494,7 +1504,8 @@ ten live Faces, source roles, placement replay, and `VerifyAll`.
 ### 17.3 Stationed straight-path twist
 
 The same centred, strictly convex 3–256-edge polygon and positive-Z line
-admit a nonzero absolute angle above one radian and at most one full turn.
+admit a nonzero absolute angle at most one full turn when §17.1's one cell
+does not apply (an angle above one radian) or is refused as degenerate.
 The denoted angle is compared with the upper rational bound on `2*pi`.
 Other path, profile, sheet, mitre and scale inputs retain §17.1's refusals.
 The build commits no body when a station or proof gate refuses.
@@ -1506,6 +1517,10 @@ counts `2*edges*cells + 2*(edges-2)` held triangles and refuses a count
 whose pair count exceeds the existing 8,000,000-test ceiling. An input
 needing more than 64 cells also refuses. These are construction limits;
 the completed boundary proof still decides the caller's mesh tolerance.
+The real public gate sweeps Sketch's solved 15.4 × 4.75 mm centred rectangle
+over 6 mm at 43.6° and at every 2.5° step through 90°: each is a solid with
+volume `15.4*4.75*6` and passes `Tessellate(VerifyAll)`. A 0.5° scan through
+360° over 6 mm and 24 mm admits every angle for this section.
 
 Station `k` uses exact height `h*k/cells` and the interval enclosure of
 `theta*k/cells`. Rational sine/cosine intervals enclose the true frame;
