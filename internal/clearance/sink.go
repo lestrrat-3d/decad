@@ -51,17 +51,35 @@ func (s *CellSink) Pruned(lb float64) bool {
 	if !s.Prune || proofbound.IsNonFinite(lb) {
 		return false
 	}
-	for _, c := range s.Contribs[s.Seen:] {
-		if c.Hi < s.Best {
-			s.Best = c.Hi
-		}
-	}
+	s.Best = s.bestHi()
 	s.Seen = len(s.Contribs)
-	if lb-s.Margin <= s.Best {
+	if !s.beyond(lb, s.Best) {
 		return false
 	}
 	s.Skipped++
 	return true
+}
+
+// bestHi is the best upper bound Pruned compares against: the smallest
+// contribution hi so far, read without recording it in Best and Seen.
+// Contributions are only ever appended, so it never rises.
+func (s *CellSink) bestHi() float64 {
+	best := s.Best
+	for _, c := range s.Contribs[s.Seen:] {
+		if c.Hi < best {
+			best = c.Hi
+		}
+	}
+	return best
+}
+
+// beyond reports whether Pruned prunes a cell at box distance lb against the
+// upper bound best. Since best never rises during a walk, a cell beyond the
+// bound in hand is pruned whenever the walk reaches it.
+func (s *CellSink) beyond(lb, best float64) bool {
+	// Negated rather than written as lb − margin > best, so a NaN difference
+	// prunes exactly as it always has.
+	return s.Prune && !proofbound.IsNonFinite(lb) && !(lb-s.Margin <= best)
 }
 
 // Interval folds the contributions into the held-candidate gap interval

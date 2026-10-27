@@ -701,6 +701,20 @@ trimmed inner face alone and asks the oracle nothing:
   face/edge walk skips exactly the cells with `b − m` above the final least
   `hi`. A vertex cell is skipped against the `H` in hand when it runs.
 
+  The queue sorts only the face/edge cells that the `H` in hand when it is
+  built keeps (`queueFeatureCells`, `internal/clearance/feature_queue.go`).
+  `H` only falls, so a cell already past it is skipped wherever the walk
+  meets it. Subtracting `m` is monotone, so such a cell's `b` exceeds every
+  kept finite cell's, and the kept cells are the head of the full order. The
+  cells past `H` follow in any order, since the walk only steps the work
+  counter for them, and the cells at `b = +∞`, which never prune, go last in
+  queue order. The walk is the one a full stable sort gives.
+
+  A vertex × face, vertex × edge or line × line cell reads its exact
+  distance only after the trim keeps both feet. The sink drops a candidate
+  whose foot the trim rejects without reading its distance (§3), so the
+  skipped reading changes no contribution.
+
   Pruning never changes the least upper bound, the `overlap` finding or the
   pair diameter. Three outputs can change, each only toward a tighter or
   more decided answer:
