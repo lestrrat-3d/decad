@@ -242,12 +242,14 @@ func TestSectionMeshBooleanHistoryRefusals(t *testing.T) {
 		require.NoError(t, err)
 		refuses(t, notched, 5, operandRefusal)
 	})
-	t.Run("plane missing an operand", func(t *testing.T) {
+	t.Run("plane missing an operand is read from the grid", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		joined, err := decad.Union(t.Context(), historyCube(t, doc), beamAlongX(t, doc, -5, 20, 6, 14))
 		require.NoError(t, err)
-		refuses(t, joined, 3, operandRefusal)
+		// The history gate refuses a plane that misses an operand, but the result is a solid whose faces all square to
+		// an axis and a plane square to one, so the grid reads the cut (agent-docs/orthogonal-section-design.md).
+		requireExactHistorySection(t, joined, historyLevel(t, 3), [][2]float64{{0, 0}, {10, 0}, {10, 10}, {0, 10}}, 100)
 	})
 	t.Run("curved operand section", func(t *testing.T) {
 		t.Parallel()
@@ -300,11 +302,12 @@ func TestSectionMeshBooleanHistoryRefusals(t *testing.T) {
 		require.NoError(t, err)
 		refuses(t, slotted, 7, regionRefusal)
 	})
-	t.Run("one section inside the other", func(t *testing.T) {
+	t.Run("one section inside the other is read from the grid", func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		joined, err := decad.Union(t.Context(), historyCube(t, doc), beamAlongX(t, doc, 2, 6, 2, 6))
 		require.NoError(t, err)
-		refuses(t, joined, 4, regionRefusal)
+		// A beam wholly inside the cube leaves the cube's square: the grid reads it where the history gate does not.
+		requireExactHistorySection(t, joined, historyLevel(t, 4), [][2]float64{{0, 0}, {10, 0}, {10, 10}, {0, 10}}, 100)
 	})
 }
