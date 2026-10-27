@@ -115,6 +115,9 @@ func buildSectorsJoinRefined(ctx context.Context, env topo.Env,
 	}
 	capLimit := math.Inf(1)
 	rounds := sectorCapRounds
+	if len(sources) >= 4 {
+		rounds--
+	}
 	attempt := -1
 	for {
 		attempt++
