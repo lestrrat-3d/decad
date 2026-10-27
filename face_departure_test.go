@@ -24,10 +24,10 @@ func TestFaceDepartureReader(t *testing.T) {
 		face any
 		want bool
 	}{
-		{"exact tag", &Face{}, false},
-		{"normal bound", &Face{n: topo.Face{NormalBound: 1e-16}}, true},
-		{"held normal bound", &Face{n: topo.Face{HeldNormalBound: 1e-16}}, true},
-		{"not a face", &Edge{}, true},
+		{"exact tag", bornFace(&Face{}), false},
+		{"normal bound", bornFace(&Face{n: topo.Face{NormalBound: 1e-16}}), true},
+		{"held normal bound", bornFace(&Face{n: topo.Face{HeldNormalBound: 1e-16}}), true},
+		{"not a face", bornEdge(&Edge{}), true},
 		{"nil face", (*Face)(nil), true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
