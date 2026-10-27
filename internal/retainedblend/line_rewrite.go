@@ -123,8 +123,16 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 	faces := [4]faceLoops{}
 	for k, f := range []*topo.Face{l.faceA, l.faceB, l.ends[0].face, l.ends[1].face} {
 		var err error
+		// The rewrite re-triangulates all four faces from their boundary loops, so a vertex a face holds off
+		// its boundary is dropped with the old facets when it lies exactly on the face's own plane: the
+		// point a mesh adds to fan a face, as the orthogonal Boolean's results do.
 		var end *plane
-		if k >= 2 {
+		switch k {
+		case 0:
+			end = &l.a
+		case 1:
+			end = &l.b
+		default:
 			end = &l.ends[k-2].g
 		}
 		if faces[k], err = w.faceLoops(faceIndex[f], end); err != nil {

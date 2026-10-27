@@ -17,6 +17,7 @@ general dispatch.
 | B5 | The result replaces both operands as one `Union`, `Cut` or `Intersect` operation with the same input roles. |
 | B6 | The tests join two blocks that touch at a face into one bar of six faces, take the union, common part and difference of a cube and a slab sharing a plane, cut a pocket whose floor and walls lie in the plate's planes, chain unions into a cut, and read volumes written out by hand with a zero bound, bounds, face counts and points. A union that keeps `||` as `&&` fails them. |
 | B7 | Beside a faceted operand that meets B1, the other may be any solid whose tessellation (at 0.1 mm, verified) carries no displacement bound and has every triangle square to an axis, such as an extruded rectilinear profile: its mesh is the body exactly and is read as an operand. Two operands that are not faceted never take this route and keep their certified ones. |
+| B8 | A result of this route is a mesh solid whose axis faces keep exact planes, so `Shell` (`agent-docs/orthogonal-shell-design.md`) and `Fillet` and `Chamfer` of its straight edges (`agent-docs/retained-edge-blend-design.md`) take it, a convex and a reflex edge alike. The blend of a straight edge accepts the fan points the grid meshing leaves in a face, since they lie exactly on the face's plane and the face is built again from its loops. The tests fillet and chamfer the outer corner and fillet the reflex corner of an L-shaped union and read volumes from the section added or removed, and shell it open at the top. |
 
 ## 2. Not covered
 

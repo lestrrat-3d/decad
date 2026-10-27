@@ -537,6 +537,8 @@
 3	0.08	TestDraftCircleEndRimChamferRefusalsLeaveSourceLive
 3	0.07	TestDraftMeshExports
 3	0.01	TestDraftSubsetUndercut
+10	0.01	TestOrthogonalBooleanResultTakesAFilletAndAChamfer
+10	0.01	TestOrthogonalBooleanResultTakesAShell
 3	0.02	TestDraftUndercutPlaced
 3	0.00	TestExactness
 3	0.01	TestExtrudeChainFreeformWallAreaNeverPublishesTheLengthUnderestimate
