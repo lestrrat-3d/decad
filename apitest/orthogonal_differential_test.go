@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/decadtest"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -508,4 +509,74 @@ func TestCircularPatternAgreesWithTheUnionOfTurnedCubes(t *testing.T) {
 		require.InDelta(t, float64(len(covered)), got, bound+1e-9, "%d turned copies of %d cubes about %v", count, c.count(), centre)
 	}
 	require.Greater(t, checked, 12)
+}
+
+func TestMeshSolidWithAPrismAgreesWithTheCubeByCubeBoolean(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(33, 34))
+	checked, exact := 0, 0
+	for range 60 {
+		c := randomCubes(rng)
+		// A rectangular prism on integer coordinates, lifted to a random height: the mixed route of B7 reads it beside the
+		// mesh solid.
+		lo := [3]int{rng.IntN(voxelSide - 1), rng.IntN(voxelSide - 1), rng.IntN(voxelSide - 1)}
+		var hi [3]int
+		for a := range 3 {
+			hi[a] = lo[a] + 1 + rng.IntN(voxelSide-lo[a])
+		}
+		for _, op := range []differentialOp{opUnion, opCut, opIntersect} {
+			doc := decad.New()
+			mesh, ok := c.solid(t, doc)
+			if !ok {
+				continue
+			}
+			block := decadtest.NewBlock(t, doc, float64(lo[0]), float64(lo[1]), float64(hi[0]), float64(hi[1]), units.Millimeters(float64(hi[2]-lo[2])))
+			lift, err := r3.Translation(r3.NewVec(0, 0, float64(lo[2])))
+			require.NoError(t, err)
+			prism, err := decad.Transform(t.Context(), block, lift)
+			require.NoError(t, err)
+			want := 0
+			for x := range voxelSide {
+				for y := range voxelSide {
+					for z := range voxelSide {
+						inPrism := x >= lo[0] && x < hi[0] && y >= lo[1] && y < hi[1] && z >= lo[2] && z < hi[2]
+						switch op {
+						case opUnion:
+							if c[x][y][z] || inPrism {
+								want++
+							}
+						case opCut:
+							if c[x][y][z] && !inPrism {
+								want++
+							}
+						default:
+							if c[x][y][z] && inPrism {
+								want++
+							}
+						}
+					}
+				}
+			}
+			var out *decad.Body
+			switch op {
+			case opUnion:
+				out, err = decad.Union(t.Context(), mesh, prism)
+			case opCut:
+				out, err = decad.Cut(t.Context(), mesh, prism)
+			default:
+				out, err = decad.Intersect(t.Context(), mesh, prism)
+			}
+			if err != nil {
+				continue
+			}
+			checked++
+			got, bound := volumeOf(t, out)
+			require.InDelta(t, float64(want), got, bound+1e-9, "op %d of %d cubes and a prism %v to %v", op, c.count(), lo, hi)
+			if bound == 0 {
+				exact++
+			}
+		}
+	}
+	require.Greater(t, checked, 60)
+	require.Greater(t, exact, checked*8/10, "the mixed route answers nearly every pair exactly")
 }
