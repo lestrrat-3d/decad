@@ -122,17 +122,19 @@ according to the writer path.
   to lie on its tag, so a file stating that surface would claim more than the body proves. `export`
   reads the face through `internal/facedeparture`, which the root package installs
   (`face_departure.go`), since a public `Face` exposes none of these fields.
-  The bodies the check sends to the faceted writer include every Loft whose caps state a vertex
-  displacement (every loft with a circle in its sections, whose stations round), a Loft bore cylinder
+  The bodies the check sends to the faceted writer include every Loft with a cap not proven to lie
+  exactly on its section plane, which states the loft's vertex displacement (`agent-docs/loft-design.md`
+  §18; a cap on a tilted plane whose held points round off it), a Loft bore cylinder
   with a rounded center or an inexact frame map (`agent-docs/loft-design.md` §18), an extrusion up to
   a face at an offset whose level no float holds (a `ToFace` stop 0.1 mm above a cap at z = 10), every
   loop chamfer's corner cone, which is a cap-blend band patch (`agent-docs/modify-reach-design.md`
   §8.3), every drafted wall, plane or cone, whose tag is a rounding of the tilted surface
   (`agent-docs/draft-design.md` DD4), every partial revolution, and every revolved cone. Their
-  departures are rounding-sized, measured on amd64 at 9.6e-16 mm on the caps of a loft with a radius-1
-  hole, 3.6e-16 mm on the offset `ToFace` cap, 4.3e-17 to 2.2e-16 on the chamfer cones, 1.5e-16 to
+  departures are rounding-sized, measured on amd64 at 5.0e-14 mm on the end cap of a loft with a
+  radius-1 hole on the frame tilted to (1, 0, 4), 3.6e-16 mm on the offset `ToFace` cap, 4.3e-17 to 2.2e-16 on the chamfer cones, 1.5e-16 to
   2.9e-16 on the drafted walls, and 2.3e-15 mm on the apex of a frustum revolved from radius 3 to 7.1.
-  A revolved tube's cylinders and annular caps equal their records and keep the analytic writer. A
+  A revolved tube's cylinders and annular caps equal their records and keep the analytic writer, and
+  so does a world-frame Loft of a square with a centred circle hole, whose bore and caps are exact. A
   revolved ball's sphere and a revolved ring's torus equal their records too, but have no loop, so
   those bodies take the faceted writer as stated above. No producer builds a full conical wall or a
   cone patch that the analytic writer receives; the arm's own tests write a revolved frustum and the
