@@ -237,19 +237,27 @@ func (s *ConformScan) EdgeInteriorHits(budget *proofbound.WorkBudget, a, b int, 
 		{X: math.Nextafter(math.Min(pa.X, pb.X)-tau, math.Inf(-1)), Y: math.Nextafter(math.Min(pa.Y, pb.Y)-tau, math.Inf(-1)), Z: math.Nextafter(math.Min(pa.Z, pb.Z)-tau, math.Inf(-1))},
 		{X: math.Nextafter(math.Max(pa.X, pb.X)+tau, math.Inf(1)), Y: math.Nextafter(math.Max(pa.Y, pb.Y)+tau, math.Inf(1)), Z: math.Nextafter(math.Max(pa.Z, pb.Z)+tau, math.Inf(1))},
 	}
-	var candidates []int
 	if err := s.points.visitOverlaps(box, budget.Step, func(i int) error {
 		if err := budget.Step(); err != nil {
 			return err
 		}
-		candidates = append(candidates, i)
+		if i == tri[0] || i == tri[1] || i == tri[2] || filter.TooFar(s.Approx[i]) {
+			return nil
+		}
+		if OnSegmentInterior3(s.Verts[a], s.Verts[b], s.Verts[i]) {
+			hits = append(hits, i)
+		}
 		return nil
 	}); err != nil {
 		return nil, err
 	}
-	// Keep the previous grid walk's deterministic cell and vertex order.
-	sort.Slice(candidates, func(i, j int) bool {
-		a, b := candidates[i], candidates[j]
+	if len(hits) < 2 {
+		return hits, nil
+	}
+	// Every tree candidate steps the budget before rejection. Order the hits
+	// by grid cell and vertex index, independently of tree traversal order.
+	sort.Slice(hits, func(i, j int) bool {
+		a, b := hits[i], hits[j]
 		for axis := range 3 {
 			if s.pointCells[a][axis] != s.pointCells[b][axis] {
 				return s.pointCells[a][axis] < s.pointCells[b][axis]
@@ -257,14 +265,6 @@ func (s *ConformScan) EdgeInteriorHits(budget *proofbound.WorkBudget, a, b int, 
 		}
 		return a < b
 	})
-	for _, vi := range candidates {
-		if vi == tri[0] || vi == tri[1] || vi == tri[2] || filter.TooFar(s.Approx[vi]) {
-			continue
-		}
-		if OnSegmentInterior3(s.Verts[a], s.Verts[b], s.Verts[vi]) {
-			hits = append(hits, vi)
-		}
-	}
 	return hits, nil
 }
 
