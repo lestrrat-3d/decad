@@ -1,4 +1,4 @@
-// Package lattice builds the triangle mesh of a gyroid, Schwarz-P or diamond lattice inside a box
+// Package lattice builds the triangle mesh of a gyroid, Schwarz-P, diamond, Neovius or IWP lattice inside a box
 // (agent-docs/lattice-design.md). It works on plain millimetre data and touches
 // no body, document or sketch.
 package lattice
@@ -40,6 +40,12 @@ const (
 	// KindDiamond is sin kx·sin ky·sin kz + sin kx·cos ky·cos kz +
 	// cos kx·sin ky·cos kz + cos kx·cos ky·sin kz, which runs from −√2 to √2.
 	KindDiamond
+	// KindNeovius is 3(cos kx + cos ky + cos kz) + 4 cos kx·cos ky·cos kz, which runs from
+	// −13 to 13.
+	KindNeovius
+	// KindIWP is 2(cos kx·cos ky + cos ky·cos kz + cos kz·cos kx) − (cos 2kx + cos 2ky + cos 2kz),
+	// which runs from −5 to 3, so the largest |g| is 5.
+	KindIWP
 )
 
 // MaxLevel is the largest value |g| reaches for the kind; a level at or above it
@@ -50,6 +56,10 @@ func (k Kind) MaxLevel() float64 {
 		return 3
 	case KindDiamond:
 		return math.Sqrt2
+	case KindNeovius:
+		return 13
+	case KindIWP:
+		return 5
 	default:
 		return MaxLevel
 	}
@@ -65,6 +75,10 @@ func (k Kind) field(x, y, z float64) float64 {
 		return cx + cy + cz
 	case KindDiamond:
 		return sx*sy*sz + sx*cy*cz + cx*sy*cz + cx*cy*sz
+	case KindNeovius:
+		return 3*(cx+cy+cz) + 4*cx*cy*cz
+	case KindIWP:
+		return 2*(cx*cy+cy*cz+cz*cx) - (math.Cos(2*x) + math.Cos(2*y) + math.Cos(2*z))
 	default:
 		return sx*cy + sy*cz + sz*cx
 	}

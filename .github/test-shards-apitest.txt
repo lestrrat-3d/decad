@@ -695,6 +695,7 @@
 2	0.00	TestSurfaceRevolvePartialClearOfAxisIsASheet
 2	0.01	TestSurfaceRevolveSheetRefusesTooFewMeridianSamples
 2	0.05	TestSurfaceSplitRevolveRolesAndSelectors
+10	0.01	TestNeoviusAndIWPFollowTheirOwnFieldAtAThinWall
 2	0.00	TestSurfaceSweepLineSheetVerifiesSound
 2	0.01	TestSweepArcMatchesQuarterRevolveAndReplaysPlacement
 2	0.00	TestSweepArcRefusalsLeaveDocumentUnchanged

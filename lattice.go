@@ -16,8 +16,8 @@ import (
 // Resolution takes.
 const defaultLatticeResolution = 16
 
-// LatticeSpec describes a lattice for [GyroidLattice], [SchwarzPLattice] and
-// [DiamondLattice].
+// LatticeSpec describes a lattice for [GyroidLattice], [SchwarzPLattice],
+// [DiamondLattice], [NeoviusLattice] and [IWPLattice].
 type LatticeSpec struct {
 	// Min and Max are the box's corners in millimetres; Min is below Max on every
 	// axis.
@@ -29,8 +29,9 @@ type LatticeSpec struct {
 	// field g lies within Level of zero, |g| ≤ Level. The gyroid's g runs from
 	// −3/2 to 3/2, so a level of 0.3 gives a thin wall, 1 a heavy one and values
 	// near 3/2 a nearly full box; the Schwarz-P field runs from −3 to 3 and the
-	// diamond's from −√2 to √2. Level lies strictly between 0 and the field's
-	// largest value (agent-docs/lattice-design.md §4).
+	// diamond's from −√2 to √2, the Neovius field from −13 to 13 and the IWP field
+	// from −5 to 3. Level lies strictly between 0 and the field's largest absolute
+	// value (agent-docs/lattice-design.md §4).
 	Level units.Value
 	// Resolution is the number of samples to a cell along each axis, from 4 up.
 	// The zero value takes 16. A finer grid follows the surface more closely and
@@ -75,6 +76,25 @@ func SchwarzPLattice(ctx context.Context, spec LatticeSpec) (*MeshBody, error) {
 // and Level lies strictly between 0 and √2.
 func DiamondLattice(ctx context.Context, spec LatticeSpec) (*MeshBody, error) {
 	return buildLattice(ctx, spec, lattice.KindDiamond)
+}
+
+// NeoviusLattice builds a Neovius lattice, the field
+// 3(cos kx + cos ky + cos kz) + 4 cos kx·cos ky·cos kz, whose solid is where
+// |g| ≤ Level, as a closed [MeshBody] filling the box of spec
+// (agent-docs/lattice-design.md §4). Everything GyroidLattice says holds, except
+// that the field runs from −13 to 13 and Level lies strictly between 0 and 13.
+func NeoviusLattice(ctx context.Context, spec LatticeSpec) (*MeshBody, error) {
+	return buildLattice(ctx, spec, lattice.KindNeovius)
+}
+
+// IWPLattice builds an I-graph and wrapped package (IWP) lattice, the field
+// 2(cos kx·cos ky + cos ky·cos kz + cos kz·cos kx) − (cos 2kx + cos 2ky + cos 2kz),
+// whose solid is where |g| ≤ Level, as a closed [MeshBody] filling the box of
+// spec (agent-docs/lattice-design.md §4). Everything GyroidLattice says holds,
+// except that the field runs from −5 to 3, so Level lies strictly between 0 and
+// 5, the largest |g|.
+func IWPLattice(ctx context.Context, spec LatticeSpec) (*MeshBody, error) {
+	return buildLattice(ctx, spec, lattice.KindIWP)
 }
 
 // buildLattice is the gates and the build shared by the lattice kinds.

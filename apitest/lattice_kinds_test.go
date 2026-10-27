@@ -12,7 +12,7 @@ import (
 )
 
 // This file is agent-docs/lattice-design.md §4's public-surface tests for
-// SchwarzPLattice and DiamondLattice, on the box of lattice_test.go.
+// SchwarzPLattice, DiamondLattice, NeoviusLattice and IWPLattice, on the box of lattice_test.go.
 
 // latticeKind is a lattice entry point with the field it cuts, written out here
 // from its definition and not taken from the library.
@@ -36,6 +36,21 @@ var latticeKinds = []latticeKind{
 				math.Cos(x)*math.Sin(y)*math.Cos(z) + math.Cos(x)*math.Cos(y)*math.Sin(z)
 		},
 		math.Sqrt2,
+	},
+	{
+		"Neovius", decad.NeoviusLattice,
+		func(x, y, z float64) float64 {
+			return 3*(math.Cos(x)+math.Cos(y)+math.Cos(z)) + 4*math.Cos(x)*math.Cos(y)*math.Cos(z)
+		},
+		13,
+	},
+	{
+		"IWP", decad.IWPLattice,
+		func(x, y, z float64) float64 {
+			return 2*(math.Cos(x)*math.Cos(y)+math.Cos(y)*math.Cos(z)+math.Cos(z)*math.Cos(x)) -
+				(math.Cos(2*x) + math.Cos(2*y) + math.Cos(2*z))
+		},
+		5,
 	},
 }
 
@@ -81,6 +96,33 @@ func TestLatticeKindsAreClosedSolidsOfTheExpectedFraction(t *testing.T) {
 	}
 }
 
+// TestNeoviusAndIWPFollowTheirOwnFieldAtAThinWall reads the Neovius and IWP kinds at a thin wall, where the solid
+// fraction depends on every term of the field, so a wrong coefficient moves it by several per cent. A thin wall needs
+// 48 samples to a cell to follow the field within a per cent.
+func TestNeoviusAndIWPFollowTheirOwnFieldAtAThinWall(t *testing.T) {
+	t.Parallel()
+	for _, kind := range latticeKinds {
+		if kind.name != "Neovius" && kind.name != "IWP" {
+			continue
+		}
+		t.Run(kind.name, func(t *testing.T) {
+			t.Parallel()
+			level := 0.15 * kind.maxLevel
+			// One cell of the lattice is enough: it repeats, so its solid fraction is the box's.
+			spec := decad.LatticeSpec{
+				Min: r3.Vec{}, Max: r3.Vec{X: 10, Y: 10, Z: 10},
+				Cell: units.Millimeters(10), Level: units.Scalar(level), Resolution: 48,
+			}
+			m, err := kind.build(t.Context(), spec)
+			require.NoError(t, err)
+			volume, err := m.Volume()
+			require.NoError(t, err)
+			want := fieldFraction(kind.field, level) * 10 * 10 * 10
+			require.InDelta(t, want, volume.Value.Base(), 0.025*want)
+		})
+	}
+}
+
 func TestLatticeKindsConvergeAndThicken(t *testing.T) {
 	t.Parallel()
 	for _, kind := range latticeKinds {
@@ -113,11 +155,12 @@ func TestLatticeKindsConvergeAndThicken(t *testing.T) {
 
 func TestLatticeKindsDifferFromTheGyroidAndEachOther(t *testing.T) {
 	t.Parallel()
-	// The same level and box give different surfaces: the three kinds' volumes at a level of 0.6
+	// The same level and box give different surfaces: the kinds' volumes at a level of 0.6
 	// are 20³ times the solid fraction of each field, which differ well beyond the grid's error.
 	volumes := map[string]float64{}
 	for name, build := range map[string]func(context.Context, decad.LatticeSpec) (*decad.MeshBody, error){
 		"gyroid": decad.GyroidLattice, "schwarz": decad.SchwarzPLattice, "diamond": decad.DiamondLattice,
+		"neovius": decad.NeoviusLattice, "iwp": decad.IWPLattice,
 	} {
 		m, err := build(t.Context(), latticeSpec(0.6, 12))
 		require.NoError(t, err)
@@ -128,6 +171,8 @@ func TestLatticeKindsDifferFromTheGyroidAndEachOther(t *testing.T) {
 	require.Greater(t, math.Abs(volumes["gyroid"]-volumes["schwarz"]), 0.05*volumes["gyroid"])
 	require.Greater(t, math.Abs(volumes["gyroid"]-volumes["diamond"]), 0.05*volumes["gyroid"])
 	require.Greater(t, math.Abs(volumes["schwarz"]-volumes["diamond"]), 0.05*volumes["schwarz"])
+	require.Greater(t, math.Abs(volumes["neovius"]-volumes["schwarz"]), 0.05*volumes["neovius"])
+	require.Greater(t, math.Abs(volumes["iwp"]-volumes["gyroid"]), 0.05*volumes["iwp"])
 }
 
 func TestLatticeKindsRefusals(t *testing.T) {
