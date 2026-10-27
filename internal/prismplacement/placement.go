@@ -12,11 +12,17 @@ import (
 )
 
 // Operand holds only the stored placement and sweep fields used by the
-// shared-axis and relative-placement calculations.
+// shared-axis and relative-placement calculations. Z0Delta and Z1Delta bound
+// how far each held level sits from the level it denotes, and Z0Denoted and
+// Z1Denoted record that level where the producer knows it. The G5 interval
+// relations read all three; an operand that leaves them zero states two
+// undisplaced levels.
 type Operand struct {
-	Frame  r3.Frame
-	Xform  r3.Transform
-	Z0, Z1 float64
+	Frame                r3.Frame
+	Xform                r3.Transform
+	Z0, Z1               float64
+	Z0Delta, Z1Delta     float64
+	Z0Denoted, Z1Denoted LevelDenotation
 }
 
 // SharedAxis is G3's exact shared-axis result. Shift is the rational axial
@@ -91,62 +97,92 @@ func AdmittedShiftedInterval(pa, pb Operand) (*big.Rat, *big.Rat) {
 }
 
 // IntersectLowerEnd chooses the higher of A's lower level and B's exact
-// shifted lower level. The chosen endpoint carries its own axial displacement.
-// A tie takes A's float with the larger displacement because both operands'
-// coordinates then equally denote the result. A shifted B endpoint rounds
-// once, and RationalFloatError charges that rounding beside B's displacement.
+// shifted lower level, and the displacement that covers the true result: the
+// higher of the two true levels. The winner's own displacement covers it
+// unless the loser's range, its held level widened by its displacement,
+// reaches past the winner's; then the loser's true level may be the result,
+// and the larger of the two displacements covers either, since the loser's
+// held level lies on the winner's far side. A tie takes A's float and the
+// larger displacement. A shifted B endpoint rounds once, and
+// RationalFloatError charges that rounding beside the displacement.
 func IntersectLowerEnd(aVal, aDelta float64, bVal *big.Rat, bDelta float64) (float64, float64) {
 	return intersectEnd(aVal, aDelta, bVal, bDelta, true)
 }
 
 // IntersectUpperEnd chooses the lower of A's upper level and B's exact
-// shifted upper level, charging B's rounding when B supplies the result.
+// shifted upper level, with IntersectLowerEnd's displacement rule mirrored.
 func IntersectUpperEnd(aVal, aDelta float64, bVal *big.Rat, bDelta float64) (float64, float64) {
 	return intersectEnd(aVal, aDelta, bVal, bDelta, false)
 }
 
 func intersectEnd(aVal, aDelta float64, bVal *big.Rat, bDelta float64, lower bool) (float64, float64) {
-	cmp := proofarith.FloatRat(aVal).Cmp(bVal)
-	switch {
-	case cmp == 0:
-		return aVal, max(aDelta, bDelta)
-	case lower && cmp > 0 || !lower && cmp < 0:
-		return aVal, aDelta
+	a := proofarith.FloatRat(aVal)
+	cmp := a.Cmp(bVal)
+	aWins := cmp == 0 || lower && cmp > 0 || !lower && cmp < 0
+	delta := max(aDelta, bDelta)
+	if cmp != 0 {
+		win, winDelta, lose, loseDelta := a, aDelta, bVal, bDelta
+		if !aWins {
+			win, winDelta, lose, loseDelta = bVal, bDelta, a, aDelta
+		}
+		if !loserReaches(win, winDelta, lose, loseDelta, lower) {
+			delta = winDelta
+		}
+	}
+	if aWins {
+		return aVal, delta
 	}
 	held, _ := bVal.Float64()
-	return held, proofbound.AbsSumUpper(bDelta, proofarith.RationalFloatError(bVal, held))
+	return held, proofbound.AbsSumUpper(delta, proofarith.RationalFloatError(bVal, held))
 }
 
-// CutZIntervalSpans compares the shifted tool interval against both target
-// endpoints exactly. A cap meeting the target endpoint is a valid span.
-func CutZIntervalSpans(target, tool Operand) bool {
-	t0, t1 := proofarith.FloatRat(target.Z0), proofarith.FloatRat(target.Z1)
-	z0, z1, ok := ShiftedInterval(target, tool)
-	if t0 == nil || t1 == nil || !ok {
-		return false
+// loserReaches reports whether the losing end's range reaches past the
+// winner's: for a lower end (the higher level wins) the loser's top lies above
+// the winner's bottom, and mirrored for an upper end. A non-finite
+// displacement reaches.
+func loserReaches(win *big.Rat, winDelta float64, lose *big.Rat, loseDelta float64, lower bool) bool {
+	wd, ld := proofarith.FloatRat(winDelta), proofarith.FloatRat(loseDelta)
+	if wd == nil || ld == nil {
+		return true
 	}
-	return z0.Cmp(t0) <= 0 && z1.Cmp(t1) >= 0
+	if lower {
+		return new(big.Rat).Add(lose, ld).Cmp(new(big.Rat).Sub(win, wd)) > 0
+	}
+	return new(big.Rat).Sub(lose, ld).Cmp(new(big.Rat).Add(win, wd)) < 0
 }
 
-// UnionZIntervalMatches compares the exact shifted B interval to A's.
+// CutZIntervalSpans reports that the shifted tool interval provably spans the
+// target's. Each comparison holds for every true level the held floats and
+// displacements allow (LevelRange.AtOrBelow): a cap meeting the target
+// endpoint is a valid span when both denote one rational. Equal held floats
+// within a displacement prove nothing, so such a pair declines.
+func CutZIntervalSpans(target, tool Operand) bool {
+	t0, t1, z0, z1, ok := IntervalRanges(target, tool)
+	return ok && z0.AtOrBelow(t0) && t1.AtOrBelow(z1)
+}
+
+// UnionZIntervalMatches reports that the shifted B interval provably equals
+// A's: the held floats agree exactly after the shift, and each pair of levels
+// denotes one rational (LevelRange.SameLevel). A displaced level without a
+// denotation proves no equality.
 func UnionZIntervalMatches(pa, pb Operand) bool {
 	a0, a1 := proofarith.FloatRat(pa.Z0), proofarith.FloatRat(pa.Z1)
 	z0, z1, ok := ShiftedInterval(pa, pb)
-	if a0 == nil || a1 == nil || !ok {
+	if a0 == nil || a1 == nil || !ok || a0.Cmp(z0) != 0 || a1.Cmp(z1) != 0 {
 		return false
 	}
-	return a0.Cmp(z0) == 0 && a1.Cmp(z1) == 0
+	r0, r1, s0, s1, ok := IntervalRanges(pa, pb)
+	return ok && r0.SameLevel(s0) && r1.SameLevel(s1)
 }
 
-// IntersectZIntervalOverlaps compares the shifted B interval with A's own
-// interval exactly. A pair touching only at a cap has no overlap.
+// IntersectZIntervalOverlaps reports that the shifted B interval provably
+// overlaps A's: each lower level lies strictly below the other's upper level
+// for every true level the displacements allow (LevelRange.Below). A pair
+// touching only at a cap, or whose caps meet within their displacements, has
+// no proven overlap.
 func IntersectZIntervalOverlaps(pa, pb Operand) bool {
-	a0, a1 := proofarith.FloatRat(pa.Z0), proofarith.FloatRat(pa.Z1)
-	z0, z1, ok := ShiftedInterval(pa, pb)
-	if a0 == nil || a1 == nil || !ok {
-		return false
-	}
-	return a0.Cmp(z1) < 0 && z0.Cmp(a1) < 0
+	a0, a1, z0, z1, ok := IntervalRanges(pa, pb)
+	return ok && a0.Below(z1) && z0.Below(a1)
 }
 
 // Relative is the composed map from B's plane-local coordinates into A's.

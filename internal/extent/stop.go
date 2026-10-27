@@ -23,13 +23,19 @@ const stopTol = 1e-9
 // ok is false when any input is not finite, m is zero, m.U' or m.V' is
 // nonzero, m.N' is zero, or k is not finite.
 func PlaneStop(frame r3.Frame, xform r3.Transform, z float64, sweep r3.Frame) (*big.Rat, float64, bool) {
+	return PlaneStopAt(frame, xform, proofarith.FloatRat(z), sweep)
+}
+
+// PlaneStopAt is PlaneStop for the record's plane at the exact level zr
+// rather than a held float: the level a displaced cap denotes. ok is false
+// for a nil zr.
+func PlaneStopAt(frame r3.Frame, xform r3.Transform, zr *big.Rat, sweep r3.Frame) (*big.Rat, float64, bool) {
 	var (
 		fu, fv, fn, fo = ratVec(frame.U()), ratVec(frame.V()), ratVec(frame.N()), ratVec(frame.Origin())
 		b              = xform.Basis()
 		bx, by, bz     = ratVec(b.EX), ratVec(b.EY), ratVec(b.EZ)
 		t              = ratVec(xform.Translation())
 		su, sv, sn, so = ratVec(sweep.U()), ratVec(sweep.V()), ratVec(sweep.N()), ratVec(sweep.Origin())
-		zr             = proofarith.FloatRat(z)
 	)
 	for _, v := range [][3]*big.Rat{fu, fv, fn, fo, bx, by, bz, t, su, sv, sn, so} {
 		if v[0] == nil || v[1] == nil || v[2] == nil {

@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -31,9 +32,13 @@ func GroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, scene pr
 		}
 	}
 	z0Delta, z1Delta := max(a.Z0Delta, b.Z0Delta), max(a.Z1Delta, b.Z1Delta)
+	// G5 proved both operands' levels denote one rational at each end
+	// (prismplacement.UnionZIntervalMatches), so the shared level keeps it.
+	z0Denoted := prismplacement.DenoteLevel(a.DenotedZ0(), a.Z0, z0Delta)
+	z1Denoted := prismplacement.DenoteLevel(a.DenotedZ1(), a.Z1, z1Delta)
 	if len(regions) == 1 {
 		return prismrecord.Payload{Profile: regions[0], Frame: a.Frame, Xform: a.Xform,
-			Z0: a.Z0, Z1: a.Z1, Z0Delta: z0Delta, Z1Delta: z1Delta,
+			Z0: a.Z0, Z1: a.Z1, Z0Delta: z0Delta, Z1Delta: z1Delta, Z0Denoted: z0Denoted, Z1Denoted: z1Denoted,
 			SectionDelta: proofbound.AbsSumUpper(inputDelta, cutDelta)}, true, nil
 	}
 	disjoint, disjointWalk, err := prismcells.ProveGroupDisjoint(ctx, budget, regions)
@@ -42,7 +47,7 @@ func GroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, scene pr
 	}
 	sp := Payload{
 		Slabs: []Slab{{Regions: regions, Z0: a.Z0, Z1: a.Z1,
-			Z0Delta: z0Delta, Z1Delta: z1Delta}},
+			Z0Delta: z0Delta, Z1Delta: z1Delta, Z0Denoted: z0Denoted, Z1Denoted: z1Denoted}},
 		Frame: a.Frame, Xform: a.Xform,
 		SectionDelta: proofbound.AbsSumUpper(max(inputDelta, disjointWalk), cutDelta),
 	}

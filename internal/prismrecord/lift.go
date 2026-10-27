@@ -184,8 +184,10 @@ func (pp Payload) Dir(du, dv, dz float64) r3.Vec {
 // orientation decision below corrects for it.
 func (pp Payload) Reflected() bool { return pp.Xform.IsReflection() }
 
-// PlacementOperand is the record's frame, placement and sweep levels as the
-// prismplacement operand the analytic prism gates compare.
+// PlacementOperand is the record's frame, placement and sweep levels, with
+// each level's displacement and denotation, as the prismplacement operand the
+// analytic prism gates compare.
 func (pp Payload) PlacementOperand() prismplacement.Operand {
-	return prismplacement.Operand{Frame: pp.Frame, Xform: pp.Xform, Z0: pp.Z0, Z1: pp.Z1}
+	return prismplacement.Operand{Frame: pp.Frame, Xform: pp.Xform, Z0: pp.Z0, Z1: pp.Z1,
+		Z0Delta: pp.Z0Delta, Z1Delta: pp.Z1Delta, Z0Denoted: pp.Z0Denoted, Z1Denoted: pp.Z1Denoted}
 }

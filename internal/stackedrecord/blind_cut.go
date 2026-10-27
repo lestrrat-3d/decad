@@ -35,19 +35,12 @@ func BuildBlindCut(ctx context.Context, budget *proofbound.WorkBudget,
 	if !ok {
 		return Payload{}, false, nil
 	}
-	a0, a1 := proofarith.FloatRat(target.Z0), proofarith.FloatRat(target.Z1)
-	if a0 == nil || a1 == nil {
+	arms, ok := blindArmsOf(target.PlacementOperand(), tool.PlacementOperand())
+	if !ok {
 		return Payload{}, false, nil
 	}
-	openAtTop := z0.Cmp(a0) > 0 && z0.Cmp(a1) < 0 && z1.Cmp(a1) >= 0
-	openAtBottom := z0.Cmp(a0) <= 0 && z1.Cmp(a0) > 0 && z1.Cmp(a1) < 0
-	if !openAtTop && !openAtBottom {
-		return Payload{}, false, nil
-	}
+	openAtTop, openAtBottom := arms.openAtTop, arms.openAtBottom
 	inner, innerDenoted := toolInnerEnd(target.PlacementOperand(), tool, z0, z1, openAtBottom)
-	if !denotedStrictlyInside(innerDenoted, target.DenotedZ0(), target.DenotedZ1()) {
-		return Payload{}, false, nil
-	}
 	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, target.Profile, tool.Profile)
 	if err != nil {
 		return Payload{}, false, err
@@ -104,6 +97,11 @@ func BuildBlindCut(ctx context.Context, budget *proofbound.WorkBudget,
 		innerDelta = tool.Z1Delta
 	}
 	innerHeld, _ := inner.Float64()
+	// The ranges prove the inner end strictly inside, but its held float may
+	// round onto a cap, which leaves no slab between them.
+	if innerHeld <= target.Z0 || innerHeld >= target.Z1 {
+		return Payload{}, false, nil
+	}
 	shiftRound := proofarith.RationalFloatError(inner, innerHeld)
 	if innerDelta == 0 {
 		innerDelta = shiftRound
@@ -181,34 +179,51 @@ func denotedInterface(slabs []Slab, level *big.Rat) int {
 	return -1
 }
 
-// heldSplit is the slab whose held interval strictly contains inner, or -1.
-// An inner end equal to a held interface level is -1: denotedInterface alone
-// decides that arm. Where the denoted levels are known, they must keep the
-// held order, so every recorded denotation in the stack stays monotone.
-func heldSplit(slabs []Slab, inner, denoted *big.Rat) int {
-	for k, slab := range slabs {
-		lower, upper := proofarith.FloatRat(slab.Z0), proofarith.FloatRat(slab.Z1)
-		if lower == nil || upper == nil || inner.Cmp(lower) <= 0 {
-			return -1
-		}
-		if inner.Cmp(upper) > 0 {
-			continue
-		}
-		if inner.Cmp(upper) == 0 || !denotedStrictlyInside(denoted, slab.DenotedZ0(), slab.DenotedZ1()) {
-			return -1
-		}
-		return k
-	}
-	return -1
+// blindArms is which cap a blind tool opens at, read on the exact level
+// ranges (prismplacement.LevelRange): every level the held floats,
+// displacements and denotations allow must agree. openAtTop needs the tool's
+// lower end strictly inside the target and its upper end at or past the
+// target's top; openAtBottom mirrors it. inner is the range of the tool end
+// that lies inside.
+type blindArms struct {
+	openAtTop, openAtBottom bool
+	inner                   prismplacement.LevelRange
 }
 
-// denotedStrictlyInside is false when the known denoted levels contradict an
-// inner end strictly between lo and hi. An unknown level contradicts nothing.
-func denotedStrictlyInside(inner, lo, hi *big.Rat) bool {
-	if inner == nil {
-		return true
+// blindArmsOf reads target and tool's level ranges on the target's axis.
+// ok is false when neither arm is proven, so a tool end within its
+// displacement of a target cap, or an inner end within one of either cap,
+// declines.
+func blindArmsOf(target, tool prismplacement.Operand) (blindArms, bool) {
+	a0, a1, z0, z1, ok := prismplacement.IntervalRanges(target, tool)
+	if !ok {
+		return blindArms{}, false
 	}
-	return (lo == nil || inner.Cmp(lo) > 0) && (hi == nil || inner.Cmp(hi) < 0)
+	switch {
+	case a0.Below(z0) && z0.Below(a1) && a1.AtOrBelow(z1):
+		return blindArms{openAtTop: true, inner: z0}, true
+	case z0.AtOrBelow(a0) && a0.Below(z1) && z1.Below(a1):
+		return blindArms{openAtBottom: true, inner: z1}, true
+	}
+	return blindArms{}, false
+}
+
+// rangeSplit is the slab whose level ranges strictly contain inner's, or -1.
+// An inner end that does not lie certainly above a slab's lower level, before
+// it lies certainly below that slab's upper one, is -1: denotedInterface alone
+// decides an inner end at an interface.
+func rangeSplit(slabs []Slab, inner prismplacement.LevelRange) int {
+	for k, slab := range slabs {
+		lower, okLo := prismplacement.LevelRangeOf(slab.Z0, slab.Z0Delta, slab.Z0Denoted, new(big.Rat))
+		upper, okHi := prismplacement.LevelRangeOf(slab.Z1, slab.Z1Delta, slab.Z1Denoted, new(big.Rat))
+		if !okLo || !okHi || !lower.Below(inner) {
+			return -1
+		}
+		if inner.Below(upper) {
+			return k
+		}
+	}
+	return -1
 }
 
 // ApplyBlindCut splits the slab containing a blind tool's inner end, or
@@ -282,16 +297,13 @@ func reachBlindCut(budget *proofbound.WorkBudget, sp Payload,
 	if !ok {
 		return blindCutReach{}, false, nil
 	}
-	first := proofarith.FloatRat(sp.Slabs[0].Z0)
-	last := proofarith.FloatRat(sp.Slabs[len(sp.Slabs)-1].Z1)
-	if first == nil || last == nil {
+	// outer is the stack's outer prism, whose ends are the first and last
+	// slabs' own levels with their denotations.
+	arms, ok := blindArmsOf(outer.PlacementOperand(), tool.PlacementOperand())
+	if !ok {
 		return blindCutReach{}, false, nil
 	}
-	openAtTop := z0.Cmp(first) > 0 && z0.Cmp(last) < 0 && z1.Cmp(last) >= 0
-	openAtBottom := z0.Cmp(first) <= 0 && z1.Cmp(first) > 0 && z1.Cmp(last) < 0
-	if !openAtTop && !openAtBottom {
-		return blindCutReach{}, false, nil
-	}
+	openAtTop, openAtBottom := arms.openAtTop, arms.openAtBottom
 	reach := blindCutReach{openAtTop: openAtTop, innerDelta: tool.Z0Delta, split: -1}
 	reach.inner, reach.innerDenoted = toolInnerEnd(outer.PlacementOperand(), tool, z0, z1, openAtBottom)
 	if openAtBottom {
@@ -299,7 +311,7 @@ func reachBlindCut(budget *proofbound.WorkBudget, sp Payload,
 	}
 	reach.interfaceAt = denotedInterface(sp.Slabs, reach.innerDenoted)
 	if reach.interfaceAt < 0 {
-		reach.split = heldSplit(sp.Slabs, reach.inner, reach.innerDenoted)
+		reach.split = rangeSplit(sp.Slabs, arms.inner)
 	}
 	if reach.split < 0 && reach.interfaceAt < 0 {
 		return blindCutReach{}, false, nil

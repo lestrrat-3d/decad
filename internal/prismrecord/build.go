@@ -120,7 +120,7 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 		AxialDelta:    pp.Z0Delta,
 		HasAxialDelta: true,
 		Surface:       surfacegeom.Plane{Frame: startFrame},
-		CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: pp.Z0},
+		CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: pp.Z0, ZDenoted: pp.DenotedZ0()},
 		Origins:       []provenance.Ref{{Producer: env.Ref, Role: provenance.RoleCapStart}},
 		Body:          body,
 	})
@@ -130,7 +130,7 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 		AxialDelta:    pp.Z1Delta,
 		HasAxialDelta: true,
 		Surface:       surfacegeom.Plane{Frame: endFrame},
-		CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: pp.Z1},
+		CapRecord:     &topo.CapRecord{Frame: pp.Frame, Xform: pp.Xform, Z: pp.Z1, ZDenoted: pp.DenotedZ1()},
 		Origins:       []provenance.Ref{{Producer: env.Ref, Role: provenance.RoleCapEnd}},
 		Body:          body,
 	})

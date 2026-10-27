@@ -53,7 +53,7 @@ func groupOperandOf(payload topo.Payload) (groupOperand, bool) {
 		slab := p.Slabs[0]
 		proxy := prismrecord.Payload{Profile: slab.Regions[0], Frame: p.Frame, Xform: p.Xform,
 			Z0: slab.Z0, Z1: slab.Z1, Z0Delta: slab.Z0Delta, Z1Delta: slab.Z1Delta,
-			SectionDelta: p.SectionDelta}
+			Z0Denoted: slab.Z0Denoted, Z1Denoted: slab.Z1Denoted, SectionDelta: p.SectionDelta}
 		return groupOperand{proxy: proxy, regions: slab.Regions, group: true}, true
 	default:
 		return groupOperand{}, false

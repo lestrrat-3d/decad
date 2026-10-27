@@ -63,8 +63,8 @@ func (sp Payload) OuterPrism() prismrecord.Payload {
 	return prismrecord.Payload{
 		Profile: momentinput.Profile{Outer: first.Regions[0].Outer},
 		Frame:   sp.Frame, Xform: sp.Xform, SectionDelta: sp.SectionDelta,
-		Z0: first.Z0, Z0Delta: first.Z0Delta,
-		Z1: last.Z1, Z1Delta: last.Z1Delta,
+		Z0: first.Z0, Z0Delta: first.Z0Delta, Z0Denoted: first.Z0Denoted,
+		Z1: last.Z1, Z1Delta: last.Z1Delta, Z1Denoted: last.Z1Denoted,
 	}
 }
 
@@ -83,8 +83,9 @@ func (sp Payload) OuterRuns() []prismrecord.Payload {
 	for i, slab := range planned {
 		run := base
 		run.Profile = slab.Regions[0]
-		run.Z0, run.Z0Delta = slab.Z0, slab.Z0Delta
-		run.Z1, run.Z1Delta = slab.Z1, slab.Z1Delta
+		// Each run keys its levels, and what they denote, on its own slabs.
+		run.Z0, run.Z0Delta, run.Z0Denoted = slab.Z0, slab.Z0Delta, slab.Z0Denoted
+		run.Z1, run.Z1Delta, run.Z1Denoted = slab.Z1, slab.Z1Delta, slab.Z1Denoted
 		runs[i] = run
 	}
 	return runs

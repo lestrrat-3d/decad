@@ -37,8 +37,9 @@ type Operand struct {
 
 // OperandFromPayload reads one operand as slabs: a prism is one slab over its
 // interval with its denoted levels, a stacked prism keeps its slabs, and an A1
-// brep keeps its stack. Only the A7 crossing cut reads the denoted levels; the
-// union and brep builders write new slabs that record none
+// brep keeps its stack. The A7 crossing cut and the stacked union's level
+// order (stackedrecord.UnionLevels) read the denoted levels; the union and
+// brep builders write new slabs that record none
 // (agent-docs/stacked-prism-design.md §2.1).
 // Its proxy carries the frame, placement and section displacement read by
 // prismboolean's admission. A brep without an A1 stack is not an operand.

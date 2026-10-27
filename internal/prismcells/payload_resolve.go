@@ -66,14 +66,19 @@ func ResolveAndBuildUnion(ctx context.Context, budget *proofbound.WorkBudget, pa
 	if fallBack, err := AmplifiedFallback(sceneDelta.Amplified, AuditMergeSection(budget, pa, merged)); fallBack || err != nil {
 		return prismrecord.Payload{}, false, err
 	}
+	z0Delta, z1Delta := max(pa.Z0Delta, pb.Z0Delta), max(pa.Z1Delta, pb.Z1Delta)
 	result := prismrecord.Payload{
 		Profile: merged,
 		Frame:   pa.Frame,
 		Z0:      pa.Z0,
 		Z1:      pa.Z1,
-		Z0Delta: max(pa.Z0Delta, pb.Z0Delta),
-		Z1Delta: max(pa.Z1Delta, pb.Z1Delta),
-		Xform:   pa.Xform,
+		Z0Delta: z0Delta,
+		Z1Delta: z1Delta,
+		// G5 proved both operands' levels denote one rational at each end
+		// (prismplacement.UnionZIntervalMatches), so the shared level keeps it.
+		Z0Denoted: prismplacement.DenoteLevel(pa.DenotedZ0(), pa.Z0, z0Delta),
+		Z1Denoted: prismplacement.DenoteLevel(pa.DenotedZ1(), pa.Z1, z1Delta),
+		Xform:     pa.Xform,
 		// §7: operand A's coordinates are unchanged except for its own
 		// consumed segments' walk charge (sceneDelta.A), while B's existing
 		// displacement passes through its rigid re-expression, accumulates

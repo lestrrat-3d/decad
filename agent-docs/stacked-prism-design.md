@@ -77,21 +77,38 @@ copy that rewrites a level without restating its denotation reads nothing
 there. The zero value records nothing, and every producer that does not set
 it behaves as an undisplaced-or-unknown level always did.
 
-Two producers record denotations. `Extrude` with a `Distance`, `Symmetric`
-or `DistanceSide` extent records the exact rescale of the magnitude, halved
-for a full-length `Symmetric` and negated for the side below the plane. The
-blind cut records its inner end as G5's exact shift plus the tool's denoted
-level, and carries the target's own end denotations onto the stack's ends. A
-`Transform` or `Copy` keeps them with the rest of the record, and so does a
-through `Cut` whose tool nests inside a prism target, since it keeps the
-target's levels. A `ToFace` or `ThroughAll` stop, a chamfered end, a shell
-level, every union-built level and the BRep stack of general-boolean §3 A7
-record none.
+`Extrude` with a `Distance`, `Symmetric` or `DistanceSide` extent records
+the exact rescale of the magnitude, halved for a full-length `Symmetric` and
+negated for the side below the plane. A prism's caps carry their levels'
+denotations in `topo.CapRecord.ZDenoted`. A `ToFace` stop on such a cap
+records the cap's plane at its denoted level carried exactly onto the sketch
+frame (`extent.PlaneStopAt`), plus the exact offset
+(`extent.ToFaceDenotedLevel`). A `ThroughAll` stop records the far cap of
+its farthest stop body when that body is a prism whose two caps are exact
+level sets of the sketch frame, the sketch normal is exactly a unit vector,
+and every other met body's far-end interval ends at or below the farthest
+one's lower end (`extent.ThroughStops.Finish`). Each stop records through
+`DenoteLevel`, so a rational farther than the stop's displacement from its
+held level records nothing. The blind cut records its inner end as G5's exact
+shift plus the tool's denoted level, and carries the target's own end
+denotations onto the stack's ends. A `Transform` or `Copy` keeps them with the
+rest of the record, and so does a through `Cut` whose tool nests inside a
+prism target, since it keeps the target's levels. A prism `Union` over equal
+intervals, a prism group's union and the one-scene many-operand union keep
+the level their operands share, since G5 admits them only when every operand
+denotes it. A stop on a face or body whose record states no denoted cap (a
+stack, a BRep, a revolve, a faceted result), a `ThroughAll` stop with a
+competing far side, a chamfered end, a shell level, every stacked union level
+and the BRep stack of general-boolean §3 A7 record none.
 
-The denotations decide the interface arm, guard the split arm's order
-(§7 stage 3), enter the I4 audit (§2.2) and decide when general-boolean §3
-A7's tool end meets a target cap. Measurements,
-tessellation and every bound read the held floats and their displacements
+The denotations decide the interface arm, enter the split arm's level
+ranges (§7 stage 3), order and merge the stacked union's levels
+(`UnionLevels`, general-boolean §3 A1), enter the I4 audit (§2.2) and decide
+when general-boolean §3 A7's tool end meets a target cap. They also decide
+prism-boolean G5's span, match and overlap relations (prism-boolean §3.2),
+where a stack's first and last slab ends stand for the stack's own ends.
+Measurements, tessellation and every bound read the held floats and their
+displacements
 as before, so a displaced level still reads `Approximate` (§4).
 
 Modify-reach §9.1 wrote a `Shared` field on the interface for the material on
@@ -439,15 +456,16 @@ Each admitted arm ships its implementation and tests together.
    declines, while 0.125 in and 3.175 mm denote one plane and share the
    interface whatever rounding the floor level carries. A tool end with a
    displacement and no recorded denotation, or an interface whose slabs record
-   none or disagree, declines this arm. The split arm compares held levels;
-   where the tool end is denoted, it must lie strictly between whichever of
-   the containing slab's two ends are denoted, and the blind cut on a prism
-   checks the same against the target's ends. Only those two ends are
-   checked: when one of them is displaced with no recorded denotation, a
-   denoted level farther along the stack could still sit out of order with
-   the new one. That needs a displacement larger than a slab's thickness,
-   while a unit conversion or a shift rounding displaces a level by about
-   1e-15 mm. The reached slabs' private scenes
+   none or disagree, declines this arm. The split arm reads levels as
+   prism-boolean §3.2's exact ranges (`prismplacement.LevelRange`): the tool
+   end must lie strictly above the containing slab's lower level and
+   strictly below its upper one across both ranges, a denoted level being a
+   single rational and an undenoted one its held float widened by its
+   displacement. The blind cut on a prism, and the outer end of either blind
+   cut, read the target's caps the same way, so a tool end within its
+   displacement of a cap or an interface declines rather than claiming an
+   open pocket or a slab, and an inner end whose held float rounds onto a cap
+   declines too. The reached slabs' private scenes
    plus the interface audit prove the new hole set is monotone. Opposed
    exclusive holes also build when the private scene above proves their
    separation without a charge and the section displacement is zero.
