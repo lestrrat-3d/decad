@@ -1569,7 +1569,8 @@ are relations, never literals.
   S12 reporting two lumps with `Exact` 1000 mm³ and no `Faceted` face.
 - **A5 and A1 touching loops**: a circle tangent to a plate's side, two
   tangent circles, a triangle's apex on a square's side (two bodies, and
-  three through the one-scene `Union`), a circle tangent to a group's
+  three through the one-scene `Union`), three line-only bodies two of
+  which meet at a shared corner, a circle tangent to a group's
   plate, and a boss tangent inside a square or round plate's edge on its
   top each take the mesh path, mesh under `VerifyAll`, and carry a volume
   bound covering the closed form with its π terms. A circle tangent inside

@@ -2649,6 +2649,7 @@
 10	0.00	TestUnionTangentContactTakesMeshPath
 10	0.00	TestPatternedTangentCopies
 10	0.00	TestUnionApartOrNestedStaysAnalytic
+10	0.00	TestUnionNearStraightVertexRefuses
 10	0.22	TestRevolveTessellateNarrowBulgeHoleClearance
 10	0.01	TestRevolveTessellatePartialAxisLineSharesOneCapEdge
 10	0.02	TestRevolveTessellateReflectedPlacementKeepsOutwardWinding

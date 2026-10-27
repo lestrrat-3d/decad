@@ -162,7 +162,10 @@ func UnionMany(ctx context.Context, env topo.Env,
 		return nil, true, err
 	}
 	if !resolved || len(loops) == 0 {
-		return nil, true, fmt.Errorf("%w: Union's prism boundary does not close", decaderr.ErrUnsupported)
+		// The boundary does not chain into closed loops, as where two loops
+		// meet at a shared corner. A miss lets the bodies join two at a
+		// time, where the touching pair takes the mesh path.
+		return nil, false, nil
 	}
 	regions := make([]momentinput.Profile, len(loops))
 	for i, loop := range loops {

@@ -326,8 +326,9 @@ joined section, and its bound includes the rounding of the placed copies. A patt
 
 A `Union` or `Patterned` whose extrusions touch at one point without crossing, such as a disc tangent to a plate's side
 or to another disc, a boss on a plate's top tangent inside its edge, or a triangle's apex on a square's side, takes the
-faceted path and gives an `Approximate` result that meshes. A disc tangent inside the plate at the same height adds
-nothing and stays exact.
+faceted path and gives an `Approximate` result that meshes. That path can still refuse: three or more tangent
+`Patterned` copies in a row return `decad.ErrUnsupported`, because the joined mesh is held more coarsely than the next
+pair's chord tolerance. A disc tangent inside the plate at the same height adds nothing and stays exact.
 
 ## Sheets and surfaces
 

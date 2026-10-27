@@ -755,7 +755,9 @@ operand live.
 Every source region enters `BuildSceneRegions` once, in the same plane. The
 work cap applies to the sum of all input segments. `SplitRuns` resolves
 shared stations, `CellsHaveNoVoid` refuses an enclosed void, and
-`MergeLoops` keeps the exterior boundary. Each resulting loop passes
+`MergeLoops` keeps the exterior boundary; a boundary that does not chain into
+closed loops, as where two loops meet at a shared corner, is a miss, and the
+bodies join two at a time. Each resulting loop passes
 `prismcells.AuditMergeSection`; multiple loops also pass
 `prismcells.ProveGroupApart` (stacked §2.2). One loop builds a
 `prismPayload`, while loops proven apart build one one-slab

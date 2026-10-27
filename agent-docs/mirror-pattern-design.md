@@ -494,7 +494,9 @@ at another line's endpoint lying on it, so two tangent discs come back as
 two whole cells. `prismcells.ProveGroupApart` therefore also refuses two
 cells sharing a walked vertex and any point sketch's own intersection
 queries report between two instances' entities (stacked §2.2). Touching
-instances take rule 3, where `Union` takes the mesh path. The scene is capped by `prismMaxArrangementSegments`
+instances take rule 3, where `Union` takes the mesh path. Three or more
+tangent copies in a row can be refused there with `ErrUnsupported`: the
+first join's held mesh is coarser than the next pair's chord tolerance. The scene is capped by `prismMaxArrangementSegments`
 (prism-boolean §10); exhaustion is `ErrUnsupported`.
 
 Topology, roles and measurements are stacked §3–§4 with the region index

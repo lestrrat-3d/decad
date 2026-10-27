@@ -140,6 +140,18 @@ func TestUnionTangentContactTakesMeshPath(t *testing.T) {
 			},
 			volume: 425,
 		},
+		{
+			// The triangle's corner (5, 5) is the square's corner: the
+			// one-scene boundary does not chain into loops, so the bodies
+			// join two at a time. The triangle's area is 7.5 mm².
+			name: "square, triangle on its corner and a far square",
+			union: func(t *testing.T, doc *decad.Document) (*decad.Body, error) {
+				corner := polygonPrismIn(t, doc, [2]float64{5, 5}, [2]float64{9, 6}, [2]float64{6, 9})
+				far := polygonPrismIn(t, doc, [2]float64{20, 1}, [2]float64{24, 1}, [2]float64{24, 4}, [2]float64{20, 4})
+				return decad.Union(t.Context(), touchSquare(t, doc), corner, far)
+			},
+			volume: 445,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -147,6 +159,40 @@ func TestUnionTangentContactTakesMeshPath(t *testing.T) {
 			got, err := tc.union(t, decad.New())
 			require.NoError(t, err)
 			requireMeshedUnion(t, got, tc.volume)
+		})
+	}
+}
+
+// TestUnionNearStraightVertexRefuses unions the square with a quadrilateral
+// whose vertex (5, 2) lies on the square's x = 5 side and whose two edges
+// there leave that side by about 2.5e-10 rad, inside sketch's own parallel
+// band, so sketch's line query reports no common point for either edge.
+// Sketch's arrangement reports the region invalid, so the pair is refused
+// before any contact reading runs (agent-docs/stacked-prism-design.md §2.2).
+func TestUnionNearStraightVertexRefuses(t *testing.T) {
+	t.Parallel()
+	nearStraight := func(t *testing.T, doc *decad.Document) *decad.Body {
+		return polygonPrismIn(t, doc, [2]float64{5, 2}, [2]float64{5 + 5e-10, 4}, [2]float64{9, 3}, [2]float64{5 + 5e-10, 0})
+	}
+	cases := []struct {
+		name  string
+		union func(t *testing.T, doc *decad.Document) (*decad.Body, error)
+	}{
+		{name: "two bodies", union: func(t *testing.T, doc *decad.Document) (*decad.Body, error) {
+			return decad.Union(t.Context(), touchSquare(t, doc), nearStraight(t, doc))
+		}},
+		{name: "three bodies", union: func(t *testing.T, doc *decad.Document) (*decad.Body, error) {
+			far := polygonPrismIn(t, doc, [2]float64{20, 1}, [2]float64{24, 1}, [2]float64{24, 4}, [2]float64{20, 4})
+			return decad.Union(t.Context(), touchSquare(t, doc), nearStraight(t, doc), far)
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			_, err := tc.union(t, doc)
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			require.ErrorContains(t, err, "arrangement reports an invalid region")
 		})
 	}
 }
