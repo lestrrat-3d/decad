@@ -14,9 +14,10 @@ import (
 
 // TestFaceDepartureReader runs the reader the STEP writer's tag gate calls on
 // face nodes that state no departure, a NormalBound, a retained denoted
-// face's HeldNormalBound, and on a value that is not a face. Only the first
-// reads false. Shown to fail with each of the two bound legs deleted (that
-// face read false) and with the non-face case returning false.
+// face's HeldNormalBound, a planar face's AxialDelta, an exact axial level,
+// and on a value that is not a face. Only the faces with no departure read
+// false. Shown to fail with each of the three bound legs deleted (that face
+// read false) and with the non-face case returning false.
 func TestFaceDepartureReader(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -27,6 +28,8 @@ func TestFaceDepartureReader(t *testing.T) {
 		{"exact tag", bornFace(&Face{}), false},
 		{"normal bound", bornFace(&Face{n: topo.Face{NormalBound: 1e-16}}), true},
 		{"held normal bound", bornFace(&Face{n: topo.Face{HeldNormalBound: 1e-16}}), true},
+		{"axial delta", bornFace(&Face{n: topo.Face{AxialDelta: 1e-16, HasAxialDelta: true}}), true},
+		{"exact axial level", bornFace(&Face{n: topo.Face{HasAxialDelta: true}}), false},
 		{"not a face", bornEdge(&Edge{}), true},
 		{"nil face", (*Face)(nil), true},
 	} {

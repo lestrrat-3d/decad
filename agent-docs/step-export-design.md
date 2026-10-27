@@ -82,7 +82,8 @@ according to the writer path.
   loop, a whole revolved ball, take the faceted writer: each would need a synthetic bound through a
   point where the surface has no normal, and `ReadSTEP` reads neither a cone's apex nor a whole sphere's
   seam (`agent-docs/step-import-design.md` I12, I15), so no reader in this repository can check that
-  bound. Emit one `ADVANCED_FACE`
+  bound. A torus with no loop, a whole revolved ring, takes the faceted writer too: the whole-turn arm
+  needs two circle loops and the patch arm one. Emit one `ADVANCED_FACE`
   per body face. Share `VERTEX_POINT`s and `EDGE_CURVE`s by body topology
   identity. An `Arc3` edge is a `CIRCLE` placed about its own `Axis`, with the
   reference direction to its start vertex, trimmed by its two vertices; it
@@ -107,26 +108,35 @@ according to the writer path.
   is the float image of the `Plane`, `Cylinder`, `Cone`, `Sphere` or `Torus` tag. A face whose tag
   is not proven to be the surface the face carries sends the whole body to the faceted writer before
   any face is read. Such a face states a nonzero `topo.Face.NormalBound` or
-  `topo.Face.HeldNormalBound`, or carries a denoted surface (`topo.Face.Denoted`, a revolve face's
-  record, which a mesh Boolean's retained face keeps) that its tag does not equal exactly. A `Plane`,
-  `Cylinder` or `Torus` tag equals its record when `stitchflux.TagIsDenoted` says so, by exact rational
-  equality on the record's own points; a `Sphere` tag also needs its radius to equal the recorded
-  radius, which `TagIsDenoted` does not read. A `Cone` tag never does: `TagIsDenoted` checks that the
-  meridian lines meet at one apex and that the axis is the record's, but not the tag's own apex or
-  half-angle, and the revolve builds both from a float apex and an `atan2` half-angle. The check only
-  refuses: such a face is not proven to lie on its tag, so a file stating that surface would claim
-  more than the body proves. `export` reads the face through `internal/facedeparture`, which the root
-  package installs (`face_departure.go`), since a public `Face` exposes none of these fields.
-  The bodies the check sends to the faceted writer include a Loft bore cylinder with a rounded center
-  or an inexact frame map (`agent-docs/loft-design.md` §18), every loop chamfer's corner cone, which is
-  a cap-blend band patch (`agent-docs/modify-reach-design.md` §8.3), every drafted wall, plane or cone,
-  whose tag is a rounding of the tilted surface (`agent-docs/draft-design.md` DD4), a revolve cap whose
-  end angle displaces it, and every revolved cone. Their departures are rounding-sized, measured on
-  amd64 at 4.3e-17 to 2.2e-16 on the chamfer cones, 1.5e-16 to 2.9e-16 on the drafted walls, and
-  2.3e-15 mm on the apex of a frustum revolved from radius 3 to 7.1. A revolved tube's cylinders and
-  annular caps, a revolved ball's sphere and a revolved ring's torus equal their records and keep the
-  analytic writer. No producer builds a full conical wall the analytic writer receives; the arm's own
-  tests write a revolved frustum through the writer directly.
+  `topo.Face.HeldNormalBound`, states a nonzero `topo.Face.AxialDelta` (a planar face displaced along
+  its own normal from the level its tag holds), or carries a denoted surface (`topo.Face.Denoted`, a
+  revolve face's record, which a mesh Boolean's retained face keeps) that its tag does not equal
+  exactly. A `Plane`, `Cylinder` or `Torus` tag equals its record when `stitchflux.TagIsDenoted` says
+  so, by exact rational equality on the record's own points; a `Sphere` tag also needs its radius to
+  equal the recorded radius, which `TagIsDenoted` does not read. A `Cone` tag never does:
+  `TagIsDenoted` checks that the meridian lines meet at one apex and that the axis is the record's, but
+  not the tag's own apex or half-angle, and the revolve builds both from a float apex and an `atan2`
+  half-angle. `TagIsDenoted` refuses every cap record, so both caps of a partial revolution depart,
+  the start cap even where it is placed exactly; the body's output is the same either way, since its
+  end cap's angular displacement already refuses it. The check only refuses: such a face is not proven
+  to lie on its tag, so a file stating that surface would claim more than the body proves. `export`
+  reads the face through `internal/facedeparture`, which the root package installs
+  (`face_departure.go`), since a public `Face` exposes none of these fields.
+  The bodies the check sends to the faceted writer include every Loft whose caps state a vertex
+  displacement (every loft with a circle in its sections, whose stations round), a Loft bore cylinder
+  with a rounded center or an inexact frame map (`agent-docs/loft-design.md` §18), an extrusion up to
+  a face at an offset whose level no float holds (a `ToFace` stop 0.1 mm above a cap at z = 10), every
+  loop chamfer's corner cone, which is a cap-blend band patch (`agent-docs/modify-reach-design.md`
+  §8.3), every drafted wall, plane or cone, whose tag is a rounding of the tilted surface
+  (`agent-docs/draft-design.md` DD4), every partial revolution, and every revolved cone. Their
+  departures are rounding-sized, measured on amd64 at 9.6e-16 mm on the caps of a loft with a radius-1
+  hole, 3.6e-16 mm on the offset `ToFace` cap, 4.3e-17 to 2.2e-16 on the chamfer cones, 1.5e-16 to
+  2.9e-16 on the drafted walls, and 2.3e-15 mm on the apex of a frustum revolved from radius 3 to 7.1.
+  A revolved tube's cylinders and annular caps equal their records and keep the analytic writer. A
+  revolved ball's sphere and a revolved ring's torus equal their records too, but have no loop, so
+  those bodies take the faceted writer as stated above. No producer builds a full conical wall or a
+  cone patch that the analytic writer receives; the arm's own tests write a revolved frustum and the
+  loop chamfer corners through the writer directly.
   A full cylindrical wall receives one synthetic straight seam edge, used
   twice in opposite directions in its STEP loop. This seam changes STEP
   topology, not the body's geometry. Plane faces use their source outer and

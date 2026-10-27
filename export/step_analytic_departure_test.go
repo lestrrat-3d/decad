@@ -7,7 +7,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facedeparture"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
-	"github.com/lestrrat-3d/step"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -52,19 +51,21 @@ func departureFrame(t *testing.T, origin, u r3.Vec) r3.Frame {
 // TestAnalyticSTEPRefusesADepartedTag writes bodies whose every face and edge
 // the analytic face admission takes, but one or more of whose faces departs
 // from its tag: a Loft bore whose held center rounds (1e9 + 0.427 has no
-// float), a Loft bore on a frame map that is not exactly orthonormal
-// (loft-design §18), the rounded box's top chamfer, whose four corner cones
-// are cap-blend band patches (modify-reach §8.3), all stating a nonzero
-// NormalBound, and a revolved frustum, whose Cone tag is not proven to be the
-// cone its record denotes. Each is written faceted: one PLANE per
-// ADVANCED_FACE and no analytic surface. The same square lofted on the world
-// frame with its hole at the origin states no departure and is written
-// analytic, its bore a CYLINDRICAL_SURFACE of radius 1 placed on the z axis,
-// and so is a revolved tube, whose cylinders and annular caps are exactly
-// their records. Shown to fail with supportsAnalyticSTEP's tagsUndeparted
-// gate deleted (every departed body was written analytic), with TagDeparts'
-// Denoted leg deleted (the frustum was written analytic), and with
-// tagIsDenoted always false (the tube was written faceted).
+// float) and a Loft bore on a frame map that is not exactly orthonormal
+// (loft-design §18), each stating a nonzero NormalBound on its bore; the same
+// square lofted on the world frame with its hole at the origin, whose bore is
+// exact; the rounded box's top chamfer, whose four corner cones are cap-blend
+// band patches (modify-reach §8.3) stating a nonzero NormalBound; and a
+// revolved frustum, whose Cone tag is not proven to be the cone its record
+// denotes. Every loft's two caps state the loft's vertex displacement as
+// their AxialDelta, which is never zero for a loft with a circle hole, since
+// the circle's stations round. Each body is written faceted: one PLANE per
+// ADVANCED_FACE and no analytic surface. A revolved tube, whose cylinders and
+// annular caps are exactly their records, is written analytic. Shown to fail
+// with supportsAnalyticSTEP's tagsUndeparted gate deleted (every departed
+// body was written analytic), with TagDeparts' Denoted leg deleted (the
+// frustum was written analytic), and with tagIsDenoted always false (the
+// tube was written faceted).
 func TestAnalyticSTEPRefusesADepartedTag(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -74,10 +75,13 @@ func TestAnalyticSTEPRefusesADepartedTag(t *testing.T) {
 	}{
 		{"loft bore with a rounded center", func(t *testing.T) *decad.Body {
 			return departureLoft(t, departureFrame(t, r3.NewVec(1e9, 0, 0), r3.NewVec(1, 0, 0)), r3.NewVec(.427, 0, 0))
-		}, 1},
+		}, 3},
 		{"loft bore on a tilted frame map", func(t *testing.T) *decad.Body {
 			return departureLoft(t, departureFrame(t, r3.Vec{}, r3.NewVec(1, 0, 4)), r3.Vec{})
-		}, 1},
+		}, 3},
+		{"exact loft bore", func(t *testing.T) *decad.Body {
+			return departureLoft(t, departureFrame(t, r3.Vec{}, r3.NewVec(1, 0, 0)), r3.Vec{})
+		}, 2},
 		{"loop chamfer corner cones", func(t *testing.T) *decad.Body {
 			return patchRoundedBoxChamfer(t, 0)
 		}, 4},
@@ -126,31 +130,6 @@ func TestAnalyticSTEPRefusesADepartedTag(t *testing.T) {
 		require.Len(t, byName["ADVANCED_FACE"], 4)
 		require.Equal(t, []float64{2, 5}, bandReals(byName["CYLINDRICAL_SURFACE"], 2))
 		require.Len(t, byName["PLANE"], 2)
-	})
-	t.Run("exact loft bore", func(t *testing.T) {
-		t.Parallel()
-		body := departureLoft(t, departureFrame(t, r3.Vec{}, r3.NewVec(1, 0, 0)), r3.Vec{})
-		require.True(t, tagsUndeparted(body))
-		f, err := NewSTEPFile(t.Context(), body, units.Millimeters(0.1), bandHeader())
-		require.NoError(t, err)
-		data, err := f.Marshal()
-		require.NoError(t, err)
-		require.Contains(t, string(data), "analytic decad solid")
-		byName := bandEntities(f)
-		require.Len(t, byName["ADVANCED_FACE"], len(body.Faces()))
-		require.Len(t, byName["CYLINDRICAL_SURFACE"], 1)
-		require.Equal(t, []float64{1}, bandReals(byName["CYLINDRICAL_SURFACE"], 2))
-		byID := map[uint64]step.Entity{}
-		for _, e := range f.Entities {
-			byID[e.ID] = e
-		}
-		ref := func(v step.Value) step.Entity { return byID[uint64(v.(step.Reference))] }
-		cylinder := byName["CYLINDRICAL_SURFACE"][0]
-		placement := ref(cylinder.Parameters[1])
-		location := ref(placement.Parameters[1]).Parameters[1].(step.List)
-		axis := ref(placement.Parameters[2]).Parameters[1].(step.List)
-		require.Equal(t, step.List{step.Real(0), step.Real(0)}, location[:2], "the bore's axis passes through the origin")
-		require.Equal(t, step.List{step.Real(0), step.Real(0), step.Real(1)}, axis)
 	})
 }
 

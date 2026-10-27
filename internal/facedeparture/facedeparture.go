@@ -25,12 +25,14 @@ func Stated(face any) bool {
 }
 
 // TagDeparts reports whether f's tag is not proven to be the surface f
-// carries: f states a nonzero NormalBound or HeldNormalBound, or f carries a
-// denoted surface (topo.Face.Denoted, a revolve face's record) that its tag
-// is not proven exactly equal to (tagIsDenoted). It only refuses: a false
-// answer means no departure is stated and none is left unproven.
+// carries: f states a nonzero NormalBound or HeldNormalBound, a nonzero
+// AxialDelta (a planar face displaced along its own normal from the level its
+// tag holds), or f carries a denoted surface (topo.Face.Denoted, a revolve
+// face's record) that its tag is not proven exactly equal to (tagIsDenoted).
+// It only refuses: a false answer means no departure is stated and none is
+// left unproven.
 func TagDeparts(f *topo.Face) bool {
-	if f.NormalBound != 0 || f.HeldNormalBound != 0 {
+	if f.NormalBound != 0 || f.HeldNormalBound != 0 || f.AxialDelta != 0 {
 		return true
 	}
 	return f.Denoted != nil && !tagIsDenoted(f)

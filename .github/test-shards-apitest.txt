@@ -206,6 +206,7 @@
 1	0.00	TestSweepLineFilletCapEdgeRefuses
 1	0.27	TestSweepMitredTessellationTolerance
 1	0.32	TestSweepMitredZigzagRestatesAndPlaces
+10	0.00	TestSTEPRefusesAnOffsetToFaceCap
 1	0.50	TestSweepPairColumnEndsDepartureAtWall
 1	0.01	TestSweepPairCylinderDiskTrackRefusals
 1	0.02	TestSweepPairRotatingSourceSpheresClear
