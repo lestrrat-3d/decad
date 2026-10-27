@@ -299,3 +299,78 @@ func TestMeshSolidShellAndOffsetAgreeWithTheCubeByCubeErosionAndDilation(t *test
 	require.Greater(t, grown, 25)
 	require.Greater(t, shrunk, 12)
 }
+
+func TestVerifySurveysAgreeWithTheCubeByCubeRunsAndColumns(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(25, 26))
+	walls, blocked, free := 0, 0, 0
+	for range 90 {
+		c := randomCubes(rng)
+		doc := decad.New()
+		if _, ok := c.solid(t, doc); !ok {
+			continue
+		}
+		report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(0.5)),
+			decad.WithPullDirection(r3.NewVec(0, 0, 1)))
+		require.NoError(t, err)
+		body := report.Bodies[0]
+		// The thinnest wall is the shortest maximal run of solid cubes along any line of cubes parallel to an axis.
+		wantWall := float64(voxelSide + 1)
+		for axis := range 3 {
+			for p := range voxelSide {
+				for q := range voxelSide {
+					run := 0
+					for k := 0; k <= voxelSide; k++ {
+						var cell [3]int
+						cell[axis], cell[(axis+1)%3], cell[(axis+2)%3] = k, p, q
+						if c.at(cell[0], cell[1], cell[2]) {
+							run++
+							continue
+						}
+						if run > 0 {
+							wantWall = min(wantWall, float64(run))
+						}
+						run = 0
+					}
+				}
+			}
+		}
+		if body.Wall.Minimum != nil {
+			walls++
+			got, err := body.Wall.Minimum.Value.In(units.Millimeter)
+			require.NoError(t, err)
+			bound, err := body.Wall.Minimum.Bound.In(units.Millimeter)
+			require.NoError(t, err)
+			require.InDelta(t, wantWall, got, bound+1e-9, "thinnest wall of %d cubes", c.count())
+		}
+		// A pull along +z is blocked when some column of cubes holds a solid cube, an empty one and a solid one again.
+		want := false
+		for x := range voxelSide {
+			for y := range voxelSide {
+				seenSolid, seenGap := false, false
+				for z := range voxelSide {
+					switch {
+					case c[x][y][z] && seenGap:
+						want = true
+					case c[x][y][z]:
+						seenSolid = true
+					case seenSolid:
+						seenGap = true
+					}
+				}
+			}
+		}
+		if body.Undercut.Coverage == decad.CoverageComplete {
+			if want {
+				blocked++
+				require.NotEmpty(t, body.Undercut.Faces, "an undercut in a column of %d cubes", c.count())
+			} else {
+				free++
+				require.Empty(t, body.Undercut.Faces, "no undercut in a set of %d cubes", c.count())
+			}
+		}
+	}
+	require.Greater(t, walls, 40)
+	require.Greater(t, blocked, 4)
+	require.Greater(t, free, 25)
+}
