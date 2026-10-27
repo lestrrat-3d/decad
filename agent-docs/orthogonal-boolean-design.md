@@ -16,8 +16,10 @@ general dispatch.
 | B4 | The route only ever declines: a result with no cell, an unequal grid, a grid past `MaxCells`, kept cells that meet only along an edge (a non-manifold mesh) or a result the solid proof refuses leave the pair to the general route and its own error, so a disjoint `Intersect` is still `ErrBooleanFailed`. |
 | B5 | The result replaces both operands as one `Union`, `Cut` or `Intersect` operation with the same input roles. |
 | B6 | The tests join two blocks that touch at a face into one bar of six faces, take the union, common part and difference of a cube and a slab sharing a plane, cut a pocket whose floor and walls lie in the plate's planes, chain unions into a cut, and read volumes written out by hand with a zero bound, bounds, face counts and points. A union that keeps `||` as `&&` fails them. |
+| B7 | Beside a faceted operand that meets B1, the other may be any solid whose tessellation (at 0.1 mm, verified) carries no displacement bound and has every triangle square to an axis, such as an extruded rectilinear profile: its mesh is the body exactly and is read as an operand. Two operands that are not faceted never take this route and keep their certified ones. |
 
 ## 2. Not covered
 
+- A mixed pair whose second operand tessellates with a bound or a slanted triangle.
 - A pair with a slanted or curved face, an operand with a vertex bound (the result of a general mesh Boolean) or a placed operand.
 - Many-operand `Union` as one step: it folds two at a time through this route when its pairs qualify.
