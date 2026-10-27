@@ -1933,6 +1933,8 @@
 7	0.04	TestStitchOpenCurvedRevolveSheetKeepsFreeRims
 7	0.00	TestStitchRefusesNestedBoxesWithAGap
 7	0.01	TestStitchTwoDisjointBoxesFormATwoLumpSolid
+10	0.01	TestOrthogonalWallSurveyProvesAThickEnoughWall
+10	0.01	TestOrthogonalWallSurveyFindsAThinFinAndAShelledWall
 10	0.01	TestPlacedMeshSolidByAWholeTranslationStaysExact
 10	0.01	TestPlacedCopiesOfAMeshSolidJoinExactly
 10	0.01	TestPlacementByARoundedMotionStillPaysItsRounding
