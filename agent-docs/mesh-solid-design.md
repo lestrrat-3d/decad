@@ -46,7 +46,8 @@ with straight sides and an axis-square placement (a rectangular or polygonal poc
 boss) is read by the mixed route of `agent-docs/orthogonal-boolean-design.md` B7, so the result is exact; a round
 bore or boss is a tool the grid does not hold, so it takes the general mesh Boolean route and its volume is read
 inside the bound that route states. The tests cut a rectangular pocket, an L-shaped through hole and a round bore
-and raise a rectangular boss on a plate, and read volumes, face counts and points.
+and raise a rectangular boss on a plate, and read volumes, face counts and points. `Emboss` of a rectangular
+relief reads the same way, through the tool-body combine of B13.
 
 ## 5. Not covered
 

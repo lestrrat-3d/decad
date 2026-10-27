@@ -1669,6 +1669,7 @@
 6	0.07	TestSectionDirectLoftMovingCircleRefusesNonexactY
 6	0.35	TestSectionDirectLoftVaryingCircleRefusesPlacement
 6	0.27	TestSectionDirectLoftVaryingCircleWithTwoHolesFeedsExtrude
+10	0.01	TestEmbossOnAMeshSolidReadsExactly
 6	0.08	TestSectionMatchingLoftRefusesDifferentHoleRecords
 6	0.15	TestSectionObliqueCylinderPlacedCapCrossingFeedsVerifiedExtrude
 6	0.00	TestSectionObliqueRectangleRefusesUnsupportedExtrudeOptions
