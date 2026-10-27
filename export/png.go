@@ -63,6 +63,11 @@ type View struct {
 	// wound inside out, and a part's far side through an open shell. Its alpha is
 	// ignored (agent-docs/png-export-design.md §11).
 	BackColor *color.RGBA
+	// Opacity, when not empty, is how opaque each body is, one dimensionless value from above 0 to 1 for each body
+	// drawn, in order as Colors is: 1 is solid and less lets what lies behind show through, the body's own far side
+	// included (agent-docs/png-export-design.md §16). A view whose bodies are all solid is the same as one with
+	// no Opacity. It does not combine with Shadows.
+	Opacity []units.Value
 }
 
 // IsometricView looks at the model along the diagonal from above its +X, +Y,
@@ -123,6 +128,38 @@ func bodyTints(view View, counts []int) ([]color.RGBA, error) {
 	return tints, nil
 }
 
+// bodyOpacities is the opacity of each triangle for bodies whose triangle counts are counts, or nil when the view
+// sets none or every body is solid: view.Opacity is one value for each body.
+func bodyOpacities(view View, counts []int) ([]float64, error) {
+	if len(view.Opacity) == 0 {
+		return nil, nil
+	}
+	if len(view.Opacity) != len(counts) {
+		return nil, fmt.Errorf("export: PNG: %w: %d opacities for %d bodies; give one for each body or none",
+			decad.ErrDegenerate, len(view.Opacity), len(counts))
+	}
+	var alpha []float64
+	solid := true
+	for i, n := range counts {
+		o := view.Opacity[i]
+		if o.Kind() != units.Dimensionless {
+			return nil, fmt.Errorf("export: PNG: %w: an opacity must be dimensionless", decad.ErrUnitKind)
+		}
+		a := o.Base()
+		if !(a > 0 && a <= 1) {
+			return nil, fmt.Errorf("export: PNG: %w: an opacity must lie in (0, 1], got %g", decad.ErrDegenerate, a)
+		}
+		solid = solid && a == 1
+		for range n {
+			alpha = append(alpha, a)
+		}
+	}
+	if solid {
+		return nil, nil
+	}
+	return alpha, nil
+}
+
 // writePNG draws the mesh as a PNG image. counts are the triangle counts of
 // the bodies the mesh is made of, in order, which View.Colors is read against.
 func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View, counts []int) error {
@@ -132,6 +169,13 @@ func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View, coun
 	tints, err := bodyTints(view, counts)
 	if err != nil {
 		return err
+	}
+	alpha, err := bodyOpacities(view, counts)
+	if err != nil {
+		return err
+	}
+	if alpha != nil && view.Shadows {
+		return fmt.Errorf("export: PNG: %w: an opacity does not combine with Shadows", decad.ErrDegenerate)
 	}
 	cam := raster.Camera{Direction: view.Direction, Up: view.Up}
 	if view.FieldOfView != (units.Value{}) {
@@ -174,7 +218,9 @@ func writePNG(ctx context.Context, w io.Writer, mesh meshSource, view View, coun
 		back = *view.BackColor
 		back.A = 255
 	}
-	if view.Shadows && soft > 0 {
+	if alpha != nil {
+		img, err = raster.RenderTranslucent(ctx, mesh.Vertices(), mesh.Triangles(), tints, alpha, back, cam, view.Width, view.Height)
+	} else if view.Shadows && soft > 0 {
 		img, err = raster.RenderSoftShadowed(ctx, mesh.Vertices(), mesh.Triangles(), tints, back, cam, view.Width, view.Height,
 			min(max(2*max(view.Width, view.Height), 512), 2048), math.Tan(soft), softShadowSamples)
 	} else if view.Shadows {
