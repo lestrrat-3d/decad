@@ -110,6 +110,42 @@ func Example_neovius_iwp_lattice() {
 	// IWP: closed: true, solid fraction: 0.55
 }
 
+// FischerKochSLattice and LidinoidLattice add two more triply periodic walls: the Fischer-Koch S
+// surface, whose field runs from -sqrt(2) to sqrt(2), and the Lidinoid, whose field runs from
+// -1.35 to 1.15 so that Level runs up to 1.35.
+func Example_fischer_koch_lidinoid_lattice() {
+	spec := decad.LatticeSpec{
+		Min:        r3.Vec{},
+		Max:        r3.Vec{X: 20, Y: 20, Z: 20},
+		Cell:       units.Millimeters(10),
+		Resolution: 16,
+	}
+	for _, kind := range []struct {
+		name  string
+		build func(context.Context, decad.LatticeSpec) (*decad.MeshBody, error)
+		level float64
+	}{
+		{"Fischer-Koch S", decad.FischerKochSLattice, 0.5},
+		{"Lidinoid", decad.LidinoidLattice, 0.5},
+	} {
+		spec.Level = units.Scalar(kind.level)
+		lattice, err := kind.build(context.Background(), spec)
+		if err != nil {
+			fmt.Printf("failed to build the %s lattice: %s\n", kind.name, err)
+			return
+		}
+		volume, err := lattice.Volume()
+		if err != nil {
+			fmt.Printf("failed to measure volume: %s\n", err)
+			return
+		}
+		fmt.Printf("%s: closed: %t, solid fraction: %.2f\n", kind.name, lattice.Report().Closed, volume.Value.Base()/8000)
+	}
+	// Output:
+	// Fischer-Koch S: closed: true, solid fraction: 0.51
+	// Lidinoid: closed: true, solid fraction: 0.60
+}
+
 // Infill fills a solid with a lattice and keeps the lattice material inside it, the
 // way a slicer fills a print. Here a 10 x 10 x 12 mm block is filled with a gyroid
 // repeating every 10 mm, and the infill is lighter than the block.

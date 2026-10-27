@@ -128,10 +128,10 @@ configuration option.
 | `decad.MeshImportOption` | option set | A limit on `decad.ReadSTL`, `decad.ReadOBJ`, `decad.ReadThreeMF`, `decad.ReadSTEP` or `decad.ReadIGES`: `decad.WithMaxMeshTriangles` or `decad.WithMaxMeshBytes`. | The caller |
 | `decad.SubDCage` | struct | A polygon cage: vertices and the faces that index them, wound counter-clockwise seen from outside. | `decad.SubDMesh` |
 | `decad.InfillSpec` | struct | An infill: the lattice kind, the cell length, the wall level, the samples to a cell and an optional skin thickness. | `decad.Infill` |
-| `decad.LatticeKind` | enum | Which lattice an infill uses: `GyroidInfill`, `SchwarzPInfill`, `DiamondInfill`, `NeoviusInfill` or `IWPInfill`. | `decad.InfillSpec` |
+| `decad.LatticeKind` | enum | Which lattice an infill uses: `GyroidInfill`, `SchwarzPInfill`, `DiamondInfill`, `NeoviusInfill`, `IWPInfill`, `FischerKochSInfill` or `LidinoidInfill`. | `decad.InfillSpec` |
 | `decad.SheetMetalSpec` | struct | A bent strip: thickness, inner bend radius, width, K-factor, flat leg lengths and bend angles. | `decad.SheetMetal` |
 | `decad.SheetMetalReport` | struct | The flat pattern of a strip: each bend's allowance and the blank's length. | `decad.SheetMetal` |
-| `decad.LatticeSpec` | struct | A lattice: the box, the cell length, the wall level and the samples to a cell. | `decad.GyroidLattice`, `decad.SchwarzPLattice`, `decad.DiamondLattice`, `decad.NeoviusLattice`, `decad.IWPLattice` |
+| `decad.LatticeSpec` | struct | A lattice: the box, the cell length, the wall level and the samples to a cell. | `decad.GyroidLattice`, `decad.SchwarzPLattice`, `decad.DiamondLattice`, `decad.NeoviusLattice`, `decad.IWPLattice`, `decad.FischerKochSLattice`, `decad.LidinoidLattice` |
 | `decad.MeshReduceReport` | struct | The counts and the greatest vertex move `decad.ReduceMesh` reports: vertices merged, triangles dropped. | `decad.ReduceMesh` |
 | `decad.MeshRepairOption` | option set | A repair step of `decad.RepairMesh`: `decad.WithMeshWeld`, `decad.WithMeshOrient` or `decad.WithMeshFillHoles`. | The caller |
 | `decad.MeshRepairReport` | struct | The counts `decad.RepairMesh` changed: vertices welded, triangles dropped and flipped, loops filled or skipped, triangles added. | `decad.RepairMesh` |

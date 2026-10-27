@@ -17,7 +17,7 @@ import (
 const defaultLatticeResolution = 16
 
 // LatticeSpec describes a lattice for [GyroidLattice], [SchwarzPLattice],
-// [DiamondLattice], [NeoviusLattice] and [IWPLattice].
+// [DiamondLattice], [NeoviusLattice], [IWPLattice], [FischerKochSLattice] and [LidinoidLattice].
 type LatticeSpec struct {
 	// Min and Max are the box's corners in millimetres; Min is below Max on every
 	// axis.
@@ -29,8 +29,8 @@ type LatticeSpec struct {
 	// field g lies within Level of zero, |g| ≤ Level. The gyroid's g runs from
 	// −3/2 to 3/2, so a level of 0.3 gives a thin wall, 1 a heavy one and values
 	// near 3/2 a nearly full box; the Schwarz-P field runs from −3 to 3 and the
-	// diamond's from −√2 to √2, the Neovius field from −13 to 13 and the IWP field
-	// from −5 to 3. Level lies strictly between 0 and the field's largest absolute
+	// diamond's from −√2 to √2, the Neovius field from −13 to 13, the IWP field
+	// from −5 to 3, the Fischer-Koch S field from −√2 to √2 and the Lidinoid from −1.35 to 1.15. Level lies strictly between 0 and the field's largest absolute
 	// value (agent-docs/lattice-design.md §4).
 	Level units.Value
 	// Resolution is the number of samples to a cell along each axis, from 4 up.
@@ -85,6 +85,23 @@ func DiamondLattice(ctx context.Context, spec LatticeSpec) (*MeshBody, error) {
 // that the field runs from −13 to 13 and Level lies strictly between 0 and 13.
 func NeoviusLattice(ctx context.Context, spec LatticeSpec) (*MeshBody, error) {
 	return buildLattice(ctx, spec, lattice.KindNeovius)
+}
+
+// FischerKochSLattice builds a Fischer-Koch S lattice, the field
+// cos 2kx·sin ky·cos kz + cos kx·cos 2ky·sin kz + sin kx·cos ky·cos 2kz, whose solid is where
+// |g| ≤ Level, as a closed [MeshBody] filling the box of spec (agent-docs/lattice-design.md §4). Everything
+// GyroidLattice says holds, except that the field runs from −√2 to √2 and Level lies strictly between 0 and √2.
+func FischerKochSLattice(ctx context.Context, spec LatticeSpec) (*MeshBody, error) {
+	return buildLattice(ctx, spec, lattice.KindFischerKochS)
+}
+
+// LidinoidLattice builds a Lidinoid lattice, the field
+// ½(sin 2kx·cos ky·sin kz + sin 2ky·cos kz·sin kx + sin 2kz·cos kx·sin ky) −
+// ½(cos 2kx·cos 2ky + cos 2ky·cos 2kz + cos 2kz·cos 2kx) + 0.15, whose solid is where |g| ≤ Level, as a closed
+// [MeshBody] filling the box of spec (agent-docs/lattice-design.md §4). Everything GyroidLattice says holds, except
+// that the field runs from −1.35 to 1.15, so Level lies strictly between 0 and 1.35, the largest |g|.
+func LidinoidLattice(ctx context.Context, spec LatticeSpec) (*MeshBody, error) {
+	return buildLattice(ctx, spec, lattice.KindLidinoid)
 }
 
 // IWPLattice builds an I-graph and wrapped package (IWP) lattice, the field

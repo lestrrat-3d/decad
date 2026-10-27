@@ -52,6 +52,23 @@ var latticeKinds = []latticeKind{
 		},
 		5,
 	},
+	{
+		"Fischer-Koch S", decad.FischerKochSLattice,
+		func(x, y, z float64) float64 {
+			return math.Cos(2*x)*math.Sin(y)*math.Cos(z) + math.Cos(x)*math.Cos(2*y)*math.Sin(z) +
+				math.Sin(x)*math.Cos(y)*math.Cos(2*z)
+		},
+		math.Sqrt2,
+	},
+	{
+		"Lidinoid", decad.LidinoidLattice,
+		func(x, y, z float64) float64 {
+			return 0.5*(math.Sin(2*x)*math.Cos(y)*math.Sin(z)+math.Sin(2*y)*math.Cos(z)*math.Sin(x)+
+				math.Sin(2*z)*math.Cos(x)*math.Sin(y)) -
+				0.5*(math.Cos(2*x)*math.Cos(2*y)+math.Cos(2*y)*math.Cos(2*z)+math.Cos(2*z)*math.Cos(2*x)) + 0.15
+		},
+		1.35,
+	},
 }
 
 // fieldFraction is the share of one cell where |g| ≤ level, sampled on a grid so fine
@@ -102,7 +119,7 @@ func TestLatticeKindsAreClosedSolidsOfTheExpectedFraction(t *testing.T) {
 func TestNeoviusAndIWPFollowTheirOwnFieldAtAThinWall(t *testing.T) {
 	t.Parallel()
 	for _, kind := range latticeKinds {
-		if kind.name != "Neovius" && kind.name != "IWP" {
+		if kind.name != "Neovius" && kind.name != "IWP" && kind.name != "Fischer-Koch S" && kind.name != "Lidinoid" {
 			continue
 		}
 		t.Run(kind.name, func(t *testing.T) {
@@ -161,6 +178,7 @@ func TestLatticeKindsDifferFromTheGyroidAndEachOther(t *testing.T) {
 	for name, build := range map[string]func(context.Context, decad.LatticeSpec) (*decad.MeshBody, error){
 		"gyroid": decad.GyroidLattice, "schwarz": decad.SchwarzPLattice, "diamond": decad.DiamondLattice,
 		"neovius": decad.NeoviusLattice, "iwp": decad.IWPLattice,
+		"fischerkoch": decad.FischerKochSLattice, "lidinoid": decad.LidinoidLattice,
 	} {
 		m, err := build(t.Context(), latticeSpec(0.6, 12))
 		require.NoError(t, err)
@@ -173,6 +191,8 @@ func TestLatticeKindsDifferFromTheGyroidAndEachOther(t *testing.T) {
 	require.Greater(t, math.Abs(volumes["schwarz"]-volumes["diamond"]), 0.05*volumes["schwarz"])
 	require.Greater(t, math.Abs(volumes["neovius"]-volumes["schwarz"]), 0.05*volumes["neovius"])
 	require.Greater(t, math.Abs(volumes["iwp"]-volumes["gyroid"]), 0.05*volumes["iwp"])
+	require.Greater(t, math.Abs(volumes["fischerkoch"]-volumes["gyroid"]), 0.05*volumes["fischerkoch"])
+	require.Greater(t, math.Abs(volumes["lidinoid"]-volumes["diamond"]), 0.05*volumes["lidinoid"])
 }
 
 func TestLatticeKindsRefusals(t *testing.T) {
