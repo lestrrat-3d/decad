@@ -192,3 +192,39 @@ func TestOpposedCellsReadsArcHoles(t *testing.T) {
 		})
 	}
 }
+
+func TestOpposedCellsKeepTheInputCornerOnACircle(t *testing.T) {
+	t.Parallel()
+	rectangle, circle := rectHole(-1, -8, 3, 4), circleHole(0, 5)
+	for _, reversed := range []bool{false, true} {
+		lower, upper := rectangle, circle
+		want := 25*math.Pi - 48
+		if reversed {
+			lower, upper = upper, lower
+			want = -want
+		}
+		cells, err := opposedCells(t.Context(), proofbound.NewWorkBudget(t.Context()),
+			[]sectionrecord.LoopRecord{lower}, []sectionrecord.LoopRecord{upper})
+		require.NoError(t, err)
+		var floors, ceilings float64
+		for _, cell := range cells {
+			area, err := classbgeom.LoopSignedArea(cell.region.Outer)
+			require.NoError(t, err)
+			for _, hole := range cell.region.Holes {
+				inside, err := classbgeom.LoopSignedArea(hole)
+				require.NoError(t, err)
+				area += inside
+			}
+			if cell.floor {
+				floors += area
+			} else {
+				ceilings += area
+			}
+		}
+		// The same overlap is removed from each side. Their difference is
+		// therefore the circle's 25*pi area less the rectangle's 48.
+		require.Positive(t, floors)
+		require.Positive(t, ceilings)
+		require.InDelta(t, want, floors-ceilings, 1e-9)
+	}
+}
