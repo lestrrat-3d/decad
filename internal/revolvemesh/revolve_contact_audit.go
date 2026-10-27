@@ -458,6 +458,13 @@ func revolveContactAuditAllPairs(budget *proofbound.WorkBudget, data []RevolveAu
 	return budget.Err()
 }
 
+// ContactCandidates is revolveContactCandidates for an audit that walks its
+// own subset of the pairs, such as compositesweep's cross-span audit. margin
+// must be a non-negative number (not NaN): the sweep orders by it.
+func ContactCandidates(budget *proofbound.WorkBudget, data []RevolveAuditTri, tris [][3]int, margin float64) ([][]int32, error) {
+	return revolveContactCandidates(budget, data, tris, margin)
+}
+
 // revolveContactCandidates lists, per facet i, every j > i in ascending order
 // that the audit may have to test: every pair the box gap test does not
 // separate, and every pair that shares a vertex. Facets are swept in order of

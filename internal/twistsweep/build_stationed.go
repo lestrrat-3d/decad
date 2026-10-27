@@ -11,7 +11,9 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
+	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
@@ -213,40 +215,23 @@ func evalStationedCells(ctx context.Context, env topo.Env,
 	if err != nil {
 		return nil, err
 	}
-	parts := make([]compositesweep.SpanPart, cells)
-	held := make([]loftrecord.Payload, cells)
-	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
-	budget := proofbound.NewWorkBudget(ctx)
-	for i := range parts {
-		part, buildErr := loftrecord.Build(ctx, env, loftrecord.Payload{
-			Profile0: profile, Profile1: profile,
-			Plane0: stations[i].Plane, Plane1: stations[i+1].Plane,
-			Frame0: stations[i].Frame, Frame1: stations[i+1].Frame,
-			Xform: xform, RecordArea: [2]float64{recordArea, recordArea},
-			RetainTwistAreaCells: poly.HasArc,
-		}, budget, work0, work1)
-		if buildErr != nil {
-			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, buildErr)
-		}
-		var heldOK bool
-		held[i], heldOK = part.Payload.(loftrecord.Payload)
-		if !heldOK {
-			return nil, fmt.Errorf(`%w: twisted sweep cell lost its Loft payload`, decaderr.ErrUnsupported)
-		}
-		// Arc subdivision can make the actual Loft much larger than the
-		// source-edge estimate. A first-cell projection only skips an optional
-		// attempt; the complete mesh still receives its own exact work audit.
-		if optional && i == 0 && !stationedTwistFirstCellFits(held[i], cells) {
-			return nil, fmt.Errorf(`%w: refined twist exceeds the fixed facet-pair work ceiling`, decaderr.ErrUnsupported)
-		}
-		if _, err := mergeTwistWalls(ctx, env, part, held[i], len(poly.Points)); err != nil {
-			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, err)
-		}
-		parts[i], err = compositesweep.SpanPartOf(part)
-		if err != nil {
-			return nil, fmt.Errorf("twisted sweep cell %d: %w", i, err)
-		}
+	parts, held, err := buildStationedCells(ctx, env, profile, xform, recordArea, poly, stations, cells, optional)
+	if err != nil {
+		return nil, err
 	}
+	return finishStationedCells(ctx, env, profile, plane, path, angle, recordArea, xform, poly,
+		thetaIv, absTheta, charge, stations, parts, held)
+}
+
+// finishStationedCells sews the built cells of evalStationedCells into one
+// body and publishes its mesh, proofs and measurements.
+func finishStationedCells(ctx context.Context, env topo.Env,
+	profile profileRecord, plane planeRecord, path *sweepinput.Path, angle units.Value,
+	recordArea float64, xform r3.Transform, poly TwistPolygon,
+	thetaIv proofbound.RatInterval, absTheta *big.Rat, charge massmoment.MapCharge,
+	stations []StraightTwistStation, parts []compositesweep.SpanPart,
+	held []loftrecord.Payload) (*topo.Body, error) {
+	cells := len(parts)
 	body, err := compositesweep.Assemble(ctx, env, parts, false,
 		func(ctx context.Context, spans []compositesweep.SpanPart) error {
 			if err := ctx.Err(); err != nil {
@@ -375,6 +360,104 @@ func evalStationedCells(ctx context.Context, env topo.Env,
 		Delta: delta, AreaSlack: mesh.AreaSlack, VolSymDiff: volSymDiff,
 	}
 	return body, nil
+}
+
+// stationedCellParallelMin is the cell count from which buildStationedCells
+// builds the cells after the first on several goroutines.
+const stationedCellParallelMin = 8
+
+// buildStationedCells builds one Loft cell between each pair of adjacent
+// stations, merges its walls, and returns the cells' span parts and held
+// payloads in station order.
+//
+// Each cell reads only its own two stations and the shared read-only record,
+// and builds its own body. What the cells share is the Loft's per-record work
+// counters (work0, work1), and their state at the start of a cell can change
+// what that cell's Build does: a refusal at the ceiling, and the ceiling that
+// ValidateLoftRecords raises from the spent amount. The first cell runs on
+// this goroutine against fresh counters, as the serial loop's first cell
+// does, and its end state is the snapshot. Every later cell runs against its
+// own copy of that snapshot. When every cell before the lowest failing one (or
+// every cell, on success) ends with its copy still equal to the snapshot, the
+// serial loop would have handed each of those cells the snapshot too, so it
+// would have built the same cells and met the same first error. Otherwise the
+// serial loop runs from the second cell on against the untouched snapshot.
+// Cancellation polls ctx while the cells run and returns its error.
+func buildStationedCells(ctx context.Context, env topo.Env, profile profileRecord, xform r3.Transform,
+	recordArea float64, poly TwistPolygon, stations []StraightTwistStation, cells int,
+	optional bool) ([]compositesweep.SpanPart, []loftrecord.Payload, error) {
+	parts := make([]compositesweep.SpanPart, cells)
+	held := make([]loftrecord.Payload, cells)
+	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
+	build := func(i int, budget *proofbound.WorkBudget, work0, work1 *freeform.FreeformWork) error {
+		part, buildErr := loftrecord.Build(ctx, env, loftrecord.Payload{
+			Profile0: profile, Profile1: profile,
+			Plane0: stations[i].Plane, Plane1: stations[i+1].Plane,
+			Frame0: stations[i].Frame, Frame1: stations[i+1].Frame,
+			Xform: xform, RecordArea: [2]float64{recordArea, recordArea},
+			RetainTwistAreaCells: poly.HasArc,
+		}, budget, work0, work1)
+		if buildErr != nil {
+			return fmt.Errorf("twisted sweep cell %d: %w", i, buildErr)
+		}
+		var heldOK bool
+		held[i], heldOK = part.Payload.(loftrecord.Payload)
+		if !heldOK {
+			return fmt.Errorf(`%w: twisted sweep cell lost its Loft payload`, decaderr.ErrUnsupported)
+		}
+		// Arc subdivision can make the actual Loft much larger than the
+		// source-edge estimate. A first-cell projection only skips an optional
+		// attempt; the complete mesh still receives its own exact work audit.
+		if optional && i == 0 && !stationedTwistFirstCellFits(held[i], cells) {
+			return fmt.Errorf(`%w: refined twist exceeds the fixed facet-pair work ceiling`, decaderr.ErrUnsupported)
+		}
+		if _, err := mergeTwistWalls(ctx, env, part, held[i], len(poly.Points)); err != nil {
+			return fmt.Errorf("twisted sweep cell %d: %w", i, err)
+		}
+		var err error
+		parts[i], err = compositesweep.SpanPartOf(part)
+		if err != nil {
+			return fmt.Errorf("twisted sweep cell %d: %w", i, err)
+		}
+		return nil
+	}
+	budget := proofbound.NewWorkBudget(ctx)
+	serial := func(from int) ([]compositesweep.SpanPart, []loftrecord.Payload, error) {
+		for i := from; i < cells; i++ {
+			if err := build(i, budget, work0, work1); err != nil {
+				return nil, nil, err
+			}
+		}
+		return parts, held, nil
+	}
+	if err := build(0, budget, work0, work1); err != nil {
+		return nil, nil, err
+	}
+	rest := cells - 1
+	workers := orderedwork.EachWorkers(rest, stationedCellParallelMin)
+	if workers < 2 {
+		return serial(1)
+	}
+	snapshot0, snapshot1 := *work0, *work1
+	ends := make([][2]freeform.FreeformWork, rest)
+	failed, err := orderedwork.Each(rest, workers, 1, ctx.Err, func(k int) error {
+		own0, own1 := snapshot0, snapshot1
+		cellErr := build(k+1, proofbound.NewWorkBudget(ctx), &own0, &own1)
+		ends[k] = [2]freeform.FreeformWork{own0, own1}
+		return cellErr
+	})
+	if failed < 0 {
+		return nil, nil, err
+	}
+	for k := range failed {
+		if ends[k] != [2]freeform.FreeformWork{snapshot0, snapshot1} {
+			return serial(1)
+		}
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return parts, held, nil
 }
 
 func stationedTwistFirstCellFits(first loftrecord.Payload, cells int) bool {
