@@ -38,14 +38,15 @@ const MaxStations = 1 << 15
 // station rounding; Tris is the globally oriented held triangle set, walls
 // first, then capStart and capEnd.
 type Payload struct {
-	Profile  momentinput.Profile
-	Frame    r3.Frame
-	Line     revolveaxis.Line2
-	Side     int
-	Pitch    float64
-	Turns    float64
-	LeftHand bool
-	Xform    r3.Transform
+	Profile         momentinput.Profile
+	Frame           r3.Frame
+	Line            revolveaxis.Line2
+	Side            int
+	Pitch           float64
+	Turns           float64
+	LeftHand        bool
+	StationsPerTurn int64
+	Xform           r3.Transform
 
 	Verts       []r3.Vec
 	VertexBound []float64
@@ -66,6 +67,10 @@ func (cp Payload) ProvesSimple(context.Context) bool { return true }
 
 // Record supplies the resolved axis and recorded sweep to the shell builder.
 func (cp Payload) Record() (Record, error) {
+	stationsPerTurn := cp.StationsPerTurn
+	if stationsPerTurn == 0 {
+		stationsPerTurn = StationsPerTurn
+	}
 	return Read(Input{
 		Profile: cp.Profile, Frame: cp.Frame, Transform: cp.Xform,
 		Axis: AxisInput{
@@ -74,7 +79,7 @@ func (cp Payload) Record() (Record, error) {
 			Side: cp.Side,
 		},
 		Pitch: cp.Pitch, Turns: cp.Turns, LeftHand: cp.LeftHand,
-		StationsPerTurn: StationsPerTurn, MaxStations: MaxStations,
+		StationsPerTurn: stationsPerTurn, MaxStations: MaxStations,
 		ArcChordsPerTurn: ArcChordsPerTurn,
 	})
 }
@@ -86,14 +91,15 @@ func (cp Payload) Record() (Record, error) {
 // only by that map's determinant and defect.
 func (cp Payload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	return BuildBody(ctx, env, Payload{
-		Profile:  cp.Profile,
-		Frame:    cp.Frame,
-		Line:     cp.Line,
-		Side:     cp.Side,
-		Pitch:    cp.Pitch,
-		Turns:    cp.Turns,
-		LeftHand: cp.LeftHand,
-		Xform:    composed,
+		Profile:         cp.Profile,
+		Frame:           cp.Frame,
+		Line:            cp.Line,
+		Side:            cp.Side,
+		Pitch:           cp.Pitch,
+		Turns:           cp.Turns,
+		LeftHand:        cp.LeftHand,
+		StationsPerTurn: cp.StationsPerTurn,
+		Xform:           composed,
 	})
 }
 

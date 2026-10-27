@@ -240,7 +240,13 @@ rational.
 
 `coilStationsPerTurn` is `256`, a power of two, and `maxCoilStations` is
 `1 << 15`; the defining source constants own both values and their
-derivation. At 256 stations per turn the helix sag (§5.4) is
+derivation. Public `Coil` uses that density. `Thread` may build its private
+coil at 128 stations per turn when its radial profile step is no larger than
+its inner radius and the §5.4 departure estimate is at most the smaller of
+`0.003 mm` and `0.0006·ρ_max`; otherwise it uses 256. The shell records the
+selected density, and its computed `δ` remains the bound used by downstream
+reads and placements.
+At 256 stations per turn the helix sag (§5.4) is
 `ρ_max · π²/(2·256²) ≈ 7.5e-5 · ρ_max`. The twist term is first order in
 the station step, but §5.4's shifted correspondence moves its tangential
 part along the true surface and leaves only the part normal to it: a segment

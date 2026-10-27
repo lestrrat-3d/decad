@@ -35,6 +35,12 @@ type leftHandOption struct{}
 
 func (leftHandOption) coilOption() {}
 
+// stationsPerTurnOption is private to derived operations such as Thread. The
+// public Coil contract keeps the documented fixed density.
+type stationsPerTurnOption int64
+
+func (stationsPerTurnOption) coilOption() {}
+
 // WithLeftHand turns the section left-handed about the axis direction while
 // it advances along it. The default is right-handed. Passing it twice is
 // ErrDegenerate.
@@ -42,21 +48,30 @@ func WithLeftHand() CoilOption {
 	return leftHandOption{}
 }
 
-func decodeCoilOptions(opts []CoilOption) (bool, error) {
+func decodeCoilOptions(opts []CoilOption) (bool, int64, error) {
 	leftHand := false
+	stationsPerTurn := int64(coilshell.StationsPerTurn)
+	stationsSet := false
 	for _, raw := range opts {
 		if raw == nil {
-			return false, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+			return false, 0, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
-		if _, ok := raw.(leftHandOption); !ok {
-			return false, fmt.Errorf(`%w: the coil option is not a decad coil option (%T)`, ErrDegenerate, raw)
+		switch option := raw.(type) {
+		case leftHandOption:
+			if leftHand {
+				return false, 0, fmt.Errorf(`%w: WithLeftHand was passed more than once`, ErrDegenerate)
+			}
+			leftHand = true
+		case stationsPerTurnOption:
+			if stationsSet || option <= 0 {
+				return false, 0, fmt.Errorf(`%w: invalid coil station density`, ErrDegenerate)
+			}
+			stationsPerTurn, stationsSet = int64(option), true
+		default:
+			return false, 0, fmt.Errorf(`%w: the coil option is not a decad coil option (%T)`, ErrDegenerate, raw)
 		}
-		if leftHand {
-			return false, fmt.Errorf(`%w: WithLeftHand was passed more than once`, ErrDegenerate)
-		}
-		leftHand = true
 	}
-	return leftHand, nil
+	return leftHand, stationsPerTurn, nil
 }
 
 // Coil moves the closed profile p of sketch s along the screw motion about
@@ -100,7 +115,7 @@ func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile,
 	if err != nil {
 		return nil, err
 	}
-	leftHand, err := decodeCoilOptions(opts)
+	leftHand, stationsPerTurn, err := decodeCoilOptions(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -158,19 +173,20 @@ func Coil(ctx context.Context, d *Document, s *sketch.Sketch, p *sketch.Profile,
 	if err != nil {
 		return nil, err
 	}
-	if err := coil.Preflight(turnCount, len(prof.Pts), len(prof.LoopIdx)-1, coilshell.StationsPerTurn, coilshell.MaxStations, maxCoilFacets); err != nil {
+	if err := coil.Preflight(turnCount, len(prof.Pts), len(prof.LoopIdx)-1, stationsPerTurn, coilshell.MaxStations, maxCoilFacets); err != nil {
 		return nil, err
 	}
 
 	body, err := bodyResult(coilshell.BuildBody(ctx, envOf(documentNode(d), d.nextProducerID()), coilPayload{
-		Profile:  profile,
-		Frame:    frame,
-		Line:     line,
-		Side:     side,
-		Pitch:    pitchMM,
-		Turns:    turnCount,
-		LeftHand: leftHand,
-		Xform:    r3.Identity(),
+		Profile:         profile,
+		Frame:           frame,
+		Line:            line,
+		Side:            side,
+		Pitch:           pitchMM,
+		Turns:           turnCount,
+		LeftHand:        leftHand,
+		StationsPerTurn: stationsPerTurn,
+		Xform:           r3.Identity(),
 	}))
 	if err != nil {
 		return nil, err
