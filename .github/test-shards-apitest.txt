@@ -1780,6 +1780,9 @@
 8	0.00	TestRegionMomentsAcceptThinAnnulus
 8	0.01	TestRegionMomentsArcPinToleranceFollowsCoordinateScale
 8	0.36	TestRevolveBooleanRefusesAShallowCrossing
+10	0.01	TestInfillFillsABlockWithTheGyroidOnlyInsideIt
+10	0.01	TestInfillRefusals
+10	0.01	TestInfillTakesEachLatticeKind
 8	2.19	TestRevolveBoundsSweepEnclosesArcApex
 8	0.00	TestRevolveChainPoleAtLastEnd
 8	0.01	TestRevolveChainVertexBoundCoversAxisReexpression

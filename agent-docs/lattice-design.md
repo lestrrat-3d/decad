@@ -36,8 +36,8 @@ solid fraction by sampling `g` directly on a grid of its own and compare the vol
 ## 3. Not covered
 
 - Strut lattices, a lattice of a kind other than the three of §4, and a lattice that varies its thickness through space.
-- Filling a body. The lattice fills a box; no feature or Boolean takes a `MeshBody`, so a lattice cannot be intersected
-  with a part.
+- A lattice that follows a body's surface, and an infill whose lattice mesh is not one `SolidFromMesh` takes (a closed mesh of
+  at most 65,528 triangles).
 - A mesh that is smooth or merged to a stated surface distance: the mesh is the grid's.
 
 ## 4. Other surfaces
@@ -51,3 +51,15 @@ to G6 hold with that field and its range.
 | K2 | The diamond is `g = sin kx·sin ky·sin kz + sin kx·cos ky·cos kz + cos kx·sin ky·cos kz + cos kx·cos ky·sin kz`, from −√2 to √2 (the largest of `|g|`, at `kx = ky = kz = π/4`). `Level` lies strictly between 0 and √2. |
 | K3 | A level at or above the kind's largest `|g|`, or at or below zero, is `ErrDegenerate`; the other gates are G6's. `internal/lattice.Surface` takes the kind and `Gyroid` is its gyroid case. |
 | K4 | The tests write each field out from the definition, read the solid fraction by sampling it on a grid of their own as §2 does, and require the closed mesh, the capped bounds, the convergence with `Resolution` and the growth with `Level` of every kind, and that the three kinds' volumes differ at one level. |
+
+## 5. Infill
+
+`Infill(ctx, b, InfillSpec{Kind, Cell, Level, Resolution})` fills a solid with a lattice.
+
+| Decision | Rule |
+|---|---|
+| I1 | The lattice is built over `b`'s bounding box grown by a quarter cell on every side, so the box's faces are clear of the body's and no face of the lattice lies in one of the body's (the mesh Boolean refuses coplanar overlap). The field is that of §1 and §4 measured from the world origin, so the same spec fills two bodies in step. |
+| I2 | The lattice mesh is made a solid by `SolidFromMesh` and intersected with `b` by `Intersect`; both are consumed and the result replaces them in `b`'s document. The result is the lattice material inside the body: the body's skin is not kept, and a body that needs one is shelled and the infill united into its cavity. |
+| I3 | The result is the Boolean's: a faceted body whose volume reads inside the bound the Boolean proves, and whose own refusals (an ambiguous parity ray at some resolutions, a lattice past 65,528 triangles) surface unchanged, the latter as `ErrUnsupported`. An unknown kind, a non-positive cell, a non-length cell or a level outside the kind's range are the lattice builders' errors. |
+| I4 | The tests fill a 10 x 10 x 12 mm block with the gyroid and read the result against the field written out from its definition: points well inside the wall are inside and points well clear are outside, to 99% (the lattice mesh at 8 samples to a cell misplaces a few points at its saddles even unfilled), the volume agrees with the field's sampled fraction to a tenth, the bounds stay inside the block, and the block and the lattice are consumed. Returning the unfilled lattice fails them. |
+
