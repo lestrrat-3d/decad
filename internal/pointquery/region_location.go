@@ -47,6 +47,33 @@ func (p planePoint) dot(q planePoint) *big.Rat {
 	return out.Add(out, new(big.Rat).Mul(p.v, q.v))
 }
 
+// regionQuery is a query point the region tests read only through exact
+// signs: a rational planePoint, or a surdPoint whose coordinates carry one
+// square root (agent-docs/point-containment-design.md §10.3).
+type regionQuery interface {
+	// sideOf is the sign of (b − a) × (q − a): positive with q left of the
+	// directed line a → b, zero on it.
+	sideOf(a, b planePoint) int
+	// spanOf is the sign of (q − a)·(q − b): not positive exactly when q,
+	// known to lie on the line through a and b, lies on the closed segment.
+	spanOf(a, b planePoint) int
+	// heightOf is the sign of q.v − v.
+	heightOf(v *big.Rat) int
+	// radialOf is the sign of |q − c|² − r2.
+	radialOf(c planePoint, r2 *big.Rat) int
+}
+
+func (p planePoint) sideOf(a, b planePoint) int { return side(a, b, p) }
+
+func (p planePoint) spanOf(a, b planePoint) int { return p.sub(a).dot(p.sub(b)).Sign() }
+
+func (p planePoint) heightOf(v *big.Rat) int { return p.v.Cmp(v) }
+
+func (p planePoint) radialOf(c planePoint, r2 *big.Rat) int {
+	offset := p.sub(c)
+	return offset.dot(offset).Cmp(r2)
+}
+
 // side is the exact cross product (b − a) × (q − a): positive with q left of
 // the directed line a → b, zero on it.
 func side(a, b, q planePoint) int {
@@ -55,8 +82,8 @@ func side(a, b, q planePoint) int {
 }
 
 // onSegment reports whether q lies on the closed segment a → b.
-func onSegment(a, b, q planePoint) bool {
-	return side(a, b, q) == 0 && q.sub(a).dot(q.sub(b)).Sign() <= 0
+func onSegment(a, b planePoint, q regionQuery) bool {
+	return q.sideOf(a, b) == 0 && q.spanOf(a, b) <= 0
 }
 
 // ringEdge is one straight edge of a loop's ring. chord marks the chord that
@@ -76,18 +103,64 @@ type ringArc struct {
 	sign               int
 }
 
+// profileRing is a recorded profile read into exact rings: the outer loop's
+// and each hole's.
+type profileRing struct {
+	outer loopRing
+	holes []loopRing
+}
+
+// readProfile reads every loop of profile into its ring. ok is false when a
+// loop holds a segment, range or junction the route does not read exactly.
+func readProfile(budget *proofbound.WorkBudget, profile momentinput.Profile) (profileRing, bool, error) {
+	outer, ok, err := readRing(budget, profile.Outer)
+	if err != nil || !ok {
+		return profileRing{}, false, err
+	}
+	out := profileRing{outer: outer, holes: make([]loopRing, len(profile.Holes))}
+	for i, hole := range profile.Holes {
+		out.holes[i], ok, err = readRing(budget, hole)
+		if err != nil || !ok {
+			return profileRing{}, false, err
+		}
+	}
+	return out, true, nil
+}
+
+// closed reports that every loop's junctions close at two equal ends.
+func (pr profileRing) closed() bool {
+	if !pr.outer.closed {
+		return false
+	}
+	for _, hole := range pr.holes {
+		if !hole.closed {
+			return false
+		}
+	}
+	return true
+}
+
 // locateInProfile classifies q against the region the outer loop bounds less
 // every hole's. A point inside two holes, inside a hole but not the outer
 // loop, or on more than one loop is undecided: a sketch-arranged record has
 // none of these, and the route does not decide what such a record denotes.
-func locateInProfile(budget *proofbound.WorkBudget, profile momentinput.Profile, q planePoint) (regionClass, error) {
-	outer, err := locateInLoop(budget, profile.Outer, q)
+func locateInProfile(budget *proofbound.WorkBudget, profile momentinput.Profile, q regionQuery) (regionClass, error) {
+	rings, ok, err := readProfile(budget, profile)
+	if err != nil || !ok {
+		return regionUndecided, err
+	}
+	return rings.locate(budget, q)
+}
+
+// locate is locateInProfile over rings already read.
+func (pr profileRing) locate(budget *proofbound.WorkBudget, q regionQuery) (regionClass, error) {
+	outer, err := pr.outer.locate(budget, q)
 	if err != nil || outer == regionUndecided {
 		return regionUndecided, err
 	}
 	inHoles, onHoles := 0, 0
-	for _, hole := range profile.Holes {
-		class, err := locateInLoop(budget, hole, q)
+	for _, hole := range pr.holes {
+		class, err := hole.locate(budget, q)
 		if err != nil || class == regionUndecided {
 			return regionUndecided, err
 		}
@@ -118,31 +191,40 @@ func locateInProfile(budget *proofbound.WorkBudget, profile momentinput.Profile,
 	}
 }
 
-// locateInLoop classifies q against the closed region one recorded loop
-// bounds. A single whole circle compares squared distances. Otherwise the
-// loop is walked into a ring of exact vertices: each line at its recorded
+// loopRing is one recorded loop read exactly: a single whole circle, or a
+// ring of straight edges in walk order with the whole exact-radius arcs whose
+// chords stand in it. closed reports that every junction closes at two equal
+// ends, so the ring's vertices are the record's own segment ends.
+type loopRing struct {
+	circle *sectionrecord.CircleSeg
+	edges  []ringEdge
+	arcs   []ringArc
+	closed bool
+}
+
+// readRing walks one loop into its ring: each line at its recorded
 // parameters, each whole exact-radius arc by its chord, and each junction
 // closed as the evaluator closes it (momentinput.JunctionCorner, else the
-// straight chord). The winding number of the ring about q, corrected by every
-// arc's circular segment that holds q, is the loop's winding number.
-func locateInLoop(budget *proofbound.WorkBudget, loop sectionrecord.LoopRecord, q planePoint) (regionClass, error) {
+// straight chord). A lone segment must be a circle. ok is false for any
+// segment the route does not read.
+func readRing(budget *proofbound.WorkBudget, loop sectionrecord.LoopRecord) (loopRing, bool, error) {
 	segments := make([]sectionrecord.CurveSegment, len(loop.Segments))
 	for i, segment := range loop.Segments {
 		if err := budget.Step(); err != nil {
-			return regionUndecided, err
+			return loopRing{}, false, err
 		}
 		normalized, ok := normalizedSegment(segment)
 		if !ok {
-			return regionUndecided, nil
+			return loopRing{}, false, nil
 		}
 		segments[i] = normalized
 	}
 	if len(segments) == 1 {
 		circle, ok := segments[0].(sectionrecord.CircleSeg)
 		if !ok {
-			return regionUndecided, nil
+			return loopRing{}, false, nil
 		}
-		return locateInCircle(circle, q), nil
+		return loopRing{circle: &circle, closed: true}, true, nil
 	}
 	starts := make([]planePoint, len(segments))
 	ends := make([]planePoint, len(segments))
@@ -154,13 +236,13 @@ func locateInLoop(budget *proofbound.WorkBudget, loop sectionrecord.LoopRecord, 
 		case sectionrecord.LineSeg:
 			start, end := momentinput.ExactLineEnds(s)
 			if start == nil || end == nil {
-				return regionUndecided, nil
+				return loopRing{}, false, nil
 			}
 			starts[i], ends[i] = planePointOf(*start), planePointOf(*end)
 		case sectionrecord.ArcSeg:
 			arc, ok := exactArc(s)
 			if !ok {
-				return regionUndecided, nil
+				return loopRing{}, false, nil
 			}
 			starts[i], ends[i] = arc.start, arc.end
 			if arc.sign < 0 {
@@ -169,40 +251,52 @@ func locateInLoop(budget *proofbound.WorkBudget, loop sectionrecord.LoopRecord, 
 			arcOf[i] = len(arcs)
 			arcs = append(arcs, arc)
 		default:
-			return regionUndecided, nil
+			return loopRing{}, false, nil
 		}
 	}
-	var edges []ringEdge
+	ring := loopRing{arcs: arcs, closed: true}
 	for i := range segments {
 		if err := budget.Step(); err != nil {
-			return regionUndecided, err
+			return loopRing{}, false, err
 		}
-		edges = append(edges, ringEdge{from: starts[i], to: ends[i], chord: arcOf[i] >= 0})
+		ring.edges = append(ring.edges, ringEdge{from: starts[i], to: ends[i], chord: arcOf[i] >= 0})
 		j := (i + 1) % len(segments)
 		if ends[i].equal(starts[j]) {
 			continue
 		}
+		ring.closed = false
 		p := freeform.RatPoint{U: ends[i].u, V: ends[i].v}
 		next := freeform.RatPoint{U: starts[j].u, V: starts[j].v}
 		if corner, ok := momentinput.JunctionCorner(segments[i], segments[j], &p, &next); ok {
 			c := planePointOf(corner)
-			edges = append(edges, ringEdge{from: ends[i], to: c}, ringEdge{from: c, to: starts[j]})
+			ring.edges = append(ring.edges, ringEdge{from: ends[i], to: c}, ringEdge{from: c, to: starts[j]})
 			continue
 		}
-		edges = append(edges, ringEdge{from: ends[i], to: starts[j]})
+		ring.edges = append(ring.edges, ringEdge{from: ends[i], to: starts[j]})
 	}
-	for _, arc := range arcs {
+	return ring, true, nil
+}
+
+// locate classifies q against the closed region the loop bounds. A single
+// whole circle compares squared distances. Otherwise the winding number of
+// the ring about q, corrected by every arc's circular segment that holds q,
+// is the loop's winding number.
+func (r loopRing) locate(budget *proofbound.WorkBudget, q regionQuery) (regionClass, error) {
+	if r.circle != nil {
+		return locateInCircle(*r.circle, q), nil
+	}
+	for _, arc := range r.arcs {
 		if arc.holds(q) == regionBoundary {
 			return regionBoundary, nil
 		}
 	}
-	for _, edge := range edges {
+	for _, edge := range r.edges {
 		if !edge.chord && onSegment(edge.from, edge.to, q) {
 			return regionBoundary, nil
 		}
 	}
 	winding := 0
-	for _, edge := range edges {
+	for _, edge := range r.edges {
 		if err := budget.Step(); err != nil {
 			return regionUndecided, err
 		}
@@ -211,7 +305,7 @@ func locateInLoop(budget *proofbound.WorkBudget, loop sectionrecord.LoopRecord, 
 		}
 		winding += crossingOf(edge, q)
 	}
-	for _, arc := range arcs {
+	for _, arc := range r.arcs {
 		if arc.holds(q) == regionInside {
 			winding += arc.sign
 		}
@@ -237,14 +331,14 @@ func normalizedSegment(segment sectionrecord.CurveSegment) (sectionrecord.CurveS
 // point that does not lie on it: +1 for an upward crossing of the point's
 // horizontal with the point on its left, −1 for a downward crossing with the
 // point on its right.
-func crossingOf(edge ringEdge, q planePoint) int {
-	if edge.from.v.Cmp(q.v) <= 0 {
-		if edge.to.v.Cmp(q.v) > 0 && side(edge.from, edge.to, q) > 0 {
+func crossingOf(edge ringEdge, q regionQuery) int {
+	if q.heightOf(edge.from.v) >= 0 {
+		if q.heightOf(edge.to.v) < 0 && q.sideOf(edge.from, edge.to) > 0 {
 			return 1
 		}
 		return 0
 	}
-	if edge.to.v.Cmp(q.v) <= 0 && side(edge.from, edge.to, q) < 0 {
+	if q.heightOf(edge.to.v) >= 0 && q.sideOf(edge.from, edge.to) < 0 {
 		return -1
 	}
 	return 0
@@ -259,7 +353,7 @@ func isWholeRange(t0, t1 float64) bool {
 // locateInCircle classifies q against a whole circle's closed disk. Its
 // radius must be recorded in millimetres and positive; a cut circle's ends
 // carry trigonometry, so a fragment is undecided.
-func locateInCircle(circle sectionrecord.CircleSeg, q planePoint) regionClass {
+func locateInCircle(circle sectionrecord.CircleSeg, q regionQuery) regionClass {
 	if !isWholeRange(circle.TStart, circle.TEnd) || circle.Radius.Unit() != units.Millimeter {
 		return regionUndecided
 	}
@@ -268,8 +362,7 @@ func locateInCircle(circle sectionrecord.CircleSeg, q planePoint) regionClass {
 	if !ok || radius == nil || radius.Sign() <= 0 {
 		return regionUndecided
 	}
-	offset := q.sub(center)
-	switch offset.dot(offset).Cmp(new(big.Rat).Mul(radius, radius)) {
+	switch q.radialOf(center, new(big.Rat).Mul(radius, radius)) {
 	case -1:
 		return regionInside
 	case 0:
@@ -310,10 +403,9 @@ func exactArc(arc sectionrecord.ArcSeg) (ringArc, bool) {
 // q lies on the arc itself, inside when it lies strictly within the segment,
 // and outside otherwise, including a point on the chord's open interior,
 // which the caller tests separately.
-func (a ringArc) holds(q planePoint) regionClass {
-	offset := q.sub(a.center)
-	radial := offset.dot(offset).Cmp(a.radiusSquared)
-	chord := side(a.start, a.end, q)
+func (a ringArc) holds(q regionQuery) regionClass {
+	radial := q.radialOf(a.center, a.radiusSquared)
+	chord := q.sideOf(a.start, a.end)
 	switch {
 	case radial == 0 && chord <= 0:
 		return regionBoundary

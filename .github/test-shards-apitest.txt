@@ -2621,6 +2621,15 @@
 10	0.14	TestNormalAtAnswersRetainedSurfaces
 10	0.00	TestOBJPlate
 10	0.01	TestOffsetStagedFamilies
+10	0.00	TestPointLocationExactStackedRoundPocket
+10	0.00	TestPointLocationExactStackedBoss
+10	0.00	TestPointLocationExactRevolveStepped
+10	0.00	TestPointLocationExactRevolveCapsule
+10	0.00	TestPointLocationExactRevolveTube
+10	0.00	TestPointLocationExactRevolvePlaced
+10	0.00	TestPointLocationThroughHistoryRevolveLeaf
+10	0.00	TestPointLocationThroughHistoryStackedLeaf
+10	0.00	TestPointLocationThroughHistoryStackBrepLeaf
 10	0.00	TestOrthogonalUnionOfBlocksTouchingAtAFace
 10	0.00	TestPatchSheetTessellates
 10	0.00	TestPathPatternPivotRefusals
