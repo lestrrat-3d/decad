@@ -143,11 +143,25 @@ func Cross2x(a, b, c Xp2) *big.Rat {
 }
 
 func cross2xHomNumerator(a, b, c Xp2) *big.Int {
-	baU := new(big.Int).Sub(new(big.Int).Mul(b.Hu, a.Hw), new(big.Int).Mul(a.Hu, b.Hw))
-	baV := new(big.Int).Sub(new(big.Int).Mul(b.Hv, a.Hw), new(big.Int).Mul(a.Hv, b.Hw))
-	caU := new(big.Int).Sub(new(big.Int).Mul(c.Hu, a.Hw), new(big.Int).Mul(a.Hu, c.Hw))
-	caV := new(big.Int).Sub(new(big.Int).Mul(c.Hv, a.Hw), new(big.Int).Mul(a.Hv, c.Hw))
-	return new(big.Int).Sub(new(big.Int).Mul(baU, caV), new(big.Int).Mul(baV, caU))
+	// Reuse one product buffer across the four exact differences. Each
+	// difference owns its other product, so subtraction can reuse that storage
+	// without changing any input integer, including shared coordinate pointers.
+	var baU, baV, caU, caV, scratch big.Int
+	baU.Mul(b.Hu, a.Hw)
+	scratch.Mul(a.Hu, b.Hw)
+	baU.Sub(&baU, &scratch)
+	baV.Mul(b.Hv, a.Hw)
+	scratch.Mul(a.Hv, b.Hw)
+	baV.Sub(&baV, &scratch)
+	caU.Mul(c.Hu, a.Hw)
+	scratch.Mul(a.Hu, c.Hw)
+	caU.Sub(&caU, &scratch)
+	caV.Mul(c.Hv, a.Hw)
+	scratch.Mul(a.Hv, c.Hw)
+	caV.Sub(&caV, &scratch)
+	num := new(big.Int).Mul(&baU, &caV)
+	scratch.Mul(&baV, &caU)
+	return num.Sub(num, &scratch)
 }
 
 // ratDiffNumInto leaves the difference's positive denominator implicit. The
