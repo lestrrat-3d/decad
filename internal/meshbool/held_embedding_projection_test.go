@@ -106,7 +106,7 @@ func TestHeldSharedProjectionsInvalidateAfterFailedScan(t *testing.T) {
 	for i := range h.Tris {
 		require.True(t, e.projectedOK[i], "facet %d was prepared before workers started", i)
 	}
-	local := e.readOnlyScanCopy(t.Context(), 1)
+	local := e.readOnlyScanCopy(t.Context(), 1, false)
 	require.True(t, &local.projected[0] == &e.projected[0], "workers share the prepared certificates")
 	require.True(t, &local.projectedOK[0] == &e.projectedOK[0], "workers share the read-only readiness flags")
 	other := e.projected[1]

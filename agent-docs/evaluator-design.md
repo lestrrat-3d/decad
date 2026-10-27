@@ -1442,6 +1442,11 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
     facet boxes; repair uses a uniform grid whose padded cells still cover
     each permitted vertex move. Smaller checks scan that grid once on the calling
     goroutine without the pair memo, which only repair replays.
+    The first scan fills each facet's projections, box and openness, and for
+    a scan of every facet its corner cones, on several goroutines before its
+    workers share them read-only, while a tree on alternate axes builds
+    beside them. Each cache holds a pure function of its facet's held
+    positions, so the scan answers as a serial one does.
     Both scans use exact predicates over the held binary64 values: no shared
     vertex means no contact, one shared vertex means contact only there, one
     shared edge means contact only along it.

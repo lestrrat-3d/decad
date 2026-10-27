@@ -37,11 +37,16 @@ func KeepPlacedEmbedded(ctx context.Context, exact []proof.Xpt, held []r3.Vec, t
 // for final accepted positive-reach positions, independent of rounding charges.
 func KeepPlacedEmbeddedWithSummary(ctx context.Context, exact []proof.Xpt, held []r3.Vec,
 	tris [][3]int) ([]float64, *meshbool.EmbeddingReach, error) {
-	return keepPlacedEmbeddedWithAxes(ctx, exact, held, tris, [3]r3.Vec{})
+	return keepPlacedEmbeddedWithAxes(ctx, exact, held, tris, [3]r3.Vec{}, nil)
 }
 
+// keepPlacedEmbeddedWithAxes is KeepPlacedEmbeddedWithSummary with the first
+// scan's projection axes. A non-nil denotes holds, per vertex,
+// proof.XptDenotes(exact[i], held[i]) as the caller already decided it; the
+// check reads it instead of deciding the same exact predicate on the same
+// two values again. A nil denotes is decided here.
 func keepPlacedEmbeddedWithAxes(ctx context.Context, exact []proof.Xpt, held []r3.Vec,
-	tris [][3]int, axes [3]r3.Vec) ([]float64, *meshbool.EmbeddingReach, error) {
+	tris [][3]int, axes [3]r3.Vec, denotes []bool) ([]float64, *meshbool.EmbeddingReach, error) {
 	h := meshbool.HeldRounding{
 		Verts:    held,
 		Tris:     tris,
@@ -58,6 +63,13 @@ func keepPlacedEmbeddedWithAxes(ctx context.Context, exact []proof.Xpt, held []r
 			if err := ctx.Err(); err != nil {
 				return nil, nil, err
 			}
+		}
+		if denotes != nil {
+			if !denotes[i] {
+				h.Moved[i] = true
+				h.Movable[i] = true
+			}
+			continue
 		}
 		if !proof.XptDenotes(exact[i], held[i]) {
 			h.Moved[i] = true

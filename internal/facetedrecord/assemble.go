@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/diameter"
@@ -59,16 +60,41 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 	var diameterReading float64
 	var ok bool
 	var err error
+	// Without a shared budget, the diameter and the audit read only verts and
+	// tris, which nothing writes during the call, so the audit runs on its own
+	// goroutine beside the diameter. Each gives what it gives alone, and the
+	// diameter's error is still reported before the audit's. A serial call
+	// never audits a mesh whose diameter fails, so a panic on the audit's
+	// goroutine is held back: it is dropped when the diameter fails, and
+	// otherwise the audit, left nil, runs again on this goroutine, which
+	// panics there as a serial call would. AuditFacetedMesh keeps every input
+	// that can panic on its calling goroutine, which is the one recovered here.
+	var auditErr error
+	var auditDone sync.WaitGroup
+	if shared == nil && audit == nil {
+		auditDone.Go(func() {
+			defer func() {
+				if recover() != nil {
+					audit, auditErr = nil, nil
+				}
+			}()
+			audit, auditErr = facetproof.AuditFacetedMesh(ctx, verts, tris)
+		})
+	}
 	if shared != nil {
 		diameterReading, ok, err = diameter.PointsWithBudget(shared, verts)
 	} else {
 		diameterReading, ok, err = diameter.PointsContext(ctx, verts)
 	}
+	auditDone.Wait()
 	if err != nil {
 		return nil, nil, 0, err
 	}
 	if !ok {
 		return nil, nil, 0, fmt.Errorf(`%w: the held boundary has no usable diameter`, decaderr.ErrBooleanFailed)
+	}
+	if auditErr != nil {
+		return nil, nil, 0, auditErr
 	}
 	if audit == nil {
 		audit, err = facetproof.AuditFacetedMesh(ctx, verts, tris)
