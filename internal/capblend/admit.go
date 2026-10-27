@@ -29,10 +29,15 @@ func RequireNotReceiver(payload topo.Payload, op string) error {
 // OccupiedVolumeAdmission lets capband inspect the payload's loops.
 // A draft view's corners are read under its own sharp rule (offsetJoins), so
 // a reflex line-line corner there is the miter it is built as, never the
-// chamfer's apex arc.
+// chamfer's apex arc, and its per-walk amounts let capband admit a
+// near-tangent line–arc join whose sliver NearTangentVolume charges.
 // The delayed join builder runs only after the wall checks, preserving the
 // proof budget charges and the first refusal reported.
 func OccupiedVolumeAdmission(budget *proofbound.WorkBudget, cbp Payload) (error, error) {
+	var sharp capband.SharpAmounts
+	if cbp.Draft {
+		sharp = cbp.sharpAmounts
+	}
 	return capband.OccupiedVolumeAdmission(budget, cbp.Noun(), cbp.Loops(), cbp.StartLoops, cbp.EndLoops,
 		func(li int, loop sectionrecord.LoopRecord) ([]survey2d.SideWalk, func() ([]bool, error), error) {
 			cl, err := OneLoopCornerLoop(budget, loop, freeform.NewFreeformWork())
@@ -50,7 +55,14 @@ func OccupiedVolumeAdmission(budget *proofbound.WorkBudget, cbp Payload) (error,
 				}
 				return arcs, nil
 			}, nil
-		})
+		}, sharp)
+}
+
+// sharpAmounts is a draft view's per-walk amounts for loop li and the
+// half-width of every moved walk's span, the numbers its cap motion reads
+// (CapMotion).
+func (cbp Payload) sharpAmounts(li int, walks []survey2d.SideWalk) ([]float64, float64) {
+	return cbp.WalkAmounts(li, walks, cbp.LoopOffset(li)), cbp.LoopSetback(li).DcDelta
 }
 
 // WitnessPrisms lists one witness prism per loop of a cap-loop

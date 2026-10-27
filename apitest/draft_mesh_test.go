@@ -384,46 +384,77 @@ func TestDraftMeshOfBodyDraft(t *testing.T) {
 }
 
 // nearTangentSlot draws F3's slot with its right semicircle's centre moved
-// 2⁻⁴⁰ mm along u. Its two ends stay equidistant from that centre, so the arc
-// still passes through both, but its tangent at each end turns about
-// 2⁻⁴⁰/5 off the line it meets: tangent by the build's held-tangent rule, a
+// shift mm along u. Its two ends stay equidistant from that centre, so the
+// arc still passes through both, but its tangent at each end turns about
+// shift/5 off the line it meets: tangent by the build's held-tangent rule, a
 // sliver corner over the rationals.
-func nearTangentSlot(s *sketch.Sketch) {
-	shift := math.Ldexp(1, -40)
-	pt := func(u, v float64) *sketch.Point {
-		p := s.CreatePoint(u, v)
-		s.Fix(p)
-		return p
+func nearTangentSlot(shift float64) func(*sketch.Sketch) {
+	return func(s *sketch.Sketch) {
+		pt := func(u, v float64) *sketch.Point {
+			p := s.CreatePoint(u, v)
+			s.Fix(p)
+			return p
+		}
+		a, b, c, d := pt(-15, -5), pt(15, -5), pt(15, 5), pt(-15, 5)
+		s.CreateLine(a, b)
+		s.CreateArc(pt(15+shift, 0), b, c)
+		s.CreateLine(c, d)
+		s.CreateArc(pt(-15, 0), d, a)
 	}
-	a, b, c, d := pt(-15, -5), pt(15, -5), pt(15, 5), pt(-15, 5)
-	s.CreateLine(a, b)
-	s.CreateArc(pt(15+shift, 0), b, c)
-	s.CreateLine(c, d)
-	s.CreateArc(pt(-15, 0), d, a)
 }
 
-// TestDraftNearTangentJoinRefusesBooleans pins agent-docs/draft-design.md §9.1's
-// refusal on a join the build reads as tangent and the record does not make
-// exactly tangent: the body builds and its mesh exports, but the mesh carries
-// no volume proof, and a boolean refuses it naming the corner's point and the
-// two recorded segments that meet there.
-func TestDraftNearTangentJoinRefusesBooleans(t *testing.T) {
+// TestDraftNearTangentJoinBooleans pins agent-docs/draft-design.md §9.1.1 on
+// a join the build reads as tangent and the record does not make exactly
+// tangent: the slot's mesh proves its volume at VerifyAll, charging the
+// sliver at its two near-tangent corners, and a Cut by a 4 mm square post
+// through it removes the post's 128 mm³ from the closed form
+// h[2ℓ(R − d/2) + π(R² − Rd + d²/3)] with ℓ = 30 + 2⁻⁴⁰, within the result's
+// bound. Without the near-tangent arm in capband.OccupiedVolumeAdmission the
+// mesh carries no proof and the Cut refuses ErrUnsupported.
+func TestDraftNearTangentJoinBooleans(t *testing.T) {
+	t.Parallel()
+	shift := math.Ldexp(1, -40)
+	doc := decad.New()
+	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, nearTangentSlot(shift))
+	b := taperExtrude(t, doc, s, p, 8, 3, decad.Along)
+	mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	requireWatertight(t, mesh)
+	require.True(t, mesh.VolumeVerified())
+	var stl strings.Builder
+	require.NoError(t, export.STL(t.Context(), &stl, b, units.Millimeters(0.1)))
+
+	post := boxBodyAtZ(t, doc, -2, -2, 2, 2, -5, 20)
+	got, err := decad.Cut(t.Context(), b, post)
+	require.NoError(t, err)
+	d := bfMul(bf(8), taperTan(3))
+	straight := bfMul(bf(2), bfAdd(bf(30), bf(shift)), bfSub(bf(5), bfQuo(d, bf(2))))
+	round := bfMul(bigPi, bfAdd(bfSub(bf(25), bfMul(bf(5), d)), bfQuo(bfMul(d, d), bf(3))))
+	requireVolumeCovers(t, "cut", got, bfSub(bfMul(bf(8), bfAdd(straight, round)), bf(128)), 1e-3)
+	requireBodyWatertight(t, got)
+}
+
+// TestDraftNearTangentJoinPastLimitRefuses pins §9.1.1's stated class: with
+// the slot's centre moved 5·2⁻³¹ mm the build still reads both joins as
+// tangent, but each turns by about 2⁻³¹ rad, past the admitted 2⁻³², so the
+// mesh carries no volume proof and a boolean refuses it naming the corner and
+// the limit. Without the limit gate in capband.NearTangentCorner the Cut
+// builds.
+func TestDraftNearTangentJoinPastLimitRefuses(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, nearTangentSlot)
+	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, nearTangentSlot(5*math.Ldexp(1, -31)))
 	b := taperExtrude(t, doc, s, p, 8, 3, decad.Along)
 	mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 	require.False(t, mesh.VolumeVerified())
-	var stl strings.Builder
-	require.NoError(t, export.STL(t.Context(), &stl, b, units.Millimeters(0.1)))
 
 	post := boxBodyAtZ(t, doc, -2, -2, 2, 2, -5, 20)
-	_, err = decad.Union(t.Context(), b, post)
+	_, err = decad.Cut(t.Context(), b, post)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "no proof of the volume")
 	require.ErrorContains(t, err, "tapered extrude")
-	require.ErrorContains(t, err, "exactly tangent join")
+	require.ErrorContains(t, err, "exceeds the admitted sin²θ ≤ 2⁻⁶⁴")
 	require.Regexp(t, `the corner \(15, (-5|5)\) between recorded segments \d+ and \d+`, err.Error())
 }

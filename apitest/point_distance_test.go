@@ -66,10 +66,13 @@ func TestPointDistanceFromBore(t *testing.T) {
 	require.Greater(t, wall.Value.Base()+wall.Bound.Base(), 0.0)
 }
 
+// TestPointDistanceWithoutVolumeProof reads a point distance off a slot whose
+// joins turn past agent-docs/draft-design.md §9.1.1's limit, so its mesh
+// carries no volume proof.
 func TestPointDistanceWithoutVolumeProof(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, nearTangentSlot)
+	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, nearTangentSlot(5*math.Ldexp(1, -31)))
 	body := taperExtrude(t, doc, s, p, 8, 3, decad.Along)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
