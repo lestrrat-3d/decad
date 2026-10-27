@@ -37,11 +37,15 @@ func arcInItsPlane(edge *decad.Edge, arc decad.Arc3) bool {
 }
 
 // isWalkedPatch reports whether a face is written by the edge-use rule
-// (patchWalks): a cone or sphere face bounded by one loop.
+// (patchWalks): a cone or sphere face bounded by one loop, or a torus face
+// bounded by one loop of three edges (isHornPatch).
 func isWalkedPatch(face *decad.Face) bool {
+	loops := face.Loops()
 	switch face.Surface().(type) {
 	case decad.Cone, decad.Sphere:
-		return len(face.Loops()) == 1
+		return len(loops) == 1
+	case decad.Torus:
+		return len(loops) == 1 && isHornPatch(loops[0])
 	}
 	return false
 }
@@ -93,8 +97,8 @@ func ownWalkReversed(face *decad.Face) (bool, error) {
 
 // patchWalks decides the STEP walk of every walked patch (isWalkedPatch) by
 // the edge uses it shares (decideWalks), never by a parameter-plane area,
-// which a cone's apex vertex leaves undefined and a sphere has no seam-free
-// chart for. Every other face's walk is its own writer's (ownWalkReversed).
+// which a cone's or horn torus's apex vertex leaves undefined and a sphere
+// has no seam-free chart for. Every other face's walk is its own writer's (ownWalkReversed).
 // The result maps each patch to whether its loop is written against its
 // source walk; it is empty, and no other face's walk is computed, when the
 // body has no patch.

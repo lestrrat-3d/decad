@@ -31,8 +31,10 @@ func countEntity(step, name string) int {
 // TestBrepLoopFilletPublicSTEP exports loop-fillet bodies through the public
 // API (loop-fillet DF4, DF10): P3's root fillet writes its whole-turn torus as
 // one TOROIDAL_SURFACE, P1's top-loop fillet (r = 2) writes four ELLIPSE edges
-// for its four mitres, and P2's pocket-mouth fillet, whose horn tori close on
-// their axes, still exports and writes no TOROIDAL_SURFACE.
+// for its four mitres, and P2's pocket-mouth fillet (r = 1.5) writes analytic,
+// its four horn torus patches, which close on their axes at an apex vertex, as
+// four TOROIDAL_SURFACE entities whose major and minor radii are both 1.5.
+// ReadSTEP reads no torus face, so the file is checked by its surfaces.
 func TestBrepLoopFilletPublicSTEP(t *testing.T) {
 	t.Parallel()
 	t.Run("P3 root", func(t *testing.T) {
@@ -78,7 +80,9 @@ func TestBrepLoopFilletPublicSTEP(t *testing.T) {
 		got, err := decad.Fillet(t.Context(), pocket, loopEdgeQuery(top.Loops()[1]), units.Millimeters(1.5))
 		require.NoError(t, err)
 		step := filletSTEP(t, got)
-		require.Zero(t, countEntity(step, "TOROIDAL_SURFACE"))
+		require.True(t, strings.Contains(step, "analytic decad solid"), "the pocket mouth fillet writes analytic")
+		require.Equal(t, 4, countEntity(step, "TOROIDAL_SURFACE"))
+		require.Equal(t, 4, strings.Count(step, ",1.5,1.5);"), "each horn torus states major = minor = 1.5")
 	})
 }
 

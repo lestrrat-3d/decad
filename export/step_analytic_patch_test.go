@@ -75,8 +75,9 @@ func isSpherePatch(f *decad.Face) bool {
 // requirePatchFacesRunCounterClockwise reads every ADVANCED_FACE whose body
 // face satisfies pick back from the file and requires its loop's chord
 // polygon to have a vector area along the mean of the body face's outward
-// normals at the polygon's vertices off its cone's apex, where no normal
-// exists. The oracle reads only the file and decad's own face normal.
+// normals at the polygon's vertices off its cone's apex or its horn torus's
+// centre, where no normal exists. The oracle reads only the file and decad's
+// own face normal.
 func requirePatchFacesRunCounterClockwise(t *testing.T, f step.File, body *decad.Body, pick func(*decad.Face) bool) int {
 	t.Helper()
 	checked := 0
@@ -88,11 +89,12 @@ func requirePatchFacesRunCounterClockwise(t *testing.T, f step.File, body *decad
 			continue
 		}
 		apex, isCone := bodyFace.Surface().(decad.Cone)
+		horn, isTorus := bodyFace.Surface().(decad.Torus)
 		pts := faceLoopPoints(t, f, face)
 		area, mean := r3.Vec{}, r3.Vec{}
 		for j, p := range pts {
 			area = area.Add(p.Cross(pts[(j+1)%len(pts)]).Scale(0.5))
-			if isCone && p == apex.Origin {
+			if isCone && p == apex.Origin || isTorus && p == horn.Center {
 				continue
 			}
 			n, err := bodyFace.NormalAt(p)

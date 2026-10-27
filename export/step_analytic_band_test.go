@@ -412,15 +412,144 @@ func TestAnalyticBandCrossDrilledTopLoop(t *testing.T) {
 	require.Equal(t, 4, requireFacesRunCounterClockwiseAboutOutwardNormal(t, f, body, isCylinderPatch))
 }
 
-// TestAnalyticBandHornTorusKeepsFaceted fillets a pocket mouth, whose corners
-// are horn torus patches closing on the axis at a vertex with a three-edge
-// loop, and requires the analytic arm to refuse the body so the faceted
-// writer keeps it.
-func TestAnalyticBandHornTorusKeepsFaceted(t *testing.T) {
+// isHornTorusPatch picks a torus face of one three-edge loop.
+func isHornTorusPatch(f *decad.Face) bool {
+	return isTorus(f) && len(f.Loops()) == 1 && isHornPatch(f.Loops()[0])
+}
+
+// requireFileVerticesOnTori reads every TOROIDAL_SURFACE ADVANCED_FACE back
+// from the file and requires each vertex its loop walks to lie on the torus
+// the file states: (ρ − R)² + h² = r², h the vertex's height along the
+// placement axis from its location and ρ its distance from that axis. It
+// returns the stated location of each face it checked. The oracle reads only
+// the file; 1e-9 mm² is far above the rounding of these coordinates and far
+// below any wrong placement or radius.
+func requireFileVerticesOnTori(t *testing.T, f step.File) []r3.Vec {
+	t.Helper()
+	byID := map[uint64]step.Entity{}
+	for _, e := range f.Entities {
+		byID[e.ID] = e
+	}
+	ref := func(v step.Value) step.Entity { return byID[uint64(v.(step.Reference))] }
+	triple := func(e step.Entity) r3.Vec {
+		list := e.Parameters[1].(step.List)
+		return r3.NewVec(float64(list[0].(step.Real)), float64(list[1].(step.Real)), float64(list[2].(step.Real)))
+	}
+	var locations []r3.Vec
+	for _, face := range bandEntities(f)["ADVANCED_FACE"] {
+		surface := ref(face.Parameters[2])
+		if surface.Name != "TOROIDAL_SURFACE" {
+			continue
+		}
+		placement := ref(surface.Parameters[1])
+		location, axis := triple(ref(placement.Parameters[1])), triple(ref(placement.Parameters[2]))
+		major, minor := float64(surface.Parameters[2].(step.Real)), float64(surface.Parameters[3].(step.Real))
+		for _, p := range faceLoopPoints(t, f, face) {
+			d := p.Sub(location)
+			h := d.Dot(axis)
+			rho := d.Sub(axis.Scale(h)).Len()
+			require.InDelta(t, minor*minor, (rho-major)*(rho-major)+h*h, 1e-9, "vertex %v off the torus", p)
+		}
+		locations = append(locations, location)
+	}
+	return locations
+}
+
+// TestAnalyticBandPocketMouthHornTori writes P2's pocket mouth fillet, r =
+// 1.5, analytic. Each of the mouth's four reflex corners is a horn torus patch
+// (loop fillet LF6): a TOROIDAL_SURFACE with major and minor radius 1.5,
+// located at the pocket corner 1.5 below the top, (10, 15), (10, 25), (30, 25)
+// and (30, 15) at z = 8.5, bounded by its connector arc and the two meridians
+// that meet at that apex. The plate's six planes, the pocket's floor and four
+// walls, the four straight-walk cylinder patches of radius 1.5 and the four
+// horn patches are nineteen faces. The circles are the four connector arcs and
+// eight meridians, each of radius 1.5, and there is no ellipse. Every vertex
+// lies on the torus the file states, every edge is used once in each
+// direction, each horn patch's loop runs counter-clockwise about its outward
+// normal, read back from the file, and each is of sense T: the fillet rounds
+// a convex edge, so the outward normal points away from the tube's centre
+// circle as the torus's own does. Shown to fail with supportsAnalyticTorus
+// sending a three-edge loop to supportsAnalyticTorusPatch (the body fell to
+// the faceted writer), with isWalkedPatch refusing a torus (the build refused
+// a patch with no decided walk), with patchWalks' decided walk inverted (the
+// horn patches' edges were used twice in one direction), with torusFaceSense
+// inverted (the senses read F), and with addTorusFace placing the torus 0.5
+// along its axis (the vertices left the stated torus). torusOffAxisVertex's
+// skip of an apex vertex is not shown red: no fixture's horn loop starts at
+// its apex, so the first vertex already lies off the axis.
+func TestAnalyticBandPocketMouthHornTori(t *testing.T) {
 	t.Parallel()
-	ok, err := supportsAnalyticSTEP(t.Context(), bandPocketMouthFillet(t))
+	body := bandPocketMouthFillet(t)
+	f := bandFile(t, body)
+	byName := bandEntities(f)
+	require.Len(t, byName["ADVANCED_FACE"], 19)
+	require.Len(t, byName["PLANE"], 11)
+	require.Equal(t, slices.Repeat([]float64{1.5}, 4), bandReals(byName["CYLINDRICAL_SURFACE"], 2))
+	require.Equal(t, slices.Repeat([]float64{1.5}, 4), bandReals(byName["TOROIDAL_SURFACE"], 2))
+	require.Equal(t, slices.Repeat([]float64{1.5}, 4), bandReals(byName["TOROIDAL_SURFACE"], 3))
+	require.Equal(t, slices.Repeat([]float64{1.5}, 12), bandReals(byName["CIRCLE"], 2))
+	require.Empty(t, byName["ELLIPSE"])
+	require.ElementsMatch(t, []r3.Vec{
+		r3.NewVec(10, 15, 8.5), r3.NewVec(10, 25, 8.5), r3.NewVec(30, 25, 8.5), r3.NewVec(30, 15, 8.5),
+	}, requireFileVerticesOnTori(t, f))
+	require.Equal(t, slices.Repeat([]step.Enumeration{"T"}, 4), patchSenses(f, "TOROIDAL_SURFACE"))
+	requireEveryEdgeCurveInBothSenses(t, f)
+	require.Equal(t, 4, requirePatchFacesRunCounterClockwise(t, f, body, isHornTorusPatch))
+}
+
+// TestHornPatchAdmissionRefusesForeignTags runs supportsAnalyticHornPatch on a
+// real horn patch loop of the pocket mouth fillet against tags that do not
+// hold it, each failing one leg: a torus whose Minor is 1.6, not its Major
+// (no longer a horn torus), one whose Center moved 1 along its axis (no loop
+// vertex is its apex), and one about the x axis, under which the connector
+// arc reads as a meridian and the meridian about x as a parallel, so an edge
+// at the apex is not a meridian. Each was shown to fail with its leg deleted.
+// The one-parallel leg is not shown red: a real three-edge loop's arcs lie
+// about three mutually perpendicular axes, so any torus axis under which all
+// three classify reads exactly one of them as a parallel.
+func TestHornPatchAdmissionRefusesForeignTags(t *testing.T) {
+	t.Parallel()
+	var horn *decad.Face
+	for _, face := range bandPocketMouthFillet(t).Faces() {
+		if isHornTorusPatch(face) {
+			horn = face
+			break
+		}
+	}
+	require.NotNil(t, horn)
+	tag := horn.Surface().(decad.Torus)
+	loop := horn.Loops()[0]
+	require.True(t, supportsAnalyticHornPatch(loop, tag))
+	spindle := tag
+	spindle.Minor = units.Millimeters(1.6)
+	require.False(t, supportsAnalyticHornPatch(loop, spindle), "a horn patch needs Minor equal to Major")
+	moved := tag
+	moved.Center = tag.Center.Add(tag.Axis)
+	require.False(t, supportsAnalyticHornPatch(loop, moved), "a horn patch needs a vertex at its Center")
+	turned := tag
+	turned.Axis = r3.NewVec(1, 0, 0)
+	require.False(t, supportsAnalyticHornPatch(loop, turned), "both edges at the apex must be meridians")
+}
+
+// TestAnalyticHornPatchWithBoundedVertexKeepsFaceted builds the pocket mouth
+// fillet with the plate and pocket moved by (0.1, 0.1), whose horn patch
+// vertices carry rounding bounds, and requires the face admission to refuse
+// it. Shown to fail with supportsAnalyticHornPatch's loopVerticesExact leg
+// deleted (the face admission took the body).
+func TestAnalyticHornPatchWithBoundedVertexKeepsFaceted(t *testing.T) {
+	t.Parallel()
+	body := bandPocketMouthFilletAt(t, 0.1)
+	require.True(t, tagsUndeparted(body))
+	bounded := 0
+	for _, face := range body.Faces() {
+		if isHornTorusPatch(face) && !loopVerticesExact(face.Loops()[0]) {
+			bounded++
+		}
+	}
+	require.Positive(t, bounded, "a horn patch has a vertex with a bound")
+	ok, err := supportsAnalyticFaces(t.Context(), body)
 	require.NoError(t, err)
-	require.False(t, ok, "a horn torus patch has no analytic arm")
+	require.False(t, ok, "a horn patch vertex with a bound sends the body to the faceted writer")
 }
 
 // TestTorusPatchArcRefusesAMeridianOffItsPlane runs torusPatchArc on the real
@@ -430,10 +559,9 @@ func TestAnalyticBandHornTorusKeepsFaceted(t *testing.T) {
 // direction: the torus axis crossed with the meridian's own, still
 // perpendicular to the torus axis, so only arcInItsPlane can refuse it. The
 // swapped Axis is the one an LF6 trailing meridian carried before it took its
-// own wall's axis, and its circle's plane misses the meridian's vertices. A
-// horn patch's loop has three edges, so supportsAnalyticTorusPatch refuses it
-// before reading any arc; torusPatchArc is the per-arc admission a four-edge
-// patch passes through. Shown to fail with torusPatchArc's arcInItsPlane leg
+// own wall's axis, and its circle's plane misses the meridian's vertices.
+// torusPatchArc is the per-arc admission both a horn patch and a four-edge
+// patch pass through. Shown to fail with torusPatchArc's arcInItsPlane leg
 // deleted (the swapped meridian was admitted).
 func TestTorusPatchArcRefusesAMeridianOffItsPlane(t *testing.T) {
 	t.Parallel()
@@ -444,7 +572,7 @@ func TestTorusPatchArcRefusesAMeridianOffItsPlane(t *testing.T) {
 			continue
 		}
 		require.Len(t, face.Loops()[0].CoEdges(), 3, "a horn torus patch")
-		require.False(t, supportsAnalyticTorus(face.Loops(), torus))
+		require.True(t, supportsAnalyticTorus(face.Loops(), torus))
 		for _, ce := range face.Loops()[0].CoEdges() {
 			arc, ok := ce.Edge().Curve().(decad.Arc3)
 			if !ok || !torusArcIsMeridian(arc, torus) {
@@ -470,14 +598,21 @@ func TestTorusPatchArcRefusesAMeridianOffItsPlane(t *testing.T) {
 // horn torus patch bounded by a connector arc and two meridians.
 func bandPocketMouthFillet(t *testing.T) *decad.Body {
 	t.Helper()
+	return bandPocketMouthFilletAt(t, 0)
+}
+
+// bandPocketMouthFilletAt is bandPocketMouthFillet with the plate and the
+// pocket moved by (off, off).
+func bandPocketMouthFilletAt(t *testing.T, off float64) *decad.Body {
+	t.Helper()
 	doc := decad.New()
-	plate := bandBox(t, doc, 0, 0, 40, 40, 10)
+	plate := bandBox(t, doc, off, off, 40+off, 40+off, 10)
 	w := sketch.NewWorld()
 	plane, err := w.CreateOffsetPlane(w.XY(), 5)
 	require.NoError(t, err)
 	s, err := w.CreateSketch(plane)
 	require.NoError(t, err)
-	r := s.CreateRectangle(10, 15, 30, 25)
+	r := s.CreateRectangle(10+off, 15+off, 30+off, 25+off)
 	s.Fix(r.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
