@@ -49,6 +49,16 @@ func axisHeld(p r3.Vec, axis coneaxis.Axis) (float64, float64) {
 	return p.Dot(a), p.Cross(a).Len()
 }
 
+// heldCrossing is the held crossing parameter fl(fl(x + fl(k·rho))/a) that
+// both factor forms publish and their errors are measured against. The
+// float64() conversion rounds the product before the add, so a target free to
+// fuse the multiply and the add (arm64, or amd64 built with GOAMD64=v3) holds
+// the same q, alpha and cone point as every other target, and FactorDyadic
+// and FactorRat stay bit-identical within one build.
+func heldCrossing(x, rho, k, a float64) float64 {
+	return (x + float64(k*rho)) / a
+}
+
 // factorDyadic is FactorDyadic over the exact axial reading x and squared
 // radial reading rho2, with heldX and heldRho their float readings.
 func factorDyadic(p r3.Vec, x, rho2 proofarith.Dyadic, heldX, heldRho float64, c *Consts) (Sample, error) {
@@ -64,7 +74,7 @@ func factorDyadic(p r3.Vec, x, rho2 proofarith.Dyadic, heldX, heldRho float64, c
 	if gLo.Sign() <= 0 {
 		return Sample{}, fmt.Errorf("%w: a point-cone ray is not forward", decaderr.ErrUnsupported)
 	}
-	q := (heldX + c.slopeF*heldRho) / c.apexF
+	q := heldCrossing(heldX, heldRho, c.slopeF, c.apexF)
 	if !proofbound.FiniteVec(r3.Vec{X: q}) || q <= 0 {
 		return Sample{}, fmt.Errorf("%w: the held point-cone ray has no finite crossing", decaderr.ErrUnsupported)
 	}
@@ -124,7 +134,7 @@ func factorRat(p r3.Vec, x, rho2 *big.Rat, heldX, heldRho float64, apex, slope *
 	}
 	a, _ := apex.Float64()
 	k, _ := slope.Float64()
-	q := (heldX + k*heldRho) / a
+	q := heldCrossing(heldX, heldRho, k, a)
 	if !proofbound.FiniteVec(r3.Vec{X: q}) || q <= 0 {
 		return Sample{}, fmt.Errorf("%w: the held point-cone ray has no finite crossing", decaderr.ErrUnsupported)
 	}

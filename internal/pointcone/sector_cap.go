@@ -26,11 +26,13 @@ type SectorEdge struct {
 	U, V, Group int // group -1 is the shared root arc
 }
 
+// polygonArea is the shoelace area of points. Each product is rounded before
+// the sums, so a target free to fuse multiply-adds picks the same orientation.
 func polygonArea(points []triangulation.Point2) float64 {
 	a := 0.0
 	for i := range points {
 		j := (i + 1) % len(points)
-		a += points[i].U*points[j].V - points[j].U*points[i].V
+		a += float64(points[i].U*points[j].V) - float64(points[j].U*points[i].V)
 	}
 	return a * 0.5
 }
