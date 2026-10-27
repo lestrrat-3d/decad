@@ -621,18 +621,23 @@ func PerturbedTriangleAreaUpper(a, b, c r3.Vec, delta float64) float64 {
 	if !FiniteVec(a) || !FiniteVec(b) || !FiniteVec(c) {
 		return math.Inf(1)
 	}
-	area, lu, lv := perturbedTriangleAreaLifted(proofarith.DyVec(a), proofarith.DyVec(b), proofarith.DyVec(c))
+	area, lu, lv := perturbedTriangleAreaLifted(a, b, c, proofarith.DyVec(a), proofarith.DyVec(b), proofarith.DyVec(c))
 	return AbsSumUpper(area, perturbedAllow(delta, lu, lv))
 }
 
 // perturbedTriangleAreaLifted is PerturbedTriangleAreaUpper's exact part over
-// vertices already lifted to dyadics: the held area (the root of the exact
-// squared cross product, rounded up) and the proven lengths of both edge
-// vectors u = b-a and v = c-a.
-func perturbedTriangleAreaLifted(xa, xb, xc proofarith.DyV3) (area, lu, lv float64) {
-	u, v := proofarith.DvSub(xb, xa), proofarith.DvSub(xc, xa)
+// finite held vertices a, b, c and their dyadic lifts xa, xb, xc: the held
+// area (the root of the exact squared cross product, rounded up) and the
+// proven lengths of both edge vectors u = b-a and v = c-a.
+//
+// DvSubHeld forms each exact edge vector from the held floats wherever their
+// difference is provably exact, and DvNormUp roots the cross product's square
+// without a big.Int; both return exactly what DvSub and
+// DySqrtUp(DyShift(DvDot(n, n), -2)) return.
+func perturbedTriangleAreaLifted(a, b, c r3.Vec, xa, xb, xc proofarith.DyV3) (area, lu, lv float64) {
+	u, v := proofarith.DvSubHeld(b, a, xb, xa), proofarith.DvSubHeld(c, a, xc, xa)
 	n := proofarith.DvCross(u, v)
-	area = proofarith.DySqrtUp(proofarith.DyShift(proofarith.DvDot(n, n), -2))
+	area = proofarith.DvNormUp(n, -2)
 	return area, DvLenUpper(u), DvLenUpper(v)
 }
 
@@ -823,7 +828,8 @@ func perturbedTriangleTerms(
 			if !ok {
 				continue
 			}
-			terms[i].area, terms[i].lu, terms[i].lv = perturbedTriangleAreaLifted(xa, xb, xc)
+			terms[i].area, terms[i].lu, terms[i].lv = perturbedTriangleAreaLifted(
+				verts[t[0]], verts[t[1]], verts[t[2]], xa, xb, xc)
 			terms[i].ok = true
 		}
 		return terms, nil
@@ -856,7 +862,8 @@ func perturbedTriangleTerms(
 		if state[t[0]] != 1 || state[t[1]] != 1 || state[t[2]] != 1 {
 			return nil
 		}
-		terms[i].area, terms[i].lu, terms[i].lv = perturbedTriangleAreaLifted(lifted[t[0]], lifted[t[1]], lifted[t[2]])
+		terms[i].area, terms[i].lu, terms[i].lv = perturbedTriangleAreaLifted(
+			verts[t[0]], verts[t[1]], verts[t[2]], lifted[t[0]], lifted[t[1]], lifted[t[2]])
 		terms[i].ok = true
 		return nil
 	}); err != nil {
