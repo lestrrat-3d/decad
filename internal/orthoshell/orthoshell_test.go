@@ -236,3 +236,29 @@ func TestPressRefusals(t *testing.T) {
 	_, _, err = orthoshell.Press(v, tris, two, 1)
 	require.ErrorIs(t, err, orthoshell.ErrUnsupported, "two faces are not one")
 }
+
+func TestCenteredWallsStraddleTheSurface(t *testing.T) {
+	t.Parallel()
+	v, tris, face := box(r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
+	none := make([]bool, len(tris))
+	// Closed: the dilated box less the eroded one, 2 mm thick centred on the surface.
+	out, ot, err := orthoshell.CenteredWalls(v, tris, none, 2)
+	require.NoError(t, err)
+	outer := 12.0 * 10 * 8
+	inner := 8.0 * 6 * 4
+	require.InDelta(t, outer-inner, volume(out, ot), 1e-9)
+	lo, hi := bounds(out)
+	require.True(t, lo.Equal(r3.NewVec(-1, -1, -1), 1e-9), "%v", lo)
+	require.True(t, hi.Equal(r3.NewVec(11, 9, 7), 1e-9), "%v", hi)
+	// The top face removed: the walls are open over it, so the opening's prism is gone from both halves.
+	open := make([]bool, len(tris))
+	for i, f := range face {
+		open[i] = f == 1
+	}
+	ov, otr, err := orthoshell.CenteredWalls(v, tris, open, 2)
+	require.NoError(t, err)
+	require.Less(t, volume(ov, otr), outer-inner)
+	require.Greater(t, volume(ov, otr), 0.0)
+	_, _, err = orthoshell.CenteredWalls(v, tris, none, 20)
+	require.ErrorIs(t, err, orthoshell.ErrDegenerate, "walls so thick the cavity vanishes")
+}

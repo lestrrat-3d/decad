@@ -163,3 +163,55 @@ func mustSolid(t *testing.T, lo, hi r3.Vec) *decad.Body {
 	_, b := blockSolid(t, lo, hi)
 	return b
 }
+
+func TestShellCenteredStraddlesAMeshSolidSurface(t *testing.T) {
+	t.Parallel()
+	doc, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
+	// Closed: the 12 x 10 x 8 dilation less the 8 x 6 x 4 erosion, 2 mm thick centred on the surface.
+	out, err := decad.Shell(t.Context(), block, nil, units.Millimeters(2), decad.WithNoOpenings(), decad.WithShellSense(decad.Centered))
+	require.NoError(t, err)
+	require.Equal(t, []*decad.Body{out}, doc.Bodies())
+	volume, err := out.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-(960-192)), volume.Bound.Base()+1e-9)
+	box, err := out.Bounds()
+	require.NoError(t, err)
+	require.True(t, box.Min.Equal(r3.NewVec(-1, -1, -1), 1e-9))
+	require.True(t, box.Max.Equal(r3.NewVec(11, 9, 7), 1e-9))
+	for point, want := range map[r3.Vec]decad.PointLocation{
+		r3.NewVec(-0.5, 4, 3): decad.PointInside,  // outside the old surface, in the wall
+		r3.NewVec(0.5, 4, 3):  decad.PointInside,  // inside the old surface, in the wall
+		r3.NewVec(5, 4, 3):    decad.PointOutside, // the cavity
+		r3.NewVec(-2, 4, 3):   decad.PointOutside, // beyond the wall
+	} {
+		got, err := out.LocatePoint(t.Context(), point, units.Millimeters(0.01))
+		require.NoError(t, err)
+		require.Equal(t, want, got, "%v", point)
+	}
+	require.Len(t, out.Shells(), 2, "an outer skin and the void's")
+	// Open at the top: no wall stands over the original top.
+	_, block2 := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
+	open, err := decad.Shell(t.Context(), block2, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(2), decad.WithShellSense(decad.Centered))
+	require.NoError(t, err)
+	ov, err := open.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(ov.Value.Base()-600), ov.Bound.Base()+1e-9)
+	ob, err := open.Bounds()
+	require.NoError(t, err)
+	require.InDelta(t, 6, ob.Max.Z, 1e-9)
+}
+
+func TestShellCenteredRefusals(t *testing.T) {
+	t.Parallel()
+	_, block := blockSolid(t, r3.NewVec(0, 0, 0), r3.NewVec(10, 8, 6))
+	_, err := decad.Shell(t.Context(), block, nil, units.Millimeters(20), decad.WithNoOpenings(), decad.WithShellSense(decad.Centered))
+	require.ErrorIs(t, err, decad.ErrDegenerate, "walls whose inner halves meet")
+	_, err = decad.Shell(t.Context(), block, nil, units.Millimeters(2), decad.WithNoOpenings(),
+		decad.WithShellSense(decad.Centered), decad.WithShellSense(decad.Inward))
+	require.Error(t, err)
+	doc := decad.New()
+	prism := boxBody(t, doc, 30, 0, 40, 8, 6)
+	_, err = decad.Shell(t.Context(), prism, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(1), decad.WithShellSense(decad.Centered))
+	require.ErrorIs(t, err, decad.ErrUnsupported, "a prism has no centered route")
+	require.Equal(t, "Centered", decad.Centered.String())
+}

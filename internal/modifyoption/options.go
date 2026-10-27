@@ -55,6 +55,7 @@ type identShellSense struct{}
 const (
 	shellInward = iota
 	shellOutward
+	shellCentered
 )
 
 func shellSenseName(s int) string {
@@ -63,6 +64,8 @@ func shellSenseName(s int) string {
 		return "Inward"
 	case shellOutward:
 		return "Outward"
+	case shellCentered:
+		return "Centered"
 	default:
 		return fmt.Sprintf("ShellSense(%d)", s)
 	}
@@ -205,7 +208,7 @@ func DecodeShell(opts []ShellOption) (ShellConfig, error) {
 			if !ok {
 				return ShellConfig{}, fmt.Errorf(`%w: WithShellSense carries no sense`, decaderr.ErrDegenerate)
 			}
-			if v != shellInward && v != shellOutward {
+			if v != shellInward && v != shellOutward && v != shellCentered {
 				return ShellConfig{}, fmt.Errorf(`%w: unknown shell sense %d`, decaderr.ErrDegenerate, v)
 			}
 			if sensed && v != out.Sense {
