@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/stretchr/testify/require"
 )
 
@@ -216,4 +217,70 @@ func TestCmpFloatRatMatchesRatCmp(t *testing.T) {
 	unstored := new(big.Rat).SetInt(big.NewInt(1))
 	unstored.SetFrac(big.NewInt(4), big.NewInt(2))
 	check(2, unstored)
+}
+
+// TestFracFloatMatchesRatFloat checks FracFloatDown and FracFloatUp against
+// proofbound.RatFloatDown and RatFloatUp of the reduced value, bit for bit, on
+// every fraction of the same value the multipliers make: floats themselves,
+// float neighbours and midpoints, slivers off a float, random rationals, and
+// values that overflow or fall below the subnormals.
+func TestFracFloatMatchesRatFloat(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(1101, 1103))
+	multipliers := []*big.Int{
+		big.NewInt(1), big.NewInt(2), big.NewInt(3), big.NewInt(1 << 40),
+		new(big.Int).Lsh(big.NewInt(1), 300), new(big.Int).Mul(big.NewInt(1<<61-1), big.NewInt(1<<31-1)),
+	}
+	check := func(q *big.Rat) {
+		t.Helper()
+		wantDown, wantUp := proofbound.RatFloatDown(q), proofbound.RatFloatUp(q)
+		for _, k := range multipliers {
+			n := new(big.Int).Mul(q.Num(), k)
+			d := new(big.Int).Mul(q.Denom(), k)
+			n0, d0 := new(big.Int).Set(n), new(big.Int).Set(d)
+			require.Equal(t, math.Float64bits(wantDown), math.Float64bits(proof.FracFloatDown(n, d)), "down q=%v k=%v", q, k)
+			require.Equal(t, math.Float64bits(wantUp), math.Float64bits(proof.FracFloatUp(n, d)), "up q=%v k=%v", q, k)
+			require.Zero(t, n0.Cmp(n), "numerator changed")
+			require.Zero(t, d0.Cmp(d), "denominator changed")
+		}
+	}
+	values := []*big.Rat{
+		new(big.Rat), big.NewRat(1, 3), big.NewRat(-1, 3), big.NewRat(7, 5), big.NewRat(-7, 5),
+		new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(3), 1100)),
+		new(big.Rat).SetInt(new(big.Int).Neg(new(big.Int).Lsh(big.NewInt(3), 1100))),
+		new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(3), 1100)),
+		new(big.Rat).SetFrac(big.NewInt(-1), new(big.Int).Lsh(big.NewInt(3), 1100)),
+	}
+	// Between the largest float and 2^1024 the nearest float is an infinity,
+	// which RatFloatDown and RatFloatUp return as it is.
+	for _, below := range []uint{969, 900, 970} {
+		near := new(big.Int).Lsh(big.NewInt(1), 1024)
+		near.Sub(near, new(big.Int).Lsh(big.NewInt(1), below))
+		values = append(values, new(big.Rat).SetInt(near), new(big.Rat).SetInt(new(big.Int).Neg(near)))
+	}
+	floats := []float64{1, -1, 0.1, math.Pi, math.MaxFloat64, -math.MaxFloat64, math.SmallestNonzeroFloat64,
+		math.Float64frombits(1<<52 - 1), math.Float64frombits(1 << 52)}
+	for e := -1074; e <= 1023; e += 7 {
+		floats = append(floats, math.Ldexp(1, e), -math.Ldexp(3, e-1))
+	}
+	for range 2000 {
+		floats = append(floats, finiteBits(rng), (rng.Float64()-0.5)*math.Ldexp(1, rng.IntN(80)-40))
+	}
+	sliver := big.NewRat(1, 1<<62)
+	for _, f := range floats {
+		q := new(big.Rat).SetFloat64(f)
+		values = append(values, q, new(big.Rat).Mul(q, big.NewRat(1000001, 1000000)), new(big.Rat).Quo(q, big.NewRat(3, 1)))
+		if n := math.Nextafter(f, math.Inf(1)); !math.IsInf(n, 0) {
+			mid := new(big.Rat).Add(q, new(big.Rat).SetFloat64(n))
+			values = append(values, mid.Quo(mid, big.NewRat(2, 1)))
+		}
+		lift := new(big.Rat).Mul(sliver, new(big.Rat).Abs(q))
+		values = append(values, new(big.Rat).Add(q, lift), new(big.Rat).Sub(q, lift))
+	}
+	for range 2000 {
+		values = append(values, new(big.Rat).SetFrac(big.NewInt(rng.Int64N(1<<62)-1<<61), big.NewInt(rng.Int64N(1<<40)+1)))
+	}
+	for _, q := range values {
+		check(q)
+	}
 }

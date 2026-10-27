@@ -46,13 +46,37 @@ func IvCross(a, b motionbound.IvVec) motionbound.IvVec {
 	return motionbound.IvVec{term(1, 2), term(2, 0), term(0, 1)}
 }
 
-// ReadPoints maps any static point reading
-// through the relative pose and given its velocity under each joint.
-func ReadPoints(frames []motionbound.MotionFrame, params []motionbound.MotionParam, path []int, revolute []bool, below int, out Reading) Reading {
-	type jointAt struct {
-		revolute    bool
-		unit, pivot motionbound.IvVec
+// jointAt is one joint of a relative path read at a configuration: its unit
+// axis or direction and its pivot, both carried through the poses of the
+// joints above it.
+type jointAt struct {
+	revolute    bool
+	unit, pivot motionbound.IvVec
+}
+
+// ReadPointBounds maps a static point reading through the relative pose,
+// gives each point its velocity under each joint, and rounds the reading
+// outward: RoundCorners of the exact reading (agent-docs/linkage-check-design.md
+// §5.8), the same Bounds bit for bit. A reading of exact points under a pose
+// whose pivot is a point takes readScaled, which never forms the exact
+// reading as big.Rat values; any other reading, and a path with no joint,
+// is read exactly and rounded by RoundCorners, which writes out's slices.
+func ReadPointBounds(frames []motionbound.MotionFrame, params []motionbound.MotionParam, path []int, revolute []bool, below int, out Reading) (Bounds, bool) {
+	joints, pose := readJoints(frames, params, path, revolute, below)
+	return readPoseBounds(joints, pose, out)
+}
+
+// readPoseBounds is ReadPointBounds once the joints and the pose are read.
+func readPoseBounds(joints []jointAt, pose *motionbound.IdealPose, out Reading) (Bounds, bool) {
+	if pose != nil && pointVec(pose.Pivot) && pointReading(out) {
+		return readScaled(joints, *pose, out)
 	}
+	return RoundCorners(readExact(joints, pose, out))
+}
+
+// readJoints reads every joint on path[below:] at its parameter and composes
+// their ideal poses; the pose is nil when the path has no joint below.
+func readJoints(frames []motionbound.MotionFrame, params []motionbound.MotionParam, path []int, revolute []bool, below int) ([]jointAt, *motionbound.IdealPose) {
 	joints := make([]jointAt, 0, len(path)-below)
 	var pose *motionbound.IdealPose
 	for _, i := range path[below:] {
@@ -71,6 +95,13 @@ func ReadPoints(frames []motionbound.MotionFrame, params []motionbound.MotionPar
 		joints = append(joints, jointAt{revolute: revolute[i], unit: unit, pivot: pivot})
 		pose = &ideal
 	}
+	return joints, pose
+}
+
+// readExact maps the reading's points through pose and encloses their
+// velocities under joints in big.Rat interval arithmetic, writing out's own
+// slices.
+func readExact(joints []jointAt, pose *motionbound.IdealPose, out Reading) Reading {
 	for c := range out.Pos {
 		if pose != nil {
 			out.Pos[c] = ApplyIdeal(*pose, out.Pos[c])

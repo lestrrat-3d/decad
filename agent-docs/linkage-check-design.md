@@ -811,7 +811,10 @@ segment term, the end of the interval sum `Σ_i n·v_{i,c}·Δq_i` that weakens 
 `jointSpan` over the interval, and `Δq_i` is the exact difference of the joint's two values, `2π·Δturn +
 Δbase` with `π` over its enclosure. Once per pose each coordinate's enclosure and each velocity component's
 enclosure is widened to the floats around it, and each `h_i` and `Δq_i` is widened the same way, so the
-sums over an interval run on short dyadics; rounding outward only lowers `L_n`. `w_j` is the rational
+sums over an interval run on short dyadics; rounding outward only lowers `L_n`. `ReadPointBounds` evaluates
+those position and velocity intervals over integer numerators that share one denominator per point and rounds
+each endpoint from its numerator and denominator, the floats a `big.Rat` evaluation rounds to; the file comment
+of `internal/linkagebound/scaled_reading.go` owns why they are the same. `w_j` is the rational
 `ρ_jk` of §5.2, `B_ij` and `Rem` are `big.Rat` arithmetic, and `L_n` is compared with zero exactly and
 rounded down to the float the interval or cell publishes. No float pose enters: the claim is about the
 ideal poses, and the box inflated by its `Bound` encloses the ideal body, so no `η` is charged.
