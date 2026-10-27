@@ -165,7 +165,7 @@ Ranked by how many ordinary machined or printed parts each gap stops end to end.
 |---|---|
 | Assemblies (`Component`/`Occurrence`) | Bodies are placed explicitly with `Transform`/`Copy` |
 | Feature tree, timeline, rollback, re-evaluation after a sketch edit | Bodies are immutable; a sketch edit rebuilds nothing |
-| Sheet metal | No entry point exists |
+| Sheet metal beyond a single bent strip | `SheetMetal` builds a strip of legs and circular bends and its flat pattern length (`sheet_metal.go`, `agent-docs/sheet-metal-design.md`); no flanges on a body's edges, hems, reliefs or flat-pattern outline |
 | GUI or view state | No entry point exists |
 | Fusion code generation | No entry point exists |
 

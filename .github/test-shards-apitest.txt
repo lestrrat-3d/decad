@@ -2158,6 +2158,11 @@
 10	0.01	TestArcSegExactQuarterDisk
 10	0.34	TestAsymmetricChamferOnBrepLoop
 10	0.01	TestBodyPatchCircularPrismNestedFillMeshRefuses
+10	0.01	TestSheetMetalBuildsAnLBracket
+10	0.01	TestSheetMetalBuildsAChannelAndAZBend
+10	0.01	TestSheetMetalFlatLengthFollowsTheKFactor
+10	0.01	TestSheetMetalRefusals
+10	0.01	TestSheetMetalBuildsBendsOfAnyAngle
 10	0.03	TestBodyPatchCircularPrismOneRimTessellates
 10	0.00	TestBodyPatchClosesASheetsLastFreeEdgeStaysASheet
 10	2.93	TestBooleanBoundSoundnessRotated
