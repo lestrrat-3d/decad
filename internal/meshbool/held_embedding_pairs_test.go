@@ -2,8 +2,11 @@ package meshbool
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"math"
 	"math/rand/v2"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -118,4 +121,251 @@ func TestHeldSelfPairPollingContinuesAcrossTasks(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 	require.False(t, clean)
 	require.Equal(t, 4, e.pollRemaining)
+}
+
+// TestAxisMeetMatchesBoxesOverlap reads axisMeet against BoxesOverlap on one
+// axis over every arrangement of signed zeros, infinities, NaN and ordinary
+// endpoints, so the self-pair scan's box tests answer as BoxesOverlap does.
+func TestAxisMeetMatchesBoxesOverlap(t *testing.T) {
+	t.Parallel()
+	values := []float64{math.Inf(-1), -1, math.Copysign(0, -1), 0, 0.5, 1, math.Inf(1), math.NaN()}
+	for _, lo := range values {
+		for _, hi := range values {
+			for _, otherLo := range values {
+				for _, otherHi := range values {
+					got := axisMeet(lo, hi, otherLo, otherHi) == 1
+					a := [2]r3.Vec{{X: lo}, {X: hi}}
+					b := [2]r3.Vec{{X: otherLo}, {X: otherHi}}
+					require.Equal(t, BoxesOverlap(a, b), got, "[%v, %v] against [%v, %v]", lo, hi, otherLo, otherHi)
+				}
+			}
+		}
+	}
+}
+
+// cleanSelfPairsReference is cleanSelfPairs with every box test read through
+// BoxesOverlap, the scan TestHeldSelfPairsMatchReferenceScan compares with.
+func (e *heldEmbedding) cleanSelfPairsReference(tasks []heldNodePair, tree *heldBoxTree) (bool, error) {
+	remaining, interval, poll := e.pollRemaining, e.pollInterval, e.pollErr
+	defer func() { e.pollRemaining = remaining }()
+	step := func() error {
+		remaining--
+		if remaining != 0 {
+			return nil
+		}
+		remaining = interval
+		return poll()
+	}
+	stack := make([]heldNodePair, 0, 64)
+	for _, task := range tasks {
+		stack = append(stack[:0], task)
+		for len(stack) > 0 {
+			last := len(stack) - 1
+			pair := stack[last]
+			stack = stack[:last]
+			if err := step(); err != nil {
+				return false, err
+			}
+			a, b := &tree.nodes[pair.a], &tree.nodes[pair.b]
+			if !BoxesOverlap(a.box, b.box) {
+				continue
+			}
+			if a.leafStart < 0 || b.leafStart < 0 {
+				children, n := tree.splitSelfPair(pair)
+				stack = append(stack, children[:n]...)
+				continue
+			}
+			self := pair.a == pair.b
+			for s := a.leafStart; s < a.leafStart+a.leafCount; s++ {
+				box := tree.slotBoxes[s]
+				if !self && !BoxesOverlap(box, b.box) {
+					continue
+				}
+				var world [2]r3.Vec
+				if tree.oriented {
+					world = tree.slotWorld[s]
+				}
+				i := tree.facets[s]
+				start := b.leafStart
+				if self {
+					start = s + 1
+				}
+				for t := start; t < b.leafStart+b.leafCount; t++ {
+					if err := step(); err != nil {
+						return false, err
+					}
+					if !BoxesOverlap(box, tree.slotBoxes[t]) {
+						continue
+					}
+					if tree.oriented && !BoxesOverlap(world, tree.slotWorld[t]) {
+						continue
+					}
+					j := tree.facets[t]
+					lo, hi := i, j
+					if lo > hi {
+						lo, hi = hi, lo
+					}
+					if !e.pairEmbeddedOverlapping(lo, hi) {
+						return false, nil
+					}
+				}
+			}
+		}
+	}
+	return true, nil
+}
+
+// heldSelfScan prepares a scan of every facet of h as parallelClean does: each
+// facet's projection, box and corner cones, the scan tree with its world boxes,
+// and its node-pair tasks.
+func heldSelfScan(t testing.TB, h HeldRounding) (*heldEmbedding, heldBoxTree, []heldNodePair) {
+	t.Helper()
+	e := newHeldEmbeddingScan(h, proofbound.NewWorkBudget(t.Context()), true)
+	for i := range h.Tris {
+		e.projection(i)
+		e.triBox(i)
+		for k := range 3 {
+			e.coneBox(i, k)
+		}
+	}
+	tree, err := newHeldScanTree(t.Context(), e)
+	require.NoError(t, err)
+	if tree.oriented {
+		tree.slotWorld = make([][2]r3.Vec, len(tree.facets))
+		for s, facet := range tree.facets {
+			tree.slotWorld[s] = e.triBox(facet)
+		}
+	}
+	tasks, err := tree.selfPairTasks(t.Context(), 64)
+	require.NoError(t, err)
+	return e, tree, tasks
+}
+
+// heldTinyTube is heldRevolvedTube scaled by 2⁻³⁴⁰, exactly. Its coordinates
+// lie below the range the projection test trusts to floats, so every pair
+// sharing no corner reaches the exact plane signs, and a scan that keeps
+// sideSigns records, per pair, the vertices it read against each plane.
+func heldTinyTube(segments int) HeldRounding {
+	h := heldRevolvedTube(segments, false)
+	for v, p := range h.Verts {
+		h.Verts[v] = p.Scale(0x1p-340)
+	}
+	return h
+}
+
+// TestHeldSelfPairsMatchReferenceScan runs cleanSelfPairs and the reference
+// scan on clean, crossing and collapsed-facet meshes, each polled at several
+// intervals and stopped at several polls, with and without the shared side
+// signs of a worker copy, and requires the same answer, error, poll count and
+// countdown, and the same predicate caches afterwards: the facets whose
+// normals, rounded normals, lifts and planes were read, and each plane sign
+// read, so the same pairs were decided in the same order.
+func TestHeldSelfPairsMatchReferenceScan(t *testing.T) {
+	t.Parallel()
+	skew := [3]r3.Vec{{X: 2, Y: 3, Z: 5}, {X: -3, Y: 2}, {X: 1, Z: -2}}
+	meshes := []struct {
+		name string
+		h    func(*testing.T) HeldRounding
+	}{
+		{"grid", func(t *testing.T) HeldRounding { return heldPrepareGrid(t, 12, "none") }},
+		{"grid-crossing", func(t *testing.T) HeldRounding { return heldPrepareGrid(t, 12, "crossing") }},
+		{"grid-collapsed", func(t *testing.T) HeldRounding { return heldPrepareGrid(t, 12, "collapsed") }},
+		{"grid-crossing-skew", func(t *testing.T) HeldRounding {
+			h := heldPrepareGrid(t, 12, "crossing")
+			h.ScanAxes = skew
+			return h
+		}},
+		{"tube", func(*testing.T) HeldRounding { return heldRevolvedTube(72, false) }},
+		{"tube-oriented", func(*testing.T) HeldRounding { return heldRevolvedTube(72, true) }},
+		{"tube-tiny", func(*testing.T) HeldRounding { return heldTinyTube(72) }},
+		{"coarse-oriented", func(*testing.T) HeldRounding { return heldCoarseRevolve(8, 72, true) }},
+	}
+	stop := errors.New("stop")
+	for _, mesh := range meshes {
+		for _, signs := range []bool{false, true} {
+			// WorkPollInterval/4 is what each of four workers polls at.
+			for _, interval := range []int{1, 5, proofbound.WorkPollInterval / 4} {
+				// Zero never stops; k stops the scan at its k-th poll.
+				for _, stopAt := range []int{0, 1, 7} {
+					name := fmt.Sprintf("%s/signs=%v/interval=%d/stop=%d", mesh.name, signs, interval, stopAt)
+					t.Run(name, func(t *testing.T) {
+						h := mesh.h(t)
+						type outcome struct {
+							clean     bool
+							err       error
+							polls     int
+							remaining int
+						}
+						run := func(scan func(*heldEmbedding, []heldNodePair, *heldBoxTree) (bool, error)) (outcome, *heldEmbedding) {
+							e, tree, tasks := heldSelfScan(t, h)
+							if signs {
+								e.sideSigns = map[[2]int]int{}
+							}
+							var out outcome
+							e.pollErr = func() error {
+								out.polls++
+								if out.polls == stopAt {
+									return stop
+								}
+								return nil
+							}
+							e.pollInterval, e.pollRemaining = interval, interval
+							out.clean, out.err = scan(e, tasks, &tree)
+							out.remaining = e.pollRemaining
+							return out, e
+						}
+						want, ref := run((*heldEmbedding).cleanSelfPairsReference)
+						switch {
+						case stopAt == 0:
+							require.NoError(t, want.err, "the reference scan reads the fixture")
+							require.Equal(t, !strings.Contains(mesh.name, "crossing"), want.clean,
+								"the reference scan reads the fixture")
+						case interval == 1 && stopAt == 1:
+							require.ErrorIs(t, want.err, stop, "the reference scan polls at its first step")
+						}
+						if signs && mesh.name == "tube-tiny" && stopAt == 0 {
+							require.Greater(t, len(ref.sideSigns), len(h.Tris), "the tiny tube reaches the plane signs")
+						}
+						got, e := run((*heldEmbedding).cleanSelfPairs)
+						require.Equal(t, want, got)
+						requireSameFlags(t, "normals read", ref.normOK, e.normOK)
+						requireSameFlags(t, "rounded normals read", ref.fnormOK, e.fnormOK)
+						requireSameFlags(t, "vertex lifts read", ref.xvOK, e.xvOK)
+						require.Len(t, e.plane, len(ref.plane))
+						for i := range ref.plane {
+							if ref.plane[i] != e.plane[i] {
+								require.Failf(t, "planes interned differ", "facet %d: %d, want %d", i, e.plane[i], ref.plane[i])
+							}
+						}
+						require.Equal(t, len(ref.planes), len(e.planes), "distinct planes")
+						require.Equal(t, len(ref.sideSigns), len(e.sideSigns), "plane signs read")
+						for key, sign := range ref.sideSigns {
+							if got, ok := e.sideSigns[key]; !ok || got != sign {
+								require.Failf(t, "plane signs differ", "plane %d vertex %d", key[0], key[1])
+							}
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
+// requireSameFlags compares two cache flag slices and reports only how many
+// entries differ and the first of them.
+func requireSameFlags(t *testing.T, what string, want, got []bool) {
+	t.Helper()
+	require.Len(t, got, len(want), what)
+	first, count := -1, 0
+	for i := range want {
+		if want[i] != got[i] {
+			if first < 0 {
+				first = i
+			}
+			count++
+		}
+	}
+	if count > 0 {
+		require.Failf(t, what+" differ", "%d entries differ, first at %d", count, first)
+	}
 }

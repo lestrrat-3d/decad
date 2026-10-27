@@ -10,13 +10,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// heldPrepareGrid is a tilted 48 by 48 grid of 4,608 facets, enough for
-// parallelClean to prepare its caches on several goroutines. extra appends
-// one facet: "crossing" pierces the first cell, "collapsed" lies far off the
-// grid with three collinear corners, so only the collapse check refuses it.
-func heldPrepareGrid(t *testing.T, extra string) HeldRounding {
+// heldPrepareGrid is a tilted side by side grid of 2·side² facets; 48 gives
+// 4,608, enough for parallelClean to prepare its caches on several
+// goroutines. extra appends one facet: "crossing" pierces the first cell,
+// "collapsed" lies far off the grid with three collinear corners, so only the
+// collapse check refuses it.
+func heldPrepareGrid(t *testing.T, side int, extra string) HeldRounding {
 	t.Helper()
-	const side = 48
 	tilt, err := r3.NewFrame(r3.NewVec(0.25, -0.5, 0.125),
 		r3.NewVec(math.Cos(0.3), math.Sin(0.3), 0.1), r3.NewVec(-math.Sin(0.3), math.Cos(0.3), 0.2))
 	require.NoError(t, err)
@@ -61,7 +61,7 @@ func TestParallelCleanPreparedCachesMatchSerialScan(t *testing.T) {
 			// and the extra one are queried.
 			for _, every := range []bool{true, false} {
 				t.Run(fmt.Sprintf("%s/oriented=%v/every=%v", extra, axes != [3]r3.Vec{}, every), func(t *testing.T) {
-					h := heldPrepareGrid(t, extra)
+					h := heldPrepareGrid(t, 48, extra)
 					h.ScanAxes = axes
 					var query []int
 					mask := make([]bool, len(h.Tris))
