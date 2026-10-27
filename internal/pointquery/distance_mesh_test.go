@@ -2,6 +2,7 @@ package pointquery
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/big"
 	"math/rand/v2"
@@ -15,7 +16,7 @@ import (
 
 // eagerMeshDistanceSquared is the straightforward form of MeshDistanceSquared
 // that converts every vertex to rationals before the triangle loop. It is the
-// reference the lazy form must match.
+// reference the optimized form must match.
 func eagerMeshDistanceSquared(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][3]int) (*big.Rat, error) {
 	if len(tris) == 0 {
 		return nil, decaderr.ErrUnsupported
@@ -91,7 +92,7 @@ func uvSphere(rings, segments int, radius float64) ([]r3.Vec, [][3]int) {
 	return verts, tris
 }
 
-// TestMeshDistanceSquaredMatchesEagerReference holds the lazy conversion to
+// TestMeshDistanceSquaredMatchesEagerReference holds the distance calculation to
 // the eager reference on random spheres, whole and cut to a random prefix of
 // shuffled triangles. Under the race detector it runs the first 4 trials.
 func TestMeshDistanceSquaredMatchesEagerReference(t *testing.T) {
@@ -173,4 +174,55 @@ func BenchmarkMeshDistanceSquared(b *testing.B) {
 	b.Run("near/eager", func(b *testing.B) { benchmarkMesh(b, eagerMeshDistanceSquared, near) })
 	b.Run("far/lazy", func(b *testing.B) { benchmarkMesh(b, MeshDistanceSquared, far) })
 	b.Run("far/eager", func(b *testing.B) { benchmarkMesh(b, eagerMeshDistanceSquared, far) })
+}
+
+// These two functions freeze the rational kernel independently of the
+// dyadic implementation, including its closed-edge and degenerate cases.
+func segmentDistanceSquared(p, a, b ratVec) *big.Rat {
+	axis := subtract(b, a)
+	lengthSquared := dot(axis, axis)
+	fromStart := subtract(p, a)
+	if lengthSquared.Sign() == 0 {
+		return dot(fromStart, fromStart)
+	}
+	along := dot(fromStart, axis)
+	if along.Sign() <= 0 {
+		return dot(fromStart, fromStart)
+	}
+	if along.Cmp(lengthSquared) >= 0 {
+		fromEnd := subtract(p, b)
+		return dot(fromEnd, fromEnd)
+	}
+	parallelSquared := new(big.Rat).Quo(new(big.Rat).Mul(along, along), lengthSquared)
+	return new(big.Rat).Sub(dot(fromStart, fromStart), parallelSquared)
+}
+
+func triangleDistanceSquared(p, a, b, c ratVec) (*big.Rat, error) {
+	normal := cross(subtract(b, a), subtract(c, a))
+	normalSquared := dot(normal, normal)
+	if normalSquared.Sign() == 0 {
+		return nil, fmt.Errorf(`%w: point query mesh contains a degenerate triangle`, decaderr.ErrUnsupported)
+	}
+	triangle := [3]ratVec{a, b, c}
+	projectionInside := true
+	for i := range triangle {
+		start, end := triangle[i], triangle[(i+1)%3]
+		side := dot(cross(subtract(end, start), subtract(p, start)), normal)
+		if side.Sign() < 0 {
+			projectionInside = false
+			break
+		}
+	}
+	if projectionInside {
+		offset := dot(subtract(p, a), normal)
+		return new(big.Rat).Quo(new(big.Rat).Mul(offset, offset), normalSquared), nil
+	}
+	var minimum *big.Rat
+	for i := range triangle {
+		distance := segmentDistanceSquared(p, triangle[i], triangle[(i+1)%3])
+		if minimum == nil || distance.Cmp(minimum) < 0 {
+			minimum = distance
+		}
+	}
+	return minimum, nil
 }

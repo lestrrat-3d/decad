@@ -71,6 +71,15 @@ triangle is an evaluator failure; tessellation's Geometry row already excludes
 it. A triangle's axis-aligned box gives an exact lower bound used only to skip
 an exact distance when the current minimum is already no larger.
 
+`MeshDistanceSquared` reads the held binary64 coordinates as exact dyadics.
+It carries each squared distance as a dyadic numerator and positive dyadic
+denominator, compares candidates by exact cross multiplication, and converts
+only the final minimum to `big.Rat`. `proof.DyQuoFloatUp` supplies the same
+outward-rounded minimum used by the float box filter. Triangle order,
+degenerate-triangle refusals and per-vertex/per-triangle budget steps are
+unchanged. `MeshClosest` also returns a rational point and uses its rational
+projection calculation.
+
 Parity and distance consider every triangle across every lump and shell. An
 internal cavity therefore changes parity twice along a ray and classifies as
 outside. No nearest-face selection or local normal decides membership.

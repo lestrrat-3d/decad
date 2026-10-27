@@ -41,55 +41,6 @@ func cross(a, b ratVec) ratVec {
 	}
 }
 
-func segmentDistanceSquared(p, a, b ratVec) *big.Rat {
-	axis := subtract(b, a)
-	lengthSquared := dot(axis, axis)
-	fromStart := subtract(p, a)
-	if lengthSquared.Sign() == 0 {
-		return dot(fromStart, fromStart)
-	}
-	along := dot(fromStart, axis)
-	if along.Sign() <= 0 {
-		return dot(fromStart, fromStart)
-	}
-	if along.Cmp(lengthSquared) >= 0 {
-		fromEnd := subtract(p, b)
-		return dot(fromEnd, fromEnd)
-	}
-	parallelSquared := new(big.Rat).Quo(new(big.Rat).Mul(along, along), lengthSquared)
-	return new(big.Rat).Sub(dot(fromStart, fromStart), parallelSquared)
-}
-
-func triangleDistanceSquared(p, a, b, c ratVec) (*big.Rat, error) {
-	normal := cross(subtract(b, a), subtract(c, a))
-	normalSquared := dot(normal, normal)
-	if normalSquared.Sign() == 0 {
-		return nil, fmt.Errorf(`%w: point query mesh contains a degenerate triangle`, decaderr.ErrUnsupported)
-	}
-	triangle := [3]ratVec{a, b, c}
-	projectionInside := true
-	for i := range triangle {
-		start, end := triangle[i], triangle[(i+1)%3]
-		side := dot(cross(subtract(end, start), subtract(p, start)), normal)
-		if side.Sign() < 0 {
-			projectionInside = false
-			break
-		}
-	}
-	if projectionInside {
-		offset := dot(subtract(p, a), normal)
-		return new(big.Rat).Quo(new(big.Rat).Mul(offset, offset), normalSquared), nil
-	}
-	var minimum *big.Rat
-	for i := range triangle {
-		distance := segmentDistanceSquared(p, triangle[i], triangle[(i+1)%3])
-		if minimum == nil || distance.Cmp(minimum) < 0 {
-			minimum = distance
-		}
-	}
-	return minimum, nil
-}
-
 // boxDistanceSquared is a lower bound used only to skip a triangle whose
 // closed axis-aligned box cannot beat the current exact minimum.
 func boxDistanceSquared(p, a, b, c ratVec) *big.Rat {
@@ -187,12 +138,12 @@ func MeshDistanceSquared(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][
 		return nil, fmt.Errorf(`%w: point query mesh has no triangles`, decaderr.ErrUnsupported)
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-	point := exactVec(p)
+	point := proof.DyVec(p)
 	if err := checkFiniteVertices(budget, verts); err != nil {
 		return nil, err
 	}
-	exact := newLazyVertices(verts)
-	var minimum *big.Rat
+	var minimum dyDistance
+	haveMinimum := false
 	var minimumUpper float64
 	for _, tri := range tris {
 		if err := budget.Step(); err != nil {
@@ -203,21 +154,22 @@ func MeshDistanceSquared(ctx context.Context, p r3.Vec, verts []r3.Vec, tris [][
 				return nil, fmt.Errorf(`%w: point query mesh has an invalid triangle index`, decaderr.ErrUnsupported)
 			}
 		}
-		if minimum != nil && boxDistanceSquaredLower(p, verts[tri[0]], verts[tri[1]], verts[tri[2]]) >= minimumUpper {
+		if haveMinimum && boxDistanceSquaredLower(p, verts[tri[0]], verts[tri[1]], verts[tri[2]]) >= minimumUpper {
 			continue
 		}
-		a, b, c := exact.at(tri[0]), exact.at(tri[1]), exact.at(tri[2])
-		if minimum != nil && boxDistanceSquared(point, a, b, c).Cmp(minimum) >= 0 {
+		a, b, c := proof.DyVec(verts[tri[0]]), proof.DyVec(verts[tri[1]]), proof.DyVec(verts[tri[2]])
+		if haveMinimum && proof.DyCmp(proof.DyMul(boxDyDistanceSquared(point, a, b, c), minimum.d), minimum.n) >= 0 {
 			continue
 		}
-		distance, err := triangleDistanceSquared(point, a, b, c)
+		distance, err := triangleDyDistanceSquared(point, a, b, c)
 		if err != nil {
 			return nil, err
 		}
-		if minimum == nil || distance.Cmp(minimum) < 0 {
+		if !haveMinimum || distance.cmp(minimum) < 0 {
 			minimum = distance
-			minimumUpper = proofbound.RatFloatUp(minimum)
+			haveMinimum = true
+			minimumUpper = proof.DyQuoFloatUp(minimum.n, minimum.d)
 		}
 	}
-	return minimum, nil
+	return minimum.rat(), nil
 }
