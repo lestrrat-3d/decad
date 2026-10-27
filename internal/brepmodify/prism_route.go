@@ -266,25 +266,59 @@ func prismRoute(ctx context.Context, b *topo.Body, bp breprecord.Payload, req Re
 }
 
 // closedShellPrismReading is route P for a closed shell
-// (agent-docs/modify-general-design.md §3.2): the first reference axis along
-// which the brep record reads as a prism (brep-modify §4.1). A closed shell
-// removes no face, so there is no cap classification to admit: every reading
-// denotes the same solid, and the first one is taken. A record carrying a
-// stacked shell's rounded cavity or route L bands reads as no prism. The
-// reading must pass SB1's whole-record displacement rule before it is used.
-func closedShellPrismReading(ctx context.Context, b *topo.Body, bp breprecord.Payload) (prismrecord.Payload, bool, error) {
+// (agent-docs/modify-general-design.md §3.2): a reference axis along which
+// the brep record reads as a prism (brep-modify §4.1). A closed shell removes
+// no face, so there is no cap classification to admit. Inward, every reading
+// denotes the same solid, and the first one is taken. Outward, the dilation
+// rounds the convex edges along the reading axis only and keeps the cap edges
+// sharp, so two readings denote different solids: the record must read along
+// exactly one axis, and one that reads along several is ErrUnsupported (SG2).
+// A record carrying a stacked shell's rounded cavity or route L bands reads
+// as no prism. The reading must pass SB1's whole-record displacement rule
+// before it is used.
+func closedShellPrismReading(ctx context.Context, bp breprecord.Payload, inward bool) (prismrecord.Payload, bool, error) {
 	if bp.BossShell != nil || bp.PocketShell != nil || len(bp.LoopBands) > 0 {
 		return prismrecord.Payload{}, false, nil
 	}
-	route, _, err := prismRoute(ctx, b, bp, Request{Op: "shells", Shell: true,
-		Admits: func(prismrecord.Payload, PrismCaps) error { return nil }})
-	if err != nil || route.Prism == nil {
+	readings, err := prismReadings(ctx, bp)
+	if err != nil || len(readings) == 0 {
 		return prismrecord.Payload{}, false, err
+	}
+	if !inward && len(readings) > 1 {
+		return prismrecord.Payload{}, false, errOutwardReadings(len(readings))
 	}
 	if err := breprecord.RequireExactSection(bp, "shells"); err != nil {
 		return prismrecord.Payload{}, false, err
 	}
-	return *route.Prism, true, nil
+	return readings[0], true, nil
+}
+
+// errOutwardReadings is SG2 for an outward closed shell of a brep record that
+// reads as a prism along n > 1 reference axes.
+func errOutwardReadings(n int) error {
+	return fmt.Errorf(`%w: this brep record reads as a prism along %d reference axes, and an outward closed shell rounds only the edges along its reading axis, so the readings denote different solids (modify-general SG2)`,
+		decaderr.ErrUnsupported, n)
+}
+
+// prismReadings lists the prism reading of the record along each reference
+// axis that has one (brep-modify §4.1), in axis order. A record with no
+// embeds reads as no prism. The error is a context error only.
+func prismReadings(ctx context.Context, bp breprecord.Payload) ([]prismrecord.Payload, error) {
+	embeds, err := breprecord.Embeds(bp.Faces)
+	if err != nil {
+		return nil, nil //nolint:nilerr // no embeds is no prism reading
+	}
+	var out []prismrecord.Payload
+	for k := range 3 {
+		read, ok, err := recognisePrism(ctx, bp, embeds, k)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			out = append(out, read.pp)
+		}
+	}
+	return out, nil
 }
 
 // brepPrismRead is one prism reading of a brep record along a reference axis

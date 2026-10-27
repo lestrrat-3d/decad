@@ -2140,6 +2140,7 @@
 9	0.46	TestVerifyMitredSweepUnderPrismArmIsDisjoint
 9	0.00	TestVerifyMotionBetweenErrors
 9	0.29	TestVerifyMotionBetweenKnownCollision
+9	0.00	TestShellClosedDrilledBarOutward
 10	0.00	TestPointLocationHistoryCrossedPlates
 10	0.00	TestPointLocationHistoryNestedCut
 10	0.00	TestPointLocationHistoryPinCut

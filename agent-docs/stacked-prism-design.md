@@ -247,7 +247,7 @@ hole `i`, the band between `C`'s hole `i` reversed (an outer) and `O`'s hole
 |---|---|
 | both caps removed, `k >= 1` holes (reach BX8) | a prism group: one slab over the receiver's sweep holding the `1 + k` bands; `sectionDelta` is the offset's proven displacement |
 | no opening, `k = 0` (reach BX5, `WithNoOpenings`) | three slabs: the cap region (`P` inward, `Q` outward) under the band `{O.Outer, reverse(C.Outer)}` under the cap region, both interfaces monotone, each exposing `C`; `sectionDelta` is the offset's proven displacement; `closedShell` is set; the cavity is a void shell (§3) |
-| no opening, `k >= 1`, inward (reach BX5) | three slabs: `P` under the `1 + k` bands under `P`, both interfaces lining readings, each exposing `C`, a region with `k` holes; `sectionDelta` is the offset's proven displacement; `closedShell` is set; the cavity is one void shell around every lining (§3) |
+| no opening, `k >= 1` (reach BX5) | three slabs: `O` under the `1 + k` bands under `O`, both interfaces lining readings, each exposing `C`, a region with `k` holes; `sectionDelta` is the offset's proven displacement; `closedShell` is set; the cavity is one void shell around every lining (§3). Outward, `C` is `P` itself and each lining lies between `P`'s hole and `Q`'s smaller one |
 | one cap removed, any `k` (a cup, modify B5/B6) | a floor slab over `O` and a wall slab over the bands, meeting at a lining interface (`k >= 1`) or a monotone one (`k = 0`) whose one exposed record is `C` itself; `sectionDelta` is zero |
 
 `closedShell` marks a closed shell's record. A lining band's outer loop is

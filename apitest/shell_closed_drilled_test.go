@@ -116,10 +116,93 @@ func TestShellClosedDrilledBar(t *testing.T) {
 	}
 }
 
+// TestShellClosedDrilledBarOutward is reach §9.2's outward closed shell of a
+// holed prism: the outer wall is the section dilated by t (each convex edge
+// along the hole's axis rounded with radius t, the hole shrunk to r − t), the
+// caps grow t beyond each end, and the cavity is the drilled bar itself, a
+// ring around the hole's lining, which now grows into the hole.
+func TestShellClosedDrilledBarOutward(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		build func(*testing.T) *decad.Body
+		// volume is the closed form: the dilated section over h + 2t less the
+		// drilled bar. The dilation of the w×d section with a radius-3 hole by
+		// 1 is w·d + 2(w + d) + π less the radius-2 hole.
+		volume float64
+		// curved is the circumference of the curved walls times their length.
+		curved float64
+	}{
+		{
+			name: "axial drill (holed prism)", build: axialDrilledBar,
+			volume: (480+math.Pi-4*math.Pi)*12 - (400-9*math.Pi)*10,
+			curved: 2*math.Pi*(2+3)*12 + 2*math.Pi*12,
+		},
+		{
+			name: "cross drill (brep)", build: crossBar,
+			volume: (920+math.Pi-4*math.Pi)*22 - (800-9*math.Pi)*20,
+			curved: 2*math.Pi*(2+3)*22 + 2*math.Pi*22,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			bar := tc.build(t)
+			doc := bar.Document()
+			closed, err := decad.Shell(t.Context(), bar, nil, units.Millimeters(1),
+				decad.WithNoOpenings(), decad.WithShellSense(decad.Outward))
+			require.NoError(t, err)
+			require.True(t, closed.IsSolid())
+			requireManifold(t, closed)
+			requireVolumeNear(t, closed, tc.volume)
+
+			mesh, err := closed.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
+			require.NoError(t, err)
+			requireWatertight(t, mesh)
+			require.True(t, mesh.VolumeVerified())
+			require.InDelta(t, tc.volume, meshVolume(mesh), tc.curved*0.05)
+
+			lumps := closed.Lumps()
+			require.Len(t, lumps, 1)
+			shells := lumps[0].Shells()
+			require.Len(t, shells, 2)
+			require.False(t, shells[0].IsVoid(), `the outer shell comes first`)
+			require.True(t, shells[1].IsVoid(), `the drilled bar's own volume is the void shell`)
+			// The outer shell holds four flat and four rounded walls, two caps
+			// and the shrunk hole's wall; the cavity holds the bar's four walls,
+			// the lining's outer cylinder (the original hole wall), a floor and
+			// a ceiling, both ring-shaped.
+			require.Len(t, shells[0].Faces(), 11)
+			require.Len(t, shells[1].Faces(), 7)
+			rings := 0
+			for _, f := range shells[1].Faces() {
+				if _, ok := f.Surface().(decad.Plane); ok && len(f.Loops()) == 2 {
+					rings++
+				}
+			}
+			require.Equal(t, 2, rings, `the cavity's floor and ceiling are each the bar's holed section`)
+
+			report, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			require.Equal(t, decad.Sound, report.Status)
+
+			data := string(writeSTEP(t, closed))
+			require.Equal(t, 1, strings.Count(data, "BREP_WITH_VOIDS("))
+			require.Equal(t, 0, strings.Count(data, "MANIFOLD_SOLID_BREP("))
+			read, err := readSTEPBytes(t, []byte(data))
+			require.NoError(t, err)
+			require.True(t, read.Report().Closed)
+			require.Equal(t, 2, read.Report().Shells, `the outer skin and the ring cavity`)
+			held, err := read.Volume()
+			require.NoError(t, err)
+			require.InDelta(t, tc.volume, held.Value.Base(), tc.curved*0.1)
+		})
+	}
+}
+
 // TestShellClosedDrilledBarRefusals covers the thicknesses that collapse the
-// ring, the axial limit both kept caps set, and the senses and receivers the
-// closed shell of a holed prism does not take. Every refusal leaves the
-// document as it was.
+// ring, the axial limit both kept caps set, and the outward thicknesses that
+// fill the hole in. Every refusal leaves the document as it was.
 func TestShellClosedDrilledBarRefusals(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -149,14 +232,21 @@ func TestShellClosedDrilledBarRefusals(t *testing.T) {
 			is: decad.ErrUnsupported, want: "crosses itself",
 		},
 		{
-			name: "outward on a holed prism (SX8)", build: axialDrilledBar, th: 1,
+			// Outward the radius-3 hole erodes to radius 3 − t: at t = 3 it
+			// fills in, a feature the offset drops (S11a).
+			name: "outward fills the hole (S11a)", build: axialDrilledBar, th: 3,
 			opts: []decad.ShellOption{decad.WithShellSense(decad.Outward)},
-			is:   decad.ErrUnsupported, want: "modify-reach SX8",
+			is:   decad.ErrUnsupported, want: "drops a section feature",
 		},
 		{
-			name: "outward on a brep (SG2)", build: crossBar, th: 1,
+			name: "outward past the hole's radius (S11a)", build: axialDrilledBar, th: 4,
 			opts: []decad.ShellOption{decad.WithShellSense(decad.Outward)},
-			is:   decad.ErrUnsupported, want: "modify-general SG2",
+			is:   decad.ErrUnsupported, want: "drops a section feature",
+		},
+		{
+			name: "outward fills the cross hole (S11a)", build: crossBar, th: 3,
+			opts: []decad.ShellOption{decad.WithShellSense(decad.Outward)},
+			is:   decad.ErrUnsupported, want: "drops a section feature",
 		},
 	}
 	for _, tc := range tests {

@@ -42,7 +42,7 @@ part makes on them. Every cell was read off the live code with the probe under
 | | | shell removing one y wall, or both | builds (route P cup, tube) |
 | | | shell removing the top face, or both caps | builds (route S) |
 | | | shell removing one x wall, or one y wall with the top or both caps | builds (route S, a wall run) |
-| | | closed shell (`WithNoOpenings`), inward | builds (route P's prism reading along y, reach BX5; §3.2) |
+| | | closed shell (`WithNoOpenings`), inward or outward | builds (route P's prism reading along y, reach BX5; §3.2) |
 | **P2** pocketed plate: 40×40×10, blind 20×10 pocket 5 deep | stacked | fillet the pocket's 4 vertical edges | builds (route E) |
 | | | fillet the 4 floor edges, or the 4 mouth edges | builds (route L fillet arm) |
 | | | chamfer the 4 mouth edges, or the plate's top loop | builds (route L) |
@@ -372,18 +372,25 @@ The removed faces are read against the recognised record:
 Only `Inward` builds. The dilation `(A \ T) ⊕ t` does not distribute over the
 difference and rounds every convex edge of the receiver — a hole mouth's rim
 into a torus, a box corner into a sphere — so `Outward` is SG1.
-`WithNoOpenings` takes §3.1a's closed rectangular-boss case, and an inward
-closed shell of a brep record that route P reads as a prism along some
-reference axis (brep-modify §4.1). No face is removed, so route P admits the
-first axis that reads: every reading denotes the same solid, and the shell is
-the prism's own closed shell (reach BX5), a holed section's included. P1, the
-drilled bar, reads as a prism along its hole's axis, and its closed shell is
-the three-slab stack whose cavity rings the hole's lining (reach §9.2). It is
-SG2 on other brep or stacked receivers and on an outward call: a brep
-record's lumps are its connected face sets (general-boolean §4.2), and a
-closed cavity's faces would read as a second solid without a nesting proof.
-The void shell `prismshell.BuildClosed` builds lives on the stacked record
-alone.
+`WithNoOpenings` takes §3.1a's closed rectangular-boss case, and a closed
+shell of a brep record that route P reads as a prism along some reference
+axis (brep-modify §4.1); the shell is the prism's own closed shell (reach
+BX5), a holed section's included. No face is removed, so no cap
+classification picks the axis. Inward, route P takes the first axis that
+reads: the erosion keeps every convex edge sharp and rounds only reflex
+ones, and a record that reads along several axes is a box, whose erosion is
+the same box along each, so every reading denotes the same solid. Outward,
+the shell rounds the convex edges along the reading axis and keeps the cap
+edges sharp (modify §7, §8), so two readings of a box denote different
+solids: the record must read along exactly one axis, and one that reads along
+more is SG2 (`closedShellPrismReading`). P1, the drilled bar, reads as a
+prism along its hole's axis only, and its closed shell is the three-slab
+stack whose cavity rings the hole's lining inward, or is P1 itself outward,
+the lining then growing into the hole (reach §9.2). It is SG2 on other brep or
+stacked receivers: a brep record's lumps are its connected face sets
+(general-boolean §4.2), and a closed cavity's faces would read as a second
+solid without a nesting proof. The void shell `prismshell.BuildClosed` builds
+lives on the stacked record alone.
 
 ### 3.3 Construction
 
@@ -519,7 +526,7 @@ Modify §1's test picks every sentinel.
 | SG | Call | Exists? | Sentinel |
 |---|---|---|---|
 | **SG1** | `WithShellSense(Outward)` on a brep or stacked receiver | yes; the dilation rounds the receiver's convex edges into tori and spheres this record does not hold | `ErrUnsupported` |
-| **SG2** | `WithNoOpenings` on a brep or stacked receiver outside §3.1a's nested rectangular boss and outside an inward shell of a brep record route P reads as a prism (§3.2) | yes; no other brep record carries a certified void shell | `ErrUnsupported` (replaces SX16's text for this call) |
+| **SG2** | `WithNoOpenings` on a brep or stacked receiver outside §3.1a's nested rectangular boss and outside a shell of a brep record route P reads as a prism (§3.2); an outward one of a record that reads as a prism along more than one axis | yes; no other brep record carries a certified void shell | `ErrUnsupported` (replaces SX16's text for this call) |
 | **SG3** | the record is no through-cut record (Table TC) and is outside §3.1a–§3.1e: a blind port, a keyway, a crossing boss, a split or oblique wall, a displaced tool level | yes; its erosion may hold surfaces beyond the admitted cases | `ErrUnsupported`, naming the first face Table TC does not take |
 | **SG4** | a removed face that is a tool wall outside §3.1d, a tool floor or a hole wall of `S` | yes | `ErrUnsupported` |
 | **SG5** | a removed face that names no face of the record; a removed wall that is no straight wall along a section axis (a fillet cylinder: its rim is no planar face); a wall run whose end cuts backward along the removed carrier (a reflex corner: the rim lies inside the material). A set of walls that is no proper connected run is shell-opening SO6 | yes | `ErrUnsupported` |
@@ -533,7 +540,7 @@ reach SX10:
 |---|---|
 | 2a. record | RB dispatch; SB2; SB1 |
 | 2b. route P | brep-modify §4.2 unchanged: an axis whose prism takes the removed faces as caps builds the prism's own cup or tube |
-| 2c. route S entry | SG1; §3.1a's closed-boss case, an inward closed shell through route P's prism reading (§3.2), or SG2; Table TC (SG3); §3.1d's exact circular-wall case; the remaining removed faces against the record (SG4, SG5's face and straight-wall tests) |
+| 2c. route S entry | SG1; §3.1a's closed-boss case, a closed shell through route P's prism reading (§3.2), or SG2; Table TC (SG3); §3.1d's exact circular-wall case; the remaining removed faces against the record (SG4, SG5's face and straight-wall tests) |
 | 3. existence | caps alone: S18; S10 (section and height limits); S11a on `S`. A wall run: `sideOpeningRegions` in shell-opening §5's stages 2–5 (SO6, SO3's height half, S11a and SO1, SO2, SO4 per end, S8, S11b and S9 on `W` and `C`, the area identity), then SG5's reflex-end test. Then S11a on each tool |
 | 4. offset audit | S8, S11b, S9 on `S ⊖ t` (caps alone) and on each `Tᵢ ⊕ t`; TC7 (SG6) |
 | 5. cavity | the private cuts (SG6) |
@@ -845,7 +852,7 @@ Other record-based consumers keep their existing payload gates.
 | chamfers of edges sharing a vertex outside one loop, or fillets whose selected edges share no planar loop after straight-wall restatement | SB5 / SL1 | the mixed chamfer's corner plane has no reference-axis normal; route V and the partial fillet admit the cases in `agent-docs/vertex-blend-design.md` |
 | an edge ending on a blend or a curved face outside P8's exact front top edge (§4.3c) | SB7 | the complete-loop fillet builds P8's top loop (`agent-docs/loop-fillet-design.md`); other partial edges need a source and cutter-contact proof |
 | shell of a blind pocket outside §3.1b, a counterbore outside §3.1e, a blind port, a stacked union outside §3.1a or §3.1c, or a keyway (P2, P3, P6c) | SG3 | the remaining cases need a shape-specific exact transition and occupied-volume proof |
-| an outward shell, or a closed shell outside §3.1a and outside a brep record that reads as a prism | SG1 / SG2 | §3.2 |
+| an outward shell, or a closed shell outside §3.1a and outside a brep record that reads as a prism (along one axis only, outward) | SG1 / SG2 | §3.2 |
 | shell removing a curved outer wall (a fillet cylinder, P8), or a wall run ending at a reflex corner (P7's `y = 8` wall) | SG5 | the rim at a curved outer wall is a swept face less the cavity's trace, and a reflex end's rim lies inside the material along the removed carrier; the rim assembly states only planar regions on a removed face |
 | the surveyed modify requests on faceted P6b and P9 | reach SX9 | these receivers have no retained source route; a complete tilted plate-to-cylinder junction has the separate bounded `Fillet` in `agent-docs/oblique-boss-fillet-design.md` |
 
@@ -874,7 +881,7 @@ Other record-based consumers keep their existing payload gates.
   vertices states it where the trace reaches `R`'s edge, and a private
   `sketch` scene would return the cut vertices as `Partial` fragments decad
   can only reject (shell-opening §4.6).
-- **`Outward` refuses, and `WithNoOpenings` builds only through a prism reading.** §3.2; an outward shell and a closed shell of a record that reads as no prism have no record.
+- **`Outward` refuses on route S, and `WithNoOpenings` builds only through a prism reading.** §3.2; an outward route S shell and a closed shell of a record that reads as no prism have no record. An outward closed shell takes the prism reading only when it is the record's one reading.
 - **Asymmetric route L chamfers use the existing two-distance band.** The
   reference face chooses `dc` and `ds` consistently per loop. A stacked
   receiver's face view still lacks the required public face identity (SL4).
@@ -965,8 +972,9 @@ Route S (S-1):
   (until S-2); P1 with a second Ø6 hole along y 7 mm from the first → SG6
   (the dilated holes meet); P1 at 0.1 in → SG6; a U section with a 1 mm
   slot, drilled through one arm → SG6 through TC7; `Outward` → SG1;
-  `WithNoOpenings` builds P1's closed shell through its prism reading along y,
-  and `WithNoOpenings` outward → SG2. A hole 1.5 mm under the top on a 2 mm shell builds
+  `WithNoOpenings` builds P1's closed shell through its prism reading along y
+  in either sense, and outward on a brep box that reads along three axes →
+  SG2. A hole 1.5 mm under the top on a 2 mm shell builds
   through the crossing reach: the cavity's top splits in two, the rim holds
   both pieces, and the volume is `5632 + 220π − 16·(25·acos 0.9 − 4.5·√4.75)`.
   Two cuts refuse on the cavity's charge (§3.3 step 4's rules), SG6:
