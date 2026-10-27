@@ -1174,6 +1174,7 @@
 4	0.00	TestSheetSolidPairContainedProvenSound
 4	0.04	TestShellClosedPrismCylinder
 4	0.00	TestShellContextCancellationDuringOffsetLeavesReceiverLive
+10	0.01	TestLookupThreadReadsPipeSizes
 4	0.01	TestShellCupHoledInward
 4	0.05	TestShellCupTwoHolesThroughStack
 4	0.00	TestShellCupWallQualifyingPinch

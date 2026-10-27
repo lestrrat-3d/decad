@@ -41,8 +41,16 @@ var numbered = map[int][2]float64{
 	10: {24, 32}, 12: {24, 28},
 }
 
+// pipeG holds the major diameter in millimetres and the threads per inch of the ISO 228 parallel pipe threads (BSPP,
+// G) by size designation, the size being the nominal bore in inches as the standard writes it.
+var pipeG = map[string][2]float64{
+	"1/8": {9.728, 28}, "1/4": {13.157, 19}, "3/8": {16.662, 19}, "1/2": {20.955, 14}, "5/8": {22.911, 14},
+	"3/4": {26.441, 14}, "7/8": {30.201, 14}, "1": {33.249, 11}, "1-1/4": {41.910, 11}, "1-1/2": {47.803, 11},
+	"2": {59.614, 11},
+}
+
 // LookupThread reads a thread designation into its major diameter and pitch
-// (agent-docs/thread-design.md §9). It reads four forms:
+// (agent-docs/thread-design.md §9). It reads five forms:
 //
 //   - "M10", an ISO metric thread at its coarse pitch: 10 mm and 1.5 mm. The
 //     nominal diameter is one of the preferred sizes from M1 to M64.
@@ -54,6 +62,9 @@ var numbered = map[int][2]float64{
 //   - "#10-24" and "#10-32", a Unified numbered size by its number and threads per
 //     inch: 0.190 inch and 25.4/24 mm. The size is #0 to #6, #8, #10 or #12, and the
 //     threads per inch are its UNC or UNF value.
+//   - "G1/2", an ISO 228 parallel pipe thread by its nominal bore: 20.955 mm and 25.4/14 mm. The size is one of
+//     G1/8, G1/4, G3/8, G1/2, G5/8, G3/4, G7/8, G1, G1-1/4, G1-1/2 and G2. The size gives the diameter and pitch only:
+//     the thread's 55 degree Whitworth profile is not cut, and the caller picks the form.
 //
 // The designation is case-insensitive in its M and x and takes no spaces. The
 // pitch is the thread's own and the major diameter is its nominal one: tolerance
@@ -67,10 +78,21 @@ func LookupThread(designation string) (ThreadSize, error) {
 	if d[0] == 'M' || d[0] == 'm' {
 		return lookupMetric(d)
 	}
+	if d[0] == 'G' || d[0] == 'g' {
+		return lookupPipe(d)
+	}
 	if d[0] == '#' {
 		return lookupNumbered(d)
 	}
 	return lookupUnified(d)
+}
+
+func lookupPipe(d string) (ThreadSize, error) {
+	rates, ok := pipeG[d[1:]]
+	if !ok {
+		return ThreadSize{}, fmt.Errorf(`%w: %q is not an ISO 228 pipe thread size such as G1/2`, ErrDegenerate, d)
+	}
+	return ThreadSize{Major: units.Millimeters(rates[0]), Pitch: units.Inches(1 / rates[1])}, nil
 }
 
 func lookupNumbered(d string) (ThreadSize, error) {

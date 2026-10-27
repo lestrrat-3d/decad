@@ -74,6 +74,22 @@ func TestLookupThreadReadsUnifiedNumberedSizes(t *testing.T) {
 	}
 }
 
+func TestLookupThreadReadsPipeSizes(t *testing.T) {
+	t.Parallel()
+	// ISO 228 major diameters in millimetres and threads per inch: the pitch is 25.4/tpi mm.
+	for designation, size := range map[string][2]float64{
+		"G1/8": {9.728, 28}, "G1/4": {13.157, 19}, "G3/8": {16.662, 19}, "G1/2": {20.955, 14}, "g5/8": {22.911, 14},
+		"G3/4": {26.441, 14}, "G7/8": {30.201, 14}, "G1": {33.249, 11}, "G1-1/4": {41.910, 11}, "G1-1/2": {47.803, 11},
+		"G2": {59.614, 11},
+	} {
+		requireThreadSize(t, designation, size[0], 25.4/size[1])
+	}
+	for _, bad := range []string{"G", "G1/16", "G3", "G 1/2", "G1/2A", "G-1/2", "G1.5"} {
+		_, err := decad.LookupThread(bad)
+		require.ErrorIs(t, err, decad.ErrDegenerate, "%q", bad)
+	}
+}
+
 func TestLookupThreadRefusals(t *testing.T) {
 	t.Parallel()
 	for _, bad := range []string{

@@ -59,7 +59,7 @@ exactly.
   neighbour. Thread a rod that ends at the thread, or cut the thread before adding the shoulder.
 - A runout that tapers the groove out, and a lead-in of another angle than 45 degrees.
 - Tapered (pipe) forms and the UN inch series' own tables: a UN thread is the ISO profile at a pitch of `25.4 / threads per inch`.
-- Tables beyond the metric coarse series, explicit metric pitches and the Unified fractional sizes of §9, such as ISO fine series by size, pipe threads and trapezoidal tables. The caller states any other pitch.
+- Tables beyond the metric coarse series, explicit metric pitches and the Unified fractional sizes of §9, such as ISO fine series by size, tapered pipe threads and trapezoidal tables. The caller states any other pitch.
 - Cosmetic threads that mark a face and cut nothing.
 - Fit classes and tolerances: the profile is the basic profile with no allowance.
 
@@ -126,6 +126,7 @@ the 10 mm diameter instead of stating them.
 | K2 | `M<d>x<p>` states the pitch: any positive finite `p` below `d`, for any positive `d`. The letters M and x are read in either case. |
 | K3 | `<n>/<m>-<t>`, or `<n>-<t>` for a whole number of inches, is a Unified thread of nominal diameter `n/m` inch, a multiple of 1/64 inch in the table from 1/4 to 1 inch, at `t` threads per inch, which must be that size's UNC or UNF value (20 or 28 for 1/4, 13 or 20 for 1/2, 8 or 12 for 1, and so on). The pitch is `25.4/t` mm and the diameter `n/m · 25.4` mm. |
 | K6 | `#<n>-<t>` is a Unified numbered size: the nominal diameter of `#n` is `0.060 + 0.013 n` inch, for `n` in 0 to 6, 8, 10 and 12, at `t` threads per inch, which must be that size's UNC or UNF value (24 or 32 for `#10`, 32 or 40 for `#6`, and `#0` has only 80). The pitch is `25.4/t` mm. Any other number, a rate the size has not, or text after the rate is `ErrDegenerate`; a number without the `#` is no designation. The tests pin all nineteen sizes against the standard's table and refuse the near misses. |
+| K7 | `G<size>` is an ISO 228 parallel pipe thread (BSPP) by its nominal bore in inches, one of 1/8, 1/4, 3/8, 1/2, 5/8, 3/4, 7/8, 1, 1-1/4, 1-1/2 and 2, written as the standard writes it: its major diameter is the standard's in millimetres (9.728 for G1/8 to 59.614 for G2) and its pitch is `25.4/t` mm at 28, 19, 14 or 11 threads per inch. The G or g is read in either case. Any other size is `ErrDegenerate`. The size states the diameter and pitch only: the 55 degree Whitworth profile and the tapered NPT and BSPT threads are not read, and `Thread` cuts the form its spec names. The test pins the eleven sizes and refuses near misses. |
 | K4 | The result is a `ThreadSize` of two lengths. It names no tolerance class, allowance or minor diameter: a bore's drill diameter is the caller's to state from the thread's own tables. Any other designation, an empty one, one with a space, or a size not in the tables is `ErrDegenerate`. |
 | K5 | The tests pin each table value against the standard's, a stated pitch and a Unified size against the converted inch, every refusal, and cut a rod with the size `"M10"` names to the volume of a 1.5 mm pitch thread. |
 
