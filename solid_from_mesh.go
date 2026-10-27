@@ -15,6 +15,7 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -152,12 +153,50 @@ func meshPlaneGroups(producer provenance.Producer, verts []r3.Vec, tris [][3]int
 		if !ok {
 			gi = len(groups)
 			index[key] = gi
-			groups = append(groups, facetedrecord.Group{
+			group := facetedrecord.Group{
 				Origins: []provenance.Ref{{Producer: producer, Role: fmt.Sprintf("mesh_face(%d)", gi)}},
 				Planar:  planar,
-			})
+			}
+			if frame, ok := axisAlignedFrame(n, verts[t[0]]); ok {
+				// The plane's coordinate is a float vertex's own and its normal an exact unit axis,
+				// so the tag is the true plane with no departure: a retained plane.
+				group.Surface, group.Retained = surfacegeom.Plane{Frame: frame}, true
+			}
+			groups = append(groups, group)
 		}
 		src[ti] = gi
 	}
 	return src, groups
+}
+
+// axisAlignedFrame returns the frame of the plane through the float vertex at, when the
+// exact normal n has one non-zero part, so the plane is square to a world axis and its unit
+// normal and its offset are exact floats. The frame's normal is n's direction and its origin
+// is at.
+func axisAlignedFrame(n [3]*big.Rat, at r3.Vec) (r3.Frame, bool) {
+	axis := -1
+	for i, part := range n {
+		if part.Sign() == 0 {
+			continue
+		}
+		if axis >= 0 {
+			return r3.Frame{}, false
+		}
+		axis = i
+	}
+	if axis < 0 {
+		return r3.Frame{}, false
+	}
+	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
+	// u × v is the plane's outward normal.
+	pairs := [3][2][2]r3.Vec{{{y, z}, {z, y}}, {{z, x}, {x, z}}, {{x, y}, {y, x}}}
+	pick := pairs[axis][0]
+	if n[axis].Sign() < 0 {
+		pick = pairs[axis][1]
+	}
+	frame, err := r3.NewFrame(at, pick[0], pick[1])
+	if err != nil {
+		return r3.Frame{}, false
+	}
+	return frame, true
 }

@@ -2585,3 +2585,7 @@
 10	0.01	TestSolidFromMeshTakesPartInBooleans
 10	0.01	TestSolidFromMeshReadsATetrahedron
 10	0.01	TestSolidFromMeshRefusals
+10	0.01	TestSolidFromMeshFaceTagsAreExactPlanes
+10	0.01	TestSolidFromMeshFilletsAnEdge
+10	0.01	TestSolidFromMeshChamfersAnEdge
+10	0.01	TestSolidFromMeshTiltedFacesStayFaceted
