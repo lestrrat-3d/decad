@@ -38,11 +38,13 @@ func (l PointLocation) String() string {
 }
 
 // LocatePoint classifies a world-coordinate point in millimetres against b.
-// An undisplaced straight prism is classified against its own record in
-// exact arithmetic where its boundary is exact rational data
-// (agent-docs/point-containment-design.md §7), and a mesh Boolean result
-// combines its operands' exact answers through the operation history (§8);
-// every other body and point reads the verified mesh. tol is the positive tessellation chord tolerance.
+// An undisplaced straight prism (agent-docs/point-containment-design.md §7),
+// stacked prism or stack BRep (§9) and a full solid Revolve (§10) are
+// classified against their own records in exact arithmetic where their
+// boundaries are exact rational data, and a mesh Boolean result combines its
+// operands' exact answers through the operation history (§8); every other
+// body and point reads the verified mesh. tol is the positive tessellation
+// chord tolerance.
 // An approximate boundary can leave points near it undecided; a finer
 // tolerance may decide them. Retired bodies remain readable. A sheet or
 // unsound solid is ErrNotSolid.
@@ -78,16 +80,16 @@ func (b *Body) LocatePoint(ctx context.Context, p r3.Vec, tol units.Value) (Poin
 }
 
 // locateExact runs LocatePoint's routes that answer without a mesh: the
-// exact prism record (agent-docs/point-containment-design.md §7) and the
-// operation-history combination for a mesh Boolean result (§8). decided is
-// false when neither route applies or both leave p open. They answer without
-// a mesh, so it applies Tessellate's tolerance gates itself first. It stays
-// in root because §8 reads the document's producer records through
-// historyProducers, which only root holds.
+// exact analytic records (agent-docs/point-containment-design.md §7, §9,
+// §10) and the operation-history combination for a mesh Boolean result
+// (§8). decided is false when no route applies or the route leaves p open.
+// They answer without a mesh, so it applies Tessellate's tolerance gates
+// itself first. It stays in root because §8 reads the document's producer
+// records through historyProducers, which only root holds.
 func locateExact(ctx context.Context, b *Body, p r3.Vec, tol units.Value) (pointquery.Location, bool, error) {
-	_, prism := b.n.Payload.(prismPayload)
-	_, faceted := b.n.Payload.(facetedPayload)
-	if !prism && !faceted {
+	switch b.n.Payload.(type) {
+	case prismPayload, stackedPrismPayload, brepPayload, revolvePayload, facetedPayload:
+	default:
 		return pointquery.Undecided, false, nil
 	}
 	chord, err := sectionrecord.MagnitudeIn(tol, units.Length, units.Millimeter, "the chord tolerance")
@@ -97,10 +99,10 @@ func locateExact(ctx context.Context, b *Body, p r3.Vec, tol units.Value) (point
 	if chord == 0 {
 		return pointquery.Undecided, false, fmt.Errorf(`%w: a zero chord tolerance admits no chord`, ErrDegenerate)
 	}
-	if pp, ok := b.n.Payload.(prismPayload); ok {
-		return pointquery.LocatePrism(ctx, p, pp)
+	if _, faceted := b.n.Payload.(facetedPayload); faceted {
+		return pointquery.LocateBoolean(ctx, p, &b.n, historyProducers{documentHandle(b.n.Doc)})
 	}
-	return pointquery.LocateBoolean(ctx, p, &b.n, historyProducers{documentHandle(b.n.Doc)})
+	return pointquery.LocateRecord(ctx, p, b.n.Payload)
 }
 
 // DistanceToPoint measures the minimum distance in millimetres from p to this

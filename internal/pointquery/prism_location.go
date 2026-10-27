@@ -2,9 +2,7 @@ package pointquery
 
 import (
 	"context"
-	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -28,7 +26,7 @@ func LocatePrism(ctx context.Context, p r3.Vec, pp prismrecord.Payload) (Locatio
 	if z0 == nil || z1 == nil || z0.Cmp(z1) >= 0 {
 		return Undecided, false, nil
 	}
-	local, ok := prismLocal(p, pp)
+	local, ok := placedLocal(p, pp.Frame, pp.Xform)
 	if !ok {
 		return Undecided, false, nil
 	}
@@ -53,52 +51,4 @@ func LocatePrism(ctx context.Context, p r3.Vec, pp prismrecord.Payload) (Locatio
 	default:
 		return Undecided, false, nil
 	}
-}
-
-// prismLocal solves the record's denoted affine map for the plane coordinates
-// (u, v, z) of the world point p. The map is x ↦ T + B·O + L·x with
-// L = B·[U V N] (massmoment.PrismRotation): the frame's held axes and origin
-// and the placement's held basis B and translation T, read as exact
-// rationals (agent-docs/evaluator-design.md §5.1). The held L is orthonormal
-// only to rounding, so its transpose is not its inverse; Cramer's rule over
-// exact rationals is. It reports false for a non-finite field or a singular L.
-func prismLocal(p r3.Vec, pp prismrecord.Payload) (ratVec, bool) {
-	l, err := massmoment.PrismRotation(pp.Frame, pp.Xform)
-	if err != nil {
-		return ratVec{}, false
-	}
-	b, err := massmoment.PlacementRotation(pp.Xform)
-	if err != nil {
-		return ratVec{}, false
-	}
-	origin, translation, point := exactVec(pp.Frame.Origin()), exactVec(pp.Xform.Translation()), exactVec(p)
-	for i := range 3 {
-		if origin[i] == nil || translation[i] == nil || point[i] == nil {
-			return ratVec{}, false
-		}
-	}
-	var offset ratVec
-	for i := range 3 {
-		w := new(big.Rat).Set(translation[i])
-		for k := range 3 {
-			w.Add(w, new(big.Rat).Mul(b[i][k], origin[k]))
-		}
-		offset[i] = new(big.Rat).Sub(point[i], w)
-	}
-	det := massmoment.Determinant(l)
-	if det.Sign() == 0 {
-		return ratVec{}, false
-	}
-	var local ratVec
-	for k := range 3 {
-		var replaced [3][3]*big.Rat
-		for i := range 3 {
-			for j := range 3 {
-				replaced[i][j] = l[i][j]
-			}
-			replaced[i][k] = offset[i]
-		}
-		local[k] = new(big.Rat).Quo(massmoment.Determinant(replaced), det)
-	}
-	return local, true
 }
