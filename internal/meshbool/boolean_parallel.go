@@ -244,7 +244,8 @@ func NearContactRunner() ContactBatchRunner {
 }
 
 // contactClassifier fills one pair's slot from prepared, read-only meshes.
-type contactClassifier func(ma, mb *BoolMesh, pair ContactPair) ContactBatchResult
+// cache is the calling goroutine's own edge-plane cache over ma.
+type contactClassifier func(ma, mb *BoolMesh, pair ContactPair, cache *edgePlaneCache) ContactBatchResult
 
 func runContactBatch(ctx context.Context, ma, mb *BoolMesh, pairs []ContactPair, results []ContactBatchResult, workers int, classify contactClassifier) error {
 	if len(pairs) == 0 {
@@ -274,6 +275,7 @@ func runContactBatch(ctx context.Context, ma, mb *BoolMesh, pairs []ContactPair,
 	for range workers {
 		go func() {
 			defer wg.Done()
+			cache := newEdgePlaneCache()
 			for {
 				start := int(next.Add(chunkSize)) - chunkSize
 				if start >= len(pairs) {
@@ -283,7 +285,7 @@ func runContactBatch(ctx context.Context, ma, mb *BoolMesh, pairs []ContactPair,
 					if err := ctx.Err(); err != nil {
 						return
 					}
-					results[slot] = classify(ma, mb, pairs[slot])
+					results[slot] = classify(ma, mb, pairs[slot], &cache)
 				}
 			}
 		}()
@@ -298,33 +300,38 @@ func runContactBatch(ctx context.Context, ma, mb *BoolMesh, pairs []ContactPair,
 // runContactBatchSerial is RunContactBatch on the calling goroutine alone,
 // filling the same slots with the same classifications.
 func runContactBatchSerial(ctx context.Context, ma, mb *BoolMesh, pairs []ContactPair, results []ContactBatchResult, classify contactClassifier) error {
+	cache := newEdgePlaneCache()
 	for slot, pair := range pairs {
 		if slot%64 == 0 {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
 		}
-		results[slot] = classify(ma, mb, pair)
+		results[slot] = classify(ma, mb, pair, &cache)
 	}
 	return ctx.Err()
 }
 
-// classifyContactPair classifies one prepared facet pair.
-func classifyContactPair(ma, mb *BoolMesh, pair ContactPair) ContactBatchResult {
-	contact, err := TriTriClassifyPrepared(
+// classifyContactPair classifies one prepared facet pair, as
+// TriTriClassifyPrepared does. cache, when not nil, holds edge planes of
+// facets of ma only.
+func classifyContactPair(ma, mb *BoolMesh, pair ContactPair, cache *edgePlaneCache) ContactBatchResult {
+	contact, err := triTriClassify(
 		TriCorners(ma, pair.I),
 		TriCorners(mb, pair.J),
 		XtriCorners(ma, pair.I),
 		XtriCorners(mb, pair.J),
 		ma.Norms[pair.I], mb.Norms[pair.J],
-		ma.Fnorms[pair.I], mb.Fnorms[pair.J],
+		nil, nil, nil, nil, true,
+		ma.Fnorms[pair.I], mb.Fnorms[pair.J], true,
+		cache, pair.I,
 	)
 	return ContactBatchResult{Contact: contact, Err: err}
 }
 
 // classifyNearContactPair classifies a pair, then measures a ContactNone pair.
-func classifyNearContactPair(ma, mb *BoolMesh, pair ContactPair) ContactBatchResult {
-	result := classifyContactPair(ma, mb, pair)
+func classifyNearContactPair(ma, mb *BoolMesh, pair ContactPair, cache *edgePlaneCache) ContactBatchResult {
+	result := classifyContactPair(ma, mb, pair, cache)
 	if result.Err != nil || result.Contact.Kind != ContactNone {
 		return result
 	}

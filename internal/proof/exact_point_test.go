@@ -40,6 +40,21 @@ func TestXdotDiffSignMatchesExactSubtraction(t *testing.T) {
 					require.Equal(t, want, proof.XdotDiffSign(n, p, scaled), "n=%v p=%v q=%v factor=%d", nv, pv, qv, factor)
 					require.Equal(t, want, proof.XdotDiffSignScratch(&scratch, n, p, scaled),
 						"reused scratch: n=%v p=%v q=%v factor=%d", nv, pv, qv, factor)
+					// The offset form, with p over its own power-of-two weight,
+					// over the same weight as q and over a general weight.
+					nq := proof.XdotNum(n, scaled)
+					held := new(big.Int).Set(nq)
+					for _, pFactor := range []int64{1, factor, 5} {
+						sp := proof.Xpt{
+							X: new(big.Int).Mul(p.X, big.NewInt(pFactor)),
+							Y: new(big.Int).Mul(p.Y, big.NewInt(pFactor)),
+							Z: new(big.Int).Mul(p.Z, big.NewInt(pFactor)),
+							W: new(big.Int).Mul(p.W, big.NewInt(pFactor)),
+						}
+						require.Equal(t, want, proof.XdotDiffSignOffset(&scratch, n, sp, scaled, nq),
+							"offset: n=%v p=%v q=%v factor=%d pFactor=%d", nv, pv, qv, factor, pFactor)
+						require.Zero(t, held.Cmp(nq), "offset changed")
+					}
 				}
 			}
 		}

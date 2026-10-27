@@ -152,7 +152,7 @@ type PairContact struct {
 // Two exactly held facets amplify nothing and answer 0 at any angle; a
 // crossing with no proven positive sine answers +Inf, which the caller
 // refuses.
-func RimBound(deltaA, deltaB float64, sin2 *big.Rat) float64 {
+func RimBound(deltaA, deltaB float64, sin2 *SinSquare) float64 {
 	d := proofbound.AbsSumUpper(deltaA, deltaB)
 	if d <= 0 {
 		return 0

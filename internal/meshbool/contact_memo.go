@@ -12,8 +12,8 @@ package meshbool
 // operand, so a caller cannot key an answer for one operand pair and read it
 // back for another.
 //
-// A returned TriContact is shared: its p0/p1 endpoints and its sin2 are
-// *big.Rat values a second caller reads, never a fresh copy. Every consumer
+// A returned TriContact is shared: its p0/p1 endpoints and its sin2 hold
+// *big.Int values a second caller reads, never a fresh copy. Every consumer
 // today only reads them, so this is safe, but no consumer may mutate one in
 // place. ContactMemo is not safe for concurrent use; nothing today shares one
 // across goroutines.
