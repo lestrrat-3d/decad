@@ -65,7 +65,16 @@ func TestSweepTwistStraightPolygon(t *testing.T) {
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(area.Value.Base()-48.07298839110878), area.Bound.Base())
 
-	_, err = body.Tessellate(t.Context(), units.Millimeters(0.1),
+	// The one-cell boundary is 0.46 mm from the true wall. A finer request
+	// restates the stationed refinement of the same section
+	// (agent-docs/twist-sweep-cut-design.md §3); one below that refuses.
+	fine, err := body.Tessellate(t.Context(), units.Millimeters(0.1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.Less(t, fine.Bound().Base(), 0.1)
+	require.Greater(t, len(fine.Triangles()), 12)
+	require.True(t, fine.VolumeVerified())
+	_, err = body.Tessellate(t.Context(), units.Millimeters(0.001),
 		decad.WithVerification(decad.VerifyAll))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.5),

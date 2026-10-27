@@ -98,6 +98,13 @@ func Body(ctx context.Context, b *topo.Body, chord float64, verify Verify, opts 
 	}
 	if tp, ok := b.Payload.(twistsweep.Payload); ok {
 		if chord < tp.Delta {
+			// A one-cell sweep can restate a closer stationed boundary of the
+			// same true section (agent-docs/twist-sweep-cut-design.md §3); a finer
+			// request than that, or a sweep with no such boundary, refuses.
+			if refined, ok := tp.RefinedDelta(); ok && chord >= refined {
+				env := topo.Env{Doc: b.Doc, Ref: b.Origin.Producer, Alloc: opts.Alloc}
+				return twistsweep.RefinedMesh(ctx, env, tp, b)
+			}
 			return nil, fmt.Errorf(`%w: the twisted sweep's held boundary is %g mm from its true wall; %g mm is finer`, decaderr.ErrUnsupported, tp.Delta, chord)
 		}
 		if tp.Mesh != nil {

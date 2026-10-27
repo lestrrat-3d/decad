@@ -42,7 +42,7 @@ func HeldFloor(b *topo.Body) (float64, bool) {
 	case coilshell.Payload:
 		return p.Delta, true
 	case twistsweep.Payload:
-		return p.Delta, true
+		return twistFloor(p), true
 	default:
 		return 0, false
 	}
@@ -131,10 +131,20 @@ func heldPrimitiveFloor(payload topo.Payload) float64 {
 	case sweepmitre.Payload:
 		return p.Delta
 	case twistsweep.Payload:
-		return p.Delta
+		return twistFloor(p)
 	default:
 		return 0
 	}
+}
+
+// twistFloor is the closest held boundary a twisted sweep restates: the
+// stationed refinement of a one-cell sweep when it proves a smaller
+// displacement (agent-docs/twist-sweep-cut-design.md §3), else the sweep's own Delta.
+func twistFloor(p twistsweep.Payload) float64 {
+	if refined, ok := p.RefinedDelta(); ok {
+		return refined
+	}
+	return p.Delta
 }
 
 // coordDisplacement is the count-INDEPENDENT coordinate reservation an
