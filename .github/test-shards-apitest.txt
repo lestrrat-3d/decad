@@ -150,7 +150,7 @@
 1	0.03	TestRevolveShellOffAxisRing
 1	0.01	TestRevolveShellSideOpeningRefusals
 1	0.00	TestRevolveSnappedRimEnclosesAreaAndVolume
-10	0.00	TestSTEPWritesCornerPatchesAnalytic
+10	0.00	TestSTEPWritesCornerPatches
 1	1.11	TestRevolveTessellateCircularMeridianChordsWithTolerance
 1	0.04	TestRevolveTessellateConeApexIsOneInternedVertex
 1	0.01	TestRevolveVerifySound

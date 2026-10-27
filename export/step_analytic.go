@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/facedeparture"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/step"
 	"github.com/lestrrat-3d/step/ap214"
@@ -24,10 +25,34 @@ import (
 // Exact (loopVerticesExact); a torus is a whole turn (two one-circle loops
 // whose starts share an azimuth) or a patch of parallel and meridian arcs
 // (supportsAnalyticTorus). Every patch's walk must follow from its
-// neighbours' (patchWalks). An unsupported edge or wall sends the entire body
-// through the faceted writer, so one file never mixes two unrelated boundary
-// constructions.
+// neighbours' (patchWalks). A face whose tag departs from its surface by a
+// stated bound (tagsUndeparted), or an unsupported edge or wall, sends the
+// entire body through the faceted writer, so one file never mixes two
+// unrelated boundary constructions.
 func supportsAnalyticSTEP(ctx context.Context, body *decad.Body) (bool, error) {
+	if !tagsUndeparted(body) {
+		return false, nil
+	}
+	return supportsAnalyticFaces(ctx, body)
+}
+
+// tagsUndeparted reports whether no face of body states a departure from its
+// surface tag (a nonzero NormalBound or HeldNormalBound, read through
+// facedeparture). It only refuses: the analytic arm writes each tag's float
+// image as the face's surface, and a face that states a departure is not
+// proven to lie on that surface.
+func tagsUndeparted(body *decad.Body) bool {
+	for _, face := range body.Faces() {
+		if facedeparture.Stated(face) {
+			return false
+		}
+	}
+	return true
+}
+
+// supportsAnalyticFaces is supportsAnalyticSTEP's admission of each face's
+// surface, loops and edges and of the patch walks, without the tag gate.
+func supportsAnalyticFaces(ctx context.Context, body *decad.Body) (bool, error) {
 	for _, face := range body.Faces() {
 		if err := ctx.Err(); err != nil {
 			return false, err

@@ -2978,7 +2978,8 @@ bounded only by its two closed rim circles. Hole, Boss and Thread read the tag
 only to place a new tool. The edge dihedral (`Edge.planarDihedral`) keeps only
 `NormalAt`'s value and drops its bound; `ChamferAngle` and `FilletChord` use
 that angle only to size a tool. The selector reads the tag's kind. STEP export
-writes the tag's float image without reading `NormalBound`
+refuses a face with a nonzero `NormalBound` from its analytic writer, so a bored
+loft whose bore states a departure writes faceted
 (`agent-docs/step-export-design.md`).
 
 A direct Loft also publishes one `Circle3` per cap rim and one curved hole

@@ -155,16 +155,20 @@ func TestDraftMesh(t *testing.T) {
 }
 
 // TestDraftMeshExports pins DD3 and DD4: STL, OBJ and 3MF write F1 and F2,
-// STL and OBJ byte-identically on a second run, and STEP writes F1 through
-// the analytic writer (every face a Plane) and F2 through it too (its Cone
-// wall is full, between two circles).
+// STL and OBJ byte-identically on a second run, and STEP writes both through
+// the faceted writer. F1's drafted walls are Planes and F2's wall is a full
+// Cone between two circles, which the analytic face admission takes, but each
+// drafted wall's tag departs from the wall by a stated bound (its NormalBound
+// is not zero), and the analytic writer refuses a body with such a face
+// (agent-docs/step-export-design.md). Shown to fail with supportsAnalyticSTEP's
+// tag gate deleted (both bodies were written analytic).
 func TestDraftMeshExports(t *testing.T) {
 	t.Parallel()
 	cases := draftCases()
 	for _, tc := range []struct {
 		fixture draftCase
 		step    string
-	}{{cases[0], "analytic decad solid"}, {cases[1], "analytic decad solid"}} {
+	}{{cases[0], "faceted decad solid"}, {cases[1], "faceted decad solid"}} {
 		t.Run(tc.fixture.name, func(t *testing.T) {
 			t.Parallel()
 			b := tc.fixture.build(t, decad.New())

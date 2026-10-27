@@ -409,7 +409,7 @@ nothing else.
 | **DD1** | `Body.Tessellate` | chords both records once with the shared curve samples (tessellation §3), rules each wall between its two rims with the cap-band strip emitter (`capblend.EmitBand` in `internal/capblend/mesh_band.go`, over `internal/tessellation`'s rings), triangulates both caps; manifold by construction; the volume proof is the band admission of `agent-docs/tessellation-reach-design.md` §7 with no slab (§9.1). A band the admission refuses meshes for export with no volume proof | 2 |
 | **DD2** | `Union`/`Cut`/`Intersect` | the mesh path (evaluator §9) over DD1's mesh, admitted by `booloperand.RequireVolumeProof` through the same band admission; the analytic prism reduction's entry gate (`internal/prismboolean`) does not admit the class and takes the mesh path | 2 |
 | **DD3** | STL / OBJ / 3MF | the mesh of DD1 | 2 |
-| **DD4** | STEP | the analytic writer when every face is a `Plane` — a drafted polygon writes `ADVANCED_FACE`s over tilted planes with `Line3` loops, which `supportsAnalyticSTEP` admits; a drafted circle's full conical wall writes a `CONICAL_SURFACE`, and a cone with one circle loop sends the whole body to the faceted writer (`agent-docs/step-export-design.md`) | 2 |
+| **DD4** | STEP | the faceted writer. A drafted polygon's tilted planes with `Line3` loops and a drafted circle's full conical wall pass the analytic face admission, but each drafted wall's tag is a rounding of the tilted surface and states a nonzero `NormalBound`, and a face that states a departure sends the whole body to the faceted writer (`agent-docs/step-export-design.md`) | 2 |
 | **DD5** | `Verify` validity | built by construction after the §5 audit, as a prism is; `Built` and `Solid` read true | 1 |
 | **DD6** | `Verify` tolerance reference | `pairkernel.BodyGateDiameter` gains an arm (`draftGateDiameter`): the lower-bound diameter over wall stations on the near section at the near level and on the recorded far section at the far level, each charged its gap plus the level displacement and `farDelta`, falling back to the held vertices with their bounds (verification §3). Without it every draft body would read `DiagToleranceReferenceUnavailable`, since its bounds are never zero | 1 |
 | **DD7** | `Verify` undercut survey (`WithPullDirection`) | `internal/capblendsurvey` reads built face normals and decides each wall and cap as described below. | 4 |
@@ -760,8 +760,7 @@ its exact volume within `volSymDiff` of the closed form, and each record's
 DD17 radius at least every mesh vertex's L1 norm and at most twice the largest,
 and F1's mesh holding its eight corners and two triangles on each of its six
 faces (`internal/draftrecord/draft_fixtures_test.go`); `Union` of F1 with a straight
-prism through it; STEP of F1 analytic (`analytic decad solid`) and of F2
-faceted; `MassProperties` of F1 against the closed form.
+prism through it; STEP of F1 and of F2 faceted (`faceted decad solid`); `MassProperties` of F1 against the closed form.
 
 **PR 5 fixtures** (`apitest/draft_subset_test.go`): F1's box with its `+u`
 wall drafted alone, `Volume = h·a(a − d/2)`, its area, centroid, far corners

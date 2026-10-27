@@ -110,10 +110,29 @@ func torusArcIsMeridian(arc decad.Arc3, torus decad.Torus) bool {
 	return arc.Axis.Dot(torus.Axis) == 0
 }
 
+// torusPatchArc classifies one arc edge of a torus patch: whether it is a
+// parallel (else a meridian), and whether the patch admits it at all. An arc
+// that is neither, or whose vertices are not both in its own plane
+// (arcInItsPlane), is refused: the file would state a CIRCLE the edge does
+// not run on.
+func torusPatchArc(edge *decad.Edge, arc decad.Arc3, torus decad.Torus) (bool, bool) {
+	if !arcInItsPlane(edge, arc) {
+		return false, false
+	}
+	switch {
+	case torusArcIsParallel(arc, torus):
+		return true, true
+	case torusArcIsMeridian(arc, torus):
+		return false, true
+	}
+	return false, false
+}
+
 // supportsAnalyticTorusPatch admits one loop of at least four Arc3 edges,
-// each a parallel of the torus or a meridian of its tube, with both kinds
-// present: the pipe patch of a round corner, bounded by its top and side
-// contours and the two meridians it shares with its neighbours.
+// each a parallel of the torus or a meridian of its tube with both vertices
+// in its own plane (torusPatchArc), with both kinds present: the pipe patch
+// of a round corner, bounded by its top and side contours and the two
+// meridians it shares with its neighbours.
 func supportsAnalyticTorusPatch(loop *decad.Loop, torus decad.Torus) bool {
 	coedges := loop.CoEdges()
 	if len(coedges) < 4 {
@@ -125,13 +144,14 @@ func supportsAnalyticTorusPatch(loop *decad.Loop, torus decad.Torus) bool {
 		if !ok {
 			return false
 		}
+		parallel, ok := torusPatchArc(ce.Edge(), arc, torus)
 		switch {
-		case torusArcIsParallel(arc, torus):
-			parallels++
-		case torusArcIsMeridian(arc, torus):
-			meridians++
-		default:
+		case !ok:
 			return false
+		case parallel:
+			parallels++
+		default:
+			meridians++
 		}
 	}
 	return parallels > 0 && meridians > 0

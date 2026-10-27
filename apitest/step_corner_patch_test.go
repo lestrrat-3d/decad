@@ -11,26 +11,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestSTEPWritesCornerPatchesAnalytic writes, through the public API, three
-// bodies whose corners are single-loop cone and sphere patches
-// (agent-docs/step-export-design.md), and requires the analytic writer with
-// one ADVANCED_FACE per body face.
+// TestSTEPWritesCornerPatches writes, through the public API, three bodies
+// whose corners are single-loop cone and sphere patches
+// (agent-docs/step-export-design.md), and requires the writer each takes.
 //
 // The rounded box (20x20x10, vertical edges filleted r = 3, top loop
-// chamfered by 1) holds four cone patches, each two arcs and two generators.
-// Its volume is 9·(400 − 9(4 − π)) + ∫₀¹ (20 − 2d)² − (4 − π)(3 − d)² dd =
-// 3612 + 262π/3. ReadSTEP reads the file back closed; its arcs are chords
-// inscribed in their circles within 0.01 mm on a convex body, so the read
-// volume lies under the closed form and within 0.01 mm times the curved
-// faces' area of it. The pocket mouth chamfer holds four three-edge cone
-// patches meeting at their apex vertices, and the cube filleted r = 2 on
-// every edge holds eight three-arc sphere patches; ReadSTEP reads neither a
-// cone's apex nor a sphere patch other than a cap, so those two files are
-// checked by their surfaces. Shown to fail with supportsAnalyticConePatch and
-// supportsAnalyticSpherePatch each refusing every loop (the bodies fell to
-// the faceted writer), and with the cone patch's face sense inverted (ReadSTEP
-// turned the cone triangles inward and the read volume left its bound).
-func TestSTEPWritesCornerPatchesAnalytic(t *testing.T) {
+// chamfered by 1) holds four cone patches, each two arcs and two generators,
+// and the pocket mouth chamfer holds four three-edge cone patches meeting at
+// their apex vertices. A loop chamfer's corner cones are cap-blend band
+// patches whose tags depart from the ruled patches the build assembles by a
+// stated bound (agent-docs/modify-reach-design.md §8.3), so both bodies take
+// the faceted writer: no CONICAL_SURFACE, one planar ADVANCED_FACE per mesh
+// triangle. The rounded box's volume is 9·(400 − 9(4 − π)) + ∫₀¹ (20 − 2d)² −
+// (4 − π)(3 − d)² dd = 3612 + 262π/3; ReadSTEP reads its file back closed,
+// within the 0.1 mm chord times the curved faces' area of it. The cube
+// filleted r = 2 on every edge holds eight three-arc sphere patches, whose
+// tags are their surfaces, and takes the analytic writer; ReadSTEP reads no
+// sphere patch other than a cap, so that file is checked by its surfaces. The
+// cone legs were shown to fail with supportsAnalyticSTEP's tag gate deleted
+// (both bodies were written analytic), and the sphere leg with
+// supportsAnalyticSpherePatch refusing every loop (the body fell to the
+// faceted writer).
+func TestSTEPWritesCornerPatches(t *testing.T) {
 	t.Parallel()
 	up := r3.NewVec(0, 0, 1)
 	t.Run("convex cone patches", func(t *testing.T) {
@@ -43,9 +45,9 @@ func TestSTEPWritesCornerPatchesAnalytic(t *testing.T) {
 		body, err := decad.Chamfer(t.Context(), rounded, loopEdgeQuery(top.Loops()[0]), units.Millimeters(1))
 		require.NoError(t, err)
 		text := string(writeSTEP(t, body))
-		require.Contains(t, text, "analytic decad solid")
-		require.Equal(t, len(body.Faces()), strings.Count(text, "=ADVANCED_FACE("))
-		require.Equal(t, 4, strings.Count(text, "=CONICAL_SURFACE("))
+		require.Contains(t, text, "faceted decad solid")
+		require.Zero(t, strings.Count(text, "=CONICAL_SURFACE("))
+		require.Equal(t, strings.Count(text, "=ADVANCED_FACE("), strings.Count(text, "=PLANE("))
 
 		curved := 0.0
 		for _, f := range body.Faces() {
@@ -58,12 +60,10 @@ func TestSTEPWritesCornerPatchesAnalytic(t *testing.T) {
 		}
 		m, err := readSTEPBytes(t, []byte(text))
 		require.NoError(t, err)
-		require.True(t, m.Report().Closed, "the cone patches' chords meet their neighbours'")
+		require.True(t, m.Report().Closed, "the faceted file reads back closed")
 		volume, err := m.Volume()
 		require.NoError(t, err)
-		exact := 3612 + 262*math.Pi/3
-		require.Less(t, volume.Value.Base(), exact)
-		require.Greater(t, volume.Value.Base(), exact-0.01*curved)
+		require.InDelta(t, 3612+262*math.Pi/3, volume.Value.Base(), 0.1*curved)
 	})
 	t.Run("reflex cone patches", func(t *testing.T) {
 		t.Parallel()
@@ -74,9 +74,9 @@ func TestSTEPWritesCornerPatchesAnalytic(t *testing.T) {
 		body, err := decad.Chamfer(t.Context(), pocket, loopEdgeQuery(mouth.Loops()[1]), units.Millimeters(1))
 		require.NoError(t, err)
 		text := string(writeSTEP(t, body))
-		require.Contains(t, text, "analytic decad solid")
-		require.Equal(t, len(body.Faces()), strings.Count(text, "=ADVANCED_FACE("))
-		require.Equal(t, 4, strings.Count(text, "=CONICAL_SURFACE("))
+		require.Contains(t, text, "faceted decad solid")
+		require.Zero(t, strings.Count(text, "=CONICAL_SURFACE("))
+		require.Equal(t, strings.Count(text, "=ADVANCED_FACE("), strings.Count(text, "=PLANE("))
 	})
 	t.Run("sphere patches", func(t *testing.T) {
 		t.Parallel()
