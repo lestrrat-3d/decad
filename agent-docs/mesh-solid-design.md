@@ -17,8 +17,18 @@ func SolidFromMesh(ctx context.Context, d *Document, m *MeshBody) (*Body, error)
 | M3 | The held vertices are the mesh's own floats, so the vertex bound is zero everywhere and so are the mesh bound, the volume's symmetric difference and the area slack. The volume is read from the exact signed volume of the triangles by `facetproof.AuditFacetedMesh` and `booleaneval.VolumeReading`, with whatever bound turning that rational to a float needs; the diameter bound is the bounding box's diagonal, rounded up. |
 | M4 | Triangles share a source group, and so a face, when their planes are the same exactly: the normal `(b − a) × (c − a)` and the offset `n · a` are worked in rational arithmetic from the floats and divided by the first non-zero magnitude of the normal, so a plane and its orientation have one key. The group is `Planar`. A triangle of no area is a group of its own, not `Planar`. Edge-connectivity then splits a group into its patches, as for any faceted body. |
 | M5 | The faces are Faceted: they carry no analytic surface tag, so selection by `Planar` or a normal does not find them, and a Boolean takes them through the generic mesh path with its pair tolerance. The result is registered in the document as one `OperationSolidFromMesh` entry with no input. A refusal leaves the document unchanged. |
+| M6 | A group whose exact normal has one non-zero part, so the plane is square to a world axis, keeps that plane as a retained tag: its frame has the group's first vertex as origin, which lies on the plane exactly, and the unit axes ordered so the frame's normal is the outward one. The tag departs from the exact plane by nothing, so its normal bound is zero. Every other group stays Faceted, because no float unit normal names its plane. |
 
-## 2. Not covered
+## 2. Blends on a mesh solid
+
+A retained plane is what the retained edge blend reads (`agent-docs/retained-edge-blend-design.md`, `agent-docs/retained-modify-reach-design.md`),
+so `Fillet` and `Chamfer` build on an edge of a mesh solid between two axis-square faces whose ends lie on axis-square
+faces, exactly as on a mesh Boolean result with retained planes: the call is that route's, its gates and bounds
+unchanged. An edge that meets a slanted face has no plane to blend against and is that route's `ErrUnsupported`. The tests
+state a block's filleted and chamfered volumes from the section removed, `(1 − π/4)·r²·L` and `r²·L/2`, and require them inside
+the result's bound, and check that the tetrahedron's slanted face is Faceted and its blend refused.
+
+## 3. Not covered
 
 - Welding, orienting and hole filling: repair the mesh first with `RepairMesh`.
 - Recovering planes, cylinders or cones from a curved mesh, and so a retained analytic tag. A cylinder read from STL is a
