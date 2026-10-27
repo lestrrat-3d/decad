@@ -136,7 +136,11 @@ func cutTriangle(ctx context.Context, xtri [3]proof.Xpt, normal proof.Xpt, segs 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	tc := newTriCutter(ctx, projections)
+	return newTriCutter(ctx, projections).cut(ctx, xtri, normal, segs)
+}
+
+// cut is cutTriangle's work on a fresh cutter, every step charged to tc.Work.
+func (tc *TriCutter) cut(ctx context.Context, xtri [3]proof.Xpt, normal proof.Xpt, segs []Xseg) ([]CutRegion, error) {
 	tc.U, tc.V = ProjAxes(normal)
 	cornerIdx, err := tc.internFacet(xtri, segs)
 	if err != nil {
@@ -177,16 +181,19 @@ func cutTriangle(ctx context.Context, xtri [3]proof.Xpt, normal proof.Xpt, segs 
 	}
 
 	// Assign each chain to the piece containing it, then split the pieces
-	// along their chains into the final region polygons.
+	// along their chains into the final region polygons. The vertex table is
+	// final from here on (nothing below adds a vertex or changes a boundary
+	// flag), so each chain carries the probe found here into SplitByChains.
 	byPiece := make([][]ChainPath, len(pieces))
 	for _, ch := range chains {
 		if err := tc.Work.Step(); err != nil {
 			return nil, err
 		}
-		probe, err := tc.ChainProbe(ch)
+		probe, steps, err := tc.chainProbe(ch)
 		if err != nil {
 			return nil, err
 		}
+		ch.probe, ch.probeSteps, ch.hasProbe = probe, steps, true
 		placed := false
 		for pi, piece := range pieces {
 			pts, err := tc.PolyPoints(piece)
@@ -311,18 +318,34 @@ func xp2Swapped(p Xp2) Xp2 {
 // region boundaries.
 type ChainPath struct {
 	Verts []int
+	// probe is ChainProbe's answer for this chain and probeSteps the number
+	// of budget steps it took, recorded by cutTriangle once the vertex table
+	// is final, when hasProbe is set. ChainProbe reads only that table, so
+	// the recorded answer is the one a new call would return.
+	probe      Xp2
+	probeSteps int
+	hasProbe   bool
 }
 
 // ChainProbe is an exact point strictly inside the chain's carrier piece:
 // an interior chain vertex when one exists, else the midpoint of the first
 // edge.
 func (tc *TriCutter) ChainProbe(ch ChainPath) (Xp2, error) {
+	p, _, err := tc.chainProbe(ch)
+	return p, err
+}
+
+// chainProbe is ChainProbe, also returning the number of budget steps it
+// took.
+func (tc *TriCutter) chainProbe(ch ChainPath) (Xp2, int, error) {
+	steps := 0
 	for _, vi := range ch.Verts[1 : len(ch.Verts)-1] {
 		if err := tc.Work.Step(); err != nil {
-			return Xp2{}, err
+			return Xp2{}, steps, err
 		}
+		steps++
 		if !tc.Verts[vi].Boundary {
-			return tc.Verts[vi].P2, nil
+			return tc.Verts[vi].P2, steps, nil
 		}
 	}
 	a, b := tc.Verts[ch.Verts[0]].P2, tc.Verts[ch.Verts[1]].P2
@@ -330,7 +353,23 @@ func (tc *TriCutter) ChainProbe(ch ChainPath) (Xp2, error) {
 	return NewXP2(
 		proof.MulRat(new(big.Rat), half, proof.AddRat(new(big.Rat), a.U, b.U)),
 		proof.MulRat(new(big.Rat), half, proof.AddRat(new(big.Rat), a.V, b.V)),
-	), nil
+	), steps, nil
+}
+
+// recordedChainProbe is ChainProbe for a chain cutTriangle has recorded a
+// probe for: it takes the same budget steps and returns the recorded point.
+// The point is shared between calls; its readers never mutate it (Xp2). A
+// chain without a record takes ChainProbe.
+func (tc *TriCutter) recordedChainProbe(ch ChainPath) (Xp2, error) {
+	if !ch.hasProbe {
+		return tc.ChainProbe(ch)
+	}
+	for range ch.probeSteps {
+		if err := tc.Work.Step(); err != nil {
+			return Xp2{}, err
+		}
+	}
+	return ch.probe, nil
 }
 
 func (tc *TriCutter) PolyPoints(poly []int) ([]Xp2, error) {
@@ -714,7 +753,7 @@ func (tc *TriCutter) SplitByChains(piece []int, chains []ChainPath) ([][]int, er
 			if err := tc.Work.Step(); err != nil {
 				return nil, err
 			}
-			probe, err := tc.ChainProbe(rc)
+			probe, err := tc.recordedChainProbe(rc)
 			if err != nil {
 				return nil, err
 			}
