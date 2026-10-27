@@ -170,8 +170,8 @@ const holeTolerance = 0.05
 // b MUST be a live solid; a nil context, body or selector, a missing depth,
 // a non-positive diameter or depth, a head not wider than the hole, a
 // counterbore not shallower than the hole and a countersink deeper than the
-// hole are ErrDegenerate. A face that is not an analytic plane is
-// ErrUnsupported. A selector that does not resolve to one face is the
+// hole are ErrDegenerate. A face that is not an analytic plane, nor a convex planar
+// face of a faceted solid with exact vertices, is ErrUnsupported. A selector that does not resolve to one face is the
 // selector's own error. An At more than 1e-6 mm off the face plane, or one
 // that Body.LocatePoint certifies lies outside the body along the hole axis,
 // is ErrDegenerate; an undecided location does not refuse. A boolean the
@@ -195,7 +195,7 @@ func Hole(ctx context.Context, b *Body, spec HoleSpec) (result *Body, retErr err
 	if spec.Face == nil {
 		return nil, errNilSelector
 	}
-	in, err := holeInput(b, spec)
+	in, err := holeInput(ctx, b, spec)
 	if err != nil {
 		return nil, err
 	}
@@ -241,9 +241,9 @@ func Hole(ctx context.Context, b *Body, spec HoleSpec) (result *Body, retErr err
 }
 
 // holeInput resolves spec into the plain-data request holeplan reads.
-func holeInput(b *Body, spec HoleSpec) (holeplan.Input, error) {
+func holeInput(ctx context.Context, b *Body, spec HoleSpec) (holeplan.Input, error) {
 	var in holeplan.Input
-	site, err := resolveHoleSite(b, spec)
+	site, err := resolveHoleSite(ctx, b, spec)
 	if err != nil {
 		return in, err
 	}
@@ -330,11 +330,12 @@ func (c *curvedHole) margin(in holeplan.Input) (float64, error) {
 	return holeplan.CurvedMargin(c.radius, reach, c.concave)
 }
 
-// resolveHoleSite resolves spec.Face to exactly one analytic plane or cylinder.
+// resolveHoleSite resolves spec.Face to exactly one analytic plane or cylinder, or a planar face of a faceted solid with
+// exact vertices (agent-docs/orthogonal-boolean-design.md B20).
 // On a plane the site is the plane. On a cylinder the hole axis runs along the
 // radial line through spec.At, which MUST lie on the cylinder, and the site is
 // the plane tangent to the cylinder there.
-func resolveHoleSite(b *Body, spec HoleSpec) (holeSite, error) {
+func resolveHoleSite(ctx context.Context, b *Body, spec HoleSpec) (holeSite, error) {
 	faces, err := spec.Face.SelectFaces(b)
 	if err != nil {
 		return holeSite{}, err
@@ -351,6 +352,8 @@ func resolveHoleSite(b *Body, spec HoleSpec) (holeSite, error) {
 		return holeSite{frame: surface.Frame, outward: normal.Value}, nil
 	case Cylinder:
 		return cylinderHoleSite(faces[0], surface, spec.At)
+	case Faceted:
+		return facetedHoleSite(ctx, b, faces[0])
 	default:
 		return holeSite{}, fmt.Errorf(`%w: Hole needs an analytic planar or cylindrical face, this one is %T`,
 			ErrUnsupported, surface)
