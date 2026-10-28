@@ -1050,16 +1050,20 @@ Two kinds of digest test exist:
   of the `TestSectorRouteDigest*` tests over `internal/pointcone` shows `FactorRat` is
   never executed, so this test is the only digest that covers it.
 
-Each apitest group builds its first fixture twice and asserts that the two
-builds hash equally, and `TestPointConeDigest` hashes twice. When
-`DECAD_SECTOR_DIGEST` names a directory, each apitest group writes its
-per-fixture digests to `<group>.txt` there. When `DECAD_POINTCONE_DIGEST` names
-a file, `TestPointConeDigest` writes its per-cone digests there.
+The apitest digest tests skip unless `DECAD_SECTOR_DIGEST` names a directory,
+so they do not run in CI. The fixtures they build stay covered there by the
+§8.3 tests they copy. When the variable names a directory, each apitest group
+builds its first fixture twice, asserts that the two builds hash equally, and
+writes its per-fixture digests to `<group>.txt` there. `TestPointConeDigest`
+always runs and hashes twice. When `DECAD_POINTCONE_DIGEST` names a file,
+`TestPointConeDigest` writes its per-cone digests there.
 
-A pull request that touches a site in §2 runs both on its base commit and its
-head commit on the same machine, each tree with its own copy of the two test
-files. One that changes the signature of a hashed function edits its copy to
-pass the canonical axis and keeps every hashed reading and the output format.
+A pull request that touches a site in §2, or that changes the speed of the
+sector route and must leave it bit-identical, runs both on its base commit and
+its head commit on the same machine, with `DECAD_SECTOR_DIGEST` set for both
+runs, each tree with its own copy of the two test files. One that changes the
+signature of a hashed function edits its copy to pass the canonical axis and
+keeps every hashed reading and the output format.
 The two digest outputs must be byte-equal, and the pull request body records
 the digests.
 
