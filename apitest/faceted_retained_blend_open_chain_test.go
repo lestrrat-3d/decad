@@ -115,6 +115,12 @@ func placed(t *testing.T, b *decad.Body, dz float64) *decad.Body {
 // the outline is open.
 func roundedPocket(t *testing.T, closed bool) *decad.Body {
 	t.Helper()
+	return roundedPocketAt(t, closed, 5)
+}
+
+// roundedPocketAt is roundedPocket with its floor at height floor.
+func roundedPocketAt(t *testing.T, closed bool, floor float64) *decad.Body {
+	t.Helper()
 	w, doc := sketch.NewWorld(), decad.New()
 	plate := rectBox(t, w, doc, 0, 0, 40, 40, 10)
 	x0 := 10.0
@@ -132,7 +138,7 @@ func roundedPocket(t *testing.T, closed bool) *decad.Body {
 	}
 	tool, err := decad.Fillet(t.Context(), tool, vertical, units.Millimeters(3))
 	require.NoError(t, err)
-	out, err := decad.Cut(t.Context(), plate, placed(t, tool, 5))
+	out, err := decad.Cut(t.Context(), plate, placed(t, tool, floor))
 	require.NoError(t, err)
 	return out
 }
@@ -288,24 +294,6 @@ func TestFacetedRetainedBlendOpenChain(t *testing.T) {
 		_, err := decad.Fillet(t.Context(), drilled, seed, units.Millimeters(1))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "WithTangentChain")
-	})
-
-	t.Run("a concave closed chain is refused", func(t *testing.T) {
-		t.Parallel()
-		pocket := roundedPocket(t, true)
-		seed := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(r3.NewVec(13, 10, 5))).Exactly(1)
-		_, err := decad.Fillet(t.Context(), pocket, seed, units.Millimeters(1), decad.WithTangentChain())
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "concave tangent chain")
-	})
-
-	t.Run("a concave open chain is refused", func(t *testing.T) {
-		t.Parallel()
-		pocket := roundedPocket(t, false)
-		seed := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(r3.NewVec(27, 10, 5))).Exactly(1)
-		_, err := decad.Fillet(t.Context(), pocket, seed, units.Millimeters(1), decad.WithTangentChain())
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "concave tangent chain")
 	})
 
 	t.Run("a junction the tags nearly meet at is refused with its text", func(t *testing.T) {

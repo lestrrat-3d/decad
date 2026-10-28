@@ -255,6 +255,23 @@ func TestFacetedRetainedBlendChain(t *testing.T) {
 		}
 	})
 
+	t.Run("a cavity crossing the removed corner is refused", func(t *testing.T) {
+		t.Parallel()
+		// The cavity's upper front edge reaches into the corner the fillet
+		// removes along the top-front edge: its corner (y, z) = (0.25, 19.75)
+		// lies between the sharp edge and the fillet's arc, and the rest of the
+		// cavity lies in the material below it.
+		sc := newRetentionScene()
+		drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		require.NoError(t, err)
+		cavity, err := decad.Cut(t.Context(), drilled, placed(t, rectBox(t, sc.w, sc.doc, 15, 0.25, 17, 1.25, 1), 18.75))
+		require.NoError(t, err)
+		_, err = decad.Fillet(t.Context(), cavity, topFront(), units.Millimeters(1), decad.WithTangentChain())
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "the blend meets another facet of the body")
+		requireContactX(t, err, 15, 17)
+	})
+
 	t.Run("one straight edge without the option names the option", func(t *testing.T) {
 		t.Parallel()
 		_, err := decad.Fillet(t.Context(), crossDrilled(t), topFront(), units.Millimeters(1))

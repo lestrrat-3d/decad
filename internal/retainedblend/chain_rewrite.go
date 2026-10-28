@@ -32,6 +32,9 @@ type chainEntry struct {
 	wallIx int
 	arc    bool
 	rim    rim
+	// side is -1 when the edge is convex and its blend cuts into the
+	// material, +1 when it is concave and its blend fills the void.
+	side   float64
 	ja, jb int // junction indices at the start and end
 	p0, p1 r3.Vec
 	d      r3.Vec // line: direction
@@ -102,6 +105,9 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 	// The chain's points on the base loop, in the chain's own order: the
 	// junctions, and for an open chain the two corners where it ends.
 	open := cyc.open
+	if open && slices.ContainsFunc(cyc.edges, func(e *topo.Edge) bool { return !e.Convex }) {
+		return nil, fmt.Errorf("%w: a concave open tangent chain is not built", decaderr.ErrUnsupported)
+	}
 	nj := n
 	if open {
 		nj = n + 1
@@ -223,9 +229,6 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 			}
 		}
 		en.wallIx = faceIndex[en.wall]
-		if !en.edge.Convex {
-			return nil, fmt.Errorf("%w: a concave tangent chain is not built", decaderr.ErrUnsupported)
-		}
 		step, err := spec.assign(en.ref, base, en.wall)
 		if err != nil {
 			return nil, err
@@ -261,9 +264,15 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 	if !open && covered != len(loop) {
 		return nil, fmt.Errorf("%w: the chain is not the whole of its base loop", decaderr.ErrUnsupported)
 	}
+	side, err := chainSide(entries)
+	if err != nil {
+		return nil, err
+	}
 	tP, tW := entries[0].step.planeSetback(), entries[0].step.wallSetback()
 
-	// The rows of a cross-section.
+	// The rows of a cross-section. They run from P along the walls on the
+	// chain's side: into the material for a convex chain, into the void for a
+	// concave one.
 	fillet := spec.fillet
 	rowsM := 1
 	if fillet {
@@ -291,10 +300,10 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 			if j == 0 {
 				return v.Add(m.Scale(tP))
 			}
-			return v.Add(m.Scale(tP * (1 - s))).Sub(nP.Scale(tW * s))
+			return v.Add(m.Scale(tP * (1 - s))).Add(nP.Scale(side * tW * s))
 		}
 		alpha := float64(j) * math.Pi / 2 / float64(rowsM)
-		return v.Add(m.Scale(spec.r * (1 - math.Sin(alpha)))).Sub(nP.Scale(spec.r * (1 - math.Cos(alpha))))
+		return v.Add(m.Scale(spec.r * (1 - math.Sin(alpha)))).Add(nP.Scale(side * spec.r * (1 - math.Cos(alpha))))
 	}
 	bound := w.tau + slack
 	newRows := func(v, m r3.Vec) []int {
@@ -431,7 +440,8 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 	}
 	w.removed = append(w.removed, fl.facets...)
 
-	// The walls lose the band between P and its parallel plane at depth tW.
+	// The walls lose the band between P and its parallel plane at height tW on
+	// the chain's side.
 	faceVerts := w.faceOfVertex()
 	wallSet := map[int]bool{}
 	for _, en := range entries {
@@ -451,7 +461,7 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		if open && t == n-1 {
 			near[ecuts[1].faceIx] = true
 		}
-		cutsOf[t], wallGroups[t], err = w.clipChainWall(en, nP, oP, tW, topSet, near, faceVerts, slack)
+		cutsOf[t], wallGroups[t], err = w.clipChainWall(en, nP.Scale(side), oP, tW, topSet, near, faceVerts, slack)
 		if err != nil {
 			return nil, err
 		}
@@ -591,7 +601,23 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		groups[g].Centroid = measurement.VecMeasurement{}
 	}
 	w.removedTrue = removedTrue
+	if err := w.checkStripClear(ctx, stripFrom); err != nil {
+		return nil, err
+	}
 	return w.build(ctx, env, groups, stripFrom, blendTag{trueArea: blendTrue}, faceIndex)
+}
+
+// chainSide is the side every entry of the chain blends on: −1 when the whole
+// chain is convex, +1 when it is concave. It refuses a chain that mixes the
+// two (SM3).
+func chainSide(entries []chainEntry) (float64, error) {
+	side := entries[0].side
+	for _, en := range entries[1:] {
+		if en.side != side {
+			return 0, fmt.Errorf("%w: a tangent chain mixes convex and concave edges", decaderr.ErrUnsupported)
+		}
+	}
+	return side, nil
 }
 
 // param is the position of p along the entry: the distance from its start for
@@ -619,9 +645,21 @@ func (w *work) readChainEdge(en *chainEntry, fp facetedrecord.Payload, faceIndex
 			return fmt.Errorf("%w: a chain edge has no length", decaderr.ErrDegenerate)
 		}
 		en.d, en.length = d, en.p1.Sub(en.p0).Len()
+		// m points into P: a face lies to the left of its loop. A convex
+		// wall faces away from P (n_W = −m), a concave one toward it
+		// (n_W = +m). The two candidates are a unit vector apart, so the test
+		// only classifies; the edge's own convexity must agree.
 		m := nP.Cross(d)
-		if wp.n.Add(m).Len() > 1e-9 {
-			return fmt.Errorf("%w: a chain wall does not lean away from the base loop's inside", decaderr.ErrUnsupported)
+		switch {
+		case wp.n.Add(m).Len() <= 1e-9:
+			en.side = -1
+		case wp.n.Sub(m).Len() <= 1e-9:
+			en.side = 1
+		default:
+			return fmt.Errorf("%w: a chain wall is not normal to the base along its edge", decaderr.ErrUnsupported)
+		}
+		if en.edge.Convex != (en.side < 0) {
+			return fmt.Errorf("%w: the chain edge's convexity disagrees with its two tags", decaderr.ErrUnsupported)
 		}
 		en.m = [2]r3.Vec{m, m}
 		for _, v := range en.run {
@@ -635,13 +673,14 @@ func (w *work) readChainEdge(en *chainEntry, fp facetedrecord.Payload, faceIndex
 		if err != nil {
 			return err
 		}
-		if r.planeFace == nil || r.wallFace != en.wall || !r.convex {
-			return fmt.Errorf("%w: a chain arc does not border the base and its wall convexly", decaderr.ErrUnsupported)
+		if r.planeFace == nil || r.wallFace != en.wall {
+			return fmt.Errorf("%w: a chain arc does not border the base and its wall", decaderr.ErrUnsupported)
 		}
 		if err := r.checkSize(en.step); err != nil {
 			return err
 		}
-		en.arc, en.rim, en.sigma = true, r, -r.kappa
+		// readSide ties the rim's side to the edge's convexity.
+		en.arc, en.rim, en.sigma, en.side = true, r, -r.kappa, r.side
 		// The walk's own sense must agree with the arc's recorded sense.
 		sense := 1.0
 		if curve.Axis.Dot(nP) < 0 {
@@ -792,9 +831,11 @@ func (w *work) faceOfVertex() map[int]map[int]bool {
 	return out
 }
 
-// clipChainWall cuts the wall at depth tW below the base and returns the
-// vertices it cut, by the old mesh edge they lie on.
-func (w *work) clipChainWall(en chainEntry, nP, oP r3.Vec, tW float64, topSet, near map[int]bool,
+// clipChainWall cuts the wall at height tW from the base and returns the
+// vertices it cut, by the old mesh edge they lie on. up is the unit normal of
+// the base toward the chain's side, along which the walls leave it: −n_P for
+// a convex chain, +n_P for a concave one.
+func (w *work) clipChainWall(en chainEntry, up, oP r3.Vec, tW float64, topSet, near map[int]bool,
 	faceVerts map[int]map[int]bool, slack float64) (map[int]bool, int, error) {
 	facets := facetsOfFace(w.fp.FaceOf, en.wallIx)
 	group, err := w.groupOf(facets)
@@ -808,22 +849,22 @@ func (w *work) clipChainWall(en chainEntry, nP, oP r3.Vec, tW float64, topSet, n
 				continue
 			}
 			p := w.verts[v]
-			depth := -nP.Dot(p.Sub(oP))
+			h := up.Dot(p.Sub(oP))
 			b := w.beta[v] + slack
-			if math.Abs(depth) <= b {
+			if math.Abs(h) <= b {
 				if !topSet[v] {
 					return nil, 0, fmt.Errorf("%w: a wall touches the base plane off the chain", decaderr.ErrUnsupported)
 				}
 				g[v] = -tW
 				continue
 			}
-			gv := depth - tW
+			gv := h - tW
 			if gv > b+w.tau {
 				g[v] = gv
 				continue
 			}
-			onSeam := distToLine(p, en.p0, nP) <= b || distToLine(p, en.p1, nP) <= b
-			if onSeam && depth > 0 && gv < -(b+w.tau) {
+			onSeam := distToLine(p, en.p0, up) <= b || distToLine(p, en.p1, up) <= b
+			if onSeam && h > 0 && gv < -(b+w.tau) {
 				for fi := range faceVerts[v] {
 					if !near[fi] {
 						return nil, 0, fmt.Errorf("%w: a seam vertex inside the band borders another face",
@@ -893,21 +934,25 @@ func (w *work) chainTag(en chainEntry, nP r3.Vec, tP, tW float64) (blendTag, boo
 		tmp := &work{r: en.rim, spec: en.step, tau: w.tau}
 		return tmp.tag(), false
 	}
+	// The ball and the bevel lie on the chain's side of P: in the material for
+	// a convex chain, in the void for a concave one, whose blend faces its
+	// axis.
 	if en.step.fillet {
 		r := en.step.r
-		c0 := en.p0.Add(en.m[0].Scale(r)).Sub(nP.Scale(r))
+		c0 := en.p0.Add(en.m[0].Scale(r)).Add(nP.Scale(en.side * r))
 		return blendTag{
-			surface: surfacegeom.Cylinder{Origin: c0, Axis: en.d, Radius: units.Millimeters(r)},
+			surface:  surfacegeom.Cylinder{Origin: c0, Axis: en.d, Radius: units.Millimeters(r)},
+			reversed: en.side > 0,
 			outward: func(p r3.Vec) r3.Vec {
 				q := p.Sub(c0)
-				return q.Sub(en.d.Scale(q.Dot(en.d)))
+				return q.Sub(en.d.Scale(q.Dot(en.d))).Scale(-en.side)
 			},
 		}, false
 	}
 	a0 := en.p0.Add(en.m[0].Scale(tP))
-	b0 := en.p0.Sub(nP.Scale(tW))
+	b0 := en.p0.Add(nP.Scale(en.side * tW))
 	chord, _ := b0.Sub(a0).Normalize()
-	outward := nP.Sub(en.m[0])
+	outward := nP.Add(en.m[0].Scale(en.side))
 	tag := blendTag{outward: func(r3.Vec) r3.Vec { return outward }}
 	if frame, err := r3.NewFrame(a0, en.d, chord); err == nil {
 		tag.surface = surfacegeom.Plane{Frame: frame}
