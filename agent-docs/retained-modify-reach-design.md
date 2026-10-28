@@ -292,8 +292,11 @@ The rewrite touches `P`, every wall `W_k`, every seam between consecutive walls,
    directions along `G ∩ P` and `G ∩ W` point from `V` to the last vertex of `G`'s chain on each line, which the
    end clearance places beyond the setback by more than its bound. The loops' senses at `V` are topological: the
    walk follows `P`'s loop, the held mesh is oriented, so `G`'s loop runs the mesh edge from `V` to `P`'s
-   neighbour on `G ∩ P` the other way, and `W`'s loop runs the chain edge the other way from `P`'s. A turn whose
-   lines are too near parallel is undecided and refuses; at a corner of three orthogonal planes it reads `±1`.
+   neighbour on `G ∩ P` the other way, and `W`'s loop runs the chain edge the other way from `P`'s. An end whose
+   `G` loop does not run that edge the other way, so that `G` would leave the first corner from `P`'s side or
+   enter the last one toward it, refuses ("an end face's loop runs its edge with the base the same way as the
+   base's loop"); an oriented held mesh never reaches it. A turn whose lines are too near parallel is undecided
+   and refuses; at a corner of three orthogonal planes it reads `±1`.
 
    | Chain `s` | `P` at `V` | `W` at `V` | `G` at `V` | Case | `G`'s cap |
    |---|---|---|---|---|---|
@@ -375,9 +378,16 @@ clearance from the rest of the body is undecided"; all three are `ErrUnsupported
 corners are exact, skip pairs that cannot meet, and a uniform grid over the strip facets' boxes finds the pairs
 whose boxes meet without testing every pair. A coordinate's cell is clamped to the grid in floating point before
 it becomes an integer, so the cell index never decreases as the coordinate grows, even for a query far outside.
-A pair that shares a vertex is the construction's own seam: along the setback contour, along a wall cut, or for
-an open chain along the end column that a rebuilt end face shares with the strip; the gates above and the end
-checks already place those. The rest of `K_k`'s boundary is the removed bands of `P` and the walls and, for an
+A strip facet's vertices are all made by the construction (rows, setback points, wall cuts, end columns), so a
+pair that shares a vertex with it is the construction's own seam: along the setback contour, along a wall cut, or
+for an open chain along the end column that a rebuilt end face shares with the strip; the gates above and the end
+checks already place those. A rebuilt end face that takes a cap also keeps `G`'s held boundary vertices, and ear
+clipping can join one of them to the cap, so a held facet at such a vertex could share it and still cross the
+cap. Its pairs are therefore read by kind of shared vertex. A pair that shares a vertex the construction made is
+skipped: besides the strip, only the rebuilt base and walls carry such vertices, and their planes meet `G`'s along
+`G ∩ P` and `G ∩ W`; the new `P` and walls lie within the held ones, which met the held `G` only on its boundary,
+and the cap meets those lines only along its own edges. A pair that shares only held vertices is classified like
+any other and passes only when the exact contact is a shared vertex or the edge between two shared vertices. The rest of `K_k`'s boundary is the removed bands of `P` and the walls and, for an
 open chain, the caps its end faces give up or take. No other facet of the held solid crosses a removed band or a
 cap a convex `G` gives up, because each was part of the held surface. A cap a reflex `G` takes is new surface, and
 a held shell can cross it: a solid floating in a run-out slot's void across `G`'s plane, or a cavity across `G`'s
@@ -560,7 +570,7 @@ Rows narrow blend Table SR and reach SX2/SX9; sentinels follow those tables.
 | **SM5** | the chain gates of §5.6: undecided; a strip facet, or a facet of an end face that takes a cap, that meets another facet of the body; or a chain whose resolved references mix `P` and walls | `ErrUnsupported` (SR5; SX3 first for the mix) |
 | **SM6** | R5: the offset circles do not meet | `ErrDegenerate` (SR3) |
 | **SM7** | R5: the walls meet at `K` below `minSine` | `ErrUnsupported` (SR5) |
-| **SM8** | a straight end of an open chain whose base or wall is reflex at the corner: "a chain end's base or wall is reflex at the corner"; a turn there too near straight to read: "a chain end's base or wall turn at the corner is undecided" | `ErrUnsupported` |
+| **SM8** | a straight end of an open chain whose base or wall is reflex at the corner: "a chain end's base or wall is reflex at the corner"; a turn there too near straight to read: "a chain end's base or wall turn at the corner is undecided"; an end face whose loop runs its edge with the base the way the base's loop does (a guard: an oriented held mesh never reaches it) | `ErrUnsupported` |
 | **SM9** | an open concave chain that ends on an arc, or an arc end on an end face reflex at the corner | `ErrUnsupported` |
 
 Kept refusals: `Shell` (the `shell.go` text, SX9), `Draft` (SD23), `Offset` (R37), `PatternJoin` (the many-body
@@ -616,7 +626,7 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | Chain ends: blind end (pocket `10…30` with only its `x = 30` corners `r = 3`, floor `z = 5`), fillet `r = 1` | fill `A_f·(48 + π·(R − x̄))`; the `x = 10` wall shrinks by `2A_f` and lies more than 0.1 from a point just inside each cap | admit only a reflex `G` for a concave chain: refused; drop the whole-loop base branch: "a face boundary holds no run to replace" |
 | Chain ends: tongue (40×20×20, `x = 40` corners `r = 3`, bored), fillet `r = 1`, both ends on `x = 0` | removed `A_f·(88 + π·(R − x̄))`; 3 `Cylinder`, 2 `Torus` (`Major = R − r`); the `x = 0` face shrinks by `2A_f` and gives up both caps | drop the whole-loop base branch, or rebuild each end alone |
 | Chain end gates | the step (block 40×20×30 with `x = 40` corners `r = 3`, cut to `z = 10` for `x > 10`) and the blind pocket's mouth refuse SM8; the slot `−2…30` with four `r = 3` corners refuses SM9 for its concave arc ends, and a ledge `8…30` with four corners for its arc ends on the reflex wall; unit tests read convex, reflex and undecided turns, `G`'s turn at both ends of the tongue and the reflex foot, and the cap's sign | drop the wall's turn: the step refuses SR4; drop the base's turn: the mouth builds a flat-ended notch; drop either arc gate: the other arc text, or the ledge builds; read `G`'s turn one way at both ends: the unit test fails; drop the cap's sign: the unit test fails |
-| Taken cap clearance | a 0.1 box joined across `x = 0` in the run-out slot's void, and a 0.1 cavity cut across `x = 10` in the reflex foot's ledge corner, each at either corner, refuse SM5 "the cap an end face takes meets another facet of the body"; the box moved clear of the cap builds with the run-out's fill; a unit test refuses a facet that crosses a taken cap but not the strip | skip the taken caps: the box builds, and the cavity refuses SR7 "a result shell has inconsistent orientation" |
+| Taken cap clearance | a 0.1 box joined across `x = 0` in the run-out slot's void, and a 0.1 cavity cut across `x = 10` in the reflex foot's ledge corner, each at either corner, refuse SM5 "the cap an end face takes meets another facet of the body"; the box moved clear of the cap builds with the run-out's fill; unit tests refuse a facet that crosses a taken cap but not the strip, and one that shares a held vertex with the cap and crosses it beyond, while a facet sharing an edge with the cap passes and an end face's loop sense that matches the base's refuses | skip the taken caps: the box builds, and the cavity refuses SR7 "a result shell has inconsistent orientation"; skip every pair that shares a vertex: the held-vertex unit case builds; refuse every contact of a sharing pair: the run-out, its chamfer and the reflex foot refuse; drop the loop-sense guard: its unit test builds |
 | Chain clearance | a pocket whose chord crosses a band while its vertices lie outside it refuses SM5; a hole deep inside a band refuses SM4 | test vertices only: the crossing chord builds and SR7 or the volume check fails |
 | `internal/tangentchain` retained oracle | exactly tangent plane/cylinder tags prove "tangent"; tags one float step off are undecided; a clear miss is "not tangent" | replace the identity by a tolerance: the one-step case proves "tangent" |
 | Exact-rotation copy of P3, 20° | 6 `Plane`, 5 `Cylinder`; `NormalAt` at an interior facet centroid within its bound plus 64 float steps of the rotated source normal; bounds below 1 | keep `ExactGroupPlaced`'s drop: `Faceted` |

@@ -88,22 +88,33 @@ func (w *work) checkStripClear(ctx context.Context, stripFrom int, taken [][2]in
 		}
 	}
 	rest := append(append(make([][3]int, 0, len(held)+stripFrom), held...), w.out[:stripFrom]...)
-	if err := w.clearOf(ctx, w.out[stripFrom:], rest, "the blend", "the blend's"); err != nil {
+	if err := w.clearOf(ctx, w.out[stripFrom:], rest, "the blend", "the blend's", nil); err != nil {
 		return err
 	}
+	// A rebuilt end face keeps its held boundary vertices, and ear clipping
+	// can join one of them to the cap. A facet of another face at such a
+	// vertex may meet the end face only where they share: there, and not
+	// across the cap. A vertex the construction made (the end column, a
+	// setback point, a wall's cut) is shared only with the strip and with the
+	// rebuilt base and walls, whose planes meet G's along the cap's own edges.
+	made := func(v int) bool { return v >= len(w.fp.Verts) }
 	for _, r := range taken {
 		rest := append(append(append(make([][3]int, 0, len(held)+stripFrom), held...), w.out[:r[0]]...),
 			w.out[r[1]:stripFrom]...)
-		if err := w.clearOf(ctx, w.out[r[0]:r[1]], rest, "the cap an end face takes", "the taken cap's"); err != nil {
+		if err := w.clearOf(ctx, w.out[r[0]:r[1]], rest, "the cap an end face takes", "the taken cap's",
+			made); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// clearOf refuses when a facet of rest meets a facet of strip it shares no
-// vertex with. what and whose name strip in the refusal.
-func (w *work) clearOf(ctx context.Context, strip, rest [][3]int, what, whose string) error {
+// clearOf refuses when a facet of rest meets a facet of strip. A pair that
+// shares a vertex is not tested when seam is nil or seam holds for a shared
+// vertex; any other pair that shares vertices must meet only at a shared
+// vertex or along the edge between two. what and whose name strip in the
+// refusal.
+func (w *work) clearOf(ctx context.Context, strip, rest [][3]int, what, whose string, seam func(int) bool) error {
 	if len(strip) == 0 {
 		return nil
 	}
@@ -139,7 +150,8 @@ func (w *work) clearOf(ctx context.Context, strip, rest [][3]int, what, whose st
 			if err := budget.Step(); err != nil {
 				return err
 			}
-			if sharesVertex(r, s) {
+			shared := sharedVerts(r, s)
+			if len(shared) > 0 && (seam == nil || slices.ContainsFunc(shared, seam)) {
 				continue
 			}
 			if !re.ok {
@@ -157,7 +169,7 @@ func (w *work) clearOf(ctx context.Context, strip, rest [][3]int, what, whose st
 				return fmt.Errorf("%w: %s clearance from the rest of the body is undecided: %w",
 					decaderr.ErrUnsupported, whose, err)
 			}
-			if contact.Kind != meshbool.ContactNone {
+			if contact.Kind != meshbool.ContactNone && !w.atShared(contact, shared) {
 				return fmt.Errorf("%w: %s meets another facet of the body at %v", decaderr.ErrUnsupported, what,
 					contactAt(contact, re.f))
 			}
@@ -256,13 +268,30 @@ func (g *boxGrid) near(b facetBox, out []int) []int {
 	return out
 }
 
-func sharesVertex(a, b [3]int) bool {
+// sharedVerts are the vertices two facets share.
+func sharedVerts(a, b [3]int) []int {
+	var out []int
 	for _, u := range a {
-		for _, v := range b {
-			if u == v {
-				return true
-			}
+		if slices.Contains(b[:], u) {
+			out = append(out, u)
 		}
+	}
+	return out
+}
+
+// atShared reports whether a contact lies wholly where its two facets share:
+// a point at a shared vertex, or a segment between two shared vertices,
+// decided on exact points.
+func (w *work) atShared(c meshbool.TriContact, shared []int) bool {
+	at := func(p proof.Xpt) bool {
+		k := p.Key()
+		return slices.ContainsFunc(shared, func(v int) bool { return proof.XptOf(w.verts[v]).Key() == k })
+	}
+	switch c.Kind {
+	case meshbool.ContactPoint:
+		return at(c.P0)
+	case meshbool.ContactSegment:
+		return at(c.P0) && at(c.P1)
 	}
 	return false
 }

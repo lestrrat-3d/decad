@@ -406,6 +406,9 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 			if err := w.readEndCut(ec, nP, uP[i], tP, tW, margin, slack); err != nil {
 				return nil, err
 			}
+			if err := checkEndSense(ec, i == 1); err != nil {
+				return nil, err
+			}
 			// The corner table of §5.5 step 5: the base and the wall are
 			// convex at each straight end.
 			if err := checkEndTurns(ec, rc[i], nP, i == 0); err != nil {

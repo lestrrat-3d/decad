@@ -178,4 +178,32 @@ func TestCheckStripClear(t *testing.T) {
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 		require.Regexp(t, `the cap an end face takes meets another facet of the body at \{1 [12] 0\}`, err.Error())
 	})
+
+	t.Run("a facet sharing a held vertex with a taken cap meets it only there", func(t *testing.T) {
+		t.Parallel()
+		// w.out holds the cap at z = 0, corners 0, 1, 2, then the strip at
+		// z = 5. heldN of the vertices are held; the rest the construction
+		// made.
+		verts := append(append([]r3.Vec(nil), base...),
+			r3.NewVec(0, 0, 5), r3.NewVec(4, 0, 5), r3.NewVec(0, 4, 5),
+			r3.NewVec(2, -3, 1), r3.NewVec(2, 1, -1), r3.NewVec(2, 1, 1))
+		capWork := func(heldN int, rest [3]int) *work {
+			w := stripWork(verts, [][3]int{rest}, [][3]int{{0, 1, 2}, {3, 4, 5}})
+			w.fp.Verts = verts[:heldN]
+			return w
+		}
+		taken := [][2]int{{0, 1}}
+
+		// Along the shared edge from vertex 0 to vertex 1 only.
+		require.NoError(t, capWork(len(verts), [3]int{0, 1, 6}).checkStripClear(t.Context(), 1, taken))
+
+		// Through vertex 0 and on across the cap to (2,1,0).
+		err := capWork(len(verts), [3]int{0, 7, 8}).checkStripClear(t.Context(), 1, taken)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		// The contact is the segment from (0,0,0) to (2,1,0); either end names it.
+		require.Regexp(t, `the cap an end face takes meets another facet of the body at \{(0 0 0|2 1 0)\}`, err.Error())
+
+		// The same pair through a vertex the construction made is its seam.
+		require.NoError(t, capWork(0, [3]int{0, 7, 8}).checkStripClear(t.Context(), 1, taken))
+	})
 }

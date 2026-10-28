@@ -279,6 +279,20 @@ func cornerTurn(in, out, n r3.Vec) int {
 	return 1
 }
 
+// checkEndSense refuses an end whose face loop runs its edge with the base
+// the same way as the base's loop. The turns of §5.5 step 5 read each loop's
+// sense at the corner from the base's alone, which holds only on an oriented
+// mesh: there G's loop enters the corner from the base's side at the chain's
+// last end, where the base loop leaves along G ∩ P, and leaves toward it at
+// the first. last is set for the chain's last end.
+func checkEndSense(ec *chainEndCut, last bool) error {
+	if ec.prevP != last {
+		return fmt.Errorf("%w: an end face's loop runs its edge with the base the same way as the base's loop",
+			decaderr.ErrUnsupported)
+	}
+	return nil
+}
+
 // endFaceTurn is G's cornerTurn at the corner: its loop enters along G ∩ P
 // and leaves along G ∩ wall when it reaches the corner from the P side, and
 // the other way round otherwise.

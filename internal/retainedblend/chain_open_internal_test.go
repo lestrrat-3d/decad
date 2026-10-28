@@ -22,6 +22,27 @@ func TestCornerTurn(t *testing.T) {
 	require.Equal(t, 0, cornerTurn(x, r3.NewVec(1, 1e-12, 0), z), "lines too near parallel are undecided")
 }
 
+func TestCheckEndSense(t *testing.T) {
+	t.Parallel()
+	// G's loop leaves the first corner toward the base's side and enters the
+	// last one from it.
+	require.NoError(t, checkEndSense(&chainEndCut{}, false), "the first end")
+	require.NoError(t, checkEndSense(&chainEndCut{prevP: true}, true), "the last end")
+	for _, c := range []struct {
+		name  string
+		prevP bool
+		last  bool
+	}{
+		{"the first end entered from the base's side", true, false},
+		{"the last end left toward the base's side", false, true},
+	} {
+		err := checkEndSense(&chainEndCut{prevP: c.prevP}, c.last)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported, c.name)
+		require.ErrorContains(t, err, "an end face's loop runs its edge with the base the same way as the base's loop",
+			c.name)
+	}
+}
+
 func TestEndFaceTurn(t *testing.T) {
 	t.Parallel()
 	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
