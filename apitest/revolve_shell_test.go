@@ -570,37 +570,32 @@ func TestRevolveShellClosed(t *testing.T) {
 		wall  float64
 		skin  float64
 		other float64
-		// surveyed is false where the wall survey leaves the receiver itself
-		// undecided: a sphere meridian's arc meets the axis.
-		surveyed bool
 	}{
 		// A torus of tube radius 3 at 10 from the axis: ∫ρ dA = 10·π r², the
 		// area 4π²·10·r.
-		{"torus inward", torus, inward, 10 * math.Pi * (9 - 4), 4 * math.Pi * math.Pi * 30, 4 * math.Pi * math.Pi * 20, true},
-		{"torus outward", torus, outward, 10 * math.Pi * (16 - 9), 4 * math.Pi * math.Pi * 30, 4 * math.Pi * math.Pi * 40, true},
+		{"torus inward", torus, inward, 10 * math.Pi * (9 - 4), 4 * math.Pi * math.Pi * 30, 4 * math.Pi * math.Pi * 20},
+		{"torus outward", torus, outward, 10 * math.Pi * (16 - 9), 4 * math.Pi * math.Pi * 30, 4 * math.Pi * math.Pi * 40},
 		// ringMeridian: the cavity z ∈ [1, 19], ρ ∈ [6, 9] inward; outward
 		// the dilation of TestRevolveShellOffAxisRing's half turn.
-		{"ring inward", ring, inward, 345, 2*math.Pi*(5*20+10*20) + 2*math.Pi*75, 2*math.Pi*(6*18+9*18) + 2*math.Pi*45,
-			true},
+		{"ring inward", ring, inward, 345, 2*math.Pi*(5*20+10*20) + 2*math.Pi*75, 2*math.Pi*(6*18+9*18) + 2*math.Pi*45},
 		{"ring outward", ring, outward, 375 + 7.5*math.Pi, 2*math.Pi*(5*20+10*20) + 2*math.Pi*75,
 			// Two cylinders of radii 4 and 11 over z ∈ [0, 20], two annuli
 			// ρ ∈ [5, 10] at z = −1 and 21, and four quarter tori of tube radius
 			// 1 swept around radii 5 and 10, two each: 2π·(π/2·ρ ∓ 1) each.
-			2*math.Pi*(4*20+11*20) + 2*math.Pi*75 + 2*2*math.Pi*(math.Pi/2*5-1) + 2*2*math.Pi*(math.Pi/2*10+1),
-			true},
+			2*math.Pi*(4*20+11*20) + 2*math.Pi*75 + 2*2*math.Pi*(math.Pi/2*5-1) + 2*2*math.Pi*(math.Pi/2*10+1)},
 		// cylinderMeridian, a flat-ended solid cylinder R = 10, H = 20: the
 		// cavity z ∈ [1, 19], ρ ∈ [0, 9], so ∫ρ dA = 1000 − 81/2·18.
-		{"cylinder inward", cylinder, inward, 1000 - 729, 2*math.Pi*10*20 + 2*math.Pi*100, 2*math.Pi*9*18 + 2*math.Pi*81, true},
+		{"cylinder inward", cylinder, inward, 1000 - 729, 2*math.Pi*10*20 + 2*math.Pi*100, 2*math.Pi*9*18 + 2*math.Pi*81},
 		// Outward: z ∈ [0, 20], ρ ∈ [0, 11] (1210), the end disks moved 1 mm
 		// out (50 each), and two quarter disks of radius 1 at the rims
 		// (π/4·10 + 1/3 each). The skin gains the cylinder radius 11, two end
 		// disks of radius 10 and two quarter tori around radius 10.
 		{"cylinder outward", cylinder, outward, 1210 + 100 + 5*math.Pi + 2.0/3 - 1000, 2*math.Pi*10*20 + 2*math.Pi*100,
-			2*math.Pi*11*20 + 2*math.Pi*100 + 2*2*math.Pi*(math.Pi/2*10+1), true},
+			2*math.Pi*11*20 + 2*math.Pi*100 + 2*2*math.Pi*(math.Pi/2*10+1)},
 		// A half disk of radius r has ∫ρ dA = 2r³/3 and sweeps a sphere of
 		// area 4πr².
-		{"sphere inward", sphereBody, inward, 2.0 * (125 - 64) / 3, 100 * math.Pi, 64 * math.Pi, false},
-		{"sphere outward", sphereBody, outward, 2.0 * (216 - 125) / 3, 100 * math.Pi, 144 * math.Pi, false},
+		{"sphere inward", sphereBody, inward, 2.0 * (125 - 64) / 3, 100 * math.Pi, 64 * math.Pi},
+		{"sphere outward", sphereBody, outward, 2.0 * (216 - 125) / 3, 100 * math.Pi, 144 * math.Pi},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -631,16 +626,11 @@ func TestRevolveShellClosed(t *testing.T) {
 			require.NoError(t, err)
 			require.InEpsilon(t, vol.Value.Mag(), meshVolume(mesh), 0.03)
 
-			// DX9: the wall survey reads the shell thickness where it reads
-			// the receiver at all.
+			// DX9: the wall survey reads the 1 mm shell thickness of every case,
+			// the hollow sphere included (agent-docs/verification-design.md §6).
 			report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(0.5)))
 			require.NoError(t, err)
 			br := report.Bodies[0]
-			if !tc.surveyed {
-				require.Equal(t, decad.ScalarUndecided, br.Wall.Outcome)
-				require.Equal(t, decad.Suspect, report.Status)
-				return
-			}
 			require.Equal(t, decad.Sound, report.Status)
 			require.Equal(t, decad.ScalarMeasured, br.Wall.Outcome)
 			require.NotNil(t, br.Wall.Minimum)
