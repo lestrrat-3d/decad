@@ -216,6 +216,10 @@ type SurveyElem struct {
 	Th0, Th1   float64
 	Closed     bool
 	MatInside  bool
+	// Carrier, when nonzero, names a set of arc elements whose caller proved
+	// from exact recorded data that they lie on one circle with the material
+	// on one side. Zero means no such proof.
+	Carrier int
 }
 
 // RrBS is the element's radius with its own proven bound — the one spelling
