@@ -49,6 +49,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `extrude.go` | Generic `Extrude` over a profile or chain, `WithTaper`, linear-extent resolution, the chain ribbon entry point. See evaluator §5 and surface §13.2. |
 | `extrude_tilted_face.go` | `extrudeToTiltedFace`: `Extrude` to a planar face of an exact-vertex faceted solid that is tilted from the sweep, as an extrusion past the face cut by a prism on the face's own outline. See orthogonal Boolean B19. |
 | `draft.go` | `Draft`, `NeutralPlane`, `Walls` gates, plus the tapered extrude angle and surface-result gates, extent resolution and slab dispatch. See draft §5, §7, §10. |
+| `draft_mesh_prism.go` | `draftMeshPrism`: Draft of every wall of an exact-vertex faceted straight prism, read on the grid and swept with a taper. See orthogonal Boolean B21. |
 | `sheet_metal.go` | Public `SheetMetal`, `SheetMetalSpec` and `SheetMetalReport`: gates, the thickened centreline as a sketch outline, `Extrude`, and the flat pattern. See sheet-metal design. |
 | `sweep.go` | Generic `Sweep` over a profile or chain: nil, option and seam gates, then `internal/sweepbuild/` builds and root commits. See sweep §3.3, §15.8–§15.9. |
 | `sweep_mitre.go` | Mitred options and entry adapters; builds through `sweepmitre.Build`. See sweep §16. |

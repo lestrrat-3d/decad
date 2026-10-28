@@ -406,12 +406,14 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 	e.pollErr = ctx.Err
 	e.pollInterval = proofbound.WorkPollInterval / workers
 	e.pollRemaining = e.pollInterval
-	if allQuery && workers > 1 {
-		// Self-scan workers read the same held vertices. Share exact lifts on
-		// demand so a sparse scan does not eagerly lift unused vertices and
-		// concurrent workers do not build duplicate lifts.
+	if workers > 1 {
+		// Read-only scan workers share lazy exact and rounded-float caches.
 		e.xvOnce = make([]sync.Once, len(e.xv))
 		e.normOnce = make([]sync.Once, len(e.norm))
+		e.fnormOnce = make([]sync.Once, len(e.fnorm))
+		if !allQuery {
+			e.coneOnce = make([][3]sync.Once, len(e.cone))
+		}
 	}
 	// Worker 0 scans with e itself and writes its caches and countdown, so the
 	// other workers copy a snapshot taken before any worker starts. Each copy
@@ -433,7 +435,7 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 			if worker > 0 {
 				// A self scan's cones are prepared above, and nothing writes
 				// them until every worker has joined.
-				local = base.readOnlyScanCopy(ctx, workers, allQuery)
+				local = base.readOnlyScanCopy(ctx, workers, true)
 			}
 			clean[worker] = true
 			for {
@@ -455,11 +457,13 @@ func (e *heldEmbedding) parallelClean(ctx context.Context, query []int) (bool, e
 	}
 	group.Wait()
 	e.pollErr = nil
-	if allQuery && workers > 1 {
+	if workers > 1 {
 		// Repair may move vertices and invalidate their cached exact lifts.
 		// The shared once guards are only valid for the read-only scan.
 		e.xvOnce = nil
 		e.normOnce = nil
+		e.fnormOnce = nil
+		e.coneOnce = nil
 	}
 	if err := e.budget.Err(); err != nil {
 		return false, err
@@ -606,27 +610,39 @@ func (e *heldEmbedding) scanStep() error {
 	return e.pollErr()
 }
 
-// readOnlyScanCopy shares the immutable facet boxes, prepared projections and
-// incident-facet lists. Each worker writes only its own remaining predicate
-// caches. shareCones also shares the corner cones prepared for every facet and
-// the exact vertex and normal caches, which use once guards during the scan.
-func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int, shareCones bool) *heldEmbedding {
+// readOnlyScanCopy shares immutable facet data and guarded predicate caches.
+// Each worker keeps its own exact-plane interning and pair-sign caches.
+func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int, shareCaches bool) *heldEmbedding {
 	local := *e
 	local.pollErr = ctx.Err
 	local.pollInterval = proofbound.WorkPollInterval / workers
 	local.pollRemaining = local.pollInterval
-	if shareCones {
+	if shareCaches {
 		local.xv = e.xv
 		local.xvOK = e.xvOK
 		local.xvOnce = e.xvOnce
 		local.norm = e.norm
 		local.normOK = e.normOK
 		local.normOnce = e.normOnce
+		local.fnorm = e.fnorm
+		local.fnormOK = e.fnormOK
+		local.fnormOnce = e.fnormOnce
+		local.cone = e.cone
+		local.coneOK = e.coneOK
+		local.coneOnce = e.coneOnce
 	} else {
 		local.xv = make([]proof.Xpt, len(e.xv))
 		local.xvOK = make([]bool, len(e.xvOK))
 		local.norm = make([]proof.Xpt, len(e.norm))
 		local.normOK = make([]bool, len(e.normOK))
+		local.fnorm = make([]r3.Vec, len(e.fnorm))
+		local.fnormOK = make([]bool, len(e.fnormOK))
+		local.cone = make([][3][2]r3.Vec, len(e.cone))
+		local.coneOK = make([][3]bool, len(e.coneOK))
+		local.xvOnce = nil
+		local.normOnce = nil
+		local.fnormOnce = nil
+		local.coneOnce = nil
 	}
 	local.plane = make([]int, len(e.plane))
 	local.planeSense = make([]int8, len(e.planeSense))
@@ -634,12 +650,6 @@ func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int, share
 		local.plane[i] = -1
 	}
 	local.planes = map[string]int{}
-	local.fnorm = make([]r3.Vec, len(e.fnorm))
-	local.fnormOK = make([]bool, len(e.fnormOK))
-	if !shareCones {
-		local.cone = make([][3][2]r3.Vec, len(e.cone))
-		local.coneOK = make([][3]bool, len(e.coneOK))
-	}
 	local.sideSigns = make(map[[2]int]int)
 	local.stamp = nil
 	local.cands = nil
@@ -678,11 +688,13 @@ type heldEmbedding struct {
 	planes     map[string]int
 	fnorm      []r3.Vec
 	// fnormOK marks fnorm[i] as the float rounding of norm[i], computed on demand.
-	fnormOK []bool
+	fnormOK   []bool
+	fnormOnce []sync.Once
 	// cone caches, per facet and corner, a box around the unit directions
 	// the facet leaves that corner in (coneBox).
-	cone   [][3][2]r3.Vec
-	coneOK [][3]bool
+	cone     [][3][2]r3.Vec
+	coneOK   [][3]bool
+	coneOnce [][3]sync.Once
 	// projected holds each facet's three coordinate projections and their
 	// stable directed-edge signs. Worker copies own these mutable caches.
 	projected   []heldProjectedFacet
@@ -903,6 +915,15 @@ func (e *heldEmbedding) normal(i int) proof.Xpt {
 // floatNorm is facet i's exact normal rounded to float64, computed on first
 // use: only the triangle-pair classifier reads it.
 func (e *heldEmbedding) floatNorm(i int) r3.Vec {
+	if e.fnormOnce != nil {
+		e.fnormOnce[i].Do(func() {
+			if !e.fnormOK[i] {
+				e.fnorm[i] = e.normal(i).Vec()
+				e.fnormOK[i] = true
+			}
+		})
+		return e.fnorm[i]
+	}
 	if !e.fnormOK[i] {
 		e.fnorm[i] = e.normal(i).Vec()
 		e.fnormOK[i] = true
@@ -1144,9 +1165,24 @@ var heldConeCosLimit = math.Cos(85 * math.Pi / 180)
 // the coordinates' own scale, or an angle past 170°, gets the whole cube: its
 // direction is not worth trusting to floats.
 func (e *heldEmbedding) coneBox(i, k int) [2]r3.Vec {
+	if e.coneOnce != nil {
+		e.coneOnce[i][k].Do(func() {
+			if !e.coneOK[i][k] {
+				e.cone[i][k] = e.computeConeBox(i, k)
+				e.coneOK[i][k] = true
+			}
+		})
+		return e.cone[i][k]
+	}
 	if e.coneOK[i][k] {
 		return e.cone[i][k]
 	}
+	e.cone[i][k] = e.computeConeBox(i, k)
+	e.coneOK[i][k] = true
+	return e.cone[i][k]
+}
+
+func (e *heldEmbedding) computeConeBox(i, k int) [2]r3.Vec {
 	whole := [2]r3.Vec{r3.NewVec(-2, -2, -2), r3.NewVec(2, 2, 2)}
 	t := e.h.Tris[i]
 	v, a, b := e.h.Verts[t[k]], e.h.Verts[t[(k+1)%3]], e.h.Verts[t[(k+2)%3]]
@@ -1179,8 +1215,6 @@ func (e *heldEmbedding) coneBox(i, k int) [2]r3.Vec {
 			box = [2]r3.Vec{r3.NewVec(lx, ly, lz), r3.NewVec(hx, hy, hz)}
 		}
 	}
-	e.cone[i][k] = box
-	e.coneOK[i][k] = true
 	return box
 }
 

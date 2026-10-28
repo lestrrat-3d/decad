@@ -36,7 +36,11 @@ var errShiftDeclined = errors.New("booleaneval: shifted retry declined")
 // first, so the result departs from the true Boolean by as little as it can. A
 // contact with chord slack needs more than its slack, so a step is the larger of
 // the fraction and the least shift that reaches the slack (shiftNeed).
-var shiftSteps = [...]float64{1.0 / 64, 1.0 / 16, 1.0 / 4, 1}
+// A contact with no chord slack opens with any shift, so the first steps are far under the reach: the result then stays
+// within a few millionths of a millimetre of the true Boolean, and a chain of shifted Booleans keeps its bound under the
+// chord tolerance that a longer shift would pass. A contact with slack needs the shift its slack names (shiftNeed), which
+// the larger of that and the step supplies.
+var shiftSteps = [...]float64{1.0 / 4096, 1.0 / 512, 1.0 / 64, 1.0 / 16, 1.0 / 4, 1}
 
 // shiftMargin is how far past a contact's slack the least shift reaches.
 const shiftMargin = 1.05
@@ -176,6 +180,15 @@ func shiftOpens(u r3.Vec, sigma float64, wanted []bool, contacts []meshbool.Touc
 	return true
 }
 
+// pieceShift is how one piece of the second operand moves in a shifted retry: translated by Move, and then grown (or,
+// when Grow is negative, shrunk) about the piece's centre so that its farthest vertex moves Grow outward. A growth opens
+// contacts that no translation does, such as a tool flush with both faces of a plate, whose two faces need to move
+// opposite ways.
+type pieceShift struct {
+	Move r3.Vec
+	Grow float64
+}
+
 // pieces partitions a mesh into its connected pieces, the sets of facets that
 // share vertices, so a tool made of several separate bodies, such as the teeth of
 // a gear, can have each piece moved on its own.
@@ -233,17 +246,50 @@ func piecesOf(m *topo.Mesh) pieces {
 // boundary, and the area allowance by the rounding of the new coordinates. m is
 // not modified. It returns errShiftDeclined when the moved mesh folds through
 // itself.
-func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[int]r3.Vec) (decision, charged *topo.Mesh, displacementBound float64, err error) {
+func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[int]pieceShift) (decision, charged *topo.Mesh, displacementBound float64, err error) {
+	// A grown piece scales about the mean of its vertices, by the share of its farthest vertex's distance the shift asks.
+	centre := make(map[int]r3.Vec, len(shifts))
+	scale := make(map[int]float64, len(shifts))
+	for c, sh := range shifts {
+		if sh.Grow == 0 {
+			continue
+		}
+		var sum r3.Vec
+		n := 0
+		for i, v := range m.Vertices {
+			if pc.ofVertex[i] == c {
+				sum, n = sum.Add(v), n+1
+			}
+		}
+		if n == 0 {
+			return nil, nil, 0, errShiftDeclined
+		}
+		mid := sum.Scale(1 / float64(n))
+		radius := 0.0
+		for i, v := range m.Vertices {
+			if pc.ofVertex[i] == c {
+				radius = math.Max(radius, v.Sub(mid).Len())
+			}
+		}
+		if !(radius > 0) || !proofbound.FiniteVec(mid) {
+			return nil, nil, 0, errShiftDeclined
+		}
+		centre[c], scale[c] = mid, sh.Grow/radius
+	}
 	verts := make([]r3.Vec, len(m.Vertices))
 	moved := make([]bool, len(m.Vertices))
 	maxAbs := 0.0
 	for i, v := range m.Vertices {
-		sh := shifts[pc.ofVertex[i]]
+		c := pc.ofVertex[i]
+		sh := shifts[c].Move
 		if !proofbound.FiniteVec(sh) {
 			return nil, nil, 0, errShiftDeclined
 		}
 		verts[i] = v.Add(sh)
-		moved[i] = sh != (r3.Vec{})
+		if k, grown := scale[c]; grown {
+			verts[i] = verts[i].Add(v.Sub(centre[c]).Scale(k))
+		}
+		moved[i] = verts[i] != v
 		maxAbs = math.Max(maxAbs, math.Max(math.Abs(verts[i].X), math.Max(math.Abs(verts[i].Y), math.Abs(verts[i].Z))))
 	}
 	// Each moved coordinate is the float sum of an exact coordinate and a
@@ -252,7 +298,8 @@ func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[i
 	displacement := make(map[int]float64, len(shifts))
 	worst := 0.0
 	for c, sh := range shifts {
-		d := proofbound.AbsSumUpper(proofbound.DvLenUpper(proofbound.HeldDelta(sh, r3.Vec{})), proofbound.Radius3D(round))
+		d := proofbound.AbsSumUpper(proofbound.DvLenUpper(proofbound.HeldDelta(sh.Move, r3.Vec{})), proofbound.Radius3D(round))
+		d = proofbound.AbsSumUpper(d, math.Abs(sh.Grow))
 		if proofbound.IsNonFinite(d) {
 			return nil, nil, 0, errShiftDeclined
 		}
@@ -344,7 +391,7 @@ func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[i
 // gathered and the directions are chosen again for all of them, up to
 // shiftRounds times.
 func retryShifted(ctx context.Context, refusal error, op meshbool.OperationKind, pc pieces,
-	attempt func(map[int]r3.Vec) (Evaluation, error)) (Evaluation, error) {
+	attempt func(map[int]pieceShift) (Evaluation, error)) (Evaluation, error) {
 	var touch *meshbool.TouchContactError
 	if !errors.As(refusal, &touch) {
 		return Evaluation{}, refusal
@@ -354,13 +401,14 @@ func retryShifted(ctx context.Context, refusal error, op meshbool.OperationKind,
 		return Evaluation{}, refusal
 	}
 	byPiece := groupContacts(pc, nil, touch.Contacts)
+	initial := byPiece
 	for range shiftRounds {
 		dirs := make(map[int][]r3.Vec, len(byPiece))
 		order := make([]int, 0, len(byPiece))
 		for c, contacts := range byPiece {
 			dirs[c] = shiftDirections(op, contacts)
 			if len(dirs[c]) == 0 {
-				return Evaluation{}, refusal
+				return growShifted(ctx, refusal, op, initial, attempt)
 			}
 			order = append(order, c)
 		}
@@ -373,7 +421,7 @@ func retryShifted(ctx context.Context, refusal error, op meshbool.OperationKind,
 				if err := ctx.Err(); err != nil {
 					return Evaluation{}, err
 				}
-				shifts := make(map[int]r3.Vec, len(order))
+				shifts := make(map[int]pieceShift, len(order))
 				fits := true
 				var key strings.Builder
 				for _, c := range order {
@@ -383,8 +431,8 @@ func retryShifted(ctx context.Context, refusal error, op meshbool.OperationKind,
 						fits = false
 						break
 					}
-					shifts[c] = dir.Scale(length)
-					fmt.Fprintf(&key, "%d:%v;", c, shifts[c])
+					shifts[c] = pieceShift{Move: dir.Scale(length)}
+					fmt.Fprintf(&key, "%d:%v;", c, shifts[c].Move)
 				}
 				if !fits {
 					continue
@@ -414,7 +462,65 @@ func retryShifted(ctx context.Context, refusal error, op meshbool.OperationKind,
 			break
 		}
 	}
+	return growShifted(ctx, refusal, op, initial, attempt)
+}
+
+// growShifted is the last try of retryShifted: every piece grown about its centre, from the least growth up, when the
+// contacts that refused the Boolean all came from the exact predicates (growOpens). It returns the first outcome that
+// is not a contact refusal, and the original refusal when none is. The least growth that opens a contact is any, so the
+// result departs from the true Boolean by a fraction of the reach.
+func growShifted(ctx context.Context, refusal error, op meshbool.OperationKind, byPiece map[int][]meshbool.TouchContact,
+	attempt func(map[int]pieceShift) (Evaluation, error)) (Evaluation, error) {
+	reach := gaptol.Reach(ctx)
+	// Only a coplanar overlap is opened by growth. An edge graze or a point touch is a tangency the design leaves refused
+	// (agent-docs/gap-tolerance-design.md §5.2), and growing a tool across it would decide it by the growth's sign.
+	if touch, ok := errors.AsType[*meshbool.TouchContactError](refusal); !ok || touch.What != meshbool.TouchCoplanar {
+		return Evaluation{}, refusal
+	}
+	if len(byPiece) == 0 {
+		return Evaluation{}, refusal
+	}
+	for _, contacts := range byPiece {
+		if !growOpens(contacts) {
+			return Evaluation{}, refusal
+		}
+	}
+	for _, step := range shiftSteps {
+		if err := ctx.Err(); err != nil {
+			return Evaluation{}, err
+		}
+		grow := step * reach
+		if op == meshbool.OpIntersect {
+			grow = -grow
+		}
+		shifts := make(map[int]pieceShift, len(byPiece))
+		for c := range byPiece {
+			shifts[c] = pieceShift{Grow: grow}
+		}
+		ev, err := attempt(shifts)
+		if errors.Is(err, errShiftDeclined) {
+			continue
+		}
+		if _, ok := errors.AsType[*meshbool.TouchContactError](err); ok {
+			continue
+		}
+		return ev, err
+	}
 	return Evaluation{}, refusal
+}
+
+// growOpens reports whether growing a piece about its centre can stand in for a translation for contacts: only when every
+// contact came from the exact predicates, with no chord slack, because the growth moves a face by its distance from the
+// centre and not by a length the slack names. A Union and a Cut grow the piece, so that faces flush with the other
+// operand pass through it and faces that only touch it overlap by a sliver; an Intersect shrinks it, so that a touch
+// leaves a gap and the result is empty.
+func growOpens(contacts []meshbool.TouchContact) bool {
+	for _, c := range contacts {
+		if c.Slack > 0 {
+			return false
+		}
+	}
+	return len(contacts) > 0
 }
 
 // contactCount is the number of contacts held across all pieces.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/orthoshell"
@@ -24,6 +25,18 @@ type wedge struct {
 	m, e0, e1    float64
 	// concave marks an edge whose wedge is added to the solid (the void behind it is filled) and not cut from it.
 	concave bool
+}
+
+// flushEnds counts the ends of the wedge's tool that stop at the solid's own boundary and run on into nothing.
+func (w wedge) flushEnds() int {
+	n := 0
+	if w.concave && w.e0 == 0 {
+		n++
+	}
+	if w.concave && w.e1 == 0 {
+		n++
+	}
+	return n
 }
 
 // chamferByWedges chamfers edges of the axis-square faceted solid b by d (agent-docs/orthogonal-boolean-design.md B17):
@@ -47,7 +60,7 @@ func chamferByWedges(ctx context.Context, d *Document, b *Body, edges []*Edge, d
 			// A selection is all convex edges, cut, or all concave ones, filled.
 			return nil, false, nil
 		}
-		if !wedgeFits(payload, w, dmm) {
+		if !wedgeFits(payload, &w, dmm) {
 			return nil, false, nil
 		}
 		wedges = append(wedges, w)
@@ -56,6 +69,9 @@ func chamferByWedges(ctx context.Context, d *Document, b *Body, edges []*Edge, d
 	if wedges[0].concave {
 		op = meshbool.OpUnion
 	}
+	// A tool with an end flush with the solid meets it by the shifted retry, which charges each Boolean its shift,
+	// so the tools that run on into material go first, exact, and the flush ones last.
+	slices.SortStableFunc(wedges, func(x, y wedge) int { return x.flushEnds() - y.flushEnds() })
 	toolCtx, capture := privateConstructionContext(ctx)
 	var tools []*Body
 	defer func() { removeTools(tools) }()
@@ -76,12 +92,12 @@ func chamferByWedges(ctx context.Context, d *Document, b *Body, edges []*Edge, d
 // wedgeFits reports whether the wedge's tool cuts the wedge and no more. The tool's box holds nothing of the solid beyond
 // the two faces or past the ends, so the part of the solid in the box is the part in the box's quadrant behind both faces,
 // and the block d deep behind both faces along the whole edge is solid, so the wedge in it is material to remove.
-func wedgeFits(payload facetedPayload, w wedge, d float64) bool {
+func wedgeFits(payload facetedPayload, w *wedge, d float64) bool {
 	if w.concave {
 		return concaveWedgeFits(payload, w, d)
 	}
 	length := w.b.Sub(w.a).Len()
-	lo, hi := wedgeBox(w, d)
+	lo, hi := wedgeBox(*w, d)
 	verts, tris := axisBox(lo, hi)
 	inBox, boundBox, err := orthoshell.OverlapVolume(payload.Verts, payload.Tris, verts, tris)
 	if err != nil {
@@ -108,7 +124,7 @@ func wedgeFits(payload facetedPayload, w wedge, d float64) bool {
 // tool's box, from m behind both faces to d plus m in front of them, the solid holds exactly what is behind a face (the
 // box less the (d+m)-square of void along the whole edge), and the extensions past the edge's ends are wholly solid, so
 // the tool's end faces lie in material and the fill meets no void outside the wedge.
-func concaveWedgeFits(payload facetedPayload, w wedge, d float64) bool {
+func concaveWedgeFits(payload facetedPayload, w *wedge, d float64) bool {
 	length := w.b.Sub(w.a).Len()
 	dir := w.b.Sub(w.a).Scale(1 / length)
 	corner := func(s, t, u float64) r3.Vec {
@@ -128,9 +144,22 @@ func concaveWedgeFits(payload facetedPayload, w wedge, d float64) bool {
 	if !ok || !within(in, (side*side-(d+w.m)*(d+w.m))*length, bound) {
 		return false
 	}
-	for _, ext := range [][2]float64{{-w.e0, 0}, {length, length + w.e1}} {
+	// Past each end the box is wholly solid, and the tool runs on into it, or it is wholly air, as it is past a pocket's
+	// mouth, and the tool stops flush at the end: the Union of a flush end is the shifted retry's contact
+	// (agent-docs/gap-tolerance-design.md §5.2).
+	for k, ext := range [][2]float64{{-w.e0, 0}, {length, length + w.e1}} {
 		in, bound, ok := read(corner(-w.m, -w.m, ext[0]), corner(d+w.m, d+w.m, ext[1]))
-		if !ok || !within(in, side*side*(ext[1]-ext[0]), bound) {
+		switch {
+		case !ok:
+			return false
+		case within(in, side*side*(ext[1]-ext[0]), bound):
+		case within(in, 0, bound):
+			if k == 0 {
+				w.e0 = 0
+			} else {
+				w.e1 = 0
+			}
+		default:
 			return false
 		}
 	}

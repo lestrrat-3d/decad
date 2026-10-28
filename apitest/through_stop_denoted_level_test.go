@@ -144,7 +144,9 @@ func TestThroughStopDenotedLevelMisses(t *testing.T) {
 		twoSidedRect(t, doc, 9, 9, 11, 11, units.Millimeters(5.08), units.Millimeters(1))
 		tool := stopTool(t, doc, decad.TwoSided{One: decad.ThroughAllSide{}, Two: decad.ThroughAllSide{}})
 		part, err := decad.Cut(t.Context(), plate, tool)
-		requireDeclinedSpan(t, part, err, skinnedPlateVolume(denotedDepth(top), denotedDepth(top), 1), true)
+		// The tool is flush with both faces of the plate, so the shifted retry grows it
+		// (agent-docs/gap-tolerance-design.md §5.2 item 5) and the mesh path builds the part.
+		requireDeclinedSpan(t, part, err, skinnedPlateVolume(denotedDepth(top), denotedDepth(top), 1), false)
 	})
 	t.Run("to face on a stacked top", func(t *testing.T) {
 		t.Parallel()

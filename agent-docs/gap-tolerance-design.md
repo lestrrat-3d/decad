@@ -148,16 +148,25 @@ runs the Boolean again with the second operand moved:
    is empty. With no Decisive contact, the contacts are flush walls. A Cut and an Intersect still need every flush contact to open
    outward, so a tool flush with its target's wall pokes through it and leaves no skin. A Union needs only that they
    open. A pair of contacts that no direction opens in the needed sense, such as a tool flush with both walls of a
-   slot, is not retried and the refusal stands.
+   slot, is opened by growth (item 5).
 2. Each direction is the contacts' unit direction, each contact pulling in proportion to its Slack, plus a generic part
    of weight 0.2 that is parallel to no coordinate plane, so a shift also opens the walls that two bodies sharing a
    footprint leave coplanar.
-3. Steps of 1/64, 1/16, 1/4 and 1 of the reach are tried in order, three directions each. A step's length is the
+3. Steps of 1/4096, 1/512, 1/64, 1/16, 1/4 and 1 of the reach are tried in order, three directions each. A step's length is the
    larger of that fraction of the reach and the least shift that clears every contact's Slack (the Slack over the
    component along its normal, with a margin of 5%). A length above the reach is skipped. The first outcome that
    is not a contact refusal is the result, whether it is a body or another error, such as an empty Intersect. When a
    shifted attempt meets a contact the unmoved pair did not reach, the contacts are merged and the search starts
    again, up to four times. When every attempt refuses, the original refusal is returned.
+5. When every translation has refused, and the exact predicates alone refused the pair with coplanar facet overlaps
+   (`meshbool.TouchCoplanar`, every contact with zero Slack), each piece is grown about the mean of its vertices
+   (`growShifted`, `pieceShift.Grow`): its farthest vertex moves by the step times the reach, outward for a Union and a
+   Cut, inward for an Intersect, and every face moves by its distance from the centre. A tool flush with both walls of a
+   slot, whose two faces need to move opposite ways, then pokes through both; a Union overlaps what only touched, and an
+   Intersect leaves a gap where it only touched. The growth is charged as any displacement is, its length being the
+   farthest vertex's. An edge graze or a point touch is not grown across, because the sign of the growth would decide a
+   tangency that stays refused. A tool that only touches a Cut target, grown, notches the target by the growth, which the
+   bound covers.
 4. Each connected piece of the second operand (the teeth of a gear tool, for one) is moved on its own, along the
    directions and by the length its own contacts ask for, and a piece no contact names stays where it is. Each
    piece's displacement is charged to its own vertices and faces, the mesh bound takes the largest, and the swept
