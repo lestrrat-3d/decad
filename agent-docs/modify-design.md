@@ -742,9 +742,10 @@ covers.
 (`agent-docs/stacked-prism-design.md` §2.1). The open end and the kept end keep
 the receiver end's denotation. The derived floor level, held as the float sum
 of that end and the held thickness, denotes the end's rational plus or minus
-`t*` (`prismshell.CapShellInput.StepLevel`). Its displacement already covers
-the end's own, the thickness conversion and the sum's rounding, so
-`DenoteLevel` accepts the claim. A `ToFace` stop on the cup's floor, kept cap
+`t*` (`prismshell.CapShellInput.StepLevel`). The exact construction makes
+that claim true: the level's displacement covers the end's own, the
+thickness conversion and the sum's rounding. `DenoteLevel` only checks it and
+can only reject it. A `ToFace` stop on the cup's floor, kept cap
 or rim records it, and an end that denotes nothing leaves its floor denoting
 nothing.
 

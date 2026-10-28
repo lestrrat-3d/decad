@@ -174,9 +174,7 @@ func TestShellCupDenotedLevel(t *testing.T) {
 			require.True(t, tookMeshPath(part), "a stop denoting a plane inside the plate proves no span")
 			// The plate less the 16 mm² tool over the part of the plate the
 			// tool reaches: from the far cap, 3 mm away, to the stop end.
-			want := new(big.Rat).Mul(big.NewRat(400, 1), new(big.Rat).Add(reach, big.NewRat(3, 1)))
-			requireRationalVolumeCovered(t, part, want.Sub(want,
-				new(big.Rat).Mul(big.NewRat(16, 1), new(big.Rat).Add(toolEnd, big.NewRat(3, 1)))))
+			requireRationalVolumeCovered(t, part, skinnedPlateVolume(reach, toolEnd, 1))
 		})
 	}
 }
