@@ -78,7 +78,7 @@ func TestVerifyDoesNotChangeOperationWarnings(t *testing.T) {
 	require.Equal(t, decad.Sound, loose.Status)
 	require.Equal(t, before, joined.OperationDiagnostics())
 
-	strict, err := doc.Verify(t.Context(), decad.WithTolerance(units.Scalar(0.000001)))
+	strict, err := doc.Verify(t.Context(), decad.WithTolerance(units.Scalar(0.000000001)))
 	require.NoError(t, err)
 	require.Equal(t, decad.Suspect, strict.Status)
 	require.NotEmpty(t, strict.Diagnostics)

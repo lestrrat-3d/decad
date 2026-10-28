@@ -47,8 +47,16 @@ func integrateGroove(lo, hi, length, pitch, flat float64, fromRoot func(float64)
 
 func requireThreadVolume(t *testing.T, m decad.Measurement, want float64) {
 	t.Helper()
-	require.LessOrEqual(t, math.Abs(m.Value.Base()-want), m.Bound.Base(),
-		"volume %v ± %v should enclose %v", m.Value.Base(), m.Bound.Base(), want)
+	requireThreadVolumeWithin(t, m, want, 0)
+}
+
+// requireThreadVolumeWithin is requireThreadVolume for a want that is only known to within extra: the groove formula
+// takes the profile in an axial section, and a helix whose lead angle is not zero cuts a section normal to it, which
+// differs from the axial one by 1/cos(lead) - 1 of the thread's volume.
+func requireThreadVolumeWithin(t *testing.T, m decad.Measurement, want, extra float64) {
+	t.Helper()
+	require.LessOrEqual(t, math.Abs(m.Value.Base()-want), m.Bound.Base()+extra,
+		"volume %v ± %v (+ %v) should enclose %v", m.Value.Base(), m.Bound.Base(), extra, want)
 	require.Less(t, m.Bound.Base(), 0.005*want, "the bound stays small enough to mean something")
 }
 

@@ -152,7 +152,7 @@ runs the Boolean again with the second operand moved:
 2. Each direction is the contacts' unit direction, each contact pulling in proportion to its Slack, plus a generic part
    of weight 0.2 that is parallel to no coordinate plane, so a shift also opens the walls that two bodies sharing a
    footprint leave coplanar.
-3. Steps of 1/64, 1/16, 1/4 and 1 of the reach are tried in order, three directions each. A step's length is the
+3. Steps of 1/4096, 1/512, 1/64, 1/16, 1/4 and 1 of the reach are tried in order, three directions each. A step's length is the
    larger of that fraction of the reach and the least shift that clears every contact's Slack (the Slack over the
    component along its normal, with a margin of 5%). A length above the reach is skipped. The first outcome that
    is not a contact refusal is the result, whether it is a body or another error, such as an empty Intersect. When a

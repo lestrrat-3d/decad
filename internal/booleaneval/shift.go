@@ -36,7 +36,11 @@ var errShiftDeclined = errors.New("booleaneval: shifted retry declined")
 // first, so the result departs from the true Boolean by as little as it can. A
 // contact with chord slack needs more than its slack, so a step is the larger of
 // the fraction and the least shift that reaches the slack (shiftNeed).
-var shiftSteps = [...]float64{1.0 / 64, 1.0 / 16, 1.0 / 4, 1}
+// A contact with no chord slack opens with any shift, so the first steps are far under the reach: the result then stays
+// within a few millionths of a millimetre of the true Boolean, and a chain of shifted Booleans keeps its bound under the
+// chord tolerance that a longer shift would pass. A contact with slack needs the shift its slack names (shiftNeed), which
+// the larger of that and the step supplies.
+var shiftSteps = [...]float64{1.0 / 4096, 1.0 / 512, 1.0 / 64, 1.0 / 16, 1.0 / 4, 1}
 
 // shiftMargin is how far past a contact's slack the least shift reaches.
 const shiftMargin = 1.05
