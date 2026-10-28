@@ -303,7 +303,7 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 		groups[f.group].HasCentroid = false
 		groups[f.group].Centroid = measurement.VecMeasurement{}
 	}
-	return w.build(ctx, env, groups, stripFrom, tag, faceIndex)
+	return w.buildClear(ctx, env, groups, stripFrom, tag, faceIndex)
 }
 
 // chamferRows is the number of rows a chamfer's cone needs for its chords to

@@ -702,5 +702,5 @@ baseDone:
 		groups[f.group].HasCentroid = false
 		groups[f.group].Centroid = measurement.VecMeasurement{}
 	}
-	return w.build(ctx, env, groups, stripFrom, blendTag{trueArea: blendTrue}, faceIndex)
+	return w.buildClear(ctx, env, groups, stripFrom, blendTag{trueArea: blendTrue}, faceIndex)
 }

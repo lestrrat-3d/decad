@@ -328,7 +328,7 @@ band between `P` and `P'`, so disjoint base bands give disjoint regions `K_k`, a
 A component that enters `K_k` without touching `P`, a wall or a seam either crosses `K_k`'s boundary or lies wholly
 inside it. The held audit (SR7, `internal/facetproof/faceted.go`) does not see the first case: it checks that the
 mesh closes and that its shells nest with consistent signs, reading one probe point per shell, and it tests no
-facet for intersection. So the chain runs its own strip test before the build (`chain_strip_clear.go`): every facet
+facet for intersection. So the chain runs its own strip test before the build (`strip_clear.go`): every facet
 the result keeps outside the strip, held or rebuilt, that shares no vertex with a strip facet must miss it, decided
 by `meshbool.TriTriClassify`, the exact triangle/triangle classification, on the held floats. A contact refuses
 with "the blend meets another facet of the body at" a point: an end of a point or segment contact, or a corner of
@@ -346,6 +346,14 @@ inside `K_k` crosses nothing, so with no crossings the audit's one-point parity 
 concave chain's `K_k` lies in the void, and a positive shell inside it nests inside a positive shell and refuses;
 a convex chain's `K_k` lies in the material, and a cavity inside it ends up contained by no shell, so the audit
 refuses its negative sign.
+
+The routes that blend one edge (blend Table RR and R5 of §8) and the mitre run of blend §4.7 build through
+`buildClear`, which runs the same strip test before the build, with the same texts and the same skipped pairs; for
+these routes the shared vertices also include the trim of an end face along the strip's end row. Their region `K` is bounded by the removed bands of the two faces and the
+end faces' cut corners, which the blend gates (blend SR4, SR5) place, so the argument above carries over: a cavity
+or solid crossing `K`'s boundary meets a strip facet and refuses, and one wholly inside `K` fails the audit's
+parity. A cavity whose corner reaches the removed corner of a plate's top edge, a hole mouth, a broken-out arc, a
+groove's edge or the ridge between two bores builds without the test and refuses with it.
 
 ### 5.7 Bounds
 
@@ -553,6 +561,7 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | Concave closed chain: boss root (20×20 `r = 3` boss joined to the plate's top) | fill `A_f·(ΣL + 2π·(R + x̄))`; 4 `Torus` (`Major = R + r`) | take `κ` the other way in the arc tag: SR7 |
 | Concave chain, all 8 edges named | builds without the option; the same fill | none |
 | Chain strip clearance | a 2×1×1 box joined over the pocket floor with only its lower front edge in the fill, and a cavity under the cross-drilled box's top-front edge with only its upper front edge in the removed corner, both refuse SM5 "the blend meets another facet of the body" at a point with `x` in 15…17; unit tests check that the grid keeps every pair of meeting boxes (random, degenerate-axis, far, touching and boundary boxes) and that a crossing, a coplanar overlap and a flat facet refuse | drop the strip test: both build; report a strip vertex: the point lies outside the solid; visit one grid column, or convert the cell before clamping (amd64): the grid loses pairs; read a region contact's point: panic |
+| Single-edge strip clearance | a cavity whose corner reaches the corner the blend removes refuses SM5 "the blend meets another facet of the body" at a point inside the cavity's `x` range, for a plate's top edge (R1, `r = 2`), a mitre run of two top edges, a hole mouth (R2), a broken-out arc, a groove's edge (R3) and the ridge between two bores (R5); the same top-edge cavity 3 mm further in builds and removes `40·4·(1 − π/4)` | call `build` for one route in place of `buildClear`: that route's cavity builds |
 | Concave chain gates | a pocket 0.8 deep refuses SR4 "the blend consumes the wall"; `r = 3` refuses SR3; a cube floating inside the fill refuses SR7 by nesting parity while one clear of it builds; an open concave chain refuses SM3; a chain of mixed sides refuses SM3 (unit test) | classify by `n_W = −m` only: every concave row refuses; measure the wall band on the convex side: the pocket refuses; drop the wall clearance: the shallow pocket refuses with another text; drop the mixed-side check: the unit test builds |
 | Chain clearance | a pocket whose chord crosses a band while its vertices lie outside it refuses SM5; a hole deep inside a band refuses SM4 | test vertices only: the crossing chord builds and SR7 or the volume check fails |
 | `internal/tangentchain` retained oracle | exactly tangent plane/cylinder tags prove "tangent"; tags one float step off are undecided; a clear miss is "not tangent" | replace the identity by a tolerance: the one-step case proves "tangent" |
@@ -608,10 +617,10 @@ Each increment is one PR. M1 ships this document.
 Chains are built for closed outlines of lines and arcs, convex or concave, and for open convex ones.
 `retainedblend.Tangent` decides each junction (`chain_tangent.go`), `planChains` groups and orders the selection
 (`chain.go`) and `rewriteChain` builds one chain (`chain_rewrite.go`); the ends of an open chain live in
-`chain_open.go`, an arc end in `chain_arc_end.go`, and the strip's clearance from the rest of the body in
-`chain_strip_clear.go`. A closed chain has at least three edges and an open chain at least two. An open concave
-chain, a reflex foot, a straight end on a face that is not normal to its edge and an arc end on a face that is not
-parallel to the axis are refused. The edge between a `Cylinder` and a `Torus` blend of a fillet chain is an `Arc3`
+`chain_open.go`, an arc end in `chain_arc_end.go`, and the strip's clearance from the rest of the body, for every
+route, in `strip_clear.go`. A closed chain has at least three edges and an open chain at least two. An open
+concave chain, a reflex foot, a straight end on a face that is not normal to its edge and an arc end on a face that
+is not parallel to the axis are refused. The edge between a `Cylinder` and a `Torus` blend of a fillet chain is an `Arc3`
 (retention §10.1 E11).
 
 M3 starts with one real end-to-end run on the P2 fixture before any other fixture. If that run refuses, the
