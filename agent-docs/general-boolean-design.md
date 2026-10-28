@@ -1742,9 +1742,10 @@ are relations, never literals.
   D-flat, and an Acme thread of pitch 8 on the D-flat's wall builds to its
   twin's volume. A tool ending inside the span (drawn either way along the
   axis), a tool wall in the end plane (missed by B8), a tilted tool, a
-  `Transform`-placed tool and a tube each keep the mesh path. `Fillet` and
-  `Chamfer` of the class-B flat's and keyway's long edges build exactly
-  (brep-modify §4.4, `apitest/revolve_shaft_class_b_blend_test.go`).
+  `Transform`-placed tool and a tube each keep the mesh path. `Fillet` of the
+  class-B flat's and keyway's long edges builds with no section displacement,
+  and `Chamfer` of them builds with the crossings' displacement carried as
+  `δ_out` (brep-modify §4.4, `apitest/revolve_shaft_class_b_blend_test.go`).
   `internal/revolveplan/cylinder_view_test.go` misses each view condition
   on its own.
 - **B stepped shaft**: full Revolves of staircases of 20 mm steps about x,

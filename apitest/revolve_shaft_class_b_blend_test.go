@@ -308,17 +308,25 @@ func TestRevolvedShaftClassBBlend(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, faces, 1)
 		loop := decad.Edges(decad.OuterLoopOf(faces[0].Origins()[0]))
-		got, err := decad.Chamfer(t.Context(), filleted, loop, units.Millimeters(0.5))
+		const d = 0.5
+		got, err := decad.Chamfer(t.Context(), filleted, loop, units.Millimeters(d))
 		require.NoError(t, err)
-		before, err := filleted.Volume()
+		// The filleted section is smooth and convex, so the band removes the
+		// d × d right triangle swept along it: by Pappus, (d²/2)·(P − 2π·d/3)
+		// for its perimeter P = 2·√45 + 2·α + R·(2π − 2α), α = atan(√45/6),
+		// the turn of each r = 1 fillet arc.
+		alpha := bAtan(bQuo(shaftSqrt(45), jf(6)))
+		twoPi := bMul(jf(2), junctionPi())
+		perimeter := bAdd(bAdd(twice(shaftSqrt(45)), twice(alpha)), bMul(jf(shaftR), bSub(twoPi, twice(alpha))))
+		band := bMul(jf(d*d/2), bSub(perimeter, bMul(twoPi, jf(d/3))))
+		volume, err := got.Volume()
 		require.NoError(t, err)
-		after, err := got.Volume()
+		value, err := volume.Value.In(units.CubicMillimeter)
 		require.NoError(t, err)
-		b, err := before.Value.In(units.CubicMillimeter)
+		bound, err := volume.Bound.In(units.CubicMillimeter)
 		require.NoError(t, err)
-		a, err := after.Value.In(units.CubicMillimeter)
-		require.NoError(t, err)
-		require.Less(t, a, b, `the cap-loop chamfer removes material`)
+		require.Less(t, bound, 1e-6, `the cap band measures exactly`)
+		requireJunctionEncloses(t, `filleted and chamfered shaft volume`, value, bound, bSub(flatFillet, band))
 	})
 
 	t.Run("keyway", func(t *testing.T) {

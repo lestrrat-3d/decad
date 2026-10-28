@@ -261,13 +261,16 @@ also takes. The result states `δ_out`, so a later modify op refuses it as any
 displaced prism. The setback's conversion bound is not charged, as on the
 prism path.
 
-Table PD — every refusal is `ErrUnsupported` with SB1's text, then the row
-and its reason (`... (brep-modify SB1); its displaced reading (brep-modify
-§4.4) refuses: ... (brep-modify PDn)`):
+Table PD — a PD1–PD4 or PD5 refusal is `ErrUnsupported` with SB1's text,
+then the row and its reason (`... (brep-modify SB1); its displaced reading
+(brep-modify §4.4) refuses: ... (brep-modify PDn)`). Stage 2a's op checks (a
+Shell, an asymmetric chamfer, an op with no corner construction, a record with
+loop bands) return SB1's text alone, with no row. PD6's refusal is modify S6,
+and PD7 is a charge:
 
 | PD | Condition (exact comparisons of recorded data unless stated) |
 |---|---|
-| **PD1** | The op is `Fillet` or a symmetric `Chamfer`, the record has no loop bands, and every selected edge is a lateral edge of the reading. A Shell, an asymmetric chamfer, a cap edge or a complete cap loop refuses. |
+| **PD1** | Every selected edge is a lateral edge of the reading. A selection the op's classification refuses, a cap edge or a complete cap loop refuses with this row. (A Shell, an asymmetric chamfer or a record with loop bands never reaches the reading: SB1 alone.) |
 | **PD2** | Every circular segment of `S` is claimed by a P2(a) wall whose `WallCarrier.Radius > 0`, and every line by a P2(b) planar rectangle, never a P2(c) restated wall; a circular walk covers one segment. |
 | **PD3** | Each such segment's centre equals its carrier's bit for bit, `2δ < R`, and each recorded endpoint `P` satisfies `(R − δ)² ≤ |P − C|² ≤ (R + δ)²` over `big.Rat` (P5 makes the wall's endpoints the same points). A whole circle's radius equals the carrier's bit for bit. |
 | **PD4** | Every corner at which a circular walk meets another walk is selected; the refusal names the corner's section point. |
@@ -281,7 +284,7 @@ Gate order of the displaced reading (stage numbers as in §6):
 
 | Stage | Gates |
 |---|---|
-| 2a. record | RB dispatch; SB2; for `δ > 0`, PD1's op checks, else SB1 |
+| 2a. record | RB dispatch; SB2; for `δ > 0`, a Shell, an asymmetric chamfer, an op with no corner construction or loop bands is SB1 alone |
 | 2b. route P | P1–P5 per axis with the claim map; PD2; the op's classification; no admitting reading is SB1 |
 | 3. arm | PD1 (a chamfer's cap edge or cap loop); corner matching; PD3; PD4 |
 | 4. per corner | S4; S5 on the exact radius (fillet); PD5a; PD5b, PD5c (fillet) |
@@ -648,8 +651,9 @@ Displaced reading (§4.4; `apitest/revolve_shaft_class_b_blend_test.go`,
   agrees with the Transform-placed tool's mesh-path blend within both bounds.
 - D-flat `Chamfer` d = 1: within its bound of the closed form, and a further
   `Fillet` of its lateral edges refuses with the prism's displaced-receiver
-  text (PD7). The r = 1 fillet result takes a cap-loop chamfer (an exact
-  prism); the keyway's two top edges, and all four lateral edges, fillet at
+  text (PD7). The r = 1 fillet result takes a d = 0.5 cap-loop chamfer to
+  the closed form `(d²/2)·(P − 2π·d/3)` removed, `P` the filleted section's
+  perimeter; the keyway's two top edges, and all four lateral edges, fillet at
   r = 0.5 to their closed forms; a translated D-flat fillets to the same
   volume.
 - Refusals: one flat edge, and the keyway's floor edges alone (PD4); the

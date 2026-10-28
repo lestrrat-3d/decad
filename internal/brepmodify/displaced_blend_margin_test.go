@@ -15,8 +15,9 @@ import (
 // These are Table PD's per-corner margins (agent-docs/brep-modify-design.md
 // §4.4) on crafted numbers: each refuses a reading within its margin and
 // passes one clear of it. Shown-to-fail: deleting the comparison in
-// requireTurnMargin, requireRootMargin or requireSenseMargin, or the widening
-// in widenDisplaced, turns the matching refusal below into a pass.
+// requireTurnMargin, requireRootMargin or requireSenseMargin, the radius
+// scaling of PD5c's rounding allowance, or the widening in widenDisplaced,
+// turns the matching refusal below into a pass.
 
 func TestDisplacedTurnMargin(t *testing.T) {
 	t.Parallel()
@@ -48,6 +49,13 @@ func TestDisplacedSenseMargin(t *testing.T) {
 	require.ErrorIs(t, err, errPD)
 	require.Equal(t, "PD5c", pdRow(err))
 	require.NoError(t, requireSenseMargin(-r, r, theta))
+
+	// The rounding allowance scales with the radius: at r = 1000 a reading
+	// of 2⁻⁴⁹·r is past any fixed 2⁻⁵⁰ but within r·2⁻⁴⁸.
+	const big = 1000.0
+	err = requireSenseMargin(math.Ldexp(big, -49), big, 0)
+	require.ErrorIs(t, err, errPD)
+	require.NoError(t, requireSenseMargin(math.Ldexp(big, -46), big, 0))
 }
 
 // TestDisplacedCutbackWidening is PD6 on the D-flat section with a

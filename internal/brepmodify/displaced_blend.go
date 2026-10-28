@@ -32,9 +32,16 @@ import (
 // in the rewritten section. Table PD's gates are reject-only: each refuses
 // more, never less.
 
-// pdMargin is the 2⁻⁵⁰ every PD5 margin adds for the float evaluation of the
-// number it compares.
+// pdMargin is the 2⁻⁵⁰ PD5a adds for the float evaluation of the cross
+// product it compares, a number of order one.
 var pdMargin = math.Ldexp(1, -50)
+
+// senseRounding is PD5c's relative rounding allowance, 2⁻⁴⁸ of the fillet
+// radius: it covers the float evaluation of rot90(fA − O)·tA, whose two
+// products and sum each round by an ulp of a term of size r, the
+// normalisation of the unit tangent, and a circular walk's tangent read
+// through sincos at a computed angle, each a few ulps of r.
+var senseRounding = math.Ldexp(1, -48)
 
 // SectionCarriers is a displaced route-P reading's exact carriers
 // (brep-modify §4.4), one entry per segment of the section, loop by loop:
@@ -62,8 +69,8 @@ func pdRefusal(sb1 error, row, reason string) error {
 // displacedReceiver is the brep route for a receiver with a section
 // displacement (brep-modify §4.4, gate stages 2a and 2b): a Shell, an
 // asymmetric chamfer, an op with no corner construction, or a record carrying
-// route L bands is SB1 (PD1); otherwise the displaced reading, which is SB1
-// with PD1's or PD2's reason where no axis admits.
+// route L bands is SB1's text alone, with no PD row; otherwise the displaced
+// reading, which is SB1 with PD1's or PD2's reason where no axis admits.
 func displacedReceiver(ctx context.Context, b *topo.Body, bp breprecord.Payload, req Request) (Route, error) {
 	sb1 := breprecord.RequireExactSection(bp, req.Op)
 	if req.Shell || req.Asym != nil || req.Blend == nil || len(bp.LoopBands) > 0 {
@@ -508,10 +515,11 @@ func requireRootMargin(roots [][2]float64, ku, kv, delta float64) error {
 	return pdRowError{row: "PD5b", reason: fmt.Sprintf(`the two fillet centres lie %g and %g from the corner, within %g of each other, so the displacement may decide which one is nearest`, d0, d1, margin)}
 }
 
-// requireSenseMargin is PD5c: |rot90(fA − O)·tA| > r·θ_A + 2⁻⁵⁰, so the
-// connector arc's sense does not depend on the displaced tangent.
+// requireSenseMargin is PD5c: |rot90(fA − O)·tA| > r·(θ_A + 2⁻⁴⁸), so the
+// connector arc's sense depends neither on the displaced tangent nor on the
+// dot product's rounding, which scales with r (senseRounding).
 func requireSenseMargin(sense, r, thetaA float64) error {
-	margin := sumUp(proofbound.ProductUpper(r, thetaA), pdMargin)
+	margin := proofbound.ProductUpper(r, sumUp(thetaA, senseRounding))
 	if math.Abs(sense) > margin {
 		return nil
 	}

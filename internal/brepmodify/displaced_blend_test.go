@@ -2,6 +2,7 @@ package brepmodify_test
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/brepmodify"
@@ -154,6 +155,9 @@ func blendRecord(t *testing.T, bp breprecord.Payload, fillet bool, size float64)
 	return res.Body, err
 }
 
+// ratOf is f as an exact rational.
+func ratOf(f float64) *big.Rat { return new(big.Rat).SetFloat64(f) }
+
 // volumeOf is a body's volume and its bound in mm³.
 func volumeOf(t *testing.T, b *topo.Body) (float64, float64) {
 	t.Helper()
@@ -182,7 +186,8 @@ func requireSameBody(t *testing.T, got, want *topo.Body) {
 // Shown-to-fail: with the carrier override dropped, the fillet offsets the
 // recorded radius (about 10 + 7.1e-5) and its volume moves by about 0.14 mm³;
 // with the chamfer built at SectionDelta 0 (no PD7 charge) its bound no
-// longer covers its feet moving by about 1e-4.
+// longer covers its feet moving by about 1e-4, and with the charge cut to δ
+// it states less than the arc foot's transport R·δ/(R − δ).
 func TestDisplacedBlendReadsCarriers(t *testing.T) {
 	t.Parallel()
 	record := dFlatRecord(t)
@@ -202,7 +207,14 @@ func TestDisplacedBlendReadsCarriers(t *testing.T) {
 			if tc.fillet {
 				require.Zero(t, pp.SectionDelta, `a fillet from exact carriers keeps no displacement`)
 			} else {
-				require.GreaterOrEqual(t, pp.SectionDelta, 2e-4, `the chamfer charges at least the record's displacement`)
+				// PD7: δ_out is R·δ/(R − δ) for the record's δ = 2e-4 on the
+				// R = 10 wall, rounded up, which exceeds δ itself.
+				delta := 2 * 1e-4
+				transport := new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(10, 1), ratOf(delta)),
+					new(big.Rat).Sub(big.NewRat(10, 1), ratOf(delta)))
+				require.Greater(t, transport.Cmp(ratOf(delta)), 0)
+				require.GreaterOrEqual(t, ratOf(pp.SectionDelta).Cmp(transport), 0,
+					`the chamfer charges the arc foot's transport R·δ/(R − δ), not δ alone`)
 			}
 			requireSameBody(t, got, want)
 		})

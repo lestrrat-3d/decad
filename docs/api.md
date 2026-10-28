@@ -242,9 +242,9 @@ placement: a shaft or a tool placed by `decad.Transform` takes the faceted path,
 shaft's length, a tool that meets two steps but not a narrower step between them in one of its planes, a slot
 that splits a step holding a narrower step's shoulder, a tool passing beside a narrower step within its
 shoulder's bounding square, and a tube. On a plain shaft, `Fillet` and `Chamfer` of the flat's or keyway's
-long edges build exactly when the selection includes every edge where the cut meets the cylinder: the fillet
-keeps the exact measurement, and the chamfer's bound carries the crossing's rounding. A stepped shaft's edges,
-and other selections, refuse. To blend those, place the tool by `decad.Transform`: the faceted result keeps the
+long edges build from the shaft's exact plane and cylinder when the selection includes every edge where the cut
+meets the cylinder: the fillet keeps the exact measurement, and the chamfer's bound carries the crossing's
+rounding. A stepped shaft's edges, and other selections, refuse. To blend those, place the tool by `decad.Transform`: the faceted result keeps the
 shaft's plane and cylinder faces, and the blend builds on them.
 
 A pin drawn at right angles to a plate, on a datum plane, whose end cap lies flat inside one of the plate's faces
