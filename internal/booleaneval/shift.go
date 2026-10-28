@@ -411,13 +411,21 @@ func retryShifted(ctx context.Context, refusal error, op meshbool.OperationKind,
 	}
 	byPiece := groupContacts(pc, nil, touch.Contacts)
 	initial := byPiece
+	if op == meshbool.OpUnion && flushOnly(initial) {
+		// A Union whose contacts are all flush faces, none a touch, is best joined by shrinking the second operand
+		// strictly inside the first: the union is then the first operand's own faces with no sliver where a translation
+		// would leave a protruding rim for the next Boolean to meet (agent-docs/gap-tolerance-design.md §5.2 item 6).
+		if joined, serr := growShifted(ctx, refusal, op, initial, attempt, true); serr != refusal {
+			return joined, serr
+		}
+	}
 	for range shiftRounds {
 		dirs := make(map[int][]r3.Vec, len(byPiece))
 		order := make([]int, 0, len(byPiece))
 		for c, contacts := range byPiece {
 			dirs[c] = shiftDirections(op, contacts)
 			if len(dirs[c]) == 0 {
-				return growShifted(ctx, refusal, op, initial, attempt)
+				return growShifted(ctx, refusal, op, initial, attempt, false)
 			}
 			order = append(order, c)
 		}
@@ -471,7 +479,7 @@ func retryShifted(ctx context.Context, refusal error, op meshbool.OperationKind,
 			break
 		}
 	}
-	return growShifted(ctx, refusal, op, initial, attempt)
+	return growShifted(ctx, refusal, op, initial, attempt, false)
 }
 
 // growShifted is the last try of retryShifted: every piece grown about its centre, from the least growth up, when the
@@ -479,7 +487,7 @@ func retryShifted(ctx context.Context, refusal error, op meshbool.OperationKind,
 // is not a contact refusal, and the original refusal when none is. The least growth that opens a contact is any, so the
 // result departs from the true Boolean by a fraction of the reach.
 func growShifted(ctx context.Context, refusal error, op meshbool.OperationKind, byPiece map[int][]meshbool.TouchContact,
-	attempt func(map[int]pieceShift) (Evaluation, error)) (Evaluation, error) {
+	attempt func(map[int]pieceShift) (Evaluation, error), shrink bool) (Evaluation, error) {
 	reach := gaptol.Reach(ctx)
 	// Only a coplanar overlap is opened by growth. An edge graze or a point touch is a tangency the design leaves refused
 	// (agent-docs/gap-tolerance-design.md §5.2), and growing a tool across it would decide it by the growth's sign.
@@ -499,7 +507,7 @@ func growShifted(ctx context.Context, refusal error, op meshbool.OperationKind, 
 			return Evaluation{}, err
 		}
 		grow := step * reach
-		if op == meshbool.OpIntersect {
+		if op == meshbool.OpIntersect || shrink {
 			grow = -grow
 		}
 		shifts := make(map[int]pieceShift, len(byPiece))
@@ -516,6 +524,22 @@ func growShifted(ctx context.Context, refusal error, op meshbool.OperationKind, 
 		return ev, err
 	}
 	return Evaluation{}, refusal
+}
+
+// flushOnly reports whether no contact is Decisive and none carries slack: every one is a flush face of the second
+// operand that lies on the first operand's own face, which a Union leaves unchanged when the second sits inside it.
+func flushOnly(byPiece map[int][]meshbool.TouchContact) bool {
+	if len(byPiece) == 0 {
+		return false
+	}
+	for _, contacts := range byPiece {
+		for _, c := range contacts {
+			if c.Decisive || c.Slack > 0 {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // growOpens reports whether growing a piece about its centre can stand in for a translation for contacts: only when every
