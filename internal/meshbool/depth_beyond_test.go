@@ -219,6 +219,7 @@ func TestDepthBeyondHintSkippedByScan(t *testing.T) {
 	require.NoError(t, err)
 	m.SetVertexBounds(make([]float64, len(verts)))
 	m.Boxes[1] = [2]r3.Vec{{X: 20, Y: 20, Z: 20}, {X: 21, Y: 21, Z: 21}}
+	m.setDepthBlocks()
 	p := proof.XptOf(r3.Vec{})
 	// The scan reads facet 0 at distance 5 and skips facet 1 on its box, so
 	// the certified depth is about 5 although facet 1 lies 0.25 away.

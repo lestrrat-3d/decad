@@ -1363,7 +1363,19 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   are available before the scan ends:
   - The running minimum at any step bounds `F`, because the scan only lowers
     it. The scan keeps the definition's facet order and prune, so it stops on
-    the first step whose minimum settles the answer.
+    the first step whose minimum settles the answer. It passes over a run of
+    consecutive facets at once when a depth block covering them
+    (`internal/meshbool/depth_blocks.go`) reads a `PointBoxDist` at or past
+    the running minimum. A block's box is the coordinate-wise union of the
+    boxes it covers, or the box of all space when one of them is unordered
+    (a NaN coordinate, or a low corner past the high one). `PointBoxDist`
+    takes only steps that never decrease when a box grows: per-axis gaps from
+    comparisons and one rounded subtraction, then rounded squares, sums and a
+    square root of non-negative values. It is `//go:noinline`, so both
+    readings run the same code, and a block reads no more than any facet box
+    it covers. The prune would skip each of those facets without moving the
+    minimum, so the scan takes the same facet distances in the same order and
+    ends with the same minimum and the same settling facet.
   - A hint facet `h` bounds `F` by `max(PointBoxDist, PointTriDistance)` at
     `h`. The full scan reaches `h` with running minimum `B`. It either skips
     `h` because `PointBoxDist >= B`, so `F <= B <= PointBoxDist`, or it takes

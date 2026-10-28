@@ -467,8 +467,10 @@ func CertifiedInteriorDepth(p proof.Xpt, other *BoolMesh) float64 {
 // bound at the hint facet, settles that p is no deeper than b; the soundness
 // argument is agent-docs/evaluator-design.md §9, "The witness depth scan stops
 // once a candidate is settled as no deeper than b". A candidate it does not
-// settle finishes CertifiedInteriorDepth's own scan. A non-nil hint is updated
-// to the facet that settled a shallow answer.
+// settle finishes CertifiedInteriorDepth's own scan. The scan passes over a
+// run of facets at once where a depth block's box shows the prune would skip
+// every one of them (setDepthBlocks). A non-nil hint is updated to the facet
+// that settled a shallow answer.
 func depthBeyond(p proof.Xpt, other *BoolMesh, b float64, hint *int) bool {
 	pf := p.Vec()
 	if hint != nil && *hint >= 0 && *hint < len(other.Tris) {
@@ -478,24 +480,17 @@ func depthBeyond(p proof.Xpt, other *BoolMesh, b float64, hint *int) bool {
 			return false
 		}
 	}
-	best := math.Inf(1)
-	for i := range other.Tris {
-		// The same distance prune CertifiedInteriorDepth applies, in the same
-		// facet order, so the scan visits the same facets up to the stop.
-		if PointBoxDist(pf, other.Boxes[i]) >= best {
-			continue
+	s := depthScan{pf: pf, other: other, b: b, best: math.Inf(1)}
+	settled := s.scan()
+	if settled >= 0 {
+		if hint != nil {
+			*hint = settled
 		}
-		best = math.Min(best, PointTriDistance(pf, TriCorners(other, i)))
-		if best*(1-1e-12) <= b {
-			if hint != nil {
-				*hint = i
-			}
-			return false
-		}
+		return false
 	}
 	depth := 0.0
-	if best > 0 && !proofbound.IsNonFinite(best) {
-		depth = best*(1-1e-12) - PointRoundBound(p, pf)
+	if s.best > 0 && !proofbound.IsNonFinite(s.best) {
+		depth = s.best*(1-1e-12) - PointRoundBound(p, pf)
 	}
 	// Negated rather than written as depth > b, so a NaN b answers as
 	// DeepWitnessAt's original "depth <= b" test answered it.
