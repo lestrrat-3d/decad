@@ -69,6 +69,26 @@ func TestFacetedRetainedBlendStripClear(t *testing.T) {
 		requireVolumeChange(t, before, after, 40*4*(1-math.Pi/4))
 	})
 
+	t.Run("a cavity close under a straight edge's fillet builds", func(t *testing.T) {
+		t.Parallel()
+		// The strip's rows are 5° apart, so its first facet runs from the
+		// tangent line (y, z) = (2, 20) to (1.826, 19.992) and its box reaches
+		// down to z = 19.992. The cavity's corner (1.99, 19.995) lies inside
+		// that box but 1.995 mm from the fillet's axis at (2, 18), under the
+		// facet's chord: the exact test runs on the cavity's facets and finds
+		// no contact.
+		_, bored := boredPlate(t)
+		cav := withCavity(t, bored, 5, 1.99, 7, 4, 16, 19.995)
+		before, err := cav.Volume()
+		require.NoError(t, err)
+		out, err := decad.Fillet(t.Context(), cav, straightEdge(t, cav, r3.NewVec(0, 0, 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(2))
+		require.NoError(t, err)
+		after, err := out.Volume()
+		require.NoError(t, err)
+		requireVolumeChange(t, before, after, 40*4*(1-math.Pi/4))
+	})
+
 	t.Run("a cavity crossing a mitre run's fillet", func(t *testing.T) {
 		t.Parallel()
 		x, y := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)
