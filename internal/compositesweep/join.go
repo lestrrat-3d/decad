@@ -89,12 +89,21 @@ func RewriteVertex(body *topo.Body, old, replacement *topo.Vertex) {
 	if old == replacement {
 		return
 	}
-	for _, edge := range topobuild.Edges(body) {
-		if edge.Start == old {
-			edge.Start = replacement
-		}
-		if edge.End == old {
-			edge.End = replacement
+	for _, lump := range body.Lumps {
+		for _, shell := range lump.Shells {
+			for _, face := range shell.Faces {
+				for _, loop := range face.Loops {
+					for _, use := range loop.CoEdges {
+						edge := use.Edge
+						if edge.Start == old {
+							edge.Start = replacement
+						}
+						if edge.End == old {
+							edge.End = replacement
+						}
+					}
+				}
+			}
 		}
 	}
 }

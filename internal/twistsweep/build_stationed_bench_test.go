@@ -62,3 +62,21 @@ func BenchmarkStationedTwistCells(b *testing.B) {
 		})
 	}
 }
+
+// BenchmarkStationedTwistRounded builds the rounded 8 by 6 profile through
+// an 80 degree twist over 5 mm, matching the rounded placed stationed case
+// without placement overhead.
+func BenchmarkStationedTwistRounded(b *testing.B) {
+	profile := roundedRecord()
+	poly, err := TwistPolygonOf(profile)
+	require.NoError(b, err)
+	angle := units.Degrees(80)
+	recordArea, _ := poly.Area.Float64()
+	path := &sweepinput.Path{End: r3.NewVec(0, 0, 5)}
+	plane := planeRecord{U: r3.NewVec(1, 0, 0), V: r3.NewVec(0, 1, 0)}
+	env := topo.Env{Alloc: topotest.Alloc{}}
+	for b.Loop() {
+		_, err := evalStationed(b.Context(), env, profile, plane, path, angle, recordArea, r3.Identity())
+		require.NoError(b, err)
+	}
+}
