@@ -84,11 +84,12 @@ func pocketWithCube(t *testing.T, y0, z0, side float64) *decad.Body {
 	return joined
 }
 
-// requireBlendsFaceVoid checks that every blend face of radius r points into
-// the void at a vertex: toward a cylinder's axis, toward a torus's tube
-// centre.
-func requireBlendsFaceVoid(t *testing.T, b *decad.Body, r float64) {
+// requireBlendsFaceVoid checks that each of the n blend faces of radius
+// concaveFilletR points into the void at a vertex: toward a cylinder's axis,
+// toward a torus's tube centre.
+func requireBlendsFaceVoid(t *testing.T, b *decad.Body, n int) {
 	t.Helper()
+	const r = concaveFilletR
 	checked := 0
 	for _, f := range b.Faces() {
 		var centre func(p r3.Vec) r3.Vec
@@ -120,7 +121,7 @@ func requireBlendsFaceVoid(t *testing.T, b *decad.Body, r float64) {
 		require.Positive(t, n.Value.Dot(centre(p).Sub(p)), "a blend at %v faces the material", p)
 		checked++
 	}
-	require.Equal(t, 8, checked)
+	require.Equal(t, n, checked)
 }
 
 // requireContactX checks that a strip clearance refusal names a contact point
@@ -186,7 +187,7 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 			// The ball lies inside the corner cylinder: the tube centre is R − r.
 			require.InDelta(t, concaveR-r, m, 1e-12)
 		}
-		requireBlendsFaceVoid(t, out, r)
+		requireBlendsFaceVoid(t, out, 8)
 		requireVerifiedMesh(t, out)
 	})
 
@@ -247,7 +248,7 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 			// The ball lies outside the corner cylinder: the tube centre is R + r.
 			require.InDelta(t, concaveR+r, m, 1e-12)
 		}
-		requireBlendsFaceVoid(t, out, r)
+		requireBlendsFaceVoid(t, out, 8)
 		requireVerifiedMesh(t, out)
 	})
 
@@ -336,14 +337,5 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "the blend meets another facet of the body")
 		requireContactX(t, err, 15, 17)
-	})
-
-	t.Run("a concave open chain is refused", func(t *testing.T) {
-		t.Parallel()
-		pocket := roundedPocket(t, false)
-		seed := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(r3.NewVec(27, 10, 5))).Exactly(1)
-		_, err := decad.Fillet(t.Context(), pocket, seed, units.Millimeters(1), decad.WithTangentChain())
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "a concave open tangent chain is not built")
 	})
 }
