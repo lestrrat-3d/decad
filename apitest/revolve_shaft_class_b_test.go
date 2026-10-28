@@ -198,23 +198,8 @@ func TestRevolvedShaftClassBCut(t *testing.T) {
 		require.NoError(t, err)
 		require.Less(t, after, before, `the thread removes material`)
 	})
-
-	t.Run("blends of the D-flat refuse", func(t *testing.T) {
-		t.Parallel()
-		// The class-B flat carries a crossing displacement, so brep-modify's
-		// SB1 refuses a blend of its edges; a Transform-placed tool keeps the
-		// mesh path and its retained blend (faceted_retained_blend_revolve_test.go).
-		sc := newRetentionScene()
-		cut, err := decad.Cut(t.Context(), revolvedShaft(t, sc),
-			shaftTool(t, sc, flatPlane(t, sc), -5, -20, shaftL+5, 20))
-		require.NoError(t, err)
-		_, err = decad.Fillet(t.Context(), cut, flatEdges(t, cut), units.Millimeters(2))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, `brep-modify SB1`)
-		_, err = decad.Chamfer(t.Context(), cut, flatEdges(t, cut), units.Millimeters(1))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, `brep-modify SB1`)
-	})
+	// The D-flat's and keyway's blends are TestRevolvedShaftClassBBlend's
+	// (revolve_shaft_class_b_blend_test.go).
 }
 
 // requireShaftMeshPath checks that a cut shaft built, through the mesh path:

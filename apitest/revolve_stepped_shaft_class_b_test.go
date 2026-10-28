@@ -177,7 +177,8 @@ func TestSteppedShaftClassBBlendsRefuse(t *testing.T) {
 	t.Parallel()
 
 	// The stepped flat carries the crossing's section displacement, as a
-	// plain shaft's does, so brep-modify's SB1 refuses a blend of its edges.
+	// plain shaft's does, so brep-modify's SB1 refuses a blend of its edges:
+	// the stepped flat reads as no prism (brep-modify §4.4).
 	sc := newRetentionScene()
 	cut, err := decad.Cut(t.Context(), stepRevolve(t, sc, 10, 8),
 		shaftTool(t, sc, flatPlane(t, sc), -5, -20, 45, 20))

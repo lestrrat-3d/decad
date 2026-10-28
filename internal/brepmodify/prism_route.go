@@ -78,11 +78,14 @@ type BlendOp struct {
 // receiver for the rest of the call), and caps, its two cap faces on the
 // receiver body: the op continues on its prism path with them. Route E and
 // route S set body, the result they built, which the op commits
-// (commitModifyResult).
+// (commitModifyResult). Carriers is set only by route P's displaced reading
+// (brep-modify §4.4): the prism then carries the receiver's section
+// displacement, and the op takes its displaced arm with these carriers.
 type Route struct {
-	Prism *prismrecord.Payload
-	Caps  PrismCaps
-	Body  *topo.Body
+	Prism    *prismrecord.Payload
+	Caps     PrismCaps
+	Body     *topo.Body
+	Carriers *SectionCarriers
 }
 
 // Receiver is the brep route for one modify op (brep-modify §2).
@@ -95,13 +98,18 @@ type Route struct {
 // builds the result or refuses, and a Fillet or Chamfer takes route E (§5) or
 // route L (agent-docs/modify-general-design.md §4), as brepLoopRoute picks, which
 // builds the result or refuses with a Table SB or Table SL row.
+//
+// A receiver whose record carries a section displacement takes route P's
+// displaced reading (§4.4) instead, and no other route: a symmetric Fillet or
+// Chamfer of lateral edges whose reading passes Table PD's record gates, or
+// SB1.
 func Receiver(ctx context.Context, env topo.Env, b *topo.Body, req Request) (Route, error) {
 	bp, sourceRoles, ok, err := brepModifyRecord(ctx, b.Payload, req.Op)
 	if err != nil || !ok {
 		return Route{}, err
 	}
-	if err := breprecord.RequireExactSection(bp, req.Op); err != nil {
-		return Route{}, err
+	if bp.SectionDelta() != 0 {
+		return displacedReceiver(ctx, b, bp, req)
 	}
 	if req.Asym != nil {
 		req.Asym.RecordRoles = sourceRoles
@@ -323,12 +331,14 @@ func prismReadings(ctx context.Context, bp breprecord.Payload) ([]prismrecord.Pa
 
 // brepPrismRead is one prism reading of a brep record along a reference axis
 // (brep-modify §4.1): the recognised prism, the indices of the record's
-// bottom and top faces, and which section loop each of bottom's region loops
-// is (top's region is the section, loop for loop).
+// bottom and top faces, which section loop each of bottom's region loops
+// is (top's region is the section, loop for loop), and the P2 faces that
+// claim the section (P5), which the displaced reading (§4.4) reads.
 type brepPrismRead struct {
 	pp          prismrecord.Payload
 	bottom, top int
 	bottomLoop  []int
+	walls       brepgeom.PrismWallSet
 }
 
 // caps names the reading's cap faces on the receiver body: bottom is the
@@ -366,7 +376,7 @@ func recognisePrism(ctx context.Context, bp breprecord.Payload, embeds []brepgeo
 			Z0Delta: max(bp.Faces[caps.Bottom].Z0Delta, walls.ZloDelta),
 			Z1Delta: max(bp.Faces[caps.Top].Z0Delta, walls.ZhiDelta),
 		},
-		bottom: caps.Bottom, top: caps.Top, bottomLoop: caps.BottomLoop,
+		bottom: caps.Bottom, top: caps.Top, bottomLoop: caps.BottomLoop, walls: walls,
 	}, true, nil
 }
 

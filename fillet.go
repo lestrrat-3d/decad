@@ -92,7 +92,8 @@ type FilletOption interface{ filletOption() }
 // end face is a curved face or an earlier blend, a straight wall the route
 // needs as a plane that is oblique, split or carries a displaced level, end
 // faces whose arcs disagree, and a body whose faces carry a section
-// displacement (SB1) are ErrUnsupported (Table SB).
+// displacement (SB1), outside brep-modify §4.4's lateral blend of a class-B
+// crossing prism, are ErrUnsupported (Table SB).
 // P8's exact front top edge uses a radius-1 quarter-cylinder cutter before
 // route E's SB7 curved-third-face gate (modify-general §4.3c).
 // Any other selection of such a body's edges is route L's

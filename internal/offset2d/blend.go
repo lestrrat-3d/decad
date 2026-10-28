@@ -87,6 +87,27 @@ func offsetOf(c carrier, offsetSign, r, tol float64) (offCurve, error) {
 // the center nearest the corner (S5 when they never meet), and the tangent
 // feet, cutbacks and arc sense follow.
 func Fillet(walks []survey2d.SideWalk, ci int, r, tol float64) (*Blend, error) {
+	b, _, err := FilletWithRoots(walks, ci, r, tol)
+	return b, err
+}
+
+// FilletDecisions are the numbers a fillet's discrete choices read
+// (agent-docs/brep-modify-design.md §4.4, PD5): Cross, the cross product of
+// the corner's two unit travel tangents, whose sign is S4's corner and the
+// offset side; Roots, every root of the offset intersection, among which
+// Center is the one nearest the corner; and Sense, rot90(fA − Center)·tA,
+// whose sign is the connector arc's walk sense.
+type FilletDecisions struct {
+	Cross  float64
+	Roots  [][2]float64
+	Center [2]float64
+	Sense  float64
+}
+
+// FilletWithRoots is Fillet, also returning the numbers its decisions read,
+// so a caller that holds a margin on each decision reads the same numbers the
+// construction used.
+func FilletWithRoots(walks []survey2d.SideWalk, ci int, r, tol float64) (*Blend, FilletDecisions, error) {
 	n := len(walks)
 	arrive := walks[(ci+n-1)%n] // walk A, arriving at the corner
 	leave := walks[ci]          // walk B, leaving the corner
@@ -96,12 +117,12 @@ func Fillet(walks []survey2d.SideWalk, ci int, r, tol float64) (*Blend, error) {
 	ax, ay, la := Normalize(arrive.TanOutU, arrive.TanOutV)
 	bx, by, lb := Normalize(leave.TanInU, leave.TanInV)
 	if la == 0 || lb == 0 {
-		return nil, fmt.Errorf(`%w: a corner walk has no direction`, decaderr.ErrDegenerate)
+		return nil, FilletDecisions{}, fmt.Errorf(`%w: a corner walk has no direction`, decaderr.ErrDegenerate)
 	}
 	// S4: a smooth (tangent) or cusped (anti-tangent) corner is no corner.
 	cross := ax*by - ay*bx
 	if math.Abs(cross) <= tol {
-		return nil, fmt.Errorf(`%w: the two walls meet smoothly — there is no corner to round`, decaderr.ErrDegenerate)
+		return nil, FilletDecisions{}, fmt.Errorf(`%w: the two walls meet smoothly — there is no corner to round`, decaderr.ErrDegenerate)
 	}
 	offsetSign := 1.0 // convex: the walk turns left (material wedge < π)
 	if cross < 0 {
@@ -112,15 +133,15 @@ func Fillet(walks []survey2d.SideWalk, ci int, r, tol float64) (*Blend, error) {
 	carB := carrierOf(leave, bx, by)
 	offA, err := offsetOf(carA, offsetSign, r, tol)
 	if err != nil {
-		return nil, err
+		return nil, FilletDecisions{}, err
 	}
 	offB, err := offsetOf(carB, offsetSign, r, tol)
 	if err != nil {
-		return nil, err
+		return nil, FilletDecisions{}, err
 	}
-	ox, oy, err := intersectOffsets(offA, offB, px, py)
+	roots, ox, oy, err := intersectOffsets(offA, offB, px, py)
 	if err != nil {
-		return nil, err
+		return nil, FilletDecisions{}, err
 	}
 
 	fax, fay := footOn(carA, ox, oy)
@@ -132,33 +153,51 @@ func Fillet(walks []survey2d.SideWalk, ci int, r, tol float64) (*Blend, error) {
 	// direction, so the CCW tangent there (rotate(fA−O, +90°)) agrees with tA
 	// exactly when the arc is a CCW walk.
 	rx, ry := -(fay - oy), fax-ox
-	ccw := rx*ax+ry*ay > 0
+	sense := rx*ax + ry*ay
+	ccw := sense > 0
 
 	fA := sectionrecord.Point2{U: fax, V: fay}
 	fB := sectionrecord.Point2{U: fbx, V: fby}
-	return &Blend{
+	blend := &Blend{
 		FA:        fA,
 		FB:        fB,
 		CutbackA:  cutA,
 		CutbackB:  cutB,
 		Connector: ArcSegment(sectionrecord.Point2{U: ox, V: oy}, fA, fB, ccw),
-	}, nil
+	}
+	return blend, FilletDecisions{Cross: cross, Roots: roots, Center: [2]float64{ox, oy}, Sense: sense}, nil
 }
 
-// intersectOffsets intersects two offset curves and returns the root nearest
-// the corner (px, py). No intersection is S5 — no blend of that radius exists.
-func intersectOffsets(a, b offCurve, px, py float64) (float64, float64, error) {
-	toCurve := func(c offCurve) Curve {
-		return Curve{
-			IsLine: c.isLine, PX: c.px, PY: c.py, DX: c.dx, DY: c.dy,
-			CX: c.cx, CY: c.cy, Radius: c.rr,
-		}
+// CornerCross is the cross product of corner ci's two unit travel tangents,
+// the number S4 reads; false when a walk has no direction there.
+func CornerCross(walks []survey2d.SideWalk, ci int) (float64, bool) {
+	n := len(walks)
+	ax, ay, la := Normalize(walks[(ci+n-1)%n].TanOutU, walks[(ci+n-1)%n].TanOutV)
+	bx, by, lb := Normalize(walks[ci].TanInU, walks[ci].TanInV)
+	if la == 0 || lb == 0 {
+		return 0, false
 	}
-	x, y, ok := Intersect(toCurve(a), toCurve(b), px, py)
+	return ax*by - ay*bx, true
+}
+
+// intersectOffsets intersects two offset curves and returns every root and
+// the one nearest the corner (px, py). No intersection is S5 — no blend of
+// that radius exists.
+func intersectOffsets(a, b offCurve, px, py float64) ([][2]float64, float64, float64, error) {
+	roots := IntersectAll(offCurveOf(a), offCurveOf(b))
+	x, y, ok := nearestRoot(roots, px, py)
 	if !ok {
-		return 0, 0, fmt.Errorf(`%w: no fillet of that radius fits this corner; try a smaller radius`, decaderr.ErrDegenerate)
+		return nil, 0, 0, fmt.Errorf(`%w: no fillet of that radius fits this corner; try a smaller radius`, decaderr.ErrDegenerate)
 	}
-	return x, y, nil
+	return roots, x, y, nil
+}
+
+// offCurveOf states an offset carrier as the Curve Intersect reads.
+func offCurveOf(c offCurve) Curve {
+	return Curve{
+		IsLine: c.isLine, PX: c.px, PY: c.py, DX: c.dx, DY: c.dy,
+		CX: c.cx, CY: c.cy, Radius: c.rr,
+	}
 }
 
 // footOn returns the tangent foot of the center on a carrier: the perpendicular

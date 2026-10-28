@@ -21,11 +21,14 @@ type CrossingPieceFace[C comparable] struct {
 }
 
 // CylinderPiece is one surviving arc fragment swept between planar faces.
+// Source is the operand's own wall segment the fragment lies on, in the
+// piece's frame.
 type CylinderPiece struct {
 	Frame  r3.Frame
 	Wall   sectionrecord.CurveSegment
 	Z0, Z1 float64
 	Delta  float64
+	Source sectionrecord.CurveSegment
 }
 
 // CylinderPieces pairs the planar faces that bound each surviving cylinder
@@ -119,7 +122,8 @@ func CylinderPieces[C comparable](faces []CrossingPieceFace[C], frames [2]Crossi
 			if !(z0 < z1) {
 				return nil, miss
 			}
-			out = append(out, CylinderPiece{Frame: own.Frame, Wall: wseg, Z0: z0, Z1: z1, Delta: fr.delta})
+			out = append(out, CylinderPiece{Frame: own.Frame, Wall: wseg, Z0: z0, Z1: z1, Delta: fr.delta,
+				Source: segments[op][index]})
 		}
 	}
 	return out, nil

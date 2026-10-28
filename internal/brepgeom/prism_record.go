@@ -18,8 +18,18 @@ type PrismRect struct {
 	nu, nv float64
 }
 
+// CircleCarrier is the circle a swept circular wall lies on, in the wall's own
+// frame, as the operand that contributed the wall recorded it: its centre and
+// its radius in millimetres, the operand CircleSeg's Radius. A zero Radius
+// names none (agent-docs/brep-modify-design.md §4.4).
+type CircleCarrier struct {
+	Center sectionrecord.Point2
+	Radius float64
+}
+
 // PrismRectFace contains the record fields used to recognize a rectangle
-// across or along a proposed prism axis.
+// across or along a proposed prism axis. Carrier is a swept circular face's
+// recorded operand circle, which only a displaced reading consults.
 type PrismRectFace struct {
 	Frame            r3.Frame
 	Region           *momentinput.Profile
@@ -29,6 +39,7 @@ type PrismRectFace struct {
 	Split0, Split1   bool
 	Outward          bool
 	Role             string
+	Carrier          CircleCarrier
 }
 
 // PlanarPrismRect reads a planar face as four natural-range axis-aligned
@@ -154,41 +165,51 @@ func NaturalLine(seg sectionrecord.CurveSegment) (sectionrecord.Point2, sectionr
 // section segment with the same directed walk and outward normal.
 func PrismWallsClaim(walls []survey2d.SegmentWalk, rects []PrismRect, section momentinput.Profile,
 	work *freeform.FreeformWork) bool {
+	_, ok := prismWallsClaimants(walls, rects, section, work)
+	return ok
+}
+
+// prismWallsClaimants is PrismWallsClaim's claim map: for each section
+// segment, loop by loop, the index of the wall that claims it, or
+// len(walls) plus the index of the claiming rectangle.
+func prismWallsClaimants(walls []survey2d.SegmentWalk, rects []PrismRect, section momentinput.Profile,
+	work *freeform.FreeformWork) ([]int, bool) {
 	var walks []survey2d.SegmentWalk
 	for _, loop := range append([]sectionrecord.LoopRecord{section.Outer}, section.Holes...) {
 		for _, seg := range loop.Segments {
 			walk, err := boundarywalk.WalkOf(seg, work)
 			if err != nil {
-				return false
+				return nil, false
 			}
 			walks = append(walks, walk)
 		}
 	}
 	if len(walls)+len(rects) != len(walks) {
-		return false
+		return nil, false
 	}
+	claimant := make([]int, len(walks))
 	claimed := make([]bool, len(walks))
-	take := func(match func(survey2d.SegmentWalk) bool) bool {
+	take := func(by int, match func(survey2d.SegmentWalk) bool) bool {
 		for i, walk := range walks {
 			if !claimed[i] && match(walk) {
-				claimed[i] = true
+				claimed[i], claimant[i] = true, by
 				return true
 			}
 		}
 		return false
 	}
-	for _, wall := range walls {
+	for wi, wall := range walls {
 		key := WalkKeyOf(wall)
-		if !take(func(s survey2d.SegmentWalk) bool { return WalkKeyOf(s) == key }) {
-			return false
+		if !take(wi, func(s survey2d.SegmentWalk) bool { return WalkKeyOf(s) == key }) {
+			return nil, false
 		}
 	}
-	for _, rect := range rects {
-		if !take(rect.Matches) {
-			return false
+	for ri, rect := range rects {
+		if !take(len(walls)+ri, rect.Matches) {
+			return nil, false
 		}
 	}
-	return true
+	return claimant, true
 }
 
 // Matches reports whether a straight section walk is the rectangle's trace:

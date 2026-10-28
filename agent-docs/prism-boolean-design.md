@@ -1245,7 +1245,9 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
   centre or an offset miter amplifies a displacement by the corner geometry —
   by an unbounded factor at a shallow corner — so `Fillet`/`Chamfer`/`Shell`
   refuse a displaced receiver (`ErrUnsupported`) rather than publish a result
-  whose bounds speak only for the record. Every one of these stagings is
+  whose bounds speak only for the record. The rule stays for a prism
+  receiver; a class-B brep receiver takes brep-modify §4.4, which blends from
+  the record's exact carriers. Every one of these stagings is
   invisible at `δ == 0`, which covers every body a caller draws and every
   union whose sources and re-expression carry zero displacement.
 - **§4.5's overlap-area reading answers a multi-region pair for `Verify`
