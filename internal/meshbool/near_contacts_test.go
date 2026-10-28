@@ -387,6 +387,25 @@ func TestNearContactExecutorOrderAndBatches(t *testing.T) {
 					want := expect(all[k], hit(k))
 					require.Equal(t, want.pair, got[k].pair, label)
 					require.Equal(t, want.contact.Kind, got[k].contact.Kind, label)
+					if hit(k) {
+						if want.contact.Kind != ContactNone {
+							require.Equal(t, want.contact.P0.Key(), got[k].contact.P0.Key(), label)
+							require.Equal(t, want.contact.P1.Key(), got[k].contact.P1.Key(), label)
+						}
+						require.Equal(t, want.contact.P0OnA, got[k].contact.P0OnA, label)
+						require.Equal(t, want.contact.P1OnA, got[k].contact.P1OnA, label)
+						require.Equal(t, want.contact.P0OnB, got[k].contact.P0OnB, label)
+						require.Equal(t, want.contact.P1OnB, got[k].contact.P1OnB, label)
+						require.Equal(t, want.contact.EdgeA, got[k].contact.EdgeA, label)
+						require.Equal(t, want.contact.EdgeB, got[k].contact.EdgeB, label)
+						if want.contact.Sin2 == nil {
+							require.Nil(t, got[k].contact.Sin2, label)
+						} else {
+							require.NotNil(t, got[k].contact.Sin2, label)
+							require.Equal(t, want.contact.Sin2.Rat().RatString(),
+								got[k].contact.Sin2.Rat().RatString(), label)
+						}
+					}
 					require.Equal(t, want.measured, got[k].measured, "%s pair %d", label, k)
 					require.Equal(t, want.far, got[k].far, "%s pair %d", label, k)
 				}
