@@ -42,6 +42,15 @@ func (a *DyAcc) AddProduct(x, y Dyadic) {
 	a.addScratch(x.exp + y.exp)
 }
 
+// AddDot adds v·w to the sum, reusing the product scratch for each term
+// instead of constructing a separate Dyadic for the dot product.
+func (a *DyAcc) AddDot(v, w DyV3) {
+	for axis := range 3 {
+		x, y := v[axis], w[axis]
+		a.AddProduct(x, y)
+	}
+}
+
 // addMant adds m × 2^e, with m a read-only non-zero mantissa. It never keeps
 // a reference to m, since a Dyadic's big mantissa is shared and immutable.
 func (a *DyAcc) addMant(m *big.Int, e int) {
