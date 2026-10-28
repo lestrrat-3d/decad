@@ -15,8 +15,9 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// AddSegmentArea uses the line-only area path for the profile-area falsifier.
-// Other segment kinds retain AddSegment's validated integration.
+// AddSegmentArea uses area-only paths for lines and free-form segments in the
+// profile-area falsifier. Other segment kinds retain AddSegment's validated
+// integration.
 func (s State) AddSegmentArea(segment sectionrecord.CurveSegment, plan Plan, anchor sectionrecord.Point2) error {
 	normalized, err := sectionrecord.NormalizeSegment(segment)
 	if err != nil {

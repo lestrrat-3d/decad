@@ -24,6 +24,19 @@ func areaRectangle(u, v, width, height float64) momentinput.Profile {
 	return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: segments}}
 }
 
+func areaFitRectangle() momentinput.Profile {
+	return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.FitSplineSeg{
+			Fit:    []sectionrecord.Point2{{U: 0, V: 0}, {U: 5, V: -2}, {U: 10, V: 0}},
+			TStart: 0,
+			TEnd:   1,
+		},
+		sectionrecord.LineSeg{Start: sectionrecord.Point2{U: 10, V: 0}, End: sectionrecord.Point2{U: 10, V: 10}, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: sectionrecord.Point2{U: 10, V: 10}, End: sectionrecord.Point2{U: 0, V: 10}, TStart: 0, TEnd: 1},
+		sectionrecord.LineSeg{Start: sectionrecord.Point2{U: 0, V: 10}, End: sectionrecord.Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+	}}}
+}
+
 func TestEvaluatorAreaMatchesFullAreaIntegral(t *testing.T) {
 	p := sectionrecord.Point2{U: 3, V: -4}
 	cases := []struct {
@@ -31,6 +44,7 @@ func TestEvaluatorAreaMatchesFullAreaIntegral(t *testing.T) {
 		profile momentinput.Profile
 	}{
 		{"square", areaRectangle(0, 0, 20, 10)},
+		{"fit_spline", areaFitRectangle()},
 		{"fractional", areaRectangle(1.25, -7.125, 0.125, 0.375)},
 		{"large_offset", areaRectangle(math.Ldexp(1, 300), -math.Ldexp(1, 300),
 			math.Ldexp(1, 250), math.Ldexp(1, 249))},
@@ -71,14 +85,26 @@ func TestEvaluatorAreaMatchesFullAreaIntegral(t *testing.T) {
 	}
 }
 
+func TestEvaluatorAreaMatchesFirstOrderFitSplineIntegral(t *testing.T) {
+	profile := areaFitRectangle()
+	fullWork, areaWork := freeform.NewFreeformWork(), freeform.NewFreeformWork()
+	full, err := profile.EvaluatorIntegrals(freeform.MomentFirstOrder, fullWork)
+	require.NoError(t, err)
+	area, err := profile.EvaluatorArea(areaWork)
+	require.NoError(t, err)
+	require.Equal(t, math.Float64bits(full.Area), math.Float64bits(area))
+	require.Equal(t, fullWork.Spent, areaWork.Spent)
+	require.Greater(t, area, 0.0)
+}
+
 func BenchmarkEvaluatorArea(b *testing.B) {
-	profile := areaRectangle(0, 0, 20, 10)
+	profile := areaFitRectangle()
 	for _, tc := range []struct {
 		name string
 		run  func() error
 	}{
 		{"full", func() error {
-			_, err := profile.EvaluatorIntegrals(freeform.MomentAreaOrder, freeform.NewFreeformWork())
+			_, err := profile.EvaluatorIntegrals(freeform.MomentFirstOrder, freeform.NewFreeformWork())
 			return err
 		}},
 		{"area_only", func() error {

@@ -287,7 +287,8 @@ func (r Profile) EvaluatorIntegrals(order freeform.MomentIntegralOrder, work *fr
 }
 
 // EvaluatorArea runs the same record validation and area publication as
-// EvaluatorIntegrals, while line segments omit unused first moments.
+// EvaluatorIntegrals, while line and free-form segments omit unused first
+// moments.
 func (r Profile) EvaluatorArea(work *freeform.FreeformWork) (float64, error) {
 	pre, err := ValidateFieldsWithPoll(nil, r, work)
 	if err != nil {

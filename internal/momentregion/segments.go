@@ -37,7 +37,9 @@ func (s State) AddFreeform(spans []freeform.BezierSpan, reversed bool, order fre
 		{s.Fields[4].Value, s.Fields[4].Bound, exact.Muv},
 		{s.Fields[5].Value, s.Fields[5].Bound, exact.Mvv},
 	}
-	if order < freeform.MomentSecondOrder {
+	if order == freeform.MomentAreaOrder {
+		moments = moments[:1]
+	} else if order < freeform.MomentSecondOrder {
 		moments = moments[:3]
 	}
 	for _, moment := range moments {
