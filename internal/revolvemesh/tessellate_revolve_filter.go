@@ -181,6 +181,10 @@ func RevIvSide(h RevIv, allow float64) (int, bool) {
 // first. The exact gap is at least the enclosed one, so the exact walk would
 // accept that axis too. False means only that the floats did not settle it.
 func RevolveSeparatedFloat(a, b RevolveAuditTri, delta float64) bool {
+	return revolveSeparatedFloat(&a, &b, delta)
+}
+
+func revolveSeparatedFloat(a, b *RevolveAuditTri, delta float64) bool {
 	margin := proofbound.ProductUpper(2, delta)
 	if proofbound.IsNonFinite(margin) {
 		return false
