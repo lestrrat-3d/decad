@@ -76,5 +76,4 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/denotation/` | Level and curve identity certificates. See surface §5.2, §6.2. |
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
 | `internal/obliqueboss/` | Recognizes a complete oblique boss junction, admits its junction fillet and builds the mesh with its boundary, volume and area proofs. See oblique-boss-fillet design. |
-| `internal/exactbool/` | Exact predicates (`Orient3D`, plane side of a float or implicit point, coordinate order) and implicit plane-triple points for the polyhedral Boolean kernel. See exact-boolean design. |
 | `internal/retainedblend/` | Admits the Table RR edges between retained faces, among them a closed circular rim between a retained plane and a coaxial retained cylinder or a retained sphere, rewrites the held mesh into a torus or cone blend, and computes the area and volume bounds of the change. See retained-edge-blend design. |
