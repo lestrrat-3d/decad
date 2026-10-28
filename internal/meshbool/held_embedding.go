@@ -637,7 +637,7 @@ func (e *heldEmbedding) readOnlyScanCopy(ctx context.Context, workers int, share
 		local.normOK = make([]bool, len(e.normOK))
 		local.fnorm = make([]r3.Vec, len(e.fnorm))
 		local.fnormOK = make([]bool, len(e.fnormOK))
-		local.cone = make([][3][2]r3.Vec, len(e.cone))
+		local.cone = make([][3]heldConeBox, len(e.cone))
 		local.coneOK = make([][3]bool, len(e.coneOK))
 		local.xvOnce = nil
 		local.normOnce = nil
@@ -692,7 +692,7 @@ type heldEmbedding struct {
 	fnormOnce []sync.Once
 	// cone caches, per facet and corner, a box around the unit directions
 	// the facet leaves that corner in (coneBox).
-	cone     [][3][2]r3.Vec
+	cone     [][3]heldConeBox
 	coneOK   [][3]bool
 	coneOnce [][3]sync.Once
 	// projected holds each facet's three coordinate projections and their
@@ -738,6 +738,11 @@ type heldEmbedding struct {
 	wide   []int32
 }
 
+// heldConeBox stores outward-rounded float32 bounds for one cone box.
+// Outward rounding preserves the computed box; extra width only makes this
+// reject-only separation check more conservative.
+type heldConeBox [2][3]float32
+
 // heldPairStampLimit bounds the stamps a pair memo entry packs. An entry is
 // one word: the lower facet's stamp in bits 32 to 62, the higher facet's in
 // bits 1 to 31, and whether the pair was embedded in bit 0. Distinct stamp
@@ -766,7 +771,7 @@ func newHeldEmbeddingScan(h HeldRounding, budget *proofbound.WorkBudget, memo bo
 		planeSense:  make([]int8, len(h.Tris)),
 		fnorm:       make([]r3.Vec, len(h.Tris)),
 		fnormOK:     make([]bool, len(h.Tris)),
-		cone:        make([][3][2]r3.Vec, len(h.Tris)),
+		cone:        make([][3]heldConeBox, len(h.Tris)),
 		coneOK:      make([][3]bool, len(h.Tris)),
 		projected:   make([]heldProjectedFacet, len(h.Tris)),
 		projectedOK: make([]bool, len(h.Tris)),
@@ -1168,18 +1173,48 @@ func (e *heldEmbedding) coneBox(i, k int) [2]r3.Vec {
 	if e.coneOnce != nil {
 		e.coneOnce[i][k].Do(func() {
 			if !e.coneOK[i][k] {
-				e.cone[i][k] = e.computeConeBox(i, k)
+				e.cone[i][k] = storeHeldConeBox(e.computeConeBox(i, k))
 				e.coneOK[i][k] = true
 			}
 		})
-		return e.cone[i][k]
+		return loadHeldConeBox(e.cone[i][k])
 	}
 	if e.coneOK[i][k] {
-		return e.cone[i][k]
+		return loadHeldConeBox(e.cone[i][k])
 	}
-	e.cone[i][k] = e.computeConeBox(i, k)
+	e.cone[i][k] = storeHeldConeBox(e.computeConeBox(i, k))
 	e.coneOK[i][k] = true
-	return e.cone[i][k]
+	return loadHeldConeBox(e.cone[i][k])
+}
+
+func storeHeldConeBox(box [2]r3.Vec) heldConeBox {
+	return heldConeBox{
+		{roundHeldConeDown(box[0].X), roundHeldConeDown(box[0].Y), roundHeldConeDown(box[0].Z)},
+		{roundHeldConeUp(box[1].X), roundHeldConeUp(box[1].Y), roundHeldConeUp(box[1].Z)},
+	}
+}
+
+func loadHeldConeBox(box heldConeBox) [2]r3.Vec {
+	return [2]r3.Vec{
+		r3.NewVec(float64(box[0][0]), float64(box[0][1]), float64(box[0][2])),
+		r3.NewVec(float64(box[1][0]), float64(box[1][1]), float64(box[1][2])),
+	}
+}
+
+func roundHeldConeDown(value float64) float32 {
+	rounded := float32(value)
+	if float64(rounded) > value {
+		return math.Nextafter32(rounded, float32(math.Inf(-1)))
+	}
+	return rounded
+}
+
+func roundHeldConeUp(value float64) float32 {
+	rounded := float32(value)
+	if float64(rounded) < value {
+		return math.Nextafter32(rounded, float32(math.Inf(1)))
+	}
+	return rounded
 }
 
 func (e *heldEmbedding) computeConeBox(i, k int) [2]r3.Vec {
