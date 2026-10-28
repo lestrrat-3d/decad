@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -26,7 +27,10 @@ type Payload struct {
 	Z0, Z1  float64
 	Z0Delta float64
 	Z1Delta float64
-	Xform   r3.Transform
+	// Z0Denoted and Z1Denoted are prismrecord.Payload's own level
+	// denotations (agent-docs/stacked-prism-design.md §2.1).
+	Z0Denoted, Z1Denoted prismplacement.LevelDenotation
+	Xform                r3.Transform
 	// SectionDelta is prismrecord.Payload's own §7 term
 	// (agent-docs/prism-boolean-design.md), carried here on the identical terms: the
 	// proven upper bound on how far any recorded boundary coordinate sits from
@@ -70,6 +74,7 @@ func (pp Payload) Prism() prismrecord.Payload {
 		Frame:   pp.Frame,
 		Z0:      pp.Z0, Z1: pp.Z1,
 		Z0Delta: pp.Z0Delta, Z1Delta: pp.Z1Delta,
+		Z0Denoted: pp.Z0Denoted, Z1Denoted: pp.Z1Denoted,
 		Xform: pp.Xform,
 	}
 }

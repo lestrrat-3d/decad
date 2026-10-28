@@ -96,17 +96,26 @@ rest of the record, and so does a through `Cut` whose tool nests inside a
 prism target, since it keeps the target's levels. A prism `Union` over equal
 intervals, a prism group's union and the one-scene many-operand union keep
 the level their operands share, since G5 admits them only when every operand
-denotes it. A stop on a face or body whose record states no denoted cap (a
-stack, a BRep, a revolve, a faceted result), a `ThroughAll` stop with a
-competing far side, a chamfered end, a shell level, every stacked union level
-and the BRep stack of general-boolean §3 A7 record none.
+denotes it. A stacked union records, at each of its levels, the rational
+its operands denote there (`UnionLevel.Denoted`), on a stacked payload's
+slabs and on an A1 BRep's stack. A stack's cap and interface faces carry
+their slab level's denotation in `topo.CapRecord.ZDenoted`, so a `ToFace`
+stop on a stack's cap or floor records it. A chain sheet records its sweep's
+denoted levels as `Extrude` does, and `Split` pieces, a hole-free tube shell
+and a prism pattern group keep the receiver's. A stop on a BRep, revolve or
+faceted face, a `ThroughAll` stop on a stack or with a competing far side, a
+chamfered end, a shell's derived levels (a cup floor, a closed shell's inner
+levels, a through-shell and a boss-stack shell), a holed band shell, the BRep
+stack of general-boolean §3 A7 and a trimmed ribbon record none.
 
 The denotations decide the interface arm, enter the split arm's level
 ranges (§7 stage 3), order and merge the stacked union's levels
 (`UnionLevels`, general-boolean §3 A1), enter the I4 audit (§2.2) and decide
 when general-boolean §3 A7's tool end meets a target cap. They also decide
 prism-boolean G5's span, match and overlap relations (prism-boolean §3.2),
-where a stack's first and last slab ends stand for the stack's own ends.
+where a stack's first and last slab ends stand for the stack's own ends,
+and `Split` and `Extend`'s S6 span relation
+(`agent-docs/surface-intersection-design.md` §2.1).
 Measurements, tessellation and every bound read the held floats and their
 displacements
 as before, so a displaced level still reads `Approximate` (§4).
@@ -582,6 +591,15 @@ arm64.
   interface with no denotation, an interface whose two sides record different
   rationals (and the audit refuses it), and a split whose denoted order
   contradicts the held one.
+- Denoted levels carried by stacks: a `ToFace` stop on a blind-cut stack's
+  top or a stacked union's top at 0.2 in cuts a 0.2 in plate into the analytic
+  through hole, and a 5.08 mm plate takes the mesh path. A stacked union, and
+  an A1 BRep union, that ties a second 0.2 in top builds analytically with
+  the closed-form volume, and a 5.08 mm second top takes the mesh path. Record
+  tests show the union's levels, the A1 BRep's stack and every stack cap and
+  interface face carrying the rational
+  (`apitest/stack_denoted_level_test.go`,
+  `apitest/through_stop_denoted_level_test.go`).
 - Level displacement, incoming: a tool whose inner end is a converted magnitude
   (`units.Inches`) publishes a positive axial delta on that end, asserted first
   on the tool so the fixture cannot silently stop exercising it, and the

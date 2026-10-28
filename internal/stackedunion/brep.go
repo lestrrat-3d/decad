@@ -214,7 +214,8 @@ func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
 		for k, regions := range b.slabs {
 			lo, hi := b.levels[k], b.levels[k+1]
 			stack.Slabs = append(stack.Slabs, stackedrecord.Slab{Regions: regions,
-				Z0: lo.Held, Z1: hi.Held, Z0Delta: lo.Delta, Z1Delta: hi.Delta})
+				Z0: lo.Held, Z1: hi.Held, Z0Delta: lo.Delta, Z1Delta: hi.Delta,
+				Z0Denoted: lo.Denotation(), Z1Denoted: hi.Denotation()})
 		}
 		out.Stack = stack
 	}

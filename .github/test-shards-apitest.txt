@@ -2686,6 +2686,7 @@
 10	0.14	TestNormalAtAnswersRetainedSurfaces
 10	0.00	TestOBJPlate
 10	0.01	TestOffsetStagedFamilies
+10	0.00	TestPatternedGroupKeepsDenotedLevel
 10	0.00	TestPointLocationExactStackedRoundPocket
 10	0.00	TestPointLocationExactStackedBoss
 10	0.00	TestPointLocationExactRevolveStepped
@@ -2740,6 +2741,14 @@
 10	0.04	TestRevolveTessellateChargesPlacementRoundingSeparately
 10	0.30	TestRevolveTessellateFullSphere
 10	0.07	TestRevolveTessellateHemispherePoleAtOneEnd
+10	0.00	TestShellTubeKeepsDenotedLevel
+10	0.00	TestStackedUnionBrepChainedDenotedLevel
+10	0.00	TestStackedUnionChainedDenotedLevel
+10	0.00	TestStackedUnionToFaceDenotedLevel
+10	0.00	TestSurfaceExtendChainDenotedLevel
+10	0.00	TestSurfaceSplitChainSheetDenotedLevel
+10	0.00	TestSurfaceSplitPieceKeepsDenotedLevel
+10	0.00	TestThroughStopDenotedLevelStackedTop
 10	0.00	TestUnionTangentContactTakesMeshPath
 10	0.00	TestPatternedTangentCopies
 10	0.00	TestUnionApartOrNestedStaysAnalytic

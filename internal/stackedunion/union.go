@@ -38,9 +38,11 @@ type Operand struct {
 // OperandFromPayload reads one operand as slabs: a prism is one slab over its
 // interval with its denoted levels, a stacked prism keeps its slabs, and an A1
 // brep keeps its stack. The A7 crossing cut and the stacked union's level
-// order (stackedrecord.UnionLevels) read the denoted levels; the union and
-// brep builders write new slabs that record none
-// (agent-docs/stacked-prism-design.md §2.1).
+// order (stackedrecord.UnionLevels) read the denoted levels, and the union and
+// brep builders write each new slab's levels with the rational the operands
+// denote there (stackedrecord.UnionLevel.Denoted;
+// agent-docs/stacked-prism-design.md §2.1). The brep proxy records no
+// denotation, because every level relation reads the slabs.
 // Its proxy carries the frame, placement and section displacement read by
 // prismboolean's admission. A brep without an A1 stack is not an operand.
 func OperandFromPayload(payload topo.Payload) (Operand, bool) {
@@ -104,7 +106,8 @@ func Join(ctx context.Context, budget *proofbound.WorkBudget, va, vb Operand,
 			return nil, false, err
 		}
 		sp.Slabs = append(sp.Slabs, stackedrecord.Slab{Regions: []profileRecord{region},
-			Z0: lo.Held, Z1: hi.Held, Z0Delta: lo.Delta, Z1Delta: hi.Delta})
+			Z0: lo.Held, Z1: hi.Held, Z0Delta: lo.Delta, Z1Delta: hi.Delta,
+			Z0Denoted: lo.Denotation(), Z1Denoted: hi.Denotation()})
 	}
 	for k := 0; k+1 < len(sp.Slabs); k++ {
 		boundary, ok, err := st.interfaceOf(ctx, sp.Slabs[k].Regions[0], sp.Slabs[k+1].Regions[0])

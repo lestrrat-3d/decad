@@ -29,6 +29,7 @@ func SplitPieces(ctx context.Context, budget *proofbound.WorkBudget, target, too
 			Profile: cell.Profile, Frame: target.Frame, Xform: target.Xform,
 			Z0: target.Z0, Z1: target.Z1,
 			Z0Delta: target.Z0Delta, Z1Delta: target.Z1Delta,
+			Z0Denoted: target.Z0Denoted, Z1Denoted: target.Z1Denoted,
 			SectionDelta: cell.CutDelta,
 		}
 	}

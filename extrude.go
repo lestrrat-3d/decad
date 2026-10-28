@@ -522,13 +522,15 @@ func extrudeChain(ctx context.Context, d *Document, s *sketch.Sketch, ch *sketch
 	work := freeform.NewFreeformWork()
 	ref := d.producerID(ctx)
 	body, err := bodyResult(chainrecord.Build(ctx, envOf(documentNode(d), ref), chainPayload{
-		Chains:  []chainRecord{chain},
-		Frame:   frame,
-		Z0:      sweep.z0,
-		Z1:      sweep.z1,
-		Z0Delta: sweep.z0Delta,
-		Z1Delta: sweep.z1Delta,
-		Xform:   r3.Identity(),
+		Chains:    []chainRecord{chain},
+		Frame:     frame,
+		Z0:        sweep.z0,
+		Z1:        sweep.z1,
+		Z0Delta:   sweep.z0Delta,
+		Z1Delta:   sweep.z1Delta,
+		Z0Denoted: prismplacement.DenoteLevel(sweep.z0Exact, sweep.z0, sweep.z0Delta),
+		Z1Denoted: prismplacement.DenoteLevel(sweep.z1Exact, sweep.z1, sweep.z1Delta),
+		Xform:     r3.Identity(),
 	}, work))
 	if err != nil {
 		return nil, err
