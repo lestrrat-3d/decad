@@ -441,7 +441,7 @@ of that computation.
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
 | **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or `G`'s corner at the vertex does not match the edge (a convex edge needs a convex corner of `G`, a concave edge a reflex one), or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face, or another part of `G` comes within the blend's reach of the vertex | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
 | **SR6** | the held mesh disagrees with the exact vertex of its three tags by more than the vertex bound plus slack (§6.3) | the record and the mesh do not describe one solid | `ErrUnsupported` |
-| **SR7** | the rewritten mesh fails the held audit (watertight, no remote self-intersection, shells positive) | the result is invalid | `ErrDegenerate` when the audit proves a face inside out (modify S8), else `ErrUnsupported` |
+| **SR7** | a facet the rewrite keeps outside the new strip meets a strip facet it shares no vertex with (the strip clearance of retained-modify-reach §5.6, run before the build), or the rewritten mesh fails the held audit (watertight, shells nested with consistent signs; the audit tests no facet pair for intersection) | the result is invalid | `ErrDegenerate` when the audit proves a face inside out (modify S8), else `ErrUnsupported` |
 
 Gate order: base gates of modify §4 stage 1, then SR1, SR2, SR3, SR6, SR5, SR4,
 then the construction, then SR7.

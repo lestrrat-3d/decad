@@ -7,9 +7,11 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -17,11 +19,12 @@ import (
 // nest with consistent signs, reading one probe point per shell; it does not
 // test facets for intersection. A shell that reaches into the blend region K
 // from outside it would cross the new strip and still pass. checkStripClear
-// closes that gap for a chain (agent-docs/retained-modify-reach-design.md
+// closes that gap for every route (agent-docs/retained-modify-reach-design.md
 // §5.6): no facet of the rest of the body may meet a strip facet, decided by
 // meshbool's exact triangle/triangle classification on the held floats. A
 // pair that shares a vertex is the construction's own seam, along the base's
-// setback contour or a wall's cut, and is not tested. The test only refuses.
+// setback contour, a wall's cut or an end face's trim, and is not tested. The
+// test only refuses.
 
 // facetBox is a facet's float bounding box. Its corners are exact
 // coordinates, so two boxes that miss prove the facets miss.
@@ -54,6 +57,16 @@ type exactFacet struct {
 	x        [3]proof.Xpt
 	n        proof.Xpt
 	ok, flat bool
+}
+
+// buildClear is build after checkStripClear, for the routes that blend one
+// edge or a mitre run. A chain runs the check itself before its build.
+func (w *work) buildClear(ctx context.Context, env topo.Env, groups []facetedrecord.Group, stripFrom int,
+	tag blendTag, faceIndex map[*topo.Face]int) (*topo.Body, error) {
+	if err := w.checkStripClear(ctx, stripFrom); err != nil {
+		return nil, err
+	}
+	return w.build(ctx, env, groups, stripFrom, tag, faceIndex)
 }
 
 // checkStripClear refuses the rewrite when a facet the result keeps outside

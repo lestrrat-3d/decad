@@ -343,7 +343,7 @@ func (w *work) finishRim(ctx context.Context, env topo.Env, tag blendTag, ringA,
 	}
 	stripFrom := len(w.out)
 	w.strip(tag, ringA, ringB, blendGroup)
-	return w.build(ctx, env, groups, stripFrom, tag, faceIndex)
+	return w.buildClear(ctx, env, groups, stripFrom, tag, faceIndex)
 }
 
 // build assembles the rewritten payload and the body over it. faceIndex
