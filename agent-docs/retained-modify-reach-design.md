@@ -325,11 +325,20 @@ the largest vertex bound of the tested chord. The inflation only refuses more.
 A chord inside a band deflated by `b + slack` proves the blend consumes another face (SR4). A chord that meets the
 inflated band but not the deflated one is undecided (SR5). Every band of a chain lies in the prism over its base
 band between `P` and `P'`, so disjoint base bands give disjoint regions `K_k`, adjacent ones sharing only `Π_J`.
-A component that enters `K_k` without touching `P`, a wall or a seam is left to SR7, as in blend §6.1. A concave
-chain's `K_k` lies in the void of the held solid, so another shell may lie wholly inside it; the held audit's
-containment parity (`internal/facetproof/faceted.go`) refuses that result, because a positive shell inside a
-positive shell has odd nesting. A shell that crosses `K_k`'s boundary crosses the strip (SR7) or a band the gates
-above rule out.
+A component that enters `K_k` without touching `P`, a wall or a seam either crosses `K_k`'s boundary or lies wholly
+inside it. The held audit (SR7, `internal/facetproof/faceted.go`) does not see the first case: it checks that the
+mesh closes and that its shells nest with consistent signs, reading one probe point per shell, and it tests no
+facet for intersection. So the chain runs its own strip test before the build (`chain_strip_clear.go`): every facet
+the result keeps outside the strip, held or rebuilt, that shares no vertex with a strip facet must miss it, decided
+by `meshbool.TriTriClassify`, the exact triangle/triangle classification, on the held floats. Any contact, a
+collinear facet or an undecided classification refuses (`ErrUnsupported`, "the blend meets another facet of the
+body"); float bounding boxes, whose corners are exact, skip pairs that cannot meet. A pair that shares a vertex is
+the construction's own seam along the setback contour or a wall cut, which the gates above already place. The
+rest of `K_k`'s boundary is the removed bands of `P` and the walls, which no other facet of the held solid
+crosses. A shell wholly inside `K_k` crosses nothing, so with no crossings the audit's one-point parity reads its
+nesting correctly: a concave chain's `K_k` lies in the void, and a positive shell inside it nests inside a positive
+shell and refuses; a convex chain's `K_k` lies in the material, and a cavity inside it ends up contained by no
+shell, so the audit refuses its negative sign.
 
 ### 5.7 Bounds
 
@@ -487,7 +496,7 @@ Rows narrow blend Table SR and reach SX2/SX9; sentinels follow those tables.
 | **SM2** | a selected edge ends at a proven tangent junction whose continuation is not selected and `WithTangentChain` is absent; the message names the junction point and `WithTangentChain` | `ErrUnsupported` |
 | **SM3** | a chain whose edges share no base plane, a junction of two plane walls, a cylinder wall whose axis is not exactly normal to `P`, an R4 chain edge spanning more than `π`, a chain that mixes convex and concave edges, or an open concave chain | `ErrUnsupported` |
 | **SM4** | the chain gates of §5.6: proven overlap | `ErrDegenerate` (SR4) |
-| **SM5** | the chain gates of §5.6: undecided; or a chain whose resolved references mix `P` and walls | `ErrUnsupported` (SR5; SX3 first for the mix) |
+| **SM5** | the chain gates of §5.6: undecided; a strip facet that meets another facet of the body; or a chain whose resolved references mix `P` and walls | `ErrUnsupported` (SR5; SX3 first for the mix) |
 | **SM6** | R5: the offset circles do not meet | `ErrDegenerate` (SR3) |
 | **SM7** | R5: the walls meet at `K` below `minSine` | `ErrUnsupported` (SR5) |
 
@@ -536,6 +545,7 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | Concave closed chain chamfer, equal and with reference the floor | fill `(t_P·t_W / 2)·(ΣL + 2π·(R − t_P/3))` | the convex chamfer normal `n_P − m`: SR7; swap the setbacks: the two-distance fill is off |
 | Concave closed chain: boss root (20×20 `r = 3` boss joined to the plate's top) | fill `A_f·(ΣL + 2π·(R + x̄))`; 4 `Torus` (`Major = R + r`) | take `κ` the other way in the arc tag: SR7 |
 | Concave chain, all 8 edges named | builds without the option; the same fill | none |
+| Chain strip clearance | a 2×1×1 box joined over the pocket floor with only its lower front edge in the fill, and a cavity under the cross-drilled box's top-front edge with only its upper front edge in the removed corner, both refuse SM5 "the blend meets another facet of the body" | drop the strip test: both build |
 | Concave chain gates | a pocket 0.8 deep refuses SR4 "the blend consumes the wall"; `r = 3` refuses SR3; a cube floating inside the fill refuses SR7 by nesting parity while one clear of it builds; an open concave chain refuses SM3; a chain of mixed sides refuses SM3 (unit test) | classify by `n_W = −m` only: every concave row refuses; measure the wall band on the convex side: the pocket refuses; drop the wall clearance: the shallow pocket refuses with another text; drop the mixed-side check: the unit test builds |
 | Chain clearance | a pocket whose chord crosses a band while its vertices lie outside it refuses SM5; a hole deep inside a band refuses SM4 | test vertices only: the crossing chord builds and SR7 or the volume check fails |
 | `internal/tangentchain` retained oracle | exactly tangent plane/cylinder tags prove "tangent"; tags one float step off are undecided; a clear miss is "not tangent" | replace the identity by a tolerance: the one-step case proves "tangent" |
@@ -588,12 +598,14 @@ Each increment is one PR. M1 ships this document.
 | M6 | §8: E10 and R5 | the R5 row passes |
 | M7 | C1 concave: the chain side `s` of §5.1 in the rows, wall bands and tags | the concave chain rows of §12 pass |
 
-Chains are built for closed outlines of lines and arcs, convex or concave, and for open convex ones. `retainedblend.Tangent` decides each junction
-(`chain_tangent.go`), `planChains` groups and orders the selection (`chain.go`) and `rewriteChain` builds one chain
-(`chain_rewrite.go`); the ends of an open chain live in `chain_open.go`, and an arc end in `chain_arc_end.go`. A
-closed chain has at least three edges and an open chain at least two. An open concave chain, a reflex foot, a straight end
-on a face that is not normal to its edge and an arc end on a face that is not parallel to the axis are refused. The edge between a `Cylinder` and a `Torus` blend of a fillet chain is an
-`Arc3` (retention §10.1 E11).
+Chains are built for closed outlines of lines and arcs, convex or concave, and for open convex ones.
+`retainedblend.Tangent` decides each junction (`chain_tangent.go`), `planChains` groups and orders the selection
+(`chain.go`) and `rewriteChain` builds one chain (`chain_rewrite.go`); the ends of an open chain live in
+`chain_open.go`, an arc end in `chain_arc_end.go`, and the strip's clearance from the rest of the body in
+`chain_strip_clear.go`. A closed chain has at least three edges and an open chain at least two. An open concave
+chain, a reflex foot, a straight end on a face that is not normal to its edge and an arc end on a face that is not
+parallel to the axis are refused. The edge between a `Cylinder` and a `Torus` blend of a fillet chain is an `Arc3`
+(retention §10.1 E11).
 
 M3 starts with one real end-to-end run on the P2 fixture before any other fixture. If that run refuses, the
 increment stops and reports the refusal.

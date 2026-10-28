@@ -65,9 +65,9 @@ func roundedBoss(t *testing.T) *decad.Body {
 	return out
 }
 
-// pocketWithCube is roundedPocket joined with a 2x0.1x0.1 cube that floats
-// over the floor, from x = 15 and y = y0 at z = 5.05.
-func pocketWithCube(t *testing.T, y0 float64) *decad.Body {
+// pocketWithCube is roundedPocket joined with a box that floats over the
+// floor: x from 15 to 17, and a side by side square from (y0, z0) in y and z.
+func pocketWithCube(t *testing.T, y0, z0, side float64) *decad.Body {
 	t.Helper()
 	w, doc := sketch.NewWorld(), decad.New()
 	plate := rectBox(t, w, doc, 0, 0, 40, 40, 10)
@@ -76,8 +76,8 @@ func pocketWithCube(t *testing.T, y0 float64) *decad.Body {
 	require.NoError(t, err)
 	pocket, err := decad.Cut(t.Context(), plate, placed(t, tool, 5))
 	require.NoError(t, err)
-	cube := rectBox(t, w, doc, 15, y0, 17, y0+0.1, 0.1)
-	joined, err := decad.Union(t.Context(), pocket, placed(t, cube, 5.05))
+	cube := rectBox(t, w, doc, 15, y0, 17, y0+side, side)
+	joined, err := decad.Union(t.Context(), pocket, placed(t, cube, z0))
 	require.NoError(t, err)
 	return joined
 }
@@ -121,6 +121,33 @@ func requireBlendsFaceVoid(t *testing.T, b *decad.Body, r float64) {
 	require.Equal(t, 8, checked)
 }
 
+// requireBevelsFaceVoid checks that every bevel of a pocket floor chamfer,
+// the 4 tilted planes and the 4 cones, points into the void at a vertex: up
+// from the floor and in toward the pocket's axis through (20, 20).
+func requireBevelsFaceVoid(t *testing.T, b *decad.Body) {
+	t.Helper()
+	checked := 0
+	for _, f := range b.Faces() {
+		switch s := f.Surface().(type) {
+		case decad.Plane:
+			if n := s.Frame.N(); math.Abs(n.Z) < 1e-9 || math.Abs(math.Abs(n.Z)-1) < 1e-9 {
+				continue
+			}
+		case decad.Cone:
+		default:
+			continue
+		}
+		p := firstVertex(t, f)
+		n, err := f.NormalAt(p)
+		require.NoError(t, err)
+		require.Positive(t, n.Value.Z, "a bevel at %v faces down into the floor", p)
+		inward := r3.NewVec(20-p.X, 20-p.Y, 0)
+		require.Positive(t, n.Value.Dot(inward), "a bevel at %v faces the wall", p)
+		checked++
+	}
+	require.Equal(t, 8, checked)
+}
+
 func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 	t.Parallel()
 
@@ -156,6 +183,7 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 		after, err := out.Volume()
 		require.NoError(t, err)
 		requireVolumeChange(t, before, after, -concaveChamferFill(1, 1))
+		requireBevelsFaceVoid(t, out)
 		requireVerifiedMesh(t, out)
 	})
 
@@ -180,6 +208,7 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 		after, err := out.Volume()
 		require.NoError(t, err)
 		requireVolumeChange(t, before, after, -concaveChamferFill(2, 1))
+		requireBevelsFaceVoid(t, out)
 		requireVerifiedMesh(t, out)
 	})
 
@@ -230,6 +259,13 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 		after, err := out.Volume()
 		require.NoError(t, err)
 		requireVolumeChange(t, before, after, -concaveFilletFill(-1))
+		cylinders, tori, majors := blendKinds(out, concaveFilletR)
+		require.Equal(t, 4, cylinders)
+		require.Equal(t, 4, tori)
+		for _, m := range majors {
+			require.InDelta(t, concaveR-concaveFilletR, m, 1e-12)
+		}
+		requireVerifiedMesh(t, out)
 	})
 
 	t.Run("a pocket shallower than the radius is refused", func(t *testing.T) {
@@ -252,7 +288,7 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 		t.Parallel()
 		// The cube lies wholly between the floor's front corner and the
 		// fillet's arc, clear of the floor and the wall.
-		_, err := decad.Fillet(t.Context(), pocketWithCube(t, 10.05), floorFront(5), units.Millimeters(1),
+		_, err := decad.Fillet(t.Context(), pocketWithCube(t, 10.05, 5.05, 0.1), floorFront(5), units.Millimeters(1),
 			decad.WithTangentChain())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "the blended mesh fails its held audit")
@@ -261,15 +297,27 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 
 	t.Run("a solid floating clear of the fill is kept", func(t *testing.T) {
 		t.Parallel()
-		joined := pocketWithCube(t, 20)
+		joined := pocketWithCube(t, 20, 5.05, 0.1)
 		before, err := joined.Volume()
 		require.NoError(t, err)
-		out, err := decad.Fillet(t.Context(), joined, floorFront(5), units.Millimeters(concaveFilletR), decad.WithTangentChain())
+		out, err := decad.Fillet(t.Context(), joined, floorFront(5), units.Millimeters(concaveFilletR),
+			decad.WithTangentChain())
 		require.NoError(t, err)
 		after, err := out.Volume()
 		require.NoError(t, err)
 		requireVolumeChange(t, before, after, -concaveFilletFill(-1))
 		requireVerifiedMesh(t, out)
+	})
+
+	t.Run("a solid crossing the fill is refused", func(t *testing.T) {
+		t.Parallel()
+		// Only the cube's lower front edge reaches into the fill: its corner
+		// (y, z) = (10.25, 5.25) lies between the floor's front corner and the
+		// fillet's arc, and the rest of the cube lies in the void beyond it.
+		_, err := decad.Fillet(t.Context(), pocketWithCube(t, 10.25, 5.25, 1), floorFront(5),
+			units.Millimeters(concaveFilletR), decad.WithTangentChain())
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "the blend meets another facet of the body")
 	})
 
 	t.Run("a concave open chain is refused", func(t *testing.T) {
