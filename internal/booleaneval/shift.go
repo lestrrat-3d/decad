@@ -52,6 +52,12 @@ func shiftNeed(u r3.Vec, contacts []meshbool.TouchContact) float64 {
 	need := 0.0
 	for _, c := range contacts {
 		if c.Slack > 0 {
+			if c.NormalA == (r3.Vec{}) {
+				// A contact with no normal, such as one at a sliver facet too thin to normalise, names no direction,
+				// so the shift reaches its slack along its own length.
+				need = math.Max(need, shiftMargin*c.Slack)
+				continue
+			}
 			need = math.Max(need, shiftMargin*c.Slack/math.Abs(u.Dot(c.NormalA)))
 		}
 	}
@@ -169,6 +175,9 @@ func wantedContacts(op meshbool.OperationKind, contacts []meshbool.TouchContact)
 // sigma names.
 func shiftOpens(u r3.Vec, sigma float64, wanted []bool, contacts []meshbool.TouchContact) bool {
 	for i, c := range contacts {
+		if c.NormalA == (r3.Vec{}) {
+			continue // no normal, no direction to open it along (shiftNeed reaches its slack)
+		}
 		along := u.Dot(c.NormalA)
 		if math.Abs(along) < shiftOpenMargin {
 			return false

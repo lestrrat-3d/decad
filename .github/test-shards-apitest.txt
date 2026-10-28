@@ -1420,6 +1420,8 @@
 10	0.01	TestMirroredCopyAndUnionAgreeWithTheMirroredCubes
 10	0.01	TestCircularPatternAgreesWithTheUnionOfTurnedCubes
 10	0.01	TestQuarterTurnAgreesWithTheTurnedCubes
+10	0.01	TestPatternJoinFoldsPolygonalPinsIntoAMeshPlate
+10	0.01	TestPatternJoinFoldRefusalLeavesEveryBodyLive
 10	0.01	TestMeshSolidShellAndOffsetAgreeWithTheCubeByCubeErosionAndDilation
 5	0.00	TestReadSTEPHandWrittenPlateWithAHoleAndInches
 5	0.01	TestReadSTEPReadsPartialCylinderWalls
@@ -2699,7 +2701,8 @@
 10	0.00	TestCutLineTouchPocket
 10	0.61	TestPatternJoinJoinsCopiesThatShareWholeSides
 10	3.78	TestPatternJoinOnAnObliqueFrame
-10	2.74	TestPatternJoinRefusesLobesThatOnlyTouchOrMissTheBase
+10	2.74	TestPatternJoinRefusesLobesThatOnlyTouchTheBase
+10	2.74	TestPatternJoinKeepsLobesThatMissTheBaseByAMicronApart
 10	0.01	TestPlacementContextCancelsAnalyticMetadataRewriting
 10	0.04	TestPlanarManifoldCornerThroughTrayFloor
 10	0.00	TestPointLocationExactPlacedPlate
