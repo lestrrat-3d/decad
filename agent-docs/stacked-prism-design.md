@@ -102,11 +102,16 @@ slabs and on an A1 BRep's stack. A stack's cap and interface faces carry
 their slab level's denotation in `topo.CapRecord.ZDenoted`, so a `ToFace`
 stop on a stack's cap or floor records it. A chain sheet records its sweep's
 denoted levels as `Extrude` does, and `Split` pieces, a hole-free tube shell
-and a prism pattern group keep the receiver's. A stop on a BRep, revolve or
-faceted face, a `ThroughAll` stop on a stack or with a competing far side, a
-chamfered end, a shell's derived levels (a cup floor, a closed shell's inner
-levels, a through-shell and a boss-stack shell), a holed band shell, the BRep
-stack of general-boolean §3 A7 and a trimmed ribbon record none.
+and a prism pattern group keep the receiver's. A mesh result's retained
+plane face keeps its source face's whole `CapRecord`, `ZDenoted` included
+(`facetedrecord.SourceTag`), so a stop on it records what the source face,
+a stack's cap or floor among them, records. A stop on a BRep or revolve
+face or on a faceted face with no retained plane, a `ThroughAll` stop on a
+stack or with a competing far side, a chamfered end, a shell's derived
+levels (a cup floor, a closed shell's inner levels, a through-shell and a
+boss-stack shell), a holed band shell, the BRep stack of general-boolean
+§3 A7, a trimmed ribbon and the prism `Thicken` builds from a chain ribbon
+record none.
 
 The denotations decide the interface arm, enter the split arm's level
 ranges (§7 stage 3), order and merge the stacked union's levels
