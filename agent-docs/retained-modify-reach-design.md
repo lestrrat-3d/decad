@@ -171,7 +171,14 @@ retained cylinder wall `W_k` whose axis is normal to `P`, and consecutive edges 
 
 At a junction both walls are perpendicular to `P`: a cylinder wall's axis is normal to `P`, and a plane wall
 tangent to it along a generator contains that generator. So every edge of a chain has dihedral angle `π/2`, and
-the whole chain is convex or the whole chain is concave.
+the whole chain is convex or the whole chain is concave, and `n_g = s·m` at every junction. Here `m = n_P × d`
+points into `P` along the walk direction `d` (a face lies to the left of its loop), and the chain's **side** `s`
+is `−1` for a convex chain, whose blends cut into the material, and `+1` for a concave one, whose blends fill the
+void. A line edge reads `s` from its wall's outward normal: `n_W = −m` gives `−1` and `n_W = +m` gives `+1`; the
+two candidates are a unit vector apart, so the float test only classifies, and the edge's own convexity flag must
+agree. An arc edge takes `s` from the rim's side (blend §4.2), which `readSide` ties to the edge's convexity. A
+chain whose edges read different sides is SM3; at a junction test 3 of §5.2 makes the walls' normals along `g`
+equal, so public input does not reach it.
 
 ### 5.2 Tangent junction
 
@@ -223,6 +230,9 @@ cross-section of `e_k`'s blend by `Π` equals the cross-section of `e_{k+1}`'s b
 | fillet, concave | the quarter circle of radius `r` about `c_J = V + r·n_P + r·n_g`, from `c_J − r·n_P` to `c_J − r·n_g` |
 | chamfer, setbacks `t_P` on `P`, `t_W` on the walls | the segment from `V − t_P·n_g` to `V − t_W·n_P` (convex; `+` for concave) |
 
+With the chain's side `s` (§5.1), both fillet rows are `c_J = V + r·m + s·r·n_P`, because `n_g = s·m`; the
+construction computes every junction row from that one form.
+
 *Proof.* `Π` contains `n_P` and `n_g`, hence `g`. For an R1 edge, `d_V` is the edge direction, so `Π` is normal to
 the blend cylinder's axis and cuts it in blend §4.1's circle: centre at `r/cos(π/4) = r√2` along the bisector, which
 is `−r·n_P − r·n_W` with `n_W = n_g`. For an R4 edge, the meridian plane at `V`'s azimuth holds the axis (parallel
@@ -247,14 +257,19 @@ The rewrite touches `P`, every wall `W_k`, every seam between consecutive walls,
    angles `α_j = j·(π/2)/m`. `m` follows blend §5 step 3 for `τ = 2⁻¹⁰·r`; every chain edge has angle `π/2` and
    the same `r`, so every edge takes the same `m`. A chamfer has `m = 1`. **Compute each junction row once** and
    give the same vertex indices to both strips that meet there; `q_0(J) = P_J` lies on `P` and
-   `q_m(J) = S_J = g ∩ P'` on the seam, with `P'` the plane parallel to `P` at depth `t_W` into the material.
+   `q_m(J) = S_J = g ∩ P'` on the seam, with `P'` the plane parallel to `P` at height `t_W` on the chain's side
+   `s`: into the material for a convex chain, into the void for a concave one. A fillet row is
+   `V + m·r(1 − sin α_j) + s·n_P·r(1 − cos α_j)` and a chamfer row `V + m·t_P(1 − σ) + s·n_P·t_W·σ`.
 2. **Strips.** An R1 edge's strip is blend §5.0 step 4 with each end row taken from its junction (or, for a C2 end,
    from blend §5.0 step 1). An R4 edge's strip is blend §4.4's grid with its two end columns taken from its
-   junction rows. Rows are wound to face the blend's outward normal.
+   junction rows. Rows are wound to face the blend's outward normal. A line fillet's cylinder has its axis through
+   `p_0 + r·m + s·r·n_P`, faces away from the axis when convex and toward it when concave (tag reversed); a
+   chamfer's plane faces `n_P + s·m`. An arc's torus or cone reads the rim's side as blend §4.2 does.
 3. **Base face.** The chain's run in `P`'s loop gives way to the setback contour: an R1 edge's setback edge between
    its two end setback points, an R4 edge's ring-0 polygon. `P_J` is shared by both neighbours. `P` is then
    triangulated again by ear clipping over its loops (blend §5 step 2), with its other loops kept.
-4. **Walls.** Each `W_k` loses the band between `P` and `P'`: a plane wall by blend §5.0 step 2's chain cut at the
+4. **Walls.** Each `W_k` loses the band between `P` and `P'`, measured as the height `s·n_P·(p − o_P)` on the
+   chain's side: a plane wall by blend §5.0 step 2's chain cut at the
    setback line, a cylinder wall by blend §5 step 2's cut at the setback height. Each seam's held run is cut at
    `S_J`: the run's vertices on `P`'s side of `S_J` go and `S_J` takes their place.
 5. **Ends (C2).** Blend §5.0 (R1) at the first and last edge, which must be straight with a retained plane wall and
@@ -268,9 +283,9 @@ The rewrite touches `P`, every wall `W_k`, every seam between consecutive walls,
    edge's interior columns fan out from the end curve: row `j` of column `i` lies at the fraction `i / n_a` of the
    way from its azimuth on `G` to the azimuth of the other end's meridian, so every vertex lies on the torus. The end
    curve stays a chain of exact points (it is no conic). A chamfer's arc end takes extra rows, as blend §4.4's cone
-   does, so that its chords follow the section `G` cuts in the cone to within `τ`. The end of a convex chain on a
-   face that is reflex at the corner (a reflex foot) refuses (`ErrUnsupported`); it occurs only where a concave
-   chain meets a wall, and no concave chain is built.
+   does, so that its chords follow the section `G` cuts in the cone to within `τ`. Only a convex chain is built
+   open: an open concave chain refuses (`ErrUnsupported`, "a concave open tangent chain is not built"), and so
+   does the end of a convex chain on a face that is reflex at the corner (a reflex foot).
 6. **Build.** `facetedrecord.Build`, as blend §5 step 5. Each chain edge gets its own blend group with role
    `fillet(k)` or `chamfer(k)`, `k` the edge's ordinal in the expanded selection.
 
@@ -292,11 +307,13 @@ the largest vertex bound of the tested chord. The inflation only refuses more.
   edge whose span exceeds `π` has no convex wedge and is SM3.
 - **Neighbours.** The vertices of edges `k − 1` and `k + 1` other than `V_J` are chords of `P` for edge `k`'s band
   test like any other. A G1 neighbour leaves `V_J` beyond `Π_J`, so it clears the band.
-- **Walls.** Every held boundary vertex of every wall that lies on no chain edge and no seam has distance at least
-  `t_W + b + slack` from `P`. Distance to a plane is affine, so the chords between such vertices clear `P'` as well.
-- **Seams.** Each seam's far end lies at distance at least `t_W + b + slack` from `P`, so `S_J` cuts it.
-- **Sizes.** Blend SR3 per edge: an R4 edge whose material lies inside its cylinder needs `R − r > 0` (fillet) or
-  `R − t_P > 0` (chamfer).
+- **Walls.** Every held boundary vertex of every wall that lies on no chain edge and no seam has height at least
+  `t_W + b + slack` from `P` on the chain's side `s`. Height above a plane is affine, so the chords between such
+  vertices clear `P'` as well. A concave pocket shallower than `t_W` fails it (SR4).
+- **Seams.** Each seam's far end lies at height at least `t_W + b + slack` from `P` on side `s`, so `S_J` cuts it.
+- **Sizes.** Blend SR3 per edge: an R4 edge whose base lies inside its circle (`κ = −1`: a convex edge whose
+  material lies inside its cylinder, or a concave pocket floor's arc) needs `R − r > 0` (fillet) or `R − t_P > 0`
+  (chamfer).
 - **Asymmetric.** `P` borders every edge of the chain, so a reference that names `P` names it for every edge. A
   reference naming walls names each edge's own wall. A mix gives some edge two reference faces, and SX3 refuses it
   first (reach §6's cap-loop argument); SM5 is the second check. Several chains of one selection (the top and
@@ -308,7 +325,11 @@ the largest vertex bound of the tested chord. The inflation only refuses more.
 A chord inside a band deflated by `b + slack` proves the blend consumes another face (SR4). A chord that meets the
 inflated band but not the deflated one is undecided (SR5). Every band of a chain lies in the prism over its base
 band between `P` and `P'`, so disjoint base bands give disjoint regions `K_k`, adjacent ones sharing only `Π_J`.
-A component that enters `K_k` without touching `P`, a wall or a seam is left to SR7, as in blend §6.1.
+A component that enters `K_k` without touching `P`, a wall or a seam is left to SR7, as in blend §6.1. A concave
+chain's `K_k` lies in the void of the held solid, so another shell may lie wholly inside it; the held audit's
+containment parity (`internal/facetproof/faceted.go`) refuses that result, because a positive shell inside a
+positive shell has odd nesting. A shell that crosses `K_k`'s boundary crosses the strip (SR7) or a band the gates
+above rule out.
 
 ### 5.7 Bounds
 
@@ -464,7 +485,7 @@ Rows narrow blend Table SR and reach SX2/SX9; sentinels follow those tables.
 |---|---|---|
 | **SM1** | a chain junction whose tangency §5.2 cannot decide | `ErrUnsupported` (reach SX2's text) |
 | **SM2** | a selected edge ends at a proven tangent junction whose continuation is not selected and `WithTangentChain` is absent; the message names the junction point and `WithTangentChain` | `ErrUnsupported` |
-| **SM3** | a chain whose edges share no base plane, a junction of two plane walls, a cylinder wall whose axis is not exactly normal to `P`, or an R4 chain edge spanning more than `π` | `ErrUnsupported` |
+| **SM3** | a chain whose edges share no base plane, a junction of two plane walls, a cylinder wall whose axis is not exactly normal to `P`, an R4 chain edge spanning more than `π`, a chain that mixes convex and concave edges, or an open concave chain | `ErrUnsupported` |
 | **SM4** | the chain gates of §5.6: proven overlap | `ErrDegenerate` (SR4) |
 | **SM5** | the chain gates of §5.6: undecided; or a chain whose resolved references mix `P` and walls | `ErrUnsupported` (SR5; SX3 first for the mix) |
 | **SM6** | R5: the offset circles do not meet | `ErrDegenerate` (SR3) |
@@ -511,7 +532,11 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | All 8 edges named, no option | builds the C1 result; volume equal within both bounds | treat shared junction corners as SR2: refused |
 | Open chain (C2): one lateral fillet, seed its top edge | chain of line, arc, line; removed `A_f·(L1 + L2) + (π/2)·(R − x̄)·A_f` | stop the walk at the junction and use the R1 end rule: refused as grazing |
 | Open chain ending on an arc (C2, R4): the corner-rounded box trimmed by a plane through its arc; seed the arc | line and arc ending on `G`; removed volume `A_f·L + ∫∫ ρ·Δφ(ρ)` over the section's corner, `Δφ` the angle from `G` to the tangent point | start every row at the corner's azimuth: the end rows leave `G` (unit test) |
-| Concave chain: rounded boss on a plate, cut by a placed tool | fill `A_f·(ΣL + 2π·(R + x̄))`; blend normals point into the void | build the convex blend: the normals point into the material |
+| Concave closed chain: pocket floor (40×40×10 plate, 20×20 `r = 3` pocket, floor `z = 5`, `ΣL = 56`), fillet `r = 1` | fill `A_f·(ΣL + 2π·(R − x̄))`; 4 `Cylinder`, 4 `Torus` (`Major = R − r`); every blend's `NormalAt` points into the void; `VerifyAll` passes | restore the concave refusal: refused; convex rows: SR7; an unreversed cylinder tag: the normals point into the material |
+| Concave closed chain chamfer, equal and with reference the floor | fill `(t_P·t_W / 2)·(ΣL + 2π·(R − t_P/3))` | the convex chamfer normal `n_P − m`: SR7; swap the setbacks: the two-distance fill is off |
+| Concave closed chain: boss root (20×20 `r = 3` boss joined to the plate's top) | fill `A_f·(ΣL + 2π·(R + x̄))`; 4 `Torus` (`Major = R + r`) | take `κ` the other way in the arc tag: SR7 |
+| Concave chain, all 8 edges named | builds without the option; the same fill | none |
+| Concave chain gates | a pocket 0.8 deep refuses SR4 "the blend consumes the wall"; `r = 3` refuses SR3; a cube floating inside the fill refuses SR7 by nesting parity while one clear of it builds; an open concave chain refuses SM3; a chain of mixed sides refuses SM3 (unit test) | classify by `n_W = −m` only: every concave row refuses; measure the wall band on the convex side: the pocket refuses; drop the wall clearance: the shallow pocket refuses with another text; drop the mixed-side check: the unit test builds |
 | Chain clearance | a pocket whose chord crosses a band while its vertices lie outside it refuses SM5; a hole deep inside a band refuses SM4 | test vertices only: the crossing chord builds and SR7 or the volume check fails |
 | `internal/tangentchain` retained oracle | exactly tangent plane/cylinder tags prove "tangent"; tags one float step off are undecided; a clear miss is "not tangent" | replace the identity by a tolerance: the one-step case proves "tangent" |
 | Exact-rotation copy of P3, 20° | 6 `Plane`, 5 `Cylinder`; `NormalAt` at an interior facet centroid within its bound plus 64 float steps of the rotated source normal; bounds below 1 | keep `ExactGroupPlaced`'s drop: `Faceted` |
@@ -561,11 +586,12 @@ Each increment is one PR. M1 ships this document.
 | M4b | C2: open chains whose first or last edge is a blend §4.4 arc | the arc-end rows pass; the concave and reflex-foot cases stay refused |
 | M5 | §7: `ScaledAt` keeps curved tags | the two scale rows pass |
 | M6 | §8: E10 and R5 | the R5 row passes |
+| M7 | C1 concave: the chain side `s` of §5.1 in the rows, wall bands and tags | the concave chain rows of §12 pass |
 
-Chains are built for convex outlines of lines and arcs. `retainedblend.Tangent` decides each junction
+Chains are built for closed outlines of lines and arcs, convex or concave, and for open convex ones. `retainedblend.Tangent` decides each junction
 (`chain_tangent.go`), `planChains` groups and orders the selection (`chain.go`) and `rewriteChain` builds one chain
 (`chain_rewrite.go`); the ends of an open chain live in `chain_open.go`, and an arc end in `chain_arc_end.go`. A
-closed chain has at least three edges and an open chain at least two. A concave chain, a reflex foot, a straight end
+closed chain has at least three edges and an open chain at least two. An open concave chain, a reflex foot, a straight end
 on a face that is not normal to its edge and an arc end on a face that is not parallel to the axis are refused. The edge between a `Cylinder` and a `Torus` blend of a fillet chain is an
 `Arc3` (retention §10.1 E11).
 
