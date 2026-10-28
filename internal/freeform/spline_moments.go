@@ -145,10 +145,11 @@ func ExactFreeformMoments(spans []BezierSpan, reversed bool, order MomentIntegra
 	for _, span := range spans {
 		u, v := SpanCoordinatePolys(span)
 		du, dv := polynomial.RpDeriv(u), polynomial.RpDeriv(v)
-		uu := polynomial.RpMul(u, u)
-		vv := polynomial.RpMul(v, v)
-
 		out.Area.Add(out.Area, new(big.Rat).Mul(half, RpIntegral01(polynomial.RpSub(polynomial.RpMul(u, dv), polynomial.RpMul(v, du)))))
+		if order == MomentAreaOrder {
+			continue
+		}
+		uu, vv := polynomial.RpMul(u, u), polynomial.RpMul(v, v)
 		out.Mu.Add(out.Mu, new(big.Rat).Mul(half, RpIntegral01(polynomial.RpMul(uu, dv))))
 		out.Mv.Sub(out.Mv, new(big.Rat).Mul(half, RpIntegral01(polynomial.RpMul(vv, du))))
 		if order >= MomentSecondOrder {

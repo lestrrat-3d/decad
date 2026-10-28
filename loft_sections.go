@@ -160,7 +160,7 @@ func (d *Document) buildTwistedFitSections(ctx context.Context, sections []LoftS
 			return nil, err
 		}
 		work[i] = freeform.NewFreeformWork()
-		if _, err := profile.FalsifyRecordedArea(sketchArea, work[i]); err != nil {
+		if _, err := profile.FalsifyLoftRecordedArea(sketchArea, work[i]); err != nil {
 			return nil, err
 		}
 		records[i], planes[i] = profile, plane
