@@ -194,7 +194,7 @@ Each of these returns a new body and retires its input.
 
 | Function | Effect |
 |---|---|
-| `decad.Fillet` | Rounds selected edges with a tangent arc of a given radius. |
+| `decad.Fillet` | Rounds selected edges with a tangent arc of a given radius. On a mesh solid, straight edges that meet end to end on one face at right-angle corners, such as a box's top loop, are rounded together and their arcs meet in a mitre at each corner. |
 | `decad.Chamfer` | Bevels selected edges. `decad.WithAsymmetricChamfer` sets a second distance. Selecting the whole outer cap loop of a prism whose section is a smooth chain of fit splines bevels it within a measured ratio of the ideal chamfer, as a cut. Several convex edges of an axis-square mesh solid that share corners are bevelled as the solid less each edge's wedge, and several concave ones whose ends lie in material or open to air as the solid plus each edge's wedge. |
 | `decad.FilletChord` | Rounds convex or concave edges between two planar faces, or circular ones between a plane and a surface of revolution, with an arc stated by its chord length. |
 | `decad.ChamferAngle` | Bevels convex or concave edges between two planar faces, or circular ones between a plane and a surface of revolution, by a distance along a reference face and an angle from that face. |

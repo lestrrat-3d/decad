@@ -629,6 +629,13 @@ func polyArea(ps ...r3.Vec) float64 {
 // the exact area of the blend face (design §5.0).
 func (w *work) lineAreas(l line, spec blendSpec, convex bool, center, baseA, baseB r3.Vec,
 	rows [2][]int) (removed, blend float64) {
+	return w.lineAreasAt(l, spec, convex, center, baseA, baseB, rows, [2]bool{})
+}
+
+// lineAreasAt is lineAreas for an edge one of whose ends is a mitre joint (line_mitre.go): the end plane there is the
+// mitre plane, and no notch is taken from it, because the mitre trims no end face.
+func (w *work) lineAreasAt(l line, spec blendSpec, convex bool, center, baseA, baseB r3.Vec,
+	rows [2][]int, mitred [2]bool) (removed, blend float64) {
 	m := len(rows[0]) - 1
 	pt := func(i, j int) r3.Vec { return w.verts[rows[i][j]] }
 	v0, v1 := l.ends[0].exact, l.ends[1].exact
@@ -643,6 +650,9 @@ func (w *work) lineAreas(l line, spec blendSpec, convex bool, center, baseA, bas
 		}
 		if !convex {
 			corner = -corner
+		}
+		if mitred[i] {
+			corner = 0
 		}
 		removed += corner
 	}

@@ -111,6 +111,24 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 		out, err := blendChains(ctx, env, b, fp, edges, refs, chains, spec, op)
 		return out, true, err
 	}
+	if spec.fillet && spec.asym == nil && len(edges) >= 2 {
+		// Straight convex edges that meet end to end on one face, at corners of three perpendicular faces, are
+		// filleted as one run with a mitre at each joint (line_mitre.go).
+		allLines := true
+		for _, e := range edges {
+			allLines = allLines && looksLikeLine(e)
+		}
+		if allLines {
+			run, ok, err := planMitre(edges, fp, faceIndex)
+			if err != nil {
+				return nil, true, err
+			}
+			if ok {
+				out, err := rewriteMitreRun(ctx, env, fp, run, spec, op, faceIndex)
+				return out, true, err
+			}
+		}
+	}
 	var corners []r3.Vec
 	claim := func(ends [2]lineEnd, scale float64) error {
 		for _, end := range ends {
