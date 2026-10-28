@@ -313,6 +313,30 @@ Refusals (SR2): three edges at a corner, edges not on one base face, a corner wh
 perpendicular, both free ends of an open run on one face, and a boundary of the base face or of a wall within the
 strips' reach.
 
+### 4.8 Corners of three perpendicular faces
+
+Straight R1 fillet edges of one radius whose ends lie at corners of three mutually perpendicular retained planes are
+blended together (`internal/retainedblend/corner_fillet.go`), however many edges the selection holds at each corner.
+Every edge is convex and at least `2r` long.
+
+Each corner is read from its three faces, with outward normals `n_0`, `n_1`, `n_2`; the corner's edge `k` runs along
+`u_k = −n_k`. The strip of an edge ends on a plane that depends on how many selected edges reach the corner:
+
+| Selected at the corner | End plane of each strip | Face `k` (which holds edges `i` and `j`) gets, in place of the corner |
+|---|---|---|
+| one, edge `k` | the plane of the end face, as a single edge's | the end row of edge `k`, an arc of centre `C + r·u_i + r·u_j` |
+| two, `a` and `b` | the plane through the corner with normal `n_a − n_b` (§4.7) | `C + r·u_i + r·u_j` when `i` and `j` are both selected, else the point `r` along the unselected edge |
+| three | the plane square to the edge `r` from the corner | `C + r·u_i + r·u_j` |
+
+At a corner with three selected edges a sphere of radius `r` and centre `C + r·(u_0 + u_1 + u_2)` fills the gap. Its
+patch is the octant between the three strips' end rows, gridded so that its sides are those rows' vertices. The
+exact areas are those of the strips cut at their end planes, plus `3r²` removed from the three faces and `πr²/2` added
+by the patch for every such corner. The chord tolerance is an eighth of a single edge's, so the many chord deficits stay
+inside what `Verify` accepts for a box with all twelve edges rounded.
+
+Refusals (SR2): a selected edge no longer than `2r`, a face edge at a corner no longer than `r`, a corner whose faces
+are not mutually perpendicular retained planes, and a rebuilt face whose outline is not a simple polygon.
+
 ## 5. Construction
 
 The rewrite touches the faces `A` and `B` of the edge and, for R1, the two end
@@ -436,7 +460,7 @@ of that computation.
 | SR | Call | Existence | Sentinel |
 |---|---|---|---|
 | **SR1** | an edge outside Table RR: a curve that is not `Line3` or `Circle3`, a face that is not `RetainedTag`, a face with `NormalBound != 0` or a denoted patch whose tag is not exactly the surface it denotes (for R6's sphere, its record's exact centre and radius, §4.5), or a `Convex` flag that disagrees with §4.1 | body exists; no admitted source for the selected edge | `ErrUnsupported` (reach SX9's text) |
-| **SR2** | two selected edges share a vertex and are not a mitre run (§4.7), or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
+| **SR2** | two selected edges share a vertex and are neither a mitre run (§4.7) nor corners of perpendicular faces (§4.8), or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
 | **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, a chamfer distance of zero or below, or an R6 setback that reaches the axis or runs past the sphere's pole (§4.5) | no regular blend | `ErrDegenerate` |
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
 | **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or `G`'s corner at the vertex does not match the edge (a convex edge needs a convex corner of `G`, a concave edge a reflex one), or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face, or another part of `G` comes within the blend's reach of the vertex | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |

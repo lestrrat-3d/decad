@@ -338,10 +338,16 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		_, err = decad.Fillet(t.Context(), bored, rimAt(t, bored, 20), units.Millimeters(6))
 		require.ErrorIs(t, err, decad.ErrUnsupported, "the held bounds cannot show it fits")
 		_, bored = boredPlate(t)
-		// Three plate edges meet at one corner.
-		_, err = decad.Fillet(t.Context(), bored, decad.Edges(decad.EndpointAt(r3.NewVec(0, 0, 0))).Exactly(3),
+		// Three plate edges meet at one corner, which a sphere octant rounds: 39 + 19 + 19 mm of strip beyond the corner
+		// cube, which loses r³ less the octant's πr³/6.
+		before, err := bored.Volume()
+		require.NoError(t, err)
+		corner, err := decad.Fillet(t.Context(), bored, decad.Edges(decad.EndpointAt(r3.NewVec(0, 0, 0))).Exactly(3),
 			units.Millimeters(1))
-		require.ErrorIs(t, err, decad.ErrUnsupported, "edges that share a corner")
+		require.NoError(t, err)
+		after, err := corner.Volume()
+		require.NoError(t, err)
+		requireVolumeChange(t, before, after, 77*(1-math.Pi/4)+1-math.Pi/6)
 		_, bored = boredPlate(t)
 		_, err = decad.Fillet(t.Context(), bored, rimAt(t, bored, 20), units.Millimeters(-1))
 		require.Error(t, err)
@@ -673,11 +679,6 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		_, err = decad.Fillet(t.Context(), bored, straightEdge(t, bored, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)),
 			units.Millimeters(20))
 		require.ErrorIs(t, err, decad.ErrUnsupported, "the held bounds cannot show it fits")
-		// Two edges that share a corner.
-		_, bored = boredPlate(t)
-		_, err = decad.Fillet(t.Context(), bored, decad.Edges(decad.EndpointAt(r3.NewVec(0, 0, 0))).Exactly(3),
-			units.Millimeters(1))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
 
 		// A second blend, a Boolean and a placement all take the result.
 		sc, bored := boredPlate(t)
