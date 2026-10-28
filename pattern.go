@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/axialsection"
@@ -283,7 +284,8 @@ func Patterned(ctx context.Context, b *Body, spec PatternSpec) (*Body, error) {
 // The gates are PatternCopies' for feature and spec, plus Union's for target: a
 // nil, foreign or retired target is refused, target and feature must be distinct
 // bodies, and a sheet in either role is refused. The join takes the routes Union
-// takes over the same operands and returns that Union's error when none applies.
+// takes over the same operands, including its two-at-a-time fold when no route takes
+// the set, and returns that Union's error when none applies.
 func PatternJoin(ctx context.Context, target, feature *Body, spec PatternSpec) (*Body, error) {
 	d, rp, keeping, err := feature.patternReceiver(ctx, spec)
 	if err != nil {
@@ -331,6 +333,17 @@ func PatternJoin(ctx context.Context, target, feature *Body, spec PatternSpec) (
 	operands := append([]*Body{target, feature}, instances...)
 	body, span, err := unionManyBodies(ctx, d, base+producerID(len(instances)), operands)
 	if err != nil {
+		if errors.Is(err, ErrUnsupported) && isManyUnionRefusal(err) {
+			// No certified route takes the set as a whole, so the instances are built as registered copies and
+			// joined two at a time by Union's own fold (agent-docs/union-fold-design.md); a refusal there removes
+			// the copies and leaves the refusal above.
+			if copies, cerr := PatternCopies(ctx, feature, spec); cerr == nil {
+				if joined, uerr := Union(ctx, target, append([]*Body{feature}, copies...)...); uerr == nil {
+					return joined, nil
+				}
+				removeTools(copies)
+			}
+		}
 		return nil, err
 	}
 	var warnings opdiagnostic.CompositeSummaries

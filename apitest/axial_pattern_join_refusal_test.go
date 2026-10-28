@@ -57,22 +57,43 @@ func TestPatternJoinJoinsCopiesThatShareWholeSides(t *testing.T) {
 // disc's circle with the flank ends on it, and lobes a hair above it. The first touch the disc along
 // an arc and at the flank ends, the second leave a gap: neither joins into one region sketch can
 // certify, so the join refuses with ErrUnsupported and leaves the document as it was.
-func TestPatternJoinRefusesLobesThatOnlyTouchOrMissTheBase(t *testing.T) {
+func TestPatternJoinRefusesLobesThatOnlyTouchTheBase(t *testing.T) {
 	t.Parallel()
 	const r, height, n = 3.0, 2.0, 12
-	for name, gap := range map[string]float64{"touching": 0, "missing by a micron": 1e-3} {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			doc := decad.New()
-			disc := circleBodyAtZ(t, doc, 0, r, 0, height)
-			lobe := gapLoft(t, doc, r, gap, 0.4*math.Pi/n, height)
-			before := doc.Bodies()
-			_, err := decad.PatternJoin(t.Context(), disc, lobe,
-				decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
-			require.ErrorIs(t, err, decad.ErrUnsupported)
-			require.Equal(t, before, doc.Bodies())
-		})
-	}
+	doc := decad.New()
+	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
+	lobe := gapLoft(t, doc, r, 0, 0.4*math.Pi/n, height)
+	before := doc.Bodies()
+	_, err := decad.PatternJoin(t.Context(), disc, lobe,
+		decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Equal(t, before, doc.Bodies())
+}
+
+// TestPatternJoinKeepsLobesThatMissTheBaseByAMicronApart is the other case: lobes a micron off the disc leave a gap
+// sketch cannot certify away, so no certified route takes the set, and the two-at-a-time fold builds the Union of
+// bodies that do not touch: a body of the disc and the twelve lobes as thirteen lumps, whose volume is their sum, which
+// the test reads from the operands and not from the join.
+func TestPatternJoinKeepsLobesThatMissTheBaseByAMicronApart(t *testing.T) {
+	t.Parallel()
+	const r, height, n = 3.0, 2.0, 12
+	doc := decad.New()
+	disc := circleBodyAtZ(t, doc, 0, r, 0, height)
+	lobe := gapLoft(t, doc, r, 1e-3, 0.4*math.Pi/n, height)
+	discVolume, err := disc.Volume()
+	require.NoError(t, err)
+	lobeVolume, err := lobe.Volume()
+	require.NoError(t, err)
+	out, err := decad.PatternJoin(t.Context(), disc, lobe,
+		decad.CircularPattern{Axis: r3.NewVec(0, 0, 1), Count: n})
+	require.NoError(t, err)
+	require.Equal(t, []*decad.Body{out}, doc.Bodies())
+	require.Len(t, out.Lumps(), n+1, "the lobes stay clear of the disc")
+	volume, err := out.Volume()
+	require.NoError(t, err)
+	want := discVolume.Value.Base() + n*lobeVolume.Value.Base()
+	bound := volume.Bound.Base() + discVolume.Bound.Base() + n*lobeVolume.Bound.Base()
+	require.InDelta(t, want, volume.Value.Base(), bound+0.01, "disc plus lobes, less nothing: the lobes are clear of the disc")
 }
 
 // gapLoft lofts a lobe whose bottom arc is concentric with the disc at radius r + gap.

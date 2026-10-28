@@ -325,7 +325,7 @@ proven exact may return a faceted body whose measurements are `decad.Approximate
 | `decad.PathPatternSpaced` | Returns copies of a body at a stated arc-length distance along a `decad.Path`, as `decad.PathPatternCopies` does for a count. |
 | `decad.PathPatternCopies` | Returns copies of a body spaced at equal arc length along a `decad.Path`, keeping its orientation, or turned to follow the path with `decad.WithPathFollow`, about its start or a `decad.WithPathPivot` point. |
 | `decad.PatternCopies` | Returns the extra instances as separate bodies. |
-| `decad.PatternJoin` | Repeats a feature by a `decad.PatternSpec` and joins every instance to a target body in one Union. |
+| `decad.PatternJoin` | Repeats a feature by a `decad.PatternSpec` and joins every instance to a target body in one Union, or two at a time when no route takes the set. |
 | `decad.Arrange` | Moves bodies to lie side by side on a flat bed, each resting on its surface and a gap apart; `decad.WithArrangeTurns` lets it turn them a quarter turn to fit and `decad.WithArrangeAngle` turns each to the angle of least footprint. |
 | `decad.Mirrored` | Returns the mirror image across a `decad.MirrorPlane` and retires the input. |
 | `decad.MirroredCopy` | Returns the mirror image and leaves the source live. |
