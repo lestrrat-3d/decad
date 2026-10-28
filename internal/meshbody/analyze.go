@@ -133,7 +133,7 @@ func Analyze(ctx context.Context, verts []r3.Vec, tris [][3]int) (Analysis, erro
 		// a·((b-a)×(c-a)) = a·(b×c), so the area normal also gives
 		// the signed tetrahedron numerator. Sum the dyadics exactly before
 		// dividing once, instead of reducing one rational per triangle.
-		volume.Add(proofarith.DvDot(a, normal))
+		volume.AddDot(a, normal)
 		lowFloat, highFloat := proofarith.DvNormBounds(normal)
 		low := proofarith.SetFloatRat(&lowScratch, lowFloat)
 		high := proofarith.SetFloatRat(&highScratch, highFloat)

@@ -74,14 +74,41 @@ func TestDyAccZeroValueIsZero(t *testing.T) {
 	require.Zero(t, acc.Rat().Sign())
 }
 
+func TestDyAccAddDotMatchesSeparateDots(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(547, 557))
+	for range 256 {
+		var sum proof.Dyadic
+		var acc proof.DyAcc
+		for step := range 12 {
+			var v, w proof.DyV3
+			for axis := range 3 {
+				v[axis], w[axis] = randomAccDyadic(t, rng), randomAccDyadic(t, rng)
+			}
+			sum = proof.DyAdd(sum, proof.DvDot(v, w))
+			acc.AddDot(v, w)
+			if step%4 == 0 {
+				for axis := range v {
+					v[axis] = proof.DyNeg(v[axis])
+				}
+				sum = proof.DyAdd(sum, proof.DvDot(v, w))
+				acc.AddDot(v, w)
+			}
+		}
+		requireAccMatches(t, sum, &acc)
+	}
+}
+
 func TestDyAccInlineUpdatesAllocateNothingAfterWarmup(t *testing.T) {
 	x, y := proof.MustDyOf(3.141592653589793), proof.MustDyOf(1.4142135623730951)
+	wide := proof.DyMul(x, y)
 	for _, tc := range []struct {
 		name string
 		add  func(*proof.DyAcc)
 	}{
 		{"sum", func(a *proof.DyAcc) { a.Add(x) }},
 		{"product", func(a *proof.DyAcc) { a.AddProduct(x, y) }},
+		{"dot", func(a *proof.DyAcc) { a.AddDot(proof.DyV3{x, y, x}, proof.DyV3{wide, x, wide}) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var acc proof.DyAcc
