@@ -3,6 +3,8 @@ package proof
 import (
 	"encoding/binary"
 	"math/big"
+	"math/bits"
+	"strings"
 )
 
 // Key is the exact identity of the point: two points weld exactly when their
@@ -23,16 +25,23 @@ func ExactIntsKey(values ...*big.Int) string {
 	for _, v := range values {
 		size += (v.BitLen() + 7) / 8
 	}
-	buf := make([]byte, 0, size)
+	var key strings.Builder
+	key.Grow(size)
+	wordBytes := bits.UintSize / 8
 	for _, v := range values {
-		buf = append(buf, byte(v.Sign()+1))
+		key.WriteByte(byte(v.Sign() + 1))
 		n := (v.BitLen() + 7) / 8
-		buf = binary.LittleEndian.AppendUint64(buf, uint64(n))
-		start := len(buf)
-		buf = buf[:start+n]
-		v.FillBytes(buf[start:])
+		var length [8]byte
+		binary.LittleEndian.PutUint64(length[:], uint64(n))
+		_, _ = key.Write(length[:])
+		words := v.Bits()
+		for i := n - 1; i >= 0; i-- {
+			word := i / wordBytes
+			shift := uint(i%wordBytes) * 8
+			key.WriteByte(byte(words[word] >> shift))
+		}
 	}
-	return string(buf)
+	return key.String()
 }
 
 // DvPrimitive returns the primitive integer vector along a nonzero v: v times
