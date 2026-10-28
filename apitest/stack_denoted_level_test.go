@@ -88,7 +88,7 @@ func TestStackedUnionToFaceDenotedLevel(t *testing.T) {
 		stack := lowStack(t, doc)
 		plate := twoSidedRect(t, doc, 30, 0, 50, 20, units.Millimeters(5.08), units.Millimeters(3))
 		part, err := decad.Cut(t.Context(), plate, stackTopTool(t, doc, stack))
-		requireDeclinedSpan(t, part, err, skinnedPlateVolume(denotedDepth(units.Millimeters(5.08)), d, 1), false)
+		requireDeclinedSpan(t, part, err, skinnedPlateVolume(denotedDepth(units.Millimeters(5.08)), d, 1))
 	})
 }
 

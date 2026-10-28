@@ -1,12 +1,16 @@
 package prismshell_test
 
 import (
+	"fmt"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -243,4 +247,101 @@ func reversed(l sectionrecord.LoopRecord) sectionrecord.LoopRecord {
 		out.Segments[len(l.Segments)-1-i] = sectionrecord.LineSeg{Start: ls.End, End: ls.Start, TStart: 0, TEnd: 1}
 	}
 	return out
+}
+
+// inchShell is capShell over [0, 20]³ at 0.2 in thick: the held thickness, its conversion
+// bound and the exact rescale it denotes.
+func inchShell(t *testing.T, s float64) (prismshell.CapShellInput, *big.Rat) {
+	t.Helper()
+	th := units.Inches(0.2)
+	held, delta, err := extent.MagnitudeInBounded(th, units.Length, units.Millimeter, "the thickness")
+	require.NoError(t, err)
+	require.Positive(t, delta, "0.2 in converts with a rounding")
+	in := capShell(t, momentinput.Profile{Outer: squareAt(0, 0, 20)}, 20, s, held, 2)
+	in.Thickness, in.ThicknessDelta = th, delta
+	return in, extent.ExactConversion(th, units.Millimeter)
+}
+
+// TestCapShellStepLevel checks the exact level a shell's derived level
+// denotes: the source end's rational plus or minus the exact thickness, and
+// nothing when the end denotes nothing or the input names no thickness.
+func TestCapShellStepLevel(t *testing.T) {
+	t.Parallel()
+	in, r := inchShell(t, 1)
+	denoted := func(z, delta float64, d prismplacement.LevelDenotation) *big.Rat {
+		return prismplacement.DenotedLevel(z, delta, d)
+	}
+	t.Run("up from an exact end", func(t *testing.T) {
+		t.Parallel()
+		z, delta, d := in.StepLevel(0, 0, prismplacement.LevelDenotation{}, 1)
+		require.Equal(t, in.HeldThickness, z)
+		requireDenotes(t, r, denoted(z, delta, d), "the floor denotes the exact thickness")
+	})
+	t.Run("down from an exact end", func(t *testing.T) {
+		t.Parallel()
+		z, delta, d := in.StepLevel(20, 0, prismplacement.LevelDenotation{}, -1)
+		want := new(big.Rat).Sub(big.NewRat(20, 1), r)
+		requireDenotes(t, want, denoted(z, delta, d), "the ceiling denotes 20 less the exact thickness")
+	})
+	t.Run("up from a denoted end", func(t *testing.T) {
+		t.Parallel()
+		// The end is -0.2 in: held -h, denoting -r.
+		minusR := new(big.Rat).Neg(r)
+		end := prismplacement.DenoteLevel(minusR, -in.HeldThickness, in.ThicknessDelta)
+		require.NotNil(t, denoted(-in.HeldThickness, in.ThicknessDelta, end))
+		z, delta, d := in.StepLevel(-in.HeldThickness, in.ThicknessDelta, end, 1)
+		require.Zero(t, z)
+		require.Positive(t, delta)
+		requireDenotes(t, new(big.Rat), denoted(z, delta, d), "-r + r denotes 0")
+	})
+	t.Run("undenoted displaced end", func(t *testing.T) {
+		t.Parallel()
+		z, delta, d := in.StepLevel(1, 1e-3, prismplacement.LevelDenotation{}, 1)
+		require.Nil(t, denoted(z, delta, d))
+	})
+	t.Run("no stated thickness", func(t *testing.T) {
+		t.Parallel()
+		// A held thickness with no stated value, and a bound wide enough
+		// that a zero rescale would pass the falsifier.
+		bare := capShell(t, square10(), 20, 1, 2, 2)
+		bare.Thickness, bare.ThicknessDelta = units.Value{}, 3
+		z, delta, d := bare.StepLevel(0, 0, prismplacement.LevelDenotation{}, 1)
+		require.Nil(t, denoted(z, delta, d))
+	})
+}
+
+// TestCapShellClosedDenotedLevels builds the closed shell of a 0.2 in
+// thickness over [-0.2 in, 20] and reads every slab end's denotation: the
+// receiver's ends at -r and 20, the floor at -r ± r and the ceiling at 20 ∓ r
+// on both sides of each interface, inward and outward.
+func TestCapShellClosedDenotedLevels(t *testing.T) {
+	t.Parallel()
+	for _, s := range []float64{1, -1} {
+		in, r := inchShell(t, s)
+		minusR, twenty := new(big.Rat).Neg(r), big.NewRat(20, 1)
+		in.Prism.Z0, in.Prism.Z0Delta = -in.HeldThickness, in.ThicknessDelta
+		in.Prism.Z0Denoted = prismplacement.DenoteLevel(minusR, in.Prism.Z0, in.Prism.Z0Delta)
+		body, err := prismshell.BuildClosed(t.Context(), capShellEnv(), in)
+		require.NoError(t, err)
+		sp, ok := body.Payload.(stackedrecord.Payload)
+		require.True(t, ok)
+		require.Len(t, sp.Slabs, 3)
+		sr := new(big.Rat).Mul(r, big.NewRat(int64(s), 1))
+		lo, hi := new(big.Rat).Add(minusR, sr), new(big.Rat).Sub(twenty, sr)
+		want := [][2]*big.Rat{{minusR, lo}, {lo, hi}, {hi, twenty}}
+		if s < 0 {
+			want = [][2]*big.Rat{{lo, minusR}, {minusR, twenty}, {twenty, hi}}
+		}
+		for k, slab := range sp.Slabs {
+			requireDenotes(t, want[k][0], slab.DenotedZ0(), fmt.Sprintf("slab %d bottom, sense %v", k, s))
+			requireDenotes(t, want[k][1], slab.DenotedZ1(), fmt.Sprintf("slab %d top, sense %v", k, s))
+		}
+	}
+}
+
+// requireDenotes requires got to be the rational want.
+func requireDenotes(t *testing.T, want, got *big.Rat, what string) {
+	t.Helper()
+	require.NotNil(t, got, "%s records a denotation", what)
+	require.Zero(t, want.Cmp(got), "%s denotes %s, not %s", what, want.RatString(), got.RatString())
 }

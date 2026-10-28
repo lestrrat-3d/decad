@@ -57,14 +57,9 @@ func requireDenotedThroughHole(t *testing.T, part *decad.Body, height *big.Rat) 
 }
 
 // requireDeclinedSpan requires a Cut that proves no span: the mesh path's
-// coplanar refusal when refused, else its result covering want.
-func requireDeclinedSpan(t *testing.T, part *decad.Body, err error, want *big.Rat, refused bool) {
+// result covering want.
+func requireDeclinedSpan(t *testing.T, part *decad.Body, err error, want *big.Rat) {
 	t.Helper()
-	if refused {
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "two operand facets overlap in one plane")
-		return
-	}
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(part), "an undenoted stop within its displacement of the cap is no proven span")
 	requireRationalVolumeCovered(t, part, want)
@@ -145,7 +140,7 @@ func TestThroughStopDenotedLevelMisses(t *testing.T) {
 		part, err := decad.Cut(t.Context(), plate, tool)
 		// The tool is flush with both faces of the plate, so the shifted retry grows it
 		// (agent-docs/gap-tolerance-design.md §5.2 item 5) and the mesh path builds the part.
-		requireDeclinedSpan(t, part, err, skinnedPlateVolume(denotedDepth(top), denotedDepth(top), 1), false)
+		requireDeclinedSpan(t, part, err, skinnedPlateVolume(denotedDepth(top), denotedDepth(top), 1))
 	})
 }
 
@@ -179,7 +174,7 @@ func TestThroughStopDenotedLevelStackedTop(t *testing.T) {
 				requireDenotedThroughHole(t, part, new(big.Rat).Add(denotedDepth(inch), big.NewRat(3, 1)))
 				return
 			}
-			requireDeclinedSpan(t, part, err, skinnedPlateVolume(denotedDepth(tc.top), denotedDepth(inch), 1), false)
+			requireDeclinedSpan(t, part, err, skinnedPlateVolume(denotedDepth(tc.top), denotedDepth(inch), 1))
 		})
 	}
 }
