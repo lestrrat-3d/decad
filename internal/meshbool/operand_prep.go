@@ -59,6 +59,7 @@ func PrepContext(ctx context.Context, verts []r3.Vec, tris [][3]int, src []int) 
 			bm.Owner[[2]int{tri[k], tri[(k+1)%3]}] = i
 		}
 	}
+	bm.setDepthBlocks()
 	return bm, nil
 }
 

@@ -64,6 +64,9 @@ type BoolMesh struct {
 	// cache is empty until a query sweeps an axis, and it lives exactly as long
 	// as the prepared operand does.
 	Parity *ParityMesh
+	// depthLevels are setDepthBlocks' summaries of Boxes, which let
+	// depthBeyond pass over runs of facets its prune would skip.
+	depthLevels [][][2]r3.Vec
 }
 
 // TwinFacet returns the facet across edge k of facet f — the neighbour a
