@@ -292,6 +292,27 @@ zone `2π·R_s·|zB|` (Archimedes). The torus patch has area
 centre along the arc and `a_ρ` its radial part. The cone's frustum has
 `π·(ρA + ρB)·|T_A T_B|`.
 
+### 4.7 A mitre run of R1 fillets
+
+Straight R1 fillet edges of one radius that meet end to end on one base face `A`, at corners where `A` and the two
+walls are mutually perpendicular, are blended as one run (`internal/retainedblend/line_mitre.go`). The edges form one
+open chain or one closed loop, no more than two at a corner, every edge convex, and the walls are distinct.
+
+At a joint `C` between the edges with walls `B_k` and `B_{k+1}`, the two cylinders meet in the plane through `C` with
+normal `n(B_{k+1}) − n(B_k)`, which bisects the walls. Each edge's rows end on that plane (`setbackPoint`), so the two
+strips share the vertices of their rows there and the strips' end triangles coincide. No end face is trimmed at a
+joint. The vertical edge under `C` loses its top part, and the two walls meet at the strips' feet.
+
+The base face's boundary gives way to a polygon of the rows' base points at the joints and at any free end. A closed
+run replaces the whole outer loop; an open run replaces the stretch it covers. A free end trims its end face as a
+single edge's does (§5), and an end face is trimmed by one end only. Each strip is its own blend group. The removed
+and added areas are the sums of the single-edge terms, each with its mitred ends' end planes replaced by the mitre
+plane, and the volume change is bounded from those sums.
+
+Refusals (SR2): three edges at a corner, edges not on one base face, a corner whose faces are not mutually
+perpendicular, both free ends of an open run on one face, and a boundary of the base face or of a wall within the
+strips' reach.
+
 ## 5. Construction
 
 The rewrite touches the faces `A` and `B` of the edge and, for R1, the two end
@@ -415,7 +436,7 @@ of that computation.
 | SR | Call | Existence | Sentinel |
 |---|---|---|---|
 | **SR1** | an edge outside Table RR: a curve that is not `Line3` or `Circle3`, a face that is not `RetainedTag`, a face with `NormalBound != 0` or a denoted patch whose tag is not exactly the surface it denotes (for R6's sphere, its record's exact centre and radius, §4.5), or a `Convex` flag that disagrees with §4.1 | body exists; no admitted source for the selected edge | `ErrUnsupported` (reach SX9's text) |
-| **SR2** | two selected edges share a vertex, or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
+| **SR2** | two selected edges share a vertex and are not a mitre run (§4.7), or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
 | **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, a chamfer distance of zero or below, or an R6 setback that reaches the axis or runs past the sphere's pole (§4.5) | no regular blend | `ErrDegenerate` |
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
 | **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or `G`'s corner at the vertex does not match the edge (a convex edge needs a convex corner of `G`, a concave edge a reflex one), or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face, or another part of `G` comes within the blend's reach of the vertex | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
@@ -536,6 +557,9 @@ published bound, never with a pinned literal.
 | Oblique end face | the end arc is an `Ellipse3` with `SemiMinor = r` and `SemiMajor = r / |d̂ · nG|`; removed volume equals the section area times the length between the end planes measured through the section's centroid | treat `G` as normal to the edge: the volume is off by the centroid offset |
 | Clearance | a radius past the face width refuses `ErrDegenerate`; a radius within `b` of it refuses `ErrUnsupported` | drop the `− b_v` term of §6.2: the near case builds an invalid solid |
 | Shared vertex / tangent chain | refuse SR2 | |
+| Top loop of a mesh box, `Fillet` r = 2 | mitre run (§4.7): the volume is the box less the columns' removed height, the larger of the two walls' at each column, integrated on a 1000 × 1000 grid; the section 0.1 mm under the top has its corner on the plane x = y; `Verify` is `Sound` | delete the mitre and the corner volume is the sum of both strips |
+| Two or three top edges of a mesh box in a row | a two-edge run matches the same integral; both free ends on one face, or three edges at a corner, refuse SR2 | |
+| A pocket wall inside the strips' reach | refuse SR2 | |
 | Oblique plane/cylinder rim | refuse SR1 and keep the `Ellipse3` of retention §10.5 | |
 | Plane-sphere rim (R6): a Revolve ball cut by a placed box, fillet and chamfer | the removed volume equals the zone of the sphere down to `zB` less the solid under the torus (or the frustum), from the meridian's closed form; the area matches the cap's less the annulus and the zone plus the blend; the `Torus` has `Major = ρc` and `Minor = r`, the `Cone` starts at the narrower setback circle; `VerifyAll` passes | drop R6 from dispatch: SX9 |
 | R6 two-distance chamfer, and both rims of a twice-cut ball | the plane takes `dA`, the sphere's meridian `dB`; the second rim is found again on the partly blended body | |

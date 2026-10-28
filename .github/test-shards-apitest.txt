@@ -1424,6 +1424,11 @@
 10	0.01	TestPatternJoinFoldRefusalLeavesEveryBodyLive
 10	0.01	TestPatternJoinFoldsRoundPinsIntoAMeshPlate
 10	0.01	TestMeshSolidShellAndOffsetAgreeWithTheCubeByCubeErosionAndDilation
+10	0.01	TestFilletOfTheTopLoopOfAMeshBoxMeetsInMitres
+10	0.01	TestFilletOfTwoTopEdgesAtACornerMeetsInAMitre
+10	0.01	TestFilletOfThreeTopEdgesWhoseFreeEndsShareAFaceIsRefused
+10	0.01	TestFilletOfThreeEdgesAtACornerStaysRefused
+10	0.01	TestFilletOfMitredEdgesRefusesAFaceBoundaryInTheirReach
 5	0.00	TestReadSTEPHandWrittenPlateWithAHoleAndInches
 5	0.01	TestReadSTEPReadsPartialCylinderWalls
 5	0.00	TestReadThreeMFKeepsAMirroredCubeRightWayOut
