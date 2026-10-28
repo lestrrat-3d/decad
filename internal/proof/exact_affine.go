@@ -2,6 +2,7 @@ package proof
 
 import (
 	"math/big"
+	"math/bits"
 
 	"github.com/lestrrat-3d/r3"
 )
@@ -42,28 +43,112 @@ func XhpOfDyadics(dx, dy, dz Dyadic) Xhp {
 	lower(dx)
 	lower(dy)
 	lower(dz)
-	// The usual float-derived coordinates fit in three words each. Bound
-	// every segment's capacity so growth allocates independent storage rather
-	// than overwriting another coordinate. Larger integers grow as usual.
-	storage := new(struct {
-		coordinates [4]big.Int
-		words       [12]big.Word
-	})
-	out := Xhp{X: &storage.coordinates[0], Y: &storage.coordinates[1], Z: &storage.coordinates[2], W: &storage.coordinates[3]}
-	coord := func(dst *big.Int, words []big.Word, d Dyadic) {
-		if d.IsZero() {
-			return
+	// Bound all four integers' capacity to the largest shifted coordinate or
+	// denominator. Small points then keep the same one allocation with less
+	// unused word storage; large integers retain the existing three-word margin
+	// before big.Int grows independently.
+	maxBits := -base + 1
+	for _, d := range [3]Dyadic{dx, dy, dz} {
+		if !d.IsZero() {
+			maxBits = max(maxBits, d.bitLen()+d.Exp()-base)
 		}
-		dst.SetBits(words[:0:len(words)])
-		d.MantInto(dst)
-		dst.Lsh(dst, uint(d.Exp()-base))
 	}
-	coord(out.X, storage.words[0:3], dx)
-	coord(out.Y, storage.words[3:6], dy)
-	coord(out.Z, storage.words[6:9], dz)
-	out.W.SetBits(storage.words[9:9:12])
-	out.W.Lsh(big.NewInt(1), uint(-base))
-	return out
+	wordsPerInt := min(3, (maxBits+bits.UintSize-1)/bits.UintSize)
+	fill := func(coordinates *[4]big.Int, words []big.Word) Xhp {
+		out := Xhp{X: &coordinates[0], Y: &coordinates[1], Z: &coordinates[2], W: &coordinates[3]}
+		coord := func(index int, dst *big.Int, d Dyadic) {
+			if d.IsZero() {
+				return
+			}
+			start := index * wordsPerInt
+			dst.SetBits(words[start : start : start+wordsPerInt])
+			d.MantInto(dst)
+			shiftBigIntWithinCapacity(dst, uint(d.Exp()-base))
+		}
+		coord(0, out.X, dx)
+		coord(1, out.Y, dy)
+		coord(2, out.Z, dz)
+		start := 3 * wordsPerInt
+		out.W.SetBits(words[start : start : start+wordsPerInt])
+		setShiftedOne(out.W, uint(-base))
+		return out
+	}
+	switch wordsPerInt {
+	case 1:
+		storage := new(struct {
+			coordinates [4]big.Int
+			words       [4]big.Word
+		})
+		return fill(&storage.coordinates, storage.words[:])
+	case 2:
+		storage := new(struct {
+			coordinates [4]big.Int
+			words       [8]big.Word
+		})
+		return fill(&storage.coordinates, storage.words[:])
+	default:
+		storage := new(struct {
+			coordinates [4]big.Int
+			words       [12]big.Word
+		})
+		return fill(&storage.coordinates, storage.words[:])
+	}
+}
+
+// shiftBigIntWithinCapacity left-shifts z in its existing word storage. The
+// caller sized that storage for the shifted value. A larger value falls back
+// to big.Int.Lsh, which allocates independent storage as usual.
+func shiftBigIntWithinCapacity(z *big.Int, shift uint) {
+	if shift == 0 || z.Sign() == 0 {
+		return
+	}
+	words := z.Bits()
+	oldLength := len(words)
+	wordShift, bitShift := int(shift/bits.UintSize), shift%bits.UintSize
+	length := len(words) + wordShift
+	var carry big.Word
+	if bitShift != 0 {
+		carry = words[len(words)-1] >> (bits.UintSize - bitShift)
+		if carry != 0 {
+			length++
+		}
+	}
+	if length > cap(words) {
+		z.Lsh(z, shift)
+		return
+	}
+	negative := z.Sign() < 0
+	words = words[:length]
+	for i := oldLength - 1; i >= 0; i-- {
+		word := words[i]
+		at := i + wordShift
+		words[at] = word << bitShift
+		if bitShift != 0 && i > 0 {
+			words[at] |= words[i-1] >> (bits.UintSize - bitShift)
+		}
+	}
+	if bitShift != 0 && carry != 0 {
+		words[oldLength+wordShift] = carry
+	}
+	clear(words[:wordShift])
+	z.SetBits(words)
+	if negative {
+		z.Neg(z)
+	}
+}
+
+// setShiftedOne writes 2^shift into z's reserved words when it fits there.
+func setShiftedOne(z *big.Int, shift uint) {
+	words := z.Bits()
+	wordShift, bitShift := int(shift/bits.UintSize), shift%bits.UintSize
+	if wordShift >= cap(words) {
+		z.Lsh(big.NewInt(1), shift)
+		return
+	}
+	words = words[:wordShift+1]
+	clear(words)
+	words[wordShift] = big.Word(1) << bitShift
+	z.SetBits(words)
 }
 
 // XptDenotes reports whether the exact point p is exactly the float vertex v,
