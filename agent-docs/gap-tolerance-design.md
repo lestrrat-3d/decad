@@ -167,6 +167,13 @@ runs the Boolean again with the second operand moved:
    farthest vertex's. An edge graze or a point touch is not grown across, because the sign of the growth would decide a
    tangency that stays refused. A tool that only touches a Cut target, grown, notches the target by the growth, which the
    bound covers.
+6. A Union whose contacts are all flush faces (none Decisive, none with Slack, the exact predicates' coplanar refusal)
+   is tried first by shrinking the second operand about its centre (`growShifted` with `shrink`), steps from the least
+   up: the second operand then lies strictly inside the first, so the union is the first operand's own faces and
+   leaves no sliver for the next Boolean of a chain to meet, where a translation protrudes by the shift at one end. A
+   held curved operand needs the shrink to pass its own chord bound, so the steps climb to it. When no shrink stands,
+   the translations of items 1 to 4 run as before. Where this is the first step of a chain (`PatternJoin` of round pins
+   into a mesh plate), the result keeps the plate's six faces and the volume of the plate.
 4. Each connected piece of the second operand (the teeth of a gear tool, for one) is moved on its own, along the
    directions and by the length its own contacts ask for, and a piece no contact names stays where it is. Each
    piece's displacement is charged to its own vertices and faces, the mesh bound takes the largest, and the swept

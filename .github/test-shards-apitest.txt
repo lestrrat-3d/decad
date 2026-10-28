@@ -1422,6 +1422,7 @@
 10	0.01	TestQuarterTurnAgreesWithTheTurnedCubes
 10	0.01	TestPatternJoinFoldsPolygonalPinsIntoAMeshPlate
 10	0.01	TestPatternJoinFoldRefusalLeavesEveryBodyLive
+10	0.01	TestPatternJoinFoldsRoundPinsIntoAMeshPlate
 10	0.01	TestMeshSolidShellAndOffsetAgreeWithTheCubeByCubeErosionAndDilation
 5	0.00	TestReadSTEPHandWrittenPlateWithAHoleAndInches
 5	0.01	TestReadSTEPReadsPartialCylinderWalls

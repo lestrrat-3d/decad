@@ -28,6 +28,25 @@ func TestPatternJoinFoldsPolygonalPinsIntoAMeshPlate(t *testing.T) {
 	require.NoError(t, err)
 	require.InDelta(t, 7500, volume.Value.Base(), volume.Bound.Base()+1e-9, "the pins lie inside the plate")
 	require.Less(t, volume.Bound.Base(), 0.1)
+	require.Len(t, out.Faces(), 6, "the shrunk pins lie inside the plate, so the plate's own six faces are all there is")
+}
+
+func TestPatternJoinFoldsRoundPinsIntoAMeshPlate(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	plate := slantedPlate(t, doc)
+	// Round pins of radius 3 about (8, 15), stepped 4 mm along y: the walls of neighbouring pins cross, and the caps are
+	// flush with the plate's faces. A round pin is held within its chord tolerance, so the shrink that keeps it inside
+	// the plate must pass that bound, and the result's bound states it.
+	out, err := decad.PatternJoin(t.Context(), plate, flushPin(t, doc),
+		decad.LinearPattern{Dir: r3.NewVec(0, 1, 0), Step: units.Millimeters(4), Count: 3})
+	require.NoError(t, err)
+	require.Equal(t, []*decad.Body{out}, doc.Bodies())
+	volume, err := out.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, 7500, volume.Value.Base(), volume.Bound.Base()+1e-9)
+	require.Less(t, volume.Bound.Base(), 5.0)
+	require.Len(t, out.Faces(), 6)
 }
 
 func TestPatternJoinFoldRefusalLeavesEveryBodyLive(t *testing.T) {
