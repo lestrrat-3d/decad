@@ -126,11 +126,22 @@ func (w *work) checkStripClear(ctx context.Context, stripFrom int) error {
 			}
 			if contact.Kind != meshbool.ContactNone {
 				return fmt.Errorf("%w: the blend meets another facet of the body at %v", decaderr.ErrUnsupported,
-					contact.P0.Vec())
+					contactAt(contact, re.f))
 			}
 		}
 	}
 	return nil
+}
+
+// contactAt is a point of a contact between a strip facet and the rest facet
+// with corners rest. A point or segment contact carries its exact end point;
+// a coplanar region contact carries none, so the rest facet's first corner
+// stands for it.
+func contactAt(c meshbool.TriContact, rest [3]r3.Vec) r3.Vec {
+	if c.Kind == meshbool.ContactPoint || c.Kind == meshbool.ContactSegment {
+		return c.P0.Vec()
+	}
+	return rest[0]
 }
 
 // boxGrid buckets the strip facets' boxes in a uniform grid over their joint
@@ -168,7 +179,16 @@ func cell(x, lo, size float64, n int) int {
 	if !(size > 0) {
 		return 0
 	}
-	return min(max(int(math.Floor((x-lo)/size)), 0), n-1)
+	// Clamp before converting: a float outside int's range converts to an
+	// implementation-defined value, which would break the monotone order.
+	q := math.Floor((x - lo) / size)
+	if q >= float64(n-1) {
+		return n - 1
+	}
+	if !(q > 0) {
+		return 0
+	}
+	return int(q)
 }
 
 func (g *boxGrid) visit(b facetBox, f func(int)) {
