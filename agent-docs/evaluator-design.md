@@ -1641,7 +1641,8 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   verification §6, answered outright on this evaluator's own payloads
   (`internal/verifyrun/survey.go`, `internal/survey2d/`, `internal/revolvesurvey/`): prism/revolve wall reduces exactly to the 2D
   spanning-disk problem (a prism's profile with the height as the vertical
-  fit; a revolve's meridian section, mirrored for a full turn). `Verify`
+  fit; a revolve's meridian section, mirrored for a full turn, where an arc
+  centred exactly on the axis and its mirror read as one circle). `Verify`
   passes one shared work counter through the prism/revolve survey; candidate
   generation streams each disk directly into validation, and generation,
   validation, containment, and boundary scans all poll that counter. A

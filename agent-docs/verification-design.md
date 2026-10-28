@@ -1870,7 +1870,19 @@ that pinches a wall to zero are exact facts of the surfaces, so an analytic
 evaluator decides the reading — and the absence — outright, the boundary
 case included: a wall drafted at exactly α spans — within is inclusive,
 above — and an exact evaluator reads its thinnest spanning ball like any
-other wall's. The prism/revolve analytic survey streams each closed-form
+other wall's.
+
+A full turn's section is the meridian united with its mirror across the axis.
+An arc whose recorded centre lies exactly on the axis (radial coordinate zero
+with a zero bound) lies on one circle with its mirror, with the material on one
+side, so no disk lies between the two and the survey generates no candidate for
+that pair. A hollow sphere reads its shell thickness, a ball its diameter, a
+hemisphere its angle-limit ball, and a ball cut flat at both poles the
+separation of its flats. A centre on the axis only within rounding, such as one
+on a tilted axis or snapped onto it, keeps the pair, whose zero-width candidate
+leaves the survey undecided (`Suspect`).
+
+The prism/revolve analytic survey streams each closed-form
 candidate into validation instead of retaining the full cubic candidate set.
 Its generation, validation, containment, and boundary scans share `Verify`'s
 work counter, which checks cancellation at least every 256 candidate

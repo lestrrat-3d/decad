@@ -40,6 +40,7 @@ func WallReading(
 	var verts [][2]float64
 	pinch := false
 	axisTouch := false
+	carrier := 0
 	for _, loop := range loops {
 		n := len(loop)
 		single := n == 1 && loop[0].Closed
@@ -67,9 +68,21 @@ func WallReading(
 			if !ok {
 				return survey2d.WallReading{}, nil
 			}
-			elems = append(elems, el)
 			if full {
-				elems = append(elems, survey2d.MirrorElem(el))
+				// An arc centred exactly on the axis lies on one circle with
+				// its own mirror, the material on one side: the pair is a
+				// carrier pair and bounds no web. Each pair takes its own id,
+				// because one id names one proven circle: two concentric
+				// on-axis arcs (a hollow sphere's two skins) are two circles,
+				// and the shell between them is read as usual.
+				m := survey2d.MirrorElem(el)
+				if OnAxisCentre(w) {
+					carrier++
+					el.Carrier, m.Carrier = carrier, carrier
+				}
+				elems = append(elems, el, m)
+			} else {
+				elems = append(elems, el)
 			}
 			if single {
 				continue
@@ -183,6 +196,15 @@ func WallReading(
 		return survey2d.WallReading{}, nil
 	}
 	return survey2d.WallReading{Reading: &best, Bound: bestBound, Ok: true}, nil
+}
+
+// OnAxisCentre reports a circular walk whose recorded centre lies exactly on
+// the revolve axis: its radial coordinate is zero and the axis frame's
+// re-expression of it committed no error (CVBound, which also carries the
+// section displacement charge). A centre on the axis only within rounding — a
+// tilted axis, or a centre snapped onto it — answers false.
+func OnAxisCentre(w survey2d.SideWalk) bool {
+	return w.IsCircular() && w.CV == 0 && w.CVBound == 0
 }
 
 // RadiusAggregate is the tightest concave radius over a revolved body's
