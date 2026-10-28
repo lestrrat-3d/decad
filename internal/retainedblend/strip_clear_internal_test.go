@@ -128,20 +128,20 @@ func TestCheckStripClear(t *testing.T) {
 		t.Parallel()
 		verts := append(append([]r3.Vec(nil), base...),
 			r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 1), r3.NewVec(0, 1, 1))
-		require.NoError(t, stripWork(verts, [][3]int{{3, 4, 5}}, strip).checkStripClear(t.Context(), 0))
+		require.NoError(t, stripWork(verts, [][3]int{{3, 4, 5}}, strip).checkStripClear(t.Context(), 0, nil))
 	})
 
 	t.Run("a facet sharing a vertex with the strip is not tested", func(t *testing.T) {
 		t.Parallel()
 		verts := append(append([]r3.Vec(nil), base...), r3.NewVec(4, 4, 0), r3.NewVec(4, 0, 1))
-		require.NoError(t, stripWork(verts, [][3]int{{1, 3, 4}}, strip).checkStripClear(t.Context(), 0))
+		require.NoError(t, stripWork(verts, [][3]int{{1, 3, 4}}, strip).checkStripClear(t.Context(), 0, nil))
 	})
 
 	t.Run("a crossing facet is refused at its contact", func(t *testing.T) {
 		t.Parallel()
 		verts := append(append([]r3.Vec(nil), base...),
 			r3.NewVec(1, 1, -1), r3.NewVec(1, 1, 1), r3.NewVec(1, 3, 1))
-		err := stripWork(verts, [][3]int{{3, 4, 5}}, strip).checkStripClear(t.Context(), 0)
+		err := stripWork(verts, [][3]int{{3, 4, 5}}, strip).checkStripClear(t.Context(), 0, nil)
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 		// The facet meets the strip along the segment from (1,1,0) to (1,2,0).
 		require.Regexp(t, `the blend meets another facet of the body at \{1 [12] 0\}`, err.Error())
@@ -151,7 +151,7 @@ func TestCheckStripClear(t *testing.T) {
 		t.Parallel()
 		verts := append(append([]r3.Vec(nil), base...),
 			r3.NewVec(1, 1, 0), r3.NewVec(2, 1, 0), r3.NewVec(1, 2, 0))
-		err := stripWork(verts, [][3]int{{3, 4, 5}}, strip).checkStripClear(t.Context(), 0)
+		err := stripWork(verts, [][3]int{{3, 4, 5}}, strip).checkStripClear(t.Context(), 0, nil)
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 		require.ErrorContains(t, err, "the blend meets another facet of the body at {1 1 0}")
 	})
@@ -160,8 +160,22 @@ func TestCheckStripClear(t *testing.T) {
 		t.Parallel()
 		verts := append(append([]r3.Vec(nil), base...),
 			r3.NewVec(1, 1, -1), r3.NewVec(1, 1, 0), r3.NewVec(1, 1, 1))
-		err := stripWork(verts, [][3]int{{3, 4, 5}}, strip).checkStripClear(t.Context(), 0)
+		err := stripWork(verts, [][3]int{{3, 4, 5}}, strip).checkStripClear(t.Context(), 0, nil)
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 		require.ErrorContains(t, err, "the blend's clearance from a flat facet is undecided")
+	})
+
+	t.Run("a facet crossing a taken cap is refused", func(t *testing.T) {
+		t.Parallel()
+		// w.out holds the cap at z = 0 and then the strip at z = 5; the held
+		// facet crosses the cap only.
+		verts := append(append([]r3.Vec(nil), base...),
+			r3.NewVec(0, 0, 5), r3.NewVec(4, 0, 5), r3.NewVec(0, 4, 5),
+			r3.NewVec(1, 1, -1), r3.NewVec(1, 1, 1), r3.NewVec(1, 3, 1))
+		w := stripWork(verts, [][3]int{{6, 7, 8}}, [][3]int{{0, 1, 2}, {3, 4, 5}})
+		require.NoError(t, w.checkStripClear(t.Context(), 1, nil), "the strip alone is clear")
+		err := w.checkStripClear(t.Context(), 1, [][2]int{{0, 1}})
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.Regexp(t, `the cap an end face takes meets another facet of the body at \{1 [12] 0\}`, err.Error())
 	})
 }

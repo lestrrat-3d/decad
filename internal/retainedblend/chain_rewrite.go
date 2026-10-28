@@ -265,19 +265,6 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 	if err != nil {
 		return nil, err
 	}
-	if open {
-		// The corner table of §5.5 step 5: the base and the wall are convex at
-		// each straight end.
-		for k, ec := range ecuts {
-			en := entries[0]
-			if k == 1 {
-				en = entries[n-1]
-			}
-			if err := w.checkEndTurns(ec, loop, en.wallIx, nP, margin); err != nil {
-				return nil, err
-			}
-		}
-	}
 	tP, tW := entries[0].step.planeSetback(), entries[0].step.wallSetback()
 
 	// The rows of a cross-section. They run from P along the walls on the
@@ -410,8 +397,18 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 				break
 			}
 		}
-		for _, ec := range ecuts {
-			if err := w.readEndCut(ec, nP, tP, tW, margin, slack); err != nil {
+		// The base loop leaves the first corner along the chain and enters
+		// the last one along it; its other neighbour lies on G ∩ P.
+		k := len(loop)
+		uP := [2]int{loop[(pos[0]+k-1)%k], loop[(pos[n]+1)%k]}
+		rc := [2]r3.Vec{entries[0].d, entries[n-1].d.Scale(-1)}
+		for i, ec := range ecuts {
+			if err := w.readEndCut(ec, nP, uP[i], tP, tW, margin, slack); err != nil {
+				return nil, err
+			}
+			// The corner table of §5.5 step 5: the base and the wall are
+			// convex at each straight end.
+			if err := checkEndTurns(ec, rc[i], nP, i == 0); err != nil {
 				return nil, err
 			}
 		}
@@ -541,6 +538,7 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 
 	// The end faces give way to the end columns.
 	var removedTrue, blendTrue float64
+	var taken [][2]int
 	if open {
 		seqs := make([][]int, len(ecuts))
 		for i := range ecuts {
@@ -550,11 +548,12 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 			}
 			seqs[i] = append(append([]int(nil), jrows[col]...), seam[col])
 		}
-		corners, err := w.rebuildEnds(ecuts[:], seqs, spec.fillet, spec.r, tP, tW)
+		corners, caps, err := w.rebuildEnds(ecuts[:], seqs, spec.fillet, spec.r, tP, tW)
 		if err != nil {
 			return nil, err
 		}
 		removedTrue += corners
+		taken = caps
 	}
 
 	// The strips.
@@ -623,7 +622,7 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		groups[g].Centroid = measurement.VecMeasurement{}
 	}
 	w.removedTrue = removedTrue
-	if err := w.checkStripClear(ctx, stripFrom); err != nil {
+	if err := w.checkStripClear(ctx, stripFrom, taken); err != nil {
 		return nil, err
 	}
 	return w.build(ctx, env, groups, stripFrom, blendTag{trueArea: blendTrue}, faceIndex)

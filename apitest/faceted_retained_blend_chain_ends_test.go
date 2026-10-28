@@ -59,6 +59,60 @@ func requireFaceAreaChange(t *testing.T, before, after *decad.Body, x0, want flo
 	require.InDelta(t, want, got, bound)
 }
 
+// requireCapSide checks, at a point p of the plane x = x0 just inside the
+// corner of each cap, whether the end face covers the cap after the blend. A
+// face that gives the cap up lies about 0.34 from p, past the blend's arc, so
+// its distance, less its bound, exceeds a tenth of a millimetre; a face that
+// takes the cap lies within a hundredth of it, bound included.
+func requireCapSide(t *testing.T, b *decad.Body, x0 float64, covered bool, ps ...r3.Vec) {
+	t.Helper()
+	face := planeFaceAtX(t, b, x0)
+	for _, p := range ps {
+		d, err := face.DistanceToPoint(t.Context(), p, units.Millimeters(0.1))
+		require.NoError(t, err)
+		t.Logf("face x = %g distance to %v: %.6f, bound %.3g", x0, p, d.Value.Mag(), d.Bound.Mag())
+		if covered {
+			require.Less(t, d.Value.Mag()+d.Bound.Mag(), 0.01, "the end face does not take the cap at %v", p)
+			continue
+		}
+		require.Greater(t, d.Value.Mag()-d.Bound.Mag(), 0.1, "the end face keeps the cap at %v", p)
+	}
+}
+
+// slotWithCube is roundedPocket(t, false) joined with a box over
+// x = x0 … x1, y = y0 … y0 + 0.1, z = 5.05 … 5.15: where it crosses x = 0 it
+// passes through the cap the x = 0 face takes at the slot's corner (0,10,5)
+// for y0 = 10.05, or (0,30,5) for y0 = 29.85.
+func slotWithCube(t *testing.T, x0, x1, y0 float64) *decad.Body {
+	t.Helper()
+	w, doc := sketch.NewWorld(), decad.New()
+	plate := rectBox(t, w, doc, 0, 0, 40, 40, 10)
+	up := decad.ParallelTo(r3.NewVec(0, 0, 1))
+	tool, err := decad.Fillet(t.Context(), rectBox(t, w, doc, -10, 10, 30, 30, 20),
+		decad.Edges(up, decad.EndpointAt(r3.NewVec(30, 10, 0))).Or(up, decad.EndpointAt(r3.NewVec(30, 30, 0))).Exactly(2),
+		units.Millimeters(concaveR))
+	require.NoError(t, err)
+	pocket, err := decad.Cut(t.Context(), plate, placed(t, tool, 5))
+	require.NoError(t, err)
+	joined, err := decad.Union(t.Context(), pocket, placed(t, rectBox(t, w, doc, x0, y0, x1, y0+0.1, 0.1), 5.05))
+	require.NoError(t, err)
+	return joined
+}
+
+// ledgeWithCavity is ledgeOnWall(t, 5, 2) with a closed cavity over
+// x = 9.9 … 10.9, y = y0 … y0 + 0.1, z = 9.85 … 9.95: it crosses the x = 10
+// plane inside the cap the wall takes at the ledge's corner (10,10,10) for
+// y0 = 10.05, or (10,30,10) for y0 = 29.85, and its part in the ledge lies
+// wholly in the corner the fillet removes.
+func ledgeWithCavity(t *testing.T, y0 float64) *decad.Body {
+	t.Helper()
+	w, doc := sketch.NewWorld(), decad.New()
+	joined := ledgeOnWallIn(t, w, doc, 5, 2)
+	out, err := decad.Cut(t.Context(), joined, placed(t, rectBox(t, w, doc, 9.9, y0, 10.9, y0+0.1, 0.1), 9.85))
+	require.NoError(t, err)
+	return out
+}
+
 // xEdgeAt selects the one x-parallel edge that ends at p.
 func xEdgeAt(p r3.Vec) decad.EdgeSelector {
 	return decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)), decad.EndpointAt(p)).Exactly(1)
@@ -88,7 +142,12 @@ func blindPocket(t *testing.T) *decad.Body {
 // reflex where the ledge stands out of it.
 func ledgeOnWall(t *testing.T, x0 float64, corners int) *decad.Body {
 	t.Helper()
-	w, doc := sketch.NewWorld(), decad.New()
+	return ledgeOnWallIn(t, sketch.NewWorld(), decad.New(), x0, corners)
+}
+
+// ledgeOnWallIn is ledgeOnWall built in w and doc.
+func ledgeOnWallIn(t *testing.T, w *sketch.World, doc *decad.Document, x0 float64, corners int) *decad.Body {
+	t.Helper()
 	wall := rectBox(t, w, doc, 0, 0, 10, 40, 30)
 	up := decad.ParallelTo(r3.NewVec(0, 0, 1))
 	vertical := decad.Edges(up, decad.EndpointAt(r3.NewVec(30, 10, 0))).Or(up, decad.EndpointAt(r3.NewVec(30, 30, 0)))
@@ -167,6 +226,7 @@ func TestFacetedRetainedBlendChainEnds(t *testing.T) {
 		require.NoError(t, err)
 		requireVolumeChange(t, before, after, chainEndFillet(17+14+17))
 		requireFaceAreaChange(t, joined, out, 10, 2*chainEndCap)
+		requireCapSide(t, out, 10, true, r3.NewVec(10, 10.05, 9.95), r3.NewVec(10, 29.95, 9.95))
 		cylinders, tori, majors := blendKinds(out, r)
 		require.Equal(t, 3, cylinders)
 		require.Equal(t, 2, tori)
@@ -188,6 +248,7 @@ func TestFacetedRetainedBlendChainEnds(t *testing.T) {
 		require.NoError(t, err)
 		requireVolumeChange(t, before, after, -chainEndFillet(27+14+27))
 		requireFaceAreaChange(t, pocket, out, 0, 2*chainEndCap)
+		requireCapSide(t, out, 0, true, r3.NewVec(0, 10.05, 5.05), r3.NewVec(0, 29.95, 5.05))
 		requireBlendsFaceVoid(t, out, 5)
 		requireVerifiedMesh(t, out)
 	})
@@ -204,6 +265,7 @@ func TestFacetedRetainedBlendChainEnds(t *testing.T) {
 		require.NoError(t, err)
 		requireVolumeChange(t, before, after, -(27+14+27+math.Pi*(concaveR-1.0/3))/2)
 		requireFaceAreaChange(t, pocket, out, 0, 2*0.5)
+		requireCapSide(t, out, 0, true, r3.NewVec(0, 10.05, 5.05), r3.NewVec(0, 29.95, 5.05))
 		requireVerifiedMesh(t, out)
 	})
 
@@ -219,6 +281,7 @@ func TestFacetedRetainedBlendChainEnds(t *testing.T) {
 		require.NoError(t, err)
 		requireVolumeChange(t, before, after, -chainEndFillet(17+14+17))
 		requireFaceAreaChange(t, pocket, out, 10, -2*chainEndCap)
+		requireCapSide(t, out, 10, false, r3.NewVec(10, 10.05, 5.05), r3.NewVec(10, 29.95, 5.05))
 		requireBlendsFaceVoid(t, out, 5)
 		requireVerifiedMesh(t, out)
 	})
@@ -235,7 +298,50 @@ func TestFacetedRetainedBlendChainEnds(t *testing.T) {
 		require.NoError(t, err)
 		requireVolumeChange(t, before, after, chainEndFillet(37+14+37))
 		requireFaceAreaChange(t, tongue, out, 0, -2*chainEndCap)
+		requireCapSide(t, out, 0, false, r3.NewVec(0, 0.05, 19.95), r3.NewVec(0, 19.95, 19.95))
+		cylinders, tori, majors := blendKinds(out, concaveFilletR)
+		require.Equal(t, 3, cylinders)
+		require.Equal(t, 2, tori)
+		for _, m := range majors {
+			// The material lies inside the arcs' circle: the tube centre is R − r.
+			require.InDelta(t, concaveR-concaveFilletR, m, 1e-12)
+		}
 		requireVerifiedMesh(t, out)
+	})
+
+	t.Run("a solid crossing the cap a slot's end face takes is refused", func(t *testing.T) {
+		t.Parallel()
+		// The box crosses x = 0 inside the cap at either end and misses the
+		// strip.
+		for _, y0 := range []float64{10.05, 29.85} {
+			_, err := decad.Fillet(t.Context(), slotWithCube(t, -0.9, 0.1, y0), xEdgeAt(r3.NewVec(27, 10, 5)),
+				units.Millimeters(concaveFilletR), decad.WithTangentChain())
+			require.ErrorIs(t, err, decad.ErrUnsupported, "y0 = %g", y0)
+			require.ErrorContains(t, err, "the cap an end face takes meets another facet of the body at", "y0 = %g", y0)
+		}
+	})
+
+	t.Run("a solid clear of the cap a slot's end face takes is kept", func(t *testing.T) {
+		t.Parallel()
+		joined := slotWithCube(t, -1, -0.2, 10.05)
+		before, err := joined.Volume()
+		require.NoError(t, err)
+		out, err := decad.Fillet(t.Context(), joined, xEdgeAt(r3.NewVec(27, 10, 5)), units.Millimeters(concaveFilletR),
+			decad.WithTangentChain())
+		require.NoError(t, err)
+		after, err := out.Volume()
+		require.NoError(t, err)
+		requireVolumeChange(t, before, after, -chainEndFillet(27+14+27))
+	})
+
+	t.Run("a cavity crossing the cap a reflex foot's wall takes is refused", func(t *testing.T) {
+		t.Parallel()
+		for _, y0 := range []float64{10.05, 29.85} {
+			_, err := decad.Fillet(t.Context(), ledgeWithCavity(t, y0), xEdgeAt(r3.NewVec(27, 10, 10)),
+				units.Millimeters(concaveFilletR), decad.WithTangentChain())
+			require.ErrorIs(t, err, decad.ErrUnsupported, "y0 = %g", y0)
+			require.ErrorContains(t, err, "the cap an end face takes meets another facet of the body at", "y0 = %g", y0)
+		}
 	})
 
 	t.Run("an end whose wall wraps the corner is refused", func(t *testing.T) {

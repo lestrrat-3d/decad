@@ -4,28 +4,93 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
 
-func TestTurnAt(t *testing.T) {
+func TestCornerTurn(t *testing.T) {
 	t.Parallel()
+	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
 
-	// An L-shaped loop, counter-clockwise about +z: a convex corner at 1, a
-	// reflex one at 3, and vertex 6 on the straight run from 5 to 0.
-	w := &work{verts: []r3.Vec{
-		{X: 0, Y: 0}, {X: 2, Y: 0}, {X: 2, Y: 1}, {X: 1, Y: 1}, {X: 1, Y: 2}, {X: 0, Y: 2}, {X: 0, Y: 1},
-	}}
-	loop := []int{0, 1, 2, 3, 4, 5, 6}
-	up := r3.NewVec(0, 0, 1)
-	const margin = 1e-9
+	// A loop that enters a corner along the +y line, travelling toward -y,
+	// and leaves along +x turns left about +z: the face is convex there.
+	require.Equal(t, 1, cornerTurn(y, x, z), "a convex corner")
+	require.Equal(t, -1, cornerTurn(x, y, z), "a reflex corner")
+	require.Equal(t, -1, cornerTurn(y, x, z.Scale(-1)), "the other side of the face")
+	require.Equal(t, 0, cornerTurn(x, x.Scale(-1), z), "a straight run is undecided")
+	require.Equal(t, 0, cornerTurn(x, r3.NewVec(1, 1e-12, 0), z), "lines too near parallel are undecided")
+}
 
-	require.Equal(t, 1, w.turnAt(loop, 1, up, margin), "a convex corner")
-	require.Equal(t, -1, w.turnAt(loop, 3, up, margin), "a reflex corner")
-	require.Equal(t, 0, w.turnAt(loop, 6, up, margin), "a straight run is undecided")
-	require.Equal(t, -1, w.turnAt(loop, 1, up.Scale(-1), margin), "the other side of the face")
-	require.Equal(t, 0, w.turnAt([]int{0, 2, 4}, 1, up, margin), "a loop without the vertex")
-	require.Equal(t, 0, w.turnAt(loop, 1, up, 1), "a turn inside the margin is undecided")
+func TestEndFaceTurn(t *testing.T) {
+	t.Parallel()
+	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
+	neg := func(v r3.Vec) r3.Vec { return v.Scale(-1) }
+	cases := []struct {
+		name string
+		ec   chainEndCut
+		want int
+	}{
+		// The tongue's x = 0 face, outward -x, at (0,0,20) and (0,20,20).
+		{"the tongue's first end", chainEndCut{rP: y, rW: neg(z), g: plane{n: neg(x)}}, 1},
+		{"the tongue's last end", chainEndCut{rP: neg(y), rW: neg(z), g: plane{n: neg(x)}, prevP: true}, 1},
+		// The wall's x = 10 face, outward +x, at (10,10,10) and (10,30,10).
+		{"the reflex foot's first end", chainEndCut{rP: y, rW: neg(z), g: plane{n: x}}, -1},
+		{"the reflex foot's last end", chainEndCut{rP: neg(y), rW: neg(z), g: plane{n: x}, prevP: true}, -1},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, c.want, c.ec.endFaceTurn())
+		})
+	}
+}
+
+func TestCheckEndTurns(t *testing.T) {
+	t.Parallel()
+	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
+	neg := func(v r3.Vec) r3.Vec { return v.Scale(-1) }
+
+	t.Run("a box corner's first end is convex in base and wall", func(t *testing.T) {
+		t.Parallel()
+		// The tongue's end at (0,0,20): the chain leaves along +x, G ∩ P runs
+		// +y and G ∩ wall -z; the wall y = 0 faces -y.
+		ec := &chainEndCut{rP: y, rW: neg(z), wallN: neg(y)}
+		require.NoError(t, checkEndTurns(ec, x, z, true))
+	})
+
+	t.Run("a wall that wraps the corner is refused", func(t *testing.T) {
+		t.Parallel()
+		// The step's end at (10,0,10): G ∩ wall runs up the riser.
+		ec := &chainEndCut{rP: y, rW: z, wallN: neg(y)}
+		err := checkEndTurns(ec, x, z, true)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "a chain end's base or wall is reflex at the corner")
+	})
+
+	t.Run("a base that wraps the corner is refused", func(t *testing.T) {
+		t.Parallel()
+		// The pocket mouth's last end at (10,10,10): the base loop enters
+		// along the chain from +x; the wall y = 10 faces +y.
+		ec := &chainEndCut{rP: y, rW: neg(z), wallN: y}
+		err := checkEndTurns(ec, x, z, false)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "a chain end's base or wall is reflex at the corner")
+	})
+
+	t.Run("an undecided turn is refused with its own text", func(t *testing.T) {
+		t.Parallel()
+		ec := &chainEndCut{rP: x, rW: neg(z), wallN: neg(y)}
+		err := checkEndTurns(ec, x, z, true)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "a chain end's base or wall turn at the corner is undecided")
+	})
+
+	t.Run("an arc end is read elsewhere", func(t *testing.T) {
+		t.Parallel()
+		ec := &chainEndCut{rP: y, rW: z, wallN: neg(y), arc: &arcEnd{}}
+		require.NoError(t, checkEndTurns(ec, x, z, true))
+	})
 }
 
 func TestChainEndCapArea(t *testing.T) {

@@ -39,6 +39,9 @@ type chainEndCut struct {
 	// reflex is set when G is reflex at the corner: the blend's end cap then
 	// lies outside G, and G takes it in place of giving it up.
 	reflex bool
+	// rP and rW are the unit directions from the corner along G ∩ P and
+	// G ∩ wall toward the end face's chains.
+	rP, rW r3.Vec
 
 	// arc is set when the chain's end edge is an arc: the end curve is then a
 	// chain of exact points, not a quarter circle (chain_arc_end.go).
@@ -95,8 +98,12 @@ func (w *work) readEndCorner(v *topo.Vertex, e *topo.Edge, base *topo.Face, bp p
 
 // readEndCut reads the end face's loop around the corner: the chains leaving
 // the corner along G ∩ P and G ∩ wall, which of them the setback removes, G's
-// turn at the corner, and the gates of blend §5.0 step 2 and blend SR5.
-func (w *work) readEndCut(ec *chainEndCut, nP r3.Vec, tP, tW, margin, slack float64) error {
+// turn at the corner, and the gates of blend §5.0 step 2 and blend SR5. uP is
+// the base loop's neighbour of the corner along G ∩ P. The held mesh is
+// oriented, so G's loop runs the shared edge from the corner to uP the other
+// way round: that, and not a vertex's distance from either line, tells which
+// way G's loop leaves along G ∩ P.
+func (w *work) readEndCut(ec *chainEndCut, nP r3.Vec, uP int, tP, tW, margin, slack float64) error {
 	var err error
 	if ec.fl, err = w.faceLoops(ec.faceIx, &ec.g); err != nil {
 		return err
@@ -123,39 +130,23 @@ func (w *work) readEndCut(ec *chainEndCut, nP r3.Vec, tP, tW, margin, slack floa
 	onLine := func(x int, dir r3.Vec) bool {
 		return distToLine(w.verts[x], ec.exact, dir) <= w.beta[x]+slack
 	}
+	stepP := 0
+	switch uP {
+	case loop[(at+1)%n]:
+		stepP = 1
+	case loop[(at+n-1)%n]:
+		stepP = -1
+	default:
+		return fmt.Errorf("%w: an end face does not share the base's edge at the chain's corner",
+			decaderr.ErrUnsupported)
+	}
+	ec.prevP = stepP == -1
 	var chains [2][]int
-	for _, step := range []int{1, -1} {
-		// A vertex next to the corner can lie within its bound of both lines;
-		// it then leaves along the nearer one. A wrong pick cannot admit a
-		// result: the cut it implies fails the end and strip checks.
-		first := loop[((at+step)%n+n)%n]
-		which, near := -1, math.Inf(1)
-		for k := range dirs {
-			if d := distToLine(w.verts[first], ec.exact, dirs[k]); onLine(first, dirs[k]) && d < near {
-				which, near = k, d
-			}
-		}
-		if which < 0 || chains[which] != nil {
+	for k, step := range []int{stepP, -stepP} {
+		if chains[k] = walk(loop, at, step, func(x int) bool { return onLine(x, dirs[k]) }); len(chains[k]) == 0 {
 			return fmt.Errorf("%w: an end face leaves the chain's corner along neither of its lines",
 				decaderr.ErrUnsupported)
 		}
-		chains[which] = walk(loop, at, step, func(x int) bool { return onLine(x, dirs[which]) })
-		if step == -1 {
-			ec.prevP = which == 0
-		}
-	}
-	// G's turn at the corner picks the side of the cap: a convex G gives the
-	// cap up, a reflex G takes it (§5.5 step 5). An arc end is built on a
-	// convex G only.
-	switch w.turnAt(loop, ec.v, ec.g.n, margin) {
-	case 0:
-		return fmt.Errorf("%w: an end face's turn at the chain's corner is undecided", decaderr.ErrUnsupported)
-	case -1:
-		if ec.arc != nil {
-			return fmt.Errorf("%w: an arc end of a tangent chain needs an end face convex at the corner",
-				decaderr.ErrUnsupported)
-		}
-		ec.reflex = true
 	}
 	setback := [2]float64{tP, tW}
 	ec.beyondP = -1
@@ -199,6 +190,23 @@ func (w *work) readEndCut(ec *chainEndCut, nP r3.Vec, tP, tW, margin, slack floa
 		}
 	}
 	ec.remP, ec.remW = rem[0], rem[1]
+	// Each line now points from the corner to its chain's last vertex, which
+	// the clearance above places beyond the setback by more than its bound:
+	// the lines' senses, and the turns read from them, are certain.
+	ec.rP, ec.rW = dirs[0], dirs[1]
+	// G's turn at the corner picks the side of the cap: a convex G gives the
+	// cap up, a reflex G takes it (§5.5 step 5). An arc end is built on a
+	// convex G only.
+	switch ec.endFaceTurn() {
+	case 0:
+		return fmt.Errorf("%w: an end face's turn at the chain's corner is undecided", decaderr.ErrUnsupported)
+	case -1:
+		if ec.arc != nil {
+			return fmt.Errorf("%w: an arc end of a tangent chain needs an end face convex at the corner",
+				decaderr.ErrUnsupported)
+		}
+		ec.reflex = true
+	}
 	// Nothing else of the end face comes near the corner.
 	reach := math.Max(tP, tW)*math.Sqrt2 + margin
 	if ec.arc != nil {
@@ -254,21 +262,16 @@ func (w *work) findEndCut(cuts map[int]bool, corner, nP r3.Vec, slack float64) (
 	return found, nil
 }
 
-// turnAt is the turn of a face's loop at vertex v about the face's outward
-// normal n: +1 where the face is convex, −1 where it is reflex, and 0 where
-// the held vertices, inflated by margin, cannot decide it or the loop does not
-// hold v.
-func (w *work) turnAt(loop []int, v int, n r3.Vec, margin float64) int {
-	at := indexIn(loop, v)
-	if at < 0 {
-		return 0
-	}
-	k := len(loop)
-	prev, next := loop[(at+k-1)%k], loop[(at+1)%k]
-	in, out := w.verts[v].Sub(w.verts[prev]), w.verts[next].Sub(w.verts[v])
-	turn := in.Cross(out).Dot(n)
+// cornerTurn is the turn of a face's loop at a corner it enters along the
+// line whose direction away from the corner is in and leaves along the line
+// whose direction is out, about the face's outward normal n: +1 where the face
+// is convex, −1 where it is reflex, 0 where the two lines are too near
+// parallel to tell. The lines of a chain end are pairwise orthogonal, so the
+// turn reads ±1 up to rounding.
+func cornerTurn(in, out, n r3.Vec) int {
+	turn := in.Scale(-1).Cross(out).Dot(n)
 	switch {
-	case math.Abs(turn) <= margin*in.Len():
+	case math.Abs(turn) <= minSine:
 		return 0
 	case turn < 0:
 		return -1
@@ -276,21 +279,38 @@ func (w *work) turnAt(loop []int, v int, n r3.Vec, margin float64) int {
 	return 1
 }
 
+// endFaceTurn is G's cornerTurn at the corner: its loop enters along G ∩ P
+// and leaves along G ∩ wall when it reaches the corner from the P side, and
+// the other way round otherwise.
+func (ec *chainEndCut) endFaceTurn() int {
+	if ec.prevP {
+		return cornerTurn(ec.rP, ec.rW, ec.g.n)
+	}
+	return cornerTurn(ec.rW, ec.rP, ec.g.n)
+}
+
 // checkEndTurns refuses a straight chain end whose base or wall is not convex
 // at the corner (SM8): the base or the wall then wraps the corner, and the
-// blend's section has no end face to lie in. base is the base loop that holds
-// the corner and wallIx the end edge's wall. An arc end is read by blend §4.4
-// instead.
-func (w *work) checkEndTurns(ec *chainEndCut, base []int, wallIx int, nP r3.Vec, margin float64) error {
+// blend's section has no end face to lie in. rc is the unit direction from the
+// corner along the chain's end edge, and leaves is set when the base loop
+// leaves the corner along that edge (the chain's first end). The held mesh is
+// oriented, so the base loop runs the edge to G one way and G's loop the other,
+// and the wall's loop runs the chain edge the other way from the base's: the
+// three loops' senses at the corner follow from the base's alone. An arc end is
+// read by blend §4.4 instead.
+func checkEndTurns(ec *chainEndCut, rc, nP r3.Vec, leaves bool) error {
 	if ec.arc != nil {
 		return nil
 	}
-	wl, err := boundaryLoops(w.fp.Tris, facetsOfFace(w.fp.FaceOf, wallIx))
-	if err != nil {
-		return err
+	baseIn, baseOut, wallIn, wallOut := rc, ec.rP, ec.rW, rc
+	if leaves {
+		baseIn, baseOut, wallIn, wallOut = ec.rP, rc, rc, ec.rW
 	}
-	wall := slices.IndexFunc(wl, func(lp []int) bool { return slices.Contains(lp, ec.v) })
-	if w.turnAt(base, ec.v, nP, margin) <= 0 || wall < 0 || w.turnAt(wl[wall], ec.v, ec.wallN, margin) <= 0 {
+	base, wall := cornerTurn(baseIn, baseOut, nP), cornerTurn(wallIn, wallOut, ec.wallN)
+	if base == 0 || wall == 0 {
+		return fmt.Errorf("%w: a chain end's base or wall turn at the corner is undecided", decaderr.ErrUnsupported)
+	}
+	if base < 0 || wall < 0 {
 		return fmt.Errorf("%w: a chain end's base or wall is reflex at the corner", decaderr.ErrUnsupported)
 	}
 	return nil
@@ -299,11 +319,16 @@ func (w *work) checkEndTurns(ec *chainEndCut, base []int, wallIx int, nP r3.Vec,
 // rebuildEnds gives each end face its new loop: at each end the corner and the
 // removed parts of the two chains give way to seqs[i], the end column from the
 // setback point on G ∩ P to the cut on G ∩ wall. Two ends on one face are
-// spliced into one copy of its loops, which is triangulated once; their runs
-// are disjoint because each end's reach check covers the other end's chains.
-// It returns the signed exact area the end faces lose.
-func (w *work) rebuildEnds(ends []*chainEndCut, seqs [][]int, fillet bool, r, tP, tW float64) (float64, error) {
+// spliced into one copy of its loops, which is triangulated once. Each end's
+// run holds only vertices nearer its corner than the setbacks, and readEndCut
+// places the last vertex of each of its chains beyond them; where two runs
+// would still share a vertex, the second splice finds its run broken and
+// refuses. It returns the signed exact area the end faces lose and, for each
+// end face that takes a cap, the range of w.out its new facets fill.
+func (w *work) rebuildEnds(ends []*chainEndCut, seqs [][]int, fillet bool, r, tP, tW float64) (float64, [][2]int,
+	error) {
 	total := 0.0
+	var taken [][2]int
 	done := make([]bool, len(ends))
 	for i, first := range ends {
 		if done[i] {
@@ -313,6 +338,7 @@ func (w *work) rebuildEnds(ends []*chainEndCut, seqs [][]int, fillet bool, r, tP
 		for k, lp := range first.fl.loops {
 			loops[k] = append([]int(nil), lp...)
 		}
+		takes := false
 		for j := i; j < len(ends); j++ {
 			ec := ends[j]
 			if ec.faceIx != first.faceIx {
@@ -321,8 +347,9 @@ func (w *work) rebuildEnds(ends []*chainEndCut, seqs [][]int, fillet bool, r, tP
 			done[j] = true
 			li := slices.IndexFunc(loops, func(lp []int) bool { return slices.Contains(lp, ec.v) })
 			if li < 0 {
-				return 0, fmt.Errorf("%w: an end face does not hold the chain's corner", decaderr.ErrUnsupported)
+				return 0, nil, fmt.Errorf("%w: an end face does not hold the chain's corner", decaderr.ErrUnsupported)
 			}
+			takes = takes || ec.reflex
 			run := map[int]bool{ec.v: true}
 			for _, v := range ec.remP {
 				run[v] = true
@@ -332,7 +359,7 @@ func (w *work) rebuildEnds(ends []*chainEndCut, seqs [][]int, fillet bool, r, tP
 			}
 			outside, _, err := splice(loops[li], run)
 			if err != nil {
-				return 0, err
+				return 0, nil, err
 			}
 			repl := append([]int(nil), seqs[j]...)
 			if !ec.prevP {
@@ -341,12 +368,16 @@ func (w *work) rebuildEnds(ends []*chainEndCut, seqs [][]int, fillet bool, r, tP
 			loops[li] = append(outside, repl...)
 			total += ec.capArea(fillet, r, tP, tW)
 		}
+		from := len(w.out)
 		if err := w.retriangulate(first.g.n, first.exact, loops, first.fl.group); err != nil {
-			return 0, err
+			return 0, nil, err
+		}
+		if takes {
+			taken = append(taken, [2]int{from, len(w.out)})
 		}
 		w.removed = append(w.removed, first.fl.facets...)
 	}
-	return total, nil
+	return total, taken, nil
 }
 
 // capArea is the signed exact area the end face loses at this end: the
