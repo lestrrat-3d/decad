@@ -186,7 +186,8 @@ func TestCheckStripClear(t *testing.T) {
 		// made.
 		verts := append(append([]r3.Vec(nil), base...),
 			r3.NewVec(0, 0, 5), r3.NewVec(4, 0, 5), r3.NewVec(0, 4, 5),
-			r3.NewVec(2, -3, 1), r3.NewVec(2, 1, -1), r3.NewVec(2, 1, 1))
+			r3.NewVec(2, -3, 1), r3.NewVec(2, 1, -1), r3.NewVec(2, 1, 1),
+			r3.NewVec(-1, -1, 1), r3.NewVec(-2, -1, 1), r3.NewVec(2, -3, 0))
 		capWork := func(heldN int, rest [3]int) *work {
 			w := stripWork(verts, [][3]int{rest}, [][3]int{{0, 1, 2}, {3, 4, 5}})
 			w.fp.Verts = verts[:heldN]
@@ -197,8 +198,17 @@ func TestCheckStripClear(t *testing.T) {
 		// Along the shared edge from vertex 0 to vertex 1 only.
 		require.NoError(t, capWork(len(verts), [3]int{0, 1, 6}).checkStripClear(t.Context(), 1, taken))
 
+		// At vertex 0 only, rising away from the cap's plane.
+		require.NoError(t, capWork(len(verts), [3]int{0, 9, 10}).checkStripClear(t.Context(), 1, taken))
+
+		// In the cap's plane beside the shared edge: the classification
+		// reports the pair as one coplanar region, and it is refused.
+		err := capWork(len(verts), [3]int{0, 1, 11}).checkStripClear(t.Context(), 1, taken)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "the cap an end face takes meets another facet of the body at {0 0 0}")
+
 		// Through vertex 0 and on across the cap to (2,1,0).
-		err := capWork(len(verts), [3]int{0, 7, 8}).checkStripClear(t.Context(), 1, taken)
+		err = capWork(len(verts), [3]int{0, 7, 8}).checkStripClear(t.Context(), 1, taken)
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 		// The contact is the segment from (0,0,0) to (2,1,0); either end names it.
 		require.Regexp(t, `the cap an end face takes meets another facet of the body at \{(0 0 0|2 1 0)\}`, err.Error())

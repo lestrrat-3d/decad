@@ -387,17 +387,19 @@ cap. Its pairs are therefore read by kind of shared vertex. A pair that shares a
 skipped: besides the strip, only the rebuilt base and walls carry such vertices, and their planes meet `G`'s along
 `G ∩ P` and `G ∩ W`; the new `P` and walls lie within the held ones, which met the held `G` only on its boundary,
 and the cap meets those lines only along its own edges. A pair that shares only held vertices is classified like
-any other and passes only when the exact contact is a shared vertex or the edge between two shared vertices. The rest of `K_k`'s boundary is the removed bands of `P` and the walls and, for an
-open chain, the caps its end faces give up or take. No other facet of the held solid crosses a removed band or a
-cap a convex `G` gives up, because each was part of the held surface. A cap a reflex `G` takes is new surface, and
-a held shell can cross it: a solid floating in a run-out slot's void across `G`'s plane, or a cavity across `G`'s
-plane inside a reflex foot's ledge. So the rebuilt facets of an end face that takes a cap are tested like the
-strip, against every facet the result keeps outside them, and a contact refuses with "the cap an end face takes
-meets another facet of the body at" a point (`ErrUnsupported`). A shell wholly
-inside `K_k` crosses nothing, so with no crossings the audit's one-point parity reads its nesting correctly: a
-concave chain's `K_k` lies in the void, and a positive shell inside it nests inside a positive shell and refuses;
-a convex chain's `K_k` lies in the material, and a cavity inside it ends up contained by no shell, so the audit
-refuses its negative sign.
+any other and passes only when the exact contact is a shared vertex or the edge between two shared vertices. A
+held facet coplanar with `G` that shares an edge with a rebuilt `G` facet meets it in what the classification
+reports as one coplanar region, so it is refused; the refusal can only be a false one, and no current fixture
+reaches it. The rest of `K_k`'s boundary is the removed bands of `P` and the walls and, for an open chain, the
+caps its end faces give up or take. No other facet of the held solid crosses a removed band or a cap a convex `G`
+gives up, because each was part of the held surface. A cap a reflex `G` takes is new surface, and a held shell can
+cross it: a solid floating in a run-out slot's void across `G`'s plane, or a cavity across `G`'s plane inside a
+reflex foot's ledge. So the rebuilt facets of an end face that takes a cap are tested like the strip, against
+every facet the result keeps outside them, and a contact refuses with "the cap an end face takes meets another
+facet of the body at" a point (`ErrUnsupported`). A shell wholly inside `K_k` crosses nothing, so with no
+crossings the audit's one-point parity reads its nesting correctly: a concave chain's `K_k` lies in the void, and a
+positive shell inside it nests inside a positive shell and refuses; a convex chain's `K_k` lies in the material,
+and a cavity inside it ends up contained by no shell, so the audit refuses its negative sign.
 
 The routes that blend one edge (blend Table RR and R5 of §8) and the mitre run of blend §4.7 build through
 `buildClear`, which runs the same strip test before the build, with the same texts and the same skipped pairs; for
@@ -626,7 +628,7 @@ shown red first by the change named. `A_f = r²(1 − π/4)` is a fillet's corne
 | Chain ends: blind end (pocket `10…30` with only its `x = 30` corners `r = 3`, floor `z = 5`), fillet `r = 1` | fill `A_f·(48 + π·(R − x̄))`; the `x = 10` wall shrinks by `2A_f` and lies more than 0.1 from a point just inside each cap | admit only a reflex `G` for a concave chain: refused; drop the whole-loop base branch: "a face boundary holds no run to replace" |
 | Chain ends: tongue (40×20×20, `x = 40` corners `r = 3`, bored), fillet `r = 1`, both ends on `x = 0` | removed `A_f·(88 + π·(R − x̄))`; 3 `Cylinder`, 2 `Torus` (`Major = R − r`); the `x = 0` face shrinks by `2A_f` and gives up both caps | drop the whole-loop base branch, or rebuild each end alone |
 | Chain end gates | the step (block 40×20×30 with `x = 40` corners `r = 3`, cut to `z = 10` for `x > 10`) and the blind pocket's mouth refuse SM8; the slot `−2…30` with four `r = 3` corners refuses SM9 for its concave arc ends, and a ledge `8…30` with four corners for its arc ends on the reflex wall; unit tests read convex, reflex and undecided turns, `G`'s turn at both ends of the tongue and the reflex foot, and the cap's sign | drop the wall's turn: the step refuses SR4; drop the base's turn: the mouth builds a flat-ended notch; drop either arc gate: the other arc text, or the ledge builds; read `G`'s turn one way at both ends: the unit test fails; drop the cap's sign: the unit test fails |
-| Taken cap clearance | a 0.1 box joined across `x = 0` in the run-out slot's void, and a 0.1 cavity cut across `x = 10` in the reflex foot's ledge corner, each at either corner, refuse SM5 "the cap an end face takes meets another facet of the body"; the box moved clear of the cap builds with the run-out's fill; unit tests refuse a facet that crosses a taken cap but not the strip, and one that shares a held vertex with the cap and crosses it beyond, while a facet sharing an edge with the cap passes and an end face's loop sense that matches the base's refuses | skip the taken caps: the box builds, and the cavity refuses SR7 "a result shell has inconsistent orientation"; skip every pair that shares a vertex: the held-vertex unit case builds; refuse every contact of a sharing pair: the run-out, its chamfer and the reflex foot refuse; drop the loop-sense guard: its unit test builds |
+| Taken cap clearance | a 0.1 box joined across `x = 0` in the run-out slot's void, and a 0.1 cavity cut across `x = 10` in the reflex foot's ledge corner, each at either corner, refuse SM5 "the cap an end face takes meets another facet of the body"; the box moved clear of the cap builds with the run-out's fill; unit tests refuse a facet that crosses a taken cap but not the strip, one that shares a held vertex with the cap and crosses it beyond, and one coplanar with the cap beside a shared edge, while facets meeting the cap only at a shared vertex or along a shared edge pass, and `checkEndSense` refuses an end face's loop sense that matches the base's | skip the taken caps: the box builds, and the cavity refuses SR7 "a result shell has inconsistent orientation"; skip every pair that shares a vertex: the held-vertex unit case builds; refuse every contact of a sharing pair, or every point contact: the run-out, its chamfer and the reflex foot refuse; drop the loop-sense test from `checkEndSense`: its unit test builds; drop the call from `rewriteChain`: nothing goes red, because no oriented held mesh reaches it |
 | Chain clearance | a pocket whose chord crosses a band while its vertices lie outside it refuses SM5; a hole deep inside a band refuses SM4 | test vertices only: the crossing chord builds and SR7 or the volume check fails |
 | `internal/tangentchain` retained oracle | exactly tangent plane/cylinder tags prove "tangent"; tags one float step off are undecided; a clear miss is "not tangent" | replace the identity by a tolerance: the one-step case proves "tangent" |
 | Exact-rotation copy of P3, 20° | 6 `Plane`, 5 `Cylinder`; `NormalAt` at an interior facet centroid within its bound plus 64 float steps of the rotated source normal; bounds below 1 | keep `ExactGroupPlaced`'s drop: `Faceted` |
