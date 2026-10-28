@@ -57,8 +57,7 @@ func (c *CapShell) Build(ctx context.Context, env topo.Env) (*topo.Body, error) 
 	// proven simple and correctly nested by the §5 audit, and the cup wraps a
 	// wall band around each post, all hanging off the one floor slab (one
 	// lump). It records the offset section's displacement beside it (§9).
-	cup, err := ViewFor(c.in.Prism, c.offset, c.in.Sense, c.in.HeldThickness, c.in.ThicknessDelta,
-		offsetDelta, c.removedEnd).Payload(ctx)
+	cup, err := ViewFor(c.in, c.offset, offsetDelta, c.removedEnd).Payload(ctx)
 	if err != nil {
 		return nil, err
 	}

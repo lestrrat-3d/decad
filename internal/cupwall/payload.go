@@ -6,14 +6,13 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismshell"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
-
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // This file is the cup of agent-docs/modify-design.md §9 (Table B, B5/B6). A cup
@@ -61,6 +60,12 @@ const (
 // and centroid built on them, the box, and the wall vertices and vertical edges
 // the shared prism build stamps.
 //
+// ZOpenDenoted, ZOuterDenoted and ZCavDenoted are the exact levels the three
+// planes denote (agent-docs/stacked-prism-design.md §2.1): the open end and the
+// unstepped floor level keep the receiver end's denotation, and the derived
+// floor level denotes that end's rational moved by the exact thickness
+// (prismshell.CapShellInput.StepLevel). The zero value records nothing.
+//
 // ThicknessDelta is the shell thickness's OWN conversion displacement — the
 // bound extent.MagnitudeInBounded proved when it converted the caller's stated
 // thickness into millimetres (shell.go). It is distinct from ZOuterDelta and
@@ -91,6 +96,9 @@ type View struct {
 	ZOpenDelta     float64
 	ZOuterDelta    float64
 	ZCavDelta      float64
+	ZOpenDenoted   prismplacement.LevelDenotation
+	ZOuterDenoted  prismplacement.LevelDenotation
+	ZCavDenoted    prismplacement.LevelDenotation
 	Thickness      float64
 	ThicknessDelta float64
 	OffsetDelta    float64
@@ -187,59 +195,52 @@ func (cp View) ExtentAlong(g r3.Vec) (float64, float64, float64, error) {
 	return lo, hi, proofbound.AbsSumUpper(delta, proofbound.ProductUpper(displaced, stackedrecord.VecL1(g))), nil
 }
 
-// ViewFor assembles the cup record from the receiver prism, its offset
-// section with that section's proven displacement, and the shell
-// sense/opening (agent-docs/modify-design.md §9). removedEnd
+// ViewFor assembles the cup record from the shell's input, its offset
+// section with that section's proven displacement, and the opening
+// (agent-docs/modify-design.md §9). removedEnd
 // opens the cup at the top (z1); a removed start opens it at the bottom (z0),
 // its mirror. Inward, O is the original section P and C the erosion Q; outward,
 // O is the dilation Q and C the original P.
-func ViewFor(pp prismrecord.Payload, offset momentinput.Profile, s, t, tDelta, offsetDelta float64,
-	removedEnd bool) View {
-	z0, z1 := pp.Z0, pp.Z1
+func ViewFor(in prismshell.CapShellInput, offset momentinput.Profile, offsetDelta float64, removedEnd bool) View {
+	pp, s := in.Prism, in.Sense
 	o, c := pp.Profile, offset
-	if s < 0 {
-		o, c = offset, pp.Profile
-	}
 	sense := Inward
 	if s < 0 {
+		o, c = offset, pp.Profile
 		sense = Outward
 	}
 	cp := View{
 		Outer:          o,
 		Cavity:         c,
 		Frame:          pp.Frame,
-		Thickness:      t,
-		ThicknessDelta: tDelta,
+		Thickness:      in.HeldThickness,
+		ThicknessDelta: in.ThicknessDelta,
 		OffsetDelta:    offsetDelta,
 		Sense:          sense,
 		Xform:          pp.Xform,
 	}
-	// step is the one derived floor level. It carries the source end's own
-	// displacement, the thickness conversion, and this float sum's rounding.
-	step := func(from, delta, by float64) (float64, float64) {
-		to := from + by
-		return to, proofbound.AbsSumUpper(delta, tDelta, proofarith.AddRoundError(from, by, to))
+	// The open end is the removed cap's level and the closed end the kept
+	// one's; the floor steps from the closed end into the part (up from z0,
+	// down from z1), or out of it outward.
+	openZ, openDelta, openDenoted := pp.Z1, pp.Z1Delta, pp.Z1Denoted
+	closedZ, closedDelta, closedDenoted := pp.Z0, pp.Z0Delta, pp.Z0Denoted
+	into := 1.0
+	if !removedEnd { // open at the bottom — the mirror
+		openZ, openDelta, openDenoted = pp.Z0, pp.Z0Delta, pp.Z0Denoted
+		closedZ, closedDelta, closedDenoted = pp.Z1, pp.Z1Delta, pp.Z1Denoted
+		into = -1
 	}
-	if removedEnd { // open at the top
-		cp.ZOpen = z1
-		cp.ZOpenDelta = pp.Z1Delta
-		if s > 0 {
-			cp.ZOuter, cp.ZOuterDelta = z0, pp.Z0Delta
-			cp.ZCav, cp.ZCavDelta = step(z0, pp.Z0Delta, t)
-		} else {
-			cp.ZOuter, cp.ZOuterDelta = step(z0, pp.Z0Delta, -t)
-			cp.ZCav, cp.ZCavDelta = z0, pp.Z0Delta
-		}
-	} else { // open at the bottom — the mirror
-		cp.ZOpen = z0
-		cp.ZOpenDelta = pp.Z0Delta
-		if s > 0 {
-			cp.ZOuter, cp.ZOuterDelta = z1, pp.Z1Delta
-			cp.ZCav, cp.ZCavDelta = step(z1, pp.Z1Delta, -t)
-		} else {
-			cp.ZOuter, cp.ZOuterDelta = step(z1, pp.Z1Delta, t)
-			cp.ZCav, cp.ZCavDelta = z1, pp.Z1Delta
-		}
+	cp.ZOpen, cp.ZOpenDelta, cp.ZOpenDenoted = openZ, openDelta, openDenoted
+	// The one derived floor level carries the closed end's own displacement,
+	// the thickness conversion and this float sum's rounding, and denotes the
+	// closed end's rational moved by the exact thickness.
+	stepZ, stepDelta, stepDenoted := in.StepLevel(closedZ, closedDelta, closedDenoted, s*into)
+	if s > 0 {
+		cp.ZOuter, cp.ZOuterDelta, cp.ZOuterDenoted = closedZ, closedDelta, closedDenoted
+		cp.ZCav, cp.ZCavDelta, cp.ZCavDenoted = stepZ, stepDelta, stepDenoted
+	} else {
+		cp.ZOuter, cp.ZOuterDelta, cp.ZOuterDenoted = stepZ, stepDelta, stepDenoted
+		cp.ZCav, cp.ZCavDelta, cp.ZCavDenoted = closedZ, closedDelta, closedDenoted
 	}
 	return cp
 }
@@ -318,14 +319,14 @@ func (cp Payload) View() View {
 	}
 	if f == 0 {
 		v.Cavity = boundary.LowerExposed[0]
-		v.ZOuter, v.ZOuterDelta = floor.Z0, floor.Z0Delta
-		v.ZCav, v.ZCavDelta = floor.Z1, floor.Z1Delta
-		v.ZOpen, v.ZOpenDelta = wall.Z1, wall.Z1Delta
+		v.ZOuter, v.ZOuterDelta, v.ZOuterDenoted = floor.Z0, floor.Z0Delta, floor.Z0Denoted
+		v.ZCav, v.ZCavDelta, v.ZCavDenoted = floor.Z1, floor.Z1Delta, floor.Z1Denoted
+		v.ZOpen, v.ZOpenDelta, v.ZOpenDenoted = wall.Z1, wall.Z1Delta, wall.Z1Denoted
 	} else {
 		v.Cavity = boundary.UpperExposed[0]
-		v.ZOuter, v.ZOuterDelta = floor.Z1, floor.Z1Delta
-		v.ZCav, v.ZCavDelta = floor.Z0, floor.Z0Delta
-		v.ZOpen, v.ZOpenDelta = wall.Z0, wall.Z0Delta
+		v.ZOuter, v.ZOuterDelta, v.ZOuterDenoted = floor.Z1, floor.Z1Delta, floor.Z1Denoted
+		v.ZCav, v.ZCavDelta, v.ZCavDenoted = floor.Z0, floor.Z0Delta, floor.Z0Denoted
+		v.ZOpen, v.ZOpenDelta, v.ZOpenDenoted = wall.Z0, wall.Z0Delta, wall.Z0Denoted
 	}
 	return v
 }
@@ -351,14 +352,20 @@ func (cp View) Payload(ctx context.Context) (Payload, error) {
 		OffsetDelta:    cp.OffsetDelta,
 		Sense:          cp.Sense,
 	}
+	// Each slab end keeps its level's denotation; the interface's two sides
+	// record the one floor level's.
 	if cp.ZOpen > cp.ZOuter { // open at the top
-		floor.Z0, floor.Z0Delta, floor.Z1, floor.Z1Delta = cp.ZOuter, cp.ZOuterDelta, cp.ZCav, cp.ZCavDelta
-		wall.Z0, wall.Z0Delta, wall.Z1, wall.Z1Delta = cp.ZCav, cp.ZCavDelta, cp.ZOpen, cp.ZOpenDelta
+		floor.Z0, floor.Z0Delta, floor.Z0Denoted = cp.ZOuter, cp.ZOuterDelta, cp.ZOuterDenoted
+		floor.Z1, floor.Z1Delta, floor.Z1Denoted = cp.ZCav, cp.ZCavDelta, cp.ZCavDenoted
+		wall.Z0, wall.Z0Delta, wall.Z0Denoted = cp.ZCav, cp.ZCavDelta, cp.ZCavDenoted
+		wall.Z1, wall.Z1Delta, wall.Z1Denoted = cp.ZOpen, cp.ZOpenDelta, cp.ZOpenDenoted
 		out.Stack.Slabs = []stackedrecord.Slab{floor, wall}
 		out.Stack.Interfaces = []stackedrecord.Interface{{LowerExposed: exposed}}
 	} else {
-		wall.Z0, wall.Z0Delta, wall.Z1, wall.Z1Delta = cp.ZOpen, cp.ZOpenDelta, cp.ZCav, cp.ZCavDelta
-		floor.Z0, floor.Z0Delta, floor.Z1, floor.Z1Delta = cp.ZCav, cp.ZCavDelta, cp.ZOuter, cp.ZOuterDelta
+		wall.Z0, wall.Z0Delta, wall.Z0Denoted = cp.ZOpen, cp.ZOpenDelta, cp.ZOpenDenoted
+		wall.Z1, wall.Z1Delta, wall.Z1Denoted = cp.ZCav, cp.ZCavDelta, cp.ZCavDenoted
+		floor.Z0, floor.Z0Delta, floor.Z0Denoted = cp.ZCav, cp.ZCavDelta, cp.ZCavDenoted
+		floor.Z1, floor.Z1Delta, floor.Z1Denoted = cp.ZOuter, cp.ZOuterDelta, cp.ZOuterDenoted
 		out.Stack.Slabs = []stackedrecord.Slab{wall, floor}
 		out.Stack.Interfaces = []stackedrecord.Interface{{UpperExposed: exposed}}
 	}

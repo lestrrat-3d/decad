@@ -102,14 +102,17 @@ slabs and on an A1 BRep's stack. A stack's cap and interface faces carry
 their slab level's denotation in `topo.CapRecord.ZDenoted`, so a `ToFace`
 stop on a stack's cap or floor records it. A chain sheet records its sweep's
 denoted levels as `Extrude` does, and `Split` pieces, a hole-free tube shell
-and a prism pattern group keep the receiver's. A mesh result's retained
+and a prism pattern group keep the receiver's. A cup and a closed prism
+shell keep the receiver's end denotations on their kept and open ends, and
+each derived level (a cup's floor, a closed shell's cavity floor and
+ceiling) denotes its source end's rational moved by the thickness's exact
+rescale (`prismshell.CapShellInput.StepLevel`, modify §9). A mesh result's retained
 plane face keeps its source face's whole `CapRecord`, `ZDenoted` included
 (`facetedrecord.SourceTag`), so a stop on it records what the source face,
 a stack's cap or floor among them, records. A stop on a BRep or revolve
 face or on a faceted face with no retained plane, a `ThroughAll` stop on a
-stack or with a competing far side, a chamfered end, a shell's derived
-levels (a cup floor, a closed shell's inner levels, a through-shell and a
-boss-stack shell), a holed band shell, the BRep stack of general-boolean
+stack or with a competing far side, a chamfered end, a holed band shell,
+the BRep stack of general-boolean
 §3 A7, a trimmed ribbon and the prism `Thicken` builds from a chain ribbon
 record none.
 
@@ -605,6 +608,15 @@ arm64.
   interface face carrying the rational
   (`apitest/stack_denoted_level_test.go`,
   `apitest/through_stop_denoted_level_test.go`).
+- Denoted levels carried by shells: a `ToFace` stop on a cup's floor, kept
+  cap or rim, opened at either end in either sense, or on a closed shell's
+  cavity floor, ceiling or top cap, cuts a plate whose cap denotes the same
+  rational (0.2 in, or 10 mm or 20 mm through a 0.2 in offset) into the
+  analytic through hole. A stop holding the plate cap's float but denoting a
+  plane just inside it (a 5.08 mm plate or thickness, or a −5.08 mm offset)
+  takes the mesh path. Record tests read every derived level and slab end
+  (`apitest/shell_floor_denoted_level_test.go`,
+  `internal/cupwall/payload_test.go`, `internal/prismshell/cap_shell_test.go`).
 - Level displacement, incoming: a tool whose inner end is a converted magnitude
   (`units.Inches`) publishes a positive axial delta on that end, asserted first
   on the tool so the fixture cannot silently stop exercising it, and the

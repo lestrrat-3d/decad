@@ -2755,6 +2755,8 @@
 10	0.04	TestRevolveTessellateChargesPlacementRoundingSeparately
 10	0.30	TestRevolveTessellateFullSphere
 10	0.07	TestRevolveTessellateHemispherePoleAtOneEnd
+10	0.00	TestShellClosedDenotedLevel
+10	0.00	TestShellCupDenotedLevel
 10	0.00	TestShellTubeKeepsDenotedLevel
 10	0.00	TestStackedUnionBrepChainedDenotedLevel
 10	0.00	TestStackedUnionChainedDenotedLevel

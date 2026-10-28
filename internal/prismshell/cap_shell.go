@@ -8,9 +8,11 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/extent"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -34,6 +36,29 @@ type CapShellInput struct {
 	Thickness      units.Value
 	HeldThickness  float64
 	ThicknessDelta float64
+}
+
+// StepLevel is a level the shell derives from a receiver end (from, its
+// displacement delta and its denotation) by moving it sign times the
+// thickness: the held sum, its bound, and the exact level it denotes
+// (agent-docs/stacked-prism-design.md §2.1). The bound carries the end's
+// displacement, the thickness conversion and the float sum's rounding. The
+// denoted level is the end's rational plus sign times the thickness's exact
+// rescale, recorded through DenoteLevel; it records nothing when the end
+// denotes nothing.
+func (in CapShellInput) StepLevel(from, delta float64, denoted prismplacement.LevelDenotation, sign float64) (float64, float64, prismplacement.LevelDenotation) {
+	by := sign * in.HeldThickness
+	to := from + by
+	bound := proofbound.AbsSumUpper(delta, in.ThicknessDelta, proofarith.AddRoundError(from, by, to))
+	exact := prismplacement.DenotedLevel(from, delta, denoted)
+	thickness := extent.ExactConversion(in.Thickness, units.Millimeter)
+	if exact == nil || thickness == nil || in.Thickness == (units.Value{}) {
+		return to, bound, prismplacement.LevelDenotation{}
+	}
+	if sign < 0 {
+		thickness.Neg(thickness)
+	}
+	return to, bound, prismplacement.DenoteLevel(exact.Add(exact, thickness), to, bound)
 }
 
 // CancelCause returns context.Canceled or context.DeadlineExceeded unwrapped
@@ -237,24 +262,19 @@ func BuildClosed(ctx context.Context, env topo.Env, in CapShellInput) (*topo.Bod
 		return nil, err
 	}
 	// Each derived level carries its source end's displacement, the thickness
-	// conversion and this float sum's rounding, as a cup's floor level does.
-	step := func(from, delta, by float64) (float64, float64) {
-		to := from + by
-		return to, proofbound.AbsSumUpper(delta, in.ThicknessDelta, proofarith.AddRoundError(from, by, to))
-	}
-	s, tmm := in.Sense, in.HeldThickness
-	lo, loDelta := step(pp.Z0, pp.Z0Delta, s*tmm)
-	hi, hiDelta := step(pp.Z1, pp.Z1Delta, -s*tmm)
-	caps := stackedrecord.Slab{Regions: []momentinput.Profile{outer}}
-	first, middle, last := caps, stackedrecord.Slab{Regions: bands}, caps
-	if s > 0 {
-		first.Z0, first.Z0Delta, first.Z1, first.Z1Delta = pp.Z0, pp.Z0Delta, lo, loDelta
-		middle.Z0, middle.Z0Delta, middle.Z1, middle.Z1Delta = lo, loDelta, hi, hiDelta
-		last.Z0, last.Z0Delta, last.Z1, last.Z1Delta = hi, hiDelta, pp.Z1, pp.Z1Delta
-	} else {
-		first.Z0, first.Z0Delta, first.Z1, first.Z1Delta = lo, loDelta, pp.Z0, pp.Z0Delta
-		middle.Z0, middle.Z0Delta, middle.Z1, middle.Z1Delta = pp.Z0, pp.Z0Delta, pp.Z1, pp.Z1Delta
-		last.Z0, last.Z0Delta, last.Z1, last.Z1Delta = pp.Z1, pp.Z1Delta, hi, hiDelta
+	// conversion and this float sum's rounding, and denotes the end's rational
+	// moved by the exact thickness, as a cup's floor level does. The receiver's
+	// ends keep their own denotations.
+	s := in.Sense
+	z0 := level{pp.Z0, pp.Z0Delta, pp.Z0Denoted}
+	z1 := level{pp.Z1, pp.Z1Delta, pp.Z1Denoted}
+	var lo, hi level
+	lo.z, lo.delta, lo.denoted = in.StepLevel(z0.z, z0.delta, z0.denoted, s)
+	hi.z, hi.delta, hi.denoted = in.StepLevel(z1.z, z1.delta, z1.denoted, -s)
+	caps := []momentinput.Profile{outer}
+	first, middle, last := slabBetween(caps, z0, lo), slabBetween(bands, lo, hi), slabBetween(caps, hi, z1)
+	if s < 0 {
+		first, middle, last = slabBetween(caps, lo, z0), slabBetween(bands, z0, z1), slabBetween(caps, z1, hi)
 	}
 	exposed := []momentinput.Profile{cavity}
 	body, err := stackedrecord.Build(ctx, env, stackedrecord.Payload{
@@ -272,6 +292,20 @@ func BuildClosed(ctx context.Context, env topo.Env, in CapShellInput) (*topo.Bod
 		return nil, err
 	}
 	return body, nil
+}
+
+// level is one sweep level of a shell's stack: the held float, its
+// displacement and its denotation.
+type level struct {
+	z, delta float64
+	denoted  prismplacement.LevelDenotation
+}
+
+// slabBetween is the slab over regions from level a up to level b.
+func slabBetween(regions []momentinput.Profile, a, b level) stackedrecord.Slab {
+	return stackedrecord.Slab{Regions: regions,
+		Z0: a.z, Z0Delta: a.delta, Z0Denoted: a.denoted,
+		Z1: b.z, Z1Delta: b.delta, Z1Denoted: b.denoted}
 }
 
 // requireOneCavity is the closed shell's lump reading

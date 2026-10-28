@@ -1434,7 +1434,10 @@ and `Q` on `[z1, z1 + t]`. Both interfaces are monotone
 first and lower-only at the second, and each exposes the cavity region (`Q`
 inward, `P` outward) as the cavity's floor and ceiling. Each derived level
 carries its source end's displacement, the thickness conversion and its own
-float sum's rounding, as a cup's floor level does, and the offset loops'
+float sum's rounding, and denotes the source end's rational moved by the
+exact thickness, as a cup's floor level does (modify §9). The end caps keep
+the receiver's denotations, so a `ToFace` stop on either cap, the floor or
+the ceiling records its exact level. The offset loops'
 proven displacement is the stack's `sectionDelta`. The gates run in the order
 S18, S10's section limit, SX11 (`t` below `h/2`, inward), S11a, the §5 audit.
 The cavity's walls, floor and ceiling form a connected face set touching no

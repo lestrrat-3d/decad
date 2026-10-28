@@ -738,6 +738,16 @@ records carrying it are not a set-equality certificate. The shell-wall reading
 needs none: it reads `t*`, which the thickness's own conversion bound already
 covers.
 
+**A cup's levels denote exact rationals as a prism's caps do**
+(`agent-docs/stacked-prism-design.md` §2.1). The open end and the kept end keep
+the receiver end's denotation. The derived floor level, held as the float sum
+of that end and the held thickness, denotes the end's rational plus or minus
+`t*` (`prismshell.CapShellInput.StepLevel`). Its displacement already covers
+the end's own, the thickness conversion and the sum's rounding, so
+`DenoteLevel` accepts the claim. A `ToFace` stop on the cup's floor, kept cap
+or rim records it, and an end that denotes nothing leaves its floor denoting
+nothing.
+
 ## 10. Mass properties, and how their bounds compose
 
 **A modify op carries the analytic engine's bounds.** Its result is one prism, or two, over
