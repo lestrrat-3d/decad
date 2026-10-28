@@ -14,6 +14,14 @@ type UnionLevel struct {
 	Exact *big.Rat
 	Held  float64
 	Delta float64
+	// Denoted is the exact rational the level denotes on A's axis, nil when
+	// its range is wider than one rational.
+	Denoted *big.Rat
+}
+
+// Denotation records l.Denoted against the level's held float and bound.
+func (l UnionLevel) Denotation() prismplacement.LevelDenotation {
+	return prismplacement.DenoteLevel(l.Denoted, l.Held, l.Delta)
 }
 
 // UnionLevels sorts both operands' slab boundaries on A's axis exactly.
@@ -55,7 +63,11 @@ func UnionLevels(a, b []Slab, shift *big.Rat) ([]UnionLevel, bool) {
 				}
 			}
 		}
-		levels = append(levels, ranged{UnionLevel{Exact: exact, Held: held, Delta: delta}, r})
+		var denoted *big.Rat
+		if r.Lo.Cmp(r.Hi) == 0 {
+			denoted = new(big.Rat).Set(r.Lo)
+		}
+		levels = append(levels, ranged{UnionLevel{Exact: exact, Held: held, Delta: delta, Denoted: denoted}, r})
 		return true
 	}
 	for _, op := range []struct {

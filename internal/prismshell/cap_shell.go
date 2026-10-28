@@ -158,13 +158,15 @@ func BuildTube(ctx context.Context, env topo.Env, in CapShellInput, offset momen
 	// opens its one counter here (agent-docs/spline-design.md §5.2). A tube keeps
 	// the receiver's sweep, so each end keeps its own axial displacement too.
 	return prismrecord.Build(ctx, env, prismrecord.Payload{
-		Profile: momentinput.Profile{Outer: outer.Outer, Holes: []sectionrecord.LoopRecord{holeLoop}},
-		Frame:   pp.Frame,
-		Z0:      pp.Z0,
-		Z1:      pp.Z1,
-		Z0Delta: pp.Z0Delta,
-		Z1Delta: pp.Z1Delta,
-		Xform:   pp.Xform,
+		Profile:   momentinput.Profile{Outer: outer.Outer, Holes: []sectionrecord.LoopRecord{holeLoop}},
+		Frame:     pp.Frame,
+		Z0:        pp.Z0,
+		Z1:        pp.Z1,
+		Z0Delta:   pp.Z0Delta,
+		Z1Delta:   pp.Z1Delta,
+		Z0Denoted: pp.Z0Denoted,
+		Z1Denoted: pp.Z1Denoted,
+		Xform:     pp.Xform,
 	}, freeform.NewFreeformWork())
 }
 

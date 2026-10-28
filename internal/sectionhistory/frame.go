@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 )
@@ -80,69 +81,99 @@ func (p permutation) point(q sectionrecord.Point2) sectionrecord.Point2 {
 	return sectionrecord.Point2{U: u, V: v}
 }
 
-// lineProfile is a profile whose every loop is forward whole lines.
-type lineProfile struct {
-	outer []sectionrecord.LineSeg
-	holes [][]sectionrecord.LineSeg
-}
-
-// mapBack maps a whole-line profile from the candidate frame into plane's
-// coordinates. A reflection re-walks every loop backwards, so the outer loop
-// stays counter-clockwise and holes clockwise.
-func (p permutation) mapBack(profile lineProfile) momentinput.Profile {
-	loop := func(in []sectionrecord.LineSeg) sectionrecord.LoopRecord {
-		out := make([]sectionrecord.CurveSegment, len(in))
-		for i, line := range in {
-			start, end := p.point(line.Start), p.point(line.End)
-			if p.reflects() {
-				start, end = end, start
-			}
-			out[i] = sectionrecord.LineSeg{Start: start, End: end, TStart: 0, TEnd: 1}
+// mapBack maps a profile of whole lines, arcs and circles from the candidate
+// frame into plane's coordinates. A reflection re-walks every loop backwards,
+// so the outer loop stays counter-clockwise and holes clockwise: a line swaps
+// its ends, an arc swaps its pinned ends and keeps its range, and a circle keeps
+// its winding and range, because the reflection and the reversed walk cancel.
+// A whole circle's parameter origin moves with the frame, which a closed whole
+// edge does not observe.
+func (p permutation) mapBack(profile momentinput.Profile) momentinput.Profile {
+	loop := func(in sectionrecord.LoopRecord) sectionrecord.LoopRecord {
+		out := make([]sectionrecord.CurveSegment, len(in.Segments))
+		for i, seg := range in.Segments {
+			out[i] = p.segment(seg)
 		}
 		if p.reflects() {
 			slices.Reverse(out)
 		}
 		return sectionrecord.LoopRecord{Segments: out}
 	}
-	result := momentinput.Profile{Outer: loop(profile.outer)}
-	for _, hole := range profile.holes {
+	result := momentinput.Profile{Outer: loop(profile.Outer)}
+	for _, hole := range profile.Holes {
 		result.Holes = append(result.Holes, loop(hole))
 	}
 	return result
 }
 
-// wholeLines restates every segment as a forward whole LineSeg. A narrowed
-// line enters at a computed walked end, and an arc or circle is not a line;
-// either returns ok=false.
-func wholeLines(profile momentinput.Profile) (lineProfile, bool) {
-	loop := func(in sectionrecord.LoopRecord) ([]sectionrecord.LineSeg, bool) {
-		out := make([]sectionrecord.LineSeg, len(in.Segments))
+// segment maps one whole segment wholeCurves admitted; the loop order is
+// mapBack's.
+func (p permutation) segment(seg sectionrecord.CurveSegment) sectionrecord.CurveSegment {
+	switch seg := seg.(type) {
+	case sectionrecord.LineSeg:
+		start, end := p.point(seg.Start), p.point(seg.End)
+		if p.reflects() {
+			start, end = end, start
+		}
+		return sectionrecord.LineSeg{Start: start, End: end, TStart: 0, TEnd: 1}
+	case sectionrecord.ArcSeg:
+		start, end := p.point(seg.Start), p.point(seg.End)
+		if p.reflects() {
+			start, end = end, start
+		}
+		return sectionrecord.ArcSeg{Center: p.point(seg.Center), Start: start, End: end, TStart: seg.TStart, TEnd: seg.TEnd}
+	case sectionrecord.CircleSeg:
+		seg.Center = p.point(seg.Center)
+		return seg
+	}
+	return seg
+}
+
+// wholeCurves restates every line as a forward whole LineSeg and keeps every
+// whole arc and whole circle. A narrowed segment enters the scene at a computed
+// walked end, and any other kind has no record this path rebuilds; either
+// returns ok=false.
+func wholeCurves(profile momentinput.Profile) (momentinput.Profile, bool) {
+	loop := func(in sectionrecord.LoopRecord) (sectionrecord.LoopRecord, bool) {
+		out := make([]sectionrecord.CurveSegment, len(in.Segments))
 		for i, seg := range in.Segments {
-			line, ok := seg.(sectionrecord.LineSeg)
-			switch {
-			case !ok:
-				return nil, false
-			case line.TStart == 0 && line.TEnd == 1:
-				out[i] = line
-			case line.TStart == 1 && line.TEnd == 0:
-				out[i] = sectionrecord.LineSeg{Start: line.End, End: line.Start, TStart: 0, TEnd: 1}
+			switch seg := seg.(type) {
+			case sectionrecord.LineSeg:
+				switch {
+				case seg.TStart == 0 && seg.TEnd == 1:
+					out[i] = seg
+				case seg.TStart == 1 && seg.TEnd == 0:
+					out[i] = sectionrecord.LineSeg{Start: seg.End, End: seg.Start, TStart: 0, TEnd: 1}
+				default:
+					return sectionrecord.LoopRecord{}, false
+				}
+			case sectionrecord.ArcSeg:
+				if seg.TStart == seg.TEnd || !prismcells.WholeSegmentRange(seg.TStart, seg.TEnd) {
+					return sectionrecord.LoopRecord{}, false
+				}
+				out[i] = seg
+			case sectionrecord.CircleSeg:
+				if len(in.Segments) != 1 || seg.TStart == seg.TEnd || !prismcells.WholeSegmentRange(seg.TStart, seg.TEnd) {
+					return sectionrecord.LoopRecord{}, false
+				}
+				out[i] = seg
 			default:
-				return nil, false
+				return sectionrecord.LoopRecord{}, false
 			}
 		}
-		return out, true
+		return sectionrecord.LoopRecord{Segments: out}, true
 	}
 	outer, ok := loop(profile.Outer)
 	if !ok {
-		return lineProfile{}, false
+		return momentinput.Profile{}, false
 	}
-	result := lineProfile{outer: outer}
+	result := momentinput.Profile{Outer: outer}
 	for _, hole := range profile.Holes {
 		h, ok := loop(hole)
 		if !ok {
-			return lineProfile{}, false
+			return momentinput.Profile{}, false
 		}
-		result.holes = append(result.holes, h)
+		result.Holes = append(result.Holes, h)
 	}
 	return result, true
 }

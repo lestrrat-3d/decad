@@ -127,10 +127,9 @@ func TestThroughStopDenotedLevelThroughHole(t *testing.T) {
 	}
 }
 
-// TestThroughStopDenotedLevelMisses keeps the stops that record no denoted
+// TestThroughStopDenotedLevelMisses keeps a stop that records no denoted
 // level declining: a ThroughAll whose farthest far side another body's
-// matches within the displacements, and a ToFace onto a stacked body's top,
-// whose cap records no denoted level.
+// matches within the displacements.
 func TestThroughStopDenotedLevelMisses(t *testing.T) {
 	t.Parallel()
 	top := units.Inches(0.2)
@@ -148,21 +147,41 @@ func TestThroughStopDenotedLevelMisses(t *testing.T) {
 		// (agent-docs/gap-tolerance-design.md §5.2 item 5) and the mesh path builds the part.
 		requireDeclinedSpan(t, part, err, skinnedPlateVolume(denotedDepth(top), denotedDepth(top), 1), false)
 	})
-	t.Run("to face on a stacked top", func(t *testing.T) {
-		t.Parallel()
-		doc := decad.New()
-		stopPlate := twoSidedRect(t, doc, 30, 0, 50, 20, top, units.Millimeters(3))
-		// A pocket from below leaves the plate's top the only face facing +z.
-		pocket := twoSidedRect(t, doc, 32, 2, 36, 6, units.Millimeters(-1+3), units.Millimeters(10))
-		stacked, err := decad.Cut(t.Context(), stopPlate, pocket)
-		require.NoError(t, err)
-		require.False(t, tookMeshPath(stacked), "the pocket builds a stack")
-		plate := twoSidedRect(t, doc, 0, 0, 20, 20, top, units.Millimeters(3))
-		tool := stopTool(t, doc, decad.TwoSided{One: decad.ToFace{Body: stacked, Face: facing(r3.NewVec(0, 0, 1))},
-			Two: decad.DistanceSide{D: units.Millimeters(20)}})
-		part, err := decad.Cut(t.Context(), plate, tool)
-		requireDeclinedSpan(t, part, err, skinnedPlateVolume(denotedDepth(top), denotedDepth(top), 1), false)
-	})
+}
+
+// TestThroughStopDenotedLevelStackedTop cuts a plate with a tool that stops
+// at a blind-cut stack's top, which denotes 0.2 in. The stack's top cap
+// records its slab's denoted level, so over a 0.2 in plate the stop proves the
+// span and the cut is the analytic through hole. A 5.08 mm plate top holds the
+// same float but denotes another plane, so no span is proven.
+func TestThroughStopDenotedLevelStackedTop(t *testing.T) {
+	t.Parallel()
+	inch := units.Inches(0.2)
+	for _, tc := range []struct {
+		top      units.Value
+		analytic bool
+	}{{inch, true}, {units.Millimeters(5.08), false}} {
+		t.Run(tc.top.String(), func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			stopPlate := twoSidedRect(t, doc, 30, 0, 50, 20, inch, units.Millimeters(3))
+			// A pocket from below leaves the plate's top the only face facing +z.
+			pocket := twoSidedRect(t, doc, 32, 2, 36, 6, units.Millimeters(2), units.Millimeters(10))
+			stacked, err := decad.Cut(t.Context(), stopPlate, pocket)
+			require.NoError(t, err)
+			require.False(t, tookMeshPath(stacked), "the pocket builds a stack")
+			plate := twoSidedRect(t, doc, 0, 0, 20, 20, tc.top, units.Millimeters(3))
+			tool := stopTool(t, doc, decad.TwoSided{One: decad.ToFace{Body: stacked, Face: facing(r3.NewVec(0, 0, 1))},
+				Two: decad.DistanceSide{D: units.Millimeters(20)}})
+			part, err := decad.Cut(t.Context(), plate, tool)
+			if tc.analytic {
+				require.NoError(t, err)
+				requireDenotedThroughHole(t, part, new(big.Rat).Add(denotedDepth(inch), big.NewRat(3, 1)))
+				return
+			}
+			requireDeclinedSpan(t, part, err, skinnedPlateVolume(denotedDepth(tc.top), denotedDepth(inch), 1), false)
+		})
+	}
 }
 
 // TestThroughStopDenotedLevelUnionKeepsDenotation unions staggered plates

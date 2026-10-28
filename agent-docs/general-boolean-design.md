@@ -169,9 +169,11 @@ exposure records the match derives, and the implementation PR changes that
 document on the same branch. The inner level a shifted operand contributes
 rounds once and is charged by `rationalFloatError` into that interface's
 `z0Delta`/`z1Delta`, exactly as stacked's blind cut charges its floor. A
-union-built slab records no denoted level (stacked §2.1), so a later blind
-cut ending at a displaced union level declines stacked §7's interface arm. A
-stacked operand in a stacked union splits at every level of both.
+union-built slab records the rational its operands denote at each level
+(`stackedrecord.UnionLevel.Denoted`, stacked §2.1), so a later union tying
+that level merges it, and so does the stack an A1 BRep keeps. A union-built
+stack has several outer runs, so stacked §7's cut arms do not take it as a
+target. A stacked operand in a stacked union splits at every level of both.
 
 A stacked union whose only interface is a boss on a plate has `Volume` the
 exact rational sum `A_plate·h_plate + A_boss·h_boss`, `Exact` where both are.

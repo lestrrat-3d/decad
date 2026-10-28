@@ -9,9 +9,13 @@ import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/topo/topotest"
+	"github.com/lestrrat-3d/decad/internal/topobuild"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -274,6 +278,65 @@ func TestUnionLevelsReadRanges(t *testing.T) {
 	})
 }
 
+// inchLevel is the rational d·fl(25.4) for the float d, the level a d in
+// sweep denotes, with its held float and the bound between them.
+func inchLevel(d float64) (*big.Rat, float64, float64) {
+	exact := new(big.Rat).Mul(new(big.Rat).SetFloat64(d), new(big.Rat).SetFloat64(25.4))
+	held, _ := exact.Float64()
+	return exact, held, proofarith.RationalFloatError(exact, held)
+}
+
+func TestUnionLevelsCarryDenotation(t *testing.T) {
+	t.Parallel()
+	r, held, delta := inchLevel(0.2)
+	require.Positive(t, delta, "0.2 in is a displaced level")
+	d := prismplacement.DenoteLevel(r, held, delta)
+	t.Run("a tie keeps the shared rational", func(t *testing.T) {
+		t.Parallel()
+		a := []stackedrecord.Slab{{Z0: 0, Z1: held, Z1Delta: delta, Z1Denoted: d}}
+		b := []stackedrecord.Slab{{Z0: held, Z0Delta: delta, Z0Denoted: d, Z1: 10}}
+		levels, ok := stackedrecord.UnionLevels(a, b, new(big.Rat))
+		require.True(t, ok)
+		require.Len(t, levels, 3)
+		require.Zero(t, levels[1].Denoted.Cmp(r))
+		got := prismplacement.DenotedLevel(levels[1].Held, levels[1].Delta, levels[1].Denotation())
+		require.NotNil(t, got)
+		require.Zero(t, got.Cmp(r))
+	})
+	t.Run("a shifted level denotes the lifted rational", func(t *testing.T) {
+		t.Parallel()
+		shift := proofarith.FloatRat(0.1)
+		a := []stackedrecord.Slab{{Z0: 0, Z1: 1}}
+		b := []stackedrecord.Slab{{Z0: held, Z0Delta: delta, Z0Denoted: d, Z1: 10}}
+		levels, ok := stackedrecord.UnionLevels(a, b, shift)
+		require.True(t, ok)
+		require.Len(t, levels, 4)
+		want := new(big.Rat).Add(r, shift)
+		require.Zero(t, levels[2].Denoted.Cmp(want))
+		got := prismplacement.DenotedLevel(levels[2].Held, levels[2].Delta, levels[2].Denotation())
+		require.NotNil(t, got, "the re-rounded held level and its grown bound admit the lifted rational")
+		require.Zero(t, got.Cmp(want))
+	})
+	t.Run("an undenoted displaced level records nothing", func(t *testing.T) {
+		t.Parallel()
+		a := []stackedrecord.Slab{{Z0: 0, Z1: held, Z1Delta: delta}}
+		b := []stackedrecord.Slab{{Z0: 6, Z1: 10}}
+		levels, ok := stackedrecord.UnionLevels(a, b, new(big.Rat))
+		require.True(t, ok)
+		require.Len(t, levels, 4)
+		require.Nil(t, levels[1].Denoted)
+		require.Nil(t, prismplacement.DenotedLevel(levels[1].Held, levels[1].Delta, levels[1].Denotation()))
+	})
+	t.Run("an undisplaced level denotes its float", func(t *testing.T) {
+		t.Parallel()
+		a := []stackedrecord.Slab{{Z0: 0, Z1: held, Z1Delta: delta}}
+		b := []stackedrecord.Slab{{Z0: 6, Z1: 10}}
+		levels, ok := stackedrecord.UnionLevels(a, b, new(big.Rat))
+		require.True(t, ok)
+		require.Zero(t, levels[3].Denoted.Cmp(proofarith.FloatRat(10)))
+	})
+}
+
 func TestBuildBlindCutUndenotedCap(t *testing.T) {
 	t.Parallel()
 	// The plate's bottom holds 0 with a 1e-5 displacement and no denotation.
@@ -297,4 +360,79 @@ func TestBuildBlindCutUndenotedCap(t *testing.T) {
 			require.Equal(t, tc.ok, ok)
 		})
 	}
+}
+
+// TestBuildStackFacesCarryDenotation pockets a plate over [0, 0.2 in] from
+// below to a floor at 0.1 in, then builds the stack. Every planar face records
+// its level's rational: the bottom cap 0, the pocket's ceiling at the
+// interface 0.1 in, and the top cap 0.2 in.
+func TestBuildStackFacesCarryDenotation(t *testing.T) {
+	t.Parallel()
+	top, topHeld, topDelta := inchLevel(0.2)
+	floor, floorHeld, floorDelta := inchLevel(0.1)
+	require.Positive(t, floorDelta, "0.1 in is a displaced level")
+	env := topo.Env{Doc: &topo.Document{}, Ref: 3, Alloc: topotest.Alloc{}}
+	plate := func(denoted bool) prismrecord.Payload {
+		p := prismrecord.Payload{Profile: rectRecord(0, 0, 20, 20), Frame: xyFrame(t, 0),
+			Z1: topHeld, Z1Delta: topDelta, Xform: r3.Identity()}
+		if denoted {
+			p.Z1Denoted = prismplacement.DenoteLevel(top, topHeld, topDelta)
+		}
+		return p
+	}
+	tool := prismrecord.Payload{Profile: rectRecord(2, 2, 8, 18), Frame: xyFrame(t, 0),
+		Z0: -10, Z1: floorHeld, Z1Delta: floorDelta,
+		Z1Denoted: prismplacement.DenoteLevel(floor, floorHeld, floorDelta), Xform: r3.Identity()}
+	build := func(t *testing.T, target prismrecord.Payload, edit func(*stackedrecord.Payload)) map[float64][]*big.Rat {
+		t.Helper()
+		sp, ok, err := stackedrecord.BuildBlindCut(t.Context(), proofbound.NewWorkBudget(t.Context()), target, tool)
+		require.NoError(t, err)
+		require.True(t, ok)
+		require.Len(t, sp.Slabs, 2)
+		if edit != nil {
+			edit(&sp)
+		}
+		body, err := stackedrecord.Build(t.Context(), env, sp, stackedrecord.OwnPlan{})
+		require.NoError(t, err)
+		byLevel := map[float64][]*big.Rat{}
+		for _, f := range topobuild.Faces(body) {
+			if f.CapRecord != nil {
+				byLevel[f.CapRecord.Z] = append(byLevel[f.CapRecord.Z], f.CapRecord.ZDenoted)
+			}
+		}
+		require.Len(t, byLevel, 3, "a bottom cap, an interface and a top cap")
+		return byLevel
+	}
+	requireLevel := func(t *testing.T, faces []*big.Rat, want *big.Rat) {
+		t.Helper()
+		require.NotEmpty(t, faces)
+		for _, got := range faces {
+			if want == nil {
+				require.Nil(t, got)
+				continue
+			}
+			require.NotNil(t, got)
+			require.Zero(t, got.Cmp(want))
+		}
+	}
+	t.Run("denoted top", func(t *testing.T) {
+		t.Parallel()
+		byLevel := build(t, plate(true), nil)
+		requireLevel(t, byLevel[0], new(big.Rat))
+		requireLevel(t, byLevel[floorHeld], floor)
+		requireLevel(t, byLevel[topHeld], top)
+	})
+	t.Run("interface recorded above only", func(t *testing.T) {
+		t.Parallel()
+		byLevel := build(t, plate(true), func(sp *stackedrecord.Payload) {
+			sp.Slabs[0].Z1Denoted = prismplacement.LevelDenotation{}
+		})
+		requireLevel(t, byLevel[floorHeld], floor)
+	})
+	t.Run("undenoted top", func(t *testing.T) {
+		t.Parallel()
+		byLevel := build(t, plate(false), nil)
+		requireLevel(t, byLevel[floorHeld], floor)
+		requireLevel(t, byLevel[topHeld], nil)
+	})
 }

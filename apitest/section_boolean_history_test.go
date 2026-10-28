@@ -16,9 +16,9 @@ import (
 
 const (
 	historyRefusal  = "exact two-body Boolean history"
-	operandRefusal  = "exact line section of each Boolean operand"
-	regionRefusal   = "is not one exact region"
+	operandRefusal  = "exact section of whole lines, arcs and circles of each Boolean operand"
 	junctionRefusal = "junction Sketch does not certify exact"
+	curveCutRefusal = "cuts an arc or circle, and Sketch certifies no exact arc junction"
 )
 
 // beamAlongX extrudes the rectangle [3, 7] x [z0, z1], drawn on the YZ plane
@@ -255,20 +255,15 @@ func TestSectionMeshBooleanHistoryRefusals(t *testing.T) {
 		// an axis and a plane square to one, so the grid reads the cut (agent-docs/orthogonal-section-design.md).
 		requireExactHistorySection(t, joined, historyLevel(t, 3), [][2]float64{{0, 0}, {10, 0}, {10, 10}, {0, 10}}, 100)
 	})
-	t.Run("curved operand section", func(t *testing.T) {
+	t.Run("cut circle", func(t *testing.T) {
 		t.Parallel()
+		// The cylinder about (10, 10) cuts the cube's corner, so its arc is cut
+		// at (7, 10) and (10, 7). Sketch names no line-arc crossing as an exact
+		// point, so the cut arc refuses.
 		doc := decad.New()
-		w := sketch.NewWorld()
-		plane, err := w.CreateOffsetPlane(w.XY(), 5)
+		notched, err := decad.Cut(t.Context(), historyCube(t, doc), historyZCylinder(t, doc, 10, 10, 3, 5, 10))
 		require.NoError(t, err)
-		s, err := w.CreateSketch(plane)
-		require.NoError(t, err)
-		center := s.CreatePoint(10, 10)
-		s.Fix(center)
-		s.CreateCircle(center, 3)
-		notched, err := decad.Cut(t.Context(), historyCube(t, doc), extrudeSolved(t, doc, s, 10))
-		require.NoError(t, err)
-		refuses(t, notched, 7, operandRefusal)
+		refuses(t, notched, 7, curveCutRefusal)
 	})
 	t.Run("inexact line junction", func(t *testing.T) {
 		t.Parallel()
@@ -315,4 +310,212 @@ func TestSectionMeshBooleanHistoryRefusals(t *testing.T) {
 		// A beam wholly inside the cube leaves the cube's square: the grid reads it where the history gate does not.
 		requireExactHistorySection(t, joined, historyLevel(t, 4), [][2]float64{{0, 0}, {10, 0}, {10, 10}, {0, 10}}, 100)
 	})
+}
+
+// historyZCylinder extrudes a circle of radius r about (u, v), drawn at height z, by
+// h along +Z.
+func historyZCylinder(t *testing.T, doc *decad.Document, u, v, r, z, h float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	plane, err := w.CreateOffsetPlane(w.XY(), z)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	center := s.CreatePoint(u, v)
+	s.Fix(center)
+	s.CreateCircle(center, r)
+	return extrudeSolved(t, doc, s, h)
+}
+
+// xCylinder extrudes a circle of radius r about (y, z), drawn on the YZ plane
+// offset to x0, by length along +X.
+func xCylinder(t *testing.T, doc *decad.Document, x0, length, y, z, r float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	plane, err := w.CreateOffsetPlane(w.YZ(), x0)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	center := s.CreatePoint(y, z)
+	s.Fix(center)
+	s.CreateCircle(center, r)
+	return extrudeSolved(t, doc, s, length)
+}
+
+// xBeam extrudes the rectangle [y0, y1] x [z0, z1], drawn on the YZ plane
+// offset to x0, by length along +X.
+func xBeam(t *testing.T, doc *decad.Document, x0, length, y0, y1, z0, z1 float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	plane, err := w.CreateOffsetPlane(w.YZ(), x0)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	rect := s.CreateRectangle(y0, z0, y1, z1)
+	s.Fix(rect.A)
+	return extrudeSolved(t, doc, s, length)
+}
+
+// holedPlate is the 10 mm cube with a through hole of radius 2 about (5, 5).
+func holedPlate(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 10, 10)
+	s.Fix(rect.A)
+	center := s.CreatePoint(5, 5)
+	s.Fix(center)
+	s.CreateCircle(center, 2)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	for _, profile := range s.Profiles() {
+		if len(profile.Holes) == 1 {
+			body, err := decad.Extrude(t.Context(), doc, s, profile,
+				decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+			require.NoError(t, err)
+			return body
+		}
+	}
+	t.Fatal("the plate sketch has no holed profile")
+	return nil
+}
+
+// boredTube revolves the meridian r 4..10, z 0..20 a full turn about world Z.
+func boredTube(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XZ())
+	require.NoError(t, err)
+	a, b, c, d := s.CreatePoint(4, 0), s.CreatePoint(10, 0), s.CreatePoint(10, 20), s.CreatePoint(4, 20)
+	s.Fix(a)
+	s.CreateLine(a, b)
+	s.CreateLine(b, c)
+	s.CreateLine(c, d)
+	s.CreateLine(d, a)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], decad.SketchLine{
+		Start: decad.Point2{}, End: decad.Point2{V: 1},
+	}, decad.FullRevolution{})
+	require.NoError(t, err)
+	return body
+}
+
+// historyRegion is one expected region of a section read through history: its
+// net area in closed form and how many holes it has.
+type historyRegion struct {
+	area  float64
+	holes int
+}
+
+// requireHistoryRegions sections a mesh Boolean result and checks each region,
+// in the order Section lists them, against its closed-form area. A 1 mm
+// Extrude of every region must enclose that area and pass VerifyAll.
+func requireHistoryRegions(t *testing.T, body *decad.Body, frame r3.Frame, want []historyRegion) {
+	t.Helper()
+	require.True(t, tookMeshPath(body), "the fixture is a mesh Boolean result")
+	section, profiles, err := body.Section(t.Context(), frame)
+	require.NoError(t, err)
+	require.Len(t, profiles, len(want))
+	for i, profile := range profiles {
+		require.Len(t, profile.Holes, want[i].holes)
+		reading, err := decad.MeasureProfile(section, profile)
+		require.NoError(t, err)
+		area, err := reading.Area()
+		require.NoError(t, err)
+		require.LessOrEqual(t, math.Abs(area.Value.Base()-want[i].area), area.Bound.Base())
+		require.LessOrEqual(t, area.Bound.Base(), 1e-9)
+
+		slab, err := decad.Extrude(t.Context(), decad.New(), section, profile,
+			decad.Distance{D: units.Millimeters(1), Dir: decad.Along})
+		require.NoError(t, err)
+		volume, err := slab.Volume()
+		require.NoError(t, err)
+		require.LessOrEqual(t, math.Abs(volume.Value.Base()-want[i].area), volume.Bound.Base())
+		require.LessOrEqual(t, volume.Bound.Base(), 1e-9)
+		mesh, err := slab.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+		require.NoError(t, err)
+		require.True(t, mesh.BoundaryVerified())
+		require.True(t, mesh.VolumeVerified())
+	}
+}
+
+// yzLevel is the frame on the plane x = level with U = +Y and V = +Z.
+func yzLevel(t *testing.T, level float64) r3.Frame {
+	t.Helper()
+	f, err := r3.NewFrame(r3.Vec{X: level}, r3.Vec{Y: 1}, r3.Vec{Z: 1})
+	require.NoError(t, err)
+	return f
+}
+
+// TestSectionMeshBooleanHistoryCurvesAndRegions sections mesh Boolean results
+// whose operand sections hold whole circles and holes, and whose results hold
+// holes or several regions.
+func TestSectionMeshBooleanHistoryCurvesAndRegions(t *testing.T) {
+	t.Parallel()
+	t.Run("slot splits a holed plate", func(t *testing.T) {
+		t.Parallel()
+		// The beam y 7.5..9.5 runs through the plate along X. At z = 5 it
+		// leaves the part below it, with the round hole, and a 0.5 mm strip.
+		doc := decad.New()
+		slotted, err := decad.Cut(t.Context(), holedPlate(t, doc), xBeam(t, doc, -5, 20, 7.5, 9.5, -1, 11))
+		require.NoError(t, err)
+		requireHistoryRegions(t, slotted, historyLevel(t, 5), []historyRegion{
+			{area: 75 - 4*math.Pi, holes: 1},
+			{area: 5},
+		})
+	})
+	t.Run("beam crosses a holed plate", func(t *testing.T) {
+		t.Parallel()
+		// The common part is y 1..9 of the plate, and the hole lies inside it.
+		doc := decad.New()
+		common, err := decad.Intersect(t.Context(), holedPlate(t, doc), xBeam(t, doc, -5, 20, 1, 9, 3, 7))
+		require.NoError(t, err)
+		requireHistoryRegions(t, common, historyLevel(t, 5), []historyRegion{{area: 80 - 4*math.Pi, holes: 1}})
+	})
+	t.Run("cylinder apart from the cube", func(t *testing.T) {
+		t.Parallel()
+		// On the plane x = 5 the cube is a square in its cardinal vertical
+		// section, and the cylinder along X is a whole circle in its own
+		// parallel section. Neither bounds the other.
+		doc := decad.New()
+		joined, err := decad.Union(t.Context(), historyCube(t, doc), xCylinder(t, doc, 2, 6, 20, 5, 2))
+		require.NoError(t, err)
+		requireHistoryRegions(t, joined, yzLevel(t, 5), []historyRegion{{area: 100}, {area: 4 * math.Pi}})
+	})
+	t.Run("box inside a revolved tube's bore", func(t *testing.T) {
+		t.Parallel()
+		// At z = 8 the tube is an annulus r 4..10 from its meridian, and the
+		// box is a square inside the bore that touches nothing.
+		doc := decad.New()
+		joined, err := decad.Union(t.Context(), boredTube(t, doc), boxBodyAtZ(t, doc, -2, -2, 2, 2, 5, 10))
+		require.NoError(t, err)
+		requireHistoryRegions(t, joined, historyLevel(t, 8), []historyRegion{{area: 16}, {area: 84 * math.Pi, holes: 1}})
+	})
+}
+
+// TestSectionMeshBooleanHistoryRefusesCutCurves crosses two cylinders: the
+// section at x = 0 is a disk of radius 6 joined to a 40 x 8 band, whose four
+// corners at (±sqrt(20), ±4) no binary64 point holds. It refuses.
+func TestSectionMeshBooleanHistoryRefusesCutCurves(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XZ())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	s.Fix(center)
+	s.CreateCircle(center, 4)
+	alongY, err := r3.Translation(r3.Vec{Y: 20})
+	require.NoError(t, err)
+	tool, err := decad.Transform(t.Context(), extrudeSolved(t, doc, s, 40), alongY)
+	require.NoError(t, err)
+	joined, err := decad.Union(t.Context(), xCylinder(t, doc, -20, 40, 0, 0, 6), tool)
+	require.NoError(t, err)
+	require.True(t, tookMeshPath(joined), "the fixture is a mesh Boolean result")
+	_, _, err = joined.Section(t.Context(), yzLevel(t, 0))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, curveCutRefusal)
 }

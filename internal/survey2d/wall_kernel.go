@@ -20,7 +20,10 @@ import (
 // allowance boundary (an angle-limit disk — the closed-under-limits family of
 // §6), or a whole-arc contact (a concentric disk). Corner pinches — dihedrals
 // within the allowance, which span at every size a ball is starved to — are
-// the caller's to report; they read zero and need no disk.
+// the caller's to report; they read zero and need no disk. A carrier pair
+// (SurveyElem.Carrier) generates no concentric family: its caller proved both
+// arcs lie on one circle with the material on one side, where no disk of any
+// radius sits between them.
 //
 // Every candidate carries a PROVEN bound beside its radius (DiskCand.rBound):
 // each family derives it from its own closed form over the bounded-scalar

@@ -78,6 +78,20 @@ func TestShiftDirections(t *testing.T) {
 		require.Empty(t, booleaneval.ShiftDirections(meshbool.OpIntersect, contacts))
 	})
 
+	t.Run("a contact with no normal names no direction and does not close the search", func(t *testing.T) {
+		t.Parallel()
+		// A sliver facet too thin to normalise gives a contact whose normal is the zero vector; the contacts beside it
+		// still choose the directions, and the shift reaches its slack along its own length.
+		blind := meshbool.TouchContact{Decisive: true, Slack: 2e-6}
+		contacts := []meshbool.TouchContact{contact(up, true), blind}
+		dirs := booleaneval.ShiftDirections(meshbool.OpUnion, contacts)
+		require.NotEmpty(t, dirs)
+		for _, u := range dirs {
+			require.Less(t, u.Dot(up), -0.05)
+		}
+		require.GreaterOrEqual(t, booleaneval.ShiftNeed(dirs[0], []meshbool.TouchContact{blind}), 2e-6)
+	})
+
 	t.Run("a Cut pokes a flush tool through the wall", func(t *testing.T) {
 		t.Parallel()
 		contacts := []meshbool.TouchContact{contact(up, false)}

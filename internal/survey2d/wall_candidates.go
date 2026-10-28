@@ -131,12 +131,20 @@ func (k *WallKernel) LineArcCands(l, a SurveyElem, add func(x, y, r, rBound floa
 // candidate to build and the concentric family is the only reading of that
 // pair. The T2 denominator −εa·sa − εb·sb is built from four SIGNS and so takes
 // one of {0, ±2} exactly, which no interval can straddle.
+//
+// A carrier pair (one nonzero SurveyElem.Carrier, one material side) emits
+// nothing: its caller proved both arcs lie on one circle, so the concentric
+// family is radius-0 disks on that circle, and two pieces of one circle with
+// the material on one side bound no web of any thickness.
 func (k *WallKernel) ArcArcCands(a, b SurveyElem, add func(x, y, r, rBound float64)) {
 	dx, dy := b.Qx-a.Qx, b.Qy-a.Qy
 	dBS := proofbound.BoundedHypot(dx, dy)
 	d := dBS.Value
 	sa, sb := a.MatSign(), b.MatSign()
 	if proofbound.AdmitAbove(dBS, SurvTiny*k.Scale) != proofbound.SurvAdmit {
+		if a.Carrier != 0 && a.Carrier == b.Carrier && a.MatInside == b.MatInside {
+			return
+		}
 		// Concentric: the family disk at each arc's own angular midpoint. The
 		// annulus half-width is |Ra − Rb|/2, and NEITHER step is exact — the
 		// difference of two radii rounds outside the Sterbenz range, and each

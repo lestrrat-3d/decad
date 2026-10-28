@@ -68,6 +68,53 @@ func CellsHaveNoVoid(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 // more than two cells, or an entity this scene did not create) — the whole
 // attempt is unresolved, as required by prism boolean §4.4.
 func Classify(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, profiles []*sketch.Profile) (matterA, matterB []bool, resolved bool, err error) {
+	memberA, memberB, ok, err := classify(budget, tags, profiles, false)
+	if err != nil || !ok {
+		return nil, nil, false, err
+	}
+	matterA = make([]bool, len(profiles))
+	matterB = make([]bool, len(profiles))
+	for i := range profiles {
+		if !memberA[i].known || !memberB[i].known {
+			return nil, nil, false, nil // §4.4: isolated from an operand's own boundary
+		}
+		matterA[i] = memberA[i].val
+		matterB[i] = memberB[i].val
+	}
+	return matterA, matterB, true, nil
+}
+
+// NestedReading is ClassifyNested's per-cell answer: membership in A and in B,
+// and whether propagation reached each at all.
+type NestedReading struct {
+	A, B           []bool
+	KnownA, KnownB []bool
+}
+
+// ClassifyNested is Classify's edge-direction reading for cells that may
+// carry holes. A cell walks every edge of its outer loop and of each hole with
+// the cell on its left, so the direction comparison reads a hole loop's edges
+// as it reads an outer loop's. A cell no edge of an operand reaches is left
+// unknown rather than refused. The section-through-history path reads
+// membership from Sketch's containment verdicts and uses this reading only to
+// falsify them (agent-docs/section-design.md, "The 2D operation"). ok=false
+// (err nil) is a shape the reading does not cover.
+func ClassifyNested(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, profiles []*sketch.Profile) (NestedReading, bool, error) {
+	memberA, memberB, ok, err := classify(budget, tags, profiles, true)
+	if err != nil || !ok {
+		return NestedReading{}, false, err
+	}
+	n := len(profiles)
+	out := NestedReading{A: make([]bool, n), B: make([]bool, n), KnownA: make([]bool, n), KnownB: make([]bool, n)}
+	for i := range profiles {
+		out.A[i], out.KnownA[i] = memberA[i].val, memberA[i].known
+		out.B[i], out.KnownB[i] = memberB[i].val, memberB[i].known
+	}
+	return out, true, nil
+}
+
+func classify(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, profiles []*sketch.Profile,
+	nested bool) ([]membership, []membership, bool, error) {
 	n := len(profiles)
 	memberA := make([]membership, n)
 	memberB := make([]membership, n)
@@ -105,13 +152,17 @@ func Classify(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, prof
 		if err := budget.Step(); err != nil {
 			return nil, nil, false, err
 		}
-		if !p.Valid || len(p.Holes) != 0 {
+		if !p.Valid || (!nested && len(p.Holes) != 0) {
 			// Not a shape this classifier covers: an invalid cell, or one
 			// carrying its own hole (both operands are hole-free on this
 			// path, so a holed cell here is defensive, not expected).
 			return nil, nil, false, nil
 		}
-		for _, e := range p.Outer {
+		loops := [][]sketch.BoundaryEdge{p.Outer}
+		if nested {
+			loops = append(loops, p.Holes...)
+		}
+		for _, e := range slices.Concat(loops...) {
 			if err := budget.Step(); err != nil {
 				return nil, nil, false, err
 			}
@@ -173,17 +224,7 @@ func Classify(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, prof
 	if err := propagate(budget, links, false, memberB); err != nil {
 		return nil, nil, false, err
 	}
-
-	matterA = make([]bool, n)
-	matterB = make([]bool, n)
-	for i := range profiles {
-		if !memberA[i].known || !memberB[i].known {
-			return nil, nil, false, nil // §4.4: isolated from an operand's own boundary
-		}
-		matterA[i] = memberA[i].val
-		matterB[i] = memberB[i].val
-	}
-	return matterA, matterB, true, nil
+	return memberA, memberB, true, nil
 }
 
 // propagate floods a known cell classification across cells

@@ -24,7 +24,9 @@ import (
 // +X sector route bit-identical runs these tests on its base commit and on its
 // head, on one machine, and compares the two directories byte for byte
 // (agent-docs/revolve-axis-design.md §8.2). Each commit runs its own copy of
-// these tests.
+// these tests. The tests skip unless the variable names a directory, so CI does
+// not run them, and a pull request that needs the comparison sets it for both
+// the base and the head run.
 const sectorDigestEnv = "DECAD_SECTOR_DIGEST"
 
 // sectorDigestTolerance is the VerifyAll tolerance every fixture tessellates at.
@@ -42,7 +44,13 @@ type sectorDigestFixture struct {
 // symmetric-difference volume and area slack, so no unexported state is read.
 // The first fixture of each group is built twice and must hash equally. The
 // groups are separate tests so the CI shards can place them independently.
+// It skips the group unless sectorDigestEnv names a directory.
 func runSectorDigest(t *testing.T, group string, fixtures []sectorDigestFixture) {
+	dir := os.Getenv(sectorDigestEnv)
+	if dir == "" {
+		t.Skipf("%s names no directory; set it to compare base and head digests (agent-docs/revolve-axis-design.md §8.2)",
+			sectorDigestEnv)
+	}
 	var report strings.Builder
 	for i, fixture := range fixtures {
 		t.Run(fixture.name, func(t *testing.T) {
@@ -54,7 +62,7 @@ func runSectorDigest(t *testing.T, group string, fixtures []sectorDigestFixture)
 			fmt.Fprintf(&report, "%s %s\n", fixture.name, digest)
 		})
 	}
-	if dir := os.Getenv(sectorDigestEnv); dir != "" && !t.Failed() {
+	if !t.Failed() {
 		require.NoError(t, os.MkdirAll(dir, 0o700))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, group+".txt"), []byte(report.String()), 0o600))
 	}

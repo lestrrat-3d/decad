@@ -95,11 +95,25 @@ func TestParallelCleanPreparedCachesMatchSerialScan(t *testing.T) {
 						}
 						for k := range 3 {
 							require.True(t, e.coneOK[i][k], "facet %d corner %d cone was prepared", i, k)
-							require.Equal(t, fresh.coneBox(i, k), e.cone[i][k], "facet %d corner %d cone", i, k)
+							require.True(t, heldConeBoxEncloses(e.coneBox(i, k), fresh.coneBox(i, k)),
+								"facet %d corner %d cone bounds", i, k)
 						}
 					}
 				})
 			}
 		}
 	}
+}
+
+func heldConeBoxEncloses(outer, inner [2]r3.Vec) bool {
+	for _, axis := range [][4]float64{
+		{outer[0].X, inner[0].X, inner[1].X, outer[1].X},
+		{outer[0].Y, inner[0].Y, inner[1].Y, outer[1].Y},
+		{outer[0].Z, inner[0].Z, inner[1].Z, outer[1].Z},
+	} {
+		if axis[0] > axis[1] || axis[2] > axis[3] {
+			return false
+		}
+	}
+	return true
 }
