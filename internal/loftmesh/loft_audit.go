@@ -417,6 +417,73 @@ func TriTriCoplanarSharedEdge(xta, xtb [3]proof.Xpt, n proof.Xpt, edgeA, edgeB p
 	return sA != 0 && sB != 0 && sA != sB
 }
 
+// coplanarSharedEdge is TriTriCoplanarSharedEdge(d.xtri(i), d.xtri(j),
+// d.Norms[i], d.Xverts[a], d.Xverts[b]) for table triangles i and j that both
+// hold vertex indices a and b, read from the table's normals.
+//
+// Every table builds Norms[k] as the exact (x1-x0) x (x2-x0) over the corners
+// x of d.xtri(k) in table order, with a positive weight, and those corners are
+// d.Xverts at d.tris[k]. Write N for that cross product. The cross product
+// (x_q-x_p) x (x_r-x_p) of a triangle's corners at positions (p, q, r) is N
+// when (p, q, r) is a cyclic order of (0, 1, 2) and -N otherwise. A nonzero
+// normal makes the three corners distinct values, so the helper's key search
+// finds the third corner of each triangle as its apex. Its first side,
+// PlaneSide(x_a, x_b, apexA, Norms[i]), is then sign(±N_i . c·N_i) = ±1 for
+// a positive c, and its second is ± the sign of Norms[j] . Norms[i]. The
+// signs read numerators, so every weight involved must be positive, the
+// invariant proof.Xhp states. A table missing a normal or a field, a zero
+// normal, a weight that is not positive, or an index not in the triangle takes
+// the helper itself, so its nil-field panics and degenerate answers are
+// unchanged.
+func (d *LoftAuditData) coplanarSharedEdge(i, j, a, b int) bool {
+	na, nb := d.Norms[i], d.Norms[j]
+	pi, apexI := edgeParity(d.tris[i], a, b)
+	pj, apexJ := edgeParity(d.tris[j], a, b)
+	if pi == 0 || pj == 0 || !xptNonzeroVector(na) || !xptNonzeroVector(nb) ||
+		!xptPositiveWeight(d.Xverts[a]) || !xptPositiveWeight(d.Xverts[b]) ||
+		!xptPositiveWeight(d.Xverts[apexI]) || !xptPositiveWeight(d.Xverts[apexJ]) {
+		return TriTriCoplanarSharedEdge(d.xtri(i), d.xtri(j), na, d.Xverts[a], d.Xverts[b])
+	}
+	var dot big.Int
+	s := proof.XdotNumScratch(&dot, nb, na).Sign()
+	return s != 0 && pi != pj*s
+}
+
+// edgeParity returns +1 when a, b and the remaining corner of tri are tri's
+// corners in cyclic order and -1 when they are in the opposite order, with
+// that remaining corner. It returns 0 when a or b is not a corner of tri or a
+// equals b.
+func edgeParity(tri [3]int, a, b int) (int, int) {
+	if a == b {
+		return 0, 0
+	}
+	for p := range 3 {
+		if tri[p] != a {
+			continue
+		}
+		switch b {
+		case tri[(p+1)%3]:
+			return 1, tri[(p+2)%3]
+		case tri[(p+2)%3]:
+			return -1, tri[(p+1)%3]
+		}
+		return 0, 0
+	}
+	return 0, 0
+}
+
+// xptNonzeroVector reports whether n has a positive weight and numerators
+// that are not all zero.
+func xptNonzeroVector(n proof.Xpt) bool {
+	return xptPositiveWeight(n) && (n.X.Sign() != 0 || n.Y.Sign() != 0 || n.Z.Sign() != 0)
+}
+
+// xptPositiveWeight reports whether all four fields of p are set and its
+// weight is positive.
+func xptPositiveWeight(p proof.Xpt) bool {
+	return p.X != nil && p.Y != nil && p.Z != nil && p.W != nil && p.W.Sign() > 0
+}
+
 // SegMatchesRecordedEdge reports whether a non-coplanar segment contact is
 // exactly the recorded shared edge (either endpoint order).
 func SegMatchesRecordedEdge(c meshbool.TriContact, edgeA, edgeB proof.Xpt) bool {
@@ -871,10 +938,10 @@ func auditLoftPairDataExactSigned(data *LoftAuditData, tris [][3]int, i, j int, 
 	na := data.Norms[i]
 	nb := data.Norms[j]
 	if sharedCount == 2 {
-		edgeA, edgeB := data.Xverts[shared[0]], data.Xverts[shared[1]]
+		edgeA := data.Xverts[shared[0]]
 		apex := data.Xverts[tessellation.TriangleApexIndex(tris[j], shared[0], shared[1])]
 		if data.apexPlaneSign(ta, tb, xta, xtb, na, apex, edgeA) == 0 {
-			if TriTriCoplanarSharedEdge(xta, xtb, na, edgeA, edgeB) {
+			if data.coplanarSharedEdge(i, j, shared[0], shared[1]) {
 				return LoftPairClassified, nil
 			}
 			return LoftPairClassified, ErrLoftContact(i, j, "do not meet exactly along their recorded shared edge")
@@ -942,7 +1009,7 @@ func auditLoftPairDataExactSigned(data *LoftAuditData, tris [][3]int, i, j int, 
 		if SegMatchesRecordedEdge(contact, edgeA, edgeB) {
 			return LoftPairClassified, nil
 		}
-		if contact.Kind == meshbool.ContactRegion && TriTriCoplanarSharedEdge(xta, xtb, na, edgeA, edgeB) {
+		if contact.Kind == meshbool.ContactRegion && data.coplanarSharedEdge(i, j, shared[0], shared[1]) {
 			return LoftPairClassified, nil
 		}
 		return LoftPairClassified, ErrLoftContact(i, j, "do not meet exactly along their recorded shared edge")

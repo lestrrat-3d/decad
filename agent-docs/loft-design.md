@@ -1294,6 +1294,12 @@ their common plane and accepts only when that edge's endpoints are an edge of
 both triangles and the two opposite vertices lie strictly on opposite sides
 of its supporting line. Those conditions prove that the closed-triangle
 intersection is exactly that segment. Every other result refuses under S7.
+The pair classifier reads the helper's two side signs from the audit table
+(`coplanarSharedEdge`). Each table normal is the exact cross product of its
+triangle's corners in table order. The first apex's side is therefore the
+edge's cyclic order in triangle `i`. The second is the edge's cyclic order in
+triangle `j` times the sign of the two normals' dot product. A zero normal, a
+missing field or a weight that is not positive takes the helper itself.
 The helper is audit-only and MUST NOT change `triTriClassify` or
 mesh-boolean contact classification.
 
