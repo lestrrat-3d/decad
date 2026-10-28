@@ -534,8 +534,21 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, tookMeshPath(meshGot), "expected the mesh path to run and produce a Faceted body")
 
-	_, err = decad.Fillet(t.Context(), meshGot, decad.Edges().AtLeast(1), units.Millimeters(1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	// Every edge of both boxes rounds with r = 1: each box loses twelve edges of 8 mm beyond its corner cubes and eight
+	// corner cubes of 1 - pi/6.
+	// It runs on a copy in its own document so the survey below reads the unrounded union.
+	fillDoc := decad.New()
+	fillA := boxBody(t, fillDoc, 0, 0, 10, 10, 10)
+	fillBSrc := boxBody(t, fillDoc, 5, 5, 15, 15, 10)
+	fillB, err := decad.Transform(t.Context(), fillBSrc, farAbove)
+	require.NoError(t, err)
+	fillUnion, err := decad.Union(t.Context(), fillA, fillB)
+	require.NoError(t, err)
+	rounded, err := decad.Fillet(t.Context(), fillUnion, decad.Edges().AtLeast(1), units.Millimeters(1))
+	require.NoError(t, err)
+	roundedVolume, err := rounded.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, 2000-2*(96*(1-math.Pi/4)+8*(1-math.Pi/6)), roundedVolume.Value.Base(), roundedVolume.Bound.Base())
 
 	meshReport, err := meshDoc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)

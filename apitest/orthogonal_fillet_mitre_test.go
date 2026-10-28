@@ -139,19 +139,6 @@ func TestFilletOfThreeTopEdgesWhoseFreeEndsShareAFaceIsRefused(t *testing.T) {
 	require.Equal(t, []*decad.Body{box}, doc.Bodies())
 }
 
-func TestFilletOfThreeEdgesAtACornerStaysRefused(t *testing.T) {
-	t.Parallel()
-	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
-	// A spherical corner patch is not a mitre: all three edges of a box corner are refused.
-	three := topEdge(r3.NewVec(0, 0, 10), x).Or(decad.EndpointAt(r3.NewVec(0, 0, 10)), decad.ParallelTo(y)).
-		Or(decad.EndpointAt(r3.NewVec(0, 0, 10)), decad.ParallelTo(z))
-	doc := decad.New()
-	box := blockIn(t, doc, r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 10))
-	_, err := decad.Fillet(t.Context(), box, three, units.Millimeters(2))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Equal(t, []*decad.Body{box}, doc.Bodies())
-}
-
 func TestFilletOfMitredEdgesRefusesAFaceBoundaryInTheirReach(t *testing.T) {
 	t.Parallel()
 	x, y := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)

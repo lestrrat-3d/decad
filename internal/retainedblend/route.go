@@ -129,6 +129,28 @@ func blend(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrecord.Pay
 			}
 		}
 	}
+	if spec.fillet && spec.asym == nil && len(edges) >= 2 {
+		// Straight convex edges of one radius that meet at perpendicular corners are filleted together, each corner by
+		// the number of edges at it (corner_fillet.go).
+		allLines := true
+		for _, e := range edges {
+			allLines = allLines && looksLikeLine(e)
+		}
+		if allLines {
+			plan, ok, err := planCorners(edges, fp, faceIndex)
+			if err != nil {
+				return nil, true, err
+			}
+			if ok {
+				ords := make([]int, len(edges))
+				for i := range ords {
+					ords[i] = i
+				}
+				out, err := rewriteCorners(ctx, env, fp, plan, spec, op, ords, faceIndex)
+				return out, true, err
+			}
+		}
+	}
 	var corners []r3.Vec
 	claim := func(ends [2]lineEnd, scale float64) error {
 		for _, end := range ends {
