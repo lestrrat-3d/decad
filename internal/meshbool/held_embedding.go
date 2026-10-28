@@ -1066,7 +1066,7 @@ func (e *heldEmbedding) pairEmbeddedExact(i, j int, sharedI, sharedJ []int) bool
 }
 
 type heldProjectedFacet struct {
-	points [3][3][2]float64
+	points [3][3]float64
 	signs  [3][3]int8
 	stable [3]bool
 }
@@ -1080,12 +1080,14 @@ func (e *heldEmbedding) projection(i int) *heldProjectedFacet {
 	}
 	p := &e.projected[i]
 	tri := e.h.Tris[i]
+	for k, v := range tri {
+		point := e.h.Verts[v]
+		p.points[k] = [3]float64{point.X, point.Y, point.Z}
+	}
 	for axis, axes := range [...][2]int{{0, 1}, {2, 0}, {1, 2}} {
 		p.stable[axis] = true
-		for k, v := range tri {
-			point := e.h.Verts[v]
-			p.points[axis][k] = [2]float64{AxisCoord(point, axes[0]), AxisCoord(point, axes[1])}
-			for _, coord := range p.points[axis][k] {
+		for k := range 3 {
+			for _, coord := range [2]float64{p.points[k][axes[0]], p.points[k][axes[1]]} {
 				magnitude := proof.Abs(coord)
 				if !(magnitude == 0 || magnitude >= 1e-100 && magnitude <= 1e100) {
 					p.stable[axis] = false
@@ -1098,12 +1100,17 @@ func (e *heldEmbedding) projection(i int) *heldProjectedFacet {
 			continue
 		}
 		for k := range 3 {
-			p.signs[axis][k] = int8(Orient2Float(p.points[axis][k],
-				p.points[axis][(k+1)%3], p.points[axis][(k+2)%3]))
+			p.signs[axis][k] = int8(Orient2Float(heldProjectedPoint(p, axis, k),
+				heldProjectedPoint(p, axis, (k+1)%3), heldProjectedPoint(p, axis, (k+2)%3)))
 		}
 	}
 	e.projectedOK[i] = true
 	return p
+}
+
+func heldProjectedPoint(p *heldProjectedFacet, axis, vertex int) [2]float64 {
+	axes := [...][2]int{{0, 1}, {2, 0}, {1, 2}}
+	return [2]float64{p.points[vertex][axes[axis][0]], p.points[vertex][axes[axis][1]]}
 }
 
 // projectionsSeparated proves two triangles disjoint when one coordinate
@@ -1129,14 +1136,15 @@ func projectedEdgeSeparates(a, b *heldProjectedFacet, axis, edge int) bool {
 	if sign == 0 {
 		return false
 	}
-	start := a.points[axis][edge]
-	end := a.points[axis][(edge+1)%3]
+	start := heldProjectedPoint(a, axis, edge)
+	end := heldProjectedPoint(a, axis, (edge+1)%3)
 	bx, by := end[0]-start[0], end[1]-start[1]
 	mxEdge, myEdge := proof.Abs(bx), proof.Abs(by)
 	// A nonzero cached sign means Orient2Float admitted both edge
 	// differences. Compute them once for all three queried points and check
 	// only each point's new differences, with the same error bound.
-	for _, point := range b.points[axis] {
+	for vertex := range 3 {
+		point := heldProjectedPoint(b, axis, vertex)
 		cx, cy := point[0]-start[0], point[1]-start[1]
 		mx, my := proof.Abs(cx), proof.Abs(cy)
 		if !(cx == 0 || mx >= 0x1p-300 && mx <= 0x1p250) ||

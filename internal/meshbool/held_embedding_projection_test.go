@@ -22,8 +22,13 @@ func requireHeldProjectedEdgesMatch(t *testing.T, e *heldEmbedding) {
 		for edge := range 3 {
 			for order, pair := range [][2]*heldProjectedFacet{{a, b}, {b, a}} {
 				p, q := pair[0], pair[1]
-				want := FloatEdgeSeparates(p.points[axis][edge], p.points[axis][(edge+1)%3],
-					p.points[axis][(edge+2)%3], q.points[axis])
+				want := FloatEdgeSeparates(heldProjectedPoint(p, axis, edge),
+					heldProjectedPoint(p, axis, (edge+1)%3),
+					heldProjectedPoint(p, axis, (edge+2)%3), [3][2]float64{
+						heldProjectedPoint(q, axis, 0),
+						heldProjectedPoint(q, axis, 1),
+						heldProjectedPoint(q, axis, 2),
+					})
 				require.Equal(t, want, projectedEdgeSeparates(p, q, axis, edge),
 					"axis %d edge %d order %d", axis, edge, order)
 			}
