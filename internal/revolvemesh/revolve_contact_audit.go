@@ -96,11 +96,19 @@ func NewRevolveAuditTri(verts []r3.Vec, tri [3]int) (RevolveAuditTri, bool) {
 // float pre-test runs the same walk first (RevolveSeparatedFloat); an axis it
 // accepts is one the exact walk accepts too.
 func RevolveSeparated(a, b RevolveAuditTri, delta float64) bool {
-	return RevolveSeparatedFloat(a, b, delta) || RevolveSeparatedExact(a, b, delta)
+	return revolveSeparated(&a, &b, delta)
+}
+
+func revolveSeparated(a, b *RevolveAuditTri, delta float64) bool {
+	return revolveSeparatedFloat(a, b, delta) || revolveSeparatedExact(a, b, delta)
 }
 
 // RevolveSeparatedExact is RevolveSeparated's walk over the exact Dyadic axes.
 func RevolveSeparatedExact(a, b RevolveAuditTri, delta float64) bool {
+	return revolveSeparatedExact(&a, &b, delta)
+}
+
+func revolveSeparatedExact(a, b *RevolveAuditTri, delta float64) bool {
 	margin := proofbound.ProductUpper(2, delta)
 	if proofbound.IsNonFinite(margin) {
 		return false
@@ -595,7 +603,7 @@ func AuditRevolvePair(data []RevolveAuditTri, tris [][3]int, shared [3]int, coun
 	case 3:
 		return fmt.Errorf(`%w: revolve facets %d and %d are the same triangle`, decaderr.ErrUnsupported, i, j)
 	case 0:
-		if RevolveSeparated(data[i], data[j], delta) {
+		if revolveSeparated(&data[i], &data[j], delta) {
 			return nil
 		}
 		return fmt.Errorf(`%w: revolve facets %d and %d share no vertex, and this mesh cannot prove they stay apart under its own coordinate displacement`, decaderr.ErrUnsupported, i, j)
