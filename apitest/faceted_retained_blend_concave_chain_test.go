@@ -1,7 +1,9 @@
 package apitest_test
 
 import (
+	"fmt"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -119,6 +121,21 @@ func requireBlendsFaceVoid(t *testing.T, b *decad.Body, r float64) {
 		checked++
 	}
 	require.Equal(t, 8, checked)
+}
+
+// requireContactX checks that a strip clearance refusal names a contact point
+// whose x lies in [lo, hi], where the crossing solid is.
+func requireContactX(t *testing.T, err error, lo, hi float64) {
+	t.Helper()
+	const at = "the blend meets another facet of the body at {"
+	msg := err.Error()
+	i := strings.Index(msg, at)
+	require.GreaterOrEqual(t, i, 0, msg)
+	var p r3.Vec
+	_, scanErr := fmt.Sscanf(msg[i+len(at):], "%g %g %g}", &p.X, &p.Y, &p.Z)
+	require.NoError(t, scanErr, msg)
+	require.GreaterOrEqual(t, p.X, lo, msg)
+	require.LessOrEqual(t, p.X, hi, msg)
 }
 
 // requireBevelsFaceVoid checks that every bevel of a pocket floor chamfer,
@@ -318,6 +335,7 @@ func TestFacetedRetainedBlendConcaveChain(t *testing.T) {
 			units.Millimeters(concaveFilletR), decad.WithTangentChain())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "the blend meets another facet of the body")
+		requireContactX(t, err, 15, 17)
 	})
 
 	t.Run("a concave open chain is refused", func(t *testing.T) {

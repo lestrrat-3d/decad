@@ -269,6 +269,7 @@ func TestFacetedRetainedBlendChain(t *testing.T) {
 		_, err = decad.Fillet(t.Context(), cavity, topFront(), units.Millimeters(1), decad.WithTangentChain())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "the blend meets another facet of the body")
+		requireContactX(t, err, 15, 17)
 	})
 
 	t.Run("one straight edge without the option names the option", func(t *testing.T) {

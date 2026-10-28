@@ -3,6 +3,8 @@ package retainedblend
 import (
 	"context"
 	"fmt"
+	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -74,11 +76,10 @@ func (w *work) checkStripClear(ctx context.Context, stripFrom int) error {
 	rest = append(rest, w.out[:stripFrom]...)
 
 	boxes := make([]facetBox, len(strip))
-	all := boxOf(w.verts, strip[0])
 	for i, t := range strip {
 		boxes[i] = boxOf(w.verts, t)
-		all = all.join(boxes[i])
 	}
+	grid := newBoxGrid(boxes)
 	exact := make([]exactFacet, len(strip))
 	lift := func(t [3]int) exactFacet {
 		var e exactFacet
@@ -92,17 +93,20 @@ func (w *work) checkStripClear(ctx context.Context, stripFrom int) error {
 		return e
 	}
 	budget := proofbound.NewWorkBudget(ctx)
+	var near []int
 	for _, r := range rest {
 		rb := boxOf(w.verts, r)
-		if !rb.meets(all) {
-			continue
-		}
+		near = grid.near(rb, near[:0])
 		var re exactFacet
-		for i, s := range strip {
+		for _, i := range near {
+			s := strip[i]
+			if !rb.meets(boxes[i]) {
+				continue
+			}
 			if err := budget.Step(); err != nil {
 				return err
 			}
-			if !rb.meets(boxes[i]) || sharesVertex(r, s) {
+			if sharesVertex(r, s) {
 				continue
 			}
 			if !re.ok {
@@ -121,12 +125,82 @@ func (w *work) checkStripClear(ctx context.Context, stripFrom int) error {
 					decaderr.ErrUnsupported, err)
 			}
 			if contact.Kind != meshbool.ContactNone {
-				return fmt.Errorf("%w: the blend meets another facet of the body near %v", decaderr.ErrUnsupported,
-					w.verts[s[0]])
+				return fmt.Errorf("%w: the blend meets another facet of the body at %v", decaderr.ErrUnsupported,
+					contact.P0.Vec())
 			}
 		}
 	}
 	return nil
+}
+
+// boxGrid buckets the strip facets' boxes in a uniform grid over their joint
+// box, so a facet of the rest of the body is tested only against the strip
+// facets in the cells its own box covers. cell is monotone in each
+// coordinate, so two boxes that meet cover a common cell: the grid never
+// drops a pair the exact test would have to see.
+type boxGrid struct {
+	all      facetBox
+	lo, size r3.Vec
+	n        [3]int
+	cells    [][]int
+	stamp    []int
+	round    int
+}
+
+func newBoxGrid(boxes []facetBox) *boxGrid {
+	all := boxes[0]
+	for _, b := range boxes[1:] {
+		all = all.join(b)
+	}
+	k := max(1, min(64, int(math.Cbrt(float64(len(boxes))))))
+	g := &boxGrid{all: all, lo: all.lo, n: [3]int{k, k, k}, stamp: make([]int, len(boxes))}
+	span := all.hi.Sub(all.lo)
+	g.size = r3.NewVec(span.X/float64(k), span.Y/float64(k), span.Z/float64(k))
+	g.cells = make([][]int, k*k*k)
+	for i, b := range boxes {
+		g.visit(b, func(c int) { g.cells[c] = append(g.cells[c], i) })
+	}
+	return g
+}
+
+// cell is the grid index of coordinate x along an axis, clamped to the grid.
+func cell(x, lo, size float64, n int) int {
+	if !(size > 0) {
+		return 0
+	}
+	return min(max(int(math.Floor((x-lo)/size)), 0), n-1)
+}
+
+func (g *boxGrid) visit(b facetBox, f func(int)) {
+	x0, x1 := cell(b.lo.X, g.lo.X, g.size.X, g.n[0]), cell(b.hi.X, g.lo.X, g.size.X, g.n[0])
+	y0, y1 := cell(b.lo.Y, g.lo.Y, g.size.Y, g.n[1]), cell(b.hi.Y, g.lo.Y, g.size.Y, g.n[1])
+	z0, z1 := cell(b.lo.Z, g.lo.Z, g.size.Z, g.n[2]), cell(b.hi.Z, g.lo.Z, g.size.Z, g.n[2])
+	for x := x0; x <= x1; x++ {
+		for y := y0; y <= y1; y++ {
+			for z := z0; z <= z1; z++ {
+				f((x*g.n[1]+y)*g.n[2] + z)
+			}
+		}
+	}
+}
+
+// near appends to out, in ascending order and once each, the strip facets
+// in the cells b covers. A box that misses the strip's joint box gets none.
+func (g *boxGrid) near(b facetBox, out []int) []int {
+	if !b.meets(g.all) {
+		return out
+	}
+	g.round++
+	g.visit(b, func(c int) {
+		for _, i := range g.cells[c] {
+			if g.stamp[i] != g.round {
+				g.stamp[i] = g.round
+				out = append(out, i)
+			}
+		}
+	})
+	slices.Sort(out)
+	return out
 }
 
 func sharesVertex(a, b [3]int) bool {
