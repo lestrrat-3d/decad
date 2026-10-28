@@ -81,10 +81,24 @@ func prismOutwardSign(outward bool, e Embed) float64 {
 }
 
 // PrismWallSet collects P2's side walks and rectangles for P5's section claim.
+// Carriers holds each wall's recorded operand circle with its centre mapped
+// into the section frame, and RectPlanar says, per rectangle, whether a P2(b)
+// planar face states it (false for a P2(c) restated straight wall).
 type PrismWallSet struct {
 	Walls              []survey2d.SegmentWalk
 	Rects              []PrismRect
+	Carriers           []CircleCarrier
+	RectPlanar         []bool
 	ZloDelta, ZhiDelta float64
+}
+
+// SectionClaim names the face that claims one section segment (P5): a P2(a)
+// wall, with its recorded operand circle mapped into the section frame, or a
+// rectangle, Planar for a P2(b) planar face.
+type SectionClaim struct {
+	Wall    bool
+	Carrier CircleCarrier
+	Planar  bool
 }
 
 // Add reads one face as a wall along the axis or a rectangle across it.
@@ -112,18 +126,25 @@ func (w *PrismWallSet) Add(f PrismRectFace, e, section Embed, axis int, zlo, zhi
 			return false
 		}
 		w.Walls = append(w.Walls, walk)
+		carrier := f.Carrier
+		if carrier.Radius != 0 {
+			carrier.Center = NewPrismMap(e, section).point(carrier.Center)
+		}
+		w.Carriers = append(w.Carriers, carrier)
 		w.ZloDelta, w.ZhiDelta = max(w.ZloDelta, d0), max(w.ZhiDelta, d1)
 		return true
 	case f.Region != nil:
 		rect, ok := PlanarPrismRect(f, e, section, axis, zlo, zhi)
 		if ok {
 			w.Rects = append(w.Rects, rect)
+			w.RectPlanar = append(w.RectPlanar, true)
 		}
 		return ok
 	default:
 		rect, ok := SweptPrismRect(f, e, section, axis, zlo, zhi)
 		if ok {
 			w.Rects = append(w.Rects, rect)
+			w.RectPlanar = append(w.RectPlanar, false)
 		}
 		return ok
 	}
@@ -132,6 +153,24 @@ func (w *PrismWallSet) Add(f PrismRectFace, e, section Embed, axis int, zlo, zhi
 // ClaimsSection checks that every wall or rectangle claims exactly one section segment.
 func (w *PrismWallSet) ClaimsSection(section momentinput.Profile, work *freeform.FreeformWork) bool {
 	return PrismWallsClaim(w.Walls, w.Rects, section, work)
+}
+
+// Claims is ClaimsSection's claim map: for each section segment, loop by
+// loop, the face that claims it. It reports false where ClaimsSection does.
+func (w *PrismWallSet) Claims(section momentinput.Profile, work *freeform.FreeformWork) ([]SectionClaim, bool) {
+	claimant, ok := prismWallsClaimants(w.Walls, w.Rects, section, work)
+	if !ok {
+		return nil, false
+	}
+	out := make([]SectionClaim, len(claimant))
+	for i, c := range claimant {
+		if c < len(w.Walls) {
+			out[i] = SectionClaim{Wall: true, Carrier: w.Carriers[c]}
+			continue
+		}
+		out[i] = SectionClaim{Planar: w.RectPlanar[c-len(w.Walls)]}
+	}
+	return out, true
 }
 
 // ClassifyPrismWalls checks P2 and P5 over every face other than the caps.

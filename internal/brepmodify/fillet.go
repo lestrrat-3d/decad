@@ -155,6 +155,12 @@ func Fillet(ctx context.Context, env topo.Env, b *topo.Body, call FilletCall) (R
 	if route.Prism != nil {
 		pp, ok = *route.Prism, true
 	}
+	// Route P's displaced reading (agent-docs/brep-modify-design.md §4.4)
+	// fillets from the record's exact carriers instead of its displaced
+	// section.
+	if route.Carriers != nil {
+		return DisplacedLateralFillet(ctx, env, pp, *route.Carriers, sel, edges, rmm)
+	}
 	if !ok {
 		return Result{}, fmt.Errorf(`%w: this evaluator fillets a straight prism, its one-line Sweep reduction, a revolve, or a matching-section axial loft only; selector %s matched [%s]`,
 			decaderr.ErrUnsupported, sel, modifyselect.EdgesContext(edges))

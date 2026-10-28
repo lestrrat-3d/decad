@@ -53,7 +53,7 @@ Scenes (general-boolean §2, §9) and what each route unlocks:
 | B1 square cross hole | brep | y: 4 outer and 4 hole edges; shell | edges along x and z |
 | S11 three cross holes | brep | y: lateral edges, 6 rims; shell | x/z edges |
 | S11 + hole down the caps | brep | none | every straight edge |
-| B2 keyway | brep, `delta > 0` | SB1 | SB1 |
+| B2 keyway, D-flat | brep, `delta > 0` | x: lateral edges whose selection blends every crossing corner (§4.4) | SB1 |
 | A1 flush boss, T-face | brep | none | boss edges, plate edges |
 | A1 crossing round boss | brep, `delta > 0` | SB1 | SB1 |
 | blind rectangular pocket | stacked → face view | none | pocket corners (concave), floor edges |
@@ -80,7 +80,8 @@ cupPayload, revolve, loft… → unchanged (S3, RX2, …)
 facetedPayload             → SX9, unchanged
 ```
 
-The brep route: SB1; then route P for every reference axis in order; then
+The brep route: SB1, except §4.4's displaced reading; then route P for every
+reference axis in order; then
 route E or `agent-docs/modify-general-design.md`'s route L (Fillet/Chamfer), or
 route S (Shell; modify-general §3), whose refusal leads with SB3 or SB10
 where the record reads as no through-cut record either. Route E takes single
@@ -102,7 +103,7 @@ remains SX16.
 |---|---|---|---|
 | **RB1** | `brepPayload`, `sectionDelta() == 0` | route P, else route E (Table EB) or route L (modify-general §4); an asymmetric chamfer skips P | route P, else route S (modify-general §3) |
 | **RB2** | `stackedPrismPayload` whose `breprecord.OfStacked` succeeds (one region per slab, not a group) | as RB1 over the face view; asymmetric references use the source-face role at each record index | as RB1 |
-| **RB3** | `brepPayload` or stacked receiver with a section displacement | SB1 | SB1 |
+| **RB3** | `brepPayload` or stacked receiver with a section displacement | route P's displaced reading (§4.4) for a lateral Fillet or symmetric Chamfer that passes Table PD; otherwise SB1 | SB1 |
 | **RB4** | `facetedPayload` | reach SX9 (permanent) | reach SX9 |
 
 RB1's zero-displacement rule is prism-boolean §13's displaced-receiver rule,
@@ -147,7 +148,8 @@ and needs a reflecting map reads as no prism along that axis.
 The recognised prism is
 `prismPayload{profile: S, frame: F, z0: zlo, z1: zhi, xform: bp.xform}` in
 `F`'s coordinates, with `z0Delta`/`z1Delta` the largest level displacement any
-face states at that level, and `sectionDelta` zero (RB1). It is never stored;
+face states at that level, and `sectionDelta` zero (RB1; §4.4's displaced
+reading carries the record's). It is never stored;
 it is the op's receiver for the rest of the call.
 
 ### 4.2 Selection and dispatch
@@ -185,6 +187,114 @@ axis: the roles would change under the caller and the next cut would find no
 prism. Neither objection reaches a modify op. Its result mints fresh roles
 anyway (modify §11), and the prism it returns composes as any prism does: a
 next perpendicular cut takes class B and a co-directional one class A.
+
+### 4.4 A displaced class-B receiver: carriers, not vertices
+
+A class-B crossing result (general-boolean §3 B.3: a D-flat or keyway on a
+shaft) carries a section displacement `δ = bp.SectionDelta() > 0`: every
+cylinder–plane crossing is one float from the keyed crossing table, within its
+proven charge of the true crossing of the operand's own circle. Route P still
+reads such a record as a prism (P1–P5 are identity comparisons on the
+recorded data). This section is the one reading of a displaced receiver that
+builds: a symmetric `Fillet` or `Chamfer` of lateral edges. Every other
+displaced call is SB1.
+
+**Claim X (where a class-B section is displaced).** Let `S` be a route-P
+section of a class-B crossing record and `S*` the section the record denotes.
+`S` and `S*` have the same walks in the same order, on the same carriers. Each
+line lies exactly on its plane (a P2(b) rectangle, whose level carries no
+displacement), and each arc's centre is its cylinder's exact centre. They
+differ only at junctions that involve a circular walk: there a junction point
+of `S` lies within `δ` of the one in `S*`, and an arc's recorded radius lies
+within `δ` of its cylinder's radius. A line–line junction meets two exact
+levels and is exact.
+
+**The record carries the exact cylinder.** `breprecord.Face.WallCarrier`
+(`brepgeom.CircleCarrier`: a centre in the face's frame and a radius in
+millimetres) is the operand circle a class-B crossing build's cylinder piece
+lies on (general-boolean §4.1). Only a `CircleSeg` source sets it, so a wall
+on an arc-walled operand records none. `brepgeom.PrismWallSet.Claims` returns,
+per section segment, the face that claims it under P5 and that wall's carrier
+mapped into `F`.
+
+**Dispatch.** `Receiver` sends a displaced record to `displacedReceiver`. A
+Shell, an asymmetric chamfer, an op with no corner construction, or a record
+with route L bands is SB1. Otherwise route P runs over axes 0, 1, 2; a
+reading takes PD2 and then the op's own classification, and the first that
+passes is the route, with the prism's `SectionDelta` set to `δ` and the
+carriers in `Route.Carriers`. No admitting reading is SB1 (with PD1's or PD2's
+reason when some axis read as a prism); routes E, L, V and S never run. A
+prism-path consumer that does not take the displaced arm still refuses through
+`prismrecord.Payload.RequireExactSection`.
+
+**Construction** (`internal/brepmodify/displaced_blend.go`). The Fillet and
+Chamfer arms match corners as the prism path does, then PD3 and PD4, then
+copy the corner loops with every circular walk on its carrier: the exact
+radius, and the length that radius gives the walk's sweep. Centres are
+already exact and lines are untouched. Each selected corner is built by
+`offset2d.FilletWithRoots` (which also returns the cross product, both offset
+roots and the arc-sense dot it decided on) or `offset2d.Chamfer` on those
+walks. `offset2d.RewriteProfileBudget` rewrites the section from the carrier
+walks; the audit runs S8, S6, S7 and S9 with PD6's widened cutbacks; the build
+is `prismrecord.Build` with `SectionDelta` 0 for a fillet and `δ_out` for a
+chamfer (PD7).
+
+**Claim D (fillet).** Under PD1–PD6 the fillet of `S` equals the fillet of
+`S*` up to the float evaluation of the same closed forms from the same exact
+inputs, which modify §5 takes as every prism fillet's definition, so its
+`SectionDelta` is 0. The offsets are those of the exact carriers. The displaced
+corner enters only decisions: the turn's sign (S4 and the offset side; an arc
+tangent at a point within `δ` of the true corner turns by at most
+`θ = asin(δ/R) ≤ δ/(R − δ)`, held by PD5a), which root is nearest the corner
+(PD5b), the connector's sense (PD5c), and S6's cutback comparison (PD6). By
+PD4 every junction that involves a circular walk is a selected corner, so the
+rewrite re-emits every circular walk from foot to foot about its exact centre
+and no displaced point survives.
+
+**Claim C (chamfer).** A chamfer's feet are set back along the carriers from
+the recorded corner. A line foot moves by at most `δ`, and an arc foot by at
+most `R·asin(δ/R) ≤ R·δ/(R − δ)` (a rotation about the exact centre). So the
+record differs from the chamfer of `S*` by at most
+`δ_out = max(δ, max over circular walks at chamfered corners of R·δ/(R − δ))`,
+computed exactly and rounded up once, beyond the rounding the prism chamfer
+also takes. The result states `δ_out`, so a later modify op refuses it as any
+displaced prism. The setback's conversion bound is not charged, as on the
+prism path.
+
+Table PD — every refusal is `ErrUnsupported` with SB1's text, then the row
+and its reason (`... (brep-modify SB1); its displaced reading (brep-modify
+§4.4) refuses: ... (brep-modify PDn)`):
+
+| PD | Condition (exact comparisons of recorded data unless stated) |
+|---|---|
+| **PD1** | The op is `Fillet` or a symmetric `Chamfer`, the record has no loop bands, and every selected edge is a lateral edge of the reading. A Shell, an asymmetric chamfer, a cap edge or a complete cap loop refuses. |
+| **PD2** | Every circular segment of `S` is claimed by a P2(a) wall whose `WallCarrier.Radius > 0`, and every line by a P2(b) planar rectangle, never a P2(c) restated wall; a circular walk covers one segment. |
+| **PD3** | Each such segment's centre equals its carrier's bit for bit, `2δ < R`, and each recorded endpoint `P` satisfies `(R − δ)² ≤ |P − C|² ≤ (R + δ)²` over `big.Rat` (P5 makes the wall's endpoints the same points). A whole circle's radius equals the carrier's bit for bit. |
+| **PD4** | Every corner at which a circular walk meets another walk is selected; the refusal names the corner's section point. |
+| **PD5a** | At a selected corner with a circular walk: `|cross| > tol + θ_A + θ_B + 2⁻⁵⁰`, `θ = δ/(R − δ)` rounded up per circular walk, 0 for a line. |
+| **PD5b** | Fillet only: two distinct offset roots' distances to the recorded corner differ by more than `2δ` plus `2⁻⁴⁸` of their sum. One root, or a double root, decides nothing. |
+| **PD5c** | Fillet only: `|rot90(f_A − O) · t_A| > r·θ_A + 2⁻⁵⁰`. |
+| **PD6** | S6 sees each cutback at a corner with a circular walk widened by `2δ'`: `δ' = δ` on a line walk, `R·δ/(R − δ)` rounded up on a circular one. A failure is modify S6. |
+| **PD7** | Chamfer only: the result's `SectionDelta` is `δ_out` (a charge, never a refusal). |
+
+Gate order of the displaced reading (stage numbers as in §6):
+
+| Stage | Gates |
+|---|---|
+| 2a. record | RB dispatch; SB2; for `δ > 0`, PD1's op checks, else SB1 |
+| 2b. route P | P1–P5 per axis with the claim map; PD2; the op's classification; no admitting reading is SB1 |
+| 3. arm | PD1 (a chamfer's cap edge or cap loop); corner matching; PD3; PD4 |
+| 4. per corner | S4; S5 on the exact radius (fillet); PD5a; PD5b, PD5c (fillet) |
+| 5. audit | S8, S6 with PD6's widening, S7, S9 on the rewritten section |
+| 6. build | `prismrecord.Build`, `SectionDelta` 0 (fillet) or `δ_out` (chamfer) |
+
+Existence gates keep their sentinels and come first: S4 and S5 are
+`ErrDegenerate` (a `Fillet` of radius 10 on the D-flat has `R − r = 0`).
+
+A stepped shaft's flat reads as no prism, so it stays SB1. A crossing on an
+arc-walled operand records no carrier (PD2). A selection that leaves a
+crossing corner unblended (PD4) would keep a displaced junction the record has
+no per-vertex charge for.
 
 ## 5. Route E — axis-parallel straight edges
 
@@ -379,7 +489,7 @@ Modify §1's test picks every sentinel: a body that does not exist is
 
 | SB | Call | Exists? | Sentinel |
 |---|---|---|---|
-| **SB1** | a brep or stacked receiver with `sectionDelta() != 0` | yes; its rewrite has no proven displacement | `ErrUnsupported`, naming the displacement as `prismrecord.Payload.RequireExactSection` does |
+| **SB1** | a brep or stacked receiver with `sectionDelta() != 0` outside §4.4 | yes; its rewrite has no proven displacement | `ErrUnsupported`, naming the displacement as `prismrecord.Payload.RequireExactSection` does |
 | **SB2** | a stacked receiver `breprecord.OfStacked` refuses (a prism group, several regions in one slab; a stack enclosing a cavity, a closed shell) | yes | that call's `ErrUnsupported` |
 | **SB3** | route P reads a prism along some axis, a Shell's removed faces are not its caps, no other axis admits them, and route S reads no through-cut record along any axis (modify-general Table TC) | yes | modify S2, with SG3's reason |
 | **SB4** | route E reading an edge that is not a straight line along a reference axis; only single straight edges reach route E, and every other Fillet or Chamfer selection takes route L (modify-general §4, `agent-docs/loop-fillet-design.md`), which builds a hole rim, a boss root or a cornered loop or refuses with Table SL or SF | — (a falsifier) | `ErrUnsupported` |
@@ -404,7 +514,7 @@ record gate; a mismatch falls through to the table unchanged:
 
 | Stage | Gates |
 |---|---|
-| 2a. record | RB dispatch; SB2; SB1 |
+| 2a. record | RB dispatch; SB2; SB1, except a displaced receiver that takes §4.4's reading (its own gate order) |
 | 2b. route P | P1–P5 per axis; the prism path's own stage 2 onward where an axis admits; a shell with no admitting axis takes route S at 2c, and SB3 where a prism read and route S reads none |
 | 2c. route E entry | route S (Shell; modify-general §3.4); independent straight edges take route E; a `Fillet` of complete loops with independent straight edges takes route V (`agent-docs/vertex-blend-design.md` §2); other selections take route L or refuse; EB1/SB4 and EB7/SB5 apply to route E's set |
 | 3. edge topology | EB2/SB6; the restatement passes (§5.2): EB3/SB7, then EB4/SB8; EB5/SB8; EB6 |
@@ -441,7 +551,7 @@ general-boolean §4.5 reads it unchanged:
 |---|---|---|
 | **DB1** | mass properties, `Bounds` | general-boolean §4.3: the blend face's `ArcSeg` or `LineSeg` wall enters `brepSegmentIntegrals` with its proven bound; an all-planar result with every coordinate a float is `Exact` |
 | **DB2** | `Verify` validity, tolerance gate | by construction and the brep's witness reader |
-| **DB3** | `Tessellate`, STL/OBJ/3MF | §4.4: the blend wall chords its arc once and shares the samples with both end faces |
+| **DB3** | `Tessellate`, STL/OBJ/3MF | general-boolean §4.4: the blend wall chords its arc once and shares the samples with both end faces |
 | **DB4** | mesh boolean, class B operand | a fillet result passes B2 and B6 (an arc has no direction); a chamfer's oblique wall misses B6 and takes the mesh path |
 | **DB5** | `ThroughAll`/`ToFace` | the per-face extremes; a brep with zero displacement answers |
 | **DB6** | clearance | `clearance.BuildBrepBodyCarriers` adds the blend's cylinder or plane carrier |
@@ -528,10 +638,33 @@ Route E:
   listing the fillet wall under a pull along `(1, 1, 0)` and not along `z`,
   and transformed by a translation reproducing volume and area.
 
+Displaced reading (§4.4; `apitest/revolve_shaft_class_b_blend_test.go`,
+`internal/brepmodify/displaced_blend_test.go`):
+
+- D-flat (r = 10, L = 40, flat at z = 7), `Fillet` r = 1 and r = 2 of both
+  flat edges: 3 planes and 3 cylinders, the volume within its bound of
+  `40·(100π − segment − 2·A_c)` with the fillet corner `A_c` in closed form,
+  `VerifyAll`; the Revolve and Extrude twins agree bit for bit, and r = 2
+  agrees with the Transform-placed tool's mesh-path blend within both bounds.
+- D-flat `Chamfer` d = 1: within its bound of the closed form, and a further
+  `Fillet` of its lateral edges refuses with the prism's displaced-receiver
+  text (PD7). The r = 1 fillet result takes a cap-loop chamfer (an exact
+  prism); the keyway's two top edges, and all four lateral edges, fillet at
+  r = 0.5 to their closed forms; a translated D-flat fillets to the same
+  volume.
+- Refusals: one flat edge, and the keyway's floor edges alone (PD4); the
+  `x = 40` cap loop's chamfer (PD1); an asymmetric chamfer and a Shell (SB1);
+  `Fillet` r = 10 (S5).
+- A record whose crossings sit 1e-4 off (displacement 2e-4) fillets to the
+  real record's volume within both bounds with `SectionDelta` 0, and chamfers
+  with `SectionDelta ≥ 2e-4`; a cleared carrier is PD2; a carrier radius of
+  10.5 or a centre one ulp off is PD3; PD3's half-radius leg, PD5a–PD5c and
+  PD6 hold on crafted numbers.
+
 Refusals:
 
-- general-boolean §9's crossing round boss and the B2 keyway → SB1 naming the
-  displacement; a prism-group stacked receiver → SB2; S1's hole rims
+- general-boolean §9's crossing round boss → SB1 naming the displacement; a
+  prism-group stacked receiver → SB2; S1's hole rims
   selected → SB4 (Pocket cut by a Ø4 through hole takes the mesh path, and
   its result is reach SX9's); Pocket shell → SB10; S1 chamfered at `d = 25`
   along its `z` edge at the origin → S6 in the end face; S1 by hand with its
@@ -544,9 +677,11 @@ Refusals:
 
 ## 10. Do not do this
 
-- **Admit a displaced receiver and charge the blend.** An offset solve
-  amplifies an input displacement by the corner geometry and nothing here
-  bounds it; SB1 refuses, as `prismrecord.Payload.RequireExactSection` does for a prism.
+- **Offset a displaced record's own vertices.** An offset solve from
+  displaced data amplifies the displacement by the corner geometry. §4.4
+  offsets the exact carriers and lets a displaced corner decide signs only,
+  each with a margin; every other displaced receiver is SB1, as
+  `prismrecord.Payload.RequireExactSection` refuses for a prism.
 - **Compute the blend in one end face and copy it to the other without
   recomputing.** SB9's recomputation is the one falsifier that proves the two
   faces hold the same carriers; copying would build a closed body on a wrong
@@ -604,6 +739,7 @@ with PR 0.
 | **2c** | route E's asymmetric reference-face mapping; bypass route P for this option and refuse route L | `brep_modify.go`, `brep_modify_edge.go`, `brep_modify_loop.go`, `chamfer.go` | public boolean body: both reference faces on a vertical edge, restated end faces on a horizontal edge, and route L refusal | 2b |
 | **2d** | route L's asymmetric cap/side assignment and two-distance band | `brep_modify_loop.go`, `tessellate_brep.go` | public rounded, cross-drilled plate: both reference choices, analytic volume, verified mesh | 2c |
 | **2e** | preserve stacked source-face roles in its brep view for asymmetric route E/L references | `internal/breprecord/convert.go`, `brep_modify.go`, `chamfer.go` | public blind-pocket plate: outer edge and both top-loop reference choices, analytic volumes, verified meshes | 2d |
+| **3** | §4.4: `breprecord.Face.WallCarrier` from the crossing build, the claim map, `displacedReceiver`, the Fillet and Chamfer arms, Table PD | `internal/brepgeom/`, `internal/breprecord/payload.go`, `internal/classbgeom/`, `internal/offset2d/blend.go`, `internal/brepmodify/` (`displaced_blend.go`, `prism_route.go`, `fillet.go`, `chamfer.go`) | §9's displaced-reading fixtures | 1 |
 
 PR 1 and PR 2a run in parallel: they share only PR 0's dispatch and add
 disjoint files. PR 2b follows 2a.
@@ -619,3 +755,4 @@ Increment table — what still refuses after each PR:
 | 2c (landed) | asymmetric route P/L chamfers and stacked receivers (SX16) |
 | 2d (landed) | asymmetric stacked receivers and brep selections outside routes E/L (SX16) |
 | 2e | brep or stacked asymmetric selections outside routes E/L (SX16) |
+| 3 (landed) | displaced receivers outside §4.4 (SB1): a stepped shaft, a partial crossing selection, an asymmetric chamfer, a cap edge or loop, a Shell, an arc-walled operand |

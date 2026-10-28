@@ -3,9 +3,11 @@ package classbgeom
 import (
 	"context"
 	"fmt"
+	"math"
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -15,6 +17,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 )
 
 // This file is the crossing reach of the class-B Cut
@@ -330,10 +333,28 @@ func (b *cbBuild) run(ctx context.Context) (breprecord.Payload, error) {
 	for _, piece := range pieces {
 		out.Faces = append(out.Faces, breprecord.Face{
 			Frame: piece.Frame, Wall: piece.Wall, Z0: piece.Z0, Z1: piece.Z1, Delta: piece.Delta,
+			WallCarrier: wallCarrierOf(piece.Source),
 		})
 	}
 	out.AssignRoles()
 	return out, nil
+}
+
+// wallCarrierOf is the operand circle a cylinder piece lies on
+// (general-boolean §4.1's wallCarrier): a CircleSeg source's centre and its
+// radius in millimetres, the value radiusSquared charges the crossings
+// against. An arc source, or a radius that is not a finite positive length,
+// names none, and that wall stays SB1 (brep-modify §4.4, PD2).
+func wallCarrierOf(source sectionrecord.CurveSegment) brepgeom.CircleCarrier {
+	c, ok := source.(sectionrecord.CircleSeg)
+	if !ok {
+		return brepgeom.CircleCarrier{}
+	}
+	mm, err := c.Radius.In(units.Millimeter)
+	if err != nil || !(mm > 0) || math.IsInf(mm, 1) {
+		return brepgeom.CircleCarrier{}
+	}
+	return brepgeom.CircleCarrier{Center: c.Center, Radius: mm}
 }
 
 // brepFace states a built face in the record. A face on a wall's carrier

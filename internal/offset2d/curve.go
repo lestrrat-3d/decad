@@ -28,17 +28,27 @@ func Normalize(x, y float64) (float64, float64, float64) {
 // Intersect returns the root of two offset carriers nearest the corner.
 // A missing intersection returns ok false.
 func Intersect(a, b Curve, px, py float64) (float64, float64, bool) {
-	var cands [][2]float64
+	return nearestRoot(IntersectAll(a, b), px, py)
+}
+
+// IntersectAll is every root Intersect chooses among: none, one or two
+// points where the two curves meet.
+func IntersectAll(a, b Curve) [][2]float64 {
 	switch {
 	case a.IsLine && b.IsLine:
-		cands = lineLine(a, b)
+		return lineLine(a, b)
 	case a.IsLine && !b.IsLine:
-		cands = lineCircle(a, b.CX, b.CY, b.Radius)
+		return lineCircle(a, b.CX, b.CY, b.Radius)
 	case !a.IsLine && b.IsLine:
-		cands = lineCircle(b, a.CX, a.CY, a.Radius)
+		return lineCircle(b, a.CX, a.CY, a.Radius)
 	default:
-		cands = sectionaudit.CircleCircle(a.CX, a.CY, a.Radius, b.CX, b.CY, b.Radius)
+		return sectionaudit.CircleCircle(a.CX, a.CY, a.Radius, b.CX, b.CY, b.Radius)
 	}
+}
+
+// nearestRoot is the root nearest (px, py), the first on a tie; false when
+// there is none.
+func nearestRoot(cands [][2]float64, px, py float64) (float64, float64, bool) {
 	if len(cands) == 0 {
 		return 0, 0, false
 	}

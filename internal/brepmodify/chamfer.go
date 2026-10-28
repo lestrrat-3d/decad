@@ -182,6 +182,12 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 	if sweepStraight && asym != nil {
 		return Result{}, fmt.Errorf(`%w: an asymmetric chamfer of a Sweep wall has no mapped reference-face role`, decaderr.ErrUnsupported)
 	}
+	// Route P's displaced reading (agent-docs/brep-modify-design.md §4.4)
+	// bevels lateral corners from the record's exact carriers; a cap edge or
+	// a complete cap loop of it is PD1.
+	if route.Carriers != nil {
+		return displacedChamfer(ctx, env, pp, caps, *route.Carriers, sel, edges, dmm)
+	}
 	// The corner rewrite needs the original 2D outline, not an approximate
 	// outline recovered from a rendered or sampled shape.
 	if err := pp.RequireExactSection("chamfers"); err != nil {
@@ -318,6 +324,25 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 		return Result{}, err
 	}
 	return Result{Body: body}, nil
+}
+
+// displacedChamfer is the chamfer arm of route P's displaced reading
+// (agent-docs/brep-modify-design.md §4.4): a selection that classifies as
+// lateral takes DisplacedLateralChamfer, and a cap edge or complete cap loop
+// is SB1 (PD1).
+func displacedChamfer(ctx context.Context, env topo.Env, pp prismrecord.Payload, caps PrismCaps, carriers SectionCarriers,
+	sel string, edges []*topo.Edge, dmm float64) (Result, error) {
+	if straightPrismCapEdge(caps, edges) {
+		return Result{}, carriers.refuse("PD1", `a cap edge of a displaced prism takes no exact blend`)
+	}
+	_, _, lateral, err := ClassifyChamferSelection(ctx, pp, caps, sel, edges)
+	if err != nil {
+		return Result{}, err
+	}
+	if !lateral {
+		return Result{}, carriers.refuse("PD1", `a complete cap loop of a displaced prism takes no exact band`)
+	}
+	return DisplacedLateralChamfer(ctx, env, pp, carriers, sel, edges, dmm)
 }
 
 // computeChamfer builds one section corner blend.

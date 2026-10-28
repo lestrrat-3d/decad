@@ -143,8 +143,8 @@ type ChamferOption interface{ chamferOption() }
 // sharing a vertex, an edge whose end face is a curved face or an earlier
 // blend, a straight wall the route needs as a plane that is oblique, split
 // or carries a displaced level, end faces whose chords disagree, and a body
-// whose faces carry a section displacement (SB1) are ErrUnsupported (Table
-// SB).
+// whose faces carry a section displacement (SB1), outside brep-modify §4.4's
+// lateral blend of a class-B crossing prism, are ErrUnsupported (Table SB).
 //
 // A selection of one or more complete loops of planar faces of such a body
 // takes route L (agent-docs/modify-general-design.md §4): each loop's face takes

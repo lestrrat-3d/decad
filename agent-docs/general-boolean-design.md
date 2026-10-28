@@ -1137,8 +1137,11 @@ The class-B result of a plain shaft is the `brepPayload` an Extrude shaft
 gives: the full-length D-flat and keyway of
 `apitest/revolve_shaft_class_b_test.go` measure the same value and bound bit
 for bit as their Extrude twins. The crossing charges the flat's section
-displacement, so brep-modify SB1 refuses `Fillet` and `Chamfer` of its
-edges; `Thread` on the cut wall builds, to its Extrude twin's volume. A shaft
+displacement. Brep-modify §4.4 fillets and chamfers the lateral edges of the
+D-flat and keyway from the record's exact carriers when the selection blends
+every crossing corner; the stepped flat, a partial selection and an
+asymmetric chamfer keep SB1. `Thread` on the cut wall builds, to its Extrude
+twin's volume. A shaft
 or a tool placed by `Transform` carries its own placement, misses the
 shared-placement condition of B.3 (`AdmitPair`) as it does for an Extrude
 pair, and keeps the mesh path, where retained-edge-blend §2 blends those
@@ -1234,6 +1237,7 @@ type brepFace struct {
     side0, side1 []brepSplit // swept: the levels strictly inside (z0, z1) at which each side line is a vertex, ascending, each with its level displacement
     delta   float64        // the face's own section displacement (prism-boolean §7 terms)
     role    string
+    wallCarrier circleCarrier // swept circular face of a class-B crossing build: its operand circle's centre and radius
 }
 
 type brepPayload struct {
@@ -1253,6 +1257,16 @@ with the section displacement they carry, read only by a further
 co-directional `Union` (§3 "A1 as a brep"), never by a consumer, and
 unchanged by a placement, which moves `xform` alone.
 
+`wallCarrier` is set by the class-B crossing build alone
+(`internal/classbgeom/crossing_cut.go`), on each cylinder piece whose operand
+wall is a `CircleSeg`: that circle's centre in the piece's frame and its
+radius in millimetres, the value the crossing charges are taken against. The
+recorded wall denotes that circle only to within `delta`, and every other face
+leaves it zero. A reversal or an in-place trim keeps it, since the wall stays
+on the same circle, and a placement moves `xform` alone. Only brep-modify
+§4.4's displaced reading reads it, and its PD3 falsifies it against the
+record.
+
 A boolean's cut fragment records its carrier and a narrowed range, so two
 fragments meeting at a cut walk to it at two different floats. The face view
 joins each such junction first (`brepgeom.JoinLoop`): it takes the line's walked
@@ -1265,9 +1279,9 @@ there (`boundarywalk.DenotedEndBound`/`DenotedStartBound`, the walk's
 rounding plus an arc's radial residual at its natural `t = 1` end), and,
 where the two segments lie on different carriers, its proven distance from
 their exact crossing (§5). Two fragments of one carrier name no crossing. A
-nonzero displacement makes class B's B5 and brep-modify's SB1 refuse the
-face view, so the join changes a published measurement only where both
-terms are zero.
+nonzero displacement makes class B's B5 refuse the face view, and
+brep-modify's SB1 refuse it outside brep-modify §4.4's displaced reading, so the join
+changes a published measurement only where both terms are zero.
 
 Every face frame shares the first face's origin bit for bit and carries each
 of its axes, or that axis negated, bit for bit, keeping handedness. The map
@@ -1728,8 +1742,9 @@ are relations, never literals.
   D-flat, and an Acme thread of pitch 8 on the D-flat's wall builds to its
   twin's volume. A tool ending inside the span (drawn either way along the
   axis), a tool wall in the end plane (missed by B8), a tilted tool, a
-  `Transform`-placed tool and a tube each keep the mesh path, and `Fillet`
-  and `Chamfer` of the class-B flat's edges refuse with SB1.
+  `Transform`-placed tool and a tube each keep the mesh path. `Fillet` and
+  `Chamfer` of the class-B flat's and keyway's long edges build exactly
+  (brep-modify §4.4, `apitest/revolve_shaft_class_b_blend_test.go`).
   `internal/revolveplan/cylinder_view_test.go` misses each view condition
   on its own.
 - **B stepped shaft**: full Revolves of staircases of 20 mm steps about x,

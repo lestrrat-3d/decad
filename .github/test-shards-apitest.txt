@@ -978,6 +978,7 @@
 10	0.00	TestSteppedShaftClassBCut
 10	0.00	TestSteppedShaftClassBBlendsRefuse
 10	0.00	TestSteppedShaftClassBMisses
+10	0.00	TestRevolvedShaftClassBBlend
 3	0.05	TestTaperTwoSidedBuild
 10	0.01	TestOrthogonalInterferenceReadsTheOverlapVolumeExactly
 3	0.00	TestTessellatePlate

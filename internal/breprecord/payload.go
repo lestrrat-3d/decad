@@ -45,6 +45,12 @@ import (
 // (agent-docs/brep-modify-design.md §5.3, Table BB's BB4), and empty on every other
 // face. The body build gives such a face a second role, fillet(k) or
 // chamfer(k) for its index k, so a placement re-mints it with the record.
+//
+// wallCarrier is set on a swept circular face a class-B crossing build made
+// (agent-docs/general-boolean-design.md §4.1): the operand circle the wall lies
+// on, in the face's own frame. The recorded wall denotes that circle only to
+// within delta. It is zero on every other face, and only route P's displaced
+// reading reads it (agent-docs/brep-modify-design.md §4.4).
 type Face struct {
 	Frame            r3.Frame
 	Region           *momentinput.Profile
@@ -57,6 +63,7 @@ type Face struct {
 	Delta            float64
 	Role             string
 	Blend            string
+	WallCarrier      brepgeom.CircleCarrier
 }
 
 // Stack is the slabs an A1 result was built from
@@ -225,6 +232,7 @@ func PrismFaceRecord(f Face) brepgeom.PrismRectFace {
 		Frame: f.Frame, Region: f.Region, Wall: f.Wall, Z0: f.Z0, Z1: f.Z1,
 		Z0Delta: f.Z0Delta, Z1Delta: f.Z1Delta, Split0: len(f.Side0) != 0,
 		Split1: len(f.Side1) != 0, Outward: f.Outward, Role: f.Role,
+		Carrier: f.WallCarrier,
 	}
 }
 
