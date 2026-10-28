@@ -37,8 +37,13 @@ func (w *work) readArcEndCorner(v *topo.Vertex, e *topo.Edge, base, wall *topo.F
 	if err != nil {
 		return nil, err
 	}
-	if r.planeFace != base || r.wallFace != wall || !r.convex {
-		return nil, fmt.Errorf("%w: a chain arc does not border the base and its wall convexly", decaderr.ErrUnsupported)
+	if r.planeFace != base || r.wallFace != wall {
+		return nil, fmt.Errorf("%w: a chain arc does not border the base and its wall", decaderr.ErrUnsupported)
+	}
+	// Blend §4.4's end reads a convex rim only (SM9).
+	if !r.convex {
+		return nil, fmt.Errorf("%w: a concave open tangent chain ends on an arc; only a straight end is built",
+			decaderr.ErrUnsupported)
 	}
 	a := arcRim{rim: r, sign: 1}
 	end, err := a.readEnd(v, fp, faceIndex, faceIndex[base], faceIndex[wall])

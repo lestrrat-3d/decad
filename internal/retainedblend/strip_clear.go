@@ -24,7 +24,10 @@ import (
 // meshbool's exact triangle/triangle classification on the held floats. A
 // pair that shares a vertex is the construction's own seam, along the base's
 // setback contour, a wall's cut or an end face's trim, and is not tested. The
-// test only refuses.
+// test only refuses. An end face that is reflex at an open chain's corner
+// takes the blend's end cap, which closes the region K on that side: its
+// rebuilt facets are new surface too, and are tested the same way against
+// every facet the result keeps outside them.
 
 // facetBox is a facet's float bounding box. Its corners are exact
 // coordinates, so two boxes that miss prove the facets miss.
@@ -63,30 +66,58 @@ type exactFacet struct {
 // edge or a mitre run. A chain runs the check itself before its build.
 func (w *work) buildClear(ctx context.Context, env topo.Env, groups []facetedrecord.Group, stripFrom int,
 	tag blendTag, faceIndex map[*topo.Face]int) (*topo.Body, error) {
-	if err := w.checkStripClear(ctx, stripFrom); err != nil {
+	if err := w.checkStripClear(ctx, stripFrom, nil); err != nil {
 		return nil, err
 	}
 	return w.build(ctx, env, groups, stripFrom, tag, faceIndex)
 }
 
 // checkStripClear refuses the rewrite when a facet the result keeps outside
-// the strip w.out[stripFrom:] meets a strip facet it shares no vertex with.
-func (w *work) checkStripClear(ctx context.Context, stripFrom int) error {
-	strip := w.out[stripFrom:]
-	if len(strip) == 0 {
-		return nil
-	}
+// the strip w.out[stripFrom:] meets a strip facet it shares no vertex with,
+// and when a facet the result keeps outside an end face that takes a cap,
+// whose rebuilt facets fill the range taken of w.out, meets one of them.
+func (w *work) checkStripClear(ctx context.Context, stripFrom int, taken [][2]int) error {
 	gone := make(map[int]struct{}, len(w.removed))
 	for _, f := range w.removed {
 		gone[f] = struct{}{}
 	}
-	rest := make([][3]int, 0, len(w.fp.Tris)-len(gone)+stripFrom)
+	held := make([][3]int, 0, len(w.fp.Tris)-len(gone))
 	for i, t := range w.fp.Tris {
 		if _, ok := gone[i]; !ok {
-			rest = append(rest, t)
+			held = append(held, t)
 		}
 	}
-	rest = append(rest, w.out[:stripFrom]...)
+	rest := append(append(make([][3]int, 0, len(held)+stripFrom), held...), w.out[:stripFrom]...)
+	if err := w.clearOf(ctx, w.out[stripFrom:], rest, "the blend", "the blend's", nil); err != nil {
+		return err
+	}
+	// A rebuilt end face keeps its held boundary vertices, and ear clipping
+	// can join one of them to the cap. A facet of another face at such a
+	// vertex may meet the end face only where they share: there, and not
+	// across the cap. A vertex the construction made (the end column, a
+	// setback point, a wall's cut) is shared only with the strip and with the
+	// rebuilt base and walls, whose planes meet G's along the cap's own edges.
+	made := func(v int) bool { return v >= len(w.fp.Verts) }
+	for _, r := range taken {
+		rest := append(append(append(make([][3]int, 0, len(held)+stripFrom), held...), w.out[:r[0]]...),
+			w.out[r[1]:stripFrom]...)
+		if err := w.clearOf(ctx, w.out[r[0]:r[1]], rest, "the cap an end face takes", "the taken cap's",
+			made); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// clearOf refuses when a facet of rest meets a facet of strip. A pair that
+// shares a vertex is not tested when seam is nil or seam holds for a shared
+// vertex; any other pair that shares vertices must meet only at a shared
+// vertex or along the edge between two. what and whose name strip in the
+// refusal.
+func (w *work) clearOf(ctx context.Context, strip, rest [][3]int, what, whose string, seam func(int) bool) error {
+	if len(strip) == 0 {
+		return nil
+	}
 
 	boxes := make([]facetBox, len(strip))
 	for i, t := range strip {
@@ -119,7 +150,8 @@ func (w *work) checkStripClear(ctx context.Context, stripFrom int) error {
 			if err := budget.Step(); err != nil {
 				return err
 			}
-			if sharesVertex(r, s) {
+			shared := sharedVerts(r, s)
+			if len(shared) > 0 && (seam == nil || slices.ContainsFunc(shared, seam)) {
 				continue
 			}
 			if !re.ok {
@@ -130,15 +162,15 @@ func (w *work) checkStripClear(ctx context.Context, stripFrom int) error {
 			}
 			if exact[i].flat || re.flat {
 				// The classification needs a plane for each facet.
-				return fmt.Errorf("%w: the blend's clearance from a flat facet is undecided", decaderr.ErrUnsupported)
+				return fmt.Errorf("%w: %s clearance from a flat facet is undecided", decaderr.ErrUnsupported, whose)
 			}
 			contact, err := meshbool.TriTriClassify(exact[i].f, re.f, exact[i].x, re.x, exact[i].n, re.n)
 			if err != nil {
-				return fmt.Errorf("%w: the blend's clearance from the rest of the body is undecided: %w",
-					decaderr.ErrUnsupported, err)
+				return fmt.Errorf("%w: %s clearance from the rest of the body is undecided: %w",
+					decaderr.ErrUnsupported, whose, err)
 			}
-			if contact.Kind != meshbool.ContactNone {
-				return fmt.Errorf("%w: the blend meets another facet of the body at %v", decaderr.ErrUnsupported,
+			if contact.Kind != meshbool.ContactNone && !w.atShared(contact, shared) {
+				return fmt.Errorf("%w: %s meets another facet of the body at %v", decaderr.ErrUnsupported, what,
 					contactAt(contact, re.f))
 			}
 		}
@@ -236,13 +268,30 @@ func (g *boxGrid) near(b facetBox, out []int) []int {
 	return out
 }
 
-func sharesVertex(a, b [3]int) bool {
+// sharedVerts are the vertices two facets share.
+func sharedVerts(a, b [3]int) []int {
+	var out []int
 	for _, u := range a {
-		for _, v := range b {
-			if u == v {
-				return true
-			}
+		if slices.Contains(b[:], u) {
+			out = append(out, u)
 		}
+	}
+	return out
+}
+
+// atShared reports whether a contact lies wholly where its two facets share:
+// a point at a shared vertex, or a segment between two shared vertices,
+// decided on exact points.
+func (w *work) atShared(c meshbool.TriContact, shared []int) bool {
+	at := func(p proof.Xpt) bool {
+		k := p.Key()
+		return slices.ContainsFunc(shared, func(v int) bool { return proof.XptOf(w.verts[v]).Key() == k })
+	}
+	switch c.Kind {
+	case meshbool.ContactPoint:
+		return at(c.P0)
+	case meshbool.ContactSegment:
+		return at(c.P0) && at(c.P1)
 	}
 	return false
 }

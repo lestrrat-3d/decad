@@ -105,9 +105,6 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 	// The chain's points on the base loop, in the chain's own order: the
 	// junctions, and for an open chain the two corners where it ends.
 	open := cyc.open
-	if open && slices.ContainsFunc(cyc.edges, func(e *topo.Edge) bool { return !e.Convex }) {
-		return nil, fmt.Errorf("%w: a concave open tangent chain is not built", decaderr.ErrUnsupported)
-	}
 	nj := n
 	if open {
 		nj = n + 1
@@ -400,8 +397,21 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 				break
 			}
 		}
-		for _, ec := range ecuts {
-			if err := w.readEndCut(ec, nP, tP, tW, margin, slack); err != nil {
+		// The base loop leaves the first corner along the chain and enters
+		// the last one along it; its other neighbour lies on G ∩ P.
+		k := len(loop)
+		uP := [2]int{loop[(pos[0]+k-1)%k], loop[(pos[n]+1)%k]}
+		rc := [2]r3.Vec{entries[0].d, entries[n-1].d.Scale(-1)}
+		for i, ec := range ecuts {
+			if err := w.readEndCut(ec, nP, uP[i], tP, tW, margin, slack); err != nil {
+				return nil, err
+			}
+			if err := checkEndSense(ec, i == 1); err != nil {
+				return nil, err
+			}
+			// The corner table of §5.5 step 5: the base and the wall are
+			// convex at each straight end.
+			if err := checkEndTurns(ec, rc[i], nP, i == 0); err != nil {
 				return nil, err
 			}
 		}
@@ -427,11 +437,22 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 				run[v] = true
 			}
 		}
-		outside, _, err := splice(loop, run)
-		if err != nil {
-			return nil, err
+		// When the chain and the removed parts of G ∩ P are the whole loop,
+		// both ends lie on one G and the contour closes along G ∩ P between
+		// its two setback points.
+		whole := !slices.ContainsFunc(loop, func(v int) bool { return !run[v] })
+		if whole && ecuts[0].faceIx == ecuts[1].faceIx {
+			if err := w.checkContour(ringA, nP, oP, false); err != nil {
+				return nil, err
+			}
+			loops = append(loops, ringA)
+		} else {
+			outside, _, err := splice(loop, run)
+			if err != nil {
+				return nil, err
+			}
+			loops = append(loops, append(outside, ringA...))
 		}
-		loops = append(loops, append(outside, ringA...))
 	} else {
 		loops = append(loops, ringA)
 	}
@@ -520,19 +541,22 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 
 	// The end faces give way to the end columns.
 	var removedTrue, blendTrue float64
+	var taken [][2]int
 	if open {
-		for i, ec := range ecuts {
+		seqs := make([][]int, len(ecuts))
+		for i := range ecuts {
 			col := 0
 			if i == 1 {
 				col = n
 			}
-			seq := append(append([]int(nil), jrows[col]...), seam[col])
-			corner, err := w.rebuildEnd(ec, seq, spec.fillet, spec.r, tP, tW)
-			if err != nil {
-				return nil, err
-			}
-			removedTrue += corner
+			seqs[i] = append(append([]int(nil), jrows[col]...), seam[col])
 		}
+		corners, caps, err := w.rebuildEnds(ecuts[:], seqs, spec.fillet, spec.r, tP, tW)
+		if err != nil {
+			return nil, err
+		}
+		removedTrue += corners
+		taken = caps
 	}
 
 	// The strips.
@@ -601,7 +625,7 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		groups[g].Centroid = measurement.VecMeasurement{}
 	}
 	w.removedTrue = removedTrue
-	if err := w.checkStripClear(ctx, stripFrom); err != nil {
+	if err := w.checkStripClear(ctx, stripFrom, taken); err != nil {
 		return nil, err
 	}
 	return w.build(ctx, env, groups, stripFrom, blendTag{trueArea: blendTrue}, faceIndex)
