@@ -1878,9 +1878,12 @@ with a zero bound) lies on one circle with its mirror, with the material on one
 side, so no disk lies between the two and the survey generates no candidate for
 that pair. A hollow sphere reads its shell thickness, a ball its diameter, a
 hemisphere its angle-limit ball, and a ball cut flat at both poles the
-separation of its flats. A centre on the axis only within rounding, such as one
-on a tilted axis or snapped onto it, keeps the pair, whose zero-width candidate
-leaves the survey undecided (`Suspect`).
+separation of its flats. A centre the axis frame cannot prove on the axis, such
+as one on a tilted axis or snapped onto it, keeps the pair, whose zero-width
+candidate leaves the survey undecided (`Suspect`). Each arc pairs only with its
+own mirror, so an on-axis circle split across several arc segments (two quarter
+arcs meeting at the equator) still yields zero-width candidates from its cross
+pairs and reads `Suspect` too.
 
 The prism/revolve analytic survey streams each closed-form
 candidate into validation instead of retaining the full cubic candidate set.

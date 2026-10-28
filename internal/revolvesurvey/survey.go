@@ -71,10 +71,9 @@ func WallReading(
 			if full {
 				// An arc centred exactly on the axis lies on one circle with
 				// its own mirror, the material on one side: the pair is a
-				// carrier pair and bounds no web. Each pair takes its own id,
-				// because one id names one proven circle: two concentric
-				// on-axis arcs (a hollow sphere's two skins) are two circles,
-				// and the shell between them is read as usual.
+				// carrier pair and bounds no web. Each pair takes its own id
+				// because SurveyElem.Carrier's contract is that one id names
+				// one proven circle, and this walk proves only its own.
 				m := survey2d.MirrorElem(el)
 				if OnAxisCentre(w) {
 					carrier++
@@ -201,8 +200,8 @@ func WallReading(
 // OnAxisCentre reports a circular walk whose recorded centre lies exactly on
 // the revolve axis: its radial coordinate is zero and the axis frame's
 // re-expression of it committed no error (CVBound, which also carries the
-// section displacement charge). A centre on the axis only within rounding — a
-// tilted axis, or a centre snapped onto it — answers false.
+// section displacement charge). A centre the axis frame cannot prove on the
+// axis — on a tilted axis, or snapped onto it — answers false.
 func OnAxisCentre(w survey2d.SideWalk) bool {
 	return w.IsCircular() && w.CV == 0 && w.CVBound == 0
 }

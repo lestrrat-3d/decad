@@ -17,7 +17,7 @@ func TestOnAxisCentre(t *testing.T) {
 	}
 	require.True(t, revolvesurvey.OnAxisCentre(circular(0, 0)))
 	require.False(t, revolvesurvey.OnAxisCentre(circular(1e-13, 0)), "a centre off the axis")
-	require.False(t, revolvesurvey.OnAxisCentre(circular(0, 1e-15)), "a centre on the axis only within rounding")
+	require.False(t, revolvesurvey.OnAxisCentre(circular(0, 1e-15)), "a centre the axis frame cannot prove on the axis")
 	line := survey2d.SideWalk{Kind: survey2d.WalkLine, EndU: 10}
 	require.False(t, revolvesurvey.OnAxisCentre(line), "a line walk carries no centre")
 }
