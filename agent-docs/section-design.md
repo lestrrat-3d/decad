@@ -29,8 +29,9 @@ The returned Sketch uses `plane` as its construction frame. The profiles are
 fresh, valid Sketch snapshots; changing the Sketch makes them stale under the
 ordinary seam rules or the bounded-source certificate below. The result is a
 slice because a section can hold several material regions: the full Revolve
-classes below and the orthogonal class return one profile per region, and every
-other admitted class returns one.
+classes and the mesh Boolean history class below, and the orthogonal class
+(`agent-docs/orthogonal-section-design.md`), return one profile per region, and
+every other admitted class returns one.
 The caller may read a retired body. A nil body or context, or an invalid frame,
 is `ErrDegenerate`; a sheet or unsound solid is `ErrNotSolid`.
 
@@ -116,15 +117,23 @@ producer return `ErrUnsupported`.
 
 Each operand must have an exact section at the requested plane in one of these
 existing classes: the parallel exact prism, a strictly interior slab of a
-stacked prism or stack-backed BRep, or the cardinal vertical plane of a
-rectangular or whole-circle prism. The first three are read through
+stacked prism or stack-backed BRep, the cardinal vertical plane of a
+rectangular or whole-circle prism, or a full Revolve cut through or normal to
+its axis. The first three are read through
 `sectionclip.SectionBrepStackRecord`, because `stackedunion.OperandFromPayload`
-states a plain prism as a one-slab stack. Each class keeps all its own gates. The
-section must be loops of whole `LineSeg` records. A narrowed line range enters
-at a computed walked end, and an arc or circle has no certified junction, so
-either returns `ErrUnsupported`. An operand that is itself a mesh Boolean
-result is not read through its own history, and an operand the plane misses
-has no section, so the result refuses.
+states a plain prism as a one-slab stack. A full Revolve is read through
+`sectionclip.RevolveAxialSection`, then `sectionclip.RevolveNormalSection`.
+Each class keeps all its own gates. A sphere or cone that only its own
+authenticated class admits, and a class-B BRep, which keeps no slab stack, have
+no operand section here.
+
+An operand section is a list of regions, each with its holes. A revolve
+section may hold several; every other class holds one. Every segment must be a
+whole `LineSeg`, a whole `ArcSeg` or a whole `CircleSeg` that is a loop on its
+own. A narrowed range of any kind enters the scene at a computed walked end, so
+it returns `ErrUnsupported`, as does any other segment kind. An operand that is
+itself a mesh Boolean result is not read through its own history, and an
+operand the plane misses has no section, so the result refuses.
 
 One requested frame rarely suits both operands. A box swept along Z is read in
 (X, Y), but a box swept along X must be read in a frame whose V axis is ±X. So
@@ -139,8 +148,14 @@ requested plane. The first candidate a class admits gives the operand's
 section. A point at `u'U' + v'V'` is the same world point at the signed
 permutation of `(u', v')` in the requested frame, because U' and V' are the
 requested axes negated or swapped. Negating and swapping binary64 values is
-exact. A reflection (`U'×V' = −N`) reverses every loop's walk, so outer loops
-stay counter-clockwise and holes clockwise in the requested frame.
+exact, so every point, arc centre and pinned arc end maps exactly and every
+radius is unchanged. A reflection (`U'×V' = −N`) reverses every loop's walk,
+so outer loops stay counter-clockwise and holes clockwise in the requested
+frame. Under it a line swaps its ends, an arc swaps its pinned ends and keeps
+its range, because the image of a counter-clockwise sweep from S to E is the
+counter-clockwise sweep from E' to S', and a circle keeps its winding and range,
+because the reflection and the reversed walk cancel. A whole circle's parameter
+origin moves with the frame, which a closed whole edge does not observe.
 
 ### Proof that the section commutes with the Boolean
 
@@ -155,14 +170,16 @@ The 2D operations on regions in P are the same regularized operations.
 (H2) `X ∩ P = cl_P(X° ∩ P)`. Under H, `σ(X) = cl_P(X° ∩ P) = X ∩ P` and
 `int_P σ(X) = X° ∩ P`.
 
-**Every admitted operand class satisfies H.**
+**Every admitted operand class satisfies H.** None of these arguments reads a
+segment's kind, so they hold for sections bounded by arcs and circles, with
+holes, and of several regions alike.
 
 - Parallel prism or stack slab: the plane is normal to the sweep at a level
   strictly inside the slab's open level interval I. Consecutive slabs meet only
   at their end levels (`agent-docs/stacked-prism-design.md` I4). So near P the
   operand is `Σ × I` and its interior is `int Σ × I`, with Σ the recorded
-  region. `X ∩ P = Σ`, `X° ∩ P = int Σ`, and `Σ = cl(int Σ)` because a recorded
-  region is the closure of its interior.
+  region, holes included. `X ∩ P = Σ`, `X° ∩ P = int Σ`, and `Σ = cl(int Σ)`
+  because a recorded region is the closure of its interior.
 - Rectangular prism, vertical plane: in its placed axes the operand is
   `[a, b] × [c, d] × [z0, z1]` and P is `u = k`, where `a < k < b` holds by
   the class's strict opposite signs at opposite corners. Then
@@ -170,6 +187,20 @@ The 2D operations on regions in P are the same regularized operations.
 - Whole-circle prism, vertical plane at offset `d` with `d² < r²`: a secant
   line meets the open disk in the open chord, so `X ∩ P = [−h, h] × [z0, z1]`
   and `X° ∩ P = (−h, h) × (z0, z1)`.
+- Full Revolve, plane holding the axis: X is unchanged by every turn about the
+  axis. If a disk D in P about a point p lies in `X ∩ P`, the turns of D about
+  the axis sweep a ball about p, both off the axis and on it, so p ∈ X°. That
+  is H1. `X ∩ P = M ∪ M'` is a union of two closures of interiors, and the
+  closure of the interior of a union contains the union of the closures of the
+  interiors, so `cl_P int_P(X ∩ P) = X ∩ P`, which with H1 is H2.
+- Full Revolve, plane normal to the axis at level h: the class admits h only
+  when no segment end lies on it and every crossing of the level line with the
+  meridian boundary is transversal and enumerated. So the level line meets
+  ∂M exactly at the sorted radii, and its points strictly between two
+  consecutive radii lie in int M or outside M. `X ∩ P` is therefore the closed
+  disks and annuli of the material intervals, and a point of their interior
+  turns from a point of int M (or an axis point with a half disk of M about
+  it), so it lies in X°.
 
 **Lemma.** If A and B satisfy H at P, then `σ(A op B) = σ(A) op σ(B)` for the
 regularized 3D op and its regularized 2D counterpart.
@@ -192,40 +223,93 @@ regularized 3D op and its regularized 2D counterpart.
   `cl_P(int σA \ int σB) = cl_P(int σA \ σB)`, and σ(R) lies in it.
 
 The identity is a theorem over the two recorded sets. It uses no geometric test
-and neither operand's class proves anything about the other. Where H fails it
-can fail. For a notch cut by a box whose bottom cap lies in P, the result's
-material at P is the whole square, while `σA \ σB` removes the tool's footprint.
-Every admitted class refuses a plane on its own cap, which is this case.
+and neither operand's class proves anything about the other, and it places no
+condition on how many regions or holes either section or the result has. Where
+H fails it can fail. For a notch cut by a box whose bottom cap lies in P, the
+result's material at P is the whole square, while `σA \ σB` removes the tool's
+footprint. Every admitted class refuses a plane on its own cap, which is this
+case, and the revolve normal class refuses a shoulder level for the same
+reason.
 
 ### The 2D operation
 
 The operand sections, both in the requested frame, form one private Sketch
-scene (`prismcells.BuildScene` with the identity map), the default shape
-`agent-docs/prism-boolean-design.md` §4.1 describes. Whole lines enter at their
-recorded points, so the scene's walk charge is zero. `prismcells.Classify`
-reads each cell's membership in A and in B from Sketch's edge directions
-(§4.2), and the cells `a ∨ b`, `a ∧ ¬b` or `a ∧ b` select are kept.
+scene (`prismcells.BuildProfileScene` with the identity map), the default shape
+`agent-docs/prism-boolean-design.md` §4.1 describes. Every region and hole of
+both operands enters. Whole segments enter at their recorded points, centres
+and radii, so the scene's walk charge is zero. The scene's coincident-span gap
+must be zero. A span Sketch merged from two near-coincident carriers would
+otherwise join or split regions that the exact sets do not.
+
+Each cell's membership in A and in B is Sketch's answer, not decad's.
+`prismcells.DeclareOperandLoops` declares every recorded loop of both operands,
+outer loops and holes, as a Sketch loop of the scene's own entities in recorded
+segment order, before the scene is published. `prismcells.ContainedMembership`
+then reads each cell's `Profile.Containments()` verdicts: a cell is in an
+operand when Sketch proves it inside the outer loop of one of the operand's
+regions and outside every hole of that region. A verdict Sketch leaves
+unproven, a missing verdict and an invalid cell refuse. This covers the cells
+an edge-direction reading cannot reach, such as a section lying apart from the
+other. A loop so thin that Sketch's map of it is degenerate, such as a dart a
+few 2^-30 mm wide, reads `ReasonCoincident` and refuses here.
+
+Sketch leaves out a cycle whose area falls below its per-cycle floor without
+flagging it, and still proves the other cells' verdicts against the loop. A
+triangle of area 3·2^-38 mm² inside a square is such a loop: the square's cell
+reads outside it, yet no cell carries it as a hole, so its loss would return
+the whole square. `prismcells.LoopEntitiesWalked` therefore requires every
+entity of every recorded loop to be walked over its whole parameter domain by
+the published cells, counting a window a coincident span withdraws from it
+under the other operand's entity. It reads only the ranges Sketch reported, so
+it can only refuse.
+
+`prismcells.ClassifyNested` reads membership a second way, from Sketch's edge
+directions (§4.2) over every loop of the cell, holes included: a cell walks
+each of its loops with itself on the left, as an operand walks its outer loops
+counter-clockwise and its holes clockwise, so a matching direction puts the
+cell on that operand's material side, and membership crosses an edge of the
+other operand unchanged. This reading can only falsify: a cell it reaches
+must agree with Sketch's verdict, and a cell it does not reach proves nothing.
 Membership is constant on each open cell and the arrangement's edges enclose
-no area, so the closure of the kept cells is the regularized 2D operation of
-the lemma. The scene's
-coincident-span gap must be zero. A span Sketch merged from two near-coincident
-lines would otherwise join or split regions that the exact sets do not.
-`prismcells.MergeLoopsExactLineCuts` drops the walls between selected cells and
-records the survivors. Each fragment is admitted only by Sketch's own `TExact`
-certification, and the seam's loop-closure check can only refuse.
-Every cut end must be one paired Sketch line crossing that
+no area, so the closure of the cells `a ∨ b`, `a ∧ ¬b` or `a ∧ b` selects is
+the regularized 2D operation of the lemma.
+
+`prismcells.MergeRegionsExact` drops the walls between selected cells and
+chains the survivors into simple loops by their exact walked ends. A vertex two
+survivors leave refuses; this catches two regions that meet at a shared chain
+vertex. Selected cells that share a wall are one region, by Sketch's own cell
+adjacency. Which loop of a region is its outer loop is again Sketch's verdict:
+every merged loop is declared as a loop of spans of the scene's entities, the
+scene is published again, each republished representative cell must walk the
+same edges as before, and that cell must lie inside exactly one of its
+region's loops, the outer one, and outside the others, its holes. An unproven
+verdict refuses. No coordinate is compared to place a loop. The seam's
+loop-closure check can only refuse.
+
+Each loop is then stated exactly or refused. A whole segment records from its
+entity's own data. A cut end must be one paired Sketch line crossing that
 `Sketch.CertifyLineLineJunction` solves from the two lines' endpoint bits as an
 exact binary64 point. Exact rational membership on both source lines then
-restates each loop as whole lines between exact points. The cut charge must be
-zero, so a fragment whose junction Sketch does not certify returns
-`ErrUnsupported`; decad never rounds or fits a junction itself.
+restates each line as a whole line between exact points; a whole arc between
+them keeps its record, and its walked ends must meet its neighbours' ends
+exactly. A cut arc or circle has no such certificate. Its recorded parameter
+t names the point at angle 2πt about its centre, which binary64 coordinates
+hold only at a quarter turn. `Sketch.CertifyLineCircleJunction` and
+`Sketch.CertifyQuarterArcJunctions` return rational enclosures of a line-arc
+crossing, not a binary64 vertex. The line-circle certificate takes only a
+complete circle and declines a crossing straight across the centre along
+either axis, which is where a quarter turn lies, and Sketch certifies no
+arc-arc crossing. So no cut end on an arc or circle can be stated as one exact
+point both neighbours share. A cut arc or circle returns `ErrUnsupported`, as
+does a cut end Sketch does not certify; the cut charge must be zero, and decad
+never rounds or fits a junction itself.
 
-The merged survivors must close into exactly one loop. `Classify` refuses a
-cell carrying its own hole, so nested sections and sections with holes refuse,
-as do several separate regions. The loop is rebuilt through
-`sectionclip.ReconstructExactSection` on the requested plane, and Sketch's
-fresh record must match it. The result is an ordinary exact profile and may
-enter any profile consumer.
+The regions are rebuilt through `sectionclip.ReconstructExactSections` on the
+requested plane, all in one fresh Sketch. Each record must match a valid
+profile whose fresh certified record equals it, and the profiles return in
+record order; a face no record names, such as the empty space inside a hole
+around an island, is left out. The result is one ordinary exact profile per
+region and may enter any profile consumer.
 
 ## Exact interior section of a rectangular LoftSections result
 
@@ -825,11 +909,30 @@ reusing its bound.
   `Tessellate(0.1 mm, VerifyAll)`. A corner tool drawn on a plane facing down
   takes a reflected candidate frame. Two boxes on one tilted Sketch plane,
   moved along its normal by powers of two, cut on the mesh path and section
-  at 75 mm² in that plane's own frame. Refuse a gap-shifted result, a copied
-  result, the tool's cap level, a plane missing an operand, a curved operand
-  section, a junction Sketch does not certify, a slot that splits the section
-  and a section nested in the other. A unit fixture refuses two regions that
-  Sketch welds across a 2^-40 mm gap.
+  at 75 mm² in that plane's own frame. Refuse a gap-shifted result, the tool's
+  cap level and a junction Sketch does not certify. A copied result, a plane
+  missing an operand, a slot that splits the section and a section nested in
+  the other are axis-square, so the orthogonal grid reads them first. A unit
+  fixture refuses two regions that Sketch welds across a 2^-40 mm gap.
+- Section real mesh Boolean results whose operand sections hold whole circles
+  and holes. A 10 mm cube with a radius 2 mm through hole, cut by a beam along X
+  spanning y 7.5..9.5, gives at z=5 a region of 75 − 4π mm² with the round
+  hole and a 5 mm² strip. The same plate intersected with a beam spanning
+  y 1..9 gives one region of 80 − 4π mm² with the hole. The cube joined to a
+  radius 2 mm cylinder along X lying apart gives a 100 mm² square and a 4π mm²
+  disk on the plane x=5, each operand read in its own candidate frame. A
+  revolved tube r 4..10 joined to a box in its bore gives at z=8 a 16 mm²
+  square and an 84π mm² annulus. Each region's 1 mm Extrude encloses its area
+  and passes `Tessellate(0.1 mm, VerifyAll)`. A cube cut by a cylinder over its
+  corner and a cylinder of radius 6 mm along X joined to one of radius 4 mm
+  along Y refuse, because their sections cut a circle. Unit fixtures merge a
+  disjoint union, a circular hole, an island inside a hole, a disk inside a
+  square, a hole inside an overlap, a split holed square and a whole arc
+  beside certified line cuts, and refuse a line crossing an arc or a circle,
+  two regions touching at a corner, an empty result, a square cut by a dart
+  of width 2^-30 to 2^-44 mm whose containment Sketch leaves unproven, and a
+  square combined with a triangle of area 3·2^-38 to 3·2^-50 mm², axis-aligned
+  or not, that Sketch drops below its area floor.
 - Cut a real 4×4×4 mm blind pocket from a 10 mm cube. Section at z=8 gives
   84 mm² with one hole spanning (3..7, 3..7), and at z=3 gives 100 mm². Each
   2 mm Extrude passes `Tessellate(0.1 mm, VerifyAll)`. The pocket floor, caps

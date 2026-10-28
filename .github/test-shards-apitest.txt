@@ -1557,6 +1557,8 @@
 10	0.01	TestHoleInATiltedMeshFaceRunsAlongTheFacesNormal
 10	0.01	TestQuarterTurnExchangesCoordinatesExactly
 10	0.01	TestQuarterTurnedSolidsJoinExactly
+10	0.00	TestSectionMeshBooleanHistoryCurvesAndRegions
+10	0.00	TestSectionMeshBooleanHistoryRefusesCutCurves
 10	0.01	TestQuarterTurnRefusals
 6	0.00	TestBossRibsRefusals
 6	0.46	TestBossStandsOnTheWallOfABore

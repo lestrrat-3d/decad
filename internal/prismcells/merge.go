@@ -73,9 +73,9 @@ func MergeLoops(budget *proofbound.WorkBudget, selected []*sketch.Profile, opNam
 }
 
 // MergeLoopsExactLineCuts is reserved for an A1 BRep Union of authenticated
-// source slabs and for Body.Section of a mesh Boolean result read from its
-// history (internal/sectionhistory). Other Boolean consumers retain their
-// original cut charge.
+// source slabs. Body.Section of a mesh Boolean result read from its history
+// uses MergeRegionsExact. Other Boolean consumers retain their original cut
+// charge.
 func MergeLoopsExactLineCuts(budget *proofbound.WorkBudget, scene *sketch.Sketch, selected []*sketch.Profile,
 	opName string) ([]sectionrecord.LoopRecord, float64, bool, error) {
 	return mergeLoops(budget, scene, selected, opName)
