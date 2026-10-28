@@ -166,7 +166,8 @@ func Group(ctx context.Context, rp patternrecord.Spec, payload topo.Payload) (st
 	switch p := payload.(type) {
 	case prismrecord.Payload:
 		regions = []momentinput.Profile{p.Profile}
-		slab = stackedrecord.Slab{Z0: p.Z0, Z1: p.Z1, Z0Delta: p.Z0Delta, Z1Delta: p.Z1Delta}
+		slab = stackedrecord.Slab{Z0: p.Z0, Z1: p.Z1, Z0Delta: p.Z0Delta, Z1Delta: p.Z1Delta,
+			Z0Denoted: p.Z0Denoted, Z1Denoted: p.Z1Denoted}
 		sectionDelta = p.SectionDelta
 	case stackedrecord.Payload:
 		if p.IsGroup() {

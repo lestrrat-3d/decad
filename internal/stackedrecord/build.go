@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/denotation"
@@ -375,7 +376,10 @@ func Build(ctx context.Context, env topo.Env, sp Payload, plan Plan) (*topo.Body
 		}
 	}
 
-	newPlane := func(z, axial float64, flip bool, role string, area proofbound.BoundedScalar) (*topo.Face, error) {
+	// newPlane records denoted, the slab level's exact rational or nil, as the
+	// face's CapRecord.ZDenoted, so a ToFace stop on a stack's cap or floor
+	// reads it as a prism cap's (agent-docs/stacked-prism-design.md §2.1).
+	newPlane := func(z, axial float64, denoted *big.Rat, flip bool, role string, area proofbound.BoundedScalar) (*topo.Face, error) {
 		frame, err := base.CapFrame(z, flip)
 		if err != nil {
 			return nil, err
@@ -386,7 +390,7 @@ func Build(ctx context.Context, env topo.Env, sp Payload, plan Plan) (*topo.Body
 			AxialDelta:    axial,
 			HasAxialDelta: true,
 			Surface:       surfacegeom.Plane{Frame: frame},
-			CapRecord:     &topo.CapRecord{Frame: base.Frame, Xform: base.Xform, Z: z},
+			CapRecord:     &topo.CapRecord{Frame: base.Frame, Xform: base.Xform, Z: z, ZDenoted: denoted},
 			Origins:       []provenance.Ref{{Producer: env.Ref, Role: role}},
 			Body:          body,
 		}), nil
@@ -399,15 +403,19 @@ func Build(ctx context.Context, env topo.Env, sp Payload, plan Plan) (*topo.Body
 	capArea := proofbound.BoundedScalar{}
 	for _, p := range parts {
 		for _, end := range []struct {
-			slab int
-			z, d float64
-			flip bool
-			top  bool
-		}{{0, first.Z0, first.Z0Delta, true, false}, {len(sp.Slabs) - 1, last.Z1, last.Z1Delta, false, true}} {
+			slab    int
+			z, d    float64
+			denoted *big.Rat
+			flip    bool
+			top     bool
+		}{
+			{0, first.Z0, first.Z0Delta, first.DenotedZ0(), true, false},
+			{len(sp.Slabs) - 1, last.Z1, last.Z1Delta, last.DenotedZ1(), false, true},
+		} {
 			if p.slab != end.slab {
 				continue
 			}
-			f, err := newPlane(end.z, end.d, end.flip, plan.CapRole(end.slab, p.region, end.top), p.area)
+			f, err := newPlane(end.z, end.d, end.denoted, end.flip, plan.CapRole(end.slab, p.region, end.top), p.area)
 			if err != nil {
 				return nil, err
 			}
@@ -435,6 +443,13 @@ func Build(ctx context.Context, env topo.Env, sp Payload, plan Plan) (*topo.Body
 	}
 	for k := range sp.Interfaces {
 		z, axial := sp.Slabs[k].Z1, sp.Slabs[k].Z1Delta
+		// Falsify's I4 has refused two sides that denote different rationals,
+		// and both sides hold one float and bound, so either side's record
+		// names the interface's level.
+		denoted := sp.Slabs[k].DenotedZ1()
+		if denoted == nil {
+			denoted = sp.Slabs[k+1].DenotedZ0()
+		}
 		patches, err := sp.InterfacePatches(columns, bySlab, k)
 		if err != nil {
 			return nil, err
@@ -444,7 +459,7 @@ func Build(ctx context.Context, env topo.Env, sp Payload, plan Plan) (*topo.Body
 			if err != nil {
 				return nil, err
 			}
-			f, err := newPlane(z, axial, !patch.Floor, plan.PatchRole(patch), area)
+			f, err := newPlane(z, axial, denoted, !patch.Floor, plan.PatchRole(patch), area)
 			if err != nil {
 				return nil, err
 			}
