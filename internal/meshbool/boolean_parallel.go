@@ -94,13 +94,14 @@ type ContactBatchExecutor struct {
 	Batch           []ContactBatchEntry
 	Misses          []ContactPair
 	Results         []ContactBatchResult
+	memoHits        []TriContact
 	initialCapacity int
 }
 
 type ContactBatchEntry struct {
-	Pair    ContactPair
-	Contact TriContact
-	Miss    bool
+	Pair ContactPair
+	// HitIndex selects the cached contact for a memo hit. Misses use -1.
+	HitIndex int
 }
 
 func NewContactBatchExecutor(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, workers int, consume func(ContactPair, TriContact) error) *ContactBatchExecutor {
@@ -134,11 +135,10 @@ func (e *ContactBatchExecutor) Add(i, j int) error {
 		return err
 	}
 	pair := ContactPair{I: i, J: j}
-	entry := ContactBatchEntry{Pair: pair}
+	entry := ContactBatchEntry{Pair: pair, HitIndex: -1}
 	if contact, ok := e.Memo.Lookup(i, j); ok {
-		entry.Contact = contact
-	} else {
-		entry.Miss = true
+		entry.HitIndex = len(e.memoHits)
+		e.memoHits = append(e.memoHits, contact)
 	}
 	if e.Batch == nil {
 		e.Batch = make([]ContactBatchEntry, 0, e.initialCapacity)
@@ -156,7 +156,7 @@ func (e *ContactBatchExecutor) Flush() error {
 	}
 	e.Misses = e.Misses[:0]
 	for _, entry := range e.Batch {
-		if entry.Miss {
+		if entry.HitIndex < 0 {
 			if e.Misses == nil {
 				e.Misses = make([]ContactPair, 0, e.initialCapacity)
 			}
@@ -169,22 +169,25 @@ func (e *ContactBatchExecutor) Flush() error {
 		e.Results = e.Results[:len(e.Misses)]
 	}
 	if err := e.Run(e.Ctx, e.Ma, e.Mb, e.Misses, e.Results, e.Workers); err != nil {
-		e.Batch = e.Batch[:0]
+		e.resetBatch()
 		return err
 	}
 	miss := 0
 	for _, entry := range e.Batch {
 		if err := e.Ctx.Err(); err != nil {
-			e.Batch = e.Batch[:0]
+			e.resetBatch()
 			return err
 		}
-		contact := entry.Contact
-		result := ContactBatchResult{Contact: contact}
-		if entry.Miss {
+		var contact TriContact
+		var result ContactBatchResult
+		if entry.HitIndex >= 0 {
+			contact = e.memoHits[entry.HitIndex]
+			result = ContactBatchResult{Contact: contact}
+		} else {
 			result = e.Results[miss]
 			miss++
 			if result.Err != nil {
-				e.Batch = e.Batch[:0]
+				e.resetBatch()
 				return result.Err
 			}
 			contact = result.Contact
@@ -192,18 +195,24 @@ func (e *ContactBatchExecutor) Flush() error {
 		}
 		if e.ConsumeResult != nil {
 			if err := e.ConsumeResult(entry.Pair, result); err != nil {
-				e.Batch = e.Batch[:0]
+				e.resetBatch()
 				return err
 			}
 		} else if e.Consume != nil {
 			if err := e.Consume(entry.Pair, contact); err != nil {
-				e.Batch = e.Batch[:0]
+				e.resetBatch()
 				return err
 			}
 		}
 	}
-	e.Batch = e.Batch[:0]
+	e.resetBatch()
 	return e.Ctx.Err()
+}
+
+func (e *ContactBatchExecutor) resetBatch() {
+	e.Batch = e.Batch[:0]
+	clear(e.memoHits)
+	e.memoHits = e.memoHits[:0]
 }
 
 func (e *ContactBatchExecutor) Done() error {
