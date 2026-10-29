@@ -115,7 +115,6 @@
 0	0.00	TestLoftPlacedFaceAreaSumMatchesBodyArea
 0	0.00	TestLoftSeamGates
 0	0.01	TestLoftSectionsManyRectanglesRefuseUnprovedInputs
-0	53.00	TestLoftSectionsTwistedLongRibbonIsOneVerifiedLoft
 0	0.00	TestLoftSplitsRefusals
 0	0.00	TestLoopCoEdgesFollowDirectedBoundary
 0	0.01	TestMassPropertiesCupOuterMinusCavity
