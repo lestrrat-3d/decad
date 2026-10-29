@@ -36,6 +36,12 @@ func PlaneGroup(t *testing.T, role string, p0, p1, p2 r3.Vec) facetedrecord.Grou
 	}
 }
 
+// axisGroup is a retained plane group on the frame (o, u, v), whose outward normal is u x v.
+func axisGroup(t *testing.T, role string, o, u, v r3.Vec) facetedrecord.Group {
+	t.Helper()
+	return PlaneGroup(t, role, o, o.Add(u), o.Add(v))
+}
+
 // Build builds the body of fp with the kit's environment.
 func Build(t *testing.T, fp facetedrecord.Payload) *topo.Body {
 	t.Helper()
@@ -78,8 +84,8 @@ func Prism(t *testing.T, section [][2]float64, x0, x1 float64) (*topo.Body, face
 		addTri(i, a, c, d)
 	}
 	end, start := len(fp.Groups), len(fp.Groups)+1
-	fp.Groups = append(fp.Groups, PlaneGroup(t, "capEnd", vec(n), vec(n+1), vec(n+2)))
-	fp.Groups = append(fp.Groups, PlaneGroup(t, "capStart", vec(0), vec(2), vec(1)))
+	fp.Groups = append(fp.Groups, axisGroup(t, "capEnd", r3.NewVec(x1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)))
+	fp.Groups = append(fp.Groups, axisGroup(t, "capStart", r3.NewVec(x0, 0, 0), r3.NewVec(0, 0, 1), r3.NewVec(0, 1, 0)))
 	for k := 1; k < n-1; k++ {
 		addTri(end, n, n+k, n+k+1)
 		addTri(start, 0, k+1, k)

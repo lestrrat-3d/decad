@@ -14,3 +14,4 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/trimtest/` | Hand-made retained prisms and a pyramid with exact plane frames, for the trim-graph packages' tests. |
 | `internal/facemesh/` | Meshes one planar face of a trim graph over `internal/triangulation`, refusing a dropped point or a triangle that fails the exact orientation margin. See trim-graph Component 4. |
 | `internal/trimrebuild/` | Splices new faces into a receiver's held mesh, composes the volume, area and diameter bounds, runs the held-embedding gate and builds the body. See trim-graph Component 5. |
+| `internal/trimshell/` | Shell over a trim graph: the closed inward shell of a convex planar receiver, the offset-plane vertex meets and gate C1. See trim-graph Component 6. |
