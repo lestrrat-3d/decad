@@ -37,3 +37,9 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/dxf-export-design.md` | `export.DXF`: feature-edge projection, hidden-line runs and the release-12 file. |
 | `agent-docs/png-export-design.md` | `export.PNG` and `export.PNGBodies`: the orthographic flat-shaded renderer, its camera and shading rules. |
 | `agent-docs/boolean-chain-regroup-design.md` | Rebuilding a refused two-body Boolean from the source bodies its history names: admitted set identities, plan, fallback and fixtures. |
+| `agent-docs/same-set-level-design.md` | Proposed exact level comparison for prism and cup set-identity proofs. |
+| `agent-docs/brep-point-containment-design.md` | Proposed exact point queries for Boolean BReps without stack records. |
+| `agent-docs/split-circle-wall-design.md` | Proposed wall survey for spherical Revolve meridians split across arcs. |
+| `agent-docs/closed-surface-step-design.md` | Proposed analytic STEP topology for whole sphere and ring faces without loops. |
+| `agent-docs/gap-shifted-query-design.md` | Proposed point and section query contract for gap-shifted Boolean results. |
+| `agent-docs/exact-arithmetic-task-plans.md` | Implementation plan index and shared execution rules for five exact arithmetic proposals. |
