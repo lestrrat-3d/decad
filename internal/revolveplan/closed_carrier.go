@@ -15,6 +15,7 @@ import (
 )
 
 // CompleteRingRecord holds exact carrier data for a proven full ring.
+// Center includes payload placement; axis and radii remain unchanged by translation.
 type CompleteRingRecord struct {
 	Center       proof.DyV3
 	Axis         r3.Vec
@@ -26,7 +27,11 @@ func (rp Payload) CompleteRing(ctx context.Context) (CompleteRingRecord, bool, e
 	if err := ctx.Err(); err != nil {
 		return CompleteRingRecord{}, false, err
 	}
-	if !rp.Full || rp.SurfaceResult || rp.SectionDelta != 0 || rp.SectionWhole || rp.Xform != r3.Identity() || rp.Ax.AUBound != 0 || rp.Ax.AVBound != 0 || rp.Ax.DUBound != 0 || rp.Ax.DVBound != 0 || rp.Ax.RadialAdmitAllow != 0 || rp.Ax.Snap != (revolveaxis.SnapAllow{}) {
+	if !rp.Full || rp.SurfaceResult || rp.SectionDelta != 0 || rp.SectionWhole ||
+		!rp.Xform.IsValid() || !proofbound.FiniteVec(rp.Xform.Translation()) ||
+		rp.Xform.Basis() != r3.Identity().Basis() ||
+		rp.Ax.AUBound != 0 || rp.Ax.AVBound != 0 || rp.Ax.DUBound != 0 || rp.Ax.DVBound != 0 ||
+		rp.Ax.RadialAdmitAllow != 0 || rp.Ax.Snap != (revolveaxis.SnapAllow{}) {
 		return CompleteRingRecord{}, false, nil
 	}
 	lo, hi := rp.Den.Phi0, rp.Den.Phi1
@@ -109,7 +114,7 @@ func (rp Payload) CompleteRing(ctx context.Context) (CompleteRingRecord, bool, e
 	if !rp.ProvesSimple(ctx) {
 		return CompleteRingRecord{}, false, ctx.Err()
 	}
-	return CompleteRingRecord{Center: center, Axis: w, Major: rho, Minor: minor}, true, nil
+	return CompleteRingRecord{Center: proof.DvTransform(rp.Xform, center), Axis: w, Major: rho, Minor: minor}, true, nil
 }
 
 func closedCardinalBasis(u, v, n r3.Vec) bool {

@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/contactround"
 	"github.com/lestrrat-3d/decad/internal/facedeparture"
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveaxis"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/stitchflux"
@@ -36,7 +37,11 @@ func readClosedSurface(ctx context.Context, body, face any) (closedstep.Coverage
 		return closedstep.Coverage{}, false, nil
 	}
 	rp, ok := b.n.Payload.(revolveplan.Payload)
-	if !ok || !rp.Full || rp.SurfaceResult || rp.SectionDelta != 0 || rp.SectionWhole || rp.Xform != r3.Identity() || rp.Ax.AUBound != 0 || rp.Ax.AVBound != 0 || rp.Ax.DUBound != 0 || rp.Ax.DVBound != 0 || rp.Ax.RadialAdmitAllow != 0 || rp.Ax.Snap != (revolveaxis.SnapAllow{}) {
+	if !ok || !rp.Full || rp.SurfaceResult || rp.SectionDelta != 0 || rp.SectionWhole ||
+		!rp.Xform.IsValid() || !proofbound.FiniteVec(rp.Xform.Translation()) ||
+		rp.Xform.Basis() != r3.Identity().Basis() ||
+		rp.Ax.AUBound != 0 || rp.Ax.AVBound != 0 || rp.Ax.DUBound != 0 || rp.Ax.DVBound != 0 ||
+		rp.Ax.RadialAdmitAllow != 0 || rp.Ax.Snap != (revolveaxis.SnapAllow{}) {
 		return closedstep.Coverage{}, false, nil
 	}
 	if proof.FloatRat(rp.Ax.AU) == nil || proof.FloatRat(rp.Ax.AV) == nil || proof.FloatRat(rp.Ax.DU) == nil || proof.FloatRat(rp.Ax.DV) == nil || proof.FloatRat(rp.Ax.SnapTol) == nil || rp.Ax.SnapTol < 0 {
@@ -74,7 +79,7 @@ func readClosedSurface(ctx context.Context, body, face any) (closedstep.Coverage
 		}
 		return closedstep.Coverage{Ring: true, Center: center, Axis: rec.Axis, Reference: ref, Major: major, Minor: minor}, true, nil
 	}
-	p, ok := contactround.SphereRecord(&b.n)
+	p, ok := contactround.SphereAtPose(&b.n, r3.Identity())
 	if !ok || p.Face != &f.n || facedeparture.TagDeparts(&f.n) {
 		return closedstep.Coverage{}, false, nil
 	}

@@ -69,15 +69,77 @@ func TestNewSTEPFileWholeSphereAnalytic(t *testing.T) {
 	require.Len(t, body.Faces(), 1)
 	require.Empty(t, body.Edges())
 	require.Empty(t, body.Faces()[0].Loops())
-	moved, err := r3.Translation(r3.NewVec(1, 0, 0))
+	moved, err := r3.Translation(r3.NewVec(8, -4, 2))
 	require.NoError(t, err)
-	placed, err := decad.Transform(t.Context(), body, moved)
+	placed, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(moved))
 	require.NoError(t, err)
-	fallback, err := export.NewSTEPFile(t.Context(), placed, units.Millimeters(0.1), header())
+	coverage, ok, err := closedstep.Read(t.Context(), placed, placed.Faces()[0])
 	require.NoError(t, err)
-	for _, entity := range fallback.Entities {
-		require.NotEqual(t, "SPHERICAL_SURFACE", entity.Name)
+	require.True(t, ok)
+	require.Equal(t, r3.NewVec(13, -4, 2), coverage.Center)
+	require.Equal(t, 5.0, coverage.Radius)
+	translated, err := export.NewSTEPFile(t.Context(), placed, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	translatedBytes, err := translated.Marshal()
+	require.NoError(t, err)
+	require.NotEmpty(t, translatedBytes)
+	found := false
+	translatedEntities := map[step.Reference]step.Entity{}
+	for _, entity := range translated.Entities {
+		translatedEntities[step.Reference(entity.ID)] = entity
 	}
+	for _, entity := range translated.Entities {
+		if entity.Name == "VERTEX_LOOP" {
+			vertex := translatedEntities[entity.Parameters[1].(step.Reference)]
+			point := translatedEntities[vertex.Parameters[1].(step.Reference)]
+			require.Equal(t, step.List{step.Real(13), step.Real(-4), step.Real(7)}, point.Parameters[1])
+		}
+		if entity.Name == "SPHERICAL_SURFACE" {
+			found = true
+		}
+	}
+	require.True(t, found)
+
+	for _, tc := range []struct {
+		translation r3.Vec
+		coverage    bool
+		analytic    bool
+	}{
+		{r3.NewVec(0.1, 0, 0), false, false},
+		{r3.NewVec(0, 0, 0.1), true, false},
+		{r3.NewVec(256, -128, 64), true, true},
+	} {
+		move, err := r3.Translation(tc.translation)
+		require.NoError(t, err)
+		copyBody, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(move))
+		require.NoError(t, err)
+		_, ok, err := closedstep.Read(t.Context(), copyBody, copyBody.Faces()[0])
+		require.NoError(t, err)
+		require.Equal(t, tc.coverage, ok)
+		file, err := export.NewSTEPFile(t.Context(), copyBody, units.Millimeters(0.1), header())
+		require.NoError(t, err)
+		sphere, planes := 0, 0
+		for _, entity := range file.Entities {
+			if entity.Name == "SPHERICAL_SURFACE" {
+				sphere++
+			}
+			if entity.Name == "PLANE" {
+				planes++
+			}
+		}
+		if tc.analytic {
+			require.Equal(t, 1, sphere)
+		} else {
+			require.Zero(t, sphere)
+			require.Positive(t, planes)
+		}
+	}
+	transformed, err := decad.Transform(t.Context(), placed, moved)
+	require.NoError(t, err)
+	again, ok, err := closedstep.Read(t.Context(), transformed, transformed.Faces()[0])
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, r3.NewVec(21, -8, 4), again.Center)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	_, err = export.NewSTEPFile(ctx, body, units.Millimeters(0.1), header())
@@ -133,6 +195,51 @@ func TestNewSTEPFileWholeRingAnalytic(t *testing.T) {
 	require.Len(t, body.Faces(), 1)
 	require.Empty(t, body.Edges())
 	require.Empty(t, body.Faces()[0].Loops())
+	move, err := r3.Translation(r3.NewVec(8, -4, 2))
+	require.NoError(t, err)
+	placed, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(move))
+	require.NoError(t, err)
+	coverage, ok, err := closedstep.Read(t.Context(), placed, placed.Faces()[0])
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, r3.NewVec(8, -4, 2), coverage.Center)
+	translated, err := export.NewSTEPFile(t.Context(), placed, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	output, err := translated.Marshal()
+	require.NoError(t, err)
+	require.NotEmpty(t, output)
+	found := false
+	translatedEntities := map[step.Reference]step.Entity{}
+	for _, entity := range translated.Entities {
+		translatedEntities[step.Reference(entity.ID)] = entity
+		if entity.Name == "TOROIDAL_SURFACE" {
+			found = true
+		}
+	}
+	require.True(t, found)
+	for _, entity := range translated.Entities {
+		if entity.Name == "VERTEX_POINT" {
+			point := translatedEntities[entity.Parameters[1].(step.Reference)]
+			require.Equal(t, step.List{step.Real(8), step.Real(9), step.Real(2)}, point.Parameters[1])
+		}
+	}
+	moveInexact, err := r3.Translation(r3.NewVec(0, 0.1, 0))
+	require.NoError(t, err)
+	inexact, err := decad.Copy(t.Context(), body, decad.WithCopyPlacement(moveInexact))
+	require.NoError(t, err)
+	_, ok, err = closedstep.Read(t.Context(), inexact, inexact.Faces()[0])
+	require.NoError(t, err)
+	require.True(t, ok)
+	fallback, err := export.NewSTEPFile(t.Context(), inexact, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	planes := 0
+	for _, entity := range fallback.Entities {
+		require.NotEqual(t, "TOROIDAL_SURFACE", entity.Name)
+		if entity.Name == "PLANE" {
+			planes++
+		}
+	}
+	require.Positive(t, planes)
 }
 
 func TestClosedSTEPInexactSyntheticPointFallsBack(t *testing.T) {

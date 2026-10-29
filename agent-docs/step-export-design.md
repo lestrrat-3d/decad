@@ -80,8 +80,9 @@ according to the writer path.
   no patch is left. A patch that no decided face reaches, or whose shared edges ask for both walks,
   sends the body to the faceted writer.
   A cone with one circle loop, which reaches its apex without a vertex there, takes the faceted writer.
-  A complete sphere or regular ring from an authenticated identity-placement full Revolve writes analytically
-  when exact carrier, synthetic point and outward normal checks pass. A sphere uses a north-pole vertex loop.
+  A complete sphere or regular ring from an authenticated full Revolve with identity or pure translation
+  placement writes analytically when the translated carrier matches the tag exactly and the synthetic point
+  and outward normal checks pass. The placement must be finite and valid with an exactly identity basis. A sphere uses a north-pole vertex loop.
   A ring uses two shared circle edges, each used in opposite directions. Unsupported or inexact cases fall back
   to the faceted writer. `ReadSTEP` still refuses whole spheres and tori (I15 and I4).
   Emit one `ADVANCED_FACE`

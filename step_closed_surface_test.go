@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -84,6 +85,26 @@ func TestClosedRingCoverage(t *testing.T) {
 	require.Equal(t, 3.0, got.Minor)
 	require.Equal(t, r3.NewVec(1, 0, 0), got.Axis)
 	rp := b.n.Payload.(revolveplan.Payload)
+	rotation, err := r3.Rotation(r3.NewVec(0, 0, 1), units.Degrees(90))
+	require.NoError(t, err)
+	tiny, err := r3.Rotation(r3.NewVec(0, 0, 1), units.Radians(1e-12))
+	require.NoError(t, err)
+	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	reflection, err := r3.Reflection(frame)
+	require.NoError(t, err)
+	for _, transform := range []r3.Transform{rotation, tiny, reflection, {}} {
+		changed := rp
+		changed.Xform = transform
+		_, ok, err := changed.CompleteRing(t.Context())
+		require.NoError(t, err)
+		require.False(t, ok)
+		b.n.Payload = changed
+		_, ok, err = closedstep.Read(t.Context(), b, f)
+		require.NoError(t, err)
+		require.False(t, ok)
+	}
+	b.n.Payload = rp
 	rotated, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 1, 0), r3.NewVec(-1, 1, 0))
 	require.NoError(t, err)
 	skewed := rp
