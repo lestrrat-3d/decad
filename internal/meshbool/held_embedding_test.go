@@ -99,6 +99,31 @@ func TestHeldFoldsNamesTheFacetsThatMeet(t *testing.T) {
 	require.Empty(t, pairs, "a mesh with no moved vertex has no fold to report")
 }
 
+func TestHeldFoldExistsMatchesFullFoldScan(t *testing.T) {
+	t.Parallel()
+	clean := heldFragment([][3]r3.Vec{
+		{{X: 0, Y: 0, Z: 0}, {X: 1, Y: 0, Z: 0}, {X: 0, Y: 1, Z: 0}},
+		{{X: 1, Y: 0, Z: 0}, {X: 1, Y: 1, Z: 0}, {X: 0, Y: 1, Z: 0}},
+	})
+	noMoved := clean
+	noMoved.Moved = make([]bool, len(clean.Verts))
+	cases := map[string]meshbool.HeldRounding{
+		"folded":   union14Fold(),
+		"clean":    clean,
+		"no-moved": noMoved,
+	}
+	for name, held := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			folds, err := meshbool.HeldFolds(t.Context(), held)
+			require.NoError(t, err)
+			got, err := meshbool.HasHeldFold(t.Context(), held)
+			require.NoError(t, err)
+			require.Equal(t, len(folds) > 0, got)
+		})
+	}
+}
+
 // TestRepairHeldEmbeddingReturnsWhatItCannotClear checks that
 // RepairHeldEmbedding hands back the facets the float-box search leaves folded,
 // where EnforceHeldEmbedding refuses, and none for an embedded mesh.
