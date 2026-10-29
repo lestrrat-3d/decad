@@ -293,7 +293,11 @@ func scanHeldFolds(ctx context.Context, h HeldRounding, firstOnly bool) ([][2]in
 	if err := e.buildGrid(); err != nil {
 		return nil, false, err
 	}
-	e.pairs = make(map[uint64]uint64, 32*len(query))
+	pairCapacity := 32 * len(query)
+	if firstOnly {
+		pairCapacity = 16 * len(query)
+	}
+	e.pairs = make(map[uint64]uint64, pairCapacity)
 	var out [][2]int
 	for _, f := range query {
 		bad, collapsed, found, err := e.scanFacetFailures(f, nil, nil, firstOnly)
