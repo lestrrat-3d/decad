@@ -39,8 +39,8 @@ func (l PointLocation) String() string {
 
 // LocatePoint classifies a world-coordinate point in millimetres against b.
 // A straight prism with an undisplaced section and exact denoted levels
-// (agent-docs/point-containment-design.md §7),
-// stacked prism or stack BRep (§9) and a full solid Revolve (§10) are
+// (agent-docs/point-containment-design.md §7), stacked prism, stack BRep or
+// line-only A7 crossing blind Cut (§9), and a full solid Revolve (§10) are
 // classified against their own records in exact arithmetic where their
 // boundaries are exact rational data, and a mesh Boolean result combines its
 // operands' exact answers through the operation history (§8); every other

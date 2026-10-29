@@ -27,6 +27,13 @@ func rectRecord(u0, v0, u1, v1 float64) momentinput.Profile {
 	return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: segments}}
 }
 
+func TestPointQueryCutDoesNotMakeBrepAnOperand(t *testing.T) {
+	t.Parallel()
+	payload := breprecord.Payload{PointQueryCut: &breprecord.CutOperands{}}
+	_, ok := stackedunion.OperandFromPayload(payload)
+	require.False(t, ok)
+}
+
 // TestJoinBrepStackCarriesDenotation unions a plate over [-3, 2] with a boss
 // over [-3, 0.2 in] that overhangs the plate's edge. The interface crosses,
 // so the join builds an A1 BRep, and its stack's top level keeps the rational
