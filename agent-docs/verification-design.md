@@ -1880,10 +1880,11 @@ that pair. A hollow sphere reads its shell thickness, a ball its diameter, a
 hemisphere its angle-limit ball, and a ball cut flat at both poles the
 separation of its flats. A centre the axis frame cannot prove on the axis, such
 as one on a tilted axis or snapped onto it, keeps the pair, whose zero-width
-candidate leaves the survey undecided (`Suspect`). Each arc pairs only with its
-own mirror, so an on-axis circle split across several arc segments (two quarter
-arcs meeting at the equator) still yields zero-width candidates from its cross
-pairs and reads `Suspect` too.
+candidate leaves the survey undecided (`Suspect`). For an undisplaced meridian
+and exact cardinal axis, whole source arcs with the same exact centre and
+squared radius share a carrier. Their original spans
+and material sides remain in the survey. Unsupported arcs and uncertain axes
+keep the per-walk carrier path.
 
 The prism/revolve analytic survey streams each closed-form
 candidate into validation instead of retaining the full cubic candidate set.

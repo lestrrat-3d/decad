@@ -203,3 +203,44 @@ func TestWallSphereTiltedAxisUndecided(t *testing.T) {
 	tilted := decad.SketchLine{End: decad.Point2{U: 1, V: 1}}
 	requireWallUndecided(t, sphereWallReport(t, s, p, tilted, 1.5))
 }
+
+func requireSplitWall(t *testing.T, pts [][2]float64, arcs map[int][2]float64, cw map[int]struct{}, truth int64, failTool float64) {
+	t.Helper()
+	s, p := sphereMeridianSketch(t, pts, arcs, cw)
+	report := sphereWallReport(t, s, p, uAxis, 1.5)
+	br := report.Bodies[0]
+	require.Equal(t, decad.ScalarMeasured, br.Wall.Outcome)
+	require.NotNil(t, br.Wall.Minimum)
+	value, err := br.Wall.Minimum.Value.In(units.Millimeter)
+	require.NoError(t, err)
+	bound, err := br.Wall.Minimum.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	requireContains(t, big.NewRat(truth, 1), value, bound)
+	require.LessOrEqual(t, bound, 1e-9)
+	require.Equal(t, decad.Sound, report.Status)
+	t.Logf("wall: %.17g ± %.17g mm", value, bound)
+	if failTool > 0 {
+		requireWallTooThin(t, sphereWallReport(t, s, p, uAxis, failTool))
+	}
+}
+
+func TestWallSplitSolidBallReadsDiameter(t *testing.T) {
+	t.Run("original", func(t *testing.T) {
+		requireSplitWall(t, [][2]float64{{10, 0}, {0, 10}, {-10, 0}}, map[int][2]float64{0: {0, 0}, 1: {0, 0}}, nil, 20, 25)
+	})
+	t.Run("rotated", func(t *testing.T) {
+		requireSplitWall(t, [][2]float64{{0, 10}, {-10, 0}, {10, 0}}, map[int][2]float64{0: {0, 0}, 2: {0, 0}}, nil, 20, 25)
+	})
+	t.Run("zone", func(t *testing.T) {
+		requireSplitWall(t, [][2]float64{{-6, 0}, {6, 0}, {6, 8}, {0, 10}, {-6, 8}}, map[int][2]float64{2: {0, 0}, 3: {0, 0}}, nil, 12, 0)
+	})
+}
+
+func TestWallSplitHollowSphereReadsThickness(t *testing.T) {
+	t.Run("original", func(t *testing.T) {
+		requireSplitWall(t, [][2]float64{{10, 0}, {0, 10}, {-10, 0}, {-8, 0}, {0, 8}, {8, 0}}, map[int][2]float64{0: {0, 0}, 1: {0, 0}, 3: {0, 0}, 4: {0, 0}}, map[int]struct{}{3: {}, 4: {}}, 2, 2.5)
+	})
+	t.Run("rotated", func(t *testing.T) {
+		requireSplitWall(t, [][2]float64{{-8, 0}, {0, 8}, {8, 0}, {10, 0}, {0, 10}, {-10, 0}}, map[int][2]float64{0: {0, 0}, 1: {0, 0}, 3: {0, 0}, 4: {0, 0}}, map[int]struct{}{0: {}, 1: {}}, 2, 2.5)
+	})
+}
