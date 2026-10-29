@@ -20,12 +20,13 @@ type CertificatePair struct {
 // endpoint gaps are floats whose exact rational values were already proven.
 // A nil or nonpositive result means neither proof certifies the pair.
 func IntervalPairLower(loA, loB float64, travel, projection *big.Rat) *big.Rat {
-	var lower *big.Rat
-	if travel != nil {
-		lower = new(big.Rat).Add(proofarith.FloatRat(loA), proofarith.FloatRat(loB))
-		lower.Sub(lower, travel)
-		lower.Quo(lower, big.NewRat(2, 1))
-	}
+	return IntervalPairTravelProjectionLower(IntervalTravelLower(loA, loB, travel), projection)
+}
+
+// IntervalPairTravelProjectionLower combines an exact travel lower bound with
+// an optional projection bound. A nil or nonpositive result certifies no gap.
+func IntervalPairTravelProjectionLower(travel, projection *big.Rat) *big.Rat {
+	lower := travel
 	if projection != nil && (lower == nil || projection.Cmp(lower) > 0) {
 		lower = projection
 	}
@@ -33,6 +34,23 @@ func IntervalPairLower(loA, loB float64, travel, projection *big.Rat) *big.Rat {
 		return nil
 	}
 	return lower
+}
+
+// IntervalTravelLower returns the exact travel-only lower bound. A nil travel
+// proof means no travel bound is available; a returned bound may be nonpositive.
+func IntervalTravelLower(loA, loB float64, travel *big.Rat) *big.Rat {
+	if travel == nil {
+		return nil
+	}
+	lower := new(big.Rat).Add(proofarith.FloatRat(loA), proofarith.FloatRat(loB))
+	lower.Sub(lower, travel)
+	return lower.Quo(lower, big.NewRat(2, 1))
+}
+
+// CanSkipProjection reports whether a positive travel bound cannot improve the
+// smallest complete bound already seen in pair order.
+func CanSkipProjection(travel, prior *big.Rat) bool {
+	return travel != nil && travel.Sign() > 0 && prior != nil && travel.Cmp(prior) >= 0
 }
 
 // CertifyPairs visits pairs in row order. It returns the smallest proven lower
