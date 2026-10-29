@@ -236,11 +236,12 @@ func parityAllFacets(n int) []int {
 	return all
 }
 
-// flatGroupFirst maps each facet whose projection lies on one axis-parallel
-// line to the first facet on that line, the one the index keeps.
+// flatGroupFirst maps each duplicate projected line facet to the first one
+// the index keeps. Axis-parallel facets group by whole line; slanted facets
+// group only when their projected segment endpoints match exactly.
 func flatGroupFirst(pm *ParityMesh, axis, u, v int) map[int]int {
 	boxes := pm.FacetBoxes(axis)
-	first := map[[2]float64]int{}
+	first := map[[5]float64]int{}
 	out := map[int]int{}
 	for ti, tri := range pm.Tris {
 		if !boxes[ti].Built {
@@ -250,14 +251,15 @@ func flatGroupFirst(pm *ParityMesh, axis, u, v int) map[int]int {
 			continue
 		}
 		a, b, c := pm.Verts[tri[0]], pm.Verts[tri[1]], pm.Verts[tri[2]]
-		var key [2]float64
+		var key [5]float64
 		switch {
 		case CoordOf(a, v) == CoordOf(b, v) && CoordOf(a, v) == CoordOf(c, v):
-			key = [2]float64{0, CoordOf(a, v)}
+			key = [5]float64{0, CoordOf(a, v)}
 		case CoordOf(a, u) == CoordOf(b, u) && CoordOf(a, u) == CoordOf(c, u):
-			key = [2]float64{1, CoordOf(a, u)}
+			key = [5]float64{1, CoordOf(a, u)}
 		default:
-			continue
+			segment := parityProjectedSegmentKey(pm, tri, u, v)
+			key = [5]float64{2, segment[0], segment[1], segment[2], segment[3]}
 		}
 		if f, ok := first[key]; ok {
 			out[ti] = f
@@ -867,6 +869,94 @@ func TestParityIndexMembershipCap(t *testing.T) {
 			require.True(t, refused.index[0] == nil, `and refused`)
 		})
 	}
+}
+
+// TestParityIndexDeduplicatesExactSlantedSegments pins projected-segment
+// identity, the membership-cap benefit, answer parity, and original-position
+// cancellation polling when most line facets are skipped.
+func TestParityIndexDeduplicatesExactSlantedSegments(t *testing.T) {
+	t.Parallel()
+	var verts []r3.Vec
+	var tris [][3]int
+	addSegment := func(lo, hi, x float64, reverse, negativeZero bool) {
+		mid := (lo + hi) / 2
+		start := lo
+		if negativeZero {
+			start = math.Copysign(0, -1)
+		}
+		first := len(verts)
+		verts = append(verts,
+			r3.Vec{X: x, Y: start, Z: lo},
+			r3.Vec{X: x + 1, Y: hi, Z: hi},
+			r3.Vec{X: x, Y: mid, Z: mid},
+		)
+		if reverse {
+			tris = append(tris, [3]int{first + 1, first, first + 2})
+			return
+		}
+		tris = append(tris, [3]int{first, first + 1, first + 2})
+	}
+	for i := range 256 {
+		addSegment(0, 1, 4*float64(i), i == 1, i == 0)
+	}
+	addSegment(2, 3, 4*256, false, false)
+	pm := NewParityMesh(verts, tris)
+	boxes := pm.FacetBoxes(0)
+	for ti := range boxes {
+		boxes[ti] = pm.BuildFacetBox(0, 1, 2, ti)
+	}
+	inner := min(max(int(math.Ceil(2*math.Sqrt(float64(len(tris))))), 4), 256)
+	idxGrid := &ParityIndex{u: newParityGridAxis(0, 3, inner), v: newParityGridAxis(0, 3, inner)}
+	kinds, bound, ok := pm.parityFacetKinds(idxGrid, 1, 2, boxes)
+	require.True(t, ok)
+	require.Equal(t, parityFacetLine, kinds[0])
+	require.Equal(t, parityFacetSkipped, kinds[1], `reversed winding and signed zero share the first segment`)
+	require.Equal(t, parityFacetSkipped, kinds[255])
+	require.Equal(t, parityFacetLine, kinds[256], `different endpoints on the same slanted line remain listed`)
+	c := len(idxGrid.u.lo)
+	require.Equal(t, 2*c, bound)
+	full := pm.buildParityIndex(0, 1, 2)
+	require.NotNil(t, full)
+	membershipCap := len(full.ids)
+	unduplicated := &parityPlacement{c: c}
+	for _, tri := range tris {
+		require.True(t, idxGrid.addLine(pm, unduplicated, tri, 1, 2))
+	}
+	require.Greater(t, unduplicated.memberships, membershipCap,
+		`placing every duplicate line would exceed the cap`)
+	pm.maxMemberships = membershipCap
+	idx := pm.buildParityIndex(0, 1, 2)
+	require.NotNil(t, idx, `the deduplicated placement fits the cap`)
+	require.Len(t, idx.ids, membershipCap)
+	require.Contains(t, idx.ids, int32(0), `the first identical segment is listed`)
+	require.NotContains(t, idx.ids, int32(1), `the reversed duplicate is skipped`)
+	require.Contains(t, idx.ids, int32(256), `the segment with different endpoints is listed`)
+
+	all := parityAllFacets(len(tris))
+	plain := NewParityMesh(verts, tris)
+	plain.Unfiltered = true
+	for qi, p := range []proof.Xpt{
+		proof.XptOf(r3.Vec{X: 10, Y: 0.25, Z: 0.25}),
+		proof.XptOf(r3.Vec{X: -10, Y: 10, Z: 10}),
+		proof.XptOf(r3.Vec{X: 40, Y: 2.5, Z: 2.5}),
+	} {
+		got := NewParityMesh(verts, tris)
+		got.maxMemberships = membershipCap
+		require.Equal(t, answerOf(MeshParityPreparedContext(t.Context(), p, plain, all)),
+			answerOf(MeshParityAllContext(t.Context(), p, got)), `query %d`, qi)
+	}
+
+	p := proof.XptOf(r3.Vec{X: 10, Y: 10, Z: 10})
+	legacy := &parityPollContext{Context: t.Context(), cancelAt: 2}
+	_, _, legacyErr := MeshParityPreparedContext(legacy, p, plain, all)
+	require.ErrorIs(t, legacyErr, context.Canceled)
+	indexed := &parityPollContext{Context: t.Context(), cancelAt: 2}
+	got := NewParityMesh(verts, tris)
+	got.maxMemberships = membershipCap
+	require.NotNil(t, got.parityIndex(0, 1, 2), `the capped axis uses the deduplicated index`)
+	_, _, indexedErr := MeshParityAllContext(indexed, p, got)
+	require.ErrorIs(t, indexedErr, context.Canceled)
+	require.Equal(t, legacy.polls, indexed.polls, `skipped facets retain original-position polling`)
 }
 
 // TestParityIndexSkipsUnusableFloatProjections requires a query whose first-ray

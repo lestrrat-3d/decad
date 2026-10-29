@@ -32,10 +32,10 @@ func parityBuildHash(idx *ParityIndex) (uint64, int, int) {
 func TestParityIndexBuildIsStable(t *testing.T) {
 	t.Parallel()
 	sides, starts := 1500, 24650
-	want := []uint64{0xe233565e4203299, 0xb0a2b33a9c112095, 0x7f885a5cd47948f}
+	want := []uint64{0xe233565e4203299, 0xb0a2b33a9c112095, 0xf609020b7502d292}
 	if raceDetector {
 		sides, starts = 150, 2602
-		want = []uint64{0x90b4a666739748ba, 0x3636e202af0d22b2, 0x1769950073261d4d}
+		want = []uint64{0x90b4a666739748ba, 0x3636e202af0d22b2, 0x2aea3cd06ab20bf9}
 	}
 	verts, tris := parityCylinder(sides)
 	pm := NewParityMesh(verts, tris)
@@ -58,7 +58,7 @@ func TestParityIndexBuildPinsTheFixtureLists(t *testing.T) {
 		sum    uint64
 		ns, ni int
 	}{
-		`cylinder`:     {{0x7a0fb474ef3f702e, 485, 1979}, {0xe47bf711e5b78cb4, 485, 1979}, {0x52231c5016c4644f, 485, 3496}},
+		`cylinder`:     {{0x7a0fb474ef3f702e, 485, 1979}, {0xe47bf711e5b78cb4, 485, 1979}, {0xdcd6deaa748c4168, 485, 2456}},
 		`lattice`:      {{0xf7226e03325b490, 577, 7776}, {0xe5f11037b002436b, 577, 8976}, {0x4064da09c4d649ac, 577, 9872}},
 		`slanted`:      {{0x10b211fd28025785, 730, 8032}, {0x801f71f93fdf55d1, 730, 7830}, {0x37da594e2d2690c2, 730, 7789}},
 		`slanted huge`: {{0xb7bbe6a6b76ab6a3, 442, 3125}, {0xeb7919603e46acbe, 442, 3025}, {0xcc09efa321f31391, 442, 2908}},

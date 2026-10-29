@@ -21,7 +21,8 @@ const ParityIndexMinFacets = 64
 // facets that project to a segment, the vertex projection cache, and they are
 // not part of the bound. The real shells list about 43 thousand memberships
 // per index (3 996 facets, 129 by 129 cells), a factor of 190 below it. The
-// count is the runs' membership total, checked after every facet, before the
+// count is the runs' membership total after axis-parallel and exact duplicate
+// slanted-segment facets are skipped, checked after every facet, before the
 // int32 offsets are summed or any list is filled, so the offsets cannot
 // overflow: the cap is far below MaxInt32. The cap is a count compared with >,
 // so an index of exactly the cap is built.
@@ -244,7 +245,8 @@ func (pm *ParityMesh) buildParityIndex(axis, u, v int) *ParityIndex {
 // placeParityIndex lays out the grid for one swept axis and places every
 // facet, returning the index with its lists still unfilled and the placement
 // that fills them, or nil when the mesh is too small, has a facet the grid
-// cannot place or lists more than the membership cap.
+// cannot place or lists more than the membership cap after duplicate
+// projected-segment facets have been skipped.
 func (pm *ParityMesh) placeParityIndex(axis, u, v int) (*ParityIndex, *parityPlacement) {
 	n := len(pm.Tris)
 	if n < ParityIndexMinFacets || n > math.MaxInt32 {
@@ -310,7 +312,7 @@ func (pm *ParityMesh) placeParityIndex(axis, u, v int) (*ParityIndex, *parityPla
 
 // How the placement lists one facet.
 const (
-	parityFacetSkipped int8 = iota // a later facet on a listed axis-parallel line
+	parityFacetSkipped int8 = iota // a later facet on a listed line or identical slanted segment
 	parityFacetArea                // nonzero projected area: addTriangle
 	parityFacetLine                // a segment projection: addLine
 )
@@ -321,12 +323,15 @@ const (
 // reports false for a facet that projects to one point, which the grid cannot
 // place. Facets on one axis-parallel line answer alike: off the line every one
 // continues, and on it the first in index order is ambiguous and ends the
-// scan. Only that first facet is listed.
+// scan. Only that first facet is listed. Slanted segment projections are
+// deduplicated only when their exact projected endpoints match; the first
+// facet then has the same exact classification for every query on that line.
 func (pm *ParityMesh) parityFacetKinds(idx *ParityIndex, u, v int, boxes []ParityFacetBox) ([]int8, int, bool) {
 	kinds := make([]int8, len(pm.Tris))
 	c := len(idx.u.lo)
 	bound := 0
 	flat, upright := map[float64]struct{}{}, map[float64]struct{}{}
+	segments := make(map[[4]float64]struct{})
 	for ti, tri := range pm.Tris {
 		if b := &boxes[ti]; b.Nondegenerate {
 			kinds[ti] = parityFacetArea
@@ -349,11 +354,42 @@ func (pm *ParityMesh) parityFacetKinds(idx *ParityIndex, u, v int, boxes []Parit
 				continue
 			}
 			upright[fu] = struct{}{}
+		} else {
+			key := parityProjectedSegmentKey(pm, tri, u, v)
+			if _, seen := segments[key]; seen {
+				continue
+			}
+			segments[key] = struct{}{}
 		}
 		kinds[ti] = parityFacetLine
 		bound += c
 	}
 	return kinds, bound, true
+}
+
+// parityProjectedSegmentKey returns the lexicographically ordered endpoints
+// of a zero-area projected triangle. Signed zero is canonicalized because the
+// line placement treats positive and negative zero alike.
+func parityProjectedSegmentKey(pm *ParityMesh, tri [3]int, u, v int) [4]float64 {
+	var points [3][2]float64
+	for k, vi := range tri {
+		points[k] = [2]float64{CoordOf(pm.Verts[vi], u), CoordOf(pm.Verts[vi], v)}
+		for axis := range 2 {
+			if points[k][axis] == 0 {
+				points[k][axis] = 0
+			}
+		}
+	}
+	minPoint, maxPoint := points[0], points[0]
+	for _, point := range points[1:] {
+		if point[0] < minPoint[0] || point[0] == minPoint[0] && point[1] < minPoint[1] {
+			minPoint = point
+		}
+		if point[0] > maxPoint[0] || point[0] == maxPoint[0] && point[1] > maxPoint[1] {
+			maxPoint = point
+		}
+	}
+	return [4]float64{minPoint[0], minPoint[1], maxPoint[0], maxPoint[1]}
 }
 
 // parityPlacement collects the (cell, facet) memberships of one index build as
