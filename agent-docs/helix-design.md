@@ -738,16 +738,19 @@ At the default relative tolerance `0.001`, the end-reaching gallery model report
 | Centroid | `(0.006830893328, 7.127687732124, -0.010412655469) mm` | `0.028588054103 mm` | `0.017204650534 mm` |
 
 All three bounds exceed their limits, so the valid body is `Suspect`.
-The independent end-clipped volume is
-`π·(350 − 16Q − (4/3)·M⁻)`, where `Q = ∫ρ dA` over the profile inside
-`ρ ≤ 5` and `M⁻ = ∫ρζ dA` over its part below `ζ = 0`.
+The independent end-clipped volume of a `T`-turn cut from an `R = 5`,
+length-`L` cylinder is `π·(25L − 2T·Q − (4/3)·M⁻)`, where `Q = ∫ρ dA` over
+the profile inside `ρ ≤ 5` and `M⁻ = ∫ρζ dA` over its part below `ζ = 0`.
+The gallery's `T = 8` and `L = 14` make it `π·(350 − 16Q − (4/3)·M⁻)`.
 The screw sweep's lower angle is `max(0, −ζ/k)`, with `k = 1.5/(2π)`;
 the turns do not overlap, and the upper end stays below the blank's top.
-The closed form is approximately `992.545905603195 mm³`, inside the published
-volume interval `[990.988510589052, 993.653696630569] mm³`.
-The regression compares exact rational coordinates and both endpoints of a
-π enclosure against the published bound. This enclosure does not tighten the
-body's reported bound or change its tolerance verdict.
+The gallery's closed form is approximately `992.545905603195 mm³`, inside the
+published volume interval `[990.988510589052, 993.653696630569] mm³`.
+`TestCoilThreadEndClippedVolume` (`apitest/coil_test.go`) checks the same
+form on a two-turn cut from an `L = 5` cylinder. It computes `Q` and `M⁻`
+over exact rational coordinates and requires the published volume interval
+to hold the closed form at both endpoints of a π enclosure. This enclosure
+does not tighten the body's reported bound or change its tolerance verdict.
 
 **What the station count buys.** Measured on the eight-turn interior-groove fixture (`R = 5`, `L = 20`,
 starting at `ζ = 3`) with the facet-pair ceiling lifted for the measurement alone:
@@ -965,6 +968,11 @@ PR 2:
 - `_gallery/thread.go` renders the eight-turn end-reaching V-groove during
   gallery CI and requires its valid, `Suspect` verdict with exactly `Area`,
   `Volume` and `Centroid` tolerance diagnostics.
+  `TestCoilThreadEndClippedVolume` cuts the same end-reaching groove, two
+  turns from an `L = 5` cylinder: its `Volume` interval encloses
+  `π·(125 − 4Q − (4/3)·M⁻)`, the body is valid and its mesh is watertight.
+  Leg shown to fail: with the coil's per-turn advance scaled by `1.1` in its
+  station placement, the published interval no longer reaches the closed form.
 - The cylinder meshed at the raised pair tolerance is coarser than at the
   diameter-derived one, and its mesh volume and area still lie within its
   own `volSymDiff` and `areaSlack` of `500π` and `250π`.

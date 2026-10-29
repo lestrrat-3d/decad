@@ -2640,6 +2640,7 @@
 10	0.66	TestClearanceOraclePrismPairs
 10	0.03	TestClearanceRevolveAxisSnapContainsTruth
 10	0.09	TestClearanceTangentSpheresSuspect
+10	0.35	TestCoilThreadEndClippedVolume
 10	0.02	TestCommonAxisRevolveUnionKeepsBothCoincidentWallSources
 10	0.01	TestContactPairAnalyticPrismTouch
 10	0.00	TestContactPairKeepsAbsentResultsNil
@@ -2688,6 +2689,7 @@
 10	0.00	TestJointBoxOptionSet
 10	0.00	TestLoftChainMultiCellRibbonFreeEdgesAndArea
 10	0.00	TestLoftEmptyAlignmentPayload
+10	0.04	TestLoftFitSplineWedgeVerifiesSound
 10	0.00	TestLoftPlacedContextCancellation
 10	0.00	TestLoftSameKindCircleAgainstCircleAdmitted
 10	0.01	TestLoftSectionsFiveIndependentRectanglesKeepVolumeAndMeshProof

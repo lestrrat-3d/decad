@@ -6,6 +6,7 @@ import (
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
 
@@ -33,4 +34,30 @@ func TestSweepPointDeviationSquaredSignedIntervals(t *testing.T) {
 	// The first point's farthest X endpoint is 5/3; the second's is 2/3.
 	want := big.NewRat(25, 9)
 	require.Zero(t, want.Cmp(SweepPointDeviationSquared(source, actual, rot, shift)))
+}
+
+// TestSweepTransferChargeReadsTheFartherEndpoint holds the identity pose
+// against an enclosure whose (0, 0) entry is [3/4, 3/2]. The rounded entry 1
+// lies inside it, 1/4 from the near end and 1/2 from the far one, and every
+// other entry matches exactly, so the charge ‖R_r − R_i‖_F·δ bounding every
+// member is exactly δ/2.
+func TestSweepTransferChargeReadsTheFartherEndpoint(t *testing.T) {
+	zero := proofbound.PointInterval(new(big.Rat))
+	one := proofbound.PointInterval(big.NewRat(1, 1))
+	var matrix IvMat
+	for row := range 3 {
+		for col := range 3 {
+			matrix[row][col] = zero
+		}
+		matrix[row][row] = one
+	}
+	matrix[0][0] = proofbound.IntervalOwned(big.NewRat(3, 4), big.NewRat(3, 2))
+	delta := proofarith.MustDyOf(0.125)
+	charge, ok := SweepTransferCharge(r3.Identity(), NewScaledIvMat(matrix), delta)
+	require.True(t, ok)
+	require.Zero(t, big.NewRat(1, 16).Cmp(charge), "charge %s", charge)
+
+	none, ok := SweepTransferCharge(r3.Identity(), NewScaledIvMat(matrix), proofarith.DyZero())
+	require.True(t, ok)
+	require.Zero(t, none.Sign(), "an exact body charges nothing")
 }

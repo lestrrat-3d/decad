@@ -3010,6 +3010,15 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 
 - Delivers §10.4's replay transfer charge `‖R_r − R_i‖_F·δ` in `planarsweep.BodyPath.ReplayDeviation`.
 - Files: `internal/sweeprun/rotation.go`, `internal/sweepproof/replay.go`.
+- Test: `internal/planarsweep/body_path_test.go`'s `TestReplayTransferChargeIsTheBasisDifference`: a
+  unit box holding `δ = 2⁻¹² mm` charges zero on a translating path. Turning about Z at `1 rad/s`, its
+  charge at each sampled fraction equals the Frobenius norm of the rounded basis less the ideal
+  enclosure, each entry read at its farther endpoint so the norm bounds every member, times `δ`,
+  computed independently in the test, and lies below `2⁻⁴⁰·δ`.
+  `internal/motionbound/sweep_pose_test.go`'s `TestSweepTransferChargeReadsTheFartherEndpoint` holds a
+  rounded entry inside an enclosure entry `[3/4, 3/2]` and reads exactly `δ/2`. Legs shown to fail: the
+  charge zeroed, the turning path's charge reads zero; the nearer endpoint read, the wide enclosure's
+  charge reads `δ/4`.
 - Depends on: PR 18.
 - Shipped. `planarsweep.BodyPath.ReplayDeviation` calls `motionbound.SweepTransferCharge` and returns
   its charge, so replay (`internal/sweepproof/replay.go`) and the rotating bracket's narrowing read the same

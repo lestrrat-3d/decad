@@ -2,9 +2,11 @@ package apitest_test
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -215,4 +217,103 @@ func TestCoilFullTurnArcPublishesClosedRims(t *testing.T) {
 		require.Equal(t, edge.Start().Position().Value, edge.End().Position().Value)
 		require.Len(t, edge.Faces(), 2)
 	}
+}
+
+// TestCoilThreadEndClippedVolume starts the external V groove of
+// agent-docs/helix-design.md §9 at ζ = -0.375, below the cylinder's end plane,
+// so the cut opens through that end. Over T turns of pitch 1.5 the cut removes
+// ∫ρ·(2πT − max(0, −ζ/k)) dA over the groove's part inside ρ = 5, with
+// k = 1.5/(2π), so the result's volume is π·(25L − 2T·Q − (4/3)·M⁻): Q = ∫ρ dA
+// over that part and M⁻ = ∫ρζ dA over its part below ζ = 0. At the gallery's
+// T = 8 and L = 14 this is π·(350 − 16Q − (4/3)·M⁻); the test runs T = 2 and
+// L = 5. Both endpoints of the published volume must enclose the closed form
+// times both endpoints of a π enclosure, computed over exact rationals; the
+// body is valid and its mesh is watertight.
+func TestCoilThreadEndClippedVolume(t *testing.T) {
+	t.Parallel()
+	const halfWidth, start, turns, length = 0.6928203230275509, -0.375, 2, 5
+	doc := decad.New()
+	cylinderSketch, cylinderProfile := coilSketch(t, [][2]float64{{0, 0}, {5, 0}, {5, length}, {0, length}})
+	cylinder, err := decad.Revolve(t.Context(), doc, cylinderSketch, cylinderProfile, coilAxis(), decad.FullRevolution{})
+	require.NoError(t, err)
+	points := [][2]float64{{4.1, start}, {5.3, start - halfWidth}, {5.3, start + halfWidth}}
+	grooveSketch, grooveProfile := coilSketch(t, points)
+	groove, err := decad.Coil(t.Context(), doc, grooveSketch, grooveProfile, coilAxis(),
+		units.Millimeters(1.5), units.Scalar(turns))
+	require.NoError(t, err)
+	cut, err := decad.Cut(t.Context(), cylinder, groove)
+	require.NoError(t, err)
+	require.Len(t, cut.Lumps(), 1)
+
+	rat := func(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
+	profile := make([][2]*big.Rat, len(points))
+	for i, point := range points {
+		profile[i] = [2]*big.Rat{rat(point[0]), rat(point[1])}
+	}
+	inside := clipRatPolygon(profile, func(p [2]*big.Rat) *big.Rat { return new(big.Rat).Sub(rat(5), p[0]) })
+	q, _ := ratPolygonMoments(inside)
+	_, below := ratPolygonMoments(clipRatPolygon(inside, func(p [2]*big.Rat) *big.Rat { return new(big.Rat).Neg(p[1]) }))
+	require.Negative(t, below.Sign(), "the groove crosses the end plane")
+	exactOverPi := new(big.Rat).Mul(big.NewRat(2*turns, 1), q)
+	exactOverPi.Add(exactOverPi, new(big.Rat).Mul(big.NewRat(4, 3), below))
+	exactOverPi.Sub(big.NewRat(25*length, 1), exactOverPi)
+
+	volume, err := cut.Volume()
+	require.NoError(t, err)
+	publishedLo := new(big.Rat).Sub(rat(volume.Value.Base()), rat(volume.Bound.Base()))
+	publishedHi := new(big.Rat).Add(rat(volume.Value.Base()), rat(volume.Bound.Base()))
+	require.LessOrEqual(t, publishedLo.Cmp(new(big.Rat).Mul(exactOverPi, proofbound.PiLower)), 0,
+		"the volume's lower end lies below the closed form")
+	require.GreaterOrEqual(t, publishedHi.Cmp(new(big.Rat).Mul(exactOverPi, proofbound.PiUpper)), 0,
+		"the volume's upper end lies above the closed form")
+
+	requireBodyWatertight(t, cut)
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.ValidityValid, report.Bodies[len(report.Bodies)-1].Validity.Outcome)
+}
+
+// ratPolygonMoments returns ∫ρ dA and ∫ρζ dA over a simple polygon of (ρ, ζ)
+// corners, by the shoelace forms of the first and mixed moments.
+func ratPolygonMoments(pts [][2]*big.Rat) (*big.Rat, *big.Rat) {
+	q, m := new(big.Rat), new(big.Rat)
+	mul := func(a, b *big.Rat) *big.Rat { return new(big.Rat).Mul(a, b) }
+	for i := range pts {
+		x0, y0 := pts[i][0], pts[i][1]
+		x1, y1 := pts[(i+1)%len(pts)][0], pts[(i+1)%len(pts)][1]
+		c := new(big.Rat).Sub(mul(x0, y1), mul(x1, y0))
+		q.Add(q, mul(new(big.Rat).Add(x0, x1), c))
+		mixed := new(big.Rat).Add(mul(x0, y1), mul(x1, y0))
+		mixed.Add(mixed, mul(big.NewRat(2, 1), new(big.Rat).Add(mul(x0, y0), mul(x1, y1))))
+		m.Add(m, mul(mixed, c))
+	}
+	q.Quo(q, big.NewRat(6, 1))
+	m.Quo(m, big.NewRat(24, 1))
+	if q.Sign() < 0 {
+		q.Neg(q)
+		m.Neg(m)
+	}
+	return q, m
+}
+
+// clipRatPolygon keeps the part of a polygon where keep(p) ≥ 0 for an affine
+// keep, by Sutherland–Hodgman over exact rationals.
+func clipRatPolygon(pts [][2]*big.Rat, keep func(p [2]*big.Rat) *big.Rat) [][2]*big.Rat {
+	var out [][2]*big.Rat
+	for i := range pts {
+		a, b := pts[i], pts[(i+1)%len(pts)]
+		fa, fb := keep(a), keep(b)
+		if fa.Sign() >= 0 {
+			out = append(out, a)
+		}
+		if fa.Sign()*fb.Sign() < 0 {
+			t := new(big.Rat).Quo(fa, new(big.Rat).Sub(fa, fb))
+			var p [2]*big.Rat
+			for k := range 2 {
+				p[k] = new(big.Rat).Add(a[k], new(big.Rat).Mul(t, new(big.Rat).Sub(b[k], a[k])))
+			}
+			out = append(out, p)
+		}
+	}
+	return out
 }
