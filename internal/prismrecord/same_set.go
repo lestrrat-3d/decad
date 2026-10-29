@@ -2,12 +2,14 @@ package prismrecord
 
 import (
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
 // SameSet is the exact set-identity test of two prism records: equal frames,
-// levels and placements, no section displacement on either, and equal
-// profiles walked loop by loop under the budget. Equal records are a
+// held and exactly denoted endpoint levels and placements, no section
+// displacement on either, and equal profiles walked loop by loop under the
+// budget. Equal records are a
 // certificate of equal SETS only while each record IS the set it denotes; a
 // payload carrying a section displacement (agent-docs/prism-boolean-design.md §7)
 // denotes a set its record is only within that displacement of, so such a pair
@@ -17,6 +19,10 @@ func (pp Payload) SameSet(budget *proofbound.WorkBudget, other Payload) (bool, e
 		return false, nil
 	}
 	if pp.SectionDelta != 0 || other.SectionDelta != 0 {
+		return false, nil
+	}
+	if !prismplacement.SameDenotedLevel(pp.Z0, pp.Z0Delta, pp.Z0Denoted, other.Z0, other.Z0Delta, other.Z0Denoted) ||
+		!prismplacement.SameDenotedLevel(pp.Z1, pp.Z1Delta, pp.Z1Denoted, other.Z1, other.Z1Delta, other.Z1Denoted) {
 		return false, nil
 	}
 	return momentinput.ExactProfileEqual(budget, pp.Profile, other.Profile)

@@ -43,6 +43,19 @@ func DenotedLevel(held, delta float64, d LevelDenotation) *big.Rat {
 	return nil
 }
 
+// SameDenotedLevel reports whether both records prove the same exact level.
+func SameDenotedLevel(aHeld, aDelta float64, aDenoted LevelDenotation, bHeld, bDelta float64, bDenoted LevelDenotation) bool {
+	a := DenotedLevel(aHeld, aDelta, aDenoted)
+	if a == nil {
+		return false
+	}
+	b := DenotedLevel(bHeld, bDelta, bDenoted)
+	if b == nil {
+		return false
+	}
+	return a.Cmp(b) == 0
+}
+
 // DenotedShiftedLevel lifts B's denoted level onto A's axis through G5's
 // exact shift, or returns nil when B's level has no denotation.
 func DenotedShiftedLevel(pa, pb Operand, held, delta float64, d LevelDenotation) *big.Rat {
