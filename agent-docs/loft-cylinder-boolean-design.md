@@ -512,9 +512,17 @@ query's cell. A facet is omitted from a cell only if its closed projection,
 widened by the margin, is disjoint from the cell, and the margin exceeds the
 maximum float error of the placement arithmetic, so float placement can only
 add facets to a list. For a facet projecting to a segment the whole line is
-listed. Such an omitted facet ends strictly outside in the exact scan. Of the
-facets on one axis-parallel line only the first is listed, since it is the one
-that ends the scan.
+listed. A facet omitted from a cell because its widened projection is disjoint
+from it ends strictly outside in the exact scan. A later slanted-segment facet
+with exactly the same projected endpoints is omitted because the first such
+facet has the same exact classification for every query; endpoint order and
+signed zero do not change that key. Different segments on the same slanted
+supporting line remain listed. Of the facets on one axis-parallel line only the
+first is listed, since it is the one that ends the scan. The membership cap
+counts the remaining placements after these duplicate skips; when that count
+exceeds the cap, the axis uses the plain scan. Every skipped duplicate keeps
+its original facet position, so exact scanning still polls cancellation on the
+plain scan's schedule.
 
 The placement runs under a range guard. Each projected vertex coordinate is
 zero or between `2⁻³⁰⁰` and `2²⁴⁰` in magnitude; each coordinate difference
