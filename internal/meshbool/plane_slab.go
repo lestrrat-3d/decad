@@ -1,6 +1,7 @@
 package meshbool
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -13,13 +14,38 @@ import (
 // the frame of facet i's plane and true for such a facet. Every other facet
 // keeps FacetBound. SetVertexBounds must have run.
 func (bm *BoolMesh) SetSlabBounds(planeOf func(facet int) (r3.Frame, bool)) {
-	for i := range bm.Tris {
+	bm.SetChargedSlabBounds(func(i int) (r3.Frame, float64, bool) {
 		frame, ok := planeOf(i)
-		if !ok {
+		return frame, 0, ok
+	})
+}
+
+// SetChargedSlabBounds is SetSlabBounds for planes the true piece may lie off
+// by a proven displacement. planeOf also returns delta, the largest distance
+// along the plane's normal between the true piece and the frame's plane. Let
+// x be a true point and x_T its foot on T, so |x − x_T| ≤ delta. Then
+// |x_T − y| ≤ β + delta and
+//
+//	dist(x, P) ≤ dist(x_T, P) + delta ≤ h + (β + delta)·sin φ + delta ≤ h + β·sin φ + 2·delta,
+//
+// so the slab widens by 2·delta. A negative or non-finite delta applies no
+// slab, which leaves FacetBound in force.
+func (bm *BoolMesh) SetChargedSlabBounds(planeOf func(facet int) (frame r3.Frame, delta float64, ok bool)) {
+	for i := range bm.Tris {
+		frame, delta, ok := planeOf(i)
+		if !ok || !(delta >= 0) || math.IsInf(delta, 0) {
 			continue
 		}
-		if slab, ok := bm.planeSlab(i, frame); ok && slab < bm.SlabBound[i] {
-			bm.SlabBound[i] = slab
+		if slab, ok := bm.planeSlab(i, frame); ok {
+			if delta != 0 {
+				slab = proofbound.AbsSumUpper(slab, 2*delta)
+			}
+			if proofbound.IsNonFinite(slab) {
+				continue
+			}
+			if slab < bm.SlabBound[i] {
+				bm.SlabBound[i] = slab
+			}
 		}
 	}
 }

@@ -117,10 +117,12 @@ type rim struct {
 	planeFace  *topo.Face
 	wallFace   *topo.Face
 	scale      float64
+	// charge is the plane displacement the rim's and end planes add to slack.
+	charge float64
 }
 
 // slack is the arithmetic allowance for a value computed from the tags.
-func (r rim) slack() float64 { return 64 * ulp * r.scale }
+func (r rim) slack() float64 { return chargedSlack(r.scale, r.charge) }
 
 // looksLikeRim reports whether edge is a candidate for this route: a closed
 // retained Circle3 between exactly one retained Plane and one retained
@@ -221,6 +223,11 @@ func readRim(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face
 		return rim{}, fmt.Errorf("%w: the rim's circle has no radius", decaderr.ErrUnsupported)
 	}
 	r.center, r.n, r.radius = center, n, radius
+	planeDelta, deltaOK := faceDelta(r.planeFace)
+	if !deltaOK {
+		return rim{}, fmt.Errorf("%w: the rim's plane states no usable displacement", decaderr.ErrUnsupported)
+	}
+	r.charge = proofbound.ProductUpper(planeAmp, planeDelta)
 	slack := r.slack()
 	if center.Sub(circleCentre).Len() > slack || math.Abs(circleRadius-radius) > slack {
 		return rim{}, fmt.Errorf("%w: the rim's circle is not the meeting of its two tags", decaderr.ErrUnsupported)

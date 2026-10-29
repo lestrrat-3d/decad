@@ -276,7 +276,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	}
 	var bmB *meshbool.BoolMesh
 	if len(shifts) > 0 {
-		bmB, err = prepBoolMesh(ctx, mb, srcB, func(int) (r3.Frame, bool) { return r3.Frame{}, false })
+		bmB, err = prepBoolMesh(ctx, mb, srcB, func(int) (r3.Frame, float64, bool) { return r3.Frame{}, 0, false })
 	} else {
 		bmB, err = PrepBoolMesh(ctx, mb, srcB)
 	}
@@ -454,7 +454,7 @@ func summarizeChainAllowance(a *meshbool.BoolMesh, operandA int, b *meshbool.Boo
 // refused rather than partly examined. Loud beats silently wrong.
 func PrepBoolMesh(ctx context.Context, m *topo.Mesh, src []int) (*meshbool.BoolMesh, error) {
 	if retainedPlaneSlabDisabled(ctx) {
-		return prepBoolMesh(ctx, m, src, func(int) (r3.Frame, bool) { return r3.Frame{}, false })
+		return prepBoolMesh(ctx, m, src, func(int) (r3.Frame, float64, bool) { return r3.Frame{}, 0, false })
 	}
 	return prepBoolMesh(ctx, m, src, retainedPlaneOf(m))
 }
@@ -462,7 +462,7 @@ func PrepBoolMesh(ctx context.Context, m *topo.Mesh, src []int) (*meshbool.BoolM
 // prepBoolMesh is PrepBoolMesh with the retained-plane reading as a parameter:
 // a moved operand's facets lie on no retained plane.
 func prepBoolMesh(ctx context.Context, m *topo.Mesh, src []int,
-	retained func(facet int) (r3.Frame, bool)) (*meshbool.BoolMesh, error) {
+	retained func(facet int) (r3.Frame, float64, bool)) (*meshbool.BoolMesh, error) {
 	bm, err := meshbool.PrepContext(ctx, m.Vertices, m.Triangles, src)
 	if err != nil {
 		return nil, err
@@ -475,7 +475,7 @@ func prepBoolMesh(ctx context.Context, m *topo.Mesh, src []int,
 		return nil, err
 	}
 	bm.SetVertexBounds(beta)
-	bm.SetSlabBounds(retained)
+	bm.SetChargedSlabBounds(retained)
 	return bm, nil
 }
 

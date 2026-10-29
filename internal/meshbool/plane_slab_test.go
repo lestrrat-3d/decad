@@ -59,6 +59,46 @@ func TestSetSlabBounds(t *testing.T) {
 	})
 }
 
+func TestSetChargedSlabBounds(t *testing.T) {
+	t.Parallel()
+	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	prep := func(t *testing.T) *meshbool.BoolMesh {
+		t.Helper()
+		bm, err := meshbool.PrepContext(t.Context(),
+			[]r3.Vec{r3.NewVec(0, 0, 0), r3.NewVec(10, 0, 0), r3.NewVec(0, 10, 0)}, [][3]int{{0, 1, 2}}, []int{0})
+		require.NoError(t, err)
+		bm.SetVertexBounds([]float64{0.003, 0.003, 0.003})
+		return bm
+	}
+	charged := func(delta float64) func(int) (r3.Frame, float64, bool) {
+		return func(int) (r3.Frame, float64, bool) { return frame, delta, true }
+	}
+
+	t.Run("a displaced plane widens the slab by twice its displacement", func(t *testing.T) {
+		t.Parallel()
+		const delta = 1e-4
+		bm := prep(t)
+		bm.SetChargedSlabBounds(charged(delta))
+		require.GreaterOrEqual(t, bm.SlabBound[0], 2*delta)
+		require.LessOrEqual(t, bm.SlabBound[0], 2*delta*(1+1e-9))
+	})
+	t.Run("a zero displacement is the uncharged slab", func(t *testing.T) {
+		t.Parallel()
+		bm := prep(t)
+		bm.SetChargedSlabBounds(charged(0))
+		require.Zero(t, bm.SlabBound[0])
+	})
+	for name, delta := range map[string]float64{"negative": -1, "infinite": math.Inf(1), "NaN": math.NaN()} {
+		t.Run("a "+name+" displacement keeps the displacement bound", func(t *testing.T) {
+			t.Parallel()
+			bm := prep(t)
+			bm.SetChargedSlabBounds(charged(delta))
+			require.Equal(t, 0.003, bm.SlabBound[0])
+		})
+	}
+}
+
 func TestSetSlabBoundsMatchesRational(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewSource(29))

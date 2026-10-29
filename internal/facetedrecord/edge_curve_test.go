@@ -63,6 +63,100 @@ func TestRetainedEdgeCurvePlanePlane(t *testing.T) {
 	require.False(t, ok, "parallel planes meet nowhere")
 }
 
+func TestRetainedEdgeCurveChargesPlaneAxialDelta(t *testing.T) {
+	t.Parallel()
+	wall := retained(planeAt(t, r3.Vec{}, r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)))
+	chain := []r3.Vec{r3.NewVec(0, 0, 1e-8), r3.NewVec(0, 3, 1e-8), r3.NewVec(0, 7, 1e-8)}
+	bounds := []float64{1e-9, 1e-9, 1e-9}
+	floor := func(delta float64) *topo.Face {
+		f := retained(planeAt(t, r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)))
+		f.HasAxialDelta, f.AxialDelta = true, delta
+		return f
+	}
+
+	_, ok := facetedrecord.RetainedEdgeCurve(floor(0), wall, chain, bounds, false)
+	require.False(t, ok, "a rim 1e-8 off an exact floor, bound 1e-9, is falsified")
+	curve, ok := facetedrecord.RetainedEdgeCurve(floor(1e-8), wall, chain, bounds, false)
+	require.True(t, ok, "a floor stated to lie 1e-8 off its tag charges that into the falsifier")
+	require.IsType(t, surfacegeom.Line3{}, curve, "only a line carries the widened falsifier")
+	for _, bad := range []float64{-1, math.Inf(1), math.NaN()} {
+		_, ok = facetedrecord.RetainedEdgeCurve(floor(bad), wall, chain, bounds, false)
+		require.False(t, ok, "a displacement no bound can cover declines the rim: %v", bad)
+	}
+}
+
+func TestRetainedEdgeCurveDisplacedPlaneDeclinesConic(t *testing.T) {
+	t.Parallel()
+	displaced := func(f *topo.Face, delta float64) *topo.Face {
+		f.HasAxialDelta, f.AxialDelta = true, delta
+		return f
+	}
+
+	t.Run("a circle rim", func(t *testing.T) {
+		t.Parallel()
+		floor := retained(planeAt(t, r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)))
+		bore := retained(surfacegeom.Cylinder{Origin: r3.NewVec(10, 10, 0), Axis: r3.NewVec(0, 0, 1),
+			Radius: units.Millimeters(4)})
+		ring, bounds := arcChain(r3.NewVec(10, 10, 0), 0, 2*math.Pi, 8)
+		ring[len(ring)-1] = ring[0]
+
+		_, ok := facetedrecord.RetainedEdgeCurve(displaced(floor, 1e-8), bore, ring, bounds, true)
+		require.False(t, ok, "a circle is published exact: it cannot carry a displaced plane")
+		curve, ok := facetedrecord.RetainedEdgeCurve(displaced(floor, 2.9e-16), bore, ring, bounds, true)
+		require.True(t, ok, "a unit-conversion sized delta stays inside the arithmetic allowance")
+		require.IsType(t, surfacegeom.Circle3{}, curve)
+		curve, ok = facetedrecord.RetainedEdgeCurve(displaced(floor, 0), bore, ring, bounds, true)
+		require.True(t, ok)
+		require.IsType(t, surfacegeom.Circle3{}, curve)
+	})
+
+	t.Run("an arc rim", func(t *testing.T) {
+		t.Parallel()
+		floor := retained(planeAt(t, r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)))
+		bore := retained(surfacegeom.Cylinder{Origin: r3.NewVec(10, 10, 0), Axis: r3.NewVec(0, 0, 1),
+			Radius: units.Millimeters(4)})
+		chain, bounds := arcChain(r3.NewVec(10, 10, 0), 0.2, 2.5, 6)
+		_, ok := facetedrecord.RetainedEdgeCurve(displaced(floor, 1e-8), bore, chain, bounds, false)
+		require.False(t, ok)
+	})
+
+	t.Run("an ellipse rim", func(t *testing.T) {
+		t.Parallel()
+		floor, bore, _, point := obliqueScene(t)
+		ring, bounds := ellipseChain(point, 0, 2*math.Pi, 12)
+		ring[len(ring)-1] = ring[0]
+		_, ok := facetedrecord.RetainedEdgeCurve(displaced(floor, 1e-8), bore, ring, bounds, true)
+		require.False(t, ok, "an ellipse is published exact: it cannot carry a displaced plane")
+		curve, ok := facetedrecord.RetainedEdgeCurve(displaced(floor, 2.9e-16), bore, ring, bounds, true)
+		require.True(t, ok)
+		require.IsType(t, surfacegeom.Ellipse3{}, curve)
+	})
+
+	t.Run("a sphere circle", func(t *testing.T) {
+		t.Parallel()
+		floor := retained(planeAt(t, r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)))
+		ball := retained(surfacegeom.Sphere{Center: r3.NewVec(0, 0, 3), Radius: units.Millimeters(5)})
+		ring, bounds := arcChain(r3.Vec{}, 0, 2*math.Pi, 8)
+		ring[len(ring)-1] = ring[0]
+		_, ok := facetedrecord.RetainedEdgeCurve(displaced(floor, 1e-8), ball, ring, bounds, true)
+		require.False(t, ok)
+	})
+
+	t.Run("a generator line of a tangent cylinder", func(t *testing.T) {
+		t.Parallel()
+		floor := retained(planeAt(t, r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)))
+		blend := retained(surfacegeom.Cylinder{Origin: r3.NewVec(3, 0, 3), Axis: r3.NewVec(0, 1, 0),
+			Radius: units.Millimeters(3)})
+		chain := []r3.Vec{r3.NewVec(3, 0, 1e-8), r3.NewVec(3, 5, 1e-8), r3.NewVec(3, 9, 1e-8)}
+		bounds := []float64{1e-9, 1e-9, 1e-9}
+		_, ok := facetedrecord.RetainedEdgeCurve(floor, blend, chain, bounds, false)
+		require.False(t, ok)
+		curve, ok := facetedrecord.RetainedEdgeCurve(displaced(floor, 1e-8), blend, chain, bounds, false)
+		require.True(t, ok)
+		require.IsType(t, surfacegeom.Line3{}, curve)
+	})
+}
+
 func TestRetainedEdgeCurvePlaneCylinder(t *testing.T) {
 	t.Parallel()
 	floor := retained(planeAt(t, r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)))

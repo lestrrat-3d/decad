@@ -136,11 +136,15 @@ func rewriteCorners(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	}
 	r := spec.r
 	scale := plan.lines[0].scale
-	w := newWork(fp, rim{scale: scale}, spec)
+	charge := 0.0
+	for _, l := range plan.lines {
+		charge = max(charge, l.charge)
+	}
+	w := newWork(fp, rim{scale: scale, charge: charge}, spec)
 	// A sphere patch and many strips add their chord deficits to one area reading; an eighth of the chord tolerance
 	// keeps the sum inside what Verify accepts for a box with every edge rounded.
 	w.tau /= 8
-	slack := plan.lines[0].slack()
+	slack := chargedSlack(scale, charge)
 	margin := w.tau + slack
 	for _, l := range plan.lines {
 		if l.ends[1].exact.Sub(l.ends[0].exact).Len() <= 2*r+8*margin {
@@ -351,13 +355,10 @@ func rewriteCorners(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 		g := &geoms[ei]
 		tag := w.lineTag(l, true, g.center, g.baseA, g.baseB)
 		group := len(groups)
-		groups = append(groups, facetedrecord.Group{
-			Origins:  []provenance.Ref{{Producer: env.Ref, Role: fmt.Sprintf("%s(%d)", op, ords[ei])}},
-			Source:   facetedrecord.BlendSource(env.Ref, ords[ei]),
-			Surface:  tag.surface,
-			Retained: true,
-			Reversed: tag.reversed,
-		})
+		groups = append(groups, w.tagGroup(facetedrecord.Group{
+			Origins: []provenance.Ref{{Producer: env.Ref, Role: fmt.Sprintf("%s(%d)", op, ords[ei])}},
+			Source:  facetedrecord.BlendSource(env.Ref, ords[ei]),
+		}, tag))
 		for j := range rowCount {
 			lo0, lo1 := g.rowIdx[0][j], g.rowIdx[1][j]
 			hi0, hi1 := g.rowIdx[0][j+1], g.rowIdx[1][j+1]
@@ -408,13 +409,16 @@ func rewriteCorners(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 func (w *work) spherePatch(c *cornerVertex, r float64, m int, shareVertex func(r3.Vec) int, group int, env topo.Env,
 	ords []int, groups *[]facetedrecord.Group) (float64, error) {
 	centre := c.exact.Add(c.u(0).Scale(r)).Add(c.u(1).Scale(r)).Add(c.u(2).Scale(r))
-	*groups = append(*groups, facetedrecord.Group{
+	patch := facetedrecord.Group{
 		Origins: []provenance.Ref{{Producer: env.Ref, Role: "cornerFillet"}},
 		Source:  facetedrecord.BlendSource(env.Ref, ords[c.edge[0]]),
-		Surface: surfacegeom.Sphere{Center: centre, Radius: units.Millimeters(r)},
-		// The sphere's outward side is away from its centre, the body's outside at the corner.
-		Retained: true,
-	})
+	}
+	if w.r.charge == 0 {
+		// The sphere's outward side is away from its centre, the body's outside at the corner. A sphere has no field
+		// for a positional offset, so a charged corner leaves the patch faceted (tagGroup).
+		patch.Surface, patch.Retained = surfacegeom.Sphere{Center: centre, Radius: units.Millimeters(r)}, true
+	}
+	*groups = append(*groups, patch)
 	id := make([][]int, m+1)
 	for a := 0; a <= m; a++ {
 		id[a] = make([]int, m-a+1)

@@ -24,9 +24,11 @@ type cylLine struct {
 	ends         [2]lineEnd // the exact corner of each end
 	edgeConvex   bool
 	scale        float64
+	// charge is the plane displacement the tags' planes add to slack.
+	charge float64
 }
 
-func (c cylLine) slack() float64 { return 64 * ulp * c.scale }
+func (c cylLine) slack() float64 { return chargedSlack(c.scale, c.charge) }
 
 func (c cylLine) key() lineKey { return lineKey{c.ends[0].exact, c.ends[1].exact} }
 
@@ -53,6 +55,9 @@ func looksLikeCylLine(edge *topo.Edge) bool {
 		}
 		switch f.Surface.(type) {
 		case surfacegeom.Plane:
+			if _, ok := faceDelta(f); !ok {
+				return false
+			}
 			planes++
 		case surfacegeom.Cylinder:
 			cylinders++
@@ -73,6 +78,7 @@ func readCylLine(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.
 		}
 	}
 	c.a, _ = retainedPlane(c.faceA)
+	c.charge = planeCharge(c.a)
 	cyl, ok := c.faceB.Surface.(surfacegeom.Cylinder)
 	if !ok {
 		return cylLine{}, fmt.Errorf("%w: the edge's wall changed kind", decaderr.ErrUnsupported)
@@ -124,6 +130,7 @@ func (c *cylLine) readEnd(vertex *topo.Vertex, fp facetedrecord.Payload, faceInd
 		return lineEnd{}, fmt.Errorf("%w: an edge end meets a face that is not normal to the axis", decaderr.ErrUnsupported)
 	}
 	end.g = g
+	c.charge = addCharge(c.charge, g)
 	// The corner lies in the end plane, on the plane's meeting with the circle
 	// the cylinder cuts there.
 	o := c.axisPoint(g.o)

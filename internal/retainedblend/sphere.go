@@ -80,6 +80,7 @@ func readSphereRim(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*top
 	if err != nil || !(radius > 0) || math.IsInf(radius, 0) {
 		return sphereRim{}, fmt.Errorf("%w: the rim's sphere has no finite radius", decaderr.ErrUnsupported)
 	}
+	s.charge = planeCharge(g)
 	s.scale = 1
 	for _, v := range fp.Verts {
 		s.scale = max(s.scale, math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
@@ -158,7 +159,8 @@ func (s sphereRim) section(spec blendSpec, tau float64) (meridian, error) {
 	a, b := u1.Dot(s.u), u1.Dot(s.n)
 	wB := s.u.Scale(-b).Add(s.n.Scale(a)).Scale(s.side)
 	margin := tau + s.slack()
-	line := cylLine{a: plane{n: s.n, o: s.center}, radius: s.sphereRadius, matOutside: s.matOutside}
+	line := cylLine{a: plane{n: s.n, o: s.center}, radius: s.sphereRadius, matOutside: s.matOutside,
+		charge: s.charge}
 	sec, err := line.solveSection(spec, k, s.sphere, wA, wB, s.convex, tau, margin)
 	if err != nil {
 		return m, err

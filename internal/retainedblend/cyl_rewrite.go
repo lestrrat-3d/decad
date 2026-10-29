@@ -144,7 +144,7 @@ func (c cylLine) cornerArea(spec blendSpec, s section, k0, o0, wA r3.Vec) float6
 // rewritten mesh.
 func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c cylLine, spec blendSpec,
 	role string, ord int, faceIndex map[*topo.Face]int) (*topo.Body, error) {
-	w := newWork(fp, rim{scale: c.scale}, spec)
+	w := newWork(fp, rim{scale: c.scale, charge: c.charge}, spec)
 	slack := c.slack()
 	margin := w.tau + slack
 	k0, k1 := c.ends[0].exact, c.ends[1].exact
@@ -538,14 +538,11 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	}
 
 	groups := append([]facetedrecord.Group(nil), fp.Groups...)
-	groups = append(groups, facetedrecord.Group{
-		Origins:  []provenance.Ref{{Producer: env.Ref, Role: role}},
-		Source:   facetedrecord.BlendSource(env.Ref, ord),
-		Surface:  tag.surface,
-		Retained: true,
-		Reversed: tag.reversed,
-		Planar:   !spec.fillet,
-	})
+	groups = append(groups, w.tagGroup(facetedrecord.Group{
+		Origins: []provenance.Ref{{Producer: env.Ref, Role: role}},
+		Source:  facetedrecord.BlendSource(env.Ref, ord),
+		Planar:  !spec.fillet,
+	}, tag))
 	for _, f := range faces {
 		groups[f.group].HasCentroid = false
 		groups[f.group].Centroid = measurement.VecMeasurement{}

@@ -350,13 +350,10 @@ func (w *work) finishRim(ctx context.Context, env topo.Env, tag blendTag, ringA,
 	role string, ord int, faceIndex map[*topo.Face]int) (*topo.Body, error) {
 	groups := append([]facetedrecord.Group(nil), w.fp.Groups...)
 	blendGroup := len(groups)
-	groups = append(groups, facetedrecord.Group{
-		Origins:  []provenance.Ref{{Producer: env.Ref, Role: role}},
-		Source:   facetedrecord.BlendSource(env.Ref, ord),
-		Surface:  tag.surface,
-		Retained: true,
-		Reversed: tag.reversed,
-	})
+	groups = append(groups, w.tagGroup(facetedrecord.Group{
+		Origins: []provenance.Ref{{Producer: env.Ref, Role: role}},
+		Source:  facetedrecord.BlendSource(env.Ref, ord),
+	}, tag))
 	// The two shrunk faces keep their surfaces but lose the whole-group
 	// centroid certificate.
 	for _, g := range shrunk {

@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -75,8 +76,26 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 	for _, v := range fp.Verts {
 		scale = max(scale, math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
 	}
-	w := newWork(fp, rim{scale: scale}, spec)
-	slack := 64 * ulp * scale
+	// The chain reads its base, walls and end faces, whose planes are not all
+	// known yet: every plane of the held body is charged, which only widens the
+	// slack.
+	charge := 0.0
+	held := make([]*topo.Face, 0, len(faceIndex))
+	for f := range faceIndex {
+		held = append(held, f)
+	}
+	// Sum in face order: a float sum depends on its order, and the published
+	// bounds must not depend on map iteration.
+	sort.Slice(held, func(i, j int) bool { return faceIndex[held[i]] < faceIndex[held[j]] })
+	for _, f := range held {
+		if d, ok := faceDelta(f); !ok {
+			return nil, fmt.Errorf("%w: a face states no usable plane displacement", decaderr.ErrUnsupported)
+		} else if _, plane := f.Surface.(surfacegeom.Plane); plane {
+			charge = proofbound.AbsSumUpper(charge, proofbound.ProductUpper(planeAmp, d))
+		}
+	}
+	w := newWork(fp, rim{scale: scale, charge: charge}, spec)
+	slack := chargedSlack(scale, charge)
 	margin := w.tau + slack
 
 	// The base: the one face every chain edge borders.
@@ -606,14 +625,11 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		}
 		removedTrue += pa + wa
 		blendTrue += ba
-		groups = append(groups, facetedrecord.Group{
-			Origins:  []provenance.Ref{{Producer: env.Ref, Role: fmt.Sprintf("%s(%d)", op, en.ord)}},
-			Source:   facetedrecord.BlendSource(env.Ref, en.ord),
-			Surface:  tag.surface,
-			Retained: true,
-			Reversed: tag.reversed,
-			Planar:   planar,
-		})
+		groups = append(groups, w.tagGroup(facetedrecord.Group{
+			Origins: []provenance.Ref{{Producer: env.Ref, Role: fmt.Sprintf("%s(%d)", op, en.ord)}},
+			Source:  facetedrecord.BlendSource(env.Ref, en.ord),
+			Planar:  planar,
+		}, tag))
 	}
 	if open {
 		for _, ec := range ecuts {

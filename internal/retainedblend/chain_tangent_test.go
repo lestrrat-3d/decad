@@ -68,4 +68,16 @@ func TestTangentJunction(t *testing.T) {
 		arc.Faces[1].TagDeparture = 1e-3
 		require.Equal(t, clearance.DegUnknown, retainedblend.Tangent(line, arc, v))
 	})
+
+	t.Run("a plane with a stated axial delta is undecided", func(t *testing.T) {
+		t.Parallel()
+		for _, delta := range []float64{1e-6, 2.9e-16} {
+			line, arc, v := junctionAt(t, 3)
+			require.Equal(t, clearance.DegYes, retainedblend.Tangent(line, arc, v))
+			line.Faces[0].HasAxialDelta, line.Faces[0].AxialDelta = true, delta
+			arc.Faces[0].HasAxialDelta, arc.Faces[0].AxialDelta = true, delta
+			require.False(t, retainedblend.Chainable(line), "delta %v", delta)
+			require.Equal(t, clearance.DegUnknown, retainedblend.Tangent(line, arc, v), "delta %v", delta)
+		}
+	})
 }

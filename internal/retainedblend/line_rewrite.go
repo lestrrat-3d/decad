@@ -116,7 +116,7 @@ func setbackPoint(base, d r3.Vec, g plane) r3.Vec {
 // rewritten mesh.
 func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload, l line, spec blendSpec,
 	role string, ord int, faceIndex map[*topo.Face]int) (*topo.Body, error) {
-	w := newWork(fp, rim{scale: l.scale}, spec)
+	w := newWork(fp, rim{scale: l.scale, charge: l.charge}, spec)
 	slack := l.slack()
 	margin := w.tau + slack
 
@@ -358,14 +358,11 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 	w.removedTrue, tag.trueArea = w.lineAreas(l, spec, convex, center, baseA, baseB, rowIdx)
 
 	groups := append([]facetedrecord.Group(nil), fp.Groups...)
-	groups = append(groups, facetedrecord.Group{
-		Origins:  []provenance.Ref{{Producer: env.Ref, Role: role}},
-		Source:   facetedrecord.BlendSource(env.Ref, ord),
-		Surface:  tag.surface,
-		Retained: true,
-		Reversed: tag.reversed,
-		Planar:   !spec.fillet,
-	})
+	groups = append(groups, w.tagGroup(facetedrecord.Group{
+		Origins: []provenance.Ref{{Producer: env.Ref, Role: role}},
+		Source:  facetedrecord.BlendSource(env.Ref, ord),
+		Planar:  !spec.fillet,
+	}, tag))
 	for _, f := range faces {
 		groups[f.group].HasCentroid = false
 		groups[f.group].Centroid = measurement.VecMeasurement{}
