@@ -211,10 +211,13 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 
 	// Global source-face ids: the operands' faces in order, so the payload
 	// records provenance without holding live pointers.
-	var groups []facetedrecord.Group
-	sourceID := map[*topo.Face]int{}
-	targetFaces := len(topobuild.Faces(a))
-	for i, f := range append(topobuild.Faces(a), topobuild.Faces(b)...) {
+	facesA := topobuild.Faces(a)
+	facesB := topobuild.Faces(b)
+	targetFaces := len(facesA)
+	totalFaces := targetFaces + len(facesB)
+	groups := make([]facetedrecord.Group, 0, totalFaces)
+	sourceID := make(map[*topo.Face]int, totalFaces)
+	for i, f := range append(facesA, facesB...) {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
 				return Evaluation{}, err
