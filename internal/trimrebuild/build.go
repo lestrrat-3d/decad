@@ -37,6 +37,12 @@ func Build(ctx context.Context, env topo.Env, fp facetedrecord.Payload, s Splice
 		return nil, fmt.Errorf("%w: a splice states %d vertices and %d bounds", decaderr.ErrUnsupported,
 			len(s.Verts), len(s.Bounds))
 	}
+	// The AreaSlack term for receiver faces whose facets are dropped (facetedrecord.FaceAreaGeom) needs the
+	// receiver's faces, which Build does not take; a splice that drops a facet is refused until the increment
+	// that drops one adds the term.
+	if len(s.Keep) != len(fp.Tris) {
+		return nil, fmt.Errorf("%w: a trim-graph splice must keep every receiver facet", decaderr.ErrUnsupported)
+	}
 	verts := append(append([]r3.Vec(nil), fp.Verts...), s.Verts...)
 	beta := append(append([]float64(nil), fp.VertexBound...), s.Bounds...)
 	groups := append([]facetedrecord.Group(nil), fp.Groups...)

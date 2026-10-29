@@ -92,3 +92,10 @@ func TestBuildRefusesMismatchedBounds(t *testing.T) {
 	_, err := trimrebuild.Build(t.Context(), trimtest.Env(), fp, trimrebuild.Splice{Verts: []r3.Vec{{}}})
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 }
+
+func TestBuildRefusesDroppedFacets(t *testing.T) {
+	fp, _ := outerCube(t)
+	_, err := trimrebuild.Build(t.Context(), trimtest.Env(), fp, trimrebuild.Splice{Keep: []int{0}})
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	require.ErrorContains(t, err, "keep every receiver facet")
+}

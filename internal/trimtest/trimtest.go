@@ -90,7 +90,6 @@ func Prism(t *testing.T, section [][2]float64, x0, x1 float64) (*topo.Body, face
 		addTri(end, n, n+k, n+k+1)
 		addTri(start, 0, k+1, k)
 	}
-	fp.MeshBound, fp.DPair = 0, 1
 	fp.DPair = r3.NewVec(x1-x0, 40, 40).Len()
 	return BuildPayload(t, fp)
 }

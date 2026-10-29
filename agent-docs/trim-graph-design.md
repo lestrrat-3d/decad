@@ -74,8 +74,7 @@ export of the new blend surfaces; topology-changing offsets (merge, split, vanis
 
 ## Gap inventory
 
-Rows are named by their leading words in `agent-docs/missing-features.md`. Each refusal was confirmed in code on
-2026-10-30 (dated observation).
+Rows are named by their leading words in `agent-docs/missing-features.md`. Each refusal site is named.
 
 ### RC1 — no recorded trims on a mesh result
 
