@@ -762,8 +762,9 @@ func (tc *TriCutter) SplitByChains(piece []int, chains []ChainPath) ([][]int, er
 		if areaA <= 0 || areaB <= 0 {
 			return nil, fmt.Errorf(`%w: a chain split produced a non-positive region`, decaderr.ErrBooleanFailed)
 		}
-		wa := work{poly: polyA}
-		wb := work{poly: polyB}
+		chainParts := make([]ChainPath, len(rest))
+		aEnd := 0
+		bStart := len(chainParts)
 		for _, rc := range rest {
 			if err := tc.Work.Step(); err != nil {
 				return nil, err
@@ -780,7 +781,8 @@ func (tc *TriCutter) SplitByChains(piece []int, chains []ChainPath) ([][]int, er
 				return nil, fmt.Errorf(`%w: a chain lies on a freshly split boundary`, decaderr.ErrBooleanFailed)
 			}
 			if inside {
-				wa.chains = append(wa.chains, rc)
+				chainParts[aEnd] = rc
+				aEnd++
 				continue
 			}
 			inside, onBoundary, err = PointInPoly2(tc.Work, ptsB, probe)
@@ -790,8 +792,14 @@ func (tc *TriCutter) SplitByChains(piece []int, chains []ChainPath) ([][]int, er
 			if onBoundary || !inside {
 				return nil, fmt.Errorf(`%w: a chain escaped both split regions`, decaderr.ErrBooleanFailed)
 			}
-			wb.chains = append(wb.chains, rc)
+			bStart--
+			chainParts[bStart] = rc
 		}
+		aChains := chainParts[:aEnd:aEnd]
+		bChains := chainParts[bStart:len(chainParts):len(chainParts)]
+		slices.Reverse(bChains)
+		wa := work{poly: polyA, chains: aChains}
+		wb := work{poly: polyB, chains: bChains}
 		stack = append(stack, wa, wb)
 	}
 	return out, nil
