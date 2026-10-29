@@ -504,6 +504,13 @@ true piece lies within `h + β·sin φ + 2δ` of `P`.
 `meshbool.BoolMesh.SetChargedSlabBounds` adds `2δ`; a negative or non-finite δ
 applies no slab, so `FacetBound` stays in force.
 
+A rim between a displaced plane and another plane or a cylinder parallel to
+the plane's normal moves by at most `4000δ` (planes meeting at a sine of at
+least `1e-3`). `RetainedEdgeCurve` widens its line falsifier by that, and only
+for a `Line3`. A `Circle3`, `Arc3` or `Ellipse3` carries no curve bound, so a
+circle or ellipse rim declines when any plane's δ exceeds the arithmetic
+allowance `64·ε·scale`; a zero δ changes nothing.
+
 `h` and `sin φ` are computed in exact rational arithmetic from the held
 floats and the tag's frame, and rounded up (`meshbool.SetSlabBounds`). The
 slab bound is `min(β, h + β·sin φ)`. In-plane displacement of the facet's

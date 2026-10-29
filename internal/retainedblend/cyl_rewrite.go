@@ -538,14 +538,11 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	}
 
 	groups := append([]facetedrecord.Group(nil), fp.Groups...)
-	groups = append(groups, facetedrecord.Group{
-		Origins:  []provenance.Ref{{Producer: env.Ref, Role: role}},
-		Source:   facetedrecord.BlendSource(env.Ref, ord),
-		Surface:  tag.surface,
-		Retained: true,
-		Reversed: tag.reversed,
-		Planar:   !spec.fillet,
-	})
+	groups = append(groups, w.tagGroup(facetedrecord.Group{
+		Origins: []provenance.Ref{{Producer: env.Ref, Role: role}},
+		Source:  facetedrecord.BlendSource(env.Ref, ord),
+		Planar:  !spec.fillet,
+	}, tag))
 	for _, f := range faces {
 		groups[f.group].HasCentroid = false
 		groups[f.group].Centroid = measurement.VecMeasurement{}

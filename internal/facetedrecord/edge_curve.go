@@ -56,9 +56,13 @@ func RetainedEdgeCurve(a, b *topo.Face, chain []r3.Vec, bounds []float64, closed
 		scale = max(scale, math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
 	}
 	slack := 64 * edgeEps * scale
-	// A plane tag may lie off the true plane by its stated AxialDelta, which
-	// moves the published rim by at most planeRimAmp times that. The
-	// displacement widens the falsifier's slack; it never admits by itself.
+	// A plane tag may lie off the true plane by its stated AxialDelta. A Line3
+	// rim moves by at most planeRimAmp times that, so a line's falsifier slack
+	// widens by it (lineSlack); the widening never admits by itself. A circle or
+	// ellipse rim is published with a zero curve bound, so it has no room for the
+	// displacement: it declines when any delta exceeds the arithmetic allowance.
+	lineSlack := slack
+	displaced := false
 	for _, f := range []*topo.Face{a, b} {
 		if _, isPlane := f.Surface.(surfacegeom.Plane); !isPlane || !f.HasAxialDelta {
 			continue
@@ -66,18 +70,22 @@ func RetainedEdgeCurve(a, b *topo.Face, chain []r3.Vec, bounds []float64, closed
 		if !(f.AxialDelta >= 0) || math.IsInf(f.AxialDelta, 0) {
 			return nil, false
 		}
-		slack = proofbound.AbsSumUpper(slack, proofbound.ProductUpper(planeRimAmp, f.AxialDelta))
+		if f.AxialDelta == 0 {
+			continue
+		}
+		displaced = displaced || f.AxialDelta > slack
+		lineSlack = proofbound.AbsSumUpper(lineSlack, proofbound.ProductUpper(planeRimAmp, f.AxialDelta))
 	}
 	n := plane.Frame.N()
 	o := plane.Frame.Origin()
 	switch s := tb.(type) {
 	case surfacegeom.Plane:
-		return planePlaneRim(n, o, s, chain, bounds, slack)
+		return planePlaneRim(n, o, s, chain, bounds, lineSlack)
 	case surfacegeom.Cylinder:
-		return planeCylinderRim(n, o, s, chain, bounds, closed, slack)
+		return planeCylinderRim(n, o, s, chain, bounds, closed, slack, lineSlack, displaced)
 	case surfacegeom.Sphere:
 		radius, ok := millimeters(s.Radius)
-		if !ok {
+		if !ok || displaced {
 			return nil, false
 		}
 		d := n.Dot(s.Center.Sub(o))
@@ -177,7 +185,7 @@ func planePlaneRim(n1, o1 r3.Vec, p2 surfacegeom.Plane, chain []r3.Vec, bounds [
 }
 
 func planeCylinderRim(n, o r3.Vec, cyl surfacegeom.Cylinder, chain []r3.Vec, bounds []float64,
-	closed bool, slack float64) (surfacegeom.Curve, bool) {
+	closed bool, slack, lineSlack float64, displaced bool) (surfacegeom.Curve, bool) {
 	radius, ok := millimeters(cyl.Radius)
 	if !ok {
 		return nil, false
@@ -185,13 +193,16 @@ func planeCylinderRim(n, o r3.Vec, cyl surfacegeom.Cylinder, chain []r3.Vec, bou
 	axis := cyl.Axis
 	switch {
 	case axis.Cross(n).Len() <= edgeParallel:
+		if displaced {
+			return nil, false
+		}
 		t := n.Dot(o.Sub(cyl.Origin)) / n.Dot(axis)
 		return circleRim(cyl.Origin.Add(axis.Scale(t)), n, radius, chain, bounds, closed, slack)
 	case math.Abs(axis.Dot(n)) <= edgeParallel:
 		s := n.Dot(cyl.Origin.Sub(o))
 		foot := cyl.Origin.Sub(n.Scale(s))
 		half := radius*radius - s*s
-		if half < -slack*radius {
+		if half < -lineSlack*radius {
 			return nil, false
 		}
 		w := math.Sqrt(max(half, 0))
@@ -201,8 +212,11 @@ func planeCylinderRim(n, o r3.Vec, cyl surfacegeom.Cylinder, chain []r3.Vec, bou
 		}
 		return acceptLine([]rimLine{
 			{foot.Add(side.Scale(w)), axis}, {foot.Sub(side.Scale(w)), axis},
-		}, chain, bounds, slack)
+		}, chain, bounds, lineSlack)
 	case math.Abs(axis.Dot(n)) >= edgeOblique:
+		if displaced {
+			return nil, false
+		}
 		return ellipseRim(n, o, cyl.Origin, axis, radius, chain, bounds, closed, slack)
 	}
 	return nil, false

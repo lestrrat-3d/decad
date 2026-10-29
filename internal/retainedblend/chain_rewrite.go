@@ -80,7 +80,14 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 	// known yet: every plane of the held body is charged, which only widens the
 	// slack.
 	charge := 0.0
+	held := make([]*topo.Face, 0, len(faceIndex))
 	for f := range faceIndex {
+		held = append(held, f)
+	}
+	// Sum in face order: a float sum depends on its order, and the published
+	// bounds must not depend on map iteration.
+	sort.Slice(held, func(i, j int) bool { return faceIndex[held[i]] < faceIndex[held[j]] })
+	for _, f := range held {
 		if d, ok := faceDelta(f); !ok {
 			return nil, fmt.Errorf("%w: a face states no usable plane displacement", decaderr.ErrUnsupported)
 		} else if _, plane := f.Surface.(surfacegeom.Plane); plane {
@@ -618,14 +625,11 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		}
 		removedTrue += pa + wa
 		blendTrue += ba
-		groups = append(groups, facetedrecord.Group{
-			Origins:  []provenance.Ref{{Producer: env.Ref, Role: fmt.Sprintf("%s(%d)", op, en.ord)}},
-			Source:   facetedrecord.BlendSource(env.Ref, en.ord),
-			Surface:  tag.surface,
-			Retained: true,
-			Reversed: tag.reversed,
-			Planar:   planar,
-		})
+		groups = append(groups, w.tagGroup(facetedrecord.Group{
+			Origins: []provenance.Ref{{Producer: env.Ref, Role: fmt.Sprintf("%s(%d)", op, en.ord)}},
+			Source:  facetedrecord.BlendSource(env.Ref, en.ord),
+			Planar:  planar,
+		}, tag))
 	}
 	if open {
 		for _, ec := range ecuts {

@@ -669,13 +669,10 @@ baseDone:
 		tag := w.lineTag(l, true, g.center, g.baseA, g.baseB)
 		group := len(groups)
 		ord := e.ord
-		groups = append(groups, facetedrecord.Group{
-			Origins:  []provenance.Ref{{Producer: env.Ref, Role: fmt.Sprintf("%s(%d)", op, ord)}},
-			Source:   facetedrecord.BlendSource(env.Ref, ord),
-			Surface:  tag.surface,
-			Retained: true,
-			Reversed: tag.reversed,
-		})
+		groups = append(groups, w.tagGroup(facetedrecord.Group{
+			Origins: []provenance.Ref{{Producer: env.Ref, Role: fmt.Sprintf("%s(%d)", op, ord)}},
+			Source:  facetedrecord.BlendSource(env.Ref, ord),
+		}, tag))
 		for j := range m {
 			lo0, lo1 := g.rowIdx[0][j], g.rowIdx[1][j]
 			hi0, hi1 := g.rowIdx[0][j+1], g.rowIdx[1][j+1]

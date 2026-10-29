@@ -4,7 +4,6 @@ import (
 	"math"
 	"testing"
 
-	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/retainedblend"
@@ -87,44 +86,86 @@ func topBevelEdge(t *testing.T, b *topo.Body) *topo.Edge {
 	return nil
 }
 
-func maxVertexBound(b *topo.Body) float64 {
-	worst := 0.0
-	for _, v := range topobuild.Vertices(b) {
-		worst = max(worst, v.Bound.Base())
+func payloadOf(t *testing.T, b *topo.Body) facetedrecord.Payload {
+	t.Helper()
+	fp, ok := b.Payload.(facetedrecord.Payload)
+	require.True(t, ok)
+	return fp
+}
+
+// meshVolume is the signed volume of the held mesh.
+func meshVolume(fp facetedrecord.Payload) float64 {
+	vol := 0.0
+	for _, tri := range fp.Tris {
+		vol += fp.Verts[tri[0]].Dot(fp.Verts[tri[1]].Cross(fp.Verts[tri[2]])) / 6
 	}
-	return worst
+	return vol
+}
+
+// blendGroup is the group the rewrite added: the last one of the payload.
+func blendGroup(fp facetedrecord.Payload) facetedrecord.Group { return fp.Groups[len(fp.Groups)-1] }
+
+// requireSameShape checks that out has the vertices of exact to within tol and its volume.
+func requireSameShape(t *testing.T, exact, out facetedrecord.Payload, tol float64) {
+	t.Helper()
+	require.Len(t, out.Verts, len(exact.Verts))
+	for i, v := range exact.Verts {
+		require.LessOrEqual(t, out.Verts[i].Sub(v).Len(), tol, "vertex %d", i)
+	}
+	require.InDelta(t, meshVolume(exact), meshVolume(out), tol*1e3)
+}
+
+// requireChargedBounds checks that every vertex bound of out covers its exact twin's and that the largest grew by
+// at least delta.
+func requireChargedBounds(t *testing.T, exact, out facetedrecord.Payload, delta float64) {
+	t.Helper()
+	require.Len(t, out.VertexBound, len(exact.VertexBound))
+	grew, worst := 0, 0.0
+	for i, b := range exact.VertexBound {
+		require.GreaterOrEqual(t, out.VertexBound[i], b, "vertex %d", i)
+		if out.VertexBound[i] > b {
+			grew++
+		}
+		worst = max(worst, out.VertexBound[i]-b)
+	}
+	require.Positive(t, grew, "no vertex bound carries the plane displacement")
+	require.GreaterOrEqual(t, worst, delta, "no vertex bound grew by the plane displacement")
 }
 
 func TestFilletChargesPlaneAxialDelta(t *testing.T) {
 	t.Parallel()
-	fillet := func(t *testing.T, delta float64) (out *topo.Body, recognized bool, err error) {
+	fillet := func(t *testing.T, delta float64) (*topo.Body, bool, error) {
 		t.Helper()
 		b, built := bevelledPlate(t, delta)
 		return retainedblend.Fillet(t.Context(), axialEnv(), b, built, []*topo.Edge{topBevelEdge(t, b)}, 3, 0)
 	}
-
-	t.Run("a unit-conversion sized delta keeps building", func(t *testing.T) {
-		t.Parallel()
-		out, recognized, err := fillet(t, 2.9e-16)
-		require.True(t, recognized)
-		require.NoError(t, err)
-		require.NotNil(t, out)
-	})
-	t.Run("a stated delta is charged into the published vertex bounds or refused", func(t *testing.T) {
-		t.Parallel()
-		const delta = 1e-6
-		exact, recognized, err := fillet(t, 0)
-		require.True(t, recognized)
-		require.NoError(t, err)
+	build := func(t *testing.T, delta float64) facetedrecord.Payload {
+		t.Helper()
 		out, recognized, err := fillet(t, delta)
 		require.True(t, recognized)
-		if err != nil {
-			require.ErrorIs(t, err, decaderr.ErrUnsupported)
-			return
-		}
-		require.GreaterOrEqual(t, maxVertexBound(out), maxVertexBound(exact)+delta,
-			"a plane displaced by delta was read as exact: no published bound covers it")
+		require.NoError(t, err, "a stated delta is charged, not refused")
+		require.NotNil(t, out)
+		return payloadOf(t, out)
+	}
+
+	t.Run("no delta publishes the retained cylinder", func(t *testing.T) {
+		t.Parallel()
+		blend := blendGroup(build(t, 0))
+		require.True(t, blend.Retained)
+		require.IsType(t, surfacegeom.Cylinder{}, blend.Surface)
+		require.False(t, blend.HasAxialDelta)
 	})
+	for name, delta := range map[string]float64{"a unit-conversion sized": 2.9e-16, "a stated": 1e-6} {
+		t.Run(name+" delta is charged and the cylinder is not published", func(t *testing.T) {
+			t.Parallel()
+			exact, out := build(t, 0), build(t, delta)
+			requireChargedBounds(t, exact, out, delta)
+			requireSameShape(t, exact, out, 1e-9)
+			blend := blendGroup(out)
+			require.False(t, blend.Retained, "a cylinder has no field for the displacement of its planes")
+			require.Nil(t, blend.Surface)
+		})
+	}
 	for name, delta := range map[string]float64{"negative": -1, "infinite": math.Inf(1), "NaN": math.NaN()} {
 		t.Run("a "+name+" delta names no plane", func(t *testing.T) {
 			t.Parallel()
@@ -132,5 +173,35 @@ func TestFilletChargesPlaneAxialDelta(t *testing.T) {
 			require.False(t, recognized && err == nil, "a displacement no bound can cover was admitted")
 			require.Nil(t, out)
 		})
+	}
+}
+
+func TestChamferChargesPlaneAxialDelta(t *testing.T) {
+	t.Parallel()
+	chamfer := func(t *testing.T, delta float64) facetedrecord.Payload {
+		t.Helper()
+		b, built := bevelledPlate(t, delta)
+		out, recognized, err := retainedblend.Chamfer(t.Context(), axialEnv(), b, built,
+			[]*topo.Edge{topBevelEdge(t, b)}, 1, 0, nil)
+		require.True(t, recognized)
+		require.NoError(t, err)
+		return payloadOf(t, out)
+	}
+
+	exact := chamfer(t, 0)
+	blend := blendGroup(exact)
+	require.True(t, blend.Retained)
+	require.IsType(t, surfacegeom.Plane{}, blend.Surface)
+	require.False(t, blend.HasAxialDelta, "no charge, no stated displacement")
+
+	for _, delta := range []float64{2.9e-16, 1e-6} {
+		out := chamfer(t, delta)
+		requireChargedBounds(t, exact, out, delta)
+		requireSameShape(t, exact, out, 1e-9)
+		blend := blendGroup(out)
+		require.True(t, blend.Retained)
+		require.IsType(t, surfacegeom.Plane{}, blend.Surface)
+		require.True(t, blend.HasAxialDelta, "the bevel plane is built from displaced planes")
+		require.GreaterOrEqual(t, blend.AxialDelta, delta)
 	}
 }
