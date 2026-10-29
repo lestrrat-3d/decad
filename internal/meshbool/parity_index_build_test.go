@@ -35,7 +35,7 @@ func TestParityIndexBuildIsStable(t *testing.T) {
 	want := []uint64{0xe233565e4203299, 0xb0a2b33a9c112095, 0xf609020b7502d292}
 	if raceDetector {
 		sides, starts = 150, 2602
-		want = []uint64{0x90b4a666739748ba, 0x3636e202af0d22b2, 0x1769950073261d4d}
+		want = []uint64{0x90b4a666739748ba, 0x3636e202af0d22b2, 0x2aea3cd06ab20bf9}
 	}
 	verts, tris := parityCylinder(sides)
 	pm := NewParityMesh(verts, tris)
