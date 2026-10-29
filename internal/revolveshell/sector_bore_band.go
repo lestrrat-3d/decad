@@ -100,7 +100,9 @@ func BuildSectorBandCut(ctx context.Context, joined facetedrecord.Payload,
 		}
 	}
 	lowSeen, highSeen := make([]bool, n), make([]bool, n)
+	finalTriangles := len(joined.Tris) + 2*n
 	mesh := &facetedrecord.JoinedMesh{Verts: append([]r3.Vec(nil), joined.Verts...),
+		Tris: make([][3]int, 0, finalTriangles), Src: make([]int, 0, finalTriangles),
 		Groups: append([]facetedrecord.Group(nil), joined.Groups...)}
 	for i, tri := range joined.Tris {
 		if err := ctx.Err(); err != nil {
