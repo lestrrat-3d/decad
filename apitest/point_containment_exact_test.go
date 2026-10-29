@@ -1,6 +1,9 @@
 package apitest_test
 
 import (
+	"context"
+	"math"
+	"sync"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -155,4 +158,99 @@ func TestPointLocationOffRadiusArcFallsBackToMesh(t *testing.T) {
 		{name: "near a straight side", at: r3.NewVec(10, 1e-9, 5), want: decad.PointUndecided},
 		{name: "deep material", at: r3.NewVec(6, 6, 5), want: decad.PointInside},
 	})
+}
+
+func TestPointLocationDenotedLevel(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		depth units.Value
+		cap   decad.PointLocation
+	}{
+		{"millimetres", units.Millimeters(5.08), decad.PointOnBoundary},
+		{"inches", units.Inches(0.2), decad.PointOutside},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := decad.New()
+			w := sketch.NewWorld()
+			s, err := w.CreateSketch(w.XY())
+			require.NoError(t, err)
+			r := s.CreateRectangle(0, 0, 1, 1)
+			s.Fix(r.A)
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			require.Len(t, s.Profiles(), 1)
+			body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: tc.depth, Dir: decad.Along})
+			require.NoError(t, err)
+			requireLocations(t, body, []locateCase{
+				{"below", r3.NewVec(.5, .5, math.Nextafter(5.08, 0)), decad.PointInside},
+				{"held cap", r3.NewVec(.5, .5, 5.08), tc.cap},
+				{"above", r3.NewVec(.5, .5, math.Nextafter(5.08, math.Inf(1))), decad.PointOutside},
+			})
+			if tc.name == "inches" {
+				point := r3.NewVec(.5, .5, 5.08)
+				_, err = body.LocatePoint(t.Context(), point, units.Degrees(1))
+				require.ErrorIs(t, err, decad.ErrUnitKind)
+				_, err = body.LocatePoint(t.Context(), point, units.Millimeters(0))
+				require.ErrorIs(t, err, decad.ErrDegenerate)
+				ctx, cancel := context.WithCancel(t.Context())
+				cancel()
+				_, err = body.LocatePoint(ctx, point, units.Millimeters(.05))
+				require.ErrorIs(t, err, context.Canceled)
+				shift, err := r3.Translation(r3.NewVec(2, 0, 0))
+				require.NoError(t, err)
+				placed, err := decad.Transform(t.Context(), body, shift)
+				require.NoError(t, err)
+				// Translation leaves local z unchanged exactly.
+				requireLocations(t, placed, []locateCase{
+					{"translated held cap", r3.NewVec(2.5, .5, 5.08), decad.PointOutside},
+					{"translated below", r3.NewVec(2.5, .5, math.Nextafter(5.08, 0)), decad.PointInside},
+				})
+				requireLocations(t, body, []locateCase{{"retired source", point, decad.PointOutside}})
+			}
+		})
+	}
+}
+
+func TestPointLocationDenotedExtentModes(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		extent    decad.Extent
+		low, high float64
+	}{
+		{"against", decad.Distance{D: units.Inches(.2), Dir: decad.Against}, -5.08, 0},
+		{"symmetric", decad.Symmetric{D: units.Inches(.2)}, -5.08, 5.08},
+		{"full length", decad.Symmetric{D: units.Inches(.4), FullLength: true}, -5.08, 5.08},
+		{"two sided", decad.TwoSided{One: decad.DistanceSide{D: units.Inches(.2)}, Two: decad.DistanceSide{D: units.Millimeters(5.08)}}, -5.08, 5.08},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := sketch.NewWorld()
+			s, err := w.CreateSketch(w.XY())
+			require.NoError(t, err)
+			r := s.CreateRectangle(0, 0, 1, 1)
+			s.Fix(r.A)
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			body, err := decad.Extrude(t.Context(), decad.New(), s, s.Profiles()[0], tc.extent)
+			require.NoError(t, err)
+			requireLocations(t, body, []locateCase{
+				{"interior", r3.NewVec(.5, .5, math.Nextafter(0, -1)), decad.PointInside},
+				{"vertical side", r3.NewVec(0, .5, math.Nextafter(tc.high, 0)), decad.PointOnBoundary},
+				{"above", r3.NewVec(.5, .5, math.Nextafter(tc.high, math.Inf(1))), decad.PointOutside},
+				{"below", r3.NewVec(.5, .5, math.Nextafter(tc.low, math.Inf(-1))), decad.PointOutside},
+			})
+			var wg sync.WaitGroup
+			for range 8 {
+				wg.Go(func() {
+					for range 10 {
+						got, err := body.LocatePoint(t.Context(), r3.NewVec(.5, .5, math.Nextafter(tc.high, math.Inf(1))), units.Millimeters(.05))
+						if err != nil || got != decad.PointOutside {
+							t.Errorf("concurrent query: location=%v error=%v", got, err)
+							return
+						}
+					}
+				})
+			}
+			wg.Wait()
+		})
+	}
 }

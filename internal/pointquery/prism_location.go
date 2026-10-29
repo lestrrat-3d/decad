@@ -2,15 +2,15 @@ package pointquery
 
 import (
 	"context"
+	"math"
 
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
-	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
 
-// LocatePrism classifies the world point p against the solid an undisplaced
-// prism record denotes, in exact rational arithmetic over the held record
+// LocatePrism classifies the world point p against the solid a prism record with an undisplaced section and exact levels denotes,
+// in exact rational arithmetic
 // (agent-docs/point-containment-design.md §7). decided is false where the
 // record is not one this route reads exactly or the point meets a case it
 // leaves open; the caller then classifies against the verified mesh (§2).
@@ -19,10 +19,12 @@ func LocatePrism(ctx context.Context, p r3.Vec, pp prismrecord.Payload) (Locatio
 	if err := ctx.Err(); err != nil {
 		return Undecided, false, err
 	}
-	if pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 || pp.SurfaceResult {
+	if pp.SectionDelta != 0 || pp.SurfaceResult ||
+		pp.Z0Delta < 0 || math.IsNaN(pp.Z0Delta) || math.IsInf(pp.Z0Delta, 0) ||
+		pp.Z1Delta < 0 || math.IsNaN(pp.Z1Delta) || math.IsInf(pp.Z1Delta, 0) {
 		return Undecided, false, nil
 	}
-	z0, z1 := proof.FloatRat(pp.Z0), proof.FloatRat(pp.Z1)
+	z0, z1 := pp.DenotedZ0(), pp.DenotedZ1()
 	if z0 == nil || z1 == nil || z0.Cmp(z1) >= 0 {
 		return Undecided, false, nil
 	}

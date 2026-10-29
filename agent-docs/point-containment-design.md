@@ -1,8 +1,8 @@
 # Point containment and distance design
 
 `Body.LocatePoint` classifies one world-coordinate point against a solid body.
-An undisplaced straight prism is first classified against its own record in
-exact arithmetic (§7), and so are an undisplaced stacked prism, the BRep a
+A straight prism with an undisplaced section and exact denoted levels is
+classified against its own record in exact arithmetic (§7), and so are an undisplaced stacked prism, the BRep a
 stacked `Union` keeps its slabs on (§9) and a full solid `Revolve` (§10). A
 mesh Boolean result first combines its operands' exact answers through the
 operation history (§8). Every other body, and every point §7 to §10 leave
@@ -199,12 +199,12 @@ the point to §2 unchanged.
 
 ### 7.1 Admission
 
-The body's payload must be a `prismPayload` with `SectionDelta`, `Z0Delta` and
-`Z1Delta` all zero, no `SurfaceResult`, and `Z0 < Z1` compared exactly. Only
-then is the record the set it denotes (`prismrecord.Payload`'s doc,
-`agent-docs/prism-boolean-design.md` §7). A faceted Boolean result goes to §8,
-a stacked prism and a BRep to §9, and a revolve to §10. A displaced record and
-every other payload go to §2.
+The body's payload must be a `prismPayload` with zero `SectionDelta`, no
+`SurfaceResult`, and finite, nonnegative endpoint bounds. `DenotedZ0` and
+`DenotedZ1` must return exact levels in strictly increasing order. A zero bound
+uses the held level; a displaced level needs a matching producer certificate.
+Missing or stale certificates and malformed bounds go to §2. A faceted Boolean
+result goes to §8, a stacked prism and a BRep to §9, and a revolve to §10.
 
 ### 7.2 Plane coordinates
 
@@ -222,7 +222,8 @@ never place a point exactly on the boundary the record denotes. A zero
 determinant hands the point to §2. The solve gives the exact plane
 coordinates `(u, v, z)` of `p`.
 
-`z < Z0` or `z > Z1` is `PointOutside` without reading the profile.
+`z` is compared to the exact denoted levels, not their rounded held values.
+A point beyond either level is `PointOutside` without reading the profile.
 
 ### 7.3 Plane-local region test
 
@@ -476,7 +477,7 @@ are about the same set.
   fold over three inputs, a `Cut` over a `Union`, and each stop, which reads
   no later operand. They decline a point-cone record, a gap shift, an
   embedding reach, an analytic payload, a missing producer record, a
-  one-input `Cut`, a mesh operand with no record and a displaced prism
+  one-input `Cut`, a mesh operand with no record and a section-displaced prism
   operand; a chain allowance still combines, and a canceled context returns
   its error. They also cut a stacked leaf by a cube and unite a revolve leaf
   with a cube (§9, §10).
