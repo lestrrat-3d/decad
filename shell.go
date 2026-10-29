@@ -150,7 +150,14 @@ func WithShellFaceThickness(normal r3.Vec, t units.Value) ShellOption {
 // only. A two-slab rectangular boss Union builds the bounded inward cavity of
 // modify-general §3.1a. Other receivers return ErrUnsupported after the
 // stage-1 gates pass — a partial revolve, and brep or stacked results outside
-// those classes (SG2). Two WithShellSense options naming different senses are
+// those classes (SG2). A convex mesh Boolean result whose faces all keep an
+// exact plane tag and whose edges all meet at valence-3 vertices, such as the
+// 45 degree bevelled plate of a tilted Cut, builds the closed inward shell
+// through the trim graph: each face's plane moved in by t and the cavity
+// corners found as exact three-plane meets (agent-docs/trim-graph-design.md,
+// Component 6). The cavity is one void shell with a plane face per outer face;
+// a thickness that drops a face, or a receiver with a concave edge, keeps the
+// ErrUnsupported refusal. Two WithShellSense options naming different senses are
 // ErrDegenerate (SX1).
 //
 // An analytic boolean result (a brep or stacked body) that reads as a prism

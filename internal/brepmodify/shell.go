@@ -25,6 +25,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/throughshell"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/trimshell"
 	"github.com/lestrrat-3d/decad/internal/twistsweep"
 	"github.com/lestrrat-3d/units"
 )
@@ -89,6 +90,14 @@ func Shell(ctx context.Context, env topo.Env, b *topo.Body, call ShellCall) (*to
 			}
 			if matched {
 				return n, nil
+			}
+		}
+		// Trim-graph design Component 6: the closed inward shell of a convex planar mesh Boolean result. A receiver
+		// the route declines keeps the SX9 refusal below.
+		if fp, ok := b.Payload.(facetedrecord.Payload); ok {
+			n, matched, err := trimshell.Closed(ctx, env, b, fp, trimshell.Call{Inward: call.Inward, T: tmm, TDelta: tDelta})
+			if matched || err != nil {
+				return n, err
 			}
 		}
 		return nil, stackedshell.RefuseClosed(b.Payload)

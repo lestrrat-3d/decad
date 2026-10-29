@@ -14,7 +14,8 @@ import (
 // RefuseClosed is Shell's answer to WithNoOpenings on every receiver but a
 // full-turn revolve over a hole-free meridian, a straight prism, a brep record
 // that reads as a prism (inward along any axis, outward along its one axis),
-// and an admitted two-slab rectangular boss.
+// an admitted two-slab rectangular boss, and an inward convex mesh Boolean result with planar faces
+// (agent-docs/trim-graph-design.md).
 // Their own builders run first (agent-docs/modify-reach-design.md Tables RX/SX,
 // §14; agent-docs/modify-general-design.md §3.2). Each receiver gets the row
 // that stages it: a faceted boolean result SX9, a brep or stacked receiver

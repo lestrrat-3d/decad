@@ -189,6 +189,7 @@ var (
 		layoutPartSpec("internal-prism.md"),
 		layoutPartSpec("internal-placement.md"),
 		layoutPartSpec("operation-observability.md"),
+		layoutPartSpec("internal-trim.md"),
 	}
 )
 

@@ -44,6 +44,7 @@ first.
 - `agent-docs/layout/internal-prism.md`: prism, stacked, cup and Shell internal packages.
 - `agent-docs/layout/internal-placement.md`: body layout and path-spacing internal packages.
 - `agent-docs/layout/operation-observability.md`: operation history and diagnostics internals.
+- `agent-docs/layout/internal-trim.md`: trim-graph internal packages.
 
 ## Splitting oversized agent files
 
