@@ -7,6 +7,8 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/export"
+	"github.com/lestrrat-3d/decad/internal/closedstep"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/step"
@@ -131,4 +133,70 @@ func TestNewSTEPFileWholeRingAnalytic(t *testing.T) {
 	require.Len(t, body.Faces(), 1)
 	require.Empty(t, body.Edges())
 	require.Empty(t, body.Faces()[0].Loops())
+}
+
+func TestClosedSTEPInexactSyntheticPointFallsBack(t *testing.T) {
+	t.Run("sphere", func(t *testing.T) {
+		w := sketch.NewWorld()
+		plane, err := w.CreateOffsetPlane(w.XY(), 0.1)
+		require.NoError(t, err)
+		s, err := w.CreateSketch(plane)
+		require.NoError(t, err)
+		start := s.CreatePoint(0, 0)
+		s.Fix(start)
+		end := s.CreatePoint(0.4, 0)
+		center := s.CreatePoint(0.2, 0)
+		s.CreateLine(start, end)
+		s.CreateArc(center, end, start)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		body, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0], decad.ConstructionAxis{Origin: r3.NewVec(0, 0, 0.1), Dir: r3.NewVec(1, 0, 0)}, decad.FullRevolution{})
+		require.NoError(t, err)
+		coverage, ok, err := closedstep.Read(t.Context(), body, body.Faces()[0])
+		require.NoError(t, err)
+		require.True(t, ok)
+		require.False(t, coverage.Ring)
+		exact := proof.DyAdd(proof.MustDyOf(coverage.Center.Z), proof.MustDyOf(coverage.Radius))
+		held := coverage.Center.Z + coverage.Radius
+		require.NotZero(t, proof.DyCmp(exact, proof.MustDyOf(held)))
+		f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.02), header())
+		require.NoError(t, err)
+		planes := 0
+		for _, e := range f.Entities {
+			require.NotEqual(t, "SPHERICAL_SURFACE", e.Name)
+			if e.Name == "PLANE" {
+				planes++
+			}
+		}
+		require.Positive(t, planes)
+	})
+	t.Run("ring", func(t *testing.T) {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		center := s.CreatePoint(0, 0.4)
+		s.Fix(center)
+		s.CreateCircle(center, 0.1)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		body, err := decad.Revolve(t.Context(), decad.New(), s, s.Profiles()[0], decad.ConstructionAxis{Origin: r3.Vec{}, Dir: r3.NewVec(1, 0, 0)}, decad.FullRevolution{})
+		require.NoError(t, err)
+		coverage, ok, err := closedstep.Read(t.Context(), body, body.Faces()[0])
+		require.NoError(t, err)
+		require.True(t, ok)
+		require.True(t, coverage.Ring)
+		exact := proof.DyAdd(proof.MustDyOf(coverage.Major), proof.MustDyOf(coverage.Minor))
+		held := coverage.Major + coverage.Minor
+		require.NotZero(t, proof.DyCmp(exact, proof.MustDyOf(held)))
+		f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.02), header())
+		require.NoError(t, err)
+		planes := 0
+		for _, e := range f.Entities {
+			require.NotEqual(t, "TOROIDAL_SURFACE", e.Name)
+			if e.Name == "PLANE" {
+				planes++
+			}
+		}
+		require.Positive(t, planes)
+	})
 }
