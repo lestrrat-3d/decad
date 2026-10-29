@@ -69,11 +69,13 @@ func buildPointConeInsideBand(ctx context.Context, env topo.Env,
 		return nil, err
 	}
 	farRound = proofbound.AbsSumUpper(farRound, contactRound)
-	allCaps := make([][3]int, 0, len(outside)+len(inside))
-	allCaps = append(allCaps, outside...)
-	allCaps = append(allCaps, inside...)
-	lowerSamples := make([]pointcone.Sample, len(far))
+	capCount := len(outside) + len(inside)
+	var allCaps [][3]int
+	var lowerSamples []pointcone.Sample
 	if lower != nil {
+		allCaps = make([][3]int, 0, capCount)
+		allCaps = append(allCaps, outside...)
+		allCaps = append(allCaps, inside...)
 		lowerQError := 0.0
 		var lowerErrs []error
 		lowerSamples, lowerErrs = PointConeFactors(far, lower,
@@ -120,7 +122,7 @@ func buildPointConeInsideBand(ctx context.Context, env topo.Env,
 	for i := range farGroup {
 		groups[i].Surface = surfacegeom.NURBSSurface{}
 	}
-	tris := make([][3]int, 0, 2*len(allCaps)+2*len(allSides))
+	tris := make([][3]int, 0, 2*capCount+2*len(allSides))
 	src := make([]int, 0, cap(tris))
 	add := func(t [3]int, group int) {
 		tris = append(tris, t)
