@@ -253,41 +253,67 @@ func repairHeldEmbeddingSummary(ctx context.Context, h HeldRounding, memo bool, 
 // facets it meets, in ascending order of the first. It moves nothing; Movable
 // is ignored. A mesh with no Moved vertex has none.
 func HeldFolds(ctx context.Context, h HeldRounding) ([][2]int, error) {
+	folds, _, err := scanHeldFolds(ctx, h, false)
+	return folds, err
+}
+
+// HasHeldFold reports whether the held mesh has any improper facet contact
+// among facets that touch a Moved vertex. It moves nothing; Movable is ignored.
+func HasHeldFold(ctx context.Context, h HeldRounding) (bool, error) {
+	_, found, err := scanHeldFolds(ctx, h, true)
+	if err != nil {
+		return false, err
+	}
+	if found {
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
+	}
+	return found, nil
+}
+
+func scanHeldFolds(ctx context.Context, h HeldRounding, firstOnly bool) ([][2]int, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
 	if err := budget.Err(); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	var query []int
 	for i, t := range h.Tris {
 		if err := budget.Step(); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if h.Moved[t[0]] || h.Moved[t[1]] || h.Moved[t[2]] {
 			query = append(query, i)
 		}
 	}
 	if len(query) == 0 {
-		return nil, nil
+		return nil, false, nil
 	}
 	e := newHeldEmbeddingScan(h, budget, true)
 	if err := e.buildGrid(); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	e.pairs = make(map[uint64]uint64, 32*len(query))
 	var out [][2]int
 	for _, f := range query {
-		bad, collapsed, err := e.facetFailures(f)
+		bad, collapsed, found, err := e.scanFacetFailures(f, nil, nil, firstOnly)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if collapsed {
 			out = append(out, [2]int{f, f})
+			if firstOnly {
+				return out, true, nil
+			}
 		}
 		for _, g := range bad {
 			out = append(out, [2]int{f, g})
 		}
+		if firstOnly && found {
+			return out, true, nil
+		}
 	}
-	return out, nil
+	return out, false, nil
 }
 
 // heldPrepareParallelMin is the facet count from which parallelClean prepares
@@ -1563,17 +1589,23 @@ func (e *heldEmbedding) facetFailures(i int) ([]int, bool, error) {
 // answer is whether earlier names j: it is the answer the pair memo would
 // replay, read without the memo. done is nil outside such a pass.
 func (e *heldEmbedding) facetFailuresAfter(i int, done []bool, earlier []int) ([]int, bool, error) {
+	bad, collapsed, _, err := e.scanFacetFailures(i, done, earlier, false)
+	return bad, collapsed, err
+}
+
+func (e *heldEmbedding) scanFacetFailures(i int, done []bool, earlier []int,
+	firstOnly bool) ([]int, bool, bool, error) {
 	if zeroXpt(e.normal(i)) {
-		return nil, true, nil
+		return nil, true, true, nil
 	}
 	cands, err := e.candidates(i)
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 	var bad []int
 	for _, j := range cands {
 		if err := e.budget.Step(); err != nil {
-			return nil, false, err
+			return nil, false, false, err
 		}
 		if j == i {
 			continue
@@ -1588,8 +1620,11 @@ func (e *heldEmbedding) facetFailuresAfter(i int, done []bool, earlier []int) ([
 			continue
 		}
 		bad = append(bad, j)
+		if firstOnly {
+			return bad, false, true, nil
+		}
 	}
-	return bad, false, nil
+	return bad, false, len(bad) > 0, nil
 }
 
 // vertexFailures counts the failing pairs that involve a facet incident to v,

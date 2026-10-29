@@ -323,11 +323,11 @@ func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[i
 	for i, v := range verts {
 		h.Exact[i] = proof.XptOf(v)
 	}
-	folds, err := meshbool.HeldFolds(ctx, h)
+	folded, err := meshbool.HasHeldFold(ctx, h)
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	if len(folds) > 0 {
+	if folded {
 		return nil, nil, 0, errShiftDeclined
 	}
 
