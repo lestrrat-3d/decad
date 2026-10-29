@@ -808,6 +808,7 @@ func BuildChain(ctx context.Context, env topo.Env, rp ChainPayload, work *freefo
 	if len(rp.Chains) == 0 {
 		return nil, fmt.Errorf(`%w: a chain-revolve payload holds no walk`, decaderr.ErrDegenerate)
 	}
+	rp.freeEnds = nil
 	rev := rp.Revolve()
 	sweep := rev.Sweep()
 	if sweep.Value <= 0 {
@@ -845,9 +846,20 @@ func BuildChain(ctx context.Context, env topo.Env, rp ChainPayload, work *freefo
 		if err := revolveaxis.RequireChainAxisIncidence(resolved); err != nil {
 			return nil, err
 		}
-		faces, walkArea, err := buildChainRevolveWalls(ctx, env.Alloc, body, ref, view, ci, b, resolved, frame)
+		var ends chainBuiltEnds
+		faces, walkArea, err := buildChainRevolveWalls(ctx, env.Alloc, body, ref, view, ci, b, resolved, frame, &ends)
 		if err != nil {
 			return nil, err
+		}
+		first, last := resolved.Walks[0].Segs, resolved.Walks[len(resolved.Walks)-1].Segs
+		if len(first) == 0 || len(last) == 0 || first[0] != 0 || last[len(last)-1] != len(rp.Chains[ci].Segments)-1 {
+			return nil, fmt.Errorf(`%w: inconsistent chain endpoint record`, decaderr.ErrUnsupported)
+		}
+		if ends.start != nil {
+			rp.freeEnds = append(rp.freeEnds, chainFreeEnd{ends.start, ci, first[0], true})
+		}
+		if ends.end != nil {
+			rp.freeEnds = append(rp.freeEnds, chainFreeEnd{ends.end, ci, last[len(last)-1], false})
 		}
 		allFaces = append(allFaces, faces...)
 		area = proofbound.BoundedAdd(area, walkArea)
@@ -870,6 +882,9 @@ func BuildChain(ctx context.Context, env topo.Env, rp ChainPayload, work *freefo
 	if err := topobuild.ValidateAnalyticMeasurements(body); err != nil {
 		return nil, err
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	body.Payload = rp
 	return body, nil
 }
@@ -886,7 +901,7 @@ func BuildChain(ctx context.Context, env topo.Env, rp ChainPayload, work *freefo
 // attached to a cap face here — a chain mints none — so it stays free
 // regardless of position (agent-docs/surface-design.md §13.4). It returns the
 // faces and the walk's own total wall area, folded through proofbound.BoundedAdd.
-func buildChainRevolveWalls(ctx context.Context, alloc topo.Alloc, body *topo.Body, ref provenance.Producer, rp Payload, loopIdx int, b revolvemesh.RevolveBasis, resolved revolveaxis.ResolvedWalks, frame massmoment.MapCharge) ([]*topo.Face, proofbound.BoundedScalar, error) {
+func buildChainRevolveWalls(ctx context.Context, alloc topo.Alloc, body *topo.Body, ref provenance.Producer, rp Payload, loopIdx int, b revolvemesh.RevolveBasis, resolved revolveaxis.ResolvedWalks, frame massmoment.MapCharge, ends *chainBuiltEnds) ([]*topo.Face, proofbound.BoundedScalar, error) {
 	walks, kinds := resolved.Walks, resolved.Kinds
 	n := len(walks)
 	sweep := rp.Sweep()
@@ -982,6 +997,11 @@ func buildChainRevolveWalls(ctx context.Context, alloc topo.Alloc, body *topo.Bo
 		js[i] = j
 	}
 
+	if rp.Full {
+		ends.start, ends.end = js[0].lat, js[n].lat
+	} else {
+		ends.start, ends.end = js[0].arc, js[n].arc
+	}
 	faces := make([]*topo.Face, 0, n)
 	total := proofbound.BoundedScalar{}
 	for i, w := range walks {

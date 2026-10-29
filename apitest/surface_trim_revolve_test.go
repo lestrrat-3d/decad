@@ -366,6 +366,57 @@ func TestSurfaceExtendRevolveRibbonToNearestCut(t *testing.T) {
 		area.Value.Base(), area.Bound.Base(), box.Min.Y, box.Max.Y, box.Bound.Base())
 }
 
+func TestSurfaceExtendRevolvePartialNearestCut(t *testing.T) {
+	doc := decad.New()
+	ribbon := extendRevolveRibbon(t, doc, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	before, err := ribbon.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 60*math.Pi, before.Value.Base(), 1e-9)
+	arcs, err := decad.Edges(decad.Free(), decad.Circular()).Exactly(2).SelectEdges(ribbon)
+	require.NoError(t, err)
+	var moved *decad.Edge
+	var untouched *decad.Edge
+	for _, arc := range arcs {
+		if math.Abs(arc.Start().Position().Value.Y-40) < 1e-9 {
+			moved = arc
+		} else {
+			untouched = arc
+		}
+	}
+	require.NotNil(t, moved)
+	require.NotNil(t, untouched)
+	start, end := untouched.Start().Position().Value, untouched.End().Position().Value
+	query := decad.Edges(decad.Free(), decad.Circular(), decad.EndpointAt(moved.Start().Position().Value)).Exactly(1)
+	tool := trimRevolvePartial(t, doc, 2, 60, 8, 80, 90, false)
+	result, err := decad.Extend(t.Context(), ribbon, query, tool)
+	require.NoError(t, err)
+	area, err := result.Area()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(area.Value.Base()-90*math.Pi), area.Bound.Base())
+	box, err := result.Bounds()
+	require.NoError(t, err)
+	require.InDelta(t, 0, box.Min.Y, box.Bound.Base())
+	require.InDelta(t, 60, box.Max.Y, box.Bound.Base())
+	_, err = decad.Edges(decad.Free()).Exactly(4).SelectEdges(result)
+	require.NoError(t, err)
+	after, err := decad.Edges(decad.Free(), decad.Circular()).Exactly(2).SelectEdges(result)
+	require.NoError(t, err)
+	for _, arc := range after {
+		a, b := arc.Start().Position().Value, arc.End().Position().Value
+		if math.Abs(a.Y) < 1e-9 {
+			require.Equal(t, start, a)
+			require.Equal(t, end, b)
+		} else {
+			require.InDelta(t, 60, a.Y, box.Bound.Base())
+			require.InDelta(t, 60, b.Y, box.Bound.Base())
+			require.InDelta(t, start.X, a.X, 1e-9)
+			require.InDelta(t, start.Z, a.Z, 1e-9)
+			require.InDelta(t, end.X, b.X, 1e-9)
+			require.InDelta(t, end.Z, b.Z, 1e-9)
+		}
+	}
+}
+
 // TestSurfaceExtendRevolveRefusalsNameTheirOwnGate is T183's refusal half:
 // four revolve pairs Extend declines, each read by MESSAGE TEXT so the refusal
 // is pinned to its own gate rather than only to the sentinel they share.
@@ -387,15 +438,37 @@ func TestSurfaceExtendRevolveRefusalsNameTheirOwnGate(t *testing.T) {
 		require.Equal(t, before, doc.Bodies())
 	})
 
-	t.Run("a partial revolution refuses by name", func(t *testing.T) {
+	t.Run("partial cap edge and mixed selection refuse", func(t *testing.T) {
 		doc := decad.New()
-		ribbon := extendRevolveRibbon(t, doc,
-			decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+		ribbon := extendRevolveRibbon(t, doc, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 		tool := trimRevolvePartial(t, doc, 2, 60, 8, 80, 90, false)
-		_, err := decad.Extend(t.Context(), ribbon, decad.Edges(decad.Free()), tool)
+		edges, err := decad.Edges(decad.Free()).Exactly(4).SelectEdges(ribbon)
+		require.NoError(t, err)
+		var capEdge *decad.Edge
+		for _, edge := range edges {
+			if math.Abs(edge.Start().Position().Value.Y-edge.End().Position().Value.Y) > 1 {
+				capEdge = edge
+				break
+			}
+		}
+		require.NotNil(t, capEdge)
+		query := decad.Edges(decad.Free(), decad.EndpointAt(capEdge.Start().Position().Value),
+			decad.EndpointAt(capEdge.End().Position().Value)).Exactly(1)
+		before := doc.Bodies()
+		_, err = decad.Extend(t.Context(), ribbon, query, tool)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "admits a full revolution alone")
-		require.Len(t, doc.Bodies(), 2)
+		after := doc.Bodies()
+		require.Len(t, after, len(before))
+		for i := range before {
+			require.True(t, before[i] == after[i], "body %d changed", i)
+		}
+		_, err = decad.Extend(t.Context(), ribbon, decad.Edges(decad.Free()), tool)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		after = doc.Bodies()
+		require.Len(t, after, len(before))
+		for i := range before {
+			require.True(t, before[i] == after[i], "body %d changed", i)
+		}
 	})
 
 	t.Run("S4 refuses a parallel axis two millimetres away", func(t *testing.T) {

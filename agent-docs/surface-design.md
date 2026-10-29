@@ -78,7 +78,7 @@ one is queued.
 | Command | What builds | What is still staged |
 |---|---|---|
 | `Thicken` | §16.1's admitted sheet families build | Holed or placed composite sweeps, chain sweeps outside §16.8's classes, loft, stitched, `PatchEdges` and `Unstitch` sheets refuse under R24; §16.8 names their missing proofs |
-| `Trim`, `Extend` | `Trim` over a receiver whose section is one closed loop and `Extend` over a chain ribbon, in the prism family and the revolve family alike (`agent-docs/surface-intersection-design.md` §2.2) | `Extend` over a PARTIALLY revolved ribbon, RS14. A partial revolution gathers the wall's swept free edge into one loop with its two cap edges, and no recorded fact separates them; lifting it is a recorded free-end map from the chain-revolve build, not a bound and not a gate (that document's §2.2). That document's §4 states every other shape outside the admitted class, and `agent-docs/api-design.md` §2.1's reasoning is what keeps a pair sharing no generator refused |
+| `Trim`, `Extend` | `Trim` over a receiver whose section is one closed loop and `Extend` over a chain ribbon, in the prism family and the revolve family alike (`agent-docs/surface-intersection-design.md` §2.2) | That document's §4 states shapes outside the admitted class, and `agent-docs/api-design.md` §2.1 explains the refusal of a pair sharing no generator |
 | `Split` | the prism family and the revolve family alike: one solid target, a sheet tool, and one solid body per arranged piece out (`agent-docs/surface-intersection-design.md` §8). A revolve piece charges its cut ends through that document's §7.2 | nothing is staged. That document's §4 states every shape outside the admitted class |
 | `Sweep` over a chain | one straight span, one arc through the chain Revolve gates, or a §15.8 composite of tangent lines and exact coordinate-axis quarter and half turns that starts with a line, over a line-only source walk | Other composite paths refuse R34. Only §15.8's radial line/half-circle composite has a sheet mesh. A single-arc sheet from more than one straight off-axis source segment has no mesh. `agent-docs/sweep-design.md` §15 states the reductions. Table D row 13 |
 | `LoftChain` | a `LineSeg`-only correspondence between two exactly-parallel walks whose to-plane origin lies strictly on the from-plane's positive side (`agent-docs/loft-design.md` §16.6's PR L1) | a curved correspondence, R36, until §5.1's station generator there states each COMPUTED station's own side against the from-plane (that document's §16.2, §16.6's PR L2). A non-parallel plane pair refuses at R35, which §7 reads as a reach boundary rather than a queued build: the ribbon between two non-parallel open walks exists, and what this evaluator lacks is a stated positive side for it |
@@ -1602,7 +1602,6 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R28 | `Thicken` on a retired receiver | `ErrRetiredBody` |
 | R29 | `Trim`, `Extend` or `Split` handed a pair `agent-docs/surface-intersection-design.md` §2's entry gate refuses, or a resolution its §6 cannot complete | as that table states: `ErrUnsupported` / `ErrUnrecordableProfile` |
 | R30 | `Trim` whose tool separates no fragment of the receiver, or `Split` whose tool separates no part of the target | `ErrDegenerate` |
-| R31 | `Extend` handed a partially revolved ribbon — the arm §1.2 still stages, stated in full as `agent-docs/surface-intersection-design.md` §6's RS14 | `ErrUnsupported` |
 | R32 | a curved stitched mesh lacks §10.1's one-source route or §10.2's proven sibling-weld route, has an unsupported surface kind, or has a non-identity stitch placement | `ErrUnsupported`, naming a source surface kind |
 | R33 | `Revolve` over a chain with an interior on-axis junction lacking one swept-wall end and one axis-line end, or with repeated on-axis junctions at one axial coordinate | `ErrDegenerate` |
 | R37 | `Offset` on a live body other than §17.1's admitted `patchPayload` or profile-fed `prismPayload` sheet — a solid, a sheet with no evaluator payload, or a prism sheet whose section is outside §17.1's admitted shapes | `ErrUnsupported` |
@@ -1633,12 +1632,10 @@ authentication, a range this seam cannot record exactly — and the caller's
 repair for each is identical whether a profile or a chain carried it, so a
 parallel set would double the branches a caller writes while every branch's
 move stayed the same (§12 widens each sentinel's stated cause to name both).
-R29 and R31 are `ErrUnsupported` on the same distinction, and R30 joins
-R5, R7 and R9 as `ErrDegenerate`: a tool that separates nothing names no
-trimmed body for any later evaluator to build. R31 is STAGED — a recorded
-free-end map from the chain-revolve build lifts RS14
-(`agent-docs/surface-intersection-design.md` §2.2) — while R29 carries that
-document's §4 set, whose pair-sharing-no-generator row is permanent.
+R29 is `ErrUnsupported`; its pair-sharing-no-generator case is permanent
+(`agent-docs/surface-intersection-design.md` §4). R30 joins R5, R7 and R9 as
+`ErrDegenerate` when a tool separates nothing.
+
 
 R22, R34, R36 and R45 are `ErrUnsupported` and STAGED: each names real
 geometry, and each waits on a topology build rather than on a different

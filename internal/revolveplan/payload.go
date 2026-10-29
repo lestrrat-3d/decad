@@ -454,6 +454,7 @@ func (rp Payload) Sweep() proofbound.BoundedScalar {
 // §3.4 is what first builds more than one, one lump per surviving walk, and
 // sets SectionDelta beside them.
 type ChainPayload struct {
+	freeEnds   []chainFreeEnd
 	Chains     []sectionrecord.ChainRecord
 	Frame      r3.Frame
 	Ax         revolveaxis.Frame
