@@ -114,6 +114,10 @@ func sortRowByBitmap(row []int32, words int) []int32 {
 	if len(row) < 2 {
 		return row
 	}
+	if len(row) <= 64 {
+		slices.Sort(row)
+		return row
+	}
 	lo, hi := row[0], row[0]
 	for _, j := range row {
 		lo, hi = min(lo, j), max(hi, j)
