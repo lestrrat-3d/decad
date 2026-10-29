@@ -116,7 +116,7 @@ func setbackPoint(base, d r3.Vec, g plane) r3.Vec {
 // rewritten mesh.
 func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload, l line, spec blendSpec,
 	role string, ord int, faceIndex map[*topo.Face]int) (*topo.Body, error) {
-	w := newWork(fp, rim{scale: l.scale}, spec)
+	w := newWork(fp, rim{scale: l.scale, charge: l.charge}, spec)
 	slack := l.slack()
 	margin := w.tau + slack
 

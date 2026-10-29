@@ -467,6 +467,15 @@ of that computation.
 | **SR6** | the held mesh disagrees with the exact vertex of its three tags by more than the vertex bound plus slack (§6.3) | the record and the mesh do not describe one solid | `ErrUnsupported` |
 | **SR7** | a facet the rewrite keeps outside the new strip meets a strip facet it shares no vertex with (the strip clearance of retained-modify-reach §5.6, run before the build), or the rewritten mesh fails the held audit (watertight, shells nested with consistent signs; the audit tests no facet pair for intersection) | the result is invalid | `ErrDegenerate` when the audit proves a face inside out (modify S8), else `ErrUnsupported` |
 
+**Displaced planes.** A retained `Plane` tag may state `AxialDelta` δ, the
+proven distance of the true plane from the tag along its normal. A route never
+reads the tag as exact past δ. Each reader adds `4δ/minSine` per plane it reads
+(`planeCharge`) to its slack, which the vertex-agreement test of SR6 and the
+bounds of §6.3 both carry. A tangent chain charges every plane of the held
+body. A negative or non-finite δ makes the face no retained plane, so the edge
+is outside Table RR (SR1). The charge widens the published bound or the route
+refuses; no residual admits a displaced plane.
+
 Gate order: base gates of modify §4 stage 1, then SR1, SR2, SR3, SR6, SR5, SR4,
 then the construction, then SR7.
 

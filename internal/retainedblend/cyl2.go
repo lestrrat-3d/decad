@@ -36,9 +36,11 @@ type cylCyl struct {
 	ends       [2]lineEnd
 	edgeConvex bool
 	scale      float64
+	// charge is the plane displacement the end planes add to slack.
+	charge float64
 }
 
-func (c cylCyl) slack() float64 { return 64 * ulp * c.scale }
+func (c cylCyl) slack() float64 { return chargedSlack(c.scale, c.charge) }
 
 func (c cylCyl) key() lineKey { return lineKey{c.ends[0].exact, c.ends[1].exact} }
 
@@ -125,6 +127,7 @@ func (c *cylCyl) readEnd(vertex *topo.Vertex, fp facetedrecord.Payload, faceInde
 		return lineEnd{}, fmt.Errorf("%w: an edge end meets a face that is not normal to the axes", decaderr.ErrUnsupported)
 	}
 	end.g = g
+	c.charge = addCharge(c.charge, g)
 	// The corner lies in the end plane, where the two circles the cylinders cut
 	// there meet.
 	o1, o2 := c.wall[0].axisPoint(c.axis, g.o), c.wall[1].axisPoint(c.axis, g.o)

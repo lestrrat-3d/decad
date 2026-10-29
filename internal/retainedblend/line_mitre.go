@@ -219,8 +219,12 @@ func rewriteMitreRun(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 		return nil, fmt.Errorf("%w: a mitred run is filleted, not chamfered", decaderr.ErrUnsupported)
 	}
 	scale := run.edges[0].l.scale
-	w := newWork(fp, rim{scale: scale}, spec)
-	slack := run.edges[0].l.slack()
+	charge := 0.0
+	for _, e := range run.edges {
+		charge = max(charge, e.l.charge)
+	}
+	w := newWork(fp, rim{scale: scale, charge: charge}, spec)
+	slack := chargedSlack(scale, charge)
 	margin := w.tau + slack
 	n := len(run.edges)
 

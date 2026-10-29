@@ -63,6 +63,27 @@ func TestRetainedEdgeCurvePlanePlane(t *testing.T) {
 	require.False(t, ok, "parallel planes meet nowhere")
 }
 
+func TestRetainedEdgeCurveChargesPlaneAxialDelta(t *testing.T) {
+	t.Parallel()
+	wall := retained(planeAt(t, r3.Vec{}, r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)))
+	chain := []r3.Vec{r3.NewVec(0, 0, 1e-8), r3.NewVec(0, 3, 1e-8), r3.NewVec(0, 7, 1e-8)}
+	bounds := []float64{1e-9, 1e-9, 1e-9}
+	floor := func(delta float64) *topo.Face {
+		f := retained(planeAt(t, r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)))
+		f.HasAxialDelta, f.AxialDelta = true, delta
+		return f
+	}
+
+	_, ok := facetedrecord.RetainedEdgeCurve(floor(0), wall, chain, bounds, false)
+	require.False(t, ok, "a rim 1e-8 off an exact floor, bound 1e-9, is falsified")
+	_, ok = facetedrecord.RetainedEdgeCurve(floor(1e-8), wall, chain, bounds, false)
+	require.True(t, ok, "a floor stated to lie 1e-8 off its tag charges that into the falsifier")
+	for _, bad := range []float64{-1, math.Inf(1), math.NaN()} {
+		_, ok = facetedrecord.RetainedEdgeCurve(floor(bad), wall, chain, bounds, false)
+		require.False(t, ok, "a displacement no bound can cover declines the rim: %v", bad)
+	}
+}
+
 func TestRetainedEdgeCurvePlaneCylinder(t *testing.T) {
 	t.Parallel()
 	floor := retained(planeAt(t, r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)))

@@ -497,6 +497,13 @@ does not lengthen distances, so `|x − y_T| ≤ β`. The distance to `P` is aff
 on `T` with slope `sin φ`, and `dist(y_T, P) ≤ |y_T − y| ≤ h`. So
 `dist(x, P) ≤ h + β·sin φ`. ∎
 
+**Displaced plane.** A retained `Plane` that states `AxialDelta` δ (a source
+whose level does not convert exactly) may lie δ off its tag along the normal.
+Then `|x_T − y| ≤ β + δ` for the foot `x_T` of the true point on `T`, and the
+true piece lies within `h + β·sin φ + 2δ` of `P`.
+`meshbool.BoolMesh.SetChargedSlabBounds` adds `2δ`; a negative or non-finite δ
+applies no slab, so `FacetBound` stays in force.
+
 `h` and `sin φ` are computed in exact rational arithmetic from the held
 floats and the tag's frame, and rounded up (`meshbool.SetSlabBounds`). The
 slab bound is `min(β, h + β·sin φ)`. In-plane displacement of the facet's

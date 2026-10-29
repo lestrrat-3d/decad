@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -75,8 +76,19 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 	for _, v := range fp.Verts {
 		scale = max(scale, math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
 	}
-	w := newWork(fp, rim{scale: scale}, spec)
-	slack := 64 * ulp * scale
+	// The chain reads its base, walls and end faces, whose planes are not all
+	// known yet: every plane of the held body is charged, which only widens the
+	// slack.
+	charge := 0.0
+	for f := range faceIndex {
+		if d, ok := faceDelta(f); !ok {
+			return nil, fmt.Errorf("%w: a face states no usable plane displacement", decaderr.ErrUnsupported)
+		} else if _, plane := f.Surface.(surfacegeom.Plane); plane {
+			charge = proofbound.AbsSumUpper(charge, proofbound.ProductUpper(planeAmp, d))
+		}
+	}
+	w := newWork(fp, rim{scale: scale, charge: charge}, spec)
+	slack := chargedSlack(scale, charge)
 	margin := w.tau + slack
 
 	// The base: the one face every chain edge borders.

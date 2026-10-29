@@ -110,6 +110,7 @@ func (a *arcRim) readEnd(vertex *topo.Vertex, fp facetedrecord.Payload, faceInde
 		return lineEnd{}, fmt.Errorf("%w: an arc end meets a face that is not parallel to the axis", decaderr.ErrUnsupported)
 	}
 	end.g = g
+	a.charge = addCharge(a.charge, g)
 	held := fp.Verts[end.v]
 	roots, ok := a.ringAzimuths(a.radius, g, a.sign*a.angle(held))
 	if !ok {

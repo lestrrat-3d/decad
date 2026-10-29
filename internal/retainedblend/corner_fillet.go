@@ -136,11 +136,15 @@ func rewriteCorners(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	}
 	r := spec.r
 	scale := plan.lines[0].scale
-	w := newWork(fp, rim{scale: scale}, spec)
+	charge := 0.0
+	for _, l := range plan.lines {
+		charge = max(charge, l.charge)
+	}
+	w := newWork(fp, rim{scale: scale, charge: charge}, spec)
 	// A sphere patch and many strips add their chord deficits to one area reading; an eighth of the chord tolerance
 	// keeps the sum inside what Verify accepts for a box with every edge rounded.
 	w.tau /= 8
-	slack := plan.lines[0].slack()
+	slack := chargedSlack(scale, charge)
 	margin := w.tau + slack
 	for _, l := range plan.lines {
 		if l.ends[1].exact.Sub(l.ends[0].exact).Len() <= 2*r+8*margin {

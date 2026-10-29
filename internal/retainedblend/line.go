@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/stitchflux"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -20,7 +21,47 @@ import (
 const minSine = 1e-3
 
 // plane is an exact plane of a retained tag: outward unit normal n through o.
-type plane struct{ n, o r3.Vec }
+type plane struct {
+	n, o r3.Vec
+	// delta is the proven displacement of the true plane from (n, o) along n
+	// (topo.Face.AxialDelta). A route charges it into its slack through
+	// planeCharge; it never admits a plane by a residual.
+	delta float64
+}
+
+// planeAmp scales a plane's displacement to the displacement of a corner or
+// rim it meets: the three-plane meeting moves by at most 2·delta/det per
+// displaced plane, and readers accept det of at least minSine.
+const planeAmp = 4 / minSine
+
+// planeCharge is the slack a displaced plane adds to a route's allowance.
+func planeCharge(p plane) float64 { return proofbound.ProductUpper(planeAmp, p.delta) }
+
+// chargedSlack is the arithmetic allowance for a value computed from the tags,
+// 64 ulp of scale, widened by a route's accumulated plane charge. With no
+// charge it is exactly the arithmetic allowance.
+func chargedSlack(scale, charge float64) float64 {
+	base := 64 * ulp * scale
+	if charge == 0 {
+		return base
+	}
+	return proofbound.AbsSumUpper(base, charge)
+}
+
+// addCharge widens a route's accumulated plane charge by a further plane's.
+func addCharge(charge float64, p plane) float64 {
+	return proofbound.AbsSumUpper(charge, planeCharge(p))
+}
+
+// faceDelta reads the proven displacement of f's plane tag. It is false when
+// the stated displacement is negative or not finite, which no bound can cover.
+func faceDelta(f *topo.Face) (float64, bool) {
+	if !f.HasAxialDelta {
+		return 0, true
+	}
+	d := f.AxialDelta
+	return d, d >= 0 && !math.IsInf(d, 0)
+}
 
 func (p plane) offset(x r3.Vec) float64 { return p.n.Dot(x.Sub(p.o)) }
 
@@ -43,9 +84,11 @@ type line struct {
 	phi          float64 // angle between the outward normals
 	edgeConvex   bool
 	scale        float64
+	// charge is the plane displacement the tags' planes add to slack.
+	charge float64
 }
 
-func (l line) slack() float64 { return 64 * ulp * l.scale }
+func (l line) slack() float64 { return chargedSlack(l.scale, l.charge) }
 
 // lineKey identifies a straight edge across rewrites by its two corners.
 type lineKey struct{ p0, p1 r3.Vec }
@@ -60,6 +103,10 @@ func retainedPlane(f *topo.Face) (plane, bool) {
 	if !ok {
 		return plane{}, false
 	}
+	delta, ok := faceDelta(f)
+	if !ok {
+		return plane{}, false
+	}
 	n, ok := pl.Frame.N().Normalize()
 	if !ok {
 		return plane{}, false
@@ -67,7 +114,7 @@ func retainedPlane(f *topo.Face) (plane, bool) {
 	if f.Reversed {
 		n = n.Scale(-1)
 	}
-	return plane{n: n, o: pl.Frame.Origin()}, true
+	return plane{n: n, o: pl.Frame.Origin(), delta: delta}, true
 }
 
 // looksLikeLine reports whether edge is a candidate for the straight-edge
@@ -139,6 +186,7 @@ func readLine(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Fac
 	l.faceA, l.faceB = edge.Faces[0], edge.Faces[1]
 	l.a, _ = retainedPlane(l.faceA)
 	l.b, _ = retainedPlane(l.faceB)
+	l.charge = addCharge(planeCharge(l.a), l.b)
 	l.edgeConvex = edge.Convex
 	l.scale = 1
 	for _, v := range fp.Verts {
@@ -181,6 +229,7 @@ func (l *line) readEnd(vertex *topo.Vertex, fp facetedrecord.Payload, faceIndex 
 		return lineEnd{}, fmt.Errorf("%w: an edge end meets a face that is not a retained plane", decaderr.ErrUnsupported)
 	}
 	end.g = g
+	l.charge = addCharge(l.charge, g)
 	exact, ok := intersect3(l.a, l.b, g)
 	if !ok {
 		return lineEnd{}, fmt.Errorf("%w: an edge end meets its end face at a grazing angle", decaderr.ErrUnsupported)

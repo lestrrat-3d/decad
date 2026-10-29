@@ -20,7 +20,7 @@ import (
 // the wall of R3 is; the strip joins the two cuts.
 func rewriteCylCyl(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c cylCyl, spec blendSpec,
 	role string, ord int, faceIndex map[*topo.Face]int) (*topo.Body, error) {
-	w := newWork(fp, rim{scale: c.scale}, spec)
+	w := newWork(fp, rim{scale: c.scale, charge: c.charge}, spec)
 	slack := c.slack()
 	margin := w.tau + slack
 	k0, k1 := c.ends[0].exact, c.ends[1].exact

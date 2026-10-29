@@ -3,6 +3,7 @@ package facetedrecord
 import (
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -20,6 +21,11 @@ const (
 	// centre amplifies the rounding of its inputs by its reciprocal.
 	edgeOblique = 1e-3
 )
+
+// planeRimAmp scales a plane tag's displacement to the displacement of the rim
+// it meets: planes whose normals meet at a sine of at least 1e-3 move their
+// common line by at most 2·delta/sine per plane.
+const planeRimAmp = 4000.0
 
 // RetainedEdgeCurve returns the analytic curve of the rim between two faces
 // whose retained tags meet along it (agent-docs/faceted-source-retention-design.md
@@ -50,6 +56,18 @@ func RetainedEdgeCurve(a, b *topo.Face, chain []r3.Vec, bounds []float64, closed
 		scale = max(scale, math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
 	}
 	slack := 64 * edgeEps * scale
+	// A plane tag may lie off the true plane by its stated AxialDelta, which
+	// moves the published rim by at most planeRimAmp times that. The
+	// displacement widens the falsifier's slack; it never admits by itself.
+	for _, f := range []*topo.Face{a, b} {
+		if _, isPlane := f.Surface.(surfacegeom.Plane); !isPlane || !f.HasAxialDelta {
+			continue
+		}
+		if !(f.AxialDelta >= 0) || math.IsInf(f.AxialDelta, 0) {
+			return nil, false
+		}
+		slack = proofbound.AbsSumUpper(slack, proofbound.ProductUpper(planeRimAmp, f.AxialDelta))
+	}
 	n := plane.Frame.N()
 	o := plane.Frame.Origin()
 	switch s := tb.(type) {
