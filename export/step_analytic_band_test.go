@@ -164,7 +164,7 @@ func bandFile(t *testing.T, body *decad.Body) step.File {
 // admission says and why the writer is still read on that body.
 func armFile(t *testing.T, body *decad.Body) step.File {
 	t.Helper()
-	f, err := assembleSTEPFile(t.Context(), body, bandHeader(), true, nil, nil, nil, nil)
+	f, err := assembleSTEPFile(t.Context(), body, bandHeader(), true, nil, nil, nil, nil, nil)
 	require.NoError(t, err)
 	data, err := f.Marshal()
 	require.NoError(t, err)

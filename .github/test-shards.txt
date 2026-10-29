@@ -278,3 +278,5 @@
 10	0.06	TestShellWindingRefusesAnInsideOutCavity
 10	0.26	TestTopologyHandlesAreBorn
 10	1.35	TestTwistLocalAreaRealArcCell
+10	0.00	TestClosedSphereCoverage
+10	0.00	TestClosedRingCoverage

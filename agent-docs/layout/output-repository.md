@@ -34,6 +34,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/meshslice/` | Cuts a triangle mesh with a plane and chains the cut into closed outlines by the mesh edges it crosses. See section-outline design. |
 | `internal/outlineclear/` | Least distance between the material regions of two sets of closed plane polylines: bounding-box trees, crossing and containment tests. See section-outline design §5. |
 | `internal/drawing/` | Feature-edge projection of a mesh with depth-buffer hidden-line runs, and the even-odd hatch of a section, for `export.DXF` and `export.DXFSection`; plain millimetre data. See dxf-export design. |
+| `internal/closedstep/` | Bridges authenticated complete-surface data to the STEP writer. |
 | `internal/facedeparture/` | The hook through which `export`'s STEP writer reads whether a face's tag is not proven to be its surface: a stated bound, or a revolve record the tag is not exactly. See step-export design. |
 | `internal/raster/` | Orthographic flat-shaded triangle rasterizer, projection and depth buffer, for `export.PNG` and `export.DXF`; plain millimetre data. See png-export design. |
 | `linkage/` | The generic linkage model, its loop and drive solver, and the linkage and joint-box checks over the motion engine. `decad` aliases it. See `agent-docs/linkage-check-design.md`. |
@@ -48,6 +49,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `dynamics/` | Rigid-body worlds and their scheduled step. See `agent-docs/multibody-dynamics-design.md`. |
 | `apitest/` | Tests of the exported API alone. See `apitest/doc.go`. |
 | `decadtest/` | The public test kit. See `decadtest/doc.go`. |
+| `step_closed_surface.go` | Authenticates complete Revolve surfaces for the STEP writer through the internal bridge. |
 | `face_departure.go` | Installs the reader behind `internal/facedeparture`, so the STEP writer can keep a face whose tag departs from its surface out of its analytic arm. See step-export design. |
 | `payload_class.go` | Installs the reader behind `decadtest.PayloadClass`, so tests can tell a mesh Boolean result from an analytic one. See faceted-source-retention §10. |
 | `_gallery/` | Nested module for README images, landing and linkage clips, dynamics scenes; excludes SolidLens. See `main.go`. |
