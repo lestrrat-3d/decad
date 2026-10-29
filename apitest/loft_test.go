@@ -807,6 +807,52 @@ func TestLoftHelicalToothClearsDefaultTolerance(t *testing.T) {
 	require.True(t, report.Passed(), "the m1 z17 tooth loft must be trustworthy: %v", report.Diagnostics)
 }
 
+// TestLoftArcWedgeVerifiesSound lofts the reference arc wedge (two radial
+// lines and a radius-5 quarter arc, 10 mm tall) at the shipped chord target
+// (agent-docs/loft-gear-bounds-design.md §5). Verify reads it Sound; Volume,
+// Area and Centroid each enclose the closed-form wedge; and Volume and Area
+// clear the default 1e-3 relative tolerance by more than a factor of 2.
+func TestLoftArcWedgeVerifiesSound(t *testing.T) {
+	t.Parallel()
+	const radius, height, tolerance = loftWedgeRadius, 10.0, 1e-3
+	w, base, top := loftWedgePlanes(t, height)
+	s0, p0 := loftWedgeSketch(t, w, base)
+	s1, p1 := loftWedgeSketch(t, w, top)
+	doc := decad.New()
+	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status, "diagnostics: %+v", report.Diagnostics)
+
+	quarter := math.Pi * radius * radius / 4
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-quarter*height), volume.Bound.Base())
+	area, err := body.Area()
+	require.NoError(t, err)
+	wantArea := 2*quarter + 2*radius*height + math.Pi*radius/2*height
+	require.LessOrEqual(t, math.Abs(area.Value.Base()-wantArea), area.Bound.Base())
+	centroid, err := body.Centroid()
+	require.NoError(t, err)
+	offset := 4 * radius / (3 * math.Pi)
+	wantCentroid := r3.NewVec(offset, offset, height/2)
+	require.LessOrEqual(t, centroid.Value.Sub(wantCentroid).Len(), centroid.Bound.Base())
+
+	for _, reading := range []struct {
+		name         string
+		bound, value float64
+	}{
+		{"Volume", volume.Bound.Base(), volume.Value.Base()},
+		{"Area", area.Bound.Base(), area.Value.Base()},
+	} {
+		margin := tolerance / (reading.bound / reading.value)
+		t.Logf("%s margin over the default tolerance: %.3gx", reading.name, margin)
+		require.Greater(t, margin, 2.0, "%s must clear the default tolerance by more than 2x", reading.name)
+	}
+}
+
 // TestLoftHugeCircleRefusesNonFiniteVolume lofts a radius-1e103 circle over
 // a height of 1e103. Its volume overflows float64, so the build must refuse
 // with ErrNotFinite. The centroid's clearance is computed first, from an

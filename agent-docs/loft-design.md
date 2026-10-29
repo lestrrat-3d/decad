@@ -1961,9 +1961,8 @@ of an open-patch by-parts split remains, and none is charged.
 **No leg may be dropped for another's incidental slack.** Omitting the twist
 correction understates a twisted pairing's true gap
 (`TestCellTwistMomentsMatchRefinedBilinearSurface`); omitting the vertex sweep
-understates a placed loft (`TestLoftPlacedVolumeNeedsTheVertexSweep`);
-omitting the wall leg understates every chorded ring
-(`TestLoftVolumeBoundEnclosesRefinedRing`).
+understates a placed loft; omitting the wall leg understates a chorded wall
+(`TestChordedWallLegIsLoadBearing`).
 
 **`Centroid` reads no residual leg as a moment.** It applies the exact twist
 correction, then spends the measure legs alone in its shift form; §8's
@@ -2277,13 +2276,11 @@ against this budget.
   `TestCellTwistMomentsMatchRefinedBilinearSurface` compares the exact volume
   and first-moment corrections with an independently refined surface, and
   `TestCellBilinearAreaEnclosesDirectIntegral` checks the area enclosure.
-  The residual legs are tested over the production path:
+  The residual legs are tested over `ComputeLoftChordedAllow` and
+  `MassAccumulator` on hand-built wall cells:
   `TestLoftVolumeResidualIsPerCellWallLegPlusSkirt` pins `Volume`'s composition
   and the per-cell wall leg against the build-wide form;
-  `TestLoftVolumeBoundEnclosesRefinedRing` asserts the exact ring volume
-  inside the bound from 4 to 64 cells per arc, twisted and untwisted;
-  `TestLoftPlacedVolumeNeedsTheVertexSweep` holds a placed build the bound
-  encloses only with the vertex sweep; `TestLoftAreaCapTubeIsPerCell` pins the
+  `TestLoftAreaCapTubeIsPerCell` pins the
   cap tube; `TestChordedWallAndTwistLegsEncloseTheMeasuredGap`,
   `TestChordedTwistLegIsLoadBearing` and `TestChordedWallLegIsLoadBearing`
   sweep the held-triangle form tessellation spends; and
@@ -2521,8 +2518,7 @@ The joint walk-up settles at `m = 75`: the certified sagitta first meets the
 target there, and at `m = 74` both the certified and the exact sagitta are
 still over it. `Verify` at the default `1e-3` tolerance reads `Sound` with
 `Volume` binding at about 9.1x
-(`loft_chord_calibration_internal_test.go`'s `loftChordFractionPinM`,
-`TestLoftArcWedgeVerifiesSound`). The matching fit-spline wedge, chorded by
+(`TestLoftArcWedgeVerifiesSound`). The matching fit-spline wedge, chorded by
 §5.1's free-form arm with its matched-departure bisection, takes 120 cells
 and reads `Sound` with `Volume` binding at about 14.3x
 (`TestLoftFitSplineWedgeVerifiesSound`).

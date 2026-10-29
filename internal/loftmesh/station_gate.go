@@ -98,10 +98,9 @@ func StationCapGate(p0, p1 momentinput.Profile, recordArea [2]float64, offsets [
 //
 // 2.5e-4 is the finest value whose full z = 40 gear build that design measured
 // keeps its audit near 5 s; the coarser 5e-4 still reads Sound on every gear
-// case the design measured but leaves Area a 1.5x margin at z = 8. The
-// reference arc wedge settles at the count wedgePinStations pins
-// (loft_chord_calibration_internal_test.go), which re-derives it from the
-// generator at every run.
+// case the design measured but leaves Area a 1.5x margin at z = 8.
+// TestLoftArcWedgeVerifiesSound (apitest) reads the reference arc wedge Sound
+// at this constant.
 //
 // It is NOT a caller option: a loft's chording is topology, and nothing is
 // added to the public API for it (agent-docs/loft-design.md §5.1).

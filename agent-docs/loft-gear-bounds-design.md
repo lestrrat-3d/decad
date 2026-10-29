@@ -284,8 +284,8 @@ walk, 1)`: the exact `circularLengthInterval` bracket for an arc, the walk's own
 `LengthUpper` otherwise. A target decides the vertex set. For a record of `LineSeg`
 and polynomial Tier A segments with recorded control points, both inputs are
 exact-rational computations rounded once, so the same record gives the same target
-on every platform; `TestLoftChordTargetReadsFeatureSize` pins one such record's
-target bits, and CI reads them on amd64 and arm64. A circular segment's area
+on every platform; `TestLoftChordTargetReadsFeatureSize` checks one such record's
+target against `fraction · A/P`. A circular segment's area
 contribution is a float trig expression (`internal/momentregion`'s `AddCircular`),
 and a `FitSplineSeg`'s spans come from sketch's float interpolation solve, so a
 record holding either can read a target whose last bits differ between platforms.
@@ -470,9 +470,7 @@ arrangement and for a chord count that scales with a curve's size rather than
 `Loft` build time with every increment in place, measured on an AMD Ryzen 9
 7900X3D: tooth cases 0.25–0.34 s; z8 1.4 s; z20 2.4 s; z40 4.2 s; and the same gear at
 z = 69, the largest the reconstruction ceiling admits, 8.5 s. Under `-race` the tooth
-cases take 1.1–1.7 s, z8 8.8 s, z20 16.0 s and z40 33.0 s, so the race shards carry the
-three tooth cases and the z8 outline; z20 and z40 skip under `testing.Short()` and
-under the race detector (§8), and run unsharded on the non-race CI legs.
+cases take 1.1–1.7 s, z8 8.8 s, z20 16.0 s and z40 33.0 s.
 
 Each ceiling still refuses an adversarial record in bounded time. One free-form pair
 among 256 paired segments, handed a chord target no station allowance can meet,
@@ -486,32 +484,34 @@ and the z = 70 gear refuses there in 2.1 s, its `sectioncert.RecordProfile` incl
 
 Each bound test deletes its leg or gate and records the red run in the test
 (`decad-fixtures-must-be-shown-to-fail`). No bound literal is pinned; margins are
-asserted as ratios against the tolerance.
+asserted as ratios against the tolerance. Each test names its package. A row whose
+test is "none" states an assertion no current test makes.
 
 | Test | Asserts | Shown to fail by |
 |---|---|---|
-| `TestLoftVolumeResidualIsPerCellWallLegPlusSkirt` | on an oval whose two arcs have radii 3 and 5, `Volume.Bound` equals the rounding, the vertex sweep, the per-cell sum and the skirt composed in order; the skirt is exactly 0 at `delta == 0` (one chord per arc) and positive on the placed copy | dropping the skirt on the placed copy; charging the build-wide maximum instead of the per-cell sum (bound rises) |
-| `TestLoftVolumeBoundEnclosesRefinedRing` | the exact ring volume lies inside `[Value − Bound, Value + Bound]` at station counts from 4 to 64 per quarter arc, twisted and untwisted | deleting the wall leg |
-| `TestLoftPlacedVolumeNeedsTheVertexSweep` | a placed thin slab with one tiny chorded arc: the exact volume lies inside `Volume`'s bound and outside the bound without `sweptLeg` | deleting `sweptVolumeAllow` from the chorded `Volume` composition |
-| `TestLoftCentroidShiftFormEnclosesTwoArcLobe` | on a section of two circular arcs (no `LineSeg`, so every wall is ruled; a ring cannot show the shift red, its chorded centroid equals the true one by symmetry), untwisted, twisted and placed at three bulge offsets: the exact centroid lies inside `Bound` of the published one; `R_c` reaches every densely sampled true boundary point; the bound is below the old form's on every row | deleting `R_c`'s `max(matchedDelta, delta)` term (6 of 7 rows); deleting the shift (every row) |
-| `TestLoftCentroidToothBoundReadsToothSize` | one tooth at z = 8, 20, 40: `R_c` within the tooth's own diameter; the Centroid ratio below the old form's and below `2.5e-4 · 4` on every row (5.0e-5, 5.0e-5, 6.1e-5 measured) | the anchor-based form, read over §2's volume legs, exceeds `2.5e-4 · 4` at z40 (1.7e-3; 3.1e-4 and 7.3e-4 at z8 and z20) |
-| `TestCentroidClearanceIsExact` | `CentroidClearance` is the largest float at or below the exact `|vol| − volumeAllow` where that allowance sits inside `V_value`'s half-ulp | the rounded-volume form overstates it 1.7x |
-| `TestLoftAreaCapTubeIsPerCell` | `CapAreaExcess` is the per-cell tube; it matches the maximum form to rounding when every cell's departure is equal (a uniform full circle) and is below it on the two-radius oval | charging the maximum form |
-| `TestLoftChordTargetReadsFeatureSize` | the target of a tooth, a gear and a copy of each translated 10 outer radii: `fraction · A/P` to one ulp, translation-invariant; an exact `LineSeg`/`NURBSSeg` record's target bits pinned, read on amd64 and arm64 by CI | reading the envelope rule |
-| `TestLoftFreeformWalkBisectsOnMatched` | on the zigzag span of `TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses` paired with itself, every accepted cell's matched value is at or below the target | bisecting on the sagitta alone |
-| `TestLoftArcWedgeVerifiesSound` (re-pinned) | the §14 wedge's Volume and Centroid margins under the new constant, as ratios | — |
-| `TestLoftSweepEnumeratesEveryTouchingPair` | on the chorded wedge and crossing fixtures, the sweep's candidate set contains every pair the all-pairs reference finds touching, and the refused pair is identical | enumerating from a shifted axis without the full box test |
-| `TestLoftCapProofAgreesWithReference` | every §6 fixture: the structured audit's verdict equals the zero-shortcut reference's | deleting condition (d); deleting (e) |
-| `TestLoftCapProofRefusesOverlappingTriangulation` | a hand-built cap whose triangles double-cover a region (a positively oriented hole) fails (e); a cap with one triangle flipped fails (c); a cap with a vertex lifted off the plane fails (a) and the pair falls back to pairwise testing | — |
-| `TestLoftGearToothVerifiesSound` | one tooth at z = 8, 20 and 40: `Sound`, every ratio below `1e-3`, station count below `stationCap(P)`, and `Volume`, `Centroid` and `Area` each enclosing a dense-sample reference (ruled patches over 512 samples per span or arc, the loft's own triangle pair over each `LineSeg`) | deleting the wall leg from `Volume` |
-| `TestLoftGearOutlineVerifiesSound` | full gears z = 8 (race shards), 20 and 40 (skipped under `testing.Short` and the race detector): the tooth test's assertions | restoring any one of the shipped ceilings; 32 stations per paired segment; deleting the wall leg from `Volume` |
-| `TestLoftStationCapScalesWithPairs` | `stationCap(P)` at `P` = 3, 6, 8, 9, 48, 120, 127, 128, 240, 10_000, and the shared extra-cell budget S15 reads from it | — |
-| `TestLoftStationWalkWorkPerStation` | on every gear case, the counter has `StationWorkLimit(0,P)` before the area falsifier, keeps it through the walk gate, and walks plus stations charge below 8192 per station | — |
-| `TestLoftStationWalkRefusesAtTheRaisedWorkLimit` | a tooth's station walk, left half its cost below the raised ceiling, runs past `1 << 20` and refuses R7 at the raised ceiling | removing the raise |
-| `TestFreeformWorkRaisedLimitBinds` | `RaiseLimit` never lowers the ceiling, charges run to the raised ceiling and refuse one unit past it, and a saturated charge refuses under any ceiling | removing `Step`'s saturation test |
-| `TestLoftAuditCandidateCeilingRefuses` | a build whose candidate count exceeds a lowered test ceiling refuses S8 before any exact test | — |
+| `TestLoftVolumeResidualIsPerCellWallLegPlusSkirt` (`internal/loftmesh`) | on four wall cells with departures 0.1, 0.01, 0.001 and 0 (the last one faceted), at `delta` 0 and 0.01: `WallLeg` is the per-cell sum and below the build-wide maximum form; `SkirtLeg` runs along every seam cell, the faceted one included, and is exactly 0 at `delta == 0` and positive above it; `Volume.Bound` equals the rounding, the vertex sweep, the per-cell sum and the skirt composed in order | dropping the skirt from `VolumeAllow`; charging the build-wide maximum instead of the per-cell sum |
+| none | the exact ring volume lies inside `[Value − Bound, Value + Bound]` at station counts from 4 to 64 per quarter arc, twisted and untwisted; `TestLoftArcWedgeVerifiesSound` checks one untwisted quarter arc at the shipped target only | deleting the wall leg |
+| none | a placed thin slab with one tiny chorded arc: the exact volume lies inside `Volume`'s bound and outside the bound without `sweptLeg`; `TestLoftVolumeResidualIsPerCellWallLegPlusSkirt` checks only that `Volume` adds the sweep at `delta > 0` | deleting `sweptVolumeAllow` from the chorded `Volume` composition |
+| none | on a section of two circular arcs (no `LineSeg`, so every wall is ruled; a ring cannot show the shift red, its chorded centroid equals the true one by symmetry), untwisted, twisted and placed at three bulge offsets: the exact centroid lies inside `Bound` of the published one; `R_c` reaches every densely sampled true boundary point; the bound is below the old form's on every row | deleting `R_c`'s `max(matchedDelta, delta)` term (6 of 7 rows); deleting the shift (every row) |
+| none | one tooth at z = 8, 20, 40: `R_c` within the tooth's own diameter; the Centroid ratio below the old form's and below `2.5e-4 · 4` on every row | the anchor-based form, read over §2's volume legs, exceeds `2.5e-4 · 4` at z40 |
+| `TestCentroidClearanceIsExact` (`internal/loftmesh`) | `CentroidClearance` is the largest float at or below the exact `|vol| − volumeAllow` where that allowance sits inside `V_value`'s half-ulp | the rounded-volume form overstates it 1.7x |
+| `TestLoftAreaCapTubeIsPerCell` (`internal/loftmesh`) | `CapAreaExcess` is the per-cell tube; it matches the maximum form to rounding when every cell's departure is equal and is below it when the departures are 0.1, 0.01, 0.001 and 0.05 | charging the maximum form |
+| `TestLoftChordTargetReadsFeatureSize` (`internal/loftmesh`) | an exact `LineSeg`/`NURBSSeg` record (the region under a parabola, area 16/3) lofted to a copy of itself, and the same record translated 40 mm: the record's own area is 16/3, the perimeter bound encloses the true boundary length and lies within 1e-3 of it, the target is `fraction · A/P` to two ulps and does not change under the translation; a zero area refuses | reading the envelope rule |
+| `TestLoftFreeformWalkBisectsOnMatched` (`internal/loftmesh`) | on the zigzag span of `TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses` (`internal/freeform`) paired with itself, the walk bisects although the sagitta is 0, and every accepted cell's matched value is at or below the target | bisecting on the sagitta alone |
+| `TestLoftArcWedgeVerifiesSound` (`apitest`) | the §14 wedge reads `Sound`; `Volume`, `Area` and `Centroid` enclose the closed-form wedge; `Volume` and `Area` clear the default tolerance by more than 2x | — |
+| `TestLoftSweepEnumeratesEveryTouchingPair` (`internal/loftmesh`) | on a holed square prism, a ring frustum, a crossing pair and a pair touching at one corner: the candidate list is exactly the box-overlap set, in strict lexicographic order, and holds every pair sharing a vertex; the audit's refused pair is the zero-shortcut reference's | dropping the three-axis box test from the sweep |
+| `TestLoftCapProofAgreesWithReference` (`internal/loftmesh`) | on every fixture of `TestLoftCapProofRefusesOverlappingTriangulation`, the structured audit's verdict and refusal text equal the zero-shortcut reference's | deleting condition (d); deleting (e) |
+| `TestLoftCapProofRefusesOverlappingTriangulation` (`internal/loftmesh`) | on a holed square prism, the first cap fails (e) when the hole is covered by its own two triangles as well as the outer square's (a positively oriented hole), (d) with a second copy of one triangle, (c) with one triangle flipped and (a) with a loop vertex lifted off the plane; the second cap's proof still holds, and the failed cap's pairs join the pairwise pass | — |
+| none | one tooth at z = 8, 20 and 40: `Sound`, every ratio below `1e-3`, station count below `stationCap(P)`, and `Volume`, `Centroid` and `Area` each enclosing a dense-sample reference (ruled patches over 512 samples per span or arc, the loft's own triangle pair over each `LineSeg`); `TestLoftHelicalToothClearsDefaultTolerance` (`apitest`) checks only a four-edge arc-and-line tooth: `Sound`, and `Area` within `1e-3` | deleting the wall leg from `Volume` |
+| none | full gears z = 8, 20 and 40: the tooth row's assertions | restoring any one of the shipped ceilings; 32 stations per paired segment; deleting the wall leg from `Volume` |
+| `TestLoftStationCapScalesWithPairs` (`internal/loftmesh`) | `stationCap(P)` at `P` = 3, 6, 8, 9, 48, 120, 127, 128, 240, 10_000, and the shared extra-cell budget S15 reads from it | — |
+| none | on every gear case, the counter has `StationWorkLimit(0,P)` before the area falsifier, keeps it through the walk gate, and walks plus stations charge below 8192 per station | — |
+| `TestLoftStationWalkRefusesAtTheRaisedWorkLimit` (`internal/loftmesh`) | on the parabola record of `TestLoftChordTargetReadsFeatureSize`, a station walk left half its cost below the raised ceiling runs past `1 << 20`, refuses R7 at the raised ceiling and names it | removing the raise |
+| `TestFreeformWorkRaisedLimitBinds` (`internal/freeform`) | `RaiseLimit` never lowers the ceiling, charges run to the raised ceiling and refuse one unit past it, and a saturated charge refuses under any ceiling | removing `Step`'s saturation test |
+| `TestLoftAuditCandidateCeilingRefuses` (`internal/loftmesh`) | the structured audit of the holed square prism refuses S8 at a ceiling one scan unit below its scan count, before any pair test, and admits at the count | removing the scan-count refusal |
 
-Every test lands in `.github/test-shards.txt`.
+Root-package and `apitest/` tests land in their shard manifests
+(`agent-docs/testing.md`, "Shard manifests").
 
 ## 9. PR split
 
@@ -520,7 +520,7 @@ the loft sections §12 lists for it.
 
 | PR | Files and functions | Proves itself by |
 |---|---|---|
-| **1 — volume residual and area tube** | `internal/loftmesh/loft_chord_allow.go`: `ComputeLoftChordedAllow` accumulates `WallLeg`, `CapAreaExcess` per cell and `SkirtLeg` over every seam cell, and drops `CapVolumeUpper`, `SeamAllow`, `h1Upper`, `posUpper`; `ComputeLoftChordedAllow` also loses the cap-offset scan; `internal/loftmesh/mass_accumulator.go` `Volume`/`Area`, and `Centroid`'s `epsV` reads the same chain; `internal/loftmesh/mass_proof.go` `MeshProofOf` (`VolSymDiff`); `internal/proofbound/bounds.go` makes `PerturbedAreaUpper` exact and deletes `ChordedBoundarySeamAllow`, `ChordedBoundaryVolumeAllow`, `ChordedBoundaryVolumeResidualAllow`, `CapAreaVolumeAllow` and their tests | the tests of §8 that name Volume or Area, and `TestLoftPlacedVolumeNeedsTheVertexSweep` |
+| **1 — volume residual and area tube** | `internal/loftmesh/loft_chord_allow.go`: `ComputeLoftChordedAllow` accumulates `WallLeg`, `CapAreaExcess` per cell and `SkirtLeg` over every seam cell, and drops `CapVolumeUpper`, `SeamAllow`, `h1Upper`, `posUpper`; `ComputeLoftChordedAllow` also loses the cap-offset scan; `internal/loftmesh/mass_accumulator.go` `Volume`/`Area`, and `Centroid`'s `epsV` reads the same chain; `internal/loftmesh/mass_proof.go` `MeshProofOf` (`VolSymDiff`); `internal/proofbound/bounds.go` makes `PerturbedAreaUpper` exact and deletes `ChordedBoundarySeamAllow`, `ChordedBoundaryVolumeAllow`, `ChordedBoundaryVolumeResidualAllow`, `CapAreaVolumeAllow` and their tests | the tests of §8 that name Volume or Area |
 | **2 — centroid shift form** | `internal/loftmesh/mass_accumulator.go` `Centroid`, `CentroidMeasureAllow`, `CentroidRadius`, `CentroidClearance`, `VolumeAllow`; `loft_chord_allow.go` accumulates `WallLeg` and `SkirtLeg` (fields only; `Volume` keeps reading the shipped residual until PR 1); delete `PlacedCentroidAllow` and the loft's `ChordedBoundaryMomentResidualAllow` call (the `internal/proofbound` helpers stay) | the three centroid tests |
 | **3 — audit** | `internal/loftmesh/loft_audit.go`: `sweepCandidates`, `LoftCrossingAuditStructured`, `capFamilyProof`, `LoftAuditShortcuts.Sweep`/`.CapProof`; `loftrecord.Build` calls the structured entry with `a.walls`, `a.capStartCount`, `a.vIdx`, `a.wIdx`; `internal/sweepmitre/build.go` unchanged; `internal/proofbound/budget.go` comment on what S8 counts | the four audit tests |
 | **4 — chord target and matched bisection** | `internal/loftmesh/station_gate.go`: `ChordTarget(area0, perim0, area1, perim1)`, `FeatureSize`, `ChordFraction = 2.5e-4`; `loft.go` passes `Profile.FalsifyLoftRecordedArea`'s area on `loftPayload.RecordArea`; `loftmesh.StationCapGate` computes the target from it and `loftrecord.Build` chords at it; `internal/freeform/spline_stations.go` `WalkCell` measures and forwards the matched value, `StationCellReader.AcceptCell` takes it | the target, walk and wedge tests |

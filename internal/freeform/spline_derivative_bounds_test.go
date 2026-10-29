@@ -1,6 +1,7 @@
 package freeform_test
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -85,4 +86,66 @@ func TestSpanHodographGapSquaredMatchesRationalHull(t *testing.T) {
 		}
 		require.Zero(t, got.Cmp(want))
 	}
+}
+
+// zigzagHuggingSpan is a cubic whose control points all lie on its own chord
+// segment [(0,0),(1,0)], two of them clustered at u = 1/1000. Its sagitta is
+// exactly 0, but the curve's position at parameter t runs far behind the
+// chord point at the same t, so its parameter-matched deviation is large.
+func zigzagHuggingSpan() freeform.BezierSpan {
+	point := func(un, ud int64) freeform.RatPoint {
+		return freeform.RatPoint{U: big.NewRat(un, ud), V: new(big.Rat)}
+	}
+	return freeform.BezierSpan{point(0, 1), point(1, 1000), point(1, 1000), point(1, 1)}
+}
+
+// denseMatchedDeviation samples max_t |C(t) − (C(0) + t·(C(1) − C(0)))| on
+// samples+1 parameters, evaluating C by float de Casteljau.
+func denseMatchedDeviation(span freeform.BezierSpan, samples int) float64 {
+	control := make([][2]float64, len(span))
+	for i, p := range span {
+		control[i][0], _ = p.U.Float64()
+		control[i][1], _ = p.V.Float64()
+	}
+	start, end := control[0], control[len(control)-1]
+	worst := 0.0
+	work := make([][2]float64, len(control))
+	for step := range samples + 1 {
+		at := float64(step) / float64(samples)
+		copy(work, control)
+		for n := len(work); n > 1; n-- {
+			for i := range n - 1 {
+				work[i][0] = (1-at)*work[i][0] + at*work[i+1][0]
+				work[i][1] = (1-at)*work[i][1] + at*work[i+1][1]
+			}
+		}
+		chordU := start[0] + at*(end[0]-start[0])
+		chordV := start[1] + at*(end[1]-start[1])
+		worst = math.Max(worst, math.Hypot(work[0][0]-chordU, work[0][1]-chordV))
+	}
+	return worst
+}
+
+// TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses pins why the loft's
+// free-form walk bisects on the matched departure as well as the sagitta
+// (agent-docs/loft-gear-bounds-design.md §5): on zigzagHuggingSpan the
+// sagitta is exactly 0 while the sampled parameter-matched deviation is above
+// 0.3, and SpanMatchedDeltaUpper encloses that deviation.
+//
+// Shown to fail: returning SpanSagittaUpper from SpanMatchedDeltaUpper fails
+// the enclosure assertion, since that reading is 0 here.
+func TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses(t *testing.T) {
+	t.Parallel()
+	span := zigzagHuggingSpan()
+
+	sagitta, err := freeform.SpanSagittaUpper(nil, span)
+	require.NoError(t, err)
+	require.Zero(t, sagitta, "every control point lies on the chord segment")
+
+	dense := denseMatchedDeviation(span, 200_000)
+	require.Greater(t, dense, 0.3, "the fixture must carry a large parameter-matched deviation")
+
+	matched, err := freeform.SpanMatchedDeltaUpper(nil, span)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, matched, dense, "the matched bound must enclose what the sagitta misses")
 }

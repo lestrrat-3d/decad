@@ -97,11 +97,13 @@ func loftHoledSquares(t *testing.T) (*sketch.Sketch, *sketch.Profile, *sketch.Sk
 	return s0, p0, s1, p1
 }
 
-// loftWedgePlanes and loftWedgeSketch build the same cheap quarter-disc wedge
-// (two radial lines plus one connecting arc) loft_arc_pairs_internal_test.go's
-// own wedgeArcSketch builds, reproduced here since that helper is unexported
-// in the internal package: a same-kind ArcSeg pairing, admitted by Table P row
-// P5, whose station chording makes sectionDelta positive (§5.1).
+// loftWedgeRadius is the radius of loftWedgeSketch's quarter arc.
+const loftWedgeRadius = 5.0
+
+// loftWedgePlanes and loftWedgeSketch build a cheap quarter-disc wedge (two
+// radial lines plus one connecting arc): a same-kind ArcSeg pairing, admitted
+// by Table P row P5, whose station chording makes sectionDelta positive
+// (§5.1).
 func loftWedgePlanes(t *testing.T, height float64) (*sketch.World, *sketch.Plane, *sketch.Plane) {
 	t.Helper()
 	w := sketch.NewWorld()
@@ -110,8 +112,9 @@ func loftWedgePlanes(t *testing.T, height float64) (*sketch.World, *sketch.Plane
 	return w, w.XY(), top
 }
 
-func loftWedgeSketch(t *testing.T, w *sketch.World, plane *sketch.Plane, radius float64) (*sketch.Sketch, *sketch.Profile) {
+func loftWedgeSketch(t *testing.T, w *sketch.World, plane *sketch.Plane) (*sketch.Sketch, *sketch.Profile) {
 	t.Helper()
+	const radius = loftWedgeRadius
 	s, err := w.CreateSketch(plane)
 	require.NoError(t, err)
 	origin := s.CreatePoint(0, 0)
@@ -342,8 +345,8 @@ func TestSurfaceLoftSheetVerifiesSound(t *testing.T) {
 func TestSurfaceLoftChordedPairVerifiesUndecided(t *testing.T) {
 	t.Parallel()
 	w, base, top := loftWedgePlanes(t, 10)
-	s0, p0 := loftWedgeSketch(t, w, base, 5)
-	s1, p1 := loftWedgeSketch(t, w, top, 5)
+	s0, p0 := loftWedgeSketch(t, w, base)
+	s1, p1 := loftWedgeSketch(t, w, top)
 	doc := decad.New()
 	sheet, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1, decad.WithSurfaceResult())
 	require.NoError(t, err)

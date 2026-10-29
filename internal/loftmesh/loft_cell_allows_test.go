@@ -1,11 +1,13 @@
 package loftmesh
 
 import (
+	"fmt"
 	"math"
 	"slices"
 	"testing"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
@@ -149,6 +151,159 @@ func TestComputeLoftChordedAllowMatchesSeparateBounds(t *testing.T) {
 			requireChordedAllowExact(t, want, cached)
 			require.Equal(t, originalPairs, pairs)
 			require.Equal(t, originalVerts, verts)
+		})
+	}
+}
+
+// chordedAllowMesh closes chordedAllowCase's four wall cells into a solid:
+// two triangles per wall cell, then a two-triangle cap on each ring. It
+// returns the triangles and the wall count.
+func chordedAllowMesh() ([][3]int, int) {
+	var tris [][3]int
+	for j := range 4 {
+		jn := (j + 1) % 4
+		tris = append(tris, [3]int{j, jn, 4 + jn}, [3]int{j, 4 + jn, 4 + j})
+	}
+	walls := len(tris)
+	tris = append(tris, [3]int{0, 2, 1}, [3]int{0, 3, 2}, [3]int{4, 5, 6}, [3]int{4, 6, 7})
+	return tris, walls
+}
+
+// chordedCellMatched is each cell's own matched departure, as
+// ComputeLoftChordedAllow composes it, and the largest of them.
+func chordedCellMatched(p LoopPair, delta float64) ([]float64, float64) {
+	cells := make([]float64, len(p.MatchedDelta))
+	worst := 0.0
+	for j, md := range p.MatchedDelta {
+		cells[j] = ChordCellDeltaUpper(md, delta)
+		worst = math.Max(worst, cells[j])
+	}
+	return cells, worst
+}
+
+// TestLoftVolumeResidualIsPerCellWallLegPlusSkirt pins Volume's chorded
+// residual (agent-docs/loft-gear-bounds-design.md §2) on four wall cells with
+// departures 0.1, 0.01, 0.001 and 0, the last one faceted:
+//
+//   - WallLeg sums each charged cell's own departure times its wall area and
+//     is below the build-wide maximum departure times the summed wall area;
+//   - SkirtLeg is matchedDelta·delta times the seam perimeter over EVERY
+//     cell, the faceted one included: exactly 0 at delta == 0, positive above;
+//   - Volume.Bound is the rounding, the vertex sweep, WallLeg and SkirtLeg
+//     composed in that order, bit for bit, and the sweep is absent at
+//     delta == 0.
+//
+// Shown to fail: charging every cell at the build-wide maximum fails the
+// per-cell sum; dropping SkirtLeg from VolumeAllow fails the composition at
+// delta > 0.
+func TestLoftVolumeResidualIsPerCellWallLegPlusSkirt(t *testing.T) {
+	t.Parallel()
+	anchor := r3.NewVec(0.25, -0.5, 0.75)
+	tris, walls := chordedAllowMesh()
+	for _, delta := range []float64{0, 0.01} {
+		t.Run(fmt.Sprintf("delta=%g", delta), func(t *testing.T) {
+			pairs, vIdx, wIdx, verts := chordedAllowCase()
+			p := &pairs[0]
+			copy(p.MatchedDelta, []float64{0.1, 0.01, 0.001, 0})
+			p.Faceted[3] = true
+			cells, matchedDelta := chordedCellMatched(*p, delta)
+			got := ComputeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, matchedDelta, delta, false)
+
+			var wallLeg, perimeter float64
+			for j := range p.V {
+				jn := (j + 1) % len(p.V)
+				vLo, vHi := verts[vIdx[0][j]], verts[vIdx[0][jn]]
+				wLo, wHi := verts[wIdx[0][j]], verts[wIdx[0][jn]]
+				perimeter = proofbound.AbsSumUpper(perimeter,
+					math.Max(p.ArcUpperV[j], proofbound.CellSpanUpper(vLo, vHi)),
+					math.Max(p.ArcUpperW[j], proofbound.CellSpanUpper(wLo, wHi)),
+				)
+				if p.Faceted[j] && p.MatchedDelta[j] <= 0 {
+					continue
+				}
+				cellWall := proofbound.CellChordCurveAreaUpper(vLo, vHi, wLo, wHi, p.ArcUpperV[j], p.ArcUpperW[j], cells[j])
+				wallLeg = proofbound.AbsSumUpper(wallLeg, proofbound.ProductUpper(cells[j], cellWall))
+			}
+			require.Equal(t, math.Float64bits(wallLeg), math.Float64bits(got.WallLeg), "the wall leg is the per-cell sum")
+			require.Less(t, got.WallLeg, proofbound.ProductUpper(matchedDelta, got.WallAreaUpper),
+				"each cell is charged at its own departure, below the worst cell's")
+			if delta == 0 {
+				require.Zero(t, got.SkirtLeg, "a held seam on its cap plane has no skirt")
+			} else {
+				require.Positive(t, got.SkirtLeg)
+				want := proofbound.ProductUpper(proofbound.ProductUpper(matchedDelta, delta), perimeter)
+				require.Equal(t, math.Float64bits(want), math.Float64bits(got.SkirtLeg),
+					"the skirt runs along every seam cell, the faceted one included")
+			}
+
+			m := NewMassAccumulator(anchor, delta, matchedDelta, matchedDelta)
+			m.AddMesh(verts, tris, walls)
+			m.Chorded = got
+			vol := m.correctedVolume()
+			value, bound := m.Volume(verts, tris)
+			wantValue, _ := vol.Float64()
+			require.Equal(t, wantValue, value)
+			allow := 0.0
+			if delta > 0 {
+				allow = proofbound.SweptVolumeAllow(delta, proofbound.PerturbedAreaUpper(verts, tris, delta))
+				require.Positive(t, allow)
+			}
+			allow = proofbound.AbsSumUpper(allow, got.WallLeg, got.SkirtLeg)
+			want := proofbound.AbsSumUpper(proofarith.RationalFloatError(vol, value), allow)
+			require.Equal(t, math.Float64bits(want), math.Float64bits(bound),
+				"Volume.Bound is rounding + sweptLeg + wallLeg + skirtLeg (want %g, got %g)", want, bound)
+		})
+	}
+}
+
+// TestLoftAreaCapTubeIsPerCell pins Area's cap tube
+// (agent-docs/loft-gear-bounds-design.md §4): Σ over charged cells and both
+// sides of 2·cellMatched·arcLenUpper + π⁺·cellMatched². With every cell at
+// the same departure it equals the build-wide maximum form
+// proofbound.SectionDisplacementArea to rounding; with departures 0.1, 0.01,
+// 0.001 and 0.05 it is below it.
+//
+// Shown to fail: charging every cell at the build-wide maximum fails the
+// per-cell sum on the unequal row.
+func TestLoftAreaCapTubeIsPerCell(t *testing.T) {
+	t.Parallel()
+	const delta = 0.01
+	anchor := r3.NewVec(0.25, -0.5, 0.75)
+	piUp := math.Nextafter(math.Pi, math.Inf(1))
+	for _, tc := range []struct {
+		name       string
+		departures []float64
+	}{
+		{"uniform", []float64{0.1, 0.1, 0.1, 0.1}},
+		{"unequal", []float64{0.1, 0.01, 0.001, 0.05}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pairs, vIdx, wIdx, verts := chordedAllowCase()
+			p := pairs[0]
+			copy(p.MatchedDelta, tc.departures)
+			cells, matchedDelta := chordedCellMatched(p, delta)
+			got := ComputeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, matchedDelta, delta, false)
+
+			var tube, perimV, perimW float64
+			for j := range p.V {
+				perimV = proofbound.AbsSumUpper(perimV, p.ArcUpperV[j])
+				perimW = proofbound.AbsSumUpper(perimW, p.ArcUpperW[j])
+				joint := proofbound.ProductUpper(piUp, proofbound.ProductUpper(cells[j], cells[j]))
+				twice := proofbound.ProductUpper(2, cells[j])
+				tube = proofbound.AbsSumUpper(tube,
+					proofbound.ProductUpper(twice, p.ArcUpperV[j]), joint,
+					proofbound.ProductUpper(twice, p.ArcUpperW[j]), joint)
+			}
+			require.Equal(t, math.Float64bits(tube), math.Float64bits(got.CapAreaExcess), "the cap tube is the per-cell sum")
+			maxForm := proofbound.AbsSumUpper(
+				proofbound.SectionDisplacementArea(matchedDelta, len(p.V), perimV),
+				proofbound.SectionDisplacementArea(matchedDelta, len(p.V), perimW),
+			)
+			if tc.name == "uniform" {
+				require.InEpsilon(t, maxForm, got.CapAreaExcess, 1e-9, "equal departures read the maximum form")
+				return
+			}
+			require.Less(t, got.CapAreaExcess, maxForm, "each cell is charged at its own departure, below the worst cell's")
 		})
 	}
 }

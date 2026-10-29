@@ -109,8 +109,8 @@ const (
 // StationWorkUnits is the free-form work one station may charge each record's
 // counter. On the gear fixtures of agent-docs/loft-gear-bounds-design.md the loft's
 // walk resolution and station walk together charge 5300–7000 units per
-// station per record, averaged over every station of the build, and
-// TestLoftStationWalkWorkPerStation keeps that average below this constant.
+// station per record, averaged over every station of the build. No test
+// measures that average (agent-docs/loft-gear-bounds-design.md §8).
 const StationWorkUnits = 8192
 
 // StationWorkLimit is the free-form work ceiling a public Loft raises each

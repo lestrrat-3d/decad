@@ -2166,6 +2166,7 @@
 8	0.00	TestIntersectDisjointIsEmpty
 8	3.68	TestLatticeKindsDifferFromTheGyroidAndEachOther
 8	0.01	TestLoftAlignmentSelectsTheCorrespondence
+10	0.00	TestLoftArcWedgeVerifiesSound
 8	0.00	TestLoftCapAreaExactMapKeepsBound
 8	0.00	TestLoftCopyPlacementTranslation
 8	0.04	TestLoftDirectBoreRoundedCenterChargesNormalBound
