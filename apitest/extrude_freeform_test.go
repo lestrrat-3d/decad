@@ -170,9 +170,7 @@ func TestExtrudeFreeformRimLengthPublished(t *testing.T) {
 }
 
 // TestExtrudeFreeformNormalAtRefuses asserts observable test 5: NormalAt on
-// the built free-form face refuses ErrUnsupported through the public API —
-// topology_internal_test.go's TestNormalAtRefusesNURBSSurface pins the same
-// fact against a bare *Face built directly.
+// the built free-form face refuses ErrUnsupported through the public API.
 func TestExtrudeFreeformNormalAtRefuses(t *testing.T) {
 	t.Parallel()
 	s, p := fitSplineArchSketch(t)

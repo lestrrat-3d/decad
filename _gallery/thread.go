@@ -58,7 +58,7 @@ func externalThread(ctx context.Context) (*decad.Body, error) {
 	if err != nil {
 		return nil, fmt.Errorf("revolve thread cylinder: %w", err)
 	}
-	// Start a quarter pitch below the end, as in TestCoilThreadRunsOutOfTheEnd.
+	// Start a quarter pitch below the end so the thread runs out through the end face.
 	// The blank trims the cutter; its other end leaves a short plain collar.
 	const start = -0.375
 	const halfWidth = 0.6928203230275509

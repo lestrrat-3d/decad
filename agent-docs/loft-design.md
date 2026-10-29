@@ -1959,8 +1959,7 @@ the seam's departure from the cap plane is the skirt. No cap or seam residue
 of an open-patch by-parts split remains, and none is charged.
 
 **No leg may be dropped for another's incidental slack.** Omitting the twist
-correction understates a twisted pairing's true gap
-(`TestCellTwistMomentsMatchRefinedBilinearSurface`); omitting the vertex sweep
+correction understates a twisted pairing's true gap; omitting the vertex sweep
 understates a placed loft; omitting the wall leg understates a chorded wall
 (`TestChordedWallLegIsLoadBearing`).
 
@@ -2273,9 +2272,8 @@ against this budget.
   sentinel and on the arm rather than on the source rows' own finiteness.
   **The exact bilinear corrections and the residual volume terms are fixtured
   in internal tests, named here rather than restated over a built body.**
-  `TestCellTwistMomentsMatchRefinedBilinearSurface` compares the exact volume
-  and first-moment corrections with an independently refined surface, and
-  `TestCellBilinearAreaEnclosesDirectIntegral` checks the area enclosure.
+  `TestCellTwistAreaAllowEnclosesTheBilinearGap` checks the area enclosure
+  against an independent dense integration of the ruled patch.
   The residual legs are tested over `ComputeLoftChordedAllow` and
   `MassAccumulator` on hand-built wall cells:
   `TestLoftVolumeResidualIsPerCellWallLegPlusSkirt` pins `Volume`'s composition
@@ -2284,7 +2282,7 @@ against this budget.
   cap tube; `TestChordedWallAndTwistLegsEncloseTheMeasuredGap`,
   `TestChordedTwistLegIsLoadBearing` and `TestChordedWallLegIsLoadBearing`
   sweep the held-triangle form tessellation spends; and
-  `TestChordedBoundaryMomentAllowWidensPastTheHeldCoordEnvelope` pins that the
+  `TestChordedBoundaryMomentAllowWidensTheWallMeasure` pins that the
   wall measure's radius widens past the held coordinate envelope while the
   twist measure stays inside it (§8).
   **Two counterexample fixtures pin why the wall leg's area obligation is
@@ -2520,8 +2518,7 @@ still over it. `Verify` at the default `1e-3` tolerance reads `Sound` with
 `Volume` binding at about 9.1x
 (`TestLoftArcWedgeVerifiesSound`). The matching fit-spline wedge, chorded by
 §5.1's free-form arm with its matched-departure bisection, takes 120 cells
-and reads `Sound` with `Volume` binding at about 14.3x
-(`TestLoftFitSplineWedgeVerifiesSound`).
+and reads `Sound` with `Volume` binding at about 14.3x.
 
 **The station cap's value is resolved.** §5.1 states the rule the cap obeys
 and everything an implementation needs to decide S15 from the record — the

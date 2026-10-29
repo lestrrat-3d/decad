@@ -136,7 +136,7 @@ func TestPatchReproducesThroughPlacement(t *testing.T) {
 }
 
 // TestPatchVerifiesUndecided is agent-docs/surface-design.md §9.1's holding fix,
-// modelled on TestSurfaceExtrudeSheetVerifiesUndecided (surface_test.go): the
+// modelled on a surface-extruded sheet's verification: the
 // manifold-with-boundary audit lands later, so a patch reads ValidityUndecided
 // rather than proven invalid, and carries no Region and no DiagInvalidBody.
 func TestPatchVerifiesUndecided(t *testing.T) {

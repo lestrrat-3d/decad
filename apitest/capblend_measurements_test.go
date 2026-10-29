@@ -209,11 +209,10 @@ func tallPlateWithDiskHole(t *testing.T, r, h float64) *decad.Body {
 	return body
 }
 
-// TestCapBlendConeAreaEnclosesRoundedRadiusDifference is the reachability
-// half of the ΔR enclosure regression whose arithmetic half is
-// TestPatchAreaOfEnclosesRoundedRadiusDifference: it builds through Chamfer
-// the very patch that test states by hand, so the geometry the bound is
-// judged on is a body a caller can actually make.
+// TestCapBlendConeAreaEnclosesRoundedRadiusDifference is the ΔR enclosure
+// regression: it builds through Chamfer a patch whose cone-arm ΔR subtraction
+// rounds, so the geometry the bound is judged on is a body a caller can
+// actually make.
 //
 // Only one arm of the cap offset can round the ΔR = R1-R0 subtraction
 // patchAreaOf's Cone arm evaluates. The inward arm's cap radius is R-d with

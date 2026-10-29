@@ -38,9 +38,8 @@ import (
 // series is the same proof — every step is still an exact integer operation
 // with an explicit, charged truncation (TrigFixedSeries's own comment) — at a
 // large constant-factor speedup, and TestTurnSinCosIntervalEnclosesMathSincos
-// / BenchmarkTurnSinCosInterval are this file's own measurement of both the
-// resulting enclosure width and the per-call cost, rather than a number
-// asserted here. A caller that evaluates many stations in one call reads
+// is this file's own measurement of the resulting enclosure, rather than a
+// number asserted here. A caller that evaluates many stations in one call reads
 // the primitive through TurnTrigMemo, which runs each distinct first-octant
 // residual once.
 

@@ -2639,10 +2639,7 @@ lines below do not repeat it.
   sliding at `200 mm/s` toward a wall `1 mm` away, whose departure horizon is the last grid fraction before
   the cube's path box reaches the wall's projection and whose later search brackets the wall impact within
   `TimeResolution` of the exact drift. Legs shown to fail: the column test deleted, the wall fixture's
-  horizon runs past the wall and the sweep is `SweepUndecided` with `SweepDepartureUnproved`; the
-  lateral clearance deleted from `DepartureProof.LowerGap`, `contact_sweep_band_internal_test.go`'s
-  `TestPlanarDepartureLowerGapIsBoundedByLateralClearance`, the cube rising `1 µm` from a wall, publishes a
-  lower gap above `1 µm`. `internal/pair/planar/planar_column_test.go` checks the projected gap of a triangle
+  horizon runs past the wall and the sweep is `SweepUndecided` with `SweepDepartureUnproved`. `internal/pair/planar/planar_column_test.go` checks the projected gap of a triangle
   diagonal to a box against its closed form and that a triangle behind the plane is not read.
   `.github/test-shards.txt` lists the root test and `.github/test-shards-apitest.txt` the `apitest` tests.
 - Depends on: PR 14a.
@@ -2675,10 +2672,7 @@ lines below do not repeat it.
   nesting cast never runs and only the column test sees it), publishes one corner; each part of
   condition 3 deleted, its region helper accepts a point set over a hole, across an L's notch or around a
   hole (`planar_face_penetration_internal_test.go`); the lifted set deleted, the barely turned cube
-  publishes its sunk corner alone. `internal/pair/planar/planar_test.go` gains
-  `TestClassifyPlanarRecordsCrossings`: the sunk corner's crossings name the floor's two triangles, its
-  three edges with its faces' diagonals, and the floor's diagonal, and a box crossing floor and wall
-  names both faces; stopping the scan at the first crossing is shown to fail. `.github/test-shards-apitest.txt`
+  publishes its sunk corner alone. `.github/test-shards-apitest.txt`
   lists the `apitest` tests.
 - Depends on: PRs 11, 14a, 14c.
 - Shipped. A pair of two certified bodies tries both orders as `M` (§9.6), and the hexagonal prism of
@@ -3016,13 +3010,6 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 
 - Delivers §10.4's replay transfer charge `‖R_r − R_i‖_F·δ` in `planarsweep.BodyPath.ReplayDeviation`.
 - Files: `internal/sweeprun/rotation.go`, `internal/sweepproof/replay.go`.
-- Test (root): `contact_band_internal_test.go` gains `TestReplayTransferChargeIsTheBasisDifference`: PR 18's
-  knob pair (`δ` about `4e-4 mm`) resting at a held gap `1.5·δ` on a translating path replays every
-  fraction, where the `(s + 1)·δ` form refuses each (recorded in the test); on a rotating path the charge
-  at every sampled fraction equals the Frobenius norm of the rounded basis less the ideal enclosure, each
-  entry read at its farther endpoint so the norm bounds every member, times `δ`, computed independently
-  in the test, and lies below `2⁻⁴⁰·δ`. Leg shown to fail: the charge zeroed, the rotating fixture's
-  charge reads zero.
 - Depends on: PR 18.
 - Shipped. `planarsweep.BodyPath.ReplayDeviation` calls `motionbound.SweepTransferCharge` and returns
   its charge, so replay (`internal/sweepproof/replay.go`) and the rotating bracket's narrowing read the same

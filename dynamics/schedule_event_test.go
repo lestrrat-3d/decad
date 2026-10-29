@@ -668,7 +668,7 @@ func TestScheduledStepDiagnosticsNameTheIsland(t *testing.T) {
 	require.ErrorIs(t, err, dynamics.ErrInvalidInput)
 }
 
-// TestScheduledStepRotatingDriverIslandRefuses rests a 10 mm box on the
+// TestScheduledStepTurntableTouchRefuses rests a 10 mm box on the
 // kinematic platform of TestScheduledStepKinematicIsland while the platform
 // turns a quarter turn about Z. The touching pair forms an island at the
 // step start, and a rotating driver has no single contact-point velocity, so

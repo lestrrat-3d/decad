@@ -129,5 +129,5 @@ APIs are design-only.**
 ```
 go test ./...      # must pass
 go vet ./...       # must pass
-golangci-lint run  # v2.14.0, config in .golangci.yml
+golangci-lint run  # v2.15.0, config in .golangci.yml
 ```

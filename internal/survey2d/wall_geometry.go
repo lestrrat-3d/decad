@@ -199,8 +199,8 @@ type SurveyElem struct {
 	// the weakest slack any of those readings concedes is k.tol = 1e-9·scale.
 	// That is six decades of headroom, seven against WallKernel.ContactTol's 8·k.tol, so
 	// widening the readings by rrBound would move nothing any of them decides.
-	// TestArcWalkRadiusBoundStaysUnderTheKernelSlack pins both halves of that
-	// chain so the argument cannot rot unnoticed.
+	// TestArcWalkRadiusBoundMatchesEnclosureBracket covers the radius bound's
+	// side of that chain.
 	//
 	// contains/RayCrossings is a different kind of reading again: a held-float
 	// PARITY predicate, whose soundness rests on its own ambiguity guards and

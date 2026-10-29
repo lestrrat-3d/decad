@@ -738,10 +738,9 @@ func ratUnitCirclePoints(ts []int64) [][2]*big.Rat {
 // agent-docs/tessellation-design.md Sec 3) rather than the tight closed form, so
 // what a circular cell carries is not the arc's exact matched-parameter
 // deviation; it still encloses it,
-// which the fourth subtest pins. That a circular cell's matchedDelta IS that
-// published sagitta, cell for cell, is pinned in the evaluator itself by
-// TestLoftCircularCellStationsMatchedDeltaIsItsSagitta
-// (loft_stations_internal_test.go).
+// which the fourth subtest pins. The evaluator's circular cell stations, sagitta and
+// matchedDelta included, are compared bit for bit with an independent
+// reference by TestCircularCellStationsMatchIndependentWalkReference.
 func TestArcMatchedDeltaEqualsSagitta(t *testing.T) {
 	t.Parallel()
 	t.Run("the reduction to (1) is an exact identity", func(t *testing.T) {

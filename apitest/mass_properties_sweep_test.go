@@ -25,10 +25,9 @@ import (
 //     with it zeroed, TestMassPropertiesCompositeSweepPlaced misses a
 //     reference component.
 //   - The span frame's defect widening in massmoment.Rotate, on P and on Q:
-//     recorded in mass_properties_sweep_internal_test.go. A held sweep frame
-//     is orthonormal to within an ulp, so TestMassPropertiesCompositeSweep-
-//     TurnedFrame stays green without it; that test checks the turned frame's
-//     rotation, and the internal test makes each widening visible.
+//     a held sweep frame is orthonormal to within an ulp, so
+//     TestMassPropertiesCompositeSweepTurnedFrame stays green without it;
+//     that test checks the turned frame's rotation.
 //   - The exact re-anchoring in massmoment.Shift: dropping its V·sᵢ·sⱼ or
 //     sᵢ·Pⱼ terms turns TestMassPropertiesCompositeSweepSumsSpans red.
 

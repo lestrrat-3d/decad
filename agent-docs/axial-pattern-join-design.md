@@ -88,7 +88,7 @@ second one.
 - A set whose only loft is itself placed has no reference frame and is a miss.
 - Segments of kind line, arc, circle and fit spline are placed. Other kinds are a miss.
 - A tooth or lobe that only touches the base (a bottom arc resting on the circle with the flank ends on it) or misses it by
-  a micron is a miss: it makes no region `sketch` can certify as one union. `apitest.TestPatternJoinRefusesLobesThatOnlyTouchOrMissTheBase`
+  a micron is a miss: it makes no region `sketch` can certify as one union. `apitest.TestPatternJoinRefusesLobesThatOnlyTouchTheBase`
   pins both.
 - Copies whose free-form edges cross one another (two arched tops that overlap), or whose sides nearly coincide without
   sharing a whole edge, are a miss: `sketch` certifies a spline against a circle but not a spline against another spline

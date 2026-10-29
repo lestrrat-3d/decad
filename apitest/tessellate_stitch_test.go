@@ -383,8 +383,7 @@ func TestStitchSolidTessellatesItsOwnTriangleSet(t *testing.T) {
 // TestStitchPlacedSolidTessellateBoundReadsVertexBound is agent-docs/surface-design.md's
 // T59: T58's box, Placed by a translation far from the origin and then a
 // rotation, is the placement-delta route to a nonzero per-face bound — the
-// leg TestStitchTessellateClassBoundIsIndependentOfPlacement (T60,
-// tessellate_stitch_internal_test.go) shows is NOT the only route.
+// leg agent-docs/surface-design.md's T60 covers is NOT the only route.
 func TestStitchPlacedSolidTessellateBoundReadsVertexBound(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -635,10 +634,8 @@ func TestStitchSolidTessellateIsDeterministic(t *testing.T) {
 // an occupied-volume proof of exactly zero, so booloperand.RequireVolumeProof's
 // stitchPayload arm no longer refuses it and Union composes the two disjoint
 // operands' exact volumes — the mesh-boolean analog of TestUnionDisjointCubes
-// (boolean_test.go), over a stitched operand instead of a plain one. This
-// replaces TestStitchSolidUnionRefusesOnTheVolumeProof, whose whole subject
-// (a stitched solid ever entering a boolean) this row retires; T64's own row
-// keeps the refusal only for a stitched solid this proof does not cover
+// (boolean_test.go), over a stitched operand instead of a plain one. T64's
+// own row keeps the refusal only for a stitched solid this proof does not cover
 // (T73, T74).
 func TestStitchSolidUnionComposesTheCorrectVolume(t *testing.T) {
 	t.Parallel()

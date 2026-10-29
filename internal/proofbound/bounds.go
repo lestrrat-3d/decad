@@ -1903,9 +1903,8 @@ func CellChordPatchNormalLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 //     through the held corners) - Area(ruled patch through the stations they
 //     denote)|, at the payload's own delta. It carries the step the two legs
 //     above stop short of, from its own inequality rather than by analogy with
-//     a triangle's, and TestDisplacedStationCellNeedsTheStationShiftLeg pins
-//     both directions: the first two legs alone do NOT cover a displaced-station
-//     circular cell, and this leg covers the surface step it is charged for.
+//     a triangle's. The first two legs alone do NOT cover a displaced-station
+//     circular cell; this leg covers the surface step it is charged for.
 //
 // # Why no corner reading is widened by delta
 //

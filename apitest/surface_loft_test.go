@@ -291,8 +291,8 @@ func TestSurfaceLoftStaysASheetThroughPlacement(t *testing.T) {
 }
 
 // TestSurfaceLoftHoledProfileReportsDisconnectedLumps is the loft analogue of
-// decision A (agent-docs/surface-design.md §2.2, TestSurfaceRevolveHoledProfileReport
-// sDisconnectedLumps): a holed profile lofted as a surface has an outer wall
+// decision A (agent-docs/surface-design.md §2.2,
+// TestSurfaceRevolveHoledProfileReportsDisconnectedLumps): a holed profile lofted as a surface has an outer wall
 // tube and a hole wall tube that touch nowhere once their shared cap is
 // omitted, so Body.Lumps() must report both. The solid built from the same
 // profile keeps its one lump, joined through its two caps.

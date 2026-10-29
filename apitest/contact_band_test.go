@@ -45,13 +45,9 @@ import (
 //   - the track's exact-support rule: TestSweepPairBandTrack's stacked
 //     blocks publish a track on a held face;
 //   - δ on the track's face containment: TestSweepPairBandFootStaysInsideFace
-//     publishes a track whose true foot may leave the floor;
-//   - the transfer charge on the replay's clear check:
-//     TestReplayTransferChargeIsTheBasisDifference in
-//     contact_band_internal_test.go reads a zero charge on a rotating path.
+//     publishes a track whose true foot may leave the floor.
 //
-// contact_band_internal_test.go shows the sweep's transfer legs on the
-// transfer itself. The track replay's height check reads the held depth, as
+// The track replay's height check reads the held depth, as
 // PR 13's does; it only refuses, and no sound fixture reaches it.
 
 // chamferedBlock is a 12 mm cube on the floor plane z = 0 with its upper cap

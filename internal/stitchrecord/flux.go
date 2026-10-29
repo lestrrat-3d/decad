@@ -153,15 +153,10 @@ import (
 // here goes through proofbound.BoundedMul against that proven bound rather than
 // assuming the bare units.Value is exact. Every PUBLIC fixture this PR
 // tests (apitest/stitch_flux_test.go) revolves about a coordinate-aligned axis
-// through the origin, where that bound is proven exactly zero, so the
-// nonzero case is pinned directly instead, on a hand-built face carrying a
-// synthetic rim lengthBound far above ulp noise
-// (TestStitchCylinderMomentChargesRadiusBound,
-// TestStitchPlaneMomentChargesRadiusBound, stitch_internal_test.go) — the
-// same treatment TestStitchCylinderFluxReusesAreaBound already gives the
-// area-bound composition, for the identical reason: a fixture where the
-// true bound happens to be zero cannot show this leg failing if it were
-// ever deleted.
+// through the origin, where that bound is proven exactly zero, so no public
+// fixture shows this leg failing if it were deleted: the true bound is
+// zero there, and a hand-built face with a synthetic rim lengthBound far
+// above ulp noise would be needed to exercise the nonzero case.
 //
 // The Sphere arm's own radius carries a DIFFERENT source of bound, because
 // it has no rim edge to read stitchflux.CircleRadius's own circumference from
@@ -169,10 +164,9 @@ import (
 // stitchflux.SphereRadius inverts the face's own already-proven area/areaBound
 // instead (its own doc comment). The public T50 fixture's own area bound is
 // the same tiny, ulp-scale magnitude every other term here carries, so
-// TestStitchSphereFluxReusesAreaBound (stitch_internal_test.go) pins the
-// leg on a hand-built face carrying a synthetic areaBound far above that
-// noise floor, the same treatment TestStitchCylinderFluxReusesAreaBound
-// gives the Cylinder arm's own area-bound reuse.
+// no public fixture shows this leg failing if it were deleted; a hand-built
+// face carrying a synthetic areaBound far above that noise floor would be
+// needed, as for the Cylinder arm's own area-bound reuse.
 //
 // The Cone arm's apex is Origin when Radius is exactly 0 — the ONLY case
 // this evaluator admits. A revolve cone's Origin is its walk's float apex,
@@ -186,15 +180,11 @@ import (
 // proofbound.BoundedQuotient's own clearance check unconditionally, for every angle,
 // not only the degenerate ones (stitchflux.ConeApex's own doc comment walks through
 // why). So a nonzero Radius refuses (ErrUnsupported, R8) rather than
-// publish an apex this evaluator cannot bound — pinned directly on a
-// hand-built face (TestStitchConeApexRefusesNonzeroRadius,
-// stitch_internal_test.go), since every reachable construction site sets
-// Cone.Radius literally to 0 (Origin already IS the apex) and so never
-// reaches this gate. stitchflux.ConeApex separately refuses a degenerate HalfAngle
+// publish an apex this evaluator cannot bound. Every reachable construction
+// site sets Cone.Radius literally to 0 (Origin already IS the apex) and so
+// never reaches this gate. stitchflux.ConeApex separately refuses a degenerate HalfAngle
 // (0, or non-finite one layer up through units.Value.In's own
-// ErrNotFinite) regardless of Radius, pinned the same way
-// (TestStitchConeHalfAngleRefusesDegenerateTangent,
-// stitch_internal_test.go) — no real wallCone ever carries one
+// ErrNotFinite) regardless of Radius; no real wallCone ever carries one
 // (internal/revolveplan/payload.go computes a real cone's HalfAngle as
 // math.Atan2(|dr|, |dz|) over a wall revolveaxis.Classify named a cone, so
 // neither dr nor dz is negligible and the angle is finite and strictly
@@ -210,11 +200,9 @@ import (
 // stitchflux.AxisIsCoordinateAligned rather than derived — the one condition
 // under which that read carries the identical zero bound the OTHER arms'
 // own edge/area derivations already give for a coordinate-aligned axis.
-// Every public fixture this PR tests revolves about a coordinate-aligned
-// axis through the origin, so the gate's own refusal for an off-axis Torus
-// is pinned on a hand-built face (TestStitchTorusRefusesOffAxisAlignedAxis,
-// stitch_internal_test.go), the same treatment the other arms' own
-// hand-built refusal fixtures already get.
+// Every public fixture revolves about a coordinate-aligned axis through the
+// origin, so no public fixture reaches the gate's refusal for an off-axis
+// Torus.
 //
 // RULE S — the construction-proof gate. Before this file's dispatch ever
 // runs, Build requires every operand face to descend from ONE

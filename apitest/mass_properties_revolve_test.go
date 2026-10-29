@@ -36,9 +36,9 @@ import (
 //     its lower endpoint leaves every fixture green. Both enclosures are
 //     about 1e-60 or narrower relative to the value, far below the ~1e-16
 //     relative rounding the float conversion charges, so no float reading
-//     can observe them. The internal enclosure tests
-//     (TestCircularThirdMomentWholeCircle, TestThirdOrderMomentsOfASector)
-//     hold their width and containment instead.
+//     can observe them. TestCircularThirdMomentWholeCircle
+//     (internal/circularbounds) holds the whole-circle enclosure's width and
+//     containment instead.
 // Each formula term was also removed or swapped: dropping the P·Pᵀ/V
 // centroid shift, swapping ∫z²ρ with ∫zρ² in either place, swapping ∫cos
 // with ∫sin or ∫cos² with ∫sin², or replacing ∫sinφcosφ turns at least one

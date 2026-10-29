@@ -221,8 +221,7 @@ func TestTessellateCapBlendRoundedRectMiters(t *testing.T) {
 
 	// The mitered corner patches carry a window-skew term on top of their own
 	// chording, so the mesh reads strictly above the larger of the two rings'
-	// sagitta. tessellation.ChordSagitta is not reachable from here; the internal test
-	// TestCapBlendMeshChargesTheWindowSkew pins the term itself.
+	// sagitta.
 	require.Positive(t, mesh.Bound().Mag())
 	require.Greater(t, mesh.Bound().Mag(), chordSagittaOfRoundedCorner(rho, tol),
 		`a mitered band bound must exceed the side ring's own sagitta alone`)
@@ -373,21 +372,14 @@ func TestTessellateCapBlendPlacedStaysWatertight(t *testing.T) {
 // whole turns, line-line miters and exactly G1 joins, and every boolean then
 // takes the body as an operand; any other band stays export-only.
 //
-// Each leg of that proof was shown to fail: the term was deleted, the named
+// These legs of that proof were shown to fail: the term was deleted, the named
 // test went red, and the term was restored.
 //
 //	Mchord trimmed term (productUpper(hTrimUpper, sideSegs))
 //	    TestCapBlendChamferedPinAsTool: the result volume leaves its bound.
 //	Mchord band term (productUpper(dUpper, bandSegs))
 //	    TestCapBlendDiskIntersectBandDominated: the result volume leaves its bound.
-//	cap station enclosure (lm.capMotion[j] in the cap vertex's motion)
-//	    TestCapBlendMeshPublishesVolumeProofForAnAdmittedBand (internal).
-//	side level bound (L.bound) and cap level bound (capBandLevel(...).bound)
-//	    TestCapBlendMeshMotionCarriesEachLevelBound (internal), one assertion each.
-//	prismrecord.Payload.PointRound (round in the motion)
-//	    TestCapBlendMeshMotionCarriesPlacementRounding (internal).
 //	line-line miter displacement (the bandDelta arm of capBlendCapMotion)
-//	    TestCapBlendMeshMotionCarriesTheMiterDisplacement (internal) and
 //	    TestCapBlendBooleanChargesTheMiterDisplacement: the Cut turns Exact.
 //	admission arms (whole turn, line-line miter, capJoinIsG1)
 //	    TestCapBlendFlangeCutAfterChamfer (whole turn and G1 joins) and

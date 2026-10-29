@@ -657,11 +657,8 @@ func TestVerifyCrossingPairSeatedAndPlacedResolve(t *testing.T) {
 // walk charge (§7's delta_walk), which the crossings with B can amplify.
 // agent-docs/general-boolean-design.md §3 A6 charges that, so the pair is measured
 // like the control arm, which draws the IDENTICAL footprint as a plain
-// rectangle. That this fixture yields a positive delta_walk under an identity
-// re-expression is pinned white-box by
-// TestPrismUnionTrimmedSourceSplitBoundaryChargesTheCrossing
-// (prism_boolean_internal_test.go). Shown to fail with the §3.4 split-boundary
-// reroute restored in prismcells.ResolveCrossingCells.
+// rectangle. Shown to fail with the §3.4 split-boundary reroute restored in
+// prismcells.ResolveCrossingCells.
 func TestVerifySeatedWalkChargedPairIsMeasured(t *testing.T) {
 	t.Parallel()
 	const h = 5.0
