@@ -10,3 +10,5 @@ The rules for rows live in `agent-docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `internal/anasurf/` | Exact plane tags with interval offsets, three-plane meets as enclosures and strict half-space tests. See trim-graph Component 2. |
+| `internal/trimgraph/` | Lifts a retained faceted body into faces, edges and vertices on exact plane tags, and decides edge convexity from the tags. See trim-graph Component 1, Table L. |
+| `internal/trimtest/` | Hand-made retained prisms and a pyramid with exact plane frames, for the trim-graph packages' tests. |
