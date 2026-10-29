@@ -36,11 +36,14 @@ func lobedTubeBoxes(sections, points, lobes int, step, twist float64) [][2]r3.Ve
 }
 
 // BenchmarkPairScanBuild measures newPairScan, and each scan it builds, over
-// the lobed tube at the audit's own ceiling.
+// a lobed tube at the twisted loft route's ceilings: 763 sections of 328
+// points are 499,872 triangles, just under twistMaxTriangles (500_000), and
+// the limit is twistMaxScans (4096 * twistMaxTriangles). Both constants live
+// in internal/smoothloft/twisted_mesh.go, which this package cannot import.
 func BenchmarkPairScanBuild(b *testing.B) {
-	boxes := lobedTubeBoxes(686, 328, 68, 0.26, 0.004)
+	boxes := lobedTubeBoxes(763, 328, 24, 0.26, 0.004)
 	members := allMembers(len(boxes))
-	const limit = 2_048_000_000
+	const limit = 4096 * 500_000
 	b.Run("pair", func(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
