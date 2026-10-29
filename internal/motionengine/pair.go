@@ -465,6 +465,7 @@ func (r *Run) intervalOutcome(a, b *Pose) (vocab.IntervalOutcome, *vocab.Measure
 	if r.collides(a) || r.collides(b) {
 		return vocab.IntervalColliding, nil
 	}
+	var priorLowest *big.Rat
 	lowest, ok := r.CertifyPairs(func(i, k int) *big.Rat {
 		pa, pb := a.Pairs[i][k], b.Pairs[i][k]
 		if !pa.HasGap || !pb.HasGap {
@@ -476,7 +477,17 @@ func (r *Run) intervalOutcome(a, b *Pose) (vocab.IntervalOutcome, *vocab.Measure
 			// §5.9).
 			tau = new(big.Rat)
 		}
-		return motionbound.IntervalPairLower(pa.Lo, pb.Lo, tau, r.Drive.Projection(i, k, a, b))
+		travel := motionbound.IntervalTravelLower(pa.Lo, pb.Lo, tau)
+		var bound *big.Rat
+		if motionbound.CanSkipProjection(travel, priorLowest) {
+			bound = travel
+		} else {
+			bound = motionbound.IntervalPairTravelProjectionLower(travel, r.Drive.Projection(i, k, a, b))
+		}
+		if bound != nil && (priorLowest == nil || bound.Cmp(priorLowest) < 0) {
+			priorLowest = bound
+		}
+		return bound
 	}, nil)
 	if !ok {
 		return vocab.IntervalUndecided, nil
