@@ -665,9 +665,23 @@ func PointTriDistance(p r3.Vec, t [3]r3.Vec) float64 {
 	}
 	best := posInf
 	for i := range 3 {
-		best = minFloat64(best, SegSegDist3(p, p, t[i], t[(i+1)%3]))
+		best = minFloat64(best, pointSegDist3(p, t[i], t[(i+1)%3]))
 	}
 	return best
+}
+
+// pointSegDist3 is the degenerate-first-segment case of SegSegDist3. Non-finite
+// projection terms retain the general routine's NaN and infinity behavior.
+func pointSegDist3(p, q0, q1 r3.Vec) float64 {
+	v := q1.Sub(q0)
+	w := p.Sub(q0)
+	c := v.Dot(v)
+	e := v.Dot(w)
+	if proofbound.IsNonFinite(c) || proofbound.IsNonFinite(e) {
+		return SegSegDist3(p, p, q0, q1)
+	}
+	t := Clamp01(e, c)
+	return p.Sub(q0.Add(v.Scale(t))).Len()
 }
 
 // triNormal is the unnormalised facet normal PointTriDistance projects along.
