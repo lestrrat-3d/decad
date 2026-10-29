@@ -429,9 +429,24 @@ func TestLoftAuditDataForCandidatesMatchesSerialReference(t *testing.T) {
 				require.True(t, slices.Contains(selected, false))
 
 				want := legacyLoftAuditDataSelected(m.verts, legacyLift(m.verts, m.tris, selected),
-					m.tris, selected, false)
+					m.tris, selected, true)
 				got := newLoftAuditDataForCandidatesWorkers(m.verts, m.tris, cands, workers)
 				requireSameLoftTables(t, m.tris, selected, want, got)
+				require.Nil(t, got.Corners)
+				require.Nil(t, got.Xtris)
+				require.Nil(t, got.Projections)
+				require.NotSame(t, &m.verts[0], &got.verts[0])
+				require.NotSame(t, &m.tris[0], &got.tris[0])
+				for i := range selected {
+					if selected[i] {
+						continue
+					}
+					require.Nil(t, got.Norms[i].X)
+					require.Nil(t, got.Planes[i].A)
+					require.Zero(t, got.floatNorms[i])
+					require.Zero(t, got.floatPlanes[i])
+					require.Zero(t, got.projAxes[i])
+				}
 			})
 		}
 	}

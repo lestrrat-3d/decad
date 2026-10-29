@@ -199,7 +199,7 @@ func newLoftAuditDataForCandidatesWorkers(verts []r3.Vec, tris [][3]int, cands l
 			need[tri[0]], need[tri[1]], need[tri[2]] = true, true, true
 		}
 	}
-	return newLoftAuditDataSelected(verts, liftLoftVertices(verts, need, workers), tris, selected, false, workers)
+	return newLoftAuditDataSelected(verts, liftLoftVertices(verts, need, workers), tris, selected, true, workers)
 }
 
 // loftDataParallelMin is the triangle count from which the audit tables are
