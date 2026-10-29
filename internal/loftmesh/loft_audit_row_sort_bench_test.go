@@ -7,12 +7,16 @@ import (
 )
 
 // BenchmarkLongRibbonRowSort measures the real tree row producer and parallel
-// row sorting over the long ribbon's production-sized chunks.
+// row sorting over a lobed tube at the twisted loft route's ceilings: 763
+// sections of 328 points are 499,872 triangles, just under twistMaxTriangles
+// (500_000), and the ceiling is twistMaxScans (4096 * twistMaxTriangles). Both
+// constants live in internal/smoothloft/twisted_mesh.go, which this package
+// cannot import. The size comes from those limits, not from any consumer model.
 func BenchmarkLongRibbonRowSort(b *testing.B) {
-	boxes := lobedTubeBoxes(686, 328, 68, 0.26, 0.004)
+	boxes := lobedTubeBoxes(763, 328, 24, 0.26, 0.004)
 	members := allMembers(len(boxes))
 	tree := newTreeScan(boxes, members)
-	const ceiling = 2_048_000_000
+	const ceiling = 4096 * 500_000
 	counts, err := sweepCandidateCountsWorkers(proofbound.NewWorkBudget(b.Context()), tree,
 		len(boxes), keepEveryPair, ceiling, 1)
 	if err != nil || counts.exceeded {
