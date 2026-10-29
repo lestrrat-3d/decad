@@ -530,7 +530,7 @@ requires opening a PR before the first real producer-to-accessor fixture passes.
   `go test . -run '^TestCLAUDEMDLayoutStaysCompact$'` for layout changes. Run the repository's applicable API/doc
   guard tests discovered beside the touched public surface. Fix failures without weakening assertions.
 - Before any Go-code PR push or creation, follow `git-operations.md`'s Go Lint Before PR requirement. Current
-  `.github/workflows/ci.yml` runs golangci-lint v2.12.2 and `go vet ./...`; run
+  `.github/workflows/ci.yml` runs golangci-lint v2.15.0 and `go vet ./...`; run
   `golangci-lint run --timeout=5m` and `go vet ./...` after the last Go edit and resolve change-caused failures.
 - Let remote CI run the full suite. Follow Push Guard, message lint, and PR CI Watch rules for any authorized
   PR delivery; watch checks to completion and report the actual CI result. Do not call focused local checks

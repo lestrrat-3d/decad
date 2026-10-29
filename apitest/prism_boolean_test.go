@@ -135,9 +135,7 @@ func overshootQuadBody(t *testing.T, doc *decad.Document, corners [][2]float64, 
 //
 // This fixture is fu157's own class (#158): welding the private scene's
 // recorded junctions closes exactly this loop, so once that PR lands this
-// test's refusal must be re-measured — TestPrismUnionMergedLoopJunctionsClose
-// (prism_boolean_internal_test.go) pins RB9's guard directly, on a synthetic
-// non-closing loop, for exactly that reason, and stays correct either way.
+// test's refusal must be re-measured.
 func TestPrismUnionCutFragmentOperandRefusesNonClosingMerge(t *testing.T) {
 	t.Parallel()
 	corners := [][2]float64{{-9.317, -5.731}, {10.29, -6.113}, {8.877, 7.219}, {-7.331, 6.407}}

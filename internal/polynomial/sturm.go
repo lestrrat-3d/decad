@@ -103,8 +103,7 @@ func IpSign(p IntPoly, num, den *big.Int, acc, dpow, tmp *big.Int) int {
 
 // SturmVarAt counts sign changes of the chain at x, reading each member's
 // sign from cleared-denominator big.Int coefficients (IpSign) rather than a
-// full big.Rat evaluation; the sign vector is identical either way
-// (TestSturmVarAtMatchesRationalHornerSigns).
+// full big.Rat evaluation; the sign vector is identical either way.
 func SturmVarAt(chain SturmChainInt, x *big.Rat) int {
 	acc, dpow, tmp := new(big.Int), new(big.Int), new(big.Int)
 	num, den := new(big.Int).Set(x.Num()), new(big.Int).Set(x.Denom())

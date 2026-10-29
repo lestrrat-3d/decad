@@ -1064,7 +1064,7 @@ Add each new test name to shard 10 of `.github/test-shards.txt`.
   changes and the affected documentation/layout guards. Run executable examples
   that changed. Leave the full suite to configured CI.
 - Required Go lint before PR: After the last Go edit and before the first push
-  or PR creation, run `golangci-lint run --timeout=5m` using CI's v2.12.2 and
+  or PR creation, run `golangci-lint run --timeout=5m` using CI's v2.15.0 and
   `go vet ./...`. Store expensive output in `.tmp/`. Fix changed-code failures
   and rerun the failed checks; stop if lint cannot run or unrelated errors block it.
   Follow `~/.claude/docs/git-operations.md` for later pushes and PR CI Watch.

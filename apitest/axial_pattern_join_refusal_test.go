@@ -53,7 +53,7 @@ func TestPatternJoinJoinsCopiesThatShareWholeSides(t *testing.T) {
 	require.InDelta(t, want, v.Value.Base(), v.Bound.Base()+pv.Bound.Base()+3*tv.Bound.Base()+1e-9)
 }
 
-// TestPatternJoinRefusesLobesThatOnlyTouchOrMissTheBase builds lobes whose bottom arc rests on the
+// TestPatternJoinRefusesLobesThatOnlyTouchTheBase builds lobes whose bottom arc rests on the
 // disc's circle with the flank ends on it, and lobes a hair above it. The first touch the disc along
 // an arc and at the flank ends, the second leave a gap: neither joins into one region sketch can
 // certify, so the join refuses with ErrUnsupported and leaves the document as it was.

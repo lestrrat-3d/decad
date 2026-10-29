@@ -354,7 +354,7 @@ func BenchmarkModelingPlacedFreeform(b *testing.B) {
 	b.StopTimer()
 }
 
-// BenchmarkModelingVerifyDefaultWarm measures default verification on an
+// BenchmarkModelingVerifyDefaultWarmDisjoint measures default verification on an
 // increasing number of disjoint, already-built bodies.
 func BenchmarkModelingVerifyDefaultWarmDisjoint(b *testing.B) {
 	for _, count := range []int{2, 4, 8} {

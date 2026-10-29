@@ -790,7 +790,7 @@ func TestShellSideOpeningArcs(t *testing.T) {
 		// − 12)) = 120 + 125π − 250·acos(3/5). Its rims end at the cut's
 		// parameter on the arc's own record, a float whose point is not
 		// (3, ±4) itself, and the prism charges that gap
-		// (TestSideOpeningRegionsDSection pins the gap's enclosure).
+		// (the prism's bound encloses that gap).
 		_, d = arcPrism(t, dSection)
 		removed = cylinderFaces(d, 0, 0, 5)
 		require.Len(t, removed, 1)
@@ -837,7 +837,7 @@ func TestShellSideOpeningArcs(t *testing.T) {
 		// (2, ±√21), a float solve. With both caps removed the wall is a
 		// prism over 125π/10 − (25·acos(2/5) − 2√21), volume 125π −
 		// 250·acos(2/5) + 20√21 within its bound (the cut's own charge is
-		// TestSideOpeningRegionsDSection's). Each kept cap adds a slab of the
+		// the same gap enclosure). Each kept cap adds a slab of the
 		// cavity C = 25·acos(2/5) − 2√21, two units tall: one cap kept,
 		// 125π − 200·acos(2/5) + 16√21; both, 125π − 150·acos(2/5) + 12√21.
 		// The rims and the pieces of R and R' are parameter ranges of the

@@ -247,9 +247,7 @@ func TestStitchPatchCappedTubeClosesToASolid(t *testing.T) {
 // cylinder wall plus two PatchProfile discs at its own exact end planes,
 // bit-identical circles at bit-identical planes, still leaves all four rims
 // free after Stitch. Rule S's own single-source-body restriction is
-// pinned instead by TestStitchRuleSRefusesMultipleSourceBodies
-// (stitch_internal_test.go), on a hand-built face set the same way
-// TestStitchOrientationRefusesMobiusAssembly pins stitchrecord.DeriveOrientation.
+// not reachable through the public seam, and no test covers it.
 
 // halfTorusAnalytics is the by-hand closed form for offAxisSemicircleSketch's
 // own shape: a straight chord at rho=Major (the tube's own equatorial
@@ -326,14 +324,11 @@ func halfTorusRevolveSheet(t *testing.T, u0, major, minor float64) *decad.Body {
 // TestStitchTorusRevolveSheetClosesToASolid is T53: offAxisSemicircleSketch's
 // own full-revolution surface sheet (u0=5, Major=10, Minor=5 in
 // offAxisSemicircleSketchGeneral's own parametrization — the identical
-// points TestStitchTorusFaceStaysUnsupported built) — one Cylinder wall and
+// points a torus face built before the Torus arm existed) — one Cylinder wall and
 // one Torus wall spanning exactly the tube's own outer half, phi in
 // [-pi/2, pi/2] — closes to a solid whose volume, area and centroid the
 // Torus arm now computes, checked against halfTorusAnalytics's own
-// independent Pappus derivation. This replaces
-// TestStitchTorusFaceStaysUnsupported: the refusal that test pinned (the
-// sealed switch's own then-missing KindTorus arm) is retired, and its shard
-// row moves to this test's name.
+// independent Pappus derivation.
 func TestStitchTorusRevolveSheetClosesToASolid(t *testing.T) {
 	t.Parallel()
 	s, p := offAxisSemicircleSketch(t)
@@ -626,10 +621,7 @@ func sphereRevolveSheet(t *testing.T, u0, diameter float64) (*decad.Document, *d
 
 // TestStitchSphereRevolveSheetClosesToABall is T50: semicircleSketch's own
 // full-revolution surface sheet (T6's fixture) closes to a solid whose
-// volume, area and centroid the Sphere arm now computes. This replaces
-// TestStitchClosedCurvedSheetIsUnsupported (stitch_test.go): T6's own
-// "stitching it alone is ErrUnsupported" half is retired, and its shard row
-// moves to this test's name.
+// volume, area and centroid the Sphere arm computes.
 func TestStitchSphereRevolveSheetClosesToABall(t *testing.T) {
 	t.Parallel()
 	doc, sheet := sphereRevolveSheet(t, 0, 10)

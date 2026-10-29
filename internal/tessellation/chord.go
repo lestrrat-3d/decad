@@ -120,8 +120,7 @@ func ChordCount(w survey2d.SegmentWalk, tol float64, nMin int) (int, float64, er
 //
 // The bound sits above the true sagitta by the factor (x/sin x)² — about
 // 1.0000126 at a typical fine chording (90 degrees over 64 stations) and
-// π²/9 in the coarsest case a closed walk can reach (n=3 on a full circle;
-// TestChordSagittaCoarsestClosedWalkStaysProven pins that ratio). Two
+// π²/9 in the coarsest case a closed walk can reach (n=3 on a full circle). Two
 // consequences reach a caller, and [Body.Tessellate]'s doc comment owns
 // both in the caller's own terms: [Mesh.Bound] reads by that factor above
 // the deviation the chords take, and ChordCount's walk-up settles on a
@@ -130,8 +129,6 @@ func ChordCount(w survey2d.SegmentWalk, tol float64, nMin int) (int, float64, er
 // tol within (x/sin x)²−1 of the finest chording the cap admits. Both are
 // the safe direction: a finer mesh, or a typed refusal, never a coarser
 // mesh under a claim this package cannot prove.
-// TestChordCountRefusesTheToleranceWindowAtTheMeshCap pins that refusal at
-// its exact boundary.
 func ChordSagitta(radius, sweep float64, n int) float64 {
 	if n <= 0 || sweep < 0 {
 		// A non-positive n or a negative sweep would otherwise read as

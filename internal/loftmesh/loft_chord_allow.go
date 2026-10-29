@@ -71,7 +71,7 @@ import (
 // the union of the charged cells' lenses, which lie inside that tube; the
 // held vertices' own displacement is the accumulator's perturbAreaSum. Area()
 // charges it beside the wall term; omitting it understates Area on every curved
-// pairing (TestLoftArcWedgeAreaMatchesExtrudeOracle).
+// pairing.
 //
 // areaExcess is the two residual legs of the wall's own per-cell gap after
 // proofbound.CellBilinearArea has moved the nominal reading from held facets to the

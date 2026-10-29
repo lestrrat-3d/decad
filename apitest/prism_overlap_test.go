@@ -361,8 +361,8 @@ func TestPublicBooleansUnchangedOnMultiRegionPair(t *testing.T) {
 // [0, yBase]) and n teeth of width tw rising from it at pitch p (left edge of
 // tooth k at x0+mL+k*p) up to tip height yTop, with base margins mL/mR beyond
 // the end teeth. Point order generalizes combTeethPts's own hand-authored
-// 3-tooth comb (prism_overlap_test.go's TestVerifyThreeRegionOverlapReports
-// SummedVolume fixture) to any tooth count, right-to-left per tooth.
+// 3-tooth comb (prism_overlap_test.go's
+// TestVerifyThreeRegionOverlapReportsSummedVolume fixture) to any tooth count, right-to-left per tooth.
 func combUpPts(n int, x0, tw, p, mL, mR, yBase, yTop float64) [][2]float64 {
 	total := mL + float64(n-1)*p + tw + mR
 	pts := [][2]float64{{x0, 0}, {x0 + total, 0}, {x0 + total, yBase}}

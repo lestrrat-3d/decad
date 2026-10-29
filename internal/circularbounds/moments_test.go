@@ -169,8 +169,7 @@ func requireIntervalsOverlap(t *testing.T, name string, a, b proofbound.RatInter
 // enclosures of one value must overlap.
 //
 // Shown-to-fail: dropping the a ≥ 2 reduction's (a−1)·r² lower term
-// separates every case. These forms never reach the b ≥ 2 reduction;
-// TestThirdOrderMomentsOfASector covers it.
+// separates every case. These forms never reach the b ≥ 2 reduction.
 func TestCircularMonomialsAgreeWithClosedForms(t *testing.T) {
 	t.Parallel()
 	drifted, _, _ := driftedArcFixture(t)

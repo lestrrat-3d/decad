@@ -774,10 +774,6 @@ func TestSweepPairPerVertexCurvature(t *testing.T) {
 //     TestSweepPairColumnEndsDepartureAtWall departs over the whole sweep,
 //     past the wall, and its departure's end sample overlaps the wall, so the
 //     sweep is SweepUndecided with SweepDepartureUnproved;
-//   - the lateral clearance in the departure's lower gap:
-//     contact_sweep_band_internal_test.go's
-//     TestPlanarDepartureLowerGapIsBoundedByLateralClearance publishes the
-//     rising cube's height, far above its 2⁻¹⁰ mm clearance from the wall;
 //   - the column test in the band track's grid search:
 //     TestSweepPairColumnRefusesTrackOverRim publishes a quarter-second band
 //     track through which the box sinks into a low wall's rim.

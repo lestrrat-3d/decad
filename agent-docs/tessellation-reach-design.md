@@ -227,7 +227,7 @@ loft is an ordinary positive-bound all-planar operand via the per-pair rim bound
 
 tess §14's loft bullet in full, plus:
 
-- `TestLoftTessellateStaged` (`apitest/loft_test.go`) becomes `TestLoftTessellate`: mesh non-nil; triangle count
+- `TestLoftTessellate` (`apitest/tessellate_loft_test.go`) checks: mesh non-nil; triangle count
   `== 2·Σstations + capTris`; `requireWatertight`; `meshVolume(mesh)` within `body.Volume().Bound()` of
   `body.Volume().Value`; every `SourceFaces()` entry is one of `b.Faces()`; the mesh vertex set equals the
   body's `Vertices()` positions exactly.

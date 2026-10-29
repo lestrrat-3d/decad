@@ -85,9 +85,8 @@ func Dot(a, b r3.Vec) proofbound.BoundedScalar {
 // (internal/revolveplan/payload.go's WallCone arm, internal/capblend/band.go's coneSurface) sets Radius
 // literally to 0 — Origin already IS the apex — so this restriction costs
 // no reachable admitted face; the refusal it adds for a nonzero Radius is
-// exercised at a hand-built internal fixture
-// (TestStitchConeApexRefusesNonzeroRadius, stitch_internal_test.go), since
-// no construction site here ever sets Radius otherwise.
+// reached by no construction site here, since none ever
+// sets Radius otherwise.
 //
 // WHY THE GENERAL DIVISION IS NOT SOUNDLY BOUNDABLE HERE, so a future
 // change does not silently reintroduce it. tan(HalfAngle) would need its
@@ -122,10 +121,7 @@ func Dot(a, b r3.Vec) proofbound.BoundedScalar {
 // HalfAngle is refused one layer up, by units.Value.In's own ErrNotFinite,
 // before this function's own tan(HalfAngle) call ever runs, and a
 // HalfAngle near π/2 does not make math.Tan return an actual ±Inf for any
-// finite input (π/2 itself has no exact float64 representation) —
-// TestStitchConeHalfAngleRefusesDegenerateTangent
-// (stitch_internal_test.go) shows the exactly-zero case failing red and
-// records why the non-finite half of the guard is not similarly shown.
+// finite input (π/2 itself has no exact float64 representation).
 func ConeApex(halfAngle, radius units.Value, origin r3.Vec) (proofbound.BoundedScalar, proofbound.BoundedScalar, proofbound.BoundedScalar, error) {
 	half, herr := halfAngle.In(units.Radian)
 	if herr != nil {
@@ -167,8 +163,7 @@ func ConeApex(halfAngle, radius units.Value, origin r3.Vec) (proofbound.BoundedS
 		// Radius is EXACTLY zero at every construction site in this
 		// evaluator (internal/revolveplan/payload.go's WallCone arm,
 		// internal/capblend/band.go's coneSurface — Origin is already the apex), so refusing what
-		// nothing builds costs no reachable fixture
-		// (TestStitchConeApexRefusesNonzeroRadius, stitch_internal_test.go).
+		// nothing builds costs no reachable fixture.
 		return proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, proofbound.BoundedScalar{}, fmt.Errorf(
 			`%w: Stitch's flux path needs a Cone whose Origin is already its own apex (Radius exactly 0); this evaluator has no sound bound for tan(HalfAngle)'s own rounding, which a nonzero Radius would need to divide by (agent-docs/surface-design.md Table R row R8)`,
 			decaderr.ErrUnsupported,

@@ -1376,7 +1376,7 @@ func TestDegenerateSplineRecordRefuses(t *testing.T) {
 // (agent-docs/spline-design.md §10 P4b, Table R row R6 retired): Extrude reaches the
 // walk-kind discriminant's free-form arm instead of refusing there, and the
 // resulting solid's Volume is the Tier A rational times the sweep height —
-// the same exact area TestClosedSplineExactArea proves, composed through the
+// the same exact area TestClosedSplineProfileAreaExactWhenRepresentable proves, composed through the
 // unchanged height arithmetic every straight-walled prism already uses.
 func TestExtrudeClosedSplineProfileBuilds(t *testing.T) {
 	t.Parallel()

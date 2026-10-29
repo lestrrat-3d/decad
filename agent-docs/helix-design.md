@@ -738,7 +738,7 @@ At the default relative tolerance `0.001`, the end-reaching gallery model report
 | Centroid | `(0.006830893328, 7.127687732124, -0.010412655469) mm` | `0.028588054103 mm` | `0.017204650534 mm` |
 
 All three bounds exceed their limits, so the valid body is `Suspect`.
-`TestCoilGalleryThreadVolume` checks the independent end-clipped volume
+The independent end-clipped volume is
 `π·(350 − 16Q − (4/3)·M⁻)`, where `Q = ∫ρ dA` over the profile inside
 `ρ ≤ 5` and `M⁻ = ∫ρζ dA` over its part below `ζ = 0`.
 The screw sweep's lower angle is `max(0, −ζ/k)`, with `k = 1.5/(2π)`;
@@ -964,9 +964,7 @@ PR 2:
   `Ω ∩ {ρ ≥ R}` and `Sound` verification.
 - `_gallery/thread.go` renders the eight-turn end-reaching V-groove during
   gallery CI and requires its valid, `Suspect` verdict with exactly `Area`,
-  `Volume` and `Centroid` tolerance diagnostics. `TestCoilGalleryThreadVolume`
-  checks the same eight-turn geometry's independent volume enclosure,
-  bounds, watertight mesh and validity.
+  `Volume` and `Centroid` tolerance diagnostics.
 - The cylinder meshed at the raised pair tolerance is coarser than at the
   diameter-derived one, and its mesh volume and area still lie within its
   own `volSymDiff` and `areaSlack` of `500π` and `250π`.

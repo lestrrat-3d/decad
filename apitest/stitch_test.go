@@ -18,10 +18,8 @@ import (
 // refusal a stitched solid pins. The internal fixtures for Table R's R7 rows (a
 // non-orientable set and a non-manifold one) and R9 live in
 // stitch_internal_test.go, since decad's public seam admits no way to
-// author either shape directly. T6's own stitched-solid half (T50) moved to
-// stitch_flux_test.go once the Sphere arm retired its "ErrUnsupported"
-// outcome — TestStitchClosedCurvedSheetIsUnsupported is gone, replaced by
-// TestStitchSphereRevolveSheetClosesToABall.
+// author either shape directly. T6's own stitched-solid half (T50) is
+// TestStitchSphereRevolveSheetClosesToABall in stitch_flux_test.go.
 
 // stitchBoxSheets builds T1's rectangle walls plus a patch at each end —
 // agent-docs/surface-design.md's worked box example — and returns the three
@@ -741,15 +739,11 @@ func TestStitchBoxReachesAProvenClearanceGap(t *testing.T) {
 }
 
 // TestStitchOverlappingSolidReportsRealInterference is
-// agent-docs/surface-design.md's T72. This replaces
-// TestStitchOverlappingSolidStaysUndecided (T66), whose whole subject — a
-// stitched solid's overlap ever reaching a real Interference row — this row
-// retires: the clearance kernel already proved this shape of pair
-// boundaryaudit.PairOverlapping before this increment
-// (TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal,
-// clearance_internal_test.go), but booloperand.RequireVolumeProof
-// (internal/booloperand/volume_proof.go) refused the stitched operand before measuredInterference
-// ever consulted that verdict. A CLOSED, all-planar, zero-vertex-bound
+// agent-docs/surface-design.md's T72. A stitched solid's overlap reaches a
+// real Interference row: the clearance kernel proves this shape of pair
+// boundaryaudit.PairOverlapping, and booloperand.RequireVolumeProof
+// (internal/booloperand/volume_proof.go) no longer refuses the operand before
+// measuredInterference consults that verdict. A CLOSED, all-planar, zero-vertex-bound
 // stitched solid no longer hits that refusal, so the pair now resolves
 // through the ordinary mesh boolean (measuredInterference's own
 // evaluateBoolean(meshbool.OpIntersect) fallback) to a real, bounded volume.

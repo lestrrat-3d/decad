@@ -10,7 +10,7 @@ import (
 )
 
 // BenchmarkRevolveArcCellSlack measures the certified slack calculation for
-// the inner-torus arc cell from TestRevolveArcCellSlackBoundsASignChangingJacobianGap.
+// the inner-torus arc cell, whose Jacobian changes sign across the gap.
 func BenchmarkRevolveArcCellSlack(b *testing.B) {
 	cell := arcCellFixture(10, 3, 3*math.Pi/2-0.4, 0.8)
 	step := proofbound.IntervalScale(proofbound.TwoPiInterval(), big.NewRat(1, 16))
