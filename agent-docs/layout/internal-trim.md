@@ -12,3 +12,4 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/anasurf/` | Exact plane tags with interval offsets, three-plane meets as enclosures and strict half-space tests. See trim-graph Component 2. |
 | `internal/trimgraph/` | Lifts a retained faceted body into faces, edges and vertices on exact plane tags, and decides edge convexity from the tags. See trim-graph Component 1, Table L. |
 | `internal/trimtest/` | Hand-made retained prisms and a pyramid with exact plane frames, for the trim-graph packages' tests. |
+| `internal/facemesh/` | Meshes one planar face of a trim graph over `internal/triangulation`, refusing a dropped point or a triangle that fails the exact orientation margin. See trim-graph Component 4. |
