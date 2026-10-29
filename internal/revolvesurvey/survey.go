@@ -1,6 +1,7 @@
 package revolvesurvey
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -20,11 +21,36 @@ type AxisClassifier interface {
 // whose own two contacts span exactly when the sweep is within the
 // allowance, the on-axis cap edge (dihedral = the sweep itself) included.
 func WallReading(
-	budget *proofbound.WorkBudget, loops [][]survey2d.SideWalk, classify AxisClassifier,
+	budget *proofbound.WorkBudget, loops [][]survey2d.SideWalk, carriers [][]int, classify AxisClassifier,
 	full bool, phi0, phi1, angularDelta, alpha float64,
 ) (survey2d.WallReading, error) {
 	if err := survey2d.WallBudgetErr(budget); err != nil {
 		return survey2d.WallReading{}, err
+	}
+	carrier := 0
+	if carriers != nil {
+		if len(carriers) != len(loops) {
+			return survey2d.WallReading{}, fmt.Errorf("revolve wall carrier table: loop count mismatch")
+		}
+		for i, row := range carriers {
+			if err := survey2d.WallBudgetStep(budget); err != nil {
+				return survey2d.WallReading{}, err
+			}
+			if len(row) != len(loops[i]) {
+				return survey2d.WallReading{}, fmt.Errorf("revolve wall carrier table: walk count mismatch")
+			}
+			for _, id := range row {
+				if err := survey2d.WallBudgetStep(budget); err != nil {
+					return survey2d.WallReading{}, err
+				}
+				if id < 0 {
+					return survey2d.WallReading{}, fmt.Errorf("revolve wall carrier table: negative ID")
+				}
+				if id > carrier {
+					carrier = id
+				}
+			}
+		}
 	}
 	// The sweep, with the subtraction's OWN rounding plus the proven angular
 	// displacement (agent-docs/evaluator-design.md §6) as its bound — the two
@@ -40,8 +66,7 @@ func WallReading(
 	var verts [][2]float64
 	pinch := false
 	axisTouch := false
-	carrier := 0
-	for _, loop := range loops {
+	for loopIndex, loop := range loops {
 		n := len(loop)
 		single := n == 1 && loop[0].Closed
 		kinds := make([]bool, n)
@@ -71,13 +96,16 @@ func WallReading(
 			if full {
 				// An arc centred exactly on the axis lies on one circle with
 				// its own mirror, the material on one side: the pair is a
-				// carrier pair and bounds no web. Each pair takes its own id
-				// because SurveyElem.Carrier's contract is that one id names
-				// one proven circle, and this walk proves only its own.
+				// carrier pair and bounds no web. A supplied ID groups source arcs
+				// proven to share a circle; otherwise this pair gets a fresh ID.
 				m := survey2d.MirrorElem(el)
 				if OnAxisCentre(w) {
-					carrier++
-					el.Carrier, m.Carrier = carrier, carrier
+					shared := 0
+					if carriers != nil {
+						shared = carriers[loopIndex][i]
+					}
+					id := nextCarrierID(shared, &carrier)
+					el.Carrier, m.Carrier = id, id
 				}
 				elems = append(elems, el, m)
 			} else {
@@ -310,4 +338,12 @@ func RadiusAggregate(loops [][]survey2d.SideWalk, classify AxisClassifier) surve
 		}
 	}
 	return agg
+}
+
+func nextCarrierID(shared int, last *int) int {
+	if shared > 0 {
+		return shared
+	}
+	*last++
+	return *last
 }
