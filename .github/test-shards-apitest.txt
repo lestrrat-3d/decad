@@ -1417,6 +1417,7 @@
 10	0.01	TestExtrudeToATiltedMeshFaceFromAboveSweepsDown
 5	0.00	TestPrismUnionReflectedOperandInsideBox
 10	0.01	TestMeshSolidBooleansAgreeWithTheCubeByCubeBoolean
+10	0.00	TestVerifySameSetDenotedLevels
 10	0.01	TestVerifySurveysAgreeWithTheCubeByCubeRunsAndColumns
 10	0.01	TestStretchAgreesWithTheStretchedCubes
 10	0.01	TestMeshSolidWithAPrismAgreesWithTheCubeByCubeBoolean

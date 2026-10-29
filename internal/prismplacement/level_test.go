@@ -56,3 +56,42 @@ func TestDenotedLevel(t *testing.T) {
 		require.Equal(t, prismplacement.LevelDenotation{}, prismplacement.DenoteLevel(nil, held, delta))
 	})
 }
+
+func TestSameDenotedLevel(t *testing.T) {
+	exact := new(big.Rat).Mul(new(big.Rat).SetFloat64(0.2), new(big.Rat).SetFloat64(25.4))
+	held, _ := exact.Float64()
+	d1 := prismplacement.DenoteLevel(exact, held, 1e-15)
+	d2 := prismplacement.DenoteLevel(exact, held, 2e-15)
+	type level struct {
+		held, delta float64
+		denoted     prismplacement.LevelDenotation
+	}
+	valid := level{held, 1e-15, d1}
+	zero := prismplacement.LevelDenotation{}
+	cases := []struct {
+		name string
+		a, b level
+		want bool
+	}{
+		{"undisplaced", level{7, 0, zero}, level{7, 0, zero}, true},
+		{"different", level{7, 0, zero}, level{8, 0, zero}, false},
+		{"different bounds", valid, level{held, 2e-15, d2}, true},
+		{"different exact", valid, level{held, 0, zero}, false},
+		{"unknown", valid, level{held, 1e-15, zero}, false},
+		{"stale held", valid, level{math.Nextafter(held, 0), 1e-15, d1}, false},
+		{"stale bound", valid, level{held, 2e-15, d1}, false},
+		{"nan", valid, level{math.NaN(), 0, zero}, false},
+		{"positive infinity", valid, level{math.Inf(1), 0, zero}, false},
+		{"negative infinity", valid, level{math.Inf(-1), 0, zero}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, pair := range [][2]level{{tc.a, tc.b}, {tc.b, tc.a}} {
+				a, b := pair[0], pair[1]
+				require.Equal(t, tc.want, prismplacement.SameDenotedLevel(a.held, a.delta, a.denoted, b.held, b.delta, b.denoted))
+			}
+		})
+	}
+	require.Zero(t, prismplacement.DenotedLevel(held, 1e-15, d1).Cmp(exact))
+	require.Zero(t, prismplacement.DenotedLevel(held, 2e-15, d2).Cmp(exact))
+}

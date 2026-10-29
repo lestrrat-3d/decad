@@ -246,12 +246,16 @@ coincide. An exact set-equality certificate may reuse one operand's volume on
 the same grounds: `A = B` proves `A ∩ B = A`.
 
 The shipped certificate is analytic and exact. It compares the payload fields
-that determine the represented point set with exact structural equality, never
-samples, bounding boxes, tolerances, or topology counts. Derived metadata that
+that determine the represented point set using exact equality, never samples,
+bounding boxes, tolerances, or topology counts. Derived metadata that
 does not change that set — `cupPayload.Thickness`/`Sense` and
 `prismPayload.BlendSegs`/`BlendKind` — is deliberately excluded. Equal
 represented-set fields in `prismPayload`, `cupPayload`, or `revolvePayload`
 prove identical represented sets.
+
+For prisms, both endpoint levels must have equal exact denotations. For cups,
+the open, outer, and cavity levels must each have equal exact denotations.
+Missing or stale displaced-level evidence withholds the certificate.
 
 The certificate additionally requires each operand's record to BE the set it
 denotes. A `prismPayload` carrying a nonzero section displacement

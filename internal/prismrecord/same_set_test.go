@@ -2,9 +2,11 @@ package prismrecord_test
 
 import (
 	"errors"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -34,6 +36,42 @@ func TestSameSet(t *testing.T) {
 		return prismrecord.Payload{Frame: frame, Xform: r3.Identity(), Z0: 0, Z1: 4, Profile: squareProfile(2)}
 	}
 	budget := func() *proofbound.WorkBudget { return proofbound.NewWorkBudget(t.Context()) }
+	exact := new(big.Rat).Mul(new(big.Rat).SetFloat64(0.2), new(big.Rat).SetFloat64(25.4))
+	held, _ := exact.Float64()
+	for name, set := range map[string]func(*prismrecord.Payload, float64, prismplacement.LevelDenotation){
+		"start": func(p *prismrecord.Payload, delta float64, d prismplacement.LevelDenotation) {
+			p.Z0, p.Z0Delta, p.Z0Denoted, p.Z1 = held, delta, d, 8
+		},
+		"end": func(p *prismrecord.Payload, delta float64, d prismplacement.LevelDenotation) {
+			p.Z1, p.Z1Delta, p.Z1Denoted = held, delta, d
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			a := base()
+			set(&a, 1e-15, prismplacement.DenoteLevel(exact, held, 1e-15))
+			for _, tc := range []struct {
+				name    string
+				delta   float64
+				denoted prismplacement.LevelDenotation
+				want    bool
+			}{
+				{"equal", 2e-15, prismplacement.DenoteLevel(exact, held, 2e-15), true},
+				{"unequal", 0, prismplacement.LevelDenotation{}, false},
+				{"unknown", 1e-15, prismplacement.LevelDenotation{}, false},
+				{"stale", 2e-15, prismplacement.DenoteLevel(exact, held, 1e-15), false},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					b := base()
+					set(&b, tc.delta, tc.denoted)
+					for _, pair := range [][2]prismrecord.Payload{{a, b}, {b, a}} {
+						same, err := pair[0].SameSet(budget(), pair[1])
+						require.NoError(t, err)
+						require.Equal(t, tc.want, same)
+					}
+				})
+			}
+		})
+	}
 
 	same, err := base().SameSet(budget(), base())
 	require.NoError(t, err)

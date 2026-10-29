@@ -2,10 +2,12 @@ package cupwall_test
 
 import (
 	"errors"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/cupwall"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
@@ -35,6 +37,45 @@ func TestViewSameSet(t *testing.T) {
 			Outer: squareOf(10), Cavity: squareOf(6)}
 	}
 	budget := func() *proofbound.WorkBudget { return proofbound.NewWorkBudget(t.Context()) }
+	exact := new(big.Rat).Mul(new(big.Rat).SetFloat64(0.2), new(big.Rat).SetFloat64(25.4))
+	held, _ := exact.Float64()
+	for name, set := range map[string]func(*cupwall.View, float64, prismplacement.LevelDenotation){
+		"open": func(p *cupwall.View, delta float64, d prismplacement.LevelDenotation) {
+			p.ZOpen, p.ZOpenDelta, p.ZOpenDenoted, p.ZCav = held, delta, d, 1
+		},
+		"outer": func(p *cupwall.View, delta float64, d prismplacement.LevelDenotation) {
+			p.ZOuter, p.ZOuterDelta, p.ZOuterDenoted, p.ZCav = held, delta, d, 10
+		},
+		"cavity": func(p *cupwall.View, delta float64, d prismplacement.LevelDenotation) {
+			p.ZCav, p.ZCavDelta, p.ZCavDenoted = held, delta, d
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			a := base()
+			set(&a, 1e-15, prismplacement.DenoteLevel(exact, held, 1e-15))
+			for _, tc := range []struct {
+				name    string
+				delta   float64
+				denoted prismplacement.LevelDenotation
+				want    bool
+			}{
+				{"equal", 2e-15, prismplacement.DenoteLevel(exact, held, 2e-15), true},
+				{"unequal", 0, prismplacement.LevelDenotation{}, false},
+				{"unknown", 1e-15, prismplacement.LevelDenotation{}, false},
+				{"stale", 2e-15, prismplacement.DenoteLevel(exact, held, 1e-15), false},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					b := base()
+					set(&b, tc.delta, tc.denoted)
+					for _, pair := range [][2]cupwall.View{{a, b}, {b, a}} {
+						same, err := pair[0].SameSet(budget(), pair[1])
+						require.NoError(t, err)
+						require.Equal(t, tc.want, same)
+					}
+				})
+			}
+		})
+	}
 
 	same, err := base().SameSet(budget(), base())
 	require.NoError(t, err)
