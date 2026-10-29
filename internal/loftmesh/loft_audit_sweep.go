@@ -409,8 +409,20 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 		var err error
 		// Projected patches already remove within-patch pairs; their remaining
 		// pairs retain the existing preparation path.
+		selectExact := provenPatches == 0
+		if selectExact && len(members) < loftRowParallelMin {
+			if tree, ok := rowTree.(treeScan); ok && len(tree.nodes) > 0 {
+				rows := uint64(len(members))
+				if rows > ceiling || count > ceiling-rows {
+					// Every serial row visit includes at least one root visit. The
+					// row preflight must refuse, so exact-pair observation cannot
+					// affect the audit result.
+					selectExact = false
+				}
+			}
+		}
 		data, err = prepareLoftStreamAuditData(budget, rowTree, members, starts, ceiling,
-			verts, tris, shortcuts, provenPatches == 0)
+			verts, tris, shortcuts, selectExact)
 		if err != nil {
 			return work, err
 		}
