@@ -31,7 +31,7 @@ func TestClosedSphereCoverage(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, r3.NewVec(5, 0, 0), got.Center)
 	require.Equal(t, 5.0, got.Radius)
-	_, ok, err = closedstep.Read(t.Context(), b, &Face{})
+	_, ok, err = closedstep.Read(t.Context(), b, bornFace(&Face{}))
 	require.NoError(t, err)
 	require.False(t, ok)
 	_, ok, err = closedstep.Read(t.Context(), b, nil)
