@@ -38,16 +38,6 @@ func AdmitExtendPair(ctx context.Context, budget *proofbound.WorkBudget,
 	if !rcvOk || receiver.Kind != topo.BodySheet {
 		return fail(`%w: Extend's receiver needs an open meridian to lengthen; a closed one has no free end and its other free direction is its own sweep`, decaderr.ErrUnsupported)
 	}
-	// The FULL-revolution restriction, and it is a reading rather than a bound:
-	// surfacetrim.ExtendRevolve names a free end by the single-coedge
-	// latitude loop fullRevLoops (build.go) puts on the first and last
-	// wall. A PARTIAL revolution carries no such loop — each wall holds one loop
-	// gathering its two cap edges beside the swept arcs, and which member of it
-	// is the meridian's own free end is not a recorded fact — so the pair is
-	// refused rather than resolved by position.
-	if !rcv.Full {
-		return fail(`%w: Extend over the revolve family admits a full revolution alone; a partially revolved ribbon's swept free edge shares one loop with its wall's two cap edges, and no recorded fact separates them`, decaderr.ErrUnsupported)
-	}
 	var tl Payload
 	switch p := tool.Payload.(type) {
 	case Payload:

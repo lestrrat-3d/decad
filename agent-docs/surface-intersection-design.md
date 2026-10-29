@@ -123,16 +123,9 @@ the side gate, the axis-contact audit and the snap allowances), so a piece the
 target's gates would not have admitted refuses with the sentinel `Revolve`
 gives it. A cylinder or a ball splits across its axis this way.
 
-**`Extend`'s revolve arm takes a FULL revolution alone.** §3.2 reads which end
-is being lengthened off the receiver's own topology, and a full revolution
-gives each wall face its two junctions' latitude circles as separate
-single-coedge loops whose `forward` flag names which junction each came from —
-a recorded structural fact the ribbon's free ends are read through. A PARTIAL
-revolution gives the wall one loop instead, gathering its two cap edges beside
-the swept arcs, and which member of that loop is the meridian's own free end is
-not a fact the build records. So the partial case refuses (RS14) rather than
-being resolved by position; lifting it is a recorded free-end map from the
-chain-revolve build, not a bound and not a gate.
+**`Extend` reads chain-Revolve free ends from the build record.** The builder records each swept endpoint edge
+and its original chain and segment. The reader checks edge identity and its incident face's body. Cap-copy and
+internal edges do not name a free end. Placement rebuilds the record with new edges.
 
 ## 3. Design
 
@@ -235,8 +228,8 @@ scene at full domain, so no fragment carries that bound and no such comparison
 is available. The widened range replaces the recorded one; every other segment
 of the receiver's walk is copied verbatim. The named edge is one of the two
 sweep edges the ribbon's free ends carry (surface Table G), so which end is
-being lengthened is read off the receiver's own walk rather than stated by the
-caller (`internal/surfacetrim`'s `ExtendPrism` and `ExtendRevolve`), and the
+being lengthened is read from the receiver (`internal/surfacetrim`'s
+`ExtendPrism`, or `revolveplan.FreeEnd` for a revolve), and the
 direction follows from the recorded range order alone:
 `TStart` is the covered interval's lower bound when the record runs ascending
 and its upper bound when it runs reversed, so widening `TStart` decreases it in
@@ -341,7 +334,6 @@ set, so it needs the same two fields and no third.
 | A free-form segment on either operand | S3, `ErrUnsupported`. The whole-scene `TExact` gate blinds the arrangement, not only the free-form segment's own edges |
 | A `Trim` that keeps every fragment or none | `ErrDegenerate` (RS6). The tool separates nothing, so no trimmed body exists |
 | A `Split` whose tool separates no part of the target | `ErrDegenerate` (RS7), on the same reading |
-| An `Extend` over a PARTIALLY revolved ribbon | `ErrUnsupported` (RS14). §2.2's own paragraph states why: a partial revolution's swept free edge shares one loop with its wall's two cap edges, and no recorded fact separates them. A recorded free-end map from the chain-revolve build admits it |
 
 ## 5. What S7 costs, and what would lift it
 
@@ -383,7 +375,7 @@ point pointing here.
 | RS10 | A surviving walk's recorded segments do not join at an interior junction (`falsifyLoopJoins`, seam §3, run at interior junctions only per seam §2.2) | `ErrUnrecordableProfile` | No — a differently-drawn operand closes |
 | RS11 | `Trim`, `Extend` or `Split` handed a retired body, or bodies owned by different documents | `ErrRetiredBody` / `ErrForeignBody` | The existing uniform terms (core §6) |
 | RS12 | `Extend` handed a receiver whose section is a closed walk, or an edge that is not one of the two sweep edges its free ends carry | `ErrUnsupported` | Permanent for the closed receiver — the operation it wants is an extent, not an intersection |
-| RS14 | `Extend` handed a partially revolved ribbon, or a revolve pair either of whose meridians touches the resolved axis | `ErrUnsupported` | No — the first waits on a recorded free-end map (§2.2), the second on the pole topology a cut fragment ending on the axis would sweep |
+| RS14 | `Extend` handed a revolve pair either of whose meridians touches the resolved axis | `ErrUnsupported` | No — a cut fragment ending on the axis needs pole topology |
 
 The work budget and cancellation are `internal/proofbound/budget.go`'s existing `workBudget` and
 prism §10's discipline unchanged: one counter per attempt, charged per created
