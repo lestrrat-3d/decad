@@ -8,7 +8,7 @@ refinement this extends), `agent-docs/faceted-vertex-bounds-design.md` §3 and
 
 ## 1. The problem
 
-The screw gear sleeve is a tube (outer radius 18.5 mm, inner 12.5 mm, 37.5 mm
+The case is a tube (outer radius 18.5 mm, inner 12.5 mm, 37.5 mm
 tall) bored by twisted rectangular tools (15.4 x 4.15 mm, 7.27 degrees of twist
 per mm, 10.9 mm of axis, 79 degrees) along two axes 80 degrees apart, then cut
 by two slanted prism windows. Every `Cut` after the first was refused:
@@ -131,7 +131,7 @@ Refused, soundly:
 
 - A prism window over a rimmed strip, as above, without
   `WithChainTolerance`.
-- One through-sweep per gear (285 degrees, 39 mm): the refinement reaches only
+- One through-sweep per bore axis (285 degrees, 39 mm): the refinement reaches only
   the cell ceiling (`Delta` = 0.054 mm) and the second cut still touches the
   first one's rim at 0.088 mm.
 - A true crossing or gap under the new slack (about 0.05 mm).

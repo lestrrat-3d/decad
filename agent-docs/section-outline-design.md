@@ -64,7 +64,7 @@ func (c SectionClearance) Lower() units.Value
 func (s SectionOutline) Clearance(other SectionOutline) (SectionClearance, error)
 ```
 
-`Clearance` reads how closely two outlines cut by the same plane come, such as the two ribbons of a screw gear pair.
+`Clearance` reads how closely two outlines cut by the same plane come, such as two meshing parts cut by one plane.
 It measures the material regions the outlines enclose, in the plane. It is a pure reading of the polylines: it runs no
 tessellation and takes no context.
 

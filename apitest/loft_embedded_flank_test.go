@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The gallery's smallest embedded-flank tooth uses the original interpolating
-// curves on both sections. Sketch certifies their root-circle trims, and Loft
+// A module 0.5, 30 degree pressure angle tooth with an embedded flank uses the
+// original interpolating curves on both sections. Sketch certifies their root-circle trims, and Loft
 // records those same curves to build one solid.
 func TestLoftEmbeddedFitFlanksKeepOriginalCurve(t *testing.T) {
 	t.Parallel()

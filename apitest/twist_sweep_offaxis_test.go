@@ -13,7 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad"
 )
 
-// The screw gear's bore section is not centred on the twist axis: it spans
+// This bore section is not centred on the twist axis: it spans
 // u in [-7.7, 7.7] and v in [-2.075, 2.675], and it turns about the origin.
 const (
 	offAxisHalfU = 7.7

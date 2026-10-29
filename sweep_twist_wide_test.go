@@ -35,7 +35,7 @@ func TestTwistWideThinRectangleAngles(t *testing.T) {
 	for _, deg := range angles {
 		// A single flat Loft cell (about 30 degrees and below) certifies a
 		// coarse boundary; the stationed build (the folded 35-55 degree
-		// band, and above) is finer. 43.6 degrees is the screw gear's.
+		// band, and above) is finer. 43.6 degrees (a 49.5 mm lead over 6 mm) sits in the folded band.
 		tol := 5.0
 		if deg == 43.6 {
 			tol = 0.5
@@ -71,8 +71,8 @@ func TestTwistWideThinRectangleFullTurn(t *testing.T) {
 	}
 }
 
-// The screw gear builds its twisted bore at the origin and moves it onto a
-// tilted, offset axis: Transform keeps the stationed twist usable.
+// A twisted tool built at the origin and moved onto a tilted, offset axis keeps
+// its stationed twist usable under Transform.
 func TestTwistWideThinRectangleTransform(t *testing.T) {
 	const w, th, length = 15.4, 4.75, 6.0
 	body, err := wideRectTwist(t, w, th, length, 43.6)

@@ -2004,6 +2004,6 @@ small-residual admission. The old Loft/cylinder route and its bounds are
 unchanged.
 
 This reduction does not admit moving sections, twisted pairings, free-form
-walls, or the gallery's helical tooth Loft. Such contacts need a separate
+walls, or a helical tooth Loft. Such contacts need a separate
 source-wall intersection and held-shell certificate before this route can
 replace the structural Loft/cylinder path.

@@ -12,9 +12,8 @@ import (
 	"github.com/lestrrat-3d/decad"
 )
 
-// The screw gear sleeve: a tube bored along two crossing axes by twisted
-// rectangular tools, then cut by two slanted prism windows. The sizes below
-// are the gear's; chainedBoreAxis names each tool's pose.
+// A tube bored along two crossing axes by twisted rectangular tools, then cut
+// by two slanted prism windows; chainedBoreAxis names each tool's pose.
 const (
 	chainTubeOuter  = 18.5
 	chainTubeInner  = 12.5
@@ -71,7 +70,7 @@ func chainTube(t *testing.T, doc *decad.Document) *decad.Body {
 }
 
 // chainBoreTool builds one twisted tool in place. The rectangle is turned by
-// the twist angle of its first station so the tool follows the gear's lead.
+// the twist angle of its first station so the tool follows chainLead.
 func chainBoreTool(t *testing.T, doc *decad.Document, c chainBoreSpec) *decad.Body {
 	t.Helper()
 	lam := chainLead / (2 * math.Pi)
@@ -329,8 +328,8 @@ func TestCutChainedTwistedBoresAndWindows(t *testing.T) {
 	require.Greater(t, windows, 200.0)
 
 	volumeBound, meshBound := chainRequireVolume(t, body, tubeVolume, windows)
-	// The gallery proves 0.2 mm bore clearances against this body, so both
-	// certified figures have to sit well inside that.
+	// A 0.2 mm clearance reading against this body needs both certified
+	// figures well inside 0.2 mm.
 	require.Less(t, meshBound, 0.1)
 	require.Less(t, volumeBound, 0.01*tubeVolume.Value.Base())
 	t.Logf("volume bound %.2f mm3, boundary bound %.4f mm", volumeBound, meshBound)

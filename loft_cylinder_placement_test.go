@@ -185,8 +185,8 @@ func loftCylinderCheckCanonicalReadings(t *testing.T, world *Body, local *Body, 
 	loftCylinderPlacedBoxOverlap(t, worldBox, localBox, pose)
 }
 
-// The seven source arrangements match the retained gallery diagnostic's
-// route cases. All placed cases must use the structural certificate.
+// The seven source arrangements cover the common-pose route cases: origin,
+// translations and rotations. All placed cases must use the structural certificate.
 func TestLoftCylinderUnionCommonPlacement(t *testing.T) {
 	xyU, xyV := r3.Vec{X: 1}, r3.Vec{Y: 1}
 	for _, tc := range []struct {

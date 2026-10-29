@@ -136,11 +136,9 @@ constructed shell before the payload records `ContactAudited=true`. The
 faceted-body audit then checks manifold closure and orientation.
 The structural join uses a 16-million candidate-pair scan ceiling in this
 audit; other callers keep the generic eight-million ceiling. The triangle
-ceiling and all exact pair classifications are unchanged. In the real
-17-tooth gallery build, the generic ceiling stopped tooth 16 after 67.59 s;
-the structural ceiling completed Build and `VerifyAll` in 78.00 s. A
-diagnostic run counted 9,466,787 scanned pairs and 3,054,048 overlapping
-candidate pairs in the final 9,380-triangle join.
+ceiling and all exact pair classifications are unchanged. A full structural
+ring join scans more candidate pairs than the generic eight-million ceiling
+allows; `AuditMaxScans` in `internal/loftcylinder/xy.go` owns the value.
 An exact midpoint and outline-contact audit keeps every omitted held root
 chord inside its filled cap; only the two global root endpoints may touch
 the outline.
