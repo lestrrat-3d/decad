@@ -13,7 +13,8 @@ import (
 )
 
 // bevelMember is the blank, cones and one tooth of a straight bevel gear
-// member (module 4, 90 degree shaft), taken from a gallery model. The flank
+// member (module 4, 90 degree shaft): a straight bevel pair, 32 teeth meshing
+// with 16. The flank
 // is the left involute flank in the tooth's back-cone plane; the right flank
 // mirrors it. When the involute base circle lies inside the root circle
 // (embedded), Sketch trims each flank at the root circle and the tooth root is

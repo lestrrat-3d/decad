@@ -8,7 +8,7 @@ and cell ceilings and applies it to stationed sweeps; §3 states the rule. Compa
 
 ## 1. The problem
 
-A screw gear bores a tube wall with a twisted rectangular `Sweep` tool. The
+A twisted rectangular `Sweep` tool bores a tube wall. The
 repro is a 15.4 x 4.75 mm centred rectangle swept 6 mm along +Z with a 30
 degree twist, cut from a 4 mm tall, radius 18.5 mm cylinder whose caps the tool
 passes through. `Cut` returned `BooleanUnsupportedContact`: the operands' held
@@ -101,7 +101,7 @@ because `Placed` replays the record under the composed rigid motion.
 Refused, soundly:
 
 - A true gap or crossing depth smaller than the slack (about 0.7 mm for the
-  screw gear's sizes). A 60 degree tool at 15.5 mm from the tube axis ends 0.49
+  §1 sizes). A 60 degree tool at 15.5 mm from the tube axis ends 0.49
   mm from the 18.5 mm wall; the refusal is the contact gate working, not a
   limit of the refinement. Moving the tool 1 mm admits it.
 - An arc profile, which is already stationed (§17.4) and keeps its own `Delta`.
@@ -114,7 +114,7 @@ target's share falls with its chord request, and the tool's with its
 refinement (chained-cut §4). For the 37.5 mm tube bored four times the bound
 is 104 mm3, 26 mm3 for each bore.
 
-## 6. What else would close the screw gear gap
+## 6. Contacts this refinement still refuses
 
 - The 43.6 degree twist. It sweeps only once the parallel angle work lands
   (35 to 55 degrees); this change then covers its Cut with no further edit,

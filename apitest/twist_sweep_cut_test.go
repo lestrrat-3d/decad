@@ -19,7 +19,7 @@ const (
 	twistBoreSpan = 6.0
 )
 
-// twistBoreTool sweeps the screw gear's 15.4 x 4.75 mm centred rectangle along
+// twistBoreTool sweeps a 15.4 x 4.75 mm centred rectangle along
 // +Z from the origin XY plane through twistBoreSpan mm with a twist of deg degrees.
 func twistBoreTool(t *testing.T, doc *decad.Document, deg float64) *decad.Body {
 	t.Helper()
@@ -205,8 +205,8 @@ func twistBoreTiltedOverlap(length, deg, tilt, cx, lift, height, inner, outer fl
 	return float64(count) * du * dv * dw
 }
 
-// The screw gear's bores lie along tilted axes, so the tool arrives through a
-// rotation as well as a translation.
+// A bore along a tilted axis needs the tool to arrive through a rotation as
+// well as a translation.
 func TestCutTwistedSweepTiltedAcrossTubeWall(t *testing.T) {
 	t.Parallel()
 	const outer, inner, height, length, lift, offset, tilt, deg = 18.5, 12.5, 24.0, 6.0, 9.0, 16.5, 20.0, 30.0

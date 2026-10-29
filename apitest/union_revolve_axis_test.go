@@ -311,8 +311,8 @@ func TestUnionHubAndRadialLugsAboutPermutedAxis(t *testing.T) {
 // the public Union, serially and in one variadic call. Each result is
 // watertight with Euler characteristic 2 and passes VerifyAll, and its volume
 // agrees with the same construction about +X within the proven bounds
-// (agent-docs/revolve-axis-design.md §7.5). The axes are (1, 2, 0), and the
-// gallery's float direction: (1, 2)/√5 rounded to 26 significant bits.
+// (agent-docs/revolve-axis-design.md §7.5). The axes are (1, 2, 0), and a
+// float direction: (1, 2)/√5 rounded to 26 significant bits.
 //
 // The inputs move by at most |dir|·grid (tiltedAxisPlacement), the lug's
 // plane frame rounds by a few units in the last place, and each copy turns

@@ -1536,9 +1536,9 @@ least count at the four-percent target it optionally tries the least count at
 an absolute 0.08 mm target when that is finer, within the same ceilings, and
 keeps the original count if the finer build refuses. A 15.4 mm wide section
 therefore publishes about 0.08 mm of boundary bound rather than 0.4 mm.
-The screw gear's off-axis section (u in [-7.7, 7.7], v in [-2.075, 2.675]
+An off-axis section (u in [-7.7, 7.7], v in [-2.075, 2.675]
 turning 58.2° over 8 mm) passes through a 12.5/18.5 mm tube wall with
-`Cut` and `Tessellate(VerifyAll)`; with only the four-percent count the
+`Cut` and `Tessellate(VerifyAll)` (`TestCutTwistedOffAxisSweepThroughTubeWall`); with only the four-percent count the
 tool's 0.40 mm bound left a 0.69 mm clearance undecidable.
 
 Station `k` uses exact height `h*k/cells` and the interval enclosure of

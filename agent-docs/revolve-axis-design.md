@@ -802,7 +802,7 @@ Each question below was checked against the sections above.
 A model in the general class does the following:
 
 - Sketches the blank, toe cone and heel cone sections on a world coordinate
-  plane through the origin. The gallery's shared XY sketch qualifies.
+  plane through the origin. A shared world-XY sketch qualifies.
 - Revolves all three about the same axis input with the anchor at the origin:
   a `SketchLine` from `(0,0)`, or a `ConstructionAxis` whose `Origin` is the
   world origin. `AxisVec` is then bitwise equal for all three.

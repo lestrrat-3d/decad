@@ -7,6 +7,9 @@ examples, or changing CI shards.
 
 - Keep Decad's geometry and failure behavior covered by small, focused tests.
   Split a test that dominates a CI shard into tests for its separate operations.
+- Size a fixture or benchmark by a Decad ceiling or limit, or by the smallest case
+  that reaches the branch under test. Never copy a consumer model's size, and never
+  name a consumer model as a threshold's reason.
 - Put full consumer models, including complete gears, in the consumer repository.
   Test the underlying Decad operations here with minimal geometry.
 - If CI renders a full consumer model, use that render as its integration check.
