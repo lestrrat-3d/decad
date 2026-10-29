@@ -18,6 +18,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const orientedEdgeEntity = "ORIENTED_EDGE"
+
 func box(t *testing.T, sheet bool) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
@@ -65,7 +67,7 @@ func TestNewSTEPFileBoxTopology(t *testing.T) {
 		case "CARTESIAN_POINT":
 			xyz := entity.Parameters[1].(step.List)
 			points[[3]step.Real{xyz[0].(step.Real), xyz[1].(step.Real), xyz[2].(step.Real)}] = struct{}{}
-		case "ORIENTED_EDGE":
+		case orientedEdgeEntity:
 			edge := entity.Parameters[3].(step.Reference)
 			edgeUses[edge] = append(edgeUses[edge], entity.Parameters[4].(step.Enumeration))
 		}
@@ -73,7 +75,7 @@ func TestNewSTEPFileBoxTopology(t *testing.T) {
 	require.Equal(t, 8, counts["VERTEX_POINT"])
 	require.Equal(t, 14, counts["CARTESIAN_POINT"])
 	require.Equal(t, 12, counts["EDGE_CURVE"])
-	require.Equal(t, 24, counts["ORIENTED_EDGE"])
+	require.Equal(t, 24, counts[orientedEdgeEntity])
 	require.Equal(t, 6, counts["ADVANCED_FACE"])
 	require.Equal(t, 6, counts["PLANE"])
 	require.Equal(t, 1, counts["CLOSED_SHELL"])
@@ -125,7 +127,7 @@ func TestNewSTEPFilePlateWithHoleAnalytic(t *testing.T) {
 			points[[3]step.Real{xyz[0].(step.Real), xyz[1].(step.Real), xyz[2].(step.Real)}] = struct{}{}
 		case "CIRCLE", "CYLINDRICAL_SURFACE":
 			require.Equal(t, step.Real(5), entity.Parameters[2])
-		case "ORIENTED_EDGE":
+		case orientedEdgeEntity:
 			edge := entity.Parameters[3].(step.Reference)
 			uses[edge] = append(uses[edge], entity.Parameters[4].(step.Enumeration))
 		}
@@ -166,7 +168,7 @@ func TestNewSTEPFileCylinderAnalytic(t *testing.T) {
 	uses := map[step.Reference][]step.Enumeration{}
 	for _, entity := range f.Entities {
 		counts[entity.Name]++
-		if entity.Name == "ORIENTED_EDGE" {
+		if entity.Name == orientedEdgeEntity {
 			edge := entity.Parameters[3].(step.Reference)
 			uses[edge] = append(uses[edge], entity.Parameters[4].(step.Enumeration))
 		}
@@ -260,7 +262,7 @@ func entityUses(f step.File) (map[string]int, map[step.Reference][]step.Enumerat
 	uses := map[step.Reference][]step.Enumeration{}
 	for _, entity := range f.Entities {
 		counts[entity.Name]++
-		if entity.Name == "ORIENTED_EDGE" {
+		if entity.Name == orientedEdgeEntity {
 			edge := entity.Parameters[3].(step.Reference)
 			uses[edge] = append(uses[edge], entity.Parameters[4].(step.Enumeration))
 		}

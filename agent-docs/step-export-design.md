@@ -79,14 +79,12 @@ according to the writer path.
   shares with a face already decided runs opposite to that face's use, and the decided set grows until
   no patch is left. A patch that no decided face reaches, or whose shared edges ask for both walks,
   sends the body to the faceted writer.
-  A cone with one circle loop, which reaches its apex without a vertex there, and a sphere with no
-  loop, a whole revolved ball, take the faceted writer: each would need a synthetic bound through a
-  point where the surface has no normal, and `ReadSTEP` reads neither a cone's apex nor a whole sphere's
-  seam (`agent-docs/step-import-design.md` I12, I15), so no reader in this repository can check that
-  bound. A torus with no loop, a whole revolved ring, takes the faceted writer too: the whole-turn arm
-  needs two circle loops and the patch arms one. Each of these faces would need a bound the body does
-  not have, a `VERTEX_LOOP` or seams used twice, and which of them a reader expects is a choice no
-  reader in this repository checks (`ReadSTEP` reads no torus face, I4). Emit one `ADVANCED_FACE`
+  A cone with one circle loop, which reaches its apex without a vertex there, takes the faceted writer.
+  A complete sphere or regular ring from an authenticated identity-placement full Revolve writes analytically
+  when exact carrier, synthetic point and outward normal checks pass. A sphere uses a north-pole vertex loop.
+  A ring uses two shared circle edges, each used in opposite directions. Unsupported or inexact cases fall back
+  to the faceted writer. `ReadSTEP` still refuses whole spheres and tori (I15 and I4).
+  Emit one `ADVANCED_FACE`
   per body face. Share `VERTEX_POINT`s and `EDGE_CURVE`s by body topology
   identity. An `Arc3` edge is a `CIRCLE` placed about its own `Axis`, with the
   reference direction to its start vertex, trimmed by its two vertices; it
@@ -154,8 +152,7 @@ according to the writer path.
   2.9e-16 on the drafted walls, and 2.3e-15 mm on the apex of a frustum revolved from radius 3 to 7.1.
   A revolved tube's cylinders and annular caps equal their records and keep the analytic writer, and
   so does a world-frame Loft of a square with a centred circle hole, whose bore and caps are exact. A
-  revolved ball's sphere and a revolved ring's torus equal their records too, but have no loop, so
-  those bodies take the faceted writer as stated above. No producer builds a full conical wall or a
+  revolved ball's sphere and a revolved ring's torus may use the complete-surface arm described above. No producer builds a full conical wall or a
   cone patch that the analytic writer receives; the arm's own tests write a revolved frustum and the
   loop chamfer corners through the writer directly.
   A full cylindrical wall receives one synthetic straight seam edge, used

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/closedstep"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/step"
 	"github.com/lestrrat-3d/step/ap214"
@@ -108,10 +109,23 @@ func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 	// A cavity or a second lump writes through the faceted arm only: the analytic
 	// arm builds the faces of one outer shell.
 	analytic := false
+	var closed *closedstep.Coverage
 	var solids []meshSolid
 	if voids == 0 && len(shells) == 1 {
-		if analytic, err = supportsAnalyticSTEP(ctx, body); err != nil {
-			return step.File{}, err
+		if tagsUndeparted(body) && len(body.Faces()) == 1 {
+			c, ok, e := admitClosedSTEP(ctx, body)
+			if e != nil {
+				return step.File{}, e
+			}
+			if ok {
+				closed = &c
+				analytic = true
+			}
+		}
+		if closed == nil {
+			if analytic, err = supportsAnalyticSTEP(ctx, body); err != nil {
+				return step.File{}, err
+			}
 		}
 	}
 	if !analytic {
@@ -119,14 +133,14 @@ func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 			return step.File{}, err
 		}
 	}
-	return assembleSTEPFile(ctx, body, header, analytic, vertices, triangles, components, solids)
+	return assembleSTEPFile(ctx, body, header, analytic, closed, vertices, triangles, components, solids)
 }
 
 // assembleSTEPFile writes the product structure and the shell of one admitted
 // body: its analytic faces when analytic, else one planar face per triangle
 // of the verified mesh (vertices, triangles), grouped into solids.
 func assembleSTEPFile(
-	ctx context.Context, body *decad.Body, header step.Header, analytic bool, vertices []r3.Vec, triangles [][3]int,
+	ctx context.Context, body *decad.Body, header step.Header, analytic bool, closed *closedstep.Coverage, vertices []r3.Vec, triangles [][3]int,
 	components []int, solids []meshSolid,
 ) (step.File, error) {
 	productDescription := "faceted decad solid"
@@ -152,7 +166,15 @@ func assembleSTEPFile(
 	var faceComponent []int
 	var err error
 	if analytic {
-		faces, err = b.addAnalyticFaces(ctx, body)
+		if closed != nil {
+			if closed.Ring {
+				faces = b.addClosedRing(*closed)
+			} else {
+				faces = b.addClosedSphere(*closed)
+			}
+		} else {
+			faces, err = b.addAnalyticFaces(ctx, body)
+		}
 		if err != nil {
 			return step.File{}, err
 		}
