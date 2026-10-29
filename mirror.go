@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/mirrorjoin"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/r3"
 )
@@ -190,6 +191,12 @@ func (d *Document) resolveMirrorFace(mf MirrorFace) (r3.Frame, error) {
 	// operand's plane, not an exact mirror plane
 	// (agent-docs/faceted-source-retention-design.md §4).
 	ok = ok && (!face.n.RetainedTag || face.n.NormalBound == 0)
+	// A plane that states AxialDelta lies that far off its tag, so the image
+	// across the tag is up to twice that off the true reflection, and the
+	// placement has no channel to charge it (mirrorjoin.PlaneDeltaAdmitted).
+	if ok && face.n.HasAxialDelta && !mirrorjoin.PlaneDeltaAdmitted(face.n.AxialDelta, pl.Frame.Origin()) {
+		return r3.Frame{}, fmt.Errorf(`%w: the mirror face states a plane displaced from its tag by %g, which a reflection cannot carry; use a MirrorFrame`, ErrUnsupported, face.n.AxialDelta)
+	}
 	switch {
 	case ok:
 		return pl.Frame, nil
