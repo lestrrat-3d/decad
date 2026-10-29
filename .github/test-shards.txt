@@ -282,3 +282,4 @@
 10	0.00	TestClosedRingCoverage
 
 10	0.00	TestRevolveChainBuiltEnds
+10	0.00	TestMirrorFaceStatedAxialDelta

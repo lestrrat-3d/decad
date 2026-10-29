@@ -138,7 +138,13 @@ with no analytic `Plane` surface (a mesh-boolean `Faceted` face) is
 cardinality rule is `AtLeast(1)` with every face proven coplanar (§5.1).
 Resolving the plane does not consume `Body`. The plane is the face's own
 `Plane.Frame`, so a `MirrorFace` over a face of the receiver reflects
-across a plane the body's own record states.
+across a plane the body's own record states. A face whose plane states an
+`AxialDelta` lies that far off its tag, so the image across the tag is up to
+twice that off the true reflection, and the placement has no channel to charge
+it. `MirrorFace` over such a face is `ErrUnsupported` once `2·AxialDelta`
+exceeds the arithmetic allowance `64·ε·max(1, |origin|)` (`mirrorjoin.PlaneDeltaAdmitted`);
+a unit-conversion sized delta inside it mirrors as before. `MirrorFrame` is not
+affected.
 
 ### 4.2 Mirror
 
