@@ -2883,3 +2883,5 @@
 10	0.01	TestWholeCircleEdgeSeamVertices
 10	0.00	TestWallSplitSolidBallReadsDiameter
 10	0.00	TestWallSplitHollowSphereReadsThickness
+10	0.00	TestPointLocationDenotedLevel
+10	0.00	TestPointLocationDenotedExtentModes

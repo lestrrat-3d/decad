@@ -1,10 +1,14 @@
 package pointquery
 
 import (
+	"context"
+	"fmt"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/r3"
@@ -249,4 +253,78 @@ func TestLocatePrismConcaveArc(t *testing.T) {
 		{name: "under the notch", at: r3.NewVec(10, 15, 5), want: Inside},
 		{name: "beside the notch", at: r3.NewVec(3, 18, 5), want: Inside},
 	})
+}
+
+func TestLocatePrismDenotedLevels(t *testing.T) {
+	base := payloadOf(t, momentinput.Profile{Outer: squareLoop()})
+	half := big.NewRat(1, 2)
+	upper := new(big.Rat).Sub(big.NewRat(10, 1), half)
+	lower := new(big.Rat).Add(big.NewRat(0, 1), half)
+	require.Less(t, upper.Cmp(big.NewRat(10, 1)), 0)
+	require.Greater(t, lower.Cmp(big.NewRat(0, 1)), 0)
+	pp := base
+	pp.Z0Delta, pp.Z1Delta = 1, 1
+	pp.Z0Denoted = prismplacement.DenoteLevel(lower, pp.Z0, pp.Z0Delta)
+	pp.Z1Denoted = prismplacement.DenoteLevel(upper, pp.Z1, pp.Z1Delta)
+	requirePrismLocations(t, pp, []prismCase{
+		{"held lower", r3.NewVec(5, 5, 0), Outside},
+		{"exact lower", r3.NewVec(5, 5, .5), OnBoundary},
+		{"inside", r3.NewVec(5, 5, 5), Inside},
+		{"exact upper", r3.NewVec(5, 5, 9.5), OnBoundary},
+		{"held upper", r3.NewVec(5, 5, 10), Outside},
+	})
+	exact := pp
+	exact.Z1Denoted = prismplacement.DenoteLevel(big.NewRat(10, 1), 10, 1)
+	requirePrismLocations(t, exact, []prismCase{{"conservative bound", r3.NewVec(5, 5, 10), OnBoundary}})
+	staleZero := base
+	staleZero.Z1Denoted = pp.Z1Denoted
+	requirePrismLocations(t, staleZero, []prismCase{{"zero bound", r3.NewVec(5, 5, 10), OnBoundary}})
+	tests := map[string]prismrecord.Payload{}
+	missingUpper := pp
+	missingUpper.Z1Denoted = prismplacement.LevelDenotation{}
+	tests["missing upper"] = missingUpper
+	missingLower := pp
+	missingLower.Z0Denoted = prismplacement.LevelDenotation{}
+	tests["missing lower"] = missingLower
+	staleHeld := pp
+	staleHeld.Z1 = 11
+	tests["stale held"] = staleHeld
+	staleBound := pp
+	staleBound.Z1Delta = 2
+	tests["stale bound"] = staleBound
+	tight := pp
+	tight.Z1Denoted = prismplacement.DenoteLevel(upper, 10, .1)
+	tests["too tight"] = tight
+	for _, v := range []float64{-1, math.NaN(), math.Inf(1), math.Inf(-1)} {
+		bad := pp
+		bad.Z1Delta = v
+		bad.Z1Denoted = prismplacement.DenoteLevel(upper, 10, v)
+		tests["upper "+fmt.Sprint(v)] = bad
+		bad = pp
+		bad.Z0Delta = v
+		bad.Z0Denoted = prismplacement.DenoteLevel(lower, 0, v)
+		tests["lower "+fmt.Sprint(v)] = bad
+	}
+	nonfinite := base
+	nonfinite.Z1 = math.Inf(1)
+	tests["nonfinite held"] = nonfinite
+	equal := pp
+	equal.Z0, equal.Z1 = 0, 1
+	equal.Z0Delta, equal.Z1Delta = 1, 1
+	equal.Z0Denoted = prismplacement.DenoteLevel(big.NewRat(1, 2), 0, 1)
+	equal.Z1Denoted = prismplacement.DenoteLevel(big.NewRat(1, 2), 1, 1)
+	tests["equal"] = equal
+	reversed := equal
+	reversed.Z0Denoted = prismplacement.DenoteLevel(big.NewRat(3, 4), 0, 1)
+	reversed.Z1Denoted = prismplacement.DenoteLevel(big.NewRat(1, 4), 1, 1)
+	tests["reversed"] = reversed
+	for name, bad := range tests {
+		t.Run(name, func(t *testing.T) { requirePrismLocations(t, bad, []prismCase{{name, r3.NewVec(5, 5, 5), Undecided}}) })
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	got, decided, err := LocatePrism(ctx, r3.NewVec(5, 5, 5), pp)
+	require.ErrorIs(t, err, context.Canceled)
+	require.False(t, decided)
+	require.Equal(t, Undecided, got)
 }

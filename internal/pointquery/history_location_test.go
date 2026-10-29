@@ -2,12 +2,14 @@ package pointquery
 
 import (
 	"context"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
+	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -301,5 +303,20 @@ func TestLocateBooleanStackedAndRevolveLeaves(t *testing.T) {
 			{name: "axis", at: r3.NewVec(0, 15, 0), want: Inside},
 			{name: "cube face beyond the revolve", at: r3.NewVec(15, 5, 5), want: OnBoundary},
 		})
+	})
+}
+
+func TestLocateBooleanDenotedPrism(t *testing.T) {
+	src := newHistorySource()
+	leaf := cube(t, 0)
+	pp := leaf.Payload.(prismrecord.Payload)
+	pp.Z1Delta = 1
+	pp.Z1Denoted = prismplacement.DenoteLevel(big.NewRat(19, 2), 10, 1)
+	leaf.Payload = pp
+	n := src.result(meshbool.OpUnion, leaf, cube(t, 20))
+	requireBooleanLocations(t, n, src, []prismCase{
+		{"inside", r3.NewVec(5, 5, 9), Inside},
+		{"exact cap", r3.NewVec(5, 5, 9.5), OnBoundary},
+		{"held cap", r3.NewVec(5, 5, 10), Outside},
 	})
 }

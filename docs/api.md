@@ -388,9 +388,9 @@ Features choose edges and faces with queries.
 contained prism Cuts when they produce tighter readings that agree with the
 verified mesh. Other faceted results continue to use their verified mesh.
 
-`Body.LocatePoint` classifies a point in exact arithmetic against an
-undisplaced prism, for example an extrude to a stated millimetre distance,
-whose profile is made of lines, whole circles with a millimetre radius and
+`Body.LocatePoint` classifies a point in exact arithmetic against a prism with
+an undisplaced section and exact denoted levels, including distances in other
+units. Its profile must be made of lines, whole circles with a millimetre radius and
 whole arcs whose end lies exactly on the start's radius. A blind pocket, a
 boss united onto a plate and other stacked prisms with undisplaced levels and
 such profiles answer the same way, and so does the BRep a `Union` builds when
@@ -399,9 +399,8 @@ exactly when its meridian is made of whole lines, whole circles and such
 whole arcs, its axis is resolved exactly, and its sweep is `FullRevolution`
 or a whole turn in degrees; points on the axis are included. Such a body
 answers `PointOnBoundary` for a point exactly on its boundary and
-`PointInside` or `PointOutside` for a point off it. An extrude to a computed
-level (`ToFace`, `ThroughAll`, a distance in another unit that does not
-convert exactly, a chamfered end), a prism Boolean result whose section moved,
+`PointInside` or `PointOutside` for a point off it. An extrude whose computed level lacks an exact denotation, a chamfered end,
+a prism Boolean result whose section moved,
 a pocket crossing a through hole, a partial or radian-stated revolve, every
 other body except the mesh Boolean results described next, and a point on an
 arc's chord or on two loops at once are classified through the verified mesh
