@@ -104,6 +104,9 @@ func Analytic(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b
 		return n, true, nil
 	}
 	if n, ok, err := revolveplan.PointConeBoolean(ctx, op, env, a, b, hooks.MatchingFaces); err != nil {
+		if _, ok := errors.AsType[*meshbool.BooleanExpectedError](err); ok {
+			err = hooks.AsBooleanError(op, err)
+		}
 		return nil, false, err
 	} else if ok {
 		return n, true, nil

@@ -19,21 +19,23 @@ func TestPointConeBooleanGates(t *testing.T) {
 	doc := New()
 	tooth := pointLoftTooth(t, doc)
 	d := documentHandle(tooth.n.Doc)
-	run := func(op meshbool.OperationKind, target, tool *topo.Body) (*topo.Body, bool) {
+	run := func(op meshbool.OperationKind, target, tool *topo.Body) (*topo.Body, bool, error) {
 		t.Helper()
 		out, ok, err := revolveplan.PointConeBoolean(t.Context(), op, envOf(documentNode(d), d.nextProducerID()),
 			target, tool, false)
-		require.NoError(t, err)
-		return out, ok
+		return out, ok, err
 	}
 	cone := func(apex float64) *topo.Body { return bodyNode(pointLoftConeTool(t, doc, apex)) }
 
 	base := bodyNode(tooth)
-	_, ok := run(meshbool.OpUnion, base, cone(5))
+	_, ok, err := run(meshbool.OpUnion, base, cone(5))
+	require.NoError(t, err)
 	require.False(t, ok, "a Union is not a trim")
-	_, ok = run(meshbool.OpCut, base, &topo.Body{})
+	_, ok, err = run(meshbool.OpCut, base, &topo.Body{})
+	require.NoError(t, err)
 	require.False(t, ok, "the tool is no cone")
-	_, ok = run(meshbool.OpCut, &topo.Body{}, cone(5))
+	_, ok, err = run(meshbool.OpCut, &topo.Body{}, cone(5))
+	require.NoError(t, err)
 	require.False(t, ok, "the target is no faceted body")
 
 	placed := &topo.Body{Payload: base.Payload}
@@ -42,14 +44,16 @@ func TestPointConeBooleanGates(t *testing.T) {
 	fp := placed.Payload.(facetedPayload)
 	fp.Xform = move
 	placed.Payload = fp
-	_, ok = run(meshbool.OpCut, placed, cone(5))
+	_, ok, err = run(meshbool.OpCut, placed, cone(5))
+	require.NoError(t, err)
 	require.False(t, ok, "a placed point-Loft is not the class")
 
 	noSource := &topo.Body{Payload: base.Payload}
 	fp = noSource.Payload.(facetedPayload)
 	fp.PointSection, fp.PointCone = nil, nil
 	noSource.Payload = fp
-	_, ok = run(meshbool.OpCut, noSource, cone(5))
+	_, ok, err = run(meshbool.OpCut, noSource, cone(5))
+	require.NoError(t, err)
 	require.False(t, ok, "a body with no point-section record is not the class")
 
 	offApex := &topo.Body{Payload: base.Payload}
@@ -58,7 +62,8 @@ func TestPointConeBooleanGates(t *testing.T) {
 	section.Apex = r3.Vec{X: 1}
 	fp.PointSection = &section
 	offApex.Payload = fp
-	_, ok = run(meshbool.OpCut, offApex, cone(5))
+	_, ok, err = run(meshbool.OpCut, offApex, cone(5))
+	require.NoError(t, err)
 	require.False(t, ok, "the apex must sit at the origin")
 
 	for _, first := range []struct {
@@ -77,11 +82,25 @@ func TestPointConeBooleanGates(t *testing.T) {
 			{meshbool.OpIntersect, 8.0}: false, {meshbool.OpIntersect, 11.0}: false,
 		}},
 	} {
-		trimmed, ok := run(first.op, base, cone(first.apex))
+		trimmed, ok, err := run(first.op, base, cone(first.apex))
+		require.NoError(t, err)
 		require.True(t, ok)
 		for next, want := range first.then {
-			_, ok := run(next[0].(meshbool.OperationKind), trimmed, cone(next[1].(float64)))
-			require.Equal(t, want, ok, "after %v %v, then %v %v", first.op, first.apex, next[0], next[1])
+			nextOp, nextApex := next[0].(meshbool.OperationKind), next[1].(float64)
+			_, ok, err := run(nextOp, trimmed, cone(nextApex))
+			label := "after %v %v, then %v %v"
+			empty := first.op == meshbool.OpCut && nextOp == meshbool.OpIntersect && nextApex == 2 ||
+				first.op == meshbool.OpIntersect && nextOp == meshbool.OpCut && nextApex == 11
+			if empty {
+				require.True(t, ok, "the exact empty proof is an admitted result")
+				var expected *meshbool.BooleanExpectedError
+				require.ErrorAs(t, err, &expected, label, first.op, first.apex, next[0], next[1])
+				require.Equal(t, meshbool.BooleanExpectedEmpty, expected.Kind)
+				require.ErrorIs(t, err, ErrBooleanFailed)
+				continue
+			}
+			require.NoError(t, err, label, first.op, first.apex, next[0], next[1])
+			require.Equal(t, want, ok, label, first.op, first.apex, next[0], next[1])
 		}
 	}
 }

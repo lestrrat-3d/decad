@@ -2,7 +2,9 @@ package revolveplan
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/pointcone"
@@ -58,8 +60,15 @@ func PointConeBoolean(ctx context.Context, op meshbool.OperationKind, env topo.E
 		}
 		record.Upper = cone
 	}
-	if record.Lower != nil && record.Upper != nil &&
-		!facetedrecord.PointConeLimitOrdered(record.Lower, record.Upper, record.Base) {
+	if record.Lower != nil && record.Upper != nil {
+		if facetedrecord.PointConeLimitOrdered(record.Lower, record.Upper, record.Base) {
+			body, err := facetedrecord.BuildPointConeTrim(ctx, env, record)
+			return body, true, err
+		}
+		if facetedrecord.PointConeLimitOrdered(record.Upper, record.Lower, record.Base) {
+			err := fmt.Errorf("%w: point-cone limits enclose no radial band", decaderr.ErrBooleanFailed)
+			return nil, true, meshbool.ExpectedBoolean(meshbool.BooleanExpectedEmpty, err)
+		}
 		return nil, false, nil
 	}
 	body, err := facetedrecord.BuildPointConeTrim(ctx, env, record)

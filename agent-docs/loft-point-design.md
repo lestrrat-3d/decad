@@ -177,7 +177,9 @@ mesh displacement. This is the nonempty witness for a thin outside piece
 even when its volume interval includes zero. Chained cuts and
 intersections rebuild from the same source fan. Two limits of either kind
 must be strictly ordered over the whole far cap; a lower Cut limit must
-precede an upper Intersect limit. Other orders take the mesh path.
+precede an upper Intersect limit. If the reverse proof establishes that the
+upper Intersect limit precedes the lower Cut limit over the whole far cap, the
+band is empty. Overlapping or uncertain orders take the mesh path.
 
 Each far-cap triangle is subdivided before its cone image is chorded.
 Its coordinate box proves `rho>=rhoMin>0` and `g>=gMin>0`; its longest

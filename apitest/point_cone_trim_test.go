@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -192,4 +193,8 @@ func TestPointConeTrimContainingCutCannotBuildInvertedBand(t *testing.T) {
 	require.NoError(t, err)
 	_, err = decad.Cut(t.Context(), inside, pointConeTool(t, doc, 12))
 	require.ErrorIs(t, err, decad.ErrBooleanFailed)
+	var booleanErr *decad.BooleanError
+	require.ErrorAs(t, err, &booleanErr)
+	require.Equal(t, decad.BooleanEmpty, booleanErr.Code)
+	require.True(t, errors.Is(err, decad.ErrBooleanFailed))
 }
