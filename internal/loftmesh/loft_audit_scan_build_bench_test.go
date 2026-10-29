@@ -8,16 +8,14 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// twistedRibbonBoxes is the triangle boxes of a twisted gear-like ribbon:
-// sections stacked step apart in z, each a closed profile of points vertices
-// on a wavy circle with teeth lobes, each section turned twist radians from
-// the one below, and every quad between two sections split into two
-// triangles. With 686 sections of 328 points it has the size and shape of the
-// TestLoftSectionsTwistedLongRibbonIsOneVerifiedLoft mesh's wall.
-func twistedRibbonBoxes(sections, points, teeth int, step, twist float64) [][2]r3.Vec {
+// lobedTubeBoxes is the triangle boxes of a closed lobed tube: sections
+// stacked step apart in z, each a closed profile of points vertices on a wavy
+// circle with lobes lobes, each section turned twist radians from the one
+// below, and every quad between two sections split into two triangles.
+func lobedTubeBoxes(sections, points, lobes int, step, twist float64) [][2]r3.Vec {
 	at := func(s, p int) r3.Vec {
 		a := 2*math.Pi*float64(p%points)/float64(points) + twist*float64(s)
-		r := 20 + 1.5*math.Sin(float64(teeth)*2*math.Pi*float64(p%points)/float64(points))
+		r := 20 + 1.5*math.Sin(float64(lobes)*2*math.Pi*float64(p%points)/float64(points))
 		return r3.NewVec(r*math.Cos(a), r*math.Sin(a), step*float64(s))
 	}
 	verts := make([]r3.Vec, 0, sections*points)
@@ -38,9 +36,9 @@ func twistedRibbonBoxes(sections, points, teeth int, step, twist float64) [][2]r
 }
 
 // BenchmarkPairScanBuild measures newPairScan, and each scan it builds, over
-// the twisted ribbon at the audit's own ceiling.
+// the lobed tube at the audit's own ceiling.
 func BenchmarkPairScanBuild(b *testing.B) {
-	boxes := twistedRibbonBoxes(686, 328, 68, 0.26, 0.004)
+	boxes := lobedTubeBoxes(686, 328, 68, 0.26, 0.004)
 	members := allMembers(len(boxes))
 	const limit = 2_048_000_000
 	b.Run("pair", func(b *testing.B) {
@@ -53,7 +51,7 @@ func BenchmarkPairScanBuild(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
 			if _, ok := newGridScan(boxes, members, limit); !ok {
-				b.Fatal("the ribbon grid must fit the limit")
+				b.Fatal("the tube grid must fit the limit")
 			}
 		}
 	})

@@ -192,13 +192,13 @@ func requireSameWalk(t *testing.T, want, got scanWalk, label string) {
 	}
 }
 
-// scanBuildFixtures are the beat fixtures plus a small twisted ribbon,
+// scanBuildFixtures are the beat fixtures plus a small lobed tube,
 // boxes with duplicate and coincident vertices (points, segments, repeats),
 // and scattered boxes, coarse and fine: the fine set has more (x, y) columns
 // than registrations, which sends its grid to the item sort.
 func scanBuildFixtures() []gridFixture {
 	out := beatFixtures()
-	out = append(out, gridFixture{"twisted ribbon", twistedRibbonBoxes(40, 96, 12, 0.26, 0.02)})
+	out = append(out, gridFixture{"lobed tube", lobedTubeBoxes(40, 96, 12, 0.26, 0.02)})
 	rng := rand.New(rand.NewPCG(0x5ca1, 0xb0e5))
 	var degenerate [][2]r3.Vec
 	for i := range 900 {

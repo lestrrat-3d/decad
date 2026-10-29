@@ -9,7 +9,7 @@ import (
 // BenchmarkLongRibbonRowSort measures the real tree row producer and parallel
 // row sorting over the long ribbon's production-sized chunks.
 func BenchmarkLongRibbonRowSort(b *testing.B) {
-	boxes := twistedRibbonBoxes(686, 328, 68, 0.26, 0.004)
+	boxes := lobedTubeBoxes(686, 328, 68, 0.26, 0.004)
 	members := allMembers(len(boxes))
 	tree := newTreeScan(boxes, members)
 	const ceiling = 2_048_000_000
