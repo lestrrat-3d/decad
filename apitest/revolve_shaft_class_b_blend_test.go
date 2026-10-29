@@ -394,7 +394,7 @@ func TestRevolvedShaftClassBBlend(t *testing.T) {
 			return err
 		}, decad.ErrUnsupported, `brep-modify SB1`},
 		{"shell", false, func(t *testing.T, b *decad.Body) error {
-			_, err := decad.Shell(t.Context(), b, flat.Exactly(1), units.Millimeters(1))
+			_, err := decad.Shell(t.Context(), b, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(1), units.Millimeters(1))
 			return err
 		}, decad.ErrUnsupported, `brep-modify SB1`},
 		{"fillet as large as the shaft", false, func(t *testing.T, b *decad.Body) error {
