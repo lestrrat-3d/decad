@@ -100,6 +100,27 @@ type twistStation struct {
 	a    int64
 }
 
+// twistSelectCounts tries twistTargets finest first and returns the station
+// counts of the first whose table holds at most maxTriangles triangles. A
+// target whose counts exceed a station ceiling is skipped. It reports
+// ErrUnsupported when no target fits, and ctx.Err() when ctx is done.
+func twistSelectCounts(ctx context.Context, bounds [][]twistBounds, maxTriangles int) ([]int, []int, error) {
+	for _, target := range twistTargets {
+		nu, nt, err := twistCounts(ctx, bounds, target)
+		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return nil, nil, ctxErr
+			}
+			continue
+		}
+		if twistTriangleCount(nu, nt) <= maxTriangles {
+			return nu, nt, nil
+		}
+	}
+	return nil, nil, twistUnsupported("twisted loft needs more than %d triangles or its station ceilings for a 0.05 mm mesh bound",
+		maxTriangles)
+}
+
 func buildTwistedMesh(ctx context.Context, patches [][]twistPatch, edgeOf []int, edges int,
 	planes []sectionrecord.PlaneRecord, zs []*big.Rat) (Build, error) {
 	bounds := make([][]twistBounds, len(patches))
@@ -112,25 +133,9 @@ func buildTwistedMesh(ctx context.Context, patches [][]twistPatch, edgeOf []int,
 			bounds[k][i] = commons[k][i].bounds()
 		}
 	}
-	var nu, nt []int
-	for _, target := range twistTargets {
-		var err error
-		nu, nt, err = twistCounts(ctx, bounds, target)
-		if err != nil {
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return Build{}, ctxErr
-			}
-			nu = nil
-			continue
-		}
-		if twistTriangleCount(nu, nt) <= twistMaxTriangles {
-			break
-		}
-		nu = nil
-	}
-	if nu == nil {
-		return Build{}, twistUnsupported("twisted loft needs more than %d triangles or its station ceilings for a 0.05 mm mesh bound",
-			twistMaxTriangles)
+	nu, nt, err := twistSelectCounts(ctx, bounds, twistMaxTriangles)
+	if err != nil {
+		return Build{}, err
 	}
 	var stations []twistStation
 	var stationEdge []int
@@ -160,7 +165,6 @@ func buildTwistedMesh(ctx context.Context, patches [][]twistPatch, edgeOf []int,
 		spanStart[st.span+1] = q + 1
 	}
 	rhos := make([]*big.Rat, len(rings))
-	var err error
 	verts := make([]r3.Vec, len(rings)*ringSize)
 	err = twistParallel(ctx, len(rings), func(r int) error {
 		rg := rings[r]

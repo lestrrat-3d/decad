@@ -770,7 +770,8 @@ ring polygon by the area swept between ring and polygon, at most
 `(M_uu/(8 n_u²) + ρ)(B_u + 2ρ n_u)` per edge span, for each cap. Every term
 rounds upward into `AreaSlack`. This bound is first order in the cell size,
 unlike the second-order distance and volume bounds, and is loose at this
-resolution (about 40% of the area for the screw-gear ribbon). The diameter
+resolution (about 40% of the area for the 41-section ribbon of
+`TestLoftSectionsTwistedRibbonKeepsVolumeAndMeshProof`). The diameter
 bound is `2 max |C|_1 + (z_{n-1} - z_0)`, over every control point.
 
 Placement, `Tessellate(VerifyAll)`, mesh booleans and export use the standard
@@ -802,17 +803,17 @@ with the ring's largest by cross multiplication. No float decides anything,
 and every vertex and published number equals the reduced-rational
 evaluation bit for bit. The mesh needs rings about every 0.04 mm of height for a moving tooth, whatever
 the section spacing, so the triangle count follows the height and the
-tolerance and not the section count. The whole 68-tooth screw-gear ribbon,
-686 sections at 0.26 mm (178.1 mm), holds 449684 triangles at `τ = 0.03 mm`
-(`MeshBound` 0.0188 mm, volume bound 2.4%). The bound is certified for any
-spacing; a coarser spacing (69 sections at 2.6 mm, 19 at 10.4 mm) also meets
-0.05 mm but denotes a different, smoother solid, because Catmull-Rom through
-undersampled tooth phases is not the helical tooth.
+tolerance and not the section count. `twistTargets` are tried finest first
+(0.02, 0.03, then 0.049 mm), and the first table at or under 500000 triangles
+is used (`TestTwistedSelectCountsFallsBackPastTheCeiling`); a loft none of them
+fits is refused. The bound is certified for any spacing; a coarser spacing
+can also meet 0.05 mm but denotes a different, smoother solid, because
+Catmull-Rom through undersampled tooth phases is not the helical tooth.
 
 A mesh boolean tessellates the pair at a chord tolerance proportional to the
-pair's diameter (about 0.0036 mm for this ribbon with a box). `Intersect` and
-`Cut` therefore refuse the long ribbon: its held bound is 5 times coarser,
-and a table that fine would need about two million triangles.
+pair's diameter. `Intersect` and `Cut` refuse a long twisted loft whose held
+bound is coarser than that tolerance, because a table that fine would exceed
+the triangle ceiling.
 
 ### 13.6 Size and provability
 
@@ -820,5 +821,6 @@ The route is about 1000 lines of Go in `internal/smoothloft/` (patch algebra
 and admission, gathering, mesh and bounds) plus 60 in the root glue. Every
 bound above is a closed-form rational expression over exact control nets, so
 the error bound is provable as stated. No numeric search or sampled residual
-admits input. For 41 screw-gear ribbon sections the mesh has about 39000
-triangles with `MeshBound` 0.014 mm.
+admits input. For the 41-section ribbon of
+`TestLoftSectionsTwistedRibbonKeepsVolumeAndMeshProof` the mesh has about
+39000 triangles with `MeshBound` 0.014 mm.
