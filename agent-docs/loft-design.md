@@ -2518,7 +2518,8 @@ still over it. `Verify` at the default `1e-3` tolerance reads `Sound` with
 `Volume` binding at about 9.1x
 (`TestLoftArcWedgeVerifiesSound`). The matching fit-spline wedge, chorded by
 §5.1's free-form arm with its matched-departure bisection, takes 120 cells
-and reads `Sound` with `Volume` binding at about 14.3x.
+and reads `Sound` with `Volume` binding at about 14.3x
+(`TestLoftFitSplineWedgeVerifiesSound`).
 
 **The station cap's value is resolved.** §5.1 states the rule the cap obeys
 and everything an implementation needs to decide S15 from the record — the

@@ -45,7 +45,10 @@ import (
 //   - the track's exact-support rule: TestSweepPairBandTrack's stacked
 //     blocks publish a track on a held face;
 //   - δ on the track's face containment: TestSweepPairBandFootStaysInsideFace
-//     publishes a track whose true foot may leave the floor.
+//     publishes a track whose true foot may leave the floor;
+//   - the transfer charge on the replay's clear check:
+//     internal/planarsweep's TestReplayTransferChargeIsTheBasisDifference
+//     reads a zero charge on a turning path.
 //
 // The track replay's height check reads the held depth, as
 // PR 13's does; it only refuses, and no sound fixture reaches it.

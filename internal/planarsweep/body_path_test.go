@@ -1,9 +1,11 @@
 package planarsweep_test
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/motionbound"
 	"github.com/lestrrat-3d/decad/internal/planarsweep"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/sweepmemo"
@@ -203,5 +205,77 @@ func TestBodyPathMemoKeys(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, ok)
 		require.True(t, pointsEqual(wantFar, points), "far deviation, reading %d", reading)
+	}
+}
+
+// TestReplayTransferChargeIsTheBasisDifference pins replay's multibody §10.4
+// transfer charge ‖R_r − R_i‖_F·δ on a unit box holding δ = 2⁻¹² mm. A
+// translating path keeps its From basis and charges zero. On a path turning
+// about Z at 1 rad/s, the charge at each fraction is the Frobenius norm of the
+// rounded basis less the ideal rotation's enclosure, each entry read at its
+// farther endpoint so the norm bounds every member, rounded up to a float and
+// times δ. The test computes that norm independently and requires the charge
+// to stay below 2⁻⁴⁰·δ.
+func TestReplayTransferChargeIsTheBasisDifference(t *testing.T) {
+	corners := boxCorners([3]float64{-1, -1, -1}, [3]float64{1, 1, 1})
+	delta := proofarith.MustDyOf(math.Ldexp(1, -12))
+	fractions := []*big.Rat{big.NewRat(1, 4), big.NewRat(1, 2), big.NewRat(1, 1)}
+
+	slide := translatingBoxPath(t, corners)
+	slide.HeldDelta = delta
+	for _, f := range fractions {
+		pose, err := slide.Path.RoundedPoseAt(f)
+		require.NoError(t, err)
+		_, charge, ok := slide.ReplayDeviation(pose, f)
+		require.True(t, ok)
+		require.Zero(t, charge.Sign(), "a translating path charges nothing at %s", f)
+	}
+
+	zeroSpeed, zeroRate := units.MillimetersPerSecond(0), units.RadiansPerSecond(0)
+	path, err := sweeppath.Validate(sweeppath.RigidDriftSegment{From: r3.Identity(),
+		LinearVelocity:  sweeppath.QuantityVec{X: zeroSpeed, Y: zeroSpeed, Z: zeroSpeed},
+		AngularVelocity: sweeppath.QuantityVec{X: zeroRate, Y: zeroRate, Z: units.RadiansPerSecond(1)},
+		Duration:        units.Seconds(1)})
+	require.NoError(t, err)
+	// The box's corners lie within √2 of the Z axis; the radius only sizes
+	// the path's travel, which the charge does not read.
+	motion, ok := sweeppath.PrepareMotion(path, func(r3.Transform, r3.Vec, motionbound.RatVec) (*big.Rat, bool) {
+		return big.NewRat(2, 1), true
+	})
+	require.True(t, ok)
+	spin := planarsweep.BodyPath{Motion: motion, StartPoints: corners, SourcePoints: corners, HeldDelta: delta}
+	deltaRat := delta.Rat()
+	ceiling := new(big.Rat).Mul(proofarith.FloatRat(math.Ldexp(1, -40)), deltaRat)
+	for _, f := range fractions {
+		pose, err := spin.Path.RoundedPoseAt(f)
+		require.NoError(t, err)
+		_, charge, ok := spin.ReplayDeviation(pose, f)
+		require.True(t, ok)
+		ideal, ok := spin.IdealAt(f)
+		require.True(t, ok)
+		basis := pose.Basis()
+		columns := [3][3]float64{{basis.EX.X, basis.EX.Y, basis.EX.Z}, {basis.EY.X, basis.EY.Y, basis.EY.Z},
+			{basis.EZ.X, basis.EZ.Y, basis.EZ.Z}}
+		squared := new(big.Rat)
+		for i := range 3 {
+			for j := range 3 {
+				rounded := proofarith.FloatRat(columns[j][i])
+				entry := ideal.Rot.Entry(i, j)
+				far := new(big.Rat).Abs(new(big.Rat).Sub(rounded, entry.Lo))
+				if other := new(big.Rat).Abs(new(big.Rat).Sub(rounded, entry.Hi)); other.Cmp(far) > 0 {
+					far = other
+				}
+				squared.Add(squared, far.Mul(far, far))
+			}
+		}
+		// The norm is rounded up to a float, so its square is at least the
+		// exact squared norm and exceeds it by no more than a few ulps.
+		norm := new(big.Rat).Quo(charge, deltaRat)
+		normSquared := new(big.Rat).Mul(norm, norm)
+		require.Positive(t, norm.Sign(), "a turning path charges its basis difference at %s", f)
+		require.GreaterOrEqual(t, normSquared.Cmp(squared), 0, "the charge covers the norm at %s", f)
+		slack := new(big.Rat).Mul(squared, new(big.Rat).Add(big.NewRat(1, 1), proofarith.FloatRat(math.Ldexp(1, -48))))
+		require.LessOrEqual(t, normSquared.Cmp(slack), 0, "the charge is the norm at %s", f)
+		require.Negative(t, charge.Cmp(ceiling), "the charge is a few ulps of δ at %s", f)
 	}
 }

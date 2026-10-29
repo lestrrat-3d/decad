@@ -853,6 +853,84 @@ func TestLoftArcWedgeVerifiesSound(t *testing.T) {
 	}
 }
 
+// loftFitSplineWedgeSketch draws the arc wedge's two radial lines with the
+// quarter arc replaced by a fit spline through five points of it, π/8 apart.
+func loftFitSplineWedgeSketch(t *testing.T, w *sketch.World, plane *sketch.Plane) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	origin := s.CreatePoint(0, 0)
+	s.Fix(origin)
+	points := make([]*sketch.Point, 5)
+	for i := range points {
+		angle := float64(i) * math.Pi / 8
+		points[i] = s.CreatePoint(loftWedgeRadius*math.Cos(angle), loftWedgeRadius*math.Sin(angle))
+		s.Fix(points[i])
+	}
+	_, err = s.CreateFitSpline(points...)
+	require.NoError(t, err)
+	s.CreateLine(origin, points[0])
+	s.CreateLine(points[len(points)-1], origin)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	return s, profiles[0]
+}
+
+// TestLoftFitSplineWedgeVerifiesSound lofts the fit-spline wedge 10 mm
+// (agent-docs/loft-design.md §14), chorded by §5.1's free-form arm. Verify
+// reads it Sound at the default tolerance, and of the readings Verify gates,
+// Volume leaves the least room under its limit, at about 14.3x. The loft's
+// Volume overlaps the Extrude of the same profile, which is the same solid.
+func TestLoftFitSplineWedgeVerifiesSound(t *testing.T) {
+	t.Parallel()
+	w, base, top := loftWedgePlanes(t, 10)
+	s0, p0 := loftFitSplineWedgeSketch(t, w, base)
+	s1, p1 := loftFitSplineWedgeSketch(t, w, top)
+	doc := decad.New()
+	body, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status, "diagnostics: %+v", report.Diagnostics)
+	require.Len(t, report.Bodies, 1)
+	readings := report.Bodies[0]
+	require.NotNil(t, readings.Region)
+	binding, least := "", math.Inf(1)
+	for _, reading := range []struct {
+		name  string
+		bound units.Value
+		limit *units.Value
+	}{
+		{"Area", readings.Area.Bound, readings.Area.Tolerance.Limit},
+		{"Bounds", readings.Bounds.Bound, readings.Bounds.Tolerance.Limit},
+		{"Volume", readings.Region.Volume.Bound, readings.Region.Volume.Tolerance.Limit},
+		{"Centroid", readings.Region.Centroid.Bound, readings.Region.Centroid.Tolerance.Limit},
+	} {
+		if reading.limit == nil || reading.bound.Base() == 0 {
+			continue
+		}
+		margin := reading.limit.Base() / reading.bound.Base()
+		t.Logf("%s margin under its limit: %.4gx", reading.name, margin)
+		if margin < least {
+			binding, least = reading.name, margin
+		}
+	}
+	require.Equal(t, "Volume", binding)
+	require.InEpsilon(t, 14.3, least, 0.25)
+
+	extruded, err := decad.Extrude(t.Context(), decad.New(), s0, p0,
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	want, err := extruded.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-want.Value.Base()), volume.Bound.Base()+want.Bound.Base())
+}
+
 // TestLoftHugeCircleRefusesNonFiniteVolume lofts a radius-1e103 circle over
 // a height of 1e103. Its volume overflows float64, so the build must refuse
 // with ErrNotFinite. The centroid's clearance is computed first, from an
