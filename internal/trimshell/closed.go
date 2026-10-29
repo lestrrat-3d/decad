@@ -68,7 +68,11 @@ func closed(ctx context.Context, env topo.Env, g trimgraph.Graph, fp facetedreco
 	outer := make([]anasurf.Plane, len(g.Faces))
 	inner := make([]anasurf.Plane, len(g.Faces))
 	for i, f := range g.Faces {
-		p, err := anasurf.PlaneOf(f.Tag.(surfacegeom.Plane), f.Reversed)
+		tag, ok := f.PlaneTag()
+		if !ok {
+			return nil, refuse("face %d is not a plane (trim TG3)", i)
+		}
+		p, err := anasurf.PlaneOf(tag, f.Reversed)
 		if err != nil {
 			return nil, refuse("the plane of face %d has no exact form (trim TG3): %w", i, err)
 		}
@@ -152,7 +156,10 @@ func cavityFace(ctx context.Context, env topo.Env, g trimgraph.Graph, fp faceted
 	if err := checkOrientation(i, negN, loop); err != nil {
 		return trimrebuild.NewFace{}, err
 	}
-	tag := f.Tag.(surfacegeom.Plane)
+	tag, ok := f.PlaneTag()
+	if !ok {
+		return trimrebuild.NewFace{}, refuse("face %d is not a plane (trim TG3)", i)
+	}
 	local, err := facemesh.Planar(ctx, negN, tag.Frame.U(), tag.Frame.V(), []facemesh.Loop{loop})
 	if err != nil {
 		switch {
@@ -226,7 +233,10 @@ func checkOrientation(face int, n [3]*big.Rat, loop facemesh.Loop) error {
 
 // cavityGroup is step 7: the group of cavity face i on the offset plane, stating its departure from the true plane.
 func cavityGroup(env topo.Env, i int, f trimgraph.Face, p, q anasurf.Plane, t *big.Rat) (facetedrecord.Group, error) {
-	tag := f.Tag.(surfacegeom.Plane)
+	tag, ok := f.PlaneTag()
+	if !ok {
+		return facetedrecord.Group{}, refuse("face %d is not a plane (trim TG3)", i)
+	}
 	norm, err := p.Norm()
 	if err != nil {
 		return facetedrecord.Group{}, refuse("the plane of face %d has no exact form (trim TG3): %w", i, err)

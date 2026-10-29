@@ -27,6 +27,12 @@ type Face struct {
 	Loops    [][]Use // outer loop first, each in its topo walk order
 }
 
+// PlaneTag returns the face's tag as a Plane; Lift admits planes only, so ok is true for a lifted face.
+func (f Face) PlaneTag() (surfacegeom.Plane, bool) {
+	p, ok := f.Tag.(surfacegeom.Plane)
+	return p, ok
+}
+
 // Use is one directed use of a graph edge in a loop.
 type Use struct {
 	Edge    int

@@ -247,7 +247,11 @@ func (g *Graph) orderVertexFaces(vi int, corners []corner) error {
 func (g *Graph) checkConvexity(ctx context.Context) error {
 	planes := make([]anasurf.Plane, len(g.Faces))
 	for i, f := range g.Faces {
-		p, err := anasurf.PlaneOf(f.Tag.(surfacegeom.Plane), f.Reversed)
+		tag, ok := f.PlaneTag()
+		if !ok {
+			return notLiftable("face %d is not a plane (L2)", i)
+		}
+		p, err := anasurf.PlaneOf(tag, f.Reversed)
 		if err != nil {
 			return notLiftable("face %d has no exact plane (L6): %v", i, err)
 		}

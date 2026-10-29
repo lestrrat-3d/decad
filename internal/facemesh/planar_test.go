@@ -11,8 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func normal(x, y, z int64) [3]*big.Rat {
-	return [3]*big.Rat{big.NewRat(x, 1), big.NewRat(y, 1), big.NewRat(z, 1)}
+// normalZ is the exact normal (0, 0, z).
+func normalZ(z int64) [3]*big.Rat {
+	return [3]*big.Rat{new(big.Rat), new(big.Rat), big.NewRat(z, 1)}
 }
 
 func loopOf(bound float64, pts ...r3.Vec) facemesh.Loop {
@@ -36,7 +37,7 @@ func triArea(pts []r3.Vec, tris [][3]int) *big.Rat {
 
 func TestPlanarPentagon(t *testing.T) {
 	pts := []r3.Vec{r3.NewVec(0, 0, 0), r3.NewVec(20, 0, 0), r3.NewVec(20, 20, 0), r3.NewVec(2, 20, 0), r3.NewVec(0, 18, 0)}
-	tris, err := facemesh.Planar(t.Context(), normal(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0),
+	tris, err := facemesh.Planar(t.Context(), normalZ(1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0),
 		[]facemesh.Loop{loopOf(0, pts...)})
 	require.NoError(t, err)
 	require.Len(t, tris, 3)
@@ -48,7 +49,7 @@ func TestPlanarFlippedFrameStillCounterClockwise(t *testing.T) {
 	// Outward normal -z: the loop is counter-clockwise about -z, i.e. clockwise in the xy plane. The frame
 	// (x, y) has u×v = +z, opposite the normal, so Planar projects with (y, x).
 	pts := []r3.Vec{r3.NewVec(0, 0, 0), r3.NewVec(0, 4, 0), r3.NewVec(4, 4, 0), r3.NewVec(4, 0, 0)}
-	tris, err := facemesh.Planar(t.Context(), normal(0, 0, -1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0),
+	tris, err := facemesh.Planar(t.Context(), normalZ(-1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0),
 		[]facemesh.Loop{loopOf(0, pts...)})
 	require.NoError(t, err)
 	require.Len(t, tris, 2)
@@ -62,7 +63,7 @@ func TestPlanarFlippedFrameStillCounterClockwise(t *testing.T) {
 func TestPlanarKeepsCollinearPoint(t *testing.T) {
 	// Triangulate keeps a collinear boundary point as a triangle corner, so every loop point is used.
 	pts := []r3.Vec{r3.NewVec(0, 0, 0), r3.NewVec(2, 0, 0), r3.NewVec(4, 0, 0), r3.NewVec(4, 4, 0), r3.NewVec(0, 4, 0)}
-	tris, err := facemesh.Planar(t.Context(), normal(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0),
+	tris, err := facemesh.Planar(t.Context(), normalZ(1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0),
 		[]facemesh.Loop{loopOf(0, pts...)})
 	require.NoError(t, err)
 	seen := map[int]bool{}
@@ -85,7 +86,7 @@ func TestCoverageRefusesDroppedPoint(t *testing.T) {
 func TestPlanarRefusesSliverBeyondItsBounds(t *testing.T) {
 	pts := []r3.Vec{r3.NewVec(0, 0, 0), r3.NewVec(10, 0, 0), r3.NewVec(5, 1e-6, 0)}
 	frame := func(bound float64) error {
-		_, err := facemesh.Planar(t.Context(), normal(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0),
+		_, err := facemesh.Planar(t.Context(), normalZ(1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0),
 			[]facemesh.Loop{loopOf(bound, slices.Clone(pts)...)})
 		return err
 	}

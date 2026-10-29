@@ -2886,3 +2886,4 @@
 10	0.00	TestPointLocationDenotedLevel
 10	0.00	TestPointLocationDenotedExtentModes
 10	0.00	TestSurfaceExtendRevolvePartialNearestCut
+10	0.00	TestTrimGraphClosedShell
