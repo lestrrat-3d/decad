@@ -35,6 +35,13 @@ type cornerVertex struct {
 	end  [3]int
 }
 
+func possibleSharedVertex(delta r3.Vec, tol float64) bool {
+	bound := 2 * tol
+	return delta.X <= bound && delta.X >= -bound &&
+		delta.Y <= bound && delta.Y >= -bound &&
+		delta.Z <= bound && delta.Z >= -bound
+}
+
 func (c *cornerVertex) u(k int) r3.Vec { return c.n[k].Scale(-1) }
 
 func (c *cornerVertex) selected() int {
@@ -143,8 +150,13 @@ func rewriteCorners(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 
 	var shared []int
 	shareVertex := func(p r3.Vec) int {
+		tol := 16*slack + w.tau*1e-3
 		for _, v := range shared {
-			if w.verts[v].Sub(p).Len() <= 16*slack+w.tau*1e-3 {
+			delta := w.verts[v].Sub(p)
+			if !possibleSharedVertex(delta, tol) {
+				continue
+			}
+			if delta.Len() <= tol {
 				return v
 			}
 		}
