@@ -22,8 +22,8 @@ This document ("trim §N" elsewhere) is the companion to `agent-docs/api-design.
 
 Fillet, Chamfer, Shell and Draft build only on recognised shape classes, and a mesh Boolean result reaches them
 only through per-surface-pair routes (blend R1–R6, reach §4–§8). Shell, Draft and Offset of a mesh Boolean result
-refuse outright, because the held mesh records polygons and no face trims. Blends between crossing cylinders, on
-cones or tori, and on oblique plane–cylinder rims refuse because their blend surface is outside the vocabulary.
+refuse outright, because the held mesh records polygons and no face trims. Blends between crossing cylinders outside
+blend R7's saddles, on cones or tori, and on oblique plane–cylinder rims refuse because their blend surface is outside the vocabulary.
 Variable-radius and face-to-face fillets have no entry point. This design adds one general path: lift any body whose
 faces carry exact analytic tags into a **trim graph** (faces on tags, edges on exact or certified curves, vertices
 with bounds), run the modify operation on the graph, mesh only the faces it changed, and prove the result.
@@ -97,7 +97,7 @@ surface is not a `Cylinder`, `Cone` or `Torus`, refuses.
 | Row | Refusal site |
 |---|---|
 | Modify: "Fillet/chamfer of most faceted boolean results" | the S3 text "this evaluator fillets a straight prism, its one-line Sweep reduction, a revolve, or a matching-section axial loft only" (`internal/brepmodify/fillet.go`) after `retainedblend.SaddleFillet` and `retainedblend.Fillet` decline |
-| Modify: "Retained edge blend between crossing cylinders (a `Fillet` or `Chamfer` outside R7), or on a `Cone` or `Torus` face" | blend SR1: `retainedblend.Unread` (`internal/retainedblend/unread.go`) names the edge after the `looksLike*` classification (`route.go`) and `looksLikeSaddle` (`saddle.go`) decline it |
+| Modify: "Retained edge blend between crossing cylinders (a `Fillet` outside the R7 fillet row, a `Chamfer` outside R7), or on a `Cone` or `Torus` face" | blend SR1: `retainedblend.Unread` (`internal/retainedblend/unread.go`) names the edge after `looksLikeSaddleFillet` (`saddle_fillet.go`), the `looksLike*` classification (`route.go`) and `looksLikeSaddle` (`saddle.go`) decline it |
 | Modify: "Fillet/chamfer of a class-B crossing result's edges outside brep-modify §4.4" | brep-modify SB1 |
 | Modify: "Variable-radius fillet, face-to-face fillet" | no entry point (`fillet.go` has no option for it) |
 | Also consider: "Fillet by chord length … on a torus, with setback corners" | `fillet.go` |
