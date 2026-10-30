@@ -141,6 +141,11 @@ func Fillet(ctx context.Context, env topo.Env, b *topo.Body, call FilletCall) (R
 	}
 
 	if fp, ok := b.Payload.(facetedrecord.Payload); ok {
+		// A cross hole's saddle mouth rebuilds both walls near it and joins
+		// them by a proven pipe (agent-docs/retained-edge-blend-design.md §4.10).
+		if out, recognized, err := retainedblend.SaddleFillet(ctx, env, b, fp, edges, rmm, rDelta); recognized || err != nil {
+			return Result{Body: out}, err
+		}
 		// A closed circular rim between two retained faces rebuilds the held
 		// mesh near it (agent-docs/retained-edge-blend-design.md). A selection it does
 		// not recognize keeps the ordinary S3 refusal and its edge context.

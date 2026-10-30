@@ -13,10 +13,11 @@ import (
 const crossingCylindersReason = `no retained blend class reads selected edge[0]: two retained cylinders whose axes are not parallel: ` +
 	`the blend is a canal surface (retained-edge-blend SR1)`
 
-// turnedShaftWithCrossHole is a radius-10 shaft, 80 mm long on the x axis,
-// cut by a radius-3 hole along z at x = 40: a mesh Boolean result whose hole
-// mouths lie between two retained cylinders with crossing axes.
-func turnedShaftWithCrossHole(t *testing.T) *decad.Body {
+// turnedShaftWithCrossPin is a radius-10 shaft, 80 mm long on the x axis,
+// joined to a radius-3 pin along z at x = 40: a mesh Boolean result whose pin
+// roots lie between two retained cylinders with crossing axes, each with its
+// material inside.
+func turnedShaftWithCrossPin(t *testing.T) *decad.Body {
 	t.Helper()
 	doc := decad.New()
 	w := sketch.NewWorld()
@@ -42,13 +43,13 @@ func turnedShaftWithCrossHole(t *testing.T) *decad.Body {
 	require.NoError(t, err)
 	pin, err := decad.Extrude(t.Context(), doc, hs, hs.Profiles()[0], decad.Distance{D: units.Millimeters(45), Dir: decad.Along})
 	require.NoError(t, err)
-	cut, err := decad.Cut(t.Context(), shaft, pin)
+	joined, err := decad.Union(t.Context(), shaft, pin)
 	require.NoError(t, err)
-	return cut
+	return joined
 }
 
 // crossHoleMouths selects the edges of body whose end points both lie on the
-// hole wall (radius 3 about the hole axis) and on the shaft wall (radius 10).
+// pin's wall (radius 3 about its axis) and on the shaft wall (radius 10).
 func crossHoleMouths(t *testing.T, body *decad.Body) *decad.EdgeQuery {
 	t.Helper()
 	near := func(a, b float64) bool { d := a - b; return d < 0.05 && d > -0.05 }
@@ -80,11 +81,13 @@ func hypot(a, b float64) float64 {
 
 func TestBlendRefusalNamesCrossingCylinders(t *testing.T) {
 	t.Parallel()
-	// Chamfer builds these mouths (retained_saddle_chamfer_test.go); the
-	// rolling-ball fillet there is a canal surface.
-	t.Run(`fillet of cross-hole mouths`, func(t *testing.T) {
+	// Fillet and Chamfer build a cross hole's mouths
+	// (retained_saddle_fillet_test.go, retained_saddle_chamfer_test.go); a
+	// pin's root, where the ball lies outside both cylinders, is a canal
+	// surface no route builds.
+	t.Run(`fillet of cross-pin roots`, func(t *testing.T) {
 		t.Parallel()
-		body := turnedShaftWithCrossHole(t)
+		body := turnedShaftWithCrossPin(t)
 		_, err := decad.Fillet(t.Context(), body, crossHoleMouths(t, body), units.Millimeters(0.5))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		requireReasonLeads(t, err, `this evaluator fillets a straight prism, its one-line Sweep reduction, a revolve, or a matching-section axial loft only`)

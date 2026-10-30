@@ -190,6 +190,7 @@ var (
 		layoutPartSpec("internal-placement.md"),
 		layoutPartSpec("operation-observability.md"),
 		layoutPartSpec("internal-trim.md"),
+		layoutPartSpec("internal-blends.md"),
 	}
 )
 
