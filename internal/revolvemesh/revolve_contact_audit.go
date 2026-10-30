@@ -798,10 +798,6 @@ func revolveVertexIsolated(a RevolveAuditTri, triA [3]int, b RevolveAuditTri, tr
 		}
 		return side == 0 || side != want
 	}
-	var corner *revolveCornerAxes
-	if cache != nil {
-		corner = cache.corner(ia, a, ai, delta)
-	}
 	normal := func() RevolveSepAxis {
 		if cache != nil {
 			return cache.normalAxis(ia, a, delta)
@@ -810,6 +806,10 @@ func revolveVertexIsolated(a RevolveAuditTri, triA [3]int, b RevolveAuditTri, tr
 	}
 	if try(normal(), nil) {
 		return true
+	}
+	var corner *revolveCornerAxes
+	if cache != nil {
+		corner = cache.corner(ia, a, ai, delta)
 	}
 	for k := range 2 {
 		var ax RevolveSepAxis
