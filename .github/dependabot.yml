@@ -17,7 +17,7 @@ updates:
   - package-ecosystem: gomod
     directory: /
     schedule:
-      interval: weekly
+      interval: daily
 
   # _gallery is its own Go module (see its go.mod), kept out of the root module
   # so the README image renderer never becomes a library dependency. A
