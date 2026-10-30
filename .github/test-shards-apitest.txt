@@ -2935,3 +2935,8 @@
 10	0.03	TestWallSectorTooTightForItsFlats
 10	0.02	TestWallSphereTiltedAxisUndecided
 10	0.01	TestWebPathRefusals
+10	0.00	TestShellBossThenBlendBoxVerticals
+10	0.00	TestShellBossThenFilletRefusesCavityBreakthrough
+10	0.00	TestShellBossThenShellRefuses
+10	0.00	TestShellBossThenFilletOpeningRim
+10	0.00	TestShellPocketThenFilletOuterVerticals

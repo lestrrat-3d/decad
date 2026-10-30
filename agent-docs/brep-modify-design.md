@@ -98,6 +98,43 @@ reference-face mapping (§5.1) or route L's complete-loop mapping
 (`agent-docs/modify-general-design.md` §4.2). A selection outside those routes
 remains SX16.
 
+### 2.1 A stacked shell's rounded cavity: the faceted view
+
+A `brepPayload` that carries a boss shell or pocket shell band
+(`breprecord.Payload` `BossShell` or `PocketShell`; modify-general §3.1a–§3.1c,
+§3.1e) has no exact modify route: no route above rewrites its cylinder,
+sphere or torus band patches. A `Fillet` or `Chamfer` of it runs, before the
+brep route, on the body's faceted view (`shellViewBlend`,
+`internal/brepmodify/shell_view.go`):
+
+1. `booleaneval.View` tessellates the body at `VerifyAll`, at the chord the
+   pair `(b, b)` derives, and gives each face of the body one group, which
+   `facetedrecord.SourceTag` fills exactly as a mesh Boolean fills an
+   operand face's group. Planes keep their exact plane. A band patch keeps its
+   cylinder, sphere or torus where `SourceTag` admits the face, and is
+   `Faceted` otherwise. The view's vertex bounds, volume allowance and area
+   slack are the tessellation's own; nothing is cut, welded or moved.
+2. Each selected edge maps to the one view edge between the images of its two
+   faces whose two ends equal its own ends exactly. An edge with no such view
+   edge, or with several, leaves the selection unmapped.
+3. `retainedblend.Fillet` or `retainedblend.Chamfer`
+   (`agent-docs/retained-edge-blend-design.md`) builds the result from the view.
+   Its strip check (SR7) reads every other facet of the view, the cavity
+   walls and band facets included, as an obstacle, so a blend that would
+   break through the wall into the cavity refuses.
+
+An unmapped selection, or one the retained blend does not recognize, falls
+through to SB11. A `Shell` that removes faces of such a body is SB11 without a
+view, and a closed one is modify-general SG2. The result
+is a `facetedPayload`: its volume bound grows by the view's band chords (about
+±14 mm³ for the 60×40×20 box with a 20×20×10 boss shelled `t = 2`), and every
+later reading, modify op and Boolean reads its held mesh.
+
+For the box above, open at the boss top, `Fillet` of the four outer box
+verticals at `r = 3` leaves `√2·t − (√2−1)·r = 1.586` mm of wall on each
+corner's diagonal and removes `4·20·9·(1 − π/4)` mm³. At `r = 7`, past
+`√2·t/(√2−1) = 6.83`, the strip meets the cavity and SR7 refuses.
+
 ## 3. Table RB — receivers
 
 | RB | Receiver | `Fillet` / `Chamfer` | `Shell` |
@@ -106,6 +143,7 @@ remains SX16.
 | **RB2** | `stackedPrismPayload` whose `breprecord.OfStacked` succeeds (one region per slab, not a group) | as RB1 over the face view; asymmetric references use the source-face role at each record index | as RB1 |
 | **RB3** | `brepPayload` or stacked receiver with a section displacement | route P's displaced reading (§4.4) for a lateral Fillet or symmetric Chamfer that passes Table PD; otherwise SB1 | SB1 |
 | **RB4** | `facetedPayload` | reach SX9 (permanent) | reach SX9 |
+| **RB5** | `brepPayload` carrying a boss or pocket shell band | the faceted view's retained edge blend (§2.1), else SB11 | SB11; a closed shell is modify-general SG2 |
 
 RB1's zero-displacement rule is prism-boolean §13's displaced-receiver rule,
 the one `prismrecord.Payload.RequireExactSection` enforces for a prism: a rewrite of a record that
@@ -503,6 +541,7 @@ Modify §1's test picks every sentinel: a body that does not exist is
 | **SB8** | an adjacent face outside EB4/EB5, or a Fillet or Chamfer whose end-face corners disagree with the interior material wedge (EB8) or whose wedge turn is undecided | yes | `ErrUnsupported` |
 | **SB9** | the two end faces' blends disagree in reference coordinates | — (a falsifier) | `ErrUnsupported` |
 | **SB10** | Shell of a brep that reads as a prism along no axis and as no through-cut record (modify-general Table TC) | yes; the three-dimensional offset puts a sphere at a reflex vertex, a torus around a reflex circle and an elliptical edge where two reflex edges meet, none of which this record holds | `ErrUnsupported`, with SG3's reason |
+| **SB11** | RB5: a `Shell` that removes faces, or a `Fillet` or `Chamfer` whose selection §2.1 leaves unmapped or the retained blend does not recognize | yes for a thin enough second shell or a small enough blend | `ErrUnsupported`: "this evaluator does not modify a stacked shell's rounded cavity" |
 
 SB7 includes a cylinder, a plane along the edge's axis, an oblique, split or
 level-displaced wall, an earlier blend, and a trimmed wall ending on a loop
@@ -525,7 +564,7 @@ record gate; a mismatch falls through to the table unchanged:
 
 | Stage | Gates |
 |---|---|
-| 2a. record | RB dispatch; SB2; SB1, except a displaced receiver that takes §4.4's reading (its own gate order) |
+| 2a. record | a Fillet or Chamfer of an RB5 receiver takes §2.1's view first; RB dispatch; SB11; SB2; SB1, except a displaced receiver that takes §4.4's reading (its own gate order) |
 | 2b. route P | P1–P5 per axis; the prism path's own stage 2 onward where an axis admits; a shell with no admitting axis takes route S at 2c, and SB3 where a prism read and route S reads none |
 | 2c. route E entry | route S (Shell; modify-general §3.4); independent straight edges take route E; a `Fillet` of complete loops with independent straight edges takes route V (`agent-docs/vertex-blend-design.md` §2); other selections take route L or refuse; EB1/SB4 and EB7/SB5 apply to route E's set |
 | 3. edge topology | EB2/SB6; the restatement passes (§5.2): EB3/SB7, then EB4/SB8; EB5/SB8; EB6 |

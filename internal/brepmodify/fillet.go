@@ -63,6 +63,14 @@ func Fillet(ctx context.Context, env topo.Env, b *topo.Body, call FilletCall) (R
 			return out, nil
 		}
 	}
+	// A stacked shell's rounded cavity has no exact modify route; its faceted
+	// view takes the retained edge blend (brep-modify §2.1).
+	if out, matched, err := shellViewBlend(ctx, env, hooks, b, edges, nil,
+		func(view *topo.Body, fp facetedrecord.Payload, edges []*topo.Edge, _ map[*topo.Edge]*topo.Face) (*topo.Body, bool, error) {
+			return retainedblend.Fillet(ctx, env, view, fp, edges, rmm, rDelta)
+		}); matched || err != nil {
+		return Result{Body: out}, err
+	}
 	blend := BlendOp{
 		Kind: "fillet",
 		Corner: func(loop survey2d.CornerLoop, _, ci int, _ *topo.Edge) (*offset2d.Blend, error) {
