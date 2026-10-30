@@ -1,7 +1,9 @@
 package meshbool_test
 
 import (
+	"context"
 	"math"
+	"sync/atomic"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -63,8 +65,48 @@ func newGateBox(t *testing.T, lo, hi r3.Vec, delta float64) gateBox {
 
 func gate(t *testing.T, a, b gateBox, capFace, coneFace *topo.Face) error {
 	t.Helper()
-	return meshbool.RefuseUndecidableProximity(t.Context(), a.mesh, b.mesh, a.bool, b.bool,
+	return gateWithContext(t.Context(), a, b, capFace, coneFace)
+}
+
+func gateWithContext(ctx context.Context, a, b gateBox, capFace, coneFace *topo.Face) error {
+	return meshbool.RefuseUndecidableProximity(ctx, a.mesh, b.mesh, a.bool, b.bool,
 		meshbool.NewContactMemo(a.bool, b.bool), capFace, coneFace)
+}
+
+type gatePollContext struct {
+	context.Context //nolint:containedctx // deterministic cancellation fixture for one test call.
+	polls           atomic.Int64
+	cancelAt        int64
+}
+
+func (c *gatePollContext) Err() error {
+	polls := c.polls.Add(1)
+	if c.cancelAt > 0 && polls >= c.cancelAt {
+		return context.Canceled
+	}
+	return c.Context.Err()
+}
+
+func TestRefuseUndecidableProximityPollsAfterFailedDepthProof(t *testing.T) {
+	makePair := func() (gateBox, gateBox) {
+		return newGateBox(t, r3.NewVec(0, 0, 0), r3.NewVec(1, 1, 1), 0.1),
+			newGateBox(t, r3.NewVec(0.25, 0.25, 1.1), r3.NewVec(0.75, 0.75, 2), 0.1)
+	}
+	a, b := makePair()
+	baseline := &gatePollContext{Context: meshbool.WithContactWorkers(context.Background(), 1)}
+	err := gateWithContext(baseline, a, b, nil, nil)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported, "the near miss has no deep-intersection witness")
+	require.Positive(t, baseline.polls.Load())
+
+	a, b = makePair()
+	canceled := &gatePollContext{
+		Context:  meshbool.WithContactWorkers(context.Background(), 1),
+		cancelAt: baseline.polls.Load(),
+	}
+	err = gateWithContext(canceled, a, b, nil, nil)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, baseline.polls.Load(), canceled.polls.Load(),
+		"the added poll must observe cancellation after the failed depth proof")
 }
 
 func TestRefuseUndecidableProximity(t *testing.T) {
