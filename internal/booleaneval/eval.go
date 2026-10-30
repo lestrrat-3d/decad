@@ -255,26 +255,13 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			}
 		}
 		sourceID[f] = len(groups)
-		// The tool of a Cut (every face of b) leaves its natural normal
-		// pointing into the result (agent-docs/faceted-source-retention-design.md §3.1).
-		group, _ := facetedrecord.SourceTag(f, op == meshbool.OpCut && i >= targetFaces)
-		if i < targetFaces {
-			group = placed[0].charge(group, f, i)
-		} else {
-			group = placed[1].charge(group, f, i-targetFaces)
-		}
-		// A mesh result face descends from f, so it carries every role f is
-		// selected by: its own as Origins, which recognizers match faces by,
-		// and those an analytic Boolean attributed to it as Upstream.
-		group.Origins = slices.Clone(f.Origins)
-		group.Upstream = slices.Clone(f.Upstream)
-		// Identity only: no reader derives a plane or a bound from Source.
 		operand, ordinal, owner := 0, i, a
 		if i >= targetFaces {
 			operand, ordinal, owner = 1, i-targetFaces, b
 		}
-		group.Source = facetedrecord.FaceSource(owner.Origin.Producer, operand, ordinal, f)
-		group.Planar = f.Surface.Kind() == surfacegeom.KindPlane || f.HeldPlanar
+		// The tool of a Cut (every face of b) leaves its natural normal
+		// pointing into the result (agent-docs/faceted-source-retention-design.md §3.1).
+		group := sourceGroup(owner, operand, ordinal, f, op == meshbool.OpCut && i >= targetFaces, placed[operand])
 		if len(shifts) > 0 && i >= targetFaces {
 			// A moved piece's true faces lie on its tags translated by the
 			// shift, never on the unmoved tags.
@@ -457,6 +444,25 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	}
 	ev.Chain = summarizeChainAllowance(bmA, 0, bmB, 1)
 	return ev, nil
+}
+
+// sourceGroup is the result group a mesh Boolean copies from face f of
+// operand owner, at position ordinal of topobuild.Faces(owner): the face's
+// retained tag (facetedrecord.SourceTag, flipped for the tool of a Cut) charged
+// with the placed operand's departure, its roles and its identity.
+func sourceGroup(owner *topo.Body, operand, ordinal int, f *topo.Face, flip bool,
+	placed placedDepartures) facetedrecord.Group {
+	group, _ := facetedrecord.SourceTag(f, flip)
+	group = placed.charge(group, f, ordinal)
+	// A mesh result face descends from f, so it carries every role f is
+	// selected by: its own as Origins, which recognizers match faces by,
+	// and those an analytic Boolean attributed to it as Upstream.
+	group.Origins = slices.Clone(f.Origins)
+	group.Upstream = slices.Clone(f.Upstream)
+	// Identity only: no reader derives a plane or a bound from Source.
+	group.Source = facetedrecord.FaceSource(owner.Origin.Producer, operand, ordinal, f)
+	group.Planar = f.Surface.Kind() == surfacegeom.KindPlane || f.HeldPlanar
+	return group
 }
 
 func configureChainGate(bm *meshbool.BoolMesh, pairLimit, allowance float64) {

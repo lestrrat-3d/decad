@@ -100,6 +100,22 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 			return Result{Body: node}, err
 		}
 	}
+	// A stacked shell's rounded cavity has no exact modify route; its faceted
+	// view takes the retained edge blend (brep-modify §2.1).
+	var asymRefs map[*topo.Edge]*topo.Face
+	if asym != nil {
+		asymRefs = asym.Refs
+	}
+	if out, matched, err := shellViewBlend(ctx, env, hooks, b, edges, asymRefs,
+		func(view *topo.Body, fp facetedrecord.Payload, edges []*topo.Edge, refs map[*topo.Edge]*topo.Face) (*topo.Body, bool, error) {
+			var ref *retainedblend.Reference
+			if asym != nil {
+				ref = &retainedblend.Reference{Refs: refs, Other: asym.Other, OtherDelta: asym.OtherDelta}
+			}
+			return retainedblend.Chamfer(ctx, env, view, fp, edges, dmm, dDelta, ref)
+		}); matched || err != nil {
+		return Result{Body: out}, err
+	}
 	// All twelve edges of a bare box take the same whole-body chamfer.
 	if node, matched, err := breprecord.TryBareBoxAllEdgeChamfer(ctx, env, b, edges, dmm, dDelta, asym != nil); matched || err != nil {
 		return Result{Body: node}, err
