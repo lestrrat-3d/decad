@@ -13,6 +13,26 @@ import (
 // pt2 is a point in a face plane's (u, w) coordinates.
 type pt2 struct{ u, w float64 }
 
+type planarEar struct {
+	at      int
+	quality float64
+}
+
+func sortPlanarEars(ears []planarEar) {
+	for _, e := range ears {
+		if math.IsNaN(e.quality) {
+			sort.SliceStable(ears, func(i, j int) bool { return ears[i].quality > ears[j].quality })
+			return
+		}
+	}
+	sort.Slice(ears, func(i, j int) bool {
+		if ears[i].quality == ears[j].quality {
+			return ears[i].at < ears[j].at
+		}
+		return ears[i].quality > ears[j].quality
+	})
+}
+
 // orient is the sign of (b − a) × (c − a): +1 for a left turn, −1 for a right
 // turn, 0 for collinear points. A float evaluation decides it when its
 // rounding cannot flip the sign, and exact rational arithmetic decides it
@@ -190,21 +210,17 @@ func collinearOverlap(a, b, end, other pt2) bool {
 func earClip(ps []pt2, poly []int) ([][3]int, error) {
 	idx := append([]int(nil), poly...)
 	tris := make([][3]int, 0, len(idx))
-	type ear struct {
-		at      int
-		quality float64
-	}
 	for len(idx) > 3 {
 		n := len(idx)
-		var ears []ear
+		var ears []planarEar
 		for i := range n {
 			a, b, c := ps[idx[(i+n-1)%n]], ps[idx[i]], ps[idx[(i+1)%n]]
 			if orient(a, b, c) <= 0 {
 				continue
 			}
-			ears = append(ears, ear{i, earQuality(a, b, c)})
+			ears = append(ears, planarEar{i, earQuality(a, b, c)})
 		}
-		sort.SliceStable(ears, func(i, j int) bool { return ears[i].quality > ears[j].quality })
+		sortPlanarEars(ears)
 		clipped := false
 		for _, e := range ears {
 			ia, ib, ic := idx[(e.at+n-1)%n], idx[e.at], idx[(e.at+1)%n]
