@@ -2691,6 +2691,7 @@
 10	0.00	TestLoftChainMultiCellRibbonFreeEdgesAndArea
 10	0.00	TestLoftEmptyAlignmentPayload
 10	0.04	TestLoftFitSplineWedgeVerifiesSound
+10	0.00	TestLoftLineAndArcProfileThroughBorePreservesExactSections
 10	0.00	TestLoftPlacedContextCancellation
 10	0.00	TestLoftSameKindCircleAgainstCircleAdmitted
 10	0.01	TestLoftSectionsFiveIndependentRectanglesKeepVolumeAndMeshProof

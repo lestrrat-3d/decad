@@ -2943,7 +2943,8 @@ fillets, optional bore and both outer-cap chamfers.
 ## 18. Coaxial bore and held outer-cap chamfer
 
 `Cut` keeps a solid matching axial loft as a `loftPayload` when a straight
-prism tool cuts one full circular or D-shaped through-bore. Both recorded
+prism tool cuts one full circular, D-shaped or closed line-and-arc-profile
+through-bore. Both recorded
 sections must be identical and hole-free before the cut, share their in-plane
 axes, have zero alignment, and have no placement. The tool must share those
 axes and span both cap levels. Exact rational lifts of its endpoint levels
@@ -2952,8 +2953,14 @@ inserted hole center must have equal exact lifts, including the recovered
 axial coordinate. A D-shaped tool consists of one clipped circular arc and
 its chord; the chord endpoints define the normalized section loop, and the
 supporting circle bounds the complete tool for containment. Its bounded
-section displacement is carried into the resulting Loft. A whole-circle tool
-with displaced section or endpoint records uses the general boolean path.
+section displacement is carried into the resulting Loft. A non-D line-and-arc
+tool must have whole line and circular-arc segments whose walked endpoints
+join exactly. The tool loop maps by exact point lifts, then reverses for the
+hole. An outward-rounded circle around line endpoints and arc supporting
+circles contains the complete tool; the existing circle containment proof
+must place that circle inside the loft boundary. A whole-circle tool with
+displaced section or endpoint records uses the general boolean path. Other
+profile curves also use the general boolean path.
 `internal/loftfillet/circle_hole.go` proves that the circle's
 containing square misses every outer carrier enclosure and junction, then uses
 exact winding of the carrier chords to prove the circle lies inside the
@@ -2962,8 +2969,9 @@ both sections and runs the normal loft evaluator. A pair outside these gates
 uses the general boolean path; the global sketch reconstruction ceiling is
 unchanged.
 The rewritten payload records `throughBoreCut` whether or not it publishes
-analytic bore topology. `Body.Section` reads the D-shaped cut only for a
-matching pair of authenticated source profiles at an interior world-XY plane.
+analytic bore topology. `Body.Section` reads D-shaped and closed line-and-arc
+cuts only for a matching pair of authenticated source profiles at an interior
+world-XY plane.
 
 The certified Cut marks the resulting Loft for analytic bore topology only
 when exact rational lifts of both section origins and circle centers agree

@@ -257,14 +257,14 @@ func LoftMatchingSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, b
 	return pl.Profile0, true
 }
 
-// LoftThroughBoreSectionRecord reads a D-shaped through-bore loft from its
+// LoftThroughBoreSectionRecord reads a supported through-bore loft from its
 // authenticated, matching section records. The supporting wall is vertical, so
 // every interior world-XY section has the recorded profile.
 func LoftThroughBoreSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, bool) {
 	if !pl.AuthenticatedReconstruction || pl.SurfaceResult || !pl.ThroughBoreCut || pl.AnalyticBore ||
 		pl.ConstructionDelta != 0 || len(pl.BlendSegs) != 0 || pl.Xform != r3.Identity() ||
 		!sectionrecord.IdenticalRecord(pl.Profile0, pl.Profile1) || len(pl.Profile0.Holes) != 1 ||
-		!isDLoop(pl.Profile0.Holes[0]) {
+		!isThroughBoreHoleLoop(pl.Profile0.Holes[0]) {
 		return profileRecord{}, false
 	}
 	for _, offset := range pl.Alignment {
@@ -312,6 +312,47 @@ func isDLoop(loop sectionrecord.LoopRecord) bool {
 		}
 	}
 	return line == 1 && circle == 1
+}
+
+func isThroughBoreHoleLoop(loop sectionrecord.LoopRecord) bool {
+	if isDLoop(loop) {
+		return true
+	}
+	if len(loop.Segments) < 2 {
+		return false
+	}
+	starts, ends := make([]sectionrecord.Point2, len(loop.Segments)), make([]sectionrecord.Point2, len(loop.Segments))
+	for i, segment := range loop.Segments {
+		var ok bool
+		switch segment := segment.(type) {
+		case sectionrecord.LineSeg:
+			starts[i], ends[i], ok = loftSectionFullLineEnds(segment)
+		case sectionrecord.ArcSeg:
+			starts[i], ends[i], ok = loftSectionFullArcEnds(segment)
+		default:
+			return false
+		}
+		if !ok || starts[i] == ends[i] {
+			return false
+		}
+	}
+	for i := range starts {
+		if ends[i] != starts[(i+1)%len(starts)] {
+			return false
+		}
+	}
+	return true
+}
+
+func loftSectionFullArcEnds(arc sectionrecord.ArcSeg) (sectionrecord.Point2, sectionrecord.Point2, bool) {
+	switch {
+	case arc.TStart == 0 && arc.TEnd == 1:
+		return arc.Start, arc.End, true
+	case arc.TStart == 1 && arc.TEnd == 0:
+		return arc.End, arc.Start, true
+	default:
+		return sectionrecord.Point2{}, sectionrecord.Point2{}, false
+	}
 }
 
 // LoftRuledLineSectionRecord intersects the exact triangular walls of a

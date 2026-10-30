@@ -37,6 +37,43 @@ func TestBoreHasExactAxisProof(t *testing.T) {
 	require.False(t, BoreHasExactAxis(bottom, bottom, 1, 0, 0))
 }
 
+func TestThroughBoreProfileCircleContainsArcSupports(t *testing.T) {
+	point := func(u, v float64) sectionrecord.Point2 { return sectionrecord.Point2{U: u, V: v} }
+	loop := sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.LineSeg{Start: point(-1.5, -1), End: point(1.5, -1), TEnd: 1},
+		sectionrecord.ArcSeg{Center: point(1.5, 0), Start: point(1.5, -1), End: point(1.5, 1), TEnd: 1},
+		sectionrecord.LineSeg{Start: point(1.5, 1), End: point(-1.5, 1), TEnd: 1},
+		sectionrecord.ArcSeg{Center: point(-1.5, 0), Start: point(-1.5, 1), End: point(-1.5, -1), TEnd: 1},
+	}}
+	container, ok, err := throughBoreProfileCircle(loop)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, point(0, 0), container.Center)
+	// Each support circle reaches 2.5 mm from the bounding-box center.
+	require.GreaterOrEqual(t, container.Radius.Base(), 2.5)
+}
+
+func TestThroughBoreProfileCircleRejectsUnsupportedLoops(t *testing.T) {
+	point := func(u, v float64) sectionrecord.Point2 { return sectionrecord.Point2{U: u, V: v} }
+	closed := sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.LineSeg{Start: point(-1, -1), End: point(1, -1), TEnd: 1},
+		sectionrecord.LineSeg{Start: point(1, -1), End: point(1, 1), TEnd: 1},
+		sectionrecord.LineSeg{Start: point(1, 1), End: point(-1, 1), TEnd: 1},
+		sectionrecord.LineSeg{Start: point(-1, 1), End: point(-1, -1), TEnd: 1},
+	}}
+	open := closed
+	open.Segments = append([]sectionrecord.CurveSegment(nil), closed.Segments...)
+	open.Segments[3] = sectionrecord.LineSeg{Start: point(-1, 1), End: point(-1, 0), TEnd: 1}
+	freeform := sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.FitSplineSeg{Fit: []sectionrecord.Point2{point(-1, -1), point(1, -1), point(1, 1)}},
+	}}
+	for _, loop := range []sectionrecord.LoopRecord{open, freeform} {
+		_, ok, err := throughBoreProfileCircle(loop)
+		require.NoError(t, err)
+		require.False(t, ok)
+	}
+}
+
 func TestBoreTopologyShapeRefusals(t *testing.T) {
 	type fixture struct {
 		pl    Payload
