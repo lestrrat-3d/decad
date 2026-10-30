@@ -212,7 +212,8 @@ so two slabs that share an outer but not a hole enter as two. The scene is cache
 record set, so a slab merge and an interface over the same records share
 one arrangement and its cut points, and two scenes that cut one carrier
 pair record the crossing once through the keyed table below.
-Only this authenticated A1 BRep Union path and `Body.Section` of a mesh
+Only this authenticated A1 BRep Union path, a common-axis full-Revolve
+Boolean ("Common-axis full revolutions" below) and `Body.Section` of a mesh
 Boolean result read from its history (`agent-docs/section-design.md`) can
 re-express a complete all-line loop at certified exact line crossings; the
 section refuses any loop that keeps a cut charge. Each crossing must have
@@ -1185,8 +1186,20 @@ circle segments (a sphere is a half-disk of one arc and the axis line), no
 meridian holes, no section displacement, a matching full-turn angle record,
 and one resulting closed loop. Every input segment must have a distinct scene
 entity so its source-face role is unambiguous. The existing prism-cell work
-cap and cancellation apply. A result cut through a source line or arc carries the
-cut parameter's displacement through `revolvePayload.SectionDelta`. A kept
+cap and cancellation apply. A result loop of lines only, whose every cut end
+is a Sketch-certified line crossing at an exact binary64 point, is restated
+as whole lines between those points (`prismcells.MergeWithChainExactLineCuts`,
+the exact line-crossing restatement of §3 "A1 as a brep") and carries no section
+displacement. A groove cut into a turned shaft is such a loop: its walls
+cross the shaft's rim at the groove's own recorded coordinates, although the
+cut parameters along the rim are rounded. A groove drawn flush with the rim
+is not: each wall ends on the rim as a whole edge, so the rim's cut end
+meets a recorded endpoint rather than a second cut, and the loop keeps the
+charge (`apitest/revolve_groove_blend_test.go`,
+`TestRevolveGrooveDisplacedMeridianRefuses`). Any other result cut through a
+source line or arc carries the cut parameter's displacement through
+`revolvePayload.SectionDelta`, and a blend or shell of it refuses
+(`revolveplan.RequireExactSection`). A kept
 wall retains its source face's origins; a coincident wall retains both source
 faces' origins. Every shared span must lie on exactly the same recorded
 carrier (`prismcells.CoincidentReading.ExactCarriers`). Sketch's identity band

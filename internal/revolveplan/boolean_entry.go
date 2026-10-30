@@ -101,7 +101,11 @@ func PrepareCommonAxis(ctx context.Context, op meshbool.OperationKind,
 	if ok, err := sceneDelta.SharedSpansBounded(budget, selected); err != nil || !ok {
 		return Payload{}, false, false, err
 	}
-	profile, cutDelta, chain, resolved, err := prismcells.MergeWithChain(budget, selected, op.String())
+	// A cut between two lines that Sketch certifies at an exact binary64
+	// point (a groove's wall meeting the shaft's rim) is restated as whole
+	// lines between exact points; only a cut it cannot state that way keeps
+	// the rounded parameter's charge.
+	profile, cutDelta, chain, resolved, err := prismcells.MergeWithChainExactLineCuts(budget, s, selected, op.String())
 	if err != nil || !resolved {
 		return Payload{}, false, false, err
 	}

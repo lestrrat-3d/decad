@@ -43,6 +43,22 @@ func Merge(budget *proofbound.WorkBudget, selected []*sketch.Profile, opName str
 // A caller can read their scene entity tags to retain source-face origins.
 func MergeWithChain(budget *proofbound.WorkBudget, selected []*sketch.Profile,
 	opName string) (momentinput.Profile, float64, []sketch.BoundaryEdge, bool, error) {
+	return mergeWithChain(budget, nil, selected, opName)
+}
+
+// MergeWithChainExactLineCuts is MergeWithChain for a common-axis
+// full-Revolve Boolean: an all-line loop whose every cut end is one paired
+// Sketch line crossing at an exact binary64 point is restated as whole lines
+// between those points and charges no cut displacement
+// (reparameterizeExactLineLoop). Any other loop keeps its fragments and cut
+// charge. The chain is returned unchanged either way.
+func MergeWithChainExactLineCuts(budget *proofbound.WorkBudget, scene *sketch.Sketch, selected []*sketch.Profile,
+	opName string) (momentinput.Profile, float64, []sketch.BoundaryEdge, bool, error) {
+	return mergeWithChain(budget, scene, selected, opName)
+}
+
+func mergeWithChain(budget *proofbound.WorkBudget, scene *sketch.Sketch, selected []*sketch.Profile,
+	opName string) (momentinput.Profile, float64, []sketch.BoundaryEdge, bool, error) {
 	survivors, resolved, err := mergeSurvivors(budget, selected, opName)
 	if err != nil || !resolved {
 		return momentinput.Profile{}, 0, nil, false, err
@@ -54,7 +70,7 @@ func MergeWithChain(budget *proofbound.WorkBudget, selected []*sketch.Profile,
 	if !resolved {
 		return momentinput.Profile{}, 0, nil, false, nil // §4.4: the survivors do not close into one simple loop
 	}
-	loop, cutDelta, err := recordChain(budget, chain, nil)
+	loop, cutDelta, err := recordChain(budget, chain, scene)
 	if err != nil {
 		return momentinput.Profile{}, 0, nil, false, err
 	}
@@ -74,8 +90,9 @@ func MergeLoops(budget *proofbound.WorkBudget, selected []*sketch.Profile, opNam
 
 // MergeLoopsExactLineCuts is reserved for an A1 BRep Union of authenticated
 // source slabs. Body.Section of a mesh Boolean result read from its history
-// uses MergeRegionsExact. Other Boolean consumers retain their original cut
-// charge.
+// uses MergeRegionsExact, and a common-axis full-Revolve Boolean uses
+// MergeWithChainExactLineCuts. Other Boolean consumers keep their original
+// cut charge.
 func MergeLoopsExactLineCuts(budget *proofbound.WorkBudget, scene *sketch.Sketch, selected []*sketch.Profile,
 	opName string) ([]sectionrecord.LoopRecord, float64, bool, error) {
 	return mergeLoops(budget, scene, selected, opName)
