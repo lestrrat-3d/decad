@@ -66,6 +66,38 @@ func PairChainStations(spans0, spans1 []BezierSpan, target float64, limits PairC
 	}, nil
 }
 
+// PairChainStationsSelf is PairChainStations for one chain paired with itself.
+// It measures each cell once and returns independent mirrored result slices.
+// Callers must establish record identity and charge the second record's work.
+func PairChainStationsSelf(spans []BezierSpan, target float64, limits PairChainLimits,
+	work *FreeformWork) (PairChain, error) {
+	reader := &PairCellReader{SelfPair: true}
+	gen := NewSagittaStationWalk(target, reader, len(spans), work, nil)
+	gen.Matched = true
+	gen.SelfPair = true
+	gen.Limit = limits.MaxChords
+	gen.Underivable = limits.Underivable
+	stations0, _, err := pairWalk(spans, spans, gen)
+	if err != nil {
+		return PairChain{}, err
+	}
+	stations1 := make([]RatPoint, len(stations0))
+	for i, point := range stations0 {
+		stationCopy, err := RatPointCopy(nil, point)
+		if err != nil {
+			return PairChain{}, err
+		}
+		stations1[i] = stationCopy
+	}
+	return PairChain{
+		Stations:      [2][]RatPoint{stations0, stations1},
+		MatchedDelta:  reader.MatchedDelta,
+		ArcUpper:      reader.ArcUpper,
+		TangentEnergy: reader.TangentEnergy,
+		Sagitta:       gen.SagittaUpper,
+	}, nil
+}
+
 // pairWalk runs PairStations' guards and its cell walk over gen, returning the
 // two station lists with the chain's own final station appended to each.
 func pairWalk(spans0, spans1 []BezierSpan, gen *SagittaStationWalk) ([]RatPoint, []RatPoint, error) {
@@ -114,9 +146,12 @@ func pairWalk(spans0, spans1 []BezierSpan, gen *SagittaStationWalk) ([]RatPoint,
 		if err != nil {
 			return nil, nil, err
 		}
-		cell1, err := DyadicSpanOf(work1, spans1[i])
-		if err != nil {
-			return nil, nil, err
+		cell1 := cell0
+		if !gen.SelfPair {
+			cell1, err = DyadicSpanOf(work1, spans1[i])
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 		if err := gen.WalkCell([]DyadicSpan{cell0, cell1}); err != nil {
 			return nil, nil, err
@@ -146,7 +181,12 @@ func pairWalk(spans0, spans1 []BezierSpan, gen *SagittaStationWalk) ([]RatPoint,
 	if err != nil {
 		return nil, nil, err
 	}
-	end1, err := RatPointCopy(work1, last1)
+	var end1 RatPoint
+	if gen.SelfPair {
+		end1, err = RatPointCopy(nil, end0)
+	} else {
+		end1, err = RatPointCopy(work1, last1)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -276,6 +316,7 @@ type SagittaStationWalk struct {
 	// and ChainStations leave it false: they decide on the sagitta alone and
 	// hand the reader 0.
 	Matched      bool
+	SelfPair     bool
 	SagittaUpper float64
 	Chords       int
 	Frontier     int
@@ -341,6 +382,7 @@ type PairMatchedDeltaReader struct {
 // value to decide the cell (SagittaStationWalk.Matched), so this reader
 // records the value it is handed rather than measuring it again.
 type PairCellReader struct {
+	SelfPair      bool
 	MatchedDelta  []float64
 	ArcUpper      [2][]float64
 	TangentEnergy [2][]float64
@@ -348,6 +390,21 @@ type PairCellReader struct {
 
 func (r *PairCellReader) AcceptCell(spans []BezierSpan, matched float64, works []*FreeformWork) error {
 	r.MatchedDelta = append(r.MatchedDelta, matched)
+	if r.SelfPair {
+		arc, err := SpanSpeedUpper(works[0], spans[0])
+		if err != nil {
+			return err
+		}
+		energy, err := SpanTangentEnergyUpper(works[0], spans[0])
+		if err != nil {
+			return err
+		}
+		for side := range r.ArcUpper {
+			r.ArcUpper[side] = append(r.ArcUpper[side], arc)
+			r.TangentEnergy[side] = append(r.TangentEnergy[side], energy)
+		}
+		return nil
+	}
 	for side := range r.ArcUpper {
 		arc, err := SpanSpeedUpper(works[side], spans[side])
 		if err != nil {
@@ -439,6 +496,10 @@ func (g *SagittaStationWalk) WalkCell(cells []DyadicSpan) error {
 	worst := 0.0
 	matched := 0.0
 	for i, cell := range cells {
+		if g.SelfPair && i == 1 {
+			spans[i] = spans[0]
+			continue
+		}
 		sag, span, err := DyadicSpanSagittaUpperWithSpan(g.Works[i], cell)
 		if err != nil {
 			return err
@@ -463,6 +524,14 @@ func (g *SagittaStationWalk) WalkCell(cells []DyadicSpan) error {
 		}
 		starts := make([]RatPoint, len(cells))
 		for i, cell := range cells {
+			if g.SelfPair && i == 1 {
+				start, err := RatPointCopy(nil, starts[0])
+				if err != nil {
+					return err
+				}
+				starts[i] = start
+				continue
+			}
 			start, err := cell.RatPointAt(g.Works[i], 0)
 			if err != nil {
 				return err
@@ -484,6 +553,10 @@ func (g *SagittaStationWalk) WalkCell(cells []DyadicSpan) error {
 	lefts := make([]DyadicSpan, len(cells))
 	rights := make([]DyadicSpan, len(cells))
 	for i, cell := range cells {
+		if g.SelfPair && i == 1 {
+			lefts[i], rights[i] = lefts[0], rights[0]
+			continue
+		}
 		left, right, err := cell.Split(g.Works[i])
 		if err != nil {
 			return err

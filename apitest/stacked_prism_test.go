@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func circleBodyAtZ(t *testing.T, doc *decad.Document, x, radius, z, height float64) *decad.Body {
+func circleBodyAtZ(t testing.TB, doc *decad.Document, x, radius, z, height float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
 	plane, err := w.CreateOffsetPlane(w.XY(), z)

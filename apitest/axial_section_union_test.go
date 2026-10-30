@@ -16,7 +16,7 @@ import (
 // ribSection draws a closed section bounded by a line, a fit spline, an arc, a fit
 // spline, a line and an arc about the origin, turned by rot: a lobe standing on
 // the circle of radius r.
-func lobeLoft(t *testing.T, doc *decad.Document, r, rot, half float64, height float64) *decad.Body {
+func lobeLoft(t testing.TB, doc *decad.Document, r, rot, half float64, height float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
 	section := func(plane *sketch.Plane) (*sketch.Sketch, *sketch.Profile) {
@@ -55,6 +55,28 @@ func lobeLoft(t *testing.T, doc *decad.Document, r, rot, half float64, height fl
 	b, err := decad.Loft(t.Context(), doc, s0, p0, s1, p1)
 	require.NoError(t, err)
 	return b
+}
+
+// BenchmarkAxialSectionUnion17Lobes measures seventeen free-form lofts and
+// their complete axial union, matching the integration case above.
+func BenchmarkAxialSectionUnion17Lobes(b *testing.B) {
+	const r, height, n = 3.0, 2.0, 17
+	for b.Loop() {
+		doc := decad.New()
+		disc := circleBodyAtZ(b, doc, 0, r, 0, height)
+		lobes := make([]*decad.Body, n)
+		for k := range lobes {
+			lobes[k] = lobeLoft(b, doc, r, 2*math.Pi*float64(k)/n,
+				0.4*math.Pi/float64(n), height)
+		}
+		joined, err := decad.Union(b.Context(), disc, lobes...)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if !joined.IsSolid() {
+			b.Fatal("union of seventeen lobes is not solid")
+		}
+	}
 }
 
 func TestAxialSectionUnionLobesOnADisc(t *testing.T) {

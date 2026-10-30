@@ -146,7 +146,11 @@ func PairRecords(p0, p1 momentinput.Profile, offsets []int, walks0, walks1 [][]s
 				if err != nil {
 					return nil, 0, 0, 0, err
 				}
-				cell, err := FreeformCellPoints(w0, w1, target, 1+remainingExtra, work0, work1)
+				cell, reused := selfFreeformCell(seg0, seg1, w0, w1,
+					target, 1+remainingExtra, work0, work1)
+				if !reused {
+					cell, err = FreeformCellPoints(w0, w1, target, 1+remainingExtra, work0, work1)
+				}
 				if err != nil {
 					if capErr, ok := errors.AsType[*StationCapError](err); ok {
 						capErr.Loop, capErr.Seg = i, j
@@ -228,6 +232,43 @@ func PairRecords(p0, p1 momentinput.Profile, offsets []int, walks0, walks1 [][]s
 		}
 	}
 	return pairs, sectionDelta, sectionMatchedDelta, stationRound, nil
+}
+
+// selfFreeformCell tries the bit-identical two-record shortcut on copies of
+// both counters. A refused trial leaves the original counters untouched, so
+// PairRecords can take the original two-side path with its original refusal
+// order and accounting.
+func selfFreeformCell(seg0, seg1 sectionrecord.CurveSegment, w0, w1 survey2d.SegmentWalk,
+	target float64, maxCells int, work0, work1 *freeform.FreeformWork) (FreeformCell, bool) {
+	if w0.Kind != survey2d.WalkFreeform || w1.Kind != survey2d.WalkFreeform ||
+		!sectionrecord.IdenticalRecord(seg0, seg1) || !sectionrecord.IdenticalRecord(w0, w1) ||
+		work0 == work1 && work0 != nil {
+		return FreeformCell{}, false
+	}
+	if work0 == nil || work1 == nil {
+		if work0 != nil || work1 != nil {
+			return FreeformCell{}, false
+		}
+		cell, err := FreeformCellPointsSelf(w0, target, maxCells, nil)
+		if err != nil {
+			return FreeformCell{}, false
+		}
+		return cell, true
+	}
+	if *work0 != *work1 {
+		return FreeformCell{}, false
+	}
+	trial0, trial1 := *work0, *work1
+	cell, err := FreeformCellPointsSelf(w0, target, maxCells, &trial0)
+	if err != nil {
+		return FreeformCell{}, false
+	}
+	charged := trial0.Spent - work0.Spent
+	if err := trial1.Step(charged); err != nil {
+		return FreeformCell{}, false
+	}
+	*work0, *work1 = trial0, trial1
+	return cell, true
 }
 
 // appendFreeform appends one free-form pair's cells to the loop. Each side's
