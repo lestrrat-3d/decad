@@ -31,4 +31,10 @@ func TestOrientedInteriorWitnessRequiresStrictErodedOverlap(t *testing.T) {
 	require.True(t, box.OrientedInteriorWitness(a, b, quarter, quarter))
 	require.True(t, box.OrientedInteriorWitness(b, a, quarter, quarter))
 	require.False(t, box.OrientedInteriorWitness(a, b, half, half))
+
+	separated := unitBox(3)
+	zero := new(big.Rat)
+	require.True(t, box.OrientedInteriorWitness(a, b, zero, zero))
+	require.True(t, box.OrientedInteriorWitness(b, a, zero, zero))
+	require.False(t, box.OrientedInteriorWitness(a, separated, zero, zero))
 }
