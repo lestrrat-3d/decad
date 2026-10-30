@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/lestrrat-3d/r3"
 
@@ -239,8 +240,10 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		// pointing into the result (agent-docs/faceted-source-retention-design.md §3.1).
 		group, _ := facetedrecord.SourceTag(f, op == meshbool.OpCut && i >= targetFaces)
 		// A mesh result face descends from f, so it carries every role f is
-		// selected by: its own and those an analytic Boolean attributed to it.
-		group.Origins = f.AllOrigins()
+		// selected by: its own as Origins, which recognizers match faces by,
+		// and those an analytic Boolean attributed to it as Upstream.
+		group.Origins = slices.Clone(f.Origins)
+		group.Upstream = slices.Clone(f.Upstream)
 		// Identity only: no reader derives a plane or a bound from Source.
 		operand, ordinal, owner := 0, i, a
 		if i >= targetFaces {

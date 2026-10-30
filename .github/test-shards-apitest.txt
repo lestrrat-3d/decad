@@ -2923,3 +2923,6 @@
 10	0.00	TestMeshUnionCarriesUpstreamRoles
 10	0.00	TestModifyResultsDropUpstreamRoles
 10	0.00	TestUnionChainKeepsRolesThroughBrepOperands
+10	0.00	TestFacetedNestedBossShellTakesAnInheritedCapBoss
+10	0.00	TestSheetOpsKeepUpstreamRoles
+10	0.00	TestScaledAtKeepsUpstreamRoles

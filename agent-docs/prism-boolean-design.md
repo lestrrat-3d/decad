@@ -1210,8 +1210,18 @@ all inherit the same roles, or none of them does. It rides in the payload
 without it, and only `Placed` re-attaches it, so a `Transform` or `Copy` keeps
 the inherited roles while a modify op that derives a new record from the
 payload carries none. A result of any other payload class (a Loft, revolve or
-faceted route) inherits nothing from this pass; the mesh path keeps carrying
-every operand role, own and upstream, as evaluator §9 states. A many-body
+faceted route) inherits nothing from this pass.
+
+**A face that descends from another keeps the two lists apart.** The mesh path
+copies an operand face's `Origins` into the result face's `Origins` and its
+`Upstream` into `Upstream` (`facetedrecord.Group.Upstream`), as do `ScaledAt`,
+`Stitch`, `Unstitch` and `PatchEdges`. Every recognizer that matches a face by
+its roles reads `Origins` alone, so an operand that inherited a role is
+recognized exactly as one that did not: the nested-boss shell's opening
+(`prismshell`, one own cap role), the prism-union fillet's walls, and the
+oblique-boss fillet and cross-bore mouth, whose rebuilt faces copy the
+operand faces' own roles only because they are modify results, which inherit
+no Boolean roles. A many-body
 `Union` that a one-scene, pattern or Loft route takes as a set inherits
 nothing; its pair chain and the two-at-a-time fold run the pass at each step,
 since each step goes through `booleandispatch.Body`. A caller that needs a

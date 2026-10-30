@@ -1545,8 +1545,8 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   motion's own rounding allowance. So every `Faceted` body is embedded when it
   is created, which is what its tessellation's `BoundaryVerified()` reports.
 - **Ordinary mesh output**: faces are `Faceted`, one per CONNECTED PATCH of a current operand
-  face. Each patch keeps that face's origins, its upstream roles included
-  (`topo.Face.AllOrigins`), so provenance (`FaceCreatedBy`)
+  face. Each patch keeps that face's origins, and its inherited Boolean roles
+  apart as `Upstream` (prism-boolean §11), so provenance (`FaceCreatedBy`)
   and face-level selection survive the boolean — but the operand face is not the
   face. A boolean can cut one operand face into pieces that no longer touch (a blind
   trench crosses a cap and leaves two separate strips of it standing), and each

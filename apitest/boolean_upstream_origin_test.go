@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -313,4 +314,97 @@ func TestModifyResultsDropUpstreamRoles(t *testing.T) {
 			require.ErrorIs(t, err, decad.ErrNoMatch)
 		}
 	})
+}
+
+// TestFacetedNestedBossShellTakesAnInheritedCapBoss makes the boss of the
+// faceted nested-boss shell as an Intersect, so its top carries the narrow
+// box's end cap as an inherited role. The mesh Union keeps that role apart
+// from the face's own, the nested-boss shell route still recognizes the boss
+// top as its opening, and the shell has the volume the plain boss gives.
+func TestFacetedNestedBossShellTakesAnInheritedCapBoss(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	plate := boxBodyAtZ(t, doc, -10, -10, 10, 10, 0, 4)
+	narrow := boxBodyAtZ(t, doc, -4, -3, 4, 3, 3, 5)
+	wide := boxBodyAtZ(t, doc, -6, -5, 6, 5, 0, 20)
+	boss, err := decad.Intersect(t.Context(), narrow, wide)
+	require.NoError(t, err)
+	turn, err := r3.RotationAround(r3.Vec{X: 1, Y: 0.5}, r3.Vec{Z: 1}, units.Degrees(20))
+	require.NoError(t, err)
+	boss, err = decad.Transform(t.Context(), boss, turn)
+	require.NoError(t, err)
+	joined, err := decad.Union(t.Context(), plate, boss)
+	require.NoError(t, err)
+	top, err := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(narrow))).Exactly(1).SelectFaces(joined)
+	require.NoError(t, err)
+	require.Contains(t, top[0].Origins(), decad.CapEnd(boss))
+	shell, err := decad.Shell(t.Context(), joined,
+		decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss))).Exactly(1), units.Millimeters(1))
+	require.NoError(t, err)
+	volume, err := shell.Volume()
+	require.NoError(t, err)
+	// The same solid as TestFacetedUnionNestedBossShellVerified's.
+	want := 1792.0 - (648 + 96 + 152.0/3 - 7*math.Pi)
+	require.LessOrEqual(t, math.Abs(volume.Value.Mag()-want), volume.Bound.Mag())
+}
+
+// TestSheetOpsKeepUpstreamRoles splits the plate-and-boss Union into one sheet
+// per face, patches the boss top's sheet, and stitches the sheets back: each
+// copies the faces it keeps, inherited roles included.
+func TestSheetOpsKeepUpstreamRoles(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	plate := levelBox(t, doc, 0, 0, 80, 60, 0, 10)
+	boss := levelBox(t, doc, 30, 20, 50, 40, 10, 15)
+	u, err := decad.Union(t.Context(), plate, boss)
+	require.NoError(t, err)
+	sheets, err := decad.Unstitch(t.Context(), u)
+	require.NoError(t, err)
+	var top *decad.Body
+	for _, sheet := range sheets {
+		if _, err := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss))).SelectFaces(sheet); err == nil {
+			require.Nil(t, top, "one sheet holds the boss top")
+			top = sheet
+		}
+	}
+	require.NotNil(t, top)
+	upstreamFace(t, top, decad.CapEnd(boss), 400, 25)
+	stitched, err := decad.Stitch(t.Context(), sheets...)
+	require.NoError(t, err)
+	upstreamFace(t, stitched, decad.CapEnd(boss), 400, 25)
+	upstreamFace(t, stitched, decad.CapEnd(plate), 80*60-20*20, 10)
+
+	doc2 := decad.New()
+	plate2 := levelBox(t, doc2, 0, 0, 80, 60, 0, 10)
+	boss2 := levelBox(t, doc2, 30, 20, 50, 40, 10, 15)
+	u2, err := decad.Union(t.Context(), plate2, boss2)
+	require.NoError(t, err)
+	sheets2, err := decad.Unstitch(t.Context(), u2)
+	require.NoError(t, err)
+	var patchedCount int
+	for _, sheet := range sheets2 {
+		if _, err := decad.Faces(decad.FaceCreatedBy(decad.CapEnd(boss2))).SelectFaces(sheet); err != nil {
+			continue
+		}
+		patched, err := decad.PatchEdges(t.Context(), sheet, decad.Edges(decad.Free()).Exactly(4))
+		require.NoError(t, err)
+		upstreamFace(t, patched, decad.CapEnd(boss2), 400, 25)
+		patchedCount++
+	}
+	require.Equal(t, 1, patchedCount)
+}
+
+// TestScaledAtKeepsUpstreamRoles doubles the plate-and-boss Union about the
+// origin: the faceted image keeps the boss top's inherited role, scaled with
+// the body.
+func TestScaledAtKeepsUpstreamRoles(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	plate := levelBox(t, doc, 0, 0, 80, 60, 0, 10)
+	boss := levelBox(t, doc, 30, 20, 50, 40, 10, 15)
+	u, err := decad.Union(t.Context(), plate, boss)
+	require.NoError(t, err)
+	scaled, err := decad.ScaledAt(t.Context(), u, r3.Vec{}, units.Scalar(2))
+	require.NoError(t, err)
+	upstreamFace(t, scaled, decad.CapEnd(boss), 4*400, 50)
 }

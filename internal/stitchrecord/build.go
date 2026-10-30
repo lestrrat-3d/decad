@@ -501,6 +501,7 @@ func rebuildTopology(ctx context.Context, alloc topo.Alloc, plan *Plan, xform r3
 			Surface:       transformed,
 			CapRecord:     f.CapRecord.Under(xform),
 			Origins:       append([]provenance.Ref(nil), f.Origins...),
+			Upstream:      slices.Clone(f.Upstream),
 		})
 		for _, l := range f.Loops {
 			coedges := make([]topo.CoEdge, len(l.CoEdges))

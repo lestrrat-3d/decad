@@ -78,7 +78,9 @@ func carries(p topo.Payload) bool {
 func Attribute(ctx context.Context, op meshbool.OperationKind, result, a, b *topo.Body) (topo.UpstreamRoles, error) {
 	operands := [2]operand{{body: a}, {body: b, flip: op == meshbool.OpCut}}
 	for i := range operands {
-		operands[i].faces = facesOf(operands[i].body)
+		for _, g := range facesOf(operands[i].body) {
+			operands[i].faces = append(operands[i].faces, readFace(g))
+		}
 		operands[i].axis, operands[i].axisOK = recordAxis(operands[i].body.Payload)
 	}
 	type row struct {
@@ -126,10 +128,35 @@ func Attribute(ctx context.Context, op meshbool.OperationKind, result, a, b *top
 // of a prism or stacked record (axisOK false for any other).
 type operand struct {
 	body   *topo.Body
-	faces  []*topo.Face
+	faces  []operandFace
 	flip   bool
 	axis   [3]*big.Rat
 	axisOK bool
+}
+
+// operandFace is an operand face with its exact planes read once: rec is its
+// CapRecord's plane at the held level (recOK false when the face has no
+// CapRecord with a Plane tag and no retained tag, or the record does not
+// read), and plane the plane the face lies on (capplane.OfFace).
+type operandFace struct {
+	face    *topo.Face
+	rec     capplane.Plane
+	recOK   bool
+	plane   capplane.Plane
+	planeOK bool
+}
+
+func readFace(g *topo.Face) operandFace {
+	out := operandFace{face: g}
+	if g.CapRecord == nil {
+		return out
+	}
+	if _, ok := g.Surface.(surfacegeom.Plane); !ok || g.RetainedTag {
+		return out
+	}
+	out.rec, out.recOK = capplane.OfRecord(g.CapRecord)
+	out.plane, out.planeOK = capplane.OfFace(g)
+	return out
 }
 
 // attribute returns the roles F inherits, ok=false when it inherits none.
@@ -159,7 +186,7 @@ func attribute(f *topo.Face, operands [2]operand) ([]provenance.Ref, bool) {
 			if found != nil {
 				return nil, false
 			}
-			found = g
+			found = g.face
 		}
 	}
 	if found == nil {
@@ -176,26 +203,22 @@ func attribute(f *topo.Face, operands [2]operand) ([]provenance.Ref, bool) {
 
 // onPlane decides whether operand face g lies on plane with outward side
 // want. ok=false means the question is undecided.
-func onPlane(plane capplane.Plane, want int, o operand, g *topo.Face) (bool, bool) {
+func onPlane(plane capplane.Plane, want int, o operand, of operandFace) (bool, bool) {
+	g := of.face
 	if g.CapRecord != nil {
-		if _, ok := g.Surface.(surfacegeom.Plane); !ok || g.RetainedTag {
-			return false, false
-		}
-		rec, ok := capplane.OfRecord(g.CapRecord)
-		if !ok {
+		if !of.recOK {
 			return false, false
 		}
 		// The face lies on its record's plane up to a displacement along
 		// that plane's normal, so a record not parallel to P never meets
 		// P in an area.
-		if !rec.ParallelTo(plane) {
+		if !of.rec.ParallelTo(plane) {
 			return false, true
 		}
-		gp, ok := capplane.OfFace(g)
-		if !ok {
+		if !of.planeOK {
 			return false, false
 		}
-		if !gp.Same(plane) {
+		if !of.plane.Same(plane) {
 			return false, true
 		}
 		side, ok := outwardSense(plane, g)

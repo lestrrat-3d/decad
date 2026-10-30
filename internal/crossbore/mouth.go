@@ -190,7 +190,9 @@ func MouthChamfer(ctx context.Context, env topo.Env, body *topo.Body,
 }
 
 // FaceGroup is the facet group of the body's face stamped with role by the
-// body's own producer.
+// body's own producer. It copies the face's own Origins alone: the mouth blend
+// built from these groups is a modify result, which inherits no Boolean roles
+// (agent-docs/prism-boolean-design.md §11).
 func FaceGroup(body *topo.Body, role string) (facetedrecord.Group, bool) {
 	for _, face := range topobuild.Faces(body) {
 		for _, origin := range face.Origins {

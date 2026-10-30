@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
@@ -227,6 +228,7 @@ func copyFaceUnder(ctx context.Context, alloc topo.Alloc, srcFace *topo.Face, xf
 		Surface:       transformed,
 		CapRecord:     srcFace.CapRecord.Under(xform),
 		Origins:       append([]provenance.Ref(nil), srcFace.Origins...),
+		Upstream:      slices.Clone(srcFace.Upstream),
 	})
 	for _, l := range srcFace.Loops {
 		if err := ctx.Err(); err != nil {

@@ -185,7 +185,8 @@ func boundedOriginCopies(in Mesh) (uint64, bool) {
 			return 0, false
 		}
 		var ok bool
-		copies, ok = proofbound.WallCheckedAdd(copies, uint64(len(in.Groups[group].Origins)))
+		copies, ok = proofbound.WallCheckedAdd(copies,
+			uint64(len(in.Groups[group].Origins))+uint64(len(in.Groups[group].Upstream)))
 		if !ok {
 			return 0, false
 		}

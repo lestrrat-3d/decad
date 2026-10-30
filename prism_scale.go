@@ -71,7 +71,8 @@ func auditHeldScaleContact(ctx context.Context, fp facetedPayload) error {
 
 // certifiedScaleSource transfers an authenticated source mesh to the
 // similarity evaluator. Curved faces become Faceted; planar source tags and
-// all face origins remain attached to their source facet groups.
+// all face origins remain attached to their source facet groups, a face's
+// inherited Boolean roles as the group's Upstream (prism-boolean §11).
 func certifiedScaleSource(ctx context.Context, b *Body, chord float64) (facetedPayload, error) {
 	mesh, err := tessellateContext(ctx, b, units.Millimeters(chord), VerifyAll)
 	if err != nil {
@@ -93,11 +94,11 @@ func certifiedScaleSource(ctx context.Context, b *Body, chord float64) (facetedP
 		}
 		switch surface := face.n.Surface.(type) {
 		case surfacegeom.Plane:
-			groups[i] = facetGroup{Origins: face.originRefs(), Surface: surface, Planar: true}
+			groups[i] = facetGroup{Origins: face.originRefs(), Upstream: face.upstreamRefs(), Surface: surface, Planar: true}
 		default:
 			// The source mesh supplies every curved-face displacement. The
 			// image keeps origins and publishes Faceted without a normal tag.
-			groups[i] = facetGroup{Origins: face.originRefs()}
+			groups[i] = facetGroup{Origins: face.originRefs(), Upstream: face.upstreamRefs()}
 		}
 		faceID[faceNode(face)] = i
 	}

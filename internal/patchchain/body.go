@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -285,6 +286,7 @@ func copyFacesUnder(ctx context.Context, alloc topo.Alloc, srcFaces []*topo.Face
 			Surface:       transformed,
 			CapRecord:     f.CapRecord.Under(xform),
 			Origins:       append([]provenance.Ref(nil), f.Origins...),
+			Upstream:      slices.Clone(f.Upstream),
 		})
 		for _, l := range f.Loops {
 			coedges := make([]topo.CoEdge, len(l.CoEdges))

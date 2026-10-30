@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -191,6 +192,7 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 				NormalBound: in.Groups[in.Src[i]].NormalBound,
 				Reversed:    in.Groups[in.Src[i]].Reversed,
 				Origins:     append([]provenance.Ref(nil), in.Groups[in.Src[i]].Origins...),
+				Upstream:    slices.Clone(in.Groups[in.Src[i]].Upstream),
 				Source:      in.Groups[in.Src[i]].Source,
 				Body:        body,
 			})

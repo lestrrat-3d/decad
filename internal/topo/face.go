@@ -129,9 +129,10 @@ type Face struct {
 	Origins []provenance.Ref
 	// Upstream is every operand role an analytic Boolean proved this face
 	// lies inside (agent-docs/prism-boolean-design.md §11): the origins of
-	// the one operand face on the same exact plane and side. It is separate
-	// from Origins, which hold only the roles this body's own producer mints
-	// and which tessellators and modify ops key on. Root Face.Origins and the
+	// the one operand face on the same exact plane and side. A mesh Boolean,
+	// a placement, a scale and the sheet operations copy it from the face
+	// they descend from. It is separate from Origins, which tessellators,
+	// modify ops and Boolean recognizers key on. Root Face.Origins and the
 	// provenance selectors read both (AllOrigins). nil for every face no such
 	// proof names.
 	Upstream []provenance.Ref
