@@ -51,6 +51,20 @@ func TestShiftDirections(t *testing.T) {
 		}
 	})
 
+	t.Run("a Union pulls a body resting on a flat face into it", func(t *testing.T) {
+		t.Parallel()
+		// The proximity gate's contact on a flat face of the first operand is not Decisive and carries Slack: the gate
+		// cannot tell a body resting on the face from one flush beneath it. Moving the second operand into the first
+		// joins the resting body and keeps the flush one inside, where moving it out would leave the resting body
+		// floating above the face.
+		contacts := []meshbool.TouchContact{{NormalA: up, Slack: 0.004638}}
+		dirs := booleaneval.ShiftDirections(meshbool.OpUnion, contacts)
+		requireOpens(t, dirs, contacts)
+		for _, u := range dirs {
+			require.Less(t, u.Dot(up), -0.02, "the second operand moves down, into the first operand's top")
+		}
+	})
+
 	t.Run("a Cut and an Intersect take a face-on-face touch apart", func(t *testing.T) {
 		t.Parallel()
 		contacts := []meshbool.TouchContact{contact(up, true)}

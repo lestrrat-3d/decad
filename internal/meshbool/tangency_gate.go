@@ -183,8 +183,12 @@ func firstFacet(facets []int) int {
 // move an operand uses them to choose which way to move it, and how far: the
 // second operand has to reach slack past the first along the normal to decide
 // the pair. The contact is Decisive when it is a curved face the second operand
-// sits on, where moving it away would detach it; a flat face is decided by
-// moving the second operand either way.
+// sits on, where moving it away would detach it. A contact on a flat face is not
+// Decisive: moving the second operand either way decides the gate, and the gate
+// cannot tell a body resting on the face from one flush beneath it. The caller
+// then picks the sense the operation wants with no Decisive contact: a Union
+// moves the second operand into the first, so a resting body joins it, and a Cut
+// and an Intersect move it out.
 func nearContactNormals(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int,
 	slack float64, decisive bool, memo *ContactMemo) ([]TouchContact, error) {
 	nc, _, err := GatherNearContacts(ctx, bmA, fis, bmB, fjs, slack, memo)
