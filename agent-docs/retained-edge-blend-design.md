@@ -246,7 +246,9 @@ generators of the cone) at the tube angle `α_j`; row `j` runs from the azimuth
 where its circle meets `G₀` to the one where it meets `G₁`, a solution of
 `n_G · x = h_G` in the azimuth. The blend meets `G_i` in the curve those end
 points trace, a section of a torus by a plane that is not a conic, so it stays a
-chain of exact points.
+chain of exact points. The rows' tube angles start evenly spaced at the
+profile's own step and are refined until every chord of that chain in both end
+planes lies within `τ` of the curve (§6.3), so they need not stay evenly spaced.
 
 The faces are rewritten as in R2 for the plane (a polygon on the setback arc)
 and the wall (the cut at the setback height), and as in R1 for the ends.
@@ -339,7 +341,8 @@ normal `n(B_{k+1}) − n(B_k)`, which bisects the walls. Each edge's rows end on
 strips share the vertices of their rows there and the strips' end triangles coincide. No end face is trimmed at a
 joint. The mitre plane meets each edge at 45°, so every edge of the run takes its row count from the smallest
 `|d̂ · n|` over all the run's mitre and end planes, as §5.0 step 1 does for one edge's two end planes: the chords in the
-mitre plane stay within `τ`, and both strips at a joint have the same rows. The vertical edge under `C` loses its top part, and the two walls meet at the strips' feet.
+mitre plane stay within `τ`, and both strips at a joint have the same rows. The vertical edge under `C` loses its top
+part, and the two walls meet at the strips' feet.
 
 The base face's boundary gives way to a polygon of the rows' base points at the joints and at any free end. A closed
 run replaces the whole outer loop; an open run replaces the stretch it covers. A free end trims its end face as a
@@ -911,7 +914,7 @@ of that computation.
 | **SR2** | two selected edges share a vertex and are neither a mitre run (§4.7) nor corners of perpendicular faces (§4.8), or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
 | **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, a chamfer distance of zero or below, an R6 setback that reaches the axis or runs past the sphere's pole (§4.5), or an R7 fillet inside the larger cylinder with `2ρ ≥ R − r`, where no ball touches both walls (§4.10) | no regular blend | `ErrDegenerate` |
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
-| **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or a chain's sense or `G`'s turn at the vertex is undecided (§5.0), or `G` turns the wrong way: a concave edge needs a reflex corner of `G`, or a convex one where `A` or `B` is reflex at the vertex, and a convex edge outside the R1 route (plane–cylinder, arc, cylinder–cylinder, mitre run) needs a convex one; or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face other than an R3 wall that extends past the vertex beside a plane that trims there (§5.0), or another part of `G` comes within the blend's reach of the vertex, or a vertex of an R3 wall lies within its bound of an end plane the band is clipped by, or, unless it lies outside such a plane, of the band's generator (§4.3), or the end cap an R3 end face takes is not a simple polygon (§5.0), or another feature comes within an R7 chamfer's or fillet's reach, or an R7 fillet's cell, window, cut ring or band test fails (§4.9, §4.10) | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
+| **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or a chain's sense or `G`'s turn at the vertex is undecided (§5.0), or `G` turns the wrong way: a concave edge needs a reflex corner of `G`, or a convex one where `A` or `B` is reflex at the vertex, and a convex edge outside the R1 route (plane–cylinder, arc, cylinder–cylinder, mitre run) needs a convex one; or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face other than an R3 wall that extends past the vertex beside a plane that trims there (§5.0), or another part of `G` comes within the blend's reach of the vertex, or a vertex of an R3 wall lies within its bound of an end plane the band is clipped by, or, unless it lies outside such a plane, of the band's generator (§4.3), or the end cap an R3 end face takes is not a simple polygon (§5.0), or another feature comes within an R7 chamfer's or fillet's reach, or an R7 fillet's cell, window, cut ring or band test fails (§4.9, §4.10), or an arc's rows need more than 1,024 rows for their chords in an end plane to certify within `τ` (§6.3) | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
 | **SR6** | the held mesh disagrees with the exact vertex of its three tags by more than the vertex bound plus slack (§6.3) | the record and the mesh do not describe one solid | `ErrUnsupported` |
 | **SR7** | a facet the rewrite keeps outside the new strip meets a strip facet it shares no vertex with (the strip clearance of retained-modify-reach §5.6, run before the build), or the rewritten mesh fails the held audit (watertight, shells nested with consistent signs; the audit tests no facet pair for intersection) | the result is invalid | `ErrDegenerate` when the audit proves a face inside out (modify S8), else `ErrUnsupported` |
 
@@ -991,8 +994,10 @@ rounding of its computation, because the chords between ring vertices leave the
 exact surface by at most `τ` and a vertex bound is the only place a facet can
 state that. A straight edge's rows meet that in the end and mitre planes they
 end on as well as on the cylinder, because their step is set by the most
-oblique of those planes (Area, below). A wall cut vertex takes the larger bound of its edge's two ends, plus
-`τ` and the rounding (§5 step 2). An old vertex keeps its bound.
+oblique of those planes, and an arc's rows meet it in the planes its ends lie
+on, because their gaps are halved until each chord there certifies within `τ`
+(Area, below). A wall cut vertex takes the larger bound of its edge's two ends,
+plus `τ` and the rounding (§5 step 2). An old vertex keeps its bound.
 
 **Claim K.** Let `H` be the held solid with `VolSymDiff = v`, `H'` the rewritten
 held solid, and `S'` the true blended solid. Then
@@ -1060,6 +1065,44 @@ held to the same step: there no face takes the gap between the chord and the
 ellipse, and a true point on the ellipse lies within the chord's sagitta of the
 mesh only through that chord.
 
+An arc's rows (§4.4) end on planes `G` parallel to the axis at distance `h`
+from it. The row at profile parameter `s`, the circle of radius `ρ(s)` at height
+`z(s)`, meets `G` at the in-plane distance `X = √(ρ² − h²)` from the axis's
+foot, so the end curve is `(X(s), z(s))`. The profile's own step does not bound
+the sagitta of its chords: where `G` passes close to a row's circle, `X/ρ` is
+small, and with the profile's rows a hole mouth's fillet strays about 4 times
+`τ` from its chords at `X/ρ = 0.2` on the wall's row, past the published
+`Bound` (§9). The rows are sized for the end curve instead (`arcRows`,
+`internal/retainedblend/arc_section.go`):
+
+1. Both coordinates are monotone in `s`, because `ρ` and `z` are. The curve's
+   tangent makes the angle `ψ` with the `X` axis, `tan ψ = g(s)·X/ρ`, with
+   `g = |dz/ds| / |dρ/ds|`: `tan α` on the torus, `d_B/d_A` on the cone.
+2. On a piece `[t₀, t₁]` of the profile `g` does not decrease and `X/ρ` is
+   monotone, so `ψ` lies in `[atan(g(t₀)·min X/ρ), atan(g(t₁)·max X/ρ)]`,
+   inside `[0, π/2]`.
+3. A curve from `P` to `Q` whose velocity stays in the cone of two directions
+   lies in `P + cone` and in `Q − cone`: the parallelogram with diagonal `PQ`
+   and sides along the two directions. No point of the piece lies farther from
+   the chord's line than the parallelogram's corners do.
+4. Each parallelogram lies in the box whose diagonal is the chord, and every
+   point of that box projects onto the chord, so the distance from the line is
+   the distance from the chord.
+5. `certify` halves a piece whose corners reach past `τ`, up to 4,096 pieces.
+   A chord that does not certify on every end plane has its gap halved. The
+   rows start from the profile's own count, a fillet's arc sagitta within `τ`
+   or two rows for a chamfer, and the blend refuses (SR5) past 1,024 rows.
+
+Every chord on every end plane then lies within `τ` of its arc of the end curve,
+which the bound `τ + slack` of each row vertex states. `certify` runs in floating
+point, as `rowStep` does; its rounding is a few units in the last place of the
+coordinates, the size `slack` charges for the rows' own computation. The last chord ends at
+the wall's cut vertex, whose larger bound covers that vertex's own offset from
+the exact point. A halved gap keeps the cross-section's sagitta within `τ`, so
+the strip's own chords stay within it as well. The chain route's arc ends
+(retained-modify-reach §5.5 step 5) are sized the same way, and every entry of
+the chain takes the same rows.
+
 **Volume.** The new `VolSymDiff` is the old one plus `ε·(A_strip + A_true)`, with
 `ε` the largest vertex bound of the strip and `A_strip`, `A_true` the held and
 exact areas of the blend face. Two surfaces within `ε` of each other enclose at
@@ -1117,6 +1160,8 @@ published bound, never with a pinned literal.
 | Concave edge at a wall's foot | the plate face is reflex at each foot corner; the fill adds `L·r²(1 − π/4)`, the wall's end faces grow by the caps, `VerifyAll` passes; two foot edges together and a chamfer build as well | keep `V` out of the extended end face's loop: the mesh fails its audit |
 | Oblique end face, sketched at 45° about z and, separately, about y (no exact tool leans both ways) | the end arc is an `Ellipse3` with `SemiMinor = r` and `SemiMajor = r / |d̂ · nG|`; removed volume equals the section area times the length between the end planes measured through the section's centroid | treat `G` as normal to the edge: the volume is off by the centroid offset |
 | Rows ending on oblique planes (`apitest/faceted_retained_blend_oblique_end_test.go`): the 45° end face above at r = 2, a two-edge mitre run at r = 3, and the 45° plane of a two-edge corner on the corner route at r = 2 | 1,001 samples of the true end curve, the ellipse the cylinder cuts in that plane, lie within the mesh's `Bound` of its facets. A unit test (`internal/retainedblend/line_rewrite_internal_test.go`) projects rows onto a plane with `|d̂ · n| = 1/2`: the chord centred on the stretch direction has sagitta `r·(1 − cos h)/c` there and no other chord's is larger; spaced for the cross-section alone that is `τ/c`, spaced by `rowStep` it is `τ` | space the rows by `τ` alone in any of the three routes: its curve lies up to about 1.37 times `Bound` from the mesh; drop `c` from `rowStep`: the unit case reads `τ/c` |
+| Rows ending on an arc's offset end planes (`apitest/faceted_retained_blend_arc_end_plane_test.go`): a Ø8 bore whose axis lies `h` from the plate's face `x = 0` breaks out through it, fillet r = 4 with the wall's row meeting `x = 0` at `X/ρ` = 0.4 and 0.2 (arc route); the rounded box corner cut back so the plane's row meets the cut at `X/ρ` = 0.1, fillet r = 2.5 along the tangent chain (chain route) | 1,001 samples of each true end curve, taken from the torus, lie within the mesh's `Bound` of its facets. Unit tests (`internal/retainedblend/arc_section_internal_test.go`) pin `tan ψ = g·X/ρ` against finite differences of a sampler that bisects each row's circle against the plane; on a plane through the axis, where the end curve is the tube's circle, `certify` refuses a chord whose sagitta `r·(1 − cos(Δα/2))` is 1.01 `τ` and accepts one at 0.9 `τ`; a hole mouth's torus and cone at `X/ρ` = 0.2 and a boss's torus at 0.1 keep every sampled chord within `τ` with at most 64 rows, where the profile's own rows stray past it; a plane through the axis adds no rows; a tiny `τ` refuses past 1,024 rows; a plane the setback circle misses refuses | space the rows by the profile alone: the curves lie up to 1.41 times `Bound` from the mesh (1.22 at 0.4, 1.05 on the chain) and the unit cases stray past `τ`; drop the parallelogram's corners from `certify`: the 1.01 `τ` chord certifies |
+| Grazing-angle gates (`internal/retainedblend/arc_section_internal_test.go`) | `shallow` refuses a sine under `minSine` or not a number; `intersect3` refuses a plane whose normal is not a number, and such a normal reaches the corner route's row sine as NaN, which `shallow` refuses | write the gate `c < minSine`: NaN passes |
 | Clearance | a radius past the face width refuses `ErrDegenerate`; a radius within `b` of it refuses `ErrUnsupported` | drop the `− b_v` term of §6.2: the near case builds an invalid solid |
 | Shared vertex / tangent chain | refuse SR2 | |
 | Top loop of a mesh box, `Fillet` r = 2 | mitre run (§4.7): the volume is the box less the columns' removed height, the larger of the two walls' at each column, integrated on a 1000 × 1000 grid; the section 0.1 mm under the top has its corner on the plane x = y; `Verify` is `Sound` | delete the mitre and the corner volume is the sum of both strips |

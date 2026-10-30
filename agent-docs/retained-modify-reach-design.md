@@ -284,8 +284,9 @@ The rewrite touches `P`, every wall `W_k`, every seam between consecutive walls,
    The plane's setback point is row 0, on `G ∩ P`; the wall's is the cut of the generator `G ∩ W` at depth `t_W`. The
    edge's interior columns fan out from the end curve: row `j` of column `i` lies at the fraction `i / n_a` of the
    way from its azimuth on `G` to the azimuth of the other end's meridian, so every vertex lies on the torus. The end
-   curve stays a chain of exact points (it is no conic). A chamfer's arc end takes extra rows, as blend §4.4's cone
-   does, so that its chords follow the section `G` cuts in the cone to within `τ`.
+   curve stays a chain of exact points (it is no conic). The rows of a fillet or a chamfer with an arc end are refined,
+   as blend §4.4's are, until their chords follow the section `G` cuts in the torus or cone to within `τ`
+   (blend §6.3), and every entry of the chain takes those rows.
 
    At a straight end `P`, `W` and `G` meet pairwise orthogonally at `V` (`cornerOf` admits exactly three faces and
    `G` is normal to the edge). The end is classified by the turn of each face's loop at `V` about the face's
