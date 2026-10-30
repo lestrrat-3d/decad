@@ -196,7 +196,7 @@ func opposedCells(ctx context.Context, budget *proofbound.WorkBudget,
 			}
 		}
 	}
-	matter, resolved, err := prismcells.ClassifyRegionsWithHoles(budget, tags, profiles)
+	matter, resolved, err := prismcells.ClassifyRegions(budget, tags, profiles)
 	if err != nil {
 		return nil, err
 	}

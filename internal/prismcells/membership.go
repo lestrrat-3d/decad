@@ -282,22 +282,13 @@ type RegionKey struct {
 // every record of the scene, whether the cell sits on that record's material
 // side. Each record's membership propagates across the edges of every other
 // record and never across its own; a span two records share
-// (CoincidentEdgesRegions) is a boundary of both. resolved=false (err always
-// nil then) means a cell's membership in some record could not be reached,
-// or a shape Classify does not cover.
-func ClassifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin, profiles []*sketch.Profile) (map[RegionKey][]bool, bool, error) {
-	return classifyRegions(budget, tags, profiles, false)
-}
-
-// ClassifyRegionsWithHoles also reads bounded cells with inner loops. A Cut
-// against a holed section needs those loops to classify its retained area.
-func ClassifyRegionsWithHoles(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
+// (CoincidentEdgesRegions) is a boundary of both. A cell's holes are read as
+// its outer is: a union floor round a boss standing inside it, or a cut
+// against a holed section, is a cell with inner loops. resolved=false (err
+// always nil then) means a cell's membership in some record could not be
+// reached, an invalid cell, or a shape Classify does not cover.
+func ClassifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
 	profiles []*sketch.Profile) (map[RegionKey][]bool, bool, error) {
-	return classifyRegions(budget, tags, profiles, true)
-}
-
-func classifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin,
-	profiles []*sketch.Profile, allowHoles bool) (map[RegionKey][]bool, bool, error) {
 	n := len(profiles)
 	member := map[RegionKey][]membership{}
 	for _, origin := range tags {
@@ -331,7 +322,7 @@ func classifyRegions(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origi
 		if err := budget.Step(); err != nil {
 			return nil, false, err
 		}
-		if !p.Valid || (!allowHoles && len(p.Holes) != 0) {
+		if !p.Valid {
 			return nil, false, nil
 		}
 		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {

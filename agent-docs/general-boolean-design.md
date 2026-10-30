@@ -162,7 +162,10 @@ payload cannot state is the result's topology:
 Such a union is therefore stated as a `brepPayload` (§4) from the same
 slabs, under "A1 as a brep" below, and a pair that build does not cover
 takes the mesh path with no error, prism-boolean §4.4's unresolved
-topology. Stacked §2.2's I5 reads, for
+topology. So is a union whose slab both operands reach holds records that
+stay apart, such as a second round boss standing beside the first on a
+plate: the select-all merge leaves two loops, which a stacked slab's one
+region cannot state. Stacked §2.2's I5 reads, for
 a union-built stack, "every slab's outer loop equals the previous slab's or
 is proven nested by the clean-nesting match", I6/I7 generalise to the
 exposure records the match derives, and the implementation PR changes that
@@ -181,7 +184,10 @@ exact rational sum `A_plate·h_plate + A_boss·h_boss`, `Exact` where both are.
 #### A1 as a brep — the flush or crossing interface
 
 `internal/stackedunion/brep.go` takes over when an interface's clean-nesting match
-is unresolved, with the slabs `prismboolean.TryStackedUnion` admitted. It admits the pair
+is unresolved, or when the select-all merge of a slab both operands reach
+does not close into one loop, with the slabs `prismboolean.TryStackedUnion`
+admitted. The brep build then runs every slab's merge and every interface
+again under its own checks below, and its miss takes the mesh path. It admits the pair
 only where every carrier it records is exact: the identity re-expression
 (B's records enter every scene verbatim; a re-expressed B would be recorded
 once per scene, at floats no two scenes share), both operands'
@@ -203,7 +209,10 @@ operand A's as the scene's A regions and operand B's as its B regions, and
 its regions are the select-all merge's loops (`prismcells.MergeLoopsExactLineCuts`): one
 loop, or several when the records are apart in that slab, each an outer
 walked counter-clockwise, with prism-boolean §4.2's enclosed-void check and
-§6's audit per loop. A slab one operand reaches keeps that operand's
+§6's audit per loop. Several loops are separate regions only when
+`prismcells.ProveGroupApart` proves them apart (A5's reading: two tangent
+boss circles close as two whole loops meeting at a point no loop names, and
+miss), and that proof scene's walk charge joins the build's walk term. A slab one operand reaches keeps that operand's
 records verbatim. Each interface arranges every record reaching the slab
 below or the slab above it, again split by owner, once: a record reaching
 both sides enters once and counts on both. Two records of one operand are one
@@ -222,13 +231,22 @@ and strict source-range and walk-order checks. Any failed check keeps the
 original fragments and cut charge. Ordinary Union, Cut, Intersect, and
 class-B paths use `prismcells.MergeLoops` or `MergeWithChain` unchanged.
 `prismcells.ClassifyRegions` names each cell's membership in every record
-of the scene — prism-boolean §4.2's flag comparison and propagation, run
+of the scene, a cell's holes read as its outer is — prism-boolean §4.2's flag comparison and propagation, run
 per record rather than per operand, with a span two records share
 (`prismcells.CoincidentEdgesRegions`, A3's reading with the partner taken
 from any other record, of either operand) a boundary of both that neither
 membership crosses. A cell inside some record reaching one side and inside
 none reaching the other is that side's exposed face, recorded from the cell
-as `sketch` returned it (a floor faces up, a ceiling down). Two records of
+as `sketch` returned it (a floor faces up, a ceiling down). A `Union`'s
+exposed cell may carry holes: the plate's floor round separate bosses is one
+cell whose holes are the boss footprints, and becomes one planar face with
+those holes, each ring restated through `LoopOf` as a slab cap's are. The
+arrangement cuts no tangency, so a boss tangent inside the plate's outline
+leaves a hole touching the outer at a point the cell never names, and two
+tangent bosses come back as one hole ring through their tangency twice;
+`prismcells.RingContact` reads a walked vertex starting two of the cell's
+edges, an entity in two rings, and `RegionContact` between the rings'
+entities, and any contact is a miss. A `Cut`'s holed interface cell misses. Two records of
 one operand sharing a wall in one scene enter that scene as two regions and
 read as A3 reads them; two records whose identical segment the scene
 builder would make one entity read as unresolved and miss.
@@ -674,7 +692,7 @@ The opposed interface's faces come from one private Sketch scene over only the
 exclusive holes' interiors: each lower-only hole, reversed, as an A region and
 each upper-only hole, reversed, as a B region. Every partial edge must carry
 `TExact`, the scene carries no walk charge, and
-`prismcells.ClassifyRegionsWithHoles` must classify every cell. A cell inside
+`prismcells.ClassifyRegions` must classify every cell. A cell inside
 some B region and no A region is a floor: the lower slab's material under an
 upper hole, facing up. A cell inside some A region and no B region is a
 ceiling, facing down. A cell inside both is open through both slabs and has no
@@ -1689,6 +1707,18 @@ are relations, never literals.
   interval, is `ErrUnsupported`/`ErrDegenerate`. Misses: an operand
   carrying a section displacement, and a boss drawn on a plane offset in
   the plate's plane.
+- **A1 separate bosses**: a 100 × 60 × 10 plate with radius-6, 8 mm round
+  bosses standing apart (`apitest/stacked_union_separate_bosses_test.go`):
+  `PatternJoin` of three at 30 mm, `Union` of two, three in either order or
+  with a boss first, four, one under the plate, and one overhanging the
+  edge each build a brep with no shift, volume within its bound of
+  `60000 + n·288π`, one radius-6 wall about each boss's axis and `Sound`; a
+  radius-1 fillet of the three bosses' six circles gives six tori and
+  `60000 + 3·(288π + 4π·A·d)`, `A = 1 − π/4`, `d = (10 − 3π)/(3·(4 − π))`.
+  Two bosses 8 mm apart merge into one stacked region; bosses 12 mm apart,
+  and a boss tangent inside the plate's edge, take the mesh path with a
+  shift. Internal reads show `ProveGroupApart` refusing the tangent slab
+  loops and `RingContact` refusing the tangent floor.
 - **A1 brep operand**: the flush corner boss result unioned with a second
   10 mm boss flush in the opposite corner, in either operand order: a brep
   of 12 faces, `Exact` 19000 mm³ and 6000 mm², every flush wall one L-shaped

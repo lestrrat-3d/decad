@@ -39,13 +39,14 @@ func restingBossCases() []restingBossCase {
 			bosses: 1,
 		},
 		{
-			name: "a second sketched boss on a plate and boss",
+			name: "a Transform'd boss on a plate and boss",
 			make: func(t *testing.T, doc *decad.Document) *decad.Body {
 				t.Helper()
 				plate := boxBody(t, doc, 0, 0, 100, 60, 10)
 				first, err := decad.Union(t.Context(), plate, pinPrism(t, doc, 20, 30, 6, 10, 8))
 				require.NoError(t, err)
-				joined, err := decad.Union(t.Context(), first, pinPrism(t, doc, 50, 30, 6, 10, 8))
+				second := translated(t, pinPrism(t, doc, 20, 30, 6, 10, 8), 30, 0, 0)
+				joined, err := decad.Union(t.Context(), first, second)
 				require.NoError(t, err)
 				return joined
 			},
