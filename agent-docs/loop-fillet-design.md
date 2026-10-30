@@ -450,13 +450,10 @@ the chord budget, at least 2 and at most 4096
 largest plan distance between the two corners' cap-minus-side offsets over
 the band's cells (`brepfilletmesh.TwistRingCount`). Ring `k` sits at
 `side + (cap − side)·g(φ_k)` with one `g` for every sample, so a cell's twist
-vector is that offset difference times `Δg ≤ Δφ`, and its charged `|T|/4`
-stays within the other half of the chord budget. A straight root edge's band
-is one cell from one corner's miter to the next, whose offsets point along
-two different bisectors, so its twist, not its sagitta, sets the count. Every
-other fillet band takes the sagitta count alone: there a cell between two
-miters can charge a twist above `tol`, and `Mesh.Bound` then reads above the
-requested tolerance. An LF4 corner's ring vertices
+vector is that offset difference times `Δg ≤ Δφ`, and the raised count keeps
+`|T|/4` alone within the other half of the chord budget. Every other fillet
+band takes the sagitta count alone, and every band's cells are charged as
+the cell charge below states. An LF4 corner's ring vertices
 are the ellipse's chord chain, shared by both cylinders; an LF5 join's are the
 quarter circle's. Each strip between rings `k` and `k+1` is a quad per
 azimuth interval with a fixed diagonal; along a straight walk the quad is a
@@ -470,8 +467,8 @@ in-plane chord sagitta of the ring's arc at the larger radius (zero on a
 straight walk), and `store` the ring vertex's bound. The band's symmetric
 difference is at most `Σ_strips area(strip)·(s_φ + s_ring + store)`, summed
 into `volSymDiff` beside the record faces' own terms. The strip's quads
-are triangulated, so each cell's twist (`proofbound.CellTwistOffsetUpper`)
-joins `s_φ + s_ring`; `store` enters through the per-vertex motion that
+are triangulated, so each cell's charge (below) joins `s_φ + s_ring`;
+`store` enters through the per-vertex motion that
 `SweptVolumeAllow` reads, where an interior ring vertex carries its two ends'
 motion plus its own interpolation error (the interval error of `1 − cos φ_k`
 times the end-to-end span, the exact rounding of the interpolation, and the
@@ -481,6 +478,90 @@ adds is the measured gap between its held facets' area, enclosed in exact
 rational arithmetic, and the patch's published area with its bound. The `Bound` a patch
 face publishes on the mesh is the same sum per patch. Both terms are zero
 at `n_φ → ∞` only, so a banded mesh is never `Exact`.
+
+#### Cell charge
+
+The charge is a Hausdorff bound between a cell's two held triangles `L` and
+the bilinear patch `Q(s, u)` through the cell's four held corners: `vLo`,
+`vHi` on ring `k` at the cell's two columns, `wLo`, `wHi` on ring `k+1`. The
+surface-to-`Q` leg is `s_φ + s_ring`, and the vertex motion from the ideal
+corners to the held ones is the `store` leg, so the charge answers only for
+`Q` against `L` over the coordinates the mesh stores. `Rings.Emit` reads them
+from the mesh's vertex array after every ring is placed, and the brep
+tessellator moves no vertex afterwards (a reflection reverses windings
+only). A patch takes the largest charge over its cells; a cell whose two
+ring-`k` corners are one vertex (the LF6 apex) is a single triangle, which
+is its own bilinear patch, and charges nothing. The charge is the
+smaller of two upper bounds on the same distance, which is again an upper
+bound:
+
+1. **Twist bound** `|T|/4` with `T = vLo − vHi − wLo + wHi`
+   (`proofbound.CellTwistOffsetUpper`). At equal parameters `L` and `Q`
+   differ by a multiple of `T` of size at most `1/4`. It holds for every
+   cell. It also counts movement within the cell's own plane: the box's
+   straight-walk cell from one miter to the next has `|T| = 2·r·Δg`, whose
+   `|T|/4` alone exceeds `tol` at the sagitta count (0.46 mm for `r = 3` at
+   `tol = 0.1`, where the last strip has `Δg = cos(0.4π) = 0.309`).
+2. **Height bound** (`proofbound.CellHeightOffsetUpper`). Let `Π` be the
+   plane through `vLo`, `vHi`, `wLo`, `n = (vHi − vLo) × (wLo − vLo)`, and
+   `h(p) = n̂·(p − vLo)`. The precondition is that the cell projected onto
+   `Π` is a strictly convex quadrilateral: `n·(in × out) > 0` at each corner
+   of the boundary `vLo → vHi → wHi → wLo`, with `in` and `out` the edges
+   arriving at and leaving the corner. Projection along `n̂` does not change
+   `n·(x × y)`, so these signs are the projected turns. Each is decided in
+   exact integer arithmetic over the held floats, and a zero `n` or any
+   sign `≤ 0` keeps the twist bound. Under the precondition:
+   - `∂Q/∂s × ∂Q/∂u` is affine in `(s, u)` (its `s·u` term is `T' × T' =
+     0`), and its `n` component at the unit square's four corners is the
+     four corner turns, so it is positive on the whole square. The
+     projected patch is a local homeomorphism whose boundary runs once
+     around the convex quadrilateral `K`, hence a homeomorphism onto `K`.
+   - Either diagonal splits a strictly convex `K` into two triangles that
+     tile it, so the projected triangle pair is `K` too.
+   - `Q` and `L` are therefore graphs over `K` with the same boundary. `h`
+     is 0 at three corners and `H = h(wHi)` at the fourth, `h∘Q(s, u) =
+     s·u·H`, and a triangle interpolates its corners' heights, so both
+     graphs lie between heights 0 and `H`.
+   - The two points of `Q` and `L` above one point of `K` are at most `|H|`
+     apart. Pairing them is a homeomorphism that is the identity on the
+     cell's boundary, so it glues with the neighbouring cells' pairings
+     into one map of the band, as the parameter correspondence does.
+
+   The bound is `|H| = |n·(wHi − vLo)| / |n|`, the distance of `wHi` from
+   `Π`: `H²` as an exact rational over the held floats, rounded up through
+   `RatSqrtUp`. No tolerance enters. A cell that fails the precondition is
+   charged the twist bound; a near-planar residual never admits anything.
+
+Every ordinary cell of a fillet band is a planar trapezoid at the ideal
+corners: on a straight walk ring `k`'s chord runs along the walk's offset
+line, on a circular walk between two azimuths at radius `ρ_k`, and on a
+reflex connector between two azimuths of the arc of radius `t_k` about the
+apex, so rings `k` and `k+1` give parallel chords run the same way. The held
+corners carry rounding, so `H` is not zero but reads about `1e-15` mm, and
+the charge drops from `|T|/4` to that. An LF8 seam's ring positions follow
+offset-carrier intersections and need not give parallel chords; there the
+smaller bound is whichever the cell's corners give. `Emit` skips the height
+reading for a cell whose `|T|/4` is at most the patch's running maximum,
+since the smaller bound could not raise it.
+
+#### Patch Bound against tol
+
+A patch's `Bound` is `s_φ + s_ring + charge + seam gaps`, composed with
+`F.delta`, the level displacement, the axial term and the vertex store.
+`n_φ` holds `s_φ` within `tol/2`, and the charge is at rounding level, so a
+band whose patches are all straight walks between line–line miters, on a
+record with no displacement, publishes `Bound ≤ tol`: the
+60×40×20 box's top loop filleted at `r = 3` reads about 0.037 mm at `tol =
+0.1` and 0.0047 mm at `tol = 0.01`, with 5 and 14 rings. `capblend.ChordLoop`
+spends the whole chord budget on the in-plane walk count `n(w)`, so `s_ring`
+on a circular walk, and the connector arc's sagitta at a reflex corner,
+reach up to `tol`, and such a patch can read up to about `1.5·tol`. At `tol
+= 0.01` the round boss's root loop filleted at `r = 1` reads `s_φ` 0.0048 +
+`s_ring` 0.0098 = 0.0146 mm, the pocket mouth and the L prism's top loop at
+`r = 1.5` read `s_φ` 0.0046 + connector sagitta 0.0094 = 0.0141 mm, and the
+rounded plate's top loop at `r = 2` reads `s_φ` 0.0043 + `s_ring` 0.0093 =
+0.0135 mm. At `tol = 0.1` only the round boss root exceeds `tol`, at 0.034 +
+0.091 = 0.126 mm.
 
 ## 8. Reference fixtures
 

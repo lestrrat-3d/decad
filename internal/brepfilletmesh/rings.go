@@ -64,9 +64,10 @@ func loopLayout(lm *capblend.LoopMesh) ([]int, []tessellation.FilletCell, int, e
 
 // TwistRingCount is the interior ring count of a full-loop fillet band of
 // the given radius chorded at chord: tessellation.FilletRingCount's sagitta
-// count, raised until every cell's twist (proofbound.CellTwistOffsetUpper,
-// charged by Emit) fits the other half of chord, up to
-// tessellation.MaxFilletRings.
+// count, raised until every cell's |T|/4 twist bound
+// (proofbound.CellTwistOffsetUpper) alone fits the other half of chord, up to
+// tessellation.MaxFilletRings. Emit charges each cell the smaller of that
+// bound and its height bound (cellOffsetUpper).
 //
 // Ring k's plan point at cap sample c is side + D·g(φ_k), with D the cap
 // sample's offset from its matched side sample, g(φ) = 1 − cos φ (cos φ on a
@@ -77,7 +78,7 @@ func loopLayout(lm *capblend.LoopMesh) ([]int, []tessellation.FilletCell, int, e
 // |T|/4 is at most |D(C0) − D(C1)|·π/(8n). A cell from one line–line miter
 // to the next along a straight walk has the largest spread: two plan offsets
 // along different bisectors. The count only selects the mesh; Emit charges
-// the twist the placed rings actually take.
+// the cells the placed rings actually make.
 func TwistRingCount(lm *capblend.LoopMesh, radius, chord float64) (int, error) {
 	n := tessellation.FilletRingCount(radius, chord)
 	match, cells, _, err := loopLayout(lm)
@@ -248,7 +249,7 @@ func (fr *Rings) Emit(in Input, mesh *topo.Mesh,
 			}
 			if a != b {
 				twist[cell.Patch] = math.Max(twist[cell.Patch],
-					proofbound.CellTwistOffsetUpper(verts(k, cell.C0), verts(k, cell.C1), verts(k+1, cell.C0), verts(k+1, cell.C1)))
+					cellOffsetUpper(twist[cell.Patch], verts(k, cell.C0), verts(k, cell.C1), verts(k+1, cell.C0), verts(k+1, cell.C1)))
 			}
 		}
 	}
@@ -271,6 +272,25 @@ func (fr *Rings) Emit(in Input, mesh *topo.Mesh,
 		}
 	}
 	return nil
+}
+
+// cellOffsetUpper bounds how far one cell's held triangle pair strays from
+// the bilinear patch over its four held corners: the smaller of the twist
+// bound |T|/4 and, when the cell projects onto the plane of three corners as
+// a strictly convex quadrilateral, the fourth corner's height over that plane
+// (proofbound.CellHeightOffsetUpper; agent-docs/loop-fillet-design.md §7.1).
+// Both bound the same distance, so their minimum does. A cell whose |T|/4 is
+// at most floor, the patch's running maximum, cannot raise that maximum, and
+// skips the exact height reading.
+func cellOffsetUpper(floor float64, vLo, vHi, wLo, wHi r3.Vec) float64 {
+	twist := proofbound.CellTwistOffsetUpper(vLo, vHi, wLo, wHi)
+	if !(twist > floor) {
+		return twist
+	}
+	if height, ok := proofbound.CellHeightOffsetUpper(vLo, vHi, wLo, wHi); ok {
+		return math.Min(twist, height)
+	}
+	return twist
 }
 
 // FinishPatch records one patch's face displacement and area slack.
