@@ -47,7 +47,12 @@ lie on exact surfaces computed from the two retained tags.
 
 Tags with a stated departure (`NormalBound != 0`, a placed float image) are not
 read: their plane or axis may differ from the true one, so an exact setback
-computed from them has no proof (SR1).
+computed from them has no proof (SR1). A tag moved by an exact translation
+states a zero departure and is read: a `Transform` whose moved origin is the
+exact rational sum, and the tags of a piece the shifted Boolean retry
+translates (`agent-docs/gap-tolerance-design.md` §5.2), whose snapped shift makes that
+sum exact for ordinary coordinates (retention §3.4). Such a blend is built on
+the moved solid `A∘(B+s)`.
 
 A face with a denoted patch (every Revolve wall and end face, `topo.Face.Denoted`)
 is read only where its tag IS the surface its record denotes, decided by

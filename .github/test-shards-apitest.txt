@@ -2896,3 +2896,5 @@
 10	0.00	TestShellStackedBossKeepsThicknessAtRoot
 10	0.00	TestShellRoundStackedBossKeepsThicknessAtRoot
 10	0.00	TestShellStackedBossConcaveRadius
+10	0.00	TestBooleanGapShiftKeepsTranslatedTags
+10	0.00	TestBooleanGapShiftFilletsRestingBoss

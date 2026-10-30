@@ -206,6 +206,33 @@ func shiftOpens(u r3.Vec, sigma float64, wanted []bool, contacts []meshbool.Touc
 	return true
 }
 
+// snapShiftBits is how many bits below the leading bit of a shift's length
+// snapShift keeps.
+const snapShiftBits = 24
+
+// snapShift truncates each component of v toward zero onto the grid
+// 2^(floor(log2|v|) − snapShiftBits). A tag origin o that is a multiple of the
+// grid, such as a whole or dyadic millimetre coordinate, then moves to o + v
+// exactly whenever o + v keeps o's precision, so the translated tag of a moved
+// piece is the exact image of its tag (movedGroup). No component grows in
+// magnitude, so the shift never lengthens, and each changes by under the grid,
+// so the length changes by under 2^(1−snapShiftBits) of itself, far inside the
+// margin shiftNeed leaves above a contact's slack. A zero, non-finite or
+// subnormal-scale v is returned unchanged.
+func snapShift(v r3.Vec) r3.Vec {
+	l := v.Len()
+	if !(l > 0) || math.IsInf(l, 0) {
+		return v
+	}
+	_, e := math.Frexp(l)
+	grid := math.Ldexp(1, e-1-snapShiftBits)
+	if !(grid > 0) {
+		return v
+	}
+	snap := func(x float64) float64 { return math.Trunc(x/grid) * grid }
+	return r3.Vec{X: snap(v.X), Y: snap(v.Y), Z: snap(v.Z)}
+}
+
 // pieceShift is how one piece of the second operand moves in a shifted retry: translated by Move, and then grown (or,
 // when Grow is negative, shrunk) about the piece's centre so that its farthest vertex moves Grow outward. A growth opens
 // contacts that no translation does, such as a tool flush with both faces of a plate, whose two faces need to move
@@ -465,7 +492,7 @@ func retryShifted(ctx context.Context, refusal error, op meshbool.OperationKind,
 						fits = false
 						break
 					}
-					shifts[c] = pieceShift{Move: dir.Scale(length)}
+					shifts[c] = pieceShift{Move: snapShift(dir.Scale(length))}
 					fmt.Fprintf(&key, "%d:%v;", c, shifts[c].Move)
 				}
 				if !fits {

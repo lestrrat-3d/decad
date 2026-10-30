@@ -101,8 +101,15 @@ recorded it, not because the polygons happen to sit near it.
 | `Reversed` | the operand face's `Reversed`, flipped for the faces of the subtracted operand of a `Cut` |
 | `NormalBound` | the tag's own departure `ε_F`: zero for a built operand face, the operand's `TagDeparture` for a retained one, the operand's own `NormalBound` for a denoted face (§3.3) |
 | `Denoted` | the operand face's denoted patch, when it has one |
-| `CapRecord`, `AxialDelta`, `HasAxialDelta` | for a `Plane` group, the operand face's. A Boolean never moves a plane, so the exact-plane record transfers verbatim; every float placement and similarity drops it; an exact rotation copy keeps it for a plane the rotation maps onto itself (retained-modify-reach §6) |
-| `Source` | an immutable `SourcePatch`: the operand body's `Origin.Producer`, the operand position, the face's ordinal in `topobuild.Faces`, and `Parent`, the operand face's own record when it is faceted (nil for a built face). It also rides a moved operand's group on the shifted retry, where the tag is dropped. It traces origin only: no admission rule, bound or reader consults it |
+| `CapRecord`, `AxialDelta`, `HasAxialDelta` | for a `Plane` group, the operand face's. A Boolean of unmoved operands leaves each plane where it is, so the exact-plane record transfers verbatim; a plane the shifted retry translates, and every float placement and similarity, drops it; an exact rotation copy keeps it for a plane the rotation maps onto itself (retained-modify-reach §6) |
+| `Source` | an immutable `SourcePatch`: the operand body's `Origin.Producer`, the operand position, the face's ordinal in `topobuild.Faces`, and `Parent`, the operand face's own record when it is faceted (nil for a built face). It rides every group of a moved operand on the shifted retry, including one that keeps no tag. It traces origin only: no admission rule, bound or reader consults it |
+
+On the shifted retry (`agent-docs/gap-tolerance-design.md` §5.2) the second
+operand's pieces may move. A face of a piece translated by `s` takes its tag
+translated by `s`, charged as a placement by that translation (§3.4), with
+`ε_F` kept. A face of a grown piece, a face whose facets lie in several pieces,
+a denoted patch and a `Cone` keep no tag. A face of a piece that does not move
+keeps the fields above.
 
 `Union` and `Intersect` keep both operands' orientations; `Cut` keeps the
 target's and flips the tool's, because the tool's natural normal points into
@@ -165,7 +172,8 @@ allowance, as it does for every analytic variant
 ### 3.4 Placement
 
 `Transform` and `Copy` carry the tag to its float image
-(`surfaceplace.TransformSurface`). A retained `Plane`, `Cylinder`, `Sphere` or
+(`surfaceplace.TransformSurface`), and so does the shifted Boolean retry for a
+piece of its second operand translated by the shift (§3.1). A retained `Plane`, `Cylinder`, `Sphere` or
 `Torus` group keeps its departure `ε_F` and adds the departure of the float
 image from the exact image of the tag under the placement
 (`facetedrecord.PlacedTagDeparture`). The held term of §3.3 is then recomputed
@@ -194,8 +202,10 @@ rationals, with orthonormality defect `e` (`massmoment.MapCharge.Stretch`).
   the held term of §3.3 at twice that displacement.
 
 A translation or a signed permutation has `e = 0` and `a = 0`, so the charge is
-the origin's rounding alone, and a plane whose origin the translation leaves
-exact adds nothing. The `CapRecord` follows the placement already, because the
+the origin's rounding alone. A tag whose moved origin is the exact rational
+image adds nothing: `P = 0`, and the held term of §3.3 at a zero displacement
+is exactly zero (`HeldNormalTerm` takes no upward rounding step for a zero
+displacement). The `CapRecord` follows the placement already, because the
 placed plane is the record's image.
 
 ## 4. Readers

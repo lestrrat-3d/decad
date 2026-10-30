@@ -1,6 +1,7 @@
 package booleaneval_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
@@ -196,4 +197,33 @@ func TestShiftPiecesChargeEachPieceOnItsOwn(t *testing.T) {
 		}
 	}
 	require.Equal(t, verts[0], m.Vertices[0], "the input mesh is not modified")
+}
+
+func TestSnapShift(t *testing.T) {
+	t.Parallel()
+	// Each shift with the coordinates it must move exactly: any coordinate
+	// below 2^(52-24) times the shift's length that is a multiple of the grid.
+	cases := []struct {
+		v       r3.Vec
+		exactAt []float64
+	}{
+		{r3.Vec{X: 0.0010544506367295983, Y: 0.0006516862194985151, Z: -0.004869488999247551}, []float64{0, 50, -30, 17.75, 1024}},
+		{r3.Vec{X: 0.2098498229406450, Y: 0.1296943230999956, Z: -0.9690936148625756}, []float64{0, 50, -30, 17.75, 1024}},
+		{r3.Vec{X: 0.0001, Y: 0.0001, Z: 0.0001}, []float64{0, 50, -30, 17.75}},
+		{r3.Vec{X: -3.3e-7, Y: 1.7e-9}, []float64{0, 1, 17.75}},
+	}
+	for _, tc := range cases {
+		v, got := tc.v, booleaneval.SnapShift(tc.v)
+		for _, pair := range [][2]float64{{v.X, got.X}, {v.Y, got.Y}, {v.Z, got.Z}} {
+			require.LessOrEqual(t, math.Abs(pair[1]), math.Abs(pair[0]), "%v: a snapped component never grows", v)
+			require.False(t, pair[0]*pair[1] < 0, "%v: a snapped component keeps its sign", v)
+		}
+		require.LessOrEqual(t, got.Sub(v).Len(), math.Ldexp(v.Len(), -23), "%v moves by under 2^-23 of its length", v)
+		for _, o := range tc.exactAt {
+			requireExactSum(t, o, got.X, o+got.X)
+			requireExactSum(t, o, got.Y, o+got.Y)
+			requireExactSum(t, o, got.Z, o+got.Z)
+		}
+	}
+	require.Equal(t, r3.Vec{}, booleaneval.SnapShift(r3.Vec{}))
 }

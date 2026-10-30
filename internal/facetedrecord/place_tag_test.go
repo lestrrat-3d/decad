@@ -1,6 +1,7 @@
 package facetedrecord_test
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
@@ -43,11 +44,31 @@ func TestPlacedTagDeparture(t *testing.T) {
 		require.Zero(t, add)
 	})
 
-	t.Run("a translation of a cylinder charges only the displacement term", func(t *testing.T) {
+	t.Run("an exact translation leaves a curved tag's bound at zero", func(t *testing.T) {
 		t.Parallel()
-		add, ok := requireDeparture(t, cyl, shift, verts)
+		sphere := surfacegeom.Sphere{Center: r3.NewVec(20, 0, 10), Radius: units.Millimeters(4)}
+		torus := surfacegeom.Torus{Center: r3.NewVec(20, 0, 10), Axis: r3.NewVec(0, 0, 1),
+			Major: units.Millimeters(6), Minor: units.Millimeters(1)}
+		for _, tag := range []surfacegeom.Surface{cyl, sphere, torus} {
+			add, ok := requireDeparture(t, tag, shift, verts)
+			require.True(t, ok)
+			require.Zero(t, add, "%T moved exactly states no departure", tag)
+		}
+	})
+
+	t.Run("an inexact translation charges the rounding of the origin", func(t *testing.T) {
+		t.Parallel()
+		tag := surfacegeom.Cylinder{Origin: r3.NewVec(0.1, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(4)}
+		s := r3.NewVec(0.7, 0, 0)
+		exact := new(big.Rat).Add(new(big.Rat).SetFloat64(tag.Origin.X), new(big.Rat).SetFloat64(s.X))
+		require.NotZero(t, exact.Cmp(new(big.Rat).SetFloat64(tag.Origin.X+s.X)),
+			"the fixture's sum is not a float, so the moved origin rounds")
+		inexact, err := r3.Translation(s)
+		require.NoError(t, err)
+		add, ok := requireDeparture(t, tag, inexact, verts)
 		require.True(t, ok)
-		require.Less(t, add, 1e-12)
+		require.Positive(t, add)
+		require.Less(t, add, 1e-12, "the charge is the origin's rounding, far below the trivial 2")
 	})
 
 	t.Run("a rotation charges at least the orthonormality defect", func(t *testing.T) {
