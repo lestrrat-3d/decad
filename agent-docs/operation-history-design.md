@@ -996,13 +996,17 @@ Add each new test name to shard 10 of `.github/test-shards.txt`.
   control refuses, plus the volume's closed form within its bound when it builds.
   The later cut's tool is placed by the same `Copy` option as the target.
   - Invalid placement transfer: Make a 20° exact-rotation `Copy` of the P3
-    result about the z axis through (20, 10, 10), and separately translate it by
-    X = 0.1. First assert that the two planes the later cut touches, the y = 0
-    and y = 20 faces, carry a `RetainedTag` and a nonzero `NormalBound`. The
-    later cut then matches the control. The X = 0.1 copy keeps `NormalBound == 0`
-    on its x- and z-normal planes, so the assertion names only the touched planes.
-  - Valid transfer: An integer translation (X = 5) keeps `NormalBound == 0` on
-    the touched planes, and the later cut still builds where the control refuses.
+    result about the z axis through (20, 10, 10). First assert that the two
+    planes the later cut touches, the y = 0 and y = 20 faces, carry a
+    `RetainedTag` and a nonzero `NormalBound`. The later cut then matches the
+    control. A translation by Y = 0.1 leaves the y = 0 face at the exact level
+    0.1 and rounds the y = 20 face's level 20.1 off its plane: only the back
+    face states a departure, and the later cut refuses.
+  - Valid transfer: An integer translation (X = 5), and a translation by
+    X = 0.1 whose rounding stays within the touched planes
+    (`agent-docs/faceted-source-retention-design.md` §3.4), keep
+    `NormalBound == 0` on the touched planes, and the later cut still builds
+    where the control refuses.
   - Denoted plane: Revolve a stepped profile 270° so its end faces are caps. Cut
     a z-axis pin of radius 1.5 that pierces the cap in the sketch plane, then a
     second pin 4 mm along x. Both pins end inside the material, so the second cut
