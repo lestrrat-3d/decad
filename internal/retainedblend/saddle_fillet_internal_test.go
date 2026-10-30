@@ -97,3 +97,46 @@ func TestSaddleRecognitionKeepsTheChamferRule(t *testing.T) {
 		}
 	}
 }
+
+// TestSaddleFilletRecognition checks the fillet's admission set on every
+// pair of radii, Reversed flags and Convex flag: the convex mouth of a cross
+// hole (the larger face not Reversed, the bore Reversed), two crossing bores
+// (both Reversed, convex) and a boss's root on a rod (neither Reversed,
+// concave). The concave pin root inside a tube's bore, and every edge whose
+// ball lies inside the bore, refuse.
+func TestSaddleFilletRecognition(t *testing.T) {
+	t.Parallel()
+	v := &topo.Vertex{}
+	for _, radii := range [][2]float64{{10, 3}, {3, 10}, {10, 7.5}, {5, 5}} {
+		for flags := range 8 {
+			convex, rev0, rev1 := flags&1 != 0, flags&2 != 0, flags&4 != 0
+			faces := []*topo.Face{
+				{Surface: surfacegeom.Cylinder{Axis: r3.NewVec(1, 0, 0), Radius: units.Millimeters(radii[0])},
+					RetainedTag: true, Reversed: rev0},
+				{Surface: surfacegeom.Cylinder{Origin: r3.NewVec(40, 0, 0), Axis: r3.NewVec(0, 0, 1),
+					Radius: units.Millimeters(radii[1])}, RetainedTag: true, Reversed: rev1},
+			}
+			e := &topo.Edge{Start: v, End: v, Faces: faces, Convex: convex}
+			name := fmt.Sprintf("radii %v convex %v reversed %v %v", radii, convex, rev0, rev1)
+			bigRev, boreRev := rev0, rev1
+			if radii[1] > radii[0] {
+				bigRev, boreRev = rev1, rev0
+			}
+			want := radii[0] != radii[1] && 2*min(radii[0], radii[1])*min(radii[0], radii[1]) <
+				max(radii[0], radii[1])*max(radii[0], radii[1])
+			switch {
+			case convex && !bigRev && boreRev, convex && bigRev && boreRev, !convex && !bigRev && !boreRev:
+			default:
+				want = false
+			}
+			require.Equal(t, want, looksLikeSaddleFillet(e), name)
+			if !want {
+				continue
+			}
+			_, _, key, ok := saddleTags(e)
+			require.True(t, ok, name)
+			require.Equal(t, convex && !bigRev, key.built(), "%s: the chamfer builds only the mouth", name)
+			require.Equal(t, bigRev || !convex, canalOf(key, 1).Outside, "%s: the ball's side of the larger cylinder", name)
+		}
+	}
+}

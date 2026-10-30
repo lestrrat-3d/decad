@@ -34,16 +34,32 @@ type saddleKey struct {
 	sigma  [2]int
 }
 
-// builtSides is the sign pattern the saddle routes build: the ball inside the
+// mouthSides is σ at the convex mouth of a cross hole: the ball inside the
 // larger cylinder and outside the bore.
-var builtSides = [2]int{-1, 1}
+var mouthSides = [2]int{-1, 1}
 
-// built reports whether the routes build the saddle: the convex mouth of a
+// outsideSides is σ with the ball outside both cylinders: at a convex edge
+// where two bores cross in a block, and at a concave one where a boss or pin
+// roots on a rod.
+var outsideSides = [2]int{1, 1}
+
+// built reports whether the chamfer builds the saddle: the convex mouth of a
 // cross hole, σ = (−1, +1) at a convex edge, so the shaft is not Reversed and
 // the bore is. σ alone does not tell it: a concave pin root inside a tube's
 // bore, both faces' Reversed flags and the Convex flag flipped together, has
 // the same σ, and a blend there adds material.
-func (k saddleKey) built() bool { return k.convex && k.sigma == builtSides }
+func (k saddleKey) built() bool { return k.convex && k.sigma == mouthSides }
+
+// filletBuilt reports whether the fillet builds the saddle
+// (agent-docs/retained-edge-blend-design.md §4.10): the chamfer's mouth, and
+// σ = (+1, +1) at either a convex edge (two crossing bores, both faces
+// Reversed; the fillet removes material) or a concave one (a boss on a rod,
+// neither Reversed; the fillet adds material). The concave pin root inside a
+// tube's bore, σ = (−1, +1) at a concave edge, and every pattern with the
+// ball inside the bore stay SR1.
+func (k saddleKey) filletBuilt() bool {
+	return k.built() || k.sigma == outsideSides
+}
 
 // saddle is one admitted saddle edge.
 type saddle struct {
@@ -163,8 +179,8 @@ func saddleTags(e *topo.Edge) (shaft, bore *topo.Face, key saddleKey, ok bool) {
 	return shaft, bore, key, true
 }
 
-// looksLikeSaddle reports whether e is an R7 saddle the routes build, from its
-// tags and Convex flag alone (saddleKey.built).
+// looksLikeSaddle reports whether e is an R7 saddle the chamfer builds, from
+// its tags and Convex flag alone (saddleKey.built).
 func looksLikeSaddle(e *topo.Edge) bool {
 	_, _, key, ok := saddleTags(e)
 	return ok && key.built()
@@ -183,14 +199,15 @@ func local(pose crossbore.Pose, p r3.Vec) r3.Vec {
 	return r3.Vec{X: l[0], Y: l[1], Z: l[2]}
 }
 
-// readSaddle reads a saddle edge against the held mesh: the seam loop the two
-// walls share at the edge's start, the mouth it lies on, and the walls' held
-// bounds. Every held seam vertex must lie within its bound plus slack of both
+// readSaddle reads a saddle edge that admit accepts against the held mesh:
+// the seam loop the two walls share at the edge's start, the mouth it lies
+// on, and the walls' held bounds. Every held seam vertex must lie within its bound plus slack of both
 // cylinders and on one side of the shaft's axis; this falsifies the edge and
 // never admits it.
-func readSaddle(e *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face]int) (saddle, error) {
+func readSaddle(e *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face]int,
+	admit func(saddleKey) bool) (saddle, error) {
 	shaft, bore, key, ok := saddleTags(e)
-	if !ok || !key.built() {
+	if !ok || !admit(key) {
 		return saddle{}, fmt.Errorf("%w: the saddle's walls changed", decaderr.ErrUnsupported)
 	}
 	s := saddle{key: key, big: shaft, bore: bore, scale: 1}
@@ -287,7 +304,7 @@ func SaddleChamfer(ctx context.Context, env topo.Env, mesher booleaneval.Operand
 	faceIndex := faceIndexOf(b)
 	saddles := make([]saddle, len(edges))
 	for i, e := range edges {
-		s, err := readSaddle(e, fp, faceIndex)
+		s, err := readSaddle(e, fp, faceIndex, saddleKey.built)
 		if err != nil {
 			return nil, 0, true, err
 		}

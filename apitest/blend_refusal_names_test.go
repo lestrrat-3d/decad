@@ -81,31 +81,31 @@ func hypot(a, b float64) float64 {
 
 func TestBlendRefusalNamesCrossingCylinders(t *testing.T) {
 	t.Parallel()
-	// Fillet and Chamfer build a cross hole's mouths
-	// (retained_saddle_fillet_test.go, retained_saddle_chamfer_test.go); a
-	// pin's root, where the ball lies outside both cylinders, is a canal
-	// surface no route builds.
-	t.Run(`fillet of cross-pin roots`, func(t *testing.T) {
+	// Fillet builds a cross hole's mouths and a pin's or boss's roots
+	// (retained_saddle_fillet_test.go); Chamfer builds only the mouths
+	// (retained_saddle_chamfer_test.go). A root's chamfer is a canal surface no
+	// route builds.
+	t.Run(`chamfer of cross-pin roots`, func(t *testing.T) {
 		t.Parallel()
 		body := turnedShaftWithCrossPin(t)
-		_, err := decad.Fillet(t.Context(), body, crossHoleMouths(t, body), units.Millimeters(0.5))
+		_, err := decad.Chamfer(t.Context(), body, crossHoleMouths(t, body), units.Millimeters(0.5))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		requireReasonLeads(t, err, `this evaluator fillets a straight prism, its one-line Sweep reduction, a revolve, or a matching-section axial loft only`)
+		requireReasonLeads(t, err, `this evaluator chamfers a straight prism, its one-line Sweep reduction, or a revolve only`)
 		requireReasonLeads(t, err, crossingCylindersReason)
-		require.Contains(t, err.Error(), `axial loft only; no retained blend class reads`,
+		require.Contains(t, err.Error(), `revolve only; no retained blend class reads`,
 			`the existing prefix is followed by the named condition`)
 	})
 
-	t.Run(`fillet of a boss root on a rod`, func(t *testing.T) {
+	t.Run(`chamfer of a boss root on a rod`, func(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		rod := diskBody(t, doc, 0, 0, 15)
 		boss, err := decad.Boss(t.Context(), rod, decad.BossSpec{Face: decad.Faces(decad.Cylindrical()),
 			At: r3.NewVec(15, 0, 10), Diameter: units.Millimeters(10), Height: units.Millimeters(8)})
 		require.NoError(t, err)
-		_, err = decad.Fillet(t.Context(), boss, decad.Edges(decad.Concave()).Exactly(1), units.Millimeters(1))
+		_, err = decad.Chamfer(t.Context(), boss, decad.Edges(decad.Concave()).Exactly(1), units.Millimeters(1))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		requireReasonLeads(t, err, `this evaluator fillets a straight prism, its one-line Sweep reduction, a revolve, or a matching-section axial loft only`)
+		requireReasonLeads(t, err, `this evaluator chamfers a straight prism, its one-line Sweep reduction, or a revolve only`)
 		requireReasonLeads(t, err, crossingCylindersReason)
 	})
 }

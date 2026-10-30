@@ -2812,6 +2812,7 @@
 10	0.00	TestRepairMeshWeldsASplitCube
 10	0.00	TestRetainedSaddleFillet
 10	0.00	TestRetainedSaddleFilletExtrudeShaft
+10	0.00	TestRetainedSaddleFilletOutside
 10	0.00	TestRetainedSaddleFilletRefusals
 10	0.01	TestRevolveAxisDerivedOverflow
 10	0.09	TestRevolveBlendRolesSurvivePlacementAndReplay

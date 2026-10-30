@@ -117,9 +117,9 @@ Faces with a stated departure, or a denoted patch whose tag is not exactly the s
 | GAP-C (`Draft`) | refuse | each drafted face must be re-trimmed against its neighbours and the tool, with the same missing trims | §9.2 |
 | `Offset` of a solid | refuse | surface-design R37 refuses every solid; not a retention matter | §9.3 |
 | GAP-F (`PatternJoin`) | refuse here | the refusal is the many-body Union rule, which retention does not touch | §9.4 |
-| Cylinder/Cylinder, crossing axes, `Fillet` outside blend R7 | refuse | the blend is a canal surface outside the surface vocabulary | §9.5 |
+| Cylinder/Cylinder, crossing axes, `Fillet` outside blend R7's fillet row | refuse | the blend is a canal surface outside the surface vocabulary | §9.5 |
 | Cylinder/Cylinder, a bore crossing a larger shaft at right angles, `Chamfer` | build (blend R7) | a proven band-shaped tool cuts the exact equal-setback wedge through the mesh Boolean | blend §4.9 |
-| Cylinder/Cylinder, a bore crossing a larger shaft at right angles, `Fillet` of the convex mouth | build (blend R7 fillet) | both walls are cut by exact planes near the mouth and joined by a faceted pipe whose chord error is proven cell by cell | blend §4.10 |
+| Cylinder/Cylinder, a bore crossing a larger cylinder at right angles, `Fillet` of the convex mouth, of two crossing bores' convex seam, or of a boss's or pin's concave root on a rod | build (blend R7 fillet) | both walls are cut by exact planes near the mouth and joined by a faceted pipe whose chord error is proven cell by cell; the pipe removes material at a convex edge and adds it at a concave one | blend §4.10 |
 | `Cone`, `Torus` faces | refuse | the admitted sources carry denoted interval surfaces, which this route does not read | §9.5 |
 | Plane/`Sphere` rim | build (blend R6) | the meridian blend is R3's line-circle section revolved, and the sphere's record reads as exact points | blend §4.5 |
 
@@ -554,9 +554,11 @@ belongs to that owner.
   quartic, and the blend is a canal surface about it. It is no `Cylinder`, `Cone`, `Torus` or `Sphere`, and
   `NURBSSurface` carries no geometry a proof can read (spline §7). The convex saddle a bore leaves in a larger
   shaft, with exact perpendicular coordinate axes that meet and `2r² < R²`, builds an equal-setback `Chamfer` as
-  blend R7 (§4.9) and a `Fillet` as an untagged faceted pipe (blend §4.10). Every other crossing pair (a pin
-  joined through a shaft, two crossing bores, a bore off the shaft's axis or off the coordinate axes,
-  `r/R ≥ 1/√2`, a two-distance chamfer) is SR1.
+  blend R7 (§4.9) and a `Fillet` as an untagged faceted pipe (blend §4.10). The same axes with the ball outside
+  both cylinders, the convex seam of two crossing bores and the concave root of a boss or pin on a rod, build a
+  `Fillet` too. Every other crossing pair (a pin's root inside a tube's bore, a ball inside the bore, a bore off
+  the larger cylinder's axis or off the coordinate axes, `r/R ≥ 1/√2`, a `Chamfer` of two crossing bores or of a
+  root, a two-distance chamfer) is SR1.
 - **`Cone` and `Torus` faces.** In the meridian of a coaxial pair the blend is a `Torus`, so the geometry exists.
   The retained cones and tori that reach a mesh result come from revolves. Their tag is a float re-expression (the
   cone's half-angle is an `Atan2`, `internal/revolveplan/payload.go`) whose departure is stated only through the
