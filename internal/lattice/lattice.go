@@ -204,7 +204,7 @@ func Surface(ctx context.Context, kind Kind, lo, hi r3.Vec, cell, level float64,
 	// Half the triangle count is a vertex capacity hint for closed surfaces.
 	// Disconnected components may need more; their storage grows as usual.
 	vertexCapacity := triangleCount/2 + 2
-	b := &builder{field: field, vertexAt: make(map[[2]int]int, vertexCapacity),
+	b := &builder{field: field, vertexAt: make(map[uint64]int, vertexCapacity),
 		vertices: make([]r3.Vec, 0, vertexCapacity), triangles: make([][3]int, 0, triangleCount)}
 	for l := 0; l+1 < n[2]; l++ {
 		if err := ctx.Err(); err != nil {
@@ -237,7 +237,7 @@ func Surface(ctx context.Context, kind Kind, lo, hi r3.Vec, cell, level float64,
 // shared by every triangle that meets it.
 type builder struct {
 	field     []float64
-	vertexAt  map[[2]int]int
+	vertexAt  map[uint64]int
 	vertices  []r3.Vec
 	triangles [][3]int
 }
@@ -249,7 +249,8 @@ func (b *builder) crossing(a, c int, pos func(int) r3.Vec) int {
 	if a > c {
 		a, c = c, a
 	}
-	key := [2]int{a, c}
+	// Surface caps the grid below 2^32 nodes, so this key preserves both IDs.
+	key := uint64(a)<<32 | uint64(c)
 	if v, ok := b.vertexAt[key]; ok {
 		return v
 	}
