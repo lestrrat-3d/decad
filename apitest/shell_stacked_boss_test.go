@@ -24,7 +24,9 @@ func TestShellCenteredStackedBoss(t *testing.T) {
 	require.NoError(t, err)
 	volume, err := shelled.Volume()
 	require.NoError(t, err)
-	want := 3424.0/3 - 8*math.Pi
+	// Plate 2000 and boss 500, less the 18x18x3 lower cavity, the 8x8x5
+	// upper cavity and the root band 100 - 10*pi + 8/3.
+	want := 3316.0/3 + 10*math.Pi
 	require.LessOrEqual(t, math.Abs(volume.Value.Base()-want), volume.Bound.Base())
 
 	var cylinders, ellipses int
@@ -102,14 +104,21 @@ func TestShellOffsetRectangularBoss(t *testing.T) {
 	require.NoError(t, err)
 	v, err := shell.Volume()
 	require.NoError(t, err)
-	want := 4096.0/3 - 5*math.Pi
+	// Plate 2880 and boss 192, less the 22x18x4 lower cavity, the 6x4x4
+	// upper cavity and the 8x6 root band 152/3 - 7*pi.
+	bandV := 152.0/3 - 7*math.Pi
+	want := 3072 - 1584 - 96 - bandV
 	require.LessOrEqual(t, math.Abs(v.Value.Base()-want), v.Bound.Base())
 	c, err := shell.Centroid()
 	require.NoError(t, err)
-	remainingBoss := 96 - (80.0/3 + 5*math.Pi)
+	remainingBoss := 96 - bandV
 	require.LessOrEqual(t, math.Abs(c.Value.X-2*remainingBoss/want), c.Bound.Base())
 	require.LessOrEqual(t, math.Abs(c.Value.Y+remainingBoss/want), c.Bound.Base())
-	require.InDelta(t, (4503-25*math.Pi)/want, c.Value.Z, 1e-12)
+	// Moment about z=0: plate 2880 at 3, boss 192 at 8, lower cavity 1584
+	// at 3, upper cavity 96 at 8, and the band at its ledge level 5 plus its
+	// own offset 35 - 7*pi.
+	mz := 8640.0 + 1536 - 4752 - 768 - (5*bandV + 35 - 7*math.Pi)
+	require.InDelta(t, mz/want, c.Value.Z, 1e-12)
 	mesh, err := shell.Tessellate(t.Context(), units.Millimeters(0.05),
 		decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -140,14 +149,14 @@ func TestShellStackedBossOpenAtBottom(t *testing.T) {
 	require.NoError(t, err)
 	// Plate 20x20x5 plus boss 10x10x5, less the 18x18x4 lower cavity (floor
 	// open), the 8x8x4 upper cavity under the kept roof, and the root band
-	// 20/3 + 8*pi + 60.
-	want := 2500.0 - 18*18*4 - 8*8*4 - (60 + 20.0/3 + 8*math.Pi)
+	// 100 - 10*pi + 8/3.
+	bandV := 100 + 8.0/3 - 10*math.Pi
+	want := 2500.0 - 18*18*4 - 8*8*4 - bandV
 	require.LessOrEqual(t, math.Abs(v.Value.Base()-want), v.Bound.Base())
 	// Moment about z=0: plate 2000 at 2.5, boss 500 at 7.5, lower cavity
 	// 1296 at 2, upper cavity 256 at 7, and the band at its ledge level 4
-	// plus its own offset 43 + 2/3.
-	bandV := 60 + 20.0/3 + 8*math.Pi
-	mz := 5000.0 + 3750 - 1296*2 - 256*7 - (4*bandV + 131.0/3)
+	// plus its own offset 65 - 10*pi.
+	mz := 5000.0 + 3750 - 1296*2 - 256*7 - (4*bandV + 65 - 10*math.Pi)
 	c, err := shell.Centroid()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(c.Value.Z-mz/want), 1e-12+c.Bound.Base())
@@ -193,8 +202,8 @@ func TestShellStackedBossOpenAtBottomOffCentre(t *testing.T) {
 	v, err := shell.Volume()
 	require.NoError(t, err)
 	// Plate 20x20x6 centred at U=-2, boss 8x6x4, lower cavity 18x18x5 (floor open), upper
-	// cavity 6x4x3 under the kept roof, root band 80/3 + 5*pi.
-	bandV := 80.0/3 + 5*math.Pi
+	// cavity 6x4x3 under the kept roof, root band 152/3 - 7*pi.
+	bandV := 152.0/3 - 7*math.Pi
 	want := 2400.0 + 192 - 1620 - 72 - bandV
 	require.LessOrEqual(t, math.Abs(v.Value.Base()-want), v.Bound.Base())
 	c, err := shell.Centroid()
@@ -202,7 +211,7 @@ func TestShellStackedBossOpenAtBottomOffCentre(t *testing.T) {
 	tol := 1e-12 + c.Bound.Base()
 	require.LessOrEqual(t, math.Abs(c.Value.X-(-1320-2*bandV)/want), tol)
 	require.LessOrEqual(t, math.Abs(c.Value.Y-(-120+bandV)/want), tol)
-	mz := 7200.0 + 1536 - 1620*2.5 - 72*7.5 - (5*bandV + 59.0/3)
+	mz := 7200.0 + 1536 - 1620*2.5 - 72*7.5 - (5*bandV + 35 - 7*math.Pi)
 	require.LessOrEqual(t, math.Abs(c.Value.Z-mz/want), tol)
 	mesh, err := shell.Tessellate(t.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)

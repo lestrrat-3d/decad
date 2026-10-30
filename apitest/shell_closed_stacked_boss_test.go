@@ -54,8 +54,9 @@ func TestClosedShellOfNestedRectangularSlabs(t *testing.T) {
 	volume, err := closed.Volume()
 	require.NoError(t, err)
 	// Source less an 18×18×3 lower cavity, an 8×8×4 upper cavity,
-	// and the quarter-cylinder transition's exact integrated volume.
-	want := 2500 - 18*18*3 - 8*8*4 - (200.0/3 + 8*math.Pi)
+	// and the quarter-cylinder transition's exact integrated volume
+	// wdt - (w+d)πt²/2 + 8t³/3.
+	want := 2500 - 18*18*3 - 8*8*4 - (308.0/3 - 10*math.Pi)
 	require.LessOrEqual(t, math.Abs(volume.Value.Base()-want), volume.Bound.Base())
 	mesh, err := closed.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))
@@ -158,7 +159,7 @@ func TestClosedShellOfNestedRectangularSlabsSwappedAxes(t *testing.T) {
 			require.NoError(t, err)
 			// The two orientations have the same dimensions and the same
 			// quarter-cylinder transition volume.
-			want := 2520 - 22*16*3 - 10*4*4 - (128.0/3 + 7*math.Pi)
+			want := 2520 - 22*16*3 - 10*4*4 - (224.0/3 - 9*math.Pi)
 			require.LessOrEqual(t, math.Abs(volume.Value.Base()-want), volume.Bound.Base())
 			mesh, err := closed.Tessellate(t.Context(), units.Millimeters(0.1),
 				decad.WithVerification(decad.VerifyAll))
@@ -183,7 +184,7 @@ func TestClosedShellOfNestedRectangularSlabsReversedLevels(t *testing.T) {
 	require.True(t, closed.Shells()[1].IsVoid())
 	volume, err := closed.Volume()
 	require.NoError(t, err)
-	want := 2500 - 18*18*3 - 8*8*4 - (200.0/3 + 8*math.Pi)
+	want := 2500 - 18*18*3 - 8*8*4 - (308.0/3 - 10*math.Pi)
 	require.LessOrEqual(t, math.Abs(volume.Value.Base()-want), volume.Bound.Base())
 	mesh, err := closed.Tessellate(t.Context(), units.Millimeters(0.1),
 		decad.WithVerification(decad.VerifyAll))

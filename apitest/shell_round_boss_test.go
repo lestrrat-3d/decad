@@ -33,7 +33,9 @@ func TestShellRoundStackedBoss(t *testing.T) {
 			require.Len(t, shell.Faces(), 16)
 			volume, err := shell.Volume()
 			require.NoError(t, err)
-			want := 1028 + 76*math.Pi/3 - 3*math.Pi*math.Pi/2
+			// Plate net 2000 - 972, boss 80*pi less the radius-3 upper cavity
+			// 45*pi and the root band pi*(16 - 2*pi + 2/3).
+			want := 1028 + 55*math.Pi/3 + 2*math.Pi*math.Pi
 			require.LessOrEqual(t, math.Abs(volume.Value.Base()-want), volume.Bound.Base())
 			centroid, err := shell.Centroid()
 			require.NoError(t, err)
@@ -42,7 +44,10 @@ func TestShellRoundStackedBoss(t *testing.T) {
 				math.Abs(centroid.Value.X-(1028*10+bossNet*tc.cx)/want), centroid.Bound.Base())
 			require.LessOrEqual(t,
 				math.Abs(centroid.Value.Y-(1028*10+bossNet*tc.cy)/want), centroid.Bound.Base())
-			wantZ := (2570 + 2605*math.Pi/12 - 6*math.Pi*math.Pi) / want
+			// Moment about z=0: plate net 5000 - 2430, boss 600*pi less the
+			// upper cavity's 337.5*pi, and the band at its ledge level 4 plus
+			// its own offset pi*(133/12 - 2*pi).
+			wantZ := (2570 + 2217*math.Pi/12 + 10*math.Pi*math.Pi) / want
 			require.InDelta(t, wantZ, centroid.Value.Z, 1e-12)
 			var tori int
 			for _, face := range shell.Faces() {
@@ -55,8 +60,12 @@ func TestShellRoundStackedBoss(t *testing.T) {
 				decad.WithVerification(decad.VerifyAll))
 			require.NoError(t, err)
 			require.True(t, mesh.VolumeVerified())
+			// The 0.05 mm mesh's inscribed walls and torus facets hold about
+			// 1.7 mm³ less than the analytic body; the gap shrinks in
+			// proportion to the chord. A wrong band formula moves the
+			// analytic volume by more than 10 mm³.
 			require.LessOrEqual(t, math.Abs(shellMeshSignedVolume(mesh)-volume.Value.Base()),
-				1+volume.Bound.Base())
+				2+volume.Bound.Base())
 			report, err := doc.Verify(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, decad.Sound, report.Status)
@@ -83,7 +92,7 @@ func TestShellRoundStackedBoss(t *testing.T) {
 					decad.WithVerification(decad.VerifyAll))
 				require.NoError(t, err)
 				require.True(t, reflectedMesh.VolumeVerified())
-				require.LessOrEqual(t, math.Abs(shellMeshSignedVolume(reflectedMesh)-want), 1.0)
+				require.LessOrEqual(t, math.Abs(shellMeshSignedVolume(reflectedMesh)-want), 2.0)
 			}
 		})
 	}

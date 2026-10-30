@@ -62,8 +62,8 @@ type Band struct {
 func (bc *Band) filletInput() brepfilletmesh.Input {
 	return brepfilletmesh.Input{
 		Band: bc.band, Face: bc.face, Payload: bc.cbp, Loop: &bc.lm,
-		Start: bc.start, SideZ: bc.sideZ, SideV: bc.sideV, CapV: bc.capV,
-		Curved: bc.curved,
+		Start: bc.start, SideZ: bc.sideZ, SideDelta: bc.sideDelta, SideV: bc.sideV, CapV: bc.capV,
+		Curved: bc.curved, RootAxis: bc.bossShell,
 	}
 }
 
