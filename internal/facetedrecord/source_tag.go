@@ -51,7 +51,8 @@ func SourceTag(f *topo.Face, flip bool) (Group, bool) {
 // distance from the axis of every true point of a Cone patch; the other
 // surfaces ignore it. The term is zero for a plane. For the others it is
 // 2·delta/R times a surface factor, capped at 2, and the tag is declined once
-// the term reaches 1.
+// the term reaches 1. A zero delta gives a zero term, so a tag placed by an
+// exact translation states no departure.
 func HeldNormalTerm(tag surfacegeom.Surface, delta, rhoLower float64) (float64, bool) {
 	var term float64
 	switch s := tag.(type) {
@@ -90,7 +91,12 @@ func HeldNormalTerm(tag surfacegeom.Surface, delta, rhoLower float64) (float64, 
 	default:
 		return 0, false
 	}
-	term = math.Nextafter(term, math.Inf(1))
+	// A zero delta gives an exact zero term: every factor above is finite, and
+	// only a positive product needs the upward step, which also covers one
+	// that underflowed to zero.
+	if delta != 0 {
+		term = math.Nextafter(term, math.Inf(1))
+	}
 	if !(term < 1) {
 		return 0, false
 	}

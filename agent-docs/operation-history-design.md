@@ -840,8 +840,10 @@ stage carries it as follows:
 All paths are under `internal/`. `evaluate` orders groups as
 `topobuild.Faces(a)` then `Faces(b)`, so a group index is the operand face's
 identity within one operation. Its `sourceID` map from face pointer to group
-index is local and dropped on return. A shifted retry keeps only `Origins` for
-the moved operand. Assembly sets `RetainedTag` on a patch when retention A4
+index is local and dropped on return. A shifted retry keeps `Origins` and
+`Source` for every face of the moved operand, and the tag translated by the
+shift for a face of a translated piece (`agent-docs/gap-tolerance-design.md`
+§5.2). Assembly sets `RetainedTag` on a patch when retention A4
 admits it, and no faceted path merges two groups. `facetedtopology` needs no
 change in this phase.
 
@@ -965,7 +967,8 @@ Add each new test name to shard 10 of `.github/test-shards.txt`.
   group's record names the modify producer and the edge's ordinal in the call.
   The record holds no topology node, body, document, context or cache.
 - Deliverable: `evaluate` sets `Source` for every group, including a moved
-  operand's group on the shifted retry, where the tag is still dropped.
+  operand's group on the shifted retry, whether it keeps a translated tag or
+  none.
   Placement and similarity copy the group struct (`placed.go`, `place.go`,
   `point_plane_scale.go`), so they keep the pointer with no new code.
   `retainedblend` keeps copied groups' records and gives each blend group a new

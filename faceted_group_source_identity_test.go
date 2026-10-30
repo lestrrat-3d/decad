@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
@@ -149,7 +150,17 @@ func TestShiftedRetryGroupsKeepSource(t *testing.T) {
 
 	groups := facetedGroups(t, joined)
 	nA := len(topobuild.Faces(&a.n))
-	require.Len(t, groups, nA+len(topobuild.Faces(&b.n)))
+	facesB := topobuild.Faces(&b.n)
+	require.Len(t, groups, nA+len(facesB))
+	// The moved box's planes carry their tags translated by the one shift s
+	// the retry applied, exactly: every moved origin is the rational o + s.
+	first, ok := groups[nA].Surface.(surfacegeom.Plane)
+	require.True(t, ok, "the moved operand keeps its tag, translated")
+	unmoved, ok := facesB[0].Surface.(surfacegeom.Plane)
+	require.True(t, ok)
+	s := first.Frame.Origin().Sub(unmoved.Frame.Origin())
+	require.Positive(t, s.Len())
+	require.LessOrEqual(t, s.Len(), 0.01, "the shift stays within the default gap tolerance")
 	for i, g := range groups {
 		require.NotNil(t, g.Source, "group %d", i)
 		if i < nA {
@@ -161,7 +172,24 @@ func TestShiftedRetryGroupsKeepSource(t *testing.T) {
 		require.Equal(t, 1, g.Source.Operand, "group %d", i)
 		require.Equal(t, i-nA, g.Source.Ordinal)
 		require.Equal(t, b.n.Origin.Producer, g.Source.Producer)
-		require.Nil(t, g.Surface, "the moved operand keeps no tag")
-		require.False(t, g.Retained)
+		tag, ok := g.Surface.(surfacegeom.Plane)
+		require.True(t, ok, "group %d keeps its plane, translated", i)
+		src, ok := facesB[i-nA].Surface.(surfacegeom.Plane)
+		require.True(t, ok)
+		requireExactTranslation(t, src.Frame.Origin(), s, tag.Frame.Origin())
+		require.Equal(t, src.Frame.N(), tag.Frame.N())
+		require.True(t, g.Retained)
+		require.Zero(t, g.NormalBound, "an exact translation states no departure")
+		require.Nil(t, g.CapRecord, "the record states the unmoved plane")
+	}
+}
+
+// requireExactTranslation asserts got is exactly the rational o + s in every
+// coordinate.
+func requireExactTranslation(t *testing.T, o, s, got r3.Vec) {
+	t.Helper()
+	for _, c := range [][3]float64{{o.X, s.X, got.X}, {o.Y, s.Y, got.Y}, {o.Z, s.Z, got.Z}} {
+		sum := new(big.Rat).Add(new(big.Rat).SetFloat64(c[0]), new(big.Rat).SetFloat64(c[1]))
+		require.Zero(t, sum.Cmp(new(big.Rat).SetFloat64(c[2])), "%v + %v is not exactly %v", c[0], c[1], c[2])
 	}
 }

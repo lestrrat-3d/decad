@@ -161,7 +161,8 @@ runs the Boolean again with the second operand moved:
    the chain refuses at the chain-depth gate (`RefuseCoarseHeldContact`). A pair of contacts that no direction opens in the needed sense,
    such as a tool flush with both walls of a slot, is opened by growth (item 5).
 
-   The rule follows from the tolerant reading `A∘(B+s)` with `s·n` the shift along a contact's outward normal `n`. A
+   The rule follows from the tolerant reading `A∘(B+s)` with `s·n` the shift along a contact's outward normal `n`.
+   `A∘(B+s)` is the solid the result states, never `A∘B` (see "What a result of the retry states" below). A
    Union with `s·n < 0` overlaps a resting B by `|s·n|` and leaves a flush B inside A. With `s·n > 0` it leaves a
    gap under a resting B and a sliver of a flush B outside A. A Union that also holds a Decisive contact overlaps B
    there whichever way a contact that is not Decisive opens, so the sense of that contact decides only on which side
@@ -176,7 +177,11 @@ runs the Boolean again with the second operand moved:
    footprint leave coplanar.
 3. Steps of 1/4096, 1/512, 1/64, 1/16, 1/4 and 1 of the reach are tried in order, three directions each. A step's length is the
    larger of that fraction of the reach and the least shift that clears every contact's Slack (the Slack over the
-   component along its normal, with a margin of 5%). A length above the reach is skipped. The first outcome that
+   component along its normal, with a margin of 5%). A length above the reach is skipped. Each component of the
+   shift `s` is then truncated toward zero onto the grid `2^(⌊log₂|s|⌋−24)` (`snapShift`): the shift never
+   lengthens, its length changes by under `2^-23` of itself, inside the 5% margin, and a tag origin that is a
+   multiple of the grid and below about `2^28·|s|` moves to `o + s` exactly, so the moved piece's translated tags
+   carry no rounding (the tag paragraph below). The first outcome that
    is not a contact refusal is the result, whether it is a body or another error, such as an empty Intersect. When a
    shifted attempt meets a contact the unmoved pair did not reach, the contacts are merged and the search starts
    again, up to four times. When every attempt refuses, the original refusal is returned.
@@ -206,14 +211,30 @@ with its own bounds. The chain-depth gate (`RefuseCoarseHeldContact`) admits a m
 tolerance by the shift the retry applied, because the result's bounds already carry it. The composition of the result's bounds reads a copy that is wider by the shift
 (`shiftOperandMesh`): the vertex and face bounds of a moved piece grow by its displacement, the mesh bound by the
 largest, the symmetric-difference volume grows by what each move sweeps over its piece's boundary, and the area allowance grows by the rounding of the new
-coordinates. The ordinary trim amplification then charges the shift at every crossing. The moved operand keeps no
-retained surface tag, because its facets no longer lie on the surfaces they were cut from. A shifted mesh that folds,
+coordinates. The ordinary trim amplification then charges the shift at every crossing. A shifted mesh that folds,
 and any pair that uses a spiral-join certificate, is declined.
+
+The moved operand's retained tags (`agent-docs/faceted-source-retention-design.md` §3.1) follow the move
+(`movedGroup`, `internal/booleaneval/moved_tag.go`). A face of a piece translated by `s` lies on its tag translated
+by `s`, never on the unmoved tag, which misses the true face by `|s·n|` for a plane, `|s − (s·â)â|` for a cylinder
+and `|s|` for a sphere. The group carries the translated tag `T+s` (`surfaceplace.TransformSurface`), charged as a
+placement by the translation (`facetedrecord.PlacedTagDeparture`, retention §3.4). Every position parameter of `T+s`
+is compared with the exact rational sum `o + s`: where the float equals it, the charge is zero and the tag reads as
+exact (retained-edge-blend §2), and otherwise the charge is the measured rounding of the moved origin, which the
+placement path already charges soundly, and the tag states that departure. No residual against the held mesh admits
+the tag. The plane's `CapRecord` is dropped, because it records the unmoved plane. The group keeps no tag for a face
+of a grown piece, a face whose facets lie in several pieces, a tag that is not retained, a denoted patch and a `Cone`.
+A face of a piece no shift names keeps its tag unchanged.
 
 What a result of the retry states, and what it does not:
 
-- Its volume reads `Approximate`, and the bound covers the distance to the volume of the unmoved Boolean.
+- Its true solid is `A∘(B+s)`, the Boolean with the second operand moved by the exact shift. Its retained tags,
+  its edge curves and every operation built on it describe that solid.
+- Its volume reads `Approximate`, and the bound covers the distance to the volume of the unmoved Boolean. The
+  charge widens each moved piece's bounds by its whole displacement, so the bound covers `A∘(B+s)` as well.
 - Its vertices lie within their bounds of the features of the unmoved Boolean that the move leaves in place.
+- A later blend or Boolean states its bounds against `A∘(B+s)`. They need not cover the distance to the unmoved
+  `A∘B`, from which the moved faces lie up to `|s|`, at most the reach.
 - The Boolean it computes is the tolerant kernel's reading of a coincident contact, not the exact reading. A feature
   whose existence depends on a gap below the tolerance can be present or absent. A tool that stops one ulp short of a
   wall opens a through hole, because a flush Cut pokes through, and the wall's face area reads the pierced wall. A
@@ -270,11 +291,17 @@ owns that refusal in the same change.
 | `apitest.TestDocumentGapToleranceOptions` | The option set, its last-wins rule and each invalid value's error. |
 | `booleaneval.TestShiftNeed` | The least shift that clears a contact's Slack, along a normal and along a slanted direction. |
 | `booleaneval.TestShiftPiecesChargeEachPieceOnItsOwn` | Two separate pieces: only the moved piece moves and is charged. |
+| `booleaneval.TestSnapShift` | A snapped shift never lengthens, keeps each component's sign, changes by under `2^-23` of its length, and moves whole and dyadic coordinates such as 50 exactly. |
+| `booleaneval.TestMovedGroup` | A translated piece's Cylinder and Plane tags move by the exact shift with a zero bound and the plane's `CapRecord` dropped; an unmoved piece keeps its tag; a grown piece, a face spanning pieces, a face with no facet, a denoted patch, an unretained tag and a Cone keep none. |
+| `booleaneval.TestFacePieces` | A face whose facets lie in two pieces is marked as spanning them. |
+| `facetedrecord.TestPlacedTagDeparture` | An exact translation of a Plane, Cylinder, Sphere or Torus tag states zero departure, and an inexact one of a Cylinder at x = 0.1 states a positive one. |
 | `meshbool.TestRefuseUndecidableProximityLocalSlack` | A pair the faces' bounds cannot decide is decided by its close facets' own bounds, and a refusal names its contacts with their Slack. |
 | `booleaneval.TestShiftDirections` | Which sense each operation wants for each kind of contact, a Union's inward pull on contacts that are not Decisive when none is, the outward tie beside a Decisive contact, and when no direction exists. |
 | `apitest.TestBooleanGapTolerance` | Union, Cut and Intersect of boxes that touch or sit flush: the result, the bound that covers the true volume, a tighter bound from a smaller tolerance, and the refusals `ExactOnly` and a slot keep. |
 | `apitest.TestBooleanGapToleranceEdgeAndPointTouches` | A shared corner, a knife edge inside a wider wedge and two crossing edges: Union, Cut and Intersect, the volume bound, and the `ExactOnly` refusal. |
 | `apitest.TestBooleanGapToleranceRestingBossJoinsPlate` | A `Transform`ed boss resting on a plate unions into one lump whose volume bound covers `60000 + 288π`, with the boss's top below z = 18, and `Verify` reads `Sound`. |
+| `apitest.TestBooleanGapShiftKeepsTranslatedTags` | A `Transform`ed boss on a plate, and a second sketched boss on a plate and boss, join through the retry: the moved wall reads as a radius-6 `Cylinder` about the boss's axis moved by `s`, the top as a `Plane` at `18 + s.z`, and the root and rim as `Circle3` edges. |
+| `apitest.TestBooleanGapShiftFilletsRestingBoss` | A radius-1 `Fillet` of every root and rim of the same bodies builds one `Torus` per edge, its volume bound covers the hand volume `60000 + n·(288π + 4π·A·d)` and the moved solid's, smaller by `36π·|s.z|`, and `Verify` reads `Sound`. |
 | `apitest.TestBooleanGapToleranceStaysExactForCurvedContact` | A tangent cylinder on a plate stays refused under `ExactOnly`. |
 | `apitest.TestVerifyGapToleranceDecidesAFlushPair` | `Verify` reads a flush pair's overlap with a covering bound, leaves it staged under `ExactOnly`, and reports an invalid tolerance. |
 | `examples.Example_gap_tolerance` | The documented use. |

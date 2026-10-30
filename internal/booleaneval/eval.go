@@ -217,6 +217,18 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	totalFaces := targetFaces + len(facesB)
 	groups := make([]facetedrecord.Group, 0, totalFaces)
 	sourceID := make(map[*topo.Face]int, totalFaces)
+	var (
+		piecesB   pieces
+		facePiece map[*topo.Face]int
+		reachB    float64
+	)
+	if len(shifts) > 0 {
+		piecesB = piecesOf(mb)
+		facePiece = facePieces(mb, piecesB)
+		if reachB, err = tagReach(mb); err != nil {
+			return Evaluation{}, err
+		}
+	}
 	for i, f := range append(facesA, facesB...) {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -236,9 +248,10 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		group.Source = facetedrecord.FaceSource(owner.Origin.Producer, operand, ordinal, f)
 		group.Planar = f.Surface.Kind() == surfacegeom.KindPlane || f.HeldPlanar
 		if len(shifts) > 0 && i >= targetFaces {
-			// A moved operand's facets no longer lie on the surfaces they were
-			// cut from, so the result keeps no retained tag for them.
-			group = facetedrecord.Group{Origins: group.Origins, Source: group.Source}
+			// A moved piece's true faces lie on its tags translated by the
+			// shift, never on the unmoved tags.
+			piece, ok := facePiece[f]
+			group = movedGroup(group, piece, ok, shifts, mb.Vertices, reachB)
 		}
 		groups = append(groups, group)
 	}
@@ -262,7 +275,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		if capFace != nil || coneFace != nil {
 			return Evaluation{}, errShiftDeclined
 		}
-		mbDecide, mb, shiftDisplacement, err = shiftOperandMesh(ctx, mb, piecesOf(mb), shifts)
+		mbDecide, mb, shiftDisplacement, err = shiftOperandMesh(ctx, mb, piecesB, shifts)
 		if err != nil {
 			return Evaluation{}, err
 		}

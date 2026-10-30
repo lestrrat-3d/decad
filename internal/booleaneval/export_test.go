@@ -37,3 +37,19 @@ func GrowPieces(m *topo.Mesh, grows map[int]float64) (*topo.Mesh, *topo.Mesh, fl
 	}
 	return shiftOperandMesh(context.Background(), m, piecesOf(m), moves)
 }
+
+// PieceShift exposes pieceShift to the external test package.
+type PieceShift = pieceShift
+
+// SnapShift exposes snapShift to the external test package.
+var SnapShift = snapShift
+
+// MovedGroup exposes movedGroup to the external test package.
+var MovedGroup = movedGroup
+
+// SpanningPieces exposes spanningPieces to the external test package.
+const SpanningPieces = spanningPieces
+
+// FacePieces returns the connected piece of each source face of m, or
+// SpanningPieces for a face whose facets lie in several.
+func FacePieces(m *topo.Mesh) map[*topo.Face]int { return facePieces(m, piecesOf(m)) }

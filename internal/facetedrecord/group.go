@@ -50,8 +50,9 @@ type Group struct {
 	// displacement.
 	Retained bool
 	// CapRecord, AxialDelta and HasAxialDelta carry the operand plane's exact
-	// record onto a retained Plane group. A Boolean never moves a plane, so
-	// the record transfers verbatim; every placement and similarity drops it
+	// record onto a retained Plane group. A Boolean of unmoved operands keeps
+	// each plane where it is, so the record transfers verbatim. A plane the
+	// shifted retry translates, and every placement and similarity, drops it
 	// (topo.CapRecord.Under) because the image is no longer that record.
 	CapRecord     *topo.CapRecord
 	AxialDelta    float64
