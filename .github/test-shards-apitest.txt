@@ -2815,6 +2815,8 @@
 10	0.02	TestRevolveWallNormalCoversFarTiltedAxis
 10	0.01	TestRevolveWallNormalCoversNearPerpendicularSegment
 10	0.00	TestRevolvedShaftClassBMisses
+10	0.00	TestSB7NonTangentJunctionKeepsCurvedFaceText
+10	0.00	TestSB7TangentJunctionNamesChain
 10	0.00	TestScaleMeshRefusals
 10	0.00	TestScaledAtKeepsUpstreamRoles
 10	0.03	TestSectionCardinalConePlacementAndAxisSense

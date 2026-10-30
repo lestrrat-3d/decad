@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
+	"github.com/lestrrat-3d/decad/internal/clearance"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/modifyselect"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
@@ -15,6 +16,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/tangentchain"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
@@ -28,9 +30,46 @@ type brepEdgeRoute struct {
 
 func newBrepEdgeRoute(bp breprecord.Payload, topo *breprecord.Topology,
 	call Request, budget *proofbound.WorkBudget) *brepEdgeRoute {
-	return &brepEdgeRoute{EdgeRoute: breprecord.NewEdgeRoute(bp, topo,
+	r := &brepEdgeRoute{EdgeRoute: breprecord.NewEdgeRoute(bp, topo,
 		call.Op, fmt.Sprint(call.Sel), modifyselect.EdgesContext(call.Edges), call.Blend.Kind,
 		budget), call: call}
+	r.TangentNote = r.tangentJunctionNote
+	return r
+}
+
+// tangentJunctionNote names the condition behind SB7's curved third face
+// when the selected edge ends at a proven tangent junction whose continuation
+// is not selected: the exact route cannot round a tangent chain edge by edge,
+// and WithTangentChain selects the whole chain. The junction must be proven
+// (clearance.DegYes); an undecided or non-tangent junction returns "" and
+// leaves the curved-face reason unchanged.
+func (r *brepEdgeRoute) tangentJunctionNote(eb *breprecord.EdgeBlend, v [3]float64) string {
+	e := r.call.Edges[eb.Ordinal]
+	at := r.BP.RefView().Point(v[0], v[1], v[2])
+	selected := map[*topo.Edge]struct{}{}
+	for _, s := range r.call.Edges {
+		selected[s] = struct{}{}
+	}
+	for _, end := range []*topo.Vertex{e.Start, e.End} {
+		if end == nil || at.Sub(end.Position).Len() > 1e-6 {
+			continue
+		}
+		for _, f := range e.Faces {
+			for _, l := range f.Loops {
+				for _, ce := range l.CoEdges {
+					c := ce.Edge
+					if _, ok := selected[c]; ok || c == e {
+						continue
+					}
+					if tangentchain.Continues(e, c, end) == clearance.DegYes {
+						return fmt.Sprintf(`the selected edge ends at the tangent junction %s whose continuation is not selected; WithTangentChain selects the whole chain`,
+							selectorquery.RenderVec(end.Position))
+					}
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // BlendEdges commits the route E record after its edge and face gates.
