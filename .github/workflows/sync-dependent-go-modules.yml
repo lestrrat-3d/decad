@@ -4,8 +4,8 @@ on:
   pull_request:
     types: [opened, reopened, synchronize]
     paths:
-      - go.mod
-      - go.sum
+      - '**/go.mod'
+      - '**/go.sum'
 
 permissions:
   actions: write
@@ -36,7 +36,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          git add -u -- ':(glob)**/go.mod' ':(glob)**/go.sum'
+          git add -- ':(glob)**/go.mod' ':(glob)**/go.sum'
           if git diff --cached --quiet; then
             echo 'changed=false' >> "$GITHUB_OUTPUT"
             exit 0

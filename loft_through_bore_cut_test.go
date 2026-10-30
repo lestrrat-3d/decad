@@ -18,7 +18,7 @@ import (
 // throughBoreFixture is a 10 x 10 axial square Loft two tall and a circular
 // through-tool of radius 1 at (1, 0.5) that spans both caps, as the public
 // Cut sees them.
-func throughBoreFixture(t *testing.T) (*Document, loftPayload, prismPayload) {
+func throughBoreFixture(t *testing.T) (*Document, *Body, loftPayload, prismPayload) {
 	t.Helper()
 	world := sketch.NewWorld()
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
@@ -55,7 +55,7 @@ func throughBoreFixture(t *testing.T) (*Document, loftPayload, prismPayload) {
 	require.NoError(t, err)
 	tool, err := Extrude(t.Context(), doc, ts, ts.Profiles()[0], Distance{D: units.Millimeters(4), Dir: Along})
 	require.NoError(t, err)
-	return doc, blank.n.Payload.(loftPayload), tool.n.Payload.(prismPayload)
+	return doc, blank, blank.n.Payload.(loftPayload), tool.n.Payload.(prismPayload)
 }
 
 // TestLoftThroughBoreCutGates breaks one fact of the admitted pair at a time.
@@ -64,7 +64,7 @@ func throughBoreFixture(t *testing.T) (*Document, loftPayload, prismPayload) {
 // cancellation path of the containment audit needs a context that expires
 // mid-call.
 func TestLoftThroughBoreCutGates(t *testing.T) {
-	doc, loft, tool := throughBoreFixture(t)
+	doc, blank, loft, tool := throughBoreFixture(t)
 	cut := func(ctx context.Context, a loftPayload, b prismPayload) (bool, error) {
 		node, ok, err := loftrecord.ThroughBoreCut(ctx, envOf(documentNode(doc), doc.nextProducerID()), a, b)
 		if ok {
@@ -136,32 +136,33 @@ func TestLoftThroughBoreCutGates(t *testing.T) {
 	toolGates := []struct {
 		name string
 		edit func(*prismPayload)
+		want bool
 	}{
-		{"a surface result tool", func(p *prismPayload) { p.SurfaceResult = true }},
-		{"a placed tool", func(p *prismPayload) { p.Xform = shifted }},
-		{"a displaced section", func(p *prismPayload) { p.SectionDelta = 1e-3 }},
-		{"a displaced start level", func(p *prismPayload) { p.Z0Delta = 1e-3 }},
-		{"a displaced end level", func(p *prismPayload) { p.Z1Delta = 1e-3 }},
-		{"a tool frame with a flipped U", func(p *prismPayload) { p.Frame = toolFlipU }},
-		{"a tool frame with a flipped V", func(p *prismPayload) { p.Frame = toolFlipV }},
-		{"a tool with a hole", func(p *prismPayload) { p.Profile.Holes = []sectionrecord.LoopRecord{p.Profile.Outer} }},
+		{"a surface result tool", func(p *prismPayload) { p.SurfaceResult = true }, false},
+		{"a placed tool", func(p *prismPayload) { p.Xform = shifted }, false},
+		{"a displaced section", func(p *prismPayload) { p.SectionDelta = 1e-3 }, false},
+		{"a displaced start level", func(p *prismPayload) { p.Z0Delta = 1e-3 }, false},
+		{"a displaced end level", func(p *prismPayload) { p.Z1Delta = 1e-3 }, false},
+		{"a tool frame with a flipped U", func(p *prismPayload) { p.Frame = toolFlipU }, false},
+		{"a tool frame with a flipped V", func(p *prismPayload) { p.Frame = toolFlipV }, false},
+		{"a tool with a hole", func(p *prismPayload) { p.Profile.Holes = []sectionrecord.LoopRecord{p.Profile.Outer} }, false},
 		{"a tool with two segments", func(p *prismPayload) {
 			p.Profile.Outer.Segments = append(append([]sectionrecord.CurveSegment(nil), p.Profile.Outer.Segments...), line)
-		}},
-		{"a straight tool segment", func(p *prismPayload) { p.Profile.Outer.Segments = []sectionrecord.CurveSegment{line} }},
+		}, false},
+		{"a straight tool segment", func(p *prismPayload) { p.Profile.Outer.Segments = []sectionrecord.CurveSegment{line} }, false},
 		{"a partial circle", func(p *prismPayload) {
 			half := circle
 			half.TEnd = 0.5
 			p.Profile.Outer.Segments = []sectionrecord.CurveSegment{half}
-		}},
-		{"a tool that stops short of the top cap", func(p *prismPayload) { p.Z1 = 1 }},
-		{"a tool that starts above the bottom cap", func(p *prismPayload) { p.Z0 = 1.5 }},
-		{"a tool frame raised above the bottom cap", func(p *prismPayload) { p.Frame = raised }},
+		}, false},
+		{"a tool that stops short of the top cap", func(p *prismPayload) { p.Z1 = 1 }, false},
+		{"a tool that starts above the bottom cap", func(p *prismPayload) { p.Z0 = 1.5 }, false},
+		{"a tool frame raised above the bottom cap", func(p *prismPayload) { p.Frame = raised }, false},
 		{"a circle too big for the section", func(p *prismPayload) {
 			big := circle
 			big.Radius = units.Millimeters(9)
 			p.Profile.Outer.Segments = []sectionrecord.CurveSegment{big}
-		}},
+		}, false},
 	}
 	for _, tc := range toolGates {
 		t.Run(tc.name, func(t *testing.T) {
@@ -169,7 +170,7 @@ func TestLoftThroughBoreCutGates(t *testing.T) {
 			tc.edit(&p)
 			ok, err := cut(t.Context(), loft, p)
 			require.NoError(t, err)
-			require.False(t, ok)
+			require.Equal(t, tc.want, ok)
 		})
 	}
 
@@ -192,13 +193,81 @@ func TestLoftThroughBoreCutGates(t *testing.T) {
 		require.False(t, ok)
 		require.ErrorIs(t, err, context.Canceled)
 	})
+	t.Run("D-shaped through-bore keeps the exact section", func(t *testing.T) {
+		dTool := throughDToolFixture(t, doc)
+		dToolPayload := dTool.n.Payload.(prismPayload)
+		require.Len(t, dToolPayload.Profile.Outer.Segments, 2)
+		node, admitted, err := loftrecord.ThroughBoreCut(t.Context(), envOf(documentNode(doc), doc.nextProducerID()), loft, dToolPayload)
+		require.NoError(t, err)
+		require.True(t, admitted)
+		require.NotNil(t, node)
+		cut, err := Cut(t.Context(), blank, dTool)
+		require.NoError(t, err)
+		result, ok := cut.n.Payload.(loftPayload)
+		require.True(t, ok, "a contained D-shaped tool must stay on the exact loft route")
+		require.True(t, result.ThroughBoreCut)
+		require.False(t, result.AnalyticBore, "a flat-sided bore is not a cylinder")
+		require.Len(t, result.Profile0.Holes, 1)
+		require.Len(t, result.Profile0.Holes[0].Segments, 2)
+		_, hasArc := result.Profile0.Holes[0].Segments[0].(sectionrecord.ArcSeg)
+		_, hasLine := result.Profile0.Holes[0].Segments[1].(sectionrecord.LineSeg)
+		require.True(t, hasArc)
+		require.True(t, hasLine)
+
+		frame, err := r3.NewFrame(r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+		require.NoError(t, err)
+		sketch, profiles, err := cut.Section(t.Context(), frame)
+		require.NoError(t, err)
+		require.NotNil(t, sketch)
+		require.Len(t, profiles, 1)
+		require.Len(t, profiles[0].Holes, 1)
+		require.InDelta(t, 100-(3.141592653589793-(1.047197551196598-0.4330127018922193)), profiles[0].Area, 1e-8)
+	})
+}
+
+func throughDToolFixture(t *testing.T, doc *Document) *Body {
+	t.Helper()
+	world := sketch.NewWorld()
+	frame, err := r3.NewFrame(r3.NewVec(0, 0, -1), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	plane, err := world.CreatePlaneFromFrame(frame)
+	require.NoError(t, err)
+	circleSketch, err := world.CreateSketch(plane)
+	require.NoError(t, err)
+	center := circleSketch.CreatePoint(1, 0.5)
+	circleSketch.Fix(center)
+	circle := circleSketch.CreateCircle(center, 1)
+	circleSketch.AddConstraint(sketch.NewRadius(circle, 1))
+	_, err = circleSketch.Solve(t.Context())
+	require.NoError(t, err)
+	cylinder, err := Extrude(t.Context(), doc, circleSketch, circleSketch.Profiles()[0],
+		Distance{D: units.Millimeters(4), Dir: Along})
+	require.NoError(t, err)
+
+	capSketch, err := world.CreateSketch(plane)
+	require.NoError(t, err)
+	capRect := capSketch.CreateRectangle(1.5, -5, 5, 5)
+	capSketch.AddConstraint(
+		sketch.NewHorizontalDistance(capSketch.Origin(), capRect.A, 1.5),
+		sketch.NewVerticalDistance(capSketch.Origin(), capRect.A, -5),
+		sketch.NewHorizontalDistance(capRect.A, capRect.B, 3.5),
+		sketch.NewVerticalDistance(capRect.B, capRect.C, 10),
+	)
+	_, err = capSketch.Solve(t.Context())
+	require.NoError(t, err)
+	capBody, err := Extrude(t.Context(), doc, capSketch, capSketch.Profiles()[0],
+		Distance{D: units.Millimeters(4), Dir: Along})
+	require.NoError(t, err)
+	dTool, err := Cut(t.Context(), cylinder, capBody)
+	require.NoError(t, err)
+	return dTool
 }
 
 // TestPlacedLoftBoreChargesPlacement places a certified through-bore Loft.
 // The rebuild keeps the analytic bore mark, so the placed cylinder must carry
 // the departure the rotation leaves on its tag; the unplaced one has none.
 func TestPlacedLoftBoreChargesPlacement(t *testing.T) {
-	doc, loft, tool := throughBoreFixture(t)
+	doc, _, loft, tool := throughBoreFixture(t)
 	env := envOf(documentNode(doc), doc.nextProducerID())
 	node, ok, err := loftrecord.ThroughBoreCut(t.Context(), env, loft, tool)
 	require.NoError(t, err)

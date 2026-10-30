@@ -28,7 +28,8 @@ import (
 // a full Revolve with an exact cardinal axis cut by a cardinal plane holding
 // that axis (the meridian and its mirror) or normal to it (one disk or annulus
 // per material interval), each returned as one profile per region,
-// a direct matching-profile, full line-boundary or varying circular-boundary Loft
+// a direct matching-profile, a Loft with one authenticated D-shaped through-bore,
+// full line-boundary or varying circular-boundary Loft
 // cut by an exact world-XY interior plane,
 // an original rectangular or homothetic LoftSections cut by an exact world-XY interior plane,
 // a rectangular prism cut by an interior cardinal vertical plane, and
@@ -59,7 +60,10 @@ func (b *Body) Section(ctx context.Context, plane r3.Frame) (*sketch.Sketch, []*
 		return nil, nil, fmt.Errorf(`%w: a section needs a sound solid`, ErrNotSolid)
 	}
 	if pl, ok := b.n.Payload.(loftPayload); ok {
-		profile, admitted := sectionclip.LoftCircleSectionRecord(pl, plane)
+		profile, admitted := sectionclip.LoftThroughBoreSectionRecord(pl, plane)
+		if !admitted {
+			profile, admitted = sectionclip.LoftCircleSectionRecord(pl, plane)
+		}
 		if !admitted {
 			profile, admitted = sectionclip.LoftMatchingSectionRecord(pl, plane)
 		}

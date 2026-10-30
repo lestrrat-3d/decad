@@ -2,8 +2,10 @@ package loftrecord
 
 import (
 	"context"
+	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/loftfillet"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
@@ -13,10 +15,11 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 )
 
-// ThroughBoreCut keeps a matching axial loft as a loft when a whole
-// circular through-tool becomes one new hole in each section. The section
+// ThroughBoreCut keeps a matching axial loft as a loft when a whole circular
+// or D-shaped through-tool becomes one new hole in each section. The section
 // certificate proves the new hole lies inside the existing outer loop.
 // Every other pair keeps the general boolean path.
 func ThroughBoreCut(ctx context.Context, env topo.Env, a, b topo.Payload) (*topo.Body, bool, error) {
@@ -34,14 +37,20 @@ func ThroughBoreCut(ctx context.Context, env topo.Env, a, b topo.Payload) (*topo
 	}
 	tool, ok := b.(prismrecord.Payload)
 	if !ok || tool.SurfaceResult || tool.Xform != r3.Identity() ||
-		tool.SectionDelta != 0 || tool.Z0Delta != 0 || tool.Z1Delta != 0 ||
+		proofbound.IsNonFinite(tool.SectionDelta) || tool.SectionDelta < 0 ||
+		tool.Z0Delta != 0 || tool.Z1Delta != 0 ||
 		tool.Frame.U() != pl.Frame0.U() || tool.Frame.V() != pl.Frame0.V() ||
-		len(tool.Profile.Holes) != 0 || len(tool.Profile.Outer.Segments) != 1 {
+		len(tool.Profile.Holes) != 0 {
 		return nil, false, nil
 	}
-	circle, ok := tool.Profile.Outer.Segments[0].(sectionrecord.CircleSeg)
-	if !ok || !((circle.TStart == 0 && circle.TEnd == 1) ||
-		(circle.TStart == 1 && circle.TEnd == 0)) {
+	circle, wholeCircle, ok, err := throughBoreToolCircle(tool.Profile.Outer, tool.SectionDelta)
+	if err != nil {
+		return nil, false, err
+	}
+	if !ok {
+		return nil, false, nil
+	}
+	if wholeCircle && tool.SectionDelta != 0 {
 		return nil, false, nil
 	}
 	centerWorld := tool.Point(circle.Center.U, circle.Center.V, 0)
@@ -54,17 +63,30 @@ func ThroughBoreCut(ctx context.Context, env topo.Env, a, b topo.Payload) (*topo
 		return nil, false, nil
 	}
 	profile := pl.Profile0
-	hole := circle
-	hole.Center = sectionrecord.Point2{U: center.X, V: center.Y}
-	hole.CCW, hole.TStart, hole.TEnd = false, 1, 0
-	profile.Holes = []sectionrecord.LoopRecord{{Segments: []sectionrecord.CurveSegment{hole}}}
+	var hole sectionrecord.LoopRecord
+	if wholeCircle {
+		circle.Center = sectionrecord.Point2{U: center.X, V: center.Y}
+		circle.CCW, circle.TStart, circle.TEnd = false, 1, 0
+		hole = sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{circle}}
+	} else {
+		hole, ok = mapDToolHole(tool.Profile.Outer, tool.Frame, pl.Frame0, center.Z)
+		if !ok {
+			return nil, false, nil
+		}
+	}
+	profile.Holes = []sectionrecord.LoopRecord{hole}
 	budget := proofbound.NewWorkBudget(ctx)
 	work0, work1 := freeform.NewFreeformWork(), freeform.NewFreeformWork()
 	pl.RaiseReconstructionLimit(work0, work1)
 	limit := pl.RewriteWorkLimit(uint64(len(profile.Outer.Segments) + 1))
 	work0.RaiseLimit(limit)
 	work1.RaiseLimit(limit)
-	contained, err := loftfillet.CircleHoleInside(budget, pl.Profile0.Outer, hole, pl.ConstructionDelta, work0)
+	container := circle
+	container.Center = sectionrecord.Point2{U: center.X, V: center.Y}
+	container.Radius = units.Millimeters(proofbound.AbsSumUpper(
+		container.Radius.Base(), tool.SectionDelta))
+	targetDelta := proofbound.AbsSumUpper(pl.SectionDelta, pl.JoinDelta, pl.ConstructionDelta)
+	contained, err := loftfillet.CircleHoleInside(budget, pl.Profile0.Outer, container, targetDelta, work0)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, false, ctx.Err()
@@ -84,13 +106,14 @@ func ThroughBoreCut(ctx context.Context, env topo.Env, a, b topo.Payload) (*topo
 	next := pl
 	next.Profile0, next.Profile1 = profile, profile
 	next.ThroughBoreCut = true
+	next.SectionDelta = max(pl.SectionDelta, tool.SectionDelta)
 	next.RecordArea = [2]float64{ig.Area, ig.Area}
 	// The analytic wall carries the normal departure a rounded center, a
 	// non-isometric frame map or a tilted held axis leaves on its tag. A bore
 	// whose departure has no bound keeps the Loft's tessellated topology.
-	_, bounded := BoreCylinderNormalBound(pl.Frame0, pl.Xform, hole.Center.U, hole.Center.V,
-		end.Z, hole.Radius.Base())
-	next.AnalyticBore = BoreHasExactAxis(pl.Frame0, pl.Frame1, hole.Center.U, hole.Center.V, end.Z) && bounded
+	_, bounded := BoreCylinderNormalBound(pl.Frame0, pl.Xform, container.Center.U, container.Center.V,
+		end.Z, container.Radius.Base())
+	next.AnalyticBore = wholeCircle && BoreHasExactAxis(pl.Frame0, pl.Frame1, container.Center.U, container.Center.V, end.Z) && bounded
 	out, err := Build(ctx, env, next, budget, work0, work1)
 	if err != nil {
 		return nil, false, err
@@ -98,10 +121,168 @@ func ThroughBoreCut(ctx context.Context, env topo.Env, a, b topo.Payload) (*topo
 	return out, true, nil
 }
 
+// throughBoreToolCircle returns the circle that contains a through-hole tool.
+// A D-shaped tool is bounded by one circular arc and its chord, so its entire
+// filled section lies inside the arc's supporting circle.
+func throughBoreToolCircle(loop sectionrecord.LoopRecord, sectionDelta float64) (sectionrecord.CircleSeg, bool, bool, error) {
+	if len(loop.Segments) == 1 {
+		circle, ok := loop.Segments[0].(sectionrecord.CircleSeg)
+		if !ok || !wholeSectionSegment(circle) {
+			return sectionrecord.CircleSeg{}, false, false, nil
+		}
+		return circle, true, true, nil
+	}
+	if len(loop.Segments) != 2 {
+		return sectionrecord.CircleSeg{}, false, false, nil
+	}
+	var arc sectionrecord.CircleSeg
+	var line sectionrecord.LineSeg
+	hasArc, hasLine := false, false
+	for _, segment := range loop.Segments {
+		switch segment := segment.(type) {
+		case sectionrecord.CircleSeg:
+			if hasArc {
+				return sectionrecord.CircleSeg{}, false, false, nil
+			}
+			arc, hasArc = segment, true
+		case sectionrecord.LineSeg:
+			if hasLine {
+				return sectionrecord.CircleSeg{}, false, false, nil
+			}
+			line, hasLine = segment, true
+		default:
+			return sectionrecord.CircleSeg{}, false, false, nil
+		}
+	}
+	if !hasArc || !hasLine {
+		return sectionrecord.CircleSeg{}, false, false, nil
+	}
+	arcWalk, err := boundarywalk.WalkOf(arc, freeform.NewFreeformWork())
+	if err != nil || !arcWalk.IsCircular() || arcWalk.Closed {
+		return sectionrecord.CircleSeg{}, false, false, err
+	}
+	lineWalk, err := boundarywalk.WalkOf(line, freeform.NewFreeformWork())
+	if err != nil || lineWalk.Closed || lineWalk.StartU == lineWalk.EndU && lineWalk.StartV == lineWalk.EndV {
+		return sectionrecord.CircleSeg{}, false, false, err
+	}
+	endpointsClose := func(au, av float64, ab proofbound.WalkEndBound, bu, bv float64, bb proofbound.WalkEndBound) bool {
+		distance := math.Hypot(au-bu, av-bv)
+		allow := proofbound.AbsSumUpper(proofbound.WalkEndBoundAllow(ab),
+			proofbound.WalkEndBoundAllow(bb), sectionDelta)
+		return !proofbound.IsNonFinite(distance) && !proofbound.IsNonFinite(allow) && distance <= allow
+	}
+	if !(endpointsClose(arcWalk.StartU, arcWalk.StartV, arcWalk.StartBound,
+		lineWalk.EndU, lineWalk.EndV, lineWalk.EndBound) &&
+		endpointsClose(arcWalk.EndU, arcWalk.EndV, arcWalk.EndBound,
+			lineWalk.StartU, lineWalk.StartV, lineWalk.StartBound)) &&
+		!(endpointsClose(arcWalk.StartU, arcWalk.StartV, arcWalk.StartBound,
+			lineWalk.StartU, lineWalk.StartV, lineWalk.StartBound) &&
+			endpointsClose(arcWalk.EndU, arcWalk.EndV, arcWalk.EndBound,
+				lineWalk.EndU, lineWalk.EndV, lineWalk.EndBound)) {
+		return sectionrecord.CircleSeg{}, false, false, nil
+	}
+	radius := proofbound.AbsSumUpper(arcWalk.Radius, arcWalk.RadiusBound)
+	if proofbound.IsNonFinite(radius) || radius <= 0 {
+		return sectionrecord.CircleSeg{}, false, false, nil
+	}
+	return sectionrecord.CircleSeg{
+		Center: arc.Center, Radius: units.Millimeters(radius), CCW: true, TStart: 0, TEnd: 1,
+	}, false, true, nil
+}
+
+func wholeSectionSegment(segment sectionrecord.CurveSegment) bool {
+	var start, end float64
+	switch segment := segment.(type) {
+	case sectionrecord.LineSeg:
+		start, end = segment.TStart, segment.TEnd
+	case sectionrecord.CircleSeg:
+		start, end = segment.TStart, segment.TEnd
+	case sectionrecord.ArcSeg:
+		start, end = segment.TStart, segment.TEnd
+	default:
+		return false
+	}
+	return start == 0 && end == 1 || start == 1 && end == 0
+}
+
+// mapDToolHole maps a clipped circle and its chord to a normalized exact loop.
+// The chord endpoints define both records, so Sketch can certify their shared
+// junctions without relying on independently rounded trigonometric endpoints.
+func mapDToolHole(loop sectionrecord.LoopRecord, toolFrame, loftFrame r3.Frame, level float64) (sectionrecord.LoopRecord, bool) {
+	if len(loop.Segments) != 2 {
+		return sectionrecord.LoopRecord{}, false
+	}
+	var circle sectionrecord.CircleSeg
+	var line sectionrecord.LineSeg
+	hasCircle, hasLine := false, false
+	for _, segment := range loop.Segments {
+		switch segment := segment.(type) {
+		case sectionrecord.CircleSeg:
+			circle, hasCircle = segment, true
+		case sectionrecord.LineSeg:
+			line, hasLine = segment, true
+		default:
+			return sectionrecord.LoopRecord{}, false
+		}
+	}
+	if !hasCircle || !hasLine {
+		return sectionrecord.LoopRecord{}, false
+	}
+	circleWalk, err := boundarywalk.WalkOf(circle, freeform.NewFreeformWork())
+	if err != nil || !circleWalk.IsCircular() || circleWalk.Closed {
+		return sectionrecord.LoopRecord{}, false
+	}
+	lineWalk, err := boundarywalk.WalkOf(line, freeform.NewFreeformWork())
+	if err != nil || lineWalk.Closed {
+		return sectionrecord.LoopRecord{}, false
+	}
+	center, ok := mapToolPoint(circle.Center, toolFrame, loftFrame, level)
+	if !ok {
+		return sectionrecord.LoopRecord{}, false
+	}
+	lineStart, ok := mapToolPoint(sectionrecord.Point2{U: lineWalk.StartU, V: lineWalk.StartV},
+		toolFrame, loftFrame, level)
+	if !ok {
+		return sectionrecord.LoopRecord{}, false
+	}
+	lineEnd, ok := mapToolPoint(sectionrecord.Point2{U: lineWalk.EndU, V: lineWalk.EndV},
+		toolFrame, loftFrame, level)
+	if !ok {
+		return sectionrecord.LoopRecord{}, false
+	}
+	// The source loop walks the chord from circle.End to circle.Start, then the
+	// CCW circle arc from Start to End. Reverse it for a hole.
+	allow := proofbound.AbsSumUpper(proofbound.WalkEndBoundAllow(lineWalk.StartBound),
+		proofbound.WalkEndBoundAllow(lineWalk.EndBound), proofbound.WalkEndBoundAllow(circleWalk.StartBound),
+		proofbound.WalkEndBoundAllow(circleWalk.EndBound), proofbound.UlpOf(circleWalk.Radius))
+	if proofbound.IsNonFinite(allow) ||
+		math.Hypot(lineWalk.StartU-circleWalk.EndU, lineWalk.StartV-circleWalk.EndV) > allow ||
+		math.Hypot(lineWalk.EndU-circleWalk.StartU, lineWalk.EndV-circleWalk.StartV) > allow {
+		return sectionrecord.LoopRecord{}, false
+	}
+	return sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		sectionrecord.ArcSeg{Center: center, Start: lineEnd, End: lineStart, TStart: 1, TEnd: 0},
+		sectionrecord.LineSeg{Start: lineEnd, End: lineStart, TStart: 0, TEnd: 1},
+	}}, true
+}
+
+func mapToolPoint(p sectionrecord.Point2, toolFrame, loftFrame r3.Frame, level float64) (sectionrecord.Point2, bool) {
+	world := toolFrame.ToWorldUV(p.U, p.V)
+	local := loftFrame.ToLocal(world)
+	if local.Z != level || !loftToolPointExact(toolFrame, loftFrame, p.U, p.V, local) {
+		return sectionrecord.Point2{}, false
+	}
+	return sectionrecord.Point2{U: local.X, V: local.Y}, true
+}
+
 // The candidate local coordinates are rounded readings. Compare their exact
 // lifts with the recorded tool center before reusing them in a hole record.
 func loftToolCenterExact(tool prismrecord.Payload, frame r3.Frame, u, v float64, candidate r3.Vec) bool {
-	toolCenter, err := massmoment.RevolveAnchor(tool.Frame, u, v)
+	return loftToolPointExact(tool.Frame, frame, u, v, candidate)
+}
+
+func loftToolPointExact(toolFrame, frame r3.Frame, u, v float64, candidate r3.Vec) bool {
+	toolCenter, err := massmoment.RevolveAnchor(toolFrame, u, v)
 	if err != nil {
 		return false
 	}
