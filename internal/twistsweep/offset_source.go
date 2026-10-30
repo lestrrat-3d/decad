@@ -144,6 +144,15 @@ func twistOffsetSmoothClosed(profile profileRecord) bool {
 	return true
 }
 
+func sumTwistOffsetAreas(terms [64]proofbound.RatInterval) proofbound.RatInterval {
+	for width := len(terms) / 2; width > 0; width /= 2 {
+		for index := range width {
+			terms[index] = proofbound.IntervalAdd(terms[index], terms[index+width])
+		}
+	}
+	return terms[0]
+}
+
 // TwistOffsetSource proves that the normal-offset contour has a positive
 // tangent speed and increasing tangent angle, and stays strictly inside the
 // authenticated convex source. It integrates its area without a sampled fit.
@@ -173,6 +182,7 @@ func TwistOffsetSource(profile profileRecord, height float64, angle units.Value,
 	var clearanceLo, speedLo, turnRateLo, radialLo *big.Rat
 	const parts = int64(64)
 	for _, segment := range profile.Outer.Segments {
+		var segmentArea [parts]proofbound.RatInterval
 		for index := range parts {
 			var span twistOffsetSpan
 			switch edge := segment.(type) {
@@ -222,8 +232,8 @@ func TwistOffsetSource(profile profileRecord, height float64, angle units.Value,
 			if radius.Lo.Sign() <= 0 {
 				return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell offset has no positive area density`, decaderr.ErrUnsupported)
 			}
-			area = proofbound.IntervalAdd(area, proofbound.IntervalScale(proofbound.IntervalMul(
-				span.length, proofbound.IntervalMul(lambda, radius)), big.NewRat(1, 2)))
+			segmentArea[index] = proofbound.IntervalScale(proofbound.IntervalMul(
+				span.length, proofbound.IntervalMul(lambda, radius)), big.NewRat(1, 2))
 			if clearanceLo == nil || clearance.Cmp(clearanceLo) < 0 {
 				clearanceLo = clearance
 			}
@@ -237,6 +247,7 @@ func TwistOffsetSource(profile profileRecord, height float64, angle units.Value,
 				radialLo = radius.Lo
 			}
 		}
+		area = proofbound.IntervalAdd(area, sumTwistOffsetAreas(segmentArea))
 	}
 	if area.Lo.Sign() <= 0 || area.Hi.Cmp(poly.AreaInterval.Lo) >= 0 {
 		return twistOffsetSourceProof{}, fmt.Errorf(`%w: twisted shell offset area is not enclosed inside source`, decaderr.ErrUnsupported)
