@@ -123,9 +123,19 @@ brep route, on the body's faceted view (`shellViewBlend`,
    walls and band facets included, as an obstacle, so a blend that would
    break through the wall into the cavity refuses.
 
-An unmapped selection, or one the retained blend does not recognize, falls
-through to SB11. A `Shell` that removes faces of such a body is SB11 without a
-view, and a closed one is modify-general SG2. The result
+Only a mapped selection that the retained blend recognizes and builds
+succeeds. A selection the retained blend recognizes but cannot build refuses
+with the retained blend's own row (Table SR of
+`agent-docs/retained-edge-blend-design.md`). On the box below, a cavity
+vertical or floor edge refuses with "an end face's corner does not match the
+edge's convexity", the opening's inner rim with "a convex edge ends where a
+face is reflex", and an edge at the band's ring with "an edge end meets a face
+that is not a retained plane". An unmapped selection, or one the retained
+blend does not recognize, falls through to SB11. A placed shell whose held
+vertices do not equal its view's vertices exactly maps nothing: the box shell
+translated by 12.7 along x, or turned 30° or 90° about z by
+`r3.RotationAround`, refuses with SB11. A `Shell` that removes faces of such a
+body is SB11 without a view, and a closed one is modify-general SG2. The result
 is a `facetedPayload`: its volume bound grows by the view's band chords (about
 ±14 mm³ for the 60×40×20 box with a 20×20×10 boss shelled `t = 2`), and every
 later reading, modify op and Boolean reads its held mesh.
@@ -541,7 +551,7 @@ Modify §1's test picks every sentinel: a body that does not exist is
 | **SB8** | an adjacent face outside EB4/EB5, or a Fillet or Chamfer whose end-face corners disagree with the interior material wedge (EB8) or whose wedge turn is undecided | yes | `ErrUnsupported` |
 | **SB9** | the two end faces' blends disagree in reference coordinates | — (a falsifier) | `ErrUnsupported` |
 | **SB10** | Shell of a brep that reads as a prism along no axis and as no through-cut record (modify-general Table TC) | yes; the three-dimensional offset puts a sphere at a reflex vertex, a torus around a reflex circle and an elliptical edge where two reflex edges meet, none of which this record holds | `ErrUnsupported`, with SG3's reason |
-| **SB11** | RB5: a `Shell` that removes faces, or a `Fillet` or `Chamfer` whose selection §2.1 leaves unmapped or the retained blend does not recognize | yes for a thin enough second shell or a small enough blend | `ErrUnsupported`: "this evaluator does not modify a stacked shell's rounded cavity" |
+| **SB11** | RB5: a `Shell` that removes faces, or a `Fillet` or `Chamfer` whose selection §2.1 leaves unmapped or the retained blend does not recognize; a recognized selection the retained blend cannot build takes its own SR row instead | yes for a thin enough second shell or a small enough blend | `ErrUnsupported`: "this evaluator does not modify a stacked shell's rounded cavity" |
 
 SB7 includes a cylinder, a plane along the edge's axis, an oblique, split or
 level-displaced wall, an earlier blend, and a trimmed wall ending on a loop

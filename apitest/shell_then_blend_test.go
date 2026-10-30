@@ -167,6 +167,9 @@ func TestShellBossThenShellRefuses(t *testing.T) {
 // The opening's outer rim edge along x at y = 10 fillets on the view: the
 // blend is a radius-1 cylinder about the line y = 11, z = 29, so a point
 // 0.71 mm from that axis inside the corner stays and one 1.20 mm away goes.
+// The test reads the blend's geometry rather than the volume: the corner
+// piece is (1 − π/4)·20 = 4.29 mm³, below the result's ≈ 12 mm³ volume bound,
+// so a volume check could not tell the fillet from no fillet.
 func TestShellBossThenFilletOpeningRim(t *testing.T) {
 	t.Parallel()
 	doc, shell, _ := shellBoxBoss(t, openBossTop)
@@ -214,4 +217,106 @@ func TestShellPocketThenFilletOuterVerticals(t *testing.T) {
 	// The (10, 10) corner's fillet axis is (9, 9).
 	require.True(t, meshEncloses(mesh, r3.NewVec(9.5, 9.5, 5)), "the wall behind the fillet is material")
 	require.False(t, meshEncloses(mesh, r3.NewVec(9.9, 9.9, 5)), "the corner piece is cut away")
+}
+
+// requireRemoved checks that after is before less want, within the two
+// volume readings' bounds.
+func requireRemoved(t *testing.T, before, after *decad.Body, want float64) {
+	t.Helper()
+	vb, err := before.Volume()
+	require.NoError(t, err)
+	va, err := after.Volume()
+	require.NoError(t, err)
+	got := vb.Value.Base() - va.Value.Base()
+	require.LessOrEqual(t, math.Abs(got-want), vb.Bound.Base()+va.Bound.Base(),
+		"removed %v must lie within the bounds of %v", got, want)
+}
+
+// A two-distance chamfer on the faceted view: the bottom-open shell's
+// plate-top edge along x at y = 0 and the boss-top edge along x at y = 10,
+// with d = 1 on the +z face and 0.5 on the side. Each removes a 1×0.5
+// triangle along its 60 or 20 mm length, 0.25·80 mm³. At x = 30 the plate
+// edge's bevel runs from (y, z) = (1, 20) to (0, 19.5): (0.4, 19.9) lies
+// above it and is cut away, and (0.1, 19.4) lies below it and stays, which
+// it would not if the side took the 1 mm setback.
+func TestShellBossThenAsymmetricChamfer(t *testing.T) {
+	t.Parallel()
+	_, shell, _ := shellBoxBoss(t, openBoxBottom)
+	ex := r3.NewVec(1, 0, 0)
+	edges := decad.Edges(decad.Convex(), decad.ParallelTo(ex), decad.EndpointAt(r3.NewVec(0, 0, 20))).
+		Or(decad.Convex(), decad.ParallelTo(ex), decad.EndpointAt(r3.NewVec(20, 10, 30))).Exactly(2)
+	top := decad.Faces(decad.Facing(r3.NewVec(0, 0, 1)), decad.NormalTo(r3.NewVec(0, 0, 1)))
+	chamfered, err := decad.Chamfer(t.Context(), shell, edges, units.Millimeters(1),
+		decad.WithAsymmetricChamfer(top, units.Millimeters(0.5)))
+	require.NoError(t, err)
+	requireRemoved(t, shell, chamfered, 0.25*80)
+	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, mesh.VolumeVerified())
+	require.False(t, meshEncloses(mesh, r3.NewVec(30, 0.4, 19.9)), "the bevel cuts 1 mm into the top face")
+	require.True(t, meshEncloses(mesh, r3.NewVec(30, 0.1, 19.4)), "the bevel cuts 0.5 mm down the side")
+}
+
+// The other stacked shells take the faceted view as well: the counterbore
+// shell's 10 mm plate verticals at r = 1, the round boss shell's 5 mm plate
+// verticals at r = 3.3 (√2 − (√2−1)·3.3 = 0.05 mm of its 1 mm wall stays on
+// the diagonal), and the round boss shell's outer rim, radius 4 at z = 10, at
+// r = 0.5. A rim fillet removes the corner piece (1 − π/4)·r² swept round the
+// circle through its centroid, r·(10 − 3π)/(3·(4 − π)) inside the rim, and
+// its wall is a torus of major radius 3.5 and minor radius 0.5 at z = 9.5.
+func TestShellThenFilletOtherStackedShells(t *testing.T) {
+	t.Parallel()
+	ez := r3.NewVec(0, 0, 1)
+	roundShell := func(t *testing.T) *decad.Body {
+		t.Helper()
+		stack := roundBossFromSketch(t, decad.New(), 10, 10)
+		shell, err := decad.Shell(t.Context(), stack,
+			decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1), units.Millimeters(1))
+		require.NoError(t, err)
+		return shell
+	}
+	t.Run("counterbore verticals", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New()
+		part, err := decad.Cut(t.Context(), boxBody(t, doc, -10, -10, 10, 10, 10), circleBodyAtZ(t, doc, 0, 3, 0, 10))
+		require.NoError(t, err)
+		part, err = decad.Cut(t.Context(), part, circleBodyAtZ(t, doc, 0, 5, 7, 3))
+		require.NoError(t, err)
+		shell, err := decad.Shell(t.Context(), part, decad.Faces(decad.FaceCreatedBy(decad.CapEnd(part))).Exactly(1),
+			units.Millimeters(1))
+		require.NoError(t, err)
+		filleted, err := decad.Fillet(t.Context(), shell,
+			decad.Edges(decad.Convex(), decad.ParallelTo(ez)).Exactly(4), units.Millimeters(1))
+		require.NoError(t, err)
+		requireRemoved(t, shell, filleted, 4*(1-math.Pi/4)*10)
+	})
+	t.Run("round boss verticals", func(t *testing.T) {
+		t.Parallel()
+		shell := roundShell(t)
+		filleted, err := decad.Fillet(t.Context(), shell,
+			decad.Edges(decad.Convex(), decad.ParallelTo(ez)).Exactly(4), units.Millimeters(3.3))
+		require.NoError(t, err)
+		requireRemoved(t, shell, filleted, 4*(1-math.Pi/4)*3.3*3.3*5)
+	})
+	t.Run("round boss rim", func(t *testing.T) {
+		t.Parallel()
+		shell := roundShell(t)
+		const r = 0.5
+		filleted, err := decad.Fillet(t.Context(), shell,
+			decad.Edges(decad.Circular(), decad.EndpointAt(r3.NewVec(14, 10, 10))).Exactly(1), units.Millimeters(r))
+		require.NoError(t, err)
+		centroid := r * (10 - 3*math.Pi) / (3 * (4 - math.Pi))
+		requireRemoved(t, shell, filleted, 2*math.Pi*(4-centroid)*(1-math.Pi/4)*r*r)
+		found := false
+		for _, f := range filleted.Faces() {
+			tor, ok := f.Surface().(decad.Torus)
+			if !ok || !tor.Minor.Equal(units.Millimeters(r), 1e-12) {
+				continue
+			}
+			found = true
+			require.True(t, tor.Major.Equal(units.Millimeters(3.5), 1e-12), "major %s", tor.Major)
+			require.InDelta(t, 9.5, tor.Center.Z, 1e-12)
+		}
+		require.True(t, found, "the rim fillet's wall is a torus of minor radius 0.5")
+	})
 }

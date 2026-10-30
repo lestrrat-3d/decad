@@ -241,8 +241,9 @@ edge of length `L`. The fillet band's mesh-ring builder places the interior
 rings with the two rings exchanged (`brepfilletmesh.Input.RootAxis`), so each
 ring turns about the root edge. `Tessellate(VerifyAll)` charges the band's chorded volume,
 surface departure and vertex motion before publishing its occupied-volume
-bound. A later `Fillet` or `Chamfer` runs on the body's faceted view and
-builds a faceted result, and a later `Shell` refuses
+bound. A later `Fillet` or `Chamfer` runs on the body's faceted view, and a
+selection that maps to the view and that the retained edge blend recognizes
+builds a faceted result; a later `Shell` refuses without a view
 (`agent-docs/brep-modify-design.md` §2.1, RB5). Class B and clearance
 face views refuse it because they omit its patch faces. Mesh booleans use its
 verified tessellation.
@@ -274,8 +275,9 @@ expanded pocket's volume within the outer cavity is
 The shell volume is the source volume minus the eroded outer box's volume
 plus that expanded-pocket volume. Rational intervals enclose `π` and all
 moments; the body's occupied-volume proof uses the rounded vertical walls'
-chord slivers and the fillet band's sphere/cylinder patch bounds. Later
-modify operations take §3.1a's faceted view (brep-modify §2.1). Class B and clearance face views
+chord slivers and the fillet band's sphere/cylinder patch bounds. A later
+`Fillet` or `Chamfer` takes §3.1a's faceted view, and a later `Shell` refuses
+(brep-modify §2.1). Class B and clearance face views
 refuse it because its record omits the band patches; mesh booleans require
 its verified tessellation.
 

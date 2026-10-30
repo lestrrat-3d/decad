@@ -2940,3 +2940,5 @@
 10	0.00	TestShellBossThenShellRefuses
 10	0.00	TestShellBossThenFilletOpeningRim
 10	0.00	TestShellPocketThenFilletOuterVerticals
+10	0.00	TestShellBossThenAsymmetricChamfer
+10	0.00	TestShellThenFilletOtherStackedShells
