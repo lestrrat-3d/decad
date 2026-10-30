@@ -19,7 +19,7 @@ const (
 	splitKindSpline = "a spline"
 )
 
-func splitTopPlane(t *testing.T, w *sketch.World, z float64) *sketch.Plane {
+func splitTopPlane(t testing.TB, w *sketch.World, z float64) *sketch.Plane {
 	t.Helper()
 	frame, err := r3.NewFrame(r3.Vec{Z: z}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)

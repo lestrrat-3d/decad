@@ -160,6 +160,65 @@ func FreeformCellPoints(w0, w1 survey2d.SegmentWalk, target float64, maxCells in
 	return out, nil
 }
 
+// FreeformCellPointsSelf reuses one measured station chain for a pair whose
+// recorded segments and resolved walks are bit-identical. The caller runs it
+// on a copied counter and charges the same work to each record only on success.
+func FreeformCellPointsSelf(w survey2d.SegmentWalk, target float64, maxCells int,
+	work *freeform.FreeformWork) (FreeformCell, error) {
+	spans := walkOrderSpans(w)
+	if len(spans) == 0 {
+		return FreeformCell{}, fmt.Errorf(`%w: a paired free-form station chain needs a span`, decaderr.ErrDegenerate)
+	}
+	common, ok := commonSpanCount(len(spans), len(spans), maxCells)
+	if !ok {
+		return FreeformCell{}, &StationCapError{M: maxCells + 1, MMax: maxCells, AtLeast: true}
+	}
+	refined, err := freeform.RefineSpanChain(spans, common/len(spans), work)
+	if err != nil {
+		return FreeformCell{}, err
+	}
+	chain, err := freeform.PairChainStationsSelf(refined, target, freeform.PairChainLimits{
+		MaxChords:   maxCells,
+		Underivable: ErrLoftSagittaUnderivable,
+	}, work)
+	if err != nil {
+		if errors.Is(err, freeform.ErrTooManyChords) {
+			return FreeformCell{}, &StationCapError{M: maxCells + 1, MMax: maxCells, AtLeast: true}
+		}
+		return FreeformCell{}, err
+	}
+	for k := range chain.MatchedDelta {
+		if proofbound.IsNonFinite(chain.MatchedDelta[k]) ||
+			proofbound.IsNonFinite(chain.ArcUpper[0][k]) ||
+			proofbound.IsNonFinite(chain.ArcUpper[1][k]) {
+			return FreeformCell{}, ErrLoftSagittaUnderivable
+		}
+	}
+	cells := len(chain.MatchedDelta)
+	out := FreeformCell{
+		Sagitta:      chain.Sagitta,
+		MatchedDelta: chain.MatchedDelta,
+		ArcUpper0:    chain.ArcUpper[0],
+		ArcUpper1:    chain.ArcUpper[1],
+		Energy0:      chain.TangentEnergy[0],
+		Energy1:      chain.TangentEnergy[1],
+		Round:        WalkEndPlaneDelta(w.EndBound),
+	}
+	for k := range cells {
+		p, round, err := roundedStation(chain.Stations[0][k])
+		if err != nil {
+			return FreeformCell{}, err
+		}
+		out.Stations0 = append(out.Stations0, p)
+		out.Stations1 = append(out.Stations1, p)
+		out.Round = math.Max(out.Round, round)
+	}
+	if proofbound.IsNonFinite(out.Round) {
+		return FreeformCell{}, ErrLoftStationDisplacementUnderivable
+	}
+	return out, nil
+}
+
 // commonSpanCount gives both span-uniform chains the same slot boundaries.
 // Check the current station allowance before multiplying, so a large least common multiple
 // cannot allocate a chain or overflow an int.
