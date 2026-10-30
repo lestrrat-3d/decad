@@ -145,4 +145,89 @@ func TestRevolveBoreBoundaryBothSweepDirections(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+	for _, tc := range []struct {
+		name string
+		area float64
+	}{{"D outline", math.Pi*4.1*4.1 - (4.1*4.1*math.Acos(3.1/4.1) - 3.1*math.Sqrt(4.1*4.1-3.1*3.1))},
+		{"rectangular outline", 24}} {
+		t.Run("repeated placement/"+tc.name, func(t *testing.T) {
+			requireRevolveBoreRepeatedPlacement(t, tc.name, tc.area)
+		})
+	}
+}
+
+func requireRevolveBoreRepeatedPlacement(t *testing.T, outline string, toolArea float64) {
+	t.Helper()
+	doc, w := New(), sketch.NewWorld()
+	hs, err := w.CreateSketch(w.XZ())
+	require.NoError(t, err)
+	points := [][2]float64{{0, 0}, {10, 0}, {8, 32}, {0, 32}}
+	vertices := make([]*sketch.Point, len(points))
+	for i, point := range points {
+		vertices[i] = hs.CreatePoint(point[0], point[1])
+	}
+	hs.Fix(vertices[0])
+	for i := range vertices {
+		hs.CreateLine(vertices[i], vertices[(i+1)%len(vertices)])
+	}
+	_, err = hs.Solve(t.Context())
+	require.NoError(t, err)
+	host, err := Revolve(t.Context(), doc, hs, hs.Profiles()[0], ConstructionAxis{Dir: r3.Vec{Z: 1}}, FullRevolution{})
+	require.NoError(t, err)
+	ts, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	switch outline {
+	case "D outline":
+		const radius, flat = 4.1, 3.1
+		h := math.Sqrt(radius*radius - flat*flat)
+		upper, lower := ts.CreatePoint(flat, h), ts.CreatePoint(flat, -h)
+		arc := ts.CreateArc(ts.Origin(), upper, lower)
+		line := ts.CreateLine(lower, upper)
+		ts.AddConstraint(sketch.NewRadius(arc, radius), sketch.NewHorizontalDistance(ts.Origin(), upper, flat),
+			sketch.NewVertical(line))
+	case "rectangular outline":
+		rectangle := ts.CreateRectangle(-3, -2, 3, 2)
+		ts.Fix(rectangle.A)
+	default:
+		t.Fatalf("unknown bore outline %q", outline)
+	}
+	_, err = ts.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, ts.Profiles(), 1)
+	tool, err := Extrude(t.Context(), doc, ts, ts.Profiles()[0], Distance{D: units.Millimeters(32), Dir: Along})
+	require.NoError(t, err)
+	result, err := Cut(t.Context(), host, tool)
+	require.NoError(t, err)
+	_, ok := result.n.Payload.(revolvebore.Payload)
+	require.True(t, ok, "the fixture exercises the native axial Revolve bore record")
+	wantVolume := math.Pi*32/3*(10*10+10*8+8*8) - toolArea*32
+	requireRevolveBoreVolume(t, result, wantVolume)
+
+	placed, err := Transform(t.Context(), result, r3.Identity())
+	require.NoError(t, err, "identity placement")
+	requireRevolveBoreVolume(t, placed, wantVolume)
+	angle := math.Remainder(7*math.Pi/3, 2*math.Pi)
+	c, s := math.Cos(angle), math.Sin(angle)
+	frame, err := r3.NewFrame(r3.Vec{X: -140, Y: 28, Z: 690}, r3.Vec{X: c, Z: s}, r3.Vec{X: -s, Z: c})
+	require.NoError(t, err)
+	turn, err := r3.FromFrame(frame)
+	require.NoError(t, err)
+	placed, err = Transform(t.Context(), placed, turn)
+	require.NoError(t, err, "nonzero placement")
+	requireRevolveBoreVolume(t, placed, wantVolume)
+	placed, err = Transform(t.Context(), placed, r3.Identity())
+	require.NoError(t, err, "repeated identity placement")
+	requireRevolveBoreVolume(t, placed, wantVolume)
+	shift, err := r3.Translation(r3.Vec{X: 13, Y: -7, Z: 5})
+	require.NoError(t, err)
+	placed, err = Transform(t.Context(), placed, shift)
+	require.NoError(t, err, "repeated nonzero placement")
+	requireRevolveBoreVolume(t, placed, wantVolume)
+}
+
+func requireRevolveBoreVolume(t *testing.T, body *Body, want float64) {
+	t.Helper()
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-want), volume.Bound.Base()+1e-10)
 }
