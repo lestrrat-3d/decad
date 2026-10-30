@@ -65,6 +65,32 @@ func TestShiftDirections(t *testing.T) {
 		}
 	})
 
+	t.Run("a Union with no Decisive contact pulls inward along each contact the pull does not lean along", func(t *testing.T) {
+		t.Parallel()
+		east := r3.Vec{X: 1}
+		contacts := []meshbool.TouchContact{{NormalA: up, Slack: 0.004638}, {NormalA: east, Slack: 0.001}}
+		dirs := booleaneval.ShiftDirections(meshbool.OpUnion, contacts)
+		requireOpens(t, dirs, contacts)
+		for _, u := range dirs {
+			require.Less(t, u.Dot(up), -0.02)
+			require.Less(t, u.Dot(east), -0.02)
+		}
+	})
+
+	t.Run("a Union with a Decisive contact opens the other contacts outward on a tie", func(t *testing.T) {
+		t.Parallel()
+		// A curved wall touching the first operand's side decides the Union, and the
+		// flush top and bottom caps beside it only need to open. A cap orthogonal to
+		// the Decisive pull takes the outward tie, and the opposite cap follows it.
+		contacts := []meshbool.TouchContact{contact(south, true), contact(up, false), contact(down, false)}
+		dirs := booleaneval.ShiftDirections(meshbool.OpUnion, contacts)
+		requireOpens(t, dirs, contacts)
+		for _, u := range dirs {
+			require.Less(t, u.Dot(south), -0.05, "the Decisive contact closes inward")
+			require.Greater(t, u.Dot(up), 0.02, "the tie between the caps opens along the first cap's normal")
+		}
+	})
+
 	t.Run("a Cut and an Intersect take a face-on-face touch apart", func(t *testing.T) {
 		t.Parallel()
 		contacts := []meshbool.TouchContact{contact(up, true)}
