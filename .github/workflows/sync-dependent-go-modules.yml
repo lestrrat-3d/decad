@@ -1,0 +1,56 @@
+name: Sync dependent Go modules
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths:
+      - go.mod
+      - go.sum
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  sync:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the pull request branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Install Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Tidy every nested Go module
+        run: scripts/tidy-dependent-go-modules.sh
+
+      - name: Commit and push manifest updates
+        id: update
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git add -u -- ':(glob)**/go.mod' ':(glob)**/go.sum'
+          if git diff --cached --quiet; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore: sync dependent Go modules'
+          git push origin "HEAD:${HEAD_REF}"
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
+
+      - name: Run CI on the updated pull request head
+        if: steps.update.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: gh workflow run ci.yml --ref "$HEAD_REF"
