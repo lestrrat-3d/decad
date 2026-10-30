@@ -255,8 +255,8 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 			endIDs[j] = c.idx
 			reach[j] = w.verts[c.idx]
 		}
-		loops, err := w.endFace(a.ends[i], fG[i], runA.chain[i], runB.chain[i], [2]sideKind{trims, trims},
-			remA[i], remB[i], endIDs, reach, margin, a.convex)
+		loops, _, err := w.endFace(a.ends[i], fG[i], runA.chain[i], runB.chain[i], [2]sideKind{trims, trims},
+			remA[i], remB[i], endIDs, reach, margin, a.convex, nil)
 		if err != nil {
 			return nil, err
 		}

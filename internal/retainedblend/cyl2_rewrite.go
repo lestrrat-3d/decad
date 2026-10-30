@@ -141,8 +141,8 @@ func rewriteCylCyl(ctx context.Context, env topo.Env, fp facetedrecord.Payload, 
 			reach[j] = w.verts[end[j]]
 		}
 		kinds := [2]sideKind{trims, trims}
-		loops, err := w.endFace(c.ends[i], fG[i], runs[0].chain[i], runs[1].chain[i], kinds,
-			cuts[0].rem[i], cuts[1].rem[i], end, reach, margin, convex)
+		loops, _, err := w.endFace(c.ends[i], fG[i], runs[0].chain[i], runs[1].chain[i], kinds,
+			cuts[0].rem[i], cuts[1].rem[i], end, reach, margin, convex, nil)
 		if err != nil {
 			return nil, err
 		}

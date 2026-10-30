@@ -615,9 +615,9 @@ baseDone:
 				continue
 			}
 			fl := endFaces[e.l.ends[i].face]
-			loops, err := w.endFace(e.l.ends[i], *fl, g.runs[0].chain[i], g.runs[1].chain[i],
+			loops, _, err := w.endFace(e.l.ends[i], *fl, g.runs[0].chain[i], g.runs[1].chain[i],
 				[2]sideKind{trims, trims}, g.rem[i][0], g.rem[i][1], g.rowIdx[i],
-				endPoints(g.rowsAt, e.l.d, e.l.ends[i].g), margin, true)
+				endPoints(g.rowsAt, e.l.d, e.l.ends[i].g), margin, true, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -694,7 +694,7 @@ baseDone:
 				mitred[i] = true
 			}
 		}
-		removed, blend := w.lineAreasAt(la, spec, true, g.center, g.baseA, g.baseB, g.rowIdx, mitred)
+		removed, blend := w.lineAreasAt(la, spec, true, g.center, g.baseA, g.baseB, g.rowIdx, mitred, [2]bool{})
 		removedTrue += removed
 		blendTrue += blend
 	}
