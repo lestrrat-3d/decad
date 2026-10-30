@@ -69,7 +69,7 @@ export of the new blend surfaces; topology-changing offsets (merge, split, vanis
 - New internal packages get rows in a new part file `agent-docs/layout/internal-trim.md`, because
   `agent-docs/layout/internal-core.md` (12208 bytes) and `internal-checks.md` (11939 bytes) are near the 12288-byte
   budget.
-- Fixtures reuse the apitest helpers `slicedPlate`, `rotation`, `blendPlate` and `newRetentionScene`
+- Fixtures reuse the apitest helpers `wedgedPlate`, `blendPlate` and `newRetentionScene`
   (`apitest/faceted_retained_blend_test.go`, `apitest/faceted_source_retention_test.go`).
 
 ## Gap inventory
@@ -734,8 +734,9 @@ of Component 6; the PR that implements one adds its tasks here first.
 - **Files:** modify `apitest/trim_shell_test.go` (test `TestTrimGraphErosionShell`), `.github/test-shards-apitest.txt`,
   `shell.go` doc, `docs/api.md`, `agent-docs/missing-features.md` (both Shell rows), `agent-docs/trim-graph-design.md`
   (increment 3a lands).
-- **What:** end-to-end tests through a real mesh `Cut` (the grooved bar `slicedPlate(t, sc.w.YZ(), [4]float64{8, 14, 12, 50}, 100, rotation(...))`, a 4 mm groove tilted 20° about x, so its
-  vertices carry nonzero bounds and `shellOrthogonal` does not take it) and real `Shell`.
+- **What:** end-to-end tests through a real mesh `Cut` (the grooved bar `wedgedPlate(t, sc.w.YZ(), [][2]float64{{8, 14}, {10, 12}, {46, 48}, {44, 50}}, 100, r3.Vec{X: 0.5})`,
+  a groove whose walls run at 45° in the YZ plane, so its vertices carry nonzero bounds and `shellOrthogonal` does not
+  take it; a rotated tool's tags state a departure, retention §3.5, and the lift refuses them at L2) and real `Shell`.
 - **Depends on:** 12.
 - **Tests:** the grooved bar is an extrusion along x of its `(y, z)` section `A`, and the distance to the boundary of
   a product is the smaller of the two factors' distances, so its erosion is `(A ⊖ D_t) × [t, 40 − t]`. The closed

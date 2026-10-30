@@ -76,10 +76,13 @@ What Claim R does not say:
   recorded `Surface` at Boolean time. A `Faceted` operand face, a
   `NURBSSurface` face and a face with a `Denoted` patch contribute no surface
   (§3.2). Provenance roles are never used to rebuild one (payload §5.2).
-- `T` is exact for the operand. The operand's own displacement of its built
-  surface from its design intent is already inside `sourceBound`
-  (payload §5.3) and enters the result through `δ_f`. The retained tag adds
-  no position claim of its own.
+- `T` is the design intent. The operand's own displacement of what it
+  denotes from its design intent is already inside `sourceBound`
+  (payload §5.3) and enters the result through `δ_f`. Claim R takes `T` to be
+  the surface the operand denotes for `F`. For a built face of an operand at
+  the identity placement the group states no departure from it. A placed
+  analytic operand's tag is a float image of that surface, and the group
+  states how far it may lie off it (§3.5).
 
 Residuals. A distance from a held vertex to `T`, computed from the vertex
 floats and the recorded surface, is a computation on two known objects. It
@@ -99,7 +102,7 @@ recorded it, not because the polygons happen to sit near it.
 | `Surface` | the operand face's surface when §3.2 admits it, else nil |
 | `Retained` | true when `Surface` came from an operand face; a structural builder's authenticated tag leaves it false |
 | `Reversed` | the operand face's `Reversed`, flipped for the faces of the subtracted operand of a `Cut` |
-| `NormalBound` | the tag's own departure `ε_F`: zero for a built operand face, the operand's `TagDeparture` for a retained one, the operand's own `NormalBound` for a denoted face (§3.3) |
+| `NormalBound` | the tag's own departure `ε_F`: zero for a built face of an operand at the identity placement, the placement charge of §3.5 for a built face of a placed one, the operand's `TagDeparture` for a retained one, the operand's own `NormalBound` for a denoted face (§3.3) |
 | `Denoted` | the operand face's denoted patch, when it has one |
 | `CapRecord`, `AxialDelta`, `HasAxialDelta` | for a `Plane` group, the operand face's. A Boolean of unmoved operands leaves each plane where it is, so the exact-plane record transfers verbatim; a plane the shifted retry translates, and every float placement and similarity, drops it; an exact rotation copy keeps it for a plane the rotation maps onto itself (retained-modify-reach §6) |
 | `Source` | an immutable `SourcePatch`: the operand body's `Origin.Producer`, the operand position, the face's ordinal in `topobuild.Faces`, and `Parent`, the operand face's own record when it is faceted (nil for a built face). It rides every group of a moved operand on the shifted retry, including one that keeps no tag. It traces origin only: no admission rule, bound or reader consults it |
@@ -159,8 +162,9 @@ point moves with its radial direction, which is where the factor
 `1 + 2M / (M − m)` comes from. Every term is capped at 2 and rounds upward,
 and A4 declines the face once the term reaches 1.
 
-`ε_F` is zero for a built operand face and `TagDeparture` for a retained one,
-so a second-generation Boolean recomputes the held term against its own `δ_f`
+`ε_F` is zero for a built face of an operand at the identity placement, the
+placement charge of §3.5 for a built face of a placed one, and `TagDeparture`
+for a retained one, so a second-generation Boolean recomputes the held term against its own `δ_f`
 instead of adding the previous one. The cylinder and sphere term follows
 from `|a/|a| − b/|b|| ≤ 2|a−b| / max(|a|,|b|)` applied to the radial parts
 of a held point `p` and its nearest true point `q`: `|p−q| ≤ δ_f`, the
@@ -207,6 +211,47 @@ image adds nothing: `P = 0`, and the held term of §3.3 at a zero displacement
 is exactly zero (`HeldNormalTerm` takes no upward rounding step for a zero
 displacement). The `CapRecord` follows the placement already, because the
 placed plane is the record's image.
+
+### 3.5 Placed analytic operands
+
+An analytic operand whose payload carries a placement (its accumulated
+`Transform` is not the identity) denotes its record carried through that
+placement, read as exact rationals. Its built faces hold the float result of
+that lift. A tool whose bore is at `x = 28`, moved by `36 + 2^-47`, denotes the
+bore at `64 + 2^-47` and holds `64`. The operand's vertices charge that
+rounding (`agent-docs/evaluator-design.md` §8), so `δ_f` covers the held facets.
+The face states nothing about its tag, so the Boolean charges it here.
+
+`booleaneval` rebuilds the operand from its record at the identity placement,
+in a scratch document (`placedOperandDepartures`), and pairs its faces with the
+placed body's by position in `topobuild.Faces`. Each built face's tag is
+charged against the exact image of its twin's tag under the placement
+(`facetedrecord.PlacedBuiltDeparture`), and the group's `NormalBound` adds the
+charge.
+
+| Twin tag | Charge |
+|---|---|
+| `Plane` | §3.4's `8a + 4e + P` |
+| `Cylinder`, `Sphere`, `Torus` with the twin's radii | §3.4's `4e` plus the held term at twice `P + (a + 2e)·D`. `D` bounds the distance from the twin's origin to a true point: a true point lies within `far` of the placed origin (the placed mesh's farthest vertex plus `tagReach`), that origin lies within `P` of the exact image, and the inverse map stretches by at most 2, so `D ≤ 2·(far + P)` |
+| `Cone` | zero when the placed tag is its exact image under an exactly orthonormal map, otherwise no bound |
+| another variant, different radii, or a failed rebuild | no bound |
+
+The charge is zero exactly when every position parameter of the placed tag is
+the exact image: a translation whose sums are exact floats. A translation
+whose sum rounds charges the rounding, and every rotation charges `e` and `a`,
+because no float rotation basis is exactly orthonormal except a signed
+permutation. A face with no bound keeps its provenance and no tag. A charged
+tag reads as departed everywhere a `TagDeparture` gates: its curved rims keep
+`FacetedCurve` (§10.1 E12), a retained blend refuses it (SR1), the trim lift
+refuses it (L2), `ToFace` and `MirrorFace` refuse its plane (§4) and its plane facets keep
+`β` (§11). A faceted operand states its own departure (§3.4), and a face with a
+denoted patch is judged against the patch (E12), so neither is charged here.
+The rebuild costs one evaluation of the operand's record per mesh Boolean
+whose operand is placed and not faceted.
+
+The lift at the identity placement is not charged. A face built on a frame
+that is not exactly orthonormal, or whose lift rounds at the identity
+placement, states a zero departure.
 
 ## 4. Readers
 
@@ -287,6 +332,7 @@ the clause named.
 | `internal/contactfaceted/floor.go` predicate | the support proof still finds the floor face of a retained-plane body | keep the old `Kind == Faceted` test: the proof finds no valid face and the contact returns `ContactPayloadUnsupported` |
 | `ToFace` on a retained plane | the stop level equals the plane's exact coordinate; `AxialDelta` is the operand's | clear `CapRecord` on the group: `ToFace` refuses |
 | Placement | a translated and a 20°-rotated copy of P3 report `NormalAt` bounds within 1e-9 of the unplaced copy's, and the rotated normal lies within the two bounds of the rotated reading; a plane that the rotation turns never reads as an exact mirror plane | keep the old constant 2: the placed `NormalAt` bound is 2 |
+| Placed analytic operand (§3.5) | `PlacedBuiltDeparture` states zero for a cylinder moved by an exact translation, at least `2·2·2^-47/R` for one whose moved origin rounds by `2^-47`, a positive charge for a rotation, no bound for a twin of another variant or radius, and zero for a cone only as its exact image | return zero unconditionally: the rounding, rotation, mismatch and cone cases fail |
 | Reader audit | a test lists every non-test file under the module that matches `Surface\.\(surfacegeom\.` or `Surface\(\)\.\(`, and fails on a file this document's §4 does not name | add a reader without a §4 row: the audit fails |
 | Existing assertions | the 23 `decad.Faceted` / `KindFaceted` assertions under `apitest/` and `examples/` (for example `apitest/mirror_test.go`, whose premise is a Boolean wall that carries no `Plane`) are rewritten to the retained kind where §3.2 admits the face, and kept where it declines | run the suite before the change; a test that still passes after it, on a face §3.2 admits, asserts the wrong thing |
 
@@ -302,6 +348,7 @@ expression) and not a printed number.
 | `boolean_mesh.go` | fill `facetGroup.Surface`, `Retained`, `Reversed`, `NormalBound` from the operand face (§3.1, §3.2) |
 | `internal/facetedrecord/assemble.go` | compute `NormalBound_f` per built face, apply A4, set `RetainedTag` |
 | `internal/facetedrecord/place_tag.go`, `placed.go` | placement rule of §3.4 |
+| `internal/booleaneval/placed_operand.go`, `internal/facetedrecord/place_tag.go` (`PlacedBuiltDeparture`) | placed analytic operand charge of §3.5 |
 | `internal/topo/face.go` | `RetainedTag` |
 | `internal/contactfaceted/floor.go` | predicate of §4 |
 | `internal/facetedrecord/edge_curve.go`, `topology.go`, `internal/topo/edge.go` | edge curves and their witness flag (§10, increment 3) |
@@ -323,7 +370,7 @@ Increments 1 to 6 are in. Nothing in 1–4 depends on 5 or 6.
 | 4 | Placement rule of §3.4 | a rotated copy of P3 reports a finite `NormalAt` bound below 2 |
 | 5 | A later mesh Boolean charges a retained `Plane` facet's slab half-width by its measured distance from `T` instead of `β` (§11) | a second cut beside the first hole, previously refused by the held-mesh gate, builds with rim bounds below the first cut's |
 
-| 6 | §10.5–§10.6: `Ellipse3` on an oblique `Plane`/`Cylinder` rim, with its sweep rule and the whole-turn convention | the oblique plate fixture publishes its two mouth ellipses |
+| 6 | §10.5–§10.6: `Ellipse3` on an oblique `Plane`/`Cylinder` rim, with its sweep rule and the whole-turn convention | the `RetainedEdgeCurve` unit tests publish the oblique ellipse |
 
 Increments 1–4 only publish what Claim R and Claim E already prove (increment 4 adds the placement charge of §3.4).
 Increment 5 uses the tag to tighten later arithmetic; its proof is Claim S in §11.
@@ -361,7 +408,7 @@ chord chain; nothing refuses.
 | E8 | `Plane` and `Cylinder` with the axis oblique to the plane: `|axis × n| > 10⁻¹²` and `|axis · n| ≥ 10⁻³` | `Ellipse3`, §10.5 |
 | E10 | `Cylinder` and `Cylinder` with parallel axes (`|a1 × a2| ≤ 10⁻¹²`) at distance `s` with `|R1 − R2| < s < R1 + R2` within slack | `Line3`. Two generators exist, at the cross-section's circle intersections; either passes if the falsifier accepts it (reach §8) |
 | E11 | `Cylinder` of radius `r` and `Torus` of tube radius `r` (equal within slack) with the cylinder axis `d` normal to the torus axis `a` (`|d · a| ≤ 10⁻¹²`), where `c` is the point of the cylinder's axis nearest the torus centre `C`: `c − C` lies in the torus's equatorial plane (`|(c − C) · a| ≤ slack`) at distance `Major` from `C` (within slack) | `Arc3` about `c` of radius `r`, axis `±d`, or `Circle3` for a closed rim. This is the junction of two retained blends (reach §5.4); the falsifier E6 and the sweep rule E7 apply |
-| E12 | When either face's tag may lie off its true surface, only E2 applies. A tag may lie off it when the face states a nonzero `TagDeparture` (§3.4), or when it carries a denoted patch (§3.1) and `stitchflux.TagIsDenoted`, given no edge curves, does not prove the tag exactly equal to the denoted surface | A departed tag is a float image of its true surface: a placement or shifted retry whose moved origin rounded, or a revolve wall re-expressed in floats. A denoted face states its departure in `NormalBound` against the denoted patch and leaves `TagDeparture` at zero, so the exact surface comparison decides it; a placed denoted patch is the exact image of the record, so a rounded tag fails it. A `Circle3`, `Arc3` or `Ellipse3` publishes the tags' centre, axis and radius with no curve bound, and the `Line3` of E4 and E10 is straight only while the two directions are exactly parallel, so those pairs keep `FacetedCurve`. Two `Plane` tags stand for two true planes however far they lie off them, so E2 still publishes a `Line3` |
+| E12 | When either face's tag may lie off its true surface, only E2 applies. A tag may lie off it when the face states a nonzero `TagDeparture` (§3.4, §3.5), or when it carries a denoted patch (§3.1) and `stitchflux.TagIsDenoted`, given no edge curves, does not prove the tag exactly equal to the denoted surface | A departed tag is a float image of its true surface: a placement of the result or of an analytic operand, or a shifted retry, whose moved origin rounded or whose map is a rotation, or a revolve wall re-expressed in floats. A denoted face states its departure in `NormalBound` against the denoted patch and leaves `TagDeparture` at zero, so the exact surface comparison decides it; a placed denoted patch is the exact image of the record, so a rounded tag fails it. A `Circle3`, `Arc3` or `Ellipse3` publishes the tags' centre, axis and radius with no curve bound, and the `Line3` of E4 and E10 is straight only while the two directions are exactly parallel, so those pairs keep `FacetedCurve`. Two `Plane` tags stand for two true planes however far they lie off them, so E2 still publishes a `Line3` |
 
 A `Line3` carries no parameters, so E2 and E4 assert only that the edge is
 straight between its vertices. The other pairs (`Cylinder`/`Cylinder` with crossing axes, `Cone`,
@@ -419,7 +466,7 @@ public API.
 | Drilled filleted box | 16 `Line3`, 8 `Arc3` of radius 3 about z, 2 `Circle3` of radius 4 about y through (20, ·, 10) | return the chord chain unconditionally: no edge is a line, arc or circle |
 | `RetainedEdgeCurve` unit tests | plane-plane and plane-cylinder (tangent generator, bore circle) accept; a mispaired chain, a face meeting itself, an untagged face and parallel planes decline; a counter-clockwise run sweeps about +z and a clockwise one about −z; two vertices or a doubled-back chain decline | drop E6: the 0.5 mm-off bore chain publishes a circle |
 | STEP | a retained drilled plate still writes planar triangles and no analytic entity | none; the test pins that the analytic writer stays off |
-| Departed tag (E12) | the drilled box, bored at x = 28 by an extruded tool and by a revolved one, moved by 36 keeps both bore rims as `Circle3` at x = 64; moved by `36 + 2^-47`, whose sum `64 + 2^-47` rounds to 64 while the front and back planes move exactly, the bore wall keeps its `Cylinder` and both rims read `FacetedCurve`; a revolved tool at 60° to x bores the box with both mouths `FacetedCurve`; the unit test declines every curved rim and E4 line of a departed tag and keeps the line of two departed planes | drop the `TagDeparture` arm: the extruded rounded bore publishes two `Circle3` centred at x = 64; drop the denoted arm: the revolved rounded bore does the same and the oblique revolved mouths publish `Ellipse3` |
+| Departed tag (E12) | the drilled box, bored at x = 28 by an extruded tool and by a revolved one, moved by 36 keeps both bore rims as `Circle3` at x = 64; moved by `36 + 2^-47`, whose sum `64 + 2^-47` rounds to 64 while the front and back planes move exactly, the bore wall keeps its `Cylinder` and both rims read `FacetedCurve`; the same holds when the tool is moved by `36 + 2^-47` before the Cut and the box by exactly 36 (§3.5); a revolved tool at 60° to x bores the box with both mouths `FacetedCurve`; the unit test declines every curved rim and E4 line of a departed tag and keeps the line of two departed planes | drop the `TagDeparture` arm: the extruded rounded bore publishes two `Circle3` centred at x = 64; drop the denoted arm: the revolved rounded bore does the same and the oblique revolved mouths publish `Ellipse3`; drop the placed-operand charge: the extruded tool moved before the Cut publishes two `Circle3` centred at x = 64 |
 
 ### 10.5 The oblique plane and cylinder
 
@@ -479,7 +526,7 @@ takes the body.
 
 | Test | Asserts | Red leg |
 |---|---|---|
-| Plate drilled 30° off the normal by a placed tool | both mouths publish `Ellipse3` with `SemiMinor = R`, `SemiMajor = R / cos 30°`, `Center` on the tool axis, `Major` along the tilt, to the bit of the closed-form value; the closed rims are whole turns | return `FacetedCurve` for every oblique pair: no edge is an ellipse |
+| Plate drilled 30° off the normal by a rotated tool | the rotation charges the tool's wall (§3.5), so the wall keeps its `Cylinder`, both mouths keep `FacetedCurve` and the plate's 12 edges stay `Line3` | drop the placed-operand charge: both mouths publish `Ellipse3` |
 | `RetainedEdgeCurve` unit tests | an open chain sweeping counter-clockwise publishes `Axis = +n` and a clockwise one `−n`; a chain 0.5 mm off the cylinder declines; a chain 0.5 mm off the plane declines; `k = 5·10⁻⁴` declines; a doubled-back chain declines | drop the cylinder half of E6: the off-cylinder chain publishes an ellipse; negate the sweep sign: the clockwise chain reads counter-clockwise |
 
 ## 11. Why the hint helps a later Boolean, and its limit

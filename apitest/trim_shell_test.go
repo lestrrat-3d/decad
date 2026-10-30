@@ -1,7 +1,6 @@
 package apitest_test
 
 import (
-	"math"
 	"math/big"
 	"testing"
 
@@ -13,11 +12,11 @@ import (
 )
 
 // bevelledPlate is the 45 degree bevelled plate of the retained-blend tests: the 40x20x20 plate with its y=0, z=20
-// edge cut from (y=0, z=18) to (y=2, z=20) by a rotated tool. Its volume is 15920.
+// edge cut from (y=0, z=18) to (y=2, z=20) by a tool whose 45 degree wall is sketched. Its volume is 15920.
 func bevelledPlate(t *testing.T) *decad.Body {
 	t.Helper()
-	return slicedPlate(t, func(sc *retentionScene) *sketch.Plane { return sc.w.YZ() },
-		[4]float64{-50, -50, 2, 50}, 100, rotation(t, r3.NewVec(0, 2, 20), r3.NewVec(1, 0, 0), -math.Pi/4))
+	return wedgedPlate(t, func(sc *retentionScene) *sketch.Plane { return sc.w.YZ() },
+		[][2]float64{{-10, 8}, {12, 30}, {-10, 30}}, 100, r3.Vec{X: 0.5})
 }
 
 // faceNormal is the face's normal at the mean of its outer loop's distinct corners, which lies inside a convex face.
@@ -110,9 +109,10 @@ func TestTrimGraphClosedShell(t *testing.T) {
 
 	t.Run("a concave receiver stays refused", func(t *testing.T) {
 		t.Parallel()
-		// A 4 mm groove tilted 20 degrees about x: its two floor edges are concave.
-		grooved := slicedPlate(t, func(sc *retentionScene) *sketch.Plane { return sc.w.YZ() },
-			[4]float64{8, 14, 12, 50}, 100, rotation(t, r3.NewVec(0, 10, 20), r3.NewVec(1, 0, 0), math.Pi/9))
+		// A groove whose walls run at 45 degrees in the YZ plane, sketched so
+		// every tag is exactly its wall: its two floor edges are concave.
+		grooved := wedgedPlate(t, func(sc *retentionScene) *sketch.Plane { return sc.w.YZ() },
+			[][2]float64{{8, 14}, {10, 12}, {46, 48}, {44, 50}}, 100, r3.Vec{X: 0.5})
 		_, err := decad.Shell(t.Context(), grooved, nil, units.Millimeters(1), decad.WithNoOpenings())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "modify-reach SX9")

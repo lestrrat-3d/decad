@@ -102,3 +102,77 @@ func TestPlacedTagDeparture(t *testing.T) {
 		require.False(t, ok)
 	})
 }
+
+// TestPlacedBuiltDeparture charges a placed analytic tag against the exact
+// image of its unplaced twin (retention §3.5). The placed tags here are what a
+// rebuild under the placement holds: the float sum of the origin and the
+// translation.
+func TestPlacedBuiltDeparture(t *testing.T) {
+	t.Parallel()
+	_, cyl, verts := placedTagFixtures(t)
+	move := func(t *testing.T, dx float64) r3.Transform {
+		t.Helper()
+		tr, err := r3.Translation(r3.NewVec(dx, 30, 0))
+		require.NoError(t, err)
+		return tr
+	}
+	at := func(origin r3.Vec) surfacegeom.Cylinder {
+		return surfacegeom.Cylinder{Origin: origin, Axis: cyl.Axis, Radius: cyl.Radius}
+	}
+	unplaced := at(r3.NewVec(28, 0, 10))
+
+	t.Run("an exact translation states no departure", func(t *testing.T) {
+		t.Parallel()
+		dep, ok := facetedrecord.PlacedBuiltDeparture(unplaced, at(r3.NewVec(64, 30, 10)), move(t, 36), verts, 1e-9)
+		require.True(t, ok)
+		require.Zero(t, dep)
+	})
+
+	t.Run("a translation whose sum rounds states the rounding", func(t *testing.T) {
+		t.Parallel()
+		dx := 36 + 0x1p-47
+		require.Equal(t, 64.0, 28+dx)
+		dep, ok := facetedrecord.PlacedBuiltDeparture(unplaced, at(r3.NewVec(28+dx, 30, 10)), move(t, dx), verts, 1e-9)
+		require.True(t, ok)
+		require.Positive(t, dep)
+		// The held term of the doubled origin gap 2^-47 over the radius 4.
+		require.GreaterOrEqual(t, dep, 2*2*0x1p-47/4)
+	})
+
+	t.Run("a rotation states a departure", func(t *testing.T) {
+		t.Parallel()
+		turn, err := r3.RotationAround(r3.NewVec(20, 10, 0), r3.NewVec(0, 0, 1), units.Degrees(20))
+		require.NoError(t, err)
+		placed, err := surfaceplace.TransformSurface(unplaced, turn)
+		require.NoError(t, err)
+		dep, ok := facetedrecord.PlacedBuiltDeparture(unplaced, placed, turn, verts, 1e-9)
+		require.True(t, ok)
+		require.Positive(t, dep)
+	})
+
+	t.Run("a mismatched twin states nothing", func(t *testing.T) {
+		t.Parallel()
+		wider := surfacegeom.Cylinder{Origin: r3.NewVec(64, 30, 10), Axis: cyl.Axis, Radius: units.Millimeters(5)}
+		_, ok := facetedrecord.PlacedBuiltDeparture(unplaced, wider, move(t, 36), verts, 1e-9)
+		require.False(t, ok, "a different radius")
+		sphere := surfacegeom.Sphere{Center: r3.NewVec(64, 30, 10), Radius: cyl.Radius}
+		_, ok = facetedrecord.PlacedBuiltDeparture(unplaced, sphere, move(t, 36), verts, 1e-9)
+		require.False(t, ok, "a different variant")
+	})
+
+	t.Run("a cone states zero only as its exact image", func(t *testing.T) {
+		t.Parallel()
+		cone := func(origin r3.Vec) surfacegeom.Cone {
+			return surfacegeom.Cone{Origin: origin, Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(2),
+				HalfAngle: units.Degrees(30)}
+		}
+		dep, ok := facetedrecord.PlacedBuiltDeparture(cone(r3.NewVec(28, 0, 10)), cone(r3.NewVec(64, 30, 10)),
+			move(t, 36), verts, 1e-9)
+		require.True(t, ok)
+		require.Zero(t, dep)
+		dx := 36 + 0x1p-47
+		_, ok = facetedrecord.PlacedBuiltDeparture(cone(r3.NewVec(28, 0, 10)), cone(r3.NewVec(28+dx, 30, 10)),
+			move(t, dx), verts, 1e-9)
+		require.False(t, ok, "a rounded cone origin keeps no bound")
+	})
+}

@@ -108,6 +108,84 @@ func PlacedTagDepartureBy(tag, moved surfacegeom.Surface, linear [3][3]*big.Rat,
 	return 0, false
 }
 
+// PlacedBuiltDeparture returns the departure the tag of a built analytic face
+// carries from its true surface when its body is placed by composed, and
+// whether the tag keeps a stated bound at all
+// (agent-docs/faceted-source-retention-design.md §3.5). unplaced is the face's
+// tag in the same record built at the identity placement, placed its tag in the
+// body placed by composed, and verts and reach the placed body's held mesh with
+// the distance of any true boundary point from a held vertex.
+//
+// The placed body denotes its record carried through composed read as exact
+// rationals, so its true surface is the exact image of unplaced under composed.
+// The charge is PlacedTagDeparture's for that image: zero when every position
+// parameter of placed is that exact image, and otherwise at least the rounding
+// of the moved origin. Its D, the distance from unplaced's origin to any true
+// point, is read from the placed mesh: a true point lies within far of the
+// placed origin, which lies within the origin's rounding gap P of the exact
+// image of unplaced's origin, and the inverse map stretches by at most
+// 1/σ ≤ 2 for a defect up to 10⁻³, so D ≤ 2·(far + P).
+//
+// The two tags must be the same variant with equal radii; a mismatch, a Cone
+// that is not its exact image under an exactly orthonormal map, and a
+// placement PlacedTagDeparture declines keep no bound.
+func PlacedBuiltDeparture(unplaced, placed surfacegeom.Surface, composed r3.Transform, verts []r3.Vec,
+	reach float64) (float64, bool) {
+	linear, err := massmoment.PlacementRotation(composed)
+	if err != nil {
+		return 0, false
+	}
+	charge, err := massmoment.MapChargeOf(linear)
+	if err != nil {
+		return 0, false
+	}
+	translation, ok := massmoment.ExactVec(composed.Translation())
+	if !ok {
+		return 0, false
+	}
+	var from, to r3.Vec
+	switch u := unplaced.(type) {
+	case surfacegeom.Plane:
+		p, same := placed.(surfacegeom.Plane)
+		if !same {
+			return 0, false
+		}
+		from, to = u.Frame.Origin(), p.Frame.Origin()
+	case surfacegeom.Cylinder:
+		p, same := placed.(surfacegeom.Cylinder)
+		if !same || u.Radius != p.Radius {
+			return 0, false
+		}
+		from, to = u.Origin, p.Origin
+	case surfacegeom.Sphere:
+		p, same := placed.(surfacegeom.Sphere)
+		if !same || u.Radius != p.Radius {
+			return 0, false
+		}
+		from, to = u.Center, p.Center
+	case surfacegeom.Torus:
+		p, same := placed.(surfacegeom.Torus)
+		if !same || u.Major != p.Major || u.Minor != p.Minor {
+			return 0, false
+		}
+		from, to = u.Center, p.Center
+	case surfacegeom.Cone:
+		p, same := placed.(surfacegeom.Cone)
+		exact := same && charge.Stretch == 0 && u.Radius == p.Radius && u.HalfAngle == p.HalfAngle &&
+			pointGap(linear, translation, u.Origin, p.Origin) == 0 && imageGap(linear, u.Axis, p.Axis) == 0
+		return 0, exact
+	default:
+		return 0, false
+	}
+	far := reach
+	for _, v := range verts {
+		far = max(far, proofbound.AbsSumUpper(reach, proofbound.DvLenUpper(proofbound.HeldDelta(v, to))))
+	}
+	gap := pointGap(linear, translation, from, to)
+	d := proofbound.ProductUpper(2, proofbound.AbsSumUpper(far, gap))
+	return PlacedTagDepartureBy(unplaced, placed, linear, translation, charge.Stretch, nil, d)
+}
+
 // curvedDeparture is the Cylinder, Sphere and Torus charge of
 // PlacedTagDeparture: 4e for the normal map plus the held term of the
 // displacement 2·(P + (a + 2e)·D).

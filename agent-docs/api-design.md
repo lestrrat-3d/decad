@@ -653,7 +653,10 @@ and unless the placement is exactly the identity, `NormalAt` charges a placed
 group that has no denoted patch the tag's own departure plus the float image's
 (`agent-docs/faceted-source-retention-design.md` §3.4) where the tag is a retained
 `Plane`, `Cylinder`, `Sphere` or `Torus`, and a direction bound of 2 otherwise
-(`agent-docs/faceted-vertex-bounds-design.md` §4.3). So a `Cylinder.Axis`
+(`agent-docs/faceted-vertex-bounds-design.md` §4.3). A mesh Boolean charges the
+tag it keeps from an analytic operand that carries a placement the same way,
+against the exact image of the tag the operand holds at the identity placement
+(`agent-docs/faceted-source-retention-design.md` §3.5). So a `Cylinder.Axis`
 or a `Sphere.Center` is an exact parameter of its named surface, while
 `Face.NormalAt(p)` — a quantity the evaluator *computes*, on a face that may be
 a bounded analytic stand-in — is a measurement and reports its `Exactness` like

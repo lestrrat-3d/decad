@@ -229,6 +229,18 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			return Evaluation{}, err
 		}
 	}
+	// A placed analytic operand's tags are float images of its record's true
+	// surfaces; each states how far it may lie off its own.
+	var placed [2]placedDepartures
+	for k, m := range [2]*topo.Mesh{ma, mb} {
+		owner := a
+		if k == 1 {
+			owner = b
+		}
+		if placed[k], err = placedOperandDepartures(ctx, owner, m); err != nil {
+			return Evaluation{}, err
+		}
+	}
 	for i, f := range append(facesA, facesB...) {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -239,6 +251,11 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		// The tool of a Cut (every face of b) leaves its natural normal
 		// pointing into the result (agent-docs/faceted-source-retention-design.md §3.1).
 		group, _ := facetedrecord.SourceTag(f, op == meshbool.OpCut && i >= targetFaces)
+		if i < targetFaces {
+			group = placed[0].charge(group, f, i)
+		} else {
+			group = placed[1].charge(group, f, i-targetFaces)
+		}
 		// A mesh result face descends from f, so it carries every role f is
 		// selected by: its own as Origins, which recognizers match faces by,
 		// and those an analytic Boolean attributed to it as Upstream.
