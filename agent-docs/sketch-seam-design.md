@@ -96,9 +96,10 @@ else.** `sketch` computed the arrangement that produced the fragment, so it is
 the only party that knows the range and the only party that knows how it was
 obtained. The range it computed **is** the trim; decad neither second-guesses
 the flag nor derives another trim for the recorded fragment. A1 BRep Union
-(general-boolean §3) has a separate Sketch witness for one paired analytic
-line crossing. It can state a new whole-line loop only after exact crossing,
-source-range, and walk-order checks; it never re-certifies `TExact`.
+and a common-axis full-Revolve Boolean (general-boolean §3) have a separate
+Sketch witness for one paired analytic line crossing. Each can state a new
+whole-line loop only after exact crossing, source-range, and walk-order
+checks; neither re-certifies `TExact`.
 A recorded fragment therefore denotes its entity over exactly the recorded
 float range, and no bound charges the distance from a recorded `t` to the
 exact crossing. Two fragments cut at one crossing denote two different end
