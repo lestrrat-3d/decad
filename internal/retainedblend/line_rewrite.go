@@ -148,6 +148,19 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 	if err != nil {
 		return nil, err
 	}
+	// Each chain's direction is a tag line, A ∩ G or B ∩ G, and locate takes
+	// its sense from the chain's last vertex. That sense is certain only when
+	// the vertex lies farther along the line than its bound; the faces' sides
+	// and the end faces' turns below are read from these directions.
+	for _, run := range []edgeRun{runA, runB} {
+		for i := range 2 {
+			last := run.chain[i][len(run.chain[i])-1]
+			if tau(w.verts[last], l.ends[i].exact, run.dir[i]) <= w.beta[last]+margin {
+				return nil, fmt.Errorf("%w: a face leaves an edge end along too short a run to read its direction",
+					decaderr.ErrUnsupported)
+			}
+		}
+	}
 
 	// A face lies to the left of its own boundary, so the way into it from
 	// the edge is the face normal crossed with the way the loop runs along the
@@ -310,8 +323,9 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 	var gLoops [2][][]int
 	var takes [2]bool
 	for i := range 2 {
+		dirs := [2]r3.Vec{runA.dir[i], runB.dir[i]}
 		loops, t, err := w.endFace(l.ends[i], fG[i], runA.chain[i], runB.chain[i], kind[i], remA[i], remB[i],
-			rowIdx[i], endPoints(rowsAt, l.d, l.ends[i].g), margin, convex, true)
+			rowIdx[i], endPoints(rowsAt, l.d, l.ends[i].g), margin, convex, &dirs)
 		if err != nil {
 			return nil, err
 		}
@@ -384,15 +398,18 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 }
 
 // endFace builds end face G_i's new loops: the corner and the removed parts of
-// the two chains give way to the end curve of the blend. line is set by the
-// straight-edge route (rewriteLineEdge), whose chains both run along straight
-// lines and end beyond the setback points. There the corner's turn is read
-// from the chains' last vertices, so a held vertex just beside the corner
-// cannot leave it undecided, and a convex edge may end on a face reflex at the
-// corner, which takes the blend's end cap: takes reports that it does, and the
-// caller must clear the face's rebuilt facets with checkStripClear.
+// the two chains give way to the end curve of the blend. dirs is set only by
+// the straight-edge route (rewriteLineEdge): the unit directions in which A's
+// and B's chains leave the corner, the tag lines A ∩ G and B ∩ G with the
+// sense rewriteLineEdge has shown certain. There G's turn at the corner is
+// read from those directions, not from held vertices, and refuses when the
+// lines are too near parallel to tell; and a convex edge may end on a face
+// reflex at the corner, which takes the blend's end cap: takes reports that it
+// does, and the caller must clear the face's rebuilt facets with
+// checkStripClear. The other routes pass nil, read the turn from the loop's
+// vertices beside the corner, and refuse a reflex end face under a convex edge.
 func (w *work) endFace(end lineEnd, g faceLoops, chainA, chainB []int, kinds [2]sideKind, remA, remB, rows []int,
-	reachPts []r3.Vec, margin float64, convex, line bool) ([][]int, bool, error) {
+	reachPts []r3.Vec, margin float64, convex bool, dirs *[2]r3.Vec) ([][]int, bool, error) {
 	li, ok := g.loopWith(end.v)
 	if !ok {
 		return nil, false, fmt.Errorf("%w: an end face does not hold the edge's corner", decaderr.ErrUnsupported)
@@ -420,22 +437,31 @@ func (w *work) endFace(end lineEnd, g faceLoops, chainA, chainB []int, kinds [2]
 	// the plate's top: the blend's end cap lies in the face's plane beside the
 	// corner, and the face takes it. Nothing else of the face may come near.
 	extended := kinds[0] == extends || kinds[1] == extends
-	from, to := prev, next
-	if line {
-		inChain, outChain := chainB, chainA
+	var convexG bool
+	if dirs != nil {
+		// G's loop enters the corner along the chain whose first vertex is
+		// prev and leaves along the other.
+		in, out := dirs[1], dirs[0]
 		if aFirst {
-			inChain, outChain = chainA, chainB
+			in, out = dirs[0], dirs[1]
 		}
-		from, to = inChain[len(inChain)-1], outChain[len(outChain)-1]
+		turn := cornerTurn(in, out, end.g.n)
+		if turn == 0 {
+			return nil, false, fmt.Errorf("%w: an end face's turn at the edge's corner is undecided",
+				decaderr.ErrUnsupported)
+		}
+		convexG = turn > 0
+	} else {
+		in, out := w.verts[end.v].Sub(w.verts[prev]), w.verts[next].Sub(w.verts[end.v])
+		turn := in.Cross(out).Dot(end.g.n)
+		if math.Abs(turn) <= margin*in.Len() {
+			return nil, false, fmt.Errorf("%w: an end face's corner does not match the edge's convexity",
+				decaderr.ErrUnsupported)
+		}
+		convexG = turn > 0
 	}
-	in, out := w.verts[end.v].Sub(w.verts[from]), w.verts[to].Sub(w.verts[end.v])
-	turn := in.Cross(out).Dot(end.g.n)
-	if math.Abs(turn) <= margin*in.Len() {
-		return nil, false, fmt.Errorf("%w: an end face's corner does not match the edge's convexity",
-			decaderr.ErrUnsupported)
-	}
-	takes := line && convex && !extended && turn < 0
-	if (turn > 0) != (convex || extended) && !takes {
+	takes := dirs != nil && convex && !extended && !convexG
+	if convexG != (convex || extended) && !takes {
 		return nil, false, fmt.Errorf("%w: an end face's corner does not match the edge's convexity",
 			decaderr.ErrUnsupported)
 	}

@@ -183,7 +183,9 @@ func TestFacetedRetainedBlendBossFoot(t *testing.T) {
 		t.Parallel()
 		// The slanted side meets the side along y = 20 at 60° at (32, 20), so
 		// the faces' normals turn by φ = 2π/3 and the section loses
-		// r²(tan(φ/2) − φ/2).
+		// r²(tan(φ/2) − φ/2). The setback is r·tan(φ/2) on each side, so the
+		// area gains the arc r·φ and loses two strips over the 15 mm; the
+		// boss's top gives up the corner region the plate's top takes.
 		const r = 2.0
 		slanted := boxBoss
 		slanted.slant = math.Pi / 6
@@ -194,7 +196,9 @@ func TestFacetedRetainedBlendBossFoot(t *testing.T) {
 		after, err := filleted.Volume()
 		require.NoError(t, err)
 		const phi = 2 * math.Pi / 3
-		requireVolumeChange(t, before, after, 15*r*r*(math.Tan(phi/2)-phi/2))
+		corner := r * r * (math.Tan(phi/2) - phi/2)
+		requireVolumeChange(t, before, after, 15*corner)
+		requireCapsTaken(t, body, filleted, 15*r*(phi-2*math.Tan(phi/2)), corner)
 	})
 
 	t.Run("fillet of a pillar between two plates", func(t *testing.T) {
