@@ -549,12 +549,24 @@ signed area of the planar loop holding the edge and the loop's `IsOuter` role,
 never from the stored loop direction, which builders do not agree on. The
 answer is decided only where `|(n1 × n2)·t|` exceeds the bound composed from
 `Face.NormalAt`'s own bounds, the normal's turn over the vertices' proven
-displacement, and the tangent's displacement; a check that can only withhold an
-answer, never grant one on a small residual. Where both faces are planar, both
-readings must agree. Only edges whose angle cannot change along them are read:
-a line between two planes, a line between a plane and a cylinder parallel to
-it, and a circle or arc on a plane normal to its axis meeting a coaxial
-cylinder, cone, sphere or torus, the circle carrying a proven curve bound.
+displacement, and the tangent's displacement. That sign check can only withhold
+an answer, never grant one on a small residual. The loop's area is decided the
+same way, against the rounding of its terms and of their running sum, the band
+the vertex and curve displacement sweeps, and the plane normal's bound; an
+arc whose held sweep lies within its ends' displacement of zero gives no area.
+Where both faces are planar, both readings must agree. Only edges whose angle
+cannot change along them are read: a line between two planes, a line between a
+plane and a cylinder parallel to it, and a circle or arc on a plane normal to
+its axis meeting a coaxial cylinder, cone, sphere or torus, the circle carrying
+a proven curve bound. That class gate does admit on a tolerance: "parallel" and
+"coaxial" are `selectorquery.ParallelDirs`, a relative 1e-9. It chooses which
+edges are read and decides no sign, and its tolerance cannot flip a decided
+sign along the edge. On a line, the plane's normal and the tangent are
+constant and a cylinder's normal turns monotonically by far under a half
+turn, so the reading is a cosine of that turn and keeps the sign both ends
+decide. On a circle or arc, the plane's and the round face's misalignment
+from the circle's axis moves the reading by at most twice that misalignment,
+which the bound charges. `internal/edgewedge`'s `admitted` states the argument.
 Everything else is `WedgeUndecided`: a tangent junction, a `Faceted` face, a
 `FacetedCurve` or `Ellipse3` edge, a line between two cylinders, a free or
 non-manifold edge. `internal/edgewedge` owns the reading. The two readings

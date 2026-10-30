@@ -78,7 +78,11 @@ func Of(e *topo.Edge) Wedge {
 		return Undecided
 	}
 	stations, ok := stationsOf(e)
-	if !ok || !admitted(e) {
+	if !ok {
+		return Undecided
+	}
+	spread, ok := admitted(e)
+	if !ok {
 		return Undecided
 	}
 	got := Undecided
@@ -93,7 +97,7 @@ func Of(e *topo.Edge) Wedge {
 			return Undecided
 		}
 		for _, st := range stations {
-			w := readAt(f, other, walk, st)
+			w := readAt(f, other, walk, st, spread)
 			if w == Undecided || (read && w != got) {
 				return Undecided
 			}
@@ -105,8 +109,9 @@ func Of(e *topo.Edge) Wedge {
 
 // readAt reads the wedge at one station from planar face f, which walks the
 // edge with its material on the left in the edge's own sense when walk is
-// +1 and against it when walk is −1.
-func readAt(f, other *topo.Face, walk float64, st station) Wedge {
+// +1 and against it when walk is −1. spread bounds how far the reading can
+// move between this station and any other point of the edge.
+func readAt(f, other *topo.Face, walk float64, st station, spread float64) Wedge {
 	n1, e1, ok := outwardNormal(f, st)
 	if !ok {
 		return Undecided
@@ -118,7 +123,7 @@ func readAt(f, other *topo.Face, walk float64, st station) Wedge {
 	turn := n1.Cross(n2).Dot(st.tangent.Scale(walk))
 	// Every factor is within its bound of a unit vector, so the triple
 	// product of the held vectors is within this of the true one.
-	bound := (1+e1)*(1+e2)*(1+st.tanErr) - 1 + arithSlack
+	bound := (1+e1)*(1+e2)*(1+st.tanErr) - 1 + arithSlack + spread
 	bound = math.Nextafter(bound*(1+0x1p-50), math.Inf(1))
 	switch {
 	case math.IsNaN(turn) || math.IsNaN(bound) || math.Abs(turn) <= bound:
@@ -278,22 +283,36 @@ func vertexBound(v *topo.Vertex) (float64, bool) {
 }
 
 // admitted reports whether e is an edge whose material angle is the same all
-// along it, so its ends speak for the whole edge, and at least one of its
-// faces is planar to read the material side from.
-func admitted(e *topo.Edge) bool {
+// along it, up to the spread it returns, so its ends speak for the whole
+// edge, and at least one of its faces is planar to read the material side
+// from.
+//
+// The class gate admits on selectorquery.ParallelDirs, a relative tolerance
+// of 1e-9; it only chooses which edges are read and never decides a sign.
+// Its tolerance cannot flip a decided sign between the points read:
+//
+//   - On a line, a plane's normal and the tangent are constant, and a
+//     cylinder's normal turns monotonically about the cylinder's axis as the
+//     line runs, through far less than a half turn. The reading is then a
+//     cosine of that turn, which cannot dip to the other sign between two
+//     ends that both decide one sign. Both ends are always read.
+//   - On a circle or arc, the plane's tilt from the circle's axis and the
+//     round face's tilt and offset from it move both normals around the
+//     circle by at most their misalignment, which the spread charges twice.
+func admitted(e *topo.Edge) (float64, bool) {
 	f0, f1 := e.Faces[0].Surface, e.Faces[1].Surface
 	_, p0 := f0.(surfacegeom.Plane)
 	_, p1 := f1.(surfacegeom.Plane)
 	switch c := e.Curve.(type) {
 	case surfacegeom.Line3:
 		dir := e.End.Position.Sub(e.Start.Position)
-		return (p0 || p1) && alongLine(f0, dir) && alongLine(f1, dir)
+		return 0, (p0 || p1) && alongLine(f0, dir) && alongLine(f1, dir)
 	case surfacegeom.Circle3:
-		return circleFaces(f0, f1, c.Center, c.Axis)
+		return circleFaces(f0, f1, c.Center, c.Axis, c.Radius)
 	case surfacegeom.Arc3:
-		return circleFaces(f0, f1, c.Center, c.Axis)
+		return circleFaces(f0, f1, c.Center, c.Axis, c.Radius)
 	default:
-		return false
+		return 0, false
 	}
 }
 
@@ -312,37 +331,64 @@ func alongLine(s surfacegeom.Surface, dir r3.Vec) bool {
 }
 
 // circleFaces reports whether a circle about center and axis lies on a plane
-// normal to axis and on a surface of revolution coaxial with it.
-func circleFaces(f0, f1 surfacegeom.Surface, center, axis r3.Vec) bool {
+// normal to axis and on a surface of revolution coaxial with it, and returns
+// the spread its misalignment charges: twice the sine of the plane normal's
+// tilt from the axis, plus twice the round face's axis tilt and its centre's
+// offset from the circle's axis over the radius.
+func circleFaces(f0, f1 surfacegeom.Surface, center, axis r3.Vec, radius units.Value) (float64, bool) {
+	r, err := radius.In(units.Millimeter)
+	if err != nil || !(r > 0) {
+		return 0, false
+	}
 	plane, round := f0, f1
 	if _, ok := plane.(surfacegeom.Plane); !ok {
 		plane, round = f1, f0
 	}
 	pl, ok := plane.(surfacegeom.Plane)
-	if !ok || !selectorquery.ParallelDirs(pl.Frame.N(), axis) {
-		return false
+	if !ok {
+		return 0, false
 	}
+	n, ok := pl.Frame.N().Normalize()
+	if !ok || !selectorquery.ParallelDirs(n, axis) {
+		return 0, false
+	}
+	tilt := n.Cross(axis).Len()
+	var misalign float64
 	switch s := round.(type) {
 	case surfacegeom.Cylinder:
-		return coaxial(center, axis, s.Origin, s.Axis)
+		misalign, ok = coaxial(center, axis, s.Origin, s.Axis, r)
 	case surfacegeom.Cone:
-		return coaxial(center, axis, s.Origin, s.Axis)
+		misalign, ok = coaxial(center, axis, s.Origin, s.Axis, r)
 	case surfacegeom.Torus:
-		return coaxial(center, axis, s.Center, s.Axis)
+		misalign, ok = coaxial(center, axis, s.Center, s.Axis, r)
 	case surfacegeom.Sphere:
 		rel := s.Center.Sub(center)
-		return rel == (r3.Vec{}) || selectorquery.ParallelDirs(rel, axis)
+		ok = rel == (r3.Vec{}) || selectorquery.ParallelDirs(rel, axis)
+		misalign = rel.Cross(axis).Len() / r
 	default:
-		return false
+		return 0, false
 	}
+	if !ok {
+		return 0, false
+	}
+	spread := 2 * (tilt + misalign)
+	if math.IsNaN(spread) || math.IsInf(spread, 0) {
+		return 0, false
+	}
+	return spread, true
 }
 
-// coaxial reports whether the circle about center and axis shares the axis
-// line through origin along dir.
-func coaxial(center, axis, origin, dir r3.Vec) bool {
+// coaxial reports whether the circle about center and axis, of radius r,
+// shares the axis line through origin along the unit direction dir, and
+// returns the misalignment: the sine of the tilt between the axes plus the
+// centre's offset from the line over r.
+func coaxial(center, axis, origin, dir r3.Vec, r float64) (float64, bool) {
 	if !selectorquery.ParallelDirs(axis, dir) {
-		return false
+		return 0, false
 	}
 	rel := center.Sub(origin)
-	return rel == (r3.Vec{}) || selectorquery.ParallelDirs(rel, dir)
+	if rel != (r3.Vec{}) && !selectorquery.ParallelDirs(rel, dir) {
+		return 0, false
+	}
+	return axis.Cross(dir).Len() + rel.Cross(dir).Len()/r, true
 }

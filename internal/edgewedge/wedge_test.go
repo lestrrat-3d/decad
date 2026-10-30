@@ -244,6 +244,158 @@ func TestOfCircle(t *testing.T) {
 	})
 }
 
+// roundCircle builds a whole-circle edge through p about center and axis,
+// with vertex bound delta, between a disk on the plane through origin
+// spanned by u and v and a face carrying round.
+func roundCircle(t *testing.T, origin, u, v r3.Vec, round surfacegeom.Surface, p, center, axis r3.Vec, delta float64) *topo.Edge {
+	t.Helper()
+	vertex := &topo.Vertex{Position: p, Bound: units.Millimeters(delta)}
+	e := &topo.Edge{
+		Curve: surfacegeom.Circle3{Center: center, Axis: axis, Radius: units.Millimeters(p.Sub(center).Len())},
+		Start: vertex, End: vertex, CurveBounded: true,
+	}
+	frame, err := r3.NewFrame(origin, u, v)
+	require.NoError(t, err)
+	disk := &topo.Face{Surface: surfacegeom.Plane{Frame: frame},
+		Loops: []*topo.Loop{{Outer: true, CoEdges: []topo.CoEdge{{Edge: e, Forward: true}}}}}
+	e.Faces = []*topo.Face{{Surface: round}, disk}
+	return e
+}
+
+// Each circle below leaves the class: the plane, the round face's axis or
+// its centre is off the circle's axis by far more than ParallelDirs admits,
+// though the turn at the vertex is large enough to decide.
+func TestOfCircleMisaligned(t *testing.T) {
+	t.Parallel()
+	cyl := func(origin, axis r3.Vec) surfacegeom.Surface {
+		return surfacegeom.Cylinder{Origin: origin, Axis: axis, Radius: units.Millimeters(2)}
+	}
+	p := r3.Vec{X: 2}
+	tests := []struct {
+		name  string
+		u, v  r3.Vec
+		round surfacegeom.Surface
+	}{
+		{"plane tilted from the axis", ex, r3.Vec{Y: math.Cos(0.1), Z: math.Sin(0.1)}, cyl(r3.Vec{}, ez)},
+		{"cylinder axis tilted", ex, ey, cyl(r3.Vec{}, r3.Vec{Y: math.Sin(0.05), Z: math.Cos(0.05)})},
+		{"cylinder off the axis", ex, ey, cyl(r3.Vec{X: 0.3}, ez)},
+		{"sphere off the axis", ex, ey, surfacegeom.Sphere{Center: r3.Vec{X: 0.3, Z: -1}, Radius: units.Millimeters(math.Hypot(1.7, 1))}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			e := roundCircle(t, r3.Vec{}, tc.u, tc.v, tc.round, p, r3.Vec{}, ez, 0)
+			require.Equal(t, edgewedge.Undecided, edgewedge.Of(e))
+		})
+	}
+}
+
+// A vertex displacement turns a curved face's normal by more than the turn
+// at the edge, though the tangent's own displacement does not reach it. The
+// same circle with an exact vertex decides.
+func TestOfCurvedNormalShift(t *testing.T) {
+	t.Parallel()
+	z0 := math.Sqrt(0.99)
+	coneHalf := math.Acos(0.03)
+	tests := []struct {
+		name   string
+		origin r3.Vec
+		round  surfacegeom.Surface
+		p      r3.Vec
+		delta  float64
+	}{
+		// The unit sphere meets z = z0 in a radius-0.1 circle at a 0.1 turn.
+		{"sphere", r3.Vec{Z: z0}, surfacegeom.Sphere{Radius: units.Millimeters(1)}, r3.Vec{X: 0.1, Z: z0}, 0.0045},
+		// A cone of half angle acos(0.03) meets z = 0 at a 0.03 turn.
+		{"cone", r3.Vec{}, surfacegeom.Cone{Axis: ez, Radius: units.Millimeters(1), HalfAngle: units.Radians(coneHalf)},
+			r3.Vec{X: 1}, 0.0099},
+		// A major-10, minor-1 torus meets z = z0 at a 0.1 turn, where its
+		// normal swings with the tube centre.
+		{"torus", r3.Vec{Z: z0}, surfacegeom.Torus{Axis: ez, Major: units.Millimeters(10), Minor: units.Millimeters(1)},
+			r3.Vec{X: 10.1, Z: z0}, 0.02},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			center := r3.Vec{Z: tc.origin.Z}
+			e := roundCircle(t, tc.origin, ex, ey, tc.round, tc.p, center, ez, tc.delta)
+			require.Equal(t, edgewedge.Undecided, edgewedge.Of(e))
+			exact := roundCircle(t, tc.origin, ex, ey, tc.round, tc.p, center, ez, 0)
+			require.NotEqual(t, edgewedge.Undecided, edgewedge.Of(exact))
+		})
+	}
+}
+
+// boundTopLoop gives the box edge's top face loop, all but the shared edge,
+// vertex bound d.
+func boundTopLoop(e *topo.Edge, d float64) {
+	for _, ce := range e.Faces[0].Loops[0].CoEdges {
+		if ce.Edge == e {
+			continue
+		}
+		ce.Edge.Start.Bound, ce.Edge.End.Bound = units.Millimeters(d), units.Millimeters(d)
+	}
+}
+
+func TestOfLoopAreaBound(t *testing.T) {
+	t.Parallel()
+
+	t.Run("vertex displacement band", func(t *testing.T) {
+		t.Parallel()
+		// The unit top loop, perimeter 4, with corners displaced by 0.11:
+		// 2·4·0.11 + 4π·0.11² ≈ 1.03 covers its area of 1, though either
+		// term alone does not.
+		e := boxCorner(t)
+		boundTopLoop(e, 0.11)
+		require.Equal(t, edgewedge.Undecided, edgewedge.Of(e))
+		boundTopLoop(e, 0.05)
+		require.Equal(t, edgewedge.Salient, edgewedge.Of(e))
+	})
+	t.Run("plane normal bound", func(t *testing.T) {
+		t.Parallel()
+		// The band of 0.1 displacement, about 0.93, leaves the area of 1
+		// decided; a 0.15 normal bound on the top face tilts the area's
+		// reading by up to 0.15 of it, which closes the gap.
+		e := boxCorner(t)
+		boundTopLoop(e, 0.1)
+		require.Equal(t, edgewedge.Salient, edgewedge.Of(e))
+		e.Faces[0].NormalBound = 0.15
+		require.Equal(t, edgewedge.Undecided, edgewedge.Of(e))
+	})
+	t.Run("summation of many terms", func(t *testing.T) {
+		t.Parallel()
+		// A sliver 3.7e-12 wide beside the unit edge, walked back through
+		// 500 points: each term's own rounding allowance leaves its area
+		// decided, but the running sum of 502 terms may drift by more.
+		const n = 500
+		const h = 3.7e-12
+		pts := []r3.Vec{{}, ey}
+		for k := range n {
+			pts = append(pts, r3.Vec{X: h, Y: 1 - float64(k)/float64(n-1)})
+		}
+		e := corner(r3.Vec{}, ey, 0)
+		planeFace(t, ex, ey, true, e, pts...)
+		planeFace(t, ez, ey, true, e, r3.Vec{}, ey, r3.Vec{Y: 1, Z: -1}, r3.Vec{Z: -1})
+		require.Len(t, e.Faces[0].Loops[0].CoEdges, n+2)
+		require.Equal(t, edgewedge.Undecided, edgewedge.Of(e))
+	})
+	t.Run("arc sweep within its ends' displacement", func(t *testing.T) {
+		t.Parallel()
+		// A radius-100 arc sweeps about 0.001 between ends displaced by
+		// 0.06, which could put the true ends either way round: the held
+		// sweep cannot say whether the arc is short or nearly whole.
+		e := corner(r3.Vec{}, ey, 0)
+		planeFace(t, ex, ey, true, e, r3.Vec{}, ex, r3.Vec{X: 1, Y: 0.45}, r3.Vec{X: 1, Y: 0.55}, r3.Vec{X: 1, Y: 1}, ey)
+		planeFace(t, ez, ey, true, e, r3.Vec{}, ey, r3.Vec{Y: 1, Z: -1}, r3.Vec{Z: -1})
+		arc := e.Faces[0].Loops[0].CoEdges[2].Edge
+		arc.Curve = surfacegeom.Arc3{Center: r3.Vec{X: -99, Y: 0.5}, Axis: ez, Radius: units.Millimeters(math.Hypot(100, 0.05))}
+		arc.CurveBounded = true
+		require.Equal(t, edgewedge.Salient, edgewedge.Of(e))
+		arc.Start.Bound, arc.End.Bound = units.Millimeters(0.06), units.Millimeters(0.06)
+		require.Equal(t, edgewedge.Undecided, edgewedge.Of(e))
+	})
+}
+
 func TestView(t *testing.T) {
 	t.Parallel()
 	reflex := edgewedge.View{Edge: insideCorner(t)}

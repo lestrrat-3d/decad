@@ -358,8 +358,8 @@ is how a sheet's rim shows.
 `Edge.Wedge` returns a `decad.EdgeWedge`: `decad.WedgeReflex` where the material angle across the edge is over a half
 turn, as at a boss root or an inside corner, and `decad.WedgeSalient` where it is under a half turn, as at a box's
 outer edge or a hole's rim. It answers only where the two faces' outward normals decide the sign beyond their proven
-bounds, on a line between two planes, a line between a plane and a parallel cylinder, or a circle on a plane meeting
-a coaxial cylinder, cone, sphere or torus. Every other edge, such as a tangent junction or an edge of a
+bounds, on a line between two planes, a line between a plane and a parallel cylinder, or a circle or arc on a plane
+meeting a coaxial cylinder, cone, sphere or torus. Every other edge, such as a tangent junction or an edge of a
 `decad.Faceted` face, is `decad.WedgeUndecided`. `Edge.IsConvex` is a different reading: it follows the profile
 walk, so it calls a boss root convex and a hole's rim concave.
 
