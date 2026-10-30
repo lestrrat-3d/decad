@@ -191,16 +191,10 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	// last vertex, and is certain only when that vertex lies farther along the
 	// line than its bound.
 	for i := range 2 {
-		dir := tL
 		last := runA.chain[i][len(runA.chain[i])-1]
-		if w.verts[last].Sub(c.ends[i].exact).Dot(dir) < 0 {
-			dir = dir.Scale(-1)
+		if runA.dir[i], err = lineSense(tL, w.verts[last], c.ends[i].exact, w.beta[last]+margin); err != nil {
+			return nil, err
 		}
-		if tau(w.verts[last], c.ends[i].exact, dir) <= w.beta[last]+margin {
-			return nil, fmt.Errorf("%w: a face leaves an edge end along too short a run to read its direction",
-				decaderr.ErrUnsupported)
-		}
-		runA.dir[i] = dir
 	}
 
 	// The ways into the faces, and the corner's kind.
@@ -243,17 +237,8 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 			return nil, fmt.Errorf("%w: a convex edge ends where its plane is reflex", decaderr.ErrUnsupported)
 		}
 		first := runB.chain[i][0]
-		toward := w.verts[first].Sub(c.ends[i].exact)
-		s := toward.Dot(wB)
-		sure := max(w.beta[first]+margin, minSine*toward.Len())
-		switch {
-		case s > sure:
-			kindB[i] = trims
-		case -s > sure:
-			kindB[i] = extends
-		default:
-			return nil, fmt.Errorf("%w: a face leaves an edge end along too short a run to read its direction",
-				decaderr.ErrUnsupported)
+		if kindB[i], err = wallSense(wB, w.verts[first], c.ends[i].exact, w.beta[first]+margin); err != nil {
+			return nil, err
 		}
 		if kindB[i] == extends && (!convex || kindA[i] == extends) {
 			return nil, fmt.Errorf("%w: the wall turns reflex at an edge end", decaderr.ErrUnsupported)
@@ -475,6 +460,12 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 			if run, err = cuts.endRun(i, c.ends[i].v); err != nil {
 				return nil, err
 			}
+			// The cap runs along the rows, back along the wall's run and from
+			// V along A ∩ G to P_A; it must be a simple polygon.
+			capLoop := append(append(append([]int(nil), rows...), run...), c.ends[i].v)
+			if err := w.capSimple(c.ends[i].g.n, capLoop, m); err != nil {
+				return nil, err
+			}
 		}
 		loops, _, err := w.endFaceRun(c.ends[i], fG[i], runA.chain[i], runB.chain[i], kinds, remA[i], remB[i], rows,
 			run, reach, margin, convex, dirs)
@@ -524,19 +515,8 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 			}
 		}
 	}
-	// A convex edge takes the corner out of an end face where the wall ends
-	// with the edge, and the end face takes it as the cap where the wall
-	// extends past it; a concave edge adds the notch's fill to it.
-	corner := c.cornerArea(spec, sec, k0, o0, wA)
-	w.removedTrue = polyArea(k0, k1, w.verts[rowIdx[0][len(cols)-1]], w.verts[rowIdx[0][0]]) +
-		c.radius*sec.thetaT*length
-	for i := range 2 {
-		if !convex || extB[i] {
-			w.removedTrue -= corner
-			continue
-		}
-		w.removedTrue += corner
-	}
+	w.removedTrue = cylRemovedArea(polyArea(k0, k1, w.verts[rowIdx[0][len(cols)-1]], w.verts[rowIdx[0][0]]),
+		c.radius*sec.thetaT*length, c.cornerArea(spec, sec, k0, o0, wA), convex, extB)
 	if spec.fillet {
 		tag.trueArea = spec.r * sec.phi * length
 	} else {
@@ -557,6 +537,111 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 		return nil, err
 	}
 	return w.build(ctx, env, groups, stripFrom, tag, faceIndex)
+}
+
+// lineSense is the sense of the tag line dir along which a face's chain
+// leaves the corner exact, read from the chain's last vertex last: the vertex
+// must lie farther along the line than bound, else the sense is undecided and
+// the edge refuses.
+func lineSense(dir, last, exact r3.Vec, bound float64) (r3.Vec, error) {
+	if last.Sub(exact).Dot(dir) < 0 {
+		dir = dir.Scale(-1)
+	}
+	if tau(last, exact, dir) <= bound {
+		return r3.Vec{}, fmt.Errorf("%w: a face leaves an edge end along too short a run to read its direction",
+			decaderr.ErrUnsupported)
+	}
+	return dir, nil
+}
+
+// wallSense reads how the wall meets an edge end from the first vertex of its
+// chain along the end circle, whose tangent at the corner exact is ±wB: along
+// wB the wall ends with the edge, against it the wall extends past the end
+// plane. The vertex must lie farther along the tangent than bound, and than
+// minSine of its distance, else the edge refuses.
+func wallSense(wB, first, exact r3.Vec, bound float64) (sideKind, error) {
+	toward := first.Sub(exact)
+	s := toward.Dot(wB)
+	sure := max(bound, minSine*toward.Len())
+	switch {
+	case s > sure:
+		return trims, nil
+	case -s > sure:
+		return extends, nil
+	}
+	return 0, fmt.Errorf("%w: a face leaves an edge end along too short a run to read its direction",
+		decaderr.ErrUnsupported)
+}
+
+// cylRemovedArea is the exact area a plane–cylinder blend removes: the
+// plane's strip and the wall's band, less the corner region at each end where
+// the end face takes it as the cap (the wall extends past the corner) or adds
+// the notch's fill (a concave edge), plus it at each end where a convex edge
+// takes it out of the end face (the wall ends with the edge).
+func cylRemovedArea(strip, band, corner float64, convex bool, extB [2]bool) float64 {
+	removed := strip + band
+	for i := range 2 {
+		if !convex || extB[i] {
+			removed -= corner
+			continue
+		}
+		removed += corner
+	}
+	return removed
+}
+
+// capSimple refuses the end cap an end face takes where the wall extends past
+// the corner unless the cap is a simple polygon in the face's plane n: the
+// loop is the blend's rows from P_A to the band's corner at index tb, the
+// wall's cut back to the corner V, and the plane's line from V to P_A. The cap
+// ends in a cusp at T_A and, for a fillet, at T_B, where the exact rows meet
+// the wall's held facets. A held facet lies inside the wall by up to its bound,
+// so near T_B the last rows can lie beyond it and the loop crosses itself. The
+// test is exact on the held coordinates and can only refuse: no two edges that
+// do not share a vertex touch, no two that do run back along each other, and
+// the loop turns at both cusps the way it runs.
+func (w *work) capSimple(n r3.Vec, loop []int, tb int) error {
+	u, ok := perpendicular(n)
+	if !ok {
+		return fmt.Errorf("%w: an end face has no plane frame", decaderr.ErrUnsupported)
+	}
+	v := n.Cross(u)
+	k := len(loop)
+	ps := make([]pt2, k)
+	idx := make([]int, k)
+	for i, id := range loop {
+		q := w.verts[id].Sub(w.verts[loop[0]])
+		ps[i], idx[i] = pt2{q.Dot(u), q.Dot(v)}, i
+	}
+	folds := fmt.Errorf("%w: the blend's end cap folds where its rows meet the wall's facets", decaderr.ErrUnsupported)
+	area := signedArea2(ps, idx)
+	if area == 0 {
+		return folds
+	}
+	sense := 1
+	if area < 0 {
+		sense = -1
+	}
+	at := func(i int) pt2 { return ps[(i+k)%k] }
+	for _, i := range []int{0, tb} {
+		if orient(at(i-1), at(i), at(i+1)) != sense {
+			return folds
+		}
+	}
+	for i := range k {
+		if collinearOverlap(at(i-1), at(i), at(i), at(i+1)) {
+			return folds
+		}
+		for j := i + 2; j < k; j++ {
+			if i == 0 && j == k-1 {
+				continue
+			}
+			if segmentsTouch(at(i), at(i+1), at(j), at(j+1)) {
+				return folds
+			}
+		}
+	}
+	return nil
 }
 
 // tag is the exact surface of the blend face.
