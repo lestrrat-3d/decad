@@ -83,6 +83,13 @@ func Refine(ctx context.Context, vertices []r3.Vec, triangles [][3]int, maxEdge 
 					count++
 				}
 			}
+			pieces := count + 1
+			if len(next)+pieces > MaxTriangles && (count > 0 || len(mid) > 0) {
+				if err := ctx.Err(); err != nil {
+					return Result{}, err
+				}
+				return Result{}, fmt.Errorf("%w: more than %d triangles", ErrTooLarge, MaxTriangles)
+			}
 			if count == 0 {
 				next = append(next, t)
 				continue
