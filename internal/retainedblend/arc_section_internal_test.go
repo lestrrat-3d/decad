@@ -131,7 +131,7 @@ func TestEndSectionCertifiesMeridian(t *testing.T) {
 // is 0.2 at the wall's row of the hole and 0.1 at the plane's row of the boss.
 // Spaced by the profile alone, the chords in the plane stray past tau; the
 // rows arcRows returns keep every chord within tau of the sampled curve, with
-// at most 64 rows.
+// at most 96 rows, the rows that hold the ends' azimuth shift included.
 func TestArcRowsFollowEndCurve(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -154,7 +154,7 @@ func TestArcRowsFollowEndCurve(t *testing.T) {
 			rows, err := arcRows(tc.f.spec, tau, []endSection{tc.f.section(t)})
 			require.NoError(t, err)
 			require.LessOrEqual(t, tc.f.worstChord(rows), tau)
-			require.LessOrEqual(t, len(rows)-1, 64)
+			require.LessOrEqual(t, len(rows)-1, 96)
 			require.Equal(t, 0.0, rows[0])
 			require.Equal(t, 1.0, rows[len(rows)-1])
 		})
@@ -165,7 +165,7 @@ func TestArcRowsFollowEndCurve(t *testing.T) {
 		f := endPlaneFixture{R: 4, kappa: 1, side: -1, h: 0, spec: blendSpec{fillet: true, r: 4}}
 		rows, err := arcRows(f.spec, math.Ldexp(4, -10), []endSection{f.section(t)})
 		require.NoError(t, err)
-		require.Equal(t, uniform(18), rows)
+		require.Equal(t, uniform(26), rows, "the profile's own rows at half of tau")
 	})
 
 	t.Run("refusals", func(t *testing.T) {
@@ -255,34 +255,90 @@ func TestEndSectionMarginCoversRounding(t *testing.T) {
 	}
 }
 
-// TestChamferRowsHoldEndShift sizes a hole mouth's cone at the sine 0.2: the
-// azimuth at which each row meets x = h, acos(h/ρ) from the plane's normal,
-// moves by at most chamferColumn between neighbouring rows, and two such steps,
-// a column and a shift, keep the cone's sagitta rhoHi·(1 − cos(step)) within
-// tau. Without the shift the profile's rows alone let it move further.
-func TestChamferRowsHoldEndShift(t *testing.T) {
+// TestStripRowsHoldEndShift sizes a hole mouth's cone and torus at the sine
+// 0.2 and a boss's torus at 0.1: the azimuth at which each row meets x = h,
+// acos(h/ρ) from the plane's normal, moves by at most stripColumn between
+// neighbouring rows, and two such steps, a column and a shift, keep the
+// azimuth term rhoHi·(1 − cos(step)) within its share of tau: all of it on
+// the cone, half on a torus. Without the shift the profile's rows, sized for
+// the end curve alone, let it move further.
+func TestStripRowsHoldEndShift(t *testing.T) {
 	t.Parallel()
-	const d = 4.0
-	tau := math.Ldexp(d, -10)
-	f := endPlaneFixture{R: 4, kappa: 1, side: -1, h: 4 * math.Sqrt(1-0.2*0.2), spec: blendSpec{dA: d, dB: d}}
-	sec := f.section(t)
-	step := chamferColumn(tau, sec.rhoHi)
-	require.LessOrEqual(t, sec.rhoHi*(1-math.Cos(step)), tau)
-	worst := func(rows []float64) float64 {
-		w := 0.0
-		for j := 0; j+1 < len(rows); j++ {
-			r0, _ := f.row(rows[j])
-			r1, _ := f.row(rows[j+1])
-			w = math.Max(w, math.Abs(math.Acos(f.h/r1)-math.Acos(f.h/r0)))
+	for _, f := range []endPlaneFixture{
+		{R: 4, kappa: 1, side: -1, h: 4 * math.Sqrt(1-0.2*0.2), spec: blendSpec{dA: 4, dB: 4}},
+		{R: 4, kappa: 1, side: -1, h: 4 * math.Sqrt(1-0.2*0.2), spec: blendSpec{fillet: true, r: 4}},
+		{R: 3, kappa: -1, side: -1, h: 0.5 * math.Sqrt(1-0.1*0.1), spec: blendSpec{fillet: true, r: 2.5}},
+	} {
+		size := f.spec.r
+		if !f.spec.fillet {
+			size = f.spec.dA
 		}
-		return w
+		tau := math.Ldexp(size, -10)
+		sec := f.section(t)
+		share := azimuthShare(f.spec, tau)
+		step := stripColumn(share, sec.rhoHi)
+		require.LessOrEqual(t, sec.rhoHi*(1-math.Cos(step)), share)
+		worst := func(rows []float64) float64 {
+			w := 0.0
+			for j := 0; j+1 < len(rows); j++ {
+				r0, _ := f.row(rows[j])
+				r1, _ := f.row(rows[j+1])
+				w = math.Max(w, math.Abs(math.Acos(f.h/r1)-math.Acos(f.h/r0)))
+			}
+			return w
+		}
+		rows, err := arcRows(f.spec, tau, []endSection{sec})
+		require.NoError(t, err)
+		require.LessOrEqual(t, worst(rows), step, "%+v", f)
+		m := 2
+		if f.spec.fillet {
+			m = max(2, int(math.Ceil(math.Pi/2/rowStep(profileShare(tau), f.spec.r, 1))))
+		}
+		plain, err := sectionRows(m, tau, []endSection{sec})
+		require.NoError(t, err)
+		require.Greater(t, worst(plain), step, "%+v", f)
 	}
-	rows, err := arcRows(f.spec, tau, []endSection{sec})
-	require.NoError(t, err)
-	require.LessOrEqual(t, worst(rows), step)
-	plain, err := sectionRows(2, tau, []endSection{sec})
-	require.NoError(t, err)
-	require.Greater(t, worst(plain), step)
+}
+
+// TestOctantDepartureCoversSamples samples every triangle of a corner's sphere
+// patch on a barycentric grid against the unit sphere: no sample lies
+// farther inside it than octantDeparture, and the farthest comes within a
+// tenth of it, at the triangle's foot of the centre. The patch's triangles
+// lie farther from the sphere than the rows' chords along its sides.
+func TestOctantDepartureCoversSamples(t *testing.T) {
+	t.Parallel()
+	n := [3]r3.Vec{{X: 1}, {Y: 1}, {Z: 1}}
+	for _, m := range []int{4, 17, 51} {
+		at := func(a, b int) r3.Vec {
+			d, ok := octantDir(n, m, a, b)
+			require.True(t, ok)
+			return d
+		}
+		worst := 0.0
+		sample := func(p, q, s r3.Vec) {
+			const g = 24
+			for i := 0; i <= g; i++ {
+				for j := 0; i+j <= g; j++ {
+					x := p.Add(q.Sub(p).Scale(float64(i) / g)).Add(s.Sub(p).Scale(float64(j) / g))
+					worst = math.Max(worst, 1-x.Len())
+				}
+			}
+		}
+		for a := range m {
+			for b := range m - a {
+				sample(at(a, b), at(a+1, b), at(a, b+1))
+				if b < m-a-1 {
+					sample(at(a+1, b), at(a+1, b+1), at(a, b+1))
+				}
+			}
+		}
+		dep := octantDeparture(m)
+		chord := 1 - math.Cos(math.Pi/4/float64(m))
+		t.Logf("m = %d: sampled %.6g, departure %.6g, side chord %.6g", m, worst, dep, chord)
+		require.LessOrEqual(t, worst, dep)
+		require.Greater(t, worst, 0.9*dep)
+		require.Greater(t, dep, 2*chord)
+	}
 }
 
 // TestEndSectionTiltCharge reads an end plane tilted off the axis by

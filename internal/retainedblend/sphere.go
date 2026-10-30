@@ -140,6 +140,8 @@ type meridian struct {
 	rhoA      float64      // the plane's setback circle, at z = 0
 	rhoB, zB  float64      // the wall's setback circle
 	rows      [][2]float64 // the fillet's rows between them, as (ρ, z)
+	phi       float64      // the fillet arc's angle, 0 for a chamfer
+	rhoHi     float64      // the largest ρ of the blend's rows
 	zA        float64      // the plane's setback circle's height, 0 to rounding
 	rhoC, zC  float64      // the fillet ball's centre
 	r         float64      // the fillet's radius, 0 for a chamfer
@@ -192,14 +194,18 @@ func (s sphereRim) section(spec blendSpec, tau float64) (meridian, error) {
 		}
 		m.outwardMR = [2]float64{normRho, normZ}
 		m.trueArea = math.Pi * (m.rhoA + m.rhoB) * math.Hypot(chordRho, chordZ)
+		m.rhoHi = max(m.rhoA, m.rhoB)
 		return m, nil
 	}
 	r := spec.r
 	m.r = r
 	m.rhoC, m.zC = at(sec.centre)
+	m.phi = sec.phi
+	m.rhoHi = max(m.rhoA, m.rhoB)
 	for _, p := range sec.rows[1 : len(sec.rows)-1] {
 		rho, z := at(p)
 		m.rows = append(m.rows, [2]float64{rho, z})
+		m.rhoHi = max(m.rhoHi, rho)
 	}
 	// The torus patch's area by Pappus: the arc runs from a0 to a1 about the
 	// ball's centre through phi, and its points stand ρc + r·(a(α)·u) from the
@@ -225,6 +231,8 @@ func (s sphereRim) tag(spec blendSpec, m meridian) blendTag {
 			},
 			reversed: !r.convex,
 			trueArea: m.trueArea,
+			rhoHi:    m.rhoHi,
+			lastSag:  filletSag(spec, m.phi/float64(len(m.rows)+1)),
 		}
 		tag.outward = func(p r3.Vec) r3.Vec {
 			d := p.Sub(r.at(m.rhoC, r.angle(p), m.zC))
@@ -262,6 +270,7 @@ func (s sphereRim) tag(spec blendSpec, m meridian) blendTag {
 		reversed: outward(r.at(m.rhoA, 0, 0)).Dot(natural) < 0,
 		outward:  outward,
 		trueArea: m.trueArea,
+		rhoHi:    m.rhoHi,
 	}
 }
 
@@ -275,15 +284,25 @@ func rewriteSphereRim(ctx context.Context, env topo.Env, fp facetedrecord.Payloa
 		return nil, err
 	}
 	w := newWork(fp, s.rim, spec)
+	// The rows and the plane's polygon each keep their term within all of
+	// tau, so a fillet's rows state twice it (§6.3, Strip triangles): split as
+	// the other rims are, the grid folds the band on a slice's lower rim.
+	w.share = w.tau
+	if spec.fillet {
+		w.rowTau = 2 * w.tau
+	}
 	m, err := s.section(spec, w.tau)
 	if err != nil {
 		return nil, err
 	}
 	planeTag, _ := retainedPlane(s.planeFace)
-	ringA, groupA, err := w.rewritePlane(faceIndex[s.planeFace], planeTag, math.Abs(m.rhoA-s.radius))
+	ringA, groupA, err := w.rewritePlane(faceIndex[s.planeFace], planeTag, math.Abs(m.rhoA-s.radius), m.rhoHi)
 	if err != nil {
 		return nil, err
 	}
+	// The wall's cut vertices lie on the sphere's held facets, which the cut
+	// plane meets at a slant (cutOffset).
+	w.sphereWall = &sphereWall{radius: s.sphereRadius, zS: s.height(s.sphere), rhoB: m.rhoB, zB: m.zB}
 	ringB, groupB, err := w.rewriteWall(faceIndex[s.wallFace], s.side*m.zB, s.sphereRadius,
 		func(p r3.Vec) float64 { return m.dist(s.meridianOf(p)) })
 	if err != nil {

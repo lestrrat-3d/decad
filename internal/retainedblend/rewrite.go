@@ -39,6 +39,16 @@ type work struct {
 	// raised is the largest bound rewriteWall gave a kept inner vertex of a
 	// curved wall.
 	raised float64
+	// cutDelta holds, for each vertex a wall cut made, the facet bound of the
+	// held facet it was cut from (noteCut).
+	cutDelta map[int]float64
+	// sphereWall is the sphere an R6 rim's wall lies on; nil for a wall the
+	// cut plane meets square (cutOffset).
+	sphereWall *sphereWall
+	// share is the part of tau the plane polygon's step spends on a strip
+	// triangle's azimuth term, and rowTau the bound the rows between the
+	// plane's and the wall's state (§6.3, Strip triangles).
+	share, rowTau float64
 }
 
 type ringPt struct {
@@ -57,6 +67,7 @@ func newWork(fp facetedrecord.Payload, r rim, spec blendSpec) *work {
 		size = max(spec.dA, spec.dB)
 	}
 	w.tau = max(math.Ldexp(size, -10), 64*ulp*r.scale)
+	w.share, w.rowTau = azimuthShare(spec, w.tau), w.tau
 	return w
 }
 
@@ -86,12 +97,12 @@ func (w *work) groupOf(facets []int) (int, error) {
 }
 
 // ringCount is the number of vertices a circle of radius rho needs for its
-// chord sagitta to stay within the blend's tolerance.
-func (w *work) ringCount(rho float64) int {
-	if w.tau >= rho {
+// chord sagitta to stay within tol.
+func ringCount(rho, tol float64) int {
+	if tol >= rho {
 		return 8
 	}
-	step := 2 * math.Acos(1-w.tau/rho)
+	step := 2 * math.Acos(1-tol/rho)
 	return min(max(int(math.Ceil(2*math.Pi/step)), 8), 4096)
 }
 
@@ -114,8 +125,10 @@ func clearance(gap, margin float64, what string) error {
 // polygon on the plane's setback circle, at distance ta from the rim along the
 // plane, and the face is triangulated again over its remaining boundary loops
 // (§5 step 2, R2 and R6). A vertex no loop reaches is dropped with the old
-// facets when it lies exactly on the plane g.
-func (w *work) rewritePlane(fi int, g plane, ta float64) ([]ringPt, int, error) {
+// facets when it lies exactly on the plane g. The polygon's step keeps the
+// azimuth term of a strip triangle within its share of tau on every row out
+// to radius rhoHi, the largest of the blend's rows (§6.3).
+func (w *work) rewritePlane(fi int, g plane, ta, rhoHi float64) ([]ringPt, int, error) {
 	r := w.r
 	facets := facetsOfFace(w.fp.FaceOf, fi)
 	group, err := w.groupOf(facets)
@@ -192,7 +205,7 @@ func (w *work) rewritePlane(fi int, g plane, ta float64) ([]ringPt, int, error) 
 		w.dir = -1
 	}
 
-	n := w.ringCount(max(r.radius, rhoA))
+	n := ringCount(max(r.radius, rhoA, rhoHi), w.share)
 	ring := make([]ringPt, n)
 	ringBound := w.tau + slack
 	for k := range n {
@@ -360,6 +373,7 @@ func (w *work) rewriteWall(fi int, tb, bandRadius float64, blendDist func(r3.Vec
 
 	type key struct{ a, b int }
 	cuts := map[key]int{}
+	facetBound := 0.0
 	cut := func(a, b int) int {
 		k := key{min(a, b), max(a, b)}
 		if c, ok := cuts[k]; ok {
@@ -368,11 +382,13 @@ func (w *work) rewriteWall(fi int, tb, bandRadius float64, blendDist func(r3.Vec
 		t := g[a] / (g[a] - g[b])
 		p := w.verts[a].Add(w.verts[b].Sub(w.verts[a]).Scale(t))
 		c := w.vertex(p, max(w.beta[a], w.beta[b])+slack+w.tau)
+		w.noteCut(c, facetBound)
 		cuts[k] = c
 		return c
 	}
 	for _, f := range facets {
 		t := w.fp.Tris[f]
+		facetBound = w.facetBound(t)
 		var above []int
 		for k, v := range t {
 			if g[v] > 0 {
@@ -449,6 +465,10 @@ type blendTag struct {
 	rows []func(phi float64) r3.Vec
 	// trueArea is the exact area of the blend face.
 	trueArea float64
+	// rhoHi is the largest distance of a row from the axis, and lastSag the
+	// profile's sagitta over the gap between the last row and the wall's cut
+	// (§6.3, the band).
+	rhoHi, lastSag float64
 }
 
 // tagGroup completes g, the group of a blend face, with the tag's surface. The
@@ -496,8 +516,10 @@ func (w *work) torusTag() blendTag {
 		}
 		return d
 	}
-	step := 2 * math.Acos(1-math.Min(w.tau/rr, 1))
+	step := rowStep(profileShare(w.tau), rr, 1)
 	m := max(2, int(math.Ceil(math.Pi/2/step)))
+	tag.rhoHi = max(r.radius, rhoC)
+	tag.lastSag = filletSag(w.spec, math.Pi/2/float64(m))
 	for j := 1; j < m; j++ {
 		alpha := float64(j) * math.Pi / 2 / float64(m)
 		tag.rows = append(tag.rows, func(phi float64) r3.Vec {
@@ -547,13 +569,15 @@ func (w *work) coneTag() blendTag {
 		reversed: sample.Dot(natural) < 0,
 		outward:  outward,
 		trueArea: math.Pi * (math.Abs(rho1) + r.radius) * length,
+		rhoHi:    max(r.radius, rho1),
 	}
 }
 
 // strip builds the blend face's grid between the plane ring and the wall ring
 // and emits it under group.
 func (w *work) strip(tag blendTag, ringA, ringB []ringPt, group int) {
-	rowBound := w.tau + w.r.slack()
+	rowBound := w.rowTau + w.r.slack()
+	from := len(w.out)
 	rows := [][]ringPt{ringA}
 	for _, at := range tag.rows {
 		row := make([]ringPt, len(ringA))
@@ -573,6 +597,7 @@ func (w *work) strip(tag blendTag, ringA, ringB []ringPt, group int) {
 			w.emit(t, group)
 		}
 	}
+	w.chargeBand(from, bandAxis{o: w.r.center, n: w.r.n, ok: true}, tag.rhoHi, tag.lastSag, w.r.slack())
 }
 
 // zipper joins two closed rings, each sorted by angle, into a band of

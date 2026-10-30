@@ -213,6 +213,23 @@ func rewriteCorners(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	if shallow(sine) {
 		return nil, fmt.Errorf("%w: a strip's rows end on a plane at a grazing angle", decaderr.ErrUnsupported)
 	}
+	m := max(2, int(math.Ceil(math.Pi/2/rowStep(w.tau, r, sine))))
+	for _, c := range plan.corners {
+		if c.selected() != 3 {
+			continue
+		}
+		// A sphere patch's triangles lie farther from the sphere than the
+		// rows' chords along its sides; the rows are added until the patch
+		// they grid stays within the rows' own tolerance (§6.3).
+		for octantDeparture(m)*r > w.tau {
+			if m >= maxSectionRows {
+				return nil, fmt.Errorf("%w: a corner's sphere patch needs more than %d rows",
+					decaderr.ErrUnsupported, maxSectionRows)
+			}
+			m++
+		}
+		break
+	}
 	geoms := make([]cornerGeom, len(plan.lines))
 	for ei, l := range plan.lines {
 		g := &geoms[ei]
@@ -221,7 +238,6 @@ func rewriteCorners(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 		g.baseB = e0.Sub(l.a.n.Scale(r))
 		g.center = e0.Sub(l.a.n.Scale(r)).Sub(l.b.n.Scale(r))
 		g.dir = [2]r3.Vec{l.d, l.d.Scale(-1)}
-		m := max(2, int(math.Ceil(math.Pi/2/rowStep(w.tau, r, sine))))
 		for j := 0; j <= m; j++ {
 			alpha := math.Pi / 2 * float64(j) / float64(m)
 			g.rowsAt = append(g.rowsAt, g.center.Add(l.a.n.Scale(r*math.Cos(alpha))).Add(l.b.n.Scale(r*math.Sin(alpha))))
@@ -437,11 +453,7 @@ func (w *work) spherePatch(c *cornerVertex, r float64, m int, shareVertex func(r
 	for a := 0; a <= m; a++ {
 		id[a] = make([]int, m-a+1)
 		for b := 0; b <= m-a; b++ {
-			cc := m - a - b
-			dir := c.n[0].Scale(math.Sin(math.Pi / 2 * float64(a) / float64(m))).
-				Add(c.n[1].Scale(math.Sin(math.Pi / 2 * float64(b) / float64(m)))).
-				Add(c.n[2].Scale(math.Sin(math.Pi / 2 * float64(cc) / float64(m))))
-			d, ok := dir.Normalize()
+			d, ok := octantDir(c.n, m, a, b)
 			if !ok {
 				return 0, fmt.Errorf("%w: a corner patch has a zero direction", decaderr.ErrUnsupported)
 			}
@@ -456,6 +468,7 @@ func (w *work) spherePatch(c *cornerVertex, r float64, m int, shareVertex func(r
 		}
 		w.emit([3]int{x, y, z}, group)
 	}
+	from := len(w.out)
 	for a := range m {
 		for b := range m - a {
 			emit(id[a][b], id[a+1][b], id[a][b+1])
@@ -464,7 +477,48 @@ func (w *work) spherePatch(c *cornerVertex, r float64, m int, shareVertex func(r
 			}
 		}
 	}
+	// A patch triangle can lie farther from the sphere than its sides' row
+	// chords do; its corners state its own departure (§6.3).
+	w.chargeSpherePatch(from, centre, r, w.r.slack())
 	return math.Pi * r * r / 2, nil
+}
+
+// octantDir is the unit direction of the patch's grid point (a, b) of m about
+// the corner's normals n: the normalized sum of n_k·sin(π/2·i_k/m) over the
+// grid's three indices, which puts the sides' points on the strips' rows.
+func octantDir(n [3]r3.Vec, m, a, b int) (r3.Vec, bool) {
+	cc := m - a - b
+	return n[0].Scale(math.Sin(math.Pi / 2 * float64(a) / float64(m))).
+		Add(n[1].Scale(math.Sin(math.Pi / 2 * float64(b) / float64(m)))).
+		Add(n[2].Scale(math.Sin(math.Pi / 2 * float64(cc) / float64(m)))).Normalize()
+}
+
+// octantDeparture is the largest departure from the unit sphere of a
+// triangle of the patch's grid of m: one less the distance of the centre from
+// the triangle's plane, which no point of the triangle comes nearer than.
+// The grid's shape does not depend on the corner's frame.
+func octantDeparture(m int) float64 {
+	n := [3]r3.Vec{{X: 1}, {Y: 1}, {Z: 1}}
+	at := func(a, b int) r3.Vec {
+		d, _ := octantDir(n, m, a, b)
+		return d
+	}
+	worst := 0.0
+	dep := func(p, q, s r3.Vec) {
+		nrm := q.Sub(p).Cross(s.Sub(p))
+		if l := nrm.Len(); l > 0 {
+			worst = max(worst, 1-math.Abs(p.Dot(nrm))/l)
+		}
+	}
+	for a := range m {
+		for b := range m - a {
+			dep(at(a, b), at(a+1, b), at(a, b+1))
+			if b < m-a-1 {
+				dep(at(a+1, b), at(a+1, b+1), at(a, b+1))
+			}
+		}
+	}
+	return worst
 }
 
 func sameLoop(a, b []int) bool {

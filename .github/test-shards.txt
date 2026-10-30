@@ -280,6 +280,7 @@
 10	1.91	TestPrismPatternUnionManyGates
 10	0.22	TestQuarterSourceHeldY3WrongRealRadius
 10	0.00	TestRevolveBoreBoundaryBothSweepDirections
+10	2.07	TestRetainedBlendStripFacetBounds
 10	0.00	TestRevolveSectorProjectionRefusesOverlap
 10	0.02	TestStraightLoftPrismUnionManyGates
 10	0.01	TestSweepPairRealFacetedUnionClearAndImpact

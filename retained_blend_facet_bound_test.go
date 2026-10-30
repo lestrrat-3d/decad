@@ -1,0 +1,299 @@
+package decad
+
+import (
+	"fmt"
+	"math"
+	"testing"
+
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
+	"github.com/stretchr/testify/require"
+)
+
+// This file checks agent-docs/retained-edge-blend-design.md §6.3's strip
+// triangles facet by facet. A held mesh states a bound per vertex, and every
+// facet claims its true piece within the largest bound of its three corners
+// (agent-docs/faceted-vertex-bounds-design.md §2). Mesh.Bound is the largest
+// over the whole mesh, so a source's own charges can cover a strip facet that
+// its own corners understate; this test reads each blend facet's own bound
+// from the mesh node's VertexBound, which no exported API publishes, so it
+// lives in the root package rather than apitest/.
+// The exact surfaces come from each fixture's construction in closed form.
+
+// stripProfile is a blend's profile in the meridian half-plane about the axis
+// through o along +z: the arc of radius r about (rc, zc) whose directions run
+// from a0 counter-clockwise through span. sphere set measures from the sphere
+// of radius r about o instead.
+type stripProfile struct {
+	o         r3.Vec
+	rc, zc, r float64
+	a0, span  float64
+	sphere    bool
+}
+
+func (p stripProfile) dist(x r3.Vec) float64 {
+	q := x.Sub(p.o)
+	if p.sphere {
+		return math.Abs(q.Len() - p.r)
+	}
+	dx, dz := math.Hypot(q.X, q.Y)-p.rc, q.Z-p.zc
+	th := math.Atan2(dz, dx) - p.a0
+	th -= 2 * math.Pi * math.Floor(th/(2*math.Pi))
+	if th <= p.span {
+		return math.Abs(math.Hypot(dx, dz) - p.r)
+	}
+	end := func(a float64) float64 { return math.Hypot(dx-p.r*math.Cos(a), dz-p.r*math.Sin(a)) }
+	return math.Min(end(p.a0), end(p.a0+p.span))
+}
+
+// requireFacetBoundsHold samples every facet of out's mesh whose source face
+// keep accepts on a 12×12 barycentric grid and requires every sample within
+// the facet's own bound, the largest of its corners' vertex bounds, of the
+// surface p.
+func requireFacetBoundsHold(t *testing.T, out *Body, keep func(*Face) bool, p stripProfile) {
+	t.Helper()
+	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyNone))
+	require.NoError(t, err)
+	vb := mesh.n.VertexBound
+	require.Len(t, vb, len(mesh.n.Vertices), "the blend's mesh states its vertex bounds")
+	src := mesh.SourceFaces()
+	worst, facets := 0.0, 0
+	for i, tri := range mesh.n.Triangles {
+		if !keep(src[i]) {
+			continue
+		}
+		facets++
+		a, b, c := mesh.n.Vertices[tri[0]], mesh.n.Vertices[tri[1]], mesh.n.Vertices[tri[2]]
+		own := max(vb[tri[0]], vb[tri[1]], vb[tri[2]])
+		far := 0.0
+		const g = 12
+		for x := 0; x <= g; x++ {
+			for y := 0; x+y <= g; y++ {
+				far = math.Max(far, p.dist(a.Add(b.Sub(a).Scale(float64(x)/g)).Add(c.Sub(a).Scale(float64(y)/g))))
+			}
+		}
+		worst = math.Max(worst, far/own)
+		require.LessOrEqual(t, far, own, "facet %d at %v", i, a)
+	}
+	t.Logf("%d blend facets, the farthest at %.3f of its own bound", facets, worst)
+	require.Positive(t, facets)
+}
+
+// freshFaces returns a predicate that accepts the faces of a body none of
+// whose origins appear on a face of before.
+func freshFaces(before *Body) func(after *Body) func(*Face) bool {
+	old := map[FeatureRef]bool{}
+	for _, f := range before.Faces() {
+		for _, o := range f.Origins() {
+			old[o] = true
+		}
+	}
+	return func(after *Body) func(*Face) bool {
+		made := map[*Face]bool{}
+		for _, f := range after.Faces() {
+			fresh := true
+			for _, o := range f.Origins() {
+				fresh = fresh && !old[o]
+			}
+			made[f] = fresh
+		}
+		return func(f *Face) bool { return made[f] }
+	}
+}
+
+type stripScene struct {
+	w   *sketch.World
+	doc *Document
+}
+
+func newStripScene() *stripScene { return &stripScene{w: sketch.NewWorld(), doc: New()} }
+
+func (sc *stripScene) rect(t *testing.T, x0, y0, x1, y1, h float64) *Body {
+	t.Helper()
+	s, err := sc.w.CreateSketch(sc.w.XY())
+	require.NoError(t, err)
+	r := s.CreateRectangle(x0, y0, x1, y1)
+	s.Fix(r.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	b, err := Extrude(t.Context(), sc.doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+	require.NoError(t, err)
+	return b
+}
+
+func (sc *stripScene) disc(t *testing.T, cx, cy, r, h float64, dir Direction) *Body {
+	t.Helper()
+	s, err := sc.w.CreateSketch(sc.w.XY())
+	require.NoError(t, err)
+	c := s.CreatePoint(cx, cy)
+	s.Fix(c)
+	s.CreateCircle(c, r)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	b, err := Extrude(t.Context(), sc.doc, s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: dir})
+	require.NoError(t, err)
+	return b
+}
+
+func moved(t *testing.T, b *Body, d r3.Vec) *Body {
+	t.Helper()
+	tr, err := r3.Translation(d)
+	require.NoError(t, err)
+	out, err := Transform(t.Context(), b, tr)
+	require.NoError(t, err)
+	return out
+}
+
+// circularAt selects the one circular edge (an arc when arc is set, else a
+// full circle) whose centre lies at height z.
+func circularAt(t *testing.T, b *Body, z float64, arc bool) EdgeSelector {
+	t.Helper()
+	for _, e := range b.Edges() {
+		var centre r3.Vec
+		switch c := e.Curve().(type) {
+		case Arc3:
+			if !arc {
+				continue
+			}
+			centre = c.Center
+		case Circle3:
+			if arc {
+				continue
+			}
+			centre = c.Center
+		default:
+			continue
+		}
+		if math.Abs(centre.Z-z) < 1e-9 {
+			return Edges(Circular(), EndpointAt(e.Start().Position().Value)).Exactly(1)
+		}
+	}
+	require.Fail(t, "no circular edge at that height")
+	return nil
+}
+
+func TestRetainedBlendStripFacetBounds(t *testing.T) {
+	t.Parallel()
+
+	// A boss of radius 3 on a plate, its top rim at z = 30.001 filleted (R2,
+	// κ = −1): the tube's sagitta and the azimuth's add toward the axis.
+	for _, r := range []float64{1, 2.5} {
+		t.Run(fmt.Sprintf("a boss's top rim fillet, r = %g", r), func(t *testing.T) {
+			t.Parallel()
+			const top = 30.001
+			sc := newStripScene()
+			joined, err := Union(t.Context(), sc.rect(t, 0, 0, 40, 20, 20),
+				moved(t, sc.disc(t, 20, 10, 3, 10.5, Against), r3.Vec{Z: top}))
+			require.NoError(t, err)
+			fresh := freshFaces(joined)
+			out, err := Fillet(t.Context(), joined, circularAt(t, joined, top, false), units.Millimeters(r))
+			require.NoError(t, err)
+			requireFacetBoundsHold(t, out, fresh(out),
+				stripProfile{o: r3.NewVec(20, 10, 0), rc: 3 - r, zc: top - r, r: r, span: math.Pi / 2})
+		})
+	}
+
+	// The rounded box corner cut back so its plane's row meets the cut at the
+	// sine 0.4, filleted along the tangent chain (the chain route's fan).
+	t.Run("a boss corner's chain fillet", func(t *testing.T) {
+		t.Parallel()
+		const r, q, R = 2.5, 0.4, 3.0
+		gx := R - (R-r)*math.Sqrt(1-q*q)
+		sc := newStripScene()
+		box, err := Fillet(t.Context(), sc.rect(t, 0, 0, 40, 20, 20),
+			Edges(ParallelTo(r3.NewVec(0, 0, 1)), EndpointAt(r3.Vec{})).Exactly(1), units.Millimeters(R))
+		require.NoError(t, err)
+		trimmed, err := Cut(t.Context(), box, moved(t, sc.rect(t, -5, -5, gx, 25, 30), r3.Vec{Z: -5}))
+		require.NoError(t, err)
+		fresh := freshFaces(trimmed)
+		out, err := Fillet(t.Context(), trimmed, circularAt(t, trimmed, 20, true), units.Millimeters(r),
+			WithTangentChain())
+		require.NoError(t, err)
+		made := fresh(out)
+		corner := func(f *Face) bool {
+			p := f.Loops()[0].CoEdges()[0].Start().Position().Value
+			return made(f) && p.X < R+1e-6 && p.Y < R+1e-6
+		}
+		requireFacetBoundsHold(t, out, corner, stripProfile{o: r3.NewVec(R, R, 0), rc: R - r, zc: 20 - r, r: r,
+			span: math.Pi / 2})
+	})
+
+	// A Ø8 bore whose axis lies h from x = 0 breaks out through it, its top arc
+	// filleted with d = 4 (the arc route): the wall's row meets x = 0 at the
+	// sine 0.2.
+	t.Run("a hole mouth's arc fillet", func(t *testing.T) {
+		t.Parallel()
+		const bore, d, c = 4.0, 4.0, 0.2
+		h := bore * math.Sqrt(1-c*c)
+		sc := newStripScene()
+		bored, err := Cut(t.Context(), sc.rect(t, 0, 0, 40, 20, 20),
+			moved(t, sc.disc(t, h, 10, bore, 60, Along), r3.Vec{Z: -30 + 0.001}))
+		require.NoError(t, err)
+		fresh := freshFaces(bored)
+		out, err := Fillet(t.Context(), bored, circularAt(t, bored, 20, true), units.Millimeters(d))
+		require.NoError(t, err)
+		requireFacetBoundsHold(t, out, fresh(out), stripProfile{o: r3.NewVec(h, 10, 0), rc: bore + d, zc: 20 - d, r: d,
+			a0: math.Pi / 2, span: math.Pi / 2})
+	})
+
+	// The cap of a ball of radius 2 below z = −1, its rim filleted with
+	// r = 0.4 (R6): the band's cut vertices lie on the sphere's held facets.
+	t.Run("a sphere rim's fillet", func(t *testing.T) {
+		t.Parallel()
+		const R, cutZ, r = 2.0, -1.0, 0.4
+		sc := newStripScene()
+		s, err := sc.w.CreateSketch(sc.w.XY())
+		require.NoError(t, err)
+		o := s.CreatePoint(-R, 0)
+		s.Fix(o)
+		end := s.CreatePoint(R, 0)
+		s.CreateLine(o, end)
+		s.CreateArc(s.CreatePoint(0, 0), end, o)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		ball, err := Revolve(t.Context(), sc.doc, s, s.Profiles()[0],
+			SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}, FullRevolution{})
+		require.NoError(t, err)
+		capped, err := Cut(t.Context(), ball, moved(t, sc.rect(t, -100, -100, 100, 100, 20), r3.Vec{Z: cutZ}))
+		require.NoError(t, err)
+		fresh := freshFaces(capped)
+		out, err := Fillet(t.Context(), capped, circularAt(t, capped, cutZ, false), units.Millimeters(r))
+		require.NoError(t, err)
+		zc := cutZ - r
+		rc := math.Sqrt((R-r)*(R-r) - zc*zc)
+		a0 := math.Atan2(zc, rc)
+		requireFacetBoundsHold(t, out, fresh(out), stripProfile{rc: rc, zc: zc, r: r, a0: a0, span: math.Pi/2 - a0})
+	})
+
+	// Three edges at a mesh box's corner (§4.8): the sphere octant between the
+	// strips' end rows.
+	t.Run("a box corner's sphere patch", func(t *testing.T) {
+		t.Parallel()
+		const r = 2.0
+		lo, hi := r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 10)
+		v := []r3.Vec{
+			{X: lo.X, Y: lo.Y, Z: lo.Z}, {X: hi.X, Y: lo.Y, Z: lo.Z}, {X: hi.X, Y: hi.Y, Z: lo.Z}, {X: lo.X, Y: hi.Y, Z: lo.Z},
+			{X: lo.X, Y: lo.Y, Z: hi.Z}, {X: hi.X, Y: lo.Y, Z: hi.Z}, {X: hi.X, Y: hi.Y, Z: hi.Z}, {X: lo.X, Y: hi.Y, Z: hi.Z},
+		}
+		var tris [][3]int
+		for _, q := range [][4]int{{0, 3, 2, 1}, {4, 5, 6, 7}, {0, 1, 5, 4}, {3, 7, 6, 2}, {0, 4, 7, 3}, {1, 2, 6, 5}} {
+			tris = append(tris, [3]int{q[0], q[1], q[2]}, [3]int{q[0], q[2], q[3]})
+		}
+		m, err := NewMeshBody(t.Context(), v, tris)
+		require.NoError(t, err)
+		box, err := SolidFromMesh(t.Context(), New(), m)
+		require.NoError(t, err)
+		corner := r3.NewVec(0, 0, 10)
+		three := Edges(EndpointAt(corner), ParallelTo(r3.NewVec(1, 0, 0))).
+			Or(EndpointAt(corner), ParallelTo(r3.NewVec(0, 1, 0))).Or(EndpointAt(corner), ParallelTo(r3.NewVec(0, 0, 1)))
+		out, err := Fillet(t.Context(), box, three, units.Millimeters(r))
+		require.NoError(t, err)
+		centre := r3.NewVec(r, r, 10-r)
+		octant := func(f *Face) bool {
+			_, ok := f.Surface().(Sphere)
+			return ok
+		}
+		requireFacetBoundsHold(t, out, octant, stripProfile{o: centre, r: r, sphere: true})
+	})
+}
