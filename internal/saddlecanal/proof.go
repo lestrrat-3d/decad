@@ -202,13 +202,13 @@ func (c Canal) proveSub(S, C, sMid, cMid iv, t0, t1, hLo, h float64) (subResult,
 	dTheta := iv{-half, half}
 	dT := iv{down(t0 - tMid), up(t1 - tMid)}
 	var res subResult
-	if meanValue(mid.jac, cell.jac, dTheta, dT).lo <= 0 {
+	if !(meanValue(mid.jac, cell.jac, dTheta, dT).lo > 0) {
 		res.failed |= checkJacobian
 	}
-	if meanValue(mid.progress, cell.progress, dTheta, dT).lo <= 0 {
+	if !(meanValue(mid.progress, cell.progress, dTheta, dT).lo > 0) {
 		res.failed |= checkProgress
 	}
-	if meanValue(mid.monotone, cell.monotone, dTheta, dT).lo <= 0 {
+	if !(meanValue(mid.monotone, cell.monotone, dTheta, dT).lo > 0) {
 		res.failed |= checkMonotone
 	}
 	for i := range 3 {
@@ -336,7 +336,7 @@ func Prove(ctx context.Context, c Canal, rows []float64, pose crossbore.Pose,
 	held func(k, j int) r3.Vec) (Proof, error) {
 	const n = Stations
 	if !c.Exists() {
-		return Proof{}, fmt.Errorf("%w: no ball of that radius touches both walls of the saddle", decaderr.ErrDegenerate)
+		return Proof{}, fmt.Errorf("%w: the saddle canal's offset cylinders do not meet in a loop", decaderr.ErrDegenerate)
 	}
 	m := len(rows) - 1
 	if m < 1 || rows[0] != 0 || rows[m] != 1 {

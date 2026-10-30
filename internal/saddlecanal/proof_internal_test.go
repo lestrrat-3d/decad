@@ -126,6 +126,7 @@ func TestExists(t *testing.T) {
 	require.False(t, Canal{10, 3, 0}.Exists())
 	_, err := Prove(t.Context(), Canal{10, 3, 3.5}, []float64{0, 1}, identity, nil)
 	require.ErrorIs(t, err, decaderr.ErrDegenerate)
+	require.ErrorContains(t, err, "the saddle canal's offset cylinders do not meet in a loop")
 }
 
 func TestRowsSplitTheWidestArc(t *testing.T) {

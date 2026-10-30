@@ -24,18 +24,26 @@ import (
 // (saddle_tool.go) and Fillet rewrites the mesh near it (saddle_fillet.go).
 
 // saddleKey identifies a saddle: the pose its two tags and its mouth give, the
-// two radii, and the side σ of each cylinder the rolling ball lies on (−1
-// inside, +1 outside; the larger cylinder first). Two selected edges with one
-// key name one rim.
+// two radii, the edge's Convex flag, and the side σ of each cylinder the
+// rolling ball lies on (−1 inside, +1 outside; the larger cylinder first). Two
+// selected edges with one key name one rim.
 type saddleKey struct {
-	pose  crossbore.Pose
-	R, r  float64
-	sigma [2]int
+	pose   crossbore.Pose
+	R, r   float64
+	convex bool
+	sigma  [2]int
 }
 
-// built is the one sign pattern the saddle routes build: the ball inside the
-// larger cylinder and outside the bore, the convex mouth of a cross hole.
-var built = [2]int{-1, 1}
+// builtSides is the sign pattern the saddle routes build: the ball inside the
+// larger cylinder and outside the bore.
+var builtSides = [2]int{-1, 1}
+
+// built reports whether the routes build the saddle: the convex mouth of a
+// cross hole, σ = (−1, +1) at a convex edge, so the shaft is not Reversed and
+// the bore is. σ alone does not tell it: a concave pin root inside a tube's
+// bore, both faces' Reversed flags and the Convex flag flipped together, has
+// the same σ, and a blend there adds material.
+func (k saddleKey) built() bool { return k.convex && k.sigma == builtSides }
 
 // saddle is one admitted saddle edge.
 type saddle struct {
@@ -149,16 +157,17 @@ func saddleTags(e *topo.Edge) (shaft, bore *topo.Face, key saddleKey, ok bool) {
 			Shift: r3.Vec{X: shift[0], Y: shift[1], Z: shift[2]},
 		},
 		R: R, r: r,
-		sigma: [2]int{ballSide(shaft, e.Convex), ballSide(bore, e.Convex)},
+		convex: e.Convex,
+		sigma:  [2]int{ballSide(shaft, e.Convex), ballSide(bore, e.Convex)},
 	}
 	return shaft, bore, key, true
 }
 
 // looksLikeSaddle reports whether e is an R7 saddle the routes build, from its
-// tags alone: the convex mouth, σ = (−1, +1).
+// tags and Convex flag alone (saddleKey.built).
 func looksLikeSaddle(e *topo.Edge) bool {
 	_, _, key, ok := saddleTags(e)
-	return ok && key.sigma == built
+	return ok && key.built()
 }
 
 // local returns the local coordinates of world point p under pose, in float:
@@ -181,7 +190,7 @@ func local(pose crossbore.Pose, p r3.Vec) r3.Vec {
 // never admits it.
 func readSaddle(e *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face]int) (saddle, error) {
 	shaft, bore, key, ok := saddleTags(e)
-	if !ok || key.sigma != built {
+	if !ok || !key.built() {
 		return saddle{}, fmt.Errorf("%w: the saddle's walls changed", decaderr.ErrUnsupported)
 	}
 	s := saddle{key: key, big: shaft, bore: bore, scale: 1}

@@ -386,9 +386,9 @@ does not give equal setbacks: its setback along the bore wall varies by
 **Recognition (tags only).** `looksLikeSaddle` admits a closed edge
 (`Start == End`) between two faces with `RetainedTag`, `TagDeparture == 0` and
 `tagIsRecord`, both `Cylinder` and of different radii: the larger is the shaft
-(radius `R`), the smaller the bore (radius `r`). The ball's sides must be
-σ = (−1, +1) (§4.10): with the `Convex` flag set, the shaft is not `Reversed`
-(material inside) and the bore is (material outside). Each axis is a unit
+(radius `R`), the smaller the bore (radius `r`). The edge's `Convex` flag must
+be set and the ball's sides must be σ = (−1, +1) (§4.10), so the shaft is not
+`Reversed` (material inside) and the bore is (material outside). Each axis is a unit
 coordinate axis (one component ±1, two exactly 0), the two on different
 coordinates, and the origins agree exactly on the third coordinate, so the axes
 meet at right angles at a point `T` read from the tags. `2r² < R²` holds in
@@ -496,9 +496,13 @@ takes the larger cylinder (radius `R`) and the bore (radius `r`) by their radii.
 Each wall gets the side σ of the rolling ball: −1 inside its cylinder, +1
 outside. The ball lies in the material at a convex edge and in the void at a
 concave one, and a face's material lies inside its cylinder unless the face is
-`Reversed`. Both routes build σ = (−1, +1) only, the convex mouth, and §4.9's
-chamfer reads the same pattern. A pin's root (+1, +1) and every other pattern
-stay SR1. The pose and the seam are read as in §4.9.
+`Reversed`. Both routes build only a convex edge with σ = (−1, +1), and §4.9's
+chamfer reads the same test (`saddleKey.built`). σ alone does not identify the
+mouth: a concave pin root inside a tube's bore has both `Reversed` flags and the
+`Convex` flag flipped from a mouth's, so it reads the same σ, and a blend there
+adds material. A unit test checks that the test admits exactly the edges the
+chamfer admitted before σ existed. A pin's root (+1, +1), the root inside a
+tube and every other pattern stay SR1. The pose and the seam are read as in §4.9.
 
 **Size (SR3).** With `R' = R − ρ` and `r' = r + ρ`, the ball's centre lies on
 both offset cylinders, and they meet in one closed loop per mouth exactly when
@@ -550,13 +554,15 @@ a curve crosses a strip between the strip's vertices.
 **Bands.** On each wall a zipper of triangles joins the held cut ring to the
 ring of exact tangency points at the stations: on the shaft both rings are
 ordered by the angle of `((R'/R)·y, z)`, on the bore by the angle about its
-axis. T1 sits at angle θ_k in the first order and T2 in the second. A band
-facet must face its wall's outward direction with a cosine above 10⁻⁹. On the
-shaft it must also face along the bore's axis (+x), so its (y, z) projection
-keeps its orientation. On the bore it must face the bore's axis from the
-direction of each of its vertices, so its radial projection onto the bore keeps
-its orientation. With both rings running once around, either test embeds the
-band. A band facet lies within `d + R·Δ²/8` of its wall, `d` the largest
+axis. T1 sits at angle θ_k in the first order and T2 in the second. Each band
+facet is wound toward its wall's outward side and then tested exactly, in
+rationals on the held floats (`bandFacing`). On the shaft its normal must have
+a positive component along the bore's axis (+x), so its (y, z) projection keeps
+its orientation. On the bore its normal must have a positive component toward
+the bore's axis from each of its vertices, so its radial projection onto the
+bore keeps its orientation over the facet's angular span. With both rings
+running once around, either test embeds the band. A zero-area facet fails the
+test and refuses. A band facet lies within `d + R·Δ²/8` of its wall, `d` the largest
 distance of its vertices from the wall (a cut vertex's bound, or the strip's
 sample error for a tangency point) and Δ the spread of its vertices' angles
 about the wall's axis widened by `2d/(R − d)`; the band's bound is the largest
@@ -598,7 +604,7 @@ rings the bands share. The fillet is an untagged `Faceted` face with role
    the area of the ellipse `(b/R)²y² + z² ≤ a²` of the (y, z) projection lifted
    onto the shaft. The bore loses `∫₀^{2π} r·(√(R² − r²cos²θ) − √(R'² − r'²cos²θ)) dθ`.
    Each integral is enclosed station cell by station cell.
-4. The band facet tests above.
+4. The band facet tests above (`bandFacing`), each exact.
 5. Clearance: `checkMouthClear` refuses when a facet of a face other than the
    two walls, or a segment of another boundary loop of either wall, comes
    within its bound plus slack of the box of the window, the bore's cut-off end
@@ -624,6 +630,16 @@ the shaft by the cut ring's projected area less T1's ellipse `π·r'²·R/R'`, t
 the two walls' (proof 3), read at the end of its interval farther from the held
 change.
 
+**Loose bounds at large ρ.** The fillet's area enclosure sums each cell's
+mean-value remainder, which grows with the cell's second partials, and the
+first split stops at the coarsest cell that passes the three tests. It reads
+[61.1, 70.3] mm² around an area of 65.7 at r = 3, ρ = 1.5 and [156.7, 229.5] at
+ρ = 3.0, where `AreaSlack` grows by about 97 mm². ε grows with ρ too, so the
+volume bound grows by about 136 mm³ at r = 7, ρ = 1.36. These figures were read
+on 2026-10-31 from the R = 10 shafts. Each bound is proven; only its tightness
+suffers, and splitting every cell finer would buy it back at a multiple of the
+proof's time.
+
 **Result.** The walls keep their `Cylinder` tags; each fillet is a `Faceted`
 face. On the R = 10, r = 3 shaft the two-mouth result holds about 30,000 facets
 at ρ = 0.5, and `Tessellate(…, VerifyAll)` verifies its boundary and volume.
@@ -632,7 +648,10 @@ at ρ = 0.5, and `Tessellate(…, VerifyAll)` verifies its boundary and volume.
 0.7 (ρ = 0.5), a `Hole` through the shaft's wall (ρ = 1.5), and an Extrude
 shaft (ρ = 1.5) under each assignment of the two axes to world coordinates and
 under a translation. The cell proofs also pass at r/R = 0.8 and at r/R = 0.3
-with ρ = 3.0, where ε grows to 0.027 mm. The removed volume per mouth, from the
+with ρ = 3.0, where ε grows to 0.027 mm. Near the size limit the route refuses
+before `2ρ = R − r`: at r = 3 the pipe folds at ρ = 3.4 and ρ = 3.2 refuses
+"has no enclosure" at station 0; at r = 7, ρ = 1.4 the window would reach past
+the side of the shaft (`s ≥ R'`, SR5). The removed volume per mouth, from the
 tube-coordinate integral of `apitest/retained_saddle_fillet_test.go`, is
 1.635978 mm³ at ρ = 0.5, 7.317201 at ρ = 1.0 and 18.593228 at ρ = 1.5 for
 R = 10, r = 3. A rolling-ball grid (a point is removed when it is material and
@@ -996,8 +1015,8 @@ published bound, never with a pinned literal.
 | New vertex bounds | every new vertex lies within its stated bound of its exact point | skip the rounding charge: the bound is zero and the check fails |
 | Verify | `Verify` of a blended plate passes with no `Suspect` in watertightness | |
 | R7 cross-hole chamfer: Revolve shaft R = 10, pin r = 3 through it, both mouths, d = 1.5 and 0.5; pin r = 7, d = 0.5 (`apitest/retained_saddle_chamfer_test.go`) | the volume falls by twice the wedge's divergence-theorem integral (24.474 mm³ per mouth at d = 1.5, 2.460 at d = 0.5) within both bodies' bounds, and at d = 1.5 that change exceeds the bounds; the walls stay `Cylinder`, the bands read `Faceted`; on the `VerifyAll` mesh the wedge's section centroid reads outside, farther than the mesh bound, and a point 0.3 mm past the band reads inside, at 8 stations of each mouth; an Extrude shaft at d = 1.5 under the three axis assignments and a translation does the same (`TestRetainedSaddleChamferExtrudeShaft`; under `-race` the translated case only, on one mouth) | cut with `d/2`: the d = 1.5 volume and the d = 0.5 centroids fail; drop the outer foot's rotation from the held stations: the sample comparison widens `ε` and proof 4 refuses; drop the mouth-side flip or permute the pose's axes: the race-mode Extrude case refuses |
-| R7 fillet: Revolve shaft R = 10, pin r = 3 through it, both mouths, ρ = 1.5 and 0.5; pin r = 7, ρ = 0.5; a `Hole` r = 3 through the shaft's wall, ρ = 1.5 (`apitest/retained_saddle_fillet_test.go`) | the volume falls by twice the tube-coordinate integral of §4.10, computed by Gauss–Legendre over exact ray exits (18.593228 mm³ per mouth at ρ = 1.5, 1.635978 at ρ = 0.5), within both bodies' bounds, and at ρ = 1.5 that change exceeds the bounds; the walls stay `Cylinder`, the fillets read `Faceted`; `VerifyAll` verifies the result; on its mesh a point midway between the arc and the edge along the arc's bisector reads outside, farther than the mesh bound, and a point 0.3·ρ inside the ball reads inside, at 8 stations of each mouth; an Extrude shaft at ρ = 1.5 under the three axis assignments and a translation does the same (`TestRetainedSaddleFilletExtrudeShaft`; under `-race` the translated case only, on one mouth). Unit tests (`internal/saddlecanal/proof_internal_test.go`): the cell proofs' area intervals hold a midpoint-rule area of the fillet and Green's-theorem areas of both walls, the chord bound covers sampled held triangles, a moved held vertex raises the sample error, and ρ = 3.4 folds; `internal/retainedblend/saddle_fillet_internal_test.go` chains a cut ring through a merged sliver and reads a pose's hand | fillet with ρ/2: the ρ = 1.5 volume and the ρ = 0.5 points fail; flip σ (`R' = R + ρ`, `r' = r − ρ`): the cells refuse; drop the strip's winding swap for a left-handed pose: the Revolve result fails its audit; drop the mouth-side flip: the race-mode Extrude case puts the fillet on the far mouth and its points fail |
-| R7 fillet refusals | `ρ = 3.5` (`2ρ = R − r`) refuses `ErrDegenerate` "no ball of that radius touches both walls of the saddle"; ρ = 3.4 refuses "folds: the pipe is not regular there"; a pin moved 0.5 off the shaft's axis and a pin joined through the shaft refuse with the canal-surface reason; a flat milled beside a mouth refuses "another face of the body comes within the saddle fillet's reach" (`TestRetainedSaddleFilletRefusals`) | drop the existence test: ρ = 3.5 refuses as unsupported instead; drop the Jacobian test: ρ = 3.4 refuses at the progress test instead; drop the clearance check: the flat refuses later, "a corner of the saddle fillet's window lies on no facet of the shaft wall"; admit every σ: the joined pin refuses "the bore's cut leaves fewer than three vertices"; drop the exact axis meeting: the moved pin refuses with "a held seam vertex is off the two cylinders" |
+| R7 fillet: Revolve shaft R = 10, pin r = 3 through it, both mouths, ρ = 1.5 and 0.5; pin r = 7, ρ = 0.5; a `Hole` r = 3 through the shaft's wall, ρ = 1.5 (`apitest/retained_saddle_fillet_test.go`) | the volume falls by twice the tube-coordinate integral of §4.10, computed by Gauss–Legendre over exact ray exits (18.593228 mm³ per mouth at ρ = 1.5, 1.635978 at ρ = 0.5), within both bodies' bounds, and at ρ = 1.5 that change exceeds the bounds; the walls stay `Cylinder`, the fillets read `Faceted`; `VerifyAll` verifies the result; on its mesh a point midway between the arc and the edge along the arc's bisector reads outside, farther than the mesh bound, and a point 0.3·ρ inside the ball reads inside, at 8 stations of each mouth; an Extrude shaft at ρ = 1.5 under the three axis assignments and a translation does the same (`TestRetainedSaddleFilletExtrudeShaft`; under `-race` the translated case only, on one mouth). Unit tests (`internal/saddlecanal/proof_internal_test.go`): the cell proofs' area intervals hold a midpoint-rule area of the fillet and Green's-theorem areas of both walls, the chord bound covers sampled held triangles, a moved held vertex raises the sample error, and ρ = 3.4 folds; `internal/retainedblend/saddle_fillet_internal_test.go` chains a cut ring through a merged sliver, reads a pose's hand, and checks that saddle recognition admits exactly the edges the chamfer's rule before σ admitted, over every pair of radii, `Reversed` flags and `Convex` flag; a second fillet of a rebuilt r = 3 shaft at ρ = 0.5 tessellates to the same vertices and triangles | fillet with ρ/2: the ρ = 1.5 volume and the ρ = 0.5 points fail; flip σ (`R' = R + ρ`, `r' = r − ρ`): the cells refuse; drop the strip's winding swap for a left-handed pose: the Revolve result fails its audit; drop the mouth-side flip: the race-mode Extrude case puts the fillet on the far mouth and its points fail |
+| R7 fillet refusals | `ρ = 3.5` (`2ρ = R − r`) refuses `ErrDegenerate` "no ball of that radius touches both walls of the saddle"; ρ = 3.4 refuses "folds: the pipe is not regular there"; a pin moved 0.5 off the shaft's axis, a pin joined through the shaft, and a concave pin root inside a tube's bore (`Chamfer` and `Fillet`) refuse with the canal-surface reason; a flat milled beside a mouth refuses "another face of the body comes within the saddle fillet's reach" (`TestRetainedSaddleFilletRefusals`) | drop the route's existence test: ρ = 3.5 refuses at `saddlecanal.Prove`'s own, "the saddle canal's offset cylinders do not meet in a loop" (a unit test pins that site's text); drop the Convex flag from `saddleKey.built`: the tube root's `Chamfer` builds and removes material where a concave blend adds it, and the recognition unit test fails; drop the Jacobian test: ρ = 3.4 refuses at the progress test instead; drop the clearance check: the flat refuses later, "a corner of the saddle fillet's window lies on no facet of the shaft wall"; admit every σ: the joined pin refuses "the bore's cut leaves fewer than three vertices"; drop the exact axis meeting: the moved pin refuses with "a held seam vertex is off the two cylinders" |
 | R7 refusals | `d > r/2` refuses; a pin moved 0.5 off the shaft's axis, a pin with r/R = 0.75 and a pin joined through the shaft refuse with the canal-surface reason; a flat milled beside a mouth refuses "another face of the body comes within the saddle chamfer's reach"; `Fillet` of a pin's roots keeps the canal-surface reason (`apitest/blend_refusal_names_test.go`) | drop the clearance check: the flat builds; admit a bore that is not `Reversed`: the joined pin builds; drop the exact axis meeting: the moved pin refuses with "a held seam vertex is off the two cylinders"; drop `2r² < R²`: r/R = 0.75 builds |
 
 ## 10. Files and fallout
@@ -1027,7 +1046,7 @@ published bound, never with a pinned literal.
 | B4 | R4, an open arc | as B1 for an arc with end faces |
 | B5 | R6, a closed plane-sphere rim (§4.5) | the R6 rows of §9 pass |
 | B6 | R7, the cross-hole saddle chamfer (§4.9) | the R7 rows of §9 pass |
-| B7 | R7 fillet of the convex mouth, σ = (−1, +1) (§4.10) | the R7 fillet rows of §9 pass |
+| B7 | R7 fillet of the convex mouth: a convex edge with σ = (−1, +1) (§4.10) | the R7 fillet rows of §9 pass |
 | B8 | the other sign patterns of crossing cylinders: two crossing bores, a boss's root on a shaft | a design for each pattern's walls and bands |
 
 ## 12. Rejected shortcuts
@@ -1072,4 +1091,4 @@ published bound, never with a pinned literal.
 | R7 ratio | `2r² < R²` | admit what the cell proofs pass (r/R = 0.75 builds with the gate dropped): wider reach, no checked fixture past 0.7 |
 | R7 fillet stations and rows | `N = 256`, rows for `τ = 2⁻¹⁰·ρ`: two mouths in about 0.4 s and 30,000 facets at ρ = 0.5, ε from 0.0024 mm (ρ = 0.5) to 0.0074 mm (ρ = 1.5) | `N = 1024` as §4.9: ε about a quarter, four times the facets and time |
 | R7 fillet face | untagged `Faceted`, role `fillet(k)` | a sealed `Canal` surface variant (`agent-docs/trim-graph-design.md` increment 9): a tag a reader can query, a new public type |
-| R7 fillet sign patterns | σ = (−1, +1), the convex mouth, only | the patterns of B8 |
+| R7 fillet sign patterns | a convex edge with σ = (−1, +1), the cross hole's mouth, only | the patterns of B8 |

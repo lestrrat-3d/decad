@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 	"slices"
 	"sort"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/saddlecanal"
@@ -49,9 +51,6 @@ const (
 	// a cut line or plane and a window corner from a held edge: a closer one
 	// would make a facet piece of nearly zero size.
 	clipTol = 1e-6
-	// foldMargin is the least cosine a new band facet's normal keeps with
-	// the direction its embedding argument reads.
-	foldMargin = 1e-9
 )
 
 // looksLikeSaddleFillet reports whether e is an R7 saddle a fillet can
@@ -124,7 +123,8 @@ func findSaddle(body *topo.Body, fp facetedrecord.Payload, key saddleKey) (saddl
 		if !looksLikeSaddleFillet(e) {
 			continue
 		}
-		if _, _, k, ok := saddleTags(e); !ok || k.R != key.R || k.r != key.r || k.sigma != key.sigma {
+		if _, _, k, ok := saddleTags(e); !ok || k.R != key.R || k.r != key.r || k.convex != key.convex ||
+			k.sigma != key.sigma {
 			continue
 		}
 		s, err := readSaddle(e, fp, faceIndex)
@@ -355,6 +355,12 @@ func (f *saddleFillet) chooseCuts(faceIndex map[*topo.Face]int) (shaftWindow, fl
 	rp, Rp := f.c.Bore+f.c.Rho, f.c.R-f.c.Rho
 	margin := rp * windowMargin
 	s := (rp + margin) / math.Cos(math.Pi/windowSides)
+	// The corners' widest |y| is s·R/R'; at R or beyond the window leaves the
+	// shaft's (y, z) projection.
+	if !(s < Rp) {
+		return shaftWindow{}, 0, fmt.Errorf("%w: the saddle fillet's window reaches past the side of the shaft",
+			decaderr.ErrUnsupported)
+	}
 	shaft := f.mouthFacets(faceIndex[f.s.big])
 	var win shaftWindow
 	found := false
@@ -753,11 +759,6 @@ func monotoneRing(ring []ringPt, what string) ([]ringPt, error) {
 			next = out[i+1].ang
 		}
 		if !(next > p.ang) || next-p.ang >= math.Pi {
-			fmt.Println("DEBUG ring", what, len(out), i, p.ang, next)
-			for _, q := range out {
-				fmt.Printf("%.4f ", q.ang)
-			}
-			fmt.Println()
 			return nil, fmt.Errorf("%w: %s does not run once around the bore", decaderr.ErrUnsupported, what)
 		}
 	}
@@ -925,6 +926,7 @@ func (f *saddleFillet) emitPieces(t int, loops [][]int, reversed bool, pts piece
 // about the bore axis.
 func (f *saddleFillet) clipBore(fi int, xw float64) ([]ringPt, error) {
 	g := func(v int) float64 { return xw - f.localOf(v).X }
+	var order []int
 	cut := func(a, b int) int {
 		k := [2]int{min(a, b), max(a, b)}
 		if c, ok := f.cuts[k]; ok {
@@ -936,8 +938,8 @@ func (f *saddleFillet) clipBore(fi int, xw float64) ([]ringPt, error) {
 		p := va.Add(vb.Sub(va).Scale(t))
 		bound := proofbound.AbsSumUpper(max(f.beta[a], f.beta[b]), f.slack)
 		// Two cuts within rounding of each other, across a held sliver,
-		// become one vertex.
-		for _, c := range f.cuts {
+		// become one vertex: the earlier, in the facets' order.
+		for _, c := range order {
 			if d := f.verts[c].Sub(p).Len(); d <= f.slack {
 				f.beta[c] = max(f.beta[c], proofbound.AbsSumUpper(bound, d))
 				f.cuts[k] = c
@@ -946,6 +948,7 @@ func (f *saddleFillet) clipBore(fi int, xw float64) ([]ringPt, error) {
 		}
 		c := f.vertex(p, bound)
 		f.cuts[k] = c
+		order = append(order, c)
 		return c
 	}
 	for _, t := range facetsOfFace(f.fp.FaceOf, fi) {
@@ -978,13 +981,8 @@ func (f *saddleFillet) clipBore(fi int, xw float64) ([]ringPt, error) {
 		}
 		f.removed = append(f.removed, t)
 	}
-	ring := make([]ringPt, 0, len(f.cuts))
-	seen := map[int]struct{}{}
-	for _, c := range f.cuts {
-		if _, dup := seen[c]; dup {
-			continue
-		}
-		seen[c] = struct{}{}
+	ring := make([]ringPt, 0, len(order))
+	for _, c := range order {
 		p := f.localOf(c)
 		a := math.Atan2(p.Z, p.Y)
 		if a < 0 {
@@ -992,7 +990,7 @@ func (f *saddleFillet) clipBore(fi int, xw float64) ([]ringPt, error) {
 		}
 		ring = append(ring, ringPt{idx: c, ang: a})
 	}
-	sort.Slice(ring, func(i, j int) bool { return ring[i].ang < ring[j].ang })
+	sort.SliceStable(ring, func(i, j int) bool { return ring[i].ang < ring[j].ang })
 	return monotoneRing(ring, "the bore's cut")
 }
 
@@ -1001,6 +999,45 @@ func (f *saddleFillet) emitSome(t [3]int, src int) {
 	if t[0] != t[1] && t[1] != t[2] && t[2] != t[0] {
 		f.emit(t, src)
 	}
+}
+
+// bandFacing decides, in exact rationals on the held floats, the test that
+// embeds a band facet t. On the shaft its normal must have a positive
+// component along the local x axis, the bore's axis, so the facet's (y, z)
+// projection keeps its orientation. On the bore its normal must have a
+// positive component toward the bore's axis from each of its vertices,
+// −(0, y_i, z_i) in local coordinates, so its radial projection onto the
+// bore keeps its orientation over the facet's angular span. The local
+// coordinates are differences of world floats and the pose's signs cancel
+// in the bore's products, so every term is exact.
+func (f *saddleFillet) bandFacing(t [3]int, shaft bool) bool {
+	pose := f.s.key.pose
+	at := func(v r3.Vec, i int) *big.Rat { return proofarith.FloatRat([3]float64{v.X, v.Y, v.Z}[i]) }
+	a, b, c := f.verts[t[0]], f.verts[t[1]], f.verts[t[2]]
+	// normal returns component i of (b − a) × (c − a).
+	normal := func(i int) *big.Rat {
+		j, k := (i+1)%3, (i+2)%3
+		bj, bk := new(big.Rat).Sub(at(b, j), at(a, j)), new(big.Rat).Sub(at(b, k), at(a, k))
+		cj, ck := new(big.Rat).Sub(at(c, j), at(a, j)), new(big.Rat).Sub(at(c, k), at(a, k))
+		return new(big.Rat).Sub(new(big.Rat).Mul(bj, ck), new(big.Rat).Mul(bk, cj))
+	}
+	if shaft {
+		return normal(pose.Axis[0]).Sign()*int(pose.Sign[0]) > 0
+	}
+	shift := [3]float64{pose.Shift.X, pose.Shift.Y, pose.Shift.Z}
+	n1, n2 := normal(pose.Axis[1]), normal(pose.Axis[2])
+	for _, v := range t {
+		p := f.verts[v]
+		y := new(big.Rat).Sub(at(p, pose.Axis[1]), proofarith.FloatRat(shift[pose.Axis[1]]))
+		z := new(big.Rat).Sub(at(p, pose.Axis[2]), proofarith.FloatRat(shift[pose.Axis[2]]))
+		// The local y and z carry the pose's signs, as do the normal's
+		// local components; each product's two signs cancel.
+		dot := new(big.Rat).Add(new(big.Rat).Mul(n1, y), new(big.Rat).Mul(n2, z))
+		if dot.Sign() >= 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // bandArea is a band's held area and an upper bound on the exact area of
@@ -1051,20 +1088,13 @@ func (f *saddleFillet) band(cut, exact []ringPt, group int, sample float64, shaf
 			dist = max(dist, d)
 		}
 		a, b, c := f.verts[t[0]], f.verts[t[1]], f.verts[t[2]]
-		n := b.Sub(a).Cross(c.Sub(a))
-		if n.Dot(dirs[0].Add(dirs[1]).Add(dirs[2])) < 0 {
+		// Wind toward the wall's outward side; bandFacing then proves it.
+		if b.Sub(a).Cross(c.Sub(a)).Dot(dirs[0].Add(dirs[1]).Add(dirs[2])) < 0 {
 			t[1], t[2] = t[2], t[1]
-			n = n.Scale(-1)
 		}
-		checks := dirs[:]
-		if shaft {
-			checks = append(checks, worldVec(pose, r3.Vec{X: 1}))
-		}
-		for _, d := range checks {
-			if !(n.Dot(d) > foldMargin*n.Len()*d.Len()) {
-				return 0, bandArea{}, fmt.Errorf("%w: the saddle fillet's band on the %s folds", decaderr.ErrUnsupported,
-					map[bool]string{true: "shaft wall", false: "bore"}[shaft])
-			}
+		if !f.bandFacing(t, shaft) {
+			return 0, bandArea{}, fmt.Errorf("%w: the saddle fillet's band on the %s folds", decaderr.ErrUnsupported,
+				map[bool]string{true: "shaft wall", false: "bore"}[shaft])
 		}
 		// The spread of the vertices' angles, widened by the angle their
 		// distance from the wall can hide, |Δ| ≤ 2·dist/(radius − dist).

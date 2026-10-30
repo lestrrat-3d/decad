@@ -1,11 +1,16 @@
 package retainedblend
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/crossbore"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
+	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -48,4 +53,47 @@ func TestMonotoneRing(t *testing.T) {
 	require.ErrorIs(t, err, decaderr.ErrUnsupported, "a ring that turns back")
 	_, err = monotoneRing([]ringPt{{idx: 1, ang: 0}, {idx: 2, ang: 0.5}, {idx: 3, ang: 1 + math.Pi}}, "ring")
 	require.ErrorIs(t, err, decaderr.ErrUnsupported, "a gap of half a turn")
+}
+
+// TestSaddleRecognitionKeepsTheChamferRule compares looksLikeSaddle with the
+// rule the R7 chamfer read before σ: a convex edge, exactly one face
+// Reversed, the other the shaft of radius R and the Reversed one the bore of
+// radius r, 2r² < R². Every pair of radii, Reversed flags and Convex flag
+// must give the same answer and the same shaft. A concave pin root inside a
+// tube's bore (both flags and Convex flipped from a cross hole's mouth) has the
+// mouth's σ and must still refuse.
+func TestSaddleRecognitionKeepsTheChamferRule(t *testing.T) {
+	t.Parallel()
+	before := func(e *topo.Edge) (*topo.Face, bool) {
+		if !e.Convex || e.Faces[0].Reversed == e.Faces[1].Reversed {
+			return nil, false
+		}
+		shaft, bore := e.Faces[0], e.Faces[1]
+		if shaft.Reversed {
+			shaft, bore = bore, shaft
+		}
+		R, _ := shaft.Surface.(surfacegeom.Cylinder).Radius.In(units.Millimeter)
+		r, _ := bore.Surface.(surfacegeom.Cylinder).Radius.In(units.Millimeter)
+		return shaft, 2*r*r < R*R
+	}
+	v := &topo.Vertex{}
+	for _, radii := range [][2]float64{{10, 3}, {3, 10}, {10, 7.5}, {7.5, 10}, {5, 5}} {
+		for flags := range 8 {
+			convex, rev0, rev1 := flags&1 != 0, flags&2 != 0, flags&4 != 0
+			faces := []*topo.Face{
+				{Surface: surfacegeom.Cylinder{Axis: r3.NewVec(1, 0, 0), Radius: units.Millimeters(radii[0])},
+					RetainedTag: true, Reversed: rev0},
+				{Surface: surfacegeom.Cylinder{Origin: r3.NewVec(40, 0, 0), Axis: r3.NewVec(0, 0, 1),
+					Radius: units.Millimeters(radii[1])}, RetainedTag: true, Reversed: rev1},
+			}
+			e := &topo.Edge{Start: v, End: v, Faces: faces, Convex: convex}
+			name := fmt.Sprintf("radii %v convex %v reversed %v %v", radii, convex, rev0, rev1)
+			wantShaft, want := before(e)
+			require.Equal(t, want, looksLikeSaddle(e), name)
+			if want {
+				shaft, _, _, _ := saddleTags(e)
+				require.Same(t, wantShaft, shaft, name)
+			}
+		}
+	}
 }

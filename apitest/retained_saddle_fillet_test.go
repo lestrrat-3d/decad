@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -263,6 +264,21 @@ func TestRetainedSaddleFillet(t *testing.T) {
 			require.Equal(t, map[string]int{"cylinder": 2, "plane": 2, "faceted": 2}, kinds,
 				"the walls keep their cylinders and each fillet is faceted")
 			requireFilletedMouths(t, body, out, tc.r, tc.rho, tc.meaningful, []float64{1, -1}, saddleWorld)
+			if tc.name != "r3 rho0.5" {
+				return
+			}
+			// The same call on the same shaft builds the same mesh: no merge of
+			// near cut points depends on map order. The Fillet retired the
+			// first body, so the shaft is built again.
+			body, _ = saddleShaft(t, tc.r, 0)
+			again, err := decad.Fillet(t.Context(), body, saddleMouths(t, body, tc.r, 0), units.Millimeters(tc.rho))
+			require.NoError(t, err)
+			first, err := out.Tessellate(t.Context(), units.Millimeters(0.1))
+			require.NoError(t, err)
+			second, err := again.Tessellate(t.Context(), units.Millimeters(0.1))
+			require.NoError(t, err)
+			require.True(t, slices.Equal(first.Vertices(), second.Vertices()), "the vertex lists agree")
+			require.True(t, slices.Equal(first.Triangles(), second.Triangles()), "the triangle lists agree")
 		})
 	}
 	t.Run("a Hole on the shaft's wall", func(t *testing.T) {
@@ -279,6 +295,38 @@ func TestRetainedSaddleFillet(t *testing.T) {
 		require.NoError(t, err)
 		requireFilletedMouths(t, body, out, 3, 1.5, true, []float64{1, -1}, saddleWorld)
 	})
+}
+
+// saddleTubeRoot is a tube, the rectangle x in [0, 80], y in [10, 20]
+// revolved about x, joined to a radius-3 pin along z through (40, 0) from
+// z = 2 to 15, which stands in the tube's bore and roots in its wall.
+func saddleTubeRoot(t *testing.T) *decad.Body {
+	t.Helper()
+	sc := newRetentionScene()
+	s, err := sc.w.CreateSketch(sc.w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, saddleR, 80, 2*saddleR)
+	s.Fix(rect.A)
+	s.Fix(rect.C)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	tube, err := decad.Revolve(t.Context(), sc.doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+	plane, err := sc.w.CreateOffsetPlane(sc.w.XY(), 2)
+	require.NoError(t, err)
+	ps, err := sc.w.CreateSketch(plane)
+	require.NoError(t, err)
+	c := ps.CreatePoint(40, 0)
+	ps.Fix(c)
+	ps.CreateCircle(c, 3)
+	_, err = ps.Solve(t.Context())
+	require.NoError(t, err)
+	pin, err := decad.Extrude(t.Context(), sc.doc, ps, ps.Profiles()[0],
+		decad.Distance{D: units.Millimeters(13), Dir: decad.Along})
+	require.NoError(t, err)
+	body, err := decad.Union(t.Context(), tube, pin)
+	require.NoError(t, err)
+	return body
 }
 
 func TestRetainedSaddleFilletRefusals(t *testing.T) {
@@ -310,6 +358,31 @@ func TestRetainedSaddleFilletRefusals(t *testing.T) {
 		body, err := decad.Union(t.Context(), saddleRevolve(t, sc), saddlePin(t, sc, 3, 0))
 		require.NoError(t, err)
 		_, err = decad.Fillet(t.Context(), body, saddleMouths(t, body, 3, 0), units.Millimeters(0.5))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, crossingCylindersReason)
+	})
+	t.Run("a pin's root inside a tube's bore", func(t *testing.T) {
+		t.Parallel()
+		// The root is concave between the tube's bore (Reversed, radius 10)
+		// and the pin's wall (radius 3): both Reversed flags and the Convex
+		// flag are a cross hole mouth's flipped, so the ball's sides read as
+		// the mouth's, but a blend here adds material and neither route
+		// builds it.
+		body := saddleTubeRoot(t)
+		var sel *decad.EdgeQuery
+		for _, e := range body.Edges() {
+			p := e.Start().Position().Value
+			if p == e.End().Position().Value && math.Abs(math.Hypot(p.X-40, p.Y)-3) < 0.05 &&
+				math.Abs(math.Hypot(p.Y, p.Z)-saddleR) < 0.05 {
+				require.Nil(t, sel, "one root edge")
+				sel = decad.Edges(decad.EndpointAt(p)).Exactly(1)
+			}
+		}
+		require.NotNil(t, sel)
+		_, err := decad.Chamfer(t.Context(), body, sel, units.Millimeters(0.5))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, crossingCylindersReason)
+		_, err = decad.Fillet(t.Context(), body, sel, units.Millimeters(0.5))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, crossingCylindersReason)
 	})
