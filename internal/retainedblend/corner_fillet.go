@@ -199,6 +199,17 @@ func rewriteCorners(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 		}
 	}
 
+	// Every strip's rows end on its end planes; one step for all of them,
+	// taken at the shallowest plane, keeps each chord there within the rows'
+	// bound and gives every strip the same rows.
+	sine := 1.0
+	for ei, l := range plan.lines {
+		for i := range 2 {
+			if pl, kind := endPlane(ei, i); kind != 0 {
+				sine = endSine(sine, l.d, pl)
+			}
+		}
+	}
 	geoms := make([]cornerGeom, len(plan.lines))
 	for ei, l := range plan.lines {
 		g := &geoms[ei]
@@ -207,7 +218,7 @@ func rewriteCorners(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 		g.baseB = e0.Sub(l.a.n.Scale(r))
 		g.center = e0.Sub(l.a.n.Scale(r)).Sub(l.b.n.Scale(r))
 		g.dir = [2]r3.Vec{l.d, l.d.Scale(-1)}
-		m := max(2, int(math.Ceil(math.Pi/2/(2*math.Acos(1-math.Min(w.tau/r, 1))))))
+		m := max(2, int(math.Ceil(math.Pi/2/rowStep(w.tau, r, sine))))
 		for j := 0; j <= m; j++ {
 			alpha := math.Pi / 2 * float64(j) / float64(m)
 			g.rowsAt = append(g.rowsAt, g.center.Add(l.a.n.Scale(r*math.Cos(alpha))).Add(l.b.n.Scale(r*math.Sin(alpha))))

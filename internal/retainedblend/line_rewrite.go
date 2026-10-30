@@ -112,6 +112,25 @@ func setbackPoint(base, d r3.Vec, g plane) r3.Vec {
 	return base.Add(d.Scale(-g.offset(base) / d.Dot(g.n)))
 }
 
+// rowStep is the largest angle between neighbouring rows of a straight edge's
+// fillet of radius r whose rows end on planes with |d·n| at least c. A row
+// chord's sagitta in the cross-section is r·(1 − cos(Δα/2)); projected along
+// the edge onto an end plane it grows by up to 1/|d·n|, so the step keeps the
+// cross-section's sagitta within tau·c and the end plane's within tau, which
+// every row vertex's bound tau + slack states
+// (agent-docs/retained-edge-blend-design.md §6.3).
+func rowStep(tau, r, c float64) float64 { return 2 * math.Acos(1-math.Min(tau*c/r, 1)) }
+
+// endSine is the smallest of c and |d·n| over the planes' normals n: the
+// sine of the shallowest angle at which an edge along d meets the planes its
+// rows end on.
+func endSine(c float64, d r3.Vec, planes ...plane) float64 {
+	for _, p := range planes {
+		c = min(c, math.Abs(d.Dot(p.n)))
+	}
+	return c
+}
+
 // rewriteLineEdge blends one straight edge and builds the body over the
 // rewritten mesh.
 func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload, l line, spec blendSpec,
@@ -228,7 +247,9 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 			return nil, fmt.Errorf("%w: the blend's tangent points do not share one ball", decaderr.ErrUnsupported)
 		}
 		a0, a1 := l.a.n.Scale(-ball), l.b.n.Scale(-ball)
-		step := 2 * math.Acos(1-math.Min(w.tau/spec.r, 1))
+		// The rows end on the end planes, where each chord stands for an arc
+		// of the ellipse the cylinder cuts there.
+		step := rowStep(w.tau, spec.r, endSine(1, l.d, l.ends[0].g, l.ends[1].g))
 		m := max(2, int(math.Ceil(l.phi/step)))
 		sin := math.Sin(l.phi)
 		for j := 0; j <= m; j++ {

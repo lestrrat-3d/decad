@@ -288,6 +288,21 @@ func rewriteMitreRun(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 		return v
 	}
 
+	// Every edge's rows end on a mitre plane or an end plane; one step for the
+	// whole run, taken at its shallowest plane, keeps each chord there within
+	// the rows' bound and gives neighbouring strips the same rows at a joint.
+	sine := 1.0
+	for k := range run.edges {
+		e := &run.edges[k]
+		for i := range 2 {
+			end := e.l.ends[i].g
+			if jt := e.joint[i]; jt >= 0 {
+				end = run.joints[jt].plane
+			}
+			sine = endSine(sine, e.l.d, end)
+		}
+	}
+
 	// Per edge: the runs, the rows, and the vertices of each row at both ends.
 	for k := range run.edges {
 		e := &run.edges[k]
@@ -333,7 +348,7 @@ func rewriteMitreRun(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 			return nil, fmt.Errorf("%w: the blend's tangent points do not share one ball", decaderr.ErrUnsupported)
 		}
 		a0, a1 := l.a.n, l.b.n // the ball is inside: -ball = +1 for a convex edge
-		step := 2 * math.Acos(1-math.Min(w.tau/spec.r, 1))
+		step := rowStep(w.tau, spec.r, sine)
 		m := max(2, int(math.Ceil(l.phi/step)))
 		sin := math.Sin(l.phi)
 		for j := 0; j <= m; j++ {
