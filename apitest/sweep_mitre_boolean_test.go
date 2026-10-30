@@ -628,6 +628,9 @@ func clusteredBranchUnion(t *testing.T, branches int) *decad.Body {
 	require.NoError(t, err)
 	branchSketch, branchProfile := polygonSweepSketch(t, 16, 1.5)
 	branchPath := mustPath(t, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 2.5), r3.NewVec(0.8, 0.3, 6), r3.NewVec(2.5, 0.6, 9.5))
+	unit, err := decad.Sweep(t.Context(), doc, branchSketch, branchProfile, branchPath,
+		decad.WithMitredJoins(), decad.WithSectionScale(scalars(1.375/1.5, 1.2/1.5, 1/1.5)...))
+	require.NoError(t, err)
 
 	tilt := 40 * math.Pi / 180
 	tree := trunk
@@ -641,10 +644,7 @@ func clusteredBranchUnion(t *testing.T, branches int) *decad.Body {
 		require.NoError(t, err)
 		xf, err := r3.FromFrame(frame)
 		require.NoError(t, err)
-		unit, err := decad.Sweep(t.Context(), doc, branchSketch, branchProfile, branchPath,
-			decad.WithMitredJoins(), decad.WithSectionScale(scalars(1.375/1.5, 1.2/1.5, 1/1.5)...))
-		require.NoError(t, err)
-		branch, err := decad.Transform(t.Context(), unit, xf)
+		branch, err := decad.Copy(t.Context(), unit, decad.WithCopyPlacement(xf))
 		require.NoError(t, err)
 
 		treeVol, err := tree.Volume()
@@ -665,6 +665,8 @@ func clusteredBranchUnion(t *testing.T, branches int) *decad.Body {
 		require.LessOrEqual(t, got.Value.Base()-slack, treeVol.Value.Base()+branchVol.Value.Base(), `union %d`, k+1)
 		require.Greater(t, got.Value.Base()+slack, treeVol.Value.Base(), `union %d adds the branch's exposed part`, k+1)
 	}
+	require.NoError(t, decad.Remove(unit))
+	require.Equal(t, []*decad.Body{tree}, doc.Bodies())
 
 	return tree
 }
