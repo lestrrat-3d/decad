@@ -23,7 +23,7 @@ import (
 // The reference tests and the mirrored route's tests compare against it.
 func crossBoreCellProof(rec *facetedrecord.CrossCylinderBoreRecord, setback float64,
 	i int, angularGap *big.Rat) (CellResult, error) {
-	exact, err := CellExactProof(rec, setback, i, angularGap)
+	exact, err := CellExactProof(rec.Radius, rec.Bore, setback, i, angularGap)
 	if err != nil {
 		return CellResult{}, err
 	}
@@ -271,7 +271,7 @@ func TestCrossBoreMirroredCellsEncloseSamples(t *testing.T) {
 				base, ok := bases[k]
 				if !ok {
 					var err error
-					base, err = CellExactProof(&tc.rec, tc.setback, k, gap)
+					base, err = CellExactProof(tc.rec.Radius, tc.rec.Bore, tc.setback, k, gap)
 					require.NoError(t, err)
 					bases[k] = base
 				}
@@ -433,7 +433,7 @@ func TestCrossBoreMirroredRouteRefusesLikeDirect(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var firstDirect error
 			for j := range n {
-				_, err := CellExactProof(&tc.rec, 0.5, j, gap)
+				_, err := CellExactProof(tc.rec.Radius, tc.rec.Bore, 0.5, j, gap)
 				if err != nil {
 					firstDirect = err
 					break
@@ -441,7 +441,7 @@ func TestCrossBoreMirroredRouteRefusesLikeDirect(t *testing.T) {
 			}
 			require.Error(t, firstDirect)
 			_, err := MirroredCellMaxima(t.Context(), 4,
-				func(k int) (CellExact, error) { return CellExactProof(&tc.rec, 0.5, k, gap) },
+				func(k int) (CellExact, error) { return CellExactProof(tc.rec.Radius, tc.rec.Bore, 0.5, k, gap) },
 				func(int, *CellExact, bool, bool) float64 { return 0 })
 			require.EqualError(t, err, firstDirect.Error())
 		})

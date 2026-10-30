@@ -90,15 +90,19 @@ type CellExact struct {
 // The cell's intervals keep unreduced rationals (proofarith.LazyRat); a value
 // is read in lowest terms where it leaves the proof: a square-root input, the
 // sine/cosine span input and width, and the float readers.
-func CellExactProof(rec *facetedrecord.CrossCylinderBoreRecord, setback float64,
-	i int, angularGap *big.Rat) (CellExact, error) {
+//
+// radius is the outer cylinder's R and bore the bore's r, in the fixed pose of
+// agent-docs/cross-cylinder-bore-chamfer-design.md with the bore axis at Z−c = 0;
+// the retained saddle chamfer (internal/retainedblend/saddle.go) maps its pair
+// into that pose and proves the same cells.
+func CellExactProof(radius, bore, setback float64, i int, angularGap *big.Rat) (CellExact, error) {
 	const n = 2 * HalfStations
 	turn := big.NewRat(int64(i), n)
 	s0, c0 := proofbound.TurnSinCosInterval(turn)
 	gapLazy := proofarith.LazyOf(angularGap)
 	s := proofarith.LazyIntervalWiden(proofarith.LazyIntervalOf(proofbound.ToProofInterval(s0)), gapLazy)
 	c := proofarith.LazyIntervalWiden(proofarith.LazyIntervalOf(proofbound.ToProofInterval(c0)), gapLazy)
-	R, r, d := crossPoint(rec.Radius), crossPoint(rec.Bore), crossPoint(setback)
+	R, r, d := crossPoint(radius), crossPoint(bore), crossPoint(setback)
 	cd, sd := crossDual{v: c, d: crossSub(crossPoint(0), s)}, crossDual{v: s, d: c}
 	Rd, rd, dd := crossConst(R), crossConst(r), crossConst(d)
 	xd, ok := crossDSqrt(crossDSub(crossDMul(Rd, Rd),
@@ -337,7 +341,7 @@ func ProveCells(ctx context.Context, rec *facetedrecord.CrossCylinderBoreRecord,
 	const n = 2 * HalfStations
 	gap := new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(2, 1), proofbound.PiUpper), big.NewRat(n, 1))
 	return MirroredCellMaxima(ctx, orderedwork.EachWorkers(n/4+1, CellParallelMin),
-		func(k int) (CellExact, error) { return CellExactProof(rec, setback, k, gap) },
+		func(k int) (CellExact, error) { return CellExactProof(rec.Radius, rec.Bore, setback, k, gap) },
 		func(j int, base *CellExact, flipY, flipZ bool) float64 {
 			cell := mesh.CellHeld[j]
 			held := [3]r3.Vec{mesh.Verts[cell[0]], mesh.Verts[cell[1]], mesh.Verts[cell[2]]}
