@@ -28,7 +28,7 @@ import (
 // a full Revolve with an exact cardinal axis cut by a cardinal plane holding
 // that axis (the meridian and its mirror) or normal to it (one disk or annulus
 // per material interval), each returned as one profile per region,
-// a direct matching-profile, a Loft with one authenticated D-shaped through-bore,
+// a direct matching-profile, a Loft with one authenticated line-and-arc or D-shaped through-bore,
 // full line-boundary or varying circular-boundary Loft
 // cut by an exact world-XY interior plane,
 // an original rectangular or homothetic LoftSections cut by an exact world-XY interior plane,
