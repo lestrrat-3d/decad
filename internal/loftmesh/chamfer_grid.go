@@ -193,6 +193,11 @@ func chamferPointEdgeWithin(p proofarith.Xpt,
 	edge ChamferSplitEdge, reach2 *big.Rat) bool {
 	d := proofarith.Xsub(edge.B, edge.A)
 	den := proofarith.XdotRat(d, d)
+	return chamferPointEdgeWithinPrepared(p, edge, d, den, reach2)
+}
+
+func chamferPointEdgeWithinPrepared(p proofarith.Xpt, edge ChamferSplitEdge,
+	d proofarith.Xpt, den, reach2 *big.Rat) bool {
 	if den.Sign() == 0 {
 		return false
 	}
@@ -220,9 +225,11 @@ func ChamferNearCovered(ctx context.Context, tri [3]proofarith.Xpt,
 	}
 	for _, index := range candidates {
 		edge := grid.edges[index]
-		if chamferPointEdgeWithin(tri[0], edge, reach2) &&
-			chamferPointEdgeWithin(tri[1], edge, reach2) &&
-			chamferPointEdgeWithin(tri[2], edge, reach2) {
+		d := proofarith.Xsub(edge.B, edge.A)
+		den := proofarith.XdotRat(d, d)
+		if chamferPointEdgeWithinPrepared(tri[0], edge, d, den, reach2) &&
+			chamferPointEdgeWithinPrepared(tri[1], edge, d, den, reach2) &&
+			chamferPointEdgeWithinPrepared(tri[2], edge, d, den, reach2) {
 			return true
 		}
 	}

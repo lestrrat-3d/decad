@@ -133,6 +133,9 @@ func TestChamferPointEdgeWithinMatchesRawRat(t *testing.T) {
 		reach2 := reaches[rng.IntN(len(reaches))]
 		want := oracle(p, edge, reach2)
 		require.Equal(t, want, chamferPointEdgeWithin(p, edge, reach2))
+		d := proof.Xsub(edge.B, edge.A)
+		den := proof.XdotRat(d, d)
+		require.Equal(t, want, chamferPointEdgeWithinPrepared(p, edge, d, den, reach2))
 		if want {
 			inside++
 		} else {
