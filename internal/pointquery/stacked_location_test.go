@@ -154,6 +154,47 @@ func TestLocateStackBrep(t *testing.T) {
 	}
 }
 
+func TestLocatePointQueryCutBrep(t *testing.T) {
+	t.Parallel()
+	bp := stackBrep(t)
+	outer := squareLoop()
+	inner := sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		line(pt{U: 4, V: 4}, pt{U: 4, V: 6}),
+		line(pt{U: 4, V: 6}, pt{U: 6, V: 6}),
+		line(pt{U: 6, V: 6}, pt{U: 6, V: 4}),
+		line(pt{U: 6, V: 4}, pt{U: 4, V: 4}),
+	}}
+	target := payloadOf(t, momentinput.Profile{Outer: outer, Holes: []sectionrecord.LoopRecord{inner}})
+	tool := payloadOf(t, momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{
+		line(pt{U: 1, V: 1}, pt{U: 9, V: 1}),
+		line(pt{U: 9, V: 1}, pt{U: 9, V: 9}),
+		line(pt{U: 9, V: 9}, pt{U: 1, V: 9}),
+		line(pt{U: 1, V: 9}, pt{U: 1, V: 1}),
+	}}})
+	tool.Z0, tool.Z1 = 6, 10
+	bp.PointQueryCut = &breprecord.CutOperands{Target: target, Tool: tool}
+	bp.Stack = nil
+	for _, tc := range []prismCase{
+		{name: "inside below tool", at: r3.NewVec(2, 5, 5), want: Inside},
+		{name: "tool floor", at: r3.NewVec(2, 5, 6), want: OnBoundary},
+		{name: "outside target", at: r3.NewVec(12, 5, 5), want: Outside},
+	} {
+		got, decided, err := LocateStackBrep(t.Context(), tc.at, bp)
+		require.NoError(t, err, tc.name)
+		require.Equal(t, tc.want != Undecided, decided, tc.name)
+		require.Equal(t, tc.want, got, tc.name)
+	}
+	bp.Stack = &breprecord.Stack{}
+	_, decided, err := LocateStackBrep(t.Context(), r3.NewVec(5, 5, 3), bp)
+	require.NoError(t, err)
+	require.False(t, decided)
+	bp.Stack = nil
+	bp.PointQueryCut.Target.Profile.Holes = nil
+	_, decided, err = LocateStackBrep(t.Context(), r3.NewVec(2, 5, 5), bp)
+	require.NoError(t, err)
+	require.False(t, decided)
+}
+
 // TestLocateStackBrepLeavesOpenRecords covers every gate that hands a BRep
 // back to the mesh.
 func TestLocateStackBrepLeavesOpenRecords(t *testing.T) {

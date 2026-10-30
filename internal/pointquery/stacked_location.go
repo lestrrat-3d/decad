@@ -34,13 +34,38 @@ func LocateStacked(ctx context.Context, p r3.Vec, sp stackedrecord.Payload) (Loc
 // zero stack and face displacement, no blend face, loop band or shell band,
 // and a first face that is a planar cap in the reference frame the stack is
 // stated in (agent-docs/point-containment-design.md §9.1). Every other BRep,
-// and a point the route leaves open, reports decided false. p must be
-// finite.
+// and a point the route leaves open, reports decided false. A line-only A7
+// Cut BRep instead combines its transient exact source prisms through §7.
+// p must be finite.
 func LocateStackBrep(ctx context.Context, p r3.Vec, bp breprecord.Payload) (Location, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return Undecided, false, err
 	}
-	if bp.Stack == nil || bp.Stack.Delta != 0 || len(bp.Faces) == 0 ||
+	if cut := bp.PointQueryCut; cut != nil {
+		if bp.Stack != nil || !cut.Target.Profile.AllLines() || !cut.Tool.Profile.AllLines() ||
+			len(cut.Target.Profile.Holes) != 1 || len(cut.Tool.Profile.Holes) != 0 ||
+			cut.Target.SectionDelta != 0 || cut.Tool.SectionDelta != 0 ||
+			len(bp.Faces) == 0 || len(bp.LoopBands) != 0 || bp.BossShell != nil || bp.PocketShell != nil {
+			return Undecided, false, nil
+		}
+		for _, face := range bp.Faces {
+			if face.Blend != "" {
+				return Undecided, false, nil
+			}
+		}
+		target, targetOK, err := LocatePrism(ctx, p, cut.Target)
+		if err != nil || !targetOK {
+			return Undecided, false, err
+		}
+		tool, toolOK, err := LocatePrism(ctx, p, cut.Tool)
+		if err != nil || !toolOK {
+			return Undecided, false, err
+		}
+		result := meet(target, complement(tool))
+		return result, result != Undecided, nil
+	}
+	stack := bp.Stack
+	if stack == nil || stack.Delta != 0 || len(bp.Faces) == 0 ||
 		len(bp.LoopBands) != 0 || bp.BossShell != nil || bp.PocketShell != nil {
 		return Undecided, false, nil
 	}
@@ -64,7 +89,7 @@ func LocateStackBrep(ctx context.Context, p r3.Vec, bp breprecord.Payload) (Loca
 	// loops whose junctions close at two equal ends, where that vertex is
 	// the recorded end itself.
 	budget := proofbound.NewWorkBudget(ctx)
-	for _, slab := range bp.Stack.Slabs {
+	for _, slab := range stack.Slabs {
 		for _, region := range slab.Regions {
 			rings, ok, err := readProfile(budget, region)
 			if err != nil || !ok || !rings.closed() {
@@ -72,7 +97,7 @@ func LocateStackBrep(ctx context.Context, p r3.Vec, bp breprecord.Payload) (Loca
 			}
 		}
 	}
-	return locateSlabs(ctx, p, bp.Stack.Slabs, bp.Faces[0].Frame, bp.Xform)
+	return locateSlabs(ctx, p, stack.Slabs, bp.Faces[0].Frame, bp.Xform)
 }
 
 // locateSlabs classifies p against the union of every slab's regions swept

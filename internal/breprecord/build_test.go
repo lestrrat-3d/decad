@@ -60,6 +60,30 @@ func TestBuildBoxRecord(t *testing.T) {
 	require.Equal(t, bp, body.Payload)
 }
 
+func TestPointQueryCutIsTransientAcrossBuilds(t *testing.T) {
+	t.Parallel()
+	bp := boxRecord(t)
+	bp.PointQueryCut = &breprecord.CutOperands{}
+	env := topo.Env{Doc: &topo.Document{}, Ref: 3, Alloc: topotest.Alloc{}}
+	body, err := breprecord.BuildWithPointQueryCut(t.Context(), env, bp)
+	require.NoError(t, err)
+	record, ok := body.Payload.(breprecord.Payload)
+	require.True(t, ok)
+	require.NotNil(t, record.PointQueryCut)
+
+	rebuilt, err := breprecord.Build(t.Context(), env, record)
+	require.NoError(t, err)
+	rebuiltRecord, ok := rebuilt.Payload.(breprecord.Payload)
+	require.True(t, ok)
+	require.Nil(t, rebuiltRecord.PointQueryCut)
+
+	placed, err := record.Placed(t.Context(), env, r3.Identity())
+	require.NoError(t, err)
+	placedRecord, ok := placed.Payload.(breprecord.Payload)
+	require.True(t, ok)
+	require.Nil(t, placedRecord.PointQueryCut)
+}
+
 func TestPlacedMovesTheRecord(t *testing.T) {
 	t.Parallel()
 	shift, err := r3.Translation(r3.NewVec(100, 0, 0))

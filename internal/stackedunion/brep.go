@@ -218,8 +218,36 @@ func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
 				Z0Denoted: lo.Denotation(), Z1Denoted: hi.Denotation()})
 		}
 		out.Stack = stack
+	} else if b.cut && b.st.va.Proxy.SectionDelta == 0 && b.st.vb.Proxy.SectionDelta == 0 &&
+		lineOnlyOperand(b.st.va) && lineOnlyOperand(b.st.vb) && lineOnlySlabs(b.slabs) {
+		// Keep the exact source prisms for point queries. Their regularized Cut
+		// is the set this A7 BRep records, and they remain separate from the A1
+		// operand stack read by OperandFromPayload.
+		out.PointQueryCut = &breprecord.CutOperands{Target: b.st.va.Proxy, Tool: b.st.vb.Proxy}
 	}
 	return out, nil
+}
+
+func lineOnlyOperand(op Operand) bool {
+	for _, slab := range op.Slabs {
+		for _, region := range slab.Regions {
+			if !region.AllLines() {
+				return false
+			}
+		}
+	}
+	return len(op.Slabs) != 0
+}
+
+func lineOnlySlabs(slabs [][]profileRecord) bool {
+	for _, slab := range slabs {
+		for _, region := range slab {
+			if !region.AllLines() {
+				return false
+			}
+		}
+	}
+	return len(slabs) != 0
 }
 
 func (b *ubBuild) regionLoops(region profileRecord) (ubLoop, []ubLoop, error) {

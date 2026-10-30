@@ -78,6 +78,14 @@ type Stack struct {
 	Delta float64
 }
 
+// CutOperands are the exact prism records whose regularized Cut an eligible
+// A7 BRep denotes for point queries. They do not make the BRep a Boolean
+// operand; generic rebuilds discard them.
+type CutOperands struct {
+	Target prismrecord.Payload
+	Tool   prismrecord.Payload
+}
+
 // Payload is the evaluator's record of an analytically trimmed body. Every
 // face frame is stated in the payload's unplaced coordinates and xform places
 // the whole body, as every payload does. stack is nil for every record but
@@ -87,12 +95,15 @@ type Stack struct {
 // the body build attaches them (band.go, fillet.go). It
 // is nil for every record route L did not build.
 type Payload struct {
-	Faces       []Face
-	Xform       r3.Transform
-	Stack       *Stack
-	LoopBands   []LoopBand
-	BossShell   *prismshell.BossShellBand
-	PocketShell *prismshell.PocketShellBand
+	Faces []Face
+	Xform r3.Transform
+	Stack *Stack
+	// PointQueryCut keeps the exact source prisms of a line-only crossing blind
+	// cut for point queries. Generic rebuilds drop it.
+	PointQueryCut *CutOperands
+	LoopBands     []LoopBand
+	BossShell     *prismshell.BossShellBand
+	PocketShell   *prismshell.PocketShellBand
 	// loopPatches is each band's patch geometry, beside its role
 	// chamferLoop(f,l,p), in band order, nil for a fillet band, whose
 	// patches the readers take from the band record and the body's faces
@@ -149,6 +160,7 @@ func (bp Payload) Transform() r3.Transform { return bp.Xform }
 // unchanged.
 func (bp Payload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	bp.Xform = composed
+	bp.PointQueryCut = nil
 	return Build(ctx, env, bp)
 }
 

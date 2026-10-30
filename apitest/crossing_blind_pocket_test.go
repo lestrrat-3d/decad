@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -34,6 +35,23 @@ func TestCrossingBlindPocketOnThroughHole(t *testing.T) {
 			part, err = decad.Cut(t.Context(), part, pocket)
 			require.NoError(t, err)
 			require.False(t, tookMeshPath(part))
+			if tc.name == "shared-line" {
+				for _, point := range []struct {
+					at   r3.Vec
+					want decad.PointLocation
+				}{
+					{r3.NewVec(2, 0, 6), decad.PointOnBoundary},
+					{r3.NewVec(2, 0, 5.999), decad.PointInside},
+					{r3.NewVec(2, 0, 6.001), decad.PointOutside},
+					{r3.NewVec(-4, 0, 5), decad.PointOnBoundary},
+					{r3.NewVec(-3.999, 0, 5), decad.PointOutside},
+					{r3.NewVec(-4.001, 0, 5), decad.PointInside},
+				} {
+					got, err := part.LocatePoint(t.Context(), point.at, units.Millimeters(0.1))
+					require.NoError(t, err)
+					require.Equal(t, point.want, got, point.at)
+				}
+			}
 			requireEveryEdgeOnTwoFaces(t, part)
 			volume, err := part.Volume()
 			require.NoError(t, err)

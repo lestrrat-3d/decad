@@ -25,6 +25,9 @@ import (
 // the record's faces, bound their other side (band.go). Every node comes from
 // env.Alloc, and the body links env.Doc under producer env.Ref.
 func Build(ctx context.Context, env topo.Env, bp Payload) (*topo.Body, error) {
+	// Point-query Cut sources describe only the A7 body first built from them.
+	// Rebuilds must not carry them across edits or placement changes.
+	bp.PointQueryCut = nil
 	ref, alloc := env.Ref, env.Alloc
 	btopo, err := TopologyContext(ctx, bp)
 	if err != nil {
@@ -188,6 +191,24 @@ func Build(ctx context.Context, env topo.Env, bp Payload) (*topo.Body, error) {
 	}
 	bp.LoopPatches = bands.geom
 	body.Payload = bp
+	return body, nil
+}
+
+// BuildWithPointQueryCut builds bp and attaches its transient exact source
+// prisms to the resulting body. Generic Build calls intentionally discard them.
+func BuildWithPointQueryCut(ctx context.Context, env topo.Env, bp Payload) (*topo.Body, error) {
+	cut := bp.PointQueryCut
+	bp.PointQueryCut = nil
+	body, err := Build(ctx, env, bp)
+	if err != nil || cut == nil {
+		return body, err
+	}
+	built, ok := body.Payload.(Payload)
+	if !ok {
+		return nil, fmt.Errorf("%w: BRep build did not retain its payload", decaderr.ErrUnsupported)
+	}
+	built.PointQueryCut = cut
+	body.Payload = built
 	return body, nil
 }
 

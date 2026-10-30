@@ -218,6 +218,9 @@ func AnalyticBody(ctx context.Context, env topo.Env, payload topo.Payload) (*top
 	case stackedrecord.Payload:
 		return stackedrecord.Build(ctx, env, p, stackedrecord.OwnPlan{})
 	case breprecord.Payload:
+		if p.PointQueryCut != nil {
+			return breprecord.BuildWithPointQueryCut(ctx, env, p)
+		}
 		return breprecord.Build(ctx, env, p)
 	default:
 		return nil, fmt.Errorf(`%w: an analytic boolean produced a %T payload`, decaderr.ErrUnsupported, payload)

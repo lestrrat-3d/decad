@@ -2,8 +2,9 @@
 
 `Body.LocatePoint` classifies one world-coordinate point against a solid body.
 A straight prism with an undisplaced section and exact denoted levels is
-classified against its own record in exact arithmetic (§7), and so are an undisplaced stacked prism, the BRep a
-stacked `Union` keeps its slabs on (§9) and a full solid `Revolve` (§10). A
+classified against its own record in exact arithmetic (§7), and so are an
+undisplaced stacked prism, the BRep a stacked `Union` keeps its slabs on (§9),
+a line-only A7 crossing blind `Cut` (§9.1), and a full solid `Revolve` (§10). A
 mesh Boolean result first combines its operands' exact answers through the
 operation history (§8). Every other body, and every point §7 to §10 leave
 open, reads a verified mesh and its occupied-volume proof (§2). The query does
@@ -517,8 +518,15 @@ Two payloads carry a slab stack:
   sweep) and reads §7.2's map with its frame and the payload's placement.
 
 A crossing blind cut (general-boolean §3 A7), an opposed-pocket result (A8)
-and a class-B result keep no stack, a cup holds its record in its own payload,
-and a displaced stack is not its held record; all of them go to §2.
+and a class-B result keep no A1 operand stack, a cup holds its record in its
+own payload, and a displaced stack is not its held record; all of them go to
+§2 unless the A7 result carries its query-only source prisms. That field is
+attached only while the initial BRep body is built, when both inputs and every
+result slab contain lines only and both input sections have zero displacement.
+It cannot be read as a later Boolean operand. The query route classifies both
+source prisms through §7 and combines their exact answers as a regularized Cut.
+Displaced levels or any other §7 refusal leave the point to §2. Placement or
+another generic BRep rebuild drops the field.
 
 The route checks, reject-only, that the stack has a slab, every slab has a
 region, every slab has `Z0 < Z1` exactly, and consecutive slabs share one held

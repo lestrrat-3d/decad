@@ -588,7 +588,11 @@ target, so a tool end that meets a cap reaches the slab beside it, and the
 result takes the cap's held level and displacement. A displaced level reaches
 the result's face levels, so the volume reads `Approximate` with a proven
 bound, and a result with no displaced level reads `Exact`. The BRep stack A7
-outputs records no denoted level.
+outputs records no denoted level. An A7 result whose two input profiles and
+selected slab regions contain only lines, with zero input section
+displacement, also carries its source prisms for point containment
+(point-containment §9.1). These are not an A1 operand stack and do not admit a
+later Boolean operation.
 
 In the top arm the target's original section is the lower slab and the cut
 section the upper; in the bottom arm the cut section is the lower slab and the
