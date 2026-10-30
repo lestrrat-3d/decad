@@ -398,18 +398,31 @@ func rewriteLineEdge(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 }
 
 // endFace builds end face G_i's new loops: the corner and the removed parts of
-// the two chains give way to the end curve of the blend. dirs is set only by
-// the straight-edge route (rewriteLineEdge): the unit directions in which A's
-// and B's chains leave the corner, the tag lines A ∩ G and B ∩ G with the
-// sense rewriteLineEdge has shown certain. There G's turn at the corner is
-// read from those directions, not from held vertices, and refuses when the
-// lines are too near parallel to tell; and a convex edge may end on a face
-// reflex at the corner, which takes the blend's end cap: takes reports that it
-// does, and the caller must clear the face's rebuilt facets with
-// checkStripClear. The other routes pass nil, read the turn from the loop's
-// vertices beside the corner, and refuse a reflex end face under a convex edge.
+// the two chains give way to the end curve of the blend. dirs is set by the
+// straight-edge route (rewriteLineEdge), and by the plane–cylinder route
+// (rewriteCylLine) at an end where its wall extends past the corner: the unit
+// directions in which A's and B's chains leave the corner, tag lines or the
+// end circle's tangent, with the sense the caller has shown certain. There G's
+// turn at the corner is read from those directions, not from held vertices,
+// and refuses when they are too near parallel to tell. On the straight-edge
+// route a convex edge may end on a face reflex at the corner, which takes the
+// blend's end cap: takes reports that it does, and the caller must clear the
+// face's rebuilt facets with checkStripClear. The other routes pass nil, read
+// the turn from the loop's vertices beside the corner, and refuse a reflex end
+// face under a convex edge; the plane–cylinder route's dirs come only with an
+// extending wall, whose end face must be convex.
 func (w *work) endFace(end lineEnd, g faceLoops, chainA, chainB []int, kinds [2]sideKind, remA, remB, rows []int,
 	reachPts []r3.Vec, margin float64, convex bool, dirs *[2]r3.Vec) ([][]int, bool, error) {
+	return w.endFaceRun(end, g, chainA, chainB, kinds, remA, remB, rows, nil, reachPts, margin, convex, dirs)
+}
+
+// endFaceRun is endFace where B extends past the corner on a curved wall
+// (cyl_rewrite.go): the end curve's last row is the wall's setback point in
+// G's plane, and the loop runs from it along wallRun, the wall's cut in that
+// plane, to the corner. wallRun lists the cut's vertices between the two, in
+// order from the setback point; a planar B passes nil.
+func (w *work) endFaceRun(end lineEnd, g faceLoops, chainA, chainB []int, kinds [2]sideKind, remA, remB, rows,
+	wallRun []int, reachPts []r3.Vec, margin float64, convex bool, dirs *[2]r3.Vec) ([][]int, bool, error) {
 	li, ok := g.loopWith(end.v)
 	if !ok {
 		return nil, false, fmt.Errorf("%w: an end face does not hold the edge's corner", decaderr.ErrUnsupported)
@@ -506,7 +519,7 @@ func (w *work) endFace(end lineEnd, g faceLoops, chainA, chainB []int, kinds [2]
 	case kinds[0] == extends:
 		seq = append([]int{end.v}, seq...)
 	case kinds[1] == extends:
-		seq = append(seq, end.v)
+		seq = append(append(seq, wallRun...), end.v)
 	}
 	repl := seq
 	if !aFirst {

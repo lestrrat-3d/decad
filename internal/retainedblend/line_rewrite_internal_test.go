@@ -44,6 +44,42 @@ func TestLineEndFaceTurn(t *testing.T) {
 		require.ErrorContains(t, err, "an end face's corner does not match the edge's convexity")
 	})
 
+	t.Run("an end where the wall extends takes the wall's run and the corner", func(t *testing.T) {
+		t.Parallel()
+		// The cap lies below A's chain: the rows run from ta = (1, 0) to the
+		// wall's setback point (0.5, -0.8), and the wall's cut in G's plane
+		// runs on through (0.2, -0.6) to V. G's loop keeps V and gains the
+		// cap.
+		capped := append(append([]r3.Vec(nil), verts...), r3.NewVec(0.5, -0.8, 0), r3.NewVec(0.2, -0.6, 0))
+		read := func(dirs *[2]r3.Vec) ([][]int, error) {
+			w := &work{verts: capped, beta: make([]float64, len(capped))}
+			loops, takes, err := w.endFaceRun(end, convexG, []int{1}, []int{3}, [2]sideKind{trims, extends}, nil, nil,
+				[]int{4, 6}, []int{7}, []r3.Vec{x, capped[6]}, 1e-9, true, dirs)
+			require.False(t, takes)
+			return loops, err
+		}
+		loops, err := read(&[2]r3.Vec{x, y})
+		require.NoError(t, err)
+		require.Len(t, loops, 1)
+		at := 0
+		for loops[0][at] != 1 {
+			at++
+		}
+		got := append(append([]int(nil), loops[0][at:]...), loops[0][:at]...)
+		require.Equal(t, []int{1, 2, 3, 0, 7, 6, 4}, got)
+
+		// The held vertices show a square convex corner; the tag directions
+		// decide the turn.
+		near, ok := r3.NewVec(-1, 1e-4, 0).Normalize()
+		require.True(t, ok)
+		_, err = read(&[2]r3.Vec{x, near})
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "an end face's turn at the edge's corner is undecided")
+		_, err = read(&[2]r3.Vec{y, x})
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "an end face's corner does not match the edge's convexity")
+	})
+
 	t.Run("a turn within the bound reads undecided and refuses", func(t *testing.T) {
 		t.Parallel()
 		// The held vertices show a square corner, but the tag lines meet at a
