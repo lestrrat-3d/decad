@@ -56,6 +56,7 @@ Scenes (general-boolean §2, §9) and what each route unlocks:
 | B2 keyway, D-flat | brep, `delta > 0` | x: lateral edges whose selection blends every crossing corner (§4.4) | SB1 |
 | A1 flush boss, T-face | brep | none | boss edges, plate edges |
 | A1 crossing round boss | brep, `delta > 0` | SB1 | SB1 |
+| A1 L bracket (axis-aligned crossing prisms) | brep, `delta = 0` | none | straight edges, equal, two-distance and angle chamfers |
 | blind rectangular pocket | stacked → face view | none | pocket corners (concave), floor edges |
 | counterbore | stacked → face view | none | rims as complete loops (`agent-docs/loop-fillet-design.md`) |
 | boss on plate (stacked) | stacked → face view | none | boss edges; root circle as a complete loop (`agent-docs/loop-fillet-design.md`) |
@@ -664,6 +665,17 @@ Displaced reading (§4.4; `apitest/revolve_shaft_class_b_blend_test.go`,
   with `SectionDelta ≥ 2e-4`; a cleared carrier is PD2; a carrier radius of
   10.5 or a centre one ulp off is PD3; PD3's half-radius leg, PD5a–PD5c and
   PD6 hold on crafted numbers.
+
+Axis-aligned A1 crossing:
+
+- The L bracket (60×40×8 base united with an 8×40×50 upright; `Exact` 32640)
+  records `SectionDelta` 0 and a `Stack.Delta` of `CutDisplacementAllow(60)`.
+  Its heel edge takes a two-distance chamfer 3/5 (`Exact` 32640 − 300), an
+  equal chamfer 3 (`Exact` 32460) and, at its concave inner corner, a
+  `ChamferAngle` 3 at 30° (32640 + 60√3 within its bound), each `Sound`.
+- A round boss crossing a plate's side records a `SectionDelta` at least
+  `CutDisplacementAllow` of that side: a line-circle vertex carries its cut
+  end's charge itself.
 
 Refusals:
 
