@@ -179,11 +179,14 @@ func TestFacetedRetainedBlendRevolvedShaft(t *testing.T) {
 		var q *decad.EdgeQuery
 		for _, e := range cut.Edges() {
 			a, c := e.Start().Position().Value, e.End().Position().Value
-			if _, ok := e.Curve().(decad.Line3); !ok || math.Abs(a.Z-flatZ) > 1e-6 || math.Abs(c.Z-flatZ) > 1e-6 ||
-				a.Sub(c).Len() < shaftL/2 {
+			if math.Abs(a.Z-flatZ) > 1e-6 || math.Abs(c.Z-flatZ) > 1e-6 || a.Sub(c).Len() < shaftL/2 {
 				continue
 			}
-			preds := []decad.EdgePredicate{decad.EndpointAt(a), decad.ParallelTo(c.Sub(a))}
+			// The flat meets a wall whose tag is not provably its revolve
+			// record, so the rim keeps its chord chain
+			// (agent-docs/faceted-source-retention-design.md §10.1 E12).
+			require.IsType(t, decad.FacetedCurve{}, e.Curve())
+			preds := []decad.EdgePredicate{decad.EndpointAt(a), decad.EndpointAt(c)}
 			if q == nil {
 				q = decad.Edges(preds...)
 			} else {

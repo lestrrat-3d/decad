@@ -216,9 +216,11 @@ scaled about its float centre by its float factor `k`. A held vertex is the roun
 decision copy keeps `m`'s bounds and adds, per vertex, an upper bound on the distance of the stored image `fl(v + s)`
 (or the grown image) from the exact `v + s`, computed from the exact rounding error of each coordinate
 (`moveRounding`). A face bound takes the largest addition among its corners, and the mesh
-bound the largest overall. A grown piece's bounds also stretch by `1 + |k|`. After `snapShift` the addition is zero
-except for a very large coordinate or a sum that crosses a power of two (item 3). The chain-depth gate (`RefuseCoarseHeldContact`) admits a mesh bound coarser than the chord
-tolerance by the shift the retry applied, because the result's bounds already carry it. The composition of the result's bounds reads a copy that is wider by the shift
+bound the largest overall. A grown piece's bounds also stretch by `1 + |k|`. A held vertex need not be a multiple of
+the grid, so only the first case of item 3 makes its sum exact: the addition is zero for a coordinate whose last-place
+unit is no larger than the grid (below about `2^28·|s|`) unless the sum passes the power of two above it, and a larger
+coordinate generally rounds. The chain-depth gate (`RefuseCoarseHeldContact`) admits a mesh bound coarser than the chord
+tolerance by the shift the retry applied (the charged copy's mesh bound less the unmoved operand's), because the result's bounds already carry it. The composition of the result's bounds reads a copy that is wider by the shift
 (`shiftOperandMesh`): the vertex and face bounds of a moved piece grow by its displacement, the mesh bound by the
 largest, the symmetric-difference volume grows by what each move sweeps over its piece's boundary, and the area allowance grows by the rounding of the new
 coordinates. The ordinary trim amplification then charges the shift at every crossing. A shifted mesh that folds,

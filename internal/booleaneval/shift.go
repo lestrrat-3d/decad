@@ -443,9 +443,12 @@ func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[i
 // factor k: x ↦ x + s + k·(x − c). A held vertex is the rounded image of that
 // move, so its bound grows by the distance of verts[i] from the exact image of
 // m's vertex (moveRounding), and a grown piece's bounds also stretch by
-// 1 + |k|. A vertex whose image is exact, as every coordinate is after
-// snapShift unless it is very large or its sum crosses a power of two, keeps
-// its bound unchanged. It returns errShiftDeclined when a move cannot be
+// 1 + |k|. A vertex whose image is exact keeps its bound unchanged. A held
+// vertex need not be a multiple of snapShift's grid, so a translated
+// coordinate is exact by the first case of snapShift's rule only: when its
+// last-place unit is no larger than the grid (|v| below about 2^28·|s|) and
+// the sum does not pass the power of two above |v|. A larger coordinate, or
+// a sum that crosses a power of two, generally rounds. It returns errShiftDeclined when a move cannot be
 // bounded.
 func decisionMesh(m *topo.Mesh, pc pieces, shifts map[int]pieceShift, verts []r3.Vec, centre map[int]r3.Vec,
 	scale map[int]float64) (*topo.Mesh, error) {
