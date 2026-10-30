@@ -49,20 +49,24 @@ func CellHeightOffsetUpper(vLo, vHi, wLo, wHi r3.Vec) (float64, bool) {
 	if !FiniteVec(vLo) || !FiniteVec(vHi) || !FiniteVec(wLo) || !FiniteVec(wHi) {
 		return math.Inf(1), false
 	}
-	c := CellCornersOf(vLo, vHi, wLo, wHi)
-	n := proofarith.Xcross(proofarith.Xsub(c.VHi, c.VLo), proofarith.Xsub(c.WLo, c.VLo))
+	corners := CellCornersOf(vLo, vHi, wLo, wHi)
+	a, b, c, d := corners.VLo, corners.VHi, corners.WHi, corners.WLo
+	e := proofarith.Xsub(b, a)
+	f := proofarith.Xsub(c, d)
+	p := proofarith.Xsub(d, a)
+	q := proofarith.Xsub(c, b)
+	n := proofarith.Xcross(e, p)
 	if n.X.Sign() == 0 && n.Y.Sign() == 0 && n.Z.Sign() == 0 {
 		return 0, false
 	}
-	boundary := [4]proofarith.Xpt{c.VLo, c.VHi, c.WHi, c.WLo}
-	for i := range boundary {
-		in := proofarith.Xsub(boundary[i], boundary[(i+3)%4])
-		out := proofarith.Xsub(boundary[(i+1)%4], boundary[i])
-		if proofarith.XdotSign(n, proofarith.Xcross(in, out)) <= 0 {
-			return 0, false
-		}
+	// The turn at A is n·n, which is positive after the nonzero check.
+	// These are the other three projected turns, in boundary order B, C, D.
+	if proofarith.XdotSign(n, proofarith.Xcross(e, q)) <= 0 ||
+		proofarith.XdotSign(n, proofarith.Xcross(f, q)) <= 0 ||
+		proofarith.XdotSign(n, proofarith.Xcross(f, p)) <= 0 {
+		return 0, false
 	}
-	m := proofarith.Xsub(c.WHi, c.VLo)
+	m := proofarith.Xsub(c, a)
 	// n·m = dot / (n.W·m.W) and n·n = nn / n.W², so
 	// H² = (n·m)² / (n·n) = dot² / (m.W²·nn).
 	dot := proofarith.XdotNum(n, m)
