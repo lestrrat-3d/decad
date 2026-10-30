@@ -2738,6 +2738,7 @@
 10	0.03	TestPrismCutCleanNestingBoreThroughHub
 10	0.97	TestPrismCutOffsetPlaneExclusionsTakeMeshPath
 10	0.00	TestPrismIntersectG5FallsBackOnDisjointZIntervals
+10	0.00	TestPrismPatternEmbeddedJoinKeepsAxialRootsAndCapLoops
 10	0.01	TestPrismUnionChainedBooleanCarriesNoAccumulatedBound
 10	0.01	TestPrismUnionRoundedReExpressionStaysWithinItsBound
 10	0.00	TestProfileRecordClosesExactLineJunction

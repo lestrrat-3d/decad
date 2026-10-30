@@ -78,12 +78,24 @@ func unionManyBodies(ctx context.Context, d *Document, ref producerID, operands 
 	if joined, ok := orthogonalUnionMany(ctx, d, ref, operands); ok {
 		return joined, 1, ctx.Err()
 	}
-	// Every route above refused. A set of prisms with a free-form section can
-	// still join through the union of their sections, which reads a root arc
-	// that lies on the blank's rim and any number of copies. A miss or a refusal
-	// there leaves the first refusal as the answer.
+	// Every certified set route above refused. A set of prisms with a free-form
+	// section can still join through the union of its sections. If that route
+	// declines, try the generic pair chain and keep the first refusal if it fails.
 	node, matched, aerr := axialsection.UnionManyPrisms(ctx, envOf(documentNode(d), ref), bodyNodes(operands))
-	if aerr != nil || !matched {
+	if aerr != nil {
+		return nil, 0, err
+	}
+	if !matched {
+		if !isManyUnionRefusal(err) {
+			return nil, 0, err
+		}
+		body, span, matched, chainErr := tryPrismUnionChain(ctx, ref, operands)
+		if chainErr != nil {
+			return nil, 0, chainErr
+		}
+		if matched {
+			return body, span, ctx.Err()
+		}
 		return nil, 0, err
 	}
 	return bodyHandle(node), 1, ctx.Err()
@@ -130,10 +142,6 @@ func unionManyRoutes(ctx context.Context, d *Document, ref producerID, operands 
 		node, matched, err = prismboolean.StraightLoftUnionMany(ctx, envOf(documentNode(d), ref), bodyNodes(operands))
 		body = bodyHandle(node)
 	}
-	span := producerID(1)
-	if !matched && err == nil {
-		body, span, matched, err = tryPrismUnionChain(ctx, ref, operands)
-	}
 	if err != nil {
 		return nil, 0, err
 	}
@@ -141,7 +149,7 @@ func unionManyRoutes(ctx context.Context, d *Document, ref producerID, operands 
 		return nil, 0, fmt.Errorf("%w: Union of three or more bodies needs a certified prism, "+
 			"axial or copied-tooth set; join them two at a time", ErrUnsupported)
 	}
-	return body, span, ctx.Err()
+	return body, 1, ctx.Err()
 }
 
 // tryPrismUnionChain gives prism inputs and exact straight-source Loft inputs
