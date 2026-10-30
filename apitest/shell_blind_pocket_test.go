@@ -48,6 +48,13 @@ func TestShellBlindRectangularPocket(t *testing.T) {
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
+	// The floor band keeps distance t from the pocket's floor edges and
+	// corners, with the solid inside each tube, so it is convex. The pocket
+	// and its rounded expansion carry no concave curved wall either.
+	report, err = doc.Verify(t.Context(), decad.WithConcaveRadius())
+	require.NoError(t, err)
+	require.Len(t, report.Bodies, 1)
+	require.Nil(t, report.Bodies[0].ConcaveRadius.Minimum, "the floor band is convex")
 
 	rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)

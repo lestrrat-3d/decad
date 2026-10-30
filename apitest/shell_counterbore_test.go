@@ -89,6 +89,17 @@ func TestShellCoaxialCounterbore(t *testing.T) {
 					report, err := doc.Verify(t.Context())
 					require.NoError(t, err)
 					require.Equal(t, decad.Sound, report.Status)
+					// The shoulder torus is convex: the solid lies inside its tube,
+					// and it faces away from the axis. The tightest concave radius
+					// is the kept small bore's 3 mm.
+					report, err = doc.Verify(t.Context(), decad.WithConcaveRadius())
+					require.NoError(t, err)
+					require.Len(t, report.Bodies, 1)
+					minimum := report.Bodies[0].ConcaveRadius.Minimum
+					require.NotNil(t, minimum)
+					require.Equal(t, decad.Exact, minimum.Exactness)
+					require.True(t, minimum.Value.Equal(units.Millimeters(3), 1e-12),
+						"the small bore's radius, got %s", minimum.Value)
 				})
 			}
 		}

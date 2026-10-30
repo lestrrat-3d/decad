@@ -2893,3 +2893,6 @@
 10	0.00	TestStackedUnionBracketChamfers
 10	0.00	TestStackedUnionBracketShell
 10	0.00	TestBooleanGapToleranceRestingBossJoinsPlate
+10	0.00	TestShellStackedBossKeepsThicknessAtRoot
+10	0.00	TestShellRoundStackedBossKeepsThicknessAtRoot
+10	0.00	TestShellStackedBossConcaveRadius

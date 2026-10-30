@@ -203,8 +203,16 @@ the bottom.
 The top-open result keeps the source's exterior faces except the boss top.
 Its cavity has a plate inset over `[z0+t, z1-t]`, a horizontal ledge at `z1-t`, and a
 boss inset over `[z1, z2]`. Four quarter-cylinder patches join the ledge's
-boss-sized inner ring to the upper cavity walls. Adjacent patches meet on
-four `Ellipse3` seams. The lower and upper rings each bound one ordinary
+boss-sized inner ring to the upper cavity walls. The root edge, the boss
+outline at `z1`, is a concave edge of the source, so modify §8's reflex-corner
+row applies to it: the cavity keeps distance `t` from the root edge. Each
+patch therefore lies on the cylinder of radius `t` whose axis is one source
+root edge, on the quarter below `z1` and inside the boss outline; the solid
+lies inside the cylinder. A patch runs from the ledge's ring, straight below
+its axis at `z1-t`, to the upper inset's ring at `z1`. Adjacent patches meet on
+four `Ellipse3` seams, the quarter ellipses the bisector plane of a root corner
+cuts from both cylinders: centre on the root corner at `z1`, semi-axes `t√2`
+and `t`. The lower and upper rings each bound one ordinary
 record face and one patch. The body build mints fresh `face(k)` and `wall(k)`
 roles; each patch has a `filletLoop` role. No planar cap is inserted at the
 transition.
@@ -218,12 +226,18 @@ faces occupy the exterior group. For the same dimensions and thickness,
 the closed volume adds the boss inset's area times `t` to the top-open
 volume; its first axial moment adds that volume at height `z2 − t/2`.
 
-For boss width `w`, depth `d` and thickness `t`, the transition's void volume
-is `wdt - 2(w+d)t² + (w+d)πt²/2 + (20/3 - 2π)t³`. The shell volume subtracts
+For boss width `w`, depth `d` and thickness `t`, the transition's void at
+`s = z1 − z`, `0 ≤ s ≤ t`, is the boss rectangle inset by `sqrt(t² − s²)` on
+every side, with sharp corners. Its volume is `wdt − (w+d)πt²/2 + 8t³/3`, and
+its first height moment above `z1 − t` is
+`wdt²/2 + (2/3 − π/2)(w+d)t³ + 5t⁴/3`. The shell volume subtracts
 that transition, the plate-inset void below it and the boss-inset void above it from the two
 source slabs. Rational interval arithmetic encloses `π`, volume and centroid.
-The established fillet band's cylinder, ellipse and mesh-ring builders close
-the patches. `Tessellate(VerifyAll)` charges the band's chorded volume,
+`breprecord`'s `attachBossShellBand` builds the four cylinder patches and
+their seams on the two rings' edges. A patch's area is `tπL/2 − 2t²` for a root
+edge of length `L`. The fillet band's mesh-ring builder places the interior
+rings with the two rings exchanged (`brepfilletmesh.Input.RootAxis`), so each
+ring turns about the root edge. `Tessellate(VerifyAll)` charges the band's chorded volume,
 surface departure and vertex motion before publishing its occupied-volume
 bound. A later modify operation refuses this payload; class B and clearance
 face views refuse it because they omit its patch faces. Mesh booleans use its
@@ -274,18 +288,22 @@ coordinates must be exactly represented. Other unions continue to SG3.
 
 The result keeps the source exterior except the boss top. Its cavity has the
 plate's inset rectangle over `[z0+t,z1-t]`, a ledge at `z1-t`, and the boss's
-concentric inset circle over `[z1,z2]`. One LF7 quarter-torus patch joins
-the ledge's circle of radius `r` to the inner cylinder of radius `r-t`.
+concentric inset circle over `[z1,z2]`. One quarter-torus patch joins
+the ledge's circle of radius `r` to the inner cylinder of radius `r-t`. As in
+§3.1a, the cavity keeps distance `t` from the root circle, so the torus's tube
+centre is the root circle itself: major radius `r` at `z1`, minor radius `t`,
+the quarter below `z1` and inside the root. Its area is `π²rt − 2πt²`.
 The patch has two whole-circle edges and no seam. The ledge hole uses the
 band's side-ring stations; the inner cylinder uses its cap-ring stations.
 Both rings therefore share mesh vertices with their neighbouring faces.
 
 At height `u` above `z1-t`, the transition void has radius
-`R(u)=r-t+sqrt(t²-u²)`. Its volume is
-`π[(r-t)²t+(r-t)πt²/2+2t³/3]`. Its first height moment above `z1-t` is
-`π[(r-t)²t²/2+2(r-t)t³/3+t⁴/4]`. Rational intervals enclose both powers
+`R(u)=r-sqrt(t²-(t-u)²)`. Its volume is
+`π[r²t-rπt²/2+2t³/3]`. Its first height moment above `z1-t` is
+`π[r²t²/2+(2/3-π/2)rt³+5t⁴/12]`. Rational intervals enclose both powers
 of `π`, the full shell volume and centroid. `Tessellate(VerifyAll)` uses the
-existing whole-circle fillet-band and face-chord volume proofs. Later modify,
+existing whole-circle fillet-band and face-chord volume proofs, with the
+mesh rings turned about the root circle as §3.1a's are. Later modify,
 class B, and clearance face views keep §3.1a's staging; a mesh boolean uses
 the verified mesh.
 

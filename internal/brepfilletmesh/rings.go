@@ -2,11 +2,14 @@
 package brepfilletmesh
 
 import (
+	"fmt"
 	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/capblend"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/filletband"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -31,6 +34,11 @@ type Rings struct {
 
 // Input is the recorded band and the rings already shared with adjacent faces.
 // Loop, SideV and CapV are read in the wall-to-ring placement order.
+// RootAxis marks a band whose patches turn about the side ring's plan points
+// at F's level, not about the cap ring's plan points at the side level: a
+// boss shell's root transition, whose axis is the source root edge
+// (agent-docs/modify-general-design.md §3.1a). SideDelta is the side level's
+// displacement.
 type Input struct {
 	Band        breprecord.LoopBand
 	Face        breprecord.Face
@@ -38,8 +46,10 @@ type Input struct {
 	Loop        *capblend.LoopMesh
 	Start       bool
 	SideZ       float64
+	SideDelta   float64
 	SideV, CapV []int
 	Curved      []bool
+	RootAxis    bool
 }
 
 // Place adds interior rings after the side and cap rings have their shared vertices.
@@ -59,15 +69,32 @@ func (fr *Rings) Place(in Input, e brepgeom.Embed,
 	for c, index := range match {
 		side[c] = lm.SidePts[index]
 	}
-	points, err := tessellation.FilletRingGeometry(tessellation.FilletRingInput{
+	ring := tessellation.FilletRingInput{
 		Side: side, Cap: lm.CapPts, Radius: in.Band.Setback.Dc,
 		RadiusDelta: in.Band.Setback.DcDelta, CapLevel: in.Face.Z0,
 		CapLevelDelta: in.Face.Z0Delta, SideLevel: in.SideZ,
 		MaterialSign: in.Band.MatSign(in.Face), Count: n,
 		Noun: "a fillet band", RingNoun: "a fillet",
-	})
+	}
+	if in.RootAxis {
+		if len(in.Curved) > 0 {
+			return fmt.Errorf(`%w: a root-axis band has no curved miter`, decaderr.ErrUnsupported)
+		}
+		// The same quarter circle with its two rings exchanged: its centre
+		// is the side point at F's level, so the exchanged reading walks it
+		// from the cap ring at F's level to the side ring at the side level.
+		ring.Side, ring.Cap = lm.CapPts, side
+		ring.SideLevel, ring.CapLevel, ring.CapLevelDelta = in.Face.Z0, in.SideZ, in.SideDelta
+		ring.MaterialSign = -ring.MaterialSign
+	}
+	points, err := tessellation.FilletRingGeometry(ring)
 	if err != nil {
 		return err
+	}
+	if in.RootAxis {
+		// Ring k counts from the side ring; the exchanged reading counts
+		// from the cap ring.
+		slices.Reverse(points[1:n])
 	}
 	if len(in.Curved) > 0 {
 		rIv, err := filletband.RadiusInterval(in.Band.Setback.Dc, in.Band.Setback.DcDelta)

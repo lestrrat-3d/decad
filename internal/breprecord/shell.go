@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/capblend"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/filletband"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -19,8 +20,10 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -142,27 +145,198 @@ func bossShellOpenEdges(ctx context.Context, alloc topo.Alloc, bp Payload, btopo
 	return nil
 }
 
-// attachBossShellBand uses the established analytic fillet patch constructor
-// with a virtual cap at the upper ring. The cap is only a geometry datum:
-// its ring is actually bounded by the upper cavity walls.
+// attachBossShellBand builds the cavity's root transition. Every cavity
+// point keeps distance t from the source's root edge, the boss outline at
+// InterfaceZ, so each patch lies on the cylinder of radius t about one root
+// edge (a whole circle: the torus about it), on the cavity side below and
+// inside the root (agent-docs/modify-general-design.md §3.1a, §3.1c). The
+// patch runs from the side ring, the boss outline at LowerZ straight below
+// the axis, to the cap ring, the upper inset at InterfaceZ, beside it. Two
+// rectangular patches meet on the quarter ellipse the bisector plane of their
+// root corner cuts from both cylinders. The solid lies inside each cylinder,
+// so every patch's outward normal points away from its axis.
 func attachBossShellBand(ctx context.Context, alloc topo.Alloc, body *topo.Body, ref provenance.Producer, bp Payload, open openSet) ([]*topo.Face, error) {
 	band := bp.BossShell
 	bi := len(bp.LoopBands)
-	b := LoopBand{Face: band.LedgeFace, Loop: 0, Orig: band.SideProfile().Outer,
-		Setback: capblend.Setback{Dc: band.T, Ds: band.T}, Sigma: 1, Kind: BandFillet}
-	upper := band.CapProfile()
-	fake := Face{Frame: band.Frame, Region: &upper,
-		Z0: band.InterfaceZ, Z1: band.InterfaceZ, Outward: false, Role: "bossShellBand"}
-	copyBP := bp
-	copyBP.Faces = append([]Face(nil), bp.Faces...)
-	copyBP.Faces[band.LedgeFace] = fake
-	copyBP.LoopBands = append(append([]LoopBand(nil), bp.LoopBands...), b)
-	embeds, err := Embeds(bp.Faces)
+	role := LoopBand{Face: band.LedgeFace, Loop: 0, Kind: BandFillet}
+	pl := Face{Frame: band.Frame}.View(bp.Xform)
+	sideCo, capCo := open.side[bi], open.cap[bi]
+	rIv, err := filletband.RadiusInterval(band.T, 0)
 	if err != nil {
 		return nil, err
 	}
-	patches, _, err := attachFilletBand(ctx, alloc, body, ref, copyBP, bi, open, embeds[band.LedgeFace], freeform.NewFreeformWork())
-	return patches, err
+	pi := proofbound.Interval(proofbound.PiLower, proofbound.PiUpper)
+	down := pl.Dir(0, 0, -1)
+	var patches []*topo.Face
+	newPatch := func(surf surfacegeom.Surface, loops []*topo.Loop, areaIv proofbound.RatInterval, sideV *topo.Vertex) error {
+		held, bound := heldOf(areaIv)
+		face := topobuild.NewFace(alloc, topo.Face{Area: held, AreaBound: bound, Surface: surf,
+			Origins: []provenance.Ref{{Producer: ref, Role: role.PatchRole(len(patches))}}, Body: body, Loops: loops})
+		// The side ring lies straight below the axis, where the outward
+		// normal, away from the axis, points down the frame normal.
+		nrm, err := topobuild.NormalAt(face, sideV.Position)
+		if err != nil {
+			return fmt.Errorf(`%w: a boss shell root patch's outward orientation cannot be certified (%v)`, decaderr.ErrUnsupported, err)
+		}
+		if nrm.Value.Dot(down) < 0 {
+			face.Reversed = !face.Reversed
+		}
+		for _, l := range loops {
+			for _, ce := range l.CoEdges {
+				ce.Edge.Faces = append(ce.Edge.Faces, face)
+			}
+		}
+		patches = append(patches, face)
+		return nil
+	}
+	if circle := band.Round; circle != nil {
+		if len(sideCo) != 1 || len(capCo) != 1 {
+			return nil, fmt.Errorf(`%w: a round boss shell band has no single whole-circle ring pair`, decaderr.ErrUnsupported)
+		}
+		side, capE := sideCo[0].Edge, capCo[0].Edge
+		side.Convex, capE.Convex = false, false
+		// Pappus: the quarter-circle meridian of length πt/2 has its centroid
+		// 2t/π inside the root circle, so the area is 2π(r − 2t/π)·πt/2.
+		r := proofbound.PointInterval(proofarith.FloatRat(circle.Radius))
+		areaIv := proofbound.IntervalSub(proofbound.IntervalMul(proofbound.IntervalMul(pi, pi), proofbound.IntervalMul(r, rIv)),
+			proofbound.IntervalScale(proofbound.IntervalMul(pi, proofbound.IntervalMul(rIv, rIv)), big.NewRat(2, 1)))
+		torus := surfacegeom.Torus{Center: pl.Point(circle.Center.U, circle.Center.V, band.InterfaceZ),
+			Axis: pl.Dir(0, 0, 1), Major: units.Millimeters(circle.Radius), Minor: units.Millimeters(band.T)}
+		if err := newPatch(torus, []*topo.Loop{
+			topobuild.NewLoop(alloc, topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: side, Forward: true}}}),
+			topobuild.NewLoop(alloc, topo.Loop{Outer: true, CoEdges: []topo.CoEdge{{Edge: capE, Forward: false}}}),
+		}, areaIv, side.Start); err != nil {
+			return nil, err
+		}
+		return patches, nil
+	}
+	n := len(sideCo)
+	if n != 4 || len(capCo) != 4 {
+		return nil, fmt.Errorf(`%w: a rectangular boss shell band has %d side and %d cap edges, expected four each`,
+			decaderr.ErrUnsupported, n, len(capCo))
+	}
+	// Every root corner is a right angle, so each seam is the quarter of the
+	// ellipse with semi-axes t·√2 and t (filletband's κ = 1).
+	seamIv, err := filletband.QuarterEllipseLength(rIv, proofbound.PointInterval(big.NewRat(1, 1)))
+	if err != nil {
+		return nil, err
+	}
+	seamLen, seamBound := heldOf(seamIv)
+	walks := band.SideProfile().Outer.Segments
+	if len(walks) != n {
+		return nil, fmt.Errorf(`%w: a rectangular boss shell's root outline does not hold four edges`, decaderr.ErrUnsupported)
+	}
+	insets := band.CapProfile().Outer.Segments
+	if len(insets) != n {
+		return nil, fmt.Errorf(`%w: a rectangular boss shell's inset outline does not hold four edges`, decaderr.ErrUnsupported)
+	}
+	roots := make([]sectionrecord.LineSeg, n)
+	seams := make([]*topo.Edge, n)
+	for k := range n {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		root, ok := walks[k].(sectionrecord.LineSeg)
+		inset, insetOK := insets[k].(sectionrecord.LineSeg)
+		if !ok || !insetOK {
+			return nil, fmt.Errorf(`%w: a rectangular boss shell's root outline holds a curved segment`, decaderr.ErrUnsupported)
+		}
+		roots[k] = root
+		capV, sideV := capCo[k].Edge.Start, sideCo[k].Edge.Start
+		// The seam's ellipse is centred on root corner k at the root level.
+		// Its major axis points from the corner toward the inset corner, the
+		// seam's start at the cap ring; its minor axis points down to the
+		// corner at the side ring, a quarter turn on.
+		center := pl.Point(root.Start.U, root.Start.V, band.InterfaceZ)
+		if !bossSeamCornerPaired(root.Start, inset.Start, band.Boss, band.T) ||
+			bossSeamFalsified(capV.Position, sideV.Position, center, down, band.T) {
+			return nil, fmt.Errorf(`%w: a rectangular boss shell's ring corner %d is not its root corner's inset`, decaderr.ErrUnsupported, k)
+		}
+		major, ok := capV.Position.Sub(center).Normalize()
+		if !ok {
+			return nil, fmt.Errorf(`%w: a rectangular boss shell seam has no major axis`, decaderr.ErrUnsupported)
+		}
+		axis, ok := major.Cross(down).Normalize()
+		if !ok {
+			return nil, fmt.Errorf(`%w: a rectangular boss shell seam has no plane`, decaderr.ErrUnsupported)
+		}
+		seams[k] = topobuild.NewEdge(alloc, topo.Edge{Length: seamLen, LengthBound: seamBound,
+			Curve: surfacegeom.Ellipse3{Center: center, Axis: axis, Major: major,
+				SemiMajor: units.Millimeters(math.Sqrt2 * band.T), SemiMinor: units.Millimeters(band.T)},
+			Start: capV, End: sideV})
+	}
+	for i := range n {
+		next := (i + 1) % n
+		side, wall := sideCo[i].Edge, capCo[i].Edge
+		if wall.Start != seams[i].Start || wall.End != seams[next].Start ||
+			side.Start != seams[i].End || side.End != seams[next].End {
+			return nil, fmt.Errorf(`%w: a rectangular boss shell root patch %d does not close on its ring vertices`, decaderr.ErrUnsupported, i)
+		}
+		side.Convex, wall.Convex = false, false
+		root := roots[i]
+		// stackedshell's gate proved the boss width and height exact, so
+		// each axis-aligned root edge's length is one exact difference.
+		du, dv := root.End.U-root.Start.U, root.End.V-root.Start.V
+		if (du == 0) == (dv == 0) {
+			return nil, fmt.Errorf(`%w: a rectangular boss shell root edge is not axis-aligned`, decaderr.ErrUnsupported)
+		}
+		length := math.Abs(du) + math.Abs(dv)
+		// At angle α from the side ring, the patch's axial length is the root
+		// edge's length L less 2t·sin α, so its area is t·πL/2 − 2t².
+		lIv := proofbound.PointInterval(proofarith.FloatRat(length))
+		areaIv := proofbound.IntervalSub(proofbound.IntervalMul(proofbound.IntervalMul(rIv, lIv), proofbound.HalfPiInterval()),
+			proofbound.IntervalScale(proofbound.IntervalMul(rIv, rIv), big.NewRat(2, 1)))
+		cylinder := surfacegeom.Cylinder{Origin: pl.Point(root.Start.U, root.Start.V, band.InterfaceZ),
+			Axis: pl.Dir(du/length, dv/length, 0), Radius: units.Millimeters(band.T)}
+		if err := newPatch(cylinder, []*topo.Loop{topobuild.NewLoop(alloc, topo.Loop{Outer: true, CoEdges: []topo.CoEdge{
+			{Edge: side, Forward: true},
+			{Edge: seams[next], Forward: false},
+			{Edge: wall, Forward: false},
+			{Edge: seams[i], Forward: true},
+		}})}, areaIv, side.Start); err != nil {
+			return nil, err
+		}
+	}
+	return patches, nil
+}
+
+// bossSeamCornerPaired reports whether inset is root corner root of boss
+// moved t toward the boss interior along both axes. stackedshell proved every
+// inset coordinate exact (prismshell.BossRectArithmeticExact), so the
+// comparison is exact equality. A root that is no corner of boss fails.
+func bossSeamCornerPaired(root, inset sectionrecord.Point2, boss prismshell.BossRect, t float64) bool {
+	toward := func(x, lo, hi float64) (float64, bool) {
+		switch x {
+		case lo:
+			return x + t, true
+		case hi:
+			return x - t, true
+		}
+		return 0, false
+	}
+	u, okU := toward(root.U, boss.U0, boss.U1)
+	v, okV := toward(root.V, boss.V0, boss.V1)
+	return okU && okV && inset.U == u && inset.V == v
+}
+
+// bossSeamFalsified reports whether the placed ring vertices disprove a
+// seam centred at center: the cap vertex must lie t·√2 from it and the side
+// vertex at center + t·down. It only rejects. Its allowance, 1e-9 of the
+// coordinates' magnitude, far exceeds the rounding of the placement and
+// vertex arithmetic, so a sound pairing never fails it. A side vertex of
+// another corner lies a whole root edge L away and fails. Another corner's
+// inset lies sqrt((L−t)² + t²) away, only about (L − 2t)/√2 beyond t·√2, so
+// this check cannot tell it apart when L is within the allowance of 2t;
+// bossSeamCornerPaired's exact comparison of the recorded corners refuses
+// that pairing.
+func bossSeamFalsified(capPos, sidePos, center, down r3.Vec, t float64) bool {
+	scale := 1 + t
+	for _, c := range [...]float64{center.X, center.Y, center.Z} {
+		scale = math.Max(scale, math.Abs(c)+t)
+	}
+	allow := 1e-9 * scale
+	return math.Abs(capPos.Sub(center).Len()-math.Sqrt2*t) > allow ||
+		sidePos.Sub(center.Add(down.Scale(t))).Len() > allow
 }
 
 // measureBossShell integrates its three cavity intervals exactly, with pi
@@ -194,11 +368,11 @@ func measureBossShell(ctx context.Context, bp Payload, body *topo.Body) error {
 	upperV := mul(area(b.Upper), upperHeight)
 	t2, t3, t4 := mul(t, t), mul(mul(t, t), t), mul(mul(t, t), mul(t, t))
 	widths := add(bw, bh)
-	bandV := add(
-		add(sub(mul(area(b.Boss), t), scale(mul(widths, t2), 2, 1)),
-			scale(mul(mul(widths, pi), t2), 1, 2)),
-		sub(scale(t3, 20, 3), scale(mul(pi, t3), 2, 1)),
-	)
+	// At s = z1 − z in [0, t] the transition void is the boss rectangle
+	// inset by a(s) = sqrt(t² − s²) on every side, with sharp corners: the
+	// points at distance more than t from the root edges. Integrating
+	// (w − 2a)(d − 2a) over s gives wdt − (w+d)πt²/2 + 8t³/3.
+	bandV := add(sub(mul(area(b.Boss), t), scale(mul(widths, mul(pi, t2)), 1, 2)), scale(t3, 8, 3))
 	volume := sub(sub(add(plateV, bossV), add(lowerV, upperV)), bandV)
 	if volume.Lo.Sign() <= 0 {
 		return fmt.Errorf("%w: boss shell has no proven positive volume", decaderr.ErrUnsupported)
@@ -210,8 +384,11 @@ func measureBossShell(ctx context.Context, bp Payload, body *topo.Body) error {
 	bossCZ := scale(add(point(b.InterfaceZ), point(b.TopZ)), 1, 2)
 	upperCZ := scale(add(point(b.InterfaceZ), point(b.CavityTopZ)), 1, 2)
 	lowerCZ := scale(add(point(b.CavityBottomZ), point(b.LowerZ)), 1, 2)
+	// The same slices weighted by their height u = t − s above LowerZ:
+	// wdt²/2 + (2/3 − π/2)(w+d)t³ + 5t⁴/3.
 	bandZ := add(mul(point(b.LowerZ), bandV),
-		add(sub(scale(mul(area(b.Boss), t2), 1, 2), scale(mul(widths, t3), 1, 3)), scale(t4, 1, 3)))
+		add(add(scale(mul(area(b.Boss), t2), 1, 2),
+			sub(scale(mul(widths, t3), 2, 3), scale(mul(pi, mul(widths, t3)), 1, 2))), scale(t4, 5, 3)))
 	mu := sub(sub(add(mul(plateV, centerU(b.Plate)), mul(bossV, centerU(b.Boss))),
 		add(mul(lowerV, centerU(b.Lower)), mul(upperV, centerU(b.Upper)))), mul(bandV, centerU(b.Boss)))
 	mv := sub(sub(add(mul(plateV, centerV(b.Plate)), mul(bossV, centerV(b.Boss))),
@@ -482,9 +659,10 @@ func measureCounterboreShell(ctx context.Context, bp Payload, body *topo.Body) e
 	return topobuild.ValidateAnalyticMeasurements(body)
 }
 
-// The void below the circular boss's inset wall has radius
-// (r-t)+sqrt(t²-u²) at height u above lowerZ. Its area and first height
-// moment integrate to the intervals below; pi is enclosed rationally.
+// The void below the circular boss's inset wall keeps distance t from the
+// root circle, so at height u above lowerZ its radius is
+// r − sqrt(t² − (t−u)²). Its area and first height moment integrate to the
+// intervals below; pi is enclosed rationally.
 func measureRoundBossShell(ctx context.Context, bp Payload, body *topo.Body) error {
 	b, circle := bp.BossShell, bp.BossShell.Round
 	point := func(x float64) proofbound.RatInterval { return proofbound.PointInterval(proofarith.FloatRat(x)) }
@@ -505,7 +683,8 @@ func measureRoundBossShell(ctx context.Context, bp Payload, body *topo.Body) err
 	bossV := mul(pi, mul(mul(r, r), hb))
 	lowerV := mul(area(b.Lower), sub(point(b.LowerZ), point(b.CavityBottomZ)))
 	upperV := mul(pi, mul(mul(ri, ri), hb))
-	bandAreaIntegral := add(add(mul(mul(ri, ri), t), scale(mul(mul(ri, pi), t2), 1, 2)), scale(t3, 2, 3))
+	// π[r²t − rπt²/2 + 2t³/3]
+	bandAreaIntegral := add(sub(mul(mul(r, r), t), scale(mul(mul(r, pi), t2), 1, 2)), scale(t3, 2, 3))
 	bandV := mul(pi, bandAreaIntegral)
 	volume := sub(sub(add(plateV, bossV), add(lowerV, upperV)), bandV)
 	if volume.Lo.Sign() <= 0 {
@@ -516,7 +695,10 @@ func measureRoundBossShell(ctx context.Context, bp Payload, body *topo.Body) err
 	plateCZ := scale(add(point(b.Z0), point(b.InterfaceZ)), 1, 2)
 	bossCZ := scale(add(point(b.InterfaceZ), point(b.TopZ)), 1, 2)
 	lowerCZ := scale(add(point(b.CavityBottomZ), point(b.LowerZ)), 1, 2)
-	bandFirst := add(add(scale(mul(mul(ri, ri), t2), 1, 2), scale(mul(ri, t3), 2, 3)), scale(t4, 1, 4))
+	// π[r²t²/2 + (2/3 − π/2)rt³ + 5t⁴/12]
+	rt3 := mul(r, t3)
+	bandFirst := add(add(scale(mul(mul(r, r), t2), 1, 2), sub(scale(rt3, 2, 3), scale(mul(pi, rt3), 1, 2))),
+		scale(t4, 5, 12))
 	bandZ := add(mul(point(b.LowerZ), bandV), mul(pi, bandFirst))
 	plateNet := sub(plateV, lowerV)
 	bossNet := sub(sub(bossV, upperV), bandV)
