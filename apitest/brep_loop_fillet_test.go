@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"bytes"
+	"fmt"
 	"math"
 	"math/big"
 	"strings"
@@ -128,6 +129,58 @@ func TestBrepLoopFilletPublicBoxCaps(t *testing.T) {
 	volume, err := got.Volume()
 	require.NoError(t, err)
 	requireMeasurementHoldsPi(t, volume, big.NewRat(317000, 3), big.NewRat(3500, 1))
+}
+
+// boxTopLoopFillet fillets the top loop of the 60×40×20 box at r = 3.
+func boxTopLoopFillet(t *testing.T) (*decad.Document, *decad.Body) {
+	t.Helper()
+	doc := decad.New()
+	box := boxBody(t, doc, 0, 0, 60, 40, 20)
+	top := planeFacing(t, box, r3.NewVec(0, 0, 1), r3.NewVec(0, 0, 20))
+	got, err := decad.Fillet(t.Context(), box, loopEdgeQuery(top.Loops()[0]), units.Millimeters(3))
+	require.NoError(t, err)
+	return doc, got
+}
+
+// A loop fillet's band meshes within the requested tolerance at its sagitta
+// ring count (agent-docs/loop-fillet-design.md §7.1). Each straight walk of
+// the box's top loop is one cell per strip, from one miter to the next,
+// whose two ring chords are parallel, so the cell is planar and its strip
+// pair adds no departure beyond the quarter-arc sagitta. The ring count is
+// n = ⌈(π/2) / (2·acos(1 − (tol/2)/3))⌉: 5 at tol 0.1 (π/2 ÷ 0.3657 = 4.30)
+// and 14 at tol 0.01 (π/2 ÷ 0.1155 = 13.6). The mesh holds two triangles on
+// each cap, two on each of the four trimmed walls and two per strip on each
+// of the four walks: 12 + 8n.
+func TestBrepLoopFilletTessellateWithinTolerance(t *testing.T) {
+	t.Parallel()
+	_, got := boxTopLoopFillet(t)
+	for _, tc := range []struct {
+		tol   float64
+		rings int
+	}{{0.1, 5}, {0.01, 14}} {
+		t.Run(fmt.Sprintf("tol %g", tc.tol), func(t *testing.T) {
+			t.Parallel()
+			mesh, err := got.Tessellate(t.Context(), units.Millimeters(tc.tol))
+			require.NoError(t, err)
+			require.LessOrEqual(t, mesh.Bound().Base(), tc.tol)
+			require.Len(t, mesh.Triangles(), 12+8*tc.rings)
+		})
+	}
+}
+
+// A Cut through a loop fillet's corner takes the mesh path at the pair's
+// chord, and its result's readings come from the band's planar cells, which
+// charge no twist, so a default Verify reads the result Sound.
+func TestBrepLoopFilletCornerCutVerifiesSound(t *testing.T) {
+	t.Parallel()
+	doc, got := boxTopLoopFillet(t)
+	cut, err := decad.Cut(t.Context(), got, boxBodyAtZ(t, doc, 55, 35, 65, 45, 15, 10))
+	require.NoError(t, err)
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	reading, err := report.ForBody(cut)
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, reading.Status, "diagnostics: %+v", reading.Diagnostics)
 }
 
 func TestVertexBlendPublicBoxAllEdges(t *testing.T) {

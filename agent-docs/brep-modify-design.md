@@ -138,10 +138,10 @@ translated by 12.7 along x, or turned 30° or 90° about z by
 body is SB11 without a view, and a closed one is modify-general SG2. The result
 is a `facetedPayload`: its volume, area and box bounds grow by the view's
 band chords, and every later reading, modify op and Boolean reads its held
-mesh. The view's root band takes the ring count of loop-fillet §7.1, which
-covers each cell's twist, so for the 60×40×20 box with a 20×20×10 boss
-shelled `t = 2` and filleted at `r = 3` the volume bound is about ±2.4 mm³ and
-the area bound about 10 mm², both below `Verify`'s default relative limits,
+mesh. The view's root band takes the ring count and the cell charge of
+loop-fillet §7.1, so for the 60×40×20 box with a 20×20×10 boss
+shelled `t = 2` and filleted at `r = 3` the volume bound is about ±2.2 mm³ and
+the area bound about 9.4 mm², both below `Verify`'s default relative limits,
 and `Verify` reads the result `Sound`.
 
 For the box above, open at the boss top, `Fillet` of the four outer box

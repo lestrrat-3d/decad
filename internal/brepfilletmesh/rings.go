@@ -248,7 +248,7 @@ func (fr *Rings) Emit(in Input, mesh *topo.Mesh,
 			}
 			if a != b {
 				twist[cell.Patch] = math.Max(twist[cell.Patch],
-					proofbound.CellTwistOffsetUpper(verts(k, cell.C0), verts(k, cell.C1), verts(k+1, cell.C0), verts(k+1, cell.C1)))
+					cellOffsetUpper(twist[cell.Patch], verts(k, cell.C0), verts(k, cell.C1), verts(k+1, cell.C0), verts(k+1, cell.C1)))
 			}
 		}
 	}
@@ -271,6 +271,25 @@ func (fr *Rings) Emit(in Input, mesh *topo.Mesh,
 		}
 	}
 	return nil
+}
+
+// cellOffsetUpper bounds how far one cell's held triangle pair strays from
+// the bilinear patch over its four held corners: the smaller of the twist
+// bound |T|/4 and, when the cell projects onto the plane of three corners as
+// a strictly convex quadrilateral, the fourth corner's height over that plane
+// (proofbound.CellHeightOffsetUpper; agent-docs/loop-fillet-design.md §7.1).
+// Both bound the same distance, so their minimum does. A cell whose |T|/4 is
+// at most floor, the patch's running maximum, cannot raise that maximum, and
+// skips the exact height reading.
+func cellOffsetUpper(floor float64, vLo, vHi, wLo, wHi r3.Vec) float64 {
+	twist := proofbound.CellTwistOffsetUpper(vLo, vHi, wLo, wHi)
+	if !(twist > floor) {
+		return twist
+	}
+	if height, ok := proofbound.CellHeightOffsetUpper(vLo, vHi, wLo, wHi); ok {
+		return math.Min(twist, height)
+	}
+	return twist
 }
 
 // FinishPatch records one patch's face displacement and area slack.

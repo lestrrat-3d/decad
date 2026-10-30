@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,6 +32,37 @@ func TestTwistRings(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			require.Equal(t, tc.want, twistRings(tc.n, tc.spread, tc.chord))
+		})
+	}
+}
+
+// cellOffsetUpper charges a cell the smaller of |T|/4 and the height bound,
+// and the height bound only where the cell projects strictly convex. The
+// expected values are worked by hand from the corners, with
+// T = vLo − vHi − wLo + wHi.
+func TestCellOffsetUpper(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name               string
+		floor              float64
+		vLo, vHi, wLo, wHi r3.Vec
+		want               float64
+	}{
+		// Chords of lengths 4 and 2 in the plane z = y: |T|/4 = 1/2, all of
+		// it within the plane, and the fourth corner lies on the plane.
+		{"planar trapezoid", 0, r3.NewVec(0, 0, 0), r3.NewVec(4, 0, 0), r3.NewVec(1, 1, 1), r3.NewVec(3, 1, 1), 0},
+		// The unit square with one corner lifted by 1/2: |T|/4 = 1/8 is
+		// below the corner's height 1/2, so the twist bound stays.
+		{"lifted corner", 0, r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(1, 1, 0.5), 0.125},
+		// A planar cell whose boundary crosses itself is not a graph over
+		// its plane, so it keeps |T|/4 = 1/2.
+		{"bowtie", 0, r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(1, 1, 0), r3.NewVec(0, 1, 0), 0.5},
+		// A |T|/4 of 1/2 at or below the running maximum 1 cannot raise it.
+		{"below the floor", 1, r3.NewVec(0, 0, 0), r3.NewVec(4, 0, 0), r3.NewVec(1, 1, 1), r3.NewVec(3, 1, 1), 0.5},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tc.want, cellOffsetUpper(tc.floor, tc.vLo, tc.vHi, tc.wLo, tc.wHi))
 		})
 	}
 }
