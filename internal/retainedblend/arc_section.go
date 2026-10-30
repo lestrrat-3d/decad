@@ -34,6 +34,11 @@ type endSection struct {
 	// slope is |dz/ds| / |dρ/ds|, nondecreasing in s: tan(s·π/2) for the
 	// torus, dB/dA for the cone.
 	slope func(s float64) float64
+	// margin is certify's rounding allowance, 32·ulp·S·(1 + 1/q) with S the
+	// profile's largest ρ plus h plus its largest |z|, and q the smallest X/ρ
+	// (§6.3): it covers the rounding of certify's own arithmetic and of the
+	// row vertices' azimuths, both of which grow as 1/q.
+	margin float64
 }
 
 // section is the end curve the blend of spec cuts in the end plane g. It
@@ -50,6 +55,14 @@ func (a arcRim) section(spec blendSpec, g plane) (endSection, error) {
 		}
 	}
 	e := endSection{p: p, kappa: a.kappa, side: a.side, h: h}
+	// ρ and z are monotone over the profile, so their extremes and the
+	// smallest X/ρ lie at its ends.
+	rho0, z0 := p(0)
+	rho1, z1 := p(1)
+	_, _, q0 := e.at(0)
+	_, _, q1 := e.at(1)
+	size := max(rho0, rho1) + h + max(math.Abs(z0), math.Abs(z1))
+	e.margin = 32 * ulp * size * (1 + 1/min(q0, q1))
 	if fillet {
 		e.slope = func(s float64) float64 {
 			if s >= 1 {
@@ -84,8 +97,12 @@ func (e endSection) at(s float64) (u, v, q float64) {
 // parallelogram's corners are. Every parallelogram lies in the box with
 // diagonal AB, whose points project onto the chord, so that distance is the
 // distance from the chord itself. A piece whose corners reach past tau is
-// split in two; certify gives up after maxSectionLeaves pieces.
+// split in two; certify gives up after maxSectionLeaves pieces. A piece
+// certifies when its corners lie within tau less the rounding margin.
 func (e endSection) certify(s0, s1, tau float64) bool {
+	if !(e.margin < tau) {
+		return false
+	}
 	au, av, _ := e.at(s0)
 	bu, bv, _ := e.at(s1)
 	du, dv := bu-au, bv-av
@@ -116,7 +133,7 @@ func (e endSection) certify(s0, s1, tau float64) bool {
 			d = math.Max(d, dist(pu+k1*math.Cos(lo), pv+k1*math.Sin(lo)))
 			d = math.Max(d, dist(pu+k2*math.Cos(hi), pv+k2*math.Sin(hi)))
 		}
-		if d <= tau {
+		if d+e.margin <= tau {
 			continue
 		}
 		mid := (pc.t0 + pc.t1) / 2
@@ -134,6 +151,15 @@ func (e endSection) certify(s0, s1, tau float64) bool {
 // certifies within tau. It refuses a blend that needs more than
 // maxSectionRows rows.
 func sectionRows(m int, tau float64, ends []endSection) ([]float64, error) {
+	refuse := fmt.Errorf("%w: the blend's end curve on an end face needs more than %d rows",
+		decaderr.ErrUnsupported, maxSectionRows)
+	for _, e := range ends {
+		// No number of rows certifies a chord when the rounding margin
+		// alone reaches tau.
+		if !(e.margin < tau) {
+			return nil, refuse
+		}
+	}
 	out := []float64{0}
 	var fill func(s0, s1 float64) error
 	fill = func(s0, s1 float64) error {
@@ -147,8 +173,7 @@ func sectionRows(m int, tau float64, ends []endSection) ([]float64, error) {
 		}
 		mid := (s0 + s1) / 2
 		if len(out) >= maxSectionRows || !(mid > s0 && mid < s1) {
-			return fmt.Errorf("%w: the blend's end curve on an end face needs more than %d rows",
-				decaderr.ErrUnsupported, maxSectionRows)
+			return refuse
 		}
 		if err := fill(s0, mid); err != nil {
 			return err

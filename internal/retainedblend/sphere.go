@@ -118,7 +118,7 @@ func readSphereRim(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*top
 // minSine: rr is the rim's squared radius and radius the sphere's. A nearly
 // tangent rim is no edge the section solve can resolve.
 func crossing(rr, radius float64) error {
-	if !(rr > 0) || math.Sqrt(rr) < minSine*radius {
+	if !(rr > 0) || !(math.Sqrt(rr) >= minSine*radius) {
 		return fmt.Errorf("%w: the plane meets the sphere at a grazing angle", decaderr.ErrUnsupported)
 	}
 	return nil

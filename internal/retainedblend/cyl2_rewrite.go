@@ -75,7 +75,7 @@ func rewriteCylCyl(ctx context.Context, env topo.Env, fp facetedrecord.Payload, 
 		}
 		tangent := axis.Cross(u[k])
 		toward := w.verts[runs[k].chain[0][0]].Sub(w.verts[c.ends[0].v])
-		if math.Abs(toward.Dot(tangent)) <= minSine*toward.Len() {
+		if !clears(math.Abs(toward.Dot(tangent)), toward.Len()) {
 			return nil, fmt.Errorf("%w: a wall leaves the edge end along no clear direction", decaderr.ErrUnsupported)
 		}
 		wt[k] = tangent
@@ -83,11 +83,11 @@ func rewriteCylCyl(ctx context.Context, env topo.Env, fp facetedrecord.Payload, 
 			wt[k] = tangent.Scale(-1)
 		}
 		toward1 := w.verts[runs[k].chain[1][0]].Sub(w.verts[c.ends[1].v])
-		if toward1.Dot(wt[k]) <= minSine*toward1.Len() {
+		if !clears(toward1.Dot(wt[k]), toward1.Len()) {
 			return nil, fmt.Errorf("%w: the wall turns reflex at an edge end", decaderr.ErrUnsupported)
 		}
 	}
-	if axis.Cross(u[0]).Cross(axis.Cross(u[1])).Len() < minSine {
+	if shallow(axis.Cross(u[0]).Cross(axis.Cross(u[1])).Len()) {
 		return nil, fmt.Errorf("%w: the two walls meet at a grazing angle", decaderr.ErrUnsupported)
 	}
 	convex := nrm[1].Dot(wt[0]) < 0

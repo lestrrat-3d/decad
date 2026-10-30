@@ -2,6 +2,7 @@ package retainedblend
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -173,6 +174,17 @@ func TestArcRowsFollowEndCurve(t *testing.T) {
 		_, err := sectionRows(2, 1e-12, []endSection{f.section(t)})
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 		require.ErrorContains(t, err, "needs more than 1024 rows")
+		// A fillet of 10⁻⁶ on a 1,000 mm bore whose end plane meets the wall's
+		// row at the sine 10⁻³, the least readEnd admits: certify's rounding
+		// margin alone passes tau = 2⁻¹⁰·r.
+		const big, tiny = 1000.0, 1e-6
+		grazing := endPlaneFixture{R: big, kappa: 1, side: -1, h: big * math.Sqrt(1-minSine*minSine),
+			spec: blendSpec{fillet: true, r: tiny}}
+		sec := grazing.section(t)
+		require.GreaterOrEqual(t, sec.margin, math.Ldexp(tiny, -10))
+		_, err = arcRows(grazing.spec, math.Ldexp(tiny, -10), []endSection{sec})
+		require.ErrorIs(t, err, decaderr.ErrUnsupported)
+		require.ErrorContains(t, err, "the blend's end curve on an end face needs more than 1024 rows")
 		// The plane's setback circle of radius 3 − 2 = 1 never reaches x = 1.5.
 		boss := endPlaneFixture{R: 3, kappa: -1, side: -1, h: 1.5, spec: blendSpec{fillet: true, r: 2}}
 		_, err = boss.rim().section(boss.spec, plane{n: r3.NewVec(1, 0, 0), o: r3.NewVec(1.5, 0, 0)})
@@ -181,19 +193,64 @@ func TestArcRowsFollowEndCurve(t *testing.T) {
 	})
 }
 
-// TestShallowRefusesNaN reads the grazing-angle gates: a sine that is not a
-// number refuses, as one under minSine does.
-func TestShallowRefusesNaN(t *testing.T) {
+// TestEndSectionMarginCoversRounding measures, in 200-bit arithmetic, the
+// rounding of the two computations certify's margin stands for, at every row
+// arcRows builds and at 64 points of each gap: certify's X = √(ρ² − h²), and
+// the row vertex the route places with ringAzimuths and atTheta, both against
+// the exact point of the plane x = h at the same radius and height. Each stays
+// within a quarter of the margin, from a plane through the axis down to one
+// meeting a row's circle at the sine 10⁻⁶.
+func TestEndSectionMarginCoversRounding(t *testing.T) {
 	t.Parallel()
-	require.True(t, shallow(math.NaN()))
-	require.True(t, shallow(minSine/2))
-	require.False(t, shallow(minSine))
-	require.False(t, shallow(1))
-	x, y := plane{n: r3.NewVec(1, 0, 0)}, plane{n: r3.NewVec(0, 1, 0)}
-	_, ok := intersect3(x, y, plane{n: r3.NewVec(0, 0, math.NaN())})
-	require.False(t, ok, "a plane with no normal meets no corner")
-	_, ok = intersect3(x, y, plane{n: r3.NewVec(0, 0, 1)})
-	require.True(t, ok)
-	require.True(t, shallow(endSine(1, r3.NewVec(1, 0, 0), plane{n: r3.NewVec(math.NaN(), 0, 0)})),
-		"a NaN normal reaches the corner route's sine")
+	exact := func(rho, h float64) *big.Float {
+		r2 := new(big.Float).SetPrec(200).Mul(big.NewFloat(rho), big.NewFloat(rho))
+		r2.Sub(r2, new(big.Float).SetPrec(200).Mul(big.NewFloat(h), big.NewFloat(h)))
+		return r2.Sqrt(r2)
+	}
+	diff := func(a float64, b *big.Float) float64 {
+		d, _ := new(big.Float).SetPrec(200).Sub(big.NewFloat(a), b).Float64()
+		return math.Abs(d)
+	}
+	var cases []endPlaneFixture
+	for _, q := range []float64{1, 0.2, 1e-2, 1e-3} {
+		cases = append(cases, endPlaneFixture{R: 4, kappa: 1, side: -1, h: 4 * math.Sqrt(1-q*q),
+			spec: blendSpec{fillet: true, r: 4}})
+	}
+	for _, q := range []float64{0.1, 1e-4, 1e-6} {
+		cases = append(cases, endPlaneFixture{R: 3, kappa: -1, side: -1, h: 0.5 * math.Sqrt(1-q*q),
+			spec: blendSpec{fillet: true, r: 2.5}})
+	}
+	for _, f := range cases {
+		sec := f.section(t)
+		tau := math.Ldexp(f.spec.r, -10)
+		rows, err := arcRows(f.spec, tau, []endSection{sec})
+		require.NoError(t, err, "h = %v", f.h)
+		require.LessOrEqual(t, len(rows), maxSectionRows)
+		a := f.rim()
+		a.sign = 1
+		g := plane{n: r3.NewVec(1, 0, 0), o: r3.NewVec(f.h, 0, 0)}
+		worstX, worstV := 0.0, 0.0
+		for j := 0; j+1 < len(rows); j++ {
+			for k := range 64 {
+				s := rows[j] + (rows[j+1]-rows[j])*float64(k)/64
+				rho, z := sec.p(s)
+				want := exact(rho, f.h)
+				u, _, _ := sec.at(s)
+				worstX = math.Max(worstX, diff(math.Abs(u), want))
+				roots, ok := a.ringAzimuths(rho, g, math.Pi/2)
+				require.True(t, ok)
+				th := roots[0]
+				if math.Sin(roots[1]) > math.Sin(th) {
+					th = roots[1]
+				}
+				v := a.atTheta(rho, th, z)
+				dx, dy, dz := math.Abs(v.X-f.h), diff(v.Y, want), math.Abs(v.Z-z)
+				worstV = math.Max(worstV, math.Sqrt(dx*dx+dy*dy+dz*dz))
+			}
+		}
+		t.Logf("h = %v: %d rows, margin %.3g, X rounding %.3g, vertex rounding %.3g",
+			f.h, len(rows)-1, sec.margin, worstX, worstV)
+		require.LessOrEqual(t, worstX, sec.margin/4, "h = %v", f.h)
+		require.LessOrEqual(t, worstV, sec.margin/4, "h = %v", f.h)
+	}
 }

@@ -271,7 +271,7 @@ func (w *work) findEndCut(cuts map[int]bool, corner, nP r3.Vec, slack float64) (
 func cornerTurn(in, out, n r3.Vec) int {
 	turn := in.Scale(-1).Cross(out).Dot(n)
 	switch {
-	case math.Abs(turn) <= minSine:
+	case !(math.Abs(turn) > minSine):
 		return 0
 	case turn < 0:
 		return -1

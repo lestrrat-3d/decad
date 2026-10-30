@@ -25,6 +25,10 @@ const minSine = 1e-3
 // row count as NaN.
 func shallow(c float64) bool { return !(c >= minSine) }
 
+// clears reports whether s, a direction's component along a way out of a
+// corner, exceeds minSine of the direction's length. NaN does not clear.
+func clears(s, length float64) bool { return s > minSine*length }
+
 // plane is an exact plane of a retained tag: outward unit normal n through o.
 type plane struct {
 	n, o r3.Vec
