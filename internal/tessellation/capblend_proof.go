@@ -279,13 +279,14 @@ func ComposeCapBlendBounds[F comparable](
 }
 
 // RequireCapBlendFacetAreas refuses a mesh carrying a zero-area triangle
-// (agent-docs/tessellation-design.md §12) with ErrUnsupported. The test is the exact
-// rational squared cross product, so a sliver is judged by what its own
-// coordinates say rather than by a tolerance.
+// (agent-docs/tessellation-design.md §12) with ErrUnsupported. A proven float
+// filter skips exact arithmetic for ordinary triangles; uncertain triangles
+// use the exact rational squared cross product, so a sliver is judged by its
+// own coordinates rather than by a tolerance.
 func RequireCapBlendFacetAreas(verts []r3.Vec, tris [][3]int, noun string) error {
 	for i, tri := range tris {
 		a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
-		if CapBlendTwiceAreaSq(a, b, c).Sign() <= 0 {
+		if !proofarith.TriangleOpenFloat(a, b, c) && CapBlendTwiceAreaSq(a, b, c).Sign() <= 0 {
 			return fmt.Errorf(`%w: facet %d of this %s mesh has zero area`, decaderr.ErrUnsupported, i, noun)
 		}
 	}

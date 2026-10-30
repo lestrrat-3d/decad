@@ -1,6 +1,7 @@
 package tessellation_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -40,6 +41,28 @@ func TestRequireCapBlendFacetAreas(t *testing.T) {
 	err := tessellation.RequireCapBlendFacetAreas(verts, [][3]int{{0, 1, 2}, {0, 1, 3}}, "x")
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 	require.ErrorContains(t, err, "facet 1 of this x mesh has zero area")
+}
+
+func TestRequireCapBlendFacetAreasMatchesExactRational(t *testing.T) {
+	large := math.Ldexp(1, 1001)
+	step := math.Ldexp(1, 950)
+	near := math.Nextafter(2, math.Inf(1))
+	tests := []struct {
+		name string
+		tri  [3]r3.Vec
+	}{
+		{name: "ordinary", tri: [3]r3.Vec{{}, {X: 3, Y: 1}, {X: 1, Y: 4}}},
+		{name: "collinear", tri: [3]r3.Vec{{}, {X: 1, Y: 1, Z: 1}, {X: 2, Y: 2, Z: 2}}},
+		{name: "near collinear", tri: [3]r3.Vec{{}, {X: 1, Y: 1, Z: 1}, {X: 2, Y: 2, Z: near}}},
+		{name: "extreme finite", tri: [3]r3.Vec{{}, {X: large, Y: large}, {X: large, Y: large + step}}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			wantPositive := tessellation.CapBlendTwiceAreaSq(tc.tri[0], tc.tri[1], tc.tri[2]).Sign() > 0
+			err := tessellation.RequireCapBlendFacetAreas(tc.tri[:], [][3]int{{0, 1, 2}}, "test")
+			require.Equal(t, wantPositive, err == nil)
+		})
+	}
 }
 
 func TestPrismPatternMeshRoot(t *testing.T) {
