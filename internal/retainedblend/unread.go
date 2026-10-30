@@ -45,9 +45,19 @@ func tagFaceOf(f *topo.Face) tagFace {
 	if f == nil {
 		return tagFace{missing: true}
 	}
+	if f.Surface == nil {
+		return tagFace{kind: surfacegeom.KindFaceted}
+	}
 	t := tagFace{kind: f.Surface.Kind(), retained: f.RetainedTag, departs: f.TagDeparture != 0}
 	if f.RetainedTag && !t.departs {
-		t.notDenoted = !tagIsRecord(f)
+		// Only the kinds a class reads against a revolve record are judged: a
+		// Cone or Torus with a record is named by its kind instead.
+		switch surf := f.Surface.(type) {
+		case surfacegeom.Plane, surfacegeom.Cylinder:
+			t.notDenoted = !tagIsRecord(f)
+		case surfacegeom.Sphere:
+			t.notDenoted = sphereIsRecord(f, surf) != nil
+		}
 	}
 	if c, ok := f.Surface.(surfacegeom.Cylinder); ok {
 		t.cylinderDir = c.Axis
@@ -66,6 +76,9 @@ var kindNames = map[surfacegeom.SurfaceKind]string{
 // unreadReason states why no class reads an edge between faces, from their tags.
 func unreadReason(faces []tagFace) string {
 	if len(faces) != 2 {
+		if len(faces) == 1 {
+			return "the edge borders 1 face, and a class reads an edge between exactly two"
+		}
 		return fmt.Sprintf("the edge borders %d faces, and a class reads an edge between exactly two", len(faces))
 	}
 	for _, f := range faces {
@@ -95,5 +108,15 @@ func unreadReason(faces []tagFace) string {
 	case a.kind == surfacegeom.KindTorus || b.kind == surfacegeom.KindTorus:
 		return "an edge on a retained torus, which no class reads (retained-edge-blend SR1)"
 	}
-	return fmt.Sprintf("an edge between a retained %s and a retained %s", kindNames[a.kind], kindNames[b.kind])
+	if a.kind == surfacegeom.KindCylinder && b.kind == surfacegeom.KindCylinder {
+		return "an edge between two retained cylinders with parallel axes"
+	}
+	return fmt.Sprintf("an edge between a retained %s and a retained %s", kindName(a.kind), kindName(b.kind))
+}
+
+func kindName(k surfacegeom.SurfaceKind) string {
+	if n, ok := kindNames[k]; ok {
+		return n
+	}
+	return fmt.Sprintf("surface of kind %d", int(k))
 }
