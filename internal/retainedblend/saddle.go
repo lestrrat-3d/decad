@@ -216,8 +216,9 @@ func readSaddle(e *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face
 			return saddle{}, fmt.Errorf("%w: the saddle's held seam crosses the shaft's axis", decaderr.ErrUnsupported)
 		}
 	}
-	// The mouth lies on local +X: flip the bore axis, and with it the third
-	// axis so the frame keeps its hand.
+	// The mouth lies on local +X: flip the bore axis, and the third axis with
+	// it. The pose may be left-handed either way; nothing reads its hand, and
+	// the tool's winding comes from its signed volume (buildSaddleTool).
 	s.key.pose.Sign[0], s.key.pose.Sign[1] = side, side
 	return s, nil
 }

@@ -160,7 +160,10 @@ func TestRetainedSaddleChamfer(t *testing.T) {
 		name string
 		r, d float64
 		// meaningful is set where the removed volume exceeds the two
-		// bodies' bounds, so the volume alone tells a chamfer from none.
+		// bodies' bounds, so the volume alone tells a chamfer from none. At
+		// d = 0.5 (r = 3 and r = 7) the bounds sum to about 15 mm³ against a
+		// removal of 4.9 and 10.5 mm³: the volume assertion there proves
+		// nothing, and the point checks below carry the test.
 		meaningful bool
 	}{
 		{"r3 d1.5", 3, 1.5, true},
@@ -304,4 +307,119 @@ func TestRetainedSaddleChamferRefusals(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "another face of the body comes within the saddle chamfer's reach")
 	})
+}
+
+// TestRetainedSaddleChamferExtrudeShaft chamfers both mouths of an Extrude
+// shaft (radius 10, length 40, centred on the origin) cut by a radius-3
+// Extrude pin, under each assignment of the two axes to world coordinates and
+// under a translation that leaves the axes meeting off the origin. Under the
+// race detector only the moved assignment runs, and only on the mouth at the
+// bore axis's negative end; dropping the mouth-side flip or permuting the
+// pose's axes in readSaddle fails it.
+func TestRetainedSaddleChamferExtrudeShaft(t *testing.T) {
+	t.Parallel()
+	const r, d = 3.0, 1.5
+	wedge := saddleWedgeVolume(saddleR, r, d)
+	signs := []float64{1, -1}
+	if raceDetector {
+		signs = []float64{-1}
+	}
+	for _, tc := range []struct {
+		name        string
+		shaft, bore func(w *sketch.World) *sketch.Plane
+		// ib, ic and ik are the world coordinates of the shaft's axis, the
+		// bore's axis and the third axis.
+		ib, ic, ik int
+		move       r3.Vec
+		race       bool
+	}{
+		{"shaft z bore x", (*sketch.World).XY, (*sketch.World).YZ, 2, 0, 1, r3.Vec{}, false},
+		{"shaft y bore z", (*sketch.World).XZ, (*sketch.World).XY, 1, 2, 0, r3.Vec{}, false},
+		{"shaft x bore y", (*sketch.World).YZ, (*sketch.World).XZ, 0, 1, 2, r3.Vec{}, false},
+		{"shaft z bore x moved", (*sketch.World).XY, (*sketch.World).YZ, 2, 0, 1, r3.Vec{X: 0.1, Y: 0.2, Z: 0.3}, true},
+	} {
+		if raceDetector && !tc.race {
+			continue
+		}
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			sc := newRetentionScene()
+			cylinder := func(plane *sketch.Plane, radius, length float64) *decad.Body {
+				s, err := sc.w.CreateSketch(plane)
+				require.NoError(t, err)
+				c := s.CreatePoint(0, 0)
+				s.Fix(c)
+				s.CreateCircle(c, radius)
+				_, err = s.Solve(t.Context())
+				require.NoError(t, err)
+				b, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
+					decad.Symmetric{D: units.Millimeters(length)})
+				require.NoError(t, err)
+				if tc.move == (r3.Vec{}) {
+					return b
+				}
+				m, err := r3.Translation(tc.move)
+				require.NoError(t, err)
+				b, err = decad.Transform(t.Context(), b, m)
+				require.NoError(t, err)
+				return b
+			}
+			body, err := decad.Cut(t.Context(), cylinder(tc.shaft(sc.w), saddleR, 40), cylinder(tc.bore(sc.w), r, 30))
+			require.NoError(t, err)
+			at := func(p r3.Vec, i int) float64 { return [3]float64{p.X, p.Y, p.Z}[i] }
+			var q *decad.EdgeQuery
+			n := 0
+			for _, e := range body.Edges() {
+				p := e.Start().Position().Value
+				if p != e.End().Position().Value {
+					continue
+				}
+				l := p.Sub(tc.move)
+				if math.Abs(math.Hypot(at(l, tc.ic), at(l, tc.ik))-saddleR) > 0.05 ||
+					math.Abs(math.Hypot(at(l, tc.ik), at(l, tc.ib))-r) > 0.05 ||
+					(len(signs) == 1 && at(l, tc.ic)*signs[0] < 0) {
+					continue
+				}
+				if q == nil {
+					q = decad.Edges(decad.EndpointAt(p))
+				} else {
+					q = q.Or(decad.EndpointAt(p))
+				}
+				n++
+			}
+			require.Equal(t, len(signs), n, "the selected mouths of the cross hole")
+			before, err := body.Volume()
+			require.NoError(t, err)
+			out, err := decad.Chamfer(t.Context(), body, q.Exactly(n), units.Millimeters(d))
+			require.NoError(t, err)
+			after, err := out.Volume()
+			require.NoError(t, err)
+			want := float64(n) * wedge
+			require.InDelta(t, want, before.Value.Base()-after.Value.Base(), before.Bound.Base()+after.Bound.Base(),
+				"the chamfer removes each selected wedge")
+			require.Greater(t, want, before.Bound.Base()+after.Bound.Base(), "the removed volume exceeds both bounds")
+
+			mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+			require.NoError(t, err)
+			held, err := decad.NewMeshBody(t.Context(), mesh.Vertices(), mesh.Triangles())
+			require.NoError(t, err)
+			for _, sign := range signs {
+				world := func(l r3.Vec) r3.Vec {
+					var a [3]float64
+					a[tc.ic], a[tc.ik], a[tc.ib] = sign*l.X, l.Y, l.Z
+					return r3.Vec{X: a[0], Y: a[1], Z: a[2]}.Add(tc.move)
+				}
+				for k := range 8 {
+					w := saddleSectionAt(saddleR, r, d, 2*math.Pi*(float64(k)+0.25)/8)
+					got, err := held.LocatePoint(t.Context(), world(w.p.Add(w.o).Add(w.b).Scale(1.0/3)))
+					require.NoError(t, err)
+					require.Equal(t, decad.PointOutside, got, "the wedge is gone")
+					mid := w.o.Add(w.b).Scale(0.5)
+					got, err = held.LocatePoint(t.Context(), world(mid.Add(mid.Sub(w.p).Scale(0.3/mid.Sub(w.p).Len()))))
+					require.NoError(t, err)
+					require.Equal(t, decad.PointInside, got, "the material past the band stays")
+				}
+			}
+		})
+	}
 }

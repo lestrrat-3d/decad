@@ -448,8 +448,9 @@ about 20,000 facets and `Tessellate(…, VerifyAll)` verifies its boundary and
 volume. `Verify` reads its area beyond the relative tolerance: the band rims hold
 about `2N` segments, and `proofbound.ChainLengthBound` charges `2δ` per segment.
 
-**Reach.** Built and checked: r/R = 0.3 (d = 0.5, 1.5) and 0.7 (d = 0.5), on a
-Revolve and on an Extrude shaft. The cell proofs also pass at r/R = 0.75;
+**Reach.** Built and checked: r/R = 0.3 (d = 0.5, 1.5) and 0.7 (d = 0.5) on a
+Revolve shaft, and r/R = 0.3 (d = 1.5) on an Extrude shaft under each
+assignment of the two axes to world coordinates and under a translation. The cell proofs also pass at r/R = 0.75;
 recognition stops at `1/√2`, where the opening stops being one graph over the
 shaft's angle.
 
@@ -749,7 +750,7 @@ published bound, never with a pinned literal.
 | Result is an ordinary retained body | a second blend on another edge, a `Cut` through the blended region and `Transform` all build; `NormalAt` on the blend face has a bound below 1 | store the blend with `Retained = false`: the chain loses the tag |
 | New vertex bounds | every new vertex lies within its stated bound of its exact point | skip the rounding charge: the bound is zero and the check fails |
 | Verify | `Verify` of a blended plate passes with no `Suspect` in watertightness | |
-| R7 cross-hole chamfer: Revolve shaft R = 10, pin r = 3 through it, both mouths, d = 1.5 and 0.5; pin r = 7, d = 0.5 (`apitest/retained_saddle_chamfer_test.go`) | the volume falls by twice the wedge's divergence-theorem integral (24.474 mm³ per mouth at d = 1.5, 2.460 at d = 0.5) within both bodies' bounds, and at d = 1.5 that change exceeds the bounds; the walls stay `Cylinder`, the bands read `Faceted`; on the `VerifyAll` mesh the wedge's section centroid reads outside, farther than the mesh bound, and a point 0.3 mm past the band reads inside, at 8 stations of each mouth | cut with `d/2`: the d = 1.5 volume and the d = 0.5 centroids fail; drop the outer foot's rotation from the held stations: the sample comparison widens `ε` and proof 4 refuses |
+| R7 cross-hole chamfer: Revolve shaft R = 10, pin r = 3 through it, both mouths, d = 1.5 and 0.5; pin r = 7, d = 0.5 (`apitest/retained_saddle_chamfer_test.go`) | the volume falls by twice the wedge's divergence-theorem integral (24.474 mm³ per mouth at d = 1.5, 2.460 at d = 0.5) within both bodies' bounds, and at d = 1.5 that change exceeds the bounds; the walls stay `Cylinder`, the bands read `Faceted`; on the `VerifyAll` mesh the wedge's section centroid reads outside, farther than the mesh bound, and a point 0.3 mm past the band reads inside, at 8 stations of each mouth; an Extrude shaft at d = 1.5 under the three axis assignments and a translation does the same (`TestRetainedSaddleChamferExtrudeShaft`; under `-race` the translated case only, on one mouth) | cut with `d/2`: the d = 1.5 volume and the d = 0.5 centroids fail; drop the outer foot's rotation from the held stations: the sample comparison widens `ε` and proof 4 refuses; drop the mouth-side flip or permute the pose's axes: the race-mode Extrude case refuses |
 | R7 refusals | `d > r/2` refuses; a pin moved 0.5 off the shaft's axis, a pin with r/R = 0.75 and a pin joined through the shaft refuse with the canal-surface reason; a flat milled beside a mouth refuses "another face of the body comes within the saddle chamfer's reach"; `Fillet` of the mouths keeps the canal-surface reason (`apitest/blend_refusal_names_test.go`) | drop the clearance check: the flat builds; admit a bore that is not `Reversed`: the joined pin builds; drop the exact axis meeting: the moved pin refuses with "a held seam vertex is off the two cylinders"; drop `2r² < R²`: r/R = 0.75 builds |
 
 ## 10. Files and fallout
