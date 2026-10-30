@@ -2805,6 +2805,7 @@
 10	0.00	TestRevolveChainRejectsInteriorAxisPinch
 10	0.01	TestRevolveFullTurnStaysApproximate
 10	0.00	TestRevolveGrooveCornerBlends
+10	0.00	TestRevolveGrooveDisplacedMeridianRefuses
 10	0.02	TestRevolvePartialSweepWithHole
 10	1.93	TestRevolveSectorCylinderCutRadiusBoundariesLeaveBodiesLive
 10	0.01	TestRevolveSemicirclePartialSweepCentroidBoundTightens

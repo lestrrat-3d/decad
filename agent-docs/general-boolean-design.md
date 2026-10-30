@@ -1192,7 +1192,11 @@ as whole lines between those points (`prismcells.MergeWithChainExactLineCuts`,
 the exact line-crossing restatement of §3 "A1 as a brep") and carries no section
 displacement. A groove cut into a turned shaft is such a loop: its walls
 cross the shaft's rim at the groove's own recorded coordinates, although the
-cut parameters along the rim are rounded. Any other result cut through a
+cut parameters along the rim are rounded. A groove drawn flush with the rim
+is not: each wall ends on the rim as a whole edge, so the rim's cut end
+meets a recorded endpoint rather than a second cut, and the loop keeps the
+charge (`apitest/revolve_groove_blend_test.go`,
+`TestRevolveGrooveDisplacedMeridianRefuses`). Any other result cut through a
 source line or arc carries the cut parameter's displacement through
 `revolvePayload.SectionDelta`, and a blend or shell of it refuses
 (`revolveplan.RequireExactSection`). A kept

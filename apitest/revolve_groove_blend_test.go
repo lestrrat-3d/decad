@@ -112,3 +112,63 @@ func TestRevolveGrooveCornerBlends(t *testing.T) {
 		decadtest.IsSound(t, doc)
 	})
 }
+
+// TestRevolveGrooveDisplacedMeridianRefuses pins where the exact restatement
+// stops. A meridian loop is restated only when every cut end is a crossing of
+// two cut lines at a binary64 point; any other loop keeps the rim's cut
+// charge, and a fillet or shell of it refuses.
+//
+// Legs shown to fail before these fixtures were accepted: dropping the cut
+// charge whenever the restatement declines lets every case here build.
+func TestRevolveGrooveDisplacedMeridianRefuses(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		base [][2]float64
+		ring [][2]float64
+		volQ float64
+	}{
+		{
+			// The groove's top lies on the rim, so its walls end on the rim:
+			// each junction there is a cut rim fragment meeting a whole wall.
+			name: "flush groove",
+			base: grooveShaftMeridian,
+			ring: [][2]float64{{60, 7}, {62, 7}, {62, 8}, {60, 8}},
+			volQ: groovedShaftQ,
+		},
+		{
+			// The groove's walls end on the rim at (60, 8) and (62, 8), and a
+			// peak above the rim joins them: the same whole-wall junctions.
+			name: "walls ending on the rim",
+			base: grooveShaftMeridian,
+			ring: [][2]float64{{60, 7}, {62, 7}, {62, 8}, {61, 9}, {60, 8}},
+			volQ: groovedShaftQ,
+		},
+		{
+			// A cone of base radius 10 and length 30 (∫ρ dA = 500). The
+			// ring's wall z = 10 crosses its slant ρ = 10 − z/3 at 20/3, which
+			// binary64 cannot hold. The groove takes
+			// ∫ (ρ(z)² − 4)/2 dz over z ∈ [10, 12] = 976/27.
+			name: "cone slant at 20/3",
+			base: [][2]float64{{0, 0}, {30, 0}, {0, 10}},
+			ring: [][2]float64{{10, 2}, {12, 2}, {12, 12}, {10, 12}},
+			volQ: 500 - 976.0/27,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			base := revolveMeridian(t, doc, tc.base, decad.FullRevolution{})
+			ring := revolveMeridian(t, doc, tc.ring, decad.FullRevolution{})
+			grooved, err := decad.Cut(t.Context(), base, ring)
+			require.NoError(t, err)
+			decadtest.MeasuresVolume(t, grooved, fullTurnVolume(tc.volQ))
+			const msg = `cannot integrate a region over a meridian carrying its own section displacement`
+			_, err = decad.Fillet(t.Context(), grooved, concaveJunctions(), units.Millimeters(0.3))
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			require.Contains(t, err.Error(), msg)
+			_, err = decad.Shell(t.Context(), grooved, nil, units.Millimeters(0.3), decad.WithNoOpenings())
+			requireShellRefused(t, doc, grooved, err, decad.ErrUnsupported, msg)
+		})
+	}
+}
