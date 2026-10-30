@@ -17,7 +17,7 @@
 //
 // It touches the larger wall along a1 = −σ1·(c_x, c_y, 0)/R' and the bore
 // along a2 = −(0, cos θ, sin θ); both are normal to c′, and the arc between
-// them has angle φ with cos φ = −σ1·r'·cos²θ/R'. The fillet is the pipe
+// them has angle φ with cos φ = σ1·r'·cos²θ/R'. The fillet is the pipe
 //
 //	F(θ, t) = c(θ) + ρ·w/|w|,  w = (1 − t)·a1 + t·a2,  t ∈ [0, 1],
 //
@@ -97,7 +97,7 @@ func (c Canal) Exists() bool {
 var arcStep = 2 * math.Acos(1-0x1p-10)
 
 // widestArc is φ*, the largest angle of the arc from a1 to a2 over θ: its
-// cosine −σ1·r'·cos²θ/R' is least at θ = 0 inside the larger cylinder,
+// cosine σ1·r'·cos²θ/R' is least at θ = 0 inside the larger cylinder,
 // arccos(−r'/R'), and at θ = π/2 outside it, π/2.
 func (c Canal) widestArc() float64 {
 	if c.Outside {

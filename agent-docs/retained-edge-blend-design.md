@@ -530,7 +530,7 @@ cell proofs, the window and the clearance.
 `c(θ) = (√(R'² − r'²cos²θ), r'·cos θ, r'·sin θ)`. The ball touches the larger
 wall along `a1 = −σ1·(c_x, c_y, 0)/R'` and the bore along
 `a2 = −(0, cos θ, sin θ)`. Both are normal to `c′`, and the arc between them has
-angle φ with `cos φ = −σ1·r'·cos²θ / R'`. Inside the larger cylinder φ is
+angle φ with `cos φ = σ1·r'·cos²θ / R'`. Inside the larger cylinder φ is
 widest at θ = 0, `arccos(−r'/R')`; outside it at θ = ±π/2, π/2. The tangency
 curves are `T1 = c + ρ·a1` on the larger wall, the curve
 `(R'·y/|p_xy|)² + z² = r'²`, and `T2 = c + ρ·a2` on the bore, the curve

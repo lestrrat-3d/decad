@@ -50,7 +50,7 @@ const (
 // larger cylinder and −1 outside it. As ρ → 0, F_θ → c′ and the determinant
 // tends to ρ·det[c′, u_t, u] = −ρ·ω·(c′·ê), with ê the unit axis about which
 // u turns from a1 to a2 and ω > 0 its turning speed. The arc's angle stays
-// inside (0, π) at every θ (its cosine −σ1·r'·cos²θ/R' lies in (−1, 1)), so
+// inside (0, π) at every θ (its cosine σ1·r'·cos²θ/R' lies in (−1, 1)), so
 // ê·c′ keeps one sign around the loop, which θ = 0 shows: there c′ = r'·ẑ, and
 // the arc turns about −ẑ inside the larger cylinder (a1 in the first quadrant
 // of the (x, y) plane, a2 = −ŷ) and about +ẑ outside it (a1 in the third).
