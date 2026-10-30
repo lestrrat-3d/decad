@@ -337,7 +337,9 @@ open chain or one closed loop, no more than two at a corner, every edge convex, 
 At a joint `C` between the edges with walls `B_k` and `B_{k+1}`, the two cylinders meet in the plane through `C` with
 normal `n(B_{k+1}) − n(B_k)`, which bisects the walls. Each edge's rows end on that plane (`setbackPoint`), so the two
 strips share the vertices of their rows there and the strips' end triangles coincide. No end face is trimmed at a
-joint. The vertical edge under `C` loses its top part, and the two walls meet at the strips' feet.
+joint. The mitre plane meets each edge at 45°, so every edge of the run takes its row count from the smallest
+`|d̂ · n|` over all the run's mitre and end planes, as §5.0 step 1 does for one edge's two end planes: the chords in the
+mitre plane stay within `τ`, and both strips at a joint have the same rows. The vertical edge under `C` loses its top part, and the two walls meet at the strips' feet.
 
 The base face's boundary gives way to a polygon of the rows' base points at the joints and at any free end. A closed
 run replaces the whole outer loop; an open run replaces the stretch it covers. A free end trims its end face as a
@@ -368,7 +370,9 @@ At a corner with three selected edges a sphere of radius `r` and centre `C + r·
 patch is the octant between the three strips' end rows, gridded so that its sides are those rows' vertices. The
 exact areas are those of the strips cut at their end planes, plus `3r²` removed from the three faces and `πr²/2` added
 by the patch for every such corner. The chord tolerance is an eighth of a single edge's, so the many chord deficits stay
-inside what `Verify` accepts for a box with all twelve edges rounded.
+inside what `Verify` accepts for a box with all twelve edges rounded. Every strip takes the same row count, from the
+smallest `|d̂ · n|` over all the strips' end planes (§5.0 step 1), so the chords on a two-edge corner's 45° plane stay
+within the tolerance.
 
 Refusals (SR2): a selected edge no longer than `2r`, a face edge at a corner no longer than `r`, a corner whose faces
 are not mutually perpendicular retained planes, and a rebuilt face whose outline is not a simple polygon.
@@ -773,7 +777,12 @@ again over the new loops. Let `e` run from `V₀` to `V₁`, with `d̂` its dire
    For a fillet, the arc rows `α_j = jφ/m` of the exact cylinder meet `G_i` at
    `q_j,i = p_j + s·d̂`, with `p_j` the point of the cross-section arc and `s`
    the offset along `d̂` that reaches `G_i`. Row 0 is `P_A` and row `m` is `P_B`;
-   a chamfer has rows 0 and 1 only.
+   a chamfer has rows 0 and 1 only. `m` is the smallest count whose arc
+   sagitta `r·(1 − cos(Δα/2))` is at most `τ·c`, with `c` the smaller of
+   `|d̂ · n_G0|` and `|d̂ · n_G1|` (`rowStep`): in `G_i` each row chord stands
+   for an arc of the ellipse and its sagitta grows by up to `1/c`, so the
+   chords in both end planes stay within `τ` (§6.3). The grazing-angle
+   refusal, `c < 10⁻³`, keeps `m` at most 1,124 for any `φ < π`.
 2. **Chains.** In `A`'s loop, `e` is the run of vertices from `V₀` to `V₁` that lie
    on the line of `e` within their bounds. `eA_i` is the run that leaves `V_i`
    on the line of `eA_i`. The setback point `P_A,i` falls between two vertices of
@@ -980,7 +989,9 @@ A ring vertex on the plane face lies at the exact setback circle, so it is an
 exact function of the tags; every strip vertex takes the bound `τ` plus the
 rounding of its computation, because the chords between ring vertices leave the
 exact surface by at most `τ` and a vertex bound is the only place a facet can
-state that. A wall cut vertex takes the larger bound of its edge's two ends, plus
+state that. A straight edge's rows meet that in the end and mitre planes they
+end on as well as on the cylinder, because their step is set by the most
+oblique of those planes (Area, below). A wall cut vertex takes the larger bound of its edge's two ends, plus
 `τ` and the rounding (§5 step 2). An old vertex keeps its bound.
 
 **Claim K.** Let `H` be the held solid with `VolSymDiff = v`, `H'` the rewritten
@@ -1037,10 +1048,17 @@ chord, `β` the smaller bound of its two end vertices: the perimeter form's
 chord charges `δ(t)·(|u| + |v|) ≥ β·c` by the triangle inequality. So the face's
 own term covers its share of the chord error wherever `s ≤ β`. The rim ring
 meets that (its step comes from `ringCount` at `τ`, and each ring vertex has
-bound `τ + slack`), and so do a straight edge's rows on the blend's circle
-(step `2·acos(1 − τ/r)`, bound `τ + slack`). A straight edge's rows projected
-along the edge onto an end face oblique to it do not: in the end plane `G` a
-row chord's sagitta reaches `τ/|d·n_G|` against the same bound `τ + slack`.
+bound `τ + slack`), and so do a straight edge's rows, both on the blend's
+circle and where they end on an end face oblique to the edge. In the end plane
+`G` the rows' chords are the cross-section's chords projected along the edge,
+which stretches lengths by at most `1/|d·n_G|`, so a chord whose cross-section
+sagitta is `s` has sagitta at most `s/|d·n_G|` in `G`. The step
+`2·acos(1 − τ·c/r)`, with `c` the smallest `|d·n|` over the planes the rows end
+on (§5.0 step 1, `rowStep`), keeps `s ≤ τ·c`, so the sagitta in `G` is at most
+`τ` against each row vertex's bound `τ + slack`. A mitre plane (§4.7, §4.8) is
+held to the same step: there no face takes the gap between the chord and the
+ellipse, and a true point on the ellipse lies within the chord's sagitta of the
+mesh only through that chord.
 
 **Volume.** The new `VolSymDiff` is the old one plus `ε·(A_strip + A_true)`, with
 `ε` the largest vertex bound of the strip and `A_strip`, `A_true` the held and
@@ -1098,6 +1116,7 @@ published bound, never with a pinned literal.
 | Concave edge in an L section | the fill adds `L·r²(1 − π/4)`, the blend's normal points into the void, `VerifyAll` passes | build the convex blend: the normal points into the material |
 | Concave edge at a wall's foot | the plate face is reflex at each foot corner; the fill adds `L·r²(1 − π/4)`, the wall's end faces grow by the caps, `VerifyAll` passes; two foot edges together and a chamfer build as well | keep `V` out of the extended end face's loop: the mesh fails its audit |
 | Oblique end face, sketched at 45° about z and, separately, about y (no exact tool leans both ways) | the end arc is an `Ellipse3` with `SemiMinor = r` and `SemiMajor = r / |d̂ · nG|`; removed volume equals the section area times the length between the end planes measured through the section's centroid | treat `G` as normal to the edge: the volume is off by the centroid offset |
+| Rows ending on oblique planes (`apitest/faceted_retained_blend_oblique_end_test.go`): the 45° end face above at r = 2, a two-edge mitre run at r = 3, and the 45° plane of a two-edge corner on the corner route at r = 2 | 1,001 samples of the true end curve, the ellipse the cylinder cuts in that plane, lie within the mesh's `Bound` of its facets. A unit test (`internal/retainedblend/line_rewrite_internal_test.go`) projects rows onto a plane with `|d̂ · n| = 1/2`: the chord centred on the stretch direction has sagitta `r·(1 − cos h)/c` there and no other chord's is larger; spaced for the cross-section alone that is `τ/c`, spaced by `rowStep` it is `τ` | space the rows by `τ` alone in any of the three routes: its curve lies up to about 1.37 times `Bound` from the mesh; drop `c` from `rowStep`: the unit case reads `τ/c` |
 | Clearance | a radius past the face width refuses `ErrDegenerate`; a radius within `b` of it refuses `ErrUnsupported` | drop the `− b_v` term of §6.2: the near case builds an invalid solid |
 | Shared vertex / tangent chain | refuse SR2 | |
 | Top loop of a mesh box, `Fillet` r = 2 | mitre run (§4.7): the volume is the box less the columns' removed height, the larger of the two walls' at each column, integrated on a 1000 × 1000 grid; the section 0.1 mm under the top has its corner on the plane x = y; `Verify` is `Sound` | delete the mitre and the corner volume is the sum of both strips |

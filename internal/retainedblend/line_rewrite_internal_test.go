@@ -1,6 +1,7 @@
 package retainedblend
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -90,4 +91,61 @@ func TestLineEndFaceTurn(t *testing.T) {
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 		require.ErrorContains(t, err, "an end face's turn at the edge's corner is undecided")
 	})
+}
+
+// TestRowStepEndPlaneSagitta projects a fillet's rows along the edge d = x onto
+// an end plane through the axis with |d·n| = c = 1/2. The plane's ellipse is the
+// cross-section's circle of radius r stretched by 1/c along u = y, so a chord of
+// half-angle h centred on u keeps its direction while its sagitta r·(1 − cos h)
+// stretches to r·(1 − cos h)/c; no chord's grows more.
+func TestRowStepEndPlaneSagitta(t *testing.T) {
+	t.Parallel()
+	const r, c = 2.0, 0.5
+	tau := math.Ldexp(r, -10)
+	d := r3.NewVec(1, 0, 0)
+	g := plane{n: r3.NewVec(c, math.Sqrt(1-c*c), 0)}
+	circle := func(beta float64) r3.Vec { return r3.NewVec(0, r*math.Cos(beta), r*math.Sin(beta)) }
+	// inPlane is the largest distance in the end plane between the arc of
+	// half-angle h about beta and its chord, each projected along d.
+	inPlane := func(beta, h float64) float64 {
+		p0, p1 := setbackPoint(circle(beta-h), d, g), setbackPoint(circle(beta+h), d, g)
+		worst := 0.0
+		for k := range 201 {
+			q := setbackPoint(circle(beta-h+2*h*float64(k)/200), d, g)
+			worst = math.Max(worst, distToSegment(q, p0, p1))
+		}
+		return worst
+	}
+	sagitta := func(h float64) float64 { return r * (1 - math.Cos(h)) / c }
+
+	require.Equal(t, c, endSine(1, d, plane{n: r3.NewVec(-0.8, 0.6, 0)}, g, plane{n: d}),
+		"the shallowest plane sets the sine")
+	require.Equal(t, 1.0, endSine(1, d, plane{n: d}))
+
+	for _, tc := range []struct {
+		name string
+		c    float64
+		over bool
+	}{
+		// Spaced for the cross-section alone, the chord on u reaches tau/c.
+		{"rows spaced for the cross-section", 1, true},
+		{"rows spaced for the end plane", endSine(1, d, g), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			h := rowStep(tau, r, tc.c) / 2
+			want := sagitta(h)
+			require.InEpsilon(t, want, inPlane(0, h), 1e-9, "the chord on u")
+			for k := range 64 {
+				beta := 2 * math.Pi * float64(k) / 64
+				require.LessOrEqual(t, inPlane(beta, h), want*(1+1e-9), "the chord at %v", beta)
+			}
+			if tc.over {
+				require.InEpsilon(t, tau/c, want, 1e-9)
+				return
+			}
+			require.InEpsilon(t, tau, want, 1e-9)
+			require.LessOrEqual(t, want, tau*(1+1e-12))
+		})
+	}
 }
