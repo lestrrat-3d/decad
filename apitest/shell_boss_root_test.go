@@ -126,3 +126,42 @@ func meshEncloses(mesh *decad.Mesh, p r3.Vec) bool {
 	}
 	return crossings%2 == 1
 }
+
+// The boss shell's root patches are convex in their tube direction: the
+// solid lies inside each cylinder and torus tube about the root edge. They
+// add no concave radius. The rectangular shell has no curved concave face, so
+// its proven answer is nil; the round shell's tightest concave radius is its
+// inner cavity wall's r − t = 3 mm.
+func TestShellStackedBossConcaveRadius(t *testing.T) {
+	t.Parallel()
+	t.Run("rectangular", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New()
+		stack, err := decad.Union(t.Context(), boxBody(t, doc, 0, 0, 60, 40, 20),
+			boxBodyAtZ(t, doc, 20, 10, 40, 30, 20, 10))
+		require.NoError(t, err)
+		_, err = decad.Shell(t.Context(), stack, decad.Faces(decad.FaceCreatedBy(decad.CapStart(stack))).Exactly(1),
+			units.Millimeters(2))
+		require.NoError(t, err)
+		report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
+		require.NoError(t, err)
+		require.Len(t, report.Bodies, 1)
+		require.Nil(t, report.Bodies[0].ConcaveRadius.Minimum, "the root patches are convex")
+	})
+	t.Run("round", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New()
+		stack := roundBossFromSketch(t, doc, 10, 10)
+		_, err := decad.Shell(t.Context(), stack,
+			decad.Faces(decad.FaceCreatedBy(decad.CapEnd(stack))).Exactly(1), units.Millimeters(1))
+		require.NoError(t, err)
+		report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
+		require.NoError(t, err)
+		require.Len(t, report.Bodies, 1)
+		minimum := report.Bodies[0].ConcaveRadius.Minimum
+		require.NotNil(t, minimum)
+		require.Equal(t, decad.Exact, minimum.Exactness)
+		require.True(t, minimum.Value.Equal(units.Millimeters(3), 1e-12),
+			"the inner cavity wall's radius, got %s", minimum.Value)
+	})
+}

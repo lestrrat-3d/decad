@@ -23,6 +23,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -225,6 +226,10 @@ func attachBossShellBand(ctx context.Context, alloc topo.Alloc, body *topo.Body,
 	if len(walks) != n {
 		return nil, fmt.Errorf(`%w: a rectangular boss shell's root outline does not hold four edges`, decaderr.ErrUnsupported)
 	}
+	insets := band.CapProfile().Outer.Segments
+	if len(insets) != n {
+		return nil, fmt.Errorf(`%w: a rectangular boss shell's inset outline does not hold four edges`, decaderr.ErrUnsupported)
+	}
 	roots := make([]sectionrecord.LineSeg, n)
 	seams := make([]*topo.Edge, n)
 	for k := range n {
@@ -232,7 +237,8 @@ func attachBossShellBand(ctx context.Context, alloc topo.Alloc, body *topo.Body,
 			return nil, err
 		}
 		root, ok := walks[k].(sectionrecord.LineSeg)
-		if !ok {
+		inset, insetOK := insets[k].(sectionrecord.LineSeg)
+		if !ok || !insetOK {
 			return nil, fmt.Errorf(`%w: a rectangular boss shell's root outline holds a curved segment`, decaderr.ErrUnsupported)
 		}
 		roots[k] = root
@@ -242,6 +248,10 @@ func attachBossShellBand(ctx context.Context, alloc topo.Alloc, body *topo.Body,
 		// seam's start at the cap ring; its minor axis points down to the
 		// corner at the side ring, a quarter turn on.
 		center := pl.Point(root.Start.U, root.Start.V, band.InterfaceZ)
+		if !bossSeamCornerPaired(root.Start, inset.Start, band.Boss, band.T) ||
+			bossSeamFalsified(capV.Position, sideV.Position, center, down, band.T) {
+			return nil, fmt.Errorf(`%w: a rectangular boss shell's ring corner %d is not its root corner's inset`, decaderr.ErrUnsupported, k)
+		}
 		major, ok := capV.Position.Sub(center).Normalize()
 		if !ok {
 			return nil, fmt.Errorf(`%w: a rectangular boss shell seam has no major axis`, decaderr.ErrUnsupported)
@@ -288,6 +298,42 @@ func attachBossShellBand(ctx context.Context, alloc topo.Alloc, body *topo.Body,
 		}
 	}
 	return patches, nil
+}
+
+// bossSeamCornerPaired reports whether inset is root corner root of boss
+// moved t toward the boss interior along both axes. stackedshell proved every
+// inset coordinate exact (prismshell.BossRectArithmeticExact), so the
+// comparison is exact equality. A root that is no corner of boss fails.
+func bossSeamCornerPaired(root, inset sectionrecord.Point2, boss prismshell.BossRect, t float64) bool {
+	toward := func(x, lo, hi float64) (float64, bool) {
+		switch x {
+		case lo:
+			return x + t, true
+		case hi:
+			return x - t, true
+		}
+		return 0, false
+	}
+	u, okU := toward(root.U, boss.U0, boss.U1)
+	v, okV := toward(root.V, boss.V0, boss.V1)
+	return okU && okV && inset.U == u && inset.V == v
+}
+
+// bossSeamFalsified reports whether the placed ring vertices disprove a
+// seam centred at center: the cap vertex must lie t·√2 from it and the side
+// vertex at center + t·down. It only rejects. Its allowance, 1e-9 of the
+// coordinates' magnitude, far exceeds the rounding of the placement and
+// vertex arithmetic, so a sound pairing never fails it. A side vertex of
+// another corner lies a whole root edge L away, and another corner's inset
+// lies sqrt((L−t)² + t²) > t·√2 away, since stackedshell requires L > 2t.
+func bossSeamFalsified(capPos, sidePos, center, down r3.Vec, t float64) bool {
+	scale := 1 + t
+	for _, c := range [...]float64{center.X, center.Y, center.Z} {
+		scale = math.Max(scale, math.Abs(c)+t)
+	}
+	allow := 1e-9 * scale
+	return math.Abs(capPos.Sub(center).Len()-math.Sqrt2*t) > allow ||
+		sidePos.Sub(center.Add(down.Scale(t))).Len() > allow
 }
 
 // measureBossShell integrates its three cavity intervals exactly, with pi

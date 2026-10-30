@@ -121,9 +121,12 @@ func brepMinRadius(b *topo.Body, bp breprecord.Payload) (radiusOutcome, bool) {
 		}
 	}
 	fillets := make([]radiussurvey.BrepFilletRadius, 0, len(bp.LoopBands))
-	if bp.BossShell != nil {
-		fillets = append(fillets, radiussurvey.BrepFilletRadius{Radius: bp.BossShell.T})
-	}
+	// A boss shell's root patches add no radius: the solid lies inside each
+	// cylinder and torus tube about the root edge, so they are convex in the
+	// tube direction, and a torus patch's azimuthal radius is never below the
+	// inner cavity wall's r − t, which that wall already supplies. A pocket
+	// shell's band wraps the pocket from outside the material, so it is
+	// concave with its tube radius t.
 	if bp.PocketShell != nil {
 		fillets = append(fillets, radiussurvey.BrepFilletRadius{Radius: bp.PocketShell.T})
 	}
