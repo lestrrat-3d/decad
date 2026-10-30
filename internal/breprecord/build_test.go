@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topo/topotest"
@@ -95,4 +96,33 @@ func TestPlacedMovesTheRecord(t *testing.T) {
 	require.Equal(t, r3.NewVec(110, 20, 30), placed.Bounds.Max)
 	require.Equal(t, r3.NewVec(105, 10, 15), placed.Centroid.Value)
 	require.Equal(t, shift, placed.Payload.Transform())
+}
+
+// TestUpstreamRolesTravelOnlyThroughPlaced pins that Build stores a record
+// without its upstream roles, so a record derived by copying the payload
+// carries none, while Placed re-attaches them to the faces they name.
+func TestUpstreamRolesTravelOnlyThroughPlaced(t *testing.T) {
+	t.Parallel()
+	inherited := []provenance.Ref{{Producer: 1, Role: "capEnd"}}
+	bp := boxRecord(t)
+	bp.Upstream = topo.UpstreamRoles{{Roles: []string{"face(5)"}, Origins: inherited}}
+	env := topo.Env{Doc: &topo.Document{}, Ref: 3, Alloc: topotest.Alloc{}}
+
+	built, err := breprecord.Build(t.Context(), env, bp)
+	require.NoError(t, err)
+	require.Nil(t, built.Payload.(breprecord.Payload).Upstream)
+	for _, f := range topobuild.Faces(built) {
+		require.Nil(t, f.Upstream)
+	}
+
+	shift, err := r3.Translation(r3.NewVec(0, 0, 5))
+	require.NoError(t, err)
+	placed, err := bp.Placed(t.Context(), env, shift)
+	require.NoError(t, err)
+	require.Equal(t, bp.Upstream, placed.Payload.(breprecord.Payload).Upstream)
+	faces := topobuild.Faces(placed)
+	require.Equal(t, inherited, faces[5].Upstream)
+	for _, f := range faces[:5] {
+		require.Nil(t, f.Upstream)
+	}
 }

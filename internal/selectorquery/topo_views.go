@@ -1,7 +1,6 @@
 package selectorquery
 
 import (
-	"slices"
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -44,7 +43,7 @@ func (e EdgeNode) SelectorEndpoints() (r3.Vec, r3.Vec) {
 func (e EdgeNode) SelectorLengthMM() float64 { return e.Length }
 func (e EdgeNode) SelectorHasOrigin(ref provenance.Ref) bool {
 	for _, face := range e.Faces {
-		if slices.Contains(face.Origins, ref) {
+		if face.HasOrigin(ref) {
 			return true
 		}
 	}
@@ -52,7 +51,7 @@ func (e EdgeNode) SelectorHasOrigin(ref provenance.Ref) bool {
 }
 func (e EdgeNode) SelectorOnOuterLoop(ref provenance.Ref) bool {
 	for _, face := range e.Faces {
-		if !slices.Contains(face.Origins, ref) {
+		if !face.HasOrigin(ref) {
 			continue
 		}
 		for _, loop := range face.Loops {
@@ -100,7 +99,7 @@ func (f FaceNode) SelectorCylindrical() bool {
 	return ok
 }
 func (f FaceNode) SelectorHasOrigin(ref provenance.Ref) bool {
-	return slices.Contains(f.Origins, ref)
+	return f.HasOrigin(ref)
 }
 func (f FaceNode) SelectorIsWallOf(ref provenance.Ref) bool {
 	return IsWallOf(f.Face, ref.Producer)

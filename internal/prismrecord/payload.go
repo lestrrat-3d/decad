@@ -11,6 +11,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -91,6 +92,11 @@ type Payload struct {
 	SectionDelta  float64
 	Walks         *momentinput.ProfileWalks
 	SurfaceResult bool
+	// Upstream is the operand roles an analytic Boolean attributed to this
+	// result's faces (topo.UpstreamRoles). Build stores the payload without
+	// it, so a record derived from this one by copying it carries none; only
+	// the Boolean's own attach and Placed set it on a body.
+	Upstream topo.UpstreamRoles
 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports

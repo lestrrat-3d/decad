@@ -2,7 +2,9 @@ package stackedrecord
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -30,6 +32,11 @@ type Payload struct {
 	// one by copying it keeps the mark; a component that reaches an end cap
 	// stays an outer shell whatever the mark says.
 	ClosedShell bool
+	// Upstream is the operand roles an analytic Boolean attributed to this
+	// result's faces (topo.UpstreamRoles). Build stores the payload without
+	// it, so a record derived from this one by copying it carries none; only
+	// the Boolean's own attach and Placed set it on a body.
+	Upstream topo.UpstreamRoles
 }
 
 // Transform is the accumulated rigid placement.
@@ -45,7 +52,19 @@ func (sp Payload) OpposedSectionExact() bool {
 // Build with the payload's own plan.
 func (sp Payload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	sp.Xform = composed
-	return Build(ctx, env, sp, OwnPlan{})
+	up := sp.Upstream
+	body, err := Build(ctx, env, sp, OwnPlan{})
+	if err != nil || len(up) == 0 {
+		return body, err
+	}
+	built, ok := body.Payload.(Payload)
+	if !ok {
+		return nil, fmt.Errorf("%w: the stacked prism build did not retain its payload", decaderr.ErrUnsupported)
+	}
+	built.Upstream = up
+	body.Payload = built
+	up.Apply(body)
+	return body, nil
 }
 
 // AxialDelta is the largest displacement any slab's end carries.

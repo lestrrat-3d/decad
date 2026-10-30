@@ -13,6 +13,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/axialsection"
 	"github.com/lestrrat-3d/decad/internal/booleaneval"
+	"github.com/lestrrat-3d/decad/internal/boolupstream"
 	"github.com/lestrrat-3d/decad/internal/classbgeom"
 	"github.com/lestrrat-3d/decad/internal/crossbore"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -54,8 +55,23 @@ type Hooks struct {
 // Analytic runs every route Body tries before the mesh pipeline, in Body's order.
 // ok=false with a nil error is a miss. A non-nil error is the route's refusal, already
 // mapped through hooks.AsBooleanError where Body maps it. It writes nothing to the
-// document. a and b must belong to one document.
+// document. a and b must belong to one document. A hit's planar faces inherit
+// the operand roles boolupstream.Attach proves they lie inside
+// (agent-docs/prism-boolean-design.md §11).
 func Analytic(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *topo.Body,
+	hooks Hooks) (*topo.Body, bool, error) {
+	body, ok, err := analyticRoutes(ctx, op, env, a, b, hooks)
+	if err != nil || !ok || body == nil {
+		return body, ok, err
+	}
+	if err := boolupstream.Attach(ctx, op, body, a, b); err != nil {
+		return nil, false, err
+	}
+	return body, true, nil
+}
+
+// analyticRoutes is Analytic's dispatch over the routes, before attribution.
+func analyticRoutes(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *topo.Body,
 	hooks Hooks) (*topo.Body, bool, error) {
 	if n, ok, err := loftmirror.Union(ctx, op, env, hooks.Verified,
 		a, b); err != nil {

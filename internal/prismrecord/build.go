@@ -306,6 +306,7 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 		pw = pw.WithIntegrals(ig, freeform.MomentFirstOrder)
 	}
 	pp.Walks = pw
+	pp.Upstream = nil
 	body.Payload = pp
 	return body, nil
 }

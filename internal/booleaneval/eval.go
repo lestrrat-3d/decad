@@ -26,7 +26,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -239,7 +238,9 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		// The tool of a Cut (every face of b) leaves its natural normal
 		// pointing into the result (agent-docs/faceted-source-retention-design.md §3.1).
 		group, _ := facetedrecord.SourceTag(f, op == meshbool.OpCut && i >= targetFaces)
-		group.Origins = append([]provenance.Ref(nil), f.Origins...)
+		// A mesh result face descends from f, so it carries every role f is
+		// selected by: its own and those an analytic Boolean attributed to it.
+		group.Origins = f.AllOrigins()
 		// Identity only: no reader derives a plane or a bound from Source.
 		operand, ordinal, owner := 0, i, a
 		if i >= targetFaces {

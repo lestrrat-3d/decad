@@ -190,6 +190,7 @@ func Build(ctx context.Context, env topo.Env, bp Payload) (*topo.Body, error) {
 		return nil, err
 	}
 	bp.LoopPatches = bands.geom
+	bp.Upstream = nil
 	body.Payload = bp
 	return body, nil
 }

@@ -112,6 +112,11 @@ type Payload struct {
 	// the tessellator and the surveys read it from the payload the build
 	// left on the body, as capblend.Payload.patches is read.
 	LoopPatches [][]capblend.Patch
+	// Upstream is the operand roles an analytic Boolean attributed to this
+	// result's faces (topo.UpstreamRoles). Build stores the payload without
+	// it, so a record derived from this one by copying it carries none; only
+	// the Boolean's own attach and Placed set it on a body.
+	Upstream topo.UpstreamRoles
 }
 
 // SurveyClass names the payload class a staged survey diagnostic reports
@@ -161,7 +166,19 @@ func (bp Payload) Transform() r3.Transform { return bp.Xform }
 func (bp Payload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	bp.Xform = composed
 	bp.PointQueryCut = nil
-	return Build(ctx, env, bp)
+	up := bp.Upstream
+	body, err := Build(ctx, env, bp)
+	if err != nil || len(up) == 0 {
+		return body, err
+	}
+	built, ok := body.Payload.(Payload)
+	if !ok {
+		return nil, fmt.Errorf("%w: the BRep build did not retain its payload", decaderr.ErrUnsupported)
+	}
+	built.Upstream = up
+	body.Payload = built
+	up.Apply(body)
+	return body, nil
 }
 
 // AxialDelta is the largest level displacement over every face.

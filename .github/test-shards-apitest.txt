@@ -2912,3 +2912,14 @@
 10	0.00	TestRetainedSaddleChamfer
 10	0.00	TestRetainedSaddleChamferRefusals
 10	0.00	TestRetainedSaddleChamferExtrudeShaft
+10	0.00	TestUnionBossTopKeepsTheBossCapRole
+10	0.00	TestUnionBoxBottomKeepsTheBoxCapRole
+10	0.00	TestUnionLBracketKeepsTheBaseTopRole
+10	0.00	TestUnionFlushBoxesShareNoCapRole
+10	0.00	TestTransformKeepsUpstreamCapRoles
+10	0.00	TestCutPocketFloorKeepsTheToolStartRole
+10	0.00	TestIntersectKeepsTheCapOfTheLowerTop
+10	0.00	TestTransformKeepsUpstreamRolesOfEveryRecord
+10	0.00	TestMeshUnionCarriesUpstreamRoles
+10	0.00	TestModifyResultsDropUpstreamRoles
+10	0.00	TestUnionChainKeepsRolesThroughBrepOperands
