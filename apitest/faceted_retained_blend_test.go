@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -21,19 +22,22 @@ func boredPlate(t *testing.T) (*retentionScene, *decad.Body) {
 	t.Helper()
 	sc := newRetentionScene()
 	plate := blendPlate(t, sc)
-	bored, err := decad.Cut(t.Context(), plate, zCylinder(t, sc, -30, 30))
+	bored, err := decad.Cut(t.Context(), plate, zCylinder(t, sc, -30))
 	require.NoError(t, err)
 	return sc, bored
 }
 
-// zCylinder is a Ø8 cylinder along z at (20, 10) from z0 to z1, placed by a
+// zCylinder is a Ø8 cylinder along z at (20, 10) from z0 to 30, placed by a
 // translation so a Boolean takes the mesh path.
-func zCylinder(t *testing.T, sc *retentionScene, z0, z1 float64) *decad.Body {
+func zCylinder(t *testing.T, sc *retentionScene, z0 float64) *decad.Body {
 	t.Helper()
-	return zCylinderAt(t, sc, 20, 10, 4, z0, z1)
+	return zCylinderAt(t, sc, 20, 10, 4, z0, 30)
 }
 
-// zCylinderAt is a cylinder of radius r along z at (cx, cy) from z0 to z1.
+// zCylinderAt is a cylinder of radius r along z at (cx, cy) from z0 to z1,
+// both lifted by 0.001. It is extruded from z = 0 and moved by z0 + 0.001, so
+// a cap level whose float sum rounds states a departure
+// (agent-docs/faceted-source-retention-design.md §3.5).
 func zCylinderAt(t *testing.T, sc *retentionScene, cx, cy, r, z0, z1 float64) *decad.Body {
 	t.Helper()
 	ts, err := sc.w.CreateSketch(sc.w.XY())
@@ -147,6 +151,66 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		require.True(t, mesh.VolumeVerified())
 	})
 
+	// A Ø6 pin sketched at z = −30 and moved by (0, 0, 0.1) holds its axis
+	// origin at the rounded sum −30 + 0.1. The rounding runs along the axis,
+	// which leaves the cylinder the exact image of its record, so the wall
+	// states no departure (agent-docs/faceted-source-retention-design.md §3.5)
+	// and both mouths stay circles that a fillet and a chamfer read.
+	t.Run("a pin moved along its axis by a rounding sum keeps its mouths", func(t *testing.T) {
+		t.Parallel()
+		exact := new(big.Rat).Add(big.NewRat(-30, 1), new(big.Rat).SetFloat64(0.1))
+		require.NotZero(t, exact.Cmp(new(big.Rat).SetFloat64(-30+0.1)), "the moved origin rounds")
+		pinned := func(t *testing.T) *decad.Body {
+			t.Helper()
+			sc := newRetentionScene()
+			plane, err := sc.w.CreateOffsetPlane(sc.w.XY(), -30)
+			require.NoError(t, err)
+			s, err := sc.w.CreateSketch(plane)
+			require.NoError(t, err)
+			c := s.CreatePoint(20, 10)
+			s.Fix(c)
+			s.CreateCircle(c, 3)
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			pin, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
+				decad.Distance{D: units.Millimeters(60), Dir: decad.Along})
+			require.NoError(t, err)
+			bored, err := decad.Cut(t.Context(), blendPlate(t, sc), translated(t, pin, 0, 0, 0.1))
+			require.NoError(t, err)
+			return bored
+		}
+		bored := pinned(t)
+		circles := 0
+		for _, e := range bored.Edges() {
+			if c, ok := e.Curve().(decad.Circle3); ok {
+				circles++
+				require.Equal(t, r3.NewVec(20, 10, c.Center.Z), c.Center)
+				require.Equal(t, 3.0, c.Radius.Base())
+			}
+		}
+		require.Equal(t, 2, circles, "both mouths are circles")
+
+		const r, rim = 1.0, 3.0
+		before, err := bored.Volume()
+		require.NoError(t, err)
+		filleted, err := decad.Fillet(t.Context(), bored, rimAt(t, bored, 20), units.Millimeters(r))
+		require.NoError(t, err)
+		after, err := filleted.Volume()
+		require.NoError(t, err)
+		requireVolumeChange(t, before, after,
+			math.Pi*r*(2*rim*r+r*r)-2*math.Pi*((rim+r)-4*r/(3*math.Pi))*(math.Pi*r*r/4))
+
+		bored = pinned(t)
+		before, err = bored.Volume()
+		require.NoError(t, err)
+		const d = 0.5
+		chamfered, err := decad.Chamfer(t.Context(), bored, rimAt(t, bored, 20), units.Millimeters(d))
+		require.NoError(t, err)
+		after, err = chamfered.Volume()
+		require.NoError(t, err)
+		requireVolumeChange(t, before, after, 2*math.Pi*(rim+d/3)*(d*d/2))
+	})
+
 	t.Run("hole mouth chamfer and both mouths", func(t *testing.T) {
 		t.Parallel()
 		_, bored := boredPlate(t)
@@ -206,7 +270,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 	t.Run("boss root fillet fills the corner", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		joined, err := decad.Union(t.Context(), blendPlate(t, sc), zCylinder(t, sc, 15, 30))
+		joined, err := decad.Union(t.Context(), blendPlate(t, sc), zCylinder(t, sc, 15))
 		require.NoError(t, err)
 		before, err := joined.Volume()
 		require.NoError(t, err)
@@ -247,8 +311,21 @@ func TestFacetedRetainedBlend(t *testing.T) {
 		require.NoError(t, err)
 		hole, err := decad.Transform(t.Context(), pin, move)
 		require.NoError(t, err)
-		shaft := zCylinder(t, sc, 0, 20)
-		_ = shaft
+		// The shaft runs down from its top cap and is lifted by 20.001, so the
+		// cap's level is the exact float 0 + 20.001. Lifted from its foot
+		// instead, the top would be the rounded sum 20 + 0.001, a tag off its
+		// true plane (agent-docs/faceted-source-retention-design.md §3.5).
+		ss, err := sc.w.CreateSketch(sc.w.XY())
+		require.NoError(t, err)
+		sc0 := ss.CreatePoint(20, 10)
+		ss.Fix(sc0)
+		ss.CreateCircle(sc0, 4)
+		_, err = ss.Solve(t.Context())
+		require.NoError(t, err)
+		shaft, err := decad.Extrude(t.Context(), sc.doc, ss, ss.Profiles()[0],
+			decad.Distance{D: units.Millimeters(20), Dir: decad.Against})
+		require.NoError(t, err)
+		shaft = translated(t, shaft, 0, 0, 20.001)
 		drilled, err := decad.Cut(t.Context(), shaft, hole)
 		require.NoError(t, err)
 		before, err := drilled.Volume()
@@ -265,7 +342,7 @@ func TestFacetedRetainedBlend(t *testing.T) {
 	t.Run("pocket floor fillet fills the corner", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		pocketed, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinder(t, sc, 10, 30))
+		pocketed, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinder(t, sc, 10))
 		require.NoError(t, err)
 		before, err := pocketed.Volume()
 		require.NoError(t, err)
@@ -360,26 +437,29 @@ func cornerCentroid(r float64) float64 {
 	return (r*r*r/2 - (r-4*r/(3*math.Pi))*math.Pi*r*r/4) / (r * r * (1 - math.Pi/4))
 }
 
-// slicedPlate is the plate with a box tool cut away after the tool took each
-// of the placements in turn.
-func slicedPlate(t *testing.T, sketchPlane func(*retentionScene) *sketch.Plane, rect [4]float64, depth float64,
-	placements ...r3.Transform) *decad.Body {
+// wedgedPlate cuts the blend plate with a tool extruded symmetrically by
+// depth from the polygon corners on the sketch plane, then moved by the exact
+// translation move so the Cut takes the mesh path.
+func wedgedPlate(t *testing.T, sketchPlane func(*retentionScene) *sketch.Plane, corners [][2]float64, depth float64,
+	move r3.Vec) *decad.Body {
 	t.Helper()
 	sc := newRetentionScene()
 	plate := blendPlate(t, sc)
 	s, err := sc.w.CreateSketch(sketchPlane(sc))
 	require.NoError(t, err)
-	r := s.CreateRectangle(rect[0], rect[1], rect[2], rect[3])
-	s.Fix(r.A)
+	pts := make([]*sketch.Point, len(corners))
+	for i, c := range corners {
+		pts[i] = s.CreatePoint(c[0], c[1])
+		s.Fix(pts[i])
+	}
+	for i := range pts {
+		s.CreateLine(pts[i], pts[(i+1)%len(pts)])
+	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	tool, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(depth)})
 	require.NoError(t, err)
-	for _, p := range placements {
-		tool, err = decad.Transform(t.Context(), tool, p)
-		require.NoError(t, err)
-	}
-	cut, err := decad.Cut(t.Context(), plate, tool)
+	cut, err := decad.Cut(t.Context(), plate, translated(t, tool, move.X, move.Y, move.Z))
 	require.NoError(t, err)
 	return cut
 }
@@ -463,12 +543,65 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		requireVolumeChange(t, before, after, 40*4*(1-math.Pi/4))
 	})
 
+	// A box tool sketched at z = 10 over x 30..50 and moved by (0, 0.1, 0)
+	// steps the plate down at x = 30. Its walls' and floor's frame origins
+	// round only within their own planes, so the step faces are exactly
+	// x = 30 and z = 10 and state no departure
+	// (agent-docs/faceted-source-retention-design.md §3.5): the step's concave
+	// and convex edges both take a fillet.
+	t.Run("a step cut by a tool moved within its faces' planes", func(t *testing.T) {
+		t.Parallel()
+		stepped := func(t *testing.T) *decad.Body {
+			t.Helper()
+			sc := newRetentionScene()
+			plane, err := sc.w.CreateOffsetPlane(sc.w.XY(), 10)
+			require.NoError(t, err)
+			s, err := sc.w.CreateSketch(plane)
+			require.NoError(t, err)
+			rect := s.CreateRectangle(30, -5, 50, 25)
+			s.Fix(rect.A)
+			s.Fix(rect.C)
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			tool, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
+				decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+			require.NoError(t, err)
+			cut, err := decad.Cut(t.Context(), blendPlate(t, sc), translated(t, tool, 0, 0.1, 0))
+			require.NoError(t, err)
+			return cut
+		}
+		const r = 1.0
+		corner := 20 * r * r * (1 - math.Pi/4)
+		for _, tc := range []struct {
+			name string
+			z    float64
+			want float64
+		}{
+			{"concave", 10, -corner},
+			{"convex", 20, corner},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				cut := stepped(t)
+				before, err := cut.Volume()
+				require.NoError(t, err)
+				filleted, err := decad.Fillet(t.Context(), cut,
+					straightEdge(t, cut, r3.NewVec(30, 0, tc.z), r3.NewVec(0, 1, 0)), units.Millimeters(r))
+				require.NoError(t, err)
+				after, err := filleted.Volume()
+				require.NoError(t, err)
+				requireVolumeChange(t, before, after, tc.want)
+			})
+		}
+	})
+
 	t.Run("a 45 degree edge", func(t *testing.T) {
 		t.Parallel()
 		// A bevel from (y=0, z=18) to (y=2, z=20) leaves a 45 degree edge
-		// along the top at y=2.
-		beveled := slicedPlate(t, func(sc *retentionScene) *sketch.Plane { return sc.w.YZ() },
-			[4]float64{-50, -50, 2, 50}, 100, rotation(t, r3.NewVec(0, 2, 20), r3.NewVec(1, 0, 0), -math.Pi/4))
+		// along the top at y=2. The tool's slanted wall is sketched at 45° in
+		// the YZ plane, so its tag is exactly the wall it denotes.
+		beveled := wedgedPlate(t, func(sc *retentionScene) *sketch.Plane { return sc.w.YZ() },
+			[][2]float64{{-10, 8}, {12, 30}, {-10, 30}}, 100, r3.Vec{X: 0.5})
 		before, err := beveled.Volume()
 		require.NoError(t, err)
 		const phi, r = math.Pi / 4, 3.0
@@ -488,41 +621,56 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		require.Equal(t, 1, cylinders)
 	})
 
-	t.Run("an end face oblique to the edge", func(t *testing.T) {
-		t.Parallel()
-		// The tool's face passes through (5, 0, 10), leans 30 degrees about z
-		// and 10 degrees about y, so the plate's top front edge ends on a
-		// slanted face.
-		const r = 2.0
-		about := r3.NewVec(5, 0, 10)
-		first := rotation(t, about, r3.NewVec(0, 0, 1), math.Pi/6)
-		second := rotation(t, about, r3.NewVec(0, 1, 0), math.Pi/18)
-		cut := slicedPlate(t, func(sc *retentionScene) *sketch.Plane { return sc.w.XY() },
-			[4]float64{-60, -50, 5, 50}, 80, first, second)
-		before, err := cut.Volume()
-		require.NoError(t, err)
-		filleted, err := decad.Fillet(t.Context(), cut, straightEdge(t, cut, r3.NewVec(40, 0, 20), r3.NewVec(1, 0, 0)),
-			units.Millimeters(r))
-		require.NoError(t, err)
-		after, err := filleted.Volume()
-		require.NoError(t, err)
-		// The tool's face has normal n through p0; the generator through the
-		// section centroid runs from that face to x = 40.
-		n := second.ApplyDir(first.ApplyDir(r3.NewVec(1, 0, 0)))
-		p0 := second.Apply(first.Apply(about))
-		c := cornerCentroid(r)
-		y, z := c, 20-c
-		x0 := p0.X - (n.Y*(y-p0.Y)+n.Z*(z-p0.Z))/n.X
-		removed := r * r * (1 - math.Pi/4) * (40 - x0)
-		requireVolumeChange(t, before, after, removed)
-		ellipses := 0
-		for _, e := range filleted.Edges() {
-			if el, ok := e.Curve().(decad.Ellipse3); ok && math.Abs(el.SemiMinor.Base()-r) < 1e-9 {
-				ellipses++
+	// The tool's face, through p0 with normal n, cuts the plate's top front
+	// edge at an angle, so the edge ends on a slanted face. Each slant is
+	// sketched at 45° on an axis plane, so the face's tag is exactly the plane:
+	// a rotated tool would state a departure
+	// (agent-docs/faceted-source-retention-design.md §3.5). A slant leaning
+	// both about z and about y has no exact construction, so the two tilts run
+	// separately.
+	for _, tc := range []struct {
+		name    string
+		plane   func(*retentionScene) *sketch.Plane
+		corners [][2]float64
+		move    r3.Vec
+		n, p0   r3.Vec
+	}{
+		// x − y = 5, leaning 45° about z.
+		{"an end face oblique to the edge", func(sc *retentionScene) *sketch.Plane { return sc.w.XY() },
+			[][2]float64{{-60, -30}, {-25, -30}, {35, 30}, {-60, 30}}, r3.Vec{Z: 0.5},
+			r3.NewVec(1, -1, 0), r3.NewVec(5, 0, 10)},
+		// x − z = −5, leaning 45° about y over the edge.
+		{"an end face leaning over the edge", func(sc *retentionScene) *sketch.Plane { return sc.w.XZ() },
+			[][2]float64{{-30, -25}, {30, 35}, {-30, 35}}, r3.Vec{Y: 0.5},
+			r3.NewVec(1, 0, -1), r3.NewVec(0, 0, 5)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			const r = 2.0
+			cut := wedgedPlate(t, tc.plane, tc.corners, 80, tc.move)
+			before, err := cut.Volume()
+			require.NoError(t, err)
+			filleted, err := decad.Fillet(t.Context(), cut,
+				straightEdge(t, cut, r3.NewVec(40, 0, 20), r3.NewVec(1, 0, 0)), units.Millimeters(r))
+			require.NoError(t, err)
+			after, err := filleted.Volume()
+			require.NoError(t, err)
+			// The generator through the section centroid runs from the tool's
+			// face to x = 40.
+			c := cornerCentroid(r)
+			y, z := c, 20-c
+			x0 := tc.p0.X - (tc.n.Y*(y-tc.p0.Y)+tc.n.Z*(z-tc.p0.Z))/tc.n.X
+			removed := r * r * (1 - math.Pi/4) * (40 - x0)
+			requireVolumeChange(t, before, after, removed)
+			ellipses := 0
+			for _, e := range filleted.Edges() {
+				if el, ok := e.Curve().(decad.Ellipse3); ok && math.Abs(el.SemiMinor.Base()-r) < 1e-9 {
+					ellipses++
+				}
 			}
-		}
-		t.Logf("%d edges with the blend's ellipse", ellipses)
-	})
+			t.Logf("%d edges with the blend's ellipse", ellipses)
+		})
+	}
 
 	t.Run("a concave edge in an L section", func(t *testing.T) {
 		t.Parallel()
@@ -548,7 +696,7 @@ func TestFacetedRetainedBlendStraight(t *testing.T) {
 		require.NoError(t, err)
 		prism, err = decad.Transform(t.Context(), prism, shift)
 		require.NoError(t, err)
-		bored, err := decad.Cut(t.Context(), prism, zCylinder(t, sc, -30, 30))
+		bored, err := decad.Cut(t.Context(), prism, zCylinder(t, sc, -30))
 		require.NoError(t, err)
 		before, err := bored.Volume()
 		require.NoError(t, err)

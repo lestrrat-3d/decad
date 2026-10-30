@@ -20,13 +20,15 @@ import (
 // bossFoot describes a plate 80×60×10 with a 15 mm boss over the rectangle
 // rect = (x0, y0, x1, y1) standing on it, a through hole of radius hole[2] at
 // (hole[0], hole[1]), and, when roofed, a second 10 mm plate lying on the
-// boss's top. A nonzero slant cuts away the boss's side beyond the vertical
-// plane through (x0 + 2, y0) turned by slant from the y axis toward +x, so the
-// boss's corner there is π/2 − slant. The plane misses the rectangle's
-// corners, which leaves no sliver of the cut side.
+// boss's top. A nonzero lean cuts away the boss's side beyond the vertical
+// plane through (x0 + 2, y0) that advances lean in x per unit of y, so the
+// boss's corner there is π/2 − atan(lean). The plane misses the rectangle's
+// corners, which leaves no sliver of the cut side. The cut is sketched, not
+// rotated into place: a rotated tool's tags state a departure, which a
+// retained blend refuses (agent-docs/faceted-source-retention-design.md §3.5).
 type bossFoot struct {
 	rect   [4]float64
-	slant  float64
+	lean   float64
 	hole   [3]float64
 	roofed bool
 }
@@ -37,15 +39,35 @@ func (bf bossFoot) build(t *testing.T) *decad.Body {
 	sc := newRetentionScene()
 	x0, y0, x1, y1 := bf.rect[0], bf.rect[1], bf.rect[2], bf.rect[3]
 	body := rectBox(t, sc.w, sc.doc, 0, 0, 80, 60, 10)
-	boss := rectBox(t, sc.w, sc.doc, x0, y0, x1, y1, 15)
-	if bf.slant != 0 {
-		tool := placed(t, rectBox(t, sc.w, sc.doc, x0+2-100, y0-50, x0+2, y1+50, 25), -5)
-		tool, err := decad.Transform(t.Context(), tool, rotation(t, r3.NewVec(x0+2, y0, 0), zAxis, -bf.slant))
+	// The boss stands on the plate's top, so the Union shifts it clear
+	// (agent-docs/gap-tolerance-design.md §5.2). A leaning boss instead sinks
+	// 1 mm into the plate: the shift re-normalises the slanted plane's frame
+	// (surfaceplace.TransformSurface), which states a departure a retained
+	// blend refuses.
+	boss := placed(t, rectBox(t, sc.w, sc.doc, x0, y0, x1, y1, 15), 10)
+	if bf.lean != 0 {
+		boss = placed(t, rectBox(t, sc.w, sc.doc, x0, y0, x1, y1, 16), 9)
+		px, py := x0+2, y0
+		s, err := sc.w.CreateSketch(sc.w.XY())
 		require.NoError(t, err)
-		boss, err = decad.Cut(t.Context(), boss, tool)
+		corners := [][2]float64{{px - 60*bf.lean, py - 60}, {px + 60*bf.lean, py + 60}, {px - 60*bf.lean, py + 60}}
+		pts := make([]*sketch.Point, len(corners))
+		for i, c := range corners {
+			pts[i] = s.CreatePoint(c[0], c[1])
+			s.Fix(pts[i])
+		}
+		for i := range pts {
+			s.CreateLine(pts[i], pts[(i+1)%len(pts)])
+		}
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		tool, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
+			decad.Distance{D: units.Millimeters(25), Dir: decad.Along})
+		require.NoError(t, err)
+		boss, err = decad.Cut(t.Context(), boss, placed(t, tool, 4))
 		require.NoError(t, err)
 	}
-	body, err := decad.Union(t.Context(), body, placed(t, boss, 10))
+	body, err := decad.Union(t.Context(), body, boss)
 	require.NoError(t, err)
 	if bf.roofed {
 		roof := rectBox(t, sc.w, sc.doc, 0, 0, 80, 60, 10)
@@ -65,8 +87,8 @@ func (bf bossFoot) volume() float64 {
 		slabs = 20
 	}
 	area := w * h
-	if bf.slant != 0 {
-		area -= 2*h + h*h*math.Tan(bf.slant)/2
+	if bf.lean != 0 {
+		area -= 2*h + h*h*bf.lean/2
 	}
 	return 80*60*slabs + 15*area - math.Pi*bf.hole[2]*bf.hole[2]*slabs
 }
@@ -181,21 +203,23 @@ func TestFacetedRetainedBlendBossFoot(t *testing.T) {
 
 	t.Run("fillet at a corner that is not square", func(t *testing.T) {
 		t.Parallel()
-		// The slanted side meets the side along y = 20 at 60° at (32, 20), so
-		// the faces' normals turn by φ = 2π/3 and the section loses
+		// The slanted side meets the side along y = 20 at 45° at (32, 20), so
+		// the faces' normals turn by φ = 3π/4 and the section loses
 		// r²(tan(φ/2) − φ/2). The setback is r·tan(φ/2) on each side, so the
 		// area gains the arc r·φ and loses two strips over the 15 mm; the
-		// boss's top gives up the corner region the plate's top takes.
+		// boss's top gives up the corner region the plate's top takes. The
+		// boss reaches x = 60 so the slanted side leaves through its top side.
 		const r = 2.0
 		slanted := boxBoss
-		slanted.slant = math.Pi / 6
+		slanted.rect[2] = 60
+		slanted.lean = 1
 		body := slanted.build(t)
 		before := requireBossVolume(t, body, slanted.volume())
 		filleted, err := decad.Fillet(t.Context(), body, bossSides(t, body, [][2]float64{{32, 20}}), units.Millimeters(r))
 		require.NoError(t, err)
 		after, err := filleted.Volume()
 		require.NoError(t, err)
-		const phi = 2 * math.Pi / 3
+		const phi = 3 * math.Pi / 4
 		corner := r * r * (math.Tan(phi/2) - phi/2)
 		requireVolumeChange(t, before, after, 15*corner)
 		requireCapsTaken(t, body, filleted, 15*r*(phi-2*math.Tan(phi/2)), corner)

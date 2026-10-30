@@ -364,11 +364,14 @@ func TestFacetedSourceRetention(t *testing.T) {
 		require.Equal(t, 2, circles)
 	})
 
-	t.Run("an oblique bore's mouths publish whole ellipses", func(t *testing.T) {
+	// A 20 mm plate is bored by a Ø8 tool that a Transform leans 30° from the
+	// plate's normal about the y axis through (20, 10, 10). The rotation's
+	// float basis is not exactly orthonormal and the moved axis rounds, so the
+	// placed tool's wall states a departure (retention §3.5), and the two
+	// mouths keep their chords instead of publishing Ellipse3 rims (§10.1 E12).
+	t.Run("a rotated tool's oblique bore keeps the mouths' chords", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		// A 20 mm plate, bored by a Ø8 tool that leans 30° from the plate's
-		// normal about the y axis through (20, 10, 10).
 		s, err := sc.w.CreateSketch(sc.w.XY())
 		require.NoError(t, err)
 		r := s.CreateRectangle(0, 0, 40, 20)
@@ -387,36 +390,34 @@ func TestFacetedSourceRetention(t *testing.T) {
 		require.NoError(t, err)
 		pin, err := decad.Extrude(t.Context(), sc.doc, ts, ts.Profiles()[0], decad.Symmetric{D: units.Millimeters(60)})
 		require.NoError(t, err)
-		tilt := 30 * math.Pi / 180
-		turn, err := r3.RotationAround(r3.NewVec(20, 10, 10), r3.NewVec(0, 1, 0), units.Radians(tilt))
+		turn, err := r3.RotationAround(r3.NewVec(20, 10, 10), r3.NewVec(0, 1, 0), units.Radians(30*math.Pi/180))
 		require.NoError(t, err)
 		tool, err := decad.Transform(t.Context(), pin, turn)
 		require.NoError(t, err)
 		bored, err := decad.Cut(t.Context(), plate, tool)
 		require.NoError(t, err)
 
-		axis := turn.ApplyDir(r3.NewVec(0, 0, 1))
-		ellipses, lines := 0, 0
-		for _, e := range bored.Edges() {
-			ellipse, ok := e.Curve().(decad.Ellipse3)
+		bores, chains := 0, 0
+		for _, f := range bored.Faces() {
+			cyl, ok := f.Surface().(decad.Cylinder)
 			if !ok {
-				require.IsType(t, decad.Line3{}, e.Curve(), "a rim of the bored plate is an ellipse or a line")
-				lines++
 				continue
 			}
-			ellipses++
-			require.InDelta(t, 4, ellipse.SemiMinor.Base(), 1e-9)
-			require.InDelta(t, 4/math.Cos(tilt), ellipse.SemiMajor.Base(), 1e-9)
-			// The centre is where the tool axis crosses the plate face.
-			require.True(t, math.Abs(ellipse.Center.Z) < 1e-9 || math.Abs(ellipse.Center.Z-20) < 1e-9, "centre %v", ellipse.Center)
-			along := (ellipse.Center.Z - 10) / axis.Z
-			want := r3.NewVec(20, 10, 10).Add(axis.Scale(along))
-			require.InDelta(t, 0, ellipse.Center.Sub(want).Len(), 1e-9)
-			require.InDelta(t, 1, math.Abs(ellipse.Major.Dot(r3.NewVec(1, 0, 0))), 1e-9, "the major axis lies along the tilt")
-			require.InDelta(t, 1, math.Abs(ellipse.Axis.Z), 1e-12)
-			require.Same(t, e.Start(), e.End(), "a whole-turn rim starts and ends at one vertex")
+			bores++
+			require.InDelta(t, 4, cyl.Radius.Base(), 1e-12)
+			for _, e := range f.Edges() {
+				require.IsType(t, decad.FacetedCurve{}, e.Curve(), "a rotated tool's mouth keeps its chords")
+				chains++
+			}
 		}
-		require.Equal(t, 2, ellipses)
+		require.Equal(t, 1, bores, "the bore wall keeps its Cylinder tag")
+		require.Equal(t, 2, chains, "both mouths keep their chord chains")
+		lines := 0
+		for _, e := range bored.Edges() {
+			if _, ok := e.Curve().(decad.Line3); ok {
+				lines++
+			}
+		}
 		require.Equal(t, 12, lines, "the plate's own edges")
 	})
 
@@ -487,6 +488,65 @@ func TestFacetedSourceRetention(t *testing.T) {
 				circles, chains = rims(dx)
 				require.Empty(t, circles, "a rounded bore publishes no circle centred at the rounded origin")
 				require.Equal(t, 2, chains, "the drill's rims keep their chord chains")
+			})
+		}
+	})
+
+	// The same drill, but the tool is moved while it is still an analytic body
+	// and the box by exactly 36. The tool's record denotes the bore at
+	// x = 28 + dx, and its built wall tag holds the float sum. For dx = 36 the
+	// sum is exactly 64 and the rims are circles there. For dx = 36 + 2^-47 the
+	// sum rounds to 64, so the extruded tool's wall states the rounding as its
+	// departure (retention §3.5) and the revolved tool's denoted patch no
+	// longer equals the tag; either way the rims keep their chords (§10.1 E12).
+	t.Run("a placed analytic tool whose origin rounds keeps the rims' chords", func(t *testing.T) {
+		t.Parallel()
+		tools := []struct {
+			name string
+			make func(sc *retentionScene, t *testing.T) *decad.Body
+		}{
+			{"an extruded tool", func(sc *retentionScene, t *testing.T) *decad.Body { return sc.tool(t, 28) }},
+			{"a revolved tool", func(sc *retentionScene, t *testing.T) *decad.Body { return sc.revolvedTool(t, 28) }},
+		}
+		for _, tc := range tools {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				// bore returns the bore wall's tag and the curves of its rims.
+				bore := func(dx float64) (decad.Cylinder, []decad.Curve) {
+					sc := newRetentionScene()
+					box := translated(t, sc.roundedBox(t), 36, 0, 0)
+					drilled, err := decad.Cut(t.Context(), box, translated(t, tc.make(sc, t), dx, 0, 0))
+					require.NoError(t, err)
+					var walls []*decad.Face
+					for _, f := range drilled.Faces() {
+						if cyl, ok := f.Surface().(decad.Cylinder); ok && cyl.Radius.Base() == 4 {
+							walls = append(walls, f)
+						}
+					}
+					require.Len(t, walls, 1, "the bore wall keeps its Cylinder tag")
+					var rims []decad.Curve
+					for _, e := range walls[0].Edges() {
+						rims = append(rims, e.Curve())
+					}
+					require.Len(t, rims, 2)
+					return walls[0].Surface().(decad.Cylinder), rims
+				}
+
+				wall, rims := bore(36)
+				require.Equal(t, 64.0, wall.Origin.X)
+				for _, c := range rims {
+					circle, ok := c.(decad.Circle3)
+					require.True(t, ok, "an exact move keeps the rim a circle, got %T", c)
+					require.Equal(t, 64.0, circle.Center.X)
+				}
+
+				dx := 36 + 0x1p-47
+				require.Equal(t, 64.0, 28+dx, "the moved origin rounds")
+				wall, rims = bore(dx)
+				require.Equal(t, 64.0, wall.Origin.X, "the tag holds the rounded origin")
+				for _, c := range rims {
+					require.IsType(t, decad.FacetedCurve{}, c, "a rounded bore publishes no circle at the rounded origin")
+				}
 			})
 		}
 	})

@@ -88,9 +88,11 @@ func requireTwoBores(t *testing.T, b *Body) {
 }
 
 // TestFacetedSourcePatchFallback shows the retained-plane slab stays off where
-// placement leaves a plane tag a float image, where a face carries a denoted
-// patch, and where the contact lies on a curved rim, and stays on for an
-// integer translation. Each case runs against booleaneval.WithoutRetainedPlaneSlab.
+// placement leaves a plane tag a float image off its plane, where a face
+// carries a denoted patch, and where the contact lies on a curved rim, and
+// stays on for an exact translation and for one whose rounding stays within
+// the planes (agent-docs/faceted-source-retention-design.md §3.4). Each case
+// runs against booleaneval.WithoutRetainedPlaneSlab.
 func TestFacetedSourcePatchFallback(t *testing.T) {
 	t.Parallel()
 
@@ -105,7 +107,6 @@ func TestFacetedSourcePatchFallback(t *testing.T) {
 		axis r3.Vec
 	}{
 		{"a 20 degree exact rotation", WithCopyRotation(r3.Vec{X: 20, Y: 10, Z: 10}, r3.Vec{Z: 1}, units.Degrees(20)), tilted},
-		{"a translation by X = 0.1", WithCopyPlacement(mustTranslation(r3.Vec{X: 0.1})), yAxis},
 	} {
 		t.Run(tc.name+" refuses as the control does", func(t *testing.T) {
 			t.Parallel()
@@ -121,22 +122,54 @@ func TestFacetedSourcePatchFallback(t *testing.T) {
 		})
 	}
 
-	t.Run("an integer translation builds where the control refuses", func(t *testing.T) {
+	// The front and back faces are y = 0 and y = 20. Moved by Y = 0.1, the
+	// front face's level is the exact float 0 + 0.1 while the back face's is
+	// the rounded sum 20 + 0.1, a tag off its plane. The back face keeps its
+	// slab off, so the cut refuses where the integer translation builds.
+	t.Run("a translation by Y = 0.1 that moves the back face refuses", func(t *testing.T) {
 		t.Parallel()
-		opt := WithCopyPlacement(mustTranslation(r3.Vec{X: 5}))
-		target, got, err := fallbackP3(t, t.Context(), opt)
-		require.NoError(t, err)
+		target, _, err := fallbackP3(t, t.Context(), WithCopyPlacement(mustTranslation(r3.Vec{Y: 0.1})))
 		planes := planesAlong(target, yAxis)
-		require.Len(t, planes, 2)
+		require.Len(t, planes, 2, "the later cut touches the front and back faces")
 		for _, f := range planes {
 			require.True(t, f.RetainedTag)
-			require.Zero(t, f.NormalBound, "an exact translation keeps the tag the plane itself")
+			level := f.Surface.(surfacegeom.Plane).Frame.Origin().Y
+			if level < 10 {
+				require.Zero(t, f.NormalBound, "the front face's level 0 + 0.1 is exact")
+				continue
+			}
+			require.Positive(t, f.NormalBound, "the back face's level 20 + 0.1 rounds")
 		}
-		requireTwoBores(t, got)
-
-		_, _, ctrlErr := fallbackP3(t, booleaneval.WithoutRetainedPlaneSlab(t.Context()), opt)
-		slabRefusal(t, ctrlErr)
+		slabRefusal(t, err)
 	})
+
+	// An integer translation is exact. A translation by X = 0.1 rounds each
+	// moved frame origin's x, which lies within the front and back planes, so
+	// both tags stay their planes exactly.
+	for _, tc := range []struct {
+		name string
+		move r3.Vec
+	}{
+		{"an integer translation", r3.Vec{X: 5}},
+		{"a translation by X = 0.1 within the planes", r3.Vec{X: 0.1}},
+	} {
+		t.Run(tc.name+" builds where the control refuses", func(t *testing.T) {
+			t.Parallel()
+			opt := WithCopyPlacement(mustTranslation(tc.move))
+			target, got, err := fallbackP3(t, t.Context(), opt)
+			require.NoError(t, err)
+			planes := planesAlong(target, yAxis)
+			require.Len(t, planes, 2)
+			for _, f := range planes {
+				require.True(t, f.RetainedTag)
+				require.Zero(t, f.NormalBound, "the tag is the plane itself")
+			}
+			requireTwoBores(t, got)
+
+			_, _, ctrlErr := fallbackP3(t, booleaneval.WithoutRetainedPlaneSlab(t.Context()), opt)
+			slabRefusal(t, ctrlErr)
+		})
+	}
 
 	t.Run("a denoted cap refuses as the control does", func(t *testing.T) {
 		t.Parallel()
