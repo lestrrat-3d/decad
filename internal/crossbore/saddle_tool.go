@@ -17,7 +17,7 @@ import (
 // (agent-docs/retained-edge-blend-design.md §4.9). The tool's band is the
 // ruled surface of agent-docs/cross-cylinder-bore-chamfer-design.md, extended
 // past both feet by BandExtension of its own length: at angle θ it runs from
-// B'' = B − λ(O − B) to O'' = O + λ(O − B), O and B the outer and bore feet.
+// B⁺ = B − λ(O − B) to O⁺ = O + λ(O − B), O and B the outer and bore feet.
 
 // BandExtension is λ, the fraction of the band's length the tool's band runs
 // past each foot. It is a dyadic, so (1+λ)·O − λ·B is exact in rationals.
@@ -49,7 +49,7 @@ func (p Pose) World(local r3.Vec) r3.Vec {
 	return r3.Vec{X: w[0], Y: w[1], Z: w[2]}
 }
 
-// BandEnds returns the local band ends O'' and B'' of tool station j, in
+// BandEnds returns the local band ends O⁺ and B⁺ of tool station j, in
 // float: the feet of FeetAt with the bore axis at Z = 0, extended by
 // BandExtension.
 func BandEnds(R, r, setback float64, j int) (r3.Vec, r3.Vec) {
@@ -70,7 +70,7 @@ type ToolProof struct {
 
 // toolBase is one quarter-turn base cell's reading: the chord spread from the
 // widened cell, the extended band ends' enclosures at the cell's own angle in
-// the order O'' X, Y, Z, B'' X, Y, Z, and, for k < n/4, the enclosure of the
+// the order O⁺ X, Y, Z, B⁺ X, Y, Z, and, for k < n/4, the enclosure of the
 // band's area per radian over [θ_k, θ_k+1].
 type toolBase struct {
 	spread         float64
@@ -126,8 +126,8 @@ func cross(a, b [3]fiv) [3]fiv {
 }
 
 // bandDensity encloses the extended band's area per radian over a cell. With
-// F(θ, t) = B''(θ) + t·D(θ), D = O'' − B'', t ∈ [0, 1], the area element is
-// |u + t(v − u)| with u = B''′ × D and v = O''′ × D, whose integral over t
+// F(θ, t) = B⁺(θ) + t·D(θ), D = O⁺ − B⁺, t ∈ [0, 1], the area element is
+// |u + t(v − u)| with u = B⁺′ × D and v = O⁺′ × D, whose integral over t
 // lies between |u + v|/2 and (|u| + |v|)/2.
 func bandDensity(cell *CellExact) (float64, float64, bool) {
 	var dO, dB, band [3]fiv
@@ -215,9 +215,9 @@ func worldError(held r3.Vec, local [3]crossIV, flipY, flipZ bool, pose Pose) flo
 }
 
 // ProveToolBand proves the tool band for the outer radius R, the bore r and
-// the setback d. It proves the 1,025 quarter-turn base cells with
+// the setback d. It proves the ToolStations/4 + 1 quarter-turn base cells with
 // CellExactProof (every failed interval sign refuses), and compares held(j),
-// the world band ends O'' and B'' of every station j, with its base cell's
+// the world band ends O⁺ and B⁺ of every station j, with its base cell's
 // mirrored point enclosures (cellMirrorOf, which holds for the fixed pose
 // exactly). The chord term pairs a point of a held band triangle with the
 // exact band at the same parameters: on either triangle of the quad between

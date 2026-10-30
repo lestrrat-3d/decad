@@ -116,6 +116,18 @@ exceed this allowance. A source-area upper bound plus the held mesh area
 bounds the surface-area difference. The held diameter plus boundary
 departure enters the usual volume-based centroid allowance.
 
+## Shared cell proof
+
+`CellExactProof` reads only the radii `R`, `r` and the setback `d` as plain
+numbers, with the bore axis at `z − c = 0`; `Feet` reads the record through
+`FeetAt`, which takes the same numbers and `c`. The retained saddle chamfer
+(`agent-docs/retained-edge-blend-design.md` §4.9) maps a shaft and a
+perpendicular bore read from exact retained tags onto this pose and proves its
+tool's band with the same cell tests at its own station count
+(`crossbore.ProveToolBand`); its admission is that document's, not this one's.
+
+## Public case
+
 For the public `R=5, r=1, H=10, c=5, d=0.5 mm` case, the result has
 47,104 facets, a 0.046353 mm boundary bound, and a
 `753.228711±10.088197 mm³` volume reading. `Tessellate(0.1 mm, VerifyAll)`

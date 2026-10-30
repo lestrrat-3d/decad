@@ -97,7 +97,7 @@ surface is not a `Cylinder`, `Cone` or `Torus`, refuses.
 | Row | Refusal site |
 |---|---|
 | Modify: "Fillet/chamfer of most faceted boolean results" | `internal/brepmodify/fillet.go:165` (S3 text) after `retainedblend.Fillet` declines |
-| Modify: "Retained edge blend between crossing cylinders, or on a `Cone` or `Torus` face" | blend SR1 (`internal/retainedblend/route.go` `looksLike*` classification) |
+| Modify: "Retained edge blend between crossing cylinders (every `Fillet`; a `Chamfer` outside R7), or on a `Cone` or `Torus` face" | blend SR1 (`internal/retainedblend/route.go` `looksLike*` classification, `saddle.go` `looksLikeSaddle`) |
 | Modify: "Fillet/chamfer of a class-B crossing result's edges outside brep-modify §4.4" | brep-modify SB1 |
 | Modify: "Variable-radius fillet, face-to-face fillet" | no entry point (`fillet.go` has no option for it) |
 | Also consider: "Fillet by chord length … on a torus, with setback corners" | `fillet.go` |

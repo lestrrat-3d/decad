@@ -24,8 +24,8 @@ import (
 // it (saddle_tool.go); a Fillet's rolling-ball blend there is a canal surface
 // and stays SR1, named by Unread.
 
-// saddleKey identifies a saddle across the steps of one call: the pose its two
-// tags give and the mouth it lies on.
+// saddleKey identifies a saddle: the pose its two tags and its mouth give, and
+// the two radii. Two selected edges with one key name one rim.
 type saddleKey struct {
 	pose crossbore.Pose
 	R, r float64
@@ -44,26 +44,23 @@ type saddle struct {
 	scale             float64
 }
 
-// cardinal returns the index and sign of a unit coordinate axis, exactly.
-func cardinal(v r3.Vec) (int, float64, bool) {
-	c := [3]float64{v.X, v.Y, v.Z}
+// cardinal returns the index of a unit coordinate axis: one component ±1 and
+// the others exactly 0.
+func cardinal(v r3.Vec) (int, bool) {
 	axis := -1
-	for i, x := range c {
+	for i, x := range [3]float64{v.X, v.Y, v.Z} {
 		switch x {
 		case 0:
 		case 1, -1:
 			if axis >= 0 {
-				return 0, 0, false
+				return 0, false
 			}
 			axis = i
 		default:
-			return 0, 0, false
+			return 0, false
 		}
 	}
-	if axis < 0 {
-		return 0, 0, false
-	}
-	return axis, c[axis], true
+	return axis, axis >= 0
 }
 
 func coord(v r3.Vec, i int) float64 { return [3]float64{v.X, v.Y, v.Z}[i] }
@@ -106,8 +103,8 @@ func saddleTags(e *topo.Edge) (shaft, bore *topo.Face, key saddleKey, ok bool) {
 	if new(big.Rat).Add(r2, r2).Cmp(new(big.Rat).Mul(proofarith.FloatRat(R), proofarith.FloatRat(R))) >= 0 {
 		return nil, nil, saddleKey{}, false
 	}
-	ib, _, okB := cardinal(cyl[0].Axis)
-	ic, _, okC := cardinal(cyl[1].Axis)
+	ib, okB := cardinal(cyl[0].Axis)
+	ic, okC := cardinal(cyl[1].Axis)
 	if !okB || !okC || ib == ic {
 		return nil, nil, saddleKey{}, false
 	}
@@ -135,8 +132,8 @@ func saddleTags(e *topo.Edge) (shaft, bore *topo.Face, key saddleKey, ok bool) {
 
 // looksLikeSaddle reports whether e is an R7 candidate from its tags alone.
 func looksLikeSaddle(e *topo.Edge) bool {
-	_, _, _, ok := saddleTags(e)
-	return ok
+	shaft, _, _, ok := saddleTags(e)
+	return ok && shaft != nil
 }
 
 // local returns the local coordinates of world point p under pose, in float:

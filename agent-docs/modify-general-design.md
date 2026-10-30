@@ -77,7 +77,8 @@ part makes on them. Every cell was read off the live code with the probe under
 | | | fillet the front top edge along x at r = 1 | builds as a bounded faceted cut (§4.3c) |
 | | | shell removing the top | builds (route S) |
 | | | shell removing one y wall | shell-opening SO1 (the wall meets the fillets smoothly) |
-| **P9** round rod with a cross hole | faceted | any request | SX9's class (`chamfers a straight prism or a revolve only`); cylinder × cylinder has no analytic class |
+| **P9** round rod with a cross hole | faceted | chamfer both hole mouths, one setback | builds (retained-edge-blend R7, §4.9) |
+| | | fillet a hole mouth, or any other request | SX9's class (`chamfers a straight prism or a revolve only`); cylinder × cylinder has no analytic class |
 
 Ranked by the parts each refusal blocks:
 

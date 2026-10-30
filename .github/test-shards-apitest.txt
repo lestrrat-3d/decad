@@ -2909,3 +2909,5 @@
 10	0.00	TestEdgeWedgeRevolveCircles
 10	0.00	TestEdgeWedgeFilletReflexRoots
 10	0.00	TestEdgeWedgePredicateRendering
+10	0.00	TestRetainedSaddleChamfer
+10	0.00	TestRetainedSaddleChamferRefusals

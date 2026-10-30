@@ -117,7 +117,8 @@ Faces with a stated departure, or a denoted patch whose tag is not exactly the s
 | GAP-C (`Draft`) | refuse | each drafted face must be re-trimmed against its neighbours and the tool, with the same missing trims | §9.2 |
 | `Offset` of a solid | refuse | surface-design R37 refuses every solid; not a retention matter | §9.3 |
 | GAP-F (`PatternJoin`) | refuse here | the refusal is the many-body Union rule, which retention does not touch | §9.4 |
-| Cylinder/Cylinder, crossing axes | refuse | the blend is a canal surface outside the surface vocabulary | §9.5 |
+| Cylinder/Cylinder, crossing axes, `Fillet` | refuse | the blend is a canal surface outside the surface vocabulary | §9.5 |
+| Cylinder/Cylinder, a bore crossing a larger shaft at right angles, `Chamfer` | build (blend R7) | a proven band-shaped tool cuts the exact equal-setback wedge through the mesh Boolean | blend §4.9 |
 | `Cone`, `Torus` faces | refuse | the admitted sources carry denoted interval surfaces, which this route does not read | §9.5 |
 | Plane/`Sphere` rim | build (blend R6) | the meridian blend is R3's line-circle section revolved, and the sphere's record reads as exact points | blend §4.5 |
 
@@ -550,7 +551,10 @@ belongs to that owner.
 
 - **Crossing cylinders.** The rolling ball's centre runs along the intersection of two offset cylinders, a
   quartic, and the blend is a canal surface about it. It is no `Cylinder`, `Cone`, `Torus` or `Sphere`, and
-  `NURBSSurface` carries no geometry a proof can read (spline §7). SR1.
+  `NURBSSurface` carries no geometry a proof can read (spline §7). A `Fillet` is SR1. An equal-setback `Chamfer`
+  of the convex saddle a bore leaves in a larger shaft, with exact perpendicular coordinate axes that meet and
+  `2r² < R²`, builds as blend R7 (§4.9); every other crossing pair (a pin joined through a shaft, two crossing
+  bores, a bore off the shaft's axis or off the coordinate axes, `r/R ≥ 1/√2`, a two-distance chamfer) is SR1.
 - **`Cone` and `Torus` faces.** In the meridian of a coaxial pair the blend is a `Torus`, so the geometry exists.
   The retained cones and tori that reach a mesh result come from revolves. Their tag is a float re-expression (the
   cone's half-angle is an `Atan2`, `internal/revolveplan/payload.go`) whose departure is stated only through the
@@ -576,7 +580,8 @@ Rows narrow blend Table SR and reach SX2/SX9; sentinels follow those tables.
 | **SM9** | an open concave chain that ends on an arc, or an arc end on an end face reflex at the corner | `ErrUnsupported` |
 
 Kept refusals: `Shell` (the `shell.go` text, SX9), `Draft` (SD23), `Offset` (R37), `PatternJoin` (the many-body
-`Union` text), crossing cylinders, `Cone`, `Torus` and oblique plane/cylinder rims (SR1).
+`Union` text), crossing cylinders outside the blend R7 chamfer, `Cone`, `Torus` and oblique plane/cylinder rims
+(SR1).
 
 Gate order: modify §4 stage 1, reach stage 2 (expansion, SM1), stage 3 (SX3), then SR1, SM3, SM9, SR2 and SM2,
 SR3 and SM6, SR6, SM8, SR5, SM5 and SM7, SR4 and SM4, the construction, SR7.

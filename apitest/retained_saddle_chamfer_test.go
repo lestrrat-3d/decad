@@ -24,6 +24,15 @@ const saddleR = 10.0
 func saddleShaft(t *testing.T, r, y float64, opts ...decad.DocumentOption) (*decad.Body, *retentionScene) {
 	t.Helper()
 	sc := &retentionScene{w: sketch.NewWorld(), doc: decad.New(opts...)}
+	body, err := decad.Cut(t.Context(), saddleRevolve(t, sc), saddlePin(t, sc, r, y))
+	require.NoError(t, err)
+	return body, sc
+}
+
+// saddleRevolve revolves the rectangle x in [0, 80], y in [0, saddleR] about
+// the x axis.
+func saddleRevolve(t *testing.T, sc *retentionScene) *decad.Body {
+	t.Helper()
 	s, err := sc.w.CreateSketch(sc.w.XY())
 	require.NoError(t, err)
 	rect := s.CreateRectangle(0, 0, 80, saddleR)
@@ -33,9 +42,7 @@ func saddleShaft(t *testing.T, r, y float64, opts ...decad.DocumentOption) (*dec
 	require.NoError(t, err)
 	shaft, err := decad.Revolve(t.Context(), sc.doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
-	body, err := decad.Cut(t.Context(), shaft, saddlePin(t, sc, r, y))
-	require.NoError(t, err)
-	return body, sc
+	return shaft
 }
 
 // saddlePin extrudes a circle of radius r about (40, y) from z = −15 to 15.
@@ -266,16 +273,7 @@ func TestRetainedSaddleChamferRefusals(t *testing.T) {
 	t.Run("a pin joined through the shaft", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
-		s, err := sc.w.CreateSketch(sc.w.XY())
-		require.NoError(t, err)
-		rect := s.CreateRectangle(0, 0, 80, saddleR)
-		s.Fix(rect.A)
-		s.Fix(rect.C)
-		_, err = s.Solve(t.Context())
-		require.NoError(t, err)
-		shaft, err := decad.Revolve(t.Context(), sc.doc, s, s.Profiles()[0], uAxis, decad.FullRevolution{})
-		require.NoError(t, err)
-		body, err := decad.Union(t.Context(), shaft, saddlePin(t, sc, 3, 0))
+		body, err := decad.Union(t.Context(), saddleRevolve(t, sc), saddlePin(t, sc, 3, 0))
 		require.NoError(t, err)
 		_, err = decad.Chamfer(t.Context(), body, saddleMouths(t, body, 3, 0), units.Millimeters(0.5))
 		require.ErrorIs(t, err, decad.ErrUnsupported)

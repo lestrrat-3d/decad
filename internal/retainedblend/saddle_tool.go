@@ -29,14 +29,14 @@ import (
 // axis Z, bore axis X, the axes meeting at the origin, the mouth at +X), each
 // of the crossbore.ToolStations stations θ_j holds four vertices:
 //
-//   - O'', the outer foot extended past the shaft wall along the band;
-//   - A, O'' pushed out radially from the shaft's axis to R + r;
+//   - O⁺, the outer foot extended past the shaft wall along the band;
+//   - A, O⁺ pushed out radially from the shaft's axis to R + r;
 //   - K, the point (X + r, r·cos θ/2, r·sin θ/2) in the bore's extension
 //     outside the shaft, with X = √(R² − r²cos²θ);
-//   - B'', the bore foot extended into the bore along the band.
+//   - B⁺, the bore foot extended into the bore along the band.
 //
 // The tool is the ring of quads joining consecutive stations over the four
-// sides O''→A→K→B''→O''. The side B''→O'' is the chamfer band; the other three
+// sides O⁺→A→K→B⁺→O⁺. The side B⁺→O⁺ is the chamfer band; the other three
 // lie outside the true solid by a proven margin.
 
 const (
@@ -144,9 +144,9 @@ func exactLocal(pose crossbore.Pose, p r3.Vec) [3]*big.Rat {
 }
 
 // checkOutside proves, exactly on the held tool vertices, that the tool's
-// three outside sides miss the solid by a margin. The sides O''→A and A→K of
+// three outside sides miss the solid by a margin. The sides O⁺→A and A→K of
 // each quad lie in one half-space n·p ≥ (R + μ)|n| with n horizontal, so
-// they clear the shaft's cylinder grown by μ. The side K→B'' has every vertex
+// they clear the shaft's cylinder grown by μ. The side K→B⁺ has every vertex
 // inside the bore shrunk by μ', a convex set, so the whole side does. μ and μ'
 // are the walls' held bounds plus the band's chord bound plus slack, so the
 // held walls and the exact band's ends clear the sides too. A failure refuses.

@@ -93,6 +93,7 @@ Table RR lists the edges a blend can be built on. The others are refused.
 | **R4** | `Arc3` | as R2, open, ending on planes parallel to the axis | as R2 | ends on two distinct retained planes; equal or two-distance chamfer; an arc whose ends meet one face is refused |
 | **R5** | `Line3` of retention E10 | two retained `Cylinder`s with parallel axes, ending on retained planes normal to the axes | `Cylinder` / `Plane` | reach §8; equal or two-distance chamfer |
 | **R6** | `Circle3` of retention E5, closed | retained `Plane` and a retained `Sphere` whose tag is exactly its record (§4.5) | `Torus` / `Cone` | §4.5; equal or two-distance chamfer |
+| **R7** | closed saddle, any held curve | a retained `Cylinder` shaft (material inside) and a retained `Cylinder` bore of radius `r` (material outside), unit coordinate axes on two coordinates meeting exactly, `2r² < R²` | none / ruled band held `Faceted` | §4.9; equal-setback `Chamfer` only, by a mesh `Cut` |
 
 Refused, with the reason a caller can act on:
 
@@ -102,8 +103,10 @@ Refused, with the reason a caller can act on:
   vocabulary has is `NURBSSurface`, an opaque marker with no geometry to carry
   a proof (spline §7). The rim keeps its published ellipse and the blend
   refuses (SR1).
-- **A `Cylinder`/`Cylinder` rim with crossing axes, an open (`Arc3`) plane-sphere
-  rim, a `Cone` or `Torus` face.** No Table RR row; SR1.
+- **A `Fillet` of R7's saddle, any other `Cylinder`/`Cylinder` rim with crossing
+  axes, an open (`Arc3`) plane-sphere rim, a `Cone` or `Torus` face.** The ball
+  rolled between crossing cylinders sweeps a canal surface about a quartic, which
+  the vocabulary cannot carry. No Table RR row; SR1.
 - **A rim with a face that is not retained,** or whose edge is a chord chain
   because retention §10 declined it. SR1.
 
@@ -342,6 +345,114 @@ inside what `Verify` accepts for a box with all twelve edges rounded.
 Refusals (SR2): a selected edge no longer than `2r`, a face edge at a corner no longer than `r`, a corner whose faces
 are not mutually perpendicular retained planes, and a rebuilt face whose outline is not a simple polygon.
 
+### 4.9 R7, the saddle of a cross hole (Chamfer only)
+
+R7 is the closed mouth a perpendicular bore leaves in a turned shaft. It is
+built by `internal/retainedblend/saddle.go` (recognition) and `saddle_tool.go`
+(tool and cut), not by §5's rewrite: the chamfer face is a ruled band between
+two space curves, which is no `Plane`, `Cone` or `Cylinder`, so the result holds
+it as an untagged `Faceted` face whose chords carry a proven bound, as
+`agent-docs/cross-cylinder-bore-chamfer-design.md`'s band does. A coaxial cone
+does not give equal setbacks: its setback along the bore wall varies by
+`R − √(R² − r²)` around the mouth (0.46 mm for R = 10, r = 3).
+
+**Recognition (tags only).** `looksLikeSaddle` admits a closed edge
+(`Start == End`) with the `Convex` flag set, between two faces with
+`RetainedTag`, `TagDeparture == 0` and `tagIsRecord`, both `Cylinder`. Exactly
+one face is `Reversed`: the other is the shaft (material inside, radius `R`),
+the reversed one the bore (material outside, radius `r`). Each axis is a unit
+coordinate axis (one component ±1, two exactly 0), the two on different
+coordinates, and the origins agree exactly on the third coordinate, so the axes
+meet at right angles at a point `T` read from the tags. `2r² < R²` holds in
+rationals. Any failure leaves the edge to `Unread`'s canal-surface reason (SR1).
+
+**Pose.** A signed permutation and the translation `T` map the pair exactly
+onto cross-cylinder-bore §"Source surface and band"'s pose with the bore axis
+at `z = 0`: shaft axis local Z, bore axis local X, the third coordinate local
+Y. The held seam loop is the boundary loop of the bore's facets that holds the
+edge's start vertex. Every vertex of it must lie on the shaft's facets, within
+its bound plus `64·ulp·scale` of both cylinders, and on one side of the shaft's
+axis; that side becomes local `+X` (X and Y both flip for the far mouth). This
+check only refuses.
+
+**Size.** One setback `d` on both walls, `0 < d ≤ r/2`, converted exactly; an
+asymmetric chamfer refuses. Several selected saddles are cut in one Boolean.
+
+**Tool.** At each of `N = 1024` stations `θ_j = 2πj/N` the feet `O` (shaft)
+and `B` (bore) are cross-cylinder-bore's, each `d` from the seam point `P` along
+its unrolled cylinder. The tool section holds four vertices:
+
+| Vertex | Local position |
+|---|---|
+| `O⁺` | `O + λ(O − B)`, `λ = 1/4`: the band run past the shaft wall |
+| `A` | `O⁺` moved radially from the shaft's axis to `R + r`, same height |
+| `K` | `(√(R² − r²cos²θ) + r, (r/2)cos θ, (r/2)sin θ)`: in the bore's extension outside the shaft |
+| `B⁺` | `B − λ(O − B)`: the band run into the bore |
+
+Quads join consecutive stations over the sides `O⁺A`, `AK`, `KB⁺` and the band
+`B⁺O⁺`; the ring is wound outward by its signed volume. Its band is group
+`chamfer(k)`, every other side one shared group.
+
+**Proofs (each failure refuses `ErrUnsupported`).**
+
+1. Band cells: `crossbore.ProveToolBand` runs `CellExactProof` on the `N/4 + 1`
+   quarter-turn cells widened by `2π/N` (the outer foot outside the bore, the
+   bore foot inside the shaft, polar progress, no fold), and mirrors them over
+   the whole turn as cross-cylinder-bore does; the local pose is exactly
+   symmetric by construction.
+2. Chord bound `ε`: a point of a held band triangle pairs with the exact
+   extended band `F(θ, t) = B⁺(θ) + t(O⁺ − B⁺)(θ)` at the same parameters; on
+   either triangle of a quad the difference is `h·u(1 − u)` times the spread of
+   the two end curves' θ-derivatives over the cell (`|[B⁺′] − [O⁺′]|` and the
+   enclosures' widths), so at most `h/4` times it, `h = 2π/N`. Each held `O⁺`,
+   `B⁺` is compared with a tight enclosure at its own exact angle, mapped to the
+   world by the exact pose; the largest gap joins `ε`.
+3. Band area: midpoint cells over exactly `[θ_k, θ_k+1]` enclose `|u + t(v − u)|`
+   (`u = B⁺′ × D`, `v = O⁺′ × D`, `D = O⁺ − B⁺`) between `|u + v|/2` and
+   `(|u| + |v|)/2`; four quarters give the band's exact area interval.
+4. Outside: on the held vertices in exact rationals, every `O⁺A` and `AK` quad
+   lies in one half-space `n·p ≥ (R + μ)|n|`, `n` horizontal, and every `K`
+   and `B⁺` lies inside the bore shrunk to `r − μ'`, so the `KB⁺` quads do
+   (the disc is convex). `μ` and `μ'` are the wall's largest held vertex bound
+   plus `ε` plus slack.
+5. Clearance: no facet of another face, and no segment of another boundary loop
+   of either wall, grown by its held bounds plus slack, meets the tool's box.
+   Inside the box the solid is then the region inside the shaft and outside the
+   bore.
+6. Each ring passes the exact crossing audit (`loftmesh.LoftCrossingAuditBounded`)
+   and the rings' boxes are apart.
+7. The Cut passes the mesh Boolean's own audits; a shifted retry refuses.
+
+**Claim S.** Let `S` be the true solid and `W*` its exact chamfer wedge, the
+part of `S` on the seam's side of the exact band. Let `T*` be the held tool
+with its band replaced by the exact extended band. By proofs 4 and 5, `T*` meets
+`S` only in `W*`: its sides lie outside `S`, the exact band runs past `O` outside
+the shaft (`B` is strictly inside it) and past `B` inside the bore (`O` is
+outside the bore and `B⁺` inside it). So `S − T* = S − W*`, the chamfered solid.
+The held tool lies within `ε` of `T*`. The tool states vertex bound `ε` on `O⁺`
+and `B⁺` and 0 on `A` and `K`, `VolSymDiff = ε·(A_held + A_exact)` over the
+band (Claim K's argument), and `AreaSlack` the gap between the band's held area
+and its exact interval plus a seal `2ε` times the length of both band ends. The
+Boolean composes the result's bounds from these and the body's own.
+
+**Chain allowance.** The Cut meets only the two walls and the bands, whose
+facets carry the walls' held bounds and `ε`. The chain-depth gate
+(`agent-docs/faceted-vertex-bounds-design.md` §5) would refuse them past the
+pair's chord tolerance; it only compares two proven numbers, so the cut runs
+with the chain tolerance raised to the largest of those bounds, as §5's rewrite
+publishes the walls' bounds on its cut vertices.
+
+**Result.** The walls keep their `Cylinder` tags; each band is a `Faceted` face
+with role `chamfer(k)`. On the R = 10, r = 3 shaft the two-mouth result holds
+about 20,000 facets and `Tessellate(…, VerifyAll)` verifies its boundary and
+volume. `Verify` reads its area beyond the relative tolerance: the band rims hold
+about `2N` segments, and `proofbound.ChainLengthBound` charges `2δ` per segment.
+
+**Reach.** Built and checked: r/R = 0.3 (d = 0.5, 1.5) and 0.7 (d = 0.5), on a
+Revolve and on an Extrude shaft. The cell proofs also pass at r/R = 0.75;
+recognition stops at `1/√2`, where the opening stops being one graph over the
+shaft's angle.
+
 ## 5. Construction
 
 The rewrite touches the faces `A` and `B` of the edge and, for R1, the two end
@@ -481,7 +592,10 @@ only, never from held geometry. The reasons are a face with no retained surface
 (faceted), a free-form surface, a face without a retained tag, a tag with a
 stated departure or one not proven to be exactly its revolve record, two retained cylinders
 whose axes are not parallel (the canal surface of SR1), a retained cone or
-torus, and otherwise the two retained kinds the edge lies between.
+torus, and otherwise the two retained kinds the edge lies between. `Unread`
+names R7's saddle by the canal-surface reason too: a `Fillet` has no class
+there, and a `Chamfer` reaches `Unread` only when some selected edge is not an
+R7 saddle (§4.9).
 
 **Displaced planes.** A retained `Plane` tag may state `AxialDelta` δ, the
 proven distance of the true plane from the tag along its normal. A route never
@@ -503,7 +617,9 @@ plane with any nonzero `AxialDelta` is no chain wall, as
 `facedeparture.TagDeparts` reads it.
 
 Gate order: base gates of modify §4 stage 1, then SR1, SR2, SR3, SR6, SR5, SR4,
-then the construction, then SR7.
+then the construction, then SR7. R7 runs its own order (§4.9): recognition,
+the size, the seam loop, then per saddle the band proofs, the outside and
+clearance proofs and the crossing audit, then the Cut.
 
 ### 6.2 Clearance
 
@@ -582,6 +698,9 @@ Reach RX6's row gains a class and SX9 narrows with it.
 | `facetedPayload` whose selected edges are all Table RR edges | this document's route, applied one edge at a time to the evolving mesh. Each step reads the previous step's result as an ordinary retained body; the selection resolves up front to `(face pair, curve)` records, not mesh indices |
 | any other `facetedPayload` call | SX9, unchanged |
 
+A `Chamfer` whose selected edges are all R7 saddles takes §4.9 instead: one Cut
+by a tool with a ring per saddle.
+
 The result is a `facetedPayload` with retained tags. A further `Fillet`,
 `Chamfer` or Boolean takes it like any retained body, and a placement carries
 its tags by retention §3.4. `Shell` stays SX9. An asymmetric chamfer takes the
@@ -630,6 +749,8 @@ published bound, never with a pinned literal.
 | Result is an ordinary retained body | a second blend on another edge, a `Cut` through the blended region and `Transform` all build; `NormalAt` on the blend face has a bound below 1 | store the blend with `Retained = false`: the chain loses the tag |
 | New vertex bounds | every new vertex lies within its stated bound of its exact point | skip the rounding charge: the bound is zero and the check fails |
 | Verify | `Verify` of a blended plate passes with no `Suspect` in watertightness | |
+| R7 cross-hole chamfer: Revolve shaft R = 10, pin r = 3 through it, both mouths, d = 1.5 and 0.5; pin r = 7, d = 0.5 (`apitest/retained_saddle_chamfer_test.go`) | the volume falls by twice the wedge's divergence-theorem integral (24.474 mm³ per mouth at d = 1.5, 2.460 at d = 0.5) within both bodies' bounds, and at d = 1.5 that change exceeds the bounds; the walls stay `Cylinder`, the bands read `Faceted`; on the `VerifyAll` mesh the wedge's section centroid reads outside, farther than the mesh bound, and a point 0.3 mm past the band reads inside, at 8 stations of each mouth | cut with `d/2`: the d = 1.5 volume and the d = 0.5 centroids fail; drop the outer foot's rotation from the held stations: the sample comparison widens `ε` and proof 4 refuses |
+| R7 refusals | `d > r/2` refuses; a pin moved 0.5 off the shaft's axis, a pin with r/R = 0.75 and a pin joined through the shaft refuse with the canal-surface reason; a flat milled beside a mouth refuses "another face of the body comes within the saddle chamfer's reach"; `Fillet` of the mouths keeps the canal-surface reason (`apitest/blend_refusal_names_test.go`) | drop the clearance check: the flat builds; admit a bore that is not `Reversed`: the joined pin builds; drop the exact axis meeting: the moved pin refuses with "a held seam vertex is off the two cylinders"; drop `2r² < R²`: r/R = 0.75 builds |
 
 ## 10. Files and fallout
 
@@ -637,6 +758,8 @@ published bound, never with a pinned literal.
 |---|---|
 | `internal/retainedblend/` | new: classification (Table RR), exact geometry (§4), clip, strip and end construction (§5), gates (§6); R6 in `sphere.go`, its exact-record rule in `denoted.go` |
 | `internal/facetedrecord/` | an entry that builds a payload from new vertices, triangles, groups and bounds; no change to `Build` |
+| `internal/retainedblend/saddle.go`, `saddle_tool.go`, `internal/crossbore/saddle_tool.go` | R7 (§4.9): recognition, tool, band proof, outside and clearance proofs, the Cut |
+| `internal/brepmodify/chamfer.go` | calls `retainedblend.SaddleChamfer` with the hooks' mesher before `retainedblend.Chamfer` |
 | `fillet.go`, `chamfer.go` | call the route before SX9 for a `facetedPayload`; thin wrappers only |
 | `agent-docs/modify-reach-design.md` | RX6 row and SX9 text; the sentence in §11 about what SX9 leaves a caller proving |
 | `agent-docs/missing-features.md` | the row for faceted `Fillet`/`Chamfer` |
@@ -653,6 +776,7 @@ published bound, never with a pinned literal.
 | B3 | R3, a line between a plane and a parallel cylinder, ending on planes normal to the axis | the groove, chamfer and boss-foot rows of §9 pass |
 | B4 | R4, an open arc | as B1 for an arc with end faces |
 | B5 | R6, a closed plane-sphere rim (§4.5) | the R6 rows of §9 pass |
+| B6 | R7, the cross-hole saddle chamfer (§4.9) | the R7 rows of §9 pass |
 
 ## 12. Rejected shortcuts
 
@@ -670,6 +794,9 @@ published bound, never with a pinned literal.
   from published bounds, and the volume check can only reject.
 - **Blend an oblique plane and cylinder as a `NURBSSurface`.** The surface
   carries no geometry a proof can read.
+- **Chamfer a cross hole with a coaxial cone.** A countersink cone sets back
+  unequally: along the bore wall its setback varies by `R − √(R² − r²)` around
+  the mouth. R7 cuts the equal-setback ruled band instead (§4.9).
 
 ## 13. Decisions the user may want to overturn
 
@@ -680,3 +807,6 @@ published bound, never with a pinned literal.
 | Chord tolerance `τ = 2⁻¹⁰·r` for the blend grid | fixed ratio of the radius | follow the body's `MeshBound`: finer blend, many more facets |
 | Several selected edges | one at a time on the evolving mesh; each later rim is found again by its circle | require disjoint regions `K` and build them together |
 | `Shell` of a retained body | stays SX9 | a separate design |
+| R7 tool stations | `N = 1024`: two mouths cut in about 2 s, about 20,000 facets | `N = 4096`: `ε` four times smaller, about 70,000 facets and several times the time |
+| R7 cut's chain allowance | raised to the walls' held bounds and `ε` (§4.9) | keep the document's: every R7 cut on a Boolean result refuses at the chain-depth gate |
+| R7 ratio | `2r² < R²` | admit what the cell proofs pass (r/R = 0.75 builds with the gate dropped): wider reach, no checked fixture past 0.7 |
