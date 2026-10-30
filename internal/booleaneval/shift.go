@@ -97,8 +97,12 @@ const (
 // touching Cut leaves its target whole. When no contact is Decisive, the
 // operands are flush on one side, and Cut and Intersect still need every
 // contact to open outward, so a tool flush with its target's wall pokes through
-// it instead of leaving a skin. Union wants nothing more of a flush contact
-// than that it open.
+// it instead of leaving a skin. Union requires only that a contact that is not
+// Decisive open. When no contact is Decisive, nothing else brings the operands
+// into overlap, so the base direction pulls the second operand inward along
+// each contact it does not already lean along (weightedBase), and a body
+// resting on a flat face joins the first operand. Beside a Decisive contact
+// such a contact opens outward on a tie.
 func shiftDirections(op meshbool.OperationKind, contacts []meshbool.TouchContact) []r3.Vec {
 	sigma := 1.0
 	if op == meshbool.OpUnion {
@@ -129,21 +133,34 @@ func shiftDirections(op meshbool.OperationKind, contacts []meshbool.TouchContact
 // shift, and a contact with none pulls with almost nothing. A wanted contact
 // pulls in the sense sigma names. Any other contact pulls in the sense the pull
 // so far already leans, since moving the second operand either way decides it.
+// A contact the pull does not lean along, its float dot product with the pull
+// being exactly zero, takes the tie sense: sigma when no contact is wanted, and
+// outward (+1) otherwise. With nothing wanted, a Union has no Decisive contact,
+// so nothing else brings the operands into overlap, and the inward tie lets a
+// body resting on a flat face join the first operand instead of floating above
+// it. A wanted contact already sets the sense that decides the operation, and
+// the other contacts need only open (agent-docs/gap-tolerance-design.md §5.2
+// item 1).
 func weightedBase(sigma float64, wanted []bool, contacts []meshbool.TouchContact) (r3.Vec, bool) {
 	weight := func(c meshbool.TouchContact) float64 { return math.Max(c.Slack, 1e-6) }
 	var pull r3.Vec
 	var rest []meshbool.TouchContact
+	tie := sigma
 	for i, c := range contacts {
 		if wanted[i] {
 			pull = pull.Add(c.NormalA.Scale(sigma * weight(c)))
+			tie = 1
 		} else {
 			rest = append(rest, c)
 		}
 	}
 	slices.SortStableFunc(rest, func(a, b meshbool.TouchContact) int { return cmp.Compare(weight(b), weight(a)) })
 	for _, c := range rest {
-		sense := 1.0
-		if pull.Dot(c.NormalA) < 0 {
+		sense := tie
+		switch lean := pull.Dot(c.NormalA); {
+		case lean > 0:
+			sense = 1
+		case lean < 0:
 			sense = -1
 		}
 		pull = pull.Add(c.NormalA.Scale(sense * weight(c)))

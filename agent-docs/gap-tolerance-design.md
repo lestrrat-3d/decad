@@ -145,10 +145,32 @@ runs the Boolean again with the second operand moved:
    contact's normal is at least 0.02 in magnitude. A Decisive contact also fixes the sense. A Union moves the second
    operand inward along the first operand's normal, so bodies that touch join into one, along a face, an edge or at a
    corner. A Cut and an Intersect move it outward, so a touching Cut leaves its target whole and a touching Intersect
-   is empty. With no Decisive contact, the contacts are flush walls. A Cut and an Intersect still need every flush contact to open
-   outward, so a tool flush with its target's wall pokes through it and leaves no skin. A Union needs only that they
-   open. A pair of contacts that no direction opens in the needed sense, such as a tool flush with both walls of a
-   slot, is opened by growth (item 5).
+   is empty. With no Decisive contact, each contact is a flush wall or a gate contact on a flat face, and a gate
+   contact cannot tell a body resting on the face from one flush beneath it. A Cut and an Intersect still need every
+   such contact to open outward, so a tool flush with its target's wall pokes through it and leaves no skin, and a tool
+   resting on it stays apart. A Union needs only that they open (`weightedBase`). Each contact that is not wanted
+   pulls in the sense the pull so far leans along its normal. A contact the pull does not lean along takes the tie
+   sense: inward when the Union has no Decisive contact, outward otherwise. The lean is the float dot product of the
+   pull and the normal, so only an exactly zero product is a tie, and a nearly orthogonal normal follows the sign
+   rounding gives it. With no Decisive contact nothing else brings the operands into overlap, so a body resting on a
+   flat face sinks into it and joins into one solid, and a body flush beneath it sinks inside, where an outward pull
+   would leave the resting body as a second lump above the face. A Decisive contact already moves the operands into
+   overlap, so the contacts beside it, such as the flush top and bottom caps of two ribs whose curved and flat walls
+   touch, only open, and they open outward on a tie. An inward tie there gains no connection, and on the line, arc and
+   line ribs of `TestWebPathJoinsALineArcLineChain` it leaves the joined ribs with a mesh bound that the next Union of
+   the chain refuses at the chain-depth gate (`RefuseCoarseHeldContact`). A pair of contacts that no direction opens in the needed sense,
+   such as a tool flush with both walls of a slot, is opened by growth (item 5).
+
+   The rule follows from the tolerant reading `A∘(B+s)` with `s·n` the shift along a contact's outward normal `n`. A
+   Union with `s·n < 0` overlaps a resting B by `|s·n|` and leaves a flush B inside A. With `s·n > 0` it leaves a
+   gap under a resting B and a sliver of a flush B outside A. A Union that also holds a Decisive contact overlaps B
+   there whichever way a contact that is not Decisive opens, so the sense of that contact decides only on which side
+   of its face a sliver or a gap of the shift's length lies, and the result is one solid either way. A Cut with
+   `s·n > 0` leaves A whole under a resting tool and opens a flush tool's pocket. With `s·n < 0` it notches A under a
+   resting tool and leaves a skin over a flush pocket. An Intersect with `s·n > 0` is empty for a resting B and B less a sliver for a flush B. With
+   `s·n < 0` it leaves a sliver solid for a resting B. Union with no Decisive contact therefore pulls inward, and Cut
+   and Intersect push outward: every contact is wanted for them when none is Decisive, and a tie beside a Decisive
+   contact opens outward.
 2. Each direction is the contacts' unit direction, each contact pulling in proportion to its Slack, plus a generic part
    of weight 0.2 that is parallel to no coordinate plane, so a shift also opens the walls that two bodies sharing a
    footprint leave coplanar.
@@ -249,9 +271,10 @@ owns that refusal in the same change.
 | `booleaneval.TestShiftNeed` | The least shift that clears a contact's Slack, along a normal and along a slanted direction. |
 | `booleaneval.TestShiftPiecesChargeEachPieceOnItsOwn` | Two separate pieces: only the moved piece moves and is charged. |
 | `meshbool.TestRefuseUndecidableProximityLocalSlack` | A pair the faces' bounds cannot decide is decided by its close facets' own bounds, and a refusal names its contacts with their Slack. |
-| `booleaneval.TestShiftDirections` | Which sense each operation wants for each kind of contact, and when no direction exists. |
+| `booleaneval.TestShiftDirections` | Which sense each operation wants for each kind of contact, a Union's inward pull on contacts that are not Decisive when none is, the outward tie beside a Decisive contact, and when no direction exists. |
 | `apitest.TestBooleanGapTolerance` | Union, Cut and Intersect of boxes that touch or sit flush: the result, the bound that covers the true volume, a tighter bound from a smaller tolerance, and the refusals `ExactOnly` and a slot keep. |
 | `apitest.TestBooleanGapToleranceEdgeAndPointTouches` | A shared corner, a knife edge inside a wider wedge and two crossing edges: Union, Cut and Intersect, the volume bound, and the `ExactOnly` refusal. |
+| `apitest.TestBooleanGapToleranceRestingBossJoinsPlate` | A `Transform`ed boss resting on a plate unions into one lump whose volume bound covers `60000 + 288π`, with the boss's top below z = 18, and `Verify` reads `Sound`. |
 | `apitest.TestBooleanGapToleranceStaysExactForCurvedContact` | A tangent cylinder on a plate stays refused under `ExactOnly`. |
 | `apitest.TestVerifyGapToleranceDecidesAFlushPair` | `Verify` reads a flush pair's overlap with a covering bound, leaves it staged under `ExactOnly`, and reports an invalid tolerance. |
 | `examples.Example_gap_tolerance` | The documented use. |
