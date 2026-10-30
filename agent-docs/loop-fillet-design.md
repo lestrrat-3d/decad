@@ -445,7 +445,8 @@ chordCount(capArc(w)))` so the larger of the side and cap radii sets the
 in-plane sagitta); `n_φ = ⌈(π/2) / (2·acos(1 − tol_φ/r))⌉` with `tol_φ` half
 the chord budget, at least 2 and at most 4096
 (`tessellation.MaxFilletRings`). The boss shell's root band (modify-general
-§3.1a) raises `n_φ` to `⌈s·π/(4·tol)⌉`, within the same cap, where `s` is the
+§3.1a) raises `n_φ` to `⌈s·π/(4·c)⌉`, with `c` the whole chord budget
+(`2·tol_φ`), within the same cap, where `s` is the
 largest plan distance between the two corners' cap-minus-side offsets over
 the band's cells (`brepfilletmesh.TwistRingCount`). Ring `k` sits at
 `side + (cap − side)·g(φ_k)` with one `g` for every sample, so a cell's twist

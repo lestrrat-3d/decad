@@ -94,11 +94,22 @@ func TwistRingCount(lm *capblend.LoopMesh, radius, chord float64) (int, error) {
 		u1, v1 := offset(cell.C1)
 		spread = max(spread, math.Hypot(u0-u1, v0-v1))
 	}
+	return twistRings(n, spread, chord), nil
+}
+
+// twistRings raises the sagitta count n to ⌈spread·π/(4·chord)⌉, the count
+// whose |T|/4 bound spread·π/(8n) fits half of chord, capped at
+// tessellation.MaxFilletRings. A chord that is not positive, NaN included,
+// keeps n, as tessellation.FilletRingCount does.
+func twistRings(n int, spread, chord float64) int {
+	if !(chord > 0) {
+		return n
+	}
 	need := math.Ceil(spread * math.Pi / (4 * chord))
 	if !(need > float64(n)) {
-		return n, nil
+		return n
 	}
-	return int(min(need, tessellation.MaxFilletRings)), nil
+	return int(min(need, tessellation.MaxFilletRings))
 }
 
 // Place adds interior rings after the side and cap rings have their shared vertices.
