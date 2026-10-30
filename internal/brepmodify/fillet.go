@@ -162,8 +162,8 @@ func Fillet(ctx context.Context, env topo.Env, b *topo.Body, call FilletCall) (R
 		return DisplacedLateralFillet(ctx, env, pp, *route.Carriers, sel, edges, rmm)
 	}
 	if !ok {
-		return Result{}, fmt.Errorf(`%w: this evaluator fillets a straight prism, its one-line Sweep reduction, a revolve, or a matching-section axial loft only; selector %s matched [%s]`,
-			decaderr.ErrUnsupported, sel, modifyselect.EdgesContext(edges))
+		return Result{}, fmt.Errorf(`%w: this evaluator fillets a straight prism, its one-line Sweep reduction, a revolve, or a matching-section axial loft only%s; selector %s matched [%s]`,
+			decaderr.ErrUnsupported, unreadNote(b.Payload, edges), sel, modifyselect.EdgesContext(edges))
 	}
 	if err := pp.RequireExactSection("fillets"); err != nil {
 		return Result{}, err
@@ -304,4 +304,17 @@ func straightSweepCapEdge(edge *topo.Edge) bool {
 		}
 	}
 	return capRole && wallRole
+}
+
+// unreadNote is the retained-blend condition appended to the generic refusal of
+// a mesh Boolean result: "; " and the first selected edge no retained class
+// reads, from the face tags alone. It is empty for any other payload.
+func unreadNote(payload any, edges []*topo.Edge) string {
+	if _, ok := payload.(facetedrecord.Payload); !ok {
+		return ""
+	}
+	if why := retainedblend.Unread(edges); why != "" {
+		return "; " + why
+	}
+	return ""
 }

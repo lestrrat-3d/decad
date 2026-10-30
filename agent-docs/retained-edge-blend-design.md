@@ -467,6 +467,17 @@ of that computation.
 | **SR6** | the held mesh disagrees with the exact vertex of its three tags by more than the vertex bound plus slack (§6.3) | the record and the mesh do not describe one solid | `ErrUnsupported` |
 | **SR7** | a facet the rewrite keeps outside the new strip meets a strip facet it shares no vertex with (the strip clearance of retained-modify-reach §5.6, run before the build), or the rewritten mesh fails the held audit (watertight, shells nested with consistent signs; the audit tests no facet pair for intersection) | the result is invalid | `ErrDegenerate` when the audit proves a face inside out (modify S8), else `ErrUnsupported` |
 
+**Naming the unread edge.** When no route recognizes the selection, the generic
+fillet or chamfer refusal of a mesh Boolean result keeps its text and its
+sentinel and appends `; no retained blend class reads selected edge[N]: <reason>`
+(`Unread`, `internal/retainedblend/unread.go`). It names the first selected edge
+that is in no class of Table RR, from the faces' tags and the edge's face count
+only, never from held geometry. The reasons are a face with no retained surface
+(faceted), a free-form surface, a face without a retained tag, a tag with a
+stated departure or one that is not its revolve record, two retained cylinders
+whose axes are not parallel (the canal surface of SR1), a retained cone or
+torus, and otherwise the two retained kinds the edge lies between.
+
 **Displaced planes.** A retained `Plane` tag may state `AxialDelta` δ, the
 proven distance of the true plane from the tag along its normal. A route never
 reads the tag as exact past δ. Each reader adds `4δ/minSine` per plane it reads
