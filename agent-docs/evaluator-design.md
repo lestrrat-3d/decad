@@ -1416,6 +1416,19 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   remaining candidates with `TriTriDistance`'s own code. A pair that neither
   normal separates is measured in full. The function's comment holds the
   error bounds.
+- **A tighter depth check may reuse a bounded broad contact set.**
+  `RefuseUndecidableProximity` derives local slack from contacts gathered at the
+  face-pair slack, then gathers tight contacts when that slack is smaller.
+  Every tight contact is also in the broad set. `ProvenDepthExceeds` may use the
+  broad set at the tighter threshold when its facet and span counts fit
+  `MaxDepthWitnessFacets` and `MaxDepthWitnessSpans`: extra broad facets can
+  nominate additional points, but `DeepWitnessAt` still proves strict
+  interpenetration deeper than the tighter threshold, and every broad span is
+  an exact intersection segment. If any cap is exceeded, the evaluator keeps
+  the original broad depth check and the separate tight-contact depth check.
+  The caps matter because the witness search stops after its fixed facet limit;
+  an unbounded broad set could otherwise crowd out a tight contact and lose a
+  witness.
 - **A strict held-triangle gap uses exact distance when projection gaps are too
   small.** `meshbool.DisjointTriDistanceAbove` first proves the two closed
   triangles disjoint with exact separating axes, including in-plane axes for

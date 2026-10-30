@@ -24,16 +24,21 @@ func FacesNearMiss(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh,
 	if err != nil || deferred {
 		return false, err
 	}
+	return facesNearMissFromContacts(ctx, bmA, bmB, nc, slack)
+}
+
+// facesNearMissFromContacts decides whether nc is a near miss at slack. The
+// caller may reuse a broader contact set at a tighter depth threshold: an
+// extra facet can only supply another exact witness, and every witness still
+// has to prove penetration deeper than slack.
+func facesNearMissFromContacts(ctx context.Context, bmA, bmB *BoolMesh, nc NearContacts, slack float64) (bool, error) {
 	if len(nc.CloseA) == 0 {
 		return false, nil // the facets stay clear of each other: nothing hides
 	}
 	// A restating operand's facets within the slack are where the pair meets
 	// it, so the local chain-depth gate reads them before any depth question
 	// is asked (agent-docs/faceted-vertex-bounds-design.md §5).
-	if err := RefuseCoarseHeldContact(bmA, 0, nc.CloseA); err != nil {
-		return false, err
-	}
-	if err := RefuseCoarseHeldContact(bmB, 1, nc.CloseB); err != nil {
+	if err := refuseCoarseNearContacts(bmA, bmB, nc); err != nil {
 		return false, err
 	}
 	deep, err := ProvenDepthExceeds(ctx, bmA, nc.CloseA, bmB, nc.CloseB, nc.Spans, slack)

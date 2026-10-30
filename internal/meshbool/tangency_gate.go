@@ -104,39 +104,78 @@ func RefuseUndecidableProximity(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB
 			if !BoxesWithin(ga.box, gb.box, slack*(1+1e-9)) {
 				continue
 			}
-			near, err := FacesNearMiss(ctx, bmA, ga.facets, bmB, gb.facets, slack*(1+1e-9), memo)
+			broadSlack := slack * (1 + 1e-9)
+			broad, deferred, err := GatherNearContacts(ctx, bmA, ga.facets, bmB, gb.facets, broadSlack, memo)
 			if err != nil {
 				return err
 			}
-			if !near {
+			if deferred || len(broad.CloseA) == 0 {
 				continue
+			}
+			if err := refuseCoarseNearContacts(bmA, bmB, broad); err != nil {
+				return err
+			}
+			reuseDepth := depthWitnessFits(broad)
+			if !reuseDepth {
+				deep, err := ProvenDepthExceeds(ctx, bmA, broad.CloseA, bmB, broad.CloseB, broad.Spans, broadSlack)
+				if err != nil {
+					return err
+				}
+				if deep {
+					continue
+				}
 			}
 			// The face-level slack covers the worst facet of either face, which a
 			// face that a boolean already shifted or cut holds far from where it
 			// meets here. A true touch lies within a facet pair's own bounds of
-			// the pair, so the slack that matters is the largest bound among the
-			// facets that come within the face-level slack. It is never larger,
-			// and asking again with it can only find the pair decided.
-			local, err := localSlack(ctx, bmA, ga.facets, bmB, gb.facets, slack*(1+1e-9), memo)
-			if err != nil {
-				return err
-			}
-			if local < slack {
-				near, err = FacesNearMiss(ctx, bmA, ga.facets, bmB, gb.facets, local*(1+1e-9), memo)
+			// facets that come within the face-level slack. The broad set already
+			// contains the facets needed to compute it.
+			local := localSlackFromContacts(bmA, bmB, broad, broadSlack)
+			narrowed := local < slack
+			tightSlack := broadSlack
+			contacts := broad
+			if narrowed {
+				tightSlack = local * (1 + 1e-9)
+				contacts, deferred, err = GatherNearContacts(ctx, bmA, ga.facets, bmB, gb.facets, tightSlack, memo)
 				if err != nil {
 					return err
 				}
-				if !near {
+				if deferred || len(contacts.CloseA) == 0 {
+					if err := ctx.Err(); err != nil {
+						return err
+					}
 					continue
 				}
-				slack = local
 			}
-			_, flat := ga.source.Surface.(surfacegeom.Plane)
-			contacts, err := nearContactNormals(ctx, bmA, ga.facets, bmB, gb.facets, slack*(1+1e-9), !flat, memo)
-			if err != nil {
+			// A broad set under every depth-witness cap includes all tight
+			// contacts and can safely supply a witness at the tighter threshold.
+			// Larger sets keep the original two-stage depth search.
+			if reuseDepth {
+				deep, err := ProvenDepthExceeds(ctx, bmA, broad.CloseA, bmB, broad.CloseB, broad.Spans, tightSlack)
+				if err != nil {
+					return err
+				}
+				if deep {
+					continue
+				}
+			} else if narrowed {
+				if err := refuseCoarseNearContacts(bmA, bmB, contacts); err != nil {
+					return err
+				}
+				deep, err := ProvenDepthExceeds(ctx, bmA, contacts.CloseA, bmB, contacts.CloseB, contacts.Spans, tightSlack)
+				if err != nil {
+					return err
+				}
+				if deep {
+					continue
+				}
+			}
+			if err := ctx.Err(); err != nil {
 				return err
 			}
-			refusal.Contacts = append(refusal.Contacts, contacts...)
+			_, flat := ga.source.Surface.(surfacegeom.Plane)
+			contactsOut := nearContactNormalsFromContacts(bmA, contacts, tightSlack, !flat, firstFacet(gb.facets))
+			refusal.Contacts = append(refusal.Contacts, contactsOut...)
 			if gaptol.Reach(ctx) <= 0 {
 				return refusal
 			}
@@ -150,14 +189,25 @@ func RefuseUndecidableProximity(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB
 	return nil
 }
 
-// localSlack is the sum of the largest facet bound among the first face's facets
-// that come within slack of the second face's facets and the largest among the
-// second's, and slack itself when it finds none.
-func localSlack(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int,
-	slack float64, memo *ContactMemo) (float64, error) {
-	nc, deferred, err := GatherNearContacts(ctx, bmA, fis, bmB, fjs, slack, memo)
-	if err != nil || deferred || len(nc.CloseA) == 0 || len(nc.CloseB) == 0 {
-		return slack, err
+func refuseCoarseNearContacts(bmA, bmB *BoolMesh, nc NearContacts) error {
+	if err := RefuseCoarseHeldContact(bmA, 0, nc.CloseA); err != nil {
+		return err
+	}
+	return RefuseCoarseHeldContact(bmB, 1, nc.CloseB)
+}
+
+func depthWitnessFits(nc NearContacts) bool {
+	return len(nc.CloseA) <= MaxDepthWitnessFacets &&
+		len(nc.CloseB) <= MaxDepthWitnessFacets &&
+		len(nc.Spans) <= MaxDepthWitnessSpans
+}
+
+// localSlackFromContacts returns the sum of the largest facet bound among the
+// first face's near facets and the largest among the second's, or slack when
+// either side has no near facets.
+func localSlackFromContacts(bmA, bmB *BoolMesh, nc NearContacts, slack float64) float64 {
+	if len(nc.CloseA) == 0 || len(nc.CloseB) == 0 {
+		return slack
 	}
 	worst := func(m *BoolMesh, facets []int) float64 {
 		w := 0.0
@@ -166,7 +216,7 @@ func localSlack(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fj
 		}
 		return w
 	}
-	return proofbound.AbsSumUpper(worst(bmA, nc.CloseA), worst(bmB, nc.CloseB)), nil
+	return proofbound.AbsSumUpper(worst(bmA, nc.CloseA), worst(bmB, nc.CloseB))
 }
 
 // firstFacet is the first of facets, or zero when there is none.
@@ -177,29 +227,20 @@ func firstFacet(facets []int) int {
 	return facets[0]
 }
 
-// nearContactNormals reads the first operand's outward unit normal at each of
-// its facets that come within slack of the other face's facets, once per
-// distinct direction and at most maxTouchContacts of them. A caller allowed to
-// move an operand uses them to choose which way to move it, and how far: the
-// second operand has to reach slack past the first along the normal to decide
-// the pair. The contact is Decisive when it is a curved face the second operand
-// sits on, where moving it away would detach it. A contact on a flat face is not
-// Decisive: moving the second operand either way decides the gate, and the gate
-// cannot tell a body resting on the face from one flush beneath it. The caller
-// then picks the sense the operation wants with no Decisive contact: a Union
-// moves the second operand into the first, so a resting body joins it, and a Cut
-// and an Intersect move it out.
-func nearContactNormals(ctx context.Context, bmA *BoolMesh, fis []int, bmB *BoolMesh, fjs []int,
-	slack float64, decisive bool, memo *ContactMemo) ([]TouchContact, error) {
-	nc, _, err := GatherNearContacts(ctx, bmA, fis, bmB, fjs, slack, memo)
-	if err != nil {
-		return nil, err
-	}
+// nearContactNormalsFromContacts reads the first operand's outward unit normal
+// at each near facet, once per distinct direction and at most maxTouchContacts.
+// A caller allowed to move an operand uses them to choose the direction and
+// distance; the second operand has to reach slack past the first. A curved face
+// makes the contact decisive because moving away detaches the body. A flat face
+// is not decisive because the gate cannot distinguish a body resting on it from
+// one flush beneath it. The operation chooses the direction: Union moves into
+// the first operand; Cut and Intersect move out.
+func nearContactNormalsFromContacts(bmA *BoolMesh, nc NearContacts, slack float64, decisive bool, otherFacet int) []TouchContact {
 	type key [3]int64
 	seen := map[key]struct{}{}
 	var out []TouchContact
 	for _, i := range nc.CloseA {
-		c := touchOf(bmA, i, firstFacet(fjs))
+		c := touchOf(bmA, i, otherFacet)
 		c.Slack, c.Decisive = slack, decisive
 		k := key{int64(math.Round(c.NormalA.X * 1e3)), int64(math.Round(c.NormalA.Y * 1e3)), int64(math.Round(c.NormalA.Z * 1e3))}
 		if _, dup := seen[k]; dup {
@@ -211,7 +252,7 @@ func nearContactNormals(ctx context.Context, bmA *BoolMesh, fis []int, bmB *Bool
 			break
 		}
 	}
-	return out, nil
+	return out
 }
 
 // faceFacets is one analytic face of an operand: its facets, and the chord
