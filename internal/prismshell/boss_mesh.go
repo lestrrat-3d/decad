@@ -207,24 +207,27 @@ func PrismUnionBossShellMeshOf(ctx context.Context, ref provenance.Producer,
 	quad(upperBase, upperTop, sideGroups("shellUpperWall", true))
 	prev := upperBase
 	rootGroups := sideGroups("shellRootBand", false)
+	// The cavity keeps distance t from the source root edge, the boss outline
+	// at InterfaceZ (agent-docs/shell-faceted-boss-design.md). In the inset q
+	// and the height s above BossBottom, the band is the quarter circle of
+	// radius t centred on the root edge at (q, s) = (0, t), from the ledge's
+	// boss-outline ring at (0, 0) to the upper inset ring at (t, t). Station
+	// w on it is the rational point (2tw, 2tw²)/(1+w²). Station 0 is exactly
+	// (0, 0), so the ledge ring is the boss outline at BossBottom with no
+	// rounding error.
 	for k := input.Stations - 1; k >= 0; k-- {
 		w := big.NewRat(int64(k), int64(input.Stations))
 		w2 := new(big.Rat).Mul(w, w)
 		den := new(big.Rat).Add(big.NewRat(1, 1), w2)
 		qRat := new(big.Rat).Quo(new(big.Rat).Mul(proofarith.FloatRat(t),
-			new(big.Rat).Mul(big.NewRat(2, 1), w2)), den)
-		sRat := new(big.Rat).Quo(new(big.Rat).Mul(proofarith.FloatRat(t),
 			new(big.Rat).Mul(big.NewRat(2, 1), w)), den)
+		sRat := new(big.Rat).Quo(new(big.Rat).Mul(proofarith.FloatRat(t),
+			new(big.Rat).Mul(big.NewRat(2, 1), w2)), den)
 		zRat := new(big.Rat).Add(proofarith.FloatRat(input.BossBottom), sRat)
 		q := proofbound.RatFloatUp(qRat)
 		z, _ := zRat.Float64()
 		qError := proofarith.RationalFloatError(qRat, q)
 		zError := proofarith.RationalFloatError(zRat, z)
-		if k == 0 {
-			q = 0
-			z = input.BossBottom
-			qError, zError = 0, 0
-		}
 		var ring [4]int
 		for i := range 4 {
 			var err error

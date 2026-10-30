@@ -12,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/r3"
+	"github.com/stretchr/testify/require"
 )
 
 func bossMeshTestInput(t *testing.T) BossMeshInput {
@@ -75,6 +76,32 @@ func TestBossMeshKeepsSourceOrderAndBoundsNewRoot(t *testing.T) {
 	input.Groups[0].Planar = false
 	if mesh.Verts[0].X != -4 || !mesh.Groups[0].Planar {
 		t.Fatal("source vertex or group storage was aliased")
+	}
+}
+
+// Every root-band station lies at distance t = 1 from the root edge, the boss
+// outline at InterfaceZ = 4: its inset q from the outline and its depth below
+// InterfaceZ lie on the quarter circle centred on that edge. The band runs
+// from the outline itself at the ledge to the inset t at InterfaceZ.
+func TestBossMeshRootStationsKeepThicknessFromRootEdge(t *testing.T) {
+	t.Parallel()
+	input := bossMeshTestInput(t)
+	mesh, err := PrismUnionBossShellMeshOf(t.Context(), 17, input, 1)
+	require.NoError(t, err)
+	// The upper walls' eight vertices come first, then the rings from the
+	// station next to InterfaceZ down to the ledge.
+	rings := mesh.Verts[mesh.RootStart+8 : mesh.BossPointEnd]
+	require.Len(t, rings, 4*input.Stations)
+	for i, v := range rings {
+		q := min(v.X+4, 4-v.X, v.Y+3, 3-v.Y)
+		depth := input.InterfaceZ - v.Z
+		require.True(t, q >= 0 && depth > 0 && depth <= 1, "station %d at %v", i, v)
+		require.InDelta(t, 1, math.Hypot(q, depth), mesh.VertexBound[mesh.RootStart+8+i]+1e-12,
+			"station %d at %v", i, v)
+	}
+	ledge := rings[len(rings)-4:]
+	for i, uv := range PrismUnionBossShellCorners(input.BossRect) {
+		require.Equal(t, r3.Vec{X: uv[0], Y: uv[1], Z: input.BossBottom}, ledge[i], "ledge ring corner %d", i)
 	}
 }
 

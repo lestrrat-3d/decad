@@ -2898,3 +2898,4 @@
 10	0.00	TestShellStackedBossConcaveRadius
 10	0.00	TestBooleanGapShiftKeepsTranslatedTags
 10	0.00	TestBooleanGapShiftFilletsRestingBoss
+10	0.00	TestFacetedUnionNestedBossShellKeepsThicknessAtRoot
