@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -114,12 +115,7 @@ func sortedIDs(m *stepread.Model) []int {
 	for id := range m.Entities {
 		ids = append(ids, id)
 	}
-	// Insertion sort keeps the dependency-free, deterministic order small models need.
-	for i := 1; i < len(ids); i++ {
-		for j := i; j > 0 && ids[j-1] > ids[j]; j-- {
-			ids[j-1], ids[j] = ids[j], ids[j-1]
-		}
-	}
+	slices.Sort(ids)
 	return ids
 }
 
