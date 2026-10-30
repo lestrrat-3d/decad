@@ -2762,6 +2762,7 @@
 10	35.53	TestInfillTakesEachLatticeKind
 10	0.01	TestIntersectDisjointIsEmpty
 10	0.91	TestIntersectWithAToolFlushWithBothFacesOfAMeshPlate
+10	0.00	TestLinearRevolveDThroughBore
 10	0.00	TestLoftChainCrossingCorrespondenceIsRefused
 10	0.01	TestLoftChainVerifyValidityAfterAudit
 10	17.57	TestLoftFilletEveryCornerOfLobesOnADisc
@@ -2872,6 +2873,7 @@
 10	0.00	TestStackedOpposedOverlapDisplacedLevelDeclines
 10	0.01	TestStackedUnionEqualBoxesStacked
 10	0.09	TestStackedUnionRootedCrossingBoss
+10	0.00	TestSteppedRevolveAxialThroughBores
 10	0.00	TestSteppedShaftClassBCut
 10	0.34	TestStitchCurvedWeldedRevolveSiblingsTessellate
 10	0.01	TestStitchDecimalFrustumEnclosesItsRecord

@@ -5,6 +5,7 @@ package tessaudit
 import (
 	"github.com/lestrrat-3d/decad/internal/breprecord"
 	"github.com/lestrrat-3d/decad/internal/patchchain"
+	"github.com/lestrrat-3d/decad/internal/revolvebore"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/stitchrecord"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
@@ -26,6 +27,9 @@ func AuditsFacetContact(p topo.Payload) bool {
 	}
 	_, ok := p.(revolveplan.Payload)
 	if ok {
+		return true
+	}
+	if _, ok := p.(revolvebore.Payload); ok {
 		return true
 	}
 	if sp, ok := p.(sweeprecord.Payload); ok {

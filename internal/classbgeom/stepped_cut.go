@@ -21,7 +21,9 @@ import (
 // shoulder at the start of step i (i ≥ 1) is −(2+i).
 
 // CutSteppedView is class B's Cut of a stepped shaft x, read as its stack
-// of coaxial circular prisms steps, by a prism tool y. The pair's entry gate
+// of coaxial circular prisms steps, by a prism tool y. A contained through
+// tool along the shaft axis takes the exact axial-bore route first. Otherwise
+// the perpendicular pair's entry gate
 // runs on the stack's envelope, the circle of the largest radius swept over
 // the whole span: B1–B8 read only its end caps, its circular wall and its
 // span, and each of those bounds every step, so a pair the envelope admits
@@ -36,6 +38,9 @@ func CutSteppedView(ctx context.Context, steps []prismrecord.Payload, y topo.Pay
 	envelope, ok := steppedEnvelope(steps)
 	if !ok {
 		return nil, false, nil
+	}
+	if payload, ok, err := cutSteppedBore(ctx, steps, y); err != nil || ok {
+		return payload, ok, err
 	}
 	cp, ok, err := AdmitPair(ctx, envelope, y, envelope.Xform, 0)
 	if err != nil || !ok {

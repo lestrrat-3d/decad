@@ -218,6 +218,11 @@ Each of these returns a new body and retires its input.
 
 ## Booleans
 
+A full Revolve with a linear, axially monotone solid-core profile can retain
+analytic cone and cylinder walls when cut by a coaxial, full-length prism.
+The tool must fit strictly inside the outer walls and meet both end planes
+exactly. Tessellation carries bounds for rounding at the two cap rims.
+
 | Function | Result |
 |---|---|
 | `decad.Union` | The volume enclosed by two or more bodies. |

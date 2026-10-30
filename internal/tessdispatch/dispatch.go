@@ -31,6 +31,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismtess"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolvebore"
+	"github.com/lestrrat-3d/decad/internal/revolveboretess"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolvetess"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -75,6 +77,13 @@ type Options struct {
 // tessellateContext withholds them afterwards.
 func Body(ctx context.Context, b *topo.Body, chord float64, verify Verify, opts Options) (*topo.Mesh, error) {
 	formatSurface := opts.Surface
+	if p, ok := b.Payload.(revolvebore.Payload); ok {
+		sources, err := revolveboretess.BuildSources(ctx, b, p, chord)
+		if err != nil {
+			return nil, err
+		}
+		return revolveboretess.Assemble(ctx, b, p, sources)
+	}
 	if p, ok := b.Payload.(breprecord.AllEdgeChamferPayload); ok {
 		return alledgechamfermesh.Build(ctx, b, p, chord, verify >= Boundary, verify >= All)
 	}

@@ -49,7 +49,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/sketchrecord/` | Sketch snapshot authentication, edge conversion, and join checks. See sketch-seam §2. |
 | `internal/splinebezier/` | Bézier conversion of recorded splines. See `agent-docs/spline-design.md` §5.1. |
 | `internal/boundarywalk/` | Bounded walks, coalescing, junction vertices, rim convexity, and analytic survey and modify loops over recorded segments. |
-| `internal/classbgeom/` | Class B: the entry over two payloads (gates B1-B8, through and flush reaches, the sweep walk, result record), the crossing reach, face geometry and shifted tool records. See general-boolean §3 B, §5. |
+| `internal/classbgeom/` | Class B: the entry over two payloads, stepped shaft crossing and coaxial-bore cuts, gates B1-B8, through and flush reaches, sweep walk and result records. See general-boolean §3 B, §5. |
 | `internal/crossbore/` | Recognizes the perpendicular cylinder Cut, admits the bore-mouth chamfer, builds the held mesh, proves its cells and computes boundary, volume and area bounds. See cross-cylinder-bore-chamfer design. |
 | `internal/brepgeom/` / `internal/stackedbrep/` | BRep geometry, topology and shared endpoint matching. See general-boolean §4–§5. |
 | `internal/brepwallmesh/` | Chords BRep swept walls and checks clearance between their mesh loops. See general-boolean §4.4 and tessellation §5. |

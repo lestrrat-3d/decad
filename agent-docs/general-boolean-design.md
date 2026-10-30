@@ -1175,6 +1175,57 @@ at the start of step i is −(2+i), a plane across the axis at that step's
 The result is a class-B `brepPayload`, and `breprecord.Build`'s
 falsification, edge pairing and volume check run on it.
 
+#### Coaxial stepped through-bore
+
+`CutSteppedView` also admits a prism tool whose extrusion runs along the
+stepped shaft's axis and spans the shaft's full interval. The tool and shaft
+must have zero displacement and a relative rigid map whose axes match by
+signed permutation. That map must re-express every outline coordinate and
+both axial levels exactly, including when the tool extrudes opposite the shaft
+axis. The tool must have one natural, closed line/arc/circle outline and no
+holes. Every segment's conservative exact box must fit strictly inside the
+smallest step circle, so the bore cannot touch an outer cylinder or a
+shoulder.
+
+For each step, `prismcells.ResolveCut` asks Sketch to prove that the tool
+outline becomes one new hole in the recorded circle, with zero scene charge.
+The B-rep keeps the source outer cylinder for each step, the reversed bore
+loop as its inner wall, the cut profiles on both end caps, and the unchanged
+annulus at every shoulder. `breprecord.Build` checks the resulting face
+pairing and volume. A blind tool, breakout, touching box, displaced pair,
+incompatible frame, or unsupported curve misses this route and keeps the
+existing fallback.
+
+#### Coaxial linear Revolve through-bore
+
+`Cut` admits a full solid Revolve with one whole-line meridian, one axis
+edge, two radial ends and a monotone axial outer run. The outer run may
+include slopes, cylinders and radial shoulders; at least one wall must slope.
+The prism tool has one natural closed line/arc/circle section and no holes.
+Both caps must coincide exactly with the Revolve ends. Both sweep signs are
+accepted. Axis, section and level displacement, blends, draft roles, rounded
+relative maps and insufficient radial clearance miss the route. Circular
+segments use their complete carrier for the conservative clearance proof.
+
+Sketch certifies the two nested cap regions. A fresh body keeps the Revolve
+walls and source origins, adds two holed end faces and inward prism walls, and
+checks edge incidence and vertex links. Its volume and mass moments subtract
+the tool from the Revolve with bounded arithmetic. The tessellator builds
+both source meshes and projects their cap vertices onto the common exact cap
+planes for its proof. It replaces their caps with shared-rim annuli, audits
+the source and combined facets under the projection displacement, and adds
+the resulting area and swept-volume allowances to the source mesh bounds.
+The facet audit uses a bounded spatial candidate scan.
+The projection changes only the coordinate omitted by the cap's 2D chart, so
+the virtual cap triangulation uses the same chart points and shared rim
+indices as the held mesh. The projected source caps share the certified plane;
+their nested sections make the virtual result the regularized source-mesh
+difference. The source and result vertex homotopies preserve embedding under
+the expanded facet audits. Mesh and projection allowances are converted from
+world lengths to local radii through the frame's lower length factor.
+Folded outer runs, cone-crossing tools and blind tools remain outside this
+route.
+
 The class-B result of a plain shaft is the `brepPayload` an Extrude shaft
 gives: the full-length D-flat and keyway of
 `apitest/revolve_shaft_class_b_test.go` measure the same value and bound bit
@@ -1837,6 +1888,13 @@ are relations, never literals.
   three-step meridians and misses rims on both sides of the axis, an
   overhanging rim, equal neighbouring rims, slanted risers, an extra riser
   and a spike along the axis.
+- **B coaxial stepped bore**: a five-step Revolve cut by a full-length D tool,
+  plus two-step round, rectangular, translated and antiparallel D bores, builds
+  without a Faceted face, has the expected removed volume, and passes
+  `VerifyAll` (`apitest/revolve_stepped_shaft_bore_test.go`). A blind tool,
+  a tool whose box leaves the narrowest circle, a displaced tool, a holed tool
+  and a non-permutation section frame miss the exact route
+  (`internal/classbgeom/stepped_bore_test.go`).
 - **B blind cross hole**: a drill ending at y = 11 inside the box builds with
   8 faces and volume within its bound of `16000 − 9π·11`.
 - **B tool crossing a wall**: a 10×10 slot ending inside the box and crossing

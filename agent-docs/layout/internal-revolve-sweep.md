@@ -32,5 +32,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/revolvemesh/` | Revolve rings, cells, caps, cap frames, construction and area proofs, quarter-turn cap-rim blend stations, faceted mesh and bounds, and sector-bore cap fans, station steps and projected patches. |
 | `internal/revolvetess/` | Assembles Revolve and chain Sweep angular meshes over topology nodes, including retries, sheet and solid audits, and proof publication. See tessellation §8–§11 and sweep §15.8–§15.9. |
 | `internal/revolveplan/` | Revolve and chain records, node builders, mesh walks, pair gates and complete ring proof. Root `revolvePayload` aliases its record. See evaluator §6, §8; general-boolean §3; surface-intersection §2.1; revolve-axis. |
+| `internal/revolvebore/` | Operand gates for an axial prism bore through a Revolve. |
+| `internal/revolveboretess/` | Cap rim extraction and exact held-plane checks for Revolve bore meshes. |
 | `internal/revolvesampling/` | Revolve meridian junctions, stations, samples and section readings. |
 | `internal/revolveproof/` | Meridian envelopes, facet budgets, circular and fitted-spline meridian volume charges, cell bounds, chain-arc source density, and point-Loft sector source contacts, root, seat and exterior-path proofs. See tessellation §8–§11, sweep §15.9, revolve-loft-sector and revolve-axis. |
