@@ -102,8 +102,19 @@ func Join(ctx context.Context, budget *proofbound.WorkBudget, va, vb Operand,
 	for k := 0; k+1 < len(levels); k++ {
 		lo, hi := levels[k], levels[k+1]
 		region, ok, err := st.slabRegion(ctx, reach[k][0], reach[k][1])
-		if err != nil || !ok {
+		if err != nil {
 			return nil, false, err
+		}
+		if !ok {
+			if reach[k][0] >= 0 && reach[k][1] >= 0 {
+				// The merge of a slab both operands reach did not close into
+				// one loop, such as two separate bosses on a plate. The brep
+				// build keeps several regions per slab and runs its own
+				// scene, void, apart and merge checks; its miss is the mesh
+				// path.
+				return st.brep(ctx, levels, reach)
+			}
+			return nil, false, nil
 		}
 		sp.Slabs = append(sp.Slabs, stackedrecord.Slab{Regions: []profileRecord{region},
 			Z0: lo.Held, Z1: hi.Held, Z0Delta: lo.Delta, Z1Delta: hi.Delta,

@@ -21,15 +21,18 @@ import (
 )
 
 // This file builds agent-docs/general-boolean-design.md §3 A1's brep result
-// from admitted operand slabs. It handles both operands that already
-// require a BRep and interfaces that clean nesting cannot state as a
-// stacked-prism record, such as a flush or crossing boss.
+// from admitted operand slabs. It handles operands that already require a
+// BRep, slabs whose records stay apart (separate bosses on a plate), and
+// interfaces that clean nesting cannot state as a stacked-prism record, such
+// as a flush or crossing boss.
 //
 // Every 2D answer is a private scene's: a slab both operands reach arranges
-// every record reaching it and its regions are the select-all merge's loops;
-// each interface arranges every record reaching the slab below or above it
-// and prismcells.ClassifyRegions names the cells on each side, so the
-// exposed floors and ceilings are cells, recorded as sketch returned them.
+// every record reaching it and its regions are the select-all merge's loops,
+// proven apart when there are several; each interface arranges every record
+// reaching the slab below or above it and prismcells.ClassifyRegions names
+// the cells on each side, so the exposed floors and ceilings are cells,
+// recorded as sketch returned them. A union floor round separate bosses is
+// one cell with a hole per boss, whose rings must not touch.
 // An operand is a prism, a stacked prism, or an A1 result read through the
 // slabs it keeps (brepStack). decad then only restates what the scenes recorded: every
 // junction becomes one canonical vertex (a line's exact level, or the one
@@ -374,7 +377,8 @@ func (b *ubBuild) charge(sc *ubScene) error {
 // slabRegions is one result slab's regions: one operand's records verbatim
 // where the other does not reach, else the select-all merge's loops over
 // every record reaching the slab (prism-boolean §4.2 with its enclosed-void
-// check, A5's several disjoint loops, §6's audit per loop).
+// check, A5's several loops proven apart by prismcells.ProveGroupApart with
+// its walk charge, §6's audit per loop).
 func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]profileRecord, error) {
 	refsA, refsB := b.refs(false, b.reach[k][0]), b.refs(true, b.reach[k][1])
 	var verbatim []ubRef
@@ -441,6 +445,19 @@ func (b *ubBuild) slabRegions(ctx context.Context, k int) ([]profileRecord, erro
 			return nil, err
 		}
 	}
+	if len(out) > 1 {
+		// Several loops are separate lumps of the slab only when they are
+		// apart as well as disjoint (A5): two tangent boss circles close as
+		// two whole loops that meet at a point no loop names.
+		apart, walk, err := prismcells.ProveGroupApart(ctx, b.st.budget, out)
+		if err != nil {
+			return nil, err
+		}
+		if !apart {
+			return nil, errUBMiss
+		}
+		b.walk = math.Max(b.walk, walk)
+	}
 	return out, nil
 }
 
@@ -455,7 +472,7 @@ func (b *ubBuild) cutSlabRegion(sc *ubScene) ([]profileRecord, error) {
 		return nil, errUBMiss
 	}
 	if sc.matter == nil {
-		matter, resolved, err := prismcells.ClassifyRegionsWithHoles(b.st.budget, sc.tags, sc.profiles)
+		matter, resolved, err := prismcells.ClassifyRegions(b.st.budget, sc.tags, sc.profiles)
 		if err != nil {
 			return nil, err
 		}
@@ -537,7 +554,10 @@ func sameRegion(budget *proofbound.WorkBudget, a, b profileRecord) (bool, error)
 // record reaching the slab below or the slab above it, each cell's
 // membership in every record read by prismcells.ClassifyRegions, and the
 // cells inside some record of one side and none of the other recorded as
-// that side's exposed faces. A stacked operand's equal regions on both sides,
+// that side's exposed faces. A union's exposed cell with holes, such as a
+// plate's floor round separate bosses, becomes one planar face with those
+// holes when prismcells.RingContact finds no two of its rings touching; a
+// cut's holed cell misses. A stacked operand's equal regions on both sides,
 // outer and holes alike (sameRegion), enter once.
 func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 	type side struct {
@@ -598,11 +618,9 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 		return err
 	}
 	if sc.matter == nil {
-		classify := prismcells.ClassifyRegions
-		if b.cut {
-			classify = prismcells.ClassifyRegionsWithHoles
-		}
-		matter, resolved, err := classify(b.st.budget, sc.tags, sc.profiles)
+		// An exposed floor round a boss standing inside it is a cell with
+		// holes, for a union as for a cut.
+		matter, resolved, err := prismcells.ClassifyRegions(b.st.budget, sc.tags, sc.profiles)
 		if err != nil {
 			return err
 		}
@@ -639,6 +657,25 @@ func (b *ubBuild) interfaceFaces(ctx context.Context, k int) error {
 				return err
 			}
 			return errUBMiss
+		}
+		if len(region.Holes) != 0 && !b.cut {
+			// A union floor round separate bosses: each boss footprint is a
+			// hole of the floor cell. Rings that touch would pinch the face.
+			touch, err := prismcells.RingContact(b.st.budget, p)
+			if err != nil {
+				return err
+			}
+			if touch {
+				return errUBMiss
+			}
+			outer, holes, err := b.regionLoops(region)
+			if err != nil {
+				return err
+			}
+			if err := b.geom.AddFaceRegion(outer, holes, k, below); err != nil {
+				return err
+			}
+			continue
 		}
 		loop, err := b.geom.LoopOf(brepgeom.Profile{Outer: region.Outer, Holes: region.Holes}, b.st.budget)
 		if err != nil {

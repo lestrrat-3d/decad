@@ -2854,6 +2854,9 @@
 10	0.03	TestStackBrepScaledAtVerified
 10	0.02	TestStackedOpposedSeparatePocketsStayStacked
 10	0.00	TestStackedUnionBrepChainedDenotedLevel
+10	0.00	TestStackedUnionSeparateBosses
+10	0.00	TestStackedUnionSeparateBossesFillet
+10	0.00	TestStackedUnionTouchingBosses
 10	0.01	TestStitchClosesABoundedPatchedWallWithChargedVolumeBound
 10	0.01	TestStitchPlacedSolidTessellateBoundReadsVertexBound
 10	0.04	TestStitchRefusesNestedBoxesWithAGap

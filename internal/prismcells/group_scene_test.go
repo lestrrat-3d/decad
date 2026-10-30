@@ -89,3 +89,61 @@ func TestCurvedCrossingsCut(t *testing.T) {
 		})
 	}
 }
+
+// sceneBosses is several circles of radius 3 about (x, 0), one per x.
+func sceneBosses(xs ...float64) func(*sketch.Sketch) []sketch.Entity {
+	return func(s *sketch.Sketch) []sketch.Entity {
+		var out []sketch.Entity
+		for _, x := range xs {
+			out = append(out, sceneCircle(x, 3)(s)...)
+		}
+		return out
+	}
+}
+
+// TestRingContact reads the holed cell of a 20 mm square floor round
+// radius-3 bosses: bosses apart from each other and from the outline pass. A boss
+// tangent inside the outline refuses: the arrangement leaves the tangency
+// uncut and returns a valid cell with whole rings. Two tangent bosses refuse:
+// the arrangement cuts one circle at the tangency and returns one hole ring
+// through that point twice.
+//
+// Shown red: dropping RegionContact from RingContact passes tangent-outline,
+// and dropping the repeated-vertex reading passes tangent-bosses.
+func TestRingContact(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name  string
+		b     func(*sketch.Sketch) []sketch.Entity
+		holes int
+		want  bool
+	}{
+		{name: "one-apart", b: sceneBosses(0), holes: 1},
+		{name: "two-apart", b: sceneBosses(-4, 4), holes: 2},
+		// The circle about (7, 0) touches x = 10 at (10, 0).
+		{name: "tangent-outline", b: sceneBosses(7), holes: 1, want: true},
+		// The two circles touch at the origin.
+		{name: "tangent-bosses", b: sceneBosses(-3, 3), want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			profiles, _ := curvedScene(t, sceneRect(-10, -10, 10, 10), tc.b)
+			var floor *sketch.Profile
+			for _, p := range profiles {
+				if len(p.Holes) == 0 {
+					continue
+				}
+				require.Nil(t, floor, "one cell carries the holes")
+				floor = p
+			}
+			require.NotNil(t, floor)
+			if tc.holes != 0 {
+				require.True(t, floor.Valid)
+				require.Len(t, floor.Holes, tc.holes)
+			}
+			got, err := RingContact(proofbound.NewWorkBudget(t.Context()), floor)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}

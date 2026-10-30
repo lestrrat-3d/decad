@@ -546,6 +546,43 @@ func RegionContact(budget *proofbound.WorkBudget, tags map[sketch.Entity]Origin)
 	return false, nil
 }
 
+// RingContact reports whether the rings of one arranged cell meet: its outer
+// and a hole, two holes, or one ring passing a point twice. Any such point
+// pinches the face there. It reads three ways, each only refusing:
+//
+//   - a walked vertex (an edge's Polyline start, as ChainClosedLoops keys it)
+//     that starts two of the cell's edges: two tangent boss circles the
+//     arrangement cut at their tangency come back as one hole ring through
+//     that point twice;
+//   - one entity walked by two rings;
+//   - RegionContact over the cell's entities, each tagged with its ring: the
+//     arrangement cuts neither a tangency nor a line at another line's
+//     endpoint lying on it, so a boss circle tangent inside a plate's outline
+//     comes back as a hole touching the outer at a point the cell never names.
+func RingContact(budget *proofbound.WorkBudget, cell *sketch.Profile) (bool, error) {
+	tags := map[sketch.Entity]Origin{}
+	starts := map[[2]float64]struct{}{}
+	for r, ring := range append([][]sketch.BoundaryEdge{cell.Outer}, cell.Holes...) {
+		for _, e := range ring {
+			if err := budget.Step(); err != nil {
+				return false, err
+			}
+			if len(e.Polyline) == 0 {
+				return true, nil
+			}
+			if _, twice := starts[e.Polyline[0]]; twice {
+				return true, nil
+			}
+			starts[e.Polyline[0]] = struct{}{}
+			if have, ok := tags[e.Entity]; ok && have.Region != r {
+				return true, nil
+			}
+			tags[e.Entity] = Origin{Region: r}
+		}
+	}
+	return RegionContact(budget, tags)
+}
+
 // lineContactBand is the parameter slack of RegionContact's line reading, a
 // fraction of the segment's length as curvedPairContact's is. A wider reading
 // only refuses more.
