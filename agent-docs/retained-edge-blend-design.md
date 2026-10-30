@@ -94,7 +94,8 @@ Table RR lists the edges a blend can be built on. The others are refused.
 | **R4** | `Arc3` | as R2, open, ending on planes parallel to the axis | as R2 | ends on two distinct retained planes; equal or two-distance chamfer; an arc whose ends meet one face is refused |
 | **R5** | `Line3` of retention E10 | two retained `Cylinder`s with parallel axes, ending on retained planes normal to the axes | `Cylinder` / `Plane` | reach §8; equal or two-distance chamfer |
 | **R6** | `Circle3` of retention E5, closed | retained `Plane` and a retained `Sphere` whose tag is exactly its record (§4.5) | `Torus` / `Cone` | §4.5; equal or two-distance chamfer |
-| **R7** | closed saddle, any held curve | a retained `Cylinder` shaft (material inside) and a retained `Cylinder` bore of radius `r` (material outside), unit coordinate axes on two coordinates meeting exactly, `2r² < R²` | none / ruled band held `Faceted` | §4.9; equal-setback `Chamfer` only, by a mesh `Cut` |
+| **R7** | closed saddle, any held curve | a retained `Cylinder` shaft (material inside) and a retained `Cylinder` bore of radius `r` (material outside), unit coordinate axes on two coordinates meeting exactly, `2r² < R²` | (next row) / ruled band held `Faceted` | §4.9; equal-setback `Chamfer`, by a mesh `Cut` |
+| **R7 fillet** | the R7 saddle, the ball inside the shaft and outside the bore (σ = (−1, +1)) | as R7 | pipe held `Faceted` / (row above) | §4.10; `Fillet` by a rewrite of both walls, `2ρ < R − r` |
 
 Refused, with the reason a caller can act on:
 
@@ -104,10 +105,13 @@ Refused, with the reason a caller can act on:
   vocabulary has is `NURBSSurface`, an opaque marker with no geometry to carry
   a proof (spline §7). The rim keeps its published ellipse and the blend
   refuses (SR1).
-- **A `Fillet` of R7's saddle, any other `Cylinder`/`Cylinder` rim with crossing
-  axes, an open (`Arc3`) plane-sphere rim, a `Cone` or `Torus` face.** The ball
-  rolled between crossing cylinders sweeps a canal surface about a quartic, which
-  the vocabulary cannot carry. No Table RR row; SR1.
+- **Any `Cylinder`/`Cylinder` rim with crossing axes outside R7 and its fillet
+  row (a pin's root, where the ball lies outside both cylinders; two crossing
+  bores; a bore off the shaft's axis or off the coordinate axes; `2r² ≥ R²`), an
+  open (`Arc3`) plane-sphere rim, a `Cone` or `Torus` face.** The ball rolled
+  between crossing cylinders sweeps a canal surface about a quartic, which the
+  vocabulary cannot carry as a tag, and only R7's sign pattern has a proven
+  faceted pipe (§4.10). No Table RR row; SR1.
 - **A rim with a face that is not retained,** or whose edge is a chord chain
   because retention §10 declined it. SR1.
 
@@ -368,7 +372,7 @@ inside what `Verify` accepts for a box with all twelve edges rounded.
 Refusals (SR2): a selected edge no longer than `2r`, a face edge at a corner no longer than `r`, a corner whose faces
 are not mutually perpendicular retained planes, and a rebuilt face whose outline is not a simple polygon.
 
-### 4.9 R7, the saddle of a cross hole (Chamfer only)
+### 4.9 R7, the saddle of a cross hole (Chamfer)
 
 R7 is the closed mouth a perpendicular bore leaves in a turned shaft. It is
 built by `internal/retainedblend/saddle.go` (recognition) and `saddle_tool.go`
@@ -380,10 +384,11 @@ does not give equal setbacks: its setback along the bore wall varies by
 `R − √(R² − r²)` around the mouth (0.46 mm for R = 10, r = 3).
 
 **Recognition (tags only).** `looksLikeSaddle` admits a closed edge
-(`Start == End`) with the `Convex` flag set, between two faces with
-`RetainedTag`, `TagDeparture == 0` and `tagIsRecord`, both `Cylinder`. Exactly
-one face is `Reversed`: the other is the shaft (material inside, radius `R`),
-the reversed one the bore (material outside, radius `r`). Each axis is a unit
+(`Start == End`) between two faces with `RetainedTag`, `TagDeparture == 0` and
+`tagIsRecord`, both `Cylinder` and of different radii: the larger is the shaft
+(radius `R`), the smaller the bore (radius `r`). The ball's sides must be
+σ = (−1, +1) (§4.10): with the `Convex` flag set, the shaft is not `Reversed`
+(material inside) and the bore is (material outside). Each axis is a unit
 coordinate axis (one component ±1, two exactly 0), the two on different
 coordinates, and the origins agree exactly on the third coordinate, so the axes
 meet at right angles at a point `T` read from the tags. `2r² < R²` holds in
@@ -476,6 +481,162 @@ Revolve shaft, and r/R = 0.3 (d = 1.5) on an Extrude shaft under each
 assignment of the two axes to world coordinates and under a translation. The cell proofs also pass at r/R = 0.75;
 recognition stops at `1/√2`, where the opening stops being one graph over the
 shaft's angle.
+
+### 4.10 R7 fillet, the rolling ball in a cross hole's mouth
+
+R7's saddle takes a `Fillet` where the ball lies inside the shaft and outside
+the bore, which is the convex mouth a cross hole leaves. It is built by
+`internal/retainedblend/saddle_fillet.go` (the rewrite), `internal/saddlecanal`
+(the exact fillet and its cell proofs) and `saddle.go` (recognition), as a
+rewrite of the held mesh near the mouth in the manner of §5. A Cut by a tool
+would leave a crease where the true fillet meets each wall tangentially (§12).
+
+**Recognition (tags only).** `saddleTags` reads the edge as §4.9 does, and
+takes the larger cylinder (radius `R`) and the bore (radius `r`) by their radii.
+Each wall gets the side σ of the rolling ball: −1 inside its cylinder, +1
+outside. The ball lies in the material at a convex edge and in the void at a
+concave one, and a face's material lies inside its cylinder unless the face is
+`Reversed`. Both routes build σ = (−1, +1) only, the convex mouth, and §4.9's
+chamfer reads the same pattern. A pin's root (+1, +1) and every other pattern
+stay SR1. The pose and the seam are read as in §4.9.
+
+**Size (SR3).** With `R' = R − ρ` and `r' = r + ρ`, the ball's centre lies on
+both offset cylinders, and they meet in one closed loop per mouth exactly when
+`r' < R'`, i.e. `2ρ < R − r`, decided in rationals. Otherwise the call refuses
+`ErrDegenerate` "no ball of that radius touches both walls of the saddle". For
+R = 10 and r = 3 the bound is ρ < 3.5.
+
+**Fillet.** In the local pose (shaft `x² + y² = R²` about z, bore `y² + z² = r²`
+about x, mouth at x > 0) the centre curve is
+`c(θ) = (√(R'² − r'²cos²θ), r'·cos θ, r'·sin θ)`. The ball touches the shaft
+along `a1 = (c_x, c_y, 0)/R'` and the bore along `a2 = −(0, cos θ, sin θ)`. Both
+are normal to `c′`, and the arc between them has angle φ with
+`cos φ = −r'·cos²θ / R'`, which stays below π and is widest at θ = 0. The
+tangency curves are `T1 = c + ρ·a1` on the shaft, the curve
+`(R'·y/|p_xy|)² + z² = r'²`, and `T2 = c + ρ·a2` on the bore, the curve
+`x² + r'²y²/|p_yz|² = R'²`, which crosses each generator of the bore once at
+the bore angle θ. The fillet is the pipe `F(θ, t) = c(θ) + ρ·w/|w|`. The
+direction `w` blends `a1` into the bisector `b = (a1 + a2)/|a1 + a2|` over
+`t ∈ [0, 1/2]` and `b` into `a2` over `[1/2, 1]`, each half as `(1 − τ)·from +
+τ·to`. Splitting at the bisector keeps the parameter's angular speed within a
+factor 1.4 of uniform, where the single blend from `a1` to `a2` varies by a
+factor 4.
+
+**Stations and rows.** The strip has `N = 256` stations `θ_k = 2πk/N` and the
+rows `t_j` that split each half of the widest arc, `φ* = arccos(−r'/R')`, into
+equal angles no larger than `2·arccos(1 − 2⁻¹⁰)`. The sagitta over that angle is
+`τ = 2⁻¹⁰·ρ`. The rows are shared by every station: at R = 10, r = 3, ρ = 0.5
+there are 24 rows and the strip holds 12,288 facets per mouth.
+
+**Walls.** The shaft wall is cut out of a window `W`, a 64-gon in the (y, z)
+projection. Its corners lie on `(R'/R)²y² + z² = s²` with `s·cos(π/64) =
+r'·(1 + 1/32)`, so `W` holds T1 with a margin of `r'/32`. Each side of `W` is a
+plane parallel to the bore's axis, so it cuts every flat held facet of the
+shaft along a straight segment: the clip is exact. The part of a facet outside
+`W` runs along the facet's boundary outside `W` and, from each point where that
+boundary enters `W`, clockwise along `W`'s boundary through the corners inside
+the facet to the next crossing, which must be an exit. Ear clipping in the
+projection triangulates each part. The cut ring is the chain of those arcs
+around `W`, not a sort by angle. Two crossings within `64·ulp·scale` of each
+other, across a held sliver, are one vertex. The bore is cut by the plane
+`x = X_w = √(R'² − r'²) − r'/32`, inside T2's least x. A held vertex within
+10⁻⁶ mm of a cut, or a window corner as near a held edge, turns the window
+(nine offsets of its corners) or moves the plane (four places), else SR5. A
+cut along a curve of T1's own family would miss facets: the shaft's held facets
+are strips from the seam to the shaft's ends (168 strips 80 mm long on the
+R = 10 Revolve), T1 runs almost along the generators at its two ends, and such
+a curve crosses a strip between the strip's vertices.
+
+**Bands.** On each wall a zipper of triangles joins the held cut ring to the
+ring of exact tangency points at the stations: on the shaft both rings are
+ordered by the angle of `((R'/R)·y, z)`, on the bore by the angle about its
+axis. T1 sits at angle θ_k in the first order and T2 in the second. A band
+facet must face its wall's outward direction with a cosine above 10⁻⁹. On the
+shaft it must also face along the bore's axis (+x), so its (y, z) projection
+keeps its orientation. On the bore it must face the bore's axis from the
+direction of each of its vertices, so its radial projection onto the bore keeps
+its orientation. With both rings running once around, either test embeds the
+band. A band facet lies within `d + R·Δ²/8` of its wall, `d` the largest
+distance of its vertices from the wall (a cut vertex's bound, or the strip's
+sample error for a tangency point) and Δ the spread of its vertices' angles
+about the wall's axis widened by `2d/(R − d)`; the band's bound is the largest
+over its facets.
+
+**Strip.** Consecutive stations and rows join in quads of two triangles wound
+toward `+u`, swapped for a left-handed pose. Rows 0 and m are the T1 and T2
+rings the bands share. The fillet is an untagged `Faceted` face with role
+`fillet(k)`, as §4.9's band is.
+
+**Proofs (each failure refuses `ErrUnsupported`).**
+
+1. Cells (`saddlecanal.Prove`): over each station cell and row cell,
+   second-order interval jets of `F` in outward-rounded float arithmetic give
+   mean-value enclosures about the cell's midpoint, from sine and cosine
+   enclosures of the exact turns k/N and (2k + 1)/(2N). Three tests must hold:
+   - `det[F_θ, F_t, u] > 0`, so the pipe is regular and wound as for a small
+     ball: its envelope is the surface the ball sweeps;
+   - `∂Φ/∂θ > 0`, with Φ the angle of `(F_y, F_z)` about the bore's axis, so
+     every row runs once around the bore;
+   - `∂(Φ, G)/∂(θ, t) > 0`, with `G = (R − |F_xy|) − (|F_yz| − r)` the depth
+     into the shaft less the distance from the bore. At a fixed Φ, `G` then
+     grows with `t`, so `(Φ, G)` determines `(θ, t)` and the strip is embedded.
+     The radius about the bore's axis cannot replace `G`: its t-derivative
+     vanishes on T2, where the fillet touches the bore.
+
+   A cell too wide to decide a test splits up to 8 × 8. At R = 10, r = 3,
+   ρ = 3.4, where `r' < R'` holds, the pipe folds near θ = 0 and the first test
+   refuses: "the saddle fillet's cell at station 0 folds: the pipe is not
+   regular there".
+2. Chord ε: a point of a held strip triangle pairs with `F` at the same
+   parameters. Linear interpolation on a triangle of a cell of widths h and k
+   errs by at most `|F_θθ|·h²/8 + |F_θt|·h·k/4 + |F_tt|·k²/8` per coordinate,
+   with the second partials enclosed over the cell. Each held vertex is compared
+   with the point enclosure at its own station and row. ε is the largest bound
+   plus that sample error, both read as 3D distances.
+3. Areas: the fillet's, by the cells' mean-value integrals. The shaft loses
+   `A(r', R') − A(r, R)` with `A(a, b) = ∫₀^{2π} R·a²·sin²θ / (b·√(1 − (a/b)²cos²θ)) dθ`,
+   the area of the ellipse `(b/R)²y² + z² ≤ a²` of the (y, z) projection lifted
+   onto the shaft. The bore loses `∫₀^{2π} r·(√(R² − r²cos²θ) − √(R'² − r'²cos²θ)) dθ`.
+   Each integral is enclosed station cell by station cell.
+4. The band facet tests above.
+5. Clearance: `checkMouthClear` refuses when a facet of a face other than the
+   two walls, or a segment of another boundary loop of either wall, comes
+   within its bound plus slack of the box of the window, the bore's cut-off end
+   and the fillet: "another face of the body comes within the saddle fillet's
+   reach". Inside that box the solid is the region inside the shaft and outside
+   the bore.
+6. `checkStripClear` with both bands as taken ranges, and the strip's facets
+   against each other.
+7. The held audit of the rebuilt mesh.
+
+**Claim F.** Let `H` be the held solid with `VolSymDiff = v`, `H'` the rewritten
+one and `S'` the true filleted solid. Outside the window, the bore's part beyond
+`X_w` and the fillet, `H'` equals `H` and `S'` equals `S`: proof 5 keeps every
+other feature out of that box. Inside it `S'` is bounded by the shaft over `W`
+less T1, the fillet, and the bore from T2 to `X_w`. `H'` is bounded there by the
+shaft band, the strip and the bore band, each within ε of its exact surface,
+where ε is the largest of the strip's and the two bands' bounds and every new
+vertex states it. So `VolSymDiff` grows by `ε·(A_strip + A_fillet + A_bands +
+A_bands*)`, the held and exact areas, plus rounding. `A_bands*` is bounded on
+the shaft by the cut ring's projected area less T1's ellipse `π·r'²·R/R'`, times
+`R/√(R² − Y²)`, Y the ring's largest `|y|`, and on the bore by `2πr·(R' − X_w)`.
+`AreaSlack` grows as §6.3 states, with the exact change the fillet's area less
+the two walls' (proof 3), read at the end of its interval farther from the held
+change.
+
+**Result.** The walls keep their `Cylinder` tags; each fillet is a `Faceted`
+face. On the R = 10, r = 3 shaft the two-mouth result holds about 30,000 facets
+at ρ = 0.5, and `Tessellate(…, VerifyAll)` verifies its boundary and volume.
+
+**Reach.** Built and checked: a Revolve shaft with r/R = 0.3 (ρ = 0.5, 1.5) and
+0.7 (ρ = 0.5), a `Hole` through the shaft's wall (ρ = 1.5), and an Extrude
+shaft (ρ = 1.5) under each assignment of the two axes to world coordinates and
+under a translation. The cell proofs also pass at r/R = 0.8 and at r/R = 0.3
+with ρ = 3.0, where ε grows to 0.027 mm. The removed volume per mouth, from the
+tube-coordinate integral of `apitest/retained_saddle_fillet_test.go`, is
+1.635978 mm³ at ρ = 0.5, 7.317201 at ρ = 1.0 and 18.593228 at ρ = 1.5 for
+R = 10, r = 3. A rolling-ball grid (a point is removed when it is material and
+farther than ρ from the material eroded by ρ) agrees within 0.5 % and 0.1 %.
 
 ## 5. Construction
 
@@ -657,9 +818,9 @@ of that computation.
 |---|---|---|---|
 | **SR1** | an edge outside Table RR: a curve that is not `Line3` or `Circle3`, a face that is not `RetainedTag`, a face with `NormalBound != 0` or a denoted patch whose tag is not exactly the surface it denotes (for R6's sphere, its record's exact centre and radius, §4.5), or a `Convex` flag that disagrees with §4.1 | body exists; no admitted source for the selected edge | `ErrUnsupported` (reach SX9's text) |
 | **SR2** | two selected edges share a vertex and are neither a mitre run (§4.7) nor corners of perpendicular faces (§4.8), or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
-| **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, a chamfer distance of zero or below, or an R6 setback that reaches the axis or runs past the sphere's pole (§4.5) | no regular blend | `ErrDegenerate` |
+| **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, a chamfer distance of zero or below, an R6 setback that reaches the axis or runs past the sphere's pole (§4.5), or an R7 fillet with `2ρ ≥ R − r`, where no ball touches both walls (§4.10) | no regular blend | `ErrDegenerate` |
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
-| **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or a chain's sense or `G`'s turn at the vertex is undecided (§5.0), or `G` turns the wrong way: a concave edge needs a reflex corner of `G`, or a convex one where `A` or `B` is reflex at the vertex, and a convex edge outside the R1 route (plane–cylinder, arc, cylinder–cylinder, mitre run) needs a convex one; or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face other than an R3 wall that extends past the vertex beside a plane that trims there (§5.0), or another part of `G` comes within the blend's reach of the vertex, or a vertex of an R3 wall lies within its bound of an end plane the band is clipped by, or, unless it lies outside such a plane, of the band's generator (§4.3), or the end cap an R3 end face takes is not a simple polygon (§5.0) | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
+| **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or a chain's sense or `G`'s turn at the vertex is undecided (§5.0), or `G` turns the wrong way: a concave edge needs a reflex corner of `G`, or a convex one where `A` or `B` is reflex at the vertex, and a convex edge outside the R1 route (plane–cylinder, arc, cylinder–cylinder, mitre run) needs a convex one; or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face other than an R3 wall that extends past the vertex beside a plane that trims there (§5.0), or another part of `G` comes within the blend's reach of the vertex, or a vertex of an R3 wall lies within its bound of an end plane the band is clipped by, or, unless it lies outside such a plane, of the band's generator (§4.3), or the end cap an R3 end face takes is not a simple polygon (§5.0), or another feature comes within an R7 chamfer's or fillet's reach, or an R7 fillet's cell, window, cut ring or band test fails (§4.9, §4.10) | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
 | **SR6** | the held mesh disagrees with the exact vertex of its three tags by more than the vertex bound plus slack (§6.3) | the record and the mesh do not describe one solid | `ErrUnsupported` |
 | **SR7** | a facet the rewrite keeps outside the new strip meets a strip facet it shares no vertex with (the strip clearance of retained-modify-reach §5.6, run before the build), or the rewritten mesh fails the held audit (watertight, shells nested with consistent signs; the audit tests no facet pair for intersection) | the result is invalid | `ErrDegenerate` when the audit proves a face inside out (modify S8), else `ErrUnsupported` |
 
@@ -672,10 +833,9 @@ only, never from held geometry. The reasons are a face with no retained surface
 (faceted), a free-form surface, a face without a retained tag, a tag with a
 stated departure or one not proven to be exactly its revolve record, two retained cylinders
 whose axes are not parallel (the canal surface of SR1), a retained cone or
-torus, and otherwise the two retained kinds the edge lies between. `Unread`
-names R7's saddle by the canal-surface reason too: a `Fillet` has no class
-there, and a `Chamfer` reaches `Unread` only when some selected edge is not an
-R7 saddle (§4.9).
+torus, and otherwise the two retained kinds the edge lies between. An R7
+saddle is in a class for both blends (§4.9, §4.10), so `Unread` never names it;
+the canal-surface reason names the crossing rims outside R7.
 
 **Displaced planes.** A retained `Plane` tag may state `AxialDelta` δ, the
 proven distance of the true plane from the tag along its normal. A route never
@@ -699,7 +859,10 @@ plane with any nonzero `AxialDelta` is no chain wall, as
 Gate order: base gates of modify §4 stage 1, then SR1, SR2, SR3, SR6, SR5, SR4,
 then the construction, then SR7. R7 runs its own order (§4.9): recognition,
 the size, the seam loop, then per saddle the band proofs, the outside and
-clearance proofs and the crossing audit, then the Cut.
+clearance proofs and the crossing audit, then the Cut. The R7 fillet's order
+(§4.10) is recognition, the size, the seam loop, then per mouth the cell
+proofs, the window and the bore cut, the clearance, the wall cuts, the bands,
+the strip, `checkStripClear`, and the build's audit.
 
 ### 6.2 Clearance
 
@@ -779,7 +942,8 @@ Reach RX6's row gains a class and SX9 narrows with it.
 | any other `facetedPayload` call | SX9, unchanged |
 
 A `Chamfer` whose selected edges are all R7 saddles takes §4.9 instead: one Cut
-by a tool with a ring per saddle.
+by a tool with a ring per saddle. A `Fillet` whose selected edges are all R7
+saddles takes §4.10, one mouth at a time on the evolving mesh.
 
 The result is a `facetedPayload` with retained tags. A further `Fillet`,
 `Chamfer` or Boolean takes it like any retained body, and a placement carries
@@ -832,7 +996,9 @@ published bound, never with a pinned literal.
 | New vertex bounds | every new vertex lies within its stated bound of its exact point | skip the rounding charge: the bound is zero and the check fails |
 | Verify | `Verify` of a blended plate passes with no `Suspect` in watertightness | |
 | R7 cross-hole chamfer: Revolve shaft R = 10, pin r = 3 through it, both mouths, d = 1.5 and 0.5; pin r = 7, d = 0.5 (`apitest/retained_saddle_chamfer_test.go`) | the volume falls by twice the wedge's divergence-theorem integral (24.474 mm³ per mouth at d = 1.5, 2.460 at d = 0.5) within both bodies' bounds, and at d = 1.5 that change exceeds the bounds; the walls stay `Cylinder`, the bands read `Faceted`; on the `VerifyAll` mesh the wedge's section centroid reads outside, farther than the mesh bound, and a point 0.3 mm past the band reads inside, at 8 stations of each mouth; an Extrude shaft at d = 1.5 under the three axis assignments and a translation does the same (`TestRetainedSaddleChamferExtrudeShaft`; under `-race` the translated case only, on one mouth) | cut with `d/2`: the d = 1.5 volume and the d = 0.5 centroids fail; drop the outer foot's rotation from the held stations: the sample comparison widens `ε` and proof 4 refuses; drop the mouth-side flip or permute the pose's axes: the race-mode Extrude case refuses |
-| R7 refusals | `d > r/2` refuses; a pin moved 0.5 off the shaft's axis, a pin with r/R = 0.75 and a pin joined through the shaft refuse with the canal-surface reason; a flat milled beside a mouth refuses "another face of the body comes within the saddle chamfer's reach"; `Fillet` of the mouths keeps the canal-surface reason (`apitest/blend_refusal_names_test.go`) | drop the clearance check: the flat builds; admit a bore that is not `Reversed`: the joined pin builds; drop the exact axis meeting: the moved pin refuses with "a held seam vertex is off the two cylinders"; drop `2r² < R²`: r/R = 0.75 builds |
+| R7 fillet: Revolve shaft R = 10, pin r = 3 through it, both mouths, ρ = 1.5 and 0.5; pin r = 7, ρ = 0.5; a `Hole` r = 3 through the shaft's wall, ρ = 1.5 (`apitest/retained_saddle_fillet_test.go`) | the volume falls by twice the tube-coordinate integral of §4.10, computed by Gauss–Legendre over exact ray exits (18.593228 mm³ per mouth at ρ = 1.5, 1.635978 at ρ = 0.5), within both bodies' bounds, and at ρ = 1.5 that change exceeds the bounds; the walls stay `Cylinder`, the fillets read `Faceted`; `VerifyAll` verifies the result; on its mesh a point midway between the arc and the edge along the arc's bisector reads outside, farther than the mesh bound, and a point 0.3·ρ inside the ball reads inside, at 8 stations of each mouth; an Extrude shaft at ρ = 1.5 under the three axis assignments and a translation does the same (`TestRetainedSaddleFilletExtrudeShaft`; under `-race` the translated case only, on one mouth). Unit tests (`internal/saddlecanal/proof_internal_test.go`): the cell proofs' area intervals hold a midpoint-rule area of the fillet and Green's-theorem areas of both walls, the chord bound covers sampled held triangles, a moved held vertex raises the sample error, and ρ = 3.4 folds; `internal/retainedblend/saddle_fillet_internal_test.go` chains a cut ring through a merged sliver and reads a pose's hand | fillet with ρ/2: the ρ = 1.5 volume and the ρ = 0.5 points fail; flip σ (`R' = R + ρ`, `r' = r − ρ`): the cells refuse; drop the strip's winding swap for a left-handed pose: the Revolve result fails its audit; drop the mouth-side flip: the race-mode Extrude case puts the fillet on the far mouth and its points fail |
+| R7 fillet refusals | `ρ = 3.5` (`2ρ = R − r`) refuses `ErrDegenerate` "no ball of that radius touches both walls of the saddle"; ρ = 3.4 refuses "folds: the pipe is not regular there"; a pin moved 0.5 off the shaft's axis and a pin joined through the shaft refuse with the canal-surface reason; a flat milled beside a mouth refuses "another face of the body comes within the saddle fillet's reach" (`TestRetainedSaddleFilletRefusals`) | drop the existence test: ρ = 3.5 refuses as unsupported instead; drop the Jacobian test: ρ = 3.4 refuses at the progress test instead; drop the clearance check: the flat refuses later, "a corner of the saddle fillet's window lies on no facet of the shaft wall"; admit every σ: the joined pin refuses "the bore's cut leaves fewer than three vertices"; drop the exact axis meeting: the moved pin refuses with "a held seam vertex is off the two cylinders" |
+| R7 refusals | `d > r/2` refuses; a pin moved 0.5 off the shaft's axis, a pin with r/R = 0.75 and a pin joined through the shaft refuse with the canal-surface reason; a flat milled beside a mouth refuses "another face of the body comes within the saddle chamfer's reach"; `Fillet` of a pin's roots keeps the canal-surface reason (`apitest/blend_refusal_names_test.go`) | drop the clearance check: the flat builds; admit a bore that is not `Reversed`: the joined pin builds; drop the exact axis meeting: the moved pin refuses with "a held seam vertex is off the two cylinders"; drop `2r² < R²`: r/R = 0.75 builds |
 
 ## 10. Files and fallout
 
@@ -842,6 +1008,8 @@ published bound, never with a pinned literal.
 | `internal/facetedrecord/` | an entry that builds a payload from new vertices, triangles, groups and bounds; no change to `Build` |
 | `internal/retainedblend/saddle.go`, `saddle_tool.go`, `internal/crossbore/saddle_tool.go` | R7 (§4.9): recognition, tool, band proof, outside and clearance proofs, the Cut |
 | `internal/brepmodify/chamfer.go` | calls `retainedblend.SaddleChamfer` with the hooks' mesher before `retainedblend.Chamfer` |
+| `internal/retainedblend/saddle_fillet.go`, `internal/saddlecanal/` | R7 fillet (§4.10): the window and bore cuts, the bands, the strip and the bounds; the exact fillet, its rows and its cell proofs |
+| `internal/brepmodify/fillet.go` | calls `retainedblend.SaddleFillet` before `retainedblend.Fillet` |
 | `fillet.go`, `chamfer.go` | call the route before SX9 for a `facetedPayload`; thin wrappers only |
 | `agent-docs/modify-reach-design.md` | RX6 row and SX9 text; the sentence in §11 about what SX9 leaves a caller proving |
 | `agent-docs/missing-features.md` | the row for faceted `Fillet`/`Chamfer` |
@@ -859,6 +1027,8 @@ published bound, never with a pinned literal.
 | B4 | R4, an open arc | as B1 for an arc with end faces |
 | B5 | R6, a closed plane-sphere rim (§4.5) | the R6 rows of §9 pass |
 | B6 | R7, the cross-hole saddle chamfer (§4.9) | the R7 rows of §9 pass |
+| B7 | R7 fillet of the convex mouth, σ = (−1, +1) (§4.10) | the R7 fillet rows of §9 pass |
+| B8 | the other sign patterns of crossing cylinders: two crossing bores, a boss's root on a shaft | a design for each pattern's walls and bands |
 
 ## 12. Rejected shortcuts
 
@@ -879,6 +1049,14 @@ published bound, never with a pinned literal.
 - **Chamfer a cross hole with a coaxial cone.** A countersink cone sets back
   unequally: along the bore wall its setback varies by `R − √(R² − r²)` around
   the mouth. R7 cuts the equal-setback ruled band instead (§4.9).
+- **Fillet a cross hole by a Cut with a tool like §4.9's.** The tool's face
+  would cut both walls at an angle. The true fillet meets each wall tangentially
+  along T1 and T2, so the Cut leaves a crease the solid does not have.
+- **Cut the shaft wall along a curve of T1's family.** The shaft's held facets
+  are long strips, and such a curve crosses a strip between its vertices: a cut
+  that reads the level at the vertices misses the strip, and a ring cut from the
+  vertex levels lies up to a facet's width (0.4 mm on the R = 10 shaft) off the
+  curve, far beyond the strip's first row. §4.10 cuts by planes instead.
 
 ## 13. Decisions the user may want to overturn
 
@@ -892,3 +1070,6 @@ published bound, never with a pinned literal.
 | R7 tool stations | `N = 1024`: two mouths cut in about 2 s, about 20,000 facets | `N = 4096`: `ε` four times smaller, about 70,000 facets and several times the time |
 | R7 cut's chain allowance | raised to the walls' held bounds and `ε` (§4.9) | keep the document's: every R7 cut on a Boolean result refuses at the chain-depth gate |
 | R7 ratio | `2r² < R²` | admit what the cell proofs pass (r/R = 0.75 builds with the gate dropped): wider reach, no checked fixture past 0.7 |
+| R7 fillet stations and rows | `N = 256`, rows for `τ = 2⁻¹⁰·ρ`: two mouths in about 0.4 s and 30,000 facets at ρ = 0.5, ε from 0.0024 mm (ρ = 0.5) to 0.0074 mm (ρ = 1.5) | `N = 1024` as §4.9: ε about a quarter, four times the facets and time |
+| R7 fillet face | untagged `Faceted`, role `fillet(k)` | a sealed `Canal` surface variant (`agent-docs/trim-graph-design.md` increment 9): a tag a reader can query, a new public type |
+| R7 fillet sign patterns | σ = (−1, +1), the convex mouth, only | the patterns of B8 |

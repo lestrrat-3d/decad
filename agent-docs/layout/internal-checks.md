@@ -76,5 +76,3 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/denotation/` | Level and curve identity certificates. See surface §5.2, §6.2. |
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
 | `internal/edgewedge/` | The material-wedge reading behind `Edge.Wedge` and the `Reflex`/`Salient` predicates, and the selector edge view that carries it. See API §6.1, §9. |
-| `internal/obliqueboss/` | Recognizes a complete oblique boss junction, admits its junction fillet and builds the mesh with its boundary, volume and area proofs. See oblique-boss-fillet design. |
-| `internal/retainedblend/` | Admits Table RR edges and tangent chains between retained faces, rewrites the held mesh into the blend or cuts an R7 saddle by a proven tool, refuses a strip that meets another facet, and bounds the area and volume change. See retained-edge-blend and retained-modify-reach designs. |

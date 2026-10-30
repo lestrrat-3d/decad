@@ -45,6 +45,7 @@ first.
 - `agent-docs/layout/internal-placement.md`: body layout and path-spacing internal packages.
 - `agent-docs/layout/operation-observability.md`: operation history and diagnostics internals.
 - `agent-docs/layout/internal-trim.md`: trim-graph internal packages.
+- `agent-docs/layout/internal-blends.md`: retained, saddle and oblique edge-blend internal packages.
 
 ## Splitting oversized agent files
 
