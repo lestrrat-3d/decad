@@ -381,7 +381,18 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		}
 		rhoMax := max(en.rim.radius, en.rim.radius+en.rim.kappa*tP)
 		dTheta := 2 * math.Acos(1-math.Min(w.tau/rhoMax, 1))
-		na := max(2, int(math.Ceil(en.span/dTheta)))
+		width := en.span
+		if fan && !fillet {
+			// A chamfer's fan columns step by chamferColumn across the widest
+			// row, so a strip triangle that also spans the shift of the rows'
+			// ends on G stays within tau of the cone (blend §6.3).
+			dTheta = chamferColumn(w.tau, rhoMax)
+			start, end := en.fanBounds(rowsM)
+			for j := range rowsM {
+				width = max(width, math.Abs(end[j]-start[j]))
+			}
+		}
+		na := max(2, int(math.Ceil(width/dTheta)))
 		for i := 0; i <= na; i++ {
 			f := float64(i) / float64(na)
 			switch {

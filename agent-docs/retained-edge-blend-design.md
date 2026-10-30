@@ -249,12 +249,16 @@ points trace, a section of a torus by a plane that is not a conic, so it stays a
 chain of exact points. The rows' tube angles start evenly spaced at the
 profile's own step and are refined until every chord of that chain in both end
 planes lies within `τ` of the curve (§6.3), so they need not stay evenly spaced.
+A chamfer's columns step by `chamferColumn`, and its rows also hold the shift of
+their ends' azimuths on each `G` to that step, so its strip stays within `τ` of
+the cone (§6.3).
 An open tangent chain whose arc ends lie on such a plane takes the same rows
 (retained-modify-reach §5.5 step 5), but only where the chain's walk decides the
 arc's end vertex. On the hole side (`κ = +1`) a pocket mouth whose 3 mm corners
-have their axes 2.75 mm from the end plane, where the rim meets the plane at the
-sine 0.40, refuses at the walk (modify-reach SX2); at 2.5 mm, sine 0.55, it
-builds (`agent-docs/missing-features.md`).
+have their axes 2.55 mm or nearer to the end plane, where the rim meets the
+plane at the sine 0.53 or less (measured at 2.55, 2.6, 2.7, 2.75 and 2.875 mm),
+refuses at the walk (modify-reach SX2); at 2.5 mm, sine 0.55, it builds
+(`agent-docs/missing-features.md`).
 
 The faces are rewritten as in R2 for the plane (a polygon on the setback arc)
 and the wall (the cut at the setback height), and as in R1 for the ends.
@@ -1086,7 +1090,8 @@ small, and with the profile's rows a hole mouth's fillet strays about 4 times
    `g = |dz/ds| / |dρ/ds|`: `tan α` on the torus, `d_B/d_A` on the cone.
 2. On a piece `[t₀, t₁]` of the profile `g` does not decrease and `X/ρ` is
    monotone, so `ψ` lies in `[atan(g(t₀)·min X/ρ), atan(g(t₁)·max X/ρ)]`,
-   inside `[0, π/2]`.
+   inside `[0, π/2]`. `certify` widens that range by the angle allowance `ε_ψ`
+   below, clamped to `[0, π/2]`.
 3. A curve from `P` to `Q` whose velocity stays in the cone of two directions
    lies in `P + cone` and in `Q − cone`: the parallelogram with diagonal `PQ`
    and sides along the two directions. No point of the piece lies farther from
@@ -1095,26 +1100,56 @@ small, and with the profile's rows a hole mouth's fillet strays about 4 times
    point of that box projects onto the chord, so the distance from the line is
    the distance from the chord.
 5. `certify` accepts a piece whose corners' computed distance `d̂` satisfies
-   `d̂ + δ ≤ τ`, with the rounding margin `δ` below, and halves any other piece,
-   up to 4,096 pieces. A chord that does not certify on every end plane has its
-   gap halved. The rows start from the profile's own count, a fillet's arc
-   sagitta within `τ` or two rows for a chamfer. The blend refuses (SR5) past
-   1,024 rows, and at once when `δ ≥ τ`, where no number of rows certifies.
+   `d̂ + δ ≤ τ`, with the margin `δ` below, and halves any other piece, up to
+   4,096 pieces. A chord that does not certify on every end plane has its gap
+   halved. The rows start from the profile's own count, a fillet's arc sagitta
+   within `τ` or two rows for a chamfer. The blend refuses (SR5) past 1,024
+   rows, and at once when `δ ≥ τ`, where no number of rows certifies. Over
+   `R` from 1 to 100 mm, `r` from 0.1 to 4 mm and `X/ρ` down to 10⁻⁶, a fillet
+   takes at most 44 rows and a chamfer at most 52.
 
 Every chord on every end plane then lies within `τ` of its arc of the end curve,
 which the bound `τ + slack` of each row vertex states. The last chord ends at
 the wall's cut vertex, whose larger bound covers that vertex's own offset from
-the exact point. A halved gap keeps the cross-section's sagitta within `τ`, so
-the strip's own chords stay within it as well. The chain route's arc ends
-(retained-modify-reach §5.5 step 5) are sized the same way, and every entry of
-the chain takes the same rows.
+the exact point. A halved gap keeps the cross-section's sagitta within `τ`. The
+chain route's arc ends (retained-modify-reach §5.5 step 5) are sized the same
+way, and every entry of the chain takes the same rows.
 
-**Rounding of the certificate.** `certify` runs in floating point, as `rowStep`
-does. Write `u = 2⁻⁵³` for the unit roundoff and `ulp = 2u`, measure every
-length from the rim's centre, and let `S = max ρ + h + max |z|` over the profile
-and `q = min X/ρ`, both read at the profile's two ends since `ρ` and `z` are
-monotone. The margin is `δ = 32·ulp·S·(1 + 1/q) = 64·u·S·(1 + 1/q)`
-(`endSection.margin`). Its budget, term by term:
+**A chamfer's strip.** A strip triangle between two rows leaves the surface of
+revolution by at most the profile's own sagitta over its rows plus
+`ρ_max·(1 − cos(Δφ/2))`, with `Δφ` the spread of its vertices' azimuths: a
+convex combination of points on the surface has a radius at least the same
+combination of their radii times `cos(Δφ/2)`, and its meridian point lies in
+the hull of the profile points. The cone's profile is straight, so only the
+azimuth term remains. The arc route joins two rows by advancing whichever
+row's next vertex comes first in its own fraction `t` of the row
+(`zipOpen`), so a triangle's three `t` lie within one column of one of the two
+rows. Each row's azimuth is linear in `t`, and two rows' azimuths at one `t`
+differ by at most the larger shift of their ends on `G₀` and `G₁`. So
+`Δφ ≤ column step + end shift`. The chain route's fan columns sit at one
+fraction of every row, which gives the same sum. A chamfer's columns step by
+`c = 2·acos(1 − τ/(4ρ_hi))` (`chamferColumn`, `ρ_hi` the profile's largest
+radius) across the widest row, and its rows are added until the end's azimuth
+`acos(h/ρ)` moves by at most `c` between neighbours (`endSection.shifts`). Then
+`ρ_hi·(1 − cos(Δφ/2)) ≤ ρ_hi·(1 − cos c) ≤ 4·ρ_hi·(1 − cos(c/2)) = τ`, by
+`1 − cos 2x = 8·sin²(x/2)·cos²(x/2) ≤ 4·(1 − cos x)`. The band next to the
+wall's cut vertices, which sit on held wall facets, takes their larger bound.
+A fillet's strip triangle spans a row gap whose sagitta is within `τ` and a
+column whose sagitta is within `τ`, plus the shift of the rows' ends; this
+section bounds no fillet strip interior below that sum.
+
+**Rounding and tilt in the certificate.** `certify` runs in floating point, as
+`rowStep` does. Write `u = 2⁻⁵³` for the unit roundoff and `ulp = 2u`, measure
+every length from the rim's centre, and let `S = max ρ + h + Z`, `Z = max |z|`,
+`ρ_lo = min ρ` and `q = min X/ρ` over the profile, all read at its two ends
+since `ρ` and `z` are monotone. `ε_G = |n_G · axis|` is the end plane's tilt off
+the axis, at most 10⁻⁹ (`readEnd`). The margin and the angle allowance are
+(`endSection.margin`, `endSection.angle`):
+
+    δ   = 32·ulp·S·(1 + 1/q) + 2·ε_G·Z·(1 + 1/q)
+    ε_ψ = 4·ulp·(1/q + S/(ρ_lo·q²))
+
+The length budget, term by term:
 
 - `ρ` and `z` from `sin` and `cos`: within `4u·S` each.
 - `X = √(ρ² − h²)`: `ρ² − h²` within `2ρ·4uS + 3uρ²`, and the square root
@@ -1122,25 +1157,45 @@ monotone. The margin is `δ = 32·ulp·S·(1 + 1/q) = 64·u·S·(1 + 1/q)`
   the curve lies within `e = (6/q + 5)·u·S` of the exact one.
 - The chord's line through two computed points moves by at most `2e` over the
   box, and the point measured against it by `e`: `3e`.
-- The tangent angles `ψlo` and `ψhi` from `atan` of a product: within `4u` each,
-  which moves a corner's height by at most `16u·L ≤ 16u·S` for a piece of
-  length `L`.
-- The distance formula: `4u·S`.
+- The corners' own arithmetic (`sin`, `cos`, `hypot` on lengths at most `S`):
+  `16u·S`. The distance formula: `4u·S`.
 - The row vertex the route places on `G` with `ringAzimuths` and `atTheta`:
   `acos` near 1 magnifies its argument's rounding by `ρ/X = 1/q`, so the
   vertex's offset relative to the centre is within `(3/q + 4)·u·S`. Its
   rounding at the body's own scale is what `slack` charges, as for every row.
+- The tilt: the route places each row's end as if `G` were parallel to the
+  axis. On the tilted plane the row's circle meets `G` at an in-plane distance
+  that differs by `ε_G·|z|` across and `ε_G·|z|·h/X ≤ ε_G·|z|/q` along the
+  plane, within `2·ε_G·Z·(1 + 1/q)`.
 
-The terms sum to at most `(21/q + 39)·u·S ≤ 64·u·S·(1 + 1/q) = δ`. So a piece
-that certifies with `d̂ + δ ≤ τ` has every exact point of the end curve within
-`τ` of the chord between the placed vertices, and the vertex bound `τ + slack`
-covers the rest. The estimate is a hand count of IEEE operations, not a
-machine proof. `TestEndSectionMarginCoversRounding` measures the `X` and vertex
-terms in 200-bit arithmetic at every row and 64 points per gap, from a plane
-through the axis down to `q = 10⁻⁶`, and finds each under `δ/4`. `δ` reaches
-`τ = 2⁻¹⁰·r` only for a blend tiny against its rim, such as `r = 10⁻⁶` on a
-1,000 mm bore whose end plane meets the wall's row at `q = 10⁻³`, which then
-refuses.
+The rounding terms sum to `3e + 20uS + (3/q + 4)uS = (21/q + 39)·u·S`, and
+`(21/q + 39)·u·S ≤ 64·u·S·(1 + 1/q) = 32·ulp·S·(1 + 1/q)` for every `q ≤ 1`, so
+`δ` covers them and the tilt.
+
+The tangent angles do not enter `δ`. `q` is computed as `X/ρ`, with relative
+error at most `δX/X + δρ/ρ + u ≤ (6/q² + 1/q + 4)·u·S/ρ_lo + u`, and
+`ψ = atan(g·q)` moves by at most half that relative error, since
+`x/(1 + x²) ≤ 1/2`. `g = tan(sπ/2)` from a rounded argument adds at most
+`π·u/q`, since `g·q/((1 + g²q²)·sin x·cos x) = q/(cos² x + q²·sin² x) ≤ 1/q`.
+With `atan` itself within `u`, the angle error is at most
+`π·u/q + (3/q² + 1/(2q) + 2)·u·S/ρ_lo + 2u ≤ 8u·(1/q + S/(ρ_lo·q²)) = ε_ψ`,
+because `S/ρ_lo ≥ 1` and `q ≤ 1`. Widening `[ψlo, ψhi]` by `ε_ψ` keeps the true
+tangent range inside the one `certify` uses, so step 3's containment holds for
+the exact curve.
+
+A piece that certifies with `d̂ + δ ≤ τ` therefore has every exact point of the
+end curve within `τ` of the chord between the placed vertices, and the vertex
+bound `τ + slack` covers the rest. The budget is a hand count of IEEE
+operations, not a machine proof. `TestEndSectionMarginCoversRounding` measures
+two of its terms in 200-bit arithmetic: the rounding of `X = √(ρ² − h²)` and
+of the placed row vertex, each against the exact point of `G` for the same
+computed `ρ` and `z`, at every row and 64 points per gap, from a plane through
+the axis down to `q = 10⁻⁶`. It finds each under `δ/4`. It does not measure the
+rounding of `ρ` and `z` themselves, of the corners' arithmetic or of the tangent
+angles. `TestEndSectionTiltCharge` measures the tilt term at `ε_G = 10⁻⁹` in
+200-bit arithmetic. `δ` reaches `τ = 2⁻¹⁰·r` only for a blend tiny against its
+rim, such as `r = 10⁻⁶` on a 1,000 mm bore whose end plane meets the wall's row
+at `q = 10⁻³`, or for a tilted plane at `q` near 10⁻⁷, and then the rows refuse.
 
 **Volume.** The new `VolSymDiff` is the old one plus `ε·(A_strip + A_true)`, with
 `ε` the largest vertex bound of the strip and `A_strip`, `A_true` the held and
@@ -1199,7 +1254,7 @@ published bound, never with a pinned literal.
 | Concave edge at a wall's foot | the plate face is reflex at each foot corner; the fill adds `L·r²(1 − π/4)`, the wall's end faces grow by the caps, `VerifyAll` passes; two foot edges together and a chamfer build as well | keep `V` out of the extended end face's loop: the mesh fails its audit |
 | Oblique end face, sketched at 45° about z and, separately, about y (no exact tool leans both ways) | the end arc is an `Ellipse3` with `SemiMinor = r` and `SemiMajor = r / |d̂ · nG|`; removed volume equals the section area times the length between the end planes measured through the section's centroid | treat `G` as normal to the edge: the volume is off by the centroid offset |
 | Rows ending on oblique planes (`apitest/faceted_retained_blend_oblique_end_test.go`): the 45° end face above at r = 2, a two-edge mitre run at r = 3, and the 45° plane of a two-edge corner on the corner route at r = 2 | 1,001 samples of the true end curve, the ellipse the cylinder cuts in that plane, lie within the mesh's `Bound` of its facets. A unit test (`internal/retainedblend/line_rewrite_internal_test.go`) projects rows onto a plane with `|d̂ · n| = 1/2`: the chord centred on the stretch direction has sagitta `r·(1 − cos h)/c` there and no other chord's is larger; spaced for the cross-section alone that is `τ/c`, spaced by `rowStep` it is `τ` | space the rows by `τ` alone in any of the three routes: its curve lies up to about 1.37 times `Bound` from the mesh; drop `c` from `rowStep`: the unit case reads `τ/c` |
-| Rows ending on an arc's offset end planes (`apitest/faceted_retained_blend_arc_end_plane_test.go`): a Ø8 bore whose axis lies `h` from the plate's face `x = 0` breaks out through it, fillet r = 4 with the wall's row meeting `x = 0` at `X/ρ` = 0.4 and 0.2 (arc route); the rounded box corner cut back so the plane's row meets the cut at `X/ρ` = 0.1, fillet r = 2.5 along the tangent chain (chain route); a pocket open through `x = 0` whose 3 mm corners' axes lie 2.5 mm from it, fillet r = 2 along the mouth's chain (chain route, hole side) | 1,001 samples of each true end curve, taken from the torus, lie within the mesh's `Bound` of its facets. Unit tests (`internal/retainedblend/arc_section_internal_test.go`) pin `tan ψ = g·X/ρ` against finite differences of a sampler that bisects each row's circle against the plane; on a plane through the axis, where the end curve is the tube's circle, `certify` refuses a chord whose sagitta `r·(1 − cos(Δα/2))` is 1.01 `τ` and accepts one at 0.9 `τ`; a hole mouth's torus and cone at `X/ρ` = 0.2 and a boss's torus at 0.1 keep every sampled chord within `τ` with at most 64 rows, where the profile's own rows stray past it; a plane through the axis adds no rows; a tiny `τ`, and a fillet of 10⁻⁶ on a 1,000 mm bore whose margin `δ` passes `τ`, refuse past 1,024 rows; a plane the setback circle misses refuses; `TestEndSectionMarginCoversRounding` measures the rounding of `X` and of the placed row vertex in 200-bit arithmetic under `δ/4` down to `q = 10⁻⁶`; the pocket with its axes 2.75 mm from `x = 0` refuses at the walk (SX2) | space the rows by the profile alone: the curves lie up to 1.41 times `Bound` from the mesh (1.22 at 0.4, 1.05 on the chain) and the unit cases stray past `τ`; drop the parallelogram's corners from `certify`: the 1.01 `τ` chord certifies; set `δ` to zero: the rounding test and the margin refusal fail |
+| Rows ending on an arc's offset end planes (`apitest/faceted_retained_blend_arc_end_plane_test.go`): a Ø8 bore whose axis lies `h` from the plate's face `x = 0` breaks out through it, fillet r = 4 with the wall's row meeting `x = 0` at `X/ρ` = 0.4 and 0.2 (arc route); the rounded box corner cut back so the plane's row meets the cut at `X/ρ` = 0.1, fillet r = 2.5 along the tangent chain (chain route); a pocket open through `x = 0` whose 3 mm corners' axes lie 2.5 mm from it, fillet r = 2 along the mouth's chain (chain route, hole side); the hole mouth chamfered with d = 1, 2 and 4 at `X/ρ` = 0.4 and 0.2 | 1,001 samples of each true end curve, taken from the torus, lie within the mesh's `Bound` of its facets; every chamfer strip triangle, sampled on a barycentric grid against the cone's generator in closed form, lies within `Bound` of the cone. Unit tests (`internal/retainedblend/arc_section_internal_test.go`) pin `tan ψ = g·X/ρ` against finite differences of a sampler that bisects each row's circle against the plane; on a plane through the axis, where the end curve is the tube's circle, `certify` refuses a chord whose sagitta `r·(1 − cos(Δα/2))` is 1.01 `τ` and accepts one at 0.9 `τ`; a hole mouth's torus and cone at `X/ρ` = 0.2 and a boss's torus at 0.1 keep every sampled chord within `τ` with at most 64 rows, where the profile's own rows stray past it; a plane through the axis adds no rows; a tiny `τ`, and a fillet of 10⁻⁶ on a 1,000 mm bore whose margin `δ` passes `τ`, refuse past 1,024 rows; a plane the setback circle misses refuses; `TestEndSectionMarginCoversRounding` measures the rounding of `X` and of the placed row vertex in 200-bit arithmetic under `δ/4` down to `q = 10⁻⁶`; `TestChamferRowsHoldEndShift` holds a chamfer's end azimuth shift between rows within `chamferColumn`, which the profile's rows alone exceed; `TestEndSectionTiltCharge` measures a plane tilted 10⁻⁹ off the axis in 200-bit arithmetic within the margin's tilt term and refuses where that term passes `τ`; the pocket with its axes 2.75 mm from `x = 0` refuses at the walk (SX2) | space the rows by the profile alone: the curves lie up to 1.41 times `Bound` from the mesh (1.22 at 0.4, 1.05 on the chain) and the unit cases stray past `τ`; drop the parallelogram's corners from `certify`: the 1.01 `τ` chord certifies; set `δ` to zero: the rounding test and the margin refusal fail; drop the chamfer's column step and end shift: the strips at d = 2, c = 0.4 and d = 4 at both sines lie up to 1.52 times `Bound` from the cone; drop the tilt term: the tilt test fails |
 | Grazing-angle and direction gates (`TestGatesRefuseNaN`, `internal/retainedblend/line_internal_test.go`) | each gate refuses a value that is not a number, as a tag whose normal is not a number produces: `shallow` (the straight edge's end, mitre and corner planes, and the cylinder–cylinder walls' meeting), `intersect3`, `grazes` (a plane–cylinder edge's end plane), `clears` (the cylinder–cylinder walls' ways out of a corner), `crossing` (a sphere rim's plane) and `cornerTurn` (a chain end's turn reads undecided) | write any of them as `c < minSine`, `≤` or `>` against the bound: NaN passes and its subtest fails |
 | Clearance | a radius past the face width refuses `ErrDegenerate`; a radius within `b` of it refuses `ErrUnsupported` | drop the `− b_v` term of §6.2: the near case builds an invalid solid |
 | Shared vertex / tangent chain | refuse SR2 | |

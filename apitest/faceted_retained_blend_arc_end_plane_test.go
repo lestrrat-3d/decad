@@ -44,6 +44,36 @@ func TestFacetedRetainedBlendArcEndPlane(t *testing.T) {
 		})
 	}
 
+	// The same hole mouth chamfered: the cone's strip triangles join rows
+	// whose ends on x = 0 lie at different azimuths, and every point of every
+	// strip triangle must lie within Bound of the cone.
+	for _, c := range []float64{0.4, 0.2} {
+		for _, d := range []float64{1, 2, 4} {
+			t.Run(fmt.Sprintf("the chamfer's strip at a hole mouth, d = %g, c = %g", d, c), func(t *testing.T) {
+				t.Parallel()
+				const bore = 4.0
+				h := bore * math.Sqrt(1-c*c)
+				sc := newRetentionScene()
+				bored, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinderAt(t, sc, h, 10, bore, -30, 30))
+				require.NoError(t, err)
+				out, err := decad.Chamfer(t.Context(), bored, arcSeedAt(t, bored, 20), units.Millimeters(d))
+				require.NoError(t, err)
+				// The cone's generator in the meridian plane about (h, 10),
+				// from (bore + d, 20) to (bore, 20 − d).
+				coneDist := func(p r3.Vec) float64 {
+					rho := math.Hypot(p.X-h, p.Y-10)
+					a, b := [2]float64{bore + d, 20}, [2]float64{bore, 20 - d}
+					ux, uz := b[0]-a[0], b[1]-a[1]
+					s := math.Min(1, math.Max(0, ((rho-a[0])*ux+(p.Z-a[1])*uz)/(ux*ux+uz*uz)))
+					return math.Hypot(rho-a[0]-s*ux, p.Z-a[1]-s*uz)
+				}
+				requireStripInteriorsCovered(t, out, coneDist, func(p r3.Vec) bool {
+					return math.Abs(p.X) < 1e-9 || math.Abs(p.Z-20) < 1e-9
+				})
+			})
+		}
+	}
+
 	// The box's corner rounded to radius 3 about (3, 3), cut back to x = gx,
 	// has a top outline that starts with an arc ending on x = gx: a tangent
 	// chain with an arc end (the chain route). The fillet's plane row, the
@@ -116,4 +146,35 @@ func pocketMouth(t *testing.T, x1 float64) *decad.Body {
 	out, err := decad.Cut(t.Context(), plate, placed(t, tool, 5))
 	require.NoError(t, err)
 	return out
+}
+
+// requireStripInteriorsCovered samples every strip triangle of out's mesh, a
+// triangle whose three vertices lie on the blend surface (dist at most
+// 1e-9) and not all on one face's plane (onFace), on a barycentric grid, and
+// requires every sample within the mesh's published Bound of the surface.
+func requireStripInteriorsCovered(t *testing.T, out *decad.Body, dist func(r3.Vec) float64,
+	onFace func(r3.Vec) bool) {
+	t.Helper()
+	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyNone))
+	require.NoError(t, err)
+	verts := mesh.Vertices()
+	worst, strip := 0.0, 0
+	for _, tri := range mesh.Triangles() {
+		a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
+		if dist(a) > 1e-9 || dist(b) > 1e-9 || dist(c) > 1e-9 || (onFace(a) && onFace(b) && onFace(c)) {
+			continue
+		}
+		strip++
+		const g = 8
+		for i := 0; i <= g; i++ {
+			for j := 0; i+j <= g; j++ {
+				p := a.Add(b.Sub(a).Scale(float64(i) / g)).Add(c.Sub(a).Scale(float64(j) / g))
+				worst = math.Max(worst, dist(p))
+			}
+		}
+	}
+	t.Logf("strip interiors within %.6g mm of the surface, Bound %.6g mm, %d strip facets of %d", worst,
+		mesh.Bound().Base(), strip, len(mesh.Triangles()))
+	require.Positive(t, strip)
+	require.LessOrEqual(t, worst, mesh.Bound().Base())
 }

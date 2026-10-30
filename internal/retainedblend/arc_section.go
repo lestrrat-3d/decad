@@ -34,11 +34,21 @@ type endSection struct {
 	// slope is |dz/ds| / |dρ/ds|, nondecreasing in s: tan(s·π/2) for the
 	// torus, dB/dA for the cone.
 	slope func(s float64) float64
-	// margin is certify's rounding allowance, 32·ulp·S·(1 + 1/q) with S the
-	// profile's largest ρ plus h plus its largest |z|, and q the smallest X/ρ
-	// (§6.3): it covers the rounding of certify's own arithmetic and of the
-	// row vertices' azimuths, both of which grow as 1/q.
+	// margin is certify's allowance in length (§6.3):
+	// 32·ulp·S·(1 + 1/q) + 2·ε·Z·(1 + 1/q), with S the profile's largest ρ
+	// plus h plus its largest |z|, Z its largest |z|, q the smallest X/ρ and
+	// ε = |n_G · axis| the end plane's tilt off the axis. The first term covers
+	// the rounding of certify's arithmetic and of the row vertices' azimuths,
+	// the second the row vertices' offset from the tilted plane.
 	margin float64
+	// angle is certify's allowance on a tangent angle: the rounding of
+	// atan(slope·q), 4·ulp·(1/q + S/(ρ_lo·q²)) with ρ_lo the smallest ρ.
+	angle float64
+	// rhoHi is the profile's largest ρ.
+	rhoHi float64
+	// shift, when positive, caps how far the azimuth of a row's end on G may
+	// move between neighbouring rows (stripRows).
+	shift float64
 }
 
 // section is the end curve the blend of spec cuts in the end plane g. It
@@ -61,8 +71,13 @@ func (a arcRim) section(spec blendSpec, g plane) (endSection, error) {
 	rho1, z1 := p(1)
 	_, _, q0 := e.at(0)
 	_, _, q1 := e.at(1)
-	size := max(rho0, rho1) + h + max(math.Abs(z0), math.Abs(z1))
-	e.margin = 32 * ulp * size * (1 + 1/min(q0, q1))
+	zHi := max(math.Abs(z0), math.Abs(z1))
+	size := max(rho0, rho1) + h + zHi
+	q := min(q0, q1)
+	tilt := math.Abs(g.n.Dot(a.n))
+	e.margin = 32*ulp*size*(1+1/q) + 2*tilt*zHi*(1+1/q)
+	e.angle = 4 * ulp * (1/q + size/(min(rho0, rho1)*q*q))
+	e.rhoHi = max(rho0, rho1)
 	if fillet {
 		e.slope = func(s float64) float64 {
 			if s >= 1 {
@@ -98,7 +113,8 @@ func (e endSection) at(s float64) (u, v, q float64) {
 // diagonal AB, whose points project onto the chord, so that distance is the
 // distance from the chord itself. A piece whose corners reach past tau is
 // split in two; certify gives up after maxSectionLeaves pieces. A piece
-// certifies when its corners lie within tau less the rounding margin.
+// certifies when its corners lie within tau less the margin, its angles
+// widened by the angle allowance.
 func (e endSection) certify(s0, s1, tau float64) bool {
 	if !(e.margin < tau) {
 		return false
@@ -121,8 +137,8 @@ func (e endSection) certify(s0, s1, tau float64) bool {
 		stack = stack[:len(stack)-1]
 		pu, pv, q0 := e.at(pc.t0)
 		qu, qv, q1 := e.at(pc.t1)
-		lo := math.Atan(e.slope(pc.t0) * math.Min(q0, q1))
-		hi := math.Atan(e.slope(pc.t1) * math.Max(q0, q1))
+		lo := math.Max(0, math.Atan(e.slope(pc.t0)*math.Min(q0, q1))-e.angle)
+		hi := math.Min(math.Pi/2, math.Atan(e.slope(pc.t1)*math.Max(q0, q1))+e.angle)
 		d := math.Max(dist(pu, pv), dist(qu, qv))
 		if hi > lo {
 			// The corners P + |PQ|·sin(hi − ψ)/sin(hi − lo) along lo and
@@ -145,6 +161,26 @@ func (e endSection) certify(s0, s1, tau float64) bool {
 	return true
 }
 
+// shifts reports whether the azimuth at which a row's circle meets G moves by
+// at most e.shift between the rows at s0 and s1: acos(h/ρ) from G's normal.
+func (e endSection) shifts(s0, s1 float64) bool {
+	if !(e.shift > 0) {
+		return true
+	}
+	rho0, _ := e.p(s0)
+	rho1, _ := e.p(s1)
+	return math.Abs(math.Acos(e.h/rho1)-math.Acos(e.h/rho0)) <= e.shift
+}
+
+// chamferColumn is the azimuth step of a chamfer strip's columns on a profile
+// whose largest radius is rhoHi: rhoHi·(1 − cos(step/2)) = tau/4. A strip
+// triangle between two rows spans at most one column step and the shift of
+// the rows' ends, each held to this step, and
+// rhoHi·(1 − cos(step)) ≤ 4·rhoHi·(1 − cos(step/2)) = tau (§6.3).
+func chamferColumn(tau, rhoHi float64) float64 {
+	return 2 * math.Acos(1-math.Min(tau/(4*rhoHi), 1))
+}
+
 // sectionRows returns the profile parameters of the blend's rows, from 0 at
 // the plane's setback to 1 at the wall's: m evenly spaced rows, with each gap
 // halved until the chord between its rows' points on every end plane in ends
@@ -165,7 +201,7 @@ func sectionRows(m int, tau float64, ends []endSection) ([]float64, error) {
 	fill = func(s0, s1 float64) error {
 		ok := true
 		for _, e := range ends {
-			ok = ok && e.certify(s0, s1, tau)
+			ok = ok && e.certify(s0, s1, tau) && e.shifts(s0, s1)
 		}
 		if ok {
 			out = append(out, s1)
@@ -192,10 +228,20 @@ func sectionRows(m int, tau float64, ends []endSection) ([]float64, error) {
 // starting from the rows the profile itself needs: a fillet's arc sagitta
 // r·(1 − cos(Δα/2)) within tau, and two for a chamfer, whose profile is
 // straight.
+//
+// A chamfer's rows also keep the azimuth of their ends on each G within
+// chamferColumn of their neighbours', so that, with columns that step, every
+// strip triangle lies within tau of the cone (§6.3).
 func arcRows(spec blendSpec, tau float64, ends []endSection) ([]float64, error) {
 	m := 2
 	if spec.fillet {
 		m = max(2, int(math.Ceil(math.Pi/2/rowStep(tau, spec.r, 1))))
+	}
+	if !spec.fillet {
+		ends = append([]endSection(nil), ends...)
+		for i := range ends {
+			ends[i].shift = chamferColumn(tau, ends[i].rhoHi)
+		}
 	}
 	return sectionRows(m, tau, ends)
 }

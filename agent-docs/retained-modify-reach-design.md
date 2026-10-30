@@ -286,7 +286,8 @@ The rewrite touches `P`, every wall `W_k`, every seam between consecutive walls,
    way from its azimuth on `G` to the azimuth of the other end's meridian, so every vertex lies on the torus. The end
    curve stays a chain of exact points (it is no conic). The rows of a fillet or a chamfer with an arc end are refined,
    as blend §4.4's are, until their chords follow the section `G` cuts in the torus or cone to within `τ`
-   (blend §6.3), and every entry of the chain takes those rows.
+   (blend §6.3), and every entry of the chain takes those rows. A chamfer's fan columns step by `chamferColumn`
+   across the widest row, and its rows also hold the end's azimuth shift to that step (blend §6.3).
 
    At a straight end `P`, `W` and `G` meet pairwise orthogonally at `V` (`cornerOf` admits exactly three faces and
    `G` is normal to the edge). The end is classified by the turn of each face's loop at `V` about the face's

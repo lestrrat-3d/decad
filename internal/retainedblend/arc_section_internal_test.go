@@ -254,3 +254,80 @@ func TestEndSectionMarginCoversRounding(t *testing.T) {
 		require.LessOrEqual(t, worstV, sec.margin/4, "h = %v", f.h)
 	}
 }
+
+// TestChamferRowsHoldEndShift sizes a hole mouth's cone at the sine 0.2: the
+// azimuth at which each row meets x = h, acos(h/ρ) from the plane's normal,
+// moves by at most chamferColumn between neighbouring rows, and two such steps,
+// a column and a shift, keep the cone's sagitta rhoHi·(1 − cos(step)) within
+// tau. Without the shift the profile's rows alone let it move further.
+func TestChamferRowsHoldEndShift(t *testing.T) {
+	t.Parallel()
+	const d = 4.0
+	tau := math.Ldexp(d, -10)
+	f := endPlaneFixture{R: 4, kappa: 1, side: -1, h: 4 * math.Sqrt(1-0.2*0.2), spec: blendSpec{dA: d, dB: d}}
+	sec := f.section(t)
+	step := chamferColumn(tau, sec.rhoHi)
+	require.LessOrEqual(t, sec.rhoHi*(1-math.Cos(step)), tau)
+	worst := func(rows []float64) float64 {
+		w := 0.0
+		for j := 0; j+1 < len(rows); j++ {
+			r0, _ := f.row(rows[j])
+			r1, _ := f.row(rows[j+1])
+			w = math.Max(w, math.Abs(math.Acos(f.h/r1)-math.Acos(f.h/r0)))
+		}
+		return w
+	}
+	rows, err := arcRows(f.spec, tau, []endSection{sec})
+	require.NoError(t, err)
+	require.LessOrEqual(t, worst(rows), step)
+	plain, err := sectionRows(2, tau, []endSection{sec})
+	require.NoError(t, err)
+	require.Greater(t, worst(plain), step)
+}
+
+// TestEndSectionTiltCharge reads an end plane tilted off the axis by
+// ε = 10⁻⁹, the most readEnd admits. The route places each row's end as if
+// the plane were parallel to the axis; on the tilted plane the row's circle
+// meets it at x = h − ε·z/√(1 − ε²) instead, and the offset between the two
+// points, measured in 200-bit arithmetic, stays within the margin's tilt
+// term 2·ε·Z·(1 + 1/q). Where q is small enough that the term passes tau, the
+// rows refuse.
+func TestEndSectionTiltCharge(t *testing.T) {
+	t.Parallel()
+	const eps = 1e-9
+	tilted := plane{n: r3.NewVec(math.Sqrt(1-eps*eps), 0, eps)}
+	for _, q := range []float64{0.1, 1e-3} {
+		f := endPlaneFixture{R: 3, kappa: -1, side: -1, h: 0.5 * math.Sqrt(1-q*q), spec: blendSpec{fillet: true, r: 2.5}}
+		tilted.o = r3.NewVec(f.h, 0, 0)
+		flat := f.section(t)
+		sec, err := f.rim().section(f.spec, tilted)
+		require.NoError(t, err)
+		zHi, qMin := 2.5, math.Min(q, 1)
+		require.InEpsilon(t, 2*eps*zHi*(1+1/qMin), sec.margin-flat.margin, 0.05, "q = %v", q)
+		worst := 0.0
+		for k := range 201 {
+			rho, z := f.row(float64(k) / 200)
+			prec := func(x float64) *big.Float { return new(big.Float).SetPrec(200).SetFloat64(x) }
+			y := func(x *big.Float) *big.Float {
+				r2 := new(big.Float).SetPrec(200).Mul(prec(rho), prec(rho))
+				return r2.Sqrt(r2.Sub(r2, new(big.Float).SetPrec(200).Mul(x, x)))
+			}
+			xt := prec(f.h)
+			xt.Sub(xt, new(big.Float).SetPrec(200).Quo(prec(eps*z), prec(math.Sqrt(1-eps*eps))))
+			dy, _ := new(big.Float).SetPrec(200).Sub(y(xt), y(prec(f.h))).Float64()
+			worst = math.Max(worst, math.Hypot(dy, eps*z))
+		}
+		require.LessOrEqual(t, worst, sec.margin-flat.margin, "q = %v", q)
+	}
+	f := endPlaneFixture{R: 3, kappa: -1, side: -1, h: 0.5 * math.Sqrt(1-1e-14), spec: blendSpec{fillet: true, r: 2.5}}
+	tilted.o = r3.NewVec(f.h, 0, 0)
+	sec, err := f.rim().section(f.spec, tilted)
+	require.NoError(t, err)
+	tau := math.Ldexp(2.5, -10)
+	require.GreaterOrEqual(t, sec.margin, tau)
+	_, err = arcRows(f.spec, tau, []endSection{sec})
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	require.ErrorContains(t, err, "needs more than 1024 rows")
+	_, err = arcRows(f.spec, tau, []endSection{f.section(t)})
+	require.NoError(t, err, "the same plane parallel to the axis builds")
+}
