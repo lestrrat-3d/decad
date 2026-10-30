@@ -3,6 +3,7 @@ package orthoshell
 import (
 	"fmt"
 	"math"
+	"sort"
 
 	"github.com/lestrrat-3d/r3"
 )
@@ -62,8 +63,15 @@ func Press(verts []r3.Vec, tris [][3]int, face []bool, d float64) ([]r3.Vec, [][
 		pa := [2]float64{comp(verts[tri[0]], v), comp(verts[tri[0]], w)}
 		pb := [2]float64{comp(verts[tri[1]], v), comp(verts[tri[1]], w)}
 		pc := [2]float64{comp(verts[tri[2]], v), comp(verts[tri[2]], w)}
-		for cw := range ud[w] {
-			for cv := range ud[v] {
+		vmin := math.Min(pa[0], math.Min(pb[0], pc[0]))
+		vmax := math.Max(pa[0], math.Max(pb[0], pc[0]))
+		wmin := math.Min(pa[1], math.Min(pb[1], pc[1]))
+		wmax := math.Max(pa[1], math.Max(pb[1], pc[1]))
+		// Include the cell before each lower bound within eps, so merged grid lines remain conservative.
+		cv0 := max(0, sort.SearchFloat64s(sg.u.c[v], vmin-sg.eps)-1)
+		cw0 := max(0, sort.SearchFloat64s(sg.u.c[w], wmin-sg.eps)-1)
+		for cw := cw0; cw < ud[w] && sg.u.c[w][cw] < wmax; cw++ {
+			for cv := cv0; cv < ud[v] && sg.u.c[v][cv] < vmax; cv++ {
 				v0, v1, w0, w1 := sg.u.c[v][cv], sg.u.c[v][cv+1], sg.u.c[w][cw], sg.u.c[w][cw+1]
 				footprint[cw*ud[v]+cv] += clipArea(pa, pb, pc, v0, v1, w0, w1) / ((v1 - v0) * (w1 - w0))
 			}
