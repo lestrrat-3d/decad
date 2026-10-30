@@ -499,6 +499,9 @@ func (e *Edge) Start() *Vertex
 func (e *Edge) End() *Vertex
 func (e *Edge) Length() (Measurement, error)
 func (e *Edge) IsConvex() bool
+func (e *Edge) Wedge() EdgeWedge   // the material angle: WedgeSalient, WedgeReflex or WedgeUndecided
+
+type EdgeWedge int // WedgeUndecided, WedgeSalient, WedgeReflex; String() "undecided" / "salient" / "reflex"
 ```
 
 `Face.DistanceToPoint` measures the selected trimmed face patch, including
@@ -534,6 +537,44 @@ sweep is under a half turn. So **a hole's rim edges are concave**, as are those 
 a concave round bitten out of the outer boundary, even though the material across
 such a rim is a plain quarter-turn wedge a chamfer could take. It is a decided
 answer either way — `Concave()` selects those rims, `Convex()` never does.
+
+**`Edge.Wedge` is the MATERIAL angle across the edge, read from the two faces'
+outward normals.** `WedgeReflex` is a material angle over a half turn (a boss
+root, an inside corner), `WedgeSalient` one under a half turn (a box's outer
+edge, a boss's top rim, a hole's rim). The reading is the sign of
+`(n1 × n2)·t` at each end of the edge, where `n1` is a planar face's outward
+normal, `n2` the other face's, and `t` the direction the planar face walks the
+edge with its material on the left seen from outside. That walk comes from the
+signed area of the planar loop holding the edge and the loop's `IsOuter` role,
+never from the stored loop direction, which builders do not agree on. The
+answer is decided only where `|(n1 × n2)·t|` exceeds the bound composed from
+`Face.NormalAt`'s own bounds, the normal's turn over the vertices' proven
+displacement, and the tangent's displacement. That sign check can only withhold
+an answer, never grant one on a small residual. The loop's area is decided the
+same way, against the rounding of its terms and of their running sum, the band
+the vertex and curve displacement sweeps, and the plane normal's bound; an
+arc whose held sweep lies within its ends' displacement of zero gives no area.
+Where both faces are planar, both readings must agree. Only edges whose angle
+cannot change along them are read: a line between two planes, a line between a
+plane and a cylinder parallel to it, and a circle or arc on a plane normal to
+its axis meeting a coaxial cylinder, cone, sphere or torus, the circle carrying
+a proven curve bound. That class gate does admit on a tolerance: "parallel" and
+"coaxial" are `selectorquery.ParallelDirs`, a relative 1e-9. It chooses which
+edges are read and decides no sign, and its tolerance cannot flip a decided
+sign along the edge. On a line, the plane's normal and the tangent are
+constant and a cylinder's normal turns monotonically by far under a half
+turn, so the reading is a cosine of that turn and keeps the sign both ends
+decide. On a circle or arc, the plane's and the round face's misalignment
+from the circle's axis moves the reading by at most twice that misalignment on
+a cylinder, cone or sphere. On a torus it also moves the plane's cut across the
+tube, which turns the tube's normal by up to (circle radius + major radius) over
+the minor radius times the misalignment. The bound charges that spread in
+both cases. `internal/edgewedge`'s `admitted` states the argument.
+Everything else is `WedgeUndecided`: a tangent junction, a `Faceted` face, a
+`FacetedCurve` or `Ellipse3` edge, a line between two cylinders, a free or
+non-manifold edge. `internal/edgewedge` owns the reading. The two readings
+differ on purpose: a boss root on a `Union` result is `IsConvex` and
+`WedgeReflex`, a hole's rim is concave and `WedgeSalient`.
 
 `Surface` and `Curve` are **sealed** interfaces (unexported method), matching the
 house idiom in `sketch.Entity` — the answer to Fusion's `core.Base`-as-anything.
@@ -1788,6 +1829,8 @@ func (q *FaceQuery) AtLeast(n int) *FaceQuery
 // Predicates compose.
 func Convex() EdgePredicate
 func Concave() EdgePredicate
+func Reflex() EdgePredicate                  // Edge.Wedge() == WedgeReflex
+func Salient() EdgePredicate                 // Edge.Wedge() == WedgeSalient
 func ParallelTo(v r3.Vec) EdgePredicate
 func EndpointAt(p r3.Vec) EdgePredicate // either endpoint equals p in stored coordinates
 func LongerThan(l units.Value) EdgePredicate
@@ -1806,6 +1849,12 @@ func FaceCreatedBy(f FeatureRef) FacePredicate // provenance, the face analog of
 `Convex()` and `Concave()` read `Edge.IsConvex` (§6.1): the walked-boundary
 convexity, not the material angle across the edge. A hole's rim edges are
 concave, so a fillet meant for them asks for `Concave()`.
+
+`Reflex()` and `Salient()` read `Edge.Wedge` (§6.1), the material angle, so
+`Fillet(Edges(Reflex()), r)` rounds a boss root or an inside corner of a
+`Union` result, where `Concave()` matches nothing. An edge whose wedge is
+`WedgeUndecided` matches neither, so `Reflex()` and `Salient()` together need
+not cover a body's edges.
 
 `OuterLoopOf(CapStart(body))` matches only edges on the start cap's outer
 boundary. It excludes hole loops by `Loop.IsOuter`, so a cap chamfer can
@@ -2037,6 +2086,7 @@ Each predicate renders by its codec kind token and payload:
 | Predicate | Rendering |
 |---|---|
 | `Convex()` / `Concave()` / `Circular()` | `convex` / `concave` / `circular` |
+| `Reflex()` / `Salient()` | `reflex` / `salient` |
 | `Free()` | `free` |
 | `Planar()` / `Cylindrical()` | `planar` / `cylindrical` |
 | `ParallelTo(v)` | `parallel_to(<vec>)` |

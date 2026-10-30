@@ -37,6 +37,7 @@ configuration option.
 | `decad.Loop` | struct | One boundary loop of a face. | `Face.Loops` |
 | `decad.CoEdge` | struct | One directed use of an edge by a loop. | `Loop.CoEdges` |
 | `decad.Edge` | struct | A curve between two vertices, with its adjacent faces. | `Body.Edges`, `Face.Edges` |
+| `decad.EdgeWedge` | enum | `decad.WedgeSalient`, `decad.WedgeReflex` or `decad.WedgeUndecided`: the material angle across an edge. | `Edge.Wedge` |
 | `decad.Vertex` | struct | A topological point. | `Body.Vertices`, `Edge.Start` |
 | `decad.FeatureRef` | struct | The stable role that made a body, face or edge. | `Face.Origins`, `Body.Origin` |
 | `decad.HeldTopology` | struct | A body's lump and void counts. | `BodyReport.Topology` |
@@ -353,6 +354,14 @@ Body -> Lump -> FaceShell -> Face -> Loop -> CoEdge -> Edge -> Vertex
 edge's own `Edge.Start` to `Edge.End` direction. An edge shared by two faces appears as one `decad.Edge` with two
 co-edges, so `Edge.Faces` returns the faces on either side. `Edge.IsFree` marks an edge with only one face, which
 is how a sheet's rim shows.
+
+`Edge.Wedge` returns a `decad.EdgeWedge`: `decad.WedgeReflex` where the material angle across the edge is over a half
+turn, as at a boss root or an inside corner, and `decad.WedgeSalient` where it is under a half turn, as at a box's
+outer edge or a hole's rim. It answers only where the two faces' outward normals decide the sign beyond their proven
+bounds, on a line between two planes, a line between a plane and a parallel cylinder, or a circle or arc on a plane
+meeting a coaxial cylinder, cone, sphere or torus. Every other edge, such as a tangent junction or an edge of a
+`decad.Faceted` face, is `decad.WedgeUndecided`. `Edge.IsConvex` is a different reading: it follows the profile
+walk, so it calls a boss root convex and a hole's rim concave.
 
 `Body.Faces`, `Body.Edges` and `Body.Vertices` return the same elements as flat lists. `Face.Origins` returns the
 `decad.FeatureRef` values that name the feature role that made a face, such as `capStart` or a side wall. Selectors

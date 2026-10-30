@@ -2899,3 +2899,13 @@
 10	0.00	TestBooleanGapShiftKeepsTranslatedTags
 10	0.00	TestBooleanGapShiftFilletsRestingBoss
 10	0.00	TestFacetedUnionNestedBossShellKeepsThicknessAtRoot
+10	0.00	TestEdgeWedgeRectBossRoot
+10	0.00	TestEdgeWedgeMirroredBossRoot
+10	0.00	TestEdgeWedgeLBracketInsideCorner
+10	0.00	TestEdgeWedgeHoleRimSalientAndConcave
+10	0.00	TestEdgeWedgeRoundBoss
+10	0.00	TestEdgeWedgeTangentJunctionUndecided
+10	0.00	TestEdgeWedgeMeshUnionUnprovenEdges
+10	0.00	TestEdgeWedgeRevolveCircles
+10	0.00	TestEdgeWedgeFilletReflexRoots
+10	0.00	TestEdgeWedgePredicateRendering

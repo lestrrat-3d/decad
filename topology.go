@@ -3,6 +3,7 @@ package decad
 import (
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/edgewedge"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/ringmemo"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -369,6 +370,57 @@ func (e *Edge) Faces() []*Face { return faceHandles(e.n.Faces) }
 // here is the walk's answer, not the wedge's: Concave() picks a hole's rim,
 // Convex() never does.
 func (e *Edge) IsConvex() bool { return e.n.Convex }
+
+// EdgeWedge is the material wedge across an edge, which Edge.Wedge reads.
+type EdgeWedge int
+
+const (
+	// WedgeUndecided is an edge whose wedge this evaluator does not read, or
+	// whose reading its proven normal bounds do not decide.
+	WedgeUndecided EdgeWedge = iota
+	// WedgeSalient is an edge whose material angle is under a half turn: a
+	// box's outer edge, a boss's top rim, a hole's rim.
+	WedgeSalient
+	// WedgeReflex is an edge whose material angle is over a half turn: a boss
+	// root, an inside corner.
+	WedgeReflex
+)
+
+// String returns "undecided", "salient" or "reflex".
+func (w EdgeWedge) String() string {
+	switch w {
+	case WedgeSalient:
+		return "salient"
+	case WedgeReflex:
+		return "reflex"
+	default:
+		return "undecided"
+	}
+}
+
+// Wedge reads the MATERIAL wedge across the edge: whether the solid's material
+// angle there is reflex or salient. It is not IsConvex, which reads the
+// walked boundary: a boss root on a Union result is IsConvex but
+// WedgeReflex, and a hole's rim is concave by IsConvex but WedgeSalient.
+//
+// It answers only where the two faces' outward normals (Face.NormalAt) decide
+// the sign of their turn beyond their proven bounds at every end of the edge,
+// and only for an edge whose angle cannot change along it: a line between two
+// planes, a line between a plane and a cylinder parallel to it, and a circle
+// or arc on a plane normal to its axis meeting a coaxial cylinder, cone,
+// sphere or torus. Every other edge is WedgeUndecided: a tangent junction, an
+// edge of a Faceted face, a FacetedCurve edge, a line between two cylinders,
+// and a free or non-manifold edge.
+func (e *Edge) Wedge() EdgeWedge {
+	switch edgewedge.Of(edgeNode(e)) {
+	case edgewedge.Salient:
+		return WedgeSalient
+	case edgewedge.Reflex:
+		return WedgeReflex
+	default:
+		return WedgeUndecided
+	}
+}
 
 // IsFree reports whether exactly one face is adjacent to this edge — a
 // sheet's boundary, and the expected shape there (agent-docs/surface-design.md

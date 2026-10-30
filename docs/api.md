@@ -364,8 +364,12 @@ A sheet encloses no material, so `Body.Volume` and `Body.Centroid` return `decad
 Features choose edges and faces with queries.
 
 - `decad.Edges` returns a `*decad.EdgeQuery`. Edge predicates are `decad.Circular`, `decad.Concave`, `decad.Convex`,
-  `decad.Free`, `decad.LongerThan`, `decad.ParallelTo`, `decad.EndpointAt`, `decad.CreatedBy` and
-  `decad.OuterLoopOf`.
+  `decad.Reflex`, `decad.Salient`, `decad.Free`, `decad.LongerThan`, `decad.ParallelTo`, `decad.EndpointAt`,
+  `decad.CreatedBy` and `decad.OuterLoopOf`.
+- `decad.Convex` and `decad.Concave` read `Edge.IsConvex`, the walked boundary, so a boss root on a `Union` result
+  is convex and a hole's rim is concave. `decad.Reflex` and `decad.Salient` read `Edge.Wedge`, the material angle
+  across the edge: `Edges(decad.Reflex())` picks boss roots and inside corners. An edge whose wedge
+  `Edge.Wedge` reports `decad.WedgeUndecided` matches neither.
 - `decad.Faces` returns a `*decad.FaceQuery`. Face predicates are `decad.Planar`, `decad.Cylindrical`,
   `decad.Facing`, `decad.NormalTo`, `decad.FaceCreatedBy` and `decad.Walls`.
 - `EdgeQuery` and `FaceQuery` chain `Or`, `Exactly` and `AtLeast`.
@@ -380,7 +384,7 @@ Features choose edges and faces with queries.
 | Size | `Body.Volume`, `Body.Area`, `Body.Centroid`, `Body.Bounds`, `Body.MassProperties` |
 | Position | `Body.LocatePoint`, `Body.DistanceToPoint`, `Face.DistanceToPoint`, `Body.ClosestPoint`, `Face.ClosestPoint` |
 | Topology | `Body.Lumps`, `Body.Shells`, `Body.Faces`, `Body.Edges`, `Body.Vertices`, `Face.Loops`, `Edge.Faces` |
-| Geometry | `Face.Surface`, `Edge.Curve`, `Face.NormalAt`, `Face.Centroid` (point-loft caps and mesh-solid planar faces), `Edge.Length`, `Vertex.Position` |
+| Geometry | `Face.Surface`, `Edge.Curve`, `Face.NormalAt`, `Face.Centroid` (point-loft caps and mesh-solid planar faces), `Edge.Length`, `Edge.Wedge`, `Vertex.Position` |
 | Cross-section | `Body.Section` returns a sketch and its profiles on a plane. A matching axial `Loft`, including one with a certified D-shaped or closed line-and-arc-profile through-bore, returns its exact profile at an interior world-XY plane. A full `Revolve` about a world-axis line sections exactly by a world-axis plane that holds the axis, as the meridian and its mirror, or that is normal to it, as one disk or ring per material interval. The cut must pass no meridian vertex, every cut radius and corner must be a binary64 value, and a plane holding the axis refuses a meridian that meets the axis outside one run of axis lines. A faceted solid every face of which squares to an axis, such as a mesh solid, sections exactly by a plane square to an axis, each region of the cut a profile of the returned sketch. A mesh `Union`, `Cut` or `Intersect` result of two prism, stacked-prism, slab-stack BRep or full `Revolve` bodies sections exactly from its operation history when both operands have exact sections there made of whole lines, arcs and circles. The result is one profile per region with its holes. Every corner where the two sections cross must be a line crossing whose point binary64 holds exactly, and Sketch must prove which operand each piece of the plane lies in; a section that cuts an arc or circle, or two regions that share a corner, refuse. Operands that touch tangentially are refused earlier, by the mesh Boolean itself. `Body.SectionOutline` returns the closed outlines of the verified mesh cut by a plane, for bodies `Body.Section` refuses. `SectionOutline.Clearance` returns the least distance between the material two outlines of one plane enclose, with the closest pair of points, whether the regions overlap, and a bound from both outlines' `OffSurface`. Its `Lower` reading is positive only when the gap is certified. |
 | Mesh | `Body.Tessellate` returns a `*decad.Mesh` with its chord error bound. It refuses a body whose cavity or outer shell winds the wrong way, and `Document.Verify` reports such a body as an invalid solid. |
 

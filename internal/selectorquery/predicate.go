@@ -28,6 +28,8 @@ const (
 	FaceCreatedByKind = "face_created_by"
 	WallsKind         = "walls"
 	FreeKind          = "free"
+	ReflexKind        = "reflex"
+	SalientKind       = "salient"
 )
 
 type EdgeClause[R comparable] struct {
@@ -53,6 +55,9 @@ type EdgeView[R comparable] interface {
 	SelectorHasOrigin(R) bool
 	SelectorOnOuterLoop(R) bool
 	SelectorCircular() bool
+	// SelectorWedge reports whether the edge's material wedge is decided,
+	// and whether a decided wedge is reflex (internal/edgewedge).
+	SelectorWedge() (bool, bool)
 }
 
 type FaceView[R comparable] interface {
@@ -68,7 +73,7 @@ type FaceView[R comparable] interface {
 // Validate rejects a malformed clause before looking at any edge.
 func (p EdgeClause[R]) Validate(validateRef func(R, string) error) error {
 	switch p.Kind {
-	case ConvexKind, ConcaveKind, CircularKind, FreeKind:
+	case ConvexKind, ConcaveKind, CircularKind, FreeKind, ReflexKind, SalientKind:
 		return nil
 	case CreatedByKind:
 		return validateRef(p.Ref, "created-by")
@@ -137,6 +142,12 @@ func (p EdgeClause[R]) Matches(e EdgeView[R]) bool {
 		return e.SelectorOnOuterLoop(p.Ref)
 	case CircularKind:
 		return e.SelectorCircular()
+	case ReflexKind:
+		decided, reflex := e.SelectorWedge()
+		return decided && reflex
+	case SalientKind:
+		decided, reflex := e.SelectorWedge()
+		return decided && !reflex
 	default:
 		return false
 	}
@@ -171,7 +182,7 @@ func (p FaceClause[R]) Matches(f FaceView[R]) bool {
 
 func (p EdgeClause[R]) Render(renderRef func(R) string) string {
 	switch p.Kind {
-	case ConvexKind, ConcaveKind, CircularKind, FreeKind:
+	case ConvexKind, ConcaveKind, CircularKind, FreeKind, ReflexKind, SalientKind:
 		return p.Kind
 	case ParallelToKind:
 		return p.Kind + "(" + RenderVec(p.Direction) + ")"
