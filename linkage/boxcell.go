@@ -200,12 +200,14 @@ func (b *boxRun[B]) classify(c *boxCell[B]) {
 		// bound L_n(C), two proven lower bounds on one gap.
 		lo := proofarith.FloatRat(pp.Lo)
 		bound := lo.Sub(lo, b.halfTravel(c, i, k))
-		if proj, shares := b.cellProjection(c, i, k, readings); proj != nil && proj.Cmp(bound) > 0 {
-			bound = proj
-			if c.projShares == nil {
-				c.projShares = make(map[[2]int]map[int]*big.Rat)
+		if !motionbound.CanSkipProjection(bound, lowBound) {
+			if proj, shares := b.cellProjection(c, i, k, readings); proj != nil && proj.Cmp(bound) > 0 {
+				bound = proj
+				if c.projShares == nil {
+					c.projShares = make(map[[2]int]map[int]*big.Rat)
+				}
+				c.projShares[[2]int{i, k}] = shares
 			}
-			c.projShares[[2]int{i, k}] = shares
 		}
 		if bound.Sign() <= 0 {
 			return nil
