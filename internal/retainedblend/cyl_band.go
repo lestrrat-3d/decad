@@ -290,8 +290,12 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 		}
 	}
 	planes = append(planes, bandGen)
+	beyond := b.beyondEnds(f.facets)
 	for _, fi := range f.facets {
 		for _, v := range tris[fi] {
+			if beyond[v] {
+				continue
+			}
 			if _, err := b.sideOf(w.heldPt(v), bandGen); err != nil {
 				return bandCuts{}, err
 			}
@@ -330,6 +334,13 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 		t := tris[fi]
 		inside := false
 		for _, v := range t {
+			if beyond[v] {
+				// Its side of the generator may be undecided: count it inside,
+				// so the facet is clipped, and the end plane drops it.
+				s, err := b.angleSide(w.verts[v], w.beta[v])
+				inside = inside || err != nil || s > 0
+				continue
+			}
 			s, _ := b.sideOf(w.heldPt(v), bandGen)
 			inside = inside || s > 0
 		}
@@ -363,6 +374,9 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 	}
 	for _, fi := range f.facets {
 		for _, v := range tris[fi] {
+			if beyond[v] {
+				continue
+			}
 			in := true
 			for k := len(planes) - 1; k >= 0 && in; k-- {
 				s, err := b.sideOf(w.heldPt(v), planes[k])
@@ -377,6 +391,34 @@ func (w *work) cutBand(f faceLoops, b *wallBand) (bandCuts, error) {
 		}
 	}
 	return out, nil
+}
+
+// beyondEnds marks the wall's vertices that lie outside an extending end plane
+// by more than their bound, and records that side. The band lies inside every
+// such plane, so a marked vertex is never in it, and a facet clipped by the
+// band loses the vertex to that plane's clip before the generator's is
+// applied: its side of the generator is never read there, except where a
+// crossing on a held edge reads both of the edge's vertices, which still
+// refuses an undecided one. cutBand therefore tests no marked vertex against
+// the generator and removes none, and a feature on the wall past an end
+// plane, such as a cross hole, does not refuse. A vertex within its bound of
+// the plane is not marked, and cutBand tests it against the generator.
+func (b *wallBand) beyondEnds(facets []int) map[int]bool {
+	beyond := map[int]bool{}
+	for _, fi := range facets {
+		for _, v := range b.w.fp.Tris[fi] {
+			for i, e := range b.ends {
+				if e == nil || e.on[v] {
+					continue
+				}
+				if b.value(bandEnd0+i, b.w.verts[v]) < -b.tolerance(b.w.beta[v]) {
+					beyond[v] = true
+					b.side[bandEnd0+i][v] = -1
+				}
+			}
+		}
+	}
+	return beyond
 }
 
 func (w *work) heldPt(v int) bandPt {
