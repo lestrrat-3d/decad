@@ -67,6 +67,10 @@ type EdgeRoute struct {
 	// loopUse maps a planar face's (face, loop, segment) to its use index.
 	LoopUse   map[[3]int]int
 	Terminals map[[3]float64]bool
+	// TangentNote, when set, is asked for a replacement reason whenever
+	// FindEndFaces meets a curved third face at the reference-coordinate
+	// vertex v of eb. It returns "" to keep the curved-face reason.
+	TangentNote func(eb *EdgeBlend, v [3]float64) string
 }
 
 // MaterialWedgeMismatchError marks the route E corner-model refusal that a
@@ -314,6 +318,11 @@ func (r *EdgeRoute) FindEndFaces(eb *EdgeBlend, incident map[[3]float64][]int, r
 			normal = rs.Embed.Axis[2]
 		case !g.Planar():
 			what = `a curved face`
+			if r.TangentNote != nil {
+				if note := r.TangentNote(eb, v); note != "" {
+					return r.Refuse(eb, "SB7", note)
+				}
+			}
 		}
 		if what == "" && normal != eb.Axis {
 			what = `a plane along the edge's axis`

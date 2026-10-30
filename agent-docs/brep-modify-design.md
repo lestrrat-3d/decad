@@ -508,6 +508,13 @@ SB7 includes a cylinder, a plane along the edge's axis, an oblique, split or
 level-displaced wall, an earlier blend, and a trimmed wall ending on a loop
 band patch. Only modify-general §4.3c's exact P8 edge bypasses this gate.
 
+When the third face is curved and the selected edge ends at a junction that
+`tangentchain.Continues` proves tangent (an exact `DegYes`) to an unselected
+edge, the refusal names that junction and the workaround: "the selected edge
+ends at the tangent junction `x,y,z` whose continuation is not selected;
+`WithTangentChain` selects the whole chain (brep-modify SB7)", the mesh route's
+SM2 wording. An undecided or non-tangent junction keeps the curved-face text.
+
 Base S4, S5, S6, S7, S8, S9 keep modify §4's meanings per end face and per
 trimmed wall. Reach SX16 is replaced: a brep receiver either builds here or
 refuses with one of the rows above.
