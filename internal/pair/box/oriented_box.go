@@ -223,9 +223,15 @@ func (p *orientedFaceProjector) project(vertex proofarith.DyV3) (orientedFacePro
 // An actual point strictly inside both η-eroded read boxes is also inside
 // both ideal boxes: every support plane moves by at most its body's η.
 func OrientedInteriorWitness(a, b OrientedBox, etaA, etaB *big.Rat) bool {
+	if etaA == nil || etaB == nil || etaA.Sign() < 0 || etaB.Sign() < 0 {
+		return false
+	}
 	insideA, okA := prepareOrientedInside(a, etaA)
 	insideB, okB := prepareOrientedInside(b, etaB)
 	if !okA || !okB {
+		return false
+	}
+	if orientedBoxesOutsideBand(a, b, new(big.Rat).Add(etaA, etaB)) {
 		return false
 	}
 	try := func(point [3]*big.Rat) bool {
@@ -264,6 +270,33 @@ func OrientedInteriorWitness(a, b OrientedBox, etaA, etaB *big.Rat) bool {
 					return true
 				}
 			}
+		}
+	}
+	return false
+}
+
+// orientedBoxesOutsideBand rejects pairs whose exact world-coordinate
+// projections have a gap at least as large as their combined pose allowance.
+func orientedBoxesOutsideBand(a, b OrientedBox, etaSum *big.Rat) bool {
+	for axis := range 3 {
+		alo, ahi := a.Corner[0][axis], a.Corner[0][axis]
+		blo, bhi := b.Corner[0][axis], b.Corner[0][axis]
+		for _, point := range a.Corner[1:] {
+			alo, ahi = proofarith.DyMin(alo, point[axis]), proofarith.DyMax(ahi, point[axis])
+		}
+		for _, point := range b.Corner[1:] {
+			blo, bhi = proofarith.DyMin(blo, point[axis]), proofarith.DyMax(bhi, point[axis])
+		}
+		var gap proofarith.Dyadic
+		if proofarith.DyCmp(ahi, blo) <= 0 {
+			gap = proofarith.DySubScalar(blo, ahi)
+		} else if proofarith.DyCmp(bhi, alo) <= 0 {
+			gap = proofarith.DySubScalar(alo, bhi)
+		} else {
+			continue
+		}
+		if gap.Rat().Cmp(etaSum) >= 0 {
+			return true
 		}
 	}
 	return false
