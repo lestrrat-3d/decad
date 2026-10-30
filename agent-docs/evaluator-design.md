@@ -228,6 +228,13 @@ Rules:
   partial revolve is convex when the sweep is under π. Consequence, and it is
   the intended one: a hole's rim edges are concave, and so are the rims of a
   concave round on the outer loop.
+- **The material wedge is read on demand, never stored** (core §6.1).
+  `Edge.Wedge` and the `Reflex`/`Salient` predicates call
+  `internal/edgewedge.Of` on the edge node, which reads the faces' outward
+  normals through `topobuild.NormalAt` and the planar loops' signed areas; no
+  builder stamps it and no copier carries it. `edgewedge.View` adds the reading
+  to `selectorquery.EdgeNode` for selector resolution, because `topobuild`
+  imports `selectorquery`.
 
 ## 4. Mass properties — decad's own, on decad's own records
 

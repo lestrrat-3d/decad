@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/edgewedge"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/selectorquery"
 	"github.com/lestrrat-3d/r3"
@@ -255,8 +256,8 @@ func (q *EdgeQuery) selector() {}
 func (q *FaceQuery) selector() {}
 
 // EdgePredicate is one clause of an EdgeQuery. Predicates come
-// only from the package constructors — Convex, Concave, ParallelTo,
-// EndpointAt, LongerThan, CreatedBy, Circular, Free — and compose by
+// only from the package constructors — Convex, Concave, Reflex, Salient,
+// ParallelTo, EndpointAt, LongerThan, CreatedBy, Circular, Free — and compose by
 // conjunction within a branch (EdgeQuery.Or adds a branch); the zero
 // value names no predicate and is rejected at resolve.
 type EdgePredicate struct {
@@ -289,6 +290,19 @@ func Convex() EdgePredicate { return EdgePredicate{kind: selectorquery.ConvexKin
 // that picks a hole's rim edges, and the rim of a concave round bitten out of
 // the outer boundary.
 func Concave() EdgePredicate { return EdgePredicate{kind: selectorquery.ConcaveKind} }
+
+// Reflex matches edges Edge.Wedge reads WedgeReflex: the material angle across
+// the edge is over a half turn, as at a boss root or an inside corner. It is
+// the predicate that picks the root of a boss on a Union result, which
+// Concave does not. An edge whose wedge is WedgeUndecided matches neither
+// Reflex nor Salient.
+func Reflex() EdgePredicate { return EdgePredicate{kind: selectorquery.ReflexKind} }
+
+// Salient matches edges Edge.Wedge reads WedgeSalient: the material angle
+// across the edge is under a half turn, as at a box's outer edge or a hole's
+// rim. An edge whose wedge is WedgeUndecided matches neither Salient nor
+// Reflex.
+func Salient() EdgePredicate { return EdgePredicate{kind: selectorquery.SalientKind} }
 
 // ParallelTo matches edges whose direction is parallel to v. The vector is
 // recorded exactly as given — a dimensionless direction (core §5.2); a
@@ -425,7 +439,7 @@ func (p EdgePredicate) validate() error { return p.clause().Validate(validatePre
 func (p FacePredicate) validate() error { return p.clause().Validate(validatePredicateRef) }
 
 func (p EdgePredicate) matches(e *Edge) bool {
-	return p.clause().Matches(selectorquery.EdgeNode{Edge: edgeNode(e)})
+	return p.clause().Matches(edgewedge.View{Edge: edgeNode(e)})
 }
 func (p FacePredicate) matches(f *Face) bool {
 	return p.clause().Matches(selectorquery.FaceNode{Face: faceNode(f)})
