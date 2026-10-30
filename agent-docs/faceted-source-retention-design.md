@@ -543,11 +543,11 @@ takes the body.
 | Test | Asserts | Red leg |
 |---|---|---|
 | Plate drilled 30° off the normal by a rotated tool | the rotation charges the tool's wall (§3.5), so the wall keeps its `Cylinder`, both mouths keep `FacetedCurve` and the plate's 12 edges stay `Line3` | drop the placed-operand charge: both mouths publish `Ellipse3` |
+| `RetainedEdgeCurve` unit tests | an open chain sweeping counter-clockwise publishes `Axis = +n` and a clockwise one `−n`; a chain 0.5 mm off the cylinder declines; a chain 0.5 mm off the plane declines; `k = 5·10⁻⁴` declines; a doubled-back chain declines | drop the cylinder half of E6: the off-cylinder chain publishes an ellipse; negate the sweep sign: the clockwise chain reads counter-clockwise |
 
 E8 publishes an `Ellipse3` only from the unit tests: an oblique cylinder from a
 rotation states a departure (§3.5), and no sketch plane gives an exact
 oblique tag, so no end-to-end test reaches it.
-| `RetainedEdgeCurve` unit tests | an open chain sweeping counter-clockwise publishes `Axis = +n` and a clockwise one `−n`; a chain 0.5 mm off the cylinder declines; a chain 0.5 mm off the plane declines; `k = 5·10⁻⁴` declines; a doubled-back chain declines | drop the cylinder half of E6: the off-cylinder chain publishes an ellipse; negate the sweep sign: the clockwise chain reads counter-clockwise |
 
 ## 11. Why the hint helps a later Boolean, and its limit
 
