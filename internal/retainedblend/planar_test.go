@@ -2,6 +2,7 @@ package retainedblend
 
 import (
 	"math"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -33,6 +34,26 @@ func TestTriangulateRegionKeepsEveryLoopVertex(t *testing.T) {
 		require.True(t, used[v], "vertex %d appears in a triangle", v)
 	}
 	require.InDelta(t, 100-16, area, 1e-12)
+}
+
+func TestSortPlanarEarsUsesAtOrderForQualityTies(t *testing.T) {
+	ears := []planarEar{{at: 3, quality: 1}, {at: 1, quality: 2}, {at: 0, quality: 1}, {at: 2, quality: 2}}
+
+	sortPlanarEars(ears)
+
+	require.Equal(t, []planarEar{{at: 1, quality: 2}, {at: 2, quality: 2}, {at: 0, quality: 1}, {at: 3, quality: 1}}, ears)
+}
+
+func TestSortPlanarEarsKeepsStableOrderWithNaN(t *testing.T) {
+	ears := []planarEar{{at: 2, quality: 1}, {at: 1, quality: math.NaN()}, {at: 0, quality: 1}, {at: 3, quality: 2}}
+	want := append([]planarEar(nil), ears...)
+	sort.SliceStable(want, func(i, j int) bool { return want[i].quality > want[j].quality })
+
+	sortPlanarEars(ears)
+
+	for i := range ears {
+		require.Equal(t, want[i].at, ears[i].at)
+	}
 }
 
 func TestZipperJoinsRingsOfDifferentCounts(t *testing.T) {
