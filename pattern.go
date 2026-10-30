@@ -421,7 +421,12 @@ func (rp resolvedPattern) quarterTurnedInstance(ctx context.Context, d *Document
 	if err != nil {
 		return nil, false
 	}
-	body, err := solidFromMeshBodyAt(ctx, d, mesh, ref)
+	var body *Body
+	if held.ContactAudited {
+		body, err = solidFromExactQuarterTurnMeshBodyAt(ctx, d, mesh, ref)
+	} else {
+		body, err = solidFromMeshBodyAt(ctx, d, mesh, ref)
+	}
 	if err != nil {
 		return nil, false
 	}

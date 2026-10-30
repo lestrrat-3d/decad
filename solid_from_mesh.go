@@ -63,6 +63,17 @@ func solidFromMeshBody(ctx context.Context, d *Document, m *MeshBody) (*Body, er
 
 // solidFromMeshBodyAt is solidFromMeshBody under the producer identity ref, for an operation that evaluates under one.
 func solidFromMeshBodyAt(ctx context.Context, d *Document, m *MeshBody, ref producerID) (*Body, error) {
+	return solidFromMeshBodyAtWithContactAudit(ctx, d, m, ref, true)
+}
+
+// solidFromExactQuarterTurnMeshBodyAt rebuilds a mesh whose vertices came from
+// quarterTurnVerts applied to a ContactAudited faceted payload. That exact
+// coordinate permutation preserves the source's whole-mesh contact proof.
+func solidFromExactQuarterTurnMeshBodyAt(ctx context.Context, d *Document, m *MeshBody, ref producerID) (*Body, error) {
+	return solidFromMeshBodyAtWithContactAudit(ctx, d, m, ref, false)
+}
+
+func solidFromMeshBodyAtWithContactAudit(ctx context.Context, d *Document, m *MeshBody, ref producerID, auditContacts bool) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a conversion`, ErrDegenerate)
 	}
@@ -81,12 +92,14 @@ func solidFromMeshBodyAt(ctx context.Context, d *Document, m *MeshBody, ref prod
 		return nil, fmt.Errorf(`%w: a mesh of %d triangles is past the %d the crossing audit proves`,
 			ErrUnsupported, len(tris), loftmesh.MaxLoftAuditTriangles)
 	}
-	if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), verts, tris,
-		loftmesh.MaxLoftAuditTriangles, solidFromMeshScans); err != nil {
-		if errors.Is(err, ErrUnsupported) || ctx.Err() != nil {
-			return nil, err
+	if auditContacts {
+		if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), verts, tris,
+			loftmesh.MaxLoftAuditTriangles, solidFromMeshScans); err != nil {
+			if errors.Is(err, ErrUnsupported) || ctx.Err() != nil {
+				return nil, err
+			}
+			return nil, fmt.Errorf("%w: the mesh crosses itself: %s", ErrDegenerate, err)
 		}
-		return nil, fmt.Errorf("%w: the mesh crosses itself: %s", ErrDegenerate, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
