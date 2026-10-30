@@ -381,7 +381,7 @@ func rewriteCorners(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 				la.ends[i].exact = pl.o
 			}
 		}
-		removed, blend := w.lineAreasAt(la, spec, true, g.center, g.baseA, g.baseB, g.rowIdx, flat)
+		removed, blend := w.lineAreasAt(la, spec, true, g.center, g.baseA, g.baseB, g.rowIdx, flat, [2]bool{})
 		removedTrue += removed
 		blendTrue += blend
 	}

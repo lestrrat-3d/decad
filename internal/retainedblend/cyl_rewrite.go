@@ -487,7 +487,8 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 			reach[j] = w.verts[rows[j]]
 		}
 		kinds := [2]sideKind{kindA[i], trims}
-		loops, err := w.endFace(c.ends[i], fG[i], runA.chain[i], runB.chain[i], kinds, remA[i], remB[i], rows, reach, margin, convex)
+		loops, _, err := w.endFace(c.ends[i], fG[i], runA.chain[i], runB.chain[i], kinds, remA[i], remB[i], rows, reach,
+			margin, convex, false)
 		if err != nil {
 			return nil, err
 		}

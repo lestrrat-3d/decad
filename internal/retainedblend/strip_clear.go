@@ -24,10 +24,10 @@ import (
 // meshbool's exact triangle/triangle classification on the held floats. A
 // pair that shares a vertex is the construction's own seam, along the base's
 // setback contour, a wall's cut or an end face's trim, and is not tested. The
-// test only refuses. An end face that is reflex at an open chain's corner
-// takes the blend's end cap, which closes the region K on that side: its
-// rebuilt facets are new surface too, and are tested the same way against
-// every facet the result keeps outside them.
+// test only refuses. An end face that is reflex at an open chain's corner, or
+// at a convex straight edge's end, takes the blend's end cap, which closes the
+// region K on that side: its rebuilt facets are new surface too, and are
+// tested the same way against every facet the result keeps outside them.
 
 // facetBox is a facet's float bounding box. Its corners are exact
 // coordinates, so two boxes that miss prove the facets miss.
@@ -63,7 +63,8 @@ type exactFacet struct {
 }
 
 // buildClear is build after checkStripClear, for the routes that blend one
-// edge or a mitre run. A chain runs the check itself before its build.
+// edge or a mitre run and take no cap. A chain, and a straight edge, run the
+// check themselves before their build.
 func (w *work) buildClear(ctx context.Context, env topo.Env, groups []facetedrecord.Group, stripFrom int,
 	tag blendTag, faceIndex map[*topo.Face]int) (*topo.Body, error) {
 	if err := w.checkStripClear(ctx, stripFrom, nil); err != nil {

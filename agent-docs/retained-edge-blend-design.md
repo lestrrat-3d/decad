@@ -540,11 +540,27 @@ where both faces are reflex. Which way a face leaves the edge comes from the
 loop: a face lies to the left of its own boundary, so the way into `A` is
 `n_A × δ`, with `δ` the direction the loop runs along the edge.
 
+**An end face that is reflex at the corner.** A convex edge whose two faces both
+trim at `V` can end on a `G` that is reflex there, as a boss's side edge ends on
+the plate's top face, which wraps the boss's footprint. The corner region of the
+cross-section, projected along `d̂` onto `G`'s plane, lies on the far side of
+`G`'s two chains from `G`: before the blend it is inside the material, after it
+is the floor of the removed region. `G` takes it as the blend's end cap. Its
+loop is rebuilt as in step 3, which now encloses the corner region, and its
+rebuilt facets are new surface: `checkStripClear` tests them, as it tests an
+open chain's taken cap (retained-modify-reach §5.6), against every facet the
+result keeps outside them, and refuses on any contact. The SR5 reach check
+already keeps the rest of `G`'s boundary off the cap. `G`'s turn at `V` is read
+from the last vertices of its two chains, which the setback clearance places
+beyond the setback points, so a held vertex just beside `V` cannot leave it
+undecided.
+
 **Exact areas.** The removed region of `A` is the quadrilateral
 `V₀ V₁ P_A,₁ P_A,₀`, and `B`'s likewise. The removed region of `G_i` is the
 projection along `d̂` of the corner region of the cross-section, area
 `r²(tan(φ/2) − φ/2)`, so its area is that over `|d̂ · n_G|`. A chamfer removes
-the triangle `V_i P_A,i P_B,i` from `G_i`. The cylinder patch has area
+the triangle `V_i P_A,i P_B,i` from `G_i`. A `G_i` reflex at `V_i` gains the
+same area instead. The cylinder patch has area
 `r·ℓ_c·φ + r²·tan(φ/2)·μ·(a₀ + a₁)`, with `ℓ(x) = ℓ_c + μ·(x − c)` the length of
 the generator through `x` between the two end planes, `c` the axis point and
 `a₀`, `a₁` the unit vectors from `c` to the two tangent lines. The chamfer plane
@@ -583,7 +599,7 @@ of that computation.
 | **SR2** | two selected edges share a vertex and are neither a mitre run (§4.7) nor corners of perpendicular faces (§4.8), or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
 | **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, a chamfer distance of zero or below, or an R6 setback that reaches the axis or runs past the sphere's pole (§4.5) | no regular blend | `ErrDegenerate` |
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
-| **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or `G`'s corner at the vertex does not match the edge (a convex edge needs a convex corner of `G`, a concave edge a reflex one), or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face, or another part of `G` comes within the blend's reach of the vertex | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
+| **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or `G`'s turn at the vertex is undecided, or a concave edge's `G` turns the wrong way (a reflex corner is needed, or a convex one where `A` or `B` is reflex at the vertex), or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face, or another part of `G` comes within the blend's reach of the vertex | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
 | **SR6** | the held mesh disagrees with the exact vertex of its three tags by more than the vertex bound plus slack (§6.3) | the record and the mesh do not describe one solid | `ErrUnsupported` |
 | **SR7** | a facet the rewrite keeps outside the new strip meets a strip facet it shares no vertex with (the strip clearance of retained-modify-reach §5.6, run before the build), or the rewritten mesh fails the held audit (watertight, shells nested with consistent signs; the audit tests no facet pair for intersection) | the result is invalid | `ErrDegenerate` when the audit proves a face inside out (modify S8), else `ErrUnsupported` |
 
@@ -734,6 +750,7 @@ published bound, never with a pinned literal.
 | 45° edge (R1 fillet) | setback `r·tan(φ/2)`; removed area per unit length `r²(tan(φ/2) − φ/2)` | use `r` for the setback at `φ ≠ π/2`: the 45° test fails |
 | Plane to cylinder edge (R3): a groove's top edge, fillet and chamfer | the fillet's centre and tangent points are those of the cross-section; the volume change equals `L` times the area of the corner region, and the surface changes by the cylinder gained less the plane strip, the wall band and a corner of each end face | take `κ` the other way: the ball sits on the wrong side of the wall |
 | Plane to cylinder edge at a boss's foot | the plate's top face is reflex at each end; the fill adds `L` times the corner region's area, and `VerifyAll` passes | |
+| Convex side edges of a boss at its foot (`apitest/faceted_retained_blend_boss_foot_test.go`): a 20×20×15 box boss on an 80×60×10 plate with a placed through hole; a 60° corner; a pillar between two plates | the plate's top face is reflex at each foot and takes the cap. Fillet r = 3 of the four sides removes `4·15·r²(1 − π/4)`, Chamfer d = 2 removes `4·15·d²/2`, the 60° corner `15·r²(tan(φ/2) − φ/2)` with `φ = 2π/3`, the pillar `15·r²(1 − π/4)` with a cap at each end; the area changes by the blend face less the two strips, plus each cap the end faces take, and the bound's growth stays under twice the caps' area; `VerifyAll` passes. A cavity crossing the cap refuses "the cap an end face takes meets …", a hole within the blend's reach on the plate's top refuses SR5, and a convex edge whose face is reflex at the foot refuses SR5 | build no cap: the boss refuses SR5; drop the cap's facets from the strip-clear check: the cavity builds; charge the cap as a corner `G` gives up: the bound's growth passes twice the caps; read the turn from the chains' first vertices: the 60° corner refuses SR5; drop the reflex-face check: the step's wall edge builds |
 | Concave edge in an L section | the fill adds `L·r²(1 − π/4)`, the blend's normal points into the void, `VerifyAll` passes | build the convex blend: the normal points into the material |
 | Concave edge at a wall's foot | the plate face is reflex at each foot corner; the fill adds `L·r²(1 − π/4)`, the wall's end faces grow by the caps, `VerifyAll` passes; two foot edges together and a chamfer build as well | keep `V` out of the extended end face's loop: the mesh fails its audit |
 | Oblique end face | the end arc is an `Ellipse3` with `SemiMinor = r` and `SemiMajor = r / |d̂ · nG|`; removed volume equals the section area times the length between the end planes measured through the section's centroid | treat `G` as normal to the edge: the volume is off by the centroid offset |
