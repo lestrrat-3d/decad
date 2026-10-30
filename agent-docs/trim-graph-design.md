@@ -110,7 +110,6 @@ trims the new face by other faces.
 | Row | Refusal site |
 |---|---|
 | Modify: "Retained edge blend or tangent chain whose new strip would cross another part" | `internal/retainedblend/strip_clear.go:173` |
-| Modify: "Fillet/chamfer of a mesh Boolean result's edge that ends at a tangent junction" | `internal/retainedblend/chain.go` (SM2) |
 | Modify: "Open tangent chain on a mesh Boolean result whose concave end edge is an arc" | `internal/retainedblend/chain_arc_end.go:45`, `chain_open.go` |
 | (blend SR2) two selected edges sharing a vertex | `internal/retainedblend/route.go` "two selected edges share a corner" |
 
@@ -140,7 +139,8 @@ stacked chamfer selection", Feature "`Draft` of a wall subset that moves one of 
 
 Contact on the mesh path, tangent and coplanar contact, level denotations (prism `Cut` levels, blind cuts at displaced
 levels), sketch arrangements of trimmed sections, the tangent junction that misses tangency by a rounding (stays
-refused by soundness rule S6), free-form walls, STEP rows, sweep and loft topology rows.
+refused by soundness rule S6), an edge ending at a tangent junction whose continuation is not selected (a correct
+refusal in `agent-docs/missing-features.md`), free-form walls, STEP rows, sweep and loft topology rows.
 
 ## Approach
 
