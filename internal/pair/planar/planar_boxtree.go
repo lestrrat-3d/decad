@@ -29,7 +29,11 @@ type boxTreeNode struct {
 const boxTreeLeaf = 8
 
 func newBoxTree(boxes []floatBox) *boxTree {
-	t := &boxTree{boxes: boxes, order: make([]int, len(boxes))}
+	t := &boxTree{
+		boxes: boxes,
+		order: make([]int, len(boxes)),
+		nodes: make([]boxTreeNode, 0, boxTreeNodeCount(len(boxes))),
+	}
 	for i := range t.order {
 		t.order[i] = i
 	}
@@ -37,6 +41,18 @@ func newBoxTree(boxes []floatBox) *boxTree {
 		t.build(0, len(boxes))
 	}
 	return t
+}
+
+func boxTreeNodeCount(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	if n <= boxTreeLeaf {
+		return 1
+	}
+	left := n / 2
+	right := n - left
+	return 1 + boxTreeNodeCount(left) + boxTreeNodeCount(right)
 }
 
 // build adds the node for order[lo:hi] and returns its index.
