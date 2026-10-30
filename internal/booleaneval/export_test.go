@@ -38,6 +38,9 @@ func GrowPieces(m *topo.Mesh, grows map[int]float64) (*topo.Mesh, *topo.Mesh, fl
 	return shiftOperandMesh(context.Background(), m, piecesOf(m), moves)
 }
 
+// MoveRounding exposes moveRounding to the external test package.
+var MoveRounding = moveRounding
+
 // PieceShift exposes pieceShift to the external test package.
 type PieceShift = pieceShift
 

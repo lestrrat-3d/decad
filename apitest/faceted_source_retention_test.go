@@ -402,4 +402,59 @@ func TestFacetedSourceRetention(t *testing.T) {
 		require.Equal(t, 2, ellipses)
 		require.Equal(t, 12, lines, "the plate's own edges")
 	})
+
+	// The drill's rim circles are centred at x = 20. A translation by 44 moves
+	// the bore's tag exactly, to x = 64. A translation by 44 + 2^-47 moves the
+	// true centre to 64 + 2^-47, which is not a float: the sum crosses 64,
+	// where the spacing doubles to 2^-46, and the tag's origin rounds to 64.
+	// That tag states a departure, and a Circle3 built from it would claim the
+	// centre 64 with no bound, so the rims keep their chords
+	// (agent-docs/faceted-source-retention-design.md §10.1 E12).
+	t.Run("a translation that rounds the bore's origin keeps the rims' chords", func(t *testing.T) {
+		t.Parallel()
+		sc := newRetentionScene()
+		drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))
+		require.NoError(t, err)
+		// rims returns the curves of the bore wall's edges after the move.
+		rims := func(dx float64) (circles []decad.Circle3, chains int) {
+			twin, err := decad.Copy(t.Context(), drilled)
+			require.NoError(t, err)
+			moved := translated(t, twin, dx, 0, 0)
+			bores := 0
+			for _, f := range moved.Faces() {
+				cyl, ok := f.Surface().(decad.Cylinder)
+				if !ok || cyl.Radius.Base() != 4 {
+					continue
+				}
+				bores++
+				require.Equal(t, 64.0, cyl.Origin.X, "the bore's tag origin is the float 64")
+				for _, e := range f.Edges() {
+					switch c := e.Curve().(type) {
+					case decad.Circle3:
+						circles = append(circles, c)
+					case decad.FacetedCurve:
+						chains++
+					default:
+						require.Failf(t, "unexpected rim curve", "%T", c)
+					}
+				}
+			}
+			require.Equal(t, 1, bores, "the bore wall keeps its Cylinder tag")
+			return circles, chains
+		}
+
+		circles, chains := rims(44)
+		require.Len(t, circles, 2, "an exact move keeps the drill's rims as circles")
+		require.Zero(t, chains)
+		for _, c := range circles {
+			require.Equal(t, 64.0, c.Center.X)
+		}
+
+		dx := 44 + 0x1p-47
+		require.NotEqual(t, 44.0, dx)
+		require.Equal(t, 64.0, 20+dx, "the moved origin rounds")
+		circles, chains = rims(dx)
+		require.Empty(t, circles, "a departed bore publishes no circle centred at the rounded origin")
+		require.Equal(t, 2, chains, "the drill's rims keep their chord chains")
+	})
 }

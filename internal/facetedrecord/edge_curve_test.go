@@ -157,6 +157,65 @@ func TestRetainedEdgeCurveDisplacedPlaneDeclinesConic(t *testing.T) {
 	})
 }
 
+// TestRetainedEdgeCurveDepartedTagKeepsChords pairs faces whose tags state a
+// departure (§10.1 E12): every rim but a plane-plane line keeps its chords.
+func TestRetainedEdgeCurveDepartedTagKeepsChords(t *testing.T) {
+	t.Parallel()
+	departed := func(f *topo.Face) *topo.Face {
+		f.TagDeparture = 0x1p-50
+		return f
+	}
+	floor := func() *topo.Face {
+		return retained(planeAt(t, r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)))
+	}
+	bore := func() *topo.Face {
+		return retained(surfacegeom.Cylinder{Origin: r3.NewVec(10, 10, 0), Axis: r3.NewVec(0, 0, 1),
+			Radius: units.Millimeters(4)})
+	}
+	ring, ringBounds := arcChain(r3.NewVec(10, 10, 0), 0, 2*math.Pi, 8)
+	ring[len(ring)-1] = ring[0]
+
+	curve, ok := facetedrecord.RetainedEdgeCurve(floor(), bore(), ring, ringBounds, true)
+	require.True(t, ok)
+	require.IsType(t, surfacegeom.Circle3{}, curve, "two exact tags publish the bore circle")
+	_, ok = facetedrecord.RetainedEdgeCurve(floor(), departed(bore()), ring, ringBounds, true)
+	require.False(t, ok, "a departed cylinder keeps the bore rim's chords")
+	_, ok = facetedrecord.RetainedEdgeCurve(departed(floor()), bore(), ring, ringBounds, true)
+	require.False(t, ok, "a departed plane keeps the bore rim's chords")
+	_, ok = facetedrecord.RetainedEdgeCurve(floor(), &topo.Face{Surface: bore().Surface, RetainedTag: true,
+		TagDeparture: math.NaN()}, ring, ringBounds, true)
+	require.False(t, ok, "a departure that is not a number keeps the chords")
+
+	arc, arcBounds := arcChain(r3.NewVec(10, 10, 0), 0.2, 2.5, 6)
+	_, ok = facetedrecord.RetainedEdgeCurve(floor(), departed(bore()), arc, arcBounds, false)
+	require.False(t, ok, "a departed cylinder keeps an arc rim's chords")
+
+	tilted, cyl, _, point := obliqueScene(t)
+	ellipse, ellipseBounds := ellipseChain(point, 0, 2*math.Pi, 12)
+	ellipse[len(ellipse)-1] = ellipse[0]
+	_, ok = facetedrecord.RetainedEdgeCurve(tilted, departed(cyl), ellipse, ellipseBounds, true)
+	require.False(t, ok, "a departed cylinder keeps an ellipse rim's chords")
+
+	ball := departed(retained(surfacegeom.Sphere{Center: r3.NewVec(0, 0, 3), Radius: units.Millimeters(5)}))
+	sphereRing, sphereBounds := arcChain(r3.Vec{}, 0, 2*math.Pi, 8)
+	sphereRing[len(sphereRing)-1] = sphereRing[0]
+	_, ok = facetedrecord.RetainedEdgeCurve(floor(), ball, sphereRing, sphereBounds, true)
+	require.False(t, ok, "a departed sphere keeps its circle's chords")
+
+	blend := departed(retained(surfacegeom.Cylinder{Origin: r3.NewVec(3, 0, 3), Axis: r3.NewVec(0, 1, 0),
+		Radius: units.Millimeters(3)}))
+	line := []r3.Vec{r3.NewVec(3, 0, 0), r3.NewVec(3, 5, 0), r3.NewVec(3, 9, 0)}
+	lineBounds := []float64{1e-9, 1e-9, 1e-9}
+	_, ok = facetedrecord.RetainedEdgeCurve(floor(), blend, line, lineBounds, false)
+	require.False(t, ok, "a departed cylinder keeps a generator rim's chords")
+
+	wall := departed(retained(planeAt(t, r3.Vec{}, r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))))
+	curve, ok = facetedrecord.RetainedEdgeCurve(departed(floor()), wall,
+		[]r3.Vec{r3.NewVec(0, 0, 0), r3.NewVec(0, 3, 0), r3.NewVec(0, 7, 0)}, lineBounds, false)
+	require.True(t, ok, "two departed planes still meet in a line")
+	require.IsType(t, surfacegeom.Line3{}, curve)
+}
+
 func TestRetainedEdgeCurvePlaneCylinder(t *testing.T) {
 	t.Parallel()
 	floor := retained(planeAt(t, r3.Vec{}, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0)))

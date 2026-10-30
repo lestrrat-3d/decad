@@ -361,6 +361,7 @@ chord chain; nothing refuses.
 | E8 | `Plane` and `Cylinder` with the axis oblique to the plane: `|axis × n| > 10⁻¹²` and `|axis · n| ≥ 10⁻³` | `Ellipse3`, §10.5 |
 | E10 | `Cylinder` and `Cylinder` with parallel axes (`|a1 × a2| ≤ 10⁻¹²`) at distance `s` with `|R1 − R2| < s < R1 + R2` within slack | `Line3`. Two generators exist, at the cross-section's circle intersections; either passes if the falsifier accepts it (reach §8) |
 | E11 | `Cylinder` of radius `r` and `Torus` of tube radius `r` (equal within slack) with the cylinder axis `d` normal to the torus axis `a` (`|d · a| ≤ 10⁻¹²`), where `c` is the point of the cylinder's axis nearest the torus centre `C`: `c − C` lies in the torus's equatorial plane (`|(c − C) · a| ≤ slack`) at distance `Major` from `C` (within slack) | `Arc3` about `c` of radius `r`, axis `±d`, or `Circle3` for a closed rim. This is the junction of two retained blends (reach §5.4); the falsifier E6 and the sweep rule E7 apply |
+| E12 | When either face states a nonzero `TagDeparture` (§3.4), only E2 applies | A departed tag is a float image that may lie off its true surface by the rounding of its placement. A `Circle3`, `Arc3` or `Ellipse3` publishes the tags' centre, axis and radius with no curve bound, and the `Line3` of E4 and E10 is straight only while the two directions are exactly parallel, so those pairs keep `FacetedCurve`. Two `Plane` tags stand for two true planes whatever their departure, so E2 still publishes a `Line3` |
 
 A `Line3` carries no parameters, so E2 and E4 assert only that the edge is
 straight between its vertices. The other pairs (`Cylinder`/`Cylinder` with crossing axes, `Cone`,
@@ -375,7 +376,9 @@ residual.
 ### 10.2 What the curve says and does not say
 
 The curve parameters (`Center`, `Axis`, `Radius`) are the exact intersection of
-two recorded surfaces, floats rounded once. Vertex positions stay the held
+two recorded surfaces, floats rounded once. A curve with parameters comes
+only from two tags that state a zero `TagDeparture` (E12), each the exact
+true surface. Vertex positions stay the held
 positions with their `Bound`. An edge therefore runs between two vertices that
 may sit up to their bound off the curve, and a reader that wants the curve
 reads the curve, not the endpoints. `topo.Edge.CurveBounded` stays false: the
@@ -416,6 +419,7 @@ public API.
 | Drilled filleted box | 16 `Line3`, 8 `Arc3` of radius 3 about z, 2 `Circle3` of radius 4 about y through (20, ·, 10) | return the chord chain unconditionally: no edge is a line, arc or circle |
 | `RetainedEdgeCurve` unit tests | plane-plane and plane-cylinder (tangent generator, bore circle) accept; a mispaired chain, a face meeting itself, an untagged face and parallel planes decline; a counter-clockwise run sweeps about +z and a clockwise one about −z; two vertices or a doubled-back chain decline | drop E6: the 0.5 mm-off bore chain publishes a circle |
 | STEP | a retained drilled plate still writes planar triangles and no analytic entity | none; the test pins that the analytic writer stays off |
+| Departed tag (E12) | the drilled box moved by 44 keeps both bore rims as `Circle3` at x = 64; moved by `44 + 2^-47`, whose sum `64 + 2^-47` rounds to 64, the bore wall keeps its `Cylinder` and both rims read `FacetedCurve`; the unit test declines every curved rim and E4 line of a departed tag and keeps the line of two departed planes | drop E12: the rounded bore publishes two `Circle3` centred at x = 64 |
 
 ### 10.5 The oblique plane and cylinder
 

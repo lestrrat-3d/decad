@@ -38,6 +38,21 @@ func RetainedEdgeCurve(a, b *topo.Face, chain []r3.Vec, bounds []float64, closed
 		return nil, false
 	}
 	ta, tb := a.Surface, b.Surface
+	// A tag that states a departure (a placement or a shifted retry whose moved
+	// origin rounded, retention §3.4) is a float image that may lie off its
+	// true surface. A circle, arc or ellipse is published with the tags'
+	// centre, axis and radius and no curve bound, and a line between a plane
+	// and a cylinder or two cylinders is straight only while their directions
+	// are exactly parallel, which the departure no longer proves. Such a pair
+	// keeps its chord chain (§10.1 E12). Two Plane tags stand for two true
+	// planes whatever their departure, so their rim is still a Line3.
+	if a.TagDeparture != 0 || b.TagDeparture != 0 {
+		_, pa := ta.(surfacegeom.Plane)
+		_, pb := tb.(surfacegeom.Plane)
+		if !pa || !pb {
+			return nil, false
+		}
+	}
 	if circle, ok := cylinderTorusRim(ta, tb, chain, bounds, closed); ok {
 		return circle, true
 	}
