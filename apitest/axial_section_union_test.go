@@ -65,9 +65,15 @@ func BenchmarkAxialSectionUnion17Lobes(b *testing.B) {
 		doc := decad.New()
 		disc := circleBodyAtZ(b, doc, 0, r, 0, height)
 		lobes := make([]*decad.Body, n)
+		sum := 0.0
 		for k := range lobes {
 			lobes[k] = lobeLoft(b, doc, r, 2*math.Pi*float64(k)/n,
 				0.4*math.Pi/float64(n), height)
+			volume, err := lobes[k].Volume()
+			if err != nil {
+				b.Fatal(err)
+			}
+			sum += volume.Value.Base()
 		}
 		joined, err := decad.Union(b.Context(), disc, lobes...)
 		if err != nil {
@@ -76,6 +82,18 @@ func BenchmarkAxialSectionUnion17Lobes(b *testing.B) {
 		if !joined.IsSolid() {
 			b.Fatal("union of seventeen lobes is not solid")
 		}
+		volume, err := joined.Volume()
+		if err != nil {
+			b.Fatal(err)
+		}
+		want := math.Pi*r*r*height + sum
+		require.InDelta(b, want, volume.Value.Base(), volume.Bound.Base()+1e-9)
+		mesh, err := joined.Tessellate(b.Context(), units.Millimeters(0.05), decad.WithVerification(decad.VerifyAll))
+		if err != nil {
+			b.Fatal(err)
+		}
+		require.True(b, mesh.BoundaryVerified())
+		require.True(b, mesh.VolumeVerified())
 	}
 }
 
