@@ -362,8 +362,11 @@ the recorded profile as its material region. Reconstruct that profile on a
 fresh Sketch and require its matching valid region before returning it.
 Cap-level, oblique, translated and twisted requests return `ErrUnsupported`.
 Differing sections use the line-only or circular-hole classes below when
-admitted. Cut and Fillet rewrites refuse because their inserted holes
-or connector arcs were not authenticated by both source Sketch profiles.
+admitted. A certified through-bore Cut has its own exact section route when it
+adds one D-shaped hole to otherwise matching profiles. The route requires the
+source Sketch records, canonical axial frames, identity placement, zero
+alignment, and an interior world-XY request; other Cut rewrites and Fillet
+connector arcs remain unsupported.
 
 ## Parallel section of an authenticated line-only Loft
 

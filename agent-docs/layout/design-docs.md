@@ -103,7 +103,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `seam.go` | Sketch chain recording adapters, `MeasureProfile` and `SecondMoments`; profile recording lives in `internal/sectioncert/`. See sketch-seam §1–§2. |
 | `section_outline.go` | Public `SectionOutline`, `Body.SectionOutline` (the verified mesh cut by a plane via `internal/meshslice/`) and `SectionOutline.Clearance`. See section-outline design. |
 | `section_orthogonal.go` | The orthogonal-polyhedron route of `Body.Section`: gates the frame and body, `internal/orthoshell/` traces the cut and `sectionclip` rebuilds the sketch. See orthogonal-section design. |
-| `section.go` | Planar section query over certified prism, stack-backed BRep, stacked prism, Loft, sphere, cone, Revolve meridian and mesh Boolean history records; builders live in `internal/sectionclip/` and `internal/sectionhistory/`; also the `Section` constraint. See section design, surface §13.2. |
+| `section.go` | Planar section query over certified prism, stack-backed BRep, stacked prism, Loft (including authenticated D-shaped through-bores), sphere, cone, Revolve meridian and mesh Boolean history records; builders live in `internal/sectionclip/` and `internal/sectionhistory/`; also the `Section` constraint. See section design, surface §13.2. |
 | `path.go` | The immutable spatial `Path`, sealed segments and its recorded `internal/sweepinput.Path`. See sweep §2–§3. |
 | `extent.go` | Public linear and angular extent variants and normalization. See API §8.1. |
 | `selector.go` | `EdgeQuery`/`FaceQuery`, which resolve against live bodies through `internal/selectorquery` node views. See API §9. |

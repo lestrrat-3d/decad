@@ -257,6 +257,63 @@ func LoftMatchingSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, b
 	return pl.Profile0, true
 }
 
+// LoftThroughBoreSectionRecord reads a D-shaped through-bore loft from its
+// authenticated, matching section records. The supporting wall is vertical, so
+// every interior world-XY section has the recorded profile.
+func LoftThroughBoreSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, bool) {
+	if !pl.AuthenticatedReconstruction || pl.SurfaceResult || !pl.ThroughBoreCut || pl.AnalyticBore ||
+		pl.ConstructionDelta != 0 || len(pl.BlendSegs) != 0 || pl.Xform != r3.Identity() ||
+		!sectionrecord.IdenticalRecord(pl.Profile0, pl.Profile1) || len(pl.Profile0.Holes) != 1 ||
+		!isDLoop(pl.Profile0.Holes[0]) {
+		return profileRecord{}, false
+	}
+	for _, offset := range pl.Alignment {
+		if offset != 0 {
+			return profileRecord{}, false
+		}
+	}
+	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
+	if pl.Frame0.U() != x || pl.Frame0.V() != y || pl.Frame0.N() != z ||
+		pl.Frame1.U() != x || pl.Frame1.V() != y || pl.Frame1.N() != z ||
+		plane.U() != x || plane.V() != y || plane.N() != z {
+		return profileRecord{}, false
+	}
+	if pl.Frame0.Origin().X != pl.Frame1.Origin().X ||
+		pl.Frame0.Origin().Y != pl.Frame1.Origin().Y ||
+		pl.Frame0.Origin().X != plane.Origin().X ||
+		pl.Frame0.Origin().Y != plane.Origin().Y ||
+		pl.Plane0.Origin.Z != pl.Frame0.Origin().Z ||
+		pl.Plane1.Origin.Z != pl.Frame1.Origin().Z {
+		return profileRecord{}, false
+	}
+	z0, z1 := proofarith.FloatRat(pl.Frame0.Origin().Z), proofarith.FloatRat(pl.Frame1.Origin().Z)
+	cut := proofarith.FloatRat(plane.Origin().Z)
+	if z0 == nil || z1 == nil || cut == nil || cut.Cmp(z0) <= 0 || cut.Cmp(z1) >= 0 {
+		return profileRecord{}, false
+	}
+	return pl.Profile0, true
+}
+
+func isDLoop(loop sectionrecord.LoopRecord) bool {
+	if len(loop.Segments) != 2 {
+		return false
+	}
+	line, circle := 0, 0
+	for _, segment := range loop.Segments {
+		switch segment.(type) {
+		case sectionrecord.LineSeg:
+			line++
+		case sectionrecord.CircleSeg:
+			circle++
+		case sectionrecord.ArcSeg:
+			circle++
+		default:
+			return false
+		}
+	}
+	return line == 1 && circle == 1
+}
+
 // LoftRuledLineSectionRecord intersects the exact triangular walls of a
 // direct line-only Loft. Each line pair contributes two triangles with one
 // diagonal, so its interior section can contain a kink at that diagonal.
