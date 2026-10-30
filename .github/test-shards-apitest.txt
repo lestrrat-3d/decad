@@ -2890,3 +2890,4 @@
 10	0.00	TestSurfaceExtendRevolvePartialNearestCut
 10	0.00	TestTrimGraphClosedShell
 10	0.00	TestStackedUnionBracketChamfers
+10	0.00	TestStackedUnionBracketShell

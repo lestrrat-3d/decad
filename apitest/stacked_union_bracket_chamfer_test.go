@@ -64,6 +64,23 @@ func requireBracketSound(t *testing.T, doc *decad.Document) {
 	require.Equal(t, decad.Sound, report.Status)
 }
 
+// TestStackedUnionBracketShell checks that an inward Shell of the L bracket
+// with its y = 0 end open builds. The bracket's section is the 816 mm^2 L; its
+// inward offset by t = 2 keeps both strips (56 x 4 and 4 x 46, overlapping in
+// a 4 x 4 square, area 392) plus the reflex corner's (6,8]^2 square less the
+// quarter disc of radius 2 about (8,8), 4 - pi, so 396 - pi. The cavity runs
+// from the open end to the closed end's inner face, 38 mm, and the wall keeps
+// 816·40 - 38·(396 - pi) = 17592 + 38·pi.
+func TestStackedUnionBracketShell(t *testing.T) {
+	t.Parallel()
+	doc, bracket := stackedLBracket(t)
+	out, err := decad.Shell(t.Context(), bracket, decad.Faces(decad.Facing(r3.NewVec(0, -1, 0))).Exactly(1),
+		units.Millimeters(2))
+	require.NoError(t, err)
+	decadtest.MeasuresVolume(t, out, units.CubicMillimeters(17592+38*math.Pi), decadtest.WithinRel(units.Scalar(1e-12)))
+	requireBracketSound(t, doc)
+}
+
 // TestStackedUnionBracketChamfers checks that a chamfer on the straight edge
 // of an exact stacked Union builds and measures what the cut removes or adds.
 func TestStackedUnionBracketChamfers(t *testing.T) {
@@ -93,6 +110,9 @@ func TestStackedUnionBracketChamfers(t *testing.T) {
 		requireBracketSound(t, doc)
 	})
 
+	// The equal chamfer builds through route P along y with or without this
+	// change; it is a regression guard for that route. Before the change its
+	// volume read Approximate (about 1.9e-9 bound) and now reads Exact.
 	t.Run("equal distance", func(t *testing.T) {
 		t.Parallel()
 		doc, bracket := stackedLBracket(t)
