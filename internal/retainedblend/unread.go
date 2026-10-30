@@ -94,7 +94,7 @@ func unreadReason(faces []tagFace) string {
 		case f.departs:
 			return "a face whose retained tag states a departure from the true surface (retained-edge-blend SR1)"
 		case f.notDenoted:
-			return "a face whose tag is not exactly the surface its revolve record denotes (retained-edge-blend SR1)"
+			return "a face whose tag is not proven to be exactly the surface its revolve record denotes (retained-edge-blend SR1)"
 		}
 	}
 	a, b := faces[0], faces[1]

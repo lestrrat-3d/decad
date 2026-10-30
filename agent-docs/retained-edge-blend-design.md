@@ -474,7 +474,7 @@ sentinel and appends `; no retained blend class reads selected edge[N]: <reason>
 that is in no class of Table RR, from the faces' tags and the edge's face count
 only, never from held geometry. The reasons are a face with no retained surface
 (faceted), a free-form surface, a face without a retained tag, a tag with a
-stated departure or one that is not its revolve record, two retained cylinders
+stated departure or one not proven to be exactly its revolve record, two retained cylinders
 whose axes are not parallel (the canal surface of SR1), a retained cone or
 torus, and otherwise the two retained kinds the edge lies between.
 

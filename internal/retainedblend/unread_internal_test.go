@@ -55,7 +55,7 @@ func TestUnreadReason(t *testing.T) {
 			"a face whose retained tag states a departure from the true surface (retained-edge-blend SR1)"},
 		{"tag that is not its revolve record", []tagFace{{kind: surfacegeom.KindCylinder, retained: true, notDenoted: true},
 			plain(surfacegeom.KindPlane)},
-			"a face whose tag is not exactly the surface its revolve record denotes (retained-edge-blend SR1)"},
+			"a face whose tag is not proven to be exactly the surface its revolve record denotes (retained-edge-blend SR1)"},
 		{"three faces", []tagFace{{}, {}, {}},
 			"the edge borders 3 faces, and a class reads an edge between exactly two"},
 		{"unmapped kind", []tagFace{plain(surfacegeom.SurfaceKind(99)), plain(surfacegeom.KindPlane)},
@@ -124,7 +124,20 @@ func TestUnreadFaceTags(t *testing.T) {
 		f := retainedFace(surfacegeom.Sphere{Radius: units.Millimeters(2)})
 		f.Denoted = denoted
 		require.Contains(t, Unread([]*topo.Edge{edge(f)}),
-			"a face whose tag is not exactly the surface its revolve record denotes")
+			"a face whose tag is not proven to be exactly the surface its revolve record denotes")
+	})
+	t.Run("a plane or cylinder whose record is not proven is named as such", func(t *testing.T) {
+		t.Parallel()
+		for _, surf := range []surfacegeom.Surface{surfacegeom.Plane{}, surfacegeom.Cylinder{}} {
+			f := retainedFace(surf)
+			f.Denoted = denoted // not Valid, so the tag is not proven to be the record
+			require.Contains(t, Unread([]*topo.Edge{edge(f)}),
+				"a face whose tag is not proven to be exactly the surface its revolve record denotes")
+		}
+	})
+	t.Run("a nil edge is named", func(t *testing.T) {
+		t.Parallel()
+		require.Equal(t, "no retained blend class reads selected edge[0]: it is not an edge", Unread([]*topo.Edge{nil}))
 	})
 	t.Run("a cone with a revolve record is named a cone", func(t *testing.T) {
 		t.Parallel()
