@@ -37,9 +37,9 @@ func Build(ctx context.Context, env topo.Env, fp facetedrecord.Payload, s Splice
 		return nil, fmt.Errorf("%w: a splice states %d vertices and %d bounds", decaderr.ErrUnsupported,
 			len(s.Verts), len(s.Bounds))
 	}
-	// The AreaSlack term for receiver faces whose facets are dropped (facetedrecord.FaceAreaGeom) needs the
-	// receiver's faces, which Build does not take; a splice that drops a facet is refused until the increment
-	// that drops one adds the term.
+	// A splice that drops receiver facets charges AreaSlack the shortfall of the rebuilt faces' geometric area
+	// terms against the receiver's by source group (agent-docs/retained-edge-blend-design.md §6.3, Area). That
+	// needs the receiver's faces, which Build does not take, so a splice that drops a facet is refused.
 	if len(s.Keep) != len(fp.Tris) {
 		return nil, fmt.Errorf("%w: a trim-graph splice must keep every receiver facet", decaderr.ErrUnsupported)
 	}

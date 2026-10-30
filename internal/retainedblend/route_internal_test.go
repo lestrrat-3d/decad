@@ -3,9 +3,11 @@ package retainedblend
 import (
 	"fmt"
 	"maps"
+	"math"
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -59,6 +61,30 @@ func TestGeomShortfall(t *testing.T) {
 	require.LessOrEqual(t, new(big.Rat).SetFloat64(got).Cmp(new(big.Rat).Add(want, slack)), 0)
 
 	require.Zero(t, geomShortfall(map[int]float64{0: 1}, map[int]float64{0: 1, 1: 1}))
+}
+
+// TestGeomShortfallNotFinite charges +Inf, which the build refuses, wherever a
+// group's difference is not a number or its old terms are infinite; a group
+// whose new terms are infinite charges nothing, since its own bound is.
+func TestGeomShortfallNotFinite(t *testing.T) {
+	t.Parallel()
+	inf := math.Inf(1)
+	for name, c := range map[string]struct {
+		oldGeom, newGeom map[int]float64
+		want             float64
+	}{
+		"both infinite":   {map[int]float64{0: inf, 1: 0.5}, map[int]float64{0: inf}, inf},
+		"old not number":  {map[int]float64{0: math.NaN()}, map[int]float64{0: 1}, inf},
+		"old infinite":    {map[int]float64{0: inf}, map[int]float64{0: 1}, inf},
+		"new infinite":    {map[int]float64{0: 1}, map[int]float64{0: inf}, 0},
+		"new not number":  {map[int]float64{0: 1}, map[int]float64{0: math.NaN()}, inf},
+		"finite with nan": {map[int]float64{0: 1, 1: 1}, map[int]float64{1: math.NaN()}, inf},
+	} {
+		require.Equal(t, c.want, geomShortfall(c.oldGeom, c.newGeom), name)
+	}
+	_, err := buildCharged(t.Context(), topo.Env{Doc: &topo.Document{}, Ref: 9, Alloc: topotest.Alloc{}},
+		boundedCube(t), map[int]float64{2: inf})
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 }
 
 // boundedCube is the cube [0, 10]³ as a retained faceted payload, one planar

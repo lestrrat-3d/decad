@@ -435,11 +435,16 @@ func buildCharged(ctx context.Context, env topo.Env, next facetedrecord.Payload,
 // how far each group's old terms exceed its new ones. oldGeom holds upper
 // bounds and newGeom lower bounds of the exact sums, so each positive
 // difference rounded up covers the exact one; a group the new body lacks
-// reads zero.
+// reads zero. A difference that is not a number, as of two infinite terms,
+// bounds nothing and charges +Inf, which the build refuses.
 func geomShortfall(oldGeom, newGeom map[int]float64) float64 {
 	total := 0.0
 	for _, g := range slices.Sorted(maps.Keys(oldGeom)) {
-		if d := oldGeom[g] - newGeom[g]; d > 0 {
+		d := oldGeom[g] - newGeom[g]
+		if math.IsNaN(d) {
+			return math.Inf(1)
+		}
+		if d > 0 {
 			total = proofbound.AbsSumUpper(total, proofbound.UpRound(d))
 		}
 	}

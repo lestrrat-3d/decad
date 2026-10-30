@@ -1024,8 +1024,23 @@ instead charges the same allowance a second time, beside its new term, and a
 blend of `n` edges that each rebuild one large face then charges that face's
 term `n` more times. A face that is the only face of its group in both bodies
 keeps its own area bound at or above its old term plus the old `AreaSlack`.
-The face's own share of `Δ_held − Δ_true` reaches its bound only through the
-signed sum over every face the rewrite touches.
+
+A face's own area bound is not derived from its old one: its term is computed
+afresh from its new facets (`agent-docs/faceted-vertex-bounds-design.md`
+§4.2), and the shortfall keeps only the body total. A new boundary chord of
+length `c` on a face, standing for an exact curve of the face whose sagitta
+against it is `s`, leaves a segment of area at most `c·s` between them: the
+segment lies in the chord's `c × s` rectangle, since the arc spans less than a
+half circle. Both forms of the face's term charge at least `β·c` for that
+chord, `β` the smaller bound of its two end vertices: the perimeter form's
+`δ_f` is at least `β` and its perimeter holds `c`, and the facet beside the
+chord charges `δ(t)·(|u| + |v|) ≥ β·c` by the triangle inequality. So the face's
+own term covers its share of the chord error wherever `s ≤ β`. The rim ring
+meets that (its step comes from `ringCount` at `τ`, and each ring vertex has
+bound `τ + slack`), and so do a straight edge's rows on the blend's circle
+(step `2·acos(1 − τ/r)`, bound `τ + slack`). A straight edge's rows projected
+along the edge onto an end face oblique to it do not: in the end plane `G` a
+row chord's sagitta reaches `τ/|d·n_G|` against the same bound `τ + slack`.
 
 **Volume.** The new `VolSymDiff` is the old one plus `ε·(A_strip + A_true)`, with
 `ε` the largest vertex bound of the strip and `A_strip`, `A_true` the held and
@@ -1096,8 +1111,8 @@ published bound, never with a pinned literal.
 | R6 kept inner vertex bound (unit test) | a vertex held `β` outside the sphere off a point inside the zone gets a bound that reaches the nearest point of the new boundary | keep its old bound: the bound falls short |
 | R6 pocket and dome foot | `Cut(slab, ball)` (convex, plane outside the rim, material outside the sphere) and `Union(ball, slab)` (concave, sphere rising): fillet and chamfer change the volume and the area by the meridian's closed forms; the torus and cone parameters match and the blend's normal points away from the material | flip the chamfer normal's sphere term for an outside material: the cone's normal points into the material |
 | Area slack carries the shortfall of the face terms | the fillet's area change lies within the bound's growth | drop the shortfall: the rebuilt bound grows by less than the change's error |
-| Shortfall by group (`internal/retainedblend/route_internal_test.go`, `internal/facetedrecord/build_test.go`) | a group whose old terms exceed its new ones by an exact half charges at least that half to `AreaSlack` and the area bound, a group the new body lacks charges all its old terms, the lower sum stays at or below the exact sum, and `ChargeAreaSlack` raises every face's and the body's bound by at least the charge | drop the charge, the group the new body lacks, the lower sum's step down, or a face's or the body's charge: each test fails |
-| Four boss side fillets, then a rim chamfer, on one plate (`apitest/faceted_retained_blend_area_charge_test.go`): the 20×20×15 box boss, a counterbored M6 hole and a placed round boss of radius 6 on an 80×60×10 plate, r = 2, then d = 1 | each volume equals the hand volume within its bound; `Verify` reads `Sound` with the area within its tolerance | charge each rewritten face's whole old term: the plate's top charges its term once per side edge and the area bound passes its tolerance |
+| Shortfall by group (`internal/retainedblend/route_internal_test.go`, `internal/facetedrecord/build_test.go`) | a group whose old terms exceed its new ones by an exact half charges at least that half to `AreaSlack` and the area bound, a group the new body lacks charges all its old terms, the lower sum stays at or below the exact sum, `ChargeAreaSlack` raises every face's and the body's bound by at least the charge, and a difference that is not a number, as of two infinite terms, charges `+Inf`, which the build refuses | drop the charge, the group the new body lacks, the lower sum's step down, a face's or the body's charge, or the `+Inf` charge: each test fails |
+| Four boss side fillets, then a rim chamfer, on one plate (`apitest/faceted_retained_blend_area_charge_test.go`): the 20×20×15 box boss, a counterbored M6 hole and a placed round boss of radius 6 on an 80×60×10 plate, r = 2, then d = 1 | each volume and area equals the hand value within its bound; `Verify` reads `Sound` with the area within its tolerance | charge each rewritten face's whole old term: the plate's top charges its term once per side edge and the area bound passes its tolerance |
 | Result is an ordinary retained body | a second blend on another edge, a `Cut` through the blended region and `Transform` all build; `NormalAt` on the blend face has a bound below 1 | store the blend with `Retained = false`: the chain loses the tag |
 | New vertex bounds | every new vertex lies within its stated bound of its exact point | skip the rounding charge: the bound is zero and the check fails |
 | Verify | `Verify` of a blended plate passes with no `Suspect` in watertightness | |
