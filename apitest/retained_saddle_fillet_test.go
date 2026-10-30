@@ -13,13 +13,24 @@ import (
 )
 
 // The fixtures of agent-docs/retained-edge-blend-design.md §4.10: the R7
-// shafts of retained_saddle_chamfer_test.go, filleted. In the fixed pose of
-// agent-docs/cross-cylinder-bore-chamfer-design.md (shaft x² + y² = R² about
-// z, bore y² + z² = r² about x, mouth at x > 0) a ball of radius ρ inside the
-// shaft and outside the bore has its centre on the closed curve
-// c(θ) = (√(R'² − r'²cos²θ), r'cos θ, r'sin θ), R' = R − ρ, r' = r + ρ, and
-// touches the shaft along a1 = (c_x, c_y, 0)/R' and the bore along
-// a2 = −(0, cos θ, sin θ).
+// shafts of retained_saddle_chamfer_test.go, filleted, and the saddles with
+// the ball outside both cylinders. In the fixed pose of
+// agent-docs/cross-cylinder-bore-chamfer-design.md (larger cylinder
+// x² + y² = R² about z, bore y² + z² = r² about x, mouth at x > 0) a ball of
+// radius ρ outside the bore, and inside (σ1 = −1) or outside (σ1 = +1) the
+// larger cylinder, has its centre on the closed curve
+// c(θ) = (√(R'² − r'²cos²θ), r'cos θ, r'sin θ), R' = R + σ1·ρ, r' = r + ρ,
+// and touches the larger cylinder along a1 = −σ1·(c_x, c_y, 0)/R' and the
+// bore along a2 = −(0, cos θ, sin θ).
+
+// saddleBlend is one mouth's fillet: the larger radius R, the bore's r, the
+// ball's rho, whether the ball lies outside the larger cylinder, and whether
+// the fillet adds material (a concave edge, the ball in the void) rather than
+// removing it.
+type saddleBlend struct {
+	R, r, rho     float64
+	outside, adds bool
+}
 
 // saddleBall is the ball's section at angle θ: its centre, the two contact
 // directions and the unit vector e that completes a1 to an orthonormal pair
@@ -29,11 +40,15 @@ type saddleBall struct {
 	phi          float64
 }
 
-func saddleBallAt(R, r, rho, theta float64) saddleBall {
-	Rp, rp := R-rho, r+rho
+func (sb saddleBlend) ballAt(theta float64) saddleBall {
+	sigma1 := -1.0
+	if sb.outside {
+		sigma1 = 1
+	}
+	Rp, rp := sb.R+sigma1*sb.rho, sb.r+sb.rho
 	s, co := math.Sincos(theta)
 	x := math.Sqrt(Rp*Rp - rp*rp*co*co)
-	b := saddleBall{c: r3.NewVec(x, rp*co, rp*s), a1: r3.NewVec(x/Rp, rp*co/Rp, 0), a2: r3.NewVec(0, -co, -s)}
+	b := saddleBall{c: r3.NewVec(x, rp*co, rp*s), a1: r3.NewVec(-sigma1*x/Rp, -sigma1*rp*co/Rp, 0), a2: r3.NewVec(0, -co, -s)}
 	cphi := b.a1.Dot(b.a2)
 	b.phi = math.Acos(cphi)
 	b.e = b.a2.Sub(b.a1.Scale(cphi)).Scale(1 / math.Sin(b.phi))
@@ -45,17 +60,17 @@ func (b saddleBall) dir(alpha float64) r3.Vec {
 	return b.a1.Scale(math.Cos(alpha)).Add(b.e.Scale(math.Sin(alpha)))
 }
 
-// exit is the distance from the centre along u to the solid's boundary
-// before the fillet: the first point past the ball where the ray leaves the
-// shaft (x² + y² = R²) or enters the bore (y² + z² = r²), each an exact
-// quadratic root.
+// exit is the distance from the centre along u to the boundary before the
+// fillet: the first point past the ball where the ray crosses the larger
+// cylinder (x² + y² = R²) or the bore (y² + z² = r²), each an exact quadratic
+// root.
 func (b saddleBall) exit(R, r, rho float64, u r3.Vec) float64 {
 	shaft, bore := b.hits(R, r, rho, u)
 	return math.Min(shaft, bore)
 }
 
-// hits returns the distances along u at which the ray leaves the shaft and
-// enters the bore.
+// hits returns the first distances past the ball along u at which the ray
+// crosses the larger cylinder and the bore.
 func (b saddleBall) hits(R, r, rho float64, u r3.Vec) (float64, float64) {
 	hit := func(pi, pj, ui, uj, rad float64) float64 {
 		qa := ui*ui + uj*uj
@@ -102,9 +117,8 @@ func gaussLegendre(n int) ([]float64, []float64) {
 	return x, w
 }
 
-// saddleFilletVolume is the volume one mouth's fillet removes: the region
-// between the ball's arc and the edge, in the tube coordinates of the centre
-// curve, p = c(θ) + s·u(θ, α) with u the direction at angle α from a1, whose
+// volume is the volume one mouth's fillet removes or adds: the region between
+// the ball's arc and the edge, in the tube coordinates of the centre curve, p = c(θ) + s·u(θ, α) with u the direction at angle α from a1, whose
 // volume element is s·|c′|·(1 − s·κ_u) with κ_u = (u·c″)/|c′|². Each ray runs
 // from the arc, s = ρ, to its exact exit s_h, so the volume is
 //
@@ -113,8 +127,9 @@ func gaussLegendre(n int) ([]float64, []float64) {
 // The exit switches walls at the ray through the edge, where the integrand
 // has a kink; each θ splits α there (found by bisection) and integrates both
 // sides by Gauss–Legendre, over 32 panels in θ.
-func saddleFilletVolume(R, r, rho float64) float64 {
+func (sb saddleBlend) volume() float64 {
 	const panels, nodes = 32, 16
+	R, r, rho := sb.R, sb.r, sb.rho
 	xs, ws := gaussLegendre(nodes)
 	rp := r + rho
 	total := 0.0
@@ -123,12 +138,13 @@ func saddleFilletVolume(R, r, rho float64) float64 {
 		for i, xt := range xs {
 			theta := (t0+t1)/2 + (t1-t0)/2*xt
 			weight := ws[i] * (t1 - t0) / 2
-			b := saddleBallAt(R, r, rho, theta)
+			b := sb.ballAt(theta)
 			s, co := math.Sincos(theta)
 			d1 := r3.NewVec(rp*rp*co*s/b.c.X, -rp*s, rp*co)
 			d2 := r3.NewVec((rp*rp*(co*co-s*s)-d1.X*d1.X)/b.c.X, -rp*co, -rp*s)
 			speed := d1.Len()
-			// Near a1 the ray leaves through the shaft, near a2 into the bore.
+			// Near a1 the ray crosses the larger cylinder first, near a2 the
+			// bore.
 			shaftFirst := func(alpha float64) bool {
 				shaft, bore := b.hits(R, r, rho, b.dir(alpha))
 				return shaft < bore
@@ -158,14 +174,14 @@ func saddleFilletVolume(R, r, rho float64) float64 {
 	return total
 }
 
-// saddleFilletPoints returns, at angle θ, a point midway along the arc's
-// bisector between the arc and the edge, in the removed region, and a point
-// 0.3·ρ inside the ball, which stays.
-func saddleFilletPoints(R, r, rho, theta float64) (r3.Vec, r3.Vec) {
-	b := saddleBallAt(R, r, rho, theta)
+// points returns, at angle θ, a point midway along the arc's bisector
+// between the arc and the edge, in the region the fillet removes or adds, and
+// a point 0.3·ρ inside the ball, which keeps its side.
+func (sb saddleBlend) points(theta float64) (r3.Vec, r3.Vec) {
+	b := sb.ballAt(theta)
 	u := b.dir(b.phi / 2)
-	out := b.c.Add(u.Scale((rho + b.exit(R, r, rho, u)) / 2))
-	in := b.c.Add(u.Scale(0.7 * rho))
+	out := b.c.Add(u.Scale((sb.rho + b.exit(sb.R, sb.r, sb.rho, u)) / 2))
+	in := b.c.Add(u.Scale(0.7 * sb.rho))
 	return out, in
 }
 
@@ -173,30 +189,49 @@ func TestSaddleFilletHandVolume(t *testing.T) {
 	t.Parallel()
 	// The values of agent-docs/retained-edge-blend-design.md §4.10, which a
 	// rolling-ball grid (a point is removed when it is material and farther
-	// than ρ from the material eroded by ρ) matched to 0.5 % and 0.1 %.
-	for _, tc := range []struct{ rho, want float64 }{{0.5, 1.635978}, {1.0, 7.317201}, {1.5, 18.593228}} {
-		require.InDelta(t, tc.want, saddleFilletVolume(saddleR, 3, tc.rho), 1e-6)
+	// than ρ from the material eroded by ρ; added, likewise for the void)
+	// matched to 0.5 % and 0.2 %.
+	for _, tc := range []struct {
+		sb   saddleBlend
+		want float64
+	}{
+		{saddleBlend{R: saddleR, r: 3, rho: 0.5}, 1.635978},
+		{saddleBlend{R: saddleR, r: 3, rho: 1.0}, 7.317201},
+		{saddleBlend{R: saddleR, r: 3, rho: 1.5}, 18.593228},
+		// H03 and H08: two bores crossing in a block and a boss on a rod.
+		{saddleBlend{R: 5, r: 3, rho: 0.5, outside: true}, 0.540755},
+		{saddleBlend{R: 15, r: 5, rho: 1, outside: true, adds: true}, 4.701377},
+		{saddleBlend{R: saddleR, r: 3, rho: 1.5, outside: true, adds: true}, 6.619077},
+	} {
+		require.InDelta(t, tc.want, tc.sb.volume(), 1e-6, "%+v", tc.sb)
 	}
 }
 
-// requireFilletedMouths asserts what a filleted pair of mouths of body shows:
-// the volume falls by twice the hand value within both bodies' bounds, and
-// on the VerifyAll mesh the removed region's sample points read outside,
-// farther than the mesh bound, and the ball's read inside, at 8 stations of
-// each mouth. world maps a local point of the mouth on side sign to the
-// world.
-func requireFilletedMouths(t *testing.T, before, out *decad.Body, r, rho float64, meaningful bool,
+// requireFilletedMouths asserts what a filleted set of mouths of body shows:
+// the volume falls (or grows, for a fillet that adds material) by the hand
+// value per mouth within both bodies' bounds, and on the VerifyAll mesh the
+// blend region's sample points read on the far side of the material's
+// boundary from before, farther than the mesh bound, and the ball's keep their
+// side, at 8 stations of each mouth. world maps a local point of the mouth on
+// side sign to the world.
+func requireFilletedMouths(t *testing.T, before, out *decad.Body, sb saddleBlend, meaningful bool,
 	signs []float64, world func(p r3.Vec, sign float64) r3.Vec) {
 	t.Helper()
 	vb, err := before.Volume()
 	require.NoError(t, err)
 	va, err := out.Volume()
 	require.NoError(t, err)
-	want := float64(len(signs)) * saddleFilletVolume(saddleR, r, rho)
+	want := float64(len(signs)) * sb.volume()
+	change := vb.Value.Base() - va.Value.Base()
+	region, ball := decad.PointOutside, decad.PointInside
+	if sb.adds {
+		change = -change
+		region, ball = ball, region
+	}
 	bounds := vb.Bound.Base() + va.Bound.Base()
-	require.InDelta(t, want, vb.Value.Base()-va.Value.Base(), bounds, "the fillet removes each mouth's edge region")
+	require.InDelta(t, want, change, bounds, "the fillet changes each mouth's edge region")
 	if meaningful {
-		require.Greater(t, want, bounds, "the removed volume exceeds both bounds")
+		require.Greater(t, want, bounds, "the changed volume exceeds both bounds")
 	}
 	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
 	require.NoError(t, err)
@@ -206,22 +241,27 @@ func requireFilletedMouths(t *testing.T, before, out *decad.Body, r, rho float64
 	require.NoError(t, err)
 	for _, sign := range signs {
 		for k := range 8 {
-			gone, kept := saddleFilletPoints(saddleR, r, rho, 2*math.Pi*(float64(k)+0.25)/8)
+			gone, kept := sb.points(2 * math.Pi * (float64(k) + 0.25) / 8)
 			// The Hole body's bound leaves this point undecided; no body puts
-			// it outside.
+			// it on the far side.
 			in, err := before.LocatePoint(t.Context(), world(gone, sign), units.Millimeters(0.01))
 			require.NoError(t, err)
-			require.NotEqual(t, decad.PointOutside, in, "the edge region is material before the fillet")
+			require.NotEqual(t, region, in, "the edge region is on the edge's side before the fillet")
 			got, err := held.LocatePoint(t.Context(), world(gone, sign))
 			require.NoError(t, err)
-			require.Equal(t, decad.PointOutside, got, "the edge region is gone")
-			gap, err := held.DistanceToPoint(t.Context(), world(gone, sign))
-			require.NoError(t, err)
-			require.Greater(t, gap.Value.Base()-gap.Bound.Base(), mesh.Bound().Base(),
-				"the removed point clears the true boundary")
+			require.Equal(t, region, got, "the fillet moves the edge region across")
+			// DistanceToPoint reads zero inside the mesh, so an added point's
+			// gap is its distance to the nearest facet.
+			gap := distanceToMesh(mesh, world(gone, sign))
+			if !sb.adds {
+				d, err := held.DistanceToPoint(t.Context(), world(gone, sign))
+				require.NoError(t, err)
+				gap = d.Value.Base() - d.Bound.Base()
+			}
+			require.Greater(t, gap, mesh.Bound().Base(), "the changed point clears the true boundary")
 			got, err = held.LocatePoint(t.Context(), world(kept, sign))
 			require.NoError(t, err)
-			require.Equal(t, decad.PointInside, got, "the ball's material stays")
+			require.Equal(t, ball, got, "the ball keeps its side")
 		}
 	}
 }
@@ -263,7 +303,8 @@ func TestRetainedSaddleFillet(t *testing.T) {
 			}
 			require.Equal(t, map[string]int{"cylinder": 2, "plane": 2, "faceted": 2}, kinds,
 				"the walls keep their cylinders and each fillet is faceted")
-			requireFilletedMouths(t, body, out, tc.r, tc.rho, tc.meaningful, []float64{1, -1}, saddleWorld)
+			requireFilletedMouths(t, body, out, saddleBlend{R: saddleR, r: tc.r, rho: tc.rho}, tc.meaningful,
+				[]float64{1, -1}, saddleWorld)
 			if tc.name != "r3 rho0.5" {
 				return
 			}
@@ -293,7 +334,7 @@ func TestRetainedSaddleFillet(t *testing.T) {
 		require.NoError(t, err)
 		out, err := decad.Fillet(t.Context(), body, saddleMouths(t, body, 3, 0), units.Millimeters(1.5))
 		require.NoError(t, err)
-		requireFilletedMouths(t, body, out, 3, 1.5, true, []float64{1, -1}, saddleWorld)
+		requireFilletedMouths(t, body, out, saddleBlend{R: saddleR, r: 3, rho: 1.5}, true, []float64{1, -1}, saddleWorld)
 	})
 }
 
@@ -352,14 +393,29 @@ func TestRetainedSaddleFilletRefusals(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, crossingCylindersReason)
 	})
-	t.Run("a pin joined through the shaft", func(t *testing.T) {
+	t.Run("a pin clipped to the shaft", func(t *testing.T) {
 		t.Parallel()
+		// The pin's part inside the shaft: its two ends are convex seams with
+		// the ball inside both cylinders, σ = (−1, −1), which no route builds.
 		sc := newRetentionScene()
-		body, err := decad.Union(t.Context(), saddleRevolve(t, sc), saddlePin(t, sc, 3, 0))
+		body, err := decad.Intersect(t.Context(), saddleRevolve(t, sc), saddlePin(t, sc, 3, 0))
 		require.NoError(t, err)
 		_, err = decad.Fillet(t.Context(), body, saddleMouths(t, body, 3, 0), units.Millimeters(0.5))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, crossingCylindersReason)
+	})
+	t.Run("a boss too short for the ball", func(t *testing.T) {
+		t.Parallel()
+		// The boss's top face at x = 16 meets T2, whose largest x is
+		// R + ρ = 16, and lies inside the bore's cut at R' + r'/32.
+		doc := decad.New()
+		rod := diskBody(t, doc, 0, 0, 15)
+		body, err := decad.Boss(t.Context(), rod, decad.BossSpec{Face: decad.Faces(decad.Cylindrical()),
+			At: r3.NewVec(15, 0, 10), Diameter: units.Millimeters(10), Height: units.Millimeters(1)})
+		require.NoError(t, err)
+		_, err = decad.Fillet(t.Context(), body, decad.Edges(decad.Concave()).Exactly(1), units.Millimeters(1))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "another face of the body comes within the saddle fillet's reach")
 	})
 	t.Run("a pin's root inside a tube's bore", func(t *testing.T) {
 		t.Parallel()
@@ -496,11 +552,87 @@ func TestRetainedSaddleFilletExtrudeShaft(t *testing.T) {
 			require.NoError(t, err)
 			// One mouth's 18.6 mm³ does not exceed the Extrude bodies' bounds;
 			// two mouths' does.
-			requireFilletedMouths(t, body, out, r, rho, n == 2, signs, func(l r3.Vec, sign float64) r3.Vec {
-				var a [3]float64
-				a[tc.ic], a[tc.ik], a[tc.ib] = sign*l.X, l.Y, l.Z
-				return r3.Vec{X: a[0], Y: a[1], Z: a[2]}.Add(tc.move)
-			})
+			requireFilletedMouths(t, body, out, saddleBlend{R: saddleR, r: r, rho: rho}, n == 2, signs,
+				func(l r3.Vec, sign float64) r3.Vec {
+					var a [3]float64
+					a[tc.ic], a[tc.ik], a[tc.ib] = sign*l.X, l.Y, l.Z
+					return r3.Vec{X: a[0], Y: a[1], Z: a[2]}.Add(tc.move)
+				})
 		})
 	}
+}
+
+// TestRetainedSaddleFilletOutside fillets the saddles whose ball lies outside
+// both cylinders (agent-docs/retained-edge-blend-design.md §4.10, σ = (+1,
+// +1)): the convex seams where two bores cross in a block, which the fillet
+// rounds by removing material, and the concave roots of a boss on a rod and
+// of a pin joined through a turned shaft, which it fills by adding material.
+// The block and the rod keep their hand; the Revolve shaft's pose is
+// left-handed. Under the race detector only the rod runs.
+func TestRetainedSaddleFilletOutside(t *testing.T) {
+	t.Parallel()
+	t.Run("crossing bores in a block", func(t *testing.T) {
+		t.Parallel()
+		if raceDetector {
+			t.Skip("the boss on a rod carries the race build")
+		}
+		// A plate 80 × 60 × 20 with a radius-5 hole down through (40, 30) and
+		// a radius-3 hole in from x = 80 along y = 30, z = 10, 50 deep: it
+		// crosses the first and leaves two mouths on its wall.
+		doc := decad.New()
+		plate := boxBody(t, doc, 0, 0, 80, 60, 20)
+		down, err := decad.Hole(t.Context(), plate, decad.HoleSpec{Face: decad.Faces(decad.FaceCreatedBy(decad.CapEnd(plate))),
+			At: r3.NewVec(40, 30, 20), Diameter: units.Millimeters(10), Depth: decad.ThroughHole{}})
+		require.NoError(t, err)
+		body, err := decad.Hole(t.Context(), down, decad.HoleSpec{Face: decad.Faces(decad.Facing(r3.NewVec(1, 0, 0))),
+			At: r3.NewVec(80, 30, 10), Diameter: units.Millimeters(6), Depth: decad.BlindHole{Depth: units.Millimeters(50)}})
+		require.NoError(t, err)
+		var q *decad.EdgeQuery
+		n := 0
+		for _, e := range body.Edges() {
+			p := e.Start().Position().Value
+			if p != e.End().Position().Value || math.Abs(math.Hypot(p.X-40, p.Y-30)-5) > 0.05 ||
+				math.Abs(math.Hypot(p.Y-30, p.Z-10)-3) > 0.05 {
+				continue
+			}
+			if q == nil {
+				q = decad.Edges(decad.EndpointAt(p))
+			} else {
+				q = q.Or(decad.EndpointAt(p))
+			}
+			n++
+		}
+		require.Equal(t, 2, n, "both mouths of the crossing bores")
+		out, err := decad.Fillet(t.Context(), body, q.Exactly(2), units.Millimeters(0.5))
+		require.NoError(t, err)
+		requireFilletedMouths(t, body, out, saddleBlend{R: 5, r: 3, rho: 0.5, outside: true}, false,
+			[]float64{1, -1}, func(p r3.Vec, sign float64) r3.Vec { return r3.NewVec(40+sign*p.X, 30+sign*p.Y, 10+p.Z) })
+	})
+	t.Run("a boss on a rod", func(t *testing.T) {
+		t.Parallel()
+		// A radius-15 rod along z, 20 long, with a radius-5 boss 8 high on
+		// its wall at z = 10, along x.
+		doc := decad.New()
+		rod := diskBody(t, doc, 0, 0, 15)
+		body, err := decad.Boss(t.Context(), rod, decad.BossSpec{Face: decad.Faces(decad.Cylindrical()),
+			At: r3.NewVec(15, 0, 10), Diameter: units.Millimeters(10), Height: units.Millimeters(8)})
+		require.NoError(t, err)
+		out, err := decad.Fillet(t.Context(), body, decad.Edges(decad.Concave()).Exactly(1), units.Millimeters(1))
+		require.NoError(t, err)
+		requireFilletedMouths(t, body, out, saddleBlend{R: 15, r: 5, rho: 1, outside: true, adds: true}, false,
+			[]float64{1}, func(p r3.Vec, _ float64) r3.Vec { return r3.NewVec(p.X, p.Y, 10+p.Z) })
+	})
+	t.Run("a pin joined through a shaft", func(t *testing.T) {
+		t.Parallel()
+		if raceDetector {
+			t.Skip("the boss on a rod carries the race build")
+		}
+		sc := newRetentionScene()
+		body, err := decad.Union(t.Context(), saddleRevolve(t, sc), saddlePin(t, sc, 3, 0))
+		require.NoError(t, err)
+		out, err := decad.Fillet(t.Context(), body, saddleMouths(t, body, 3, 0), units.Millimeters(1.5))
+		require.NoError(t, err)
+		requireFilletedMouths(t, body, out, saddleBlend{R: saddleR, r: 3, rho: 1.5, outside: true, adds: true}, false,
+			[]float64{1, -1}, saddleWorld)
+	})
 }

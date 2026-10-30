@@ -54,8 +54,16 @@ const (
 )
 
 // looksLikeSaddleFillet reports whether e is an R7 saddle a fillet can
-// build: the ball inside the shaft and outside the bore.
-func looksLikeSaddleFillet(e *topo.Edge) bool { return looksLikeSaddle(e) }
+// build, from its tags and Convex flag alone (saddleKey.filletBuilt).
+func looksLikeSaddleFillet(e *topo.Edge) bool {
+	_, _, key, ok := saddleTags(e)
+	return ok && key.filletBuilt()
+}
+
+// canalOf is the fillet of radius rho at the saddle key names.
+func canalOf(key saddleKey, rho float64) saddlecanal.Canal {
+	return saddlecanal.Canal{R: key.R, Bore: key.r, Rho: rho, Outside: key.sigma[0] > 0}
+}
 
 // SaddleFillet fillets the selected saddle edges of b (Table RR R7 fillet,
 // agent-docs/retained-edge-blend-design.md §4.10), one mouth at a time on the
@@ -83,11 +91,11 @@ func SaddleFillet(ctx context.Context, env topo.Env, b *topo.Body, fp facetedrec
 	faceIndex := faceIndexOf(b)
 	keys := make([]saddleKey, len(edges))
 	for i, e := range edges {
-		s, err := readSaddle(e, fp, faceIndex)
+		s, err := readSaddle(e, fp, faceIndex, saddleKey.filletBuilt)
 		if err != nil {
 			return nil, true, err
 		}
-		if !(saddlecanal.Canal{R: s.key.R, Bore: s.key.r, Rho: rho}).Exists() {
+		if !canalOf(s.key, rho).Exists() {
 			return nil, true, fmt.Errorf("%w: no ball of that radius touches both walls of the saddle "+
 				"(retained-edge-blend SR3)", decaderr.ErrDegenerate)
 		}
@@ -127,7 +135,7 @@ func findSaddle(body *topo.Body, fp facetedrecord.Payload, key saddleKey) (saddl
 			k.sigma != key.sigma {
 			continue
 		}
-		s, err := readSaddle(e, fp, faceIndex)
+		s, err := readSaddle(e, fp, faceIndex, saddleKey.filletBuilt)
 		if err == nil && s.key == key {
 			return s, nil
 		}
@@ -143,6 +151,10 @@ type saddleFillet struct {
 	c     saddlecanal.Canal
 	rows  []float64
 	slack float64
+	// shaftOut and boreOut are +1 when the wall's material lies inside its
+	// cylinder (the face is not Reversed), so the solid's outward side points
+	// away from the wall's axis, and −1 when it lies outside.
+	shaftOut, boreOut float64
 	// loc holds the local coordinates of every vertex the rewrite reads or
 	// makes, by vertex index.
 	loc map[int]r3.Vec
@@ -171,7 +183,7 @@ func worldVec(pose crossbore.Pose, d r3.Vec) r3.Vec {
 // filletSaddle fillets one mouth and builds the body over the rewritten mesh.
 func filletSaddle(ctx context.Context, env topo.Env, fp facetedrecord.Payload, s saddle, rho float64,
 	ord int, faceIndex map[*topo.Face]int) (*topo.Body, error) {
-	c := saddlecanal.Canal{R: s.key.R, Bore: s.key.r, Rho: rho}
+	c := canalOf(s.key, rho)
 	rows, err := c.Rows()
 	if err != nil {
 		return nil, err
@@ -179,6 +191,7 @@ func filletSaddle(ctx context.Context, env topo.Env, fp facetedrecord.Payload, s
 	f := &saddleFillet{
 		work: &work{fp: fp, cuts: map[[2]int]int{}},
 		s:    s, c: c, rows: rows, slack: 64 * ulp * s.scale, loc: map[int]r3.Vec{},
+		shaftOut: outwardSign(s.big), boreOut: outwardSign(s.bore),
 	}
 	f.verts = append([]r3.Vec(nil), fp.Verts...)
 	f.beta = append([]float64(nil), fp.VertexBound...)
@@ -205,7 +218,11 @@ func filletSaddle(ctx context.Context, env topo.Env, fp facetedrecord.Payload, s
 	if err != nil {
 		return nil, err
 	}
-	if err := f.checkReach(faceIndex, win, xw); err != nil {
+	strip := boxOf(f.verts, [3]int{grid[0], grid[0], grid[0]})
+	for _, v := range grid {
+		strip = strip.join(boxOf(f.verts, [3]int{v, v, v}))
+	}
+	if err := f.checkReach(faceIndex, win, xw, strip, proof.Chord); err != nil {
 		return nil, err
 	}
 	shaftGroup, err := f.groupOf(facetsOfFace(fp.FaceOf, faceIndex[s.big]))
@@ -255,7 +272,15 @@ func filletSaddle(ctx context.Context, env topo.Env, fp facetedrecord.Payload, s
 		groups[g].HasCentroid = false
 		groups[g].Centroid = measurement.VecMeasurement{}
 	}
-	flip := poseHand(s.key.pose) < 0
+	// A strip facet (a, b, c) has its local normal along F_θ × F_t, whose
+	// component along u has the sign c.JacobianSign (proof 1). The solid's
+	// outward side is +u at a convex edge, the ball in the material, and −u at
+	// a concave one; a left-handed pose turns the world winding over.
+	facing := c.JacobianSign() * poseHand(s.key.pose)
+	if !s.key.convex {
+		facing = -facing
+	}
+	flip := facing < 0
 	for k := range n {
 		next := (k + 1) % n
 		for j := range m {
@@ -285,6 +310,15 @@ func filletSaddle(ctx context.Context, env topo.Env, fp facetedrecord.Payload, s
 	trueBands := proofbound.AbsSumUpper(area1.trueHi, area2.trueHi)
 	heldBands := proofbound.AbsSumUpper(area1.held, area2.held)
 	return f.buildSaddle(ctx, env, groups, stripFrom, proof, eps, heldBands, trueBands, faceIndex)
+}
+
+// outwardSign is +1 when face's material lies inside its cylinder and −1 when
+// the face is Reversed.
+func outwardSign(face *topo.Face) float64 {
+	if face.Reversed {
+		return -1
+	}
+	return 1
 }
 
 // poseHand is the determinant of the pose's signed permutation: the product
@@ -346,13 +380,14 @@ func pointSegment2(p, a, b pt2) float64 {
 // chooseCuts places the shaft wall's window and the bore's cut plane. The
 // window's corners lie on the ellipse (R'/R)²y² + z² = s², which the map
 // (y, z) ↦ ((R'/R)·y, z) takes to a circle, and s·cos(π/K) = r' + margin, so
-// the window holds T1 ((R'/R)²y² + z² = r'²) with that margin. The bore is cut
-// at x = X_w = √(R'² − r'²) − margin, inside T2's least x. Each is turned or
-// moved until no held vertex comes within clipTol of a cut and no window
-// corner within clipTol of a held edge.
+// the window holds T1 ((R'/R)²y² + z² = r'²) with that margin. With the ball
+// inside the shaft the bore is cut at x = X_w = √(R'² − r'²) − margin, below
+// T2's least x; outside it at X_w = R' + margin, past T2's largest x. Each is
+// turned or moved until no held vertex comes within clipTol of a cut and no
+// window corner within clipTol of a held edge.
 func (f *saddleFillet) chooseCuts(faceIndex map[*topo.Face]int) (shaftWindow, float64, error) {
 	R := f.s.key.R
-	rp, Rp := f.c.Bore+f.c.Rho, f.c.R-f.c.Rho
+	rp, Rp := f.c.Offsets()
 	margin := rp * windowMargin
 	s := (rp + margin) / math.Cos(math.Pi/windowSides)
 	// The corners' widest |y| is s·R/R'; at R or beyond the window leaves the
@@ -382,6 +417,9 @@ func (f *saddleFillet) chooseCuts(faceIndex map[*topo.Face]int) (shaftWindow, fl
 	bore := facetsOfFace(f.fp.FaceOf, faceIndex[f.s.bore])
 	for _, shift := range []float64{0, 0.25, 0.5, 0.75} {
 		xw := math.Sqrt(Rp*Rp-rp*rp) - margin*(1+shift)
+		if f.c.Outside {
+			xw = Rp + margin*(1+shift)
+		}
 		apart := true
 		for _, t := range bore {
 			for _, v := range f.fp.Tris[t] {
@@ -446,9 +484,12 @@ func (f *saddleFillet) windowClear(w shaftWindow, facets []int) bool {
 // within the rewrite's reach: a facet of another face, or a segment of another
 // boundary loop of either wall, whose box grown by its bounds plus slack meets
 // the box of the window, the bore's cut-off end and the fillet
-// (agent-docs/retained-edge-blend-design.md §4.10, SR5). Inside that box the
-// solid is then the region inside the shaft and outside the bore.
-func (f *saddleFillet) checkReach(faceIndex map[*topo.Face]int, w shaftWindow, xw float64) error {
+// (agent-docs/retained-edge-blend-design.md §4.10, SR5). The fillet's part is
+// strip, the box of the held strip's vertices, grown by chord: it holds both
+// the held strip and the exact fillet. Inside that box the solid's boundary is
+// then the two walls alone, on whichever side of each its material lies.
+func (f *saddleFillet) checkReach(faceIndex map[*topo.Face]int, w shaftWindow, xw float64, strip facetBox,
+	chord float64) error {
 	yMax, zMax := 0.0, 0.0
 	for _, c := range w.corners {
 		yMax, zMax = math.Max(yMax, math.Abs(c.u)), math.Max(zMax, math.Abs(c.w))
@@ -456,13 +497,17 @@ func (f *saddleFillet) checkReach(faceIndex map[*topo.Face]int, w shaftWindow, x
 	R := f.s.key.R
 	grow := proofbound.AbsSumUpper(f.s.betaBig, f.s.betaBore, f.slack)
 	xLo := math.Min(xw, math.Sqrt(math.Max(0, R*R-yMax*yMax))) - grow
+	// The bore's cut-off part runs from the seam to x_w: below the shaft
+	// wall's window inside the shaft and past R outside it.
 	lo := r3.Vec{X: xLo, Y: -yMax - grow, Z: -zMax - grow}
-	hi := r3.Vec{X: R + grow, Y: yMax + grow, Z: zMax + grow}
+	hi := r3.Vec{X: math.Max(R, xw) + grow, Y: yMax + grow, Z: zMax + grow}
 	a, b := f.s.key.pose.World(lo), f.s.key.pose.World(hi)
 	box := facetBox{
 		lo: r3.NewVec(math.Min(a.X, b.X), math.Min(a.Y, b.Y), math.Min(a.Z, b.Z)),
 		hi: r3.NewVec(math.Max(a.X, b.X), math.Max(a.Y, b.Y), math.Max(a.Z, b.Z)),
 	}
+	g := proofbound.AbsSumUpper(chord, f.slack)
+	box = box.join(facetBox{lo: strip.lo.Sub(r3.Vec{X: g, Y: g, Z: g}), hi: strip.hi.Add(r3.Vec{X: g, Y: g, Z: g})})
 	return checkMouthClear(f.fp, faceIndex, f.s, box, "fillet")
 }
 
@@ -658,7 +703,8 @@ func (f *saddleFillet) clipShaft(fi int, w shaftWindow) ([]ringPt, error) {
 	if err != nil {
 		return nil, err
 	}
-	scale := (f.c.R - f.c.Rho) / f.s.key.R
+	_, Rp := f.c.Offsets()
+	scale := Rp / f.s.key.R
 	out := make([]ringPt, len(ring))
 	for i, x := range ring {
 		q := pts[x]
@@ -922,10 +968,15 @@ func (f *saddleFillet) emitPieces(t int, loops [][]int, reversed bool, pts piece
 }
 
 // clipBore cuts the bore wall's facets by the plane x = xw and keeps the
-// part toward the bore's far end. It returns the cut ring sorted by angle
-// about the bore axis.
+// part toward the bore's far end, away from the seam: x < xw with the ball
+// inside the shaft and x > xw outside it. It returns the cut ring sorted by
+// angle about the bore axis.
 func (f *saddleFillet) clipBore(fi int, xw float64) ([]ringPt, error) {
-	g := func(v int) float64 { return xw - f.localOf(v).X }
+	keep := -1.0
+	if f.c.Outside {
+		keep = 1
+	}
+	g := func(v int) float64 { return keep * (f.localOf(v).X - xw) }
 	var order []int
 	cut := func(a, b int) int {
 		k := [2]int{min(a, b), max(a, b)}
@@ -1002,14 +1053,14 @@ func (f *saddleFillet) emitSome(t [3]int, src int) {
 }
 
 // bandFacing decides, in exact rationals on the held floats, the test that
-// embeds a band facet t. On the shaft its normal must have a positive
-// component along the local x axis, the bore's axis, so the facet's (y, z)
-// projection keeps its orientation. On the bore its normal must have a
-// positive component toward the bore's axis from each of its vertices,
-// −(0, y_i, z_i) in local coordinates, so its radial projection onto the
-// bore keeps its orientation over the facet's angular span. The local
-// coordinates are differences of world floats and the pose's signs cancel
-// in the bore's products, so every term is exact.
+// embeds a band facet t, wound toward its wall's outward side. On the shaft
+// its normal must have a component of the sign shaftOut along the local x
+// axis, the bore's axis, so the facet's (y, z) projection keeps its
+// orientation. On the bore its normal must have a component of the sign
+// boreOut along (0, y_i, z_i), away from the bore's axis, at each vertex, so
+// its radial projection onto the bore keeps its orientation over the facet's
+// angular span. The local coordinates are differences of world floats and
+// the pose's signs cancel in the bore's products, so every term is exact.
 func (f *saddleFillet) bandFacing(t [3]int, shaft bool) bool {
 	pose := f.s.key.pose
 	at := func(v r3.Vec, i int) *big.Rat { return proofarith.FloatRat([3]float64{v.X, v.Y, v.Z}[i]) }
@@ -1022,7 +1073,7 @@ func (f *saddleFillet) bandFacing(t [3]int, shaft bool) bool {
 		return new(big.Rat).Sub(new(big.Rat).Mul(bj, ck), new(big.Rat).Mul(bk, cj))
 	}
 	if shaft {
-		return normal(pose.Axis[0]).Sign()*int(pose.Sign[0]) > 0
+		return normal(pose.Axis[0]).Sign()*int(pose.Sign[0])*int(f.shaftOut) > 0
 	}
 	shift := [3]float64{pose.Shift.X, pose.Shift.Y, pose.Shift.Z}
 	n1, n2 := normal(pose.Axis[1]), normal(pose.Axis[2])
@@ -1033,7 +1084,7 @@ func (f *saddleFillet) bandFacing(t [3]int, shaft bool) bool {
 		// The local y and z carry the pose's signs, as do the normal's
 		// local components; each product's two signs cancel.
 		dot := new(big.Rat).Add(new(big.Rat).Mul(n1, y), new(big.Rat).Mul(n2, z))
-		if dot.Sign() >= 0 {
+		if dot.Sign()*int(f.boreOut) <= 0 {
 			return false
 		}
 	}
@@ -1045,17 +1096,16 @@ func (f *saddleFillet) bandFacing(t [3]int, shaft bool) bool {
 type bandArea struct{ held, trueHi float64 }
 
 // band joins the held cut ring to the exact ring of tangency points by a
-// zipper of triangles on the wall, emitted under group. On the shaft wall
-// (shaft set) each facet faces away from the shaft's axis and its (y, z)
-// projection keeps its orientation, so the band is embedded: both rings run
+// zipper of triangles on the wall, emitted under group and wound toward the
+// solid's outward side. On the shaft wall (shaft set) every facet's (y, z)
+// projection keeps one orientation, so the band is embedded: both rings run
 // once around in the (R'/R·y, z) angle and every facet keeps the sense of
-// that projection. On the bore each facet faces the bore's axis from every
-// vertex's direction, so the band's radial projection onto the bore keeps
-// its sense and the band is embedded. A facet that fails refuses. It returns
-// the band's bound: the largest over its facets of the largest distance of
-// a vertex from the wall, which is the vertex's bound (sample for an exact
-// tangency point), plus the sagitta R·Δ²/8 of the facet's angular spread Δ
-// about the wall's axis.
+// that projection. On the bore every facet's radial projection onto the bore
+// keeps one orientation, so the band is embedded (bandFacing). A facet that
+// fails refuses. It returns the band's bound: the largest over its facets of
+// the largest distance of a vertex from the wall, which is the vertex's bound
+// (sample for an exact tangency point), plus the sagitta R·Δ²/8 of the
+// facet's angular spread Δ about the wall's axis.
 func (f *saddleFillet) band(cut, exact []ringPt, group int, sample float64, shaft bool) (float64, bandArea, error) {
 	pose := f.s.key.pose
 	radius := f.s.key.r
@@ -1075,10 +1125,10 @@ func (f *saddleFillet) band(cut, exact []ringPt, group int, sample float64, shaf
 		for k, v := range t {
 			p := f.localOf(v)
 			if shaft {
-				dirs[k] = worldVec(pose, r3.Vec{X: p.X, Y: p.Y})
+				dirs[k] = worldVec(pose, r3.Vec{X: p.X, Y: p.Y}.Scale(f.shaftOut))
 				angs[k] = math.Atan2(p.Y, p.X)
 			} else {
-				dirs[k] = worldVec(pose, r3.Vec{Y: -p.Y, Z: -p.Z})
+				dirs[k] = worldVec(pose, r3.Vec{Y: p.Y, Z: p.Z}.Scale(f.boreOut))
 				angs[k] = math.Atan2(p.Z, p.Y)
 			}
 			d := f.beta[v]
@@ -1125,17 +1175,30 @@ func (f *saddleFillet) band(cut, exact []ringPt, group int, sample float64, shaf
 // (y, z) projection, whose area element R/√(R² − y²) is at most R/√(R² − Y²)
 // with Y the window's widest |y|; the window's area is at most that of the
 // polygon of its corners. On the bore it is the strip between the cut and
-// T2, no wider than R' − X_w, around the bore's circumference.
+// T2 around the bore's circumference, no wider than the gap from the cut to
+// T2's farthest x: R' − X_w with the ball inside the shaft, X_w − √(R'² − r'²)
+// outside it.
 func (f *saddleFillet) bandTrueArea(shaft bool, cut []ringPt) (float64, error) {
 	R, r := f.s.key.R, f.s.key.r
-	rp, Rp := f.c.Bore+f.c.Rho, f.c.R-f.c.Rho
+	rp, Rp := f.c.Offsets()
 	piHi := math.Nextafter(math.Pi, math.Inf(1))
 	if !shaft {
-		xw := math.Inf(1)
-		for _, p := range cut {
-			xw = math.Min(xw, f.localOf(p.idx).X)
+		var width float64
+		if f.c.Outside {
+			// From T2's least x, √(R'² − r'²), up to the cut.
+			xw := math.Inf(-1)
+			for _, p := range cut {
+				xw = math.Max(xw, f.localOf(p.idx).X)
+			}
+			width = proofbound.AbsSumUpper(xw, -math.Sqrt((Rp-rp)*(Rp+rp)), f.slack)
+		} else {
+			// From the cut up to T2's largest x, R'.
+			xw := math.Inf(1)
+			for _, p := range cut {
+				xw = math.Min(xw, f.localOf(p.idx).X)
+			}
+			width = proofbound.AbsSumUpper(Rp, -xw, f.slack)
 		}
-		width := proofbound.AbsSumUpper(Rp, -xw, f.slack)
 		return proofbound.ProductUpper(proofbound.ProductUpper(2*piHi, r), width), nil
 	}
 	poly, yMax := 0.0, 0.0
