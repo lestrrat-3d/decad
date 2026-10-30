@@ -324,8 +324,11 @@ func bossSeamCornerPaired(root, inset sectionrecord.Point2, boss prismshell.Boss
 // vertex at center + t·down. It only rejects. Its allowance, 1e-9 of the
 // coordinates' magnitude, far exceeds the rounding of the placement and
 // vertex arithmetic, so a sound pairing never fails it. A side vertex of
-// another corner lies a whole root edge L away, and another corner's inset
-// lies sqrt((L−t)² + t²) > t·√2 away, since stackedshell requires L > 2t.
+// another corner lies a whole root edge L away and fails. Another corner's
+// inset lies sqrt((L−t)² + t²) away, only about (L − 2t)/√2 beyond t·√2, so
+// this check cannot tell it apart when L is within the allowance of 2t;
+// bossSeamCornerPaired's exact comparison of the recorded corners refuses
+// that pairing.
 func bossSeamFalsified(capPos, sidePos, center, down r3.Vec, t float64) bool {
 	scale := 1 + t
 	for _, c := range [...]float64{center.X, center.Y, center.Z} {
