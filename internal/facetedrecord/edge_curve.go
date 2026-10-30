@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/stitchflux"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -38,6 +39,20 @@ func RetainedEdgeCurve(a, b *topo.Face, chain []r3.Vec, bounds []float64, closed
 		return nil, false
 	}
 	ta, tb := a.Surface, b.Surface
+	// A tag that may lie off its true surface (tagDeparts) is a float image of
+	// it. A circle, arc or ellipse is published with the tags' centre, axis
+	// and radius and no curve bound, and a line between a plane and a cylinder
+	// or two cylinders is straight only while their directions are exactly
+	// parallel, which such a tag no longer proves. Such a pair keeps its chord
+	// chain (§10.1 E12). Two Plane tags stand for two true planes however far
+	// they lie off them, so their rim is still a Line3.
+	if tagDeparts(a) || tagDeparts(b) {
+		_, pa := ta.(surfacegeom.Plane)
+		_, pb := tb.(surfacegeom.Plane)
+		if !pa || !pb {
+			return nil, false
+		}
+	}
 	if circle, ok := cylinderTorusRim(ta, tb, chain, bounds, closed); ok {
 		return circle, true
 	}
@@ -96,6 +111,35 @@ func RetainedEdgeCurve(a, b *topo.Face, chain []r3.Vec, bounds []float64, closed
 		return circleRim(s.Center.Sub(n.Scale(d)), n, math.Sqrt(rr), chain, bounds, closed, slack)
 	}
 	return nil, false
+}
+
+// tagDeparts reports whether f's retained tag may differ from the surface the
+// face lies on (§10.1 E12): its TagDeparture is nonzero (a placement or a
+// shifted retry whose moved origin rounded, retention §3.4), or it carries a
+// denoted patch whose surface the tag is not exactly. A denoted face states its
+// departure in NormalBound against the denoted patch, never in TagDeparture,
+// so its tag is admitted only when stitchflux.TagIsDenoted proves it equal to
+// the exact denoted surface. The test passes no edge curves, so it compares
+// the surfaces alone, by exact equality. TagIsDenoted reads no sphere radius,
+// so a Sphere tag's radius must also equal the record's point radius exactly,
+// the rule retainedblend's R6 applies (retained-edge-blend §4.5).
+func tagDeparts(f *topo.Face) bool {
+	if f.TagDeparture != 0 {
+		return true
+	}
+	if f.Denoted == nil {
+		return false
+	}
+	if !stitchflux.TagIsDenoted(stitchflux.TaggedFace{Denoted: f.Denoted, Surface: f.Surface}) {
+		return true
+	}
+	sphere, ok := f.Surface.(surfacegeom.Sphere)
+	if !ok {
+		return false
+	}
+	ex, exact := stitchflux.ExactRevolveOf(*f.Denoted)
+	radius, rok := stitchflux.RatMillimetres(sphere.Radius)
+	return !exact || !rok || ex.Radius == nil || ex.Radius.Cmp(radius) != 0
 }
 
 // cylinderTorusRim returns the junction circle of a blend cylinder and a blend

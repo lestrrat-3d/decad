@@ -62,6 +62,23 @@ func (sc *retentionScene) tool(t *testing.T, cx float64) *decad.Body {
 	return placed
 }
 
+// revolvedTool builds the same Ø8 tool along y through (cx, ·, 10) by revolving
+// the rectangle u ∈ [cx, cx+4], v ∈ [-10, 50] about the line u = cx, then
+// moving it up by 10, so its wall carries a denoted patch.
+func (sc *retentionScene) revolvedTool(t *testing.T, cx float64) *decad.Body {
+	t.Helper()
+	s, err := sc.w.CreateSketch(sc.w.XY())
+	require.NoError(t, err)
+	r := s.CreateRectangle(cx, -10, cx+4, 50)
+	s.Fix(r.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: cx, V: 0}, End: decad.Point2{U: cx, V: 1}}
+	pin, err := decad.Revolve(t.Context(), sc.doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
+	require.NoError(t, err)
+	return translated(t, pin, 0, 0, 10)
+}
+
 func retentionKinds(b *decad.Body) map[string]int {
 	kinds := map[string]int{}
 	for _, f := range b.Faces() {
@@ -401,5 +418,121 @@ func TestFacetedSourceRetention(t *testing.T) {
 		}
 		require.Equal(t, 2, ellipses)
 		require.Equal(t, 12, lines, "the plate's own edges")
+	})
+
+	// The drill's rim circles are centred at x = 28. A translation by 36 moves
+	// the bore's tag exactly, to x = 64. A translation by 36 + 2^-47 moves the
+	// true centre to 64 + 2^-47, which is not a float: the sum crosses 64,
+	// where the spacing doubles to 2^-46, and the tag's origin rounds to 64.
+	// The front and back planes move exactly, from x = 20 to 56 + 2^-47. A
+	// Circle3 built from the rounded bore would claim the centre 64 with no
+	// bound, so the rims keep their chords
+	// (agent-docs/faceted-source-retention-design.md §10.1 E12). An extruded
+	// tool's bore states the rounding as its TagDeparture; a revolved tool's
+	// bore carries a denoted patch the rounded tag no longer equals.
+	t.Run("a translation that rounds the bore's origin keeps the rims' chords", func(t *testing.T) {
+		t.Parallel()
+		tools := []struct {
+			name string
+			make func(sc *retentionScene, t *testing.T) *decad.Body
+		}{
+			{"an extruded tool", func(sc *retentionScene, t *testing.T) *decad.Body { return sc.tool(t, 28) }},
+			{"a revolved tool", func(sc *retentionScene, t *testing.T) *decad.Body { return sc.revolvedTool(t, 28) }},
+		}
+		for _, tc := range tools {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				sc := newRetentionScene()
+				drilled, err := decad.Cut(t.Context(), sc.roundedBox(t), tc.make(sc, t))
+				require.NoError(t, err)
+				// rims returns the curves of the bore wall's edges after the move.
+				rims := func(dx float64) (circles []decad.Circle3, chains int) {
+					twin, err := decad.Copy(t.Context(), drilled)
+					require.NoError(t, err)
+					moved := translated(t, twin, dx, 0, 0)
+					bores := 0
+					for _, f := range moved.Faces() {
+						cyl, ok := f.Surface().(decad.Cylinder)
+						if !ok || cyl.Radius.Base() != 4 {
+							continue
+						}
+						bores++
+						require.Equal(t, 64.0, cyl.Origin.X, "the bore's tag origin is the float 64")
+						for _, e := range f.Edges() {
+							switch c := e.Curve().(type) {
+							case decad.Circle3:
+								circles = append(circles, c)
+							case decad.FacetedCurve:
+								chains++
+							default:
+								require.Failf(t, "unexpected rim curve", "%T", c)
+							}
+						}
+					}
+					require.Equal(t, 1, bores, "the bore wall keeps its Cylinder tag")
+					return circles, chains
+				}
+
+				circles, chains := rims(36)
+				require.Len(t, circles, 2, "an exact move keeps the drill's rims as circles")
+				require.Zero(t, chains)
+				for _, c := range circles {
+					require.Equal(t, 64.0, c.Center.X)
+				}
+
+				dx := 36 + 0x1p-47
+				require.NotEqual(t, 36.0, dx)
+				require.Equal(t, 64.0, 28+dx, "the moved origin rounds")
+				require.Equal(t, 56+0x1p-47, 20+dx, "the planes move exactly")
+				circles, chains = rims(dx)
+				require.Empty(t, circles, "a rounded bore publishes no circle centred at the rounded origin")
+				require.Equal(t, 2, chains, "the drill's rims keep their chord chains")
+			})
+		}
+	})
+
+	// A revolved tool whose axis runs at 60° to x in the XY plane bores the
+	// box obliquely. Its wall tag re-expresses the denoted surface in floats
+	// along a direction no float states exactly, so the tag is not the denoted
+	// surface and the two mouths keep their chords instead of publishing
+	// Ellipse3 rims (§10.1 E12).
+	t.Run("an oblique revolved bore keeps the mouths' chords", func(t *testing.T) {
+		t.Parallel()
+		sc := newRetentionScene()
+		s, err := sc.w.CreateSketch(sc.w.XY())
+		require.NoError(t, err)
+		dir := r3.NewVec(math.Cos(math.Pi/3), math.Sin(math.Pi/3), 0)
+		side := r3.NewVec(-dir.Y, dir.X, 0).Scale(4)
+		a := r3.NewVec(20, 10, 0).Sub(dir.Scale(30))
+		corners := []r3.Vec{a, a.Add(dir.Scale(60)), a.Add(dir.Scale(60)).Add(side), a.Add(side)}
+		pts := make([]*sketch.Point, len(corners))
+		for i, c := range corners {
+			pts[i] = s.CreatePoint(c.X, c.Y)
+			s.Fix(pts[i])
+		}
+		for i := range pts {
+			s.CreateLine(pts[i], pts[(i+1)%len(pts)])
+		}
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		axis := decad.SketchLine{Start: decad.Point2{U: a.X, V: a.Y}, End: decad.Point2{U: a.X + dir.X, V: a.Y + dir.Y}}
+		pin, err := decad.Revolve(t.Context(), sc.doc, s, s.Profiles()[0], axis, decad.FullRevolution{})
+		require.NoError(t, err)
+		bored, err := decad.Cut(t.Context(), sc.roundedBox(t), translated(t, pin, 0, 0, 10))
+		require.NoError(t, err)
+		bores, chains := 0, 0
+		for _, f := range bored.Faces() {
+			cyl, ok := f.Surface().(decad.Cylinder)
+			if !ok || math.Abs(cyl.Radius.Base()-4) > 1e-9 {
+				continue
+			}
+			bores++
+			for _, e := range f.Edges() {
+				require.IsType(t, decad.FacetedCurve{}, e.Curve(), "an oblique revolved mouth keeps its chords")
+				chains++
+			}
+		}
+		require.Equal(t, 1, bores, "the bore wall keeps its Cylinder tag")
+		require.Equal(t, 2, chains, "both mouths keep their chord chains")
 	})
 }

@@ -85,6 +85,22 @@ func discRim(t *testing.T, b *decad.Body) decad.EdgeSelector {
 	return nil
 }
 
+// chordRim selects the one closed edge of b, and asserts it keeps its chord
+// chain: a rim whose sphere tag is not provably its revolve record publishes
+// no Circle3 (agent-docs/faceted-source-retention-design.md §10.1 E12).
+func chordRim(t *testing.T, b *decad.Body) decad.EdgeSelector {
+	t.Helper()
+	var rims []*decad.Edge
+	for _, e := range b.Edges() {
+		if e.Start() == e.End() {
+			rims = append(rims, e)
+		}
+	}
+	require.Len(t, rims, 1, "the cap has one closed rim")
+	require.IsType(t, decad.FacetedCurve{}, rims[0].Curve(), "the rim keeps its chord chain")
+	return decad.Edges(decad.EndpointAt(rims[0].Start().Position().Value)).Exactly(1)
+}
+
 // ballZone is the volume of the ball between a cut plane and the parallel
 // plane zB inside it, z measured from the cut plane along its outward normal:
 // π∫(R² − (z + h)²) dz over [zB, 0], with the ball's centre at z = −h. The top
@@ -333,9 +349,9 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		require.NoError(t, err)
 		cut, err := decad.Cut(t.Context(), turned, ballCap(t, sc, ballCut))
 		require.NoError(t, err)
-		_, err = decad.Fillet(t.Context(), cut, discRim(t, cut), units.Millimeters(0.3))
+		_, err = decad.Fillet(t.Context(), cut, chordRim(t, cut), units.Millimeters(0.3))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "the sphere's revolve record is not exact")
+		require.ErrorContains(t, err, "a face whose tag is not proven to be exactly the surface its revolve record denotes")
 	})
 
 	t.Run("a snapped centre refuses", func(t *testing.T) {
@@ -343,9 +359,9 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		// The half-disk's centre sits 5e-10 off the axis: the chord snaps onto
 		// it and the tag's centre is on the axis, but the record's is not.
 		cut := flatBall(t, 0, 5e-10)
-		_, err := decad.Fillet(t.Context(), cut, discRim(t, cut), units.Millimeters(0.3))
+		_, err := decad.Fillet(t.Context(), cut, chordRim(t, cut), units.Millimeters(0.3))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "the sphere's tag centre is not exactly its recorded centre")
+		require.ErrorContains(t, err, "a face whose tag is not proven to be exactly the surface its revolve record denotes")
 	})
 
 	t.Run("a rounded radius refuses", func(t *testing.T) {
@@ -353,9 +369,9 @@ func TestFacetedRetainedBlendSphereRim(t *testing.T) {
 		// About x = 0.1 the recorded radius 2.1 − 0.1 is no float, so the record
 		// holds an interval and the tag's 2 is not provably it.
 		cut := flatBall(t, 0.1, 0)
-		_, err := decad.Chamfer(t.Context(), cut, discRim(t, cut), units.Millimeters(0.3))
+		_, err := decad.Chamfer(t.Context(), cut, chordRim(t, cut), units.Millimeters(0.3))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "the sphere's tag radius is not exactly its recorded radius")
+		require.ErrorContains(t, err, "a face whose tag is not proven to be exactly the surface its revolve record denotes")
 	})
 }
 

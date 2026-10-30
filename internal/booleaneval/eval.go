@@ -272,6 +272,9 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	}
 	// mbDecide is the mesh the contact gate reads: mb itself, unless b moved.
 	mbDecide := mb
+	// unmoved keeps b's own mesh: the chain gate's allowance is how far the
+	// charged copy's bound grew past it.
+	unmoved := mb
 	shiftDisplacement := 0.0
 	if len(shifts) > 0 {
 		// The cap and cone certificates authenticate the operands' own
@@ -314,8 +317,8 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		// A moved operand's facets carry the move in their bounds, which the
 		// gate would read as a coarse mesh. The move is what the gap tolerance
 		// permits and the composition of the result's bounds charges it, so the
-		// gate allows it.
-		configureChainGate(bmB, tolMM+(mb.Bound-mbDecide.Bound), chain)
+		// gate allows the growth of the mesh bound the move charged.
+		configureChainGate(bmB, tolMM+(mb.Bound-unmoved.Bound), chain)
 	}
 	if err := ctx.Err(); err != nil {
 		return Evaluation{}, err

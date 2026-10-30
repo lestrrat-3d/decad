@@ -244,11 +244,14 @@ residual:
 3. the recorded radius is a point and equals the tag's radius exactly.
 
 `stitchflux.TagIsDenoted` reads the first two and no radius, so the third is
-this route's own. Each failure refuses SR1 with a message naming the leaf: a
+this route's own. Each failure refuses SR1 with a message naming the leaf. A
 rotated placement fails the first, a half-disk centre within the snap
 tolerance of the axis fails the second, and a meridian whose recorded radius is
-no float (an arc to `2.1` about `0.1`) fails the third. A `Sphere` face with no
-denoted patch is its own record, as for every other kind (§2).
+no float (an arc to `2.1` about `0.1`) fails the third. Retention §10.1 E12
+applies the same three tests before it publishes the rim, so on a body built
+by those three the rim already reads `FacetedCurve`, and `Unread` refuses it
+SR1 as a tag not proven to be exactly its revolve record. A `Sphere` face with
+no denoted patch is its own record, as for every other kind (§2).
 
 **Rim.** Let `zs = n·(S − o)`. The rim's centre is `c = S − zs·n` and its radius
 `ρ0 = √(R_s² − zs²)`. `ρ0 / R_s` is the sine of the angle at which the plane
@@ -742,7 +745,7 @@ published bound, never with a pinned literal.
 | Oblique plane/cylinder rim | refuse SR1 and keep the `Ellipse3` of retention §10.5 | |
 | Plane-sphere rim (R6): a Revolve ball cut by a placed box, fillet and chamfer | the removed volume equals the zone of the sphere down to `zB` less the solid under the torus (or the frustum), from the meridian's closed form; the area matches the cap's less the annulus and the zone plus the blend; the `Torus` has `Major = ρc` and `Minor = r`, the `Cone` starts at the narrower setback circle; `VerifyAll` passes | drop R6 from dispatch: SX9 |
 | R6 two-distance chamfer, and both rims of a twice-cut ball | the plane takes `dA`, the sphere's meridian `dB`; the second rim is found again on the partly blended body | |
-| R6 refusals | a snapped centre, a rounded radius and a rotated revolve refuse SR1 with their own messages; a ball too large, a plane setback past the axis and a sphere setback past the pole refuse SR3; a grazing crossing refuses SR5 (unit test) | delete each check: its fixture builds, and the rotated one panics on the unread record |
+| R6 refusals | a snapped centre, a rounded radius and a rotated revolve keep the rim's chords (retention E12) and refuse SR1 as a tag not proven to be exactly its revolve record; a ball too large, a plane setback past the axis and a sphere setback past the pole refuse SR3; a grazing crossing refuses SR5 (unit test) | drop E12's denoted arm: each of the three publishes a `Circle3` rim; drop its sphere-radius test: the rounded radius does; delete an SR3 or SR5 check: its fixture builds |
 | R6 inner wall vertices | a sphere zone that holds tessellation vertices builds | gate inner vertices as R2 gates the cylinder's: "the blend consumes the wall" |
 | R6 kept inner vertex bound (unit test) | a vertex held `β` outside the sphere off a point inside the zone gets a bound that reaches the nearest point of the new boundary | keep its old bound: the bound falls short |
 | R6 pocket and dome foot | `Cut(slab, ball)` (convex, plane outside the rim, material outside the sphere) and `Union(ball, slab)` (concave, sphere rising): fillet and chamfer change the volume and the area by the meridian's closed forms; the torus and cone parameters match and the blend's normal points away from the material | flip the chamfer normal's sphere term for an outside material: the cone's normal points into the material |

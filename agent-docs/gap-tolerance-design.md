@@ -179,9 +179,13 @@ runs the Boolean again with the second operand moved:
    larger of that fraction of the reach and the least shift that clears every contact's Slack (the Slack over the
    component along its normal, with a margin of 5%). A length above the reach is skipped. Each component of the
    shift `s` is then truncated toward zero onto the grid `2^(⌊log₂|s|⌋−24)` (`snapShift`): the shift never
-   lengthens, its length changes by under `2^-23` of itself, inside the 5% margin, and a tag origin that is a
-   multiple of the grid and below about `2^28·|s|` moves to `o + s` exactly, so the moved piece's translated tags
-   carry no rounding (the tag paragraph below). The first outcome that
+   lengthens, and its length changes by under `2^-23` of itself, inside the 5% margin. Every component of `s` is a
+   multiple of the grid, so for a tag coordinate `o ≠ 0` the sum `o + s` is a multiple of `q`, the smaller of the
+   grid and the lowest set bit of `o`, and it is a float, so `o` moves exactly, whenever `|o + s| ≤ 2^53·q`. Two
+   cases follow. A coordinate whose last-place unit is no larger than the grid moves exactly unless `|o + s|`
+   exceeds the power of two just above `|o|`. A coordinate that is a multiple of the grid moves exactly while
+   `|o + s| ≤ 2^53·grid`, which is at least `2^28·|s|`. A tag whose coordinates all move exactly carries no rounding
+   (the tag paragraph below). The first outcome that
    is not a contact refusal is the result, whether it is a body or another error, such as an empty Intersect. When a
    shifted attempt meets a contact the unmoved pair did not reach, the contacts are merged and the search starts
    again, up to four times. When every attempt refuses, the original refusal is returned.
@@ -207,8 +211,16 @@ runs the Boolean again with the second operand moved:
    volume sums the pieces, so a piece is never charged for another's move.
 
 The moved operand is the solid the Boolean decides about, so the proximity gate and the exact predicates read it
-with its own bounds. The chain-depth gate (`RefuseCoarseHeldContact`) admits a mesh bound coarser than the chord
-tolerance by the shift the retry applied, because the result's bounds already carry it. The composition of the result's bounds reads a copy that is wider by the shift
+(`decisionMesh`). Its true solid is the exact move of the true operand, each piece translated by `s` and, when grown,
+scaled about its float centre by its float factor `k`. A held vertex is the rounded image of that move, so the
+decision copy keeps `m`'s bounds and adds, per vertex, an upper bound on the distance of the stored image `fl(v + s)`
+(or the grown image) from the exact `v + s`, computed from the exact rounding error of each coordinate
+(`moveRounding`). A face bound takes the largest addition among its corners, and the mesh
+bound the largest overall. A grown piece's bounds also stretch by `1 + |k|`. A held vertex need not be a multiple of
+the grid, so only the first case of item 3 makes its sum exact: the addition is zero for a coordinate whose last-place
+unit is no larger than the grid (below about `2^28·|s|`) unless the sum passes the power of two above it, and a larger
+coordinate generally rounds. The chain-depth gate (`RefuseCoarseHeldContact`) admits a mesh bound coarser than the chord
+tolerance by the shift the retry applied (the charged copy's mesh bound less the unmoved operand's), because the result's bounds already carry it. The composition of the result's bounds reads a copy that is wider by the shift
 (`shiftOperandMesh`): the vertex and face bounds of a moved piece grow by its displacement, the mesh bound by the
 largest, the symmetric-difference volume grows by what each move sweeps over its piece's boundary, and the area allowance grows by the rounding of the new
 coordinates. The ordinary trim amplification then charges the shift at every crossing. A shifted mesh that folds,
@@ -291,6 +303,8 @@ owns that refusal in the same change.
 | `apitest.TestDocumentGapToleranceOptions` | The option set, its last-wins rule and each invalid value's error. |
 | `booleaneval.TestShiftNeed` | The least shift that clears a contact's Slack, along a normal and along a slanted direction. |
 | `booleaneval.TestShiftPiecesChargeEachPieceOnItsOwn` | Two separate pieces: only the moved piece moves and is charged. |
+| `booleaneval.TestShiftDecisionChargesRounding` | A tetrahedron at `2^30` mm moved by a snapped shift whose sums round: each decision vertex bound, its face bound and the mesh bound cover the exact distance of the stored vertex from `v + s`; a tetrahedron at 50 mm moves exactly and keeps zero bounds; a grown piece's bounds stretch by `1 + k`. Red legs: drop the addition, the face widening, the mesh-bound widening or the stretch. |
+| `booleaneval.TestMoveRounding` | The rounding bound of a translated and of a grown vertex covers the exact distance from its exact image, an exact sum adds nothing, and a non-finite image answers `+Inf`. Red leg: a grown vertex answers 0. |
 | `booleaneval.TestSnapShift` | A snapped shift never lengthens, keeps each component's sign, changes by under `2^-23` of its length, and moves whole and dyadic coordinates such as 50 exactly. |
 | `booleaneval.TestMovedGroup` | A translated piece's Cylinder and Plane tags move by the exact shift with a zero bound and the plane's `CapRecord` dropped; an unmoved piece keeps its tag; a grown piece, a face spanning pieces, a face with no facet, a denoted patch, an unretained tag and a Cone keep none. |
 | `booleaneval.TestFacePieces` | A face whose facets lie in two pieces is marked as spanning them. |

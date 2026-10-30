@@ -211,10 +211,13 @@ func shiftOpens(u r3.Vec, sigma float64, wanted []bool, contacts []meshbool.Touc
 const snapShiftBits = 24
 
 // snapShift truncates each component of v toward zero onto the grid
-// 2^(floor(log2|v|) − snapShiftBits). A tag origin o that is a multiple of the
-// grid, such as a whole or dyadic millimetre coordinate, then moves to o + v
-// exactly whenever o + v keeps o's precision, so the translated tag of a moved
-// piece is the exact image of its tag (movedGroup). No component grows in
+// 2^(floor(log2|v|) − snapShiftBits). Every component is then a multiple of
+// the grid, so a tag coordinate o ≠ 0 moves to o + v exactly whenever
+// |o + v| ≤ 2^53·q, q being the smaller of the grid and o's lowest set bit:
+// an o whose last-place unit is no larger than the grid moves exactly unless
+// the sum passes the power of two above |o|, and an o that is a multiple of
+// the grid moves exactly while |o + v| ≤ 2^53·grid. The translated tag of a
+// moved piece is then the exact image of its tag (movedGroup). No component grows in
 // magnitude, so the shift never lengthens, and each changes by under the grid,
 // so the length changes by under 2^(1−snapShiftBits) of itself, far inside the
 // margin shiftNeed leaves above a contact's slack. A zero, non-finite or
@@ -290,8 +293,9 @@ func piecesOf(m *topo.Mesh) pieces {
 
 // shiftOperandMesh returns two copies of m with each piece moved by its own
 // shift, a piece with none staying where it is. The decision copy keeps m's
-// bounds: the moved operand is the solid the Boolean decides about, so the
-// contact gate reads it exactly as it reads an unmoved one. The charged copy
+// bounds, widened only by the rounding of each moved vertex (decisionMesh):
+// the moved operand is the solid the Boolean decides about, so the contact
+// gate reads it as it reads an unmoved one. The charged copy
 // describes the moved mesh as an approximation of the true operand, which the
 // composition of the result's bounds reads: the vertex and face bounds of a
 // moved piece grow by that piece's displacement, the mesh bound by the largest,
@@ -414,11 +418,12 @@ func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[i
 	perimeter = proofbound.UpRound(perimeter + proofbound.SumSlop(3*len(m.Triangles), perimeter))
 	areaRound := proofbound.ProductUpper(proofbound.Radius3D(round), perimeter)
 
-	decided := *m
-	decided.Vertices = verts
-	decided.Owner = nil
+	decided, err := decisionMesh(m, pc, shifts, verts, centre, scale)
+	if err != nil {
+		return nil, nil, 0, err
+	}
 
-	next := decided
+	next := *decided
 	next.Bound = proofbound.AbsSumUpper(m.Bound, worst)
 	next.CoordBound = proofbound.AbsSumUpper(m.CoordBound, worst)
 	next.VertexBound = beta
@@ -428,7 +433,127 @@ func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[i
 	if proofbound.IsNonFinite(next.AreaSlack) || proofbound.IsNonFinite(next.VolSymDiff) {
 		return nil, nil, 0, errShiftDeclined
 	}
-	return &decided, &next, worst, nil
+	return decided, &next, worst, nil
+}
+
+// decisionMesh returns the copy of m the gates decide on: m with each held
+// vertex of a moved piece replaced by its float image verts[i]. The solid it
+// stands for is the exact move of the true operand, each piece translated by
+// its Move s and, when grown, scaled about its float centre c by its float
+// factor k: x ↦ x + s + k·(x − c). A held vertex is the rounded image of that
+// move, so its bound grows by the distance of verts[i] from the exact image of
+// m's vertex (moveRounding), and a grown piece's bounds also stretch by
+// 1 + |k|. A vertex whose image is exact keeps its bound unchanged. A held
+// vertex need not be a multiple of snapShift's grid, so a translated
+// coordinate is exact by the first case of snapShift's rule only: when its
+// last-place unit is no larger than the grid (|v| below about 2^28·|s|) and
+// the sum does not pass the power of two above |v|. A larger coordinate, or
+// a sum that crosses a power of two, generally rounds. It returns errShiftDeclined when a move cannot be
+// bounded.
+func decisionMesh(m *topo.Mesh, pc pieces, shifts map[int]pieceShift, verts []r3.Vec, centre map[int]r3.Vec,
+	scale map[int]float64) (*topo.Mesh, error) {
+	decided := *m
+	decided.Vertices = verts
+	decided.Owner = nil
+
+	stretchOf := make(map[int]float64, len(scale))
+	for c, k := range scale {
+		if proofbound.IsNonFinite(k) {
+			return nil, errShiftDeclined
+		}
+		stretchOf[c] = proofbound.AbsSumUpper(1, k)
+	}
+	add := make([]float64, len(verts))
+	worst, stretchMax, changed := 0.0, 0.0, len(stretchOf) > 0
+	for _, st := range stretchOf {
+		stretchMax = max(stretchMax, st)
+	}
+	for i, v := range m.Vertices {
+		c := pc.ofVertex[i]
+		sh, moving := shifts[c]
+		if !moving {
+			continue
+		}
+		k, grown := scale[c]
+		r := moveRounding(v, verts[i], sh.Move, centre[c], k, grown)
+		if proofbound.IsNonFinite(r) {
+			return nil, errShiftDeclined
+		}
+		add[i] = r
+		worst = max(worst, r)
+		changed = changed || r > 0
+	}
+	if !changed {
+		return &decided, nil
+	}
+
+	// A face's bound covers every corner of its facets, so it takes the
+	// largest addition and stretch among them.
+	faceAdd := make(map[*topo.Face]float64, len(m.FaceBound))
+	faceStretch := make(map[*topo.Face]float64, len(m.FaceBound))
+	for f, t := range m.Triangles {
+		if f >= len(m.Source) || m.Source[f] == nil {
+			continue
+		}
+		src := m.Source[f]
+		for _, vi := range t {
+			faceAdd[src] = max(faceAdd[src], add[vi])
+		}
+		if st, grown := stretchOf[pc.ofFacet[f]]; grown {
+			faceStretch[src] = max(faceStretch[src], st)
+		}
+	}
+	widen := func(b, st, a float64) float64 {
+		if st > 0 {
+			b = proofbound.ProductUpper(st, b)
+		}
+		if a > 0 {
+			b = proofbound.AbsSumUpper(b, a)
+		}
+		return b
+	}
+	decided.FaceBound = make(map[*topo.Face]float64, len(m.FaceBound))
+	for f, b := range m.FaceBound {
+		decided.FaceBound[f] = widen(b, faceStretch[f], faceAdd[f])
+	}
+	if m.VertexBound != nil {
+		// A mesh with no record derives one from the widened face bounds
+		// (topobuild.VertexBounds), which already cover each corner's addition.
+		decided.VertexBound = make([]float64, len(m.VertexBound))
+		for i, b := range m.VertexBound {
+			decided.VertexBound[i] = widen(b, stretchOf[pc.ofVertex[i]], add[i])
+		}
+	}
+	decided.Bound = widen(m.Bound, stretchMax, worst)
+	decided.CoordBound = widen(m.CoordBound, stretchMax, worst)
+	if proofbound.IsNonFinite(decided.Bound) || proofbound.IsNonFinite(decided.CoordBound) {
+		return nil, errShiftDeclined
+	}
+	return &decided, nil
+}
+
+// moveRounding bounds the distance of w, the float image of the held vertex
+// v, from its exact image under a piece's move: v + s for a translation, and
+// v + s + k·(v − c) for a grown piece. It is zero exactly when w is the exact
+// image, and +Inf when an input is not finite.
+func moveRounding(v, w, s, c r3.Vec, k float64, grown bool) float64 {
+	if !proofbound.FiniteVec(v) || !proofbound.FiniteVec(w) || !proofbound.FiniteVec(s) {
+		return math.Inf(1)
+	}
+	if !grown {
+		e := r3.Vec{X: proof.AddRoundError(v.X, s.X, w.X), Y: proof.AddRoundError(v.Y, s.Y, w.Y),
+			Z: proof.AddRoundError(v.Z, s.Z, w.Z)}
+		if !proofbound.FiniteVec(e) {
+			return math.Inf(1)
+		}
+		return proofbound.DvLenUpper(proof.DyVec(e))
+	}
+	if !proofbound.FiniteVec(c) || proofbound.IsNonFinite(k) {
+		return math.Inf(1)
+	}
+	dv := proof.DyVec(v)
+	exact := proof.DvAdd(proof.DvAdd(dv, proof.DyVec(s)), proof.DvScale(proof.DvSub(dv, proof.DyVec(c)), proof.MustDyOf(k)))
+	return proofbound.DvLenUpper(proof.DvSub(proof.DyVec(w), exact))
 }
 
 // retryShifted runs attempt with the pieces of the second operand moved by up to
