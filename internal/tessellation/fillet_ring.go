@@ -169,10 +169,25 @@ func filletInterpolate(s, c, f float64, fRat *big.Rat) (float64, float64, bool) 
 // A facet the enclosure cannot state answers +Inf.
 func FilletMeshAreaDeficit(verts []r3.Vec, tris [][3]int, trueArea, trueBound float64) float64 {
 	sum := proofbound.PointInterval(new(big.Rat))
+	// Shared mesh vertices recur across triangles. IvVec3Of owns exact point
+	// intervals; keep their endpoints read-only while the interval operations
+	// below build fresh results.
+	vertexIntervals := make(map[int]proofbound.IvVec3)
+	intervalOf := func(index int) (proofbound.IvVec3, bool) {
+		if iv, ok := vertexIntervals[index]; ok {
+			return iv, true
+		}
+		iv, ok := proofbound.IvVec3Of(verts[index])
+		if !ok {
+			return proofbound.IvVec3{}, false
+		}
+		vertexIntervals[index] = iv
+		return iv, true
+	}
 	for _, t := range tris {
-		a, okA := proofbound.IvVec3Of(verts[t[0]])
-		b, okB := proofbound.IvVec3Of(verts[t[1]])
-		c, okC := proofbound.IvVec3Of(verts[t[2]])
+		a, okA := intervalOf(t[0])
+		b, okB := intervalOf(t[1])
+		c, okC := intervalOf(t[2])
 		if !okA || !okB || !okC {
 			return math.Inf(1)
 		}
