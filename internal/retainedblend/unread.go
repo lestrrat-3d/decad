@@ -19,7 +19,7 @@ func Unread(edges []*topo.Edge) string {
 			return fmt.Sprintf("no retained blend class reads selected edge[%d]: it is not an edge", i)
 		}
 		if looksLikeRim(e) || looksLikeSphereRim(e) || looksLikeLine(e) || looksLikeCylLine(e) ||
-			looksLikeArc(e) || looksLikeCylCyl(e) {
+			looksLikeArc(e) || looksLikeCylCyl(e) || looksLikeSaddle(e) {
 			continue
 		}
 		faces := make([]tagFace, len(e.Faces))

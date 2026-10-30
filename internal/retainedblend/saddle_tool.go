@@ -200,13 +200,19 @@ func checkOutside(t *saddleTool, s saddle) error {
 }
 
 // checkSaddleClear refuses when anything but the two walls near this mouth
-// could reach the tool: a facet of another face, or a segment of another
-// boundary loop of either wall, whose box grown by its held bounds plus slack
-// meets the tool's box. Inside that box the solid is then the region inside
-// the shaft and outside the bore, so the tool's band meets the solid only in
-// the chamfer's wedge.
+// could reach the tool (checkMouthClear with the tool's box). Inside that box
+// the solid is then the region inside the shaft and outside the bore, so the
+// tool's band meets the solid only in the chamfer's wedge.
 func checkSaddleClear(fp facetedrecord.Payload, faceIndex map[*topo.Face]int, s saddle, t *saddleTool) error {
-	box := t.box()
+	return checkMouthClear(fp, faceIndex, s, t.box(), "chamfer")
+}
+
+// checkMouthClear refuses when a facet of a face other than the saddle's two
+// walls, or a segment of a boundary loop of either wall other than this
+// mouth's seam, has a box grown by its held bounds plus slack that meets box.
+// blend names the saddle blend in the refusal.
+func checkMouthClear(fp facetedrecord.Payload, faceIndex map[*topo.Face]int, s saddle, box facetBox,
+	blend string) error {
 	slack := 64 * ulp * s.scale
 	grown := func(b facetBox, by float64) facetBox {
 		g := r3.Vec{X: by, Y: by, Z: by}
@@ -219,8 +225,8 @@ func checkSaddleClear(fp facetedrecord.Payload, faceIndex map[*topo.Face]int, s 
 		}
 		by := proofbound.AbsSumUpper(max(fp.VertexBound[f[0]], fp.VertexBound[f[1]], fp.VertexBound[f[2]]), slack)
 		if grown(boxOf(fp.Verts, f), by).meets(box) {
-			return fmt.Errorf("%w: another face of the body comes within the saddle chamfer's reach",
-				decaderr.ErrUnsupported)
+			return fmt.Errorf("%w: another face of the body comes within the saddle %s's reach",
+				decaderr.ErrUnsupported, blend)
 		}
 	}
 	inChain := map[int]struct{}{}
@@ -241,8 +247,8 @@ func checkSaddleClear(fp facetedrecord.Payload, faceIndex map[*topo.Face]int, s 
 				seg := boxOf(fp.Verts, [3]int{v, w, w})
 				by := proofbound.AbsSumUpper(max(fp.VertexBound[v], fp.VertexBound[w]), slack)
 				if grown(seg, by).meets(box) {
-					return fmt.Errorf("%w: another boundary of the saddle's walls comes within the chamfer's reach",
-						decaderr.ErrUnsupported)
+					return fmt.Errorf("%w: another boundary of the saddle's walls comes within the %s's reach",
+						decaderr.ErrUnsupported, blend)
 				}
 			}
 		}

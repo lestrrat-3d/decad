@@ -20,16 +20,22 @@ import (
 
 // This file reads R7 of agent-docs/retained-edge-blend-design.md Table RR: the
 // closed saddle edge where a retained bore crosses a larger retained cylinder
-// at right angles, as a cross hole leaves a turned shaft. Only Chamfer builds
-// it (saddle_tool.go); a Fillet's rolling-ball blend there is a canal surface
-// and stays SR1, named by Unread.
+// at right angles, as a cross hole leaves a turned shaft. Chamfer cuts it
+// (saddle_tool.go) and Fillet rewrites the mesh near it (saddle_fillet.go).
 
-// saddleKey identifies a saddle: the pose its two tags and its mouth give, and
-// the two radii. Two selected edges with one key name one rim.
+// saddleKey identifies a saddle: the pose its two tags and its mouth give, the
+// two radii, and the side σ of each cylinder the rolling ball lies on (−1
+// inside, +1 outside; the larger cylinder first). Two selected edges with one
+// key name one rim.
 type saddleKey struct {
-	pose crossbore.Pose
-	R, r float64
+	pose  crossbore.Pose
+	R, r  float64
+	sigma [2]int
 }
+
+// built is the one sign pattern the saddle routes build: the ball inside the
+// larger cylinder and outside the bore, the convex mouth of a cross hole.
+var built = [2]int{-1, 1}
 
 // saddle is one admitted saddle edge.
 type saddle struct {
@@ -65,38 +71,55 @@ func cardinal(v r3.Vec) (int, bool) {
 
 func coord(v r3.Vec, i int) float64 { return [3]float64{v.X, v.Y, v.Z}[i] }
 
+// ballSide is σ for a face of a blended edge: the ball lies in the material at
+// a convex edge and in the void at a concave one, and a face's material lies
+// inside its cylinder unless the face is Reversed.
+func ballSide(f *topo.Face, convex bool) int {
+	s := -1
+	if f.Reversed {
+		s = 1
+	}
+	if !convex {
+		s = -s
+	}
+	return s
+}
+
 // saddleTags reads the two walls of a candidate saddle edge from their tags
-// alone: the shaft (not Reversed: material inside) and the bore (Reversed:
-// material outside), with unit cardinal axes on different coordinates that
-// meet exactly, and 2r² < R² in rationals. It returns the pose with the mouth
+// alone: two retained cylinders of different radii, the larger (radius R) and
+// the bore (radius r), with unit cardinal axes on different coordinates that
+// meet exactly, and 2r² < R² in rationals. σ comes from the Convex flag and
+// each face's Reversed flag (ballSide). It returns the pose with the mouth
 // side unset (Sign[0] = +1).
 func saddleTags(e *topo.Edge) (shaft, bore *topo.Face, key saddleKey, ok bool) {
 	if e == nil || e.Start == nil || e.Start != e.End || len(e.Faces) != 2 ||
-		e.Faces[0] == nil || e.Faces[1] == nil || e.Faces[0] == e.Faces[1] || !e.Convex {
+		e.Faces[0] == nil || e.Faces[1] == nil || e.Faces[0] == e.Faces[1] {
 		return nil, nil, saddleKey{}, false
 	}
 	var cyl [2]surfacegeom.Cylinder
+	var radius [2]float64
 	for i, f := range e.Faces {
 		c, isCyl := f.Surface.(surfacegeom.Cylinder)
 		if !isCyl || !f.RetainedTag || f.TagDeparture != 0 || !tagIsRecord(f) {
 			return nil, nil, saddleKey{}, false
 		}
+		var err error
+		if radius[i], err = c.Radius.In(units.Millimeter); err != nil || !(radius[i] > 0) || math.IsInf(radius[i], 0) {
+			return nil, nil, saddleKey{}, false
+		}
 		cyl[i] = c
 	}
 	switch {
-	case !e.Faces[0].Reversed && e.Faces[1].Reversed:
+	case radius[0] > radius[1]:
 		shaft, bore = e.Faces[0], e.Faces[1]
-	case e.Faces[0].Reversed && !e.Faces[1].Reversed:
+	case radius[1] > radius[0]:
 		shaft, bore = e.Faces[1], e.Faces[0]
 		cyl[0], cyl[1] = cyl[1], cyl[0]
+		radius[0], radius[1] = radius[1], radius[0]
 	default:
 		return nil, nil, saddleKey{}, false
 	}
-	R, errR := cyl[0].Radius.In(units.Millimeter)
-	r, errr := cyl[1].Radius.In(units.Millimeter)
-	if errR != nil || errr != nil || !(r > 0) || math.IsInf(R, 0) {
-		return nil, nil, saddleKey{}, false
-	}
+	R, r := radius[0], radius[1]
 	// 2r² < R², exactly: the opening stays one graph over the shaft's angle
 	// only below r/R = 1/√2.
 	r2 := new(big.Rat).Mul(proofarith.FloatRat(r), proofarith.FloatRat(r))
@@ -126,14 +149,16 @@ func saddleTags(e *topo.Edge) (shaft, bore *topo.Face, key saddleKey, ok bool) {
 			Shift: r3.Vec{X: shift[0], Y: shift[1], Z: shift[2]},
 		},
 		R: R, r: r,
+		sigma: [2]int{ballSide(shaft, e.Convex), ballSide(bore, e.Convex)},
 	}
 	return shaft, bore, key, true
 }
 
-// looksLikeSaddle reports whether e is an R7 candidate from its tags alone.
+// looksLikeSaddle reports whether e is an R7 saddle the routes build, from its
+// tags alone: the convex mouth, σ = (−1, +1).
 func looksLikeSaddle(e *topo.Edge) bool {
-	shaft, _, _, ok := saddleTags(e)
-	return ok && shaft != nil
+	_, _, key, ok := saddleTags(e)
+	return ok && key.sigma == built
 }
 
 // local returns the local coordinates of world point p under pose, in float:
@@ -156,7 +181,7 @@ func local(pose crossbore.Pose, p r3.Vec) r3.Vec {
 // never admits it.
 func readSaddle(e *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face]int) (saddle, error) {
 	shaft, bore, key, ok := saddleTags(e)
-	if !ok {
+	if !ok || key.sigma != built {
 		return saddle{}, fmt.Errorf("%w: the saddle's walls changed", decaderr.ErrUnsupported)
 	}
 	s := saddle{key: key, big: shaft, bore: bore, scale: 1}

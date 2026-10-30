@@ -2810,6 +2810,9 @@
 10	0.03	TestRegionAreaAndCentroidWithHole
 10	0.00	TestRegionMomentsAcceptThinAnnulus
 10	0.00	TestRepairMeshWeldsASplitCube
+10	0.00	TestRetainedSaddleFillet
+10	0.00	TestRetainedSaddleFilletExtrudeShaft
+10	0.00	TestRetainedSaddleFilletRefusals
 10	0.01	TestRevolveAxisDerivedOverflow
 10	0.09	TestRevolveBlendRolesSurvivePlacementAndReplay
 10	0.00	TestRevolveChainFullTurnStaysOpen
@@ -2827,6 +2830,7 @@
 10	0.02	TestRevolveWallNormalCoversSnappedSphereCentre
 10	0.00	TestRevolvedShaftClassBCut
 10	0.04	TestSTLChordTolerance
+10	0.00	TestSaddleFilletHandVolume
 10	0.00	TestScaleMeshOverflowingVerticesAreNotFinite
 10	0.01	TestSecondMomentsRectangle
 10	0.65	TestSectionCardinalConeRoundedProxyCarriesDisplacement
