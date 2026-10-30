@@ -239,7 +239,11 @@ source slabs. Rational interval arithmetic encloses `π`, volume and centroid.
 their seams on the two rings' edges. A patch's area is `tπL/2 − 2t²` for a root
 edge of length `L`. The fillet band's mesh-ring builder places the interior
 rings with the two rings exchanged (`brepfilletmesh.Input.RootAxis`), so each
-ring turns about the root edge. `Tessellate(VerifyAll)` charges the band's chorded volume,
+ring turns about the root edge. Its ring count covers each cell's twist as
+well as the sagitta (loop-fillet §7.1), so the mesh `Bound` stays within the
+requested tolerance up to the 4096-ring cap; at the cap the twist sets a
+floor on the `Bound` (about 0.000384 mm for the 60×40×20 box with its
+20×20×10 boss shelled `t = 2`). `Tessellate(VerifyAll)` charges the band's chorded volume,
 surface departure and vertex motion before publishing its occupied-volume
 bound. A later `Fillet` or `Chamfer` runs on the body's faceted view, and a
 selection that maps to the view and that the retained edge blend recognizes

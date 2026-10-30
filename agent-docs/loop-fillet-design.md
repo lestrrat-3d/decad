@@ -443,7 +443,20 @@ Counts: one count per walk shared by the trimmed wall, every ring and `F`'s
 contour (`capblend.ChordLoop`, with `n(w) = max(chordCount(w),
 chordCount(capArc(w)))` so the larger of the side and cap radii sets the
 in-plane sagitta); `n_φ = ⌈(π/2) / (2·acos(1 − tol_φ/r))⌉` with `tol_φ` half
-the chord budget, at least 2. An LF4 corner's ring vertices
+the chord budget, at least 2 and at most 4096
+(`tessellation.MaxFilletRings`). The boss shell's root band (modify-general
+§3.1a) raises `n_φ` to `⌈s·π/(4·c)⌉`, with `c` the whole chord budget
+(`2·tol_φ`), within the same cap, where `s` is the
+largest plan distance between the two corners' cap-minus-side offsets over
+the band's cells (`brepfilletmesh.TwistRingCount`). Ring `k` sits at
+`side + (cap − side)·g(φ_k)` with one `g` for every sample, so a cell's twist
+vector is that offset difference times `Δg ≤ Δφ`, and its charged `|T|/4`
+stays within the other half of the chord budget. A straight root edge's band
+is one cell from one corner's miter to the next, whose offsets point along
+two different bisectors, so its twist, not its sagitta, sets the count. Every
+other fillet band takes the sagitta count alone: there a cell between two
+miters can charge a twist above `tol`, and `Mesh.Bound` then reads above the
+requested tolerance. An LF4 corner's ring vertices
 are the ellipse's chord chain, shared by both cylinders; an LF5 join's are the
 quarter circle's. Each strip between rings `k` and `k+1` is a quad per
 azimuth interval with a fixed diagonal; along a straight walk the quad is a

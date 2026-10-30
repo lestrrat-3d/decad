@@ -182,9 +182,16 @@ func Chord(ctx context.Context, bp breprecord.Payload, btopo *breprecord.Topolog
 			return nil, nil, err
 		}
 		sideZ, sideDelta := b.SideLevel(f)
+		// The root band's straight walks run from one root corner's miter
+		// to the next in a single cell, so the cell twist, not the
+		// sagitta, sets its ring count.
+		rings, err := brepfilletmesh.TwistRingCount(&lm, b.Setback.AxialUpper(), chord)
+		if err != nil {
+			return nil, nil, err
+		}
 		bc := Band{band: b, face: f, cbp: cbp, lm: lm, start: false,
 			sideZ: sideZ, sideDelta: sideDelta, bossShell: true,
-			fillet: &brepfilletmesh.Rings{Count: tessellation.FilletRingCount(b.Setback.AxialUpper(), chord)}}
+			fillet: &brepfilletmesh.Rings{Count: rings}}
 		if shell.Round != nil {
 			// The upper cavity wall starts on the band's smaller circle.
 			// Impose the band's count and stations on that wall so the
