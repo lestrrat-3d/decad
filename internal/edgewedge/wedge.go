@@ -298,7 +298,11 @@ func vertexBound(v *topo.Vertex) (float64, bool) {
 //     ends that both decide one sign. Both ends are always read.
 //   - On a circle or arc, the plane's tilt from the circle's axis and the
 //     round face's tilt and offset from it move both normals around the
-//     circle by at most their misalignment, which the spread charges twice.
+//     circle by at most their misalignment on a cylinder, cone or sphere,
+//     which the spread charges twice. On a torus they also move the plane's
+//     cut across the tube, by up to (circle radius + major radius) times the
+//     misalignment, which turns the tube's normal by that over the minor
+//     radius; the spread charges that lever too.
 func admitted(e *topo.Edge) (float64, bool) {
 	f0, f1 := e.Faces[0].Surface, e.Faces[1].Surface
 	_, p0 := f0.(surfacegeom.Plane)
@@ -333,8 +337,8 @@ func alongLine(s surfacegeom.Surface, dir r3.Vec) bool {
 // circleFaces reports whether a circle about center and axis lies on a plane
 // normal to axis and on a surface of revolution coaxial with it, and returns
 // the spread its misalignment charges: twice the sine of the plane normal's
-// tilt from the axis, plus twice the round face's axis tilt and its centre's
-// offset from the circle's axis over the radius.
+// tilt from the axis plus the round face's axis tilt and its centre's offset
+// from the circle's axis over the radius, times the lever below.
 func circleFaces(f0, f1 surfacegeom.Surface, center, axis r3.Vec, radius units.Value) (float64, bool) {
 	r, err := radius.In(units.Millimeter)
 	if err != nil || !(r > 0) {
@@ -354,6 +358,12 @@ func circleFaces(f0, f1 surfacegeom.Surface, center, axis r3.Vec, radius units.V
 	}
 	tilt := n.Cross(axis).Len()
 	var misalign float64
+	// lever scales the misalignment into the reading's movement. On a
+	// cylinder, cone or sphere it is 1. On a torus a tilt or offset moves the
+	// plane's cut height across the tube by up to the circle's radius plus the
+	// major radius times the misalignment, which turns the tube's normal by
+	// that over the minor radius.
+	lever := 1.0
 	switch s := round.(type) {
 	case surfacegeom.Cylinder:
 		misalign, ok = coaxial(center, axis, s.Origin, s.Axis, r)
@@ -361,6 +371,15 @@ func circleFaces(f0, f1 surfacegeom.Surface, center, axis r3.Vec, radius units.V
 		misalign, ok = coaxial(center, axis, s.Origin, s.Axis, r)
 	case surfacegeom.Torus:
 		misalign, ok = coaxial(center, axis, s.Center, s.Axis, r)
+		major, err := s.Major.In(units.Millimeter)
+		if err != nil {
+			return 0, false
+		}
+		minor, err := s.Minor.In(units.Millimeter)
+		if err != nil || !(minor > 0) {
+			return 0, false
+		}
+		lever = 1 + (r+math.Abs(major))/minor
 	case surfacegeom.Sphere:
 		rel := s.Center.Sub(center)
 		ok = rel == (r3.Vec{}) || selectorquery.ParallelDirs(rel, axis)
@@ -371,7 +390,7 @@ func circleFaces(f0, f1 surfacegeom.Surface, center, axis r3.Vec, radius units.V
 	if !ok {
 		return 0, false
 	}
-	spread := 2 * (tilt + misalign)
+	spread := 2 * (tilt + misalign) * lever
 	if math.IsNaN(spread) || math.IsInf(spread, 0) {
 		return 0, false
 	}

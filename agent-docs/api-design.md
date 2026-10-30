@@ -565,8 +565,11 @@ sign along the edge. On a line, the plane's normal and the tangent are
 constant and a cylinder's normal turns monotonically by far under a half
 turn, so the reading is a cosine of that turn and keeps the sign both ends
 decide. On a circle or arc, the plane's and the round face's misalignment
-from the circle's axis moves the reading by at most twice that misalignment,
-which the bound charges. `internal/edgewedge`'s `admitted` states the argument.
+from the circle's axis moves the reading by at most twice that misalignment on
+a cylinder, cone or sphere. On a torus it also moves the plane's cut across the
+tube, which turns the tube's normal by up to (circle radius + major radius) over
+the minor radius times the misalignment. The bound charges that spread in
+both cases. `internal/edgewedge`'s `admitted` states the argument.
 Everything else is `WedgeUndecided`: a tangent junction, a `Faceted` face, a
 `FacetedCurve` or `Ellipse3` edge, a line between two cylinders, a free or
 non-manifold edge. `internal/edgewedge` owns the reading. The two readings

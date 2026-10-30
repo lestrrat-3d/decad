@@ -290,6 +290,51 @@ func TestOfCircleMisaligned(t *testing.T) {
 	}
 }
 
+// Each misalignment below sits inside the class gate's 1e-9 window, so the
+// circle is admitted, and the turn at the vertex is smaller than how far that
+// misalignment can move the reading around the circle. The circle is
+// undecided; the same circle exactly aligned decides.
+func TestOfCircleSpread(t *testing.T) {
+	t.Parallel()
+
+	t.Run("sphere centre offset", func(t *testing.T) {
+		t.Parallel()
+		// A radius-1e-5 circle near the pole of a unit sphere turns by about
+		// 1e-5; a 5e-10 offset of the sphere's centre from the circle's
+		// axis can move the reading by 2·5e-10/1e-5 = 1e-4.
+		const rho = 1e-5
+		c := math.Sqrt(1 - rho*rho)
+		p := r3.Vec{X: rho}
+		sphere := func(offset float64) surfacegeom.Surface {
+			centre := r3.Vec{X: offset, Z: -c}
+			return surfacegeom.Sphere{Center: centre, Radius: units.Millimeters(p.Sub(centre).Len())}
+		}
+		e := roundCircle(t, r3.Vec{}, ex, ey, sphere(5e-10), p, r3.Vec{}, ez, 0)
+		require.Equal(t, edgewedge.Undecided, edgewedge.Of(e))
+		e = roundCircle(t, r3.Vec{}, ex, ey, sphere(0), p, r3.Vec{}, ez, 0)
+		require.NotEqual(t, edgewedge.Undecided, edgewedge.Of(e))
+	})
+	t.Run("slender torus axis tilt", func(t *testing.T) {
+		t.Parallel()
+		// A major-1000, minor-0.01 torus cut 1e-7 outside the top of its
+		// tube turns by about 1e-5. A 5e-10 axis tilt moves the cut height by
+		// about 5e-7 around the circle, past the tube's top: the torus lever
+		// (1 + 2000/0.01) carries the spread to about 2e-4, while the
+		// unscaled 1e-9 would leave the circle decided.
+		const major, minor, out = 1000.0, 0.01, 1e-7
+		z0 := math.Sqrt(minor*minor - out*out)
+		p := r3.Vec{X: major + out, Z: z0}
+		torus := func(tilt float64) surfacegeom.Surface {
+			return surfacegeom.Torus{Axis: r3.Vec{X: math.Sin(tilt), Z: math.Cos(tilt)},
+				Major: units.Millimeters(major), Minor: units.Millimeters(minor)}
+		}
+		e := roundCircle(t, r3.Vec{Z: z0}, ex, ey, torus(5e-10), p, r3.Vec{Z: z0}, ez, 0)
+		require.Equal(t, edgewedge.Undecided, edgewedge.Of(e))
+		e = roundCircle(t, r3.Vec{Z: z0}, ex, ey, torus(0), p, r3.Vec{Z: z0}, ez, 0)
+		require.NotEqual(t, edgewedge.Undecided, edgewedge.Of(e))
+	})
+}
+
 // A vertex displacement turns a curved face's normal by more than the turn
 // at the edge, though the tangent's own displacement does not reach it. The
 // same circle with an exact vertex decides.
