@@ -64,9 +64,10 @@ func loopLayout(lm *capblend.LoopMesh) ([]int, []tessellation.FilletCell, int, e
 
 // TwistRingCount is the interior ring count of a full-loop fillet band of
 // the given radius chorded at chord: tessellation.FilletRingCount's sagitta
-// count, raised until every cell's twist (proofbound.CellTwistOffsetUpper,
-// charged by Emit) fits the other half of chord, up to
-// tessellation.MaxFilletRings.
+// count, raised until every cell's |T|/4 twist bound
+// (proofbound.CellTwistOffsetUpper) alone fits the other half of chord, up to
+// tessellation.MaxFilletRings. Emit charges each cell the smaller of that
+// bound and its height bound (cellOffsetUpper).
 //
 // Ring k's plan point at cap sample c is side + D·g(φ_k), with D the cap
 // sample's offset from its matched side sample, g(φ) = 1 − cos φ (cos φ on a
@@ -77,7 +78,7 @@ func loopLayout(lm *capblend.LoopMesh) ([]int, []tessellation.FilletCell, int, e
 // |T|/4 is at most |D(C0) − D(C1)|·π/(8n). A cell from one line–line miter
 // to the next along a straight walk has the largest spread: two plan offsets
 // along different bisectors. The count only selects the mesh; Emit charges
-// the twist the placed rings actually take.
+// the cells the placed rings actually make.
 func TwistRingCount(lm *capblend.LoopMesh, radius, chord float64) (int, error) {
 	n := tessellation.FilletRingCount(radius, chord)
 	match, cells, _, err := loopLayout(lm)
