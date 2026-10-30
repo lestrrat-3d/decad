@@ -635,8 +635,8 @@ mean-value remainder, which grows with the cell's second partials, and the
 first split stops at the coarsest cell that passes the three tests. It reads
 [61.1, 70.3] mm² around an area of 65.7 at r = 3, ρ = 1.5 and [156.7, 229.5] at
 ρ = 3.0, where `AreaSlack` grows by about 97 mm². ε grows with ρ too, so the
-volume bound grows by about 136 mm³ at r = 7, ρ = 1.36. These figures were read
-on 2026-10-31 from the R = 10 shafts. Each bound is proven; only its tightness
+volume bound grows by about 136 mm³ at r = 7, ρ = 1.36. The figures are for
+those R = 10 shafts. Each bound is proven; only its tightness
 suffers, and splitting every cell finer would buy it back at a multiple of the
 proof's time.
 
