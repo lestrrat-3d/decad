@@ -1250,11 +1250,11 @@ func (f *saddleFillet) buildSaddle(ctx context.Context, env topo.Env, groups []f
 	trueHi := proof.AreaHi - proof.ShaftLo - proof.BoreLo
 	gap := math.Max(math.Abs(deltaHeld-trueLo), math.Abs(deltaHeld-trueHi))
 	scale := math.Max(math.Abs(deltaHeld), math.Abs(trueHi)) + oldArea + newArea + proof.AreaHi
-	oldGeom, err := f.rewrittenGeom(ctx, faceIndex)
+	oldGeom, err := groupGeom(ctx, faceIndex, fp, true)
 	if err != nil {
 		return nil, err
 	}
-	areaSlack := proofbound.AbsSumUpper(gap, oldSlop, newSlop, 64*0x1p-52*scale, oldGeom)
+	areaSlack := proofbound.AbsSumUpper(gap, oldSlop, newSlop, 64*0x1p-52*scale)
 	volume := proofbound.ProductUpper(eps, proofbound.AbsSumUpper(stripArea, proof.AreaHi, heldBands, trueBands))
 	volume = proofbound.AbsSumUpper(volume, 64*0x1p-52*eps*scale)
 
@@ -1271,9 +1271,5 @@ func (f *saddleFillet) buildSaddle(ctx context.Context, env topo.Env, groups []f
 	if proofbound.IsNonFinite(next.VolSymDiff) || proofbound.IsNonFinite(next.AreaSlack) {
 		return nil, fmt.Errorf("%w: the saddle fillet has no finite bound", decaderr.ErrUnsupported)
 	}
-	body, err := facetedrecord.Build(ctx, env, next)
-	if err != nil {
-		return nil, fmt.Errorf("%w: the blended mesh fails its held audit: %w", decaderr.ErrUnsupported, err)
-	}
-	return body, nil
+	return buildCharged(ctx, env, next, oldGeom)
 }

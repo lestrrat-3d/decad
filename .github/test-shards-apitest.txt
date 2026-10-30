@@ -2742,6 +2742,7 @@
 10	0.00	TestExtrudeToPartialRevolveStartCap
 10	0.01	TestExtrudeVertexReachesDenotedMergedRun
 10	0.03	TestFacetedEdgeLengthNeverClaimsExact
+10	5.01	TestFacetedRetainedBlendAreaCharge
 10	0.00	TestFacetedRetainedBlendConcaveChain
 10	0.00	TestFacetedRetainedChamferTwoDistance
 10	0.02	TestFacetedUnionNestedBossShellRefusesPlacedSourceRelation

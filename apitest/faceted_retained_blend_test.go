@@ -950,11 +950,12 @@ func TestFacetedRetainedBlendCylinderLine(t *testing.T) {
 		q := math.Atan2(tb[1]-o[1], tb[0]-o[0]) - math.Atan2(k[1]-o[1], k[0]-o[0])
 		phi := math.Acos(0.6)
 		requireAreaChange(t, beforeArea, afterArea, 40*(r*phi-(k[0]-ta[0])-rad*q)-2*kq)
-		// The growth carries the rewrite's error and the old geometric area
-		// terms of the faces it rewrites (agent-docs/retained-edge-blend-design.md
-		// §6.3), about 0.9 here: a loose ceiling, not the bound itself.
+		// The growth carries the rewrite's error, the shortfall of the rebuilt
+		// faces' geometric area terms and the new faces' own terms
+		// (agent-docs/retained-edge-blend-design.md §6.3), about 0.42 here: a
+		// loose ceiling, not the bound itself.
 		require.Less(t, afterArea.Bound.Mag()-beforeArea.Bound.Mag(), 2.0,
-			"the area bound grows by the rewrite's error and the rewritten faces' old terms only")
+			"the area bound grows by the rewrite's error, the terms' shortfall and the new terms only")
 		cylinders := 0
 		for _, f := range filleted.Faces() {
 			if c, ok := f.Surface().(decad.Cylinder); ok && math.Abs(c.Radius.Base()-r) < 1e-12 {

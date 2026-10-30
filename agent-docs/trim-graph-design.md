@@ -435,7 +435,7 @@ Bound composition (pattern: `internal/retainedblend/route.go` `build`):
 | `Verts`, `VertexBound`, `Tris`, `Src`, `Groups` | kept receiver facets and groups, then new faces; unused vertices compacted |
 | `MeshBound` | `facetproof.FacetBoundMax` over the new mesh |
 | `VolSymDiff` | receiver's, plus `proofbound.SweptVolumeAllow(βnew, proofbound.PerturbedAreaUpper(newVerts, newTris, βnew))`, `βnew` the largest bound over every vertex of every new facet (receiver vertices included), plus the sagitta term `τ·A_up` per curved new face (Task 11). The receiver's term still covers the kept facets: the identity behind `SweptVolumeAllow` holds facet by facet, so dropping facets (increment 2's removed face) only removes terms whose surface the new facets replace |
-| `AreaSlack` | receiver's, plus `PerturbedAreaUpper(new, βnew) − A_held(new)` rounded up, plus `proofbound.FacetAreaTermSlop` per new facet, plus `facetedrecord.FaceAreaGeom` of every receiver face whose facets were dropped |
+| `AreaSlack` | receiver's, plus `PerturbedAreaUpper(new, βnew) − A_held(new)` rounded up, plus `proofbound.FacetAreaTermSlop` per new facet, plus, for a splice that drops receiver facets, the shortfall of the rebuilt faces' geometric area terms against the receiver's by source group (`agent-docs/retained-edge-blend-design.md` §6.3, Area) |
 | `DPair` | `facetedrecord.SourceDiameterUpper(verts, MeshBound)` |
 | `Xform`, `ExactPlaced` | receiver's |
 | every special record | dropped, as `retainedblend` does |

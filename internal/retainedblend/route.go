@@ -3,6 +3,7 @@ package retainedblend
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -387,7 +389,8 @@ func (w *work) build(ctx context.Context, env topo.Env, groups []facetedrecord.G
 
 	verts, beta, facets := compact(w.verts, w.beta, facets)
 	meshBound := facetproof.FacetBoundMax(facets, beta)
-	area, vol, err := w.measureChange(ctx, tag, stripFrom, faceIndex)
+	area, vol := w.measureChange(tag, stripFrom)
+	oldGeom, err := groupGeom(ctx, faceIndex, fp, true)
 	if err != nil {
 		return nil, err
 	}
@@ -400,11 +403,103 @@ func (w *work) build(ctx context.Context, env topo.Env, groups []facetedrecord.G
 		Xform:       fp.Xform,
 		ExactPlaced: fp.ExactPlaced,
 	}
+	return buildCharged(ctx, env, next, oldGeom)
+}
+
+// buildCharged builds the rewritten body from next and charges the shortfall
+// of its geometric area terms against oldGeom, the old body's terms by group
+// (agent-docs/retained-edge-blend-design.md §6.3, Area). next.AreaSlack holds
+// the old slack and the change's own terms; the shortfall joins it and every
+// area bound of the built body (facetedrecord.ChargeAreaSlack).
+func buildCharged(ctx context.Context, env topo.Env, next facetedrecord.Payload,
+	oldGeom map[int]float64) (*topo.Body, error) {
 	body, err := facetedrecord.Build(ctx, env, next)
 	if err != nil {
 		return nil, fmt.Errorf("%w: the blended mesh fails its held audit: %w", decaderr.ErrUnsupported, err)
 	}
+	built, ok := body.Payload.(facetedrecord.Payload)
+	if !ok {
+		return nil, fmt.Errorf("%w: the blended body lost its payload", decaderr.ErrBooleanFailed)
+	}
+	newGeom, err := groupGeom(ctx, faceIndexOf(body), built, false)
+	if err != nil {
+		return nil, err
+	}
+	if err := facetedrecord.ChargeAreaSlack(body, geomShortfall(oldGeom, newGeom)); err != nil {
+		return nil, err
+	}
 	return body, nil
+}
+
+// geomShortfall is an upper bound on the sum, over the groups of oldGeom, of
+// how far each group's old terms exceed its new ones. oldGeom holds upper
+// bounds and newGeom lower bounds of the exact sums, so each positive
+// difference rounded up covers the exact one; a group the new body lacks
+// reads zero. A difference that is not a number, as of two infinite terms,
+// bounds nothing and charges +Inf, which the build refuses.
+func geomShortfall(oldGeom, newGeom map[int]float64) float64 {
+	total := 0.0
+	for _, g := range slices.Sorted(maps.Keys(oldGeom)) {
+		d := oldGeom[g] - newGeom[g]
+		if math.IsNaN(d) {
+			return math.Inf(1)
+		}
+		if d > 0 {
+			total = proofbound.AbsSumUpper(total, proofbound.UpRound(d))
+		}
+	}
+	return total
+}
+
+// groupGeom sums the geometric area term AssembleBody charged each face of a
+// body (facetedrecord.FaceAreaGeom), keyed by the source group of the face's
+// first facet. faces numbers the body's faces as fp.FaceOf does. With up each
+// sum is rounded up, else down, so it bounds the exact sum of the terms from
+// that side.
+func groupGeom(ctx context.Context, faces map[*topo.Face]int, fp facetedrecord.Payload,
+	up bool) (map[int]float64, error) {
+	byIndex := make(map[int]*topo.Face, len(faces))
+	for f, i := range faces {
+		byIndex[i] = f
+	}
+	own := map[int][]int{}
+	for t, fi := range fp.FaceOf {
+		own[fi] = append(own[fi], t)
+	}
+	budget := proofbound.NewWorkBudget(ctx)
+	terms := map[int][]float64{}
+	for _, fi := range slices.Sorted(maps.Keys(own)) {
+		f, ok := byIndex[fi]
+		if !ok {
+			return nil, fmt.Errorf("%w: a facet's face is not a face of the body", decaderr.ErrUnsupported)
+		}
+		g, err := facetedrecord.FaceAreaGeom(budget, f, fp.Verts, fp.VertexBound, fp.Tris, own[fi])
+		if err != nil {
+			return nil, err
+		}
+		key := fp.Src[own[fi][0]]
+		terms[key] = append(terms[key], g)
+	}
+	out := make(map[int]float64, len(terms))
+	for key, ts := range terms {
+		if up {
+			out[key] = proofbound.AbsSumUpper(ts...)
+			continue
+		}
+		out[key] = sumDown(ts)
+	}
+	return out, nil
+}
+
+// sumDown is a lower bound on the exact sum of non-negative terms: each
+// partial sum is rounded and then stepped down, so it never passes the exact
+// one, and the exact sum is at least zero.
+func sumDown(terms []float64) float64 {
+	total := 0.0
+	for _, t := range terms {
+		total = max(0, proofarith.NextDown(total+t))
+	}
+	return total
 }
 
 // compact drops the vertices no facet uses and renumbers the rest.
@@ -444,12 +539,9 @@ func heldArea(verts []r3.Vec, facets [][3]int) (float64, float64) {
 // measureChange returns the area slack and volume bound the rewrite adds
 // (agent-docs/retained-edge-blend-design.md §6.3, Claim K). The area change of the
 // held mesh is compared with the exact change: the annulus and band removed
-// and the blend face added. The old body's area error was proven only with
-// the geometric terms of every face, and the rebuilt body charges the
-// rewritten faces' terms afresh from their new facets, which can be smaller:
-// the slack therefore carries the old terms of the rewritten faces.
-func (w *work) measureChange(ctx context.Context, tag blendTag, stripFrom int,
-	faceIndex map[*topo.Face]int) (areaSlack, volSymDiff float64, err error) {
+// and the blend face added. The shortfall of the rebuilt faces' geometric
+// terms is charged after the build (buildCharged).
+func (w *work) measureChange(tag blendTag, stripFrom int) (float64, float64) {
 	oldArea, oldSlop := heldArea(w.fp.Verts, pick(w.fp.Tris, w.removed))
 	newArea, newSlop := heldArea(w.verts, w.out)
 	stripArea, _ := heldArea(w.verts, w.out[stripFrom:])
@@ -458,11 +550,7 @@ func (w *work) measureChange(ctx context.Context, tag blendTag, stripFrom int,
 	deltaTrue := tag.trueArea - w.removedTrue
 	// Every term is a float evaluation; charge the areas' own rounding.
 	scale := math.Max(math.Abs(deltaHeld), math.Abs(deltaTrue)) + oldArea + newArea + w.removedTrue
-	oldGeom, err := w.rewrittenGeom(ctx, faceIndex)
-	if err != nil {
-		return 0, 0, err
-	}
-	areaSlack = proofbound.AbsSumUpper(math.Abs(deltaHeld-deltaTrue), oldSlop, newSlop, 64*0x1p-52*scale, oldGeom)
+	areaSlack := proofbound.AbsSumUpper(math.Abs(deltaHeld-deltaTrue), oldSlop, newSlop, 64*0x1p-52*scale)
 
 	// A raised inner vertex of a curved wall bounds the facets beside the
 	// strip that now face the blend.
@@ -470,43 +558,9 @@ func (w *work) measureChange(ctx context.Context, tag blendTag, stripFrom int,
 	for _, t := range w.out[stripFrom:] {
 		eps = max(eps, w.beta[t[0]], w.beta[t[1]], w.beta[t[2]])
 	}
-	volSymDiff = proofbound.AbsSumUpper(proofbound.ProductUpper(eps, proofbound.AbsSumUpper(stripArea, tag.trueArea)),
+	volSymDiff := proofbound.AbsSumUpper(proofbound.ProductUpper(eps, proofbound.AbsSumUpper(stripArea, tag.trueArea)),
 		64*0x1p-52*eps*scale)
-	return areaSlack, volSymDiff, nil
-}
-
-// rewrittenGeom sums the geometric area term the old body published for each
-// face the rewrite takes facets from (facetedrecord.FaceAreaGeom).
-func (w *work) rewrittenGeom(ctx context.Context, faceIndex map[*topo.Face]int) (float64, error) {
-	faces := map[int]*topo.Face{}
-	for f, i := range faceIndex {
-		faces[i] = f
-	}
-	var rewritten []int
-	seen := map[int]struct{}{}
-	for _, t := range w.removed {
-		fi := w.fp.FaceOf[t]
-		if _, ok := seen[fi]; !ok {
-			seen[fi] = struct{}{}
-			rewritten = append(rewritten, fi)
-		}
-	}
-	slices.Sort(rewritten)
-	budget := proofbound.NewWorkBudget(ctx)
-	total := 0.0
-	for _, fi := range rewritten {
-		f, ok := faces[fi]
-		if !ok {
-			return 0, fmt.Errorf("%w: a rewritten face is not a face of the body", decaderr.ErrUnsupported)
-		}
-		g, err := facetedrecord.FaceAreaGeom(budget, f, w.fp.Verts, w.fp.VertexBound, w.fp.Tris,
-			facetsOfFace(w.fp.FaceOf, fi))
-		if err != nil {
-			return 0, err
-		}
-		total = proofbound.AbsSumUpper(total, g)
-	}
-	return total, nil
+	return areaSlack, volSymDiff
 }
 
 func pick(all [][3]int, idx []int) [][3]int {
