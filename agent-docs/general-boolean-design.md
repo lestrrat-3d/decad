@@ -276,16 +276,33 @@ overhanging piece's side line, which the record states as two edges. An
 oblique line with a vertex strictly inside it misses.
 
 **Displacements.** Every level carries its own `z0Delta`/`z1Delta`. Every
-face carries one section displacement: §7's stacked formula over the
-slab merges (their cut charge, except for A1's certified exact line rewrite,
-since every incoming and walk term is zero by admission) plus the largest
-allowance of any canonical vertex. Every
-vertex lies on exact carriers — an axis-aligned plane at its recorded
-level, a circle about its recorded centre — within that distance of the
-crossing it denotes, so each planar region and each pinned arc is within
-it of the face it denotes; a swept piece's band and a planar face's area
-term read it as §4.3 states, and a planar face's level moves by its level
-displacement alone. An all-planar result with float levels is `Exact`.
+face carries one section displacement: the largest allowance of any canonical
+vertex, and nothing else. No face coordinate reads a slab merge's cut
+parameter. A junction is a canonical vertex, and `LoopOf` and the face writers
+record only canonical points, recorded levels and whole lines. A vertex where
+a line meets a circle or another oblique line reads a cut end, and
+`stackedbrep`'s `ubEnds` adds that cut's charge to the vertex's own allowance,
+with `crossingOffset` on top. A circle-circle junction (`recordedJunction`)
+takes the larger `ubEnds` allowance of its two ends. So an axis-aligned
+result's faces are exact rational data even when a merge falls back to
+`CutDisplacementAllow` for a cut: the L bracket's base side is cut at the
+upright's wall, an interior point of the merged edge and a corner only of the
+other operand, so the two fragments meeting there are collinear. A modify op
+may take such faces for the faces they denote. The stack is the one record
+that keeps merged slab fragments verbatim, so `Stack.Delta` is §7's stacked
+formula over the slab merges (their cut charge, except for A1's certified
+exact line rewrite, since every incoming and walk term is zero by admission)
+plus that vertex allowance. Every vertex lies on exact carriers — an
+axis-aligned plane at its recorded level, a circle about its recorded centre
+— within that distance of the crossing it denotes, so each planar region and
+each pinned arc is within it of the face it denotes; a swept piece's band
+and a planar face's area term read it as §4.3 states, and a planar face's
+level moves by its level displacement alone. An all-planar result with float
+levels is `Exact`. A nonzero `Stack.Delta` is read by `Body.Section` (through
+its `SectionDelta`, `internal/sectionclip/reconstruct.go`) and `ScaledAt`
+(`stack_brep_scale.go`), which refuse it, and by a further Union, whose
+stacked operand then carries it as its `SectionDelta` and misses silently
+(`internal/stackedunion/brep.go`).
 
 **Audit and consumers.** Each planar face runs modify §5's audit, and the
 record must pair every edge by §4.2's count; a record this build leaves

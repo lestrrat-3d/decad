@@ -194,23 +194,29 @@ func (b *ubBuild) run(ctx context.Context) (brepPayload, error) {
 	}
 	// Every vertex lies on exact carriers: an axis-aligned plane at its
 	// recorded level, or a circle about its recorded centre. A cut vertex
-	// sits within delta of the crossing it denotes along those carriers, so
-	// each planar face's region and each swept piece's pinned arc is within
-	// delta of the face it denotes: the merges' cut charge plus the largest
-	// allowance of any canonical vertex, charged to every face alike.
-	delta := proofbound.AbsSumUpper(b.cutDelta, b.geom.Allow())
+	// sits within its own allowance of the crossing it denotes along those
+	// carriers, so each planar face's region and each swept piece's pinned
+	// arc is within the largest canonical-vertex allowance of the face it
+	// denotes. No face coordinate reads a slab-merge cut parameter: a
+	// junction is a canonical vertex, and a canonical vertex that reads a
+	// cut end already carries that end's cut charge (stackedbrep ubEnds).
+	// The faces therefore carry geom.Allow() alone. The kept slab fragments
+	// are the only record that reads a merge's cut parameter verbatim, so
+	// the stack carries cutDelta on top of that allowance.
+	faceDelta := b.geom.Allow()
+	stackDelta := proofbound.AbsSumUpper(b.cutDelta, faceDelta)
 	faceLevels := make([]stackedbrep.Level, len(b.levels))
 	for i, level := range b.levels {
 		faceLevels[i] = stackedbrep.Level{Held: level.Held, Delta: level.Delta}
 	}
-	out, err := breprecord.StackedRecord(ctx, b.st.budget, b.geom, faceLevels, b.st.va.Proxy.Frame, b.st.va.Proxy.Xform, delta)
+	out, err := breprecord.StackedRecord(ctx, b.st.budget, b.geom, faceLevels, b.st.va.Proxy.Frame, b.st.va.Proxy.Xform, faceDelta)
 	if err != nil {
 		return brepPayload{}, err
 	}
 	if !b.cut {
 		// A1's union result keeps its slabs for a further co-directional
 		// Union (§4.1). The crossing Cut's holed slabs are not A1 operands.
-		stack := &brepStack{Delta: delta}
+		stack := &brepStack{Delta: stackDelta}
 		for k, regions := range b.slabs {
 			lo, hi := b.levels[k], b.levels[k+1]
 			stack.Slabs = append(stack.Slabs, stackedrecord.Slab{Regions: regions,
