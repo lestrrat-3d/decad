@@ -176,8 +176,8 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 		pp, ok, sweepStraight = reduction, true, true
 	}
 	if !ok {
-		return Result{}, fmt.Errorf(`%w: this evaluator chamfers a straight prism, its one-line Sweep reduction, or a revolve only; selector %s matched [%s]`,
-			decaderr.ErrUnsupported, sel, modifyselect.EdgesContext(edges))
+		return Result{}, fmt.Errorf(`%w: this evaluator chamfers a straight prism, its one-line Sweep reduction, or a revolve only%s; selector %s matched [%s]`,
+			decaderr.ErrUnsupported, unreadNote(b.Payload, edges), sel, modifyselect.EdgesContext(edges))
 	}
 	if sweepStraight && asym != nil {
 		return Result{}, fmt.Errorf(`%w: an asymmetric chamfer of a Sweep wall has no mapped reference-face role`, decaderr.ErrUnsupported)
