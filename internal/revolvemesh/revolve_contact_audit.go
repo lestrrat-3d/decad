@@ -2,6 +2,7 @@ package revolvemesh
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"math"
 	"runtime"
@@ -303,6 +304,32 @@ func RevolveContactAudit(budget *proofbound.WorkBudget, data []RevolveAuditTri, 
 		runtime.GOMAXPROCS(0) > 1 && revolveRowsLen(rows) >= revolveParallelMinPairs)
 }
 
+// RevolveContactAuditBounded audits spatial candidates under a fixed scan and
+// exact-pair budget. Callers must still enforce the mesh facet ceiling.
+func RevolveContactAuditBounded(budget *proofbound.WorkBudget, data []RevolveAuditTri, tris [][3]int, delta float64) error {
+	if len(data) != len(tris) {
+		return fmt.Errorf("%w: revolve facet audit input lengths differ", decaderr.ErrUnsupported)
+	}
+	margin := proofbound.ProductUpper(2, delta)
+	if !(margin >= 0) || proofbound.IsNonFinite(margin) {
+		return fmt.Errorf("%w: revolve facet audit has no finite margin", decaderr.ErrUnsupported)
+	}
+	scan := proofbound.NewWallWorkBudgetWithOperation(proofbound.MaxFacetPairTestsPerCall, budget)
+	rows, err := revolveContactCandidates(scan, data, tris, margin)
+	if errors.Is(err, proofbound.ErrWallWorkBudget) {
+		return fmt.Errorf("%w: revolve facet candidate scan exceeds its work ceiling", decaderr.ErrUnsupported)
+	}
+	if err != nil {
+		return err
+	}
+	count := revolveRowsLen(rows)
+	if uint64(count) > proofbound.MaxFacetPairTestsPerCall {
+		return fmt.Errorf("%w: revolve facet candidates exceed the pair ceiling", decaderr.ErrUnsupported)
+	}
+	return revolveAuditRows(budget, data, tris, rows, delta, margin,
+		runtime.GOMAXPROCS(0) > 1 && count >= revolveParallelMinPairs)
+}
+
 // revolveParallelMinPairs is the candidate count from which the audit runs its
 // pairs on several goroutines.
 const revolveParallelMinPairs = 20000
@@ -519,6 +546,9 @@ func revolveContactCandidates(budget *proofbound.WorkBudget, data []RevolveAudit
 	for i, t := range tris {
 		for _, v := range t {
 			for _, j := range incident[v] {
+				if err := budget.Step(); err != nil {
+					return nil, err
+				}
 				if int(j) > i {
 					rows[i] = append(rows[i], j)
 				}

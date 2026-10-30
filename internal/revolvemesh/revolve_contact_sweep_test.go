@@ -127,6 +127,16 @@ func sweepMeshes(t *testing.T) map[string]sweepMesh {
 
 var sweepDeltas = []float64{0, 1e-9, 0.25}
 
+func TestRevolveBoundedContactAuditMatchesExisting(t *testing.T) {
+	for name, mesh := range sweepMeshes(t) {
+		for _, delta := range sweepDeltas {
+			oldErr := RevolveContactAudit(proofbound.NewWorkBudget(t.Context()), mesh.data, mesh.tris, delta)
+			newErr := RevolveContactAuditBounded(proofbound.NewWorkBudget(t.Context()), mesh.data, mesh.tris, delta)
+			require.Equal(t, oldErr == nil, newErr == nil, "%s delta %g", name, delta)
+		}
+	}
+}
+
 func TestRevolveContactCandidatesMatchBruteForce(t *testing.T) {
 	for name, m := range sweepMeshes(t) {
 		for _, delta := range sweepDeltas {

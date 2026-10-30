@@ -16,6 +16,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/revolvebore"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sweeprecord"
 	"github.com/lestrrat-3d/decad/internal/tessaudit"
@@ -67,6 +68,11 @@ func Properties(ctx context.Context, mesher verifiedmesh.Mesher, b *topo.Body, d
 		// A term the analytic path does not charge leaves the revolve to its
 		// verified mesh (agent-docs/multibody-dynamics-design.md §8.5).
 		return verifiedMeshMassProperties(ctx, mesher, b, density)
+	}
+	if bore, ok := b.Payload.(revolvebore.Payload); ok {
+		result, err := massmoment.RevolveBoreProperties(ctx, bore.Candidate.Revolve.MassRecord(),
+			bore.Candidate.Tool.MassRecord(), b.Centroid, density)
+		return analyticOrMeshMassProperties(ctx, mesher, b, density, result, err)
 	}
 	if faceted, ok := b.Payload.(facetedrecord.Payload); ok {
 		return containedCutMassProperties(ctx, mesher, b, faceted, density)

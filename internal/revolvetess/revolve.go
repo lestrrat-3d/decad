@@ -130,7 +130,8 @@ type revolvePlan struct {
 	// pair-test ceiling is charged nothing, and below VerifyAll the per-cell
 	// area slack and occupied-volume terms are never composed. Every other
 	// audit, and the face bounds, run at each level.
-	verify Level
+	verify       Level
+	boundedAudit bool
 }
 
 // TessellateRevolve meshes a revolved body (agent-docs/tessellation-design.md §§8-10).
@@ -149,6 +150,17 @@ func TessellateRevolveWithRoles(ctx context.Context, b *topo.Body, rp revolvePay
 // TessellateRevolveWithCountFloor keeps a composite sweep's shared meridian counts.
 func TessellateRevolveWithCountFloor(ctx context.Context, b *topo.Body, rp revolvePayload,
 	chord float64, verify Level, roleOf func(string) string, floor [][]int, freeformTarget float64) (*topo.Mesh, error) {
+	return tessellateRevolve(ctx, b, rp, chord, verify, roleOf, floor, freeformTarget, false)
+}
+
+// TessellateRevolveBoundedAudit uses a bounded spatial candidate audit.
+// It retains the facet ceiling and all VerifyAll proof terms.
+func TessellateRevolveBoundedAudit(ctx context.Context, b *topo.Body, rp revolvePayload, chord float64) (*topo.Mesh, error) {
+	return tessellateRevolve(ctx, b, rp, chord, VerifyAll, nil, nil, 0, true)
+}
+
+func tessellateRevolve(ctx context.Context, b *topo.Body, rp revolvePayload,
+	chord float64, verify Level, roleOf func(string) string, floor [][]int, freeformTarget float64, boundedAudit bool) (*topo.Mesh, error) {
 	var plan *revolvePlan
 	var err error
 	if floor == nil {
@@ -159,6 +171,7 @@ func TessellateRevolveWithCountFloor(ctx context.Context, b *topo.Body, rp revol
 	if err != nil {
 		return nil, err
 	}
+	plan.boundedAudit = boundedAudit
 	for attempt := 0; ; attempt++ {
 		mesh, err := buildRevolveMesh(ctx, plan)
 		if err == nil {
@@ -319,7 +332,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*topo.Mesh, error) {
 		return nil, revolveSectionRetry(loopMesh, err)
 	}
 
-	if err := revolvePreflightFacets(loopMesh, p.Angular, rp.Full, sheet, p.verify >= VerifyBoundary, p.work); err != nil {
+	if err := revolvePreflightFacets(loopMesh, p.Angular, rp.Full, sheet, p.verify >= VerifyBoundary && !p.boundedAudit, p.work); err != nil {
 		return nil, err
 	}
 	angular, err := revolvemesh.AngularSequence(revolvemesh.AngularInput{
@@ -506,7 +519,13 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*topo.Mesh, error) {
 		return nil, err
 	}
 	if p.verify >= VerifyBoundary {
-		if err := revolvemesh.RevolveContactAudit(auditBudget, auditTris, mesh.Triangles, coord); err != nil {
+		var err error
+		if p.boundedAudit {
+			err = revolvemesh.RevolveContactAuditBounded(auditBudget, auditTris, mesh.Triangles, coord)
+		} else {
+			err = revolvemesh.RevolveContactAudit(auditBudget, auditTris, mesh.Triangles, coord)
+		}
+		if err != nil {
 			// A crossing or an undecided contact is the one failure a finer
 			// angular sequence can still answer, and §3 makes the global count the
 			// thing an angular failure increments. A canceled context or an

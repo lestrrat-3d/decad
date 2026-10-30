@@ -28,6 +28,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/obliqueboss"
 	"github.com/lestrrat-3d/decad/internal/prismboolean"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/revolvebore"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
@@ -297,6 +298,15 @@ func analyticRoutes(ctx context.Context, op meshbool.OperationKind, env topo.Env
 			return nil, false, err
 		} else if ok {
 			return found(prismboolean.AnalyticBody(ctx, env, pp))
+		}
+	}
+	if op == meshbool.OpCut {
+		candidate, ok, err := revolvebore.Prepare(ctx, a, b)
+		if err != nil {
+			return nil, false, err
+		}
+		if ok {
+			return found(revolvebore.Build(ctx, env, revolvebore.Payload{Candidate: candidate}))
 		}
 	}
 	// agent-docs/general-boolean-design.md §3 class B: a perpendicular pair with a

@@ -48,7 +48,8 @@ func massPropertiesFromReadings(readings massmoment.MassReadings, err error) (Ma
 // source spheres under rigid placements, cardinal full source cylinders made
 // by revolving an axis-incident rectangle, full and partial revolves of any
 // integrated section about an exact in-plane axis under any frame and rigid
-// placement, sweeps whose spans those prism and revolve paths admit, cups
+// placement, admitted full-length axial prism cuts of a linear Revolve,
+// sweeps whose spans those prism and revolve paths admit, cups
 // whose outer and cavity prisms they admit, and faceted Boolean solids with a
 // certified occupied-volume bound. Every other solid, and a sweep or cup the
 // analytic arms refuse, is integrated over its VerifyAll mesh when that mesh
