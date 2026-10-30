@@ -13,8 +13,12 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
+// MaxFilletRings caps a fillet band's interior strip count.
+const MaxFilletRings = 4096
+
 // FilletRingCount is the fewest strips whose quarter-circle chord sagitta
-// stays within half the chord budget, with a minimum of two.
+// stays within half the chord budget, with a minimum of two and a maximum of
+// MaxFilletRings.
 func FilletRingCount(radius, chord float64) int {
 	tol := chord / 2
 	if !(radius > 0) || !(tol > 0) {
@@ -25,7 +29,7 @@ func FilletRingCount(radius, chord float64) int {
 		arg = -1
 	}
 	n := int(math.Ceil((math.Pi / 2) / (2 * math.Acos(arg))))
-	return min(max(n, 2), 4096)
+	return min(max(n, 2), MaxFilletRings)
 }
 
 // FilletLoopInput names the shared walk and connector sample layout.

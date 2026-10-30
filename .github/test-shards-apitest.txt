@@ -2853,6 +2853,7 @@
 10	0.00	TestSectorRouteDigestSingleLug
 10	0.01	TestSelectFacesPredicates
 10	0.00	TestSelectorResolutionRejectsNilInputs
+10	0.18	TestShellBossTessellateWithinTolerance
 10	0.00	TestShellBossThenBlendBoxVerticals
 10	0.13	TestShellCenteredStraddlesAMeshSolidSurface
 10	0.01	TestShellClosedDenotedLevel

@@ -52,15 +52,60 @@ type Input struct {
 	RootAxis    bool
 }
 
-// Place adds interior rings after the side and cap rings have their shared vertices.
-func (fr *Rings) Place(in Input, e brepgeom.Embed,
-	addVertex func([3]float64, proofbound.WalkEndBound) int) error {
-	lm := in.Loop
-	match, cells, patches, err := tessellation.FilletLoopLayout(tessellation.FilletLoopInput{
+// loopLayout pairs lm's cap samples with its side samples and lists the
+// band's cells (tessellation.FilletLoopLayout).
+func loopLayout(lm *capblend.LoopMesh) ([]int, []tessellation.FilletCell, int, error) {
+	return tessellation.FilletLoopLayout(tessellation.FilletLoopInput{
 		Walks: lm.Walks, Joins: capblend.SampleJoins(lm.Joins),
 		Count: lm.Count, ArcCount: lm.ArcCount, SideStart: lm.SideStart,
 		CapSamples: len(lm.CapPts),
 	})
+}
+
+// TwistRingCount is the interior ring count of a full-loop fillet band of
+// the given radius chorded at chord: tessellation.FilletRingCount's sagitta
+// count, raised until every cell's twist (proofbound.CellTwistOffsetUpper,
+// charged by Emit) fits the other half of chord, up to
+// tessellation.MaxFilletRings.
+//
+// Ring k's plan point at cap sample c is side + D·g(φ_k), with D the cap
+// sample's offset from its matched side sample, g(φ) = 1 − cos φ (cos φ on a
+// root-axis band, whose rings are exchanged) at every sample, and every ring
+// vertex of ring k at one level (agent-docs/loop-fillet-design.md §7.1). A
+// cell's twist vector between rings k and k+1 is then
+// (D(C0) − D(C1))·(g(φ_k) − g(φ_{k+1})), and |Δg| ≤ Δφ = (π/2)/n, so its
+// |T|/4 is at most |D(C0) − D(C1)|·π/(8n). A cell from one line–line miter
+// to the next along a straight walk has the largest spread: two plan offsets
+// along different bisectors. The count only selects the mesh; Emit charges
+// the twist the placed rings actually take.
+func TwistRingCount(lm *capblend.LoopMesh, radius, chord float64) (int, error) {
+	n := tessellation.FilletRingCount(radius, chord)
+	match, cells, _, err := loopLayout(lm)
+	if err != nil {
+		return 0, err
+	}
+	offset := func(c int) (float64, float64) {
+		side := lm.SidePts[match[c]]
+		return lm.CapPts[c].U - side.U, lm.CapPts[c].V - side.V
+	}
+	spread := 0.0
+	for _, cell := range cells {
+		u0, v0 := offset(cell.C0)
+		u1, v1 := offset(cell.C1)
+		spread = max(spread, math.Hypot(u0-u1, v0-v1))
+	}
+	need := math.Ceil(spread * math.Pi / (4 * chord))
+	if !(need > float64(n)) {
+		return n, nil
+	}
+	return int(min(need, tessellation.MaxFilletRings)), nil
+}
+
+// Place adds interior rings after the side and cap rings have their shared vertices.
+func (fr *Rings) Place(in Input, e brepgeom.Embed,
+	addVertex func([3]float64, proofbound.WalkEndBound) int) error {
+	lm := in.Loop
+	match, cells, patches, err := loopLayout(lm)
 	if err != nil {
 		return err
 	}

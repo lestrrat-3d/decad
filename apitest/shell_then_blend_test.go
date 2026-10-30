@@ -67,8 +67,8 @@ func boxVerticals() *decad.EdgeQuery {
 }
 
 // requireBlendVerified checks the blended body's verified mesh, and that a
-// default Verify finds nothing wrong: Sound, or Suspect only for a faceted
-// reading's bound wider than the default tolerance.
+// default Verify of doc reads Sound, with every reading of each body's
+// report bounded below its tolerance limit.
 func requireBlendVerified(t *testing.T, doc *decad.Document, b *decad.Body) *decad.Mesh {
 	t.Helper()
 	mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
@@ -78,11 +78,39 @@ func requireBlendVerified(t *testing.T, doc *decad.Document, b *decad.Body) *dec
 	require.True(t, mesh.VolumeVerified())
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Contains(t, []decad.Status{decad.Sound, decad.Suspect}, report.Status)
-	for _, d := range report.Diagnostics {
-		require.Equal(t, decad.DiagMeasurementBeyondTolerance, d.Code, d.Message)
+	require.Equal(t, decad.Sound, report.Status, "diagnostics: %+v", report.Diagnostics)
+	for _, readings := range report.Bodies {
+		require.NotNil(t, readings.Region)
+		for _, reading := range []struct {
+			name  string
+			bound units.Value
+			limit *units.Value
+		}{
+			{"Area", readings.Area.Bound, readings.Area.Tolerance.Limit},
+			{"Bounds", readings.Bounds.Bound, readings.Bounds.Tolerance.Limit},
+			{"Volume", readings.Region.Volume.Bound, readings.Region.Volume.Tolerance.Limit},
+			{"Centroid", readings.Region.Centroid.Bound, readings.Region.Centroid.Tolerance.Limit},
+		} {
+			require.NotNil(t, reading.limit, reading.name)
+			require.Less(t, reading.bound.Base(), reading.limit.Base(), reading.name)
+		}
 	}
 	return mesh
+}
+
+// A stacked boss shell's root band meshes within the requested tolerance.
+// Each straight root edge's band runs from one root corner's miter to the
+// next in a single cell, so its ring count is set by that cell's twist
+// (agent-docs/loop-fillet-design.md §7.1), and the mesh Bound, every term of
+// which the band charges, stays at or below tol.
+func TestShellBossTessellateWithinTolerance(t *testing.T) {
+	t.Parallel()
+	_, shell, _ := shellBoxBoss(t, openBossTop)
+	for _, tol := range []float64{0.1, 0.01} {
+		mesh, err := shell.Tessellate(t.Context(), units.Millimeters(tol))
+		require.NoError(t, err)
+		require.LessOrEqual(t, mesh.Bound().Base(), tol, "tol %g", tol)
+	}
 }
 
 // A Fillet or Chamfer of the outer box verticals of a stacked boss shell
@@ -90,7 +118,9 @@ func requireBlendVerified(t *testing.T, doc *decad.Document, b *decad.Body) *dec
 // walls are t thick leaves √2·t − (√2−1)·r of wall on the corner's
 // diagonal: 1.586 mm for r = 3 and t = 2. The cavity is untouched, so the
 // shell loses the four corner pieces only, (1 − π/4)·r² for a fillet and
-// d²/2 for a chamfer per unit length, over the 20 mm edges.
+// d²/2 for a chamfer per unit length, over the 20 mm edges. The view's root
+// band meshes within its chord, so every blended result's readings stay
+// below their relative limits and Verify reads it Sound.
 //
 // A fillet of radius 3 on the bottom-open shell's verticals refuses: the
 // 2 mm rim at the open end is an end face whose cavity loop lies within the
@@ -167,9 +197,9 @@ func TestShellBossThenShellRefuses(t *testing.T) {
 // The opening's outer rim edge along x at y = 10 fillets on the view: the
 // blend is a radius-1 cylinder about the line y = 11, z = 29, so a point
 // 0.71 mm from that axis inside the corner stays and one 1.20 mm away goes.
-// The test reads the blend's geometry rather than the volume: the corner
-// piece is (1 − π/4)·20 = 4.29 mm³, below the result's ≈ 12 mm³ volume bound,
-// so a volume check could not tell the fillet from no fillet.
+// The fillet removes the corner piece (1 − π/4)·20 = 4.29 mm³, and the
+// result's volume bound sits far enough below it for the removed volume to
+// tell the fillet from no fillet.
 func TestShellBossThenFilletOpeningRim(t *testing.T) {
 	t.Parallel()
 	doc, shell, _ := shellBoxBoss(t, openBossTop)
@@ -189,6 +219,11 @@ func TestShellBossThenFilletOpeningRim(t *testing.T) {
 		require.InDelta(t, 29, c.Origin.Z, 1e-12)
 	}
 	require.True(t, found, "the fillet wall is a radius-1 cylinder")
+	corner := (1 - math.Pi/4) * 20
+	vol, err := filleted.Volume()
+	require.NoError(t, err)
+	require.Less(t, vol.Bound.Base(), corner/2, "the volume bound resolves the corner piece")
+	requireRemoved(t, shell, filleted, corner)
 	mesh := requireBlendVerified(t, doc, filleted)
 	require.True(t, meshEncloses(mesh, r3.NewVec(30, 10.5, 29.5)), "material inside the fillet")
 	require.False(t, meshEncloses(mesh, r3.NewVec(30, 10.15, 29.85)), "the rim corner is cut away")
