@@ -136,7 +136,7 @@ func (c *cylLine) readEnd(vertex *topo.Vertex, fp facetedrecord.Payload, faceInd
 	o := c.axisPoint(g.o)
 	s := c.a.offset(o)
 	half := c.radius*c.radius - s*s
-	if half < (minSine*c.radius)*(minSine*c.radius) {
+	if grazes(c.radius, s) {
 		return lineEnd{}, fmt.Errorf("%w: the plane meets the cylinder at a grazing angle", decaderr.ErrUnsupported)
 	}
 	side := c.a.n.Cross(c.axis)
@@ -153,6 +153,13 @@ func (c *cylLine) readEnd(vertex *topo.Vertex, fp facetedrecord.Payload, faceInd
 		return lineEnd{}, fmt.Errorf("%w: an edge end is not where its three tags meet", decaderr.ErrUnsupported)
 	}
 	return end, nil
+}
+
+// grazes reports whether a plane at distance s from a cylinder's axis meets
+// the cylinder of that radius at a sine below minSine, or either is not a
+// number.
+func grazes(radius, s float64) bool {
+	return !(radius*radius-s*s >= (minSine*radius)*(minSine*radius))
 }
 
 // findCylLine returns the retained plane-cylinder line of body whose corners

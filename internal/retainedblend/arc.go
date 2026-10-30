@@ -118,7 +118,7 @@ func (a *arcRim) readEnd(vertex *topo.Vertex, fp facetedrecord.Payload, faceInde
 	}
 	// The end face must cross the rim at a real angle: its offset from the axis
 	// is short of the radius by more than minSine allows.
-	if h := math.Abs(g.n.Dot(g.o.Sub(a.center))); h > a.radius*math.Sqrt(1-minSine*minSine) {
+	if h := math.Abs(g.n.Dot(g.o.Sub(a.center))); !(h <= a.radius*math.Sqrt(1-minSine*minSine)) {
 		return lineEnd{}, fmt.Errorf("%w: an arc end face meets the cylinder at a grazing angle", decaderr.ErrUnsupported)
 	}
 	best := math.Inf(1)

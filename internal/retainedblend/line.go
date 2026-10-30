@@ -20,6 +20,15 @@ import (
 // straight-edge construction accepts as a real angle.
 const minSine = 1e-3
 
+// shallow reports whether the sine c is below minSine or is not a number. A
+// gate written c < minSine admits NaN, which then reaches rowStep and the
+// row count as NaN.
+func shallow(c float64) bool { return !(c >= minSine) }
+
+// clears reports whether s, a direction's component along a way out of a
+// corner, exceeds minSine of the direction's length. NaN does not clear.
+func clears(s, length float64) bool { return s > minSine*length }
+
 // plane is an exact plane of a retained tag: outward unit normal n through o.
 type plane struct {
 	n, o r3.Vec
@@ -171,7 +180,7 @@ func cornerOf(vertex *topo.Vertex, fp facetedrecord.Payload, faceIndex map[*topo
 // are nearly dependent.
 func intersect3(p, q, s plane) (r3.Vec, bool) {
 	det := p.n.Dot(q.n.Cross(s.n))
-	if math.Abs(det) < minSine {
+	if shallow(math.Abs(det)) {
 		return r3.Vec{}, false
 	}
 	hp, hq, hs := p.n.Dot(p.o), q.n.Dot(q.o), s.n.Dot(s.o)
@@ -194,7 +203,7 @@ func readLine(edge *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Fac
 	}
 	cross := l.a.n.Cross(l.b.n)
 	sin := cross.Len()
-	if sin < minSine {
+	if shallow(sin) {
 		return line{}, fmt.Errorf("%w: the edge's two planes are nearly parallel", decaderr.ErrDegenerate)
 	}
 	l.d = cross.Scale(1 / sin)
@@ -238,7 +247,7 @@ func (l *line) readEnd(vertex *topo.Vertex, fp facetedrecord.Payload, faceIndex 
 	if exact.Sub(fp.Verts[end.v]).Len() > fp.VertexBound[end.v]+l.slack() {
 		return lineEnd{}, fmt.Errorf("%w: an edge end is not where its three tags meet", decaderr.ErrUnsupported)
 	}
-	if math.Abs(l.d.Dot(g.n)) < minSine || l.a.n.Cross(g.n).Len() < minSine || l.b.n.Cross(g.n).Len() < minSine {
+	if shallow(math.Abs(l.d.Dot(g.n))) || shallow(l.a.n.Cross(g.n).Len()) || shallow(l.b.n.Cross(g.n).Len()) {
 		return lineEnd{}, fmt.Errorf("%w: an edge end meets its end face at a grazing angle", decaderr.ErrUnsupported)
 	}
 	return end, nil

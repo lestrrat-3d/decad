@@ -125,21 +125,28 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	}
 
 	// The profile and its rows.
-	profile, isFillet := a.profile(spec)
+	profile, _ := a.profile(spec)
 	ta, tb := spec.planeSetback(), spec.wallSetback()
 	rhoA := a.radius + a.kappa*ta
 	ref := [2]float64{a.theta0, a.theta0 + a.span}
-	rows := []arcRow{}
-	var m int
-	if isFillet {
-		step := 2 * math.Acos(1-math.Min(w.tau/spec.r, 1))
-		m = max(2, int(math.Ceil(math.Pi/2/step)))
-	} else {
-		m = a.chamferRows(profile, w.tau)
+	var ends []endSection
+	for i := range 2 {
+		sec, err := a.section(spec, a.ends[i].g)
+		if err != nil {
+			return nil, err
+		}
+		ends = append(ends, sec)
 	}
+	// The rows end on both end planes; their chords there follow the end
+	// curves to within tau (§6.3).
+	ss, err := arcRows(spec, w.tau, ends)
+	if err != nil {
+		return nil, err
+	}
+	m := len(ss) - 1
+	rows := []arcRow{}
 	prev := ref
-	for j := 0; j <= m; j++ {
-		s := float64(j) / float64(m)
+	for _, s := range ss {
 		th, err := a.rowAngles(profile, s, prev)
 		if err != nil {
 			return nil, err
@@ -190,12 +197,19 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	}
 
 	// The plane's row, the wall's row, and the rows between them.
-	colsA := w.arcRow(a, rows[0], 0, rhoA)
+	// A chamfer's columns step finer than the rows' own sagitta needs, so a
+	// strip triangle that also spans the shift of the rows' ends stays within
+	// tau of the cone (§6.3); a fillet's columns step by tau on each circle.
+	colStep := 0.0
+	if !spec.fillet {
+		colStep = chamferColumn(w.tau, max(a.radius, rhoA))
+	}
+	colsA := w.arcRow(a, rows[0], 0, rhoA, colStep)
 	bound := w.tau + slack
 	rowCols := make([][]colPt, m+1)
 	rowCols[0] = colsA
 	for j := 1; j < m; j++ {
-		rowCols[j] = w.interiorRow(a, rows[j], bound)
+		rowCols[j] = w.interiorRow(a, rows[j], bound, colStep)
 	}
 	rowCols[m] = make([]colPt, len(cutIDs))
 	span := rows[m].theta
@@ -303,44 +317,21 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	return w.buildClear(ctx, env, groups, stripFrom, tag, faceIndex)
 }
 
-// chamferRows is the number of rows a chamfer's cone needs for its chords to
-// follow the section the end faces cut in it to within tau.
-func (a arcRim) chamferRows(p arcProfile, tau float64) int {
-	for m := 2; m < 64; m *= 2 {
-		worst := 0.0
-		for i := range 2 {
-			for j := range m {
-				s0, s1, sm := float64(j)/float64(m), float64(j+1)/float64(m), (float64(j)+0.5)/float64(m)
-				pt := func(s float64) (r3.Vec, bool) {
-					rho, z := p(s)
-					roots, ok := a.ringAzimuths(rho, a.ends[i].g, a.theta0+float64(i)*a.span)
-					if !ok {
-						return r3.Vec{}, false
-					}
-					return a.atTheta(rho, roots[0], z), true
-				}
-				p0, ok0 := pt(s0)
-				p1, ok1 := pt(s1)
-				pm, okm := pt(sm)
-				if !ok0 || !ok1 || !okm {
-					return m
-				}
-				worst = max(worst, distToSegment(pm, p0, p1))
-			}
-		}
-		if worst <= tau {
-			return m
-		}
+// columnStep is the azimuth step of a row of radius rho: step when positive,
+// else the step whose sagitta on the circle is tau.
+func (w *work) columnStep(rho, step float64) float64 {
+	if step > 0 {
+		return step
 	}
-	return 64
+	return 2 * math.Acos(1-math.Min(w.tau/math.Max(rho, w.tau), 1))
 }
 
 // arcRow builds the plane's row: the setback points and the points between
-// them along the circle of radius rho.
-func (w *work) arcRow(a arcRim, row arcRow, z, rho float64) []colPt {
+// them along the circle of radius rho, step apart at most (columnStep).
+func (w *work) arcRow(a arcRim, row arcRow, z, rho, step float64) []colPt {
 	bound := w.tau + a.slack()
 	t0, t1 := row.theta[0], row.theta[1]
-	step := 2 * math.Acos(1-math.Min(w.tau/math.Max(rho, w.tau), 1))
+	step = w.columnStep(rho, step)
 	k := max(1, int(math.Ceil((t1-t0)/step)))
 	out := make([]colPt, 0, k+1)
 	for i := 0; i <= k; i++ {
@@ -351,10 +342,11 @@ func (w *work) arcRow(a arcRim, row arcRow, z, rho float64) []colPt {
 }
 
 // interiorRow builds a row between the plane's and the wall's: its end points
-// on the end faces and the points between them.
-func (w *work) interiorRow(a arcRim, row arcRow, bound float64) []colPt {
+// on the end faces and the points between them, step apart at most
+// (columnStep).
+func (w *work) interiorRow(a arcRim, row arcRow, bound, step float64) []colPt {
 	t0, t1 := row.theta[0], row.theta[1]
-	step := 2 * math.Acos(1-math.Min(w.tau/math.Max(row.rho, w.tau), 1))
+	step = w.columnStep(row.rho, step)
 	k := max(1, int(math.Ceil((t1-t0)/step)))
 	out := make([]colPt, 0, k+1)
 	for i := 0; i <= k; i++ {

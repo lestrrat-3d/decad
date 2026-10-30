@@ -290,35 +290,42 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 	// chain's side: into the material for a convex chain, into the void for a
 	// concave one.
 	fillet := spec.fillet
-	rowsM := 1
-	if fillet {
-		step := 2 * math.Acos(1-math.Min(w.tau/spec.r, 1))
-		rowsM = max(2, int(math.Ceil(math.Pi/2/step)))
+	// rowS holds each row's profile parameter, 0 at the base's setback and 1
+	// at the wall's. A chamfer's section is one segment; a fillet's rows keep
+	// its arc's sagitta within tau. An arc end's rows also end on G, where
+	// their chords follow the section G cuts in the torus or cone to within
+	// tau (blend §6.3).
+	rowS := []float64{0, 1}
+	var ends []endSection
+	for k, ec := range ecuts {
+		if ec == nil || ec.arc == nil {
+			continue
+		}
+		en := entries[0]
+		if k == 1 {
+			en = entries[n-1]
+		}
+		sec, err := ec.arc.a.section(en.step, ec.arc.g)
+		if err != nil {
+			return nil, err
+		}
+		ends = append(ends, sec)
 	}
-	if !fillet {
-		// A chamfer's section is one segment; an arc end needs rows along it
-		// for the chords to follow the section G cuts in the cone.
-		for k, ec := range ecuts {
-			if ec == nil || ec.arc == nil {
-				continue
-			}
-			en := entries[0]
-			if k == 1 {
-				en = entries[n-1]
-			}
-			p, _ := ec.arc.a.profile(en.step)
-			rowsM = max(rowsM, ec.arc.chamferEndRows(p, ec.exact, w.tau))
+	if fillet || len(ends) > 0 {
+		if rowS, err = arcRows(spec, w.tau, ends); err != nil {
+			return nil, err
 		}
 	}
+	rowsM := len(rowS) - 1
 	rowPoint := func(v, m r3.Vec, j int) r3.Vec {
+		s := rowS[j]
 		if !fillet {
-			s := float64(j) / float64(rowsM)
 			if j == 0 {
 				return v.Add(m.Scale(tP))
 			}
 			return v.Add(m.Scale(tP * (1 - s))).Add(nP.Scale(side * tW * s))
 		}
-		alpha := float64(j) * math.Pi / 2 / float64(rowsM)
+		alpha := s * math.Pi / 2
 		return v.Add(m.Scale(spec.r * (1 - math.Sin(alpha)))).Add(nP.Scale(side * spec.r * (1 - math.Cos(alpha))))
 	}
 	bound := w.tau + slack
@@ -340,7 +347,7 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 	}
 	for t := range entries {
 		if open && t == 0 && ecuts[0].arc != nil {
-			if jrows[0], err = w.arcEndColumn(ecuts[0], entries[0].step, rowsM, bound); err != nil {
+			if jrows[0], err = w.arcEndColumn(ecuts[0], entries[0].step, rowS[:rowsM], bound); err != nil {
 				return nil, err
 			}
 			continue
@@ -353,7 +360,7 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		jrows[entries[t].ja] = newRows(entries[t].p0, prev.m[1])
 	}
 	if open && ecuts[1].arc != nil {
-		if jrows[n], err = w.arcEndColumn(ecuts[1], entries[n-1].step, rowsM, bound); err != nil {
+		if jrows[n], err = w.arcEndColumn(ecuts[1], entries[n-1].step, rowS[:rowsM], bound); err != nil {
 			return nil, err
 		}
 	} else if open {
@@ -374,7 +381,18 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		}
 		rhoMax := max(en.rim.radius, en.rim.radius+en.rim.kappa*tP)
 		dTheta := 2 * math.Acos(1-math.Min(w.tau/rhoMax, 1))
-		na := max(2, int(math.Ceil(en.span/dTheta)))
+		width := en.span
+		if fan && !fillet {
+			// A chamfer's fan columns step by chamferColumn across the widest
+			// row, so a strip triangle that also spans the shift of the rows'
+			// ends on G stays within tau of the cone (blend §6.3).
+			dTheta = chamferColumn(w.tau, rhoMax)
+			start, end := en.fanBounds(rowsM)
+			for j := range rowsM {
+				width = max(width, math.Abs(end[j]-start[j]))
+			}
+		}
+		na := max(2, int(math.Ceil(width/dTheta)))
 		for i := 0; i <= na; i++ {
 			f := float64(i) / float64(na)
 			switch {
@@ -383,7 +401,7 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 			case i == na:
 				en.cols = append(en.cols, chainCol{s: en.span, rows: jrows[en.jb]})
 			case fan:
-				rows := w.fanRows(en, f, rowsM, bound)
+				rows := w.fanRows(en, f, rowS[:rowsM], bound)
 				en.cols = append(en.cols, chainCol{s: en.param(w.verts[rows[rowsM-1]]), rows: rows})
 			default:
 				phi := en.phi0 + en.sigma*en.span*f

@@ -210,6 +210,9 @@ func rewriteCorners(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 			}
 		}
 	}
+	if shallow(sine) {
+		return nil, fmt.Errorf("%w: a strip's rows end on a plane at a grazing angle", decaderr.ErrUnsupported)
+	}
 	geoms := make([]cornerGeom, len(plan.lines))
 	for ei, l := range plan.lines {
 		g := &geoms[ei]

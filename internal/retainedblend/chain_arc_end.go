@@ -74,22 +74,18 @@ func (ae *arcEnd) endAngles(p arcProfile, ss []float64, exact r3.Vec) ([]float64
 	return out, nil
 }
 
-// arcEndColumn builds the end column of an arc end: the vertices of rows
-// 0 … rowsM−1 of the blend's profile on G. It records the plane's setback
-// point, the reach of the end curve from the corner, and the area the blend
-// takes from G.
-func (w *work) arcEndColumn(ec *chainEndCut, step blendSpec, rowsM int, bound float64) ([]int, error) {
+// arcEndColumn builds the end column of an arc end: the vertices on G of the
+// blend's rows at the profile parameters ss, which hold every row but the
+// wall's. It records the plane's setback point, the reach of the end curve
+// from the corner, and the area the blend takes from G.
+func (w *work) arcEndColumn(ec *chainEndCut, step blendSpec, ss []float64, bound float64) ([]int, error) {
 	ae := ec.arc
 	p, _ := ae.a.profile(step)
-	ss := make([]float64, rowsM)
-	for j := range ss {
-		ss[j] = float64(j) / float64(rowsM)
-	}
 	var err error
 	if ae.ang, err = ae.endAngles(p, ss, ec.exact); err != nil {
 		return nil, err
 	}
-	rows := make([]int, rowsM)
+	rows := make([]int, len(ss))
 	ae.reach = step.wallSetback()
 	for j, s := range ss {
 		rho, z := p(s)
@@ -127,34 +123,6 @@ func (ae *arcEnd) cornerAreaOf(p arcProfile, exact r3.Vec) float64 {
 	return polyArea(pts...)
 }
 
-// chamferEndRows is the number of rows a chamfer's cone needs for its chords to
-// follow the section G cuts in it to within tau. A chain of straight edges has
-// one row; an arc end needs more (arc.chamferRows, for one end).
-func (ae *arcEnd) chamferEndRows(p arcProfile, exact r3.Vec, tauMax float64) int {
-	for m := 2; m < 64; m *= 2 {
-		ss := make([]float64, 0, 2*m+1)
-		for j := 0; j <= 2*m; j++ {
-			ss = append(ss, float64(j)/float64(2*m))
-		}
-		angs, err := ae.endAngles(p, ss, exact)
-		if err != nil {
-			return m
-		}
-		worst := 0.0
-		pt := func(k int) r3.Vec {
-			rho, z := p(ss[k])
-			return ae.a.atTheta(rho, angs[k], z)
-		}
-		for j := range m {
-			worst = max(worst, distToSegment(pt(2*j+1), pt(2*j), pt(2*j+2)))
-		}
-		if worst <= tauMax {
-			return m
-		}
-	}
-	return 64
-}
-
 // fanBounds are, for each row, the angle at which the entry's blend starts and
 // the angle at which it ends. A junction end is a meridian, the same angle for
 // every row; a free end is the row's own meeting with G.
@@ -188,16 +156,16 @@ func (en *chainEntry) checkFan(rowsM int) error {
 }
 
 // fanRows builds the rows of the arc entry's column at fraction f of its
-// span. Row j lies on the circle of the profile at the angle that is f of the
-// way from the row's start angle to its end angle, so a free end's columns fan
-// out from the end curve on G.
-func (w *work) fanRows(en *chainEntry, f float64, rowsM int, bound float64) []int {
-	start, end := en.fanBounds(rowsM)
+// span, at the profile parameters ss. Row j lies on the circle of the profile
+// at the angle that is f of the way from the row's start angle to its end
+// angle, so a free end's columns fan out from the end curve on G.
+func (w *work) fanRows(en *chainEntry, f float64, ss []float64, bound float64) []int {
+	start, end := en.fanBounds(len(ss))
 	a := arcRim{rim: en.rim, sign: 1}
 	p, _ := a.profile(en.step)
-	rows := make([]int, rowsM)
+	rows := make([]int, len(ss))
 	for j := range rows {
-		rho, z := p(float64(j) / float64(rowsM))
+		rho, z := p(ss[j])
 		rows[j] = w.vertex(en.rim.at(rho, start[j]+(end[j]-start[j])*f, z), bound)
 	}
 	return rows

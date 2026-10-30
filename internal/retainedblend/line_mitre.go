@@ -169,7 +169,7 @@ func planMitre(edges []*topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo
 			return nil, false, nil
 		}
 		corner := a.l.ends[ea].exact
-		if math.Abs(a.l.d.Dot(mn)) < minSine || math.Abs(b.l.d.Dot(mn)) < minSine {
+		if shallow(math.Abs(a.l.d.Dot(mn))) || shallow(math.Abs(b.l.d.Dot(mn))) {
 			return nil, false, nil
 		}
 		run.joints = append(run.joints, mitreJoint{corner: corner, plane: plane{n: mn, o: corner}, vertex: a.l.ends[ea].v})
@@ -335,7 +335,7 @@ func rewriteMitreRun(ctx context.Context, env topo.Env, fp facetedrecord.Payload
 				run edgeRun
 				w   r3.Vec
 			}{{g.runs[0], g.wA}, {g.runs[1], g.wB}} {
-				if c.run.dir[i].Dot(c.w) <= minSine {
+				if !(c.run.dir[i].Dot(c.w) > minSine) {
 					_ = f
 					return nil, fmt.Errorf("%w: a mitred edge ends where a face is reflex", decaderr.ErrUnsupported)
 				}
