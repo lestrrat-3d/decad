@@ -418,7 +418,8 @@ Claim K (blend §6.3) holds with `K = ∪ K_k`: outside it the rewritten mesh eq
 the strip's chords leave the exact blend by at most `τ`. The shared junction rows add no term, because both
 neighbouring strips use the same vertices, which lie on both exact blend surfaces (Claim J). A junction vertex
 takes `τ` plus the rounding of its computation. `VolSymDiff` and `AreaSlack` add each edge's terms as blend §6.3
-states them, and `AreaSlack` the old geometric term of each face the chain rewrites, once. The exact areas are
+states them, and `AreaSlack` the shortfall of the chain's rebuilt body's geometric terms against the old body's, by
+source group, once per chain (blend §6.3, Area). The exact areas are
 blend §5.0's for an R1 edge with `μ = 0` (its end planes are normal to it) and blend §4.4's for an R4 edge over its
 azimuth span. An end face's cap enters the removed area with the sign of §5.5 step 5. A wrong sign moves the exact
 change by four caps, which `AreaSlack = |Δ_held − Δ_true|` absorbs, so no published reading shows it; the sign has
