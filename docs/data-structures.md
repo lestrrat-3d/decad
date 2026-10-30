@@ -364,8 +364,11 @@ meeting a coaxial cylinder, cone, sphere or torus. Every other edge, such as a t
 walk, so it calls a boss root convex and a hole's rim concave.
 
 `Body.Faces`, `Body.Edges` and `Body.Vertices` return the same elements as flat lists. `Face.Origins` returns the
-`decad.FeatureRef` values that name the feature role that made a face, such as `capStart` or a side wall. Selectors
-such as `decad.FaceCreatedBy` match on that role.
+`decad.FeatureRef` values that name the feature role that made a face, such as `capStart` or a side wall. A face of
+an exact `Union`, `Cut` or `Intersect` result also lists an operand face's roles only where exact plane identity
+proves the face lies inside that one operand face, such as `decad.CapEnd(boss)` on the top of a boss joined to a
+plate. A face two operands share lists neither. A face of a faceted (mesh) result lists the roles of the operand face
+it was cut from. Selectors such as `decad.FaceCreatedBy` match on any of these roles.
 
 ## Surfaces and curves
 

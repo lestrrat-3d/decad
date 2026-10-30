@@ -1377,8 +1377,10 @@ outer faces as one shell and the disconnected cavity faces as one void shell
 (modify-general §3.1a). Roles are fresh under the boolean's producer identity:
 `face(k)` for planar faces, `wall(k)` for swept, both indexed by the result
 record, and `capStart`/`capEnd` are not minted (core §9: the helper returns a
-reference matching nothing). `Face.Origins` carry no operand provenance
-(prism-boolean §11's decision, same reasoning).
+reference matching nothing). A planar face also inherits the roles of the one
+operand face exact plane identity proves it lies inside (prism-boolean §11), so
+`FaceCreatedBy(CapEnd(operand))` selects it; the stacked record of §3 A1 follows
+the same rule.
 
 ### 4.3 Measurements
 

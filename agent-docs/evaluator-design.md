@@ -113,7 +113,7 @@ value: it holds a `noCopy` marker that `go vet`'s copylocks check enforces.
 | `Body` | owning `*Document` (the document node in the node, which `Body.Document()` maps to its handle), origin (a `provenance.Ref` in the node; `Body.Origin()` converts it to `FeatureRef`), `BodyKind` (a `topo.BodyKind` in the node; `Body.Kind()` converts it), `[]*Lump` (lump nodes in the node, which `Body.Lumps()` maps to their handles), cached measurements (computed at build, immutable after; `measurement.Measurement`, `VecMeasurement` and `Box` in the node, which `Volume`, `Area`, `Centroid` and `Bounds` convert), the payload it was built from (a `topo.Payload` in the node, §8), the last tessellation (`Tess` in the node, `agent-docs/tessellation-design.md` §1.1) |
 | `Lump` | `[]*FaceShell` (shell nodes in its `topo.Lump`, which `Lump.Shells()` maps to their handles) — a connected piece of a body, solid or sheet; a sheet lump holds exactly one shell (`agent-docs/surface-design.md` §2.2) |
 | `FaceShell` | `[]*Face` (face nodes in the node, which `FaceShell.Faces()` maps to their handles), `void bool`, `open bool` — `open` is true when the shell has a free edge (`agent-docs/surface-design.md` §2.2) |
-| `Face` | tagged `Surface` (the `surfacegeom` variant in the node; `Face.Surface()` converts to the public one), `[]*Loop` (first outer; loop nodes in the node, which `Face.Loops()` maps to their handles), origin roles (≥1 `provenance.Ref`s in the node, exposed as `FeatureRef`s by `Face.Origins()` — a canonicalization merge UNIONS the merged faces' roles, and `FaceCreatedBy` matches on ANY of them, so provenance survives the merge) , back-ref to its body (the `Body` node in the `Face` node; root maps it to the handle through `Owner`) |
+| `Face` | tagged `Surface` (the `surfacegeom` variant in the node; `Face.Surface()` converts to the public one), `[]*Loop` (first outer; loop nodes in the node, which `Face.Loops()` maps to their handles), origin roles (≥1 `provenance.Ref`s in the node, exposed as `FeatureRef`s by `Face.Origins()` — a canonicalization merge UNIONS the merged faces' roles, and `FaceCreatedBy` matches on ANY of them, so provenance survives the merge), upstream roles (`Upstream` in the node: the operand roles an analytic Boolean proved the face lies inside, prism-boolean §11; `Face.Origins()` appends them and the selectors match them, while builders and tessellators read `Origins` alone), back-ref to its body (the `Body` node in the `Face` node; root maps it to the handle through `Owner`) |
 | `Loop` | ordered `[]CoEdge` (directed edge uses in boundary-walk order; `topo.CoEdge` values in the node, which `Loop.CoEdges()` wraps), `outer bool` |
 | `CoEdge` | shared `*Edge` plus walk sense (the edge node and `Forward` in its `topo.CoEdge`); public `Edge`/`Start`/`End`/`IsForward` accessors map the edge and its vertices to their handles |
 | `Edge` | tagged `Curve` (the `surfacegeom` variant in the node; `Edge.Curve()` converts to the public one), `Start`/`End` (vertex nodes in the node; `Edge.Start()`/`End()` map them to their handles), ALL adjacent faces (face nodes in the node; `Edge.Faces()` maps them to their handles; exactly 2 on a closed manifold body; `Edge.Faces()` reports the actual count, which is precisely how `len != 2` surfaces non-manifold topology — core §6.1; exactly 1 is a FREE edge on a sheet body, `agent-docs/surface-design.md` §2.2), `convex bool` |
@@ -140,7 +140,9 @@ Rules:
   the swept-wall grammar alone, which no Loft role reads. Roles derive from
   the evaluated feature, and the provenance predicates — `CreatedBy`
   for edges, `FaceCreatedBy` for faces (core §9) — select the same entities
-  under every run.
+  under every run. An analytic Boolean's planar face also carries, in
+  `topo.Face.Upstream`, the roles of the one operand face exact plane identity
+  proves it lies inside (prism-boolean §11); the predicates match those too.
 - **Canonicalize at build.** Adjacent side faces merge where their two
   recorded segments lie on one exact line: parallel chords over the
   rationals that meet at one point, with no junction bound reaching off the
@@ -1543,7 +1545,8 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   motion's own rounding allowance. So every `Faceted` body is embedded when it
   is created, which is what its tessellation's `BoundaryVerified()` reports.
 - **Ordinary mesh output**: faces are `Faceted`, one per CONNECTED PATCH of a current operand
-  face. Each patch keeps that face's origins, so provenance (`FaceCreatedBy`)
+  face. Each patch keeps that face's origins, and its inherited Boolean roles
+  apart as `Upstream` (prism-boolean §11), so provenance (`FaceCreatedBy`)
   and face-level selection survive the boolean — but the operand face is not the
   face. A boolean can cut one operand face into pieces that no longer touch (a blind
   trench crosses a cap and leaves two separate strips of it standing), and each

@@ -127,6 +127,15 @@ type Face struct {
 	// were merged. A merged face carries all contributing roles. Root
 	// Face.Origins converts it to the public FeatureRef form.
 	Origins []provenance.Ref
+	// Upstream is every operand role an analytic Boolean proved this face
+	// lies inside (agent-docs/prism-boolean-design.md §11): the origins of
+	// the one operand face on the same exact plane and side. A mesh Boolean,
+	// a placement, a scale and the sheet operations copy it from the face
+	// they descend from. It is separate from Origins, which tessellators,
+	// modify ops and Boolean recognizers key on. Root Face.Origins and the
+	// provenance selectors read both (AllOrigins). nil for every face no such
+	// proof names.
+	Upstream []provenance.Ref
 	// Source is the record of the faceted group this face was assembled from,
 	// nil for any other face. It only traces origin and admits nothing.
 	Source *provenance.SourcePatch

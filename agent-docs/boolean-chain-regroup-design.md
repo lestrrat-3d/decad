@@ -83,7 +83,8 @@ carries a mesh-only boss under `ExactOnly` (F3), and an analytic intersect after
   Producer identity (`topo.Env.Ref`) does not decide admission.
 - `MaxLiterals = 6` bounds the work on the refusal path. No measurement chose it.
 - The roles of faces a private analytic step mints are acceptable as fresh roles under that step's private
-  producer, as in the many-body prism chain (`boolean_many.go` `tryPrismUnionChain`).
+  producer, as in the many-body prism chain (`boolean_many.go` `tryPrismUnionChain`), beside the source roles
+  prism-boolean §11's attribution adds.
 
 ## Approach
 
@@ -377,10 +378,12 @@ rescued body denotes `a − b` (Admitted identities).
   `HistoryUnknown`, as for every Boolean route.
 - Producer identities: the commit reserves the span `Regroup` returns (`commitOperationSpanIn`), as
   `tryPrismUnionChain` does. `Body.Origin` names the final step's producer.
-- Roles: faces a private analytic step mints carry fresh roles under that step's private producer
-  (prism-boolean §11), which no caller can name. The final mesh step keeps its operands' face origins
-  (evaluator §9). A selector naming a source feature's origin can therefore match fewer faces than it would on a
-  sequential result. Select by geometric predicate instead, as prism-boolean §11 already advises.
+- Roles: faces a private analytic step mints carry fresh roles under that step's private producer, which no
+  caller can name, plus the source roles prism-boolean §11's attribution proves (each step runs
+  `booleandispatch.Analytic`). The final mesh step keeps its operands' face origins, upstream roles included
+  (evaluator §9). A face §11 leaves unattributed, such as one two sources share, names no source feature, so a
+  selector naming a source feature's origin can match fewer faces than it would on a sequential result. Select
+  such a face by geometric predicate.
 - Diagnostics: the result carries no `OperationWarnings` (Execution in booleandispatch rejects any).
 - Recognizers in the mesh tail (`obliqueboss.Recognize`, `facetedrecord.RecognizePrismUnionFillet`,
   `crossbore.RecognizeBore`, `loftfacestrim.RecordConeToe`) read the final step's operands. Their records are claims

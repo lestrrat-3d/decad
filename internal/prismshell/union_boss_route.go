@@ -157,6 +157,9 @@ func prismUnionBossShellAuthenticate(result *topo.Body, fp facetedrecord.Payload
 			break
 		}
 	}
+	// A mesh result face holds its operand face's own roles in Origins and any
+	// inherited Boolean roles apart in Upstream (prism-boolean §11), so a boss
+	// whose top inherited a role still shows exactly its own cap here.
 	if openingIdx < 0 || opening.Surface.Kind() != surfacegeom.KindPlane && !opening.HeldPlanar || len(opening.Origins) != 1 ||
 		opening.Origins[0] != capEndRef(bossBody) {
 		return src, false

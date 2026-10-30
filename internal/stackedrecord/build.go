@@ -565,6 +565,7 @@ func Build(ctx context.Context, env topo.Env, sp Payload, plan Plan) (*topo.Body
 	if err := topobuild.ValidateAnalyticMeasurements(body); err != nil {
 		return nil, err
 	}
+	sp.Upstream = nil
 	body.Payload = sp
 	return body, nil
 }

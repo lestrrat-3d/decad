@@ -57,7 +57,9 @@ func (m *Mesh) quad(a, b, c, d, source int) {
 }
 
 // FaceGroup returns the provenance group of the first face of body that
-// carries role under the body's own producer.
+// carries role under the body's own producer. It copies the face's own
+// Origins alone: the fillet built from these groups is a modify result, which
+// inherits no Boolean roles (agent-docs/prism-boolean-design.md §11).
 func FaceGroup(body *topo.Body, role string) (facetedrecord.Group, bool) {
 	for _, face := range topobuild.Faces(body) {
 		for _, origin := range append([]provenance.Ref(nil), face.Origins...) {

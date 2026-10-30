@@ -30,6 +30,12 @@ import (
 // rebuild (Transform) reproduces the same origins.
 type Group struct {
 	Origins []provenance.Ref
+	// Upstream is the operand roles an analytic Boolean proved the source
+	// face lies inside (topo.Face.Upstream), carried apart from Origins so a
+	// recognizer that matches a face by its own roles reads the same Origins
+	// it did before any attribution. Every face assembled from the group
+	// carries it as its Upstream.
+	Upstream []provenance.Ref
 	// Source traces the operand face or blend this group came from. It never
 	// admits a plane or changes a bound (Source is read by tests and history
 	// only), and a placement copies it with the struct.

@@ -1171,23 +1171,62 @@ they already take. Exhaustion is RB7 (§9), not silent truncation.
 The result is built by `evalPrism` over the merged record, under the boolean's
 own private producer identity — identical to how Fillet/Chamfer/Shell build, and
 the topology it builds is untouched by §7's added displacement term. Faces
-therefore get **fresh** roles
-(`side(i,j)`/`capStart`/`capEnd`) minted from the merged record's own segment
-positions, per decad's already-settled role rule (modify §9/§12: "a role
-indexes the record it labels ... never inherited"). **Decision: the analytic
-path does not carry `Face.Origins()` provenance forward from either
-operand** — overturning the earlier investigation's lean toward the mesh
-boolean's behavior (`.tmp/boolean-redesign/README.md` §3.B, "Provenance").
-Reason: this construction is a section rewrite in exactly modify-design's
-sense (a section derived from a record, rebuilt through `evalPrism` under a
-fresh step), not the mesh boolean's face-patch grouping over surviving
-operand facets — the two constructions are not the same shape, so extending
-the mesh boolean's *different* provenance rule to this one would be
-inconsistent with decad's own settled precedent, not a continuation of it. A
-caller that needs to re-select "the tooth's faces" after the union selects
-by geometric predicate (`Circular`, `LongerThan`, `NormalTo`) rather than by
-origin, exactly as it already must after a Fillet or Chamfer. Flagged in
-§13 as a decision the user may want to overturn.
+get **fresh** roles (`side(i,j)`/`capStart`/`capEnd`) minted from the merged
+record's own segment positions, per decad's settled role rule (modify §9/§12:
+"a role indexes the record it labels"). Those fresh roles stay in
+`topo.Face.Origins`, which tessellators and modify ops key on.
+
+**A planar result face also inherits an operand face's roles when exact plane
+identity proves it lies inside exactly one operand face.**
+`internal/boolupstream` runs after every route `booleandispatch.Analytic` takes
+and stores the inherited roles in `topo.Face.Upstream`, a field separate from
+`Origins`. Public `Face.Origins()` returns both, and `FaceCreatedBy`,
+`CreatedBy` and `OuterLoopOf` match either. The rule, per result face F:
+
+1. F needs a `CapRecord` plane read exactly (`capplane.OfFace`): the record's
+   denoted level `ZDenoted`, or its held level when F states a zero axial
+   displacement. Any other F inherits nothing.
+2. F's outward side s on that plane P fixes the side an operand face must
+   bound F from: s for both operands of a `Union` or `Intersect` and for a
+   `Cut`'s target, −s for a `Cut`'s tool. The result's boundary lies in the
+   operands' boundaries, and an operand face on P with the other side cannot
+   bound the result there.
+3. Every face of both operands is placed against P exactly. A `CapRecord` face
+   with a `Plane` tag whose record normal is not parallel to P's, or whose
+   exact plane is another plane, is off P. A swept wall of a prism, stacked or
+   brep record whose sweep direction crosses P (`capplane.Plane.Crosses`) meets
+   P in a set of zero area, so it is off P. Any other face is undecided: a
+   displaced cap with no denoted level, a `Faceted` or retained tag, a wall
+   parallel to P, a band patch, a face with no `CapRecord` in any other
+   payload class.
+4. F inherits the origins, own and upstream, of operand face G only when no
+   face is undecided and G is the one face of either operand on P with the
+   side step 2 asks for. Two candidates, as at the floor two flush boxes share,
+   leave F with nothing.
+
+The table is keyed by F's own role names, so faces sharing one role list must
+all inherit the same roles, or none of them does. It rides in the payload
+(`Upstream` on the prism, stacked and brep records). Build stores the payload
+without it, and only `Placed` re-attaches it, so a `Transform` or `Copy` keeps
+the inherited roles while a modify op that derives a new record from the
+payload carries none. A result of any other payload class (a Loft, revolve or
+faceted route) inherits nothing from this pass.
+
+**A face that descends from another keeps the two lists apart.** The mesh path
+copies an operand face's `Origins` into the result face's `Origins` and its
+`Upstream` into `Upstream` (`facetedrecord.Group.Upstream`), as do `ScaledAt`,
+`Stitch`, `Unstitch` and `PatchEdges`. Every recognizer that matches a face by
+its roles reads `Origins` alone, so an operand that inherited a role is
+recognized exactly as one that did not: the nested-boss shell's opening
+(`prismshell`, one own cap role), the prism-union fillet's walls, and the
+oblique-boss fillet and cross-bore mouth, whose rebuilt faces copy the
+operand faces' own roles only because they are modify results, which inherit
+no Boolean roles. A many-body
+`Union` that a one-scene, pattern or Loft route takes as a set inherits
+nothing; its pair chain and the two-at-a-time fold run the pass at each step,
+since each step goes through `booleandispatch.Body`. A caller that needs a
+face this rule leaves unnamed selects by geometric predicate (`Facing`,
+`NormalTo`, `Circular`).
 
 ## 12. Downstream consumers
 
@@ -1231,15 +1270,12 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
   `[−D, 0]`, so a tool sketched on `CreateOffsetPlane` above the target and
   extruded `Against` shares A's frame bits and is admitted by the shared-axis
   arm with the exact shift, its section copied verbatim.
-- **§11's provenance decision** — fresh roles only, no inherited
-  `Face.Origins()`, overturning the investigation's lean toward the mesh
-  boolean's behavior. Reason given in §11; the alternative (thread operand
-  origins through the merge, tagging each surviving segment with its source
-  operand's `FeatureRef`s) is a bounded, separable addition if a consumer
-  needs it later — it does not change §4's selection logic, only what
-  `topobuild.AddBlendRoles`-equivalent code stamps onto the built faces. **Accepted**: a
-  `FaceCreatedBy` selector that survives the mesh boolean does not survive
-  this one, and that is the agreed cost.
+- **§11's provenance rule is reject-only.** A result face inherits an
+  operand's roles only where exact plane identity places every operand face,
+  so a face on a plane parallel to an operand's sweep direction inherits
+  nothing even where the operand's walls lie elsewhere: deciding a wall's
+  plane would need its record segment lifted exactly, which the pass does not
+  read. Extending step 3 that way adds reach without changing the rule.
 - **A nonzero `δ` stages the readings §12 names, and every modify op.** A
   modify op rewrites the receiver's recorded section (modify §2), and a blend
   centre or an offset miter amplifies a displacement by the corner geometry —

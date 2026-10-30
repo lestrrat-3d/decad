@@ -2,8 +2,10 @@ package prismrecord
 
 import (
 	"context"
+	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -44,5 +46,17 @@ func (pp Payload) ProvesSimple(context.Context) bool {
 // here exactly as it did on the way in (agent-docs/spline-design.md §5.2).
 func (pp Payload) Placed(ctx context.Context, env topo.Env, composed r3.Transform) (*topo.Body, error) {
 	pp.Xform = composed
-	return Build(ctx, env, pp, freeform.NewFreeformWork())
+	up := pp.Upstream
+	body, err := Build(ctx, env, pp, freeform.NewFreeformWork())
+	if err != nil || len(up) == 0 {
+		return body, err
+	}
+	built, ok := body.Payload.(Payload)
+	if !ok {
+		return nil, fmt.Errorf("%w: the prism build did not retain its payload", decaderr.ErrUnsupported)
+	}
+	built.Upstream = up
+	body.Payload = built
+	up.Apply(body)
+	return body, nil
 }

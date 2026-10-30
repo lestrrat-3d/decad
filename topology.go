@@ -544,8 +544,10 @@ func (f *Face) isPlanar() bool {
 
 // Origins returns every feature role that created this face —
 // canonicalization may merge coplanar faces, and a merged face carries ALL
-// contributing roles (core §6.1).
-func (f *Face) Origins() []FeatureRef { return featureRefsOf(f.n.Origins) }
+// contributing roles (core §6.1). A face of an analytic Boolean result also
+// carries the roles of the one operand face it provably lies inside
+// (agent-docs/prism-boolean-design.md §11).
+func (f *Face) Origins() []FeatureRef { return featureRefsOf(f.n.AllOrigins()) }
 
 // FaceShell is a connected set of faces.
 type FaceShell struct {
@@ -689,9 +691,13 @@ func (b *Body) Centroid() (VecMeasurement, error) {
 	return b.n.Centroid, nil
 }
 
-// originRefs returns a copy of the face's origin roles in their internal form,
-// nil when it has none, exactly as Origins copies the public form.
+// originRefs returns a copy of the face's own origin roles in their internal
+// form, nil when it has none. Origins publishes them followed by upstreamRefs.
 func (f *Face) originRefs() []provenance.Ref { return append([]provenance.Ref(nil), f.n.Origins...) }
+
+// upstreamRefs returns a copy of the operand roles an analytic Boolean proved
+// the face lies inside (prism-boolean §11), nil when it has none.
+func (f *Face) upstreamRefs() []provenance.Ref { return append([]provenance.Ref(nil), f.n.Upstream...) }
 
 // featureRefOf is the public form of an internal provenance reference.
 func featureRefOf(r provenance.Ref) FeatureRef { return FeatureRef{producer: r.Producer, Role: r.Role} }
