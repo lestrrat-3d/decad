@@ -9,6 +9,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestBoxTreeNodeCount(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		n    int
+		want int
+	}{
+		{n: 0, want: 0},
+		{n: 1, want: 1},
+		{n: boxTreeLeaf, want: 1},
+		{n: boxTreeLeaf + 1, want: 3},
+		{n: 41, want: 15},
+	} {
+		require.Equal(t, tc.want, boxTreeNodeCount(tc.n), "n=%d", tc.n)
+	}
+}
+
 // TestBoxTreeQueryMatchesFullScan holds every query to the full scan with the
 // floatApart pre-test: the same indices, in ascending order. The boxes cover
 // clustered, overlapping, degenerate and non-finite cases.
