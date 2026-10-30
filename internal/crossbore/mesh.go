@@ -156,7 +156,12 @@ const (
 // cylinders. The source intersection is x=sqrt(R²-r²cos²t), y=r cos t,
 // z=c+r sin t; Q=sqrt(R²-r²cos⁴t) makes both normal offsets explicit.
 func Feet(rec *facetedrecord.CrossCylinderBoreRecord, setback, theta float64) (r3.Vec, r3.Vec) {
-	R, r, c := rec.Radius, rec.Bore, rec.CenterZ
+	return FeetAt(rec.Radius, rec.Bore, rec.CenterZ, setback, theta)
+}
+
+// FeetAt is Feet for an outer radius R, a bore radius r and a bore axis at
+// height c, in plain data.
+func FeetAt(R, r, c, setback, theta float64) (r3.Vec, r3.Vec) {
 	s, co := math.Sincos(theta)
 	x := math.Sqrt(R*R - r*r*co*co)
 	Q := math.Sqrt(R*R - r*r*co*co*co*co)

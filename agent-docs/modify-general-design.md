@@ -77,7 +77,9 @@ part makes on them. Every cell was read off the live code with the probe under
 | | | fillet the front top edge along x at r = 1 | builds as a bounded faceted cut (§4.3c) |
 | | | shell removing the top | builds (route S) |
 | | | shell removing one y wall | shell-opening SO1 (the wall meets the fillets smoothly) |
-| **P9** round rod with a cross hole | faceted | any request | SX9's class (`chamfers a straight prism or a revolve only`); cylinder × cylinder has no analytic class |
+| **P9** round rod with a cross hole | faceted | chamfer both hole mouths, one setback | builds (retained-edge-blend R7, §4.9) |
+| | | fillet a hole mouth | SX9's class (`fillets a straight prism, its one-line Sweep reduction, a revolve, or a matching-section axial loft only`), then the canal-surface reason of retained-edge-blend SR1 |
+| | | any other request | SX9's class (`chamfers a straight prism or a revolve only` for a chamfer); cylinder × cylinder has no analytic class |
 
 Ranked by the parts each refusal blocks:
 
@@ -87,7 +89,7 @@ Ranked by the parts each refusal blocks:
 | 2 | SL1: edges sharing a vertex outside complete loops | other mixed-edge parts | route V builds complete loops with independent edges; §4.3b builds P1's all-edge chamfer; a partial fillet builds edges on one planar loop after straight-wall restatement (`agent-docs/vertex-blend-design.md`) |
 | 3 | a loop fillet: the curved-edge and cornered-loop fillets this survey found refused | P1, P2, P3, P4, P7 | `agent-docs/loop-fillet-design.md`'s pipe band, which builds them |
 | 4 | SB7: an edge ending on a curved face or a blend | P8 outside §4.3c | the complete-loop fillet builds P8's top loop; §4.3c builds its one exact front top edge |
-| 5 | a faceted receiver | P6b, P9 | an analytic boolean: a cup as a boolean operand, cylinder × cylinder; reach SX9 stays permanent |
+| 5 | a faceted receiver | P6b, P9 outside its hole-mouth chamfer | an analytic boolean: a cup as a boolean operand, cylinder × cylinder; reach SX9 stays for them |
 
 Routes S and L below clear every brep and stacked row of ranks 1–2 whose
 body is planes and cylinders along reference axes, meeting in lines, circles
@@ -875,7 +877,7 @@ Other record-based consumers keep their existing payload gates.
 | shell of a blind pocket outside §3.1b, a counterbore outside §3.1e, a blind port, a stacked union outside §3.1a or §3.1c, or a keyway (P2, P3, P6c) | SG3 | the remaining cases need a shape-specific exact transition and occupied-volume proof |
 | an outward shell, or a closed shell outside §3.1a and outside a brep record that reads as a prism (along one axis only, outward) | SG1 / SG2 | §3.2 |
 | shell removing a curved outer wall (a fillet cylinder, P8), or a wall run ending at a reflex corner (P7's `y = 8` wall) | SG5 | the rim at a curved outer wall is a swept face less the cavity's trace, and a reflex end's rim lies inside the material along the removed carrier; the rim assembly states only planar regions on a removed face |
-| the surveyed modify requests on faceted P6b and P9 | reach SX9 | these receivers have no retained source route; a complete tilted plate-to-cylinder junction has the separate bounded `Fillet` in `agent-docs/oblique-boss-fillet-design.md` |
+| the surveyed modify requests on faceted P6b, and on P9 other than the equal-setback chamfer of its hole mouths (retained-edge-blend R7, §4.9) | reach SX9 | these requests have no retained source route; a complete tilted plate-to-cylinder junction has the separate bounded `Fillet` in `agent-docs/oblique-boss-fillet-design.md` |
 
 ## 7. Decided questions
 

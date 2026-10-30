@@ -72,10 +72,12 @@ type CellResult struct {
 // CellExact is one cell's exact part: the coordinate width, the
 // derivative speed and the band length, plus the nine coordinate enclosures
 // the held-sample comparison reads, in the order outer X, Y, Z−c, bore X, Y,
-// Z−c, negative-mouth X, Y, Z−c.
+// Z−c, negative-mouth X, Y, Z−c. Derivs encloses the θ-derivatives of the
+// outer and bore feet over the cell, in the order outer X, Y, Z, bore X, Y, Z.
 type CellExact struct {
 	Width, Speed, BandLength float64
 	Coords                   [9]crossIV
+	Derivs                   [6]crossIV
 }
 
 // CellExactProof proves every point of one angular cell, including
@@ -90,15 +92,24 @@ type CellExact struct {
 // The cell's intervals keep unreduced rationals (proofarith.LazyRat); a value
 // is read in lowest terms where it leaves the proof: a square-root input, the
 // sine/cosine span input and width, and the float readers.
-func CellExactProof(rec *facetedrecord.CrossCylinderBoreRecord, setback float64,
-	i int, angularGap *big.Rat) (CellExact, error) {
+//
+// radius is the outer cylinder's R and bore the bore's r, in the fixed pose of
+// agent-docs/cross-cylinder-bore-chamfer-design.md with the bore axis at Z−c = 0;
+// the retained saddle chamfer (internal/retainedblend/saddle.go) maps its pair
+// into that pose and proves the same cells.
+func CellExactProof(radius, bore, setback float64, i int, angularGap *big.Rat) (CellExact, error) {
 	const n = 2 * HalfStations
-	turn := big.NewRat(int64(i), n)
+	return cellExactProofAt(radius, bore, setback, big.NewRat(int64(i), n), angularGap)
+}
+
+// cellExactProofAt is CellExactProof for the cell centred on the exact turn
+// (a fraction of the whole turn), widened by angularGap either side.
+func cellExactProofAt(radius, bore, setback float64, turn, angularGap *big.Rat) (CellExact, error) {
 	s0, c0 := proofbound.TurnSinCosInterval(turn)
 	gapLazy := proofarith.LazyOf(angularGap)
 	s := proofarith.LazyIntervalWiden(proofarith.LazyIntervalOf(proofbound.ToProofInterval(s0)), gapLazy)
 	c := proofarith.LazyIntervalWiden(proofarith.LazyIntervalOf(proofbound.ToProofInterval(c0)), gapLazy)
-	R, r, d := crossPoint(rec.Radius), crossPoint(rec.Bore), crossPoint(setback)
+	R, r, d := crossPoint(radius), crossPoint(bore), crossPoint(setback)
 	cd, sd := crossDual{v: c, d: crossSub(crossPoint(0), s)}, crossDual{v: s, d: c}
 	Rd, rd, dd := crossConst(R), crossConst(r), crossConst(d)
 	xd, ok := crossDSqrt(crossDSub(crossDMul(Rd, Rd),
@@ -193,6 +204,7 @@ func CellExactProof(rec *facetedrecord.CrossCylinderBoreRecord, setback float64,
 	return CellExact{
 		Width: width, Speed: proofbound.Radius3D(speed), BandLength: proofbound.Radius3D(bandCoord),
 		Coords: [9]crossIV{outX.v, outY.v, outZ.v, inX.v, inY.v, inZ.v, negativeX, negativeY, negativeZ},
+		Derivs: [6]crossIV{outX.d, outY.d, outZ.d, inX.d, inY.d, inZ.d},
 	}, nil
 }
 
@@ -245,8 +257,12 @@ func CellSampleError(held *[3]r3.Vec, centerZ float64, coords *[9]crossIV, flipY
 // θ_j = 2π − θ_k (Z−c negated). The relations hold exactly for the turns
 // j/n and k/n, so they map the whole range θ_j ± 2π/n onto θ_k ± 2π/n.
 func CellMirror(j int) (int, bool, bool) {
-	const n = 2 * HalfStations
-	const quarter, half = n / 4, n / 2
+	return cellMirrorOf(j, 2*HalfStations)
+}
+
+// cellMirrorOf is CellMirror for n whole-turn cells, n a multiple of four.
+func cellMirrorOf(j, n int) (int, bool, bool) {
+	quarter, half := n/4, n/2
 	switch {
 	case j <= quarter:
 		return j, false, false
@@ -337,7 +353,7 @@ func ProveCells(ctx context.Context, rec *facetedrecord.CrossCylinderBoreRecord,
 	const n = 2 * HalfStations
 	gap := new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(2, 1), proofbound.PiUpper), big.NewRat(n, 1))
 	return MirroredCellMaxima(ctx, orderedwork.EachWorkers(n/4+1, CellParallelMin),
-		func(k int) (CellExact, error) { return CellExactProof(rec, setback, k, gap) },
+		func(k int) (CellExact, error) { return CellExactProof(rec.Radius, rec.Bore, setback, k, gap) },
 		func(j int, base *CellExact, flipY, flipZ bool) float64 {
 			cell := mesh.CellHeld[j]
 			held := [3]r3.Vec{mesh.Verts[cell[0]], mesh.Verts[cell[1]], mesh.Verts[cell[2]]}

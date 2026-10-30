@@ -138,6 +138,12 @@ func Chamfer(ctx context.Context, env topo.Env, b *topo.Body, call ChamferCall) 
 		if recognized || err != nil {
 			return Result{Body: node}, err
 		}
+		// A closed saddle where a retained bore crosses a larger retained
+		// cylinder is cut by a proven band-shaped tool (Table RR R7).
+		node, span, recognized, err := retainedblend.SaddleChamfer(ctx, env, hooks.Mesher, b, fp, edges, dmm, dDelta, asym != nil)
+		if recognized || err != nil {
+			return Result{Body: node, Span: span}, err
+		}
 		var ref *retainedblend.Reference
 		if asym != nil {
 			ref = &retainedblend.Reference{Refs: asym.Refs, Other: asym.Other, OtherDelta: asym.OtherDelta}

@@ -80,14 +80,16 @@ func hypot(a, b float64) float64 {
 
 func TestBlendRefusalNamesCrossingCylinders(t *testing.T) {
 	t.Parallel()
-	t.Run(`chamfer of cross-hole mouths`, func(t *testing.T) {
+	// Chamfer builds these mouths (retained_saddle_chamfer_test.go); the
+	// rolling-ball fillet there is a canal surface.
+	t.Run(`fillet of cross-hole mouths`, func(t *testing.T) {
 		t.Parallel()
 		body := turnedShaftWithCrossHole(t)
-		_, err := decad.Chamfer(t.Context(), body, crossHoleMouths(t, body), units.Millimeters(0.5))
+		_, err := decad.Fillet(t.Context(), body, crossHoleMouths(t, body), units.Millimeters(0.5))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		requireReasonLeads(t, err, `this evaluator chamfers a straight prism, its one-line Sweep reduction, or a revolve only`)
+		requireReasonLeads(t, err, `this evaluator fillets a straight prism, its one-line Sweep reduction, a revolve, or a matching-section axial loft only`)
 		requireReasonLeads(t, err, crossingCylindersReason)
-		require.Contains(t, err.Error(), `or a revolve only; no retained blend class reads`,
+		require.Contains(t, err.Error(), `axial loft only; no retained blend class reads`,
 			`the existing prefix is followed by the named condition`)
 	})
 
