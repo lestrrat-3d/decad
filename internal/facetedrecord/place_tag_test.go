@@ -139,6 +139,40 @@ func TestPlacedBuiltDeparture(t *testing.T) {
 		require.GreaterOrEqual(t, dep, 2*2*0x1p-47/4)
 	})
 
+	t.Run("a rounding along the axis or within the plane states nothing", func(t *testing.T) {
+		t.Parallel()
+		// 30 + 0.1 and 28 + 0.1 are not floats, so each moved coordinate
+		// below holds a rounded sum. The cylinder runs along y.
+		along, err := r3.Translation(r3.NewVec(0, 0.1, 0))
+		require.NoError(t, err)
+		dep, ok := facetedrecord.PlacedBuiltDeparture(at(r3.NewVec(28, 30, 10)), at(r3.NewVec(28, 30+0.1, 10)), along,
+			verts, 1e-9)
+		require.True(t, ok)
+		require.Zero(t, dep, "a cylinder shifted along its axis is unchanged")
+
+		wall := func(t *testing.T, origin r3.Vec) surfacegeom.Plane {
+			t.Helper()
+			frame, err := r3.NewFrame(origin, r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
+			require.NoError(t, err)
+			return surfacegeom.Plane{Frame: frame}
+		}
+		dep, ok = facetedrecord.PlacedBuiltDeparture(wall(t, r3.NewVec(30, 30, 10)), wall(t, r3.NewVec(30, 30+0.1, 10)),
+			along, verts, 1e-9)
+		require.True(t, ok)
+		require.Zero(t, dep, "the plane x = 30 shifted within itself is unchanged")
+
+		across, err := r3.Translation(r3.NewVec(0.1, 0, 0))
+		require.NoError(t, err)
+		dep, ok = facetedrecord.PlacedBuiltDeparture(wall(t, r3.NewVec(30, 30, 10)), wall(t, r3.NewVec(30+0.1, 30, 10)),
+			across, verts, 1e-9)
+		require.True(t, ok)
+		require.Positive(t, dep, "a rounding along the normal moves the plane")
+		dep, ok = facetedrecord.PlacedBuiltDeparture(at(r3.NewVec(28, 30, 10)), at(r3.NewVec(28+0.1, 30, 10)), across,
+			verts, 1e-9)
+		require.True(t, ok)
+		require.Positive(t, dep, "a rounding across the axis moves the cylinder")
+	})
+
 	t.Run("a rotation states a departure", func(t *testing.T) {
 		t.Parallel()
 		turn, err := r3.RotationAround(r3.NewVec(20, 10, 0), r3.NewVec(0, 0, 1), units.Degrees(20))

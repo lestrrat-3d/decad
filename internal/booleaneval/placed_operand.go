@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
@@ -20,24 +21,78 @@ type placedDepartures struct {
 	stated    []bool
 }
 
-// placedOperandDepartures reads the departures of body's built faces. A
-// faceted payload states its own (facetedrecord.PlacedTagDeparture) and an
-// operand at the identity placement has none, so both answer nil. Any other
-// operand is rebuilt from its record at the identity placement, in a scratch
-// document, and each placed tag is charged against the exact image of its
-// unplaced twin under the operand's placement (facetedrecord.PlacedBuiltDeparture).
-// m is the operand's own mesh, read through tagReach. A rebuild that fails,
-// or whose faces do not match the placed body's one for one in surface kind,
-// states no departure for any face, so none of them keeps a tag.
-func placedOperandDepartures(ctx context.Context, body *topo.Body, m *topo.Mesh) (placedDepartures, error) {
+// operandTwin is the face tags of a placed analytic operand rebuilt at the
+// identity placement, by position in topobuild.Faces.
+type operandTwin struct {
+	// placed is false for an operand charged nothing: no payload, a faceted
+	// payload, or the identity placement.
+	placed bool
+	// tags is nil when the rebuild failed or its faces do not pair one for
+	// one with the placed body's.
+	tags []surfacegeom.Surface
+}
+
+// operandTwins caches each operand's twin across the attempts of one
+// Evaluate, so the shifted retry does not rebuild it again.
+type operandTwins struct {
+	done [2]bool
+	twin [2]operandTwin
+}
+
+// of returns operand k's twin, rebuilding body at most once.
+func (c *operandTwins) of(ctx context.Context, k int, body *topo.Body) (operandTwin, error) {
+	if c.done[k] {
+		return c.twin[k], nil
+	}
+	twin, err := unplacedTwin(ctx, body)
+	if err != nil {
+		return operandTwin{}, err
+	}
+	c.done[k], c.twin[k] = true, twin
+	return twin, nil
+}
+
+// unplacedTwin rebuilds body from its record at the identity placement, in a
+// scratch document. A faceted payload states its own departure
+// (facetedrecord.PlacedTagDeparture) and an operand at the identity placement
+// has none, so neither is rebuilt. A rebuild that fails, or whose faces do not
+// match the placed body's in number, leaves no tags.
+func unplacedTwin(ctx context.Context, body *topo.Body) (operandTwin, error) {
 	if body == nil || body.Payload == nil {
-		return placedDepartures{}, nil
+		return operandTwin{}, nil
 	}
 	if _, faceted := body.Payload.(facetedrecord.Payload); faceted {
-		return placedDepartures{}, nil
+		return operandTwin{}, nil
 	}
-	composed := body.Payload.Transform()
-	if composed == r3.Identity() {
+	if body.Payload.Transform() == r3.Identity() {
+		return operandTwin{}, nil
+	}
+	env := topo.Env{Doc: &topo.Document{}, Ref: body.Origin.Producer, Alloc: scratchAlloc{}}
+	twin, err := body.Payload.Placed(ctx, env, r3.Identity())
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return operandTwin{}, ctxErr
+		}
+		return operandTwin{placed: true}, nil
+	}
+	faces := topobuild.Faces(twin)
+	if len(faces) != len(topobuild.Faces(body)) {
+		return operandTwin{placed: true}, nil
+	}
+	tags := make([]surfacegeom.Surface, len(faces))
+	for i, f := range faces {
+		tags[i] = f.Surface
+	}
+	return operandTwin{placed: true, tags: tags}, nil
+}
+
+// placedOperandDepartures charges each built face of body against the exact
+// image of its twin's tag under the operand's placement
+// (facetedrecord.PlacedBuiltDeparture). m is the operand's own mesh, read
+// through tagReach. A twin with no tags states no departure for any face, so
+// none of them keeps a tag.
+func placedOperandDepartures(body *topo.Body, twin operandTwin, m *topo.Mesh) (placedDepartures, error) {
+	if !twin.placed {
 		return placedDepartures{}, nil
 	}
 	reach, err := tagReach(m)
@@ -46,24 +101,16 @@ func placedOperandDepartures(ctx context.Context, body *topo.Body, m *topo.Mesh)
 	}
 	faces := topobuild.Faces(body)
 	out := placedDepartures{departure: make([]float64, len(faces)), stated: make([]bool, len(faces))}
-	env := topo.Env{Doc: &topo.Document{}, Ref: body.Origin.Producer, Alloc: scratchAlloc{}}
-	twin, err := body.Payload.Placed(ctx, env, r3.Identity())
-	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return placedDepartures{}, ctxErr
-		}
+	if twin.tags == nil {
 		return out, nil
 	}
-	unplaced := topobuild.Faces(twin)
-	if len(unplaced) != len(faces) {
-		return out, nil
-	}
+	composed := body.Payload.Transform()
 	for i, f := range faces {
-		u := unplaced[i]
-		if f.Surface == nil || u.Surface == nil || f.Surface.Kind() != u.Surface.Kind() {
+		u := twin.tags[i]
+		if f.Surface == nil || u == nil || f.Surface.Kind() != u.Kind() {
 			continue
 		}
-		out.departure[i], out.stated[i] = facetedrecord.PlacedBuiltDeparture(u.Surface, f.Surface, composed,
+		out.departure[i], out.stated[i] = facetedrecord.PlacedBuiltDeparture(u, f.Surface, composed,
 			m.Vertices, reach)
 	}
 	return out, nil
@@ -85,7 +132,7 @@ func (d placedDepartures) charge(g facetedrecord.Group, f *topo.Face, i int) fac
 }
 
 // scratchAlloc allocates the bare nodes of a rebuild that never leaves this
-// package: placedOperandDepartures reads its face tags and drops it.
+// package: unplacedTwin reads its face tags and drops it.
 type scratchAlloc struct{}
 
 func (scratchAlloc) NewBody() *topo.Body           { return &topo.Body{} }

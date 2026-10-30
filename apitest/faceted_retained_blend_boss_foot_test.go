@@ -39,12 +39,14 @@ func (bf bossFoot) build(t *testing.T) *decad.Body {
 	sc := newRetentionScene()
 	x0, y0, x1, y1 := bf.rect[0], bf.rect[1], bf.rect[2], bf.rect[3]
 	body := rectBox(t, sc.w, sc.doc, 0, 0, 80, 60, 10)
-	// The boss is placed while it is still a prism and sinks 1 mm into the
-	// plate. A boss standing on the plate's top would make the Union shift it
-	// clear (gap-tolerance §5.2), and the shifted slanted plane's re-normalised
-	// frame states a departure, which a retained blend refuses.
-	boss := placed(t, rectBox(t, sc.w, sc.doc, x0, y0, x1, y1, 16), 9)
+	// The boss stands on the plate's top, so the Union shifts it clear
+	// (agent-docs/gap-tolerance-design.md §5.2). A leaning boss instead sinks
+	// 1 mm into the plate: the shift re-normalises the slanted plane's frame
+	// (surfaceplace.TransformSurface), which states a departure a retained
+	// blend refuses.
+	boss := placed(t, rectBox(t, sc.w, sc.doc, x0, y0, x1, y1, 15), 10)
 	if bf.lean != 0 {
+		boss = placed(t, rectBox(t, sc.w, sc.doc, x0, y0, x1, y1, 16), 9)
 		px, py := x0+2, y0
 		s, err := sc.w.CreateSketch(sc.w.XY())
 		require.NoError(t, err)

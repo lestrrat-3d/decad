@@ -195,7 +195,14 @@ rationals, with orthonormality defect `e` (`massmoment.MapCharge.Stretch`).
   least 0.99 gives under `7a`. The charge is `8a + 4e + P`, with `P` the
   distance of the moved origin from the exact image of the origin. `4e` and `P`
   are not needed by the normal; they keep a zero bound meaning "the tag is the
-  exact image plane", which `MirrorFace` reads (§4).
+  exact image plane", which `MirrorFace` reads (§4). When `a = 0` and `e = 0`
+  the moved frame vectors are the exact images under an exactly orthogonal map,
+  so the moved plane is parallel to the exact image plane, and `P` is only the
+  component of the origin's gap along the normal `U × V`, computed in exact
+  rationals (`offsetAlong`). A rounding within the plane leaves `P = 0`. No
+  reader of a retained plane needs the frame origin itself: `MirrorFace`
+  reflects across the plane (`r3.Reflection`), `ToFace` reads the `CapRecord`,
+  and the edge rules, the blends and the slab bound read the plane.
 - **Cylinder, Sphere, Torus.** The true normal is `B⁻ᵀn` and the tag's is
   `B·n`. Their difference `B⁻ᵀ(I − BᵀB)n` has length at most `e/σ`, with
   `σ² ≥ 1 − e`, so the unit normals differ by at most `2e/σ² ≤ 4e`. The tag
@@ -203,10 +210,13 @@ rationals, with orthonormality defect `e` (`massmoment.MapCharge.Stretch`).
   `(a + 2e)·D` for the moved axis and the stretch, where `D` bounds the
   distance from the tag's origin to any true point (the farthest held vertex
   plus the mesh bound and the largest vertex bound). The charge is `4e` plus
-  the held term of §3.3 at twice that displacement.
+  the held term of §3.3 at twice that displacement. For a `Cylinder` with
+  `a = 0` and `e = 0` the moved axis is the exact image, and `P` is only the
+  component of the origin's gap across the axis: a cylinder shifted along its
+  axis is the same cylinder. A `Sphere` or `Torus` keeps the whole `P`.
 
 A translation or a signed permutation has `e = 0` and `a = 0`, so the charge is
-the origin's rounding alone. A tag whose moved origin is the exact rational
+the part of the origin's rounding that moves the surface. A tag whose moved origin is the exact rational
 image adds nothing: `P = 0`, and the held term of §3.3 at a zero displacement
 is exactly zero (`HeldNormalTerm` takes no upward rounding step for a zero
 displacement). The `CapRecord` follows the placement already, because the
@@ -223,31 +233,36 @@ rounding (`agent-docs/evaluator-design.md` §8), so `δ_f` covers the held facet
 The face states nothing about its tag, so the Boolean charges it here.
 
 `booleaneval` rebuilds the operand from its record at the identity placement,
-in a scratch document (`placedOperandDepartures`), and pairs its faces with the
+in a scratch document (`unplacedTwin`), and pairs its faces with the
 placed body's by position in `topobuild.Faces`. Each built face's tag is
 charged against the exact image of its twin's tag under the placement
-(`facetedrecord.PlacedBuiltDeparture`), and the group's `NormalBound` adds the
-charge.
+(`placedOperandDepartures`, `facetedrecord.PlacedBuiltDeparture`), and the
+group's `NormalBound` adds the charge.
 
 | Twin tag | Charge |
 |---|---|
-| `Plane` | §3.4's `8a + 4e + P` |
-| `Cylinder`, `Sphere`, `Torus` with the twin's radii | §3.4's `4e` plus the held term at twice `P + (a + 2e)·D`. `D` bounds the distance from the twin's origin to a true point: a true point lies within `far` of the placed origin (the placed mesh's farthest vertex plus `tagReach`), that origin lies within `P` of the exact image, and the inverse map stretches by at most 2, so `D ≤ 2·(far + P)` |
-| `Cone` | zero when the placed tag is its exact image under an exactly orthonormal map, otherwise no bound |
+| `Plane` | §3.4's `8a + 4e + P`, `P` the gap along the normal when `a = e = 0` |
+| `Cylinder`, `Sphere`, `Torus` with the twin's radii | §3.4's `4e` plus the held term at twice `P + (a + 2e)·D`, a `Cylinder`'s `P` the gap across the axis when `a = e = 0`. `D` bounds the distance from the twin's origin to a true point: a true point lies within `far` of the placed origin (the placed mesh's farthest vertex plus `tagReach`), that origin lies within `P` of the exact image, and the inverse map stretches by at most 2, so `D ≤ 2·(far + P)` |
+| `Cone` | zero when the placed tag is its exact image under an exactly orthonormal map, otherwise no bound. A shift along the axis moves the apex, so the whole origin must map exactly |
 | another variant, different radii, or a failed rebuild | no bound |
 
-The charge is zero exactly when every position parameter of the placed tag is
-the exact image: a translation whose sums are exact floats. A translation
-whose sum rounds charges the rounding, and every rotation charges `e` and `a`,
-because no float rotation basis is exactly orthonormal except a signed
-permutation. A face with no bound keeps its provenance and no tag. A charged
+The charge is zero exactly when the placed tag is the exact image surface: a
+translation whose sums are exact floats, or one whose rounding stays within a
+plane or along a cylinder's axis. A translation whose sum moves the surface
+charges that rounding. A rotation charges `e` and `a`: no float basis is
+exactly orthonormal except a signed permutation, and `r3.RotationAround` never
+builds one, because `cos(π/2)` of the float `π/2` is about `6.1·10⁻¹⁷`, not 0.
+`r3.FromBasis` with signed unit axes builds an exact quarter turn. A face with no bound keeps its provenance and no tag. A charged
 tag reads as departed everywhere a `TagDeparture` gates: its curved rims keep
 `FacetedCurve` (§10.1 E12), a retained blend refuses it (SR1), the trim lift
 refuses it (L2), `ToFace` and `MirrorFace` refuse its plane (§4) and its plane facets keep
-`β` (§11). A faceted operand states its own departure (§3.4), and a face with a
+`β` (§11). `ToFace` refuses a charged cap even where its `CapRecord`, which the
+stop reads, is exact, because its gate reads `NormalBound`, which does not
+tell an offset from a tilt. A faceted operand states its own departure (§3.4), and a face with a
 denoted patch is judged against the patch (E12), so neither is charged here.
 The rebuild costs one evaluation of the operand's record per mesh Boolean
-whose operand is placed and not faceted.
+whose operand is placed and not faceted; `Evaluate` keeps it across the
+shifted retry's attempts.
 
 The lift at the identity placement is not charged. A face built on a frame
 that is not exactly orthonormal, or whose lift rounds at the identity
@@ -332,7 +347,8 @@ the clause named.
 | `internal/contactfaceted/floor.go` predicate | the support proof still finds the floor face of a retained-plane body | keep the old `Kind == Faceted` test: the proof finds no valid face and the contact returns `ContactPayloadUnsupported` |
 | `ToFace` on a retained plane | the stop level equals the plane's exact coordinate; `AxialDelta` is the operand's | clear `CapRecord` on the group: `ToFace` refuses |
 | Placement | a translated and a 20°-rotated copy of P3 report `NormalAt` bounds within 1e-9 of the unplaced copy's, and the rotated normal lies within the two bounds of the rotated reading; a plane that the rotation turns never reads as an exact mirror plane | keep the old constant 2: the placed `NormalAt` bound is 2 |
-| Placed analytic operand (§3.5) | `PlacedBuiltDeparture` states zero for a cylinder moved by an exact translation, at least `2·2·2^-47/R` for one whose moved origin rounds by `2^-47`, a positive charge for a rotation, no bound for a twin of another variant or radius, and zero for a cone only as its exact image | return zero unconditionally: the rounding, rotation, mismatch and cone cases fail |
+| Placed analytic operand (§3.5) | `PlacedBuiltDeparture` states zero for a cylinder moved by an exact translation, at least `2·2·2^-47/R` for one whose moved origin rounds by `2^-47`, a positive charge for a rotation, no bound for a twin of another variant or radius, and zero for a cone only as its exact image; a rounding along a cylinder's axis or within a plane states zero and one along the normal or across the axis a positive charge | return zero unconditionally: the rounding, rotation, mismatch and cone cases fail; charge the whole origin gap (§3.4): the along-axis and in-plane cases fail |
+| Rounding that leaves the surface in place (§3.4) | a Ø6 pin sketched at z = −30 and moved by (0, 0, 0.1) bores the plate with both mouths `Circle3`, and its top mouth takes a fillet and a chamfer by the hole-mouth volumes; a box tool sketched at z = 10 and moved by (0, 0.1, 0) steps the plate at x = 30, and the step's concave and convex edges each take a fillet (`apitest/faceted_retained_blend_test.go`); the saddle chamfer's shaft moved by (0.1, 0.2, 0.3) rounds only along both axes and builds | charge the whole origin gap: the mouths read `FacetedCurve` and every blend refuses SR1 |
 | Reader audit | a test lists every non-test file under the module that matches `Surface\.\(surfacegeom\.` or `Surface\(\)\.\(`, and fails on a file this document's §4 does not name | add a reader without a §4 row: the audit fails |
 | Existing assertions | the 23 `decad.Faceted` / `KindFaceted` assertions under `apitest/` and `examples/` (for example `apitest/mirror_test.go`, whose premise is a Boolean wall that carries no `Plane`) are rewritten to the retained kind where §3.2 admits the face, and kept where it declines | run the suite before the change; a test that still passes after it, on a face §3.2 admits, asserts the wrong thing |
 
@@ -527,6 +543,10 @@ takes the body.
 | Test | Asserts | Red leg |
 |---|---|---|
 | Plate drilled 30° off the normal by a rotated tool | the rotation charges the tool's wall (§3.5), so the wall keeps its `Cylinder`, both mouths keep `FacetedCurve` and the plate's 12 edges stay `Line3` | drop the placed-operand charge: both mouths publish `Ellipse3` |
+
+E8 publishes an `Ellipse3` only from the unit tests: an oblique cylinder from a
+rotation states a departure (§3.5), and no sketch plane gives an exact
+oblique tag, so no end-to-end test reaches it.
 | `RetainedEdgeCurve` unit tests | an open chain sweeping counter-clockwise publishes `Axis = +n` and a clockwise one `−n`; a chain 0.5 mm off the cylinder declines; a chain 0.5 mm off the plane declines; `k = 5·10⁻⁴` declines; a doubled-back chain declines | drop the cylinder half of E6: the off-cylinder chain publishes an ellipse; negate the sweep sign: the clockwise chain reads counter-clockwise |
 
 ## 11. Why the hint helps a later Boolean, and its limit

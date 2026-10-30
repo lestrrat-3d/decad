@@ -336,7 +336,7 @@ func TestRetainedSaddleChamferExtrudeShaft(t *testing.T) {
 		{"shaft z bore x", (*sketch.World).XY, (*sketch.World).YZ, 2, 0, 1, r3.Vec{}, false},
 		{"shaft y bore z", (*sketch.World).XZ, (*sketch.World).XY, 1, 2, 0, r3.Vec{}, false},
 		{"shaft x bore y", (*sketch.World).YZ, (*sketch.World).XZ, 0, 1, 2, r3.Vec{}, false},
-		{"shaft z bore x moved", (*sketch.World).XY, (*sketch.World).YZ, 2, 0, 1, r3.Vec{X: 0.125, Y: 0.25, Z: 0.375}, true},
+		{"shaft z bore x moved", (*sketch.World).XY, (*sketch.World).YZ, 2, 0, 1, r3.Vec{X: 0.1, Y: 0.2, Z: 0.3}, true},
 	} {
 		if raceDetector && !tc.race {
 			continue

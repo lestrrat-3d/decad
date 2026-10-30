@@ -124,7 +124,8 @@ func VolumeReading(ctx context.Context, audit *facetproof.MeshAudit, volSymDiff 
 // (agent-docs/gap-tolerance-design.md §5.2).
 func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	meshes OperandMesher, chordScale float64, capFace, coneFace *topo.Face) (Evaluation, error) {
-	ev, err := evaluate(ctx, op, a, b, meshes, chordScale, capFace, coneFace, nil)
+	twins := &operandTwins{}
+	ev, err := evaluate(ctx, op, a, b, meshes, chordScale, capFace, coneFace, twins, nil)
 	if err == nil {
 		return ev, nil
 	}
@@ -141,14 +142,16 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		return ev, err
 	}
 	return retryShifted(ctx, err, op, piecesOf(mb), func(shifts map[int]pieceShift) (Evaluation, error) {
-		return evaluate(ctx, op, a, b, meshes, chordScale, capFace, coneFace, shifts)
+		return evaluate(ctx, op, a, b, meshes, chordScale, capFace, coneFace, twins, shifts)
 	})
 }
 
 // evaluate is Evaluate's single attempt, with the pieces of b's mesh moved by
-// shifts when there are any.
+// shifts when there are any. twins caches the operands' identity rebuilds
+// across attempts.
 func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
-	meshes OperandMesher, chordScale float64, capFace, coneFace *topo.Face, shifts map[int]pieceShift) (Evaluation, error) {
+	meshes OperandMesher, chordScale float64, capFace, coneFace *topo.Face, twins *operandTwins,
+	shifts map[int]pieceShift) (Evaluation, error) {
 	if err := ctx.Err(); err != nil {
 		return Evaluation{}, err
 	}
@@ -237,7 +240,11 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		if k == 1 {
 			owner = b
 		}
-		if placed[k], err = placedOperandDepartures(ctx, owner, m); err != nil {
+		twin, err := twins.of(ctx, k, owner)
+		if err != nil {
+			return Evaluation{}, err
+		}
+		if placed[k], err = placedOperandDepartures(owner, twin, m); err != nil {
 			return Evaluation{}, err
 		}
 	}

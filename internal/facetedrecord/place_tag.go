@@ -1,6 +1,7 @@
 package facetedrecord
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/massmoment"
@@ -83,14 +84,27 @@ func PlacedTagDepartureBy(tag, moved surfacegeom.Surface, linear [3][3]*big.Rat,
 		}
 		a := max(imageGap(linear, t.Frame.U(), m.Frame.U()), imageGap(linear, t.Frame.V(), m.Frame.V()))
 		p := pointGap(linear, translation, t.Frame.Origin(), m.Frame.Origin())
+		if a == 0 && e == 0 {
+			// The moved frame vectors are the exact images under an exactly
+			// orthogonal map, so the moved plane is parallel to the exact image
+			// plane, and only the origin's gap along the normal moves it.
+			p = min(p, offsetAlong(linear, translation, t.Frame.Origin(), m.Frame.Origin(),
+				m.Frame.U(), m.Frame.V(), false))
+		}
 		return proofbound.AbsSumUpper(proofbound.ProductUpper(8, a), proofbound.ProductUpper(4, e), p), true
 	case surfacegeom.Cylinder:
 		m, isCyl := moved.(surfacegeom.Cylinder)
 		if !isCyl {
 			return 0, false
 		}
-		return curvedDeparture(tag, e, imageGap(linear, t.Axis, m.Axis),
-			pointGap(linear, translation, t.Origin, m.Origin), t.Origin, verts, reach)
+		a := imageGap(linear, t.Axis, m.Axis)
+		p := pointGap(linear, translation, t.Origin, m.Origin)
+		if a == 0 && e == 0 {
+			// The moved axis is the exact image under an exactly orthogonal
+			// map, so only the origin's gap across the axis moves the cylinder.
+			p = min(p, offsetAlong(linear, translation, t.Origin, m.Origin, m.Axis, r3.Vec{}, true))
+		}
+		return curvedDeparture(tag, e, a, p, t.Origin, verts, reach)
 	case surfacegeom.Sphere:
 		m, isSphere := moved.(surfacegeom.Sphere)
 		if !isSphere {
@@ -184,6 +198,71 @@ func PlacedBuiltDeparture(unplaced, placed surfacegeom.Surface, composed r3.Tran
 	gap := pointGap(linear, translation, from, to)
 	d := proofbound.ProductUpper(2, proofbound.AbsSumUpper(far, gap))
 	return PlacedTagDepartureBy(unplaced, placed, linear, translation, charge.Stretch, nil, d)
+}
+
+// offsetAlong bounds how far the exact image B·p + t of the point p lies from
+// moved, measured only where it moves the surface. With across false it is
+// the component along the normal u × v of a plane; with across true the
+// component across the axis u of a cylinder. Every product is exact rational
+// arithmetic; an exactly zero component answers 0, and a nonzero one rounds
+// upward over a lower bound on the direction's length.
+func offsetAlong(linear [3][3]*big.Rat, translation [3]*big.Rat, p, moved, u, v r3.Vec, across bool) float64 {
+	coords := [3]float64{p.X, p.Y, p.Z}
+	got := [3]float64{moved.X, moved.Y, moved.Z}
+	var g [3]*big.Rat
+	for i := range g {
+		g[i] = new(big.Rat).Set(translation[i])
+		for j := range coords {
+			g[i].Add(g[i], pointPlaneMul(linear[i][j], ratOfPointPlane(coords[j])))
+		}
+		g[i].Sub(g[i], ratOfPointPlane(got[i]))
+	}
+	dir := ratVecOf(u)
+	if !across {
+		dir = ratCross(dir, ratVecOf(v))
+	}
+	length2 := ratDot(dir, dir)
+	lengthLow := math.Nextafter(math.Sqrt(proofbound.RatFloatDown(length2)), 0)
+	if !(lengthLow > 0) {
+		return math.Inf(1)
+	}
+	var num float64
+	if across {
+		c := ratCross(g, dir)
+		num2 := ratDot(c, c)
+		if num2.Sign() == 0 {
+			return 0
+		}
+		num = math.Nextafter(math.Sqrt(proofbound.RatFloatUp(num2)), math.Inf(1))
+	} else {
+		d := ratDot(g, dir)
+		if d.Sign() == 0 {
+			return 0
+		}
+		num = proofbound.RatFloatUp(d.Abs(d))
+	}
+	return proofbound.DivUpper(num, lengthLow)
+}
+
+func ratVecOf(v r3.Vec) [3]*big.Rat {
+	return [3]*big.Rat{ratOfPointPlane(v.X), ratOfPointPlane(v.Y), ratOfPointPlane(v.Z)}
+}
+
+func ratCross(a, b [3]*big.Rat) [3]*big.Rat {
+	var out [3]*big.Rat
+	for i := range out {
+		j, k := (i+1)%3, (i+2)%3
+		out[i] = new(big.Rat).Sub(pointPlaneMul(a[j], b[k]), pointPlaneMul(a[k], b[j]))
+	}
+	return out
+}
+
+func ratDot(a, b [3]*big.Rat) *big.Rat {
+	out := new(big.Rat)
+	for i := range a {
+		out.Add(out, pointPlaneMul(a[i], b[i]))
+	}
+	return out
 }
 
 // curvedDeparture is the Cylinder, Sphere and Torus charge of
