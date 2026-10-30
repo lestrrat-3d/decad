@@ -54,6 +54,15 @@ func Refine(ctx context.Context, vertices []r3.Vec, triangles [][3]int, maxEdge 
 		if err := ctx.Err(); err != nil {
 			return Result{}, err
 		}
+		if len(tris) > MaxTriangles/4 {
+			overLimit, err := exceedsTriangleLimit(ctx, verts, tris, maxEdge)
+			if err != nil {
+				return Result{}, err
+			}
+			if overLimit {
+				return Result{}, fmt.Errorf("%w: more than %d triangles", ErrTooLarge, MaxTriangles)
+			}
+		}
 		mid := map[edgeKey]int{}
 		long := func(a, b int) bool {
 			return verts[b].Sub(verts[a]).Len() > maxEdge
@@ -110,6 +119,35 @@ func Refine(ctx context.Context, vertices []r3.Vec, triangles [][3]int, maxEdge 
 		out.Rounds++
 		out.Splits += len(mid)
 	}
+}
+
+func exceedsTriangleLimit(ctx context.Context, verts []r3.Vec, tris [][3]int, maxEdge float64) (bool, error) {
+	planned := 0
+	splitOccurred := false
+	for i, t := range tris {
+		if i%65536 == 0 {
+			if err := ctx.Err(); err != nil {
+				return false, err
+			}
+		}
+		count := 0
+		for e := range 3 {
+			if verts[t[(e+1)%3]].Sub(verts[t[e]]).Len() > maxEdge {
+				count++
+			}
+		}
+		planned += count + 1
+		if count > 0 {
+			splitOccurred = true
+		}
+		if planned > MaxTriangles && splitOccurred {
+			if err := ctx.Err(); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // appendSplit cuts triangle t along its split edges (edge e runs from corner e
