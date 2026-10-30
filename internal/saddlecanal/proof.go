@@ -31,17 +31,31 @@ type Proof struct {
 type cellCheck int
 
 const (
-	// checkJacobian is det[F_θ, F_t, u] > 0: the pipe is regular, so its
-	// envelope is the surface the ball sweeps, wound as for a small ball.
+	// checkJacobian is JacobianSign·det[F_θ, F_t, u] > 0: the pipe is
+	// regular, so its envelope is the surface the ball sweeps, wound as for a
+	// small ball.
 	checkJacobian cellCheck = 1 << iota
 	// checkProgress is ∂Φ/∂θ > 0, Φ the angle of (F_y, F_z) about the bore's
 	// axis: every row runs once around the bore.
 	checkProgress
-	// checkMonotone is ∂(Φ, G)/∂(θ, t) > 0, G the larger wall's depth less
-	// the bore's: at a fixed Φ, G grows with t, so no two parameters share a
-	// point and the strip is embedded.
+	// checkMonotone is ∂(Φ, G)/∂(θ, t) > 0, G the distance from the larger
+	// wall on the ball's side less the distance from the bore, negative on T1
+	// and positive on T2 for either side: at a fixed Φ, G grows with t, so no
+	// two parameters share a point and the strip is embedded.
 	checkMonotone
 )
+
+// JacobianSign is the sign det[F_θ, F_t, u] takes on a pipe whose ball is
+// small against the centre curve's curvature: +1 when the ball lies inside the
+// larger cylinder and −1 outside it. As ρ → 0, F_θ → c′ and the determinant
+// tends to ρ·det[c′, u_t, u] = −ρ·ω·(c′·ê), with ê the unit axis about which
+// u turns from a1 to a2 and ω > 0 its turning speed. The arc's angle stays
+// inside (0, π) at every θ (its cosine −σ1·r'·cos²θ/R' lies in (−1, 1)), so
+// ê·c′ keeps one sign around the loop, which θ = 0 shows: there c′ = r'·ẑ, and
+// the arc turns about −ẑ inside the larger cylinder (a1 in the first quadrant
+// of the (x, y) plane, a2 = −ŷ) and about +ẑ outside it (a1 in the third).
+// A cell with the other sign lies past a fold.
+func (c Canal) JacobianSign() float64 { return -c.sigma1() }
 
 // eval encloses F and the blend direction u over sin θ ∈ S, cos θ ∈ C and
 // t ∈ T, with their partial derivatives to second order.
@@ -50,8 +64,8 @@ func (c Canal) eval(S, C, T iv) (jvec, jvec, bool) {
 	s := jet{v: S, a: C, b: pt(0), aa: S.neg(), ab: pt(0), bb: pt(0)}
 	co := jet{v: C, a: S.neg(), b: pt(0), aa: C.neg(), ab: pt(0), bb: pt(0)}
 	t := jet{v: T, a: pt(0), b: pt(1), aa: pt(0), ab: pt(0), bb: pt(0)}
-	Rp := jconst(pt(c.R).sub(pt(c.Rho)))
-	rp := jconst(pt(c.Bore).add(pt(c.Rho)))
+	rpIV, RpIV := c.offsetIV()
+	Rp, rp := jconst(RpIV), jconst(rpIV)
 	rpc := rp.mul(co)
 	x, ok := Rp.mul(Rp).sub(rpc.mul(rpc)).sqrt()
 	if !ok {
@@ -63,6 +77,10 @@ func (c Canal) eval(S, C, T iv) (jvec, jvec, bool) {
 		return jvec{}, jvec{}, false
 	}
 	a1 := jvec{a1x, a1y, zero}
+	if c.Outside {
+		// σ1 = +1: the ball touches the larger wall on the side of its axis.
+		a1 = jvec{a1x.neg(), a1y.neg(), zero}
+	}
 	a2 := jvec{zero, co.neg(), s.neg()}
 	// The arc runs from a1 through the bisector b̂ = (a1 + a2)/|a1 + a2| to
 	// a2, each half the normalised blend of its two ends.
@@ -139,8 +157,13 @@ func (c Canal) read(f, u jvec) (readings, bool) {
 	if !ok1 || !ok2 {
 		return readings{}, false
 	}
-	// G = (R − |F_xy|) − (|F_yz| − r); its partials are those of −|F_xy| − |F_yz|.
+	// G = σ1·(|F_xy| − R) − (|F_yz| − r), the distance from the larger wall on
+	// the ball's side less the distance from the bore; its partials are those
+	// of σ1·|F_xy| − |F_yz|.
 	g := dxy.add(dyz).neg()
+	if c.Outside {
+		g = dxy.sub(dyz)
+	}
 	r.monotone = r.progress.mul(g.db()).sub(pb.mul(g.da()))
 	nn := dot(n, n)
 	if nn.v.lo > 0 {
@@ -202,7 +225,11 @@ func (c Canal) proveSub(S, C, sMid, cMid iv, t0, t1, hLo, h float64) (subResult,
 	dTheta := iv{-half, half}
 	dT := iv{down(t0 - tMid), up(t1 - tMid)}
 	var res subResult
-	if !(meanValue(mid.jac, cell.jac, dTheta, dT).lo > 0) {
+	jac := meanValue(mid.jac, cell.jac, dTheta, dT)
+	if c.JacobianSign() < 0 {
+		jac = jac.neg()
+	}
+	if !(jac.lo > 0) {
 		res.failed |= checkJacobian
 	}
 	if !(meanValue(mid.progress, cell.progress, dTheta, dT).lo > 0) {
@@ -228,21 +255,21 @@ func (c Canal) proveSub(S, C, sMid, cMid iv, t0, t1, hLo, h float64) (subResult,
 	return res, true
 }
 
-// proveCell reads station cell k and row cell [t0, t1] split into q × q
+// proveCell reads station cell k and row cell [t0, t1] split into q × qt
 // sub-cells. The chord of a held triangle on the whole cell is at most
 // |F_θθ|·h²/8 + |F_θt|·h·k/4 + |F_tt|·k²/8 per coordinate, the bound of
 // linear interpolation on a triangle of the cell with each second partial's
 // largest value over the sub-cells.
-func (c Canal) proveCell(tr trig, k int, t0, t1 float64, q int) (cellResult, bool) {
+func (c Canal) proveCell(tr trig, k int, t0, t1 float64, q, qt int) (cellResult, bool) {
 	var res cellResult
 	var aa, ab, bb [3]float64
 	hsLo, hs := down(tr.hLo/float64(q)), up(tr.hHi/float64(q))
 	for i := range q {
 		S, C, sMid, cMid := tr.sub(k, i, q)
-		for j := range q {
-			s0 := t0 + (t1-t0)*float64(j)/float64(q)
-			s1 := t0 + (t1-t0)*float64(j+1)/float64(q)
-			if j == q-1 {
+		for j := range qt {
+			s0 := t0 + (t1-t0)*float64(j)/float64(qt)
+			s1 := t0 + (t1-t0)*float64(j+1)/float64(qt)
+			if j == qt-1 {
 				s1 = t1
 			}
 			sub, ok := c.proveSub(S, C, sMid, cMid, s0, s1, hsLo, hs)
@@ -326,6 +353,13 @@ func (t trig) sub(k, i, q int) (iv, iv, iv, iv) {
 // maxSplit is the finest split per side of a cell.
 const maxSplit = 8
 
+// rowSplit is the extra split of every cell along t. A row cell is wider in
+// t than a station cell in θ, so the t term of the area remainder dominates;
+// halving the sub-cells' width in t quarters it, at about a third more
+// proof time (at R = 15, r = 5, ρ = 1 outside the rod the area enclosure
+// narrows from 7.4 mm² to 1.7 mm²).
+const rowSplit = 2
+
 // Prove proves the strip of the fillet c with the given rows over the
 // Stations station cells, and the areas the fillet changes. held(k, j)
 // returns the held world vertex of station k and row j, which pose maps from
@@ -355,7 +389,7 @@ func Prove(ctx context.Context, c Canal, rows []float64, pose crossbore.Pose,
 			var res cellResult
 			ok := false
 			for q := 1; q <= maxSplit; q *= 2 {
-				if res, ok = c.proveCell(tr, k, rows[j], rows[j+1], q); ok && res.failed == 0 {
+				if res, ok = c.proveCell(tr, k, rows[j], rows[j+1], q, q*rowSplit); ok && res.failed == 0 {
 					break
 				}
 			}
@@ -439,13 +473,17 @@ func worldError(held r3.Vec, f jvec, pose crossbore.Pose) float64 {
 //	A(a, b) = ∫₀^{2π} R·a²·sin²θ / (b·√(1 − (a/b)²cos²θ)) dθ,
 //
 // the substitution y = (R·a/b)·cos θ, z = a·sin θ of the ellipse
-// (b/R)²y² + z² = a². The bore loses the band between the seam
+// (b/R)²y² + z² = a². T1's ellipse holds the seam's circle y² + z² = r² on
+// either side: its semi-axes are r' > r and r'·R/R' > r, the latter because
+// (r + ρ)·R > r·(R + ρ) when R > r. The bore loses the band between the seam
 // x = √(R² − r²cos²θ) and T2 x = √(R'² − r'²cos²θ) along its generator at
-// angle θ, an area ∫ r·(seam − T2) dθ.
+// angle θ, an area ∫ r·|seam − T2| dθ. T2 lies below the seam inside the
+// larger cylinder and above it outside, where
+// R'² − r'²cos²θ − (R² − r²cos²θ) ≥ 2ρ·(R − r) > 0.
 func (c Canal) wallAreas(tr trig) (float64, float64, float64, float64, bool) {
 	R, r := dconst(pt(c.R)), dconst(pt(c.Bore))
-	Rp := dconst(pt(c.R).sub(pt(c.Rho)))
-	rp := dconst(pt(c.Bore).add(pt(c.Rho)))
+	rpIV, RpIV := c.offsetIV()
+	Rp, rp := dconst(RpIV), dconst(rpIV)
 	one := dconst(pt(1))
 	region := func(s, co, a, b dv) (dv, bool) {
 		k, ok := a.div(b)
@@ -468,6 +506,9 @@ func (c Canal) wallAreas(tr trig) (float64, float64, float64, float64, bool) {
 	bore := func(_, co dv) (dv, bool) {
 		seam, ok1 := R.mul(R).sub(r.mul(r).mul(co).mul(co)).sqrt()
 		t2, ok2 := Rp.mul(Rp).sub(rp.mul(rp).mul(co).mul(co)).sqrt()
+		if c.Outside {
+			return r.mul(t2.sub(seam)), ok1 && ok2
+		}
 		return r.mul(seam.sub(t2)), ok1 && ok2
 	}
 	integral := func(f func(s, co dv) (dv, bool)) (float64, float64, bool) {
