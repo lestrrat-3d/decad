@@ -187,10 +187,18 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	if err != nil {
 		return nil, err
 	}
+	// A's chain runs along the tag line A ∩ G; its sense comes from the chain's
+	// last vertex, and is certain only when that vertex lies farther along the
+	// line than its bound.
 	for i := range 2 {
 		dir := tL
-		if w.verts[runA.chain[i][len(runA.chain[i])-1]].Sub(c.ends[i].exact).Dot(dir) < 0 {
+		last := runA.chain[i][len(runA.chain[i])-1]
+		if w.verts[last].Sub(c.ends[i].exact).Dot(dir) < 0 {
 			dir = dir.Scale(-1)
+		}
+		if tau(w.verts[last], c.ends[i].exact, dir) <= w.beta[last]+margin {
+			return nil, fmt.Errorf("%w: a face leaves an edge end along too short a run to read its direction",
+				decaderr.ErrUnsupported)
 		}
 		runA.dir[i] = dir
 	}
@@ -213,7 +221,15 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	if (nA.Dot(wB) < 0) != convex || c.edgeConvex != convex {
 		return nil, fmt.Errorf("%w: the edge's convexity disagrees with its two tags", decaderr.ErrUnsupported)
 	}
-	var kindA [2]sideKind
+	// At each end the plane trims or, for a concave edge, extends past the
+	// corner. The wall's chain leaves the corner along the end circle, whose
+	// tangent there is ±wB: along wB the wall ends with the edge, against it the
+	// wall extends past the end plane (§5.0). The sense comes from the chain's
+	// first vertex, which must lie farther along the tangent than its bound. A
+	// wall may extend only beside a convex edge whose plane trims there; the
+	// end plane then takes the blend's end cap.
+	var kindA, kindB [2]sideKind
+	var extB [2]bool
 	for i := range 2 {
 		switch s := runA.dir[i].Dot(wA); {
 		case s > minSine:
@@ -226,10 +242,23 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 		if kindA[i] == extends && convex {
 			return nil, fmt.Errorf("%w: a convex edge ends where its plane is reflex", decaderr.ErrUnsupported)
 		}
-		toward := w.verts[runB.chain[i][0]].Sub(w.verts[c.ends[i].v])
-		if toward.Dot(wB) <= minSine*toward.Len() {
+		first := runB.chain[i][0]
+		toward := w.verts[first].Sub(c.ends[i].exact)
+		s := toward.Dot(wB)
+		sure := max(w.beta[first]+margin, minSine*toward.Len())
+		switch {
+		case s > sure:
+			kindB[i] = trims
+		case -s > sure:
+			kindB[i] = extends
+		default:
+			return nil, fmt.Errorf("%w: a face leaves an edge end along too short a run to read its direction",
+				decaderr.ErrUnsupported)
+		}
+		if kindB[i] == extends && (!convex || kindA[i] == extends) {
 			return nil, fmt.Errorf("%w: the wall turns reflex at an edge end", decaderr.ErrUnsupported)
 		}
+		extB[i] = kindB[i] == extends
 	}
 
 	// The blend's section.
@@ -242,105 +271,48 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 		return nil, fmt.Errorf("%w: the edge is too short for the blend", decaderr.ErrDegenerate)
 	}
 
-	// The wall: cut at the generator through tb. The vertices of the wall's
-	// facets sit on one side of it or the other by their angle about the axis.
-	u1, u2 := radialK, wB
-	thetaOf := func(p r3.Vec) float64 {
-		q := p.Sub(o0)
-		q = q.Sub(axis.Scale(q.Dot(axis)))
-		return math.Atan2(q.Dot(u2), q.Dot(u1))
+	// The wall: cut by the removed band (cyl_band.go), bounded by the
+	// generator through tb and, at an end where the wall extends past the
+	// corner, by the end face's exact plane.
+	nu := radialK.Scale(-math.Sin(sec.thetaT)).Add(wB.Scale(math.Cos(sec.thetaT)))
+	band := &wallBand{o0: o0, u1: radialK, u2: wB, nu: nu, radius: c.radius, thetaT: sec.thetaT, slack: slack}
+	for i := range 2 {
+		if !extB[i] {
+			continue
+		}
+		g := c.ends[i].g
+		sign := 1.0
+		if g.offset(c.ends[1-i].exact) < 0 {
+			sign = -1
+		}
+		on := map[int]bool{c.ends[i].v: true}
+		for _, v := range runB.chain[i] {
+			on[v] = true
+		}
+		band.ends[i] = &bandEnd{g: g, sign: sign, on: on}
 	}
-	removedB := map[int]bool{}
-	for _, f := range fB.facets {
-		for _, v := range fp.Tris[f] {
-			if _, seen := removedB[v]; seen {
-				continue
-			}
-			th := thetaOf(w.verts[v])
-			if th < 0 {
-				th += 2 * math.Pi
-			}
-			tol := (w.beta[v] + slack + w.tau) / c.radius
-			if th > 2*math.Pi-tol {
-				th -= 2 * math.Pi
-			}
-			switch {
-			case th < sec.thetaT-tol:
-				removedB[v] = true
-			case th > sec.thetaT+tol:
-				removedB[v] = false
-			default:
-				return nil, fmt.Errorf("%w: a vertex of the wall lies on the blend's setback line", decaderr.ErrUnsupported)
-			}
-		}
+	cuts, err := w.cutBand(fB, band)
+	if err != nil {
+		return nil, err
 	}
-	nu := u1.Scale(-math.Sin(sec.thetaT)).Add(u2.Scale(math.Cos(sec.thetaT)))
-	gT := func(v int) float64 { return nu.Dot(w.verts[v].Sub(o0)) }
-	cut := func(a, b int) (int, error) { // a removed, b kept
-		key := [2]int{min(a, b), max(a, b)}
-		if id, ok := w.cuts[key]; ok {
-			return id, nil
-		}
-		ga, gb := gT(a), gT(b)
-		if !(ga < 0 && gb > 0) {
-			return 0, fmt.Errorf("%w: a wall facet reaches across half the cylinder", decaderr.ErrUnsupported)
-		}
-		p := w.verts[a].Add(w.verts[b].Sub(w.verts[a]).Scale(ga / (ga - gb)))
-		id := w.vertex(p, max(w.beta[a], w.beta[b])+slack+w.tau)
-		w.cuts[key] = id
-		return id, nil
-	}
-	for _, f := range fB.facets {
-		t := fp.Tris[f]
-		var gone []int
-		for k, v := range t {
-			if removedB[v] {
-				gone = append(gone, k)
-			}
-		}
-		switch len(gone) {
-		case 0:
-			w.emit(t, fB.group)
-		case 3:
-		case 1:
-			z := gone[0]
-			x, y, below := t[(z+1)%3], t[(z+2)%3], t[z]
-			cyz, err := cut(below, y)
-			if err != nil {
-				return nil, err
-			}
-			czx, err := cut(below, x)
-			if err != nil {
-				return nil, err
-			}
-			w.emit([3]int{x, y, cyz}, fB.group)
-			w.emit([3]int{x, cyz, czx}, fB.group)
-		case 2:
-			x := 0
-			for k := range 3 {
-				if !removedB[t[k]] {
-					x = k
-				}
-			}
-			a, b, d := t[x], t[(x+1)%3], t[(x+2)%3]
-			cab, err := cut(b, a)
-			if err != nil {
-				return nil, err
-			}
-			cda, err := cut(d, a)
-			if err != nil {
-				return nil, err
-			}
-			w.emit([3]int{a, cab, cda}, fB.group)
-		}
-	}
+	removedB := cuts.removed
 	w.removed = append(w.removed, fB.facets...)
 
 	// The wall's removed part of each chain, and the cut vertices on the chain
-	// edges where the setback line crosses them.
+	// edges where the setback line crosses them. Where the wall extends past
+	// the corner its chain stays whole, and the strip ends at the band's corner
+	// in the end plane.
 	var remB [2][]int
 	var pB [2]int
 	for i := range 2 {
+		if extB[i] {
+			if cuts.corner[i] < 0 {
+				return nil, fmt.Errorf("%w: the blend's setback line does not meet an end face on the wall",
+					decaderr.ErrUnsupported)
+			}
+			pB[i] = cuts.corner[i]
+			continue
+		}
 		seq := append([]int{c.ends[i].v}, runB.chain[i]...)
 		if !removedB[seq[0]] {
 			return nil, fmt.Errorf("%w: an edge end is not on the removed side of the wall's setback line", decaderr.ErrUnsupported)
@@ -384,6 +356,11 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	var cols []int
 	for _, id := range w.cuts {
 		cols = append(cols, id)
+	}
+	for i := range 2 {
+		if extB[i] {
+			cols = append(cols, cuts.corner[i])
+		}
 	}
 	sort.Slice(cols, func(a, b int) bool {
 		return w.verts[cols[a]].Sub(k0).Dot(axis) < w.verts[cols[b]].Sub(k0).Dot(axis)
@@ -486,9 +463,21 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 			rows[j] = rowIdx[j][col]
 			reach[j] = w.verts[rows[j]]
 		}
-		kinds := [2]sideKind{kindA[i], trims}
-		loops, _, err := w.endFace(c.ends[i], fG[i], runA.chain[i], runB.chain[i], kinds, remA[i], remB[i], rows, reach,
-			margin, convex, nil)
+		kinds := [2]sideKind{kindA[i], kindB[i]}
+		// Where the wall extends past the corner, G's turn there is read from
+		// the tag directions the chains leave along: A ∩ G, and the end circle's
+		// tangent against wB. Its loop runs from the blend's last row along the
+		// wall's cut in its plane back to the corner.
+		var dirs *[2]r3.Vec
+		var run []int
+		if extB[i] {
+			dirs = &[2]r3.Vec{runA.dir[i], wB.Scale(-1)}
+			if run, err = cuts.endRun(i, c.ends[i].v); err != nil {
+				return nil, err
+			}
+		}
+		loops, _, err := w.endFaceRun(c.ends[i], fG[i], runA.chain[i], runB.chain[i], kinds, remA[i], remB[i], rows,
+			run, reach, margin, convex, dirs)
 		if err != nil {
 			return nil, err
 		}
@@ -498,13 +487,22 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	if err != nil {
 		return nil, err
 	}
+	// An end face that takes the cap is new surface where the cap lies: its
+	// rebuilt facets are cleared against the rest of the body as the strip is.
+	var taken [][2]int
 	for _, f := range []struct {
 		loops [][]int
 		n, o  r3.Vec
 		fl    faceLoops
-	}{{aLoops, nA, k0, fA}, {gLoops[0], c.ends[0].g.n, k0, fG[0]}, {gLoops[1], c.ends[1].g.n, k1, fG[1]}} {
+		takes bool
+	}{{aLoops, nA, k0, fA, false}, {gLoops[0], c.ends[0].g.n, k0, fG[0], extB[0]},
+		{gLoops[1], c.ends[1].g.n, k1, fG[1], extB[1]}} {
+		from := len(w.out)
 		if err := w.retriangulate(f.n, f.o, f.loops, f.fl.group); err != nil {
 			return nil, err
+		}
+		if f.takes {
+			taken = append(taken, [2]int{from, len(w.out)})
 		}
 		w.removed = append(w.removed, f.fl.facets...)
 	}
@@ -526,12 +524,19 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 			}
 		}
 	}
+	// A convex edge takes the corner out of an end face where the wall ends
+	// with the edge, and the end face takes it as the cap where the wall
+	// extends past it; a concave edge adds the notch's fill to it.
 	corner := c.cornerArea(spec, sec, k0, o0, wA)
-	if !convex {
-		corner = -corner
-	}
 	w.removedTrue = polyArea(k0, k1, w.verts[rowIdx[0][len(cols)-1]], w.verts[rowIdx[0][0]]) +
-		c.radius*sec.thetaT*length + 2*corner
+		c.radius*sec.thetaT*length
+	for i := range 2 {
+		if !convex || extB[i] {
+			w.removedTrue -= corner
+			continue
+		}
+		w.removedTrue += corner
+	}
 	if spec.fillet {
 		tag.trueArea = spec.r * sec.phi * length
 	} else {
@@ -548,7 +553,10 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 		groups[f.group].HasCentroid = false
 		groups[f.group].Centroid = measurement.VecMeasurement{}
 	}
-	return w.buildClear(ctx, env, groups, stripFrom, tag, faceIndex)
+	if err := w.checkStripClear(ctx, stripFrom, taken); err != nil {
+		return nil, err
+	}
+	return w.build(ctx, env, groups, stripFrom, tag, faceIndex)
 }
 
 // tag is the exact surface of the blend face.

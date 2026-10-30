@@ -2723,6 +2723,7 @@
 10	0.00	TestFacetedNestedBossShellTakesAnInheritedCapBoss
 10	0.00	TestFacetedRetainedBlendBossFoot
 10	0.00	TestFacetedRetainedBlendChainEnds
+10	0.00	TestFacetedRetainedBlendKeyway
 10	0.01	TestFacetedRetainedBlendStraight
 10	0.00	TestFacetedSourcePlacement
 10	0.02	TestFilletHoleOutsideRoundedLoopRefused
