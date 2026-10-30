@@ -298,7 +298,8 @@ turn is refused with `decad.ErrUnsupported`, as is a trimmed segment; the body s
 
 Two faceted solids every face of which squares to an axis, such as mesh solids, combine exactly on a grid of their coordinates under `Union`, `Cut` and `Intersect`, any contact between them included. A two-body `Union`, `Cut` or `Intersect` that would be refused because an operand is the mesh result of earlier Booleans is retried from
 the source bodies of that chain, when all but one pair combine by exact routes. The result is the same solid. Its
-history records the one call, and faces made by the exact steps carry fresh roles, so select them by geometry.
+history records the one call. A face made by the exact steps names a source body's role only where it lies inside
+exactly one source face, so select other faces by geometry.
 
 `Cut` and `Intersect` take options. `decad.WithMatchingFaces()` says faces of the two bodies are meant to match
 where they meet, such as a cap drawn to touch a cone. A miss of a few last-place steps is then taken as the
@@ -374,6 +375,10 @@ Features choose edges and faces with queries.
   `decad.Facing`, `decad.NormalTo`, `decad.FaceCreatedBy` and `decad.Walls`.
 - `EdgeQuery` and `FaceQuery` chain `Or`, `Exactly` and `AtLeast`.
 - `decad.CapStart` and `decad.CapEnd` name the two caps of a body as a `decad.FeatureRef`.
+- After `Union`, `Cut` or `Intersect`, `decad.FaceCreatedBy(decad.CapEnd(boss))` still selects a face of the result
+  that lies inside the boss's end cap and inside no other operand face on that plane, such as the top of a boss joined
+  to a plate. A face two operands share, such as the floor of two flush blocks, names neither operand, and a face on a
+  plane parallel to an operand's extrude direction may name none.
 - A query that matches nothing, or the wrong count, returns a `*decad.SelectionError` that lists how many
   elements each clause matched.
 

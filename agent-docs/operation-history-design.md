@@ -368,8 +368,9 @@ whole-face survival.
 
 Keep face correspondence separate from role provenance. In particular:
 
-- Analytic section rewrites keep their fresh roles under `prism-boolean-design.md`
-  §11 and `general-boolean-design.md` §4.2.
+- Analytic section rewrites keep their fresh roles, and the operand roles their
+  planar faces inherit, under `prism-boolean-design.md` §11 and
+  `general-boolean-design.md` §4.2.
 - Copy and Transform keep their existing per-payload provenance rules under
   `api-design.md` §8.
 - Canonicalization keeps the existing union of contributing origin roles.

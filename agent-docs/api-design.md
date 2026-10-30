@@ -475,7 +475,9 @@ func (f *Face) ClosestPoint(ctx context.Context, p r3.Vec, tol units.Value) (Clo
 func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) // a computed direction: a measurement
 func (f *Face) Origins() []FeatureRef // provenance: every feature role that created it — canonicalization
                                       // may merge coplanar faces, and a merged face carries ALL contributing
-                                      // roles; FaceCreatedBy matches on any of them
+                                      // roles, an analytic Boolean's face adds the roles of the one operand
+                                      // face it provably lies inside (prism-boolean §11); FaceCreatedBy
+                                      // matches on any of them
 
 type Loop struct{ /* ... */ }
 
@@ -1624,12 +1626,15 @@ source's, reproduced from the same record:
   analytic/modified feature roles. A certified Loft mirror `Union` is a bounded
   faceted exception: it mints two outer-cap roles, so a placed copy keeps the
   source origins and also mints those two roles under the copy's identity;
-- an **analytic** or **modified** copy (a prism, revolve, cup, tube) carries no
-  separate upstream provenance — a prism cap is created by the prism step itself
-  — so re-evaluation reproduces the body's own fixed roles (`capStart`, `capEnd`,
+- an **analytic** or **modified** copy (a prism, revolve, cup, tube)
+  re-evaluates the same record, which reproduces the body's own fixed roles (`capStart`, `capEnd`,
   `side(i, j)`, …) from the same record, keyed to the copy's own private producer
   identity, and the copy's own
-  `CapStart` / `CapEnd` / `FaceCreatedBy` resolve against it;
+  `CapStart` / `CapEnd` / `FaceCreatedBy` resolve against it. An analytic
+  Boolean result's prism, stacked or brep payload also carries the operand
+  roles its faces inherited (prism-boolean §11), keyed by each face's own role
+  name, and the copy re-attaches them verbatim, as a faceted copy keeps its
+  upstream origins;
 - the `body` role — `Body.Origin()` — uses the copy's own private producer
   identity in every case.
 
@@ -1920,7 +1925,12 @@ the boolean's own identity), an ordinary full revolution (no caps at all), and `
 cup (a cup mints `capStart` and a `shellCap` pocket floor, no `capEnd`). To name
 a cap that an ordinary mesh boolean's operand contributed, select
 `FaceCreatedBy(CapStart(originalBody))` against the upstream body whose
-provenance the mesh boolean preserved (§9).
+provenance the mesh boolean preserved (§9). The same selection names a face of
+an analytic `Union` / `Cut` / `Intersect` result when exact plane identity
+proves the face lies inside exactly one operand face (prism-boolean §11): the
+boss top of a plate-and-boss `Union` answers both `CapEnd(boss)` and the
+result's own `CapEnd(u)`, while a floor two flush operands share answers
+neither operand's `CapStart`.
 
 The **indexed** `side(i, j)` roles stay positional and get no helper: a wall
 is named by geometry — `Faces(Planar(), Facing(v))` — never by a hand-counted
