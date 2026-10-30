@@ -4,8 +4,13 @@ on:
   pull_request:
     types: [opened, reopened, synchronize]
     paths:
+      - '**/*.go'
       - '**/go.mod'
       - '**/go.sum'
+      - 'go.work'
+      - 'go.work.sum'
+      - 'scripts/tidy-dependent-go-modules.sh'
+      - '.github/workflows/sync-dependent-go-modules.yml'
 
 permissions:
   actions: write
