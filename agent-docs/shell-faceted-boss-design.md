@@ -32,22 +32,31 @@ therefore becomes a local inset `q/L`. The cavity has a plate-inset floor at
 inset to the boss footprint, the rounded root band up to the plate top,
 upper boss-inset walls, and a rim around the removed top cap.
 
-On the root interval, with `s=z-z_boss_bottom`, the true world inset is
+The root edge, the boss outline at the plate top, is a concave edge of the
+source, so the reflex-corner row of `agent-docs/modify-design.md` §8 applies
+to it: the cavity keeps distance `t` from the root edge. On the root
+interval, with `s=z-z_boss_bottom`, the true world inset is
 
 ```text
-q(s) = t - sqrt(t² - s²),       0 ≤ s ≤ t.
+q(s) = sqrt(t² - (t-s)²),       0 ≤ s ≤ t.
 ```
 
+In the `(q,s)` plane this is the quarter circle of radius `t` centred on the
+root edge at `(0,t)`. It leaves the ledge's boss-outline ring at `(0,0)`
+tangent to the ledge and meets the upper inset walls at `(t,t)` tangent to
+them. Each section is the boss rectangle inset by `q(s)` with sharp corners,
+so adjacent sides meet on mitred diagonal seams.
+
 The held band uses 16 stations at `w=k/16` with rational coordinates
-`s=2tw/(1+w²)` and `q=2tw²/(1+w²)`. The square-root bracket for `L` and the
+`q=2tw/(1+w²)` and `s=2tw²/(1+w²)`. The square-root bracket for `L` and the
 rational-to-float station error enter each new vertex's source point bound.
 The planar curve `(q(w),s(w))` has second-derivative norm at most `4t`.
 Linear interpolation at the same `w` across one station cell differs by at
 most `t/(2·16²)`. Each rectangle corner moves in two inward coordinates,
 so the payload charges `3t/(4·16²)` for the curved band. Parameter matching
-allows Z to move near the horizontal tangent. The root volume
+allows Z to move near the horizontal tangent at `w=0`. The root volume
 bound uses swept surface area rather than a same-Z inset difference. The
-old Union mesh loses only the selected top cap triangles. Its other facets
+source Union mesh loses only the selected top cap triangles. Its other facets
 and vertex bounds remain unchanged.
 
 The held mesh is checked for positive facet area, exact facet contact,
@@ -63,7 +72,7 @@ boss height above the plate. The lower and upper cavity prisms have ordinary
 rectangle volumes. Integrating the root rectangle area gives
 
 ```text
-V_root = WHL²t - 2(W+H)Lt² + (W+H)Lπt²/2 + (20/3 - 2π)t³.
+V_root = WHL²t - (W+H)Lπt²/2 + 8t³/3.
 ```
 
 The code evaluates this expression as a rational interval with an outward

@@ -44,9 +44,10 @@ func PrismUnionBossShellLevels(plateBottom, bossBottom, interfaceZ, bossTop, t f
 
 // PrismUnionBossShellCurveBound encloses the root's quarter-circle chord gap.
 func PrismUnionBossShellCurveBound(t float64, stations int) float64 {
-	// The planar quarter circle (q(w), s(w)) has second-derivative norm at
-	// most 4t on 0 <= w <= 1. Linear interpolation at matching w across a
-	// cell of width 1/N differs by at most 4t/(8N²) = t/(2N²). Insetting
+	// The planar quarter circle (q(w), s(w)) = (2tw, 2tw²)/(1+w²) has
+	// second-derivative norm at most 4t on 0 <= w <= 1. Linear interpolation
+	// at matching w across a cell of width 1/N differs by at most
+	// 4t/(8N²) = t/(2N²). Insetting
 	// both rectangle coordinates stretches this gap by at most sqrt(2),
 	// rounded safely to 3/2.
 	n := float64(stations)
@@ -74,10 +75,12 @@ func PrismUnionBossShellTrueVolume(plateRect, bossRect BossRect,
 		point(bossTop-interfaceZ))
 	pi := proofbound.Interval(proofbound.PiLower, proofbound.PiUpper)
 	widths := add(w, h)
-	band := add(sub(mul(mul(w, h), tv), mul(mul(point(2), widths), t2)),
-		add(mul(mul(mul(widths, pi), t2), point(0.5)),
-			sub(mul(t3, proofbound.Interval(big.NewRat(20, 3), big.NewRat(20, 3))),
-				mul(mul(point(2), pi), t3))))
+	// At depth u below the root level the root void is the boss rectangle
+	// inset by a(u) = sqrt(t² − u²) on every side, with sharp corners: the
+	// points at distance at least t from the root edge. Integrating
+	// (w − 2a)(h − 2a) over u in [0, t] gives wht − (w+h)πt²/2 + 8t³/3.
+	band := add(sub(mul(mul(w, h), tv), mul(mul(mul(widths, pi), t2), point(0.5))),
+		mul(t3, proofbound.PointInterval(big.NewRat(8, 3))))
 	return sub(outer, add(add(lower, upper), band))
 }
 
@@ -114,7 +117,8 @@ func PrismUnionBossShellPayload(ctx context.Context, ref provenance.Producer, in
 	// cavity is a family of nested convex rectangles. The root's true
 	// quarter-circle surface stays within curve plus the station lift of a
 	// chorded surface matched at the same rational curve parameter. This
-	// matching lets Z move near the horizontal tangent;
+	// matching lets Z move near the horizontal tangent, where the band leaves
+	// the ledge at w = 0;
 	// a same-Z radial gap would be larger. Every homotopy section remains a
 	// strictly nested rectangle. Its swept root area is below 4 P t, where P
 	// is the boss perimeter; multiplying by the displacement bounds the
