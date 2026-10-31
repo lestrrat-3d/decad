@@ -100,45 +100,55 @@ func triAxis(v0, v1, v2 r3.Vec) (axis, sign int, ok bool) {
 
 // clipArea is the area of the triangle (a, b, c) inside the rectangle [x0,x1]×[y0,y1].
 func clipArea(a, b, c [2]float64, x0, x1, y0, y1 float64) float64 {
-	poly := [][2]float64{a, b, c}
-	clip := func(in [][2]float64, inside func(p [2]float64) bool, cut func(p, q [2]float64) [2]float64) [][2]float64 {
-		var out [][2]float64
-		for i, p := range in {
-			q := in[(i+1)%len(in)]
-			ip, iq := inside(p), inside(q)
+	// Each clip emits at most two vertices per input edge, so four clips need at most 3*2^4 = 48 slots.
+	var scratchA, scratchB [48][2]float64
+	scratchA[0], scratchA[1], scratchA[2] = a, b, c
+	in, out := &scratchA, &scratchB
+	inLen := 3
+
+	for pass := range 4 {
+		axis := pass / 2
+		bound := [4]float64{x0, x1, y0, y1}[pass]
+		keepGreater := pass%2 == 0
+		outLen := 0
+		for i := range inLen {
+			p := in[i]
+			q := in[(i+1)%inLen]
+			ip, iq := p[axis] >= bound, q[axis] >= bound
+			if !keepGreater {
+				ip, iq = p[axis] <= bound, q[axis] <= bound
+			}
 			switch {
 			case ip && iq:
-				out = append(out, q)
-			case ip && !iq:
-				out = append(out, cut(p, q))
-			case !ip && iq:
-				out = append(out, cut(p, q), q)
+				out[outLen] = q
+				outLen++
+			case ip && !iq, !ip && iq:
+				var intersection [2]float64
+				if axis == 0 {
+					t := (bound - p[0]) / (q[0] - p[0])
+					intersection = [2]float64{bound, p[1] + t*(q[1]-p[1])}
+				} else {
+					t := (bound - p[1]) / (q[1] - p[1])
+					intersection = [2]float64{p[0] + t*(q[0]-p[0]), bound}
+				}
+				out[outLen] = intersection
+				outLen++
+				if !ip && iq {
+					out[outLen] = q
+					outLen++
+				}
 			}
 		}
-		return out
+		inLen = outLen
+		in, out = out, in
 	}
-	vert := func(x float64) func(p, q [2]float64) [2]float64 {
-		return func(p, q [2]float64) [2]float64 {
-			t := (x - p[0]) / (q[0] - p[0])
-			return [2]float64{x, p[1] + t*(q[1]-p[1])}
-		}
-	}
-	horiz := func(y float64) func(p, q [2]float64) [2]float64 {
-		return func(p, q [2]float64) [2]float64 {
-			t := (y - p[1]) / (q[1] - p[1])
-			return [2]float64{p[0] + t*(q[0]-p[0]), y}
-		}
-	}
-	poly = clip(poly, func(p [2]float64) bool { return p[0] >= x0 }, vert(x0))
-	poly = clip(poly, func(p [2]float64) bool { return p[0] <= x1 }, vert(x1))
-	poly = clip(poly, func(p [2]float64) bool { return p[1] >= y0 }, horiz(y0))
-	poly = clip(poly, func(p [2]float64) bool { return p[1] <= y1 }, horiz(y1))
-	if len(poly) < 3 {
+	if inLen < 3 {
 		return 0
 	}
 	area := 0.0
-	for i, p := range poly {
-		q := poly[(i+1)%len(poly)]
+	for i := range inLen {
+		p := in[i]
+		q := in[(i+1)%inLen]
 		area += p[0]*q[1] - q[0]*p[1]
 	}
 	return math.Abs(area) / 2
