@@ -633,6 +633,14 @@ func tumbleFirstImpact(t *testing.T, steps []*dynamics.StepReport, tray, body *d
 	return 0, dynamics.ContactEvent{}
 }
 
+func requireTrayFloorEvent(t *testing.T, event dynamics.ContactEvent, tray *decad.Body, step int) {
+	t.Helper()
+	require.Equal(t, tray, event.Pair.A, "step %d", step)
+	for _, point := range event.Manifold.Points {
+		require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value, "step %d", step)
+	}
+}
+
 // requireTumbleExit asserts §2's Phase 2 exit criteria on a tumble timeline
 // advanced steps steps.
 func requireTumbleExit(t *testing.T, scene tumbleScene, timeline *dynamics.Timeline, steps int) {
@@ -655,10 +663,7 @@ func requireTumbleExit(t *testing.T, scene tumbleScene, timeline *dynamics.Timel
 		// Every event joins a body and the tray's floor, whose normal is +Z:
 		// no body reaches another one or a wall.
 		for _, event := range report.Events {
-			require.Equal(t, scene.tray, event.Pair.A, "step %d", k)
-			for _, point := range event.Manifold.Points {
-				require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value, "step %d", k)
-			}
+			requireTrayFloorEvent(t, event, scene.tray, k)
 			if event.Kind == dynamics.ContactImpact {
 				impacts[len(event.Manifold.Points)]++
 			}
@@ -1054,10 +1059,7 @@ func requirePartsBinExit(t *testing.T, scene partsBinScene, timeline *dynamics.T
 		// Every event joins a body and the tray's floor, whose normal is +Z:
 		// no body reaches another one or a wall.
 		for _, event := range report.Events {
-			require.Equal(t, scene.tray, event.Pair.A, "step %d", k)
-			for _, point := range event.Manifold.Points {
-				require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value, "step %d", k)
-			}
+			requireTrayFloorEvent(t, event, scene.tray, k)
 		}
 
 		// The bottle's landing island publishes a WitnessSpin below 1 rad/s,
