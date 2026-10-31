@@ -23,7 +23,7 @@ func TestBooleanParityConsumersMatchScan(t *testing.T) {
 	verts, tris := parityCylinder(64)
 	bm, err := PrepContext(t.Context(), verts, tris, nil)
 	require.NoError(t, err)
-	bm.Parity = NewParityMesh(verts, tris)
+	bm.SetVertexBounds(make([]float64, len(verts)))
 	ref := NewParityMesh(verts, tris)
 	all := AllFacets(bm)
 	queries := []r3.Vec{{X: 0.25, Y: 0.125}, {X: 4}, {Z: 2}, {Z: -1}}
@@ -58,6 +58,69 @@ func TestBooleanParityConsumersMatchScan(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 	_, err = DeepWitnessAt(ctx, p, bm, 0.125)
 	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestPreparedBooleanParityMatchesStandaloneExactQueries(t *testing.T) {
+	t.Parallel()
+	verts, tris := parityCylinder(24)
+	bm, err := PrepContext(t.Context(), verts, tris, nil)
+	require.NoError(t, err)
+	bm.SetVertexBounds(make([]float64, len(verts)))
+	standalone := NewParityMesh(verts, tris)
+
+	queries := []proof.Xpt{
+		ratXpt(big.NewRat(1, 7), big.NewRat(1, 11), big.NewRat(1, 13)),
+		ratXpt(big.NewRat(5, 1), big.NewRat(1, 4), big.NewRat(1, 2)),
+		proof.XptOf(verts[0]),
+		ratXpt(big.NewRat(1, 10), big.NewRat(1, 7), big.NewRat(-1, 1)),
+		ratXpt(big.NewRat(0, 1), big.NewRat(3, 1), big.NewRat(1, 2)),
+	}
+	inside, onBoundary, err := MeshParityAllContext(t.Context(), queries[3], bm.Parity)
+	require.NoError(t, err)
+	require.False(t, inside)
+	require.True(t, onBoundary, "the query lies on the cylinder's cap")
+	_, _, err = MeshParityAllContext(t.Context(), queries[4], bm.Parity)
+	require.ErrorContains(t, err, "every parity ray was ambiguous")
+
+	tri := tris[0]
+	midpoint := proof.Xlerp(bm.Xverts[tri[0]], bm.Xverts[tri[1]], big.NewInt(1), big.NewInt(2))
+	projection := NewXP2(RatCoordOf(midpoint, 0), RatCoordOf(midpoint, 1))
+	for name, pm := range map[string]*ParityMesh{"standalone": standalone, "prepared": bm.Parity} {
+		require.Equal(t, facetAmbiguous, pm.classifyFacet(midpoint, projection, 2, 0, 1, 1, 0),
+			"the exact projected edge remains ambiguous for %s geometry", name)
+	}
+	requirePreparedParityMatches(t, verts, tris, queries)
+
+	delta := r3.NewVec(0.125, -0.25, 0.5)
+	shiftedVerts := make([]r3.Vec, len(verts))
+	for i, v := range verts {
+		shiftedVerts[i] = v.Add(delta)
+	}
+	shiftedQueries := []proof.Xpt{
+		ratXpt(big.NewRat(1, 7).Add(big.NewRat(1, 7), big.NewRat(1, 8)),
+			big.NewRat(1, 11).Sub(big.NewRat(1, 11), big.NewRat(1, 4)),
+			big.NewRat(1, 13).Add(big.NewRat(1, 13), big.NewRat(1, 2))),
+		proof.XptOf(shiftedVerts[0]),
+		ratXpt(big.NewRat(1, 8), big.NewRat(11, 4), big.NewRat(1, 1)),
+	}
+	requirePreparedParityMatches(t, shiftedVerts, tris, shiftedQueries)
+}
+
+func requirePreparedParityMatches(t *testing.T, verts []r3.Vec, tris [][3]int, queries []proof.Xpt) {
+	t.Helper()
+	bm, err := PrepContext(t.Context(), verts, tris, nil)
+	require.NoError(t, err)
+	bm.SetVertexBounds(make([]float64, len(verts)))
+	require.Len(t, bm.Parity.exactVerts, len(verts))
+	require.Len(t, bm.Parity.exactNorms, len(tris))
+	standalone := NewParityMesh(verts, tris)
+
+	for i, p := range queries {
+		wantIn, wantBoundary, wantErr := MeshParityAllContext(t.Context(), p, standalone)
+		gotIn, gotBoundary, gotErr := MeshParityAllContext(t.Context(), p, bm.Parity)
+		require.Equal(t, answerOf(wantIn, wantBoundary, wantErr), answerOf(gotIn, gotBoundary, gotErr),
+			"prepared query %d", i)
+	}
 }
 
 func fr(f float64) *big.Rat { return new(big.Rat).SetFloat64(f) }

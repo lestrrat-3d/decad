@@ -86,6 +86,12 @@ func XIntCoordOf(p proof.Xpt, axis int) *big.Int {
 type ParityMesh struct {
 	Verts []r3.Vec
 	Tris  [][3]int
+	// exactVerts and exactNorms borrow the exact geometry of a BoolMesh when
+	// parity is part of Boolean evaluation. They are immutable for the same
+	// operation lifetime as the mesh. Standalone NewParityMesh callers leave
+	// them nil and classifyFacet builds the exact geometry on demand.
+	exactVerts []proof.Xpt
+	exactNorms []proof.Xpt
 	// projections[axis][vi] is vertex vi projected onto the plane a ray
 	// sweeping axis leaves. Both rays of an axis carry the same (u, v) pair
 	// (AxisRays), so one slot per axis serves both senses. A slot stays nil
@@ -405,9 +411,16 @@ func (prepared *ParityMesh) classifyFacet(p proof.Xpt, pa Xp2, axis, u, v, dir, 
 	if s1 == 0 || s2 == 0 || s3 == 0 {
 		return facetAmbiguous
 	}
-	a, b, c := prepared.Verts[tri[0]], prepared.Verts[tri[1]], prepared.Verts[tri[2]]
-	xa, xb, xc := proof.XptOf(a), proof.XptOf(b), proof.XptOf(c)
-	n := proof.Xcross(proof.Xsub(xb, xa), proof.Xsub(xc, xa))
+	var xa, n proof.Xpt
+	if len(prepared.exactVerts) == len(prepared.Verts) && len(prepared.exactNorms) == len(prepared.Tris) {
+		xa = prepared.exactVerts[tri[0]]
+		n = prepared.exactNorms[ti]
+	} else {
+		a, b, c := prepared.Verts[tri[0]], prepared.Verts[tri[1]], prepared.Verts[tri[2]]
+		xb, xc := proof.XptOf(b), proof.XptOf(c)
+		xa = proof.XptOf(a)
+		n = proof.Xcross(proof.Xsub(xb, xa), proof.Xsub(xc, xa))
+	}
 	nAxis := XIntCoordOf(n, axis)
 	if nAxis.Sign() == 0 {
 		return facetAmbiguous
