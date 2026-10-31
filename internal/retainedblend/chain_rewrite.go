@@ -393,7 +393,10 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 				width = max(width, math.Abs(end[j]-start[j]))
 			}
 		}
-		na := max(2, int(math.Ceil(width/dTheta)))
+		na, err := columnCount(width, dTheta, rhoMax, spec.size(), 2)
+		if err != nil {
+			return nil, err
+		}
 		for i := 0; i <= na; i++ {
 			f := float64(i) / float64(na)
 			switch {
@@ -955,7 +958,7 @@ func (w *work) clipChainWall(en chainEntry, up, oP r3.Vec, tW float64, topSet, n
 		if !ok {
 			t := g[a] / (g[a] - g[b])
 			p := w.verts[a].Add(w.verts[b].Sub(w.verts[a]).Scale(t))
-			c = w.vertex(p, max(w.beta[a], w.beta[b])+slack+w.tau)
+			c = w.vertex(p, facetBound+slack+w.tau)
 			w.noteCut(c, facetBound)
 			w.cuts[k] = c
 		}

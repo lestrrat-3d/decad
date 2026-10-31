@@ -9,17 +9,17 @@
 # shard. Rebalance only by regenerating from measured costs.
 #
 # Shard totals at the last measurement:
-#   shard 0:  204.62s over 262 tests
+#   shard 0:  204.79s over 262 tests
 #   shard 1:  203.51s over 265 tests
 #   shard 2:  197.61s over 266 tests
 #   shard 3:  186.10s over 265 tests
 #   shard 4:  224.71s over 266 tests
 #   shard 5:  211.21s over 261 tests
 #   shard 6:  225.42s over 267 tests
-#   shard 7:  222.44s over 267 tests
+#   shard 7:  234.43s over 268 tests
 #   shard 8:  218.34s over 261 tests
 #   shard 9:  213.27s over 268 tests
-#   shard 10:  222.56s over 273 tests
+#   shard 10:  225.26s over 273 tests
 #
 0	0.01	FuzzFillet
 0	12.54	TestAxialSectionUnionFinishes
@@ -96,7 +96,7 @@
 0	0.14	TestFacetedUnionNestedBossShellVerified
 0	0.09	TestFacetedWallSurveyLeavesAThickEnoughPlateUndecided
 0	0.02	TestFilletBoxAllConvexEdges
-0	5.13	TestFilletOfEveryEdgeOfAMeshBoxRoundsAllEightCorners
+0	5.30	TestFilletOfEveryEdgeOfAMeshBoxRoundsAllEightCorners
 0	0.01	TestFilletOfThreeTopEdgesWhoseFreeEndsShareAFaceIsRefused
 0	0.00	TestFitSplineNonFiniteInterpolantIsUnsupported
 0	0.03	TestFreeformPrismSelectorNeverMatchesFace
@@ -1952,6 +1952,7 @@
 7	0.00	TestFacetedRetainedBlendArc
 7	0.01	TestFacetedRetainedBlendParallelCylinders
 7	0.00	TestFacetedRetainedBlendSphereRim
+7	11.99	TestFacetedRetainedBlendStripInterior
 7	0.64	TestFacetedUndercutSurveyClaimsNothingForAFreePull
 7	0.02	TestFilletLineArcCorner
 7	0.00	TestFilletRefusals
@@ -2742,11 +2743,10 @@
 10	0.00	TestExtrudeToPartialRevolveStartCap
 10	0.01	TestExtrudeVertexReachesDenotedMergedRun
 10	0.03	TestFacetedEdgeLengthNeverClaimsExact
-10	1.20	TestFacetedRetainedBlendArcEndPlane
-10	5.01	TestFacetedRetainedBlendAreaCharge
+10	4.10	TestFacetedRetainedBlendArcEndPlane
+10	4.81	TestFacetedRetainedBlendAreaCharge
 10	0.00	TestFacetedRetainedBlendConcaveChain
 10	0.18	TestFacetedRetainedBlendObliqueEnd
-10	4.02	TestFacetedRetainedBlendStripInterior
 10	0.00	TestFacetedRetainedChamferTwoDistance
 10	0.02	TestFacetedUnionNestedBossShellRefusesPlacedSourceRelation
 10	0.01	TestFilletChordRoundsAConcaveEdge

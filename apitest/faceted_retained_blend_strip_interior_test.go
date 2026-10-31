@@ -22,13 +22,43 @@ import (
 // blendProfile is the blend's profile in the meridian half-plane about the
 // vertical axis through (cx, cy): the arc of radius r about (rc, zc) whose
 // directions run from a0 counter-clockwise through span, or, for a chamfer,
-// the segment from p0 to p1.
+// the segment from p0 to p1. Every fixture blends a convex edge, so the
+// solid's outward normal points away from the arc's centre, and from the
+// segment toward corner, the edge the chamfer removes.
 type blendProfile struct {
 	cx, cy    float64
 	rc, zc, r float64
 	a0, span  float64
 	seg       bool
 	p0, p1    [2]float64
+	corner    [2]float64
+}
+
+// outward is the solid's outward unit normal at the point of the blend
+// surface nearest p, read from the profile in the meridian half-plane.
+func (m blendProfile) outward(p r3.Vec) r3.Vec {
+	radial, _ := r3.NewVec(p.X-m.cx, p.Y-m.cy, 0).Normalize()
+	up := r3.NewVec(0, 0, 1)
+	if m.seg {
+		nr, nz := m.p1[1]-m.p0[1], -(m.p1[0] - m.p0[0])
+		if nr*(m.corner[0]-m.p0[0])+nz*(m.corner[1]-m.p0[1]) < 0 {
+			nr, nz = -nr, -nz
+		}
+		n, _ := radial.Scale(nr).Add(up.Scale(nz)).Normalize()
+		return n
+	}
+	rho, z := math.Hypot(p.X-m.cx, p.Y-m.cy), p.Z
+	th := math.Atan2(z-m.zc, rho-m.rc) - m.a0
+	th -= 2 * math.Pi * math.Floor(th/(2*math.Pi))
+	if th > m.span {
+		// Past the arc, the nearer end's direction.
+		if th-m.span < 2*math.Pi-th {
+			th = m.span
+		} else {
+			th = 0
+		}
+	}
+	return radial.Scale(math.Cos(m.a0 + th)).Add(up.Scale(math.Sin(m.a0 + th)))
 }
 
 // dist is the distance of p from the surface the profile sweeps about the
@@ -86,20 +116,29 @@ func madeFaces(old map[decad.FeatureRef]bool, after *decad.Body) map[*decad.Face
 // within the mesh's Bound of the surface dist measures. band counts the facets
 // with a vertex off the surface, the band beside the wall's cut; at least one
 // must be sampled when wantBand is set. tau is the blend's chord tolerance,
-// logged as the worst sample's multiple of it.
+// logged as the worst sample's multiple of it. Each facet's own normal must
+// also agree in sign with outward, the exact surface's outward normal at the
+// facet's centroid; the smallest dot product of the two is logged. A facet
+// facing the other way is folded over the surface it stands for, which no
+// distance bound reveals.
 func requireBlendFacetsCovered(t *testing.T, out *decad.Body, keep func(*decad.Face) bool,
-	dist func(r3.Vec) float64, tau float64, wantBand bool) {
+	dist func(r3.Vec) float64, outward func(r3.Vec) r3.Vec, tau float64, wantBand bool) {
 	t.Helper()
 	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyNone))
 	require.NoError(t, err)
 	verts, src := mesh.Vertices(), mesh.SourceFaces()
-	worst, sampled, band := 0.0, 0, 0
+	worst, sampled, band, facing := 0.0, 0, 0, 1.0
 	for i, tri := range mesh.Triangles() {
 		if !keep(src[i]) {
 			continue
 		}
 		a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
 		sampled++
+		if n, ok := b.Sub(a).Cross(c.Sub(a)).Normalize(); ok {
+			dot := n.Dot(outward(a.Add(b).Add(c).Scale(1.0 / 3)))
+			facing = math.Min(facing, dot)
+			require.Positive(t, dot, "facet %d at %v faces into the solid", i, a)
+		}
 		if dist(a) > 1e-9 || dist(b) > 1e-9 || dist(c) > 1e-9 {
 			band++
 		}
@@ -113,7 +152,8 @@ func requireBlendFacetsCovered(t *testing.T, out *decad.Body, keep func(*decad.F
 	}
 	bound := mesh.Bound().Base()
 	t.Logf("blend facets within %.6g mm (%.3f τ) of the surface, Bound %.6g mm (%.3f of it), %d blend facets, "+
-		"%d in the band, %d facets", worst, worst/tau, bound, worst/bound, sampled, band, len(mesh.Triangles()))
+		"%d in the band, %d facets, normals agree to %.3f at worst", worst, worst/tau, bound, worst/bound, sampled,
+		band, len(mesh.Triangles()), facing)
 	require.Positive(t, sampled)
 	if wantBand {
 		require.Positive(t, band, "the band beside the wall's cut is sampled")
@@ -170,7 +210,7 @@ func TestFacetedRetainedBlendStripInterior(t *testing.T) {
 				return made[f] && p.X < openBoxR+1e-6 && p.Y < openBoxR+1e-6
 			}
 			profile := blendProfile{cx: openBoxR, cy: openBoxR, rc: openBoxR - tc.r, zc: 20 - tc.r, r: tc.r, span: math.Pi / 2}
-			requireBlendFacetsCovered(t, out, keep, profile.dist, math.Ldexp(tc.r, -10), true)
+			requireBlendFacetsCovered(t, out, keep, profile.dist, profile.outward, math.Ldexp(tc.r, -10), true)
 		})
 	}
 
@@ -193,7 +233,7 @@ func TestFacetedRetainedBlendStripInterior(t *testing.T) {
 				made := madeFaces(old, out)
 				profile := blendProfile{cx: h, cy: 10, rc: bore + d, zc: 20 - d, r: d, a0: math.Pi / 2, span: math.Pi / 2}
 				requireBlendFacetsCovered(t, out, func(f *decad.Face) bool { return made[f] }, profile.dist,
-					math.Ldexp(d, -10), true)
+					profile.outward, math.Ldexp(d, -10), true)
 			})
 		}
 	}
@@ -201,7 +241,7 @@ func TestFacetedRetainedBlendStripInterior(t *testing.T) {
 	// A boss of radius R on the plate, its closed top rim filleted (R2,
 	// κ = −1, the ball inside the boss): the tube's sagitta and the azimuth's
 	// both move a strip triangle toward the axis, so they add.
-	for _, tc := range []struct{ bossR, r float64 }{{3, 1}, {3, 2.5}, {4, 1}, {4, 2.5}} {
+	for _, tc := range []struct{ bossR, r float64 }{{3, 1}, {3, 2.5}, {4, 1}, {4, 2.5}, {1, 0.01}} {
 		t.Run(fmt.Sprintf("a boss's top rim fillet, R = %g, r = %g", tc.bossR, tc.r), func(t *testing.T) {
 			t.Parallel()
 			const top = 30.001
@@ -212,9 +252,27 @@ func TestFacetedRetainedBlendStripInterior(t *testing.T) {
 			made := madeFaces(old, out)
 			profile := blendProfile{cx: 20, cy: 10, rc: tc.bossR - tc.r, zc: top - tc.r, r: tc.r, span: math.Pi / 2}
 			requireBlendFacetsCovered(t, out, func(f *decad.Face) bool { return made[f] }, profile.dist,
-				math.Ldexp(tc.r, -10), true)
+				profile.outward, math.Ldexp(tc.r, -10), true)
 		})
 	}
+
+	// A fillet tiny against its rim needs a column step that shrinks with the
+	// square root of r/ρ. Past 4,096 columns on the circle the strip refuses
+	// rather than step coarser than its bound states: a boss of radius 9 with
+	// its top rim filleted at r = 0.004, and an Ø18 bore's mouth at r = 0.002.
+	t.Run("a fillet tiny against its rim refuses", func(t *testing.T) {
+		t.Parallel()
+		joined := bossTop(t, 9)
+		_, err := decad.Fillet(t.Context(), joined, rimAt(t, joined, 30.001), units.Millimeters(0.004))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "the blend's strip needs more than 4096 columns on a circle of radius 9 mm")
+		sc := newRetentionScene()
+		bored, err := decad.Cut(t.Context(), blendPlate(t, sc), zCylinderAt(t, sc, 20, 10, 9, -30, 30))
+		require.NoError(t, err)
+		_, err = decad.Fillet(t.Context(), bored, rimAt(t, bored, 20), units.Millimeters(0.002))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "the blend's strip needs more than 4096 columns")
+	})
 
 	// The cap of the ball of radius 2 below z = −1, its rim filleted (R6): the
 	// wall's cut vertices lie on the sphere's held facets, which the cut plane
@@ -237,7 +295,7 @@ func TestFacetedRetainedBlendStripInterior(t *testing.T) {
 		a0 := math.Atan2(zc, rc)
 		profile := blendProfile{rc: rc, zc: zc, r: r, a0: a0, span: math.Pi/2 - a0}
 		requireBlendFacetsCovered(t, out, func(f *decad.Face) bool { return made[f] }, profile.dist,
-			math.Ldexp(r, -10), true)
+			profile.outward, math.Ldexp(r, -10), true)
 	})
 
 	// Three edges at a box's corner filleted (§4.8): the sphere octant's
@@ -266,7 +324,10 @@ func TestFacetedRetainedBlendStripInterior(t *testing.T) {
 				return true
 			}
 			requireBlendFacetsCovered(t, out, octant, func(p r3.Vec) float64 { return math.Abs(p.Sub(centre).Len() - r) },
-				math.Ldexp(r, -13), false)
+				func(p r3.Vec) r3.Vec {
+					n, _ := p.Sub(centre).Normalize()
+					return n
+				}, math.Ldexp(r, -13), false)
 		})
 	}
 }

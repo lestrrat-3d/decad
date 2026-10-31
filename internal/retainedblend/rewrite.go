@@ -96,14 +96,23 @@ func (w *work) groupOf(facets []int) (int, error) {
 	return g, nil
 }
 
-// ringCount is the number of vertices a circle of radius rho needs for its
-// chord sagitta to stay within tol.
-func ringCount(rho, tol float64) int {
+// ringCount is the number of vertices, at least 8, a circle of radius rho
+// needs for its chord sagitta to stay within tol. It refuses a circle that
+// needs more than maxStripColumns (columnCount); size is the blend's.
+func ringCount(rho, tol, size float64) (int, error) {
 	if tol >= rho {
-		return 8
+		return 8, nil
 	}
-	step := 2 * math.Acos(1-tol/rho)
-	return min(max(int(math.Ceil(2*math.Pi/step)), 8), 4096)
+	return columnCount(2*math.Pi, 2*math.Acos(1-tol/rho), rho, size, 8)
+}
+
+// size is the blend's own size: a fillet's radius or a chamfer's larger
+// distance.
+func (s blendSpec) size() float64 {
+	if s.fillet {
+		return s.r
+	}
+	return max(s.dA, s.dB)
 }
 
 // clearance refuses a blend whose setback does not fit: the bounds say the
@@ -205,7 +214,10 @@ func (w *work) rewritePlane(fi int, g plane, ta, rhoHi float64) ([]ringPt, int, 
 		w.dir = -1
 	}
 
-	n := ringCount(max(r.radius, rhoA, rhoHi), w.share)
+	n, err := ringCount(max(r.radius, rhoA, rhoHi), w.share, w.spec.size())
+	if err != nil {
+		return nil, 0, err
+	}
 	ring := make([]ringPt, n)
 	ringBound := w.tau + slack
 	for k := range n {
@@ -381,7 +393,7 @@ func (w *work) rewriteWall(fi int, tb, bandRadius float64, blendDist func(r3.Vec
 		}
 		t := g[a] / (g[a] - g[b])
 		p := w.verts[a].Add(w.verts[b].Sub(w.verts[a]).Scale(t))
-		c := w.vertex(p, max(w.beta[a], w.beta[b])+slack+w.tau)
+		c := w.vertex(p, facetBound+slack+w.tau)
 		w.noteCut(c, facetBound)
 		cuts[k] = c
 		return c

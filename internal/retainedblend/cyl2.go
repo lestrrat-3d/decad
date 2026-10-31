@@ -338,6 +338,7 @@ func (w *work) cutWall(fp facetedrecord.Payload, f faceLoops, run edgeRun, c cyl
 	}
 	nu := u1.Scale(-math.Sin(theta)).Add(u2.Scale(math.Cos(theta)))
 	gT := func(v int) float64 { return nu.Dot(w.verts[v].Sub(o0)) }
+	facetBound := 0.0
 	cut := func(a, b int) (int, error) { // a removed, b kept
 		key := [2]int{min(a, b), max(a, b)}
 		if id, ok := w.cuts[key]; ok {
@@ -348,12 +349,15 @@ func (w *work) cutWall(fp facetedrecord.Payload, f faceLoops, run edgeRun, c cyl
 			return 0, fmt.Errorf("%w: a wall facet reaches across half the cylinder", decaderr.ErrUnsupported)
 		}
 		p := w.verts[a].Add(w.verts[b].Sub(w.verts[a]).Scale(ga / (ga - gb)))
-		id := w.vertex(p, max(w.beta[a], w.beta[b])+slack+w.tau)
+		// The held facet claims its true piece of the curved wall within its
+		// facet bound, the largest of its three corners'.
+		id := w.vertex(p, facetBound+slack+w.tau)
 		w.cuts[key] = id
 		return id, nil
 	}
 	for _, fi := range f.facets {
 		t := fp.Tris[fi]
+		facetBound = w.facetBound(t)
 		var gone []int
 		for k, v := range t {
 			if removed[v] {

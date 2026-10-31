@@ -1,8 +1,10 @@
 package retainedblend
 
 import (
+	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -24,6 +26,28 @@ func azimuthShare(spec blendSpec, tau float64) float64 {
 		return tau / 2
 	}
 	return tau
+}
+
+// maxStripColumns is the most columns a strip's row takes, over a closed
+// rim's full turn or an open row's span. A column step that needs more
+// refuses (columnCount) rather than step coarser than the bound states.
+const maxStripColumns = 4096
+
+// columnCount is the number of columns that step at most step apart over the
+// angle span on a circle of radius rho, at least least. It refuses (SR5) a
+// count past maxStripColumns, naming the blend's size against the radius:
+// the step shrinks with the square root of size/rho, so a blend tiny against
+// its rim needs more columns than a strip takes.
+func columnCount(span, step, rho, size float64, least int) (int, error) {
+	n := float64(least)
+	if step > 0 {
+		n = math.Max(n, math.Ceil(span/step))
+	}
+	if !(n <= maxStripColumns) {
+		return 0, fmt.Errorf("%w: the blend's strip needs more than %d columns on a circle of radius %g mm "+
+			"for a blend of %g mm (size/radius %.3g)", decaderr.ErrUnsupported, maxStripColumns, rho, size, size/rho)
+	}
+	return int(n), nil
 }
 
 // profileShare is the sagitta a fillet's rows keep over each gap of the

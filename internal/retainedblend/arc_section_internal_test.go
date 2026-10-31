@@ -387,3 +387,21 @@ func TestEndSectionTiltCharge(t *testing.T) {
 	_, err = arcRows(f.spec, tau, []endSection{f.section(t)})
 	require.NoError(t, err, "the same plane parallel to the axis builds")
 }
+
+// TestColumnCountRefusesPastTheLimit counts the columns of a step over a span:
+// exactly maxStripColumns builds, one more refuses with the blend's size
+// against the radius, and a zero step takes the least count.
+func TestColumnCountRefusesPastTheLimit(t *testing.T) {
+	t.Parallel()
+	n, err := columnCount(maxStripColumns, 1, 9, 0.004, 8)
+	require.NoError(t, err)
+	require.Equal(t, maxStripColumns, n)
+	_, err = columnCount(maxStripColumns+1, 1, 9, 0.004, 8)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	require.ErrorContains(t, err, "needs more than 4096 columns on a circle of radius 9 mm for a blend of 0.004 mm")
+	n, err = columnCount(1, 0, 9, 0.004, 8)
+	require.NoError(t, err)
+	require.Equal(t, 8, n)
+	_, err = ringCount(9, 0.004/2048, 0.004)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+}

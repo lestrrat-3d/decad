@@ -62,16 +62,12 @@ func TestFacetedRetainedBlendArcEndPlane(t *testing.T) {
 				require.NoError(t, err)
 				made := madeFaces(old, out)
 				// The cone's generator in the meridian plane about (h, 10),
-				// from (bore + d, 20) to (bore, 20 − d).
-				coneDist := func(p r3.Vec) float64 {
-					rho := math.Hypot(p.X-h, p.Y-10)
-					a, b := [2]float64{bore + d, 20}, [2]float64{bore, 20 - d}
-					ux, uz := b[0]-a[0], b[1]-a[1]
-					s := math.Min(1, math.Max(0, ((rho-a[0])*ux+(p.Z-a[1])*uz)/(ux*ux+uz*uz)))
-					return math.Hypot(rho-a[0]-s*ux, p.Z-a[1]-s*uz)
-				}
-				requireBlendFacetsCovered(t, out, func(f *decad.Face) bool { return made[f] }, coneDist,
-					math.Ldexp(d, -10), true)
+				// from (bore + d, 20) to (bore, 20 − d); the chamfer removes
+				// the bore's edge at (bore, 20).
+				cone := blendProfile{cx: h, cy: 10, seg: true, p0: [2]float64{bore + d, 20},
+					p1: [2]float64{bore, 20 - d}, corner: [2]float64{bore, 20}}
+				requireBlendFacetsCovered(t, out, func(f *decad.Face) bool { return made[f] }, cone.dist,
+					cone.outward, math.Ldexp(d, -10), true)
 			})
 		}
 	}

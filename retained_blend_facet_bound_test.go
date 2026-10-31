@@ -24,18 +24,32 @@ import (
 // stripProfile is a blend's profile in the meridian half-plane about the axis
 // through o along +z: the arc of radius r about (rc, zc) whose directions run
 // from a0 counter-clockwise through span. sphere set measures from the sphere
-// of radius r about o instead.
+// of radius r about o instead, a nonzero line from the cylinder of radius r
+// about the line through o along it, and seg from the cone the meridian
+// segment p0 p1 sweeps about the axis.
 type stripProfile struct {
 	o         r3.Vec
 	rc, zc, r float64
 	a0, span  float64
 	sphere    bool
+	line      r3.Vec
+	seg       bool
+	p0, p1    [2]float64
 }
 
 func (p stripProfile) dist(x r3.Vec) float64 {
 	q := x.Sub(p.o)
 	if p.sphere {
 		return math.Abs(q.Len() - p.r)
+	}
+	if p.line != (r3.Vec{}) {
+		return math.Abs(q.Sub(p.line.Scale(q.Dot(p.line))).Len() - p.r)
+	}
+	if p.seg {
+		rho := math.Hypot(q.X, q.Y)
+		ux, uz := p.p1[0]-p.p0[0], p.p1[1]-p.p0[1]
+		s := math.Min(1, math.Max(0, ((rho-p.p0[0])*ux+(q.Z-p.p0[1])*uz)/(ux*ux+uz*uz)))
+		return math.Hypot(rho-p.p0[0]-s*ux, q.Z-p.p0[1]-s*uz)
 	}
 	dx, dz := math.Hypot(q.X, q.Y)-p.rc, q.Z-p.zc
 	th := math.Atan2(dz, dx) - p.a0
@@ -122,11 +136,12 @@ func (sc *stripScene) rect(t *testing.T, x0, y0, x1, y1, h float64) *Body {
 	return b
 }
 
-func (sc *stripScene) disc(t *testing.T, cx, cy, r, h float64, dir Direction) *Body {
+// disc extrudes the circle of radius r about (cx, 10) by h along dir.
+func (sc *stripScene) disc(t *testing.T, cx, r, h float64, dir Direction) *Body {
 	t.Helper()
 	s, err := sc.w.CreateSketch(sc.w.XY())
 	require.NoError(t, err)
-	c := s.CreatePoint(cx, cy)
+	c := s.CreatePoint(cx, 10)
 	s.Fix(c)
 	s.CreateCircle(c, r)
 	_, err = s.Solve(t.Context())
@@ -143,6 +158,25 @@ func moved(t *testing.T, b *Body, d r3.Vec) *Body {
 	out, err := Transform(t.Context(), b, tr)
 	require.NoError(t, err)
 	return out
+}
+
+// lineEdgeAt selects the one straight edge along dir with an end within
+// 5e-3 of p.
+func lineEdgeAt(t *testing.T, b *Body, p, dir r3.Vec) EdgeSelector {
+	t.Helper()
+	for _, e := range b.Edges() {
+		if _, ok := e.Curve().(Line3); !ok {
+			continue
+		}
+		for _, v := range []*Vertex{e.Start(), e.End()} {
+			run := e.End().Position().Value.Sub(e.Start().Position().Value)
+			if v.Position().Value.Sub(p).Len() < 5e-3 && run.Cross(dir).Len() < 1e-6*run.Len() {
+				return Edges(EndpointAt(v.Position().Value), ParallelTo(dir)).Exactly(1)
+			}
+		}
+	}
+	require.Fail(t, "no such edge", "near %v along %v", p, dir)
+	return nil
 }
 
 // circularAt selects the one circular edge (an arc when arc is set, else a
@@ -184,7 +218,7 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 			const top = 30.001
 			sc := newStripScene()
 			joined, err := Union(t.Context(), sc.rect(t, 0, 0, 40, 20, 20),
-				moved(t, sc.disc(t, 20, 10, 3, 10.5, Against), r3.Vec{Z: top}))
+				moved(t, sc.disc(t, 20, 3, 10.5, Against), r3.Vec{Z: top}))
 			require.NoError(t, err)
 			fresh := freshFaces(joined)
 			out, err := Fillet(t.Context(), joined, circularAt(t, joined, top, false), units.Millimeters(r))
@@ -193,6 +227,25 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 				stripProfile{o: r3.NewVec(20, 10, 0), rc: 3 - r, zc: top - r, r: r, span: math.Pi / 2})
 		})
 	}
+
+	// A boss of radius 9 with its top rim chamfered at d = 0.003, just inside
+	// the 4,096 columns a strip takes on the rim (a chamfer's columns take all
+	// of tau, so it reaches the limit below d/R of about 3.0·10⁻⁴ and keeps one
+	// row gap, where a fillet just inside it builds some 200,000 facets): the
+	// facets still lie within their own bounds.
+	t.Run("a boss's top rim chamfer just inside the column limit", func(t *testing.T) {
+		t.Parallel()
+		const top, R, d = 30.001, 9.0, 0.003
+		sc := newStripScene()
+		joined, err := Union(t.Context(), sc.rect(t, 0, 0, 40, 20, 20),
+			moved(t, sc.disc(t, 20, R, 10.5, Against), r3.Vec{Z: top}))
+		require.NoError(t, err)
+		fresh := freshFaces(joined)
+		out, err := Chamfer(t.Context(), joined, circularAt(t, joined, top, false), units.Millimeters(d))
+		require.NoError(t, err)
+		requireFacetBoundsHold(t, out, fresh(out),
+			stripProfile{o: r3.NewVec(20, 10, 0), seg: true, p0: [2]float64{R - d, top}, p1: [2]float64{R, top - d}})
+	})
 
 	// The rounded box corner cut back so its plane's row meets the cut at the
 	// sine 0.4, filleted along the tangent chain (the chain route's fan).
@@ -228,7 +281,7 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 		h := bore * math.Sqrt(1-c*c)
 		sc := newStripScene()
 		bored, err := Cut(t.Context(), sc.rect(t, 0, 0, 40, 20, 20),
-			moved(t, sc.disc(t, h, 10, bore, 60, Along), r3.Vec{Z: -30 + 0.001}))
+			moved(t, sc.disc(t, h, bore, 60, Along), r3.Vec{Z: -30 + 0.001}))
 		require.NoError(t, err)
 		fresh := freshFaces(bored)
 		out, err := Fillet(t.Context(), bored, circularAt(t, bored, 20, true), units.Millimeters(d))
@@ -264,6 +317,49 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 		rc := math.Sqrt((R-r)*(R-r) - zc*zc)
 		a0 := math.Atan2(zc, rc)
 		requireFacetBoundsHold(t, out, fresh(out), stripProfile{rc: rc, zc: zc, r: r, a0: a0, span: math.Pi/2 - a0})
+	})
+
+	// The straight routes cut curved walls too, and their cut vertices take
+	// the held facet's bound: a groove of radius 4 along x about (y, z) =
+	// (10, 22) whose near top edge is filleted with r = 1 (R3, the ball at
+	// (6, 19)), and the ridge between two bores of radius 4 about (14, 10) and
+	// (21, 10), filleted with r = 1 (R5, the ball outside both).
+	t.Run("a groove's top edge fillet", func(t *testing.T) {
+		t.Parallel()
+		sc := newStripScene()
+		s, err := sc.w.CreateSketch(sc.w.YZ())
+		require.NoError(t, err)
+		c := s.CreatePoint(10, 22)
+		s.Fix(c)
+		s.CreateCircle(c, 4)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		tool, err := Extrude(t.Context(), sc.doc, s, s.Profiles()[0], Symmetric{D: units.Millimeters(30)})
+		require.NoError(t, err)
+		grooved, err := Cut(t.Context(), sc.rect(t, 0, 0, 40, 20, 20), moved(t, tool, r3.Vec{X: 20}))
+		require.NoError(t, err)
+		fresh := freshFaces(grooved)
+		k := 10 - math.Sqrt(16-4)
+		out, err := Fillet(t.Context(), grooved, lineEdgeAt(t, grooved, r3.NewVec(0, k, 20), r3.NewVec(1, 0, 0)),
+			units.Millimeters(1))
+		require.NoError(t, err)
+		requireFacetBoundsHold(t, out, fresh(out), stripProfile{o: r3.NewVec(0, 6, 19), r: 1, line: r3.NewVec(1, 0, 0)})
+	})
+	t.Run("a bore pair's ridge fillet", func(t *testing.T) {
+		t.Parallel()
+		sc := newStripScene()
+		b := sc.rect(t, 0, 0, 40, 20, 20)
+		for _, x := range []float64{14, 21} {
+			var err error
+			b, err = Cut(t.Context(), b, moved(t, sc.disc(t, x, 4, 40, Along), r3.Vec{Z: -10 + 0.001}))
+			require.NoError(t, err)
+		}
+		fresh := freshFaces(b)
+		ridge := r3.NewVec(17.5, 10-math.Sqrt(16-3.5*3.5), 20)
+		out, err := Fillet(t.Context(), b, lineEdgeAt(t, b, ridge, r3.NewVec(0, 0, 1)), units.Millimeters(1))
+		require.NoError(t, err)
+		requireFacetBoundsHold(t, out, fresh(out),
+			stripProfile{o: r3.NewVec(17.5, 10-math.Sqrt(25-3.5*3.5), 0), r: 1, line: r3.NewVec(0, 0, 1)})
 	})
 
 	// Three edges at a mesh box's corner (§4.8): the sphere octant between the
