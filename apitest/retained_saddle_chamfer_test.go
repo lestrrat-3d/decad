@@ -29,6 +29,30 @@ func saddleShaft(t *testing.T, r, y float64, opts ...decad.DocumentOption) (*dec
 	return body, sc
 }
 
+// saddleShaftWithFlatBesideMouth cuts a flat against the bore cut's held wall,
+// so the document allows the wall's bound at the contact.
+func saddleShaftWithFlatBesideMouth(t *testing.T) *decad.Body {
+	t.Helper()
+	body, sc := saddleShaft(t, 3, 0, decad.WithChainTolerance(units.Millimeters(0.01)))
+	s, err := sc.w.CreateSketch(sc.w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(44.5, -20, 60, 20)
+	s.Fix(rect.A)
+	s.Fix(rect.C)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	box, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
+		decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	require.NoError(t, err)
+	move, err := r3.Translation(r3.Vec{Z: 9.8})
+	require.NoError(t, err)
+	flat, err := decad.Transform(t.Context(), box, move)
+	require.NoError(t, err)
+	body, err = decad.Cut(t.Context(), body, flat)
+	require.NoError(t, err)
+	return body
+}
+
 // saddleRevolve revolves the rectangle x in [0, 80], y in [0, saddleR] about
 // the x axis.
 func saddleRevolve(t *testing.T, sc *retentionScene) *decad.Body {
@@ -331,26 +355,8 @@ func TestRetainedSaddleChamferRefusals(t *testing.T) {
 	})
 	t.Run("a flat milled beside the mouth", func(t *testing.T) {
 		t.Parallel()
-		// The flat's Cut meets the shaft wall the hole's Cut already held, so
-		// the document allows that wall's bound at the contact.
-		body, sc := saddleShaft(t, 3, 0, decad.WithChainTolerance(units.Millimeters(0.01)))
-		s, err := sc.w.CreateSketch(sc.w.XY())
-		require.NoError(t, err)
-		rect := s.CreateRectangle(44.5, -20, 60, 20)
-		s.Fix(rect.A)
-		s.Fix(rect.C)
-		_, err = s.Solve(t.Context())
-		require.NoError(t, err)
-		box, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-			decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
-		require.NoError(t, err)
-		move, err := r3.Translation(r3.Vec{Z: 9.8})
-		require.NoError(t, err)
-		flat, err := decad.Transform(t.Context(), box, move)
-		require.NoError(t, err)
-		body, err = decad.Cut(t.Context(), body, flat)
-		require.NoError(t, err)
-		_, err = decad.Chamfer(t.Context(), body, saddleMouths(t, body, 3, 0), units.Millimeters(1.5))
+		body := saddleShaftWithFlatBesideMouth(t)
+		_, err := decad.Chamfer(t.Context(), body, saddleMouths(t, body, 3, 0), units.Millimeters(1.5))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "another face of the body comes within the saddle chamfer's reach")
 	})
