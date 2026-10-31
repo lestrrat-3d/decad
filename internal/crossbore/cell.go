@@ -105,6 +105,18 @@ func CellExactProof(radius, bore, setback float64, i int, angularGap *big.Rat) (
 // cellExactProofAt is CellExactProof for the cell centred on the exact turn
 // (a fraction of the whole turn), widened by angularGap either side.
 func cellExactProofAt(radius, bore, setback float64, turn, angularGap *big.Rat) (CellExact, error) {
+	cell, err := cellExactGeometryAt(radius, bore, setback, turn, angularGap)
+	if err != nil {
+		return CellExact{}, err
+	}
+	cell.Width, cell.Speed, cell.BandLength = cellExactMetrics(&cell)
+	return cell, nil
+}
+
+// cellExactGeometryAt proves the cell and returns only coordinates and
+// derivatives. The retained saddle tool proof reads those values but not the
+// width, speed or band-length readings that CellExactProof exposes.
+func cellExactGeometryAt(radius, bore, setback float64, turn, angularGap *big.Rat) (CellExact, error) {
 	s0, c0 := proofbound.TurnSinCosInterval(turn)
 	gapLazy := proofarith.LazyOf(angularGap)
 	s := proofarith.LazyIntervalWiden(proofarith.LazyIntervalOf(proofbound.ToProofInterval(s0)), gapLazy)
@@ -185,27 +197,25 @@ func cellExactProofAt(radius, bore, setback float64, turn, angularGap *big.Rat) 
 	}
 	negativeX := crossSub(crossPoint(0), xd.v)
 	negativeY, negativeZ := crossMul(r, c), crossMul(r, s)
-	width := 0.0
-	for _, coordinate := range []crossIV{
-		outX.v, outY.v, outZ.v, inX.v, inY.v, inZ.v,
-		negativeX, negativeY, negativeZ,
-	} {
-		width = max(width, crossWidth(coordinate))
-	}
-	speed := 0.0
-	for _, dcoord := range []crossIV{outX.d, outY.d, outZ.d, inX.d, inY.d, inZ.d} {
-		speed = max(speed, proofbound.LazyIntervalAbsUpperUp(dcoord))
-	}
-	diffX := crossSub(outX.v, inX.v)
-	bandCoord := max(
-		proofbound.LazyIntervalAbsUpperUp(diffX),
-		proofbound.LazyIntervalAbsUpperUp(diffY),
-		proofbound.LazyIntervalAbsUpperUp(diffZ))
 	return CellExact{
-		Width: width, Speed: proofbound.Radius3D(speed), BandLength: proofbound.Radius3D(bandCoord),
 		Coords: [9]crossIV{outX.v, outY.v, outZ.v, inX.v, inY.v, inZ.v, negativeX, negativeY, negativeZ},
 		Derivs: [6]crossIV{outX.d, outY.d, outZ.d, inX.d, inY.d, inZ.d},
 	}, nil
+}
+
+// cellExactMetrics reads the interval measurements exposed by CellExactProof
+// after the geometry proof has succeeded.
+func cellExactMetrics(cell *CellExact) (width, speed, bandLength float64) {
+	for _, coordinate := range cell.Coords {
+		width = max(width, crossWidth(coordinate))
+	}
+	for _, derivative := range cell.Derivs {
+		speed = max(speed, proofbound.LazyIntervalAbsUpperUp(derivative))
+	}
+	for c := range 3 {
+		bandLength = max(bandLength, proofbound.LazyIntervalAbsUpperUp(crossSub(cell.Coords[c], cell.Coords[3+c])))
+	}
+	return width, proofbound.Radius3D(speed), proofbound.Radius3D(bandLength)
 }
 
 const (

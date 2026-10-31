@@ -214,10 +214,10 @@ func quadSpread(cell *CellExact) float64 {
 func proveToolBase(R, r, d float64, k int, gap *big.Rat) (toolBase, error) {
 	const n = ToolStations
 	turn := big.NewRat(int64(k), n)
-	if _, err := cellExactProofAt(R, r, d, turn, gap); err != nil {
+	if _, err := cellExactGeometryAt(R, r, d, turn, gap); err != nil {
 		return toolBase{}, err
 	}
-	point, err := cellExactProofAt(R, r, d, turn, new(big.Rat))
+	point, err := cellExactGeometryAt(R, r, d, turn, new(big.Rat))
 	if err != nil {
 		return toolBase{}, err
 	}
@@ -228,7 +228,7 @@ func proveToolBase(R, r, d float64, k int, gap *big.Rat) (toolBase, error) {
 	}
 	if k < n/4 {
 		half := new(big.Rat).Quo(proofbound.PiUpper, big.NewRat(n, 1))
-		mid, err := cellExactProofAt(R, r, d, big.NewRat(int64(2*k+1), 2*n), half)
+		mid, err := cellExactGeometryAt(R, r, d, big.NewRat(int64(2*k+1), 2*n), half)
 		if err != nil {
 			return toolBase{}, err
 		}
@@ -236,7 +236,7 @@ func proveToolBase(R, r, d float64, k int, gap *big.Rat) (toolBase, error) {
 		const q = ToolAreaCells
 		sub := new(big.Rat).Quo(proofbound.PiUpper, big.NewRat(n*q, 1))
 		for p := range q {
-			cell, err := cellExactProofAt(R, r, d, big.NewRat(int64(2*(k*q+p)+1), 2*n*q), sub)
+			cell, err := cellExactGeometryAt(R, r, d, big.NewRat(int64(2*(k*q+p)+1), 2*n*q), sub)
 			if err != nil {
 				return toolBase{}, err
 			}
@@ -302,7 +302,8 @@ func worldError(held r3.Vec, local [3]crossIV, flipY, flipZ bool, pose Pose) flo
 
 // ProveToolBand proves the tool band for the outer radius R, the bore r and
 // the setback d. It proves the ToolStations/4 + 1 quarter-turn base cells with
-// CellExactProof (every failed interval sign refuses), and compares held(j, i),
+// the same eight interval sign checks as CellExactProof (every failure
+// refuses), and compares held(j, i),
 // the world band point of station j on row i (row 0 is B⁺, row ToolRows is
 // O⁺), with its base cell's mirrored point enclosures (cellMirrorOf, which
 // holds for the fixed pose exactly). The chord term pairs a point of a held

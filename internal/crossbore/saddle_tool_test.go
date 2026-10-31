@@ -91,3 +91,21 @@ func TestProveToolBand(t *testing.T) {
 	require.Greater(t, proof.AreaHi, sum)
 	require.Less(t, proof.AreaHi-proof.AreaLo, sum/100, "the band's area interval is narrow")
 }
+
+// BenchmarkProveToolBand measures the proof with held rows from the real
+// band producer at the radius-10 shaft and radius-3 bore fixture.
+func BenchmarkProveToolBand(b *testing.B) {
+	const R, r, d = 10.0, 3.0, 1.5
+	pose := crossbore.Pose{Axis: [3]int{2, 1, 0}, Sign: [3]float64{-1, -1, 1}, Shift: r3.Vec{X: 40}}
+	held := func(j, i int) r3.Vec {
+		o, inner := crossbore.BandEnds(R, r, d, j%crossbore.ToolStations)
+		return pose.World(crossbore.BandRow(o, inner, i))
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		if _, err := crossbore.ProveToolBand(b.Context(), R, r, d, pose, held); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
