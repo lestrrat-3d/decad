@@ -42,6 +42,89 @@ func possibleSharedVertex(delta r3.Vec, tol float64) bool {
 		delta.Z <= bound && delta.Z >= -bound
 }
 
+type vertexBucket struct {
+	x, y, z int64
+}
+
+// sharedVertexIndex limits candidate comparisons to nearby points while keeping IDs in insertion order.
+type sharedVertexIndex struct {
+	width     float64
+	buckets   map[vertexBucket][]int
+	unindexed []int
+}
+
+func newSharedVertexIndex(tol float64) *sharedVertexIndex {
+	return &sharedVertexIndex{width: 2 * tol, buckets: map[vertexBucket][]int{}}
+}
+
+func bucketCoordinate(x, width float64) (int64, bool) {
+	if math.IsNaN(x) || math.IsInf(x, 0) || math.IsNaN(width) || math.IsInf(width, 0) || width <= 0 {
+		return 0, false
+	}
+	q := math.Floor(x / width)
+	limit := math.Ldexp(1, 63)
+	if math.IsNaN(q) || math.IsInf(q, 0) || q <= -limit || q >= limit {
+		return 0, false
+	}
+	return int64(q), true
+}
+
+func (i *sharedVertexIndex) bucket(p r3.Vec) (vertexBucket, bool) {
+	x, okX := bucketCoordinate(p.X, i.width)
+	y, okY := bucketCoordinate(p.Y, i.width)
+	z, okZ := bucketCoordinate(p.Z, i.width)
+	return vertexBucket{x: x, y: y, z: z}, okX && okY && okZ
+}
+
+func (i *sharedVertexIndex) add(id int, p r3.Vec) {
+	key, ok := i.bucket(p)
+	if !ok {
+		i.unindexed = append(i.unindexed, id)
+		return
+	}
+	i.buckets[key] = append(i.buckets[key], id)
+}
+
+func (i *sharedVertexIndex) find(verts []r3.Vec, shared []int, p r3.Vec, tol float64) int {
+	key, ok := i.bucket(p)
+	if !ok {
+		return scanSharedVertices(verts, shared, p, tol)
+	}
+	best := -1
+	consider := func(id int) {
+		if best >= 0 && id >= best {
+			return
+		}
+		delta := verts[id].Sub(p)
+		if possibleSharedVertex(delta, tol) && delta.Len() <= tol {
+			best = id
+		}
+	}
+	for _, id := range i.unindexed {
+		consider(id)
+	}
+	for dx := int64(-1); dx <= 1; dx++ {
+		for dy := int64(-1); dy <= 1; dy++ {
+			for dz := int64(-1); dz <= 1; dz++ {
+				for _, id := range i.buckets[vertexBucket{key.x + dx, key.y + dy, key.z + dz}] {
+					consider(id)
+				}
+			}
+		}
+	}
+	return best
+}
+
+func scanSharedVertices(verts []r3.Vec, shared []int, p r3.Vec, tol float64) int {
+	for _, id := range shared {
+		delta := verts[id].Sub(p)
+		if possibleSharedVertex(delta, tol) && delta.Len() <= tol {
+			return id
+		}
+	}
+	return -1
+}
+
 func (c *cornerVertex) u(k int) r3.Vec { return c.n[k].Scale(-1) }
 
 func (c *cornerVertex) selected() int {
@@ -153,19 +236,15 @@ func rewriteCorners(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 	}
 
 	var shared []int
+	tol := 16*slack + w.tau*1e-3
+	sharedIndex := newSharedVertexIndex(tol)
 	shareVertex := func(p r3.Vec) int {
-		tol := 16*slack + w.tau*1e-3
-		for _, v := range shared {
-			delta := w.verts[v].Sub(p)
-			if !possibleSharedVertex(delta, tol) {
-				continue
-			}
-			if delta.Len() <= tol {
-				return v
-			}
+		if v := sharedIndex.find(w.verts, shared, p, tol); v >= 0 {
+			return v
 		}
 		v := w.vertex(p, w.tau+slack)
 		shared = append(shared, v)
+		sharedIndex.add(v, p)
 		return v
 	}
 
