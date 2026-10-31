@@ -11,6 +11,7 @@ import (
 	"image/color"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -556,6 +557,10 @@ func RenderSoftShadowed(ctx context.Context, verts []r3.Vec, tris [][3]int, tint
 	e2, _ := key.Cross(e1).Normalize()
 	shaded := make([]uint16, width*height)
 	shadow := make([]color.RGBA, width*height)
+	workers := 1
+	if width*height >= minShadowPixels {
+		workers = min(orderedwork.Workers(ctx, orderedwork.EachWorkers(width*height, minShadowPixels)), orderedwork.MaxEachWorkers)
+	}
 	for k := range samples {
 		toLight := key
 		if samples > 1 && spread > 0 {
@@ -575,61 +580,26 @@ func RenderSoftShadowed(ctx context.Context, verts []r3.Vec, tris [][3]int, tint
 		if err != nil {
 			return nil, err
 		}
-		for y := range height {
-			if y%64 == 0 {
-				if err := ctx.Err(); err != nil {
-					return nil, err
-				}
-			}
-			for x := range width {
-				at := y*width + x
-				if ids[at] < 0 {
-					continue
-				}
-				t := tris[ids[at]]
-				normal, ok := verts[t[1]].Sub(verts[t[0]]).Cross(verts[t[2]].Sub(verts[t[0]])).Normalize()
-				if !ok {
-					continue
-				}
-				// The pixel's world point: the image plane's place of the pixel and its depth.
-				px := proj.centreX + (float64(x)+0.5-float64(width)/2)/proj.scale
-				py := proj.centreY - (float64(y)+0.5-float64(height)/2)/proj.scale
-				world := proj.World(px, py, depths[at])
-				view := proj.Sight(world)
-				if normal.Dot(view) > 0 {
-					normal = normal.Scale(-1) // seen from behind: the side that faces the camera
-				}
-				cos := normal.Dot(toLight)
-				if cos <= 0 {
-					continue // turned from the light: already at the ambient level
-				}
-				lx, ly, ld := lproj.Project(world)
-				ix, iy := int(math.Floor(lx)), int(math.Floor(ly))
-				if ix < 0 || iy < 0 || ix >= shadowSize || iy >= shadowSize {
-					continue
-				}
-				slope := math.Sqrt(math.Max(0, 1-cos*cos)) / math.Max(cos, 0.1)
-				bias := lproj.PixelSize() * (1.5 + 2*slope)
-				if ld > shadowMap[iy*shadowSize+ix]+bias {
-					shaded[at]++
-					if shaded[at] == 1 {
-						front := Front
-						if tints != nil {
-							front = tints[ids[at]]
-						}
-						base := front
-						if cosView := view.Dot(verts[t[1]].Sub(verts[t[0]]).Cross(verts[t[2]].Sub(verts[t[0]]))); cosView > 0 {
-							base = back
-						}
-						shadow[at] = color.RGBA{
-							R: uint8(math.Round(float64(base.R) * ambient)),
-							G: uint8(math.Round(float64(base.G) * ambient)),
-							B: uint8(math.Round(float64(base.B) * ambient)),
-							A: 255,
-						}
+		rows := shadowRows{
+			verts: verts, tris: tris, tints: tints, back: back,
+			proj: proj, lproj: lproj, toLight: toLight,
+			width: width, height: height, shadowSize: shadowSize,
+			ids: ids, depths: depths, shadowMap: shadowMap, shaded: shaded, shadow: shadow,
+		}
+		if workers <= 1 {
+			for y := range height {
+				if y%64 == 0 {
+					if err := ctx.Err(); err != nil {
+						return nil, err
 					}
 				}
+				_ = rows.shadeRow(y)
 			}
+		} else if err := shadeParallelRows(ctx, rows, workers); err != nil {
+			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
 	}
 	for at, n := range shaded {
