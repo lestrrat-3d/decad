@@ -462,6 +462,8 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 	// complementary accept-only certificates and reports which path decided
 	// the pair.
 	failI, failJ := -1, -1
+	var separated bool
+	var signA, signB [3]int
 	testPair := func(i, j int) error {
 		if err := budget.Step(); err != nil {
 			return err
@@ -473,12 +475,12 @@ func loftCrossingAuditLimitedWithStreaming(budget *proofbound.WorkBudget, verts 
 				work.Skips++
 				return nil
 			}
-			separated, sa, sb := separate(data, i, j)
+			separated, signA, signB = separate(data, i, j)
 			if separated {
 				work.Skips++
 				return nil
 			}
-			knownA, knownB = &sa, &sb
+			knownA, knownB = &signA, &signB
 		}
 		outcome, err := classifyPair(data, tris, i, j, shortcuts, knownA, knownB)
 		switch outcome {
