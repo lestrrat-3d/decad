@@ -438,8 +438,13 @@ its unrolled cylinder. The tool section holds four vertices:
 | `K` | `(√(R² − r²cos²θ) + r, (r/2)cos θ, (r/2)sin θ)`: in the bore's extension outside the shaft |
 | `B⁺` | `B − λ(O − B)`: the band run into the bore |
 
-Quads join consecutive stations over the sides `O⁺A`, `AK`, `KB⁺` and the band
-`B⁺O⁺`; the ring is wound outward by its signed volume. Its band is group
+The band `B⁺O⁺` is split into `M = 8` rows across its length: each station
+also holds the points `B⁺ + t_i·(O⁺ − B⁺)` at `t_i = i/M`, computed in float
+from the held `O⁺` and `B⁺`. `M` is a power of two, so every `t_i` is a
+dyadic, and no `t_i` is 1/6 or 5/6, where the exact band meets the bore and
+the shaft (`λ = 1/4`). Quads join consecutive stations over the sides `O⁺A`,
+`AK`, `KB⁺` and each row of the band, each quad split along the same
+diagonal; the ring is wound outward by its signed volume. Its band is group
 `chamfer(k)`, every other side one shared group.
 
 **Proofs (each failure refuses `ErrUnsupported`).**
@@ -450,15 +455,42 @@ Quads join consecutive stations over the sides `O⁺A`, `AK`, `KB⁺` and the ba
    the whole turn as cross-cylinder-bore does; the local pose is exactly
    symmetric by construction.
 2. Chord bound `ε`: a point of a held band triangle pairs with the exact
-   extended band `F(θ, t) = B⁺(θ) + t(O⁺ − B⁺)(θ)` at the same parameters; on
-   either triangle of a quad the difference is `h·u(1 − u)` times the spread of
-   the two end curves' θ-derivatives over the cell (`|[B⁺′] − [O⁺′]|` and the
-   enclosures' widths), so at most `h/4` times it, `h = 2π/N`. Each held `O⁺`,
-   `B⁺` is compared with a tight enclosure at its own exact angle, mapped to the
-   world by the exact pose; the largest gap joins `ε`.
-3. Band area: midpoint cells over exactly `[θ_k, θ_k+1]` enclose `|u + t(v − u)|`
-   (`u = B⁺′ × D`, `v = O⁺′ × D`, `D = O⁺ − B⁺`) between `|u + v|/2` and
-   `(|u| + |v|)/2`; four quarters give the band's exact area interval.
+   extended band `F(θ, t) = B⁺(θ) + t·D(θ)`, `D = O⁺ − B⁺`, at the same
+   parameters. Take the quad between stations `θ_j`, `θ_j+1` (`h = 2π/N`) and
+   rows `t_i`, `t_i+1` (`k = 1/M`), write `P(θ) = F(θ, t_i)` and
+   `Q(θ) = F(θ, t_i+1)`, `u` the fraction of `h` and `s` of `k`, so that
+   `F = (1 − s)·P + s·Q` there. On the triangle `(P_j, Q_j, Q_j+1)`, where
+   `u ≤ s`, the held point with those exact corners is
+   `(1 − s)·P_j + (s − u)·Q_j + u·Q_j+1`, and
+   `F − x = (1 − s)·g_P + s·g_Q + (1 − s)·u·(ΔP − ΔQ)`, with `ΔP = P_j+1 − P_j`
+   and `g_P(u) = P(θ_j + u·h) − P_j − u·ΔP` the chord's departure.
+   Per coordinate `g_P = h·u(1 − u)·(m₁ − m₂)`, `m₁` and `m₂` the means of
+   `P′` over the two parts of the cell, so `|g_P| ≤ h·u(1 − u)·W`, `W` the
+   larger width of the enclosures of `O⁺′` and `B⁺′` over the cell (`P′` lies
+   in `(1 − t_i)·[B⁺′] + t_i·[O⁺′]`, no wider). `ΔP − ΔQ = −k·h` times the
+   mean of `D′ = (1 + 2λ)·(O′ − B′)`, at most `k·h·S` with `S` the largest
+   `|D′|` over the cell. Since `(1 − s)·u ≤ (1 − u)·u`, each coordinate of
+   `F − x` is at most `h·u(1 − u)·(W + S/M) ≤ (h/4)·(W + S/M)`. The other
+   triangle, where `s ≤ u`, gives `s·(1 − u)·(ΔP − ΔQ)` in place of the last
+   term, with the same bound, and so does either diagonal, so the bound holds
+   on the mirror image of a quad. The enclosures come from cells over exactly
+   `[θ_k, θ_k+1]` for the quarter turn's quads; every other quad is the mirror
+   image of one of them, which keeps each coordinate's magnitude. `W` shrinks
+   with `h` and `S/M` with the rows: the band's twist `S` is about 3 mm per
+   radian at R = 10, r = 3, d = 1.5, and the rows take its share of `ε` from
+   about 0.0080 to 0.0011 mm. Each held band point, on every row, is compared
+   with a tight enclosure of `(1 − t_i)·B⁺ + t_i·O⁺` at its own exact angle,
+   mapped to the world by the exact pose; the largest gap joins `ε`.
+3. Band area: `|F_θ × F_t| = |w(t)|`, `w = (1 − t)·u + t·v` with
+   `u = B⁺′ × D` and `v = O⁺′ × D`, is convex in `t`, so over a row
+   `[a, b]` its integral lies between `(b − a)·|w((a + b)/2)|` (Jensen) and
+   `(b − a)·(|w(a)| + |w(b)|)/2` (the chord above a convex function). Each
+   quad of the quarter turn splits into 8 cells along θ, and each cell's
+   enclosures `U` and `V` of `u` and `v` give `(1 − t)·U + t·V ∋ w(t)` at
+   every θ of the cell; four quarters give each row's exact area interval. An
+   interval enclosure over a cell is wider than the range it holds by a part
+   proportional to the cell's width, so the split narrows the band's interval
+   eightfold, from 4.61 to 0.58 mm² per mouth at R = 10, r = 3, d = 1.5.
 4. Outside: on the held vertices in exact rationals, every `O⁺A` and `AK` quad
    lies in one half-space `n·p ≥ (R + μ)|n|`, `n` horizontal, and every `K`
    and `B⁺` lies inside the bore shrunk to `r − μ'`, so the `KB⁺` quads do
@@ -480,9 +512,11 @@ the shaft (`B` is strictly inside it) and past `B` inside the bore (`O` is
 outside the bore and `B⁺` inside it). So `S − T* = S − W*`, the chamfered solid.
 The held tool lies within `ε` of `T*`. The tool states vertex bound `ε` on `O⁺`
 and `B⁺` and 0 on `A` and `K`, `VolSymDiff = ε·(A_held + A_exact)` over the
-band (Claim K's argument), and `AreaSlack` the gap between the band's held area
-and its exact interval plus a seal `2ε` times the length of both band ends. The
-Boolean composes the result's bounds from these and the body's own.
+band (Claim K's argument), and `AreaSlack` the sum over the rows of the gap
+between each row's held area and its exact interval, plus a seal `2ε` times the
+length of both band ends. The sum is at least the whole band's gap and bounds
+the gap of every union of whole rows. The Boolean composes the result's bounds
+from these and the body's own.
 
 **Chain allowance.** The Cut meets only the two walls and the bands, whose
 facets carry the walls' held bounds and `ε`. The chain-depth gate
@@ -493,9 +527,18 @@ publishes the walls' bounds on its cut vertices.
 
 **Result.** The walls keep their `Cylinder` tags; each band is a `Faceted` face
 with role `chamfer(k)`. On the R = 10, r = 3 shaft the two-mouth result holds
-about 20,000 facets and `Tessellate(…, VerifyAll)` verifies its boundary and
-volume. `Verify` reads its area beyond the relative tolerance: the band rims hold
-about `2N` segments, and `proofbound.ChainLengthBound` charges `2δ` per segment.
+about 40,000 facets and `Tessellate(…, VerifyAll)` verifies its boundary and
+volume. Each face's area term is its largest facet bound times its perimeter,
+and the perimeter carries `proofbound.ChainLengthBound`'s `2δ` for each of the
+rims' segments, about 2,400 per rim. The largest facet bound is a rim vertex's,
+`(ε + β_wall)/sin θ` (faceted-vertex-bounds §3.2): 0.0065 mm from `ε` = 0.0011
+and the wall's 0.0037 at a crossing angle near 47°. At d = 1.5 the body's area
+bound is 5.34 mm² against `Verify`'s relative tolerance of 5.93: 3.94 from the
+face terms (shaft 1.61, bore 0.67, each band 0.72, each end disc 0.11), 0.59
+carried from the Boolean, and 0.81 from the two tools' row gaps and seals.
+`Verify` reads it Sound, and the d = 0.5 result too (3.95 against 5.95). At
+r = 7, d = 0.5 the bound is 7.19 against 6.04, and `Verify` reads the area
+Suspect; the face terms there are 4.79.
 
 **Reach.** Built and checked: r/R = 0.3 (d = 0.5, 1.5) and 0.7 (d = 0.5) on a
 Revolve shaft, and r/R = 0.3 (d = 1.5) on an Extrude shaft under each
@@ -1427,7 +1470,7 @@ published bound, never with a pinned literal.
 | Result is an ordinary retained body | a second blend on another edge, a `Cut` through the blended region and `Transform` all build; `NormalAt` on the blend face has a bound below 1 | store the blend with `Retained = false`: the chain loses the tag |
 | New vertex bounds | every new vertex lies within its stated bound of its exact point | skip the rounding charge: the bound is zero and the check fails |
 | Verify | `Verify` of a blended plate passes with no `Suspect` in watertightness | |
-| R7 cross-hole chamfer: Revolve shaft R = 10, pin r = 3 through it, both mouths, d = 1.5 and 0.5; pin r = 7, d = 0.5 (`apitest/retained_saddle_chamfer_test.go`) | the volume falls by twice the wedge's divergence-theorem integral (24.474 mm³ per mouth at d = 1.5, 2.460 at d = 0.5) within both bodies' bounds, and at d = 1.5 that change exceeds the bounds; the walls stay `Cylinder`, the bands read `Faceted`; on the `VerifyAll` mesh the wedge's section centroid reads outside, farther than the mesh bound, and a point 0.3 mm past the band reads inside, at 8 stations of each mouth; an Extrude shaft at d = 1.5 under the three axis assignments and a translation does the same (`TestRetainedSaddleChamferExtrudeShaft`; under `-race` the translated case only, on one mouth) | cut with `d/2`: the d = 1.5 volume and the d = 0.5 centroids fail; drop the outer foot's rotation from the held stations: the sample comparison widens `ε` and proof 4 refuses; drop the mouth-side flip or permute the pose's axes: the race-mode Extrude case refuses |
+| R7 cross-hole chamfer: Revolve shaft R = 10, pin r = 3 through it, both mouths, d = 1.5 and 0.5; pin r = 7, d = 0.5 (`apitest/retained_saddle_chamfer_test.go`) | the volume falls by twice the wedge's divergence-theorem integral (24.474 mm³ per mouth at d = 1.5, 2.460 at d = 0.5) within both bodies' bounds, and at d = 1.5 that change exceeds the bounds; the area falls by twice the shaft's and the bore's strips less the band, from the same parametrisation, within both bodies' bounds, and at r = 3 that change exceeds the bounds and `Verify` reads the result Sound with the area within its tolerance; the walls stay `Cylinder`, the bands read `Faceted`; on the `VerifyAll` mesh the wedge's section centroid reads outside, farther than the mesh bound, and a point 0.3 mm past the band reads inside, at 8 stations of each mouth; an Extrude shaft at d = 1.5 under the three axis assignments and a translation does the same (`TestRetainedSaddleChamferExtrudeShaft`; under `-race` the translated case only, on one mouth). A unit test (`internal/crossbore/saddle_tool_test.go`, R = 10, r = 3, d = 1.5) checks that the chord bound covers sampled points of the held band triangles against the exact band at the same parameters, that each row's area interval holds a midpoint-rule area of the exact row and the band's interval is narrower than 1 % of its area, and that a moved inner row raises the sample error | cut with `d/2`: the d = 1.5 volume and the d = 0.5 centroids fail; drop the outer foot's rotation from the held stations: the sample comparison widens `ε` and proof 4 refuses; drop the mouth-side flip or permute the pose's axes: the race-mode Extrude case refuses; drop the twist term from the chord spread: the sampled triangles lie past the bound; charge the whole twist (`S` in place of `S/M`): `Verify` reads both r = 3 results Suspect; split no quad into area cells: `Verify` reads the d = 1.5 result Suspect and the band's interval is too wide; give every row the whole band's density: row 0's interval misses its area; compare only `O⁺` and `B⁺`: the moved inner row goes unread |
 | R7 fillet: Revolve shaft R = 10, pin r = 3 through it, both mouths, ρ = 1.5 and 0.5; pin r = 7, ρ = 0.5; a `Hole` r = 3 through the shaft's wall, ρ = 1.5 (`apitest/retained_saddle_fillet_test.go`) | the volume falls by twice the tube-coordinate integral of §4.10, computed by Gauss–Legendre over exact ray exits (18.593228 mm³ per mouth at ρ = 1.5, 1.635978 at ρ = 0.5), within both bodies' bounds, and at ρ = 1.5 that change exceeds the bounds; the walls stay `Cylinder`, the fillets read `Faceted`; `VerifyAll` verifies the result; on its mesh a point midway between the arc and the edge along the arc's bisector reads outside, farther than the mesh bound, and a point 0.3·ρ inside the ball reads inside, at 8 stations of each mouth; an Extrude shaft at ρ = 1.5 under the three axis assignments and a translation does the same (`TestRetainedSaddleFilletExtrudeShaft`; under `-race` the translated case only, on one mouth). Unit tests (`internal/saddlecanal/proof_internal_test.go`, both sides of the larger cylinder; under `-race` one canal of each): the cell proofs' area intervals hold a midpoint-rule area of the fillet and Green's-theorem areas of both walls, the chord bound covers sampled held triangles, the rows split the widest arc, a moved held vertex raises the sample error, and ρ = 3.4 folds; `internal/retainedblend/saddle_fillet_internal_test.go` chains a cut ring through a merged sliver, reads a pose's hand, checks that the chamfer's recognition admits exactly the edges its rule before σ admitted, and that the fillet's admits its three patterns, over every pair of radii, `Reversed` flags and `Convex` flag; a second fillet of a rebuilt r = 3 shaft at ρ = 0.5 tessellates to the same vertices and triangles | fillet with ρ/2: the ρ = 1.5 volume and the ρ = 0.5 points fail; flip σ1 in the route: every build refuses, "the bore's cut leaves fewer than three vertices"; drop the strip's winding swap for a left-handed pose: the Revolve result fails its audit; drop the mouth-side flip: the race-mode Extrude case puts the fillet on the far mouth and its points fail; drop the Jacobian's sign or σ1 in `G`: the outside unit canals refuse, "folds" and "is not embedded" |
 | R7 fillet outside both cylinders (`TestRetainedSaddleFilletOutside`): a block 80 × 60 × 20 with a radius-5 `Hole` down through it crossed by a radius-3 blind `Hole`, both mouths, ρ = 0.5 (convex, removes); a radius-5 `Boss` 8 high on a radius-15 rod, ρ = 1 (concave, adds); a radius-3 pin joined through the R = 10 Revolve shaft, both roots, ρ = 1.5 (concave, a left-handed pose) | the volume falls (block) or grows (rod, pin) by the tube-coordinate integral per mouth (0.540755, 4.701377 and 6.619077 mm³) within both bodies' bounds; `VerifyAll` verifies the result; on its mesh the point midway between the arc and the edge reads outside for the block and inside for the rod and pin, farther than the mesh bound from every facet, and the point 0.3·ρ inside the ball keeps its side, at 8 stations of each mouth; under `-race` the rod only | expect ρ/2 or σ1 = −1 in the test: all three fail, at the ball's points or the volume; flip σ1 in the route: every build refuses, "the bore's cut leaves fewer than three vertices" |
 | R7 fillet refusals | `ρ = 3.5` (`2ρ = R − r`) refuses `ErrDegenerate` "no ball of that radius touches both walls of the saddle"; ρ = 3.4 refuses "folds: the pipe is not regular there"; a pin moved 0.5 off the shaft's axis, the pin's part inside the shaft (`Intersect`, σ = (−1, −1)) and a concave pin root inside a tube's bore (`Chamfer` and `Fillet`) refuse with the canal-surface reason; a flat milled beside a mouth refuses "another face of the body comes within the saddle fillet's reach", as does a boss 1 high on the radius-15 rod at ρ = 1, whose top face lies inside the bore's cut (`TestRetainedSaddleFilletRefusals`) | drop the route's existence test: ρ = 3.5 refuses at `saddlecanal.Prove`'s own, "the saddle canal's offset cylinders do not meet in a loop" (a unit test pins that site's text); drop the Convex flag from `saddleKey.built`: the tube root's `Chamfer` builds and removes material where a concave blend adds it, and both recognition unit tests fail; drop the Jacobian test: ρ = 3.4 refuses at the progress test instead; drop the clearance check: the flat refuses later, "a corner of the saddle fillet's window lies on no facet of the shaft wall", and the short boss "the bore's cut leaves fewer than three vertices"; admit every σ: the tube root's `Fillet` builds and the clipped pin refuses "a corner of the saddle fillet's window lies on no facet of the shaft wall"; drop the exact axis meeting: the moved pin refuses with "a held seam vertex is off the two cylinders" |
@@ -1500,7 +1543,8 @@ published bound, never with a pinned literal.
 | Chord tolerance `τ = 2⁻¹⁰·r` for the blend grid | fixed ratio of the radius | follow the body's `MeshBound`: finer blend, many more facets |
 | Several selected edges | one at a time on the evolving mesh; each later rim is found again by its circle | require disjoint regions `K` and build them together |
 | `Shell` of a retained body | stays SX9 | a separate design |
-| R7 tool stations | `N = 1024`: two mouths cut in about 2 s, about 20,000 facets | `N = 4096`: `ε` four times smaller, about 70,000 facets and several times the time |
+| R7 tool stations | `N = 1024`: two mouths cut in about 2 s, about 40,000 facets | `N = 4096`: `ε` four times smaller, but a rim vertex's bound only falls from 0.0065 to about 0.0054 mm, the wall's share, while the rims hold four times the segments, so their length bounds grow about threefold; several times the facets and time |
+| R7 band rows and area cells | `M = 8` rows and 8 area cells per quad: `ε` 0.0011 mm and an area bound of 5.34 mm² (Sound) at R = 10, r = 3, d = 1.5, the cut about 0.8 s slower than with neither | `M = 16`: `ε` about 0.0006, about 70,000 facets; 16 area cells: 5.04 mm², about 0.3 s more; `N = 512` with 8 rows and 16 area cells: `ε` 0.0026 and 6.22 mm², Suspect |
 | R7 cut's chain allowance | raised to the walls' held bounds and `ε` (§4.9) | keep the document's: every R7 cut on a Boolean result refuses at the chain-depth gate |
 | R7 ratio | `2r² < R²` | admit what the cell proofs pass (r/R = 0.75 builds with the gate dropped): wider reach, no checked fixture past 0.7 |
 | R7 fillet stations and rows | `N = 256`, rows for `τ = 2⁻¹⁰·ρ`: two mouths in about 0.45 s and 30,000 facets at ρ = 0.5, ε from 0.0020 mm (ρ = 0.5) to 0.0059 mm (ρ = 1.5) | `N = 1024` as §4.9: ε about a quarter, four times the facets and time |

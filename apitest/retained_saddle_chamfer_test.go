@@ -106,46 +106,72 @@ func saddleSectionAt(R, r, d, theta float64) saddleSection {
 	}
 }
 
-// saddleWedgeVolume is the volume one mouth's chamfer removes, by the
-// divergence theorem over the wedge's closed boundary: the ruled band from B to
-// O, the shaft wall from O back to P (its angle and height linear between the
-// two) and the bore wall from P to B (its angle and axial place linear). Each
-// piece is integrated as the flux of p/3 on an n × m midpoint grid in (θ, s).
-func saddleWedgeVolume(R, r, d float64) float64 {
+// saddleWedge holds the closed boundary of one mouth's chamfer wedge, each
+// piece a map of (θ, s) ∈ [0, 2π] × [0, 1]: the ruled band from B to O, the
+// shaft wall from P to O (its angle and height linear between the two) and
+// the bore wall from P to B (its angle and axial place linear).
+type saddleWedge struct{ band, outer, bore func(theta, u float64) r3.Vec }
+
+func saddleWedgeOf(R, r, d float64) saddleWedge {
+	return saddleWedge{
+		band: func(theta, u float64) r3.Vec {
+			w := saddleSectionAt(R, r, d, theta)
+			return w.b.Add(w.o.Sub(w.b).Scale(u))
+		},
+		outer: func(theta, u float64) r3.Vec {
+			s, c := math.Sincos(theta)
+			x := math.Sqrt(R*R - r*r*c*c)
+			q := math.Sqrt(R*R - r*r*c*c*c*c)
+			phi := math.Atan2(r*c, x) + u*d*c*x/(R*q)
+			return r3.NewVec(R*math.Cos(phi), R*math.Sin(phi), r*s+u*d*R*s/q)
+		},
+		bore: func(theta, u float64) r3.Vec {
+			s, c := math.Sincos(theta)
+			x := math.Sqrt(R*R - r*r*c*c)
+			q := math.Sqrt(R*R - r*r*c*c*c*c)
+			psi := theta + u*d*c*s/q
+			return r3.NewVec(x-u*x*d/q, r*math.Cos(psi), r*math.Sin(psi))
+		},
+	}
+}
+
+// saddleGrid sums f over an n × m midpoint grid in (θ, s) of piece p, with
+// the cell's two edge vectors.
+func saddleGrid(p func(theta, u float64) r3.Vec, f func(mid, dt, du r3.Vec) float64) float64 {
 	const n, m = 4000, 40
-	band := func(theta, u float64) r3.Vec {
-		w := saddleSectionAt(R, r, d, theta)
-		return w.b.Add(w.o.Sub(w.b).Scale(u))
-	}
-	outer := func(theta, u float64) r3.Vec {
-		s, c := math.Sincos(theta)
-		x := math.Sqrt(R*R - r*r*c*c)
-		q := math.Sqrt(R*R - r*r*c*c*c*c)
-		phi := math.Atan2(r*c, x) + u*d*c*x/(R*q)
-		return r3.NewVec(R*math.Cos(phi), R*math.Sin(phi), r*s+u*d*R*s/q)
-	}
-	bore := func(theta, u float64) r3.Vec {
-		s, c := math.Sincos(theta)
-		x := math.Sqrt(R*R - r*r*c*c)
-		q := math.Sqrt(R*R - r*r*c*c*c*c)
-		psi := theta + u*d*c*s/q
-		return r3.NewVec(x-u*x*d/q, r*math.Cos(psi), r*math.Sin(psi))
-	}
-	flux := func(f func(theta, u float64) r3.Vec) float64 {
-		total := 0.0
-		for i := range n {
-			t0, t1 := 2*math.Pi*float64(i)/n, 2*math.Pi*float64(i+1)/n
-			for j := range m {
-				u0, u1 := float64(j)/m, float64(j+1)/m
-				p00, p10, p01, p11 := f(t0, u0), f(t1, u0), f(t0, u1), f(t1, u1)
-				dt := p10.Sub(p00).Add(p11.Sub(p01)).Scale(0.5)
-				du := p01.Sub(p00).Add(p11.Sub(p10)).Scale(0.5)
-				total += f((t0+t1)/2, (u0+u1)/2).Dot(dt.Cross(du))
-			}
+	total := 0.0
+	for i := range n {
+		t0, t1 := 2*math.Pi*float64(i)/n, 2*math.Pi*float64(i+1)/n
+		for j := range m {
+			u0, u1 := float64(j)/m, float64(j+1)/m
+			p00, p10, p01, p11 := p(t0, u0), p(t1, u0), p(t0, u1), p(t1, u1)
+			dt := p10.Sub(p00).Add(p11.Sub(p01)).Scale(0.5)
+			du := p01.Sub(p00).Add(p11.Sub(p10)).Scale(0.5)
+			total += f(p((t0+t1)/2, (u0+u1)/2), dt, du)
 		}
-		return total
 	}
-	return math.Abs(flux(band)-flux(outer)+flux(bore)) / 3
+	return total
+}
+
+// saddleWedgeVolume is the volume one mouth's chamfer removes, by the
+// divergence theorem over the wedge's closed boundary: the flux of p/3
+// through each piece.
+func saddleWedgeVolume(R, r, d float64) float64 {
+	w := saddleWedgeOf(R, r, d)
+	flux := func(p func(theta, u float64) r3.Vec) float64 {
+		return saddleGrid(p, func(mid, dt, du r3.Vec) float64 { return mid.Dot(dt.Cross(du)) })
+	}
+	return math.Abs(flux(w.band)-flux(w.outer)+flux(w.bore)) / 3
+}
+
+// saddleAreaChange is the area one mouth's chamfer removes: the shaft wall
+// from the seam to O and the bore wall from the seam to B, less the band.
+func saddleAreaChange(R, r, d float64) float64 {
+	w := saddleWedgeOf(R, r, d)
+	area := func(p func(theta, u float64) r3.Vec) float64 {
+		return saddleGrid(p, func(_, dt, du r3.Vec) float64 { return dt.Cross(du).Len() })
+	}
+	return area(w.outer) + area(w.bore) - area(w.band)
 }
 
 // saddleWorld maps a point of the fixed pose to the world for the mouth on
@@ -165,10 +191,14 @@ func TestRetainedSaddleChamfer(t *testing.T) {
 		// removal of 4.9 and 10.5 mm³: the volume assertion there proves
 		// nothing, and the point checks below carry the test.
 		meaningful bool
+		// sound is set where Verify reads the result Sound, its area bound
+		// within the relative tolerance. At r = 7 the band rims' length
+		// bounds keep the area bound past it.
+		sound bool
 	}{
-		{"r3 d1.5", 3, 1.5, true},
-		{"r3 d0.5", 3, 0.5, false},
-		{"r7 d0.5", 7, 0.5, false},
+		{"r3 d1.5", 3, 1.5, true, true},
+		{"r3 d0.5", 3, 0.5, false, true},
+		{"r7 d0.5", 7, 0.5, false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -200,6 +230,23 @@ func TestRetainedSaddleChamfer(t *testing.T) {
 			if tc.meaningful {
 				require.Greater(t, want, before.Bound.Base()+after.Bound.Base(),
 					"the removed volume exceeds both bounds")
+			}
+			areaBefore, err := body.Area()
+			require.NoError(t, err)
+			areaAfter, err := out.Area()
+			require.NoError(t, err)
+			wantArea := 2 * saddleAreaChange(saddleR, tc.r, tc.d)
+			areaBounds := areaBefore.Bound.Base() + areaAfter.Bound.Base()
+			require.InDelta(t, wantArea, areaBefore.Value.Base()-areaAfter.Value.Base(), areaBounds,
+				"the chamfer trades both walls' strips for the bands")
+			if tc.sound {
+				require.Greater(t, wantArea, areaBounds, "the area change exceeds both bounds")
+				report, err := out.Document().Verify(t.Context())
+				require.NoError(t, err)
+				reading, err := report.ForBody(out)
+				require.NoError(t, err)
+				require.Equal(t, decad.ToleranceSatisfied, reading.Area.Tolerance.State)
+				require.Equal(t, decad.Sound, reading.Status)
 			}
 
 			kinds := map[string]int{}
