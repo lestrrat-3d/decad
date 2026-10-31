@@ -1690,10 +1690,10 @@ func CellTwistAreaProjectedAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 //
 //	|Area_ruled-Q| <= (|A|^2+|B|^2+3|A-B|^2)/(12*|2U|).
 //
-// Every vector and squared norm is exact over big.Rat. The denominator is
-// rounded down before division and the quotient is rounded up. A zero or
-// unrepresentable denominator withdraws this arm with +Inf; the linear arm
-// then remains available.
+// Every vector and squared norm is exact as a dyadic. The center norm is
+// rounded down, multiplication by 12 is exact, and DyQuoFloatUp rounds the
+// exact quotient up. A zero or unrepresentable center norm withdraws this arm
+// with +Inf; the linear arm then remains available.
 func CellTwistAreaQuadraticAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	da := HeldDelta(vHi, vLo)
 	g := HeldDelta(wLo, vLo)
@@ -1714,15 +1714,12 @@ func CellTwistAreaQuadraticAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 		centerTwice[i] = proofarith.DyAdd(proofarith.DyAdd(proofarith.DyShift(n0[i], 1), a[i]), b[i])
 	}
 	centerLenLower := proofarith.DySqrtDown(proofarith.DvDot(centerTwice, centerTwice))
-	centerLenRat, ok := RatOf(centerLenLower)
+	centerLen, ok := proofarith.DyOf(centerLenLower)
 	if !ok || centerLenLower <= 0 {
 		return math.Inf(1)
 	}
-	// The quotient genuinely leaves the dyadic set — a division by twelve times
-	// a bracketed norm is no power of two — so this is where the exact vector
-	// arithmetic hands over to a general fraction (dyadic.go's own boundary).
-	denominator := proofarith.MulRat(new(big.Rat), big.NewRat(12, 1), centerLenRat)
-	return RatFloatUp(proofarith.QuoRat(new(big.Rat), numerator.Rat(), denominator))
+	denominator := proofarith.DyMul(proofarith.DyInt(12), centerLen)
+	return proofarith.DyQuoFloatUp(numerator, denominator)
 }
 
 // UniformSpeedTangentEnergyUpper is the per-side TANGENT-DEVIATION ENERGY
