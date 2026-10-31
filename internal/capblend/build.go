@@ -143,24 +143,22 @@ func Build(ctx context.Context, env topo.Env, cbp Payload) (*topo.Body, error) {
 		// guards in proofbound.SectionDisplacementArea and proofbound.BandPatchAreaAllow, not a
 		// separate onStart/onEnd branch.
 		var startBand, endBand BandResult
-		if onStart {
-			band, err := BuildBand(ctx, env, body, cbp, li, loop, cbp.Z0, +1, bottomCo, nil, work)
+		buildBand := func(z, direction float64, capCo []topo.CoEdge, key BandKey) (BandResult, error) {
+			band, err := BuildBand(ctx, env, body, cbp, li, loop, z, direction, capCo, nil, work)
 			if err != nil {
-				return nil, err
+				return BandResult{}, err
 			}
 			faces = append(faces, band.Patches...)
 			collectPatchGeoms(band)
-			bandDeltas[BandKey{Loop: li, Start: true}] = band.Delta
-			startCo = band.CapCo
-			startBand = band
-			mass, err := readBandMassWithSideArea(ctx, li, loop, cbp, band.Geom, cbp.Z0, +1,
+			bandDeltas[key] = band.Delta
+			mass, err := readBandMassWithSideArea(ctx, li, loop, cbp, band.Geom, z, direction,
 				band.Delta, band.Closure, &loopArea)
 			if err != nil {
-				return nil, err
+				return BandResult{}, err
 			}
 			v, err := capband.BandVolume(mass, work)
 			if err != nil {
-				return nil, err
+				return BandResult{}, err
 			}
 			bandVolume = proofbound.BoundedAdd(bandVolume, proofbound.MeasuredScalar(sign*v.Value, v.Bound))
 			for _, g := range band.Geom {
@@ -168,50 +166,30 @@ func Build(ctx context.Context, env topo.Env, cbp Payload) (*topo.Body, error) {
 				patchArea = proofbound.BoundedAdd(patchArea, proofbound.MeasuredScalar(pa, pb))
 			}
 			if err := ctx.Err(); err != nil {
-				return nil, err
+				return BandResult{}, err
 			}
 			bmu, bmv, bmz, err := capband.BandMoment(mass, work)
 			if err != nil {
-				return nil, err
+				return BandResult{}, err
 			}
 			muTotal = proofbound.BoundedAdd(muTotal, proofbound.MeasuredScalar(sign*bmu.Value, bmu.Bound))
 			mvTotal = proofbound.BoundedAdd(mvTotal, proofbound.MeasuredScalar(sign*bmv.Value, bmv.Bound))
 			mzTotal = proofbound.BoundedAdd(mzTotal, proofbound.MeasuredScalar(sign*bmz.Value, bmz.Bound))
+			return band, nil
+		}
+		if onStart {
+			startBand, err = buildBand(cbp.Z0, +1, bottomCo, BandKey{Loop: li, Start: true})
+			if err != nil {
+				return nil, err
+			}
+			startCo = startBand.CapCo
 		}
 		if onEnd {
-			band, err := BuildBand(ctx, env, body, cbp, li, loop, cbp.Z1, -1, topCo, nil, work)
+			endBand, err = buildBand(cbp.Z1, -1, topCo, BandKey{Loop: li, Start: false})
 			if err != nil {
 				return nil, err
 			}
-			faces = append(faces, band.Patches...)
-			collectPatchGeoms(band)
-			bandDeltas[BandKey{Loop: li, Start: false}] = band.Delta
-			endCo = band.CapCo
-			endBand = band
-			mass, err := readBandMassWithSideArea(ctx, li, loop, cbp, band.Geom, cbp.Z1, -1,
-				band.Delta, band.Closure, &loopArea)
-			if err != nil {
-				return nil, err
-			}
-			v, err := capband.BandVolume(mass, work)
-			if err != nil {
-				return nil, err
-			}
-			bandVolume = proofbound.BoundedAdd(bandVolume, proofbound.MeasuredScalar(sign*v.Value, v.Bound))
-			for _, g := range band.Geom {
-				pa, pb := capband.AreaOf(g)
-				patchArea = proofbound.BoundedAdd(patchArea, proofbound.MeasuredScalar(pa, pb))
-			}
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			bmu, bmv, bmz, err := capband.BandMoment(mass, work)
-			if err != nil {
-				return nil, err
-			}
-			muTotal = proofbound.BoundedAdd(muTotal, proofbound.MeasuredScalar(sign*bmu.Value, bmu.Bound))
-			mvTotal = proofbound.BoundedAdd(mvTotal, proofbound.MeasuredScalar(sign*bmv.Value, bmv.Bound))
-			mzTotal = proofbound.BoundedAdd(mzTotal, proofbound.MeasuredScalar(sign*bmz.Value, bmz.Bound))
+			endCo = endBand.CapCo
 		}
 
 		startLoopObjs[li] = topobuild.NewLoop(env.Alloc, topo.Loop{Outer: li == 0, CoEdges: startCo})
