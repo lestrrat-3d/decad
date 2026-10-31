@@ -11,16 +11,19 @@ import (
 
 // This file holds the bounds of a blend strip's facets (agent-docs/
 // retained-edge-blend-design.md §6.3, "Strip triangles"). A strip triangle
-// whose vertices lie on the exact blend's rows stays within the profile's
-// sagitta over its row gap plus rhoHi·(1 − cos(Δφ/2)) of the surface, with Δφ
-// the spread of its vertices' azimuths. A triangle of the band beside the
-// wall's cut adds how far its cut vertices lie from the exact setback curve.
+// whose vertices lie on two neighbouring rows of the exact blend stays within
+// the profile's sagitta over their gap plus ρ_g·(1 − cos(Δφ/2)) of the
+// surface, with ρ_g the larger radius of the two rows and Δφ the spread of
+// its vertices' azimuths. A triangle of the band beside the wall's cut adds
+// how far its cut vertices lie from the exact setback curve.
 
-// azimuthShare is the part of tau a revolve strip's columns may spend on the
-// azimuth term: half of it on a fillet, whose rows spend the other half on
-// the profile's sagitta (profileShare), and all of it on a chamfer, whose
-// profile is straight. The two terms add, so a strip triangle between exact
-// rows stays within tau, which every row vertex states.
+// azimuthShare is the part of tau the columns of a closed rim or of a chain
+// arc's meridian columns may spend on the azimuth term: half of it on a
+// fillet, whose rows spend the other half on the profile's sagitta
+// (profileShare), and all of it on a chamfer, whose profile is straight. The
+// two terms add, so a strip triangle between exact rows stays within tau,
+// which every row vertex states. Rows that end on end planes take rowSteps
+// instead.
 func azimuthShare(spec blendSpec, tau float64) float64 {
 	if spec.fillet {
 		return tau / 2
@@ -35,14 +38,17 @@ const maxStripColumns = 4096
 
 // columnCount is the number of columns that step at most step apart over the
 // angle span on a circle of radius rho, at least least. It refuses (SR5) a
-// count past maxStripColumns, naming the blend's size against the radius:
-// the step shrinks with the square root of size/rho, so a blend tiny against
-// its rim needs more columns than a strip takes.
+// step that is not positive, as one is when a row's end shift leaves its gaps
+// no azimuth allowance (rowSteps), or not a number, and a count past
+// maxStripColumns, naming the blend's size against the radius: the step
+// shrinks with the square root of size/rho, so a blend tiny against its rim
+// needs more columns than a strip takes.
 func columnCount(span, step, rho, size float64, least int) (int, error) {
-	n := float64(least)
-	if step > 0 {
-		n = math.Max(n, math.Ceil(span/step))
+	if !(step > 0) {
+		return 0, fmt.Errorf("%w: the blend's strip has no column step left on a circle of radius %g mm "+
+			"for a blend of %g mm (step %g)", decaderr.ErrUnsupported, rho, size, step)
 	}
+	n := math.Max(float64(least), math.Ceil(span/step))
 	if !(n <= maxStripColumns) {
 		return 0, fmt.Errorf("%w: the blend's strip needs more than %d columns on a circle of radius %g mm "+
 			"for a blend of %g mm (size/radius %.3g)", decaderr.ErrUnsupported, maxStripColumns, rho, size, size/rho)
@@ -50,9 +56,81 @@ func columnCount(span, step, rho, size float64, least int) (int, error) {
 	return int(n), nil
 }
 
-// profileShare is the sagitta a fillet's rows keep over each gap of the
-// profile's arc: half of tau, the azimuth term taking the rest (azimuthShare).
+// profileShare is the sagitta a closed rim's or a chain's fillet rows start
+// from over each gap of the profile's arc: half of tau, the azimuth term
+// taking the rest (azimuthShare).
 func profileShare(tau float64) float64 { return tau / 2 }
+
+// arcProfileShare is the sagitta an arc route's fillet rows start from: a
+// quarter of tau. Its rows end on end planes, where each gap's columns take
+// what its own sagitta leaves (rowSteps), so a finer profile buys coarser
+// columns.
+func arcProfileShare(tau float64) float64 { return tau / 4 }
+
+// stepCut is the part of its budget azimuthStep gives up, so that the
+// rounding of the step, of the profile's sagitta and of the rows' azimuths
+// stays inside the budget (§6.3, Strip triangles).
+const stepCut = 0x1p-16
+
+// azimuthStep is the largest azimuth spread Δφ, at most π, whose term
+// rho·(1 − cos(Δφ/2)) = 2·rho·sin²(Δφ/4) stays within budget less stepCut of
+// it: 4·asin(√(b/(2·rho))). The half-angle form keeps the step's relative
+// rounding within a few units in the last place however small b/rho is. A
+// budget that is not positive gives 0.
+func azimuthStep(budget, rho float64) float64 {
+	b := budget * (1 - stepCut)
+	if !(b > 0) {
+		return 0
+	}
+	x := b / (2 * rho)
+	if !(x < 1) {
+		return math.Pi
+	}
+	return math.Min(math.Pi, 4*math.Asin(math.Sqrt(x)))
+}
+
+// rowSteps is, for each vertex row of a strip whose rows end on end planes,
+// the largest column step its triangles may take (§6.3, Strip triangles). ss
+// are the rows' profile parameters and rho their radii, the wall's cut row
+// last; shift[g] is the largest move of the rows' end azimuths between vertex
+// rows g and g + 1 on either end plane. A triangle between vertex rows g and
+// g + 1 spans at most the larger column step of the two rows plus shift[g],
+// so each such gap leaves its rows the step azimuthStep(tau − σ_g, ρ_g) −
+// shift[g], σ_g the profile's sagitta over the gap and ρ_g the larger of the
+// two radii. Each row's step also keeps its own polyline within
+// tau/(1 + 1/cos β_g) of the row's circle, β_g half the gap's tube angle (0 on
+// a cone), which bounds the patch near that row from the other side.
+//
+// The band between the last vertex row and the wall's cut row is charged per
+// triangle (chargeBand), so no step bounds it. The last row still keeps the
+// step whose term at the larger of the band's radii is a quarter of the
+// azimuth share (azimuthShare), so that the band's triangles, which also span
+// the held wall's facets, keep their charge near what the cut vertices
+// already state. This is a choice of spacing, not a bound.
+func rowSteps(spec blendSpec, tau float64, ss, rho, shift []float64) []float64 {
+	n := len(ss) - 1
+	out := make([]float64, n)
+	for j := range out {
+		out[j] = math.Pi
+	}
+	for g := range n {
+		half := (ss[g+1] - ss[g]) * math.Pi / 4
+		sag := filletSag(spec, 2*half)
+		near := 2.0
+		if spec.fillet {
+			near = 1 + 1/math.Cos(half)
+		}
+		if g == n-1 {
+			out[g] = min(out[g], azimuthStep(azimuthShare(spec, tau)/4, max(rho[g], rho[g+1])))
+			continue
+		}
+		step := azimuthStep(tau-sag, max(rho[g], rho[g+1])) - shift[g]
+		for _, j := range []int{g, g + 1} {
+			out[j] = min(out[j], step, azimuthStep(tau/near, rho[j]))
+		}
+	}
+	return out
+}
 
 // filletSag is the sagitta of a fillet's profile arc of radius r over the
 // tube angle span: r·(1 − cos(span/2)). A chamfer's profile is straight.
@@ -149,6 +227,8 @@ type bandAxis struct {
 // offset of the triangle's cut vertices, plus the profile's sagitta sag over
 // the band's row gap, plus, about axis, (1 + 1/cos(Δα/2))·rhoHi·(1 − cos(Δφ/2))
 // of the triangle's own azimuth spread, plus slack for the rounding (§6.3).
+// rhoHi is at least the larger radius of the band's two rows, the last row's
+// and the setback circle's, on which the cut vertices' surrogates lie.
 // The azimuth term counts once for the triangle's distance from the blend and
 // once more, over cos(Δα/2), for a point of the blend beside a row's polyline,
 // Δα the gap's tube angle. A triangle with no cut vertex lies between exact

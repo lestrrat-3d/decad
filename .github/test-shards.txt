@@ -280,6 +280,7 @@
 10	4.68	TestPointConeTrimRejectsRoundTrippedPointLoft
 10	1.91	TestPrismPatternUnionManyGates
 10	0.22	TestQuarterSourceHeldY3WrongRealRadius
+10	0.87	TestRetainedBlendStripPatchCovered
 10	0.00	TestRevolveBoreBoundaryBothSweepDirections
 10	0.00	TestRevolveSectorProjectionRefusesOverlap
 10	0.02	TestStraightLoftPrismUnionManyGates

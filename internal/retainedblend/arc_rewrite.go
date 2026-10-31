@@ -139,7 +139,7 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	}
 	// The rows end on both end planes; their chords there follow the end
 	// curves to within tau (§6.3).
-	ss, err := arcRows(spec, w.tau, ends)
+	ss, err := arcRows(spec, w.tau, arcProfileShare(w.tau), ends)
 	if err != nil {
 		return nil, err
 	}
@@ -196,12 +196,12 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 		return nil, err
 	}
 
-	// The plane's row, the wall's row, and the rows between them. The columns
-	// step by stripColumn on every row, so a strip triangle that also spans the
-	// shift of the rows' ends keeps its azimuth term within its share of tau
-	// (§6.3).
-	colStep := stripColumn(azimuthShare(spec, w.tau), max(a.radius, rhoA))
-	colsA, err := w.arcRow(a, rows[0], 0, rhoA, colStep)
+	// The plane's row, the wall's row, and the rows between them. Each row's
+	// columns step by what its two gaps leave once their sagitta and the
+	// shift of the rows' ends on the end planes are spent, so every strip
+	// triangle stays within tau (rowSteps, §6.3).
+	steps := w.arcRowSteps(rows, ss, rhoA)
+	colsA, err := w.arcRow(a, rows[0], 0, rhoA, steps[0])
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +209,7 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	rowCols := make([][]colPt, m+1)
 	rowCols[0] = colsA
 	for j := 1; j < m; j++ {
-		if rowCols[j], err = w.interiorRow(a, rows[j], bound, colStep); err != nil {
+		if rowCols[j], err = w.interiorRow(a, rows[j], bound, steps[j]); err != nil {
 			return nil, err
 		}
 	}
@@ -304,8 +304,10 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 			w.emit(t, blendGroup)
 		}
 	}
-	// The band beside the wall's cut takes its cut vertices' offsets (§6.3).
-	w.chargeBand(stripFrom, bandAxis{o: a.center, n: n, ok: true}, max(a.radius, rhoA),
+	// The band beside the wall's cut takes its cut vertices' offsets (§6.3),
+	// its azimuth term read at the larger radius of its two rows: the last
+	// row's and the wall's setback circle's, a.radius.
+	w.chargeBand(stripFrom, bandAxis{o: a.center, n: n, ok: true}, max(a.radius, rows[m-1].rho),
 		filletSag(spec, (1-ss[m-1])*math.Pi/2), slack)
 	w.removedTrue, tag.trueArea = a.arcAreas(profile, rows, tb)
 
@@ -320,6 +322,26 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 		groups[f.group].Centroid = measurement.VecMeasurement{}
 	}
 	return w.buildClear(ctx, env, groups, stripFrom, tag, faceIndex)
+}
+
+// arcRowSteps is rowSteps for the rows of an arc route, the plane's row
+// first, at radius rhoA, at which arcRow places it, and the wall's cut row
+// last. A row's azimuth runs linearly from its end on G₀ to its end on G₁, so
+// two rows' azimuths at one fraction of their rows differ by at most the
+// larger move of their ends.
+func (w *work) arcRowSteps(rows []arcRow, ss []float64, rhoA float64) []float64 {
+	m := len(rows) - 1
+	rho := make([]float64, m+1)
+	shift := make([]float64, m-1)
+	for j, row := range rows {
+		rho[j] = row.rho
+		if j > 0 && j < m {
+			prev := rows[j-1].theta
+			shift[j-1] = max(math.Abs(row.theta[0]-prev[0]), math.Abs(row.theta[1]-prev[1]))
+		}
+	}
+	rho[0] = rhoA
+	return rowSteps(w.spec, w.tau, ss, rho, shift)
 }
 
 // arcRow builds the plane's row: the setback points and the points between

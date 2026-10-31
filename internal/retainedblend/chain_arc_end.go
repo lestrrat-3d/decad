@@ -171,6 +171,43 @@ func (w *work) fanRows(en *chainEntry, f float64, ss []float64, bound float64) [
 	return rows
 }
 
+// rowRadius is the radius of the arc entry's row at profile parameter s.
+func (en *chainEntry) rowRadius(s float64) float64 {
+	p, _ := arcRim{rim: en.rim, sign: 1}.profile(en.step)
+	rho, _ := p(s)
+	return rho
+}
+
+// fanColumns is the number of columns of a fan entry whose rows lie at the
+// profile parameters ss, the wall's cut row last. Every column sits at one
+// fraction of every vertex row, so row j's columns are its span
+// |end_j − start_j| over the count, and two rows' azimuths at one fraction
+// differ by at most the larger move of their two ends: a junction's meridian
+// does not move, a free end's azimuth on G does. The count gives every vertex
+// row the step its gaps leave it (rowSteps, blend §6.3).
+func (w *work) fanColumns(en *chainEntry, ss []float64) (int, error) {
+	n := len(ss) - 1
+	start, end := en.fanBounds(n)
+	rho := make([]float64, n+1)
+	shift := make([]float64, n-1)
+	for j, s := range ss {
+		rho[j] = en.rowRadius(s)
+		if j > 0 && j < n {
+			shift[j-1] = max(math.Abs(start[j]-start[j-1]), math.Abs(end[j]-end[j-1]))
+		}
+	}
+	steps := rowSteps(en.step, w.tau, ss, rho, shift)
+	na := 2
+	for j := range n {
+		k, err := columnCount(math.Abs(end[j]-start[j]), steps[j], rho[j], en.step.size(), 2)
+		if err != nil {
+			return 0, err
+		}
+		na = max(na, k)
+	}
+	return na, nil
+}
+
 // areasFree is chainEntry.areas for an arc with a free end on G. The wall's
 // band keeps its generators at the corner angles. The base loses the region
 // between the rim and the setback arc, bounded by the radial line at a
