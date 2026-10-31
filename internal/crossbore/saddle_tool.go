@@ -28,6 +28,30 @@ const BandExtension = 0.25
 // mirror map of CellMirror holds for its cells too.
 const ToolStations = 1024
 
+// ToolRows is the number of rows the band is split into across its length,
+// at t_i = i/ToolRows from B⁺ (t = 0) to O⁺ (t = 1). It is a power of two,
+// so every t_i is a dyadic, and no t_i is 1/6 or 5/6, where the exact band
+// meets the bore and the shaft (BandExtension = 1/4).
+const ToolRows = 8
+
+// ToolAreaCells is the number of cells each quad's area enclosure splits
+// into along θ. An interval enclosure over a cell is wider than the range it
+// holds by a part proportional to the cell's width, so the band's area
+// interval narrows in proportion to the split.
+const ToolAreaCells = 8
+
+// BandRow returns the held point of row i between the local band ends o
+// (O⁺) and b (B⁺): b + t_i·(o − b), in float.
+func BandRow(o, b r3.Vec, i int) r3.Vec {
+	switch i {
+	case 0:
+		return b
+	case ToolRows:
+		return o
+	}
+	return b.Add(o.Sub(b).Scale(float64(i) / ToolRows))
+}
+
 // Pose maps the fixed pose (outer axis Z, bore axis X, bore axis at Z = 0,
 // mouth at +X) into world coordinates exactly: world[Axis[i]] equals
 // Sign[i]·local[i] + Shift[Axis[i]]. Sign entries are ±1 and Axis is a
@@ -62,20 +86,22 @@ func BandEnds(R, r, setback float64, j int) (r3.Vec, r3.Vec) {
 // ToolProof is the proven reading of the tool's band. Chord bounds the
 // distance between each held band facet and the exact extended ruled surface
 // under the pairing of agent-docs/retained-edge-blend-design.md §4.9, held
-// rounding included. AreaLo and AreaHi enclose the exact area of the whole
-// extended band.
+// rounding included. RowLo[i] and RowHi[i] enclose the exact area of row i of
+// the extended band, t ∈ [t_i, t_i+1]; AreaLo and AreaHi are their sums, the
+// whole band's.
 type ToolProof struct {
 	Chord, SampleError, AreaLo, AreaHi float64
+	RowLo, RowHi                       [ToolRows]float64
 }
 
-// toolBase is one quarter-turn base cell's reading: the chord spread from the
-// widened cell, the extended band ends' enclosures at the cell's own angle in
-// the order O⁺ X, Y, Z, B⁺ X, Y, Z, and, for k < n/4, the enclosure of the
-// band's area per radian over [θ_k, θ_k+1].
+// toolBase is one quarter-turn base cell's reading: the extended band ends'
+// enclosures at the cell's own angle in the order O⁺ X, Y, Z, B⁺ X, Y, Z,
+// and, for k < n/4, from the cell over exactly [θ_k, θ_k+1], the chord
+// spread of that quad and the enclosure of each row's area per radian.
 type toolBase struct {
 	spread         float64
 	ends           [6]crossIV
-	areaLo, areaHi float64
+	areaLo, areaHi [ToolRows]float64
 }
 
 // extend returns (1+λ)·a − λ·b, exactly.
@@ -125,11 +151,14 @@ func cross(a, b [3]fiv) [3]fiv {
 	}
 }
 
-// bandDensity encloses the extended band's area per radian over a cell. With
-// F(θ, t) = B⁺(θ) + t·D(θ), D = O⁺ − B⁺, t ∈ [0, 1], the area element is
-// |u + t(v − u)| with u = B⁺′ × D and v = O⁺′ × D, whose integral over t
-// lies between |u + v|/2 and (|u| + |v|)/2.
-func bandDensity(cell *CellExact) (float64, float64, bool) {
+// bandDensity encloses each row's area per radian over a cell. With
+// F(θ, t) = B⁺(θ) + t·D(θ), D = O⁺ − B⁺, the area element is |w(t)| with
+// w(t) = (1 − t)·u + t·v, u = B⁺′ × D and v = O⁺′ × D. |w| is convex in t, so
+// its integral over a row [a, b] lies between (b − a)·|w((a + b)/2)| (Jensen)
+// and (b − a)·(|w(a)| + |w(b)|)/2 (the chord above a convex function). The
+// interval (1 − t)·U + t·V holds w(t) at every θ of the cell, U and V
+// holding u and v there.
+func bandDensity(cell *CellExact) ([ToolRows]float64, [ToolRows]float64, bool) {
 	var dO, dB, band [3]fiv
 	for c := range 3 {
 		dO[c] = fivOf(extend(cell.Derivs[c], cell.Derivs[3+c]))
@@ -137,28 +166,55 @@ func bandDensity(cell *CellExact) (float64, float64, bool) {
 		band[c] = fivOf(crossMul(crossPoint(1+2*BandExtension), crossSub(cell.Coords[c], cell.Coords[3+c])))
 	}
 	u, v := cross(dB, band), cross(dO, band)
-	var sum [3]fiv
-	for c := range 3 {
-		sum[c] = u[c].add(v[c])
+	// at encloses |w(t)| for the dyadic t = num/(2·ToolRows); the scalings
+	// by a power of two and by num are rounded outward by mul.
+	at := func(num int) fiv {
+		t := float64(num) / (2 * ToolRows)
+		var w [3]fiv
+		for c := range 3 {
+			w[c] = u[c].mul(fiv{1 - t, 1 - t}).add(v[c].mul(fiv{t, t}))
+		}
+		return norm(w)
 	}
-	nu, nv, ns := norm(u), norm(v), norm(sum)
-	lo, hi := down(ns.lo/2), up(up(nu.hi+nv.hi)/2)
-	if proofbound.IsNonFinite(lo) || proofbound.IsNonFinite(hi) || lo < 0 {
-		return 0, 0, false
+	var lo, hi [ToolRows]float64
+	const k = 1.0 / ToolRows
+	for i := range ToolRows {
+		a, mid, b := at(2*i), at(2*i+1), at(2*i+2)
+		lo[i], hi[i] = down(mid.lo*k), up(up(up(a.hi+b.hi)/2)*k)
+		if proofbound.IsNonFinite(lo[i]) || proofbound.IsNonFinite(hi[i]) || lo[i] < 0 {
+			return lo, hi, false
+		}
 	}
 	return lo, hi, true
 }
 
+// quadSpread is the chord spread of the quad a cell spans: per coordinate,
+// the larger width of the band ends' θ-derivative enclosures plus the
+// largest |D′| divided by ToolRows, D′ = (1 + 2λ)·(O′ − B′); the largest
+// over the three coordinates (agent-docs/retained-edge-blend-design.md §4.9,
+// proof 2).
+func quadSpread(cell *CellExact) float64 {
+	spread := 0.0
+	for c := range 3 {
+		dO := extend(cell.Derivs[c], cell.Derivs[3+c])
+		dB := extend(cell.Derivs[3+c], cell.Derivs[c])
+		twist := proofbound.LazyIntervalAbsUpperUp(
+			crossMul(crossPoint(1+2*BandExtension), crossSub(cell.Derivs[c], cell.Derivs[3+c])))
+		spread = max(spread, proofbound.AbsSumUpper(max(crossWidth(dO), crossWidth(dB)),
+			proofbound.DivUpper(twist, ToolRows)))
+	}
+	return spread
+}
+
 // proveToolBase proves base cell k for the outer radius R, the bore r and the
 // setback d. The widened cell runs CellExactProof's clearance, progress and
-// fold tests and gives the derivative enclosures; a second call at the
-// cell's own angle (no widening) gives tight enclosures of the feet there,
-// and for k < n/4 a third over exactly [θ_k, θ_k+1] encloses the band's area.
+// fold tests; a second call at the cell's own angle (no widening) gives tight
+// enclosures of the feet there, and for k < n/4 a third over exactly
+// [θ_k, θ_k+1] gives that quad's chord spread and encloses each row's area.
 func proveToolBase(R, r, d float64, k int, gap *big.Rat) (toolBase, error) {
 	const n = ToolStations
 	turn := big.NewRat(int64(k), n)
-	cell, err := cellExactProofAt(R, r, d, turn, gap)
-	if err != nil {
+	if _, err := cellExactProofAt(R, r, d, turn, gap); err != nil {
 		return toolBase{}, err
 	}
 	point, err := cellExactProofAt(R, r, d, turn, new(big.Rat))
@@ -166,28 +222,58 @@ func proveToolBase(R, r, d float64, k int, gap *big.Rat) (toolBase, error) {
 		return toolBase{}, err
 	}
 	var base toolBase
-	spread := 0.0
 	for c := range 3 {
-		dO := extend(cell.Derivs[c], cell.Derivs[3+c])
-		dB := extend(cell.Derivs[3+c], cell.Derivs[c])
-		spread = max(spread, proofbound.LazyIntervalAbsUpperUp(crossSub(dB, dO)),
-			crossWidth(dO), crossWidth(dB))
 		base.ends[c] = extend(point.Coords[c], point.Coords[3+c])
 		base.ends[3+c] = extend(point.Coords[3+c], point.Coords[c])
 	}
-	base.spread = spread
 	if k < n/4 {
 		half := new(big.Rat).Quo(proofbound.PiUpper, big.NewRat(n, 1))
 		mid, err := cellExactProofAt(R, r, d, big.NewRat(int64(2*k+1), 2*n), half)
 		if err != nil {
 			return toolBase{}, err
 		}
-		var ok bool
-		if base.areaLo, base.areaHi, ok = bandDensity(&mid); !ok {
-			return toolBase{}, fmt.Errorf("%w: the saddle chamfer's band has no area enclosure", decaderr.ErrUnsupported)
+		base.spread = quadSpread(&mid)
+		const q = ToolAreaCells
+		sub := new(big.Rat).Quo(proofbound.PiUpper, big.NewRat(n*q, 1))
+		for p := range q {
+			cell, err := cellExactProofAt(R, r, d, big.NewRat(int64(2*(k*q+p)+1), 2*n*q), sub)
+			if err != nil {
+				return toolBase{}, err
+			}
+			lo, hi, ok := bandDensity(&cell)
+			if !ok {
+				return toolBase{}, fmt.Errorf("%w: the saddle chamfer's band has no area enclosure", decaderr.ErrUnsupported)
+			}
+			for i := range ToolRows {
+				base.areaLo[i], base.areaHi[i] = down(base.areaLo[i]+lo[i]), up(base.areaHi[i]+hi[i])
+			}
 		}
 	}
 	return base, nil
+}
+
+// rowEnclosure returns row i's exact point (1 − t_i)·B⁺ + t_i·O⁺ from the
+// band ends' enclosures in the order O⁺ X, Y, Z, B⁺ X, Y, Z.
+func rowEnclosure(ends *[6]crossIV, i int) [3]crossIV {
+	t := big.NewRat(int64(i), ToolRows)
+	s := new(big.Rat).Sub(big.NewRat(1, 1), t)
+	var p [3]crossIV
+	for c := range 3 {
+		p[c] = crossAdd(crossMul(proofarith.LazyPoint(s), ends[3+c]), crossMul(proofarith.LazyPoint(t), ends[c]))
+	}
+	return p
+}
+
+// stationSampleError is the largest gap between a station's held band points
+// held(i), on every row i from B⁺ (0) to O⁺ (ToolRows), and the exact rows of
+// the base cell's end enclosures, mirrored by flipY and flipZ and mapped by
+// pose.
+func stationSampleError(ends *[6]crossIV, held func(i int) r3.Vec, flipY, flipZ bool, pose Pose) float64 {
+	e := 0.0
+	for i := range ToolRows + 1 {
+		e = max(e, worldError(held(i), rowEnclosure(ends, i), flipY, flipZ, pose))
+	}
+	return e
 }
 
 // worldError compares a held world point with a local enclosure triple
@@ -216,16 +302,17 @@ func worldError(held r3.Vec, local [3]crossIV, flipY, flipZ bool, pose Pose) flo
 
 // ProveToolBand proves the tool band for the outer radius R, the bore r and
 // the setback d. It proves the ToolStations/4 + 1 quarter-turn base cells with
-// CellExactProof (every failed interval sign refuses), and compares held(j),
-// the world band ends O⁺ and B⁺ of every station j, with its base cell's
-// mirrored point enclosures (cellMirrorOf, which holds for the fixed pose
-// exactly). The chord term pairs a point of a held band triangle with the
-// exact band at the same parameters: on either triangle of the quad between
-// stations j and j+1, the difference is at most h·u(1−u) times the spread
-// of the end curves' θ-derivatives, u ∈ [0, 1], so h/4 times it, with h the
-// station step.
+// CellExactProof (every failed interval sign refuses), and compares held(j, i),
+// the world band point of station j on row i (row 0 is B⁺, row ToolRows is
+// O⁺), with its base cell's mirrored point enclosures (cellMirrorOf, which
+// holds for the fixed pose exactly). The chord term pairs a point of a held
+// band triangle with the exact band at the same parameters: on either
+// triangle of the quad between stations j and j+1 and rows i and i+1, each
+// coordinate of the difference is at most h·u(1−u) times the quad's spread
+// (quadSpread), u ∈ [0, 1] the fraction of the station step h, so h/4 times
+// it (agent-docs/retained-edge-blend-design.md §4.9, proof 2).
 func ProveToolBand(ctx context.Context, R, r, d float64, pose Pose,
-	held func(j int) (r3.Vec, r3.Vec)) (ToolProof, error) {
+	held func(j, i int) r3.Vec) (ToolProof, error) {
 	const n = ToolStations
 	gap := new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(2, 1), proofbound.PiUpper), big.NewRat(n, 1))
 	bases := make([]toolBase, n/4+1)
@@ -240,11 +327,7 @@ func ProveToolBand(ctx context.Context, R, r, d float64, pose Pose,
 	samples := make([]float64, n)
 	if err := cellEach(ctx, n, workers, func(j int) error {
 		k, flipY, flipZ := cellMirrorOf(j, n)
-		o, b := held(j)
-		ends := &bases[k].ends
-		samples[j] = max(
-			worldError(o, [3]crossIV{ends[0], ends[1], ends[2]}, flipY, flipZ, pose),
-			worldError(b, [3]crossIV{ends[3], ends[4], ends[5]}, flipY, flipZ, pose))
+		samples[j] = stationSampleError(&bases[k].ends, func(i int) r3.Vec { return held(j, i) }, flipY, flipZ, pose)
 		return nil
 	}); err != nil {
 		return ToolProof{}, err
@@ -254,21 +337,27 @@ func ProveToolBand(ctx context.Context, R, r, d float64, pose Pose,
 	}
 	var p ToolProof
 	spread := 0.0
-	areaLo, areaHi := 0.0, 0.0
-	for k, b := range bases {
+	var areaLo, areaHi [ToolRows]float64
+	for _, b := range bases[:n/4] {
 		spread = max(spread, b.spread)
-		if k < n/4 {
-			areaLo, areaHi = down(areaLo+b.areaLo), up(areaHi+b.areaHi)
+		for i := range ToolRows {
+			areaLo[i], areaHi[i] = down(areaLo[i]+b.areaLo[i]), up(areaHi[i]+b.areaHi[i])
 		}
 	}
 	for _, e := range samples {
 		p.SampleError = max(p.SampleError, e)
 	}
-	// The four quarter turns are mirror images, so the band's whole area is
-	// four times the quarter's; each cell spans 2π/n.
-	stepLo := proofbound.RatFloatDown(new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(8, 1), proofbound.PiLower), big.NewRat(n, 1)))
-	stepHi := proofbound.RatFloatUp(new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(8, 1), proofbound.PiUpper), big.NewRat(n, 1)))
-	p.AreaLo, p.AreaHi = down(areaLo*stepLo), up(areaHi*stepHi)
+	// The four quarter turns are mirror images, so each row's whole area is
+	// four times the quarter's; each area cell spans 2π/(n·ToolAreaCells).
+	// Every quad of the turn is the mirror image of one of the quarter's, so
+	// its spread is too.
+	cells := big.NewRat(n*ToolAreaCells, 1)
+	stepLo := proofbound.RatFloatDown(new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(8, 1), proofbound.PiLower), cells))
+	stepHi := proofbound.RatFloatUp(new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(8, 1), proofbound.PiUpper), cells))
+	for i := range ToolRows {
+		p.RowLo[i], p.RowHi[i] = down(areaLo[i]*stepLo), up(areaHi[i]*stepHi)
+		p.AreaLo, p.AreaHi = down(p.AreaLo+p.RowLo[i]), up(p.AreaHi+p.RowHi[i])
+	}
 	step := proofbound.RatFloatUp(gap)
 	p.SampleError = proofbound.Radius3D(p.SampleError)
 	p.Chord = proofbound.AbsSumUpper(

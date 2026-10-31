@@ -21,6 +21,10 @@
 #   shard 9:  213.27s over 268 tests
 #   shard 10:  225.26s over 273 tests
 #
+# TestRetainedSaddleChamfer was moved by hand from shard 3 to shard 6, the
+# lightest by job time in CI run 41154421023. Its figure is the sum of its
+# three parallel subtests' -race times there, not a -parallel 1 measurement.
+#
 0	0.01	FuzzFillet
 0	12.54	TestAxialSectionUnionFinishes
 0	0.00	TestBlendRefusalNamesCrossingCylinders
@@ -953,7 +957,6 @@
 3	0.02	TestRegionMomentsArcPinToleranceFollowsCoordinateScale
 3	0.04	TestRemeshMeshFlipsEdgesTowardSixNeighbours
 3	0.00	TestRepairMeshDropsTrianglesThatCarryNoSurface
-3	0.00	TestRetainedSaddleChamfer
 3	0.57	TestRevolveBooleanRefusesAShallowCrossing
 3	3.60	TestRevolveBoundsSweepEnclosesArcApex
 3	0.00	TestRevolveChainQuarterTurnStaysUndecided
@@ -1756,6 +1759,7 @@
 6	1.28	TestRegionSecondMomentsBoundContainArcEndpointDriftGreenIntegral
 6	0.05	TestRemeshMeshRefusals
 6	0.00	TestRepairMeshMendsAllThree
+6	169.02	TestRetainedSaddleChamfer
 6	0.03	TestRevolveBoundsBoundEnclosesOffsetAxisExtreme
 6	0.00	TestRevolveCanceledContextLeavesDocumentUnchanged
 6	0.01	TestRevolveCapNormalStartStaysExact

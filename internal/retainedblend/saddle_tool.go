@@ -27,22 +27,38 @@ import (
 // The saddle chamfer's tool (agent-docs/retained-edge-blend-design.md §4.9).
 // In the fixed pose of agent-docs/cross-cylinder-bore-chamfer-design.md (shaft
 // axis Z, bore axis X, the axes meeting at the origin, the mouth at +X), each
-// of the crossbore.ToolStations stations θ_j holds four vertices:
+// of the crossbore.ToolStations stations θ_j holds toolStride vertices:
 //
 //   - O⁺, the outer foot extended past the shaft wall along the band;
 //   - A, O⁺ pushed out radially from the shaft's axis to R + r;
 //   - K, the point (X + r, r·cos θ/2, r·sin θ/2) in the bore's extension
 //     outside the shaft, with X = √(R² − r²cos²θ);
-//   - B⁺, the bore foot extended into the bore along the band.
+//   - B⁺, the bore foot extended into the bore along the band;
+//   - the band's inner rows 1 … crossbore.ToolRows − 1 from B⁺ towards O⁺.
 //
-// The tool is the ring of quads joining consecutive stations over the four
-// sides O⁺→A→K→B⁺→O⁺. The side B⁺→O⁺ is the chamfer band; the other three
-// lie outside the true solid by a proven margin.
+// The tool is the ring of quads joining consecutive stations over the sides
+// O⁺→A→K→B⁺ and the band's rows from B⁺ back to O⁺. The rows are the chamfer
+// band; the other three sides lie outside the true solid by a proven margin.
 
 const (
 	toolBand = iota
 	toolSide
 )
+
+// toolStride is the number of tool vertices per station.
+const toolStride = 3 + crossbore.ToolRows
+
+// rowVertex is the index of station j's band vertex on row i: row 0 is B⁺
+// and row crossbore.ToolRows is O⁺.
+func rowVertex(j, i int) int {
+	switch i {
+	case 0:
+		return toolStride*j + 3
+	case crossbore.ToolRows:
+		return toolStride * j
+	}
+	return toolStride*j + 3 + i
+}
 
 // saddleTool is the tool mesh in world coordinates, with each vertex's bound.
 type saddleTool struct {
@@ -50,14 +66,16 @@ type saddleTool struct {
 	beta  []float64
 	tris  [][3]int
 	src   []int
+	// row is the band row of each facet, −1 for an outside side.
+	row   []int
 	proof crossbore.ToolProof
-	// bandArea is the held float area of the band's facets, within bandSlop
+	// rowArea[i] is the held float area of row i's facets, within rowSlop[i]
 	// of their exact area.
-	bandArea, bandSlop float64
+	rowArea, rowSlop [crossbore.ToolRows]float64
 }
 
-// stationPoints returns the four local vertices of station j.
-func stationPoints(R, r, d float64, j int) [4]r3.Vec {
+// stationPoints returns the toolStride local vertices of station j.
+func stationPoints(R, r, d float64, j int) [toolStride]r3.Vec {
 	o, b := crossbore.BandEnds(R, r, d, j)
 	theta := 2 * math.Pi * float64(j) / crossbore.ToolStations
 	s, c := math.Sincos(theta)
@@ -65,13 +83,18 @@ func stationPoints(R, r, d float64, j int) [4]r3.Vec {
 	k := r3.Vec{X: x + r, Y: r * c / 2, Z: r * s / 2}
 	scale := (R + r) / math.Hypot(o.X, o.Y)
 	a := r3.Vec{X: o.X * scale, Y: o.Y * scale, Z: o.Z}
-	return [4]r3.Vec{o, a, k, b}
+	p := [toolStride]r3.Vec{o, a, k, b}
+	for i := 1; i < crossbore.ToolRows; i++ {
+		p[3+i] = crossbore.BandRow(o, b, i)
+	}
+	return p
 }
 
-// buildSaddleTool places the stations, joins them and proves the band.
-func buildSaddleTool(ctx context.Context, s saddle, d float64) (*saddleTool, error) {
+// placeSaddleTool places the stations and joins them; proveSaddleTool
+// proves the band.
+func placeSaddleTool(s saddle, d float64) (*saddleTool, error) {
 	const n = crossbore.ToolStations
-	t := &saddleTool{verts: make([]r3.Vec, 0, 4*n)}
+	t := &saddleTool{verts: make([]r3.Vec, 0, toolStride*n)}
 	for j := range n {
 		for _, p := range stationPoints(s.key.R, s.key.r, d, j) {
 			t.verts = append(t.verts, s.key.pose.World(p))
@@ -84,15 +107,19 @@ func buildSaddleTool(ctx context.Context, s saddle, d float64) (*saddleTool, err
 	}
 	for j := range n {
 		next := (j + 1) % n
-		for side := range 4 {
-			a, b := 4*j+side, 4*j+(side+1)%4
-			c, e := 4*next+(side+1)%4, 4*next+side
-			src := toolSide
-			if side == 3 {
-				src = toolBand
-			}
+		for side := range 3 {
+			a, b := toolStride*j+side, toolStride*j+side+1
+			c, e := toolStride*next+side+1, toolStride*next+side
 			t.tris = append(t.tris, [3]int{a, b, c}, [3]int{a, c, e})
-			t.src = append(t.src, src, src)
+			t.src = append(t.src, toolSide, toolSide)
+			t.row = append(t.row, -1, -1)
+		}
+		for i := range crossbore.ToolRows {
+			a, b := rowVertex(j, i), rowVertex(j, i+1)
+			c, e := rowVertex(next, i+1), rowVertex(next, i)
+			t.tris = append(t.tris, [3]int{a, b, c}, [3]int{a, c, e})
+			t.src = append(t.src, toolBand, toolBand)
+			t.row = append(t.row, i, i)
 		}
 	}
 	// Wind the ring outward: a negative signed volume flips every facet. The
@@ -107,25 +134,36 @@ func buildSaddleTool(ctx context.Context, s saddle, d float64) (*saddleTool, err
 			t.tris[i][1], t.tris[i][2] = t.tris[i][2], t.tris[i][1]
 		}
 	}
-	proof, err := crossbore.ProveToolBand(ctx, s.key.R, s.key.r, d, s.key.pose, func(j int) (r3.Vec, r3.Vec) {
-		return t.verts[4*j], t.verts[4*j+3]
+	return t, nil
+}
+
+// proveSaddleTool proves the band of t, placed by placeSaddleTool, and sets
+// each band vertex's bound and each row's held area.
+func proveSaddleTool(ctx context.Context, t *saddleTool, s saddle, d float64) error {
+	const n = crossbore.ToolStations
+	proof, err := crossbore.ProveToolBand(ctx, s.key.R, s.key.r, d, s.key.pose, func(j, i int) r3.Vec {
+		return t.verts[rowVertex(j, i)]
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 	t.proof = proof
 	t.beta = make([]float64, len(t.verts))
 	for j := range n {
-		t.beta[4*j], t.beta[4*j+3] = proof.Chord, proof.Chord
-	}
-	var band [][3]int
-	for i, f := range t.tris {
-		if t.src[i] == toolBand {
-			band = append(band, f)
+		for i := range crossbore.ToolRows + 1 {
+			t.beta[rowVertex(j, i)] = proof.Chord
 		}
 	}
-	t.bandArea, t.bandSlop = heldArea(t.verts, band)
-	return t, nil
+	var rows [crossbore.ToolRows][][3]int
+	for k, f := range t.tris {
+		if t.row[k] >= 0 {
+			rows[t.row[k]] = append(rows[t.row[k]], f)
+		}
+	}
+	for i := range rows {
+		t.rowArea[i], t.rowSlop[i] = heldArea(t.verts, rows[i])
+	}
+	return nil
 }
 
 // exactLocal returns the exact local coordinates of world point p.
@@ -164,15 +202,20 @@ func checkOutside(t *saddleTool, s saddle) error {
 	// Round the shrunk radius down: a vertex inside the smaller disc is inside.
 	innerR := proofarith.FloatRat(math.Nextafter(inner, 0))
 	inner2 := new(big.Rat).Mul(innerR, innerR)
+	// The check reads O⁺, A, K and B⁺ of each station, never the band's
+	// inner rows.
 	locals := make([][3]*big.Rat, len(t.verts))
-	for i, v := range t.verts {
-		locals[i] = exactLocal(s.key.pose, v)
+	for j := range n {
+		for v := toolStride * j; v < toolStride*j+4; v++ {
+			locals[v] = exactLocal(s.key.pose, t.verts[v])
+		}
 	}
 	fail := fmt.Errorf("%w: the saddle chamfer's tool does not clear the solid outside its band", decaderr.ErrUnsupported)
 	for j := range n {
 		next := (j + 1) % n
 		for _, side := range [][2]int{{0, 1}, {1, 2}} {
-			quad := [4]int{4*j + side[0], 4*j + side[1], 4*next + side[0], 4*next + side[1]}
+			quad := [4]int{toolStride*j + side[0], toolStride*j + side[1],
+				toolStride*next + side[0], toolStride*next + side[1]}
 			nx, ny := 0.0, 0.0
 			for _, v := range quad {
 				p := local(s.key.pose, t.verts[v])
@@ -189,7 +232,7 @@ func checkOutside(t *saddleTool, s saddle) error {
 				}
 			}
 		}
-		for _, v := range []int{4*j + 2, 4*j + 3} {
+		for _, v := range []int{toolStride*j + 2, toolStride*j + 3} {
 			l := locals[v]
 			if new(big.Rat).Add(new(big.Rat).Mul(l[1], l[1]), new(big.Rat).Mul(l[2], l[2])).Cmp(inner2) >= 0 {
 				return fail
@@ -269,22 +312,27 @@ func (t *saddleTool) box() facetBox {
 // held ring with its band replaced by the exact extended band, which differs
 // from the held ring only between the two bands, within the chord bound: the
 // volume term charges that bound over both bands' areas (Claim K), and the
-// area term the difference of the two areas plus a seal of the chord bound
-// along both band ends, where the exact band's edge meets the held sides.
+// area term, row by row, the gap between the row's held area and its exact
+// interval, plus a seal of the chord bound along both band ends, where the
+// exact band's edge meets the held sides.
 func (t *saddleTool) slacks() (float64, float64) {
 	const n = crossbore.ToolStations
 	ends := 0.0
 	for j := range n {
 		next := (j + 1) % n
-		ends = proofbound.AbsSumUpper(ends, t.verts[4*j].Sub(t.verts[4*next]).Len(),
-			t.verts[4*j+3].Sub(t.verts[4*next+3]).Len())
+		ends = proofbound.AbsSumUpper(ends, t.verts[toolStride*j].Sub(t.verts[toolStride*next]).Len(),
+			t.verts[toolStride*j+3].Sub(t.verts[toolStride*next+3]).Len())
 	}
 	// Each chord is a nearest-rounded length: charge its rounding too.
 	ends = proofbound.ProductUpper(ends, 1+0x1p-48)
 	seal := proofbound.ProductUpper(proofbound.ProductUpper(2, ends), t.proof.Chord)
-	heldHi := proofbound.AbsSumUpper(t.bandArea, t.bandSlop)
-	heldLo := t.bandArea - t.bandSlop
-	gap := max(heldHi-t.proof.AreaLo, t.proof.AreaHi-heldLo)
+	gap, heldHi := 0.0, 0.0
+	for i := range crossbore.ToolRows {
+		hi := proofbound.AbsSumUpper(t.rowArea[i], t.rowSlop[i])
+		lo := math.Nextafter(t.rowArea[i]-t.rowSlop[i], math.Inf(-1))
+		heldHi = proofbound.AbsSumUpper(heldHi, hi)
+		gap = proofbound.AbsSumUpper(gap, max(hi-t.proof.RowLo[i], t.proof.RowHi[i]-lo, 0))
+	}
 	gap = proofbound.ProductUpper(gap, 1+0x1p-50)
 	vol := proofbound.ProductUpper(t.proof.Chord, proofbound.AbsSumUpper(heldHi, t.proof.AreaHi))
 	return vol, proofbound.AbsSumUpper(gap, seal)
@@ -338,14 +386,19 @@ func cutSaddles(ctx context.Context, env topo.Env, mesher booleaneval.OperandMes
 	tools := make([]*saddleTool, len(saddles))
 	allow := chaintol.Of(ctx)
 	for i, s := range saddles {
-		t, err := buildSaddleTool(ctx, s, d)
+		t, err := placeSaddleTool(s, d)
 		if err != nil {
 			return nil, err
 		}
-		if err := checkOutside(t, s); err != nil {
+		// The clearance check reads only the tool's box, so it runs before
+		// the band proof, the costliest step.
+		if err := checkSaddleClear(fp, faceIndex, s, t); err != nil {
 			return nil, err
 		}
-		if err := checkSaddleClear(fp, faceIndex, s, t); err != nil {
+		if err := proveSaddleTool(ctx, t, s, d); err != nil {
+			return nil, err
+		}
+		if err := checkOutside(t, s); err != nil {
 			return nil, err
 		}
 		// The ring must be one embedded closed surface for its true solid to
