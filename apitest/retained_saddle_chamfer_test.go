@@ -29,6 +29,29 @@ func saddleShaft(t *testing.T, r, y float64, opts ...decad.DocumentOption) (*dec
 	return body, sc
 }
 
+func saddleExtrudedCylinder(t *testing.T, sc *retentionScene, plane *sketch.Plane,
+	radius, length float64, move r3.Vec) *decad.Body {
+	t.Helper()
+	s, err := sc.w.CreateSketch(plane)
+	require.NoError(t, err)
+	c := s.CreatePoint(0, 0)
+	s.Fix(c)
+	s.CreateCircle(c, radius)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	b, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
+		decad.Symmetric{D: units.Millimeters(length)})
+	require.NoError(t, err)
+	if move == (r3.Vec{}) {
+		return b
+	}
+	m, err := r3.Translation(move)
+	require.NoError(t, err)
+	b, err = decad.Transform(t.Context(), b, m)
+	require.NoError(t, err)
+	return b
+}
+
 // saddleShaftWithFlatBesideMouth cuts a flat against the bore cut's held wall,
 // so the document allows the wall's bound at the contact.
 func saddleShaftWithFlatBesideMouth(t *testing.T) *decad.Body {
@@ -397,27 +420,9 @@ func TestRetainedSaddleChamferExtrudeShaft(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			sc := newRetentionScene()
-			cylinder := func(plane *sketch.Plane, radius, length float64) *decad.Body {
-				s, err := sc.w.CreateSketch(plane)
-				require.NoError(t, err)
-				c := s.CreatePoint(0, 0)
-				s.Fix(c)
-				s.CreateCircle(c, radius)
-				_, err = s.Solve(t.Context())
-				require.NoError(t, err)
-				b, err := decad.Extrude(t.Context(), sc.doc, s, s.Profiles()[0],
-					decad.Symmetric{D: units.Millimeters(length)})
-				require.NoError(t, err)
-				if tc.move == (r3.Vec{}) {
-					return b
-				}
-				m, err := r3.Translation(tc.move)
-				require.NoError(t, err)
-				b, err = decad.Transform(t.Context(), b, m)
-				require.NoError(t, err)
-				return b
-			}
-			body, err := decad.Cut(t.Context(), cylinder(tc.shaft(sc.w), saddleR, 40), cylinder(tc.bore(sc.w), r, 30))
+			body, err := decad.Cut(t.Context(),
+				saddleExtrudedCylinder(t, sc, tc.shaft(sc.w), saddleR, 40, tc.move),
+				saddleExtrudedCylinder(t, sc, tc.bore(sc.w), r, 30, tc.move))
 			require.NoError(t, err)
 			at := func(p r3.Vec, i int) float64 { return [3]float64{p.X, p.Y, p.Z}[i] }
 			var q *decad.EdgeQuery
