@@ -1809,7 +1809,7 @@ func UniformSpeedTangentEnergyUpper(arcLenUpper, chordLower float64) float64 {
 // coordinate is an exact rational, and
 // the differences and cross products above are exact rational arithmetic), so
 // the only rounding is the final division: the sum's own length is taken UP
-// (RatSqrtUp) and the quotient DOWN (RatFloatDown), which can only shrink the
+// (DySqrtUp) and the quotient DOWN (DyQuoFloatDown), which can only shrink the
 // published lower bound, never inflate it.
 //
 // A non-finite corner is a BROKEN caller claim: it answers 0, this helper's own
@@ -1849,13 +1849,13 @@ func CellChordPatchNormalLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	if IsNonFinite(lenUp) || lenUp <= 0 {
 		return 0
 	}
-	lenRat, ok := RatOf(lenUp)
+	lenDy, ok := proofarith.DyOf(lenUp)
 	if !ok {
 		return 0
 	}
-	// Dividing by a bracketed norm leaves the dyadic set, so the quotient is
-	// taken as a general fraction (dyadic.go's own boundary).
-	lower := RatFloatDown(proofarith.QuoRat(new(big.Rat), minDot.Rat(), lenRat))
+	// Dividing by a bracketed norm leaves the dyadic set, so round the exact
+	// quotient down to a float.
+	lower := proofarith.DyQuoFloatDown(minDot, lenDy)
 	if IsNonFinite(lower) || lower <= 0 {
 		return 0
 	}
