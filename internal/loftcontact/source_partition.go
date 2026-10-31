@@ -52,19 +52,7 @@ func CertifySourcePartition(ctx context.Context, operation *proofbound.WorkBudge
 		},
 		ErrFn: wall.Err,
 	}
-	if !lp.AuthenticatedReconstruction || lp.SourceIdentity == nil || lp.SurfaceResult ||
-		lp.ThroughBoreCut || lp.AnalyticBore || lp.ConstructionDelta != 0 ||
-		len(lp.BlendSegs) != 0 || len(lp.Profile0.Holes) != 0 || len(lp.Profile1.Holes) != 0 ||
-		pp.SurfaceResult || pp.SectionDelta != 0 || pp.Z0Delta != 0 || pp.Z1Delta != 0 ||
-		len(pp.Profile.Holes) != 0 || len(pp.BlendSegs) != 0 ||
-		pp.Xform != r3.Identity() || lp.Xform != r3.Identity() ||
-		pp.Z0 != 0 || pp.Z1 <= 0 || lp.Frame0 != pp.Frame ||
-		lp.Plane0 != (sectionrecord.PlaneRecord{Origin: lp.Frame0.Origin(), U: lp.Frame0.U(), V: lp.Frame0.V()}) ||
-		lp.Plane1 != (sectionrecord.PlaneRecord{Origin: lp.Frame1.Origin(), U: lp.Frame1.U(), V: lp.Frame1.V()}) ||
-		lp.Frame0.U() != lp.Frame1.U() || lp.Frame0.V() != lp.Frame1.V() {
-		return no, false, nil
-	}
-	if len(lp.Alignment) > 1 {
+	if !loftPrismSourcePairEligible(pp, lp) {
 		return no, false, nil
 	}
 	for _, offset := range lp.Alignment {
@@ -310,6 +298,19 @@ func CertifySourcePartition(ctx context.Context, operation *proofbound.WorkBudge
 	result.Prepared = prepared
 	result.SourceVisits = sourceSteps
 	return result, true, nil
+}
+
+func loftPrismSourcePairEligible(pp prismrecord.Payload, lp loftrecord.Payload) bool {
+	return lp.AuthenticatedReconstruction && lp.SourceIdentity != nil && !lp.SurfaceResult &&
+		!lp.ThroughBoreCut && !lp.AnalyticBore && lp.ConstructionDelta == 0 &&
+		len(lp.BlendSegs) == 0 && len(lp.Profile0.Holes) == 0 && len(lp.Profile1.Holes) == 0 &&
+		!pp.SurfaceResult && pp.SectionDelta == 0 && pp.Z0Delta == 0 && pp.Z1Delta == 0 &&
+		len(pp.Profile.Holes) == 0 && len(pp.BlendSegs) == 0 &&
+		pp.Xform == r3.Identity() && lp.Xform == r3.Identity() &&
+		pp.Z0 == 0 && pp.Z1 > 0 && lp.Frame0 == pp.Frame &&
+		lp.Plane0 == (sectionrecord.PlaneRecord{Origin: lp.Frame0.Origin(), U: lp.Frame0.U(), V: lp.Frame0.V()}) &&
+		lp.Plane1 == (sectionrecord.PlaneRecord{Origin: lp.Frame1.Origin(), U: lp.Frame1.U(), V: lp.Frame1.V()}) &&
+		lp.Frame0.U() == lp.Frame1.U() && lp.Frame0.V() == lp.Frame1.V() && len(lp.Alignment) <= 1
 }
 
 // GroundPartitionScene pins the private copied source points before the
