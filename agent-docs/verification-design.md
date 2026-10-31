@@ -941,6 +941,14 @@ not advance provenance, retire an operand, or register a transient body.
 
 ### 1.2 Cost and caller deadlines
 
+`internal/verifyrun.bodyCheckWorkers` selects the bounded body-check pool for
+wall-survey requests. It admits documents of at least two solid prisms whose
+undisplaced sections contain only lines and circular arcs or circles. Other
+documents keep serial body checks. Each job owns its survey budget; results
+and errors are consumed in document order after every worker joins. The pool
+shares `orderedwork`'s worker reservations and finishes before pair work starts.
+This gate avoids scheduling overhead on default checks and unavailable surveys.
+
 **Give large-model verification a caller-owned deadline.** `Verify` computes
 interference even when no options are passed because the `Interfering` status
 depends on it. After body checks, it considers every unordered pair of proven
