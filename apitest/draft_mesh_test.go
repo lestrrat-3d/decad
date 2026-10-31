@@ -434,16 +434,12 @@ func TestDraftNearTangentJoinBooleans(t *testing.T) {
 	requireBodyWatertight(t, got)
 }
 
-// TestDraftNearTangentJoinPastLimitRefuses pins §9.1.1's stated class: with
-// the slot's centre moved 5·2⁻³¹ mm the build still reads both joins as
-// tangent, but each turns by about 2⁻³¹ rad, past the admitted 2⁻³², so the
-// mesh carries no volume proof and a boolean refuses it naming the corner and
-// the limit. Without the limit gate in capband.NearTangentCorner the Cut
-// builds.
-func TestDraftNearTangentJoinPastLimitRefuses(t *testing.T) {
-	t.Parallel()
+// requirePastLimitNearTangentCutRefusal checks that a near-tangent extrusion
+// without a volume proof refuses a Cut and names its corner and limit.
+func requirePastLimitNearTangentCutRefusal(t *testing.T, draw func(*sketch.Sketch), cornerPattern string) {
+	t.Helper()
 	doc := decad.New()
-	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, nearTangentSlot(5*math.Ldexp(1, -31)))
+	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, draw)
 	b := taperExtrude(t, doc, s, p, 8, 3, decad.Along)
 	mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
@@ -456,7 +452,19 @@ func TestDraftNearTangentJoinPastLimitRefuses(t *testing.T) {
 	require.ErrorContains(t, err, "no proof of the volume")
 	require.ErrorContains(t, err, "tapered extrude")
 	require.ErrorContains(t, err, "exceeds the admitted sin²θ ≤ 2⁻⁶⁴")
-	require.Regexp(t, `the corner \(15, (-5|5)\) between recorded segments \d+ and \d+`, err.Error())
+	require.Regexp(t, cornerPattern, err.Error())
+}
+
+// TestDraftNearTangentJoinPastLimitRefuses pins §9.1.1's stated class: with
+// the slot's centre moved 5·2⁻³¹ mm the build still reads both joins as
+// tangent, but each turns by about 2⁻³¹ rad, past the admitted 2⁻³², so the
+// mesh carries no volume proof and a boolean refuses it naming the corner and
+// the limit. Without the limit gate in capband.NearTangentCorner the Cut
+// builds.
+func TestDraftNearTangentJoinPastLimitRefuses(t *testing.T) {
+	t.Parallel()
+	requirePastLimitNearTangentCutRefusal(t, nearTangentSlot(5*math.Ldexp(1, -31)),
+		`the corner \(15, (-5|5)\) between recorded segments \d+ and \d+`)
 }
 
 // splitDiscSketch draws a radius-5 circle as two half arcs: the upper one
@@ -516,19 +524,6 @@ func TestDraftTwoArcNearTangentJoinBooleans(t *testing.T) {
 // gate in capband.NearTangentCorner, the mesh carried the proof.
 func TestDraftTwoArcNearTangentPastLimitRefuses(t *testing.T) {
 	t.Parallel()
-	doc := decad.New()
-	s, p := taperSketch(t, r3.NewVec(0, 0, 0), 0, splitDiscSketch(5*math.Ldexp(1, -31)))
-	b := taperExtrude(t, doc, s, p, 8, 3, decad.Along)
-	mesh, err := b.Tessellate(t.Context(), units.Millimeters(0.1))
-	require.NoError(t, err)
-	requireWatertight(t, mesh)
-	require.False(t, mesh.VolumeVerified())
-
-	post := boxBodyAtZ(t, doc, -2, -2, 2, 2, -5, 20)
-	_, err = decad.Cut(t.Context(), b, post)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "no proof of the volume")
-	require.ErrorContains(t, err, "tapered extrude")
-	require.ErrorContains(t, err, "exceeds the admitted sin²θ ≤ 2⁻⁶⁴")
-	require.Regexp(t, `the corner \((-5|5), 0\) between recorded segments \d+ and \d+`, err.Error())
+	requirePastLimitNearTangentCutRefusal(t, splitDiscSketch(5*math.Ldexp(1, -31)),
+		`the corner \((-5|5), 0\) between recorded segments \d+ and \d+`)
 }
