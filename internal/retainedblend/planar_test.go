@@ -2,6 +2,7 @@ package retainedblend
 
 import (
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -78,6 +79,24 @@ func TestSortPlanarEarsPutsNaNLast(t *testing.T) {
 		got[i] = e.at
 	}
 	require.Equal(t, []int{3, 0, 2, 4, 1, 5}, got)
+}
+
+func TestBestPlanarEarMatchesSortedFirst(t *testing.T) {
+	t.Parallel()
+	inputs := [][]planarEar{
+		{{at: 3, quality: 1}, {at: 1, quality: 2}, {at: 0, quality: 1}, {at: 2, quality: 2}},
+		{{at: 5, quality: math.Inf(-1)}, {at: 4, quality: math.Inf(1)}, {at: 7, quality: math.Inf(-1)}, {at: 6, quality: math.Inf(1)}},
+		{{at: 2, quality: 1}, {at: 5, quality: math.NaN()}, {at: 1, quality: math.NaN()}, {at: 0, quality: 1}},
+	}
+	for _, input := range inputs {
+		sorted := slices.Clone(input)
+		sortPlanarEars(sorted)
+		best, ok := bestPlanarEar(input)
+		require.True(t, ok)
+		require.Equal(t, sorted[0], best)
+	}
+	_, ok := bestPlanarEar(nil)
+	require.False(t, ok)
 }
 
 func TestZipperJoinsRingsOfDifferentCounts(t *testing.T) {

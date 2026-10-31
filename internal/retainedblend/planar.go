@@ -21,9 +21,24 @@ type planarEar struct {
 // sortPlanarEars orders ears best quality first, then by position. A NaN
 // quality sorts after every number, so the order is total.
 func sortPlanarEars(ears []planarEar) {
-	slices.SortFunc(ears, func(a, b planarEar) int {
-		return cmp.Or(cmp.Compare(b.quality, a.quality), cmp.Compare(a.at, b.at))
-	})
+	slices.SortFunc(ears, comparePlanarEars)
+}
+
+func comparePlanarEars(a, b planarEar) int {
+	return cmp.Or(cmp.Compare(b.quality, a.quality), cmp.Compare(a.at, b.at))
+}
+
+func bestPlanarEar(ears []planarEar) (planarEar, bool) {
+	if len(ears) == 0 {
+		return planarEar{}, false
+	}
+	best := ears[0]
+	for _, ear := range ears[1:] {
+		if comparePlanarEars(ear, best) < 0 {
+			best = ear
+		}
+	}
+	return best, true
 }
 
 // orient is the sign of (b − a) × (c − a): +1 for a left turn, −1 for a right
@@ -215,21 +230,29 @@ func earClip(ps []pt2, poly []int) ([][3]int, error) {
 			}
 			ears = append(ears, planarEar{i, earQuality(a, b, c)})
 		}
-		sortPlanarEars(ears)
-		clipped := false
-		for _, e := range ears {
-			ia, ib, ic := idx[(e.at+n-1)%n], idx[e.at], idx[(e.at+1)%n]
-			if earBlocked(ps, idx, ia, ib, ic) {
-				continue
-			}
-			tris = append(tris, [3]int{ia, ib, ic})
-			idx = append(idx[:e.at], idx[e.at+1:]...)
-			clipped = true
-			break
-		}
-		if !clipped {
+		best, ok := bestPlanarEar(ears)
+		if !ok {
 			return nil, fmt.Errorf("%w: the face's boundary has no ear to clip", decaderr.ErrUnsupported)
 		}
+		ia, ib, ic := idx[(best.at+n-1)%n], idx[best.at], idx[(best.at+1)%n]
+		if earBlocked(ps, idx, ia, ib, ic) {
+			sortPlanarEars(ears)
+			found := false
+			for _, e := range ears[1:] {
+				ia, ib, ic = idx[(e.at+n-1)%n], idx[e.at], idx[(e.at+1)%n]
+				if earBlocked(ps, idx, ia, ib, ic) {
+					continue
+				}
+				best = e
+				found = true
+				break
+			}
+			if !found {
+				return nil, fmt.Errorf("%w: the face's boundary has no ear to clip", decaderr.ErrUnsupported)
+			}
+		}
+		tris = append(tris, [3]int{ia, ib, ic})
+		idx = append(idx[:best.at], idx[best.at+1:]...)
 	}
 	if orient(ps[idx[0]], ps[idx[1]], ps[idx[2]]) <= 0 {
 		return nil, fmt.Errorf("%w: the face's boundary closes on a degenerate triangle", decaderr.ErrUnsupported)
