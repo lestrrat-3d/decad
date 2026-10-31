@@ -89,6 +89,19 @@ func arcArea(ctx context.Context, seg Segment, axis Axis, pitch, turns *big.Rat,
 			b: gridOut(proofbound.IntervalSub(proofbound.IntervalMul(q, e[0]), proofbound.IntervalMul(p, e[1]))),
 		}
 	}
+	type primitives struct{ b3, ab, ab4 Iv }
+	endsPrimitive := make([]primitives, pieces+1)
+	for i := range endsPrimitive {
+		if err := ctx.Err(); err != nil {
+			return Iv{}, false, err
+		}
+		x := at[2*i]
+		a2, b2 := proofbound.IntervalSquare(x.a), proofbound.IntervalSquare(x.b)
+		endsPrimitive[i].b3 = proofbound.IntervalMul(b2, x.b)
+		endsPrimitive[i].ab = proofbound.IntervalMul(x.a, x.b)
+		endsPrimitive[i].ab4 = proofbound.IntervalMul(endsPrimitive[i].ab,
+			proofbound.IntervalSub(a2, b2))
+	}
 	hOf := func(x ab) Iv {
 		h := proofbound.IntervalAdd(a0, proofbound.IntervalMul(a1, x.a))
 		h = proofbound.IntervalAdd(h, proofbound.IntervalMul(a2, proofbound.IntervalSquare(x.a)))
@@ -128,6 +141,7 @@ func arcArea(ctx context.Context, seg Segment, axis Axis, pitch, turns *big.Rat,
 				return Iv{}, err
 			}
 			lo, mid, hi := at[2*i], at[2*i+1], at[2*i+2]
+			loPrimitive, hiPrimitive := endsPrimitive[i], endsPrimitive[i+1]
 			hMid := hOf(mid)
 			hm, _ := Mid(hMid).Float64()
 			if !(hm > 0) || proofbound.IsNonFinite(hm) {
@@ -140,12 +154,9 @@ func arcArea(ctx context.Context, seg Segment, axis Axis, pitch, turns *big.Rat,
 			// piece, from A = cos φ, B = −sin φ.
 			diff := func(f func(x ab) Iv) Iv { return proofbound.IntervalSub(f(hi), f(lo)) }
 			bb := diff(func(x ab) Iv { return x.b })
-			b3 := diff(func(x ab) Iv { return proofbound.IntervalMul(proofbound.IntervalSquare(x.b), x.b) })
-			abd := diff(func(x ab) Iv { return proofbound.IntervalMul(x.a, x.b) })
-			ab4 := diff(func(x ab) Iv {
-				return proofbound.IntervalMul(proofbound.IntervalMul(x.a, x.b),
-					proofbound.IntervalSub(proofbound.IntervalSquare(x.a), proofbound.IntervalSquare(x.b)))
-			})
+			b3 := proofbound.IntervalSub(hiPrimitive.b3, loPrimitive.b3)
+			abd := proofbound.IntervalSub(hiPrimitive.ab, loPrimitive.ab)
+			ab4 := proofbound.IntervalSub(hiPrimitive.ab4, loPrimitive.ab4)
 			iA := proofbound.IntervalNeg(bb)
 			abdHalf := proofbound.IntervalScale(abd, half)
 			b3Third := proofbound.IntervalScale(b3, third)
