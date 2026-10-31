@@ -434,6 +434,9 @@ func fillTriangle(img *image.RGBA, depths []float64, ids []int32, id int32, widt
 			px := float64(x) + 0.5
 			// Barycentric weights from the signed areas of the sub-triangles.
 			wa := ((b.x-px)*(c.y-py) - (b.y-py)*(c.x-px)) / area
+			if wa < 0 {
+				continue
+			}
 			wb := ((c.x-px)*(a.y-py) - (c.y-py)*(a.x-px)) / area
 			wc := 1 - wa - wb
 			if wa < 0 || wb < 0 || wc < 0 {
