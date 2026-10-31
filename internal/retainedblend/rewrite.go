@@ -82,6 +82,41 @@ func (w *work) emit(t [3]int, src int) {
 	w.outSrc = append(w.outSrc, src)
 }
 
+// clipFacets keeps the positive side of each held triangle and cuts crossing edges.
+func (w *work) clipFacets(facets []int, g map[int]float64, group int,
+	cut func(a, b int, facetBound float64) int) {
+	for _, f := range facets {
+		t := w.fp.Tris[f]
+		facetBound := w.facetBound(t)
+		var above []int
+		for k, v := range t {
+			if g[v] > 0 {
+				above = append(above, k)
+			}
+		}
+		switch len(above) {
+		case 0:
+		case 3:
+			w.emit(t, group)
+		case 1:
+			x := above[0]
+			a, b, c := t[x], t[(x+1)%3], t[(x+2)%3]
+			w.emit([3]int{a, cut(a, b, facetBound), cut(c, a, facetBound)}, group)
+		case 2:
+			z := 0
+			for k := range 3 {
+				if g[t[k]] <= 0 {
+					z = k
+				}
+			}
+			x, y, below := t[(z+1)%3], t[(z+2)%3], t[z]
+			cyz, czx := cut(y, below, facetBound), cut(below, x, facetBound)
+			w.emit([3]int{x, y, cyz}, group)
+			w.emit([3]int{x, cyz, czx}, group)
+		}
+	}
+}
+
 // groupOf returns the one source group the facets belong to.
 func (w *work) groupOf(facets []int) (int, error) {
 	if len(facets) == 0 {
@@ -385,8 +420,7 @@ func (w *work) rewriteWall(fi int, tb, bandRadius float64, blendDist func(r3.Vec
 
 	type key struct{ a, b int }
 	cuts := map[key]int{}
-	facetBound := 0.0
-	cut := func(a, b int) int {
+	cut := func(a, b int, facetBound float64) int {
 		k := key{min(a, b), max(a, b)}
 		if c, ok := cuts[k]; ok {
 			return c
@@ -398,36 +432,7 @@ func (w *work) rewriteWall(fi int, tb, bandRadius float64, blendDist func(r3.Vec
 		cuts[k] = c
 		return c
 	}
-	for _, f := range facets {
-		t := w.fp.Tris[f]
-		facetBound = w.facetBound(t)
-		var above []int
-		for k, v := range t {
-			if g[v] > 0 {
-				above = append(above, k)
-			}
-		}
-		switch len(above) {
-		case 0:
-		case 3:
-			w.emit(t, group)
-		case 1:
-			x := above[0]
-			a, b, c := t[x], t[(x+1)%3], t[(x+2)%3]
-			w.emit([3]int{a, cut(a, b), cut(c, a)}, group)
-		case 2:
-			z := 0
-			for k := range 3 {
-				if g[t[k]] <= 0 {
-					z = k
-				}
-			}
-			x, y, below := t[(z+1)%3], t[(z+2)%3], t[z]
-			cyz, czx := cut(y, below), cut(below, x)
-			w.emit([3]int{x, y, cyz}, group)
-			w.emit([3]int{x, cyz, czx}, group)
-		}
-	}
+	w.clipFacets(facets, g, group, cut)
 	w.removed = append(w.removed, facets...)
 	w.removedTrue += 2 * math.Pi * bandRadius * tb
 
