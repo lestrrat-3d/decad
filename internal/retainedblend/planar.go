@@ -204,9 +204,10 @@ func collinearOverlap(a, b, end, other pt2) bool {
 func earClip(ps []pt2, poly []int) ([][3]int, error) {
 	idx := append([]int(nil), poly...)
 	tris := make([][3]int, 0, len(idx))
+	var ears []planarEar
 	for len(idx) > 3 {
+		ears = ears[:0]
 		n := len(idx)
-		var ears []planarEar
 		for i := range n {
 			a, b, c := ps[idx[(i+n-1)%n]], ps[idx[i]], ps[idx[(i+1)%n]]
 			if orient(a, b, c) <= 0 {
