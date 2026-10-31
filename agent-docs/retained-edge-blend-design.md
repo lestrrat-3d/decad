@@ -450,7 +450,8 @@ diagonal; the ring is wound outward by its signed volume. Its band is group
 
 **Proofs (each failure refuses `ErrUnsupported`).**
 
-1. Band cells: `crossbore.ProveToolBand` runs `CellExactProof` on the `N/4 + 1`
+1. Band cells: `crossbore.ProveToolBand` runs the same eight interval sign checks
+   as `CellExactProof` on the `N/4 + 1`
    quarter-turn cells widened by `2π/N` (the outer foot outside the bore, the
    bore foot inside the shaft, polar progress, no fold), and mirrors them over
    the whole turn as cross-cylinder-bore does; the local pose is exactly
