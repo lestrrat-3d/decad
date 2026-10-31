@@ -76,13 +76,17 @@ const stepCut = 0x1p-16
 // rho·(1 − cos(Δφ/2)) = 2·rho·sin²(Δφ/4) stays within budget less stepCut of
 // it: 4·asin(√(b/(2·rho))). The half-angle form keeps the step's relative
 // rounding within a few units in the last place however small b/rho is. A
-// budget that is not positive gives 0.
+// budget that is not positive, or a radius that is NaN or negative, gives 0,
+// which columnCount refuses.
 func azimuthStep(budget, rho float64) float64 {
 	b := budget * (1 - stepCut)
 	if !(b > 0) {
 		return 0
 	}
 	x := b / (2 * rho)
+	if !(x >= 0) {
+		return 0
+	}
 	if !(x < 1) {
 		return math.Pi
 	}
