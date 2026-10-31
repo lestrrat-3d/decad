@@ -123,7 +123,7 @@ type stripScene struct {
 
 func newStripScene() *stripScene { return &stripScene{w: sketch.NewWorld(), doc: New()} }
 
-func (sc *stripScene) rect(t *testing.T, x0, y0, x1, y1, h float64) *Body {
+func (sc *stripScene) rect(t testing.TB, x0, y0, x1, y1, h float64) *Body {
 	t.Helper()
 	s, err := sc.w.CreateSketch(sc.w.XY())
 	require.NoError(t, err)
@@ -137,7 +137,7 @@ func (sc *stripScene) rect(t *testing.T, x0, y0, x1, y1, h float64) *Body {
 }
 
 // disc extrudes the circle of radius r about (cx, 10) by h along dir.
-func (sc *stripScene) disc(t *testing.T, cx, r, h float64, dir Direction) *Body {
+func (sc *stripScene) disc(t testing.TB, cx, r, h float64, dir Direction) *Body {
 	t.Helper()
 	s, err := sc.w.CreateSketch(sc.w.XY())
 	require.NoError(t, err)
@@ -151,7 +151,7 @@ func (sc *stripScene) disc(t *testing.T, cx, r, h float64, dir Direction) *Body 
 	return b
 }
 
-func moved(t *testing.T, b *Body, d r3.Vec) *Body {
+func moved(t testing.TB, b *Body, d r3.Vec) *Body {
 	t.Helper()
 	tr, err := r3.Translation(d)
 	require.NoError(t, err)
@@ -181,7 +181,7 @@ func lineEdgeAt(t *testing.T, b *Body, p, dir r3.Vec) EdgeSelector {
 
 // circularAt selects the one circular edge (an arc when arc is set, else a
 // full circle) whose centre lies at height z.
-func circularAt(t *testing.T, b *Body, z float64, arc bool) EdgeSelector {
+func circularAt(t testing.TB, b *Body, z float64, arc bool) EdgeSelector {
 	t.Helper()
 	for _, e := range b.Edges() {
 		var centre r3.Vec
@@ -436,6 +436,40 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 		}
 		requireFacetBoundsHold(t, out, octant, stripProfile{o: centre, r: r, sphere: true})
 	})
+}
+
+func BenchmarkRetainedBlendHighColumnChamfer(b *testing.B) {
+	b.ReportAllocs()
+	const top, radius, distance = 30.001, 9.0, 0.003
+	for range b.N {
+		b.StopTimer()
+		sc := newStripScene()
+		joined, err := Union(b.Context(), sc.rect(b, 0, 0, 40, 20, 20),
+			moved(b, sc.disc(b, 20, radius, 10.5, Against), r3.Vec{Z: top}))
+		if err != nil {
+			b.Fatal(err)
+		}
+		before, err := joined.Volume()
+		if err != nil {
+			b.Fatal(err)
+		}
+		selected := circularAt(b, joined, top, false)
+
+		b.StartTimer()
+		out, err := Chamfer(b.Context(), joined, selected, units.Millimeters(distance))
+		b.StopTimer()
+		if err != nil {
+			b.Fatal(err)
+		}
+		after, err := out.Volume()
+		if err != nil {
+			b.Fatal(err)
+		}
+		if after.Value.Base() >= before.Value.Base() {
+			b.Fatalf("Chamfer did not remove material: before %.9g, after %.9g mm³",
+				before.Value.Base(), after.Value.Base())
+		}
+	}
 }
 
 // triangleDist is the distance from p to the triangle abc: the closest point

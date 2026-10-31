@@ -25,11 +25,20 @@ func sortPlanarEars(ears []planarEar) {
 			return
 		}
 	}
-	sort.Slice(ears, func(i, j int) bool {
-		if ears[i].quality == ears[j].quality {
-			return ears[i].at < ears[j].at
+	slices.SortFunc(ears, func(a, b planarEar) int {
+		if a.quality > b.quality {
+			return -1
 		}
-		return ears[i].quality > ears[j].quality
+		if a.quality < b.quality {
+			return 1
+		}
+		if a.at < b.at {
+			return -1
+		}
+		if a.at > b.at {
+			return 1
+		}
+		return 0
 	})
 }
 

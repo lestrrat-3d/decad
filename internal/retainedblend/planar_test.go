@@ -37,11 +37,29 @@ func TestTriangulateRegionKeepsEveryLoopVertex(t *testing.T) {
 }
 
 func TestSortPlanarEarsUsesAtOrderForQualityTies(t *testing.T) {
-	ears := []planarEar{{at: 3, quality: 1}, {at: 1, quality: 2}, {at: 0, quality: 1}, {at: 2, quality: 2}}
+	ears := []planarEar{
+		{at: 3, quality: 1},
+		{at: 1, quality: 2},
+		{at: 0, quality: 1},
+		{at: 2, quality: 2},
+		{at: 5, quality: math.Inf(-1)},
+		{at: 4, quality: math.Inf(1)},
+		{at: 7, quality: math.Inf(-1)},
+		{at: 6, quality: math.Inf(1)},
+	}
 
 	sortPlanarEars(ears)
 
-	require.Equal(t, []planarEar{{at: 1, quality: 2}, {at: 2, quality: 2}, {at: 0, quality: 1}, {at: 3, quality: 1}}, ears)
+	require.Equal(t, []planarEar{
+		{at: 4, quality: math.Inf(1)},
+		{at: 6, quality: math.Inf(1)},
+		{at: 1, quality: 2},
+		{at: 2, quality: 2},
+		{at: 0, quality: 1},
+		{at: 3, quality: 1},
+		{at: 5, quality: math.Inf(-1)},
+		{at: 7, quality: math.Inf(-1)},
+	}, ears)
 }
 
 func TestSortPlanarEarsKeepsStableOrderWithNaN(t *testing.T) {
