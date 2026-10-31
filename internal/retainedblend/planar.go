@@ -1,6 +1,7 @@
 package retainedblend
 
 import (
+	"cmp"
 	"fmt"
 	"math"
 	"math/big"
@@ -142,27 +143,8 @@ func bridgeNearest(ps []pt2, merged []int, holes [][]int) ([]int, [][]int, error
 			}
 		}
 	}
-	hasNaNDistance := false
-	for _, c := range cands {
-		if math.IsNaN(c.d) {
-			hasNaNDistance = true
-			break
-		}
-	}
-	if hasNaNDistance {
-		// Keep the existing comparator semantics for NaN distances.
-		sort.Slice(cands, func(i, j int) bool { return cands[i].d < cands[j].d })
-	} else {
-		slices.SortFunc(cands, func(a, b candidate) int {
-			if a.d < b.d {
-				return -1
-			}
-			if a.d > b.d {
-				return 1
-			}
-			return 0
-		})
-	}
+	// cmp.Compare orders NaN before every number, so the order stays total.
+	slices.SortFunc(cands, func(a, b candidate) int { return cmp.Compare(a.d, b.d) })
 	for _, c := range cands {
 		hole := holes[c.holeIdx]
 		a, b := ps[merged[c.m]], ps[hole[c.h]]
