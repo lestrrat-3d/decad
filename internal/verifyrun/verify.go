@@ -18,6 +18,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/tolerance"
 	"github.com/lestrrat-3d/decad/internal/verifyoption"
 
@@ -51,13 +53,30 @@ func Run(ctx context.Context, h Hooks, bodies []*topo.Body, cfg verifyConfig) (*
 	// is what keeps §9.3's sheet pair rule from ever running on a sheet that
 	// is not itself proven sound.
 	var pairBodies []*BodyReport
-	for _, b := range bodies {
+	var bodyReports []*BodyReport
+	if workers := bodyCheckWorkers(ctx, bodies, cfg); workers > 1 {
+		var err error
+		bodyReports, err = orderedwork.Run(ctx, meshbool.WithContactWorkers(ctx, 1), bodies, workers,
+			func(ctx context.Context, b *topo.Body) (*BodyReport, error) {
+				return verifyBody(ctx, h.Draft, b, cfg, req)
+			})
+		if err != nil {
+			return nil, err
+		}
+	}
+	for i, b := range bodies {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		br, err := verifyBody(ctx, h.Draft, b, cfg, req)
-		if err != nil {
-			return nil, err
+		var br *BodyReport
+		if bodyReports != nil {
+			br = bodyReports[i]
+		} else {
+			var err error
+			br, err = verifyBody(ctx, h.Draft, b, cfg, req)
+			if err != nil {
+				return nil, err
+			}
 		}
 		report.Bodies = append(report.Bodies, br)
 		report.Diagnostics = append(report.Diagnostics, br.Diagnostics...)
@@ -112,6 +131,51 @@ func Run(ctx context.Context, h Hooks, bodies []*topo.Body, cfg verifyConfig) (*
 
 	report.Status = aggregateStatus(report, undecided)
 	return publishReport(req, report.Bodies, report.Interferences, report.Clearances, report.Diagnostics, report.Status), nil
+}
+
+// bodyCheckWorkers limits the pool to the measured prism wall-survey path.
+// Default checks and unavailable surveys can finish before pool setup does.
+// Keep mixed documents serial so this gate also bounds which kernels overlap.
+func bodyCheckWorkers(ctx context.Context, bodies []*topo.Body, cfg verifyConfig) int {
+	if cfg.Wall == nil || len(bodies) < 2 {
+		return 1
+	}
+	workers := min(orderedwork.Workers(ctx, orderedwork.EachWorkers(len(bodies), 2)), orderedwork.MaxEachWorkers)
+	if workers < 2 {
+		return 1
+	}
+	for _, b := range bodies {
+		if ctx.Err() != nil {
+			return 1
+		}
+		p, ok := b.Payload.(prismrecord.Payload)
+		if !ok || b.Kind != topo.BodySolid || !b.Solid || p.SectionDelta != 0 || !analyticWallLoop(ctx, p.Profile.Outer) {
+			return 1
+		}
+		for _, hole := range p.Profile.Holes {
+			if !analyticWallLoop(ctx, hole) {
+				return 1
+			}
+		}
+	}
+	return workers
+}
+
+func analyticWallLoop(ctx context.Context, loop sectionrecord.LoopRecord) bool {
+	if len(loop.Segments) == 0 {
+		return false
+	}
+	for i, segment := range loop.Segments {
+		if i%proofbound.WorkPollInterval == 0 && ctx.Err() != nil {
+			return false
+		}
+		switch segment.(type) {
+		case sectionrecord.LineSeg, sectionrecord.ArcSeg, sectionrecord.CircleSeg:
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func effectiveVerifyRequest(cfg verifyConfig) vocab.VerifyRequest {

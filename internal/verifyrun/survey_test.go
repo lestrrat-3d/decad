@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/verifyoption"
 	vocab "github.com/lestrrat-3d/decad/report"
@@ -16,6 +18,37 @@ import (
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+func TestBodyChecksKeepCheapRequestsSerial(t *testing.T) {
+	// These records exercise scheduling only; real producer/consumer coverage
+	// lives in TestParallelBodyWallSurveysPreserveReadingsAndOrder.
+	prism := prismrecord.Payload{Profile: momentinput.Profile{
+		Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{sectionrecord.LineSeg{TEnd: 1}}},
+	}}
+	body := topo.Body{Solid: true, Payload: prism}
+	other := topo.Body{Solid: true, Payload: prism}
+	bodies := []*topo.Body{&body, &other}
+	wall := verifyConfig{Wall: &verifyoption.WallSpec{Tool: units.Millimeters(1)}}
+	ctx := orderedwork.WithWorkers(t.Context(), 12)
+	require.Equal(t, orderedwork.MaxEachWorkers, bodyCheckWorkers(ctx, bodies, wall))
+	require.Equal(t, 1, bodyCheckWorkers(orderedwork.WithWorkers(ctx, 1), bodies, wall))
+	require.Equal(t, 1, bodyCheckWorkers(ctx, bodies, verifyConfig{}))
+	require.Equal(t, 1, bodyCheckWorkers(ctx, bodies[:1], wall))
+
+	other.Kind = topo.BodySheet
+	require.Equal(t, 1, bodyCheckWorkers(ctx, bodies, wall))
+	other.Kind = topo.BodySolid
+	displaced := prism
+	displaced.SectionDelta = 1e-9
+	other.Payload = displaced
+	require.Equal(t, 1, bodyCheckWorkers(ctx, bodies, wall))
+	other.Payload = nil
+	require.Equal(t, 1, bodyCheckWorkers(ctx, bodies, wall))
+	freeform := prism
+	freeform.Profile.Holes = []sectionrecord.LoopRecord{{Segments: []sectionrecord.CurveSegment{sectionrecord.SplineSeg{}}}}
+	other.Payload = freeform
+	require.Equal(t, 1, bodyCheckWorkers(ctx, bodies, wall))
+}
 
 func TestRunSurveysReportsUndecidedCupWall(t *testing.T) {
 	line := func(u0, v0, u1, v1 float64) sectionrecord.CurveSegment {
