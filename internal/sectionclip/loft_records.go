@@ -11,6 +11,25 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
+func loftSectionPlaneAndAlignmentMatch(pl loftPayload, plane r3.Frame) bool {
+	for _, offset := range pl.Alignment {
+		if offset != 0 {
+			return false
+		}
+	}
+	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
+	return pl.Frame0.U() == x && pl.Frame0.V() == y && pl.Frame0.N() == z &&
+		pl.Frame1.U() == x && pl.Frame1.V() == y && pl.Frame1.N() == z &&
+		plane.U() == x && plane.V() == y && plane.N() == z &&
+		pl.Plane0.U == x && pl.Plane0.V == y &&
+		pl.Plane1.U == x && pl.Plane1.V == y &&
+		pl.Plane0.Origin == pl.Frame0.Origin() && pl.Plane1.Origin == pl.Frame1.Origin() &&
+		pl.Frame0.Origin().X == pl.Frame1.Origin().X &&
+		pl.Frame0.Origin().Y == pl.Frame1.Origin().Y &&
+		pl.Frame0.Origin().X == plane.Origin().X &&
+		pl.Frame0.Origin().Y == plane.Origin().Y
+}
+
 // LoftCircleSectionRecord reads a parallel section directly from an
 // authenticated circle-pair Loft. Its identical outer records denote the
 // same region boundary at every level. Equal-angle correspondence makes the
@@ -77,22 +96,7 @@ func LoftVaryingCircularOuterSectionRecord(pl loftPayload, plane r3.Frame) (prof
 		(len(pl.Alignment) != 0 && len(pl.Alignment) != 1+len(pl.Profile0.Holes)) {
 		return profileRecord{}, false
 	}
-	for _, offset := range pl.Alignment {
-		if offset != 0 {
-			return profileRecord{}, false
-		}
-	}
-	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
-	if pl.Frame0.U() != x || pl.Frame0.V() != y || pl.Frame0.N() != z ||
-		pl.Frame1.U() != x || pl.Frame1.V() != y || pl.Frame1.N() != z ||
-		plane.U() != x || plane.V() != y || plane.N() != z ||
-		pl.Plane0.U != x || pl.Plane0.V != y ||
-		pl.Plane1.U != x || pl.Plane1.V != y ||
-		pl.Plane0.Origin != pl.Frame0.Origin() || pl.Plane1.Origin != pl.Frame1.Origin() ||
-		pl.Frame0.Origin().X != pl.Frame1.Origin().X ||
-		pl.Frame0.Origin().Y != pl.Frame1.Origin().Y ||
-		pl.Frame0.Origin().X != plane.Origin().X ||
-		pl.Frame0.Origin().Y != plane.Origin().Y {
+	if !loftSectionPlaneAndAlignmentMatch(pl, plane) {
 		return profileRecord{}, false
 	}
 	z0, z1 := proofarith.FloatRat(pl.Frame0.Origin().Z), proofarith.FloatRat(pl.Frame1.Origin().Z)
@@ -370,22 +374,7 @@ func LoftRuledLineSectionRecord(pl loftPayload, plane r3.Frame) (profileRecord, 
 		(len(pl.Alignment) != 0 && len(pl.Alignment) != 1+len(pl.Profile0.Holes)) {
 		return profileRecord{}, false
 	}
-	for _, offset := range pl.Alignment {
-		if offset != 0 {
-			return profileRecord{}, false
-		}
-	}
-	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
-	if pl.Frame0.U() != x || pl.Frame0.V() != y || pl.Frame0.N() != z ||
-		pl.Frame1.U() != x || pl.Frame1.V() != y || pl.Frame1.N() != z ||
-		plane.U() != x || plane.V() != y || plane.N() != z ||
-		pl.Plane0.U != x || pl.Plane0.V != y ||
-		pl.Plane1.U != x || pl.Plane1.V != y ||
-		pl.Plane0.Origin != pl.Frame0.Origin() || pl.Plane1.Origin != pl.Frame1.Origin() ||
-		pl.Frame0.Origin().X != pl.Frame1.Origin().X ||
-		pl.Frame0.Origin().Y != pl.Frame1.Origin().Y ||
-		pl.Frame0.Origin().X != plane.Origin().X ||
-		pl.Frame0.Origin().Y != plane.Origin().Y {
+	if !loftSectionPlaneAndAlignmentMatch(pl, plane) {
 		return profileRecord{}, false
 	}
 	z0, z1 := proofarith.FloatRat(pl.Frame0.Origin().Z), proofarith.FloatRat(pl.Frame1.Origin().Z)
