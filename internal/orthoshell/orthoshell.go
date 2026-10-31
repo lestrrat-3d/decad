@@ -118,11 +118,7 @@ func clipArea(a, b, c [2]float64, x0, x1, y0, y1 float64) float64 {
 			if !keepGreater {
 				ip, iq = p[axis] <= bound, q[axis] <= bound
 			}
-			switch {
-			case ip && iq:
-				out[outLen] = q
-				outLen++
-			case ip && !iq, !ip && iq:
+			if ip != iq {
 				var intersection [2]float64
 				if axis == 0 {
 					t := (bound - p[0]) / (q[0] - p[0])
@@ -133,10 +129,10 @@ func clipArea(a, b, c [2]float64, x0, x1, y0, y1 float64) float64 {
 				}
 				out[outLen] = intersection
 				outLen++
-				if !ip && iq {
-					out[outLen] = q
-					outLen++
-				}
+			}
+			if iq {
+				out[outLen] = q
+				outLen++
 			}
 		}
 		inLen = outLen
