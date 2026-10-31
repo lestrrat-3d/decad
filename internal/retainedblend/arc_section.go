@@ -172,12 +172,13 @@ func (e endSection) shifts(s0, s1 float64) bool {
 	return math.Abs(math.Acos(e.h/rho1)-math.Acos(e.h/rho0)) <= e.shift
 }
 
-// chamferColumn is the azimuth step of a chamfer strip's columns on a profile
-// whose largest radius is rhoHi: rhoHi·(1 − cos(step/2)) = tau/4. A strip
-// triangle between two rows spans at most one column step and the shift of
-// the rows' ends, each held to this step, and
-// rhoHi·(1 − cos(step)) ≤ 4·rhoHi·(1 − cos(step/2)) = tau (§6.3).
-func chamferColumn(tau, rhoHi float64) float64 {
+// stripColumn is the azimuth step of the columns of a strip whose rows end on
+// an end plane, on a profile whose largest radius is rhoHi:
+// rhoHi·(1 − cos(step/2)) = tau/4. A strip triangle between two rows spans at
+// most one column step and the shift of the rows' ends, each held to this
+// step, and rhoHi·(1 − cos(step)) ≤ 4·rhoHi·(1 − cos(step/2)) = tau, so the
+// triangle's azimuth term is within tau (§6.3).
+func stripColumn(tau, rhoHi float64) float64 {
 	return 2 * math.Acos(1-math.Min(tau/(4*rhoHi), 1))
 }
 
@@ -226,22 +227,20 @@ func sectionRows(m int, tau float64, ends []endSection) ([]float64, error) {
 
 // arcRows is sectionRows for a blend whose rows end on the planes of ends,
 // starting from the rows the profile itself needs: a fillet's arc sagitta
-// r·(1 − cos(Δα/2)) within tau, and two for a chamfer, whose profile is
-// straight.
+// r·(1 − cos(Δα/2)) within its share of tau (profileShare), and two for a
+// chamfer, whose profile is straight.
 //
-// A chamfer's rows also keep the azimuth of their ends on each G within
-// chamferColumn of their neighbours', so that, with columns that step, every
-// strip triangle lies within tau of the cone (§6.3).
+// The rows also keep the azimuth of their ends on each G within stripColumn
+// of their neighbours', so that, with columns that step by it, every strip
+// triangle's azimuth term stays within its share of tau (§6.3).
 func arcRows(spec blendSpec, tau float64, ends []endSection) ([]float64, error) {
 	m := 2
 	if spec.fillet {
-		m = max(2, int(math.Ceil(math.Pi/2/rowStep(tau, spec.r, 1))))
+		m = max(2, int(math.Ceil(math.Pi/2/rowStep(profileShare(tau), spec.r, 1))))
 	}
-	if !spec.fillet {
-		ends = append([]endSection(nil), ends...)
-		for i := range ends {
-			ends[i].shift = chamferColumn(tau, ends[i].rhoHi)
-		}
+	ends = append([]endSection(nil), ends...)
+	for i := range ends {
+		ends[i].shift = stripColumn(azimuthShare(spec, tau), ends[i].rhoHi)
 	}
 	return sectionRows(m, tau, ends)
 }

@@ -227,8 +227,11 @@ func (b *wallBand) crossing(u, v bandPt, q int, facetBound float64) (bandPt, err
 				decaderr.ErrUnsupported)
 		}
 		p := a.p.Add(c.p.Sub(a.p).Scale(fa / (fa - fc)))
+		// The point lies on the held facet, which claims its true piece of the
+		// curved wall within its facet bound, the largest of its three
+		// corners'; the edge's two ends alone do not carry that claim.
 		return bandPt{p: p, id: -1, edge: e, planes: [2]int{q, -1},
-			bound: max(a.bound, c.bound) + b.slack + b.w.tau}, nil
+			bound: max(a.bound, c.bound, facetBound) + b.slack + b.w.tau}, nil
 	}
 	along := b.chordPlane(u, v)
 	if along < 0 {

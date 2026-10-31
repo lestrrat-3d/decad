@@ -334,7 +334,8 @@ func rewriteRim(ctx context.Context, env topo.Env, fp facetedrecord.Payload, r r
 	w := newWork(fp, r, spec)
 	// looksLikeRim admitted the face, so its plane tag reads.
 	planeTag, _ := retainedPlane(r.planeFace)
-	ringA, groupA, err := w.rewritePlane(faceIndex[r.planeFace], planeTag, spec.planeSetback())
+	ringA, groupA, err := w.rewritePlane(faceIndex[r.planeFace], planeTag, spec.planeSetback(),
+		max(r.radius, r.radius+r.kappa*spec.planeSetback()))
 	if err != nil {
 		return nil, err
 	}

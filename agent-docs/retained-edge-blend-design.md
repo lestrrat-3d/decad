@@ -223,8 +223,9 @@ plane, such as a cross hole, does not refuse, while one between the end planes
 does. The facet keeps the rest, triangulated again with every point
 where the band's boundary crosses a held facet edge and every corner of the
 band inside it. A crossing point is read from the held edge's two vertices,
-so the two facets beside the edge make the same point, and takes their larger
-bound plus the slack and `τ`; a corner of the band, where the generator meets
+so the two facets beside the edge make the same point, and takes the larger of
+their bounds and the bound of the facet it is cut from (§6.3) plus the slack
+and `τ`; a corner of the band, where the generator meets
 `G`'s plane, takes the largest bound of its facet's vertices plus the same.
 The crossings on the generator and the band's corners, in order along the
 axis, are the strip's last row.
@@ -249,9 +250,9 @@ points trace, a section of a torus by a plane that is not a conic, so it stays a
 chain of exact points. The rows' tube angles start evenly spaced at the
 profile's own step and are refined until every chord of that chain in both end
 planes lies within `τ` of the curve (§6.3), so they need not stay evenly spaced.
-A chamfer's columns step by `chamferColumn`, and its rows also hold the shift of
-their ends' azimuths on each `G` to that step, so its strip stays within `τ` of
-the cone (§6.3).
+The columns step by `stripColumn`, and the rows also hold the shift of their
+ends' azimuths on each `G` to that step, so a strip triangle's azimuth term
+stays within `τ`, a fillet's and a chamfer's alike (§6.3, Strip triangles).
 An open tangent chain whose arc ends lie on such a plane takes the same rows
 (retained-modify-reach §5.5 step 5), but only where the chain's walk decides the
 arc's end vertex. On the hole side (`κ = +1`) a pocket mouth whose 3 mm corners
@@ -383,7 +384,9 @@ At a corner with three selected edges a sphere of radius `r` and centre `C + r·
 patch is the octant between the three strips' end rows, gridded so that its sides are those rows' vertices. The
 exact areas are those of the strips cut at their end planes, plus `3r²` removed from the three faces and `πr²/2` added
 by the patch for every such corner. The chord tolerance is an eighth of a single edge's, so the many chord deficits stay
-inside what `Verify` accepts for a box with all twelve edges rounded. Every strip takes the same row count, from the
+inside what `Verify` accepts for a box with all twelve edges rounded. A patch triangle lies farther from the sphere than
+the rows' chords along its sides, so the rows are added until the patch's own grid stays within that tolerance
+(§6.3, Strip triangles). Every strip takes the same row count, from the
 smallest `|d̂ · n|` over all the strips' end planes (§5.0 step 1), so the chords on a two-edge corner's 45° plane stay
 within the tolerance.
 
@@ -757,13 +760,18 @@ faces `G₀` and `G₁`. Everything else in the held mesh is copied unchanged.
    (SR5), except a plane face's vertex exactly on its plane (§2), and the straight edge's own two faces' vertex exactly on that face's retained plane: the rewrite triangulates those faces again from their loops, so the point a mesh adds to fan a face is dropped. The wall's facets are cut by the setback plane: a facet wholly beyond
    it stays, one wholly before it goes, and a crossing facet is clipped, with one
    new vertex per cut mesh edge shared by the facets on either side. A new wall
-   vertex lies on a held facet edge, so it takes that edge's larger vertex bound,
-   plus `τ` and the rounding of the cut.
+   vertex lies on a held facet edge, so it takes the bound of the facet it is
+   cut from, the largest of its three corners' (§6.3), plus `τ` and the
+   rounding of the cut, and then what the strip's band triangles beside it
+   need (§6.3, Strip triangles).
 3. **Strip.** The blend face is a grid of rings. The first ring is the plane
    face's new polygon and the last is the wall's cut vertices, sorted by angle
    about the axis. A fillet has `m − 1` rings between them on the exact torus,
    with `m` the smallest count whose arc sagitta `r·(1 − cos(Δα/2))` is at most
-   `τ = 2⁻¹⁰·r` (not below `64·2⁻⁵²·scale`). A chamfer has none. Neighbouring
+   `τ/2`, with `τ = 2⁻¹⁰·r` (not below `64·2⁻⁵²·scale`). A chamfer has none.
+   The plane's polygon steps so that its sagitta on the largest of the rows'
+   circles is within `τ/2` for a fillet and `τ` for a chamfer, and every row
+   takes its azimuths; an R6 rim keeps both at `τ` (§6.3, Strip triangles). Neighbouring
    rings join by walking both in angle and advancing the ring whose next vertex
    comes first, which gives the band of triangles whatever the two rings' vertex
    counts. Each triangle is wound to face the blend's analytic outward normal.
@@ -924,7 +932,7 @@ of that computation.
 | **SR2** | two selected edges share a vertex and are neither a mitre run (§4.7) nor corners of perpendicular faces (§4.8), or a selected edge continues tangentially into a neighbour | no transition built | `ErrUnsupported` |
 | **SR3** | no blend of that size exists: `R − r ≤ 0` for an inside ball (§4.2), `φ` within 10⁻⁹ of 0 or π, a chamfer distance of zero or below, an R6 setback that reaches the axis or runs past the sphere's pole (§4.5), or an R7 fillet inside the larger cylinder with `2ρ ≥ R − r`, where no ball touches both walls (§4.10) | no regular blend | `ErrDegenerate` |
 | **SR4** | the setback does not fit (§6.2) and the held bounds prove it does not | the blend consumes the face | `ErrDegenerate` |
-| **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or a chain's sense or `G`'s turn at the vertex is undecided (§5.0), or `G` turns the wrong way: a concave edge needs a reflex corner of `G`, or a convex one where `A` or `B` is reflex at the vertex, and a convex edge outside the R1 route (plane–cylinder, arc, cylinder–cylinder, mitre run) needs a convex one; or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face other than an R3 wall that extends past the vertex beside a plane that trims there (§5.0), or another part of `G` comes within the blend's reach of the vertex, or a vertex of an R3 wall lies within its bound of an end plane the band is clipped by, or, unless it lies outside such a plane, of the band's generator (§4.3), or the end cap an R3 end face takes is not a simple polygon (§5.0), or another feature comes within an R7 chamfer's or fillet's reach, or an R7 fillet's cell, window, cut ring or band test fails (§4.9, §4.10), or an arc's rows need more than 1,024 rows for their chords in an end plane to certify within `τ` (§6.3) | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
+| **SR5** | the setback might not fit and the held bounds cannot decide it, or a plane that crosses an R6 sphere below `minSine` (§4.5), or an end vertex of an R1 edge is not a three-face corner with a retained planar `G`, or a chain's sense or `G`'s turn at the vertex is undecided (§5.0), or `G` turns the wrong way: a concave edge needs a reflex corner of `G`, or a convex one where `A` or `B` is reflex at the vertex, and a convex edge outside the R1 route (plane–cylinder, arc, cylinder–cylinder, mitre run) needs a convex one; or both `A` and `B` turn reflex at the vertex, or a convex edge meets a reflex face other than an R3 wall that extends past the vertex beside a plane that trims there (§5.0), or another part of `G` comes within the blend's reach of the vertex, or a vertex of an R3 wall lies within its bound of an end plane the band is clipped by, or, unless it lies outside such a plane, of the band's generator (§4.3), or the end cap an R3 end face takes is not a simple polygon (§5.0), or another feature comes within an R7 chamfer's or fillet's reach, or an R7 fillet's cell, window, cut ring or band test fails (§4.9, §4.10), or an arc's rows need more than 1,024 rows for their chords in an end plane to certify within `τ` (§6.3), or a corner's sphere patch needs more than 1,024 rows to stay within the corner route's tolerance, or a revolve strip's row needs more than 4,096 columns for its azimuth term's share of `τ` (§6.3, Strip triangles) | body exists; the evaluator cannot prove its construction | `ErrUnsupported` |
 | **SR6** | the held mesh disagrees with the exact vertex of its three tags by more than the vertex bound plus slack (§6.3) | the record and the mesh do not describe one solid | `ErrUnsupported` |
 | **SR7** | a facet the rewrite keeps outside the new strip meets a strip facet it shares no vertex with (the strip clearance of retained-modify-reach §5.6, run before the build), or the rewritten mesh fails the held audit (watertight, shells nested with consistent signs; the audit tests no facet pair for intersection) | the result is invalid | `ErrDegenerate` when the audit proves a face inside out (modify S8), else `ErrUnsupported` |
 
@@ -999,26 +1007,40 @@ nothing fitted.
 ### 6.3 Bounds of the result
 
 A ring vertex on the plane face lies at the exact setback circle, so it is an
-exact function of the tags; every strip vertex takes the bound `τ` plus the
-rounding of its computation, because the chords between ring vertices leave the
-exact surface by at most `τ` and a vertex bound is the only place a facet can
-state that. A straight edge's rows meet that in the end and mitre planes they
-end on as well as on the cylinder, because their step is set by the most
-oblique of those planes, and an arc's rows meet it in the planes its ends lie
-on, because their gaps are halved until each chord there certifies within `τ`
-(Area, below). A wall cut vertex takes the larger bound of its edge's two ends,
-plus `τ` and the rounding (§5 step 2). An old vertex keeps its bound.
+exact function of the tags. A facet states how far it lies from its true piece
+only through its corners' bounds (faceted-vertex-bounds §2), so every strip
+vertex takes the strip's own bound plus the rounding of its computation: `τ`,
+on a strip whose triangles lie in the plane of two straight rows (R1, R3, the
+cylinder–cylinder line, a mitre run and the corner route's strips) and on a
+cone or torus alike, except an R6 fillet's rows, which state `2τ` (Strip
+triangles, below). A straight edge's
+rows meet `τ` in the end and mitre planes they end on as well as on the
+cylinder, because their step is set by the most oblique of those planes, and an
+arc's rows meet it in the planes its ends lie on, because their gaps are halved
+until each chord there certifies within `τ` (Area, below). A wall cut vertex
+takes the bound of the held facet it is cut from, the largest of its three
+corners', plus `τ` and the rounding (§5 step 2): a curved wall's facet (R2,
+R3, R4, R5, R6, a chain's arc entries) claims its true piece within that bound
+only as a whole, and the cut edge's two ends alone do not carry the claim. On
+a planar wall (a chain's straight entries) the two ends would suffice, since
+their true points lie on the true plane and so does every point between them
+(faceted-vertex-bounds §2); the chain reads the facet's bound there too. Beside a revolve strip a
+cut vertex also takes what the band's triangles need (Strip triangles). An old
+vertex keeps its bound.
 
 **Claim K.** Let `H` be the held solid with `VolSymDiff = v`, `H'` the rewritten
 held solid, and `S'` the true blended solid. Then
-`vol(H' △ S') ≤ v + τ·area(blend) + ρ`, with `ρ` the rounding of the new
-vertices times the area of the faces they touch.
+`vol(H' △ S') ≤ v + ε·(area(strip) + area(blend)) + ρ`, with `ε` the largest
+vertex bound of the strip's facets (Strip triangles) and `ρ` the rounding of
+the new vertices times the area of the faces they touch.
 
 *Proof.* Outside `K`, `H'` equals `H` and `S'` equals the true solid `S`,
 because the gates of §6.2 show that no other face enters `K`. So the difference
 outside `K` lies inside `H △ S`. Inside `K`, `S'` is the exact blended region and
-`H'` is the polyhedron on the strip's chords; they differ by at most the sagitta
-`τ` times the blend face's area, plus the rounding of the grid's vertices. ∎
+`H'` is the polyhedron on the strip's chords; every strip facet lies within its
+own bound, at most `ε`, of the blend face and the blend face within it of the
+facets, so they differ by at most `ε` times the larger of the two areas, plus
+the rounding of the grid's vertices. ∎
 
 **Area.** Write `Δ_held` for the held area of the new facets less that of the
 old facets the rewrite replaced, and `Δ_true` for the exact area of the blend
@@ -1062,8 +1084,8 @@ chord, `β` the smaller bound of its two end vertices: the perimeter form's
 `δ_f` is at least `β` and its perimeter holds `c`, and the facet beside the
 chord charges `δ(t)·(|u| + |v|) ≥ β·c` by the triangle inequality. So the face's
 own term covers its share of the chord error wherever `s ≤ β`. The rim ring
-meets that (its step comes from `ringCount` at `τ`, and each ring vertex has
-bound `τ + slack`), and so do a straight edge's rows, both on the blend's
+meets that (its step keeps the ring's sagitta within `τ`, and each ring vertex
+has the strip's bound plus slack), and so do a straight edge's rows, both on the blend's
 circle and where they end on an end face oblique to the edge. In the end plane
 `G` the rows' chords are the cross-section's chords projected along the edge,
 which stretches lengths by at most `1/|d·n_G|`, so a chord whose cross-section
@@ -1102,41 +1124,170 @@ small, and with the profile's rows a hole mouth's fillet strays about 4 times
 5. `certify` accepts a piece whose corners' computed distance `d̂` satisfies
    `d̂ + δ ≤ τ`, with the margin `δ` below, and halves any other piece, up to
    4,096 pieces. A chord that does not certify on every end plane has its gap
-   halved. The rows start from the profile's own count, a fillet's arc sagitta
-   within `τ` or two rows for a chamfer. The blend refuses (SR5) past 1,024
-   rows, and at once when `δ ≥ τ`, where no number of rows certifies. Over
-   `R` from 1 to 100 mm, `r` from 0.1 to 4 mm and `X/ρ` down to 10⁻⁶, a fillet
-   takes at most 44 rows and a chamfer at most 52.
+   halved, and so is a gap across which the azimuth of the rows' ends on any
+   `G` moves by more than `stripColumn` (Strip triangles). The rows start from
+   the profile's own count, a fillet's arc sagitta within `τ/2` or two rows
+   for a chamfer. The blend refuses (SR5) past 1,024 rows, and at once when `δ ≥ τ`,
+   where no number of rows certifies. Over `R` of 1, 2, 5, 10, 20, 50 and
+   100 mm, `r` from 0.1 to 4 mm on either side of the wall and `X/ρ` from 1
+   down to 10⁻⁶ at the smallest row, a fillet takes at most 82 rows and a
+   chamfer at most 50.
 
 Every chord on every end plane then lies within `τ` of its arc of the end curve,
-which the bound `τ + slack` of each row vertex states. The last chord ends at
+which each row vertex's bound, at least `τ + slack`, states. The last chord ends at
 the wall's cut vertex, whose larger bound covers that vertex's own offset from
 the exact point. A halved gap keeps the cross-section's sagitta within `τ`. The
 chain route's arc ends (retained-modify-reach §5.5 step 5) are sized the same
 way, and every entry of the chain takes the same rows.
 
-**A chamfer's strip.** A strip triangle between two rows leaves the surface of
-revolution by at most the profile's own sagitta over its rows plus
-`ρ_max·(1 − cos(Δφ/2))`, with `Δφ` the spread of its vertices' azimuths: a
-convex combination of points on the surface has a radius at least the same
-combination of their radii times `cos(Δφ/2)`, and its meridian point lies in
-the hull of the profile points. The cone's profile is straight, so only the
-azimuth term remains. The arc route joins two rows by advancing whichever
-row's next vertex comes first in its own fraction `t` of the row
-(`zipOpen`), so a triangle's three `t` lie within one column of one of the two
-rows. Each row's azimuth is linear in `t`, and two rows' azimuths at one `t`
-differ by at most the larger shift of their ends on `G₀` and `G₁`. So
-`Δφ ≤ column step + end shift`. The chain route's fan columns sit at one
-fraction of every row, which gives the same sum. A chamfer's columns step by
-`c = 2·acos(1 − τ/(4ρ_hi))` (`chamferColumn`, `ρ_hi` the profile's largest
-radius) across the widest row, and its rows are added until the end's azimuth
-`acos(h/ρ)` moves by at most `c` between neighbours (`endSection.shifts`). Then
-`ρ_hi·(1 − cos(Δφ/2)) ≤ ρ_hi·(1 − cos c) ≤ 4·ρ_hi·(1 − cos(c/2)) = τ`, by
-`1 − cos 2x = 8·sin²(x/2)·cos²(x/2) ≤ 4·(1 − cos x)`. The band next to the
-wall's cut vertices, which sit on held wall facets, takes their larger bound.
-A fillet's strip triangle spans a row gap whose sagitta is within `τ` and a
-column whose sagitta is within `τ`, plus the shift of the rows' ends; this
-section bounds no fillet strip interior below that sum.
+**Strip triangles.** Every strip triangle of a surface of revolution (R2, R4,
+R6 and the arc entries of a tangent chain, on a torus or a cone) has its three
+vertices on two neighbouring rows. Let `ṽ_i = F(s_i, φ_i)` be the exact point
+a vertex `v_i` stands for, at profile parameter `s_i` and azimuth `φ_i`, with
+meridian point `(ρ_i, z_i)`, and `e_i = |v_i − ṽ_i|`.
+
+*Claim S.* Every point `x = Σλ_i·v_i` of the triangle lies within
+`max e_i + σ + ρ_hi·(1 − cos(Δφ/2))` of the blend surface, where `σ` is the
+profile's sagitta over the two rows' gap (`r·(1 − cos(Δα/2))` over a tube angle
+gap `Δα`, 0 on a cone's straight profile), `Δφ` the largest angle between two of
+the `φ_i`, and `ρ_hi` the largest radius of a row.
+
+*Proof.* Term by term:
+
+1. `x̃ = Σλ_i·ṽ_i` lies within `Σλ_i·e_i ≤ max e_i` of `x`.
+2. `x̃`'s height above the rim plane is `z̄ = Σλ_i·z_i`. Its horizontal part is
+   `Σλ_i·ρ_i·u(φ_i)`, `u` the unit direction at an azimuth. Its length is at
+   most `ρ̄ = Σλ_i·ρ_i`, and its component along the direction halfway between
+   the two outermost azimuths is at least `ρ̄·cos(Δφ/2)`, since every `u(φ_i)`
+   lies within `Δφ/2` of that direction. So `x̃`'s meridian point `(ρ_x̃, z̄)`
+   lies within `ρ̄·(1 − cos(Δφ/2)) ≤ ρ_hi·(1 − cos(Δφ/2))` of `(ρ̄, z̄)`.
+3. The `(ρ_i, z_i)` are two profile points, one per row, so `(ρ̄, z̄)` lies on
+   the chord between them, and the chord lies within `σ` of the profile.
+4. A surface of revolution is as far from a point as its profile is from the
+   point's meridian image, so `x̃` lies within `σ + ρ_hi·(1 − cos(Δφ/2))` of it,
+   and `x` within that plus `max e_i`. ∎
+
+*The other way.* Every point `P` of the patch between the two rows, at azimuth
+`φ`, lies within the same sum, `e` aside, of the triangles, each term now read
+from the triangles that meet `φ`'s half-plane. Write `ê = ρ_hi·(1 − cos(Δφ/2))`
+for the azimuth term, `β = Δα/2`, and work in that half-plane, where the
+triangles between the two rows cut a path `γ` from row `j`'s polyline to row
+`j + 1`'s:
+
+- Where both rows take the same azimuths (a closed rim, a chain's meridian
+  columns), the triangles between two columns form a planar trapezoid, and `γ`
+  is the chord between the rows' profile points with `ρ` scaled by one factor
+  `k ≥ cos(c/2)`, `c` the column step. Its point nearest `P` lies within
+  `σ + (1 − k)·ρ_hi ≤ σ + ê`.
+- Otherwise let `L` be the line through `P` normal to the chord, and `g` the
+  coordinate along the chord from row `j`'s profile point. `γ`'s end on a row's
+  polyline lies within `(1 − cos(c/2))·ρ_hi` of that row's profile point,
+  radially, so where `P`'s own `g` lies farther than that from both chord ends,
+  `L` separates `γ`'s ends and meets `γ` at a point within `ê` of the chord, by
+  step 2, while `P` lies within `σ` of it on `L`: within `σ + ê`. Nearer an end,
+  `P` lies within `(1 − cos(c/2))·ρ_hi / cos β` of that row's profile point,
+  since the arc stays below the tangent at its end, which leaves the chord at the
+  angle `β`, and so within `(1 + 1/cos β)·(1 − cos(c/2))·ρ_hi` of `γ`'s end. On
+  rows that end on a plane, `c` is at most `stripColumn`, so that is at most
+  `(1 + 1/cos β)·τ_a/4`, `τ_a` below, inside the sum's bound.
+
+So the exact strip's facets and its patch lie within `σ + ê` of each other
+both ways.
+
+*Column limit.* A row takes at most 4,096 columns over a closed rim's turn or
+an open row's span (`columnCount`, `maxStripColumns`). The column step shrinks
+with `√(size/ρ)`, so a blend tiny against its rim would need more: on a closed
+rim a fillet reaches the limit below `r/ρ_hi` of about `6.0·10⁻⁴`, and a
+chamfer, whose columns take all of `τ`, below `d/ρ_hi` of about `3.0·10⁻⁴`. Such a
+blend refuses (SR5) rather than step coarser than its bound states.
+
+*The rows and columns split `τ` between the two terms.* The terms add, so a
+fillet spends half of `τ` on each: its rows keep `σ ≤ τ/2` (`profileShare`; the
+profile's step, §5 step 3, and the arc rows' halving, which only shortens gaps),
+and its columns keep `ê ≤ τ_a = τ/2` (`azimuthShare`). A chamfer's profile is
+straight, `σ = 0`, so its columns take all of it, `τ_a = τ`. Splitting `τ`
+instead of stating `2τ` keeps a later Boolean's chain-depth gate (api-design §8)
+admitting the blend face: a hole mouth filleted with r = 1 and then cut through
+its torus refuses there with `2τ`. The columns hold the azimuth term:
+
+- A closed rim (R2, R6) gives every row the plane polygon's azimuths, whose step
+  `c` keeps `ρ_hi·(1 − cos(c/2)) ≤ τ_a` (`ringCount` at the largest radius of
+  any row; an R6 arc can bulge past the rim's radius, so its rows are read). A
+  triangle between two such rows spans one column.
+- A chain's arc entry with no free end steps its meridian columns the same way.
+- A row that ends on an end plane `G` (R4, and a chain's free end, whose
+  columns fan out from the end curve) runs between azimuths that differ from
+  row to row. The arc route joins two rows by whichever row's next vertex comes
+  first in its own fraction `t` of the row (`zipOpen`), so a triangle's three
+  `t` lie within one column of one of the two rows. Each row's azimuth is linear
+  in `t`, and two rows' azimuths at one `t` differ by at most the larger shift
+  of their ends on `G₀` and `G₁`, so `Δφ ≤ column step + end shift`. A chain's
+  fan columns sit at one fraction of every row, which gives the same sum, so
+  they are counted across the widest row, not the rim's span: at a boss's
+  corner (`κ = −1`) the rows nearer the axis sweep far wider angles than the
+  rim. The columns step by `c = 2·acos(1 − τ_a/(4ρ_hi))` (`stripColumn`) and
+  the rows are added until the end's azimuth `acos(h/ρ)` moves by at most `c`
+  between neighbours (`endSection.shifts`). Then
+  `ρ_hi·(1 − cos(Δφ/2)) ≤ ρ_hi·(1 − cos c) ≤ 4·ρ_hi·(1 − cos(c/2)) = τ_a`, by
+  `1 − cos 2x = 8·sin²(x/2)·cos²(x/2) ≤ 4·(1 − cos x)`.
+
+So a strip triangle between two exact rows lies within `τ` of the blend, and
+every exact strip vertex takes `τ` plus slack, which holds `e_i`. An R6 rim
+keeps its rows and its polygon at `τ` each, and its interior rows state `2τ`.
+With each term at `τ/2`, the r = 0.2 lower rim of the radius 2 ball's slice
+between z = −1.5 and −1 (`apitest/faceted_retained_blend_sphere_test.go`)
+refuses SR7, "the held boundary does not close": its band and the sphere's
+clipped facets share a directed edge. The same refusal comes at other slices
+on either grid, r = 0.1 with the lower cut at −1.5 and r = 0.2 with it at −1.8
+(`agent-docs/missing-features.md`), so keeping `τ` each only moves where that
+weakness of the R6 construction shows. The `2τ` rows, and the band's slanted
+cut offsets, put a later Boolean whose contact crosses the torus past the
+chain-depth gate (`agent-docs/missing-features.md`). Its plane polygon states
+`τ`, since every strip triangle has a corner on an interior row. The steps are computed in
+floating point, as `rowStep` is; their rounding moves each term by a few units
+in the last place of `τ`, inside slack.
+
+*The band beside the wall's cut.* A triangle with a wall cut vertex `v` does not
+have exact corners. `v` lies on an edge of a held wall facet `t`, which claims
+its true piece within its facet bound `δ_t`, the largest bound of its three
+corners (the cut edge's two ends alone do not carry that claim), so a point of
+the true wall lies within `δ_t + e` of `v`, `e` the rounding of the cut. Its
+surrogate `ṽ` is the setback circle's point at `v`'s azimuth (on a chain's
+plane wall, the setback line's point beside it), a point of the blend's last
+row:
+
+- On a cylinder about the axis or a plane along the edge, the cut plane meets
+  the wall square, so `|v − ṽ| ≤ δ_t + 2e`.
+- On an R6 sphere of radius `R_s` about the height `z_S`, the cut plane `z_B`
+  meets it at a slant. From `ρ² = |v − S|² − (z − z_S)²`,
+  `|ρ_v − ρ_B| ≤ (δ'·(2R_s + δ') + e·(2|z_B − z_S| + e)) / (ρ_v + ρ_B)` with
+  `δ' = δ_t + e`, and `|v − ṽ|` is that plus `e` (`cutOffset`).
+
+Claim S applied to the surrogates puts the triangle within the larger offset of
+its cut vertices, plus the last gap's `σ`, plus `ê_t = ρ_hi·(1 − cos(Δφ_t/2))`
+of its own vertices' azimuths, which come from the held wall and no step
+bounds. The other way, the surrogate band reaches every point of the patch
+between the last row and the setback circle within `σ + ê_t` where `L` crosses
+the triangle, or within `(1 + 1/cos β)·ê_t` beside a row's polyline, whose edge
+belongs to a band triangle whose spread is at least that edge's; the real band
+lies within the offsets of the surrogate one, vertex for vertex. The build
+computes `offset + σ + (1 + 1/cos β)·ê_t` per band triangle, which covers both,
+and raises each of its cut vertices to it plus slack (`chargeBand`); a chain's
+straight entry has no azimuth term, since its surrogates lie on the setback
+line, parallel to its last row. The wall's held facets beside the cut take the
+raised bounds too, which only widens their own.
+
+*A corner's sphere patch* (§4.8) is a grid of triangles whose corners lie on the
+sphere of radius `r` about `C`. Every point `x` of such a triangle lies inside
+the sphere, no nearer `C` than the triangle's plane, so `r − |x − C|` is at most
+`r` less that plane's distance from `C`; the point of the sphere on the ray
+from `C` through `x` lies that far from it, which bounds both directions. A
+patch triangle reaches farther from the sphere than the rows' chords along its
+sides: about 2.6 times as far on the grid of the rows' count. The rows are
+therefore added until the grid's own departure (`octantDeparture`, the grid's
+shape at unit radius) times `r` is within the corner route's tolerance, and the
+blend refuses (SR5) past 1,024 rows. Each patch vertex also takes its
+triangles' computed departure plus slack (`chargeSpherePatch`).
 
 **Rounding and tilt in the certificate.** `certify` runs in floating point, as
 `rowStep` does. Write `u = 2⁻⁵³` for the unit roundoff and `ulp = 2u`, measure
@@ -1198,8 +1349,9 @@ rim, such as `r = 10⁻⁶` on a 1,000 mm bore whose end plane meets the wall's 
 at `q = 10⁻³`, or for a tilted plane at `q` near 10⁻⁷, and then the rows refuse.
 
 **Volume.** The new `VolSymDiff` is the old one plus `ε·(A_strip + A_true)`, with
-`ε` the largest vertex bound of the strip and `A_strip`, `A_true` the held and
-exact areas of the blend face. Two surfaces within `ε` of each other enclose at
+`ε` the largest vertex bound of the strip's facets, the band's raised cut
+vertices included, and `A_strip`, `A_true` the held and exact areas of the
+blend face. Two surfaces within `ε` of each other enclose at
 most `ε` times the larger area between them.
 
 The `Verify` and `VerifyAll` results come from the faceted audit of the rebuilt
@@ -1254,7 +1406,8 @@ published bound, never with a pinned literal.
 | Concave edge at a wall's foot | the plate face is reflex at each foot corner; the fill adds `L·r²(1 − π/4)`, the wall's end faces grow by the caps, `VerifyAll` passes; two foot edges together and a chamfer build as well | keep `V` out of the extended end face's loop: the mesh fails its audit |
 | Oblique end face, sketched at 45° about z and, separately, about y (no exact tool leans both ways) | the end arc is an `Ellipse3` with `SemiMinor = r` and `SemiMajor = r / |d̂ · nG|`; removed volume equals the section area times the length between the end planes measured through the section's centroid | treat `G` as normal to the edge: the volume is off by the centroid offset |
 | Rows ending on oblique planes (`apitest/faceted_retained_blend_oblique_end_test.go`): the 45° end face above at r = 2, a two-edge mitre run at r = 3, and the 45° plane of a two-edge corner on the corner route at r = 2 | 1,001 samples of the true end curve, the ellipse the cylinder cuts in that plane, lie within the mesh's `Bound` of its facets. A unit test (`internal/retainedblend/line_rewrite_internal_test.go`) projects rows onto a plane with `|d̂ · n| = 1/2`: the chord centred on the stretch direction has sagitta `r·(1 − cos h)/c` there and no other chord's is larger; spaced for the cross-section alone that is `τ/c`, spaced by `rowStep` it is `τ` | space the rows by `τ` alone in any of the three routes: its curve lies up to about 1.37 times `Bound` from the mesh; drop `c` from `rowStep`: the unit case reads `τ/c` |
-| Rows ending on an arc's offset end planes (`apitest/faceted_retained_blend_arc_end_plane_test.go`): a Ø8 bore whose axis lies `h` from the plate's face `x = 0` breaks out through it, fillet r = 4 with the wall's row meeting `x = 0` at `X/ρ` = 0.4 and 0.2 (arc route); the rounded box corner cut back so the plane's row meets the cut at `X/ρ` = 0.1, fillet r = 2.5 along the tangent chain (chain route); a pocket open through `x = 0` whose 3 mm corners' axes lie 2.5 mm from it, fillet r = 2 along the mouth's chain (chain route, hole side); the hole mouth chamfered with d = 1, 2 and 4 at `X/ρ` = 0.4 and 0.2 | 1,001 samples of each true end curve, taken from the torus, lie within the mesh's `Bound` of its facets; every chamfer strip triangle, sampled on a barycentric grid against the cone's generator in closed form, lies within `Bound` of the cone. Unit tests (`internal/retainedblend/arc_section_internal_test.go`) pin `tan ψ = g·X/ρ` against finite differences of a sampler that bisects each row's circle against the plane; on a plane through the axis, where the end curve is the tube's circle, `certify` refuses a chord whose sagitta `r·(1 − cos(Δα/2))` is 1.01 `τ` and accepts one at 0.9 `τ`; a hole mouth's torus and cone at `X/ρ` = 0.2 and a boss's torus at 0.1 keep every sampled chord within `τ` with at most 64 rows, where the profile's own rows stray past it; a plane through the axis adds no rows; a tiny `τ`, and a fillet of 10⁻⁶ on a 1,000 mm bore whose margin `δ` passes `τ`, refuse past 1,024 rows; a plane the setback circle misses refuses; `TestEndSectionMarginCoversRounding` measures the rounding of `X` and of the placed row vertex in 200-bit arithmetic under `δ/4` down to `q = 10⁻⁶`; `TestChamferRowsHoldEndShift` holds a chamfer's end azimuth shift between rows within `chamferColumn`, which the profile's rows alone exceed; `TestEndSectionTiltCharge` measures a plane tilted 10⁻⁹ off the axis in 200-bit arithmetic within the margin's tilt term and refuses where that term passes `τ`; the pocket with its axes 2.75 mm from `x = 0` refuses at the walk (SX2) | space the rows by the profile alone: the curves lie up to 1.41 times `Bound` from the mesh (1.22 at 0.4, 1.05 on the chain) and the unit cases stray past `τ`; drop the parallelogram's corners from `certify`: the 1.01 `τ` chord certifies; set `δ` to zero: the rounding test and the margin refusal fail; drop the chamfer's column step and end shift: the strips at d = 2, c = 0.4 and d = 4 at both sines lie up to 1.52 times `Bound` from the cone; drop the tilt term: the tilt test fails |
+| Rows ending on an arc's offset end planes (`apitest/faceted_retained_blend_arc_end_plane_test.go`): a Ø8 bore whose axis lies `h` from the plate's face `x = 0` breaks out through it, fillet r = 4 with the wall's row meeting `x = 0` at `X/ρ` = 0.4 and 0.2 (arc route); the rounded box corner cut back so the plane's row meets the cut at `X/ρ` = 0.1, fillet r = 2.5 along the tangent chain (chain route); a pocket open through `x = 0` whose 3 mm corners' axes lie 2.5 mm from it, fillet r = 2 along the mouth's chain (chain route, hole side); the hole mouth chamfered with d = 1, 2 and 4 at `X/ρ` = 0.4 and 0.2 | 1,001 samples of each true end curve, taken from the torus, lie within the mesh's `Bound` of its facets; every facet of the chamfer, the band beside the wall's cut included, sampled on a barycentric grid against the cone's generator in closed form, lies within `Bound` of the cone. Unit tests (`internal/retainedblend/arc_section_internal_test.go`) pin `tan ψ = g·X/ρ` against finite differences of a sampler that bisects each row's circle against the plane; on a plane through the axis, where the end curve is the tube's circle, `certify` refuses a chord whose sagitta `r·(1 − cos(Δα/2))` is 1.01 `τ` and accepts one at 0.9 `τ`; a hole mouth's torus and cone at `X/ρ` = 0.2 and a boss's torus at 0.1 keep every sampled chord within `τ` with at most 96 rows, the rows that hold the ends' azimuth shift included, where the profile's own rows stray past it; a plane through the axis adds no rows; a tiny `τ`, and a fillet of 10⁻⁶ on a 1,000 mm bore whose margin `δ` passes `τ`, refuse past 1,024 rows; a plane the setback circle misses refuses; `TestEndSectionMarginCoversRounding` measures the rounding of `X` and of the placed row vertex in 200-bit arithmetic under `δ/4` down to `q = 10⁻⁶`; `TestStripRowsHoldEndShift` holds the end azimuth shift between rows of a hole mouth's cone and torus at the sine 0.2 and of a boss's torus at 0.1 within `stripColumn`, which the profile's rows alone exceed; `TestEndSectionTiltCharge` measures a plane tilted 10⁻⁹ off the axis in 200-bit arithmetic within the margin's tilt term and refuses where that term passes `τ`; the pocket with its axes 2.75 mm from `x = 0` refuses at the walk (SX2) | space the rows by the profile alone: the curves lie up to 1.41 times `Bound` from the mesh (1.22 at 0.4, 1.05 on the chain) and the unit cases stray past `τ`; drop the parallelogram's corners from `certify`: the 1.01 `τ` chord certifies; set `δ` to zero: the rounding test and the margin refusal fail; drop the chamfer's column step and end shift: the strips at d = 2, c = 0.4 and d = 4 at both sines lie up to 1.52 times `Bound` from the cone; drop the tilt term: the tilt test fails |
+| Strip triangles (`apitest/faceted_retained_blend_strip_interior_test.go`, `retained_blend_facet_bound_test.go`): the rounded box corner cut back so the plane's row meets the cut at `q` = 0.4 and 0.2 for r = 2 and at 0.4, 0.2 and 0.1 for r = 2.5, filleted along the tangent chain (`κ = −1`); the hole mouth that breaks out through `x = 0`, filleted with d = 1, 2 and 4 at `X/ρ` = 0.4 and 0.2; bosses of radius 3 and 4 on the plate, their top rims filleted with r = 1 and 2.5, and of radius 1 at r = 0.01; a boss of radius 9 filleted at r = 0.004 and chamfered at d = 0.003, and an Ø18 bore's mouth filleted at r = 0.002; a groove's top edge (R3) and a bore pair's ridge (R5) filleted with r = 1; the cap of the radius 2 ball below z = −1, its rim filleted with r = 0.4; three edges at a mesh box's corner filleted with r = 1, 2 and 3 | every facet of each blend face, the band beside the wall's cut included, sampled on a 12×12 barycentric grid against the fixture's profile or sphere in closed form, lies within the mesh's `Bound`; the root test reads each blend facet's own bound, the largest vertex bound of its corners, and every sample of the boss rims at r = 1 and 2.5, the boss corner at r = 2.5 and `q` = 0.4, the hole mouth at d = 4 and 0.2, the sphere rim, the r = 2 corner, the radius 9 boss's chamfer at d = 0.003, the groove and the ridge lies within it. Every blend facet's normal agrees in sign with the exact surface's outward normal at its centroid, the smallest dot product logged (0.107 on the radius 1 boss's band, whose held wall steps far wider than its rows). The radius 9 boss at r = 0.004 and the Ø18 mouth refuse past 4,096 columns; `TestColumnCountRefusesPastTheLimit` builds exactly 4,096 and refuses one more. `TestOctantDepartureCoversSamples` samples the corner patch's grid at 4, 17 and 51 rows: no sample lies past `octantDeparture`, the farthest comes within a tenth of it, and it passes twice the side chords' sagitta | count a fillet's fan columns across the rim's span: the boss corner lies up to 2.83 times `Bound` (5.31 `τ`) from the torus; give each of a fillet's two terms all of `τ`: the boss rims and the boss corner fail the root test, their facets up to 1.01 times their own bounds, while `Bound` alone still covers them, held up by the band's cut vertices; drop the band's charge: the sphere rim's band lies 1.91 times `Bound` from the torus, and 0.0103 mm against its facets' own 0.0060; size the corner's rows by the strips alone and drop the patch's charge: the patch lies 2.60 times `Bound`; size them so and keep the charge: both tests pass and the corner boxes' volume bounds pass 0.1 and 0.5 (`apitest/orthogonal_fillet_corner_test.go`); drop the shift from a fillet's rows: `TestStripRowsHoldEndShift` fails; state `2τ` on every fillet row instead of splitting `τ`: `TestFacetedSourcePatchBlendThenCut` refuses at the chain-depth gate; clamp the column count at 4,096 instead of refusing: the radius 9 boss and the Ø18 mouth build, their facets 1.14 and 1.35 times their own bounds; read a curved wall's cut vertex from its edge's two ends alone: no fixture here fails, since their held facets' corners carry equal bounds |
 | Grazing-angle and direction gates (`TestGatesRefuseNaN`, `internal/retainedblend/line_internal_test.go`) | each gate refuses a value that is not a number, as a tag whose normal is not a number produces: `shallow` (the straight edge's end, mitre and corner planes, and the cylinder–cylinder walls' meeting), `intersect3`, `grazes` (a plane–cylinder edge's end plane), `clears` (the cylinder–cylinder walls' ways out of a corner), `crossing` (a sphere rim's plane) and `cornerTurn` (a chain end's turn reads undecided) | write any of them as `c < minSine`, `≤` or `>` against the bound: NaN passes and its subtest fails |
 | Clearance | a radius past the face width refuses `ErrDegenerate`; a radius within `b` of it refuses `ErrUnsupported` | drop the `− b_v` term of §6.2: the near case builds an invalid solid |
 | Shared vertex / tangent chain | refuse SR2 | |
@@ -1284,7 +1437,7 @@ published bound, never with a pinned literal.
 
 | Area | Change |
 |---|---|
-| `internal/retainedblend/` | new: classification (Table RR), exact geometry (§4), clip, strip and end construction (§5), gates (§6); R6 in `sphere.go`, its exact-record rule in `denoted.go`; R3's wall band in `cyl_band.go` |
+| `internal/retainedblend/` | new: classification (Table RR), exact geometry (§4), clip, strip and end construction (§5), gates (§6); R6 in `sphere.go`, its exact-record rule in `denoted.go`; R3's wall band in `cyl_band.go`; the strip triangles' bounds, the band's charge and the corner patch's in `strip_bound.go` |
 | `internal/facetedrecord/` | an entry that builds a payload from new vertices, triangles, groups and bounds; no change to `Build` |
 | `internal/retainedblend/saddle.go`, `saddle_tool.go`, `internal/crossbore/saddle_tool.go` | R7 (§4.9): recognition, tool, band proof, outside and clearance proofs, the Cut |
 | `internal/brepmodify/chamfer.go` | calls `retainedblend.SaddleChamfer` with the hooks' mesher before `retainedblend.Chamfer` |

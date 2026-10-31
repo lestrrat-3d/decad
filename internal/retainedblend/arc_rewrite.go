@@ -196,20 +196,22 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 		return nil, err
 	}
 
-	// The plane's row, the wall's row, and the rows between them.
-	// A chamfer's columns step finer than the rows' own sagitta needs, so a
-	// strip triangle that also spans the shift of the rows' ends stays within
-	// tau of the cone (§6.3); a fillet's columns step by tau on each circle.
-	colStep := 0.0
-	if !spec.fillet {
-		colStep = chamferColumn(w.tau, max(a.radius, rhoA))
+	// The plane's row, the wall's row, and the rows between them. The columns
+	// step by stripColumn on every row, so a strip triangle that also spans the
+	// shift of the rows' ends keeps its azimuth term within its share of tau
+	// (§6.3).
+	colStep := stripColumn(azimuthShare(spec, w.tau), max(a.radius, rhoA))
+	colsA, err := w.arcRow(a, rows[0], 0, rhoA, colStep)
+	if err != nil {
+		return nil, err
 	}
-	colsA := w.arcRow(a, rows[0], 0, rhoA, colStep)
 	bound := w.tau + slack
 	rowCols := make([][]colPt, m+1)
 	rowCols[0] = colsA
 	for j := 1; j < m; j++ {
-		rowCols[j] = w.interiorRow(a, rows[j], bound, colStep)
+		if rowCols[j], err = w.interiorRow(a, rows[j], bound, colStep); err != nil {
+			return nil, err
+		}
 	}
 	rowCols[m] = make([]colPt, len(cutIDs))
 	span := rows[m].theta
@@ -302,6 +304,9 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 			w.emit(t, blendGroup)
 		}
 	}
+	// The band beside the wall's cut takes its cut vertices' offsets (§6.3).
+	w.chargeBand(stripFrom, bandAxis{o: a.center, n: n, ok: true}, max(a.radius, rhoA),
+		filletSag(spec, (1-ss[m-1])*math.Pi/2), slack)
 	w.removedTrue, tag.trueArea = a.arcAreas(profile, rows, tb)
 
 	groups := append([]facetedrecord.Group(nil), fp.Groups...)
@@ -317,43 +322,37 @@ func rewriteArc(ctx context.Context, env topo.Env, fp facetedrecord.Payload, a a
 	return w.buildClear(ctx, env, groups, stripFrom, tag, faceIndex)
 }
 
-// columnStep is the azimuth step of a row of radius rho: step when positive,
-// else the step whose sagitta on the circle is tau.
-func (w *work) columnStep(rho, step float64) float64 {
-	if step > 0 {
-		return step
-	}
-	return 2 * math.Acos(1-math.Min(w.tau/math.Max(rho, w.tau), 1))
-}
-
 // arcRow builds the plane's row: the setback points and the points between
-// them along the circle of radius rho, step apart at most (columnStep).
-func (w *work) arcRow(a arcRim, row arcRow, z, rho, step float64) []colPt {
+// them along the circle of radius rho, step apart at most.
+func (w *work) arcRow(a arcRim, row arcRow, z, rho, step float64) ([]colPt, error) {
 	bound := w.tau + a.slack()
 	t0, t1 := row.theta[0], row.theta[1]
-	step = w.columnStep(rho, step)
-	k := max(1, int(math.Ceil((t1-t0)/step)))
+	k, err := columnCount(t1-t0, step, rho, w.spec.size(), 1)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]colPt, 0, k+1)
 	for i := 0; i <= k; i++ {
 		f := float64(i) / float64(k)
 		out = append(out, colPt{w.vertex(a.atTheta(rho, t0+(t1-t0)*f, z), bound), f})
 	}
-	return out
+	return out, nil
 }
 
 // interiorRow builds a row between the plane's and the wall's: its end points
-// on the end faces and the points between them, step apart at most
-// (columnStep).
-func (w *work) interiorRow(a arcRim, row arcRow, bound, step float64) []colPt {
+// on the end faces and the points between them, step apart at most.
+func (w *work) interiorRow(a arcRim, row arcRow, bound, step float64) ([]colPt, error) {
 	t0, t1 := row.theta[0], row.theta[1]
-	step = w.columnStep(row.rho, step)
-	k := max(1, int(math.Ceil((t1-t0)/step)))
+	k, err := columnCount(t1-t0, step, row.rho, w.spec.size(), 1)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]colPt, 0, k+1)
 	for i := 0; i <= k; i++ {
 		f := float64(i) / float64(k)
 		out = append(out, colPt{w.vertex(a.atTheta(row.rho, t0+(t1-t0)*f, row.z), bound), f})
 	}
-	return out
+	return out, nil
 }
 
 // zipOpen joins two open rows into a band of triangles by advancing whichever
@@ -423,6 +422,7 @@ func (w *work) clipArcWall(f faceLoops, a arcRim, tb float64, generator map[int]
 			g[v] = gv
 		}
 	}
+	facetBound := 0.0
 	cut := func(x, y int) int { // x removed, y kept
 		key := [2]int{min(x, y), max(x, y)}
 		if id, ok := w.cuts[key]; ok {
@@ -430,12 +430,14 @@ func (w *work) clipArcWall(f faceLoops, a arcRim, tb float64, generator map[int]
 		}
 		t := g[x] / (g[x] - g[y])
 		p := w.verts[x].Add(w.verts[y].Sub(w.verts[x]).Scale(t))
-		id := w.vertex(p, max(w.beta[x], w.beta[y])+slack+w.tau)
+		id := w.vertex(p, facetBound+slack+w.tau)
+		w.noteCut(id, facetBound)
 		w.cuts[key] = id
 		return id
 	}
 	for _, facet := range f.facets {
 		t := w.fp.Tris[facet]
+		facetBound = w.facetBound(t)
 		var above []int
 		for k, v := range t {
 			if g[v] > 0 {

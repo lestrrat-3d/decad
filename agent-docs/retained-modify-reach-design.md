@@ -286,8 +286,9 @@ The rewrite touches `P`, every wall `W_k`, every seam between consecutive walls,
    way from its azimuth on `G` to the azimuth of the other end's meridian, so every vertex lies on the torus. The end
    curve stays a chain of exact points (it is no conic). The rows of a fillet or a chamfer with an arc end are refined,
    as blend §4.4's are, until their chords follow the section `G` cuts in the torus or cone to within `τ`
-   (blend §6.3), and every entry of the chain takes those rows. A chamfer's fan columns step by `chamferColumn`
-   across the widest row, and its rows also hold the end's azimuth shift to that step (blend §6.3).
+   (blend §6.3), and every entry of the chain takes those rows. The fan columns step by `stripColumn` across the
+   widest row, not the rim's span, and the rows also hold the end's azimuth shift to that step, a fillet's and a
+   chamfer's alike (blend §6.3, Strip triangles).
 
    At a straight end `P`, `W` and `G` meet pairwise orthogonally at `V` (`cornerOf` admits exactly three faces and
    `G` is normal to the edge). The end is classified by the turn of each face's loop at `V` about the face's
@@ -417,9 +418,10 @@ groove's edge or the ridge between two bores builds without the test and refuses
 ### 5.7 Bounds
 
 Claim K (blend §6.3) holds with `K = ∪ K_k`: outside it the rewritten mesh equals the held one; inside each `K_k`
-the strip's chords leave the exact blend by at most `τ`. The shared junction rows add no term, because both
-neighbouring strips use the same vertices, which lie on both exact blend surfaces (Claim J). A junction vertex
-takes `τ` plus the rounding of its computation. `VolSymDiff` and `AreaSlack` add each edge's terms as blend §6.3
+the strip's facets leave the exact blend by at most `τ`, and the band beside the walls' cut by its cut vertices'
+raised bounds (blend §6.3, Strip triangles). The shared junction rows add no term, because both neighbouring strips
+use the same vertices, which lie on both exact blend surfaces (Claim J). A junction vertex takes `τ` plus the
+rounding of its computation. `VolSymDiff` and `AreaSlack` add each edge's terms as blend §6.3
 states them, and `AreaSlack` the shortfall of the chain's rebuilt body's geometric terms against the old body's, by
 source group, once per chain (blend §6.3, Area). The exact areas are
 blend §5.0's for an R1 edge with `μ = 0` (its end planes are normal to it) and blend §4.4's for an R4 edge over its

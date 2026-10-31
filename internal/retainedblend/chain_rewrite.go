@@ -380,19 +380,23 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 			}
 		}
 		rhoMax := max(en.rim.radius, en.rim.radius+en.rim.kappa*tP)
-		dTheta := 2 * math.Acos(1-math.Min(w.tau/rhoMax, 1))
+		share := azimuthShare(spec, w.tau)
+		dTheta := 2 * math.Acos(1-math.Min(share/rhoMax, 1))
 		width := en.span
-		if fan && !fillet {
-			// A chamfer's fan columns step by chamferColumn across the widest
-			// row, so a strip triangle that also spans the shift of the rows'
-			// ends on G stays within tau of the cone (blend §6.3).
-			dTheta = chamferColumn(w.tau, rhoMax)
+		if fan {
+			// A fan's columns step by stripColumn across its widest row, so a
+			// strip triangle that also spans the shift of the rows' ends on G
+			// keeps its azimuth term within its share of tau (blend §6.3).
+			dTheta = stripColumn(share, rhoMax)
 			start, end := en.fanBounds(rowsM)
 			for j := range rowsM {
 				width = max(width, math.Abs(end[j]-start[j]))
 			}
 		}
-		na := max(2, int(math.Ceil(width/dTheta)))
+		na, err := columnCount(width, dTheta, rhoMax, spec.size(), 2)
+		if err != nil {
+			return nil, err
+		}
 		for i := 0; i <= na; i++ {
 			f := float64(i) / float64(na)
 			switch {
@@ -620,6 +624,7 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 			}
 		}
 		last := rowsM - 1
+		bandFrom := len(w.out)
 		bi := 0
 		bp := make([]float64, len(ringB[t]))
 		for k, c := range ringB[t] {
@@ -637,6 +642,14 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 			emit(en.cols[i].rows[last], ringB[t][bi+1], ringB[t][bi])
 			bi++
 		}
+		// The band beside the wall's cut takes its cut vertices' offsets; an
+		// arc entry's band also its azimuth spread (blend §6.3).
+		axis := bandAxis{}
+		if en.arc {
+			axis = bandAxis{o: en.rim.center, n: en.rim.n, ok: true}
+		}
+		w.chargeBand(bandFrom, axis, max(en.rim.radius, en.rim.radius+en.rim.kappa*tP),
+			filletSag(spec, (1-rowS[rowsM-1])*math.Pi/2), slack)
 		pa, wa, ba := en.areas(tP, tW, spec)
 		if en.freeStart != nil || en.freeEnd != nil {
 			pa, wa, ba = en.areasFree(tP, tW)
@@ -938,13 +951,15 @@ func (w *work) clipChainWall(en chainEntry, up, oP r3.Vec, tW float64, topSet, n
 		}
 	}
 	mine := map[int]bool{}
+	facetBound := 0.0
 	cut := func(a, b int) int {
 		k := [2]int{min(a, b), max(a, b)}
 		c, ok := w.cuts[k]
 		if !ok {
 			t := g[a] / (g[a] - g[b])
 			p := w.verts[a].Add(w.verts[b].Sub(w.verts[a]).Scale(t))
-			c = w.vertex(p, max(w.beta[a], w.beta[b])+slack+w.tau)
+			c = w.vertex(p, facetBound+slack+w.tau)
+			w.noteCut(c, facetBound)
 			w.cuts[k] = c
 		}
 		mine[c] = true
@@ -952,6 +967,7 @@ func (w *work) clipChainWall(en chainEntry, up, oP r3.Vec, tW float64, topSet, n
 	}
 	for _, f := range facets {
 		t := w.fp.Tris[f]
+		facetBound = w.facetBound(t)
 		var above []int
 		for k, v := range t {
 			if g[v] > 0 {
