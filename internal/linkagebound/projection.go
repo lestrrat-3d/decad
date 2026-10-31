@@ -146,6 +146,29 @@ func Lower(a, b Side) *big.Rat {
 	return best
 }
 
+// LowerWithDirection returns Lower's bound and the first coordinate axis and
+// sense that attains it, in Lower's axis and sense order.
+func LowerWithDirection(a, b Side) (*big.Rat, int, int) {
+	aUp, aDown := a.Extents()
+	bUp, bDown := b.Extents()
+	var best *big.Rat
+	axis, sense := 0, 1
+	for d := range 3 {
+		for _, candidate := range []struct {
+			bound *big.Rat
+			sense int
+		}{
+			{new(big.Rat).Neg(proofarith.AddRat(new(big.Rat), bDown[d], aUp[d])), 1},
+			{new(big.Rat).Neg(proofarith.AddRat(new(big.Rat), bUp[d], aDown[d])), -1},
+		} {
+			if best == nil || candidate.bound.Cmp(best) > 0 {
+				best, axis, sense = candidate.bound, d, candidate.sense
+			}
+		}
+	}
+	return best, axis, sense
+}
+
 // FaceNormals is agent-docs/linkage-check-design.md §5.8's candidate directions
 // read off a point reading: for a prism's hull points, its extrusion
 // direction and each side face's normal, the cross product of the side's

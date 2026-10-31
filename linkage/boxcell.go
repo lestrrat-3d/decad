@@ -322,9 +322,8 @@ func (b *boxRun[B]) cellProjection(c *boxCell[B], i, k int, readings map[cellRea
 	if !ok {
 		return nil, nil
 	}
-	bound := linkagebound.Lower(a, p)
+	bound, axis, sense := linkagebound.LowerWithDirection(a, p)
 	shares := make(map[int]*big.Rat)
-	axis, sense := linkagebound.AttainedDirection(a, p, bound)
 	linkagebound.AddAxisShares(shares, a, mine.Rho[below:], linkagebound.ProjectionAxes(mine.Path, below, axisOf), axis, sense)
 	if other >= 0 {
 		linkagebound.AddAxisShares(shares, p, theirs.Rho[below:], linkagebound.ProjectionAxes(theirs.Path, below, axisOf), axis, -sense)
