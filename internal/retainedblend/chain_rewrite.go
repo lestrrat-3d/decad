@@ -950,8 +950,7 @@ func (w *work) clipChainWall(en chainEntry, up, oP r3.Vec, tW float64, topSet, n
 		}
 	}
 	mine := map[int]bool{}
-	facetBound := 0.0
-	cut := func(a, b int) int {
+	cut := func(a, b int, facetBound float64) int {
 		k := [2]int{min(a, b), max(a, b)}
 		c, ok := w.cuts[k]
 		if !ok {
@@ -964,36 +963,7 @@ func (w *work) clipChainWall(en chainEntry, up, oP r3.Vec, tW float64, topSet, n
 		mine[c] = true
 		return c
 	}
-	for _, f := range facets {
-		t := w.fp.Tris[f]
-		facetBound = w.facetBound(t)
-		var above []int
-		for k, v := range t {
-			if g[v] > 0 {
-				above = append(above, k)
-			}
-		}
-		switch len(above) {
-		case 0:
-		case 3:
-			w.emit(t, group)
-		case 1:
-			x := above[0]
-			a, b, c := t[x], t[(x+1)%3], t[(x+2)%3]
-			w.emit([3]int{a, cut(a, b), cut(c, a)}, group)
-		case 2:
-			z := 0
-			for k := range 3 {
-				if g[t[k]] <= 0 {
-					z = k
-				}
-			}
-			x, y, below := t[(z+1)%3], t[(z+2)%3], t[z]
-			cyz, czx := cut(y, below), cut(below, x)
-			w.emit([3]int{x, y, cyz}, group)
-			w.emit([3]int{x, cyz, czx}, group)
-		}
-	}
+	w.clipFacets(facets, g, group, cut)
 	w.removed = append(w.removed, facets...)
 	if len(mine) < 2 {
 		return nil, 0, fmt.Errorf("%w: a wall's cut leaves fewer than two vertices", decaderr.ErrUnsupported)
