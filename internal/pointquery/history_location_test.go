@@ -64,6 +64,13 @@ func requireBooleanLocations(t *testing.T, n *topo.Body, src *historySource, cas
 	})
 }
 
+func overlappingCubeBoolean(t *testing.T, op meshbool.OperationKind) (*topo.Body, *historySource) {
+	t.Helper()
+	src := newHistorySource()
+	n := src.result(op, cube(t, 0), cube(t, 5))
+	return n, src
+}
+
 // TestSetAlgebraTables checks meet, join and complement for every pair of
 // answers against the tables of agent-docs/point-containment-design.md §8.3,
 // written out here rather than derived from each other.
@@ -99,8 +106,7 @@ func TestLocateBooleanCombines(t *testing.T) {
 	t.Parallel()
 	t.Run("union", func(t *testing.T) {
 		t.Parallel()
-		src := newHistorySource()
-		n := src.result(meshbool.OpUnion, cube(t, 0), cube(t, 5))
+		n, src := overlappingCubeBoolean(t, meshbool.OpUnion)
 		requireBooleanLocations(t, n, src, []prismCase{
 			{name: "in A only", at: r3.NewVec(2, 5, 5), want: Inside},
 			{name: "in B only", at: r3.NewVec(12, 5, 5), want: Inside},
@@ -113,8 +119,7 @@ func TestLocateBooleanCombines(t *testing.T) {
 	})
 	t.Run("intersect", func(t *testing.T) {
 		t.Parallel()
-		src := newHistorySource()
-		n := src.result(meshbool.OpIntersect, cube(t, 0), cube(t, 5))
+		n, src := overlappingCubeBoolean(t, meshbool.OpIntersect)
 		requireBooleanLocations(t, n, src, []prismCase{
 			{name: "in both", at: r3.NewVec(7, 5, 5), want: Inside},
 			{name: "B's face inside A", at: r3.NewVec(5, 5, 5), want: OnBoundary},
@@ -125,8 +130,7 @@ func TestLocateBooleanCombines(t *testing.T) {
 	})
 	t.Run("cut", func(t *testing.T) {
 		t.Parallel()
-		src := newHistorySource()
-		n := src.result(meshbool.OpCut, cube(t, 0), cube(t, 5))
+		n, src := overlappingCubeBoolean(t, meshbool.OpCut)
 		requireBooleanLocations(t, n, src, []prismCase{
 			{name: "in A only", at: r3.NewVec(2, 5, 5), want: Inside},
 			{name: "in both", at: r3.NewVec(7, 5, 5), want: Outside},
