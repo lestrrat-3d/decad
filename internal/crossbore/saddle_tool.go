@@ -160,9 +160,12 @@ func cross(a, b [3]fiv) [3]fiv {
 // holding u and v there.
 func bandDensity(cell *CellExact) ([ToolRows]float64, [ToolRows]float64, bool) {
 	var dO, dB, band [3]fiv
+	outerScale := fiv{1 + BandExtension, 1 + BandExtension}
+	extensionScale := fiv{BandExtension, BandExtension}
 	for c := range 3 {
-		dO[c] = fivOf(extend(cell.Derivs[c], cell.Derivs[3+c]))
-		dB[c] = fivOf(extend(cell.Derivs[3+c], cell.Derivs[c]))
+		outerDerivative, boreDerivative := fivOf(cell.Derivs[c]), fivOf(cell.Derivs[3+c])
+		dO[c] = outerDerivative.mul(outerScale).sub(boreDerivative.mul(extensionScale))
+		dB[c] = boreDerivative.mul(outerScale).sub(outerDerivative.mul(extensionScale))
 		band[c] = fivOf(crossMul(crossPoint(1+2*BandExtension), crossSub(cell.Coords[c], cell.Coords[3+c])))
 	}
 	u, v := cross(dB, band), cross(dO, band)
