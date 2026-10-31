@@ -465,6 +465,33 @@ func TestLowerHullAboveMatchesReference(t *testing.T) {
 	require.Positive(t, refused)
 }
 
+func TestLowerWithDirectionMatchesExistingCalculations(t *testing.T) {
+	g := &fixtureGen{rng: rand.New(rand.NewPCG(307, 311))}
+	for range 250 {
+		a, b := g.pair()
+		want := Lower(a, b)
+		axis, sense := AttainedDirection(a, b, want)
+		got, gotAxis, gotSense := LowerWithDirection(a, b)
+		require.Zero(t, want.Cmp(got))
+		require.Equal(t, axis, gotAxis)
+		require.Equal(t, sense, gotSense)
+	}
+
+	zero := new(big.Rat)
+	point := Side{Corners: Bounds{
+		Lo: [][3]*big.Rat{{zero, zero, zero}}, Hi: [][3]*big.Rat{{zero, zero, zero}},
+		Vel: [][][3]proofbound.RatInterval{{}},
+	}}
+	want := Lower(point, point)
+	axis, sense := AttainedDirection(point, point, want)
+	got, gotAxis, gotSense := LowerWithDirection(point, point)
+	require.Zero(t, want.Cmp(got))
+	require.Equal(t, 0, axis)
+	require.Equal(t, 1, sense)
+	require.Equal(t, axis, gotAxis)
+	require.Equal(t, sense, gotSense)
+}
+
 // TestHullDirectionBelowIsSound checks the float test alone: whenever it
 // reports a direction below a limit, both exact candidates of the direction are
 // below the limit. The limits straddle the exact larger candidate to within a
