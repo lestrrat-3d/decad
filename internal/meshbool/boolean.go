@@ -211,7 +211,7 @@ func gatherNearContacts(ctx context.Context, bmA *BoolMesh, fis []int, bmB *Bool
 		for position, j := range fjs {
 			boxes[position] = bmB.Boxes[j]
 		}
-		tree = newBoxTree(boxes)
+		tree = newQueryBoxTree(boxes)
 		candidateIDs = make([]int, 0, min(len(fjs), 64))
 	}
 	for _, i := range fis {

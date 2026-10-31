@@ -164,6 +164,16 @@ func (tree *heldBoxTree) prepareQueryCeilings(ctx context.Context, queryFacet []
 }
 
 func newBoxTree(boxes [][2]r3.Vec) heldBoxTree {
+	return buildBoxTree(boxes, true)
+}
+
+// newQueryBoxTree builds a tree for read-only facet queries without keeping
+// the leaf-order box copy used only by held self-pair scans.
+func newQueryBoxTree(boxes [][2]r3.Vec) heldBoxTree {
+	return buildBoxTree(boxes, false)
+}
+
+func buildBoxTree(boxes [][2]r3.Vec, keepSlotBoxes bool) heldBoxTree {
 	facets := make([]int, 0, len(boxes))
 	for i, box := range boxes {
 		// BoxesOverlap is false for a box with a NaN coordinate.
@@ -177,9 +187,11 @@ func newBoxTree(boxes [][2]r3.Vec) heldBoxTree {
 	if len(facets) > 0 {
 		tree.build(boxes, facets)
 	}
-	tree.slotBoxes = make([][2]r3.Vec, len(tree.facets))
-	for s, facet := range tree.facets {
-		tree.slotBoxes[s] = boxes[facet]
+	if keepSlotBoxes {
+		tree.slotBoxes = make([][2]r3.Vec, len(tree.facets))
+		for s, facet := range tree.facets {
+			tree.slotBoxes[s] = boxes[facet]
+		}
 	}
 	return tree
 }
