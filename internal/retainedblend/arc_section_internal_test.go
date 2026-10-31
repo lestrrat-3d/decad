@@ -151,7 +151,7 @@ func TestArcRowsFollowEndCurve(t *testing.T) {
 			t.Parallel()
 			tau := math.Ldexp(tc.size, -10)
 			require.Greater(t, tc.f.worstChord(uniform(tc.m0)), tau, "the profile's own rows")
-			rows, err := arcRows(tc.f.spec, tau, []endSection{tc.f.section(t)})
+			rows, err := arcRows(tc.f.spec, tau, arcProfileShare(tau), []endSection{tc.f.section(t)})
 			require.NoError(t, err)
 			require.LessOrEqual(t, tc.f.worstChord(rows), tau)
 			require.LessOrEqual(t, len(rows)-1, 96)
@@ -163,15 +163,16 @@ func TestArcRowsFollowEndCurve(t *testing.T) {
 	t.Run("an end plane through the axis adds no rows", func(t *testing.T) {
 		t.Parallel()
 		f := endPlaneFixture{R: 4, kappa: 1, side: -1, h: 0, spec: blendSpec{fillet: true, r: 4}}
-		rows, err := arcRows(f.spec, math.Ldexp(4, -10), []endSection{f.section(t)})
+		tau := math.Ldexp(4, -10)
+		rows, err := arcRows(f.spec, tau, arcProfileShare(tau), []endSection{f.section(t)})
 		require.NoError(t, err)
-		require.Equal(t, uniform(26), rows, "the profile's own rows at half of tau")
+		require.Equal(t, uniform(36), rows, "the profile's own rows at a quarter of tau")
 	})
 
 	t.Run("refusals", func(t *testing.T) {
 		t.Parallel()
 		f := endPlaneFixture{R: 4, kappa: 1, side: -1, h: 3.5, spec: blendSpec{fillet: true, r: 4}}
-		_, err := sectionRows(2, 1e-12, []endSection{f.section(t)})
+		_, err := sectionRows(2, 1e-12, []endSection{f.section(t)}, nil)
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 		require.ErrorContains(t, err, "needs more than 1024 rows")
 		// A fillet of 10⁻⁶ on a 1,000 mm bore whose end plane meets the wall's
@@ -182,7 +183,7 @@ func TestArcRowsFollowEndCurve(t *testing.T) {
 			spec: blendSpec{fillet: true, r: tiny}}
 		sec := grazing.section(t)
 		require.GreaterOrEqual(t, sec.margin, math.Ldexp(tiny, -10))
-		_, err = arcRows(grazing.spec, math.Ldexp(tiny, -10), []endSection{sec})
+		_, err = arcRows(grazing.spec, math.Ldexp(tiny, -10), arcProfileShare(math.Ldexp(tiny, -10)), []endSection{sec})
 		require.ErrorIs(t, err, decaderr.ErrUnsupported)
 		require.ErrorContains(t, err, "the blend's end curve on an end face needs more than 1024 rows")
 		// The plane's setback circle of radius 3 − 2 = 1 never reaches x = 1.5.
@@ -223,7 +224,7 @@ func TestEndSectionMarginCoversRounding(t *testing.T) {
 	for _, f := range cases {
 		sec := f.section(t)
 		tau := math.Ldexp(f.spec.r, -10)
-		rows, err := arcRows(f.spec, tau, []endSection{sec})
+		rows, err := arcRows(f.spec, tau, arcProfileShare(tau), []endSection{sec})
 		require.NoError(t, err, "h = %v", f.h)
 		require.LessOrEqual(t, len(rows), maxSectionRows)
 		a := f.rim()
@@ -255,49 +256,112 @@ func TestEndSectionMarginCoversRounding(t *testing.T) {
 	}
 }
 
-// TestStripRowsHoldEndShift sizes a hole mouth's cone and torus at the sine
-// 0.2 and a boss's torus at 0.1: the azimuth at which each row meets x = h,
-// acos(h/ρ) from the plane's normal, moves by at most stripColumn between
-// neighbouring rows, and two such steps, a column and a shift, keep the
-// azimuth term rhoHi·(1 − cos(step)) within its share of tau: all of it on
-// the cone, half on a torus. Without the shift the profile's rows, sized for
-// the end curve alone, let it move further.
-func TestStripRowsHoldEndShift(t *testing.T) {
+// TestStripRowStepsHoldTau sizes the rows and columns of a hole mouth's cone
+// and torus at the sine 0.2 and of a boss's torus at 0.1, whose rows end on
+// x = h. The azimuth at which each row meets x = h, acos(h/ρ) from the plane's
+// normal, gives each gap's shift, and rowSteps gives each row its column step.
+// Every gap between two vertex rows then keeps its sagitta plus the azimuth
+// term ρ_g·(1 − cos((c + shift)/2)) of its larger column step c within tau,
+// and spends at least 0.9 of it somewhere; every row keeps
+// (1 + 1/cos β)·ρ·(1 − cos(c/2)) within tau. Steps read at the strip's
+// smallest radius instead of each gap's larger one, or without the gap's
+// shift or sagitta, pass tau.
+func TestStripRowStepsHoldTau(t *testing.T) {
 	t.Parallel()
 	for _, f := range []endPlaneFixture{
 		{R: 4, kappa: 1, side: -1, h: 4 * math.Sqrt(1-0.2*0.2), spec: blendSpec{dA: 4, dB: 4}},
 		{R: 4, kappa: 1, side: -1, h: 4 * math.Sqrt(1-0.2*0.2), spec: blendSpec{fillet: true, r: 4}},
 		{R: 3, kappa: -1, side: -1, h: 0.5 * math.Sqrt(1-0.1*0.1), spec: blendSpec{fillet: true, r: 2.5}},
 	} {
-		size := f.spec.r
-		if !f.spec.fillet {
-			size = f.spec.dA
-		}
-		tau := math.Ldexp(size, -10)
+		tau := math.Ldexp(f.spec.size(), -10)
 		sec := f.section(t)
-		share := azimuthShare(f.spec, tau)
-		step := stripColumn(share, sec.rhoHi)
-		require.LessOrEqual(t, sec.rhoHi*(1-math.Cos(step)), share)
-		worst := func(rows []float64) float64 {
+		rows, err := arcRows(f.spec, tau, arcProfileShare(tau), []endSection{sec})
+		require.NoError(t, err)
+		n := len(rows) - 1
+		rho := make([]float64, n+1)
+		for j, s := range rows {
+			rho[j], _ = f.row(s)
+		}
+		shift := make([]float64, n-1)
+		for g := range shift {
+			shift[g] = math.Abs(math.Acos(f.h/rho[g+1]) - math.Acos(f.h/rho[g]))
+		}
+		// sum is the gap's sagitta plus its azimuth term for column steps c0
+		// and c1 at radius r.
+		sum := func(g int, c0, c1, r float64) float64 {
+			dA := (rows[g+1] - rows[g]) * math.Pi / 2
+			return filletSag(f.spec, dA) + r*(1-math.Cos((max(c0, c1)+shift[g])/2))
+		}
+		steps := rowSteps(f.spec, tau, rows, rho, shift)
+		spent := 0.0
+		for g := range shift {
+			got := sum(g, steps[g], steps[g+1], max(rho[g], rho[g+1]))
+			require.LessOrEqual(t, got, tau, "%+v gap %d", f, g)
+			spent = math.Max(spent, got)
+		}
+		require.Greater(t, spent, 0.9*tau, "%+v", f)
+		for j := range n {
+			for _, g := range []int{j - 1, j} {
+				if g < 0 || g >= n {
+					continue
+				}
+				near := 2.0
+				if f.spec.fillet {
+					near = 1 + 1/math.Cos((rows[g+1]-rows[g])*math.Pi/4)
+				}
+				require.LessOrEqual(t, near*rho[j]*(1-math.Cos(steps[j]/2)), tau, "%+v row %d", f, j)
+			}
+		}
+		// The same steps read at the smaller radius, or without the shift or
+		// the sagitta, reach past tau on some gap.
+		least := rho[0]
+		for _, r := range rho {
+			least = math.Min(least, r)
+		}
+		lo := make([]float64, len(rho))
+		for j := range lo {
+			lo[j] = least
+		}
+		worse := func(steps []float64) float64 {
 			w := 0.0
-			for j := 0; j+1 < len(rows); j++ {
-				r0, _ := f.row(rows[j])
-				r1, _ := f.row(rows[j+1])
-				w = math.Max(w, math.Abs(math.Acos(f.h/r1)-math.Acos(f.h/r0)))
+			for g := range shift {
+				w = math.Max(w, sum(g, steps[g], steps[g+1], max(rho[g], rho[g+1])))
 			}
 			return w
 		}
-		rows, err := arcRows(f.spec, tau, []endSection{sec})
-		require.NoError(t, err)
-		require.LessOrEqual(t, worst(rows), step, "%+v", f)
-		m := 2
+		t.Logf("%+v: %d rows, the worst gap at %.4f τ; at the smallest radius %.3f τ, without the shift %.3f τ",
+			f, n, spent/tau, worse(rowSteps(f.spec, tau, rows, lo, shift))/tau,
+			worse(rowSteps(f.spec, tau, rows, rho, make([]float64, len(shift))))/tau)
+		require.Greater(t, worse(rowSteps(f.spec, tau, rows, lo, shift)), tau, "%+v at the smallest radius", f)
+		require.Greater(t, worse(rowSteps(f.spec, tau, rows, rho, make([]float64, len(shift)))), tau,
+			"%+v without the shift", f)
 		if f.spec.fillet {
-			m = max(2, int(math.Ceil(math.Pi/2/rowStep(profileShare(tau), f.spec.r, 1))))
+			flat := f
+			flat.spec = blendSpec{dA: f.spec.r, dB: f.spec.r}
+			require.Greater(t, worse(rowSteps(flat.spec, tau, rows, rho, shift)), tau, "%+v without the sagitta", f)
 		}
-		plain, err := sectionRows(m, tau, []endSection{sec})
-		require.NoError(t, err)
-		require.Greater(t, worst(plain), step, "%+v", f)
 	}
+}
+
+// TestAzimuthStepHoldsBudget pins azimuthStep: the term ρ·(1 − cos(Δφ/2)) of
+// its step stays within the budget and within 2·stepCut of it, from a budget
+// near ρ down to 10⁻¹⁴ of it, it clamps at π, and a budget that is not
+// positive, or not a number, gives no step.
+func TestAzimuthStepHoldsBudget(t *testing.T) {
+	t.Parallel()
+	for _, x := range []float64{0.5, 1e-2, 1e-4, 1e-8, 1e-14} {
+		for _, rho := range []float64{0.01, 1, 1000} {
+			b := x * rho
+			step := azimuthStep(b, rho)
+			term := 2 * rho * math.Pow(math.Sin(step/4), 2)
+			require.LessOrEqual(t, term, b, "x = %g, rho = %g", x, rho)
+			require.Greater(t, term, b*(1-2*stepCut), "x = %g, rho = %g", x, rho)
+		}
+	}
+	require.Equal(t, math.Pi, azimuthStep(3, 1))
+	require.Zero(t, azimuthStep(0, 1))
+	require.Zero(t, azimuthStep(-1, 1))
+	require.Zero(t, azimuthStep(math.NaN(), 1))
 }
 
 // TestOctantDepartureCoversSamples samples every triangle of a corner's sphere
@@ -381,16 +445,18 @@ func TestEndSectionTiltCharge(t *testing.T) {
 	require.NoError(t, err)
 	tau := math.Ldexp(2.5, -10)
 	require.GreaterOrEqual(t, sec.margin, tau)
-	_, err = arcRows(f.spec, tau, []endSection{sec})
+	_, err = arcRows(f.spec, tau, arcProfileShare(tau), []endSection{sec})
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 	require.ErrorContains(t, err, "needs more than 1024 rows")
-	_, err = arcRows(f.spec, tau, []endSection{f.section(t)})
+	_, err = arcRows(f.spec, tau, arcProfileShare(tau), []endSection{f.section(t)})
 	require.NoError(t, err, "the same plane parallel to the axis builds")
 }
 
 // TestColumnCountRefusesPastTheLimit counts the columns of a step over a span:
 // exactly maxStripColumns builds, one more refuses with the blend's size
-// against the radius, and a zero step takes the least count.
+// against the radius, a short span takes the least count, and a step that is
+// zero, negative or not a number refuses: no count of such columns holds the
+// bound.
 func TestColumnCountRefusesPastTheLimit(t *testing.T) {
 	t.Parallel()
 	n, err := columnCount(maxStripColumns, 1, 9, 0.004, 8)
@@ -399,9 +465,14 @@ func TestColumnCountRefusesPastTheLimit(t *testing.T) {
 	_, err = columnCount(maxStripColumns+1, 1, 9, 0.004, 8)
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 	require.ErrorContains(t, err, "needs more than 4096 columns on a circle of radius 9 mm for a blend of 0.004 mm")
-	n, err = columnCount(1, 0, 9, 0.004, 8)
+	n, err = columnCount(1, 1, 9, 0.004, 8)
 	require.NoError(t, err)
 	require.Equal(t, 8, n)
+	for _, step := range []float64{0, -1e-3, math.NaN()} {
+		_, err = columnCount(1, step, 9, 0.004, 8)
+		require.ErrorIs(t, err, decaderr.ErrUnsupported, "step %v", step)
+		require.ErrorContains(t, err, "the blend's strip has no column step left on a circle of radius 9 mm")
+	}
 	_, err = ringCount(9, 0.004/2048, 0.004)
 	require.ErrorIs(t, err, decaderr.ErrUnsupported)
 }

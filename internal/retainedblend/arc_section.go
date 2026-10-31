@@ -44,11 +44,6 @@ type endSection struct {
 	// angle is certify's allowance on a tangent angle: the rounding of
 	// atan(slope·q), 4·ulp·(1/q + S/(ρ_lo·q²)) with ρ_lo the smallest ρ.
 	angle float64
-	// rhoHi is the profile's largest ρ.
-	rhoHi float64
-	// shift, when positive, caps how far the azimuth of a row's end on G may
-	// move between neighbouring rows (stripRows).
-	shift float64
 }
 
 // section is the end curve the blend of spec cuts in the end plane g. It
@@ -77,7 +72,6 @@ func (a arcRim) section(spec blendSpec, g plane) (endSection, error) {
 	tilt := math.Abs(g.n.Dot(a.n))
 	e.margin = 32*ulp*size*(1+1/q) + 2*tilt*zHi*(1+1/q)
 	e.angle = 4 * ulp * (1/q + size/(min(rho0, rho1)*q*q))
-	e.rhoHi = max(rho0, rho1)
 	if fillet {
 		e.slope = func(s float64) float64 {
 			if s >= 1 {
@@ -161,33 +155,20 @@ func (e endSection) certify(s0, s1, tau float64) bool {
 	return true
 }
 
-// shifts reports whether the azimuth at which a row's circle meets G moves by
-// at most e.shift between the rows at s0 and s1: acos(h/ρ) from G's normal.
-func (e endSection) shifts(s0, s1 float64) bool {
-	if !(e.shift > 0) {
-		return true
-	}
+// shift is how far the azimuth at which a row's circle meets G moves between
+// the rows at s0 and s1: acos(h/ρ) from G's normal.
+func (e endSection) shift(s0, s1 float64) float64 {
 	rho0, _ := e.p(s0)
 	rho1, _ := e.p(s1)
-	return math.Abs(math.Acos(e.h/rho1)-math.Acos(e.h/rho0)) <= e.shift
-}
-
-// stripColumn is the azimuth step of the columns of a strip whose rows end on
-// an end plane, on a profile whose largest radius is rhoHi:
-// rhoHi·(1 − cos(step/2)) = tau/4. A strip triangle between two rows spans at
-// most one column step and the shift of the rows' ends, each held to this
-// step, and rhoHi·(1 − cos(step)) ≤ 4·rhoHi·(1 − cos(step/2)) = tau, so the
-// triangle's azimuth term is within tau (§6.3).
-func stripColumn(tau, rhoHi float64) float64 {
-	return 2 * math.Acos(1-math.Min(tau/(4*rhoHi), 1))
+	return math.Abs(math.Acos(e.h/rho1) - math.Acos(e.h/rho0))
 }
 
 // sectionRows returns the profile parameters of the blend's rows, from 0 at
 // the plane's setback to 1 at the wall's: m evenly spaced rows, with each gap
 // halved until the chord between its rows' points on every end plane in ends
-// certifies within tau. It refuses a blend that needs more than
-// maxSectionRows rows.
-func sectionRows(m int, tau float64, ends []endSection) ([]float64, error) {
+// certifies within tau and apart, when not nil, accepts the gap. It refuses a
+// blend that needs more than maxSectionRows rows.
+func sectionRows(m int, tau float64, ends []endSection, apart func(s0, s1 float64) bool) ([]float64, error) {
 	refuse := fmt.Errorf("%w: the blend's end curve on an end face needs more than %d rows",
 		decaderr.ErrUnsupported, maxSectionRows)
 	for _, e := range ends {
@@ -200,9 +181,9 @@ func sectionRows(m int, tau float64, ends []endSection) ([]float64, error) {
 	out := []float64{0}
 	var fill func(s0, s1 float64) error
 	fill = func(s0, s1 float64) error {
-		ok := true
+		ok := apart == nil || apart(s0, s1)
 		for _, e := range ends {
-			ok = ok && e.certify(s0, s1, tau) && e.shifts(s0, s1)
+			ok = ok && e.certify(s0, s1, tau)
 		}
 		if ok {
 			out = append(out, s1)
@@ -227,20 +208,40 @@ func sectionRows(m int, tau float64, ends []endSection) ([]float64, error) {
 
 // arcRows is sectionRows for a blend whose rows end on the planes of ends,
 // starting from the rows the profile itself needs: a fillet's arc sagitta
-// r·(1 − cos(Δα/2)) within its share of tau (profileShare), and two for a
-// chamfer, whose profile is straight.
+// r·(1 − cos(Δα/2)) within sag, and two for a chamfer, whose profile is
+// straight.
 //
-// The rows also keep the azimuth of their ends on each G within stripColumn
-// of their neighbours', so that, with columns that step by it, every strip
-// triangle's azimuth term stays within its share of tau (§6.3).
-func arcRows(spec blendSpec, tau float64, ends []endSection) ([]float64, error) {
+// The rows also keep the azimuth of their ends on each G within half the
+// step azimuthStep allows the gap, tau less its sagitta at the larger of its
+// two radii, so that the gap's columns keep the other half (rowSteps, §6.3).
+// The band's gap, which ends on the wall's row at s = 1, keeps its shift
+// within a quarter of the step its own allowance, (tau − σ)/(1 + 1/cos β),
+// gives, so that the band's charge stays near its cut vertices' own bounds.
+// These fractions are a choice of spacing, not a bound: rowSteps reads each
+// gap's shift from the rows the route builds, and the columns take what is
+// left.
+func arcRows(spec blendSpec, tau, sag float64, ends []endSection) ([]float64, error) {
 	m := 2
 	if spec.fillet {
-		m = max(2, int(math.Ceil(math.Pi/2/rowStep(profileShare(tau), spec.r, 1))))
+		m = max(2, int(math.Ceil(math.Pi/2/rowStep(sag, spec.r, 1))))
 	}
-	ends = append([]endSection(nil), ends...)
-	for i := range ends {
-		ends[i].shift = stripColumn(azimuthShare(spec, tau), ends[i].rhoHi)
+	apart := func(s0, s1 float64) bool {
+		budget, part := tau-filletSag(spec, (s1-s0)*math.Pi/2), 2.0
+		if s1 == 1 {
+			near := 2.0
+			if spec.fillet {
+				near = 1 + 1/math.Cos((s1-s0)*math.Pi/4)
+			}
+			budget, part = budget/near, 4
+		}
+		for _, e := range ends {
+			rho0, _ := e.p(s0)
+			rho1, _ := e.p(s1)
+			if !(e.shift(s0, s1) <= azimuthStep(budget, max(rho0, rho1))/part) {
+				return false
+			}
+		}
+		return true
 	}
-	return sectionRows(m, tau, ends)
+	return sectionRows(m, tau, ends, apart)
 }

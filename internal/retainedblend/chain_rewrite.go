@@ -312,7 +312,7 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 		ends = append(ends, sec)
 	}
 	if fillet || len(ends) > 0 {
-		if rowS, err = arcRows(spec, w.tau, ends); err != nil {
+		if rowS, err = arcRows(spec, w.tau, profileShare(w.tau), ends); err != nil {
 			return nil, err
 		}
 	}
@@ -379,23 +379,20 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 				return nil, err
 			}
 		}
-		rhoMax := max(en.rim.radius, en.rim.radius+en.rim.kappa*tP)
-		share := azimuthShare(spec, w.tau)
-		dTheta := 2 * math.Acos(1-math.Min(share/rhoMax, 1))
-		width := en.span
+		var na int
 		if fan {
-			// A fan's columns step by stripColumn across its widest row, so a
-			// strip triangle that also spans the shift of the rows' ends on G
-			// keeps its azimuth term within its share of tau (blend §6.3).
-			dTheta = stripColumn(share, rhoMax)
-			start, end := en.fanBounds(rowsM)
-			for j := range rowsM {
-				width = max(width, math.Abs(end[j]-start[j]))
+			// A fan's columns sit at one fraction of every row, so each row
+			// takes as many columns as its own span needs at the step its two
+			// gaps leave it (blend §6.3).
+			if na, err = w.fanColumns(en, rowS); err != nil {
+				return nil, err
 			}
-		}
-		na, err := columnCount(width, dTheta, rhoMax, spec.size(), 2)
-		if err != nil {
-			return nil, err
+		} else {
+			rhoMax := max(en.rim.radius, en.rim.radius+en.rim.kappa*tP)
+			dTheta := 2 * math.Acos(1-math.Min(azimuthShare(spec, w.tau)/rhoMax, 1))
+			if na, err = columnCount(en.span, dTheta, rhoMax, spec.size(), 2); err != nil {
+				return nil, err
+			}
 		}
 		for i := 0; i <= na; i++ {
 			f := float64(i) / float64(na)
@@ -643,13 +640,15 @@ func rewriteChain(ctx context.Context, env topo.Env, fp facetedrecord.Payload, c
 			bi++
 		}
 		// The band beside the wall's cut takes its cut vertices' offsets; an
-		// arc entry's band also its azimuth spread (blend §6.3).
-		axis := bandAxis{}
+		// arc entry's band also its azimuth spread, read at the larger radius
+		// of the band's two rows: the last row's and the wall's setback
+		// circle's, the rim's own (blend §6.3).
+		axis, bandRho := bandAxis{}, 0.0
 		if en.arc {
 			axis = bandAxis{o: en.rim.center, n: en.rim.n, ok: true}
+			bandRho = max(en.rim.radius, en.rowRadius(rowS[rowsM-1]))
 		}
-		w.chargeBand(bandFrom, axis, max(en.rim.radius, en.rim.radius+en.rim.kappa*tP),
-			filletSag(spec, (1-rowS[rowsM-1])*math.Pi/2), slack)
+		w.chargeBand(bandFrom, axis, bandRho, filletSag(spec, (1-rowS[rowsM-1])*math.Pi/2), slack)
 		pa, wa, ba := en.areas(tP, tW, spec)
 		if en.freeStart != nil || en.freeEnd != nil {
 			pa, wa, ba = en.areasFree(tP, tW)

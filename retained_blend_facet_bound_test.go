@@ -290,6 +290,50 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 			a0: math.Pi / 2, span: math.Pi / 2})
 	})
 
+	// The same hole mouth at the sine 0.4, chamfered with d = 2: a cone's rows
+	// take their columns from each gap's whole allowance, less the shift of
+	// their ends on x = 0.
+	t.Run("a hole mouth's arc chamfer", func(t *testing.T) {
+		t.Parallel()
+		const bore, d, c = 4.0, 2.0, 0.4
+		h := bore * math.Sqrt(1-c*c)
+		sc := newStripScene()
+		bored, err := Cut(t.Context(), sc.rect(t, 0, 0, 40, 20, 20),
+			moved(t, sc.disc(t, h, bore, 60, Along), r3.Vec{Z: -30 + 0.001}))
+		require.NoError(t, err)
+		fresh := freshFaces(bored)
+		out, err := Chamfer(t.Context(), bored, circularAt(t, bored, 20, true), units.Millimeters(d))
+		require.NoError(t, err)
+		requireFacetBoundsHold(t, out, fresh(out), stripProfile{o: r3.NewVec(h, 10, 0), seg: true,
+			p0: [2]float64{bore + d, 20}, p1: [2]float64{bore, 20 - d}})
+	})
+
+	// The boss corner at the sine 0.2, chamfered with d = 2.5 along the
+	// tangent chain: the rows near the axis sweep the widest angles, and the
+	// fan takes as many columns as its most demanding row needs.
+	t.Run("a boss corner's chain chamfer", func(t *testing.T) {
+		t.Parallel()
+		const d, q, R = 2.5, 0.2, 3.0
+		gx := R - (R-d)*math.Sqrt(1-q*q)
+		sc := newStripScene()
+		box, err := Fillet(t.Context(), sc.rect(t, 0, 0, 40, 20, 20),
+			Edges(ParallelTo(r3.NewVec(0, 0, 1)), EndpointAt(r3.Vec{})).Exactly(1), units.Millimeters(R))
+		require.NoError(t, err)
+		trimmed, err := Cut(t.Context(), box, moved(t, sc.rect(t, -5, -5, gx, 25, 30), r3.Vec{Z: -5}))
+		require.NoError(t, err)
+		fresh := freshFaces(trimmed)
+		out, err := Chamfer(t.Context(), trimmed, circularAt(t, trimmed, 20, true), units.Millimeters(d),
+			WithTangentChain())
+		require.NoError(t, err)
+		made := fresh(out)
+		corner := func(f *Face) bool {
+			p := f.Loops()[0].CoEdges()[0].Start().Position().Value
+			return made(f) && p.X < R+1e-6 && p.Y < R+1e-6
+		}
+		requireFacetBoundsHold(t, out, corner, stripProfile{o: r3.NewVec(R, R, 0), seg: true,
+			p0: [2]float64{R - d, 20}, p1: [2]float64{R, 20 - d}})
+	})
+
 	// The cap of a ball of radius 2 below z = −1, its rim filleted with
 	// r = 0.4 (R6): the band's cut vertices lie on the sphere's held facets.
 	t.Run("a sphere rim's fillet", func(t *testing.T) {
@@ -391,5 +435,160 @@ func TestRetainedBlendStripFacetBounds(t *testing.T) {
 			return ok
 		}
 		requireFacetBoundsHold(t, out, octant, stripProfile{o: centre, r: r, sphere: true})
+	})
+}
+
+// triangleDist is the distance from p to the triangle abc: the closest point
+// by the triangle's Voronoi regions (Ericson, Real-Time Collision Detection
+// §5.1.5).
+func triangleDist(p, a, b, c r3.Vec) float64 {
+	ab, ac, ap := b.Sub(a), c.Sub(a), p.Sub(a)
+	d1, d2 := ab.Dot(ap), ac.Dot(ap)
+	if d1 <= 0 && d2 <= 0 {
+		return ap.Len()
+	}
+	bp := p.Sub(b)
+	d3, d4 := ab.Dot(bp), ac.Dot(bp)
+	if d3 >= 0 && d4 <= d3 {
+		return bp.Len()
+	}
+	if vc := d1*d4 - d3*d2; vc <= 0 && d1 >= 0 && d3 <= 0 {
+		return p.Sub(a.Add(ab.Scale(d1 / (d1 - d3)))).Len()
+	}
+	cp := p.Sub(c)
+	d5, d6 := ab.Dot(cp), ac.Dot(cp)
+	if d6 >= 0 && d5 <= d6 {
+		return cp.Len()
+	}
+	if vb := d5*d2 - d1*d6; vb <= 0 && d2 >= 0 && d6 <= 0 {
+		return p.Sub(a.Add(ac.Scale(d2 / (d2 - d6)))).Len()
+	}
+	if va := d3*d6 - d5*d4; va <= 0 && d4-d3 >= 0 && d5-d6 >= 0 {
+		return p.Sub(b.Add(c.Sub(b).Scale((d4 - d3) / ((d4 - d3) + (d5 - d6))))).Len()
+	}
+	n := ab.Cross(ac)
+	return math.Abs(ap.Dot(n)) / n.Len()
+}
+
+// requirePatchCovered requires every point of pts, exact points of the blend
+// surface, within some facet's own bound of that facet, over the facets of
+// out's mesh whose source face keep accepts: the patch side of §6.3's two-way
+// claim. Facets are bucketed on a grid of their bounding boxes widened by
+// their bounds, so each point meets only the facets that could hold it.
+func requirePatchCovered(t *testing.T, out *Body, keep func(*Face) bool, pts []r3.Vec) {
+	t.Helper()
+	mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyNone))
+	require.NoError(t, err)
+	vb := mesh.n.VertexBound
+	src := mesh.SourceFaces()
+	const cell = 0.25
+	key := func(x, y, z float64) [3]int {
+		return [3]int{int(math.Floor(x / cell)), int(math.Floor(y / cell)), int(math.Floor(z / cell))}
+	}
+	type facet struct {
+		a, b, c r3.Vec
+		own     float64
+	}
+	var facets []facet
+	grid := map[[3]int][]int{}
+	for i, tri := range mesh.n.Triangles {
+		if !keep(src[i]) {
+			continue
+		}
+		f := facet{mesh.n.Vertices[tri[0]], mesh.n.Vertices[tri[1]], mesh.n.Vertices[tri[2]],
+			max(vb[tri[0]], vb[tri[1]], vb[tri[2]])}
+		lo := key(min(f.a.X, f.b.X, f.c.X)-f.own, min(f.a.Y, f.b.Y, f.c.Y)-f.own, min(f.a.Z, f.b.Z, f.c.Z)-f.own)
+		hi := key(max(f.a.X, f.b.X, f.c.X)+f.own, max(f.a.Y, f.b.Y, f.c.Y)+f.own, max(f.a.Z, f.b.Z, f.c.Z)+f.own)
+		for x := lo[0]; x <= hi[0]; x++ {
+			for y := lo[1]; y <= hi[1]; y++ {
+				for z := lo[2]; z <= hi[2]; z++ {
+					grid[[3]int{x, y, z}] = append(grid[[3]int{x, y, z}], len(facets))
+				}
+			}
+		}
+		facets = append(facets, f)
+	}
+	require.NotEmpty(t, facets)
+	worst := 0.0
+	for _, p := range pts {
+		best := math.Inf(1)
+		for _, i := range grid[key(p.X, p.Y, p.Z)] {
+			f := facets[i]
+			best = math.Min(best, triangleDist(p, f.a, f.b, f.c)/f.own)
+		}
+		worst = math.Max(worst, best)
+		require.LessOrEqual(t, best, 1.0, "the patch at %v lies past every facet's own bound", p)
+	}
+	t.Logf("%d patch points against %d blend facets, the farthest at %.3f of the nearest facet's own bound",
+		len(pts), len(facets), worst)
+}
+
+// torusPatch samples the torus a blendProfile-like arc of radius r about
+// (rc, zc), directions from a0 through span, sweeps about the vertical axis
+// through o, at n profile angles strictly inside the arc and every 2π/k of
+// azimuth from phi0 that inside accepts.
+func torusPatch(o r3.Vec, rc, zc, r, a0, span float64, n, k int, phi0 float64, inside func(r3.Vec) bool) []r3.Vec {
+	var out []r3.Vec
+	for i := 1; i < n; i++ {
+		th := a0 + span*float64(i)/float64(n)
+		rho, z := rc+r*math.Cos(th), zc+r*math.Sin(th)
+		for j := range k {
+			phi := phi0 + 2*math.Pi*float64(j)/float64(k)
+			p := r3.NewVec(o.X+rho*math.Cos(phi), o.Y+rho*math.Sin(phi), z)
+			if inside(p) {
+				out = append(out, p)
+			}
+		}
+	}
+	return out
+}
+
+func TestRetainedBlendStripPatchCovered(t *testing.T) {
+	t.Parallel()
+
+	// The hole mouth's arc fillet of TestRetainedBlendStripFacetBounds: d = 4
+	// on the Ø8 bore whose wall row meets x = 0 at the sine 0.2. Its patch
+	// lies inside the plate, x > 0.
+	t.Run("a hole mouth's arc fillet", func(t *testing.T) {
+		t.Parallel()
+		const bore, d, c = 4.0, 4.0, 0.2
+		h := bore * math.Sqrt(1-c*c)
+		sc := newStripScene()
+		bored, err := Cut(t.Context(), sc.rect(t, 0, 0, 40, 20, 20),
+			moved(t, sc.disc(t, h, bore, 60, Along), r3.Vec{Z: -30 + 0.001}))
+		require.NoError(t, err)
+		fresh := freshFaces(bored)
+		out, err := Fillet(t.Context(), bored, circularAt(t, bored, 20, true), units.Millimeters(d))
+		require.NoError(t, err)
+		pts := torusPatch(r3.NewVec(h, 10, 0), bore+d, 20-d, d, math.Pi/2, math.Pi/2, 48, 1200, 0,
+			func(p r3.Vec) bool { return p.X > 0 })
+		requirePatchCovered(t, out, fresh(out), pts)
+	})
+
+	// The boss corner's chain fillet: r = 2.5 with the plane's row meeting the
+	// cut x = gx at the sine 0.4. Its patch is the corner's quarter turn,
+	// x ≥ gx, short of the junction meridian at y = 0.
+	t.Run("a boss corner's chain fillet", func(t *testing.T) {
+		t.Parallel()
+		const r, q, R = 2.5, 0.4, 3.0
+		gx := R - (R-r)*math.Sqrt(1-q*q)
+		sc := newStripScene()
+		box, err := Fillet(t.Context(), sc.rect(t, 0, 0, 40, 20, 20),
+			Edges(ParallelTo(r3.NewVec(0, 0, 1)), EndpointAt(r3.Vec{})).Exactly(1), units.Millimeters(R))
+		require.NoError(t, err)
+		trimmed, err := Cut(t.Context(), box, moved(t, sc.rect(t, -5, -5, gx, 25, 30), r3.Vec{Z: -5}))
+		require.NoError(t, err)
+		fresh := freshFaces(trimmed)
+		out, err := Fillet(t.Context(), trimmed, circularAt(t, trimmed, 20, true), units.Millimeters(r),
+			WithTangentChain())
+		require.NoError(t, err)
+		made := fresh(out)
+		corner := func(f *Face) bool {
+			p := f.Loops()[0].CoEdges()[0].Start().Position().Value
+			return made(f) && p.X < R+1e-6 && p.Y < R+1e-6
+		}
+		pts := torusPatch(r3.NewVec(R, R, 0), R-r, 20-r, r, 0, math.Pi/2, 48, 4800, math.Pi,
+			func(p r3.Vec) bool { return p.X > gx && p.Y < R && p.X < R })
+		requirePatchCovered(t, out, corner, pts)
 	})
 }

@@ -286,9 +286,11 @@ The rewrite touches `P`, every wall `W_k`, every seam between consecutive walls,
    way from its azimuth on `G` to the azimuth of the other end's meridian, so every vertex lies on the torus. The end
    curve stays a chain of exact points (it is no conic). The rows of a fillet or a chamfer with an arc end are refined,
    as blend §4.4's are, until their chords follow the section `G` cuts in the torus or cone to within `τ`
-   (blend §6.3), and every entry of the chain takes those rows. The fan columns step by `stripColumn` across the
-   widest row, not the rim's span, and the rows also hold the end's azimuth shift to that step, a fillet's and a
-   chamfer's alike (blend §6.3, Strip triangles).
+   (blend §6.3), and every entry of the chain takes those rows. `n_a` is the most columns any row needs at the
+   step its two gaps leave it once each gap's sagitta and the shift of the rows' ends on `G` are spent
+   (`fanColumns`, `rowSteps`), not the rim's span: the rows nearer the axis sweep wider angles than the rim, at a
+   smaller radius. That holds a fillet's and a chamfer's strip triangles within `τ` alike (blend §6.3, Strip
+   triangles).
 
    At a straight end `P`, `W` and `G` meet pairwise orthogonally at `V` (`cornerOf` admits exactly three faces and
    `G` is normal to the edge). The end is classified by the turn of each face's loop at `V` about the face's
