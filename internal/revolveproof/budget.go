@@ -10,9 +10,9 @@ import (
 
 // maxFacetsPerMesh, maxFacetWorkPerCall are agent-docs/tessellation-design.md §3's
 // two per-call facet ceilings, beside internal/proofbound/budget.go's proofbound.MaxFacetPairTestsPerCall.
-// Every one of them is checked with unsigned integer arithmetic BEFORE the
-// allocation or audit it governs, so an over-budget request refuses rather
-// than building the thing that would have blown the budget.
+// The facet ceilings are checked with unsigned integer arithmetic BEFORE
+// allocation. Contact work is charged by the bounded candidate audit after
+// assembly, before each candidate scan or exact pair test.
 const (
 	maxFacetsPerMesh    = 65_536
 	maxFacetWorkPerCall = 262_144
@@ -26,8 +26,8 @@ type FacetLoops interface {
 	AxisWalk(i, walk int) bool
 }
 
-// FacetWork counts all facets and facet pairs charged by refinement attempts.
-type FacetWork struct{ Facets, Pairs uint64 }
+// FacetWork counts all facets charged by refinement attempts.
+type FacetWork struct{ Facets uint64 }
 
 // PreflightFacets charges agent-docs/tessellation-design.md §3's per-mesh and
 // cumulative facet ceilings with unsigned integer arithmetic, BEFORE a single
@@ -45,14 +45,10 @@ type FacetWork struct{ Facets, Pairs uint64 }
 // revolution already charges no cap for a solid, so sheet changes nothing
 // there.
 //
-// audit says whether this build will run the facet-contact audit. §3 charges
-// proofbound.MaxFacetPairTestsPerCall only when it will: that ceiling bounds the work one
-// all-pairs audit may do, and a build that runs no pair predicate does none of
-// that work. The facet and facet-work ceilings bound ALLOCATION instead and are
-// charged either way. This is why the tolerance a VerifyAll revolve refuses for
-// the pair ceiling alone is met at VerifyNone — the refusal was a work budget,
-// never a statement that the geometry could not be meshed.
-func PreflightFacets(loops FacetLoops, nPhi int, full, sheet, audit bool, work *FacetWork) error {
+// The facet-contact candidate scan and its exact pair tests are charged once
+// the assembled mesh exposes the spatial candidates. That work has a separate
+// cumulative ceiling and does not rely on the conservative all-pairs count.
+func PreflightFacets(loops FacetLoops, nPhi int, full, sheet bool, work *FacetWork) error {
 	var walls, samples uint64
 	for i := range loops.Len() {
 		ring := loops.Samples(i)
@@ -100,26 +96,7 @@ func PreflightFacets(loops FacetLoops, nPhi int, full, sheet, audit bool, work *
 		}
 		return errRevolveFacetCeiling
 	}
-	charged := work.Pairs
-	if audit {
-		// The facet-pair audit's own ceiling, charged here rather than at the
-		// audit: §3 requires the conservative F·(F−1)/2 to be checked before
-		// the audit starts, and checking it before the ALLOCATION is strictly
-		// earlier.
-		pairs, ok := proofbound.WallChoose2(total)
-		if !ok {
-			return errRevolveFacetCeiling
-		}
-		charged, ok = AddChecked(work.Pairs, pairs)
-		if !ok || charged > proofbound.MaxFacetPairTestsPerCall {
-			err := fmt.Errorf(`%w: this chord tolerance asks for %d facets in one revolve mesh, whose pairwise audit exceeds the fixed ceiling of %d exact tests; retry with a coarser tolerance, or ask for a mesh that does not run that audit`, decaderr.ErrUnsupported, total, proofbound.MaxFacetPairTestsPerCall)
-			if ok {
-				return proofbound.WithWorkLimit(err, "facet_pairs", charged, proofbound.MaxFacetPairTestsPerCall)
-			}
-			return err
-		}
-	}
-	work.Facets, work.Pairs = spent, charged
+	work.Facets = spent
 	return nil
 }
 

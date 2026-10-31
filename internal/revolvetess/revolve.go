@@ -130,8 +130,7 @@ type revolvePlan struct {
 	// pair-test ceiling is charged nothing, and below VerifyAll the per-cell
 	// area slack and occupied-volume terms are never composed. Every other
 	// audit, and the face bounds, run at each level.
-	verify       Level
-	boundedAudit bool
+	verify Level
 }
 
 // TessellateRevolve meshes a revolved body (agent-docs/tessellation-design.md §§8-10).
@@ -150,17 +149,11 @@ func TessellateRevolveWithRoles(ctx context.Context, b *topo.Body, rp revolvePay
 // TessellateRevolveWithCountFloor keeps a composite sweep's shared meridian counts.
 func TessellateRevolveWithCountFloor(ctx context.Context, b *topo.Body, rp revolvePayload,
 	chord float64, verify Level, roleOf func(string) string, floor [][]int, freeformTarget float64) (*topo.Mesh, error) {
-	return tessellateRevolve(ctx, b, rp, chord, verify, roleOf, floor, freeformTarget, false)
-}
-
-// TessellateRevolveBoundedAudit uses a bounded spatial candidate audit.
-// It retains the facet ceiling and all VerifyAll proof terms.
-func TessellateRevolveBoundedAudit(ctx context.Context, b *topo.Body, rp revolvePayload, chord float64) (*topo.Mesh, error) {
-	return tessellateRevolve(ctx, b, rp, chord, VerifyAll, nil, nil, 0, true)
+	return tessellateRevolve(ctx, b, rp, chord, verify, roleOf, floor, freeformTarget)
 }
 
 func tessellateRevolve(ctx context.Context, b *topo.Body, rp revolvePayload,
-	chord float64, verify Level, roleOf func(string) string, floor [][]int, freeformTarget float64, boundedAudit bool) (*topo.Mesh, error) {
+	chord float64, verify Level, roleOf func(string) string, floor [][]int, freeformTarget float64) (*topo.Mesh, error) {
 	var plan *revolvePlan
 	var err error
 	if floor == nil {
@@ -171,7 +164,6 @@ func tessellateRevolve(ctx context.Context, b *topo.Body, rp revolvePayload,
 	if err != nil {
 		return nil, err
 	}
-	plan.boundedAudit = boundedAudit
 	for attempt := 0; ; attempt++ {
 		mesh, err := buildRevolveMesh(ctx, plan)
 		if err == nil {
@@ -332,7 +324,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*topo.Mesh, error) {
 		return nil, revolveSectionRetry(loopMesh, err)
 	}
 
-	if err := revolvePreflightFacets(loopMesh, p.Angular, rp.Full, sheet, p.verify >= VerifyBoundary && !p.boundedAudit, p.work); err != nil {
+	if err := revolvePreflightFacets(loopMesh, p.Angular, rp.Full, sheet, p.work); err != nil {
 		return nil, err
 	}
 	angular, err := revolvemesh.AngularSequence(revolvemesh.AngularInput{
@@ -519,12 +511,10 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*topo.Mesh, error) {
 		return nil, err
 	}
 	if p.verify >= VerifyBoundary {
-		var err error
-		if p.boundedAudit {
-			err = revolvemesh.RevolveContactAuditBounded(auditBudget, auditTris, mesh.Triangles, coord)
-		} else {
-			err = revolvemesh.RevolveContactAudit(auditBudget, auditTris, mesh.Triangles, coord)
-		}
+		auditBudget := proofbound.NewWorkBudget(ctx)
+		work, err := revolvemesh.RevolveContactAuditBoundedWithBudget(
+			auditBudget, auditTris, mesh.Triangles, coord, p.work.pairs)
+		p.work.pairs += work
 		if err != nil {
 			// A crossing or an undecided contact is the one failure a finer
 			// angular sequence can still answer, and §3 makes the global count the
@@ -606,12 +596,12 @@ func (loops revolveWalkView) Len() int                        { return len(loops
 func (loops revolveWalkView) Walks(i int) []survey2d.SideWalk { return loops[i].Walks }
 
 // revolvePreflightFacets adapts the builder's loops to the facet budget.
-func revolvePreflightFacets(loops []revLoopMesh, nPhi int, full, sheet, audit bool, work *revolveWork) error {
-	state := revolveproof.FacetWork{Facets: work.facets, Pairs: work.pairs}
-	if err := revolveproof.PreflightFacets(revolveFacetLoops(loops), nPhi, full, sheet, audit, &state); err != nil {
+func revolvePreflightFacets(loops []revLoopMesh, nPhi int, full, sheet bool, work *revolveWork) error {
+	state := revolveproof.FacetWork{Facets: work.facets}
+	if err := revolveproof.PreflightFacets(revolveFacetLoops(loops), nPhi, full, sheet, &state); err != nil {
 		return err
 	}
-	work.facets, work.pairs = state.Facets, state.Pairs
+	work.facets = state.Facets
 	return nil
 }
 

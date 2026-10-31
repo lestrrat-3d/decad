@@ -158,22 +158,23 @@ func TestTessellateRefusesAVerificationLevelItDoesNotKnow(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
-// The facet-pair ceiling is a work budget, never a statement that the geometry
-// cannot be meshed: the tolerance VerifyAll refuses for it is met by a level
-// that runs no pair predicate (agent-docs/tessellation-design.md §3).
-func TestVerifyNoneMeetsAToleranceTheProvenPathRefuses(t *testing.T) {
+// A dense torus remains eligible for the exact boundary and volume proofs when
+// its spatially bounded contact audit fits the fixed work budget.
+func TestVerifyAllMeetsDenseTorusTolerance(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	body := fatTorus(t, doc)
 	tol := units.Millimeters(0.0414)
 
-	_, err := body.Tessellate(t.Context(), tol, decad.WithVerification(decad.VerifyAll))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Contains(t, err.Error(), "exact tests")
+	proven, err := body.Tessellate(t.Context(), tol, decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.Greater(t, len(proven.Triangles()), 4000)
+	require.True(t, proven.BoundaryVerified())
+	require.True(t, proven.VolumeVerified())
 
 	drawn, err := body.Tessellate(t.Context(), tol, decad.WithVerification(decad.VerifyNone))
 	require.NoError(t, err)
-	require.Greater(t, len(drawn.Triangles()), 4000)
+	require.Equal(t, len(proven.Triangles()), len(drawn.Triangles()))
 	require.False(t, drawn.BoundaryVerified())
 	require.Positive(t, drawn.Bound().Mag())
 }
@@ -244,9 +245,8 @@ func TestVerifyNonePublishesOnlyPositiveAreaFacets(t *testing.T) {
 	}
 }
 
-// STL and OBJ default to VerifyNone, so they can write a dense mesh that the
-// facet-pair audit refuses at VerifyAll (agent-docs/api-design.md §11).
-func TestExportWritesABodyTheProvenPathRefuses(t *testing.T) {
+// STL and OBJ write the same dense mesh under every verification level.
+func TestExportWritesDenseBodyAtEveryVerificationLevel(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	body := fatTorus(t, doc)
@@ -263,10 +263,9 @@ func TestExportWritesABodyTheProvenPathRefuses(t *testing.T) {
 	require.Greater(t, strings.Count(obj.String(), "\nf "), 4000)
 
 	err = export.STL(t.Context(), io.Discard, body, tol, decad.WithVerification(decad.VerifyAll))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Contains(t, err.Error(), "exact tests")
+	require.NoError(t, err)
 	err = export.OBJ(t.Context(), io.Discard, body, tol, decad.WithVerification(decad.VerifyAll))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.NoError(t, err)
 }
 
 // Where both levels succeed the bytes agree: the level publishes proofs, and
