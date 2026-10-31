@@ -242,7 +242,7 @@ func TestBooleanGapToleranceRestingBossJoinsPlate(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 100, 60, 10)
-	boss := translated(t, pinPrism(t, doc, 20, 30, 6, 10, 8), 30, 0, 0)
+	boss := translated(t, circlePrismAtZ(t, doc, 20, 30, 6, 10, 8), 30, 0, 0)
 	joined, err := decad.Union(t.Context(), plate, boss)
 	require.NoError(t, err)
 	require.True(t, joined.IsSolid())

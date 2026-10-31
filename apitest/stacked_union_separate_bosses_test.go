@@ -40,7 +40,7 @@ func (b separateBoss) prism(t *testing.T, doc *decad.Document) *decad.Body {
 	if b.cap < 0 {
 		z0 = b.cap
 	}
-	return pinPrism(t, doc, b.x, b.y, 6, z0, 8)
+	return circlePrismAtZ(t, doc, b.x, b.y, 6, z0, 8)
 }
 
 // unionOf joins the plate and the bosses through one Union, in the order the

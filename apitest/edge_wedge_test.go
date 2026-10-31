@@ -23,24 +23,6 @@ func wedgePlateRectBoss(t *testing.T) *decad.Body {
 	return u
 }
 
-// wedgeCircleAtZ extrudes a circle of radius r about (cx, cy) from z0 by h.
-func wedgeCircleAtZ(t *testing.T, doc *decad.Document, cx, cy, r, z0, h float64) *decad.Body {
-	t.Helper()
-	w := sketch.NewWorld()
-	plane, err := w.CreateOffsetPlane(w.XY(), z0)
-	require.NoError(t, err)
-	s, err := w.CreateSketch(plane)
-	require.NoError(t, err)
-	c := s.CreatePoint(cx, cy)
-	s.Fix(c)
-	s.CreateCircle(c, r)
-	_, err = s.Solve(t.Context())
-	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
-	require.NoError(t, err)
-	return body
-}
-
 // wedgeEnds returns e's end positions.
 func wedgeEnds(e *decad.Edge) (r3.Vec, r3.Vec) {
 	return e.Start().Position().Value, e.End().Position().Value
@@ -126,7 +108,7 @@ func TestEdgeWedgeHoleRimSalientAndConcave(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := boxBodyAtZ(t, doc, 0, 0, 80, 60, 0, 10)
-	tool := wedgeCircleAtZ(t, doc, 20, 30, 5, -1, 12)
+	tool := circlePrismAtZ(t, doc, 20, 30, 5, -1, 12)
 	drilled, err := decad.Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
 
@@ -150,7 +132,7 @@ func TestEdgeWedgeRoundBoss(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	plate := boxBodyAtZ(t, doc, 0, 0, 80, 60, 0, 10)
-	boss := wedgeCircleAtZ(t, doc, 40, 30, 10, 10, 15)
+	boss := circlePrismAtZ(t, doc, 40, 30, 10, 10, 15)
 	u, err := decad.Union(t.Context(), plate, boss)
 	require.NoError(t, err)
 
@@ -265,7 +247,7 @@ func TestEdgeWedgeMeshUnionUnprovenEdges(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	box := boxBodyAtZ(t, doc, -10, -10, 10, 10, 0, 10)
-	post := wedgeCircleAtZ(t, doc, 0, 0, 4, 5, 10)
+	post := circlePrismAtZ(t, doc, 0, 0, 4, 5, 10)
 	tilt, err := r3.RotationAround(r3.NewVec(0, 0, 5), r3.NewVec(1, 0, 0), units.Radians(0.2))
 	require.NoError(t, err)
 	post, err = decad.Transform(t.Context(), post, tilt)
