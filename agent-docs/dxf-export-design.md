@@ -47,6 +47,16 @@ meeting at the far corner and the total projected length matching the analytic o
 sections, the layers, the full-scale coordinates of the far corner and a cylinder's width and height, and the
 determinism of the bytes. A crease rule that marks every edge, or no absorption of corner noise, turns them red.
 
+### Edge visibility workers
+
+`drawing.Project` splits at least 128 feature edges with up to four workers, subject to the shared `orderedwork`
+worker budget and `GOMAXPROCS`. Smaller drawings use the serial loop. Workers read the completed depth buffer and
+write private visible and hidden runs. After all workers join, the caller appends those runs in sorted edge order,
+preserving D7's segment order and file bytes. Cancellation joins the workers before returning an empty result.
+
+The worker tests compare every ordered segment and the complete public DXF bytes for a real extruded box and a
+notched extrusion. Benchmarks include smaller notched profiles to measure the serial gate and per-edge allocations.
+
 ## 4. Not covered
 
 - Hatching other than a section cut (§10), centre lines of anything but a whole circle or arc (§11), dimensions other than the overall size, diameters and radii, and a title block with more than a title, six fields and a scale.

@@ -8,6 +8,7 @@ import (
 	"math"
 	"slices"
 
+	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	"github.com/lestrrat-3d/decad/internal/raster"
 	"github.com/lestrrat-3d/r3"
 )
@@ -252,6 +253,12 @@ func Project(ctx context.Context, verts []r3.Vec, tris [][3]int, cam raster.Came
 		}
 		return a[1] - b[1]
 	})
+	if len(edges) >= minParallelEdges {
+		workers := min(orderedwork.Workers(ctx, orderedwork.EachWorkers(len(edges), minParallelEdges)), orderedwork.MaxEachWorkers)
+		if workers > 1 {
+			return splitEdgesParallel(ctx, verts, edges, proj, depths, workers)
+		}
+	}
 	var lines Lines
 	for i, e := range edges {
 		if i%256 == 0 {
