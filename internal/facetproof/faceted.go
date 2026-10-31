@@ -315,7 +315,10 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, worker
 	}
 
 	sixth := big.NewRat(1, 6)
-	det := make([]proof.Dyadic, len(tris))
+	det := preDet
+	if det == nil {
+		det = make([]proof.Dyadic, len(tris))
+	}
 	audit.CompVol = make([]*big.Rat, len(audit.Members))
 	for ci, list := range audit.Members {
 		// Every term is a Dyadic (power-of-two denominators), so the
@@ -333,8 +336,8 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, worker
 				term = preDet[fi]
 			} else {
 				term = floatFacetDeterminant(verts, tris[fi])
+				det[fi] = term
 			}
-			det[fi] = term
 			total.Add(term)
 		}
 		v := total.Rat()
