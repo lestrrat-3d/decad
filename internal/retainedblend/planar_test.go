@@ -2,7 +2,6 @@ package retainedblend
 
 import (
 	"math"
-	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -62,16 +61,23 @@ func TestSortPlanarEarsUsesAtOrderForQualityTies(t *testing.T) {
 	}, ears)
 }
 
-func TestSortPlanarEarsKeepsStableOrderWithNaN(t *testing.T) {
-	ears := []planarEar{{at: 2, quality: 1}, {at: 1, quality: math.NaN()}, {at: 0, quality: 1}, {at: 3, quality: 2}}
-	want := append([]planarEar(nil), ears...)
-	sort.SliceStable(want, func(i, j int) bool { return want[i].quality > want[j].quality })
+func TestSortPlanarEarsPutsNaNLast(t *testing.T) {
+	ears := []planarEar{
+		{at: 2, quality: 1},
+		{at: 5, quality: math.NaN()},
+		{at: 1, quality: math.NaN()},
+		{at: 0, quality: 1},
+		{at: 3, quality: 2},
+		{at: 4, quality: math.Inf(-1)},
+	}
 
 	sortPlanarEars(ears)
 
-	for i := range ears {
-		require.Equal(t, want[i].at, ears[i].at)
+	got := make([]int, len(ears))
+	for i, e := range ears {
+		got[i] = e.at
 	}
+	require.Equal(t, []int{3, 0, 2, 4, 1, 5}, got)
 }
 
 func TestZipperJoinsRingsOfDifferentCounts(t *testing.T) {
