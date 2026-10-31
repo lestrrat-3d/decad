@@ -45,12 +45,9 @@ func cylinderMeridian() momentinput.Profile {
 
 func requireRevolveLocations(t *testing.T, rp revolveplan.Payload, cases []prismCase) {
 	t.Helper()
-	for _, tc := range cases {
-		got, decided, err := LocateRevolve(t.Context(), tc.at, rp)
-		require.NoError(t, err, tc.name)
-		require.Equal(t, tc.want != Undecided, decided, tc.name)
-		require.Equal(t, tc.want, got, tc.name)
-	}
+	requireLocationCases(t, cases, func(at r3.Vec) (Location, bool, error) {
+		return LocateRevolve(t.Context(), at, rp)
+	})
 }
 
 func TestLocateRevolveCylinder(t *testing.T) {

@@ -66,12 +66,9 @@ type prismCase struct {
 
 func requirePrismLocations(t *testing.T, pp prismrecord.Payload, cases []prismCase) {
 	t.Helper()
-	for _, tc := range cases {
-		got, decided, err := LocatePrism(t.Context(), tc.at, pp)
-		require.NoError(t, err, tc.name)
-		require.Equal(t, tc.want != Undecided, decided, tc.name)
-		require.Equal(t, tc.want, got, tc.name)
-	}
+	requireLocationCases(t, cases, func(at r3.Vec) (Location, bool, error) {
+		return LocatePrism(t.Context(), at, pp)
+	})
 }
 
 func TestLocatePrismSquare(t *testing.T) {
