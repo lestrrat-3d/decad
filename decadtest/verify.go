@@ -200,30 +200,13 @@ func HasOnlyDiagnostics(tb testing.TB, report *decad.Report, allowed ...decad.Di
 // unchanged. report, a and b MUST NOT be nil.
 func MeasuresClearance(tb testing.TB, report *decad.Report, a, b *decad.Body, want units.Value, opts ...Option) {
 	tb.Helper()
-
-	if report == nil {
-		tb.Fatalf("decadtest.MeasuresClearance: report must not be nil")
-		return
-	}
-	if a == nil {
-		tb.Fatalf("decadtest.MeasuresClearance: a must not be nil")
-		return
-	}
-	if b == nil {
-		tb.Fatalf("decadtest.MeasuresClearance: b must not be nil")
-		return
-	}
-
-	for _, row := range report.Clearances {
-		if (row.A == a && row.B == b) || (row.A == b && row.B == a) {
-			what := fmt.Sprintf("clearance (%s, %s) gap", reportBodyName(report, a), reportBodyName(report, b))
-			Measures(tb, what, row.Gap, want, opts...)
-			return
-		}
-	}
-
-	tb.Fatalf("clearance: the report holds no clearance row for the pair (%s, %s); it holds %d row(s)",
-		reportBodyName(report, a), reportBodyName(report, b), len(report.Clearances))
+	measurePair(tb, report, a, b, want, opts, pairMeasureSpec[decad.Clearance]{
+		function: "MeasuresClearance",
+		kind:     "clearance",
+		quantity: "gap",
+		rows:     func(report *decad.Report) []decad.Clearance { return report.Clearances },
+		reading:  func(row decad.Clearance) (*decad.Body, *decad.Body, decad.Measurement) { return row.A, row.B, row.Gap },
+	})
 }
 
 // MeasuresInterference fails tb unless the report holds a
@@ -233,28 +216,51 @@ func MeasuresClearance(tb testing.TB, report *decad.Report, a, b *decad.Body, wa
 // report, a and b MUST NOT be nil.
 func MeasuresInterference(tb testing.TB, report *decad.Report, a, b *decad.Body, want units.Value, opts ...Option) {
 	tb.Helper()
+	measurePair(tb, report, a, b, want, opts, pairMeasureSpec[decad.Interference]{
+		function: "MeasuresInterference",
+		kind:     "interference",
+		quantity: "volume",
+		rows:     func(report *decad.Report) []decad.Interference { return report.Interferences },
+		reading: func(row decad.Interference) (*decad.Body, *decad.Body, decad.Measurement) {
+			return row.A, row.B, row.Volume
+		},
+	})
+}
+
+type pairMeasureSpec[T any] struct {
+	function string
+	kind     string
+	quantity string
+	rows     func(*decad.Report) []T
+	reading  func(T) (*decad.Body, *decad.Body, decad.Measurement)
+}
+
+func measurePair[T any](tb testing.TB, report *decad.Report, a, b *decad.Body, want units.Value, opts []Option, spec pairMeasureSpec[T]) {
+	tb.Helper()
 
 	if report == nil {
-		tb.Fatalf("decadtest.MeasuresInterference: report must not be nil")
+		tb.Fatalf("decadtest.%s: report must not be nil", spec.function)
 		return
 	}
 	if a == nil {
-		tb.Fatalf("decadtest.MeasuresInterference: a must not be nil")
+		tb.Fatalf("decadtest.%s: a must not be nil", spec.function)
 		return
 	}
 	if b == nil {
-		tb.Fatalf("decadtest.MeasuresInterference: b must not be nil")
+		tb.Fatalf("decadtest.%s: b must not be nil", spec.function)
 		return
 	}
 
-	for _, row := range report.Interferences {
-		if (row.A == a && row.B == b) || (row.A == b && row.B == a) {
-			what := fmt.Sprintf("interference (%s, %s) volume", reportBodyName(report, a), reportBodyName(report, b))
-			Measures(tb, what, row.Volume, want, opts...)
+	rows := spec.rows(report)
+	for _, row := range rows {
+		rowA, rowB, reading := spec.reading(row)
+		if (rowA == a && rowB == b) || (rowA == b && rowB == a) {
+			what := fmt.Sprintf("%s (%s, %s) %s", spec.kind, reportBodyName(report, a), reportBodyName(report, b), spec.quantity)
+			Measures(tb, what, reading, want, opts...)
 			return
 		}
 	}
 
-	tb.Fatalf("interference: the report holds no interference row for the pair (%s, %s); it holds %d row(s)",
-		reportBodyName(report, a), reportBodyName(report, b), len(report.Interferences))
+	tb.Fatalf("%s: the report holds no %s row for the pair (%s, %s); it holds %d row(s)",
+		spec.kind, spec.kind, reportBodyName(report, a), reportBodyName(report, b), len(rows))
 }
