@@ -77,6 +77,10 @@ func keywayEdges(t *testing.T, b *decad.Body, rad, x0 float64, ys ...float64) *d
 	return q.Exactly(len(ys))
 }
 
+// keywayInside is a point (y, z) 0.125 mm or more inside the corner region of
+// the r = 0.5 fillet and the d = 0.5 chamfer.
+var keywayInside = [2]float64{3.15, 9.35}
+
 // keywaySection is the cross-section of the blend of the corner K = (3, √91)
 // in (y, z) between the wall y = 3 (material at y > 3) and the shaft's circle:
 // the area of the corner region the blend removes, the setback down the wall,
@@ -141,15 +145,14 @@ func requireKeywayBlend(t *testing.T, before, after *decad.Body, sec keywaySecti
 }
 
 // requireEndFaces checks, for each plane x = const that caps names, that the
-// point (x, ±3.15, 9.35) inside the corner region of each blended edge on side
-// ys lies on a face in that plane when caps says the face takes the cap, and
-// at least 0.1 mm off every such face when it gives up the corner. The point
-// lies 0.125 mm or more inside the region.
-func requireEndFaces(t *testing.T, b *decad.Body, ys []float64, caps map[float64]bool) {
+// point (x, ±at[0], at[1]) inside the corner region of each blended edge on
+// side ys lies on a face in that plane when caps says the face takes the cap,
+// and at least 0.1 mm off every such face when it gives up the corner.
+func requireEndFaces(t *testing.T, b *decad.Body, ys []float64, at [2]float64, caps map[float64]bool) {
 	t.Helper()
 	for x, takes := range caps {
 		for _, y := range ys {
-			p := r3.NewVec(x, math.Copysign(3.15, y), 9.35)
+			p := r3.NewVec(x, math.Copysign(at[0], y), at[1])
 			best := decad.Measurement{}
 			found := false
 			for _, f := range b.Faces() {
@@ -189,10 +192,14 @@ func TestFacetedRetainedBlendKeyway(t *testing.T) {
 		}{
 			{keywayFillet(keywayRho), keywayRegion(0.5, true)},
 			{keywayChamfer(0.5), keywayRegion(0.5, false)},
+			{keywayFillet(0.3), keywayRegion(0.3, true)},
+			{keywayFillet(0.1), keywayRegion(0.1, true)},
 		} {
 			require.InDelta(t, shoelaceArea(c.poly), c.sec.corner, 1e-7)
 		}
 		require.InDelta(t, 0.117968684, keywayFillet(keywayRho).corner, 1e-9)
+		require.InDelta(t, 0.040674574, keywayFillet(0.3).corner, 1e-9)
+		require.InDelta(t, 0.004336328, keywayFillet(0.1).corner, 1e-9)
 	})
 
 	t.Run("fillet of both top edges", func(t *testing.T) {
@@ -206,7 +213,7 @@ func TestFacetedRetainedBlendKeyway(t *testing.T) {
 		require.NoError(t, err)
 		sec := keywayFillet(keywayRho)
 		requireKeywayBlend(t, body, filleted, sec, 2, 40, 4, 0)
-		requireEndFaces(t, filleted, []float64{keywayW, -keywayW}, map[float64]bool{20: true, 60: true})
+		requireEndFaces(t, filleted, []float64{keywayW, -keywayW}, keywayInside, map[float64]bool{20: true, 60: true})
 		cylinders := 0
 		for _, f := range filleted.Faces() {
 			if c, ok := f.Surface().(decad.Cylinder); ok && math.Abs(c.Radius.Base()-r) < 1e-12 {
@@ -235,7 +242,7 @@ func TestFacetedRetainedBlendKeyway(t *testing.T) {
 		require.NoError(t, err)
 		sec := keywayFillet(keywayRho)
 		requireKeywayBlend(t, body, filleted, sec, 2, 60, 2, 2)
-		requireEndFaces(t, filleted, []float64{keywayW, -keywayW}, map[float64]bool{20: true, 80: false})
+		requireEndFaces(t, filleted, []float64{keywayW, -keywayW}, keywayInside, map[float64]bool{20: true, 80: false})
 	})
 
 	t.Run("chamfer of a top edge", func(t *testing.T) {
@@ -247,7 +254,7 @@ func TestFacetedRetainedBlendKeyway(t *testing.T) {
 		require.NoError(t, err)
 		sec := keywayChamfer(d)
 		requireKeywayBlend(t, body, chamfered, sec, 1, 40, 2, 0)
-		requireEndFaces(t, chamfered, []float64{keywayW}, map[float64]bool{20: true, 60: true})
+		requireEndFaces(t, chamfered, []float64{keywayW}, keywayInside, map[float64]bool{20: true, 60: true})
 	})
 
 	t.Run("fillet of a small radius", func(t *testing.T) {
@@ -259,6 +266,36 @@ func TestFacetedRetainedBlendKeyway(t *testing.T) {
 			units.Millimeters(r))
 		require.NoError(t, err)
 		requireKeywayBlend(t, body, filleted, keywayFillet(r), 2, 60-x0, 4, 0)
+	})
+
+	t.Run("fillet of a small radius running off the shaft's end", func(t *testing.T) {
+		t.Parallel()
+		// The keyway from x = 20.37 runs out through x = 80. Where the end wall
+		// at x = 20.37 takes the cap, the ball touches the shaft's circle at tb
+		// closer to it, by the profile's own last row, than the shaft's facets
+		// lie inside it: the rows leave a wider last gap there (§5.0). The
+		// shaft's end x = 80 gives the corner up.
+		const x0 = 20.37
+		for _, c := range []struct {
+			r  float64
+			at [2]float64 // a point 0.05 (r = 0.3) or 0.01 mm (r = 0.1) inside the corner region
+		}{{0.3, [2]float64{3.05, 9.45}}, {0.1, [2]float64{3.01, 9.52}}} {
+			body := keywayShaft(t, x0, 90)
+			filleted, err := decad.Fillet(t.Context(), body, keywayEdges(t, body, keywayR, x0, keywayW, -keywayW),
+				units.Millimeters(c.r))
+			require.NoError(t, err)
+			requireKeywayBlend(t, body, filleted, keywayFillet(c.r), 2, 80-x0, 2, 2)
+			requireEndFaces(t, filleted, []float64{keywayW, -keywayW}, c.at, map[float64]bool{x0: true})
+			mesh, err := filleted.Tessellate(t.Context(), units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll))
+			require.NoError(t, err)
+			require.True(t, mesh.BoundaryVerified())
+			require.True(t, mesh.VolumeVerified())
+			rep, err := filleted.Document().Verify(t.Context())
+			require.NoError(t, err)
+			br, err := rep.ForBody(filleted)
+			require.NoError(t, err)
+			require.Equal(t, decad.Sound, br.Status)
+		}
 	})
 
 	t.Run("a cross hole past the keyway's end", func(t *testing.T) {
@@ -328,16 +365,14 @@ func TestFacetedRetainedBlendKeyway(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "a vertex of the wall lies on the blend's setback line")
 
-		// A fillet r = 0.3 of a keyway from x = 20.37 running off the shaft's
-		// end: the shaft's facets lie up to their bound inside the true circle,
-		// and next to tb, where the ball and the circle touch, the fillet's
-		// last row lies beyond the facet the end wall's cap is cut from. The
-		// cap's loop crosses itself.
+		// A fillet r = 0.007 of a keyway from x = 20.37 running off the
+		// shaft's end: its tangent point on the shaft lies under minSine of
+		// the edge's angle about the axis from the edge.
 		body = keywayShaft(t, 20.37, 90)
 		_, err = decad.Fillet(t.Context(), body, keywayEdges(t, body, keywayR, 20.37, keywayW, -keywayW),
-			units.Millimeters(0.3))
+			units.Millimeters(0.007))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "the blend's end cap folds where its rows meet the wall's facets")
+		require.ErrorContains(t, err, "the blend's tangent point does not lie on the wall's face")
 
 		// A groove 20 mm long cut into a plate's top face: the top face wraps
 		// the groove's flat ends, so beside the convex edge the plane, not the

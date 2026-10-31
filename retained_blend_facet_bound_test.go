@@ -592,3 +592,199 @@ func TestRetainedBlendStripPatchCovered(t *testing.T) {
 		requirePatchCovered(t, out, corner, pts)
 	})
 }
+
+// keywayCusp is the section, in (y, z), of a fillet of radius r of the top
+// edge K = (3, √91) of a keyway |y| ≤ 3 above z = 6.5 in a shaft of radius 10
+// along x: the ball's centre c at distance 10 − r from the axis, its tangent
+// points ta on the wall y = 3 and tb on the shaft's circle, and the corner
+// region the blend removes between the wall, the ball's arc and the circle.
+type keywayCusp struct {
+	r              float64
+	c, ta, tb, k   [2]float64
+	arc0, arcSweep float64 // the arc's directions from c, ta to tb
+}
+
+func newKeywayCusp(r float64) keywayCusp {
+	const rad = 10.0
+	cy := 3 + r
+	cz := math.Sqrt((rad-r)*(rad-r) - cy*cy)
+	s := rad / (rad - r)
+	q := keywayCusp{r: r, c: [2]float64{cy, cz}, ta: [2]float64{3, cz}, tb: [2]float64{cy * s, cz * s},
+		k: [2]float64{3, math.Sqrt(91)}}
+	q.arc0 = math.Pi
+	q.arcSweep = math.Atan2(q.tb[1]-cz, q.tb[0]-cy) - math.Pi
+	return q
+}
+
+// corner reports whether p lies in the corner region: past the wall, inside
+// the circle, outside the ball, and between the ball's radii to ta and tb.
+func (q keywayCusp) corner(p [2]float64) bool {
+	dy, dz := p[0]-q.c[0], p[1]-q.c[1]
+	cross := func(a, b [2]float64) float64 { return a[0]*b[1] - a[1]*b[0] }
+	toTB := [2]float64{q.tb[0] - q.c[0], q.tb[1] - q.c[1]}
+	side := cross(toTB, [2]float64{q.k[0] - q.c[0], q.k[1] - q.c[1]})
+	return p[0] >= 3 && math.Hypot(p[0], p[1]) <= 10 && math.Hypot(dy, dz) >= q.r && dz >= 0 &&
+		cross(toTB, [2]float64{dy, dz})*side >= 0
+}
+
+// boundary samples the end face's boundary near the corner as a dense
+// polyline: up the wall from z = 8 to ta, along the ball's arc to tb, and
+// along the circle from tb to the angle where y = yEnd.
+func (q keywayCusp) boundary(yEnd float64) [][2]float64 {
+	const n = 4000
+	out := [][2]float64{{3, 8}}
+	for i := 0; i <= n; i++ {
+		a := q.arc0 + q.arcSweep*float64(i)/n
+		out = append(out, [2]float64{q.c[0] + q.r*math.Cos(a), q.c[1] + q.r*math.Sin(a)})
+	}
+	b0, b1 := math.Atan2(q.tb[1], q.tb[0]), math.Atan2(math.Sqrt(100-yEnd*yEnd), yEnd)
+	for i := 1; i <= n; i++ {
+		a := b0 + (b1-b0)*float64(i)/n
+		out = append(out, [2]float64{10 * math.Cos(a), 10 * math.Sin(a)})
+	}
+	return out
+}
+
+// planeDist is the distance of p from the end face in the plane x = x0 near
+// the corner: the face holds the points inside accepts, and the rest lie as
+// far from it as from its boundary polyline.
+func planeDist(p r3.Vec, x0 float64, inside func([2]float64) bool, poly [][2]float64) float64 {
+	q := [2]float64{p.Y, p.Z}
+	off := math.Abs(p.X - x0)
+	if inside(q) {
+		return off
+	}
+	best := math.Inf(1)
+	for i := 1; i < len(poly); i++ {
+		a, b := poly[i-1], poly[i]
+		ux, uz := b[0]-a[0], b[1]-a[1]
+		s := math.Min(1, math.Max(0, ((q[0]-a[0])*ux+(q[1]-a[1])*uz)/(ux*ux+uz*uz)))
+		best = math.Min(best, math.Hypot(q[0]-a[0]-s*ux, q[1]-a[1]-s*uz))
+	}
+	return math.Hypot(best, off)
+}
+
+// TestRetainedBlendKeywayCuspBounds samples the fillet of a keyway's top edge
+// in a turned shaft whose end cap, at the keyway's end wall x = 20.37, closes
+// in a cusp finer than the shaft's facets (retained-edge-blend §5.0, "A wall
+// that extends past the corner"). The fillet's rows there leave a wider last
+// gap before tb, whose sagitta the cut row and the last row's end vertices
+// state. Every blend facet, sampled on a 12×12 grid against the exact
+// cylinder, lies within its own bound and within Mesh.Bound, and every exact
+// point of the fillet within the nearest blend facet's own bound. Every facet
+// of the cap's end wall and of the shaft's end x = 80 near the corner lies
+// within its own bound of the exact end face, whose boundary there runs up
+// the wall, along the fillet's arc and along the circle; and every exact point
+// of the arc in each end plane lies within the nearest end facet's own bound.
+func TestRetainedBlendKeywayCuspBounds(t *testing.T) {
+	t.Parallel()
+	const x0, x1 = 20.37, 80.0
+	for _, r := range []float64{0.3, 0.1} {
+		t.Run(fmt.Sprintf("r = %g", r), func(t *testing.T) {
+			t.Parallel()
+			sc := newStripScene()
+			s, err := sc.w.CreateSketch(sc.w.XY())
+			require.NoError(t, err)
+			rect := s.CreateRectangle(0, 0, x1, 10)
+			s.Fix(rect.A)
+			s.Fix(rect.C)
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			shaft, err := Revolve(t.Context(), sc.doc, s, s.Profiles()[0],
+				SketchLine{Start: planePoint{}, End: planePoint{U: 1}}, FullRevolution{})
+			require.NoError(t, err)
+			keyway, err := Cut(t.Context(), shaft, moved(t, sc.rect(t, x0, -3, 90, 3, 6), r3.Vec{Z: 6.5}))
+			require.NoError(t, err)
+			fresh := freshFaces(keyway)
+			k := r3.NewVec(x0, 3, math.Sqrt(91))
+			var at r3.Vec
+			for _, v := range keyway.Vertices() {
+				if p := v.Position().Value; p.Sub(k).Len() < 5e-3 {
+					at = p
+				}
+			}
+			out, err := Fillet(t.Context(), keyway, Edges(EndpointAt(at), ParallelTo(r3.NewVec(1, 0, 0))).Exactly(1),
+				units.Millimeters(r))
+			require.NoError(t, err)
+			q := newKeywayCusp(r)
+			blend := fresh(out)
+			requireFacetBoundsHold(t, out, blend, stripProfile{o: r3.NewVec(0, q.c[0], q.c[1]), r: r,
+				line: r3.NewVec(1, 0, 0)})
+
+			mesh, err := out.Tessellate(t.Context(), units.Millimeters(0.1), WithVerification(VerifyNone))
+			require.NoError(t, err)
+			bound := mesh.Bound().Base()
+			vb := mesh.n.VertexBound
+			for i, tri := range mesh.n.Triangles {
+				if blend(mesh.SourceFaces()[i]) {
+					require.LessOrEqual(t, max(vb[tri[0]], vb[tri[1]], vb[tri[2]]), bound)
+				}
+			}
+
+			// The exact fillet, with every tenth of its arc's last hundredth
+			// near tb, at 61 stations along the edge.
+			var patch []r3.Vec
+			for i := range 61 {
+				x := x0 + (x1-x0)*(float64(i)+0.5)/61
+				for j := 1; j < 200; j++ {
+					f := float64(j) / 200
+					if j > 100 {
+						f = 0.99 + 0.01*float64(j-100)/100
+					}
+					a := q.arc0 + q.arcSweep*f
+					patch = append(patch, r3.NewVec(x, q.c[0]+r*math.Cos(a), q.c[1]+r*math.Sin(a)))
+				}
+			}
+			requirePatchCovered(t, out, blend, patch)
+
+			// The end faces near the corner: the cap the end wall takes at x0,
+			// and the shaft's end x1, which gives the corner up.
+			cases := []struct {
+				x      float64
+				inside func([2]float64) bool
+				yEnd   float64
+			}{
+				{x0, func(p [2]float64) bool { return math.Hypot(p[0], p[1]) <= 10 && (p[0] <= 3 || q.corner(p)) }, 2.5},
+				{x1, func(p [2]float64) bool { return math.Hypot(p[0], p[1]) <= 10 && p[0] >= 3 && !q.corner(p) }, 4.5},
+			}
+			for _, c := range cases {
+				poly := q.boundary(c.yEnd)
+				near := func(p r3.Vec) bool {
+					return math.Abs(p.X-c.x) < 1e-6 && p.Y > 2.5 && p.Y < 4.5 && p.Z > 8
+				}
+				facets, worst := 0, 0.0
+				for _, tri := range mesh.n.Triangles {
+					a, b, cc := mesh.n.Vertices[tri[0]], mesh.n.Vertices[tri[1]], mesh.n.Vertices[tri[2]]
+					if !near(a) || !near(b) || !near(cc) {
+						continue
+					}
+					facets++
+					own := max(vb[tri[0]], vb[tri[1]], vb[tri[2]])
+					const g = 12
+					for u := 0; u <= g; u++ {
+						for w := 0; u+w <= g; w++ {
+							p := a.Add(b.Sub(a).Scale(float64(u) / g)).Add(cc.Sub(a).Scale(float64(w) / g))
+							d := planeDist(p, c.x, c.inside, poly)
+							worst = math.Max(worst, d/own)
+							require.LessOrEqual(t, d, own, "end facet at %v", a)
+							require.LessOrEqual(t, d, bound, "end facet at %v", a)
+						}
+					}
+				}
+				t.Logf("x = %g: %d end facets near the corner, the farthest at %.3f of its own bound", c.x, facets,
+					worst)
+				require.Positive(t, facets)
+				var arc []r3.Vec
+				for i := range 2001 {
+					a := q.arc0 + q.arcSweep*float64(i)/2000
+					arc = append(arc, r3.NewVec(c.x, q.c[0]+r*math.Cos(a), q.c[1]+r*math.Sin(a)))
+				}
+				x := c.x
+				requirePatchCovered(t, out, func(f *Face) bool {
+					pl, ok := f.Surface().(Plane)
+					return ok && math.Abs(math.Abs(pl.Frame.N().X)-1) < 1e-12 && math.Abs(pl.Frame.Origin().X-x) < 1e-9
+				}, arc)
+			}
+		})
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -337,6 +338,44 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 		}
 	}
 
+	// A fillet's end cap closes in a cusp at tb, and the wall's cut in the end
+	// plane lies within its own bound of the circle there. Where the cap the
+	// profile's own rows would make is not simple, the rows are spaced again
+	// so the last row before tb lies farther inside than that cut can (§5.0,
+	// "A wall that extends past the corner"); the last gap's sagitta is
+	// charged below. capSimple still decides the rebuilt cap.
+	cusp := 0.0
+	if spec.fillet && (extB[0] || extB[1]) {
+		reach, simple := 0.0, true
+		for i := range 2 {
+			if !extB[i] {
+				continue
+			}
+			run, err := cuts.endRun(i, c.ends[i].v)
+			if err != nil {
+				return nil, err
+			}
+			reach = max(reach, w.beta[cuts.corner[i]])
+			shift := axis.Scale(float64(i) * length)
+			pts := make([]r3.Vec, 0, len(sec.rows)+len(run)+1)
+			for _, p := range sec.rows[:len(sec.rows)-1] {
+				pts = append(pts, p.Add(shift))
+			}
+			pts = append(pts, w.verts[cuts.corner[i]])
+			for _, v := range run {
+				reach = max(reach, w.beta[v])
+				pts = append(pts, w.verts[v])
+			}
+			pts = append(pts, w.verts[c.ends[i].v])
+			simple = simple && capSimplePts(c.ends[i].g.n, pts, len(sec.rows)-1) == nil
+		}
+		if !simple {
+			if cusp, err = c.clearCusp(spec, &sec, o0, convex, proofbound.AbsSumUpper(reach, margin), w.tau); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	// The cut vertices, in order along the axis, are the columns of the strip.
 	var cols []int
 	for _, id := range w.cuts {
@@ -497,6 +536,9 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 		}
 		w.removed = append(w.removed, f.fl.facets...)
 	}
+	if cusp > 0 {
+		w.chargeCusp(cols, []int{rowIdx[m-1][0], rowIdx[m-1][len(cols)-1]}, cusp, spec.r, slack)
+	}
 
 	// The strip, and its tag.
 	tag := c.tag(spec, sec, convex)
@@ -537,6 +579,89 @@ func rewriteCylLine(ctx context.Context, env topo.Env, fp facetedrecord.Payload,
 		return nil, err
 	}
 	return w.build(ctx, env, groups, stripFrom, tag, faceIndex)
+}
+
+// clearCusp spaces a fillet's rows again so the last row before tb lies at
+// least need from the wall's circle (§5.0, "A wall that extends past the
+// corner"). The ball touches the circle at tb, so the arc's point at the tube
+// angle ψ short of tb lies inside the circle (outside it, where the material
+// lies outside the cylinder) by
+//
+//	gap(ψ) = κ·(√(D² + r² − 2κ·D·r·cos ψ) − R),  D = R + κ·r,
+//
+// which grows with ψ over the arc. The last gap spans the ψ where gap(ψ) =
+// need, and the rest of the arc keeps the profile's step. It returns the last
+// gap's sagitta r·(1 − cos(ψ/2)), which the rows' own bound τ does not cover,
+// or 0, rows unchanged, when the last row already lies need from the circle.
+// It refuses (SR5) a fillet whose tangent point on the plane lies no farther
+// than need from the circle, as a fillet tiny against the wall's facets does.
+func (c cylLine) clearCusp(spec blendSpec, s *section, o0 r3.Vec, convex bool, need, tau float64) (float64, error) {
+	r, rr := spec.r, c.radius
+	kappa := -1.0
+	if convex == c.matOutside {
+		kappa = 1
+	}
+	gap := func(p r3.Vec) float64 { return kappa * (p.Sub(o0).Len() - rr) }
+	m := len(s.rows) - 1
+	if gap(s.rows[m-1]) >= need {
+		return 0, nil
+	}
+	d := rr + kappa*r
+	target := rr + kappa*need
+	psi := math.Acos(math.Max(-1, math.Min(1, (d*d+r*r-target*target)/(2*kappa*d*r))))
+	span := s.phi - psi
+	if !(gap(s.ta) > need) || !(span > minSine) {
+		return 0, fmt.Errorf("%w: the fillet's arc comes no more than %g mm from the wall's circle, "+
+			"and the wall's held facets may lie %g mm from it at the end cap", decaderr.ErrUnsupported, gap(s.ta), need)
+	}
+	a0 := s.ta.Sub(s.centre).Scale(1 / r)
+	a1 := s.tb.Sub(s.centre).Scale(1 / r)
+	sin := math.Sin(s.phi)
+	step := 2 * math.Acos(1-math.Min(tau/r, 1))
+	k := max(1, int(math.Ceil(span/step)))
+	rows := make([]r3.Vec, 0, k+2)
+	for j := 0; j <= k; j++ {
+		alpha := span * float64(j) / float64(k)
+		rows = append(rows, s.centre.Add(a0.Scale(r*math.Sin(s.phi-alpha)/sin)).Add(a1.Scale(r*math.Sin(alpha)/sin)))
+	}
+	rows[0] = s.ta
+	s.rows = append(rows, s.tb)
+	return filletSag(spec, s.phi-span), nil
+}
+
+// chargeCusp states the widened last gap of a fillet's rows (clearCusp),
+// whose sagitta sag exceeds the τ the rows' own bounds hold (§6.3, "The
+// cusp's last gap"). Each vertex of the wall's cut row cut takes
+// cuspCharge(sag, β, r) plus slack, β its own bound; every triangle of the
+// gap has such a vertex. Each of the last row's vertices in the end planes,
+// end, takes sag plus slack, so both ends of the gap's chord in an end face
+// state its sagitta. A bound already larger stays.
+func (w *work) chargeCusp(cut, end []int, sag, r, slack float64) {
+	for _, v := range cut {
+		w.beta[v] = max(w.beta[v], proofbound.AbsSumUpper(cuspCharge(sag, w.beta[v], r), slack))
+	}
+	for _, v := range end {
+		w.beta[v] = max(w.beta[v], proofbound.AbsSumUpper(sag, slack))
+	}
+}
+
+// cuspCharge bounds, from above, how far the segment from an exact point P of
+// a circle of radius r to a point C' within eps of another exact point C of
+// it lies from the arc PC, and the arc from the segment, where the chord PC
+// has sagitta sag: max over ν in [0, 1] of 4·sag·ν(1 − ν) + ν·eps, which is
+// eps when eps ≥ 4·sag and (4·sag + eps)²/(16·sag) otherwise, plus
+// sag²/(2r) for an arc point's distance from the chord past its radial
+// distance (§6.3, "The cusp's last gap"). Every step rounds up.
+func cuspCharge(sag, eps, r float64) float64 {
+	if !(sag > 0) {
+		return eps
+	}
+	far := eps
+	if eps < 4*sag {
+		s := proofbound.AbsSumUpper(4*sag, eps)
+		far = proofbound.DivUpper(proofbound.ProductUpper(s, s), 16*sag)
+	}
+	return proofbound.AbsSumUpper(far, proofbound.DivUpper(proofbound.ProductUpper(sag, sag), 2*r))
 }
 
 // lineSense is the sense of the tag line dir along which a face's chain
@@ -601,16 +726,25 @@ func cylRemovedArea(strip, band, corner float64, convex bool, extB [2]bool) floa
 // do not share a vertex touch, no two that do run back along each other, and
 // the loop turns at both cusps the way it runs.
 func (w *work) capSimple(n r3.Vec, loop []int, tb int) error {
+	pts := make([]r3.Vec, len(loop))
+	for i, id := range loop {
+		pts[i] = w.verts[id]
+	}
+	return capSimplePts(n, pts, tb)
+}
+
+// capSimplePts is capSimple on the loop's points.
+func capSimplePts(n r3.Vec, pts []r3.Vec, tb int) error {
 	u, ok := perpendicular(n)
 	if !ok {
 		return fmt.Errorf("%w: an end face has no plane frame", decaderr.ErrUnsupported)
 	}
 	v := n.Cross(u)
-	k := len(loop)
+	k := len(pts)
 	ps := make([]pt2, k)
 	idx := make([]int, k)
-	for i, id := range loop {
-		q := w.verts[id].Sub(w.verts[loop[0]])
+	for i, p := range pts {
+		q := p.Sub(pts[0])
 		ps[i], idx[i] = pt2{q.Dot(u), q.Dot(v)}, i
 	}
 	folds := fmt.Errorf("%w: the blend's end cap folds where its rows meet the wall's facets", decaderr.ErrUnsupported)
