@@ -178,6 +178,18 @@ finds behind a surface (`agent-docs/dxf-export-design.md` D5, D6).
 | F3 | A pixel counts the samples whose light a nearer triangle blocks, with §10's bias. A pixel blocked in every sample takes the ambient shade of §10 exactly, one blocked in none keeps its lit shade, and any other takes the lit and ambient shades mixed in the blocked fraction. A face turned from the key light is at the ambient level as before. |
 | F4 | A shadow so grades from dark to light across a penumbra whose width grows with the distance from the occluder, about twice that distance times `tan(softness)`. The tests count the pixels strictly between the lit and shadowed plate levels: a hard shadow has a handful at its edge, a 5 degree one hundreds, and a 12 degree one more; the pillar's top and the far plate are unchanged. A render that mixes by a fixed fraction fails them. |
 
+### Row shading
+
+Hard and soft shadows shade images of at least 65,536 pixels with up to four workers, subject to the shared
+`orderedwork` worker budget and `GOMAXPROCS`. Smaller images shade serially. Each worker reads the completed camera
+and light depth buffers and writes only its assigned rows' blocked counts and ambient colours. All rows join before
+the next light sample starts, so each pixel accumulates samples in the same order as serial rendering. Camera
+rasterization, light depth buffers and final colour mixing run serially. Cancellation joins the workers before
+returning an error and publishes no image.
+
+The row tests compare every pixel for hard, soft and perspective shadows with body colours, back colours and gloss.
+The export tests also compare the complete PNG bytes across worker counts using tessellated plate and pillar bodies.
+
 ## 15. Gloss
 
 `View.Gloss`, a dimensionless strength from 0 to 1, gives lit faces a specular highlight.
