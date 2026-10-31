@@ -264,6 +264,18 @@ func rowEnclosure(ends *[6]crossIV, i int) [3]crossIV {
 	return p
 }
 
+// stationSampleError is the largest gap between a station's held band points
+// held(i), on every row i from B⁺ (0) to O⁺ (ToolRows), and the exact rows of
+// the base cell's end enclosures, mirrored by flipY and flipZ and mapped by
+// pose.
+func stationSampleError(ends *[6]crossIV, held func(i int) r3.Vec, flipY, flipZ bool, pose Pose) float64 {
+	e := 0.0
+	for i := range ToolRows + 1 {
+		e = max(e, worldError(held(i), rowEnclosure(ends, i), flipY, flipZ, pose))
+	}
+	return e
+}
+
 // worldError compares a held world point with a local enclosure triple
 // mirrored by flipY and flipZ and mapped by pose. Negation and the shift are
 // exact, so only the reading's own rounding enters, upward.
@@ -315,10 +327,7 @@ func ProveToolBand(ctx context.Context, R, r, d float64, pose Pose,
 	samples := make([]float64, n)
 	if err := cellEach(ctx, n, workers, func(j int) error {
 		k, flipY, flipZ := cellMirrorOf(j, n)
-		ends := &bases[k].ends
-		for i := range ToolRows + 1 {
-			samples[j] = max(samples[j], worldError(held(j, i), rowEnclosure(ends, i), flipY, flipZ, pose))
-		}
+		samples[j] = stationSampleError(&bases[k].ends, func(i int) r3.Vec { return held(j, i) }, flipY, flipZ, pose)
 		return nil
 	}); err != nil {
 		return ToolProof{}, err

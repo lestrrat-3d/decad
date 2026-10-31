@@ -90,8 +90,9 @@ func stationPoints(R, r, d float64, j int) [toolStride]r3.Vec {
 	return p
 }
 
-// buildSaddleTool places the stations, joins them and proves the band.
-func buildSaddleTool(ctx context.Context, s saddle, d float64) (*saddleTool, error) {
+// placeSaddleTool places the stations and joins them; proveSaddleTool
+// proves the band.
+func placeSaddleTool(s saddle, d float64) (*saddleTool, error) {
 	const n = crossbore.ToolStations
 	t := &saddleTool{verts: make([]r3.Vec, 0, toolStride*n)}
 	for j := range n {
@@ -133,11 +134,18 @@ func buildSaddleTool(ctx context.Context, s saddle, d float64) (*saddleTool, err
 			t.tris[i][1], t.tris[i][2] = t.tris[i][2], t.tris[i][1]
 		}
 	}
+	return t, nil
+}
+
+// proveSaddleTool proves the band of t, placed by placeSaddleTool, and sets
+// each band vertex's bound and each row's held area.
+func proveSaddleTool(ctx context.Context, t *saddleTool, s saddle, d float64) error {
+	const n = crossbore.ToolStations
 	proof, err := crossbore.ProveToolBand(ctx, s.key.R, s.key.r, d, s.key.pose, func(j, i int) r3.Vec {
 		return t.verts[rowVertex(j, i)]
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 	t.proof = proof
 	t.beta = make([]float64, len(t.verts))
@@ -155,7 +163,7 @@ func buildSaddleTool(ctx context.Context, s saddle, d float64) (*saddleTool, err
 	for i := range rows {
 		t.rowArea[i], t.rowSlop[i] = heldArea(t.verts, rows[i])
 	}
-	return t, nil
+	return nil
 }
 
 // exactLocal returns the exact local coordinates of world point p.
@@ -194,15 +202,20 @@ func checkOutside(t *saddleTool, s saddle) error {
 	// Round the shrunk radius down: a vertex inside the smaller disc is inside.
 	innerR := proofarith.FloatRat(math.Nextafter(inner, 0))
 	inner2 := new(big.Rat).Mul(innerR, innerR)
+	// The check reads O⁺, A, K and B⁺ of each station, never the band's
+	// inner rows.
 	locals := make([][3]*big.Rat, len(t.verts))
-	for i, v := range t.verts {
-		locals[i] = exactLocal(s.key.pose, v)
+	for j := range n {
+		for v := toolStride * j; v < toolStride*j+4; v++ {
+			locals[v] = exactLocal(s.key.pose, t.verts[v])
+		}
 	}
 	fail := fmt.Errorf("%w: the saddle chamfer's tool does not clear the solid outside its band", decaderr.ErrUnsupported)
 	for j := range n {
 		next := (j + 1) % n
 		for _, side := range [][2]int{{0, 1}, {1, 2}} {
-			quad := [4]int{toolStride*j + side[0], toolStride*j + side[1], toolStride*next + side[0], toolStride*next + side[1]}
+			quad := [4]int{toolStride*j + side[0], toolStride*j + side[1],
+				toolStride*next + side[0], toolStride*next + side[1]}
 			nx, ny := 0.0, 0.0
 			for _, v := range quad {
 				p := local(s.key.pose, t.verts[v])
@@ -373,14 +386,19 @@ func cutSaddles(ctx context.Context, env topo.Env, mesher booleaneval.OperandMes
 	tools := make([]*saddleTool, len(saddles))
 	allow := chaintol.Of(ctx)
 	for i, s := range saddles {
-		t, err := buildSaddleTool(ctx, s, d)
+		t, err := placeSaddleTool(s, d)
 		if err != nil {
 			return nil, err
 		}
-		if err := checkOutside(t, s); err != nil {
+		// The clearance check reads only the tool's box, so it runs before
+		// the band proof, the costliest step.
+		if err := checkSaddleClear(fp, faceIndex, s, t); err != nil {
 			return nil, err
 		}
-		if err := checkSaddleClear(fp, faceIndex, s, t); err != nil {
+		if err := proveSaddleTool(ctx, t, s, d); err != nil {
+			return nil, err
+		}
+		if err := checkOutside(t, s); err != nil {
 			return nil, err
 		}
 		// The ring must be one embedded closed surface for its true solid to

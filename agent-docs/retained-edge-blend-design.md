@@ -499,7 +499,8 @@ diagonal; the ring is wound outward by its signed volume. Its band is group
 5. Clearance: no facet of another face, and no segment of another boundary loop
    of either wall, grown by its held bounds plus slack, meets the tool's box.
    Inside the box the solid is then the region inside the shaft and outside the
-   bore.
+   bore. It reads only the placed tool's box, so it runs first, before the band
+   proof: a mouth that fails it and another proof refuses with its text.
 6. Each ring passes the exact crossing audit (`loftmesh.LoftCrossingAuditBounded`)
    and the rings' boxes are apart.
 7. The Cut passes the mesh Boolean's own audits; a shifted retry refuses.

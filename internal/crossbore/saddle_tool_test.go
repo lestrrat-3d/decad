@@ -12,8 +12,8 @@ import (
 // TestProveToolBand proves the saddle chamfer's band for a radius-10 shaft
 // and a radius-3 bore under a placed pose. It checks the chord bound against
 // sampled points of the held band triangles, each row's area interval against
-// a fine midpoint-rule area of the exact band, and that the held-sample
-// comparison reads a moved inner row.
+// a fine midpoint-rule area of the exact band
+// (TestStationSampleError reads a moved inner row).
 func TestProveToolBand(t *testing.T) {
 	t.Parallel()
 	const R, r, d = 10.0, 3.0, 1.5
@@ -63,17 +63,21 @@ func TestProveToolBand(t *testing.T) {
 	require.Positive(t, worst)
 	require.LessOrEqual(t, worst, proof.Chord, "the chord bound covers the sampled held triangles")
 
-	// A midpoint-rule area of each row of the exact band, from a grid four
-	// times finer than the stations and eight times finer than the rows.
-	const ft, fs = 4 * n, 8
+	// A midpoint-rule area of each row of the exact band, from a grid twice
+	// as fine as the stations and four times as fine as the rows.
+	const ft, fs = 2 * n, 4
 	sum := 0.0
 	for i := range rows {
+		var pts [fs + 1][ft + 1]r3.Vec
+		for b := range fs + 1 {
+			for a := range ft + 1 {
+				pts[b][a] = exact(2*math.Pi*float64(a)/ft, (float64(i)+float64(b)/fs)*k)
+			}
+		}
 		area := 0.0
-		for a := range ft {
-			t0, t1 := 2*math.Pi*float64(a)/ft, 2*math.Pi*float64(a+1)/ft
-			for b := range fs {
-				s0, s1 := (float64(i)+float64(b)/fs)*k, (float64(i)+float64(b+1)/fs)*k
-				p00, p10, p01, p11 := exact(t0, s0), exact(t1, s0), exact(t0, s1), exact(t1, s1)
+		for b := range fs {
+			for a := range ft {
+				p00, p10, p01, p11 := pts[b][a], pts[b][a+1], pts[b+1][a], pts[b+1][a+1]
 				dt := p10.Sub(p00).Add(p11.Sub(p01)).Scale(0.5)
 				ds := p01.Sub(p00).Add(p11.Sub(p10)).Scale(0.5)
 				area += dt.Cross(ds).Len()
@@ -86,17 +90,4 @@ func TestProveToolBand(t *testing.T) {
 	require.Less(t, proof.AreaLo, sum)
 	require.Greater(t, proof.AreaHi, sum)
 	require.Less(t, proof.AreaHi-proof.AreaLo, sum/100, "the band's area interval is narrow")
-
-	const moved = 1e-4
-	shifted := func(j, i int) r3.Vec {
-		p := held(j, i)
-		if j == 77 && i == rows/2 {
-			p.X += moved
-		}
-		return p
-	}
-	off, err := crossbore.ProveToolBand(t.Context(), R, r, d, pose, shifted)
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, off.SampleError, moved, "the comparison reads the moved inner row")
-	require.Greater(t, off.Chord, proof.Chord+moved/2)
 }

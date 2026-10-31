@@ -269,7 +269,7 @@ func readSaddle(e *topo.Edge, fp facetedrecord.Payload, faceIndex map[*topo.Face
 	}
 	// The mouth lies on local +X: flip the bore axis, and the third axis with
 	// it. The pose may be left-handed either way; nothing reads its hand, and
-	// the tool's winding comes from its signed volume (buildSaddleTool).
+	// the tool's winding comes from its signed volume (placeSaddleTool).
 	s.key.pose.Sign[0], s.key.pose.Sign[1] = side, side
 	return s, nil
 }
