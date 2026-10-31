@@ -124,18 +124,19 @@ func cellExactGeometryAt(radius, bore, setback float64, turn, angularGap *big.Ra
 	R, r, d := crossPoint(radius), crossPoint(bore), crossPoint(setback)
 	cd, sd := crossDual{v: c, d: crossSub(crossPoint(0), s)}, crossDual{v: s, d: c}
 	Rd, rd, dd := crossConst(R), crossConst(r), crossConst(d)
-	xd, ok := crossDSqrt(crossDSub(crossDMul(Rd, Rd),
-		crossDMul(crossDMul(rd, rd), crossDMul(cd, cd))))
+	R2, r2, c2 := crossDMul(Rd, Rd), crossDMul(rd, rd), crossDMul(cd, cd)
+	xd, ok := crossDSqrt(crossDSub(R2,
+		crossDMul(r2, c2)))
 	if !ok {
 		return CellExact{}, fmt.Errorf("%w: the cross-bore seam has no real X", decaderr.ErrUnsupported)
 	}
-	c2 := crossDMul(cd, cd)
-	Qd, ok := crossDSqrt(crossDSub(crossDMul(Rd, Rd),
-		crossDMul(crossDMul(rd, rd), crossDMul(c2, c2))))
+	Qd, ok := crossDSqrt(crossDSub(R2,
+		crossDMul(r2, crossDMul(c2, c2))))
 	if !ok {
 		return CellExact{}, fmt.Errorf("%w: the cross-bore normal has no length", decaderr.ErrUnsupported)
 	}
-	do, ok := crossDQuo(crossDMul(crossDMul(dd, cd), xd), crossDMul(Rd, Qd))
+	ddcd := crossDMul(dd, cd)
+	do, ok := crossDQuo(crossDMul(ddcd, xd), crossDMul(Rd, Qd))
 	if !ok {
 		return CellExact{}, fmt.Errorf("%w: the outer setback has no finite angle", decaderr.ErrUnsupported)
 	}
@@ -143,14 +144,15 @@ func cellExactGeometryAt(radius, bore, setback float64, turn, angularGap *big.Ra
 	if !ok {
 		return CellExact{}, fmt.Errorf("%w: the outer setback has no trig enclosure", decaderr.ErrUnsupported)
 	}
-	outX := crossDSub(crossDMul(xd, codo), crossDMul(crossDMul(rd, cd), sodo))
-	outY := crossDAdd(crossDMul(xd, sodo), crossDMul(crossDMul(rd, cd), codo))
+	rdcd := crossDMul(rd, cd)
+	outX := crossDSub(crossDMul(xd, codo), crossDMul(rdcd, sodo))
+	outY := crossDAdd(crossDMul(xd, sodo), crossDMul(rdcd, codo))
 	outZ, ok := crossDQuo(crossDMul(crossDMul(dd, Rd), sd), Qd)
 	if !ok {
 		return CellExact{}, fmt.Errorf("%w: the outer setback has no Z", decaderr.ErrUnsupported)
 	}
 	outZ = crossDAdd(crossDMul(rd, sd), outZ)
-	db, ok := crossDQuo(crossDMul(crossDMul(dd, cd), sd), Qd)
+	db, ok := crossDQuo(crossDMul(ddcd, sd), Qd)
 	if !ok {
 		return CellExact{}, fmt.Errorf("%w: the bore setback has no finite angle", decaderr.ErrUnsupported)
 	}
