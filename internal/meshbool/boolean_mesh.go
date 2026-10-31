@@ -508,7 +508,7 @@ func newKeyMemo() func(proof.Xpt) string {
 
 // keepSide is KeepSide with the exact-point key function supplied.
 func keepSide(ctx context.Context, m, other *BoolMesh, cuts map[int][]Xseg, blocked map[[2]int]struct{}, rims map[string]float64, wantInside, flip bool, keyOf func(proof.Xpt) string) ([]KeptFacet, error) {
-	var kept []KeptFacet
+	kept := make([]KeptFacet, 0, len(m.Tris))
 	emit := func(tri [3]proof.Xpt, beta [3]float64, keys [3]string, src int) {
 		if flip {
 			tri[1], tri[2] = tri[2], tri[1]
