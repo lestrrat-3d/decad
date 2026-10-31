@@ -1,7 +1,6 @@
 package proofbound_test
 
 import (
-	"fmt"
 	"math"
 	"math/big"
 	"math/rand/v2"
@@ -18,7 +17,7 @@ import (
 
 func requireBoundsSameFloatBits(t *testing.T, want, got float64, msg string, args ...any) {
 	t.Helper()
-	require.Equal(t, math.Float64bits(want), math.Float64bits(got), fmt.Sprintf(msg, args...))
+	requireFloatBitsEqual(t, want, got, append([]any{msg}, args...)...)
 }
 
 // This file tests internal/proofbound/bounds.go's proofbound.PerturbedTriangleAreaAllow, the one new

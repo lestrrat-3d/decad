@@ -144,9 +144,14 @@ func samePanic(t *testing.T, want, got func(), msg string) {
 	require.Equal(t, fmt.Sprint(wantVal), fmt.Sprint(gotVal), "%s: panic", msg)
 }
 
+func requireFloatBitsEqual(t *testing.T, want, got float64, msgAndArgs ...any) {
+	t.Helper()
+	require.Equal(t, math.Float64bits(want), math.Float64bits(got), msgAndArgs...)
+}
+
 func requireSameFloatBits(t *testing.T, want, got float64, msg string) {
 	t.Helper()
-	require.Equal(t, math.Float64bits(want), math.Float64bits(got), "%s: want %v got %v", msg, want, got)
+	requireFloatBitsEqual(t, want, got, "%s: want %v got %v", msg, want, got)
 }
 
 func TestRatOfMatchesSetFloat64(t *testing.T) {
