@@ -171,15 +171,20 @@ func CompositeTwistMesh(ctx context.Context, body *topo.Body, cells []loftrecord
 	}
 	area := proofbound.PointInterval(new(big.Rat))
 	byFace := make(map[*topo.Face]proofbound.RatInterval, len(topobuild.Faces(body)))
+	vertexIntervals := make([]proofbound.IvVec3, len(mesh.Vertices))
+	vertexIntervalsInitialized := make([]bool, len(mesh.Vertices))
 	for index, triangle := range mesh.Triangles {
 		var points [3]proofbound.IvVec3
-		for i, index := range triangle {
-			v := mesh.Vertices[index]
-			points[i] = proofbound.IvVec3{
-				proofbound.PointInterval(TwistRat(v.X)),
-				proofbound.PointInterval(TwistRat(v.Y)),
-				proofbound.PointInterval(TwistRat(v.Z)),
+		for i, vertexIndex := range triangle {
+			if !vertexIntervalsInitialized[vertexIndex] {
+				iv, ok := proofbound.IvVec3Of(mesh.Vertices[vertexIndex])
+				if !ok {
+					return nil, proofbound.RatInterval{}, nil, fmt.Errorf(`%w: twisted Loft facet has no area enclosure`, decaderr.ErrUnsupported)
+				}
+				vertexIntervals[vertexIndex] = iv
+				vertexIntervalsInitialized[vertexIndex] = true
 			}
+			points[i] = vertexIntervals[vertexIndex]
 		}
 		twice, ok := revolvemesh.IvTwoTriangleArea(points[0], points[1], points[2])
 		if !ok {
