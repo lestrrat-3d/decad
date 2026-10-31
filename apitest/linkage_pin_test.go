@@ -60,25 +60,6 @@ func holedBar(t *testing.T, doc *decad.Document, x0, y0, x1, y1, cx, cy, bore, z
 	return body
 }
 
-// pinPrism extrudes the circle of radius r about (cx, cy) over
-// z ∈ [z0, z0+h].
-func pinPrism(t *testing.T, doc *decad.Document, cx, cy, r, z0, h float64) *decad.Body {
-	t.Helper()
-	w := sketch.NewWorld()
-	plane, err := w.CreateOffsetPlane(w.XY(), z0)
-	require.NoError(t, err)
-	s, err := w.CreateSketch(plane)
-	require.NoError(t, err)
-	c := s.CreatePoint(cx, cy)
-	s.Fix(c)
-	s.CreateCircle(c, r)
-	_, err = s.Solve(t.Context())
-	require.NoError(t, err)
-	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
-	require.NoError(t, err)
-	return body
-}
-
 // pairRows returns, per evaluated pose, the Clearance rows naming the pair in
 // either order.
 func pairRows(report *decad.LinkageReport, a, b *decad.Body) [][]decad.Clearance {
@@ -115,7 +96,7 @@ func verifyPinnedElbow(t *testing.T, r float64) pinnedElbow {
 	t.Helper()
 	e := pinnedElbow{doc: decad.New()}
 	e.arm = holedBar(t, e.doc, -14, -14, 62, 14, 48, 0, 5.5, 0, 8)
-	e.pin = pinPrism(t, e.doc, 48, 0, r, -1, 10)
+	e.pin = circlePrismAtZ(t, e.doc, 48, 0, r, -1, 10)
 	e.wall = boxBodyAtZ(t, e.doc, -100, 38, 150, 58, -10, 50)
 	e.linkage = decad.NewLinkage()
 	shoulder, err := e.linkage.Ground().Revolute(r3.Vec{}, zAxis, []*decad.Body{e.arm})
@@ -189,7 +170,7 @@ func TestVerifyLinkagePinnedElbow(t *testing.T) {
 		// the kernel's windowed nested cell.
 		doc := decad.New()
 		arm := holedBar(t, doc, -14, -14, 62, 14, 48, 0, 5.5, 0, 8)
-		pin := pinPrism(t, doc, 48, 0, 5, -1, 10)
+		pin := circlePrismAtZ(t, doc, 48, 0, 5, -1, 10)
 		block := boxBodyAtZ(t, doc, 46, -2, 50, 2, 20, 2)
 		boxBodyAtZ(t, doc, -100, 38, 150, 58, -10, 50)
 		l := decad.NewLinkage()
@@ -261,7 +242,7 @@ func TestVerifyLinkagePinOnStaticPost(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	arm := holedBar(t, doc, -14, -14, 62, 14, 48, 0, 5.5, 0, 8)
-	post := pinPrism(t, doc, 48, 0, 5, -1, 10)
+	post := circlePrismAtZ(t, doc, 48, 0, 5, -1, 10)
 	boxBodyAtZ(t, doc, -100, 38, 150, 58, -10, 50)
 	l := decad.NewLinkage()
 	shoulder, err := l.Ground().Revolute(r3.NewVec(48, 0, 0), zAxis, []*decad.Body{arm})
