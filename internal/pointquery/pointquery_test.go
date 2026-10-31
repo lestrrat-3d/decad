@@ -7,6 +7,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func requireLocationCases(t *testing.T, cases []prismCase, locate func(r3.Vec) (Location, bool, error)) {
+	t.Helper()
+	for _, tc := range cases {
+		got, decided, err := locate(tc.at)
+		require.NoError(t, err, tc.name)
+		require.Equal(t, tc.want != Undecided, decided, tc.name)
+		require.Equal(t, tc.want, got, tc.name)
+	}
+}
+
 func TestMeshDistanceSquared(t *testing.T) {
 	t.Parallel()
 	verts := []r3.Vec{

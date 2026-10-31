@@ -59,12 +59,9 @@ func cube(t *testing.T, x0 float64) *topo.Body {
 
 func requireBooleanLocations(t *testing.T, n *topo.Body, src *historySource, cases []prismCase) {
 	t.Helper()
-	for _, tc := range cases {
-		got, decided, err := LocateBoolean(t.Context(), tc.at, n, src)
-		require.NoError(t, err, tc.name)
-		require.Equal(t, tc.want != Undecided, decided, tc.name)
-		require.Equal(t, tc.want, got, tc.name)
-	}
+	requireLocationCases(t, cases, func(at r3.Vec) (Location, bool, error) {
+		return LocateBoolean(t.Context(), at, n, src)
+	})
 }
 
 // TestSetAlgebraTables checks meet, join and complement for every pair of

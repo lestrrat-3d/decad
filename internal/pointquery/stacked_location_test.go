@@ -36,12 +36,9 @@ func stackedOf(t *testing.T, slabs []stackedrecord.Slab) stackedrecord.Payload {
 
 func requireStackedLocations(t *testing.T, sp stackedrecord.Payload, cases []prismCase) {
 	t.Helper()
-	for _, tc := range cases {
-		got, decided, err := LocateStacked(t.Context(), tc.at, sp)
-		require.NoError(t, err, tc.name)
-		require.Equal(t, tc.want != Undecided, decided, tc.name)
-		require.Equal(t, tc.want, got, tc.name)
-	}
+	requireLocationCases(t, cases, func(at r3.Vec) (Location, bool, error) {
+		return LocateStacked(t.Context(), at, sp)
+	})
 }
 
 // pocketCases are the bored slabs' answers, the same for a stacked prism and
