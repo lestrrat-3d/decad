@@ -364,8 +364,33 @@ func TestDirectLoftRotatedCircleFramesPublishRuledHole(t *testing.T) {
 }
 
 func TestDirectLoftNonCardinalAndOffAxisQuarterTurnsKeepFacetedHoles(t *testing.T) {
+	for _, tc := range directLoftNonCardinalAndOffAxisCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			body := directLoftRotatedCircleFrameBody(t, tc.u, tc.v, tc.bottomCenter, tc.topCenter)
+			requireFacetedLoftHole(t, body, tc.wantVolume)
+		})
+	}
+}
+
+func BenchmarkDirectLoftNonCardinalAndOffAxisQuarterTurns(b *testing.B) {
+	cases := directLoftNonCardinalAndOffAxisCases()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		for _, tc := range cases {
+			directLoftRotatedCircleFrameBody(b, tc.u, tc.v, tc.bottomCenter, tc.topCenter)
+		}
+	}
+}
+
+func directLoftNonCardinalAndOffAxisCases() []struct {
+	name                    string
+	u, v                    r3.Vec
+	bottomCenter, topCenter r3.Vec
+	wantVolume              float64
+} {
 	s := math.Sqrt2 / 2
-	for _, tc := range []struct {
+	return []struct {
 		name                    string
 		u, v                    r3.Vec
 		bottomCenter, topCenter r3.Vec
@@ -381,11 +406,6 @@ func TestDirectLoftNonCardinalAndOffAxisQuarterTurnsKeepFacetedHoles(t *testing.
 			r3.NewVec(1, 0, 0), 18 * math.Pi},
 		{"upper center off axis V", r3.NewVec(0, 1, 0), r3.NewVec(-1, 0, 0), r3.Vec{},
 			r3.NewVec(0, 1, 0), 18 * math.Pi},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			body := directLoftRotatedCircleFrameBody(t, tc.u, tc.v, tc.bottomCenter, tc.topCenter)
-			requireFacetedLoftHole(t, body, tc.wantVolume)
-		})
 	}
 }
 
@@ -432,7 +452,7 @@ func directLoftRotatedCircleFrameCase(t *testing.T, u, v r3.Vec) {
 	}
 }
 
-func directLoftRotatedCircleFrameBody(t *testing.T, u, v, bottomCenter, topCenter r3.Vec) *decad.Body {
+func directLoftRotatedCircleFrameBody(t testing.TB, u, v, bottomCenter, topCenter r3.Vec) *decad.Body {
 	t.Helper()
 	world := sketch.NewWorld()
 	upperFrame, err := r3.NewFrame(r3.NewVec(0, 0, 2), u, v)
