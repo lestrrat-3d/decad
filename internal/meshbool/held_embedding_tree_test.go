@@ -12,6 +12,59 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestHeldBoxTreeNodeCount(t *testing.T) {
+	var referenceCount func(int) int
+	referenceCount = func(n int) int {
+		if n == 0 {
+			return 0
+		}
+		if n <= heldBoxLeafSize {
+			return 1
+		}
+		middle := n / 2
+		return 1 + referenceCount(middle) + referenceCount(n-middle)
+	}
+
+	for _, n := range []int{0, 1, 15, 16, 17, 31, 32, 33, 34, 63, 64, 65, 127, 128, 129, 257, 20480} {
+		boxes := make([][2]r3.Vec, 0, n+1)
+		if n > 0 {
+			boxes = append(boxes, [2]r3.Vec{{X: math.NaN()}, {X: math.NaN()}})
+		}
+		for i := range n {
+			boxes = append(boxes, [2]r3.Vec{r3.NewVec(float64(i), 0, 0), r3.NewVec(float64(i+1), 1, 1)})
+		}
+		want := referenceCount(n)
+		require.Equal(t, want, heldBoxNodeCount(n), "facet count %d", n)
+		for _, keepSlotBoxes := range []bool{false, true} {
+			tree := buildBoxTree(boxes, keepSlotBoxes)
+			require.Len(t, tree.nodes, want, "facet count %d, keep slots %t", n, keepSlotBoxes)
+			require.Equal(t, want, cap(tree.nodes), "facet count %d, keep slots %t", n, keepSlotBoxes)
+			require.Len(t, tree.facets, n)
+			if keepSlotBoxes {
+				require.Len(t, tree.slotBoxes, n)
+				for slot, facet := range tree.facets {
+					if facet == 0 || tree.slotBoxes[slot] != boxes[facet] {
+						t.Fatalf("facet count %d: invalid slot box at %d for facet %d", n, slot, facet)
+					}
+				}
+			} else {
+				require.Empty(t, tree.slotBoxes)
+			}
+		}
+	}
+	for _, keepSlotBoxes := range []bool{false, true} {
+		tree := buildBoxTree([][2]r3.Vec{{{X: math.NaN()}, {X: math.NaN()}}}, keepSlotBoxes)
+		require.Empty(t, tree.nodes)
+		require.Zero(t, cap(tree.nodes))
+		require.Empty(t, tree.facets)
+		require.Empty(t, tree.slotBoxes)
+	}
+	maxInt := int(^uint(0) >> 1)
+	count := heldBoxNodeCount(maxInt)
+	require.Greater(t, count, 0)
+	require.Less(t, count, maxInt)
+}
+
 func heldQueryGrid(crossing bool) HeldRounding {
 	const side = 8
 	var h HeldRounding
