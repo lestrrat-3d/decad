@@ -7,11 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func referenceMul(a, b iv) iv {
-	p := [4]float64{a.lo * b.lo, a.lo * b.hi, a.hi * b.lo, a.hi * b.hi}
-	return iv{down(min(p[0], p[1], p[2], p[3])), up(max(p[0], p[1], p[2], p[3]))}
-}
-
 func TestIntervalMulMatchesFourProductTable(t *testing.T) {
 	smallest := math.SmallestNonzeroFloat64
 	tests := []struct {
@@ -37,7 +32,7 @@ func TestIntervalMulMatchesFourProductTable(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, want := tc.a.mul(tc.b), referenceMul(tc.a, tc.b)
+			got, want := tc.a.mul(tc.b), tc.a.mulFour(tc.b)
 			require.Equal(t, math.Float64bits(want.lo), math.Float64bits(got.lo))
 			require.Equal(t, math.Float64bits(want.hi), math.Float64bits(got.hi))
 		})

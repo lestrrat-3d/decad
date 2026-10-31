@@ -20,9 +20,16 @@ func (a iv) add(b iv) iv { return iv{down(a.lo + b.lo), up(a.hi + b.hi)} }
 func (a iv) sub(b iv) iv { return iv{down(a.lo - b.hi), up(a.hi - b.lo)} }
 func (a iv) neg() iv     { return iv{-a.hi, -a.lo} }
 
+// finiteOrdered reports whether both bounds are finite and lo <= hi. NaN
+// bounds and infinities report false.
+func (a iv) finiteOrdered() bool {
+	return a.lo >= -math.MaxFloat64 && a.lo <= a.hi && a.hi <= math.MaxFloat64
+}
+
+// mul takes the sign-case fast path for finite, ordered operands and falls
+// back to the four-product table otherwise.
 func (a iv) mul(b iv) iv {
-	if !(a.lo >= -math.MaxFloat64 && a.lo <= a.hi && a.hi <= math.MaxFloat64) ||
-		!(b.lo >= -math.MaxFloat64 && b.lo <= b.hi && b.hi <= math.MaxFloat64) {
+	if !a.finiteOrdered() || !b.finiteOrdered() {
 		return a.mulFour(b)
 	}
 	var lo, hi float64
