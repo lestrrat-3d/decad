@@ -21,6 +21,42 @@ func (a iv) sub(b iv) iv { return iv{down(a.lo - b.hi), up(a.hi - b.lo)} }
 func (a iv) neg() iv     { return iv{-a.hi, -a.lo} }
 
 func (a iv) mul(b iv) iv {
+	if !(a.lo >= -math.MaxFloat64 && a.lo <= a.hi && a.hi <= math.MaxFloat64) ||
+		!(b.lo >= -math.MaxFloat64 && b.lo <= b.hi && b.hi <= math.MaxFloat64) {
+		return a.mulFour(b)
+	}
+	var lo, hi float64
+	if a.lo >= 0 {
+		switch {
+		case b.lo >= 0:
+			lo, hi = a.lo*b.lo, a.hi*b.hi
+		case b.hi <= 0:
+			lo, hi = a.hi*b.lo, a.lo*b.hi
+		default:
+			lo, hi = a.hi*b.lo, a.hi*b.hi
+		}
+	} else if a.hi <= 0 {
+		switch {
+		case b.lo >= 0:
+			lo, hi = a.lo*b.hi, a.hi*b.lo
+		case b.hi <= 0:
+			lo, hi = a.hi*b.hi, a.lo*b.lo
+		default:
+			lo, hi = a.lo*b.hi, a.lo*b.lo
+		}
+	} else if b.lo >= 0 {
+		lo, hi = a.lo*b.hi, a.hi*b.hi
+	} else if b.hi <= 0 {
+		lo, hi = a.hi*b.lo, a.lo*b.lo
+	} else {
+		p0, p1 := a.lo*b.hi, a.hi*b.lo
+		q0, q1 := a.lo*b.lo, a.hi*b.hi
+		lo, hi = min(p0, p1), max(q0, q1)
+	}
+	return iv{down(lo), up(hi)}
+}
+
+func (a iv) mulFour(b iv) iv {
 	p := [4]float64{a.lo * b.lo, a.lo * b.hi, a.hi * b.lo, a.hi * b.hi}
 	return iv{down(min(p[0], p[1], p[2], p[3])), up(max(p[0], p[1], p[2], p[3]))}
 }
