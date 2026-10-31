@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
@@ -135,6 +136,22 @@ func TestRevolveBoundedContactAuditMatchesExisting(t *testing.T) {
 			require.Equal(t, oldErr == nil, newErr == nil, "%s delta %g", name, delta)
 		}
 	}
+}
+
+func TestRevolveBoundedContactAuditCarriesWorkBudget(t *testing.T) {
+	m := revolveLikeMesh(t)
+	used, err := RevolveContactAuditBoundedWithBudget(
+		proofbound.NewWorkBudget(t.Context()), m.data, m.tris, 0,
+		uint64(proofbound.MaxFacetPairTestsPerCall-1),
+	)
+	require.ErrorIs(t, err, decaderr.ErrUnsupported)
+	require.Equal(t, uint64(1), used)
+
+	var detail *proofbound.WorkLimitError
+	require.ErrorAs(t, err, &detail)
+	require.Equal(t, "facet_pairs", detail.Resource)
+	require.Equal(t, uint64(proofbound.MaxFacetPairTestsPerCall+1), detail.Observed)
+	require.Equal(t, uint64(proofbound.MaxFacetPairTestsPerCall), detail.Maximum)
 }
 
 func TestRevolveContactCandidatesMatchBruteForce(t *testing.T) {

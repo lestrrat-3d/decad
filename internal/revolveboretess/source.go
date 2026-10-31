@@ -40,7 +40,7 @@ func BuildSources(ctx context.Context, body *topo.Body, payload revolvebore.Payl
 	if err != nil {
 		return result, err
 	}
-	result.Host, err = revolvetess.TessellateRevolveBoundedAudit(ctx, host, c.Revolve, chord)
+	result.Host, err = revolvetess.TessellateRevolve(ctx, host, c.Revolve, chord, revolvetess.VerifyAll)
 	if err != nil {
 		return result, err
 	}

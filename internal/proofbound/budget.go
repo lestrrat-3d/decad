@@ -161,14 +161,11 @@ func WallCandidateWork(elementCount, vertexCount int, wedge bool) (uint64, bool)
 // polls (agent-docs/interference-design.md §7.2).
 const WorkPollInterval = 256
 
-// MaxFacetPairTestsPerCall is the fixed ceiling on exact triangle-pair
-// predicate invocations for one call (agent-docs/tessellation-design.md §3): the
-// tessellation boolean pre-pass and the loft crossing audit
-// (agent-docs/loft-design.md §6) both charge every pair test against this one
-// constant rather than minting a second ceiling for the identical quantity.
-// The crossing audit compares it, before testing any pair, against the pairs
-// its sweep scans and the candidate pairs it will test: the pairs whose
-// bounding boxes overlap, less every pair a cap proof decides (S8).
+// MaxFacetPairTestsPerCall is the fixed ceiling on facet-pair audit work for one
+// call (agent-docs/tessellation-design.md §3). Revolve charges candidate-sweep
+// visits and pairs reserved for exact predicates against it. The tessellation boolean
+// pre-pass and loft crossing audit charge their exact pair tests against this
+// same ceiling rather than minting another limit for pair work.
 const MaxFacetPairTestsPerCall = 8_000_000
 
 // WorkBudget shares one bounded cancellation counter across every nested loop

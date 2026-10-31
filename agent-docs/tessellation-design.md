@@ -501,27 +501,28 @@ maxFacetPairTestsPerCall = 8_000_000
 ```
 
 `maxFacetWorkPerCall` counts every facet assembled across the initial attempt
-and every refinement retry. `maxFacetPairTestsPerCall` counts every exact
-facet-pair predicate invocation across all endpoint and placement-homotopy
-audits. Neither counter resets during refinement.
+and every refinement retry. `maxFacetPairTestsPerCall` counts each revolve
+candidate-sweep visit and reserves one step for every candidate pair it may
+test across refinement attempts. Neither counter resets during refinement.
 
 Before building any slice, derive the candidate facet count from every walk's
 chord count and the global angular count with checked integer arithmetic. Refuse
 if that attempt exceeds `maxFacetsPerMesh`, or if adding it would exceed
-`maxFacetWorkPerCall`. Before each all-pairs audit, compute the conservative
-upper bound `F*(F-1)/2` with checked arithmetic and refuse if adding it would
-exceed `maxFacetPairTestsPerCall`; adjacency may reduce actual tests but never
-raises the admitted ceiling. Overflow or a finer request than any cap admits →
-`ErrUnsupported`. No facet allocation or pair predicate starts before its
-corresponding preflight passes.
+`maxFacetWorkPerCall`. Once the triangles exist, the revolve contact audit
+orders their boxes on one coordinate and builds only pairs that can still touch
+under the charged displacement. Each sweep probe and candidate pair consumes
+the cumulative `maxFacetPairTestsPerCall` budget. The whole candidate list and
+its exact-test allowance fit that budget before any exact pair predicate starts;
+exceeding it refuses before the next scan or predicate. The exact audit uses
+the same predicates and required-contact rules as before. Overflow or a finer
+request than any cap admits → `ErrUnsupported`.
 
 **`maxFacetPairTestsPerCall` is charged only when the audit it bounds will
-run.** It is a bound on the work one all-pairs audit may do, so a level that
-declines that audit does no pair work and is charged none. `maxFacetsPerMesh`
+run.** A level that declines the contact audit does no pair work and is charged
+none. `maxFacetsPerMesh`
 and `maxFacetWorkPerCall` bound allocation instead and are charged at every
-level. This is why a tolerance `VerifyAll` refuses for the pair ceiling alone is
-met at `VerifyNone`: the refusal was a work budget, never a statement that the
-geometry could not be meshed.
+level. A contact audit that exceeds the candidate-work ceiling still refuses
+even when the mesh itself fits the facet and allocation limits.
 
 A requested tolerance is an upper bound on chording, not on the complete mesh
 bound or a density request. The tessellator may refine beyond the first
@@ -1000,13 +1001,14 @@ displacement of `deltaC + deltaR` at each corner can take from it (§10.2's own
 per-triangle area allowance, read as a gate rather than as a slack term).
 
 The facet-contact audit runs at `VerifyBoundary` and above. After unplaced
-assembly, preflight §3's cumulative pair-work budget — charged only when this
-audit will run — and audit both the ideal-coordinate angularly chorded endpoint
-and the stored unplaced endpoint: adjacent facet interiors meet only on their
-shared vertex/edge paths; every non-adjacent pair is disjoint. Shared
-vertices and shared edges are the only admitted contacts. Isolate every ideal
-endpoint predicate with certified coordinate enclosures from §8; the stored
-endpoint uses the boolean's exact predicates over its binary64 values.
+assembly, preflight §3's facet allocation budget, then build its bounded spatial
+candidate list under the cumulative pair-work budget. Audit each candidate at
+the final stored coordinates with the combined displacement `deltaC + deltaR`.
+The combined margin carries the same contact result through the ideal and
+stored endpoints and both construction and placement homotopies. Adjacent
+facet interiors meet only on their shared vertex/edge paths; every
+non-adjacent pair is disjoint. Shared vertices and shared edges are the only
+admitted contacts.
 
 The revolve audit reads each exact sign and separating-axis gap through a
 float pre-test first (`internal/revolvemesh/tessellate_revolve_filter.go`). The pre-test encloses
@@ -1049,24 +1051,13 @@ audit, the vertex-link audit, the positive-area check above, the signed-volume
 orientation audit, `Bound` and its per-face composition — because none of those
 reads a facet pair.
 
-Then certify the affine construction homotopy from every ideal unplaced vertex
-to its stored unplaced vertex. Run the same positive-area/contact/disjointness
-proof over the whole closed interval. The moving predicates have fixed degree
-in the homotopy parameter; evaluate their coefficients with certified interval
-arithmetic and refine the §8 enclosures until every required sign and root is
-isolated. A zero, unisolated sign, or contact triggers deterministic meridian or
-angular refinement; no proof before the refinement/work budget is exhausted →
-`ErrUnsupported`. This is the topology proof charged to `deltaC`.
-
-Exact rigid placement preserves that result. After final coordinate storage,
-run the endpoint audit again and certify a second affine homotopy from each
-exact rigid image of the stored unplaced vertex to its final binary64 vertex.
-Here the inputs are binary64 and the moving predicates use `math/big.Rat`
-exactly. Apply the same full-interval rules; this is the proof charged to
-`deltaR`. Sampling or checking only endpoints is never a proof. Preflight and
-charge both homotopy audits to §3's cumulative pair-work budget before starting
-them. Together with the meridian proof, they preserve loop nesting, shell and
-component topology, and contact relations through every construction stage.
+The audit uses exact predicates over the final binary64 coordinates. Its
+separating-axis and shared-feature margins account for the combined
+displacement, so every intermediate boundary stays within the proved contact
+class throughout construction and rigid placement. Sampling or checking only
+endpoints is never a proof. Together with the meridian proof, this preserves
+loop nesting, shell and component topology, and contact relations through
+every construction stage.
 
 Before return, at every verification level, build the combinatorial link of
 every stored mesh vertex: each
@@ -1511,14 +1502,15 @@ edge must reuse the same vertex indices, not merely equal coordinates.
 - Fuzz valid revolve payloads across tolerance scales; a result is either a
   mesh satisfying every invariant or `ErrUnsupported`, never a cracked mesh.
 - Hit each fixed facet/work ceiling exactly and one unit beyond it. Assert the
-  over-budget call refuses before allocation or pair testing and repeated
-  refinement never resets either cumulative counter.
+  over-budget facet request refuses before allocation, the contact audit
+  refuses before its next scan or exact predicate, and retries never reset
+  either cumulative counter.
 - Tessellate one body at one tolerance at `VerifyNone` and at `VerifyAll`;
   assert the two meshes are vertex- and index-identical and their `Bound` and
   source faces agree, while `BoundaryVerified` and `VolumeVerified` differ.
-- Assert a tolerance the `VerifyAll` path refuses for the pair ceiling is met
-  by the `VerifyNone` path, and that the refusal names the audit rather than
-  the geometry.
+- Assert a dense revolve whose conservative all-pairs estimate exceeds the
+  ceiling succeeds when its bounded spatial audit fits, with both boundary and
+  volume proofs published.
 - Assert the per-facet positive-area check still refuses at `VerifyNone`, shown
   to fail by deleting the hoisted check.
 - Assert the one-entry cache never answers one level's request with another
@@ -1526,9 +1518,9 @@ edge must reuse the same vertex indices, not merely equal coordinates.
 - Assert `Union`, `Cut` and `Intersect` refuse an operand mesh built below
   `VerifyBoundary` with a message naming the declined audit, and one built at
   `VerifyBoundary` but below `VerifyAll` with the missing-volume-proof message.
-- Assert `STL` and `OBJ` write a body at a stated tolerance that `VerifyAll`
-  refuses, and that `WithVerification(VerifyAll)` reinstates that
-  refusal. Assert the bytes are identical wherever both levels succeed.
+- Assert `STL` and `OBJ` write a dense body at a stated tolerance under
+  `VerifyAll`. Assert the bytes are identical wherever multiple levels
+  succeed.
 
 ## 15. Open implementation choice
 

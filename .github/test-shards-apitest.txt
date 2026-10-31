@@ -1941,7 +1941,7 @@
 7	0.06	TestEdgeWedgeFilletReflexRoots
 7	0.01	TestEmbossDraftZeroIsAStraightWall
 7	0.04	TestEmbossRefusesTiltedSketchAndUntangentCurvedFace
-7	0.55	TestExportWritesABodyTheProvenPathRefuses
+7	0.55	TestExportWritesDenseBodyAtEveryVerificationLevel
 7	0.00	TestExtrudeCanceledContextLeavesDocumentUnchanged
 7	0.02	TestExtrudeChainFreeformWallAreaNeverPublishesTheLengthUnderestimate
 7	0.00	TestExtrudeChainTessellateRefusesCurvedWall
@@ -2953,7 +2953,7 @@
 10	0.00	TestVerifyMotionProjectionPendulum
 10	0.05	TestVerifyMotionSweptBoxCoversTravelFromRest
 10	0.03	TestVerifyMultiRegionOverlapSumMatchesIndependentRationalAnswer
-10	0.30	TestVerifyNoneMeetsAToleranceTheProvenPathRefuses
+10	0.30	TestVerifyAllMeetsDenseTorusTolerance
 10	0.01	TestVerifySingleRegionOverlapOrderIsNormative
 10	0.02	TestVerifyStrictContainmentReusesInnerVolume
 10	0.04	TestVerifyThreeRegionOverlapReportsSummedVolume

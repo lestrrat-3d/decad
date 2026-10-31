@@ -304,30 +304,64 @@ func RevolveContactAudit(budget *proofbound.WorkBudget, data []RevolveAuditTri, 
 		runtime.GOMAXPROCS(0) > 1 && revolveRowsLen(rows) >= revolveParallelMinPairs)
 }
 
-// RevolveContactAuditBounded audits spatial candidates under a fixed scan and
-// exact-pair budget. Callers must still enforce the mesh facet ceiling.
+// RevolveContactAuditBounded audits spatial candidates under the fixed
+// candidate-work ceiling. Callers must still enforce the mesh facet ceiling.
 func RevolveContactAuditBounded(budget *proofbound.WorkBudget, data []RevolveAuditTri, tris [][3]int, delta float64) error {
+	_, err := RevolveContactAuditBoundedWithBudget(budget, data, tris, delta, 0)
+	return err
+}
+
+// RevolveContactAuditBoundedWithBudget carries candidate and pair work across
+// refinement attempts. It charges the candidate scan and every candidate pair
+// before running exact pair predicates.
+func RevolveContactAuditBoundedWithBudget(budget *proofbound.WorkBudget, data []RevolveAuditTri,
+	tris [][3]int, delta float64, charged uint64) (uint64, error) {
 	if len(data) != len(tris) {
-		return fmt.Errorf("%w: revolve facet audit input lengths differ", decaderr.ErrUnsupported)
+		return 0, fmt.Errorf("%w: revolve facet audit input lengths differ", decaderr.ErrUnsupported)
 	}
 	margin := proofbound.ProductUpper(2, delta)
 	if !(margin >= 0) || proofbound.IsNonFinite(margin) {
-		return fmt.Errorf("%w: revolve facet audit has no finite margin", decaderr.ErrUnsupported)
+		return 0, fmt.Errorf("%w: revolve facet audit has no finite margin", decaderr.ErrUnsupported)
 	}
-	scan := proofbound.NewWallWorkBudgetWithOperation(proofbound.MaxFacetPairTestsPerCall, budget)
+	ceiling := uint64(proofbound.MaxFacetPairTestsPerCall)
+	if charged > ceiling {
+		return 0, revolveFacetPairWorkLimit()
+	}
+	remaining := ceiling - charged
+	var scanned uint64
+	scan := &proofbound.WorkBudget{
+		StepFn: func() error {
+			if scanned >= remaining {
+				return proofbound.ErrWallWorkBudget
+			}
+			if err := budget.Step(); err != nil {
+				return err
+			}
+			scanned++
+			return nil
+		},
+		ErrFn: budget.Err,
+	}
 	rows, err := revolveContactCandidates(scan, data, tris, margin)
 	if errors.Is(err, proofbound.ErrWallWorkBudget) {
-		return fmt.Errorf("%w: revolve facet candidate scan exceeds its work ceiling", decaderr.ErrUnsupported)
+		return scanned, revolveFacetPairWorkLimit()
 	}
 	if err != nil {
-		return err
+		return scanned, err
 	}
 	count := revolveRowsLen(rows)
-	if uint64(count) > proofbound.MaxFacetPairTestsPerCall {
-		return fmt.Errorf("%w: revolve facet candidates exceed the pair ceiling", decaderr.ErrUnsupported)
+	if uint64(count) > remaining-scanned {
+		return scanned, revolveFacetPairWorkLimit()
 	}
-	return revolveAuditRows(budget, data, tris, rows, delta, margin,
+	err = revolveAuditRows(budget, data, tris, rows, delta, margin,
 		runtime.GOMAXPROCS(0) > 1 && count >= revolveParallelMinPairs)
+	return scanned + uint64(count), err
+}
+
+func revolveFacetPairWorkLimit() error {
+	ceiling := uint64(proofbound.MaxFacetPairTestsPerCall)
+	err := fmt.Errorf("%w: revolve facet contact audit exceeds its fixed work ceiling", decaderr.ErrUnsupported)
+	return proofbound.WithWorkLimit(err, "facet_pairs", ceiling+1, ceiling)
 }
 
 // revolveParallelMinPairs is the candidate count from which the audit runs its
