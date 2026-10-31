@@ -57,24 +57,31 @@ const (
 // A cell with the other sign lies past a fold.
 func (c Canal) JacobianSign() float64 { return -c.sigma1() }
 
-// eval encloses F and the blend direction u over sin θ ∈ S, cos θ ∈ C and
-// t ∈ T, with their partial derivatives to second order.
-func (c Canal) eval(S, C, T iv) (jvec, jvec, bool) {
+// thetaBase holds the calculations that depend on θ but not t. Its values are
+// copied into each evaluation and never mutated.
+type thetaBase struct {
+	centre   jvec
+	a1, a2   jvec
+	bisector jvec
+}
+
+// makeThetaBase encloses the θ-only part of F over sin θ ∈ S and cos θ ∈ C,
+// with partial derivatives to second order.
+func (c Canal) makeThetaBase(S, C iv) (thetaBase, bool) {
 	zero := jconst(pt(0))
 	s := jet{v: S, a: C, b: pt(0), aa: S.neg(), ab: pt(0), bb: pt(0)}
 	co := jet{v: C, a: S.neg(), b: pt(0), aa: C.neg(), ab: pt(0), bb: pt(0)}
-	t := jet{v: T, a: pt(0), b: pt(1), aa: pt(0), ab: pt(0), bb: pt(0)}
 	rpIV, RpIV := c.offsetIV()
 	Rp, rp := jconst(RpIV), jconst(rpIV)
 	rpc := rp.mul(co)
 	x, ok := Rp.mul(Rp).sub(rpc.mul(rpc)).sqrt()
 	if !ok {
-		return jvec{}, jvec{}, false
+		return thetaBase{}, false
 	}
 	a1x, ok1 := x.div(Rp)
 	a1y, ok2 := rpc.div(Rp)
 	if !ok1 || !ok2 {
-		return jvec{}, jvec{}, false
+		return thetaBase{}, false
 	}
 	a1 := jvec{a1x, a1y, zero}
 	if c.Outside {
@@ -87,27 +94,35 @@ func (c Canal) eval(S, C, T iv) (jvec, jvec, bool) {
 	mid := a1.add(a2)
 	mn, ok := mid.dot(mid).sqrt()
 	if !ok {
-		return jvec{}, jvec{}, false
+		return thetaBase{}, false
 	}
+	var bisector jvec
+	for i := range 3 {
+		if bisector[i], ok = mid[i].div(mn); !ok {
+			return thetaBase{}, false
+		}
+	}
+	return thetaBase{centre: jvec{x, rpc, rp.mul(s)}, a1: a1, a2: a2, bisector: bisector}, true
+}
+
+// evalBase encloses F and the blend direction using a θ-only base.
+func (c Canal) evalBase(base thetaBase, T iv) (jvec, jvec, bool) {
+	t := jet{v: T, a: pt(0), b: pt(1), aa: pt(0), ab: pt(0), bb: pt(0)}
 	var from, to jvec
 	var tau jet
 	switch {
 	case T.hi <= 0.5:
-		from, to, tau = a1, jvec{}, t.scale(pt(2))
+		from, to, tau = base.a1, jvec{}, t.scale(pt(2))
 	case T.lo >= 0.5:
-		from, to, tau = jvec{}, a2, t.scale(pt(2)).sub(jconst(pt(1)))
+		from, to, tau = jvec{}, base.a2, t.scale(pt(2)).sub(jconst(pt(1)))
 	default:
 		return jvec{}, jvec{}, false
 	}
 	for i := range 3 {
-		b, ok := mid[i].div(mn)
-		if !ok {
-			return jvec{}, jvec{}, false
-		}
 		if T.hi <= 0.5 {
-			to[i] = b
+			to[i] = base.bisector[i]
 		} else {
-			from[i] = b
+			from[i] = base.bisector[i]
 		}
 	}
 	w := from.mul(jconst(pt(1)).sub(tau)).add(to.mul(tau))
@@ -116,14 +131,22 @@ func (c Canal) eval(S, C, T iv) (jvec, jvec, bool) {
 		return jvec{}, jvec{}, false
 	}
 	var u, f jvec
-	centre := jvec{x, rpc, rp.mul(s)}
 	for i := range 3 {
 		if u[i], ok = w[i].div(n); !ok {
 			return jvec{}, jvec{}, false
 		}
-		f[i] = centre[i].add(u[i].scale(pt(c.Rho)))
+		f[i] = base.centre[i].add(u[i].scale(pt(c.Rho)))
 	}
 	return f, u, true
+}
+
+// eval preserves the non-reusing evaluation path for callers without a base.
+func (c Canal) eval(S, C, T iv) (jvec, jvec, bool) {
+	base, ok := c.makeThetaBase(S, C)
+	if !ok {
+		return jvec{}, jvec{}, false
+	}
+	return c.evalBase(base, T)
 }
 
 func cross(a, b [3]dv) [3]dv {
@@ -210,9 +233,24 @@ type subResult struct {
 // Each tested quantity is enclosed by its mean-value form about the midpoint
 // (θ_mid, t_mid).
 func (c Canal) proveSub(S, C, sMid, cMid iv, t0, t1, hLo, h float64) (subResult, bool) {
+	return c.proveSubWithBases(S, C, sMid, cMid, t0, t1, hLo, h, nil, nil)
+}
+
+func (c Canal) proveSubWithBases(S, C, sMid, cMid iv, t0, t1, hLo, h float64,
+	cellBase, midBase *thetaBase) (subResult, bool) {
 	tMid := t0 + (t1-t0)/2
-	f, u, ok1 := c.eval(S, C, iv{t0, t1})
-	fm, um, ok2 := c.eval(sMid, cMid, pt(tMid))
+	var f, u, fm, um jvec
+	var ok1, ok2 bool
+	if cellBase == nil {
+		f, u, ok1 = c.eval(S, C, iv{t0, t1})
+	} else {
+		f, u, ok1 = c.evalBase(*cellBase, iv{t0, t1})
+	}
+	if midBase == nil {
+		fm, um, ok2 = c.eval(sMid, cMid, pt(tMid))
+	} else {
+		fm, um, ok2 = c.evalBase(*midBase, pt(tMid))
+	}
 	if !ok1 || !ok2 {
 		return subResult{}, false
 	}
@@ -261,6 +299,11 @@ func (c Canal) proveSub(S, C, sMid, cMid iv, t0, t1, hLo, h float64) (subResult,
 // linear interpolation on a triangle of the cell with each second partial's
 // largest value over the sub-cells.
 func (c Canal) proveCell(tr trig, k int, t0, t1 float64, q, qt int) (cellResult, bool) {
+	return c.proveCellWithBases(tr, k, t0, t1, q, qt, nil, nil)
+}
+
+func (c Canal) proveCellWithBases(tr trig, k int, t0, t1 float64, q, qt int,
+	cellBase, midBase *thetaBase) (cellResult, bool) {
 	var res cellResult
 	var aa, ab, bb [3]float64
 	hsLo, hs := down(tr.hLo/float64(q)), up(tr.hHi/float64(q))
@@ -272,7 +315,13 @@ func (c Canal) proveCell(tr trig, k int, t0, t1 float64, q, qt int) (cellResult,
 			if j == qt-1 {
 				s1 = t1
 			}
-			sub, ok := c.proveSub(S, C, sMid, cMid, s0, s1, hsLo, hs)
+			var sub subResult
+			var ok bool
+			if q == 1 {
+				sub, ok = c.proveSubWithBases(S, C, sMid, cMid, s0, s1, hsLo, hs, cellBase, midBase)
+			} else {
+				sub, ok = c.proveSub(S, C, sMid, cMid, s0, s1, hsLo, hs)
+			}
 			if !ok {
 				return cellResult{}, false
 			}
@@ -383,13 +432,31 @@ func Prove(ctx context.Context, c Canal, rows []float64, pose crossbore.Pose,
 	}
 	workers := orderedwork.EachWorkers(n, 64)
 	if _, err := orderedwork.Each(n, workers, 8, ctx.Err, func(k int) error {
+		var basesReady bool
+		var cellBase, midBase thetaBase
+		var cellBaseOK, midBaseOK bool
 		for j := range m {
 			// A cell whose enclosures are too wide to decide a test is split
 			// into finer sub-cells, up to maxSplit per side.
 			var res cellResult
 			ok := false
 			for q := 1; q <= maxSplit; q *= 2 {
-				if res, ok = c.proveCell(tr, k, rows[j], rows[j+1], q, q*rowSplit); ok && res.failed == 0 {
+				if q == 1 {
+					if !basesReady {
+						S, C, sMid, cMid := tr.sub(k, 0, 1)
+						cellBase, cellBaseOK = c.makeThetaBase(S, C)
+						midBase, midBaseOK = c.makeThetaBase(sMid, cMid)
+						basesReady = true
+					}
+					if cellBaseOK && midBaseOK {
+						res, ok = c.proveCellWithBases(tr, k, rows[j], rows[j+1], q, q*rowSplit, &cellBase, &midBase)
+					} else {
+						res, ok = cellResult{}, false
+					}
+				} else {
+					res, ok = c.proveCell(tr, k, rows[j], rows[j+1], q, q*rowSplit)
+				}
+				if ok && res.failed == 0 {
 					break
 				}
 			}
@@ -421,8 +488,14 @@ func Prove(ctx context.Context, c Canal, rows []float64, pose crossbore.Pose,
 	}
 	// Every held vertex against the exact point at its own station.
 	for k := range n {
+		S, C := tr.s[k], tr.c[k]
+		base, baseOK := c.makeThetaBase(S, C)
 		for j := 0; j <= m; j++ {
-			f, _, ok := c.eval(tr.s[k], tr.c[k], pt(rows[j]))
+			var f jvec
+			ok := baseOK
+			if ok {
+				f, _, ok = c.evalBase(base, pt(rows[j]))
+			}
 			if !ok {
 				return Proof{}, fail(k, "has no point enclosure")
 			}
