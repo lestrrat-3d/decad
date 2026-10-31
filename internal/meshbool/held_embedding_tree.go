@@ -182,7 +182,7 @@ func buildBoxTree(boxes [][2]r3.Vec, keepSlotBoxes bool) heldBoxTree {
 		}
 		facets = append(facets, i)
 	}
-	tree := heldBoxTree{nodes: make([]heldBoxNode, 0, len(facets)), boxes: boxes,
+	tree := heldBoxTree{nodes: make([]heldBoxNode, 0, heldBoxNodeCount(len(facets))), boxes: boxes,
 		facets: make([]int, 0, len(facets))}
 	if len(facets) > 0 {
 		tree.build(boxes, facets)
@@ -194,6 +194,18 @@ func buildBoxTree(boxes [][2]r3.Vec, keepSlotBoxes bool) heldBoxTree {
 		}
 	}
 	return tree
+}
+
+func heldBoxNodeCount(facets int) int {
+	if facets == 0 {
+		return 0
+	}
+	if facets <= heldBoxLeafSize {
+		return 1
+	}
+	partitions := 1 << (bits.Len(uint((facets-1)/heldBoxLeafSize)) - 1)
+	leaves := partitions + min(partitions, facets-heldBoxLeafSize*partitions)
+	return 2*leaves - 1
 }
 
 func (tree *heldBoxTree) visitOverlaps(box [2]r3.Vec, poll func() error,
