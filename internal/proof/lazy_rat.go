@@ -87,6 +87,13 @@ func LazyCmp(a, b LazyRat) int {
 	if a.d.Cmp(b.d) == 0 {
 		return a.n.Cmp(b.n)
 	}
+	sa, sb := a.n.Sign(), b.n.Sign()
+	if sa != sb {
+		if sa < sb {
+			return -1
+		}
+		return 1
+	}
 	return new(big.Int).Mul(a.n, b.d).Cmp(new(big.Int).Mul(b.n, a.d))
 }
 
