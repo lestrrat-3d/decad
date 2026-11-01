@@ -21,7 +21,11 @@ plane, or on a `CreateOffsetPlane` of it, is compared over `big.Rat`, and the
 one level the tool contributes to the result (its inner end) is that exact
 rational rounded to a float once, charged with `rationalFloatError`. Where the
 tool's own level is known exactly, the slabs also record the rational that
-inner end denotes (§2.1).
+inner end denotes (§2.1). For identical stored frames and equal finite,
+invertible transform bases, the blind-Cut translation arm in prism-boolean
+§3.1 runs after ordinary analytic admission misses when the exact in-section
+translation is nonzero. It carries its exact axial coefficient through those
+level comparisons; exact pure-axial misses keep the earlier Boolean route.
 
 ## 1. Problem
 

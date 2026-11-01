@@ -19,6 +19,11 @@ type Reexpression struct {
 	Delta     float64
 }
 
+// NewCutTranslationReexpression constructs the proven same-basis Cut map.
+func NewCutTranslationReexpression(relative prismplacement.Relative) *Reexpression {
+	return &Reexpression{relative: relative, Identity: relative.Identity, Reflected: relative.Reflection}
+}
+
 // NewReexpression composes the two placements once, so each recorded point
 // rounds at the operands' relative offset rather than at their world position.
 func NewReexpression(a, b prismplacement.Operand) (*Reexpression, error) {

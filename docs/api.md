@@ -231,6 +231,12 @@ exactly. Tessellation carries bounds for rounding at the two cap rims.
 | `decad.Intersect` | The volume common to both bodies. |
 | `decad.Split` | One solid per arranged target cell. |
 
+After ordinary analytic admission misses, a blind prism Cut can use translated
+placements with the same stored frame and transform basis when their exact
+in-section translation is nonzero. Pure-axial pairs continue through their
+preexisting route. The Cut keeps the exact axial offset when deciding which
+end of the tool lies inside the target.
+
 Two full `decad.Revolve` bodies about one axis combine exactly, with no `Faceted` face, when their meridians
 are lines, arcs or circles: a sphere cut by a coaxial disk or shaft, or two coaxial spheres, keep their
 sphere, torus, cone, cylinder and plane faces (an off-axis circle meridian gives torus faces). Meridians may share an

@@ -279,8 +279,11 @@ func AdmitPairBudget(budget *proofbound.WorkBudget, op meshbool.OperationKind, a
 		return prismrecord.Payload{}, prismrecord.Payload{}, false, nil
 	}
 	shared := prismplacement.SharedAxisOf(pa.PlacementOperand(), pb.PlacementOperand())
-	if shared.OK && pa.Xform != pb.Xform && !PlacedAxisProfileAdmitted(op, pa, pb) {
-		return prismrecord.Payload{}, prismrecord.Payload{}, false, nil
+	if shared.OK && pa.Xform != pb.Xform {
+		admitted, err := PlacedAxisProfileAdmitted(budget, op, pa, pb)
+		if err != nil || !admitted {
+			return prismrecord.Payload{}, prismrecord.Payload{}, false, err
+		}
 	}
 	if !shared.OK { // G3
 		worldOriginA := pa.Xform.Apply(pa.Frame.Origin())

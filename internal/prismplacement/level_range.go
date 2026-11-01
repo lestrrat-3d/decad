@@ -56,7 +56,12 @@ func zRanges(op Operand, shift *big.Rat) (LevelRange, LevelRange, bool) {
 // IntervalRanges is A's two level ranges and B's after G5's exact shift onto
 // A's axis.
 func IntervalRanges(pa, pb Operand) (a0, a1, b0, b1 LevelRange, ok bool) {
+	return IntervalRangesShift(pa, pb, ZShift(pa, pb))
+}
+
+// IntervalRangesShift applies a caller-proven exact shift to B's levels.
+func IntervalRangesShift(pa, pb Operand, shift *big.Rat) (a0, a1, b0, b1 LevelRange, ok bool) {
 	a0, a1, okA := zRanges(pa, new(big.Rat))
-	b0, b1, okB := zRanges(pb, ZShift(pa, pb))
+	b0, b1, okB := zRanges(pb, shift)
 	return a0, a1, b0, b1, okA && okB
 }
