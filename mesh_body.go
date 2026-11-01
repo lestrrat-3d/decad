@@ -65,6 +65,12 @@ type MeshBody struct {
 // triangles say is what [MeshBody.Report] reports. A canceled context returns
 // its error.
 func NewMeshBody(ctx context.Context, vertices []r3.Vec, triangles [][3]int) (*MeshBody, error) {
+	return newMeshBody(ctx, vertices, triangles, true)
+}
+
+// newMeshBody reads the mesh once and either copies its input slices or takes
+// ownership of them, as selected by copySlices.
+func newMeshBody(ctx context.Context, vertices []r3.Vec, triangles [][3]int, copySlices bool) (*MeshBody, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a mesh read`, ErrDegenerate)
 	}
@@ -75,9 +81,14 @@ func NewMeshBody(ctx context.Context, vertices []r3.Vec, triangles [][3]int) (*M
 	if err != nil {
 		return nil, err
 	}
+	storedVertices, storedTriangles := vertices, triangles
+	if copySlices {
+		storedVertices = append([]r3.Vec(nil), vertices...)
+		storedTriangles = append([][3]int(nil), triangles...)
+	}
 	m := &MeshBody{
-		vertices:  append([]r3.Vec(nil), vertices...),
-		triangles: append([][3]int(nil), triangles...),
+		vertices:  storedVertices,
+		triangles: storedTriangles,
 		signed:    a.SignedVolume,
 		areaLow:   a.AreaLow,
 		areaHigh:  a.AreaHigh,

@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is agent-docs/mesh-import-design.md §5's public-surface tests for
-// the point queries of MeshBody, on a 2 mm cube at the origin.
+// This file tests MeshBody construction and agent-docs/mesh-import-design.md
+// §5's public point queries, on a 2 mm cube at the origin.
 
 func queryCubeParts() ([]r3.Vec, [][3]int) {
 	v := []r3.Vec{
@@ -36,6 +36,38 @@ func queryCube(t *testing.T, inverted bool) *decad.MeshBody {
 	m, err := decad.NewMeshBody(t.Context(), v, tris)
 	require.NoError(t, err)
 	return m
+}
+
+func TestNewMeshBodyCopiesInputAndAccessorSlices(t *testing.T) {
+	t.Parallel()
+	vertices, triangles := queryCubeParts()
+	wantVertices := append([]r3.Vec(nil), vertices...)
+	wantTriangles := append([][3]int(nil), triangles...)
+	m, err := decad.NewMeshBody(t.Context(), vertices, triangles)
+	require.NoError(t, err)
+	wantReport := m.Report()
+	wantBounds := m.Bounds()
+	wantArea, err := m.Area()
+	require.NoError(t, err)
+	wantVolume, err := m.Volume()
+	require.NoError(t, err)
+
+	vertices[0] = r3.NewVec(100, 100, 100)
+	triangles[0] = [3]int{7, 7, 7}
+	gotVertices, gotTriangles := m.Vertices(), m.Triangles()
+	gotVertices[0] = r3.NewVec(-100, -100, -100)
+	gotTriangles[0] = [3]int{6, 6, 6}
+
+	require.Equal(t, wantVertices, m.Vertices())
+	require.Equal(t, wantTriangles, m.Triangles())
+	require.Equal(t, wantReport, m.Report())
+	require.Equal(t, wantBounds, m.Bounds())
+	gotArea, err := m.Area()
+	require.NoError(t, err)
+	require.Equal(t, wantArea, gotArea)
+	gotVolume, err := m.Volume()
+	require.NoError(t, err)
+	require.Equal(t, wantVolume, gotVolume)
 }
 
 func TestMeshBodyLocatePoint(t *testing.T) {

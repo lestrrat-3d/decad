@@ -2788,6 +2788,7 @@
 10	0.00	TestMeshImportOBJAcceptsNegativeIndicesQuadsAndExtraParts
 10	10.53	TestMeshSolidBooleansAgreeWithTheCubeByCubeBoolean
 10	0.00	TestModifyResultsDropUpstreamRoles
+10	0.00	TestNewMeshBodyCopiesInputAndAccessorSlices
 10	0.31	TestNormalAtArmBoundCoversItsOwnDefect
 10	0.08	TestOffsetMitresAnLShapedSolidAtItsCorners
 10	0.01	TestOffsetOfASolidRefusals

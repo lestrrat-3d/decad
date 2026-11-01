@@ -156,5 +156,7 @@ func buildLattice(ctx context.Context, spec LatticeSpec, kind lattice.Kind) (*Me
 	if err != nil {
 		return nil, err
 	}
-	return NewMeshBody(ctx, vertices, triangles)
+	// Surface returns fresh slices that buildLattice does not retain or mutate.
+	// This transfers their ownership to the mesh body.
+	return newMeshBody(ctx, vertices, triangles, false)
 }
