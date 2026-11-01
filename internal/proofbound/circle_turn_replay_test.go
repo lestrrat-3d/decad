@@ -37,7 +37,7 @@ func TestCircleTurnFractionReplayLimits(t *testing.T) {
 	}
 	work, records := meter.Usage()
 	bytes := meter.Bytes()
-	for _, mode := range []string{"exact", replayBudgetTestWork, replayBudgetTestRecords, replayBudgetTestBytes} {
+	for _, mode := range []string{replayBudgetTestExact, replayBudgetTestWork, replayBudgetTestRecords, replayBudgetTestBytes} {
 		t.Run(mode, func(t *testing.T) {
 			b := NewReplayTrialBudget()
 			w, r, z := ReplayTrialWork-work, ReplayTrialRecords-records, ReplayTrialBytes-bytes
@@ -59,7 +59,7 @@ func TestCircleTurnFractionReplayLimits(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, _, err := CircleTurnFractionReplay(t.Context(), 1, 221, b)
-			if mode == "exact" && err != nil || mode != "exact" && !errors.Is(err, decaderr.ErrUnsupported) {
+			if mode == replayBudgetTestExact && err != nil || mode != replayBudgetTestExact && !errors.Is(err, decaderr.ErrUnsupported) {
 				t.Fatalf("error=%v", err)
 			}
 		})

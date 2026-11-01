@@ -12,6 +12,16 @@ import (
 
 type fanIntervalPoint struct{ x, y meshbool.FloatInterval }
 
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errConvexFanReplay1 = fmt.Errorf("%w: invalid convex fan", decaderr.ErrUnsupported)
+	errConvexFanReplay2 = fmt.Errorf("%w: invalid convex fan index", decaderr.ErrUnsupported)
+	errConvexFanReplay3 = fmt.Errorf("%w: unproved convex fan half-plane", decaderr.ErrUnsupported)
+	errConvexFanReplay4 = fmt.Errorf("%w: unproved convex fan ray order", decaderr.ErrUnsupported)
+	errConvexFanReplay5 = fmt.Errorf("%w: unproved convex fan turn", decaderr.ErrUnsupported)
+	errConvexFanReplay6 = fmt.Errorf("%w: rounded cap turn", decaderr.ErrUnsupported)
+)
+
 func fanVector(a, b Point2) fanIntervalPoint {
 	return fanIntervalPoint{meshbool.FivPoint(a.U).Sub(meshbool.FivPoint(b.U)), meshbool.FivPoint(a.V).Sub(meshbool.FivPoint(b.V))}
 }
@@ -25,7 +35,7 @@ func ConvexFanReplay(ctx context.Context, pts []Point2, poly []int, b *proofboun
 	}
 	n := len(poly)
 	if b == nil || n < 3 || n > 1<<14 || len(pts) > 1<<14 {
-		return nil, fmt.Errorf("%w: invalid convex fan", decaderr.ErrUnsupported)
+		return nil, errConvexFanReplay1
 	}
 	// Setup constructs eight interval points, four interval differences,
 	// and two interval sums. Each operation costs at most 128 scalar steps;
@@ -48,7 +58,7 @@ func ConvexFanReplay(ctx context.Context, pts []Point2, poly []int, b *proofboun
 			return nil, err
 		}
 		if id < 0 || id >= len(pts) || seen[id] {
-			return nil, fmt.Errorf("%w: invalid convex fan index", decaderr.ErrUnsupported)
+			return nil, errConvexFanReplay2
 		}
 		seen[id] = true
 	}
@@ -65,12 +75,12 @@ func ConvexFanReplay(ctx context.Context, pts []Point2, poly []int, b *proofboun
 		r := fanVector(pts[poly[i]], center)
 		dot := h.x.Mul(r.x).Add(h.y.Mul(r.y))
 		if dot.Lo <= 0 || dot.Abstains() {
-			return nil, fmt.Errorf("%w: unproved convex fan half-plane", decaderr.ErrUnsupported)
+			return nil, errConvexFanReplay3
 		}
 		if i > 0 {
 			a, b := pts[poly[i-1]], pts[poly[i]]
 			if meshbool.Orient2Float([2]float64{center.U, center.V}, [2]float64{a.U, a.V}, [2]float64{b.U, b.V}) <= 0 {
-				return nil, fmt.Errorf("%w: unproved convex fan ray order", decaderr.ErrUnsupported)
+				return nil, errConvexFanReplay4
 			}
 		}
 	}
@@ -82,7 +92,7 @@ func ConvexFanReplay(ctx context.Context, pts []Point2, poly []int, b *proofboun
 		}
 		a, c, d := pts[poly[i]], pts[poly[(i+1)%n]], pts[poly[(i+2)%n]]
 		if meshbool.Orient2Float([2]float64{a.U, a.V}, [2]float64{c.U, c.V}, [2]float64{d.U, d.V}) <= 0 || !(Cross2(a, c, d) > 0) {
-			return nil, fmt.Errorf("%w: unproved convex fan turn", decaderr.ErrUnsupported)
+			return nil, errConvexFanReplay5
 		}
 	}
 	out := make([][3]int, 0, n-2)
@@ -92,7 +102,7 @@ func ConvexFanReplay(ctx context.Context, pts []Point2, poly []int, b *proofboun
 		}
 		a, c, d := pts[poly[n-1]], pts[poly[i]], pts[poly[i+1]]
 		if !(Cross2(a, c, d) > 0) || !(Cross2(pts[poly[n-2]], a, c) > 0) {
-			return nil, fmt.Errorf("%w: rounded cap turn", decaderr.ErrUnsupported)
+			return nil, errConvexFanReplay6
 		}
 		out = append(out, [3]int{poly[n-1], poly[i], poly[i+1]})
 	}

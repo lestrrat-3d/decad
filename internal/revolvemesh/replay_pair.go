@@ -2,10 +2,8 @@ package revolvemesh
 
 import (
 	"context"
-	"fmt"
 	"unsafe"
 
-	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 )
@@ -195,13 +193,13 @@ func auditRevolvePairReplay(ctx context.Context, data []RevolveAuditTri, tris []
 	if !admitted {
 		switch count {
 		case 3:
-			return fmt.Errorf("%w: revolve facets %d and %d are the same triangle", decaderr.ErrUnsupported, i, j)
+			return proofbound.ReplayIndexedRefusal(ctx, b, "revolve facets ", " and ", " are the same triangle", i, j, true)
 		case 0:
-			return fmt.Errorf("%w: revolve facets %d and %d share no vertex, and this mesh cannot prove they stay apart under its own coordinate displacement", decaderr.ErrUnsupported, i, j)
+			return proofbound.ReplayIndexedRefusal(ctx, b, "revolve facets ", " and ", " share no vertex, and this mesh cannot prove they stay apart under its own coordinate displacement", i, j, true)
 		case 1:
-			return fmt.Errorf("%w: revolve facets %d and %d do not provably meet only at the vertex they share", decaderr.ErrUnsupported, i, j)
+			return proofbound.ReplayIndexedRefusal(ctx, b, "revolve facets ", " and ", " do not provably meet only at the vertex they share", i, j, true)
 		default:
-			return fmt.Errorf("%w: revolve facets %d and %d do not provably meet only along the edge they share", decaderr.ErrUnsupported, i, j)
+			return proofbound.ReplayIndexedRefusal(ctx, b, "revolve facets ", " and ", " do not provably meet only along the edge they share", i, j, true)
 		}
 	}
 	return nil

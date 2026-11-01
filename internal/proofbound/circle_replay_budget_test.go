@@ -51,6 +51,58 @@ func TestCircleReplayBudgetRefusals(t *testing.T) {
 			}
 		})
 	}
+	base := NewCircleReplayBudget()
+	_, initialRecords := base.Usage()
+	initialBytes := base.Bytes()
+	diagnostic := func(b *ReplayBudget) error {
+		return ReplayIndexedRefusal(ctx, b, "facets ", " and ", " overlap", -1, 23, true)
+	}
+	want := decaderr.ErrUnsupported.Error() + ": facets -1 and 23 overlap"
+	if err := diagnostic(base); err.Error() != want {
+		t.Fatalf("diagnostic: %v", err)
+	}
+	work, records := base.Usage()
+	records -= initialRecords
+	usedBytes := base.Bytes() - initialBytes
+	for _, mode := range []string{replayBudgetTestExact, replayBudgetTestWork, replayBudgetTestRecords, replayBudgetTestBytes} {
+		t.Run("diagnostic_"+mode, func(t *testing.T) {
+			b := NewCircleReplayBudget()
+			_, initialRecords := b.Usage()
+			initialBytes := b.Bytes()
+			w, r, z := ReplayTrialWork-work, ReplayTrialRecords-initialRecords-records, ReplayTrialBytes-initialBytes-usedBytes
+			switch mode {
+			case replayBudgetTestWork:
+				w++
+			case replayBudgetTestRecords:
+				r++
+			case replayBudgetTestBytes:
+				z++
+			}
+			if err := b.SpendWork(ctx, w); err != nil {
+				t.Fatal(err)
+			}
+			if err := b.ReserveRecords(ctx, r); err != nil {
+				t.Fatal(err)
+			}
+			if err := b.ReserveBytes(ctx, z); err != nil {
+				t.Fatal(err)
+			}
+			err := diagnostic(b)
+			if mode == replayBudgetTestExact && err.Error() != want {
+				t.Fatalf("exact diagnostic: %v", err)
+			}
+			if mode != replayBudgetTestExact {
+				if _, ok := errors.AsType[*WorkLimitError](err); !ok {
+					t.Fatalf("one-short diagnostic %s: %v", mode, err)
+				}
+			}
+		})
+	}
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if err := ReplayIndexedRefusal(cancelled, NewCircleReplayBudget(), "", "", "", 0, 0, false); !errors.Is(err, context.Canceled) {
+		t.Fatalf("diagnostic cancellation: %v", err)
+	}
 	b := NewCircleReplayBudget()
 	allocs := testing.AllocsPerRun(10, func() { _ = b.ReserveArray(ctx, ^uint64(0), 2) })
 	if allocs != 0 {

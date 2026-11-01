@@ -11,13 +11,20 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errExactErrorReplay1 = fmt.Errorf("%w: missing rational budget", decaderr.ErrUnsupported)
+	errExactErrorReplay2 = fmt.Errorf("%w: rational lift overflow", decaderr.ErrUnsupported)
+	errExactErrorReplay3 = fmt.Errorf("%w: missing rational error input", decaderr.ErrUnsupported)
+)
+
 func replayFloatRat(ctx context.Context, v float64, m ReplayKeyBudget) (*big.Rat, error) {
 	if m == nil {
-		return nil, fmt.Errorf("%w: missing rational budget", decaderr.ErrUnsupported)
+		return nil, errExactErrorReplay1
 	}
 	p, err := XptOfBounded(r3.Vec{X: v}, func(blocks uint64) error {
 		if blocks > ^uint64(0)/64 {
-			return fmt.Errorf("%w: rational lift overflow", decaderr.ErrUnsupported)
+			return errExactErrorReplay2
 		}
 		if err := m.SpendWork(ctx, blocks*64); err != nil {
 			return err
@@ -46,7 +53,7 @@ func ReplayRationalFloatError(ctx context.Context, exact *big.Rat, held float64,
 // the same held rational repeatedly. It does not mutate either input.
 func ReplayRationalRatError(ctx context.Context, exact, held *big.Rat, m ReplayKeyBudget) (float64, error) {
 	if exact == nil || held == nil || m == nil {
-		return 0, fmt.Errorf("%w: missing rational error input", decaderr.ErrUnsupported)
+		return 0, errExactErrorReplay3
 	}
 	if err := m.SpendWork(ctx, 4); err != nil {
 		return 0, err

@@ -21,19 +21,26 @@ type CircleStationReplayCache struct {
 	radius, u, v *big.Rat
 }
 
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errCircleStationCacheReplay1 = fmt.Errorf("%w: invalid circle station cache", decaderr.ErrUnsupported)
+	errCircleStationCacheReplay2 = fmt.Errorf("%w: invalid circle radius", decaderr.ErrUnsupported)
+	errCircleStationCacheReplay3 = fmt.Errorf("%w: invalid circle station cache use", decaderr.ErrUnsupported)
+)
+
 func NewCircleStationReplayCache(ctx context.Context, seg sectionrecord.CircleSeg, b *proofbound.ReplayBudget) (*CircleStationReplayCache, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if b == nil || !seg.CCW || seg.TStart != 0 || seg.TEnd != 1 || seg.Radius.Unit() != units.Millimeter {
-		return nil, fmt.Errorf("%w: invalid circle station cache", decaderr.ErrUnsupported)
+		return nil, errCircleStationCacheReplay1
 	}
 	if err := b.SpendWork(ctx, 64); err != nil {
 		return nil, err
 	}
 	r, err := seg.Radius.In(units.Millimeter)
 	if err != nil || !(r > 0) || math.IsInf(r, 0) {
-		return nil, fmt.Errorf("%w: invalid circle radius", decaderr.ErrUnsupported)
+		return nil, errCircleStationCacheReplay2
 	}
 	if err := b.ReserveRecords(ctx, 1); err != nil {
 		return nil, err
@@ -61,7 +68,7 @@ func (c *CircleStationReplayCache) Bound(ctx context.Context, heldU, heldV float
 		return proofbound.WalkEndBound{}, err
 	}
 	if c == nil || b == nil || c.meter != b || s.Lo == nil || s.Hi == nil || co.Lo == nil || co.Hi == nil {
-		return proofbound.WalkEndBound{}, fmt.Errorf("%w: invalid circle station cache use", decaderr.ErrUnsupported)
+		return proofbound.WalkEndBound{}, errCircleStationCacheReplay3
 	}
 	if err := b.SpendWork(ctx, 64); err != nil {
 		return proofbound.WalkEndBound{}, err

@@ -12,7 +12,9 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/prismtess"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/surfacenormal"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -288,6 +290,12 @@ func TestPublicCirclePrimitiveFaceTokenMutations(t *testing.T) {
 			t.Fatalf("%s: %v", name, err)
 		}
 	}
+	wall.Source = &provenance.SourcePatch{}
+	refuse("source")
+	wall.Source = nil
+	wall.Denoted = &surfacenormal.Revolved{}
+	refuse("denoted")
+	wall.Denoted = nil
 	oldRole := wall.Origins[0].Role
 	wall.Origins[0].Role = "changed"
 	refuse("role")

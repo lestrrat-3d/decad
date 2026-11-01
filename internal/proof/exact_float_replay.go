@@ -26,6 +26,15 @@ func ReplayXptVec(ctx context.Context, p Xpt, budget ReplayKeyBudget) (r3.Vec, e
 	return r3.Vec{X: out[0], Y: out[1], Z: out[2]}, nil
 }
 
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errExactFloatReplay1 = fmt.Errorf("%w: exact float width overflow", decaderr.ErrUnsupported)
+	errExactFloatReplay2 = fmt.Errorf("%w: exact float workspace overflow", decaderr.ErrUnsupported)
+	errExactFloatReplay3 = fmt.Errorf("%w: exact float storage overflow", decaderr.ErrUnsupported)
+	errExactFloatReplay4 = fmt.Errorf("%w: invalid exact fraction", decaderr.ErrUnsupported)
+	errExactFloatReplay5 = fmt.Errorf("%w: invalid replay rational", decaderr.ErrUnsupported)
+)
+
 func replayQuotientFloat64(ctx context.Context, num, den *big.Int, budget ReplayKeyBudget) (float64, error) {
 	if err := budget.SpendWork(ctx, 1); err != nil {
 		return 0, err
@@ -52,32 +61,32 @@ func replayQuotientFloat64(ctx context.Context, num, den *big.Int, budget Replay
 	aBits, bBits := num.BitLen(), den.BitLen()
 	if shift > 0 {
 		if shift > int(^uint(0)>>1)-aBits {
-			return 0, fmt.Errorf("%w: exact float width overflow", decaderr.ErrUnsupported)
+			return 0, errExactFloatReplay1
 		}
 		aBits += shift
 	} else if shift < 0 {
 		if -shift > int(^uint(0)>>1)-bBits {
-			return 0, fmt.Errorf("%w: exact float width overflow", decaderr.ErrUnsupported)
+			return 0, errExactFloatReplay1
 		}
 		bBits -= shift
 	}
 	if bBits > int(^uint(0)>>1)-54 {
-		return 0, fmt.Errorf("%w: exact float width overflow", decaderr.ErrUnsupported)
+		return 0, errExactFloatReplay1
 	}
 	maxBits := max(aBits, bBits+54)
 	if maxBits > int(^uint(0)>>1)-bits.UintSize {
-		return 0, fmt.Errorf("%w: exact float width overflow", decaderr.ErrUnsupported)
+		return 0, errExactFloatReplay1
 	}
 	n := 1 + (maxBits+bits.UintSize-1)/bits.UintSize
 	if n > int(^uint(0)>>1)/2 {
-		return 0, fmt.Errorf("%w: exact float workspace overflow", decaderr.ErrUnsupported)
+		return 0, errExactFloatReplay2
 	}
 	bytes := uint64(2*n) * uint64(bits.UintSize/8)
 	if err := budget.ReserveRecords(ctx, 1); err != nil {
 		return 0, err
 	}
 	if bytes > (^uint64(0)-128)/2 {
-		return 0, fmt.Errorf("%w: exact float storage overflow", decaderr.ErrUnsupported)
+		return 0, errExactFloatReplay3
 	}
 	if err := budget.ReserveBytes(ctx, 2*bytes+128); err != nil {
 		return 0, err
@@ -128,7 +137,7 @@ func replayQuotientFloat64(ctx context.Context, num, den *big.Int, budget Replay
 // ReplayFractionFloat64 rounds an exact fraction with bounded workspace.
 func ReplayFractionFloat64(ctx context.Context, num, den *big.Int, budget ReplayKeyBudget) (float64, error) {
 	if budget == nil || num == nil || den == nil || den.Sign() <= 0 {
-		return 0, fmt.Errorf("%w: invalid exact fraction", decaderr.ErrUnsupported)
+		return 0, errExactFloatReplay4
 	}
 	return replayQuotientFloat64(ctx, num, den, budget)
 }
@@ -136,7 +145,7 @@ func ReplayFractionFloat64(ctx context.Context, num, den *big.Int, budget Replay
 // ReplayRatFloat64 rounds a rational using the caller's bounded replay meter.
 func ReplayRatFloat64(ctx context.Context, q *big.Rat, budget ReplayKeyBudget) (float64, error) {
 	if q == nil || budget == nil {
-		return 0, fmt.Errorf("%w: invalid replay rational", decaderr.ErrUnsupported)
+		return 0, errExactFloatReplay5
 	}
 	return ReplayFractionFloat64(ctx, q.Num(), q.Denom(), budget)
 }

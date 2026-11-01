@@ -1,6 +1,7 @@
 package proofbound
 
 const (
+	replayBudgetTestExact = "exact"
 	replayBudgetTestBytes = "bytes"
 )
 

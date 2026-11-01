@@ -11,17 +11,24 @@ import (
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 )
 
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errReplayCandidates1 = fmt.Errorf("%w: invalid bounded revolve audit", decaderr.ErrUnsupported)
+	errReplayCandidates2 = fmt.Errorf("%w: revolve facet audit has no finite margin", decaderr.ErrUnsupported)
+	errReplayCandidates3 = fmt.Errorf("%w: revolve vertex index outside bounded audit", decaderr.ErrUnsupported)
+)
+
 func revolveContactAuditReplay(ctx context.Context, data []RevolveAuditTri, tris [][3]int,
 	delta float64, charged uint64, budget *proofbound.ReplayBudget) (uint64, error) {
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
 	if budget == nil || len(data) != len(tris) {
-		return 0, fmt.Errorf("%w: invalid bounded revolve audit", decaderr.ErrUnsupported)
+		return 0, errReplayCandidates1
 	}
 	margin := proofbound.ProductUpper(2, delta)
 	if !(margin >= 0) || proofbound.IsNonFinite(margin) {
-		return 0, fmt.Errorf("%w: revolve facet audit has no finite margin", decaderr.ErrUnsupported)
+		return 0, errReplayCandidates2
 	}
 	ceiling := uint64(proofbound.MaxFacetPairTestsPerCall)
 	if charged > ceiling {
@@ -103,7 +110,7 @@ func replayContactCandidates(ctx context.Context, data []RevolveAuditTri, tris [
 				return nil, 0, err
 			}
 			if v < 0 || v >= len(incident) {
-				return nil, 0, fmt.Errorf("%w: revolve vertex index outside bounded audit", decaderr.ErrUnsupported)
+				return nil, 0, errReplayCandidates3
 			}
 			row := incident[v]
 			if len(row) == 0 {

@@ -12,6 +12,12 @@ import (
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errCircleWallsReplay1 = fmt.Errorf("%w: bounded circular walls require one aligned loop", decaderr.ErrUnsupported)
+	errCircleWallsReplay2 = fmt.Errorf("%w: circular wall has multiple source faces", decaderr.ErrUnsupported)
+)
+
 // CircleWallsReplay emits the walls of one authenticated circular loop.
 func CircleWallsReplay[F comparable](ctx context.Context, loop PrismLoop[F], axial float64, budget *proofbound.ReplayBudget) (PrismTopology[F], error) {
 	return circleWallsReplay(ctx, loop, axial, budget)
@@ -28,7 +34,7 @@ func circleWallsReplay[F comparable](ctx context.Context, loop PrismLoop[F], axi
 	n := len(loop.Samples)
 	if n < 3 || n > freeform.MaxChordsPerWalk ||
 		len(loop.BoundOf) != n || len(loop.FaceOf) != n || len(loop.SagOf) != n {
-		return PrismTopology[F]{}, fmt.Errorf("%w: bounded circular walls require one aligned loop", decaderr.ErrUnsupported)
+		return PrismTopology[F]{}, errCircleWallsReplay1
 	}
 	// The wall loop has one face. Reserve three entries, including both caps;
 	// the two facet arrays also reserve room for n-2 triangles at each cap.
@@ -51,7 +57,7 @@ func circleWallsReplay[F comparable](ctx context.Context, loop PrismLoop[F], axi
 			return PrismTopology[F]{}, decaderr.ErrUnsupported
 		}
 		if loop.FaceOf[i] != loop.FaceOf[0] {
-			return PrismTopology[F]{}, fmt.Errorf("%w: circular wall has multiple source faces", decaderr.ErrUnsupported)
+			return PrismTopology[F]{}, errCircleWallsReplay2
 		}
 	}
 	if err := budget.ReserveRecords(ctx, uint64(3*n+2*(4*n-4)+6)); err != nil {

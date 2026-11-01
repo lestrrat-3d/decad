@@ -13,13 +13,23 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errCircleDeficitReplay1 = fmt.Errorf("%w: missing circular schedule budget", decaderr.ErrUnsupported)
+	errCircleDeficitReplay2 = fmt.Errorf("%w: invalid circle radius", decaderr.ErrUnsupported)
+	errCircleDeficitReplay3 = fmt.Errorf("%w: unsupported recorded circle", decaderr.ErrUnsupported)
+	errCircleDeficitReplay4 = fmt.Errorf("%w: missing circular deficit budget", decaderr.ErrUnsupported)
+	errCircleDeficitReplay5 = fmt.Errorf("%w: circular deficit is outside its bounded range", decaderr.ErrUnsupported)
+	errCircleDeficitReplay6 = fmt.Errorf("%w: circular deficit cannot be bounded", decaderr.ErrUnsupported)
+)
+
 // CircleScheduleReplay checks a recorded full-circle walk and selects a
 // chord count and area deficits under one budget. The caller must separately
 // authenticate the source record, its walk and the placement.
 func CircleScheduleReplay(ctx context.Context, seg sectionrecord.CircleSeg, walk survey2d.SegmentWalk,
 	chord, height float64, budget *proofbound.ReplayBudget) (int, float64, float64, float64, error) {
 	if budget == nil {
-		return 0, 0, 0, 0, fmt.Errorf("%w: missing circular schedule budget", decaderr.ErrUnsupported)
+		return 0, 0, 0, 0, errCircleDeficitReplay1
 	}
 	if err := budget.SpendWork(ctx, 128); err != nil {
 		return 0, 0, 0, 0, err
@@ -31,14 +41,14 @@ func CircleScheduleReplay(ctx context.Context, seg sectionrecord.CircleSeg, walk
 		return 0, 0, 0, 0, err
 	}
 	if seg.Radius.Kind() != units.Length || proofbound.IsNonFinite(seg.Radius.Base()) {
-		return 0, 0, 0, 0, fmt.Errorf("%w: invalid circle radius", decaderr.ErrUnsupported)
+		return 0, 0, 0, 0, errCircleDeficitReplay2
 	}
 	radius, err := seg.Radius.In(units.Millimeter)
 	if err != nil || !seg.CCW || seg.TStart != 0 || seg.TEnd != 1 || walk.Kind != survey2d.WalkCircular || !walk.Closed ||
 		walk.Th0 != 0 || walk.Th1 != 2*math.Pi || math.Float64bits(walk.CU) != math.Float64bits(seg.Center.U) ||
 		math.Float64bits(walk.CV) != math.Float64bits(seg.Center.V) || math.Float64bits(walk.Radius) != math.Float64bits(radius) ||
 		!(radius >= math.Ldexp(1, -100)) || radius > math.Ldexp(1, 100) || !(chord > 0) || proofbound.IsNonFinite(chord) {
-		return 0, 0, 0, 0, fmt.Errorf("%w: unsupported recorded circle", decaderr.ErrUnsupported)
+		return 0, 0, 0, 0, errCircleDeficitReplay3
 	}
 	sweep := proofbound.TwoPiUpper()
 	if err := budget.SpendWork(ctx, 64); err != nil {
@@ -84,7 +94,7 @@ func CircleScheduleReplay(ctx context.Context, seg sectionrecord.CircleSeg, walk
 // height are in millimetres; the returned values are square millimetres.
 func CircleDeficitReplay(ctx context.Context, radius float64, chords int, height float64, budget *proofbound.ReplayBudget) (float64, float64, error) {
 	if budget == nil {
-		return 0, 0, fmt.Errorf("%w: missing circular deficit budget", decaderr.ErrUnsupported)
+		return 0, 0, errCircleDeficitReplay4
 	}
 	if err := budget.SpendWork(ctx, 64); err != nil {
 		return 0, 0, err
@@ -96,7 +106,7 @@ func CircleDeficitReplay(ctx context.Context, radius float64, chords int, height
 		return 0, 0, err
 	}
 	if chords < 3 || chords > freeform.MaxChordsPerWalk || !(radius >= math.Ldexp(1, -100)) || radius > math.Ldexp(1, 100) || proofbound.IsNonFinite(radius) || proofbound.IsNonFinite(height) {
-		return 0, 0, fmt.Errorf("%w: circular deficit is outside its bounded range", decaderr.ErrUnsupported)
+		return 0, 0, errCircleDeficitReplay5
 	}
 	theta := proofbound.TwoPiUpper()
 	cube := proofbound.ProductUpper(theta, proofbound.ProductUpper(theta, theta))
@@ -109,7 +119,7 @@ func CircleDeficitReplay(ctx context.Context, radius float64, chords int, height
 	}
 	wallArea := proofbound.ProductUpper(proofbound.DivUpper(proofbound.ProductUpper(radius, cube), 24*square), h)
 	if !(capArea > 0) || (height != 0 && !(wallArea > 0)) || proofbound.IsNonFinite(capArea) || proofbound.IsNonFinite(wallArea) {
-		return 0, 0, fmt.Errorf("%w: circular deficit cannot be bounded", decaderr.ErrUnsupported)
+		return 0, 0, errCircleDeficitReplay6
 	}
 	return capArea, wallArea, nil
 }

@@ -83,7 +83,7 @@ func (f *Face) SealPrismFace() bool {
 		return false
 	}
 	t := f.prismFaceToken
-	if t.face != f || t.body != f.Body || t.kind == PrismFaceUnknown || len(f.Origins) != 1 || len(f.Upstream) != 0 {
+	if t.face != f || t.body != f.Body || t.kind == PrismFaceUnknown || len(f.Origins) != 1 || len(f.Upstream) != 0 || f.Source != nil || f.Denoted != nil {
 		return false
 	}
 	switch f.Surface.(type) {
@@ -141,7 +141,7 @@ func (t PrismFaceToken) Matches(face *Face, body *Body, producer provenance.Prod
 // MatchesSealed reports whether the restricted construction snapshot still
 // matches. The caller charges bounded rational comparison before calling it.
 func (t PrismFaceToken) MatchesSealed(face *Face) bool {
-	if !t.sealed || face == nil || prismFaceScalars(face) != t.scalars || prismFaceFlags(face) != t.flags || !samePrismCentroid(face.Centroid, t.centroid) || len(face.Origins) != 1 || len(face.Upstream) != 0 || face.Origins[0] != t.origin {
+	if !t.sealed || face == nil || face.Source != nil || face.Denoted != nil || prismFaceScalars(face) != t.scalars || prismFaceFlags(face) != t.flags || !samePrismCentroid(face.Centroid, t.centroid) || len(face.Origins) != 1 || len(face.Upstream) != 0 || face.Origins[0] != t.origin {
 		return false
 	}
 	switch got := face.Surface.(type) {

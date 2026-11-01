@@ -11,6 +11,13 @@ import (
 
 const replayAuditLimit = 65536
 
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errAuditReplay1 = fmt.Errorf("%w: replay closed-mesh audit exceeds its facet bound", decaderr.ErrUnsupported)
+	errAuditReplay2 = fmt.Errorf("%w: replay vertex-link audit exceeds its mesh bound", decaderr.ErrUnsupported)
+	errAuditReplay3 = fmt.Errorf("%w: replay mesh has an invalid vertex", decaderr.ErrUnsupported)
+)
+
 func replayEdgeLess(a, b [2]int) bool {
 	return a[0] < b[0] || (a[0] == b[0] && a[1] < b[1])
 }
@@ -26,7 +33,7 @@ func RequireClosedMeshReplay(ctx context.Context, triangles [][3]int, budget *pr
 		return err
 	}
 	if len(triangles) > replayAuditLimit {
-		return fmt.Errorf("%w: replay closed-mesh audit exceeds its facet bound", decaderr.ErrUnsupported)
+		return errAuditReplay1
 	}
 	n := 3 * len(triangles)
 	if err := budget.ReserveRecords(ctx, 2*uint64(n)); err != nil {
@@ -106,7 +113,7 @@ func RequireVertexLinksReplay(ctx context.Context, vertexCount int, triangles []
 		return err
 	}
 	if vertexCount < 0 || vertexCount > replayAuditLimit || len(triangles) > replayAuditLimit {
-		return fmt.Errorf("%w: replay vertex-link audit exceeds its mesh bound", decaderr.ErrUnsupported)
+		return errAuditReplay2
 	}
 	v, t := uint64(vertexCount), uint64(len(triangles))
 	if err := budget.ReserveRecords(ctx, 6*v+t); err != nil {
@@ -139,7 +146,7 @@ func RequireVertexLinksReplay(ctx context.Context, vertexCount int, triangles []
 				return err
 			}
 			if center < 0 || center >= vertexCount {
-				return fmt.Errorf("%w: replay mesh has an invalid vertex", decaderr.ErrUnsupported)
+				return errAuditReplay3
 			}
 			next[i][k], heads[center] = heads[center], 3*i+k
 		}
@@ -178,7 +185,7 @@ func RequireVertexLinksReplay(ctx context.Context, vertexCount int, triangles []
 				return err
 			}
 			if degree[vertex] != 2 {
-				return fmt.Errorf("%w: the mesh vertex at index %d has a pinched link", decaderr.ErrUnsupported, center)
+				return proofbound.ReplayIndexedRefusal(ctx, budget, "the mesh vertex at index ", " has a pinched link", "", center, 0, false)
 			}
 			start = min(start, vertex)
 		}
@@ -199,14 +206,14 @@ func RequireVertexLinksReplay(ctx context.Context, vertexCount int, triangles []
 				break
 			}
 			if seen[nxt] {
-				return fmt.Errorf("%w: the mesh vertex at index %d has a pinched link", decaderr.ErrUnsupported, center)
+				return proofbound.ReplayIndexedRefusal(ctx, budget, "the mesh vertex at index ", " has a pinched link", "", center, 0, false)
 			}
 			seen[nxt] = true
 			visited++
 			prev, cur = cur, nxt
 		}
 		if visited != len(touched) {
-			return fmt.Errorf("%w: the mesh vertex at index %d has more than one link cycle", decaderr.ErrUnsupported, center)
+			return proofbound.ReplayIndexedRefusal(ctx, budget, "the mesh vertex at index ", " has more than one link cycle", "", center, 0, false)
 		}
 		for _, vertex := range touched {
 			if err := budget.SpendWork(ctx, 32); err != nil {

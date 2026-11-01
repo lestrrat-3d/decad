@@ -8,13 +8,18 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 )
 
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errNormalReplay1 = fmt.Errorf("%w: exact normal storage overflow", decaderr.ErrUnsupported)
+)
+
 func normalReserveLimbs(reserve func(uint64) error, limbs, objects uint64) error {
 	if limbs > (^uint64(0)-63)/uint64(bits.UintSize/8) {
-		return fmt.Errorf("%w: exact normal storage overflow", decaderr.ErrUnsupported)
+		return errNormalReplay1
 	}
 	blocks := (limbs*uint64(bits.UintSize/8) + 63) / 64
 	if objects > ^uint64(0)-blocks {
-		return fmt.Errorf("%w: exact normal storage overflow", decaderr.ErrUnsupported)
+		return errNormalReplay1
 	}
 	return reserve(blocks + objects)
 }

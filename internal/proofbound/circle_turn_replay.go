@@ -10,10 +10,15 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 )
 
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errCircleTurnReplay1 = fmt.Errorf("%w: invalid replay circle fraction", decaderr.ErrUnsupported)
+)
+
 // CircleTurnFractionReplay encloses sine and cosine at a whole-circle station.
 func CircleTurnFractionReplay(ctx context.Context, k, n int, b *ReplayBudget) (RatInterval, RatInterval, error) {
 	if n < 3 || n > 1<<14 || k <= 0 || k >= n || b == nil {
-		return RatInterval{}, RatInterval{}, fmt.Errorf("%w: invalid replay circle fraction", decaderr.ErrUnsupported)
+		return RatInterval{}, RatInterval{}, errCircleTurnReplay1
 	}
 	a, err := newReplayTrigArena(ctx, b)
 	if err != nil {

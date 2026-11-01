@@ -18,6 +18,12 @@ type replayDyadicOps struct {
 	budget *proofbound.ReplayBudget
 }
 
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errReplayFacetArea1 = fmt.Errorf("%w: invalid revolve facet vertex", decaderr.ErrUnsupported)
+	errReplayFacetArea2 = fmt.Errorf("%w: invalid facet area root", decaderr.ErrUnsupported)
+)
+
 func (m replayDyadicOps) op(a, b proof.Dyadic, k byte) (proof.Dyadic, error) {
 	return proof.ReplayDyadicArithmetic(m.ctx, a, b, k, m.budget)
 }
@@ -84,7 +90,7 @@ func newRevolveAuditTriReplay(ctx context.Context, verts []r3.Vec, tri [3]int, b
 	m := replayDyadicOps{ctx, b}
 	for k, vi := range tri {
 		if vi < 0 || vi >= len(verts) || !proofbound.FiniteVec(verts[vi]) {
-			return out, fmt.Errorf("%w: invalid revolve facet vertex", decaderr.ErrUnsupported)
+			return out, errReplayFacetArea1
 		}
 		if err := b.SpendWork(ctx, 3); err != nil {
 			return out, err
@@ -172,7 +178,7 @@ func requireRevolveFacetAreaUpperReplay(ctx context.Context, t RevolveAuditTri, 
 	}
 	allow := proofbound.ProductUpper(2, proofbound.AbsSumUpper(proofbound.ProductUpper(delta, proofbound.AbsSumUpper(t.Lu, t.Lv)), proofbound.ProductUpper(proofbound.ProductUpper(2, delta), delta)))
 	if proofbound.IsNonFinite(held) || proofbound.IsNonFinite(allow) || held <= allow {
-		return 0, fmt.Errorf("%w: revolve facet %d does not keep a positive area under the coordinate displacement this mesh carries", decaderr.ErrUnsupported, i)
+		return 0, proofbound.ReplayIndexedRefusal(ctx, b, "revolve facet ", " does not keep a positive area under the coordinate displacement this mesh carries", "", i, 0, false)
 	}
 	if !wantUpper {
 		return 0, nil
@@ -185,7 +191,7 @@ func requireRevolveFacetAreaUpperReplay(ctx context.Context, t RevolveAuditTri, 
 	}
 	v, ok := proof.DyOf(held)
 	if !ok {
-		return 0, fmt.Errorf("%w: invalid facet area root", decaderr.ErrUnsupported)
+		return 0, errReplayFacetArea2
 	}
 	square, err := m.op(v, v, '*')
 	if err != nil {

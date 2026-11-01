@@ -9,6 +9,11 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 )
 
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errReplaySort1 = fmt.Errorf("%w: revolve candidate row too large", decaderr.ErrUnsupported)
+)
+
 // replayStableSort charges each comparison and each move before it happens.
 func replayStableSort(ctx context.Context, a []int32, less func(int32, int32) bool,
 	budget *proofbound.ReplayBudget) error {
@@ -53,7 +58,7 @@ func replayStableSort(ctx context.Context, a []int32, less func(int32, int32) bo
 func replayAppend(ctx context.Context, row []int32, value int32, budget *proofbound.ReplayBudget) ([]int32, error) {
 	if len(row) == cap(row) {
 		if cap(row) > int(^uint(0)>>1)/2 {
-			return nil, fmt.Errorf("%w: revolve candidate row too large", decaderr.ErrUnsupported)
+			return nil, errReplaySort1
 		}
 		n := max(1, 2*cap(row))
 		if err := budget.ReserveRecords(ctx, uint64(n)); err != nil {

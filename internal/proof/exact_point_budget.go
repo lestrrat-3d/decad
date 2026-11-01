@@ -9,6 +9,16 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errExactPointBudget1 = fmt.Errorf("%w: exact lift needs a reservation", decaderr.ErrUnsupported)
+	errExactPointBudget2 = fmt.Errorf("%w: exact lift needs finite coordinates", decaderr.ErrUnsupported)
+	errExactPointBudget3 = fmt.Errorf("%w: exact normal needs a reservation", decaderr.ErrUnsupported)
+	errExactPointBudget4 = fmt.Errorf("%w: exact normal needs finite coordinates", decaderr.ErrUnsupported)
+	errExactPointBudget5 = fmt.Errorf("%w: exact normal has no extent", decaderr.ErrUnsupported)
+	errExactPointBudget6 = fmt.Errorf("%w: exact normal exceeds the bounded dyadic span", decaderr.ErrUnsupported)
+)
+
 // XptOfBounded reserves an upper bound for the binary64 lift's independent
 // limb payloads in 64-byte blocks before constructing the exact point.
 // The float significands fit the initial three-word slots. Each of the four
@@ -17,14 +27,14 @@ import (
 // bound even when a coordinate is zero or stays inline.
 func XptOfBounded(v r3.Vec, reserve func(uint64) error) (Xpt, error) {
 	if reserve == nil {
-		return Xpt{}, fmt.Errorf("%w: exact lift needs a reservation", decaderr.ErrUnsupported)
+		return Xpt{}, errExactPointBudget1
 	}
 	base := 0
 	var exps [3]int
 	var lengths [3]int
 	for i, f := range [3]float64{v.X, v.Y, v.Z} {
 		if math.IsNaN(f) || math.IsInf(f, 0) {
-			return Xpt{}, fmt.Errorf("%w: exact lift needs finite coordinates", decaderr.ErrUnsupported)
+			return Xpt{}, errExactPointBudget2
 		}
 		raw := math.Float64bits(f)
 		fraction := raw & ((uint64(1) << 52) - 1)
@@ -63,14 +73,14 @@ func XptOfBounded(v r3.Vec, reserve func(uint64) error) (Xpt, error) {
 // a fixed number of payloads and does not enter large-number multiplication.
 func TriangleNormalBounded(a, b, c r3.Vec, reserve func(uint64) error) (Xpt, error) {
 	if reserve == nil {
-		return Xpt{}, fmt.Errorf("%w: exact normal needs a reservation", decaderr.ErrUnsupported)
+		return Xpt{}, errExactPointBudget3
 	}
 	base, top := 0, 0
 	found := false
 	for _, v := range [3]r3.Vec{a, b, c} {
 		for _, f := range [3]float64{v.X, v.Y, v.Z} {
 			if math.IsNaN(f) || math.IsInf(f, 0) {
-				return Xpt{}, fmt.Errorf("%w: exact normal needs finite coordinates", decaderr.ErrUnsupported)
+				return Xpt{}, errExactPointBudget4
 			}
 			raw := math.Float64bits(f)
 			fraction := raw & ((uint64(1) << 52) - 1)
@@ -92,11 +102,11 @@ func TriangleNormalBounded(a, b, c r3.Vec, reserve func(uint64) error) (Xpt, err
 		}
 	}
 	if !found {
-		return Xpt{}, fmt.Errorf("%w: exact normal has no extent", decaderr.ErrUnsupported)
+		return Xpt{}, errExactPointBudget5
 	}
 	span := top - base
 	if span > 120 {
-		return Xpt{}, fmt.Errorf("%w: exact normal exceeds the bounded dyadic span", decaderr.ErrUnsupported)
+		return Xpt{}, errExactPointBudget6
 	}
 	// Each aligned difference fits span+1 bits and each cross component fits
 	// 2*span+3. Include the homogeneous denominator and shifted coordinates.

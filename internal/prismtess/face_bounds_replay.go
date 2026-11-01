@@ -12,11 +12,24 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errFaceBoundsReplay1 = fmt.Errorf("%w: invalid prism face bounds", decaderr.ErrUnsupported)
+	errFaceBoundsReplay2 = fmt.Errorf("%w: invalid prism vertex", decaderr.ErrBooleanFailed)
+	errFaceBoundsReplay3 = fmt.Errorf("%w: nonfinite prism face bound", decaderr.ErrUnsupported)
+	errFaceBoundsReplay4 = fmt.Errorf("%w: invalid bounded stacked face bounds", decaderr.ErrUnsupported)
+	errFaceBoundsReplay5 = fmt.Errorf("%w: missing bounded stacked faces", decaderr.ErrUnsupported)
+	errFaceBoundsReplay6 = fmt.Errorf("%w: invalid bounded stacked face", decaderr.ErrUnsupported)
+	errFaceBoundsReplay7 = fmt.Errorf("%w: duplicate stacked face bound", decaderr.ErrUnsupported)
+	errFaceBoundsReplay8 = fmt.Errorf("%w: missing stacked face bound", decaderr.ErrUnsupported)
+	errFaceBoundsReplay9 = fmt.Errorf("%w: unused stacked face bound", decaderr.ErrUnsupported)
+)
+
 // faceBoundsReplay composes the same per-face bounds without a map.
 func faceBoundsReplay(ctx context.Context, mesh *topo.Mesh, inputs []tessellation.PrismReplayFaceBound[*topo.Face],
 	store []float64, section float64, budget *proofbound.ReplayBudget) error {
 	if mesh == nil || budget == nil || len(mesh.Triangles) != len(mesh.Source) {
-		return fmt.Errorf("%w: invalid prism face bounds", decaderr.ErrUnsupported)
+		return errFaceBoundsReplay1
 	}
 	faceStore, err := topo.NewFaceBoundTable(ctx, len(mesh.Source), budget)
 	if err != nil {
@@ -29,7 +42,7 @@ func faceBoundsReplay(ctx context.Context, mesh *topo.Mesh, inputs []tessellatio
 		}
 		for _, v := range mesh.Triangles[i] {
 			if v < 0 || v >= len(store) {
-				return fmt.Errorf("%w: invalid prism vertex", decaderr.ErrBooleanFailed)
+				return errFaceBoundsReplay2
 			}
 			if store[v] < 0 || proofbound.IsNonFinite(store[v]) {
 				return decaderr.ErrUnsupported
@@ -58,7 +71,7 @@ func faceBoundsReplay(ctx context.Context, mesh *topo.Mesh, inputs []tessellatio
 		}
 		bound := proofbound.AbsSumUpper(trim, s, section, axial)
 		if proofbound.IsNonFinite(bound) {
-			return fmt.Errorf("%w: nonfinite prism face bound", decaderr.ErrUnsupported)
+			return errFaceBoundsReplay3
 		}
 		if err := out.Set(ctx, face, bound, budget); err != nil {
 			return err
@@ -84,10 +97,10 @@ func verifiedFaceBoundsReplay(ctx context.Context, mesh *topo.Mesh, inputs []tes
 		return err
 	}
 	if mesh == nil || len(store) != len(mesh.Vertices) || section < 0 || proofbound.IsNonFinite(section) {
-		return fmt.Errorf("%w: invalid bounded stacked face bounds", decaderr.ErrUnsupported)
+		return errFaceBoundsReplay4
 	}
 	if len(inputs) == 0 || len(mesh.Source) != len(mesh.Triangles) {
-		return fmt.Errorf("%w: missing bounded stacked faces", decaderr.ErrUnsupported)
+		return errFaceBoundsReplay5
 	}
 	if err := b.ReserveRecords(ctx, uint64(len(inputs))); err != nil {
 		return err
@@ -101,7 +114,7 @@ func verifiedFaceBoundsReplay(ctx context.Context, mesh *topo.Mesh, inputs []tes
 			return err
 		}
 		if x.Face == nil || x.Trim < 0 || x.Axial < 0 || proofbound.IsNonFinite(x.Trim) || proofbound.IsNonFinite(x.Axial) {
-			return fmt.Errorf("%w: invalid bounded stacked face", decaderr.ErrUnsupported)
+			return errFaceBoundsReplay6
 		}
 	}
 	for _, f := range mesh.Source {
@@ -112,13 +125,13 @@ func verifiedFaceBoundsReplay(ctx context.Context, mesh *topo.Mesh, inputs []tes
 			}
 			if x.Face == f {
 				if match != -1 {
-					return fmt.Errorf("%w: duplicate stacked face bound", decaderr.ErrUnsupported)
+					return errFaceBoundsReplay7
 				}
 				match = i
 			}
 		}
 		if match < 0 {
-			return fmt.Errorf("%w: missing stacked face bound", decaderr.ErrUnsupported)
+			return errFaceBoundsReplay8
 		}
 		seen[match] = true
 	}
@@ -127,7 +140,7 @@ func verifiedFaceBoundsReplay(ctx context.Context, mesh *topo.Mesh, inputs []tes
 			return err
 		}
 		if !ok {
-			return fmt.Errorf("%w: unused stacked face bound", decaderr.ErrUnsupported)
+			return errFaceBoundsReplay9
 		}
 	}
 	return faceBoundsReplay(ctx, mesh, inputs, store, section, b)

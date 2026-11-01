@@ -12,6 +12,15 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errPrismChargeReplay1 = fmt.Errorf("%w: replay placement frame defect", decaderr.ErrUnsupported)
+	errPrismChargeReplay2 = fmt.Errorf("%w: missing prism charge budget", decaderr.ErrUnsupported)
+	errPrismChargeReplay3 = fmt.Errorf("%w: invalid prism chord", decaderr.ErrUnsupported)
+	errPrismChargeReplay4 = fmt.Errorf("%w: invalid prism lift", decaderr.ErrUnsupported)
+	errPrismChargeReplay5 = fmt.Errorf("%w: invalid local chord", decaderr.ErrUnsupported)
+)
+
 // ReplayPlacementCharge computes the exact placement defect under the shared replay budget.
 func ReplayPlacementCharge(ctx context.Context, placement r3.Transform, b *proofbound.ReplayBudget) (MapCharge, error) {
 	if b == nil {
@@ -85,7 +94,7 @@ func replayMatrixCharge(ctx context.Context, m [3][3]*big.Rat, b *proofbound.Rep
 		return MapCharge{}, err
 	}
 	if cmp >= 0 {
-		return MapCharge{}, fmt.Errorf("%w: replay placement frame defect", decaderr.ErrUnsupported)
+		return MapCharge{}, errPrismChargeReplay1
 	}
 	minor := func(i, j, k, l int) (*big.Rat, error) {
 		a, e := op(m[i][k], m[j][l], '*')
@@ -173,7 +182,7 @@ func replayMatrixCharge(ctx context.Context, m [3][3]*big.Rat, b *proofbound.Rep
 // deriving the stretch and volume charges.
 func ReplayPrismCharge(ctx context.Context, frame r3.Frame, placement r3.Transform, b *proofbound.ReplayBudget) (MapCharge, error) {
 	if b == nil {
-		return MapCharge{}, fmt.Errorf("%w: missing prism charge budget", decaderr.ErrUnsupported)
+		return MapCharge{}, errPrismChargeReplay2
 	}
 	if err := b.SpendWork(ctx, 32); err != nil {
 		return MapCharge{}, err
@@ -230,7 +239,7 @@ func ReplayPrismChord(ctx context.Context, frame r3.Frame, placement r3.Transfor
 		return 0, 0, MapCharge{}, err
 	}
 	if !(chord > 0) || math.IsInf(chord, 0) || math.IsNaN(chord) {
-		return 0, 0, MapCharge{}, fmt.Errorf("%w: invalid prism chord", decaderr.ErrUnsupported)
+		return 0, 0, MapCharge{}, errPrismChargeReplay3
 	}
 	charge, err := ReplayPrismCharge(ctx, frame, placement, b)
 	if err != nil {
@@ -244,14 +253,14 @@ func ReplayPrismChord(ctx context.Context, frame r3.Frame, placement r3.Transfor
 		lift = proofbound.AbsSumUpper(1, charge.Stretch)
 	}
 	if math.IsNaN(lift) || math.IsInf(lift, 0) || lift < 1 {
-		return 0, 0, MapCharge{}, fmt.Errorf("%w: invalid prism lift", decaderr.ErrUnsupported)
+		return 0, 0, MapCharge{}, errPrismChargeReplay4
 	}
 	local := chord
 	if lift != 1 {
 		local = math.Nextafter(chord/lift, 0)
 	}
 	if !(local > 0) || math.IsInf(local, 0) {
-		return 0, 0, MapCharge{}, fmt.Errorf("%w: invalid local chord", decaderr.ErrUnsupported)
+		return 0, 0, MapCharge{}, errPrismChargeReplay5
 	}
 	return local, lift, charge, nil
 }

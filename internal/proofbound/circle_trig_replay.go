@@ -24,9 +24,26 @@ type replayTrigArena struct {
 	ctx    context.Context
 }
 
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errCircleTrigReplay1  = fmt.Errorf("%w: unsupported bounded trig arena", decaderr.ErrUnsupported)
+	errCircleTrigReplay2  = fmt.Errorf("%w: bounded trig integer width", decaderr.ErrUnsupported)
+	errCircleTrigReplay3  = fmt.Errorf("%w: bounded trig addition overflow", decaderr.ErrUnsupported)
+	errCircleTrigReplay4  = fmt.Errorf("%w: bounded trig subtraction underflow", decaderr.ErrUnsupported)
+	errCircleTrigReplay5  = fmt.Errorf("%w: bounded trig product aliases input", decaderr.ErrUnsupported)
+	errCircleTrigReplay6  = fmt.Errorf("%w: bounded trig product overflow", decaderr.ErrUnsupported)
+	errCircleTrigReplay7  = fmt.Errorf("%w: bounded trig product carry overflow", decaderr.ErrUnsupported)
+	errCircleTrigReplay8  = fmt.Errorf("%w: bounded trig division aliases input", decaderr.ErrUnsupported)
+	errCircleTrigReplay9  = fmt.Errorf("%w: bounded trig division by zero", decaderr.ErrUnsupported)
+	errCircleTrigReplay10 = fmt.Errorf("%w: bounded trig remainder overflow", decaderr.ErrUnsupported)
+	errCircleTrigReplay11 = fmt.Errorf("%w: bounded trig shift overflow", decaderr.ErrUnsupported)
+	errCircleTrigReplay12 = fmt.Errorf("%w: invalid bounded trig series slots", decaderr.ErrUnsupported)
+	errCircleTrigReplay13 = fmt.Errorf("%w: bounded trig result scale", decaderr.ErrUnsupported)
+)
+
 func newReplayTrigArena(ctx context.Context, budget *ReplayBudget) (*replayTrigArena, error) {
 	if budget == nil || bits.UintSize != 64 {
-		return nil, fmt.Errorf("%w: unsupported bounded trig arena", decaderr.ErrUnsupported)
+		return nil, errCircleTrigReplay1
 	}
 	if err := budget.ReserveRecords(ctx, replayTrigSlots); err != nil {
 		return nil, err
@@ -42,7 +59,7 @@ func newReplayTrigArena(ctx context.Context, budget *ReplayBudget) (*replayTrigA
 func (a *replayTrigArena) charge(n uint64) error { return a.budget.SpendWork(a.ctx, n) }
 func (a *replayTrigArena) load(slot int, x *big.Int) error {
 	if x == nil || x.BitLen() > 64*replayTrigWords {
-		return fmt.Errorf("%w: bounded trig integer width", decaderr.ErrUnsupported)
+		return errCircleTrigReplay2
 	}
 	if err := a.charge(replayTrigWords); err != nil {
 		return err
@@ -74,7 +91,7 @@ func (a *replayTrigArena) add(out, x, y int) error {
 		a.slots[out][i], carry = bits.Add64(a.slots[x][i], a.slots[y][i], carry)
 	}
 	if carry != 0 {
-		return fmt.Errorf("%w: bounded trig addition overflow", decaderr.ErrUnsupported)
+		return errCircleTrigReplay3
 	}
 	return nil
 }
@@ -87,13 +104,13 @@ func (a *replayTrigArena) sub(out, x, y int) error {
 		a.slots[out][i], borrow = bits.Sub64(a.slots[x][i], a.slots[y][i], borrow)
 	}
 	if borrow != 0 {
-		return fmt.Errorf("%w: bounded trig subtraction underflow", decaderr.ErrUnsupported)
+		return errCircleTrigReplay4
 	}
 	return nil
 }
 func (a *replayTrigArena) mul(out, x, y int) error {
 	if out == x || out == y {
-		return fmt.Errorf("%w: bounded trig product aliases input", decaderr.ErrUnsupported)
+		return errCircleTrigReplay5
 	}
 	if err := a.charge(replayTrigWords); err != nil {
 		return err
@@ -117,7 +134,7 @@ func (a *replayTrigArena) mul(out, x, y int) error {
 		for j, yj := range a.slots[y] {
 			if i+j >= replayTrigWords {
 				if yj != 0 || carry != 0 {
-					return fmt.Errorf("%w: bounded trig product overflow", decaderr.ErrUnsupported)
+					return errCircleTrigReplay6
 				}
 				continue
 			}
@@ -127,13 +144,13 @@ func (a *replayTrigArena) mul(out, x, y int) error {
 			lo, c = bits.Add64(lo, carry, 0)
 			hi, c2 := bits.Add64(hi, 0, c)
 			if c1|c2 != 0 {
-				return fmt.Errorf("%w: bounded trig product carry overflow", decaderr.ErrUnsupported)
+				return errCircleTrigReplay7
 			}
 			z[i+j] = lo
 			carry = hi
 		}
 		if carry != 0 {
-			return fmt.Errorf("%w: bounded trig product overflow", decaderr.ErrUnsupported)
+			return errCircleTrigReplay6
 		}
 	}
 	return nil
@@ -151,14 +168,14 @@ func replayTrigBitLen(x *replayTrigInteger) int {
 // div computes quotient and remainder without allocating division scratch.
 func (a *replayTrigArena) div(q, r, n, d int) error {
 	if q == r || q == n || q == d || r == n || r == d {
-		return fmt.Errorf("%w: bounded trig division aliases input", decaderr.ErrUnsupported)
+		return errCircleTrigReplay8
 	}
 	if err := a.charge(2 * replayTrigWords); err != nil {
 		return err
 	}
 	nbits, dbits := replayTrigBitLen(&a.slots[n]), replayTrigBitLen(&a.slots[d])
 	if dbits == 0 {
-		return fmt.Errorf("%w: bounded trig division by zero", decaderr.ErrUnsupported)
+		return errCircleTrigReplay9
 	}
 	if err := a.charge(2 * replayTrigWords); err != nil {
 		return err
@@ -176,7 +193,7 @@ func (a *replayTrigArena) div(q, r, n, d int) error {
 			carry = next
 		}
 		if carry != 0 {
-			return fmt.Errorf("%w: bounded trig remainder overflow", decaderr.ErrUnsupported)
+			return errCircleTrigReplay10
 		}
 		a.slots[r][0] |= (a.slots[n][bit/64] >> uint(bit%64)) & 1
 		cmp := 0
@@ -204,7 +221,7 @@ func (a *replayTrigArena) div(q, r, n, d int) error {
 func (a *replayTrigArena) left(slot int, shift uint) error {
 	x := &a.slots[slot]
 	if n := replayTrigBitLen(x); n > 0 && (shift >= 4096 || uint(n) > 4096-shift) {
-		return fmt.Errorf("%w: bounded trig shift overflow", decaderr.ErrUnsupported)
+		return errCircleTrigReplay11
 	}
 	if err := a.charge(replayTrigWords); err != nil {
 		return err
@@ -260,7 +277,7 @@ func (a *replayTrigArena) copySlot(dst, src int) error {
 }
 func (a *replayTrigArena) divWord(slot int, divisor uint64) error {
 	if divisor == 0 {
-		return fmt.Errorf("%w: bounded trig division by zero", decaderr.ErrUnsupported)
+		return errCircleTrigReplay9
 	}
 	if err := a.charge(replayTrigWords); err != nil {
 		return err
@@ -276,7 +293,7 @@ func (a *replayTrigArena) divWord(slot int, divisor uint64) error {
 // 2^-200 grid. Slots 20 through 25 are its private scratch.
 func (a *replayTrigArena) fixedSeries(input, sin, cos, margin int) error {
 	if input >= 20 || sin >= 20 || cos >= 20 || margin >= 20 || sin == cos || sin == margin || cos == margin {
-		return fmt.Errorf("%w: invalid bounded trig series slots", decaderr.ErrUnsupported)
+		return errCircleTrigReplay12
 	}
 	const square, term, tmp, sinRem, cosRem, c = 20, 21, 22, 23, 24, 25
 	if err := a.mul(square, input, input); err != nil {
@@ -382,7 +399,7 @@ func (a *replayTrigArena) signedAdd(out int, x, y replayTrigSigned) (replayTrigS
 
 func (a *replayTrigArena) dyadicRat(value replayTrigSigned, scale int) (*big.Rat, error) {
 	if scale < 0 || scale > 4095 {
-		return nil, fmt.Errorf("%w: bounded trig result scale", decaderr.ErrUnsupported)
+		return nil, errCircleTrigReplay13
 	}
 	if err := a.copySlot(18, value.slot); err != nil {
 		return nil, err

@@ -3,6 +3,7 @@ package proofbound
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -133,6 +134,49 @@ func (b *ReplayBudget) ReserveArray(ctx context.Context, count, elementBytes uin
 		return fmt.Errorf("%w: replay allocation envelope overflow", decaderr.ErrUnsupported)
 	}
 	return b.ReserveBytes(ctx, 2*size+128)
+}
+
+type replayIndexedError struct{ text string }
+
+func (e *replayIndexedError) Error() string { return e.text }
+func (e *replayIndexedError) Unwrap() error { return decaderr.ErrUnsupported }
+
+// ReplayIndexedRefusal constructs an unsupported error with one or two indices.
+// Its fixed buffer holds the prefix, at most 400 bytes of literal text, and two
+// signed machine integers. All possible backing storage is reserved first.
+func ReplayIndexedRefusal(ctx context.Context, b *ReplayBudget, first, middle, last string, i, j int, two bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if b == nil || len(first) > 400 || len(middle) > 400 || len(last) > 400 ||
+		len(first)+len(middle)+len(last) > 400 || len(decaderr.ErrUnsupported.Error())+442 > 512 {
+		return decaderr.ErrUnsupported
+	}
+	if err := b.SpendWork(ctx, 2048); err != nil {
+		return err
+	}
+	if err := b.ReserveRecords(ctx, 3); err != nil {
+		return err
+	}
+	for range 2 {
+		if err := b.ReserveArray(ctx, 512, 1); err != nil {
+			return err
+		}
+	}
+	if err := b.ReserveArray(ctx, 1, uint64(unsafe.Sizeof(replayIndexedError{}))); err != nil {
+		return err
+	}
+	var storage [512]byte
+	out := append(storage[:0], decaderr.ErrUnsupported.Error()...)
+	out = append(out, ':', ' ')
+	out = append(out, first...)
+	out = strconv.AppendInt(out, int64(i), 10)
+	out = append(out, middle...)
+	if two {
+		out = strconv.AppendInt(out, int64(j), 10)
+	}
+	out = append(out, last...)
+	return &replayIndexedError{text: string(out)}
 }
 
 // Bytes returns cumulative precharged storage.

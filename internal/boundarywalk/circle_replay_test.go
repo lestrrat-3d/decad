@@ -74,6 +74,9 @@ func TestCircleWalkReplayLimitsAndRefusals(t *testing.T) {
 	seg.Radius = units.Millimeters(3.3)
 	seg.Center.U = math.Inf(1)
 	require.ErrorIs(t, run(t.Context(), proofbound.NewReplayTrialBudget()), decaderr.ErrUnsupported)
+	seg.Center.U = math.MaxFloat64
+	seg.Radius = units.Millimeters(math.MaxFloat64)
+	require.ErrorIs(t, run(t.Context(), proofbound.NewCircleReplayBudget()), decaderr.ErrUnsupported)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	seg.Center.U = 0

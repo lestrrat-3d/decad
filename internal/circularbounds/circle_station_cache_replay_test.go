@@ -19,6 +19,20 @@ func TestCircleStationReplayCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	other := proofbound.NewReplayTrialBudget()
+	sin, cos, err := proofbound.CircleTurnFractionReplay(t.Context(), 1, 13, meter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	allocs := testing.AllocsPerRun(100, func() {
+		_, err := cache.Bound(context.Background(), 0, 0, sin, cos, other)
+		if !errors.Is(err, decaderr.ErrUnsupported) {
+			t.Fatalf("wrong meter: %v", err)
+		}
+	})
+	if allocs != 0 {
+		t.Fatalf("wrong-meter refusal allocated %g times", allocs)
+	}
 	for _, k := range []int{1, 13, 267, 534, 801, 1067} {
 		s, c, err := proofbound.CircleTurnFractionReplay(t.Context(), k, 1068, meter)
 		if err != nil {
