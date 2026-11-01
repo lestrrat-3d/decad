@@ -38,7 +38,7 @@ func ClassifyOrientedSphere(sphere AxisSphere, box OrientedBox, sphereFirst bool
 		result.Reason = pair.PayloadUnsupported
 		return result
 	}
-	distance2, ok := ClosestOrientedBoxPoint(sphere.Center, box)
+	distance2, ok := ClosestOrthogonalBoxPoint(sphere.Center, box)
 	if !ok {
 		result.Reason = pair.PayloadUnsupported
 		return result

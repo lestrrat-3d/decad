@@ -479,11 +479,11 @@ center, or wider patch keeps the proven relation but withholds the manifold.
 Reversing body order reverses the exact axis normal and witness fields.
 
 For an exactly orthogonal rotated source box, minimize squared distance from
-the source sphere center to its exact read-pose parallelotope. Enumerate each
-box coordinate as free, fixed at zero, or fixed at one; solve the twenty-seven
-resulting rational stationary systems and keep the least feasible squared
-distance. Compare it with the exact squared radius to classify the complete
-occupied sets. Bound a positive gap with outward square-root conversion.
+the source sphere center to its exact read-pose parallelotope. Project the
+center onto each pairwise orthogonal, nonzero edge with exact rational dot
+products, clamp each coefficient to `[0, 1]`, and sum the squared distance to
+the resulting point. Compare it with the exact squared radius to classify the
+complete occupied sets. Bound a positive gap with outward square-root conversion.
 An isolated face manifold requires the center outside one face, an orthogonal
 projection strictly inside that face, and the projected sphere disk strictly
 inside both face intervals. The opposite support must remain farther than one
