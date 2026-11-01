@@ -266,6 +266,31 @@ func widenedBand(contact *contactReport, etaA, etaB float64) (*vocab.Measurement
 // the support planes, records a departure, and publishes a proven band as a
 // SweepContactTrack.
 
+type planarSupportCache struct {
+	ordered []planarsweep.Support
+	work    uint64
+	ready   bool
+}
+
+func (c *planarSupportCache) get(budget *proofbound.WorkBudget,
+	search func(func() error) ([]planarsweep.Support, error)) ([]planarsweep.Support, error) {
+	if c.ready {
+		_, err := budget.StepN(c.work)
+		return c.ordered, err
+	}
+	var work uint64
+	poll := func() error {
+		work++
+		return budget.Step()
+	}
+	ordered, err := search(poll)
+	if err != nil {
+		return nil, err
+	}
+	*c = planarSupportCache{ordered: ordered, work: work, ready: true}
+	return ordered, nil
+}
+
 // planarSupports lists every support plane of the initial touch
 // (planarsweep.FindPathSupports) under the request's support band and rest
 // speed.
@@ -282,11 +307,15 @@ func (r *rotationalPairSweep) planarSupports(poll func() error) ([]planarsweep.S
 		planarband.SupportBand(r.req.ContactRequest), rest, poll)
 }
 
+func (r *rotationalPairSweep) supportsForBudget(budget *proofbound.WorkBudget) ([]planarsweep.Support, error) {
+	return r.supports.get(budget, r.planarSupports)
+}
+
 // planarDepartureFraction proves §10.2's departure (planarsweep.ProveDeparture),
 // records it on the run, and returns the largest grid fraction it covers.
 func (r *rotationalPairSweep) planarDepartureFraction(ctx context.Context) (*big.Rat, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
-	supports, err := r.planarSupports(budget.Step)
+	supports, err := r.supportsForBudget(budget)
 	if err != nil {
 		return nil, false, err
 	}
@@ -302,7 +331,7 @@ func (r *rotationalPairSweep) planarDepartureFraction(ctx context.Context) (*big
 // order, that admits one (planarsweep.ProveBand) and whose track publishes.
 func (r *rotationalPairSweep) planarBand(ctx context.Context) (*sweepproof.Track, bool, error) {
 	budget := proofbound.NewWorkBudget(ctx)
-	supports, err := r.planarSupports(budget.Step)
+	supports, err := r.supportsForBudget(budget)
 	if err != nil {
 		return nil, false, err
 	}
