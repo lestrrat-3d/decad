@@ -13,9 +13,13 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
 
-// CircleCandidateReplay builds an unpublished candidate. Its caller must seal
-// and recheck the source payload, history, and face construction records.
-// The returned mesh withholds its boundary and occupied-volume proof flags.
+// CircleCandidateReplay builds an unpublished candidate. The caller must bind
+// body, payload, segment, samples, lift and charge to the same authenticated
+// source, history, face construction records and replay meter. It must recheck
+// that seal before and after use; a retained mesh needs its own immutable seal.
+// This function does not establish those bindings. The returned mesh withholds
+// its boundary and occupied-volume proof flags and cannot be used as verified
+// source geometry without the remaining embedding and occupied-volume proofs.
 func CircleCandidateReplay(ctx context.Context, body *topo.Body, p prismrecord.Payload, seg sectionrecord.CircleSeg,
 	faces [3]*topo.Face, samples tessellation.ChordSamples[*topo.Face], lift float64, charge massmoment.MapCharge,
 	budget *proofbound.ReplayBudget) (*topo.Mesh, error) {

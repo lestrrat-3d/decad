@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -265,5 +266,90 @@ func TestPublicCirclePrimitiveSourceMutation(t *testing.T) {
 	edge.Start.Position = old
 	if !errors.Is(err, decaderr.ErrUnsupported) || mesh != nil {
 		t.Fatalf("mutated source: %v", err)
+	}
+}
+
+func TestPublicCirclePrimitiveFaceTokenMutations(t *testing.T) {
+	body := publicCirclePrimitive(t)
+	faces := body.n.Lumps[0].Shells[0].Faces
+	if len(faces) != 3 {
+		t.Fatalf("face count=%d", len(faces))
+	}
+	wall := faces[0]
+	if len(wall.Loops) == 0 || len(wall.Loops[0].CoEdges) == 0 {
+		t.Fatal("missing wall loop")
+	}
+	loop := wall.Loops[0]
+	edge := loop.CoEdges[0].Edge
+	refuse := func(name string) {
+		t.Helper()
+		m, err := publicCircleCandidate(t.Context(), body, proofbound.NewCircleReplayBudget())
+		if !errors.Is(err, decaderr.ErrUnsupported) || m != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	oldRole := wall.Origins[0].Role
+	wall.Origins[0].Role = "changed"
+	refuse("role")
+	wall.Origins[0].Role = oldRole
+	oldBody := wall.Body
+	source := body.Document().OperationHistory().Operations()[1].Inputs()[0].Body
+	wall.Body = &source.n
+	refuse("body")
+	wall.Body = oldBody
+	oldProducer := body.n.Origin.Producer
+	body.n.Origin.Producer++
+	refuse("producer")
+	body.n.Origin.Producer = oldProducer
+	loop.CoEdges[0].Forward = !loop.CoEdges[0].Forward
+	refuse("coedge")
+	loop.CoEdges[0].Forward = !loop.CoEdges[0].Forward
+	if len(edge.Faces) == 0 {
+		t.Fatal("missing adjacency")
+	}
+	oldAdjacent := edge.Faces[0]
+	edge.Faces[0] = nil
+	refuse("adjacency")
+	edge.Faces[0] = oldAdjacent
+	var capRecord *topo.CapRecord
+	for _, f := range faces {
+		if f.CapRecord != nil {
+			capRecord = f.CapRecord
+			break
+		}
+	}
+	if capRecord == nil || capRecord.ZDenoted == nil {
+		t.Fatal("missing cap denotation")
+	}
+	oldDenoted := capRecord.ZDenoted
+	capRecord.ZDenoted = new(big.Rat).Set(oldDenoted)
+	refuse("cap rational identity")
+	capRecord.ZDenoted = oldDenoted
+}
+
+//nolint:containedctx // The context injects one mutation during a synchronous replay.
+type circlePrimitiveMutationContext struct {
+	context.Context
+	polls  int
+	mutate func()
+}
+
+func (c *circlePrimitiveMutationContext) Err() error {
+	c.polls++
+	if c.polls == 500 {
+		c.mutate()
+	}
+	return nil
+}
+func TestPublicCirclePrimitiveMutationDuringReplay(t *testing.T) {
+	body := publicCirclePrimitive(t)
+	face := body.n.Lumps[0].Shells[0].Faces[0]
+	edge := face.Loops[0].CoEdges[0].Edge
+	old := edge.Start.Position
+	ctx := &circlePrimitiveMutationContext{Context: t.Context(), mutate: func() { edge.Start.Position.X++ }}
+	mesh, err := publicCircleCandidate(ctx, body, proofbound.NewCircleReplayBudget())
+	edge.Start.Position = old
+	if ctx.polls < 500 || !errors.Is(err, decaderr.ErrUnsupported) || mesh != nil {
+		t.Fatalf("mutation during replay: %v polls=%d", err, ctx.polls)
 	}
 }

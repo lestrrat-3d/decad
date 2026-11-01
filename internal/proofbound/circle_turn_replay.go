@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"math/bits"
+	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 )
@@ -54,10 +56,32 @@ func CircleTurnFractionReplay(ctx context.Context, k, n int, b *ReplayBudget) (R
 	// The ordinary first-octant endpoints are floor/ceil of
 	// pi * 2 * rem/(8*n) * 2^TrigFixedBits.
 	for i, p := range []*big.Rat{PiLower, PiUpper} {
-		if err := a.load(0, p.Num()); err != nil {
+		if err := b.SpendWork(ctx, 32); err != nil {
 			return RatInterval{}, RatInterval{}, err
 		}
-		if err := a.load(1, p.Denom()); err != nil {
+		nw, dw := (p.Num().BitLen()+bits.UintSize-1)/bits.UintSize, (p.Denom().BitLen()+bits.UintSize-1)/bits.UintSize
+		if err := b.ReserveRecords(ctx, 4); err != nil {
+			return RatInterval{}, RatInterval{}, err
+		}
+		for range 2 {
+			if err := b.ReserveArray(ctx, 1, uint64(unsafe.Sizeof(big.Int{}))); err != nil {
+				return RatInterval{}, RatInterval{}, err
+			}
+		}
+		if err := b.ReserveArray(ctx, uint64(nw+1), uint64(unsafe.Sizeof(big.Word(0)))); err != nil {
+			return RatInterval{}, RatInterval{}, err
+		}
+		if err := b.ReserveArray(ctx, uint64(dw+1), uint64(unsafe.Sizeof(big.Word(0)))); err != nil {
+			return RatInterval{}, RatInterval{}, err
+		}
+		if err := b.SpendWork(ctx, uint64(nw+dw+8)); err != nil {
+			return RatInterval{}, RatInterval{}, err
+		}
+		num, den := new(big.Int).Set(p.Num()), new(big.Int).Set(p.Denom())
+		if err := a.load(0, num); err != nil {
+			return RatInterval{}, RatInterval{}, err
+		}
+		if err := a.load(1, den); err != nil {
 			return RatInterval{}, RatInterval{}, err
 		}
 		if err := a.setWord(2, uint64(rem)); err != nil {

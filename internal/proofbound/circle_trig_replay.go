@@ -8,6 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // replayTrigInteger is one unsigned integer in the private 4096-bit arena.
@@ -408,8 +409,10 @@ func (a *replayTrigArena) dyadicRat(value replayTrigSigned, scale int) (*big.Rat
 	if err := a.budget.ReserveRecords(a.ctx, 3); err != nil {
 		return nil, err
 	}
-	if err := a.budget.ReserveArray(a.ctx, uint64(nwords+dwords+1), uint64(unsafe.Sizeof(big.Word(0)))); err != nil {
-		return nil, err
+	for _, words := range [2]int{nwords, dwords} {
+		if err := a.budget.ReserveArray(a.ctx, uint64(words), uint64(unsafe.Sizeof(big.Word(0)))); err != nil {
+			return nil, err
+		}
 	}
 	if err := a.budget.ReserveArray(a.ctx, 1, uint64(unsafe.Sizeof(big.Rat{}))); err != nil {
 		return nil, err
@@ -423,11 +426,20 @@ func (a *replayTrigArena) dyadicRat(value replayTrigSigned, scale int) (*big.Rat
 	}
 	d := make([]big.Word, dwords)
 	d[scale/64] = big.Word(uint64(1) << uint(scale%64))
-	q := new(big.Rat).SetInt64(1)
-	q.Num().SetBits(n)
-	q.Denom().SetBits(d)
-	if value.negative && nwords > 0 {
-		q.Num().Neg(q.Num())
+	if err := a.budget.ReserveRecords(a.ctx, 2); err != nil {
+		return nil, err
 	}
-	return q, nil
+	for range 2 {
+		if err := a.budget.ReserveArray(a.ctx, 1, uint64(unsafe.Sizeof(big.Int{}))); err != nil {
+			return nil, err
+		}
+	}
+	if err := a.charge(64); err != nil {
+		return nil, err
+	}
+	num, den := new(big.Int).SetBits(n), new(big.Int).SetBits(d)
+	if value.negative && nwords > 0 {
+		num.Neg(num)
+	}
+	return proof.ReplayReducedFraction(a.ctx, num, den, a.budget)
 }

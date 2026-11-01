@@ -132,3 +132,11 @@ func ReplayFractionFloat64(ctx context.Context, num, den *big.Int, budget Replay
 	}
 	return replayQuotientFloat64(ctx, num, den, budget)
 }
+
+// ReplayRatFloat64 rounds a rational using the caller's bounded replay meter.
+func ReplayRatFloat64(ctx context.Context, q *big.Rat, budget ReplayKeyBudget) (float64, error) {
+	if q == nil || budget == nil {
+		return 0, fmt.Errorf("%w: invalid replay rational", decaderr.ErrUnsupported)
+	}
+	return ReplayFractionFloat64(ctx, q.Num(), q.Denom(), budget)
+}

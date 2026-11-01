@@ -141,7 +141,7 @@ func replayMatrixCharge(ctx context.Context, m [3][3]*big.Rat, b *proofbound.Rep
 		a.Neg(a)
 	}
 	up := func(q *big.Rat) (float64, error) {
-		f, e := proofarith.ReplayFractionFloat64(ctx, q.Num(), q.Denom(), b)
+		f, e := proofarith.ReplayRatFloat64(ctx, q, b)
 		if e != nil {
 			return 0, e
 		}
