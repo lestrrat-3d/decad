@@ -51,6 +51,8 @@ type Body struct {
 	// OperationWarnings are bounded summaries from the public call that built
 	// this body. Root adapts them to public diagnostic values.
 	OperationWarnings []opdiagnostic.Record
+	// PrivateShift holds evaluator-owned evidence, without inheritance through placement.
+	PrivateShift any
 	// Area is the body's total surface area. Root Body.Area converts it to
 	// the public Measurement form.
 	Area measurement.Measurement

@@ -4,11 +4,14 @@ package diameter
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/big"
 	"runtime"
 	"sync"
+	"unsafe"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -217,14 +220,60 @@ func pointsContextParallel(ctx context.Context, points []r3.Vec) (float64, bool,
 // float distance, or a winning pair without rational coordinates returns no
 // answer. A zero maximum needs no rounding step.
 func PointsWithBudget(budget *proofbound.WorkBudget, points []r3.Vec) (float64, bool, error) {
-	if len(points) == 0 {
+	if budget != nil && budget.Replay {
+		return 0, false, fmt.Errorf("%w: replay diameter requires an explicit context", decaderr.ErrUnsupported)
+	}
+	best, i, j, ok, err := pointsScan(budget, points)
+	if err != nil || !ok {
+		return 0, false, err
+	}
+	if best == 0 {
+		return 0, true, nil
+	}
+	d, ok := pairDistanceDown(points[i], points[j])
+	if !ok {
 		return 0, false, nil
+	}
+	return d, true, nil
+}
+
+// PointsReplay measures the same witnesses using the caller's replay context.
+func PointsReplay(ctx context.Context, budget *proofbound.WorkBudget, points []r3.Vec) (float64, bool, error) {
+	if budget == nil || !budget.Replay {
+		return 0, false, fmt.Errorf("%w: missing replay diameter budget", decaderr.ErrUnsupported)
+	}
+	best, i, j, ok, err := pointsScan(budget, points)
+	if err != nil || !ok {
+		return 0, false, err
+	}
+	if best == 0 {
+		return 0, true, nil
+	}
+	d, err := replayPairDistanceDown(ctx, budget, points[i], points[j])
+	if err != nil {
+		return 0, false, err
+	}
+	return d, true, nil
+}
+
+func pointsScan(budget *proofbound.WorkBudget, points []r3.Vec) (float64, int, int, bool, error) {
+	if len(points) == 0 {
+		return 0, 0, 0, false, nil
 	}
 	best := 0.0
 	bestI, bestJ := 0, 0
 	skipSq := 0.0
 	var blocks []pointBlock
 	if len(points) >= 512 && parallelScanSafe(points) {
+		if budget != nil && budget.Replay {
+			n := (len(points) + pointBlockSize - 1) / pointBlockSize
+			if err := budget.ReserveBytesMul(uint64(n), uint64(unsafe.Sizeof(pointBlock{}))); err != nil {
+				return 0, 0, 0, false, err
+			}
+			if _, err := budget.StepN(uint64(len(points))); err != nil {
+				return 0, 0, 0, false, err
+			}
+		}
 		blocks = pointBlocks(points)
 	}
 	for i := range points {
@@ -242,7 +291,7 @@ func PointsWithBudget(budget *proofbound.WorkBudget, points []r3.Vec) (float64, 
 					// one move per poll.
 					if budget != nil {
 						if _, err := budget.StepN(uint64(end - j)); err != nil {
-							return 0, false, err
+							return 0, 0, 0, false, err
 						}
 					}
 					j = end
@@ -252,7 +301,7 @@ func PointsWithBudget(budget *proofbound.WorkBudget, points []r3.Vec) (float64, 
 			for ; j < end; j++ {
 				if budget != nil {
 					if err := budget.Step(); err != nil {
-						return 0, false, err
+						return 0, 0, 0, false, err
 					}
 				}
 				delta := points[i].Sub(points[j])
@@ -264,7 +313,7 @@ func PointsWithBudget(budget *proofbound.WorkBudget, points []r3.Vec) (float64, 
 				}
 				distance := delta.Len()
 				if !usableMagnitude(distance) {
-					return 0, false, nil
+					return 0, 0, 0, false, nil
 				}
 				if distance > best {
 					best, bestI, bestJ = distance, i, j
@@ -280,17 +329,10 @@ func PointsWithBudget(budget *proofbound.WorkBudget, points []r3.Vec) (float64, 
 	}
 	if budget != nil {
 		if err := budget.Err(); err != nil {
-			return 0, false, err
+			return 0, 0, 0, false, err
 		}
 	}
-	if best == 0 {
-		return 0, true, nil
-	}
-	d, ok := pairDistanceDown(points[bestI], points[bestJ])
-	if !ok {
-		return 0, false, nil
-	}
-	return d, true, nil
+	return best, bestI, bestJ, true, nil
 }
 
 // pairDistanceDown returns the largest float64 at or below the exact

@@ -80,14 +80,16 @@ type ContactBatchRunner func(context.Context, *BoolMesh, *BoolMesh, []ContactPai
 // cached float normals before starting workers. Workers therefore only read
 // immutable mesh data and write their own result slot.
 type ContactBatchExecutor struct {
-	Ctx     context.Context //nolint:containedctx // one call-scoped cancellation source for this short-lived executor.
-	Ma      *BoolMesh
-	Mb      *BoolMesh
-	Memo    *ContactMemo
-	Workers int
-	Limit   int
-	Run     ContactBatchRunner
-	Consume func(ContactPair, TriContact) error
+	NoMemoStore  bool
+	NoMemoLookup bool
+	Ctx          context.Context //nolint:containedctx // one call-scoped cancellation source for this short-lived executor.
+	Ma           *BoolMesh
+	Mb           *BoolMesh
+	Memo         *ContactMemo
+	Workers      int
+	Limit        int
+	Run          ContactBatchRunner
+	Consume      func(ContactPair, TriContact) error
 	// ConsumeResult, when set, replaces Consume and also receives the slot the
 	// runner filled. A memo hit arrives as ContactBatchResult{Contact: c}.
 	ConsumeResult   func(ContactPair, ContactBatchResult) error
@@ -136,9 +138,11 @@ func (e *ContactBatchExecutor) Add(i, j int) error {
 	}
 	pair := ContactPair{I: i, J: j}
 	entry := ContactBatchEntry{Pair: pair, HitIndex: -1}
-	if contact, ok := e.Memo.Lookup(i, j); ok {
-		entry.HitIndex = len(e.memoHits)
-		e.memoHits = append(e.memoHits, contact)
+	if !e.NoMemoLookup {
+		if contact, ok := e.Memo.Lookup(i, j); ok {
+			entry.HitIndex = len(e.memoHits)
+			e.memoHits = append(e.memoHits, contact)
+		}
 	}
 	if e.Batch == nil {
 		e.Batch = make([]ContactBatchEntry, 0, e.initialCapacity)
@@ -191,7 +195,9 @@ func (e *ContactBatchExecutor) Flush() error {
 				return result.Err
 			}
 			contact = result.Contact
-			e.Memo.Store(entry.Pair.I, entry.Pair.J, contact)
+			if !e.NoMemoStore {
+				e.Memo.Store(entry.Pair.I, entry.Pair.J, contact)
+			}
 		}
 		if e.ConsumeResult != nil {
 			if err := e.ConsumeResult(entry.Pair, result); err != nil {

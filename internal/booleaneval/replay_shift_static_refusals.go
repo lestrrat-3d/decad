@@ -1,0 +1,52 @@
+package booleaneval
+
+import (
+	"fmt"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+)
+
+// These immutable snapshot refusals are initialized before replay starts.
+var (
+	errShiftSnapshotDenotationChanged                = fmt.Errorf("%w: denotation changed", decaderr.ErrUnsupported)
+	errShiftSnapshotDenotationTooLarge               = fmt.Errorf("%w: denotation too large", decaderr.ErrUnsupported)
+	errShiftSnapshotDenotationWidth                  = fmt.Errorf("%w: denotation width", decaderr.ErrUnsupported)
+	errShiftSnapshotMismatchedSnapshotBudget         = fmt.Errorf("%w: mismatched snapshot budget", decaderr.ErrUnsupported)
+	errShiftSnapshotMissingBrakeReplayBudget         = fmt.Errorf("%w: missing brake replay budget", decaderr.ErrUnsupported)
+	errShiftSnapshotMissingStoredMesh                = fmt.Errorf("%w: missing stored mesh", decaderr.ErrUnsupported)
+	errShiftSnapshotMissingStoredShift               = fmt.Errorf("%w: missing stored shift", decaderr.ErrUnsupported)
+	errShiftSnapshotNonfiniteStoredShift             = fmt.Errorf("%w: nonfinite stored shift", decaderr.ErrUnsupported)
+	errShiftSnapshotSourceAncestryChanged            = fmt.Errorf("%w: source ancestry changed", decaderr.ErrUnsupported)
+	errShiftSnapshotSourceAncestryTooDeep            = fmt.Errorf("%w: source ancestry too deep", decaderr.ErrUnsupported)
+	errShiftSnapshotSourceGroupPointerChanged        = fmt.Errorf("%w: source group pointer changed", decaderr.ErrUnsupported)
+	errShiftSnapshotSourceGroupsChanged              = fmt.Errorf("%w: source groups changed", decaderr.ErrUnsupported)
+	errShiftSnapshotStaleStoredShift                 = fmt.Errorf("%w: stale stored shift", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredBoundsChanged              = fmt.Errorf("%w: stored bounds changed", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredCapChanged                 = fmt.Errorf("%w: stored cap changed", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredCapRationalWidth           = fmt.Errorf("%w: stored cap rational width", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredCapWidth                   = fmt.Errorf("%w: stored cap width", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredComponentsChanged          = fmt.Errorf("%w: stored components changed", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredFaceBoundInvalid           = fmt.Errorf("%w: stored face bound invalid", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredGroupChanged               = fmt.Errorf("%w: stored group changed", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredGroupsChanged              = fmt.Errorf("%w: stored groups changed", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredGroupsTooLarge             = fmt.Errorf("%w: stored groups too large", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredMeshBoundInvalid           = fmt.Errorf("%w: stored mesh bound invalid", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredMeshChanged                = fmt.Errorf("%w: stored mesh changed", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredMeshFaceBoundMissing       = fmt.Errorf("%w: stored mesh face bound missing", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredMeshIndexInvalid           = fmt.Errorf("%w: stored mesh index invalid", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredMeshPointerChanged         = fmt.Errorf("%w: stored mesh pointer changed", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredMeshShape                  = fmt.Errorf("%w: stored mesh shape", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredMeshSourceMissing          = fmt.Errorf("%w: stored mesh source missing", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredMeshTooLarge               = fmt.Errorf("%w: stored mesh too large", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredMeshVertexInvalid          = fmt.Errorf("%w: stored mesh vertex invalid", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredProvenanceChanged          = fmt.Errorf("%w: stored provenance changed", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredProvenanceTooLarge         = fmt.Errorf("%w: stored provenance too large", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredShiftFieldsChanged         = fmt.Errorf("%w: stored shift fields changed", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredShiftIdentityMismatch      = fmt.Errorf("%w: stored shift identity mismatch", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredShiftMeshMissing           = fmt.Errorf("%w: stored shift mesh missing", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredShiftPieceMismatch         = fmt.Errorf("%w: stored shift piece mismatch", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredShiftPiecesMismatch        = fmt.Errorf("%w: stored shift pieces mismatch", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredSliceTooLarge              = fmt.Errorf("%w: stored slice too large", decaderr.ErrUnsupported)
+	errShiftSnapshotStoredSurfaceSnapshotUnavailable = fmt.Errorf("%w: stored surface snapshot unavailable", decaderr.ErrUnsupported)
+	errShiftSnapshotTooManyGroups                    = fmt.Errorf("%w: too many groups", decaderr.ErrUnsupported)
+)

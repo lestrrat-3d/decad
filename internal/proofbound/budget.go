@@ -184,6 +184,8 @@ const MaxFacetPairTestsPerCall = 8_000_000
 // WorkBudget holds closures rather than a context.Context field, so no
 // long-lived geometry state stores a context.
 type WorkBudget struct {
+	Replay         bool
+	ReplayID       *ReplayBudget
 	StepFn         func() error
 	ErrFn          func() error
 	ReserveFn      func(uint64) error

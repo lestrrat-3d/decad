@@ -70,6 +70,8 @@ type Mesh struct {
 	// the CLAIM that the held polygon is the true trimmed patch and that its
 	// stored coordinates add nothing.
 	FaceBound map[*Face]float64
+	// ReplayFaceBounds holds private replay bounds without a runtime map.
+	ReplayFaceBounds *FaceBoundTable
 	// Owner is the root Mesh handle that holds this node by value. Root sets
 	// it when the handle is born and maps a node back to its handle through
 	// it; nothing else writes it.

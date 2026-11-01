@@ -68,11 +68,14 @@ func tagReach(m *topo.Mesh) (float64, error) {
 // stated.
 func movedGroup(g facetedrecord.Group, piece int, ok bool, shifts map[int]pieceShift, verts []r3.Vec,
 	reach float64) facetedrecord.Group {
+	sh, moved := shifts[piece]
+	return movedGroupWithShift(g, piece, ok, sh, moved, verts, reach)
+}
+func movedGroupWithShift(g facetedrecord.Group, piece int, ok bool, sh pieceShift, moved bool, verts []r3.Vec, reach float64) facetedrecord.Group {
 	bare := facetedrecord.Group{Origins: g.Origins, Upstream: g.Upstream, Source: g.Source}
 	if !ok || piece == spanningPieces {
 		return bare
 	}
-	sh, moved := shifts[piece]
 	if !moved {
 		return g
 	}

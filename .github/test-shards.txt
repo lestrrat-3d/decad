@@ -267,6 +267,15 @@
 9	0.00	TestRevolveSectorProjectionSeparatesRotatedSources
 9	0.02	TestSweepPairRealFacetedUnionTouchContinuations
 9	0.01	TestThickenPrismUnrepresentableOffset
+10	0.00	TestBrakeBudgetFailureDoesNotAllocate
+10	0.00	TestBrakeFinalWarningProof
+10	0.56	TestBrakeHistoryReaderBudgetAndLargeInput
+10	0.00	TestBrakePrerequisiteProbe
+10	0.00	TestBrakePrivateAncestryPreservesPublicSource
+10	0.00	TestBrakeRefusalAccounting
+10	0.00	TestBrakeReplayInputsReservation
+10	0.55	TestBrakeRetryCancellationRollback
+10	0.00	TestBrakeSourceFaceRecordsSurvivePlacement
 10	1.49	TestCIWorkflowRaceShardsCoverEveryPackage
 10	0.43	TestExactCopyMomentHistoryAndRetiredSource
 10	3.42	TestLoftContactDirectShellUnionVaryingRectangleBothOrders
@@ -280,6 +289,7 @@
 10	4.68	TestPointConeTrimRejectsRoundTrippedPointLoft
 10	1.91	TestPrismPatternUnionManyGates
 10	0.22	TestQuarterSourceHeldY3WrongRealRadius
+10	0.00	TestReplayHandleAllocationSizes
 10	0.52	TestRetainedBlendKeywayCuspBounds
 10	0.87	TestRetainedBlendStripPatchCovered
 10	0.00	TestReplayTrialChordRealPublicProducers

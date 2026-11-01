@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
@@ -23,10 +24,21 @@ var errBoundedArithmetic = errors.New("bounded faceted arithmetic refused")
 func AssembleBodyBounded(ctx context.Context, budget *proofbound.WorkBudget, env topo.Env, in Mesh,
 	audit *facetproof.MeshAudit, volume measurement.Measurement, volRat *big.Rat,
 ) (*topo.Body, []int, float64, bool, error) {
+	return assembleBodyBounded(ctx, budget, env, in, audit, volume, volRat, 512)
+}
+
+func assembleBodyBounded(ctx context.Context, budget *proofbound.WorkBudget, env topo.Env, in Mesh,
+	audit *facetproof.MeshAudit, volume measurement.Measurement, volRat *big.Rat, facetLimit int,
+) (*topo.Body, []int, float64, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, 0, false, err
 	}
-	if budget == nil || audit == nil || len(in.Tris) > 512 || len(in.Verts) > 3*len(in.Tris) ||
+	if budget != nil && budget.Replay {
+		if _, err := topo.ReplayNodeBytes(env.Alloc, "body"); err != nil {
+			return nil, nil, 0, false, fmt.Errorf("%w: %v", decaderr.ErrUnsupported, err)
+		}
+	}
+	if budget == nil || audit == nil || len(in.Tris) > facetLimit || len(in.Verts) > 3*len(in.Tris) ||
 		len(audit.Members) > len(in.Tris) {
 		return nil, nil, 0, false, nil
 	}
@@ -48,7 +60,15 @@ func AssembleBodyBounded(ctx context.Context, budget *proofbound.WorkBudget, env
 	if memberCount != len(in.Tris) {
 		return nil, nil, 0, false, nil
 	}
-	if !boundedFacetedInput(in, audit, volRat) {
+	if err := budget.Reserve(uint64(len(in.Tris))); err != nil {
+		return nil, nil, 0, false, err
+	}
+	if budget.Replay {
+		if err := budget.ReserveBytesMul(uint64(len(in.Tris)), uint64(unsafe.Sizeof(false))); err != nil {
+			return nil, nil, 0, false, boundedBuildError(ctx, err)
+		}
+	}
+	if !boundedFacetedInput(in, audit, volRat, facetLimit) {
 		return nil, nil, 0, false, nil
 	}
 	originCopies, ok := boundedOriginCopies(in)
@@ -69,7 +89,7 @@ func AssembleBodyBounded(ctx context.Context, budget *proofbound.WorkBudget, env
 		if d.Exp() < -512 || d.Exp() > 512 {
 			return nil, nil, 0, false, nil
 		}
-		if mantissa := d.Mant(); mantissa != nil && mantissa.BitLen() > 512 {
+		if d.MantissaBitLen() > 512 {
 			return nil, nil, 0, false, nil
 		}
 	}
@@ -101,9 +121,9 @@ func boundedBuildError(ctx context.Context, err error) error {
 // are restricted to exponents [-128,128]. Combined with the 512-bit audited
 // integers below, 512 terms, and a 512-bit volume, even unreduced moment and
 // centroid products stay below the route's 8,192-bit arithmetic ceiling.
-func boundedFacetedInput(in Mesh, audit *facetproof.MeshAudit, volRat *big.Rat) bool {
+func boundedFacetedInput(in Mesh, audit *facetproof.MeshAudit, volRat *big.Rat, facetLimit int) bool {
 	v, f := len(in.Verts), len(in.Tris)
-	if v == 0 || f == 0 || f > 512 || v > 3*f ||
+	if v == 0 || f == 0 || f > facetLimit || v > 3*f ||
 		len(in.VertexBound) != v || len(in.Src) != f || audit == nil || volRat == nil ||
 		len(audit.XVerts) != v || len(audit.Det) != f || len(audit.Comp) != f || len(audit.Adj) != f ||
 		len(audit.Members) == 0 || len(audit.Members) > f ||
@@ -213,6 +233,9 @@ func reserveBoundedAssembly(budget *proofbound.WorkBudget, verts, facets, compon
 	if !ok {
 		return proofbound.ErrWallWorkBudget
 	}
+	if err := budget.Reserve(n); err != nil {
+		return err
+	}
 	_, err := budget.StepN(n)
 	return err
 }
@@ -221,6 +244,32 @@ func reserveBoundedAssembly(budget *proofbound.WorkBudget, verts, facets, compon
 // Storage has already been included in reserveBoundedAssembly.
 func faceIndicesBounded(ctx context.Context, budget *proofbound.WorkBudget,
 	faces, facetFace []*topo.Face) ([]int, error) {
+	if budget.Replay {
+		if err := budget.ReserveBytesMul(uint64(len(facetFace)), uint64(unsafe.Sizeof(int(0)))); err != nil {
+			return nil, err
+		}
+		out := make([]int, len(facetFace))
+		for i, f := range facetFace {
+			found := -1
+			for j := len(faces) - 1; j >= 0; j-- { //nolint:modernize // Keep the reverse scan and its budgeted visit order explicit.
+				if err := budget.Step(); err != nil {
+					return nil, err
+				}
+				if faces[j] == f {
+					found = j
+					break
+				}
+			}
+			if found < 0 {
+				return nil, fmt.Errorf("%w: a facet maps to a face absent from the built body", decaderr.ErrBooleanFailed)
+			}
+			out[i] = found
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		return out, budget.Err()
+	}
 	flat := make(map[*topo.Face]int, len(faces))
 	for i, f := range faces {
 		if err := budget.Step(); err != nil {

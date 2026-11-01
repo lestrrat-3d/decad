@@ -2,6 +2,9 @@ package facetedrecord
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 
 	"github.com/lestrrat-3d/decad/internal/facetedtopology"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -29,6 +32,9 @@ func buildTopologyWithBudget(
 	vertexBound []float64,
 	axialSectionJoin bool,
 ) error {
+	if budget != nil && budget.Replay {
+		return buildTopologyReplay(ctx, budget, alloc, verts, tris, facetFace, vertexBound, axialSectionJoin)
+	}
 	faceID := map[*topo.Face]int{}
 	faces := []*topo.Face{}
 	facetID := make([]int, len(facetFace))
@@ -87,7 +93,27 @@ func buildTopologyWithBudget(
 		}
 		edgeObj[chain] = e
 	}
-	for fi, loops := range plan.FaceLoops {
+	loopSets := plan.FaceLoops
+	if budget != nil && budget.Replay {
+		for fi, loops := range plan.ReplayFaceLoops {
+			if len(loops) == 0 {
+				continue
+			}
+			if fi >= len(faces) {
+				return fmt.Errorf("%w: replay loop face absent", decaderr.ErrBooleanFailed)
+			}
+			f := faces[fi]
+			for _, planned := range loops {
+				loop := topobuild.NewLoop(alloc, topo.Loop{Outer: planned.Outer})
+				for _, ce := range planned.Coedges {
+					loop.CoEdges = append(loop.CoEdges, topo.CoEdge{Edge: edgeObj[ce.Edge], Forward: ce.Forward})
+				}
+				f.Loops = append(f.Loops, loop)
+			}
+		}
+		return nil
+	}
+	for fi, loops := range loopSets {
 		f := faces[fi]
 		for _, planned := range loops {
 			loop := topobuild.NewLoop(alloc, topo.Loop{Outer: planned.Outer})

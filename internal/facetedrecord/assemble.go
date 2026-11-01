@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"slices"
 	"sync"
+	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/diameter"
@@ -82,7 +83,9 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 			audit, auditErr = facetproof.AuditFacetedMesh(ctx, verts, tris)
 		})
 	}
-	if shared != nil {
+	if shared != nil && shared.Replay {
+		diameterReading, ok, err = diameter.PointsReplay(ctx, shared, verts)
+	} else if shared != nil {
 		diameterReading, ok, err = diameter.PointsWithBudget(shared, verts)
 	} else {
 		diameterReading, ok, err = diameter.PointsContext(ctx, verts)
@@ -113,6 +116,11 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 	comp, adj := audit.Comp, audit.Adj
 	members, compVol, contains := audit.Members, audit.CompVol, audit.Contains
 
+	if budget.Replay {
+		if err := reserveReplayNode(budget, env.Alloc, "body"); err != nil {
+			return nil, nil, 0, err
+		}
+	}
 	body := env.Alloc.NewBody()
 	body.Solid = true
 	body.Origin = provenance.Ref{Producer: env.Ref, Role: provenance.RoleBody}
@@ -122,6 +130,11 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 	}
 	// facetDelta is each held facet's δ(t), the largest of its corners' β
 	// (agent-docs/faceted-vertex-bounds-design.md §2).
+	if budget.Replay {
+		if err := budget.ReserveBytesMul(uint64(len(tris)), uint64(unsafe.Sizeof(float64(0)))); err != nil {
+			return nil, nil, 0, err
+		}
+	}
 	facetDelta := facetproof.FacetDeltas(tris, in.VertexBound)
 
 	for _, s := range in.Src {
@@ -153,25 +166,121 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	groupPatch := make(map[int]int)
+	var groupPatch map[int]int
+	var groupFixed []int
+	if budget.Replay {
+		if err := budget.ReserveBytesMul(uint64(len(in.Groups)), uint64(unsafe.Sizeof(int(0)))); err != nil {
+			return nil, nil, 0, err
+		}
+		groupFixed = make([]int, len(in.Groups))
+		for i := range groupFixed {
+			groupFixed[i] = -2
+		}
+	} else {
+		groupPatch = make(map[int]int)
+	}
 	for i, group := range in.Src {
-		if first, exists := groupPatch[group]; !exists {
-			groupPatch[group] = patch[i]
-		} else if first != patch[i] {
-			groupPatch[group] = -1
+		if budget.Replay {
+			if groupFixed[group] == -2 {
+				groupFixed[group] = patch[i]
+			} else if groupFixed[group] != patch[i] {
+				groupFixed[group] = -1
+			}
+		} else {
+			if first, exists := groupPatch[group]; !exists {
+				groupPatch[group] = patch[i]
+			} else if first != patch[i] {
+				groupPatch[group] = -1
+			}
 		}
 	}
-
-	faceIdx := map[int]*topo.Face{}
-	facePlanar := map[*topo.Face]bool{}
-	faceGroup := map[*topo.Face]int{}
+	patchForGroup := func(group int) int {
+		if budget.Replay {
+			return groupFixed[group]
+		}
+		return groupPatch[group]
+	}
+	var faceIdx map[int]*topo.Face
+	var faceFixed []*topo.Face
+	if budget.Replay {
+		if err := budget.ReserveBytesMul(uint64(len(tris)), uint64(unsafe.Sizeof((*topo.Face)(nil)))); err != nil {
+			return nil, nil, 0, err
+		}
+		faceFixed = make([]*topo.Face, len(tris))
+	} else {
+		faceIdx = map[int]*topo.Face{}
+	}
+	var facePlanar map[*topo.Face]bool
+	var faceGroup map[*topo.Face]int
+	var faceTermSlop map[*topo.Face]float64
+	var facePatch *topo.FaceBoundTable
+	var groupByPatch, countByPatch []int
+	var slopByPatch, coneByPatch []float64
+	var coneSeen []bool
+	if budget.Replay {
+		facePatch, err = topo.NewFaceBoundTable(ctx, len(tris), budget.ReplayID)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		for range 2 {
+			if err := budget.ReserveBytesMul(uint64(len(tris)), uint64(unsafe.Sizeof(int(0)))); err != nil {
+				return nil, nil, 0, err
+			}
+			if err := budget.ReserveBytesMul(uint64(len(tris)), uint64(unsafe.Sizeof(float64(0)))); err != nil {
+				return nil, nil, 0, err
+			}
+		}
+		if err := budget.ReserveBytesMul(uint64(len(tris)), uint64(unsafe.Sizeof(false))); err != nil {
+			return nil, nil, 0, err
+		}
+		groupByPatch = make([]int, len(tris))
+		countByPatch = make([]int, len(tris))
+		slopByPatch = make([]float64, len(tris))
+		coneByPatch = make([]float64, len(tris))
+		coneSeen = make([]bool, len(tris))
+	} else {
+		facePlanar = map[*topo.Face]bool{}
+		faceGroup = map[*topo.Face]int{}
+		faceTermSlop = map[*topo.Face]float64{}
+	}
+	getPatch := func(f *topo.Face) (int, error) {
+		v, ok, e := facePatch.Lookup(ctx, f, budget.ReplayID)
+		if e != nil {
+			return 0, e
+		}
+		if !ok {
+			return 0, fmt.Errorf("%w: missing replay face patch", decaderr.ErrBooleanFailed)
+		}
+		return int(v), nil
+	}
+	if budget.Replay {
+		if err := budget.ReserveBytesMul(uint64(len(tris)), uint64(unsafe.Sizeof((*topo.Face)(nil)))); err != nil {
+			return nil, nil, 0, err
+		}
+		if err := budget.ReserveBytesMul(uint64(len(members)), uint64(unsafe.Sizeof([]*topo.Face{}))); err != nil {
+			return nil, nil, 0, err
+		}
+		for range 2 {
+			if err := budget.ReserveBytesMul(uint64(len(tris)), uint64(unsafe.Sizeof(float64(0)))); err != nil {
+				return nil, nil, 0, err
+			}
+		}
+	}
 	facetFace := make([]*topo.Face, len(tris))
 	compFaces := make([][]*topo.Face, len(members))
+	if budget.Replay {
+		for i, m := range members {
+			if err := budget.ReserveBytesMul(uint64(len(m)), uint64(unsafe.Sizeof((*topo.Face)(nil)))); err != nil {
+				return nil, nil, 0, err
+			}
+			compFaces[i] = make([]*topo.Face, 0, len(m))
+		}
+	}
 	// faceTermSlop is each face's summed per-facet evaluation charge
 	// (internal/proofbound/bounds.go, proofbound.FacetAreaTermSlop): a sliver
 	// facet's cross product cancels, and its rounding tracks its edge products
 	// rather than the area SumSlop's relative charge reads.
-	faceTermSlop := map[*topo.Face]float64{}
+
 	// facetArea and facetSlop hold each facet's area term and evaluation
 	// charge for the body totals below, which sum the same per-facet values in
 	// the same facet order.
@@ -181,11 +290,29 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 		if err := budget.Step(); err != nil {
 			return nil, nil, 0, err
 		}
-		f, ok := faceIdx[patch[i]]
+		var f *topo.Face
+		var ok bool
+		if budget.Replay {
+			f = faceFixed[patch[i]]
+			ok = f != nil
+		} else {
+			f, ok = faceIdx[patch[i]]
+		}
 		if !ok {
 			// Every patch of one source face carries that face's OWN origins:
 			// both strips of a split cap came from the cap, and both must
 			// still say so, or FaceCreatedBy and the surveys lose them.
+			if budget.Replay {
+				if err := reserveReplayNode(budget, env.Alloc, "face"); err != nil {
+					return nil, nil, 0, err
+				}
+				group := in.Groups[in.Src[i]]
+				for _, n := range []int{len(group.Origins), len(group.Upstream)} {
+					if err := budget.ReserveBytesMul(uint64(n), uint64(unsafe.Sizeof(provenance.Ref{}))); err != nil {
+						return nil, nil, 0, err
+					}
+				}
+			}
 			f = topobuild.NewFace(env.Alloc, topo.Face{
 				HeldPlanar:  in.Groups[in.Src[i]].Planar,
 				Denoted:     in.Groups[in.Src[i]].Denoted,
@@ -197,35 +324,120 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 				Body:        body,
 			})
 			group := in.Groups[in.Src[i]]
-			if group.HasCentroid && groupPatch[in.Src[i]] == patch[i] {
+			if group.HasCentroid && patchForGroup(in.Src[i]) == patch[i] {
 				f.Centroid, f.HasCentroid = group.Centroid, true
 			}
-			faceIdx[patch[i]] = f
-			facePlanar[f] = in.Groups[in.Src[i]].Planar
-			faceGroup[f] = in.Src[i]
+			if budget.Replay {
+				faceFixed[patch[i]] = f
+			} else {
+				faceIdx[patch[i]] = f
+			}
+			if budget.Replay {
+				if err := facePatch.Set(ctx, f, float64(patch[i]), budget.ReplayID); err != nil {
+					return nil, nil, 0, err
+				}
+				groupByPatch[patch[i]] = in.Src[i]
+			} else {
+				facePlanar[f] = in.Groups[in.Src[i]].Planar
+				faceGroup[f] = in.Src[i]
+			}
 			compFaces[comp[i]] = append(compFaces[comp[i]], f)
 		}
 		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
 		facetArea[i] = b.Sub(a).Cross(c.Sub(a)).Len() / 2
 		facetSlop[i] = proofbound.FacetAreaTermSlop(a, b, c)
 		f.Area += facetArea[i]
-		faceTermSlop[f] = proofbound.AbsSumUpper(faceTermSlop[f], facetSlop[i])
+		if budget.Replay {
+			slopByPatch[patch[i]] = proofbound.AbsSumUpper(slopByPatch[patch[i]], facetSlop[i])
+			countByPatch[patch[i]]++
+			group := in.Groups[in.Src[i]]
+			if cone, ok := group.Surface.(surfacegeom.Cone); ok && group.Retained {
+				value := ConeAxialMin(cone, verts[t[0]], verts[t[1]], verts[t[2]])
+				if !coneSeen[patch[i]] || value < coneByPatch[patch[i]] {
+					coneByPatch[patch[i]] = value
+					coneSeen[patch[i]] = true
+				}
+			}
+		} else {
+			faceTermSlop[f] = proofbound.AbsSumUpper(faceTermSlop[f], facetSlop[i])
+		}
 		facetFace[i] = f
 	}
 	// A face's bound is the largest δ(t) over its own facets, and its
 	// per-facet area allowance sums each facet's perturbation at its own δ(t)
 	// (§4.2).
-	faceDelta, faceFacetArea, err := facetproof.FaceProofs(budget, verts, tris, facetFace, facetDelta)
-	if err != nil {
-		return nil, nil, 0, err
+	var faceDelta, faceFacetArea map[*topo.Face]float64
+	var fixedDelta, fixedArea *topo.FaceBoundTable
+	var proofFaces []*topo.Face
+	if budget.Replay {
+		fixedDelta, fixedArea, err = facetproof.FaceProofsReplay(ctx, budget.ReplayID, verts, tris, facetFace, facetDelta)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		if err = budget.ReserveBytesMul(uint64(len(tris)), uint64(unsafe.Sizeof((*topo.Face)(nil)))); err != nil {
+			return nil, nil, 0, err
+		}
+		proofFaces = make([]*topo.Face, 0, len(tris))
+		for _, fs := range compFaces {
+			proofFaces = append(proofFaces, fs...)
+		}
+	} else {
+		faceDelta, faceFacetArea, err = facetproof.FaceProofs(budget, verts, tris, facetFace, facetDelta)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		proofFaces = make([]*topo.Face, 0, len(faceDelta))
+		for f := range faceDelta {
+			proofFaces = append(proofFaces, f)
+		}
 	}
-	coneAxial := coneAxialMin(in.Groups, faceGroup, verts, tris, facetFace)
-	for f, delta := range faceDelta {
-		group := in.Groups[faceGroup[f]]
+	readProof := func(f *topo.Face) (float64, float64, error) {
+		if !budget.Replay {
+			return faceDelta[f], faceFacetArea[f], nil
+		}
+		d, ok, e := fixedDelta.Lookup(ctx, f, budget.ReplayID)
+		if e != nil {
+			return 0, 0, e
+		}
+		if !ok {
+			return 0, 0, fmt.Errorf("%w: missing replay face delta", decaderr.ErrBooleanFailed)
+		}
+		a, ok, e := fixedArea.Lookup(ctx, f, budget.ReplayID)
+		if e != nil {
+			return 0, 0, e
+		}
+		if !ok {
+			return 0, 0, fmt.Errorf("%w: missing replay face area", decaderr.ErrBooleanFailed)
+		}
+		return d, a, nil
+	}
+	var coneAxial map[*topo.Face]float64
+	if !budget.Replay {
+		coneAxial = coneAxialMin(in.Groups, faceGroup, verts, tris, facetFace)
+	}
+	for _, f := range proofFaces {
+		delta, _, err := readProof(f)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		groupID := 0
+		axial := 0.0
+		if budget.Replay {
+			pi, e := getPatch(f)
+			if e != nil {
+				return nil, nil, 0, e
+			}
+			groupID = groupByPatch[pi]
+			axial = coneByPatch[pi]
+		} else {
+			groupID = faceGroup[f]
+			axial = coneAxial[f]
+		}
+		group := in.Groups[groupID]
 		if group.Retained {
 			rho := 0.0
 			if cone, isCone := group.Surface.(surfacegeom.Cone); isCone {
-				rho = ConeRhoLower(cone, coneAxial[f], delta)
+				rho = ConeRhoLower(cone, axial, delta)
 			}
 			if term, ok := HeldNormalTerm(group.Surface, delta, rho); ok {
 				f.Surface = group.Surface
@@ -261,9 +473,13 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 	}
 	// A retained tag on a face with no loop would read as a closed analytic
 	// surface to the boundary audit (A3).
-	for f := range faceDelta {
+	for _, f := range proofFaces {
 		if f.RetainedTag && len(f.Loops) == 0 {
-			f.Surface = surfacegeom.Faceted{Bound: units.Millimeters(faceDelta[f])}
+			delta, _, err := readProof(f)
+			if err != nil {
+				return nil, nil, 0, err
+			}
+			f.Surface = surfacegeom.Faceted{Bound: units.Millimeters(delta)}
 			f.RetainedTag, f.TagDeparture, f.NormalBound, f.HeldNormalBound, f.Reversed = false, 0, 0, 0, false
 			f.Denoted = nil
 			f.CapRecord, f.AxialDelta, f.HasAxialDelta = nil, 0, false
@@ -279,12 +495,17 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 	// an edge's held chord length is
 	// itself only known within its own bound (internal/proofbound/bounds.go,
 	// proofbound.ChainLengthBound).
-	facetsOf := map[*topo.Face]int{}
+	var facetsOf map[*topo.Face]int
+	if !budget.Replay {
+		facetsOf = map[*topo.Face]int{}
+	}
 	for _, f := range facetFace {
 		if err := budget.Step(); err != nil {
 			return nil, nil, 0, err
 		}
-		facetsOf[f]++
+		if !budget.Replay {
+			facetsOf[f]++
+		}
 	}
 	// bodyGeom sums every face's own geometric term: a rim that moves perturbs
 	// BOTH faces it separates, and each face charges it.
@@ -298,29 +519,83 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 			if err != nil {
 				return nil, nil, 0, err
 			}
-			geom := facetproof.FacetedAreaGeom(faceDelta[f], loopLen, faceFacetArea[f])
+			delta, area, err := readProof(f)
+			if err != nil {
+				return nil, nil, 0, err
+			}
+			geom := facetproof.FacetedAreaGeom(delta, loopLen, area)
 			bodyGeom = proofbound.AbsSumUpper(bodyGeom, geom)
-			f.AreaBound = proofbound.AbsSumUpper(geom, in.AreaSlack, proofbound.SumSlop(facetsOf[f], f.Area), faceTermSlop[f])
+			count := 0
+			slop := 0.0
+			if budget.Replay {
+				pi, e := getPatch(f)
+				if e != nil {
+					return nil, nil, 0, e
+				}
+				count = countByPatch[pi]
+				slop = slopByPatch[pi]
+			} else {
+				count = facetsOf[f]
+				slop = faceTermSlop[f]
+			}
+			f.AreaBound = proofbound.AbsSumUpper(geom, in.AreaSlack, proofbound.SumSlop(count, f.Area), slop)
 		}
 	}
 
 	// Shells and lumps: positive components are outer shells (one lump
 	// each); a negative component is a void of its innermost positive
 	// container.
+	if budget.Replay {
+		if err := budget.ReserveBytesMul(uint64(len(members)), uint64(unsafe.Sizeof((*topo.FaceShell)(nil)))); err != nil {
+			return nil, nil, 0, err
+		}
+		for range 2 {
+			if err := budget.ReserveBytesMul(uint64(len(members)), uint64(unsafe.Sizeof((*topo.Lump)(nil)))); err != nil {
+				return nil, nil, 0, err
+			}
+		}
+	}
 	shells := make([]*topo.FaceShell, len(members))
-	lumpOf := map[int]*topo.Lump{}
+	var lumpOf map[int]*topo.Lump
 	var lumps []*topo.Lump
+	if budget.Replay {
+		lumps = make([]*topo.Lump, 0, len(members))
+	} else {
+		lumpOf = map[int]*topo.Lump{}
+	}
 	for ci := range members {
 		if err := budget.Step(); err != nil {
 			return nil, nil, 0, err
 		}
+		if budget.Replay {
+			if err := reserveReplayNode(budget, env.Alloc, "shell"); err != nil {
+				return nil, nil, 0, err
+			}
+		}
 		shells[ci] = env.Alloc.NewFaceShell()
 		shells[ci].Void, shells[ci].Faces = compVol[ci].Sign() < 0, compFaces[ci]
 		if compVol[ci].Sign() > 0 {
+			if budget.Replay {
+				if err := reserveReplayNode(budget, env.Alloc, "lump"); err != nil {
+					return nil, nil, 0, err
+				}
+			}
 			l := env.Alloc.NewLump()
+			if budget.Replay {
+				if err := budget.ReserveBytesMul(1, uint64(unsafe.Sizeof((*topo.FaceShell)(nil)))); err != nil {
+					return nil, nil, 0, err
+				}
+			}
 			l.Shells = []*topo.FaceShell{shells[ci]}
-			lumpOf[ci] = l
+			if !budget.Replay {
+				lumpOf[ci] = l
+			}
 			lumps = append(lumps, l)
+		}
+	}
+	if budget.Replay {
+		if err := budget.ReserveBytesMul(uint64(len(compVol)), uint64(unsafe.Sizeof(int(0)))); err != nil {
+			return nil, nil, 0, err
 		}
 	}
 	parents, err := facetproof.VoidParents(budget, compVol, contains)
@@ -329,6 +604,9 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 	}
 	for ci, parent := range parents {
 		if parent >= 0 {
+			if budget.Replay {
+				return nil, nil, 0, fmt.Errorf("%w: replay void shell unsupported", decaderr.ErrUnsupported)
+			}
 			lumpOf[parent].Shells = append(lumpOf[parent].Shells, shells[ci])
 		}
 	}
@@ -349,7 +627,12 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 		}
 	}
 	body.Volume = volume
-	moments, err := facetproof.FirstMomentsFromAudit(budget, audit, tris)
+	var moments [3]*big.Rat
+	if budget.Replay {
+		moments, err = facetproof.FirstMomentsReplay(ctx, budget, audit, tris)
+	} else {
+		moments, err = facetproof.FirstMomentsFromAudit(budget, audit, tris)
+	}
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -380,23 +663,30 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 	// Centroid: the exact first moment over the exact volume; the bound is
 	// the symmetric-difference mass displaced to the pair's own diameter,
 	// with the diameter itself as the honest ceiling.
-	tf := big.NewRat(1, 24)
-	cx := centroidCoord(moments[0], tf, volRat)
-	cy := centroidCoord(moments[1], tf, volRat)
-	cz := centroidCoord(moments[2], tf, volRat)
-	cenBound := facetproof.FacetedCentroidAllowance(in.VolSymDiff, in.DPair, VolFloor(volRat, in.VolSymDiff))
-	cxF, _ := cx.Float64()
-	cyF, _ := cy.Float64()
-	czF, _ := cz.Float64()
-	if shared != nil && !proofbound.FiniteVec(r3.Vec{X: cxF, Y: cyF, Z: czF}) {
+	var centroid r3.Vec
+	var centroidBound float64
+	if budget.Replay {
+		centroid, centroidBound, err = replayCentroid(ctx, budget, moments, volRat, in.VolSymDiff, in.DPair)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+	} else {
+		tf := big.NewRat(1, 24)
+		cx := centroidCoord(moments[0], tf, volRat)
+		cy := centroidCoord(moments[1], tf, volRat)
+		cz := centroidCoord(moments[2], tf, volRat)
+		cenBound := facetproof.FacetedCentroidAllowance(in.VolSymDiff, in.DPair, VolFloor(volRat, in.VolSymDiff))
+		centroid.X, _ = cx.Float64()
+		centroid.Y, _ = cy.Float64()
+		centroid.Z, _ = cz.Float64()
+		cenRound := proofbound.Radius3D(math.Max(proofbound.RatAbsDiff(cx, centroid.X), math.Max(proofbound.RatAbsDiff(cy, centroid.Y), proofbound.RatAbsDiff(cz, centroid.Z))))
+		centroidBound = proofbound.AbsSumUpper(cenBound, cenRound)
+	}
+	if shared != nil && !proofbound.FiniteVec(centroid) {
 		return nil, nil, 0, errBoundedArithmetic
 	}
-	// The three coordinates round independently, and the VecMeasurement bound
-	// is a 3D radius (internal/proofbound/bounds.go, proofbound.Radius3D).
-	cenRound := proofbound.Radius3D(math.Max(proofbound.RatAbsDiff(cx, cxF), math.Max(proofbound.RatAbsDiff(cy, cyF), proofbound.RatAbsDiff(cz, czF))))
-	centroidBound := proofbound.AbsSumUpper(cenBound, cenRound)
 	body.Centroid = measurement.VecMeasurement{
-		Value:     r3.Vec{X: cxF, Y: cyF, Z: czF},
+		Value:     centroid,
 		Exactness: measurement.ExactnessOf(centroidBound),
 		Bound:     units.Millimeters(centroidBound),
 	}
@@ -415,8 +705,18 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 	// each vertex's own facet bound; the corner can be off on every axis at
 	// once, so the radius is √3 of the largest (internal/proofbound/bounds.go,
 	// proofbound.Radius3D).
+	if budget.Replay {
+		if err := budget.ReserveBytesMul(uint64(len(verts)), uint64(unsafe.Sizeof(float64(0)))); err != nil {
+			return nil, nil, 0, err
+		}
+	}
 	vertexFacetDelta := facetproof.VertexFacetDeltas(len(verts), tris, facetDelta)
-	extremeErr, err := facetproof.FacetedExtremeError(budget, verts, in.VertexBound, vertexFacetDelta, lo, hi)
+	var extremeErr float64
+	if budget.Replay {
+		extremeErr, err = facetproof.FacetedExtremeErrorReplay(ctx, budget, verts, in.VertexBound, vertexFacetDelta, lo, hi)
+	} else {
+		extremeErr, err = facetproof.FacetedExtremeError(budget, verts, in.VertexBound, vertexFacetDelta, lo, hi)
+	}
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -434,6 +734,17 @@ func assembleBody(ctx context.Context, shared *proofbound.WorkBudget, env topo.E
 	var faceOf []int
 	if shared == nil {
 		faceOf, err = facetproof.FaceIndices(ctx, topobuild.Faces(body), facetFace)
+	} else if budget.Replay {
+		if err := budget.ReserveBytesMul(uint64(len(tris)), uint64(unsafe.Sizeof((*topo.Face)(nil)))); err != nil {
+			return nil, nil, 0, err
+		}
+		orderedFaces := make([]*topo.Face, 0, len(tris))
+		for _, l := range body.Lumps {
+			for _, sh := range l.Shells {
+				orderedFaces = append(orderedFaces, sh.Faces...)
+			}
+		}
+		faceOf, err = faceIndicesBounded(ctx, shared, orderedFaces, facetFace)
 	} else {
 		faceOf, err = faceIndicesBounded(ctx, shared, topobuild.Faces(body), facetFace)
 	}
@@ -470,6 +781,22 @@ func FaceAreaGeom(budget *proofbound.WorkBudget, f *topo.Face, verts []r3.Vec, b
 // and returns proofbound.PerimeterUpper over them.
 func facePerimeterUpper(f *topo.Face, budget *proofbound.WorkBudget) (float64, error) {
 	var lengths, bounds []float64
+	if budget != nil && budget.Replay {
+		n := 0
+		for _, l := range f.Loops {
+			if len(l.CoEdges) > int(^uint(0)>>1)-n {
+				return 0, fmt.Errorf("%w: perimeter size", decaderr.ErrUnsupported)
+			}
+			n += len(l.CoEdges)
+		}
+		for range 2 {
+			if err := budget.ReserveBytesMul(uint64(n), uint64(unsafe.Sizeof(float64(0)))); err != nil {
+				return 0, err
+			}
+		}
+		lengths = make([]float64, 0, n)
+		bounds = make([]float64, 0, n)
+	}
 	for _, l := range f.Loops {
 		for _, ce := range l.CoEdges {
 			lengths = append(lengths, ce.Edge.Length)

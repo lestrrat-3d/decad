@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/gaptol"
@@ -47,6 +48,18 @@ func KeepPlacedEmbeddedWithSummary(ctx context.Context, exact []proof.Xpt, held 
 // two values again. A nil denotes is decided here.
 func keepPlacedEmbeddedWithAxes(ctx context.Context, exact []proof.Xpt, held []r3.Vec,
 	tris [][3]int, axes [3]r3.Vec, denotes []bool) ([]float64, *meshbool.EmbeddingReach, error) {
+	return keepPlacedEmbeddedWithAxesReplay(ctx, exact, held, tris, axes, denotes, nil)
+}
+
+func keepPlacedEmbeddedWithAxesReplay(ctx context.Context, exact []proof.Xpt, held []r3.Vec,
+	tris [][3]int, axes [3]r3.Vec, denotes []bool, budget *proofbound.WorkBudget) ([]float64, *meshbool.EmbeddingReach, error) {
+	if budget != nil && budget.Replay {
+		for range 2 {
+			if err := budget.ReserveBytesMul(uint64(len(held)), uint64(unsafe.Sizeof(false))); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
 	h := meshbool.HeldRounding{
 		Verts:    held,
 		Tris:     tris,
@@ -56,8 +69,11 @@ func keepPlacedEmbeddedWithAxes(ctx context.Context, exact []proof.Xpt, held []r
 		Reach:    gaptol.Reach(ctx),
 		ScanAxes: axes,
 	}
-	first := make([]r3.Vec, len(held))
-	copy(first, held)
+	var first []r3.Vec
+	if budget == nil || !budget.Replay {
+		first = make([]r3.Vec, len(held))
+		copy(first, held)
+	}
 	for i := range held {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -71,17 +87,37 @@ func keepPlacedEmbeddedWithAxes(ctx context.Context, exact []proof.Xpt, held []r
 			}
 			continue
 		}
-		if !proof.XptDenotes(exact[i], held[i]) {
+		denotesPoint := false
+		if budget != nil && budget.Replay {
+			var err error
+			denotesPoint, err = proof.ReplayXptDenotes(ctx, exact[i], held[i], replayExactMeter{budget})
+			if err != nil {
+				return nil, nil, err
+			}
+		} else {
+			denotesPoint = proof.XptDenotes(exact[i], held[i])
+		}
+		if !denotesPoint {
 			h.Moved[i] = true
 			h.Movable[i] = true
 		}
 	}
-	n, summary, err := meshbool.EnforceHeldEmbeddingWithSummary(ctx, h)
+	var n int
+	var summary *meshbool.EmbeddingReach
+	var err error
+	if budget != nil {
+		n, summary, err = meshbool.EnforceHeldEmbeddingReplay(ctx, h, budget)
+	} else {
+		n, summary, err = meshbool.EnforceHeldEmbeddingWithSummary(ctx, h)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
 	if n == 0 {
 		return nil, nil, nil
+	}
+	if budget != nil && budget.Replay {
+		return nil, nil, fmt.Errorf("%w: replay placement repair unavailable", decaderr.ErrUnsupported)
 	}
 	out := make([]float64, len(held))
 	for i := range held {
@@ -132,6 +168,9 @@ func FacetedAreaGeom(delta, perimeterUpper, facetAllow float64) float64 {
 // exact arithmetic and rounded up; only a vertex whose own bound reaches past
 // the extreme can widen it beyond the extreme vertex's own figure.
 func FacetedExtremeError(budget *proofbound.WorkBudget, verts []r3.Vec, beta, B []float64, lo, hi r3.Vec) (float64, error) {
+	if budget.Replay {
+		return 0, fmt.Errorf("%w: replay extrema require an explicit context", decaderr.ErrUnsupported)
+	}
 	// Held coordinates and bounds are binary floats. Dyadic keeps their
 	// extrema exact without allocating a rational at every vertex.
 	var worst proof.Dyadic
@@ -315,10 +354,7 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, worker
 	}
 
 	sixth := big.NewRat(1, 6)
-	det := preDet
-	if det == nil {
-		det = make([]proof.Dyadic, len(tris))
-	}
+	det := make([]proof.Dyadic, len(tris))
 	audit.CompVol = make([]*big.Rat, len(audit.Members))
 	for ci, list := range audit.Members {
 		// Every term is a Dyadic (power-of-two denominators), so the
@@ -336,8 +372,8 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int, worker
 				term = preDet[fi]
 			} else {
 				term = floatFacetDeterminant(verts, tris[fi])
-				det[fi] = term
 			}
+			det[fi] = term
 			total.Add(term)
 		}
 		v := total.Rat()

@@ -34,12 +34,26 @@ func ChordWalkMin(w survey2d.SegmentWalk) int {
 // inverse below — which is undefined for a budget at or above 2r — is never
 // evaluated at all.
 func ChordCount(w survey2d.SegmentWalk, tol float64, nMin int) (int, float64, error) {
+	return chordCount(w, tol, nMin, nil)
+}
+
+// ChordCountWithBudget charges each sagitta check to the caller's work budget.
+func ChordCountWithBudget(w survey2d.SegmentWalk, tol float64, nMin int, budget *proofbound.WorkBudget) (int, float64, error) {
+	return chordCount(w, tol, nMin, budget)
+}
+
+func chordCount(w survey2d.SegmentWalk, tol float64, nMin int, budget *proofbound.WorkBudget) (int, float64, error) {
 	sweep := math.Abs(w.Th1 - w.Th0)
 	if nMin < 1 {
 		nMin = 1
 	}
 	if nMin > freeform.MaxChordsPerWalk {
 		return 0, 0, freeform.ErrTooManyChords
+	}
+	if budget != nil {
+		if err := budget.Step(); err != nil {
+			return 0, 0, err
+		}
 	}
 	if s := ChordSagitta(w.Radius, sweep, nMin); s <= tol {
 		return nMin, s, nil
@@ -68,12 +82,22 @@ func ChordCount(w survey2d.SegmentWalk, tol float64, nMin int) (int, float64, er
 	// asked tolerance: float rounding in the asin/ceil path can land one
 	// chord short at a threshold value. Each increment strictly shrinks the
 	// sagitta toward zero, so the walk-up terminates.
+	if budget != nil {
+		if err := budget.Step(); err != nil {
+			return 0, 0, err
+		}
+	}
 	s := ChordSagitta(w.Radius, sweep, n)
 	for s > tol && sweep > 0 {
 		if n == freeform.MaxChordsPerWalk {
 			return 0, 0, freeform.ErrTooManyChords
 		}
 		n++
+		if budget != nil {
+			if err := budget.Step(); err != nil {
+				return 0, 0, err
+			}
+		}
 		s = ChordSagitta(w.Radius, sweep, n)
 	}
 	return n, s, nil

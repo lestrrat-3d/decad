@@ -117,6 +117,9 @@ func (d Dyadic) IsZero() bool { return d.big == nil && d.lo == 0 }
 func (d Dyadic) neg() bool { return d.hi&dySign != 0 }
 
 // bitLen is the bit length of the mantissa's magnitude.
+// MantissaBitLen returns the exact mantissa width.
+func (d Dyadic) MantissaBitLen() int { return d.bitLen() }
+
 func (d Dyadic) bitLen() int {
 	if d.big != nil {
 		return d.big.BitLen()

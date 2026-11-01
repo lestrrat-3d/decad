@@ -8,11 +8,14 @@ import (
 )
 
 // ReplayBudget shares one work and record allowance across a private replay.
-// A replay owns one instance for all of its steps.
+// A replay owns one instance for all of its steps. Brake limit errors are
+// stored in that instance, retaining the first refusal for each resource.
 type ReplayBudget struct {
-	shared   MultiwayBudget
-	bytes    uint64
-	maxBytes uint64
+	shared      MultiwayBudget
+	bytes       uint64
+	maxBytes    uint64
+	brake       bool
+	limitErrors [3]WorkLimitError
 }
 
 // Replay trial limits bound the shared trial meter.
@@ -27,22 +30,48 @@ func NewReplayTrialBudget() *ReplayBudget {
 	return &ReplayBudget{shared: MultiwayBudget{maxWork: ReplayTrialWork, maxRecords: ReplayTrialRecords}}
 }
 
+// BrakeReplay limits apply to the authenticated private brake route.
+const (
+	BrakeReplayWork    uint64 = 11735281028
+	BrakeReplayRecords uint64 = 284417498
+	BrakeReplayBytes   uint64 = 59714786988
+)
+
+// NewBrakeReplayBudget creates a meter for one private brake replay.
+func NewBrakeReplayBudget() *ReplayBudget {
+	b := &ReplayBudget{shared: MultiwayBudget{maxWork: BrakeReplayWork, maxRecords: BrakeReplayRecords}, maxBytes: BrakeReplayBytes, brake: true}
+	b.shared.prebuiltLimits = &b.limitErrors
+	return b
+}
+
+// IsBrakeReplay reports whether the meter belongs to the private brake route.
+func (b *ReplayBudget) IsBrakeReplay() bool { return b != nil && b.brake }
+
 // ReserveBytes charges cumulative allocated storage before allocation.
 func (b *ReplayBudget) ReserveBytes(ctx context.Context, n uint64) error {
 	limit := b.maxBytes
 	if limit == 0 {
 		limit = ReplayTrialBytes
 	}
-	return multiwayCharge(ctx, &b.bytes, n, limit, "replay_bytes")
+	return multiwayCharge(ctx, &b.bytes, n, limit, "replay_bytes", b.shared.prebuiltLimits)
 }
+
+var errBrakeArrayOverflow = fmt.Errorf("%w: replay allocation size overflow", decaderr.ErrUnsupported)
+var errBrakeEnvelopeOverflow = fmt.Errorf("%w: replay allocation envelope overflow", decaderr.ErrUnsupported)
 
 // ReserveArray charges a checked backing array and a conservative allocation envelope.
 func (b *ReplayBudget) ReserveArray(ctx context.Context, count, elementBytes uint64) error {
 	if elementBytes != 0 && count > ^uint64(0)/elementBytes {
+		if b.brake {
+			return errBrakeArrayOverflow
+		}
 		return fmt.Errorf("%w: replay allocation size overflow", decaderr.ErrUnsupported)
 	}
 	size := count * elementBytes
 	if size > (^uint64(0)-128)/2 {
+		if b.brake {
+			return errBrakeEnvelopeOverflow
+		}
 		return fmt.Errorf("%w: replay allocation envelope overflow", decaderr.ErrUnsupported)
 	}
 	return b.ReserveBytes(ctx, 2*size+128)
@@ -65,6 +94,8 @@ func (b *ReplayBudget) ReserveRecords(ctx context.Context, n uint64) error {
 func (b *ReplayBudget) WorkBudget(ctx context.Context) *WorkBudget {
 	b.shared.reserveBytes = b.ReserveBytes
 	work := b.shared.WorkBudget(ctx)
+	work.Replay = true
+	work.ReplayID = b
 	return work
 }
 
