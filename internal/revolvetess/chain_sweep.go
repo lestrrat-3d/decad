@@ -196,7 +196,7 @@ func chainSweepMeshClass(b *topo.Body, sp chainSweepPayload) (float64, float64, 
 		return refuse()
 	}
 	height := line.End.Z
-	arc, ok := sp.Path.Segments[1], sp.Path.Segments[1].Arc
+	arc, ok := sp.Path.Segments[1], sp.Path.Segments[1].Arc && !sp.Path.Segments[1].Around
 	if !ok || arc.Through.Y != 0 || arc.End.Y != 0 || arc.End.Z != height {
 		return refuse()
 	}

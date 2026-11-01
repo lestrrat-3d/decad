@@ -72,9 +72,10 @@ configuration option.
 | `decad.FilletMiter3` | struct | The intersection edge of two analytic fillet patches. | `Edge.Curve` |
 | `decad.Mesh` | struct | Triangles as positions and index triples, with a chord bound. | `Body.Tessellate` |
 | `decad.Path` | struct | An immutable ordered spatial curve in millimetres. | `decad.NewPath` |
-| `decad.PathSegment` | sealed interface | One segment of a path: `decad.LineTo` or `decad.ArcThrough`. | `Path.Segments` |
+| `decad.PathSegment` | sealed interface | One segment of a path: `decad.LineTo`, `decad.ArcThrough` or `decad.ArcAround`. | `Path.Segments` |
 | `decad.LineTo` | struct | A straight segment to `End`. | The caller |
 | `decad.ArcThrough` | struct | A circular arc through a point to `End`. | The caller |
+| `decad.ArcAround` | struct | A circular arc about `Center` and oriented `Axis` to `End`. | The caller |
 | `decad.Point2` | struct | A plane-local coordinate in millimetres. | The caller |
 | `decad.PoseSegment` | struct | A motion between two placements, relative to the body's current placement. | The caller |
 
@@ -417,7 +418,7 @@ bounds and the optional wall, undercut and concave-radius results. A `decad.Diag
 ## Paths and profiles
 
 A `*decad.Path` is an immutable curve built by `decad.NewPath` from a start point and `decad.PathSegment` values, such
-as `decad.LineTo` and `decad.ArcThrough`. Section-fed features read their 2D input from the `sketch` module: a closed
+as `decad.LineTo`, `decad.ArcThrough` and `decad.ArcAround`. Section-fed features read their 2D input from the `sketch` module: a closed
 `*sketch.Profile` or an open `*sketch.Chain`. `decad.MeasureProfile` returns a `decad.MeasuredProfile` for 2D area,
 centroid and second moments without building a body.
 

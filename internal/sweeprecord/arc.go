@@ -16,8 +16,8 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file owns the one-arc Sweep reduction. ArcThrough's three recorded
-// points derive one exact rational circle. Its float axis and angle are held
+// This file owns the one-arc Sweep reduction. The circular path records one
+// exact rational circle. Its float axis and angle are held
 // beside rational enclosures of the exact values they publish.
 
 func BuildArc(

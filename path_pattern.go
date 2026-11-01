@@ -57,7 +57,7 @@ func WithPathPivot(pivot r3.Vec) PathPatternOption {
 // the path.
 //
 // The path is the sweep [Path] of straight [LineTo] and circular
-// [ArcThrough] segments. Points are spaced by arc length, not by segment.
+// [ArcThrough] and [ArcAround] segments. Points are spaced by arc length, not by segment.
 // Join the copies with the base through one [Union], as with [PatternCopies].
 //
 // b MUST be live; path MUST NOT be nil. count is at least 2, and a smaller
@@ -186,6 +186,9 @@ func patternSegments(path *Path) ([]pathsample.Segment, error) {
 			samples[i] = pathsample.Segment{End: s.End}
 		case ArcThrough:
 			samples[i] = pathsample.Segment{Arc: true, Through: s.Through, End: s.End}
+		case ArcAround:
+			samples[i] = pathsample.Segment{Arc: true, Around: true, Center: s.Center, Axis: s.Axis,
+				End: s.End, Sweep: path.n.Records[i].ArcPhi}
 		default:
 			return nil, fmt.Errorf(`%w: unknown path segment %T`, ErrDegenerate, seg)
 		}

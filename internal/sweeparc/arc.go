@@ -13,13 +13,26 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// Record holds the exact carrier derived from three recorded points.
+// Record holds the exact carrier of a recorded circular path segment.
 type Record struct {
 	Center       RatVec
 	RadiusStart  RatVec
 	RadiusMiddle RatVec
 	RadiusEnd    RatVec
 	Axis         RatVec
+	Around       bool
+}
+
+// RecordAround records an explicit center and oriented axis as exact inputs.
+func RecordAround(start, center, axis, end r3.Vec) (Record, error) {
+	c, a := VecOf(center), VecOf(axis)
+	r0, r1 := Sub(VecOf(start), c), Sub(VecOf(end), c)
+	radius := Dot(r0, r0)
+	if IsZero(a) || radius.Sign() == 0 || start == end ||
+		Dot(r1, r1).Cmp(radius) != 0 || Dot(a, r0).Sign() != 0 || Dot(a, r1).Sign() != 0 {
+		return Record{}, fmt.Errorf(`%w: an arc requires distinct equal-radius endpoints perpendicular to its nonzero axis`, decaderr.ErrDegenerate)
+	}
+	return Record{Center: c, RadiusStart: r0, RadiusEnd: r1, Axis: a, Around: true}, nil
 }
 
 // RecordArc derives the exact circle through the three stated points.

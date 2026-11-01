@@ -34,6 +34,7 @@ func PathPatternJoinSpaced(ctx context.Context, target, feature *Body, path *Pat
   through point, to the end. The arc turns counter-clockwise about the normal of those three points in that order, so
   the sweep is the angle of the end in `[0, 2π)` and a clockwise arc in the world frame is a counter-clockwise one
   about the opposite normal.
+- An `ArcAround` segment samples its explicit center and oriented axis using the path record's held directed angle.
 - Points are the first at the start and the last at the end exactly. Those between come from arc length and so carry
   float rounding.
 
@@ -45,7 +46,6 @@ The translation of an arc point is not exact, so such an instance reads as `Appr
 ## 4. Not covered
 
 - Turning instances about the path's own axis.
-- A path of any segment kind beyond `LineTo` and `ArcThrough`, which is all `Path` holds.
 
 ## 5. Following the path
 

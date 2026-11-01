@@ -100,7 +100,7 @@
 //	  subset moving one of two walls at a circular corner,
 //	    NeutralFrame, non-cap neutral face, operand other
 //	    than a straight prism                                 ErrUnsupported
-//	Sweep         zero-twist LineTo / ArcThrough paths         builds
+//	Sweep         zero-twist LineTo / circular arc paths       builds
 //	  composite path without exact transported frames or
 //	    certified span separation                             ErrUnsupported
 //	  closed path                                             ErrUnsupported

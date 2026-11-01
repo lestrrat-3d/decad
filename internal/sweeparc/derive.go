@@ -44,10 +44,9 @@ func Derive(start r3.Vec, arc *Record, phi float64, angle revolveangle.Angle,
 		return Geometry{}, fmt.Errorf(`%w: the sweep arc's derived axis does not lie in the profile plane`, decaderr.ErrDegenerate)
 	}
 
-	// The carrier was solved from all three points. This equality catches an
-	// arithmetic regression before a derived angle reaches the evaluator.
+	// Check every recorded radius before the derived angle reaches the evaluator.
 	radiusSquared := Dot(r0, r0)
-	if Dot(rm, rm).Cmp(radiusSquared) != 0 || Dot(r1, r1).Cmp(radiusSquared) != 0 {
+	if (!arc.Around && Dot(rm, rm).Cmp(radiusSquared) != 0) || Dot(r1, r1).Cmp(radiusSquared) != 0 {
 		return Geometry{}, fmt.Errorf(`%w: the sweep arc points do not share one exact carrier`, decaderr.ErrUnsupported)
 	}
 	line, err := AxisLine(center, axis, plane.Origin, plane.U, plane.V)
