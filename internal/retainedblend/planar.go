@@ -279,6 +279,25 @@ func earQuality(a, b, c pt2) float64 {
 
 func earBlocked(ps []pt2, idx []int, ia, ib, ic int) bool {
 	a, b, c := ps[ia], ps[ib], ps[ic]
+	if finitePt(a) && finitePt(b) && finitePt(c) {
+		// Keep non-finite points on the old exact-predicate path. The box proof
+		// only holds for finite coordinates, and orient owns their behavior.
+		minU, maxU := math.Min(a.u, math.Min(b.u, c.u)), math.Max(a.u, math.Max(b.u, c.u))
+		minW, maxW := math.Min(a.w, math.Min(b.w, c.w)), math.Max(a.w, math.Max(b.w, c.w))
+		for _, v := range idx {
+			p := ps[v]
+			if samePt(p, a) || samePt(p, b) || samePt(p, c) {
+				continue
+			}
+			if finitePt(p) && (p.u < minU || p.u > maxU || p.w < minW || p.w > maxW) {
+				continue
+			}
+			if orient(a, b, p) >= 0 && orient(b, c, p) >= 0 && orient(c, a, p) >= 0 {
+				return true
+			}
+		}
+		return false
+	}
 	for _, v := range idx {
 		p := ps[v]
 		if samePt(p, a) || samePt(p, b) || samePt(p, c) {
@@ -289,6 +308,10 @@ func earBlocked(ps []pt2, idx []int, ia, ib, ic int) bool {
 		}
 	}
 	return false
+}
+
+func finitePt(p pt2) bool {
+	return !math.IsNaN(p.u) && !math.IsInf(p.u, 0) && !math.IsNaN(p.w) && !math.IsInf(p.w, 0)
 }
 
 // sliverQuality is the earQuality below which a triangle counts as a sliver.
