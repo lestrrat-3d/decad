@@ -27,6 +27,15 @@ func NewReplayTrialBudget() *ReplayBudget {
 	return &ReplayBudget{shared: MultiwayBudget{maxWork: ReplayTrialWork, maxRecords: ReplayTrialRecords}}
 }
 
+// NewReplayBudgetLimits creates a replay budget no larger than the trial caps.
+// All limits must be positive; smaller limits support bounded callers and tests.
+func NewReplayBudgetLimits(work, records, bytes uint64) (*ReplayBudget, error) {
+	if work == 0 || records == 0 || bytes == 0 || work > ReplayTrialWork || records > ReplayTrialRecords || bytes > ReplayTrialBytes {
+		return nil, fmt.Errorf("%w: invalid replay limits", decaderr.ErrUnsupported)
+	}
+	return &ReplayBudget{shared: MultiwayBudget{maxWork: work, maxRecords: records}, maxBytes: bytes}, nil
+}
+
 // ReserveBytes charges cumulative allocated storage before allocation.
 func (b *ReplayBudget) ReserveBytes(ctx context.Context, n uint64) error {
 	limit := b.maxBytes
