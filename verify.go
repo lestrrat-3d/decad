@@ -137,7 +137,7 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	if err != nil {
 		return nil, err
 	}
-	found, err := verifyrun.Run(ctx, verifyHooks(), d.n.Live(), cfg)
+	found, err := verifyrun.Run(ctx, verifyHooks(d), d.n.Live(), cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -145,9 +145,9 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 }
 
 // verifyHooks are the services Verify takes from the document: the verified
-// mesher, the public Booleans' operand mesher and the handle allocator.
-func verifyHooks() verifyrun.Hooks {
-	return verifyrun.Hooks{Mesher: verifyAllMesher{}, Draft: verifyAllMesher{}, Operand: pairMeshes{}, Alloc: handleAlloc{}}
+// mesher, the public Booleans' operand mesher, operation history and handle allocator.
+func verifyHooks(d *Document) verifyrun.Hooks {
+	return verifyrun.Hooks{Mesher: verifyAllMesher{}, Draft: verifyAllMesher{}, Operand: pairMeshes{}, Alloc: handleAlloc{}, History: historyProducers{d}}
 }
 
 // verifyLift maps the node form of a verification report to the root handles.

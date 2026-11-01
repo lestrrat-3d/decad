@@ -2948,6 +2948,7 @@
 10	0.00	TestVerifyLinkageLoopScotchYoke
 10	35.79	TestVerifyLinkageLoopTiltedSlider
 10	0.14	TestVerifyLinkageSweptBoxCoversAncestorTravel
+10	0.00	TestVerifyCutAgainstCopiedTool
 10	0.00	TestVerifyLinkageSymmetricBody
 10	0.50	TestVerifyMotionBetweenNonMutationAndDeterminism
 10	0.95	TestVerifyMotionCancellation

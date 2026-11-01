@@ -6,6 +6,8 @@ import (
 	"math"
 	"sync"
 
+	"github.com/lestrrat-3d/decad/internal/boolchain"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/verifiedmesh"
 	vocab "github.com/lestrrat-3d/decad/report"
 
@@ -73,7 +75,7 @@ func verifyPairJobs(ctx context.Context, bodies []*BodyReport, cfg verifyConfig)
 // procedure; a solid pair takes the analytic pair kernel, then containment,
 // equality and read-only intersection measurement. geomCache is nil unless
 // clearances were asked; it and meshes must be safe for concurrent use.
-func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, geomCache *pairkernel.Cache, meshes booleaneval.OperandMesher, mesher verifiedmesh.Mesher, alloc topo.Alloc) (verifyPairOutcome, error) {
+func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, geomCache *pairkernel.Cache, meshes booleaneval.OperandMesher, mesher verifiedmesh.Mesher, alloc topo.Alloc, history boolchain.Source) (verifyPairOutcome, error) {
 	var out verifyPairOutcome
 	a, b, boxProven := job.a, job.b, job.boxProven
 
@@ -187,6 +189,21 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 		return out, nil
 	}
 
+	if history != nil && res.Verdict == boundaryaudit.PairUndecided {
+		proven, err := cutToolPair(ctx, history, a, b)
+		if err != nil {
+			return verifyPairOutcome{}, err
+		}
+		if proven {
+			if cfg.Clearances {
+				out.diagnostics = append(out.diagnostics, PairDiagNone(a, b, vocab.DiagUndecidedClearance,
+					"the Cut result and its tool are proven non-overlapping but the requested clearance gap is unmeasured"))
+				out.undecided = true
+			}
+			return out, nil
+		}
+	}
+
 	volume, outcome, err := MeasuredInterference(ctx, alloc, a, b, res, meshes)
 	if err != nil {
 		return verifyPairOutcome{}, err
@@ -227,6 +244,22 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 		out.undecided = true
 	}
 	return out, nil
+}
+
+// cutToolPair proves that a public Cut result cannot overlap its consumed tool.
+func cutToolPair(ctx context.Context, history boolchain.Source, a, b *topo.Body) (bool, error) {
+	budget := proofbound.NewWorkBudget(ctx)
+	for _, pair := range [][2]*topo.Body{{a, b}, {b, a}} {
+		op, inputs, ok := boolchain.Expandable(history, pair[0])
+		if !ok || op != meshbool.OpCut || len(inputs) != 2 {
+			continue
+		}
+		equal, err := analyticBodiesEqual(budget, inputs[1], pair[1])
+		if err != nil || equal {
+			return equal, err
+		}
+	}
+	return false, nil
 }
 
 // appendClearance records the pair's Clearance row and, when the gap misses
