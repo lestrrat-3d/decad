@@ -37,8 +37,8 @@ straight or circular path segment.
 
 The current `Sweep` implementation admits:
 
-- an open path made from `LineTo` and `ArcThrough` segments;
-- §3.3's closed full circle made from two complementary `ArcThrough` segments
+- an open path made from `LineTo`, `ArcThrough` and `ArcAround` segments;
+- §3.3's closed full circle made from two complementary circular segments
   when the result is a zero-twist solid;
 - §3.4's closed planar cardinal loop, which includes the four-span racetrack, with any
   authenticated section the arc builders and the contact audit prove simple;
@@ -126,6 +126,14 @@ type ArcThrough struct {
     End     r3.Vec
 }
 
+// ArcAround follows the positive rotation about Axis from the current point
+// to End on the circle centered at Center.
+type ArcAround struct {
+    Center r3.Vec
+    Axis   r3.Vec
+    End    r3.Vec
+}
+
 func NewPath(start r3.Vec, segments ...PathSegment) (*Path, error)
 func (p *Path) Start() r3.Vec
 func (p *Path) End() r3.Vec
@@ -178,6 +186,12 @@ share one recorded coordinate. Its circle, plane, sense, and swept angle are
 derived exactly from decad-owned spatial input, with bounded publication into
 binary64.
 
+`ArcAround` records an explicit center, oriented axis and endpoint. Its exact
+carrier uses the dyadic inputs directly. Its positive turn is below one full
+revolution; reversing the axis selects the other directed arc. Exact radius
+and perpendicularity checks reject incompatible inputs without adjustment.
+Sweep applies the same tangent, span, transport and contact gates to either arc.
+
 `WithSweepTwist` is accepted at most once. Its angle is a signed displacement,
 not a magnitude: a negative value reverses the twist sense. A wrong kind is
 `ErrUnitKind`; a non-finite value is `ErrNotFinite`. Section 17 admits one
@@ -197,6 +211,7 @@ geometry.
 | **P1** | `NewPath` requires a finite start and at least one owned, non-nil concrete segment. It copies the segment values before validation. |
 | **P2** | `LineTo` denotes the exact closed line segment from the current point to `End`. Equal endpoints are degenerate. |
 | **P3** | `ArcThrough` denotes the oriented circle arc from the current point through `Through` to `End`. The points fix the carrier, sense, and minor/major choice. Repeated or collinear points are degenerate. |
+| **P3a** | `ArcAround` denotes the positive rotation about `Axis` from the current point to `End` around `Center`, strictly less than a full turn. Exact endpoint radii must be equal and nonzero, and perpendicular to the nonzero axis. Equal endpoints are degenerate. |
 | **P4** | A segment's end is the next segment's start by construction. No proximity weld, endpoint search, or snapping runs. |
 | **P5** | An internal join is admitted by Sweep only when the two one-sided tangent rays are exactly codirectional in the structural path geometry. An ordinary position-continuous corner remains a valid `Path`, but Sweep stages it at S6. |
 | **P6** | The initial path point lies exactly in the recorded profile plane, and the first tangent is exactly codirectional with the plane's positive normal. The profile need not contain that point. |
@@ -210,9 +225,11 @@ The private `Path` record stores the caller's points verbatim and stores each
 segment's derived geometry over exact dyadic or rational arithmetic:
 
 - a line stores its two recorded endpoints;
-- an arc stores its three recorded points, exact unnormalised carrier plane,
+- an `ArcThrough` stores its three recorded points, exact unnormalised carrier plane,
   exact rational circumcenter and squared radius, and a certified directed
   sweep-angle interval;
+- an `ArcAround` stores its stated center and axis, exact rational endpoint
+  radii, and a certified directed sweep-angle interval;
 - a derived float coordinate carries the outward-rounded gap from the exact
   value it denotes;
 - a join tangent is compared by exact signs and products, never by an angular
@@ -246,8 +263,8 @@ Frenet normals are undefined on a line and flip at an inflection.
 
 ### 3.3 Closed full-circle reduction
 
-`Sweep` admits a zero-twist solid path of exactly two `ArcThrough` segments when
-the second ends at the first start, both exact rational circumcenters agree,
+`Sweep` admits a zero-twist solid path of exactly two circular segments when
+the second ends at the first start, both exact rational centers agree,
 and the two arc axes are exactly codirectional. The path's existing initial
 tangent and internal-join checks run first. Each arc has a directed angle
 strictly between zero and one turn. The shared endpoints and codirectional
@@ -372,7 +389,7 @@ The existing existence rule applies: a requested solid that does not exist is
 | **S1** | nil sketch, profile, or path; empty path; nil or foreign option | `ErrDegenerate` | yes |
 | **S2** | profile seam rejection | seam sentinel | seam-owned |
 | **S3** | non-finite path point, or arc construction overflows before it can state a finite carrier | `ErrNotFinite` for caller input; `ErrUnsupported` for derived range overflow | input rule is permanent; range ceiling is not |
-| **S4** | zero-length line; repeated or collinear `ArcThrough` points | `ErrDegenerate` | yes |
+| **S4** | zero-length line; invalid circular segment inputs under P3 or P3a | `ErrDegenerate` | yes |
 | **S5** | path start is not on the profile plane, or its initial tangent is not codirectional with the positive plane normal | `ErrDegenerate` | yes for this operation's meaning |
 | **S6** | an internal path join is not tangent, and the call does not carry `WithMitredJoins()` | `ErrUnsupported` | no; `WithMitredJoins()` defines the one admitted corner mode, and §16.4 owns what refuses it |
 | **S7** | path is closed but outside §§3.3–3.4's bounded solid reductions: fewer than four spans, an arc that is not an exact quarter or half turn, arcs about more than one coordinate axis, a span off the loop's plane, signed turns that do not sum to one whole turn, or a transported end frame that differs from the start | `ErrUnsupported`; the message names the failed gate | no; general closed-frame holonomy is staged |
@@ -804,7 +821,7 @@ span:
 
 - a **`LineTo`** span is the chain prism a chain `Extrude` already
   builds, over the path's own signed height instead of a resolved `Extent`;
-- an **`ArcThrough`** span is the chain shell `Revolve` over a chain already
+- a circular span is the chain shell `Revolve` over a chain already
   builds, over the arc's exact centre, axis and directed angle instead of a
   resolved `AngularExtent`.
 
@@ -913,7 +930,7 @@ a chain sweep adds that neither sibling has is §15.2's path height bound.
 | PR | Lands | Still staged |
 |---|---|---|
 | **C1** | `Sweep` over a chain along a one-span `LineTo` path: Table SC rows SC1 through SC4 and SC6, the chain prism reduction, and the four readings §15.5 states for it | a standalone arc and composite paths outside §15.8 |
-| **C2** | a one-span `ArcThrough` reduction with the chain shell's own axis gates (SC8), plus §15.9's one-line sheet mesh | other chain-arc meshes |
+| **C2** | a one-span circular reduction with the chain shell's own axis gates (SC8), plus §15.9's one-line sheet mesh | other chain-arc meshes |
 | **C3a** | §15.8's radial line/half-circle composite with one source `LineSeg`: its certified sheet mesh | other composite sheet meshes and a placed composite sheet |
 | **C3** | §15.8's composite join over `N` tangent line/arc spans that start with a line and turn only by exact coordinate-axis quarter and half turns: wall-face rim lists per recorded segment, indexed sew, separation and boundary audits, area and bounds, and `Thicken` of a source walk of axis-parallel lines with right-angle corners | an arc-first path, curved source segments, other arcs, other sheet meshes, `Thicken` of other line walks and placement |
 
@@ -944,7 +961,7 @@ still refuses such an arc, but names the frame rather than the arc.
 
 **Spans.** Every span builds from the ONE authenticated `ChainRecord`: a
 `LineTo` span through the chain prism builder over the path's own signed
-height, an `ArcThrough` span through the chain revolve builder over the arc's
+height, a circular span through the chain revolve builder over the arc's
 exact centre, axis and turn. Each span keeps its own gates. A line span must
 follow its transported section normal; an arc span runs the chain shell's
 axis-side gate (SC8), so a walk that crosses an arc axis refuses there. The
@@ -1003,7 +1020,7 @@ wall counts differ and the sew refuses.
 `Verify` reports validity undecided: the topology and separation checks do not
 certify every swept-wall contact.
 
-**Mesh.** Only the radial line/half-circle class meshes: one authenticated
+**Mesh.** Only the radial line/half-circle class with an `ArcThrough` segment meshes: one authenticated
 `LineSeg` whose complete forward walk is `(0,0)` to `(w,0)` on the world XY
 sketch, with `0 < w < R`, swept from the origin on +Z by `L > 0`, then along
 the XZ half-circle through `(R,0,L+R)` to `(2R,0,L)`. The comparisons `L+R`,
@@ -1030,7 +1047,7 @@ sweeps still refuse at that consumer.
 
 ### 15.9 One-arc chain sheet and mesh
 
-A one-span `ArcThrough` path passes the same `sweeparc.Derive` and chain
+A one-span circular path passes the same `sweeparc.Derive` and chain
 `Revolve` axis gates as an arc span of §15.8. The authenticated Sketch chain
 enters that reduction unchanged, and the result has its chain Revolve wall
 faces and free rims. A partial arc reports `ValidityUndecided`, as a partial
@@ -1093,7 +1110,7 @@ The build admits:
 - `WithSectionScale` with one positive factor per segment, or no scale;
 - zero twist, and a solid result.
 
-It refuses, with Table SM's rows, an `ArcThrough` segment, a curved or
+It refuses, with Table SM's rows, a circular segment, a curved or
 free-form profile segment, `WithSurfaceResult()`, a nonzero twist and a closed
 path. A curved profile segment's image under a span's wall lines is a conic
 section, which no admitted surface variant holds exactly; an arc span has no
@@ -1217,7 +1234,7 @@ running SM8 in place of §7's separation audit.
 
 | SM | Condition | Sentinel |
 |---|---|---|
-| **SM1** | `WithMitredJoins()` or `WithSectionScale` with an `ArcThrough` segment | `ErrUnsupported` |
+| **SM1** | `WithMitredJoins()` or `WithSectionScale` with a circular segment | `ErrUnsupported` |
 | **SM2** | a profile segment, on any loop, that is not a `LineSeg`, or a `LineSeg` trimmed at a cut parameter, under either option | `ErrUnsupported` |
 | **SM3** | a factor of the wrong kind; a non-finite factor; a factor at or below zero; a factor count other than the segment count | `ErrUnitKind`; `ErrNotFinite`; `ErrDegenerate`; `ErrDegenerate` |
 | **SM4** | `WithSectionScale` on a path of two or more spans without `WithMitredJoins()` | `ErrUnsupported` |

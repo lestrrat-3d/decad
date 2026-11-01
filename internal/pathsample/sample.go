@@ -7,6 +7,7 @@ import (
 	"errors"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -14,12 +15,12 @@ import (
 var ErrDegenerate = errors.New("pathsample: degenerate segment")
 
 // Segment is one piece of a path. A segment with Arc false is the straight
-// line from the previous end to End. With Arc true it is the circular arc from
-// the previous end through Through to End.
+// line from the previous end to End. An arc uses either Through or the
+// explicit Center, Axis and held Sweep angle when Around is true.
 type Segment struct {
-	Arc     bool
-	Through r3.Vec
-	End     r3.Vec
+	Arc, Around                bool
+	Through, Center, Axis, End r3.Vec
+	Sweep                      float64
 }
 
 // piece is a segment resolved to what a point at a length needs.
@@ -119,6 +120,9 @@ func resolveAll(start r3.Vec, segments []Segment) ([]piece, float64, r3.Vec, err
 		}
 		pieces = append(pieces, p)
 		total += p.length
+		if math.IsInf(total, 0) || math.IsNaN(total) {
+			return nil, 0, r3.Vec{}, ErrDegenerate
+		}
 		prev = seg.End
 	}
 	return pieces, total, prev, nil
@@ -151,7 +155,36 @@ func resolve(start r3.Vec, seg Segment) (piece, error) {
 			return start.Add(span.Scale(s / length))
 		}, dir: func(float64) r3.Vec { return span.Scale(1 / length) }}, nil
 	}
+	if seg.Around {
+		return resolveAround(start, seg.Center, seg.Axis, seg.Sweep)
+	}
 	return resolveArc(start, seg.Through, seg.End)
+}
+
+// resolveAround samples the explicit carrier without constructing a through point.
+func resolveAround(start, center, direction r3.Vec, sweep float64) (piece, error) {
+	radiusVector := start.Sub(center)
+	radius := radiusVector.Len()
+	axis, ok := direction.Normalize()
+	if !ok || radius <= 0 || math.IsInf(radius, 0) || math.IsNaN(radius) {
+		return piece{}, ErrDegenerate
+	}
+	e1 := radiusVector.Scale(1 / radius)
+	e2 := axis.Cross(e1)
+	if !proofbound.FiniteVec(e1) || !proofbound.FiniteVec(e2) {
+		return piece{}, ErrDegenerate
+	}
+	length := sweep * radius
+	if !(length > 0) || math.IsInf(length, 0) || math.IsNaN(length) {
+		return piece{}, ErrDegenerate
+	}
+	return piece{start: start, length: length, at: func(s float64) r3.Vec {
+		theta := s / radius
+		return center.Add(e1.Scale(radius * math.Cos(theta))).Add(e2.Scale(radius * math.Sin(theta)))
+	}, dir: func(s float64) r3.Vec {
+		theta := s / radius
+		return e2.Scale(math.Cos(theta)).Sub(e1.Scale(math.Sin(theta)))
+	}}, nil
 }
 
 // resolveArc builds the arc from a through b to c. The centre is the point in

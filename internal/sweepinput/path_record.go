@@ -13,8 +13,8 @@ import (
 
 // Segment is one owned public path segment expressed without public CAD types.
 type Segment struct {
-	End, Through r3.Vec
-	Arc          bool
+	End, Through, Center, Axis r3.Vec
+	Arc, Around                bool
 }
 
 // PathRecord holds exact derived geometry of one recorded path segment.
@@ -42,6 +42,16 @@ func RecordSegment(start r3.Vec, segment Segment, index int) (PathRecord, error)
 			TangentIn: tangent, TangentOut: tangent,
 		}, nil
 	}
+	if segment.Around {
+		if !proofbound.FiniteVec(segment.Center) || !proofbound.FiniteVec(segment.Axis) || !proofbound.FiniteVec(segment.End) {
+			return PathRecord{}, fmt.Errorf(`%w: path segment %d has a non-finite arc input`, decaderr.ErrNotFinite, index)
+		}
+		carrier, err := sweeparc.RecordAround(start, segment.Center, segment.Axis, segment.End)
+		if err != nil {
+			return PathRecord{}, fmt.Errorf(`path segment %d: %w`, index, err)
+		}
+		return recordCarrier(start, segment.End, carrier, index)
+	}
 	if !proofbound.FiniteVec(segment.Through) || !proofbound.FiniteVec(segment.End) {
 		return PathRecord{}, fmt.Errorf(`%w: path segment %d has a non-finite point`, decaderr.ErrNotFinite, index)
 	}
@@ -57,6 +67,10 @@ func RecordSegment(start r3.Vec, segment Segment, index int) (PathRecord, error)
 	if err != nil {
 		return PathRecord{}, fmt.Errorf(`path segment %d: %w`, index, err)
 	}
+	return recordCarrier(start, segment.End, carrier, index)
+}
+
+func recordCarrier(start, end r3.Vec, carrier sweeparc.Record, index int) (PathRecord, error) {
 	phi, angle, err := sweeparc.ArcAngle(carrier.RadiusStart, carrier.RadiusEnd, carrier.Axis)
 	if err != nil {
 		return PathRecord{}, fmt.Errorf(`path segment %d: %w`, index, err)
@@ -67,7 +81,7 @@ func RecordSegment(start r3.Vec, segment Segment, index int) (PathRecord, error)
 		}
 	}
 	return PathRecord{
-		Start: start, End: segment.End,
+		Start: start, End: end,
 		TangentIn:  sweeparc.Cross(carrier.Axis, carrier.RadiusStart),
 		TangentOut: sweeparc.Cross(carrier.Axis, carrier.RadiusEnd),
 		Arc:        &carrier,

@@ -290,7 +290,7 @@ func mitred(ctx context.Context, env topo.Env, profile momentinput.Profile, plan
 	for k, segment := range path.Segments {
 		if segment.Arc {
 			return nil, fmt.Errorf(`%w: a mitred or scaled sweep follows LineTo segments only; path segment %d is %s`,
-				decaderr.ErrUnsupported, k, "decad.ArcThrough")
+				decaderr.ErrUnsupported, k, "decad.ArcThrough or decad.ArcAround")
 		}
 	}
 	if cfg.Scaled && !cfg.Mitred && len(path.Segments) > 1 {

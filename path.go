@@ -26,8 +26,17 @@ type ArcThrough struct {
 	End     r3.Vec
 }
 
+// ArcAround follows the positive rotation about Axis from the preceding point
+// to End on the circle centered at Center. Axis is an oriented direction. The
+// endpoint radii must be exactly equal, nonzero and perpendicular to Axis. The
+// endpoints must differ; one segment cannot describe a full turn.
+type ArcAround struct {
+	Center, Axis, End r3.Vec
+}
+
 func (LineTo) pathSegment()     {}
 func (ArcThrough) pathSegment() {}
+func (ArcAround) pathSegment()  {}
 
 // Path is an immutable ordered spatial curve. Its coordinates are in
 // millimetres.
@@ -60,6 +69,8 @@ func NewPath(start r3.Vec, segments ...PathSegment) (*Path, error) {
 			input = sweepinput.Segment{End: segment.End}
 		case ArcThrough:
 			input = sweepinput.Segment{End: segment.End, Through: segment.Through, Arc: true}
+		case ArcAround:
+			input = sweepinput.Segment{End: segment.End, Center: segment.Center, Axis: segment.Axis, Arc: true, Around: true}
 		}
 		records[i], err = sweepinput.RecordSegment(current, input, i)
 		if err != nil {
@@ -90,6 +101,10 @@ func pathSegments(p *sweepinput.Path) []PathSegment {
 	}
 	out := make([]PathSegment, len(p.Segments))
 	for i, s := range p.Segments {
+		if s.Around {
+			out[i] = ArcAround{Center: s.Center, Axis: s.Axis, End: s.End}
+			continue
+		}
 		if s.Arc {
 			out[i] = ArcThrough{Through: s.Through, End: s.End}
 			continue
@@ -126,6 +141,13 @@ func ownPathSegment(raw PathSegment) (PathSegment, error) {
 	case ArcThrough:
 		return segment, nil
 	case *ArcThrough:
+		if segment == nil {
+			return nil, fmt.Errorf(`%w: a nil arc segment names no geometry`, ErrDegenerate)
+		}
+		return *segment, nil
+	case ArcAround:
+		return segment, nil
+	case *ArcAround:
 		if segment == nil {
 			return nil, fmt.Errorf(`%w: a nil arc segment names no geometry`, ErrDegenerate)
 		}

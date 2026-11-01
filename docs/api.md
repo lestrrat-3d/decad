@@ -175,8 +175,9 @@ a sheet. The `decad.Section` type constraint covers both.
 ### Axes and paths
 
 A revolve or coil axis is a `decad.SketchLine`, a `decad.ConstructionAxis` or a `decad.EdgeAxis`.
-Build a sweep path with `decad.NewPath`. Its segments are `decad.LineTo`, `decad.ArcThrough` and the other
-`decad.PathSegment` values.
+Build a sweep path with `decad.NewPath` and `decad.LineTo`, `decad.ArcThrough`, or `decad.ArcAround` segments.
+`ArcAround` takes a center, an oriented axis, and an endpoint. The start and end must have exactly equal nonzero
+distances from the center and lie perpendicular to the axis. The positive turn about the axis is less than one full turn.
 
 ### Options
 

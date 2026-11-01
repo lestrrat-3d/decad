@@ -2961,3 +2961,10 @@
 10	0.01	TestWallReadingExactHeightArm
 10	2.94	TestWebPathJoinsALineArcLineChain
 10	0.02	TestWholeCircleCylinderHasTwoLoops
+10	0.00	TestSweepDisplacedArcThroughRefuses
+10	0.00	TestSweepArcAroundHalfTurn
+10	0.00	TestArcAroundInputAndOwnership
+10	0.00	TestPathPatternArcAround
+10	0.00	TestSweepChainArcAroundShortcutRefuses
+10	0.00	TestPathPatternArcAroundUnrepresentableSampler
+10	0.00	TestSweepArcAroundClosedCircle
