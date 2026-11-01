@@ -58,6 +58,7 @@ type rotationalPairSweep struct {
 	report     *sweepReport
 	planar     bool                        // both paths carry exact planar vertex sets (internal/sweeprun/planar.go)
 	departure  *planarsweep.DepartureProof // a planar pair's §10.2 departure, when proved
+	supports   planarSupportCache          // support search results stay within this sweep attempt
 }
 
 func sweepRotatingPair(ctx context.Context, h Hooks, a, b *topo.Body,
