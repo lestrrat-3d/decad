@@ -34,6 +34,11 @@ func replayQuotientFloat64(ctx context.Context, num, den *big.Int, budget Replay
 		return 0, nil
 	}
 	exp := num.BitLen() - den.BitLen()
+	// TrailingZeroBits can inspect every denominator word before deciding
+	// whether the power-of-two shortcut applies.
+	if err := budget.SpendWork(ctx, uint64(len(den.Bits()))); err != nil {
+		return 0, err
+	}
 	if isPositivePowerOfTwo(den) {
 		words := uint64(len(num.Bits())) + uint64(len(den.Bits()))
 		if err := budget.SpendWork(ctx, words+1); err != nil {
