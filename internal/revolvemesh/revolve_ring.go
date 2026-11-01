@@ -58,7 +58,7 @@ func EmitRings(loops [][]RevMeridian, angular RevolveAngular, basis RevolveBasis
 					// EVERY angle, so its enclosure must cover them all.
 					radial = poleRadial
 				}
-				ideal := proofbound.IvVec3Add(idealBasis.A3, proofbound.IvVec3Add(axial, proofbound.IvVec3Mul(radial, s.RhoIv)))
+				ideal := proofbound.IvVec3Add3(idealBasis.A3, axial, proofbound.IvVec3Mul(radial, s.RhoIv))
 				gapC := proofbound.Radius3D(max(
 					proofbound.IntervalFloatError(ideal[0], local.X),
 					proofbound.IntervalFloatError(ideal[1], local.Y),
