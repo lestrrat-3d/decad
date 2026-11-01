@@ -9,12 +9,14 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 )
 
+var errRationalFloatBudget = fmt.Errorf("%w: missing exact error budget", decaderr.ErrUnsupported)
+
 // ReplayRationalFloatError charges the exact difference and directed float
 // rounding before returning the same upper error as RationalFloatError.
 func ReplayRationalFloatError(ctx context.Context, exact *big.Rat, held float64,
 	budget ReplayKeyBudget) (float64, error) {
 	if budget == nil {
-		return 0, fmt.Errorf("%w: missing exact error budget", decaderr.ErrUnsupported)
+		return 0, errRationalFloatBudget
 	}
 	if err := ctx.Err(); err != nil {
 		return 0, err

@@ -7,47 +7,12 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
-
-	"github.com/lestrrat-3d/r3"
 )
 
 // These refusals are constructed once so rejected replay does not allocate.
 var (
-	errExactErrorReplay1 = fmt.Errorf("%w: missing rational budget", decaderr.ErrUnsupported)
-	errExactErrorReplay2 = fmt.Errorf("%w: rational lift overflow", decaderr.ErrUnsupported)
 	errExactErrorReplay3 = fmt.Errorf("%w: missing rational error input", decaderr.ErrUnsupported)
 )
-
-func replayFloatRat(ctx context.Context, v float64, m ReplayKeyBudget) (*big.Rat, error) {
-	if m == nil {
-		return nil, errExactErrorReplay1
-	}
-	p, err := XptOfBounded(r3.Vec{X: v}, func(blocks uint64) error {
-		if blocks > ^uint64(0)/64 {
-			return errExactErrorReplay2
-		}
-		if err := m.SpendWork(ctx, blocks*64); err != nil {
-			return err
-		}
-		if err := m.ReserveRecords(ctx, blocks); err != nil {
-			return err
-		}
-		return m.ReserveBytes(ctx, blocks*64)
-	})
-	if err != nil {
-		return nil, err
-	}
-	return ReplayReducedFraction(ctx, p.X, p.W, m)
-}
-
-// ReplayRationalFloatError computes |exact-held| rounded toward positive infinity.
-func ReplayRationalFloatError(ctx context.Context, exact *big.Rat, held float64, m ReplayKeyBudget) (float64, error) {
-	h, err := replayFloatRat(ctx, held, m)
-	if err != nil {
-		return 0, err
-	}
-	return replayRationalRatError(ctx, exact, h, m)
-}
 
 // ReplayRationalRatError bounds an exact rational difference without lifting
 // the same held rational repeatedly. It does not mutate either input.
@@ -79,7 +44,7 @@ func replayRationalRatError(ctx context.Context, exact, held *big.Rat, m ReplayK
 	if math.IsInf(f, 1) {
 		return f, nil
 	}
-	r, err := replayFloatRat(ctx, f, m)
+	r, err := ReplayFloatRat(ctx, f, m)
 	if err != nil {
 		return 0, err
 	}
@@ -91,9 +56,4 @@ func replayRationalRatError(ctx context.Context, exact, held *big.Rat, m ReplayK
 		f = math.Nextafter(f, math.Inf(1))
 	}
 	return f, nil
-}
-
-// ReplayFloatRat lifts a finite float to its exact rational value.
-func ReplayFloatRat(ctx context.Context, v float64, m ReplayKeyBudget) (*big.Rat, error) {
-	return replayFloatRat(ctx, v, m)
 }

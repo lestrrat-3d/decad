@@ -9,6 +9,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 )
 
+var errReplayFloatRat = fmt.Errorf("%w: exact lift needs a finite value and budget", decaderr.ErrUnsupported)
+
 var replayZero = big.NewInt(0)
 var replayNegativeOne = big.NewInt(-1)
 
@@ -18,7 +20,7 @@ func ReplayFloatRat(ctx context.Context, v float64, m ReplayKeyBudget) (*big.Rat
 		return nil, err
 	}
 	if m == nil || math.IsNaN(v) || math.IsInf(v, 0) {
-		return nil, fmt.Errorf("%w: exact lift needs a finite value and budget", decaderr.ErrUnsupported)
+		return nil, errReplayFloatRat
 	}
 	// FloatRat reads one binary64 word, then shifts an odd signed mantissa
 	// into either numerator or denominator. The largest possible result has

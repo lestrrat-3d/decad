@@ -30,6 +30,9 @@ func CircleWalkReplay(ctx context.Context, seg sectionrecord.CircleSeg, b *proof
 	}
 	w := circularWalk(seg.Center.U, seg.Center.V, r, 0, 2*math.Pi, math.Abs(r), proofbound.CircularSweepUpper(0, 1))
 	w.Closed = true
+	if proofbound.IsNonFinite(w.StartU) || proofbound.IsNonFinite(w.StartV) || proofbound.IsNonFinite(w.EndU) || proofbound.IsNonFinite(w.EndV) || proofbound.IsNonFinite(w.Length) {
+		return survey2d.SegmentWalk{}, decaderr.ErrUnsupported
+	}
 	rr, err := proofarith.ReplayFloatRat(ctx, r, b)
 	if err != nil {
 		return survey2d.SegmentWalk{}, err
