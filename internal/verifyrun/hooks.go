@@ -4,6 +4,7 @@
 package verifyrun
 
 import (
+	"github.com/lestrrat-3d/decad/internal/boolchain"
 	"github.com/lestrrat-3d/decad/internal/booleaneval"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/verifiedmesh"
@@ -23,6 +24,8 @@ type Hooks struct {
 	Operand booleaneval.OperandMesher
 	// Alloc allocates the scratch bodies a measurement builds.
 	Alloc topo.Alloc
+	// History optionally supplies the producer of a Cut result.
+	History boolchain.Source
 }
 
 // The verification records of the public report package, with topology nodes

@@ -117,7 +117,7 @@ func Run(ctx context.Context, h Hooks, bodies []*topo.Body, cfg verifyConfig) (*
 	parallelCtx := meshbool.WithContactWorkers(ctx, 1)
 	workers := orderedwork.Workers(ctx, meshbool.DefaultContactWorkers())
 	outcomes, err := orderedwork.Run(ctx, parallelCtx, jobs, workers, func(ctx context.Context, job verifyPairJob) (verifyPairOutcome, error) {
-		return proveVerifyPair(ctx, job, cfg, geomCache, meshes, h.Mesher, h.Alloc)
+		return proveVerifyPair(ctx, job, cfg, geomCache, meshes, h.Mesher, h.Alloc, h.History)
 	})
 	if err != nil {
 		return nil, err

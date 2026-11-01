@@ -445,6 +445,10 @@ the body representation.
 
 ## Verification
 
+For an unadjusted mesh Cut, Verify can prove non-overlap with an exact same-set
+analytic copy of its consumed tool. If a requested gap cannot be measured, the
+report has an undecided-clearance diagnostic and no clearance row.
+
 `Document.Verify` checks every live body and returns a `*decad.Report`. Pass options to add checks:
 
 | Option | Check |

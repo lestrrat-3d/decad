@@ -79,17 +79,22 @@ For each pair:
    not settle the partition.
 4. Finish immediately on `boundaryaudit.PairDisjoint` or `boundaryaudit.PairTouching`; append a clearance
    row only when `WithClearances()` asked and the gap was measured.
-5. On `boundaryaudit.PairOverlapping`, try its containment-volume certificate first, then
+5. For an undecided pair, an unadjusted mesh Cut result and an exact same-set
+   analytic copy of its consumed tool prove non-overlap. Check both pair
+   orientations using operation history and a bounded set comparison. If a
+   clearance was requested, emit `DiagUndecidedClearance` and no clearance row:
+   this proof does not measure a gap.
+6. On `boundaryaudit.PairOverlapping`, try its containment-volume certificate first, then
    read-only intersection measurement when needed.
-6. On `boundaryaudit.PairUndecided`, try read-only intersection measurement. A positive
+7. On `boundaryaudit.PairUndecided`, try read-only intersection measurement. A positive
    volume may prove overlap even when the analytic kernel could not classify
    the contact arrangement.
-7. If neither volume path proves and bounds the overlap, mark the pair
+8. If neither volume path proves and bounds the overlap, mark the pair
    undecided for aggregation.
 
-Steps 2–7 run on a bounded worker pool, one pair per task, sized like the
+Steps 2–8 run on a bounded worker pool, one pair per task, sized like the
 boolean's contact batches (`GOMAXPROCS`, at most 12). A pair's proof reads only
-its two operands, per-body caches that every caller fills with the same value,
+its two operands, immutable operation history, per-body caches that every caller fills with the same value,
 and the chord §5.3 fixes for each body before the pool starts, so its outcome
 does not depend on which pairs run before it or beside it. Each task writes its
 outcome to its own slot, and `Verify` appends the slots in pair order. A pool
@@ -665,17 +670,19 @@ even though `Passed()` is already false because the bodies overlap.
 
 ## 9. Coverage and refusal
 
-The proof path is capability-based, not operation-history-based:
+The proof paths use operand capabilities, with one history-backed Cut-tool
+exception:
 
 | Operand capability | Available path |
 |---|---|
 | bounds | box disjointness |
 | analytic boundary model + certified casts | clearance/contact/full-containment proof |
 | exact planar held boundary with a displacement `δ` (a mitred sweep, a faceted Boolean result, a coil) against an exact planar partner | §3.2's exact planar arm: disjoint with a gap, touching at `δ = 0`, or overlap through a deep vertex |
+| unadjusted mesh Cut result and an exact same-set analytic copy of its consumed tool | operation history and bounded set equality prove non-overlap, without measuring a gap |
 | tessellation accepted by mesh boolean | read-only intersection volume |
 | neither boundary model nor tessellation | undecided → `Suspect` |
 
-Each row is a capability of one operand. The §3.4 analytic `OpIntersect`
+The other rows describe operand capabilities. The §3.4 analytic `OpIntersect`
 dispatch and the overlap-area reading behind it sit on top of them as
 pair-level paths: an admitted co-directional coplanar prism pair measures its
 overlap from the two recorded sections and needs no tessellation row at all,
