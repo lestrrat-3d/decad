@@ -64,7 +64,13 @@ func NewPlanarTopology(verts int, tris [][3]int, poll func() error) (*PlanarTopo
 // planarTopologyOf builds the edges, edge facets and shells of tris over verts
 // vertices, the combinatorial half of preparePlanar.
 func planarTopologyOf(verts int, tris [][3]int) *PlanarTopology {
-	topo := &PlanarTopology{verts: verts, tris: tris}
+	edgeCapacity := 3 * len(tris) / 2
+	topo := &PlanarTopology{
+		verts:      verts,
+		tris:       tris,
+		edges:      make([][2]int, 0, edgeCapacity),
+		edgeFacets: make([][2]int, 0, edgeCapacity),
+	}
 	parent := make([]int, verts)
 	for i := range parent {
 		parent[i] = i
