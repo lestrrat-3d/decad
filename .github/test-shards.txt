@@ -268,6 +268,14 @@
 9	0.02	TestSweepPairRealFacetedUnionTouchContinuations
 9	0.01	TestThickenPrismUnrepresentableOffset
 10	1.49	TestCIWorkflowRaceShardsCoverEveryPackage
+10	0.00	TestCircleAffineDeltaBoundary
+10	0.00	TestCircleAffineLargeRadius
+10	0.00	TestCircleExactAffineAllowance
+10	0.00	TestCirclePlacementReplaySnapshot
+10	0.00	TestCircleSourceCandidateChordConsumedByPlacement
+10	0.00	TestCircleSourceCandidateMutationDuringReplay
+10	0.00	TestCircleSourceCandidateNearChord
+10	0.00	TestCircleSourceCandidateProducer
 10	0.43	TestExactCopyMomentHistoryAndRetiredSource
 10	3.42	TestLoftContactDirectShellUnionVaryingRectangleBothOrders
 10	0.01	TestLoftContactPartitionSourceAndWorkRefusals
@@ -285,9 +293,9 @@
 10	0.00	TestPublicCirclePrimitiveMutationDuringReplay
 10	0.00	TestPublicCirclePrimitiveSourceMutation
 10	0.22	TestQuarterSourceHeldY3WrongRealRadius
+10	0.00	TestReplayTrialChordRealPublicProducers
 10	0.52	TestRetainedBlendKeywayCuspBounds
 10	0.87	TestRetainedBlendStripPatchCovered
-10	0.00	TestReplayTrialChordRealPublicProducers
 10	0.00	TestRevolveBoreBoundaryBothSweepDirections
 10	0.00	TestRevolveSectorProjectionRefusesOverlap
 10	0.02	TestStraightLoftPrismUnionManyGates
