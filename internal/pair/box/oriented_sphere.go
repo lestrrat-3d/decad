@@ -6,105 +6,34 @@ import (
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
-// ClosestOrientedBoxPoint minimizes squared Euclidean distance over the exact
-// parallelotope. Each coordinate is free or fixed at either endpoint; the
-// twenty-seven resulting stationary candidates cover every face, edge and
-// vertex of the compact convex box.
-func ClosestOrientedBoxPoint(center proofarith.DyV3, box OrientedBox) (*big.Rat, bool) {
-	var best *big.Rat
-	for code := range 27 {
-		status, value := code, [3]*big.Rat{}
-		var free [3]int
-		count := 0
-		point := [3]*big.Rat{}
-		for k := range 3 {
-			point[k] = box.Corner[0][k].Rat()
+// ClosestOrthogonalBoxPoint minimizes exact squared distance for a box with
+// pairwise orthogonal, nonzero edges. Callers must establish orthogonality.
+func ClosestOrthogonalBoxPoint(center proofarith.DyV3, box OrientedBox) (*big.Rat, bool) {
+	var value [3]*big.Rat
+	delta := proofarith.DvSub(center, box.Corner[0])
+	for axis := range 3 {
+		length2 := proofarith.DvDot(box.Edge[axis], box.Edge[axis]).Rat()
+		if length2.Sign() <= 0 {
+			return nil, false
 		}
+		coefficient := new(big.Rat).Quo(proofarith.DvDot(delta, box.Edge[axis]).Rat(), length2)
+		if coefficient.Sign() < 0 {
+			coefficient.SetInt64(0)
+		} else if coefficient.Cmp(big.NewRat(1, 1)) > 0 {
+			coefficient.SetInt64(1)
+		}
+		value[axis] = coefficient
+	}
+	distance2 := new(big.Rat)
+	for k := range 3 {
+		coordinate := box.Corner[0][k].Rat()
 		for axis := range 3 {
-			side := status % 3
-			status /= 3
-			if side == 2 {
-				free[count], count = axis, count+1
-				continue
-			}
-			value[axis] = big.NewRat(int64(side), 1)
-			if side == 1 {
-				for k := range 3 {
-					point[k].Add(point[k], box.Edge[axis][k].Rat())
-				}
-			}
+			coordinate.Add(coordinate, new(big.Rat).Mul(value[axis], box.Edge[axis][k].Rat()))
 		}
-		if count > 0 {
-			matrix := make([][]*big.Rat, count)
-			for i := range count {
-				matrix[i] = make([]*big.Rat, count+1)
-				for j := range count {
-					matrix[i][j] = proofarith.DvDot(box.Edge[free[i]], box.Edge[free[j]]).Rat()
-				}
-				matrix[i][count] = new(big.Rat)
-				for k := range 3 {
-					term := new(big.Rat).Sub(center[k].Rat(), point[k])
-					matrix[i][count].Add(matrix[i][count],
-						new(big.Rat).Mul(box.Edge[free[i]][k].Rat(), term))
-				}
-			}
-			if !solvePositiveGram(matrix) {
-				return nil, false
-			}
-			valid := true
-			for i := range count {
-				candidate := matrix[i][count]
-				if candidate.Sign() < 0 || candidate.Cmp(big.NewRat(1, 1)) > 0 {
-					valid = false
-					break
-				}
-				value[free[i]] = candidate
-			}
-			if !valid {
-				continue
-			}
-		}
-		distance2 := new(big.Rat)
-		for k := range 3 {
-			coordinate := box.Corner[0][k].Rat()
-			for axis := range 3 {
-				coordinate.Add(coordinate, new(big.Rat).Mul(value[axis], box.Edge[axis][k].Rat()))
-			}
-			delta := new(big.Rat).Sub(center[k].Rat(), coordinate)
-			distance2.Add(distance2, new(big.Rat).Mul(delta, delta))
-		}
-		if best == nil || distance2.Cmp(best) < 0 {
-			best = distance2
-		}
+		delta := new(big.Rat).Sub(center[k].Rat(), coordinate)
+		distance2.Add(distance2, new(big.Rat).Mul(delta, delta))
 	}
-	return best, best != nil
-}
-
-func solvePositiveGram(matrix [][]*big.Rat) bool {
-	n := len(matrix)
-	for pivot := range n {
-		if matrix[pivot][pivot].Sign() <= 0 {
-			return false
-		}
-		denominator := new(big.Rat).Set(matrix[pivot][pivot])
-		for column := pivot; column <= n; column++ {
-			matrix[pivot][column] = new(big.Rat).Quo(matrix[pivot][column], denominator)
-		}
-		for row := pivot + 1; row < n; row++ {
-			factor := new(big.Rat).Set(matrix[row][pivot])
-			for column := pivot; column <= n; column++ {
-				matrix[row][column] = new(big.Rat).Sub(matrix[row][column],
-					new(big.Rat).Mul(factor, matrix[pivot][column]))
-			}
-		}
-	}
-	for row := n - 1; row >= 0; row-- {
-		for column := row + 1; column < n; column++ {
-			matrix[row][n] = new(big.Rat).Sub(matrix[row][n],
-				new(big.Rat).Mul(matrix[row][column], matrix[column][n]))
-		}
-	}
-	return true
+	return distance2, true
 }
 
 // OrientedSphereFace identifies one isolated exterior support. The strict
