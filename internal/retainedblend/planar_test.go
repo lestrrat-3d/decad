@@ -8,6 +8,44 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestEarQualityMatchesLoopImplementation(t *testing.T) {
+	t.Parallel()
+	inputs := []struct {
+		name    string
+		a, b, c pt2
+	}{
+		{name: "ordinary", a: pt2{0, 0}, b: pt2{3, 0}, c: pt2{0, 4}},
+		{name: "collinear", a: pt2{-2, 1}, b: pt2{0, 1}, c: pt2{5, 1}},
+		{name: "coincident", a: pt2{2, -3}, b: pt2{2, -3}, c: pt2{2, -3}},
+		{name: "signed zero", a: pt2{math.Copysign(0, -1), 0}, b: pt2{0, math.Copysign(0, -1)}, c: pt2{0, 0}},
+		{name: "tiny", a: pt2{0, 0}, b: pt2{1e-150, 0}, c: pt2{0, 1e-150}},
+		{name: "large", a: pt2{0, 0}, b: pt2{1e150, 0}, c: pt2{0, 1e150}},
+		{name: "infinite", a: pt2{0, 0}, b: pt2{math.Inf(1), 1}, c: pt2{2, 3}},
+		{name: "nan", a: pt2{0, 0}, b: pt2{math.NaN(), 1}, c: pt2{2, 3}},
+		{name: "nan payload", a: pt2{0, 0}, b: pt2{math.Float64frombits(0x7ff8000000000001), 1}, c: pt2{2, 3}},
+	}
+	for _, input := range inputs {
+		t.Run(input.name, func(t *testing.T) {
+			got := earQuality(input.a, input.b, input.c)
+			want := earQualityLoopImplementation(input.a, input.b, input.c)
+			require.Equal(t, math.Float64bits(want), math.Float64bits(got))
+		})
+	}
+}
+
+func earQualityLoopImplementation(a, b, c pt2) float64 {
+	area2 := math.Abs((b.u-a.u)*(c.w-a.w) - (b.w-a.w)*(c.u-a.u))
+	long := 0.0
+	for _, d := range [][2]pt2{{a, b}, {b, c}, {c, a}} {
+		du, dw := d[1].u-d[0].u, d[1].w-d[0].w
+		long = math.Max(long, du*du+dw*dw)
+	}
+	if long == 0 {
+		return 0
+	}
+	return area2 / long
+}
+
 func TestTriangulateRegionKeepsEveryLoopVertex(t *testing.T) {
 	t.Parallel()
 	// A 10x10 square with a collinear vertex on each side, and a square hole.
