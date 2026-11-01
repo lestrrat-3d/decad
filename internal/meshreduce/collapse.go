@@ -73,6 +73,9 @@ type collapser struct {
 	live   int
 	merged int
 	queue  edgeQueue
+	// edgeSet and edgeList hold one pass's edge snapshot; callers finish ranging it before rebuilding it.
+	edgeSet  map[[2]int]struct{}
+	edgeList [][2]int
 }
 
 func newCollapser(vertices []r3.Vec, triangles [][3]int) *collapser {
