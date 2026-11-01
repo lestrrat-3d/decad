@@ -265,10 +265,12 @@ func earClip(ps []pt2, poly []int) ([][3]int, error) {
 func earQuality(a, b, c pt2) float64 {
 	area2 := math.Abs((b.u-a.u)*(c.w-a.w) - (b.w-a.w)*(c.u-a.u))
 	long := 0.0
-	for _, d := range [][2]pt2{{a, b}, {b, c}, {c, a}} {
-		du, dw := d[1].u-d[0].u, d[1].w-d[0].w
-		long = math.Max(long, du*du+dw*dw)
-	}
+	du, dw := b.u-a.u, b.w-a.w
+	long = math.Max(long, du*du+dw*dw)
+	du, dw = c.u-b.u, c.w-b.w
+	long = math.Max(long, du*du+dw*dw)
+	du, dw = a.u-c.u, a.w-c.w
+	long = math.Max(long, du*du+dw*dw)
 	if long == 0 {
 		return 0
 	}
