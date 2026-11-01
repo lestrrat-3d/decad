@@ -7,9 +7,6 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-var replayZero = big.NewInt(0)
-var replayNegativeOne = big.NewInt(-1)
-
 // ReplayOrientSignPrepared preserves the float filter and bounds exact scratch.
 func ReplayOrientSignPrepared(ctx context.Context, a, b, c, d r3.Vec, xa, xd, n Xpt, budget ReplayKeyBudget) (int, error) {
 	if budget == nil {

@@ -37,7 +37,7 @@ func reduceGrid(t *testing.T, n int) *decad.MeshBody {
 
 // reduceSphere is a UV sphere of radius r about the origin, 48 around and 24 up,
 // wound counter-clockwise seen from outside.
-func reduceSphere(t *testing.T, r float64) *decad.MeshBody {
+func reduceSphere(t testing.TB, r float64) *decad.MeshBody {
 	t.Helper()
 	const around, up = 48, 24
 	v := []r3.Vec{r3.NewVec(0, 0, r)}

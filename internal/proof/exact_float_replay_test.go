@@ -7,22 +7,6 @@ import (
 	"testing"
 )
 
-func TestReplayRatFloat64MatchesFraction(t *testing.T) {
-	values := []*big.Rat{
-		new(big.Rat),
-		new(big.Rat).SetFrac(big.NewInt(-13), big.NewInt(8)),
-		new(big.Rat).SetFrac(big.NewInt(7), big.NewInt(3)),
-		new(big.Rat).SetFrac(new(big.Int).Lsh(big.NewInt(1), 1200), big.NewInt(3)),
-	}
-	for i, q := range values {
-		got, err := ReplayRatFloat64(t.Context(), q, new(keyTestBudget))
-		want, _ := q.Float64()
-		if err != nil || math.Float64bits(got) != math.Float64bits(want) {
-			t.Fatalf("case %d: got %g, want %g, error %v", i, got, want, err)
-		}
-	}
-}
-
 func TestReplayXptVecMatches(t *testing.T) {
 	r := rand.New(rand.NewSource(91))
 	for i := range 300 {
@@ -46,6 +30,22 @@ func TestReplayXptVecMatches(t *testing.T) {
 		}
 		if math.Float64bits(got.X) != math.Float64bits(want.X) || math.Float64bits(got.Y) != math.Float64bits(want.Y) || math.Float64bits(got.Z) != math.Float64bits(want.Z) {
 			t.Fatalf("case %d differs", i)
+		}
+	}
+}
+
+func TestReplayRatFloat64MatchesFraction(t *testing.T) {
+	values := []*big.Rat{
+		new(big.Rat),
+		new(big.Rat).SetFrac(big.NewInt(-13), big.NewInt(8)),
+		new(big.Rat).SetFrac(big.NewInt(7), big.NewInt(3)),
+		new(big.Rat).SetFrac(new(big.Int).Lsh(big.NewInt(1), 1200), big.NewInt(3)),
+	}
+	for i, q := range values {
+		got, err := ReplayRatFloat64(t.Context(), q, new(keyTestBudget))
+		want, _ := q.Float64()
+		if err != nil || math.Float64bits(got) != math.Float64bits(want) {
+			t.Fatalf("case %d: got %g, want %g, error %v", i, got, want, err)
 		}
 	}
 }

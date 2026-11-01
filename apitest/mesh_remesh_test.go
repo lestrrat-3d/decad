@@ -104,6 +104,25 @@ func TestRemeshMeshCoarsensAsWellAsRefines(t *testing.T) {
 	}
 }
 
+func BenchmarkRemeshMesh(b *testing.B) {
+	m := reduceSphere(b, 10)
+	for _, tc := range []struct {
+		name string
+		edge float64
+	}{
+		{name: "coarse_6mm", edge: 6},
+		{name: "fine_0.8mm", edge: 0.8},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for range b.N {
+				_, err := decad.RemeshMesh(b.Context(), m, units.Millimeters(tc.edge))
+				require.NoError(b, err)
+			}
+		})
+	}
+}
+
 func TestRemeshMeshRefusals(t *testing.T) {
 	t.Parallel()
 	m := reduceSphere(t, 10)

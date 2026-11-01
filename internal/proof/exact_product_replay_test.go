@@ -52,15 +52,6 @@ func TestReplayXlerpMatches(t *testing.T) {
 		if err != nil || want.X.Cmp(got.X) != 0 || want.Y.Cmp(got.Y) != 0 || want.Z.Cmp(got.Z) != 0 || want.W.Cmp(got.W) != 0 {
 			t.Fatalf("case %d: %v", i, err)
 		}
-		rat := new(big.Rat).SetFrac(n, d)
-		canonical, err := ReplayXlerp(t.Context(), a, b, rat.Num(), rat.Denom(), new(keyTestBudget))
-		if err != nil {
-			t.Fatalf("canonical case %d: %v", i, err)
-		}
-		rational, err := ReplayRatXlerp(t.Context(), a, b, rat, new(keyTestBudget))
-		if err != nil || canonical.X.Cmp(rational.X) != 0 || canonical.Y.Cmp(rational.Y) != 0 || canonical.Z.Cmp(rational.Z) != 0 || canonical.W.Cmp(rational.W) != 0 {
-			t.Fatalf("rational case %d (%s): want X=%s, got X=%s, error=%v", i, rat, canonical.X, rational.X, err)
-		}
 	}
 }
 

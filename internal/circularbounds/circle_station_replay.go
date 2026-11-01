@@ -13,19 +13,40 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// CircleStationReplay reproduces the ordinary whole-circle station bound.
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errCircleStationReplay1 = fmt.Errorf("%w: unsupported bounded circle station", decaderr.ErrUnsupported)
+	errCircleStationReplay2 = fmt.Errorf("%w: invalid bounded circle radius", decaderr.ErrUnsupported)
+	errCircleStationReplay3 = fmt.Errorf("%w: invalid bounded circle station", decaderr.ErrUnsupported)
+)
+
+// CircleStationReplay bounds a held interior station of an authenticated whole circle.
 func CircleStationReplay(ctx context.Context, seg sectionrecord.CircleSeg, k, n int, heldU, heldV float64,
 	b *proofbound.ReplayBudget) (proofbound.WalkEndBound, error) {
-	if b == nil || !b.IsBrakeReplay() || !seg.CCW || seg.TStart != 0 || seg.TEnd != 1 {
-		return proofbound.WalkEndBound{}, fmt.Errorf("%w: unsupported bounded circle station", decaderr.ErrUnsupported)
+	if b == nil || !seg.CCW || seg.TStart != 0 || seg.TEnd != 1 || seg.Radius.Unit() != units.Millimeter {
+		return proofbound.WalkEndBound{}, errCircleStationReplay1
 	}
 	r, err := seg.Radius.In(units.Millimeter)
 	if err != nil || !(r > 0) || math.IsInf(r, 0) {
-		return proofbound.WalkEndBound{}, fmt.Errorf("%w: invalid bounded circle radius", decaderr.ErrUnsupported)
+		return proofbound.WalkEndBound{}, errCircleStationReplay2
 	}
-	s, c, err := proofbound.TurnFractionSinCosReplay(ctx, k, n, b)
+	s, c, err := proofbound.CircleTurnFractionReplay(ctx, k, n, b)
 	if err != nil {
 		return proofbound.WalkEndBound{}, err
+	}
+	return circleStationFromIntervals(ctx, seg, heldU, heldV, s, c, b)
+}
+
+// circleStationFromIntervals bounds the held point against certified
+// sine and cosine enclosures of the recorded turn.
+func circleStationFromIntervals(ctx context.Context, seg sectionrecord.CircleSeg, heldU, heldV float64,
+	s, c proofbound.RatInterval, b *proofbound.ReplayBudget) (proofbound.WalkEndBound, error) {
+	if b == nil || !seg.CCW || seg.TStart != 0 || seg.TEnd != 1 || seg.Radius.Unit() != units.Millimeter || s.Lo == nil || s.Hi == nil || c.Lo == nil || c.Hi == nil {
+		return proofbound.WalkEndBound{}, errCircleStationReplay3
+	}
+	r, err := seg.Radius.In(units.Millimeter)
+	if err != nil || !(r > 0) || math.IsInf(r, 0) {
+		return proofbound.WalkEndBound{}, errCircleStationReplay2
 	}
 	radius, err := proof.ReplayFloatRat(ctx, r, b)
 	if err != nil {

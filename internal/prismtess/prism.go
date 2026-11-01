@@ -301,7 +301,7 @@ func build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	// Prove loop clearance before both caps reuse the wall rings' vertices.
 	var capErr error
 	if replay != nil && circle {
-		capErr = circleCapsReplay(ctx, &topology, capStart, capEnd, pp.Z0Delta, pp.Z1Delta, replay)
+		capErr = circleCapsAxialReplay(ctx, &topology, capStart, capEnd, pp.Z0Delta, pp.Z1Delta, replay)
 	} else if replay != nil {
 		capErr = rectangleCapsReplay(ctx, &topology, capStart, capEnd, pp.Z0Delta, pp.Z1Delta, replay)
 	} else {

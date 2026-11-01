@@ -3,13 +3,27 @@ package proof
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"math/big"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+)
+
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errExactRatioReplay1 = fmt.Errorf("%w: invalid replay fraction", decaderr.ErrUnsupported)
+	errExactRatioReplay2 = fmt.Errorf("%w: invalid exact key", decaderr.ErrBooleanFailed)
+	errExactRatioReplay3 = fmt.Errorf("%w: invalid exact key length", decaderr.ErrBooleanFailed)
+	errExactRatioReplay4 = fmt.Errorf("%w: replay fraction storage overflow", decaderr.ErrUnsupported)
+	errExactRatioReplay5 = fmt.Errorf("%w: invalid replay rational", decaderr.ErrUnsupported)
+	errExactRatioReplay6 = fmt.Errorf("%w: replay rational division by zero", decaderr.ErrUnsupported)
+	errExactRatioReplay7 = fmt.Errorf("%w: invalid replay rational operation", decaderr.ErrUnsupported)
 )
 
 // ReplayReducedFraction builds the same reduced ratio as RatFrac without GCD scratch.
 func ReplayReducedFraction(ctx context.Context, num, den *big.Int, budget ReplayKeyBudget) (*big.Rat, error) {
 	if budget == nil || num == nil || den == nil || den.Sign() <= 0 {
-		return nil, errReplayInvalidReplayFraction
+		return nil, errExactRatioReplay1
 	}
 	key, err := ReplayExactKey(ctx, Xpt{X: num, Y: replayZero, Z: replayZero, W: den}, budget)
 	if err != nil {
@@ -20,20 +34,20 @@ func ReplayReducedFraction(ctx context.Context, num, den *big.Int, budget Replay
 	at := 0
 	for i := range 4 {
 		if at > len(key)-9 {
-			return nil, errReplayInvalidExactKey
+			return nil, errExactRatioReplay2
 		}
 		signs[i] = key[at]
 		size := binary.LittleEndian.Uint64([]byte(key[at+1 : at+9]))
 		at += 9
 		if size > uint64(len(key)-at) {
-			return nil, errReplayInvalidExactKeyLength
+			return nil, errExactRatioReplay3
 		}
 		starts[i], lengths[i] = at, int(size)
 		at += int(size)
 	}
 	bytes := uint64(lengths[0]) + uint64(lengths[3])
 	if bytes > (^uint64(0)-1024)/4 {
-		return nil, errReplayReplayFractionStorageOverflow
+		return nil, errExactRatioReplay4
 	}
 	if err := budget.ReserveRecords(ctx, 3); err != nil {
 		return nil, err
@@ -58,7 +72,7 @@ var replayOne = big.NewInt(1)
 // ReplayRatCompare compares two rationals using bounded products.
 func ReplayRatCompare(ctx context.Context, a, b *big.Rat, budget ReplayKeyBudget) (int, error) {
 	if a == nil || b == nil {
-		return 0, errReplayInvalidReplayRational
+		return 0, errExactRatioReplay5
 	}
 	d, err := ReplayProductDifference(ctx, a.Num(), b.Denom(), b.Num(), a.Denom(), budget)
 	if err != nil {
@@ -70,7 +84,7 @@ func ReplayRatCompare(ctx context.Context, a, b *big.Rat, budget ReplayKeyBudget
 // ReplayRatArithmetic performs a reduced sum, difference, product or quotient.
 func ReplayRatArithmetic(ctx context.Context, a, b *big.Rat, op byte, budget ReplayKeyBudget) (*big.Rat, error) {
 	if a == nil || b == nil {
-		return nil, errReplayInvalidReplayRational
+		return nil, errExactRatioReplay5
 	}
 	var num, den *big.Int
 	var err error
@@ -87,11 +101,11 @@ func ReplayRatArithmetic(ctx context.Context, a, b *big.Rat, op byte, budget Rep
 		num, err = ReplayProductDifference(ctx, a.Num(), b.Num(), replayZero, replayZero, budget)
 	case '/':
 		if b.Sign() == 0 {
-			return nil, errReplayReplayRationalDivisionByZero
+			return nil, errExactRatioReplay6
 		}
 		num, err = ReplayProductDifference(ctx, a.Num(), b.Denom(), replayZero, replayZero, budget)
 	default:
-		return nil, errReplayInvalidReplayRationalOperation
+		return nil, errExactRatioReplay7
 	}
 	if err != nil {
 		return nil, err

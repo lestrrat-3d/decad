@@ -14,6 +14,10 @@ The rules for rows live in `agent-docs/layout.md`.
 | `topology_replay_alloc.go` | Reports topology handle sizes for bounded replay allocation charges. |
 | `container.go` | `Container`, the document's grouping of sketches, planes and bodies; placement of results and `ErrCrossContainer`. See `agent-docs/container-design.md`. |
 | `document.go` | `Document`: live body set, atomic operation publication, `Remove`, liveness gates, `Transform` and `Copy`; the producer identity spelling and zero-vector predicate. See evaluator §8 and operation history. |
+| `circle_affine_replay.go` | Exact affine differences for replay of placed circle sources. |
+| `circle_placement_replay.go` | Ordered placement witness and rounding checks for circle sources. |
+| `circle_primitive_seal.go` | Private circle source interface and candidate replay with placement bounds. |
+| `circle_source_replay.go` | Circle Extrude and Transform history capture under one replay budget. |
 | `operation_history.go` | Immutable public operation snapshots, body dependency indexes, and face-successor query values. See operation-history-design. |
 | `operation_kind.go` | Shared public operation-kind vocabulary and stable string tokens. See operation-history-design and operation-diagnostics-design. |
 | `operation_diagnostics.go` | Public operation diagnostic values, typed error accessors and body warning snapshots. See operation-diagnostics-design. |

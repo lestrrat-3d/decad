@@ -83,6 +83,9 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	body.Origin = provenance.Ref{Producer: env.Ref, Role: provenance.RoleBody}
 	body.Kind = kind
 	body.Doc = env.Doc
+	if body.BeginPrismConstruction() {
+		defer body.FinishPrismConstruction()
+	}
 
 	// The LEVEL half of the shared-denotation certificate (internal/denotation):
 	// minted only when this payload's own section is drawn straight from its
@@ -176,7 +179,7 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		sideFaces, bottom, top, loopLen, err := BuildLoopSides(ctx, env, body, pp, li, loop, work, pw, levelZ0, levelZ1, true)
+		sideFaces, bottom, top, loopLen, err := buildLoopSidesAs(ctx, env, body, pp, li, li != 0, loop, work, pw, levelZ0, levelZ1, true, true)
 		if err != nil {
 			return nil, err
 		}
@@ -192,6 +195,8 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	// each rim edge with only its wall face — both rims of every loop become
 	// free edges with no rim-specific code.
 	if !pp.SurfaceResult {
+		capStart.RecordPrismFace(topo.PrismFaceCapStart, -1, -1)
+		capEnd.RecordPrismFace(topo.PrismFaceCapEnd, -1, -1)
 		faces = append(faces, capStart, capEnd)
 		if err := topobuild.AttachFaceLoops(ctx, []*topo.Face{capStart, capEnd}); err != nil {
 			return nil, err
@@ -304,6 +309,13 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	// the payload the body carries denotes exactly what it did before.
 	if pw != pp.Walks {
 		pw = pw.WithIntegrals(ig, freeform.MomentFirstOrder)
+	}
+	if !pp.SurfaceResult && len(pp.Profile.Holes) == 0 && len(pp.Profile.Outer.Segments) == 1 {
+		if _, ok := pp.Profile.Outer.Segments[0].(sectionrecord.CircleSeg); ok {
+			for _, f := range faces {
+				f.SealPrismFace()
+			}
+		}
 	}
 	pp.Walks = pw
 	pp.Upstream = nil
@@ -471,6 +483,10 @@ func BuildLoopSides(ctx context.Context, env topo.Env, body *topo.Body, pp Paylo
 // False for every OTHER caller of this function, which mints no curve
 // identity for their own rim.
 func BuildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Payload, roleLoop int, holeLoop bool, loop sectionrecord.LoopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, levelZ0, levelZ1 denotation.LevelToken, mintCurveTokens bool) ([]*topo.Face, []topo.CoEdge, []topo.CoEdge, proofbound.BoundedScalar, error) {
+	return buildLoopSidesAs(ctx, env, body, pp, roleLoop, holeLoop, loop, work, resolved, levelZ0, levelZ1, mintCurveTokens, false)
+}
+
+func buildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Payload, roleLoop int, holeLoop bool, loop sectionrecord.LoopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, levelZ0, levelZ1 denotation.LevelToken, mintCurveTokens, recordPrismFace bool) ([]*topo.Face, []topo.CoEdge, []topo.CoEdge, proofbound.BoundedScalar, error) {
 	mintCurve := func() denotation.CurveToken {
 		if !mintCurveTokens {
 			return denotation.CurveToken{}
@@ -664,6 +680,9 @@ func BuildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Pay
 			Origins:   origins,
 			Body:      body,
 		})
+		if recordPrismFace && len(w.Segs) == 1 {
+			face.RecordPrismFace(topo.PrismFaceWall, roleLoop, w.Segs[0])
+		}
 		if singleClosed {
 			// A closed cylindrical band has TWO boundary loops — one circle
 			// per cap — not one loop holding both.

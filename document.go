@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/massdispatch"
 	"github.com/lestrrat-3d/decad/internal/parambind"
+	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -47,9 +48,11 @@ type Document struct {
 	resultC *Container
 	// operations and their indexes are published under n.LiveMu with body
 	// retirement and registration.
-	operations []*Operation
-	producers  map[*Body]*Operation
-	consumers  map[*Body][]*Operation
+	operations       []*Operation
+	producers        map[*Body]*Operation
+	consumers        map[*Body][]*Operation
+	circleBuilds     map[*Body]*prismrecord.CircleBuildWitness
+	circlePlacements map[*Body]*circlePlacementWitness
 }
 
 // DocumentOption configures New. WithGapTolerance, ExactOnly,
@@ -64,6 +67,8 @@ func New(opts ...DocumentOption) *Document {
 	d := bornDocument(&Document{})
 	d.producers = make(map[*Body]*Operation)
 	d.consumers = make(map[*Body][]*Operation)
+	d.circleBuilds = make(map[*Body]*prismrecord.CircleBuildWitness)
+	d.circlePlacements = make(map[*Body]*circlePlacementWitness)
 	d.gapReach, d.gapErr = gapReachOf(opts)
 	d.chainTol, d.chainErr = chainToleranceOf(opts)
 	d.params = paramsOf(opts)
@@ -164,6 +169,14 @@ func (d *Document) commitOperationSpanPrefixIn(ctx context.Context, c *Container
 	d.placeLocked(bodyNode(produced), dest)
 	stampOperationWarningKind(produced, kind)
 	d.appendOperationLocked(operation)
+	if kind == OperationExtrude || kind == OperationTransform {
+		if witness := prismrecord.SealCircleBuildWitness(&produced.n); witness != nil {
+			if d.circleBuilds == nil {
+				d.circleBuilds = make(map[*Body]*prismrecord.CircleBuildWitness)
+			}
+			d.circleBuilds[produced] = witness
+		}
+	}
 	return nil
 }
 
@@ -464,6 +477,16 @@ func transform(ctx context.Context, body *Body, t r3.Transform, kind OperationKi
 	inputs := append([]OperationInput{{Body: body, Role: operationRoleSource, Use: InputConsumed}}, additionalInputs...)
 	if err := d.commitOperationIn(ctx, nil, kind, inputs, placed, body); err != nil {
 		return nil, err
+	}
+	if kind == OperationTransform {
+		d.n.LiveMu.Lock()
+		if d.circleBuilds[body] != nil && d.circleBuilds[placed] != nil {
+			if d.circlePlacements == nil {
+				d.circlePlacements = make(map[*Body]*circlePlacementWitness)
+			}
+			d.circlePlacements[placed] = &circlePlacementWitness{source: body, placed: placed, motion: t, composed: composed}
+		}
+		d.n.LiveMu.Unlock()
 	}
 	return placed, nil
 }

@@ -2,27 +2,32 @@ package proof
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 )
 
-func replayFloatRat(ctx context.Context, v float64, m ReplayKeyBudget) (*big.Rat, error) {
-	p, err := XptOfBounded(r3.Vec{X: v}, func(blocks uint64) error { return m.ReserveBytes(ctx, blocks*64) })
-	if err != nil {
-		return nil, err
-	}
-	return ReplayReducedFraction(ctx, p.X, p.W, m)
-}
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errExactErrorReplay3 = fmt.Errorf("%w: missing rational error input", decaderr.ErrUnsupported)
+)
 
-// ReplayRationalFloatError computes |exact-held| rounded toward positive infinity.
-func ReplayRationalFloatError(ctx context.Context, exact *big.Rat, held float64, m ReplayKeyBudget) (float64, error) {
-	h, err := replayFloatRat(ctx, held, m)
-	if err != nil {
+// ReplayRationalRatError bounds an exact rational difference without lifting
+// the same held rational repeatedly. It does not mutate either input.
+func ReplayRationalRatError(ctx context.Context, exact, held *big.Rat, m ReplayKeyBudget) (float64, error) {
+	if exact == nil || held == nil || m == nil {
+		return 0, errExactErrorReplay3
+	}
+	if err := m.SpendWork(ctx, 4); err != nil {
 		return 0, err
 	}
-	d, err := ReplayRatArithmetic(ctx, exact, h, '-', m)
+	return replayRationalRatError(ctx, exact, held, m)
+}
+
+func replayRationalRatError(ctx context.Context, exact, held *big.Rat, m ReplayKeyBudget) (float64, error) {
+	d, err := ReplayRatArithmetic(ctx, exact, held, '-', m)
 	if err != nil {
 		return 0, err
 	}
@@ -39,7 +44,7 @@ func ReplayRationalFloatError(ctx context.Context, exact *big.Rat, held float64,
 	if math.IsInf(f, 1) {
 		return f, nil
 	}
-	r, err := replayFloatRat(ctx, f, m)
+	r, err := ReplayFloatRat(ctx, f, m)
 	if err != nil {
 		return 0, err
 	}
@@ -51,11 +56,6 @@ func ReplayRationalFloatError(ctx context.Context, exact *big.Rat, held float64,
 		f = math.Nextafter(f, math.Inf(1))
 	}
 	return f, nil
-}
-
-// ReplayFloatRat lifts a finite float to its exact rational value.
-func ReplayFloatRat(ctx context.Context, v float64, m ReplayKeyBudget) (*big.Rat, error) {
-	return replayFloatRat(ctx, v, m)
 }
 
 // ReplaySqrtDyadicRat matches DySqrtUp using bounded exact comparisons.
@@ -92,7 +92,7 @@ func ReplaySqrtDyadicRat(ctx context.Context, q *big.Rat, m ReplayKeyBudget) (fl
 		f = math.MaxFloat64
 	}
 	for range SqrtAdjustLimit {
-		r, err := replayFloatRat(ctx, f, m)
+		r, err := ReplayFloatRat(ctx, f, m)
 		if err != nil {
 			return 0, err
 		}
@@ -134,7 +134,7 @@ func ReplaySqrtDownRat(ctx context.Context, q *big.Rat, m ReplayKeyBudget) (floa
 		f = math.MaxFloat64
 	}
 	for range SqrtAdjustLimit {
-		r, err := replayFloatRat(ctx, f, m)
+		r, err := ReplayFloatRat(ctx, f, m)
 		if err != nil {
 			return 0, err
 		}

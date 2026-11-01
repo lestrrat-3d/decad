@@ -19,6 +19,7 @@ type MultiwayBudget struct {
 	maxRecords, maxWork uint64
 	reserveBytes        func(context.Context, uint64) error
 	prebuiltLimits      *[3]WorkLimitError
+	strictReplay        *ReplayBudget
 }
 
 var brakeOverflowCauses = [3]error{
@@ -76,6 +77,9 @@ func (b *MultiwayBudget) ReserveRecords(ctx context.Context, n uint64) error {
 	if limit == 0 {
 		limit = MaxMultiwayRecordsPerCall
 	}
+	if b.strictReplay != nil {
+		return b.strictReplay.charge(ctx, &b.Records, n, limit, "multiway_records")
+	}
 	return multiwayCharge(ctx, &b.Records, n, limit, "multiway_records", b.prebuiltLimits)
 }
 
@@ -84,6 +88,9 @@ func (b *MultiwayBudget) SpendWork(ctx context.Context, n uint64) error {
 	limit := b.maxWork
 	if limit == 0 {
 		limit = MaxMultiwayWorkPerCall
+	}
+	if b.strictReplay != nil {
+		return b.strictReplay.charge(ctx, &b.Work, n, limit, "multiway_work")
 	}
 	return multiwayCharge(ctx, &b.Work, n, limit, "multiway_work", b.prebuiltLimits)
 }

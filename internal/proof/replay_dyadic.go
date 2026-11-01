@@ -2,20 +2,32 @@ package proof
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/big"
 	"math/bits"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+)
+
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errReplayDyadic1 = fmt.Errorf("%w: bounded dyadic meter missing", decaderr.ErrUnsupported)
+	errReplayDyadic2 = fmt.Errorf("%w: bounded dyadic storage overflow", decaderr.ErrUnsupported)
+	errReplayDyadic3 = fmt.Errorf("%w: unknown bounded dyadic operation", decaderr.ErrUnsupported)
+	errReplayDyadic4 = fmt.Errorf("%w: bounded square-root exponent", decaderr.ErrUnsupported)
+	errReplayDyadic5 = fmt.Errorf("%w: bounded dyadic width overflow", decaderr.ErrUnsupported)
 )
 
 // ReplayDyadicArithmetic applies exact dyadic arithmetic with precharged
 // operand-width-dependent scratch and limb work.
 func ReplayDyadicArithmetic(ctx context.Context, a, b Dyadic, op byte, m ReplayKeyBudget) (Dyadic, error) {
 	if m == nil {
-		return Dyadic{}, errReplayBoundedDyadicMeterMissing
+		return Dyadic{}, errReplayDyadic1
 	}
 	reserve := func(n uint64) error {
 		if n > ^uint64(0)/64 {
-			return errReplayBoundedDyadicStorageOverflow
+			return errReplayDyadic2
 		}
 		if err := m.ReserveBytes(ctx, n*64); err != nil {
 			return err
@@ -35,7 +47,7 @@ func ReplayDyadicArithmetic(ctx context.Context, a, b Dyadic, op byte, m ReplayK
 	case '*':
 		return normalMulReplay(a, b, reserve, spend)
 	default:
-		return Dyadic{}, errReplayUnknownBoundedDyadicOperation
+		return Dyadic{}, errReplayDyadic3
 	}
 }
 
@@ -44,7 +56,7 @@ func ReplayDyadicArithmetic(ctx context.Context, a, b Dyadic, op byte, m ReplayK
 // ambiguous seeds use a bounded exact search.
 func ReplaySqrtDyadic(ctx context.Context, d Dyadic, down bool, m ReplayKeyBudget) (float64, error) {
 	if m == nil {
-		return 0, errReplayBoundedDyadicMeterMissing
+		return 0, errReplayDyadic1
 	}
 	if err := m.SpendWork(ctx, 16); err != nil {
 		return 0, err
@@ -53,7 +65,7 @@ func ReplaySqrtDyadic(ctx context.Context, d Dyadic, down bool, m ReplayKeyBudge
 		return 0, nil
 	}
 	if d.exp < -16384 || d.exp > 16384 {
-		return 0, errReplayBoundedSquareRootExponent
+		return 0, errReplayDyadic4
 	}
 	var f float64
 	if d.big == nil {
@@ -100,12 +112,12 @@ func ReplaySqrtDyadic(ctx context.Context, d Dyadic, down bool, m ReplayKeyBudge
 // shifted numerator and denominator storage.
 func ReplayDyadicRat(ctx context.Context, d Dyadic, m ReplayKeyBudget) (*big.Rat, error) {
 	if m == nil {
-		return nil, errReplayBoundedDyadicMeterMissing
+		return nil, errReplayDyadic1
 	}
 	width := max(1, d.bitLen()+max(d.exp, 0), 1+max(-d.exp, 0))
 	words := uint64((width + bits.UintSize - 1) / bits.UintSize)
 	if words > (^uint64(0)-16)/8 {
-		return nil, errReplayBoundedDyadicWidthOverflow
+		return nil, errReplayDyadic5
 	}
 	if err := m.ReserveBytes(ctx, 8*(words+4)*uint64(bits.UintSize/8)+512); err != nil {
 		return nil, err
@@ -117,4 +129,50 @@ func ReplayDyadicRat(ctx context.Context, d Dyadic, m ReplayKeyBudget) (*big.Rat
 		return nil, err
 	}
 	return d.Rat(), nil
+}
+
+// ReplayDyadicFloatError computes the same upward-rounded absolute error as
+// ReplayRationalFloatError without lifting the held value to a rational.
+func ReplayDyadicFloatError(ctx context.Context, exact Dyadic, held float64, m ReplayKeyBudget) (float64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	if m == nil || math.IsNaN(held) || math.IsInf(held, 0) {
+		return 0, decaderr.ErrUnsupported
+	}
+	if err := m.SpendWork(ctx, 64); err != nil {
+		return 0, err
+	}
+	d, err := ReplayDyadicArithmetic(ctx, exact, DyOfFinite(held), '-', m)
+	if err != nil {
+		return 0, err
+	}
+	if d.Sign() < 0 {
+		d, err = ReplayDyadicArithmetic(ctx, DyZero(), d, '-', m)
+		if err != nil {
+			return 0, err
+		}
+	}
+	if d.Sign() == 0 {
+		return 0, nil
+	}
+	r, err := ReplayDyadicRat(ctx, d, m)
+	if err != nil {
+		return 0, err
+	}
+	f, err := ReplayFractionFloat64(ctx, r.Num(), r.Denom(), m)
+	if err != nil {
+		return 0, err
+	}
+	if math.IsInf(f, 1) {
+		return f, nil
+	}
+	cmp, err := ReplayDyadicArithmetic(ctx, DyOfFinite(f), d, '-', m)
+	if err != nil {
+		return 0, err
+	}
+	if cmp.Sign() != 0 {
+		f = math.Nextafter(f, math.Inf(1))
+	}
+	return f, nil
 }

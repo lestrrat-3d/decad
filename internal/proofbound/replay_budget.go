@@ -3,6 +3,8 @@ package proofbound
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 )
@@ -16,6 +18,9 @@ type ReplayBudget struct {
 	maxBytes    uint64
 	brake       bool
 	limitErrors [3]WorkLimitError
+	strict      bool
+	failure     error
+	limitError  WorkLimitError
 }
 
 // Replay trial limits bound the shared trial meter.
@@ -47,11 +52,78 @@ func NewBrakeReplayBudget() *ReplayBudget {
 // IsBrakeReplay reports whether the meter belongs to the private brake route.
 func (b *ReplayBudget) IsBrakeReplay() bool { return b != nil && b.brake }
 
+// NewReplayBudgetLimits creates a replay budget no larger than the trial caps.
+// All limits must be positive; smaller limits support bounded callers and tests.
+func NewReplayBudgetLimits(work, records, bytes uint64) (*ReplayBudget, error) {
+	if work == 0 || records == 0 || bytes == 0 || work > ReplayTrialWork || records > ReplayTrialRecords || bytes > ReplayTrialBytes {
+		return nil, fmt.Errorf("%w: invalid replay limits", decaderr.ErrUnsupported)
+	}
+	return &ReplayBudget{shared: MultiwayBudget{maxWork: work, maxRecords: records}, maxBytes: bytes}, nil
+}
+
+// NewCircleReplayBudget creates a fail-closed trial meter whose own fixed
+// object and limit refusal are accounted before any source proof can run.
+func NewCircleReplayBudget() *ReplayBudget {
+	b := &ReplayBudget{shared: MultiwayBudget{maxWork: ReplayTrialWork, maxRecords: ReplayTrialRecords}, strict: true}
+	b.shared.strictReplay = b
+	b.shared.Records = 1
+	b.bytes = 2*uint64(unsafe.Sizeof(ReplayBudget{})) + 128
+	return b
+}
+
+// IsCircleReplay reports whether b uses the fail-closed circle meter.
+func (b *ReplayBudget) IsCircleReplay() bool { return b != nil && b.strict }
+
+var (
+	errCircleReplayOverflow = fmt.Errorf("%w: replay counter overflow", decaderr.ErrUnsupported)
+	errCircleReplayWork     = fmt.Errorf("%w: multiway multiway_work budget exceeded", decaderr.ErrUnsupported)
+	errCircleReplayRecords  = fmt.Errorf("%w: multiway multiway_records budget exceeded", decaderr.ErrUnsupported)
+	errCircleReplayBytes    = fmt.Errorf("%w: multiway replay_bytes budget exceeded", decaderr.ErrUnsupported)
+	errCircleReplayArray    = fmt.Errorf("%w: replay allocation size overflow", decaderr.ErrUnsupported)
+	errCircleReplayEnvelope = fmt.Errorf("%w: replay allocation envelope overflow", decaderr.ErrUnsupported)
+)
+
+func (b *ReplayBudget) charge(ctx context.Context, used *uint64, add, limit uint64, resource string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if b.failure != nil {
+		return b.failure
+	}
+	if *used > limit || add > ^uint64(0)-*used {
+		b.failure = errCircleReplayOverflow
+		return b.failure
+	}
+	next := *used + add
+	if next > limit {
+		var cause error
+		switch resource {
+		case "multiway_work":
+			cause = errCircleReplayWork
+		case "multiway_records":
+			cause = errCircleReplayRecords
+		case "replay_bytes":
+			cause = errCircleReplayBytes
+		default:
+			b.failure = errCircleReplayOverflow
+			return b.failure
+		}
+		b.limitError = WorkLimitError{Resource: resource, Observed: next, Maximum: limit, err: cause}
+		b.failure = &b.limitError
+		return b.failure
+	}
+	*used = next
+	return nil
+}
+
 // ReserveBytes charges cumulative allocated storage before allocation.
 func (b *ReplayBudget) ReserveBytes(ctx context.Context, n uint64) error {
 	limit := b.maxBytes
 	if limit == 0 {
 		limit = ReplayTrialBytes
+	}
+	if b.strict {
+		return b.charge(ctx, &b.bytes, n, limit, "replay_bytes")
 	}
 	return multiwayCharge(ctx, &b.bytes, n, limit, "replay_bytes", b.shared.prebuiltLimits)
 }
@@ -61,7 +133,19 @@ var errBrakeEnvelopeOverflow = fmt.Errorf("%w: replay allocation envelope overfl
 
 // ReserveArray charges a checked backing array and a conservative allocation envelope.
 func (b *ReplayBudget) ReserveArray(ctx context.Context, count, elementBytes uint64) error {
+	if b.strict {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if b.failure != nil {
+			return b.failure
+		}
+	}
 	if elementBytes != 0 && count > ^uint64(0)/elementBytes {
+		if b.strict {
+			b.failure = errCircleReplayArray
+			return b.failure
+		}
 		if b.brake {
 			return errBrakeArrayOverflow
 		}
@@ -69,12 +153,59 @@ func (b *ReplayBudget) ReserveArray(ctx context.Context, count, elementBytes uin
 	}
 	size := count * elementBytes
 	if size > (^uint64(0)-128)/2 {
+		if b.strict {
+			b.failure = errCircleReplayEnvelope
+			return b.failure
+		}
 		if b.brake {
 			return errBrakeEnvelopeOverflow
 		}
 		return fmt.Errorf("%w: replay allocation envelope overflow", decaderr.ErrUnsupported)
 	}
 	return b.ReserveBytes(ctx, 2*size+128)
+}
+
+type replayIndexedError struct{ text string }
+
+func (e *replayIndexedError) Error() string { return e.text }
+func (e *replayIndexedError) Unwrap() error { return decaderr.ErrUnsupported }
+
+// ReplayIndexedRefusal constructs an unsupported error with one or two indices.
+// Its fixed buffer holds the prefix, at most 400 bytes of literal text, and two
+// signed machine integers. All possible backing storage is reserved first.
+func ReplayIndexedRefusal(ctx context.Context, b *ReplayBudget, first, middle, last string, i, j int, two bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if b == nil || len(first) > 400 || len(middle) > 400 || len(last) > 400 ||
+		len(first)+len(middle)+len(last) > 400 || len(decaderr.ErrUnsupported.Error())+442 > 512 {
+		return decaderr.ErrUnsupported
+	}
+	if err := b.SpendWork(ctx, 2048); err != nil {
+		return err
+	}
+	if err := b.ReserveRecords(ctx, 3); err != nil {
+		return err
+	}
+	for range 2 {
+		if err := b.ReserveArray(ctx, 512, 1); err != nil {
+			return err
+		}
+	}
+	if err := b.ReserveArray(ctx, 1, uint64(unsafe.Sizeof(replayIndexedError{}))); err != nil {
+		return err
+	}
+	var storage [512]byte
+	out := append(storage[:0], decaderr.ErrUnsupported.Error()...)
+	out = append(out, ':', ' ')
+	out = append(out, first...)
+	out = strconv.AppendInt(out, int64(i), 10)
+	out = append(out, middle...)
+	if two {
+		out = strconv.AppendInt(out, int64(j), 10)
+	}
+	out = append(out, last...)
+	return &replayIndexedError{text: string(out)}
 }
 
 // Bytes returns cumulative precharged storage.
