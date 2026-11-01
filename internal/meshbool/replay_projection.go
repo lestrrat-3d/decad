@@ -17,11 +17,11 @@ func replayProjection(ctx context.Context, p proof.Xpt, u, v int, budget proof.R
 	if err != nil {
 		return Xp2{}, err
 	}
-	fu, err := proof.ReplayFractionFloat64(ctx, ur.Num(), ur.Denom(), budget)
+	fu, err := proof.ReplayRatFloat64(ctx, ur, budget)
 	if err != nil {
 		return Xp2{}, err
 	}
-	fv, err := proof.ReplayFractionFloat64(ctx, vr.Num(), vr.Denom(), budget)
+	fv, err := proof.ReplayRatFloat64(ctx, vr, budget)
 	if err != nil {
 		return Xp2{}, err
 	}
@@ -29,11 +29,11 @@ func replayProjection(ctx context.Context, p proof.Xpt, u, v int, budget proof.R
 }
 
 func replayXP2FromRats(ctx context.Context, u, v *big.Rat, budget proof.ReplayKeyBudget) (Xp2, error) {
-	fu, err := proof.ReplayFractionFloat64(ctx, u.Num(), u.Denom(), budget)
+	fu, err := proof.ReplayRatFloat64(ctx, u, budget)
 	if err != nil {
 		return Xp2{}, err
 	}
-	fv, err := proof.ReplayFractionFloat64(ctx, v.Num(), v.Denom(), budget)
+	fv, err := proof.ReplayRatFloat64(ctx, v, budget)
 	if err != nil {
 		return Xp2{}, err
 	}

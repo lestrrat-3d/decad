@@ -102,7 +102,7 @@ func FacetedExtremeErrorReplay(ctx context.Context, budget *proofbound.WorkBudge
 	if worst.Sign() == 0 {
 		return 0, nil
 	}
-	f, err := proof.ReplayFractionFloat64(ctx, worst.Num(), worst.Denom(), m)
+	f, err := proof.ReplayRatFloat64(ctx, worst, m)
 	if err != nil {
 		return 0, err
 	}

@@ -131,7 +131,7 @@ func ReplayPlacementCharge(ctx context.Context, placement r3.Transform, b *proof
 		a.Neg(a)
 	}
 	up := func(q *big.Rat) (float64, error) {
-		f, e := proofarith.ReplayFractionFloat64(ctx, q.Num(), q.Denom(), b)
+		f, e := proofarith.ReplayRatFloat64(ctx, q, b)
 		if e != nil {
 			return 0, e
 		}

@@ -31,7 +31,7 @@ func replayFloatBoxCorners(ctx context.Context, p proof.Xpt, budget *proofbound.
 		if err != nil {
 			return out, 0, err
 		}
-		d, err := proof.ReplayProductDifference(ctx, q.Num(), p.W, num, q.Denom(), budget)
+		d, err := proof.ReplayRatProductDifference(ctx, q, p.W, num, budget)
 		if err != nil {
 			return out, 0, err
 		}

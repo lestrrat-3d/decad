@@ -11,7 +11,7 @@ import (
 )
 
 func replayPlaneFloatBound(ctx context.Context, q *big.Rat, up bool, b *proofbound.ReplayBudget) (float64, error) {
-	f, err := proof.ReplayFractionFloat64(ctx, q.Num(), q.Denom(), b)
+	f, err := proof.ReplayRatFloat64(ctx, q, b)
 	if err != nil || proofbound.IsNonFinite(f) {
 		return f, err
 	}

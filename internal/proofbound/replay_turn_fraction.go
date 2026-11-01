@@ -55,10 +55,7 @@ func TurnFractionSinCosReplay(ctx context.Context, k, n int, b *ReplayBudget) (R
 	// The ordinary first-octant endpoints are floor/ceil of
 	// pi * 2 * rem/(8*n) * 2^TrigFixedBits.
 	for i, p := range []*big.Rat{PiLower, PiUpper} {
-		if err := a.load(0, p.Num()); err != nil {
-			return RatInterval{}, RatInterval{}, err
-		}
-		if err := a.load(1, p.Denom()); err != nil {
+		if err := a.loadRatPair(0, p); err != nil {
 			return RatInterval{}, RatInterval{}, err
 		}
 		if err := a.setWord(2, uint64(rem)); err != nil {

@@ -116,7 +116,7 @@ func (tc *brakeTriCutter) splitAtU(a, b CutVert, c *big.Rat) (Xp2, proof.Xpt, er
 	if err != nil {
 		return Xp2{}, proof.Xpt{}, err
 	}
-	p3, err := proof.ReplayXlerp(tc.replayCtx, a.P3, b.P3, t.Num(), t.Denom(), budget)
+	p3, err := proof.ReplayRatXlerp(tc.replayCtx, a.P3, b.P3, t, budget)
 	if err != nil {
 		return Xp2{}, proof.Xpt{}, err
 	}

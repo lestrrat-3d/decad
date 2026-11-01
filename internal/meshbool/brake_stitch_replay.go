@@ -405,7 +405,7 @@ func stitchFacetsContext(ctx context.Context, kept []KeptFacet, shared *PairCuts
 	if worst.Sign() > 0 {
 		var w float64
 		if work.Replay {
-			w, err = proof.ReplayFractionFloat64(ctx, worst.Num(), worst.Denom(), replayExactWork{work})
+			w, err = proof.ReplayRatFloat64(ctx, worst, replayExactWork{work})
 			if err != nil {
 				return nil, err
 			}

@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -64,6 +65,50 @@ func unbornHandles(fset *token.FileSet, f *ast.File) []string {
 		_, ok = bornHandles[id.Name]
 		return id.Name, ok
 	}
+	unsafeNames := map[string]struct{}{}
+	for _, spec := range f.Imports {
+		path, err := strconv.Unquote(spec.Path.Value)
+		if err != nil || path != "unsafe" {
+			continue
+		}
+		name := filepath.Base(path)
+		if spec.Name != nil {
+			name = spec.Name.Name
+		}
+		unsafeNames[name] = struct{}{}
+	}
+	sizeofProbes := map[ast.Node]struct{}{}
+	ast.Inspect(f, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok || len(call.Args) != 1 {
+			return true
+		}
+		selector, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || selector.Sel.Name != "Sizeof" {
+			return true
+		}
+		pkg, ok := selector.X.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if _, ok := unsafeNames[pkg.Name]; !ok {
+			return true
+		}
+		arg := call.Args[0]
+		for {
+			paren, ok := arg.(*ast.ParenExpr)
+			if !ok {
+				break
+			}
+			arg = paren.X
+		}
+		if literal, ok := arg.(*ast.CompositeLit); ok {
+			if _, ok := bornType(literal.Type); ok {
+				sizeofProbes[literal] = struct{}{}
+			}
+		}
+		return true
+	})
 	// The literals and new calls each constructor receives.
 	owned := map[ast.Node]struct{}{}
 	ast.Inspect(f, func(n ast.Node) bool {
@@ -93,6 +138,9 @@ func unbornHandles(fset *token.FileSet, f *ast.File) []string {
 		switch n := n.(type) {
 		case *ast.CompositeLit:
 			if typ, ok := bornType(n.Type); ok {
+				if _, sizeOnly := sizeofProbes[n]; sizeOnly {
+					return true
+				}
 				if _, ok := owned[n]; !ok {
 					report(n, typ+" literal not born through "+bornHandles[typ])
 				}
@@ -127,6 +175,24 @@ func unbornHandles(fset *token.FileSet, f *ast.File) []string {
 		return true
 	})
 	return bad
+}
+
+func TestTopologyHandleSizeofProbeDoesNotCountAsAllocation(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+		want int
+	}{
+		{"size probe", "package p\nimport \"unsafe\"\nfunc f() uintptr { return unsafe.Sizeof(Body{}) }", 0},
+		{"real literal", "package p\nimport \"unsafe\"\nfunc f() uintptr { _ = unsafe.Sizeof(Body{}); _ = Body{}; return 0 }", 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fset := token.NewFileSet()
+			f, err := parser.ParseFile(fset, "probe.go", tc.src, 0)
+			require.NoError(t, err)
+			require.Len(t, unbornHandles(fset, f), tc.want)
+		})
+	}
 }
 
 // isNewOf returns T for new(T) of a born type, and "" otherwise.

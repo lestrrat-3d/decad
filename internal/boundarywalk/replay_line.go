@@ -67,7 +67,7 @@ func LineWalkReplay(ctx context.Context, seg LineSeg, b *proofbound.ReplayBudget
 		if e != nil {
 			return 0, e
 		}
-		f, e := proof.ReplayFractionFloat64(ctx, q.Num(), q.Denom(), b)
+		f, e := proof.ReplayRatFloat64(ctx, q, b)
 		if e != nil {
 			return 0, e
 		}

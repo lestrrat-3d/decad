@@ -37,7 +37,7 @@ func replayCentroid(ctx context.Context, b *proofbound.WorkBudget, moments [3]*b
 		if err != nil {
 			return r3.Vec{}, 0, err
 		}
-		values[i], err = proof.ReplayFractionFloat64(ctx, q.Num(), q.Denom(), meter)
+		values[i], err = proof.ReplayRatFloat64(ctx, q, meter)
 		if err != nil {
 			return r3.Vec{}, 0, err
 		}
@@ -49,7 +49,7 @@ func replayCentroid(ctx context.Context, b *proofbound.WorkBudget, moments [3]*b
 			return r3.Vec{}, 0, err
 		}
 	}
-	v, err := proof.ReplayFractionFloat64(ctx, volume.Num(), volume.Denom(), meter)
+	v, err := proof.ReplayRatFloat64(ctx, volume, meter)
 	if err != nil {
 		return r3.Vec{}, 0, err
 	}

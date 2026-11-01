@@ -125,3 +125,11 @@ func ReplayFractionFloat64(ctx context.Context, num, den *big.Int, budget Replay
 	}
 	return replayQuotientFloat64(ctx, num, den, budget)
 }
+
+// ReplayRatFloat64 rounds an exact rational with bounded workspace.
+func ReplayRatFloat64(ctx context.Context, q *big.Rat, budget ReplayKeyBudget) (float64, error) {
+	if q == nil {
+		return 0, errReplayInvalidExactFraction
+	}
+	return ReplayFractionFloat64(ctx, q.Num(), q.Denom(), budget)
+}

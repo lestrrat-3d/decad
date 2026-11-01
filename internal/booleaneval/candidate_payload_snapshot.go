@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"math/bits"
 	"slices"
 	"unsafe"
 
@@ -126,7 +127,8 @@ func copyCandidateRat(ctx context.Context, q *big.Rat, b *proofbound.ReplayBudge
 	if q == nil || b == nil || q.Denom().Sign() <= 0 || q.Num().BitLen() > 4096 || q.Denom().BitLen() > 4096 {
 		return nil, fmt.Errorf("%w: candidate exact level width", decaderr.ErrUnsupported)
 	}
-	n, d := uint64(len(q.Num().Bits())), uint64(len(q.Denom().Bits()))
+	n := uint64((q.Num().BitLen() + bits.UintSize - 1) / bits.UintSize)
+	d := uint64((q.Denom().BitLen() + bits.UintSize - 1) / bits.UintSize)
 	if n > ^uint64(0)-4 || d > ^uint64(0)-4 || n+d > ^uint64(0)-8 {
 		return nil, fmt.Errorf("%w: candidate exact level allocation overflow", decaderr.ErrUnsupported)
 	}

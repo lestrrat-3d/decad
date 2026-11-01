@@ -79,7 +79,7 @@ func replayGapBounds(ctx context.Context, b *proofbound.WorkBudget, gaps []*big.
 		}
 		value := xbeta[i]
 		if g.Sign() > 0 {
-			f, err := proof.ReplayFractionFloat64(ctx, g.Num(), g.Denom(), meter)
+			f, err := proof.ReplayRatFloat64(ctx, g, meter)
 			if err != nil {
 				return nil, nil, err
 			}

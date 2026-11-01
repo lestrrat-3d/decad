@@ -105,6 +105,14 @@ func ReplayProductDifference(ctx context.Context, a, b, c, d *big.Int, budget Re
 	return result, nil
 }
 
+// ReplayRatProductDifference computes q.Num()*b-c*q.Denom() with bounded scratch.
+func ReplayRatProductDifference(ctx context.Context, q *big.Rat, b, c *big.Int, budget ReplayKeyBudget) (*big.Int, error) {
+	if q == nil || b == nil || c == nil {
+		return nil, errReplayInvalidExactProduct
+	}
+	return ReplayProductDifference(ctx, q.Num(), b, c, q.Denom(), budget)
+}
+
 // smallReplayProduct owns both the integer and its limbs in one allocation.
 type smallReplayProduct struct {
 	value big.Int
@@ -381,4 +389,12 @@ func ReplayXlerp(ctx context.Context, a, b Xpt, num, den *big.Int, budget Replay
 		return Xpt{}, err
 	}
 	return out, nil
+}
+
+// ReplayRatXlerp interpolates exact points using a bounded rational parameter.
+func ReplayRatXlerp(ctx context.Context, a, b Xpt, t *big.Rat, budget ReplayKeyBudget) (Xpt, error) {
+	if t == nil {
+		return Xpt{}, errReplayInvalidReplayInterpolation
+	}
+	return ReplayXlerp(ctx, a, b, t.Num(), t.Denom(), budget)
 }

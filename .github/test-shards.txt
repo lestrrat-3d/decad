@@ -297,3 +297,4 @@
 10	0.00	TestRevolveSectorProjectionRefusesOverlap
 10	0.02	TestStraightLoftPrismUnionManyGates
 10	0.01	TestSweepPairRealFacetedUnionClearAndImpact
+10	0.00	TestTopologyHandleSizeofProbeDoesNotCountAsAllocation

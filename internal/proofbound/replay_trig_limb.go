@@ -8,6 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // replayTrigInteger is one unsigned integer in the private 4096-bit arena.
@@ -38,19 +39,17 @@ func newReplayTrigArena(ctx context.Context, budget *ReplayBudget) (*replayTrigA
 	return &replayTrigArena{budget: budget, ctx: ctx}, nil
 }
 func (a *replayTrigArena) charge(n uint64) error { return a.budget.SpendWork(a.ctx, n) }
-func (a *replayTrigArena) load(slot int, x *big.Int) error {
-	if x == nil || x.BitLen() > 64*replayTrigWords {
-		return fmt.Errorf("%w: bounded trig integer width", decaderr.ErrUnsupported)
+func (a *replayTrigArena) loadRatPart(slot int, q *big.Rat, numerator bool) error {
+	if slot < 0 || slot >= replayTrigSlots {
+		return fmt.Errorf("%w: bounded trig slot", decaderr.ErrUnsupported)
 	}
-	if err := a.charge(replayTrigWords); err != nil {
+	return proof.ReplayRatPartToWords(a.ctx, q, numerator, a.slots[slot][:], a.budget)
+}
+func (a *replayTrigArena) loadRatPair(slot int, q *big.Rat) error {
+	if err := a.loadRatPart(slot, q, true); err != nil {
 		return err
 	}
-	v := &a.slots[slot]
-	*v = replayTrigInteger{}
-	for i, w := range x.Bits() {
-		v[i] = uint64(w)
-	}
-	return nil
+	return a.loadRatPart(slot+1, q, false)
 }
 func replayTrigCmp(x, y *replayTrigInteger) int {
 	for i := replayTrigWords - 1; i >= 0; i-- {
@@ -388,17 +387,14 @@ func (a *replayTrigArena) turnFloor(x *big.Rat) (replayTrigSigned, error) {
 	if x.Sign() < 0 {
 		pi = PiLower
 	}
-	for i, v := range []*big.Int{x.Num(), x.Denom(), pi.Num(), pi.Denom(), PiUpper.Num(), PiUpper.Denom()} {
-		slot := i
-		if i == 4 {
-			slot = 8
-		}
-		if i == 5 {
-			slot = 9
-		}
-		if err := a.load(slot, v); err != nil {
-			return out, err
-		}
+	if err := a.loadRatPair(0, x); err != nil {
+		return out, err
+	}
+	if err := a.loadRatPair(2, pi); err != nil {
+		return out, err
+	}
+	if err := a.loadRatPair(8, PiUpper); err != nil {
+		return out, err
 	}
 	// |x| <= 8*piUpper. Reject before constructing larger intermediates.
 	if err := a.mul(4, 0, 9); err != nil {
@@ -493,10 +489,7 @@ func (a *replayTrigArena) gridSeries(grid replayTrigSigned) (replayTrigSpan, rep
 	}
 	// Outward floor and ceiling of pi*residual*2^105.
 	for i, p := range []*big.Rat{PiLower, PiUpper} {
-		if err := a.load(0, p.Num()); err != nil {
-			return empty, empty, err
-		}
-		if err := a.load(1, p.Denom()); err != nil {
+		if err := a.loadRatPair(0, p); err != nil {
 			return empty, empty, err
 		}
 		if err := a.mul(2, 0, 7); err != nil {
@@ -676,10 +669,11 @@ func (a *replayTrigArena) widenRadianGap(x *big.Rat, grid replayTrigSigned, s, c
 	if x.Sign() < 0 {
 		pi = PiUpper
 	}
-	for i, v := range []*big.Int{x.Num(), x.Denom(), pi.Num(), pi.Denom()} {
-		if err := a.load(i, v); err != nil {
-			return s, c, scale, err
-		}
+	if err := a.loadRatPair(0, x); err != nil {
+		return s, c, scale, err
+	}
+	if err := a.loadRatPair(2, pi); err != nil {
+		return s, c, scale, err
 	}
 	if err := a.mul(4, 0, 3); err != nil {
 		return s, c, scale, err
@@ -709,10 +703,7 @@ func (a *replayTrigArena) widenRadianGap(x *big.Rat, grid replayTrigSigned, s, c
 	if err := a.left(9, TurnGridShift); err != nil {
 		return s, c, scale, err
 	}
-	if err := a.load(2, PiUpper.Num()); err != nil {
-		return s, c, scale, err
-	}
-	if err := a.load(3, PiUpper.Denom()); err != nil {
+	if err := a.loadRatPair(2, PiUpper); err != nil {
 		return s, c, scale, err
 	}
 	if err := a.mul(0, 8, 2); err != nil {
@@ -732,10 +723,11 @@ func (a *replayTrigArena) widenRadianGap(x *big.Rat, grid replayTrigSigned, s, c
 }
 
 func (a *replayTrigArena) widenRadianSpan(lo, hi *big.Rat, s, c replayTrigSpan, scale int) (replayTrigSpan, replayTrigSpan, int, error) {
-	for i, v := range []*big.Int{lo.Num(), lo.Denom(), hi.Num(), hi.Denom()} {
-		if err := a.load(i, v); err != nil {
-			return s, c, scale, err
-		}
+	if err := a.loadRatPair(0, lo); err != nil {
+		return s, c, scale, err
+	}
+	if err := a.loadRatPair(2, hi); err != nil {
+		return s, c, scale, err
 	}
 	if err := a.mul(4, 2, 1); err != nil {
 		return s, c, scale, err
@@ -785,32 +777,7 @@ func (a *replayTrigArena) dyadicRat(value replayTrigSigned, scale int) (*big.Rat
 		return nil, err
 	}
 	nwords := (replayTrigBitLen(&a.slots[18]) + 63) / 64
-	dwords := scale/64 + 1
-	if err := a.budget.ReserveRecords(a.ctx, 3); err != nil {
-		return nil, err
-	}
-	if err := a.budget.ReserveArray(a.ctx, uint64(nwords+dwords+1), uint64(unsafe.Sizeof(big.Word(0)))); err != nil {
-		return nil, err
-	}
-	if err := a.budget.ReserveArray(a.ctx, 1, uint64(unsafe.Sizeof(big.Rat{}))); err != nil {
-		return nil, err
-	}
-	if err := a.charge(uint64(nwords + dwords)); err != nil {
-		return nil, err
-	}
-	n := make([]big.Word, nwords)
-	for i := range n {
-		n[i] = big.Word(a.slots[18][i])
-	}
-	d := make([]big.Word, dwords)
-	d[scale/64] = big.Word(uint64(1) << uint(scale%64))
-	q := new(big.Rat).SetInt64(1)
-	q.Num().SetBits(n)
-	q.Denom().SetBits(d)
-	if value.negative && nwords > 0 {
-		q.Num().Neg(q.Num())
-	}
-	return q, nil
+	return proof.ReplayDyadicRatFromWords(a.ctx, a.slots[18][:nwords], -scale, value.negative, a.budget)
 }
 
 // RadSinCosSpanReplay encloses a bounded radian interval without the global
@@ -898,10 +865,7 @@ func TurnSinCosReplay(ctx context.Context, turn *big.Rat, budget *ReplayBudget) 
 	if err != nil {
 		return RatInterval{}, RatInterval{}, err
 	}
-	if err = a.load(0, turn.Num()); err != nil {
-		return RatInterval{}, RatInterval{}, err
-	}
-	if err = a.load(1, turn.Denom()); err != nil {
+	if err = a.loadRatPair(0, turn); err != nil {
 		return RatInterval{}, RatInterval{}, err
 	}
 	if err = a.left(0, TurnGridShift); err != nil {
@@ -923,10 +887,7 @@ func TurnSinCosReplay(ctx context.Context, turn *big.Rat, budget *ReplayBudget) 
 	if err != nil {
 		return RatInterval{}, RatInterval{}, err
 	}
-	if err = a.load(0, turn.Num()); err != nil {
-		return RatInterval{}, RatInterval{}, err
-	}
-	if err = a.load(1, turn.Denom()); err != nil {
+	if err = a.loadRatPair(0, turn); err != nil {
 		return RatInterval{}, RatInterval{}, err
 	}
 	if err = a.left(0, TurnGridShift); err != nil {
@@ -948,10 +909,7 @@ func TurnSinCosReplay(ctx context.Context, turn *big.Rat, budget *ReplayBudget) 
 	if err = a.left(9, TurnGridShift); err != nil {
 		return RatInterval{}, RatInterval{}, err
 	}
-	if err = a.load(2, PiUpper.Num()); err != nil {
-		return RatInterval{}, RatInterval{}, err
-	}
-	if err = a.load(3, PiUpper.Denom()); err != nil {
+	if err = a.loadRatPair(2, PiUpper); err != nil {
 		return RatInterval{}, RatInterval{}, err
 	}
 	if err = a.mul(0, 8, 2); err != nil {
@@ -1001,10 +959,7 @@ func RoundIntervalGridReplay(ctx context.Context, iv RatInterval, shift int, b *
 		return RatInterval{}, err
 	}
 	round := func(q *big.Rat, up bool) (*big.Rat, error) {
-		if err := a.load(0, q.Num()); err != nil {
-			return nil, err
-		}
-		if err := a.load(1, q.Denom()); err != nil {
+		if err := a.loadRatPair(0, q); err != nil {
 			return nil, err
 		}
 		if err := a.left(0, uint(shift)); err != nil {

@@ -42,7 +42,7 @@ func VolumeFromAuditReplay(ctx context.Context, budget *proofbound.WorkBudget, a
 	if err != nil {
 		return 0, 0, nil, false, err
 	}
-	volumeFloat, err := proof.ReplayFractionFloat64(ctx, volumeRat.Num(), volumeRat.Denom(), replayExactMeter{budget})
+	volumeFloat, err := proof.ReplayRatFloat64(ctx, volumeRat, replayExactMeter{budget})
 	if err != nil {
 		return 0, 0, nil, false, err
 	}
