@@ -75,6 +75,9 @@ type Body struct {
 	// sets it when the handle is born and maps a node back to its handle
 	// through it; nothing else writes it.
 	Owner any
+	// prismBuildSeal retains bounded immutable native-prism face evidence.
+	prismBuildSeal *prismBuildSeal
+
 	// Payload is the evaluator's own record of how this body was built —
 	// what Transform re-evaluates under a composed motion
 	// (agent-docs/evaluator-design.md §8). Nil for a body this evaluator did not

@@ -1,6 +1,7 @@
 package prismrecord
 
 import (
+	"context"
 	"math"
 
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -134,6 +135,13 @@ func (pp Payload) CircleCurveBound(cu, cv, z, zDelta, centerDelta, radius, radiu
 func (pp Payload) LiftedVertex(u, v, z float64) (r3.Vec, float64) {
 	held := pp.Point(u, v, z)
 	return held, pp.PointRound(u, v, z, held)
+}
+
+// LiftedVertexReplay charges the exact frame lift before calculating the
+// same held point and bound that LiftedVertex returns.
+func (pp Payload) LiftedVertexReplay(ctx context.Context, u, v, z float64,
+	budget *proofbound.ReplayBudget) (r3.Vec, float64, error) {
+	return proofbound.ExactFrameLiftRoundReplay(ctx, pp.Frame, pp.Xform, u, v, z, budget)
 }
 
 func vecL1(v r3.Vec) float64 {

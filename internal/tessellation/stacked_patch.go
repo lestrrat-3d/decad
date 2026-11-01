@@ -61,12 +61,18 @@ func StackedPatchTriangles[F any](ctx context.Context, rings []StackedRing[F], l
 	clearance func(context.Context, []sectionrecord.Point2, [][]int, []float64) error,
 	triangulate func(context.Context, []sectionrecord.Point2, [][]int) ([][3]int, error),
 ) (StackedPatchMesh, error) {
+	if err := ctx.Err(); err != nil {
+		return StackedPatchMesh{}, err
+	}
 	var points []sectionrecord.Point2
 	var vertices []int
 	var indexLoops [][]int
 	var sags []float64
 	out := StackedPatchMesh{}
 	for _, loop := range loops {
+		if err := ctx.Err(); err != nil {
+			return StackedPatchMesh{}, err
+		}
 		ring := rings[loop.Column]
 		start := len(points)
 		points = append(points, ring.Samples...)
@@ -97,13 +103,22 @@ func StackedPatchTriangles[F any](ctx context.Context, rings []StackedRing[F], l
 	if err != nil {
 		return StackedPatchMesh{}, err
 	}
+	if err := ctx.Err(); err != nil {
+		return StackedPatchMesh{}, err
+	}
 	out.Triangles = make([][3]int, len(tris))
 	for i, tri := range tris {
+		if err := ctx.Err(); err != nil {
+			return StackedPatchMesh{}, err
+		}
 		a, b, c := vertices[tri[0]], vertices[tri[1]], vertices[tri[2]]
 		if reverse {
 			b, c = c, b
 		}
 		out.Triangles[i] = [3]int{a, b, c}
+	}
+	if err := ctx.Err(); err != nil {
+		return StackedPatchMesh{}, err
 	}
 	return out, nil
 }

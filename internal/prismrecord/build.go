@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -41,6 +42,15 @@ const OuterFirstSideRole = "side(0,0)"
 // env.Ref. It never commits: the caller maps the result to its handle and
 // commits it.
 func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.FreeformWork) (*topo.Body, error) {
+	var witness *PrismSourceWitness
+	if capture, ok := ctx.Value(prismWitnessKey{}).(func(*PrismSourceWitness)); ok && capture != nil {
+		witness = newPrismSourceWitness(pp)
+		defer func() {
+			if witness != nil && witness.Body != nil {
+				capture(witness)
+			}
+		}()
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -179,7 +189,8 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		sideFaces, bottom, top, loopLen, err := buildLoopSidesAs(ctx, env, body, pp, li, li != 0, loop, work, pw, levelZ0, levelZ1, true, true)
+		sideFaces, bottom, top, loopLen, err := buildLoopSidesAs(ctx, env, body, pp, li, li != 0,
+			loop, work, pw, levelZ0, levelZ1, true, true, nil, witness)
 		if err != nil {
 			return nil, err
 		}
@@ -319,7 +330,24 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 	}
 	pp.Walks = pw
 	pp.Upstream = nil
+	witnessBudget := proofbound.NewReplayTrialBudget()
+	if sealed, _ := body.SealPrismBuildFacesReplay(ctx, faces, witnessBudget); sealed {
+		if sealed, _ := body.SealPrismBuildPayloadReplay(ctx, pp.Frame, pp.Xform,
+			pp.Z0, pp.Z1, pp.Z0Delta, pp.Z1Delta, pp.SectionDelta,
+			pp.Z0Denoted, pp.Z1Denoted,
+			[]momentinput.Profile{pp.Profile}, witnessBudget); sealed {
+			// This optional seal only enables a later bounded replay; ordinary
+			// construction remains valid if its witness cannot be recorded.
+			_, _ = body.SealPrismBuildWalksReplay(ctx, pw, witnessBudget)
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	body.Payload = pp
+	if witness != nil && witness.valid && len(witness.Walls) == len(pp.Profile.Outer.Segments) {
+		witness.Body, witness.CapStart, witness.CapEnd = body, capStart, capEnd
+	}
 	return body, nil
 }
 
@@ -334,6 +362,24 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 // around it — wraparound junctions and cap coedges for a loop, neither for a
 // chain (agent-docs/surface-design.md §13.4).
 func BuildWallGeometry(alloc topo.Alloc, pp Payload, w survey2d.SideWalk, convex, closed bool, bStart, bEnd, tStart, tEnd *topo.Vertex) (*topo.Edge, *topo.Edge, surfacegeom.Surface, bool, error) {
+	return buildWallGeometry(alloc, pp, w, convex, closed, bStart, bEnd, tStart, tEnd, nil, nil)
+}
+
+// BuildWallGeometryReplay uses the same topology construction with a charged
+// signed-basis circular bound. The caller charges its node allocations.
+func BuildWallGeometryReplay(ctx context.Context, alloc topo.Alloc, pp Payload, w survey2d.SideWalk,
+	convex, closed bool, bStart, bEnd, tStart, tEnd *topo.Vertex, budget *proofbound.ReplayBudget,
+) (*topo.Edge, *topo.Edge, surfacegeom.Surface, bool, error) {
+	if budget == nil {
+		return nil, nil, nil, false, decaderr.ErrUnsupported
+	}
+	return buildWallGeometry(alloc, pp, w, convex, closed, bStart, bEnd, tStart, tEnd, ctx, budget)
+}
+
+func buildWallGeometry(alloc topo.Alloc, pp Payload, w survey2d.SideWalk, convex, closed bool,
+	bStart, bEnd, tStart, tEnd *topo.Vertex, ctx context.Context, budget *proofbound.ReplayBudget,
+) (*topo.Edge, *topo.Edge, surfacegeom.Surface, bool, error) {
+	var err error
 	switch w.Kind {
 	case survey2d.WalkCircular:
 		axis := pp.Dir(0, 0, 1)
@@ -380,8 +426,19 @@ func BuildWallGeometry(alloc topo.Alloc, pp Payload, w survey2d.SideWalk, convex
 		// this walk, computed by the caller.
 		bottomEdge := topobuild.NewEdge(alloc, topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve0, Start: bStart, End: bEnd})
 		topEdge := topobuild.NewEdge(alloc, topo.Edge{Convex: convex, Length: w.Length, LengthBound: w.LengthBound, Curve: curve1, Start: tStart, End: tEnd})
-		bottomEdge.CurveBound, bottomEdge.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, center0, edgeAxis)
-		topEdge.CurveBound, topEdge.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z1, pp.Z1Delta, 0, w.Radius, w.RadiusBound, center1, edgeAxis)
+		if budget == nil {
+			bottomEdge.CurveBound, bottomEdge.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, center0, edgeAxis)
+			topEdge.CurveBound, topEdge.CurveBounded = pp.CircleCurveBound(w.CU, w.CV, pp.Z1, pp.Z1Delta, 0, w.Radius, w.RadiusBound, center1, edgeAxis)
+		} else {
+			bottomEdge.CurveBound, bottomEdge.CurveBounded, err = pp.CircleCurveBoundSignedReplay(ctx, w.CU, w.CV, pp.Z0, pp.Z0Delta, 0, w.Radius, w.RadiusBound, center0, edgeAxis, budget)
+			if err != nil {
+				return nil, nil, nil, false, err
+			}
+			topEdge.CurveBound, topEdge.CurveBounded, err = pp.CircleCurveBoundSignedReplay(ctx, w.CU, w.CV, pp.Z1, pp.Z1Delta, 0, w.Radius, w.RadiusBound, center1, edgeAxis, budget)
+			if err != nil {
+				return nil, nil, nil, false, err
+			}
+		}
 		surf := surfacegeom.Cylinder{Origin: center0, Axis: axis, Radius: radius}
 		// A clockwise-walked wall has its material OUTSIDE the cylinder,
 		// so its outward normal is the radial direction negated.
@@ -483,10 +540,45 @@ func BuildLoopSides(ctx context.Context, env topo.Env, body *topo.Body, pp Paylo
 // False for every OTHER caller of this function, which mints no curve
 // identity for their own rim.
 func BuildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Payload, roleLoop int, holeLoop bool, loop sectionrecord.LoopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, levelZ0, levelZ1 denotation.LevelToken, mintCurveTokens bool) ([]*topo.Face, []topo.CoEdge, []topo.CoEdge, proofbound.BoundedScalar, error) {
-	return buildLoopSidesAs(ctx, env, body, pp, roleLoop, holeLoop, loop, work, resolved, levelZ0, levelZ1, mintCurveTokens, false)
+	return buildLoopSidesAs(ctx, env, body, pp, roleLoop, holeLoop, loop, work, resolved, levelZ0, levelZ1, mintCurveTokens, false, nil, nil)
 }
 
-func buildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Payload, roleLoop int, holeLoop bool, loop sectionrecord.LoopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks, levelZ0, levelZ1 denotation.LevelToken, mintCurveTokens, recordPrismFace bool) ([]*topo.Face, []topo.CoEdge, []topo.CoEdge, proofbound.BoundedScalar, error) {
+// BuildLoopSidesWithWitness records the actual face created for each unmerged
+// source segment. The caller must authenticate this construction witness.
+func BuildLoopSidesWithWitness(ctx context.Context, env topo.Env, body *topo.Body, pp Payload,
+	roleLoop int, holeLoop bool, loop sectionrecord.LoopRecord, work *freeform.FreeformWork,
+	resolved *momentinput.ProfileWalks, levelZ0, levelZ1 denotation.LevelToken,
+	mintCurveTokens bool,
+) ([]*topo.Face, []topo.CoEdge, []topo.CoEdge, proofbound.BoundedScalar, []*topo.Face, error) {
+	witness := &PrismSourceWitness{Segments: loop.Segments}
+	faces, bottom, top, length, err := buildLoopSidesAs(ctx, env, body, pp, roleLoop,
+		holeLoop, loop, work, resolved, levelZ0, levelZ1, mintCurveTokens, false, nil, witness)
+	if err != nil {
+		return nil, nil, nil, proofbound.BoundedScalar{}, nil, err
+	}
+	if !witness.valid {
+		return faces, bottom, top, length, nil, nil
+	}
+	return faces, bottom, top, length, witness.Walls, nil
+}
+
+// BuildLoopSidesAsReplay charges the exact lifted rim points to one replay
+// meter. The remaining side-building stages still need accounting.
+func BuildLoopSidesAsReplay(ctx context.Context, env topo.Env, body *topo.Body, pp Payload, roleLoop int, holeLoop bool,
+	loop sectionrecord.LoopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks,
+	levelZ0, levelZ1 denotation.LevelToken, mintCurveTokens bool, budget *proofbound.ReplayBudget,
+) ([]*topo.Face, []topo.CoEdge, []topo.CoEdge, proofbound.BoundedScalar, error) {
+	if budget == nil {
+		return nil, nil, nil, proofbound.BoundedScalar{}, fmt.Errorf("%w: missing side-build budget", decaderr.ErrUnsupported)
+	}
+	return buildLoopSidesAs(ctx, env, body, pp, roleLoop, holeLoop, loop, work, resolved, levelZ0, levelZ1, mintCurveTokens, false, budget, nil)
+}
+
+func buildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Payload, roleLoop int, holeLoop bool,
+	loop sectionrecord.LoopRecord, work *freeform.FreeformWork, resolved *momentinput.ProfileWalks,
+	levelZ0, levelZ1 denotation.LevelToken, mintCurveTokens, recordPrismFace bool, budget *proofbound.ReplayBudget,
+	witness *PrismSourceWitness,
+) ([]*topo.Face, []topo.CoEdge, []topo.CoEdge, proofbound.BoundedScalar, error) {
 	mintCurve := func() denotation.CurveToken {
 		if !mintCurveTokens {
 			return denotation.CurveToken{}
@@ -501,7 +593,17 @@ func buildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Pay
 	}
 	var loopWalks []survey2d.SegmentWalk
 	if resolved != nil {
-		if !resolved.LoopMatches(roleLoop, loop) {
+		matches := false
+		if budget == nil {
+			matches = resolved.LoopMatches(roleLoop, loop)
+		} else {
+			var err error
+			matches, err = resolved.LoopMatchesReplay(ctx, roleLoop, loop, budget)
+			if err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+		}
+		if !matches {
 			return nil, nil, nil, proofbound.BoundedScalar{}, momentinput.ErrResolvedWalksMismatch
 		}
 		loopWalks = resolved.LoopWalks(roleLoop)
@@ -513,11 +615,29 @@ func buildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Pay
 	// draws, and the arithmetic below is then the unchanged one.
 	delta := pp.SectionDelta
 	walkLenAllow := proofbound.SectionDisplacementLength(delta, 1)
+	if budget != nil {
+		if err := budget.ReserveRecords(ctx, uint64(len(loop.Segments))); err != nil {
+			return nil, nil, nil, proofbound.BoundedScalar{}, err
+		}
+		if err := budget.ReserveArray(ctx, uint64(len(loop.Segments)), uint64(unsafe.Sizeof(survey2d.SideWalk{}))); err != nil {
+			return nil, nil, nil, proofbound.BoundedScalar{}, err
+		}
+	}
 	raw := make([]survey2d.SideWalk, len(loop.Segments))
 	total := proofbound.BoundedScalar{}
 	for i, seg := range loop.Segments {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, nil, proofbound.BoundedScalar{}, err
+		}
+		if budget != nil {
+			switch seg.(type) {
+			case sectionrecord.LineSeg, sectionrecord.CircleSeg, sectionrecord.ArcSeg:
+			default:
+				return nil, nil, nil, proofbound.BoundedScalar{}, decaderr.ErrUnsupported
+			}
+			if err := budget.SpendWork(ctx, 16); err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
 		}
 		seg, err := sectionrecord.NormalizeSegment(seg)
 		if err != nil {
@@ -532,6 +652,15 @@ func buildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Pay
 		var w survey2d.SegmentWalk
 		if loopWalks != nil {
 			w = loopWalks[i]
+		} else if budget != nil {
+			circle, ok := seg.(sectionrecord.CircleSeg)
+			if !ok {
+				return nil, nil, nil, proofbound.BoundedScalar{}, decaderr.ErrUnsupported
+			}
+			w, err = boundarywalk.WholeCircleWalkReplay(ctx, circle, budget)
+			if err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
 		} else {
 			w, err = boundarywalk.WalkOf(seg, work)
 			if err != nil {
@@ -539,10 +668,31 @@ func buildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Pay
 			}
 		}
 		w.LengthBound = proofbound.AbsSumUpper(w.LengthBound, walkLenAllow)
+		if budget != nil {
+			if err := budget.ReserveRecords(ctx, 1); err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+			if err := budget.ReserveArray(ctx, 1, uint64(unsafe.Sizeof(int(0)))); err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+		}
 		raw[i] = survey2d.SideWalk{SegmentWalk: w, Segs: []int{i}}
-		total = proofbound.BoundedAdd(total, proofbound.MeasuredScalar(w.Length, w.LengthBound))
+		if budget == nil {
+			total = proofbound.BoundedAdd(total, proofbound.MeasuredScalar(w.Length, w.LengthBound))
+		} else {
+			total, err = proofbound.BoundedAddReplay(ctx, total, proofbound.MeasuredScalar(w.Length, w.LengthBound), budget)
+			if err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+		}
 	}
-	walks, err := boundarywalk.CoalesceWalksContext(ctx, raw)
+	var walks []survey2d.SideWalk
+	var err error
+	if budget == nil {
+		walks, err = boundarywalk.CoalesceWalksContext(ctx, raw)
+	} else {
+		walks, err = boundarywalk.CoalesceWalksNoMergeReplay(ctx, raw, budget)
+	}
 	if err != nil {
 		return nil, nil, nil, proofbound.BoundedScalar{}, err
 	}
@@ -556,7 +706,15 @@ func buildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Pay
 	// lengths and the side face areas built from it below — a ToFace or
 	// ThroughAll stop's float arithmetic (root stops.go), a non-base unit's rescale,
 	// and a chamfered end's setback alike.
-	height := proofbound.BoundedSub(pp.Z1Scalar(), pp.Z0Scalar())
+	var height proofbound.BoundedScalar
+	if budget == nil {
+		height = proofbound.BoundedSub(pp.Z1Scalar(), pp.Z0Scalar())
+	} else {
+		height, err = proofbound.BoundedSubReplay(ctx, pp.Z1Scalar(), pp.Z0Scalar(), budget)
+		if err != nil {
+			return nil, nil, nil, proofbound.BoundedScalar{}, err
+		}
+	}
 	// A side vertex sits at one recorded boundary coordinate and one sweep level,
 	// so it carries both displacements: the section's, which moves it in the
 	// plane, and its own end's, which moves it along the normal. Each is zero for
@@ -570,10 +728,26 @@ func buildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Pay
 	// rimVertex places one rim vertex at (u, v) on level z, whose own axial
 	// displacement is zDelta, charging the section's displacement, that level's,
 	// the vertex's own exact lift rounding and the walk-end term extra.
-	rimVertex := func(u, v, z, zDelta, extra float64, level denotation.LevelToken) *topo.Vertex {
-		held, lift := pp.LiftedVertex(u, v, z)
+	rimVertex := func(u, v, z, zDelta, extra float64, level denotation.LevelToken) (*topo.Vertex, error) {
+		var held r3.Vec
+		var lift float64
+		if budget == nil {
+			held, lift = pp.LiftedVertex(u, v, z)
+		} else {
+			var err error
+			held, lift, err = pp.LiftedVertexReplay(ctx, u, v, z, budget)
+			if err != nil {
+				return nil, err
+			}
+			if err := budget.ReserveRecords(ctx, 1); err != nil {
+				return nil, err
+			}
+			if err := budget.ReserveArray(ctx, 1, uint64(unsafe.Sizeof(topo.Vertex{}))+128); err != nil {
+				return nil, err
+			}
+		}
 		base := proofbound.AbsSumUpper(delta, zDelta, lift)
-		return topobuild.NewVertex(env.Alloc, topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(base, extra)), Level: level, Denot: mintCurve()})
+		return topobuild.NewVertex(env.Alloc, topo.Vertex{Position: held, Bound: units.Millimeters(proofbound.AbsSumUpper(base, extra)), Level: level, Denot: mintCurve()}), nil
 	}
 	var bottomV, topV []*topo.Vertex
 	// seamBottom/seamTop are the SINGLE seam vertex a lone closed walk's rim
@@ -583,12 +757,36 @@ func buildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Pay
 	// singleClosed on the same terms a whole circle does, and the switch's
 	// survey2d.WalkFreeform arm needs the SAME seam pair the survey2d.WalkCircular arm builds.
 	var seamBottom, seamTop *topo.Vertex
+	junction := func(prev, next survey2d.SideWalk) (float64, float64, float64, error) {
+		if budget != nil {
+			return boundarywalk.JunctionVertexAtReplay(ctx, loop.Segments, prev, next, budget)
+		}
+		u, v, extra := boundarywalk.JunctionVertexAt(loop.Segments, prev, next)
+		return u, v, extra, nil
+	}
 	if singleClosed {
 		w := walks[0]
-		u, v, extra := boundarywalk.JunctionVertexAt(loop.Segments, w, w)
-		seamBottom = rimVertex(u, v, pp.Z0, pp.Z0Delta, extra, levelZ0)
-		seamTop = rimVertex(u, v, pp.Z1, pp.Z1Delta, extra, levelZ1)
+		u, v, extra, err := junction(w, w)
+		if err != nil {
+			return nil, nil, nil, proofbound.BoundedScalar{}, err
+		}
+		seamBottom, err = rimVertex(u, v, pp.Z0, pp.Z0Delta, extra, levelZ0)
+		if err != nil {
+			return nil, nil, nil, proofbound.BoundedScalar{}, err
+		}
+		seamTop, err = rimVertex(u, v, pp.Z1, pp.Z1Delta, extra, levelZ1)
+		if err != nil {
+			return nil, nil, nil, proofbound.BoundedScalar{}, err
+		}
 	} else {
+		if budget != nil {
+			if err := budget.ReserveArray(ctx, uint64(n), uint64(unsafe.Sizeof((*topo.Vertex)(nil)))); err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+			if err := budget.ReserveArray(ctx, uint64(n), uint64(unsafe.Sizeof((*topo.Vertex)(nil)))); err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+		}
 		bottomV = make([]*topo.Vertex, n)
 		topV = make([]*topo.Vertex, n)
 		for i, w := range walks {
@@ -596,9 +794,18 @@ func buildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Pay
 				return nil, nil, nil, proofbound.BoundedScalar{}, err
 			}
 			prev := walks[(i+n-1)%n]
-			u, v, extra := boundarywalk.JunctionVertexAt(loop.Segments, prev, w)
-			bottomV[i] = rimVertex(u, v, pp.Z0, pp.Z0Delta, extra, levelZ0)
-			topV[i] = rimVertex(u, v, pp.Z1, pp.Z1Delta, extra, levelZ1)
+			u, v, extra, err := junction(prev, w)
+			if err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+			bottomV[i], err = rimVertex(u, v, pp.Z0, pp.Z0Delta, extra, levelZ0)
+			if err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+			topV[i], err = rimVertex(u, v, pp.Z1, pp.Z1Delta, extra, levelZ1)
+			if err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
 		}
 	}
 
@@ -614,6 +821,11 @@ func buildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Pay
 	// angle. This cross needs no change for either kind.
 	var vertical []*topo.Edge
 	if !singleClosed {
+		if budget != nil {
+			if err := budget.ReserveArray(ctx, uint64(n), uint64(unsafe.Sizeof((*topo.Edge)(nil)))); err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+		}
 		vertical = make([]*topo.Edge, n)
 		for i := range walks {
 			if err := ctx.Err(); err != nil {
@@ -621,6 +833,17 @@ func buildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Pay
 			}
 			prev := walks[(i+n-1)%n]
 			cross := prev.TanOutU*walks[i].TanInV - prev.TanOutV*walks[i].TanInU
+			if budget != nil {
+				if err := budget.SpendWork(ctx, 32); err != nil {
+					return nil, nil, nil, proofbound.BoundedScalar{}, err
+				}
+				if err := budget.ReserveRecords(ctx, 1); err != nil {
+					return nil, nil, nil, proofbound.BoundedScalar{}, err
+				}
+				if err := budget.ReserveArray(ctx, 1, uint64(unsafe.Sizeof(topo.Edge{}))); err != nil {
+					return nil, nil, nil, proofbound.BoundedScalar{}, err
+				}
+			}
 			vertical[i] = topobuild.NewEdge(env.Alloc, topo.Edge{
 				Convex:      cross > 0,
 				Length:      pp.Z1 - pp.Z0,
@@ -633,6 +856,17 @@ func buildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Pay
 	}
 
 	// Side faces with bottom/top edges; cap coedges accumulate in walk order.
+	if budget != nil {
+		if err := budget.ReserveArray(ctx, uint64(n), uint64(unsafe.Sizeof((*topo.Face)(nil)))); err != nil {
+			return nil, nil, nil, proofbound.BoundedScalar{}, err
+		}
+		if err := budget.ReserveArray(ctx, uint64(n), uint64(unsafe.Sizeof(topo.CoEdge{}))); err != nil {
+			return nil, nil, nil, proofbound.BoundedScalar{}, err
+		}
+		if err := budget.ReserveArray(ctx, uint64(n), uint64(unsafe.Sizeof(topo.CoEdge{}))); err != nil {
+			return nil, nil, nil, proofbound.BoundedScalar{}, err
+		}
+	}
 	faces := make([]*topo.Face, 0, n)
 	bottomCo := make([]topo.CoEdge, 0, n)
 	topCo := make([]topo.CoEdge, 0, n)
@@ -648,11 +882,35 @@ func buildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Pay
 			bStart, tStart = bottomV[i], topV[i]
 			bEnd, tEnd = bottomV[(i+1)%n], topV[(i+1)%n]
 		}
+		if budget != nil {
+			if w.Kind != survey2d.WalkLine && w.Kind != survey2d.WalkCircular {
+				return nil, nil, nil, proofbound.BoundedScalar{}, decaderr.ErrUnsupported
+			}
+			if err := budget.SpendWork(ctx, 64); err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+			if err := budget.ReserveRecords(ctx, 2); err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+			if err := budget.ReserveArray(ctx, 2, uint64(unsafe.Sizeof(topo.Edge{}))); err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+			if err := budget.ReserveBytes(ctx, 1024); err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+		}
 		convex, err := boundarywalk.RimConvexity(ctx, w, holeLoop, work)
 		if err != nil {
 			return nil, nil, nil, proofbound.BoundedScalar{}, err
 		}
-		bottomEdge, topEdge, surf, faceReversed, err := BuildWallGeometry(env.Alloc, pp, w, convex, singleClosed, bStart, bEnd, tStart, tEnd)
+		var bottomEdge, topEdge *topo.Edge
+		var surf surfacegeom.Surface
+		var faceReversed bool
+		if budget == nil {
+			bottomEdge, topEdge, surf, faceReversed, err = BuildWallGeometry(env.Alloc, pp, w, convex, singleClosed, bStart, bEnd, tStart, tEnd) //nolint:contextcheck // The ordinary wall builder has no replay context or budget.
+		} else {
+			bottomEdge, topEdge, surf, faceReversed, err = BuildWallGeometryReplay(ctx, env.Alloc, pp, w, convex, singleClosed, bStart, bEnd, tStart, tEnd, budget)
+		}
 		if err != nil {
 			return nil, nil, nil, proofbound.BoundedScalar{}, err
 		}
@@ -667,11 +925,57 @@ func buildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Pay
 		bottomEdge.Denot = mintCurve()
 		topEdge.Denot = mintCurve()
 
+		if budget != nil {
+			if err := budget.ReserveRecords(ctx, uint64(len(w.Segs))); err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+			if err := budget.ReserveArray(ctx, uint64(len(w.Segs)), uint64(unsafe.Sizeof(provenance.Ref{}))); err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+			for range w.Segs {
+				if err := budget.ReserveBytes(ctx, 512); err != nil {
+					return nil, nil, nil, proofbound.BoundedScalar{}, err
+				}
+				if err := budget.SpendWork(ctx, 128); err != nil {
+					return nil, nil, nil, proofbound.BoundedScalar{}, err
+				}
+			}
+		}
 		origins, err := SideOrigins(ctx, env.Ref, roleLoop, w.Segs)
 		if err != nil {
 			return nil, nil, nil, proofbound.BoundedScalar{}, err
 		}
-		faceArea := proofbound.BoundedMul(proofbound.MeasuredScalar(w.Length, w.LengthBound), height)
+		var faceArea proofbound.BoundedScalar
+		if budget == nil {
+			faceArea = proofbound.BoundedMul(proofbound.MeasuredScalar(w.Length, w.LengthBound), height)
+		} else {
+			faceArea, err = proofbound.BoundedMulReplay(ctx, proofbound.MeasuredScalar(w.Length, w.LengthBound), height, budget)
+			if err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+		}
+		if budget != nil {
+			loops := uint64(1)
+			coedges := uint64(4)
+			if singleClosed {
+				loops, coedges = 2, 2
+			}
+			if err := budget.ReserveRecords(ctx, 1+loops+coedges); err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+			if err := budget.ReserveArray(ctx, 1, uint64(unsafe.Sizeof(topo.Face{}))); err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+			if err := budget.ReserveArray(ctx, loops, uint64(unsafe.Sizeof(topo.Loop{}))+uint64(unsafe.Sizeof((*topo.Loop)(nil)))); err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+			if err := budget.ReserveArray(ctx, coedges, uint64(unsafe.Sizeof(topo.CoEdge{}))); err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+			if err := budget.ReserveArray(ctx, 4, uint64(unsafe.Sizeof((*topo.Face)(nil)))); err != nil {
+				return nil, nil, nil, proofbound.BoundedScalar{}, err
+			}
+		}
 		face := topobuild.NewFace(env.Alloc, topo.Face{
 			Area:      faceArea.Value,
 			AreaBound: faceArea.Bound,
@@ -710,6 +1014,9 @@ func buildLoopSidesAs(ctx context.Context, env topo.Env, body *topo.Body, pp Pay
 		faces = append(faces, face)
 		bottomCo = append(bottomCo, topo.CoEdge{Edge: bottomEdge, Forward: true})
 		topCo = append(topCo, topo.CoEdge{Edge: topEdge, Forward: true})
+	}
+	if witness != nil && roleLoop == 0 && !holeLoop {
+		witness.captureWalks(walks, faces)
 	}
 	return faces, bottomCo, topCo, total, nil
 }

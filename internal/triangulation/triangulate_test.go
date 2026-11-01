@@ -1,10 +1,14 @@
 package triangulation
 
 import (
+	"errors"
 	"math"
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
+
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/stretchr/testify/require"
 )
 
@@ -136,6 +140,15 @@ func TestTriangulate2DHolesSharingOneBridgeAnchor(t *testing.T) {
 		require.Negative(t, loopSignedArea2(pts, h), `hole %d is clockwise`, i)
 	}
 	triAssert(t, pts, outer, holes)
+	input := append([][]int{outer}, holes...)
+	ordinary, err := Triangulate(t.Context(), pts, input)
+	require.NoError(t, err)
+	replayed, err := TriangulateReplay(t.Context(), pts, input, proofbound.NewReplayTrialBudget())
+	require.NoError(t, err)
+	require.Len(t, replayed, len(ordinary))
+	for i := range ordinary {
+		require.Equal(t, ordinary[i], replayed[i], "triangle %d", i)
+	}
 }
 
 // TestEarClipTShapedFaceKeepsEveryBoundaryEdge pins the T-shaped face: a
@@ -174,5 +187,27 @@ func TestEarClipTShapedFaceKeepsEveryBoundaryEdge(t *testing.T) {
 		edge := [2]int{loop[i], loop[(i+1)%len(loop)]}
 		require.Equal(t, 1, edges[edge], "boundary edge %v is used once by the fan", edge)
 		require.Zero(t, edges[[2]int{edge[1], edge[0]}], "boundary edge %v is never used reversed", edge)
+	}
+}
+
+func TestTriangulateReplayRejectsInvalidPointBeforeBridge(t *testing.T) {
+	pts := []Point2{{U: 0, V: 0}, {U: 2, V: 0}, {U: 0, V: 2}}
+	for _, tc := range []struct {
+		name  string
+		point Point2
+		loop  []int
+	}{
+		{"index", pts[1], []int{0, 1, 3}},
+		{"nonfinite", Point2{U: math.NaN()}, []int{0, 1, 2}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			copyPoints := append([]Point2(nil), pts...)
+			copyPoints[1] = tc.point
+			triangles, err := TriangulateReplay(t.Context(), copyPoints,
+				[][]int{tc.loop}, proofbound.NewReplayTrialBudget())
+			if !errors.Is(err, decaderr.ErrUnsupported) || len(triangles) != 0 {
+				t.Fatalf("triangles=%d error=%v", len(triangles), err)
+			}
+		})
 	}
 }

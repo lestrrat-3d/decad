@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -74,11 +75,72 @@ func pointInTri(p, a, b, c Point2) bool {
 // reduces; zero-area corners are dropped without emitting a facet. The caller
 // context reaches every quadratic bridge and ear-clipping walk.
 func Triangulate(ctx context.Context, pts []Point2, loops [][]int) ([][3]int, error) {
+	return triangulate(ctx, pts, loops, nil)
+}
+
+// TriangulateReplay keeps the ordinary bridge order and shares one finite
+// meter with the patch caller through bridge setup and ear clipping.
+func TriangulateReplay(ctx context.Context, pts []Point2, loops [][]int,
+	replay *proofbound.ReplayBudget) ([][3]int, error) {
+	if replay == nil {
+		return nil, decaderr.ErrUnsupported
+	}
+	return triangulate(ctx, pts, loops, replay)
+}
+
+func triangulate(ctx context.Context, pts []Point2, loops [][]int,
+	replay *proofbound.ReplayBudget) ([][3]int, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if len(loops) == 0 || len(loops[0]) < 3 {
 		return nil, fmt.Errorf(`%w: a cap needs at least three boundary samples`, decaderr.ErrDegenerate)
+	}
+	if replay != nil {
+		if len(loops) > 4096 {
+			return nil, decaderr.ErrUnsupported
+		}
+		var total uint64
+		for _, loop := range loops {
+			if err := replay.SpendWork(ctx, 1); err != nil {
+				return nil, err
+			}
+			if len(loop) < 3 || total+uint64(len(loop)) > 4096 {
+				return nil, decaderr.ErrUnsupported
+			}
+			total += uint64(len(loop))
+		}
+		n := uint64(len(loops[0]))
+		h := uint64(len(loops) - 1)
+		for _, loop := range loops {
+			for _, index := range loop {
+				if err := replay.SpendWork(ctx, 16); err != nil {
+					return nil, err
+				}
+				if index < 0 || index >= len(pts) ||
+					proofbound.IsNonFinite(pts[index].U) || proofbound.IsNonFinite(pts[index].V) {
+					return nil, decaderr.ErrUnsupported
+				}
+			}
+		}
+		if err := replay.ReserveArray(ctx, n, uint64(unsafe.Sizeof(int(0)))); err != nil {
+			return nil, err
+		}
+		if err := replay.ReserveArray(ctx, h, uint64(unsafe.Sizeof([]int{}))); err != nil {
+			return nil, err
+		}
+		if err := replay.ReserveArray(ctx, h, uint64(unsafe.Sizeof(float64(0)))); err != nil {
+			return nil, err
+		}
+		if err := replay.ReserveArray(ctx, h, uint64(unsafe.Sizeof(int(0)))); err != nil {
+			return nil, err
+		}
+		if err := replay.ReserveRecords(ctx, n+3*h); err != nil {
+			return nil, err
+		}
+		if err := replay.SpendWork(ctx, 32*(n+h)); err != nil {
+			return nil, err
+		}
 	}
 	budget := proofbound.NewWorkBudget(ctx)
 	merged := append([]int(nil), loops[0]...)
@@ -89,6 +151,11 @@ func Triangulate(ctx context.Context, pts []Point2, loops [][]int) ([][3]int, er
 	// it would put a walk of every hole behind every comparison.
 	keys := make([]float64, len(holes))
 	for i, hole := range holes {
+		if replay != nil {
+			if err := replay.SpendWork(ctx, 32*uint64(len(hole))); err != nil {
+				return nil, err
+			}
+		}
 		var err error
 		if keys[i], err = maxU(budget, pts, hole); err != nil {
 			return nil, err
@@ -98,17 +165,56 @@ func Triangulate(ctx context.Context, pts []Point2, loops [][]int) ([][3]int, er
 	for i := range order {
 		order[i] = i
 	}
-	sort.SliceStable(order, func(i, j int) bool { return keys[order[i]] > keys[order[j]] })
+	if replay == nil {
+		sort.SliceStable(order, func(i, j int) bool { return keys[order[i]] > keys[order[j]] })
+	} else {
+		// Stable insertion gives the same descending key order as SliceStable.
+		// Every comparison and moved index is charged before it is reached.
+		for i := 1; i < len(order); i++ {
+			key, j := order[i], i
+			for j > 0 {
+				if err := replay.SpendWork(ctx, 32); err != nil {
+					return nil, err
+				}
+				if keys[order[j-1]] >= keys[key] {
+					break
+				}
+				if err := replay.SpendWork(ctx, 16); err != nil {
+					return nil, err
+				}
+				order[j] = order[j-1]
+				j--
+			}
+			order[j] = key
+		}
+	}
 	for _, h := range order {
 		hole := holes[h]
 		if err := budget.Step(); err != nil {
 			return nil, err
+		}
+		if replay != nil {
+			// One ray scan, one reflex scan, two occurrence scans, one splice
+			// copy, and the hole's maximum-u scan are bounded by these lengths.
+			n, k := uint64(len(merged)), uint64(len(hole))
+			if err := replay.SpendWork(ctx, 128*(5*n+2*k+64)); err != nil {
+				return nil, err
+			}
+			if err := replay.ReserveRecords(ctx, n+k+2); err != nil {
+				return nil, err
+			}
+			if err := replay.ReserveArray(ctx, n+k+2, uint64(unsafe.Sizeof(int(0)))); err != nil {
+				return nil, err
+			}
 		}
 		var err error
 		merged, err = BridgeHole(ctx, pts, merged, hole)
 		if err != nil {
 			return nil, err
 		}
+	}
+	if replay != nil {
+		return EarClipReplay(ctx, pts, merged, replay)
 	}
 	return EarClip(ctx, pts, merged)
 }

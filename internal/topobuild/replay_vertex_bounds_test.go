@@ -32,7 +32,7 @@ func TestVertexBoundsReplay(t *testing.T) {
 		}
 		w, r := meter.Usage()
 		z := meter.Bytes()
-		for _, short := range []string{"exact", "work", "records", "bytes"} {
+		for _, short := range []string{replayTestCaseExact, "work", "records", "bytes"} {
 			b := proofbound.NewReplayTrialBudget()
 			ww, rr, zz := proofbound.ReplayTrialWork-w, proofbound.ReplayTrialRecords-r, proofbound.ReplayTrialBytes-z
 			switch short {
@@ -53,7 +53,7 @@ func TestVertexBoundsReplay(t *testing.T) {
 				t.Fatal(e)
 			}
 			_, e = topobuild.VertexBoundsReplay(t.Context(), m, b)
-			if short == "exact" && e != nil || short != "exact" && !errors.Is(e, decaderr.ErrUnsupported) {
+			if short == replayTestCaseExact && e != nil || short != replayTestCaseExact && !errors.Is(e, decaderr.ErrUnsupported) {
 				t.Fatalf("explicit=%t %s: %v", explicit, short, e)
 			}
 		}

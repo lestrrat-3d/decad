@@ -247,7 +247,7 @@ func buildEdge(ctx context.Context, alloc topo.Alloc, bp Payload, btopo *Topolog
 	case brepgeom.Rim0, brepgeom.Rim1:
 		w := btopo.Walls[owner.Face]
 		pp := f.View(bp.Xform)
-		bottom, top, _, _, err := prismrecord.BuildWallGeometry(alloc, pp, survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}}, convex, w.Closed, start, end, start, end)
+		bottom, top, _, _, err := prismrecord.BuildWallGeometry(alloc, pp, survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}}, convex, w.Closed, start, end, start, end) //nolint:contextcheck // The ordinary wall builder has no replay context or budget.
 		if err != nil {
 			return nil, err
 		}
@@ -320,7 +320,7 @@ func faceBody(ctx context.Context, alloc topo.Alloc, bp Payload, btopo *Topology
 		}), nil
 	}
 	w := btopo.Walls[fi]
-	_, _, surf, reversed, err := prismrecord.BuildWallGeometry(alloc, pp, survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}}, false, w.Closed, nil, nil, nil, nil)
+	_, _, surf, reversed, err := prismrecord.BuildWallGeometry(alloc, pp, survey2d.SideWalk{SegmentWalk: w, Segs: []int{0}}, false, w.Closed, nil, nil, nil, nil) //nolint:contextcheck // The ordinary wall builder has no replay context or budget.
 	if err != nil {
 		return nil, err
 	}

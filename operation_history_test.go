@@ -44,7 +44,7 @@ func TestOperationHistorySnapshotAndFaceCoverage(t *testing.T) {
 
 	transform := latest.Operations()[1]
 	inputs := transform.Inputs()
-	inputs[0].Role = "changed"
+	inputs[0].Role = replayTestCaseChanged
 	require.Equal(t, "source", transform.Inputs()[0].Role)
 	outputs := transform.Outputs()
 	outputs[0] = nil

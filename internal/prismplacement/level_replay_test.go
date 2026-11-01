@@ -21,7 +21,7 @@ func TestValidateZeroLevelReplay(t *testing.T) {
 	}
 	w, r := base.Usage()
 	z := base.Bytes()
-	for _, kind := range []string{"exact", "work", "records", "bytes"} {
+	for _, kind := range []string{replayTestCaseExact, "work", "records", "bytes"} {
 		t.Run(kind, func(t *testing.T) {
 			b := proofbound.NewCircleReplayBudget()
 			ww, rr, zz := proofbound.ReplayTrialWork-w, proofbound.ReplayTrialRecords-r, proofbound.ReplayTrialBytes-z
@@ -43,7 +43,7 @@ func TestValidateZeroLevelReplay(t *testing.T) {
 				t.Fatal(err)
 			}
 			err := ValidateZeroLevelReplay(t.Context(), 1.5, d, b)
-			if kind == "exact" && err != nil || kind != "exact" && !errors.Is(err, decaderr.ErrUnsupported) {
+			if kind == replayTestCaseExact && err != nil || kind != replayTestCaseExact && !errors.Is(err, decaderr.ErrUnsupported) {
 				t.Fatalf("budget: %v", err)
 			}
 		})

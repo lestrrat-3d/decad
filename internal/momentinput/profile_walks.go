@@ -1,10 +1,12 @@
 package momentinput
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
@@ -217,6 +219,35 @@ func (pw *ProfileWalks) LoopMatches(loopIndex int, loop LoopRecord) bool {
 		return false
 	}
 	return sectionrecord.IdenticalRecord(loops[loopIndex], loop)
+}
+
+// LoopMatchesReplay checks a fixed-shape analytic loop under the caller's
+// meter before a replay consumes a source producer's stored walk values.
+func (pw *ProfileWalks) LoopMatchesReplay(ctx context.Context, loopIndex int, loop LoopRecord,
+	budget *proofbound.ReplayBudget) (bool, error) {
+	if pw == nil || budget == nil || !pw.Metered || loopIndex < 0 ||
+		loopIndex > len(pw.Profile.Holes) || len(pw.Holes) != len(pw.Profile.Holes) {
+		return false, nil
+	}
+	var source LoopRecord
+	var walks []survey2d.SegmentWalk
+	if loopIndex == 0 {
+		source, walks = pw.Profile.Outer, pw.Outer
+	} else {
+		source, walks = pw.Profile.Holes[loopIndex-1], pw.Holes[loopIndex-1]
+	}
+	if len(source.Segments) != len(loop.Segments) || len(walks) != len(loop.Segments) {
+		return false, nil
+	}
+	for i, seg := range loop.Segments {
+		if err := budget.SpendWork(ctx, 64); err != nil {
+			return false, err
+		}
+		if !sectionrecord.IdenticalAnalyticSegment(seg, source.Segments[i]) {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // ErrResolvedWalksMismatch reports a *ProfileWalks handed to a consumer that
