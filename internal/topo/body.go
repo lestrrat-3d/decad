@@ -15,6 +15,7 @@ import (
 // Body is the data of the root Body handle, which holds one by
 // value. The handle keeps its contact cache, which names root types.
 type Body struct {
+	prismConstructionState uint8
 	// Solid reports whether the body is a valid solid, a decided answer
 	// (agent-docs/api-design.md core §6).
 	Solid bool

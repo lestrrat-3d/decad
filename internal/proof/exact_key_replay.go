@@ -18,10 +18,22 @@ type ReplayKeyBudget interface {
 	SpendWork(context.Context, uint64) error
 }
 
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errExactKeyReplay1 = fmt.Errorf("%w: invalid bounded exact point", decaderr.ErrUnsupported)
+	errExactKeyReplay2 = fmt.Errorf("%w: exact key size overflow", decaderr.ErrUnsupported)
+	errExactKeyReplay3 = fmt.Errorf("%w: exact key width overflow", decaderr.ErrUnsupported)
+	errExactKeyReplay4 = fmt.Errorf("%w: exact key workspace overflow", decaderr.ErrUnsupported)
+	errExactKeyReplay5 = fmt.Errorf("%w: exact key work overflow", decaderr.ErrUnsupported)
+	errExactKeyReplay6 = fmt.Errorf("%w: exact key allocation envelope overflow", decaderr.ErrUnsupported)
+	errExactKeyReplay7 = fmt.Errorf("%w: exact key workspace exceeds address space", decaderr.ErrUnsupported)
+	errExactKeyReplay8 = fmt.Errorf("%w: exact key division has remainder", decaderr.ErrUnsupported)
+)
+
 // ReplayExactKey encodes the same canonical point as Key with bounded scratch.
 func ReplayExactKey(ctx context.Context, p Xpt, budget ReplayKeyBudget) (string, error) {
 	if budget == nil || p.X == nil || p.Y == nil || p.Z == nil || p.W == nil || p.W.Sign() <= 0 {
-		return "", fmt.Errorf("%w: invalid bounded exact point", decaderr.ErrUnsupported)
+		return "", errExactKeyReplay1
 	}
 	values := [4]*big.Int{p.X, p.Y, p.Z, p.W}
 	var maxBits, rawBytes uint64
@@ -30,27 +42,27 @@ func ReplayExactKey(ctx context.Context, p Xpt, budget ReplayKeyBudget) (string,
 		n := uint64(v.BitLen())
 		maxBits = max(maxBits, n)
 		if n > ^uint64(0)-7 || rawBytes > ^uint64(0)-(n+7)/8 {
-			return "", fmt.Errorf("%w: exact key size overflow", decaderr.ErrUnsupported)
+			return "", errExactKeyReplay2
 		}
 		rawBytes += (n + 7) / 8
 	}
 	if maxBits > ^uint64(0)-uint64(bits.UintSize-1) {
-		return "", fmt.Errorf("%w: exact key width overflow", decaderr.ErrUnsupported)
+		return "", errExactKeyReplay3
 	}
 	words := (maxBits + uint64(bits.UintSize-1)) / uint64(bits.UintSize)
 	// Eight equal-size arrays hold gcd operands, division scratch and outputs.
 	if words == 0 || words > (^uint64(0)/uint64(bits.UintSize/8)-8)/8 || rawBytes > ^uint64(0)/2 {
-		return "", fmt.Errorf("%w: exact key workspace overflow", decaderr.ErrUnsupported)
+		return "", errExactKeyReplay4
 	}
 	if words > (^uint64(0)-rawBytes)/8 {
-		return "", fmt.Errorf("%w: exact key work overflow", decaderr.ErrUnsupported)
+		return "", errExactKeyReplay5
 	}
 	workspaceBytes := (8*words + 8) * uint64(bits.UintSize/8)
 	if err := budget.ReserveRecords(ctx, 3); err != nil {
 		return "", err
 	}
 	if workspaceBytes > (^uint64(0)-128)/2 || rawBytes > (^uint64(0)-256)/4 {
-		return "", fmt.Errorf("%w: exact key allocation envelope overflow", decaderr.ErrUnsupported)
+		return "", errExactKeyReplay6
 	}
 	if err := budget.ReserveBytes(ctx, 2*workspaceBytes+128); err != nil {
 		return "", err
@@ -63,7 +75,7 @@ func ReplayExactKey(ctx context.Context, p Xpt, budget ReplayKeyBudget) (string,
 		return "", err
 	}
 	if words > uint64(^uint(0)>>1)/8-1 || rawBytes > uint64(^uint(0)>>1) {
-		return "", fmt.Errorf("%w: exact key workspace exceeds address space", decaderr.ErrUnsupported)
+		return "", errExactKeyReplay7
 	}
 	n := int(words) + 1
 	storage := make([]big.Word, 8*n)
@@ -146,7 +158,7 @@ func ReplayExactKey(ctx context.Context, p Xpt, budget ReplayKeyBudget) (string,
 				return "", err
 			}
 			if !keyZero(rem) {
-				return "", fmt.Errorf("%w: exact key division has remainder", decaderr.ErrUnsupported)
+				return "", errExactKeyReplay8
 			}
 		}
 	}

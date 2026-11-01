@@ -10,6 +10,15 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 )
 
+// These refusals are constructed once so rejected replay does not allocate.
+var (
+	errExactProductReplay1 = fmt.Errorf("%w: invalid exact product", decaderr.ErrUnsupported)
+	errExactProductReplay2 = fmt.Errorf("%w: product width overflow", decaderr.ErrUnsupported)
+	errExactProductReplay3 = fmt.Errorf("%w: product storage overflow", decaderr.ErrUnsupported)
+	errExactProductReplay4 = fmt.Errorf("%w: product work overflow", decaderr.ErrUnsupported)
+	errExactProductReplay5 = fmt.Errorf("%w: reentrant product arena", decaderr.ErrUnsupported)
+)
+
 // ReplayProductDifference computes a*b-c*d using charged fixed limb buffers.
 func ReplayProductDifference(ctx context.Context, a, b, c, d *big.Int, budget ReplayKeyBudget) (*big.Int, error) {
 	if arena, ok := budget.(interface {
@@ -18,37 +27,37 @@ func ReplayProductDifference(ctx context.Context, a, b, c, d *big.Int, budget Re
 		return arena.ProductDifference(ctx, a, b, c, d)
 	}
 	if budget == nil || a == nil || b == nil || c == nil || d == nil {
-		return nil, fmt.Errorf("%w: invalid exact product", decaderr.ErrUnsupported)
+		return nil, errExactProductReplay1
 	}
 	aw, bw, cw, dw := len(a.Bits()), len(b.Bits()), len(c.Bits()), len(d.Bits())
 	maxInt := int(^uint(0) >> 1)
 	if aw > maxInt-bw || cw > maxInt-dw {
-		return nil, fmt.Errorf("%w: product width overflow", decaderr.ErrUnsupported)
+		return nil, errExactProductReplay2
 	}
 	width := max(aw+bw, cw+dw)
 	if width >= maxInt/5 {
-		return nil, fmt.Errorf("%w: product storage overflow", decaderr.ErrUnsupported)
+		return nil, errExactProductReplay3
 	}
 	n := width + 1
 	if n > maxInt/5 {
-		return nil, fmt.Errorf("%w: product storage overflow", decaderr.ErrUnsupported)
+		return nil, errExactProductReplay3
 	}
 	bytes := uint64(3*n) * uint64(bits.UintSize/8)
 	if err := budget.ReserveRecords(ctx, 2); err != nil {
 		return nil, err
 	}
 	if bytes > (^uint64(0)-256)/2 {
-		return nil, fmt.Errorf("%w: product storage overflow", decaderr.ErrUnsupported)
+		return nil, errExactProductReplay3
 	}
 	if err := budget.ReserveBytes(ctx, 2*bytes+256); err != nil {
 		return nil, err
 	}
 	if aw != 0 && uint64(bw) > ^uint64(0)/uint64(aw) || cw != 0 && uint64(dw) > ^uint64(0)/uint64(cw) {
-		return nil, fmt.Errorf("%w: product work overflow", decaderr.ErrUnsupported)
+		return nil, errExactProductReplay4
 	}
 	w1, w2 := uint64(aw)*uint64(bw), uint64(cw)*uint64(dw)
 	if w1 > ^uint64(0)-w2 || w1+w2 > ^uint64(0)-uint64(5*n) {
-		return nil, fmt.Errorf("%w: product work overflow", decaderr.ErrUnsupported)
+		return nil, errExactProductReplay4
 	}
 	if err := budget.SpendWork(ctx, w1+w2+uint64(5*n)); err != nil {
 		return nil, err
@@ -120,30 +129,30 @@ func (arena *ReplayProductArena) MaxWidth() int { return arena.maxWidth }
 // ProductDifference computes a product with retained, independently owned scratch.
 func (arena *ReplayProductArena) ProductDifference(ctx context.Context, a, b, c, d *big.Int, budget ReplayKeyBudget) (*big.Int, error) {
 	if budget == nil || a == nil || b == nil || c == nil || d == nil {
-		return nil, fmt.Errorf("%w: invalid exact product", decaderr.ErrUnsupported)
+		return nil, errExactProductReplay1
 	}
 	aw, bw, cw, dw := len(a.Bits()), len(b.Bits()), len(c.Bits()), len(d.Bits())
 	maxInt := int(^uint(0) >> 1)
 	if aw > maxInt-bw || cw > maxInt-dw {
-		return nil, fmt.Errorf("%w: product width overflow", decaderr.ErrUnsupported)
+		return nil, errExactProductReplay2
 	}
 	width := max(aw+bw, cw+dw)
 	if width >= maxInt/8 {
-		return nil, fmt.Errorf("%w: product storage overflow", decaderr.ErrUnsupported)
+		return nil, errExactProductReplay3
 	}
 	n := width + 1
 	if n > maxInt/8 {
-		return nil, fmt.Errorf("%w: product storage overflow", decaderr.ErrUnsupported)
+		return nil, errExactProductReplay3
 	}
 	if arena.busy {
-		return nil, fmt.Errorf("%w: reentrant product arena", decaderr.ErrUnsupported)
+		return nil, errExactProductReplay5
 	}
 	arena.busy = true
 	defer func() { arena.busy = false }()
 	words := uint64(3 * n)
 	wordBytes := uint64(unsafe.Sizeof(big.Word(0)))
 	if words > (^uint64(0)-uint64(unsafe.Sizeof(big.Int{})))/wordBytes {
-		return nil, fmt.Errorf("%w: product storage overflow", decaderr.ErrUnsupported)
+		return nil, errExactProductReplay3
 	}
 	if n > arena.width {
 		if err := budget.ReserveRecords(ctx, 1); err != nil {
@@ -160,11 +169,11 @@ func (arena *ReplayProductArena) ProductDifference(ctx context.Context, a, b, c,
 		return nil, err
 	}
 	if aw != 0 && uint64(bw) > ^uint64(0)/uint64(aw) || cw != 0 && uint64(dw) > ^uint64(0)/uint64(cw) {
-		return nil, fmt.Errorf("%w: product work overflow", decaderr.ErrUnsupported)
+		return nil, errExactProductReplay4
 	}
 	w1, w2 := uint64(aw)*uint64(bw), uint64(cw)*uint64(dw)
 	if w1 > ^uint64(0)-w2 || w1+w2 > ^uint64(0)-uint64(7*n) {
-		return nil, fmt.Errorf("%w: product work overflow", decaderr.ErrUnsupported)
+		return nil, errExactProductReplay4
 	}
 	if err := budget.SpendWork(ctx, w1+w2+uint64(7*n)); err != nil {
 		return nil, err

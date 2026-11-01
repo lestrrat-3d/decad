@@ -279,6 +279,11 @@
 10	0.03	TestPointConeSourceReadsGeneralAxis
 10	4.68	TestPointConeTrimRejectsRoundTrippedPointLoft
 10	1.91	TestPrismPatternUnionManyGates
+10	0.00	TestPublicCirclePrimitiveActiveCancellation
+10	0.00	TestPublicCirclePrimitiveCandidate
+10	0.00	TestPublicCirclePrimitiveFaceTokenMutations
+10	0.00	TestPublicCirclePrimitiveMutationDuringReplay
+10	0.00	TestPublicCirclePrimitiveSourceMutation
 10	0.22	TestQuarterSourceHeldY3WrongRealRadius
 10	0.52	TestRetainedBlendKeywayCuspBounds
 10	0.87	TestRetainedBlendStripPatchCovered

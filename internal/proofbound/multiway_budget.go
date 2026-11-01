@@ -18,6 +18,7 @@ type MultiwayBudget struct {
 	Records, Work       uint64
 	maxRecords, maxWork uint64
 	reserveBytes        func(context.Context, uint64) error
+	strictReplay        *ReplayBudget
 }
 
 func multiwayCharge(ctx context.Context, used *uint64, add, limit uint64, resource string) error {
@@ -41,6 +42,9 @@ func (b *MultiwayBudget) ReserveRecords(ctx context.Context, n uint64) error {
 	if limit == 0 {
 		limit = MaxMultiwayRecordsPerCall
 	}
+	if b.strictReplay != nil {
+		return b.strictReplay.charge(ctx, &b.Records, n, limit, "multiway_records")
+	}
 	return multiwayCharge(ctx, &b.Records, n, limit, "multiway_records")
 }
 
@@ -49,6 +53,9 @@ func (b *MultiwayBudget) SpendWork(ctx context.Context, n uint64) error {
 	limit := b.maxWork
 	if limit == 0 {
 		limit = MaxMultiwayWorkPerCall
+	}
+	if b.strictReplay != nil {
+		return b.strictReplay.charge(ctx, &b.Work, n, limit, "multiway_work")
 	}
 	return multiwayCharge(ctx, &b.Work, n, limit, "multiway_work")
 }

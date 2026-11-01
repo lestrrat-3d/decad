@@ -32,8 +32,34 @@ type PrismTopology[F comparable] struct {
 	Triangles                                       [][3]int
 	Sources                                         []F
 	FaceTrim, FaceAxial                             map[F]float64
+	ReplayFaceBounds                                []PrismReplayFaceBound[F]
 	AreaSlack, SegmentArea, PerimeterUpper, CapTrim float64
 	Walks                                           int
+}
+
+type PrismReplayFaceBound[F comparable] struct {
+	Face        F
+	Trim, Axial float64
+}
+
+// SetReplayFaceBound updates a preallocated private face record.
+func (t *PrismTopology[F]) SetReplayFaceBound(face F, trim, axial float64, maxTrim bool) error {
+	for i := range t.ReplayFaceBounds {
+		if t.ReplayFaceBounds[i].Face == face {
+			if maxTrim {
+				t.ReplayFaceBounds[i].Trim = math.Max(t.ReplayFaceBounds[i].Trim, trim)
+			} else {
+				t.ReplayFaceBounds[i].Trim = trim
+			}
+			t.ReplayFaceBounds[i].Axial = axial
+			return nil
+		}
+	}
+	if len(t.ReplayFaceBounds) == cap(t.ReplayFaceBounds) {
+		return fmt.Errorf("%w: prism face record capacity exceeded", decaderr.ErrUnsupported)
+	}
+	t.ReplayFaceBounds = append(t.ReplayFaceBounds, PrismReplayFaceBound[F]{Face: face, Trim: trim, Axial: axial})
+	return nil
 }
 
 // PrismWalls emits two facets per boundary chord and accumulates the analytic
