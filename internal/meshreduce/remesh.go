@@ -36,9 +36,13 @@ func Remesh(ctx context.Context, vertices []r3.Vec, triangles [][3]int, edge flo
 	return c.result(vertices), nil
 }
 
-// edges lists the live edges, each once as (low, high), in order.
+// edges rebuilds the live-edge snapshot, each edge once as (low, high), in order. Its slice stays valid only until the
+// next call; each pass must finish ranging it before collecting edges again.
 func (c *collapser) edges() [][2]int {
-	seen := map[[2]int]struct{}{}
+	if c.edgeSet == nil {
+		c.edgeSet = make(map[[2]int]struct{})
+	}
+	clear(c.edgeSet)
 	for ti, t := range c.tris {
 		if !c.alive[ti] {
 			continue
@@ -48,20 +52,20 @@ func (c *collapser) edges() [][2]int {
 			if a > b {
 				a, b = b, a
 			}
-			seen[[2]int{a, b}] = struct{}{}
+			c.edgeSet[[2]int{a, b}] = struct{}{}
 		}
 	}
-	out := make([][2]int, 0, len(seen))
-	for e := range seen {
-		out = append(out, e)
+	c.edgeList = c.edgeList[:0]
+	for e := range c.edgeSet {
+		c.edgeList = append(c.edgeList, e)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i][0] != out[j][0] {
-			return out[i][0] < out[j][0]
+	sort.Slice(c.edgeList, func(i, j int) bool {
+		if c.edgeList[i][0] != c.edgeList[j][0] {
+			return c.edgeList[i][0] < c.edgeList[j][0]
 		}
-		return out[i][1] < out[j][1]
+		return c.edgeList[i][1] < c.edgeList[j][1]
 	})
-	return out
+	return c.edgeList
 }
 
 // shared returns the two triangles around the edge ab, and false when there are not exactly two.
