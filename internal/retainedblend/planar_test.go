@@ -1,6 +1,7 @@
 package retainedblend
 
 import (
+	"fmt"
 	"math"
 	"slices"
 	"testing"
@@ -182,4 +183,159 @@ func TestTriangulateRegionLeavesNoSliverOnACollinearRun(t *testing.T) {
 		require.GreaterOrEqual(t, earQuality(ps[tri[0]], ps[tri[1]], ps[tri[2]]), sliverQuality, "triangle %v", tri)
 	}
 	require.Len(t, used, len(ps), "every vertex appears")
+}
+
+func TestEarBlockedMatchesUnscreenedPredicate(t *testing.T) {
+	t.Parallel()
+	ps := []pt2{
+		{0, 0}, {4, 0}, {0, 4},
+		{1, 1}, {-1, 1}, {5, 1}, {1, -1}, {1, 5},
+		{2, 0}, {2, 2}, {0, 2}, {0, 0},
+		{2, math.Nextafter(2, 0)},
+		{1, 0}, {2, 0}, {3, 0},
+	}
+	p := pt2{2, math.Nextafter(2, 0)}
+	left := (ps[2].u - ps[1].u) * (p.w - ps[1].w)
+	right := (ps[2].w - ps[1].w) * (p.u - ps[1].u)
+	require.LessOrEqual(t, math.Abs(left-right), 8*0x1p-53*(math.Abs(left)+math.Abs(right)))
+	idx := make([]int, len(ps))
+	for i := range ps {
+		idx[i] = i
+	}
+	require.Equal(t, earBlockedUnscreened(ps, idx, 0, 1, 2), earBlocked(ps, idx, 0, 1, 2))
+
+	for _, point := range []pt2{
+		{1, 1}, {-1, 1}, {5, 1}, {1, -1}, {1, 5},
+		{2, 0}, {2, 2}, {0, 2}, {0, 0},
+		{2, math.Nextafter(2, 0)},
+	} {
+		points := []pt2{{0, 0}, {4, 0}, {0, 4}, point}
+		got := earBlocked(points, []int{0, 1, 2, 3}, 0, 1, 2)
+		want := earBlockedUnscreened(points, []int{0, 1, 2, 3}, 0, 1, 2)
+		require.Equal(t, want, got, "point (%g, %g)", point.u, point.w)
+	}
+}
+
+func TestEarBlockedPreservesNonFiniteFallback(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		ps   []pt2
+	}{
+		{"NaN vertex", []pt2{{0, 0}, {4, 0}, {0, 4}, {math.NaN(), 1}}},
+		{"infinite vertex", []pt2{{0, 0}, {4, 0}, {0, 4}, {math.Inf(1), 1}}},
+		{"NaN corner", []pt2{{0, 0}, {math.NaN(), 0}, {0, 4}, {1, 1}}},
+		{"infinite corner", []pt2{{0, 0}, {math.Inf(1), 0}, {0, 4}, {1, 1}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			idx := []int{0, 1, 2, 3}
+			require.Panics(t, func() { earBlockedUnscreened(tc.ps, idx, 0, 1, 2) })
+			require.Panics(t, func() { earBlocked(tc.ps, idx, 0, 1, 2) })
+		})
+	}
+}
+
+func TestTriangulateRegionMatchesUnscreenedEarClip(t *testing.T) {
+	t.Parallel()
+	fixtures := []struct {
+		name  string
+		ps    []pt2
+		outer []int
+		holes [][]int
+	}{
+		{
+			name: "bridged hole with collinear runs",
+			ps: []pt2{
+				{0, 0}, {5, 0}, {10, 0}, {10, 5}, {10, 10}, {5, 10}, {0, 10}, {0, 5},
+				{3, 3}, {3, 7}, {7, 7}, {7, 3},
+			},
+			outer: []int{0, 1, 2, 3, 4, 5, 6, 7}, holes: [][]int{{8, 9, 10, 11}},
+		},
+		{
+			name:  "near-collinear boundary run",
+			ps:    []pt2{{0, 0}, {2, 3e-15}, {4, -3e-15}, {6, 3e-15}, {8, -3e-15}, {10, 0}, {5, 8}},
+			outer: []int{2, 3, 4, 5, 6, 0, 1},
+		},
+	}
+	for _, fixture := range fixtures {
+		t.Run(fixture.name, func(t *testing.T) {
+			want, err := triangulateRegionUnscreened(fixture.ps, fixture.outer, fixture.holes)
+			require.NoError(t, err)
+			got, err := triangulateRegion(fixture.ps, fixture.outer, fixture.holes)
+			require.NoError(t, err)
+			require.Equal(t, want, got)
+		})
+	}
+}
+
+func earBlockedUnscreened(ps []pt2, idx []int, ia, ib, ic int) bool {
+	a, b, c := ps[ia], ps[ib], ps[ic]
+	for _, v := range idx {
+		p := ps[v]
+		if samePt(p, a) || samePt(p, b) || samePt(p, c) {
+			continue
+		}
+		if orient(a, b, p) >= 0 && orient(b, c, p) >= 0 && orient(c, a, p) >= 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func triangulateRegionUnscreened(ps []pt2, outer []int, holes [][]int) ([][3]int, error) {
+	merged := slices.Clone(outer)
+	remaining := slices.Clone(holes)
+	for len(remaining) > 0 {
+		var err error
+		merged, remaining, err = bridgeNearest(ps, merged, remaining)
+		if err != nil {
+			return nil, err
+		}
+	}
+	tris, err := earClipUnscreened(ps, merged)
+	if err != nil {
+		return nil, err
+	}
+	return flipSlivers(ps, tris), nil
+}
+
+func earClipUnscreened(ps []pt2, poly []int) ([][3]int, error) {
+	idx := slices.Clone(poly)
+	tris := make([][3]int, 0, len(idx))
+	for len(idx) > 3 {
+		n := len(idx)
+		var ears []planarEar
+		for i := range n {
+			a, b, c := ps[idx[(i+n-1)%n]], ps[idx[i]], ps[idx[(i+1)%n]]
+			if orient(a, b, c) > 0 {
+				ears = append(ears, planarEar{i, earQuality(a, b, c)})
+			}
+		}
+		best, ok := bestPlanarEar(ears)
+		if !ok {
+			return nil, fmt.Errorf("no ear")
+		}
+		ia, ib, ic := idx[(best.at+n-1)%n], idx[best.at], idx[(best.at+1)%n]
+		if earBlockedUnscreened(ps, idx, ia, ib, ic) {
+			sortPlanarEars(ears)
+			found := false
+			for _, e := range ears[1:] {
+				ia, ib, ic = idx[(e.at+n-1)%n], idx[e.at], idx[(e.at+1)%n]
+				if earBlockedUnscreened(ps, idx, ia, ib, ic) {
+					continue
+				}
+				best, found = e, true
+				break
+			}
+			if !found {
+				return nil, fmt.Errorf("no ear")
+			}
+		}
+		tris = append(tris, [3]int{ia, ib, ic})
+		idx = append(idx[:best.at], idx[best.at+1:]...)
+	}
+	if orient(ps[idx[0]], ps[idx[1]], ps[idx[2]]) <= 0 {
+		return nil, fmt.Errorf("degenerate final triangle")
+	}
+	return append(tris, [3]int{idx[0], idx[1], idx[2]}), nil
 }
