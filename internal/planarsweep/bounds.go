@@ -102,13 +102,16 @@ func VertexSpins(points []proofarith.DyV3, motion Motion) ([]*big.Rat, bool) {
 // Rates returns each guest vertex's exact initial height rate.
 func Rates(points []proofarith.DyV3, normal proofarith.DyV3, m, o Motion) []*big.Rat {
 	out := make([]*big.Rat, len(points))
-	relative := RatSub3(m.Velocity, o.Velocity)
 	n := RatOfDyV3(normal)
+	w := RatSub3(m.Omega, o.Omega)
+	b := RatSub3(m.Velocity, o.Velocity)
+	b = RatSub3(b, ratCross3(m.Omega, m.Center))
+	b = ratAdd3(b, ratCross3(o.Omega, o.Center))
+	k := ratCross3(n, w)
+	d := RatDot3(n, b)
 	for i, v := range points {
 		p := RatOfDyV3(v)
-		rate := ratAdd3(relative, ratCross3(m.Omega, RatSub3(p, m.Center)))
-		rate = RatSub3(rate, ratCross3(o.Omega, RatSub3(p, o.Center)))
-		out[i] = RatDot3(n, rate)
+		out[i] = new(big.Rat).Add(d, RatDot3(k, p))
 	}
 	return out
 }
