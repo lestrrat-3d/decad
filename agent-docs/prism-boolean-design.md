@@ -175,8 +175,9 @@ in-plane translation, a different linear basis, or different frame `U`/`V`
 takes the mesh path, except for the blind-Cut arm below. No residual tolerance admits a pair; this is decad's
 own admission rule under `CLAUDE.md`'s reject-only rule.
 
-For a blind `Cut` only, identical stored frames and equal finite, invertible transform bases admit an arbitrary
-translation. `prismplacement.CutTranslation` solves the three local coefficients over exact dyadic rationals. It
+After ordinary analytic admission misses, a blind `Cut` can use identical stored frames and equal finite,
+invertible transform bases when the exact in-section translation is nonzero. An exact pure-axial miss keeps
+the earlier Boolean route. `prismplacement.CutTranslation` solves the three local coefficients over exact dyadic rationals. It
 rounds the two section offsets once and charges their error to the re-expression; the exact third coefficient
 shifts the tool's held and denoted sweep levels. The blind-cut slab gates compare those shifted rational levels.
 This arm does not change `Union`, `Intersect`, or the other Cut routes.

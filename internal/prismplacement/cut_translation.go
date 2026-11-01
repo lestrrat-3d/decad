@@ -44,5 +44,6 @@ func CutTranslation(a, b Operand) (Relative, *big.Rat, bool) {
 		return Relative{}, nil, false
 	}
 	charge := proofbound.AbsSumUpper(proofarith.RationalFloatError(ru, fu), proofarith.RationalFloatError(rv, fv))
-	return Relative{Map: m, TransAbs: max(math.Abs(fu), math.Abs(fv)), TransError: charge}, rz, true
+	return Relative{Map: m, Identity: ru.Sign() == 0 && rv.Sign() == 0,
+		TransAbs: max(math.Abs(fu), math.Abs(fv)), TransError: charge}, rz, true
 }

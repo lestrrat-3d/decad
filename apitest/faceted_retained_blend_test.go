@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/decadtest"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -24,6 +25,7 @@ func boredPlate(t *testing.T) (*retentionScene, *decad.Body) {
 	plate := blendPlate(t, sc)
 	bored, err := decad.Cut(t.Context(), plate, zCylinder(t, sc, -30))
 	require.NoError(t, err)
+	require.Equal(t, "decad.facetedPayload", decadtest.PayloadClass(bored))
 	return sc, bored
 }
 

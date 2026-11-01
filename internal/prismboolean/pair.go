@@ -125,6 +125,9 @@ func TryBlindStackedCut(ctx context.Context, a, b topo.Payload) (stackedrecord.P
 		if !ok {
 			return stackedrecord.Payload{}, false, nil
 		}
+		if relative.Identity {
+			return stackedrecord.Payload{}, false, nil
+		}
 		return stackedrecord.BuildTranslatedBlindCut(ctx, budget, target, tool, relative, shift)
 	}
 	return stackedrecord.BuildBlindCut(ctx, budget, target, tool)
