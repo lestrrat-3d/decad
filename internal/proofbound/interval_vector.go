@@ -1,6 +1,8 @@
 package proofbound
 
 import (
+	"math/big"
+
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
@@ -21,6 +23,20 @@ func IvVec3Of(v r3.Vec) (IvVec3, bool) {
 
 func IvVec3Add(a, b IvVec3) IvVec3 {
 	return IvVec3{IntervalAdd(a[0], b[0]), IntervalAdd(a[1], b[1]), IntervalAdd(a[2], b[2])}
+}
+
+// IvVec3Add3 adds three vectors with independently owned exact endpoints.
+func IvVec3Add3(a, b, c IvVec3) IvVec3 {
+	var out IvVec3
+	for coordinate := range out {
+		out[coordinate] = RatInterval{
+			Lo: proofarith.AddRat(new(big.Rat), a[coordinate].Lo, b[coordinate].Lo),
+			Hi: proofarith.AddRat(new(big.Rat), a[coordinate].Hi, b[coordinate].Hi),
+		}
+		proofarith.AddRat(out[coordinate].Lo, out[coordinate].Lo, c[coordinate].Lo)
+		proofarith.AddRat(out[coordinate].Hi, out[coordinate].Hi, c[coordinate].Hi)
+	}
+	return out
 }
 
 func IvVec3Sub(a, b IvVec3) IvVec3 {
