@@ -3,6 +3,7 @@ package proofbound
 import (
 	"context"
 	"fmt"
+	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 )
@@ -10,9 +11,12 @@ import (
 // ReplayBudget shares one work and record allowance across a private replay.
 // A replay owns one instance for all of its steps.
 type ReplayBudget struct {
-	shared   MultiwayBudget
-	bytes    uint64
-	maxBytes uint64
+	shared     MultiwayBudget
+	bytes      uint64
+	maxBytes   uint64
+	strict     bool
+	failure    error
+	limitError WorkLimitError
 }
 
 // Replay trial limits bound the shared trial meter.
@@ -36,22 +40,96 @@ func NewReplayBudgetLimits(work, records, bytes uint64) (*ReplayBudget, error) {
 	return &ReplayBudget{shared: MultiwayBudget{maxWork: work, maxRecords: records}, maxBytes: bytes}, nil
 }
 
+// NewCircleReplayBudget creates a fail-closed trial meter whose own fixed
+// object and limit refusal are accounted before any source proof can run.
+func NewCircleReplayBudget() *ReplayBudget {
+	b := &ReplayBudget{shared: MultiwayBudget{maxWork: ReplayTrialWork, maxRecords: ReplayTrialRecords}, strict: true}
+	b.shared.strictReplay = b
+	b.shared.Records = 1
+	b.bytes = 2*uint64(unsafe.Sizeof(ReplayBudget{})) + 128
+	return b
+}
+
+// IsCircleReplay reports whether b uses the fail-closed circle meter.
+func (b *ReplayBudget) IsCircleReplay() bool { return b != nil && b.strict }
+
+var (
+	errCircleReplayOverflow = fmt.Errorf("%w: replay counter overflow", decaderr.ErrUnsupported)
+	errCircleReplayWork     = fmt.Errorf("%w: multiway multiway_work budget exceeded", decaderr.ErrUnsupported)
+	errCircleReplayRecords  = fmt.Errorf("%w: multiway multiway_records budget exceeded", decaderr.ErrUnsupported)
+	errCircleReplayBytes    = fmt.Errorf("%w: multiway replay_bytes budget exceeded", decaderr.ErrUnsupported)
+	errCircleReplayArray    = fmt.Errorf("%w: replay allocation size overflow", decaderr.ErrUnsupported)
+	errCircleReplayEnvelope = fmt.Errorf("%w: replay allocation envelope overflow", decaderr.ErrUnsupported)
+)
+
+func (b *ReplayBudget) charge(ctx context.Context, used *uint64, add, limit uint64, resource string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if b.failure != nil {
+		return b.failure
+	}
+	if *used > limit || add > ^uint64(0)-*used {
+		b.failure = errCircleReplayOverflow
+		return b.failure
+	}
+	next := *used + add
+	if next > limit {
+		var cause error
+		switch resource {
+		case "multiway_work":
+			cause = errCircleReplayWork
+		case "multiway_records":
+			cause = errCircleReplayRecords
+		case "replay_bytes":
+			cause = errCircleReplayBytes
+		default:
+			b.failure = errCircleReplayOverflow
+			return b.failure
+		}
+		b.limitError = WorkLimitError{Resource: resource, Observed: next, Maximum: limit, err: cause}
+		b.failure = &b.limitError
+		return b.failure
+	}
+	*used = next
+	return nil
+}
+
 // ReserveBytes charges cumulative allocated storage before allocation.
 func (b *ReplayBudget) ReserveBytes(ctx context.Context, n uint64) error {
 	limit := b.maxBytes
 	if limit == 0 {
 		limit = ReplayTrialBytes
 	}
+	if b.strict {
+		return b.charge(ctx, &b.bytes, n, limit, "replay_bytes")
+	}
 	return multiwayCharge(ctx, &b.bytes, n, limit, "replay_bytes")
 }
 
 // ReserveArray charges a checked backing array and a conservative allocation envelope.
 func (b *ReplayBudget) ReserveArray(ctx context.Context, count, elementBytes uint64) error {
+	if b.strict {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if b.failure != nil {
+			return b.failure
+		}
+	}
 	if elementBytes != 0 && count > ^uint64(0)/elementBytes {
+		if b.strict {
+			b.failure = errCircleReplayArray
+			return b.failure
+		}
 		return fmt.Errorf("%w: replay allocation size overflow", decaderr.ErrUnsupported)
 	}
 	size := count * elementBytes
 	if size > (^uint64(0)-128)/2 {
+		if b.strict {
+			b.failure = errCircleReplayEnvelope
+			return b.failure
+		}
 		return fmt.Errorf("%w: replay allocation envelope overflow", decaderr.ErrUnsupported)
 	}
 	return b.ReserveBytes(ctx, 2*size+128)

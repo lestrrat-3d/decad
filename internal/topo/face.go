@@ -41,6 +41,7 @@ func (r *CapRecord) Under(xform r3.Transform) *CapRecord {
 // Face is the data of the root Face handle, which holds one by
 // value.
 type Face struct {
+	prismFaceToken PrismFaceToken
 	// Area is the held surface area in millimetres².
 	Area float64
 	// AreaBound is the proven error bound on Area: analytic float evaluation
