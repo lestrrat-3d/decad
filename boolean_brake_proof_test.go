@@ -4,12 +4,14 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/booleandispatch"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/r3"
 )
 
 func TestBrakePrivateAncestryPreservesPublicSource(t *testing.T) {
@@ -29,6 +31,9 @@ func TestBrakePrivateAncestryPreservesPublicSource(t *testing.T) {
 	if err != nil || got == nil || got == outer || got.Producer != outer.Producer || got.Operand != outer.Operand || got.Ordinal != outer.Ordinal || got.Parent != leaf {
 		t.Fatalf("public ancestry changed: %v", err)
 	}
+	if _, err := makeRemapper().strip(nil); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("missing source accepted: %v", err)
+	}
 	face.Source = &facetedrecord.SourcePatch{Producer: 7, Ordinal: 2}
 	if _, err := makeRemapper().strip(outer); !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("changed source accepted: %v", err)
@@ -37,6 +42,19 @@ func TestBrakePrivateAncestryPreservesPublicSource(t *testing.T) {
 	cycle.Parent = cycle
 	if _, err := makeRemapper().strip(cycle); !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("cycle accepted: %v", err)
+	}
+}
+
+func TestBrakeReplayRejectsCoarseHeldPlacement(t *testing.T) {
+	body := func(bound float64) *topo.Body {
+		b := &topo.Body{Payload: facetedrecord.Payload{MeshBound: bound}}
+		b.Bounds.Max = r3.Vec{X: 1, Y: 1, Z: 1}
+		return b
+	}
+	in := &brakeReplayInputs{ctx: t.Context(), a: body(0), c: body(0)}
+	result, _, _, err := brakeReplayUnion(nil, in, body(1), 0, 0, booleandispatch.Hooks{}, proofbound.NewBrakeReplayBudget())
+	if result != nil || !errors.Is(err, errBrakeRecordedClevisExceedsUnionChord) {
+		t.Fatalf("coarse held placement: result=%t error=%v", result != nil, err)
 	}
 }
 

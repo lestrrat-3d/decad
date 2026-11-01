@@ -78,6 +78,9 @@ func (r *brakeSourceRemapper) lookup(p *facetedrecord.SourcePatch) (int, error) 
 }
 
 func (r *brakeSourceRemapper) strip(root *facetedrecord.SourcePatch) (*facetedrecord.SourcePatch, error) {
+	if root == nil {
+		return nil, errBrakeMissingReplaySource
+	}
 	r.path = r.path[:0]
 	p := root
 	var parent *facetedrecord.SourcePatch

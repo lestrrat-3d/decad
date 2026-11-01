@@ -3,9 +3,11 @@ package booloperand
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveplan"
@@ -21,8 +23,11 @@ func TestPairChordReplayBudgetAndRefusals(t *testing.T) {
 	b.Bounds.Max = r3.Vec{X: 2, Y: 3, Z: 4}
 	meter := proofbound.NewReplayTrialBudget()
 	for range 2 {
-		if _, _, err := PairChordReplay(ctx, a, b, meter); err != nil {
-			t.Fatal(err)
+		chord, diameter, err := PairChordReplay(ctx, a, b, meter)
+		wantDiameter := math.Sqrt(29)
+		wantChord := wantDiameter * meshbool.ChordFactor
+		if err != nil || math.Float64bits(diameter) != math.Float64bits(wantDiameter) || math.Float64bits(chord) != math.Float64bits(wantChord) {
+			t.Fatalf("pair chord: got %.17g diameter %.17g error %v", chord, diameter, err)
 		}
 	}
 	work, _ := meter.Usage()

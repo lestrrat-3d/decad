@@ -273,6 +273,7 @@
 10	0.00	TestBrakePrerequisiteProbe
 10	0.00	TestBrakePrivateAncestryPreservesPublicSource
 10	0.00	TestBrakeRefusalAccounting
+10	0.00	TestBrakeReplayRejectsCoarseHeldPlacement
 10	0.00	TestBrakeReplayInputsReservation
 10	0.55	TestBrakeRetryCancellationRollback
 10	0.00	TestBrakeSourceFaceRecordsSurvivePlacement

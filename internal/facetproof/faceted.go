@@ -69,11 +69,19 @@ func keepPlacedEmbeddedWithAxesReplay(ctx context.Context, exact []proof.Xpt, he
 		Reach:    gaptol.Reach(ctx),
 		ScanAxes: axes,
 	}
-	var first []r3.Vec
-	if budget == nil || !budget.Replay {
-		first = make([]r3.Vec, len(held))
-		copy(first, held)
+	if budget != nil && budget.Replay {
+		if err := budget.Reserve(uint64(len(held))); err != nil {
+			return nil, nil, err
+		}
+		if err := budget.ReserveBytesMul(uint64(len(held)), uint64(unsafe.Sizeof(r3.Vec{}))); err != nil {
+			return nil, nil, err
+		}
+		if _, err := budget.StepN(uint64(len(held))); err != nil {
+			return nil, nil, err
+		}
 	}
+	first := make([]r3.Vec, len(held))
+	copy(first, held)
 	for i := range held {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
@@ -117,14 +125,34 @@ func keepPlacedEmbeddedWithAxesReplay(ctx context.Context, exact []proof.Xpt, he
 		return nil, nil, nil
 	}
 	if budget != nil && budget.Replay {
-		return nil, nil, fmt.Errorf("%w: replay placement repair unavailable", decaderr.ErrUnsupported)
+		if err := budget.Reserve(uint64(len(held))); err != nil {
+			return nil, nil, err
+		}
+		if err := budget.ReserveBytesMul(uint64(len(held)), uint64(unsafe.Sizeof(float64(0)))); err != nil {
+			return nil, nil, err
+		}
+		if _, err := budget.StepN(uint64(len(held))); err != nil {
+			return nil, nil, err
+		}
 	}
 	out := make([]float64, len(held))
 	for i := range held {
 		if held[i] == first[i] {
 			continue
 		}
-		if d := meshbool.CoordDistance(h.Exact[i], held[i]); d.Sign() > 0 {
+		if budget != nil && budget.Replay {
+			d, err := meshbool.ReplayCoordDistance(ctx, budget, h.Exact[i], held[i])
+			if err != nil {
+				return nil, nil, err
+			}
+			if d.Sign() > 0 {
+				w, err := proof.ReplayRatFloat64(ctx, d, replayExactMeter{budget})
+				if err != nil {
+					return nil, nil, err
+				}
+				out[i] = proofbound.Radius3D(proofbound.ProvenUpRound(w))
+			}
+		} else if d := meshbool.CoordDistance(h.Exact[i], held[i]); d.Sign() > 0 {
 			w, _ := d.Float64()
 			out[i] = proofbound.Radius3D(proofbound.ProvenUpRound(w))
 		}

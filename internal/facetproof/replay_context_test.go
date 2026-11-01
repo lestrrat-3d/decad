@@ -14,6 +14,19 @@ import (
 
 func TestReplayFacetProofContextParityAndLimits(t *testing.T) {
 	ctx := t.Context()
+	t.Run("analytic tetrahedron volume", func(t *testing.T) {
+		vertices := []r3.Vec{{}, {X: 1}, {Y: 1}, {Z: 1}}
+		facets := [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}
+		audit, err := facetproof.AuditFacetedMesh(t.Context(), vertices, facets)
+		if err != nil {
+			t.Fatal(err)
+		}
+		meter := proofbound.NewBrakeReplayBudget()
+		volume, bound, exact, ok, err := facetproof.VolumeFromAuditReplay(t.Context(), meter.WorkBudget(t.Context()), audit, 0)
+		if err != nil || !ok || exact == nil || exact.Cmp(big.NewRat(1, 6)) != 0 || math.Abs(volume-1.0/6.0) > bound {
+			t.Fatalf("tetrahedron volume: value=%.17g bound=%.17g valid=%t error=%v", volume, bound, ok, err)
+		}
+	})
 	verts, tris := tetraMesh()
 	audit, err := facetproof.AuditFacetedMesh(ctx, verts, tris)
 	if err != nil {

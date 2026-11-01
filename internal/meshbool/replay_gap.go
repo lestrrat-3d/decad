@@ -10,6 +10,11 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
+// ReplayCoordDistance meters the exact largest coordinate displacement.
+func ReplayCoordDistance(ctx context.Context, b *proofbound.WorkBudget, p proof.Xpt, v r3.Vec) (*big.Rat, error) {
+	return replayCoordDistance(ctx, b, p, v)
+}
+
 func replayCoordDistance(ctx context.Context, b *proofbound.WorkBudget, p proof.Xpt, v r3.Vec) (*big.Rat, error) {
 	meter := replayExactWork{b}
 	var worst *big.Rat
