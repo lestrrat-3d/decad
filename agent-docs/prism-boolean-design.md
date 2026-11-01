@@ -156,11 +156,12 @@ these arms:
   the exact linear image of the stored frame normal. The exact rational
   shift `s` satisfies `X_B(originB) − X_A(originA) = s·(R·N)`. This admits
   `Copy` along the common sweep axis without re-expressing either profile.
-  This new arm additionally requires zero section and axial displacement
-  and two hole-free, full-line, axis-aligned rectangular profiles. `Union`
-  and `Intersect` require identical rectangle bounds; `Cut` requires the
-  tool rectangle to lie strictly inside the target rectangle. These are
-  sufficient profile certificates; every other placed-axis pair falls back
+  This arm additionally requires zero section and axial displacement on both
+  operands. `Union` admits exactly equal recorded profiles, compared under
+  the caller's work budget, or the existing identical axis-aligned rectangle
+  certificate. `Intersect` requires identical rectangle bounds; `Cut`
+  requires the tool rectangle to lie strictly inside the target rectangle.
+  These are sufficient profile certificates; every other placed-axis pair falls back
   to the existing mesh path. The earlier shared-frame-axis arm keeps its
   existing profile admission. `Verify`'s read-only Intersect twin consumes
   the same new certificate and applies its existing positive-volume gate.
@@ -171,8 +172,14 @@ on a rounded `ApplyDir` result to prove collinearity: multiply the stored
 transform basis and frame normal in dyadic arithmetic. The existing
 same-transform arm likewise reads the stored frame origins exactly. An
 in-plane translation, a different linear basis, or different frame `U`/`V`
-takes the mesh path. No residual tolerance admits a pair; this is decad's
+takes the mesh path, except for the blind-Cut arm below. No residual tolerance admits a pair; this is decad's
 own admission rule under `CLAUDE.md`'s reject-only rule.
+
+For a blind `Cut` only, identical stored frames and equal finite, invertible transform bases admit an arbitrary
+translation. `prismplacement.CutTranslation` solves the three local coefficients over exact dyadic rationals. It
+rounds the two section offsets once and charges their error to the re-expression; the exact third coefficient
+shifts the tool's held and denoted sweep levels. The blind-cut slab gates compare those shifted rational levels.
+This arm does not change `Union`, `Intersect`, or the other Cut routes.
 
 G5 obtains `s` by dividing the largest-magnitude nonzero component of G3's
 exact composed-origin difference by the corresponding component of its exact
@@ -620,7 +627,7 @@ regardless of who authored the input curves it was cut from.
 |---|---|
 | Antiparallel, tilted, or non-analytic-segment pairs | G1–G4, mesh path, unchanged |
 | A displaced pair whose operands' recorded vertices meet exactly, with no cut there | Known limit: §3.4's crossing charge reads cut vertices only, so a vertex where two recorded vertices meet is charged nothing, though the operands' displacements can open a crossing within `(δ_A + δ_B)/sin θ` of it; the result carries only §7's incoming terms there |
-| A parallel-offset pair whose frames' `U`/`V` bits differ, whose transform bases differ, or whose exact offset has an in-plane component | G3, mesh path; the placed-axis arm admits equal section axes and equal transform bases with a purely axial composed-origin difference |
+| A parallel-offset pair whose frames' `U`/`V` bits differ or whose transform bases differ | G3, mesh path; the blind-Cut translation arm requires identical frames and bases |
 | A tool plane whose normal is genuinely reversed (a frame built with `V` flipped, so `N` opposes the target's), whichever way the tool is extruded | G3's co-directional requirement, mesh path. Admitting it needs a reflection of B's section (`V` reversed, arcs re-sensed) that §4's selection does not carry. A tool sketched on a same-normal offset plane above the target and extruded `Against` is not this case: `Extrude` keeps the sketch frame and records the negative interval `[−D, 0]`, so the shared-axis arm admits it with the exact shift (G3, G5) |
 | `Union` with unequal z-intervals | overlapping or touching: a `stackedPrismPayload` (`agent-docs/general-boolean-design.md` §3 A1); disjoint: G5, mesh path |
 | `Cut` whose tool ends inside the target and whose boundary crosses the target's (a side notch) | mesh path; the walls below the floor would split at the crossing, which `agent-docs/stacked-prism-design.md` §7 leaves unplanned |
@@ -1255,8 +1262,8 @@ face this rule leaves unnamed selects by geometric predicate (`Facing`,
   `CreateOffsetPlane` on an axis-aligned datum and `Copy` along that
   axis both qualify. No orthonormality assumption on the stored frame enters
   the proof: the shared section coefficients are identical term for term.
-  A general nonidentity re-expression is still excluded because its rounded
-  shift could decide the boundary case "tool cap meets target cap". The
+  The blind-Cut translation arm above reads all three exact coefficients and never decides a cap relation from
+  the rounded section translation. The
   coplanar arm keeps its float dot product against literal zero, while both
   axis arms use exact dyadic cross products over stored floats.
 - **Opposite normals stay outside G3.** A tool sketched on a plane whose

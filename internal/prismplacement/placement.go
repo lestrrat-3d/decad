@@ -78,11 +78,15 @@ func ZShift(pa, pb Operand) *big.Rat {
 
 // ShiftedInterval lifts B's sweep levels exactly before applying G5.
 func ShiftedInterval(pa, pb Operand) (*big.Rat, *big.Rat, bool) {
+	return ShiftedIntervalBy(pb, ZShift(pa, pb))
+}
+
+// ShiftedIntervalBy applies a caller-proven exact shift to B's held levels.
+func ShiftedIntervalBy(pb Operand, shift *big.Rat) (*big.Rat, *big.Rat, bool) {
 	b0, b1 := proofarith.FloatRat(pb.Z0), proofarith.FloatRat(pb.Z1)
 	if b0 == nil || b1 == nil {
 		return nil, nil, false
 	}
-	shift := ZShift(pa, pb)
 	return b0.Add(b0, shift), b1.Add(b1, shift), true
 }
 
@@ -191,6 +195,7 @@ type Relative struct {
 	Identity   bool
 	Reflection bool
 	TransAbs   float64
+	TransError float64
 }
 
 // Compose builds the relative map in the same frame and transform order as
@@ -241,6 +246,10 @@ func Point(re Relative, delta *float64, p sectionrecord.Point2) sectionrecord.Po
 		return p
 	}
 	out := re.Map.Apply(r3.NewVec(p.U, p.V, 0))
-	*delta = math.Max(*delta, proofbound.RigidRoundAllow(max(math.Abs(p.U), math.Abs(p.V)), re.TransAbs))
+	charge := proofbound.RigidRoundAllow(max(math.Abs(p.U), math.Abs(p.V)), re.TransAbs)
+	if re.TransError != 0 {
+		charge = proofbound.AbsSumUpper(charge, re.TransError)
+	}
+	*delta = math.Max(*delta, charge)
 	return sectionrecord.Point2{U: out.X, V: out.Y}
 }

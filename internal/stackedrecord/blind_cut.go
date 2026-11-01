@@ -19,6 +19,17 @@ import (
 // The caller owns live-body admission and passes its shared work budget.
 func BuildBlindCut(ctx context.Context, budget *proofbound.WorkBudget,
 	target, tool prismrecord.Payload) (Payload, bool, error) {
+	return buildBlindCut(ctx, budget, target, tool, nil, nil)
+}
+
+// BuildTranslatedBlindCut uses the Cut-only exact placement proof.
+func BuildTranslatedBlindCut(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismrecord.Payload,
+	relative prismplacement.Relative, shift *big.Rat) (Payload, bool, error) {
+	return buildBlindCut(ctx, budget, target, tool, prismcells.NewCutTranslationReexpression(relative), shift)
+}
+
+func buildBlindCut(ctx context.Context, budget *proofbound.WorkBudget, target, tool prismrecord.Payload,
+	reexpress *prismcells.Reexpression, shift *big.Rat) (Payload, bool, error) {
 	if len(tool.Profile.Holes) != 0 {
 		return Payload{}, false, nil
 	}
@@ -31,16 +42,19 @@ func BuildBlindCut(ctx context.Context, budget *proofbound.WorkBudget,
 			return Payload{}, false, nil
 		}
 	}
-	z0, z1, ok := prismplacement.ShiftedInterval(target.PlacementOperand(), tool.PlacementOperand())
+	if shift == nil {
+		shift = prismplacement.ZShift(target.PlacementOperand(), tool.PlacementOperand())
+	}
+	z0, z1, ok := prismplacement.ShiftedIntervalBy(tool.PlacementOperand(), shift)
 	if !ok {
 		return Payload{}, false, nil
 	}
-	arms, ok := blindArmsOf(target.PlacementOperand(), tool.PlacementOperand())
+	arms, ok := blindArmsShift(target.PlacementOperand(), tool.PlacementOperand(), shift)
 	if !ok {
 		return Payload{}, false, nil
 	}
 	openAtTop, openAtBottom := arms.openAtTop, arms.openAtBottom
-	inner, innerDenoted := toolInnerEnd(target.PlacementOperand(), tool, z0, z1, openAtBottom)
+	inner, innerDenoted := toolInnerEndShift(tool, z0, z1, openAtBottom, shift)
 	segments, withinCap, err := prismcells.RegionsWithinWorkCap(budget, target.Profile, tool.Profile)
 	if err != nil {
 		return Payload{}, false, err
@@ -50,9 +64,11 @@ func BuildBlindCut(ctx context.Context, budget *proofbound.WorkBudget,
 			`%w: the analytic cut scene charges %d arranger segments against the cap of %d`,
 			decaderr.ErrUnsupported, segments, prismcells.MaxArrangementSegments), segments)
 	}
-	reexpress, err := prismcells.NewReexpression(target.PlacementOperand(), tool.PlacementOperand())
-	if err != nil {
-		return Payload{}, false, err
+	if reexpress == nil {
+		reexpress, err = prismcells.NewReexpression(target.PlacementOperand(), tool.PlacementOperand())
+		if err != nil {
+			return Payload{}, false, err
+		}
 	}
 	scene, profiles, tags, sceneDelta, err := prismcells.CutCells(ctx, budget, target.Profile, tool.Profile, reexpress)
 	if err != nil {
@@ -157,10 +173,25 @@ func BuildBlindCut(ctx context.Context, budget *proofbound.WorkBudget,
 // proves that level.
 func toolInnerEnd(target prismplacement.Operand, tool prismrecord.Payload, z0, z1 *big.Rat,
 	openAtBottom bool) (*big.Rat, *big.Rat) {
+	return toolInnerEndShift(tool, z0, z1, openAtBottom, prismplacement.ZShift(target, tool.PlacementOperand()))
+}
+
+func toolInnerEndShift(tool prismrecord.Payload, z0, z1 *big.Rat, openAtBottom bool, shift *big.Rat) (*big.Rat, *big.Rat) {
+	var held, delta float64
+	var denoted prismplacement.LevelDenotation
 	if openAtBottom {
-		return z1, prismplacement.DenotedShiftedLevel(target, tool.PlacementOperand(), tool.Z1, tool.Z1Delta, tool.Z1Denoted)
+		held, delta, denoted = tool.Z1, tool.Z1Delta, tool.Z1Denoted
+	} else {
+		held, delta, denoted = tool.Z0, tool.Z0Delta, tool.Z0Denoted
 	}
-	return z0, prismplacement.DenotedShiftedLevel(target, tool.PlacementOperand(), tool.Z0, tool.Z0Delta, tool.Z0Denoted)
+	level := prismplacement.DenotedLevel(held, delta, denoted)
+	if level != nil {
+		level.Add(level, shift)
+	}
+	if openAtBottom {
+		return z1, level
+	}
+	return z0, level
 }
 
 // denotedInterface is the interface whose denoted level equals level, or -1.
@@ -195,7 +226,11 @@ type blindArms struct {
 // displacement of a target cap, or an inner end within one of either cap,
 // declines.
 func blindArmsOf(target, tool prismplacement.Operand) (blindArms, bool) {
-	a0, a1, z0, z1, ok := prismplacement.IntervalRanges(target, tool)
+	return blindArmsShift(target, tool, prismplacement.ZShift(target, tool))
+}
+
+func blindArmsShift(target, tool prismplacement.Operand, shift *big.Rat) (blindArms, bool) {
+	a0, a1, z0, z1, ok := prismplacement.IntervalRangesShift(target, tool, shift)
 	if !ok {
 		return blindArms{}, false
 	}

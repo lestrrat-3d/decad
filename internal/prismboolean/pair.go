@@ -103,8 +103,29 @@ func TryBlindStackedCut(ctx context.Context, a, b topo.Payload) (stackedrecord.P
 		return stackedrecord.Payload{}, false, err
 	}
 	target, tool, ok, err := prismcells.AdmitPairBudget(budget, meshbool.OpCut, a, b)
-	if err != nil || !ok {
+	if err != nil {
 		return stackedrecord.Payload{}, false, err
+	}
+	if !ok {
+		target, ok = a.(prismrecord.Payload)
+		if !ok {
+			return stackedrecord.Payload{}, false, nil
+		}
+		tool, ok = b.(prismrecord.Payload)
+		if !ok {
+			return stackedrecord.Payload{}, false, nil
+		}
+		for _, p := range []momentinput.Profile{target.Profile, tool.Profile} {
+			analytic, err := prismcells.ProfileAnalytic(budget, p)
+			if err != nil || !analytic {
+				return stackedrecord.Payload{}, false, err
+			}
+		}
+		relative, shift, ok := prismplacement.CutTranslation(target.PlacementOperand(), tool.PlacementOperand())
+		if !ok {
+			return stackedrecord.Payload{}, false, nil
+		}
+		return stackedrecord.BuildTranslatedBlindCut(ctx, budget, target, tool, relative, shift)
 	}
 	return stackedrecord.BuildBlindCut(ctx, budget, target, tool)
 }

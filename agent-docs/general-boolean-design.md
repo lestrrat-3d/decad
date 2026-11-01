@@ -406,10 +406,12 @@ same gate and scene, so a reflected pair the analytic `Intersect` resolves is
 measured instead of reaching the mesh path's `unsupported_pair_contact`.
 A pair with equal transform bases whose composed origins differ only along
 the sweep axis also needs no section re-expression; G3 computes that shift
-exactly for a `Copy` operand. The placed-axis arm requires zero section
-and axial displacement and two hole-free, full-line, axis-aligned rectangles.
-`Union` and `Intersect` require identical bounds; `Cut` requires the tool's
-bounds to lie strictly inside the target's bounds.
+exactly for a `Copy` operand. The placed-axis arm requires zero section and
+axial displacement on both operands. `Union` admits equal recorded profiles
+or the existing equal axis-aligned rectangle certificate. `Intersect`
+requires equal rectangle bounds; `Cut` requires the tool's bounds to lie
+strictly inside the target's bounds. Stacked Union still checks its own
+intervals, slabs and interfaces.
 Other placed-axis pairs keep the mesh route. The existing same-transform
 shared-axis arm retains its prior profile admission. `Verify` keeps its
 existing read-only Intersect path and positive-volume gate for a pair
