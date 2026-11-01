@@ -1149,6 +1149,9 @@ leaves the receiver live.
 
 ## 9. The boolean — where exactness dies, and how
 
+Internal bounded pair-chord reading accepts prism and faceted payloads on one shared trial meter.
+It refuses other payloads until a metered resolver exists.
+
 Increment 4, the deep end. Strategy:
 
 `agent-docs/prism-boolean-design.md` is the approved analytic reduction

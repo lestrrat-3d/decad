@@ -282,6 +282,7 @@
 10	0.22	TestQuarterSourceHeldY3WrongRealRadius
 10	0.52	TestRetainedBlendKeywayCuspBounds
 10	0.87	TestRetainedBlendStripPatchCovered
+10	0.00	TestReplayTrialChordRealPublicProducers
 10	0.00	TestRevolveBoreBoundaryBothSweepDirections
 10	0.00	TestRevolveSectorProjectionRefusesOverlap
 10	0.02	TestStraightLoftPrismUnionManyGates

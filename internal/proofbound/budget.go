@@ -3,6 +3,9 @@ package proofbound
 import (
 	"context"
 	"errors"
+	"fmt"
+
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 )
 
 var ErrWallWorkBudget = errors.New("wall survey work budget exhausted")
@@ -181,9 +184,11 @@ const MaxFacetPairTestsPerCall = 8_000_000
 // WorkBudget holds closures rather than a context.Context field, so no
 // long-lived geometry state stores a context.
 type WorkBudget struct {
-	StepFn func() error
-	ErrFn  func() error
-	poll   *workPoll // NewPollWorkBudget's counter; used only while StepFn is nil
+	StepFn         func() error
+	ErrFn          func() error
+	ReserveFn      func(uint64) error
+	ReserveBytesFn func(uint64) error
+	poll           *workPoll // NewPollWorkBudget's counter; used only while StepFn is nil
 }
 
 // workPoll is NewWorkBudget's step counter as a value: a step increments
@@ -265,6 +270,42 @@ func (b *WorkBudget) Step() error {
 		return b.poll.step()
 	}
 	return b.StepFn()
+}
+
+// Reserve charges records before allocation when this work budget has a record limit.
+func (b *WorkBudget) Reserve(n uint64) error {
+	if b.ReserveFn == nil {
+		return nil
+	}
+	return b.ReserveFn(n)
+}
+
+// ReserveBytes charges storage before allocating when a byte meter is present.
+func (b *WorkBudget) ReserveBytes(n uint64) error {
+	if b.ReserveBytesFn == nil {
+		return nil
+	}
+	return b.ReserveBytesFn(n)
+}
+
+// ReserveBytesMul checks a backing-array byte count before reserving it.
+func (b *WorkBudget) ReserveBytesMul(n, size uint64) error {
+	if size != 0 && n > ^uint64(0)/size {
+		return fmt.Errorf("%w: byte reservation overflow", decaderr.ErrUnsupported)
+	}
+	bytes := n * size
+	if bytes > (^uint64(0)-128)/2 {
+		return fmt.Errorf("%w: byte reservation envelope overflow", decaderr.ErrUnsupported)
+	}
+	return b.ReserveBytes(2*bytes + 128)
+}
+
+// ReserveMul checks a record-count product before reserving it.
+func (b *WorkBudget) ReserveMul(n, scale uint64) error {
+	if scale != 0 && n > ^uint64(0)/scale {
+		return fmt.Errorf("%w: record reservation overflow", decaderr.ErrUnsupported)
+	}
+	return b.Reserve(n * scale)
 }
 
 // err polls the context unconditionally — the phase-boundary check.
