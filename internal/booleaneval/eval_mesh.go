@@ -109,3 +109,75 @@ func operandChord(ctx context.Context, b *topo.Body, pairTol, dPair, chordScale 
 	_, restating := booloperand.HeldFloor(b)
 	return meshbool.OperandChord(pairTol, dPair*chordScale, booloperand.ChordShare(ctx, b).Floor*chordScale, restating)
 }
+
+// chordDiameter is the diameter a pair's freshly chorded operands are
+// requested by: the overlap's when ctx allows it (WithOverlapChord) and
+// OverlapChorded holds, else the pair's own.
+func chordDiameter(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body, dPair float64) float64 {
+	if !overlapAllowed(ctx) {
+		return dPair
+	}
+	if d, ok := overlapDiameter(ctx, op, a, b, dPair); ok {
+		return d
+	}
+	return dPair
+}
+
+// OverlapChorded reports whether a Cut's tool has a face that is not a plane
+// and the operand boxes overlap in at most 1/meshbool.OverlapChordRatio of
+// the pair's diameter (meshbool.OverlapDiameter), so that under
+// WithOverlapChord its fresh operands are chorded by the overlap. A tool of
+// planes leaves its rim on its own exact planes and keeps the pair's chord, as
+// a Union does.
+func OverlapChorded(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body) bool {
+	_, dPair, err := booloperand.PairChord(ctx, a, b)
+	if err != nil {
+		return false
+	}
+	_, ok := overlapDiameter(ctx, op, a, b, dPair)
+	return ok
+}
+
+func overlapDiameter(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body, dPair float64) (float64, bool) {
+	if op != meshbool.OpCut || !hasCurvedFace(b) {
+		return 0, false
+	}
+	d, ok := meshbool.OverlapDiameter(booloperand.ChordShare(ctx, a), booloperand.ChordShare(ctx, b))
+	if !ok || d*meshbool.OverlapChordRatio > dPair {
+		return 0, false
+	}
+	return d, true
+}
+
+type overlapChordKey struct{}
+
+// WithOverlapChord marks ctx so a Cut that OverlapChorded admits chords its
+// fresh operands by the overlap. Only the caller that retries the Cut at the
+// pair's own chord on any refusal sets it (booleandispatch.BodyScaled).
+func WithOverlapChord(ctx context.Context) context.Context {
+	return context.WithValue(ctx, overlapChordKey{}, true)
+}
+
+// WithoutOverlapChord clears WithOverlapChord for the Booleans ctx reaches.
+func WithoutOverlapChord(ctx context.Context) context.Context {
+	return context.WithValue(ctx, overlapChordKey{}, false)
+}
+
+func overlapAllowed(ctx context.Context) bool {
+	v, _ := ctx.Value(overlapChordKey{}).(bool)
+	return v
+}
+
+// hasCurvedFace reports whether some face of b is not a plane.
+func hasCurvedFace(b *topo.Body) bool {
+	for _, l := range b.Lumps {
+		for _, sh := range l.Shells {
+			for _, f := range sh.Faces {
+				if _, ok := f.Surface.(surfacegeom.Plane); !ok {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}

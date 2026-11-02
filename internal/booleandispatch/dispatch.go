@@ -364,6 +364,22 @@ func BodyScaled(ctx context.Context, op meshbool.OperationKind, env topo.Env, a,
 		return n, nil
 	}
 
+	// A Cut whose operands overlap in a small part of the pair is first meshed
+	// at the overlap's finer chord (booleaneval.OverlapChorded). When that
+	// attempt refuses at any stage, the Cut runs again at the pair's own
+	// chord, so the finer chord never refuses a Cut the pair's chord admits.
+	if booleaneval.OverlapChorded(ctx, op, a, b) {
+		body, err := meshBody(booleaneval.WithOverlapChord(ctx), op, env, a, b, hooks, scale)
+		if err == nil || ctx.Err() != nil {
+			return body, err
+		}
+	}
+	return meshBody(booleaneval.WithoutOverlapChord(ctx), op, env, a, b, hooks, scale)
+}
+
+// meshBody is BodyScaled's mesh pipeline at the chord ctx selects.
+func meshBody(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *topo.Body,
+	hooks Hooks, scale float64) (*topo.Body, error) {
 	eval, err := booleaneval.Evaluate(ctx, op, a, b, hooks.Mesher, scale, nil, nil)
 	if err != nil {
 		return nil, hooks.AsBooleanError(op, err)

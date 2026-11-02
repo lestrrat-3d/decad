@@ -79,6 +79,21 @@ volume proofs and `dPair` are unchanged. The request is finer only when another
 operand's held floor raised the pair tolerance, so a pair of two analytic
 operands is meshed exactly as before.
 
+A public Cut by a tool with a face that is not a plane, whose operand boxes
+overlap in at most 1/8 of the pair's diameter (`meshbool.OverlapChordRatio`),
+first passes the overlap's diameter (`meshbool.OverlapDiameter`) in place of
+`diameter`. Only the common part of the boxes can meet, so a short curved tool
+at one end of a long bar chords the pair as finely as a short bar would, and
+the result's held facets near the cut keep a smaller bound. Held operands, the
+pair tolerance and the chain gate still read the whole pair's diameter. When
+that attempt refuses at any stage, `booleandispatch.BodyScaled` runs the Cut
+again at the pair's diameter, so the finer chord never refuses a Cut the pair's
+chord admits. A tool of planes keeps the pair's chord: its rim lies on its own
+exact planes. Unions keep it too; the same rule on Unions asks some revolves
+for more facets than their mesh ceiling allows. The ratio keeps ordinary pairs
+on their old chord; with no ratio, a 190-part assembly built in 90 s instead of
+69 s. The same soundness argument covers the finer request.
+
 Soundness. A mesh publishes the sagitta it took, and every proof reads that
 published figure, never the request (tessellation §2). A finer request makes
 the published figure smaller. The tangency gate's slack is a sum of published
