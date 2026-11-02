@@ -10,7 +10,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | Path | Responsibility |
 |---|---|
 | `internal/axialsection/` | Reads prisms and matching axial lofts as axial extrusions and joins their sections through sketch loop containment into a matching axial loft, placing placed operands first. See axial-section-boolean and axial-pattern-join. |
-| `internal/prismboolean/` | Analytic boolean admission over payloads: the prism pair with its holed `Intersect`, axial-Loft and face-patch `Union`, many-body prism `Union`, blind, spanning, crossing-blind and opposed blind `Cut`, A5 groups and A1 stacked `Union`. See prism-boolean §3, general-boolean §3 A1, A5, A7, A8. |
+| `internal/prismboolean/` | Analytic Boolean admission over payloads, bounded cap selection and record authentication. See prism-boolean §3 and general-boolean §3 A1, A5, A7, A8 for pair, many-body, group, stacked and blind routes. |
 | `internal/stackedunion/` | Builds A1 stacked Union slabs, private scenes, and BRep faces after `internal/prismboolean` admits them, and states A7 and A8 blind cuts as BReps. See general-boolean §3 A1, A7, A8. |
 | `internal/stackedshell/` | Admits and records the exact stacked shells (nested rectangular boss, circular boss, rectangular blind pocket, coaxial counterbore) from a two-slab record and its face view, and `RefuseClosed`; `breprecord` builds the result. See modify-general §3.1a-§3.1c, §3.1e. |
 | `internal/prismshell/` | Prism cap-shell gates with tube, band and closed-shell records; side sections, the side-opening prism, wall bands, nested boss authentication, mesh and proof, closed stack reversal, denoted slab levels and stack faces. See modify §8, shell-opening §3–§5, shell-faceted-boss design. |

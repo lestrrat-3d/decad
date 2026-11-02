@@ -7,9 +7,9 @@ The rules for rows live in `agent-docs/layout.md`.
 
 | Path | Responsibility |
 |---|---|
-| `boolean.go` | Public `Union`/`Cut`/`Intersect`, `BooleanError` mapping, contained-Cut source volume, centroid, and moment capture, and scale-source marking; hands route order to `internal/booleandispatch/` with root-only hooks. See evaluator §9 and operation-history-design. |
+| `boolean.go` | Public `Union`/`Cut`/`Intersect`, error mapping and scale-source marking; adapters call `internal/booleandispatch` for routes and `internal/massdispatch` for contained-Cut quantities. See evaluator §9 and operation-history-design. |
 | `boolean_fold.go` | Two-at-a-time fold of a many-body `Union` that no certified route takes: a trial chain on copies, then the real one. See union-fold design. |
-| `boolean_group_blind.go` | Authenticates and commits bounded blind group Cuts. See prism-boolean design. |
+| `boolean_group_blind.go` | Binds root history and handles for bounded blind group Cuts and commits their result. `internal/prismboolean` owns cap selection and geometry proofs. See prism-boolean design. |
 | `boolean_group_cache.go` | Replays and compares a cached blind Cut mesh before returning it. See tessellation design. |
 | `boolean_group_history.go` | Bounded snapshot of a prism group Union's ordered public source bodies. |
 | `boolean_group_tessellate.go` | Replays a blind group Cut mesh and verifies its source history. See tessellation design. |

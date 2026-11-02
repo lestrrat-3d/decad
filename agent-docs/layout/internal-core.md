@@ -25,7 +25,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/contactruling/` | Placed ruling contact of a source cylinder against an exact planar body: side faces, the ruling set, normals and the manifolds published into a contact report. See contact-geometry §4.5. |
 | `internal/contactfaceted/` | Exact faceted support-face proof, bounded strict separation from a source-box floor, and the floor contact classification. See contact-geometry §4. |
 | `internal/contactpair/` | The contact pair proof for two live solids: source-box, sphere, cylinder, faceted-floor, planar and placed-ruling arms in order, with the planar fallbacks and the analytic kernel verdict. See contact-geometry §4. |
-| `internal/massdispatch/` | Mass properties by payload, Cut and exact-Copy moments, and mesh ladder. See dynamic-mass §2 and exact-copy-moments-design. |
+| `internal/massdispatch/` | Mass properties and mesh ladder; contained-Cut quantities and exact-Copy moments. See operation-history and exact-copy-moments designs. |
 | `internal/pair/sphere/` | Exact sphere-pair relation, gap and bounded response witness. See contact-geometry §4.3. |
 | `internal/pair/planar/` | Planar solid relations, gaps, patches, support faces, and convexity. |
 | `internal/planarsnapshot/` | Planar contact snapshots, cached records, pose gates and placement. See multibody §9.1–§9.2. |

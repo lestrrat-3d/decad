@@ -74,7 +74,7 @@ func groupBlindCutBodyWithBudget(ctx context.Context, target, tool *Body, ref pr
 	if err != nil || !ok {
 		return miss(err)
 	}
-	targetCap, ok, err := groupBlindTargetCap(ctx, &target.n, top, budget)
+	targetCap, ok, err := groupBlindTargetCap(ctx, target, top, budget)
 	if err != nil || !ok {
 		return miss(err)
 	}
@@ -286,47 +286,9 @@ func commitBlindGroupCut(ctx context.Context, d *Document, target, tool, result 
 	return nil
 }
 
-func groupBlindTargetCap(ctx context.Context, body *topo.Body, top bool,
+// groupBlindTargetCap unwraps the private Body.n field for prismboolean's
+// bounded cap lookup. The geometry scan and record proof stay in that package.
+func groupBlindTargetCap(ctx context.Context, body *Body, top bool,
 	budget *proofbound.ReplayBudget) (*topo.Face, bool, error) {
-	if body == nil || budget == nil {
-		return nil, false, nil
-	}
-	role := provenance.RoleCapStart
-	if top {
-		role = provenance.RoleCapEnd
-	}
-	var found *topo.Face
-	for _, lump := range body.Lumps {
-		if err := budget.SpendWork(ctx, 1); err != nil {
-			return nil, false, err
-		}
-		if lump == nil {
-			return nil, false, nil
-		}
-		for _, shell := range lump.Shells {
-			if err := budget.SpendWork(ctx, 1); err != nil {
-				return nil, false, err
-			}
-			if shell == nil {
-				return nil, false, nil
-			}
-			for _, face := range shell.Faces {
-				if err := budget.SpendWork(ctx, 1); err != nil {
-					return nil, false, err
-				}
-				if face == nil || len(face.Origins) != 1 || face.Origins[0].Role != role {
-					continue
-				}
-				if found != nil {
-					return nil, false, nil
-				}
-				found = face
-			}
-		}
-	}
-	if found == nil {
-		return nil, false, nil
-	}
-	ok, err := prismboolean.ReplayPrismCapRecord(ctx, body, found, top, budget)
-	return found, ok, err
+	return prismboolean.ReplayPrismCap(ctx, bodyNode(body), top, budget)
 }
