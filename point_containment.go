@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pointquery"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -59,12 +60,15 @@ func (b *Body) LocatePoint(ctx context.Context, p r3.Vec, tol units.Value) (Poin
 	if !proofbound.FiniteVec(p) {
 		return PointUndecided, fmt.Errorf(`%w: the query point must be finite`, ErrNotFinite)
 	}
-	if !b.n.Solid {
+	if !b.n.Solid || b.n.Kind != topo.BodySolid {
 		return PointUndecided, ErrNotSolid
 	}
 	result, decided, err := locateExact(ctx, b, p, tol)
 	if err != nil {
 		return PointUndecided, err
+	}
+	if !b.n.Solid || b.n.Kind != topo.BodySolid {
+		return PointUndecided, ErrNotSolid
 	}
 	if decided {
 		return PointLocation(result), nil
