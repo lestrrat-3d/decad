@@ -1196,47 +1196,60 @@ func CellTwistMomentFromVolume(vLo, vHi, wLo, wHi, anchor r3.Vec, signed *big.Ra
 	return out
 }
 
-type momentPoly map[[2]int]proofarith.Dyadic
+// momentPoly holds a bivariate polynomial in s and r: p[i][j] is the
+// coefficient of s^i*r^j. The largest product built here is the bilinear
+// patch's q*q*n, whose degree is at most (3,2) or (2,3), so four slots per
+// axis always suffice. The zero value of proofarith.Dyadic is zero.
+type momentPoly [4][4]proofarith.Dyadic
 
-func momentPolyAdd(p momentPoly, degree [2]int, term proofarith.Dyadic) {
-	if term.Sign() == 0 {
-		return
-	}
-	p[degree] = proofarith.DyAdd(p[degree], term)
-}
-
-func momentPolyMul(a, b momentPoly) momentPoly {
-	out := make(momentPoly)
-	for da, ca := range a {
-		for db, cb := range b {
-			momentPolyAdd(out, [2]int{da[0] + db[0], da[1] + db[1]}, proofarith.DyMul(ca, cb))
+func momentPolyMul(a, b *momentPoly) momentPoly {
+	var out momentPoly
+	for i := range a {
+		for j := range a[i] {
+			ca := a[i][j]
+			if ca.Sign() == 0 {
+				continue
+			}
+			for k := range b {
+				for l := range b[k] {
+					cb := b[k][l]
+					if cb.Sign() == 0 {
+						continue
+					}
+					out[i+k][j+l] = proofarith.DyAdd(out[i+k][j+l], proofarith.DyMul(ca, cb))
+				}
+			}
 		}
 	}
 	return out
 }
 
 func bilinearPatchMomentIntegral(q0, a, b, twist proofarith.DyV3, axis int) *big.Rat {
-	q := momentPoly{
-		{0, 0}: q0[axis],
-		{1, 0}: a[axis],
-		{0, 1}: b[axis],
-		{1, 1}: twist[axis],
-	}
+	var q momentPoly
+	q[0][0] = q0[axis]
+	q[1][0] = a[axis]
+	q[0][1] = b[axis]
+	q[1][1] = twist[axis]
 	n0 := proofarith.DvCross(a, b)
 	ns := proofarith.DvCross(a, twist)
 	nr := proofarith.DvCross(twist, b)
-	n := momentPoly{
-		{0, 0}: n0[axis],
-		{1, 0}: ns[axis],
-		{0, 1}: nr[axis],
-	}
-	integrand := momentPolyMul(momentPolyMul(q, q), n)
+	var n momentPoly
+	n[0][0] = n0[axis]
+	n[1][0] = ns[axis]
+	n[0][1] = nr[axis]
+	q2 := momentPolyMul(&q, &q)
+	integrand := momentPolyMul(&q2, &n)
 	// Every (i+1)(j+1) here divides 144. Accumulate dyadic numerators over
 	// that common denominator, then normalize the rational only once.
 	total := proofarith.DyZero()
-	for degree, coefficient := range integrand {
-		den := int64((degree[0] + 1) * (degree[1] + 1))
-		total = proofarith.DyAdd(total, proofarith.DyMul(coefficient, proofarith.DyInt(144/den)))
+	for i := range integrand {
+		for j, coefficient := range integrand[i] {
+			if coefficient.Sign() == 0 {
+				continue
+			}
+			den := int64((i + 1) * (j + 1))
+			total = proofarith.DyAdd(total, proofarith.DyMul(coefficient, proofarith.DyInt(144/den)))
+		}
 	}
 	return proofarith.QuoRat(new(big.Rat), total.Rat(), big.NewRat(144, 1))
 }
@@ -1244,30 +1257,34 @@ func bilinearPatchMomentIntegral(q0, a, b, twist proofarith.DyV3, axis int) *big
 func triangleMomentIntegral(q0, q1, q2 proofarith.DyV3, axis int) *big.Rat {
 	e1 := proofarith.DvSub(q1, q0)
 	e2 := proofarith.DvSub(q2, q0)
-	q := momentPoly{
-		{0, 0}: q0[axis],
-		{1, 0}: e1[axis],
-		{0, 1}: e2[axis],
-	}
-	q2Poly := momentPolyMul(q, q)
+	var q momentPoly
+	q[0][0] = q0[axis]
+	q[1][0] = e1[axis]
+	q[0][1] = e2[axis]
+	q2Poly := momentPolyMul(&q, &q)
 	n := proofarith.DvCross(e1, e2)[axis]
 	// Degree is at most two, so every simplex weight divides 1/24.
 	total := proofarith.DyZero()
-	for degree, coefficient := range q2Poly {
-		// Integral over s>=0, r>=0, s+r<=1 of s^i*r^j is
-		// i!*j!/(i+j+2)!; the polynomial degree here is at most two.
-		num := int64(1)
-		for i := 2; i <= degree[0]; i++ {
-			num *= int64(i)
+	for i := range q2Poly {
+		for j, coefficient := range q2Poly[i] {
+			if coefficient.Sign() == 0 {
+				continue
+			}
+			// Integral over s>=0, r>=0, s+r<=1 of s^i*r^j is
+			// i!*j!/(i+j+2)!; the polynomial degree here is at most two.
+			num := int64(1)
+			for f := 2; f <= i; f++ {
+				num *= int64(f)
+			}
+			for f := 2; f <= j; f++ {
+				num *= int64(f)
+			}
+			den := int64(1)
+			for f := 2; f <= i+j+2; f++ {
+				den *= int64(f)
+			}
+			total = proofarith.DyAdd(total, proofarith.DyMul(coefficient, proofarith.DyInt(24*num/den)))
 		}
-		for i := 2; i <= degree[1]; i++ {
-			num *= int64(i)
-		}
-		den := int64(1)
-		for i := 2; i <= degree[0]+degree[1]+2; i++ {
-			den *= int64(i)
-		}
-		total = proofarith.DyAdd(total, proofarith.DyMul(coefficient, proofarith.DyInt(24*num/den)))
 	}
 	return proofarith.QuoRat(new(big.Rat), proofarith.DyMul(total, n).Rat(), big.NewRat(24, 1))
 }
