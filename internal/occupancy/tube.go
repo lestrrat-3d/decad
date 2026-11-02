@@ -180,3 +180,6 @@ func (s torusShape) poke(tri [3]r3.Vec) float64 {
 	}
 	return proofbound.AbsSumUpper(math.Max(out*(1+relSlack), 0), s.pad)
 }
+
+// boundaryFar is not read for arc tubes: no Cut takes one as a tool.
+func (torusShape) boundaryFar(r3.Vec, r3.Vec, float64) bool { return false }

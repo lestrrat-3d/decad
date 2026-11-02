@@ -42,6 +42,20 @@ type Leaf struct {
 // the leaf's true solid: +Inf when it cannot say.
 type shape interface {
 	poke(tri [3]r3.Vec) float64
+	// boundaryFar reports whether every point of the box (lo, hi) is proven
+	// farther than pad from the true solid's boundary; false when it cannot
+	// say.
+	boundaryFar(lo, hi r3.Vec, pad float64) bool
+}
+
+// nearHoleWall reports whether the box (lo, hi) may come within pad of the
+// hole's wall region: within pad + 2·Delta of the true tool's boundary, which
+// holds every point between the true tool and its held mesh.
+func (l Leaf) nearHoleWall(lo, hi r3.Vec, pad float64) bool {
+	if !l.near(lo, hi, pad+l.Delta) {
+		return false
+	}
+	return !l.shape.boundaryFar(lo, hi, proofbound.AbsSumUpper(pad, l.Delta, l.Delta))
 }
 
 // Record is the occupancy record of a held Union result X' of the true union
@@ -97,7 +111,7 @@ func (r *Record) Bulges(verts []r3.Vec, tris [][3]int, delta []float64) []float6
 		}
 		lam := poke
 		for _, l := range r.Holes {
-			if l.near(lo, hi, r.Cross+l.Delta) {
+			if l.nearHoleWall(lo, hi, r.Cross) {
 				// The true hole reaches past its held wall by at most the tool
 				// mesh's own two-sided bound, and those points are held
 				// material outside X.
@@ -133,7 +147,7 @@ func (r *Record) LocalBulge(tri [3]r3.Vec, delta float64, site [2]r3.Vec) float6
 	}
 	lam := poke
 	for _, l := range r.Holes {
-		if l.near(site[0], site[1], SiteReach+l.Delta) {
+		if l.nearHoleWall(site[0], site[1], SiteReach) {
 			lam = math.Max(lam, l.Delta)
 		}
 	}
@@ -476,6 +490,7 @@ type cylinderShape struct {
 	inv          []exactAffine
 	finv         []Affine
 	stretch      float64
+	invStretch   float64
 	r, z0, z1    float64
 	displacement float64
 }
@@ -499,7 +514,39 @@ func newCylinderShape(place Chain, r, z0, z1, displacement float64) (cylinderSha
 		}
 		stretch = proofbound.UpRound(stretch * proofbound.UpRound(math.Sqrt(proofbound.UpRound(f))*(1+1e-15)))
 	}
-	return cylinderShape{inv: inv, finv: finv, stretch: stretch, r: r, z0: z0, z1: z1, displacement: displacement}, nil
+	invStretch := 1.0
+	for _, a := range finv {
+		f := 0.0
+		for _, row := range a.M {
+			for _, x := range row {
+				f += x * x
+			}
+		}
+		invStretch = proofbound.UpRound(invStretch * proofbound.UpRound(math.Sqrt(proofbound.UpRound(f))*(1+1e-12)))
+	}
+	return cylinderShape{inv: inv, finv: finv, stretch: stretch, invStretch: invStretch, r: r, z0: z0, z1: z1, displacement: displacement}, nil
+}
+
+// boundaryFar reads the box's centre in local coordinates: its distance to
+// the cylinder's boundary there, divided by the inverse maps' stretch, less
+// the box's half-diagonal and a float margin, bounds every box point's world
+// distance to the boundary from below.
+func (c cylinderShape) boundaryFar(lo, hi r3.Vec, pad float64) bool {
+	ctr := lo.Add(hi).Scale(0.5)
+	half := hi.Sub(lo).Len() / 2
+	p := ctr
+	for _, a := range c.finv {
+		p = a.applyFloat(p)
+	}
+	rad := math.Hypot(p.X, p.Y)
+	var d float64
+	if rad <= c.r && p.Z >= c.z0 && p.Z <= c.z1 {
+		d = math.Min(c.r-rad, math.Min(p.Z-c.z0, c.z1-p.Z))
+	} else {
+		d = math.Max(rad-c.r, math.Max(c.z0-p.Z, p.Z-c.z1))
+	}
+	margin := 1e-9 * (ctr.Len() + p.Len() + c.r + math.Abs(c.z0) + math.Abs(c.z1))
+	return d/c.invStretch-half-margin-c.displacement > pad
 }
 
 func (c cylinderShape) poke(tri [3]r3.Vec) float64 {
