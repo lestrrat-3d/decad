@@ -184,35 +184,6 @@ func replayRetryShifted(ctx context.Context, refusal error, op meshbool.Operatio
 		if touch.What != meshbool.TouchCoplanar || len(initial) == 0 || !growOpens(initial) {
 			return Evaluation{}, refusal
 		}
-		if fixed, ok := ctx.Value(authenticatedGrowthKey{}).(*AuthenticatedGrowth); ok && fixed != nil {
-			if op != meshbool.OpCut || shrink || fixed.used {
-				return Evaluation{}, refusal
-			}
-			for _, c := range initial {
-				if c.Slack != 0 {
-					return Evaluation{}, refusal
-				}
-			}
-			if err := fixed.validate(ctx, fixed.target, b); err != nil {
-				return Evaluation{}, err
-			}
-			fixed.used = true
-			shifts, e := boolshift.NewReplayShifts(ctx, b)
-			if e != nil {
-				return Evaluation{}, e
-			}
-			if e = shifts.Set(ctx, pieceShift{Grow: math.Float64frombits(fixed.growBits)}); e != nil {
-				return Evaluation{}, e
-			}
-			ev, e := attempt(shifts)
-			if errors.Is(e, errShiftDeclined) {
-				return Evaluation{}, refusal
-			}
-			if _, ok := errors.AsType[*meshbool.TouchContactError](e); ok {
-				return Evaluation{}, refusal
-			}
-			return ev, e
-		}
 		for _, step := range shiftSteps {
 			amount := step * reach
 			if op == meshbool.OpIntersect || shrink {

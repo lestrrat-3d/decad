@@ -27,10 +27,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
-	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
-	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -51,7 +49,6 @@ type OperandMesher interface {
 // payload with the occupied volume, its proven bound and exact value, and the
 // closure audit. It holds no document reference or public model state.
 type Evaluation struct {
-	circleSeal       *circleCandidateSeal
 	Payload          facetedrecord.Payload
 	Volume           float64
 	VolumeBound      float64
@@ -388,18 +385,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 				if k == 1 {
 					faces = facesB
 				}
-				candidate, candidateOK := meshes.(brakeCircleCandidateMesher)
-				_, retainedOK := meshes.(*retainedReplayMesher)
-				pp, prismOK := owner.Payload.(prismrecord.Payload)
-				circle := false
-				if prismOK && len(pp.Profile.Outer.Segments) == 1 {
-					_, circle = pp.Profile.Outer.Segments[0].(sectionrecord.CircleSeg)
-				}
-				if candidateOK && candidate.pin == owner || retainedOK && k == 0 && circle && replay.IsBrakeReplay() {
-					placed[k], err = replayPlacedCircleDepartures(ctx, owner, m, faces, replay)
-				} else {
-					placed[k], err = replayPlacedRectangleDepartures(ctx, owner, m, faces, replay)
-				}
+				placed[k], err = replayPlacedRectangleDepartures(ctx, owner, m, faces, replay)
 				if err != nil {
 					return Evaluation{}, err
 				}
@@ -411,13 +397,6 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			return Evaluation{}, err
 		}
 		if placed[k], err = placedOperandDepartures(owner, twin, m); err != nil {
-			return Evaluation{}, err
-		}
-	}
-	var prepared *preparedTagShift
-	if cert, _ := ctx.Value(preparedTagShiftKey{}).(*BrakeCandidateCertificate); cert != nil && replay != nil && ordered != nil && hasShifts {
-		prepared, err = prepareTagShift(ctx, a, b, mb, facesB, piecesB, fixedFacePiece, placed[1], reachB, ordered, replay)
-		if err != nil {
 			return Evaluation{}, err
 		}
 	}
@@ -480,9 +459,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 				if e != nil {
 					return Evaluation{}, e
 				}
-				if prepared != nil {
-					group = prepared.groups[ordinal]
-				} else if moved && ok && piece != spanningPieces && sh.Grow == 0 && group.Surface != nil && group.Retained && group.Denoted == nil {
+				if moved && ok && piece != spanningPieces && sh.Grow == 0 && group.Surface != nil && group.Retained && group.Denoted == nil {
 					return Evaluation{}, fmt.Errorf("%w: replay moved retained-tag proof is not bounded", decaderr.ErrUnsupported)
 				} else {
 					group = boolshift.MovedGroupWithShift(group, piece, ok, sh, moved, mb.Vertices, reachB)
@@ -530,12 +507,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		if capFace != nil || coneFace != nil {
 			return Evaluation{}, errShiftDeclined
 		}
-		if prepared != nil {
-			if err := prepared.recheck(ctx, a, b, mb, facesB, piecesB, fixedFacePiece, ordered, replay); err != nil {
-				return Evaluation{}, err
-			}
-			mbDecide, mb, shiftDisplacement = prepared.decision, prepared.charged, prepared.displacement
-		} else if replay != nil {
+		if replay != nil {
 			if ordered != nil {
 				mbDecide, mb, shiftDisplacement, err = boolshift.ShiftOperandMeshReplay(ctx, mb, piecesB, ordered, &shrink, replay)
 			} else {
@@ -777,11 +749,6 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		} else if op == meshbool.OpCut || op == meshbool.OpUnion && shiftsHaveSingleComponentAdjustment(shifts) {
 			ev.ShiftCertificate = captureShiftCertificate(ctx, a, b, unmoved, mbDecide, mb, piecesB,
 				groups[targetFaces:], facesB, shifts, tolMM, chordScale, shiftDisplacement)
-		}
-		if prepared != nil && (ev.ShiftCertificate == nil ||
-			prepared.shift.Grow == 0 && !ev.ShiftCertificate.IsTranslation() ||
-			prepared.shift.Grow > 0 && !ev.ShiftCertificate.IsPureGrowth()) {
-			return Evaluation{}, fmt.Errorf("%w: prepared shift certificate unavailable", decaderr.ErrUnsupported)
 		}
 		if (op == meshbool.OpCut || op == meshbool.OpUnion && shiftsHaveSingleComponentAdjustment(shifts)) &&
 			ev.ShiftCertificate != nil && len(ma.Vertices) <= 65536 && len(ma.Triangles) <= 65536 {

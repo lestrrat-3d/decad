@@ -44,11 +44,6 @@ func evaluateReplay(ctx context.Context, op meshbool.OperationKind, a, b *topo.B
 		return Evaluation{}, fmt.Errorf("%w: bounded evaluation needs two operands and a budget", decaderr.ErrUnsupported)
 	}
 	check := func() error {
-		if cert, ok := ctx.Value(preparedTagShiftKey{}).(*BrakeCandidateCertificate); ok {
-			if err := cert.validate(ctx, a, b, budget); err != nil {
-				return err
-			}
-		}
 		if candidate == 0 {
 			return nil
 		}
