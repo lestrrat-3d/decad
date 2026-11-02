@@ -393,17 +393,17 @@ func TestRefineDrilledBar(t *testing.T) {
 
 func TestRefineLetsAChainContinue(t *testing.T) {
 	t.Parallel()
-	// Without refining, the leader's fold is refused at its third Union: the
-	// new contact touches a rim whose crossing bound is past the document's
-	// 0.02 mm chain tolerance. Refining each held result first lets the next
-	// Union read the surface bound instead, and the fold completes.
+	// Without refining, an oblique zigzag's fold is refused at its second
+	// Union: the new contact touches a rim whose crossing bound is past the
+	// document's 0.02 mm chain tolerance. Refining each held result first lets
+	// the next Union read the surface bound instead, and the fold completes.
 	const chain = 0.02
-	pts := leaderPoints(1)
+	pts := []r3.Vec{{X: -5, Y: 2, Z: 1}, {X: 15, Y: 9, Z: 4}, {X: 22, Y: 30, Z: -3}, {X: 41, Y: 33, Z: 10}}
 	fold := func(t *testing.T, refine bool) error {
 		doc := decad.New(decad.WithChainTolerance(units.Millimeters(chain)))
-		u := refineSpan(t, doc, pts[0], pts[1], 0.35)
+		u := refineSpan(t, doc, pts[0], pts[1], 0.5)
 		for i := 1; i+1 < len(pts); i++ {
-			next, err := decad.Union(t.Context(), u, refineSpan(t, doc, pts[i], pts[i+1], 0.35))
+			next, err := decad.Union(t.Context(), u, refineSpan(t, doc, pts[i], pts[i+1], 0.5))
 			if err != nil {
 				return err
 			}
