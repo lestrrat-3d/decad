@@ -348,3 +348,69 @@ func TestRationalFloatErrorMatchesLegacyFloat64(t *testing.T) {
 	require.True(t, math.IsInf(proof.RationalFloatError(nil, 1), 1))
 	require.True(t, math.IsInf(proof.RationalFloatError(big.NewRat(1, 3), math.Inf(1)), 1))
 }
+
+// TestXhpVecLeavesQuotientOperandsUnchanged pins that the integer-division
+// path of quotientFloat64 scales scratch copies and never its inputs, for
+// every sign of the numerator and each of the three shift directions.
+func TestXhpVecLeavesQuotientOperandsUnchanged(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(431, 433))
+	three := big.NewInt(3)
+	var cases [][2]*big.Int
+	// Odd denominators: numerator narrower than (shift>0), as wide as
+	// (shift==0 region) and wider than (shift<0) the denominator.
+	for _, nb := range []int{1, 2, 30, 53, 54, 55, 64, 65, 200, 1100} {
+		for _, db := range []int{2, 3, 30, 54, 55, 64, 130, 700, 1100} {
+			d := randomBits(rng, db)
+			d.SetBit(d, 0, 1)
+			d.Mul(d, three)
+			cases = append(cases, [2]*big.Int{randomBits(rng, nb), d})
+		}
+	}
+	// Exact quotients, ties and huge/tiny exponents.
+	cases = append(cases,
+		[2]*big.Int{big.NewInt(9), big.NewInt(3)},
+		[2]*big.Int{big.NewInt(1), three},
+		[2]*big.Int{new(big.Int).Add(bigPow2(54), big.NewInt(1)), three},
+		[2]*big.Int{new(big.Int).Add(bigPow2(53), big.NewInt(1)), big.NewInt(1)},
+		[2]*big.Int{new(big.Int).Add(bigPow2(53), big.NewInt(1)), big.NewInt(5)},
+		[2]*big.Int{new(big.Int).Mul(bigPow2(1100), three), three},
+		[2]*big.Int{big.NewInt(1), new(big.Int).Mul(bigPow2(1100), three)},
+		[2]*big.Int{big.NewInt(5), new(big.Int).Mul(bigPow2(1090), three)},
+		[2]*big.Int{bigPow2(1100), big.NewInt(7)},
+	)
+	for _, c := range cases {
+		for _, sign := range []int{1, -1, 0} {
+			num := new(big.Int).Mul(c[0], big.NewInt(int64(sign)))
+			den := new(big.Int).Set(c[1])
+			numBefore, denBefore := new(big.Int).Set(num), new(big.Int).Set(den)
+			want := legacyXhpFractionFloat64(num, den)
+			got := proof.XhpVec(proof.Xhp{X: num, Y: new(big.Int), Z: new(big.Int), W: den}).X
+			require.Equal(t, math.Float64bits(want), math.Float64bits(got), "num=%v den=%v", numBefore, denBefore)
+			wantRat, _ := new(big.Rat).SetFrac(numBefore, denBefore).Float64()
+			require.Equal(t, math.Float64bits(wantRat), math.Float64bits(got), "rat num=%v den=%v", numBefore, denBefore)
+			require.Zero(t, numBefore.Cmp(num), "num mutated")
+			require.Zero(t, denBefore.Cmp(den), "den mutated")
+		}
+	}
+}
+
+func BenchmarkQuotientFloat64(b *testing.B) {
+	rng := rand.New(rand.NewPCG(437, 439))
+	num := new(big.Int).Neg(randomBits(rng, 200))
+	den := randomBits(rng, 130)
+	den.SetBit(den, 0, 1)
+	p := proof.Xhp{X: num, Y: new(big.Int), Z: new(big.Int), W: den}
+	b.Run("current", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			_ = proof.XhpVec(p)
+		}
+	})
+	b.Run("legacy", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			_ = legacyXhpFractionFloat64(num, den)
+		}
+	})
+}

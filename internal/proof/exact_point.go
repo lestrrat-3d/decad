@@ -256,15 +256,18 @@ func quotientFloat64(num, den *big.Int) (float64, bool) {
 		mantissa, haveRem := powerOfTwoQuotient(num)
 		return roundQuotient(num.Sign() < 0, exp, mantissa, haveRem)
 	}
-	var a, b, quotient, remainder big.Int
-	a.Abs(num)
-	b.Set(den)
+	// Only the operand that needs scaling is copied. QuoRem truncates, so
+	// |quotient| and the zero-remainder test do not depend on the operand
+	// signs; quotient.Abs restores the magnitude the mantissa is read from.
+	var scaledNum, scaledDen, quotient, remainder big.Int
+	a, b := num, den
 	if shift := 54 - exp; shift > 0 {
-		a.Lsh(&a, uint(shift))
+		a = scaledNum.Lsh(num, uint(shift))
 	} else if shift < 0 {
-		b.Lsh(&b, uint(-shift))
+		b = scaledDen.Lsh(den, uint(-shift))
 	}
-	quotient.QuoRem(&a, &b, &remainder)
+	quotient.QuoRem(a, b, &remainder)
+	quotient.Abs(&quotient)
 	return roundQuotient(num.Sign() < 0, exp, quotient.Uint64(), remainder.Sign() != 0)
 }
 
