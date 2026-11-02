@@ -7,14 +7,11 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/axialsection"
 	"github.com/lestrrat-3d/decad/internal/booleandispatch"
-	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
-	"github.com/lestrrat-3d/decad/internal/prismboolean"
-	"github.com/lestrrat-3d/decad/internal/prismpattern"
-	"github.com/lestrrat-3d/decad/internal/revolveshell"
 	"github.com/lestrrat-3d/decad/internal/topo"
+	"github.com/lestrrat-3d/decad/internal/unionmany"
 )
 
 // performUnionMany validates every input before evaluation and commits the
@@ -102,55 +99,12 @@ func unionManyBodies(ctx context.Context, d *Document, ref producerID, operands 
 	return bodyHandle(node), 1, ctx.Err()
 }
 
-// unionManyRoutes is unionManyBodies' route chain.
+// unionManyRoutes unwraps private Document.n and Body.n fields, supplies the
+// handle allocator through envOf, and preserves the caller's producer identity
+// for unionmany.Routes. The returned node becomes a root handle for its caller.
 func unionManyRoutes(ctx context.Context, d *Document, ref producerID, operands []*Body) (*Body, producerID, error) {
-	a := operands[0]
-	if node, matched, err := prismboolean.UnionMany(ctx, envOf(documentNode(d), ref), bodyNodes(operands)); matched || err != nil {
-		if err != nil {
-			return nil, 0, err
-		}
-		return bodyHandle(node), 1, ctx.Err()
-	}
-	if node, matched, err := axialsection.UnionMany(ctx, envOf(documentNode(d), ref), bodyNodes(operands)); matched || err != nil {
-		if err != nil {
-			return nil, 0, err
-		}
-		return bodyHandle(node), 1, ctx.Err()
-	}
-	tools := operands[1:]
-	node, matched, err := loftcylinder.MirrorPairs(ctx, envOf(documentNode(d), ref), verifyAllMesher{},
-		bodyNode(a), bodyNodes(tools), nil)
-	body := bodyHandle(node)
-	if !matched && err == nil {
-		var node *topo.Body
-		node, matched, err = loftcylinder.UnionTeeth(ctx, envOf(documentNode(d), ref), verifyAllMesher{},
-			bodyNode(a), bodyNodes(tools))
-		body = bodyHandle(node)
-	}
-	if !matched && err == nil {
-		var node *topo.Body
-		node, matched, err = revolveshell.SectorUnionMany(ctx, envOf(documentNode(d), ref), bodyNodes(operands))
-		body = bodyHandle(node)
-	}
-	if !matched && err == nil {
-		var node *topo.Body
-		node, matched, err = prismpattern.UnionMany(ctx, envOf(documentNode(d), ref), verifyAllMesher{},
-			bodyNodes(operands))
-		body = bodyHandle(node)
-	}
-	if !matched && err == nil {
-		var node *topo.Body
-		node, matched, err = prismboolean.StraightLoftUnionMany(ctx, envOf(documentNode(d), ref), bodyNodes(operands))
-		body = bodyHandle(node)
-	}
-	if err != nil {
-		return nil, 0, err
-	}
-	if !matched {
-		return nil, 0, fmt.Errorf("%w: Union of three or more bodies needs a certified prism, "+
-			"axial or copied-tooth set; join them two at a time", ErrUnsupported)
-	}
-	return body, 1, ctx.Err()
+	node, span, err := unionmany.Routes(ctx, envOf(documentNode(d), ref), ref, bodyNodes(operands), verifyAllMesher{})
+	return bodyHandle(node), span, err
 }
 
 // tryPrismUnionChain gives prism inputs and exact straight-source Loft inputs

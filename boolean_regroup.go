@@ -150,6 +150,8 @@ func (s pairedHistorySource) BooleanProducer(body *topo.Body) (meshbool.Operatio
 // authenticates every operand; no geometric sample establishes this identity.
 // After the original refusal, the plan makes three or five ordinary calls.
 // Those calls share no replay meter and expose no work, record or byte counts.
+// This adapter stays in root to bind Document.producers and Body.n handles;
+// booleandispatch.RunPairedCutPlan owns the node-only private call sequence.
 func pairedCutContinuation(ctx context.Context, d *Document, target, tool *Body, cfg booleanConfig,
 	cause error) (*Body, producerID, pairedCutAncestry, bool, error) {
 	var empty pairedCutAncestry
@@ -197,7 +199,7 @@ func pairedCutContinuation(ctx context.Context, d *Document, target, tool *Body,
 	if ancestry.firstTool != nil {
 		secondTool = &tool.n
 	}
-	n, err := runPairedCutPlan(ctx, sources, &firstTool.n, secondTool, run)
+	n, err := booleandispatch.RunPairedCutPlan(ctx, sources, &firstTool.n, secondTool, run)
 	if err != nil {
 		return pairedCutFailure(ctx, err)
 	}
@@ -219,43 +221,6 @@ func pairedCutContinuation(ctx context.Context, d *Document, target, tool *Body,
 		return nil, 0, empty, false, nil
 	}
 	return body, span, ancestry, true, ctx.Err()
-}
-
-// runPairedCutPlan checks cancellation at every private call boundary.
-func runPairedCutPlan(ctx context.Context, sources [2]*topo.Body, firstTool, secondTool *topo.Body,
-	run func(meshbool.OperationKind, *topo.Body, *topo.Body, float64) (*topo.Body, error)) (*topo.Body, error) {
-	var branches [2]*topo.Body
-	for i, source := range sources {
-		scale := 0.25
-		if secondTool != nil && i == 1 {
-			scale = 0.0625
-		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		var err error
-		branches[i], err = run(meshbool.OpCut, source, firstTool, scale)
-		if err != nil {
-			return nil, err
-		}
-		if secondTool != nil {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			branches[i], err = run(meshbool.OpCut, branches[i], secondTool, 0.125)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	result, err := run(meshbool.OpUnion, branches[0], branches[1], 1)
-	if err != nil {
-		return nil, err
-	}
-	return result, ctx.Err()
 }
 
 func pairedCutFailure(ctx context.Context, err error) (*Body, producerID, pairedCutAncestry, bool, error) {

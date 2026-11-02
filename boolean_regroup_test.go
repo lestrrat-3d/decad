@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/lestrrat-3d/decad/internal/booleandispatch"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
@@ -79,7 +80,7 @@ func TestRegroupSurfacesInvariantBreaks(t *testing.T) {
 					}
 					return &bodies[3+calls], nil
 				}
-				_, err := runPairedCutPlan(ctx, sources, firstTool, secondTool, run)
+				_, err := booleandispatch.RunPairedCutPlan(ctx, sources, firstTool, secondTool, run)
 				require.ErrorIs(t, err, context.Canceled, "paired=%v boundary=%d", paired, cancelledAfter)
 				require.Equal(t, cancelledAfter, calls, "paired=%v boundary=%d", paired, cancelledAfter)
 				cancel()
@@ -99,7 +100,7 @@ func TestRegroupSurfacesInvariantBreaks(t *testing.T) {
 			if paired {
 				secondTool = &bodies[3]
 			}
-			_, err := runPairedCutPlan(t.Context(), [2]*topo.Body{&bodies[0], &bodies[1]}, &bodies[2], secondTool, run)
+			_, err := booleandispatch.RunPairedCutPlan(t.Context(), [2]*topo.Body{&bodies[0], &bodies[1]}, &bodies[2], secondTool, run)
 			require.NoError(t, err)
 			want := []call{
 				{meshbool.OpCut, &bodies[0], &bodies[2], 0.25},
