@@ -70,7 +70,7 @@ A **leaf** is a solid whose true set `C` the record can read, held as:
 - **(T) coverage**: `C ⊂ A'^{+δ}`, `δ` the published two-sided bound of the held mesh `A'` the Boolean used;
 - for a leaf a `Cut` may use as a tool, **inner pieces**: exact convex polyhedra inside `C`.
 
-Leaves come from four payloads (`internal/occupancyleaf`):
+Leaves come from five payloads (`internal/occupancyleaf`):
 
 | Payload | Leaf | Outer pieces | Poke |
 |---|---|---|---|
@@ -78,6 +78,7 @@ Leaves come from four payloads (`internal/occupancyleaf`):
 | stack of slabs of one circle at contiguous levels | one cylinder | as above | as above |
 | Revolve of one whole circle clear of its axis | an arc tube about the spine circle, full or partial | one 64-gon prism per angular cell about the cell's chord, widened by the arc's sagitta over the cell and extended by `ρ·d/2` at both ends; cells of sagitta at most 1e-4 mm | float, below |
 | Sweep of one whole circle along lines and arcs | one leaf per span: a cylinder for a line, an arc tube for an arc (the spans' own prism and Revolve reductions) | as for each kind | as for each kind |
+| Coil of one whole circle | a helix tube: every point lies within the wire radius of the centre helix at its own angle, because the disc sits in the axis plane there (`agent-docs/helix-design.md` Table CP) | one 32-gon prism per angular cell about the centre helix's chord, widened by the helix sagitta `ρc·d²/8` and extended by `ρw·(lead + d)` at both ends | none: every facet keeps its own bound as its bulge |
 
 A circumscribed polygon uses rational directions `u_k` with offsets `c_k ≥ r·|u_k|` (checked as
 `c_k² ≥ r²·u_k·u_k`), and every corner is checked against every side. An inscribed one uses float corners proven
@@ -111,8 +112,10 @@ record (`occupancy.Record`) carries:
 
 **Bulge.** For a held mesh of the record, every point of `X'` outside `X` lies within `λ(t)` of some facet `t`
 (`Record.Bulges`). `λ(t)` is the smallest of the facet's own two-sided bound and the largest of three readings:
-its poke out of the nearest leaf; the bound of any hole whose cells it is near, because the true hole reaches past
-the held tool wall by at most the tool mesh's bound; and `Cross` when it is near an earlier site.
+its poke out of the nearest leaf; the bound of any hole whose wall it may come near, because the true hole reaches
+past the held tool wall by at most the tool mesh's bound; and `Cross` when it is near an earlier site. "Near the
+wall" means within the reach plus twice that bound of the true tool's boundary. The cylinder reads that distance
+from below at a box's centre, so a contact far from a bore never reads the bore's shortfall.
 
 **One step.** At a contact segment of facets `t` and `u` with proven sine `s`, a point shallow in both held operands
 but deep in their union lies within `2·max(λ(t), λ(u))/s` of the crossing line, which is on the result's boundary.
@@ -132,7 +135,9 @@ argues its true pieces, and is not separately proven.
 
 **(i) Held to true.** Take a piece `P` of a held facet and a translation `t` with `|t| ≤ h`. Suppose `P + t`
 misses every outer piece, or lies wholly inside one hole's inner piece. Then every `p ∈ P` lies within
-`max(h, Excess)` of `∂X`, where `Excess = 2·max λ`.
+`max(h, Excess)` of `∂X`. `Excess` is the largest, over facets, of `λ(t)` plus the facet's reach outside `X`:
+its poke, or a hole's bound near that hole's wall. An earlier crossing raises a bulge but not a reach, because
+the crossing line lies on held facets (`Record.BulgeParts`, `Record.MeshBounds`).
 
 **(ii) True to held.** `H = max(max δ_i + Drift, max λ)`, plus `Cross` when the record has holes, because a true
 point a Cut exposed may sit near a held rim (`Record.MeshBounds`).
@@ -241,22 +246,21 @@ landing at the top of the interval is expected, because every leaf is inscribed.
 
 ### Gallery parts on the scratch merge with PR 3022
 
-| Part | Held bound | After `Refine` | `Refine` call |
-|---|---|---|---|
-| `yarn-leader` | 0.2423 mm | 0.0446 mm | `yarn.go`: `return b.refine(b.union(spans...), 0.12)` |
-| `brake-band` | 0.2713 mm | 0.0297 mm | `brake_cord.go`: `return b.refine(b.union(cord, leftEye, rightEye), 0.12)` |
-| `treadle-flex-connector` | 0.0758 mm | refused: the true-to-held side reaches 0.114 mm | — |
-| `brake-spring-*` | 2.075 mm | no record: a Coil is not a leaf | — |
+| Part | Held bound | After `Refine` | `Refine` time | `Refine` call |
+|---|---|---|---|---|
+| `yarn-leader` | 0.2423 mm | 0.0446 mm | 1.7 s | `yarn.go`: `return b.refine(b.union(spans...), 0.12)` |
+| `brake-band` | 0.2713 mm | 0.0297 mm | 0.09 s | `brake_cord.go`: `return b.refine(b.union(cord, leftEye, rightEye), 0.12)` |
+| `treadle-flex-connector` | 0.0758 mm | 0.0071 mm | about 4.5 s | `connector.go`: `return b.refine(b.cut(body, ...), 0.01)` around the second Cut |
+| `brake-spring-*` | 2.075 mm | 0.0941 mm with a probe's pose; no record at the default pose | about 22 s | — |
 
-Both calls sit inside the part's constructor, before `builder.part` applies the head tilt. A Union result placed
-after its last Union has no record, and placing the refined body keeps its bound. `b.refine` wraps
-`decad.Refine(b.ctx, body, units.Millimeters(bound))` and `b.fail`.
+Each call sits inside the part's constructor, before `builder.part` applies the head tilt or `brakeRotate` turns
+the spring. A Union result placed after its last Union has no record, and placing the refined body keeps its
+bound. `b.refine` wraps `decad.Refine(b.ctx, body, units.Millimeters(bound))` and `b.fail`. The connector refines
+at 0.01 mm, which serves both its 0.05 mm test and the 0.01 mm clearance screen.
 
-The connector goes through the distributive Cut retry, which Unions the two cut legs along the bend's near-tangent
-crease. That crease runs within a millimetre of the lower bore. There the tool's held wall falls short of the
-true bore by 0.00028 mm, and a crossing sine of 0.0098 amplifies that into a crossing depth of 0.057 mm. The
-second Cut then charges it to the true-to-held side. A per-site bulge read from the tool's held wall, rather than
-from its true cells, is the next step.
+At the default pose, the spring's last Union (the rear eye) meets an isolated point touch on the ordinary path.
+Decad then retries it with a gap shift, which moves the operand's held mesh and is not tracked, so `Refine` finds
+no record there. Following a shifted operand needs its pieces and shape moved by the recorded shift.
 
 ## 10. Risks
 
@@ -270,4 +274,6 @@ from its true cells, is the next step.
   bounds, so a thicker or shorter-span chain can be refused mid-fold before `Refine` is reachable. R6 lifts that.
 - Tracking costs every ordinary Union and Cut of tracked operands a bulge pass, and sometimes a second pre-pass.
   The Gallery default Build takes 60.6 s with tracking against 37.7 s without.
-- Coil leaves (a tube about a helix) are not covered, so the brake springs keep their 2.075 mm.
+- A gap-shift retry is not tracked, so a Union that needs one, like the default spring's last, leaves no record.
+- Coil facets bound no poke of their own, and a spring takes about 22 s to refine, mostly in building its
+  helix cells' exact pieces.
