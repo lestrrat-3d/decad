@@ -19,7 +19,7 @@ import (
 // tiltToDiagonal is the rotation that takes X to (1, −1, 0)/√2 and Z to
 // (1, 1, 1)/√3, so a slide along scene 8's X runs along (1, −1, 0), exactly
 // perpendicular to the tilted axis (1, 1, 1).
-func tiltToDiagonal(t *testing.T) r3.Transform {
+func tiltToDiagonal(t testing.TB) r3.Transform {
 	t.Helper()
 	frame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(1, -1, 0), r3.NewVec(1, 1, -2))
 	require.NoError(t, err)
@@ -31,11 +31,11 @@ func tiltToDiagonal(t *testing.T) r3.Transform {
 // tiltedScene places bodies and pins of an untilted scene under
 // tiltToDiagonal.
 type tiltedScene struct {
-	t    *testing.T
+	t    testing.TB
 	tilt r3.Transform
 }
 
-func newTiltedScene(t *testing.T) tiltedScene {
+func newTiltedScene(t testing.TB) tiltedScene {
 	t.Helper()
 	return tiltedScene{t: t, tilt: tiltToDiagonal(t)}
 }
@@ -82,6 +82,29 @@ func buildTiltedRocker(t *testing.T, withWall bool) (fourBar, *decad.Body) {
 		wall = ts.place(boxBodyAtZ(t, doc, -50, 68.5, 150, 78.5, 19, 10))
 	}
 	return fb, wall
+}
+
+func buildTiltedSlider(t testing.TB) (*decad.Document, *decad.Linkage, decad.Drive, *decad.Body, *decad.Body) {
+	t.Helper()
+	ts := newTiltedScene(t)
+	doc := decad.New()
+	l := decad.NewLinkage()
+	crank, err := l.Ground().Revolute(ts.pin(0, 0), loopTiltAxis, []*decad.Body{
+		ts.place(boxBodyAtZ(t, doc, 0, -3, 30, 3, 0, 8)),
+	})
+	require.NoError(t, err)
+	rod, err := crank.Revolute(ts.pin(30, 0), loopTiltAxis, []*decad.Body{
+		ts.place(boxBodyAtZ(t, doc, 30, -3, 110, 3, 10, 8)),
+	})
+	require.NoError(t, err)
+	sliderBody := ts.place(boxBodyAtZ(t, doc, 105, -5, 115, 5, 20, 8))
+	slider, err := l.Ground().Prismatic(r3.NewVec(1, -1, 0), []*decad.Body{sliderBody})
+	require.NoError(t, err)
+	_, err = l.Close(rod, slider, ts.pin(110, 0), loopTiltAxis)
+	require.NoError(t, err)
+	stop := ts.place(boxBodyAtZ(t, doc, 60, -20, 70, 20, 19, 10))
+	drive := decad.Drive{{Link: crank, From: units.Degrees(0), To: units.Degrees(90)}}
+	return doc, l, drive, sliderBody, stop
 }
 
 // TestVerifyLinkageLoopTilted is scene 7 about the tilted axis (1, 1, 1),
@@ -152,20 +175,7 @@ func TestVerifyLinkageLoopTilted(t *testing.T) {
 // reads scene 8's closed forms.
 func TestVerifyLinkageLoopTiltedSlider(t *testing.T) {
 	t.Parallel()
-	ts := newTiltedScene(t)
-	doc := decad.New()
-	l := decad.NewLinkage()
-	crank, err := l.Ground().Revolute(ts.pin(0, 0), loopTiltAxis, []*decad.Body{ts.place(boxBodyAtZ(t, doc, 0, -3, 30, 3, 0, 8))})
-	require.NoError(t, err)
-	rod, err := crank.Revolute(ts.pin(30, 0), loopTiltAxis, []*decad.Body{ts.place(boxBodyAtZ(t, doc, 30, -3, 110, 3, 10, 8))})
-	require.NoError(t, err)
-	sliderBody := ts.place(boxBodyAtZ(t, doc, 105, -5, 115, 5, 20, 8))
-	slider, err := l.Ground().Prismatic(r3.NewVec(1, -1, 0), []*decad.Body{sliderBody})
-	require.NoError(t, err)
-	_, err = l.Close(rod, slider, ts.pin(110, 0), loopTiltAxis)
-	require.NoError(t, err)
-	stop := ts.place(boxBodyAtZ(t, doc, 60, -20, 70, 20, 19, 10))
-	drive := decad.Drive{{Link: crank, From: units.Degrees(0), To: units.Degrees(90)}}
+	doc, l, drive, sliderBody, stop := buildTiltedSlider(t)
 	report := verifyLinkage(t, doc, l, drive, decad.WithResolution(units.Scalar(1.0/256)))
 
 	flat := buildSliderCrank(t)
@@ -191,4 +201,38 @@ func TestVerifyLinkageLoopTiltedSlider(t *testing.T) {
 		require.Less(t, p.Pose.Bounds[2].Mag(), 1e-9)
 		require.InDelta(t, -th-math.Asin(30*math.Sin(th)/80), p.Pose.Values[1].Mag(), 1e-9)
 	}
+}
+
+// BenchmarkVerifyLinkageLoopTiltedSlider measures one real scene 8 linkage
+// verification per operation. Fixture construction stays outside the timer.
+func BenchmarkVerifyLinkageLoopTiltedSlider(b *testing.B) {
+	doc, l, drive, sliderBody, stop := buildTiltedSlider(b)
+	var report *decad.LinkageReport
+	for b.Loop() {
+		var err error
+		report, err = doc.VerifyLinkage(b.Context(), l, drive, decad.WithResolution(units.Scalar(1.0/256)))
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+	require.Equal(b, decad.Interfering, report.Status)
+	require.NotEmpty(b, report.Collisions)
+	first := report.Collisions[0]
+	require.Same(b, sliderBody, first.A)
+	require.Same(b, stop, first.B)
+	require.Equal(b, units.Scalar(252.0/256), first.At)
+	th := first.At.Mag() * math.Pi / 2
+	require.InDelta(b, 80*(75-sliderPin(th)), first.Volume.Value.Mag(), 1e-6)
+	require.Less(b, first.Volume.Bound.Mag(), first.Volume.Value.Mag())
+	var foundPose bool
+	for _, p := range report.Poses {
+		if p.Pose.At != first.At {
+			continue
+		}
+		foundPose = true
+		require.InDelta(b, sliderPin(th)-110, p.Pose.Values[2].Mag(), 1e-9)
+		require.Less(b, p.Pose.Bounds[2].Mag(), 1e-9)
+		break
+	}
+	require.True(b, foundPose, `the first collision has a computed pose`)
 }

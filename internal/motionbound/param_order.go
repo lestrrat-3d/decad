@@ -45,6 +45,9 @@ func ParamCompare(a, b units.Value) (int, bool) {
 // ParamLower and ParamUpper bound 2π·turn + base from below and above, π at
 // its enclosure's ends.
 func ParamLower(p MotionParam) *big.Rat {
+	if p.Turn.Sign() == 0 {
+		return new(big.Rat).Set(p.Base)
+	}
 	twoPi := proofbound.TwoPiInterval()
 	f := twoPi.Lo
 	if p.Turn.Sign() < 0 {
@@ -55,6 +58,9 @@ func ParamLower(p MotionParam) *big.Rat {
 }
 
 func ParamUpper(p MotionParam) *big.Rat {
+	if p.Turn.Sign() == 0 {
+		return new(big.Rat).Set(p.Base)
+	}
 	twoPi := proofbound.TwoPiInterval()
 	f := twoPi.Hi
 	if p.Turn.Sign() < 0 {
