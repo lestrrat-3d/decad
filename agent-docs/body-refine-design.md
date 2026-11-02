@@ -251,7 +251,7 @@ landing at the top of the interval is expected, because every leaf is inscribed.
 | R5 | revolved and swept circle tubes: per-cell outer pieces, the sign-aware tube poke, per-facet bulges with crossing sites read per contact | a straight wire and a swept cord, each leaving a ring, meet 0.05 mm; an outer-equator facet barely pokes, an inner one at least as far as its edge midpoint, and a facet past a partial arc falls back to its bound |
 | R6 | the next Boolean reads `σ` as its slab half-width when the restated mesh is the held one | under a 0.02 mm chain tolerance the leader's fold refuses at its third Union, and completes when each held step is refined first |
 
-### Gallery parts on the scratch merge with PR 3022
+### Gallery parts
 
 | Part | Held bound | After `Refine` | `Refine` time | `Refine` call |
 |---|---|---|---|---|
@@ -267,66 +267,36 @@ at 0.01 mm, which serves both its 0.05 mm test and the 0.01 mm clearance screen.
 
 With these four calls the Gallery native default Build tessellates all 190 parts at 0.12 mm, and the connector
 test passes. The full default test asks `footman` for 0.01 mm. Footman is a rectangular bar with two holes, cut by
-two cylinders, and now carries a record. But its held mesh was chorded at its 476 mm pair's tolerance, so its leaf
-bounds are already 0.009 mm. Its bore rims add a crossing depth of 0.025 mm, and its true-to-held side reaches
-0.0335 mm. Refine therefore refuses 0.01 mm there: no re-certification goes below the held chords, and only a
-finer re-tessellation of its history can.
+two cylinders. Chorded at its whole 476 mm pair's tolerance, its leaf bounds would be 0.009 mm and its floor
+`δ(1 + 2/sin)` 0.0335 mm, which no re-certification lowers: splitting a held facet keeps it on the same plane, and a
+finer mesh needs new vertices on the true crossing of the socket and the hole, which means running the Cut again.
+The floor meets 0.01 mm only when the chord comes from a box of about 130 mm. A public Cut by a curved tool whose
+operand boxes overlap in at most 1/8 of the pair chords its fresh operands by that overlap
+(agent-docs/chained-cut-design.md §4.1), so footman's last Cut is chorded finely enough and its 0.01 mm check passes.
 
-At 0.05 mm the facet search used to refuse. The failing pieces sat on the 2.2 mm hole's wall where the socket
-crosses it, and only a move into the hole's inner piece certifies them. Three fixes let it pass:
+At 0.05 mm the facet search certifies the pieces on the 2.2 mm hole's wall where the socket crosses it only by a
+move into the hole's inner piece. Three rules make that reachable:
 
 - Every split piece reads its candidate directions again, from its own centroid.
 - A piece also tries the moves into a near inner piece, across one face or two at once.
-- A stack's hole that runs through joined slabs becomes one hole leaf, so a wall facet that spans the slab
-  interface sits inside one hole.
+- A stack's hole that runs through joined slabs is one hole leaf, so a wall facet that spans the slab interface
+  sits inside one hole.
 
-Footman now refines at 0.05 mm and refuses 0.01 mm at its floor of 0.0245 mm.
-
-No generic re-mesh without a replay reaches 0.01 mm. Splitting a held facet keeps it on the same plane. A finer
-mesh needs new vertices on the true crossing of the socket and the hole, which means running the Cut again. A
-split construction in Gallery (a short socketed end piece joined to the bar) fails at the joining Union: the butt
-faces lie in one plane, and the proximity gate refuses them. The pair chord is `2e-5` times the pair box diameter,
-so the floor `δ(1 + 2/sin)` meets 0.01 mm only if the box shrinks from about 450 mm to 130 mm.
-
-**Overlap chord for Cuts.** Footman reaches 0.01 mm by a Cut rule with no replay.
-
-- When a Cut's tool has a face that is not a plane, and the operand boxes overlap in at most 1/8 of the pair's
-  diameter (`meshbool.OverlapChordRatio`), its freshly chorded operands are chorded by the overlap's diameter
-  (`meshbool.OverlapDiameter`). A tool of planes leaves its rim on its own exact planes and keeps the pair's chord.
-- Held operands, the pair tolerance and the chain gate still read the whole pair's diameter.
-- When that attempt refuses at any stage, `booleandispatch.BodyScaled` runs the Cut again at the pair's chord. The
-  finer chord therefore never refuses a Cut that the pair's chord admits.
-- A sphere cut by a large box would hit the revolve facet ceiling at the finer chord. A box tool keeps the pair's
-  chord, and the fallback covers a curved tool that meets the same ceiling.
-- Unions keep the pair's chord. The same rule on Unions asks a yarn hook's revolve for more than 65536 facets.
-
-The ratio keeps ordinary pairs on their old chord. With a ratio of 1, the default Build took 90 s instead of 69 s,
-and `Verify` exhausted the planar relation's work limit.
-
-**Fan lookup.** That limit was reached because the planar relation's `fanAt` scanned every triangle of a solid for
-each contact site. A finer bar against a hinge leaf has 94 000 sites. `fanAt` now reads the candidate triangles from
-the solid's triangle box tree, plus every triangle with a zero normal, which the point test checks without a box. It
-accepts the same triangles as before. `Verify` on the default wheel then finishes with no work-limit refusal.
-
-The four Gallery variants (small-seven, large-nine, twelve, small-seventeen) stop earlier, while the yarn leader is
-still being built. The chain-depth gate refuses a Union because an operand's crossing bound is 0.20–0.36 mm where
-the pair meets, above the document's 0.1 mm chain tolerance. With R6, and the leader refining each held step at
-0.1 mm before the next Union, three variants get past the leader:
+The four Gallery variants (small-seven, large-nine, twelve, small-seventeen) build the yarn leader by a chain of
+Unions whose operands carry crossing bounds of 0.20–0.36 mm where each pair meets, above the document's 0.1 mm chain
+tolerance. With R6, and the leader refining each held step at 0.1 mm before the next Union, the chain completes, and
+the proximity gate reads the refined face bounds. The variants' first failures are:
 
 | Variant | First failure |
 |---|---|
 | small-seven | `head-leg` Cut: the proximity gate cannot decide held facets within the chord tolerance |
 | large-nine | `yarn-leader` Union: every parity ray is ambiguous |
-| twelve | `treadle-heel-rail` Cut: the proximity refusal, once stitched needles are flipped (below) |
+| twelve | `treadle-heel-rail` Cut: the same proximity refusal |
 | small-seventeen | `brake-spring-left` Union: the revolve facet contact audit hits its work ceiling |
 
-The large-nine proximity refusal cleared once the gate read refined face bounds; the leader's held face bound was
-0.362 mm there. Twelve used to fail later, at the `treadle-heel-rail` Cut. The overlap chord meshes the bar's first
-seat pass (a box and a tilted bore) more finely. A later pass then restates that finer mesh and folds, and the
-fallback to the pair's chord cannot undo the earlier pass. The fold came from a needle thinner than one float step
-along the bar's edge. The stitch now flips such needles before rounding (agent-docs/evaluator-design.md §9), and
-twelve is back at `treadle-heel-rail`. In small-seven the leg's planar end face carries a
-0.0137 mm face bound, the chord of its heel hole, against a rail face that crosses it.
+In small-seven the leg's planar end face carries a 0.0137 mm face bound, the chord of its heel hole, against a rail
+face that crosses it far from the hole. Every facet of a face carries the face's whole bound, so the gate reads the
+chord where no chord is.
 
 **Gap-shift retries.** When an ordinary Union meets an isolated point touch, Decad retries with a gap shift. The
 retry moves the second operand's held mesh by at most a measured displacement and leaves the true operand where it
