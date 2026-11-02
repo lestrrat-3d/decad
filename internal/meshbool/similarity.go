@@ -17,9 +17,10 @@ func ExactSimilarityImage(anchor, p r3.Vec, factor float64) proof.Xpt {
 	s := polynomial.MustRatOf(factor)
 	var q [3]*big.Rat
 	for i := range q {
-		q[i] = new(big.Rat).Sub(polynomial.MustRatOf(v[i]), polynomial.MustRatOf(a[i]))
+		anchorExact := polynomial.MustRatOf(a[i])
+		q[i] = new(big.Rat).Sub(polynomial.MustRatOf(v[i]), anchorExact)
 		q[i].Mul(q[i], s)
-		q[i].Add(q[i], polynomial.MustRatOf(a[i]))
+		q[i].Add(q[i], anchorExact)
 	}
 	w := new(big.Int).Set(q[0].Denom())
 	for _, coord := range q[1:] {

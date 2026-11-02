@@ -263,20 +263,18 @@ func meshBooleanStats(ctx context.Context, op OperationKind, ma, mb *BoolMesh, m
 		return nil, Stats{}, err
 	}
 
-	var kept []KeptFacet
 	if err := ctx.Err(); err != nil {
 		return nil, Stats{}, err
 	}
-	keep, err := keepSide(ctx, ma, mb, cuts.CutsA, cuts.BlockedA, cuts.Rims, wantA, false, keyOf)
+	keepA, err := keepSide(ctx, ma, mb, cuts.CutsA, cuts.BlockedA, cuts.Rims, wantA, false, keyOf)
 	if err != nil {
 		return nil, Stats{}, err
 	}
-	kept = append(kept, keep...)
-	keep, err = keepSide(ctx, mb, ma, cuts.CutsB, cuts.BlockedB, cuts.Rims, wantB, flipB, keyOf)
+	keepB, err := keepSide(ctx, mb, ma, cuts.CutsB, cuts.BlockedB, cuts.Rims, wantB, flipB, keyOf)
 	if err != nil {
 		return nil, Stats{}, err
 	}
-	return append(kept, keep...), Stats{MaxRim: cuts.MaxRim, MinSin: cuts.MinSin, DeepTerm: cuts.DeepTerm, Contacts: cuts.Contacts}, nil
+	return append(keepA, keepB...), Stats{MaxRim: cuts.MaxRim, MinSin: cuts.MinSin, DeepTerm: cuts.DeepTerm, Contacts: cuts.Contacts}, nil
 }
 
 // EdgeCrosses decides whether edge k of facet f — which lies exactly in the
