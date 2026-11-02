@@ -266,7 +266,13 @@ test passes. The full default test asks `footman` for 0.01 mm. Footman is a rect
 two cylinders, and now carries a record. But its held mesh was chorded at its 476 mm pair's tolerance, so its leaf
 bounds are already 0.009 mm. Its bore rims add a crossing depth of 0.025 mm, and its true-to-held side reaches
 0.0335 mm. Refine therefore refuses 0.01 mm there: no re-certification goes below the held chords, and only a
-finer re-tessellation of its history can. At 0.05 mm it is admitted.
+finer re-tessellation of its history can. At 0.05 mm the facet search refuses: some held facet piece finds no
+translation within 0.05 mm that clears every outer piece or lands inside a hole's inner piece.
+
+The four Gallery variants (small-seven, large-nine, twelve, small-seventeen) stop earlier, while the yarn leader is
+still being built. The chain-depth gate refuses a Union because an operand's crossing bound is 0.20–0.36 mm where
+the pair meets, above the document's 0.1 mm chain tolerance. `Refine` runs only after the fold, so it cannot help
+there; R6, the next Boolean reading `σ`, is what would.
 
 **Gap-shift retries.** When an ordinary Union meets an isolated point touch, Decad retries with a gap shift. The
 retry moves the second operand's held mesh by at most a measured displacement and leaves the true operand where it
