@@ -92,37 +92,35 @@ func TestPairCutsIsolatedPointMatchesSegmentEnds(t *testing.T) {
 }
 
 // TestMeshBooleanJoinsBothSides pins that the result is operand A's kept
-// facets followed by operand B's, in order, and that joining them leaves the
-// per-side lists a caller recomputes unchanged.
+// facets followed by operand B's, in order, with the keys, source and corner
+// bounds each side's own keepSide pass gives.
 func TestMeshBooleanJoinsBothSides(t *testing.T) {
 	identity := func(v r3.Vec) r3.Vec { return v }
 	a := boxMesh(t, r3.Vec{X: 1, Y: 1, Z: 1}, identity, r3.Vec{})
 	b := boxMesh(t, r3.Vec{X: 1, Y: 1, Z: 1}, identity, r3.Vec{X: .5, Y: .5, Z: .5})
 
+	wantA, wantB, flipB, err := BooleanKeep(OpUnion)
+	require.NoError(t, err)
 	keyOf := newKeyMemo()
 	cuts, err := pairCuts(t.Context(), a, b, NewContactMemo(a, b), keyOf)
 	require.NoError(t, err)
-	keepA, err := keepSide(t.Context(), a, b, cuts.CutsA, cuts.BlockedA, cuts.Rims, false, false, keyOf)
+	keepA, err := keepSide(t.Context(), a, b, cuts.CutsA, cuts.BlockedA, cuts.Rims, wantA, false, keyOf)
 	require.NoError(t, err)
-	keepB, err := keepSide(t.Context(), b, a, cuts.CutsB, cuts.BlockedB, cuts.Rims, false, false, keyOf)
+	keepB, err := keepSide(t.Context(), b, a, cuts.CutsB, cuts.BlockedB, cuts.Rims, wantB, flipB, keyOf)
 	require.NoError(t, err)
 	require.NotEmpty(t, keepA)
 	require.NotEmpty(t, keepB)
-	srcA := make([]int, len(keepA))
-	for i, k := range keepA {
-		srcA[i] = k.Src
-	}
 
 	got, _, err := meshBoolean(t.Context(), OpUnion, a, b, NewContactMemo(a, b), newKeyMemo)
 	require.NoError(t, err)
-	require.Len(t, got, len(keepA)+len(keepB))
-	for i, k := range keepA {
-		require.Equal(t, k.Keys, got[i].Keys, "A facet %d", i)
-		require.Equal(t, k.Src, got[i].Src)
-		require.Equal(t, srcA[i], keepA[i].Src, "keepA changed at %d", i)
-	}
-	for i, k := range keepB {
-		require.Equal(t, k.Keys, got[len(keepA)+i].Keys, "B facet %d", i)
-		require.Equal(t, k.Src, got[len(keepA)+i].Src)
+	// Compare lengths, not the slice: a failing Len would print every facet.
+	require.Equal(t, len(keepA)+len(keepB), len(got), "kept facet count")
+	want := make([]KeptFacet, 0, len(got))
+	want = append(want, keepA...)
+	want = append(want, keepB...)
+	for i, k := range want {
+		require.Equal(t, k.Keys, got[i].Keys, "facet %d", i)
+		require.Equal(t, k.Src, got[i].Src, "facet %d", i)
+		require.Equal(t, k.Beta, got[i].Beta, "facet %d", i)
 	}
 }
