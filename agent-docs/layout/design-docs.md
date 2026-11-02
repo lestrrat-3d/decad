@@ -61,6 +61,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/oblique-boss-fillet-design.md` | Complete plane-to-oblique-cylinder boss junction and bounded fillet mesh. |
 | `agent-docs/cross-cylinder-bore-chamfer-design.md` | Source-backed perpendicular cylinder bore-mouth chamfer and mesh proof. |
 | `agent-docs/tessellation-reach-design.md` | Tessellation reach for lofts, free-form prisms, revolves and cap-loop chamfers. |
+| `agent-docs/revolve-local-refinement-design.md` | Non-uniform angular stations for a revolve mesh: contact window, per-interval proofs, staged increments (tier T5). |
 | `agent-docs/faceted-vertex-bounds-design.md` | Per-vertex displacement bounds on faceted bodies and their boolean composition. |
 | `agent-docs/param-binding-design.md` | Reading feature values from a `sketch/param` table, and the ledger of those reads. |
 | `agent-docs/gap-tolerance-design.md` | The document's gap tolerance: the reach of the held-mesh embedding repair, its default, its limits and its charge. |
