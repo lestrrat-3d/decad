@@ -165,11 +165,15 @@ V = Σ π r² L_i − Σ_joints (4/3) r³ tan(α_j / 2)
 |---|---|
 | held `MeshBound` (today) | 0.2423 mm |
 | largest held-to-true distance over the held mesh | 0.0061 mm |
+| R1's exact `FacetBound` over all 914 held facets (64-gon pieces, ladder from 0.001 mm, depth 20) | 0.0355 mm, none refused |
 | `max δ_i` (true-to-held side, before `W` and `e_deep`) | 0.00478 mm |
 | held volume interval | 142.2414 ± 2.1660 mm³, containing the closed form 144.4022 mm³ |
 
-Neither figure in the middle two rows is a proof. Both measure the quantities §5 certifies, so the certified
-`max σ` should land near 0.006 mm against today's 0.2423 mm and the 0.12 mm request. The closed form landing at the
+The distance row is a measurement, not a proof. The `FacetBound` row is R1's exact certificate (i), but the probe
+builds the outer pieces from its own copy of each span's frame rather than from the leaf records (R2's adapter).
+That certificate took 9.7 million work units and 174 s. The search direction set, not the geometry, accounts for
+the gap between 0.0061 and 0.0355 mm. With `H ≈ 0.0048 mm` from (ii), `max σ` stays under a seventh of the
+0.12 mm request, against today's 0.2423 mm. The closed form landing at the
 top of the interval is expected, because every leaf is inscribed.
 
 ## 9. Increments
@@ -190,5 +194,6 @@ top of the interval is expected, because every leaf is inscribed.
 - Gallery's band and connector are outside R1–R3. The band needs R5, whose leaves are not inscribed: a chord along
   a bent tube's inner side leaves the true tube, so (L) gains a sagitta-sized `λ`. Then `e_deep` becomes
   `λ / sin θ`, which is mechanism 1 again unless R5 bounds the bulge per side. The connector needs R4.
-- The certificate costs exact work per facet near other leaves. On the leader that is a few hundred facets. On
-  the connector's 16 064-facet intermediate meshes the ceiling decides.
+- The certificate is slow. On the leader's 914 facets the float axis search dominates its 174 s. R3 needs cheaper
+  axis ranking (face normals near the moved piece only), and R1's facet loop is serial. On the connector's
+  16 064-facet intermediate meshes, the ceiling and wall time decide.
