@@ -44,6 +44,9 @@ Success criteria:
 today, walking through `Transform`/`Copy`/modify producers, chains mixing `Union` with `Cut`/`Intersect`, a public
 option or diagnostic for regrouping, and `Verify`'s read-only evaluator.
 
+Prism-boolean §4.7 owns the separate three-source variadic prism retry. It
+reads the call's original operands and does not expand operation history.
+
 ## Value assessment
 
 Regrouping cannot make an unsupported pair exact: a pair no analytic route admits stays a mesh step in every order.

@@ -198,3 +198,15 @@ func allNegated(ls []Literal) bool {
 	}
 	return true
 }
+
+// UnionThree evaluates A union (B union C) with two Full steps. Its caller
+// selects this plan only after the ordinary three-source fold refuses.
+// bodies and full must not contain nil values. It does not change bodies.
+func UnionThree(ctx context.Context, bodies [3]*topo.Body, full Step) (*topo.Body, bool, error) {
+	r := runner{steps: Steps{Full: full}}
+	merged, ok, err := r.full(ctx, meshbool.OpUnion, bodies[1], bodies[2])
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	return r.full(ctx, meshbool.OpUnion, bodies[0], merged)
+}

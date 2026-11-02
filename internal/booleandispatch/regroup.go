@@ -17,6 +17,26 @@ import (
 // Execution in booleandispatch). hooks and surface must not be nil.
 func Regroup(ctx context.Context, chain boolchain.Chain, env topo.Env, hooks Hooks,
 	surface func(error) bool) (*topo.Body, provenance.Producer, bool, error) {
+	return regroup(ctx, env, hooks, surface, func(steps boolchain.Steps) (*topo.Body, bool, error) {
+		return boolchain.Run(ctx, chain, steps)
+	})
+}
+
+// RegroupUnionThree tries A union (B union C) through two ordinary dispatches.
+// Each dispatch retains its own limits; no whole-call meter is shared. It
+// rejects every warning, including geometry adjustments. It writes no document.
+// bodies, hooks and surface must not contain nil values.
+func RegroupUnionThree(ctx context.Context, bodies [3]*topo.Body, env topo.Env, hooks Hooks,
+	surface func(error) bool) (*topo.Body, provenance.Producer, bool, error) {
+	return regroup(ctx, env, hooks, surface, func(steps boolchain.Steps) (*topo.Body, bool, error) {
+		return boolchain.UnionThree(ctx, bodies, steps.Full)
+	})
+}
+
+// regroup supplies private producer identities and maps dispatch outcomes for
+// plans whose steps must not change their operands' denoted sets.
+func regroup(ctx context.Context, env topo.Env, hooks Hooks, surface func(error) bool,
+	plan func(boolchain.Steps) (*topo.Body, bool, error)) (*topo.Body, provenance.Producer, bool, error) {
 	var used provenance.Producer
 	envAt := func() topo.Env {
 		e := env
@@ -54,7 +74,10 @@ func Regroup(ctx context.Context, chain boolchain.Chain, env topo.Env, hooks Hoo
 			return outcome(ctx, body, err == nil, err, false)
 		},
 	}
-	body, ok, err := boolchain.Run(ctx, chain, steps)
+	body, ok, err := plan(steps)
+	if cerr := ctx.Err(); cerr != nil {
+		return nil, 0, false, cerr
+	}
 	if err != nil || !ok {
 		return nil, 0, false, err
 	}

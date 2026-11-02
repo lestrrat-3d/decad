@@ -17,6 +17,87 @@ type call struct {
 	x, y *topo.Body
 }
 
+func TestUnionThree(t *testing.T) {
+	a, b, c, merged, result := &topo.Body{}, &topo.Body{}, &topo.Body{}, &topo.Body{}, &topo.Body{}
+	bodyList := [3]*topo.Body{a, b, c}
+	wantError := errors.New("private step failure")
+	for _, tc := range []struct {
+		name   string
+		refuse int
+		fail   int
+		cancel int
+	}{
+		{name: "success"},
+		{name: "first refuses", refuse: 1},
+		{name: "second refuses", refuse: 2},
+		{name: "first fails", fail: 1},
+		{name: "second fails", fail: 2},
+		{name: "canceled before first", cancel: -1},
+		{name: "canceled between steps", cancel: 1},
+		{name: "canceled by final callback", cancel: 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			if tc.cancel == -1 {
+				cancel()
+			}
+			calls := 0
+			full := func(ctx context.Context, op meshbool.OperationKind, x, y *topo.Body) (*topo.Body, bool, error) {
+				calls++
+				require.Equal(t, meshbool.OpUnion, op)
+				if calls == 1 {
+					require.True(t, x == b && y == c)
+				} else {
+					require.Equal(t, 2, calls)
+					require.True(t, x == a && y == merged)
+				}
+				if calls == tc.fail {
+					return nil, false, wantError
+				}
+				if calls == tc.refuse {
+					return nil, false, nil
+				}
+				if calls == tc.cancel {
+					cancel()
+					if calls == 2 {
+						return nil, false, ctx.Err()
+					}
+				}
+				if calls == 1 {
+					return merged, true, nil
+				}
+				return result, true, nil
+			}
+			got, ok, err := boolchain.UnionThree(ctx, bodyList, full)
+			if tc.fail != 0 {
+				// Compare errors separately from topology diagnostics.
+				require.ErrorIs(t, err, wantError)
+			} else if tc.cancel != 0 {
+				require.ErrorIs(t, err, context.Canceled)
+			} else {
+				require.NoError(t, err)
+			}
+			if tc.fail != 0 || tc.refuse != 0 || tc.cancel != 0 {
+				require.False(t, ok)
+				require.True(t, got == nil)
+			} else {
+				require.True(t, ok)
+				require.True(t, got == result)
+				require.Equal(t, 2, calls)
+			}
+			require.True(t, bodyList[0] == a && bodyList[1] == b && bodyList[2] == c)
+			wantCalls := 2
+			if tc.cancel == -1 {
+				wantCalls = 0
+			} else if tc.fail == 1 || tc.refuse == 1 || tc.cancel == 1 {
+				wantCalls = 1
+			}
+			require.Equal(t, wantCalls, calls)
+		})
+	}
+}
+
 // fakeSteps records calls. exactOK decides which Exact calls succeed; each success
 // returns a fresh body recorded in made.
 type fakeSteps struct {

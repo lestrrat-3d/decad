@@ -783,6 +783,35 @@ section charge. A group also carries its disjointness walk charge. One
 document commit retires every input after result evaluation succeeds and
 the context remains live.
 
+### 4.7 Three-source prism pair retry
+
+After the specialized set routes miss, a public three-body `Union(A, B, C)`
+first runs its ordinary prism pair chain `(A ∪ B) ∪ C`. If and only if its
+second pair refuses with `meshbool.CoarseHeldContactError` for operand zero,
+retry `B ∪ C`, then `A ∪ (B ∪ C)`, through ordinary full dispatch. The source
+eligibility checks in `tryPrismUnionChain` still apply, including its admitted
+straight-source Lofts. Two-body calls, larger sets, first-pair failures,
+other refusals and private pattern chains do not take this retry.
+
+Associativity of regularized union proves the same set. Each alternate pair
+keeps every ordinary boundary, occupied-volume, depth and refusal check.
+Reject every warning from either alternate step, including a chain allowance;
+no accepted geometry adjustment enters the identity. An ordinary miss returns
+the original second-pair refusal. Cancellation and invariant failures surface.
+
+The retry runs at most two full dispatches, each with its existing independent
+limits. It has no shared whole-call work, record or byte meter. The preceding
+failed fold also consumed its own per-pair allowances. Never describe these
+as one whole-call allowance.
+
+Reserve two private producer identities on success: the first belongs to
+`Union(B, C)`, the second to `Union(A, BC)`. Each ordinary route carries its
+source face ancestry. Publish only one operation with consumed inputs
+`[A, B, C]` in caller order and the final body as its sole output. The failed
+fold and the alternate intermediate remain private. Failure or cancellation
+leaves every original live body, producer counter and history unchanged.
+This route does not produce a mapped-path witness or relax the held-mesh gate.
+
 The sequential prism fallback builds every intermediate body without
 registering or retiring it. It assigns a distinct producer identity to each
 pair result and reserves the full identity span when the final result commits.

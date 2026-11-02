@@ -331,7 +331,7 @@ func PatternJoin(ctx context.Context, target, feature *Body, spec PatternSpec) (
 		return nil, err
 	}
 	operands := append([]*Body{target, feature}, instances...)
-	body, span, err := unionManyBodies(ctx, d, base+producerID(len(instances)), operands)
+	body, span, err := unionManyBodies(ctx, d, base+producerID(len(instances)), operands, false)
 	if err != nil {
 		if errors.Is(err, ErrUnsupported) && isManyUnionRefusal(err) {
 			// No certified route takes the set as a whole, so the instances are built as registered copies and

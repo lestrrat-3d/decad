@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/axialsection"
+	"github.com/lestrrat-3d/decad/internal/booleandispatch"
 	"github.com/lestrrat-3d/decad/internal/loftcylinder"
 	"github.com/lestrrat-3d/decad/internal/loftrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -50,7 +51,7 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	body, span, err := unionManyBodies(ctx, d, d.nextProducerID(), operands)
+	body, span, err := unionManyBodies(ctx, d, d.nextProducerID(), operands, true)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +70,7 @@ func performUnionMany(ctx context.Context, operands []*Body) (*Body, error) {
 // registered. It evaluates under producer identity ref and returns the result
 // beside the span of producer identities it used. It commits nothing and
 // checks no cancellation after the last route, so the caller does.
-func unionManyBodies(ctx context.Context, d *Document, ref producerID, operands []*Body) (*Body, producerID, error) {
+func unionManyBodies(ctx context.Context, d *Document, ref producerID, operands []*Body, regroupThree bool) (*Body, producerID, error) {
 	body, span, err := unionManyRoutes(ctx, d, ref, operands)
 	if err == nil || !errors.Is(err, ErrUnsupported) {
 		return body, span, err
@@ -89,7 +90,7 @@ func unionManyBodies(ctx context.Context, d *Document, ref producerID, operands 
 		if !isManyUnionRefusal(err) {
 			return nil, 0, err
 		}
-		body, span, matched, chainErr := tryPrismUnionChain(ctx, ref, operands)
+		body, span, matched, chainErr := tryPrismUnionChain(ctx, ref, operands, regroupThree)
 		if chainErr != nil {
 			return nil, 0, chainErr
 		}
@@ -156,7 +157,7 @@ func unionManyRoutes(ctx context.Context, d *Document, ref producerID, operands 
 // the same pair evaluator as two-body Union. Every intermediate body is
 // transient. The caller commits only the final certified result and reserves
 // every producer identity used by its intermediate features.
-func tryPrismUnionChain(ctx context.Context, ref producerID, operands []*Body) (*Body, producerID, bool, error) {
+func tryPrismUnionChain(ctx context.Context, ref producerID, operands []*Body, regroupThree bool) (*Body, producerID, bool, error) {
 	firstPrism := false
 	for i, operand := range operands {
 		if _, ok := operand.n.Payload.(prismPayload); ok {
@@ -187,6 +188,20 @@ func tryPrismUnionChain(ctx context.Context, ref producerID, operands []*Body) (
 		var err error
 		result, err = booleanBody(ctx, meshbool.OpUnion, result, operand, ref+producerID(i))
 		if err != nil {
+			var held *meshbool.CoarseHeldContactError
+			if regroupThree && len(operands) == 3 && i == 1 && errors.As(err, &held) && held.Operand == 0 {
+				// The original source sets associate without reusing the coarse rim.
+				// Both alternate pairs retain every ordinary proof and refusal gate.
+				nodes := [3]*topo.Body{bodyNode(operands[0]), bodyNode(operands[1]), bodyNode(operands[2])}
+				node, span, ok, retryErr := booleandispatch.RegroupUnionThree(ctx, nodes,
+					envOf(operands[0].n.Doc, ref), booleanHooks(booleanConfig{}), regroupSurfaces)
+				if retryErr != nil {
+					return nil, 0, true, retryErr
+				}
+				if ok {
+					return bodyHandle(node), span, true, nil
+				}
+			}
 			return nil, 0, true, err
 		}
 		warnings.AddPair(result.n.OperationWarnings, i+1)

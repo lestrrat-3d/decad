@@ -2696,6 +2696,8 @@
 10	0.09	TestWallReadingBoundIsOnTheSpanningDiameter
 10	0.03	TestWallSolidBallReadsDiameter
 10	0.01	TestWebPathRefusals
+10	0.00	TestUnionThreeRegroupsCoarseHeldContact
+10	0.00	TestUnionThreeRejectsAdjustedRegroup
 11	0.00	TestArcAroundInputAndOwnership
 11	0.01	TestArrangePlacesBodiesInShelves
 11	0.03	TestBlindPocketCanEnterMeshBoolean
