@@ -2911,6 +2911,7 @@
 11	0.03	TestSweepChainCardinalLineArcSheet
 11	0.00	TestSweepChainOptionRefusalFollowsTheSeam
 11	0.00	TestSweepClosedCardinalRefusesNonQuarterArcs
+11	0.00	TestSweepCompositeTubeUnionAuditsCandidates
 11	0.00	TestSweepDisplacedArcThroughRefuses
 11	0.02	TestSweepLineFilletPlacedBottomCapEdgeVerified
 11	0.01	TestSweepMitredSelfCrossingNamesFaces

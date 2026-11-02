@@ -55,7 +55,7 @@ func TestCrossSpanContactAuditCountsCandidates(t *testing.T) {
 		// match the all-pairs walk with no pair-count gate, for a clean mesh
 		// and for one with a station corner pushed through the far wall.
 		const cells = 601
-		m := twistedPrismMesh(t, 7.7, 2.375, 87*math.Pi/180, 6, cells)
+		m := twistedPrismMesh(t, 5.5, 1.875, 87*math.Pi/180, 9, cells)
 		pairs, ok := proofbound.WallChoose2(uint64(len(m.tris)))
 		require.True(t, ok)
 		require.Greater(t, pairs, ceiling)
@@ -63,7 +63,7 @@ func TestCrossSpanContactAuditCountsCandidates(t *testing.T) {
 		require.NoError(t, compositesweep.CrossSpanContactAudit(proofbound.NewWorkBudget(t.Context()),
 			m.data, m.tris, m.spanOf, 1e-9))
 
-		dented := twistedPrismMesh(t, 7.7, 2.375, 87*math.Pi/180, 6, cells)
+		dented := twistedPrismMesh(t, 5.5, 1.875, 87*math.Pi/180, 9, cells)
 		corner := (cells / 2) * 4
 		dented.verts[corner] = dented.verts[corner].Scale(-0.6)
 		dented = newSpanMesh(t, dented.verts, dented.tris, dented.spanOf)
@@ -113,7 +113,7 @@ func TestCrossSpanContactAuditCountsCandidates(t *testing.T) {
 		})
 	}
 	t.Run("unordered margin keeps the pair-count gate", func(t *testing.T) {
-		m := twistedPrismMesh(t, 7.7, 2.375, 87*math.Pi/180, 6, 601)
+		m := twistedPrismMesh(t, 5.5, 1.875, 87*math.Pi/180, 9, 601)
 		err := compositesweep.CrossSpanContactAudit(proofbound.NewWorkBudget(t.Context()),
 			m.data, m.tris, m.spanOf, math.NaN())
 		var detail *proofbound.WorkLimitError

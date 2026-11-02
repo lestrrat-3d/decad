@@ -614,6 +614,14 @@ coordinate movement, since each reduction's chording is already covered by
 its own occupied-volume proof and the analytic composite audit separates the
 true spans.
 
+The cross-span audit lists its pairs with the revolve audit's box sweep and
+drops every same-span pair from that list. The facet-pair-test cap counts each
+sweep visit and each kept cross-span pair, all before the first exact pair
+test. It does not count every pair of the mesh, so a long, finely chorded tube
+whose triangles reach only their neighbours fits the cap. A mesh whose margin
+gives no sweep order (negative or NaN) walks every pair, and that walk keeps
+the all-pairs count against the cap.
+
 ## 11. Determinism, cancellation, and budgets
 
 Equal profile record, path record, options, and document placement produce the
