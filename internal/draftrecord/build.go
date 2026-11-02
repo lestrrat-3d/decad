@@ -268,7 +268,7 @@ func nearRim(ctx context.Context, alloc topo.Alloc, pl prismrecord.Payload, li i
 		if err != nil {
 			return nil, err
 		}
-		edge, _, _, _, err := prismrecord.BuildWallGeometry(alloc, level, w, convex, singleClosed, start, end, start, end)
+		edge, _, _, _, err := prismrecord.BuildWallGeometry(alloc, level, w, convex, singleClosed, start, end, start, end) //nolint:contextcheck // The ordinary wall builder has no replay context or budget.
 		if err != nil {
 			return nil, err
 		}

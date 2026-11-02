@@ -343,7 +343,7 @@ func openEdges(ctx context.Context, alloc topo.Alloc, bp Payload, btopo *Topolog
 				start = placeVertex(u.DirFrom, f.Delta, u.LevelDelta, proofbound.WalkEndBoundAllow(u.StartBound()))
 				end = start
 			}
-			edge, err := bandEdge(alloc, capView, u.Walk, hole, start, end)
+			edge, err := bandEdge(alloc, capView, u.Walk, hole, start, end) //nolint:contextcheck // The ordinary wall builder has no replay context or budget.
 			if err != nil {
 				return openSet{}, err
 			}
@@ -390,7 +390,7 @@ func openEdges(ctx context.Context, alloc topo.Alloc, bp Payload, btopo *Topolog
 			sideView.Z0, sideView.Z1 = sideZ, sideZ
 			sideView.Z0Delta, sideView.Z1Delta = u.LevelDelta, u.LevelDelta
 			sideView.SectionDelta = beside.Delta
-			edge, err := bandEdge(alloc, sideView, w.SegmentWalk, hole, start, end)
+			edge, err := bandEdge(alloc, sideView, w.SegmentWalk, hole, start, end) //nolint:contextcheck // The ordinary wall builder has no replay context or budget.
 			if err != nil {
 				return openSet{}, err
 			}
@@ -415,7 +415,7 @@ func openEdges(ctx context.Context, alloc topo.Alloc, bp Payload, btopo *Topolog
 			u := btopo.Uses[ui]
 			start, end := placeVertex(u.DirFrom, 0, 0, 0), placeVertex(u.DirTo, 0, 0, 0)
 			view := bp.Faces[t.Face].View(bp.Xform)
-			edge, err := bandEdge(alloc, view, u.Walk, t.Loop != 0, start, end)
+			edge, err := bandEdge(alloc, view, u.Walk, t.Loop != 0, start, end) //nolint:contextcheck // The ordinary wall builder has no replay context or budget.
 			if err != nil {
 				return openSet{}, err
 			}

@@ -38,16 +38,7 @@ func coalesceChainWalksContext(ctx context.Context, walks []survey2d.SideWalk) (
 
 func coalesceWalksWithPoll(poll func() error, walks []survey2d.SideWalk, wrap bool) ([]survey2d.SideWalk, error) {
 	collinear := func(a, b survey2d.SideWalk) bool {
-		if !a.IsLine() || !b.IsLine() {
-			return false
-		}
-		// The tangent test is only a quick reject: every exactly collinear
-		// pair passes it, since its tangents differ by their own rounding
-		// alone. The merge itself is decided exactly (exactlyCollinear).
-		cross := a.TanOutU*b.TanInV - a.TanOutV*b.TanInU
-		dot := a.TanOutU*b.TanInU + a.TanOutV*b.TanInV
-		scale := math.Hypot(a.TanOutU, a.TanOutV) * math.Hypot(b.TanInU, b.TanInV)
-		return dot > 0 && math.Abs(cross) <= 1e-12*scale && exactlyCollinear(a, b)
+		return possibleCollinear(a, b) && exactlyCollinear(a, b)
 	}
 	merge := func(a, b survey2d.SideWalk) survey2d.SideWalk {
 		// The merged walk ends where b ends, so it carries the bounds b proved
@@ -96,6 +87,18 @@ func coalesceWalksWithPoll(poll func() error, walks []survey2d.SideWalk, wrap bo
 		out = out[:len(out)-1]
 	}
 	return out, nil
+}
+
+// possibleCollinear is the ordinary coalescer's float quick reject. Every
+// exact merge candidate reaches its true arm; false proves no merge occurs.
+func possibleCollinear(a, b survey2d.SideWalk) bool {
+	if !a.IsLine() || !b.IsLine() {
+		return false
+	}
+	cross := a.TanOutU*b.TanInV - a.TanOutV*b.TanInU
+	dot := a.TanOutU*b.TanInU + a.TanOutV*b.TanInV
+	scale := math.Hypot(a.TanOutU, a.TanOutV) * math.Hypot(b.TanInU, b.TanInV)
+	return dot > 0 && math.Abs(cross) <= 1e-12*scale
 }
 
 // exactlyCollinear reports whether line walk b continues line walk a along one

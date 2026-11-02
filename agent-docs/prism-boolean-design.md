@@ -792,6 +792,17 @@ must pass its existing boundary and occupied-volume proof.
 
 ## 5. Authentication
 
+For a disjoint whole-circle group, the source-clearance check may use exact
+axis-aligned enclosing boxes. A circle uses its exact center and radius; a
+line uses its endpoints; an arc uses a full carrier enclosed by an L1 radius.
+The whole-arc allowance covers the held radius and pinned-end residual, and
+the matched scene must reproduce its natural-order source record exactly.
+Strict separation of expanded boxes proves a lower distance bound.
+The expansion includes both recorded section displacements and the scene's
+walk, reexpression, and crossing charges. Overlapping boxes refuse. This
+check proves clearance only; Sketch's whole-loop arrangement still decides
+section membership and assembly.
+
 The task this section answers: `RecordProfile`'s existing authentication
 (seam §2.1) matches a caller-supplied `*sketch.Profile` against a **fresh**
 `s.Profiles()` result on the caller's *own* sketch. decad's combined scene is

@@ -36,7 +36,7 @@ func TestRegionPartIgnoresUnusedOverflowedSecondMoments(t *testing.T) {
 
 	// The region's second moments exceed float64, but its area and first moments fit.
 	part, err := regionPart(t.Context(), stack, stack.OuterPrism(), nil, nil, nil, 0, 0,
-		freeform.NewFreeformWork())
+		freeform.NewFreeformWork(), nil, nil)
 	require.NoError(t, err)
 	require.InDelta(t, 1e200, part.area.Value, 1e185)
 	require.InDelta(t, 5e99, part.centroid.X, 1e85)

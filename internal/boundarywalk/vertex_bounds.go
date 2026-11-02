@@ -86,12 +86,18 @@ func SameCircleSeam(prev, next CurveSegment) bool {
 // verbatim, so a junction of two natural line ends at one recorded coordinate
 // answers exactly zero. A non-finite component answers +Inf.
 func JunctionVertex(prevSeg CurveSegment, prev survey2d.SegmentWalk, nextSeg CurveSegment, next survey2d.SegmentWalk) (float64, float64, proofbound.WalkEndBound) {
-	atNext := JunctionStartBound(prevSeg, prev, nextSeg, next)
+	own := DenotedStartBound(nextSeg, next)
+	end := DenotedEndBound(prevSeg, prev)
+	return junctionVertexWithBounds(prevSeg, prev, nextSeg, next, own, end)
+}
+
+func junctionVertexWithBounds(prevSeg CurveSegment, prev survey2d.SegmentWalk,
+	nextSeg CurveSegment, next survey2d.SegmentWalk, own, end proofbound.WalkEndBound,
+) (float64, float64, proofbound.WalkEndBound) {
+	atNext := junctionStartWithBounds(prevSeg, prev, nextSeg, next, own, end)
 	if !SameCircleSeam(prevSeg, nextSeg) {
 		return next.StartU, next.StartV, atNext
 	}
-	own := DenotedStartBound(nextSeg, next)
-	end := DenotedEndBound(prevSeg, prev)
 	du, dv := next.StartU-prev.EndU, next.StartV-prev.EndV
 	atPrev := proofbound.WalkEndBound{U: math.Min(end.U, reachAcross(du, own.U)), V: math.Min(end.V, reachAcross(dv, own.V))}
 	if math.Max(atPrev.U, atPrev.V) < math.Max(atNext.U, atNext.V) {
@@ -111,6 +117,12 @@ func JunctionVertex(prevSeg CurveSegment, prev survey2d.SegmentWalk, nextSeg Cur
 func JunctionStartBound(prevSeg CurveSegment, prev survey2d.SegmentWalk, nextSeg CurveSegment, next survey2d.SegmentWalk) proofbound.WalkEndBound {
 	own := DenotedStartBound(nextSeg, next)
 	end := DenotedEndBound(prevSeg, prev)
+	return junctionStartWithBounds(prevSeg, prev, nextSeg, next, own, end)
+}
+
+func junctionStartWithBounds(prevSeg CurveSegment, prev survey2d.SegmentWalk,
+	nextSeg CurveSegment, next survey2d.SegmentWalk, own, end proofbound.WalkEndBound,
+) proofbound.WalkEndBound {
 	du, dv := next.StartU-prev.EndU, next.StartV-prev.EndV
 	if SameCircleSeam(prevSeg, nextSeg) {
 		return proofbound.WalkEndBound{U: math.Min(own.U, reachAcross(du, end.U)), V: math.Min(own.V, reachAcross(dv, end.V))}

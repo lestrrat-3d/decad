@@ -271,7 +271,7 @@ func buildSides(ctx context.Context, env topo.Env, body *topo.Body, pp Payload, 
 		if err != nil {
 			return nil, proofbound.BoundedScalar{}, err
 		}
-		bottomEdge, topEdge, surf, faceReversed, err := prismrecord.BuildWallGeometry(env.Alloc, prismView, w, convex, false, bottomV[i], bottomV[i+1], topV[i], topV[i+1])
+		bottomEdge, topEdge, surf, faceReversed, err := prismrecord.BuildWallGeometry(env.Alloc, prismView, w, convex, false, bottomV[i], bottomV[i+1], topV[i], topV[i+1]) //nolint:contextcheck // The ordinary wall builder has no replay context or budget.
 		if err != nil {
 			return nil, proofbound.BoundedScalar{}, err
 		}

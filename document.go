@@ -158,9 +158,15 @@ func (d *Document) commitOperationSpanPrefixIn(ctx context.Context, c *Container
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if produced.blindProof != nil && !produced.blindProof.acceptsOperation(operation, produced) {
+		return fmt.Errorf("%w: blind Cut history does not match its witness", ErrUnsupported)
+	}
 	d.n.NextProducer += prefix + span
 	d.n.LiveMu.Lock()
 	defer d.n.LiveMu.Unlock()
+	if produced.blindProof != nil {
+		produced.blindProof.cut = operation
+	}
 	dest := d.destinationLocked(c, consumed)
 	for _, gone := range consumed {
 		d.retire(gone)

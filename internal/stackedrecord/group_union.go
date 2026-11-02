@@ -2,12 +2,14 @@ package stackedrecord
 
 import (
 	"context"
+	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
@@ -17,13 +19,61 @@ import (
 // through prismcells.AmplifiedFallback.
 func GroupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, scene prismcells.GroupScene,
 	a, b prismrecord.Payload) (topo.Payload, bool, error) {
-	loops, cutDelta, resolved, err := prismcells.GroupUnionLoops(budget, scene)
+	return groupUnionTail(ctx, budget, scene, a, b, nil)
+}
+
+// GroupUnionTailWithOrigins returns the general union's surviving edge origins.
+func GroupUnionTailWithOrigins(ctx context.Context, budget *proofbound.WorkBudget, scene prismcells.GroupScene,
+	a, b prismrecord.Payload) (topo.Payload, [][]prismcells.Origin, bool, error) {
+	var origins [][]prismcells.Origin
+	payload, ok, err := groupUnionTail(ctx, budget, scene, a, b, &origins)
+	return payload, origins, ok, err
+}
+
+func groupUnionTail(ctx context.Context, budget *proofbound.WorkBudget, scene prismcells.GroupScene,
+	a, b prismrecord.Payload, origins *[][]prismcells.Origin) (topo.Payload, bool, error) {
+	var loops []sectionrecord.LoopRecord
+	var cutDelta float64
+	var resolved bool
+	var err error
+	if origins == nil {
+		loops, cutDelta, resolved, err = prismcells.GroupUnionLoops(budget, scene)
+	} else {
+		loops, *origins, cutDelta, resolved, err = prismcells.GroupUnionLoopsWithOrigins(budget, scene)
+	}
 	if err != nil || !resolved {
 		return nil, false, err
 	}
+	return groupUnionTailFromLoops(ctx, budget, scene, a, b, loops, cutDelta)
+}
+
+// GroupWholeCircleUnionTailWithOrigins retains the source tag for each segment in a
+// disjoint whole-circle group. The caller must authenticate the input source
+// records and carry these tags across private Union steps.
+func GroupWholeCircleUnionTailWithOrigins(ctx context.Context, budget *proofbound.WorkBudget, scene prismcells.GroupScene,
+	a, b prismrecord.Payload) (topo.Payload, [][]prismcells.Origin, bool, error) {
+	loops, origins, cutDelta, resolved, err := prismcells.GroupWholeCircleOrigins(budget, scene)
+	if err != nil || !resolved {
+		return nil, nil, false, err
+	}
+	payload, ok, err := groupUnionTailFromLoops(ctx, budget, scene, a, b, loops, cutDelta)
+	if err != nil || !ok {
+		return nil, nil, false, err
+	}
+	return payload, origins, true, nil
+}
+
+func groupUnionTailFromLoops(ctx context.Context, budget *proofbound.WorkBudget, scene prismcells.GroupScene,
+	a, b prismrecord.Payload, loops []sectionrecord.LoopRecord, cutDelta float64) (topo.Payload, bool, error) {
 	// §7's incoming terms with A6's crossing charge.
 	inA, inB := scene.Delta.Incoming(a.SectionDelta, b.SectionDelta, scene.ReexpressionDelta)
 	inputDelta := max(inA, inB, scene.Delta.Crossing)
+	if err := budget.Reserve(uint64(len(loops))); err != nil {
+		return nil, false, err
+	}
+	if err := budget.ReserveBytesMul(uint64(len(loops)), uint64(unsafe.Sizeof(momentinput.Profile{}))); err != nil {
+		return nil, false, err
+	}
 	regions := make([]momentinput.Profile, len(loops))
 	for i, loop := range loops {
 		regions[i] = momentinput.Profile{Outer: loop}

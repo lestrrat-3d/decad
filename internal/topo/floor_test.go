@@ -64,5 +64,5 @@ func TestBodyMovedFields(t *testing.T) {
 	for f := range typ.Fields() {
 		got = append(got, f.Name)
 	}
-	require.Equal(t, []string{"prismConstructionState", "Solid", "PlanarConvexity", "PlanarSnapshot", "PlanarHints", "Tess", "SweepRadii", "Origin", "Volume", "VolumeLineage", "OperationWarnings", "Area", "Centroid", "Bounds", "Kind", "Doc", "Lumps", "Owner", "Payload"}, got)
+	require.Equal(t, []string{"prismConstructionState", "Solid", "PlanarConvexity", "PlanarSnapshot", "PlanarHints", "Tess", "SweepRadii", "Origin", "Volume", "VolumeLineage", "OperationWarnings", "Area", "Centroid", "Bounds", "Kind", "Doc", "Lumps", "Owner", "prismBuildSeal", "Payload"}, got)
 }
