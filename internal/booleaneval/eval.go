@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"unsafe"
 
@@ -26,6 +27,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/occupancy"
+	"github.com/lestrrat-3d/decad/internal/occupancyleaf"
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -605,6 +608,9 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	}
 	var kept []meshbool.KeptFacet
 	var maxRim float64
+	// minSin stays 0, which no occupancy record admits, on every path that
+	// does not report it.
+	var minSin float64
 	var replayKeys *meshbool.ReplayKeys
 	if replay != nil {
 		replayKeys, err = meshbool.NewReplayKeysBounded(ctx, replay)
@@ -613,7 +619,9 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		}
 		kept, maxRim, err = meshbool.MeshBooleanReplayWithKeys(ctx, op, bmA, bmB, memo, replay, replayKeys)
 	} else {
-		kept, maxRim, err = meshbool.MeshBoolean(ctx, op, bmA, bmB, memo)
+		var stats meshbool.Stats
+		kept, stats, err = meshbool.MeshBooleanStats(ctx, op, bmA, bmB, memo)
+		maxRim, minSin = stats.MaxRim, stats.MinSin
 	}
 	if err != nil {
 		return Evaluation{}, meshbool.StagingError(op, err)
@@ -694,6 +702,12 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		AreaSlack:   areaSlack,
 		DPair:       dPair,
 		Xform:       r3.Identity(),
+	}
+	if op == meshbool.OpUnion && replay == nil && !hasShifts && fixed == nil && capFace == nil && coneFace == nil {
+		payload.Occupancy = unionOccupancy(a, b, ma, mb, stitched.Round, minSin)
+		if payload.Occupancy != nil {
+			payload.Occupancy.Mesh = occupancy.Bind(payload.Verts, payload.Tris)
+		}
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -803,3 +817,30 @@ func shiftsHaveSingleComponentAdjustment(shifts map[int]pieceShift) bool {
 // operand owner, at position ordinal of topobuild.Faces(owner): the face's
 // retained tag (facetedrecord.SourceTag, flipped for the tool of a Cut) charged
 // with the placed operand's departure, its roles and its identity.
+
+// unionOccupancy composes agent-docs/body-refine-design.md §5's record for one
+// mesh Union of two convex-leaf operands, or nil. The gate slack is the
+// smallest face-bound sum the hidden-tangency pre-pass can apply to a face
+// pair of these two meshes (agent-docs/tessellation-design.md §11 step 4).
+func unionOccupancy(a, b *topo.Body, ma, mb *topo.Mesh, weld, minSin float64) *occupancy.Record {
+	ra := occupancyleaf.Of(a, ma)
+	if ra == nil {
+		return nil
+	}
+	rb := occupancyleaf.Of(b, mb)
+	if rb == nil {
+		return nil
+	}
+	minFace := func(m *topo.Mesh) float64 {
+		lo := math.Inf(1)
+		for _, d := range m.FaceBound {
+			lo = math.Min(lo, d)
+		}
+		return lo
+	}
+	slack := minFace(ma) + minFace(mb)
+	// The float sum may round up past the true sum; step it down so the
+	// comparison in Compose stays on the safe side.
+	slack = math.Nextafter(slack, 0)
+	return occupancy.Compose(ra, rb, weld, minSin, slack)
+}

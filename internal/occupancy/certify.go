@@ -2,10 +2,14 @@ package occupancy
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"math"
 	"math/big"
+	"runtime"
 	"slices"
+	"sync"
+	"sync/atomic"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/r3"
@@ -14,19 +18,19 @@ import (
 // Budget counts exact work: one unit per exact projection of one vertex on
 // one axis. A certification that would exceed Limit refuses with
 // ErrUnsupported instead of running on.
+// Charges are atomic, so one Budget may serve concurrent facet searches.
 type Budget struct {
-	Limit int
-	used  int
+	Limit int64
+	used  atomic.Int64
 }
 
 // Used reports the work charged so far.
-func (b *Budget) Used() int { return b.used }
+func (b *Budget) Used() int64 { return b.used.Load() }
 
-func (b *Budget) charge(n int) error {
-	if b.used+n > b.Limit {
+func (b *Budget) charge(n int64) error {
+	if b.used.Add(n) > b.Limit {
 		return fmt.Errorf("%w: occupancy certificate exceeds its fixed work ceiling of %d", decaderr.ErrUnsupported, b.Limit)
 	}
-	b.used += n
 	return nil
 }
 
@@ -45,6 +49,10 @@ func Misses(tri [3]r3.Vec, shift r3.Vec, p *Piece, budget *Budget) (bool, error)
 	var ft [3]r3.Vec
 	for i, v := range tri {
 		ft[i] = v.Add(shift)
+	}
+	ok, err := missesBySide(tri, shift, ft, p, budget)
+	if ok || err != nil {
+		return ok, err
 	}
 	type cand struct {
 		axis r3.Vec
@@ -98,7 +106,7 @@ func Misses(tri [3]r3.Vec, shift r3.Vec, p *Piece, budget *Budget) (bool, error)
 		xt[i] = x
 	}
 	for _, c := range cands[:min(len(cands), maxExactTries)] {
-		if err := budget.charge(3 + len(p.verts)); err != nil {
+		if err := budget.charge(int64(3 + len(p.verts))); err != nil {
 			return false, err
 		}
 		if separated(c.axis, xt, p.verts) {
@@ -106,6 +114,71 @@ func Misses(tri [3]r3.Vec, shift r3.Vec, p *Piece, budget *Budget) (bool, error)
 		}
 	}
 	return false, nil
+}
+
+// missesBySide tries the cheap certificate first: one of the piece's own
+// half-spaces (a side or a level, in local coordinates) that all three moved
+// corners lie strictly outside. Floats rank the half-spaces; the exact local
+// coordinates of the moved corners decide.
+func missesBySide(tri [3]r3.Vec, shift r3.Vec, ft [3]r3.Vec, p *Piece, budget *Budget) (bool, error) {
+	var lf [3]r3.Vec
+	for i, v := range ft {
+		for _, a := range p.finv {
+			v = a.applyFloat(v)
+		}
+		lf[i] = v
+	}
+	best, bestGap := -1, 0.0
+	gapOf := func(f func(r3.Vec) float64) float64 {
+		g := math.Inf(1)
+		for _, v := range lf {
+			g = math.Min(g, f(v))
+		}
+		return g
+	}
+	for k, sd := range p.sides {
+		if g := gapOf(func(v r3.Vec) float64 { return sd.fux*v.X + sd.fuy*v.Y - sd.fc }); g > bestGap {
+			best, bestGap = k, g
+		}
+	}
+	if g := gapOf(func(v r3.Vec) float64 { return p.fz0 - v.Z }); g > bestGap {
+		best, bestGap = len(p.sides), g
+	}
+	if g := gapOf(func(v r3.Vec) float64 { return v.Z - p.fz1 }); g > bestGap {
+		best = len(p.sides) + 1
+	}
+	if best < 0 {
+		return false, nil
+	}
+	if err := budget.charge(3); err != nil {
+		return false, err
+	}
+	sx := xvecOf(shift)
+	for _, v := range tri {
+		x := xvecOf(v)
+		for k := range 3 {
+			x[k].Add(x[k], sx[k])
+		}
+		for _, e := range p.inv {
+			x = e.apply(x)
+		}
+		var beyond bool
+		switch {
+		case best < len(p.sides):
+			sd := p.sides[best]
+			d := new(big.Rat).Mul(sd.ux, x[0])
+			d.Add(d, new(big.Rat).Mul(sd.uy, x[1]))
+			beyond = d.Cmp(sd.c) > 0
+		case best == len(p.sides):
+			beyond = x[2].Cmp(p.z0) < 0
+		default:
+			beyond = x[2].Cmp(p.z1) > 0
+		}
+		if !beyond {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func separated(axis r3.Vec, tri [3]xvec, verts []xvec) bool {
@@ -133,8 +206,9 @@ func separated(axis r3.Vec, tri [3]xvec, verts []xvec) bool {
 
 // Search fixes the facet search of agent-docs/body-refine-design.md §5.
 type Search struct {
-	// H0 and HMax bound the translation ladder H0·1.25^j.
-	H0, HMax float64
+	// H0 and HMax bound the translation ladder H0·Step^j. A Step at or
+	// below 1 reads as 1.25.
+	H0, HMax, Step float64
 	// MaxDepth is how many times a facet piece may be bisected across its
 	// longest edge before the search refuses.
 	MaxDepth int
@@ -208,7 +282,11 @@ func FacetBound(tri [3]r3.Vec, outward r3.Vec, pieces []*Piece, s Search, budget
 }
 
 func pieceBound(tri [3]r3.Vec, dirs []r3.Vec, near []*Piece, s Search, depth int, budget *Budget) (float64, error) {
-	for h := s.H0; h <= s.HMax; h *= 1.25 {
+	step := s.Step
+	if !(step > 1) {
+		step = 1.25
+	}
+	for h := s.H0; h <= s.HMax; h *= step {
 		for _, d := range dirs {
 			shift := d.Scale(h * shrink)
 			ok, err := missesAll(tri, shift, near, budget)
@@ -295,4 +373,55 @@ func boxesNear(lo, hi r3.Vec, b [2]r3.Vec, pad float64) bool {
 	return lo.X-pad <= b[1].X && b[0].X <= hi.X+pad &&
 		lo.Y-pad <= b[1].Y && b[0].Y <= hi.Y+pad &&
 		lo.Z-pad <= b[1].Z && b[0].Z <= hi.Z+pad
+}
+
+// Certify runs FacetBound over the facets of the held mesh (verts, tris) that
+// want lists, against the record's pieces, on up to GOMAXPROCS workers, and
+// returns each listed facet's h in the order of want. The first refusal or
+// cancellation stops every worker and is returned.
+func Certify(ctx context.Context, verts []r3.Vec, tris [][3]int, want []int, pieces []*Piece, s Search, budget *Budget) ([]float64, error) {
+	out := make([]float64, len(want))
+	var next atomic.Int64
+	var once sync.Once
+	var first error
+	stop := make(chan struct{})
+	fail := func(err error) {
+		once.Do(func() {
+			first = err
+			close(stop)
+		})
+	}
+	var wg sync.WaitGroup
+	for range max(1, min(runtime.GOMAXPROCS(0), len(want))) {
+		wg.Go(func() {
+			for {
+				i := int(next.Add(1) - 1)
+				if i >= len(want) {
+					return
+				}
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				if err := ctx.Err(); err != nil {
+					fail(err)
+					return
+				}
+				t := tris[want[i]]
+				tri := [3]r3.Vec{verts[t[0]], verts[t[1]], verts[t[2]]}
+				h, err := FacetBound(tri, tri[1].Sub(tri[0]).Cross(tri[2].Sub(tri[0])), pieces, s, budget)
+				if err != nil {
+					fail(err)
+					return
+				}
+				out[i] = h
+			}
+		})
+	}
+	wg.Wait()
+	if first != nil {
+		return nil, first
+	}
+	return out, nil
 }

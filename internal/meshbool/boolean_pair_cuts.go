@@ -2,6 +2,7 @@ package meshbool
 
 import (
 	"context"
+	"math"
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -12,6 +13,9 @@ type pairCutsResult struct {
 	BlockedA, BlockedB map[[2]int]struct{}
 	Rims               map[string]float64
 	MaxRim             float64
+	// MinSin is the smallest proven crossing sine over the pair's contact
+	// segments, +Inf when none crosses (Stats.MinSin).
+	MinSin float64
 }
 
 func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf func(proof.Xpt) string) (pairCutsResult, error) {
@@ -26,6 +30,7 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 	// to the largest RimBound over the facet pairs whose segment ends there.
 	rims := map[string]float64{}
 	maxRim := 0.0
+	minSin := math.Inf(1)
 	// touchedA and touchedB are the facets of each operand that meet the
 	// other, which the held-mesh gate reads once classification is done.
 	var touchedA, touchedB []int
@@ -59,6 +64,11 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 		segEnds = append(segEnds, c.P0, c.P1)
 		rim := RimBound(ma.SlabBound[i], mb.SlabBound[j], c.Sin2)
 		maxRim = max(maxRim, rim)
+		if c.Sin2 == nil {
+			minSin = 0
+		} else {
+			minSin = min(minSin, SinLowerBound(c.Sin2))
+		}
 		for _, p := range []proof.Xpt{c.P0, c.P1} {
 			k := keyOf(p)
 			if prev, ok := rims[k]; !ok || rim > prev {
@@ -209,5 +219,5 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 		}
 	}
 
-	return pairCutsResult{cutsA, cutsB, blockedA, blockedB, rims, maxRim}, nil
+	return pairCutsResult{cutsA, cutsB, blockedA, blockedB, rims, maxRim, minSin}, nil
 }

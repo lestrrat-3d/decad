@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/occupancy"
+
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -149,6 +151,36 @@ type Payload struct {
 	Diameter float64
 
 	Xform r3.Transform
+
+	// Occupancy is the convex-leaf Union record of
+	// agent-docs/body-refine-design.md §5, set only by a mesh Union whose two
+	// operands each carry one. It is read only while its Mesh binding matches
+	// Verts and Tris (OccupancyRecord).
+	Occupancy *occupancy.Record
+	// SurfaceBound is σ(f) per facet (agent-docs/body-refine-design.md §3), set
+	// only by Refine and read only while SurfaceMesh matches Verts and Tris
+	// (SurfaceBounds). A public Tessellate restates it in place of the corner
+	// maximum; every other reader keeps VertexBound.
+	SurfaceBound []float64
+	SurfaceMesh  occupancy.Binding
+}
+
+// SurfaceBounds returns σ(f) per facet when Refine proved them for this
+// payload's own held mesh, and nil otherwise.
+func (fp Payload) SurfaceBounds() []float64 {
+	if len(fp.SurfaceBound) != len(fp.Tris) || !fp.SurfaceMesh.Matches(fp.Verts, fp.Tris) {
+		return nil
+	}
+	return fp.SurfaceBound
+}
+
+// OccupancyRecord returns the payload's occupancy record when it was proven
+// for this payload's own held mesh.
+func (fp Payload) OccupancyRecord() *occupancy.Record {
+	if fp.Occupancy == nil || !fp.Occupancy.Mesh.Matches(fp.Verts, fp.Tris) {
+		return nil
+	}
+	return fp.Occupancy
 }
 
 // Transform is the accumulated rigid placement.

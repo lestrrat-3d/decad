@@ -175,6 +175,21 @@ func MeshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 	return meshBoolean(ctx, op, ma, mb, memo, newKeyMemo)
 }
 
+// Stats are the contact figures one MeshBooleanStats call proves beside its
+// kept facets. MaxRim is MeshBoolean's rim figure. MinSin is the smallest
+// proven crossing sine over every contact segment, +Inf when no segment
+// crosses and 0 when one has no proven positive sine; the occupancy record
+// reads it (agent-docs/body-refine-design.md §5).
+type Stats struct {
+	MaxRim float64
+	MinSin float64
+}
+
+// MeshBooleanStats is MeshBoolean that also returns Stats.
+func MeshBooleanStats(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *ContactMemo) ([]KeptFacet, Stats, error) {
+	return meshBooleanStats(ctx, op, ma, mb, memo, newKeyMemo)
+}
+
 // maxTouchContacts is how many coplanar facet pairs a refusal records. The
 // scan stops there: a mesh that coplanar everywhere needs no more to be refused.
 const maxTouchContacts = 64
@@ -204,31 +219,36 @@ func touchOf(ma *BoolMesh, i, j int) TouchContact {
 // and its keys travel on the kept facets into the stitch, so a point the two
 // operands share is canonicalized once.
 func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *ContactMemo, newKeyOf func() func(proof.Xpt) string) ([]KeptFacet, float64, error) {
+	kept, stats, err := meshBooleanStats(ctx, op, ma, mb, memo, newKeyOf)
+	return kept, stats.MaxRim, err
+}
+
+func meshBooleanStats(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *ContactMemo, newKeyOf func() func(proof.Xpt) string) ([]KeptFacet, Stats, error) {
 	wantA, wantB, flipB, err := BooleanKeep(op)
 	if err != nil {
-		return nil, 0, err
+		return nil, Stats{}, err
 	}
 	keyOf := newKeyOf()
 
 	cuts, err := pairCuts(ctx, ma, mb, memo, keyOf)
 	if err != nil {
-		return nil, 0, err
+		return nil, Stats{}, err
 	}
 
 	var kept []KeptFacet
 	if err := ctx.Err(); err != nil {
-		return nil, 0, err
+		return nil, Stats{}, err
 	}
 	keep, err := keepSide(ctx, ma, mb, cuts.CutsA, cuts.BlockedA, cuts.Rims, wantA, false, keyOf)
 	if err != nil {
-		return nil, 0, err
+		return nil, Stats{}, err
 	}
 	kept = append(kept, keep...)
 	keep, err = keepSide(ctx, mb, ma, cuts.CutsB, cuts.BlockedB, cuts.Rims, wantB, flipB, keyOf)
 	if err != nil {
-		return nil, 0, err
+		return nil, Stats{}, err
 	}
-	return append(kept, keep...), cuts.MaxRim, nil
+	return append(kept, keep...), Stats{MaxRim: cuts.MaxRim, MinSin: cuts.MinSin}, nil
 }
 
 // EdgeCrosses decides whether edge k of facet f — which lies exactly in the

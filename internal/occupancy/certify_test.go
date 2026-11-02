@@ -40,7 +40,7 @@ func (p placed) image(v r3.Vec) r3.Vec {
 
 func (p placed) direction(v r3.Vec) r3.Vec { return p.image(v).Sub(p.t) }
 
-func bigBudget() *occupancy.Budget { return &occupancy.Budget{Limit: 1 << 30} }
+func bigBudget() *occupancy.Budget { return &occupancy.Budget{Limit: 1 << 40} }
 
 func TestCirclePrismContainsCylinder(t *testing.T) {
 	t.Parallel()

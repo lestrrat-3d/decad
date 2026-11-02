@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/r3"
@@ -92,6 +93,20 @@ type Piece struct {
 	faces  []face
 	edges  [][2]int
 	box    [2]r3.Vec
+	// The piece's own half-spaces in local coordinates: side k is
+	// ux·x + uy·y ≤ c and the levels bound z. inv takes a world point back to
+	// local coordinates exactly and finv in floats, for ranking only.
+	sides  []side
+	z0, z1 *big.Rat
+	fz0    float64
+	fz1    float64
+	inv    []exactAffine
+	finv   []Affine
+}
+
+type side struct {
+	ux, uy, c    *big.Rat
+	fux, fuy, fc float64
 }
 
 // face is one plane of the piece in floats, for ranking axes and escape
@@ -171,7 +186,21 @@ func CirclePrism(place Chain, r, z0, z1 float64, sides int) (*Piece, error) {
 			}
 		}
 	}
-	p := &Piece{}
+	p := &Piece{z0: ratOf(z0), z1: ratOf(z1), fz0: z0, fz1: z1}
+	for _, l := range lines {
+		fux, _ := l.ux.Float64()
+		fuy, _ := l.uy.Float64()
+		fc, _ := l.c.Float64()
+		p.sides = append(p.sides, side{l.ux, l.uy, l.c, fux, fuy, fc})
+	}
+	for _, a := range slices.Backward(place) {
+		e, err := invert(a)
+		if err != nil {
+			return nil, err
+		}
+		p.inv = append(p.inv, e)
+		p.finv = append(p.finv, e.float())
+	}
 	for _, z := range []float64{z0, z1} {
 		rz := ratOf(z)
 		for _, c := range corners {
