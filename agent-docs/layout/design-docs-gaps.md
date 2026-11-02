@@ -39,3 +39,4 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/boolean-chain-regroup-design.md` | Rebuilding a refused two-body Boolean from the source bodies its history names: admitted set identities, plan, fallback and fixtures. |
 | `agent-docs/boolean-continuation-design.md` | Certified source-expression continuation after an accepted geometry adjustment; set rewrites, materialization, bounds and staged proofs. |
 | `agent-docs/trim-graph-design.md` | General modify reach over retained analytic faces: trim graph, offsets, certified curves, face meshing, gates, increments. |
+| `agent-docs/revolve-operand-coarsening-design.md` | A boolean's retry of a revolve operand at up to eight times the pair tolerance after a work ceiling refuses it. |

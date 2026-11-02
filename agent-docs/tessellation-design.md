@@ -528,7 +528,10 @@ level. A contact audit that exceeds the candidate-work ceiling still refuses
 even when the mesh itself fits the facet and allocation limits.
 
 A requested tolerance is an upper bound on chording, not on the complete mesh
-bound or a density request. The tessellator may refine beyond the first
+bound or a density request. A boolean may request a revolve operand at up to
+eight times its pair tolerance after a work ceiling refuses the pair tolerance
+(`agent-docs/revolve-operand-coarsening-design.md` §2); that is the boolean's own
+operand request, and `Body.Tessellate` never coarsens. The tessellator may refine beyond the first
 admissible `n` to prove topology, non-intersection, or a finite private bound.
 It may NEVER coarsen. Refinement is deterministic:
 refine the first failing meridian walk in payload order; an angular failure

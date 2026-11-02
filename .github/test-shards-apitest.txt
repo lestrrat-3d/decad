@@ -1494,7 +1494,7 @@
 6	0.01	TestPrismCutCrossingBoxesResolvesAnalytically
 6	0.03	TestPrismCutReflectedTargetByArcTool
 6	0.01	TestPrismUnionEnclosedVoidTakesMeshPath
-6	0.07	TestPrismUnionG1FallsBackWithUnchangedBehavior
+6	0.07	TestPrismUnionG1FallsBackToTheMeshPath
 6	0.00	TestQueryStringNegativeZeroNormalized
 6	0.04	TestQueryStringRendering
 6	0.01	TestReadIGESRefusals
@@ -2971,3 +2971,5 @@
 11	0.06	TestVoidRevolveModifyOps
 11	0.01	TestWallHeightCarriesAxialDelta
 11	0.01	TestWholeCircleEdgeSeamVertices
+11	0.01	TestUnionTorusArcWithStemCoarsensItsOperandPastTheCeilings
+11	0.01	TestUnionTorusArcWithStemShortSweep
