@@ -264,6 +264,9 @@ func commitMotherHingeCut(ctx context.Context, d *Document, target, bore, body *
 		privateWarning) {
 		return original
 	}
+	if !remapMotherHingeUnionWarningForPublicCut(body) {
+		return original
+	}
 	d.n.NextProducer += span
 	dest := d.destinationLocked(nil, []*Body{target, bore})
 	d.retire(target)
@@ -273,6 +276,23 @@ func commitMotherHingeCut(ctx context.Context, d *Document, target, bore, body *
 	stampOperationWarningKind(body, OperationCut)
 	d.appendOperationLocked(operation)
 	return nil
+}
+
+func remapMotherHingeUnionWarningForPublicCut(body *Body) bool {
+	if body == nil || len(body.n.OperationWarnings) != 1 {
+		return false
+	}
+	warning := &body.n.OperationWarnings[0]
+	if warning.Code != opdiagnostic.CodeGapShiftApplied || warning.Operation != int(meshbool.OpUnion) ||
+		warning.PublicOperation != 0 || warning.Operand != 1 || warning.Change != opdiagnostic.ChangeGapShift ||
+		warning.ChainAllowance != nil || math.Float64bits(warning.TouchedBound) != 0 ||
+		math.Float64bits(warning.PairChordLimit) != 0 {
+		return false
+	}
+	// The private Union's tool is a cut knuckle inside the public Cut target.
+	// Its authenticated shift therefore belongs to public operand zero.
+	warning.Operand = 0
+	return true
 }
 
 func motherHingeSources(h *OperationHistory, target, bore *Body) (motherHingeAncestry, bool) {

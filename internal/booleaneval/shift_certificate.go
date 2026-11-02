@@ -54,7 +54,7 @@ func (c *ShiftCertificate) IsPureShrink() bool {
 
 // IsSingleComponentAdjustment reports one finite translation or radial change.
 func (c *ShiftCertificate) IsSingleComponentAdjustment() bool {
-	return c != nil && c.component.count == 1 && proofbound.FiniteVec(c.shift.Move) &&
+	return c != nil && c.component.Count() == 1 && proofbound.FiniteVec(c.shift.Move) &&
 		!proofbound.IsNonFinite(c.shift.Grow) && (c.shift.Move != (r3.Vec{}) || c.shift.Grow != 0)
 }
 

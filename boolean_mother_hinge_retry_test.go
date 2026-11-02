@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/topo"
@@ -79,6 +81,23 @@ func TestRemapMotherAnalyticCutFacesRejectsUnmatchedAndDuplicateOwners(t *testin
 	duplicateFaces[1].Origins[0].Role = duplicateFaces[0].Origins[0].Role
 	_, ok = remapMotherAnalyticCutFaces(duplicateFaces, 30, adjusted, tool)
 	require.False(t, ok)
+}
+
+func TestMotherHingeUnionWarningNamesPublicCutTarget(t *testing.T) {
+	t.Parallel()
+
+	body := bornBody(&Body{n: topo.Body{OperationWarnings: []opdiagnostic.Record{{
+		Operation: int(meshbool.OpUnion), Code: opdiagnostic.CodeGapShiftApplied,
+		PublicOperation: 0, Operand: 1, Change: opdiagnostic.ChangeGapShift,
+		DisplacementBound: .001, AllowedReach: .01,
+	}}}})
+	require.True(t, remapMotherHingeUnionWarningForPublicCut(body))
+	stampOperationWarningKind(body, OperationCut)
+	diagnostics := body.OperationDiagnostics()
+	require.Len(t, diagnostics, 1)
+	require.Equal(t, OperationCut, diagnostics[0].Operation)
+	require.Equal(t, "target", diagnostics[0].Subject.Name)
+	require.Equal(t, OperationChangeGapShift, diagnostics[0].Change.Mechanism)
 }
 
 func motherCutLineageFixture(t *testing.T, moveBoreTransversely bool) (*Body, *Body, *topo.Face, *topo.Face, []*topo.Face) {
