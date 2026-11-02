@@ -11,7 +11,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `boolean_fold.go` | Two-at-a-time fold of a many-body `Union` that no certified route takes: a trial chain on copies, then the real one. See union-fold design. |
 | `boolean_group_blind.go` | Binds root history and handles for bounded blind group Cuts and commits their result. `internal/prismboolean` owns cap selection and geometry proofs. See prism-boolean design. |
 | `boolean_group_cache.go` | Replays and compares a cached blind Cut mesh before returning it. See tessellation design. |
-| `boolean_group_history.go` | Bounded snapshot of a prism group Union's ordered public source bodies. |
+| `boolean_group_history.go` | Authenticates ordered public source bodies for a prism group Union; `internal/prismboolean` replays their region and cap proofs. |
 | `boolean_group_tessellate.go` | Replays a blind group Cut mesh and verifies its source history. See tessellation design. |
 | `boolean_many.go` | Validates and commits multi-body Union; adapts private handles to `internal/unionmany` for certified routes and fallback prism pair chains. See API §8 and prism-boolean §4.6–§4.7. |
 | `internal/unionmany/` | Orders certified many-operand Union routes and fallback prism pair chains over nodes. See prism-boolean §4.6–§4.7, axial-section-boolean, loft-cylinder-boolean, loft-mirror-boolean, prism-pattern-union and revolve-loft-sector designs. |

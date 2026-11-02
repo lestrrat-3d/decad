@@ -6,11 +6,11 @@ import (
 	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/prismboolean"
-	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/stackedrecord"
+	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
 // groupUnionInputs snapshots the public Union's ordered source prisms. It stays
@@ -130,9 +130,11 @@ func groupDirectPrismSource(ctx context.Context, body *Body,
 	return false, nil
 }
 
-// groupUnionSourceSnapshot replays the ordered public Union and binds its
-// segment origins and original Build faces. It is not yet a Cut admission:
-// the caller must also prove placement, clearance, cap planes and output.
+// groupUnionSourceSnapshot authenticates the ordered public Union history and
+// unwraps its Body.n handles for prismboolean's geometry replay. It remains in
+// root because Document.producers and public Body handles are root-owned. It
+// is not yet a Cut admission: the caller must also prove placement, clearance,
+// cap planes and output.
 func groupUnionSourceSnapshot(ctx context.Context, group *Body, budget *proofbound.ReplayBudget) (*groupUnionSource, bool, error) {
 	if budget == nil {
 		return nil, false, nil
@@ -141,106 +143,25 @@ func groupUnionSourceSnapshot(ctx context.Context, group *Body, budget *proofbou
 	if err != nil || !ok {
 		return nil, false, err
 	}
-	groupPayload, ok := group.n.Payload.(stackedrecord.Payload)
-	if !ok {
-		return nil, false, nil
-	}
-	if err := budget.ReserveRecords(ctx, 1); err != nil {
-		return nil, false, err
-	}
-	if err := budget.ReserveArray(ctx, 1, 8); err != nil {
-		return nil, false, err
-	}
-	lineage := []int{0}
-	if err := budget.SpendWork(ctx, 1); err != nil {
-		return nil, false, err
-	}
-	payload := inputs[0].n.Payload
-	for i := 1; i < len(inputs); i++ {
-		if err := budget.SpendWork(ctx, 1); err != nil {
-			return nil, false, err
-		}
-		next, rows, replayed, err := prismboolean.ReplayWholeCircleGroupUnion(ctx, budget, payload, inputs[i].n.Payload)
-		if err != nil || !replayed {
-			return nil, false, err
-		}
-		lineage, replayed, err = prismboolean.ReplayAdvanceGroupOrigins(ctx, lineage, rows, i, budget)
-		if err != nil || !replayed {
-			return nil, false, err
-		}
-		payload = next
-	}
-	replayed, ok := payload.(stackedrecord.Payload)
-	if !ok {
-		return nil, false, nil
-	}
-	owners, ok, err := prismboolean.ReplayBindGroupOrigins(ctx, groupPayload, replayed, lineage, budget)
-	if err != nil || !ok {
-		return nil, false, err
-	}
-	groupCaps, ok, err := prismboolean.ReplayGroupCapStructure(ctx, &group.n, budget)
-	if err != nil || !ok {
-		return nil, false, err
-	}
 	if err := budget.ReserveRecords(ctx, uint64(len(inputs))); err != nil {
 		return nil, false, err
 	}
-	if err := budget.ReserveArray(ctx, uint64(len(inputs)), 24); err != nil {
+	if err := budget.ReserveArray(ctx, uint64(len(inputs)), uint64(unsafe.Sizeof((*topo.Body)(nil)))); err != nil {
 		return nil, false, err
 	}
-	leafCaps := make([]prismboolean.ReplayGroupCapFaces, len(inputs))
-	for i := range inputs {
+	nodes := make([]*topo.Body, len(inputs))
+	for i, input := range inputs {
 		if err := budget.SpendWork(ctx, 1); err != nil {
 			return nil, false, err
 		}
-		leaf := inputs[i]
-		_, ok := leaf.n.Payload.(prismrecord.Payload)
-		if !ok {
-			return nil, false, nil
-		}
-		faces, ok, err := prismboolean.ReplayPrismCapStructure(ctx, &leaf.n, budget)
-		if err != nil || !ok || len(faces) != 1 {
-			return nil, false, err
-		}
-		leafCaps[i] = faces[0]
+		nodes[i] = &input.n
 	}
-	if err := budget.SpendWork(ctx, 1); err != nil {
+	replay, ok, err := prismboolean.ReplayGroupUnionSource(ctx, &group.n, nodes, budget)
+	if err != nil || !ok {
 		return nil, false, err
 	}
-	slab := groupPayload.Slabs[0]
-	groupPlacement := prismplacement.Operand{Frame: groupPayload.Frame, Xform: groupPayload.Xform, Z0: slab.Z0, Z1: slab.Z1, Z0Delta: slab.Z0Delta, Z1Delta: slab.Z1Delta, Z0Denoted: slab.Z0Denoted, Z1Denoted: slab.Z1Denoted}
-	for region := range owners {
-		if err := budget.SpendWork(ctx, 1); err != nil {
-			return nil, false, err
-		}
-		owner := owners[region]
-		if owner < 0 || owner >= len(inputs) {
-			return nil, false, nil
-		}
-		for previous := range region {
-			if err := budget.SpendWork(ctx, 1); err != nil {
-				return nil, false, err
-			}
-			if owners[previous] == owner {
-				return nil, false, nil
-			}
-		}
-		source, ok := inputs[owner].n.Payload.(prismrecord.Payload)
-		if !ok {
-			return nil, false, nil
-		}
-		match, err := prismboolean.ReplayWholeCircleMatch(ctx, slab.Regions[region], source.Profile, groupPlacement, source.PlacementOperand(), budget)
-		if err != nil || !match {
-			return nil, false, err
-		}
-	}
-	if err := budget.ReserveRecords(ctx, 1); err != nil {
-		return nil, false, err
-	}
-	if err := budget.ReserveBytes(ctx, 256); err != nil {
-		return nil, false, err
-	}
-	return &groupUnionSource{Inputs: inputs, Owners: owners, GroupCaps: groupCaps, LeafCaps: leafCaps}, true, nil
+	return &groupUnionSource{Inputs: inputs, Owners: replay.Owners, GroupCaps: replay.GroupCaps,
+		LeafCaps: replay.LeafCaps}, true, nil
 }
 
 type groupUnionSource struct {
