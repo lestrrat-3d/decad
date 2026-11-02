@@ -5,7 +5,7 @@ its leaves denote, and returns a fresh body whose `Mesh.Bound()` is that certifi
 held vertex.
 Companion to `agent-docs/faceted-vertex-bounds-design.md` ("vertex-bounds §N"), whose §3.2 rim rule and §3.6
 shallow-crossing note this design answers, and to `agent-docs/tessellation-design.md` ("tessellation §N"), whose
-§7 restatement refusal it lifts for a refined body. Increments R1–R5 (§9) implement it; R6 is design only.
+§7 restatement refusal it lifts for a refined body. Increments R1–R6 (§9) implement it.
 
 ## 1. Problem
 
@@ -59,7 +59,9 @@ A held mesh after this design carries two readings:
 | surface bound `σ(f)` | every point of facet `f` lies within `σ(f)` of the true boundary, and every true boundary point whose nearest held point lies on `f` lies within `σ(f)` of it | `Mesh.Bound()` and `sourceBound` of a public `Tessellate`, and the §7 refusal |
 
 `σ(f) ≤ δ(f)` always holds, because `δ(f)` already proves both directions. Only `Refine` writes `σ`. The next
-Boolean keeps reading the crossing record, which stays sound and only stays as loose as today (§9 R6).
+Boolean reads `σ` as the facet's slab half-width, raised by any gap shift's move, for its rim composition and its
+chain-depth gate: a slab only states where the true boundary near the facet lies, which `σ` proves (§9 R6). Vertex
+bounds keep the crossing record, so every reading of the result's older rims stays as loose as before.
 
 ## 4. Input class
 
@@ -245,7 +247,7 @@ landing at the top of the interval is expected, because every leaf is inscribed.
 | R3 | `Refine`, surface restatement below the crossing floor, docs, example, apitest: four bent chains (a right-angle pair, an oblique zigzag, four bends at r = 0.5, the six-span leader) with volume against §8's closed form | before `Refine`, the leader's `Tessellate` at 0.12 mm refuses |
 | R4 | `Cut` by extruded-circle tools: holes, inscribed tool pieces, tool facets bulging by their own bound, the widened re-gate, shared holes in a Union of two cut halves | a bored bend (two thick legs, two Cuts) refuses `Tessellate` at 0.05 mm before `Refine` and meets 0.01 mm after |
 | R5 | revolved and swept circle tubes: per-cell outer pieces, the sign-aware tube poke, per-facet bulges with crossing sites read per contact | a straight wire and a swept cord, each leaving a ring, meet 0.05 mm; an outer-equator facet barely pokes, an inner one at least as far as its edge midpoint, and a facet past a partial arc falls back to its bound |
-| R6 | the next Boolean reads `σ` as its slab half-width | — |
+| R6 | the next Boolean reads `σ` as its slab half-width when the restated mesh is the held one | under a 0.02 mm chain tolerance the leader's fold refuses at its third Union, and completes when each held step is refined first |
 
 ### Gallery parts on the scratch merge with PR 3022
 
@@ -266,13 +268,39 @@ test passes. The full default test asks `footman` for 0.01 mm. Footman is a rect
 two cylinders, and now carries a record. But its held mesh was chorded at its 476 mm pair's tolerance, so its leaf
 bounds are already 0.009 mm. Its bore rims add a crossing depth of 0.025 mm, and its true-to-held side reaches
 0.0335 mm. Refine therefore refuses 0.01 mm there: no re-certification goes below the held chords, and only a
-finer re-tessellation of its history can. At 0.05 mm the facet search refuses: some held facet piece finds no
-translation within 0.05 mm that clears every outer piece or lands inside a hole's inner piece.
+finer re-tessellation of its history can.
+
+At 0.05 mm the facet search used to refuse. The failing pieces sat on the 2.2 mm hole's wall where the socket
+crosses it, and only a move into the hole's inner piece certifies them. Three fixes let it pass:
+
+- Every split piece reads its candidate directions again, from its own centroid.
+- A piece also tries the moves into a near inner piece, across one face or two at once.
+- A stack's hole that runs through joined slabs becomes one hole leaf, so a wall facet that spans the slab
+  interface sits inside one hole.
+
+Footman now refines at 0.05 mm and refuses 0.01 mm at its floor of 0.0245 mm.
+
+No generic re-mesh without a replay reaches 0.01 mm. Splitting a held facet keeps it on the same plane. A finer
+mesh needs new vertices on the true crossing of the socket and the hole, which means running the Cut again. A
+split construction in Gallery (a short socketed end piece joined to the bar) fails at the joining Union: the butt
+faces lie in one plane, and the proximity gate refuses them. The pair chord is `2e-5` times the pair box diameter,
+so the floor `δ(1 + 2/sin)` meets 0.01 mm only if the box shrinks from about 450 mm to 130 mm. A scratch run
+chorded a Cut's fresh operands by the diameter of the operands' box overlap instead, and kept the pair tolerance
+for held operands and the chain gate. Footman then passed its 0.01 mm check. The default test then stopped in
+`Verify` at the planar relation work limit, and took 149 s against about 65 s. The same rule on Unions also asks
+a yarn hook's revolve for more than 65536 facets.
 
 The four Gallery variants (small-seven, large-nine, twelve, small-seventeen) stop earlier, while the yarn leader is
 still being built. The chain-depth gate refuses a Union because an operand's crossing bound is 0.20–0.36 mm where
-the pair meets, above the document's 0.1 mm chain tolerance. `Refine` runs only after the fold, so it cannot help
-there; R6, the next Boolean reading `σ`, is what would.
+the pair meets, above the document's 0.1 mm chain tolerance. With R6, and the leader refining each held step at
+0.1 mm before the next Union, three variants get past the leader:
+
+| Variant | First failure |
+|---|---|
+| small-seven | `head-leg` Cut: the proximity gate cannot decide held facets within the chord tolerance |
+| large-nine | `yarn-leader` Union: the same proximity refusal |
+| twelve | `treadle-heel-rail` Cut: the same proximity refusal |
+| small-seventeen | `brake-spring-left` Union: the revolve facet contact audit hits its work ceiling |
 
 **Gap-shift retries.** When an ordinary Union meets an isolated point touch, Decad retries with a gap shift. The
 retry moves the second operand's held mesh by at most a measured displacement and leaves the true operand where it
@@ -293,7 +321,7 @@ unbuilt.
   but `MeshBounds` still reads whole facets.
 - The arc tube reading and the cylinder fast path are float with charged margins, not exact rational proofs (§4).
 - A chain must first survive its own folds. The chain-depth gate (vertex-bounds §5) still reads the crossing
-  bounds, so a thicker or shorter-span chain can be refused mid-fold before `Refine` is reachable. R6 lifts that.
+  bounds unless an operand was refined, so a chain must call `Refine` between folds to use R6.
 - Tracking costs every ordinary Union and Cut of tracked operands a bulge pass, and sometimes a second pre-pass.
   The Gallery default Build takes 60.6 s with tracking against 37.7 s without.
 - Coil facets bound no poke of their own: each keeps its own two-sided bound as its bulge.
