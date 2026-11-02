@@ -2,6 +2,7 @@ package compositesweep_test
 
 import (
 	"fmt"
+	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -11,6 +12,7 @@ import (
 
 // legacyCrossSpanContactAudit is the all-pairs walk CrossSpanContactAudit
 // replaces, kept as the reference its differential test compares against.
+// It refuses a mesh whose total pair count passes the fixed ceiling.
 func legacyCrossSpanContactAudit(budget *proofbound.WorkBudget, data []revolvemesh.RevolveAuditTri,
 	triangles [][3]int, spanOf []int, delta float64) error {
 	if len(data) != len(triangles) || len(spanOf) != len(triangles) {
@@ -24,6 +26,18 @@ func legacyCrossSpanContactAudit(budget *proofbound.WorkBudget, data []revolveme
 		}
 		return err
 	}
+	return allPairsCrossSpanWalk(budget, data, triangles, spanOf, delta)
+}
+
+// ungatedCrossSpanContactAudit is the all-pairs walk with no pair-count gate:
+// the verdict a mesh past the ceiling would get if every pair were tested.
+func ungatedCrossSpanContactAudit(t *testing.T, m spanMesh, delta float64) error {
+	t.Helper()
+	return allPairsCrossSpanWalk(proofbound.NewWorkBudget(t.Context()), m.data, m.tris, m.spanOf, delta)
+}
+
+func allPairsCrossSpanWalk(budget *proofbound.WorkBudget, data []revolvemesh.RevolveAuditTri,
+	triangles [][3]int, spanOf []int, delta float64) error {
 	margin := proofbound.ProductUpper(2, delta)
 	for i := range triangles {
 		for j := i + 1; j < len(triangles); j++ {
