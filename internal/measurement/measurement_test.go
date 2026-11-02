@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
-// TestExactnessOf pins the rule root exactnessOf applied before it moved: a
-// value is Exact only when its proven bound is exactly zero, so a negative
+// TestExactnessOf reports Exact only when its proven bound is exactly zero, so a negative
 // zero is Exact and a NaN, an infinity or any positive bound is Approximate.
 func TestExactnessOf(t *testing.T) {
 	t.Parallel()
@@ -31,6 +31,16 @@ func TestExactnessOf(t *testing.T) {
 			require.Equal(t, tc.want, measurement.ExactnessOf(tc.bound))
 		})
 	}
+}
+
+func TestCubicMillimeters(t *testing.T) {
+	t.Parallel()
+
+	require.Equal(t, measurement.Measurement{
+		Value:     units.CubicMillimeters(12.5),
+		Exactness: measurement.Approximate,
+		Bound:     units.CubicMillimeters(0.25),
+	}, measurement.CubicMillimeters(12.5, 0.25))
 }
 
 // TestFiniteValues pins the finiteness gate: every value must be neither NaN

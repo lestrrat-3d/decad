@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -102,7 +103,7 @@ func pointPlaneCapCentroidThreeMomentReference(ctx context.Context, base faceted
 	if proofbound.IsNonFinite(bound) {
 		return VecMeasurement{}, center, false, nil
 	}
-	return VecMeasurement{Value: value, Exactness: exactnessOf(bound),
+	return VecMeasurement{Value: value, Exactness: measurement.ExactnessOf(bound),
 		Bound: units.Millimeters(bound)}, center, true, nil
 }
 

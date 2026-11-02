@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/lestrrat-3d/decad/internal/booleaneval"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
-	"github.com/lestrrat-3d/units"
 )
 
 // evaluateBooleanMeshes runs the mesh-boolean pipeline
@@ -22,31 +22,6 @@ func evaluateBooleanMeshes(ctx context.Context, op meshbool.OperationKind, a, b 
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
-	return booleanEvaluation{payload: ev.Payload, volume: volumeMeasurement(ev.Volume, ev.VolumeBound),
+	return booleanEvaluation{payload: ev.Payload, volume: measurement.CubicMillimeters(ev.Volume, ev.VolumeBound),
 		volumeRat: ev.VolumeRat, audit: ev.Audit}, nil
-}
-
-func volumeMeasurement(value, bound float64) Measurement {
-	return Measurement{
-		Value:     units.CubicMillimeters(value),
-		Exactness: exactnessOf(bound),
-		Bound:     units.CubicMillimeters(bound),
-	}
-}
-
-// exactnessOf keys a measurement's exactness off its proven bound: zero is the
-// truth, anything else is Approximate.
-//
-// A zero bound is therefore a CLAIM that the reported value is exactly
-// representable — and only a value proven so may reach it: analytic features
-// with explicit rational/error evaluation, and boolean rational integrals
-// carrying their own rounding term. A value a float loop COMPUTED is never among
-// them: its bound comes from internal/proofbound/bounds.go, whose helpers are never zero for a
-// nonzero float-computed quantity (proofbound.SumSlop, proofbound.ChainLengthBound), so it can never
-// arrive here claiming Exact.
-func exactnessOf(bound float64) Exactness {
-	if bound == 0 {
-		return Exact
-	}
-	return Approximate
 }

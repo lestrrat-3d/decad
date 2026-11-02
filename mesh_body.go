@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/meshbody"
 	"github.com/lestrrat-3d/decad/internal/pointquery"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -133,7 +134,7 @@ func (m *MeshBody) Area() (Measurement, error) {
 		return Measurement{}, fmt.Errorf(`%w: the mesh area is not representable`, ErrNotFinite)
 	}
 	return Measurement{Value: units.SquareMillimeters(value), Bound: units.SquareMillimeters(bound),
-		Exactness: exactnessOfBound(bound)}, nil
+		Exactness: measurement.ExactnessOf(bound)}, nil
 }
 
 // Volume returns the volume the mesh encloses. It is ErrNotSolid unless the
@@ -154,15 +155,7 @@ func (m *MeshBody) Volume() (Measurement, error) {
 		return Measurement{}, fmt.Errorf(`%w: the mesh volume is not representable`, ErrNotFinite)
 	}
 	return Measurement{Value: units.CubicMillimeters(value), Bound: units.CubicMillimeters(bound),
-		Exactness: exactnessOfBound(bound)}, nil
-}
-
-// exactnessOfBound is Exact for a zero bound and Approximate otherwise.
-func exactnessOfBound(bound float64) Exactness {
-	if bound == 0 {
-		return Exact
-	}
-	return Approximate
+		Exactness: measurement.ExactnessOf(bound)}, nil
 }
 
 // held returns the mesh as the exact held mesh the point queries read: its
