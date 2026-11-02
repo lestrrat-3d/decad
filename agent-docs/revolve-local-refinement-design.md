@@ -19,7 +19,7 @@ centreline (`apitest/revolve_local_refinement_test.go`):
 |---|---|---|---|
 | 300° | 347 | 129 452 | refused, per-mesh ceiling |
 | 180° | 228 | 93 886 | refused, per-mesh ceiling |
-| 60° | 84 → 90 | 38 246 per attempt | refused, cumulative `maxFacetWorkPerCall` after seven attempts |
+| 60° | 84 | 38 246 | refused, facet-pair audit ceiling (`maxFacetPairTestsPerCall`) |
 | 20° | 30 | 14 814 | succeeds |
 
 Facets scale as 1/tolerance, so the 300° arc at the pair tolerance is about twice the ceiling before any
@@ -28,20 +28,30 @@ refinement near a contact.
 ## 2. Decision that changes a guarantee
 
 Non-uniform stations cannot reduce the facet count of a region that must keep the pair tolerance. To fit the
-ceiling, a revolve operand is meshed in two regions:
+ceiling, a revolve meshed as a BOOLEAN OPERAND is chorded in two regions:
 
-- the **contact window**, where the operand may touch its partner, at the pair tolerance;
-- the **rest**, at the pair tolerance raised by a power of two (`τ_far = 2^k · τ_pair`, the smallest `k` whose
-  facet count fits the ceilings).
+- the **contact window**, where the operand may touch its partner, at the pair tolerance `τ_pair`;
+- the **rest**, at `τ_far = 2^k · τ_pair`, for the smallest `k` whose facet count fits the ceilings.
 
-The rest is therefore chorded more coarsely than the pair tolerance. Today's rule in
-`agent-docs/tessellation-design.md` §3, "a requested tolerance is an upper bound on chording", would be false
-for those facets. The rule is replaced by: **a requested tolerance bounds the chording of every facet within the
-contact window; every other facet carries its own proven bound, never above `τ_far`.** The proof record already
-carries a per-face bound (§2 table, "max per-face source bound"); nothing reads a mesh-wide chord as a claim
-beyond what each face reports.
+Scope and limits:
 
-This decision needs the user's confirmation before stage 4 lands. Stages 1–3 change no guarantee.
+1. The coarser chording applies only to a boolean's internal operand chord (`meshbool.OperandChord` and its
+   callers). `Body.Tessellate(tol)` keeps `agent-docs/tessellation-design.md` §1 and §3 unchanged, including
+   "a refinement may NEVER coarsen". §3 gains the words "boolean operand chording" where it states that a
+   requested tolerance bounds chording.
+2. `k` is capped by a fixed constant, `k ≤ 3` (so `τ_far ≤ 8 · τ_pair`). A plan needing more refuses with
+   `ErrUnsupported`. A caller cannot set the cap.
+3. The window test inflates both boxes by `τ_far`, so a facet whose chording could reach across the gap is
+   inside the window.
+4. A revolve mesh publishes no per-vertex bound. The face bound `sourceBound(face)` of a revolve wall is
+   therefore `τ_far` over the WHOLE face, window included, and every downstream figure that reads it — rim
+   bound, hidden-tangency slack, result vertex bounds, `Mesh.Bound()` — reads that figure. This document does
+   not claim window facets carry `τ_pair` in any published bound. Publishing a per-vertex revolve bound is a
+   separate increment, outside S1–S5.
+
+The guarantee that changes is therefore: a boolean over a revolve whose pair tolerance would exceed the ceilings
+reports bounds up to 8x the pair tolerance on that operand's walls, and no other path does. This decision needs
+the user's confirmation before S4 lands. S1–S3 change no guarantee.
 
 ## 3. Shared angular stations
 
@@ -99,12 +109,12 @@ instead of incrementing one global count.
 
 ## 6. Refinement work
 
-Today a retry raises `nPhi` by one, and each attempt charges its whole facet count to
-`maxFacetWorkPerCall`. Seven attempts at 38 000 facets exhaust the 262 144 ceiling. Retry steps change in two
-ways, with no ceiling changed:
+A facet-pair audit that exceeds its work ceiling is final. Refining on it only adds facets and pair tests, and
+each retry charges its whole mesh to the cumulative `maxFacetWorkPerCall` again; the refusal a caller then read
+was that facet ceiling, not the audit's. `tessellateRevolve` returns the audit's own refusal at once.
 
-- an angular failure bisects the failing interval's base interval rather than adding one global station;
-- the cumulative charge stays the sum of what every attempt asked for, as §3 requires.
+An angular failure the audit can still answer (a crossing or an undecided contact) bisects the failing base
+interval once §3's plan exists, rather than adding one global station.
 
 ## 7. Contact audit
 
@@ -118,10 +128,10 @@ Each increment passes its own tests and relaxes no ceiling.
 
 | Stage | Lands | Guarantee changed |
 |---|---|---|
-| S1 | Bisecting refinement retries (§6). The 60° repro succeeds. | none |
+| S1 | An audit work-ceiling refusal is returned at once (§6). The 60° repro reports the audit ceiling. | none |
 | S2 | Station-list angular plan; uniform plan bit-identical (§3, §4 rows for triangles, caps, preflight). | none |
-| S3 | Per-interval area slack, swept volume and homotopy factor (§4). Tests compare a hand-built non-uniform plan against the exact volume and area of the true solid. | none |
-| S4 | Planner with a contact window and `τ_far` (§5), wired into the boolean's operand chord. | §2 |
+| S3 | Bisecting angular retries (§6). Per-interval area slack, swept volume and homotopy factor (§4). Tests compare a hand-built non-uniform plan against the exact volume and area of the true solid. | none |
+| S4 | Planner with a contact window and `τ_far` (§5), wired into the boolean's operand chord; face bounds per §2.4. Needs S3. | §2 |
 | S5 | Contact audit reads the windowed facet set (§7). The 300° repro and the Gallery yarn hook succeed. | none |
 
 ## 9. Test obligations
@@ -132,6 +142,6 @@ Each increment passes its own tests and relaxes no ceiling.
   interval.
 - Every fixture is shown to fail first: remove the per-interval step from one sum and the volume test goes
   red.
-- The torus-plus-stem repro at 300°, 180° and 60° succeeds, and its union volume matches the analytic value
-  within the reported bound.
+- The torus-plus-stem repro at 300° succeeds, and its union volume matches the analytic value within the
+  reported bound. S3's per-interval proofs land and pass before S4 is wired in.
 - No test pins a `Bound` literal; bounds differ between amd64 and arm64.

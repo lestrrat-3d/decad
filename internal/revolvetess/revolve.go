@@ -520,7 +520,11 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*topo.Mesh, error) {
 			// angular sequence can still answer, and §3 makes the global count the
 			// thing an angular failure increments. A canceled context or an
 			// exhausted work budget is not that failure and is returned unchanged.
-			if !errors.Is(err, decaderr.ErrUnsupported) {
+			// A work-ceiling refusal is likewise final: a finer sequence only
+			// adds facets and pair tests, and each retry would charge its
+			// whole mesh to the cumulative facet ceiling again.
+			var limit *proofbound.WorkLimitError
+			if !errors.Is(err, decaderr.ErrUnsupported) || errors.As(err, &limit) {
 				return nil, err
 			}
 			return nil, &revolveRefineError{err: err, retry: revolveplan.Refinement{Loop: -1}}
