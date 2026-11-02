@@ -1196,6 +1196,9 @@ prism inputs enter the two-body evaluator in source order after the
 specialized multi-body classes miss. Each intermediate result stays
 transient; the final result commits only if every pair passes its proof.
 A pair can still return `ErrUnsupported`.
+For exactly three source operands, the second pair's coarse-held-first-operand
+refusal permits the alternate grouping in prism-boolean §4.7. Its ordinary
+proofs and single public operation still apply.
 
 The bounded mirrored-Loft class accepts one exact centered circular prism
 and up to thirty-two copies of an authenticated three-station reflected Loft

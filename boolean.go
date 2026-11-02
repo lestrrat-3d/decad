@@ -40,6 +40,8 @@ import (
 // same-placement, hole-free whole-line prisms with distinct source line
 // carriers, plus certified straight bevel tooth patterns. Other
 // prism inputs use the two-body evaluator in order, with one final commit.
+// A three-source chain whose second pair refuses on its first operand's held
+// bound can try the other grouping (prism-boolean §4.7).
 // Each pair must pass its own proof. Failure or cancellation leaves every
 // input live. A two-body result from the mesh path is a Faceted body:
 // its faces are grouped by the operands' source faces, so provenance
