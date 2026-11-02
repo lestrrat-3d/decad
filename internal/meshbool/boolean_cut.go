@@ -866,7 +866,7 @@ func (tc *TriCutter) RegionOf(poly []int, chainEdges map[[2]int]ChainAnchor) (Cu
 	if len(tris2) == 0 {
 		return CutRegion{}, fmt.Errorf(`%w: a region triangulated to nothing`, decaderr.ErrBooleanFailed)
 	}
-	reg := CutRegion{}
+	reg := CutRegion{Tris: make([][3]proof.Xpt, 0, len(tris2))}
 	for _, t := range tris2 {
 		if err := tc.Work.Step(); err != nil {
 			return CutRegion{}, err
