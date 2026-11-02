@@ -151,3 +151,51 @@ func TestPointInFacetBoxPrefilterKeepsAnswers(t *testing.T) {
 	require.Positive(t, inside, "premise: some points lie in their triangle")
 	require.Positive(t, outside, "premise: some points miss their triangle")
 }
+
+// TestFacetsAtKeepsEveryHoldingTriangle holds the fan lookup to the linear
+// scan it replaces: at corners, edge midpoints and face points of a finely
+// split box, the triangles pointInFacetBoxed accepts from facetsAt's list are
+// those it accepts from every triangle, and the list is shorter.
+//
+// Leg shown to fail: querying the tree with a box that keeps only the point's
+// lower corner drops triangles that reach the point from above.
+func TestFacetsAtKeepsEveryHoldingTriangle(t *testing.T) {
+	t.Parallel()
+	s := fineBox([3]proof.Dyadic{proof.DyZero(), proof.DyZero(), proof.DyZero()},
+		[3]proof.Dyadic{proof.DyInt(4), proof.DyInt(4), proof.DyInt(4)}, 4, proof.DyZero())
+	prep := preparePlanar(&s)
+	prep.floatBoxes()
+	half := proof.DyShift(proof.DyInt(1), -1)
+	var points []proof.DyV3
+	for _, v := range s.Verts {
+		points = append(points, v, proof.DvAdd(v, proof.DyV3{half, proof.DyZero(), proof.DyZero()}))
+	}
+	checked, shorter := 0, 0
+	for _, point := range points {
+		x := hpoint{x: point, w: proof.DyInt(1)}
+		xb, boxed := x.floatBox()
+		require.True(t, boxed)
+		var want []int
+		for tri := range s.Tris {
+			if pointInFacetBoxed(prep, tri, x, xb, boxed) {
+				want = append(want, tri)
+			}
+		}
+		listed := prep.facetsAt(xb, boxed)
+		var got []int
+		for _, tri := range listed {
+			if pointInFacetBoxed(prep, tri, x, xb, boxed) {
+				got = append(got, tri)
+			}
+		}
+		require.Equal(t, want, got)
+		if len(want) > 0 {
+			checked++
+		}
+		if len(listed) < len(s.Tris) {
+			shorter++
+		}
+	}
+	require.Positive(t, checked, "premise: some points lie on the boundary")
+	require.Equal(t, len(points), shorter, "every boxed lookup skips some triangles")
+}
