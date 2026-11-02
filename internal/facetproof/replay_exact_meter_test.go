@@ -19,7 +19,9 @@ func TestReplayExactMeterAtomicWork(t *testing.T) {
 		if err := b.SpendWork(ctx, proofbound.ReplayTrialWork-remaining); err != nil {
 			t.Fatal(err)
 		}
-		err := (replayExactMeter{b.WorkBudget(ctx)}).SpendWork(ctx, 19)
+		workBudget := b.WorkBudget(ctx)
+		workBudget.SpendWorkFn = func(n uint64) error { return b.SpendWork(ctx, n) }
+		err := (replayExactMeter{workBudget}).SpendWork(ctx, 19)
 		w, r := b.Usage()
 		if short {
 			var limit *proofbound.WorkLimitError
@@ -37,7 +39,9 @@ func TestReplayExactMeterAtomicWork(t *testing.T) {
 	ctx, cancel := context.WithCancel(ctx)
 	cancel()
 	b := proofbound.NewReplayTrialBudget()
-	err := (replayExactMeter{b.WorkBudget(ctx)}).SpendWork(ctx, 19)
+	workBudget := b.WorkBudget(ctx)
+	workBudget.SpendWorkFn = func(n uint64) error { return b.SpendWork(ctx, n) }
+	err := (replayExactMeter{workBudget}).SpendWork(ctx, 19)
 	w, r := b.Usage()
 	if !errors.Is(err, context.Canceled) || w != 0 || r != 0 || b.Bytes() != 0 {
 		t.Fatalf("cancellation work=%d err=%v", w, err)

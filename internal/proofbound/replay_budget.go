@@ -242,7 +242,6 @@ func (b *ReplayBudget) ReserveRecords(ctx context.Context, n uint64) error {
 func (b *ReplayBudget) WorkBudget(ctx context.Context) *WorkBudget {
 	b.shared.reserveBytes = b.ReserveBytes
 	work := b.shared.WorkBudget(ctx)
-	work.SpendWorkFn = func(n uint64) error { return b.SpendWork(ctx, n) }
 	work.Replay = true
 	work.ReplayID = b
 	return work
