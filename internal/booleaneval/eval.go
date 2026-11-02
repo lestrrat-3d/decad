@@ -148,7 +148,7 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if perr != nil {
 		return ev, err
 	}
-	mb, _, terr := meshes.TessellateOperand(ctx, b, operandChord(ctx, b, tolMM*chordScale, dPair, chordScale))
+	mb, _, terr := meshes.TessellateOperand(ctx, b, operandChord(ctx, b, tolMM*chordScale, chordDiameter(ctx, op, a, b, dPair), chordScale))
 	if terr != nil {
 		return ev, err
 	}
@@ -206,7 +206,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			return Evaluation{}, err
 		}
 	} else {
-		chordA = operandChord(ctx, a, tolMM, dPair, chordScale)
+		chordA = operandChord(ctx, a, tolMM, chordDiameter(ctx, op, a, b, dPair), chordScale)
 	}
 	ma, restatingA, err := meshes.TessellateOperand(ctx, a, chordA)
 	if err != nil {
@@ -230,7 +230,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			return Evaluation{}, err
 		}
 	} else {
-		chordB = operandChord(ctx, b, tolMM, dPair, chordScale)
+		chordB = operandChord(ctx, b, tolMM, chordDiameter(ctx, op, a, b, dPair), chordScale)
 	}
 	var mb *topo.Mesh
 	var restatingB bool

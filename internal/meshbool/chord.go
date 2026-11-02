@@ -38,6 +38,31 @@ func PairChordFrom(a, b ChordOperand) (tol, diameter float64, ok bool) {
 	return math.Max(diameter*ChordFactor, math.Max(a.Floor, b.Floor)), diameter, true
 }
 
+// OverlapChordRatio is how many times the pair's diameter must exceed its
+// operands' box overlap before a Cut chords its fresh operands by the overlap
+// (OverlapDiameter). A short tool at one end of a long bar passes it; a pair
+// whose operands mostly overlap keeps the pair's chord, and so its facet
+// counts and the work every later check spends on them.
+const OverlapChordRatio = 8
+
+// OverlapDiameter is the diameter of the two inflated boxes' common part, and
+// false when they share no volume. A Cut's operands are chorded by it: only
+// their common part can meet, so a short tool at one end of a long bar
+// chords the pair as finely as a short bar would. The pair's own tolerance,
+// and so every held operand's request and the chain-depth gate, still reads
+// the whole pair's diameter.
+func OverlapDiameter(a, b ChordOperand) (float64, bool) {
+	d := r3.Vec{
+		X: math.Min(a.Hi.X, b.Hi.X) - math.Max(a.Lo.X, b.Lo.X),
+		Y: math.Min(a.Hi.Y, b.Hi.Y) - math.Max(a.Lo.Y, b.Lo.Y),
+		Z: math.Min(a.Hi.Z, b.Hi.Z) - math.Max(a.Lo.Z, b.Lo.Z),
+	}
+	if !(d.X > 0 && d.Y > 0 && d.Z > 0) {
+		return 0, false
+	}
+	return d.Len(), true
+}
+
 // OperandChord is the chord tolerance one operand is requested at for a pair
 // whose own tolerance is pairTol. An operand that restates a held mesh takes
 // the pair's tolerance: its request only has to sit at or above its floor, and
