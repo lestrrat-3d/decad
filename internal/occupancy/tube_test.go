@@ -50,6 +50,8 @@ func TestArcTubeLeafPiecesContainTheTube(t *testing.T) {
 			t.Parallel()
 			leaf, err := occupancy.ArcTubeLeaf(o, w, e0, e1, radius, rho, tc.phi0, tc.phi1, tc.full, 0, 1e-4, 64, 0.01)
 			require.NoError(t, err)
+			pieces, err := leaf.Pieces()
+			require.NoError(t, err)
 			span := tc.phi1 - tc.phi0
 			if tc.full {
 				span = 2 * math.Pi
@@ -59,12 +61,12 @@ func TestArcTubeLeafPiecesContainTheTube(t *testing.T) {
 				for j := range 12 {
 					theta := 2 * math.Pi * float64(j) / 12
 					p := torusPoint(o, w, e0, e1, radius, rho*(1-1e-6), phi, theta)
-					require.True(t, insideSomePiece(t, p, leaf.Pieces), "true tube point at φ %v θ %v escaped every piece", phi, theta)
+					require.True(t, insideSomePiece(t, p, pieces), "true tube point at φ %v θ %v escaped every piece", phi, theta)
 				}
 			}
 			// A point well outside the tube lies in no piece.
 			out := torusPoint(o, w, e0, e1, radius, rho+0.01, tc.phi0+span/3, 1.0)
-			require.False(t, insideSomePiece(t, out, leaf.Pieces))
+			require.False(t, insideSomePiece(t, out, pieces))
 		})
 	}
 }

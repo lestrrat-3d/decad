@@ -19,7 +19,7 @@ import (
 // is widened by relSlack of its own magnitude plus the caller's slack, which
 // covers float evaluation many orders of magnitude over; it is a charged
 // allowance, not an exact proof, and the design says so.
-const relSlack = 1e-9
+const relSlack = 1e-12
 
 // maxArcCells bounds the outer pieces one arc leaf builds.
 const maxArcCells = 4096
@@ -61,18 +61,28 @@ func ArcTubeLeaf(o, w, e0, e1 r3.Vec, radius, rho, phi0, phi1 float64, full bool
 		s, c := math.Sincos(phi)
 		return o.Add(e0.Scale(radius * c)).Add(e1.Scale(radius * s))
 	}
-	pieces := make([]*Piece, 0, cells)
+	boxes := make([][2]r3.Vec, cells)
 	for k := range cells {
 		pa, pb := spine(phi0+float64(k)*d), spine(phi0+float64(k+1)*d)
-		piece, err := SegmentTube(pa, pb, w, tubeR, ext, sides)
-		if err != nil {
-			return Leaf{}, err
+		// The piece reaches at most tubeR/cos(π/sides) < 2·tubeR from its
+		// chord, and ext past either end.
+		boxes[k] = cellBox(pa, pb, 2*tubeR+ext)
+	}
+	build := func() ([]*Piece, error) {
+		pieces := make([]*Piece, 0, cells)
+		for k := range cells {
+			pa, pb := spine(phi0+float64(k)*d), spine(phi0+float64(k+1)*d)
+			piece, err := SegmentTube(pa, pb, w, tubeR, ext, sides)
+			if err != nil {
+				return nil, err
+			}
+			pieces = append(pieces, piece)
 		}
-		pieces = append(pieces, piece)
+		return pieces, nil
 	}
 	sh := torusShape{o: o, w: w, e0: e0, e1: e1, radius: radius, rho: rho, phi0: phi0, phi1: phi1,
 		full: full || span >= 2*math.Pi, pad: pad}
-	return newLeaf(pieces, delta, sh), nil
+	return newLeaf(boxes, build, delta, sh), nil
 }
 
 // SegmentTube is the circumscribed prism of radius r about the segment a→b,

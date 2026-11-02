@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"sync"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -15,10 +16,16 @@ import (
 // shape that bounds how far a held facet can poke out of it, and Delta, the
 // published two-sided bound of the held mesh the Boolean used (C ⊂ A'^{+Delta}).
 type Leaf struct {
-	Pieces []*Piece
-	Delta  float64
-	shape  shape
-	box    [2]r3.Vec
+	Delta float64
+	shape shape
+	box   [2]r3.Vec
+	// cells are float boxes, each containing one outer piece (and so the
+	// part of the true solid that piece covers), for nearness readings.
+	cells [][2]r3.Vec
+	// pieces builds the exact outer pieces on first use: only the certificate
+	// reads them, so a Boolean that only composes the record never pays for
+	// their rational construction.
+	pieces *lazyPieces
 	// operand names the one held mesh this leaf came in with: leaves of one
 	// operand (a composite sweep's spans) share it, and their joins are not
 	// crossings of two Boolean operands.
@@ -139,13 +146,32 @@ func (r *Record) MeshBounds(bulges []float64) Bounds {
 	}
 }
 
-// Pieces returns every leaf's outer pieces.
-func (r *Record) Pieces() []*Piece {
+// Pieces returns every leaf's outer pieces, building them on first use.
+func (r *Record) Pieces() ([]*Piece, error) {
 	var out []*Piece
 	for _, l := range r.Leaves {
-		out = append(out, l.Pieces...)
+		p, err := l.pieces.get()
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p...)
 	}
-	return out
+	return out, nil
+}
+
+// Pieces returns the leaf's outer pieces, building them on first use.
+func (l Leaf) Pieces() ([]*Piece, error) { return l.pieces.get() }
+
+type lazyPieces struct {
+	once  sync.Once
+	build func() ([]*Piece, error)
+	out   []*Piece
+	err   error
+}
+
+func (z *lazyPieces) get() ([]*Piece, error) {
+	z.once.Do(func() { z.out, z.err = z.build() })
+	return z.out, z.err
 }
 
 // near reports whether the box (lo, hi) comes within pad of one of the leaf's
@@ -155,23 +181,34 @@ func (l Leaf) near(lo, hi r3.Vec, pad float64) bool {
 	if !boxesNear(lo, hi, l.box, pad) {
 		return false
 	}
-	for _, p := range l.Pieces {
-		if boxesNear(lo, hi, p.box, pad) {
+	for _, c := range l.cells {
+		if boxesNear(lo, hi, c, pad) {
 			return true
 		}
 	}
 	return false
 }
 
-func newLeaf(pieces []*Piece, delta float64, s shape) Leaf {
-	box := pieces[0].box
-	for _, p := range pieces[1:] {
+func newLeaf(cells [][2]r3.Vec, build func() ([]*Piece, error), delta float64, s shape) Leaf {
+	box := cells[0]
+	for _, c := range cells[1:] {
 		box = [2]r3.Vec{
-			{X: math.Min(box[0].X, p.box[0].X), Y: math.Min(box[0].Y, p.box[0].Y), Z: math.Min(box[0].Z, p.box[0].Z)},
-			{X: math.Max(box[1].X, p.box[1].X), Y: math.Max(box[1].Y, p.box[1].Y), Z: math.Max(box[1].Z, p.box[1].Z)},
+			{X: math.Min(box[0].X, c[0].X), Y: math.Min(box[0].Y, c[0].Y), Z: math.Min(box[0].Z, c[0].Z)},
+			{X: math.Max(box[1].X, c[1].X), Y: math.Max(box[1].Y, c[1].Y), Z: math.Max(box[1].Z, c[1].Z)},
 		}
 	}
-	return Leaf{Pieces: pieces, Delta: delta, shape: s, box: box}
+	return Leaf{Delta: delta, shape: s, box: box, cells: cells, pieces: &lazyPieces{build: build}}
+}
+
+// cellBox is a float box around the points within r of the segment a→b,
+// widened by relSlack of its own size so it holds the exact piece built about
+// that segment.
+func cellBox(a, b r3.Vec, r float64) [2]r3.Vec {
+	pad := r + relSlack*(a.Len()+b.Len()+r)
+	return [2]r3.Vec{
+		{X: math.Min(a.X, b.X) - pad, Y: math.Min(a.Y, b.Y) - pad, Z: math.Min(a.Z, b.Z) - pad},
+		{X: math.Max(a.X, b.X) + pad, Y: math.Max(a.Y, b.Y) + pad, Z: math.Max(a.Z, b.Z) + pad},
+	}
 }
 
 // CircleLeaf builds the leaf of the solid cylinder that place maps from
@@ -187,26 +224,43 @@ func CircleLeaf(place Chain, cu, cv, r, z0, z1, sectionDelta, dz0, dz1, slack fl
 		return Leaf{}, fmt.Errorf("%w: circle leaf displacement", ErrInvalid)
 	}
 	shifted := append(Chain{{M: [3][3]float64{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}, T: [3]float64{cu, cv, 0}}}, place...)
-	piece, err := CirclePrism(shifted,
-		proofbound.AbsSumUpper(r, sectionDelta, slack),
-		z0-proofbound.AbsSumUpper(dz0, slack), z1+proofbound.AbsSumUpper(dz1, slack), sides)
-	if err != nil {
-		return Leaf{}, err
-	}
+	outer := proofbound.AbsSumUpper(r, sectionDelta, slack)
+	lo, hi := z0-proofbound.AbsSumUpper(dz0, slack), z1+proofbound.AbsSumUpper(dz1, slack)
 	cyl, err := newCylinderShape(shifted, r, z0, z1, proofbound.AbsSumUpper(sectionDelta, dz0, dz1))
 	if err != nil {
 		return Leaf{}, err
 	}
-	return newLeaf([]*Piece{piece}, delta, cyl), nil
+	// The circumscribed polygon reaches at most outer/cos(π/sides) < 2·outer
+	// from the axis.
+	a, b := shifted.applyFloat(r3.Vec{Z: lo}), shifted.applyFloat(r3.Vec{Z: hi})
+	cells := [][2]r3.Vec{cellBox(a, b, 2*outer*cyl.stretch)}
+	build := func() ([]*Piece, error) {
+		p, err := CirclePrism(shifted, outer, lo, hi, sides)
+		if err != nil {
+			return nil, err
+		}
+		return []*Piece{p}, nil
+	}
+	return newLeaf(cells, build, delta, cyl), nil
+}
+
+func (c Chain) applyFloat(v r3.Vec) r3.Vec {
+	for _, a := range c {
+		v = a.applyFloat(v)
+	}
+	return v
 }
 
 // cylinderShape reads how far a held triangle pokes out of a placed solid
 // cylinder: each corner is taken back to local coordinates exactly, its radial
 // and axial excess bounded from above, and the local excess stretched by the
 // maps' Frobenius norms. Both excesses are convex functions, so the largest
-// corner reading bounds the whole triangle.
+// corner reading bounds the whole triangle. A corner the float inverse places
+// well inside skips the exact reading; the float residue it could carry is
+// far below the margin it is tested against.
 type cylinderShape struct {
 	inv          []exactAffine
+	finv         []Affine
 	stretch      float64
 	r, z0, z1    float64
 	displacement float64
@@ -214,6 +268,7 @@ type cylinderShape struct {
 
 func newCylinderShape(place Chain, r, z0, z1, displacement float64) (cylinderShape, error) {
 	inv := make([]exactAffine, len(place))
+	finv := make([]Affine, len(place))
 	stretch := 1.0
 	for i, a := range place {
 		e, err := invert(a)
@@ -221,6 +276,7 @@ func newCylinderShape(place Chain, r, z0, z1, displacement float64) (cylinderSha
 			return cylinderShape{}, err
 		}
 		inv[len(place)-1-i] = e
+		finv[len(place)-1-i] = e.float()
 		f := 0.0
 		for _, row := range a.M {
 			for _, x := range row {
@@ -229,7 +285,7 @@ func newCylinderShape(place Chain, r, z0, z1, displacement float64) (cylinderSha
 		}
 		stretch = proofbound.UpRound(stretch * proofbound.UpRound(math.Sqrt(proofbound.UpRound(f))*(1+1e-15)))
 	}
-	return cylinderShape{inv: inv, stretch: stretch, r: r, z0: z0, z1: z1, displacement: displacement}, nil
+	return cylinderShape{inv: inv, finv: finv, stretch: stretch, r: r, z0: z0, z1: z1, displacement: displacement}, nil
 }
 
 func (c cylinderShape) poke(tri [3]r3.Vec) float64 {
@@ -237,6 +293,16 @@ func (c cylinderShape) poke(tri [3]r3.Vec) float64 {
 	twoR := new(big.Rat).Mul(big.NewRat(2, 1), ratOf(c.r))
 	worst := 0.0
 	for _, w := range tri {
+		f := w
+		for _, a := range c.finv {
+			f = a.applyFloat(f)
+		}
+		// A corner the float reading puts inside by more than 1e-6 of the
+		// section's size cannot be outside: float evaluation errs by far less.
+		margin := 1e-6 * (c.r + math.Abs(c.z0) + math.Abs(c.z1) + w.Len())
+		if math.Hypot(f.X, f.Y) < c.r-margin && f.Z > c.z0+margin && f.Z < c.z1-margin {
+			continue
+		}
 		p := xvecOf(w)
 		for _, e := range c.inv {
 			p = e.apply(p)

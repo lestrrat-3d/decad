@@ -110,7 +110,11 @@ func refineSurfaceBounds(ctx context.Context, fp facetedPayload, target float64)
 			want = append(want, t)
 		}
 	}
-	h, err := occupancy.Certify(ctx, fp.Verts, fp.Tris, want, rec.Pieces(),
+	pieces, err := rec.Pieces()
+	if err != nil {
+		return nil, fmt.Errorf(`%w: %w`, ErrUnsupported, err)
+	}
+	h, err := occupancy.Certify(ctx, fp.Verts, fp.Tris, want, pieces,
 		occupancy.Search{H0: max(floor, target/64), HMax: target, Step: 1.25, MaxDepth: 24},
 		&occupancy.Budget{Limit: refineWorkLimit})
 	if err != nil {
