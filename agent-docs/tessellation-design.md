@@ -504,6 +504,9 @@ maxFacetPairTestsPerCall = 8_000_000
 and every refinement retry. `maxFacetPairTestsPerCall` counts each revolve
 candidate-sweep visit and reserves one step for every candidate pair it may
 test across refinement attempts. Neither counter resets during refinement.
+A composite sweep's cross-span audit charges the same ceiling the same way:
+its sweep visits plus the cross-span candidate pairs it keeps
+(`agent-docs/sweep-design.md` §10).
 
 Before building any slice, derive the candidate facet count from every walk's
 chord count and the global angular count with checked integer arithmetic. Refuse
