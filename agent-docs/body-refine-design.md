@@ -316,9 +316,15 @@ the pair meets, above the document's 0.1 mm chain tolerance. With R6, and the le
 | Variant | First failure |
 |---|---|
 | small-seven | `head-leg` Cut: the proximity gate cannot decide held facets within the chord tolerance |
-| large-nine | `yarn-leader` Union: the same proximity refusal |
-| twelve | `treadle-heel-rail` Cut: the same proximity refusal |
+| large-nine | `yarn-leader` Union: every parity ray is ambiguous |
+| twelve | `mother-upper-bar` Cut: rounding folds the held mesh through itself |
 | small-seventeen | `brake-spring-left` Union: the revolve facet contact audit hits its work ceiling |
+
+The large-nine proximity refusal cleared once the gate read refined face bounds; the leader's held face bound was
+0.362 mm there. Twelve used to fail later, at the `treadle-heel-rail` Cut. The overlap chord meshes the bar's first
+seat pass (a box and a tilted bore) more finely. A later pass then restates that finer mesh and folds, and the
+fallback to the pair's chord cannot undo the earlier pass. In small-seven the leg's planar end face carries a
+0.0137 mm face bound, the chord of its heel hole, against a rail face that crosses it.
 
 **Gap-shift retries.** When an ordinary Union meets an isolated point touch, Decad retries with a gap shift. The
 retry moves the second operand's held mesh by at most a measured displacement and leaves the true operand where it
