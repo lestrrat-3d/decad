@@ -37,4 +37,5 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/dxf-export-design.md` | `export.DXF`: feature-edge projection, hidden-line runs and the release-12 file. |
 | `agent-docs/png-export-design.md` | `export.PNG` and `export.PNGBodies`: the orthographic flat-shaded renderer, its camera and shading rules. |
 | `agent-docs/boolean-chain-regroup-design.md` | Rebuilding a refused two-body Boolean from the source bodies its history names: admitted set identities, plan, fallback and fixtures. |
+| `agent-docs/boolean-continuation-design.md` | Certified source-expression continuation after an accepted geometry adjustment; set rewrites, materialization, bounds and staged proofs. |
 | `agent-docs/trim-graph-design.md` | General modify reach over retained analytic faces: trim graph, offsets, certified curves, face meshing, gates, increments. |

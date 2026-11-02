@@ -8,24 +8,22 @@
 # A new test that has not been measured goes in the last numbered shard, never
 # in the lightest shard. Rebalance only from measured costs.
 #
-# Shard totals at the last measurement:
-#   shard 0:  396.54s over 1 tests
-#   shard 1:   19.00s over 18 tests
-#   shard 2:   28.45s over 28 tests
+# Shard totals from retained tests' last measurements:
+#   shard 0:    0.00s over 1 tests
+#   shard 1:   19.00s over 16 tests
+#   shard 2:   28.44s over 26 tests
 #   shard 3:   56.32s over 31 tests
 #   shard 4:   44.51s over 29 tests
-#   shard 5:   29.36s over 31 tests
-#   shard 6:   23.38s over 29 tests
+#   shard 5:   24.80s over 29 tests
+#   shard 6:   19.37s over 27 tests
 #   shard 7:   25.13s over 29 tests
 #   shard 8:    8.40s over 23 tests
 #   shard 9:   16.71s over 31 tests
 #   shard 10:   31.98s over 23 tests
-#   shard 11:   20.48s over 22 tests
+#   shard 11:   20.47s over 14 tests
 #
-0	396.54	TestBrakeRetryGeometryAndHistory
-1	0.00	Example_quickstart
+0	0.00	Example_quickstart
 1	0.00	TestBlendEdgesGates
-1	0.00	TestBrakeRefusalAccounting
 1	0.00	TestCICPUClassShard7
 1	0.01	TestConeFromFaceMoreRefusals
 1	0.00	TestFacetedSourcePatchBlendThenCut
@@ -42,8 +40,6 @@
 1	0.00	TestRegroupSurfacesInvariantBreaks
 1	0.00	TestTopologyHandleSizeofProbeDoesNotCountAsAllocation
 2	0.00	TestBooleanDispatchAnalyticPrefix
-2	0.00	TestBrakeReplayRejectsCoarseHeldPlacement
-2	0.01	TestBrakeSourceFaceRecordsSurvivePlacement
 2	0.00	TestCICPUClassShard8
 2	0.03	TestCircleAffineLargeRadius
 2	0.06	TestConeFromFaceRefuses
@@ -130,8 +126,6 @@
 4	0.00	TestTangentHeelMeshesClearsResult
 4	0.02	TestThickenAdmissionGates
 5	0.07	TestAxialLoftPrismUnionManyIndependentTabs
-5	0.00	TestBrakeFinalWarningProof
-5	4.56	TestBrakeHistoryReaderBudgetAndLargeInput
 5	0.00	TestCICPUClassShard10
 5	8.07	TestCertifySectorAboutPermutedAxisMatchesX
 5	0.09	TestCircleExactAffineAllowance
@@ -161,8 +155,6 @@
 5	0.00	TestStationedTwistOptionalRefinementKeepsOriginalWorkCeiling
 5	1.45	TestTwistLocalAreaRealBooleanArcSubset
 6	0.02	TestAxialLoftPrismUnionTangentDoesNotAdmit
-6	4.01	TestBrakePrerequisiteProbe
-6	0.00	TestBrakePrivateAncestryPreservesPublicSource
 6	0.00	TestCICPUClassShard2
 6	0.02	TestCircleSourceCandidateChordConsumedByPlacement
 6	0.09	TestContainedCutCentroidEvidenceFailureKeepsDocumentUnchanged
@@ -297,13 +289,9 @@
 10	0.94	TestTwistWideThinRectangleFullTurn
 11	0.03	TestAxialLoftPrismUnionIndependentUnequalTabs
 11	0.01	TestAxialLoftPrismUnionRefusesUnequalCapsAndCancellation
-11	0.00	TestBrakeBudgetFailureDoesNotAllocate
-11	0.00	TestBrakeReplayInputsReservation
-11	0.00	TestBrakeRetryCancellationRollback
 11	0.01	TestConeFromFaceCancelled
 11	0.04	TestContactCylinderAdmissionGates
 11	0.61	TestExactCopyMassQueriesAreReadOnly
-11	0.00	TestExactMotherAxisLineUsesRationalCrossProducts
 11	0.02	TestLoftContactPartitionCapMapRefusesAmbiguousFragments
 11	0.03	TestLoftContactPartitionOtherPrismCarrier
 11	1.38	TestLoftCylinderCommonPlacementBoreEligibilityPrecedesRebuild
@@ -312,13 +300,9 @@
 11	2.91	TestLoftCylinderCommonPlacementRejectsRoundedComposition
 11	0.01	TestLoftCylinderTriangleMinRadiusMatchesRational
 11	0.08	TestLoftVolumeComposeBudgetAndCancellation
-11	0.00	TestMotherHingeUnionWarningNamesPublicCutTarget
 11	4.39	TestPlacedProxyShellsChargeExactCopies
 11	0.01	TestPublicCirclePrimitiveFaceTokenMutations
 11	0.24	TestQuarterSourceHeldY3ReverseOrder
-11	0.00	TestRemapMotherAnalyticCutFacesRejectsUnmatchedAndDuplicateOwners
-11	0.00	TestRemapMotherAnalyticCutFacesUsesUniqueRolesAndSources
 11	0.00	TestRetainedBlendStripFacetBounds
-11	0.00	TestSameMotherSurfaceMatchesExactCylinderCarriers
 11	0.02	TestSweepPairRealFacetedUnionTouchContinuations
 11	5.96	TestTopoDocumentWriteGuard
