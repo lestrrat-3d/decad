@@ -50,8 +50,8 @@ Scope and limits:
    separate increment, outside S1–S5.
 
 The guarantee that changes is therefore: a boolean over a revolve whose pair tolerance would exceed the ceilings
-reports bounds up to 8x the pair tolerance on that operand's walls, and no other path does. This decision needs
-the user's confirmation before S4 lands. S1–S3 change no guarantee.
+reports bounds up to 8x the pair tolerance on that operand's walls, and no other path does. Only S4 changes a
+guarantee; S1–S3 change none.
 
 ## 3. Shared angular stations
 
