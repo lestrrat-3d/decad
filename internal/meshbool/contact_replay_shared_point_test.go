@@ -60,9 +60,9 @@ func requireReplaySharedPointMatchesExact(t *testing.T, a, b [3]r3.Vec) {
 		xa[i], xb[i] = proof.XptOf(a[i]), proof.XptOf(b[i])
 	}
 	na, nb := proof.XtriangleNormal(xa[0], xa[1], xa[2]), proof.XtriangleNormal(xb[0], xb[1], xb[2])
-	want, err := replayCoplanarContactHeld(t.Context(), a, b, xa, xb, na, nb, proofbound.NewBrakeReplayBudget(), false)
+	want, err := replayCoplanarContactHeld(t.Context(), a, b, xa, xb, na, nb, proofbound.NewReplayTrialBudget(), false)
 	require.NoError(t, err)
-	got, err := replayCoplanarContactHeld(t.Context(), a, b, xa, xb, na, nb, proofbound.NewBrakeReplayBudget(), true)
+	got, err := replayCoplanarContactHeld(t.Context(), a, b, xa, xb, na, nb, proofbound.NewReplayTrialBudget(), true)
 	require.NoError(t, err)
 	require.Equal(t, want.Kind, got.Kind)
 	require.Equal(t, want.EdgeA, got.EdgeA)
@@ -117,7 +117,7 @@ func TestReplaySharedPointBudgetAndOwnership(t *testing.T) {
 	run := func(ctx context.Context, meter *proofbound.ReplayBudget) (TriContact, error) {
 		return replayCoplanarContactHeld(ctx, a, b, xa, xb, na, nb, meter, true)
 	}
-	full := proofbound.NewBrakeReplayBudget()
+	full := proofbound.NewReplayTrialBudget()
 	got, err := run(t.Context(), full)
 	require.NoError(t, err)
 	require.Equal(t, ContactPoint, got.Kind)
@@ -126,10 +126,10 @@ func TestReplaySharedPointBudgetAndOwnership(t *testing.T) {
 	require.Equal(t, uint64(0), records)
 	require.Zero(t, full.Bytes())
 	for _, short := range []uint64{0, 1} {
-		meter := proofbound.NewBrakeReplayBudget()
-		require.NoError(t, meter.SpendWork(t.Context(), proofbound.BrakeReplayWork-work+short))
-		require.NoError(t, meter.ReserveRecords(t.Context(), proofbound.BrakeReplayRecords))
-		require.NoError(t, meter.ReserveBytes(t.Context(), proofbound.BrakeReplayBytes))
+		meter := proofbound.NewReplayTrialBudget()
+		require.NoError(t, meter.SpendWork(t.Context(), proofbound.ReplayTrialWork-work+short))
+		require.NoError(t, meter.ReserveRecords(t.Context(), proofbound.ReplayTrialRecords))
+		require.NoError(t, meter.ReserveBytes(t.Context(), proofbound.ReplayTrialBytes))
 		_, err := run(t.Context(), meter)
 		if short == 0 {
 			require.NoError(t, err)
@@ -139,14 +139,14 @@ func TestReplaySharedPointBudgetAndOwnership(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	meter := proofbound.NewBrakeReplayBudget()
+	meter := proofbound.NewReplayTrialBudget()
 	_, err = run(ctx, meter)
 	require.ErrorIs(t, err, context.Canceled)
 	work, records = meter.Usage()
 	require.Zero(t, work)
 	require.Zero(t, records)
 	require.Zero(t, meter.Bytes())
-	meter = proofbound.NewBrakeReplayBudget()
+	meter = proofbound.NewReplayTrialBudget()
 	require.Zero(t, testing.AllocsPerRun(10, func() {
 		result, e := run(t.Context(), meter)
 		if e != nil || result.P0 != xa[0] {
@@ -192,14 +192,14 @@ func TestReplaySharedPointSpatialExactComparison(t *testing.T) {
 			xa[i], xb[i] = proof.XptOf(a[i]), proof.XptOf(b[i])
 		}
 		na, nb := proof.XtriangleNormal(xa[0], xa[1], xa[2]), proof.XtriangleNormal(xb[0], xb[1], xb[2])
-		certain, err := replaySharedPointSeparatedAxes(t.Context(), a, b, na, nb, proofbound.NewBrakeReplayBudget())
+		certain, err := replaySharedPointSeparatedAxes(t.Context(), a, b, na, nb, proofbound.NewReplayTrialBudget())
 		require.NoError(t, err)
 		if !certain {
 			uncertain++
 			continue
 		}
 		certified++
-		meter := proofbound.NewBrakeReplayBudget()
+		meter := proofbound.NewReplayTrialBudget()
 		sa, sb, separated, err := replayContactSigns(t.Context(), a, b, xa, xb, na, nb, meter)
 		require.NoError(t, err)
 		require.False(t, separated)
@@ -238,7 +238,7 @@ func TestReplaySharedPointProjectionBudget(t *testing.T) {
 		run := func(ctx context.Context, meter *proofbound.ReplayBudget) (bool, error) {
 			return replaySharedPointSeparatedAxes(ctx, a, tc.b, na, nb, meter)
 		}
-		full := proofbound.NewBrakeReplayBudget()
+		full := proofbound.NewReplayTrialBudget()
 		certain, err := run(t.Context(), full)
 		require.NoError(t, err)
 		require.Equal(t, tc.certain, certain)
@@ -246,8 +246,8 @@ func TestReplaySharedPointProjectionBudget(t *testing.T) {
 		require.Zero(t, records)
 		require.Zero(t, full.Bytes())
 		for _, short := range []uint64{0, 1} {
-			meter := proofbound.NewBrakeReplayBudget()
-			require.NoError(t, meter.SpendWork(t.Context(), proofbound.BrakeReplayWork-work+short))
+			meter := proofbound.NewReplayTrialBudget()
+			require.NoError(t, meter.SpendWork(t.Context(), proofbound.ReplayTrialWork-work+short))
 			_, err = run(t.Context(), meter)
 			if short == 0 {
 				require.NoError(t, err)
@@ -257,14 +257,14 @@ func TestReplaySharedPointProjectionBudget(t *testing.T) {
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
-		meter := proofbound.NewBrakeReplayBudget()
+		meter := proofbound.NewReplayTrialBudget()
 		_, err = run(ctx, meter)
 		require.ErrorIs(t, err, context.Canceled)
 		work, records = meter.Usage()
 		require.Zero(t, work)
 		require.Zero(t, records)
 		require.Zero(t, meter.Bytes())
-		meter = proofbound.NewBrakeReplayBudget()
+		meter = proofbound.NewReplayTrialBudget()
 		require.Zero(t, testing.AllocsPerRun(10, func() {
 			_, e := run(t.Context(), meter)
 			if e != nil {

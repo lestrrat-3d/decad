@@ -20,7 +20,7 @@ func TestReplayAreaContextParityAndLimits(t *testing.T) {
 	run := func(m *ReplayBudget) (float64, []float64, error) {
 		return PerturbedAreaUpperAllowsReplay(ctx, m.WorkBudget(ctx), verts, tris, .01)
 	}
-	m := NewBrakeReplayBudget()
+	m := NewReplayTrialBudget()
 	got, gotAllows, err := run(m)
 	if err != nil || math.Float64bits(got) != math.Float64bits(want) || len(gotAllows) != len(allows) {
 		t.Fatalf("area parity: got=%v want=%v error=%v", got, want, err)
@@ -34,8 +34,8 @@ func TestReplayAreaContextParityAndLimits(t *testing.T) {
 	bytes := m.Bytes()
 	for _, short := range []string{replayBudgetTestExact, "work", "records", "bytes"} {
 		t.Run(short, func(t *testing.T) {
-			m := NewBrakeReplayBudget()
-			w, r, z := BrakeReplayWork-work, BrakeReplayRecords-records, BrakeReplayBytes-bytes
+			m := NewReplayTrialBudget()
+			w, r, z := ReplayTrialWork-work, ReplayTrialRecords-records, ReplayTrialBytes-bytes
 			switch short {
 			case "work":
 				w++

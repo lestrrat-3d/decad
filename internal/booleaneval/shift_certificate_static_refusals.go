@@ -12,7 +12,7 @@ var (
 	errShiftSnapshotDenotationTooLarge               = fmt.Errorf("%w: denotation too large", decaderr.ErrUnsupported)
 	errShiftSnapshotDenotationWidth                  = fmt.Errorf("%w: denotation width", decaderr.ErrUnsupported)
 	errShiftSnapshotMismatchedSnapshotBudget         = fmt.Errorf("%w: mismatched snapshot budget", decaderr.ErrUnsupported)
-	errShiftSnapshotMissingBrakeReplayBudget         = fmt.Errorf("%w: missing brake replay budget", decaderr.ErrUnsupported)
+	errShiftSnapshotMissingReplayBudget              = fmt.Errorf("%w: missing replay budget", decaderr.ErrUnsupported)
 	errShiftSnapshotMissingStoredMesh                = fmt.Errorf("%w: missing stored mesh", decaderr.ErrUnsupported)
 	errShiftSnapshotMissingStoredShift               = fmt.Errorf("%w: missing stored shift", decaderr.ErrUnsupported)
 	errShiftSnapshotNonfiniteStoredShift             = fmt.Errorf("%w: nonfinite stored shift", decaderr.ErrUnsupported)

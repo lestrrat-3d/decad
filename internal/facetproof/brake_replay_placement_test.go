@@ -29,7 +29,7 @@ func TestBrakeReplayRepairsAndChargesSliver(t *testing.T) {
 		}
 		return charges, held, p, err
 	}
-	meter := proofbound.NewBrakeReplayBudget()
+	meter := proofbound.NewReplayTrialBudget()
 	charges, held, point, err := run(ctx, meter)
 	if err != nil || len(charges) != len(held) {
 		t.Fatalf("repair: charges=%d error=%v", len(charges), err)
@@ -45,8 +45,8 @@ func TestBrakeReplayRepairsAndChargesSliver(t *testing.T) {
 	bytes := meter.Bytes()
 	for _, kind := range []string{"exact", "work", "records", "bytes"} {
 		t.Run(kind, func(t *testing.T) {
-			budget := proofbound.NewBrakeReplayBudget()
-			w, r, b := proofbound.BrakeReplayWork-work, proofbound.BrakeReplayRecords-records, proofbound.BrakeReplayBytes-bytes
+			budget := proofbound.NewReplayTrialBudget()
+			w, r, b := proofbound.ReplayTrialWork-work, proofbound.ReplayTrialRecords-records, proofbound.ReplayTrialBytes-bytes
 			switch kind {
 			case "work":
 				w++
@@ -78,7 +78,7 @@ func TestBrakeReplayRepairsAndChargesSliver(t *testing.T) {
 	}
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel()
-	_, _, _, err = run(cancelled, proofbound.NewBrakeReplayBudget()) //nolint:dogsled // Only the cancellation error is needed.
+	_, _, _, err = run(cancelled, proofbound.NewReplayTrialBudget()) //nolint:dogsled // Only the cancellation error is needed.
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled repair: %v", err)
 	}

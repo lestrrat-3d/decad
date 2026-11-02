@@ -32,7 +32,7 @@ func (p Pieces) Snapshot(ctx context.Context, budget *proofbound.ReplayBudget, t
 			continue
 		}
 		n := uint64(len(src))
-		if n > proofbound.BrakeReplayRecords {
+		if n > proofbound.ReplayTrialRecords {
 			return Pieces{}, tooLarge
 		}
 		if err := budget.SpendWork(ctx, n); err != nil {

@@ -11,7 +11,7 @@ import (
 func TestBrakeReplayTableGrowthLimits(t *testing.T) {
 	ctx := t.Context()
 	setup := func() (*proofbound.ReplayBudget, *replayTable[int, int]) {
-		meter := proofbound.NewBrakeReplayBudget()
+		meter := proofbound.NewReplayTrialBudget()
 		table, err := newReplayGrowingTable[int, int](ctx, 32, meter, func(v int) uint64 { return uint64(v) })
 		if err != nil {
 			t.Fatal(err)
@@ -35,9 +35,9 @@ func TestBrakeReplayTableGrowthLimits(t *testing.T) {
 		t.Run(short, func(t *testing.T) {
 			meter, table := setup()
 			work, records := meter.Usage()
-			w := proofbound.BrakeReplayWork - work - costWork
-			r := proofbound.BrakeReplayRecords - records - costRecords
-			b := proofbound.BrakeReplayBytes - meter.Bytes() - costBytes
+			w := proofbound.ReplayTrialWork - work - costWork
+			r := proofbound.ReplayTrialRecords - records - costRecords
+			b := proofbound.ReplayTrialBytes - meter.Bytes() - costBytes
 			switch short {
 			case brakeTestWork:
 				w++

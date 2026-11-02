@@ -11,22 +11,23 @@ import (
 func TestReplayExactMeterAtomicWork(t *testing.T) {
 	ctx := t.Context()
 	for _, short := range []bool{false, true} {
-		b := proofbound.NewBrakeReplayBudget()
+		b := proofbound.NewReplayTrialBudget()
 		remaining := uint64(19)
 		if short {
 			remaining--
 		}
-		if err := b.SpendWork(ctx, proofbound.BrakeReplayWork-remaining); err != nil {
+		if err := b.SpendWork(ctx, proofbound.ReplayTrialWork-remaining); err != nil {
 			t.Fatal(err)
 		}
 		err := (replayExactMeter{b.WorkBudget(ctx)}).SpendWork(ctx, 19)
 		w, r := b.Usage()
 		if short {
 			var limit *proofbound.WorkLimitError
-			if !errors.As(err, &limit) || limit.Resource != "multiway_work" || w != proofbound.BrakeReplayWork-remaining {
-				t.Fatalf("atomic refusal work=%d err=%v", w, err)
+			matched := errors.As(err, &limit)
+			if !matched || limit.Resource != "multiway_work" || w != proofbound.ReplayTrialWork-remaining {
+				t.Fatalf("atomic refusal work=%d matched=%v resource=%q observed=%d maximum=%d err=%v", w, matched, limit.Resource, limit.Observed, limit.Maximum, err)
 			}
-		} else if err != nil || w != proofbound.BrakeReplayWork {
+		} else if err != nil || w != proofbound.ReplayTrialWork {
 			t.Fatalf("exact work=%d err=%v", w, err)
 		}
 		if r != 0 || b.Bytes() != 0 {
@@ -35,7 +36,7 @@ func TestReplayExactMeterAtomicWork(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	cancel()
-	b := proofbound.NewBrakeReplayBudget()
+	b := proofbound.NewReplayTrialBudget()
 	err := (replayExactMeter{b.WorkBudget(ctx)}).SpendWork(ctx, 19)
 	w, r := b.Usage()
 	if !errors.Is(err, context.Canceled) || w != 0 || r != 0 || b.Bytes() != 0 {

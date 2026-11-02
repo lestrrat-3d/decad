@@ -11,7 +11,7 @@ import (
 
 func TestBrakeCutterConstructorByteLimit(t *testing.T) {
 	ctx := t.Context()
-	meter := proofbound.NewBrakeReplayBudget()
+	meter := proofbound.NewReplayTrialBudget()
 	budget, err := NewReplayPairCutsBudget(meter)
 	if err != nil {
 		t.Fatal(err)
@@ -25,12 +25,12 @@ func TestBrakeCutterConstructorByteLimit(t *testing.T) {
 	}
 	cost := meter.Bytes()
 	for _, short := range []bool{false, true} {
-		m := proofbound.NewBrakeReplayBudget()
+		m := proofbound.NewReplayTrialBudget()
 		remaining := cost
 		if short {
 			remaining--
 		}
-		if err := m.ReserveBytes(ctx, proofbound.BrakeReplayBytes-remaining); err != nil {
+		if err := m.ReserveBytes(ctx, proofbound.ReplayTrialBytes-remaining); err != nil {
 			t.Fatal(err)
 		}
 		b, err := NewReplayPairCutsBudget(m)
@@ -54,7 +54,7 @@ func TestBrakeCutterRegionsMatchOrdinary(t *testing.T) {
 		if err != nil {
 			t.Fatalf("fixture %d ordinary: %v", i, err)
 		}
-		budget, err := NewReplayPairCutsBudget(proofbound.NewBrakeReplayBudget())
+		budget, err := NewReplayPairCutsBudget(proofbound.NewReplayTrialBudget())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -82,7 +82,7 @@ func TestBrakeCutterRefusesIncompleteState(t *testing.T) {
 
 func TestBrakeCutterConstructorRecordLimits(t *testing.T) {
 	ctx := t.Context()
-	measure := proofbound.NewBrakeReplayBudget()
+	measure := proofbound.NewReplayTrialBudget()
 	budget, err := NewReplayPairCutsBudget(measure)
 	if err != nil {
 		t.Fatal(err)
@@ -92,12 +92,12 @@ func TestBrakeCutterConstructorRecordLimits(t *testing.T) {
 	}
 	_, cost := measure.Usage()
 	for _, short := range []bool{false, true} {
-		meter := proofbound.NewBrakeReplayBudget()
+		meter := proofbound.NewReplayTrialBudget()
 		remaining := cost
 		if short {
 			remaining--
 		}
-		if err := meter.ReserveRecords(ctx, proofbound.BrakeReplayRecords-remaining); err != nil {
+		if err := meter.ReserveRecords(ctx, proofbound.ReplayTrialRecords-remaining); err != nil {
 			t.Fatal(err)
 		}
 		b, err := NewReplayPairCutsBudget(meter)
@@ -142,7 +142,7 @@ func TestBrakeCutterRefusesMismatchedBudget(t *testing.T) {
 	ctx := t.Context()
 	for _, kind := range []string{brakeTestWork, "vertices", "edges"} {
 		t.Run(kind, func(t *testing.T) {
-			first := proofbound.NewBrakeReplayBudget()
+			first := proofbound.NewReplayTrialBudget()
 			budget, err := NewReplayPairCutsBudget(first)
 			if err != nil {
 				t.Fatal(err)
@@ -151,7 +151,7 @@ func TestBrakeCutterRefusesMismatchedBudget(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			other := proofbound.NewBrakeReplayBudget()
+			other := proofbound.NewReplayTrialBudget()
 			switch kind {
 			case brakeTestWork:
 				cutter.Work.ReplayID = other

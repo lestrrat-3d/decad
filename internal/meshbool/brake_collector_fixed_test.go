@@ -19,7 +19,7 @@ const (
 
 func TestBrakeCollectorFixedReservation(t *testing.T) {
 	for _, short := range []string{brakeTestExact, brakeTestRecords, brakeTestBytes} {
-		meter := proofbound.NewBrakeReplayBudget()
+		meter := proofbound.NewReplayTrialBudget()
 		remainingBytes := 2*(uint64(unsafe.Sizeof(PairCutsResult{}))+replayCollectorFixedBytes) + 128
 		remainingRecords := uint64(replayCollectorFixedRecords)
 		if short == brakeTestBytes {
@@ -28,10 +28,10 @@ func TestBrakeCollectorFixedReservation(t *testing.T) {
 		if short == brakeTestRecords {
 			remainingRecords--
 		}
-		if err := meter.ReserveBytes(t.Context(), proofbound.BrakeReplayBytes-remainingBytes); err != nil {
+		if err := meter.ReserveBytes(t.Context(), proofbound.ReplayTrialBytes-remainingBytes); err != nil {
 			t.Fatal(err)
 		}
-		if err := meter.ReserveRecords(t.Context(), proofbound.BrakeReplayRecords-remainingRecords); err != nil {
+		if err := meter.ReserveRecords(t.Context(), proofbound.ReplayTrialRecords-remainingRecords); err != nil {
 			t.Fatal(err)
 		}
 		budget, err := NewReplayPairCutsBudget(meter)
@@ -87,7 +87,7 @@ func TestBrakeCollectorFixedEnvelope(t *testing.T) {
 
 func TestBrakePublicPairCutsRefusesReplayBudget(t *testing.T) {
 	ctx := t.Context()
-	meter := proofbound.NewBrakeReplayBudget()
+	meter := proofbound.NewReplayTrialBudget()
 	budget, err := NewReplayPairCutsBudget(meter)
 	if err != nil {
 		t.Fatal(err)

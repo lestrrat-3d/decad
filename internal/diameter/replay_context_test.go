@@ -20,7 +20,7 @@ func TestReplayPointsContextParityAndLimits(t *testing.T) {
 	run := func(m *proofbound.ReplayBudget) (float64, bool, error) {
 		return PointsReplay(ctx, m.WorkBudget(ctx), points)
 	}
-	m := proofbound.NewBrakeReplayBudget()
+	m := proofbound.NewReplayTrialBudget()
 	got, ok, err := run(m)
 	if err != nil || !ok || math.Float64bits(got) != math.Float64bits(want) {
 		t.Fatalf("diameter parity: got=%v want=%v error=%v", got, want, err)
@@ -29,8 +29,8 @@ func TestReplayPointsContextParityAndLimits(t *testing.T) {
 	bytes := m.Bytes()
 	for _, short := range []string{"exact", "work", "records", "bytes"} {
 		t.Run(short, func(t *testing.T) {
-			m := proofbound.NewBrakeReplayBudget()
-			w, r, z := proofbound.BrakeReplayWork-work, proofbound.BrakeReplayRecords-records, proofbound.BrakeReplayBytes-bytes
+			m := proofbound.NewReplayTrialBudget()
+			w, r, z := proofbound.ReplayTrialWork-work, proofbound.ReplayTrialRecords-records, proofbound.ReplayTrialBytes-bytes
 			switch short {
 			case "work":
 				w++

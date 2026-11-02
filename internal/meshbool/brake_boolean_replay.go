@@ -451,8 +451,6 @@ func newBrakeParityWork(ctx context.Context, budget *PairCutsBudget) (*proofboun
 		return nil, err
 	}
 	work := &proofbound.WorkBudget{Replay: true, ReplayID: budget.replay, StepFn: func() error { return budget.SpendWork(ctx, 1) }, ReserveFn: func(n uint64) error { return budget.ReserveRecords(ctx, n) }, ReserveBytesFn: func(n uint64) error { return budget.ReserveBytes(ctx, n, 1) }, ErrFn: ctx.Err}
-	if budget.replay.IsBrakeReplay() {
-		work.SpendWorkFn = func(n uint64) error { return budget.SpendWork(ctx, n) }
-	}
+	work.SpendWorkFn = func(n uint64) error { return budget.SpendWork(ctx, n) }
 	return work, nil
 }

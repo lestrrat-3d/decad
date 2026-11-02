@@ -122,7 +122,7 @@ func TestShiftCaptureSealRejectsPriorMutation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			c := captureSealFixture(t)
 			mutate(c)
-			_, err := SnapshotShiftCertificate(t.Context(), proofbound.NewBrakeReplayBudget(), c)
+			_, err := SnapshotShiftCertificate(t.Context(), proofbound.NewReplayTrialBudget(), c)
 			if !errors.Is(err, decaderr.ErrUnsupported) {
 				t.Fatalf("changed capture accepted: %v", err)
 			}
@@ -130,7 +130,7 @@ func TestShiftCaptureSealRejectsPriorMutation(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := SnapshotShiftCertificate(ctx, proofbound.NewBrakeReplayBudget(), nil); !errors.Is(err, context.Canceled) {
+	if _, err := SnapshotShiftCertificate(ctx, proofbound.NewReplayTrialBudget(), nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled nil: %v", err)
 	}
 }
@@ -181,7 +181,7 @@ func TestShiftCaptureSealTamperRefusalAccounting(t *testing.T) {
 	c.groups[0].Source = &provenance.SourcePatch{Producer: 2, Ordinal: 1}
 	resealShiftFixture(t, c)
 	c.groups[0].Source.Ordinal++
-	meter := proofbound.NewBrakeReplayBudget()
+	meter := proofbound.NewReplayTrialBudget()
 	if err := validateShiftCaptureSeal(ctx, c, meter); !errors.Is(err, decaderr.ErrUnsupported) {
 		t.Fatalf("tamper: %v", err)
 	}
@@ -197,18 +197,18 @@ func TestShiftCaptureSealTamperRefusalAccounting(t *testing.T) {
 		t.Fatalf("tamper refusal allocated %.0f objects", n)
 	}
 	for _, short := range []bool{false, true} {
-		budget := proofbound.NewBrakeReplayBudget()
+		budget := proofbound.NewReplayTrialBudget()
 		left := cost
 		if short {
 			left--
 		}
-		if err := budget.SpendWork(ctx, proofbound.BrakeReplayWork-left); err != nil {
+		if err := budget.SpendWork(ctx, proofbound.ReplayTrialWork-left); err != nil {
 			t.Fatal(err)
 		}
-		if err := budget.ReserveRecords(ctx, proofbound.BrakeReplayRecords); err != nil {
+		if err := budget.ReserveRecords(ctx, proofbound.ReplayTrialRecords); err != nil {
 			t.Fatal(err)
 		}
-		if err := budget.ReserveBytes(ctx, proofbound.BrakeReplayBytes); err != nil {
+		if err := budget.ReserveBytes(ctx, proofbound.ReplayTrialBytes); err != nil {
 			t.Fatal(err)
 		}
 		err := validateShiftCaptureSeal(ctx, c, budget)

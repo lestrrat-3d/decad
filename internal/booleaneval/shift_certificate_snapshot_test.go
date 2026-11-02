@@ -37,14 +37,14 @@ func shiftSnapshotFixture() (*ShiftCertificate, *topo.Body, *topo.Body, *topo.Bo
 func TestShiftAuthTamperRefusalsDoNotAllocate(t *testing.T) {
 	ctx := t.Context()
 	c, result, target, tool := shiftSnapshotFixture()
-	budget := proofbound.NewBrakeReplayBudget()
-	if err := budget.SpendWork(ctx, proofbound.BrakeReplayWork); err != nil {
+	budget := proofbound.NewReplayTrialBudget()
+	if err := budget.SpendWork(ctx, proofbound.ReplayTrialWork); err != nil {
 		t.Fatal(err)
 	}
-	if err := budget.ReserveRecords(ctx, proofbound.BrakeReplayRecords); err != nil {
+	if err := budget.ReserveRecords(ctx, proofbound.ReplayTrialRecords); err != nil {
 		t.Fatal(err)
 	}
-	if err := budget.ReserveBytes(ctx, proofbound.BrakeReplayBytes); err != nil {
+	if err := budget.ReserveBytes(ctx, proofbound.ReplayTrialBytes); err != nil {
 		t.Fatal(err)
 	}
 	checks := []struct {
@@ -91,7 +91,7 @@ const shiftBudgetRecordsCase = "records"
 
 func TestSnapshotStoredShift(t *testing.T) {
 	c, r, a, b := shiftSnapshotFixture()
-	budget := proofbound.NewBrakeReplayBudget()
+	budget := proofbound.NewReplayTrialBudget()
 	got, err := snapshotStoredShift(t.Context(), c, r, a, b, budget)
 	if err != nil {
 		t.Fatal(err)
@@ -109,8 +109,8 @@ func TestSnapshotStoredShift(t *testing.T) {
 	}
 	for _, short := range []string{"", shiftBudgetWorkCase, shiftBudgetRecordsCase, shiftBudgetBytesCase} {
 		c, r, a, b = shiftSnapshotFixture()
-		m := proofbound.NewBrakeReplayBudget()
-		w0, n0, z0 := proofbound.BrakeReplayWork-w, proofbound.BrakeReplayRecords-n, proofbound.BrakeReplayBytes-z
+		m := proofbound.NewReplayTrialBudget()
+		w0, n0, z0 := proofbound.ReplayTrialWork-w, proofbound.ReplayTrialRecords-n, proofbound.ReplayTrialBytes-z
 		switch short {
 		case shiftBudgetWorkCase:
 			w0++
@@ -135,12 +135,12 @@ func TestSnapshotStoredShift(t *testing.T) {
 	}
 	c, r, a, b = shiftSnapshotFixture()
 	r.PrivateShift = &ShiftCertificate{}
-	if _, err := snapshotStoredShift(t.Context(), c, r, a, b, proofbound.NewBrakeReplayBudget()); !errors.Is(err, decaderr.ErrUnsupported) {
+	if _, err := snapshotStoredShift(t.Context(), c, r, a, b, proofbound.NewReplayTrialBudget()); !errors.Is(err, decaderr.ErrUnsupported) {
 		t.Fatalf("stale: %v", err)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := snapshotStoredShift(ctx, c, r, a, b, proofbound.NewBrakeReplayBudget()); !errors.Is(err, context.Canceled) {
+	if _, err := snapshotStoredShift(ctx, c, r, a, b, proofbound.NewReplayTrialBudget()); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancel: %v", err)
 	}
 }
@@ -149,7 +149,7 @@ func TestShiftSnapshotRevalidate(t *testing.T) {
 	c, r, a, b := shiftSnapshotFixture()
 	c.groups[0].Source = &provenance.SourcePatch{Producer: 2, Ordinal: 1}
 	resealShiftFixture(t, c)
-	budget := proofbound.NewBrakeReplayBudget()
+	budget := proofbound.NewReplayTrialBudget()
 	snap, err := SnapshotShiftCertificate(t.Context(), budget, c)
 	if err != nil {
 		t.Fatal(err)
@@ -173,7 +173,7 @@ func TestShiftSnapshotRevalidate(t *testing.T) {
 	if err := snap.Revalidate(t.Context(), budget, r, a, b); !errors.Is(err, decaderr.ErrUnsupported) {
 		t.Fatalf("source mutation: %v", err)
 	}
-	if err := snap.Revalidate(t.Context(), proofbound.NewBrakeReplayBudget(), r, a, b); !errors.Is(err, decaderr.ErrUnsupported) {
+	if err := snap.Revalidate(t.Context(), proofbound.NewReplayTrialBudget(), r, a, b); !errors.Is(err, decaderr.ErrUnsupported) {
 		t.Fatalf("different budget: %v", err)
 	}
 }
@@ -185,7 +185,7 @@ func TestShiftSnapshotNestedValues(t *testing.T) {
 	c.groups[0].Denoted.Radius.Lo = big.NewRat(1, 3)
 	c.groups[0].Denoted.Radius.Hi = big.NewRat(2, 3)
 	resealShiftFixture(t, c)
-	budget := proofbound.NewBrakeReplayBudget()
+	budget := proofbound.NewReplayTrialBudget()
 	snap, err := SnapshotShiftCertificate(t.Context(), budget, c)
 	if err != nil {
 		t.Fatal(err)
@@ -226,7 +226,7 @@ func TestShiftSnapshotLimits(t *testing.T) {
 		}
 		return s.Revalidate(t.Context(), m, r, a, b)
 	}
-	measured := proofbound.NewBrakeReplayBudget()
+	measured := proofbound.NewReplayTrialBudget()
 	if err := run(measured); err != nil {
 		t.Fatal(err)
 	}
@@ -234,8 +234,8 @@ func TestShiftSnapshotLimits(t *testing.T) {
 	bytes := measured.Bytes()
 	t.Logf("work=%d records=%d bytes=%d", work, records, bytes)
 	for _, short := range []string{"", shiftBudgetWorkCase, shiftBudgetRecordsCase, shiftBudgetBytesCase} {
-		m := proofbound.NewBrakeReplayBudget()
-		w, n, z := proofbound.BrakeReplayWork-work, proofbound.BrakeReplayRecords-records, proofbound.BrakeReplayBytes-bytes
+		m := proofbound.NewReplayTrialBudget()
+		w, n, z := proofbound.ReplayTrialWork-work, proofbound.ReplayTrialRecords-records, proofbound.ReplayTrialBytes-bytes
 		switch short {
 		case shiftBudgetWorkCase:
 			w++
@@ -264,7 +264,7 @@ func TestShiftSnapshotReplayFaceBounds(t *testing.T) {
 	c, r, a, b := shiftSnapshotFixture()
 	m := c.selected
 	face := m.Source[0]
-	setup := proofbound.NewBrakeReplayBudget()
+	setup := proofbound.NewReplayTrialBudget()
 	table, err := topo.NewFaceBoundTable(t.Context(), 1, setup)
 	if err != nil {
 		t.Fatal(err)
@@ -274,7 +274,7 @@ func TestShiftSnapshotReplayFaceBounds(t *testing.T) {
 	}
 	m.FaceBound = nil
 	m.ReplayFaceBounds = table
-	budget := proofbound.NewBrakeReplayBudget()
+	budget := proofbound.NewReplayTrialBudget()
 	s, err := SnapshotShiftCertificate(t.Context(), budget, c)
 	if err != nil {
 		t.Fatal(err)
@@ -299,7 +299,7 @@ func TestShiftSnapshotTamperRefusalAccounting(t *testing.T) {
 		c, result, target, tool := shiftSnapshotFixture() //nolint:contextcheck // The fixture creates immutable local inputs.
 		c.groups[0].Source = &provenance.SourcePatch{Producer: 2, Ordinal: 1}
 		resealShiftFixture(t, c) //nolint:contextcheck // The seal uses the test context.
-		budget := proofbound.NewBrakeReplayBudget()
+		budget := proofbound.NewReplayTrialBudget()
 		snap, err := SnapshotShiftCertificate(ctx, budget, c)
 		if err != nil {
 			t.Fatal(err)
@@ -333,13 +333,13 @@ func TestShiftSnapshotTamperRefusalAccounting(t *testing.T) {
 			if name == shiftBudgetWorkCase {
 				left--
 			}
-			if err := budget.SpendWork(ctx, proofbound.BrakeReplayWork-work-left); err != nil {
+			if err := budget.SpendWork(ctx, proofbound.ReplayTrialWork-work-left); err != nil {
 				t.Fatal(err)
 			}
-			if err := budget.ReserveRecords(ctx, proofbound.BrakeReplayRecords-records); err != nil {
+			if err := budget.ReserveRecords(ctx, proofbound.ReplayTrialRecords-records); err != nil {
 				t.Fatal(err)
 			}
-			if err := budget.ReserveBytes(ctx, proofbound.BrakeReplayBytes-bytes); err != nil {
+			if err := budget.ReserveBytes(ctx, proofbound.ReplayTrialBytes-bytes); err != nil {
 				t.Fatal(err)
 			}
 			err := snap.Revalidate(ctx, budget, result, target, tool)

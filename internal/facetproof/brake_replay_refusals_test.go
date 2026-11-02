@@ -10,14 +10,14 @@ import (
 
 func TestBrakeReplayRefusalDoesNotAllocate(t *testing.T) {
 	ctx := t.Context()
-	budget := proofbound.NewBrakeReplayBudget()
-	if err := budget.SpendWork(ctx, proofbound.BrakeReplayWork); err != nil {
+	budget := proofbound.NewReplayTrialBudget()
+	if err := budget.SpendWork(ctx, proofbound.ReplayTrialWork); err != nil {
 		t.Fatal(err)
 	}
-	if err := budget.ReserveRecords(ctx, proofbound.BrakeReplayRecords); err != nil {
+	if err := budget.ReserveRecords(ctx, proofbound.ReplayTrialRecords); err != nil {
 		t.Fatal(err)
 	}
-	if err := budget.ReserveBytes(ctx, proofbound.BrakeReplayBytes); err != nil {
+	if err := budget.ReserveBytes(ctx, proofbound.ReplayTrialBytes); err != nil {
 		t.Fatal(err)
 	}
 	tris := [][3]int{{0, 1, 2}}

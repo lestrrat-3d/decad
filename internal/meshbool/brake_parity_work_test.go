@@ -13,12 +13,12 @@ import (
 
 func TestBrakeParityWorkBudgetAndUnanchoredRefusal(t *testing.T) {
 	for _, short := range []bool{false, true} {
-		meter := proofbound.NewBrakeReplayBudget()
+		meter := proofbound.NewReplayTrialBudget()
 		size := 2*(uint64(unsafe.Sizeof(proofbound.WorkBudget{}))+256) + 128
 		if short {
 			size--
 		}
-		if err := meter.ReserveBytes(t.Context(), proofbound.BrakeReplayBytes-size); err != nil {
+		if err := meter.ReserveBytes(t.Context(), proofbound.ReplayTrialBytes-size); err != nil {
 			t.Fatal(err)
 		}
 		budget, err := NewReplayPairCutsBudget(meter)
@@ -33,7 +33,7 @@ func TestBrakeParityWorkBudgetAndUnanchoredRefusal(t *testing.T) {
 			t.Fatalf("exact: %v", err)
 		}
 	}
-	budget, err := NewReplayPairCutsBudget(proofbound.NewBrakeReplayBudget())
+	budget, err := NewReplayPairCutsBudget(proofbound.NewReplayTrialBudget())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestBrakeParityWorkBudgetAndUnanchoredRefusal(t *testing.T) {
 }
 
 func TestBrakeCutterRefusesNoContactEdge(t *testing.T) {
-	budget, err := NewReplayPairCutsBudget(proofbound.NewBrakeReplayBudget())
+	budget, err := NewReplayPairCutsBudget(proofbound.NewReplayTrialBudget())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestBrakeCutterRefusesNoContactEdge(t *testing.T) {
 
 func TestBrakeStaticRefusalsDoNotAllocate(t *testing.T) {
 	ctx := t.Context()
-	budget, err := NewReplayPairCutsBudget(proofbound.NewBrakeReplayBudget())
+	budget, err := NewReplayPairCutsBudget(proofbound.NewReplayTrialBudget())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,12 +114,12 @@ func TestBrakeTypedContactRefusalsDoNotAllocate(t *testing.T) {
 func TestBrakeParityAdapterRecordLimits(t *testing.T) {
 	ctx := t.Context()
 	for _, short := range []bool{false, true} {
-		meter := proofbound.NewBrakeReplayBudget()
+		meter := proofbound.NewReplayTrialBudget()
 		remaining := uint64(6)
 		if short {
 			remaining--
 		}
-		if err := meter.ReserveRecords(ctx, proofbound.BrakeReplayRecords-remaining); err != nil {
+		if err := meter.ReserveRecords(ctx, proofbound.ReplayTrialRecords-remaining); err != nil {
 			t.Fatal(err)
 		}
 		budget, err := NewReplayPairCutsBudget(meter)
@@ -143,18 +143,18 @@ func TestBrakeParityTreeRecordLimits(t *testing.T) {
 		_, err := replayParityTree(ctx, mesh, 2, 0, 1, meter.WorkBudget(ctx))
 		return err
 	}
-	measure := proofbound.NewBrakeReplayBudget()
+	measure := proofbound.NewReplayTrialBudget()
 	if err := build(measure); err != nil {
 		t.Fatal(err)
 	}
 	_, cost := measure.Usage()
 	for _, short := range []bool{false, true} {
-		meter := proofbound.NewBrakeReplayBudget()
+		meter := proofbound.NewReplayTrialBudget()
 		remaining := cost
 		if short {
 			remaining--
 		}
-		if err := meter.ReserveRecords(ctx, proofbound.BrakeReplayRecords-remaining); err != nil {
+		if err := meter.ReserveRecords(ctx, proofbound.ReplayTrialRecords-remaining); err != nil {
 			t.Fatal(err)
 		}
 		err := build(meter)
