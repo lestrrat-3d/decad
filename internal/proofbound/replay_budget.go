@@ -18,6 +18,7 @@ type ReplayBudget struct {
 	maxBytes    uint64
 	limitErrors [3]WorkLimitError
 	strict      bool
+	circle      bool
 	failure     error
 	limitError  WorkLimitError
 }
@@ -50,7 +51,7 @@ func NewReplayBudgetLimits(work, records, bytes uint64) (*ReplayBudget, error) {
 // NewCircleReplayBudget creates a fail-closed trial meter whose own fixed
 // object and limit refusal are accounted before any source proof can run.
 func NewCircleReplayBudget() *ReplayBudget {
-	b := &ReplayBudget{shared: MultiwayBudget{maxWork: ReplayTrialWork, maxRecords: ReplayTrialRecords}, strict: true}
+	b := &ReplayBudget{shared: MultiwayBudget{maxWork: ReplayTrialWork, maxRecords: ReplayTrialRecords}, strict: true, circle: true}
 	b.shared.strictReplay = b
 	b.shared.Records = 1
 	b.bytes = 2*uint64(unsafe.Sizeof(ReplayBudget{})) + 128
@@ -58,7 +59,20 @@ func NewCircleReplayBudget() *ReplayBudget {
 }
 
 // IsCircleReplay reports whether b uses the fail-closed circle meter.
-func (b *ReplayBudget) IsCircleReplay() bool { return b != nil && b.strict }
+func (b *ReplayBudget) IsCircleReplay() bool { return b != nil && b.circle }
+
+// NewStrictReplayBudget creates a fail-closed generic replay meter. It does
+// not grant access to source operations reserved for circle replay.
+func NewStrictReplayBudget() *ReplayBudget {
+	b := &ReplayBudget{shared: MultiwayBudget{maxWork: ReplayTrialWork, maxRecords: ReplayTrialRecords}, strict: true}
+	b.shared.strictReplay = b
+	b.shared.Records = 1
+	b.bytes = 2*uint64(unsafe.Sizeof(ReplayBudget{})) + 128
+	return b
+}
+
+// IsStrictReplay reports whether this meter keeps the first refusal sticky.
+func (b *ReplayBudget) IsStrictReplay() bool { return b != nil && b.strict }
 
 var (
 	errCircleReplayOverflow = fmt.Errorf("%w: replay counter overflow", decaderr.ErrUnsupported)
@@ -195,9 +209,20 @@ func (b *ReplayBudget) ReserveBundle(ctx context.Context, work, records, bytes u
 	if b == nil {
 		return fmt.Errorf("%w: nil replay budget", decaderr.ErrUnsupported)
 	}
-	if b.strict {
+	if b.circle {
 		return errCircleReplayEnvelope
 	}
+	// Finish the caller's context callback before reading any counters: it
+	// may itself charge this same meter. No caller callback runs after this.
+	// Preserve the three charge polls and pre-commit poll, before the
+	// snapshot, so cancellation and any reentrant charges are both observed.
+	for range 4 {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
+	done := ctx.Done()
+	quiet := context.WithoutCancel(ctx)
 	w, r, n := b.shared.Work, b.shared.Records, b.bytes
 	wLimit, rLimit, bLimit := b.shared.maxWork, b.shared.maxRecords, b.maxBytes
 	if wLimit == 0 {
@@ -209,17 +234,47 @@ func (b *ReplayBudget) ReserveBundle(ctx context.Context, work, records, bytes u
 	if bLimit == 0 {
 		bLimit = ReplayTrialBytes
 	}
-	if err := multiwayCharge(ctx, &w, work, wLimit, "multiway_work", b.shared.prebuiltLimits); err != nil {
+	if b.strict {
+		if err := b.charge(quiet, &w, work, wLimit, "multiway_work"); err != nil {
+			return err
+		}
+		if err := b.charge(quiet, &r, records, rLimit, "multiway_records"); err != nil {
+			return err
+		}
+		if err := b.charge(quiet, &n, bytes, bLimit, "replay_bytes"); err != nil {
+			return err
+		}
+		if done != nil {
+			select {
+			case <-done:
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				return context.Canceled
+			default:
+			}
+		}
+		b.shared.Work, b.shared.Records, b.bytes = w, r, n
+		return nil
+	}
+	if err := multiwayCharge(quiet, &w, work, wLimit, "multiway_work", b.shared.prebuiltLimits); err != nil {
 		return err
 	}
-	if err := multiwayCharge(ctx, &r, records, rLimit, "multiway_records", b.shared.prebuiltLimits); err != nil {
+	if err := multiwayCharge(quiet, &r, records, rLimit, "multiway_records", b.shared.prebuiltLimits); err != nil {
 		return err
 	}
-	if err := multiwayCharge(ctx, &n, bytes, bLimit, "replay_bytes", b.shared.prebuiltLimits); err != nil {
+	if err := multiwayCharge(quiet, &n, bytes, bLimit, "replay_bytes", b.shared.prebuiltLimits); err != nil {
 		return err
 	}
-	if err := ctx.Err(); err != nil {
-		return err
+	if done != nil {
+		select {
+		case <-done:
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			return context.Canceled
+		default:
+		}
 	}
 	b.shared.Work, b.shared.Records, b.bytes = w, r, n
 	return nil
