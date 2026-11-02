@@ -251,16 +251,26 @@ landing at the top of the interval is expected, because every leaf is inscribed.
 | `yarn-leader` | 0.2423 mm | 0.0446 mm | 1.7 s | `yarn.go`: `return b.refine(b.union(spans...), 0.12)` |
 | `brake-band` | 0.2713 mm | 0.0297 mm | 0.09 s | `brake_cord.go`: `return b.refine(b.union(cord, leftEye, rightEye), 0.12)` |
 | `treadle-flex-connector` | 0.0758 mm | 0.0071 mm | about 4.5 s | `connector.go`: `return b.refine(b.cut(body, ...), 0.01)` around the second Cut |
-| `brake-spring-*` | 2.075 mm | 0.0941 mm with a probe's pose; no record at the default pose | about 22 s | — |
+| `brake-spring-*` | 2.075 mm | 0.0889 mm at the default pose | about 8.5 s | `brake.go`: `return b.brakeRotate(b.refine(b.union(coil, frontLeg, rearLeg, frontEye, rearEye), 0.12), front, phase)` |
 
 Each call sits inside the part's constructor, before `builder.part` applies the head tilt or `brakeRotate` turns
 the spring. A Union result placed after its last Union has no record, and placing the refined body keeps its
 bound. `b.refine` wraps `decad.Refine(b.ctx, body, units.Millimeters(bound))` and `b.fail`. The connector refines
 at 0.01 mm, which serves both its 0.05 mm test and the 0.01 mm clearance screen.
 
-At the default pose, the spring's last Union (the rear eye) meets an isolated point touch on the ordinary path.
-Decad then retries it with a gap shift, which moves the operand's held mesh and is not tracked, so `Refine` finds
-no record there. Following a shifted operand needs its pieces and shape moved by the recorded shift.
+With these four calls the Gallery native default Build tessellates all 190 parts at 0.12 mm, and the connector
+test passes. The full default test then stops at `footman` at 0.01 mm (held 0.0245 mm). That part is a
+rectangular bar with a hole, cut by cylinders, and its section is not a circle, so it is outside the input class.
+
+**Gap-shift retries.** When an ordinary Union meets an isolated point touch, Decad retries with a gap shift. The
+retry moves the second operand's held mesh by at most a measured displacement and leaves the true operand where it
+was (agent-docs/gap-tolerance-design.md §4). The record follows it: the moved operand's record grows every leaf's
+and hole's bound, and its drift, by that displacement (`Record.Shifted`). Its bulges are then read on the moved
+mesh. The default spring's rear eye takes this path.
+
+**Exact pieces near certified facets only.** `Refine` builds the exact pieces only for cells whose float boxes
+come within `maxBound` of a facet it certifies (`Record.PiecesNear`). A spring's 1900 helix cells mostly stay
+unbuilt.
 
 ## 10. Risks
 
@@ -274,6 +284,5 @@ no record there. Following a shifted operand needs its pieces and shape moved by
   bounds, so a thicker or shorter-span chain can be refused mid-fold before `Refine` is reachable. R6 lifts that.
 - Tracking costs every ordinary Union and Cut of tracked operands a bulge pass, and sometimes a second pre-pass.
   The Gallery default Build takes 60.6 s with tracking against 37.7 s without.
-- A gap-shift retry is not tracked, so a Union that needs one, like the default spring's last, leaves no record.
-- Coil facets bound no poke of their own, and a spring takes about 22 s to refine, mostly in building its
-  helix cells' exact pieces.
+- Coil facets bound no poke of their own: each keeps its own two-sided bound as its bulge.
+- Replay and ordered-shift paths are still not tracked.
