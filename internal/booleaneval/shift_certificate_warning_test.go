@@ -14,7 +14,7 @@ func TestStoredShiftWarningRevalidated(t *testing.T) {
 	cert, result, target, tool := shiftSnapshotFixture()
 	warning := opdiagnostic.Record{}
 	result.OperationWarnings = []opdiagnostic.Record{warning}
-	budget := proofbound.NewReplayTrialBudget()
+	budget := proofbound.NewBrakeReplayBudget()
 	snapshot, err := SnapshotShiftCertificate(t.Context(), budget, cert)
 	if err != nil {
 		t.Fatal(err)
