@@ -283,6 +283,9 @@ func Regroup(ctx context.Context, chain boolchain.Chain, env topo.Env, hooks Hoo
 | `Exact` | `Analytic(ctx, op, envAt(k), x, y, hooks)` | any error not surfaced; `ok == false`; result restates a held mesh; result has any `OperationWarnings` record |
 | `Full` | `Body(ctx, op, envAt(k), x, y, hooks)` | any error not surfaced; result has any `OperationWarnings` record |
 
+Each `Full` callback calls `Body` separately and enforces that dispatch's existing per-step limits. The two-step
+exception can consume both per-step allowances. It has no shared whole-chain work, record or byte meter.
+
 - `envAt(k)` is `env` with `Ref = env.Ref + k`, where `k` counts successful steps so far. A missed attempt does
   not advance `k`.
 - A cancellation is `ctx.Err() != nil` after the callback returns. Return `ctx.Err()`.
