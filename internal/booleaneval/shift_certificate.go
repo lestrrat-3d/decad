@@ -27,6 +27,7 @@ type ShiftCertificate struct {
 	component                         pieces
 	shift                             pieceShift
 	groups                            []facetedrecord.Group
+	groupFaces                        []*topo.Face
 	captureSeal                       *shiftCaptureSeal
 	center                            r3.Vec
 	radius, factor                    float64
@@ -44,6 +45,17 @@ func (c *ShiftCertificate) IsTranslation() bool {
 // IsPureGrowth reports a positive one-piece growth with no translation.
 func (c *ShiftCertificate) IsPureGrowth() bool {
 	return c != nil && c.shift.Move == (r3.Vec{}) && c.shift.Grow > 0 && !proofbound.IsNonFinite(c.shift.Grow)
+}
+
+// IsPureShrink reports one finite negative radial adjustment with no translation.
+func (c *ShiftCertificate) IsPureShrink() bool {
+	return c != nil && c.shift.Move == (r3.Vec{}) && c.shift.Grow < 0 && !proofbound.IsNonFinite(c.shift.Grow)
+}
+
+// IsSingleComponentAdjustment reports one finite translation or radial change.
+func (c *ShiftCertificate) IsSingleComponentAdjustment() bool {
+	return c != nil && c.component.Count() == 1 && proofbound.FiniteVec(c.shift.Move) &&
+		!proofbound.IsNonFinite(c.shift.Grow) && (c.shift.Move != (r3.Vec{}) || c.shift.Grow != 0)
 }
 
 // SealPublicCutWarning binds the unique shift warning to the committed Cut.
@@ -73,6 +85,52 @@ func (c *ShiftCertificate) SealPublicCutWarning(result provenance.Producer, warn
 	return true
 }
 
+// SealPublicUnionShrinkWarning binds the unique accepted shrink warning to its
+// committed Union. A warning without the captured mesh snapshots is not proof.
+func (c *ShiftCertificate) SealPublicUnionShrinkWarning(result provenance.Producer,
+	warnings []opdiagnostic.Record, publicOperation int) bool {
+	if c == nil || c.sealed || !c.IsPureShrink() || len(warnings) != 1 {
+		return false
+	}
+	w := warnings[0]
+	if w.Code != opdiagnostic.CodeGapShiftApplied || w.Operation != int(meshbool.OpUnion) ||
+		w.PublicOperation != publicOperation || w.Operand != 1 || w.Change != opdiagnostic.ChangeGapShift ||
+		w.ChainAllowance != nil || math.Float64bits(w.TouchedBound) != 0 ||
+		math.Float64bits(w.PairChordLimit) != 0 ||
+		math.Float64bits(w.DisplacementBound) != math.Float64bits(c.displacement) ||
+		math.Float64bits(w.AllowedReach) != math.Float64bits(c.reach) {
+		return false
+	}
+	c.resultID = result
+	c.publicWarning = w
+	c.sealed = true
+	return true
+}
+
+// SealPrivateUnionAdjustmentWarning binds a freshly evaluated private Union shift
+// to its exact uncommitted result and source operands.
+func (c *ShiftCertificate) SealPrivateUnionAdjustmentWarning(result provenance.Producer,
+	target, tool *topo.Body, warnings []opdiagnostic.Record) bool {
+	if c == nil || c.sealed || target == nil || tool == nil ||
+		!c.IsSingleComponentAdjustment() || c.target != target || c.tool != tool ||
+		c.targetID != target.Origin.Producer || c.toolID != tool.Origin.Producer || len(warnings) != 1 {
+		return false
+	}
+	w := warnings[0]
+	if w.Code != opdiagnostic.CodeGapShiftApplied || w.Operation != int(meshbool.OpUnion) ||
+		w.PublicOperation != 0 || w.Operand != 1 || w.Change != opdiagnostic.ChangeGapShift ||
+		w.ChainAllowance != nil || math.Float64bits(w.TouchedBound) != 0 ||
+		math.Float64bits(w.PairChordLimit) != 0 ||
+		math.Float64bits(w.DisplacementBound) != math.Float64bits(c.displacement) ||
+		math.Float64bits(w.AllowedReach) != math.Float64bits(c.reach) {
+		return false
+	}
+	c.resultID = result
+	c.publicWarning = w
+	c.sealed = true
+	return true
+}
+
 func captureOrdinaryShiftMesh(ctx context.Context, mesh *topo.Mesh, budget *proofbound.ReplayBudget) (*topo.Mesh, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -89,7 +147,9 @@ func captureOrdinaryShiftMesh(ctx context.Context, mesh *topo.Mesh, budget *proo
 	return snapshotShiftMesh(ctx, mesh, budget)
 }
 
-func captureShiftCertificate(ctx context.Context, a, b *topo.Body, selected, decision, charged *topo.Mesh, pc pieces, groups []facetedrecord.Group, shifts map[int]pieceShift, chord, scale, displacement float64) *ShiftCertificate {
+func captureShiftCertificate(ctx context.Context, a, b *topo.Body, selected, decision, charged *topo.Mesh, pc pieces,
+	groups []facetedrecord.Group, groupFaces []*topo.Face, shifts map[int]pieceShift,
+	chord, scale, displacement float64) *ShiftCertificate {
 	trial := proofbound.NewReplayTrialBudget()
 	if err := trial.SpendWork(ctx, 16); err != nil {
 		return nil
@@ -97,7 +157,8 @@ func captureShiftCertificate(ctx context.Context, a, b *topo.Body, selected, dec
 	if a == nil || b == nil || pc.Count() != 1 || len(shifts) != 1 || selected == nil || decision == nil || charged == nil {
 		return nil
 	}
-	if pc.VertexCount() != len(selected.Vertices) || pc.FacetCount() != len(selected.Triangles) {
+	if pc.VertexCount() != len(selected.Vertices) || pc.FacetCount() != len(selected.Triangles) ||
+		len(groups) != len(groupFaces) {
 		return nil
 	}
 	shift, ok := shifts[0]
@@ -171,10 +232,19 @@ func captureShiftCertificate(ctx context.Context, a, b *topo.Body, selected, dec
 	if err := trial.ReserveArray(ctx, 1, uint64(unsafe.Sizeof(ShiftCertificate{}))); err != nil {
 		return nil
 	}
+	if err := trial.ReserveArray(ctx, uint64(len(groupFaces)), uint64(unsafe.Sizeof((*topo.Face)(nil)))); err != nil {
+		return nil
+	}
+	faces := append([]*topo.Face(nil), groupFaces...)
+	for _, face := range faces {
+		if face == nil {
+			return nil
+		}
+	}
 	return &ShiftCertificate{target: a, tool: b, targetID: a.Origin.Producer, toolID: b.Origin.Producer,
 		selected: selectedCopy, decision: decisionCopy, charged: chargedCopy,
 		component: component,
-		shift:     shift, groups: copied, captureSeal: seal, center: center, radius: radius, factor: factor, chord: chord, scale: scale,
+		shift:     shift, groups: copied, groupFaces: faces, captureSeal: seal, center: center, radius: radius, factor: factor, chord: chord, scale: scale,
 		displacement: displacement, reach: gaptol.Reach(ctx)}
 }
 

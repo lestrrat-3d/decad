@@ -303,6 +303,7 @@
 11	0.01	TestConeFromFaceCancelled
 11	0.04	TestContactCylinderAdmissionGates
 11	0.61	TestExactCopyMassQueriesAreReadOnly
+11	0.00	TestExactMotherAxisLineUsesRationalCrossProducts
 11	0.02	TestLoftContactPartitionCapMapRefusesAmbiguousFragments
 11	0.03	TestLoftContactPartitionOtherPrismCarrier
 11	1.38	TestLoftCylinderCommonPlacementBoreEligibilityPrecedesRebuild
@@ -311,9 +312,13 @@
 11	2.91	TestLoftCylinderCommonPlacementRejectsRoundedComposition
 11	0.01	TestLoftCylinderTriangleMinRadiusMatchesRational
 11	0.08	TestLoftVolumeComposeBudgetAndCancellation
+11	0.00	TestMotherHingeUnionWarningNamesPublicCutTarget
 11	4.39	TestPlacedProxyShellsChargeExactCopies
 11	0.01	TestPublicCirclePrimitiveFaceTokenMutations
 11	0.24	TestQuarterSourceHeldY3ReverseOrder
+11	0.00	TestRemapMotherAnalyticCutFacesRejectsUnmatchedAndDuplicateOwners
+11	0.00	TestRemapMotherAnalyticCutFacesUsesUniqueRolesAndSources
 11	0.00	TestRetainedBlendStripFacetBounds
+11	0.00	TestSameMotherSurfaceMatchesExactCylinderCarriers
 11	0.02	TestSweepPairRealFacetedUnionTouchContinuations
 11	5.96	TestTopoDocumentWriteGuard

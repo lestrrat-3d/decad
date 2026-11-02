@@ -383,7 +383,8 @@ func BodyScaled(ctx context.Context, op meshbool.OperationKind, env topo.Env, a,
 		return nil, hooks.AsBooleanError(op, err)
 	}
 	body.OperationWarnings = append(body.OperationWarnings, eval.Diagnostics(op)...)
-	if op == meshbool.OpCut && (eval.ShiftCertificate.IsTranslation() || eval.ShiftCertificate.IsPureGrowth()) {
+	if op == meshbool.OpCut && (eval.ShiftCertificate.IsTranslation() || eval.ShiftCertificate.IsPureGrowth()) ||
+		op == meshbool.OpUnion && eval.ShiftCertificate != nil && eval.ShiftCertificate.IsSingleComponentAdjustment() {
 		body.PrivateShift = eval.ShiftCertificate
 	}
 
