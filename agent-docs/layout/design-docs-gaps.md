@@ -40,3 +40,4 @@ The rules for rows live in `agent-docs/layout.md`.
 | `agent-docs/boolean-continuation-design.md` | Certified source-expression continuation after an accepted geometry adjustment; set rewrites, materialization, bounds and staged proofs. |
 | `agent-docs/trim-graph-design.md` | General modify reach over retained analytic faces: trim graph, offsets, certified curves, face meshing, gates, increments. |
 | `agent-docs/revolve-operand-coarsening-design.md` | A boolean's retry of a revolve operand at up to eight times the pair tolerance after a work ceiling refuses it. |
+| `agent-docs/body-refine-design.md` | `Refine`: surface bounds for held Union meshes of convex leaves, the occupancy certificate, records and increments. |
