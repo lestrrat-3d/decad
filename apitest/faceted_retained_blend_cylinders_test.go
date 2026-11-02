@@ -204,7 +204,11 @@ func TestFacetedRetainedBlendParallelCylinders(t *testing.T) {
 		b, err = decad.Cut(t.Context(), b, cross)
 		require.NoError(t, err)
 		// The two bores meet along a curve that is not a straight generator, so
-		// none of its edges is a Line3 between two cylinders.
+		// none of its edges is a Line3 between two cylinders. The straight
+		// valley class must not read it. The crossing is a perpendicular saddle,
+		// whose own class (agent-docs/retained-edge-blend-design.md §4.10) may
+		// fillet a whole closed crossing edge with a faceted band; any other
+		// answer is a refusal.
 		found := false
 		for _, e := range b.Edges() {
 			cyl := 0
@@ -219,9 +223,27 @@ func TestFacetedRetainedBlendParallelCylinders(t *testing.T) {
 			found = true
 			_, isLine := e.Curve().(decad.Line3)
 			require.False(t, isLine)
-			_, err = decad.Fillet(t.Context(), b, decad.Edges(decad.EndpointAt(e.Start().Position().Value),
+			out, err := decad.Fillet(t.Context(), b, decad.Edges(decad.EndpointAt(e.Start().Position().Value),
 				decad.EndpointAt(e.End().Position().Value)).AtLeast(1), units.Millimeters(0.5))
-			require.ErrorIs(t, err, decad.ErrUnsupported)
+			if err != nil || e.Start().Position().Value != e.End().Position().Value {
+				require.ErrorIs(t, err, decad.ErrUnsupported)
+				break
+			}
+			cylinders := func(b *decad.Body) (n, faceted int) {
+				for _, f := range b.Faces() {
+					switch f.Surface().(type) {
+					case decad.Cylinder:
+						n++
+					case decad.Faceted:
+						faceted++
+					}
+				}
+				return n, faceted
+			}
+			before, _ := cylinders(b)
+			after, faceted := cylinders(out)
+			require.Equal(t, before, after, "no straight valley cylinder is added")
+			require.Equal(t, 1, faceted, "the saddle band is faceted")
 			break
 		}
 		require.True(t, found, "the bores meet in an edge between two cylinders")

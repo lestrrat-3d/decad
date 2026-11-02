@@ -149,6 +149,12 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 			break
 		}
 	}
+	// A needle's apex can round across its longest edge, which no float-box
+	// move clears; flipping that edge where the exact surface allows it keeps
+	// the surface and leaves no such facet to round (mesh_needle.go).
+	if _, err := FlipNeedles(ctx, xverts, tris, src, facetBound); err != nil {
+		return nil, err
+	}
 
 	// Closure audit: each directed edge exactly once, each with its reverse.
 	// A closed boundary has three edge uses per triangle and two per key.
