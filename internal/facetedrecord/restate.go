@@ -35,6 +35,9 @@ func Restate(ctx context.Context, body *topo.Body, fp Payload, chord float64) (*
 		return nil, err
 	}
 	if chord < fp.MeshBound {
+		if sigma := fp.SurfaceBounds(); sigma != nil {
+			return restateSurface(ctx, body, fp, sigma, chord)
+		}
 		return nil, &boundError{requested: chord, held: fp.MeshBound}
 	}
 	src, err := facetproof.RestateSources(ctx, topobuild.Faces(body), fp.FaceOf,
@@ -58,6 +61,44 @@ func Restate(ctx context.Context, body *topo.Body, fp Payload, chord float64) (*
 	topobuild.SetVertexBounds(m, fp.VertexBound)
 	if m.Bound != fp.MeshBound {
 		return nil, fmt.Errorf(`%w: a faceted payload's mesh bound is not the largest of its facet bounds`, decaderr.ErrBooleanFailed)
+	}
+	return m, nil
+}
+
+// restateSurface restates a refined payload's held mesh under its surface
+// bounds σ(f) (agent-docs/body-refine-design.md §3), for a chord below the
+// crossing record's floor: every face's bound is the largest σ over its own
+// facets, and the mesh publishes no per-vertex record, because σ is a
+// facet-level claim. Requests at or above that floor, which every Boolean
+// operand request is (booloperand.HeldFloor), keep the crossing restatement,
+// so the choice is a function of the tolerance alone and the one-entry cache
+// key, which carries the tolerance, never mixes the two.
+func restateSurface(ctx context.Context, body *topo.Body, fp Payload, sigma []float64, chord float64) (*topo.Mesh, error) {
+	held := 0.0
+	for _, s := range sigma {
+		held = max(held, s)
+	}
+	if chord < held {
+		return nil, &boundError{requested: chord, held: held}
+	}
+	src, err := facetproof.RestateSources(ctx, topobuild.Faces(body), fp.FaceOf,
+		len(fp.Verts), len(fp.VertexBound), len(fp.Tris))
+	if err != nil {
+		return nil, err
+	}
+	m := &topo.Mesh{
+		Vertices:   fp.Verts,
+		Triangles:  fp.Tris,
+		AreaSlack:  fp.AreaSlack,
+		VolSymDiff: fp.VolSymDiff,
+		SymDiffOK:  true,
+		Source:     src,
+	}
+	for t := range m.Triangles {
+		topobuild.SetFaceBound(m, m.Source[t], sigma[t])
+	}
+	if m.Bound != held {
+		return nil, fmt.Errorf(`%w: a refined payload's mesh bound is not the largest of its surface bounds`, decaderr.ErrBooleanFailed)
 	}
 	return m, nil
 }

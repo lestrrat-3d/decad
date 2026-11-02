@@ -13,6 +13,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"math"
 	"math/big"
 	"unsafe"
 
@@ -26,6 +28,8 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/occupancy"
+	"github.com/lestrrat-3d/decad/internal/occupancyleaf"
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -550,6 +554,16 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		}
 		return Evaluation{}, err
 	}
+	// A refined operand (agent-docs/body-refine-design.md §3, R6) carries a
+	// surface bound per facet: its true boundary near the facet lies within
+	// that of the facet, which is all a slab half-width states. The rim
+	// composition and the held-mesh gate read the smaller of it and the
+	// crossing bound; vertex bounds, and so every reading of the new result's
+	// old rims, keep the crossing record. A moved copy adds its move.
+	if replay == nil && fixed == nil {
+		surfaceSlabs(a, ma, bmA, 0)
+		surfaceSlabs(b, mb, bmB, shiftDisplacement)
+	}
 	// A restating operand's facets where the pair meets must hold within the
 	// pair tolerance; the gate reads them on the contact classification below
 	// (agent-docs/faceted-vertex-bounds-design.md §5). Any other operand is ungated.
@@ -605,6 +619,34 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	}
 	var kept []meshbool.KeptFacet
 	var maxRim float64
+	// The occupancy record (agent-docs/body-refine-design.md §5) is tracked on
+	// the ordinary Union path only. deepTerm stays +Inf, which no record
+	// admits, on every path that does not report it.
+	deepTerm := math.Inf(1)
+	var sites [][2]r3.Vec
+	var occA, occB *occupancy.Record
+	// A gap-shift retry moves b's held mesh by at most shiftDisplacement and
+	// leaves the true operand where it was (agent-docs/gap-tolerance-design.md
+	// §4), so b's record holds once its leaves' bounds and drift grow by that.
+	trackOccupancy := (op == meshbool.OpUnion || op == meshbool.OpCut) &&
+		replay == nil && ordered == nil && fixed == nil && capFace == nil && coneFace == nil
+	if trackOccupancy {
+		if occA = occupancyleaf.Of(a, ma); occA != nil {
+			if occB = occupancyleaf.Of(b, unmoved); occB != nil && hasShifts {
+				occB = occB.Shifted(shiftDisplacement)
+			}
+			if occB != nil {
+				bmA.Bulge = occupancyleaf.Bulges(occA, ma)
+				if op == meshbool.OpCut {
+					// A tool facet's bulge is how far the true tool reaches past
+					// it: the tool mesh's own two-sided bound.
+					bmB.Bulge = occupancyleaf.Deltas(mb)
+				} else {
+					bmB.Bulge = occupancyleaf.Bulges(occB, mb)
+				}
+			}
+		}
+	}
 	var replayKeys *meshbool.ReplayKeys
 	if replay != nil {
 		replayKeys, err = meshbool.NewReplayKeysBounded(ctx, replay)
@@ -613,7 +655,12 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		}
 		kept, maxRim, err = meshbool.MeshBooleanReplayWithKeys(ctx, op, bmA, bmB, memo, replay, replayKeys)
 	} else {
-		kept, maxRim, err = meshbool.MeshBoolean(ctx, op, bmA, bmB, memo)
+		var stats meshbool.Stats
+		kept, stats, err = meshbool.MeshBooleanStats(ctx, op, bmA, bmB, memo)
+		maxRim = stats.MaxRim
+		if trackOccupancy && bmA.Bulge != nil {
+			deepTerm, sites = localDeepTerm(op, occA, occB, ma, mb, stats.Contacts)
+		}
 	}
 	if err != nil {
 		return Evaluation{}, meshbool.StagingError(op, err)
@@ -694,6 +741,12 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		AreaSlack:   areaSlack,
 		DPair:       dPair,
 		Xform:       r3.Identity(),
+	}
+	if trackOccupancy && bmA.Bulge != nil {
+		payload.Occupancy = composeOccupancy(ctx, op, occA, occB, bmA, bmB, ma, mb, memo, stitched.Round, deepTerm, sites)
+		if payload.Occupancy != nil {
+			payload.Occupancy.Mesh = occupancy.Bind(payload.Verts, payload.Tris)
+		}
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -803,3 +856,135 @@ func shiftsHaveSingleComponentAdjustment(shifts map[int]pieceShift) bool {
 // operand owner, at position ordinal of topobuild.Faces(owner): the face's
 // retained tag (facetedrecord.SourceTag, flipped for the tool of a Cut) charged
 // with the placed operand's departure, its roles and its identity.
+
+// composeOccupancy composes agent-docs/body-refine-design.md §5's record for
+// one mesh Union or Cut of two tracked operands, or nil. The deep-point step
+// needs every pair of held facets t, u that come within 2·max(λ(t), λ(u)) of
+// each other without a proven crossing to have been refused. The
+// hidden-tangency pre-pass refuses every face pair within slack
+// δ(face(t)) + δ(face(u)) (agent-docs/tessellation-design.md §11 step 4), so
+// it suffices that each facet near the other operand has 2·λ(t) below its own
+// face's bound. Where that fails, the same pre-pass runs again over face
+// bounds raised to cover twice each face's largest bulge; a refusal there
+// drops the record and changes nothing about the Boolean itself.
+func composeOccupancy(ctx context.Context, op meshbool.OperationKind, ra, rb *occupancy.Record, bmA, bmB *meshbool.BoolMesh,
+	ma, mb *topo.Mesh, memo *meshbool.ContactMemo, weld, deepTerm float64, sites [][2]r3.Vec) *occupancy.Record {
+	if !gateCovers(bmA, ma, bmB) || !gateCovers(bmB, mb, bmA) {
+		wa, wb := widenedFaceBounds(ma, bmA.Bulge), widenedFaceBounds(mb, bmB.Bulge)
+		if err := meshbool.RefuseUndecidableProximity(ctx, wa, wb, bmA, bmB, memo, nil, nil); err != nil {
+			return nil
+		}
+	}
+	if op == meshbool.OpCut {
+		return occupancy.CutCompose(ra, rb, weld, deepTerm, sites)
+	}
+	return occupancy.Compose(ra, rb, weld, deepTerm, sites)
+}
+
+// widenedFaceBounds is a shallow copy of m whose face bounds are raised to
+// twice the largest bulge over each face's facets, padded past the float
+// rounding of the sum.
+func widenedFaceBounds(m *topo.Mesh, bulge []float64) *topo.Mesh {
+	out := *m
+	out.FaceBound = make(map[*topo.Face]float64, len(m.FaceBound))
+	maps.Copy(out.FaceBound, m.FaceBound)
+	for t, b := range bulge {
+		f := m.Source[t]
+		if need := 2 * b * (1 + 1e-9); need > out.FaceBound[f] {
+			out.FaceBound[f] = need
+		}
+	}
+	return &out
+}
+
+// gateCovers reports whether every facet of m whose box comes within twice
+// its bulge of other's box has twice its bulge strictly below its source
+// face's bound.
+func gateCovers(m *meshbool.BoolMesh, mesh *topo.Mesh, other *meshbool.BoolMesh) bool {
+	lo, hi := other.Boxes[0][0], other.Boxes[0][1]
+	for _, b := range other.Boxes[1:] {
+		lo = r3.Vec{X: math.Min(lo.X, b[0].X), Y: math.Min(lo.Y, b[0].Y), Z: math.Min(lo.Z, b[0].Z)}
+		hi = r3.Vec{X: math.Max(hi.X, b[1].X), Y: math.Max(hi.Y, b[1].Y), Z: math.Max(hi.Z, b[1].Z)}
+	}
+	for t, b := range m.Bulge {
+		if b == 0 {
+			continue
+		}
+		// Widened past the float rounding of the comparison below.
+		pad := 2 * b * (1 + 1e-9)
+		box := m.Boxes[t]
+		if box[0].X-pad > hi.X || lo.X > box[1].X+pad || box[0].Y-pad > hi.Y || lo.Y > box[1].Y+pad ||
+			box[0].Z-pad > hi.Z || lo.Z > box[1].Z+pad {
+			continue
+		}
+		face, ok := mesh.FaceBound[mesh.Source[t]]
+		if !ok || !(proofbound.AbsSumUpper(b, b) < face) {
+			return false
+		}
+	}
+	return true
+}
+
+// localDeepTerm is the largest, over every contact segment, of
+// 2·max(λ_a, λ_b)/sin θ with each λ read at that segment
+// (occupancy.Record.LocalBulge); a Cut tool's facets read their own bound. It
+// answers +Inf for a segment with no proven positive sine or a term past
+// occupancy.SiteReach, and the segments' boxes as the step's crossing sites.
+func localDeepTerm(op meshbool.OperationKind, ra, rb *occupancy.Record, ma, mb *topo.Mesh, contacts []meshbool.ContactSite) (float64, [][2]r3.Vec) {
+	da, db := occupancyleaf.Deltas(ma), occupancyleaf.Deltas(mb)
+	corners := func(m *topo.Mesh, t int) [3]r3.Vec {
+		tri := m.Triangles[t]
+		return [3]r3.Vec{m.Vertices[tri[0]], m.Vertices[tri[1]], m.Vertices[tri[2]]}
+	}
+	deep := 0.0
+	sites := make([][2]r3.Vec, 0, len(contacts))
+	for _, c := range contacts {
+		sites = append(sites, c.Box)
+		la := ra.LocalBulge(corners(ma, c.I), da[c.I], c.Box)
+		lb := db[c.J]
+		if op != meshbool.OpCut {
+			lb = rb.LocalBulge(corners(mb, c.J), db[c.J], c.Box)
+		}
+		if b := max(la, lb); b > 0 {
+			deep = max(deep, proofbound.DivUpper(proofbound.AbsSumUpper(b, b), c.Sin))
+		}
+	}
+	if !(deep < occupancy.SiteReach) {
+		return math.Inf(1), sites
+	}
+	return deep, sites
+}
+
+// surfaceSlabs lowers bm's slab half-widths to the operand's refined surface
+// bounds, raised by move, when the operand is a refined faceted body whose
+// restated mesh is its held one facet for facet, and records each source
+// face's largest such bound for the proximity gate (BoolMesh.FaceSurface).
+func surfaceSlabs(body *topo.Body, mesh *topo.Mesh, bm *meshbool.BoolMesh, move float64) {
+	fp, ok := body.Payload.(facetedrecord.Payload)
+	if !ok {
+		return
+	}
+	sigma := fp.SurfaceBounds()
+	if sigma == nil || len(sigma) != len(mesh.Triangles) || len(bm.SlabBound) != len(sigma) {
+		return
+	}
+	for t, tri := range mesh.Triangles {
+		if tri != fp.Tris[t] {
+			return
+		}
+	}
+	if len(mesh.Source) != len(sigma) {
+		return
+	}
+	face := make(map[*topo.Face]float64)
+	for t, s := range sigma {
+		v := proofbound.AbsSumUpper(s, move)
+		if v < bm.SlabBound[t] {
+			bm.SlabBound[t] = v
+		}
+		if f := mesh.Source[t]; f != nil {
+			face[f] = max(face[f], v)
+		}
+	}
+	bm.FaceSurface = face
+}

@@ -66,11 +66,11 @@ func RefuseUndecidableProximity(ctx context.Context, ma, mb *topo.Mesh, bmA, bmB
 		Detail: `the operands' held facets come within the chord tolerance without provably interpenetrating deeper than it, so whether their true surfaces touch or cross is decided by where the chords fall — this evaluator refuses the question rather than answer it wrong`,
 	}
 	budget := proofbound.NewWorkBudget(ctx)
-	fa, err := facesOfMesh(budget, ma, bmA.Boxes)
+	fa, err := facesOfMesh(budget, ma, bmA.Boxes, bmA.FaceSurface)
 	if err != nil {
 		return err
 	}
-	fb, err := facesOfMesh(budget, mb, bmB.Boxes)
+	fb, err := facesOfMesh(budget, mb, bmB.Boxes, bmB.FaceSurface)
 	if err != nil {
 		return err
 	}
@@ -276,7 +276,7 @@ type faceFacets struct {
 // A source face the mesh states no bound for is a broken evaluator, not a
 // staged capability: it returns ErrBooleanFailed rather than an ErrUnsupported
 // that Verify would hide as an undecided pair, and never a zero.
-func facesOfMesh(budget *proofbound.WorkBudget, m *topo.Mesh, boxes [][2]r3.Vec) ([]faceFacets, error) {
+func facesOfMesh(budget *proofbound.WorkBudget, m *topo.Mesh, boxes [][2]r3.Vec, surface map[*topo.Face]float64) ([]faceFacets, error) {
 	index := map[*topo.Face]int{}
 	var out []faceFacets
 	for i, f := range m.Source {
@@ -288,6 +288,9 @@ func facesOfMesh(budget *proofbound.WorkBudget, m *topo.Mesh, boxes [][2]r3.Vec)
 			delta, stated := m.FaceBound[f]
 			if !stated {
 				return nil, fmt.Errorf(`%w: an operand's tessellation states no displacement bound for one of its own source faces`, decaderr.ErrBooleanFailed)
+			}
+			if sigma, ok := surface[f]; ok && sigma < delta {
+				delta = sigma
 			}
 			k = len(out)
 			index[f] = k

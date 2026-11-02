@@ -9,7 +9,7 @@
 # in the lightest shard. Rebalance only from measured costs.
 #
 # Shard totals at the last measurement:
-#   shard 0:    0.00s over 1 tests
+#   shard 0:   86.70s over 8 tests
 #   shard 1:  220.34s over 277 tests
 #   shard 2:  210.88s over 267 tests
 #   shard 3:  183.01s over 264 tests
@@ -19,8 +19,8 @@
 #   shard 7:  214.20s over 265 tests
 #   shard 8:  230.93s over 271 tests
 #   shard 9:  222.62s over 263 tests
-#   shard 10:  207.36s over 271 tests
-#   shard 11:  218.86s over 272 tests
+#   shard 10:  207.36s over 273 tests
+#   shard 11:  218.88s over 275 tests
 #
 0	0.00	TestZeroPathHasNoSegments
 1	0.03	TestArcSegExactQuarterDisk
@@ -2973,3 +2973,10 @@
 11	0.01	TestWholeCircleEdgeSeamVertices
 11	0.01	TestUnionTorusArcWithStemCoarsensItsOperandPastTheCeilings
 11	0.01	TestUnionTorusArcWithStemShortSweep
+0	31.82	TestRefineBentCylinderChains
+0	19.22	TestRefineLeaderLiftsTheTessellateRefusal
+0	2.54	TestRefineRefusals
+0	10.52	TestRefineTubeEyes
+0	13.46	TestRefineBoredBend
+0	0.41	TestRefineDrilledBar
+0	8.73	TestRefineLetsAChainContinue

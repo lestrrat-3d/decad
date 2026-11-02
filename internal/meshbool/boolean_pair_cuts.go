@@ -2,9 +2,12 @@ package meshbool
 
 import (
 	"context"
+	"math"
 	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/r3"
 )
 
 type pairCutsResult struct {
@@ -12,6 +15,13 @@ type pairCutsResult struct {
 	BlockedA, BlockedB map[[2]int]struct{}
 	Rims               map[string]float64
 	MaxRim             float64
+	// MinSin is the smallest proven crossing sine over the pair's contact
+	// segments, +Inf when none crosses (Stats.MinSin).
+	MinSin float64
+	// DeepTerm is Stats.DeepTerm.
+	DeepTerm float64
+	// Contacts is Stats.Contacts.
+	Contacts []ContactSite
 }
 
 func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf func(proof.Xpt) string) (pairCutsResult, error) {
@@ -25,6 +35,12 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 	// to the largest RimBound over the facet pairs whose segment ends there.
 	rims := map[string]float64{}
 	maxRim := 0.0
+	minSin := math.Inf(1)
+	deepTerm := 0.0
+	if ma.Bulge == nil || mb.Bulge == nil {
+		deepTerm = math.Inf(1)
+	}
+	var contactSites []ContactSite
 	// touchedA and touchedB are the facets of each operand that meet the
 	// other, which the held-mesh gate reads once classification is done.
 	var touchedA, touchedB []int
@@ -57,6 +73,18 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 		}
 		rim := RimBound(ma.SlabBound[i], mb.SlabBound[j], c.Sin2)
 		maxRim = max(maxRim, rim)
+		sin := 0.0
+		if c.Sin2 != nil {
+			sin = SinLowerBound(c.Sin2)
+		}
+		minSin = min(minSin, sin)
+		if !math.IsInf(deepTerm, 1) {
+			contactSites = append(contactSites, ContactSite{I: i, J: j, Sin: sin, Box: segmentSite(c.P0, c.P1)})
+			bulge := max(ma.Bulge[i], mb.Bulge[j])
+			if bulge > 0 {
+				deepTerm = max(deepTerm, proofbound.DivUpper(proofbound.AbsSumUpper(bulge, bulge), sin))
+			}
+		}
 		for _, p := range []proof.Xpt{c.P0, c.P1} {
 			k := keyOf(p)
 			if prev, ok := rims[k]; !ok || rim > prev {
@@ -203,5 +231,16 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 		}
 	}
 
-	return pairCutsResult{cutsA, cutsB, blockedA, blockedB, rims, maxRim}, nil
+	return pairCutsResult{cutsA, cutsB, blockedA, blockedB, rims, maxRim, minSin, deepTerm, contactSites}, nil
+}
+
+// segmentSite is a float box that holds the exact contact segment p0–p1:
+// each rounded endpoint is within half an ulp, which one ulp outward covers.
+func segmentSite(p0, p1 proof.Xpt) [2]r3.Vec {
+	a, b := p0.Vec(), p1.Vec()
+	inf := math.Inf(1)
+	return [2]r3.Vec{
+		{X: math.Nextafter(math.Min(a.X, b.X), -inf), Y: math.Nextafter(math.Min(a.Y, b.Y), -inf), Z: math.Nextafter(math.Min(a.Z, b.Z), -inf)},
+		{X: math.Nextafter(math.Max(a.X, b.X), inf), Y: math.Nextafter(math.Max(a.Y, b.Y), inf), Z: math.Nextafter(math.Max(a.Z, b.Z), inf)},
+	}
 }

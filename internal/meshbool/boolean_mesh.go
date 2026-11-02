@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -40,6 +41,17 @@ type BoolMesh struct {
 	// FacetBound except for a facet of a retained plane, whose true piece lies
 	// in that exact plane (SetSlabBounds).
 	SlabBound []float64
+	// FaceSurface, when set, is a source face's surface bound: every true
+	// point of that face lies within it of the face's held facets, and every
+	// held point within it of the true face. Refine records it
+	// (agent-docs/body-refine-design.md §3); the proximity gate reads the
+	// smaller of it and the mesh's FaceBound.
+	FaceSurface map[*topo.Face]float64
+	// Bulge is λ(t) per facet when the caller tracks an occupancy record
+	// (agent-docs/body-refine-design.md §5): every point of this operand's held
+	// solid outside its true solid lies within Bulge[t] of some facet t. nil
+	// when untracked; Stats.DeepTerm then reads +Inf.
+	Bulge []float64
 	// Gate is the pair's chord tolerance when this operand restates a held
 	// mesh (a boolean result or a mitred sweep), and zero for every other
 	// operand. A gated operand's facets that meet the other operand, or come
@@ -175,6 +187,37 @@ func MeshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 	return meshBoolean(ctx, op, ma, mb, memo, newKeyMemo)
 }
 
+// Stats are the contact figures one MeshBooleanStats call proves beside its
+// kept facets. MaxRim is MeshBoolean's rim figure. MinSin is the smallest
+// proven crossing sine over every contact segment, +Inf when no segment
+// crosses and 0 when one has no proven positive sine; the occupancy record
+// reads it (agent-docs/body-refine-design.md §5).
+type Stats struct {
+	MaxRim float64
+	MinSin float64
+	// DeepTerm is the largest, over every contact segment of facets t and u,
+	// of 2·max(Bulge_a[t], Bulge_b[u])/sin θ(t, u): +Inf when either operand
+	// tracks no bulge or a segment has no proven positive sine.
+	DeepTerm float64
+	// Contacts lists every contact segment, its facet pair, proven sine and
+	// a float box holding it; nil when either operand tracks no bulge.
+	Contacts []ContactSite
+}
+
+// ContactSite is one contact segment of facet I of the first operand and J of
+// the second: Sin its proven crossing sine (0 when none) and Box a float box
+// holding the exact segment.
+type ContactSite struct {
+	I, J int
+	Sin  float64
+	Box  [2]r3.Vec
+}
+
+// MeshBooleanStats is MeshBoolean that also returns Stats.
+func MeshBooleanStats(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *ContactMemo) ([]KeptFacet, Stats, error) {
+	return meshBooleanStats(ctx, op, ma, mb, memo, newKeyMemo)
+}
+
 // maxTouchContacts is how many coplanar facet pairs a refusal records. The
 // scan stops there: a mesh that coplanar everywhere needs no more to be refused.
 const maxTouchContacts = 64
@@ -204,29 +247,34 @@ func touchOf(ma *BoolMesh, i, j int) TouchContact {
 // and its keys travel on the kept facets into the stitch, so a point the two
 // operands share is canonicalized once.
 func meshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *ContactMemo, newKeyOf func() func(proof.Xpt) string) ([]KeptFacet, float64, error) {
+	kept, stats, err := meshBooleanStats(ctx, op, ma, mb, memo, newKeyOf)
+	return kept, stats.MaxRim, err
+}
+
+func meshBooleanStats(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *ContactMemo, newKeyOf func() func(proof.Xpt) string) ([]KeptFacet, Stats, error) {
 	wantA, wantB, flipB, err := BooleanKeep(op)
 	if err != nil {
-		return nil, 0, err
+		return nil, Stats{}, err
 	}
 	keyOf := newKeyOf()
 
 	cuts, err := pairCuts(ctx, ma, mb, memo, keyOf)
 	if err != nil {
-		return nil, 0, err
+		return nil, Stats{}, err
 	}
 
 	if err := ctx.Err(); err != nil {
-		return nil, 0, err
+		return nil, Stats{}, err
 	}
 	keepA, err := keepSide(ctx, ma, mb, cuts.CutsA, cuts.BlockedA, cuts.Rims, wantA, false, keyOf)
 	if err != nil {
-		return nil, 0, err
+		return nil, Stats{}, err
 	}
 	keepB, err := keepSide(ctx, mb, ma, cuts.CutsB, cuts.BlockedB, cuts.Rims, wantB, flipB, keyOf)
 	if err != nil {
-		return nil, 0, err
+		return nil, Stats{}, err
 	}
-	return append(keepA, keepB...), cuts.MaxRim, nil
+	return append(keepA, keepB...), Stats{MaxRim: cuts.MaxRim, MinSin: cuts.MinSin, DeepTerm: cuts.DeepTerm, Contacts: cuts.Contacts}, nil
 }
 
 // EdgeCrosses decides whether edge k of facet f — which lies exactly in the
