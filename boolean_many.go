@@ -6,11 +6,6 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/axialsection"
-	"github.com/lestrrat-3d/decad/internal/booleandispatch"
-	"github.com/lestrrat-3d/decad/internal/loftrecord"
-	"github.com/lestrrat-3d/decad/internal/meshbool"
-	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
-	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/unionmany"
 )
 
@@ -107,59 +102,11 @@ func unionManyRoutes(ctx context.Context, d *Document, ref producerID, operands 
 	return bodyHandle(node), span, err
 }
 
-// tryPrismUnionChain gives prism inputs and exact straight-source Loft inputs
-// the same pair evaluator as two-body Union. Every intermediate body is
-// transient. The caller commits only the final certified result and reserves
-// every producer identity used by its intermediate features.
+// tryPrismUnionChain unwraps private Body.n fields and supplies the handle
+// allocator, typed-error hooks and root invariant predicate to unionmany.
+// Its caller has already resolved the document's evaluator tolerances.
 func tryPrismUnionChain(ctx context.Context, ref producerID, operands []*Body, regroupThree bool) (*Body, producerID, bool, error) {
-	firstPrism := false
-	for i, operand := range operands {
-		if _, ok := operand.n.Payload.(prismPayload); ok {
-			if i < 2 {
-				firstPrism = true
-			}
-			continue
-		}
-		loft, ok := operand.n.Payload.(loftPayload)
-		if !ok {
-			return nil, 0, false, nil
-		}
-		if _, ok, err := loftrecord.ExactAxialPrism(ctx, loft); err != nil {
-			return nil, 0, true, err
-		} else if !ok {
-			return nil, 0, false, nil
-		}
-	}
-	if !firstPrism {
-		return nil, 0, false, nil
-	}
-	result := operands[0]
-	var warnings opdiagnostic.UnionSummaries
-	for i, operand := range operands[1:] {
-		if err := ctx.Err(); err != nil {
-			return nil, 0, true, err
-		}
-		var err error
-		result, err = booleanBody(ctx, meshbool.OpUnion, result, operand, ref+producerID(i))
-		if err != nil {
-			var held *meshbool.CoarseHeldContactError
-			if regroupThree && len(operands) == 3 && i == 1 && errors.As(err, &held) && held.Operand == 0 {
-				// The original source sets associate without reusing the coarse rim.
-				// Both alternate pairs retain every ordinary proof and refusal gate.
-				nodes := [3]*topo.Body{bodyNode(operands[0]), bodyNode(operands[1]), bodyNode(operands[2])}
-				node, span, ok, retryErr := booleandispatch.RegroupUnionThree(ctx, nodes,
-					envOf(operands[0].n.Doc, ref), booleanHooks(booleanConfig{}), regroupSurfaces)
-				if retryErr != nil {
-					return nil, 0, true, retryErr
-				}
-				if ok {
-					return bodyHandle(node), span, true, nil
-				}
-			}
-			return nil, 0, true, err
-		}
-		warnings.AddPair(result.n.OperationWarnings, i+1)
-	}
-	result.n.OperationWarnings = warnings.Records()
-	return result, producerID(len(operands) - 1), true, nil
+	node, span, matched, err := unionmany.PrismChain(ctx, envOf(operands[0].n.Doc, ref), bodyNodes(operands),
+		regroupThree, booleanHooks(booleanConfig{}), regroupSurfaces)
+	return bodyHandle(node), span, matched, err
 }
