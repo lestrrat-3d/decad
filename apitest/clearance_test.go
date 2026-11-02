@@ -41,7 +41,7 @@ func boxBody(t *testing.T, doc *decad.Document, x0, y0, x1, y1, h float64) *deca
 // needs a clean transversal crossing — no operand face landing exactly on
 // the other operand's own face plane — reaches for this rather than boxBody,
 // whose z0 is always 0.
-func boxBodyAtZ(t *testing.T, doc *decad.Document, x0, y0, x1, y1, z0, h float64) *decad.Body {
+func boxBodyAtZ(t testing.TB, doc *decad.Document, x0, y0, x1, y1, z0, h float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
 	plane, err := w.CreateOffsetPlane(w.XY(), z0)

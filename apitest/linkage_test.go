@@ -60,7 +60,7 @@ func (a foldingArm) drive() decad.Drive {
 	}
 }
 
-func verifyLinkage(t *testing.T, doc *decad.Document, l *decad.Linkage, d decad.Drive, opts ...decad.MotionOption) *decad.LinkageReport {
+func verifyLinkage(t testing.TB, doc *decad.Document, l *decad.Linkage, d decad.Drive, opts ...decad.MotionOption) *decad.LinkageReport {
 	t.Helper()
 	before := doc.Bodies()
 	report, err := doc.VerifyLinkage(t.Context(), l, d, opts...)
