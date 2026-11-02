@@ -1,11 +1,11 @@
 # Body Refine: surface bounds for held Union meshes
 
-`Refine` re-certifies the held mesh of a mesh-Boolean `Union` result against the true solids its leaves denote,
-and returns a fresh body whose `Mesh.Bound()` is that certified surface bound. It changes no held vertex.
+`Refine` re-certifies the held mesh of a chain of mesh-Boolean `Union` and `Cut` results against the true solids
+its leaves denote, and returns a fresh body whose `Mesh.Bound()` is that certified surface bound. It changes no
+held vertex.
 Companion to `agent-docs/faceted-vertex-bounds-design.md` ("vertex-bounds §N"), whose §3.2 rim rule and §3.6
 shallow-crossing note this design answers, and to `agent-docs/tessellation-design.md` ("tessellation §N"), whose
-§7 restatement refusal it lifts for a refined body. Increments R1–R3 (§9) implement it for Unions of extruded
-circles; R4–R6 are design only.
+§7 restatement refusal it lifts for a refined body. Increments R1–R5 (§9) implement it; R6 is design only.
 
 ## 1. Problem
 
@@ -63,93 +63,107 @@ Boolean keeps reading the crossing record, which stays sound and only stays as l
 
 ## 4. Input class
 
-A **convex leaf** is a solid whose true set `C` is convex and whose producer proves three facts about the held
-polyhedron `A'` the Boolean used:
+A **leaf** is a solid whose true set `C` the record can read, held as:
 
-- **(L) inscription**: `A' ⊂ C^{+ρ}`, `ρ` the held mesh's coordinate and placement rounding;
-- **(T) coverage**: `C ⊂ A'^{+δ}`, `δ` that mesh's published two-sided bound;
-- **(U) outer piece**: an exact convex polyhedron `U ⊇ C`, held as rational vertices and planes.
+- **outer pieces**: exact convex polyhedra, rational vertices and planes, whose union contains `C`;
+- a **shape** that bounds, for any held triangle, how far its points lie outside `C` (its *poke*);
+- **(T) coverage**: `C ⊂ A'^{+δ}`, `δ` the published two-sided bound of the held mesh `A'` the Boolean used;
+- for a leaf a `Cut` may use as a tool, **inner pieces**: exact convex polyhedra inside `C`.
 
-The first slice admits one leaf kind: a prism payload whose section is one full circle, any extrusion, any rigid
-placement. The chord polygon is inscribed, so (L) and (T) are its existing proofs. `U` is a circumscribed `m`-gon
-prism built from rational directions `u_k` with offsets `c_k ≥ r·|u_k|` (checked as `c_k² ≥ r²·u_k·u_k`), both
-cap levels widened by their recorded displacement, and mapped by the stored frame and placement read as exact
-rationals. Since an affine map keeps containment, `U ⊇ C` holds whether or not the stored matrix is exactly
-orthogonal. A stacked payload of coaxial circle slabs is one leaf per slab.
+Leaves come from four payloads (`internal/occupancyleaf`):
 
-A **convex union** is a `Union` tree whose every leaf is a convex leaf. The mesh Boolean composes its record
-(§6). `Cut`, `Intersect`, modify operations and placement drop it.
+| Payload | Leaf | Outer pieces | Poke |
+|---|---|---|---|
+| prism of one whole CCW circle | the placed cylinder | one circumscribed 128-gon prism; an inscribed 128-gon prism inside | exact: each corner taken back to local coordinates, radial plus axial excess (both convex, so corners bound the facet), stretched by the maps' Frobenius norms; a corner the float inverse puts inside by 1e-6 of the section skips the exact reading |
+| stack of slabs of one circle at contiguous levels | one cylinder | as above | as above |
+| Revolve of one whole circle clear of its axis | an arc tube about the spine circle, full or partial | one 64-gon prism per angular cell about the cell's chord, widened by the arc's sagitta over the cell and extended by `ρ·d/2` at both ends; cells of sagitta at most 1e-4 mm | float, below |
+| Sweep of one whole circle along lines and arcs | one leaf per span: a cylinder for a line, an arc tube for an arc (the spans' own prism and Revolve reductions) | as for each kind | as for each kind |
+
+A circumscribed polygon uses rational directions `u_k` with offsets `c_k ≥ r·|u_k|` (checked as
+`c_k² ≥ r²·u_k·u_k`), and every corner is checked against every side. An inscribed one uses float corners proven
+exactly inside the circle. The record's section and level displacements widen the outer pieces and narrow the
+inner ones. The prism maps (frame `(U, V, N = U×V)`, then placement) are read as exact rationals
+(`prismrecord.Payload.Point`). The Revolve maps follow `revolvemesh.RevolveLift.Point`.
+
+**Arc tube poke.** Write a point's meridian offset from the spine as `P = (r − R, h)`. Over a triangle `h` is
+affine and `r` convex; across corners spanning an angle `α` about the axis, `r` lies between its corner
+interpolation `r_lin` and `r_lin·cos(α/2)`. So `P = (A − c, h)`, with `A` affine and `0 ≤ c ≤ r_max(1 − cos(α/2))`,
+and `|P|² ≤ M² + 2Nc + c²`. Here `M` is the largest corner `|(A, h)|` and `N` the largest corner `R − r`, floored
+at zero. An outer-side facet pokes out by at most `c²/(2ρ)`, an inner-side one by about `c`. A corner outside a
+partial arc's range, or corners spanning half a turn, read `+Inf`, and the facet falls back to its own bound.
+
+**The arc tube reading is in floats, not rationals.** Spine points, cell frames and the poke use float
+trigonometry, widened by a relative `1e-12` of their magnitude plus the record's displacements. That margin
+exceeds float evaluation by four orders of magnitude, but it is a charged allowance, not an exact proof. The
+cylinder reading is exact.
 
 ## 5. The certificate
 
-Let `X = ∪ C_i` be the true union and `X'` the held mesh. `occupancy.Record` carries three figures, each proven
-for the held mesh it is bound to:
+`X` is the true solid: the union of the record's leaves less the union of its holes. `X'` is the held mesh. The
+record (`occupancy.Record`) carries:
 
-- `Excess`: `X' ⊂ X^{+Excess}`;
-- `Drift`: `∪ A'_i ⊂ X'^{+Drift}`, the held leaf meshes against the held result;
-- `Deep`: every point of `X'` deeper than `Deep` lies in `X`.
+- `Drift`: `∪ A'_i ⊂ X'^{+Drift}`, the summed weld drift;
+- `Cross`: the accumulated crossing depth;
+- `Sites`: one float box per contact segment of every earlier step;
+- `Holes`: the tool leaves every `Cut` removed. `X = (∪ leaves) ∖ (∪ holes)` holds for Unions followed by Cuts.
+  A Union of two records with holes is admitted only when both name the same tools, as a distributive Cut retry
+  produces, because `(A ∖ H) ∪ (C ∖ H) = (A ∪ C) ∖ H`.
 
-A leaf starts at `Excess = Deep = ρ`, `Drift = 0`. A ball inside `C^{+ρ}` around a point outside the convex `C`
-has radius at most `ρ`, which gives its `Deep`. One Union step with largest weld `w`, smallest proven crossing
-sine `s` and smallest hidden-tangency slack `b` composes (`occupancy.Compose`):
+**Bulge.** For a held mesh of the record, every point of `X'` outside `X` lies within `λ(t)` of some facet `t`
+(`Record.Bulges`). `λ(t)` is the smallest of the facet's own two-sided bound and the largest of three readings:
+its poke out of the nearest leaf; the bound of any hole whose cells it is near, because the true hole reaches past
+the held tool wall by at most the tool mesh's bound; and `Cross` when it is near an earlier site.
 
-```text
-Excess = max(Excess_A, Excess_B) + w
-Drift  = max(Drift_A, Drift_B) + w
-Deep   = 2·max(Deep_A, Deep_B)/s + w        (max(Deep_A, Deep_B) + w when no segment crosses)
-```
+**One step.** At a contact segment of facets `t` and `u` with proven sine `s`, a point shallow in both held operands
+but deep in their union lies within `2·max(λ(t), λ(u))/s` of the crossing line, which is on the result's boundary.
+For each segment, `λ` is read at that segment (`Record.LocalBulge`). Hole and site sources count only within
+`SiteReach` (1 mm) of it, and the step's term must stay below that reach. A Cut tool facet reads its own bound. The
+step composes `Cross = max(Cross_A, Cross_B, deep term) + w` and `Drift = max(...) + w`, and appends its segment
+boxes to `Sites`.
 
-The `Deep` step rests on one fact. A point shallow in both held operands but deep in their union lies within
-`max Deep` of both held surfaces, so within `2·max Deep / sin θ` of a crossing line on the union's boundary.
-That holds only if every pair of held surfaces that come that close is a proven crossing. The hidden-tangency
-pre-pass (tessellation §11 step 4) refuses any face pair within its slack `b` that has no proven crossing deeper
-than `b`. Compose therefore checks `b > 2·max Deep` and returns no record otherwise. `b` is read as the sum of
-the two meshes' smallest face bounds, stepped down one float. A step with a segment that has no proven positive
-sine also returns no record.
+The step needs one more fact. Every pair of held facets that come within `2·max(λ)` of each other without a proven
+crossing must have been refused. The hidden-tangency pre-pass refuses any face pair within
+`δ(face(t)) + δ(face(u))` that has no proven crossing deeper than that (tessellation §11 step 4). So it is enough
+that every facet near the other operand has `2·λ(t)` below its own face's bound. Where that fails, as it always
+does for a Cut tool, the same pre-pass runs again over face bounds raised to twice each face's largest bulge. A
+refusal there drops the record and leaves the Boolean as it was. The argument rests on the pre-pass's own
+soundness. The attribution of near-crease points to facets and sites is argued, as the existing per-vertex model
+argues its true pieces, and is not separately proven.
 
-**(i) Held to true.** Take a piece `P` of a held facet and a translation `t` with `|t| ≤ h`. If `P + t` misses
-every `U_i`, then every `p ∈ P` lies within `max(h, Excess)` of `∂X`. If `p ∈ X`, the segment to `p + t ∉ X`
-crosses `∂X`. Otherwise `dist(p, ∂X) = dist(p, X) ≤ Excess`. No crossing angle enters.
+**(i) Held to true.** Take a piece `P` of a held facet and a translation `t` with `|t| ≤ h`. Suppose `P + t`
+misses every outer piece, or lies wholly inside one hole's inner piece. Then every `p ∈ P` lies within
+`max(h, Excess)` of `∂X`, where `Excess = 2·max λ`.
 
-**(ii) True to held.** Take `y ∈ ∂X`.
-
-- If `y ∉ int X'`, then `y ∈ C_i ⊂ A'_i^{+δ_i} ⊂ X'^{+Drift}`. So `dist(y, ∂X') ≤ max δ_i + Drift`.
-- If `y ∈ int X'`, its depth is at most `Deep`, or `y` would be interior to `X`.
-
-So `H = max(max δ_i + Drift, Deep)` (`Record.TrueToHeld`) bounds the true-to-held side everywhere. Only rounding is
-amplified. On the leader, five steps leave `Deep` at 3.7e-8 mm and `Excess` at 8.8e-13 mm.
+**(ii) True to held.** `H = max(max δ_i + Drift, max λ)`, plus `Cross` when the record has holes, because a true
+point a Cut exposed may sit near a held rim (`Record.MeshBounds`).
 
 **Per-facet bound.** A facet whose crossing bound `δ(f)` exceeds a quarter of `maxBound` is certified, and gets
 `σ(f) = min(δ(f), upRound(max(h(f), Excess, H)))`. Every other facet keeps `σ(f) = δ(f)`, which already proves both
 directions.
 
 **Search.** For each certified facet, candidate translations are tried in a fixed order: the facet normal; the
-three faces of every near piece the facet's centroid is least deep behind; then the normalized sums of those.
-Lengths follow the ladder from `max(floor, maxBound/64)` by a factor of 1.25 up to `maxBound`. The cheap
-certificate comes first: one of the piece's own local half-spaces (a side or a level) that all three moved corners
-lie strictly beyond. Floats rank the half-spaces, and the corners' exact local coordinates decide. Only when no
-half-space separates does a float pass rank world axes (piece face normals, the piece normal, edge-edge cross
-products), and the exact projections decide. A piece that no candidate certifies at `maxBound` is bisected across
-its longest edge, to depth 24, with eight ulps of slack per split for the float midpoint. Work is charged per
-exact test against a fixed ceiling. Running out of ceiling or depth refuses with `ErrUnsupported`. Facets run on
-`GOMAXPROCS` workers.
+three faces of every near piece that the facet's centroid is least deep behind; then the normalized sums of those.
+Lengths follow the ladder from `max(floor, maxBound/64)` by a factor of 1.25 up to `maxBound`. Containment in a
+hole's inner piece is tried first. Next comes one of a piece's own local half-spaces that all three moved corners
+lie strictly beyond. Only then do world axes get ranked (piece face normals, the piece normal, edge-edge cross
+products). Floats rank, and exact local coordinates or projections decide. A piece that nothing certifies at
+`maxBound` is bisected across its longest edge, to depth 24, with eight ulps of slack per split. Work is charged
+per exact test against a fixed ceiling, and running out refuses with `ErrUnsupported`. Facets run on `GOMAXPROCS`
+workers. Exact pieces are built only when `Refine` first asks for them.
 
-The search is reject-only in the `CLAUDE.md` sense: a float result only proposes, and only an exact half-space or
-axis admits a piece. The certificate needs no knowledge of which part is being modelled. It reads the leaf
-records and the held mesh.
+The search is reject-only in the `CLAUDE.md` sense: a float result only proposes, and only an exact half-space,
+containment or axis admits a piece. The certificate needs no knowledge of which part is being modelled.
 
 ## 6. Records
 
-- `internal/occupancy`: the leaf piece in V-, H- and local half-space form; `CircleLeaf`, which builds it from a
-  circle and its maps and computes `ρ` exactly from the held mesh; `Record`, `Compose` and `Binding`; and the facet
-  search with `Certify`. Plain data in and out, per `agent-docs/module-boundary.md`.
-- `internal/occupancyleaf`: reads an operand as a record. A prism of one whole CCW circle is a leaf, its true solid
-  the exact image of the section under its frame `(U, V, N = U×V)` and then its placement, both read as rational
-  (`prismrecord.Payload.Point`). A stack of slabs of one circle at contiguous levels is a single leaf. A faceted
-  payload contributes its own record. The piece is a 128-gon, widened by the record's section and level
-  displacements plus a relative `1e-12` slack.
-- `facetedrecord.Payload.Occupancy` is set by `booleaneval` on the ordinary mesh Union path only (no replay, no
-  shift, no cap or cone certificate) when both operands carry a record.
+- `internal/occupancy`: pieces (outer, inscribed), leaves (`CircleLeaf`, `ArcTubeLeaf`), `Record` with `Compose`,
+  `CutCompose`, `Bulges`, `LocalBulge`, `MeshBounds`, the site index and `Binding`, and the facet search with
+  `Certify`. Plain data in and out, per `agent-docs/module-boundary.md`.
+- `internal/occupancyleaf`: reads an operand payload as a record (§4), and a mesh's per-facet bounds.
+- `internal/meshbool`: `BoolMesh.Bulge` and `Stats.Contacts` (facet pair, proven sine and float box of every
+  contact segment) from `MeshBooleanStats`.
+- `facetedrecord.Payload.Occupancy` is set by `booleaneval` on the ordinary mesh Union or Cut path only (no replay,
+  no shift, no cap or cone certificate) when both operands carry a record.
 - `facetedrecord.Payload.SurfaceBound` is set by `Refine`.
 - Both records are bound to the identity of the payload's `Verts` and `Tris` arrays (`occupancy.Binding`). Every
   producer that changes the held geometry allocates new arrays, so a record copied along with a placed or
@@ -171,7 +185,8 @@ func Refine(ctx context.Context, source *Body, maxBound units.Value) (*Body, err
 
 - `maxBound` is a length magnitude: wrong kind → `ErrUnitKind`; non-finite → `ErrNotFinite`; negative →
   `ErrNegativeMagnitude`; zero → `ErrDegenerate`. A nil or retired `source` is refused.
-- `source` must be a live `BodySolid` whose payload carries an occupancy record. Anything else, or a certificate
+- `source` must be a live `BodySolid` whose payload carries an occupancy record: mesh Unions of extruded, revolved
+  or swept circles, then Cuts by extruded circles. Anything else, or a certificate
   above `maxBound` within the ceilings, returns `ErrUnsupported` naming the facet bound reached.
 - On success the result belongs to `source`'s document, has fresh face identities and the same held vertices,
   triangles, topology, `Volume`, `Area`, vertex and edge readings. The operation records as `Refine` and retires
@@ -220,18 +235,39 @@ landing at the top of the interval is expected, because every leaf is inscribed.
 | R1 | `internal/occupancy`: circle-prism `U` under a rotated placement; exact piece-misses-`U`; facet search with ceiling | a point just inside the true circle is never separated, and one past the polygon's circumradius always is; a chord facet is never certified below its sagitta; a facet inside two leaves must clear the deeper; a work ceiling of 10 refuses |
 | R2 | the occupancy record composed by the ordinary mesh `Union` (weld, smallest sine, checked tangency slack), bound to its held mesh | a placed Union result no longer carries a readable record, so `Refine` refuses it |
 | R3 | `Refine`, surface restatement below the crossing floor, docs, example, apitest: four bent chains (a right-angle pair, an oblique zigzag, four bends at r = 0.5, the six-span leader) with volume against §8's closed form | before `Refine`, the leader's `Tessellate` at 0.12 mm refuses |
-| R4 | `Cut` and `Intersect` with convex tools: the upper set `A_U \ B_L`, with the tool's inscribed mesh as `B_L` | — |
-| R5 | swept and revolved circle tubes as unions of convex cell pieces, and the bulge term where chords leave the true tube | — |
+| R4 | `Cut` by extruded-circle tools: holes, inscribed tool pieces, tool facets bulging by their own bound, the widened re-gate, shared holes in a Union of two cut halves | a bored bend (two thick legs, two Cuts) refuses `Tessellate` at 0.05 mm before `Refine` and meets 0.01 mm after |
+| R5 | revolved and swept circle tubes: per-cell outer pieces, the sign-aware tube poke, per-facet bulges with crossing sites read per contact | a straight wire and a swept cord, each leaving a ring, meet 0.05 mm; an outer-equator facet barely pokes, an inner one at least as far as its edge midpoint, and a facet past a partial arc falls back to its bound |
 | R6 | the next Boolean reads `σ` as its slab half-width | — |
+
+### Gallery parts on the scratch merge with PR 3022
+
+| Part | Held bound | After `Refine` | `Refine` call |
+|---|---|---|---|
+| `yarn-leader` | 0.2423 mm | 0.0446 mm | `yarn.go`: `return b.refine(b.union(spans...), 0.12)` |
+| `brake-band` | 0.2713 mm | 0.0297 mm | `brake_cord.go`: `return b.refine(b.union(cord, leftEye, rightEye), 0.12)` |
+| `treadle-flex-connector` | 0.0758 mm | refused: the true-to-held side reaches 0.114 mm | — |
+| `brake-spring-*` | 2.075 mm | no record: a Coil is not a leaf | — |
+
+Both calls sit inside the part's constructor, before `builder.part` applies the head tilt. A Union result placed
+after its last Union has no record, and placing the refined body keeps its bound. `b.refine` wraps
+`decad.Refine(b.ctx, body, units.Millimeters(bound))` and `b.fail`.
+
+The connector goes through the distributive Cut retry, which Unions the two cut legs along the bend's near-tangent
+crease. That crease runs within a millimetre of the lower bore. There the tool's held wall falls short of the
+true bore by 0.00028 mm, and a crossing sine of 0.0098 amplifies that into a crossing depth of 0.057 mm. The
+second Cut then charges it to the true-to-held side. A per-site bulge read from the tool's held wall, rather than
+from its true cells, is the next step.
 
 ## 10. Risks
 
-- `Deep` grows by `2/s` per step, which is exponential in chain length. It reaches 3.7e-8 mm after the leader's
-  five steps. A long chain of shallow crossings can push it past `maxBound`, and `Refine` then refuses.
+- `Cross` grows by `2/s` per step where crossings sit near earlier sites, which is exponential in such a chain.
+  It reaches 2.2e-8 mm after the leader's five steps.
+- A facet's bulge is one number over the whole facet. A wall facet runs a whole span, so a site or hole near one
+  end reaches the other. Reading each contact's bulge at its own segment (`LocalBulge`) keeps the deep term local,
+  but `MeshBounds` still reads whole facets.
+- The arc tube reading and the cylinder fast path are float with charged margins, not exact rational proofs (§4).
 - A chain must first survive its own folds. The chain-depth gate (vertex-bounds §5) still reads the crossing
   bounds, so a thicker or shorter-span chain can be refused mid-fold before `Refine` is reachable. R6 lifts that.
-- Gallery's band and connector are outside R1–R3. The band needs R5, whose leaves are not inscribed: a chord along
-  a bent tube's inner side leaves the true tube, so (L) gains a sagitta-sized `λ`. Then `Deep` grows by
-  `λ / sin θ`, which is mechanism 1 again unless R5 bounds the bulge per side. The connector needs R4.
-- Certificate cost scales with the facets near other leaves. The leader takes 1.7 s on 24 workers. The connector's
-  16 064-facet meshes would meet the work ceiling and wall time first.
+- Tracking costs every ordinary Union and Cut of tracked operands a bulge pass, and sometimes a second pre-pass.
+  The Gallery default Build takes 60.6 s with tracking against 37.7 s without.
+- Coil leaves (a tube about a helix) are not covered, so the brake springs keep their 2.075 mm.

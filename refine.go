@@ -26,8 +26,10 @@ const refineWorkLimit = 1 << 28
 // Mesh.Bound().
 //
 // source MUST be a live solid made by mesh Unions whose every operand traces
-// back to solid prisms of one whole circle (an extruded cylinder, placed or
-// not), each Union taken on its own two operands. Any other body, or a mesh
+// back to a solid of one whole circle (an extruded cylinder, a Revolve clear of
+// its axis, or a Sweep along lines and arcs, placed or not), each Union taken
+// on its own two operands, optionally followed by Cuts whose tools are
+// extruded cylinders. Any other body, or a mesh
 // whose bound cannot be proven within maxBound inside the fixed work ceiling,
 // is ErrUnsupported and changes nothing. A Union result that was placed after
 // its last Union is outside the class: placement drops the record Refine
