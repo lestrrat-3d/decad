@@ -2,6 +2,7 @@ package apitest_test
 
 import (
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
@@ -37,29 +38,31 @@ func requireRegroupHistory(t *testing.T, doc *decad.Document, kind decad.Operati
 	last := ops[len(ops)-1]
 	require.Equal(t, kind, last.Kind())
 	in := last.Inputs()
-	require.Len(t, in, 2)
-	require.Same(t, a, in[0].Body)
-	require.Same(t, b, in[1].Body)
+	require.Equal(t, 2, len(in))
+	require.True(t, a == in[0].Body)
+	require.True(t, b == in[1].Body)
 	require.Equal(t, roles, [2]string{in[0].Role, in[1].Role})
 	require.Equal(t, decad.InputConsumed, in[0].Use)
 	require.Equal(t, decad.InputConsumed, in[1].Use)
-	require.Equal(t, []*decad.Body{result}, last.Outputs())
+	outputs := last.Outputs()
+	require.Equal(t, 1, len(outputs))
+	require.True(t, outputs[0] == result)
 	for _, leaf := range leaves {
 		consumers, err := h.Consumers(leaf)
 		require.NoError(t, err)
-		require.Len(t, consumers, 1, "a leaf is consumed once, by the earlier Boolean")
-		require.NotSame(t, last, consumers[0])
+		require.Equal(t, 1, len(consumers), "a leaf is consumed once, by the earlier Boolean")
+		require.True(t, last != consumers[0])
 	}
 	live := doc.Bodies()
-	require.Contains(t, live, result)
-	require.NotContains(t, live, a)
-	require.NotContains(t, live, b)
+	require.True(t, slices.Contains(live, result))
+	require.False(t, slices.Contains(live, a))
+	require.False(t, slices.Contains(live, b))
 }
 
 func requireRegroupSolid(t *testing.T, got *decad.Body) {
 	t.Helper()
 	require.True(t, got.IsSolid())
-	require.Len(t, got.Lumps(), 1)
+	require.Equal(t, 1, len(got.Lumps()))
 }
 
 func requireRefusalUnchanged(t *testing.T, doc *decad.Document, err error, historyLen int, bodies []*decad.Body) {
@@ -68,10 +71,15 @@ func requireRefusalUnchanged(t *testing.T, doc *decad.Document, err error, histo
 	var failure decad.OperationDiagnosticError
 	require.ErrorAs(t, err, &failure)
 	diagnostics := failure.OperationDiagnostics()
-	require.Len(t, diagnostics, 1)
+	require.Equal(t, 1, len(diagnostics))
 	require.Equal(t, decad.OpDiagOperandBoundExceeded, diagnostics[0].Code)
-	require.Len(t, doc.OperationHistory().Operations(), historyLen)
-	require.Equal(t, bodies, doc.Bodies())
+	require.Equal(t, historyLen, len(doc.OperationHistory().Operations()))
+	// Compare every handle explicitly so a failure never formats the cyclic document graph.
+	after := doc.Bodies()
+	require.Equal(t, len(bodies), len(after))
+	for i, body := range bodies {
+		require.True(t, body == after[i], "live body %d changed", i)
+	}
 }
 
 func TestBooleanRegroupConjunction(t *testing.T) {
@@ -170,7 +178,7 @@ func TestBooleanRegroupConjunction(t *testing.T) {
 		requireRefusalUnchanged(t, sc.doc, err, historyLen, bodies)
 	})
 
-	t.Run("D4 two pending literals decline", func(t *testing.T) {
+	t.Run("D4 final mesh cut refuses", func(t *testing.T) {
 		t.Parallel()
 		sc := newRetentionScene()
 		first, err := decad.Cut(t.Context(), sc.roundedBox(t), sc.tool(t, 20))

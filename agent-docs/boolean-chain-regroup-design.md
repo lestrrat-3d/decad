@@ -32,8 +32,8 @@ the held facets. The operation history (`operation_history.go`: `Document.Operat
 Success criteria:
 
 - A two-body Boolean that refuses with an error wrapping `ErrUnsupported`, and whose chain behind a mesh operand
-  can be regrouped into at most one mesh step, returns a body whose readings enclose the true quantities of the
-  same set the sequential chain denotes.
+  can finish under Plan, returns a body whose readings enclose the true quantities of the same set the
+  sequential chain denotes.
 - Every call that succeeds today returns the same body as today (no regroup runs).
 - Every call regroup cannot rescue leaves the document unchanged and returns today's error, except two cases:
   cancellation during regroup returns `ctx.Err()`, and an invariant break inside a private step returns that
@@ -47,15 +47,16 @@ option or diagnostic for regrouping, and `Verify`'s read-only evaluator.
 ## Value assessment
 
 Regrouping cannot make an unsupported pair exact: a pair no analytic route admits stays a mesh step in every order.
-What it buys is a chain with at most one mesh step, run last, over operands that hold no mesh. Whenever that one
-mesh step remains, the result is still `Faceted`.
+The plan combines source bodies analytically before trying the remaining full dispatch steps (Plan). A mesh
+step returns a `Faceted` result. Two remaining cut tools may be united by full dispatch before the final cut;
+both dispatches retain their ordinary geometry, bound and refusal checks.
 
 No missing-features row closes. Effect per row or claim:
 
 - "Held mesh operand coarser than the pair tolerance after a Boolean chain": narrowed, not closed. A chain builds
-  when its source bodies combine with every pair but one taken by an analytic route. Chains whose pairs are all
-  mesh-only gain nothing: crossing cylinders (general-boolean §3 B.2), the mitred-sweep branch tree and cone chains
-  of vertex-bounds §6, held primitives.
+  when the bounded Plan finishes. Chains whose remaining mesh-only steps exceed that plan still refuse:
+  crossing-cylinder chains (general-boolean §3 B.2), the mitred-sweep branch tree and cone chains of
+  vertex-bounds §6, and held primitives remain subject to those limits.
 - "Contact on the mesh path other than a coplanar overlap, ...": narrowed for chained calls only. A coplanar contact
   between two source bodies that an analytic route joins (general-boolean §3 A3) no longer meets the held mesh. A
   coplanar contact that exists in the final set still refuses.
@@ -91,7 +92,8 @@ carries a mesh-only boss under `ExactOnly` (F3), and an analytic intersect after
 Run today's two-body path first. When it fails with an error wrapping `ErrUnsupported` and an operand is an
 expandable mesh Boolean result, root reads producer records, `internal/boolchain` flattens the chain into a normal
 form of source-body literals, and `internal/booleandispatch` evaluates a plan: every pair an analytic route admits
-first, then at most one full dispatch step. Any miss, failure or ineligibility returns today's error unchanged.
+first, then the bounded full dispatch steps in Plan. Any miss, failure or ineligibility returns today's error
+unchanged.
 The public commit records the caller's call exactly as today and reserves one producer identity per private step.
 
 Alternatives considered:
@@ -228,7 +230,8 @@ Conjunction:
 3. If `len(pending) >= 2` and every pending literal is negative: merge their bodies (step 6), replace them with the
    merged bodies as negatives, then Absorb again.
 4. `len(pending) == 0` → return `acc`. `len(pending) == 1` → return `Full(opOf(ℓ), acc, ℓ.Body)`.
-5. Otherwise → `ok == false`.
+5. Exactly two negative literals remain → `tools = Full(OpUnion, pending[0].Body, pending[1].Body)`, then
+   `Full(OpCut, acc, tools)`. Stop on either miss or error. Otherwise → `ok == false`.
 6. Merge (shared with disjunction): over `items` in order, find the first pair `i < j` with
    `Exact(OpUnion, items[i], items[j])` ok; replace `items[i]` with the result, delete `items[j]`, restart. Stop
    when no pair merges.
@@ -240,7 +243,9 @@ Rules:
 
 - Keep a miss set keyed by `(op, x, y)`; never call `Exact` twice on one key. Bodies are immutable and routes are
   deterministic (Assumptions), so a cached miss stays valid.
-- `Full` runs at most once per `Run`.
+- `Full` runs at most twice per `Run`, only for step 5's two negative literals. Every other plan uses at most one.
+- Three or more remaining literals decline without any `Full` call.
+- Two remaining literals that are not both negative decline without any `Full` call.
 - Check `ctx.Err()` before every callback.
 - With `MaxLiterals = 6`, `Exact` runs at most 90 times: each Absorb pass tries each pending literal once per `acc`
   version (at most 30 per Absorb, two Absorbs), and Merge tries at most 10 initial pairs plus 16 pairs with merged
@@ -278,6 +283,9 @@ func Regroup(ctx context.Context, chain boolchain.Chain, env topo.Env, hooks Hoo
 | `Exact` | `Analytic(ctx, op, envAt(k), x, y, hooks)` | any error not surfaced; `ok == false`; result restates a held mesh; result has any `OperationWarnings` record |
 | `Full` | `Body(ctx, op, envAt(k), x, y, hooks)` | any error not surfaced; result has any `OperationWarnings` record |
 
+Each `Full` callback calls `Body` separately and enforces that dispatch's existing per-step limits. The two-step
+exception can consume both per-step allowances. It has no shared whole-chain work, record or byte meter.
+
 - `envAt(k)` is `env` with `Ref = env.Ref + k`, where `k` counts successful steps so far. A missed attempt does
   not advance `k`.
 - A cancellation is `ctx.Err() != nil` after the callback returns. Return `ctx.Err()`.
@@ -286,9 +294,10 @@ func Regroup(ctx context.Context, chain boolchain.Chain, env topo.Env, hooks Hoo
   `ErrBooleanFailed` that is not a `*BooleanError` with `Code == BooleanEmpty`. Root owns the predicate because
   `BooleanError` is a root type.
 - "Restates a held mesh" is `booloperand.HeldFloor(result)` reporting `true`: a faceted, mitred-sweep, coil or
-  twisted-sweep payload. Such an `Exact` result is a miss, so `acc` never holds a mesh and the final step's
-  operands come from analytic steps or leaves. A route ahead of the mesh tail that returns a held mesh is still
-  reachable through `Full`.
+  twisted-sweep payload. Such an `Exact` result is a miss: an accepted analytic step produces an operand without
+  a held floor. The two-negative exception may pass its full union's held result into the final full cut. That
+  cut retains every ordinary held-operand and mesh proof gate. A route ahead of the mesh tail that returns a held
+  mesh is still reachable through `Full`.
 - The returned span is the final `k`. The result was built under `env.Ref + k − 1`.
 - `Regroup` never writes the document. `Analytic` and `Body` write nothing today (`Body`'s doc comment); keep it so.
 
@@ -370,8 +379,8 @@ rescued body denotes `a − b` (Admitted identities).
 - Set: the result denotes the same regular set as the caller's call over its public operands (Admitted
   identities). Its readings are proven against that set by the routes that built it, so a test checks them against
   the closed-form value of that set.
-- Representation: the result differs from any sequential result. It has at most one mesh step; `Faceted` whenever
-  that step ran the mesh pipeline.
+- Representation: the result differs from any sequential result. Plan bounds its full dispatch steps; a result
+  built by the mesh pipeline is `Faceted`.
 - Public history: one record, exactly as today: kind `Cut`/`Union`/`Intersect`, the caller's `a` and `b` consumed
   with today's roles (`operationInputsForBoolean`), and the result as the only output. No record names a leaf or a
   private step. The chain is recoverable from `Producer(a)`/`Producer(b)`. `FaceSuccessors` stays
@@ -380,7 +389,7 @@ rescued body denotes `a − b` (Admitted identities).
   `tryPrismUnionChain` does. `Body.Origin` names the final step's producer.
 - Roles: faces a private analytic step mints carry fresh roles under that step's private producer, which no
   caller can name, plus the source roles prism-boolean §11's attribution proves (each step runs
-  `booleandispatch.Analytic`). The final mesh step keeps its operands' face origins, upstream roles included
+  `booleandispatch.Analytic`). Each mesh step keeps its operands' face origins, upstream roles included
   (evaluator §9). A face §11 leaves unattributed, such as one two sources share, names no source feature, so a
   selector naming a source feature's origin can match fewer faces than it would on a sequential result. Select
   such a face by geometric predicate.
@@ -395,7 +404,7 @@ rescued body denotes `a − b` (Admitted identities).
 |---|---|
 | Trigger not met | Today's `err`, document unchanged. |
 | `Flatten` declines (no expandable operand, ineligible body, mixed chain, more than 6 literals) | Today's `err`. |
-| Plan leaves two or more pending literals | Today's `err`. |
+| Plan cannot finish its remaining literals | Today's `err`. |
 | A step fails with an error `surface` does not report, or a step result carries warnings | Today's `err`. |
 | A step fails with an error `surface` reports (invariant break) | That error; no commit. |
 | Context canceled during regroup | `ctx.Err()`; no commit. |
@@ -414,7 +423,7 @@ roles follow Result identity and history. Task 4 updates core §8 "The chain dep
 
 - Calls that succeed today pay nothing.
 - A refused call with an expandable operand pays one history map read under `RLock` per examined body (the walk
-  stops past `MaxLiterals` literals), at most 90 `Exact` attempts (Plan), and one `Full` step.
+  stops past `MaxLiterals` literals), at most 90 `Exact` attempts and the bounded `Full` steps in Plan.
 - An `Exact` miss on a structural gate costs a payload type switch; a miss after a private `sketch` scene costs
   that scene.
 - No timing threshold is set. Repository rule: measure on CI, not locally.
@@ -478,15 +487,16 @@ Assertions for every F fixture:
 | D1 | F1, but `Cut(Copy(first), t2)` | `Copy` producer: leaf, no expansion | `ErrUnsupported`, one diagnostic `OpDiagOperandBoundExceeded`, history length and `doc.Bodies()` unchanged |
 | D2 | F1's `first`, then `Union(first, t2)` | `Cut` result inside a disjunction: leaf | today's error unchanged |
 | D3 | F1 with `Cut(first, t2, decad.WithMatchingFaces())` | Trigger excludes the option | same as D1 |
-| D4 | F1 with `t2` rotated 0.01 rad about the x axis through (22, 10, 10) | `Union(t1, t2')` misses (prism-boolean §3.1 G3: the sweep normals disagree), two literals pending | same as D1 |
+| D4 | F1 with `t2` rotated 0.01 rad about the x axis through (22, 10, 10) | The full tool union builds, but the final full cut refuses | same as D1 |
 
 ### Unit tests (`internal/boolchain`)
 
 - `Flatten`: each expansion rule row; role-based `Cut` input reading; leaf on non-faceted payload, non-Boolean
   producer, `PointCone != nil`, gap-shift and embedding-reach warnings; expansion through a chain-allowance warning;
   a 7-literal chain declines; no expansion declines; mixed chains decline.
-- `Run`: Absorb order and restart; Merge first-pair order and restart; one `Full` call at most; miss cache (no key
-  repeated); two pending mixed literals decline; three disjunction items decline; a callback error returns unchanged;
+- `Run`: Absorb order and restart; Merge first-pair order and restart; full-step bounds per Plan; miss cache (no
+  key repeated); two remaining negatives use a full union then cut in input order; a third remaining negative
+  or two pending mixed literals decline; three disjunction items decline; a callback error returns unchanged;
   a pre-canceled context returns `ctx.Err()` before any callback. Fakes record calls; bodies are bare `topo.Body`
   values.
 

@@ -308,9 +308,12 @@ neighbour is tangent. A line and an arc, or two arcs, that meet tangent up to ro
 is at most 2⁻³², count as tangent, and the sliver between them is charged into the result's volume bound. A larger
 turn is refused with `decad.ErrUnsupported`, as is a trimmed segment; the body still meshes for export.
 
-Two faceted solids every face of which squares to an axis, such as mesh solids, combine exactly on a grid of their coordinates under `Union`, `Cut` and `Intersect`, any contact between them included. A two-body `Union`, `Cut` or `Intersect` that would be refused because an operand is the mesh result of earlier Booleans is retried from
-the source bodies of that chain, when all but one pair combine by exact routes. The result is the same solid. Its
-history records the one call. A face made by the exact steps names a source body's role only where it lies inside
+Two faceted solids every face of which squares to an axis, such as mesh solids, combine exactly on a grid of their
+coordinates under `Union`, `Cut` and `Intersect`, any contact between them included. A two-body `Union`, `Cut` or
+`Intersect` that would be refused because an operand is the mesh result of earlier Booleans is retried from the
+source bodies of that chain. The retry first combines source pairs by analytic routes. A final pair uses the
+ordinary Boolean routes; two remaining cut tools may first be united. The result denotes the same solid, and its
+history records one call. A face made by the analytic steps names a source body's role only where it lies inside
 exactly one source face, so select other faces by geometry.
 
 `Cut` and `Intersect` take options. `decad.WithMatchingFaces()` says faces of the two bodies are meant to match
