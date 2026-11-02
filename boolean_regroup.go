@@ -76,7 +76,7 @@ func (h historyProducers) BooleanProducer(n *topo.Body) (meshbool.OperationKind,
 		}
 	}
 	if kind == meshbool.OpCut {
-		if len(in) != 2 || op.inputs[0].Role != "target" || op.inputs[1].Role != "tool" {
+		if len(in) != 2 || op.inputs[0].Role != operationRoleTarget || op.inputs[1].Role != operationRoleTool {
 			return 0, nil, false
 		}
 	}

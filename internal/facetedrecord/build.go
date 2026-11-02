@@ -71,6 +71,32 @@ func BuildWithProofBounded(ctx context.Context, budget *proofbound.WorkBudget, e
 	return body, true, nil
 }
 
+// BuildWithProofReplay keeps the bounded single-shell arithmetic checks while
+// admitting up to 65,536 facets under the caller's cumulative replay budget.
+func BuildWithProofReplay(ctx context.Context, budget *proofbound.WorkBudget, env topo.Env, pp Payload,
+	audit *facetproof.MeshAudit, volume measurement.Measurement, volRat *big.Rat) (*topo.Body, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	if budget == nil || audit == nil || volRat == nil {
+		return nil, false, nil
+	}
+	body, faceOf, diameter, ok, err := assembleBodyBounded(ctx, budget, env, meshOfPayload(pp), audit, volume, volRat, 65536)
+	if err != nil || !ok {
+		return nil, ok, err
+	}
+	pp.Diameter = diameter
+	pp.FaceOf = faceOf
+	body.Payload = pp
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	if err := budget.Err(); err != nil {
+		return nil, false, err
+	}
+	return body, true, nil
+}
+
 // ChargeAreaSlack adds extra to the AreaSlack of body, a body Build assembled
 // from a Payload, and to every area bound AssembleBody composed from it: each
 // face's and the body's. AreaSlack enters no other reading, so the result is

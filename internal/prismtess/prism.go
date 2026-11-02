@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/freeform"
@@ -29,6 +30,41 @@ import (
 func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	wallRole func(loop, seg int) string, chord float64, verifyAll bool,
 	countFloor func(loop, seg int) int, freeformTarget float64) (*topo.Mesh, error) {
+	return build(ctx, b, pp, wallRole, chord, verifyAll, countFloor, freeformTarget, nil, false)
+}
+
+// BuildRectangleReplay builds a recorded rectangular solid under one replay budget.
+func BuildRectangleReplay(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
+	chord float64, budget *proofbound.ReplayBudget) (*topo.Mesh, error) {
+	if budget == nil {
+		return nil, fmt.Errorf("%w: bounded prism requires a budget", decaderr.ErrUnsupported)
+	}
+	return build(ctx, b, pp, nil, chord, true, nil, 0, budget, false)
+}
+
+// BuildCircleReplay builds a recorded circular solid under the brake budget.
+func BuildCircleReplay(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
+	chord float64, budget *proofbound.ReplayBudget) (*topo.Mesh, error) {
+	if budget == nil || !budget.IsBrakeReplay() {
+		return nil, fmt.Errorf("%w: bounded circle requires the brake budget", decaderr.ErrUnsupported)
+	}
+	return build(ctx, b, pp, nil, chord, true, nil, 0, budget, true)
+}
+
+func build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
+	wallRole func(loop, seg int) string, chord float64, verifyAll bool,
+	countFloor func(loop, seg int) int, freeformTarget float64, replay *proofbound.ReplayBudget, circle bool) (*topo.Mesh, error) {
+	if replay != nil {
+		var err error
+		if circle {
+			err = circlePlanReplay(ctx, pp, replay)
+		} else {
+			err = rectanglePlanReplay(ctx, pp, verifyAll, countFloor, freeformTarget, replay)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
 	// sheet is agent-docs/surface-design.md §4.1's own flag, read once: a surface
 	// result omits both caps from its wall build (internal/prismrecord/build.go), and every
 	// arm below that would otherwise touch a cap face, a cap triangulation or
@@ -65,14 +101,31 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	// Facets remember their source face (agent-docs/evaluator-design.md §9); the
 	// provenance roles are how the payload's walks name the faces evalPrism
 	// built from them.
-	byRole := map[string]*topo.Face{}
-	for _, f := range topobuild.Faces(b) {
-		for _, o := range f.Origins {
-			byRole[o.Role] = f
+	var byRole map[string]*topo.Face
+	var replayRoles *topobuild.ReplayRoles
+	if replay != nil {
+		var err error
+		replayRoles, err = rectangleRolesReplay(ctx, b, replay)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		byRole = map[string]*topo.Face{}
+		for _, f := range topobuild.Faces(b) {
+			for _, o := range f.Origins {
+				byRole[o.Role] = f
+			}
 		}
 	}
 	faceOfRole := func(role string) (*topo.Face, error) {
 		f, ok := byRole[role]
+		if replayRoles != nil {
+			var err error
+			f, ok, err = replayRoles.Lookup(ctx, role)
+			if err != nil {
+				return nil, err
+			}
+		}
 		if !ok {
 			return nil, fmt.Errorf(`%w: the body carries no face for role %q`, decaderr.ErrDegenerate, role)
 		}
@@ -143,9 +196,21 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 		if countFloor != nil {
 			floor = func(w survey2d.SideWalk) int { return countFloor(li, w.Segs[0]) }
 		}
-		cl, err := tessellation.ChordLoopWithCountFloor(ctx, loop, budget, pp.Z1-pp.Z0, work, pw, li, func(w survey2d.SideWalk) (*topo.Face, error) {
-			return faceOfRole(wallRole(li, w.Segs[0]))
-		}, stationbound.ChordStationBound, floor, freeformTarget)
+		var cl tessellation.ChordSamples[*topo.Face]
+		var err error
+		if replay != nil && circle {
+			cl, err = tessellation.ChordCircleReplay(ctx, loop, budget, pp.Z1-pp.Z0, pw,
+				func(w survey2d.SideWalk) (*topo.Face, error) { return faceOfRole("side(0,0)") }, replay)
+		} else if replay != nil {
+			cl, err = tessellation.ChordRectangleReplay(ctx, loop, budget, pp.Z1-pp.Z0, work, pw,
+				func(w survey2d.SideWalk) (*topo.Face, error) {
+					return faceOfRole(fmt.Sprintf("side(0,%d)", w.Segs[0]))
+				}, replay)
+		} else {
+			cl, err = tessellation.ChordLoopWithCountFloor(ctx, loop, budget, pp.Z1-pp.Z0, work, pw, li, func(w survey2d.SideWalk) (*topo.Face, error) {
+				return faceOfRole(wallRole(li, w.Segs[0]))
+			}, stationbound.ChordStationBound, floor, freeformTarget)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -154,7 +219,22 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 			WallSlack: cl.WallSlack, CapSlack: cl.CapSlack, SegmentArea: cl.SegmentArea,
 			Walks: cl.Walks, PerimeterUpper: cl.PerimeterUpper})
 	}
-	topology := tessellation.PrismWalls(chorded, sheet, pp.AxialDelta())
+	var topology tessellation.PrismTopology[*topo.Face]
+	if replay != nil && circle {
+		var err error
+		topology, err = tessellation.PrismCircleWallsReplay(ctx, chorded[0], pp.AxialDelta(), replay)
+		if err != nil {
+			return nil, err
+		}
+	} else if replay != nil {
+		var err error
+		topology, err = tessellation.PrismRectangleWallsReplay(ctx, chorded[0], pp.AxialDelta(), replay)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		topology = tessellation.PrismWalls(chorded, sheet, pp.AxialDelta())
+	}
 	mesh.AreaSlack = topology.AreaSlack
 	pts2, sampleBound := topology.Points, topology.Bounds
 	faceTrim, faceAxial := topology.FaceTrim, topology.FaceAxial
@@ -162,6 +242,20 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 
 	// The mesh vertices: bottom and top of every boundary sample, placed
 	// through the payload — exactly on the analytic boundary.
+	if replay != nil {
+		// Four station steps and the following eight-entry StoreMax scan.
+		if err := replay.SpendWork(ctx, 2*uint64(len(pts2))); err != nil {
+			return nil, err
+		}
+		if err := replay.ReserveRecords(ctx, 2*2*uint64(len(pts2))+4); err != nil {
+			return nil, err
+		}
+		for _, size := range []uint64{uint64(unsafe.Sizeof(r3.Vec{})), uint64(unsafe.Sizeof(float64(0)))} {
+			if err := replay.ReserveArray(ctx, 2*uint64(len(pts2)), size); err != nil {
+				return nil, err
+			}
+		}
+	}
 	mesh.Vertices = make([]r3.Vec, 0, 2*len(pts2))
 	// vertexStore is agent-docs/tessellation-reach-design.md §3's deltaStore, one
 	// entry per mesh vertex: the sample's own plane-local enclosure gap carried
@@ -171,6 +265,9 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	// ever assumed zero for anything else.
 	vertexStore := make([]float64, 0, 2*len(pts2))
 	vertexBudget := proofbound.NewWorkBudget(ctx)
+	if replay != nil {
+		vertexBudget = replay.WorkBudget(ctx)
+	}
 	for j, p := range pts2 {
 		if err := vertexBudget.Step(); err != nil {
 			return nil, err
@@ -179,10 +276,21 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 		hi := pp.Point(p.U, p.V, pp.Z1)
 		mesh.Vertices = append(mesh.Vertices, lo, hi)
 		plane := proofbound.WalkEndBoundAllow(sampleBound[j])
-		vertexStore = append(vertexStore,
-			proofbound.AbsSumUpper(plane, pp.PointRound(p.U, p.V, pp.Z0, lo)),
-			proofbound.AbsSumUpper(plane, pp.PointRound(p.U, p.V, pp.Z1, hi)),
-		)
+		var loRound, hiRound float64
+		if circle {
+			var roundErr error
+			loRound, roundErr = circlePointRoundReplay(ctx, pp, p.U, p.V, pp.Z0, lo, replay)
+			if roundErr != nil {
+				return nil, roundErr
+			}
+			hiRound, roundErr = circlePointRoundReplay(ctx, pp, p.U, p.V, pp.Z1, hi, replay)
+			if roundErr != nil {
+				return nil, roundErr
+			}
+		} else {
+			loRound, hiRound = pp.PointRound(p.U, p.V, pp.Z0, lo), pp.PointRound(p.U, p.V, pp.Z1, hi)
+		}
+		vertexStore = append(vertexStore, proofbound.AbsSumUpper(plane, loRound), proofbound.AbsSumUpper(plane, hiRound))
 	}
 	storeMax, err := tessellation.StoreMax(vertexStore)
 	if err != nil {
@@ -191,11 +299,34 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	mesh.CoordBound = storeMax
 
 	// Prove loop clearance before both caps reuse the wall rings' vertices.
-	if err := tessellation.PrismCaps(ctx, &topology, sheet, capStart, capEnd,
-		pp.Z0Delta, pp.Z1Delta, tessellation.RequireLoopClearance, triangulation.Triangulate); err != nil {
-		return nil, err
+	var capErr error
+	if replay != nil && circle {
+		capErr = circleCapsAxialReplay(ctx, &topology, capStart, capEnd, pp.Z0Delta, pp.Z1Delta, replay)
+	} else if replay != nil {
+		capErr = rectangleCapsReplay(ctx, &topology, capStart, capEnd, pp.Z0Delta, pp.Z1Delta, replay)
+	} else {
+		capErr = tessellation.PrismCaps(ctx, &topology, sheet, capStart, capEnd,
+			pp.Z0Delta, pp.Z1Delta, tessellation.RequireLoopClearance, triangulation.Triangulate)
+	}
+	if capErr != nil {
+		return nil, capErr
 	}
 	mesh.Triangles, mesh.Source = topology.Triangles, topology.Sources
+	if replay != nil {
+		if !circle && (len(mesh.Triangles) != 12 || len(mesh.Source) != 12 || len(mesh.Vertices) != 8) {
+			return nil, fmt.Errorf("%w: bounded rectangle produced unexpected mesh dimensions", decaderr.ErrUnsupported)
+		}
+		// At most twelve winding flips, 36 directed-edge insertions, 36
+		// reverse-edge checks, 36 vertex-bound reads and six face entries.
+		nfacet := uint64(len(mesh.Triangles))
+		if err := replay.SpendWork(ctx, 10*nfacet+12); err != nil {
+			return nil, err
+		}
+		// Edge map, face-store and composed-bound maps, and mesh face map.
+		if err := replay.ReserveRecords(ctx, 1+3*nfacet+3*(1+6)); err != nil {
+			return nil, err
+		}
+	}
 
 	// A reflected placement flips handedness, turning every counter-clockwise
 	// winding clockwise; reversing the windings restores outward orientation.
@@ -228,16 +359,25 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 		if err := topobuild.RequireSheetMesh(ctx, b, mesh); err != nil {
 			return nil, err
 		}
+	} else if replay != nil {
+		if err := topobuild.LiftAuditError(tessellation.RequireClosedMeshReplay(ctx, mesh.Triangles, replay)); err != nil {
+			return nil, err
+		}
 	} else if err := topobuild.RequireClosedMesh(mesh); err != nil {
 		return nil, err
 	}
-	bounds, err := tessellation.FaceBounds(mesh.Triangles, mesh.Source,
-		faceTrim, faceAxial, vertexStore, pp.SectionDelta)
-	if err != nil {
-		return nil, err
-	}
-	for face, bound := range bounds {
-		topobuild.SetFaceBound(mesh, face, bound)
+	if replay != nil {
+		if err := rectangleFaceBoundsReplay(ctx, mesh, topology.ReplayFaceBounds, vertexStore, pp.SectionDelta, replay); err != nil {
+			return nil, err
+		}
+	} else {
+		bounds, err := tessellation.FaceBounds(mesh.Triangles, mesh.Source, faceTrim, faceAxial, vertexStore, pp.SectionDelta)
+		if err != nil {
+			return nil, err
+		}
+		for face, bound := range bounds {
+			topobuild.SetFaceBound(mesh, face, bound)
+		}
 	}
 	if !verifyAll {
 		// The area slack accumulated above is only part of its composition —
@@ -257,6 +397,18 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 		} else {
 			capMove := proofbound.SectionDisplacementArea(pp.SectionDelta, walks, perimeterUpper)
 			mesh.AreaSlack = proofbound.AbsSumUpper(mesh.AreaSlack, capMove, capMove, wallMove)
+		}
+	}
+	if replay != nil {
+		// Area allowance and face-area scans each visit twelve facets. The
+		// perturbed-area reduction visits twelve more after its charged lift.
+		if err := replay.SpendWork(ctx, 3*uint64(len(mesh.Triangles))+5); err != nil {
+			return nil, err
+		}
+		// Face-area map, five terms, twelve perturbed terms and the two
+		// eight-vertex lift arrays, plus their lifter and budget adapter.
+		if err := replay.ReserveRecords(ctx, 1+6+5+uint64(len(mesh.Triangles))+2*uint64(len(mesh.Vertices))+5); err != nil {
+			return nil, err
 		}
 	}
 	// Every coordinate the build itself computed can move each facet's own area
@@ -283,13 +435,31 @@ func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	// computed coordinate sweeps volume at the rate of the surface it moved.
 	// Absolute sums throughout — an occupied-volume bound admits no cancellation.
 	height := math.Abs(pp.Z1 - pp.Z0)
-	areaUpper := tessellation.FaceAreaUpper(mesh.Vertices, mesh.Triangles, mesh.Source, vertexStore)
+	var capArea [2]float64
+	if replay != nil {
+		capArea, err = rectangleCapAreasReplay(ctx, mesh, vertexStore, capStart, capEnd, replay)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		areaUpper := tessellation.FaceAreaUpper(mesh.Vertices, mesh.Triangles, mesh.Source, vertexStore)
+		capArea = [2]float64{areaUpper[capStart], areaUpper[capEnd]}
+	}
+	perturbed := 0.0
+	if replay != nil {
+		perturbed, err = proofbound.PerturbedAreaUpperReplay(ctx, replay.WorkBudget(ctx), mesh.Vertices, mesh.Triangles, storeMax)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		perturbed = proofbound.PerturbedAreaUpper(mesh.Vertices, mesh.Triangles, storeMax)
+	}
 	terms := []float64{
 		proofbound.ProductUpper(height, segmentArea),
 		proofbound.ProductUpper(proofbound.SectionDisplacementArea(pp.SectionDelta, walks, perimeterUpper), height),
-		proofbound.ProductUpper(pp.Z0Delta, areaUpper[capStart]),
-		proofbound.ProductUpper(pp.Z1Delta, areaUpper[capEnd]),
-		proofbound.SweptVolumeAllow(storeMax, proofbound.PerturbedAreaUpper(mesh.Vertices, mesh.Triangles, storeMax)),
+		proofbound.ProductUpper(pp.Z0Delta, capArea[0]),
+		proofbound.ProductUpper(pp.Z1Delta, capArea[1]),
+		proofbound.SweptVolumeAllow(storeMax, perturbed),
 	}
 	total, err := tessellation.SymDiff(terms)
 	if err != nil {

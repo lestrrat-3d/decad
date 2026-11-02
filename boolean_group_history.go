@@ -346,8 +346,8 @@ func captureBlindGroupProof(ctx context.Context, output, target, group *Body, le
 func (p *blindGroupProof) acceptsOperation(op *Operation, output *Body) bool {
 	return p != nil && p.cut == nil && p.output == output && output.n.Origin == p.origin && op != nil &&
 		op.kind == OperationCut && op.doc == output.n.Doc && len(op.outputs) == 1 && op.outputs[0] == output &&
-		len(op.inputs) == 2 && op.inputs[0].Body == p.target && op.inputs[0].Role == "target" &&
-		op.inputs[0].Use == InputConsumed && op.inputs[1].Body == p.group && op.inputs[1].Role == "tool" &&
+		len(op.inputs) == 2 && op.inputs[0].Body == p.target && op.inputs[0].Role == operationRoleTarget &&
+		op.inputs[0].Use == InputConsumed && op.inputs[1].Body == p.group && op.inputs[1].Role == operationRoleTool &&
 		op.inputs[1].Use == InputConsumed
 }
 

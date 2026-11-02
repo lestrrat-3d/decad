@@ -2,10 +2,12 @@ package proof
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 	"math/bits"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/r3"
 )
 
 // These refusals are constructed once so rejected replay does not allocate.
@@ -88,4 +90,75 @@ func normalMulReplay(a, b Dyadic, reserve, spend func(uint64) error) (Dyadic, er
 		z.Neg(z)
 	}
 	return fromBig(z, a.exp+b.exp), nil
+}
+
+// TriangleNormalReplay charges each exact operation from its actual operand
+// widths. Multiplication uses a schoolbook limb kernel with explicit storage.
+func TriangleNormalReplay(a, b, c r3.Vec, reserve, spend func(uint64) error) (Xpt, error) {
+	if reserve == nil || spend == nil {
+		return Xpt{}, errReplayExactNormalNeedsSharedCounters
+	}
+	var vals [3][3]Dyadic
+	for i, v := range [3]r3.Vec{a, b, c} {
+		for j, f := range [3]float64{v.X, v.Y, v.Z} {
+			if err := spend(1); err != nil {
+				return Xpt{}, err
+			}
+			if math.IsNaN(f) || math.IsInf(f, 0) {
+				return Xpt{}, errReplayExactNormalNeedsFiniteCoordinates
+			}
+			// DyOfFinite stores a binary64 significand inline, already stripped
+			// of trailing zero bits, including for subnormal coordinates.
+			vals[i][j] = DyOfFinite(f)
+		}
+	}
+	var u, v [3]Dyadic
+	for i := range 3 {
+		if err := normalChargeDifference(vals[1][i], vals[0][i], reserve, spend); err != nil {
+			return Xpt{}, err
+		}
+		u[i] = DySubScalar(vals[1][i], vals[0][i])
+		if err := normalChargeDifference(vals[2][i], vals[0][i], reserve, spend); err != nil {
+			return Xpt{}, err
+		}
+		v[i] = DySubScalar(vals[2][i], vals[0][i])
+	}
+	var normal [3]Dyadic
+	for i := range 3 {
+		j, k := (i+1)%3, (i+2)%3
+		p, err := normalMulReplay(u[j], v[k], reserve, spend)
+		if err != nil {
+			return Xpt{}, err
+		}
+		q, err := normalMulReplay(u[k], v[j], reserve, spend)
+		if err != nil {
+			return Xpt{}, err
+		}
+		if err := normalChargeDifference(p, q, reserve, spend); err != nil {
+			return Xpt{}, err
+		}
+		normal[i] = DySubScalar(p, q)
+	}
+	base, maxBits := 0, 1
+	for _, d := range normal {
+		if !d.IsZero() {
+			base = min(base, d.exp)
+		}
+	}
+	maxBits = max(maxBits, 1-base)
+	for _, d := range normal {
+		if !d.IsZero() {
+			maxBits = max(maxBits, d.bitLen()+d.exp-base)
+		}
+	}
+	words := uint64((maxBits + bits.UintSize - 1) / bits.UintSize)
+	// Four shifted coordinates and their independently grown backing arrays,
+	// plus in-place strip temporaries. Each allocation has four spare limbs.
+	if err := normalReserveLimbs(reserve, 8*(words+4), 8); err != nil {
+		return Xpt{}, err
+	}
+	if err := spend(16*words + 8); err != nil {
+		return Xpt{}, err
+	}
+	return Xpt(XhpStripTwosOwned(XhpOfDyadics(normal[0], normal[1], normal[2]))), nil
 }

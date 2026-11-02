@@ -10,14 +10,17 @@ import (
 )
 
 // ReplayBudget shares one work and record allowance across a private replay.
-// A replay owns one instance for all of its steps.
+// A replay owns one instance for all of its steps. Brake limit errors are
+// stored in that instance, retaining the first refusal for each resource.
 type ReplayBudget struct {
-	shared     MultiwayBudget
-	bytes      uint64
-	maxBytes   uint64
-	strict     bool
-	failure    error
-	limitError WorkLimitError
+	shared      MultiwayBudget
+	bytes       uint64
+	maxBytes    uint64
+	brake       bool
+	limitErrors [3]WorkLimitError
+	strict      bool
+	failure     error
+	limitError  WorkLimitError
 }
 
 // Replay trial limits bound the shared trial meter.
@@ -31,6 +34,23 @@ const (
 func NewReplayTrialBudget() *ReplayBudget {
 	return &ReplayBudget{shared: MultiwayBudget{maxWork: ReplayTrialWork, maxRecords: ReplayTrialRecords}}
 }
+
+// BrakeReplay limits apply to the authenticated private brake route.
+const (
+	BrakeReplayWork    uint64 = 11735281028
+	BrakeReplayRecords uint64 = 284417498
+	BrakeReplayBytes   uint64 = 59714786988
+)
+
+// NewBrakeReplayBudget creates a meter for one private brake replay.
+func NewBrakeReplayBudget() *ReplayBudget {
+	b := &ReplayBudget{shared: MultiwayBudget{maxWork: BrakeReplayWork, maxRecords: BrakeReplayRecords}, maxBytes: BrakeReplayBytes, brake: true}
+	b.shared.prebuiltLimits = &b.limitErrors
+	return b
+}
+
+// IsBrakeReplay reports whether the meter belongs to the private brake route.
+func (b *ReplayBudget) IsBrakeReplay() bool { return b != nil && b.brake }
 
 // NewReplayBudgetLimits creates a replay budget no larger than the trial caps.
 // All limits must be positive; smaller limits support bounded callers and tests.
@@ -105,8 +125,11 @@ func (b *ReplayBudget) ReserveBytes(ctx context.Context, n uint64) error {
 	if b.strict {
 		return b.charge(ctx, &b.bytes, n, limit, "replay_bytes")
 	}
-	return multiwayCharge(ctx, &b.bytes, n, limit, "replay_bytes")
+	return multiwayCharge(ctx, &b.bytes, n, limit, "replay_bytes", b.shared.prebuiltLimits)
 }
+
+var errBrakeArrayOverflow = fmt.Errorf("%w: replay allocation size overflow", decaderr.ErrUnsupported)
+var errBrakeEnvelopeOverflow = fmt.Errorf("%w: replay allocation envelope overflow", decaderr.ErrUnsupported)
 
 // ReserveArray charges a checked backing array and a conservative allocation envelope.
 func (b *ReplayBudget) ReserveArray(ctx context.Context, count, elementBytes uint64) error {
@@ -123,6 +146,9 @@ func (b *ReplayBudget) ReserveArray(ctx context.Context, count, elementBytes uin
 			b.failure = errCircleReplayArray
 			return b.failure
 		}
+		if b.brake {
+			return errBrakeArrayOverflow
+		}
 		return fmt.Errorf("%w: replay allocation size overflow", decaderr.ErrUnsupported)
 	}
 	size := count * elementBytes
@@ -130,6 +156,9 @@ func (b *ReplayBudget) ReserveArray(ctx context.Context, count, elementBytes uin
 		if b.strict {
 			b.failure = errCircleReplayEnvelope
 			return b.failure
+		}
+		if b.brake {
+			return errBrakeEnvelopeOverflow
 		}
 		return fmt.Errorf("%w: replay allocation envelope overflow", decaderr.ErrUnsupported)
 	}
@@ -200,13 +229,13 @@ func (b *ReplayBudget) ReserveBundle(ctx context.Context, work, records, bytes u
 	if bLimit == 0 {
 		bLimit = ReplayTrialBytes
 	}
-	if err := multiwayCharge(ctx, &w, work, wLimit, "multiway_work"); err != nil {
+	if err := multiwayCharge(ctx, &w, work, wLimit, "multiway_work", b.shared.prebuiltLimits); err != nil {
 		return err
 	}
-	if err := multiwayCharge(ctx, &r, records, rLimit, "multiway_records"); err != nil {
+	if err := multiwayCharge(ctx, &r, records, rLimit, "multiway_records", b.shared.prebuiltLimits); err != nil {
 		return err
 	}
-	if err := multiwayCharge(ctx, &n, bytes, bLimit, "replay_bytes"); err != nil {
+	if err := multiwayCharge(ctx, &n, bytes, bLimit, "replay_bytes", b.shared.prebuiltLimits); err != nil {
 		return err
 	}
 	if err := ctx.Err(); err != nil {
@@ -233,6 +262,8 @@ func (b *ReplayBudget) ReserveRecords(ctx context.Context, n uint64) error {
 func (b *ReplayBudget) WorkBudget(ctx context.Context) *WorkBudget {
 	b.shared.reserveBytes = b.ReserveBytes
 	work := b.shared.WorkBudget(ctx)
+	work.Replay = true
+	work.ReplayID = b
 	return work
 }
 

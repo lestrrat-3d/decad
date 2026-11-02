@@ -37,6 +37,7 @@ type PrismTopology[F comparable] struct {
 	Walks                                           int
 }
 
+// PrismReplayFaceBound holds a private rectangular face's proof inputs.
 type PrismReplayFaceBound[F comparable] struct {
 	Face        F
 	Trim, Axial float64
@@ -110,10 +111,19 @@ func PrismCaps[F comparable](ctx context.Context, t *PrismTopology[F], sheet boo
 	clearance func(context.Context, []sectionrecord.Point2, [][]int, []float64) error,
 	triangulate func(context.Context, []sectionrecord.Point2, [][]int) ([][3]int, error)) error {
 	if !sheet {
-		t.FaceTrim[capStart] = t.CapTrim
-		t.FaceTrim[capEnd] = t.CapTrim
-		t.FaceAxial[capStart] = z0Delta
-		t.FaceAxial[capEnd] = z1Delta
+		if t.ReplayFaceBounds != nil {
+			if err := t.SetReplayFaceBound(capStart, t.CapTrim, z0Delta, false); err != nil {
+				return err
+			}
+			if err := t.SetReplayFaceBound(capEnd, t.CapTrim, z1Delta, false); err != nil {
+				return err
+			}
+		} else {
+			t.FaceTrim[capStart] = t.CapTrim
+			t.FaceTrim[capEnd] = t.CapTrim
+			t.FaceAxial[capStart] = z0Delta
+			t.FaceAxial[capEnd] = z1Delta
+		}
 	}
 	if err := clearance(ctx, t.Points, t.LoopIdx, t.LoopSag); err != nil {
 		return err

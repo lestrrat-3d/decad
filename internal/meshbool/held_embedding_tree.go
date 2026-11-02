@@ -2,11 +2,14 @@ package meshbool
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/bits"
 	"slices"
 	"sort"
+	"unsafe"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 )
@@ -372,4 +375,150 @@ func heldBoxAxis(point r3.Vec, axis int) float64 {
 	default:
 		return point.Z
 	}
+}
+
+// visitOverlapsWork charges each node and leaf candidate before inspecting it.
+// The caller supplies a reusable stack with room for every tree node.
+func (tree *heldBoxTree) visitOverlapsWork(box [2]r3.Vec, step func() error, stack []int,
+	visit func(int) error) error {
+	if len(tree.nodes) == 0 {
+		return step()
+	}
+	if cap(stack) < len(tree.nodes) {
+		return fmt.Errorf("%w: bounded box tree stack is too small", decaderr.ErrUnsupported)
+	}
+	stack = append(stack[:0], 0)
+	for len(stack) > 0 {
+		if err := step(); err != nil {
+			return err
+		}
+		last := len(stack) - 1
+		node := tree.nodes[stack[last]]
+		stack = stack[:last]
+		if !BoxesOverlap(box, node.box) {
+			continue
+		}
+		if node.leafStart >= 0 {
+			for _, facet := range tree.facets[node.leafStart : node.leafStart+node.leafCount] {
+				if err := step(); err != nil {
+					return err
+				}
+				if BoxesOverlap(box, tree.boxes[facet]) {
+					if err := visit(facet); err != nil {
+						return err
+					}
+				}
+			}
+			continue
+		}
+		stack = append(stack, node.right, node.left)
+	}
+	return nil
+}
+
+// newBoxTreeWork builds an order-preserving balanced tree while charging each
+// box inspection. The caller has reserved five records per source box.
+func newBoxTreeWork(boxes [][2]r3.Vec, budget *proofbound.WorkBudget) (heldBoxTree, error) {
+	return buildBoxTreeWork(boxes, budget, false)
+}
+
+// newSpatialBoxTreeWork partitions each node on its longest axis. Conform
+// queries restore vertex-index order before running their exact predicates.
+func newSpatialBoxTreeWork(boxes [][2]r3.Vec, budget *proofbound.WorkBudget) (heldBoxTree, error) {
+	return buildBoxTreeWork(boxes, budget, true)
+}
+
+func buildBoxTreeWork(boxes [][2]r3.Vec, budget *proofbound.WorkBudget, spatial bool) (heldBoxTree, error) {
+	n := uint64(len(boxes))
+	if n > ^uint64(0)/2 {
+		return heldBoxTree{}, fmt.Errorf("%w: box tree size overflow", decaderr.ErrUnsupported)
+	}
+	for _, reservation := range [][2]uint64{{n, uint64(unsafe.Sizeof(int(0)))}, {n, uint64(unsafe.Sizeof(int(0)))}, {2 * n, uint64(unsafe.Sizeof(heldBoxNode{}))}, {n, uint64(unsafe.Sizeof([2]r3.Vec{}))}} {
+		if err := budget.ReserveBytesMul(reservation[0], reservation[1]); err != nil {
+			return heldBoxTree{}, err
+		}
+	}
+	ids := make([]int, 0, len(boxes))
+	for i, b := range boxes {
+		if err := budget.Step(); err != nil {
+			return heldBoxTree{}, err
+		}
+		if !heldBoxHasNaN(b) {
+			ids = append(ids, i)
+		}
+	}
+	tree := heldBoxTree{boxes: boxes, nodes: make([]heldBoxNode, 0, 2*len(ids)), facets: make([]int, 0, len(ids))}
+	var build func([]int) (int, error)
+	build = func(part []int) (int, error) {
+		if err := budget.Step(); err != nil {
+			return 0, err
+		}
+		idx := len(tree.nodes)
+		tree.nodes = append(tree.nodes, heldBoxNode{leafStart: -1})
+		bound := boxes[part[0]]
+		for _, id := range part[1:] {
+			if err := budget.Step(); err != nil {
+				return 0, err
+			}
+			other := boxes[id]
+			bound[0].X = min(bound[0].X, other[0].X)
+			bound[0].Y = min(bound[0].Y, other[0].Y)
+			bound[0].Z = min(bound[0].Z, other[0].Z)
+			bound[1].X = max(bound[1].X, other[1].X)
+			bound[1].Y = max(bound[1].Y, other[1].Y)
+			bound[1].Z = max(bound[1].Z, other[1].Z)
+		}
+		tree.nodes[idx].box = bound
+		if len(part) <= heldBoxLeafSize {
+			if spatial {
+				if _, err := budget.StepN(uint64(len(part))); err != nil {
+					return 0, err
+				}
+			}
+			tree.nodes[idx].leafStart = len(tree.facets)
+			tree.nodes[idx].leafCount = len(part)
+			tree.facets = append(tree.facets, part...)
+			return idx, nil
+		}
+		if spatial {
+			if _, err := budget.StepN(8); err != nil {
+				return 0, err
+			}
+			axis := 0
+			extent := [3]float64{bound[1].X - bound[0].X, bound[1].Y - bound[0].Y, bound[1].Z - bound[0].Z}
+			if extent[1] > extent[axis] {
+				axis = 1
+			}
+			if extent[2] > extent[axis] {
+				axis = 2
+			}
+			if err := sortHeldBoxFacetsWork(part, boxes, axis, budget); err != nil {
+				return 0, err
+			}
+		}
+		mid := len(part) / 2
+		left, err := build(part[:mid])
+		if err != nil {
+			return 0, err
+		}
+		right, err := build(part[mid:])
+		if err != nil {
+			return 0, err
+		}
+		tree.nodes[idx].left, tree.nodes[idx].right = left, right
+		return idx, nil
+	}
+	if len(ids) > 0 {
+		if _, err := build(ids); err != nil {
+			return heldBoxTree{}, err
+		}
+	}
+	tree.slotBoxes = make([][2]r3.Vec, len(tree.facets))
+	for i, id := range tree.facets {
+		if err := budget.Step(); err != nil {
+			return heldBoxTree{}, err
+		}
+		tree.slotBoxes[i] = boxes[id]
+	}
+	return tree, nil
 }

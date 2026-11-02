@@ -75,7 +75,12 @@ func ScaleMesh(ctx context.Context, budget *proofbound.WorkBudget,
 		}
 	}
 	next.MeshBound = FacetBoundMax(tris, next.VertexBound)
-	areaUpper, err := proofbound.PerturbedAreaUpperWithBudget(budget, next.Verts, tris, next.Round)
+	var areaUpper float64
+	if budget.Replay {
+		areaUpper, err = proofbound.PerturbedAreaUpperReplay(ctx, budget, next.Verts, tris, next.Round)
+	} else {
+		areaUpper, err = proofbound.PerturbedAreaUpperWithBudget(budget, next.Verts, tris, next.Round)
+	}
 	if err != nil {
 		return SimilarMesh{}, err
 	}

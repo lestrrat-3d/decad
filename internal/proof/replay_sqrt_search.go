@@ -3,6 +3,7 @@ package proof
 import (
 	"context"
 	"math"
+	"math/big"
 )
 
 // replaySqrtSearch finds the tight directed float by binary search over the
@@ -56,5 +57,20 @@ func replaySqrtDyadicSearch(ctx context.Context, d Dyadic, down bool, m ReplayKe
 			return 0, err
 		}
 		return diff.Sign(), nil
+	})
+}
+
+func replaySqrtRatSearch(ctx context.Context, q *big.Rat, down bool, m ReplayKeyBudget) (float64, error) {
+	return replaySqrtSearch(ctx, down, m, func(f float64) (int, error) {
+		v, _ := DyOf(f)
+		sq, err := ReplayDyadicArithmetic(ctx, v, v, '*', m)
+		if err != nil {
+			return 0, err
+		}
+		r, err := ReplayDyadicRat(ctx, sq, m)
+		if err != nil {
+			return 0, err
+		}
+		return ReplayRatCompare(ctx, r, q, m)
 	})
 }

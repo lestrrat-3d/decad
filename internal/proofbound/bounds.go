@@ -2,9 +2,12 @@ package proofbound
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/big"
+	"unsafe"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/orderedwork"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
@@ -705,8 +708,17 @@ func PerturbedAreaUpperWithBudget(
 	tris [][3]int,
 	delta float64,
 ) (float64, error) {
+	return perturbedAreaUpperWithWorkers(budget, verts, tris, delta, orderedwork.EachWorkers(len(tris), perturbedParallelMin))
+}
+
+// PerturbedAreaUpperSerialWithBudget charges each facet before its exact work.
+func PerturbedAreaUpperSerialWithBudget(budget *WorkBudget, verts []r3.Vec, tris [][3]int, delta float64) (float64, error) {
+	return perturbedAreaUpperWithWorkers(budget, verts, tris, delta, 1)
+}
+
+func perturbedAreaUpperWithWorkers(budget *WorkBudget, verts []r3.Vec, tris [][3]int, delta float64, workers int) (float64, error) {
 	terms, err := perturbedTriangleTerms(
-		budget, verts, tris, orderedwork.EachWorkers(len(tris), perturbedParallelMin))
+		budget, verts, tris, workers)
 	if err != nil {
 		return 0, err
 	}
@@ -766,11 +778,24 @@ func PerturbedAreaUpperAllowsContext(
 	tris [][3]int,
 	delta float64,
 ) (float64, []float64, error) {
-	budget := NewWorkBudget(ctx)
+	return perturbedAreaUpperAllows(NewWorkBudget(ctx), verts, tris, delta, orderedwork.EachWorkers(len(tris), perturbedParallelMin))
+}
+
+// PerturbedAreaUpperAllowsSerialWithBudget charges each facet before its exact work.
+func PerturbedAreaUpperAllowsSerialWithBudget(budget *WorkBudget, verts []r3.Vec, tris [][3]int, delta float64) (float64, []float64, error) {
+	return perturbedAreaUpperAllows(budget, verts, tris, delta, 1)
+}
+
+func perturbedAreaUpperAllows(budget *WorkBudget, verts []r3.Vec, tris [][3]int, delta float64, workers int) (float64, []float64, error) {
 	terms, err := perturbedTriangleTerms(
-		budget, verts, tris, orderedwork.EachWorkers(len(tris), perturbedParallelMin))
+		budget, verts, tris, workers)
 	if err != nil {
 		return 0, nil, err
+	}
+	if budget != nil && budget.Replay {
+		if err := budget.ReserveBytesMul(uint64(len(tris)), uint64(unsafe.Sizeof(float64(0)))); err != nil {
+			return 0, nil, err
+		}
 	}
 	allows := make([]float64, len(tris))
 	total := 0.0
@@ -810,11 +835,11 @@ const perturbedParallelMin = 2048
 // triangle. No worker touches the budget, so the budget fails at the same
 // step as the serial loop and returns the same error.
 func perturbedTriangleTerms(
-	budget *WorkBudget,
-	verts []r3.Vec,
-	tris [][3]int,
-	workers int,
+	budget *WorkBudget, verts []r3.Vec, tris [][3]int, workers int,
 ) ([]perturbedTerm, error) {
+	if budget != nil && budget.Replay {
+		return nil, fmt.Errorf("%w: replay area requires an explicit context", decaderr.ErrUnsupported)
+	}
 	terms := make([]perturbedTerm, len(tris))
 	if workers < 2 {
 		lifter := newVertexLifter(verts)

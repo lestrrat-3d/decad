@@ -438,6 +438,10 @@ func (b *Body) OperationDiagnostics() []OperationDiagnostic {
 				subject = OperationSubject{Name: name, Ordinal: ordinal}
 			}
 			allowance := units.Millimeters(*record.ChainAllowance)
+			message := "The configured chain allowance raised the local held-facet bound gate."
+			if record.AutomaticAllowance {
+				message = "The accepted adjustment raised the local held-facet bound gate."
+			}
 			out = append(out, OperationDiagnostic{
 				Code: OpDiagChainAllowanceApplied, Severity: OperationDiagnosticWarning,
 				Operation: kind, Stage: OperationStageEvaluation,
@@ -446,7 +450,7 @@ func (b *Body) OperationDiagnostics() []OperationDiagnostic {
 					TouchedBound:   units.Millimeters(record.TouchedBound),
 					PairChordLimit: units.Millimeters(record.PairChordLimit), ChainAllowance: &allowance,
 				},
-				Message: "The configured chain allowance raised the local held-facet bound gate.",
+				Message: message,
 			})
 			continue
 		}

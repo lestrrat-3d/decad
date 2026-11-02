@@ -4,17 +4,20 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/exactrotation"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/surfaceplace"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 )
 
 // Placed re-evaluates the held mesh under the composed motion: the vertices
@@ -37,13 +40,58 @@ func (fp Payload) Placed(ctx context.Context, env topo.Env, composed r3.Transfor
 // rebuilt from a later float placement.
 func (fp Payload) PlacedWith(ctx context.Context, env topo.Env, composed r3.Transform,
 	exact *exactrotation.Rotation) (*topo.Body, error) {
+	return fp.placedWithReplay(ctx, env, composed, exact, nil)
+}
+
+// PlacedReplay places a bounded faceted source and rebuilds its proven body.
+func (fp Payload) PlacedReplay(ctx context.Context, env topo.Env, composed r3.Transform, replay *proofbound.ReplayBudget) (*topo.Body, error) {
+	if replay == nil || fp.PointPlane != nil || fp.LoftMirrorJoin != nil || fp.LoftMirrorCopy != nil || fp.MirrorCapGroups != nil || fp.PointCone != nil {
+		return nil, fmt.Errorf("%w: bounded placement does not support this source record", decaderr.ErrUnsupported)
+	}
+	return fp.placedWithReplay(ctx, env, composed, nil, replay)
+}
+
+func (fp Payload) placedWithReplay(ctx context.Context, env topo.Env, composed r3.Transform,
+	exact *exactrotation.Rotation, replay *proofbound.ReplayBudget) (*topo.Body, error) {
 	budget := proofbound.NewWorkBudget(ctx)
+	if replay != nil {
+		if len(fp.Verts) > 65536 || len(fp.Tris) > 65536 || len(fp.Groups) > 65536 {
+			return nil, fmt.Errorf("%w: bounded placement source exceeds its record cap", decaderr.ErrUnsupported)
+		}
+		if err := replay.ReserveArray(ctx, uint64(len(fp.Groups)), uint64(unsafe.Sizeof(Group{}))); err != nil {
+			return nil, err
+		}
+		if err := replay.ReserveArray(ctx, uint64(len(fp.Verts)), uint64(unsafe.Sizeof(r3.Vec{}))); err != nil {
+			return nil, err
+		}
+		if err := replay.ReserveArray(ctx, uint64(len(fp.Tris)), uint64(unsafe.Sizeof([3]int{}))); err != nil {
+			return nil, err
+		}
+		groupWork, ok := proofbound.WallCheckedMul(uint64(len(fp.Groups)), uint64(len(fp.Verts)))
+		if !ok {
+			return nil, replay.SpendWork(ctx, proofbound.MaxMultiwayWorkPerCall+1)
+		}
+		if err := replay.SpendWork(ctx, groupWork+4*uint64(len(fp.Groups))+3*uint64(len(fp.Verts))+uint64(len(fp.Tris))); err != nil {
+			return nil, err
+		}
+		if err := replay.ReserveRecords(ctx, 4+uint64(len(fp.Groups))+uint64(len(fp.Verts))+uint64(len(fp.Tris))); err != nil {
+			return nil, err
+		}
+		budget = replay.WorkBudget(ctx)
+	}
 	if err := budget.Err(); err != nil {
 		return nil, err
 	}
 	delta, err := PlacementDelta(fp.Xform, composed)
 	if err != nil {
 		return nil, err
+	}
+	if replay != nil {
+		for _, group := range fp.Groups {
+			if group.Denoted != nil || (group.Surface != nil && delta != r3.Identity() && !facetproof.TranslationOnly(delta)) {
+				return nil, fmt.Errorf("%w: bounded placement group proof is unavailable", decaderr.ErrUnsupported)
+			}
+		}
 	}
 	next := fp
 	next.SmoothRectSection = nil
@@ -111,6 +159,13 @@ func (fp Payload) PlacedWith(ctx context.Context, env topo.Env, composed r3.Tran
 			next.Groups[group].Origins = append(origins, provenance.Ref{Producer: env.Ref, Role: role})
 		}
 	}
+	var replayCharge massmoment.MapCharge
+	if replay != nil {
+		replayCharge, err = massmoment.ReplayPlacementCharge(ctx, delta, replay)
+		if err != nil {
+			return nil, err
+		}
+	}
 	reach := fp.MeshBound
 	for _, beta := range fp.VertexBound {
 		reach = max(reach, beta)
@@ -124,7 +179,13 @@ func (fp Payload) PlacedWith(ctx context.Context, env topo.Env, composed r3.Tran
 			continue
 		}
 		if next.Groups[i].HasCentroid {
-			reading, err := PlacedCapCentroid(next.Groups[i].Centroid, delta)
+			var reading measurement.VecMeasurement
+			var err error
+			if replay != nil {
+				reading, err = replayPlacedCapCentroid(ctx, next.Groups[i].Centroid, delta, replayCharge, replay)
+			} else {
+				reading, err = PlacedCapCentroid(next.Groups[i].Centroid, delta)
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -141,13 +202,26 @@ func (fp Payload) PlacedWith(ctx context.Context, env topo.Env, composed r3.Tran
 		if tag := next.Groups[i].Surface; tag != nil && delta != r3.Identity() {
 			switch tag.(type) {
 			case surfacegeom.Plane, surfacegeom.Cylinder, surfacegeom.Cone, surfacegeom.Sphere, surfacegeom.Torus:
-				moved, err := surfaceplace.TransformSurface(tag, delta)
+				var moved surfacegeom.Surface
+				var replayDeparture float64
+				var err error
+				if replay != nil {
+					plane, ok := tag.(surfacegeom.Plane)
+					if !ok {
+						return nil, fmt.Errorf("%w: bounded placement needs a plane", decaderr.ErrUnsupported)
+					}
+					moved, replayDeparture, err = replayTranslatedPlane(ctx, plane, delta, replay)
+				} else {
+					moved, err = surfaceplace.TransformSurface(tag, delta)
+				}
 				if err != nil {
 					return nil, err
 				}
 				next.Groups[i].Surface = moved
 				next.Groups[i].NormalBound = 2
-				if next.Groups[i].Retained {
+				if next.Groups[i].Retained && replay != nil {
+					next.Groups[i].NormalBound = min(2, proofbound.AbsSumUpper(fp.Groups[i].NormalBound, replayDeparture))
+				} else if next.Groups[i].Retained {
 					add, stated := PlacedTagDeparture(tag, moved, delta, fp.Verts, reach)
 					if stated {
 						next.Groups[i].NormalBound = min(2, proofbound.AbsSumUpper(fp.Groups[i].NormalBound, add))
@@ -187,17 +261,23 @@ func (fp Payload) PlacedWith(ctx context.Context, env topo.Env, composed r3.Tran
 		placed, err = facetproof.PlaceMeshDenoting(ctx, budget, fp.Verts, fp.Tris, fp.VertexBound,
 			fp.VolSymDiff, fp.AreaSlack, delta, linearGap, translationGap)
 	} else {
-		var linear [3][3]*big.Rat
-		linear, err = massmoment.PlacementRotation(delta)
+		if replay != nil {
+			charge = replayCharge
+		} else {
+			var linear [3][3]*big.Rat
+			linear, err = massmoment.PlacementRotation(delta)
+			if err == nil {
+				charge, err = massmoment.MapChargeOf(linear)
+			}
+		}
 		if err != nil {
 			return nil, err
 		}
-		charge, err = massmoment.MapChargeOf(linear)
-		if err != nil {
-			return nil, err
+		if replay != nil {
+			placed, err = facetproof.PlaceMeshReplay(ctx, budget, fp.Verts, fp.Tris, fp.VertexBound, fp.VolSymDiff, fp.AreaSlack, charge.Stretch, charge.Volume, delta)
+		} else {
+			placed, err = facetproof.PlaceMesh(ctx, budget, fp.Verts, fp.Tris, fp.VertexBound, fp.VolSymDiff, fp.AreaSlack, charge.Stretch, charge.Volume, delta)
 		}
-		placed, err = facetproof.PlaceMesh(ctx, budget, fp.Verts, fp.Tris, fp.VertexBound,
-			fp.VolSymDiff, fp.AreaSlack, charge.Stretch, charge.Volume, delta)
 	}
 	if err != nil {
 		return nil, err
@@ -205,7 +285,14 @@ func (fp Payload) PlacedWith(ctx context.Context, env topo.Env, composed r3.Tran
 	next.Verts, next.Tris = placed.Verts, placed.Tris
 	next.VertexBound, next.MeshBound, next.VolSymDiff = placed.VertexBound, placed.MeshBound, placed.VolSymDiff
 	next.AreaSlack = placed.AreaSlack
-	next.DPair = SourceDiameterUpper(next.Verts, next.MeshBound)
+	if replay != nil {
+		next.DPair, err = replaySourceDiameterUpper(ctx, next.Verts, next.MeshBound, replay)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		next.DPair = SourceDiameterUpper(next.Verts, next.MeshBound)
+	}
 	if proofbound.IsNonFinite(next.DPair) {
 		return nil, fmt.Errorf("%w: the placed pair diameter has no finite proof", decaderr.ErrUnsupported)
 	}
@@ -226,10 +313,39 @@ func (fp Payload) PlacedWith(ctx context.Context, env topo.Env, composed r3.Tran
 			MeshBound: next.MeshBound, CapDisplacement: next.PointPlaneCapDisplacement})
 		next.PointSimilarity = &record
 	}
-	body, err := Build(ctx, env, next)
+	var body *topo.Body
+	if replay != nil {
+		audit, ok, aerr := facetproof.AuditFacetedMeshReplay(ctx, budget, next.Verts, next.Tris)
+		if aerr != nil {
+			return nil, aerr
+		}
+		if !ok {
+			return nil, fmt.Errorf("%w: bounded placement audit refused", decaderr.ErrUnsupported)
+		}
+		v, vb, vr, ok, verr := facetproof.VolumeFromAuditReplay(ctx, budget, audit, next.VolSymDiff)
+		if verr != nil {
+			return nil, verr
+		}
+		if !ok {
+			return nil, fmt.Errorf("%w: bounded placement volume refused", decaderr.ErrUnsupported)
+		}
+		volume := measurement.Measurement{Value: units.CubicMillimeters(v), Exactness: measurement.ExactnessOf(vb), Bound: units.CubicMillimeters(vb)}
+		body, ok, err = BuildWithProofReplay(ctx, budget, env, next, audit, volume, vr)
+		if err == nil && !ok {
+			err = fmt.Errorf("%w: bounded placement body refused", decaderr.ErrUnsupported)
+		}
+	} else {
+		body, err = Build(ctx, env, next)
+	}
 	if err != nil {
 		return nil, err
 	}
-	body.OperationWarnings = append(body.OperationWarnings, placed.EmbeddingReach.Diagnostics()...)
+	if replay != nil {
+		if placed.EmbeddingReach != nil {
+			return nil, fmt.Errorf("%w: bounded placement repair warning is unavailable", decaderr.ErrUnsupported)
+		}
+	} else {
+		body.OperationWarnings = append(body.OperationWarnings, placed.EmbeddingReach.Diagnostics()...)
+	}
 	return body, nil
 }

@@ -114,3 +114,98 @@ func OperandSymDiff(boundaryOK, symDiffOK bool, volSymDiff float64) (float64, er
 	}
 	return volSymDiff, nil
 }
+
+// PrepContextMultiway prepares a private operand under the shared trial budget.
+// It leaves depth summaries empty; consumers then use the equivalent direct scan.
+func PrepContextMultiway(ctx context.Context, verts []r3.Vec, tris [][3]int, src []int,
+	budget *proofbound.MultiwayBudget) (*BoolMesh, error) {
+	return prepContextBudgeted(ctx, verts, tris, src, budget, false)
+}
+
+// PrepContextReplay permits wider finite normals using bit-length work charges.
+func PrepContextReplay(ctx context.Context, verts []r3.Vec, tris [][3]int, src []int,
+	budget *proofbound.ReplayBudget) (*BoolMesh, error) {
+	if budget == nil {
+		return nil, fmt.Errorf("%w: bounded mesh preparation needs a budget", decaderr.ErrUnsupported)
+	}
+	return prepContextReplay(ctx, verts, tris, src, budget)
+}
+
+func prepContextBudgeted(ctx context.Context, verts []r3.Vec, tris [][3]int, src []int,
+	budget *proofbound.MultiwayBudget, replay bool) (*BoolMesh, error) {
+	if budget == nil {
+		return nil, fmt.Errorf("%w: bounded mesh preparation needs a budget", decaderr.ErrUnsupported)
+	}
+	if len(tris) > 65536 {
+		return nil, fmt.Errorf("%w: bounded mesh preparation facet cap exceeded", decaderr.ErrUnsupported)
+	}
+	if err := budget.ReserveRecords(ctx, uint64(len(verts))); err != nil {
+		return nil, err
+	}
+	if err := budget.ReserveRecords(ctx, 7*uint64(len(tris))); err != nil {
+		return nil, err
+	}
+	bm := &BoolMesh{Verts: verts, Tris: tris, Src: src}
+	bm.Xverts = make([]proof.Xpt, len(verts))
+	for i, v := range verts {
+		if err := budget.SpendWork(ctx, 1); err != nil {
+			return nil, err
+		}
+		if proofbound.IsNonFinite(v.X) || proofbound.IsNonFinite(v.Y) || proofbound.IsNonFinite(v.Z) {
+			return nil, fmt.Errorf("%w: a mesh vertex is not finite", decaderr.ErrBooleanFailed)
+		}
+		p, err := proof.XptOfBounded(v, func(n uint64) error {
+			if replay {
+				if n > ^uint64(0)/64 {
+					return fmt.Errorf("%w: exact point byte reservation overflow", decaderr.ErrUnsupported)
+				}
+				if err := budget.ReserveBytes(ctx, n*64); err != nil {
+					return err
+				}
+			}
+			return budget.ReserveRecords(ctx, n)
+		})
+		if err != nil {
+			return nil, err
+		}
+		bm.Xverts[i] = p
+	}
+	bm.Norms = make([]proof.Xpt, len(tris))
+	bm.Fnorms = make([]r3.Vec, len(tris))
+	bm.FnormsReady = make([]bool, len(tris))
+	bm.Boxes = make([][2]r3.Vec, len(tris))
+	bm.Owner = make(map[[2]int]int, 3*len(tris))
+	for i, tri := range tris {
+		if err := budget.SpendWork(ctx, 4); err != nil {
+			return nil, err
+		}
+		var n proof.Xpt
+		var err error
+		reserve := func(n uint64) error { return budget.ReserveRecords(ctx, n) }
+		if replay {
+			n, err = proof.TriangleNormalReplay(verts[tri[0]], verts[tri[1]], verts[tri[2]], func(n uint64) error {
+				if n > ^uint64(0)/64 {
+					return fmt.Errorf("%w: exact normal byte reservation overflow", decaderr.ErrUnsupported)
+				}
+				if err := budget.ReserveBytes(ctx, n*64); err != nil {
+					return err
+				}
+				return reserve(n)
+			}, func(n uint64) error { return budget.SpendWork(ctx, n) })
+		} else {
+			n, err = proof.TriangleNormalBounded(verts[tri[0]], verts[tri[1]], verts[tri[2]], reserve)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if n.X.Sign() == 0 && n.Y.Sign() == 0 && n.Z.Sign() == 0 {
+			return nil, fmt.Errorf("%w: an operand holds a collapsed facet", decaderr.ErrUnsupported)
+		}
+		bm.Norms[i] = n
+		bm.Boxes[i] = TriBox(verts, tri)
+		for k := range 3 {
+			bm.Owner[[2]int{tri[k], tri[(k+1)%3]}] = i
+		}
+	}
+	return bm, nil
+}

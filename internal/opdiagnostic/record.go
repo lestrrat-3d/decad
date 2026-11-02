@@ -24,14 +24,15 @@ const (
 
 // Record is the private plain-data form of one operation diagnostic.
 type Record struct {
-	Operation         int
-	PublicOperation   int
-	Code              Code
-	Operand           int
-	Change            ChangeMechanism
-	DisplacementBound float64
-	AllowedReach      float64
-	TouchedBound      float64
-	PairChordLimit    float64
-	ChainAllowance    *float64
+	Operation          int
+	PublicOperation    int
+	Code               Code
+	Operand            int
+	Change             ChangeMechanism
+	DisplacementBound  float64
+	AllowedReach       float64
+	TouchedBound       float64
+	PairChordLimit     float64
+	ChainAllowance     *float64
+	AutomaticAllowance bool
 }

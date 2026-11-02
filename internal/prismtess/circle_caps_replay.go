@@ -83,3 +83,22 @@ func circleCapsReplay[F comparable](ctx context.Context, t *tessellation.PrismTo
 	}
 	return nil
 }
+
+// circleCapsAxialReplay carries the brake source's two axial bounds through
+// the shared circle cap proof. The primitive circle route has zero axial bounds.
+func circleCapsAxialReplay[F comparable](ctx context.Context, t *tessellation.PrismTopology[F],
+	start, end F, z0, z1 float64, budget *proofbound.ReplayBudget) error {
+	if budget == nil || !budget.IsBrakeReplay() {
+		return decaderr.ErrUnsupported
+	}
+	if err := budget.SpendWork(ctx, 16); err != nil {
+		return err
+	}
+	if err := circleCapsReplay(ctx, t, start, end, budget); err != nil {
+		return err
+	}
+	if err := t.SetReplayFaceBound(start, t.CapTrim, z0, false); err != nil {
+		return err
+	}
+	return t.SetReplayFaceBound(end, t.CapTrim, z1, false)
+}

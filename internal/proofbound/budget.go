@@ -184,7 +184,10 @@ const MaxFacetPairTestsPerCall = 8_000_000
 // WorkBudget holds closures rather than a context.Context field, so no
 // long-lived geometry state stores a context.
 type WorkBudget struct {
+	Replay         bool
+	ReplayID       *ReplayBudget
 	StepFn         func() error
+	SpendWorkFn    func(uint64) error
 	ErrFn          func() error
 	ReserveFn      func(uint64) error
 	ReserveBytesFn func(uint64) error
@@ -247,6 +250,16 @@ func (b *WorkBudget) StepN(n uint64) (uint64, error) {
 		}
 	}
 	return n, nil
+}
+
+// SpendWork charges one logical proof operation atomically when the owner
+// supplies a callback. Other budgets retain StepN's per-step behavior.
+func (b *WorkBudget) SpendWork(n uint64) error {
+	if b.SpendWorkFn != nil {
+		return b.SpendWorkFn(n)
+	}
+	_, err := b.StepN(n)
+	return err
 }
 
 func NewWorkBudget(ctx context.Context) *WorkBudget {

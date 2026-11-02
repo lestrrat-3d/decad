@@ -87,4 +87,17 @@ func TestCircleCapsReplay(t *testing.T) {
 	if len(top.Triangles) != 2*n {
 		t.Fatal("canceled caps mutated topology")
 	}
+	// The brake route can carry distinct axial displacement on its two caps.
+	top = mk()
+	if e = circleCapsAxialReplay(t.Context(), &top, 2, 3, .01, .02, proofbound.NewBrakeReplayBudget()); e != nil {
+		t.Fatal(e)
+	}
+	if len(top.Triangles) != 4*n-4 || len(top.ReplayFaceBounds) != 3 {
+		t.Fatal("brake cap topology differs")
+	}
+	for _, bound := range top.ReplayFaceBounds {
+		if bound.Face == 2 && bound.Axial != .01 || bound.Face == 3 && bound.Axial != .02 {
+			t.Fatalf("cap %d lost its axial bound: %g", bound.Face, bound.Axial)
+		}
+	}
 }

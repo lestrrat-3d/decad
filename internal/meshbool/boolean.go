@@ -130,6 +130,13 @@ func RefuseCoarseHeldContact(m *BoolMesh, operand int, facets []int) error {
 	for _, f := range facets {
 		worst = max(worst, m.SlabBound[f])
 	}
+	return refuseCoarseHeldMaximum(m, operand, worst)
+}
+
+func refuseCoarseHeldMaximum(m *BoolMesh, operand int, worst float64) error {
+	if m.Gate <= 0 {
+		return nil
+	}
 	m.ChainTouchedBound = max(m.ChainTouchedBound, worst)
 	if m.ChainAllowance > m.PairChordLimit && worst > m.PairChordLimit && worst <= m.ChainAllowance {
 		m.ChainAllowanceUsed = true

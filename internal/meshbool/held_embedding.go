@@ -104,6 +104,36 @@ func enforceHeldEmbeddingWithSummary(ctx context.Context, h HeldRounding, memo b
 	return moved, &summary, nil
 }
 
+// EnforceHeldEmbeddingReplay applies the bounded serial repair on a shared counter.
+func EnforceHeldEmbeddingReplay(ctx context.Context, h HeldRounding, budget *proofbound.WorkBudget) (int, *EmbeddingReach, error) {
+	if budget == nil {
+		return 0, nil, fmt.Errorf("%w: bounded embedding requires a work budget", decaderr.ErrUnsupported)
+	}
+	if budget.Replay {
+		found, err := replayEmbeddingPrecheck(ctx, h, budget.ReplayID)
+		if err != nil {
+			return 0, nil, err
+		}
+		if found {
+			moved, err := replayRepairHeldEmbedding(ctx, h, budget.ReplayID)
+			return moved, nil, err
+		}
+		return 0, nil, nil
+	}
+	var summary EmbeddingReach
+	moved, failing, err := repairHeldEmbeddingShared(ctx, h, false, &summary, budget)
+	if err != nil {
+		return 0, nil, err
+	}
+	if len(failing) > 0 {
+		return 0, nil, fmt.Errorf(`%w: the result's float rounding folds its held mesh through itself, and the bounded float-box search did not clear it — the held mesh would not be embedded, so this evaluator refuses the result rather than publish it`, decaderr.ErrUnsupported)
+	}
+	if summary.DisplacementBound == 0 {
+		return moved, nil, nil
+	}
+	return moved, &summary, nil
+}
+
 // RepairHeldEmbedding runs the float-box search of EnforceHeldEmbedding and
 // returns, instead of refusing, the facets still folded after it, in ascending
 // order, with the number of vertices it moved. A caller that can still change
@@ -117,8 +147,22 @@ func repairHeldEmbedding(ctx context.Context, h HeldRounding, memo bool) (int, [
 }
 
 func repairHeldEmbeddingSummary(ctx context.Context, h HeldRounding, memo bool, summary *EmbeddingReach) (int, []int, error) {
-	budget := proofbound.NewWorkBudget(ctx)
+	return repairHeldEmbeddingShared(ctx, h, memo, summary, proofbound.NewWorkBudget(ctx))
+}
+
+// repairHeldEmbeddingShared uses the caller's work budget. Its record
+// allocations are not yet fully precharged, so it is not an admission proof.
+func repairHeldEmbeddingShared(ctx context.Context, h HeldRounding, memo bool, summary *EmbeddingReach,
+	budget *proofbound.WorkBudget) (int, []int, error) {
 	if err := budget.Err(); err != nil {
+		return 0, nil, err
+	}
+	// The bounded path keeps no pair or side-sign memo; all pair decisions
+	// are recomputed and every candidate is charged to the shared budget.
+	if budget.ReserveFn != nil {
+		memo = false
+	}
+	if err := budget.Reserve(uint64(len(h.Tris))); err != nil {
 		return 0, nil, err
 	}
 	var query []int
@@ -133,10 +177,16 @@ func repairHeldEmbeddingSummary(ctx context.Context, h HeldRounding, memo bool, 
 	if len(query) == 0 {
 		return 0, nil, nil
 	}
+	if err := budget.ReserveMul(uint64(len(h.Verts)), 2); err != nil {
+		return 0, nil, err
+	}
+	if err := budget.ReserveMul(uint64(len(h.Tris)), 15); err != nil {
+		return 0, nil, err
+	}
 	e := newHeldEmbeddingScan(h, budget, memo)
 	// The tree reads fixed facet boxes. Only a failed first scan needs the
 	// padded grid that keeps covering facets while repair moves vertices.
-	parallelFirst := memo && len(query) >= 4096 && runtime.GOMAXPROCS(0) > 1
+	parallelFirst := memo && budget.ReserveFn == nil && len(query) >= 4096 && runtime.GOMAXPROCS(0) > 1
 	if parallelFirst {
 		clean, err := e.parallelClean(ctx, query)
 		if err != nil {
@@ -152,12 +202,18 @@ func repairHeldEmbeddingSummary(ctx context.Context, h HeldRounding, memo bool, 
 	// Every facet outside check is known embedded against all its
 	// neighbours; a move puts the facets around the moved vertex back in.
 	check := query
+	if err := budget.Reserve(uint64(len(h.Verts))); err != nil {
+		return 0, nil, err
+	}
 	moved := map[int]struct{}{}
 	// Stage 0 searches the float box of each exact point. A mesh it leaves
 	// folded gets stage 1 when Reach allows, which also tries positions up to
 	// Reach away (improveWithinReach) over a grid padded for them.
 	for stage := range 2 {
 		if stage == 1 {
+			if budget.ReserveFn != nil {
+				return 0, nil, fmt.Errorf("%w: bounded embedding declines reach repair", decaderr.ErrUnsupported)
+			}
 			e.reachOn = true
 			if err := e.buildGrid(); err != nil {
 				return 0, nil, err
@@ -165,6 +221,9 @@ func repairHeldEmbeddingSummary(ctx context.Context, h HeldRounding, memo bool, 
 		}
 		for sweep := range heldEmbeddingSweeps {
 			if stage == 0 && sweep == 0 && memo && !parallelFirst {
+				if err := budget.Reserve(uint64(len(e.h.Tris))); err != nil {
+					return 0, nil, err
+				}
 				queryFacet := make([]bool, len(e.h.Tris))
 				for _, i := range check {
 					queryFacet[i] = true
@@ -172,7 +231,9 @@ func repairHeldEmbeddingSummary(ctx context.Context, h HeldRounding, memo bool, 
 				// The scan counts its own steps: a discarded scan must not move
 				// the repair path's step count or polling points.
 				repairBudget := e.budget
-				e.budget = proofbound.NewWorkBudget(ctx)
+				if budget.ReserveFn == nil {
+					e.budget = proofbound.NewWorkBudget(ctx)
+				}
 				clean, err := e.serialClean(check, queryFacet)
 				e.budget = repairBudget
 				if err != nil {
@@ -180,6 +241,14 @@ func repairHeldEmbeddingSummary(ctx context.Context, h HeldRounding, memo bool, 
 				}
 				if clean {
 					return 0, nil, nil
+				}
+			}
+			if e.inc == nil {
+				if err := budget.ReserveMul(uint64(len(e.h.Verts)), 2); err != nil {
+					return 0, nil, err
+				}
+				if err := budget.ReserveMul(uint64(len(e.h.Tris)), 3); err != nil {
+					return 0, nil, err
 				}
 			}
 			e.prepareRepair()
@@ -198,6 +267,9 @@ func repairHeldEmbeddingSummary(ctx context.Context, h HeldRounding, memo bool, 
 					return 0, nil, err
 				}
 				return len(moved), nil, nil
+			}
+			if err := budget.ReserveMul(uint64(len(e.h.Tris)), 2); err != nil {
+				return 0, nil, err
 			}
 			next := map[int]struct{}{}
 			for _, f := range failing {
@@ -222,7 +294,9 @@ func repairHeldEmbeddingSummary(ctx context.Context, h HeldRounding, memo bool, 
 			for f := range next {
 				check = append(check, f)
 			}
-			slices.Sort(check)
+			if err := heldSortInts(budget, check); err != nil {
+				return 0, nil, err
+			}
 			if !changed {
 				break
 			}
@@ -231,7 +305,9 @@ func repairHeldEmbeddingSummary(ctx context.Context, h HeldRounding, memo bool, 
 		if err != nil {
 			return 0, nil, err
 		}
-		slices.Sort(failing)
+		if err := heldSortInts(budget, failing); err != nil {
+			return 0, nil, err
+		}
 		if len(failing) == 0 || stage == 1 || e.h.Reach <= 0 {
 			if len(failing) == 0 {
 				if err := e.summarizeReach(ctx, summary); err != nil {
@@ -273,9 +349,32 @@ func HasHeldFold(ctx context.Context, h HeldRounding) (bool, error) {
 }
 
 func scanHeldFolds(ctx context.Context, h HeldRounding, firstOnly bool) ([][2]int, bool, error) {
-	budget := proofbound.NewWorkBudget(ctx)
+	return scanHeldFoldsShared(ctx, h, firstOnly, proofbound.NewWorkBudget(ctx), false)
+}
+
+// HasHeldFoldReplay checks shifted facets without allocating an unmetered pair cache.
+func HasHeldFoldReplay(ctx context.Context, h HeldRounding, budget *proofbound.WorkBudget) (bool, error) {
+	if budget == nil {
+		return false, fmt.Errorf("%w: bounded fold check requires a work budget", decaderr.ErrUnsupported)
+	}
+	if budget.Replay {
+		return replayEmbeddingPrecheck(ctx, h, budget.ReplayID)
+	}
+	_, found, err := scanHeldFoldsShared(ctx, h, true, budget, true)
+	return found, err
+}
+
+func scanHeldFoldsShared(ctx context.Context, h HeldRounding, firstOnly bool, budget *proofbound.WorkBudget, bounded bool) ([][2]int, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
 	if err := budget.Err(); err != nil {
 		return nil, false, err
+	}
+	if bounded {
+		if err := budget.Reserve(uint64(len(h.Tris))); err != nil {
+			return nil, false, err
+		}
 	}
 	var query []int
 	for i, t := range h.Tris {
@@ -289,7 +388,15 @@ func scanHeldFolds(ctx context.Context, h HeldRounding, firstOnly bool) ([][2]in
 	if len(query) == 0 {
 		return nil, false, nil
 	}
-	e := newHeldEmbeddingScan(h, budget, true)
+	if bounded {
+		if err := budget.ReserveMul(uint64(len(h.Verts)), 2); err != nil {
+			return nil, false, err
+		}
+		if err := budget.ReserveMul(uint64(len(h.Tris)), 15); err != nil {
+			return nil, false, err
+		}
+	}
+	e := newHeldEmbeddingScan(h, budget, !bounded)
 	if err := e.buildGrid(); err != nil {
 		return nil, false, err
 	}
@@ -297,7 +404,9 @@ func scanHeldFolds(ctx context.Context, h HeldRounding, firstOnly bool) ([][2]in
 	if firstOnly {
 		pairCapacity = 16 * len(query)
 	}
-	e.pairs = make(map[uint64]uint64, pairCapacity)
+	if !bounded {
+		e.pairs = make(map[uint64]uint64, pairCapacity)
+	}
 	var out [][2]int
 	for _, f := range query {
 		bad, collapsed, found, err := e.scanFacetFailures(f, nil, nil, firstOnly)
@@ -305,12 +414,22 @@ func scanHeldFolds(ctx context.Context, h HeldRounding, firstOnly bool) ([][2]in
 			return nil, false, err
 		}
 		if collapsed {
+			if bounded {
+				if err := budget.Reserve(1); err != nil {
+					return nil, false, err
+				}
+			}
 			out = append(out, [2]int{f, f})
 			if firstOnly {
 				return out, true, nil
 			}
 		}
 		for _, g := range bad {
+			if bounded {
+				if err := budget.Reserve(1); err != nil {
+					return nil, false, err
+				}
+			}
 			out = append(out, [2]int{f, g})
 		}
 		if firstOnly && found {
@@ -1616,12 +1735,23 @@ func (e *heldEmbedding) scanFacetFailures(i int, done []bool, earlier []int,
 		}
 		if done != nil && done[j] {
 			if len(earlier) > 0 && slices.Contains(earlier, j) {
+				if err := e.budget.Reserve(1); err != nil {
+					return nil, false, false, err
+				}
 				bad = append(bad, j)
 			}
 			continue
 		}
+		// The pair predicate may retain up to three shared-vertex indices
+		// from each facet while it decides the contact.
+		if err := e.budget.Reserve(6); err != nil {
+			return nil, false, false, err
+		}
 		if e.pairOK(i, j, done == nil) {
 			continue
+		}
+		if err := e.budget.Reserve(1); err != nil {
+			return nil, false, false, err
 		}
 		bad = append(bad, j)
 		if firstOnly {
@@ -1658,6 +1788,12 @@ func (e *heldEmbedding) vertexFailures(v int) (int, error) {
 // movable vertices of every failing facet and of every facet it fails
 // against, and the failing query facets themselves.
 func (e *heldEmbedding) offenders(query []int) ([]int, []int, error) {
+	if err := e.budget.ReserveMul(uint64(len(e.h.Verts)), 2); err != nil {
+		return nil, nil, err
+	}
+	if err := e.budget.ReserveMul(uint64(len(e.h.Tris)), 2); err != nil {
+		return nil, nil, err
+	}
 	movable := make([]bool, len(e.h.Verts))
 	vertices := make([]int, 0)
 	var failing []int
@@ -1696,7 +1832,9 @@ func (e *heldEmbedding) offenders(query []int) ([]int, []int, error) {
 			e.addMovable(movable, &vertices, j)
 		}
 	}
-	slices.Sort(vertices)
+	if err := heldSortInts(e.budget, vertices); err != nil {
+		return nil, nil, err
+	}
 	return vertices, failing, nil
 }
 
@@ -1728,6 +1866,9 @@ func (e *heldEmbedding) improve(v int) (bool, error) {
 	var origGen []uint64
 	if e.memoOn {
 		origGen = e.stamps(v)
+	}
+	if err := e.budget.Reserve(14); err != nil {
+		return false, err
 	}
 	for _, c := range FloatBoxCorners(e.h.Exact[v]) {
 		if err := e.budget.Step(); err != nil {
@@ -1904,6 +2045,11 @@ func (e *heldEmbedding) buildGrid() error {
 	lo := r3.NewVec(math.Inf(1), math.Inf(1), math.Inf(1))
 	hi := r3.NewVec(math.Inf(-1), math.Inf(-1), math.Inf(-1))
 	for i, t := range e.h.Tris {
+		if e.budget.ReserveFn != nil {
+			if err := e.budget.Step(); err != nil {
+				return err
+			}
+		}
 		b := TriBox(e.h.Verts, t)
 		if e.memoOn {
 			e.box[i] = b
@@ -1937,6 +2083,9 @@ func (e *heldEmbedding) buildGrid() error {
 	}
 	e.origin, e.cell, e.dims = lo, cell, dims
 	e.wide = nil
+	if err := e.budget.Reserve(uint64(dims[0] * dims[1] * dims[2])); err != nil {
+		return err
+	}
 	e.cells = make([][]int32, dims[0]*dims[1]*dims[2])
 	for i := range e.h.Tris {
 		if err := e.budget.Step(); err != nil {
@@ -1945,8 +2094,14 @@ func (e *heldEmbedding) buildGrid() error {
 		c0, c1 := e.cellRange(e.triBox(i))
 		span := (c1[0] - c0[0] + 1) * (c1[1] - c0[1] + 1) * (c1[2] - c0[2] + 1)
 		if span > heldGridCellSpan {
+			if err := e.budget.Reserve(1); err != nil {
+				return err
+			}
 			e.wide = append(e.wide, int32(i))
 			continue
+		}
+		if err := e.budget.Reserve(uint64(span)); err != nil {
+			return err
 		}
 		for x := c0[0]; x <= c1[0]; x++ {
 			for y := c0[1]; y <= c1[1]; y++ {
@@ -1981,12 +2136,21 @@ func (e *heldEmbedding) candidates(i int) ([]int, error) {
 	// The list is reused across calls: each caller is done with it before
 	// the next query.
 	out := e.cands[:0]
-	add := func(j int32) {
+	add := func(j int32) error {
+		if e.budget.ReserveFn != nil {
+			if err := e.budget.Step(); err != nil {
+				return err
+			}
+		}
 		if e.stamp[j] == id {
-			return
+			return nil
+		}
+		if err := e.budget.Reserve(1); err != nil {
+			return err
 		}
 		e.stamp[j] = id
 		out = append(out, int(j))
+		return nil
 	}
 	c0, c1 := e.cellRange(e.triBox(i))
 	for x := c0[0]; x <= c1[0]; x++ {
@@ -1996,13 +2160,17 @@ func (e *heldEmbedding) candidates(i int) ([]int, error) {
 					return nil, err
 				}
 				for _, j := range e.cells[(x*e.dims[1]+y)*e.dims[2]+z] {
-					add(j)
+					if err := add(j); err != nil {
+						return nil, err
+					}
 				}
 			}
 		}
 	}
 	for _, j := range e.wide {
-		add(j)
+		if err := add(j); err != nil {
+			return nil, err
+		}
 	}
 	e.cands = out
 	return out, nil
@@ -2066,4 +2234,25 @@ func (e *heldEmbedding) serialClean(query []int, queryFacet []bool) (bool, error
 		}
 	}
 	return true, nil
+}
+
+// heldSortInts counts every comparison on bounded paths and keeps the existing
+// binary path's sorting unchanged.
+func heldSortInts(budget *proofbound.WorkBudget, values []int) error {
+	if budget.ReserveFn == nil {
+		slices.Sort(values)
+		return nil
+	}
+	for i := 1; i < len(values); i++ {
+		for j := i; j > 0; j-- {
+			if err := budget.Step(); err != nil {
+				return err
+			}
+			if values[j] >= values[j-1] {
+				break
+			}
+			values[j], values[j-1] = values[j-1], values[j]
+		}
+	}
+	return nil
 }

@@ -161,6 +161,89 @@ func TestReplayBudgetAdaptersAndOverflow(t *testing.T) {
 	}
 }
 
+func TestBrakeReplayBudgetLimitsAreSeparate(t *testing.T) {
+	ctx := t.Context()
+	b := NewBrakeReplayBudget()
+	if err := b.SpendWork(ctx, BrakeReplayWork); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SpendWork(ctx, 1); !errors.Is(err, decaderr.ErrUnsupported) {
+		t.Fatalf("work limit: %v", err)
+	}
+	if err := b.ReserveRecords(ctx, BrakeReplayRecords); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.ReserveRecords(ctx, 1); !errors.Is(err, decaderr.ErrUnsupported) {
+		t.Fatalf("record limit: %v", err)
+	}
+	if err := b.ReserveBytes(ctx, BrakeReplayBytes); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.ReserveBytes(ctx, 1); !errors.Is(err, decaderr.ErrUnsupported) {
+		t.Fatalf("byte limit: %v", err)
+	}
+	var ordinary ReplayBudget
+	if err := ordinary.SpendWork(ctx, MaxMultiwayWorkPerCall); err != nil {
+		t.Fatal(err)
+	}
+	if err := ordinary.SpendWork(ctx, 1); !errors.Is(err, decaderr.ErrUnsupported) {
+		t.Fatalf("ordinary limit: %v", err)
+	}
+	if err := ordinary.ReserveBytes(ctx, ReplayTrialBytes); err != nil {
+		t.Fatal(err)
+	}
+	if err := ordinary.ReserveBytes(ctx, 1); !errors.Is(err, decaderr.ErrUnsupported) {
+		t.Fatalf("ordinary byte limit: %v", err)
+	}
+}
+
+var errBrakeLimitErrorSink error
+
+func TestBrakeBudgetLimitErrorsDoNotAllocate(t *testing.T) {
+	ctx := t.Context()
+	for _, kind := range []string{"work", "records", "bytes"} {
+		t.Run(kind, func(t *testing.T) {
+			meter := NewBrakeReplayBudget()
+			var index int
+			var charge func() error
+			switch kind {
+			case "work":
+				if err := meter.SpendWork(ctx, BrakeReplayWork-1); err != nil {
+					t.Fatal(err)
+				}
+				charge = func() error { return meter.SpendWork(ctx, 2) }
+			case "records":
+				index = 1
+				if err := meter.ReserveRecords(ctx, BrakeReplayRecords-1); err != nil {
+					t.Fatal(err)
+				}
+				charge = func() error { return meter.ReserveRecords(ctx, 2) }
+			case "bytes":
+				index = 2
+				if err := meter.ReserveBytes(ctx, BrakeReplayBytes-1); err != nil {
+					t.Fatal(err)
+				}
+				charge = func() error { return meter.ReserveBytes(ctx, 2) }
+			}
+			allocs := testing.AllocsPerRun(100, func() {
+				meter.limitErrors[index] = WorkLimitError{}
+				errBrakeLimitErrorSink = charge()
+			})
+			if allocs != 0 {
+				t.Fatalf("limit failure allocated %.0f objects", allocs)
+			}
+			var detail *WorkLimitError
+			if !errors.Is(errBrakeLimitErrorSink, decaderr.ErrUnsupported) || !errors.As(errBrakeLimitErrorSink, &detail) || detail.Observed != detail.Maximum+1 {
+				t.Fatalf("invalid limit error: %v", errBrakeLimitErrorSink)
+			}
+			observed, maximum := detail.Observed, detail.Maximum
+			if err := charge(); err != detail || detail.Observed != observed || detail.Maximum != maximum {
+				t.Fatal("the first refusal did not remain stable")
+			}
+		})
+	}
+}
+
 func TestReplayBudgetReserveBundleAtomic(t *testing.T) {
 	ctx := t.Context()
 	for _, tc := range []struct {
@@ -170,7 +253,7 @@ func TestReplayBudgetReserveBundleAtomic(t *testing.T) {
 		bytes      uint64
 		wantAccept bool
 	}{
-		{"exact", 2, 3, 4, true},
+		{replayBudgetTestExact, 2, 3, 4, true},
 		{"work short", 3, 3, 4, false},
 		{"records short", 2, 4, 4, false},
 		{"bytes short", 2, 3, 5, false},

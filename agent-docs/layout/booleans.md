@@ -21,5 +21,15 @@ The rules for rows live in `agent-docs/layout.md`.
 | `stack_brep_scale.go` | Admits exact line-only stacks and stack-backed BReps for certified similarity. See evaluator §8. |
 | `point_cap_extremes.go` | Resolves Split cap faces and selects the ends using facetedrecord's centroid-order proof. See loft-point design. |
 | `boolean_mesh.go` | Runs `internal/booleaneval`'s mesh boolean over two bodies and states the audited mesh's occupied volume as a public measurement, with the exactness the bound implies. See evaluator §9. |
+| `boolean_brake_ancestry.go` | Maps ordered source faces and removes retry-only provenance from the committed result. |
+| `boolean_brake_ancestry_error.go` | Builds typed, budgeted refusal errors for brake ancestry checks. |
+| `boolean_brake_compare.go` | Compares bounded body snapshots to prove failed retries leave inputs unchanged. |
+| `boolean_brake_history.go` | Reads brake producer operations and expandable source chains from history. |
+| `boolean_brake_refined_ancestry.go` | Rebinds refined-tool output faces to original producer faces. |
+| `boolean_brake_refined_retry.go` | Routes eligible brake retries through the refined tool. |
+| `boolean_brake_refined_tool.go` | Builds and applies the bounded refined brake cutter. |
+| `boolean_brake_retry.go` | Admits, meters and commits the bounded brake retry. |
+| `boolean_brake_static_refusals.go` | Defines sentinel errors for brake retry refusal paths. |
+| `boolean_brake_tool_snapshot.go` | Captures and rechecks the refined tool payload slices. |
 | `internal/boolupstream/` | Attributes an analytic Boolean result's planar faces to the one operand face exact plane identity proves each lies inside, and stores the roles in the payload's `Upstream`. See prism-boolean §11. |
 | `internal/capplane/` | Reads a `CapRecord` plane, a sweep axis and plane identity as exact rationals for Loft cap levels and Boolean attribution. See prism-boolean §11, loft §18. |

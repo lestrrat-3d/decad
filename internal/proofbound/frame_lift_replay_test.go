@@ -30,7 +30,7 @@ func TestExactFrameLiftRoundReplay(t *testing.T) {
 		xform   r3.Transform
 		u, v, z float64
 	}{
-		{"exact", axis, r3.Identity(), 1, 2, 3},
+		{replayBudgetTestExact, axis, r3.Identity(), 1, 2, 3},
 		{"placed", axis, shifted, .1, -.25, 7},
 		{"far cancellation", far, shifted, -1e12, .1, 2},
 		{"subnormal", axis, r3.Identity(), math.SmallestNonzeroFloat64, 0, 0},

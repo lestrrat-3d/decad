@@ -6,6 +6,8 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/lestrrat-3d/decad/internal/booleaneval"
+
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
@@ -261,6 +263,11 @@ func stampOperationWarningKind(body *Body, kind OperationKind) {
 		if code == opdiagnostic.CodeEmbeddingReachApplied || code == opdiagnostic.CodeGapShiftApplied ||
 			code == opdiagnostic.CodeChainAllowanceApplied {
 			body.n.OperationWarnings[i].PublicOperation = int(kind)
+		}
+	}
+	if cert, ok := body.n.PrivateShift.(*booleaneval.ShiftCertificate); ok {
+		if kind != OperationCut || !cert.SealPublicCutWarning(body.n.Origin.Producer, body.n.OperationWarnings, int(kind)) {
+			body.n.PrivateShift = nil
 		}
 	}
 }

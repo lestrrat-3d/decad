@@ -25,6 +25,9 @@ func FacetDeltas(tris [][3]int, vertexBound []float64) []float64 {
 // SourcePatches groups edge-connected facets that name the same source group.
 // The traversal keeps facet and adjacency order because they fix face order.
 func SourcePatches(budget *proofbound.WorkBudget, facetCount int, source []int, adj [][]int) ([]int, error) {
+	if budget.Replay {
+		return sourcePatchesReplay(budget, facetCount, source, adj)
+	}
 	patch := make([]int, facetCount)
 	for i := range patch {
 		if err := budget.Step(); err != nil {
@@ -291,6 +294,9 @@ const (
 // the first attempted facet through Step, as the serial loop does, before any
 // vertex lifting or parallel block computation starts.
 func FirstMomentsFromAudit(budget *proofbound.WorkBudget, audit *MeshAudit, tris [][3]int) ([3]*big.Rat, error) {
+	if budget.Replay {
+		return [3]*big.Rat{}, fmt.Errorf("%w: replay moments require an explicit context", decaderr.ErrUnsupported)
+	}
 	return firstMomentsFromAudit(budget, audit, tris, orderedwork.EachWorkers(len(tris), momentsParallelMin))
 }
 

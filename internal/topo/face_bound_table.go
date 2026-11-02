@@ -62,7 +62,7 @@ func NewFaceBoundTable(ctx context.Context, limit int, budget FaceBoundBudget) (
 	return &FaceBoundTable{slots: make([]faceBoundEntry, n), limit: limit}, nil
 }
 
-// Lookup returns a face's bound and charges each examined slot.
+// Lookup returns a face's bound and charges the complete table before searching.
 func (t *FaceBoundTable) Lookup(ctx context.Context, face *Face, budget FaceBoundBudget) (float64, bool, error) {
 	if budget == nil {
 		return 0, false, errFaceBoundTable2
@@ -70,18 +70,18 @@ func (t *FaceBoundTable) Lookup(ctx context.Context, face *Face, budget FaceBoun
 	return t.LookupWork(face, func() error { return budget.SpendWork(ctx, 1) })
 }
 
-// LookupWork reads a bound using an existing shared work callback.
+// LookupWork charges the complete table before searching, so insertion order
+// cannot change a successful lookup's work charge.
 func (t *FaceBoundTable) LookupWork(face *Face, step func() error) (float64, bool, error) {
 	if t == nil || face == nil || step == nil {
 		return 0, false, errFaceBoundTable2
 	}
-	if err := step(); err != nil {
-		return 0, false, err
-	}
-	for i := range t.count {
+	for i := 0; i <= t.count; i++ {
 		if err := step(); err != nil {
 			return 0, false, err
 		}
+	}
+	for i := range t.count {
 		if t.slots[i].face == face {
 			return t.slots[i].bound, true, nil
 		}
@@ -94,13 +94,10 @@ func (t *FaceBoundTable) Set(ctx context.Context, face *Face, bound float64, bud
 	if t == nil || face == nil || budget == nil {
 		return errFaceBoundTable3
 	}
-	if err := budget.SpendWork(ctx, 1); err != nil {
+	if err := budget.SpendWork(ctx, uint64(t.count)+1); err != nil {
 		return err
 	}
 	for i := range t.count {
-		if err := budget.SpendWork(ctx, 1); err != nil {
-			return err
-		}
 		if t.slots[i].face == face {
 			t.slots[i].bound = bound
 			return nil

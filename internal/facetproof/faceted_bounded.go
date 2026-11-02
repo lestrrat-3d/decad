@@ -5,7 +5,9 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"unsafe"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
@@ -74,7 +76,7 @@ func boundedFacetCoordinate(c float64) bool {
 // ctx and budget must be non-nil.
 func AuditFacetedMeshBounded(ctx context.Context, budget *proofbound.WorkBudget,
 	verts []r3.Vec, tris [][3]int) (*MeshAudit, bool, error) {
-	audit, admitted, err := auditFacetedMeshBounded(ctx, budget, verts, tris)
+	audit, admitted, err := auditFacetedMeshBounded(ctx, budget, verts, tris, boundedVertexLimit, boundedFacetLimit)
 	if ctx != nil {
 		if cancellation := ctx.Err(); cancellation != nil {
 			return nil, false, cancellation
@@ -86,16 +88,39 @@ func AuditFacetedMeshBounded(ctx context.Context, budget *proofbound.WorkBudget,
 	return audit, admitted, err
 }
 
-func auditFacetedMeshBounded(ctx context.Context, budget *proofbound.WorkBudget,
+// AuditFacetedMeshReplay extends the same single-shell proof to the replay's
+// fixed 65,536-facet limit. The seven extra bits in its term count keep the
+// documented 4,096-bit determinant envelope unchanged.
+func AuditFacetedMeshReplay(ctx context.Context, budget *proofbound.WorkBudget,
 	verts []r3.Vec, tris [][3]int) (*MeshAudit, bool, error) {
+	if ctx == nil || budget == nil {
+		return nil, false, errors.New("bounded facet audit requires context and budget")
+	}
+	if len(verts) == 0 || len(verts) > 65536 || len(tris) == 0 || len(tris) > 65536 {
+		return nil, false, nil
+	}
+	// Edge map, adjacency, component arrays, queue, members, determinants,
+	// lifted vertices, and the single-component proof containers.
+	if err := budget.Reserve(14*uint64(len(tris)) + uint64(len(verts)) + 10); err != nil {
+		return nil, false, err
+	}
+	audit, admitted, err := auditFacetedMeshBounded(ctx, budget, verts, tris, 65536, 65536)
+	if cancellation := ctx.Err(); cancellation != nil {
+		return nil, false, cancellation
+	}
+	return audit, admitted, err
+}
+
+func auditFacetedMeshBounded(ctx context.Context, budget *proofbound.WorkBudget,
+	verts []r3.Vec, tris [][3]int, vertexLimit, facetLimit int) (*MeshAudit, bool, error) {
 	if ctx == nil || budget == nil {
 		return nil, false, errors.New("bounded facet audit requires context and budget")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
 	}
-	if len(verts) == 0 || len(verts) > boundedVertexLimit ||
-		len(tris) == 0 || len(tris) > boundedFacetLimit {
+	if len(verts) == 0 || len(verts) > vertexLimit ||
+		len(tris) == 0 || len(tris) > facetLimit {
 		return nil, false, nil
 	}
 	vertexCount, facetCount := len(verts), len(tris)
@@ -141,7 +166,16 @@ func auditFacetedMeshBounded(ctx context.Context, budget *proofbound.WorkBudget,
 	if err != nil || !ok {
 		return nil, false, err
 	}
-	owner := make(map[[2]int]int, incidenceCount)
+	var owner map[[2]int]int
+	var table *replayEdgeTable
+	if budget.Replay {
+		table, err = newReplayEdgeTable(incidenceCount, budget)
+		if err != nil {
+			return nil, false, err
+		}
+	} else {
+		owner = make(map[[2]int]int, incidenceCount)
+	}
 	for i, tri := range tris {
 		for edge := range 3 {
 			ok, err := boundedFacetCharge(budget, 1)
@@ -149,10 +183,21 @@ func auditFacetedMeshBounded(ctx context.Context, budget *proofbound.WorkBudget,
 				return nil, false, err
 			}
 			key := [2]int{tri[edge], tri[(edge+1)%3]}
-			if owner[key] != 0 {
-				return nil, false, nil
+			if budget.Replay {
+				entry, e := table.entry(key)
+				if e != nil {
+					return nil, false, e
+				}
+				if entry.owner != 0 {
+					return nil, false, nil
+				}
+				entry.key, entry.owner = key, i+1
+			} else {
+				if owner[key] != 0 {
+					return nil, false, nil
+				}
+				owner[key] = i + 1
 			}
-			owner[key] = i + 1
 		}
 	}
 	if err := ctx.Err(); err != nil {
@@ -163,6 +208,14 @@ func auditFacetedMeshBounded(ctx context.Context, budget *proofbound.WorkBudget,
 	if err != nil || !ok {
 		return nil, false, err
 	}
+	if budget.Replay {
+		if err := budget.ReserveBytesMul(uint64(facetCount), uint64(unsafe.Sizeof([]int{}))); err != nil {
+			return nil, false, err
+		}
+		if err := budget.ReserveBytesMul(uint64(incidenceCount), uint64(unsafe.Sizeof(int(0)))); err != nil {
+			return nil, false, err
+		}
+	}
 	adj := make([][]int, facetCount)
 	neighbors := make([]int, incidenceCount)
 	for i, tri := range tris {
@@ -172,7 +225,17 @@ func auditFacetedMeshBounded(ctx context.Context, budget *proofbound.WorkBudget,
 			if err != nil || !ok {
 				return nil, false, err
 			}
-			twin := owner[[2]int{tri[(edge+1)%3], tri[edge]}]
+			key := [2]int{tri[(edge+1)%3], tri[edge]}
+			twin := 0
+			if budget.Replay {
+				entry, e := table.entry(key)
+				if e != nil {
+					return nil, false, e
+				}
+				twin = entry.owner
+			} else {
+				twin = owner[key]
+			}
 			if twin == 0 || twin == i+1 {
 				return nil, false, nil
 			}
@@ -184,18 +247,40 @@ func auditFacetedMeshBounded(ctx context.Context, budget *proofbound.WorkBudget,
 	if err != nil || !ok {
 		return nil, false, err
 	}
+	if budget.Replay {
+		if err := budget.ReserveBytes(512); err != nil {
+			return nil, false, err
+		}
+		if err := budget.ReserveBytesMul(uint64(vertexCount), uint64(unsafe.Sizeof(proof.Xpt{}))); err != nil {
+			return nil, false, err
+		}
+	}
 	audit := &MeshAudit{XVerts: make([]proof.Xpt, vertexCount), Adj: adj}
 	for i, v := range verts {
 		ok, err := boundedFacetCharge(budget, boundedFacetLiftWork+1)
 		if err != nil || !ok {
 			return nil, false, err
 		}
-		audit.XVerts[i] = proof.XptOf(v)
+		if budget.Replay {
+			audit.XVerts[i], err = proof.XptOfBounded(v, func(blocks uint64) error { return budget.ReserveBytesMul(blocks, 64) })
+			if err != nil {
+				return nil, false, err
+			}
+		} else {
+			audit.XVerts[i] = proof.XptOf(v)
+		}
 	}
 
 	ok, err = boundedFacetCharge(budget, uint64(facetCount+2*facetCount+1))
 	if err != nil || !ok {
 		return nil, false, err
+	}
+	if budget.Replay {
+		for range 3 {
+			if err := budget.ReserveBytesMul(uint64(facetCount), uint64(unsafe.Sizeof(int(0)))); err != nil {
+				return nil, false, err
+			}
+		}
 	}
 	audit.Comp = make([]int, facetCount)
 	queue := make([]int, 0, facetCount)
@@ -248,6 +333,14 @@ func auditFacetedMeshBounded(ctx context.Context, budget *proofbound.WorkBudget,
 	if err != nil || !ok {
 		return nil, false, err
 	}
+	if budget.Replay {
+		if err := budget.ReserveBytesMul(uint64(facetCount), uint64(unsafe.Sizeof(proof.Dyadic{}))); err != nil {
+			return nil, false, err
+		}
+		if err := budget.ReserveBytes(1024); err != nil {
+			return nil, false, err
+		}
+	}
 	audit.Members = make([][]int, 1)
 	audit.Members[0] = list
 	audit.Det = make([]proof.Dyadic, facetCount)
@@ -255,26 +348,57 @@ func auditFacetedMeshBounded(ctx context.Context, budget *proofbound.WorkBudget,
 	audit.Contains = make([][]bool, 1)
 	audit.Contains[0] = make([]bool, 1)
 	var total proof.DyAcc
+	var replayTotal *big.Rat
+	if budget.Replay {
+		if err := budget.ReserveBytes(256); err != nil {
+			return nil, false, err
+		}
+		replayTotal = new(big.Rat)
+	}
 	for _, facet := range list {
 		ok, err := boundedFacetCharge(budget, boundedFacetDetWork+1)
 		if err != nil || !ok {
 			return nil, false, err
 		}
 		tri := tris[facet]
-		cross := proof.Xcross(audit.XVerts[tri[1]], audit.XVerts[tri[2]])
-		term, dyadic := proof.XdotDyadic(audit.XVerts[tri[0]], cross)
-		if !dyadic {
-			return nil, false, nil
+		if budget.Replay {
+			term, rat, e := proof.ReplayDetDyadic(ctx, audit.XVerts[tri[0]], audit.XVerts[tri[1]], audit.XVerts[tri[2]], replayExactMeter{budget})
+			if e != nil {
+				return nil, false, e
+			}
+			audit.Det[facet] = term
+			replayTotal, e = proof.ReplayRatArithmetic(ctx, replayTotal, rat, '+', replayExactMeter{budget})
+			if e != nil {
+				return nil, false, e
+			}
+		} else {
+			cross := proof.Xcross(audit.XVerts[tri[1]], audit.XVerts[tri[2]])
+			term, dyadic := proof.XdotDyadic(audit.XVerts[tri[0]], cross)
+			if !dyadic {
+				return nil, false, nil
+			}
+			audit.Det[facet] = term
+			total.Add(term)
 		}
-		audit.Det[facet] = term
-		total.Add(term)
 	}
 	ok, err = boundedFacetCharge(budget, boundedComponentWork)
 	if err != nil || !ok {
 		return nil, false, err
 	}
-	volume := total.Rat()
-	volume.Mul(volume, big.NewRat(1, 6))
+	var volume *big.Rat
+	if budget.Replay {
+		if err := budget.ReserveBytes(256); err != nil {
+			return nil, false, err
+		}
+		six := big.NewRat(6, 1)
+		volume, err = proof.ReplayRatArithmetic(ctx, replayTotal, six, '/', replayExactMeter{budget})
+		if err != nil {
+			return nil, false, err
+		}
+	} else {
+		volume = total.Rat()
+		volume.Mul(volume, big.NewRat(1, 6))
+	}
 	if volume.Sign() <= 0 || volume.Num().BitLen() > boundedVolumeRatBits ||
 		volume.Denom().BitLen() > boundedVolumeRatBits {
 		return nil, false, nil
@@ -315,12 +439,16 @@ func VolumeFromAuditBounded(budget *proofbound.WorkBudget, audit *MeshAudit,
 		}
 		return 0, 0, nil, false, err
 	}
+	if budget.Replay {
+		return 0, 0, nil, false, decaderr.ErrUnsupported
+	}
 	volumeRat := new(big.Rat).Add(new(big.Rat), component)
 	volumeFloat, _ := volumeRat.Float64()
 	if proofbound.IsNonFinite(volumeFloat) || volumeFloat <= 0 {
 		return 0, 0, nil, false, nil
 	}
-	bound := proofbound.AbsSumUpper(volSymDiff, proofbound.RatAbsDiff(volumeRat, volumeFloat))
+	rounding := proofbound.RatAbsDiff(volumeRat, volumeFloat)
+	bound := proofbound.AbsSumUpper(volSymDiff, rounding)
 	if proofbound.IsNonFinite(bound) {
 		return 0, 0, nil, false, nil
 	}

@@ -84,8 +84,9 @@ func XIntCoordOf(p proof.Xpt, axis int) *big.Int {
 // projection shared across every query of this mesh classifies exactly as the
 // fresh per-facet copy it replaces.
 type ParityMesh struct {
-	Verts []r3.Vec
-	Tris  [][3]int
+	replayAxes [3]*replayParityAxis
+	Verts      []r3.Vec
+	Tris       [][3]int
 	// exactVerts and exactNorms borrow the exact geometry of a BoolMesh when
 	// parity is part of Boolean evaluation. They are immutable for the same
 	// operation lifetime as the mesh. Standalone NewParityMesh callers leave

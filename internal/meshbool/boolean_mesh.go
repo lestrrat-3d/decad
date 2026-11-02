@@ -18,6 +18,7 @@ import (
 // float cache, facet boxes for pair pruning, and the global source-face id
 // each facet remembers.
 type BoolMesh struct {
+	replayOwner *replayTable[[2]int, int]
 	Verts       []r3.Vec
 	Xverts      []proof.Xpt
 	Tris        [][3]int

@@ -34,8 +34,8 @@ func groupBlindVerifyAllWithBudget(ctx context.Context, body *Body, chord float6
 	var host, tool *Body
 	if op != nil && op.kind == OperationCut && op.doc == body.n.Doc &&
 		len(op.outputs) == 1 && op.outputs[0] == body && len(op.inputs) == 2 &&
-		op.inputs[0].Role == "target" && op.inputs[0].Use == InputConsumed &&
-		op.inputs[1].Role == "tool" && op.inputs[1].Use == InputConsumed {
+		op.inputs[0].Role == operationRoleTarget && op.inputs[0].Use == InputConsumed &&
+		op.inputs[1].Role == operationRoleTool && op.inputs[1].Use == InputConsumed {
 		host, tool = op.inputs[0].Body, op.inputs[1].Body
 	}
 	doc.n.LiveMu.RUnlock()

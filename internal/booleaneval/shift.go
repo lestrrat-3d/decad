@@ -8,9 +8,11 @@ import (
 	"math"
 	"slices"
 	"strings"
+	"unsafe"
 
 	"github.com/lestrrat-3d/r3"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -245,6 +247,14 @@ type pieceShift struct {
 	Grow float64
 }
 
+type uniformShrink struct {
+	center r3.Vec
+	move   r3.Vec
+	grow   float64
+	k      float64
+	valid  bool
+}
+
 // pieces partitions a mesh into its connected pieces, the sets of facets that
 // share vertices, so a tool made of several separate bodies, such as the teeth of
 // a gear, can have each piece moved on its own.
@@ -303,11 +313,112 @@ func piecesOf(m *topo.Mesh) pieces {
 // boundary, and the area allowance by the rounding of the new coordinates. m is
 // not modified. It returns errShiftDeclined when the moved mesh folds through
 // itself.
-func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[int]pieceShift) (decision, charged *topo.Mesh, displacementBound float64, err error) {
+func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[int]pieceShift,
+	shrink ...*uniformShrink) (decision, charged *topo.Mesh, displacementBound float64, err error) {
+	var record *uniformShrink
+	if len(shrink) > 0 {
+		record = shrink[0]
+	}
+	return shiftOperandMeshWithBudget(ctx, m, pc, shifts, record, nil)
+}
+
+func shiftOperandMeshWithBudget(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[int]pieceShift, shrink *uniformShrink, replay *proofbound.ReplayBudget) (*topo.Mesh, *topo.Mesh, float64, error) {
+	return shiftOperandMeshCore(ctx, m, pc, shifts, nil, shrink, replay)
+}
+func shiftOperandMeshReplay(ctx context.Context, m *topo.Mesh, pc pieces, shifts *ReplayShifts, shrink *uniformShrink, replay *proofbound.ReplayBudget) (*topo.Mesh, *topo.Mesh, float64, error) {
+	return shiftOperandMeshCore(ctx, m, pc, nil, shifts, shrink, replay)
+}
+func shiftOperandMeshCore(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[int]pieceShift, ordered *ReplayShifts, shrink *uniformShrink, replay *proofbound.ReplayBudget) (decision, charged *topo.Mesh, displacementBound float64, err error) {
+	count := len(shifts)
+	var single pieceShift
+	if ordered != nil {
+		if ordered.budget != replay || len(ordered.entries) != 1 {
+			return nil, nil, 0, fmt.Errorf("%w: replay shift input", decaderr.ErrUnsupported)
+		}
+		var ok bool
+		single, ok, err = ordered.get(ctx, 0)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		if !ok {
+			return nil, nil, 0, fmt.Errorf("%w: replay shift component mismatch", decaderr.ErrUnsupported)
+		}
+		count = 1
+	}
+	eachShift := func(yield func(int, pieceShift) bool) {
+		if ordered != nil {
+			yield(0, single)
+			return
+		}
+		for c, sh := range shifts {
+			if !yield(c, sh) {
+				return
+			}
+		}
+	}
+	lookupShift := func(c int) (pieceShift, bool, error) {
+		if ordered != nil {
+			return ordered.get(ctx, c)
+		}
+		sh, ok := shifts[c]
+		return sh, ok, nil
+	}
+	if replay != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, 0, err
+		}
+		if pc.count != 1 || count != 1 {
+			return nil, nil, 0, fmt.Errorf("%w: replay shift requires one component", decaderr.ErrUnsupported)
+		}
+		if _, ok, e := lookupShift(0); e != nil {
+			return nil, nil, 0, e
+		} else if !ok {
+			return nil, nil, 0, fmt.Errorf("%w: replay shift component mismatch", decaderr.ErrUnsupported)
+		}
+	}
+	if replay != nil {
+		v, f, s := uint64(len(m.Vertices)), uint64(len(m.Triangles)), uint64(count)
+		if v > proofbound.MaxMultiwayRecordsPerCall || f > proofbound.MaxMultiwayRecordsPerCall || s > proofbound.MaxMultiwayRecordsPerCall || uint64(len(m.FaceBound)) > proofbound.MaxMultiwayRecordsPerCall {
+			return nil, nil, 0, replay.ReserveRecords(ctx, proofbound.MaxMultiwayRecordsPerCall+1)
+		}
+		scan, ok := proofbound.WallCheckedMul(v, s)
+		if !ok || scan > proofbound.MaxMultiwayWorkPerCall/2 {
+			return nil, nil, 0, replay.SpendWork(ctx, proofbound.MaxMultiwayWorkPerCall+1)
+		}
+		// Two source-vertex scans per grown piece, plus all vertex, facet,
+		// face and shift-map passes in the two output mesh constructions.
+		if err := replay.SpendWork(ctx, 2*scan+8*v+8*f+5*uint64(len(m.FaceBound))+6*s); err != nil {
+			return nil, nil, 0, err
+		}
+		// Vertex/exact arrays, growable facet groups and per-face maps.
+		if err := replay.ReserveRecords(ctx, 10*v+4*f+5*uint64(len(m.FaceBound))+6*s+8); err != nil {
+			return nil, nil, 0, err
+		}
+	}
 	// A grown piece scales about the mean of its vertices, by the share of its farthest vertex's distance the shift asks.
-	centre := make(map[int]r3.Vec, len(shifts))
-	scale := make(map[int]float64, len(shifts))
-	for c, sh := range shifts {
+	var centre map[int]r3.Vec
+	var scale map[int]float64
+	var oneCentre r3.Vec
+	var oneScale float64
+	var oneGrown bool
+	if replay == nil {
+		centre = make(map[int]r3.Vec, len(shifts))
+		scale = make(map[int]float64, len(shifts))
+	}
+	getScale := func(c int) (float64, bool) {
+		if replay != nil {
+			return oneScale, oneGrown
+		}
+		v, ok := scale[c]
+		return v, ok
+	}
+	getCentre := func(c int) r3.Vec {
+		if replay != nil {
+			return oneCentre
+		}
+		return centre[c]
+	}
+	for c, sh := range eachShift {
 		if sh.Grow == 0 {
 			continue
 		}
@@ -331,20 +442,46 @@ func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[i
 		if !(radius > 0) || !proofbound.FiniteVec(mid) {
 			return nil, nil, 0, errShiftDeclined
 		}
-		centre[c], scale[c] = mid, sh.Grow/radius
+		k := sh.Grow / radius
+		if replay != nil {
+			oneCentre, oneScale, oneGrown = mid, k, true
+		} else {
+			centre[c], scale[c] = mid, k
+		}
+		if shrink != nil && pc.count == 1 && count == 1 && sh.Move == (r3.Vec{}) && sh.Grow < 0 &&
+			k > -1 && !proofbound.IsNonFinite(k) {
+			*shrink = uniformShrink{center: mid, move: sh.Move, grow: sh.Grow, k: k, valid: true}
+		}
+	}
+	if replay != nil {
+		if err := replay.ReserveArray(ctx, uint64(len(m.Vertices)), uint64(unsafe.Sizeof(r3.Vec{}))); err != nil {
+			return nil, nil, 0, err
+		}
+		for range 2 {
+			if err := replay.ReserveArray(ctx, uint64(len(m.Vertices)), uint64(unsafe.Sizeof(false))); err != nil {
+				return nil, nil, 0, err
+			}
+		}
+		if err := replay.ReserveArray(ctx, uint64(len(m.Vertices)), uint64(unsafe.Sizeof(proof.Xpt{}))); err != nil {
+			return nil, nil, 0, err
+		}
 	}
 	verts := make([]r3.Vec, len(m.Vertices))
 	moved := make([]bool, len(m.Vertices))
 	maxAbs := 0.0
 	for i, v := range m.Vertices {
 		c := pc.ofVertex[i]
-		sh := shifts[c].Move
+		piece, _, e := lookupShift(c)
+		if e != nil {
+			return nil, nil, 0, e
+		}
+		sh := piece.Move
 		if !proofbound.FiniteVec(sh) {
 			return nil, nil, 0, errShiftDeclined
 		}
 		verts[i] = v.Add(sh)
-		if k, grown := scale[c]; grown {
-			verts[i] = verts[i].Add(v.Sub(centre[c]).Scale(k))
+		if k, grown := getScale(c); grown {
+			verts[i] = verts[i].Add(v.Sub(getCentre(c)).Scale(k))
 		}
 		moved[i] = verts[i] != v
 		maxAbs = math.Max(maxAbs, math.Max(math.Abs(verts[i].X), math.Max(math.Abs(verts[i].Y), math.Abs(verts[i].Z))))
@@ -352,15 +489,30 @@ func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[i
 	// Each moved coordinate is the float sum of an exact coordinate and a
 	// shift component, so it is within an ulp of the exact sum.
 	round := 2 * proofbound.UlpOf(maxAbs)
-	displacement := make(map[int]float64, len(shifts))
+	var displacement map[int]float64
+	var oneDisplacement float64
+	if replay == nil {
+		displacement = make(map[int]float64, len(shifts))
+	}
+	getDisplacement := func(c int) (float64, bool) {
+		if replay != nil {
+			return oneDisplacement, c == 0
+		}
+		v, ok := displacement[c]
+		return v, ok
+	}
 	worst := 0.0
-	for c, sh := range shifts {
+	for c, sh := range eachShift {
 		d := proofbound.AbsSumUpper(proofbound.DvLenUpper(proofbound.HeldDelta(sh.Move, r3.Vec{})), proofbound.Radius3D(round))
 		d = proofbound.AbsSumUpper(d, math.Abs(sh.Grow))
 		if proofbound.IsNonFinite(d) {
 			return nil, nil, 0, errShiftDeclined
 		}
-		displacement[c] = d
+		if replay != nil {
+			oneDisplacement = d
+		} else {
+			displacement[c] = d
+		}
 		worst = max(worst, d)
 	}
 
@@ -369,9 +521,26 @@ func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[i
 		Exact: make([]proof.Xpt, len(verts)), Moved: moved, Movable: make([]bool, len(verts)),
 	}
 	for i, v := range verts {
-		h.Exact[i] = proof.XptOf(v)
+		if replay != nil {
+			h.Exact[i], err = proof.XptOfBounded(v, func(n uint64) error {
+				if err := replay.ReserveArray(ctx, n, 64); err != nil {
+					return err
+				}
+				return replay.ReserveRecords(ctx, n)
+			})
+			if err != nil {
+				return nil, nil, 0, err
+			}
+		} else {
+			h.Exact[i] = proof.XptOf(v)
+		}
 	}
-	folded, err := meshbool.HasHeldFold(ctx, h)
+	var folded bool
+	if replay != nil {
+		folded, err = meshbool.HasHeldFoldReplay(ctx, h, replay.WorkBudget(ctx))
+	} else {
+		folded, err = meshbool.HasHeldFold(ctx, h)
+	}
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -379,46 +548,126 @@ func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[i
 		return nil, nil, 0, errShiftDeclined
 	}
 
-	beta, err := topobuild.VertexBounds(m)
+	var beta []float64
+	if replay != nil {
+		beta, err = topobuild.VertexBoundsReplay(ctx, m, replay)
+	} else {
+		beta, err = topobuild.VertexBounds(m)
+	}
 	if err != nil {
 		return nil, nil, 0, err
 	}
 	for i := range beta {
-		beta[i] = proofbound.AbsSumUpper(beta[i], displacement[pc.ofVertex[i]])
+		d, _ := getDisplacement(pc.ofVertex[i])
+		beta[i] = proofbound.AbsSumUpper(beta[i], d)
 	}
-	faceMove := make(map[*topo.Face]float64, len(m.FaceBound))
-	trisOf := make(map[int][][3]int, len(shifts))
-	for f, t := range m.Triangles {
-		c := pc.ofFacet[f]
-		d, ok := displacement[c]
-		if !ok {
-			continue
+	var faceBound map[*topo.Face]float64
+	var fixedBound *topo.FaceBoundTable
+	var trisOf map[int][][3]int
+	var oneTris [][3]int
+	if replay != nil {
+		if err := replay.ReserveArray(ctx, uint64(len(m.Triangles)), uint64(unsafe.Sizeof([3]int{}))); err != nil {
+			return nil, nil, 0, err
 		}
-		trisOf[c] = append(trisOf[c], t)
-		if f < len(m.Source) && m.Source[f] != nil {
-			faceMove[m.Source[f]] = max(faceMove[m.Source[f]], d)
-		}
+		oneTris = make([][3]int, 0, len(m.Triangles))
+	} else {
+		trisOf = make(map[int][][3]int, len(shifts))
 	}
-	faceBound := make(map[*topo.Face]float64, len(m.FaceBound))
-	for f, b := range m.FaceBound {
-		faceBound[f] = proofbound.AbsSumUpper(b, faceMove[f])
-	}
-	volume, perimeter := 0.0, 0.0
-	for c, tris := range trisOf {
-		swept, err := proofbound.PerturbedAreaUpperContext(ctx, verts, tris, displacement[c])
+	if replay != nil {
+		faceMove, err := topo.NewFaceBoundTable(ctx, m.ReplayFaceBoundCount(), replay)
 		if err != nil {
 			return nil, nil, 0, err
 		}
-		volume = proofbound.AbsSumUpper(volume, proofbound.SweptVolumeAllow(displacement[c], swept))
+		for f, t := range m.Triangles {
+			c := pc.ofFacet[f]
+			d, ok := getDisplacement(c)
+			if !ok {
+				continue
+			}
+			oneTris = append(oneTris, t)
+			if f < len(m.Source) && m.Source[f] != nil {
+				src := m.Source[f]
+				prev, found, err := faceMove.Lookup(ctx, src, replay)
+				if err != nil {
+					return nil, nil, 0, err
+				}
+				if !found || d > prev {
+					if err := faceMove.Set(ctx, src, d, replay); err != nil {
+						return nil, nil, 0, err
+					}
+				}
+			}
+		}
+		fixedBound, err = topo.NewFaceBoundTable(ctx, m.ReplayFaceBoundCount(), replay)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		err = m.EachReplayFaceBound(ctx, replay, func(face *topo.Face, bound float64) error {
+			d, _, err := faceMove.Lookup(ctx, face, replay)
+			if err != nil {
+				return err
+			}
+			return fixedBound.Set(ctx, face, proofbound.AbsSumUpper(bound, d), replay)
+		})
+		if err != nil {
+			return nil, nil, 0, err
+		}
+	} else {
+		faceMove := make(map[*topo.Face]float64, len(m.FaceBound))
+		for f, t := range m.Triangles {
+			c := pc.ofFacet[f]
+			d, ok := getDisplacement(c)
+			if !ok {
+				continue
+			}
+			trisOf[c] = append(trisOf[c], t)
+			if f < len(m.Source) && m.Source[f] != nil {
+				faceMove[m.Source[f]] = max(faceMove[m.Source[f]], d)
+			}
+		}
+		faceBound = make(map[*topo.Face]float64, len(m.FaceBound))
+		for f, b := range m.FaceBound {
+			faceBound[f] = proofbound.AbsSumUpper(b, faceMove[f])
+		}
+	}
+	volume, perimeter := 0.0, 0.0
+	applyPiece := func(c int, tris [][3]int) error {
+		d, _ := getDisplacement(c)
+		var swept float64
+		var err error
+		if replay != nil {
+			if err := replay.ReserveRecords(ctx, uint64(len(tris))+2*uint64(len(verts))+4); err != nil {
+				return err
+			}
+			swept, err = proofbound.PerturbedAreaUpperReplay(ctx, replay.WorkBudget(ctx), verts, tris, d)
+		} else {
+			swept, err = proofbound.PerturbedAreaUpperContext(ctx, verts, tris, d)
+		}
+		if err != nil {
+			return err
+		}
+		volume = proofbound.AbsSumUpper(volume, proofbound.SweptVolumeAllow(d, swept))
 		for _, t := range tris {
 			a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
 			perimeter += b.Sub(a).Len() + c.Sub(b).Len() + a.Sub(c).Len()
+		}
+		return nil
+	}
+	if replay != nil {
+		if err := applyPiece(0, oneTris); err != nil {
+			return nil, nil, 0, err
+		}
+	} else {
+		for c, tris := range trisOf {
+			if err := applyPiece(c, tris); err != nil {
+				return nil, nil, 0, err
+			}
 		}
 	}
 	perimeter = proofbound.UpRound(perimeter + proofbound.SumSlop(3*len(m.Triangles), perimeter))
 	areaRound := proofbound.ProductUpper(proofbound.Radius3D(round), perimeter)
 
-	decided, err := decisionMesh(m, pc, shifts, verts, centre, scale)
+	decided, err := decisionMesh(ctx, m, pc, shifts, ordered, verts, centre, scale, oneCentre, oneScale, oneGrown, replay)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -428,6 +677,7 @@ func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[i
 	next.CoordBound = proofbound.AbsSumUpper(m.CoordBound, worst)
 	next.VertexBound = beta
 	next.FaceBound = faceBound
+	next.ReplayFaceBounds = fixedBound
 	next.AreaSlack = proofbound.AbsSumUpper(m.AreaSlack, areaRound)
 	next.VolSymDiff = proofbound.AbsSumUpper(m.VolSymDiff, volume)
 	if proofbound.IsNonFinite(next.AreaSlack) || proofbound.IsNonFinite(next.VolSymDiff) {
@@ -450,32 +700,68 @@ func shiftOperandMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[i
 // the sum does not pass the power of two above |v|. A larger coordinate, or
 // a sum that crosses a power of two, generally rounds. It returns errShiftDeclined when a move cannot be
 // bounded.
-func decisionMesh(m *topo.Mesh, pc pieces, shifts map[int]pieceShift, verts []r3.Vec, centre map[int]r3.Vec,
-	scale map[int]float64) (*topo.Mesh, error) {
+func decisionMesh(ctx context.Context, m *topo.Mesh, pc pieces, shifts map[int]pieceShift, ordered *ReplayShifts, verts []r3.Vec, centre map[int]r3.Vec,
+	scale map[int]float64, oneCentre r3.Vec, oneScale float64, oneGrown bool, replay *proofbound.ReplayBudget) (*topo.Mesh, error) {
 	decided := *m
 	decided.Vertices = verts
 	decided.Owner = nil
 
-	stretchOf := make(map[int]float64, len(scale))
+	var stretchOf map[int]float64
+	oneStretch := 0.0
+	if replay != nil {
+		if oneGrown {
+			if proofbound.IsNonFinite(oneScale) {
+				return nil, errShiftDeclined
+			}
+			oneStretch = proofbound.AbsSumUpper(1, oneScale)
+		}
+	} else {
+		stretchOf = make(map[int]float64, len(scale))
+	}
 	for c, k := range scale {
 		if proofbound.IsNonFinite(k) {
 			return nil, errShiftDeclined
 		}
 		stretchOf[c] = proofbound.AbsSumUpper(1, k)
 	}
+	if replay != nil {
+		if err := replay.ReserveArray(ctx, uint64(len(verts)), uint64(unsafe.Sizeof(float64(0)))); err != nil {
+			return nil, err
+		}
+	}
 	add := make([]float64, len(verts))
-	worst, stretchMax, changed := 0.0, 0.0, len(stretchOf) > 0
+	worst, stretchMax, changed := 0.0, oneStretch, len(stretchOf) > 0 || oneGrown
 	for _, st := range stretchOf {
 		stretchMax = max(stretchMax, st)
 	}
 	for i, v := range m.Vertices {
 		c := pc.ofVertex[i]
 		sh, moving := shifts[c]
+		if ordered != nil {
+			var e error
+			sh, moving, e = ordered.get(ctx, c)
+			if e != nil {
+				return nil, e
+			}
+		}
 		if !moving {
 			continue
 		}
 		k, grown := scale[c]
-		r := moveRounding(v, verts[i], sh.Move, centre[c], k, grown)
+		center := centre[c]
+		if replay != nil {
+			k, grown, center = oneScale, oneGrown, oneCentre
+		}
+		var r float64
+		if replay != nil {
+			var err error
+			r, err = replayMoveRounding(ctx, replay, v, verts[i], sh.Move, center, k, grown)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			r = moveRounding(v, verts[i], sh.Move, center, k, grown)
+		}
 		if proofbound.IsNonFinite(r) {
 			return nil, errShiftDeclined
 		}
@@ -489,20 +775,6 @@ func decisionMesh(m *topo.Mesh, pc pieces, shifts map[int]pieceShift, verts []r3
 
 	// A face's bound covers every corner of its facets, so it takes the
 	// largest addition and stretch among them.
-	faceAdd := make(map[*topo.Face]float64, len(m.FaceBound))
-	faceStretch := make(map[*topo.Face]float64, len(m.FaceBound))
-	for f, t := range m.Triangles {
-		if f >= len(m.Source) || m.Source[f] == nil {
-			continue
-		}
-		src := m.Source[f]
-		for _, vi := range t {
-			faceAdd[src] = max(faceAdd[src], add[vi])
-		}
-		if st, grown := stretchOf[pc.ofFacet[f]]; grown {
-			faceStretch[src] = max(faceStretch[src], st)
-		}
-	}
 	widen := func(b, st, a float64) float64 {
 		if st > 0 {
 			b = proofbound.ProductUpper(st, b)
@@ -512,16 +784,99 @@ func decisionMesh(m *topo.Mesh, pc pieces, shifts map[int]pieceShift, verts []r3
 		}
 		return b
 	}
-	decided.FaceBound = make(map[*topo.Face]float64, len(m.FaceBound))
-	for f, b := range m.FaceBound {
-		decided.FaceBound[f] = widen(b, faceStretch[f], faceAdd[f])
+	if replay != nil {
+		faceAdd, err := topo.NewFaceBoundTable(ctx, m.ReplayFaceBoundCount(), replay)
+		if err != nil {
+			return nil, err
+		}
+		faceStretch, err := topo.NewFaceBoundTable(ctx, m.ReplayFaceBoundCount(), replay)
+		if err != nil {
+			return nil, err
+		}
+		for f, t := range m.Triangles {
+			if f >= len(m.Source) || m.Source[f] == nil {
+				continue
+			}
+			src := m.Source[f]
+			prev, _, err := faceAdd.Lookup(ctx, src, replay)
+			if err != nil {
+				return nil, err
+			}
+			for _, vi := range t {
+				prev = max(prev, add[vi])
+			}
+			if err := faceAdd.Set(ctx, src, prev, replay); err != nil {
+				return nil, err
+			}
+			st, grown := stretchOf[pc.ofFacet[f]]
+			if replay != nil {
+				st, grown = oneStretch, oneGrown
+			}
+			if grown {
+				prev, _, err := faceStretch.Lookup(ctx, src, replay)
+				if err != nil {
+					return nil, err
+				}
+				if err := faceStretch.Set(ctx, src, max(prev, st), replay); err != nil {
+					return nil, err
+				}
+			}
+		}
+		bounds, err := topo.NewFaceBoundTable(ctx, m.ReplayFaceBoundCount(), replay)
+		if err != nil {
+			return nil, err
+		}
+		err = m.EachReplayFaceBound(ctx, replay, func(face *topo.Face, b float64) error {
+			a, _, err := faceAdd.Lookup(ctx, face, replay)
+			if err != nil {
+				return err
+			}
+			st, _, err := faceStretch.Lookup(ctx, face, replay)
+			if err != nil {
+				return err
+			}
+			return bounds.Set(ctx, face, widen(b, st, a), replay)
+		})
+		if err != nil {
+			return nil, err
+		}
+		decided.FaceBound = nil
+		decided.ReplayFaceBounds = bounds
+	} else {
+		faceAdd := make(map[*topo.Face]float64, len(m.FaceBound))
+		faceStretch := make(map[*topo.Face]float64, len(m.FaceBound))
+		for f, t := range m.Triangles {
+			if f >= len(m.Source) || m.Source[f] == nil {
+				continue
+			}
+			src := m.Source[f]
+			for _, vi := range t {
+				faceAdd[src] = max(faceAdd[src], add[vi])
+			}
+			if st, grown := stretchOf[pc.ofFacet[f]]; grown {
+				faceStretch[src] = max(faceStretch[src], st)
+			}
+		}
+		decided.FaceBound = make(map[*topo.Face]float64, len(m.FaceBound))
+		for f, b := range m.FaceBound {
+			decided.FaceBound[f] = widen(b, faceStretch[f], faceAdd[f])
+		}
 	}
 	if m.VertexBound != nil {
 		// A mesh with no record derives one from the widened face bounds
 		// (topobuild.VertexBounds), which already cover each corner's addition.
+		if replay != nil {
+			if err := replay.ReserveArray(ctx, uint64(len(m.VertexBound)), uint64(unsafe.Sizeof(float64(0)))); err != nil {
+				return nil, err
+			}
+		}
 		decided.VertexBound = make([]float64, len(m.VertexBound))
 		for i, b := range m.VertexBound {
-			decided.VertexBound[i] = widen(b, stretchOf[pc.ofVertex[i]], add[i])
+			st := stretchOf[pc.ofVertex[i]]
+			if replay != nil {
+				st = oneStretch
+			}
+			decided.VertexBound[i] = widen(b, st, add[i])
 		}
 	}
 	decided.Bound = widen(m.Bound, stretchMax, worst)

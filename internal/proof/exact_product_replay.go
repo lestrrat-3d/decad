@@ -131,6 +131,14 @@ func (arena *ReplayProductArena) ProductDifference(ctx context.Context, a, b, c,
 	if budget == nil || a == nil || b == nil || c == nil || d == nil {
 		return nil, errExactProductReplay1
 	}
+	smallBudget, specialized := budget.(interface {
+		ReserveProductSmall(context.Context, uint64) error
+	})
+	if specialized {
+		if err := budget.SpendWork(ctx, 1); err != nil {
+			return nil, err
+		}
+	}
 	aw, bw, cw, dw := len(a.Bits()), len(b.Bits()), len(c.Bits()), len(d.Bits())
 	maxInt := int(^uint(0) >> 1)
 	if aw > maxInt-bw || cw > maxInt-dw {
@@ -162,10 +170,19 @@ func (arena *ReplayProductArena) ProductDifference(ctx context.Context, a, b, c,
 			return nil, err
 		}
 	}
-	if err := budget.ReserveRecords(ctx, 1); err != nil {
+	small := specialized && n <= len(smallReplayProduct{}.words)
+	resultRecords := uint64(1)
+	if specialized && !small {
+		resultRecords = 2
+	}
+	if err := budget.ReserveRecords(ctx, resultRecords); err != nil {
 		return nil, err
 	}
-	if err := budget.ReserveBytes(ctx, uint64(n)*wordBytes+uint64(unsafe.Sizeof(big.Int{}))); err != nil {
+	if small {
+		if err := smallBudget.ReserveProductSmall(ctx, uint64(unsafe.Sizeof(smallReplayProduct{}))); err != nil {
+			return nil, err
+		}
+	} else if err := budget.ReserveBytes(ctx, uint64(n)*wordBytes+uint64(unsafe.Sizeof(big.Int{}))); err != nil {
 		return nil, err
 	}
 	if aw != 0 && uint64(bw) > ^uint64(0)/uint64(aw) || cw != 0 && uint64(dw) > ^uint64(0)/uint64(cw) {
@@ -237,9 +254,16 @@ func (arena *ReplayProductArena) ProductDifference(ctx context.Context, a, b, c,
 			negative = sy < 0
 		}
 	}
-	resultWords := make([]big.Word, n)
-	copy(resultWords, out)
-	result := new(big.Int).SetBits(resultWords)
+	var result *big.Int
+	if small {
+		owned := &smallReplayProduct{}
+		copy(owned.words[:n], out)
+		result = owned.value.SetBits(owned.words[:n])
+	} else {
+		resultWords := make([]big.Word, n)
+		copy(resultWords, out)
+		result = new(big.Int).SetBits(resultWords)
+	}
 	if negative {
 		result.Neg(result)
 	}
@@ -365,4 +389,26 @@ func ReplayXlerp(ctx context.Context, a, b Xpt, num, den *big.Int, budget Replay
 		return Xpt{}, err
 	}
 	return out, nil
+}
+
+// ReplayRatProductDifference computes q.Num()*b-c*q.Denom() with bounded scratch.
+func ReplayRatProductDifference(ctx context.Context, q *big.Rat, b, c *big.Int, budget ReplayKeyBudget) (*big.Int, error) {
+	if q == nil || b == nil || c == nil {
+		return nil, errReplayInvalidExactProduct
+	}
+	return ReplayProductDifference(ctx, q.Num(), b, c, q.Denom(), budget)
+}
+
+// smallReplayProduct owns both the integer and its limbs in one allocation.
+type smallReplayProduct struct {
+	value big.Int
+	words [4]big.Word
+}
+
+// ReplayRatXlerp interpolates exact points using a bounded rational parameter.
+func ReplayRatXlerp(ctx context.Context, a, b Xpt, t *big.Rat, budget ReplayKeyBudget) (Xpt, error) {
+	if t == nil {
+		return Xpt{}, errReplayInvalidReplayInterpolation
+	}
+	return ReplayXlerp(ctx, a, b, t.Num(), t.Denom(), budget)
 }

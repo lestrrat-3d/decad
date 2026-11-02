@@ -298,6 +298,18 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, 
 	body, err := booleanBodyWith(ctx, op, a, b, d.nextProducerID(), cfg)
 	span := producerID(1)
 	if err != nil {
+		retried, used, attempted, ok, rerr := retryBrakeUnion(ctx, d, op, a, b, cfg, err)
+		if rerr != nil {
+			return nil, rerr
+		}
+		if attempted {
+			if !ok {
+				return nil, err
+			}
+			body, span, err = retried, used, nil
+		}
+	}
+	if err != nil {
 		rescued, used, ok, rerr := regroupBoolean(ctx, d, op, a, b, cfg, err)
 		if rerr != nil {
 			return nil, rerr
@@ -327,7 +339,7 @@ func operationInputsForBoolean(op meshbool.OperationKind, a, b *Body) []Operatio
 	second := OperationInput{Body: b, Use: InputConsumed}
 	switch op {
 	case meshbool.OpCut:
-		first.Role, second.Role = "target", "tool"
+		first.Role, second.Role = operationRoleTarget, operationRoleTool
 	case meshbool.OpUnion:
 		first.Role, second.Role = "first", "others"
 	case meshbool.OpIntersect:
