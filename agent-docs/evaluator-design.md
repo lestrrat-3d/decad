@@ -1482,7 +1482,14 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   but a later boolean whose contact crosses it sees a self-crossing contact
   chain and cannot subdivide the facet, and a held mesh that is not embedded
   would publish `BoundaryVerified()` falsely (`agent-docs/tessellation-design.md` §1,
-  the Embedding row). So the rounding runs in three steps
+  the Embedding row). Before rounding, the stitch flips the longest edge of
+  each needle, a facet whose apex lies within 64 float steps of that edge, when
+  the facet across it has the same source and the exact predicates show the
+  two facets coplanar and strictly convex as a quadrilateral, and neither new
+  facet is a needle (`internal/meshbool/mesh_needle.go`). The flip keeps the
+  exact surface and every vertex. It removes the fold that no float-box move
+  can clear, where a needle thinner than one float step lies along an edge
+  next to a fan of facets. The rounding then runs in three steps
   (`internal/meshbool/held_embedding.go`):
   - **Round to nearest, then check.** Each exact vertex rounds to its nearest
     float, and coincident roundings weld as above. A held vertex is MOVED when
