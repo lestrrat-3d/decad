@@ -419,6 +419,9 @@ func booleanBodyWith(ctx context.Context, op meshbool.OperationKind, a, b *Body,
 	hooks := booleanHooks(cfg)
 	hooks.Mesher = pairMeshes{ceiling: &ceiling}
 	result, err := bodyResult(booleandispatch.Body(ctx, op, envOf(documentNode(d), ref), &a.n, &b.n, hooks))
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
+	}
 	if err == nil || !ceiling {
 		return result, err
 	}
@@ -432,8 +435,11 @@ func booleanBodyWith(ctx context.Context, op meshbool.OperationKind, a, b *Body,
 	for rung := 1; rung <= booloperand.MaxOperandCoarsenings; rung++ {
 		hooks.Mesher = pairMeshes{rung: rung}
 		result, err = bodyResult(booleandispatch.Body(ctx, op, envOf(documentNode(d), ref), &a.n, &b.n, hooks))
-		if err == nil || ctx.Err() != nil {
-			return result, err
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+		if err == nil {
+			return result, nil
 		}
 	}
 	return nil, first
