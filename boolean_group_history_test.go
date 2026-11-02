@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/capplane"
 	"github.com/lestrrat-3d/decad/internal/freeform"
+	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismboolean"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
@@ -858,18 +859,18 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 			return &cloned
 		}
 		full := proofbound.NewReplayTrialBudget()
-		equal, err := sameBlindMesh(t.Context(), base, copyMesh(), full)
+		equal, err := meshbool.EqualMeshSnapshots(t.Context(), base, copyMesh(), full)
 		require.NoError(t, err)
 		require.True(t, equal)
 		work, _ := full.Usage()
 		exact, err := proofbound.NewReplayBudgetLimits(work, 1, 1)
 		require.NoError(t, err)
-		equal, err = sameBlindMesh(t.Context(), base, copyMesh(), exact)
+		equal, err = meshbool.EqualMeshSnapshots(t.Context(), base, copyMesh(), exact)
 		require.NoError(t, err)
 		require.True(t, equal)
 		short, err := proofbound.NewReplayBudgetLimits(work-1, 1, 1)
 		require.NoError(t, err)
-		_, err = sameBlindMesh(t.Context(), base, copyMesh(), short)
+		_, err = meshbool.EqualMeshSnapshots(t.Context(), base, copyMesh(), short)
 		var limit *proofbound.WorkLimitError
 		require.ErrorAs(t, err, &limit)
 		for _, mutate := range []func(*topo.Mesh){
@@ -882,13 +883,13 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 		} {
 			changed := copyMesh()
 			mutate(changed)
-			equal, err = sameBlindMesh(t.Context(), base, changed, proofbound.NewReplayTrialBudget())
+			equal, err = meshbool.EqualMeshSnapshots(t.Context(), base, changed, proofbound.NewReplayTrialBudget())
 			require.NoError(t, err)
 			require.False(t, equal)
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
-		_, err = sameBlindMesh(ctx, base, copyMesh(), proofbound.NewReplayTrialBudget())
+		_, err = meshbool.EqualMeshSnapshots(ctx, base, copyMesh(), proofbound.NewReplayTrialBudget())
 		require.ErrorIs(t, err, context.Canceled)
 	})
 	resultPayload, stacked := result.n.Payload.(stackedrecord.Payload)

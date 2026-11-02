@@ -62,18 +62,15 @@ func orthogonalBooleanAt(ctx context.Context, d *Document, op meshbool.Operation
 	return body, true
 }
 
-// orthogonalOperand returns b's faceted payload when it holds no vertex bound. A placed body qualifies: its
-// held vertices are its world coordinates, and a placement that every vertex image survives exactly (a
-// whole-number translation of whole-number coordinates, say) charges no rounding.
+// orthogonalOperand unwraps Body.n.Payload for the generic admission check in
+// orthoshell. Root owns the Body handle; orthoshell owns the mesh invariant.
 func orthogonalOperand(b *Body) (facetedPayload, bool) {
 	payload, ok := b.n.Payload.(facetedPayload)
-	if !ok || len(payload.Tris) == 0 {
+	if !ok {
 		return facetedPayload{}, false
 	}
-	for _, beta := range payload.VertexBound {
-		if beta != 0 {
-			return facetedPayload{}, false
-		}
+	if _, ok := orthoshell.FacetedPart(payload); !ok {
+		return facetedPayload{}, false
 	}
 	return payload, true
 }

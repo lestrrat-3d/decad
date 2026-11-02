@@ -12,13 +12,11 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/booleandispatch"
 	"github.com/lestrrat-3d/decad/internal/booloperand"
-	"github.com/lestrrat-3d/decad/internal/clearance/pairkernel"
 	"github.com/lestrrat-3d/decad/internal/contactfaceted"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/massdispatch"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/prooflineage"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
 )
@@ -371,56 +369,14 @@ func operationKindForBoolean(op meshbool.OperationKind) OperationKind {
 	}
 }
 
+// containedCutQuantities unwraps private Body.n fields for massdispatch's
+// quantity capture and maps its derivation failures to public BooleanError.
 func containedCutQuantities(ctx context.Context, result, target, tool *Body) error {
-	if _, ok := result.n.Payload.(facetedPayload); !ok {
-		return nil
+	err := massdispatch.CaptureContainedCutQuantities(ctx, &result.n, &target.n, &tool.n)
+	if evidence, ok := errors.AsType[*massdispatch.ContainedCutEvidenceError](err); ok {
+		return newBooleanError(meshbool.OpCut, BooleanEvaluatorFailure, ErrBooleanFailed, evidence.Unwrap())
 	}
-	proof, err := pairkernel.Pair(ctx, &target.n, &tool.n, false, nil)
-	if err != nil {
-		return err
-	}
-	certificate := proof.Containment
-	if certificate == nil || certificate.Inner != &tool.n || certificate.Outer != &target.n {
-		return nil
-	}
-	volumeLineage, selectVolume, err := prooflineage.ContainedCutVolume(
-		int(target.n.Origin.Producer), int(tool.n.Origin.Producer),
-		target.n.Volume, tool.n.Volume, result.n.Volume,
-		prooflineage.Containment{
-			BoundaryGapLower:    units.Millimeters(certificate.BoundaryGapLower),
-			InnerShellWitnesses: certificate.InnerShellWitnesses,
-			OuterShellWitnesses: certificate.OuterShellWitnesses,
-		},
-	)
-	if err != nil {
-		return newBooleanError(meshbool.OpCut, BooleanEvaluatorFailure, ErrBooleanFailed, err)
-	}
-	centroidLineage, selectCentroid, err := prooflineage.ContainedCutCentroid(
-		volumeLineage,
-		prooflineage.SourceCentroid{Producer: int(target.n.Origin.Producer), Reading: target.n.Centroid},
-		prooflineage.SourceCentroid{Producer: int(tool.n.Origin.Producer), Reading: tool.n.Centroid},
-		result.n.Centroid,
-	)
-	if err != nil {
-		return newBooleanError(meshbool.OpCut, BooleanEvaluatorFailure, ErrBooleanFailed, err)
-	}
-	momentLineage, err := massdispatch.CaptureContainedCutMoments(ctx, &result.n, &target.n, &tool.n, volumeLineage)
-	if err != nil {
-		return newBooleanError(meshbool.OpCut, BooleanEvaluatorFailure, ErrBooleanFailed, err)
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	volumeLineage.Centroid = centroidLineage
-	volumeLineage.Moments = momentLineage
-	result.n.VolumeLineage = volumeLineage
-	if selectVolume {
-		result.n.Volume = volumeLineage.Derived
-	}
-	if selectCentroid {
-		result.n.Centroid = centroidLineage.Derived
-	}
-	return nil
+	return err
 }
 
 // booleanBody builds a boolean's result body under producer identity ref
