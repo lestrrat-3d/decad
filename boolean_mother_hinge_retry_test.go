@@ -88,8 +88,8 @@ func motherCutLineageFixture(t *testing.T, moveBoreTransversely bool) (*Body, *B
 		require.NoError(t, err)
 		return frame
 	}
-	knuckleBody := &Body{n: topo.Body{Origin: provenance.Ref{Producer: 1}}}
-	boreBody := &Body{n: topo.Body{Origin: provenance.Ref{Producer: 2}}}
+	knuckleBody := bornBody(&Body{n: topo.Body{Origin: provenance.Ref{Producer: 1}}})
+	boreBody := bornBody(&Body{n: topo.Body{Origin: provenance.Ref{Producer: 2}}})
 	outer := surfacegeom.Cylinder{Origin: r3.Vec{}, Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(5)}
 	innerOrigin := r3.Vec{}
 	if moveBoreTransversely {
