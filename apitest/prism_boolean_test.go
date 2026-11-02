@@ -246,18 +246,24 @@ func TestPrismUnionGearToothOnHubSharedCarrier(t *testing.T) {
 	require.Equal(t, 5, planes) // 3 tooth walls + capStart + capEnd
 }
 
-// TestPrismUnionG1FallsBackWithUnchangedBehavior demonstrates §3.4's "no new
-// behavior" promise concretely: a G1 miss (a revolve body carries no
-// prismPayload) reaches the exact same pre-existing mesh-path staging
-// refusal it would have before this design existed (evaluator-design §9:
-// revolve has no tessellator yet) — no new error, no new text.
-func TestPrismUnionG1FallsBackWithUnchangedBehavior(t *testing.T) {
+// TestPrismUnionG1FallsBackToTheMeshPath: a G1 miss (a revolve body carries no
+// prismPayload) reaches the mesh path. The sphere's mesh at the pair tolerance
+// runs into a work ceiling, so the boolean requests its operands coarser
+// (agent-docs/revolve-operand-coarsening-design.md) and the union of the ball
+// that holds its upper half is the box plus the lower hemisphere, within its
+// reported bound.
+func TestPrismUnionG1FallsBackToTheMeshPath(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	ball := ballBody(t, doc, 5)
 	box := boxBody(t, doc, -20, -20, 20, 20, 20)
-	_, err := decad.Union(t.Context(), ball, box)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	out, err := decad.Union(t.Context(), ball, box)
+	require.NoError(t, err)
+	vol, err := out.Volume()
+	require.NoError(t, err)
+	want := 40*40*20 + 2*math.Pi*5*5*5/3
+	require.InDelta(t, want, vol.Value.Base(), vol.Bound.Base()+1e-6)
+	require.Less(t, vol.Bound.Base(), 0.01*want)
 }
 
 // TestPrismUnionRotatedToothFallback is §3.3/§15's rotated-tooth case, at the

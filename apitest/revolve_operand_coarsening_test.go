@@ -65,15 +65,48 @@ func TestUnionTorusArcWithStemShortSweep(t *testing.T) {
 	require.Less(t, got, arcVol+stemVol)
 }
 
-// A facet-pair audit that exceeds its work ceiling is final. A finer angular
-// count only adds facets, so refining on it would charge every retry's whole
-// mesh to the cumulative facet ceiling and report that ceiling instead.
-func TestUnionTorusArcAuditWorkCeilingIsReportedAsItself(t *testing.T) {
+// stemOutsideTorusArc is the exact volume of the radial stem (radius 1, y from
+// -3 to 4) that lies outside a torus arc of the given sweep, by midpoint
+// integration over the stem. The arc's tube (radius 1, ring radius 4) spans
+// angles [0, sweep) about the x axis, measured from +y toward +z.
+func stemOutsideTorusArc(sweep float64) float64 {
+	const nr, nphi, ny = 120, 240, 280
+	outside := 0.0
+	for ir := range nr {
+		r := (float64(ir) + 0.5) / nr
+		for ip := range nphi {
+			phi := 2 * math.Pi * (float64(ip) + 0.5) / nphi
+			x, z := r*math.Cos(phi), r*math.Sin(phi)
+			for iy := range ny {
+				y := -3 + 7*(float64(iy)+0.5)/ny
+				ring := math.Hypot(y, z)
+				theta := math.Atan2(z, y)
+				if theta < 0 {
+					theta += 2 * math.Pi
+				}
+				inside := theta < sweep && math.Hypot(ring-4, x) < 1
+				if !inside {
+					outside += r
+				}
+			}
+		}
+	}
+	return outside * (1.0 / nr) * (2 * math.Pi / nphi) * (7.0 / ny)
+}
+
+func TestUnionTorusArcWithStemCoarsensItsOperandPastTheCeilings(t *testing.T) {
 	t.Parallel()
-	doc := decad.New()
-	arc := torusArcBody(t, doc, math.Pi/3)
-	stem := radialStemBody(t, doc)
-	_, err := decad.Union(t.Context(), arc, stem)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "contact audit exceeds its fixed work ceiling")
+	for _, deg := range []float64{60, 180, 300} {
+		sweep := deg * math.Pi / 180
+		doc := decad.New()
+		out, err := decad.Union(t.Context(), torusArcBody(t, doc, sweep), radialStemBody(t, doc))
+		require.NoError(t, err, "%v degrees", deg)
+		vol, err := out.Volume()
+		require.NoError(t, err)
+		want := math.Pi*4*sweep + stemOutsideTorusArc(sweep)
+		require.InDelta(t, want, vol.Value.Base(), vol.Bound.Base()+0.05, "%v degrees", deg)
+		// The coarser operand chord is capped at 8x the pair tolerance, so
+		// the volume bound stays a small fraction of the volume.
+		require.Less(t, vol.Bound.Base(), 0.02*want, "%v degrees", deg)
+	}
 }

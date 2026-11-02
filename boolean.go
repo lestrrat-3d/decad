@@ -415,8 +415,28 @@ func booleanBodyWith(ctx context.Context, op meshbool.OperationKind, a, b *Body,
 	if err != nil {
 		return nil, err
 	}
+	var ceiling bool
 	hooks := booleanHooks(cfg)
-	return bodyResult(booleandispatch.Body(ctx, op, envOf(documentNode(d), ref), &a.n, &b.n, hooks))
+	hooks.Mesher = pairMeshes{ceiling: &ceiling}
+	result, err := bodyResult(booleandispatch.Body(ctx, op, envOf(documentNode(d), ref), &a.n, &b.n, hooks))
+	if err == nil || !ceiling {
+		return result, err
+	}
+	// A revolve operand ran into a work ceiling at the pair tolerance. The pair is
+	// retried with both operands requested at 2, 4 and 8 times it, the first rung
+	// that answers winning; each mesh publishes the chording it actually took,
+	// so every bound is the coarser one. A pair no rung answers reports the
+	// refusal the pair tolerance itself hit
+	// (agent-docs/revolve-operand-coarsening-design.md §2).
+	first := err
+	for rung := 1; rung <= booloperand.MaxOperandCoarsenings; rung++ {
+		hooks.Mesher = pairMeshes{rung: rung}
+		result, err = bodyResult(booleandispatch.Body(ctx, op, envOf(documentNode(d), ref), &a.n, &b.n, hooks))
+		if err == nil || ctx.Err() != nil {
+			return result, err
+		}
+	}
+	return nil, first
 }
 
 // asBooleanError maps an evaluateBoolean or facetedrecord.BuildWithProof error to the
@@ -488,11 +508,23 @@ func evaluateBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 // pairMeshes meshes each operand at the pair's own chord tolerance, raised to
 // a restating operand's held floor: the public booleans' rule
 // (agent-docs/evaluator-design.md §9, tessellateBooleanOperand).
-type pairMeshes struct{}
+//
+// A pair with a revolve operand that ran into a work ceiling is requested
+// coarser on a later rung (booleanBodyWith): rung r doubles both operands'
+// requests r times, so neither is far finer than its partner, and ceiling,
+// when set, records that one such refusal happened.
+type pairMeshes struct {
+	rung    int
+	ceiling *bool
+}
 
-func (pairMeshes) TessellateOperand(ctx context.Context, b *topo.Body, pairTol float64) (*topo.Mesh, bool, error) {
+func (p pairMeshes) TessellateOperand(ctx context.Context, b *topo.Body, pairTol float64) (*topo.Mesh, bool, error) {
+	pairTol *= float64(int(1) << p.rung)
 	m, restating, err := tessellateBooleanOperand(ctx, bodyHandle(b), pairTol)
 	if err != nil {
+		if p.ceiling != nil && booloperand.CoarsensOperand(b, err) {
+			*p.ceiling = true
+		}
 		return nil, false, err
 	}
 	return &m.n, restating, nil
