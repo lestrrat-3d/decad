@@ -1,4 +1,4 @@
-package booleaneval
+package boolshift
 
 import (
 	"context"
@@ -8,26 +8,26 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
-func piecesOfReplay(ctx context.Context, m *topo.Mesh, budget *proofbound.ReplayBudget) (pieces, error) {
+func PiecesOfReplay(ctx context.Context, m *topo.Mesh, budget *proofbound.ReplayBudget) (Pieces, error) {
 	if m == nil || budget == nil {
-		return pieces{}, errBrakeEvalBoundedPiecesNeedAMeshAndBudget
+		return Pieces{}, ErrPiecesNeedMeshAndBudget
 	}
 	v, f := uint64(len(m.Vertices)), uint64(len(m.Triangles))
 	if v > proofbound.MaxMultiwayRecordsPerCall || f > proofbound.MaxMultiwayRecordsPerCall {
-		return pieces{}, budget.ReserveRecords(ctx, proofbound.MaxMultiwayRecordsPerCall+1)
+		return Pieces{}, budget.ReserveRecords(ctx, proofbound.MaxMultiwayRecordsPerCall+1)
 	}
 	if err := budget.ReserveRecords(ctx, 3*v+f+1); err != nil {
-		return pieces{}, err
+		return Pieces{}, err
 	}
 	for _, count := range []uint64{v, v, v, f} {
 		if err := budget.ReserveArray(ctx, count, uint64(unsafe.Sizeof(int(0)))); err != nil {
-			return pieces{}, err
+			return Pieces{}, err
 		}
 	}
 	parent := make([]int, len(m.Vertices))
 	for i := range parent {
 		if err := budget.SpendWork(ctx, 1); err != nil {
-			return pieces{}, err
+			return Pieces{}, err
 		}
 		parent[i] = i
 	}
@@ -44,18 +44,18 @@ func piecesOfReplay(ctx context.Context, m *topo.Mesh, budget *proofbound.Replay
 	for _, tri := range m.Triangles {
 		for _, vi := range tri[1:] {
 			if err := budget.SpendWork(ctx, 1); err != nil {
-				return pieces{}, err
+				return Pieces{}, err
 			}
 			if tri[0] < 0 || tri[0] >= len(parent) || vi < 0 || vi >= len(parent) {
-				return pieces{}, errBrakeEvalInvalidBoundedMeshIndex
+				return Pieces{}, ErrInvalidMeshIndex
 			}
 			a, err := find(tri[0])
 			if err != nil {
-				return pieces{}, err
+				return Pieces{}, err
 			}
 			b, err := find(vi)
 			if err != nil {
-				return pieces{}, err
+				return Pieces{}, err
 			}
 			if a != b {
 				parent[max(a, b)] = min(a, b)
@@ -67,14 +67,14 @@ func piecesOfReplay(ctx context.Context, m *topo.Mesh, budget *proofbound.Replay
 		ids[i] = -1
 	}
 	count := 0
-	pc := pieces{ofVertex: make([]int, len(m.Vertices)), ofFacet: make([]int, len(m.Triangles))}
+	pc := Pieces{ofVertex: make([]int, len(m.Vertices)), ofFacet: make([]int, len(m.Triangles))}
 	for i := range m.Vertices {
 		if err := budget.SpendWork(ctx, 1); err != nil {
-			return pieces{}, err
+			return Pieces{}, err
 		}
 		root, err := find(i)
 		if err != nil {
-			return pieces{}, err
+			return Pieces{}, err
 		}
 		c := ids[root]
 		if c < 0 {
@@ -86,7 +86,7 @@ func piecesOfReplay(ctx context.Context, m *topo.Mesh, budget *proofbound.Replay
 	}
 	for i, tri := range m.Triangles {
 		if err := budget.SpendWork(ctx, 1); err != nil {
-			return pieces{}, err
+			return Pieces{}, err
 		}
 		pc.ofFacet[i] = pc.ofVertex[tri[0]]
 	}

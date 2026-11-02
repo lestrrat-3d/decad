@@ -366,10 +366,10 @@ requires opening a PR before the first real producer-to-accessor fixture passes.
 
 ### Phase 2: Prove one real shifted Boolean end to end
 
-- Depends on Phase 1. Modify `internal/booleaneval/shift.go`, `internal/booleaneval/eval.go`,
+- Depends on Phase 1. Modify `internal/boolshift/shift.go`, `internal/booleaneval/eval.go`,
   `internal/booleandispatch/dispatch.go`, `boolean.go`, and the body publication adapter only as needed to carry
   the accepted retry's typed shift summary to `(*Body).OperationDiagnostics()` before `document.go` commits it.
-- Derive displacement from `shiftOperandMesh`'s actual accepted per-piece charges. Summarize the moved pieces
+- Derive displacement from `boolshift.ShiftOperandMesh`'s actual accepted per-piece charges. Summarize the moved pieces
   with a certified upper bound; do not use configured reach as the displacement or charge untouched pieces.
   Keep rejected-attempt records local and discard them when retrying or returning the original refusal.
 - Extend only the face-touching Union subtest in `apitest/boolean_gap_tolerance_test.go` first. Use its real

@@ -94,10 +94,10 @@ func captureShiftCertificate(ctx context.Context, a, b *topo.Body, selected, dec
 	if err := trial.SpendWork(ctx, 16); err != nil {
 		return nil
 	}
-	if a == nil || b == nil || pc.count != 1 || len(shifts) != 1 || selected == nil || decision == nil || charged == nil {
+	if a == nil || b == nil || pc.Count() != 1 || len(shifts) != 1 || selected == nil || decision == nil || charged == nil {
 		return nil
 	}
-	if len(pc.ofVertex) != len(selected.Vertices) || len(pc.ofFacet) != len(selected.Triangles) {
+	if pc.VertexCount() != len(selected.Vertices) || pc.FacetCount() != len(selected.Triangles) {
 		return nil
 	}
 	shift, ok := shifts[0]
@@ -122,7 +122,7 @@ func captureShiftCertificate(ctx context.Context, a, b *topo.Body, selected, dec
 			}
 		}
 	}
-	for _, n := range []int{len(pc.ofVertex), len(pc.ofFacet), len(groups), 1} {
+	for _, n := range []int{pc.VertexCount(), pc.FacetCount(), len(groups), 1} {
 		if !add(n) {
 			return nil
 		}
@@ -153,11 +153,7 @@ func captureShiftCertificate(ctx context.Context, a, b *topo.Body, selected, dec
 	if err != nil {
 		return nil
 	}
-	vertices, err := snapshotShiftSlice(ctx, pc.ofVertex, trial)
-	if err != nil {
-		return nil
-	}
-	facets, err := snapshotShiftSlice(ctx, pc.ofFacet, trial)
+	component, err := pc.Snapshot(ctx, trial, errShiftSnapshotStoredSliceTooLarge)
 	if err != nil {
 		return nil
 	}
@@ -177,7 +173,7 @@ func captureShiftCertificate(ctx context.Context, a, b *topo.Body, selected, dec
 	}
 	return &ShiftCertificate{target: a, tool: b, targetID: a.Origin.Producer, toolID: b.Origin.Producer,
 		selected: selectedCopy, decision: decisionCopy, charged: chargedCopy,
-		component: pieces{ofVertex: vertices, ofFacet: facets, count: pc.count},
+		component: component,
 		shift:     shift, groups: copied, captureSeal: seal, center: center, radius: radius, factor: factor, chord: chord, scale: scale,
 		displacement: displacement, reach: gaptol.Reach(ctx)}
 }
@@ -189,7 +185,7 @@ func shiftGeometry(m *topo.Mesh, pc pieces, shift pieceShift) (r3.Vec, float64, 
 	var sum r3.Vec
 	var n int
 	for i, v := range m.Vertices {
-		if pc.ofVertex[i] == 0 {
+		if pc.Vertex(i) == 0 {
 			sum = sum.Add(v)
 			n++
 		}
@@ -200,7 +196,7 @@ func shiftGeometry(m *topo.Mesh, pc pieces, shift pieceShift) (r3.Vec, float64, 
 	center := sum.Scale(1 / float64(n))
 	radius := 0.0
 	for i, v := range m.Vertices {
-		if pc.ofVertex[i] == 0 {
+		if pc.Vertex(i) == 0 {
 			radius = math.Max(radius, v.Sub(center).Len())
 		}
 	}

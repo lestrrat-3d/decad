@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/boolshift"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
@@ -108,8 +109,7 @@ func TestOrdinaryShiftCertificateCaptureSealsSource(t *testing.T) {
 	if err := validateShiftCaptureSeal(t.Context(), stored, proofbound.NewBrakeReplayBudget()); !errors.Is(err, decaderr.ErrUnsupported) {
 		t.Fatalf("prior source mutation accepted: %v", err)
 	}
-	malformed := c.component
-	malformed.ofVertex = malformed.ofVertex[:1]
+	malformed := boolshift.NewPieces([]int{c.component.Vertex(0)}, []int{c.component.Facet(0)}, c.component.Count())
 	if capture(malformed) != nil {
 		t.Fatal("malformed component accepted")
 	}

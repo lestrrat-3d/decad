@@ -13,14 +13,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
-	"slices"
 	"unsafe"
 
 	"github.com/lestrrat-3d/r3"
 
 	"github.com/lestrrat-3d/decad/internal/booloperand"
+	"github.com/lestrrat-3d/decad/internal/boolshift"
 	"github.com/lestrrat-3d/decad/internal/chaintol"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
@@ -32,7 +31,6 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
-	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/decad/internal/topobuild"
@@ -153,114 +151,9 @@ func Evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	if terr != nil {
 		return ev, err
 	}
-	return retryShifted(ctx, err, op, piecesOf(mb), func(shifts map[int]pieceShift) (Evaluation, error) {
+	return retryShifted(ctx, err, op, boolshift.PiecesOf(mb), func(shifts map[int]pieceShift) (Evaluation, error) {
 		return evaluate(ctx, op, a, b, meshes, chordScale, capFace, coneFace, twins, shifts, nil, nil, nil, 0)
 	})
-}
-
-// EvaluateReplay runs the private mesh-only attempt and its shifted retries
-// on one counter. Unsupported operand and placement branches refuse.
-func EvaluateReplay(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body, chordScale float64,
-	budget *proofbound.ReplayBudget) (Evaluation, error) {
-	return evaluateReplay(ctx, op, a, b, chordScale, 0, 0, nil, budget)
-}
-
-// EvaluateReplayClamped binds every attempt to the authenticated pair chord.
-func EvaluateReplayClamped(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body, chordScale, candidate, original float64, budget *proofbound.ReplayBudget) (Evaluation, error) {
-	if op != meshbool.OpUnion || !(candidate > 0) || !(original > 0) || !(chordScale > 0) || chordScale > 1 || proofbound.IsNonFinite(candidate) || proofbound.IsNonFinite(original) || proofbound.IsNonFinite(chordScale) || candidate*chordScale > original {
-		return Evaluation{}, fmt.Errorf("%w: invalid replay chord clamp", decaderr.ErrUnsupported)
-	}
-	return evaluateReplay(ctx, op, a, b, chordScale, candidate, original, nil, budget)
-}
-
-// EvaluateReplayRetainedClamped uses the authenticated original target mesh.
-func EvaluateReplayRetainedClamped(ctx context.Context, a, b *topo.Body, chordScale, candidate, original float64, retained *RetainedTarget, budget *proofbound.ReplayBudget) (Evaluation, error) {
-	if retained == nil || retained.body != a || !(candidate > 0) || !(original > 0) || !(chordScale > 0) || chordScale > 1 || proofbound.IsNonFinite(candidate) || proofbound.IsNonFinite(original) || proofbound.IsNonFinite(chordScale) || candidate*chordScale > original {
-		return Evaluation{}, fmt.Errorf("%w: invalid retained replay", decaderr.ErrUnsupported)
-	}
-	return evaluateReplay(ctx, meshbool.OpUnion, a, b, chordScale, candidate, original, retained, budget)
-}
-
-func evaluateReplay(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body, chordScale, candidate, original float64, retained *RetainedTarget, budget *proofbound.ReplayBudget) (Evaluation, error) {
-	if budget == nil || a == nil || b == nil {
-		return Evaluation{}, fmt.Errorf("%w: bounded evaluation needs two operands and a budget", decaderr.ErrUnsupported)
-	}
-	check := func() error {
-		if cert, ok := ctx.Value(preparedTagShiftKey{}).(*BrakeCandidateCertificate); ok {
-			if err := cert.validate(ctx, a, b, budget); err != nil {
-				return err
-			}
-		}
-		if candidate == 0 {
-			return nil
-		}
-		got, _, err := booloperand.PairChordReplay(ctx, a, b, budget)
-		if err != nil {
-			return err
-		}
-		if math.Float64bits(got) != math.Float64bits(candidate) || got*chordScale > original {
-			return fmt.Errorf("%w: replay pair chord changed", decaderr.ErrUnsupported)
-		}
-		return nil
-	}
-	if err := check(); err != nil {
-		return Evaluation{}, err
-	}
-	meshes := &retainedReplayMesher{replayMesher: replayMesher{budget: budget}, target: retained} //nolint:modernize // Named fields keep the embedded budget explicit.
-	twins := &operandTwins{}
-	ev, err := evaluate(ctx, op, a, b, meshes, chordScale, nil, nil, twins, nil, nil, budget, nil, 0)
-	if err == nil {
-		return ev, nil
-	}
-	var touch *meshbool.TouchContactError
-	if !errors.As(err, &touch) || !(gaptol.Reach(ctx) > 0) {
-		return ev, err
-	}
-	tol, dPair, perr := booloperand.PairChordReplay(ctx, a, b, budget)
-	if perr != nil {
-		return Evaluation{}, perr
-	}
-	chord, perr := operandChordReplay(ctx, b, tol*chordScale, dPair, chordScale, budget)
-	if perr != nil {
-		return Evaluation{}, perr
-	}
-	mb, _, perr := meshes.TessellateOperand(ctx, b, chord)
-	if perr != nil {
-		return Evaluation{}, perr
-	}
-	pc, perr := piecesOfReplay(ctx, mb, budget)
-	if perr != nil {
-		return Evaluation{}, perr
-	}
-	return replayRetryShifted(ctx, err, op, pc, func(shifts *ReplayShifts) (Evaluation, error) {
-		if err := check(); err != nil {
-			return Evaluation{}, err
-		}
-		return evaluate(ctx, op, a, b, meshes, chordScale, nil, nil, twins, nil, shifts, budget, nil, 0)
-	}, budget)
-}
-
-// EvaluateReplayFixedCut uses the authenticated moved tool exactly once.
-func EvaluateReplayFixedCut(ctx context.Context, a, b *topo.Body, tool *FixedShiftedTool, targetAllowance float64, budget *proofbound.ReplayBudget) (Evaluation, error) {
-	if budget == nil || a == nil || b == nil || tool == nil || tool.tool != b || targetAllowance < 0 || proofbound.IsNonFinite(targetAllowance) || chaintol.Of(ctx) != 0 {
-		return Evaluation{}, fmt.Errorf("%w: fixed shifted Cut lacks authenticated operands or allowance", decaderr.ErrUnsupported)
-	}
-	base, _, err := booloperand.PairChordReplay(ctx, a, b, budget)
-	if err != nil {
-		return Evaluation{}, err
-	}
-	ev, err := evaluate(ctx, meshbool.OpCut, a, b, replayMesher{budget: budget}, 1, nil, nil, &operandTwins{}, nil, nil, budget, tool, targetAllowance)
-	if err != nil {
-		return ev, err
-	}
-	after, _, err := booloperand.PairChordReplay(ctx, a, b, budget)
-	if err != nil {
-		return Evaluation{}, err
-	}
-	if !(base > 0) || proofbound.IsNonFinite(base) || math.Float64bits(base) != math.Float64bits(after) {
-		return Evaluation{}, fmt.Errorf("%w: final Cut chord changed", decaderr.ErrUnsupported)
-	}
-	return ev, nil
 }
 
 // evaluate is Evaluate's single attempt, with the pieces of b's mesh moved by
@@ -269,7 +162,7 @@ func EvaluateReplayFixedCut(ctx context.Context, a, b *topo.Body, tool *FixedShi
 func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	meshes OperandMesher, chordScale float64, capFace, coneFace *topo.Face, twins *operandTwins,
 	shifts map[int]pieceShift, ordered *ReplayShifts, replay *proofbound.ReplayBudget, fixed *FixedShiftedTool, targetAllowance float64) (Evaluation, error) {
-	hasShifts := len(shifts) > 0 || (ordered != nil && len(ordered.entries) > 0)
+	hasShifts := len(shifts) > 0 || (ordered != nil && ordered.Len() > 0)
 	if err := ctx.Err(); err != nil {
 		return Evaluation{}, err
 	}
@@ -431,7 +324,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			}
 		}
 		if replay != nil {
-			piecesB, err = piecesOfReplay(ctx, mb, replay)
+			piecesB, err = boolshift.PiecesOfReplay(ctx, mb, replay)
 			if err != nil {
 				return Evaluation{}, err
 			}
@@ -443,7 +336,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 				return Evaluation{}, err
 			}
 		} else {
-			piecesB = piecesOf(mb)
+			piecesB = boolshift.PiecesOf(mb)
 		}
 		if replay != nil {
 			fixedFacePiece, err = replayFacePieces(ctx, replay, mb, piecesB)
@@ -464,8 +357,8 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			}
 			reachB = proofbound.AbsSumUpper(reachB, mb.Bound)
 		} else {
-			facePiece = facePieces(mb, piecesB)
-			reachB, err = tagReach(mb)
+			facePiece = boolshift.FacePieces(mb, piecesB)
+			reachB, err = boolshift.TagReach(mb)
 		}
 		if err != nil {
 			return Evaluation{}, err
@@ -579,7 +472,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 				piece = int(v)
 			}
 			if ordered != nil {
-				sh, moved, e := ordered.get(ctx, piece)
+				sh, moved, e := ordered.Get(ctx, piece)
 				if e != nil {
 					return Evaluation{}, e
 				}
@@ -588,10 +481,10 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 				} else if moved && ok && piece != spanningPieces && sh.Grow == 0 && group.Surface != nil && group.Retained && group.Denoted == nil {
 					return Evaluation{}, fmt.Errorf("%w: replay moved retained-tag proof is not bounded", decaderr.ErrUnsupported)
 				} else {
-					group = movedGroupWithShift(group, piece, ok, sh, moved, mb.Vertices, reachB)
+					group = boolshift.MovedGroupWithShift(group, piece, ok, sh, moved, mb.Vertices, reachB)
 				}
 			} else {
-				group = movedGroup(group, piece, ok, shifts, mb.Vertices, reachB)
+				group = boolshift.MovedGroup(group, piece, ok, shifts, mb.Vertices, reachB)
 			}
 		}
 		groups = append(groups, group)
@@ -640,12 +533,12 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			mbDecide, mb, shiftDisplacement = prepared.decision, prepared.charged, prepared.displacement
 		} else if replay != nil {
 			if ordered != nil {
-				mbDecide, mb, shiftDisplacement, err = shiftOperandMeshReplay(ctx, mb, piecesB, ordered, &shrink, replay)
+				mbDecide, mb, shiftDisplacement, err = boolshift.ShiftOperandMeshReplay(ctx, mb, piecesB, ordered, &shrink, replay)
 			} else {
-				mbDecide, mb, shiftDisplacement, err = shiftOperandMeshWithBudget(ctx, mb, piecesB, shifts, &shrink, replay)
+				mbDecide, mb, shiftDisplacement, err = boolshift.ShiftOperandMeshWithBudget(ctx, mb, piecesB, shifts, &shrink, replay)
 			}
 		} else {
-			mbDecide, mb, shiftDisplacement, err = shiftOperandMesh(ctx, mb, piecesB, shifts, &shrink)
+			mbDecide, mb, shiftDisplacement, err = boolshift.ShiftOperandMesh(ctx, mb, piecesB, shifts, &shrink)
 		}
 		if err != nil {
 			return Evaluation{}, err
@@ -928,97 +821,3 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 // operand owner, at position ordinal of topobuild.Faces(owner): the face's
 // retained tag (facetedrecord.SourceTag, flipped for the tool of a Cut) charged
 // with the placed operand's departure, its roles and its identity.
-func sourceGroup(owner *topo.Body, operand, ordinal int, f *topo.Face, flip bool,
-	placed placedDepartures) facetedrecord.Group {
-	group, _ := facetedrecord.SourceTag(f, flip)
-	group = placed.charge(group, f, ordinal)
-	// A mesh result face descends from f, so it carries every role f is
-	// selected by: its own as Origins, which recognizers match faces by,
-	// and those an analytic Boolean attributed to it as Upstream.
-	group.Origins = slices.Clone(f.Origins)
-	group.Upstream = slices.Clone(f.Upstream)
-	// Identity only: no reader derives a plane or a bound from Source.
-	group.Source = facetedrecord.FaceSource(owner.Origin.Producer, operand, ordinal, f)
-	group.Planar = f.Surface.Kind() == surfacegeom.KindPlane || f.HeldPlanar
-	return group
-}
-
-func configureChainGate(bm *meshbool.BoolMesh, pairLimit, allowance float64) {
-	bm.PairChordLimit = pairLimit
-	bm.ChainAllowance = allowance
-	bm.Gate = max(pairLimit, allowance)
-}
-
-func summarizeChainAllowance(a *meshbool.BoolMesh, operandA int, b *meshbool.BoolMesh, operandB int) *ChainAllowanceSummary {
-	var chosen *ChainAllowanceSummary
-	for _, candidate := range []struct {
-		mesh    *meshbool.BoolMesh
-		operand int
-	}{{a, operandA}, {b, operandB}} {
-		m := candidate.mesh
-		if !m.ChainAllowanceUsed {
-			continue
-		}
-		summary := &ChainAllowanceSummary{Operand: candidate.operand,
-			TouchedBound: m.ChainTouchedBound, PairChordLimit: m.PairChordLimit, ChainAllowance: m.ChainAllowance}
-		if chosen == nil || summary.TouchedBound > chosen.TouchedBound {
-			chosen = summary
-		}
-	}
-	return chosen
-}
-
-// PrepBoolMesh lifts a tessellation into the exact domain and attaches its
-// per-vertex and per-facet bounds. A non-finite vertex has no exact form, so
-// it is rejected outright.
-//
-// A COLLAPSED operand facet — one whose exact normal is zero, which a rigid
-// placement's own rounding can produce on an already-faceted body — is refused
-// (decaderr.ErrUnsupported). A collapsed facet has no plane and no interior, so every
-// contact predicate in this file is blind to it: a point or tangent contact the
-// other operand makes THERE would be classified by nothing at all, and the
-// facet would ride silently through the boolean with its component's verdict.
-// The contact is exactly what this pipeline must not miss, so the operand is
-// refused rather than partly examined. Loud beats silently wrong.
-func PrepBoolMesh(ctx context.Context, m *topo.Mesh, src []int) (*meshbool.BoolMesh, error) {
-	if retainedPlaneSlabDisabled(ctx) {
-		return prepBoolMesh(ctx, m, src, func(int) (r3.Frame, float64, bool) { return r3.Frame{}, 0, false })
-	}
-	return prepBoolMesh(ctx, m, src, retainedPlaneOf(m))
-}
-
-// prepBoolMesh is PrepBoolMesh with the retained-plane reading as a parameter:
-// a moved operand's facets lie on no retained plane.
-func prepBoolMesh(ctx context.Context, m *topo.Mesh, src []int,
-	retained func(facet int) (r3.Frame, float64, bool)) (*meshbool.BoolMesh, error) {
-	bm, err := meshbool.PrepContext(ctx, m.Vertices, m.Triangles, src)
-	if err != nil {
-		return nil, err
-	}
-	// Per-vertex bounds and their facet maxima (agent-docs/faceted-vertex-bounds-
-	// design.md §2, §4.5): the mesh's own record, or §2.1's reading derived
-	// from its face bounds.
-	beta, err := topobuild.VertexBounds(m)
-	if err != nil {
-		return nil, err
-	}
-	bm.SetVertexBounds(beta)
-	bm.SetChargedSlabBounds(retained)
-	return bm, nil
-}
-
-// booleanProofBounds composes the independent, non-negative volume and area
-// proof terms that survive the mesh boolean into its faceted result.
-func booleanProofBounds(symA, symB, roundVol, slackA, slackB, dropArea float64) (
-	volSymDiff, areaSlack float64,
-) {
-	return proofbound.AbsSumUpper(symA, symB, roundVol),
-		proofbound.AbsSumUpper(slackA, slackB, dropArea)
-}
-
-// operandChord is the chord request for operand b of a pair whose tolerance,
-// already scaled by chordScale, is pairTol (meshbool.OperandChord).
-func operandChord(ctx context.Context, b *topo.Body, pairTol, dPair, chordScale float64) float64 {
-	_, restating := booloperand.HeldFloor(b)
-	return meshbool.OperandChord(pairTol, dPair*chordScale, booloperand.ChordShare(ctx, b).Floor*chordScale, restating)
-}

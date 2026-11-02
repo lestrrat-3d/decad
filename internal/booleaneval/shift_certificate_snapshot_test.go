@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/boolshift"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -23,7 +24,7 @@ func shiftSnapshotFixture() (*ShiftCertificate, *topo.Body, *topo.Body, *topo.Bo
 	r := &topo.Body{Origin: provenance.Ref{Producer: 3}}
 	face := &topo.Face{}
 	m := &topo.Mesh{Vertices: []r3.Vec{{}, {X: 1}, {Y: 1}}, Triangles: [][3]int{{0, 1, 2}}, Source: []*topo.Face{face}, VertexBound: []float64{0, 0, 0}, FaceBound: map[*topo.Face]float64{face: 0}, BoundaryOK: true, SymDiffOK: true}
-	c := &ShiftCertificate{target: a, tool: b, targetID: 1, toolID: 2, resultID: 3, sealed: true, selected: m, decision: m, charged: m, targetMesh: m, component: pieces{count: 1, ofVertex: []int{0, 0, 0}, ofFacet: []int{0}}, shift: pieceShift{Move: r3.Vec{X: 1}}, groups: []facetedrecord.Group{{Origins: []provenance.Ref{{Producer: 2, Role: "side"}}}}}
+	c := &ShiftCertificate{target: a, tool: b, targetID: 1, toolID: 2, resultID: 3, sealed: true, selected: m, decision: m, charged: m, targetMesh: m, component: boolshift.NewPieces([]int{0, 0, 0}, []int{0}, 1), shift: pieceShift{Move: r3.Vec{X: 1}}, groups: []facetedrecord.Group{{Origins: []provenance.Ref{{Producer: 2, Role: "side"}}}}}
 	r.PrivateShift = c
 	var err error
 	c.captureSeal, err = captureShiftGroupSeal(context.Background(), c.groups, proofbound.NewReplayTrialBudget())

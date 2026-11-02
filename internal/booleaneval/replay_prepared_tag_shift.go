@@ -6,6 +6,7 @@ import (
 	"slices"
 	"unsafe"
 
+	"github.com/lestrrat-3d/decad/internal/boolshift"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
@@ -59,27 +60,27 @@ func prepareTagShift(ctx context.Context, target, tool *topo.Body, selected *top
 	}
 	reach := gaptol.Reach(ctx)
 	if target == nil || tool == nil || selected == nil || b == nil || !b.IsBrakeReplay() || ordered == nil ||
-		ordered.budget != b || len(ordered.entries) != 1 || ordered.entries[0].piece != 0 || pc.count != 1 ||
-		len(pc.ofVertex) != len(selected.Vertices) || len(pc.ofFacet) != len(selected.Triangles) ||
+		!shiftBoundTo(ordered, b) || pc.Count() != 1 ||
+		pc.VertexCount() != len(selected.Vertices) || pc.FacetCount() != len(selected.Triangles) ||
 		len(selected.Source) != len(selected.Triangles) || !selected.BoundaryOK || !selected.SymDiffOK ||
 		len(faces) == 0 || facePiece == nil || len(placed.departure) != 0 || len(placed.stated) != 0 ||
 		!(reach > 0) || proofbound.IsNonFinite(reach) {
 		return nil, errBrakeEvalPreparedTagShiftLacksASelectedOnePieceTool
 	}
-	sh := ordered.entries[0].shift
+	sh, _ := ordered.Single(b)
 	translation := sh.Grow == 0 && sh.Move != (r3.Vec{}) && proofbound.FiniteVec(sh.Move)
 	growth := sh.Move == (r3.Vec{}) && sh.Grow > 0 && !proofbound.IsNonFinite(sh.Grow)
 	if !translation && !growth {
 		return nil, errBrakeEvalPreparedShiftRequiresAFiniteTranslationOrPositiveGrowth
 	}
-	n := uint64(len(pc.ofVertex) + len(pc.ofFacet) + len(faces))
+	n := uint64(pc.VertexCount() + pc.FacetCount() + len(faces))
 	if err := b.SpendWork(ctx, n); err != nil {
 		return nil, err
 	}
 	if err := b.ReserveRecords(ctx, n+2*uint64(len(faces))+1); err != nil {
 		return nil, err
 	}
-	for _, a := range [][2]uint64{{uint64(len(pc.ofVertex) + len(pc.ofFacet)), uint64(unsafe.Sizeof(int(0)))},
+	for _, a := range [][2]uint64{{uint64(pc.VertexCount() + pc.FacetCount()), uint64(unsafe.Sizeof(int(0)))},
 		{uint64(len(faces)), uint64(unsafe.Sizeof((*topo.Face)(nil)))},
 		{uint64(len(faces)), uint64(unsafe.Sizeof(facetedrecord.Group{}))},
 		{uint64(len(faces)), uint64(unsafe.Sizeof(facetedrecord.Group{}))}, {1, uint64(unsafe.Sizeof(preparedTagShift{}))}} {
@@ -87,18 +88,20 @@ func prepareTagShift(ctx context.Context, target, tool *topo.Body, selected *top
 			return nil, err
 		}
 	}
-	for _, component := range pc.ofVertex {
+	for i := range pc.VertexCount() {
+		component := pc.Vertex(i)
 		if component != 0 {
 			return nil, errBrakeEvalChangedToolVertexComponent
 		}
 	}
-	for _, component := range pc.ofFacet {
+	for i := range pc.FacetCount() {
+		component := pc.Facet(i)
 		if component != 0 {
 			return nil, errBrakeEvalChangedToolFacetComponent
 		}
 	}
 	p := &preparedTagShift{target: target, tool: tool, targetID: target.Origin.Producer, toolID: tool.Origin.Producer,
-		selected: selected, faces: slices.Clone(faces), pieces: pieces{count: pc.count, ofVertex: slices.Clone(pc.ofVertex), ofFacet: slices.Clone(pc.ofFacet)},
+		selected: selected, faces: slices.Clone(faces), pieces: pc.Clone(),
 		shift: sh, reach: reach, groups: make([]facetedrecord.Group, len(faces)), original: make([]facetedrecord.Group, len(faces))}
 	for i, f := range faces {
 		if f == nil || f.Body != tool || f.Surface == nil {
@@ -130,7 +133,7 @@ func prepareTagShift(ctx context.Context, target, tool *topo.Body, selected *top
 		if growth {
 			g = facetedrecord.Group{Origins: g.Origins, Upstream: g.Upstream, Source: g.Source}
 		} else {
-			g, err = replayMovedGroup(ctx, g, 0, 1, sh, selected.Vertices, reachB, b)
+			g, err = boolshift.ReplayMovedGroup(ctx, g, 0, 1, sh, selected.Vertices, reachB, b)
 			if err != nil {
 				return nil, err
 			}
@@ -142,7 +145,7 @@ func prepareTagShift(ctx context.Context, target, tool *topo.Body, selected *top
 	if err != nil {
 		return nil, err
 	}
-	p.decision, p.charged, p.displacement, err = shiftOperandMeshReplay(ctx, selected, pc, ordered, nil, b)
+	p.decision, p.charged, p.displacement, err = boolshift.ShiftOperandMeshReplay(ctx, selected, pc, ordered, nil, b)
 	if err != nil {
 		return nil, err
 	}
@@ -162,20 +165,23 @@ func prepareTagShift(ctx context.Context, target, tool *topo.Body, selected *top
 
 func (p *preparedTagShift) recheck(ctx context.Context, target, tool *topo.Body, selected *topo.Mesh, faces []*topo.Face,
 	pc pieces, facePiece *topo.FaceBoundTable, ordered *ReplayShifts, b *proofbound.ReplayBudget) error {
-	if p == nil || b == nil || target == nil || tool == nil || facePiece == nil || ordered == nil || ordered.budget != b || len(ordered.entries) != 1 ||
-		ordered.entries[0].piece != 0 || target != p.target || tool != p.tool || selected != p.selected ||
-		target.Origin.Producer != p.targetID || tool.Origin.Producer != p.toolID || pc.count != p.pieces.count ||
-		math.Float64bits(ordered.entries[0].shift.Move.X) != math.Float64bits(p.shift.Move.X) ||
-		math.Float64bits(ordered.entries[0].shift.Move.Y) != math.Float64bits(p.shift.Move.Y) ||
-		math.Float64bits(ordered.entries[0].shift.Move.Z) != math.Float64bits(p.shift.Move.Z) ||
-		math.Float64bits(ordered.entries[0].shift.Grow) != math.Float64bits(p.shift.Grow) ||
+	if ordered == nil || b == nil {
+		return errBrakeEvalPreparedTagShiftChanged
+	}
+	sh, bound := ordered.Single(b)
+	if p == nil || target == nil || tool == nil || facePiece == nil || !bound || target != p.target || tool != p.tool || selected != p.selected ||
+		target.Origin.Producer != p.targetID || tool.Origin.Producer != p.toolID || pc.Count() != p.pieces.Count() ||
+		math.Float64bits(sh.Move.X) != math.Float64bits(p.shift.Move.X) ||
+		math.Float64bits(sh.Move.Y) != math.Float64bits(p.shift.Move.Y) ||
+		math.Float64bits(sh.Move.Z) != math.Float64bits(p.shift.Move.Z) ||
+		math.Float64bits(sh.Grow) != math.Float64bits(p.shift.Grow) ||
 		math.Float64bits(gaptol.Reach(ctx)) != math.Float64bits(p.reach) || p.displacement > p.reach {
 		return errBrakeEvalPreparedTagShiftChanged
 	}
-	if err := b.SpendWork(ctx, uint64(len(faces)+len(pc.ofVertex)+len(pc.ofFacet))); err != nil {
+	if err := b.SpendWork(ctx, uint64(len(faces)+pc.VertexCount()+pc.FacetCount())); err != nil {
 		return err
 	}
-	if !slices.Equal(faces, p.faces) || !slices.Equal(pc.ofVertex, p.pieces.ofVertex) || !slices.Equal(pc.ofFacet, p.pieces.ofFacet) {
+	if !slices.Equal(faces, p.faces) || !pc.EqualLabels(p.pieces) {
 		return errBrakeEvalPreparedSourceMappingChanged
 	}
 	for i, f := range faces {

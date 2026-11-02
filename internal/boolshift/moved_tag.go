@@ -1,4 +1,4 @@
-package booleaneval
+package boolshift
 
 import (
 	"github.com/lestrrat-3d/r3"
@@ -10,14 +10,14 @@ import (
 	"github.com/lestrrat-3d/decad/internal/topobuild"
 )
 
-// spanningPieces marks a face in facePieces whose facets lie in more than one
+// SpanningPieces marks a face in FacePieces whose facets lie in more than one
 // connected piece of the mesh.
-const spanningPieces = -1
+const SpanningPieces = -1
 
-// facePieces maps each source face of m to the connected piece of pc its facets
-// lie in, or to spanningPieces when they lie in several. A face with no facet in
+// FacePieces maps each source face of m to the connected piece of pc its facets
+// lie in, or to SpanningPieces when they lie in several. A face with no facet in
 // m has no entry.
-func facePieces(m *topo.Mesh, pc pieces) map[*topo.Face]int {
+func FacePieces(m *topo.Mesh, pc Pieces) map[*topo.Face]int {
 	out := map[*topo.Face]int{}
 	for f := range m.Triangles {
 		if f >= len(m.Source) || m.Source[f] == nil {
@@ -29,16 +29,16 @@ func facePieces(m *topo.Mesh, pc pieces) map[*topo.Face]int {
 		case !seen:
 			out[src] = c
 		case prev != c:
-			out[src] = spanningPieces
+			out[src] = SpanningPieces
 		}
 	}
 	return out
 }
 
-// tagReach bounds the distance of any true boundary point of m from a held
+// TagReach bounds the distance of any true boundary point of m from a held
 // vertex: the largest vertex bound or mesh bound, plus the mesh bound, as a
 // placement reads it (facetedrecord.PlacedTagDeparture).
-func tagReach(m *topo.Mesh) (float64, error) {
+func TagReach(m *topo.Mesh) (float64, error) {
 	beta, err := topobuild.VertexBounds(m)
 	if err != nil {
 		return 0, err
@@ -50,11 +50,11 @@ func tagReach(m *topo.Mesh) (float64, error) {
 	return proofbound.AbsSumUpper(reach, m.Bound), nil
 }
 
-// movedGroup returns the group of a face of the second operand on a shifted
+// MovedGroup returns the group of a face of the second operand on a shifted
 // retry (agent-docs/gap-tolerance-design.md §5.2), g being the group SourceTag
-// read from the unmoved face. piece is the face's entry in facePieces, and ok
+// read from the unmoved face. piece is the face's entry in FacePieces, and ok
 // whether it has one. verts and reach are the unmoved operand mesh's vertices
-// and tagReach.
+// and TagReach.
 //
 // The true solid of the result is A∘(B+s), so a face of a piece translated by s
 // lies on its tag translated by s, never on the unmoved tag. A face of a piece
@@ -63,17 +63,17 @@ func tagReach(m *topo.Mesh) (float64, error) {
 // (facetedrecord.PlacedTagDeparture): the charge is zero when every position
 // parameter of the tag plus s is exactly representable, and otherwise the
 // rounding of the moved origin. Every other face keeps its provenance and no
-// tag: a grown piece (not a translation), a face spanning pieces, a tag that is
+// tag: a grown piece (not a translation), a face spanning Pieces, a tag that is
 // not retained, a denoted patch, a Cone and a placement charge that is not
 // stated.
-func movedGroup(g facetedrecord.Group, piece int, ok bool, shifts map[int]pieceShift, verts []r3.Vec,
+func MovedGroup(g facetedrecord.Group, piece int, ok bool, shifts map[int]PieceShift, verts []r3.Vec,
 	reach float64) facetedrecord.Group {
 	sh, moved := shifts[piece]
-	return movedGroupWithShift(g, piece, ok, sh, moved, verts, reach)
+	return MovedGroupWithShift(g, piece, ok, sh, moved, verts, reach)
 }
-func movedGroupWithShift(g facetedrecord.Group, piece int, ok bool, sh pieceShift, moved bool, verts []r3.Vec, reach float64) facetedrecord.Group {
+func MovedGroupWithShift(g facetedrecord.Group, piece int, ok bool, sh PieceShift, moved bool, verts []r3.Vec, reach float64) facetedrecord.Group {
 	bare := facetedrecord.Group{Origins: g.Origins, Upstream: g.Upstream, Source: g.Source}
-	if !ok || piece == spanningPieces {
+	if !ok || piece == SpanningPieces {
 		return bare
 	}
 	if !moved {

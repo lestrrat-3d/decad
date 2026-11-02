@@ -35,7 +35,7 @@ func AuthenticateBrakeGrowth(ctx context.Context, snapshot *ShiftCertificateSnap
 		return nil, err
 	}
 	if cert == nil || result == nil || target == nil || tool == nil || slot == nil || pin == nil || slot == pin || b == nil || !b.IsBrakeReplay() ||
-		cert.selected == nil || cert.decision == nil || cert.charged == nil || cert.component.count != 1 || cert.shift.Move != (r3.Vec{}) || !(cert.shift.Grow > 0) ||
+		cert.selected == nil || cert.decision == nil || cert.charged == nil || cert.component.Count() != 1 || cert.shift.Move != (r3.Vec{}) || !(cert.shift.Grow > 0) ||
 		proofbound.IsNonFinite(cert.shift.Grow) || !(cert.reach > 0) || proofbound.IsNonFinite(cert.reach) ||
 		cert.shift.Grow > cert.reach || math.Float64bits(gaptol.Reach(ctx)) != math.Float64bits(cert.reach) ||
 		len(result.OperationWarnings) != 1 || !sameShiftWarning(result.OperationWarnings[0], warning) {
@@ -86,7 +86,7 @@ func (g *AuthenticatedGrowth) validate(ctx context.Context, target *topo.Body, b
 		g.cert.target != g.target || g.cert.tool != g.tool || g.target.Origin.Producer != g.cert.targetID ||
 		g.tool.Origin.Producer != g.cert.toolID || len(g.result.OperationWarnings) != 1 ||
 		!sameShiftWarning(g.warning, g.result.OperationWarnings[0]) || !sameShiftWarning(g.warning, g.cert.publicWarning) ||
-		g.cert.component.count != 1 || g.cert.shift.Move != (r3.Vec{}) || math.Float64bits(g.cert.shift.Grow) != g.growBits ||
+		g.cert.component.Count() != 1 || g.cert.shift.Move != (r3.Vec{}) || math.Float64bits(g.cert.shift.Grow) != g.growBits ||
 		math.Float64bits(g.cert.reach) != g.reachBits || math.Float64bits(gaptol.Reach(ctx)) != g.reachBits {
 		return errBrakeEvalOriginalGrowthBindingChanged
 	}

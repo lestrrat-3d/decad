@@ -893,7 +893,7 @@ Add each new test name to shard 10 of `.github/test-shards.txt`.
 
 #### Task 7.1: Slab control and Cut-then-Cut fixture
 
-- Files: `internal/booleaneval/retained_plane.go`, `eval.go`'s `PrepBoolMesh`
+- Files: `internal/booleaneval/retained_plane.go`, `eval_mesh.go`'s `PrepBoolMesh`
   path, and new root `faceted_source_patch_test.go`.
 - Deliverable: Add `booleaneval.WithoutRetainedPlaneSlab(ctx)`, a context option
   in the style of `meshbool.WithContactWorkers`. Under it, `PrepBoolMesh` passes

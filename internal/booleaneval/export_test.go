@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/r3"
 
+	"github.com/lestrrat-3d/decad/internal/boolshift"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
@@ -15,7 +16,14 @@ var ShiftDirections = shiftDirections
 var ShiftNeed = shiftNeed
 
 // PieceOfFacet returns the connected piece of each facet of m.
-func PieceOfFacet(m *topo.Mesh) []int { return piecesOf(m).ofFacet }
+func PieceOfFacet(m *topo.Mesh) []int {
+	pc := boolshift.PiecesOf(m)
+	out := make([]int, pc.FacetCount())
+	for i := range out {
+		out[i] = pc.Facet(i)
+	}
+	return out
+}
 
 // ShiftPieces moves each connected piece of m by its shift and returns the
 // decision and charged copies.
@@ -24,7 +32,7 @@ func ShiftPieces(m *topo.Mesh, shifts map[int]r3.Vec) (*topo.Mesh, *topo.Mesh, e
 	for c, sh := range shifts {
 		moves[c] = pieceShift{Move: sh}
 	}
-	decision, charged, _, err := shiftOperandMesh(context.Background(), m, piecesOf(m), moves)
+	decision, charged, _, err := boolshift.ShiftOperandMesh(context.Background(), m, boolshift.PiecesOf(m), moves)
 	return decision, charged, err
 }
 
@@ -35,11 +43,11 @@ func GrowPieces(m *topo.Mesh, grows map[int]float64) (*topo.Mesh, *topo.Mesh, fl
 	for c, g := range grows {
 		moves[c] = pieceShift{Grow: g}
 	}
-	return shiftOperandMesh(context.Background(), m, piecesOf(m), moves)
+	return boolshift.ShiftOperandMesh(context.Background(), m, boolshift.PiecesOf(m), moves)
 }
 
-// MoveRounding exposes moveRounding to the external test package.
-var MoveRounding = moveRounding
+// MoveRounding exposes boolshift.MoveRounding to the external test package.
+var MoveRounding = boolshift.MoveRounding
 
 // PieceShift exposes pieceShift to the external test package.
 type PieceShift = pieceShift
@@ -47,12 +55,14 @@ type PieceShift = pieceShift
 // SnapShift exposes snapShift to the external test package.
 var SnapShift = snapShift
 
-// MovedGroup exposes movedGroup to the external test package.
-var MovedGroup = movedGroup
+// MovedGroup exposes boolshift.MovedGroup to the external test package.
+var MovedGroup = boolshift.MovedGroup
 
 // SpanningPieces exposes spanningPieces to the external test package.
 const SpanningPieces = spanningPieces
 
 // FacePieces returns the connected piece of each source face of m, or
 // SpanningPieces for a face whose facets lie in several.
-func FacePieces(m *topo.Mesh) map[*topo.Face]int { return facePieces(m, piecesOf(m)) }
+func FacePieces(m *topo.Mesh) map[*topo.Face]int {
+	return boolshift.FacePieces(m, boolshift.PiecesOf(m))
+}

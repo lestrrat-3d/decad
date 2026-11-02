@@ -5,6 +5,7 @@ import (
 
 	"github.com/lestrrat-3d/r3"
 
+	"github.com/lestrrat-3d/decad/internal/boolshift"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -89,13 +90,13 @@ func unplacedTwin(ctx context.Context, body *topo.Body) (operandTwin, error) {
 // placedOperandDepartures charges each built face of body against the exact
 // image of its twin's tag under the operand's placement
 // (facetedrecord.PlacedBuiltDeparture). m is the operand's own mesh, read
-// through tagReach. A twin with no tags states no departure for any face, so
+// through boolshift.TagReach. A twin with no tags states no departure for any face, so
 // none of them keeps a tag.
 func placedOperandDepartures(body *topo.Body, twin operandTwin, m *topo.Mesh) (placedDepartures, error) {
 	if !twin.placed {
 		return placedDepartures{}, nil
 	}
-	reach, err := tagReach(m)
+	reach, err := boolshift.TagReach(m)
 	if err != nil {
 		return placedDepartures{}, err
 	}

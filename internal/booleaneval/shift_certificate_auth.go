@@ -8,6 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/booloperand"
+	"github.com/lestrrat-3d/decad/internal/boolshift"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
@@ -389,14 +390,14 @@ func (c *ShiftCertificate) replayExactShift(ctx context.Context, a, b *topo.Body
 	if math.Float64bits(center.X) != math.Float64bits(c.center.X) || math.Float64bits(center.Y) != math.Float64bits(c.center.Y) || math.Float64bits(center.Z) != math.Float64bits(c.center.Z) || math.Float64bits(radius) != math.Float64bits(c.radius) || math.Float64bits(factor) != math.Float64bits(c.factor) {
 		return nil, 0, errShiftAuthShiftGeometryChanged
 	}
-	ordered, err := newReplayShifts(ctx, budget)
+	ordered, err := boolshift.NewReplayShifts(ctx, budget)
 	if err != nil {
 		return nil, 0, err
 	}
-	if err := ordered.set(ctx, c.shift); err != nil {
+	if err := ordered.Set(ctx, c.shift); err != nil {
 		return nil, 0, err
 	}
-	decision, charged, d, err := shiftOperandMeshReplay(ctx, c.selected, c.component, ordered, nil, budget)
+	decision, charged, d, err := boolshift.ShiftOperandMeshReplay(ctx, c.selected, c.component, ordered, nil, budget)
 	if err != nil {
 		return nil, 0, err
 	}

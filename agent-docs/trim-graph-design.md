@@ -443,7 +443,7 @@ Bound composition (pattern: `internal/retainedblend/route.go` `build`):
 Gates:
 
 - **Held embedding (TG5).** `meshbool.HasHeldFold` over the whole new mesh. `Exact` holds `proof.XptOf` of every
-  vertex's held position (pattern: `internal/booleaneval/shift.go`, the `HeldRounding` it fills), and `Moved` is
+  vertex's held position (pattern: `internal/boolshift/shift.go`, the `HeldRounding` it fills), and `Moved` is
   true for every new vertex. A fold refuses.
 - **Convex cavity (Claim C1, increment 1).** See Component 6.
 - **Claim T (increment 3a).** The general gate of Component 6, increment 3a.

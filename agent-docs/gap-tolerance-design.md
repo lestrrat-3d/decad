@@ -227,7 +227,7 @@ coordinates. The ordinary trim amplification then charges the shift at every cro
 and any pair that uses a spiral-join certificate, is declined.
 
 The moved operand's retained tags (`agent-docs/faceted-source-retention-design.md` §3.1) follow the move
-(`movedGroup`, `internal/booleaneval/moved_tag.go`). A face of a piece translated by `s` lies on its tag translated
+(`MovedGroup`, `internal/boolshift/moved_tag.go`). A face of a piece translated by `s` lies on its tag translated
 by `s`, never on the unmoved tag, which misses the true face by `|s·n|` for a plane, `|s − (s·â)â|` for a cylinder
 and `|s|` for a sphere. The group carries the translated tag `T+s` (`surfaceplace.TransformSurface`), charged as a
 placement by the translation (`facetedrecord.PlacedTagDeparture`, retention §3.4). Every position parameter of `T+s`
