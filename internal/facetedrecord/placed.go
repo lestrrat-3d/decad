@@ -3,6 +3,7 @@ package facetedrecord
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/big"
 	"unsafe"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/massmoment"
 	"github.com/lestrrat-3d/decad/internal/measurement"
+	"github.com/lestrrat-3d/decad/internal/occupancy"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -284,6 +286,13 @@ func (fp Payload) placedWithReplay(ctx context.Context, env topo.Env, composed r
 	}
 	next.Verts, next.Tris = placed.Verts, placed.Tris
 	next.VertexBound, next.MeshBound, next.VolSymDiff = placed.VertexBound, placed.MeshBound, placed.VolSymDiff
+	next.SurfaceBound, next.SurfaceMesh = placedSurfaceBounds(fp, placed), occupancy.Binding{}
+	if next.SurfaceBound != nil {
+		next.SurfaceMesh = occupancy.Bind(next.Verts, next.Tris)
+	}
+	// The occupancy record describes the unplaced leaves; Refine reads it only
+	// before placement, so a placed copy drops it.
+	next.Occupancy = nil
 	next.AreaSlack = placed.AreaSlack
 	if replay != nil {
 		next.DPair, err = replaySourceDiameterUpper(ctx, next.Verts, next.MeshBound, replay)
@@ -348,4 +357,34 @@ func (fp Payload) placedWithReplay(ctx context.Context, env topo.Env, composed r
 		body.OperationWarnings = append(body.OperationWarnings, placed.EmbeddingReach.Diagnostics()...)
 	}
 	return body, nil
+}
+
+// placedSurfaceBounds carries a refined payload's surface bounds σ(f) through
+// one rigid placement (agent-docs/body-refine-design.md §6): every held vertex
+// moved by at most the growth placement charged its own vertex bound, so a
+// facet's two-sided surface claim grows by its largest corner growth. The
+// float difference of the two bounds is stepped up one float so it stays
+// above the true growth. A payload without proven surface bounds keeps none.
+func placedSurfaceBounds(fp Payload, placed facetproof.PlacedMesh) []float64 {
+	sigma := fp.SurfaceBounds()
+	if sigma == nil || len(placed.Tris) != len(fp.Tris) || len(placed.VertexBound) != len(fp.VertexBound) {
+		return nil
+	}
+	out := make([]float64, len(sigma))
+	for t, tri := range placed.Tris {
+		if tri != fp.Tris[t] {
+			return nil
+		}
+		grow := 0.0
+		for _, v := range tri {
+			if d := placed.VertexBound[v] - fp.VertexBound[v]; d > 0 {
+				grow = max(grow, math.Nextafter(d, math.Inf(1)))
+			}
+		}
+		out[t] = proofbound.AbsSumUpper(sigma[t], grow)
+		if proofbound.IsNonFinite(out[t]) {
+			return nil
+		}
+	}
+	return out
 }

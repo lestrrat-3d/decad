@@ -237,8 +237,9 @@ walls meet nearly tangent, as they do at every bend of a tube built from straigh
 refuses any tolerance below it. `decad.Refine(ctx, body, maxBound)` proves how far the held mesh lies from the true
 union of the cylinders, facet by facet, and returns a new body, retiring the old one, whose `Tessellate` publishes that
 surface bound and succeeds at any tolerance at or above it. No vertex moves; volume, area, vertex and edge readings,
-and the bounds a later Boolean reads, stay as they were. A body made any other way, a placed result, or a bound that
-cannot be proven within `maxBound` is `decad.ErrUnsupported`.
+and the bounds a later Boolean reads, stay as they were. A later `decad.Transform` keeps the refined bound, grown by
+its rounding, so refine a Union result before placing it. A body made any other way, an already placed Union
+result, or a bound that cannot be proven within `maxBound` is `decad.ErrUnsupported`.
 
 After ordinary analytic admission misses, a blind prism Cut can use translated
 placements with the same stored frame and transform basis when their exact

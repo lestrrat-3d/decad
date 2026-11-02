@@ -153,8 +153,23 @@ func TestRefineLeaderLiftsTheTessellateRefusal(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported, "the held crossing bound refuses 0.12 mm before Refine")
 	refined, err := decad.Refine(t.Context(), chain, units.Millimeters(0.12))
 	require.NoError(t, err)
-	_, err = refined.Tessellate(t.Context(), units.Millimeters(0.12))
+	m, err := refined.Tessellate(t.Context(), units.Millimeters(0.12))
 	require.NoError(t, err)
+	before, err := m.Bound().In(units.Millimeter)
+	require.NoError(t, err)
+
+	// A rigid placement after Refine keeps the surface bound, grown by the
+	// rounding the placement charges each vertex.
+	turn, err := r3.RotationAround(r3.Vec{X: -140, Y: 300, Z: 700}, r3.Vec{Y: -1}, units.Radians(0.05))
+	require.NoError(t, err)
+	turned, err := decad.Transform(t.Context(), refined, turn)
+	require.NoError(t, err)
+	tm, err := turned.Tessellate(t.Context(), units.Millimeters(0.12))
+	require.NoError(t, err)
+	after, err := tm.Bound().In(units.Millimeter)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, after, before)
+	require.Less(t, after, before+1e-9)
 }
 
 func TestRefineRefusals(t *testing.T) {

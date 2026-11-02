@@ -153,7 +153,10 @@ records and the held mesh.
 - `facetedrecord.Payload.SurfaceBound` is set by `Refine`.
 - Both records are bound to the identity of the payload's `Verts` and `Tris` arrays (`occupancy.Binding`). Every
   producer that changes the held geometry allocates new arrays, so a record copied along with a placed or
-  rewritten payload never matches and is never read.
+  rewritten payload never matches and is never read. Rigid placement (`facetedrecord.Payload.Placed`) drops the
+  occupancy record. It carries the surface bounds instead: each `σ(f)` grows by the largest growth the placement
+  charged to the vertex bound of one of its corners, and is bound again to the placed arrays. A placement that
+  reorders a facet's corners, as a reflection does, drops them.
 - `facetedrecord.Restate` serves the surface record only for a chord below the crossing floor `MeshBound`. There it
   publishes each face's largest `σ` and no vertex record. Every Boolean operand request sits at or above that floor
   (`booloperand.HeldFloor`), so the Boolean keeps today's crossing restatement. Which restatement a request gets is
@@ -176,6 +179,8 @@ func Refine(ctx context.Context, source *Body, maxBound units.Value) (*Body, err
 - `Tessellate(tol)` on the result succeeds for every `tol ≥ max σ`. Below the crossing floor its `Mesh.Bound()`
   is `max σ`. At or above the floor it is the crossing bound, as before.
 - A later Boolean on the result reads the crossing record (§3), so refining never loosens what a chain admits.
+- A rigid placement of the result keeps its surface bounds, grown by the placement's per-vertex rounding (§6).
+  Refining after placement is refused, because placement drops the occupancy record.
 
 `docs/api.md` (Booleans), `docs/data-structures.md` (Meshes), `examples/refine_example_test.go` and
 `apitest/refine_test.go` cover the public slice.

@@ -29,7 +29,10 @@ const refineWorkLimit = 1 << 28
 // back to solid prisms of one whole circle (an extruded cylinder, placed or
 // not), each Union taken on its own two operands. Any other body, or a mesh
 // whose bound cannot be proven within maxBound inside the fixed work ceiling,
-// is ErrUnsupported and changes nothing. A later Boolean on the result reads
+// is ErrUnsupported and changes nothing. A Union result that was placed after
+// its last Union is outside the class: placement drops the record Refine
+// reads. Placing the refined result instead keeps its bound, grown by the
+// rounding the placement charges. A later Boolean on the result reads
 // the bounds source published, so refining never loosens what a chain admits.
 //
 // maxBound is a length: wrong kind is ErrUnitKind, non-finite ErrNotFinite,
