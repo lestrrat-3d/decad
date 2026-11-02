@@ -419,6 +419,16 @@ func (tree *heldBoxTree) visitOverlapsWork(box [2]r3.Vec, step func() error, sta
 // newBoxTreeWork builds an order-preserving balanced tree while charging each
 // box inspection. The caller has reserved five records per source box.
 func newBoxTreeWork(boxes [][2]r3.Vec, budget *proofbound.WorkBudget) (heldBoxTree, error) {
+	return buildBoxTreeWork(boxes, budget, false)
+}
+
+// newSpatialBoxTreeWork partitions each node on its longest axis. Conform
+// queries restore vertex-index order before running their exact predicates.
+func newSpatialBoxTreeWork(boxes [][2]r3.Vec, budget *proofbound.WorkBudget) (heldBoxTree, error) {
+	return buildBoxTreeWork(boxes, budget, true)
+}
+
+func buildBoxTreeWork(boxes [][2]r3.Vec, budget *proofbound.WorkBudget, spatial bool) (heldBoxTree, error) {
 	n := uint64(len(boxes))
 	if n > ^uint64(0)/2 {
 		return heldBoxTree{}, fmt.Errorf("%w: box tree size overflow", decaderr.ErrUnsupported)
@@ -460,10 +470,31 @@ func newBoxTreeWork(boxes [][2]r3.Vec, budget *proofbound.WorkBudget) (heldBoxTr
 		}
 		tree.nodes[idx].box = bound
 		if len(part) <= heldBoxLeafSize {
+			if spatial {
+				if _, err := budget.StepN(uint64(len(part))); err != nil {
+					return 0, err
+				}
+			}
 			tree.nodes[idx].leafStart = len(tree.facets)
 			tree.nodes[idx].leafCount = len(part)
 			tree.facets = append(tree.facets, part...)
 			return idx, nil
+		}
+		if spatial {
+			if _, err := budget.StepN(8); err != nil {
+				return 0, err
+			}
+			axis := 0
+			extent := [3]float64{bound[1].X - bound[0].X, bound[1].Y - bound[0].Y, bound[1].Z - bound[0].Z}
+			if extent[1] > extent[axis] {
+				axis = 1
+			}
+			if extent[2] > extent[axis] {
+				axis = 2
+			}
+			if err := sortHeldBoxFacetsWork(part, boxes, axis, budget); err != nil {
+				return 0, err
+			}
 		}
 		mid := len(part) / 2
 		left, err := build(part[:mid])

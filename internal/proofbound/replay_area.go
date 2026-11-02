@@ -17,8 +17,7 @@ type replayAreaMeter struct{ b *WorkBudget }
 func (m replayAreaMeter) ReserveRecords(_ context.Context, n uint64) error { return m.b.Reserve(n) }
 func (m replayAreaMeter) ReserveBytes(_ context.Context, n uint64) error   { return m.b.ReserveBytes(n) }
 func (m replayAreaMeter) SpendWork(_ context.Context, n uint64) error {
-	_, err := m.b.StepN(n)
-	return err
+	return m.b.SpendWork(n)
 }
 func replayAreaTerms(ctx context.Context, b *WorkBudget, verts []r3.Vec, tris [][3]int) ([]perturbedTerm, error) {
 	meter := replayAreaMeter{b}

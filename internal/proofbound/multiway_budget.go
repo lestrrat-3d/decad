@@ -105,7 +105,7 @@ func (b *MultiwayBudget) ReserveBytes(ctx context.Context, n uint64) error {
 
 // WorkBudget adapts one call's counters to existing proof steps and reservations.
 func (b *MultiwayBudget) WorkBudget(ctx context.Context) *WorkBudget {
-	return &WorkBudget{StepFn: func() error { return b.SpendWork(ctx, 1) }, ErrFn: ctx.Err,
+	work := &WorkBudget{StepFn: func() error { return b.SpendWork(ctx, 1) }, ErrFn: ctx.Err,
 		ReserveFn: func(n uint64) error { return b.ReserveRecords(ctx, n) },
 		ReserveBytesFn: func(n uint64) error {
 			if b.reserveBytes == nil {
@@ -113,4 +113,8 @@ func (b *MultiwayBudget) WorkBudget(ctx context.Context) *WorkBudget {
 			}
 			return b.reserveBytes(ctx, n)
 		}}
+	if b.prebuiltLimits != nil {
+		work.SpendWorkFn = func(n uint64) error { return b.SpendWork(ctx, n) }
+	}
+	return work
 }

@@ -71,6 +71,9 @@ func newBrakeTriCutter(ctx context.Context, segmentCount int, budget *PairCutsBu
 	}
 	tc.Reserve = func(n uint64) error { return budget.ReserveRecords(ctx, n) }
 	tc.Work = &proofbound.WorkBudget{Replay: true, ReplayID: budget.replay, StepFn: func() error { return budget.SpendWork(ctx, 1) }, ReserveFn: func(n uint64) error { return budget.ReserveRecords(ctx, n) }, ReserveBytesFn: func(n uint64) error { return budget.ReserveBytes(ctx, n, 1) }, ErrFn: ctx.Err}
+	if budget.replay.IsBrakeReplay() {
+		tc.Work.SpendWorkFn = func(n uint64) error { return budget.SpendWork(ctx, n) }
+	}
 	return tc, nil
 }
 

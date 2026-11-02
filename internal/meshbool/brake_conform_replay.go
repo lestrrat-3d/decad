@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"math/big"
+	"math/bits"
 	"sort"
 	"unsafe"
 
@@ -215,6 +216,7 @@ type brakeConformScan struct {
 	points     heldBoxTree
 	pointCells [][3]int
 	treeStack  []int
+	pointBits  []uint64
 	Lo         r3.Vec
 	Cell       float64
 	Slack      float64
@@ -302,7 +304,7 @@ func brakeNewConformScan(ctx context.Context, budget *proofbound.WorkBudget, ver
 		s.points = newBoxTree(boxes)
 	} else {
 		var err error
-		s.points, err = newBoxTreeWork(boxes, budget)
+		s.points, err = newSpatialBoxTreeWork(boxes, budget)
 		if err != nil {
 			return nil, err
 		}
@@ -312,6 +314,20 @@ func brakeNewConformScan(ctx context.Context, budget *proofbound.WorkBudget, ver
 			return nil, err
 		}
 		s.treeStack = make([]int, 0, len(s.points.nodes))
+		words := len(verts) / 64
+		if len(verts)%64 != 0 {
+			words++
+		}
+		if err := budget.Reserve(uint64(words)); err != nil {
+			return nil, err
+		}
+		if err := budget.ReserveBytesMul(uint64(words), uint64(unsafe.Sizeof(uint64(0)))); err != nil {
+			return nil, err
+		}
+		if _, err := budget.StepN(uint64(words)); err != nil {
+			return nil, err
+		}
+		s.pointBits = make([]uint64, words)
 	}
 	return s, nil
 }
@@ -383,7 +399,36 @@ func (s *brakeConformScan) EdgeInteriorHits(ctx context.Context, budget *proofbo
 	if budget.ReserveFn == nil {
 		err = s.points.visitOverlaps(box, budget.Step, visit)
 	} else {
-		err = s.points.visitOverlapsWork(box, budget.Step, s.treeStack, visit)
+		// The spatial index changes traversal order. A reusable bitset restores
+		// the original ascending vertex order before any exact predicate runs.
+		if _, err = budget.StepN(uint64(len(s.pointBits))); err != nil {
+			return nil, err
+		}
+		clear(s.pointBits)
+		err = s.points.visitOverlapsWork(box, budget.Step, s.treeStack, func(i int) error {
+			if err := budget.Step(); err != nil {
+				return err
+			}
+			s.pointBits[i/64] |= uint64(1) << uint(i%64)
+			return nil
+		})
+		if err == nil {
+			for wordIndex, word := range s.pointBits {
+				if err = budget.Step(); err != nil {
+					break
+				}
+				for word != 0 {
+					i := 64*wordIndex + bits.TrailingZeros64(word)
+					if err = visit(i); err != nil {
+						break
+					}
+					word &= word - 1
+				}
+				if err != nil {
+					break
+				}
+			}
+		}
 	}
 	if err != nil {
 		return nil, err

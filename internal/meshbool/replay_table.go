@@ -265,6 +265,5 @@ func (b replayExactWork) ReserveBytes(_ context.Context, n uint64) error {
 	return b.work.ReserveBytes(n)
 }
 func (b replayExactWork) SpendWork(_ context.Context, n uint64) error {
-	_, err := b.work.StepN(n)
-	return err
+	return b.work.SpendWork(n)
 }

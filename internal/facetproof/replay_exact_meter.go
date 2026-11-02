@@ -15,6 +15,5 @@ func (m replayExactMeter) ReserveBytes(_ context.Context, n uint64) error {
 	return m.budget.ReserveBytes(n)
 }
 func (m replayExactMeter) SpendWork(_ context.Context, n uint64) error {
-	_, err := m.budget.StepN(n)
-	return err
+	return m.budget.SpendWork(n)
 }
