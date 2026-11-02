@@ -957,7 +957,8 @@ func localDeepTerm(op meshbool.OperationKind, ra, rb *occupancy.Record, ma, mb *
 
 // surfaceSlabs lowers bm's slab half-widths to the operand's refined surface
 // bounds, raised by move, when the operand is a refined faceted body whose
-// restated mesh is its held one facet for facet.
+// restated mesh is its held one facet for facet, and records each source
+// face's largest such bound for the proximity gate (BoolMesh.FaceSurface).
 func surfaceSlabs(body *topo.Body, mesh *topo.Mesh, bm *meshbool.BoolMesh, move float64) {
 	fp, ok := body.Payload.(facetedrecord.Payload)
 	if !ok {
@@ -972,9 +973,18 @@ func surfaceSlabs(body *topo.Body, mesh *topo.Mesh, bm *meshbool.BoolMesh, move 
 			return
 		}
 	}
+	if len(mesh.Source) != len(sigma) {
+		return
+	}
+	face := make(map[*topo.Face]float64)
 	for t, s := range sigma {
-		if v := proofbound.AbsSumUpper(s, move); v < bm.SlabBound[t] {
+		v := proofbound.AbsSumUpper(s, move)
+		if v < bm.SlabBound[t] {
 			bm.SlabBound[t] = v
 		}
+		if f := mesh.Source[t]; f != nil {
+			face[f] = max(face[f], v)
+		}
 	}
+	bm.FaceSurface = face
 }

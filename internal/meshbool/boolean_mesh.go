@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -40,6 +41,12 @@ type BoolMesh struct {
 	// FacetBound except for a facet of a retained plane, whose true piece lies
 	// in that exact plane (SetSlabBounds).
 	SlabBound []float64
+	// FaceSurface, when set, is a source face's surface bound: every true
+	// point of that face lies within it of the face's held facets, and every
+	// held point within it of the true face. Refine records it
+	// (agent-docs/body-refine-design.md §3); the proximity gate reads the
+	// smaller of it and the mesh's FaceBound.
+	FaceSurface map[*topo.Face]float64
 	// Bulge is λ(t) per facet when the caller tracks an occupancy record
 	// (agent-docs/body-refine-design.md §5): every point of this operand's held
 	// solid outside its true solid lies within Bulge[t] of some facet t. nil
