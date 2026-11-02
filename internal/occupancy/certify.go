@@ -246,6 +246,63 @@ func FacetBound(tri [3]r3.Vec, outward r3.Vec, pieces []*Piece, s Search, budget
 			near = append(near, p)
 		}
 	}
+	var inner []*Piece
+	for _, p := range s.Inner {
+		if boxesNear(lo, hi, p.box, s.HMax) {
+			inner = append(inner, p)
+		}
+	}
+	s.Inner = inner
+	var nn *r3.Vec
+	if hasNormal {
+		nn = &n
+	}
+	return pieceBound(tri, nn, near, s, 0, budget)
+}
+
+// innerDirections are the translations that carry a facet piece into a
+// near inner piece: against the inner piece's faces the piece's centroid is
+// least far outside, alone, with the facet normal, and in pairs, so a piece
+// at a hole's rim can move in across both the wall and the end at once.
+func innerDirections(tri [3]r3.Vec, normal *r3.Vec, inner []*Piece) []r3.Vec {
+	g := tri[0].Add(tri[1]).Add(tri[2]).Scale(1.0 / 3)
+	var dirs []r3.Vec
+	add := func(v r3.Vec) {
+		if d, ok := v.Normalize(); ok {
+			dirs = append(dirs, d)
+		}
+	}
+	for _, p := range inner {
+		ranked := append([]face(nil), p.faces...)
+		// Smallest depth first: the faces the centroid is outside of, or
+		// closest behind.
+		slices.SortFunc(ranked, func(a, b face) int {
+			return cmp.Compare(a.off-a.n.Dot(g), b.off-b.n.Dot(g))
+		})
+		top := ranked[:min(len(ranked), facesPerPiece)]
+		for i, f := range top {
+			add(f.n.Scale(-1))
+			if normal != nil {
+				add(normal.Sub(f.n))
+			}
+			for _, e := range top[i+1:] {
+				add(f.n.Add(e.n).Scale(-1))
+			}
+		}
+	}
+	return dirs
+}
+
+// directions are the candidate translations for one facet piece: its outward
+// normal (nil when it has none in floats), the faces of each near piece that
+// the piece's own centroid is least deep behind, and their normalized sums.
+// Each split piece reads them afresh, so a piece near a cap or a hole end
+// tries that face where its whole facet would not.
+func directions(tri [3]r3.Vec, normal *r3.Vec, near []*Piece) []r3.Vec {
+	var n r3.Vec
+	if normal != nil {
+		n = *normal
+	}
 	g := tri[0].Add(tri[1]).Add(tri[2]).Scale(1.0 / 3)
 	// Per near piece, the faces the facet's centroid is least deep behind
 	// are the ones a short translation can cross.
@@ -262,7 +319,7 @@ func FacetBound(tri [3]r3.Vec, outward r3.Vec, pieces []*Piece, s Search, budget
 		perPiece = append(perPiece, ds)
 	}
 	var dirs []r3.Vec
-	if hasNormal {
+	if normal != nil {
 		dirs = append(dirs, n)
 	}
 	add := func(v r3.Vec) {
@@ -281,17 +338,11 @@ func FacetBound(tri [3]r3.Vec, outward r3.Vec, pieces []*Piece, s Search, budget
 			}
 		}
 	}
-	var inner []*Piece
-	for _, p := range s.Inner {
-		if boxesNear(lo, hi, p.box, s.HMax) {
-			inner = append(inner, p)
-		}
-	}
-	s.Inner = inner
-	return pieceBound(tri, dirs, near, s, 0, budget)
+	return dirs
 }
 
-func pieceBound(tri [3]r3.Vec, dirs []r3.Vec, near []*Piece, s Search, depth int, budget *Budget) (float64, error) {
+func pieceBound(tri [3]r3.Vec, normal *r3.Vec, near []*Piece, s Search, depth int, budget *Budget) (float64, error) {
+	dirs := append(directions(tri, normal, near), innerDirections(tri, normal, s.Inner)...)
 	step := s.Step
 	if !(step > 1) {
 		step = 1.25
@@ -329,7 +380,7 @@ func pieceBound(tri [3]r3.Vec, dirs []r3.Vec, near []*Piece, s Search, depth int
 	// within splitSlack of a covered point, which the bound adds.
 	worst := 0.0
 	for _, sub := range [2][3]r3.Vec{{a, m, c}, {m, b, c}} {
-		h, err := pieceBound(sub, dirs, near, s, depth+1, budget)
+		h, err := pieceBound(sub, normal, near, s, depth+1, budget)
 		if err != nil {
 			return 0, err
 		}

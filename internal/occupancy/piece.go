@@ -315,16 +315,10 @@ func InscribedCirclePrism(place Chain, r, z0, z1 float64, sides int) (*Piece, er
 			p.fverts = append(p.fverts, v.float())
 		}
 	}
-	lo, hi := p.fverts[0], p.fverts[0]
-	for _, v := range p.fverts {
-		lo = r3.Vec{X: math.Min(lo.X, v.X), Y: math.Min(lo.Y, v.Y), Z: math.Min(lo.Z, v.Z)}
-		hi = r3.Vec{X: math.Max(hi.X, v.X), Y: math.Max(hi.Y, v.Y), Z: math.Max(hi.Z, v.Z)}
+	for k := range sides {
+		p.edges = append(p.edges, [2]int{k, (k + 1) % sides}, [2]int{sides + k, sides + (k+1)%sides}, [2]int{k, sides + k})
 	}
-	inf := math.Inf(1)
-	p.box = [2]r3.Vec{
-		{X: math.Nextafter(lo.X, -inf), Y: math.Nextafter(lo.Y, -inf), Z: math.Nextafter(lo.Z, -inf)},
-		{X: math.Nextafter(hi.X, inf), Y: math.Nextafter(hi.Y, inf), Z: math.Nextafter(hi.Z, inf)},
-	}
+	p.finishFaces(sides)
 	return p, nil
 }
 

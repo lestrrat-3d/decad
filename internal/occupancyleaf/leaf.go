@@ -99,21 +99,65 @@ func coaxialStack(p stackedrecord.Payload, mesh *topo.Mesh) *occupancy.Record {
 }
 
 // stackRegions reads a stack slab by slab, region by region: every region's
-// outer loop a leaf and every hole a hole leaf through that slab's levels.
+// outer loop a leaf, and every hole a hole leaf. A hole of one circle that runs
+// through contiguous slabs is one leaf over their joined levels, so a facet of
+// its wall that spans a slab interface sits wholly inside one hole.
 func stackRegions(p stackedrecord.Payload, delta float64) *occupancy.Record {
-	var outers, holes []occupancy.Leaf
-	for _, s := range p.Slabs {
+	type run struct {
+		c                sectionrecord.CircleSeg
+		z0, z1, dz0, dz1 float64
+		open             bool
+	}
+	var outers []occupancy.Leaf
+	var runs []run
+	for si, s := range p.Slabs {
+		for i := range runs {
+			runs[i].open = runs[i].open && si > 0 && p.Slabs[si-1].Z1 == s.Z0
+		}
+		seen := map[int]bool{}
 		for _, region := range s.Regions {
-			outer, hs, ok := regionLeaves(p.Frame, p.Xform, region, s.Z0, s.Z1, p.SectionDelta, s.Z0Delta, s.Z1Delta, delta)
+			outer, _, ok := regionLeaves(p.Frame, p.Xform, momentinput.Profile{Outer: region.Outer}, s.Z0, s.Z1, p.SectionDelta, s.Z0Delta, s.Z1Delta, delta)
 			if !ok {
 				return nil
 			}
 			outers = append(outers, outer)
-			holes = append(holes, hs...)
+			for _, h := range region.Holes {
+				c, ok := wholeHoleCircle(h)
+				if !ok {
+					return nil
+				}
+				joined := false
+				for i := range runs {
+					r := &runs[i]
+					if r.open && !seen[i] && r.c.Center == c.Center && r.c.Radius == c.Radius && r.z1 == s.Z0 {
+						r.z1, r.dz1 = s.Z1, s.Z1Delta
+						seen[i], joined = true, true
+						break
+					}
+				}
+				if !joined {
+					runs = append(runs, run{c: c, z0: s.Z0, z1: s.Z1, dz0: s.Z0Delta, dz1: s.Z1Delta, open: true})
+					seen[len(runs)-1] = true
+				}
+			}
+		}
+		// A run this slab does not continue is closed.
+		for i := range runs {
+			if !seen[i] {
+				runs[i].open = false
+			}
 		}
 	}
 	if len(outers) == 0 {
 		return nil
+	}
+	holes := make([]occupancy.Leaf, 0, len(runs))
+	for _, r := range runs {
+		l, ok := prismLeaf(p.Frame, p.Xform, r.c, r.z0, r.z1, p.SectionDelta, r.dz0, r.dz1, delta)
+		if !ok {
+			return nil
+		}
+		holes = append(holes, l)
 	}
 	return occupancy.PrismRecord(outers, holes)
 }
