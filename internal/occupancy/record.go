@@ -25,7 +25,7 @@ type Leaf struct {
 	// pieces builds the exact outer pieces on first use: only the certificate
 	// reads them, so a Boolean that only composes the record never pays for
 	// their rational construction.
-	pieces *lazyPieces
+	pieces []*lazyPiece
 	// inner builds exact convex pieces inside the true solid, for a leaf a Cut
 	// may use as its tool; nil for a leaf that offers none.
 	inner *lazyPieces
@@ -247,6 +247,27 @@ func CutCompose(a, b *Record, weld, deepTerm float64, sites [][2]r3.Vec) *Record
 	return out
 }
 
+// Shifted is r for a copy of its held mesh moved by at most d: every leaf's and
+// hole's two-sided bound and the drift grow by d, and the true solid is r's
+// own. A non-finite or negative d answers nil.
+func (r *Record) Shifted(d float64) *Record {
+	if proofbound.IsNonFinite(d) || d < 0 {
+		return nil
+	}
+	out := *r
+	out.Leaves = append([]Leaf(nil), r.Leaves...)
+	for i := range out.Leaves {
+		out.Leaves[i].Delta = proofbound.AbsSumUpper(out.Leaves[i].Delta, d)
+	}
+	out.Holes = append([]Leaf(nil), r.Holes...)
+	for i := range out.Holes {
+		out.Holes[i].Delta = proofbound.AbsSumUpper(out.Holes[i].Delta, d)
+	}
+	out.Drift = proofbound.AbsSumUpper(r.Drift, d)
+	out.Mesh = Binding{}
+	return &out
+}
+
 // Inner returns the hole leaves' inner pieces, building them on first use.
 func (r *Record) Inner() ([]*Piece, error) {
 	var out []*Piece
@@ -274,20 +295,30 @@ const siteCell = 2.0
 type siteGrid struct {
 	once  sync.Once
 	cells map[[3]int64][]int
+	// wide are boxes too large to bin, checked against every query.
+	wide  []int
 	boxes [][2]r3.Vec
 }
 
-// sites returns the record's site index, built once on first use. Every
-// constructor sets grid, so concurrent readers share one sync.Once.
+// sites returns the record's site index. Every constructor sets grid, so
+// concurrent readers share one index and its one build.
 func (r *Record) sites() *siteGrid {
-	g := r.grid
-	if g == nil {
+	if r.grid == nil {
 		return &siteGrid{}
 	}
+	return r.grid
+}
+
+// index bins the boxes on the grid, once.
+func (g *siteGrid) index() {
 	g.once.Do(func() {
 		g.cells = map[[3]int64][]int{}
 		for i, b := range g.boxes {
 			lo, hi := cellOf(b[0]), cellOf(b[1])
+			if (hi[0]-lo[0]+1)*(hi[1]-lo[1]+1)*(hi[2]-lo[2]+1) > 1<<12 {
+				g.wide = append(g.wide, i)
+				continue
+			}
 			for x := lo[0]; x <= hi[0]; x++ {
 				for y := lo[1]; y <= hi[1]; y++ {
 					for z := lo[2]; z <= hi[2]; z++ {
@@ -298,7 +329,6 @@ func (r *Record) sites() *siteGrid {
 			}
 		}
 	})
-	return g
 }
 
 func cellOf(v r3.Vec) [3]int64 {
@@ -307,6 +337,12 @@ func cellOf(v r3.Vec) [3]int64 {
 
 // near reports whether the box (lo, hi) comes within pad of a site.
 func (g *siteGrid) near(lo, hi r3.Vec, pad float64) bool {
+	g.index()
+	for _, i := range g.wide {
+		if boxesNear(lo, hi, g.boxes[i], pad) {
+			return true
+		}
+	}
 	a := cellOf(r3.Vec{X: lo.X - pad, Y: lo.Y - pad, Z: lo.Z - pad})
 	b := cellOf(r3.Vec{X: hi.X + pad, Y: hi.Y + pad, Z: hi.Z + pad})
 	if (b[0]-a[0]+1)*(b[1]-a[1]+1)*(b[2]-a[2]+1) > 1<<16 {
@@ -368,7 +404,7 @@ func (r *Record) MeshBounds(bulges, reaches []float64) Bounds {
 func (r *Record) Pieces() ([]*Piece, error) {
 	var out []*Piece
 	for _, l := range r.Leaves {
-		p, err := l.pieces.get()
+		p, err := l.Pieces()
 		if err != nil {
 			return nil, err
 		}
@@ -377,8 +413,54 @@ func (r *Record) Pieces() ([]*Piece, error) {
 	return out, nil
 }
 
+// PiecesNear returns the outer pieces whose float boxes come within pad of
+// one of the query boxes, building only those. A facet search over facets in
+// the query boxes with translations up to pad never meets any other piece.
+func (r *Record) PiecesNear(queries [][2]r3.Vec, pad float64) ([]*Piece, error) {
+	g := &siteGrid{boxes: queries}
+	var out []*Piece
+	for _, l := range r.Leaves {
+		for _, part := range l.pieces {
+			if !g.near(part.box[0], part.box[1], pad) {
+				continue
+			}
+			p, err := part.get()
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
 // Pieces returns the leaf's outer pieces, building them on first use.
-func (l Leaf) Pieces() ([]*Piece, error) { return l.pieces.get() }
+func (l Leaf) Pieces() ([]*Piece, error) {
+	out := make([]*Piece, 0, len(l.pieces))
+	for _, part := range l.pieces {
+		p, err := part.get()
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, nil
+}
+
+// lazyPiece is one outer piece, built on first use, with a float box that
+// holds it.
+type lazyPiece struct {
+	box   [2]r3.Vec
+	once  sync.Once
+	build func() (*Piece, error)
+	out   *Piece
+	err   error
+}
+
+func (z *lazyPiece) get() (*Piece, error) {
+	z.once.Do(func() { z.out, z.err = z.build() })
+	return z.out, z.err
+}
 
 type lazyPieces struct {
 	once  sync.Once
@@ -407,15 +489,21 @@ func (l Leaf) near(lo, hi r3.Vec, pad float64) bool {
 	return false
 }
 
-func newLeaf(cells [][2]r3.Vec, build func() ([]*Piece, error), delta float64, s shape) Leaf {
-	box := cells[0]
-	for _, c := range cells[1:] {
+// newLeaf builds a leaf from its nearness cells and its outer pieces, given as
+// float boxes and builders.
+func newLeaf(cells [][2]r3.Vec, pieces []*lazyPiece, delta float64, s shape) Leaf {
+	return Leaf{Delta: delta, shape: s, box: unionBox(cells), cells: cells, pieces: pieces}
+}
+
+func unionBox(boxes [][2]r3.Vec) [2]r3.Vec {
+	box := boxes[0]
+	for _, c := range boxes[1:] {
 		box = [2]r3.Vec{
 			{X: math.Min(box[0].X, c[0].X), Y: math.Min(box[0].Y, c[0].Y), Z: math.Min(box[0].Z, c[0].Z)},
 			{X: math.Max(box[1].X, c[1].X), Y: math.Max(box[1].Y, c[1].Y), Z: math.Max(box[1].Z, c[1].Z)},
 		}
 	}
-	return Leaf{Delta: delta, shape: s, box: box, cells: cells, pieces: &lazyPieces{build: build}}
+	return box
 }
 
 // cellBox is a float box around the points within r of the segment a→b,
@@ -460,14 +548,10 @@ func CircleLeaf(place Chain, cu, cv, r, z0, z1, sectionDelta, dz0, dz1, slack fl
 		a, b := shifted.applyFloat(r3.Vec{Z: za}), shifted.applyFloat(r3.Vec{Z: zb})
 		cells = append(cells, cellBox(a, b, reach*cyl.stretch))
 	}
-	build := func() ([]*Piece, error) {
-		p, err := CirclePrism(shifted, outer, lo, hi, sides)
-		if err != nil {
-			return nil, err
-		}
-		return []*Piece{p}, nil
-	}
-	l := newLeaf(cells, build, delta, cyl)
+	piece := &lazyPiece{box: unionBox(cells), build: func() (*Piece, error) {
+		return CirclePrism(shifted, outer, lo, hi, sides)
+	}}
+	l := newLeaf(cells, []*lazyPiece{piece}, delta, cyl)
 	l.key = fmt.Sprintf("circle %v %v %v %v %v %v %v %v %v %v", place, cu, cv, r, z0, z1, sectionDelta, dz0, dz1, slack)
 	// Inside: the section narrowed by its displacement and the slack, between
 	// the levels narrowed the same way.

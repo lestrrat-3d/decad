@@ -9,6 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// torusRadius is the spine radius every tube test reads points on.
+const torusRadius = 2.4
+
 // torusFrame places a spine circle of radius 2.4 about a skew axis far from
 // the origin.
 func torusFrame() (o, w, e0, e1 r3.Vec) {
@@ -18,7 +21,10 @@ func torusFrame() (o, w, e0, e1 r3.Vec) {
 	return r3.Vec{X: -140.5, Y: 22.25, Z: 600.125}, w, e0, e1
 }
 
-func torusPoint(o, w, e0, e1 r3.Vec, radius, rho, phi, theta float64) r3.Vec {
+// torusPoint is the point at angle phi along the spine circle of radius
+// torusRadius and theta about the tube of radius rho round it.
+func torusPoint(o, w, e0, e1 r3.Vec, rho, phi, theta float64) r3.Vec {
+	const radius = torusRadius
 	s, c := math.Sincos(phi)
 	radial := e0.Scale(c).Add(e1.Scale(s))
 	st, ct := math.Sincos(theta)
@@ -60,12 +66,12 @@ func TestArcTubeLeafPiecesContainTheTube(t *testing.T) {
 				phi := tc.phi0 + span*float64(k)/40
 				for j := range 12 {
 					theta := 2 * math.Pi * float64(j) / 12
-					p := torusPoint(o, w, e0, e1, radius, rho*(1-1e-6), phi, theta)
+					p := torusPoint(o, w, e0, e1, rho*(1-1e-6), phi, theta)
 					require.True(t, insideSomePiece(t, p, pieces), "true tube point at φ %v θ %v escaped every piece", phi, theta)
 				}
 			}
 			// A point well outside the tube lies in no piece.
-			out := torusPoint(o, w, e0, e1, radius, rho+0.01, tc.phi0+span/3, 1.0)
+			out := torusPoint(o, w, e0, e1, rho+0.01, tc.phi0+span/3, 1.0)
 			require.False(t, insideSomePiece(t, out, pieces))
 		})
 	}
@@ -79,7 +85,7 @@ func TestArcTubeLeafBulges(t *testing.T) {
 	require.NoError(t, err)
 	rec := occupancy.LeafRecord(leaf)
 	const d = 0.1 // the facets' angular cell
-	at := func(phi, theta float64) r3.Vec { return torusPoint(o, w, e0, e1, radius, rho, phi, theta) }
+	at := func(phi, theta float64) r3.Vec { return torusPoint(o, w, e0, e1, rho, phi, theta) }
 	tris := [][3]r3.Vec{
 		// The outer equator: a locally convex patch, so a facet on its
 		// stations stays inside the tube.

@@ -30,3 +30,30 @@ func TestLocalBulgeReadsTheHoleWall(t *testing.T) {
 	wall := [2]r3.Vec{{X: 2.5, Y: -0.1, Z: 22.1}, {X: 2.7, Y: 0.1, Z: 22.3}}
 	require.GreaterOrEqual(t, rec.LocalBulge(facet, 0.01, wall), 0.001)
 }
+
+func TestPiecesNearBuildsOnlyNearCells(t *testing.T) {
+	t.Parallel()
+	const radius, rho = 2.4, 0.6
+	o, w, e0, e1 := torusFrame()
+	leaf, err := occupancy.ArcTubeLeaf(o, w, e0, e1, radius, rho, 0, 0, true, 0, 1e-4, 64, 0.01)
+	require.NoError(t, err)
+	all, err := leaf.Pieces()
+	require.NoError(t, err)
+	rec := occupancy.LeafRecord(leaf)
+	at := torusPoint(o, w, e0, e1, rho, 0.5, 0)
+	near, err := rec.PiecesNear([][2]r3.Vec{{at, at}}, 0.05)
+	require.NoError(t, err)
+	require.NotEmpty(t, near)
+	require.Less(t, len(near), len(all)/10, "only the cells near the query are built")
+	// Every piece that holds the query point is among them.
+	for _, p := range all {
+		ok, err := occupancy.Misses([3]r3.Vec{at, at, at}, r3.Vec{}, p, &occupancy.Budget{Limit: 1 << 40})
+		require.NoError(t, err)
+		if !ok {
+			require.Contains(t, near, p)
+		}
+	}
+	far, err := rec.PiecesNear([][2]r3.Vec{{o.Add(w.Scale(50)), o.Add(w.Scale(50))}}, 0.05)
+	require.NoError(t, err)
+	require.Empty(t, far)
+}

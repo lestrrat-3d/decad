@@ -3,11 +3,13 @@ package decad
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/occupancy"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -112,7 +114,19 @@ func refineSurfaceBounds(ctx context.Context, fp facetedPayload, target float64)
 			want = append(want, t)
 		}
 	}
-	pieces, err := rec.Pieces()
+	queries := make([][2]r3.Vec, len(want))
+	for i, t := range want {
+		tri := fp.Tris[t]
+		lo, hi := fp.Verts[tri[0]], fp.Verts[tri[0]]
+		for _, v := range []r3.Vec{fp.Verts[tri[1]], fp.Verts[tri[2]]} {
+			lo = r3.Vec{X: math.Min(lo.X, v.X), Y: math.Min(lo.Y, v.Y), Z: math.Min(lo.Z, v.Z)}
+			hi = r3.Vec{X: math.Max(hi.X, v.X), Y: math.Max(hi.Y, v.Y), Z: math.Max(hi.Z, v.Z)}
+		}
+		queries[i] = [2]r3.Vec{lo, hi}
+	}
+	// Only pieces within the ladder's reach of a certified facet can meet one
+	// of its translations; the margin covers the float boxes' rounding.
+	pieces, err := rec.PiecesNear(queries, target*(1+1e-9)+1e-9)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: %w`, ErrUnsupported, err)
 	}

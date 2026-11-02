@@ -62,27 +62,19 @@ func ArcTubeLeaf(o, w, e0, e1 r3.Vec, radius, rho, phi0, phi1 float64, full bool
 		return o.Add(e0.Scale(radius * c)).Add(e1.Scale(radius * s))
 	}
 	boxes := make([][2]r3.Vec, cells)
+	parts := make([]*lazyPiece, cells)
 	for k := range cells {
 		pa, pb := spine(phi0+float64(k)*d), spine(phi0+float64(k+1)*d)
 		// The piece reaches tubeR/cos(π/sides) from its chord, and ext past
 		// either end.
 		boxes[k] = cellBox(pa, pb, tubeR/math.Cos(math.Pi/float64(sides))*(1+1e-9)+ext)
-	}
-	build := func() ([]*Piece, error) {
-		pieces := make([]*Piece, 0, cells)
-		for k := range cells {
-			pa, pb := spine(phi0+float64(k)*d), spine(phi0+float64(k+1)*d)
-			piece, err := SegmentTube(pa, pb, w, tubeR, ext, sides)
-			if err != nil {
-				return nil, err
-			}
-			pieces = append(pieces, piece)
-		}
-		return pieces, nil
+		parts[k] = &lazyPiece{box: boxes[k], build: func() (*Piece, error) {
+			return SegmentTube(pa, pb, w, tubeR, ext, sides)
+		}}
 	}
 	sh := torusShape{o: o, w: w, e0: e0, e1: e1, radius: radius, rho: rho, phi0: phi0, phi1: phi1,
 		full: full || span >= 2*math.Pi, pad: pad}
-	l := newLeaf(boxes, build, delta, sh)
+	l := newLeaf(boxes, parts, delta, sh)
 	l.key = fmt.Sprintf("arc %v %v %v %v %v %v %v %v %v %v %v", o, w, e0, e1, radius, rho, phi0, phi1, full, slack, cellSagitta)
 	return l, nil
 }
@@ -219,24 +211,18 @@ func HelixTubeLeaf(c, n, er, et r3.Vec, sigma, k, rc, zc, rho, span, slack, cell
 	}
 	reach := tubeR/math.Cos(math.Pi/float64(sides))*(1+1e-9) + ext
 	boxes := make([][2]r3.Vec, cells)
+	parts := make([]*lazyPiece, cells)
 	for i := range cells {
-		boxes[i] = cellBox(helix(float64(i)*d), helix(float64(i+1)*d), reach)
+		pa, pb := helix(float64(i)*d), helix(float64(i+1)*d)
+		boxes[i] = cellBox(pa, pb, reach)
+		theta := (float64(i) + 0.5) * d
+		s, co := math.Sincos(theta)
+		radial := er.Scale(co).Add(et.Scale(sigma * s))
+		parts[i] = &lazyPiece{box: boxes[i], build: func() (*Piece, error) {
+			return SegmentTube(pa, pb, radial, tubeR, ext, sides)
+		}}
 	}
-	build := func() ([]*Piece, error) {
-		pieces := make([]*Piece, 0, cells)
-		for i := range cells {
-			theta := (float64(i) + 0.5) * d
-			s, co := math.Sincos(theta)
-			radial := er.Scale(co).Add(et.Scale(sigma * s))
-			piece, err := SegmentTube(helix(float64(i)*d), helix(float64(i+1)*d), radial, tubeR, ext, sides)
-			if err != nil {
-				return nil, err
-			}
-			pieces = append(pieces, piece)
-		}
-		return pieces, nil
-	}
-	l := newLeaf(boxes, build, delta, noPoke{})
+	l := newLeaf(boxes, parts, delta, noPoke{})
 	l.key = fmt.Sprintf("helix %v %v %v %v %v %v %v %v %v %v %v %v", c, n, er, et, sigma, k, rc, zc, rho, span, slack, cellSagitta)
 	return l, nil
 }

@@ -615,11 +615,17 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	deepTerm := math.Inf(1)
 	var sites [][2]r3.Vec
 	var occA, occB *occupancy.Record
+	// A gap-shift retry moves b's held mesh by at most shiftDisplacement and
+	// leaves the true operand where it was (agent-docs/gap-tolerance-design.md
+	// §4), so b's record holds once its leaves' bounds and drift grow by that.
 	trackOccupancy := (op == meshbool.OpUnion || op == meshbool.OpCut) &&
-		replay == nil && !hasShifts && fixed == nil && capFace == nil && coneFace == nil
+		replay == nil && ordered == nil && fixed == nil && capFace == nil && coneFace == nil
 	if trackOccupancy {
 		if occA = occupancyleaf.Of(a, ma); occA != nil {
-			if occB = occupancyleaf.Of(b, mb); occB != nil {
+			if occB = occupancyleaf.Of(b, unmoved); occB != nil && hasShifts {
+				occB = occB.Shifted(shiftDisplacement)
+			}
+			if occB != nil {
 				bmA.Bulge = occupancyleaf.Bulges(occA, ma)
 				if op == meshbool.OpCut {
 					// A tool facet's bulge is how far the true tool reaches past
