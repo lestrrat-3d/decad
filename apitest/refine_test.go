@@ -334,15 +334,12 @@ func TestRefineBoredBend(t *testing.T) {
 	body := build(t)
 	_, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
 	require.ErrorIs(t, err, decad.ErrUnsupported, "the held crossing bound refuses 0.05 mm before Refine")
-	// The second bore's crossing depth, charged to the true-to-held side,
-	// already exceeds 0.01 mm: Refine refuses that and leaves the body live.
-	_, err = decad.Refine(t.Context(), body, units.Millimeters(0.01))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	refined, err := decad.Refine(t.Context(), body, units.Millimeters(0.05))
+	// Far below the held bound and below the bores' own chording.
+	refined, err := decad.Refine(t.Context(), body, units.Millimeters(0.01))
 	require.NoError(t, err)
-	m, err := refined.Tessellate(t.Context(), units.Millimeters(0.05))
+	m, err := refined.Tessellate(t.Context(), units.Millimeters(0.01))
 	require.NoError(t, err)
 	after, err := m.Bound().In(units.Millimeter)
 	require.NoError(t, err)
-	require.LessOrEqual(t, after, 0.05)
+	require.LessOrEqual(t, after, 0.01)
 }

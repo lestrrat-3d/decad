@@ -29,6 +29,9 @@ type Leaf struct {
 	// inner builds exact convex pieces inside the true solid, for a leaf a Cut
 	// may use as its tool; nil for a leaf that offers none.
 	inner *lazyPieces
+	// key names the true solid: two leaves read from one record, through
+	// any number of reads, share it.
+	key string
 	// operand names the one held mesh this leaf came in with: leaves of one
 	// operand (a composite sweep's spans) share it, and their joins are not
 	// crossings of two Boolean operands.
@@ -53,6 +56,10 @@ type Record struct {
 	Holes []Leaf
 	Drift float64
 	Cross float64
+	// Sites are float boxes holding every crossing line an earlier step
+	// made; Cross applies only near them.
+	Sites [][2]r3.Vec
+	grid  *siteGrid
 	// Mesh is the held mesh the record was proven for; a leaf's own record
 	// leaves it zero, since the Boolean that composes it binds the result.
 	Mesh Binding
@@ -62,7 +69,7 @@ type Record struct {
 // stands for, as a composite sweep's spans do.
 func LeafRecord(leaves ...Leaf) *Record {
 	operand := new(int)
-	out := &Record{Leaves: append([]Leaf(nil), leaves...)}
+	out := &Record{Leaves: append([]Leaf(nil), leaves...), grid: &siteGrid{}}
 	for i := range out.Leaves {
 		out.Leaves[i].operand = operand
 	}
@@ -75,46 +82,65 @@ func LeafRecord(leaves ...Leaf) *Record {
 // which already says that every held point lies within it of the true
 // boundary, and of the largest of two readings of the leaves: how far the
 // facet pokes out of the nearest leaf (the least over the leaves near it),
-// and, for a facet near leaves of two different operands, the accumulated
-// crossing depth: every earlier crossing lies near leaves of the two operands
-// that met there.
+// and, for a facet near an earlier crossing site, the accumulated crossing
+// depth; a facet near a hole also reads that hole's bound.
 func (r *Record) Bulges(verts []r3.Vec, tris [][3]int, delta []float64) []float64 {
 	out := make([]float64, len(tris))
 	for t, tri := range tris {
 		tv := [3]r3.Vec{verts[tri[0]], verts[tri[1]], verts[tri[2]]}
 		lo, hi := triBox(tv)
 		poke := math.Inf(1)
-		var first *int
-		two := false
 		for _, l := range r.Leaves {
-			if !l.near(lo, hi, r.Cross+l.Delta) {
-				continue
+			if l.near(lo, hi, r.Cross+l.Delta) {
+				poke = math.Min(poke, l.shape.poke(tv))
 			}
-			if first == nil {
-				first = l.operand
-			} else if l.operand != first {
-				two = true
-			}
-			poke = math.Min(poke, l.shape.poke(tv))
 		}
 		lam := poke
 		for _, l := range r.Holes {
-			if !l.near(lo, hi, r.Cross+l.Delta) {
-				continue
-			}
-			// The true hole reaches past its held wall by at most the tool
-			// mesh's own two-sided bound, and those points are held material.
-			lam = math.Max(lam, l.Delta)
-			if first != nil && l.operand != first {
-				two = true
+			if l.near(lo, hi, r.Cross+l.Delta) {
+				// The true hole reaches past its held wall by at most the tool
+				// mesh's own two-sided bound, and those points are held
+				// material outside X.
+				lam = math.Max(lam, l.Delta)
 			}
 		}
-		if two {
+		if r.Cross > 0 && r.sites().near(lo, hi, r.Cross) {
 			lam = math.Max(lam, r.Cross)
 		}
 		out[t] = math.Min(delta[t], lam)
 	}
 	return out
+}
+
+// SiteReach is how far from a contact segment a bulge source (an earlier
+// crossing site, a hole, a facet's own poke) is read when bounding that
+// contact's deep term; a deep term at or past it is not proven.
+const SiteReach = 1.0
+
+// LocalBulge is λ for facet tri of a held mesh of r's union read at one
+// contact segment held in site: the facet's poke out of the nearest leaf,
+// and, within SiteReach of the segment, each hole's bound and the crossing
+// depth near an earlier site. A point of X' outside X near the segment lies
+// within that of the facet, since every source farther than SiteReach from
+// the segment only places points farther than any proven deep term.
+func (r *Record) LocalBulge(tri [3]r3.Vec, delta float64, site [2]r3.Vec) float64 {
+	lo, hi := triBox(tri)
+	poke := math.Inf(1)
+	for _, l := range r.Leaves {
+		if l.near(lo, hi, r.Cross+l.Delta) {
+			poke = math.Min(poke, l.shape.poke(tri))
+		}
+	}
+	lam := poke
+	for _, l := range r.Holes {
+		if l.near(site[0], site[1], SiteReach+l.Delta) {
+			lam = math.Max(lam, l.Delta)
+		}
+	}
+	if r.Cross > 0 && r.sites().near(site[0], site[1], SiteReach) {
+		lam = math.Max(lam, r.Cross)
+	}
+	return math.Min(delta, lam)
 }
 
 // Compose is the record of round(X'_a ∪ X'_b) for one mesh Union step.
@@ -125,16 +151,47 @@ func (r *Record) Bulges(verts []r3.Vec, tris [][3]int, delta []float64) []float6
 // held facets that come that close without a proven crossing was refused,
 // which the caller checks against the hidden-tangency gate before calling.
 // Compose answers nil when deepTerm is not finite.
-func Compose(a, b *Record, weld, deepTerm float64) *Record {
+func Compose(a, b *Record, weld, deepTerm float64, sites [][2]r3.Vec) *Record {
 	if a == nil || b == nil || proofbound.IsNonFinite(weld) || weld < 0 ||
-		proofbound.IsNonFinite(deepTerm) || deepTerm < 0 || len(a.Holes) != 0 || len(b.Holes) != 0 {
+		proofbound.IsNonFinite(deepTerm) || deepTerm < 0 || !sameHoles(a.Holes, b.Holes) {
 		return nil
 	}
-	return &Record{
+	// (A ∖ H) ∪ (C ∖ H) = (A ∪ C) ∖ H, so two operands cut by the very same
+	// tools join under those tools; any other mix of holes is not a union
+	// less holes and has no record.
+	out := &Record{
 		Leaves: append(append(make([]Leaf, 0, len(a.Leaves)+len(b.Leaves)), a.Leaves...), b.Leaves...),
+		Holes:  joinHoles(a.Holes, b.Holes),
 		Drift:  proofbound.AbsSumUpper(max(a.Drift, b.Drift), weld),
 		Cross:  proofbound.AbsSumUpper(max(a.Cross, b.Cross, deepTerm), weld),
+		Sites:  joinSites(a.Sites, b.Sites, sites),
 	}
+	out.grid = &siteGrid{boxes: out.Sites}
+	return out
+}
+
+// sameHoles reports whether two hole lists name the same tool leaves in the
+// same order, by the operand each came in with and its place in it.
+func sameHoles(a, b []Leaf) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].key != b[i].key {
+			return false
+		}
+	}
+	return true
+}
+
+// joinHoles is one list of shared holes, each keeping the larger of the two
+// held meshes' bounds.
+func joinHoles(a, b []Leaf) []Leaf {
+	out := append([]Leaf(nil), a...)
+	for i := range out {
+		out[i].Delta = max(out[i].Delta, b[i].Delta)
+	}
+	return out
 }
 
 // CutCompose is the record of round(X'_a ∖ X'_b) for one mesh Cut step, with
@@ -143,7 +200,7 @@ func Compose(a, b *Record, weld, deepTerm float64) *Record {
 // that, and the points between are held material outside X. The tool must be
 // a record of leaves that each offer inner pieces, with no holes of its own;
 // otherwise CutCompose answers nil.
-func CutCompose(a, b *Record, weld, deepTerm float64) *Record {
+func CutCompose(a, b *Record, weld, deepTerm float64, sites [][2]r3.Vec) *Record {
 	if a == nil || b == nil || proofbound.IsNonFinite(weld) || weld < 0 ||
 		proofbound.IsNonFinite(deepTerm) || deepTerm < 0 || len(b.Holes) != 0 {
 		return nil
@@ -153,12 +210,15 @@ func CutCompose(a, b *Record, weld, deepTerm float64) *Record {
 			return nil
 		}
 	}
-	return &Record{
+	out := &Record{
 		Leaves: append([]Leaf(nil), a.Leaves...),
 		Holes:  append(append(make([]Leaf, 0, len(a.Holes)+len(b.Leaves)), a.Holes...), b.Leaves...),
 		Drift:  proofbound.AbsSumUpper(max(a.Drift, b.Drift), weld),
 		Cross:  proofbound.AbsSumUpper(max(a.Cross, b.Cross, deepTerm), weld),
+		Sites:  joinSites(a.Sites, b.Sites, sites),
 	}
+	out.grid = &siteGrid{boxes: out.Sites}
+	return out
 }
 
 // Inner returns the hole leaves' inner pieces, building them on first use.
@@ -172,6 +232,77 @@ func (r *Record) Inner() ([]*Piece, error) {
 		out = append(out, p...)
 	}
 	return out, nil
+}
+
+func joinSites(lists ...[][2]r3.Vec) [][2]r3.Vec {
+	var out [][2]r3.Vec
+	for _, l := range lists {
+		out = append(out, l...)
+	}
+	return out
+}
+
+// siteCell is the edge of the uniform grid crossing sites are binned on.
+const siteCell = 2.0
+
+type siteGrid struct {
+	once  sync.Once
+	cells map[[3]int64][]int
+	boxes [][2]r3.Vec
+}
+
+// sites returns the record's site index, built once on first use. Every
+// constructor sets grid, so concurrent readers share one sync.Once.
+func (r *Record) sites() *siteGrid {
+	g := r.grid
+	if g == nil {
+		return &siteGrid{}
+	}
+	g.once.Do(func() {
+		g.cells = map[[3]int64][]int{}
+		for i, b := range g.boxes {
+			lo, hi := cellOf(b[0]), cellOf(b[1])
+			for x := lo[0]; x <= hi[0]; x++ {
+				for y := lo[1]; y <= hi[1]; y++ {
+					for z := lo[2]; z <= hi[2]; z++ {
+						k := [3]int64{x, y, z}
+						g.cells[k] = append(g.cells[k], i)
+					}
+				}
+			}
+		}
+	})
+	return g
+}
+
+func cellOf(v r3.Vec) [3]int64 {
+	return [3]int64{int64(math.Floor(v.X / siteCell)), int64(math.Floor(v.Y / siteCell)), int64(math.Floor(v.Z / siteCell))}
+}
+
+// near reports whether the box (lo, hi) comes within pad of a site.
+func (g *siteGrid) near(lo, hi r3.Vec, pad float64) bool {
+	a := cellOf(r3.Vec{X: lo.X - pad, Y: lo.Y - pad, Z: lo.Z - pad})
+	b := cellOf(r3.Vec{X: hi.X + pad, Y: hi.Y + pad, Z: hi.Z + pad})
+	if (b[0]-a[0]+1)*(b[1]-a[1]+1)*(b[2]-a[2]+1) > 1<<16 {
+		for _, s := range g.boxes {
+			if boxesNear(lo, hi, s, pad) {
+				return true
+			}
+		}
+		return false
+	}
+	for x := a[0]; x <= b[0]; x++ {
+		for y := a[1]; y <= b[1]; y++ {
+			for z := a[2]; z <= b[2]; z++ {
+				for _, i := range g.cells[[3]int64{x, y, z}] {
+					if boxesNear(lo, hi, g.boxes[i], pad) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
 }
 
 // Bounds are a record's figures over one held mesh of its union: every held
@@ -290,10 +421,18 @@ func CircleLeaf(place Chain, cu, cv, r, z0, z1, sectionDelta, dz0, dz1, slack fl
 	if err != nil {
 		return Leaf{}, err
 	}
-	// The circumscribed polygon reaches at most outer/cos(π/sides) < 2·outer
-	// from the axis.
-	a, b := shifted.applyFloat(r3.Vec{Z: lo}), shifted.applyFloat(r3.Vec{Z: hi})
-	cells := [][2]r3.Vec{cellBox(a, b, 2*outer*cyl.stretch)}
+	// Cells about one radius long, so a long leaf's nearness reading stays
+	// local. The circumscribed polygon reaches outer/cos(π/sides) from the
+	// axis, which reach covers.
+	reach := outer / math.Cos(math.Pi/float64(sides)) * (1 + 1e-9)
+	n := int(math.Min(4096, math.Max(1, math.Ceil((hi-lo)/outer))))
+	cells := make([][2]r3.Vec, 0, n)
+	for k := range n {
+		za := lo + (hi-lo)*float64(k)/float64(n)
+		zb := lo + (hi-lo)*float64(k+1)/float64(n)
+		a, b := shifted.applyFloat(r3.Vec{Z: za}), shifted.applyFloat(r3.Vec{Z: zb})
+		cells = append(cells, cellBox(a, b, reach*cyl.stretch))
+	}
 	build := func() ([]*Piece, error) {
 		p, err := CirclePrism(shifted, outer, lo, hi, sides)
 		if err != nil {
@@ -302,6 +441,7 @@ func CircleLeaf(place Chain, cu, cv, r, z0, z1, sectionDelta, dz0, dz1, slack fl
 		return []*Piece{p}, nil
 	}
 	l := newLeaf(cells, build, delta, cyl)
+	l.key = fmt.Sprintf("circle %v %v %v %v %v %v %v %v %v %v", place, cu, cv, r, z0, z1, sectionDelta, dz0, dz1, slack)
 	// Inside: the section narrowed by its displacement and the slack, between
 	// the levels narrowed the same way.
 	innerR := r - proofbound.AbsSumUpper(sectionDelta, slack)

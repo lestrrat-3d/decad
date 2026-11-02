@@ -192,6 +192,18 @@ type Stats struct {
 	// of 2·max(Bulge_a[t], Bulge_b[u])/sin θ(t, u): +Inf when either operand
 	// tracks no bulge or a segment has no proven positive sine.
 	DeepTerm float64
+	// Contacts lists every contact segment, its facet pair, proven sine and
+	// a float box holding it; nil when either operand tracks no bulge.
+	Contacts []ContactSite
+}
+
+// ContactSite is one contact segment of facet I of the first operand and J of
+// the second: Sin its proven crossing sine (0 when none) and Box a float box
+// holding the exact segment.
+type ContactSite struct {
+	I, J int
+	Sin  float64
+	Box  [2]r3.Vec
 }
 
 // MeshBooleanStats is MeshBoolean that also returns Stats.
@@ -257,7 +269,7 @@ func meshBooleanStats(ctx context.Context, op OperationKind, ma, mb *BoolMesh, m
 	if err != nil {
 		return nil, Stats{}, err
 	}
-	return append(kept, keep...), Stats{MaxRim: cuts.MaxRim, MinSin: cuts.MinSin, DeepTerm: cuts.DeepTerm}, nil
+	return append(kept, keep...), Stats{MaxRim: cuts.MaxRim, MinSin: cuts.MinSin, DeepTerm: cuts.DeepTerm, Contacts: cuts.Contacts}, nil
 }
 
 // EdgeCrosses decides whether edge k of facet f — which lies exactly in the

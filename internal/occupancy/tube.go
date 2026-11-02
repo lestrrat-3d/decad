@@ -64,9 +64,9 @@ func ArcTubeLeaf(o, w, e0, e1 r3.Vec, radius, rho, phi0, phi1 float64, full bool
 	boxes := make([][2]r3.Vec, cells)
 	for k := range cells {
 		pa, pb := spine(phi0+float64(k)*d), spine(phi0+float64(k+1)*d)
-		// The piece reaches at most tubeR/cos(π/sides) < 2·tubeR from its
-		// chord, and ext past either end.
-		boxes[k] = cellBox(pa, pb, 2*tubeR+ext)
+		// The piece reaches tubeR/cos(π/sides) from its chord, and ext past
+		// either end.
+		boxes[k] = cellBox(pa, pb, tubeR/math.Cos(math.Pi/float64(sides))*(1+1e-9)+ext)
 	}
 	build := func() ([]*Piece, error) {
 		pieces := make([]*Piece, 0, cells)
@@ -82,7 +82,9 @@ func ArcTubeLeaf(o, w, e0, e1 r3.Vec, radius, rho, phi0, phi1 float64, full bool
 	}
 	sh := torusShape{o: o, w: w, e0: e0, e1: e1, radius: radius, rho: rho, phi0: phi0, phi1: phi1,
 		full: full || span >= 2*math.Pi, pad: pad}
-	return newLeaf(boxes, build, delta, sh), nil
+	l := newLeaf(boxes, build, delta, sh)
+	l.key = fmt.Sprintf("arc %v %v %v %v %v %v %v %v %v %v %v", o, w, e0, e1, radius, rho, phi0, phi1, full, slack, cellSagitta)
+	return l, nil
 }
 
 // SegmentTube is the circumscribed prism of radius r about the segment a→b,

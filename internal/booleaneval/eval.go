@@ -613,6 +613,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	// the ordinary Union path only. deepTerm stays +Inf, which no record
 	// admits, on every path that does not report it.
 	deepTerm := math.Inf(1)
+	var sites [][2]r3.Vec
 	var occA, occB *occupancy.Record
 	trackOccupancy := (op == meshbool.OpUnion || op == meshbool.OpCut) &&
 		replay == nil && !hasShifts && fixed == nil && capFace == nil && coneFace == nil
@@ -640,7 +641,10 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	} else {
 		var stats meshbool.Stats
 		kept, stats, err = meshbool.MeshBooleanStats(ctx, op, bmA, bmB, memo)
-		maxRim, deepTerm = stats.MaxRim, stats.DeepTerm
+		maxRim = stats.MaxRim
+		if trackOccupancy && bmA.Bulge != nil {
+			deepTerm, sites = localDeepTerm(op, occA, occB, ma, mb, stats.Contacts)
+		}
 	}
 	if err != nil {
 		return Evaluation{}, meshbool.StagingError(op, err)
@@ -723,7 +727,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		Xform:       r3.Identity(),
 	}
 	if trackOccupancy && bmA.Bulge != nil {
-		payload.Occupancy = composeOccupancy(ctx, op, occA, occB, bmA, bmB, ma, mb, memo, stitched.Round, deepTerm)
+		payload.Occupancy = composeOccupancy(ctx, op, occA, occB, bmA, bmB, ma, mb, memo, stitched.Round, deepTerm, sites)
 		if payload.Occupancy != nil {
 			payload.Occupancy.Mesh = occupancy.Bind(payload.Verts, payload.Tris)
 		}
@@ -848,7 +852,7 @@ func shiftsHaveSingleComponentAdjustment(shifts map[int]pieceShift) bool {
 // bounds raised to cover twice each face's largest bulge; a refusal there
 // drops the record and changes nothing about the Boolean itself.
 func composeOccupancy(ctx context.Context, op meshbool.OperationKind, ra, rb *occupancy.Record, bmA, bmB *meshbool.BoolMesh,
-	ma, mb *topo.Mesh, memo *meshbool.ContactMemo, weld, deepTerm float64) *occupancy.Record {
+	ma, mb *topo.Mesh, memo *meshbool.ContactMemo, weld, deepTerm float64, sites [][2]r3.Vec) *occupancy.Record {
 	if !gateCovers(bmA, ma, bmB) || !gateCovers(bmB, mb, bmA) {
 		wa, wb := widenedFaceBounds(ma, bmA.Bulge), widenedFaceBounds(mb, bmB.Bulge)
 		if err := meshbool.RefuseUndecidableProximity(ctx, wa, wb, bmA, bmB, memo, nil, nil); err != nil {
@@ -856,9 +860,9 @@ func composeOccupancy(ctx context.Context, op meshbool.OperationKind, ra, rb *oc
 		}
 	}
 	if op == meshbool.OpCut {
-		return occupancy.CutCompose(ra, rb, weld, deepTerm)
+		return occupancy.CutCompose(ra, rb, weld, deepTerm, sites)
 	}
-	return occupancy.Compose(ra, rb, weld, deepTerm)
+	return occupancy.Compose(ra, rb, weld, deepTerm, sites)
 }
 
 // widenedFaceBounds is a shallow copy of m whose face bounds are raised to
@@ -903,4 +907,34 @@ func gateCovers(m *meshbool.BoolMesh, mesh *topo.Mesh, other *meshbool.BoolMesh)
 		}
 	}
 	return true
+}
+
+// localDeepTerm is the largest, over every contact segment, of
+// 2·max(λ_a, λ_b)/sin θ with each λ read at that segment
+// (occupancy.Record.LocalBulge); a Cut tool's facets read their own bound. It
+// answers +Inf for a segment with no proven positive sine or a term past
+// occupancy.SiteReach, and the segments' boxes as the step's crossing sites.
+func localDeepTerm(op meshbool.OperationKind, ra, rb *occupancy.Record, ma, mb *topo.Mesh, contacts []meshbool.ContactSite) (float64, [][2]r3.Vec) {
+	da, db := occupancyleaf.Deltas(ma), occupancyleaf.Deltas(mb)
+	corners := func(m *topo.Mesh, t int) [3]r3.Vec {
+		tri := m.Triangles[t]
+		return [3]r3.Vec{m.Vertices[tri[0]], m.Vertices[tri[1]], m.Vertices[tri[2]]}
+	}
+	deep := 0.0
+	sites := make([][2]r3.Vec, 0, len(contacts))
+	for _, c := range contacts {
+		sites = append(sites, c.Box)
+		la := ra.LocalBulge(corners(ma, c.I), da[c.I], c.Box)
+		lb := db[c.J]
+		if op != meshbool.OpCut {
+			lb = rb.LocalBulge(corners(mb, c.J), db[c.J], c.Box)
+		}
+		if b := max(la, lb); b > 0 {
+			deep = max(deep, proofbound.DivUpper(proofbound.AbsSumUpper(b, b), c.Sin))
+		}
+	}
+	if !(deep < occupancy.SiteReach) {
+		return math.Inf(1), sites
+	}
+	return deep, sites
 }
