@@ -1390,8 +1390,8 @@ boolean is refused before any facet is cut, with a plain `ErrUnsupported`,
 not a `BooleanError`, since the limit is the bound the operand holds there.
 A refused two-body `Union`, `Cut` or `Intersect` with a mesh Boolean result as an operand is then
 rebuilt from the source bodies the operation history names, under a set identity
-that leaves the result unchanged, when every pair but one takes an analytic route
-(`agent-docs/boolean-chain-regroup-design.md`). The result is the same set, its history
+that leaves the result unchanged, when its bounded plan applies
+(`agent-docs/boolean-chain-regroup-design.md`, Plan). The result is the same set, its history
 is the single call, and a selector naming a source feature's origin may match fewer faces.
 Any other refusal stands.
 The refusal names the operand (`Cut`'s target or tool; the first or second

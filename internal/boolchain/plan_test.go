@@ -226,3 +226,145 @@ func TestRunChecksContextBeforeEachCallback(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, 1, calls)
 }
+
+func TestRunTwoPendingNegativeLiterals(t *testing.T) {
+	t.Parallel()
+	a, b, c := leaf(), leaf(), leaf()
+	chain := conj(a, neg(b), neg(c))
+	before := append([]boolchain.Literal(nil), chain.Literals...)
+	f := fakeSteps{exactOK: func(meshbool.OperationKind, *topo.Body, *topo.Body) bool { return false }, fullOK: true}
+	got, ok, err := boolchain.Run(t.Context(), chain, f.steps())
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, 2, len(f.fullCall))
+	require.Equal(t, 2, len(f.made))
+	require.Equal(t, meshbool.OpUnion, f.fullCall[0].op)
+	require.True(t, f.fullCall[0].x == b && f.fullCall[0].y == c, "tool order changed")
+	require.Equal(t, meshbool.OpCut, f.fullCall[1].op)
+	require.True(t, f.fullCall[1].x == a && f.fullCall[1].y == f.made[0], "final cut operands changed")
+	require.True(t, got == f.made[1], "the result must come from the final cut")
+	for i, literal := range chain.Literals {
+		require.True(t, literal.Body == before[i].Body, "input body %d changed", i)
+		require.Equal(t, before[i].Negated, literal.Negated)
+	}
+}
+
+func TestRunTwoNegativeAfterAnalyticAbsorb(t *testing.T) {
+	t.Parallel()
+	a, b, c, d := leaf(), leaf(), leaf(), leaf()
+	f := fakeSteps{
+		exactOK: func(op meshbool.OperationKind, x, y *topo.Body) bool {
+			return op == meshbool.OpIntersect && x == a && y == d
+		},
+		fullOK: true,
+	}
+	got, ok, err := boolchain.Run(t.Context(), conj(a, pos(d), neg(b), neg(c)), f.steps())
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, 2, len(f.fullCall))
+	require.Equal(t, 3, len(f.made))
+	require.True(t, f.fullCall[0].x == b && f.fullCall[0].y == c)
+	require.True(t, f.fullCall[1].x == f.made[0] && f.fullCall[1].y == f.made[1])
+	require.True(t, got == f.made[2])
+}
+
+func TestRunNegativeFullStepsStayBounded(t *testing.T) {
+	t.Parallel()
+	for count := 2; count < boolchain.MaxLiterals; count++ {
+		pending := make([]boolchain.Literal, count)
+		for i := range pending {
+			pending[i] = neg(leaf())
+		}
+		f := fakeSteps{exactOK: func(meshbool.OperationKind, *topo.Body, *topo.Body) bool { return false }, fullOK: true}
+		got, ok, err := boolchain.Run(t.Context(), conj(leaf(), pending...), f.steps())
+		require.NoError(t, err)
+		if count == 2 {
+			require.True(t, ok)
+			require.Equal(t, 2, len(f.fullCall))
+			continue
+		}
+		require.False(t, ok)
+		require.True(t, got == nil)
+		require.Zero(t, len(f.fullCall), "remaining negatives=%d", count)
+	}
+}
+
+func TestRunDeclinesTwoPendingPositiveLiterals(t *testing.T) {
+	t.Parallel()
+	f := fakeSteps{exactOK: func(meshbool.OperationKind, *topo.Body, *topo.Body) bool { return false }, fullOK: true}
+	got, ok, err := boolchain.Run(t.Context(), conj(leaf(), pos(leaf()), pos(leaf())), f.steps())
+	require.NoError(t, err)
+	require.False(t, ok)
+	require.True(t, got == nil)
+	require.Zero(t, len(f.fullCall))
+}
+
+func TestRunTwoNegativeFullFailures(t *testing.T) {
+	t.Parallel()
+	boom := errors.New("full step failed")
+	for _, tc := range []struct {
+		name string
+		step int
+		err  error
+	}{
+		{"union refusal", 1, nil}, {"union error", 1, boom},
+		{"cut refusal", 2, nil}, {"cut error", 2, boom},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			a, b, c := leaf(), leaf(), leaf()
+			calls := 0
+			steps := boolchain.Steps{
+				Exact: func(context.Context, meshbool.OperationKind, *topo.Body, *topo.Body) (*topo.Body, bool, error) {
+					return nil, false, nil
+				},
+				Full: func(context.Context, meshbool.OperationKind, *topo.Body, *topo.Body) (*topo.Body, bool, error) {
+					calls++
+					if calls == tc.step {
+						return nil, false, tc.err
+					}
+					return leaf(), true, nil
+				},
+			}
+			got, ok, err := boolchain.Run(t.Context(), conj(a, neg(b), neg(c)), steps)
+			require.False(t, ok)
+			require.True(t, got == nil, "a failed plan returned a body")
+			if tc.err == nil {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, tc.err)
+			}
+			require.Equal(t, tc.step, calls)
+		})
+	}
+}
+
+func TestRunTwoNegativeFullCancellation(t *testing.T) {
+	t.Parallel()
+	for _, stop := range []int{1, 2} {
+		ctx, cancel := context.WithCancel(t.Context())
+		calls := 0
+		steps := boolchain.Steps{
+			Exact: func(context.Context, meshbool.OperationKind, *topo.Body, *topo.Body) (*topo.Body, bool, error) {
+				return nil, false, nil
+			},
+			Full: func(ctx context.Context, _ meshbool.OperationKind, _, _ *topo.Body) (*topo.Body, bool, error) {
+				calls++
+				if calls == stop {
+					cancel()
+					if stop == 2 {
+						// Production dispatch checks cancellation after each full step.
+						return nil, false, ctx.Err()
+					}
+				}
+				return leaf(), true, nil
+			},
+		}
+		got, ok, err := boolchain.Run(ctx, conj(leaf(), neg(leaf()), neg(leaf())), steps)
+		require.ErrorIs(t, err, context.Canceled)
+		require.False(t, ok)
+		require.True(t, got == nil)
+		require.Equal(t, stop, calls)
+		cancel()
+	}
+}

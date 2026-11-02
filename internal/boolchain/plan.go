@@ -29,9 +29,10 @@ type runner struct {
 	miss  map[missKey]struct{}
 }
 
-// Run evaluates chain's plan: every pair Exact admits first, then at most one Full
-// step. ok is false when the plan cannot finish. A non-nil error is a Step error or
-// ctx.Err(). Run never calls Exact twice with one (op, x, y).
+// Run evaluates every pair Exact admits first, then the bounded Full steps in
+// agent-docs/boolean-chain-regroup-design.md (Plan). ok is false when the plan
+// cannot finish. A non-nil error is a Step error or ctx.Err(). Run never calls
+// Exact twice with one (op, x, y).
 func Run(ctx context.Context, chain Chain, steps Steps) (*topo.Body, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
@@ -108,6 +109,15 @@ func (r *runner) conjunction(ctx context.Context, chain Chain) (*topo.Body, bool
 		return acc, true, nil
 	case 1:
 		return r.full(ctx, opOf(pending[0]), acc, pending[0].Body)
+	case 2:
+		if !allNegated(pending) {
+			return nil, false, nil
+		}
+		tools, ok, err := r.full(ctx, meshbool.OpUnion, pending[0].Body, pending[1].Body)
+		if err != nil || !ok {
+			return nil, false, err
+		}
+		return r.full(ctx, meshbool.OpCut, acc, tools)
 	}
 	return nil, false, nil
 }
