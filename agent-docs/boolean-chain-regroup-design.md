@@ -41,7 +41,7 @@ Success criteria:
 - The fixtures in Test plan pass with assertions on computed volumes and coordinates.
 
 **Out of scope:** `Union` of three or more bodies (`performUnionMany`), regrouping before a call that succeeds
-today, walking through `Transform`/`Copy`/modify producers, chains mixing `Union` with `Cut`/`Intersect`, a public
+today, walking through `Transform`/`Copy`/modify producers, general chains mixing `Union` with `Cut`/`Intersect`, a public
 option or diagnostic for regrouping, and `Verify`'s read-only evaluator.
 
 Prism-boolean §4.7 owns the separate three-source variadic prism retry. It
@@ -110,12 +110,14 @@ Alternatives considered:
   increment. It needs placed leaves built inside the plan; nothing in the fixtures requires it.
 - A public opt-in or opt-out option, or an `OpDiag` warning naming the regroup: rejected. It adds public API under
   core §6 review for behavior that only turns refusals into proven results.
-- Distributive rewrites for mixed chains, e.g. `(A ∪ B) − C = (A − C) ∪ (B − C)`: rejected. They add steps and do
-  not reduce the mesh-step count in any surveyed fixture.
+- General distributive rewrites for mixed chains remain outside `boolchain`. The narrow target-side coarse-held
+  `Cut` exception is specified in Paired Cut continuation.
 
 ## Design
 
 ### Trigger
+
+The separate Paired Cut continuation checks its narrower typed trigger before the chain regroup below.
 
 Regroup runs inside `performBoolean` (`boolean.go`) only when all of these hold:
 
@@ -205,8 +207,29 @@ Consequences the Plan relies on:
   subset of the literals, so it contains the final set. A disjunction intermediate contains a non-empty leaf.
 - `Union(A, B)` with `A`, `B` disjoint is a two-lump regular set; nothing above assumes connectivity.
 
-No mixed identity is admitted: `(A ∪ B) − C ≠ A ∪ (B − C)` in general, so a `Union` result inside a conjunction's
+The chain plan admits no mixed identity: `(A ∪ B) − C ≠ A ∪ (B − C)` in general, so a `Union` result inside a conjunction's
 positive side, or a `Cut`/`Intersect` result inside a disjunction or a negative literal, stays a leaf.
+
+### Paired Cut continuation
+
+- Trigger only on `Cut` without `WithMatchingFaces`, after a `BooleanExpectedStaging` refusal carrying a
+  target-side `CoarseHeldContactError`. Reject conflicting tags and canceled contexts.
+- Authenticate public history and its identity seals. The target must be `Union(L,U)` with exactly two consumed
+  sources, or `Cut(Union(L,U),H1)` with those same sources and the recorded first tool. Require expandable faceted
+  Union and prior Cut payloads, including their warning and point-cone gates. Recheck history, live operands and
+  producer identity under the commit lock.
+- The regularized identities are `(L ∪ U) − H1 = (L − H1) ∪ (U − H1)` and
+  `((L ∪ U) − H1) − H2 = ((L − H1) − H2) ∪ ((U − H1) − H2)`.
+- The first plan calls `Cut(L,H1)` and `Cut(U,H1)` at chord scale `0.25`, then unions the results at scale `1`.
+  The second calls `Cut(L,H1)` at `0.25`, cuts that result by `H2` at `0.125`, calls `Cut(U,H1)` at `0.0625`,
+  cuts that result by `H2` at `0.125`, then unions both results at scale `1`.
+- Each step starts a fresh ordinary pipeline. No shared replay meter or per-step work, record or byte counter is
+  used. Reject every private warning. Apply the ordinary source, contact, boundary and occupied-volume gates.
+- Verify the detached result at the original pair chord raised to its held floor. A finer consumer tolerance is a
+  separate check; the held-floor result does not establish the original chord globally.
+- Reserve three or five consecutive producer identities. Publish one `Cut` with the original target and tool only
+  after the plan, verification, history recheck and cancellation check succeed. A declined plan falls through to
+  the existing retry and regroup rules. A cancellation or evaluator invariant failure returns without a commit.
 
 ### Plan
 
