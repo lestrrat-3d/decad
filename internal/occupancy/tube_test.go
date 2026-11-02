@@ -115,3 +115,30 @@ func TestArcTubeLeafBulges(t *testing.T) {
 		[]r3.Vec{at(math.Pi, -d), at(math.Pi+d, -d), at(math.Pi+d, d)}, [][3]int{{0, 1, 2}}, []float64{delta})
 	require.Equal(t, delta, past[0])
 }
+
+func TestHelixTubeLeafPiecesContainTheCoil(t *testing.T) {
+	t.Parallel()
+	const rc, zc, rho, turns, pitch = 2.1, 0.3, 0.4, 1.5, 5.0
+	k := pitch / (2 * math.Pi)
+	o, n, er, _ := torusFrame()
+	et := n.Cross(er)
+	leaf, err := occupancy.HelixTubeLeaf(o, n, er, et, -1, k, rc, zc, rho, 2*math.Pi*turns, 0, 1e-4, 32, 0.01)
+	require.NoError(t, err)
+	pieces, err := leaf.Pieces()
+	require.NoError(t, err)
+	phi := func(r, z, theta float64) r3.Vec {
+		s, c := math.Sincos(theta)
+		return o.Add(er.Scale(r * c)).Add(et.Scale(-r * s)).Add(n.Scale(z + k*theta))
+	}
+	for i := range 31 {
+		theta := 2 * math.Pi * turns * float64(i) / 30
+		for j := range 8 {
+			a := 2 * math.Pi * float64(j) / 8
+			sa, ca := math.Sincos(a)
+			p := phi(rc+rho*(1-1e-6)*ca, zc+rho*(1-1e-6)*sa, theta)
+			require.True(t, insideSomePiece(t, p, pieces), "coil point at θ %v, section angle %v escaped every piece", theta, a)
+		}
+	}
+	// A point between two turns, on the centre radius, lies in no piece.
+	require.False(t, insideSomePiece(t, phi(rc, zc+pitch/2, math.Pi), pieces))
+}

@@ -27,7 +27,7 @@ const refineWorkLimit = 1 << 28
 //
 // source MUST be a live solid made by mesh Unions whose every operand traces
 // back to a solid of one whole circle (an extruded cylinder, a Revolve clear of
-// its axis, or a Sweep along lines and arcs, placed or not), each Union taken
+// its axis, a Sweep along lines and arcs, or a Coil, placed or not), each Union taken
 // on its own two operands, optionally followed by Cuts whose tools are
 // extruded cylinders. Any other body, or a mesh
 // whose bound cannot be proven within maxBound inside the fixed work ceiling,
@@ -92,13 +92,13 @@ func Refine(ctx context.Context, source *Body, maxBound units.Value) (result *Bo
 func refineSurfaceBounds(ctx context.Context, fp facetedPayload, target float64) ([]float64, error) {
 	rec := fp.OccupancyRecord()
 	if rec == nil {
-		return nil, fmt.Errorf(`%w: Refine takes mesh Unions of extruded, revolved or swept circles, then Cuts by extruded circles, and this body's history is not one`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: Refine takes mesh Unions of extruded, revolved, swept or coiled circles, then Cuts by extruded circles, and this body's history is not one`, ErrUnsupported)
 	}
 	cross := make([]float64, len(fp.Tris))
 	for t, tri := range fp.Tris {
 		cross[t] = max(fp.VertexBound[tri[0]], fp.VertexBound[tri[1]], fp.VertexBound[tri[2]])
 	}
-	bounds := rec.MeshBounds(rec.Bulges(fp.Verts, fp.Tris, cross))
+	bounds := rec.MeshBounds(rec.BulgeParts(fp.Verts, fp.Tris, cross))
 	floor := max(bounds.Excess, bounds.TrueToHeld)
 	if !(floor < target) {
 		return nil, fmt.Errorf(`%w: the true-to-held bound %s already reaches the requested %s`,

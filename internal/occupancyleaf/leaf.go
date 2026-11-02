@@ -9,6 +9,7 @@ package occupancyleaf
 import (
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/coilshell"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/occupancy"
@@ -60,6 +61,12 @@ func Of(body *topo.Body, mesh *topo.Mesh) *occupancy.Record {
 		return occupancy.LeafRecord(l)
 	case sweeprecord.Payload:
 		return sweepRecord(p, mesh)
+	case coilshell.Payload:
+		l, ok := coilLeaf(p, mesh.Bound)
+		if !ok {
+			return nil
+		}
+		return occupancy.LeafRecord(l)
 	case stackedrecord.Payload:
 		if p.ClosedShell || len(p.Slabs) == 0 {
 			return nil
@@ -159,6 +166,48 @@ func revolveLeaf(p revolveplan.Payload, delta float64) (occupancy.Leaf, bool) {
 	reach := math.Abs(zc) + rc + rho
 	slack := p.SectionDelta + p.Ax.AUBound + p.Ax.AVBound + (p.Ax.DUBound+p.Ax.DVBound)*reach + relativeSlack*(1+reach)
 	l, err := occupancy.ArcTubeLeaf(o, w, we0, we1, rc, rho, p.Phi0, p.Phi1, p.Full, slack, cellSagitta, TubeSides, delta)
+	if err != nil {
+		return occupancy.Leaf{}, false
+	}
+	return l, true
+}
+
+// HelixSides is the circumscribed polygon of every helix cell's piece.
+const HelixSides = 32
+
+// coilLeaf reads a Coil of one whole circle as a helix tube: the record's
+// axis line, side and plane frame give the screw motion's c, n, e_r and
+// e_t = n × e_r (agent-docs/helix-design.md Table CP), then its placement.
+// The axis displacements widen the leaf.
+func coilLeaf(p coilshell.Payload, delta float64) (occupancy.Leaf, bool) {
+	if len(p.Profile.Holes) != 0 || p.Side == 0 {
+		return occupancy.Leaf{}, false
+	}
+	c, ok := wholeCircle(p.Profile)
+	if !ok {
+		return occupancy.Leaf{}, false
+	}
+	rho, err := c.Radius.In(units.Millimeter)
+	if err != nil || !(rho > 0) {
+		return occupancy.Leaf{}, false
+	}
+	side := float64(p.Side)
+	du, dv := c.Center.U-p.Line.AU, c.Center.V-p.Line.AV
+	rc := (dv*p.Line.DU - du*p.Line.DV) * side
+	zc := du*p.Line.DU + dv*p.Line.DV
+	u, v := p.Frame.U(), p.Frame.V()
+	n := p.Xform.ApplyDir(u.Scale(p.Line.DU).Add(v.Scale(p.Line.DV)))
+	er := p.Xform.ApplyDir(u.Scale(-p.Line.DV * side).Add(v.Scale(p.Line.DU * side)))
+	o := p.Xform.Apply(p.Frame.ToWorldUV(p.Line.AU, p.Line.AV))
+	sigma := 1.0
+	if p.LeftHand {
+		sigma = -1
+	}
+	k := p.Pitch / (2 * math.Pi)
+	span := 2 * math.Pi * p.Turns
+	reach := math.Abs(zc) + rc + rho + math.Abs(k)*span
+	slack := p.Line.AUBound + p.Line.AVBound + (p.Line.DUBound+p.Line.DVBound)*reach + relativeSlack*(1+reach)
+	l, err := occupancy.HelixTubeLeaf(o, n, er, n.Cross(er), sigma, k, rc, zc, rho, span, slack, cellSagitta, HelixSides, delta)
 	if err != nil {
 		return occupancy.Leaf{}, false
 	}

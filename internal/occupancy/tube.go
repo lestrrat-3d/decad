@@ -183,3 +183,67 @@ func (s torusShape) poke(tri [3]r3.Vec) float64 {
 
 // boundaryFar is not read for arc tubes: no Cut takes one as a tool.
 func (torusShape) boundaryFar(r3.Vec, r3.Vec, float64) bool { return false }
+
+// HelixTubeLeaf builds the leaf of a Coil of a whole circle: the disc of radius
+// rho centred at axis coordinates (rc, zc) moved by the screw motion
+// Φ(ρ, ζ, θ) = c + ρ·(cos θ·er + σ·sin θ·et) + (ζ + k·θ)·n for θ in [0, span]
+// (agent-docs/helix-design.md Table CP). Every point of the solid lies within
+// rho of the centre helix at its own θ, since the disc sits in the axis plane
+// there; each angular cell's piece is a circumscribed prism about the chord of
+// the centre helix over the cell, widened by the helix's sagitta over it
+// (curvature rc/(rc² + k²) over an arc of length d·sqrt(rc² + k²) gives
+// rc·d²/8) and extended past both ends by how far a disc offset can reach
+// along the chord. The leaf reads no poke: every held facet keeps its own
+// bound as its bulge. delta is the published bound of the held mesh.
+func HelixTubeLeaf(c, n, er, et r3.Vec, sigma, k, rc, zc, rho, span, slack, cellSagitta float64, sides int, delta float64) (Leaf, error) {
+	if slices.ContainsFunc([]float64{sigma, k, rc, zc, rho, span, slack, cellSagitta, delta}, proofbound.IsNonFinite) {
+		return Leaf{}, fmt.Errorf("%w: helix tube reading", ErrInvalid)
+	}
+	if !(rc > rho) || !(rho > 0) || !(span > 0) || !(cellSagitta > 0) || slack < 0 || delta < 0 {
+		return Leaf{}, fmt.Errorf("%w: helix tube of radius %v, wire %v, span %v", ErrInvalid, rc, rho, span)
+	}
+	cells := max(int(math.Ceil(span/math.Sqrt(8*cellSagitta/rc))), 4)
+	if cells > 4*maxArcCells {
+		return Leaf{}, fmt.Errorf("%w: a helix tube asks for %d outer pieces", ErrInvalid, cells)
+	}
+	scale := c.Len() + rc + rho + math.Abs(zc) + math.Abs(k)*span
+	pad := proofbound.AbsSumUpper(slack, relSlack*scale)
+	d := span / float64(cells)
+	sag := rc * d * d / 8
+	lead := math.Abs(k) / math.Hypot(rc, k)
+	ext := proofbound.AbsSumUpper(rho*(lead+d), pad)
+	tubeR := proofbound.AbsSumUpper(rho, sag, pad)
+	helix := func(theta float64) r3.Vec {
+		s, co := math.Sincos(theta)
+		return c.Add(er.Scale(rc * co)).Add(et.Scale(sigma * rc * s)).Add(n.Scale(zc + k*theta))
+	}
+	reach := tubeR/math.Cos(math.Pi/float64(sides))*(1+1e-9) + ext
+	boxes := make([][2]r3.Vec, cells)
+	for i := range cells {
+		boxes[i] = cellBox(helix(float64(i)*d), helix(float64(i+1)*d), reach)
+	}
+	build := func() ([]*Piece, error) {
+		pieces := make([]*Piece, 0, cells)
+		for i := range cells {
+			theta := (float64(i) + 0.5) * d
+			s, co := math.Sincos(theta)
+			radial := er.Scale(co).Add(et.Scale(sigma * s))
+			piece, err := SegmentTube(helix(float64(i)*d), helix(float64(i+1)*d), radial, tubeR, ext, sides)
+			if err != nil {
+				return nil, err
+			}
+			pieces = append(pieces, piece)
+		}
+		return pieces, nil
+	}
+	l := newLeaf(boxes, build, delta, noPoke{})
+	l.key = fmt.Sprintf("helix %v %v %v %v %v %v %v %v %v %v %v %v", c, n, er, et, sigma, k, rc, zc, rho, span, slack, cellSagitta)
+	return l, nil
+}
+
+// noPoke is the shape of a leaf that bounds no facet's poke: every facet
+// falls back to its own two-sided bound.
+type noPoke struct{}
+
+func (noPoke) poke([3]r3.Vec) float64                   { return math.Inf(1) }
+func (noPoke) boundaryFar(r3.Vec, r3.Vec, float64) bool { return false }

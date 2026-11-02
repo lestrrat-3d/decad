@@ -99,7 +99,18 @@ func LeafRecord(leaves ...Leaf) *Record {
 // and, for a facet near an earlier crossing site, the accumulated crossing
 // depth; a facet near a hole also reads that hole's bound.
 func (r *Record) Bulges(verts []r3.Vec, tris [][3]int, delta []float64) []float64 {
+	lam, _ := r.BulgeParts(verts, tris, delta)
+	return lam
+}
+
+// BulgeParts is Bulges together with each facet's own reach outside X: how
+// far any point of the facet lies outside the true solid, its poke out of the
+// nearest leaf or, near a hole's wall, that hole's bound, capped by the
+// facet's own bound. An earlier crossing raises a facet's bulge but not its
+// reach: the crossing line lies on held facets.
+func (r *Record) BulgeParts(verts []r3.Vec, tris [][3]int, delta []float64) ([]float64, []float64) {
 	out := make([]float64, len(tris))
+	reach := make([]float64, len(tris))
 	for t, tri := range tris {
 		tv := [3]r3.Vec{verts[tri[0]], verts[tri[1]], verts[tri[2]]}
 		lo, hi := triBox(tv)
@@ -118,12 +129,13 @@ func (r *Record) Bulges(verts []r3.Vec, tris [][3]int, delta []float64) []float6
 				lam = math.Max(lam, l.Delta)
 			}
 		}
+		reach[t] = math.Min(delta[t], lam)
 		if r.Cross > 0 && r.sites().near(lo, hi, r.Cross) {
 			lam = math.Max(lam, r.Cross)
 		}
 		out[t] = math.Min(delta[t], lam)
 	}
-	return out
+	return out, reach
 }
 
 // SiteReach is how far from a contact segment a bulge source (an earlier
@@ -326,15 +338,16 @@ type Bounds struct {
 	Excess, TrueToHeld float64
 }
 
-// MeshBounds reads Bounds from the bulges of the record's own held mesh. A
-// point of X' outside X lies within λ of a facet whose points lie within λ of
-// X, so Excess is twice the largest bulge; a true boundary point inside X'
-// has a point of X' outside X arbitrarily near, so it lies within the largest
-// bulge of the held boundary.
-func (r *Record) MeshBounds(bulges []float64) Bounds {
-	lam, d := 0.0, 0.0
-	for _, b := range bulges {
+// MeshBounds reads Bounds from the bulges and reaches (BulgeParts) of the
+// record's own held mesh. A point of X' outside X lies within λ(t) of a facet
+// t whose points lie within its reach of X, so Excess is the largest sum of
+// the two; a true boundary point inside X' has a point of X' outside X
+// arbitrarily near, so it lies within the largest bulge of the held boundary.
+func (r *Record) MeshBounds(bulges, reaches []float64) Bounds {
+	lam, d, excess := 0.0, 0.0, 0.0
+	for t, b := range bulges {
 		lam = max(lam, b)
+		excess = max(excess, proofbound.AbsSumUpper(b, reaches[t]))
 	}
 	for _, l := range append(append([]Leaf(nil), r.Leaves...), r.Holes...) {
 		d = max(d, l.Delta)
@@ -346,7 +359,7 @@ func (r *Record) MeshBounds(bulges []float64) Bounds {
 		near = proofbound.AbsSumUpper(near, r.Cross)
 	}
 	return Bounds{
-		Excess:     proofbound.AbsSumUpper(lam, lam),
+		Excess:     excess,
 		TrueToHeld: max(near, lam),
 	}
 }
