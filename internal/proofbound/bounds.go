@@ -1202,6 +1202,11 @@ func CellTwistMomentFromVolume(vLo, vHi, wLo, wHi, anchor r3.Vec, signed *big.Ra
 // axis always suffice. The zero value of proofarith.Dyadic is zero.
 type momentPoly [4][4]proofarith.Dyadic
 
+// momentPolyMul returns the exact product a*b. It skips zero coefficients, so
+// only pairs of nonzero terms index out; every caller multiplies operands whose
+// nonzero degrees sum to at most 3 on each axis, which keeps that index inside
+// the array. Dyadic addition is exact, so the fixed summation order gives the
+// same value as any other order.
 func momentPolyMul(a, b *momentPoly) momentPoly {
 	var out momentPoly
 	for i := range a {

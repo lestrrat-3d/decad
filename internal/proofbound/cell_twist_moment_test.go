@@ -12,9 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// refMomentPoly is the map-backed polynomial CellTwistMoment used before it
-// moved to a fixed array. It stays here as the reference the array version
-// must match exactly.
+// refMomentPoly is an independent map-backed moment polynomial. It is the
+// reference that CellTwistMoment's fixed-array polynomial must match exactly.
 type refMomentPoly map[[2]int]proofarith.Dyadic
 
 func refMomentPolyAdd(p refMomentPoly, degree [2]int, term proofarith.Dyadic) {
@@ -132,7 +131,7 @@ func momentVec(rng *rand.Rand, mixed bool) r3.Vec {
 	return r3.Vec{X: momentScalar(rng, mixed), Y: momentScalar(rng, mixed), Z: momentScalar(rng, mixed)}
 }
 
-func momentQuads(rng *rand.Rand, kind string, mixed bool) momentQuad {
+func randomMomentQuad(rng *rand.Rand, kind string, mixed bool) momentQuad {
 	anchor := momentVec(rng, mixed)
 	vLo := momentVec(rng, mixed)
 	u := momentVec(rng, mixed)
@@ -164,7 +163,7 @@ func TestCellTwistMomentMatchesMapReference(t *testing.T) {
 				t.Parallel()
 				rng := rand.New(rand.NewPCG(7, 11))
 				for range 300 {
-					q := momentQuads(rng, kind, mixed)
+					q := randomMomentQuad(rng, kind, mixed)
 					want := refCellTwistMoment(q.vLo, q.vHi, q.wLo, q.wHi, q.anchor)
 					got := proofbound.CellTwistMoment(q.vLo, q.vHi, q.wLo, q.wHi, q.anchor)
 					for axis := range got {
@@ -180,7 +179,7 @@ func BenchmarkCellTwistMoment(b *testing.B) {
 	rng := rand.New(rand.NewPCG(3, 5))
 	quads := make([]momentQuad, 64)
 	for i := range quads {
-		quads[i] = momentQuads(rng, "nonplanar", false)
+		quads[i] = randomMomentQuad(rng, "nonplanar", false)
 	}
 	b.ReportAllocs()
 	for i := 0; b.Loop(); i++ {
@@ -193,7 +192,7 @@ func BenchmarkCellTwistMomentMapReference(b *testing.B) {
 	rng := rand.New(rand.NewPCG(3, 5))
 	quads := make([]momentQuad, 64)
 	for i := range quads {
-		quads[i] = momentQuads(rng, "nonplanar", false)
+		quads[i] = randomMomentQuad(rng, "nonplanar", false)
 	}
 	b.ReportAllocs()
 	for i := 0; b.Loop(); i++ {
