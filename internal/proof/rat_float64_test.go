@@ -357,8 +357,8 @@ func TestXhpVecLeavesQuotientOperandsUnchanged(t *testing.T) {
 	rng := rand.New(rand.NewPCG(431, 433))
 	three := big.NewInt(3)
 	var cases [][2]*big.Int
-	// Odd denominators: numerator narrower than (shift>0), as wide as
-	// (shift==0 region) and wider than (shift<0) the denominator.
+	// Non-power-of-two denominators against numerators narrower and wider
+	// than them: both shift>0 and shift<0.
 	for _, nb := range []int{1, 2, 30, 53, 54, 55, 64, 65, 200, 1100} {
 		for _, db := range []int{2, 3, 30, 54, 55, 64, 130, 700, 1100} {
 			d := randomBits(rng, db)
@@ -367,8 +367,11 @@ func TestXhpVecLeavesQuotientOperandsUnchanged(t *testing.T) {
 			cases = append(cases, [2]*big.Int{randomBits(rng, nb), d})
 		}
 	}
-	// Exact quotients, ties and huge/tiny exponents.
+	// shift==0 (BitLen(num)-BitLen(den) == 54), exact quotients, ties and
+	// huge/tiny exponents.
 	cases = append(cases,
+		[2]*big.Int{new(big.Int).Add(bigPow2(55), big.NewInt(1)), three},
+		[2]*big.Int{new(big.Int).Add(bigPow2(57), big.NewInt(3)), big.NewInt(9)},
 		[2]*big.Int{big.NewInt(9), big.NewInt(3)},
 		[2]*big.Int{big.NewInt(1), three},
 		[2]*big.Int{new(big.Int).Add(bigPow2(54), big.NewInt(1)), three},

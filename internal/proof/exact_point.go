@@ -258,7 +258,8 @@ func quotientFloat64(num, den *big.Int) (float64, bool) {
 	}
 	// Only the operand that needs scaling is copied. QuoRem truncates, so
 	// |quotient| and the zero-remainder test do not depend on the operand
-	// signs; quotient.Abs restores the magnitude the mantissa is read from.
+	// signs. quotient.Abs keeps the mantissa read within Uint64's contract,
+	// which leaves negative values undefined.
 	var scaledNum, scaledDen, quotient, remainder big.Int
 	a, b := num, den
 	if shift := 54 - exp; shift > 0 {
