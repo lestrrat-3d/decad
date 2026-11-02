@@ -1396,7 +1396,9 @@ rebuilt from the source bodies the operation history names, under a set identity
 that leaves the result unchanged, when its bounded plan applies
 (`agent-docs/boolean-chain-regroup-design.md`, Plan). The result is the same set, its history
 is the single call, and a selector naming a source feature's origin may match fewer faces.
-Any other refusal stands.
+A target-side coarse-held `Cut` refusal may also continue from an authenticated two-source `Union`, or from
+a `Cut` of that union, through the separate paired plan in `agent-docs/boolean-chain-regroup-design.md`
+(Paired Cut continuation). Other refusals follow the ordinary dispatch and regroup rules.
 The refusal names the operand (`Cut`'s target or tool; the first or second
 operand otherwise), quotes the bound of the facets the pair touches and the
 pair's chord tolerance, and states that a boolean takes no chord tolerance:

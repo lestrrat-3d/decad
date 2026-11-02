@@ -351,13 +351,20 @@ func found(b *topo.Body, err error) (*topo.Body, bool, error) {
 // instances not yet registered and commits only the last result. a and b must
 // belong to one document.
 func Body(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *topo.Body, hooks Hooks) (*topo.Body, error) {
+	return BodyScaled(ctx, op, env, a, b, hooks, 1)
+}
+
+// BodyScaled runs a fresh ordinary pair pipeline with a smaller operand chord
+// and no shared replay meter.
+func BodyScaled(ctx context.Context, op meshbool.OperationKind, env topo.Env, a, b *topo.Body,
+	hooks Hooks, scale float64) (*topo.Body, error) {
 	if n, ok, err := Analytic(ctx, op, env, a, b, hooks); err != nil {
 		return nil, err
 	} else if ok {
 		return n, nil
 	}
 
-	eval, err := booleaneval.Evaluate(ctx, op, a, b, hooks.Mesher, 1, nil, nil)
+	eval, err := booleaneval.Evaluate(ctx, op, a, b, hooks.Mesher, scale, nil, nil)
 	if err != nil {
 		return nil, hooks.AsBooleanError(op, err)
 	}

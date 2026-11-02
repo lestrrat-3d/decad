@@ -29,6 +29,17 @@ func splitTestBox(t *testing.T, doc *Document, x0, x1 float64) *Body {
 	return body
 }
 
+type cancelOperandMesher struct {
+	cancel context.CancelFunc
+	called *bool
+}
+
+func (m cancelOperandMesher) TessellateOperand(ctx context.Context, _ *topo.Body, _ float64) (*topo.Mesh, bool, error) {
+	*m.called = true
+	m.cancel()
+	return nil, false, ctx.Err()
+}
+
 // TestBooleanDispatchAnalyticPrefix pins the split of booleandispatch.Body into the
 // analytic route prefix and the mesh tail (agent-docs/boolean-chain-regroup-design.md).
 func TestBooleanDispatchAnalyticPrefix(t *testing.T) {
@@ -89,6 +100,33 @@ func TestBooleanDispatchAnalyticPrefix(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, ok)
 		require.Nil(t, n)
+
+		cancelled, cancel := context.WithCancel(ctx)
+		called := false
+		hooks := booleanHooks(booleanConfig{})
+		hooks.Mesher = cancelOperandMesher{cancel: cancel, called: &called}
+		beforeID := doc.nextProducerID()
+		beforeHistory := len(doc.OperationHistory().Operations())
+		beforeBodies := doc.Bodies()
+		boxMesh, toolMesh := box.n.Tess.Load(), tool.n.Tess.Load()
+		boxFaces, toolFaces := box.Faces(), tool.Faces()
+		_, err = booleandispatch.BodyScaled(cancelled, meshbool.OpCut, env, &box.n, &tool.n, hooks, 0.25)
+		require.True(t, called)
+		require.ErrorIs(t, err, context.Canceled)
+		require.Equal(t, beforeID, doc.nextProducerID())
+		require.Len(t, doc.OperationHistory().Operations(), beforeHistory)
+		require.Len(t, doc.Bodies(), len(beforeBodies))
+		for i, body := range doc.Bodies() {
+			require.Same(t, beforeBodies[i], body)
+		}
+		require.True(t, boxMesh == box.n.Tess.Load())
+		require.True(t, toolMesh == tool.n.Tess.Load())
+		for i, face := range box.Faces() {
+			require.Same(t, boxFaces[i], face)
+		}
+		for i, face := range tool.Faces() {
+			require.Same(t, toolFaces[i], face)
+		}
 
 		got, err := booleanBodyWith(ctx, meshbool.OpCut, box, tool, doc.nextProducerID(), booleanConfig{})
 		require.NoError(t, err)

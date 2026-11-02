@@ -299,7 +299,18 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, 
 	}
 	body, err := booleanBodyWith(ctx, op, a, b, d.nextProducerID(), cfg)
 	span := producerID(1)
-	if err != nil {
+	var paired pairedCutAncestry
+	pairedUsed := false
+	if err != nil && coarseTargetCut(op, cfg, err) {
+		var used bool
+		var rerr error
+		body, span, paired, used, rerr = pairedCutContinuation(ctx, d, a, b, cfg, err)
+		if rerr != nil {
+			return nil, rerr
+		}
+		pairedUsed = used
+	}
+	if err != nil && !pairedUsed {
 		retried, used, attempted, ok, rerr := retryBrakeUnion(ctx, d, op, a, b, cfg, err)
 		if rerr != nil {
 			return nil, rerr
@@ -311,7 +322,7 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, 
 			body, span, err = retried, used, nil
 		}
 	}
-	if err != nil {
+	if err != nil && !pairedUsed {
 		rescued, used, ok, rerr := regroupBoolean(ctx, d, op, a, b, cfg, err)
 		if rerr != nil {
 			return nil, rerr
@@ -328,6 +339,13 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, 
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if pairedUsed {
+		base := body.n.Origin.Producer - span + 1
+		if commitErr := commitPairedCut(ctx, d, a, b, body, span, base, paired, err); commitErr != nil {
+			return nil, commitErr
+		}
+		return body, nil
 	}
 	kind := operationKindForBoolean(op)
 	if err := d.commitOperationSpanIn(ctx, nil, kind, operationInputsForBoolean(op, a, b), body, span, a, b); err != nil {

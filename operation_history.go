@@ -123,6 +123,43 @@ type Operation struct {
 	outputs        []*Body
 	faceSuccessors map[*Face]FaceHistory
 	doc            *topo.Document
+	seal           operationIdentitySeal
+}
+
+type operationIdentityInput struct {
+	input    OperationInput
+	producer producerID
+}
+
+type operationIdentityOutput struct {
+	body     *Body
+	producer producerID
+}
+
+type operationIdentitySeal struct {
+	kind    OperationKind
+	doc     *topo.Document
+	inputs  []operationIdentityInput
+	outputs []operationIdentityOutput
+}
+
+// matches verifies the independently captured operation identity under LiveMu.
+func (o *Operation) matchesIdentitySeal() bool {
+	s := o.seal
+	if o.kind != s.kind || o.doc != s.doc || len(o.inputs) != len(s.inputs) || len(o.outputs) != len(s.outputs) {
+		return false
+	}
+	for i, input := range o.inputs {
+		if input != s.inputs[i].input || input.Body == nil || input.Body.n.Origin.Producer != s.inputs[i].producer {
+			return false
+		}
+	}
+	for i, output := range o.outputs {
+		if output == nil || output != s.outputs[i].body || output.n.Origin.Producer != s.outputs[i].producer {
+			return false
+		}
+	}
+	return true
 }
 
 // Kind reports the public entry point used for this operation.
@@ -285,7 +322,23 @@ func cloneFaceSuccessors(in map[*Face]FaceHistory) map[*Face]FaceHistory {
 }
 
 func (d *Document) operation(kind OperationKind, inputs []OperationInput, outputs ...*Body) *Operation {
-	return &Operation{kind: kind, inputs: slices.Clone(inputs), outputs: slices.Clone(outputs), doc: &d.n}
+	o := &Operation{kind: kind, inputs: slices.Clone(inputs), outputs: slices.Clone(outputs), doc: &d.n}
+	o.seal = operationIdentitySeal{kind: kind, doc: &d.n}
+	for _, input := range inputs {
+		var producer producerID
+		if input.Body != nil {
+			producer = input.Body.n.Origin.Producer
+		}
+		o.seal.inputs = append(o.seal.inputs, operationIdentityInput{input: input, producer: producer})
+	}
+	for _, body := range outputs {
+		var producer producerID
+		if body != nil {
+			producer = body.n.Origin.Producer
+		}
+		o.seal.outputs = append(o.seal.outputs, operationIdentityOutput{body: body, producer: producer})
+	}
+	return o
 }
 
 func referencedInputs(bodies []*Body, role string) []OperationInput {
