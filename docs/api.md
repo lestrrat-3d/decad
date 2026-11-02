@@ -316,6 +316,13 @@ ordinary Boolean routes; two remaining cut tools may first be united. The result
 history records one call. A face made by the analytic steps names a source body's role only where it lies inside
 exactly one source face, so select other faces by geometry.
 
+A three-body `Union` over admitted prism sources can also retry its grouping
+when its second pair touches a coarse held rim. It joins the last two sources
+first, then joins that result with the first source. Both pairs keep their
+ordinary proof limits, and a successful call records one operation in the
+original input order. The route is specified in
+[`prism-boolean §4.7`](../agent-docs/prism-boolean-design.md#47-three-source-prism-pair-retry).
+
 `Cut` and `Intersect` take options. `decad.WithMatchingFaces()` says faces of the two bodies are meant to match
 where they meet, such as a cap drawn to touch a cone. A miss of a few last-place steps is then taken as the
 match you intended and charged into the result's error bounds; a larger miss is still refused. See
