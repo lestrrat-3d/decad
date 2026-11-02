@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/surfacenormal"
@@ -25,6 +27,84 @@ func captureSealFixture(t *testing.T) *ShiftCertificate {
 	c.groups[0].Denoted.Radius.Hi = big.NewRat(2, 3)
 	resealShiftFixture(t, c)
 	return c
+}
+
+func TestPublicUnionShrinkSealRequiresExactSingleWarning(t *testing.T) {
+	c := captureSealFixture(t)
+	c.sealed = false
+	c.shift = pieceShift{Grow: -0.000625}
+	c.displacement = 0.0006250000003938229
+	c.reach = 0.01
+	warning := opdiagnostic.Record{Operation: int(meshbool.OpUnion), PublicOperation: 11,
+		Code: opdiagnostic.CodeGapShiftApplied, Operand: 1, Change: opdiagnostic.ChangeGapShift,
+		DisplacementBound: c.displacement, AllowedReach: c.reach}
+	if !c.SealPublicUnionShrinkWarning(3, []opdiagnostic.Record{warning}, 11) {
+		t.Fatal("valid Union shrink warning was refused")
+	}
+	if c.resultID != 3 || !c.sealed || c.publicWarning != warning {
+		t.Fatal("Union shrink was not bound to its result and warning")
+	}
+	if c.SealPublicUnionShrinkWarning(4, []opdiagnostic.Record{warning}, 11) {
+		t.Fatal("sealed witness was rebound")
+	}
+
+	for name, mutate := range map[string]func(*opdiagnostic.Record){
+		"operation":       func(w *opdiagnostic.Record) { w.Operation = int(meshbool.OpCut) },
+		"operand":         func(w *opdiagnostic.Record) { w.Operand = 0 },
+		"displacement":    func(w *opdiagnostic.Record) { w.DisplacementBound++ },
+		"reach":           func(w *opdiagnostic.Record) { w.AllowedReach++ },
+		"extra warning":   func(w *opdiagnostic.Record) { w.TouchedBound = 1 },
+		"chain allowance": func(w *opdiagnostic.Record) { v := 1.0; w.ChainAllowance = &v },
+	} {
+		t.Run(name, func(t *testing.T) {
+			cert := captureSealFixture(t)
+			cert.sealed = false
+			cert.shift = pieceShift{Grow: -0.000625}
+			cert.displacement, cert.reach = c.displacement, c.reach
+			got := warning
+			mutate(&got)
+			if cert.SealPublicUnionShrinkWarning(3, []opdiagnostic.Record{got}, 11) {
+				t.Fatal("mutated Union warning was accepted")
+			}
+		})
+	}
+}
+
+func TestPrivateUnionAdjustmentSealBindsFreshGrowthWarning(t *testing.T) {
+	c := captureSealFixture(t)
+	c.sealed = false
+	c.shift = pieceShift{Grow: 0.000625}
+	c.displacement, c.reach = 0.0006250000003938229, 0.01
+	warning := opdiagnostic.Record{Operation: int(meshbool.OpUnion), Code: opdiagnostic.CodeGapShiftApplied,
+		Operand: 1, Change: opdiagnostic.ChangeGapShift, DisplacementBound: c.displacement, AllowedReach: c.reach}
+	if !c.SealPrivateUnionAdjustmentWarning(3, c.target, c.tool, []opdiagnostic.Record{warning}) {
+		t.Fatal("valid fresh private Union growth was refused")
+	}
+	if c.resultID != 3 || !c.sealed || c.publicWarning != warning {
+		t.Fatal("private Union growth was not bound to its result and warning")
+	}
+	if c.SealPrivateUnionAdjustmentWarning(4, c.target, c.tool, []opdiagnostic.Record{warning}) {
+		t.Fatal("sealed private witness was rebound")
+	}
+
+	for name, mutate := range map[string]func(*opdiagnostic.Record){
+		"public operation": func(w *opdiagnostic.Record) { w.PublicOperation = 11 },
+		"operation":        func(w *opdiagnostic.Record) { w.Operation = int(meshbool.OpCut) },
+		"operand":          func(w *opdiagnostic.Record) { w.Operand = 0 },
+		"displacement":     func(w *opdiagnostic.Record) { w.DisplacementBound++ },
+		"extra warning":    func(w *opdiagnostic.Record) { w.TouchedBound = 1 },
+	} {
+		t.Run(name, func(t *testing.T) {
+			cert := captureSealFixture(t)
+			cert.shift = pieceShift{Grow: 0.000625}
+			cert.displacement, cert.reach = c.displacement, c.reach
+			got := warning
+			mutate(&got)
+			if cert.SealPrivateUnionAdjustmentWarning(3, cert.target, cert.tool, []opdiagnostic.Record{got}) {
+				t.Fatal("mutated private Union warning was accepted")
+			}
+		})
+	}
 }
 
 func TestShiftCaptureSealRejectsPriorMutation(t *testing.T) {

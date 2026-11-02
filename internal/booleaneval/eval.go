@@ -62,6 +62,10 @@ type Evaluation struct {
 	Chain            *ChainAllowanceSummary
 	Chains           []ChainAllowanceSummary
 	EmbeddingReach   *meshbool.EmbeddingReach
+	SimilarityCenter r3.Vec
+	SimilarityScale  float64
+	ShiftMove        r3.Vec
+	HasSimilarity    bool
 }
 
 // ChainAllowanceSummary records a local gate that the configured allowance
@@ -770,15 +774,17 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 			if err != nil {
 				return Evaluation{}, err
 			}
-		} else if op == meshbool.OpCut {
-			ev.ShiftCertificate = captureShiftCertificate(ctx, a, b, unmoved, mbDecide, mb, piecesB, groups[targetFaces:], shifts, tolMM, chordScale, shiftDisplacement)
+		} else if op == meshbool.OpCut || op == meshbool.OpUnion && shiftsHaveSingleComponentAdjustment(shifts) {
+			ev.ShiftCertificate = captureShiftCertificate(ctx, a, b, unmoved, mbDecide, mb, piecesB,
+				groups[targetFaces:], facesB, shifts, tolMM, chordScale, shiftDisplacement)
 		}
 		if prepared != nil && (ev.ShiftCertificate == nil ||
 			prepared.shift.Grow == 0 && !ev.ShiftCertificate.IsTranslation() ||
 			prepared.shift.Grow > 0 && !ev.ShiftCertificate.IsPureGrowth()) {
 			return Evaluation{}, fmt.Errorf("%w: prepared shift certificate unavailable", decaderr.ErrUnsupported)
 		}
-		if op == meshbool.OpCut && ev.ShiftCertificate != nil && len(ma.Vertices) <= 65536 && len(ma.Triangles) <= 65536 {
+		if (op == meshbool.OpCut || op == meshbool.OpUnion && shiftsHaveSingleComponentAdjustment(shifts)) &&
+			ev.ShiftCertificate != nil && len(ma.Vertices) <= 65536 && len(ma.Triangles) <= 65536 {
 			if replay != nil {
 				ev.ShiftCertificate.targetMesh, err = snapshotShiftMesh(ctx, ma, replay)
 				if err != nil {
@@ -815,6 +821,15 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		}
 	}
 	return ev, nil
+}
+
+func shiftsHaveSingleComponentAdjustment(shifts map[int]pieceShift) bool {
+	if len(shifts) != 1 {
+		return false
+	}
+	shift, ok := shifts[0]
+	return ok && (shift.Move != (r3.Vec{}) || shift.Grow != 0) &&
+		proofbound.FiniteVec(shift.Move) && !proofbound.IsNonFinite(shift.Grow)
 }
 
 // sourceGroup is the result group a mesh Boolean copies from face f of

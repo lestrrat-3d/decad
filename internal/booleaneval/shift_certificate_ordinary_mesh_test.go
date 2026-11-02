@@ -87,7 +87,7 @@ func TestOrdinaryShiftCertificateCaptureSealsSource(t *testing.T) {
 	c.groups[0].Denoted = &surfacenormal.Revolved{Valid: true}
 	c.groups[0].Denoted.Radius.Lo = big.NewRat(1, 3)
 	capture := func(pc pieces) *ShiftCertificate {
-		return captureShiftCertificate(t.Context(), target, tool, c.selected, c.decision, c.charged, pc, c.groups,
+		return captureShiftCertificate(t.Context(), target, tool, c.selected, c.decision, c.charged, pc, c.groups, c.selected.Source,
 			map[int]pieceShift{0: c.shift}, 1, 1, 1)
 	}
 	stored := capture(c.component)

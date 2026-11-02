@@ -41,7 +41,7 @@ func snapshotStoredShift(ctx context.Context, cert *ShiftCertificate, result, ta
 		cert.targetID != target.Origin.Producer ||
 		cert.toolID != tool.Origin.Producer ||
 		(!cert.IsTranslation() &&
-			!cert.IsPureGrowth()) {
+			!cert.IsPureGrowth() && !cert.IsPureShrink()) {
 		return nil, errShiftSnapshotStoredShiftIdentityMismatch
 	}
 	if !proofbound.FiniteVec(cert.shift.Move) || !proofbound.FiniteVec(cert.center) {
@@ -59,6 +59,10 @@ func snapshotStoredShift(ctx context.Context, cert *ShiftCertificate, result, ta
 		return nil, err
 	}
 	out := *cert
+	if err := budget.ReserveArray(ctx, uint64(len(cert.groupFaces)), uint64(unsafe.Sizeof((*topo.Face)(nil)))); err != nil {
+		return nil, err
+	}
+	out.groupFaces = slices.Clone(cert.groupFaces)
 	var err error
 	for _, item := range []struct {
 		source *topo.Mesh
@@ -660,6 +664,14 @@ func sameTransform(a, b r3.Transform) bool {
 func sameValue(a, b units.Value) bool { return a.Unit() == b.Unit() && sameFloat(a.Mag(), b.Mag()) }
 func sameShiftScalars(a, b *ShiftCertificate) bool {
 	x, y := a.publicWarning, b.publicWarning
+	if len(a.groupFaces) != len(b.groupFaces) || (a.groupFaces == nil) != (b.groupFaces == nil) {
+		return false
+	}
+	for i := range a.groupFaces {
+		if a.groupFaces[i] != b.groupFaces[i] {
+			return false
+		}
+	}
 	return a.target == b.target &&
 		a.tool == b.tool &&
 		a.targetID == b.targetID &&

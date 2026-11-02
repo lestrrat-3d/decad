@@ -310,7 +310,22 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, 
 		}
 		pairedUsed = used
 	}
+	motherUsed := false
+	var motherAncestry motherHingeAncestry
+	motherCause := err
 	if err != nil && !pairedUsed {
+		retried, usedSpan, ancestry, attempted, ok, rerr := motherHingeCutContinuation(ctx, d, op, a, b, cfg, err)
+		if rerr != nil {
+			return nil, rerr
+		}
+		if attempted {
+			if !ok {
+				return nil, motherCause
+			}
+			body, span, motherAncestry, motherUsed, err = retried, usedSpan, ancestry, true, nil
+		}
+	}
+	if err != nil && !pairedUsed && !motherUsed {
 		retried, used, attempted, ok, rerr := retryBrakeUnion(ctx, d, op, a, b, cfg, err)
 		if rerr != nil {
 			return nil, rerr
@@ -322,7 +337,7 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, 
 			body, span, err = retried, used, nil
 		}
 	}
-	if err != nil && !pairedUsed {
+	if err != nil && !pairedUsed && !motherUsed {
 		rescued, used, ok, rerr := regroupBoolean(ctx, d, op, a, b, cfg, err)
 		if rerr != nil {
 			return nil, rerr
@@ -343,6 +358,13 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, 
 	if pairedUsed {
 		base := body.n.Origin.Producer - span + 1
 		if commitErr := commitPairedCut(ctx, d, a, b, body, span, base, paired, err); commitErr != nil {
+			return nil, commitErr
+		}
+		return body, nil
+	}
+	if motherUsed {
+		base := body.n.Origin.Producer - span + 1
+		if commitErr := commitMotherHingeCut(ctx, d, a, b, body, span, base, motherAncestry, motherCause); commitErr != nil {
 			return nil, commitErr
 		}
 		return body, nil
