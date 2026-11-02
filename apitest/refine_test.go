@@ -390,3 +390,41 @@ func TestRefineDrilledBar(t *testing.T) {
 	require.LessOrEqual(t, after, before)
 	require.Equal(t, held.Vertices(), m.Vertices(), "Refine moves no vertex")
 }
+
+func TestRefineLetsAChainContinue(t *testing.T) {
+	t.Parallel()
+	// Without refining, the leader's fold is refused at its third Union: the
+	// new contact touches a rim whose crossing bound is past the document's
+	// 0.02 mm chain tolerance. Refining each held result first lets the next
+	// Union read the surface bound instead, and the fold completes.
+	const chain = 0.02
+	pts := leaderPoints(1)
+	fold := func(t *testing.T, refine bool) error {
+		doc := decad.New(decad.WithChainTolerance(units.Millimeters(chain)))
+		u := refineSpan(t, doc, pts[0], pts[1], 0.35)
+		for i := 1; i+1 < len(pts); i++ {
+			next, err := decad.Union(t.Context(), u, refineSpan(t, doc, pts[i], pts[i+1], 0.35))
+			if err != nil {
+				return err
+			}
+			u = next
+			if _, err := u.Tessellate(t.Context(), units.Millimeters(chain)); refine && err != nil {
+				u, err = decad.Refine(t.Context(), u, units.Millimeters(chain))
+				require.NoError(t, err)
+			}
+		}
+		m, err := u.Tessellate(t.Context(), units.Millimeters(0.12))
+		if err != nil {
+			u, err = decad.Refine(t.Context(), u, units.Millimeters(0.12))
+			require.NoError(t, err)
+			m, err = u.Tessellate(t.Context(), units.Millimeters(0.12))
+			require.NoError(t, err)
+		}
+		b, err := m.Bound().In(units.Millimeter)
+		require.NoError(t, err)
+		require.LessOrEqual(t, b, 0.12)
+		return nil
+	}
+	require.ErrorIs(t, fold(t, false), decad.ErrUnsupported, "the unrefined fold is refused mid-chain")
+	require.NoError(t, fold(t, true))
+}

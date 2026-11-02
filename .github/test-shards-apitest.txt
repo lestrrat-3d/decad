@@ -2979,3 +2979,4 @@
 11	0.00	TestRefineTubeEyes
 11	0.00	TestRefineBoredBend
 11	0.00	TestRefineDrilledBar
+11	0.00	TestRefineLetsAChainContinue

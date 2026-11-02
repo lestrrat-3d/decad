@@ -554,6 +554,16 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		}
 		return Evaluation{}, err
 	}
+	// A refined operand (agent-docs/body-refine-design.md §3, R6) carries a
+	// surface bound per facet: its true boundary near the facet lies within
+	// that of the facet, which is all a slab half-width states. The rim
+	// composition and the held-mesh gate read the smaller of it and the
+	// crossing bound; vertex bounds, and so every reading of the new result's
+	// old rims, keep the crossing record. A moved copy adds its move.
+	if replay == nil && fixed == nil {
+		surfaceSlabs(a, ma, bmA, 0)
+		surfaceSlabs(b, mb, bmB, shiftDisplacement)
+	}
 	// A restating operand's facets where the pair meets must hold within the
 	// pair tolerance; the gate reads them on the contact classification below
 	// (agent-docs/faceted-vertex-bounds-design.md §5). Any other operand is ungated.
@@ -943,4 +953,28 @@ func localDeepTerm(op meshbool.OperationKind, ra, rb *occupancy.Record, ma, mb *
 		return math.Inf(1), sites
 	}
 	return deep, sites
+}
+
+// surfaceSlabs lowers bm's slab half-widths to the operand's refined surface
+// bounds, raised by move, when the operand is a refined faceted body whose
+// restated mesh is its held one facet for facet.
+func surfaceSlabs(body *topo.Body, mesh *topo.Mesh, bm *meshbool.BoolMesh, move float64) {
+	fp, ok := body.Payload.(facetedrecord.Payload)
+	if !ok {
+		return
+	}
+	sigma := fp.SurfaceBounds()
+	if sigma == nil || len(sigma) != len(mesh.Triangles) || len(bm.SlabBound) != len(sigma) {
+		return
+	}
+	for t, tri := range mesh.Triangles {
+		if tri != fp.Tris[t] {
+			return
+		}
+	}
+	for t, s := range sigma {
+		if v := proofbound.AbsSumUpper(s, move); v < bm.SlabBound[t] {
+			bm.SlabBound[t] = v
+		}
+	}
 }
