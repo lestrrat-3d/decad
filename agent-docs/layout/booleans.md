@@ -24,3 +24,5 @@ The rules for rows live in `agent-docs/layout.md`.
 | `boolean_mesh.go` | Runs `internal/booleaneval`'s mesh Boolean over two bodies and adapts its occupied volume through `internal/measurement`. See evaluator §9. |
 | `internal/boolupstream/` | Attributes an analytic Boolean result's planar faces to the one operand face exact plane identity proves each lies inside, and stores the roles in the payload's `Upstream`. See prism-boolean §11. |
 | `internal/capplane/` | Reads a `CapRecord` plane, a sweep axis and plane identity as exact rationals for Loft cap levels and Boolean attribution. See prism-boolean §11, loft §18. |
+| `refine.go` | Public `Refine`: re-certifies a mesh Union of extruded circles under a surface bound; its root adapter reads the faceted payload for `internal/occupancy`. See body-refine §7. |
+| `internal/occupancyleaf/` | Reads a Boolean operand payload (circle prism, coaxial stack, recorded Union result) as an occupancy record. See body-refine §4, §6. |

@@ -403,7 +403,9 @@ coordinate in millimetres.
 ## Meshes
 
 `Body.Tessellate` returns a `*decad.Mesh`, which is an output. `Mesh.Vertices` and `Mesh.Triangles` hold the triangles
-as positions and index triples. `Mesh.Bound` limits how far the mesh can sit from the body's boundary.
+as positions and index triples. `Mesh.Bound` limits how far the mesh can sit from the body's boundary. For a body
+`decad.Refine` returned, a tolerance below the held crossing bound restates the same triangles under the refined
+surface bound instead, so `Mesh.Bound` reads the smaller figure there.
 `Mesh.BoundaryVerified` and `Mesh.VolumeVerified` say which proofs the mesh carries, and `Mesh.SourceFaces` lists the
 faces the triangles come from.
 

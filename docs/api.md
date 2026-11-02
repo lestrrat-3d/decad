@@ -230,6 +230,15 @@ exactly. Tessellation carries bounds for rounding at the two cap rims.
 | `decad.Cut` | The target minus the tool. A straight-profile twisted `Sweep` is an admitted tool: a boolean restates its closer stationed boundary, and refuses a crossing or gap narrower than the two operands' held bounds together. |
 | `decad.Intersect` | The volume common to both bodies. |
 | `decad.Split` | One solid per arranged target cell. |
+| `decad.Refine` | The same held mesh with a tighter proven surface bound, for a chain of mesh Unions of extruded circles. |
+
+A chain of mesh `decad.Union` calls over extruded cylinders publishes a held bound well above its chording where two
+walls meet nearly tangent, as they do at every bend of a tube built from straight spans, and `Body.Tessellate` then
+refuses any tolerance below it. `decad.Refine(ctx, body, maxBound)` proves how far the held mesh lies from the true
+union of the cylinders, facet by facet, and returns a new body, retiring the old one, whose `Tessellate` publishes that
+surface bound and succeeds at any tolerance at or above it. No vertex moves; volume, area, vertex and edge readings,
+and the bounds a later Boolean reads, stay as they were. A body made any other way, a placed result, or a bound that
+cannot be proven within `maxBound` is `decad.ErrUnsupported`.
 
 After ordinary analytic admission misses, a blind prism Cut can use translated
 placements with the same stored frame and transform basis when their exact

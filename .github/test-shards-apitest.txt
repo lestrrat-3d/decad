@@ -2973,3 +2973,6 @@
 11	0.01	TestWholeCircleEdgeSeamVertices
 11	0.01	TestUnionTorusArcWithStemCoarsensItsOperandPastTheCeilings
 11	0.01	TestUnionTorusArcWithStemShortSweep
+11	0.00	TestRefineBentCylinderChains
+11	0.00	TestRefineLeaderLiftsTheTessellateRefusal
+11	0.00	TestRefineRefusals
