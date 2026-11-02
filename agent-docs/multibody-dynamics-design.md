@@ -1185,7 +1185,10 @@ Two coplanar facets with matching outward normals and a positive-area overlap al
 A shell whose every vertex lies on the other body's boundary needs no cast: it meets the contact set.
 "Opposed material sides" is a local proof at each zero-distance site (a vertex on a facet, two crossing
 edges, a collinear edge overlap, a coplanar edge chord through a facet), taken over every triangle of
-each body that holds the site. It holds when either a plane through the site has one body's triangles
+each body that holds the site. The triangles that may hold a site come from the same facet box tree,
+queried with the site's outward float box, plus every triangle with a zero normal, which the point test
+reads without a box; the point test then decides each exactly, so the fan is the one a scan over every
+triangle finds (`internal/pair/planar/planar_local.go`). It holds when either a plane through the site has one body's triangles
 on or behind it and the other's on or in front, with a triangle of each body whose own plane bounds that
 body's triangles there, or one body's triangles lie in front of every plane of the other's there (a box
 in a tray corner). A site where neither holds leaves the relation `Undecided` with

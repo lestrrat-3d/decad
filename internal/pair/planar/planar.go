@@ -288,9 +288,12 @@ type planarPrep struct {
 	// The distance scan's shortcuts (planar_prune.go), filled on first use.
 	vertBox, triBox, edgeBox []floatBox
 	triTree, edgeTree        *boxTree
-	sides                    [][3]proof.DyV3
-	sideBoxes                [][3]floatBox
-	sidesSet                 []bool
+	// flat lists the triangles with a zero normal, built on first use by
+	// facetsAt.
+	flat      []int
+	sides     [][3]proof.DyV3
+	sideBoxes [][3]floatBox
+	sidesSet  []bool
 }
 
 // preparePlanar builds s's derived data, or reuses the pose data

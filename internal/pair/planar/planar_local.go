@@ -1,6 +1,10 @@
 package planar
 
-import "github.com/lestrrat-3d/decad/internal/proof"
+import (
+	"slices"
+
+	"github.com/lestrrat-3d/decad/internal/proof"
+)
 
 // This file is the local half of the planar relation (planar.go): the proof
 // that two solids' materials do not overlap near one zero-distance site.
@@ -30,13 +34,14 @@ func (k *planarKernel) fanAt(p *planarPrep, x hpoint) (fan, error) {
 	seenEdge := make(map[[2]int]struct{})
 	p.floatBoxes()
 	xb, boxed := x.floatBox()
-	for t, tri := range p.s.Tris {
+	for _, t := range p.facetsAt(xb, boxed) {
 		if err := k.poll(); err != nil {
 			return fan{}, err
 		}
 		if !pointInFacetBoxed(p, t, x, xb, boxed) {
 			continue
 		}
+		tri := p.s.Tris[t]
 		tris = append(tris, t)
 		f.normals = append(f.normals, p.normal[t])
 		for i, v := range tri {
@@ -74,6 +79,36 @@ func (k *planarKernel) fanAt(p *planarPrep, x hpoint) (fan, error) {
 		}
 	}
 	return f, nil
+}
+
+// facetsAt lists, in index order, every triangle of p that may hold a point
+// with outward float box xb: those whose float box is not apart from it, and
+// every triangle with a zero normal, which pointInFacetBoxed tests without its
+// box. An unboxed point lists every triangle. The list is a superset of the
+// triangles pointInFacetBoxed accepts, so a fan read from it is the same.
+func (p *planarPrep) facetsAt(xb floatBox, boxed bool) []int {
+	if !boxed {
+		all := make([]int, len(p.s.Tris))
+		for t := range all {
+			all[t] = t
+		}
+		return all
+	}
+	out := p.boxTree().queryWithin(xb, 0, nil)
+	if p.flat == nil {
+		p.flat = []int{}
+		for t, n := range p.normal {
+			if proof.DvIsZero(n) {
+				p.flat = append(p.flat, t)
+			}
+		}
+	}
+	if len(p.flat) == 0 {
+		return out
+	}
+	out = append(out, p.flat...)
+	slices.Sort(out)
+	return slices.Compact(out)
 }
 
 // onSegment reports whether x lies on the closed segment uw.
