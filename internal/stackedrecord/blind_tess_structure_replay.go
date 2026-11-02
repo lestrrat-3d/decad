@@ -5,6 +5,8 @@ import (
 	"math"
 	"unsafe"
 
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
@@ -33,10 +35,11 @@ func ReplayBlindTessStructure(ctx context.Context, body *topo.Body,
 	if err := budget.ReserveArray(ctx, 2, uint64(unsafe.Sizeof(momentinput.Profile{}))); err != nil {
 		return nil, nil, nil, false, err
 	}
-	profiles := []momentinput.Profile{sp.Slabs[0].Regions[0], sp.Slabs[1].Regions[0]}
+	first, second := sp.Slabs[0].Regions[0], sp.Slabs[1].Regions[0]
+	views := []sectionrecord.AnalyticProfileView{first.AnalyticSealView(), second.AnalyticSealView()}
 	sealed, err := body.ReplayPrismBuildPayload(ctx, sp.Frame, sp.Xform,
 		sp.Slabs[0].Z0, sp.Slabs[1].Z1, sp.Slabs[0].Z0Delta, sp.Slabs[1].Z1Delta,
-		sp.SectionDelta, sp.Slabs[0].Z0Denoted, sp.Slabs[1].Z1Denoted, profiles, budget)
+		sp.SectionDelta, sp.Slabs[0].Z0Denoted, sp.Slabs[1].Z1Denoted, views, budget)
 	if err != nil || !sealed {
 		return nil, nil, nil, false, err
 	}
@@ -70,10 +73,10 @@ func ReplayBlindTessStructure(ctx context.Context, body *topo.Body,
 	}
 	top := len(sp.Interfaces[0].LowerExposed) > 0
 	floors := sp.Interfaces[0].LowerExposed
-	uncut, cut := profiles[0], profiles[1]
+	uncut, cut := first, second
 	if !top {
 		floors = sp.Interfaces[0].UpperExposed
-		uncut, cut = profiles[1], profiles[0]
+		uncut, cut = second, first
 	}
 	if len(floors) == 0 || len(floors) > 4096 || len(cut.Holes) <= len(uncut.Holes) {
 		return nil, nil, nil, false, nil

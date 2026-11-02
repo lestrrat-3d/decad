@@ -1083,7 +1083,7 @@ func build(ctx context.Context, env topo.Env, sp Payload, plan Plan, budget *pro
 		if err := budget.ReserveArray(ctx, 2, uint64(unsafe.Sizeof(momentinput.Profile{}))); err != nil {
 			return nil, err
 		}
-		profiles := []momentinput.Profile{sp.Slabs[0].Regions[0], sp.Slabs[1].Regions[0]}
+		profiles := []sectionrecord.AnalyticProfileView{sp.Slabs[0].Regions[0].AnalyticSealView(), sp.Slabs[1].Regions[0].AnalyticSealView()}
 		sealed, err = body.SealPrismBuildPayloadReplay(ctx, sp.Frame, sp.Xform,
 			sp.Slabs[0].Z0, sp.Slabs[1].Z1, sp.Slabs[0].Z0Delta, sp.Slabs[1].Z1Delta,
 			sp.SectionDelta, sp.Slabs[0].Z0Denoted, sp.Slabs[1].Z1Denoted, profiles, budget)
@@ -1099,10 +1099,16 @@ func build(ctx context.Context, env topo.Env, sp Payload, plan Plan, budget *pro
 		if sealed, _ := body.SealPrismBuildFacesReplay(ctx, faces, witnessBudget); sealed {
 			// This optional seal only enables a later bounded replay; ordinary
 			// group construction does not depend on the witness.
-			_, _ = body.SealPrismBuildPayloadReplay(ctx, sp.Frame, sp.Xform,
-				slab.Z0, slab.Z1, slab.Z0Delta, slab.Z1Delta, sp.SectionDelta,
-				slab.Z0Denoted, slab.Z1Denoted, slab.Regions, witnessBudget)
+			views, err := momentinput.ReplayAnalyticProfileViews(ctx, slab.Regions, witnessBudget)
+			if err == nil {
+				_, _ = body.SealPrismBuildPayloadReplay(ctx, sp.Frame, sp.Xform,
+					slab.Z0, slab.Z1, slab.Z0Delta, slab.Z1Delta, sp.SectionDelta,
+					slab.Z0Denoted, slab.Z1Denoted, views, witnessBudget)
+			}
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	body.Payload = sp
 	if log != nil {

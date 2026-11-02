@@ -3,7 +3,8 @@ package prismboolean
 import (
 	"context"
 
-	"github.com/lestrrat-3d/decad/internal/momentinput"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
+
 	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proof"
@@ -40,7 +41,7 @@ func ReplayPrismCapRecord(ctx context.Context, body *topo.Body, face *topo.Face,
 	}
 	sealed, err := body.ReplayPrismBuildPayload(ctx, pp.Frame, pp.Xform, pp.Z0, pp.Z1,
 		pp.Z0Delta, pp.Z1Delta, pp.SectionDelta, pp.Z0Denoted, pp.Z1Denoted,
-		[]momentinput.Profile{pp.Profile}, budget)
+		[]sectionrecord.AnalyticProfileView{pp.Profile.AnalyticSealView()}, budget)
 	if err != nil || !sealed {
 		return false, err
 	}

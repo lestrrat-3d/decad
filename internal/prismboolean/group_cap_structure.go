@@ -38,8 +38,12 @@ func ReplayGroupCapStructure(ctx context.Context, body *topo.Body, budget Replay
 		return nil, false, nil
 	}
 	slab := sp.Slabs[0]
+	views, err := momentinput.ReplayAnalyticProfileViews(ctx, slab.Regions, budget)
+	if err != nil {
+		return nil, false, err
+	}
 	sealed, err := body.ReplayPrismBuildPayload(ctx, sp.Frame, sp.Xform, slab.Z0, slab.Z1,
-		slab.Z0Delta, slab.Z1Delta, sp.SectionDelta, slab.Z0Denoted, slab.Z1Denoted, slab.Regions, budget)
+		slab.Z0Delta, slab.Z1Delta, sp.SectionDelta, slab.Z0Denoted, slab.Z1Denoted, views, budget)
 	if err != nil || !sealed {
 		return nil, false, err
 	}
@@ -67,7 +71,7 @@ func ReplayPrismCapStructure(ctx context.Context, body *topo.Body, budget Replay
 	}
 	sealed, err := body.ReplayPrismBuildPayload(ctx, pp.Frame, pp.Xform, pp.Z0, pp.Z1,
 		pp.Z0Delta, pp.Z1Delta, pp.SectionDelta, pp.Z0Denoted, pp.Z1Denoted,
-		[]momentinput.Profile{pp.Profile}, budget)
+		[]sectionrecord.AnalyticProfileView{pp.Profile.AnalyticSealView()}, budget)
 	if err != nil || !sealed {
 		return nil, false, err
 	}

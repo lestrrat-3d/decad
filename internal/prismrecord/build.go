@@ -335,10 +335,10 @@ func Build(ctx context.Context, env topo.Env, pp Payload, work *freeform.Freefor
 		if sealed, _ := body.SealPrismBuildPayloadReplay(ctx, pp.Frame, pp.Xform,
 			pp.Z0, pp.Z1, pp.Z0Delta, pp.Z1Delta, pp.SectionDelta,
 			pp.Z0Denoted, pp.Z1Denoted,
-			[]momentinput.Profile{pp.Profile}, witnessBudget); sealed {
+			[]sectionrecord.AnalyticProfileView{pp.Profile.AnalyticSealView()}, witnessBudget); sealed {
 			// This optional seal only enables a later bounded replay; ordinary
 			// construction remains valid if its witness cannot be recorded.
-			_, _ = body.SealPrismBuildWalksReplay(ctx, pw, witnessBudget)
+			_, _ = SealPrismBuildWalksReplay(ctx, body, pw, witnessBudget)
 		}
 	}
 	if err := ctx.Err(); err != nil {

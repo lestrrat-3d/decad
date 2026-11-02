@@ -81,15 +81,15 @@ func replayFixedRound(ctx context.Context, q *big.Rat, ceil bool, budget *Replay
 	if q == nil || budget == nil {
 		return nil, decaderr.ErrUnsupported
 	}
-	num, err := replayFixedIntOp(ctx, q.Num(), TrigFixedOne, '*', 0, budget)
+	num, err := proofarith.ReplayFixedRatInt(ctx, q, true, TrigFixedOne, true, '*', 0, budget)
 	if err != nil {
 		return nil, err
 	}
-	quo, err := replayFixedIntOp(ctx, num, q.Denom(), '/', 0, budget)
+	quo, err := proofarith.ReplayFixedRatInt(ctx, q, false, num, false, '/', 0, budget)
 	if err != nil {
 		return nil, err
 	}
-	rem, err := replayFixedIntOp(ctx, num, q.Denom(), '%', 0, budget)
+	rem, err := proofarith.ReplayFixedRatInt(ctx, q, false, num, false, '%', 0, budget)
 	if err != nil {
 		return nil, err
 	}

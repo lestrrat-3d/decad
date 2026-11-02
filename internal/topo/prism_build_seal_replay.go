@@ -3,10 +3,10 @@ package topo
 import (
 	"context"
 	"math/big"
+	"math/bits"
 	"unsafe"
 
-	"github.com/lestrrat-3d/decad/internal/momentinput"
-	"github.com/lestrrat-3d/decad/internal/prismplacement"
+	"github.com/lestrrat-3d/decad/internal/denotation"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -26,7 +26,7 @@ func (b *Body) SealPrismBuildFacesReplay(ctx context.Context, faces []*Face,
 	if b == nil || b.prismBuildSeal != nil || len(faces) == 0 || len(faces) > prismSealLimit {
 		return false, nil
 	}
-	var loops, edges, caps uint64
+	var loops, edges, caps, rationalWords uint64
 	var rationalBytes uint64
 	for _, f := range faces {
 		if err := budget.SpendWork(ctx, 1); err != nil {
@@ -44,6 +44,8 @@ func (b *Body) SealPrismBuildFacesReplay(ctx context.Context, faces []*Face,
 				if rat.Num().BitLen() > 4096 || rat.Denom().BitLen() > 4096 {
 					return false, nil
 				}
+				rationalWords += uint64((rat.Num().BitLen()+bits.UintSize-1)/bits.UintSize +
+					(rat.Denom().BitLen()+bits.UintSize-1)/bits.UintSize)
 				rationalBytes += uint64(unsafe.Sizeof(big.Rat{})) +
 					uint64((rat.Num().BitLen()+7)/8+(rat.Denom().BitLen()+7)/8)*4 + 256
 			}
@@ -81,14 +83,28 @@ func (b *Body) SealPrismBuildFacesReplay(ctx context.Context, faces []*Face,
 	if err := budget.ReserveBytes(ctx, bytes); err != nil {
 		return false, err
 	}
+	// The validated counts bound both passes and every copy in the ordinary
+	// seal. Precharge their exact successful-path work before construction.
+	work := 193*fcount + 17*loops + 129*edges + rationalWords + 2
+	if err := budget.SpendWork(ctx, work); err != nil {
+		return false, err
+	}
 	var spendErr error
-	spend := func(n uint64) error {
-		spendErr = budget.SpendWork(ctx, n)
+	var checkpoints uint64
+	spend := func(uint64) error {
+		checkpoints++
+		if checkpoints%8 == 0 {
+			spendErr = ctx.Err()
+		}
 		return spendErr
 	}
 	ok := b.SealPrismBuildFaces(faces, spend)
 	if spendErr != nil {
 		return false, spendErr
+	}
+	if err := ctx.Err(); err != nil {
+		b.prismBuildSeal = nil
+		return false, err
 	}
 	return ok, nil
 }
@@ -97,7 +113,7 @@ func (b *Body) SealPrismBuildFacesReplay(ctx context.Context, faces []*Face,
 // the construction seal copies its profile, loop and segment slices.
 func (b *Body) SealPrismBuildPayloadReplay(ctx context.Context, frame r3.Frame, xform r3.Transform,
 	z0, z1, z0Delta, z1Delta, sectionDelta float64,
-	z0Denoted, z1Denoted prismplacement.LevelDenotation, profiles []momentinput.Profile,
+	z0Denoted, z1Denoted denotation.LevelDenotation, profiles []sectionrecord.AnalyticProfileView,
 	budget proof.ReplayKeyBudget) (bool, error) {
 	if budget == nil {
 		return false, nil
@@ -109,11 +125,11 @@ func (b *Body) SealPrismBuildPayloadReplay(ctx context.Context, frame r3.Frame, 
 		len(profiles) == 0 || z0Delta != 0 || z1Delta != 0 {
 		return false, nil
 	}
-	z0Bytes, ok := prismplacement.LevelDenotationSnapshotCost(z0Denoted)
+	z0Bytes, ok := denotation.LevelDenotationSnapshotCost(z0Denoted)
 	if !ok {
 		return false, nil
 	}
-	z1Bytes, ok := prismplacement.LevelDenotationSnapshotCost(z1Denoted)
+	z1Bytes, ok := denotation.LevelDenotationSnapshotCost(z1Denoted)
 	if !ok {
 		return false, nil
 	}
@@ -153,7 +169,7 @@ func (b *Body) SealPrismBuildPayloadReplay(ctx context.Context, frame r3.Frame, 
 	}
 	pcount := uint64(len(profiles))
 	bytes := uint64(unsafe.Sizeof(prismPayloadSeal{})) +
-		pcount*(uint64(unsafe.Sizeof(momentinput.Profile{}))+64) +
+		pcount*(uint64(unsafe.Sizeof(sectionrecord.AnalyticProfileView{}))+64) +
 		holes*(uint64(unsafe.Sizeof(sectionrecord.LoopRecord{}))+64) +
 		segments*(uint64(unsafe.Sizeof(sectionrecord.CurveSegment(nil)))+64) + z0Bytes + z1Bytes
 	if err := budget.ReserveRecords(ctx, 1+pcount+holes+loops+segments+2); err != nil {

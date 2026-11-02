@@ -5,6 +5,8 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -31,6 +33,9 @@ const replayTestCaseWorkShort = "work short"
 const replayTestCaseExact = "exact"
 
 func TestBlindGroupFaceLedger(t *testing.T) {
+	if !t.Run("source_seal_cancel", testBlindSourceSealCancellation) {
+		return
+	}
 	if !t.Run("public_cut_budget", testBlindGroupPublicCutBudget) {
 		return
 	}
@@ -42,6 +47,53 @@ func TestBlindGroupFaceLedger(t *testing.T) {
 	}
 	t.Run("rectangular_host", func(t *testing.T) { testBlindGroupFaceLedger(t, false) })
 	t.Run("slotted_host", func(t *testing.T) { testBlindGroupFaceLedger(t, true) })
+}
+
+type sealBatchCancelContext struct {
+	context.Context //nolint:containedctx // The cancellation probe lasts for one synchronous Extrude.
+	reached         bool
+}
+
+func (c *sealBatchCancelContext) Err() error {
+	if c.reached {
+		return context.Canceled
+	}
+	var pcs [24]uintptr
+	n := runtime.Callers(2, pcs[:])
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		if strings.Contains(frame.Function, "SealPrismBuildFacesReplay.func1") {
+			c.reached = true
+			return context.Canceled
+		}
+		if !more {
+			return c.Context.Err()
+		}
+	}
+}
+
+func testBlindSourceSealCancellation(t *testing.T) {
+	doc := New()
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rect := s.CreateRectangle(0, 0, 4, 3)
+	s.Fix(rect.A)
+	if _, err := s.Solve(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	producer, live, history := doc.nextProducerID(), len(doc.n.LiveSet), len(doc.operations)
+	ctx := &sealBatchCancelContext{Context: t.Context()}
+	body, err := Extrude(ctx, doc, s, s.Profiles()[0], Distance{D: units.Millimeters(2), Dir: Along})
+	if !ctx.reached || body != nil || !errors.Is(err, context.Canceled) {
+		t.Fatalf("checkpoint reached=%t body=%t error=%v", ctx.reached, body != nil, err)
+	}
+	if doc.nextProducerID() != producer || len(doc.n.LiveSet) != live || len(doc.operations) != history {
+		t.Fatal("canceled construction changed document membership or numbering")
+	}
 }
 
 func testBlindGroupPublicContainer(t *testing.T) {

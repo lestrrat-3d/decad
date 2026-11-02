@@ -12,11 +12,11 @@ var replayAtanOne = big.NewRat(1, 1)
 
 func replayIntervalCopy(ctx context.Context, iv RatInterval,
 	budget *ReplayBudget) (RatInterval, error) {
-	lo, err := proofarith.ReplayReducedFraction(ctx, iv.Lo.Num(), iv.Lo.Denom(), budget)
+	lo, err := proofarith.ReplayCopyRat(ctx, iv.Lo, budget)
 	if err != nil {
 		return RatInterval{}, err
 	}
-	hi, err := proofarith.ReplayReducedFraction(ctx, iv.Hi.Num(), iv.Hi.Denom(), budget)
+	hi, err := proofarith.ReplayCopyRat(ctx, iv.Hi, budget)
 	if err != nil {
 		return RatInterval{}, err
 	}

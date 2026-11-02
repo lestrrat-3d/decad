@@ -22,7 +22,7 @@ func ReplayQuarterTurnSinCos(ctx context.Context, t *big.Rat,
 	if !quadrants.IsInt() {
 		return ReplayTurnSinCosInterval(ctx, t, budget)
 	}
-	index, err := replayFixedIntOp(ctx, quadrants.Num(), replayQuarterFour, '%', 0, budget)
+	index, err := proofarith.ReplayFixedRatInt(ctx, quadrants, true, replayQuarterFour, true, '%', 0, budget)
 	if err != nil {
 		return RatInterval{}, RatInterval{}, err
 	}

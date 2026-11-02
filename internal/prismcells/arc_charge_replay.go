@@ -132,7 +132,7 @@ func ReplayWholeArcCharge(ctx context.Context, arc sectionrecord.ArcSeg, budget 
 	if total.Sign() == 0 {
 		return 0, true, nil
 	}
-	value, err := proof.ReplayFractionFloat64(ctx, total.Num(), total.Denom(), budget)
+	value, err := proof.ReplayRatFloat64(ctx, total, budget)
 	if err != nil {
 		return 0, false, err
 	}

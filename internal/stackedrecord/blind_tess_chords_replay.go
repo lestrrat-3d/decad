@@ -59,7 +59,7 @@ func ReplayBlindChordsWithSource(ctx context.Context, body, host *topo.Body,
 	sealed, err := host.ReplayPrismBuildPayload(ctx, pp.Frame, pp.Xform,
 		pp.Z0, pp.Z1, pp.Z0Delta, pp.Z1Delta, pp.SectionDelta,
 		pp.Z0Denoted, pp.Z1Denoted,
-		[]momentinput.Profile{pp.Profile}, budget)
+		[]sectionrecord.AnalyticProfileView{pp.Profile.AnalyticSealView()}, budget)
 	if err != nil || !sealed {
 		return ReplayBlindChordStructure{}, false, err
 	}
@@ -93,7 +93,7 @@ func ReplayBlindChordsWithSource(ctx context.Context, body, host *topo.Body,
 				return ReplayBlindChordStructure{}, false, err
 			}
 			for i := range walks {
-				walk, ok, err := host.ReplayPrismBuiltWalk(ctx, pp.Walks, col.LoopIndex, i, budget)
+				walk, ok, err := prismrecord.ReplayPrismBuiltWalk(ctx, host, pp.Walks, col.LoopIndex, i, budget)
 				if err != nil || !ok {
 					return ReplayBlindChordStructure{}, false, err
 				}

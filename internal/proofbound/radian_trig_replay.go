@@ -14,15 +14,15 @@ func replayRatFloorGrid(ctx context.Context, x *big.Rat, shift uint,
 	if err != nil {
 		return nil, err
 	}
-	num, err := replayFixedIntOp(ctx, x.Num(), scale, '*', 0, budget)
+	num, err := proofarith.ReplayFixedRatInt(ctx, x, true, scale, true, '*', 0, budget)
 	if err != nil {
 		return nil, err
 	}
-	quotient, err := replayFixedIntOp(ctx, num, x.Denom(), '/', 0, budget)
+	quotient, err := proofarith.ReplayFixedRatInt(ctx, x, false, num, false, '/', 0, budget)
 	if err != nil {
 		return nil, err
 	}
-	remainder, err := replayFixedIntOp(ctx, num, x.Denom(), '%', 0, budget)
+	remainder, err := proofarith.ReplayFixedRatInt(ctx, x, false, num, false, '%', 0, budget)
 	if err != nil {
 		return nil, err
 	}
@@ -41,18 +41,17 @@ func replayTrigWidening(ctx context.Context, q *big.Rat,
 		return nil, decaderr.ErrUnsupported
 	}
 	if q.Sign() == 0 {
-		return proofarith.ReplayReducedFraction(ctx, replayTurnZero.Num(),
-			replayTurnZero.Denom(), budget)
+		return proofarith.ReplayCopyRat(ctx, replayTurnZero, budget)
 	}
 	shift := TrigFixedBits - 1 + q.Denom().BitLen() - q.Num().BitLen()
 	if shift > 2048 || shift < -2048 {
 		return nil, decaderr.ErrUnsupported
 	}
-	n, err := replayFixedIntOp(ctx, q.Num(), nil, 'c', 0, budget)
+	n, err := proofarith.ReplayFixedRatInt(ctx, q, true, nil, true, 'c', 0, budget)
 	if err != nil {
 		return nil, err
 	}
-	d, err := replayFixedIntOp(ctx, q.Denom(), nil, 'c', 0, budget)
+	d, err := proofarith.ReplayFixedRatInt(ctx, q, false, nil, true, 'c', 0, budget)
 	if err != nil {
 		return nil, err
 	}

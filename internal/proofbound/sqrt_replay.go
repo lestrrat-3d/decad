@@ -24,17 +24,23 @@ func replayRatSquareCmp(ctx context.Context, f float64, q *big.Rat,
 	if err != nil {
 		return 0, false, err
 	}
-	lhs, err = replayFixedIntOp(ctx, lhs, q.Denom(), '*', 0, budget)
+	lhs, err = proofarith.ReplayFixedRatInt(ctx, q, false, lhs, false, '*', 0, budget)
 	if err != nil {
 		return 0, false, err
 	}
 	e2 := 2 * (exp - 53)
-	rhs := q.Num()
 	if e2 >= 0 {
 		lhs, err = replayFixedIntOp(ctx, lhs, nil, 'l', uint(e2), budget)
-	} else {
-		rhs, err = replayFixedIntOp(ctx, rhs, nil, 'l', uint(-e2), budget)
+		if err != nil {
+			return 0, false, err
+		}
+		work := uint64((max(lhs.BitLen(), q.Num().BitLen())+bits.UintSize-1)/bits.UintSize + 1)
+		if err := budget.SpendWork(ctx, work); err != nil {
+			return 0, false, err
+		}
+		return lhs.Cmp(q.Num()), true, nil
 	}
+	rhs, err := proofarith.ReplayFixedRatInt(ctx, q, true, nil, true, 'l', uint(-e2), budget)
 	if err != nil {
 		return 0, false, err
 	}

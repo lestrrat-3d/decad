@@ -4,10 +4,10 @@ import (
 	"context"
 	"math"
 	"math/big"
+	"math/bits"
 
+	"github.com/lestrrat-3d/decad/internal/denotation"
 	"github.com/lestrrat-3d/decad/internal/measurement"
-	"github.com/lestrrat-3d/decad/internal/momentinput"
-	"github.com/lestrrat-3d/decad/internal/prismplacement"
 	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -118,7 +118,8 @@ func (b *Body) SealPrismBuildFaces(faces []*Face, spend func(uint64) error) bool
 		work := uint64(128)
 		if f.CapRecord != nil && f.CapRecord.ZDenoted != nil {
 			rat := f.CapRecord.ZDenoted
-			work += uint64(len(rat.Num().Bits()) + len(rat.Denom().Bits()))
+			work += uint64((rat.Num().BitLen()+bits.UintSize-1)/bits.UintSize +
+				(rat.Denom().BitLen()+bits.UintSize-1)/bits.UintSize)
 		}
 		if spend(work) != nil {
 			return false
@@ -327,23 +328,23 @@ type prismPayloadSeal struct {
 	frame                                  r3.Frame
 	xform                                  r3.Transform
 	z0, z1, z0Delta, z1Delta, sectionDelta float64
-	z0Denoted, z1Denoted                   prismplacement.LevelDenotationSnapshot
-	profiles                               []momentinput.Profile
+	z0Denoted, z1Denoted                   denotation.LevelDenotationSnapshot
+	profiles                               []sectionrecord.AnalyticProfileView
 }
 
 // SealPrismBuildPayload binds the supported analytic section records and
 // placement to the face snapshot. Unsupported records leave no payload seal.
 func (b *Body) SealPrismBuildPayload(frame r3.Frame, xform r3.Transform, z0, z1, z0Delta, z1Delta, sectionDelta float64,
-	z0Denoted, z1Denoted prismplacement.LevelDenotation,
-	profiles []momentinput.Profile, spend func(uint64) error) bool {
+	z0Denoted, z1Denoted denotation.LevelDenotation,
+	profiles []sectionrecord.AnalyticProfileView, spend func(uint64) error) bool {
 	if b == nil || b.prismBuildSeal == nil || b.prismBuildSeal.payload != nil || spend == nil || len(profiles) == 0 || z0Delta != 0 || z1Delta != 0 {
 		return false
 	}
-	z0Bytes, ok := prismplacement.LevelDenotationSnapshotCost(z0Denoted)
+	z0Bytes, ok := denotation.LevelDenotationSnapshotCost(z0Denoted)
 	if !ok {
 		return false
 	}
-	z1Bytes, ok := prismplacement.LevelDenotationSnapshotCost(z1Denoted)
+	z1Bytes, ok := denotation.LevelDenotationSnapshotCost(z1Denoted)
 	if !ok || spend(128+z0Bytes+z1Bytes) != nil {
 		return false
 	}
@@ -395,9 +396,9 @@ func (b *Body) SealPrismBuildPayload(frame r3.Frame, xform r3.Transform, z0, z1,
 	}
 	sealed := &prismPayloadSeal{frame: frame, xform: xform, z0: z0, z1: z1,
 		z0Delta: z0Delta, z1Delta: z1Delta, sectionDelta: sectionDelta,
-		z0Denoted: prismplacement.SnapshotLevelDenotation(z0Denoted),
-		z1Denoted: prismplacement.SnapshotLevelDenotation(z1Denoted),
-		profiles:  make([]momentinput.Profile, len(profiles))}
+		z0Denoted: denotation.SnapshotLevelDenotation(z0Denoted),
+		z1Denoted: denotation.SnapshotLevelDenotation(z1Denoted),
+		profiles:  make([]sectionrecord.AnalyticProfileView, len(profiles))}
 	for i, p := range profiles {
 		if spend(1) != nil {
 			return false
@@ -429,8 +430,8 @@ func (b *Body) SealPrismBuildPayload(frame r3.Frame, xform r3.Transform, z0, z1,
 // ReplayPrismBuildPayload verifies a current supported payload against its
 // original Build snapshot, with all segment comparisons charged to budget.
 func (b *Body) ReplayPrismBuildPayload(ctx context.Context, frame r3.Frame, xform r3.Transform, z0, z1, z0Delta, z1Delta, sectionDelta float64,
-	z0Denoted, z1Denoted prismplacement.LevelDenotation,
-	profiles []momentinput.Profile, budget proof.ReplayKeyBudget) (bool, error) {
+	z0Denoted, z1Denoted denotation.LevelDenotation,
+	profiles []sectionrecord.AnalyticProfileView, budget proof.ReplayKeyBudget) (bool, error) {
 	if budget == nil {
 		return false, nil
 	}

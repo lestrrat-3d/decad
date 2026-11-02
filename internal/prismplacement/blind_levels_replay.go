@@ -2,57 +2,15 @@ package prismplacement
 
 import (
 	"context"
-	"math"
 	"math/big"
 
+	"github.com/lestrrat-3d/decad/internal/denotation"
 	"github.com/lestrrat-3d/decad/internal/proof"
 )
 
 func replayLevelRange(ctx context.Context, held, delta float64, denoted LevelDenotation, shift *big.Rat, budget proof.ReplayKeyBudget) (LevelRange, bool, error) {
-	if err := budget.SpendWork(ctx, 1); err != nil {
-		return LevelRange{}, false, err
-	}
-	if math.IsNaN(delta) || math.IsInf(delta, 0) || delta < 0 {
-		return LevelRange{}, false, nil
-	}
-	var exact *big.Rat
-	if denoted.exact != nil && denoted.held == held && denoted.delta == delta {
-		exact = denoted.exact
-	} else if delta == 0 {
-		var err error
-		exact, err = proof.ReplayFloatRat(ctx, held, budget)
-		if err != nil {
-			return LevelRange{}, false, err
-		}
-	}
-	if exact != nil {
-		shifted, err := proof.ReplayRatArithmetic(ctx, exact, shift, '+', budget)
-		if err != nil {
-			return LevelRange{}, false, err
-		}
-		return LevelRange{Lo: shifted, Hi: shifted}, true, nil
-	}
-	h, err := proof.ReplayFloatRat(ctx, held, budget)
-	if err != nil {
-		return LevelRange{}, false, err
-	}
-	d, err := proof.ReplayFloatRat(ctx, delta, budget)
-	if err != nil {
-		return LevelRange{}, false, err
-	}
-	h, err = proof.ReplayRatArithmetic(ctx, h, shift, '+', budget)
-	if err != nil {
-		return LevelRange{}, false, err
-	}
-	lo, err := proof.ReplayRatArithmetic(ctx, h, d, '-', budget)
-	if err != nil {
-		return LevelRange{}, false, err
-	}
-	hi, err := proof.ReplayRatArithmetic(ctx, h, d, '+', budget)
-	if err != nil {
-		return LevelRange{}, false, err
-	}
-	return LevelRange{Lo: lo, Hi: hi}, true, nil
+	lo, hi, ok, err := denotation.ReplayLevelRange(ctx, held, delta, denoted, shift, budget)
+	return LevelRange{Lo: lo, Hi: hi}, ok, err
 }
 
 // ReplayBlindLevels proves one coincident cap and a strictly interior opposite
@@ -129,24 +87,7 @@ func ReplayBlindLevels(ctx context.Context, target, tool Operand, shift *big.Rat
 	return false, inside, err
 }
 
-// ReplayDenotedLevel reads an immutable denotation under budget. The returned
-// rational must not be changed by the caller.
+// ReplayDenotedLevel reads an immutable denotation under budget.
 func ReplayDenotedLevel(ctx context.Context, held, delta float64, denoted LevelDenotation, budget proof.ReplayKeyBudget) (*big.Rat, bool, error) {
-	if budget == nil {
-		return nil, false, nil
-	}
-	if err := budget.SpendWork(ctx, 1); err != nil {
-		return nil, false, err
-	}
-	if math.IsNaN(delta) || math.IsInf(delta, 0) || delta < 0 {
-		return nil, false, nil
-	}
-	if denoted.exact != nil && denoted.held == held && denoted.delta == delta {
-		return denoted.exact, true, nil
-	}
-	if delta != 0 {
-		return nil, false, nil
-	}
-	q, err := proof.ReplayFloatRat(ctx, held, budget)
-	return q, err == nil, err
+	return denotation.ReplayDenotedLevel(ctx, held, delta, denoted, budget)
 }

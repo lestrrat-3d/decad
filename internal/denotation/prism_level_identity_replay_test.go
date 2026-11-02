@@ -1,4 +1,4 @@
-package prismplacement
+package denotation
 
 import (
 	"context"

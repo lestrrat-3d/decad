@@ -52,6 +52,20 @@ func TestSealPrismBuildFacesCopyBudget(t *testing.T) {
 	}
 	work, records := trial.Usage()
 	bytes := trial.Bytes()
+	referenceBody, referenceFace, _, _ := prismSealFixture(t)
+	referenceBody.prismBuildSeal = nil
+	referenceFace.CapRecord.ZDenoted = new(big.Rat).SetInt(numerator)
+	var referenceWork uint64
+	if !referenceBody.SealPrismBuildFaces([]*Face{referenceFace}, func(n uint64) error {
+		referenceWork += n
+		return nil
+	}) {
+		t.Fatal("reference seal refused")
+	}
+	// The replay preflight charges six units before the ordinary copy.
+	if work != referenceWork+6 {
+		t.Fatalf("batched work=%d, reference work=%d", work, referenceWork+6)
+	}
 	if work < 128+8+64+uint64(len(numerator.Bits())) {
 		t.Fatalf("copy undercharged: work=%d", work)
 	}
@@ -83,7 +97,8 @@ func TestSealPrismBuildFacesCopyBudget(t *testing.T) {
 	if ok, err := run(t.Context(), oversize, proofbound.NewReplayTrialBudget()); ok || err != nil {
 		t.Fatalf("oversize seal admitted=%t error=%v", ok, err)
 	}
-	ctx := &sealCancelContext{Context: t.Context(), at: 15}
+	// The ninth poll is the first checkpoint inside the batched copy.
+	ctx := &sealCancelContext{Context: t.Context(), at: 9}
 	if ok, err := run(ctx, numerator, proofbound.NewReplayTrialBudget()); ok || !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled seal admitted=%t error=%v", ok, err)
 	}
@@ -137,7 +152,7 @@ func TestStrictPrismBuildSealReplayBudgetAndRollback(t *testing.T) {
 		}
 		ok, err = body.SealPrismBuildPayloadReplay(ctx, frame, r3.Identity(), 0, 1, 0, 0, 0,
 			prismplacement.LevelDenotation{}, prismplacement.LevelDenotation{},
-			[]momentinput.Profile{profile}, budget)
+			[]sectionrecord.AnalyticProfileView{profile.AnalyticSealView()}, budget)
 		return body, ok, err
 	}
 	trial := proofbound.NewReplayTrialBudget()
@@ -205,12 +220,12 @@ func prismSealFixture(t *testing.T) (*Body, *Face, momentinput.Profile, r3.Frame
 	if !body.SealPrismBuildFaces([]*Face{face}, spend) ||
 		!body.SealPrismBuildPayload(frame, r3.Identity(), 0, 1, 0, 0, 0,
 			prismplacement.LevelDenotation{}, prismplacement.LevelDenotation{},
-			[]momentinput.Profile{profile}, spend) || !body.HasStrictPrismBuildSeal() {
+			[]sectionrecord.AnalyticProfileView{profile.AnalyticSealView()}, spend) || !body.HasStrictPrismBuildSeal() {
 		t.Fatal("source fixture did not seal")
 	}
 	ok, err := body.ReplayPrismBuildPayload(t.Context(), frame, r3.Identity(), 0, 1, 0, 0, 0,
 		prismplacement.LevelDenotation{}, prismplacement.LevelDenotation{},
-		[]momentinput.Profile{profile}, proofbound.NewReplayTrialBudget())
+		[]sectionrecord.AnalyticProfileView{profile.AnalyticSealView()}, proofbound.NewReplayTrialBudget())
 	if err != nil || !ok {
 		t.Fatalf("clean source payload admitted=%t err=%v", ok, err)
 	}
@@ -277,7 +292,7 @@ func TestStrictPrismBuildSealBindsPayloadDenotations(t *testing.T) {
 		body, _, profile, frame := prismSealFixture(t) //nolint:contextcheck // The test fixture uses t.Context().
 		body.prismBuildSeal.payload = nil
 		ok, err := body.SealPrismBuildPayloadReplay(ctx, frame, r3.Identity(), 0, 1, 0, 0, 0,
-			z0, z1, []momentinput.Profile{profile}, budget)
+			z0, z1, []sectionrecord.AnalyticProfileView{profile.AnalyticSealView()}, budget)
 		return body, ok, err
 	}
 	meter := proofbound.NewReplayTrialBudget()
@@ -316,7 +331,7 @@ func TestStrictPrismBuildSealBindsPayloadDenotations(t *testing.T) {
 	check := func(a, b prismplacement.LevelDenotation, want bool) {
 		t.Helper()
 		ok, err := body.ReplayPrismBuildPayload(t.Context(), frame, r3.Identity(), 0, 1, 0, 0, 0,
-			a, b, []momentinput.Profile{profile}, proofbound.NewReplayTrialBudget())
+			a, b, []sectionrecord.AnalyticProfileView{profile.AnalyticSealView()}, proofbound.NewReplayTrialBudget())
 		if err != nil || ok != want {
 			t.Fatalf("denoted replay admitted=%t error=%v", ok, err)
 		}
@@ -393,7 +408,7 @@ func TestStrictPrismBuildSealRejectsSignedZeroMutations(t *testing.T) {
 		profile, frame, xform, z0, section := mutate(profile, frame, r3.Identity())
 		ok, err := body.ReplayPrismBuildPayload(t.Context(), frame, xform, z0, 1, 0, 0, section,
 			prismplacement.LevelDenotation{}, prismplacement.LevelDenotation{},
-			[]momentinput.Profile{profile}, proofbound.NewReplayTrialBudget())
+			[]sectionrecord.AnalyticProfileView{profile.AnalyticSealView()}, proofbound.NewReplayTrialBudget())
 		if err != nil || ok {
 			t.Fatalf("signed-zero payload mutation admitted=%t err=%v", ok, err)
 		}
@@ -432,7 +447,7 @@ func TestStrictPrismBuildSealRejectsSignedZeroMutations(t *testing.T) {
 			ok, err := body.ReplayPrismBuildPayload(t.Context(), frame, r3.Identity(),
 				tc.z0, tc.z1, tc.z0Delta, tc.z1Delta, tc.section,
 				prismplacement.LevelDenotation{}, prismplacement.LevelDenotation{},
-				[]momentinput.Profile{profile}, proofbound.NewReplayTrialBudget())
+				[]sectionrecord.AnalyticProfileView{profile.AnalyticSealView()}, proofbound.NewReplayTrialBudget())
 			if err != nil || ok {
 				t.Fatalf("signed-zero %s admitted=%t err=%v", tc.name, ok, err)
 			}
@@ -442,12 +457,12 @@ func TestStrictPrismBuildSealRejectsSignedZeroMutations(t *testing.T) {
 	body.prismBuildSeal.payload = nil
 	if !body.SealPrismBuildPayload(frame, r3.Identity(), 0, 0, 0, 0, 0,
 		prismplacement.LevelDenotation{}, prismplacement.LevelDenotation{},
-		[]momentinput.Profile{profile}, func(uint64) error { return nil }) {
+		[]sectionrecord.AnalyticProfileView{profile.AnalyticSealView()}, func(uint64) error { return nil }) {
 		t.Fatal("zero end level did not seal")
 	}
 	ok, err := body.ReplayPrismBuildPayload(t.Context(), frame, r3.Identity(), 0, negativeZero,
 		0, 0, 0, prismplacement.LevelDenotation{}, prismplacement.LevelDenotation{},
-		[]momentinput.Profile{profile}, proofbound.NewReplayTrialBudget())
+		[]sectionrecord.AnalyticProfileView{profile.AnalyticSealView()}, proofbound.NewReplayTrialBudget())
 	if err != nil || ok {
 		t.Fatalf("signed-zero z1 admitted=%t err=%v", ok, err)
 	}

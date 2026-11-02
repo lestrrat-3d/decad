@@ -129,14 +129,14 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 	}
 	leaf := inputs[0].n.Payload.(prismrecord.Payload)
 	require.True(t, inputs[0].n.HasStrictPrismWalkSeal())
-	leafWalk, leafWalkOK, leafWalkErr := inputs[0].n.ReplayPrismBuiltWalk(t.Context(), leaf.Walks,
+	leafWalk, leafWalkOK, leafWalkErr := prismrecord.ReplayPrismBuiltWalk(t.Context(), &inputs[0].n, leaf.Walks,
 		0, 0, proofbound.NewReplayTrialBudget())
 	require.NoError(t, leafWalkErr)
 	require.True(t, leafWalkOK)
 	require.Equal(t, leaf.Walks.Outer[0].Kind, leafWalk.Kind)
 	t.Run("source walk seal budget and mutation", func(t *testing.T) {
 		baseline := proofbound.NewReplayTrialBudget()
-		_, ok, err := inputs[0].n.ReplayPrismBuiltWalk(t.Context(), leaf.Walks, 0, 0, baseline)
+		_, ok, err := prismrecord.ReplayPrismBuiltWalk(t.Context(), &inputs[0].n, leaf.Walks, 0, 0, baseline)
 		require.NoError(t, err)
 		require.True(t, ok)
 		work, records := baseline.Usage()
@@ -155,7 +155,7 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				budget, err := proofbound.NewReplayBudgetLimits(tc.work, tc.records, tc.bytes)
 				require.NoError(t, err)
-				_, ok, err := inputs[0].n.ReplayPrismBuiltWalk(t.Context(), leaf.Walks, 0, 0, budget)
+				_, ok, err := prismrecord.ReplayPrismBuiltWalk(t.Context(), &inputs[0].n, leaf.Walks, 0, 0, budget)
 				if tc.want {
 					require.NoError(t, err)
 					require.True(t, ok)
@@ -175,7 +175,7 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 		} else {
 			leaf.Walks.Outer[0].StartV = math.Nextafter(original, math.Inf(1))
 		}
-		_, ok, err = inputs[0].n.ReplayPrismBuiltWalk(t.Context(), leaf.Walks, 0, 0,
+		_, ok, err = prismrecord.ReplayPrismBuiltWalk(t.Context(), &inputs[0].n, leaf.Walks, 0, 0,
 			proofbound.NewReplayTrialBudget())
 		require.NoError(t, err)
 		require.False(t, ok)
@@ -185,11 +185,11 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 			sealed, err := inputs[0].n.ReplayPrismBuildPayload(ctx, leaf.Frame, leaf.Xform,
 				leaf.Z0, leaf.Z1, leaf.Z0Delta, leaf.Z1Delta, leaf.SectionDelta,
 				leaf.Z0Denoted, leaf.Z1Denoted,
-				[]momentinput.Profile{leaf.Profile}, budget)
+				[]sectionrecord.AnalyticProfileView{leaf.Profile.AnalyticSealView()}, budget)
 			if err != nil || !sealed {
 				return tessellation.ChordSamples[int]{}, err
 			}
-			walk, ok, err := inputs[0].n.ReplayPrismBuiltWalk(ctx, leaf.Walks, 0, 0, budget)
+			walk, ok, err := prismrecord.ReplayPrismBuiltWalk(ctx, &inputs[0].n, leaf.Walks, 0, 0, budget)
 			if err != nil || !ok {
 				return tessellation.ChordSamples[int]{}, err
 			}
@@ -254,7 +254,7 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 	require.Len(t, caps, 3)
 	hostPayload := host.n.Payload.(prismrecord.Payload)
 	require.True(t, host.n.HasStrictPrismWalkSeal())
-	hostWalk, hostWalkOK, hostWalkErr := host.n.ReplayPrismBuiltWalk(t.Context(), hostPayload.Walks,
+	hostWalk, hostWalkOK, hostWalkErr := prismrecord.ReplayPrismBuiltWalk(t.Context(), &host.n, hostPayload.Walks,
 		0, 0, proofbound.NewReplayTrialBudget())
 	require.NoError(t, hostWalkErr)
 	require.True(t, hostWalkOK)
@@ -894,7 +894,7 @@ func TestGroupUnionInputsUsesPublicHistory(t *testing.T) {
 	resultPayload, stacked := result.n.Payload.(stackedrecord.Payload)
 	require.True(t, stacked)
 	require.True(t, result.n.HasStrictPrismBuildSeal())
-	sealedProfiles := []momentinput.Profile{resultPayload.Slabs[0].Regions[0], resultPayload.Slabs[1].Regions[0]}
+	sealedProfiles := []sectionrecord.AnalyticProfileView{resultPayload.Slabs[0].Regions[0].AnalyticSealView(), resultPayload.Slabs[1].Regions[0].AnalyticSealView()}
 	sealed, sealErr := result.n.ReplayPrismBuildPayload(t.Context(), resultPayload.Frame, resultPayload.Xform,
 		resultPayload.Slabs[0].Z0, resultPayload.Slabs[1].Z1,
 		resultPayload.Slabs[0].Z0Delta, resultPayload.Slabs[1].Z1Delta,

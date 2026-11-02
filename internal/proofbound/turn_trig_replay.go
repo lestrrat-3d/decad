@@ -23,7 +23,7 @@ func ReplayTurnSinCosInterval(ctx context.Context, t *big.Rat,
 	if t == nil || budget == nil {
 		return RatInterval{}, RatInterval{}, decaderr.ErrUnsupported
 	}
-	fl, err := replayFixedIntOp(ctx, t.Num(), t.Denom(), '/', 0, budget)
+	fl, err := proofarith.ReplayFixedRatQuo(ctx, t, budget)
 	if err != nil {
 		return RatInterval{}, RatInterval{}, err
 	}
@@ -53,7 +53,7 @@ func ReplayTurnSinCosInterval(ctx context.Context, t *big.Rat,
 	if err != nil {
 		return RatInterval{}, RatInterval{}, err
 	}
-	kBig, err := replayFixedIntOp(ctx, scaled.Num(), scaled.Denom(), '/', 0, budget)
+	kBig, err := proofarith.ReplayFixedRatQuo(ctx, scaled, budget)
 	if err != nil {
 		return RatInterval{}, RatInterval{}, err
 	}

@@ -60,7 +60,7 @@ func ReplayBlindGroupPayload(ctx context.Context, target prismrecord.Payload, to
 	if err != nil {
 		return out, nil, false, err
 	}
-	held, err := proof.ReplayFractionFloat64(ctx, innerRat.Num(), innerRat.Denom(), budget)
+	held, err := proof.ReplayRatFloat64(ctx, innerRat, budget)
 	if err != nil {
 		return out, nil, false, err
 	}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
 )
 
@@ -15,7 +16,10 @@ func TestPrismWalkSealReplayBudgetAndMutation(t *testing.T) {
 		body, _, profile, _ := prismSealFixture(t) //nolint:contextcheck // The test fixture uses t.Context().
 		walks := &momentinput.ProfileWalks{Profile: profile, Metered: true,
 			Outer: []survey2d.SegmentWalk{{Kind: survey2d.WalkLine, StartU: 1}}}
-		ok, err := body.SealPrismBuildWalksReplay(ctx, walks, budget)
+		view, _ := walks.Outer[0].AnalyticSealView()
+		source := sectionrecord.AnalyticWalkSource{Anchor: &walks.Profile.Outer,
+			Profile: walks.Profile.AnalyticSealView(), Outer: []sectionrecord.AnalyticWalkView{view}}
+		ok, err := body.SealPrismBuildWalksReplay(ctx, source, budget)
 		return body, walks, ok, err
 	}
 	trial := proofbound.NewReplayTrialBudget()
@@ -56,7 +60,8 @@ func TestPrismWalkSealReplayBudgetAndMutation(t *testing.T) {
 	}
 	original := walks.Outer[0].StartV
 	walks.Outer[0].StartV = math.Copysign(0, -1)
-	if _, ok, err := sourceBody.ReplayPrismBuiltWalk(t.Context(), walks, 0, 0,
+	view, _ := walks.Outer[0].AnalyticSealView()
+	if ok, err := sourceBody.ReplayPrismBuiltWalk(t.Context(), &walks.Profile.Outer, 0, 0, walks.Profile.Outer, len(walks.Outer), view,
 		proofbound.NewReplayTrialBudget()); err != nil || ok {
 		t.Fatalf("changed signed zero admitted=%t err=%v", ok, err)
 	}
