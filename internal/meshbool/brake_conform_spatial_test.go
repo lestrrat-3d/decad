@@ -93,16 +93,16 @@ func TestBrakeConformSpatialIndexResourceLimits(t *testing.T) {
 	}
 	w, r := measured.Usage()
 	z := measured.Bytes()
-	for _, resource := range []string{"exact", "work", "records", "bytes"} {
+	for _, resource := range []string{brakeTestExact, brakeTestWork, brakeTestRecords, brakeTestBytes} {
 		t.Run(resource, func(t *testing.T) {
 			meter := proofbound.NewBrakeReplayBudget()
 			work, records, bytes := proofbound.BrakeReplayWork-w, proofbound.BrakeReplayRecords-r, proofbound.BrakeReplayBytes-z
 			switch resource {
-			case "work":
+			case brakeTestWork:
 				work++
-			case "records":
+			case brakeTestRecords:
 				records++
-			case "bytes":
+			case brakeTestBytes:
 				bytes++
 			}
 			if err := meter.SpendWork(ctx, work); err != nil {
@@ -115,13 +115,13 @@ func TestBrakeConformSpatialIndexResourceLimits(t *testing.T) {
 				t.Fatal(err)
 			}
 			hits, err := run(meter)
-			if resource == "exact" {
+			if resource == brakeTestExact {
 				if err != nil || !slices.Equal(hits, want) {
 					t.Fatalf("exact hits=%v err=%v", hits, err)
 				}
 			} else {
 				var detail *proofbound.WorkLimitError
-				expected := map[string]string{"work": "multiway_work", "records": "multiway_records", "bytes": "replay_bytes"}[resource]
+				expected := map[string]string{brakeTestWork: "multiway_work", brakeTestRecords: "multiway_records", brakeTestBytes: "replay_bytes"}[resource]
 				if !errors.As(err, &detail) || detail.Resource != expected || hits != nil {
 					t.Fatalf("one-short %s: %v", resource, err)
 				}

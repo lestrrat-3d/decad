@@ -66,15 +66,15 @@ func TestSpatialBoxTreeWorkLimitsAndCancellation(t *testing.T) {
 	}
 	w, r := measured.Usage()
 	z := measured.Bytes()
-	for _, resource := range []string{"exact", "work", "records", "bytes"} {
+	for _, resource := range []string{brakeTestExact, brakeTestWork, brakeTestRecords, brakeTestBytes} {
 		t.Run(resource, func(t *testing.T) {
 			work, records, bytes := w, r, z
 			switch resource {
-			case "work":
+			case brakeTestWork:
 				work--
-			case "records":
+			case brakeTestRecords:
 				records--
-			case "bytes":
+			case brakeTestBytes:
 				bytes--
 			}
 			meter, err := proofbound.NewReplayBudgetLimits(work, records, bytes)
@@ -82,7 +82,7 @@ func TestSpatialBoxTreeWorkLimitsAndCancellation(t *testing.T) {
 				t.Fatal(err)
 			}
 			tree, err := run(meter)
-			if resource == "exact" {
+			if resource == brakeTestExact {
 				gotW, gotR := meter.Usage()
 				if err != nil || len(tree.facets) != len(boxes) || gotW != w || gotR != r || meter.Bytes() != z {
 					t.Fatalf("exact: work=%d records=%d bytes=%d err=%v", gotW, gotR, meter.Bytes(), err)
@@ -90,7 +90,7 @@ func TestSpatialBoxTreeWorkLimitsAndCancellation(t *testing.T) {
 				return
 			}
 			var detail *proofbound.WorkLimitError
-			want := map[string]string{"work": "multiway_work", "records": "multiway_records", "bytes": "replay_bytes"}[resource]
+			want := map[string]string{brakeTestWork: "multiway_work", brakeTestRecords: "multiway_records", brakeTestBytes: "replay_bytes"}[resource]
 			if !errors.As(err, &detail) || detail.Resource != want || len(tree.nodes) != 0 {
 				t.Fatalf("one-short %s: %v", resource, err)
 			}
