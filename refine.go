@@ -90,19 +90,23 @@ func Refine(ctx context.Context, source *Body, maxBound units.Value) (result *Bo
 func refineSurfaceBounds(ctx context.Context, fp facetedPayload, target float64) ([]float64, error) {
 	rec := fp.OccupancyRecord()
 	if rec == nil {
-		return nil, fmt.Errorf(`%w: Refine takes a mesh Union of extruded circles, and this body's history is not one`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: Refine takes a mesh Union of extruded, revolved or swept circles, and this body's history is not one`, ErrUnsupported)
 	}
-	floor := max(rec.Excess, rec.TrueToHeld())
+	cross := make([]float64, len(fp.Tris))
+	for t, tri := range fp.Tris {
+		cross[t] = max(fp.VertexBound[tri[0]], fp.VertexBound[tri[1]], fp.VertexBound[tri[2]])
+	}
+	bounds := rec.MeshBounds(rec.Bulges(fp.Verts, fp.Tris, cross))
+	floor := max(bounds.Excess, bounds.TrueToHeld)
 	if !(floor < target) {
 		return nil, fmt.Errorf(`%w: the true-to-held bound %s already reaches the requested %s`,
 			ErrUnsupported, units.Millimeters(floor), units.Millimeters(target))
 	}
 	sigma := make([]float64, len(fp.Tris))
 	var want []int
-	for t, tri := range fp.Tris {
-		cross := max(fp.VertexBound[tri[0]], fp.VertexBound[tri[1]], fp.VertexBound[tri[2]])
-		sigma[t] = cross
-		if cross > target/4 {
+	for t := range fp.Tris {
+		sigma[t] = cross[t]
+		if cross[t] > target/4 {
 			want = append(want, t)
 		}
 	}

@@ -40,6 +40,11 @@ type BoolMesh struct {
 	// FacetBound except for a facet of a retained plane, whose true piece lies
 	// in that exact plane (SetSlabBounds).
 	SlabBound []float64
+	// Bulge is λ(t) per facet when the caller tracks an occupancy record
+	// (agent-docs/body-refine-design.md §5): every point of this operand's held
+	// solid outside its true solid lies within Bulge[t] of some facet t. nil
+	// when untracked; Stats.DeepTerm then reads +Inf.
+	Bulge []float64
 	// Gate is the pair's chord tolerance when this operand restates a held
 	// mesh (a boolean result or a mitred sweep), and zero for every other
 	// operand. A gated operand's facets that meet the other operand, or come
@@ -183,6 +188,10 @@ func MeshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 type Stats struct {
 	MaxRim float64
 	MinSin float64
+	// DeepTerm is the largest, over every contact segment of facets t and u,
+	// of 2·max(Bulge_a[t], Bulge_b[u])/sin θ(t, u): +Inf when either operand
+	// tracks no bulge or a segment has no proven positive sine.
+	DeepTerm float64
 }
 
 // MeshBooleanStats is MeshBoolean that also returns Stats.
@@ -248,7 +257,7 @@ func meshBooleanStats(ctx context.Context, op OperationKind, ma, mb *BoolMesh, m
 	if err != nil {
 		return nil, Stats{}, err
 	}
-	return append(kept, keep...), Stats{MaxRim: cuts.MaxRim, MinSin: cuts.MinSin}, nil
+	return append(kept, keep...), Stats{MaxRim: cuts.MaxRim, MinSin: cuts.MinSin, DeepTerm: cuts.DeepTerm}, nil
 }
 
 // EdgeCrosses decides whether edge k of facet f — which lies exactly in the

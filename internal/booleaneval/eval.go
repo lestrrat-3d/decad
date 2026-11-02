@@ -608,9 +608,20 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	}
 	var kept []meshbool.KeptFacet
 	var maxRim float64
-	// minSin stays 0, which no occupancy record admits, on every path that
-	// does not report it.
-	var minSin float64
+	// The occupancy record (agent-docs/body-refine-design.md §5) is tracked on
+	// the ordinary Union path only. deepTerm stays +Inf, which no record
+	// admits, on every path that does not report it.
+	deepTerm := math.Inf(1)
+	var occA, occB *occupancy.Record
+	trackOccupancy := op == meshbool.OpUnion && replay == nil && !hasShifts && fixed == nil && capFace == nil && coneFace == nil
+	if trackOccupancy {
+		if occA = occupancyleaf.Of(a, ma); occA != nil {
+			if occB = occupancyleaf.Of(b, mb); occB != nil {
+				bmA.Bulge = occupancyleaf.Bulges(occA, ma)
+				bmB.Bulge = occupancyleaf.Bulges(occB, mb)
+			}
+		}
+	}
 	var replayKeys *meshbool.ReplayKeys
 	if replay != nil {
 		replayKeys, err = meshbool.NewReplayKeysBounded(ctx, replay)
@@ -621,7 +632,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	} else {
 		var stats meshbool.Stats
 		kept, stats, err = meshbool.MeshBooleanStats(ctx, op, bmA, bmB, memo)
-		maxRim, minSin = stats.MaxRim, stats.MinSin
+		maxRim, deepTerm = stats.MaxRim, stats.DeepTerm
 	}
 	if err != nil {
 		return Evaluation{}, meshbool.StagingError(op, err)
@@ -703,8 +714,8 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		DPair:       dPair,
 		Xform:       r3.Identity(),
 	}
-	if op == meshbool.OpUnion && replay == nil && !hasShifts && fixed == nil && capFace == nil && coneFace == nil {
-		payload.Occupancy = unionOccupancy(a, b, ma, mb, stitched.Round, minSin)
+	if trackOccupancy && bmA.Bulge != nil {
+		payload.Occupancy = unionOccupancy(occA, occB, bmA, bmB, ma, mb, stitched.Round, deepTerm)
 		if payload.Occupancy != nil {
 			payload.Occupancy.Mesh = occupancy.Bind(payload.Verts, payload.Tris)
 		}
@@ -819,28 +830,43 @@ func shiftsHaveSingleComponentAdjustment(shifts map[int]pieceShift) bool {
 // with the placed operand's departure, its roles and its identity.
 
 // unionOccupancy composes agent-docs/body-refine-design.md §5's record for one
-// mesh Union of two convex-leaf operands, or nil. The gate slack is the
-// smallest face-bound sum the hidden-tangency pre-pass can apply to a face
-// pair of these two meshes (agent-docs/tessellation-design.md §11 step 4).
-func unionOccupancy(a, b *topo.Body, ma, mb *topo.Mesh, weld, minSin float64) *occupancy.Record {
-	ra := occupancyleaf.Of(a, ma)
-	if ra == nil {
+// mesh Union of two tracked operands, or nil. The deep-point step needs every
+// pair of held facets t, u that come within 2·max(λ(t), λ(u)) of each other
+// without a proven crossing to have been refused. The hidden-tangency
+// pre-pass refuses every face pair within slack δ(face(t)) + δ(face(u))
+// (agent-docs/tessellation-design.md §11 step 4), so it suffices that each
+// facet near the other operand has 2·λ(t) below its own face's bound.
+func unionOccupancy(ra, rb *occupancy.Record, bmA, bmB *meshbool.BoolMesh, ma, mb *topo.Mesh, weld, deepTerm float64) *occupancy.Record {
+	if !gateCovers(bmA, ma, bmB) || !gateCovers(bmB, mb, bmA) {
 		return nil
 	}
-	rb := occupancyleaf.Of(b, mb)
-	if rb == nil {
-		return nil
+	return occupancy.Compose(ra, rb, weld, deepTerm)
+}
+
+// gateCovers reports whether every facet of m whose box comes within twice
+// its bulge of other's box has twice its bulge strictly below its source
+// face's bound.
+func gateCovers(m *meshbool.BoolMesh, mesh *topo.Mesh, other *meshbool.BoolMesh) bool {
+	lo, hi := other.Boxes[0][0], other.Boxes[0][1]
+	for _, b := range other.Boxes[1:] {
+		lo = r3.Vec{X: math.Min(lo.X, b[0].X), Y: math.Min(lo.Y, b[0].Y), Z: math.Min(lo.Z, b[0].Z)}
+		hi = r3.Vec{X: math.Max(hi.X, b[1].X), Y: math.Max(hi.Y, b[1].Y), Z: math.Max(hi.Z, b[1].Z)}
 	}
-	minFace := func(m *topo.Mesh) float64 {
-		lo := math.Inf(1)
-		for _, d := range m.FaceBound {
-			lo = math.Min(lo, d)
+	for t, b := range m.Bulge {
+		if b == 0 {
+			continue
 		}
-		return lo
+		// Widened past the float rounding of the comparison below.
+		pad := 2 * b * (1 + 1e-9)
+		box := m.Boxes[t]
+		if box[0].X-pad > hi.X || lo.X > box[1].X+pad || box[0].Y-pad > hi.Y || lo.Y > box[1].Y+pad ||
+			box[0].Z-pad > hi.Z || lo.Z > box[1].Z+pad {
+			continue
+		}
+		face, ok := mesh.FaceBound[mesh.Source[t]]
+		if !ok || !(proofbound.AbsSumUpper(b, b) < face) {
+			return false
+		}
 	}
-	slack := minFace(ma) + minFace(mb)
-	// The float sum may round up past the true sum; step it down so the
-	// comparison in Compose stays on the safe side.
-	slack = math.Nextafter(slack, 0)
-	return occupancy.Compose(ra, rb, weld, minSin, slack)
+	return true
 }

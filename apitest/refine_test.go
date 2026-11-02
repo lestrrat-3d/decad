@@ -227,3 +227,84 @@ func TestRefineRefusals(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 }
+
+// refineTorus revolves a disc of radius rho, centred radius from the Z axis
+// in the XZ plane, a full turn about Z: a ring like a wire eye.
+func refineTorus(t *testing.T, doc *decad.Document, radius, rho float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XZ())
+	require.NoError(t, err)
+	c := s.CreatePoint(radius, 0)
+	s.AddConstraint(sketch.NewHorizontalDistance(s.Origin(), c, radius), sketch.NewVerticalDistance(s.Origin(), c, 0))
+	s.AddConstraint(sketch.NewRadius(s.CreateCircle(c, rho), rho))
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0], decad.ConstructionAxis{Dir: r3.Vec{Z: 1}}, decad.FullRevolution{})
+	require.NoError(t, err)
+	return body
+}
+
+// refineCord sweeps a disc of radius rho from start along +X, then round a
+// quarter bend of radius 5 towards +Y and on.
+func refineCord(t *testing.T, doc *decad.Document, start r3.Vec, rho float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	s.AddConstraint(sketch.NewRadius(s.CreateCircle(s.Origin(), rho), rho))
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	path, err := decad.NewPath(r3.Vec{},
+		decad.LineTo{End: r3.Vec{Z: 200}},
+		decad.ArcAround{Center: r3.Vec{Y: 5, Z: 200}, Axis: r3.Vec{X: -1}, End: r3.Vec{Y: 5, Z: 205}},
+		decad.LineTo{End: r3.Vec{Y: 30, Z: 205}})
+	require.NoError(t, err)
+	cord, err := decad.Sweep(t.Context(), doc, s, s.Profiles()[0], path)
+	require.NoError(t, err)
+	// Turn the path's +Z start onto +X at start.
+	f, err := r3.NewFrame(start, r3.Vec{Y: 1}, r3.Vec{Z: 1})
+	require.NoError(t, err)
+	xf, err := r3.FromFrame(f)
+	require.NoError(t, err)
+	cord, err = decad.Transform(t.Context(), cord, xf)
+	require.NoError(t, err)
+	return cord
+}
+
+func TestRefineTubeEyes(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name  string
+		tool  func(t *testing.T, doc *decad.Document) *decad.Body
+		bound float64
+	}{
+		{"straight wire leaving a ring", func(t *testing.T, doc *decad.Document) *decad.Body {
+			return refineSpan(t, doc, r3.Vec{X: 2.4}, r3.Vec{X: 202.4}, 0.6)
+		}, 0.05},
+		{"swept cord leaving a ring", func(t *testing.T, doc *decad.Document) *decad.Body {
+			return refineCord(t, doc, r3.Vec{X: 2.3, Y: 0.05, Z: 0.07}, 0.6)
+		}, 0.05},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New(decad.WithChainTolerance(units.Millimeters(0.1)))
+			joined, err := decad.Union(t.Context(), tc.tool(t, doc), refineTorus(t, doc, 2.4, 0.6))
+			require.NoError(t, err)
+			held, err := joined.Tessellate(t.Context(), units.Millimeters(1e3))
+			require.NoError(t, err)
+			before, err := held.Bound().In(units.Millimeter)
+			require.NoError(t, err)
+
+			refined, err := decad.Refine(t.Context(), joined, units.Millimeters(tc.bound))
+			require.NoError(t, err)
+			m, err := refined.Tessellate(t.Context(), units.Millimeters(tc.bound))
+			require.NoError(t, err)
+			after, err := m.Bound().In(units.Millimeter)
+			require.NoError(t, err)
+			require.LessOrEqual(t, after, tc.bound)
+			require.LessOrEqual(t, after, before)
+			require.Equal(t, held.Vertices(), m.Vertices(), "Refine moves no vertex")
+		})
+	}
+}
