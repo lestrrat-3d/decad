@@ -74,20 +74,18 @@ func TestPrismChainEligibilityAndCancellation(t *testing.T) {
 	surface := func(error) bool { return false }
 
 	t.Run("an unsupported payload declines before dispatch", func(t *testing.T) {
-		other := *operands[2]
-		other.Payload = nil
+		other := &topo.Body{Payload: nil}
 		body, span, matched, err := unionmany.PrismChain(t.Context(), env,
-			[]*topo.Body{operands[0], operands[1], &other}, true, hooks, surface)
+			[]*topo.Body{operands[0], operands[1], other}, true, hooks, surface)
 		require.NoError(t, err)
 		require.False(t, matched)
 		require.True(t, body == nil)
 		require.Zero(t, span)
 	})
 	t.Run("a Loft without source authentication declines", func(t *testing.T) {
-		other := *operands[2]
-		other.Payload = loftrecord.Payload{}
+		other := &topo.Body{Payload: loftrecord.Payload{}}
 		body, span, matched, err := unionmany.PrismChain(t.Context(), env,
-			[]*topo.Body{operands[0], operands[1], &other}, true, hooks, surface)
+			[]*topo.Body{operands[0], operands[1], other}, true, hooks, surface)
 		require.NoError(t, err)
 		require.False(t, matched)
 		require.True(t, body == nil)
