@@ -313,3 +313,6 @@
 10	0.01	TestSweepPairRealFacetedUnionClearAndImpact
 10	0.00	TestTopologyHandleSizeofProbeDoesNotCountAsAllocation
 10	0.00	TestBrakeRetryGeometryAndHistory
+10	0.00	TestBlindGroupFaceLedger
+10	0.00	TestGroupUnionInputsUsesPublicHistory
+10	0.00	TestGroupDirectPrismSourceHistory

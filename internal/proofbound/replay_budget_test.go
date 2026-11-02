@@ -243,3 +243,48 @@ func TestBrakeBudgetLimitErrorsDoNotAllocate(t *testing.T) {
 		})
 	}
 }
+
+func TestReplayBudgetReserveBundleAtomic(t *testing.T) {
+	ctx := t.Context()
+	for _, tc := range []struct {
+		name       string
+		work       uint64
+		records    uint64
+		bytes      uint64
+		wantAccept bool
+	}{
+		{"exact", 2, 3, 4, true},
+		{"work short", 3, 3, 4, false},
+		{"records short", 2, 4, 4, false},
+		{"bytes short", 2, 3, 5, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			meter, err := NewReplayBudgetLimits(2, 3, 4)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = meter.ReserveBundle(ctx, tc.work, tc.records, tc.bytes)
+			if tc.wantAccept && err != nil || !tc.wantAccept && !errors.Is(err, decaderr.ErrUnsupported) {
+				t.Fatalf("bundle error=%v", err)
+			}
+			work, records := meter.Usage()
+			if tc.wantAccept {
+				if work != 2 || records != 3 || meter.Bytes() != 4 {
+					t.Fatalf("accepted counts=%d,%d,%d", work, records, meter.Bytes())
+				}
+			} else if work != 0 || records != 0 || meter.Bytes() != 0 {
+				t.Fatalf("refused counts=%d,%d,%d", work, records, meter.Bytes())
+			}
+		})
+	}
+	meter := NewReplayTrialBudget()
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if err := meter.ReserveBundle(cancelled, 1, 1, 1); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled bundle error=%v", err)
+	}
+	work, records := meter.Usage()
+	if work != 0 || records != 0 || meter.Bytes() != 0 {
+		t.Fatalf("cancelled counts=%d,%d,%d", work, records, meter.Bytes())
+	}
+}

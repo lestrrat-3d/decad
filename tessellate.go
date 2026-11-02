@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/pointquery"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
 	"github.com/lestrrat-3d/decad/internal/tessaudit"
@@ -220,6 +222,15 @@ func (b *Body) Tessellate(ctx context.Context, tol units.Value, opts ...Tessella
 // terms of a proof cannot publish the rest of it, and a path that runs no
 // facet-contact audit cannot forget to say what it did prove.
 func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Verification) (*Mesh, error) {
+	var budget *proofbound.ReplayBudget
+	if verify == VerifyAll {
+		budget = proofbound.NewReplayTrialBudget()
+	}
+	return tessellateContextWithBudget(ctx, b, tol, verify, budget)
+}
+
+func tessellateContextWithBudget(ctx context.Context, b *Body, tol units.Value, verify Verification,
+	blindBudget *proofbound.ReplayBudget) (*Mesh, error) {
 	// core §12's rule for every operation that takes a context: a nil one
 	// cannot be polled, and every cancellation check below would dereference
 	// it, so it is refused at the entry before the body is examined.
@@ -242,25 +253,66 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 	if b.n.Payload == nil {
 		return nil, fmt.Errorf(`%w: this evaluator cannot tessellate a body it did not build`, ErrUnsupported)
 	}
+	if verify == VerifyBoundary && b.blindProof != nil {
+		return nil, ErrUnsupported
+	}
 	key := math.Float64bits(chord)
 	if cached := b.n.Tess.Load(); cached != nil && cached.ChordBits == key && cached.Verify == int(verify) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		return meshHandle(cached.Mesh), nil
+		if cached.Blind || b.blindProof != nil {
+			if cached.Blind && verify == VerifyAll {
+				mesh, hit, err := replayBlindCachedMesh(ctx, b, chord, cached, blindBudget)
+				if err != nil {
+					return nil, err
+				}
+				if hit {
+					return mesh, nil
+				}
+			}
+		} else {
+			return meshHandle(cached.Mesh), nil
+		}
 	}
-	node, err := tessdispatch.Body(ctx, &b.n, chord, tessdispatch.Verify(verify), tessdispatch.Options{
-		Surface: func(s surfacegeom.Surface) any { return publicSurface(s) },
-		Curve:   func(c surfacegeom.Curve) any { return publicCurve(c) },
-		Alloc:   handleAlloc{},
-	})
+	var node *topo.Mesh
+	bounded := false
+	if verify == VerifyAll {
+		node, bounded, err = groupBlindVerifyAllWithBudget(ctx, b, chord, blindBudget)
+		if err == nil && !bounded && b.blindProof != nil {
+			return nil, ErrUnsupported
+		}
+	}
+	if err == nil && !bounded {
+		node, err = tessdispatch.Body(ctx, &b.n, chord, tessdispatch.Verify(verify), tessdispatch.Options{
+			Surface: func(s surfacegeom.Surface) any { return publicSurface(s) },
+			Curve:   func(c surfacegeom.Curve) any { return publicCurve(c) },
+			Alloc:   handleAlloc{},
+		})
+	}
 	if err != nil {
 		return nil, err
 	}
 	// agent-docs/tessellation-design.md §4: every outer shell winds outward and
 	// every void shell into its cavity, at every verification level.
-	if err := topobuild.RequireShellWinding(ctx, node, b.n.Lumps); err != nil {
-		return nil, err
+	if !bounded {
+		if err := topobuild.RequireShellWinding(ctx, node, b.n.Lumps); err != nil {
+			return nil, err
+		}
+	}
+	if bounded {
+		if err := blindBudget.ReserveRecords(ctx, 2); err != nil {
+			return nil, err
+		}
+		if err := blindBudget.ReserveArray(ctx, 1, uint64(unsafe.Sizeof(topo.TessEntry{}))); err != nil {
+			return nil, err
+		}
+		if err := blindBudget.ReserveArray(ctx, 1, uint64(unsafe.Sizeof(blindTessBinding{}))); err != nil {
+			return nil, err
+		}
+		if err := blindBudget.SpendWork(ctx, 64); err != nil {
+			return nil, err
+		}
 	}
 	mesh := bornMesh(&Mesh{n: *node})
 	if verify < VerifyAll {
@@ -270,7 +322,14 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	b.n.Tess.Store(&topo.TessEntry{ChordBits: key, Verify: int(verify), Mesh: meshNode(mesh)})
+	if b.blindProof != nil && !bounded {
+		return mesh, nil
+	}
+	entry := &topo.TessEntry{ChordBits: key, Verify: int(verify), Mesh: meshNode(mesh), Blind: bounded}
+	if bounded {
+		b.blindProof.cache.Store(&blindTessBinding{body: b, operation: b.blindProof.cut, entry: entry, mesh: entry.Mesh})
+	}
+	b.n.Tess.Store(entry)
 	return mesh, nil
 }
 

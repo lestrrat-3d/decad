@@ -129,7 +129,7 @@ func bossShellOpenEdges(ctx context.Context, alloc topo.Alloc, bp Payload, btopo
 			u := btopo.Uses[ui]
 			from, to := e.Canon(w.StartU, w.StartV, spec.z), e.Canon(w.EndU, w.EndV, spec.z)
 			start, end := placeVertex(from, 0, 0, 0), placeVertex(to, 0, 0, 0)
-			edge, err := bandEdge(alloc, view, w, true, start, end)
+			edge, err := bandEdge(alloc, view, w, true, start, end) //nolint:contextcheck // The ordinary wall builder has no replay context or budget.
 			if err != nil {
 				return err
 			}
@@ -450,7 +450,7 @@ func pocketShellOpenEdges(ctx context.Context, alloc topo.Alloc, bp Payload, bto
 			u := btopo.Uses[ui]
 			from, to := e.Canon(w.StartU, w.StartV, spec.z), e.Canon(w.EndU, w.EndV, spec.z)
 			start, end := placeVertex(from, 0, 0, 0), placeVertex(to, 0, 0, 0)
-			edge, err := bandEdge(alloc, view, w, true, start, end)
+			edge, err := bandEdge(alloc, view, w, true, start, end) //nolint:contextcheck // The ordinary wall builder has no replay context or budget.
 			if err != nil {
 				return err
 			}

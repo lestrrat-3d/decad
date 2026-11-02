@@ -17,6 +17,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/massdispatch"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/prooflineage"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/units"
@@ -275,6 +276,24 @@ func performBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body, 
 			return nil, err
 		}
 		return body, nil
+	}
+	_, privateHistory := ctx.Value(operationHistorySuppressedKey{}).(*operationHistoryCapture)
+	if op == meshbool.OpCut && !cfg.matchingFaces && !privateHistory {
+		evalCtx, err := d.evalContext(ctx)
+		if err != nil {
+			return nil, err
+		}
+		budget := proofbound.NewReplayTrialBudget()
+		candidate, admitted, err := groupBlindCutBodyWithBudget(evalCtx, a, b, d.nextProducerID(), budget)
+		if err != nil {
+			return nil, err
+		}
+		if admitted {
+			if err := commitBlindGroupCut(ctx, d, a, b, candidate, budget); err != nil {
+				return nil, err
+			}
+			return candidate, nil
+		}
 	}
 	body, err := booleanBodyWith(ctx, op, a, b, d.nextProducerID(), cfg)
 	span := producerID(1)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
@@ -27,7 +28,11 @@ type GroupScene struct {
 // AdmitGroupRegions applies G4, G6 and the trimmed-circular refusal to every
 // recorded region after the root caller has admitted the operand placements.
 func AdmitGroupRegions(budget *proofbound.WorkBudget, regions []momentinput.Profile, holeFree bool) (bool, error) {
-	for _, region := range regions {
+	for i := range regions {
+		if err := budget.Step(); err != nil {
+			return false, err
+		}
+		region := regions[i]
 		if holeFree && len(region.Holes) != 0 {
 			return false, nil
 		}
@@ -44,8 +49,32 @@ func AdmitGroupRegions(budget *proofbound.WorkBudget, regions []momentinput.Prof
 }
 
 func groupWithinCap(budget *proofbound.WorkBudget, op string, regions ...[]momentinput.Profile) error {
-	var all []momentinput.Profile
-	for _, rs := range regions {
+	count := 0
+	for i := range regions {
+		if err := budget.Step(); err != nil {
+			return err
+		}
+		rs := regions[i]
+		if len(rs) > int(^uint(0)>>1)-count {
+			return fmt.Errorf("%w: group profile count overflow", decaderr.ErrUnsupported)
+		}
+		count += len(rs)
+	}
+	if err := budget.Reserve(uint64(count)); err != nil {
+		return err
+	}
+	if err := budget.ReserveBytesMul(uint64(count), uint64(unsafe.Sizeof(momentinput.Profile{}))); err != nil {
+		return err
+	}
+	all := make([]momentinput.Profile, 0, count)
+	for i := range regions {
+		if err := budget.Step(); err != nil {
+			return err
+		}
+		rs := regions[i]
+		if _, err := budget.StepN(uint64(len(rs))); err != nil {
+			return err
+		}
 		all = append(all, rs...)
 	}
 	segments, withinCap, err := RegionsWithinWorkCap(budget, all...)
@@ -60,12 +89,21 @@ func groupWithinCap(budget *proofbound.WorkBudget, op string, regions ...[]momen
 	return nil
 }
 
-func groupSceneProfiles(regions []momentinput.Profile) []SceneProfile {
-	out := make([]SceneProfile, len(regions))
-	for i, region := range regions {
-		out[i] = SceneProfile{Outer: region.Outer, Holes: region.Holes}
+func groupSceneProfiles(budget *proofbound.WorkBudget, regions []momentinput.Profile) ([]SceneProfile, error) {
+	if err := budget.Reserve(uint64(len(regions))); err != nil {
+		return nil, err
 	}
-	return out
+	if err := budget.ReserveBytesMul(uint64(len(regions)), uint64(unsafe.Sizeof(SceneProfile{}))); err != nil {
+		return nil, err
+	}
+	out := make([]SceneProfile, len(regions))
+	for i := range regions {
+		if err := budget.Step(); err != nil {
+			return nil, err
+		}
+		out[i] = SceneProfile{Outer: regions[i].Outer, Holes: regions[i].Holes}
+	}
+	return out, nil
 }
 
 // BuildGroupScene arranges two groups, splits line runs at shared vertices,
@@ -81,7 +119,15 @@ func BuildGroupScene(ctx context.Context, budget *proofbound.WorkBudget,
 	if err != nil {
 		return GroupScene{}, false, err
 	}
-	s, tags, charge, err := BuildSceneRegions(budget, groupSceneProfiles(regionsA), groupSceneProfiles(regionsB), reexpress)
+	profilesA, err := groupSceneProfiles(budget, regionsA)
+	if err != nil {
+		return GroupScene{}, false, err
+	}
+	profilesB, err := groupSceneProfiles(budget, regionsB)
+	if err != nil {
+		return GroupScene{}, false, err
+	}
+	s, tags, charge, err := BuildSceneRegions(budget, profilesA, profilesB, reexpress)
 	if err != nil {
 		return GroupScene{}, false, err
 	}
@@ -174,6 +220,75 @@ func GroupUnionLoops(budget *proofbound.WorkBudget, scene GroupScene) ([]section
 		return nil, 0, false, err
 	}
 	return MergeLoops(budget, scene.Profiles, "union")
+}
+
+// GroupUnionLoopsWithOrigins retains whole-edge source identities beside
+// unambiguous merged loops. A partial or split edge leaves origins absent.
+func GroupUnionLoopsWithOrigins(budget *proofbound.WorkBudget,
+	scene GroupScene) ([]sectionrecord.LoopRecord, [][]Origin, float64, bool, error) {
+	voidFree, err := CellsHaveNoVoid(budget, scene.Tags, scene.Profiles)
+	if err != nil || !voidFree {
+		return nil, nil, 0, false, err
+	}
+	if ok, err := scene.Delta.SharedSpansBounded(budget, scene.Profiles); err != nil || !ok {
+		return nil, nil, 0, false, err
+	}
+	survivors, resolved, err := mergeSurvivors(budget, scene.Profiles, "union")
+	if err != nil || !resolved {
+		return nil, nil, 0, false, err
+	}
+	chains, resolved, err := ChainClosedLoops(budget, survivors)
+	if err != nil || !resolved {
+		return nil, nil, 0, false, err
+	}
+	if err := budget.Reserve(uint64(2 * len(chains))); err != nil {
+		return nil, nil, 0, false, err
+	}
+	if err := budget.ReserveBytesMul(uint64(len(chains)),
+		uint64(unsafe.Sizeof(sectionrecord.LoopRecord{}))+uint64(unsafe.Sizeof([]Origin{}))); err != nil {
+		return nil, nil, 0, false, err
+	}
+	loops := make([]sectionrecord.LoopRecord, 0, len(chains))
+	origins := make([][]Origin, 0, len(chains))
+	traced := true
+	cutDelta := 0.0
+	for _, chain := range chains {
+		if err := budget.Step(); err != nil {
+			return nil, nil, 0, false, err
+		}
+		loop, d, err := recordChain(budget, chain, nil)
+		if err != nil {
+			return nil, nil, 0, false, err
+		}
+		loops = append(loops, loop)
+		cutDelta = math.Max(cutDelta, d)
+		if len(chain) != len(loop.Segments) {
+			traced = false
+			continue
+		}
+		if err := budget.ReserveBytesMul(uint64(len(chain)), uint64(unsafe.Sizeof(Origin{}))); err != nil {
+			return nil, nil, 0, false, err
+		}
+		row := make([]Origin, 0, len(chain))
+		for _, edge := range chain {
+			if err := budget.Step(); err != nil {
+				return nil, nil, 0, false, err
+			}
+			origin, ok := scene.Tags[edge.Entity]
+			if !ok || edge.Partial {
+				traced = false
+				break
+			}
+			row = append(row, origin)
+		}
+		if len(row) == len(chain) {
+			origins = append(origins, row)
+		}
+	}
+	if !traced || len(origins) != len(loops) {
+		origins = nil
+	}
+	return loops, origins, cutDelta, true, nil
 }
 
 // ProveGroupDisjoint accepts only one valid, whole outer cell per recorded
@@ -465,7 +580,11 @@ func proveGroupCells(ctx context.Context, budget *proofbound.WorkBudget,
 	if err := groupWithinCap(budget, "disjointness", outers); err != nil {
 		return nil, nil, false, 0, err
 	}
-	s, tags, charge, err := BuildSceneRegions(budget, groupSceneProfiles(outers), nil, &Reexpression{Identity: true})
+	sceneProfiles, err := groupSceneProfiles(budget, outers)
+	if err != nil {
+		return nil, nil, false, 0, err
+	}
+	s, tags, charge, err := BuildSceneRegions(budget, sceneProfiles, nil, &Reexpression{Identity: true})
 	if err != nil {
 		return nil, nil, false, 0, err
 	}

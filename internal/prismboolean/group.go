@@ -156,6 +156,18 @@ func TryGroupCut(ctx context.Context, a, b topo.Payload) (prismrecord.Payload, b
 // point, which the arrangement leaves uncut, are a silent miss to the mesh
 // path.
 func TryGroupUnion(ctx context.Context, a, b topo.Payload) (topo.Payload, bool, error) {
+	return tryGroupUnion(ctx, a, b, nil)
+}
+
+// TryGroupUnionWithOrigins preserves each general union edge's source.
+func TryGroupUnionWithOrigins(ctx context.Context, a, b topo.Payload) (topo.Payload, [][]prismcells.Origin, bool, error) {
+	var origins [][]prismcells.Origin
+	payload, ok, err := tryGroupUnion(ctx, a, b, &origins)
+	return payload, origins, ok, err
+}
+
+func tryGroupUnion(ctx context.Context, a, b topo.Payload,
+	origins *[][]prismcells.Origin) (topo.Payload, bool, error) {
 	oa, aok := groupOperandOf(a)
 	ob, bok := groupOperandOf(b)
 	if !aok || !bok {
@@ -176,9 +188,55 @@ func TryGroupUnion(ctx context.Context, a, b topo.Payload) (topo.Payload, bool, 
 	if err != nil || !ok {
 		return nil, false, err
 	}
-	payload, ok, err := stackedrecord.GroupUnionTail(ctx, budget, scene, oa.proxy, ob.proxy)
+	var payload topo.Payload
+	if origins == nil {
+		payload, ok, err = stackedrecord.GroupUnionTail(ctx, budget, scene, oa.proxy, ob.proxy)
+	} else {
+		payload, *origins, ok, err = stackedrecord.GroupUnionTailWithOrigins(ctx, budget, scene, oa.proxy, ob.proxy)
+	}
 	if fallBack, err := prismcells.AmplifiedFallback(scene.Delta.Amplified, err); fallBack || err != nil {
 		return nil, false, err
 	}
 	return payload, ok, nil
+}
+
+// ReplayWholeCircleGroupUnion reconstructs a disjoint whole-circle Union and
+// returns the input tag of each resulting segment. The caller must bind both
+// payloads to their original producers and carry the returned tags across every
+// private Union step. This helper alone does not admit a public Boolean.
+func ReplayWholeCircleGroupUnion(ctx context.Context, budget *proofbound.ReplayBudget,
+	a, b topo.Payload) (topo.Payload, [][]prismcells.Origin, bool, error) {
+	if budget == nil {
+		return nil, nil, false, nil
+	}
+	if err := budget.SpendWork(ctx, 1); err != nil {
+		return nil, nil, false, err
+	}
+	oa, aok := groupOperandOf(a)
+	ob, bok := groupOperandOf(b)
+	if !aok || !bok {
+		return nil, nil, false, nil
+	}
+	work := budget.WorkBudget(ctx)
+	if ok, err := admitGroupPair(work, meshbool.OpUnion, oa, ob, true, true); err != nil || !ok {
+		return nil, nil, false, err
+	}
+	mapping, ok, err := prismplacement.ReplayParallelSignedMap(ctx, oa.proxy.PlacementOperand(), ob.proxy.PlacementOperand(), budget)
+	if err != nil || !ok {
+		return nil, nil, false, err
+	}
+	ok, err = prismplacement.ReplaySameShiftedInterval(ctx, oa.proxy.PlacementOperand(), ob.proxy.PlacementOperand(), mapping.Shift, budget)
+	if err != nil || !ok {
+		return nil, nil, false, err
+	}
+	scene, ok, err := prismcells.BuildGroupScene(ctx, work, oa.regions, ob.regions,
+		oa.proxy.PlacementOperand(), ob.proxy.PlacementOperand(), oa.proxy.SectionDelta, ob.proxy.SectionDelta, "union")
+	if err != nil || !ok {
+		return nil, nil, false, err
+	}
+	payload, origins, ok, err := stackedrecord.GroupWholeCircleUnionTailWithOrigins(ctx, work, scene, oa.proxy, ob.proxy)
+	if fallBack, err := prismcells.AmplifiedFallback(scene.Delta.Amplified, err); fallBack || err != nil {
+		return nil, nil, false, err
+	}
+	return payload, origins, ok, nil
 }

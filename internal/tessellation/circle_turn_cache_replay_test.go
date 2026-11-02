@@ -51,7 +51,7 @@ func TestCircleTurnCacheReplayLimits(t *testing.T) {
 	}
 	work, records := base.Usage()
 	bytes := base.Bytes()
-	for _, mode := range []string{"exact", "work", "records", "bytes"} {
+	for _, mode := range []string{replayTestCaseExact, "work", "records", "bytes"} {
 		b := proofbound.NewReplayTrialBudget()
 		w, r, z := proofbound.ReplayTrialWork-work, proofbound.ReplayTrialRecords-records, proofbound.ReplayTrialBytes-bytes
 		switch mode {
@@ -72,7 +72,7 @@ func TestCircleTurnCacheReplayLimits(t *testing.T) {
 			t.Fatal(err)
 		}
 		err := run(t.Context(), b)
-		if mode == "exact" && err != nil || mode != "exact" && !errors.Is(err, decaderr.ErrUnsupported) {
+		if mode == replayTestCaseExact && err != nil || mode != replayTestCaseExact && !errors.Is(err, decaderr.ErrUnsupported) {
 			t.Fatalf("%s: %v", mode, err)
 		}
 	}

@@ -3,6 +3,7 @@ package prismcells
 import (
 	"fmt"
 	"math"
+	"unsafe"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -70,6 +71,12 @@ func BuildSceneRegions(budget *proofbound.WorkBudget, regionsA, regionsB []Scene
 				return p
 			}
 			return mapPt(p)
+		}
+		if err := budget.Reserve(uint64(len(profile.Holes)) + 1); err != nil {
+			return err
+		}
+		if err := budget.ReserveBytesMul(uint64(len(profile.Holes))+1, uint64(unsafe.Sizeof(LoopRecord{}))); err != nil {
+			return err
 		}
 		loops := append([]LoopRecord{profile.Outer}, profile.Holes...)
 		for li, loop := range loops {

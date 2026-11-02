@@ -208,6 +208,43 @@ func ReplayIndexedRefusal(ctx context.Context, b *ReplayBudget, first, middle, l
 	return &replayIndexedError{text: string(out)}
 }
 
+// ReserveBundle checks all three replay limits before committing any charge.
+// It lets one fixed exact-arithmetic step refuse without consuming part of
+// its reservation when a later resource runs out.
+func (b *ReplayBudget) ReserveBundle(ctx context.Context, work, records, bytes uint64) error {
+	if b == nil {
+		return fmt.Errorf("%w: nil replay budget", decaderr.ErrUnsupported)
+	}
+	if b.strict {
+		return errCircleReplayEnvelope
+	}
+	w, r, n := b.shared.Work, b.shared.Records, b.bytes
+	wLimit, rLimit, bLimit := b.shared.maxWork, b.shared.maxRecords, b.maxBytes
+	if wLimit == 0 {
+		wLimit = MaxMultiwayWorkPerCall
+	}
+	if rLimit == 0 {
+		rLimit = MaxMultiwayRecordsPerCall
+	}
+	if bLimit == 0 {
+		bLimit = ReplayTrialBytes
+	}
+	if err := multiwayCharge(ctx, &w, work, wLimit, "multiway_work", b.shared.prebuiltLimits); err != nil {
+		return err
+	}
+	if err := multiwayCharge(ctx, &r, records, rLimit, "multiway_records", b.shared.prebuiltLimits); err != nil {
+		return err
+	}
+	if err := multiwayCharge(ctx, &n, bytes, bLimit, "replay_bytes", b.shared.prebuiltLimits); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	b.shared.Work, b.shared.Records, b.bytes = w, r, n
+	return nil
+}
+
 // Bytes returns cumulative precharged storage.
 func (b *ReplayBudget) Bytes() uint64 { return b.bytes }
 

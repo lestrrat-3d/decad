@@ -84,6 +84,8 @@ type Mesh struct {
 // back to its handle on a hit, so a second Tessellate returns the same *Mesh.
 type TessEntry struct {
 	ChordBits uint64
+	// Blind marks entries that require the blind Cut source replay on every hit.
+	Blind bool
 	// Verify is the level the cached mesh was BUILT at, and half of the entry's
 	// key (agent-docs/tessellation-design.md §1.1). Keying on the tolerance alone
 	// would hand a VerifyNone mesh back to a boolean whose own internal

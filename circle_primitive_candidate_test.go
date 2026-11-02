@@ -198,7 +198,7 @@ func TestPublicCirclePrimitiveCandidate(t *testing.T) {
 	w, r := b.Usage()
 	z := b.Bytes()
 	t.Logf("public transformed source candidate: work=%d records=%d bytes=%d vertices=%d facets=%d", w, r, z, len(mesh.Vertices), len(mesh.Triangles))
-	for _, mode := range []string{"exact", "work", "records", "bytes"} {
+	for _, mode := range []string{replayTestCaseExact, "work", "records", "bytes"} {
 		t.Run(mode, func(t *testing.T) {
 			m := proofbound.NewCircleReplayBudget()
 			ww, rr, zz := proofbound.ReplayTrialWork-w, proofbound.ReplayTrialRecords-r, proofbound.ReplayTrialBytes-z
@@ -220,7 +220,7 @@ func TestPublicCirclePrimitiveCandidate(t *testing.T) {
 				t.Fatal(err)
 			}
 			got, err := publicCircleCandidate(t.Context(), body, m)
-			if mode == "exact" && err != nil || mode != "exact" && (!errors.Is(err, decaderr.ErrUnsupported) || got != nil) {
+			if mode == replayTestCaseExact && err != nil || mode != replayTestCaseExact && (!errors.Is(err, decaderr.ErrUnsupported) || got != nil) {
 				t.Fatalf("%s: %v", mode, err)
 			}
 		})
@@ -297,7 +297,7 @@ func TestPublicCirclePrimitiveFaceTokenMutations(t *testing.T) {
 	refuse("denoted")
 	wall.Denoted = nil
 	oldRole := wall.Origins[0].Role
-	wall.Origins[0].Role = "changed"
+	wall.Origins[0].Role = replayTestCaseChanged
 	refuse("role")
 	wall.Origins[0].Role = oldRole
 	oldBody := wall.Body

@@ -156,7 +156,7 @@ func TestCirclePlacementReplaySnapshot(t *testing.T) {
 	}
 	op.inputs[0].Body = oldSource
 	oldRole := op.inputs[0].Role
-	op.inputs[0].Role = "changed"
+	op.inputs[0].Role = replayTestCaseChanged
 	if err := s.revalidate(t.Context(), doc, m); !errors.Is(err, ErrUnsupported) {
 		t.Fatal("accepted changed input role")
 	}
