@@ -308,3 +308,41 @@ func TestRefineTubeEyes(t *testing.T) {
 		})
 	}
 }
+
+func TestRefineBoredBend(t *testing.T) {
+	t.Parallel()
+	// Two thick legs joined at a bend, each crossed by a bore, like a flexible
+	// connector: a Union, then two Cuts by extruded circles.
+	build := func(t *testing.T) *decad.Body {
+		doc := decad.New(decad.WithChainTolerance(units.Millimeters(0.1)))
+		toe := r3.Vec{X: 10.25, Y: -3.5, Z: 40.125}
+		up, _ := r3.Vec{X: 1, Y: 0.2, Z: 0.3}.Normalize()
+		legs, err := decad.Union(t.Context(),
+			refineSpan(t, doc, toe.Sub(r3.Vec{Z: 16}), toe, 3),
+			refineSpan(t, doc, toe, toe.Add(up.Scale(32)), 3))
+		require.NoError(t, err)
+		across, _ := r3.Vec{X: 0.2, Y: 1}.Normalize()
+		lower := toe.Sub(r3.Vec{Z: 12})
+		body, err := decad.Cut(t.Context(), legs, refineSpan(t, doc, lower.Sub(across.Scale(14)), lower.Add(across.Scale(14)), 2.2))
+		require.NoError(t, err)
+		side := up.Cross(across)
+		upper := toe.Add(up.Scale(26))
+		body, err = decad.Cut(t.Context(), body, refineSpan(t, doc, upper.Sub(side.Scale(14)), upper.Add(side.Scale(14)), 2.2))
+		require.NoError(t, err)
+		return body
+	}
+	body := build(t)
+	_, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
+	require.ErrorIs(t, err, decad.ErrUnsupported, "the held crossing bound refuses 0.05 mm before Refine")
+	// The second bore's crossing depth, charged to the true-to-held side,
+	// already exceeds 0.01 mm: Refine refuses that and leaves the body live.
+	_, err = decad.Refine(t.Context(), body, units.Millimeters(0.01))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	refined, err := decad.Refine(t.Context(), body, units.Millimeters(0.05))
+	require.NoError(t, err)
+	m, err := refined.Tessellate(t.Context(), units.Millimeters(0.05))
+	require.NoError(t, err)
+	after, err := m.Bound().In(units.Millimeter)
+	require.NoError(t, err)
+	require.LessOrEqual(t, after, 0.05)
+}

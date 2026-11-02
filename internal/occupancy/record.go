@@ -26,6 +26,9 @@ type Leaf struct {
 	// reads them, so a Boolean that only composes the record never pays for
 	// their rational construction.
 	pieces *lazyPieces
+	// inner builds exact convex pieces inside the true solid, for a leaf a Cut
+	// may use as its tool; nil for a leaf that offers none.
+	inner *lazyPieces
 	// operand names the one held mesh this leaf came in with: leaves of one
 	// operand (a composite sweep's spans) share it, and their joins are not
 	// crossings of two Boolean operands.
@@ -45,8 +48,11 @@ type shape interface {
 // every step. A Record is immutable once built.
 type Record struct {
 	Leaves []Leaf
-	Drift  float64
-	Cross  float64
+	// Holes are the tool leaves Cut removed: X is the union of Leaves less
+	// the union of Holes, which holds for any tree of Unions followed by Cuts.
+	Holes []Leaf
+	Drift float64
+	Cross float64
 	// Mesh is the held mesh the record was proven for; a leaf's own record
 	// leaves it zero, since the Boolean that composes it binds the result.
 	Mesh Binding
@@ -92,6 +98,17 @@ func (r *Record) Bulges(verts []r3.Vec, tris [][3]int, delta []float64) []float6
 			poke = math.Min(poke, l.shape.poke(tv))
 		}
 		lam := poke
+		for _, l := range r.Holes {
+			if !l.near(lo, hi, r.Cross+l.Delta) {
+				continue
+			}
+			// The true hole reaches past its held wall by at most the tool
+			// mesh's own two-sided bound, and those points are held material.
+			lam = math.Max(lam, l.Delta)
+			if first != nil && l.operand != first {
+				two = true
+			}
+		}
 		if two {
 			lam = math.Max(lam, r.Cross)
 		}
@@ -110,7 +127,7 @@ func (r *Record) Bulges(verts []r3.Vec, tris [][3]int, delta []float64) []float6
 // Compose answers nil when deepTerm is not finite.
 func Compose(a, b *Record, weld, deepTerm float64) *Record {
 	if a == nil || b == nil || proofbound.IsNonFinite(weld) || weld < 0 ||
-		proofbound.IsNonFinite(deepTerm) || deepTerm < 0 {
+		proofbound.IsNonFinite(deepTerm) || deepTerm < 0 || len(a.Holes) != 0 || len(b.Holes) != 0 {
 		return nil
 	}
 	return &Record{
@@ -118,6 +135,43 @@ func Compose(a, b *Record, weld, deepTerm float64) *Record {
 		Drift:  proofbound.AbsSumUpper(max(a.Drift, b.Drift), weld),
 		Cross:  proofbound.AbsSumUpper(max(a.Cross, b.Cross, deepTerm), weld),
 	}
+}
+
+// CutCompose is the record of round(X'_a ∖ X'_b) for one mesh Cut step, with
+// Compose's weld and deepTerm. Here a tool facet's bulge is the tool mesh's
+// own two-sided bound: the true tool reaches past its held wall by at most
+// that, and the points between are held material outside X. The tool must be
+// a record of leaves that each offer inner pieces, with no holes of its own;
+// otherwise CutCompose answers nil.
+func CutCompose(a, b *Record, weld, deepTerm float64) *Record {
+	if a == nil || b == nil || proofbound.IsNonFinite(weld) || weld < 0 ||
+		proofbound.IsNonFinite(deepTerm) || deepTerm < 0 || len(b.Holes) != 0 {
+		return nil
+	}
+	for _, l := range b.Leaves {
+		if l.inner == nil {
+			return nil
+		}
+	}
+	return &Record{
+		Leaves: append([]Leaf(nil), a.Leaves...),
+		Holes:  append(append(make([]Leaf, 0, len(a.Holes)+len(b.Leaves)), a.Holes...), b.Leaves...),
+		Drift:  proofbound.AbsSumUpper(max(a.Drift, b.Drift), weld),
+		Cross:  proofbound.AbsSumUpper(max(a.Cross, b.Cross, deepTerm), weld),
+	}
+}
+
+// Inner returns the hole leaves' inner pieces, building them on first use.
+func (r *Record) Inner() ([]*Piece, error) {
+	var out []*Piece
+	for _, l := range r.Holes {
+		p, err := l.inner.get()
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p...)
+	}
+	return out, nil
 }
 
 // Bounds are a record's figures over one held mesh of its union: every held
@@ -137,12 +191,18 @@ func (r *Record) MeshBounds(bulges []float64) Bounds {
 	for _, b := range bulges {
 		lam = max(lam, b)
 	}
-	for _, l := range r.Leaves {
+	for _, l := range append(append([]Leaf(nil), r.Leaves...), r.Holes...) {
 		d = max(d, l.Delta)
+	}
+	near := proofbound.AbsSumUpper(d, r.Drift)
+	if len(r.Holes) != 0 {
+		// A true point a Cut exposed may sit near a held rim, which the
+		// crossing depth covers.
+		near = proofbound.AbsSumUpper(near, r.Cross)
 	}
 	return Bounds{
 		Excess:     proofbound.AbsSumUpper(lam, lam),
-		TrueToHeld: max(proofbound.AbsSumUpper(d, r.Drift), lam),
+		TrueToHeld: max(near, lam),
 	}
 }
 
@@ -241,7 +301,21 @@ func CircleLeaf(place Chain, cu, cv, r, z0, z1, sectionDelta, dz0, dz1, slack fl
 		}
 		return []*Piece{p}, nil
 	}
-	return newLeaf(cells, build, delta, cyl), nil
+	l := newLeaf(cells, build, delta, cyl)
+	// Inside: the section narrowed by its displacement and the slack, between
+	// the levels narrowed the same way.
+	innerR := r - proofbound.AbsSumUpper(sectionDelta, slack)
+	ilo, ihi := z0+proofbound.AbsSumUpper(dz0, slack), z1-proofbound.AbsSumUpper(dz1, slack)
+	if innerR > 0 && ilo < ihi {
+		l.inner = &lazyPieces{build: func() ([]*Piece, error) {
+			p, err := InscribedCirclePrism(shifted, innerR, ilo, ihi, sides)
+			if err != nil {
+				return nil, err
+			}
+			return []*Piece{p}, nil
+		}}
+	}
+	return l, nil
 }
 
 func (c Chain) applyFloat(v r3.Vec) r3.Vec {

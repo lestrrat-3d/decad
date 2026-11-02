@@ -215,6 +215,13 @@ func sweepRecord(p sweeprecord.Payload, mesh *topo.Mesh) *occupancy.Record {
 // with each facet's own published bound: its corners' largest vertex bound
 // when the mesh publishes a per-vertex record, else its source face's bound.
 func Bulges(rec *occupancy.Record, mesh *topo.Mesh) []float64 {
+	return rec.Bulges(mesh.Vertices, mesh.Triangles, Deltas(mesh))
+}
+
+// Deltas reads every facet's own published bound: its corners' largest vertex
+// bound when the mesh publishes a per-vertex record, else its source face's
+// bound.
+func Deltas(mesh *topo.Mesh) []float64 {
 	delta := make([]float64, len(mesh.Triangles))
 	for t, tri := range mesh.Triangles {
 		if mesh.VertexBound != nil {
@@ -227,5 +234,5 @@ func Bulges(rec *occupancy.Record, mesh *topo.Mesh) []float64 {
 		}
 		delta[t] = d
 	}
-	return rec.Bulges(mesh.Vertices, mesh.Triangles, delta)
+	return delta
 }

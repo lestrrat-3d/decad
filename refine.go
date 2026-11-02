@@ -90,7 +90,7 @@ func Refine(ctx context.Context, source *Body, maxBound units.Value) (result *Bo
 func refineSurfaceBounds(ctx context.Context, fp facetedPayload, target float64) ([]float64, error) {
 	rec := fp.OccupancyRecord()
 	if rec == nil {
-		return nil, fmt.Errorf(`%w: Refine takes a mesh Union of extruded, revolved or swept circles, and this body's history is not one`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: Refine takes mesh Unions of extruded, revolved or swept circles, then Cuts by extruded circles, and this body's history is not one`, ErrUnsupported)
 	}
 	cross := make([]float64, len(fp.Tris))
 	for t, tri := range fp.Tris {
@@ -114,8 +114,12 @@ func refineSurfaceBounds(ctx context.Context, fp facetedPayload, target float64)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: %w`, ErrUnsupported, err)
 	}
+	inner, err := rec.Inner()
+	if err != nil {
+		return nil, fmt.Errorf(`%w: %w`, ErrUnsupported, err)
+	}
 	h, err := occupancy.Certify(ctx, fp.Verts, fp.Tris, want, pieces,
-		occupancy.Search{H0: max(floor, target/64), HMax: target, Step: 1.25, MaxDepth: 24},
+		occupancy.Search{H0: max(floor, target/64), HMax: target, Step: 1.25, Inner: inner, MaxDepth: 24},
 		&occupancy.Budget{Limit: refineWorkLimit})
 	if err != nil {
 		return nil, err

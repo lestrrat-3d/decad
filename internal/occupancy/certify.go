@@ -209,6 +209,9 @@ type Search struct {
 	// H0 and HMax bound the translation ladder H0·Step^j. A Step at or
 	// below 1 reads as 1.25.
 	H0, HMax, Step float64
+	// Inner are pieces inside the true holes a Cut removed: a moved facet
+	// piece wholly inside one of them is outside the true solid.
+	Inner []*Piece
 	// MaxDepth is how many times a facet piece may be bisected across its
 	// longest edge before the search refuses.
 	MaxDepth int
@@ -278,6 +281,13 @@ func FacetBound(tri [3]r3.Vec, outward r3.Vec, pieces []*Piece, s Search, budget
 			}
 		}
 	}
+	var inner []*Piece
+	for _, p := range s.Inner {
+		if boxesNear(lo, hi, p.box, s.HMax) {
+			inner = append(inner, p)
+		}
+	}
+	s.Inner = inner
 	return pieceBound(tri, dirs, near, s, 0, budget)
 }
 
@@ -289,7 +299,10 @@ func pieceBound(tri [3]r3.Vec, dirs []r3.Vec, near []*Piece, s Search, depth int
 	for h := s.H0; h <= s.HMax; h *= step {
 		for _, d := range dirs {
 			shift := d.Scale(h * shrink)
-			ok, err := missesAll(tri, shift, near, budget)
+			ok, err := insideAny(tri, shift, s.Inner, budget)
+			if err == nil && !ok {
+				ok, err = missesAll(tri, shift, near, budget)
+			}
 			if err != nil {
 				return 0, err
 			}
@@ -323,6 +336,20 @@ func pieceBound(tri [3]r3.Vec, dirs []r3.Vec, near []*Piece, s Search, depth int
 		worst = math.Max(worst, h)
 	}
 	return worst + splitSlack(tri), nil
+}
+
+// insideAny reports whether tri moved by shift lies wholly inside one of
+// inner: its three corners inside a convex piece, decided exactly.
+func insideAny(tri [3]r3.Vec, shift r3.Vec, inner []*Piece, budget *Budget) (bool, error) {
+	for _, p := range inner {
+		if err := budget.charge(int64(3 * (len(p.sides) + 2))); err != nil {
+			return false, err
+		}
+		if p.containsMoved(tri, shift) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func missesAll(tri [3]r3.Vec, shift r3.Vec, near []*Piece, budget *Budget) (bool, error) {

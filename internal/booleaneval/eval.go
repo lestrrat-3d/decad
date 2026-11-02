@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"math/big"
 	"unsafe"
@@ -613,12 +614,19 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	// admits, on every path that does not report it.
 	deepTerm := math.Inf(1)
 	var occA, occB *occupancy.Record
-	trackOccupancy := op == meshbool.OpUnion && replay == nil && !hasShifts && fixed == nil && capFace == nil && coneFace == nil
+	trackOccupancy := (op == meshbool.OpUnion || op == meshbool.OpCut) &&
+		replay == nil && !hasShifts && fixed == nil && capFace == nil && coneFace == nil
 	if trackOccupancy {
 		if occA = occupancyleaf.Of(a, ma); occA != nil {
 			if occB = occupancyleaf.Of(b, mb); occB != nil {
 				bmA.Bulge = occupancyleaf.Bulges(occA, ma)
-				bmB.Bulge = occupancyleaf.Bulges(occB, mb)
+				if op == meshbool.OpCut {
+					// A tool facet's bulge is how far the true tool reaches past
+					// it: the tool mesh's own two-sided bound.
+					bmB.Bulge = occupancyleaf.Deltas(mb)
+				} else {
+					bmB.Bulge = occupancyleaf.Bulges(occB, mb)
+				}
 			}
 		}
 	}
@@ -715,7 +723,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		Xform:       r3.Identity(),
 	}
 	if trackOccupancy && bmA.Bulge != nil {
-		payload.Occupancy = unionOccupancy(occA, occB, bmA, bmB, ma, mb, stitched.Round, deepTerm)
+		payload.Occupancy = composeOccupancy(ctx, op, occA, occB, bmA, bmB, ma, mb, memo, stitched.Round, deepTerm)
 		if payload.Occupancy != nil {
 			payload.Occupancy.Mesh = occupancy.Bind(payload.Verts, payload.Tris)
 		}
@@ -829,18 +837,44 @@ func shiftsHaveSingleComponentAdjustment(shifts map[int]pieceShift) bool {
 // retained tag (facetedrecord.SourceTag, flipped for the tool of a Cut) charged
 // with the placed operand's departure, its roles and its identity.
 
-// unionOccupancy composes agent-docs/body-refine-design.md §5's record for one
-// mesh Union of two tracked operands, or nil. The deep-point step needs every
-// pair of held facets t, u that come within 2·max(λ(t), λ(u)) of each other
-// without a proven crossing to have been refused. The hidden-tangency
-// pre-pass refuses every face pair within slack δ(face(t)) + δ(face(u))
-// (agent-docs/tessellation-design.md §11 step 4), so it suffices that each
-// facet near the other operand has 2·λ(t) below its own face's bound.
-func unionOccupancy(ra, rb *occupancy.Record, bmA, bmB *meshbool.BoolMesh, ma, mb *topo.Mesh, weld, deepTerm float64) *occupancy.Record {
+// composeOccupancy composes agent-docs/body-refine-design.md §5's record for
+// one mesh Union or Cut of two tracked operands, or nil. The deep-point step
+// needs every pair of held facets t, u that come within 2·max(λ(t), λ(u)) of
+// each other without a proven crossing to have been refused. The
+// hidden-tangency pre-pass refuses every face pair within slack
+// δ(face(t)) + δ(face(u)) (agent-docs/tessellation-design.md §11 step 4), so
+// it suffices that each facet near the other operand has 2·λ(t) below its own
+// face's bound. Where that fails, the same pre-pass runs again over face
+// bounds raised to cover twice each face's largest bulge; a refusal there
+// drops the record and changes nothing about the Boolean itself.
+func composeOccupancy(ctx context.Context, op meshbool.OperationKind, ra, rb *occupancy.Record, bmA, bmB *meshbool.BoolMesh,
+	ma, mb *topo.Mesh, memo *meshbool.ContactMemo, weld, deepTerm float64) *occupancy.Record {
 	if !gateCovers(bmA, ma, bmB) || !gateCovers(bmB, mb, bmA) {
-		return nil
+		wa, wb := widenedFaceBounds(ma, bmA.Bulge), widenedFaceBounds(mb, bmB.Bulge)
+		if err := meshbool.RefuseUndecidableProximity(ctx, wa, wb, bmA, bmB, memo, nil, nil); err != nil {
+			return nil
+		}
+	}
+	if op == meshbool.OpCut {
+		return occupancy.CutCompose(ra, rb, weld, deepTerm)
 	}
 	return occupancy.Compose(ra, rb, weld, deepTerm)
+}
+
+// widenedFaceBounds is a shallow copy of m whose face bounds are raised to
+// twice the largest bulge over each face's facets, padded past the float
+// rounding of the sum.
+func widenedFaceBounds(m *topo.Mesh, bulge []float64) *topo.Mesh {
+	out := *m
+	out.FaceBound = make(map[*topo.Face]float64, len(m.FaceBound))
+	maps.Copy(out.FaceBound, m.FaceBound)
+	for t, b := range bulge {
+		f := m.Source[t]
+		if need := 2 * b * (1 + 1e-9); need > out.FaceBound[f] {
+			out.FaceBound[f] = need
+		}
+	}
+	return &out
 }
 
 // gateCovers reports whether every facet of m whose box comes within twice

@@ -247,3 +247,114 @@ func CirclePrism(place Chain, r, z0, z1 float64, sides int) (*Piece, error) {
 	}
 	return p, nil
 }
+
+// containsMoved reports whether every corner of tri moved by shift satisfies
+// every one of p's own half-spaces, decided on exact local coordinates.
+func (p *Piece) containsMoved(tri [3]r3.Vec, shift r3.Vec) bool {
+	sx := xvecOf(shift)
+	for _, v := range tri {
+		x := xvecOf(v)
+		for k := range 3 {
+			x[k].Add(x[k], sx[k])
+		}
+		f := v.Add(shift)
+		for _, a := range p.finv {
+			f = a.applyFloat(f)
+		}
+		// A float reading clearly outside a level or side refuses at once.
+		if f.Z < p.fz0-1e-9 || f.Z > p.fz1+1e-9 {
+			return false
+		}
+		for _, e := range p.inv {
+			x = e.apply(x)
+		}
+		if x[2].Cmp(p.z0) < 0 || x[2].Cmp(p.z1) > 0 {
+			return false
+		}
+		for _, sd := range p.sides {
+			if sd.fux*f.X+sd.fuy*f.Y > sd.fc+1e-9 {
+				return false
+			}
+			d := new(big.Rat).Mul(sd.ux, x[0])
+			d.Add(d, new(big.Rat).Mul(sd.uy, x[1]))
+			if d.Cmp(sd.c) > 0 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// InscribedCirclePrism returns an exact convex piece inside the image, under
+// place, of the solid cylinder x² + y² ≤ r², z0 ≤ z ≤ z1: the prism of a
+// polygon whose corners are float points proven exactly inside the circle,
+// between the two levels.
+func InscribedCirclePrism(place Chain, r, z0, z1 float64, sides int) (*Piece, error) {
+	switch {
+	case sides < MinSides || sides > MaxSides:
+		return nil, fmt.Errorf("%w: %d sides outside [%d, %d]", ErrInvalid, sides, MinSides, MaxSides)
+	case !(r > 0) || math.IsInf(r, 0):
+		return nil, fmt.Errorf("%w: radius %v", ErrInvalid, r)
+	case math.IsNaN(z0) || math.IsNaN(z1) || math.IsInf(z0, 0) || math.IsInf(z1, 0) || !(z0 < z1):
+		return nil, fmt.Errorf("%w: levels %v, %v", ErrInvalid, z0, z1)
+	}
+	rr := new(big.Rat).Mul(ratOf(r), ratOf(r))
+	corners := make([][2]*big.Rat, sides)
+	for k := range corners {
+		th := 2 * math.Pi * float64(k) / float64(sides)
+		x, y := r*math.Cos(th), r*math.Sin(th)
+		for steps := 0; ; steps++ {
+			rx, ry := ratOf(x), ratOf(y)
+			q := new(big.Rat).Mul(rx, rx)
+			q.Add(q, new(big.Rat).Mul(ry, ry))
+			if q.Cmp(rr) <= 0 {
+				corners[k] = [2]*big.Rat{rx, ry}
+				break
+			}
+			if steps > 8 {
+				return nil, fmt.Errorf("%w: corner %d would not fit inside the circle", decaderr.ErrUnsupported, k)
+			}
+			x, y = x*(1-1e-15), y*(1-1e-15)
+		}
+	}
+	p := &Piece{z0: ratOf(z0), z1: ratOf(z1), fz0: z0, fz1: z1}
+	for k := range corners {
+		a, b := corners[k], corners[(k+1)%sides]
+		// The outward normal of the CCW edge a→b is (dy, −dx).
+		ux := new(big.Rat).Sub(b[1], a[1])
+		uy := new(big.Rat).Sub(a[0], b[0])
+		c := new(big.Rat).Mul(ux, a[0])
+		c.Add(c, new(big.Rat).Mul(uy, a[1]))
+		fux, _ := ux.Float64()
+		fuy, _ := uy.Float64()
+		fc, _ := c.Float64()
+		p.sides = append(p.sides, side{ux, uy, c, fux, fuy, fc})
+	}
+	for _, a := range slices.Backward(place) {
+		e, err := invert(a)
+		if err != nil {
+			return nil, err
+		}
+		p.inv = append(p.inv, e)
+		p.finv = append(p.finv, e.float())
+	}
+	for _, z := range []float64{z0, z1} {
+		rz := ratOf(z)
+		for _, c := range corners {
+			v := place.applyExact(xvec{c[0], c[1], rz})
+			p.verts = append(p.verts, v)
+			p.fverts = append(p.fverts, v.float())
+		}
+	}
+	lo, hi := p.fverts[0], p.fverts[0]
+	for _, v := range p.fverts {
+		lo = r3.Vec{X: math.Min(lo.X, v.X), Y: math.Min(lo.Y, v.Y), Z: math.Min(lo.Z, v.Z)}
+		hi = r3.Vec{X: math.Max(hi.X, v.X), Y: math.Max(hi.Y, v.Y), Z: math.Max(hi.Z, v.Z)}
+	}
+	inf := math.Inf(1)
+	p.box = [2]r3.Vec{
+		{X: math.Nextafter(lo.X, -inf), Y: math.Nextafter(lo.Y, -inf), Z: math.Nextafter(lo.Z, -inf)},
+		{X: math.Nextafter(hi.X, inf), Y: math.Nextafter(hi.Y, inf), Z: math.Nextafter(hi.Z, inf)},
+	}
+	return p, nil
+}
