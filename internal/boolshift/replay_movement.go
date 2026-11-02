@@ -1,4 +1,4 @@
-package booleaneval
+package boolshift
 
 import (
 	"context"

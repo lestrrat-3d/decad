@@ -46,7 +46,7 @@ func replayFacePieces(ctx context.Context, b *proofbound.ReplayBudget, m *topo.M
 		if err != nil {
 			return nil, err
 		}
-		value := pc.ofFacet[i]
+		value := pc.Facet(i)
 		if ok && int(prev) != value {
 			value = spanningPieces
 		}

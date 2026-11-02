@@ -72,26 +72,24 @@ func snapshotStoredShift(ctx context.Context, cert *ShiftCertificate, result, ta
 			return nil, err
 		}
 	}
-	out.component.ofVertex, err = snapshotShiftSlice(ctx, cert.component.ofVertex, budget)
+	out.component, err = cert.component.Snapshot(ctx, budget, errShiftSnapshotStoredSliceTooLarge)
 	if err != nil {
 		return nil, err
 	}
-	out.component.ofFacet, err = snapshotShiftSlice(ctx, cert.component.ofFacet, budget)
-	if err != nil {
-		return nil, err
-	}
-	if cert.component.count != 1 || len(out.component.ofVertex) != len(out.selected.Vertices) || len(out.component.ofFacet) != len(out.selected.Triangles) {
+	if cert.component.Count() != 1 || out.component.VertexCount() != len(out.selected.Vertices) || out.component.FacetCount() != len(out.selected.Triangles) {
 		return nil, errShiftSnapshotStoredShiftPiecesMismatch
 	}
-	if err := budget.SpendWork(ctx, uint64(len(out.component.ofVertex))+uint64(len(out.component.ofFacet))); err != nil {
+	if err := budget.SpendWork(ctx, uint64(out.component.VertexCount())+uint64(out.component.FacetCount())); err != nil {
 		return nil, err
 	}
-	for _, n := range out.component.ofVertex {
+	for i := range out.component.VertexCount() {
+		n := out.component.Vertex(i)
 		if n != 0 {
 			return nil, errShiftSnapshotStoredShiftPieceMismatch
 		}
 	}
-	for _, n := range out.component.ofFacet {
+	for i := range out.component.FacetCount() {
+		n := out.component.Facet(i)
 		if n != 0 {
 			return nil, errShiftSnapshotStoredShiftPieceMismatch
 		}
@@ -576,10 +574,10 @@ func revalidateShiftSnapshot(ctx context.Context, source, snapshot *ShiftCertifi
 			return err
 		}
 	}
-	if len(source.groups) != len(snapshot.groups) || len(source.component.ofVertex) != len(snapshot.component.ofVertex) || len(source.component.ofFacet) != len(snapshot.component.ofFacet) {
+	if len(source.groups) != len(snapshot.groups) || source.component.VertexCount() != snapshot.component.VertexCount() || source.component.FacetCount() != snapshot.component.FacetCount() {
 		return errShiftSnapshotStoredGroupsChanged
 	}
-	count := uint64(len(source.groups)) + uint64(len(source.component.ofVertex)) + uint64(len(source.component.ofFacet)) + 1
+	count := uint64(len(source.groups)) + uint64(source.component.VertexCount()) + uint64(source.component.FacetCount()) + 1
 	for i, g := range source.groups {
 		other := snapshot.groups[i]
 		if len(g.Origins) != len(other.Origins) || len(g.Upstream) != len(other.Upstream) {
@@ -598,10 +596,7 @@ func revalidateShiftSnapshot(ctx context.Context, source, snapshot *ShiftCertifi
 	if err := budget.SpendWork(ctx, count*512); err != nil {
 		return err
 	}
-	if (source.component.ofVertex == nil) != (snapshot.component.ofVertex == nil) ||
-		(source.component.ofFacet == nil) != (snapshot.component.ofFacet == nil) ||
-		!slices.Equal(source.component.ofVertex, snapshot.component.ofVertex) ||
-		!slices.Equal(source.component.ofFacet, snapshot.component.ofFacet) {
+	if !source.component.EqualSnapshot(snapshot.component) {
 		return errShiftSnapshotStoredComponentsChanged
 	}
 	for i := range source.groups {
@@ -671,7 +666,7 @@ func sameShiftScalars(a, b *ShiftCertificate) bool {
 		a.toolID == b.toolID &&
 		a.resultID == b.resultID &&
 		a.sealed == b.sealed &&
-		a.component.count == b.component.count &&
+		a.component.Count() == b.component.Count() &&
 		sameVec(a.center, b.center) &&
 		sameVec(a.shift.Move, b.shift.Move) &&
 		sameFloat(a.shift.Grow, b.shift.Grow) &&

@@ -1,4 +1,4 @@
-package booleaneval
+package boolshift
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-func replayMovedGroup(ctx context.Context, g facetedrecord.Group, piece, pieces int, sh pieceShift,
+func ReplayMovedGroup(ctx context.Context, g facetedrecord.Group, piece, pieces int, sh PieceShift,
 	verts []r3.Vec, reach float64, b *proofbound.ReplayBudget) (facetedrecord.Group, error) {
 	if err := ctx.Err(); err != nil {
 		return facetedrecord.Group{}, err
@@ -19,12 +19,12 @@ func replayMovedGroup(ctx context.Context, g facetedrecord.Group, piece, pieces 
 	if b == nil || !b.IsBrakeReplay() || pieces != 1 || piece != 0 || sh.Grow != 0 || sh.Move == (r3.Vec{}) ||
 		proofbound.IsNonFinite(sh.Move.X) || proofbound.IsNonFinite(sh.Move.Y) || proofbound.IsNonFinite(sh.Move.Z) ||
 		g.Surface == nil || !g.Retained || g.Denoted != nil || g.Source == nil || proofbound.IsNonFinite(g.NormalBound) {
-		return facetedrecord.Group{}, errBrakeEvalUnsupportedReplayMovedGroup
+		return facetedrecord.Group{}, ErrUnsupportedReplayMovedGroup
 	}
 	switch g.Surface.(type) {
 	case surfacegeom.Plane, surfacegeom.Cylinder:
 	default:
-		return facetedrecord.Group{}, errBrakeEvalReplayMovedTagTypeUnavailable
+		return facetedrecord.Group{}, ErrReplayMovedTagTypeUnavailable
 	}
 	if err := b.SpendWork(ctx, 128); err != nil {
 		return facetedrecord.Group{}, err
@@ -48,17 +48,17 @@ func replayMovedGroup(ctx context.Context, g facetedrecord.Group, piece, pieces 
 	case surfacegeom.Plane:
 		moved, ok := image.(surfacegeom.Plane)
 		if !ok {
-			return facetedrecord.Group{}, errBrakeEvalReplayPlaneImageDiffers
+			return facetedrecord.Group{}, ErrReplayPlaneImageDiffers
 		}
 		add, err = facetedrecord.ReplayPlacedBuiltPlaneDeparture(ctx, source, moved, delta, b)
 	case surfacegeom.Cylinder:
 		moved, ok := image.(surfacegeom.Cylinder)
 		if !ok {
-			return facetedrecord.Group{}, errBrakeEvalReplayCylinderImageDiffers
+			return facetedrecord.Group{}, ErrReplayCylinderImageDiffers
 		}
 		add, err = facetedrecord.ReplayTranslatedCylinderDeparture(ctx, source, moved, delta, verts, reach, b)
 	default:
-		return facetedrecord.Group{}, errBrakeEvalReplayMovedTagTypeUnavailable
+		return facetedrecord.Group{}, ErrReplayMovedTagTypeUnavailable
 	}
 	if err != nil {
 		return facetedrecord.Group{}, err

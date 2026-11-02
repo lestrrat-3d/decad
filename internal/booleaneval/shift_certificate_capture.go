@@ -18,10 +18,10 @@ func captureReplayShift(ctx context.Context, a, b *topo.Body, selected, decision
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if budget == nil || shifts == nil || shifts.budget != budget || a == nil || b == nil || selected == nil || decision == nil || charged == nil || pc.count != 1 || len(shifts.entries) != 1 {
+	if budget == nil || shifts == nil || !shiftBoundTo(shifts, budget) || a == nil || b == nil || selected == nil || decision == nil || charged == nil || pc.Count() != 1 || shifts.Len() != 1 {
 		return nil, decaderr.ErrUnsupported
 	}
-	shift, ok, err := shifts.get(ctx, 0)
+	shift, ok, err := shifts.Get(ctx, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -54,15 +54,10 @@ func captureReplayShift(ctx context.Context, a, b *topo.Body, selected, decision
 	if err != nil {
 		return nil, err
 	}
-	out.component.ofVertex, err = snapshotShiftSlice(ctx, pc.ofVertex, budget)
+	out.component, err = pc.Snapshot(ctx, budget, errShiftSnapshotStoredSliceTooLarge)
 	if err != nil {
 		return nil, err
 	}
-	out.component.ofFacet, err = snapshotShiftSlice(ctx, pc.ofFacet, budget)
-	if err != nil {
-		return nil, err
-	}
-	out.component.count = pc.count
 	out.groups, err = snapshotShiftGroups(ctx, groups, budget)
 	if err != nil {
 		return nil, err

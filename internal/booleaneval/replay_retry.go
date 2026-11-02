@@ -6,6 +6,7 @@ import (
 	"math"
 	"unsafe"
 
+	"github.com/lestrrat-3d/decad/internal/boolshift"
 	"github.com/lestrrat-3d/decad/internal/gaptol"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
@@ -158,10 +159,11 @@ func replayRetryShifted(ctx context.Context, refusal error, op meshbool.Operatio
 	if !errors.As(refusal, &touch) || !(gaptol.Reach(ctx) > 0) {
 		return Evaluation{}, refusal
 	}
-	if pc.count != 1 {
+	if pc.Count() != 1 {
 		return Evaluation{}, refusal
 	}
-	for _, p := range pc.ofFacet {
+	for i := range pc.FacetCount() {
+		p := pc.Facet(i)
 		if err := b.SpendWork(ctx, 1); err != nil {
 			return Evaluation{}, err
 		}
@@ -195,11 +197,11 @@ func replayRetryShifted(ctx context.Context, refusal error, op meshbool.Operatio
 				return Evaluation{}, err
 			}
 			fixed.used = true
-			shifts, e := newReplayShifts(ctx, b)
+			shifts, e := boolshift.NewReplayShifts(ctx, b)
 			if e != nil {
 				return Evaluation{}, e
 			}
-			if e = shifts.set(ctx, pieceShift{Grow: math.Float64frombits(fixed.growBits)}); e != nil {
+			if e = shifts.Set(ctx, pieceShift{Grow: math.Float64frombits(fixed.growBits)}); e != nil {
 				return Evaluation{}, e
 			}
 			ev, e := attempt(shifts)
@@ -216,11 +218,11 @@ func replayRetryShifted(ctx context.Context, refusal error, op meshbool.Operatio
 			if op == meshbool.OpIntersect || shrink {
 				amount = -amount
 			}
-			shifts, e := newReplayShifts(ctx, b)
+			shifts, e := boolshift.NewReplayShifts(ctx, b)
 			if e != nil {
 				return Evaluation{}, e
 			}
-			if e = shifts.set(ctx, pieceShift{Grow: amount}); e != nil {
+			if e = shifts.Set(ctx, pieceShift{Grow: amount}); e != nil {
 				return Evaluation{}, e
 			}
 			ev, e := attempt(shifts)
@@ -289,11 +291,11 @@ func replayRetryShifted(ctx context.Context, refusal error, op meshbool.Operatio
 					continue
 				}
 				tried = append(tried, move)
-				shifts, e := newReplayShifts(ctx, b)
+				shifts, e := boolshift.NewReplayShifts(ctx, b)
 				if e != nil {
 					return Evaluation{}, e
 				}
-				if e = shifts.set(ctx, pieceShift{Move: move}); e != nil {
+				if e = shifts.Set(ctx, pieceShift{Move: move}); e != nil {
 					return Evaluation{}, e
 				}
 				ev, e := attempt(shifts)
