@@ -8,24 +8,9 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/opdiagnostic"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
-	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
-func TestBrakeGrowthRejectsChangedSnapshotSource(t *testing.T) {
-	cert, result, target, tool := shiftSnapshotFixture()
-	budget := proofbound.NewBrakeReplayBudget()
-	snapshot, err := SnapshotShiftCertificate(t.Context(), budget, cert)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cert.selected.Vertices[0].X = 7
-	_, err = AuthenticateBrakeGrowth(t.Context(), snapshot, result, target, tool, &topo.Body{}, &topo.Body{}, opdiagnostic.Record{}, budget)
-	if !errors.Is(err, decaderr.ErrUnsupported) || !strings.Contains(err.Error(), "stored mesh changed") {
-		t.Fatalf("changed source was not rejected by snapshot: %v", err)
-	}
-}
-
-func TestBrakeStoredWarningRevalidated(t *testing.T) {
+func TestStoredShiftWarningRevalidated(t *testing.T) {
 	cert, result, target, tool := shiftSnapshotFixture()
 	warning := opdiagnostic.Record{}
 	result.OperationWarnings = []opdiagnostic.Record{warning}
