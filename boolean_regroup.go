@@ -233,49 +233,10 @@ func pairedCutFailure(ctx context.Context, err error) (*Body, producerID, paired
 	return nil, 0, pairedCutAncestry{}, false, nil
 }
 
-// coarseTargetCut admits only the target-side held-contact staging refusal.
-// Every nested tag must agree; a joined or wrapped conflicting refusal cannot
-// authorize a rewrite of the caller's operation.
+// coarseTargetCut unwraps the private booleanConfig.matchingFaces field for
+// booleandispatch's generic refusal classifier. Root owns the option codec.
 func coarseTargetCut(op meshbool.OperationKind, cfg booleanConfig, cause error) bool {
-	if op != meshbool.OpCut || cfg.matchingFaces || cause == nil ||
-		errors.Is(cause, context.Canceled) || errors.Is(cause, context.DeadlineExceeded) {
-		return false
-	}
-	expected, ok := asExpectedBoolean(cause)
-	if !ok || expected.Kind != meshbool.BooleanExpectedStaging || expected.Operand != 0 {
-		return false
-	}
-	var held *meshbool.CoarseHeldContactError
-	if !errors.As(expected.Err, &held) || held.Operand != 0 {
-		return false
-	}
-	return consistentCoarseTags(cause, 0)
-}
-
-func consistentCoarseTags(err error, depth int) bool {
-	if err == nil {
-		return true
-	}
-	if depth >= 128 {
-		return false
-	}
-	switch e := err.(type) {
-	case *meshbool.BooleanExpectedError:
-		if e.Kind != meshbool.BooleanExpectedStaging || e.Operand != 0 {
-			return false
-		}
-	case *meshbool.CoarseHeldContactError:
-		if e.Operand != 0 {
-			return false
-		}
-	}
-	if _, ok := err.(interface{ Unwrap() []error }); ok {
-		return false
-	}
-	if e, ok := err.(interface{ Unwrap() error }); ok {
-		return consistentCoarseTags(e.Unwrap(), depth+1)
-	}
-	return true
+	return booleandispatch.CoarseTargetCut(op, cfg.matchingFaces, cause)
 }
 
 // regroupBoolean tries the chain regroup for a refused two-body Boolean
