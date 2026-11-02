@@ -176,7 +176,7 @@ top of the interval is expected, because every leaf is inscribed.
 
 | Inc | Lands | Red leg |
 |---|---|---|
-| R1 | `internal/occupancy`: circle-prism `U` under a rotated placement; exact piece-misses-`U`; facet search with ceiling | dropping the `c_k² ≥ r² u·u` check lets a true circle point escape `U`; a facet one sagitta outside the cylinder is refused at `h` below that sagitta |
+| R1 | `internal/occupancy`: circle-prism `U` under a rotated placement; exact piece-misses-`U`; facet search with ceiling | a point just inside the true circle is never separated, and one past the polygon's circumradius always is; a chord facet is never certified below its sagitta; a facet inside two leaves must clear the deeper; a work ceiling of 10 refuses |
 | R2 | `OccupancyRecord` composed by `Union` (weld, smallest sine); dropped elsewhere | a `Cut` result carries no record |
 | R3 | `Refine`, surface restatement, cache key, docs, example, apitest: two- and six-span bent cylinder chains at two radii and two bend sets, volume against §8's closed form | restating `δ` instead of `σ` keeps the refusal |
 | R4 | `Cut` and `Intersect` with convex tools: the upper set `A_U \ B_L`, with the tool's inscribed mesh as `B_L` | — |

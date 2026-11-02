@@ -77,3 +77,4 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/denotation/` | Level and curve identity certificates. See surface §5.2, §6.2. |
 | `internal/surfacenormal/` | Exact enclosures and error bounds for analytic face normals. See `normal_bound.go`. |
 | `internal/edgewedge/` | The material-wedge reading behind `Edge.Wedge` and the `Reflex`/`Salient` predicates, and the selector edge view that carries it. See API §6.1, §9. |
+| `internal/occupancy/` | Exact outer pieces of convex leaves (circle prisms under exact affine placement) and the held-facet surface-bound search against them. See body-refine §4–§5. |
