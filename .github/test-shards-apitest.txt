@@ -2978,3 +2978,4 @@
 11	0.00	TestRefineRefusals
 11	0.00	TestRefineTubeEyes
 11	0.00	TestRefineBoredBend
+11	0.00	TestRefineDrilledBar

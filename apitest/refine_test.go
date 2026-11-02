@@ -343,3 +343,50 @@ func TestRefineBoredBend(t *testing.T) {
 	require.NoError(t, err)
 	require.LessOrEqual(t, after, 0.01)
 }
+
+func TestRefineDrilledBar(t *testing.T) {
+	t.Parallel()
+	// A rectangular bar with a hole through its section, then cross-drilled
+	// by a cylinder: a convex polygon section with a circular hole, then a Cut.
+	doc := decad.New(decad.WithChainTolerance(units.Millimeters(0.1)))
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 40, 10)
+	s.Fix(rect.A)
+	c := s.CreatePoint(6, 5)
+	s.Fix(c)
+	s.CreateCircle(c, 2)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var profile *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			profile = p
+		}
+	}
+	require.NotNil(t, profile)
+	bar, err := decad.Extrude(t.Context(), doc, s, profile, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	turn, err := r3.RotationAround(r3.Vec{X: 20, Y: 5, Z: 5}, r3.Vec{X: 1, Y: 2, Z: -1}, units.Radians(0.4))
+	require.NoError(t, err)
+	bar, err = decad.Transform(t.Context(), bar, turn)
+	require.NoError(t, err)
+	drill := refineSpan(t, doc, turn.Apply(r3.Vec{X: 30, Y: -5, Z: 5}), turn.Apply(r3.Vec{X: 30, Y: 15, Z: 5}), 1.5)
+	drilled, err := decad.Cut(t.Context(), bar, drill)
+	require.NoError(t, err)
+	held, err := drilled.Tessellate(t.Context(), units.Millimeters(1e3))
+	require.NoError(t, err)
+	before, err := held.Bound().In(units.Millimeter)
+	require.NoError(t, err)
+
+	refined, err := decad.Refine(t.Context(), drilled, units.Millimeters(0.01))
+	require.NoError(t, err)
+	m, err := refined.Tessellate(t.Context(), units.Millimeters(0.01))
+	require.NoError(t, err)
+	after, err := m.Bound().In(units.Millimeter)
+	require.NoError(t, err)
+	require.LessOrEqual(t, after, 0.01)
+	require.LessOrEqual(t, after, before)
+	require.Equal(t, held.Vertices(), m.Vertices(), "Refine moves no vertex")
+}

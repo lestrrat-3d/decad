@@ -213,38 +213,7 @@ func CirclePrism(place Chain, r, z0, z1 float64, sides int) (*Piece, error) {
 	for k := range n {
 		p.edges = append(p.edges, [2]int{k, (k + 1) % n}, [2]int{n + k, n + (k+1)%n}, [2]int{k, n + k})
 	}
-	// Face planes for the axis and direction search only: each side quad
-	// and both caps, oriented away from the vertex centroid.
-	var g r3.Vec
-	for _, v := range p.fverts {
-		g = g.Add(v)
-	}
-	g = g.Scale(1 / float64(len(p.fverts)))
-	addFace := func(a, b, c r3.Vec) {
-		nn, ok := b.Sub(a).Cross(c.Sub(a)).Normalize()
-		if !ok {
-			return
-		}
-		if nn.Dot(g.Sub(a)) > 0 {
-			nn = nn.Scale(-1)
-		}
-		p.faces = append(p.faces, face{nn, nn.Dot(a)})
-	}
-	for k := range n {
-		addFace(p.fverts[k], p.fverts[(k+1)%n], p.fverts[n+k])
-	}
-	addFace(p.fverts[0], p.fverts[1], p.fverts[2])
-	addFace(p.fverts[n], p.fverts[n+1], p.fverts[n+2])
-	lo, hi := p.fverts[0], p.fverts[0]
-	for _, v := range p.fverts {
-		lo = r3.Vec{X: math.Min(lo.X, v.X), Y: math.Min(lo.Y, v.Y), Z: math.Min(lo.Z, v.Z)}
-		hi = r3.Vec{X: math.Max(hi.X, v.X), Y: math.Max(hi.Y, v.Y), Z: math.Max(hi.Z, v.Z)}
-	}
-	inf := math.Inf(1)
-	p.box = [2]r3.Vec{
-		{X: math.Nextafter(lo.X, -inf), Y: math.Nextafter(lo.Y, -inf), Z: math.Nextafter(lo.Z, -inf)},
-		{X: math.Nextafter(hi.X, inf), Y: math.Nextafter(hi.Y, inf), Z: math.Nextafter(hi.Z, inf)},
-	}
+	p.finishFaces(n)
 	return p, nil
 }
 
@@ -357,4 +326,43 @@ func InscribedCirclePrism(place Chain, r, z0, z1 float64, sides int) (*Piece, er
 		{X: math.Nextafter(hi.X, inf), Y: math.Nextafter(hi.Y, inf), Z: math.Nextafter(hi.Z, inf)},
 	}
 	return p, nil
+}
+
+// finishFaces sets the float face planes, for the axis and direction search
+// only (each side quad and both caps, oriented away from the vertex
+// centroid), and the float box, widened one ulp so it holds the exact
+// vertices, of a prism piece of n sides.
+func (p *Piece) finishFaces(n int) {
+	// Face planes for the axis and direction search only: each side quad
+	// and both caps, oriented away from the vertex centroid.
+	var g r3.Vec
+	for _, v := range p.fverts {
+		g = g.Add(v)
+	}
+	g = g.Scale(1 / float64(len(p.fverts)))
+	addFace := func(a, b, c r3.Vec) {
+		nn, ok := b.Sub(a).Cross(c.Sub(a)).Normalize()
+		if !ok {
+			return
+		}
+		if nn.Dot(g.Sub(a)) > 0 {
+			nn = nn.Scale(-1)
+		}
+		p.faces = append(p.faces, face{nn, nn.Dot(a)})
+	}
+	for k := range n {
+		addFace(p.fverts[k], p.fverts[(k+1)%n], p.fverts[n+k])
+	}
+	addFace(p.fverts[0], p.fverts[1], p.fverts[2])
+	addFace(p.fverts[n], p.fverts[n+1], p.fverts[n+2])
+	lo, hi := p.fverts[0], p.fverts[0]
+	for _, v := range p.fverts {
+		lo = r3.Vec{X: math.Min(lo.X, v.X), Y: math.Min(lo.Y, v.Y), Z: math.Min(lo.Z, v.Z)}
+		hi = r3.Vec{X: math.Max(hi.X, v.X), Y: math.Max(hi.Y, v.Y), Z: math.Max(hi.Z, v.Z)}
+	}
+	inf := math.Inf(1)
+	p.box = [2]r3.Vec{
+		{X: math.Nextafter(lo.X, -inf), Y: math.Nextafter(lo.Y, -inf), Z: math.Nextafter(lo.Z, -inf)},
+		{X: math.Nextafter(hi.X, inf), Y: math.Nextafter(hi.Y, inf), Z: math.Nextafter(hi.Z, inf)},
+	}
 }

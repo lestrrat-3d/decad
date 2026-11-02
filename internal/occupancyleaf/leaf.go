@@ -1,9 +1,10 @@
 // Package occupancyleaf reads a Boolean operand's payload as an occupancy
-// record (agent-docs/body-refine-design.md §4): a solid prism of one whole
-// circle, a stacked prism whose slabs are one coaxial circle, a Revolve of one
-// whole circle clear of its axis, a Sweep of one whole circle whose spans are
-// lines and arcs, or a faceted Union result that already carries a record for
-// its own held mesh. Every other payload has none.
+// record (agent-docs/body-refine-design.md §4): a solid prism or stack whose
+// section regions are whole circles or convex polygons with whole circular
+// holes, a Revolve of one whole circle clear of its axis, a Sweep of one whole
+// circle whose spans are lines and arcs, a Coil of one whole circle, or a
+// faceted result that already carries a record for its own held mesh. Every
+// other payload has none.
 package occupancyleaf
 
 import (
@@ -45,14 +46,13 @@ func Of(body *topo.Body, mesh *topo.Mesh) *occupancy.Record {
 	case facetedrecord.Payload:
 		return p.OccupancyRecord()
 	case prismrecord.Payload:
-		if p.SurfaceResult || len(p.Profile.Holes) != 0 {
+		if p.SurfaceResult {
 			return nil
 		}
-		c, ok := wholeCircle(p.Profile)
-		if !ok {
-			return nil
+		if c, ok := wholeCircle(p.Profile); ok && len(p.Profile.Holes) == 0 {
+			return leaf(p.Frame, p.Xform, c, p.Z0, p.Z1, p.SectionDelta, p.Z0Delta, p.Z1Delta, mesh)
 		}
-		return leaf(p.Frame, p.Xform, c, p.Z0, p.Z1, p.SectionDelta, p.Z0Delta, p.Z1Delta, mesh)
+		return prismWithHoles(p, mesh.Bound)
 	case revolveplan.Payload:
 		l, ok := revolveLeaf(p, mesh.Bound)
 		if !ok {
@@ -71,22 +71,51 @@ func Of(body *topo.Body, mesh *topo.Mesh) *occupancy.Record {
 		if p.ClosedShell || len(p.Slabs) == 0 {
 			return nil
 		}
-		var c sectionrecord.CircleSeg
-		dz0, dz1 := 0.0, 0.0
-		for i, s := range p.Slabs {
-			if len(s.Regions) != 1 || len(s.Regions[0].Holes) != 0 {
-				return nil
-			}
-			ci, ok := wholeCircle(s.Regions[0])
-			if !ok || i > 0 && (ci != c || p.Slabs[i-1].Z1 != s.Z0) {
-				return nil
-			}
-			c = ci
-			dz0, dz1 = max(dz0, s.Z0Delta), max(dz1, s.Z1Delta)
+		if rec := coaxialStack(p, mesh); rec != nil {
+			return rec
 		}
-		return leaf(p.Frame, p.Xform, c, p.Slabs[0].Z0, p.Slabs[len(p.Slabs)-1].Z1, p.SectionDelta, dz0, dz1, mesh)
+		return stackRegions(p, mesh.Bound)
 	}
 	return nil
+}
+
+// coaxialStack reads a stack whose every slab is one whole circle of the same
+// centre and radius at contiguous levels as a single cylinder leaf.
+func coaxialStack(p stackedrecord.Payload, mesh *topo.Mesh) *occupancy.Record {
+	var c sectionrecord.CircleSeg
+	dz0, dz1 := 0.0, 0.0
+	for i, s := range p.Slabs {
+		if len(s.Regions) != 1 || len(s.Regions[0].Holes) != 0 {
+			return nil
+		}
+		ci, ok := wholeCircle(s.Regions[0])
+		if !ok || i > 0 && (ci != c || p.Slabs[i-1].Z1 != s.Z0) {
+			return nil
+		}
+		c = ci
+		dz0, dz1 = max(dz0, s.Z0Delta), max(dz1, s.Z1Delta)
+	}
+	return leaf(p.Frame, p.Xform, c, p.Slabs[0].Z0, p.Slabs[len(p.Slabs)-1].Z1, p.SectionDelta, dz0, dz1, mesh)
+}
+
+// stackRegions reads a stack slab by slab, region by region: every region's
+// outer loop a leaf and every hole a hole leaf through that slab's levels.
+func stackRegions(p stackedrecord.Payload, delta float64) *occupancy.Record {
+	var outers, holes []occupancy.Leaf
+	for _, s := range p.Slabs {
+		for _, region := range s.Regions {
+			outer, hs, ok := regionLeaves(p.Frame, p.Xform, region, s.Z0, s.Z1, p.SectionDelta, s.Z0Delta, s.Z1Delta, delta)
+			if !ok {
+				return nil
+			}
+			outers = append(outers, outer)
+			holes = append(holes, hs...)
+		}
+	}
+	if len(outers) == 0 {
+		return nil
+	}
+	return occupancy.PrismRecord(outers, holes)
 }
 
 func wholeCircle(pr momentinput.Profile) (sectionrecord.CircleSeg, bool) {
@@ -95,6 +124,16 @@ func wholeCircle(pr momentinput.Profile) (sectionrecord.CircleSeg, bool) {
 	}
 	c, ok := pr.Outer.Segments[0].(sectionrecord.CircleSeg)
 	return c, ok && c.CCW && c.TStart == 0 && c.TEnd == 1
+}
+
+// wholeHoleCircle reads a hole loop of one whole circle, which a section
+// records clockwise, from parameter 1 down to 0, as often as the other way.
+func wholeHoleCircle(loop sectionrecord.LoopRecord) (sectionrecord.CircleSeg, bool) {
+	if len(loop.Segments) != 1 {
+		return sectionrecord.CircleSeg{}, false
+	}
+	c, ok := loop.Segments[0].(sectionrecord.CircleSeg)
+	return c, ok && (c.CCW && c.TStart == 0 && c.TEnd == 1 || !c.CCW && c.TStart == 1 && c.TEnd == 0)
 }
 
 func leaf(frame r3.Frame, place r3.Transform, c sectionrecord.CircleSeg, z0, z1, sectionDelta, dz0, dz1 float64, mesh *topo.Mesh) *occupancy.Record {
@@ -123,6 +162,74 @@ func prismLeaf(frame r3.Frame, place r3.Transform, c sectionrecord.CircleSeg, z0
 		return occupancy.Leaf{}, false
 	}
 	return l, true
+}
+
+// prismWithHoles reads a straight prism whose outer loop is a whole circle or
+// a convex polygon of whole line segments, and whose holes are whole circles,
+// as its outer leaf less one circle leaf per hole.
+func prismWithHoles(p prismrecord.Payload, delta float64) *occupancy.Record {
+	outer, holes, ok := regionLeaves(p.Frame, p.Xform, p.Profile, p.Z0, p.Z1, p.SectionDelta, p.Z0Delta, p.Z1Delta, delta)
+	if !ok {
+		return nil
+	}
+	return occupancy.PrismRecord([]occupancy.Leaf{outer}, holes)
+}
+
+// regionLeaves reads one section region between two levels: its outer loop as
+// a circle or convex polygon leaf, its holes as circle leaves.
+func regionLeaves(frame r3.Frame, place r3.Transform, pr momentinput.Profile, z0, z1, sectionDelta, dz0, dz1, delta float64) (occupancy.Leaf, []occupancy.Leaf, bool) {
+	var outer occupancy.Leaf
+	if c, ok := wholeCircle(momentinput.Profile{Outer: pr.Outer}); ok {
+		l, ok := prismLeaf(frame, place, c, z0, z1, sectionDelta, dz0, dz1, delta)
+		if !ok {
+			return occupancy.Leaf{}, nil, false
+		}
+		outer = l
+	} else {
+		segs := pr.Outer.Segments
+		pts := make([][2]float64, 0, len(segs))
+		scale := 1 + math.Max(math.Abs(z0), math.Abs(z1))
+		for i, seg := range segs {
+			l, ok := seg.(sectionrecord.LineSeg)
+			if !ok || l.TStart != 0 || l.TEnd != 1 {
+				return occupancy.Leaf{}, nil, false
+			}
+			// Each segment must end where the next one starts.
+			next, ok := segs[(i+1)%len(segs)].(sectionrecord.LineSeg)
+			if !ok || l.End != next.Start {
+				return occupancy.Leaf{}, nil, false
+			}
+			pts = append(pts, [2]float64{l.Start.U, l.Start.V})
+			scale = math.Max(scale, 1+math.Abs(l.Start.U)+math.Abs(l.Start.V))
+		}
+		l, err := occupancy.PolygonLeaf(prismChain(frame, place), pts, z0, z1, sectionDelta, dz0, dz1, relativeSlack*scale, delta)
+		if err != nil {
+			return occupancy.Leaf{}, nil, false
+		}
+		outer = l
+	}
+	holes := make([]occupancy.Leaf, 0, len(pr.Holes))
+	for _, h := range pr.Holes {
+		c, ok := wholeHoleCircle(h)
+		if !ok {
+			return occupancy.Leaf{}, nil, false
+		}
+		l, ok := prismLeaf(frame, place, c, z0, z1, sectionDelta, dz0, dz1, delta)
+		if !ok {
+			return occupancy.Leaf{}, nil, false
+		}
+		holes = append(holes, l)
+	}
+	return outer, holes, true
+}
+
+func prismChain(frame r3.Frame, place r3.Transform) occupancy.Chain {
+	u, v, n, o := frame.U(), frame.V(), frame.N(), frame.Origin()
+	b, t := place.Basis(), place.Translation()
+	return occupancy.Chain{
+		{M: [3][3]float64{{u.X, v.X, n.X}, {u.Y, v.Y, n.Y}, {u.Z, v.Z, n.Z}}, T: [3]float64{o.X, o.Y, o.Z}},
+		{M: [3][3]float64{{b.EX.X, b.EY.X, b.EZ.X}, {b.EX.Y, b.EY.Y, b.EZ.Y}, {b.EX.Z, b.EY.Z, b.EZ.Z}}, T: [3]float64{t.X, t.Y, t.Z}},
+	}
 }
 
 // TubeSides is the circumscribed polygon of every arc tube cell's piece, and

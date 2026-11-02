@@ -268,10 +268,15 @@ func (r *Record) Shifted(d float64) *Record {
 	return &out
 }
 
-// Inner returns the hole leaves' inner pieces, building them on first use.
+// Inner returns the hole leaves' inner pieces, building them on first use. A
+// hole too thin to hold one offers none: a moved facet piece is then never
+// certified by containment in it, which only costs the search.
 func (r *Record) Inner() ([]*Piece, error) {
 	var out []*Piece
 	for _, l := range r.Holes {
+		if l.inner == nil {
+			continue
+		}
 		p, err := l.inner.get()
 		if err != nil {
 			return nil, err
@@ -603,23 +608,11 @@ func newCylinderShape(place Chain, r, z0, z1, displacement float64) (cylinderSha
 		}
 		inv[len(place)-1-i] = e
 		finv[len(place)-1-i] = e.float()
-		f := 0.0
-		for _, row := range a.M {
-			for _, x := range row {
-				f += x * x
-			}
-		}
-		stretch = proofbound.UpRound(stretch * proofbound.UpRound(math.Sqrt(proofbound.UpRound(f))*(1+1e-15)))
+		stretch = proofbound.UpRound(stretch * opNormUpper(a.M))
 	}
 	invStretch := 1.0
 	for _, a := range finv {
-		f := 0.0
-		for _, row := range a.M {
-			for _, x := range row {
-				f += x * x
-			}
-		}
-		invStretch = proofbound.UpRound(invStretch * proofbound.UpRound(math.Sqrt(proofbound.UpRound(f))*(1+1e-12)))
+		invStretch = proofbound.UpRound(invStretch * opNormUpper(a.M))
 	}
 	return cylinderShape{inv: inv, finv: finv, stretch: stretch, invStretch: invStretch, r: r, z0: z0, z1: z1, displacement: displacement}, nil
 }
@@ -789,4 +782,25 @@ func Bind(verts []r3.Vec, tris [][3]int) Binding {
 // Matches reports whether verts and tris are the arrays b was bound to.
 func (b Binding) Matches(verts []r3.Vec, tris [][3]int) bool {
 	return b.verts != nil && len(verts) == b.nv && len(tris) == b.nt && &verts[0] == b.verts && &tris[0] == b.tris
+}
+
+// opNormUpper bounds the spectral norm of m from above: the square root of
+// the largest absolute row sum of mᵀm, which bounds mᵀm's largest eigenvalue
+// (Gershgorin), with every float step widened. A near-orthonormal map reads
+// just above 1, where the Frobenius norm would read about √3.
+func opNormUpper(m [3][3]float64) float64 {
+	worst := 0.0
+	for i := range 3 {
+		row := 0.0
+		for j := range 3 {
+			g := 0.0
+			for k := range 3 {
+				g += m[k][i] * m[k][j]
+			}
+			row += math.Abs(g)
+		}
+		worst = math.Max(worst, row)
+	}
+	// Each sum of a few float products errs by far less than this widening.
+	return proofbound.UpRound(math.Sqrt(proofbound.UpRound(worst*(1+1e-12))) * (1 + 1e-12))
 }
