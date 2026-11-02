@@ -29,12 +29,12 @@ func TestBrakeReplayAllocationShellLimits(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			for _, short := range []bool{false, true} {
-				b := proofbound.NewBrakeReplayBudget()
+				b := proofbound.NewReplayTrialBudget()
 				remaining := 2*uint64(c.size) + 128
 				if short {
 					remaining--
 				}
-				if err := b.ReserveBytes(t.Context(), proofbound.BrakeReplayBytes-remaining); err != nil {
+				if err := b.ReserveBytes(t.Context(), proofbound.ReplayTrialBytes-remaining); err != nil {
 					t.Fatal(err)
 				}
 				err := c.make(b)
@@ -54,12 +54,12 @@ func TestBrakeProductScratchAllocationEnvelope(t *testing.T) {
 	const size = uint64(72)
 	const required = 2*size + 128
 	for _, short := range []bool{false, true} {
-		meter := proofbound.NewBrakeReplayBudget()
+		meter := proofbound.NewReplayTrialBudget()
 		remaining := required
 		if short {
 			remaining--
 		}
-		if err := meter.ReserveBytes(ctx, proofbound.BrakeReplayBytes-remaining); err != nil {
+		if err := meter.ReserveBytes(ctx, proofbound.ReplayTrialBytes-remaining); err != nil {
 			t.Fatal(err)
 		}
 		budget := replayProductScratch{ReplayBudget: meter}
@@ -85,7 +85,7 @@ func TestBrakeSmallProductBudgetLimits(t *testing.T) {
 		}
 		return err
 	}
-	meter := proofbound.NewBrakeReplayBudget()
+	meter := proofbound.NewReplayTrialBudget()
 	if err := run(meter); err != nil {
 		t.Fatal(err)
 	}
@@ -93,8 +93,8 @@ func TestBrakeSmallProductBudgetLimits(t *testing.T) {
 	bytes := meter.Bytes()
 	for _, short := range []string{brakeTestExact, brakeTestWork, brakeTestRecords, brakeTestBytes} {
 		t.Run(short, func(t *testing.T) {
-			m := proofbound.NewBrakeReplayBudget()
-			w, r, b := proofbound.BrakeReplayWork-work, proofbound.BrakeReplayRecords-records, proofbound.BrakeReplayBytes-bytes
+			m := proofbound.NewReplayTrialBudget()
+			w, r, b := proofbound.ReplayTrialWork-work, proofbound.ReplayTrialRecords-records, proofbound.ReplayTrialBytes-bytes
 			switch short {
 			case brakeTestWork:
 				w++
@@ -126,12 +126,12 @@ func TestBrakeSmallProductBudgetLimits(t *testing.T) {
 func TestBrakeAppendWorkChargesNewElements(t *testing.T) {
 	ctx := t.Context()
 	for _, short := range []bool{false, true} {
-		meter := proofbound.NewBrakeReplayBudget()
+		meter := proofbound.NewReplayTrialBudget()
 		remaining := uint64(3)
 		if short {
 			remaining--
 		}
-		if err := meter.SpendWork(ctx, proofbound.BrakeReplayWork-remaining); err != nil {
+		if err := meter.SpendWork(ctx, proofbound.ReplayTrialWork-remaining); err != nil {
 			t.Fatal(err)
 		}
 		backing := []int{-1, -1, -1}
@@ -149,12 +149,12 @@ func TestBrakeAppendWorkChargesNewElements(t *testing.T) {
 func TestBrakeAppendReplayChargesInsertion(t *testing.T) {
 	ctx := t.Context()
 	for _, short := range []bool{false, true} {
-		meter := proofbound.NewBrakeReplayBudget()
+		meter := proofbound.NewReplayTrialBudget()
 		remaining := uint64(1)
 		if short {
 			remaining = 0
 		}
-		if err := meter.SpendWork(ctx, proofbound.BrakeReplayWork-remaining); err != nil {
+		if err := meter.SpendWork(ctx, proofbound.ReplayTrialWork-remaining); err != nil {
 			t.Fatal(err)
 		}
 		budget, err := NewReplayPairCutsBudget(meter)
@@ -186,7 +186,7 @@ func TestBrakeLargeProductRecordLimits(t *testing.T) {
 		}
 		return err
 	}
-	measure := proofbound.NewBrakeReplayBudget()
+	measure := proofbound.NewReplayTrialBudget()
 	if err := run(measure); err != nil {
 		t.Fatal(err)
 	}
@@ -195,12 +195,12 @@ func TestBrakeLargeProductRecordLimits(t *testing.T) {
 		t.Fatalf("large product charged %d records, expected three", records)
 	}
 	for _, short := range []bool{false, true} {
-		meter := proofbound.NewBrakeReplayBudget()
+		meter := proofbound.NewReplayTrialBudget()
 		remaining := records
 		if short {
 			remaining--
 		}
-		if err := meter.ReserveRecords(ctx, proofbound.BrakeReplayRecords-remaining); err != nil {
+		if err := meter.ReserveRecords(ctx, proofbound.ReplayTrialRecords-remaining); err != nil {
 			t.Fatal(err)
 		}
 		err := run(meter)
@@ -215,7 +215,7 @@ func TestBrakeLargeProductRecordLimits(t *testing.T) {
 
 func TestBrakeNearContactsFixedLimits(t *testing.T) {
 	ctx := t.Context()
-	measure := proofbound.NewBrakeReplayBudget()
+	measure := proofbound.NewReplayTrialBudget()
 	if err := reserveBrakeNearContactsFixed(ctx, measure); err != nil {
 		t.Fatal(err)
 	}
@@ -223,8 +223,8 @@ func TestBrakeNearContactsFixedLimits(t *testing.T) {
 	bytes := measure.Bytes()
 	for _, short := range []string{brakeTestExact, brakeTestWork, brakeTestRecords, brakeTestBytes} {
 		t.Run(short, func(t *testing.T) {
-			meter := proofbound.NewBrakeReplayBudget()
-			w, r, b := proofbound.BrakeReplayWork-work, proofbound.BrakeReplayRecords-records, proofbound.BrakeReplayBytes-bytes
+			meter := proofbound.NewReplayTrialBudget()
+			w, r, b := proofbound.ReplayTrialWork-work, proofbound.ReplayTrialRecords-records, proofbound.ReplayTrialBytes-bytes
 			switch short {
 			case brakeTestWork:
 				w++
@@ -261,7 +261,7 @@ func TestBrakeNearContactBatchRecordLimits(t *testing.T) {
 			ContactBatchSize, meter.WorkBudget(ctx), meter)
 		return err
 	}
-	measure := proofbound.NewBrakeReplayBudget()
+	measure := proofbound.NewReplayTrialBudget()
 	if err := reserveBrakeNearContactsFixed(ctx, measure); err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +275,7 @@ func TestBrakeNearContactBatchRecordLimits(t *testing.T) {
 		t.Fatalf("batch reserved only %d records", cost)
 	}
 	for _, short := range []bool{false, true} {
-		meter := proofbound.NewBrakeReplayBudget()
+		meter := proofbound.NewReplayTrialBudget()
 		if err := reserveBrakeNearContactsFixed(ctx, meter); err != nil {
 			t.Fatal(err)
 		}
@@ -284,7 +284,7 @@ func TestBrakeNearContactBatchRecordLimits(t *testing.T) {
 		if short {
 			remaining--
 		}
-		if err := meter.ReserveRecords(ctx, proofbound.BrakeReplayRecords-used-remaining); err != nil {
+		if err := meter.ReserveRecords(ctx, proofbound.ReplayTrialRecords-used-remaining); err != nil {
 			t.Fatal(err)
 		}
 		err := run(meter)
@@ -301,10 +301,10 @@ func TestBrakeStitchFixedLimits(t *testing.T) {
 	ctx := t.Context()
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
-	if err := reserveBrakeStitchFixed(canceled, proofbound.NewBrakeReplayBudget()); !errors.Is(err, context.Canceled) {
+	if err := reserveBrakeStitchFixed(canceled, proofbound.NewReplayTrialBudget()); !errors.Is(err, context.Canceled) {
 		t.Fatalf("stitch cancellation: %v", err)
 	}
-	measure := proofbound.NewBrakeReplayBudget()
+	measure := proofbound.NewReplayTrialBudget()
 	if err := reserveBrakeStitchFixed(ctx, measure); err != nil {
 		t.Fatal(err)
 	}
@@ -312,8 +312,8 @@ func TestBrakeStitchFixedLimits(t *testing.T) {
 	bytes := measure.Bytes()
 	for _, short := range []string{brakeTestExact, brakeTestWork, brakeTestRecords, brakeTestBytes} {
 		t.Run(short, func(t *testing.T) {
-			meter := proofbound.NewBrakeReplayBudget()
-			w, r, b := proofbound.BrakeReplayWork-work, proofbound.BrakeReplayRecords-records, proofbound.BrakeReplayBytes-bytes
+			meter := proofbound.NewReplayTrialBudget()
+			w, r, b := proofbound.ReplayTrialWork-work, proofbound.ReplayTrialRecords-records, proofbound.ReplayTrialBytes-bytes
 			switch short {
 			case brakeTestWork:
 				w++
@@ -351,7 +351,7 @@ func TestBrakeReplayGapRecordLimits(t *testing.T) {
 		}
 		return err
 	}
-	measure := proofbound.NewBrakeReplayBudget()
+	measure := proofbound.NewReplayTrialBudget()
 	if err := run(measure); err != nil {
 		t.Fatal(err)
 	}
@@ -360,12 +360,12 @@ func TestBrakeReplayGapRecordLimits(t *testing.T) {
 		t.Fatalf("gap bounds charged %d records, expected four", records)
 	}
 	for _, short := range []bool{false, true} {
-		meter := proofbound.NewBrakeReplayBudget()
+		meter := proofbound.NewReplayTrialBudget()
 		remaining := records
 		if short {
 			remaining--
 		}
-		if err := meter.ReserveRecords(ctx, proofbound.BrakeReplayRecords-remaining); err != nil {
+		if err := meter.ReserveRecords(ctx, proofbound.ReplayTrialRecords-remaining); err != nil {
 			t.Fatal(err)
 		}
 		err := run(meter)
@@ -390,7 +390,7 @@ func TestBrakeFaceGroupingBudgetLimits(t *testing.T) {
 		}
 		return err
 	}
-	measure := proofbound.NewBrakeReplayBudget()
+	measure := proofbound.NewReplayTrialBudget()
 	if err := run(measure); err != nil {
 		t.Fatal(err)
 	}
@@ -398,8 +398,8 @@ func TestBrakeFaceGroupingBudgetLimits(t *testing.T) {
 	bytes := measure.Bytes()
 	for _, short := range []string{brakeTestExact, brakeTestWork, brakeTestRecords, brakeTestBytes} {
 		t.Run(short, func(t *testing.T) {
-			meter := proofbound.NewBrakeReplayBudget()
-			w, r, b := proofbound.BrakeReplayWork-work, proofbound.BrakeReplayRecords-records, proofbound.BrakeReplayBytes-bytes
+			meter := proofbound.NewReplayTrialBudget()
+			w, r, b := proofbound.ReplayTrialWork-work, proofbound.ReplayTrialRecords-records, proofbound.ReplayTrialBytes-bytes
 			switch short {
 			case brakeTestWork:
 				w++

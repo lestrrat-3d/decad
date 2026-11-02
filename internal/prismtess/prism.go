@@ -30,7 +30,7 @@ import (
 func Build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	wallRole func(loop, seg int) string, chord float64, verifyAll bool,
 	countFloor func(loop, seg int) int, freeformTarget float64) (*topo.Mesh, error) {
-	return build(ctx, b, pp, wallRole, chord, verifyAll, countFloor, freeformTarget, nil, false)
+	return build(ctx, b, pp, wallRole, chord, verifyAll, countFloor, freeformTarget, nil)
 }
 
 // BuildRectangleReplay builds a recorded rectangular solid under one replay budget.
@@ -39,29 +39,14 @@ func BuildRectangleReplay(ctx context.Context, b *topo.Body, pp prismrecord.Payl
 	if budget == nil {
 		return nil, fmt.Errorf("%w: bounded prism requires a budget", decaderr.ErrUnsupported)
 	}
-	return build(ctx, b, pp, nil, chord, true, nil, 0, budget, false)
-}
-
-// BuildCircleReplay builds a recorded circular solid under the brake budget.
-func BuildCircleReplay(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
-	chord float64, budget *proofbound.ReplayBudget) (*topo.Mesh, error) {
-	if budget == nil || !budget.IsBrakeReplay() {
-		return nil, fmt.Errorf("%w: bounded circle requires the brake budget", decaderr.ErrUnsupported)
-	}
-	return build(ctx, b, pp, nil, chord, true, nil, 0, budget, true)
+	return build(ctx, b, pp, nil, chord, true, nil, 0, budget)
 }
 
 func build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	wallRole func(loop, seg int) string, chord float64, verifyAll bool,
-	countFloor func(loop, seg int) int, freeformTarget float64, replay *proofbound.ReplayBudget, circle bool) (*topo.Mesh, error) {
+	countFloor func(loop, seg int) int, freeformTarget float64, replay *proofbound.ReplayBudget) (*topo.Mesh, error) {
 	if replay != nil {
-		var err error
-		if circle {
-			err = circlePlanReplay(ctx, pp, replay)
-		} else {
-			err = rectanglePlanReplay(ctx, pp, verifyAll, countFloor, freeformTarget, replay)
-		}
-		if err != nil {
+		if err := rectanglePlanReplay(ctx, pp, verifyAll, countFloor, freeformTarget, replay); err != nil {
 			return nil, err
 		}
 	}
@@ -198,10 +183,7 @@ func build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 		}
 		var cl tessellation.ChordSamples[*topo.Face]
 		var err error
-		if replay != nil && circle {
-			cl, err = tessellation.ChordCircleReplay(ctx, loop, budget, pp.Z1-pp.Z0, pw,
-				func(w survey2d.SideWalk) (*topo.Face, error) { return faceOfRole("side(0,0)") }, replay)
-		} else if replay != nil {
+		if replay != nil {
 			cl, err = tessellation.ChordRectangleReplay(ctx, loop, budget, pp.Z1-pp.Z0, work, pw,
 				func(w survey2d.SideWalk) (*topo.Face, error) {
 					return faceOfRole(fmt.Sprintf("side(0,%d)", w.Segs[0]))
@@ -220,13 +202,7 @@ func build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 			Walks: cl.Walks, PerimeterUpper: cl.PerimeterUpper})
 	}
 	var topology tessellation.PrismTopology[*topo.Face]
-	if replay != nil && circle {
-		var err error
-		topology, err = tessellation.PrismCircleWallsReplay(ctx, chorded[0], pp.AxialDelta(), replay)
-		if err != nil {
-			return nil, err
-		}
-	} else if replay != nil {
+	if replay != nil {
 		var err error
 		topology, err = tessellation.PrismRectangleWallsReplay(ctx, chorded[0], pp.AxialDelta(), replay)
 		if err != nil {
@@ -276,20 +252,7 @@ func build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 		hi := pp.Point(p.U, p.V, pp.Z1)
 		mesh.Vertices = append(mesh.Vertices, lo, hi)
 		plane := proofbound.WalkEndBoundAllow(sampleBound[j])
-		var loRound, hiRound float64
-		if circle {
-			var roundErr error
-			loRound, roundErr = circlePointRoundReplay(ctx, pp, p.U, p.V, pp.Z0, lo, replay)
-			if roundErr != nil {
-				return nil, roundErr
-			}
-			hiRound, roundErr = circlePointRoundReplay(ctx, pp, p.U, p.V, pp.Z1, hi, replay)
-			if roundErr != nil {
-				return nil, roundErr
-			}
-		} else {
-			loRound, hiRound = pp.PointRound(p.U, p.V, pp.Z0, lo), pp.PointRound(p.U, p.V, pp.Z1, hi)
-		}
+		loRound, hiRound := pp.PointRound(p.U, p.V, pp.Z0, lo), pp.PointRound(p.U, p.V, pp.Z1, hi)
 		vertexStore = append(vertexStore, proofbound.AbsSumUpper(plane, loRound), proofbound.AbsSumUpper(plane, hiRound))
 	}
 	storeMax, err := tessellation.StoreMax(vertexStore)
@@ -300,9 +263,7 @@ func build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 
 	// Prove loop clearance before both caps reuse the wall rings' vertices.
 	var capErr error
-	if replay != nil && circle {
-		capErr = circleCapsAxialReplay(ctx, &topology, capStart, capEnd, pp.Z0Delta, pp.Z1Delta, replay)
-	} else if replay != nil {
+	if replay != nil {
 		capErr = rectangleCapsReplay(ctx, &topology, capStart, capEnd, pp.Z0Delta, pp.Z1Delta, replay)
 	} else {
 		capErr = tessellation.PrismCaps(ctx, &topology, sheet, capStart, capEnd,
@@ -313,7 +274,7 @@ func build(ctx context.Context, b *topo.Body, pp prismrecord.Payload,
 	}
 	mesh.Triangles, mesh.Source = topology.Triangles, topology.Sources
 	if replay != nil {
-		if !circle && (len(mesh.Triangles) != 12 || len(mesh.Source) != 12 || len(mesh.Vertices) != 8) {
+		if len(mesh.Triangles) != 12 || len(mesh.Source) != 12 || len(mesh.Vertices) != 8 {
 			return nil, fmt.Errorf("%w: bounded rectangle produced unexpected mesh dimensions", decaderr.ErrUnsupported)
 		}
 		// At most twelve winding flips, 36 directed-edge insertions, 36

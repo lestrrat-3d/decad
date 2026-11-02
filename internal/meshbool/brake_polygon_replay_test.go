@@ -35,7 +35,7 @@ func TestBrakeReplayPolygonParity(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ordinary ears: %v", err)
 		}
-		meter := proofbound.NewBrakeReplayBudget()
+		meter := proofbound.NewReplayTrialBudget()
 		got, err := replayEarClip(ctx, meter.WorkBudget(ctx), pts, poly)
 		if err != nil || !slices.Equal(got, want) {
 			t.Fatalf("replay ear triangles differ: %v", err)
@@ -45,7 +45,7 @@ func TestBrakeReplayPolygonParity(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			meter := proofbound.NewBrakeReplayBudget()
+			meter := proofbound.NewReplayTrialBudget()
 			gotInside, gotBoundary, err := replayPointInPoly2(ctx, meter.WorkBudget(ctx), pts, probe)
 			if err != nil || gotInside != inside || gotBoundary != boundary {
 				t.Fatalf("containment differs: %v", err)
@@ -55,7 +55,7 @@ func TestBrakeReplayPolygonParity(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		meter = proofbound.NewBrakeReplayBudget()
+		meter = proofbound.NewReplayTrialBudget()
 		gotArea, err := replayPolyArea2Sign(ctx, meter.WorkBudget(ctx), pts)
 		if err != nil || gotArea != wantArea {
 			t.Fatalf("area sign differs: %v", err)
@@ -91,7 +91,7 @@ func TestBrakeReplayPolygonBudgetLimits(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			measure := proofbound.NewBrakeReplayBudget()
+			measure := proofbound.NewReplayTrialBudget()
 			if err := c.run(ctx, measure.WorkBudget(ctx)); err != nil {
 				t.Fatal(err)
 			}
@@ -102,8 +102,8 @@ func TestBrakeReplayPolygonBudgetLimits(t *testing.T) {
 			}
 			for _, short := range []string{brakeTestExact, brakeTestWork, brakeTestRecords, brakeTestBytes} {
 				t.Run(short, func(t *testing.T) {
-					meter := proofbound.NewBrakeReplayBudget()
-					w, r, b := proofbound.BrakeReplayWork-work, proofbound.BrakeReplayRecords-records, proofbound.BrakeReplayBytes-bytes
+					meter := proofbound.NewReplayTrialBudget()
+					w, r, b := proofbound.ReplayTrialWork-work, proofbound.ReplayTrialRecords-records, proofbound.ReplayTrialBytes-bytes
 					switch short {
 					case brakeTestWork:
 						w++
@@ -132,7 +132,7 @@ func TestBrakeReplayPolygonBudgetLimits(t *testing.T) {
 			}
 			cancelled, cancel := context.WithCancel(ctx)
 			cancel()
-			meter := proofbound.NewBrakeReplayBudget()
+			meter := proofbound.NewReplayTrialBudget()
 			if err := c.run(cancelled, meter.WorkBudget(cancelled)); !errors.Is(err, context.Canceled) {
 				t.Fatalf("cancellation: %v", err)
 			}

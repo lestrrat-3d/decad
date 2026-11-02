@@ -23,8 +23,8 @@ func snapshotStoredShift(ctx context.Context, cert *ShiftCertificate, result, ta
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if budget == nil || !budget.IsBrakeReplay() {
-		return nil, errShiftSnapshotMissingBrakeReplayBudget
+	if budget == nil {
+		return nil, errShiftSnapshotMissingReplayBudget
 	}
 	if err := budget.SpendWork(ctx, 64); err != nil {
 		return nil, err
@@ -274,7 +274,7 @@ func snapshotShiftSlice[T any](ctx context.Context, src []T, budget *proofbound.
 		return nil, nil
 	}
 	n := uint64(len(src))
-	if n > proofbound.BrakeReplayRecords {
+	if n > proofbound.ReplayTrialRecords {
 		return nil, errShiftSnapshotStoredSliceTooLarge
 	}
 	if err := budget.SpendWork(ctx, n); err != nil {
@@ -409,8 +409,8 @@ func SnapshotShiftCertificate(ctx context.Context, budget *proofbound.ReplayBudg
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if budget == nil || !budget.IsBrakeReplay() {
-		return nil, errShiftSnapshotMissingBrakeReplayBudget
+	if budget == nil {
+		return nil, errShiftSnapshotMissingReplayBudget
 	}
 	if err := budget.SpendWork(ctx, 2); err != nil {
 		return nil, err
@@ -528,7 +528,6 @@ func revalidateShiftSnapshot(ctx context.Context, source, snapshot *ShiftCertifi
 	if source == nil ||
 		snapshot == nil ||
 		budget == nil ||
-		!budget.IsBrakeReplay() ||
 		result == nil ||
 		target == nil ||
 		tool == nil ||
@@ -613,7 +612,7 @@ func revalidateShiftSnapshot(ctx context.Context, source, snapshot *ShiftCertifi
 				return errShiftSnapshotDenotationChanged
 			}
 			n := uint64(len(a.Denoted.Runs)) + uint64(len(a.Denoted.Ends)) + 16
-			if n > proofbound.BrakeReplayRecords || n > ^uint64(0)/4096 {
+			if n > proofbound.ReplayTrialRecords || n > ^uint64(0)/4096 {
 				return errShiftSnapshotDenotationTooLarge
 			}
 			if err := budget.SpendWork(ctx, n*4096); err != nil {

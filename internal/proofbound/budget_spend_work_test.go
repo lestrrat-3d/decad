@@ -42,23 +42,25 @@ func TestWorkBudgetLogicalChargeKeepsStepNBehavior(t *testing.T) {
 func TestReplayAreaMeterAtomicLimitsAndCancellation(t *testing.T) {
 	ctx := t.Context()
 	for _, short := range []bool{false, true} {
-		b := NewBrakeReplayBudget()
+		b := NewReplayTrialBudget()
 		remaining := uint64(7)
 		if short {
 			remaining--
 		}
-		if err := b.SpendWork(ctx, BrakeReplayWork-remaining); err != nil {
+		if err := b.SpendWork(ctx, ReplayTrialWork-remaining); err != nil {
 			t.Fatal(err)
 		}
-		m := replayAreaMeter{b.WorkBudget(ctx)}
+		workBudget := b.WorkBudget(ctx)
+		workBudget.SpendWorkFn = func(n uint64) error { return b.SpendWork(ctx, n) }
+		m := replayAreaMeter{workBudget}
 		err := m.SpendWork(ctx, 7)
 		work, records := b.Usage()
 		if short {
 			var limit *WorkLimitError
-			if !errors.As(err, &limit) || limit.Resource != "multiway_work" || limit.Observed != BrakeReplayWork+1 || work != BrakeReplayWork-remaining {
+			if !errors.As(err, &limit) || limit.Resource != "multiway_work" || limit.Observed != ReplayTrialWork+1 || work != ReplayTrialWork-remaining {
 				t.Fatalf("one-short work=%d err=%v", work, err)
 			}
-		} else if err != nil || work != BrakeReplayWork {
+		} else if err != nil || work != ReplayTrialWork {
 			t.Fatalf("exact work=%d err=%v", work, err)
 		}
 		if records != 0 || b.Bytes() != 0 {
@@ -67,7 +69,7 @@ func TestReplayAreaMeterAtomicLimitsAndCancellation(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	cancel()
-	b := NewBrakeReplayBudget()
+	b := NewReplayTrialBudget()
 	err := (replayAreaMeter{b.WorkBudget(ctx)}).SpendWork(ctx, 7)
 	w, r := b.Usage()
 	if !errors.Is(err, context.Canceled) || w != 0 || r != 0 || b.Bytes() != 0 {

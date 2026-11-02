@@ -22,19 +22,19 @@ type MultiwayBudget struct {
 	strictReplay        *ReplayBudget
 }
 
-var brakeOverflowCauses = [3]error{
+var replayOverflowCauses = [3]error{
 	fmt.Errorf("%w: multiway multiway_work count overflow", decaderr.ErrUnsupported),
 	fmt.Errorf("%w: multiway multiway_records count overflow", decaderr.ErrUnsupported),
 	fmt.Errorf("%w: multiway replay_bytes count overflow", decaderr.ErrUnsupported),
 }
 
-var brakeLimitCauses = [3]error{
+var replayLimitCauses = [3]error{
 	fmt.Errorf("%w: multiway multiway_work budget exceeded", decaderr.ErrUnsupported),
 	fmt.Errorf("%w: multiway multiway_records budget exceeded", decaderr.ErrUnsupported),
 	fmt.Errorf("%w: multiway replay_bytes budget exceeded", decaderr.ErrUnsupported),
 }
 
-func brakeResourceIndex(resource string) int {
+func replayResourceIndex(resource string) int {
 	switch resource {
 	case "multiway_records":
 		return 1
@@ -51,17 +51,17 @@ func multiwayCharge(ctx context.Context, used *uint64, add, limit uint64, resour
 	}
 	if *used > limit || add > ^uint64(0)-*used {
 		if prebuilt != nil {
-			return brakeOverflowCauses[brakeResourceIndex(resource)]
+			return replayOverflowCauses[replayResourceIndex(resource)]
 		}
 		return fmt.Errorf("%w: multiway %s count overflow", decaderr.ErrUnsupported, resource)
 	}
 	next := *used + add
 	if next > limit {
 		if prebuilt != nil {
-			index := brakeResourceIndex(resource)
+			index := replayResourceIndex(resource)
 			detail := &prebuilt[index]
 			if detail.err == nil {
-				*detail = WorkLimitError{Resource: resource, Observed: next, Maximum: limit, err: brakeLimitCauses[index]}
+				*detail = WorkLimitError{Resource: resource, Observed: next, Maximum: limit, err: replayLimitCauses[index]}
 			}
 			return detail
 		}
@@ -113,8 +113,5 @@ func (b *MultiwayBudget) WorkBudget(ctx context.Context) *WorkBudget {
 			}
 			return b.reserveBytes(ctx, n)
 		}}
-	if b.prebuiltLimits != nil {
-		work.SpendWorkFn = func(n uint64) error { return b.SpendWork(ctx, n) }
-	}
 	return work
 }

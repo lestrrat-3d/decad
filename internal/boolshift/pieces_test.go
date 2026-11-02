@@ -15,7 +15,7 @@ func TestPiecesCopyLabels(t *testing.T) {
 	vertices[0], facets[0] = 9, 9
 	require.Equal(t, 0, p.Vertex(0))
 	require.Equal(t, 1, p.Facet(0))
-	snapshot, err := p.Snapshot(t.Context(), proofbound.NewBrakeReplayBudget(), nil)
+	snapshot, err := p.Snapshot(t.Context(), proofbound.NewReplayTrialBudget(), nil)
 	require.NoError(t, err)
 	require.True(t, p.EqualSnapshot(snapshot))
 	require.Equal(t, 2, snapshot.Count())

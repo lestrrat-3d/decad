@@ -21,7 +21,7 @@ func TestReplayFacetProofContextParityAndLimits(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		meter := proofbound.NewBrakeReplayBudget()
+		meter := proofbound.NewReplayTrialBudget()
 		volume, bound, exact, ok, err := facetproof.VolumeFromAuditReplay(t.Context(), meter.WorkBudget(t.Context()), audit, 0)
 		if err != nil || !ok || exact == nil || exact.Cmp(big.NewRat(1, 6)) != 0 || math.Abs(volume-1.0/6.0) > bound {
 			t.Fatalf("tetrahedron volume: value=%.17g bound=%.17g valid=%t error=%v", volume, bound, ok, err)
@@ -39,7 +39,7 @@ func TestReplayFacetProofContextParityAndLimits(t *testing.T) {
 	run := func(m *proofbound.ReplayBudget) (float64, float64, *big.Rat, bool, error) {
 		return facetproof.VolumeFromAuditReplay(ctx, m.WorkBudget(ctx), audit, 0)
 	}
-	m := proofbound.NewBrakeReplayBudget()
+	m := proofbound.NewReplayTrialBudget()
 	rv, rb, rr, ok, err := run(m)
 	if err != nil || !ok || math.Float64bits(rv) != math.Float64bits(v) || math.Float64bits(rb) != math.Float64bits(b) || rr.Cmp(rat) != 0 {
 		t.Fatalf("volume parity: %v", err)
@@ -48,8 +48,8 @@ func TestReplayFacetProofContextParityAndLimits(t *testing.T) {
 	bytes := m.Bytes()
 	for _, short := range []string{"exact", "work", "records", "bytes"} {
 		t.Run(short, func(t *testing.T) {
-			m := proofbound.NewBrakeReplayBudget()
-			w, r, z := proofbound.BrakeReplayWork-work, proofbound.BrakeReplayRecords-records, proofbound.BrakeReplayBytes-bytes
+			m := proofbound.NewReplayTrialBudget()
+			w, r, z := proofbound.ReplayTrialWork-work, proofbound.ReplayTrialRecords-records, proofbound.ReplayTrialBytes-bytes
 			switch short {
 			case "work":
 				w++
@@ -80,7 +80,7 @@ func TestReplayFacetProofContextParityAndLimits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	replay, err := facetproof.FirstMomentsReplay(ctx, proofbound.NewBrakeReplayBudget().WorkBudget(ctx), audit, tris)
+	replay, err := facetproof.FirstMomentsReplay(ctx, proofbound.NewReplayTrialBudget().WorkBudget(ctx), audit, tris)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestReplayFacetProofContextParityAndLimits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bounded, err := facetproof.FacetedExtremeErrorReplay(ctx, proofbound.NewBrakeReplayBudget().WorkBudget(ctx), verts, beta, beta, lo, hi)
+	bounded, err := facetproof.FacetedExtremeErrorReplay(ctx, proofbound.NewReplayTrialBudget().WorkBudget(ctx), verts, beta, beta, lo, hi)
 	if err != nil || math.Float64bits(normal) != math.Float64bits(bounded) {
 		t.Fatalf("extrema parity: %v", err)
 	}

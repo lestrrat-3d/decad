@@ -25,7 +25,7 @@ func TestBrakeConformSpatialIndexKeepsExactHits(t *testing.T) {
 			x := float64(i) / 10
 			verts = append(verts, point(x, x+0.1, x+0.2))
 		}
-		meter := proofbound.NewBrakeReplayBudget()
+		meter := proofbound.NewReplayTrialBudget()
 		budget := meter.WorkBudget(t.Context())
 		scan, err := brakeNewConformScan(t.Context(), budget, verts)
 		if err != nil {
@@ -86,7 +86,7 @@ func TestBrakeConformSpatialIndexResourceLimits(t *testing.T) {
 		}
 		return scan.EdgeInteriorHits(ctx, budget, 0, 1, [3]int{0, 1, 2})
 	}
-	measured := proofbound.NewBrakeReplayBudget()
+	measured := proofbound.NewReplayTrialBudget()
 	want, err := run(measured)
 	if err != nil || !slices.Equal(want, []int{3}) {
 		t.Fatalf("measuring hits=%v err=%v", want, err)
@@ -95,8 +95,8 @@ func TestBrakeConformSpatialIndexResourceLimits(t *testing.T) {
 	z := measured.Bytes()
 	for _, resource := range []string{brakeTestExact, brakeTestWork, brakeTestRecords, brakeTestBytes} {
 		t.Run(resource, func(t *testing.T) {
-			meter := proofbound.NewBrakeReplayBudget()
-			work, records, bytes := proofbound.BrakeReplayWork-w, proofbound.BrakeReplayRecords-r, proofbound.BrakeReplayBytes-z
+			meter := proofbound.NewReplayTrialBudget()
+			work, records, bytes := proofbound.ReplayTrialWork-w, proofbound.ReplayTrialRecords-r, proofbound.ReplayTrialBytes-z
 			switch resource {
 			case brakeTestWork:
 				work++

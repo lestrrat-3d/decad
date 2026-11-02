@@ -94,7 +94,7 @@ func TestOrdinaryShiftCertificateCaptureSealsSource(t *testing.T) {
 	if stored == nil {
 		t.Fatal("valid capture was refused")
 	}
-	if err := validateShiftCaptureSeal(t.Context(), stored, proofbound.NewBrakeReplayBudget()); err != nil {
+	if err := validateShiftCaptureSeal(t.Context(), stored, proofbound.NewReplayTrialBudget()); err != nil {
 		t.Fatal(err)
 	}
 	c.groups[0].CapRecord.ZDenoted.SetInt64(9)
@@ -102,11 +102,11 @@ func TestOrdinaryShiftCertificateCaptureSealsSource(t *testing.T) {
 	if stored.groups[0].CapRecord.ZDenoted.Cmp(big.NewRat(7, 3)) != 0 || stored.groups[0].Denoted.Radius.Lo.Cmp(big.NewRat(1, 3)) != 0 {
 		t.Fatal("capture retained mutable source metadata")
 	}
-	if err := validateShiftCaptureSeal(t.Context(), stored, proofbound.NewBrakeReplayBudget()); err != nil {
+	if err := validateShiftCaptureSeal(t.Context(), stored, proofbound.NewReplayTrialBudget()); err != nil {
 		t.Fatalf("detached metadata seal: %v", err)
 	}
 	c.groups[0].Source.Ordinal++
-	if err := validateShiftCaptureSeal(t.Context(), stored, proofbound.NewBrakeReplayBudget()); !errors.Is(err, decaderr.ErrUnsupported) {
+	if err := validateShiftCaptureSeal(t.Context(), stored, proofbound.NewReplayTrialBudget()); !errors.Is(err, decaderr.ErrUnsupported) {
 		t.Fatalf("prior source mutation accepted: %v", err)
 	}
 	malformed := boolshift.NewPieces([]int{c.component.Vertex(0)}, []int{c.component.Facet(0)}, c.component.Count())

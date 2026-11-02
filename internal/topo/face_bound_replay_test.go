@@ -46,7 +46,7 @@ func TestReplayFaceBoundChargesIgnoreInsertionOrder(t *testing.T) {
 	faces := [3]*Face{{}, {}, {}}
 	orders := [][3]int{{0, 1, 2}, {0, 2, 1}, {1, 0, 2}, {1, 2, 0}, {2, 0, 1}, {2, 1, 0}}
 	for _, order := range orders {
-		meter := proofbound.NewBrakeReplayBudget()
+		meter := proofbound.NewReplayTrialBudget()
 		table, err := NewFaceBoundTable(ctx, len(faces), meter)
 		if err != nil {
 			t.Fatal(err)

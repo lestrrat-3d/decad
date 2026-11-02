@@ -20,7 +20,7 @@ func TestSpatialBoxTreeWorkKeepsEveryCandidate(t *testing.T) {
 	}
 	boxes[3][0].X = math.NaN()
 	boxes[7] = [2]r3.Vec{{X: math.Inf(-1)}, {X: math.Inf(1)}}
-	budget := proofbound.NewBrakeReplayBudget().WorkBudget(ctx)
+	budget := proofbound.NewReplayTrialBudget().WorkBudget(ctx)
 	tree, err := newSpatialBoxTreeWork(boxes, budget)
 	if err != nil {
 		t.Fatal(err)

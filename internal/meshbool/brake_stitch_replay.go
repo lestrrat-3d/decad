@@ -69,7 +69,7 @@ func stitchFacetsContext(ctx context.Context, kept []KeptFacet, shared *PairCuts
 	if shared != nil {
 		work = &proofbound.WorkBudget{Replay: shared.replay != nil, ReplayID: shared.replay, StepFn: func() error { return shared.SpendWork(ctx, 1) }, ErrFn: ctx.Err,
 			ReserveFn: func(n uint64) error { return shared.ReserveRecords(ctx, n) }, ReserveBytesFn: func(n uint64) error { return shared.ReserveBytes(ctx, n, 1) }}
-		if shared.replay != nil && shared.replay.IsBrakeReplay() {
+		if shared.replay != nil {
 			work.SpendWorkFn = func(n uint64) error { return shared.SpendWork(ctx, n) }
 		}
 		if len(kept) > 65536 {

@@ -27,12 +27,12 @@ func TestReplayHandleAllocationSizes(t *testing.T) {
 				t.Fatalf("size=%d want=%d error=%v", size, k.size, err)
 			}
 			for _, short := range []bool{false, true} {
-				meter := proofbound.NewBrakeReplayBudget()
+				meter := proofbound.NewReplayTrialBudget()
 				remaining := 2*size + 128
 				if short {
 					remaining--
 				}
-				if err := meter.ReserveBytes(t.Context(), proofbound.BrakeReplayBytes-remaining); err != nil {
+				if err := meter.ReserveBytes(t.Context(), proofbound.ReplayTrialBytes-remaining); err != nil {
 					t.Fatal(err)
 				}
 				err := meter.WorkBudget(t.Context()).ReserveBytesMul(1, size)
