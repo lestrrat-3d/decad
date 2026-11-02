@@ -194,6 +194,10 @@ jobs:
             race: "-race"
             shard: "10"
             packages: ""
+          - os: ubuntu-latest
+            race: "-race"
+            shard: "11"
+            packages: ""
     runs-on: ${{ matrix.os }}
     env:
       GORACE: atexit_sleep_ms=0

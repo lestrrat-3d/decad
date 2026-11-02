@@ -184,6 +184,13 @@ func replayCoplanarContactHeld(ctx context.Context, ta, tb [3]r3.Vec, xa, xb [3]
 	if err := meter.SpendWork(ctx, charge); err != nil {
 		return out, err
 	}
+	if heldSharedOne && !zeroXpt(na) && !zeroXpt(nb) {
+		if shared, certain := replaySharedPointSeparated(ta, tb, u, v); certain {
+			out.Kind = ContactPoint
+			out.P0, out.P1 = xa[shared], xa[shared]
+			return out, nil
+		}
+	}
 	if !heldSharedOne {
 		var a, b [3][2]float64
 		for i := range 3 {
@@ -251,4 +258,100 @@ func replayCoplanarContactHeld(ctx context.Context, ta, tb [3]r3.Vec, xa, xb [3]
 		}
 	}
 	return out, nil
+}
+
+// replaySharedPointSeparated proves the projections intersect only at one
+// identical 3D vertex. An incident edge contains that vertex exactly. A clear
+// inside sign and two strict opposite signs put the other triangle entirely
+// across that edge, with only the shared vertex on it. The nonzero inside
+// sign also makes this projection injective on that edge's triangle. Thus its
+// sole projected contact has exactly one 3D preimage, the shared vertex.
+// Uncertain signs, additional equal vertices and collinear boundaries abstain.
+func replaySharedPointSeparated(a, b [3]r3.Vec, u, v int) (int, bool) {
+	ai, bi, matches := -1, -1, 0
+	for i := range 3 {
+		for j := range 3 {
+			if a[i] == b[j] {
+				ai, bi, matches = i, j, matches+1
+			}
+		}
+	}
+	if matches != 1 {
+		return 0, false
+	}
+	var pa, pb [3][2]float64
+	for i := range 3 {
+		pa[i] = [2]float64{AxisCoord(a[i], u), AxisCoord(a[i], v)}
+		pb[i] = [2]float64{AxisCoord(b[i], u), AxisCoord(b[i], v)}
+	}
+	for order := range 2 {
+		x, y, xi, yi := pa, pb, ai, bi
+		if order == 1 {
+			x, y, xi, yi = pb, pa, bi, ai
+		}
+		for edge := range 3 {
+			if edge != xi && (edge+1)%3 != xi {
+				continue
+			}
+			sign := Orient2Float(x[edge], x[(edge+1)%3], x[(edge+2)%3])
+			if sign == 0 {
+				continue
+			}
+			separated := true
+			for j := range 3 {
+				if j != yi && Orient2Float(x[edge], x[(edge+1)%3], y[j]) != -sign {
+					separated = false
+					break
+				}
+			}
+			if separated {
+				return ai, true
+			}
+		}
+	}
+	return 0, false
+}
+
+// replaySharedPointSeparatedAxes tries the dominant projections first, then
+// the remaining coordinate plane. Every attempted certificate is precharged.
+func replaySharedPointSeparatedAxes(ctx context.Context, a, b [3]r3.Vec, na, nb proof.Xpt,
+	meter proof.ReplayKeyBudget) (bool, error) {
+	if err := meter.SpendWork(ctx, 8); err != nil {
+		return false, err
+	}
+	if zeroXpt(na) || zeroXpt(nb) {
+		return false, nil
+	}
+	u, v, err := replayProjectionAxes(ctx, na, meter)
+	if err != nil {
+		return false, err
+	}
+	try := func(u, v int) (bool, error) {
+		if err := meter.SpendWork(ctx, 512); err != nil {
+			return false, err
+		}
+		_, certain := replaySharedPointSeparated(a, b, u, v)
+		return certain, nil
+	}
+	if certain, err := try(u, v); err != nil || certain {
+		return certain, err
+	}
+	bu, bv, err := replayProjectionAxes(ctx, nb, meter)
+	if err != nil {
+		return false, err
+	}
+	if u != bu || v != bv {
+		if certain, err := try(bu, bv); err != nil || certain {
+			return certain, err
+		}
+	}
+	for _, axes := range [3][2]int{{0, 1}, {2, 0}, {1, 2}} {
+		if axes == [2]int{u, v} || axes == [2]int{bu, bv} {
+			continue
+		}
+		if certain, err := try(axes[0], axes[1]); err != nil || certain {
+			return certain, err
+		}
+	}
+	return false, nil
 }

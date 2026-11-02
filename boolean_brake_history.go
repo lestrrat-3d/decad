@@ -57,7 +57,7 @@ func brakeBooleanProducer(ctx context.Context, d *Document, n *topo.Body, budget
 		if input.Use != InputConsumed || input.Body == nil {
 			return 0, nil, false, nil
 		}
-		if kind == meshbool.OpCut && ((i == 0 && input.Role != "target") || (i == 1 && input.Role != "tool")) {
+		if kind == meshbool.OpCut && ((i == 0 && input.Role != operationRoleTarget) || (i == 1 && input.Role != operationRoleTool)) {
 			return 0, nil, false, nil
 		}
 		in[i] = &input.Body.n

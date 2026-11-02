@@ -213,6 +213,16 @@ func replayEmbeddingPrecheck(ctx context.Context, h HeldRounding, meter *proofbo
 					continue
 				}
 			}
+			if shared == 1 {
+				pointOnly, err := replaySharedPointSeparatedAxes(ctx, TriCorners(&bm, i), TriCorners(&bm, j),
+					bm.Norms[i], bm.Norms[j], meter)
+				if err != nil {
+					return false, err
+				}
+				if pointOnly {
+					continue
+				}
+			}
 			if shared == 2 {
 				xa, xb := XtriCorners(&bm, i), XtriCorners(&bm, j)
 				apexI := 3 - si[0] - si[1]

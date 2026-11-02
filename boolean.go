@@ -339,7 +339,7 @@ func operationInputsForBoolean(op meshbool.OperationKind, a, b *Body) []Operatio
 	second := OperationInput{Body: b, Use: InputConsumed}
 	switch op {
 	case meshbool.OpCut:
-		first.Role, second.Role = "target", "tool"
+		first.Role, second.Role = operationRoleTarget, operationRoleTool
 	case meshbool.OpUnion:
 		first.Role, second.Role = "first", "others"
 	case meshbool.OpIntersect:

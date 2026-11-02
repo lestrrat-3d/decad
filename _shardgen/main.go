@@ -49,7 +49,7 @@ import (
 // shardCount is how many race shards the workflow declares. ci_workflow_test.go
 // asserts this equals the number of shard entries in the matrix, so the two
 // cannot drift apart silently.
-const shardCount = 11
+const shardCount = 12
 
 // These tests read the same costly sync.OnceValue table. Putting them in one
 // shard lets the test binary build that table once.
@@ -374,8 +374,8 @@ func write(path, pkgDir string, assigned [][]string, totals []float64, costs map
 	}
 	b.WriteString("# with the command in _shardgen/main.go's doc comment.\n")
 	b.WriteString("#\n")
-	b.WriteString("# A new test that has not been measured goes in shard 10, never in the lightest\n")
-	b.WriteString("# shard. Rebalance only by regenerating from measured costs.\n")
+	b.WriteString("# A new test that has not been measured goes in the last numbered shard, never\n")
+	b.WriteString("# in the lightest shard. Rebalance only from measured costs.\n")
 	b.WriteString("#\n")
 	b.WriteString("# Shard totals at the last measurement:\n")
 	for i, t := range totals {

@@ -32,7 +32,7 @@ func TestReplayAreaContextParityAndLimits(t *testing.T) {
 	}
 	work, records := m.Usage()
 	bytes := m.Bytes()
-	for _, short := range []string{"exact", "work", "records", "bytes"} {
+	for _, short := range []string{replayBudgetTestExact, "work", "records", "bytes"} {
 		t.Run(short, func(t *testing.T) {
 			m := NewBrakeReplayBudget()
 			w, r, z := BrakeReplayWork-work, BrakeReplayRecords-records, BrakeReplayBytes-bytes
@@ -54,10 +54,10 @@ func TestReplayAreaContextParityAndLimits(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, _, err := run(m)
-			if short == "exact" && err != nil {
+			if short == replayBudgetTestExact && err != nil {
 				t.Fatalf("exact: %v", err)
 			}
-			if short != "exact" && !errors.Is(err, decaderr.ErrUnsupported) {
+			if short != replayBudgetTestExact && !errors.Is(err, decaderr.ErrUnsupported) {
 				t.Fatalf("one-short %s: %v", short, err)
 			}
 		})

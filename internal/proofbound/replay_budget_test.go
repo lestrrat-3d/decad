@@ -253,7 +253,7 @@ func TestReplayBudgetReserveBundleAtomic(t *testing.T) {
 		bytes      uint64
 		wantAccept bool
 	}{
-		{"exact", 2, 3, 4, true},
+		{replayBudgetTestExact, 2, 3, 4, true},
 		{"work short", 3, 3, 4, false},
 		{"records short", 2, 4, 4, false},
 		{"bytes short", 2, 3, 5, false},
