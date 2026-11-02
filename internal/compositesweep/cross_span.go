@@ -1,6 +1,7 @@
 package compositesweep
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
@@ -22,27 +23,29 @@ import (
 // BoxGapExceeds separates and that shares no vertex, so the skip below would
 // pass it over. The walk over its rows therefore meets the same pairs in the
 // same order as a walk over all pairs, and audits each with the same call.
-// Only the number of budget steps differs, and the budget only polls for
-// cancellation. A margin the sweep cannot order by (negative or NaN) walks
-// every pair.
+//
+// The fixed proofbound.MaxFacetPairTestsPerCall ceiling counts the work this
+// audit does: every candidate-sweep visit, and one test for every listed
+// cross-span pair, all reserved before the first exact pair predicate runs. A
+// margin the sweep cannot order by (negative or NaN) walks every pair, and
+// that walk is refused unless the full pair count fits the ceiling.
 func CrossSpanContactAudit(budget *proofbound.WorkBudget, data []revolvemesh.RevolveAuditTri,
 	triangles [][3]int, spanOf []int, delta float64) error {
 	if len(data) != len(triangles) || len(spanOf) != len(triangles) {
 		return fmt.Errorf(`%w: the composite sweep's facet audit has inconsistent triangle records`, decaderr.ErrUnsupported)
 	}
-	pairs, ok := proofbound.WallChoose2(uint64(len(triangles)))
-	if !ok || pairs > proofbound.MaxFacetPairTestsPerCall {
-		err := fmt.Errorf(`%w: the composite sweep's facet-pair audit exceeds its fixed work ceiling`, decaderr.ErrUnsupported)
-		if ok {
-			return proofbound.WithWorkLimit(err, "facet_pairs", pairs, proofbound.MaxFacetPairTestsPerCall)
-		}
-		return err
-	}
 	margin := proofbound.ProductUpper(2, delta)
 	if !(margin >= 0) {
+		pairs, ok := proofbound.WallChoose2(uint64(len(triangles)))
+		if !ok || pairs > proofbound.MaxFacetPairTestsPerCall {
+			if ok {
+				return crossSpanWorkLimit(pairs)
+			}
+			return errCrossSpanWorkLimit
+		}
 		return crossSpanAllPairs(budget, data, triangles, spanOf, delta, margin)
 	}
-	rows, err := revolvemesh.ContactCandidates(budget, data, triangles, margin)
+	rows, err := crossSpanCandidates(budget, data, triangles, spanOf, margin)
 	if err != nil {
 		return err
 	}
@@ -54,6 +57,58 @@ func CrossSpanContactAudit(budget *proofbound.WorkBudget, data []revolvemesh.Rev
 		}
 	}
 	return budget.Err()
+}
+
+var errCrossSpanWorkLimit = fmt.Errorf(`%w: the composite sweep's facet-pair audit exceeds its fixed work ceiling`,
+	decaderr.ErrUnsupported)
+
+func crossSpanWorkLimit(observed uint64) error {
+	return proofbound.WithWorkLimit(errCrossSpanWorkLimit, "facet_pairs", observed, proofbound.MaxFacetPairTestsPerCall)
+}
+
+// crossSpanCandidates lists revolvemesh.ContactCandidates' rows with every
+// same-span pair removed, since crossSpanPair skips those without a test. The
+// candidate sweep runs under a meter that refuses once its visits reach the
+// ceiling, and the kept cross-span pairs must fit what the sweep left of it.
+func crossSpanCandidates(budget *proofbound.WorkBudget, data []revolvemesh.RevolveAuditTri,
+	triangles [][3]int, spanOf []int, margin float64) ([][]int32, error) {
+	ceiling := uint64(proofbound.MaxFacetPairTestsPerCall)
+	var scanned uint64
+	scan := &proofbound.WorkBudget{
+		StepFn: func() error {
+			if scanned >= ceiling {
+				return proofbound.ErrWallWorkBudget
+			}
+			if err := budget.Step(); err != nil {
+				return err
+			}
+			scanned++
+			return nil
+		},
+		ErrFn: budget.Err,
+	}
+	rows, err := revolvemesh.ContactCandidates(scan, data, triangles, margin)
+	if errors.Is(err, proofbound.ErrWallWorkBudget) {
+		return nil, crossSpanWorkLimit(ceiling + 1)
+	}
+	if err != nil {
+		return nil, err
+	}
+	var kept uint64
+	for i, row := range rows {
+		out := row[:0]
+		for _, j := range row {
+			if spanOf[i] != spanOf[j] {
+				out = append(out, j)
+			}
+		}
+		rows[i] = out
+		kept += uint64(len(out))
+	}
+	if kept > ceiling-scanned {
+		return nil, crossSpanWorkLimit(scanned + kept)
+	}
+	return rows, nil
 }
 
 // crossSpanAllPairs walks every pair (i, j), i < j, in ascending order.
