@@ -13,8 +13,9 @@ The rules for rows live in `agent-docs/layout.md`.
 | `boolean_group_cache.go` | Replays and compares a cached blind Cut mesh before returning it. See tessellation design. |
 | `boolean_group_history.go` | Bounded snapshot of a prism group Union's ordered public source bodies. |
 | `boolean_group_tessellate.go` | Replays a blind group Cut mesh and verifies its source history. See tessellation design. |
-| `boolean_many.go` | Validates and commits a multi-body Union, dispatching the certified pattern, one-scene prism and straight-source Loft routes and transient prism pair chains. See API §8 and prism-boolean §4.6. |
-| `boolean_regroup.go` | Chain regroup for a refused two-body Boolean: reads `Document.producers`, maps invariant-break errors. See boolean-chain-regroup-design. |
+| `boolean_many.go` | Validates and commits multi-body Union; adapts private handles to `internal/unionmany` and runs fallback prism pair chains. See API §8 and prism-boolean §4.6. |
+| `internal/unionmany/` | Orders certified many-operand Union routes over nodes. See prism-boolean §4.6, axial-section-boolean, loft-cylinder-boolean, loft-mirror-boolean, prism-pattern-union and revolve-loft-sector designs. |
+| `boolean_regroup.go` | Root history, handle, error and commit adapters for chain regroup and paired Cut continuation. `internal/booleandispatch` owns the private node plan. See boolean-chain-regroup-design. |
 | `surface_trim.go` | Public `Trim`, `Extend` and `Split` entry checks and commits; `internal/surfacetrim/` builds them. See surface-intersection §2–§3. |
 | `point_plane_scale.go` | ScaledAt: resolves the similarity source by payload kind and commits the image; facetedrecord.ScaleImage admits and scales it. See loft-point design and evaluator §8. |
 | `prism_scale.go` | Admits prism and full-Revolve certified similarity sources and transfers their face roles. See evaluator §8. |
