@@ -70,12 +70,13 @@ A **leaf** is a solid whose true set `C` the record can read, held as:
 - **(T) coverage**: `C ⊂ A'^{+δ}`, `δ` the published two-sided bound of the held mesh `A'` the Boolean used;
 - for a leaf a `Cut` may use as a tool, **inner pieces**: exact convex polyhedra inside `C`.
 
-Leaves come from five payloads (`internal/occupancyleaf`):
+Leaves come from these payloads (`internal/occupancyleaf`):
 
 | Payload | Leaf | Outer pieces | Poke |
 |---|---|---|---|
 | prism of one whole CCW circle | the placed cylinder | one circumscribed 128-gon prism; an inscribed 128-gon prism inside | exact: each corner taken back to local coordinates, radial plus axial excess (both convex, so corners bound the facet), stretched by the maps' Frobenius norms; a corner the float inverse puts inside by 1e-6 of the section skips the exact reading |
 | stack of slabs of one circle at contiguous levels | one cylinder | as above | as above |
+| prism, or stack slab by slab, whose regions are a whole circle or a convex polygon of whole lines, with whole circular holes (either winding) | one leaf per region's outer loop, and one hole leaf per hole through that region's levels; a stack's holes meet other slabs only on shared level planes, which a regularized solid ignores | the polygon prism itself, each side pushed out by the section displacement over `|u|₁`; convexity checked exactly | float: the sum of side excesses over the sine of the sharpest corner, plus the axial excess |
 | Revolve of one whole circle clear of its axis | an arc tube about the spine circle, full or partial | one 64-gon prism per angular cell about the cell's chord, widened by the arc's sagitta over the cell and extended by `ρ·d/2` at both ends; cells of sagitta at most 1e-4 mm | float, below |
 | Sweep of one whole circle along lines and arcs | one leaf per span: a cylinder for a line, an arc tube for an arc (the spans' own prism and Revolve reductions) | as for each kind | as for each kind |
 | Coil of one whole circle | a helix tube: every point lies within the wire radius of the centre helix at its own angle, because the disc sits in the axis plane there (`agent-docs/helix-design.md` Table CP) | one 32-gon prism per angular cell about the centre helix's chord, widened by the helix sagitta `ρc·d²/8` and extended by `ρw·(lead + d)` at both ends | none: every facet keeps its own bound as its bulge |
@@ -83,7 +84,9 @@ Leaves come from five payloads (`internal/occupancyleaf`):
 A circumscribed polygon uses rational directions `u_k` with offsets `c_k ≥ r·|u_k|` (checked as
 `c_k² ≥ r²·u_k·u_k`), and every corner is checked against every side. An inscribed one uses float corners proven
 exactly inside the circle. The record's section and level displacements widen the outer pieces and narrow the
-inner ones. The prism maps (frame `(U, V, N = U×V)`, then placement) are read as exact rationals
+inner ones. The maps' stretch is bounded by the square root of the largest absolute row sum of `MᵀM` (just above 1
+for a placement), not by the Frobenius norm. The prism maps (frame `(U, V, N = U×V)`, then placement) are read as
+exact rationals
 (`prismrecord.Payload.Point`). The Revolve maps follow `revolvemesh.RevolveLift.Point`.
 
 **Arc tube poke.** Write a point's meridian offset from the spine as `P = (r − R, h)`. Over a triangle `h` is
@@ -259,8 +262,11 @@ bound. `b.refine` wraps `decad.Refine(b.ctx, body, units.Millimeters(bound))` an
 at 0.01 mm, which serves both its 0.05 mm test and the 0.01 mm clearance screen.
 
 With these four calls the Gallery native default Build tessellates all 190 parts at 0.12 mm, and the connector
-test passes. The full default test then stops at `footman` at 0.01 mm (held 0.0245 mm). That part is a
-rectangular bar with a hole, cut by cylinders, and its section is not a circle, so it is outside the input class.
+test passes. The full default test asks `footman` for 0.01 mm. Footman is a rectangular bar with two holes, cut by
+two cylinders, and now carries a record. But its held mesh was chorded at its 476 mm pair's tolerance, so its leaf
+bounds are already 0.009 mm. Its bore rims add a crossing depth of 0.025 mm, and its true-to-held side reaches
+0.0335 mm. Refine therefore refuses 0.01 mm there: no re-certification goes below the held chords, and only a
+finer re-tessellation of its history can. At 0.05 mm it is admitted.
 
 **Gap-shift retries.** When an ordinary Union meets an isolated point touch, Decad retries with a gap shift. The
 retry moves the second operand's held mesh by at most a measured displacement and leaves the true operand where it
