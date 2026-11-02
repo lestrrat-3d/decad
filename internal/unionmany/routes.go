@@ -1,4 +1,5 @@
-// Package unionmany orders the certified many-operand Union routes over nodes.
+// Package unionmany orders the certified many-operand Union routes and
+// evaluates fallback prism pair chains over nodes.
 package unionmany
 
 import (
