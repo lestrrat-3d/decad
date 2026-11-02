@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/edgewedge"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/provenance"
 	"github.com/lestrrat-3d/decad/internal/ringmemo"
 	"github.com/lestrrat-3d/decad/internal/surfacegeom"
@@ -447,7 +448,7 @@ func (e *Edge) Length() (Measurement, error) {
 	}
 	return Measurement{
 		Value:     units.Millimeters(e.n.Length),
-		Exactness: exactnessOf(e.n.LengthBound),
+		Exactness: measurement.ExactnessOf(e.n.LengthBound),
 		Bound:     units.Millimeters(e.n.LengthBound),
 	}, nil
 }
@@ -520,7 +521,7 @@ func (f *Face) Edges() []*Edge {
 func (f *Face) Area() (Measurement, error) {
 	return Measurement{
 		Value:     units.SquareMillimeters(f.n.Area),
-		Exactness: exactnessOf(f.n.AreaBound),
+		Exactness: measurement.ExactnessOf(f.n.AreaBound),
 		Bound:     units.SquareMillimeters(f.n.AreaBound),
 	}, nil
 }

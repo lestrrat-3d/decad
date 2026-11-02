@@ -61,7 +61,7 @@ func TestR3IdentityApplyIsBitIdentical(t *testing.T) {
 	// premise depends on: delta == 0 asserts that the held vertex sits at
 	// zero distance from the exact placed image, and -0.0 and 0.0 are the
 	// same coordinate at zero distance from each other. Every equality this
-	// package runs on a float (exactnessOf, the xform == r3.Identity() fast
+	// package runs on a float (measurement.ExactnessOf, the xform == r3.Identity() fast
 	// path itself) reads the same way. agent-docs/loft-design.md §13 states this
 	// case as coordinate equality for exactly that reason.
 	t.Run("negative zero", func(t *testing.T) {

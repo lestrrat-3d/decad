@@ -32,7 +32,7 @@ import (
 //     the root refuses once the inflated bound stops meaning anything;
 //   - float SUMMATION of the reported value itself → SumSlop, a proven bound
 //     for a NAIVE loop (never zero for a positive float-computed value, down
-//     to the subnormal range, which is what keeps exactnessOf honest);
+//     to the subnormal range, which is what keeps measurement.ExactnessOf honest);
 //   - ACCUMULATION over the N elements of a chain → ChainLengthBound;
 //   - RIGID-MOTION rounding → RigidRoundAllow, charged at the INPUT and
 //     translation magnitudes, which is where the rounding is actually
@@ -220,7 +220,7 @@ func UpRound(x float64) float64 {
 // falls below half the smallest subnormal, and a bound of 0 is not a small
 // bound — it is the CLAIM that the quantity it bounds is enclosed exactly, so
 // the published interval collapses to a point that excludes the truth, and
-// exactnessOf reads the same 0 as Exact for a body whose error is merely tiny.
+// measurement.ExactnessOf reads the same 0 as Exact for a body whose error is merely tiny.
 // math.SmallestNonzeroFloat64 is the correct replacement rather than a fudge:
 // rounding to +0 proves the exact result lies at or below half the smallest
 // subnormal, so the smallest subnormal is itself a valid — and finite — upper

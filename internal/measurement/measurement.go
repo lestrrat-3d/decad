@@ -94,6 +94,16 @@ func ExactnessOf(bound float64) Exactness {
 	return Approximate
 }
 
+// CubicMillimeters builds a volume measurement whose exactness follows its
+// proven absolute error bound.
+func CubicMillimeters(value, bound float64) Measurement {
+	return Measurement{
+		Value:     units.CubicMillimeters(value),
+		Exactness: ExactnessOf(bound),
+		Bound:     units.CubicMillimeters(bound),
+	}
+}
+
 // FiniteValues reports whether every value is finite: neither NaN nor an
 // infinity.
 func FiniteValues(values ...float64) bool {

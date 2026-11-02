@@ -16,7 +16,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `internal/seal/` | The key that opens the sealed accessors on `report/` sweep records, so only decad's own producers set a report's replay proof or a sample's exact fraction. See contact-sweep §7. |
 | `internal/payloadclass/` | The hook through which `decadtest.PayloadClass` reads a body's payload class, and the payload type name an error prints. See faceted-source-retention §10. |
 | `internal/proof/` | Exact dyadic arithmetic, rational intervals and float rounding. |
-| `internal/measurement/` | Private bounded reading carriers, exact inflated-box separation, `ExactnessOf` and `FiniteValues`. The public types live in `report/`. See API §5.3, §6. |
+| `internal/measurement/` | Bounded reading carriers and volumes, inflated-box separation, `ExactnessOf` and `FiniteValues`. Public types live in `report/`. See API §5.3, §6. |
 | `internal/pair/` | Shared contact relation, reason and reading types; a scalar reading publishes as a measurement; maps a pair reason and relation to and from the `report/` contact enums. |
 | `internal/pair/box/` | Exact box paths and oriented-box translation, contact, oriented, sphere-box and cylinder-box proofs, interval separation, patches, clips, and witness and normal readings with their measurements. |
 | `internal/contactbox/` | Source-box and oriented-box admission over body nodes, with their exact classification and the face, point and normal manifolds they publish into a contact report: axis, contained, clipped and oblique patches. See contact-geometry §4. |
