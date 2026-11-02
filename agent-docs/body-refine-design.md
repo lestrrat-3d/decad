@@ -60,7 +60,9 @@ A held mesh after this design carries two readings:
 
 `σ(f) ≤ δ(f)` always holds, because `δ(f)` already proves both directions. Only `Refine` writes `σ`. The next
 Boolean reads `σ` as the facet's slab half-width, raised by any gap shift's move, for its rim composition and its
-chain-depth gate: a slab only states where the true boundary near the facet lies, which `σ` proves (§9 R6). Vertex
+chain-depth gate: a slab only states where the true boundary near the facet lies, which `σ` proves (§9 R6). The
+proximity gate reads each source face's largest `σ` in place of its face bound when that is smaller
+(`BoolMesh.FaceSurface`): `σ` bounds the distance both ways, which is all that slack needs. Vertex
 bounds keep the crossing record, so every reading of the result's older rims stays as loose as before.
 
 ## 4. Input class
@@ -284,11 +286,27 @@ No generic re-mesh without a replay reaches 0.01 mm. Splitting a held facet keep
 mesh needs new vertices on the true crossing of the socket and the hole, which means running the Cut again. A
 split construction in Gallery (a short socketed end piece joined to the bar) fails at the joining Union: the butt
 faces lie in one plane, and the proximity gate refuses them. The pair chord is `2e-5` times the pair box diameter,
-so the floor `δ(1 + 2/sin)` meets 0.01 mm only if the box shrinks from about 450 mm to 130 mm. A scratch run
-chorded a Cut's fresh operands by the diameter of the operands' box overlap instead, and kept the pair tolerance
-for held operands and the chain gate. Footman then passed its 0.01 mm check. The default test then stopped in
-`Verify` at the planar relation work limit, and took 149 s against about 65 s. The same rule on Unions also asks
-a yarn hook's revolve for more than 65536 facets.
+so the floor `δ(1 + 2/sin)` meets 0.01 mm only if the box shrinks from about 450 mm to 130 mm.
+
+**Overlap chord for Cuts.** Footman reaches 0.01 mm by a Cut rule with no replay.
+
+- When a Cut's tool has a face that is not a plane, and the operand boxes overlap in at most 1/8 of the pair's
+  diameter (`meshbool.OverlapChordRatio`), its freshly chorded operands are chorded by the overlap's diameter
+  (`meshbool.OverlapDiameter`). A tool of planes leaves its rim on its own exact planes and keeps the pair's chord.
+- Held operands, the pair tolerance and the chain gate still read the whole pair's diameter.
+- When that attempt refuses at any stage, `booleandispatch.BodyScaled` runs the Cut again at the pair's chord. The
+  finer chord therefore never refuses a Cut that the pair's chord admits.
+- A sphere cut by a large box would hit the revolve facet ceiling at the finer chord. A box tool keeps the pair's
+  chord, and the fallback covers a curved tool that meets the same ceiling.
+- Unions keep the pair's chord. The same rule on Unions asks a yarn hook's revolve for more than 65536 facets.
+
+The ratio keeps ordinary pairs on their old chord. With a ratio of 1, the default Build took 90 s instead of 69 s,
+and `Verify` exhausted the planar relation's work limit.
+
+**Fan lookup.** That limit was reached because the planar relation's `fanAt` scanned every triangle of a solid for
+each contact site. A finer bar against a hinge leaf has 94 000 sites. `fanAt` now reads the candidate triangles from
+the solid's triangle box tree, plus every triangle with a zero normal, which the point test checks without a box. It
+accepts the same triangles as before. `Verify` on the default wheel then finishes with no work-limit refusal.
 
 The four Gallery variants (small-seven, large-nine, twelve, small-seventeen) stop earlier, while the yarn leader is
 still being built. The chain-depth gate refuses a Union because an operand's crossing bound is 0.20–0.36 mm where
