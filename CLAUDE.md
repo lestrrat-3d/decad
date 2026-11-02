@@ -27,6 +27,7 @@ APIs are design-only.**
 | Before writing | Read |
 |---|---|
 | Any file, to find what owns what | `agent-docs/layout.md` — one row per root `.go` file and design doc |
+| Production code or its design/review | `agent-docs/module-boundary.md` — Module boundary gate |
 | Any public type | `agent-docs/api-design.md`, and every companion design listed in `agent-docs/layout/` |
 | Collision geometry or rigid-body dynamics | `agent-docs/collision-dynamics-design.md`, `agent-docs/multibody-dynamics-design.md` |
 | Linkages and joints | `agent-docs/linkage-check-design.md` |
@@ -47,6 +48,8 @@ APIs are design-only.**
 
 ## Hard rules
 
+- **Pass the Module boundary gate before implementation and PR approval.**
+  `agent-docs/module-boundary.md` owns the gate; a failed gate blocks the change.
 - **Layering is `decad -> sketch -> r3 -> units`.** decad imports all three
   directly. NEVER import decad from any of them.
 - **Ask `sketch` for 2D answers by default.** Profile closure, DOF, constraint
@@ -109,15 +112,6 @@ APIs are design-only.**
 - Go style, testing and file-layout rules: `~/.claude/docs/go.md`. Tests use
   `testify/require` (never `assert`), `t.Context()`. Exported-API-only test →
   `apitest/`.
-- Keep the root package to the public API where practical. Put everything the
-  user does not see — algorithms, geometry kernels, helpers, report and request
-  plumbing — in an `internal/` package. The root keeps the exported types, their
-  methods and thin wrappers that call into `internal/`. Unexported root code
-  that cannot move (e.g. it needs unexported fields of a root type) says why in
-  its doc comment.
-- New unexported root helpers take plain data (`r3.Vec`, floats, slices), NEVER
-  `*Document`/`*Body`/`*Face`/`*Edge`/`*Mesh`, to fit `internal/`. Root keeps
-  wrappers; topology code stays. Narrow leaf helpers in PRs.
 - User-facing usage → executable Go examples in `examples/` with verified
   `// Output:` blocks. NEVER README-only snippets.
 - Docs state **current state only** — no changelogs, no "was X, now Y".
