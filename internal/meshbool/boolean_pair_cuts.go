@@ -20,7 +20,6 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 	cutsB := map[int][]Xseg{}
 	var pointTouches []proof.Xpt
 	var pointFacets [][2]int
-	var segEnds []proof.Xpt
 	var inPlane []PairContact
 	// rims maps each rim vertex (a contact segment's endpoint, by exact key)
 	// to the largest RimBound over the facet pairs whose segment ends there.
@@ -56,7 +55,6 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 			pointFacets = append(pointFacets, [2]int{i, j})
 			return nil
 		}
-		segEnds = append(segEnds, c.P0, c.P1)
 		rim := RimBound(ma.SlabBound[i], mb.SlabBound[j], c.Sin2)
 		maxRim = max(maxRim, rim)
 		for _, p := range []proof.Xpt{c.P0, c.P1} {
@@ -194,13 +192,9 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 	// tangency the boolean cannot classify: the operands pinch at a point, and
 	// stitching it would emit a non-manifold result — refuse, never a wrong mesh.
 	if len(pointTouches) > 0 {
-		ends := map[string]struct{}{}
-		for _, p := range segEnds {
-			ends[keyOf(p)] = struct{}{}
-		}
 		var isolated []TouchContact
 		for k, p := range pointTouches {
-			if _, ok := ends[keyOf(p)]; !ok && len(isolated) < maxTouchContacts {
+			if _, ok := rims[keyOf(p)]; !ok && len(isolated) < maxTouchContacts {
 				isolated = append(isolated, touchOf(ma, pointFacets[k][0], pointFacets[k][1]))
 			}
 		}
