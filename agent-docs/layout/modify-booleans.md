@@ -18,7 +18,7 @@ The rules for rows live in `agent-docs/layout.md`.
 | `modify_options.go` | Public reach option tiers, codec adapters and asymmetric reference resolution (SX3). See modify-reach §2, §6. |
 | `move_face.go` | Public `MoveFace`: gates on a faceted receiver and one selected face, then `internal/orthoshell/` presses the face and `solidFromMeshBody` makes the result. See orthogonal-move design. |
 | `quarter_turn.go` | Public `QuarterTurn`: exact quarter turns of a faceted solid about a world axis by exchanging coordinates, each sum proved exact. See orthogonal-boolean design B10. |
-| `boolean_orthogonal.go` | Adapts root body handles and tessellation to `internal/orthoshell/`, which admits and combines orthogonal mesh parts; root builds and proves the result. See orthogonal-boolean design. |
+| `boolean_orthogonal.go` | Pair handle and result adapters for `internal/booleandispatch`; many-body admission and `internal/orthoshell/` grid assembly. See orthogonal-boolean design. |
 | `shell_orthogonal.go` | The orthogonal-polyhedron route of `Shell`: gates on a faceted receiver, then `internal/orthoshell/` builds the walls and `solidFromMeshBody` makes them the result. See orthogonal-shell design. |
 | `shell.go` | Public `ShellOption`, `ShellSense` and `Shell`: options, selector and thickness gates, then `internal/brepmodify/` builds the shell. Also `shellTol`. See modify §7–§9 and Table R. |
 | `brep_modify.go` | The prism cap faces a modify op classifies against, the modify commit, and the conversions to `internal/brepmodify/`, which owns the brep and stacked receiver routes. See brep-modify. |

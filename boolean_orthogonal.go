@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 
+	"github.com/lestrrat-3d/decad/internal/booleandispatch"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/orthoshell"
 	"github.com/lestrrat-3d/units"
@@ -19,39 +20,15 @@ func orthogonalBoolean(ctx context.Context, d *Document, op meshbool.OperationKi
 	return orthogonalBooleanAt(ctx, d, op, a, b, d.producerID(ctx))
 }
 
-// orthogonalBooleanAt is orthogonalBoolean under the producer identity ref, for a caller that evaluates under one.
+// orthogonalBooleanAt unwraps Body.n for booleandispatch.OrthogonalPair and
+// builds its proved result under ref. Root owns the body handles, mesh-body
+// construction and solid proof; the internal route owns operand admission.
 func orthogonalBooleanAt(ctx context.Context, d *Document, op meshbool.OperationKind, a, b *Body, ref producerID) (*Body, bool) {
-	var mode orthoshell.Op
-	switch op {
-	case meshbool.OpUnion:
-		mode = orthoshell.Union
-	case meshbool.OpCut:
-		mode = orthoshell.Cut
-	case meshbool.OpIntersect:
-		mode = orthoshell.Intersect
-	default:
+	part, ok := booleandispatch.OrthogonalPair(ctx, op, &a.n, &b.n, verifyAllMesher{})
+	if !ok {
 		return nil, false
 	}
-	pa, okA := orthogonalOperand(a)
-	pb, okB := orthogonalOperand(b)
-	if !okA && !okB {
-		return nil, false // a pair of prisms or breps keeps its own certified routes
-	}
-	if !okA {
-		if pa, okA = orthogonalMeshOf(ctx, a); !okA {
-			return nil, false
-		}
-	}
-	if !okB {
-		if pb, okB = orthogonalMeshOf(ctx, b); !okB {
-			return nil, false
-		}
-	}
-	verts, tris, err := orthoshell.Combine(pa.Verts, pa.Tris, pb.Verts, pb.Tris, mode)
-	if err != nil {
-		return nil, false
-	}
-	mesh, err := NewMeshBody(ctx, verts, tris)
+	mesh, err := NewMeshBody(ctx, part.Verts, part.Tris)
 	if err != nil {
 		return nil, false
 	}
