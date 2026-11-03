@@ -2,6 +2,8 @@ package saddlecanal
 
 import (
 	"math"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // iv is a float interval with outward rounding. Every operation rounds its
@@ -11,8 +13,15 @@ import (
 // two roundings fuse.
 type iv struct{ lo, hi float64 }
 
-func down(x float64) float64 { return math.Nextafter(x, math.Inf(-1)) }
-func up(x float64) float64   { return math.Nextafter(x, math.Inf(1)) }
+// down and up are math.Nextafter toward -Inf and +Inf, bit for bit, through
+// the proof package's cheaper steps. They stay separate non-inlined calls so
+// the rounding before each step cannot fuse with it.
+//
+//go:noinline
+func down(x float64) float64 { return proofarith.NextDown(x) }
+
+//go:noinline
+func up(x float64) float64 { return proofarith.NextUp(x) }
 
 func pt(x float64) iv { return iv{x, x} }
 

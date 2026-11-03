@@ -2,6 +2,7 @@ package saddlecanal
 
 import (
 	"math"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -36,5 +37,51 @@ func TestIntervalMulMatchesFourProductTable(t *testing.T) {
 			require.Equal(t, math.Float64bits(want.lo), math.Float64bits(got.lo))
 			require.Equal(t, math.Float64bits(want.hi), math.Float64bits(got.hi))
 		})
+	}
+}
+
+// TestStepHelpersMatchNextafter compares down and up with math.Nextafter by
+// exact bit pattern over the boundary values, every exponent and a seeded
+// random sample. Both NaN results must be NaN.
+func TestStepHelpersMatchNextafter(t *testing.T) {
+	check := func(x float64) {
+		bits := math.Float64bits(x)
+		for _, c := range []struct {
+			name string
+			got  float64
+			want float64
+		}{
+			{"down", down(x), math.Nextafter(x, math.Inf(-1))},
+			{"up", up(x), math.Nextafter(x, math.Inf(1))},
+		} {
+			if math.IsNaN(c.want) {
+				require.True(t, math.IsNaN(c.got), "%s(%#x) must be NaN", c.name, bits)
+				continue
+			}
+			require.Equal(t, math.Float64bits(c.want), math.Float64bits(c.got),
+				"%s(%#x)", c.name, bits)
+		}
+	}
+	specials := []float64{
+		0, math.Copysign(0, -1), math.Inf(1), math.Inf(-1), math.NaN(), -math.NaN(),
+		math.Float64frombits(0x7ff0000000000001), math.Float64frombits(0xfff8000000000123),
+		math.MaxFloat64, -math.MaxFloat64, math.SmallestNonzeroFloat64, -math.SmallestNonzeroFloat64,
+		0x1p-1022, -0x1p-1022, 0x1p-969, -0x1p-969, 0x1p1023, 1, -1,
+	}
+	for _, x := range specials {
+		check(x)
+		check(math.Nextafter(x, 0))
+		check(math.Nextafter(x, math.Inf(1)))
+		check(math.Nextafter(x, math.Inf(-1)))
+	}
+	for e := -1074; e <= 1023; e++ {
+		p := math.Ldexp(1, e)
+		for _, x := range []float64{p, -p, math.Nextafter(p, 0), math.Nextafter(p, math.Inf(1)), -math.Nextafter(p, 0)} {
+			check(x)
+		}
+	}
+	r := rand.New(rand.NewPCG(3, 4))
+	for range 200_000 {
+		check(math.Float64frombits(r.Uint64()))
 	}
 }
