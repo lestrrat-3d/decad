@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mathProjRange is the reference fold projRange must match bit for bit:
-// math.Min and math.Max from +Inf and -Inf.
+// mathProjRange is the reference fold projRange must match: math.Min and
+// math.Max from +Inf and -Inf.
 func mathProjRange(a r3.Vec, vs []r3.Vec) (float64, float64) {
 	lo, hi := math.Inf(1), math.Inf(-1)
 	for _, v := range vs {
@@ -20,8 +20,16 @@ func mathProjRange(a r3.Vec, vs []r3.Vec) (float64, float64) {
 	return lo, hi
 }
 
+// sameFloat reports whether a and b are both NaN or have equal bits. A NaN's
+// payload differs across arm64 call sites and nothing reads it: Misses keeps
+// an axis only when its gap is positive, which no NaN is. Every other value,
+// signed zeros and infinities included, must match bit for bit.
+func sameFloat(a, b float64) bool {
+	return (math.IsNaN(a) && math.IsNaN(b)) || math.Float64bits(a) == math.Float64bits(b)
+}
+
 // TestProjRangeMatchesMathFold checks projRange against the math.Min and
-// math.Max fold bit for bit, over finite, signed-zero, subnormal, huge,
+// math.Max fold by sameFloat, over finite, signed-zero, subnormal, huge,
 // infinite and NaN inputs, including empty and single-element slices.
 func TestProjRangeMatchesMathFold(t *testing.T) {
 	rng := rand.New(rand.NewPCG(6, 6))
@@ -49,7 +57,7 @@ func TestProjRangeMatchesMathFold(t *testing.T) {
 		}
 		olo, ohi := mathProjRange(a, vs)
 		nlo, nhi := projRange(a, vs)
-		if math.Float64bits(olo) != math.Float64bits(nlo) || math.Float64bits(ohi) != math.Float64bits(nhi) {
+		if !sameFloat(olo, nlo) || !sameFloat(ohi, nhi) {
 			mismatches++
 		}
 	}
@@ -57,7 +65,7 @@ func TestProjRangeMatchesMathFold(t *testing.T) {
 }
 
 // TestProjRangeSpecialValuesExhaustive checks projRange against the math.Min
-// and math.Max fold bit for bit on every sequence of up to five projections
+// and math.Max fold by sameFloat on every sequence of up to five projections
 // drawn from NaN, both infinities, both zeros, both units, both smallest
 // subnormals and both largest finite values. The axis (1, 0, 0) and vertices
 // (d, -0, -0) make each projection exactly d, signed zeros included.
@@ -76,7 +84,7 @@ func TestProjRangeSpecialValuesExhaustive(t *testing.T) {
 		cases++
 		olo, ohi := mathProjRange(a, vs)
 		nlo, nhi := projRange(a, vs)
-		if math.Float64bits(olo) != math.Float64bits(nlo) || math.Float64bits(ohi) != math.Float64bits(nhi) {
+		if !sameFloat(olo, nlo) || !sameFloat(ohi, nhi) {
 			mismatches++
 		}
 		if len(idx) == cap(idx) {
@@ -84,7 +92,7 @@ func TestProjRangeSpecialValuesExhaustive(t *testing.T) {
 		}
 		for i, d := range values {
 			v := r3.Vec{X: d, Y: negZero, Z: negZero}
-			if math.Float64bits(a.Dot(v)) != math.Float64bits(d) {
+			if !sameFloat(a.Dot(v), d) {
 				unexact++
 			}
 			idx, vs = append(idx, i), append(vs, v)
