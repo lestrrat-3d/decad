@@ -66,6 +66,9 @@ func Misses(tri [3]r3.Vec, shift r3.Vec, p *Piece, budget *Budget) (bool, error)
 		}
 		a = a.Scale(1 / l)
 		tlo, thi := projRange(a, ft[:])
+		if meetsRange(a, p.fverts, tlo, thi) {
+			return
+		}
 		plo, phi := projRange(a, p.fverts)
 		if g := math.Max(plo-thi, tlo-phi); g > 0 {
 			cands = append(cands, cand{a, g})
@@ -129,6 +132,24 @@ func projRange(a r3.Vec, vs []r3.Vec) (float64, float64) {
 		lo, hi = math.Min(lo, d), math.Max(hi, d)
 	}
 	return lo, hi
+}
+
+// meetsRange reports whether a's float projections of vs include one at most
+// thi and one at least tlo. Then the projRange of vs has lo <= thi and
+// hi >= tlo, or a NaN bound, so neither lo-thi nor tlo-hi is positive and the
+// axis cannot be a candidate. A NaN projection or bound never satisfies a
+// comparison, so it never stops the scan early.
+func meetsRange(a r3.Vec, vs []r3.Vec, tlo, thi float64) bool {
+	below, above := false, false
+	for _, v := range vs {
+		d := a.Dot(v)
+		below = below || d <= thi
+		above = above || d >= tlo
+		if below && above {
+			return true
+		}
+	}
+	return false
 }
 
 // missesBySide tries the cheap certificate first: one of the piece's own
