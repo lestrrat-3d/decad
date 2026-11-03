@@ -55,7 +55,11 @@ func TestIvTwoTriangleAreaMatchesIntervalFormula(t *testing.T) {
 		v[k] = proofbound.Interval(lo, hi)
 		return v
 	}
-	for range 20000 {
+	triangles := 20000
+	if revolvemesh.RaceDetector {
+		triangles = 4000
+	}
+	for range triangles {
 		p0, p1, p2 := point(), point(), point()
 		switch rng.IntN(10) {
 		case 0:
