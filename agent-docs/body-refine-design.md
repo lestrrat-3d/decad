@@ -126,7 +126,8 @@ from below at a box's centre, so a contact far from a bore never reads the bore'
 
 **One step.** At a contact segment of facets `t` and `u` with proven sine `s`, a point shallow in both held operands
 but deep in their union lies within `2·max(λ(t), λ(u))/s` of the crossing line, which is on the result's boundary.
-For each segment, `λ` is read at that segment (`Record.LocalBulge`). Hole and site sources count only within
+For each segment, `λ` is read at that segment (`Record.LocalBulgeAt`, from the facet's leaf poke that
+`Record.BulgesPokes` already read). Hole and site sources count only within
 `SiteReach` (1 mm) of it, and the step's term must stay below that reach. A Cut tool facet reads its own bound. The
 step composes `Cross = max(Cross_A, Cross_B, deep term) + w` and `Drift = max(...) + w`, and appends its segment
 boxes to `Sites`.
@@ -169,8 +170,8 @@ containment or axis admits a piece. The certificate needs no knowledge of which 
 ## 6. Records
 
 - `internal/occupancy`: pieces (outer, inscribed), leaves (`CircleLeaf`, `ArcTubeLeaf`), `Record` with `Compose`,
-  `CutCompose`, `Bulges`, `LocalBulge`, `MeshBounds`, the site index and `Binding`, and the facet search with
-  `Certify`. Plain data in and out, per `agent-docs/module-boundary.md`.
+  `CutCompose`, `Bulges`, `BulgesPokes`, `LocalBulge`, `LocalBulgeAt`, `MeshBounds`, the site index and `Binding`,
+  and the facet search with `Certify`. Plain data in and out, per `agent-docs/module-boundary.md`.
 - `internal/occupancyleaf`: reads an operand payload as a record (§4), and a mesh's per-facet bounds.
 - `internal/meshbool`: `BoolMesh.Bulge` and `Stats.Contacts` (facet pair, proven sine and float box of every
   contact segment) from `MeshBooleanStats`.
@@ -313,7 +314,7 @@ unbuilt.
 - `Cross` grows by `2/s` per step where crossings sit near earlier sites, which is exponential in such a chain.
   It reaches 2.2e-8 mm after the leader's five steps.
 - A facet's bulge is one number over the whole facet. A wall facet runs a whole span, so a site or hole near one
-  end reaches the other. Reading each contact's bulge at its own segment (`LocalBulge`) keeps the deep term local,
+  end reaches the other. Reading each contact's bulge at its own segment (`LocalBulgeAt`) keeps the deep term local,
   but `MeshBounds` still reads whole facets.
 - The arc tube reading and the cylinder fast path are float with charged margins, not exact rational proofs (§4).
 - A chain must first survive its own folds. The chain-depth gate (vertex-bounds §5) still reads the crossing

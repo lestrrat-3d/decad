@@ -646,6 +646,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 	deepTerm := math.Inf(1)
 	var sites [][2]r3.Vec
 	var occA, occB *occupancy.Record
+	var pokesA, pokesB []float64
 	// A gap-shift retry moves b's held mesh by at most shiftDisplacement and
 	// leaves the true operand where it was (agent-docs/gap-tolerance-design.md
 	// §4), so b's record holds once its leaves' bounds and drift grow by that.
@@ -657,13 +658,13 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 				occB = occB.Shifted(shiftDisplacement)
 			}
 			if occB != nil {
-				bmA.Bulge = occupancyleaf.Bulges(occA, ma)
+				bmA.Bulge, pokesA = occupancyleaf.BulgesPokes(occA, ma)
 				if op == meshbool.OpCut {
 					// A tool facet's bulge is how far the true tool reaches past
 					// it: the tool mesh's own two-sided bound.
 					bmB.Bulge = occupancyleaf.Deltas(mb)
 				} else {
-					bmB.Bulge = occupancyleaf.Bulges(occB, mb)
+					bmB.Bulge, pokesB = occupancyleaf.BulgesPokes(occB, mb)
 				}
 			}
 		}
@@ -680,7 +681,7 @@ func evaluate(ctx context.Context, op meshbool.OperationKind, a, b *topo.Body,
 		kept, stats, err = meshbool.MeshBooleanStats(ctx, op, bmA, bmB, memo)
 		maxRim = stats.MaxRim
 		if trackOccupancy && bmA.Bulge != nil {
-			deepTerm, sites = localDeepTerm(op, occA, occB, ma, mb, stats.Contacts)
+			deepTerm, sites = localDeepTerm(op, occA, occB, pokesA, pokesB, ma, mb, stats.Contacts)
 		}
 	}
 	if err != nil {
@@ -952,23 +953,20 @@ func gateCovers(m *meshbool.BoolMesh, mesh *topo.Mesh, other *meshbool.BoolMesh)
 
 // localDeepTerm is the largest, over every contact segment, of
 // 2·max(λ_a, λ_b)/sin θ with each λ read at that segment
-// (occupancy.Record.LocalBulge); a Cut tool's facets read their own bound. It
-// answers +Inf for a segment with no proven positive sine or a term past
+// (occupancy.Record.LocalBulgeAt, from each facet's least leaf poke in pa and
+// pb as occupancy.Record.BulgesPokes read them); a Cut tool's facets read
+// their own bound, so a Cut reads no pb and takes nil. It answers +Inf for a segment with no proven positive sine or a term past
 // occupancy.SiteReach, and the segments' boxes as the step's crossing sites.
-func localDeepTerm(op meshbool.OperationKind, ra, rb *occupancy.Record, ma, mb *topo.Mesh, contacts []meshbool.ContactSite) (float64, [][2]r3.Vec) {
+func localDeepTerm(op meshbool.OperationKind, ra, rb *occupancy.Record, pa, pb []float64, ma, mb *topo.Mesh, contacts []meshbool.ContactSite) (float64, [][2]r3.Vec) {
 	da, db := occupancyleaf.Deltas(ma), occupancyleaf.Deltas(mb)
-	corners := func(m *topo.Mesh, t int) [3]r3.Vec {
-		tri := m.Triangles[t]
-		return [3]r3.Vec{m.Vertices[tri[0]], m.Vertices[tri[1]], m.Vertices[tri[2]]}
-	}
 	deep := 0.0
 	sites := make([][2]r3.Vec, 0, len(contacts))
 	for _, c := range contacts {
 		sites = append(sites, c.Box)
-		la := ra.LocalBulge(corners(ma, c.I), da[c.I], c.Box)
+		la := ra.LocalBulgeAt(pa[c.I], da[c.I], c.Box)
 		lb := db[c.J]
 		if op != meshbool.OpCut {
-			lb = rb.LocalBulge(corners(mb, c.J), db[c.J], c.Box)
+			lb = rb.LocalBulgeAt(pb[c.J], db[c.J], c.Box)
 		}
 		if b := max(la, lb); b > 0 {
 			deep = max(deep, proofbound.DivUpper(proofbound.AbsSumUpper(b, b), c.Sin))

@@ -418,6 +418,12 @@ func Bulges(rec *occupancy.Record, mesh *topo.Mesh) []float64 {
 	return rec.Bulges(mesh.Vertices, mesh.Triangles, Deltas(mesh))
 }
 
+// BulgesPokes is Bulges with each facet's least leaf poke
+// (occupancy.Record.BulgesPokes).
+func BulgesPokes(rec *occupancy.Record, mesh *topo.Mesh) ([]float64, []float64) {
+	return rec.BulgesPokes(mesh.Vertices, mesh.Triangles, Deltas(mesh))
+}
+
 // Deltas reads every facet's own published bound: its corners' largest vertex
 // bound when the mesh publishes a per-vertex record, else its source face's
 // bound.
