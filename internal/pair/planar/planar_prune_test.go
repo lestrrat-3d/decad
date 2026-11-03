@@ -540,11 +540,11 @@ func castAlongExact(p proof.DyV3, dir [3]int64, solid *planarPrep) castResult {
 	return castOutside
 }
 
-// TestCastAxisPretestKeepsAnswers holds castAlong with its float pre-test to
-// the exact ray it shortens, on every ladder direction, over triangle sets on
-// a coarse grid. The grid makes axis-aligned triangles, triangles seen
-// edge-on, and points in their planes common, so every outcome of the ray
-// occurs.
+// TestCastAxisPretestKeepsAnswers holds castAlong's float and exact plane
+// pre-tests to the exact ray they shorten, on every ladder direction, over
+// triangle sets on a coarse grid. The grid makes axis-aligned triangles,
+// triangles seen edge-on, and points in their planes common, so every outcome
+// of the ray occurs.
 //
 // Legs shown to fail: the pre-test without its nonzero-normal condition skips
 // an edge-on triangle whose plane holds p, which the exact ray reports
@@ -561,8 +561,9 @@ func TestCastAxisPretestKeepsAnswers(t *testing.T) {
 		return d
 	}
 	outcomes := map[castResult]int{}
-	skipped := 0
-	k := planarKernel{poll: func() error { return nil }}
+	floatSkipped, planeSkipped, onPlane := 0, 0, 0
+	polls := 0
+	k := planarKernel{poll: func() error { polls++; return nil }}
 	for range 300 {
 		var s PlanarSolid
 		for range 4 {
@@ -598,23 +599,81 @@ func TestCastAxisPretestKeepsAnswers(t *testing.T) {
 			pb := pointFloatBox(p)
 			for _, dir := range rayLadder {
 				want := castAlongExact(p, dir, prep)
+				polls = 0
 				got, err := k.castAlong(p, pb, true, dir, prep)
 				require.NoError(t, err)
 				require.Equal(t, want, got, "p %v dir %v", p, dir)
 				outcomes[want]++
 				if axis := rayAxis(dir); axis >= 0 {
-					for tri := range s.Tris {
+					for tri := range polls {
 						if prep.normal[tri][axis].Sign() != 0 && floatApartOff(pb, prep.triBox[tri], axis) {
-							skipped++
+							floatSkipped++
+						}
+						if prep.normal[tri][axis].Sign() == 0 {
+							if proof.DvDot(prep.normal[tri], proof.DvSub(s.Verts[s.Tris[tri][0]], p)).Sign() != 0 {
+								planeSkipped++
+							} else {
+								onPlane++
+							}
 						}
 					}
 				}
 			}
 		}
 	}
-	require.Positive(t, skipped, "premise: the pre-test skips some triangles")
+	require.Positive(t, floatSkipped, "premise: the float pre-test skips some triangles")
+	require.Positive(t, planeSkipped, "premise: the plane pre-test skips some triangles")
+	require.Positive(t, onPlane, "premise: the plane pre-test keeps some on-plane triangles")
 	for _, outcome := range []castResult{castInside, castOutside, castOnBoundary, castAmbiguous} {
 		require.Positive(t, outcomes[outcome], "premise: outcome %d occurs", outcome)
+	}
+}
+
+// TestCastAxisPlanePretestPaths exercises a visited facet on both sides of the
+// exact plane gate, including a zero normal that the gate must keep.
+func TestCastAxisPlanePretestPaths(t *testing.T) {
+	t.Parallel()
+	v := func(x, y, z int64) proof.DyV3 {
+		return proof.DyV3{proof.DyInt(x), proof.DyInt(y), proof.DyInt(z)}
+	}
+	tri := []proof.DyV3{v(1, 0, 0), v(1, 1, 0), v(1, 0, 1)}
+	for _, tc := range []struct {
+		name  string
+		verts []proof.DyV3
+		point proof.DyV3
+		want  castResult
+	}{
+		{"off plane", tri, v(0, 0, 0), castOutside},
+		{"on plane", tri, v(1, 0, 0), castOnBoundary},
+		{"zero normal", []proof.DyV3{v(0, 0, 0), v(0, 0, 0), v(0, 0, 0)}, v(1, 0, 0), castOnBoundary},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := PlanarSolid{Verts: tc.verts, Tris: [][3]int{{0, 1, 2}}}
+			prep := preparePlanar(&s)
+			prep.floatBoxes()
+			pb := pointFloatBox(tc.point)
+			axis := 1
+			require.Zero(t, prep.normal[0][axis].Sign())
+			ahead := proof.DvDot(prep.normal[0], proof.DvSub(s.Verts[0], tc.point)).Sign()
+			require.Equal(t, tc.name == "off plane", ahead != 0)
+			if tc.name == "off plane" {
+				require.True(t, floatApartOff(pb, prep.triBox[0], axis))
+			}
+			polls := 0
+			k := planarKernel{poll: countingPoll(&polls)}
+			got, err := k.castAlong(tc.point, pb, true, [3]int64{0, 1, 0}, prep)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, castAlongExact(tc.point, [3]int64{0, 1, 0}, prep))
+			require.Equal(t, tc.want, got)
+			require.Equal(t, 1, polls, "the facet is reached after the float pre-test")
+			if tc.name == "off plane" {
+				stopped := fmt.Errorf("cast stopped")
+				k.poll = func() error { return stopped }
+				got, err = k.castAlong(tc.point, pb, true, [3]int64{0, 1, 0}, prep)
+				require.ErrorIs(t, err, stopped)
+				require.Equal(t, castAmbiguous, got)
+			}
+		})
 	}
 }
 
