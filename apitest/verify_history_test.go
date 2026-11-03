@@ -59,8 +59,10 @@ func boredLeg(t *testing.T, doc *decad.Document) *decad.Body {
 
 // TestVerifyHistorySeparator holds the history certificate to containment
 // the records prove: a rail inside the stock that cut its socket is decided,
-// on one placement or another stock of the same frame; a rail longer than the
-// stock, taller than it, or on another placement is not.
+// on one placement or another stock of the same frame; a rail taller than the
+// stock or on another placement is not. A rail longer than the stock is decided
+// too, by the box algebra: its overhang lies outside the leg's block, so only
+// the part inside the stock's box meets the leg.
 //
 // Leg shown to fail: dropping the history check leaves the flush rail with a
 // pair diagnostic.
@@ -79,7 +81,7 @@ func TestVerifyHistorySeparator(t *testing.T) {
 	}{
 		{"rail inside the stock", 0, 40, 5, 10, lift, true},
 		{"rail shorter than the stock", 10, 30, 5, 10, lift, true},
-		{"rail past the stock's end", -8, 40, 5, 10, lift, false},
+		{"rail past the stock's end, clear of the leg", -8, 40, 5, 10, lift, true},
 		{"rail taller than the stock", 0, 40, 4, 12, lift, false},
 		{"rail on another placement", 0, 40, 5, 10, other, false},
 	} {
