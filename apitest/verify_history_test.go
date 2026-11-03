@@ -146,3 +146,49 @@ func TestVerifyHistoryFlushPrisms(t *testing.T) {
 		})
 	}
 }
+
+// TestVerifyHistoryAnalyticCut holds the walk to analytic Boolean results: a
+// block made by cutting a rail-shaped prism of the rail's own section and
+// frame out of a blank sits flush on the bored rail, and the analytic Cut's
+// record decides the pair. A blank cut by a prism on another placement is not
+// decided.
+//
+// Leg shown to fail: reading only mesh Boolean results leaves the analytic
+// Cut a leaf, and the flush pair keeps a diagnostic.
+func TestVerifyHistoryAnalyticCut(t *testing.T) {
+	t.Parallel()
+	lift := r3.Identity()
+	other, err := r3.Translation(r3.Vec{Z: 0.25})
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		name      string
+		toolMove  r3.Transform
+		separated bool
+	}{
+		{"block cut by the rail's own section", lift, true},
+		{"block cut by a prism on another placement", other, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			rail, err := decad.Cut(t.Context(), slab(t, doc, 0, 0, 40, 10, 5, 10, lift),
+				placedAlongZ(t, coaxialSection(t, doc, 20, 5, 30, 2), 1))
+			require.NoError(t, err)
+			block, err := decad.Cut(t.Context(), slab(t, doc, 10, 5, 30, 15, 5, 10, lift),
+				slab(t, doc, 0, 0, 40, 10, 5, 10, tc.toolMove))
+			require.NoError(t, err)
+			if tc.separated {
+				require.NotEqual(t, "decad.facetedPayload", decadtest.PayloadClass(block), "premise: the block's Cut is analytic")
+			}
+			report, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			interferences, diagnostics := pairFindings(report, rail, block)
+			if tc.separated {
+				require.Zero(t, interferences)
+				require.Zero(t, diagnostics, "the analytic Cut's record decides the pair")
+				return
+			}
+			require.Positive(t, interferences+diagnostics, "an overlapping or unproven pair is never called separated")
+		})
+	}
+}

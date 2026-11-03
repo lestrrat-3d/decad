@@ -201,8 +201,12 @@ coaxial separator leaves open from the recorded Boolean history alone. A Cut
 result's interior misses its tool's interior, so it misses the interior of any
 body the tool contains: a rail glued into the socket its own longer stock cut,
 whose faces coincide with the socket's, is proven non-overlapping however
-many curved faces either body has. The walk reads only histories that denote
-their operation exactly (`boolchain.Expandable`):
+many curved faces either body has. The walk reads a result's operation and
+inputs where the result denotes that operation exactly: a mesh result the
+chain admits (`boolchain.Expandable`), or an analytic result with no operation
+warning and no private shift. An analytic result's record may hold its
+section within a displacement of the set, but the set it denotes is the
+operation's exact result, and only that set enters the walk:
 
 - a Cut result misses a body that lies in its tool, or that its target
   misses; an Intersect misses what either operand misses; a Union misses what
