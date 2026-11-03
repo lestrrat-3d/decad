@@ -1,6 +1,7 @@
 package occupancy
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -45,19 +46,24 @@ func PolygonLeaf(place Chain, pts [][2]float64, z0, z1, sectionDelta, dz0, dz1, 
 	}
 	widen := proofbound.AbsSumUpper(sectionDelta, slack)
 	lines := make([]side, n)
+	inward := make([]side, n)
 	for i := range xs {
 		a, b := xs[i], xs[(i+1)%n]
 		ux := new(big.Rat).Sub(b[1], a[1])
 		uy := new(big.Rat).Sub(a[0], b[0])
-		c := new(big.Rat).Mul(ux, a[0])
-		c.Add(c, new(big.Rat).Mul(uy, a[1]))
-		// Push the side out by widen: |u| ≤ |ux| + |uy|.
+		base := new(big.Rat).Mul(ux, a[0])
+		base.Add(base, new(big.Rat).Mul(uy, a[1]))
+		// Push the side out, or in, by at least widen: |u| ≤ |ux| + |uy|.
 		l1 := new(big.Rat).Add(new(big.Rat).Abs(ux), new(big.Rat).Abs(uy))
-		c.Add(c, new(big.Rat).Mul(l1, ratOf(widen)))
+		push := new(big.Rat).Mul(l1, ratOf(widen))
 		fux, _ := ux.Float64()
 		fuy, _ := uy.Float64()
+		c := new(big.Rat).Add(base, push)
 		fc, _ := c.Float64()
 		lines[i] = side{ux, uy, c, fux, fuy, fc}
+		ci := new(big.Rat).Sub(base, push)
+		fci, _ := ci.Float64()
+		inward[i] = side{ux, uy, ci, fux, fuy, fci}
 	}
 	// Convex: every corner on or inside every side.
 	for i, p := range xs {
@@ -99,6 +105,25 @@ func PolygonLeaf(place Chain, pts [][2]float64, z0, z1, sectionDelta, dz0, dz1, 
 	}}
 	l := newLeaf([][2]r3.Vec{box}, []*lazyPiece{piece}, delta, shape)
 	l.key = fmt.Sprintf("polygon %v %v %v %v %v %v %v %v", place, pts, z0, z1, sectionDelta, dz0, dz1, slack)
+	// Inside: every side pushed in by at least the widening, between the
+	// levels narrowed the same way, as CircleLeaf narrows its circle. A
+	// recorded side lies within sectionDelta of the denoted section and the
+	// slack covers the maps' rounding, so the piece lies in the true prism
+	// and a Cut may take the leaf as its tool. A prism too thin for the
+	// narrowed sides to close offers no piece.
+	ilo, ihi := z0+proofbound.AbsSumUpper(dz0, slack), z1-proofbound.AbsSumUpper(dz1, slack)
+	if ilo < ihi {
+		l.inner = &lazyPieces{build: func() ([]*Piece, error) {
+			p, err := linesPrism(place, inward, ilo, ihi)
+			if errors.Is(err, decaderr.ErrUnsupported) {
+				return nil, nil
+			}
+			if err != nil {
+				return nil, err
+			}
+			return []*Piece{p}, nil
+		}}
+	}
 	return l, nil
 }
 
@@ -217,8 +242,10 @@ func (s polygonShape) poke(tri [3]r3.Vec) float64 {
 	return proofbound.AbsSumUpper(worst*s.stretch, relSlack*scale*float64(len(s.nx)), s.displacement)
 }
 
-// boundaryFar is not read for polygon prisms: no Cut takes one as a tool in
-// a tracked record.
+// boundaryFar never proves a box far from a polygon prism's boundary, so a
+// polygon tool's hole wall is read wherever its leaf is near: the wall's
+// bound then applies to every facet near the tool, which only widens the
+// bulge.
 func (polygonShape) boundaryFar(r3.Vec, r3.Vec, float64) bool { return false }
 
 // PrismRecord is the record of straight prisms whose sections are the outer
