@@ -10,8 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// twoCallRimBound is RimBound as the pair-cut scan used it before the sine
-// was shared: SinLowerBound runs inside it and again for the caller's sine.
+// twoCallRimBound is the rim bound read straight from sin2, a fixed copy of
+// RimBound's body: SinLowerBound runs inside it, apart from any sine the
+// caller computes for itself.
 func twoCallRimBound(deltaA, deltaB float64, sin2 *SinSquare) float64 {
 	d := proofbound.AbsSumUpper(deltaA, deltaB)
 	if d <= 0 {
