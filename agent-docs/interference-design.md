@@ -454,6 +454,28 @@ them, misses the target's interior. The first reading needs the target's
 axial range, which reads an arc of the target's section by the support of its
 circle.
 
+**The box algebra separator** (`internal/verifyrun/box_algebra.go`) reads two
+Cut chains A = A0 less the tools T1 and B = B0 less the tools T2, each target a
+prism or a Union's prism operands, each tool a prism. It runs at a Cut result.
+The chains miss each other when every pair of target parts (A0ᵢ, B0ⱼ) shares
+only a box that the tools cover. Each target part is bounded by the box of its
+section outline over its levels, its corners carried exactly into one reference
+prism's coordinates, both frames compared before one placement the two carry
+bit for bit or in the world when both lifts are exactly orthonormal. A tool
+counts only when it is exactly a box there: one axis-aligned rectangle of whole
+lines on a frame whose axes are the reference's, signed and permuted. The
+shared box is covered when it lies in the union of the tool boxes, decided
+cell by cell over the coordinates that cut it.
+
+The step is sound because a point of both interiors lies in the interior of
+A0ᵢ and of B0ⱼ, so inside their bounding boxes' intersection, and outside the
+closed tools of both chains, a Cut result's interior missing its closed tool.
+It cannot lie in the union of the tool boxes. A tool that is no exact box, or a
+tool the chain holds as a mesh Union carrying a geometry-moving warning (a
+gap-shifted Union, whose set is not its operands' union), is left out, which
+only shrinks the cover. A rail and a plate half-lapped into each other, each cut where
+the other stays, are decided when each is cut by its lap boxes one at a time.
+
 Like the coaxial separator, they prove no gap.
 
 ### 3.3 Full containment

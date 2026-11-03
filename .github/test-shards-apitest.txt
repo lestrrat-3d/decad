@@ -3005,3 +3005,4 @@
 11	0.00	TestVerifyPieceSeparator
 11	0.00	TestVerifyPieceSeparatorStripReach
 11	0.00	TestVerifyBoxInRecess
+11	0.00	TestVerifyBoxAlgebra
