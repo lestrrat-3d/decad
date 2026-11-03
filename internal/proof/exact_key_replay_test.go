@@ -120,3 +120,69 @@ func TestReplayExactKeyOrdering(t *testing.T) {
 		}
 	}
 }
+
+type chargeTestBudget struct{ records, bytes, work uint64 }
+
+func (b *chargeTestBudget) ReserveRecords(_ context.Context, n uint64) error {
+	b.records += n
+	return nil
+}
+func (b *chargeTestBudget) ReserveBytes(_ context.Context, n uint64) error {
+	b.bytes += n
+	return nil
+}
+func (b *chargeTestBudget) SpendWork(_ context.Context, n uint64) error {
+	b.work += n
+	return nil
+}
+
+func replayKeyChargeCases() []struct {
+	name                 string
+	p                    Xpt
+	records, bytes, work uint64
+} {
+	huge := new(big.Int).Lsh(big.NewInt(1), 700)
+	hugeM1 := new(big.Int).Sub(huge, big.NewInt(1))
+	return []struct {
+		name                 string
+		p                    Xpt
+		records, bytes, work uint64
+	}{
+		{name: "zero", p: Xpt{X: big.NewInt(0), Y: big.NewInt(0), Z: big.NewInt(0), W: big.NewInt(1)}, records: 3, bytes: 788, work: 53},
+		{name: "negative", p: Xpt{X: big.NewInt(-12345), Y: big.NewInt(6789), Z: big.NewInt(0), W: big.NewInt(98765)}, records: 3, bytes: 812, work: 503},
+		{name: "scaled", p: Xpt{X: big.NewInt(-9 * 315), Y: big.NewInt(0), Z: big.NewInt(8 * 315), W: big.NewInt(15 * 315)}, records: 3, bytes: 808, work: 352},
+		{name: "pow2", p: Xpt{X: big.NewInt(21), Y: big.NewInt(-8), Z: big.NewInt(3), W: big.NewInt(64)}, records: 3, bytes: 800, work: 56},
+		{name: "large", p: Xpt{X: new(big.Int).Neg(hugeM1), Y: new(big.Int).Set(huge), Z: big.NewInt(7), W: new(big.Int).Add(huge, big.NewInt(1))}, records: 3, bytes: 3124, work: 118685},
+	}
+}
+
+// TestReplayExactKeyCharges pins the budget charges and key bytes. The want
+// values were recorded from the implementation that copied a byte slice into
+// the result string.
+func TestReplayExactKeyCharges(t *testing.T) {
+	for _, tc := range replayKeyChargeCases() {
+		b := new(chargeTestBudget)
+		got, err := ReplayExactKey(t.Context(), tc.p, b)
+		if err != nil {
+			t.Fatal(tc.name, err)
+		}
+		if got != tc.p.Key() {
+			t.Fatalf("%s: key bytes differ from Key", tc.name)
+		}
+		if b.records != tc.records || b.bytes != tc.bytes || b.work != tc.work {
+			t.Fatalf("%s: charges records=%d bytes=%d work=%d, want %d %d %d",
+				tc.name, b.records, b.bytes, b.work, tc.records, tc.bytes, tc.work)
+		}
+	}
+}
+
+func BenchmarkReplayExactKey(b *testing.B) {
+	huge := new(big.Int).Lsh(big.NewInt(1), 300)
+	p := Xpt{X: new(big.Int).Neg(huge), Y: new(big.Int).Add(huge, big.NewInt(3)), Z: big.NewInt(7), W: new(big.Int).Lsh(huge, 1)}
+	b.ReportAllocs()
+	for b.Loop() {
+		if _, err := ReplayExactKey(context.Background(), p, new(chargeTestBudget)); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
