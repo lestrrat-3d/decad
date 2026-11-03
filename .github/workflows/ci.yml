@@ -51,6 +51,12 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
+      # Fails when a nested module's go.mod or go.sum differs from what
+      # scripts/tidy-dependent-go-modules.sh would write. It never modifies
+      # the checkout.
+      - name: Check nested Go modules are in sync
+        run: scripts/tidy-dependent-go-modules.sh --check
+
       - name: Save Go build cache
         uses: ./.github/actions/go-build-cache-save
 
