@@ -264,3 +264,81 @@ func TestVerifyBoxInRecess(t *testing.T) {
 		})
 	}
 }
+
+// TestVerifyPieceTangentKnuckle seats a screw's head under a hinge leaf as the
+// scaled gallery model does: a plate x in [2.4, 11.2], y in [0, 2.4] joined to a
+// knuckle disc of radius 5 about the origin, a hole of radius 1.6 about x = 8,
+// and a screw about that axis whose head of radius 3 lies flush under the plate.
+// The head's rim reaches x = 5, the disc's far side, so the two touch along a
+// line. An arrangement cannot certify a tangency, but the head's footprint and
+// the disc lie on either side of x = 5, which decides the pair. A screw 0.5 mm
+// nearer the knuckle overlaps it and is not decided.
+//
+// Leg shown to fail: leaving the tangent knuckle to the arrangement alone leaves
+// the touching case with a pair diagnostic.
+func TestVerifyPieceTangentKnuckle(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		axisX     float64
+		separated bool
+	}{
+		{"head rim tangent to the knuckle", 8, true},
+		{"head rim 0.5 mm into the knuckle", 7.5, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			w := sketch.NewWorld()
+			s, err := w.CreateSketch(w.XY())
+			require.NoError(t, err)
+			s.CreateRectangle(2.4, 0, 11.2, 2.4)
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			plate, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(6)})
+			require.NoError(t, err)
+			w2 := sketch.NewWorld()
+			s2, err := w2.CreateSketch(w2.XY())
+			require.NoError(t, err)
+			c := s2.CreatePoint(0, 0)
+			s2.Fix(c)
+			s2.CreateCircle(c, 5)
+			_, err = s2.Solve(t.Context())
+			require.NoError(t, err)
+			knuckle, err := decad.Extrude(t.Context(), doc, s2, s2.Profiles()[0], decad.Symmetric{D: units.Millimeters(6)})
+			require.NoError(t, err)
+			leaf, err := decad.Union(t.Context(), plate, knuckle)
+			require.NoError(t, err)
+			w3 := sketch.NewWorld()
+			// The XZ plane's normal is -y: the hole tool hangs below the plane at y = 3.4.
+			plane, err := w3.CreateOffsetPlane(w3.XZ(), -3.4)
+			require.NoError(t, err)
+			s3, err := w3.CreateSketch(plane)
+			require.NoError(t, err)
+			hc := s3.CreatePoint(8, 0)
+			s3.Fix(hc)
+			s3.CreateCircle(hc, 1.6)
+			_, err = s3.Solve(t.Context())
+			require.NoError(t, err)
+			tool, err := decad.Extrude(t.Context(), doc, s3, s3.Profiles()[0], decad.Distance{D: units.Millimeters(8.4), Dir: decad.Along})
+			require.NoError(t, err)
+			leaf, err = decad.Cut(t.Context(), leaf, tool)
+			require.NoError(t, err)
+
+			x := tc.axisX
+			sk, profile := polygonSketch(t, [][2]float64{{x, -1.5}, {x + 3, -1.5}, {x + 3, 0}, {x + 1.5, 0}, {x + 1.5, 11}, {x, 11}})
+			screw, err := decad.Revolve(t.Context(), doc, sk, profile,
+				decad.SketchLine{Start: decad.Point2{U: x}, End: decad.Point2{U: x, V: 1}}, decad.FullRevolution{})
+			require.NoError(t, err)
+			report, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			interferences, diagnostics := pairFindings(report, leaf, screw)
+			if tc.separated {
+				require.Zero(t, interferences)
+				require.Zero(t, diagnostics, "the boxes on either side of x = 5 decide the pair")
+				return
+			}
+			require.Positive(t, interferences+diagnostics, "an overlapping pair is never called separated")
+		})
+	}
+}

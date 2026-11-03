@@ -524,6 +524,9 @@ func slabApart(ctx context.Context, budget *proofbound.WorkBudget, history boolc
 		if !ok {
 			return false, nil
 		}
+		if boxesSeparated(rect, pt.Profile) {
+			continue
+		}
 		apart, err := prismcells.SectionsApart(ctx, budget, []momentinput.Profile{rect}, []momentinput.Profile{pt.Profile})
 		if err != nil || !apart {
 			return false, err
@@ -833,4 +836,18 @@ func stripReach(p momentinput.Profile, alongU bool, wLo, wHi *big.Rat) (lo, hi *
 		}
 	}
 	return lo, hi, met, true
+}
+
+// boxesSeparated reports whether the boxes of two sections' outlines share no
+// interior: one lies wholly on one side of the other along a section axis,
+// touching allowed. Each section lies in its box, so the sections share no
+// interior either. A circle tangent to a rectangle's edge, which an arrangement
+// cannot certify, is decided this way.
+func boxesSeparated(a, b momentinput.Profile) bool {
+	aULo, aUHi, aVLo, aVHi, okA := sectionBox(a)
+	bULo, bUHi, bVLo, bVHi, okB := sectionBox(b)
+	if !okA || !okB {
+		return false
+	}
+	return aULo.Cmp(bUHi) >= 0 || aUHi.Cmp(bULo) <= 0 || aVLo.Cmp(bVHi) >= 0 || aVHi.Cmp(bVLo) <= 0
 }

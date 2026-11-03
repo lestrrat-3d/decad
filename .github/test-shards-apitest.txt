@@ -3009,3 +3009,4 @@
 11	0.00	TestVerifyCoaxialRevolveReach
 11	0.00	TestVerifyIdentityPlacedChain
 11	0.00	TestVerifyBoxAlgebraRotatedRail
+11	0.00	TestVerifyPieceTangentKnuckle
