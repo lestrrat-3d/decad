@@ -954,8 +954,8 @@ func gateCovers(m *meshbool.BoolMesh, mesh *topo.Mesh, other *meshbool.BoolMesh)
 // localDeepTerm is the largest, over every contact segment, of
 // 2·max(λ_a, λ_b)/sin θ with each λ read at that segment
 // (occupancy.Record.LocalBulgeAt, from each facet's least leaf poke in pa and
-// pb as occupancy.Record.BulgesPokes read them); a Cut tool's facets read their own bound. It
-// answers +Inf for a segment with no proven positive sine or a term past
+// pb as occupancy.Record.BulgesPokes read them); a Cut tool's facets read
+// their own bound, so a Cut reads no pb and takes nil. It answers +Inf for a segment with no proven positive sine or a term past
 // occupancy.SiteReach, and the segments' boxes as the step's crossing sites.
 func localDeepTerm(op meshbool.OperationKind, ra, rb *occupancy.Record, pa, pb []float64, ma, mb *topo.Mesh, contacts []meshbool.ContactSite) (float64, [][2]r3.Vec) {
 	da, db := occupancyleaf.Deltas(ma), occupancyleaf.Deltas(mb)
