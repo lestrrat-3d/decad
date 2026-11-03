@@ -34,6 +34,14 @@ examples, or changing CI shards.
   never the lightest shard. Rebalance only by regenerating with `_shardgen`
   from measured costs.
 
+## Nested modules
+
+Nested modules (`_gallery/`, `_shardgen/`) take the versions of shared dependencies from the
+root `go.mod`. CI's `golangci-lint` job runs `scripts/tidy-dependent-go-modules.sh --check`,
+which fails when any nested `go.mod` or `go.sum` differs from the tidied result and leaves
+the checkout unchanged. To fix a failure, run `scripts/tidy-dependent-go-modules.sh` and
+commit the result.
+
 ## PR execution
 
 - Run example packages whole. `examples/thread/basic/` owns thread forms,
