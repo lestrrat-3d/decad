@@ -313,6 +313,30 @@ interiors, which lie in the open half-spaces, share no point. A set screw
 seated on a shaft is decided this way, away from a collar the screw's slab
 would reach.
 
+**Same-set producers.** Both walks read a Refine result as its source:
+Refine moves no vertex and changes only the bound its mesh publishes, so the
+true solid it denotes is the source's (`refine.go`). The root names such a
+producer (`historyProducers.SameSetProducer`) only for a Refine whose one
+consumed input is the recorded source, and the walks follow it before any other
+reading, so a refined Union is opened as its Union.
+
+**The Cut-tool meridian** (`internal/verifyrun/cut_meridian.go`) reads a
+Cut by a prism over one whole circle, or by a Union with such an operand, as a
+region about that cylinder's axis. The target, whatever its shape, lies
+between two levels `lo ≤ z ≤ hi` along the axis, `z` the tool frame's own
+level, each end read from the target's reach along `±g` (`Lᵀg = e₃` for the
+tool's lift), exactly where the reach is rational and from above where it holds
+a square root; a Cut lies where its target lies, a Union where every operand
+does. The tool is exactly the revolution of its rectangle `[0, r] × [z₀, z₁]`.
+So the Cut result lies in the revolution of the band `[0, ∞) × [lo, hi]` less
+the open rectangle `[0, r] × [z₀, z₁]`, and less any one operand of a Union
+tool, since removing more only shrinks the result. The band's open side is
+closed past every finite radius of the two regions compared, as for a hole's
+strip. The other body's meridian is then compared with that region as the
+meridian separator compares two (`sharedMeridians`, `SectionsApart`). A screw
+whose shank sits in the pilot the tool bored and whose head rests on the
+target's face is decided this way, though the target has no hole of its own.
+
 **The slab separator** (`internal/verifyrun/slab.go`) reads the world box
 test of the history walk in a prism's own frame. With the prism's exact lift
 `t + L·(x, y, z)`, its coordinate along local axis `k` at world point `p` is

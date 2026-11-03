@@ -311,3 +311,22 @@ func (h historyProducers) BooleanProducer(n *topo.Body) (meshbool.OperationKind,
 	}
 	return kind, in, true
 }
+
+// SameSetProducer reports the source of n when n's producer denotes the same
+// true solid as its one consumed input: a Refine, which moves no vertex and
+// changes only the bound it publishes (refine.go). The history walk of Verify
+// reads n as that source (agent-docs/interference-design.md §3.2).
+func (h historyProducers) SameSetProducer(n *topo.Body) (*topo.Body, bool) {
+	h.d.n.LiveMu.RLock()
+	defer h.d.n.LiveMu.RUnlock()
+	op := h.d.producers[bodyHandle(n)]
+	if op == nil || op.kind != OperationRefine || len(op.inputs) != 1 || len(op.outputs) != 1 ||
+		op.outputs[0] != bodyHandle(n) {
+		return nil, false
+	}
+	in := op.inputs[0]
+	if in.Body == nil || in.Use != InputConsumed || in.Role != operationRoleSource || in.Body.n.Doc != n.Doc {
+		return nil, false
+	}
+	return &in.Body.n, true
+}
