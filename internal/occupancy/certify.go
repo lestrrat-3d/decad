@@ -109,24 +109,23 @@ func Misses(tri [3]r3.Vec, shift r3.Vec, p *Piece, budget *Budget) (bool, error)
 }
 
 // projRange returns the least and greatest float projection of vs onto a, as
-// a math.Min and math.Max fold from +Inf and -Inf computes them. The builtin
-// min and max agree with those functions on every input but NaN, and a NaN
-// or infinite projection leaves the range non-finite, so a finite range is
-// already the math fold's answer; any other range repeats the fold with the
-// math functions and their NaN and infinity precedence.
+// a math.Min and math.Max fold from +Inf and -Inf computes them. Builtin min
+// and max agree with those functions for finite projections. On the first
+// non-finite projection, it switches to the math functions for the remainder,
+// preserving their NaN and infinity precedence without repeating the prefix.
 func projRange(a r3.Vec, vs []r3.Vec) (float64, float64) {
 	lo, hi := math.Inf(1), math.Inf(-1)
-	for _, v := range vs {
+	for i, v := range vs {
 		d := a.Dot(v)
+		if math.IsNaN(d) || math.IsInf(d, 0) {
+			lo, hi = math.Min(lo, d), math.Max(hi, d)
+			for _, v := range vs[i+1:] {
+				d := a.Dot(v)
+				lo, hi = math.Min(lo, d), math.Max(hi, d)
+			}
+			return lo, hi
+		}
 		lo, hi = min(lo, d), max(hi, d)
-	}
-	if !math.IsInf(lo, 0) && !math.IsNaN(lo) && !math.IsInf(hi, 0) && !math.IsNaN(hi) {
-		return lo, hi
-	}
-	lo, hi = math.Inf(1), math.Inf(-1)
-	for _, v := range vs {
-		d := a.Dot(v)
-		lo, hi = math.Min(lo, d), math.Max(hi, d)
 	}
 	return lo, hi
 }

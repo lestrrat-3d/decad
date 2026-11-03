@@ -1,6 +1,7 @@
 package occupancy
 
 import (
+	"fmt"
 	"math"
 	"math/rand/v2"
 	"testing"
@@ -41,6 +42,7 @@ func TestProjRangeMatchesMathFold(t *testing.T) {
 	}
 	vec := func() r3.Vec { return r3.Vec{X: coord(), Y: coord(), Z: coord()} }
 	mismatches := 0
+	var samples []string
 	for range 200_000 {
 		a := vec()
 		vs := make([]r3.Vec, rng.IntN(10))
@@ -51,9 +53,20 @@ func TestProjRangeMatchesMathFold(t *testing.T) {
 		nlo, nhi := projRange(a, vs)
 		if math.Float64bits(olo) != math.Float64bits(nlo) || math.Float64bits(ohi) != math.Float64bits(nhi) {
 			mismatches++
+			if len(samples) < 3 {
+				projections := make([]uint64, len(vs))
+				for i, v := range vs {
+					projections[i] = math.Float64bits(a.Dot(v))
+				}
+				samples = append(samples, fmt.Sprintf(
+					"projection bits %016x; want (%016x,%016x); got (%016x,%016x)",
+					projections, math.Float64bits(olo), math.Float64bits(ohi),
+					math.Float64bits(nlo), math.Float64bits(nhi),
+				))
+			}
 		}
 	}
-	require.Zero(t, mismatches)
+	require.Zero(t, mismatches, "mismatch samples: %v", samples)
 }
 
 // TestProjRangeSpecialValuesExhaustive checks projRange against the math.Min
