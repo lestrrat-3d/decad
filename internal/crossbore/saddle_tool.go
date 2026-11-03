@@ -317,8 +317,25 @@ func worldError(held r3.Vec, local [3]crossIV, flipY, flipZ bool, pose Pose) flo
 // it (agent-docs/retained-edge-blend-design.md §4.9, proof 2).
 func ProveToolBand(ctx context.Context, R, r, d float64, pose Pose,
 	held func(j, i int) r3.Vec) (ToolProof, error) {
+	tb, err := ProveToolBases(ctx, R, r, d)
+	if err != nil {
+		return ToolProof{}, err
+	}
+	return ProveToolBandWith(ctx, tb, pose, held)
+}
+
+// ToolBases is the pose-independent half of ProveToolBand: the quarter-turn
+// base cells for one outer radius, bore and setback. Its interval values are
+// never written, so two saddles of the same radii may read one ToolBases.
+type ToolBases struct {
+	bases []toolBase
+}
+
+// ProveToolBases proves the ToolStations/4 + 1 base cells ProveToolBand reads
+// for the outer radius R, the bore r and the setback d.
+func ProveToolBases(ctx context.Context, R, r, d float64) (ToolBases, error) {
 	const n = ToolStations
-	gap := new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(2, 1), proofbound.PiUpper), big.NewRat(n, 1))
+	gap := toolGap()
 	bases := make([]toolBase, n/4+1)
 	workers := orderedwork.EachWorkers(len(bases), CellParallelMin)
 	if err := cellEach(ctx, len(bases), workers, func(k int) error {
@@ -326,8 +343,23 @@ func ProveToolBand(ctx context.Context, R, r, d float64, pose Pose,
 		bases[k] = b
 		return err
 	}); err != nil {
-		return ToolProof{}, err
+		return ToolBases{}, err
 	}
+	return ToolBases{bases: bases}, nil
+}
+
+func toolGap() *big.Rat {
+	return new(big.Rat).Quo(new(big.Rat).Mul(big.NewRat(2, 1), proofbound.PiUpper), big.NewRat(ToolStations, 1))
+}
+
+// ProveToolBandWith is ProveToolBand over base cells ProveToolBases proved
+// for the same radii and setback.
+func ProveToolBandWith(ctx context.Context, tb ToolBases, pose Pose,
+	held func(j, i int) r3.Vec) (ToolProof, error) {
+	const n = ToolStations
+	gap := toolGap()
+	bases := tb.bases
+	workers := orderedwork.EachWorkers(len(bases), CellParallelMin)
 	samples := make([]float64, n)
 	if err := cellEach(ctx, n, workers, func(j int) error {
 		k, flipY, flipZ := cellMirrorOf(j, n)
