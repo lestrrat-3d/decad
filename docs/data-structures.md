@@ -273,7 +273,7 @@ configuration option.
 | `decad.JointRange` | struct | One link's range of joint values. | The caller |
 | `decad.JointBoxRequest` | struct | The effective settings of a joint-box check. | `JointBoxReport` |
 | `decad.JointBoxReport` | struct | The cell subdivision and verdict. | `Document.VerifyJointBox` |
-| `decad.JointCell` | struct | One closed cell of joint values. | `JointBoxReport` |
+| `decad.JointCell` | struct | One closed cell of joint values; a loop's dependent whose enclosure was refused holds the zero `units.Value` at both ends, claiming no range. | `JointBoxReport` |
 | `decad.JointCellResult` | struct | One leaf cell and its center's findings. | `JointBoxReport` |
 | `decad.JointBoxCollision` | struct | A proven overlap at one evaluated center. | `JointBoxReport` |
 | `decad.CellOutcome` | enum | What a cell result proves. | `JointCellResult` |

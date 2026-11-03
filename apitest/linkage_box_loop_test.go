@@ -144,12 +144,14 @@ func TestVerifyJointBoxLoopGate(t *testing.T) {
 	for _, d := range report.Diagnostics {
 		require.NotEqual(t, decad.DiagJointBoxBudgetExhausted, d.Code)
 		require.NotNil(t, d.Cell, `a joint-box finding names its cell`)
+		require.NotContains(t, d.Message, `outside the certified drive's reach`, `the crank-rocker over [0°, 90°] is certified whole, so no cell's hull passes the reach guard`)
 	}
 
 	rho := rockerFollowerRho()
 	star := rockerExtremeCrank()
 	worstSlack := 0.0
 	area := 0.0
+	refused := 0
 	type span struct{ thLo, thHi, dLo, dHi float64 }
 	var spans []span
 	outcomes := map[decad.CellOutcome]int{}
@@ -171,9 +173,20 @@ func TestVerifyJointBoxLoopGate(t *testing.T) {
 		require.Zero(t, cell.Center.Bounds[0].Mag())
 		require.Zero(t, cell.Center.Bounds[3].Mag())
 
-		// The cell publishes the follower's proven hull over its crank range.
+		// The cell publishes the follower's proven hull over its crank range,
+		// or, where the loop refused the cell's hull, the zero units.Value for
+		// both dependents, which claims no range; such a cell is gated.
+		if cell.Cell.Min[2] == (units.Value{}) {
+			refused++
+			for _, dep := range []int{1, 2} {
+				require.Zero(t, cell.Cell.Min[dep])
+				require.Zero(t, cell.Cell.Max[dep])
+			}
+			require.Contains(t, []decad.CellOutcome{decad.CellUndecided, decad.CellColliding}, cell.Outcome, `a refused hull gates its cell`)
+			continue
+		}
 		least, most := rockerTurnRange(thLo, thHi)
-		hLo, hHi := cell.Cell.Min[2].Mag(), cell.Cell.Max[2].Mag()
+		hLo, hHi := radiansOf(t, cell.Cell.Min[2]), radiansOf(t, cell.Cell.Max[2])
 		require.LessOrEqual(t, hLo, least+1e-12)
 		require.GreaterOrEqual(t, hHi, most-1e-12)
 		if variation := most - least; variation > 0 {
@@ -208,7 +221,7 @@ func TestVerifyJointBoxLoopGate(t *testing.T) {
 			require.Failf(t, `unexpected outcome`, `%s`, cell.Outcome)
 		}
 	}
-	t.Logf("outcomes %v, worst hull slack ratio %.6f", outcomes, worstSlack)
+	t.Logf("outcomes %v, worst hull slack ratio %.6f, refused hulls %d", outcomes, worstSlack, refused)
 	require.InDelta(t, 1, area, 1e-12, `the leaves cover the box`)
 	for a := range spans {
 		for b := a + 1; b < len(spans); b++ {
@@ -313,7 +326,9 @@ func TestVerifyJointBoxLoopOneAxis(t *testing.T) {
 // fold, every pair is settled, and the root reads CellClear and the report
 // Sound); the stuck rule (every leaf past the fold splits to the floor, 67
 // centres against the 64 this test allows); the fold statement (each finding
-// past the fold then carries sketch's own words, in the scene's terms).
+// past the fold then carries sketch's own words, in the scene's terms); the
+// no-range rendering (a gated leaf's finding then states [0, 0] as each
+// dependent's range).
 func TestVerifyJointBoxLoopFold(t *testing.T) {
 	t.Parallel()
 	sFold := math.Acos(0.04) / (math.Pi / 2)
@@ -338,7 +353,12 @@ func TestVerifyJointBoxLoopFold(t *testing.T) {
 		require.Equal(t, decad.DiagMotionUndecidedInterval, diag.Code)
 		require.NotNil(t, diag.Cell)
 		require.Contains(t, diag.Message, `the loop closing links 1 and 2`)
-		require.Zero(t, cell.Cell.Min[1], `a refused hull publishes no range for the dependent`)
+		for _, dep := range []int{1, 2} {
+			require.Zero(t, cell.Cell.Min[dep], `a refused hull publishes no range for the dependent`)
+			require.Zero(t, cell.Cell.Max[dep], `a refused hull publishes no range for the dependent`)
+		}
+		require.Contains(t, diag.Message, `× [no proven range] × [no proven range] is neither`, `the finding claims no range for a refused hull`)
+		require.NotContains(t, diag.Message, `[0, 0]`)
 		if lo <= sFold && sFold <= hi {
 			holding++
 			require.Contains(t, diag.Message, `not certified`)
@@ -720,7 +740,7 @@ func TestVerifyJointBoxLoopHeld(t *testing.T) {
 // about ½·(2/64)·2600 + ρ·δ_f·2368 ≈ 57 mm³, so the box resolves into blocked
 // cells.
 //
-// Measured: 83 centres into 42 leaves.
+// Measured: 65 centres into 33 leaves.
 //
 // Legs seen to fail when deleted: the blocked certificate (no leaf blocks:
 // every cell splits to the floor along both axes, 8191 centres, and reads

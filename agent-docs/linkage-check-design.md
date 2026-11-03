@@ -2311,10 +2311,25 @@ interval's three asks before any pair (`linkageDriver.intervalGate`); an interva
 **`m_i` and the balls.** A dependent joint's reach `m_i` (§5.2) is the largest `|value|` over the
 certified drive: the hull of every certified cell of the schedule's decomposition (§15.7) and of the
 points at its ends. The ball reading, the swept-box reach `Σ ρ_{ik}·m_i` and the layer exclusion are then
-§5.2, §6 step 4 and §5.7 verbatim. Every later point or interval whose dependent values reach past `m_i`
-is refused — unbuildable or undecided — so every value a claim is made about lies within the reach every
-swept box was grown by. Every loop joint keeps `a·x` for `a = n`, so a stacked planar loop's link-link
-pairs are layer-separated as a stacked arm's are.
+§5.2, §6 step 4 and §5.7 verbatim. The **reach guard** (`linkagebound.DependentReach`) keeps every value a
+claim is made about within the reach every swept box was grown by:
+
+- A later point whose enclosure reaches past `m_i` is refused, and its pose is unbuildable. A point is
+  always held to `m_i`: its enclosure's midpoint is where §5.8's cell form expands the corners, and that
+  expansion's segments must stay inside the values `ρ` was read for.
+- A later interval piece whose hull reaches past `m_i` is refused, and the interval is undecided, unless
+  the piece's whole stretch lies inside the stretches the decomposition certified. Inside them every
+  exact value of the dependent is one the decomposition's hull already encloses (§15.3's two chains
+  agree), so `|value| ≤ m_i` is proven there, and the piece's hull can pass `m_i` only by its own pieces'
+  overshoot past the exact path. That overshoot differs from ask to ask: `sketch` sizes each ask's pieces
+  from its own range and accepts a piece whose box reaches past the hull of its two endpoint boxes by up to
+  `5%` of that hull's width plus `1e-7` of the coordinate scale (`sketch`
+  `docs/certified-enclosure-design.md`, "Tightness"). Holding such a hull to `m_i` would refuse a stretch
+  for no value it describes. Outside the certified stretches the hull is the only bound on the values,
+  and it is held to `m_i`.
+
+Every loop joint keeps `a·x` for `a = n`, so a stacked planar loop's link-link pairs are layer-separated
+as a stacked arm's are.
 
 **Limits.** A dependent joint with `WithJointLimits` is held to that same whole-drive hull once the
 decomposition has read it: a hull not proven inside `[Min, Max]` — its lower end at or above `Min`'s upper
@@ -2973,8 +2988,9 @@ budget, as the split that produced it spent them.
 the balls, the swept-box reach and the layer exclusion as §14.3 states them for a held or varying joint;
 every loop joint keeps `a·x` for `a = n`, so a stacked planar loop's link-link pairs are layer-separated. A
 dependent with `WithJointLimits` is held to the decomposition's hull over the box's loop axis
-(`ErrDegenerate`, after the decomposition). A cell whose hull reaches past `m_j` is refused by the reach
-guard, and the gate makes it undecided.
+(`ErrDegenerate`, after the decomposition). A cell whose hull reaches past `m_j` over a stretch the
+decomposition did not certify, or whose centre's enclosure reaches past it, is refused by the reach guard
+(§15.5), and the gate makes it undecided.
 
 ### 16.4 The procedure over a loop
 
@@ -2998,7 +3014,9 @@ guard, and the gate makes it undecided.
 - **Step 8** publishes, per dependent `j` of a cell, `Cell.Min[j]` and `Cell.Max[j]` as the floats of
   `H_j`'s ends rounded outward, in the joint's `Kind` — the proven enclosure of the dependent over the cell,
   `M_j` for a held loop — or the zero `units.Value` when the hull was refused, and for every dependent of
-  every loop when the centre is unbuildable, since no hull is read then; `Center.Values[j]` and `Center.Bounds[j]` as §15.4
+  every loop when the centre is unbuildable, since no hull is read then — a value that claims no range,
+  which a consumer reads as absent, never as `[0, 0]`, and which a finding's message renders as
+  `[no proven range]`; `Center.Values[j]` and `Center.Bounds[j]` as §15.4
   labels them; and an undecided cell's `DiagMotionUndecidedInterval` with `Cell` set and, where the gate
   held the cell, a `Message` naming the loop by its two closed links and carrying `sketch`'s cause, as
   §15.6's interval finding does. No new `DiagnosticCode` is added.
@@ -3085,6 +3103,9 @@ dependent turns over `[−8.7632°, 3.0248°]` — leaves its swept box meeting 
   `δ = y_c − (72 − d)` is below `8·|cos θ4|`, so that only the corner has crossed, its `Volume` is the
   triangular prism `8·δ²/(2·sin θ4·(−cos θ4))` mm³ within `1e-6`, `Bound` below `Value`; at least one
   collision is that shallow.
+- No finding carries the reach guard's cause: the decomposition certifies the whole drive, so no cell's
+  hull is held to `m_j` (§15.5). A leaf whose hull is refused publishes the zero `units.Value` for both
+  dependents and is undecided or colliding.
 - `CellsEvaluated` is below the default budget and no `DiagJointBoxBudgetExhausted` is raised; the test
   file records the count: `393` centres into `197` leaves, `20` clear, `168` colliding, `9` undecided.
 
@@ -3169,7 +3190,7 @@ stays within `[69.3725, 69.3857]`, so the corner's depth below the underside `y 
 least `5.37` mm, past the bar's full width `8·|cos θ4| ≈ 1.61`, and the overlap is the trapezoidal prism
 `8·8·(δ − 4·|cos θ4|)/sin θ4 ≥ 298` mm³; at the floor the allowance is about
 `½·(2/64)·2600 + ρ·δ_f·2368 ≈ 57` mm³. Assert every leaf `CellBlocked`, no undecided or colliding leaf,
-`CellsEvaluated` below `512` (measured: `83` centres into `42` leaves), and every collision's `Volume` the
+`CellsEvaluated` below `512` (measured: `65` centres into `33` leaves), and every collision's `Volume` the
 trapezoidal prism within `1e-6`. Red when the blocked certificate is dropped: every cell then splits to the
 floor along both axes, `8191` centres, each leaf `CellColliding`.
 

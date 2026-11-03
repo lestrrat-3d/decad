@@ -533,7 +533,7 @@ func (s *linkageSpec[B]) prepareLoops(ctx context.Context, floor *big.Rat) error
 			return err
 		}
 		for j, d := range ld.deps {
-			s.joints[d].depReach = ld.reach[j]
+			s.joints[d].depReach = ld.reach.Bound[j]
 		}
 	}
 	return nil
