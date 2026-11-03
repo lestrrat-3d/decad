@@ -87,7 +87,7 @@ const (
 	InterferenceUnsupportedVolumeProofSecond
 	// InterferenceProvenDisjoint — the read-only intersection passed the
 	// proximity gate unshifted and kept no facet, which proves the interiors
-	// disjoint (agent-docs/interference-design.md §6): no overlap to measure.
+	// disjoint (agent-docs/interference-design.md §6.1): no overlap to measure.
 	InterferenceProvenDisjoint
 )
 
