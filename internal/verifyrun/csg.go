@@ -2,6 +2,7 @@ package verifyrun
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/boolchain"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
@@ -10,6 +11,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/prismcells"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 )
 
@@ -180,35 +182,137 @@ func expandRecorded(history boolchain.Source, body *topo.Body) (meshbool.Operati
 }
 
 // leafApart decides between two records directly whether their interiors are
-// disjoint: two prisms with one frame and placement whose levels or sections
-// share no interior.
+// disjoint: two prisms with one exact linear lift whose levels or sections,
+// read in one prism's coordinates, share no interior.
 func (w historyWalk) leafApart(a, b *topo.Body) (bool, error) {
 	pa, okA := a.Payload.(prismrecord.Payload)
 	pb, okB := b.Payload.(prismrecord.Payload)
-	if !okA || !okB || !sameExactLift(pa, pb) {
+	if !okA || !okB {
 		return false, nil
 	}
-	alo, ahi := min(pa.Z0, pa.Z1), max(pa.Z0, pa.Z1)
-	blo, bhi := min(pb.Z0, pb.Z1), max(pb.Z0, pb.Z1)
-	if ahi <= blo || bhi <= alo {
+	off, ok := liftOffset(pa, pb)
+	if !ok {
+		return false, nil
+	}
+	alo, ahi := levels(pa, nil)
+	blo, bhi := levels(pb, off.dz)
+	if ahi.Cmp(blo) <= 0 || bhi.Cmp(alo) <= 0 {
 		return true, nil
 	}
-	return prismcells.SectionsApart(w.ctx, w.budget, []momentinput.Profile{pa.Profile}, []momentinput.Profile{pb.Profile})
+	moved, ok := off.profile(pb.Profile)
+	if !ok {
+		return false, nil
+	}
+	return prismcells.SectionsApart(w.ctx, w.budget, []momentinput.Profile{pa.Profile}, []momentinput.Profile{moved})
 }
 
-// sameExactLift reports whether two prisms share one frame and placement and
-// hold their sections and levels exactly, so their sections and levels compare
-// in one coordinate system.
-func sameExactLift(a, b prismrecord.Payload) bool {
-	if a.Frame != b.Frame || a.Xform != b.Xform || a.SurfaceResult || b.SurfaceResult {
-		return false
+// prismOffset is how a second prism's section and levels read in the first
+// prism's coordinates, when both share one exact linear lift: its section
+// moves by (du, dv) and its levels by dz.
+type prismOffset struct {
+	du, dv, dz *big.Rat
+}
+
+// liftOffset reports how b reads in a's coordinates. Both prisms must hold
+// their sections and levels exactly and have the same exact linear lift
+// (frame axes carried by the placement basis, compared in rationals); the
+// translation between them then solves exactly into a section shift and a
+// level shift.
+func liftOffset(a, b prismrecord.Payload) (prismOffset, bool) {
+	if a.SurfaceResult || b.SurfaceResult {
+		return prismOffset{}, false
 	}
 	for _, d := range []float64{a.SectionDelta, b.SectionDelta, a.Z0Delta, a.Z1Delta, b.Z0Delta, b.Z1Delta} {
 		if d != 0 {
-			return false
+			return prismOffset{}, false
 		}
 	}
-	return true
+	la, ta := prismLift(a)
+	lb, tb := prismLift(b)
+	for i := range 3 {
+		for k := range 3 {
+			if la[i][k].Cmp(lb[i][k]) != 0 {
+				return prismOffset{}, false
+			}
+		}
+	}
+	w, ok := solve(la, subVec(tb, ta))
+	if !ok {
+		return prismOffset{}, false
+	}
+	return prismOffset{du: w[0], dv: w[1], dz: w[2]}, true
+}
+
+// levels returns a prism's levels in rationals, shifted by dz when given.
+func levels(p prismrecord.Payload, dz *big.Rat) (*big.Rat, *big.Rat) {
+	lo, hi := ratOf(min(p.Z0, p.Z1)), ratOf(max(p.Z0, p.Z1))
+	if dz != nil {
+		lo.Add(lo, dz)
+		hi.Add(hi, dz)
+	}
+	return lo, hi
+}
+
+// profile returns p moved by the offset's section shift, and false when a
+// moved coordinate is not exactly a float or a segment is not a line, circle
+// or arc.
+func (o prismOffset) profile(p momentinput.Profile) (momentinput.Profile, bool) {
+	if o.du.Sign() == 0 && o.dv.Sign() == 0 {
+		return p, true
+	}
+	move := func(q sectionrecord.Point2) (sectionrecord.Point2, bool) {
+		ru := new(big.Rat).Add(ratOf(q.U), o.du)
+		rv := new(big.Rat).Add(ratOf(q.V), o.dv)
+		u, _ := ru.Float64()
+		v, _ := rv.Float64()
+		if ratOf(u).Cmp(ru) != 0 || ratOf(v).Cmp(rv) != 0 {
+			return q, false
+		}
+		return sectionrecord.Point2{U: u, V: v}, true
+	}
+	loop := func(l sectionrecord.LoopRecord) (sectionrecord.LoopRecord, bool) {
+		out := sectionrecord.LoopRecord{Segments: make([]sectionrecord.CurveSegment, len(l.Segments))}
+		for i, seg := range l.Segments {
+			var ok bool
+			switch g := seg.(type) {
+			case sectionrecord.LineSeg:
+				var a, b bool
+				g.Start, a = move(g.Start)
+				g.End, b = move(g.End)
+				ok = a && b
+				out.Segments[i] = g
+			case sectionrecord.CircleSeg:
+				g.Center, ok = move(g.Center)
+				out.Segments[i] = g
+			case sectionrecord.ArcSeg:
+				var a, b, c bool
+				g.Center, a = move(g.Center)
+				g.Start, b = move(g.Start)
+				g.End, c = move(g.End)
+				ok = a && b && c
+				out.Segments[i] = g
+			default:
+				ok = false
+			}
+			if !ok {
+				return l, false
+			}
+		}
+		return out, true
+	}
+	outer, ok := loop(p.Outer)
+	if !ok {
+		return p, false
+	}
+	moved := momentinput.Profile{Outer: outer}
+	for _, h := range p.Holes {
+		hole, ok := loop(h)
+		if !ok {
+			return p, false
+		}
+		moved.Holes = append(moved.Holes, hole)
+	}
+	return moved, true
 }
 
 // leafWithin decides containment between two records directly.
@@ -224,17 +328,22 @@ func (w historyWalk) leafWithin(inner, outer *topo.Body) (bool, error) {
 	return analyticBodiesEqual(w.budget, inner, outer)
 }
 
-// prismWithin reports whether prism inner lies in prism outer: one frame and
-// placement, levels held exactly with inner's within outer's, and a section
-// Sketch proves inside outer's. Every other pair answers false.
+// prismWithin reports whether prism inner lies in prism outer: one exact
+// linear lift, levels held exactly with inner's within outer's after the
+// offset, and a section Sketch proves inside outer's once moved by it.
 func prismWithin(ctx context.Context, budget *proofbound.WorkBudget, inner, outer prismrecord.Payload) (bool, error) {
-	if !sameExactLift(inner, outer) {
+	off, ok := liftOffset(outer, inner)
+	if !ok {
 		return false, nil
 	}
-	ilo, ihi := min(inner.Z0, inner.Z1), max(inner.Z0, inner.Z1)
-	olo, ohi := min(outer.Z0, outer.Z1), max(outer.Z0, outer.Z1)
-	if ilo < olo || ihi > ohi {
+	ilo, ihi := levels(inner, off.dz)
+	olo, ohi := levels(outer, nil)
+	if ilo.Cmp(olo) < 0 || ihi.Cmp(ohi) > 0 {
 		return false, nil
 	}
-	return prismcells.SectionWithin(ctx, budget, []momentinput.Profile{inner.Profile}, []momentinput.Profile{outer.Profile})
+	moved, ok := off.profile(inner.Profile)
+	if !ok {
+		return false, nil
+	}
+	return prismcells.SectionWithin(ctx, budget, []momentinput.Profile{moved}, []momentinput.Profile{outer.Profile})
 }

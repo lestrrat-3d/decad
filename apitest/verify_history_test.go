@@ -103,10 +103,10 @@ func TestVerifyHistorySeparator(t *testing.T) {
 	}
 }
 
-// TestVerifyHistoryFlushPrisms holds the leaf rule for prisms of one frame
-// and placement: a block glued flat against a bored rail, its face on the
-// rail's, is decided; one sunk 0.5 mm into the rail, or on another
-// placement, is not.
+// TestVerifyHistoryFlushPrisms holds the leaf rule for prisms of one exact
+// linear lift: a block glued flat against a bored rail, its face on the
+// rail's, is decided, also when its placement differs from the rail's by an
+// exact offset; one sunk 0.5 mm into the rail is not.
 //
 // Leg shown to fail: reading only containment leaves the flush block with a
 // pair diagnostic.
@@ -124,7 +124,8 @@ func TestVerifyHistoryFlushPrisms(t *testing.T) {
 	}{
 		{"block flush on the rail", 10, lift, true},
 		{"block sunk into the rail", 9.5, lift, false},
-		{"block on another placement", 10, other, false},
+		{"block flush on another placement", 10, other, true},
+		{"block sunk on another placement", 9.5, other, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
