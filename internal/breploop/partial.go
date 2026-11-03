@@ -300,30 +300,8 @@ func (r *State) RewritePartialFillet(sel Sel, selected []bool, blends []*breprec
 			trims[end.Face][end.Loop][end.Corner] = eb.Blend[k]
 		}
 	}
-	var order []int
-	for fi := range trims {
-		order = append(order, fi)
-	}
-	slices.Sort(order)
-	for _, fi := range order {
-		old := r.Payload.Faces[fi]
-		loops, err := offset2d.ProfileCornerLoopsBudget(r.Budget, *r.Payload.Faces[fi].Region)
-		if err != nil {
-			return breprecord.Payload{}, err
-		}
-		region, connectors, err := offset2d.RewriteProfileBudget(r.Budget, *old.Region, loops, trims[fi])
-		if err != nil {
-			return breprecord.Payload{}, err
-		}
-		if err := offset2d.AuditRewriteBudget(r.Budget, *old.Region, region, loops, trims[fi]); err != nil {
-			return breprecord.Payload{}, r.WrapFace(fi, err)
-		}
-		faces[fi].Region = &region
-		for li, segs := range connectors {
-			for si := range segs {
-				band.Terminals = append(band.Terminals, breprecord.BandTerminal{Face: fi, Loop: li, Seg: si})
-			}
-		}
+	if err := r.rewritePartialEndFaces(faces, trims, &band); err != nil {
+		return breprecord.Payload{}, err
 	}
 	if len(band.Terminals) == 0 {
 		return breprecord.Payload{}, r.Refuse("SL1", `the selected partial loop has no terminal arcs`)
@@ -551,6 +529,21 @@ func (r *State) RewritePartialChamfer(sel Sel, selected []bool,
 			trims[end.Face][end.Loop][end.Corner] = eb.Blend[k]
 		}
 	}
+	if err := r.rewritePartialEndFaces(faces, trims, &band); err != nil {
+		return breprecord.Payload{}, err
+	}
+	if len(band.Terminals) != 2 {
+		return breprecord.Payload{}, r.Refuse("SL1", `a two-edge partial chamfer has no two terminal lines`)
+	}
+	out := breprecord.Payload{Faces: faces, Xform: r.Payload.Xform,
+		LoopBands: append(slices.Clone(r.Payload.LoopBands), band)}
+	out.AssignRoles()
+	return out, nil
+}
+
+func (r *State) rewritePartialEndFaces(faces []breprecord.Face,
+	trims map[int][]map[int]*offset2d.Blend, band *breprecord.LoopBand,
+) error {
 	var order []int
 	for fi := range trims {
 		order = append(order, fi)
@@ -560,14 +553,14 @@ func (r *State) RewritePartialChamfer(sel Sel, selected []bool,
 		old := r.Payload.Faces[fi]
 		loops, err := offset2d.ProfileCornerLoopsBudget(r.Budget, *old.Region)
 		if err != nil {
-			return breprecord.Payload{}, err
+			return err
 		}
 		region, connectors, err := offset2d.RewriteProfileBudget(r.Budget, *old.Region, loops, trims[fi])
 		if err != nil {
-			return breprecord.Payload{}, err
+			return err
 		}
 		if err := offset2d.AuditRewriteBudget(r.Budget, *old.Region, region, loops, trims[fi]); err != nil {
-			return breprecord.Payload{}, r.WrapFace(fi, err)
+			return r.WrapFace(fi, err)
 		}
 		faces[fi].Region = &region
 		for li, segs := range connectors {
@@ -576,13 +569,7 @@ func (r *State) RewritePartialChamfer(sel Sel, selected []bool,
 			}
 		}
 	}
-	if len(band.Terminals) != 2 {
-		return breprecord.Payload{}, r.Refuse("SL1", `a two-edge partial chamfer has no two terminal lines`)
-	}
-	out := breprecord.Payload{Faces: faces, Xform: r.Payload.Xform,
-		LoopBands: append(slices.Clone(r.Payload.LoopBands), band)}
-	out.AssignRoles()
-	return out, nil
+	return nil
 }
 
 // partialTerminalChamfer places an end-face line on the selected band's two
