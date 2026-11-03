@@ -26,13 +26,13 @@ func axialScrew(t *testing.T, doc *decad.Document) *decad.Body {
 	return body
 }
 
-// screwFlatTool is the box x in [x0, 5], y in [y0, y1], z in [-5, 5].
-func screwFlatTool(t *testing.T, doc *decad.Document, x0, y0, y1 float64) *decad.Body {
+// screwFlatTool is the box x in [3, 5], y in [10, y1], z in [-5, 5].
+func screwFlatTool(t *testing.T, doc *decad.Document, y1 float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
-	s.CreateRectangle(x0, y0, 5, y1)
+	s.CreateRectangle(3, 10, 5, y1)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(5)})
@@ -40,14 +40,14 @@ func screwFlatTool(t *testing.T, doc *decad.Document, x0, y0, y1 float64) *decad
 	return body
 }
 
-// axialKnob is a Ø24 knob 8 mm long from y = y0 about the y axis, its hole the
+// axialKnob is a Ø24 knob 8 mm long from y = 12 about the y axis, its hole the
 // rectangle x in [hx0, hx1], z in [-hz, hz], or a circle of radius round when
 // round is positive.
-func axialKnob(t *testing.T, doc *decad.Document, y0, hx0, hx1, hz, round float64) *decad.Body {
+func axialKnob(t *testing.T, doc *decad.Document, hx0, hx1, hz, round float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
-	// The XZ plane's normal is -y: the knob hangs 8 mm below the plane at y0 + 8.
-	plane, err := w.CreateOffsetPlane(w.XZ(), -(y0 + 8))
+	// The XZ plane's normal is -y: the knob hangs 8 mm below the plane at y = 20.
+	plane, err := w.CreateOffsetPlane(w.XZ(), -(12 + 8))
 	require.NoError(t, err)
 	s, err := w.CreateSketch(plane)
 	require.NoError(t, err)
@@ -107,10 +107,10 @@ func TestVerifyAxialSectionSeparator(t *testing.T) {
 			screw := axialScrew(t, doc)
 			if tc.flat {
 				var err error
-				screw, err = decad.Cut(t.Context(), screw, screwFlatTool(t, doc, 3, 10, tc.toolEnd))
+				screw, err = decad.Cut(t.Context(), screw, screwFlatTool(t, doc, tc.toolEnd))
 				require.NoError(t, err)
 			}
-			knob := axialKnob(t, doc, 12, -4.5, tc.hx1, 4.5, tc.round)
+			knob := axialKnob(t, doc, -4.5, tc.hx1, 4.5, tc.round)
 			report, err := doc.Verify(t.Context())
 			require.NoError(t, err)
 			interferences, diagnostics := pairFindings(report, screw, knob)
@@ -149,11 +149,11 @@ func TestVerifyAxialSectionTurnedMate(t *testing.T) {
 			screw := axialScrew(t, doc)
 			turn, err := r3.RotationAround(r3.Vec{}, r3.Vec{Y: 1}, units.Radians(0.7))
 			require.NoError(t, err)
-			tool, err := decad.Transform(t.Context(), screwFlatTool(t, doc, 3, 10, 45), turn)
+			tool, err := decad.Transform(t.Context(), screwFlatTool(t, doc, 45), turn)
 			require.NoError(t, err)
 			cut, err := decad.Cut(t.Context(), screw, tool)
 			require.NoError(t, err)
-			knob, err := decad.Transform(t.Context(), axialKnob(t, doc, 12, -4.5, tc.hx1, 4.5, 0), turn)
+			knob, err := decad.Transform(t.Context(), axialKnob(t, doc, -4.5, tc.hx1, 4.5, 0), turn)
 			require.NoError(t, err)
 			report, err := doc.Verify(t.Context())
 			require.NoError(t, err)
@@ -182,12 +182,71 @@ func TestVerifyAxialSectionShoulderAtLevel(t *testing.T) {
 	shaft, err := decad.Revolve(t.Context(), doc, s, profile,
 		decad.SketchLine{End: decad.Point2{V: 1}}, decad.FullRevolution{})
 	require.NoError(t, err)
-	shaft, err = decad.Cut(t.Context(), shaft, screwFlatTool(t, doc, 3, 10, 45))
+	shaft, err = decad.Cut(t.Context(), shaft, screwFlatTool(t, doc, 45))
 	require.NoError(t, err)
-	knob := axialKnob(t, doc, 12, -4.5, 3.001, 4.5, 0)
+	knob := axialKnob(t, doc, -4.5, 3.001, 4.5, 0)
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
 	interferences, diagnostics := pairFindings(report, shaft, knob)
 	require.Zero(t, interferences)
 	require.Zero(t, diagnostics)
+}
+
+// roundShaft extrudes a Ø8 circle along y from 0 to 40, a prism rather than a
+// Revolve, about the y axis.
+func roundShaft(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	plane, err := w.CreateOffsetPlane(w.XZ(), -40)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	c := s.CreatePoint(0, 0)
+	s.Fix(c)
+	s.CreateCircle(c, 4)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := decad.Extrude(t.Context(), doc, s, s.Profiles()[0], decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
+// TestVerifyAxialSectionRoundPrismTurnedMate seats a round prism shaft, milled with a flat, in a bore
+// on a lift turned about the shaft's axis by an angle no float holds. The shaft is
+// read as a cylinder about its axis, widened by the proven rounding, so a bore
+// 0.001 mm wider is decided and a bore 0.001 mm narrower, which the shaft
+// crosses, is not.
+//
+// Leg shown to fail: reading a round prism on another lift as nothing leaves the
+// 0.001 mm pair with a pair diagnostic.
+func TestVerifyAxialSectionRoundPrismTurnedMate(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		bore      float64
+		separated bool
+	}{
+		{"bore 0.001 mm wider", 4.001, true},
+		{"bore 0.001 mm narrower", 3.999, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			shaft, err := decad.Cut(t.Context(), roundShaft(t, doc), screwFlatTool(t, doc, 45))
+			require.NoError(t, err)
+			turn, err := r3.RotationAround(r3.Vec{}, r3.Vec{Y: 1}, units.Radians(0.7))
+			require.NoError(t, err)
+			knob, err := decad.Transform(t.Context(), axialKnob(t, doc, 0, 0, 0, tc.bore), turn)
+			require.NoError(t, err)
+			report, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			interferences, diagnostics := pairFindings(report, shaft, knob)
+			if tc.separated {
+				require.Zero(t, interferences)
+				require.Zero(t, diagnostics, "the widened cylinder lies in the bore")
+				return
+			}
+			require.Positive(t, interferences+diagnostics, "a bore the shaft crosses is never called separated")
+		})
+	}
 }

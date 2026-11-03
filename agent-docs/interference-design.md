@@ -432,6 +432,9 @@ target's cover lies in the union of b's holes and the cutting prisms' sections:
 - a prism target's cover is its outer loop, moved into b's coordinates by the
   exact offset of two prisms on one linear lift (`liftOffset`), over the levels
   the two share;
+  a prism over one whole circle on another lift is a cylinder about its axis and is
+  read as a Revolve is, its meridian the rectangle ρ ≤ r over its levels, with the
+  two unit directions across the axis its frame's own two axes;
 - a Revolve's cover is a closed disc. The Revolve is round in its frame's
   coordinates, and b is an exact rational image of its recorded set, so a point
   of the Revolve sits in b's coordinates at c + z·g3 + ρ·(cos φ·g1 + sin φ·g2),

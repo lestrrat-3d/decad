@@ -65,7 +65,21 @@ func axialApart(ctx context.Context, budget *proofbound.WorkBudget, history bool
 		}
 		off, ok := liftOffset(pb, p)
 		if !ok {
-			return false, nil
+			// A round prism on another lift is a cylinder about its axis: read
+			// it as its meridian rectangle, as a Revolve is.
+			m, found := cylinderMeridian(p)
+			if !found {
+				return false, nil
+			}
+			var apart bool
+			cover, lo, hi, apart, ok = revolveCover(m, pb, blo, bhi)
+			if apart {
+				return true, nil
+			}
+			if !ok {
+				return false, nil
+			}
+			break
 		}
 		plo, phi := levels(p, off.dz)
 		lo, hi = maxRat(plo, blo), minRat(phi, bhi)
@@ -189,8 +203,15 @@ func revolveCover(m meridian, pb prismrecord.Payload, blo, bhi *big.Rat) (
 	centre, ok1 := solve(lb, subVec(addVec(addVec(addVec(scaleVec(m.l[0], m.anchor[0]),
 		scaleVec(m.l[1], m.anchor[1])), scaleVec(m.l[2], m.anchor[2])), m.t), tb))
 	g3, ok2 := vec(m.dir)
-	g1, ok3 := vec([3]*big.Rat{new(big.Rat).Neg(m.dir[1]), m.dir[0], zero})
-	g2, ok4 := vec([3]*big.Rat{zero, zero, one})
+	// Two unit directions across the axis, in frame coordinates: a Revolve's axis
+	// lies in the frame's plane, so they are the in-plane normal and the frame's
+	// own; a cylinder's axis is the frame's normal, so they are its two axes.
+	e1, e2 := [3]*big.Rat{new(big.Rat).Neg(m.dir[1]), m.dir[0], zero}, [3]*big.Rat{zero, zero, one}
+	if m.dir[2].Sign() != 0 {
+		e1, e2 = [3]*big.Rat{one, zero, zero}, [3]*big.Rat{zero, one, zero}
+	}
+	g1, ok3 := vec(e1)
+	g2, ok4 := vec(e2)
 	if !ok1 || !ok2 || !ok3 || !ok4 || new(big.Rat).Abs(g3[2]).Cmp(big.NewRat(1, 2)) < 0 {
 		return fail()
 	}
@@ -850,4 +871,16 @@ func boxesSeparated(a, b momentinput.Profile) bool {
 		return false
 	}
 	return aULo.Cmp(bUHi) >= 0 || aUHi.Cmp(bULo) <= 0 || aVLo.Cmp(bVHi) >= 0 || aVHi.Cmp(bVLo) <= 0
+}
+
+// cylinderMeridian is the rectangle ρ ≤ r over a prism's levels that a prism
+// over one whole circle lies in the revolution of, about the axis through the
+// circle's centre; its holes only remove material.
+func cylinderMeridian(p prismrecord.Payload) (meridian, bool) {
+	for _, m := range prismMeridians(p) {
+		if len(m.region) == 4 && m.region[0][0].Sign() == 0 && m.region[1][0] != nil {
+			return m, true
+		}
+	}
+	return meridian{}, false
 }

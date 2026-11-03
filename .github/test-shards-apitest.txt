@@ -3010,3 +3010,4 @@
 11	0.00	TestVerifyIdentityPlacedChain
 11	0.00	TestVerifyBoxAlgebraRotatedRail
 11	0.00	TestVerifyPieceTangentKnuckle
+11	0.00	TestVerifyAxialSectionRoundPrismTurnedMate
