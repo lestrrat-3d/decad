@@ -199,7 +199,10 @@ the same axis line under
 lifts that are exactly orthonormal, or one affine lift (frame times placement,
 exactly equal linear parts) that carries one section circle onto the other.
 A lift that is not exactly orthonormal makes the denoted set an affine image
-of a round cylinder, which still separates when both bodies share it. Bodies
+of a round cylinder, which still separates when both bodies share it. Two
+cylinders on frames that are exactly orthonormal under one placement, bit for
+bit, are also compared before that placement: it is one affine bijection on
+both sets. Bodies
 lifted by different inexact rotations, or by one rotation composed with a
 rounded translation, denote sets whose boundaries may cross by rounding, and
 stay undecided.
@@ -264,7 +267,9 @@ radius r, and the strip ρ ≥ r over its levels for each whole-circle hole. Eac
 frame must be exactly orthonormal, so frame coordinates measure true distance
 before the placement. Two regions are compared in a's frame coordinates when
 the two lifts share one linear part, b moving by the exact solve of the
-translation between them, or in the world when both lifts are exactly
+translation between them; or before one placement both carry bit for bit,
+which is one affine bijection on both and so keeps interiors apart, where their
+frames are exactly orthonormal; or in the world when both lifts are exactly
 orthonormal. The axes must be one line exactly; b's z then maps to
 a's by an exact shift and sign. A strip's open side is closed at a radius past
 every finite radius of the two regions, which loses no point the other region

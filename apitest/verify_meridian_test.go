@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -141,6 +142,59 @@ func TestVerifyMeridianBandInGroove(t *testing.T) {
 			if tc.separated {
 				require.Zero(t, interferences)
 				require.Zero(t, diagnostics, "the meridian separator decides the band")
+				return
+			}
+			require.Positive(t, interferences+diagnostics)
+		})
+	}
+}
+
+// TestVerifyMeridianSharedPlacement turns a collared spindle, revolved in the
+// XY plane, and a bored bearing, extruded from the XZ plane, by one inexact
+// rotation about x. Their frames differ, and the rotation leaves neither lift
+// exactly orthonormal, but the one placement they share carries both, so
+// they are compared before it: the bearing sitting flush under the collar,
+// its bore flush on the shank, is decided. TestCommonAxesSharedPlacement
+// holds the comparison to the placement being one bit for bit.
+//
+// Leg shown to fail: comparing only equal lifts or orthonormal ones leaves
+// the turned pair with a diagnostic.
+func TestVerifyMeridianSharedPlacement(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		bore      float64
+		separated bool
+	}{
+		{"bearing flush under the collar", 4, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			s, profile := polygonSketch(t, [][2]float64{{0, -10}, {4, -10}, {4, 0}, {6, 0}, {6, 2}, {4, 2}, {4, 30}, {0, 30}})
+			spindle, err := decad.Revolve(t.Context(), doc, s, profile,
+				decad.SketchLine{End: decad.Point2{V: 1}}, decad.FullRevolution{})
+			require.NoError(t, err)
+			w := sketch.NewWorld()
+			bs, err := w.CreateSketch(w.XZ())
+			require.NoError(t, err)
+			for _, r := range []float64{11, tc.bore} {
+				c := bs.CreatePoint(0, 0)
+				bs.Fix(c)
+				bs.CreateCircle(c, r)
+			}
+			_, err = bs.Solve(t.Context())
+			require.NoError(t, err)
+			bearing, err := decad.Extrude(t.Context(), doc, bs, bs.Profiles()[0],
+				decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+			require.NoError(t, err)
+			spindle, bearing = turned(t, spindle, math.Pi/3), turned(t, bearing, math.Pi/3)
+			report, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			interferences, diagnostics := pairFindings(report, spindle, bearing)
+			if tc.separated {
+				require.Zero(t, interferences)
+				require.Zero(t, diagnostics, "the shared placement carries both meridians")
 				return
 			}
 			require.Positive(t, interferences+diagnostics)
