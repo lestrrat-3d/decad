@@ -221,6 +221,12 @@ operation's exact result, and only that set enters the walk:
 - a Cut result misses a body that lies in its tool, or that its target
   misses; an Intersect misses what any operand misses; a Union, of any number
   of operands, misses what every operand misses;
+- any two bodies the walk meets, a Boolean's operands included, miss each
+  other when their boxes, each inflated by its own proven bound, have disjoint
+  interiors, compared exactly (`measurement.BoxesDisjoint`): every body's
+  interior lies in its inflated box's interior. A hook whose stem sits in a
+  bore and whose ring stands clear of the drilled part is decided this way,
+  the stem by its drilling tool and the ring by its box;
 - a Cut result lies in its target, an Intersect in any operand, a Union in a
   body every operand lies in, and a body lies in a Union when it lies in any
   operand or in an Intersect when it lies in every one;

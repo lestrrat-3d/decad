@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/boolchain"
 	"github.com/lestrrat-3d/decad/internal/facetedrecord"
+	"github.com/lestrrat-3d/decad/internal/measurement"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
@@ -60,6 +61,13 @@ func (w historyWalk) misses(a, b *topo.Body, depth int) (bool, error) {
 	}
 	if err := w.budget.Step(); err != nil {
 		return false, err
+	}
+	// Every body's interior lies in the interior of its box inflated by the
+	// box's own proven bound, so two such boxes with disjoint interiors keep
+	// the bodies apart; the comparison is exact (measurement.BoxesDisjoint).
+	// A Union's operand far from the other body is decided here.
+	if measurement.BoxesDisjoint(a.Bounds, b.Bounds) {
+		return true, nil
 	}
 	op, inputs, ok := w.expand(a)
 	if !ok {
