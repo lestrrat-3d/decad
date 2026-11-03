@@ -11,19 +11,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// oldKeeps is the decision the candidate filter made before meetsRange: the
-// axis is kept exactly when the gap from the full projRange folds is positive.
-func oldKeeps(a r3.Vec, vs []r3.Vec, tlo, thi float64) bool {
+// fullFoldKeeps is the candidate filter's keep decision from the full
+// projRange folds alone: the axis is kept exactly when the gap is positive.
+func fullFoldKeeps(a r3.Vec, vs []r3.Vec, tlo, thi float64) bool {
 	plo, phi := mathProjRange(a, vs)
 	return math.Max(plo-thi, tlo-phi) > 0
 }
 
-// newKeeps is the decision with the early exit in front.
-func newKeeps(a r3.Vec, vs []r3.Vec, tlo, thi float64) bool {
+// exitKeeps is the keep decision with the meetsRange early exit in front.
+func exitKeeps(a r3.Vec, vs []r3.Vec, tlo, thi float64) bool {
 	if meetsRange(a, vs, tlo, thi) {
 		return false
 	}
-	return oldKeeps(a, vs, tlo, thi)
+	return fullFoldKeeps(a, vs, tlo, thi)
 }
 
 var meetsRangeValues = []float64{
@@ -31,11 +31,11 @@ var meetsRangeValues = []float64{
 	5e-324, -5e-324, math.MaxFloat64, -math.MaxFloat64,
 }
 
-// TestMeetsRangeKeepsOldDecision walks every sequence of up to four vertex
+// TestMeetsRangeKeepsFullFoldDecision walks every sequence of up to four vertex
 // projections and every bound pair drawn from NaN, both infinities, both
 // zeros and the extremes, and requires the early exit never to change the
 // keep decision, and never to fire on a kept axis.
-func TestMeetsRangeKeepsOldDecision(t *testing.T) {
+func TestMeetsRangeKeepsFullFoldDecision(t *testing.T) {
 	t.Parallel()
 	a := r3.Vec{X: 1}
 	negZero := math.Copysign(0, -1)
@@ -48,11 +48,11 @@ func TestMeetsRangeKeepsOldDecision(t *testing.T) {
 				cases++
 				if meetsRange(a, vs, tlo, thi) {
 					fired++
-					if oldKeeps(a, vs, tlo, thi) {
+					if fullFoldKeeps(a, vs, tlo, thi) {
 						mismatches++
 					}
 				}
-				if oldKeeps(a, vs, tlo, thi) != newKeeps(a, vs, tlo, thi) {
+				if fullFoldKeeps(a, vs, tlo, thi) != exitKeeps(a, vs, tlo, thi) {
 					mismatches++
 				}
 			}
@@ -71,7 +71,7 @@ func TestMeetsRangeKeepsOldDecision(t *testing.T) {
 	require.Greater(t, fired, 1000, "the early exit never fired in %d cases", cases)
 }
 
-// TestMeetsRangeRandomOracle compares the old and new keep decision on
+// TestMeetsRangeRandomOracle compares fullFoldKeeps and exitKeeps on
 // seeded random axes, vertex sets and bounds, with special values mixed in
 // and with touching ranges.
 func TestMeetsRangeRandomOracle(t *testing.T) {
@@ -111,14 +111,14 @@ func TestMeetsRangeRandomOracle(t *testing.T) {
 			tlo, thi = mathProjRange(a, tri)
 		}
 		early := meetsRange(a, vs, tlo, thi)
-		old := oldKeeps(a, vs, tlo, thi)
+		full := fullFoldKeeps(a, vs, tlo, thi)
 		if early {
 			fired++
 		}
-		if old {
+		if full {
 			kept++
 		}
-		if (early && old) || old != newKeeps(a, vs, tlo, thi) {
+		if (early && full) || full != exitKeeps(a, vs, tlo, thi) {
 			mismatches++
 		}
 	}
@@ -127,9 +127,9 @@ func TestMeetsRangeRandomOracle(t *testing.T) {
 	require.Positive(t, kept)
 }
 
-// oldMisses is Misses as it stood before meetsRange: every candidate axis
-// projects the whole piece through the full fold.
-func oldMisses(tri [3]r3.Vec, shift r3.Vec, p *Piece, budget *Budget) (bool, error) {
+// fullFoldMisses is Misses without the meetsRange early exit: every candidate
+// axis projects the whole piece through projRange.
+func fullFoldMisses(tri [3]r3.Vec, shift r3.Vec, p *Piece, budget *Budget) (bool, error) {
 	var ft [3]r3.Vec
 	for i, v := range tri {
 		ft[i] = v.Add(shift)
@@ -160,6 +160,7 @@ func oldMisses(tri [3]r3.Vec, shift r3.Vec, p *Piece, budget *Budget) (bool, err
 		try(f.n)
 	}
 	if len(cands) == 0 {
+		// Only an edge-edge axis can separate what no face normal does.
 		for i := range 3 {
 			te := ft[(i+1)%3].Sub(ft[i])
 			for _, e := range p.edges {
@@ -191,14 +192,14 @@ func oldMisses(tri [3]r3.Vec, shift r3.Vec, p *Piece, budget *Budget) (bool, err
 	return false, nil
 }
 
-// TestMissesMatchesOldCandidateFilter runs Misses and the pre-change copy on
-// seeded triangles around small circle prisms and requires the same answer,
-// error and exact-work charge. The charge counts the candidates tried, so it
-// pins which axes were kept and their order.
-func TestMissesMatchesOldCandidateFilter(t *testing.T) {
+// TestMissesMatchesFullFold runs Misses and fullFoldMisses on seeded triangles
+// around small circle prisms and requires the same answer, error presence and
+// exact-work charge. The charge counts the side check and each exact axis
+// check, so it pins how many kept axes were tried before the answer.
+func TestMissesMatchesFullFold(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewPCG(11, 13))
-	trues, falses, edgeEdge := 0, 0, 0
+	trues, falses, charged := 0, 0, 0
 	for _, sides := range []int{3, 4, 5, 8} {
 		axis := r3.Vec{X: 1, Y: 2, Z: 3}
 		k, _ := axis.Normalize()
@@ -226,7 +227,7 @@ func TestMissesMatchesOldCandidateFilter(t *testing.T) {
 				nb.Limit, ob.Limit = 20, 20 // small ceiling: the same refusal
 			}
 			nok, nerr := Misses(tri, shift, piece, &nb)
-			ook, oerr := oldMisses(tri, shift, piece, &ob)
+			ook, oerr := fullFoldMisses(tri, shift, piece, &ob)
 			require.Equal(t, ook, nok)
 			require.Equal(t, oerr == nil, nerr == nil)
 			require.Equal(t, ob.Used(), nb.Used())
@@ -236,11 +237,11 @@ func TestMissesMatchesOldCandidateFilter(t *testing.T) {
 				falses++
 			}
 			if nb.Used() > 0 {
-				edgeEdge++
+				charged++
 			}
 		}
 	}
 	require.Positive(t, trues)
 	require.Positive(t, falses)
-	require.Positive(t, edgeEdge)
+	require.Positive(t, charged)
 }
