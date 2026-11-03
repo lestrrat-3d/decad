@@ -38,7 +38,8 @@ func TestFloatStepMatchesMath(t *testing.T) {
 	}
 	for e := -1074; e <= 1023; e++ {
 		p := math.Ldexp(1, e)
-		for _, x := range []float64{p, -p, math.Nextafter(p, 0), math.Nextafter(p, math.Inf(1)), -math.Nextafter(p, 0)} {
+		below, above := math.Nextafter(p, 0), math.Nextafter(p, math.Inf(1))
+		for _, x := range []float64{p, -p, below, -below, above, -above} {
 			check(x)
 		}
 	}

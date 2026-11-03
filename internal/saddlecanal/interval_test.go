@@ -42,25 +42,14 @@ func TestIntervalMulMatchesFourProductTable(t *testing.T) {
 
 // TestStepHelpersMatchNextafter compares down and up with math.Nextafter by
 // exact bit pattern over the boundary values, every exponent and a seeded
-// random sample. Both NaN results must be NaN.
+// random sample. A NaN input gives math.NaN()'s own bits, as in Nextafter.
 func TestStepHelpersMatchNextafter(t *testing.T) {
 	check := func(x float64) {
 		bits := math.Float64bits(x)
-		for _, c := range []struct {
-			name string
-			got  float64
-			want float64
-		}{
-			{"down", down(x), math.Nextafter(x, math.Inf(-1))},
-			{"up", up(x), math.Nextafter(x, math.Inf(1))},
-		} {
-			if math.IsNaN(c.want) {
-				require.True(t, math.IsNaN(c.got), "%s(%#x) must be NaN", c.name, bits)
-				continue
-			}
-			require.Equal(t, math.Float64bits(c.want), math.Float64bits(c.got),
-				"%s(%#x)", c.name, bits)
-		}
+		require.Equal(t, math.Float64bits(math.Nextafter(x, math.Inf(-1))), math.Float64bits(down(x)),
+			"down(%#x)", bits)
+		require.Equal(t, math.Float64bits(math.Nextafter(x, math.Inf(1))), math.Float64bits(up(x)),
+			"up(%#x)", bits)
 	}
 	specials := []float64{
 		0, math.Copysign(0, -1), math.Inf(1), math.Inf(-1), math.NaN(), -math.NaN(),
@@ -74,9 +63,12 @@ func TestStepHelpersMatchNextafter(t *testing.T) {
 		check(math.Nextafter(x, math.Inf(1)))
 		check(math.Nextafter(x, math.Inf(-1)))
 	}
+	// Each power of two, both signs, with its neighbours on both sides: the
+	// ulp halves on the step from ±2^e toward zero.
 	for e := -1074; e <= 1023; e++ {
 		p := math.Ldexp(1, e)
-		for _, x := range []float64{p, -p, math.Nextafter(p, 0), math.Nextafter(p, math.Inf(1)), -math.Nextafter(p, 0)} {
+		below, above := math.Nextafter(p, 0), math.Nextafter(p, math.Inf(1))
+		for _, x := range []float64{p, -p, below, -below, above, -above} {
 			check(x)
 		}
 	}
