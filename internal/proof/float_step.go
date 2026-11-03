@@ -12,9 +12,10 @@ import "math"
 // whole ulp above x, so round-to-nearest lands on x + ulp — except at m = 1,
 // where the sum is the exact tie and rounds back to the even x; x + x·2^-52 is
 // then x + ulp exactly. Below zero the step toward zero is x − x·2^-53, which
-// is never a tie. Everything else — zero, subnormals, the range ends,
-// infinities and NaN — takes math.Nextafter itself. The float64() conversions
-// forbid fusing the product into the sum.
+// is never a tie. Either zero steps to the smallest subnormal. Everything
+// else — subnormals, the range ends, infinities and NaN — takes
+// math.Nextafter itself. The float64() conversions forbid fusing the product
+// into the sum.
 func NextUp(x float64) float64 {
 	if x >= 0x1p-969 && x < math.MaxFloat64 {
 		y := x + float64(x*0x1p-53)
