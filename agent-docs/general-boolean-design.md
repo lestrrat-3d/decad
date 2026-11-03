@@ -866,7 +866,9 @@ bit for bit. Every planar face of either operand is decided by its own
 scene (§5), every crossing a scene computes takes the one float §10's keyed
 crossing table records for it, every edge is split at every vertex on it,
 and each cylinder's pieces are read off the planar faces across its axis
-(§5). A trace with more than one chord, a crossing too close to tangency to
+(§5). A piece whose arc end another piece of the same frame meets at a level
+strictly inside its interval splits that side edge there, so a flat opened in a
+shaft's wall pairs edge by edge. A trace with more than one chord, a crossing too close to tangency to
 key, a scene whose cells this reach does not cover, and a crossing result
 with a hole each send the pair to the mesh path; a face that fails modify
 §5's audit, or a result whose edges do not pair, refuses.

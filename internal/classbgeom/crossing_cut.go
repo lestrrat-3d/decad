@@ -333,6 +333,7 @@ func (b *cbBuild) run(ctx context.Context) (breprecord.Payload, error) {
 	for _, piece := range pieces {
 		out.Faces = append(out.Faces, breprecord.Face{
 			Frame: piece.Frame, Wall: piece.Wall, Z0: piece.Z0, Z1: piece.Z1, Delta: piece.Delta,
+			Side0: piece.Side0, Side1: piece.Side1,
 			WallCarrier: wallCarrierOf(piece.Source),
 		})
 	}
