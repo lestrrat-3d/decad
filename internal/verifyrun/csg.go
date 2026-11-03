@@ -188,11 +188,11 @@ func (w historyWalk) leafApart(a, b *topo.Body) (bool, error) {
 	pa, okA := a.Payload.(prismrecord.Payload)
 	pb, okB := b.Payload.(prismrecord.Payload)
 	if !okA || !okB {
-		return false, nil
+		return meridianApart(w.ctx, w.budget, a, b)
 	}
 	off, ok := liftOffset(pa, pb)
 	if !ok {
-		return false, nil
+		return meridianApart(w.ctx, w.budget, a, b)
 	}
 	alo, ahi := levels(pa, nil)
 	blo, bhi := levels(pb, off.dz)
