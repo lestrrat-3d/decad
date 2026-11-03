@@ -80,10 +80,26 @@ Leaves come from these payloads (`internal/occupancyleaf`):
 |---|---|---|---|
 | prism of one whole CCW circle | the placed cylinder | one circumscribed 128-gon prism; an inscribed 128-gon prism inside | exact: each corner taken back to local coordinates, radial plus axial excess (both convex, so corners bound the facet), stretched by the maps' Frobenius norms; a corner the float inverse puts inside by 1e-6 of the section skips the exact reading |
 | stack of slabs of one circle at contiguous levels | one cylinder | as above | as above |
-| prism, or stack slab by slab, whose regions are a whole circle or a convex polygon of whole lines, with whole circular holes (either winding) | one leaf per region's outer loop, and one hole leaf per hole through that region's levels; a stack's holes meet other slabs only on shared level planes, which a regularized solid ignores | the polygon prism itself, each side pushed out by the section displacement over `|u|₁`; convexity checked exactly | float: the sum of side excesses over the sine of the sharpest corner, plus the axial excess |
+| prism, or stack slab by slab, whose regions are a whole circle or a polygon of line segments, whole or trimmed, with whole circular holes (either winding) | one leaf per convex piece of a region's outer loop (below), and one hole leaf per hole through that region's levels; a stack's holes meet other slabs only on shared level planes, which a regularized solid ignores | each piece's prism, each side pushed out by the widening over `|u|₁`; convexity checked exactly; an inscribed piece, each side pushed in the same way between narrowed levels, inside | float: the sum of side excesses over the sine of the sharpest corner, plus the axial excess |
 | Revolve of one whole circle clear of its axis | an arc tube about the spine circle, full or partial | one 64-gon prism per angular cell about the cell's chord, widened by the arc's sagitta over the cell and extended by `ρ·d/2` at both ends; cells of sagitta at most 1e-4 mm | float, below |
 | Sweep of one whole circle along lines and arcs | one leaf per span: a cylinder for a line, an arc tube for an arc (the spans' own prism and Revolve reductions) | as for each kind | as for each kind |
 | Coil of one whole circle | a helix tube: every point lies within the wire radius of the centre helix at its own angle, because the disc sits in the axis plane there (`agent-docs/helix-design.md` Table CP) | one 32-gon prism per angular cell about the centre helix's chord, widened by the helix sagitta `ρc·d²/8` and extended by `ρw·(lead + d)` at both ends | none: every facet keeps its own bound as its bulge |
+
+**Polygon sections.** A loop of line segments, each walked from its point at `TStart` to its point at `TEnd`, is read
+as the exact polygon of the segments' ends, counter-clockwise, collinear corners dropped. An analytic union's
+trimmed segments may not meet exactly, because their trim parameters are rounded: the polygon's edge then departs
+from the recorded segment by at most the largest join gap, `|Δu| + |Δv|` at a join read exactly. The polygon is
+split into convex pieces by ear clipping, each ear taken where no other corner lies in its closed triangle, and
+adjacent pieces are merged while their union stays convex (Hertel and Mehlhorn), so the pieces' union is the
+polygon. A piece's corner within 1e-9 of the corners' magnitude of the line through its neighbours is dropped,
+which moves the piece's boundary by at most that corner's distance to the line, bounded by
+`|(c−a)×(b−a)| / max(|Δu|, |Δv|)`. Rounding the pieces' exact corners to floats moves each by at most 1.5 times
+the largest coordinate rounding. The join gap, the dropped corners' distance and the rounding are added to the
+record's section displacement before the piece's sides are pushed out or in. Each charge bounds how far the
+piece's boundary moves, so the pushed-out piece still holds its part of the denoted section, whose union is the
+denoted section, and the pushed-in piece lies inside it: for convex sets `A ⊂ B ⊕ D_r` gives `A ⊖ D_r ⊂ B`. A
+polygon tool's pieces are therefore leaves a Cut may use as a tool. A polygon shape never proves a box far from its
+boundary, so a polygon tool's hole wall is read wherever its leaf is near, which only widens the bulge.
 
 A circumscribed polygon uses rational directions `u_k` with offsets `c_k ≥ r·|u_k|` (checked as
 `c_k² ≥ r²·u_k·u_k`), and every corner is checked against every side. An inscribed one uses float corners proven

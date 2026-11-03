@@ -149,7 +149,13 @@ func overlapDiameter(ctx context.Context, op meshbool.OperationKind, a, b *topo.
 		return 0, false
 	}
 	d, ok := meshbool.OverlapDiameter(booloperand.ChordShare(ctx, a), booloperand.ChordShare(ctx, b))
-	if !ok || d*meshbool.OverlapChordRatio > dPair {
+	if !ok {
+		return 0, false
+	}
+	if c, clipped := clipOverlapDiameter(a, b); clipped && c < d {
+		d = c
+	}
+	if d*meshbool.OverlapChordRatio > dPair {
 		return 0, false
 	}
 	return d, true
