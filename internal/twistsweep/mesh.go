@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/facetproof"
 	"github.com/lestrrat-3d/decad/internal/loftmesh"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/revolveangle"
 	"github.com/lestrrat-3d/r3"
@@ -32,11 +33,10 @@ type TwistShellHeld struct {
 }
 
 func twistShellDistanceUpper(a, b r3.Vec) float64 {
-	dx := new(big.Rat).Sub(TwistRat(a.X), TwistRat(b.X))
-	dy := new(big.Rat).Sub(TwistRat(a.Y), TwistRat(b.Y))
-	dz := new(big.Rat).Sub(TwistRat(a.Z), TwistRat(b.Z))
-	squared := new(big.Rat).Add(new(big.Rat).Add(
-		new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy)), new(big.Rat).Mul(dz, dz))
+	squared := proof.RatSquaredDistance3(a.X, a.Y, a.Z, b.X, b.Y, b.Z)
+	if squared == nil {
+		return math.Inf(1)
+	}
 	return proofbound.RatSqrtUp(squared)
 }
 
