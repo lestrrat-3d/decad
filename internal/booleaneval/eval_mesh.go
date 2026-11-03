@@ -90,6 +90,12 @@ func prepBoolMesh(ctx context.Context, m *topo.Mesh, src []int,
 		return nil, err
 	}
 	bm.SetVertexBounds(beta)
+	// A mesh whose planar facets carry a bound apart from their face's trim
+	// chording (topo.Mesh.Planar) lowers each facet clear of every chord to
+	// it, and hands the gate the rest for contacts that stay clear.
+	if rec := m.Planar(); rec != nil {
+		setPlanarBounds(bm, m, rec)
+	}
 	bm.SetChargedSlabBounds(retained)
 	return bm, nil
 }
@@ -180,4 +186,22 @@ func hasCurvedFace(b *topo.Body) bool {
 		}
 	}
 	return false
+}
+
+// setPlanarBounds attaches rec to bm and lowers every facet whose own box is
+// clear of its face's chords to its planar bound.
+func setPlanarBounds(bm *meshbool.BoolMesh, m *topo.Mesh, rec *topo.PlanarRecord) {
+	n := len(m.Triangles)
+	bm.PlanarOwn = rec.Own
+	bm.PlanarChords = make([][][2]r3.Vec, n)
+	bm.PlanarReach = make([]float64, n)
+	for t := range n {
+		f := m.Source[t]
+		bm.PlanarChords[t] = rec.Chords[f]
+		bm.PlanarReach[t] = rec.Reach[f]
+		if rec.Own[t] < bm.FacetBound[t] && meshbool.ChordClear(bm.Boxes[t][0], bm.Boxes[t][1], rec.Chords[f], rec.Reach[f]) {
+			bm.FacetBound[t] = rec.Own[t]
+			bm.SlabBound[t] = min(bm.SlabBound[t], rec.Own[t])
+		}
+	}
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/decad/internal/survey2d"
+	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -121,4 +122,36 @@ func PatchEdgeSense(triangles [][3]int, tris []int, a, b int) int {
 		}
 	}
 	return 0
+}
+
+// PlanarFacetRecord builds a mesh's topo.PlanarRecord. A chord of a planar
+// face is an edge it shares with a facet of a curved face; the region between
+// a chord and its arc lies within the face's trim term of the chord, padded
+// here past rounding. A facet of a planar face lies, away from that region,
+// within its own corners' store plus the section and axial terms.
+func PlanarFacetRecord(vertices []r3.Vec, triangles [][3]int, source []*topo.Face,
+	planar func(*topo.Face) bool, trim, axial map[*topo.Face]float64, store []float64, section float64) *topo.PlanarRecord {
+	rec := &topo.PlanarRecord{Own: make([]float64, len(triangles)), Chords: map[*topo.Face][][2]r3.Vec{}, Reach: map[*topo.Face]float64{}}
+	owner := make(map[[2]int]int, 3*len(triangles))
+	for t, tri := range triangles {
+		for k := range 3 {
+			owner[[2]int{tri[k], tri[(k+1)%3]}] = t
+		}
+	}
+	for t, tri := range triangles {
+		f := source[t]
+		if !planar(f) {
+			rec.Own[t] = math.Inf(1)
+			continue
+		}
+		rec.Own[t] = proofbound.AbsSumUpper(max(store[tri[0]], store[tri[1]], store[tri[2]]), section, axial[f])
+		rec.Reach[f] = proofbound.AbsSumUpper(proofbound.ProductUpper(trim[f], 1+1e-6), 1e-9)
+		for k := range 3 {
+			a, b := tri[k], tri[(k+1)%3]
+			if o, ok := owner[[2]int{b, a}]; ok && !planar(source[o]) {
+				rec.Chords[f] = append(rec.Chords[f], [2]r3.Vec{vertices[a], vertices[b]})
+			}
+		}
+	}
+	return rec
 }
