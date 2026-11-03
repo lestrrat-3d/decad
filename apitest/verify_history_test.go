@@ -1,6 +1,7 @@
 package apitest_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -293,6 +294,48 @@ func TestVerifyHistoryFarOperand(t *testing.T) {
 			if tc.separated {
 				require.Zero(t, interferences)
 				require.Zero(t, diagnostics, "every operand of the hook misses the block")
+				return
+			}
+			require.Positive(t, interferences+diagnostics)
+		})
+	}
+}
+
+// TestVerifyHistoryTurnedFarOperand is TestVerifyHistoryFarOperand turned 45°
+// about the x axis: block, drilling tool, stem and ring alike. The ring then
+// stands clear of the block's top face in the block's own frame, but the
+// world boxes of the two overlap, so only the block's frame planes separate
+// them. A ring sunk into the block is not decided.
+//
+// Leg shown to fail: reading only world boxes leaves the turned hook with a
+// pair diagnostic.
+func TestVerifyHistoryTurnedFarOperand(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		ringZ     float64
+		separated bool
+	}{
+		{"ring above the block", 15.5, true},
+		{"ring sunk into the block", 9.5, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			turn := func(b *decad.Body) *decad.Body { return turned(t, b, math.Pi/4) }
+			block := turn(slab(t, doc, 0, -5, 20, 5, 0, 10, r3.Identity()))
+			tool := turn(placedAlongZ(t, coaxialSection(t, doc, 10, 0, 17, 1), -1))
+			drilled, err := decad.Cut(t.Context(), block, tool)
+			require.NoError(t, err)
+			stem := turn(placedAlongZ(t, coaxialSection(t, doc, 10, 0, 14, 1), 2))
+			hook, err := decad.Union(t.Context(), stem, turn(hookRing(t, doc, tc.ringZ)))
+			require.NoError(t, err)
+			report, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			interferences, diagnostics := pairFindings(report, drilled, hook)
+			if tc.separated {
+				require.Zero(t, interferences)
+				require.Zero(t, diagnostics, "the block's top face plane holds the ring off")
 				return
 			}
 			require.Positive(t, interferences+diagnostics)

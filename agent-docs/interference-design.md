@@ -308,6 +308,22 @@ interiors, which lie in the open half-spaces, share no point. A set screw
 seated on a shaft is decided this way, away from a collar the screw's slab
 would reach.
 
+**The slab separator** (`internal/verifyrun/slab.go`) reads the world box
+test of the history walk in a prism's own frame. With the prism's exact lift
+`t + L·(x, y, z)`, its coordinate along local axis `k` at world point `p` is
+`g_k·(p − t)` with `Lᵀg_k = e_k`, so the prism, with exact section and levels,
+lies between `g_k·t` plus its section box's bounds along the section axes and
+its levels along the extrusion. When another body's reach along `g_k`, or along
+`−g_k`, stays at or below the near plane, the plane holds the bodies apart. A
+reach is read exactly where it is rational and from above where it holds a
+square root, each root rounded up to a float checked exactly: a prism's or a
+lined Revolve's support as above, and a disc Revolve's as its centre's reach
+plus `R·√(a² + q)` (with `a` the reach's part along the axis and `√q` across
+it), which is the largest of `z·a + ρ·√q` over the disc. The step is sound
+because each body lies in the closed half-space its reach bounds, and the
+prism in the opposite closed one. A hook ring standing clear of a turned arm,
+whose world boxes overlap, is decided this way.
+
 Like the coaxial separator, they prove no gap.
 
 ### 3.3 Full containment

@@ -190,12 +190,13 @@ func expandRecorded(history boolchain.Source, body *topo.Body) (meshbool.Operati
 }
 
 // leafApartOtherwise decides two leaves the shared-lift prism rule leaves
-// open: by their meridians about one axis, or by a prism's end-cap plane.
+// open: by their meridians about one axis, by a prism's end-cap plane, or by
+// one of a prism's frame planes (sideApart).
 func (w historyWalk) leafApartOtherwise(a, b *topo.Body) (bool, error) {
 	if apart, err := meridianApart(w.ctx, w.budget, a, b); err != nil || apart {
 		return apart, err
 	}
-	return capApart(a, b) || capApart(b, a), nil
+	return capApart(a, b) || capApart(b, a) || sideApart(a, b) || sideApart(b, a), nil
 }
 
 // leafApart decides between two records directly whether their interiors are
