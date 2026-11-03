@@ -228,7 +228,37 @@ operation's exact result, and only that set enters the walk:
 - two such prisms, read through the same exact offset, miss each other when
   their levels share no interior or Sketch proves their sections share none (`prismcells.SectionsApart`), so a
   block glued flat on a rail is decided; a leaf against a Boolean result is
-  read through the result's history.
+  read through the result's history;
+- two leaves the prism rule leaves open miss each other through the meridian
+  separator below.
+
+**The meridian separator** (`internal/verifyrun/meridian.go`) reads a leaf as
+a region of the (ρ, z) half-plane whose full revolution about an axis holds
+the body. A full, solid Revolve with no section displacement, an exact unit
+axis, no snap onto the axis, no material admitted across it, and a meridian of whole chained lines on one side of the axis is its own
+region (its holes only remove material). A prism with exact section and levels
+gives the rectangle ρ ≤ r over its levels for a whole-circle outer loop of
+radius r, and the strip ρ ≥ r over its levels for each whole-circle hole. Each
+frame must be exactly orthonormal, so frame coordinates measure true distance
+before the placement. Two regions are compared in a's frame coordinates when
+the two lifts share one linear part, b moving by the exact solve of the
+translation between them, or in the world when both lifts are exactly
+orthonormal. The axes must be one line exactly; b's z then maps to
+a's by an exact shift and sign. A strip's open side is closed at a radius past
+every finite radius of the two regions, which loses no point the other region
+can reach and keeps two strips overlapping exactly when their levels do. Every
+coordinate must stay a float, and Sketch then proves the two regions'
+interiors disjoint (`prismcells.SectionsApart`).
+
+The step is sound because each body lies in the revolution of its region,
+and the comparison map is an affine bijection, so it keeps interiors apart.
+A point in both interiors would sit at one (ρ, z) about the shared axis,
+interior to both revolutions. For ρ > 0 that (ρ, z) is interior to both
+regions. For ρ = 0 the point's neighbourhood holds points of small positive ρ
+in both interiors, and those are interior to both regions. Either way the
+regions' interiors meet, which Sketch has ruled out. A turned spindle under a
+bearing that sits flush on its collar, with its bore flush on the spindle, is
+decided this way.
 
 Like the coaxial separator, it proves no gap.
 
