@@ -216,14 +216,17 @@ operation's exact result, and only that set enters the walk:
 - a Cut result lies in its target, an Intersect in any operand, a Union in a
   body every operand lies in, and a body lies in a Union when it lies in any
   operand or in an Intersect when it lies in every one;
-- a prism lies in another prism with the same frame and placement, both
-  sections and levels held exactly, its levels within the other's, and a
-  section that a private Sketch scene proves inside the other's
+- a prism lies in another prism whose exact linear lift (frame axes carried
+  by the placement basis, in rationals) is the same, with both sections and
+  levels held exactly: the translation between the lifts solves exactly into
+  a level shift and a section shift, the section shift must keep every
+  recorded coordinate a float, and then its shifted levels lie within the
+  other's and Sketch proves its shifted section inside the other's
   (`prismcells.SectionWithin`, the arrangement of
   `agent-docs/prism-boolean-design.md` §4.1-§4.2); any other leaf lies only in
   an analytically equal body;
-- two such prisms miss each other when their levels share no interior or
-  Sketch proves their sections share none (`prismcells.SectionsApart`), so a
+- two such prisms, read through the same exact offset, miss each other when
+  their levels share no interior or Sketch proves their sections share none (`prismcells.SectionsApart`), so a
   block glued flat on a rail is decided; a leaf against a Boolean result is
   read through the result's history.
 
