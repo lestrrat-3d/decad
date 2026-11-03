@@ -67,7 +67,8 @@ type floatBox struct {
 }
 
 // floatBoxes fills the outward float boxes of every vertex, triangle and edge
-// of p. ClassifyPlanar fills them before its crossing scan.
+// of p. ClassifyPlanar fills them before its crossing scan, and
+// PlanarDeepVertex before its casts.
 func (p *planarPrep) floatBoxes() {
 	if p.vertBox != nil {
 		return
