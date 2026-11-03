@@ -617,8 +617,8 @@ func commonLifts(m meridian, p prismrecord.Payload) (la [3][3]*big.Rat, ta [3]*b
 }
 
 // sectionBox bounds a prism's outer loop: whole lines by their ends, a circle
-// or an arc by the box of its circle, an arc's ends at one exact distance from
-// its centre, each radius rounded up. ok is false for any other segment.
+// or an arc by the box of its circle, an arc's circle the one through its start
+// about its centre, each radius rounded up. ok is false for any other segment.
 func sectionBox(p momentinput.Profile) (uLo, uHi, vLo, vHi *big.Rat, ok bool) {
 	grow := func(u, v, r *big.Rat) {
 		a, b := new(big.Rat).Sub(u, r), new(big.Rat).Add(u, r)
@@ -643,11 +643,7 @@ func sectionBox(p momentinput.Profile) (uLo, uHi, vLo, vHi *big.Rat, ok bool) {
 			}
 			grow(ratOf(g.Center.U), ratOf(g.Center.V), rr)
 		case sectionrecord.ArcSeg:
-			rs, re := distSquared(g.Center, g.Start), distSquared(g.Center, g.End)
-			if rs.Cmp(re) != 0 {
-				return nil, nil, nil, nil, false
-			}
-			rr, ok := sqrtUpper(rs)
+			rr, ok := sqrtUpper(distSquared(g.Center, g.Start))
 			if !ok {
 				return nil, nil, nil, nil, false
 			}
@@ -749,27 +745,92 @@ func partReach(slab meridian, part prismrecord.Payload, rho *big.Rat) (lo, hi *b
 	if new(big.Rat).Add(h0, rho).Cmp(plo) <= 0 || new(big.Rat).Sub(h0, rho).Cmp(phi) >= 0 {
 		return nil, nil, false, true
 	}
-	uLo, uHi, vLo, vHi, ok := sectionBox(part.Profile)
-	if !ok {
-		return nil, nil, false, false
-	}
 	du, dv := dotVec(dir, lp[0]), dotVec(dir, lp[1])
 	one := big.NewRat(1, 1)
-	var axial0, d, wLo, wHi, aLo, aHi, wMid *big.Rat
+	var axial0, d, wMid *big.Rat
+	var alongU bool
 	switch {
 	case new(big.Rat).Abs(du).Cmp(one) == 0 && dv.Sign() == 0:
-		axial0, d, wMid, aLo, aHi, wLo, wHi = u0, du, v0, uLo, uHi, vLo, vHi
+		axial0, d, wMid, alongU = u0, du, v0, true
 	case new(big.Rat).Abs(dv).Cmp(one) == 0 && du.Sign() == 0:
-		axial0, d, wMid, aLo, aHi, wLo, wHi = v0, dv, u0, vLo, vHi, uLo, uHi
+		axial0, d, wMid, alongU = v0, dv, u0, false
 	default:
 		return nil, nil, false, false
 	}
-	// The box misses the strip, or only touches it, when its extent across the
-	// axis leaves the open strip.
-	if wHi.Cmp(new(big.Rat).Sub(wMid, rho)) <= 0 || wLo.Cmp(new(big.Rat).Add(wMid, rho)) >= 0 {
+	// The section's extent along the axis inside the closed strip across it.
+	aLo, aHi, met, ok := stripReach(part.Profile, alongU, new(big.Rat).Sub(wMid, rho), new(big.Rat).Add(wMid, rho))
+	if !ok {
+		return nil, nil, false, false
+	}
+	if !met {
 		return nil, nil, false, true
 	}
 	a := new(big.Rat).Quo(new(big.Rat).Sub(aLo, axial0), d)
 	b := new(big.Rat).Quo(new(big.Rat).Sub(aHi, axial0), d)
 	return minRat(a, b), maxRat(a, b), true, true
+}
+
+// stripReach is the range of a section outline's coordinate along one axis
+// (u when alongU, else v) over its points whose other coordinate lies in
+// [wLo, wHi]: whole lines clipped to the strip by their ends, and a circle or an
+// arc, whose box leaves the strip or does not, by its box. met is false when the
+// outline never meets the strip. ok is false for any other segment.
+func stripReach(p momentinput.Profile, alongU bool, wLo, wHi *big.Rat) (lo, hi *big.Rat, met, ok bool) {
+	axial := func(q sectionrecord.Point2) (*big.Rat, *big.Rat) {
+		if alongU {
+			return ratOf(q.U), ratOf(q.V)
+		}
+		return ratOf(q.V), ratOf(q.U)
+	}
+	add := func(a *big.Rat) {
+		if !met {
+			lo, hi, met = a, a, true
+			return
+		}
+		lo, hi = minRat(lo, a), maxRat(hi, a)
+	}
+	for _, seg := range p.Outer.Segments {
+		switch g := seg.(type) {
+		case sectionrecord.CircleSeg, sectionrecord.ArcSeg:
+			uLo, uHi, vLo, vHi, ok := sectionBox(momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{g}}})
+			if !ok {
+				return nil, nil, false, false
+			}
+			aBoxLo, aBoxHi, wBoxLo, wBoxHi := uLo, uHi, vLo, vHi
+			if !alongU {
+				aBoxLo, aBoxHi, wBoxLo, wBoxHi = vLo, vHi, uLo, uHi
+			}
+			if wBoxHi.Cmp(wLo) < 0 || wBoxLo.Cmp(wHi) > 0 {
+				continue
+			}
+			add(aBoxLo)
+			add(aBoxHi)
+		default:
+			start, end, whole := wholeLine(seg)
+			if !whole {
+				return nil, nil, false, false
+			}
+			a0, w0 := axial(start)
+			a1, w1 := axial(end)
+			if maxRat(w0, w1).Cmp(wLo) < 0 || minRat(w0, w1).Cmp(wHi) > 0 {
+				continue
+			}
+			if w0.Cmp(w1) == 0 {
+				add(a0)
+				add(a1)
+				continue
+			}
+			// Parameter t in [0, 1] where the line is inside the strip.
+			at := func(w *big.Rat) *big.Rat { return new(big.Rat).Quo(new(big.Rat).Sub(w, w0), new(big.Rat).Sub(w1, w0)) }
+			tA, tB := at(wLo), at(wHi)
+			if tA.Cmp(tB) > 0 {
+				tA, tB = tB, tA
+			}
+			tA, tB = maxRat(tA, new(big.Rat)), minRat(tB, big.NewRat(1, 1))
+			for _, t := range []*big.Rat{tA, tB} {
+				add(new(big.Rat).Add(a0, new(big.Rat).Mul(t, new(big.Rat).Sub(a1, a0))))
+			}
+		}
+	}
+	return lo, hi, met, true
 }
