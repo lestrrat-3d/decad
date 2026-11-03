@@ -192,10 +192,10 @@ type WorkBudget struct {
 	ErrFn          func() error
 	ReserveFn      func(uint64) error
 	ReserveBytesFn func(uint64) error
-	poll           *workPoll // NewPollWorkBudget's counter; used only while StepFn is nil
+	poll           *workPoll // NewWorkBudget's counter; used only while StepFn is nil
 }
 
-// workPoll is NewWorkBudget's step counter as a value: a step increments
+// workPoll is NewWorkBudget's step counter: a step increments
 // work and polls ctx when work reaches a multiple of WorkPollInterval.
 type workPoll struct {
 	err  func() error // the context's Err
@@ -230,17 +230,16 @@ func (p *workPoll) stepN(n uint64) (uint64, error) {
 	return n, nil
 }
 
-// NewPollWorkBudget is NewWorkBudget with StepFn nil: Step and StepN count
-// on the budget's own counter and poll ctx when it reaches a multiple of
-// WorkPollInterval, exactly as NewWorkBudget's StepFn does. Code that reads
-// StepFn of this budget gets nil.
-func NewPollWorkBudget(ctx context.Context) *WorkBudget {
+// NewWorkBudget returns a budget whose Step and StepN count on the budget's
+// own counter and poll ctx when it reaches a multiple of WorkPollInterval.
+// Its StepFn is nil.
+func NewWorkBudget(ctx context.Context) *WorkBudget {
 	return &WorkBudget{ErrFn: ctx.Err, poll: &workPoll{err: ctx.Err}}
 }
 
 // StepN is n calls of Step stopping at the first error; it returns how many
-// succeeded and that error. A budget made by NewPollWorkBudget skips the
-// per-step calls; every other budget loops Step.
+// succeeded and that error. A budget made by NewWorkBudget skips the
+// per-step calls; a budget with a StepFn loops Step.
 func (b *WorkBudget) StepN(n uint64) (uint64, error) {
 	if b.StepFn == nil && b.poll != nil {
 		return b.poll.stepN(n)
@@ -261,20 +260,6 @@ func (b *WorkBudget) SpendWork(n uint64) error {
 	}
 	_, err := b.StepN(n)
 	return err
-}
-
-func NewWorkBudget(ctx context.Context) *WorkBudget {
-	work := 0
-	return &WorkBudget{
-		StepFn: func() error {
-			work++
-			if work%WorkPollInterval == 0 {
-				return ctx.Err()
-			}
-			return nil
-		},
-		ErrFn: ctx.Err,
-	}
 }
 
 // step counts one candidate operation and returns ctx.Err() on the polling

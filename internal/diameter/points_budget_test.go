@@ -135,7 +135,7 @@ func TestPointsWithBudgetMatchesStepCharge(t *testing.T) {
 	for _, failFrom := range []int{1, 2, 7, polls / 3, polls / 2, polls - 1, polls, polls + 1, polls + 2, 0} {
 		want := &budgetCountingContext{failFrom: failFrom}
 		got := &budgetCountingContext{failFrom: failFrom}
-		wantB, gotB := proofbound.NewWorkBudget(want), proofbound.NewPollWorkBudget(got)
+		wantB, gotB := proofbound.NewWorkBudget(want), proofbound.NewWorkBudget(got)
 		d, ok, skipFail, err := pointsWithStepBudget(wantB, points)
 		wantR := newReading(d, ok, err)
 		sawSkipFail = sawSkipFail || skipFail
@@ -221,7 +221,6 @@ func BenchmarkPointsWithBudgetGearRim(b *testing.B) {
 		budget func(context.Context) *proofbound.WorkBudget
 	}{
 		{"work", proofbound.NewWorkBudget},
-		{"poll", proofbound.NewPollWorkBudget},
 	} {
 		b.Run(c.name, func(b *testing.B) {
 			ctx := b.Context()

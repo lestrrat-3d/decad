@@ -31,7 +31,7 @@ func PointsContext(ctx context.Context, points []r3.Vec) (float64, bool, error) 
 	}
 	// The poll budget returns what NewWorkBudget's would at every step; its
 	// StepN charges the scan's skipped blocks in one move per poll.
-	return PointsWithBudget(proofbound.NewPollWorkBudget(ctx), points)
+	return PointsWithBudget(proofbound.NewWorkBudget(ctx), points)
 }
 
 type pairMaximum struct {

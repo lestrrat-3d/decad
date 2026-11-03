@@ -40,7 +40,7 @@ func TestStepNMatchesStepLoop(t *testing.T) {
 			for _, failFrom := range []int{1, 2, 5, 0} {
 				want := &countingContext{failFrom: failFrom}
 				got := &countingContext{failFrom: failFrom}
-				wantB, gotB := proofbound.NewPollWorkBudget(want), proofbound.NewPollWorkBudget(got)
+				wantB, gotB := proofbound.NewWorkBudget(want), proofbound.NewWorkBudget(got)
 				advance(t, wantB, offset)
 				advance(t, gotB, offset)
 				// Align the failure point: offset steps may already have polled.
@@ -67,6 +67,22 @@ func TestStepNMatchesStepLoop(t *testing.T) {
 	}
 }
 
+// closureWorkBudget is a reference budget counting in a StepFn closure, the
+// path a budget with its own StepFn takes.
+func closureWorkBudget(ctx context.Context) *proofbound.WorkBudget {
+	work := 0
+	return &proofbound.WorkBudget{
+		StepFn: func() error {
+			work++
+			if work%proofbound.WorkPollInterval == 0 {
+				return ctx.Err()
+			}
+			return nil
+		},
+		ErrFn: ctx.Err,
+	}
+}
+
 // advance steps b offset times, ignoring errors.
 func advance(t *testing.T, b *proofbound.WorkBudget, offset int) {
 	t.Helper()
@@ -75,13 +91,13 @@ func advance(t *testing.T, b *proofbound.WorkBudget, offset int) {
 	}
 }
 
-// TestPollWorkBudgetMatchesNewWorkBudget checks the poll budget against the
-// closure budget it replaces.
+// TestPollWorkBudgetMatchesNewWorkBudget checks NewWorkBudget against the
+// closure reference budget.
 func TestPollWorkBudgetMatchesNewWorkBudget(t *testing.T) {
 	for _, failFrom := range []int{1, 3, 0} {
 		want := &countingContext{failFrom: failFrom}
 		got := &countingContext{failFrom: failFrom}
-		wantB, gotB := proofbound.NewWorkBudget(want), proofbound.NewPollWorkBudget(got)
+		wantB, gotB := closureWorkBudget(want), proofbound.NewWorkBudget(got)
 		for range 5000 {
 			require.Equal(t, wantB.Step(), gotB.Step())
 		}
@@ -89,7 +105,7 @@ func TestPollWorkBudgetMatchesNewWorkBudget(t *testing.T) {
 		require.Equal(t, wantB.Err(), gotB.Err())
 		require.Equal(t, want.calls, got.calls)
 	}
-	require.Nil(t, proofbound.NewPollWorkBudget(t.Context()).StepFn)
+	require.Nil(t, proofbound.NewWorkBudget(t.Context()).StepFn)
 }
 
 // budgetOp is one call a budget's user makes: run Step calls, one StepN(n)
@@ -156,7 +172,7 @@ func runBudgetOps(b *proofbound.WorkBudget, ctx *countingContext, ops []budgetOp
 }
 
 // TestPollWorkBudgetMatchesNewWorkBudgetOnBoreAuditOps runs the bore audits'
-// call shape through NewWorkBudget, the reference, and NewPollWorkBudget with
+// call shape through a closure budget, the reference, and NewWorkBudget with
 // a context that starts failing at its k-th Err call. Every op must return
 // the same successful step count and error and leave the same number of Err
 // calls, so a cancel or deadline stops a caller at the same step with the same
@@ -164,7 +180,7 @@ func runBudgetOps(b *proofbound.WorkBudget, ctx *countingContext, ops []budgetOp
 // boundary, the middle of each long op, and a context that never fails.
 func TestPollWorkBudgetMatchesNewWorkBudgetOnBoreAuditOps(t *testing.T) {
 	live := &countingContext{}
-	reference := runBudgetOps(proofbound.NewWorkBudget(live), live, boreAuditOps)
+	reference := runBudgetOps(closureWorkBudget(live), live, boreAuditOps)
 	failFrom := []int{0, 1, 2, 3}
 	prev := 0
 	for _, r := range reference {
@@ -178,8 +194,8 @@ func TestPollWorkBudgetMatchesNewWorkBudgetOnBoreAuditOps(t *testing.T) {
 	require.Greater(t, prev, 900, "the sequence must poll through every long op")
 	for _, k := range failFrom {
 		wantCtx, gotCtx := &countingContext{failFrom: k}, &countingContext{failFrom: k}
-		want := runBudgetOps(proofbound.NewWorkBudget(wantCtx), wantCtx, boreAuditOps)
-		got := runBudgetOps(proofbound.NewPollWorkBudget(gotCtx), gotCtx, boreAuditOps)
+		want := runBudgetOps(closureWorkBudget(wantCtx), wantCtx, boreAuditOps)
+		got := runBudgetOps(proofbound.NewWorkBudget(gotCtx), gotCtx, boreAuditOps)
 		for i := range want {
 			require.Equal(t, want[i], got[i], "fail from Err call %d, op %d (%s %d)",
 				k, i, budgetOpNames[boreAuditOps[i].kind], boreAuditOps[i].n)

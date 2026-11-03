@@ -422,7 +422,7 @@ func draftGateDiameter(ctx context.Context, body *topo.Body, dp draftrecord.Payl
 	prisms, displacement := dp.CapPrisms()
 	// The poll budget returns what NewWorkBudget's would at every step; its
 	// StepN charges the diameter scan's skipped blocks in one move per poll.
-	d, ok, err := diameter.PrismGateDiameter(proofbound.NewPollWorkBudget(ctx), prisms, displacement)
+	d, ok, err := diameter.PrismGateDiameter(proofbound.NewWorkBudget(ctx), prisms, displacement)
 	if err != nil || ok {
 		return d, ok, err
 	}

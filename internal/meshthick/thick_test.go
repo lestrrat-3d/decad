@@ -97,6 +97,6 @@ func TestMinChecksCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	v, tris := box(5, 5, 5)
-	_, err := meshthick.Min(proofbound.NewPollWorkBudget(ctx), v, tris)
+	_, err := meshthick.Min(proofbound.NewWorkBudget(ctx), v, tris)
 	require.Error(t, err)
 }

@@ -264,7 +264,7 @@ func buildSectorAnnularCut(ctx context.Context, joined facetedrecord.Payload, ca
 	// NewWorkBudget's would and the audit's result and the step at which a
 	// cancel stops it are the same. Its StepN replays the audit's bulk steps
 	// in one move per poll instead of one call per step.
-	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewPollWorkBudget(ctx),
+	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewWorkBudget(ctx),
 		mesh.Verts, mesh.Tris, patches, SectorBoreMaxAuditTriangles,
 		SectorBoreMaxAuditScans); err != nil {
 		return empty, err

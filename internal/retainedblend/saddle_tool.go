@@ -404,7 +404,7 @@ func cutSaddles(ctx context.Context, env topo.Env, mesher booleaneval.OperandMes
 		// The ring must be one embedded closed surface for its true solid to
 		// be the ring the proof describes: the exact crossing audit refuses any
 		// two facets that meet away from their shared vertices and edges.
-		if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewPollWorkBudget(ctx), t.verts, t.tris,
+		if err := loftmesh.LoftCrossingAuditBounded(proofbound.NewWorkBudget(ctx), t.verts, t.tris,
 			loftmesh.MaxLoftAuditTriangles, crossbore.AuditScans); err != nil {
 			return nil, fmt.Errorf("%w: the saddle chamfer's tool is not one embedded surface: %w",
 				decaderr.ErrUnsupported, err)

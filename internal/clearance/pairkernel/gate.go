@@ -29,7 +29,7 @@ func BodyGateDiameter(ctx context.Context, body *topo.Body) (float64, bool, erro
 	// The carrier build and the gate readers use this budget only through
 	// Step, StepN and Err, so the poll budget returns what NewWorkBudget's
 	// would at every step (see PairGateDiameter).
-	budget := proofbound.NewPollWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	_, carrierOK, err := newBodyGeomBudget(budget, body)
 	if err != nil {
 		return 0, false, err
@@ -68,7 +68,7 @@ func PairGateDiameter(ctx context.Context, a, b *topo.Body, cache *Cache) (float
 	// NewWorkBudget's would, and the reading and the step at which a cancel
 	// stops it are the same. Its StepN charges the diameter scan's skipped
 	// blocks in one move per poll instead of one call per pair.
-	budget := proofbound.NewPollWorkBudget(ctx)
+	budget := proofbound.NewWorkBudget(ctx)
 	var g diameter.GatePoints
 	for _, body := range [2]*topo.Body{a, b} {
 		points, ok, err := cache.gatePoints(ctx, budget, body)
