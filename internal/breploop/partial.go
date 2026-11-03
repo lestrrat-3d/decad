@@ -268,37 +268,15 @@ func (r *State) RewritePartialFillet(sel Sel, selected []bool, blends []*breprec
 		}
 	}
 
-	for _, eb := range blends {
-		for k := range eb.V {
-			if !eb.Terminal[k] {
-				continue
-			}
+	if err := r.registerPartialTerminals(restore, trims, blends, "SL2",
+		`two terminal arcs claim one end-face corner`, func(eb *breprecord.EdgeBlend, k int) error {
 			capLoop := profile.Outer
 			if sel.Loop > 0 {
 				capLoop = profile.Holes[sel.Loop-1]
 			}
-			if err := r.partialTerminalBlend(sel, orig, capLoop, capWalk, eb, k, sideRef); err != nil {
-				return breprecord.Payload{}, err
-			}
-			end := eb.End[k]
-			if _, ok := restore[end.Face]; !ok {
-				restore[end.Face] = r.Payload.Faces[end.Face]
-			}
-			if trims[end.Face] == nil {
-				loops, err := offset2d.ProfileCornerLoopsBudget(r.Budget, *r.Payload.Faces[end.Face].Region)
-				if err != nil {
-					return breprecord.Payload{}, err
-				}
-				trims[end.Face] = make([]map[int]*offset2d.Blend, len(loops))
-				for i := range trims[end.Face] {
-					trims[end.Face][i] = map[int]*offset2d.Blend{}
-				}
-			}
-			if trims[end.Face][end.Loop][end.Corner] != nil {
-				return breprecord.Payload{}, r.Refuse("SL2", `two terminal arcs claim one end-face corner`)
-			}
-			trims[end.Face][end.Loop][end.Corner] = eb.Blend[k]
-		}
+			return r.partialTerminalBlend(sel, orig, capLoop, capWalk, eb, k, sideRef)
+		}); err != nil {
+		return breprecord.Payload{}, err
 	}
 	if err := r.rewritePartialEndFaces(faces, trims, &band); err != nil {
 		return breprecord.Payload{}, err
@@ -497,37 +475,15 @@ func (r *State) RewritePartialChamfer(sel Sel, selected []bool,
 			a.Z1, a.Z1Delta = local, proofbound.AbsSumUpper(math.Max(a.Z1Delta, f.Z0Delta), sideDelta)
 		}
 	}
-	for _, eb := range blends {
-		for k := range eb.V {
-			if !eb.Terminal[k] {
-				continue
-			}
+	if err := r.registerPartialTerminals(restore, trims, blends, "SL1",
+		`two terminal lines claim one end-face corner`, func(eb *breprecord.EdgeBlend, k int) error {
 			capLoop := profile.Outer
 			if sel.Loop > 0 {
 				capLoop = profile.Holes[sel.Loop-1]
 			}
-			if err := r.partialTerminalChamfer(sel, orig, capLoop, capWalk, eb, k, sideRef); err != nil {
-				return breprecord.Payload{}, err
-			}
-			end := eb.End[k]
-			if _, ok := restore[end.Face]; !ok {
-				restore[end.Face] = r.Payload.Faces[end.Face]
-			}
-			if trims[end.Face] == nil {
-				loops, err := offset2d.ProfileCornerLoopsBudget(r.Budget, *r.Payload.Faces[end.Face].Region)
-				if err != nil {
-					return breprecord.Payload{}, err
-				}
-				trims[end.Face] = make([]map[int]*offset2d.Blend, len(loops))
-				for i := range trims[end.Face] {
-					trims[end.Face][i] = map[int]*offset2d.Blend{}
-				}
-			}
-			if trims[end.Face][end.Loop][end.Corner] != nil {
-				return breprecord.Payload{}, r.Refuse("SL1", `two terminal lines claim one end-face corner`)
-			}
-			trims[end.Face][end.Loop][end.Corner] = eb.Blend[k]
-		}
+			return r.partialTerminalChamfer(sel, orig, capLoop, capWalk, eb, k, sideRef)
+		}); err != nil {
+		return breprecord.Payload{}, err
 	}
 	if err := r.rewritePartialEndFaces(faces, trims, &band); err != nil {
 		return breprecord.Payload{}, err
@@ -539,6 +495,41 @@ func (r *State) RewritePartialChamfer(sel Sel, selected []bool,
 		LoopBands: append(slices.Clone(r.Payload.LoopBands), band)}
 	out.AssignRoles()
 	return out, nil
+}
+
+func (r *State) registerPartialTerminals(restore map[int]breprecord.Face,
+	trims map[int][]map[int]*offset2d.Blend, blends []*breprecord.EdgeBlend, refusalCode, occupiedReason string,
+	build func(*breprecord.EdgeBlend, int) error,
+) error {
+	for _, eb := range blends {
+		for k := range eb.V {
+			if !eb.Terminal[k] {
+				continue
+			}
+			if err := build(eb, k); err != nil {
+				return err
+			}
+			end := eb.End[k]
+			if _, ok := restore[end.Face]; !ok {
+				restore[end.Face] = r.Payload.Faces[end.Face]
+			}
+			if trims[end.Face] == nil {
+				loops, err := offset2d.ProfileCornerLoopsBudget(r.Budget, *r.Payload.Faces[end.Face].Region)
+				if err != nil {
+					return err
+				}
+				trims[end.Face] = make([]map[int]*offset2d.Blend, len(loops))
+				for i := range trims[end.Face] {
+					trims[end.Face][i] = map[int]*offset2d.Blend{}
+				}
+			}
+			if trims[end.Face][end.Loop][end.Corner] != nil {
+				return r.Refuse(refusalCode, occupiedReason)
+			}
+			trims[end.Face][end.Loop][end.Corner] = eb.Blend[k]
+		}
+	}
+	return nil
 }
 
 func (r *State) rewritePartialEndFaces(faces []breprecord.Face,
