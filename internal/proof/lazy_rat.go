@@ -161,7 +161,11 @@ func LazyPoint(r *big.Rat) LazyInterval {
 
 func lazyZeroInterval(a LazyInterval) bool { return a.Lo.Sign() == 0 && a.Hi.Sign() == 0 }
 
-func lazyZero() LazyRat { return LazyRat{n: new(big.Int), d: lazyOne} }
+// lazyZeroNum is the shared zero numerator. Like lazyOne it is never written:
+// no operation writes an operand's integers.
+var lazyZeroNum = new(big.Int)
+
+func lazyZero() LazyRat { return LazyRat{n: lazyZeroNum, d: lazyOne} }
 
 // LazyIntervalAdd is AddInterval, zero shortcuts included.
 func LazyIntervalAdd(a, b LazyInterval) LazyInterval {

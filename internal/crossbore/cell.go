@@ -15,7 +15,16 @@ import (
 
 type crossIV = proofarith.LazyInterval
 
-func crossPoint(x float64) crossIV          { return proofarith.LazyPoint(proofarith.FloatRat(x)) }
+func crossPoint(x float64) crossIV { return proofarith.LazyPoint(proofarith.FloatRat(x)) }
+
+// The constant points the cell arithmetic reads. Interval values are never
+// written (proofarith.LazyRat), so every cell shares them.
+var (
+	crossZero, crossOne, crossTwo   = crossPoint(0), crossPoint(1), crossPoint(2)
+	crossOuterScale, crossExtension = crossPoint(1 + BandExtension), crossPoint(BandExtension)
+	crossTwistScale                 = crossPoint(1 + 2*BandExtension)
+)
+
 func crossAdd(a, b crossIV) crossIV         { return proofarith.LazyIntervalAdd(a, b) }
 func crossSub(a, b crossIV) crossIV         { return proofarith.LazyIntervalSub(a, b) }
 func crossMul(a, b crossIV) crossIV         { return proofarith.LazyIntervalMul(a, b) }
@@ -26,7 +35,7 @@ func crossWidth(a crossIV) float64          { return proofbound.LazyIntervalWidt
 
 type crossDual struct{ v, d crossIV }
 
-func crossConst(v crossIV) crossDual { return crossDual{v: v, d: crossPoint(0)} }
+func crossConst(v crossIV) crossDual { return crossDual{v: v, d: crossZero} }
 func crossDAdd(a, b crossDual) crossDual {
 	return crossDual{v: crossAdd(a.v, b.v), d: crossAdd(a.d, b.d)}
 }
@@ -50,7 +59,7 @@ func crossDSqrt(a crossDual) (crossDual, bool) {
 	if !ok {
 		return crossDual{}, false
 	}
-	d, ok := crossQuo(a.d, crossMul(crossPoint(2), v))
+	d, ok := crossQuo(a.d, crossMul(crossTwo, v))
 	return crossDual{v: v, d: d}, ok
 }
 func crossDSinCos(a crossDual) (crossDual, crossDual, bool) {
@@ -59,7 +68,7 @@ func crossDSinCos(a crossDual) (crossDual, crossDual, bool) {
 		return crossDual{}, crossDual{}, false
 	}
 	return crossDual{v: s, d: crossMul(c, a.d)},
-		crossDual{v: c, d: crossSub(crossPoint(0), crossMul(s, a.d))}, true
+		crossDual{v: c, d: crossSub(crossZero, crossMul(s, a.d))}, true
 }
 
 // CellResult is what MirroredCellMaxima returns: the maxima of the coordinate
@@ -122,7 +131,7 @@ func cellExactGeometryAt(radius, bore, setback float64, turn, angularGap *big.Ra
 	s := proofarith.LazyIntervalWiden(proofarith.LazyIntervalOf(proofbound.ToProofInterval(s0)), gapLazy)
 	c := proofarith.LazyIntervalWiden(proofarith.LazyIntervalOf(proofbound.ToProofInterval(c0)), gapLazy)
 	R, r, d := crossPoint(radius), crossPoint(bore), crossPoint(setback)
-	cd, sd := crossDual{v: c, d: crossSub(crossPoint(0), s)}, crossDual{v: s, d: c}
+	cd, sd := crossDual{v: c, d: crossSub(crossZero, s)}, crossDual{v: s, d: c}
 	Rd, rd, dd := crossConst(R), crossConst(r), crossConst(d)
 	R2, r2, c2 := crossDMul(Rd, Rd), crossDMul(rd, rd), crossDMul(cd, cd)
 	xd, ok := crossDSqrt(crossDSub(R2,
@@ -164,7 +173,7 @@ func cellExactGeometryAt(radius, bore, setback float64, turn, angularGap *big.Ra
 	if !ok {
 		return CellExact{}, fmt.Errorf("%w: the bore setback has no X", decaderr.ErrUnsupported)
 	}
-	inX := crossDMul(xd, crossDSub(crossConst(crossPoint(1)), dOverQ))
+	inX := crossDMul(xd, crossDSub(crossConst(crossOne), dOverQ))
 	inY := crossDMul(rd, crossDSub(crossDMul(cd, codb), crossDMul(sd, sodb)))
 	inZ := crossDMul(rd, crossDAdd(crossDMul(sd, codb), crossDMul(cd, sodb)))
 	diffY, diffZ := crossSub(outY.v, inY.v), crossSub(outZ.v, inZ.v)
@@ -197,7 +206,7 @@ func cellExactGeometryAt(radius, bore, setback float64, turn, angularGap *big.Ra
 		!jacobianNegative(outY, outZ, diffY, diffZ) {
 		return CellExact{}, fmt.Errorf("%w: a cross-bore chamfer cell loses clearance or folds", decaderr.ErrUnsupported)
 	}
-	negativeX := crossSub(crossPoint(0), xd.v)
+	negativeX := crossSub(crossZero, xd.v)
 	negativeY, negativeZ := crossMul(r, c), crossMul(r, s)
 	return CellExact{
 		Coords: [9]crossIV{outX.v, outY.v, outZ.v, inX.v, inY.v, inZ.v, negativeX, negativeY, negativeZ},

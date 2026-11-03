@@ -106,7 +106,7 @@ type toolBase struct {
 
 // extend returns (1+λ)·a − λ·b, exactly.
 func extend(a, b crossIV) crossIV {
-	return crossSub(crossMul(crossPoint(1+BandExtension), a), crossMul(crossPoint(BandExtension), b))
+	return crossSub(crossMul(crossOuterScale, a), crossMul(crossExtension, b))
 }
 
 // fiv is a float interval with outward rounding, for the band's area
@@ -166,7 +166,7 @@ func bandDensity(cell *CellExact) ([ToolRows]float64, [ToolRows]float64, bool) {
 		outerDerivative, boreDerivative := fivOf(cell.Derivs[c]), fivOf(cell.Derivs[3+c])
 		dO[c] = outerDerivative.mul(outerScale).sub(boreDerivative.mul(extensionScale))
 		dB[c] = boreDerivative.mul(outerScale).sub(outerDerivative.mul(extensionScale))
-		band[c] = fivOf(crossMul(crossPoint(1+2*BandExtension), crossSub(cell.Coords[c], cell.Coords[3+c])))
+		band[c] = fivOf(crossMul(crossTwistScale, crossSub(cell.Coords[c], cell.Coords[3+c])))
 	}
 	u, v := cross(dB, band), cross(dO, band)
 	// at encloses |w(t)| for the dyadic t = num/(2·ToolRows); the scalings
@@ -202,7 +202,7 @@ func quadSpread(cell *CellExact) float64 {
 		dO := extend(cell.Derivs[c], cell.Derivs[3+c])
 		dB := extend(cell.Derivs[3+c], cell.Derivs[c])
 		twist := proofbound.LazyIntervalAbsUpperUp(
-			crossMul(crossPoint(1+2*BandExtension), crossSub(cell.Derivs[c], cell.Derivs[3+c])))
+			crossMul(crossTwistScale, crossSub(cell.Derivs[c], cell.Derivs[3+c])))
 		spread = max(spread, proofbound.AbsSumUpper(max(crossWidth(dO), crossWidth(dB)),
 			proofbound.DivUpper(twist, ToolRows)))
 	}
