@@ -91,12 +91,15 @@ func TestVerifyAxialSectionSeparator(t *testing.T) {
 		hx1       float64
 		toolEnd   float64
 		flat      bool
+		round     float64
 		separated bool
 	}{
-		{"flat screw in a hole 0.001 mm past the D", 3.001, 45, true, true},
-		{"hole clips the D", 2.9, 45, true, false},
-		{"tool stops inside the knob", 3.001, 16, true, false},
-		{"screw without the flat", 3.001, 45, false, false},
+		{"flat screw in a hole 0.001 mm past the D", 3.001, 45, true, 0, true},
+		{"hole clips the D", 2.9, 45, true, 0, false},
+		{"tool stops inside the knob", 3.001, 16, true, 0, false},
+		{"screw without the flat", 3.001, 45, false, 0, false},
+		{"flat screw in a round bore of its own radius", 0, 45, true, 4, true},
+		{"flat screw in a round bore 0.1 mm too small", 0, 45, true, 3.9, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -107,7 +110,7 @@ func TestVerifyAxialSectionSeparator(t *testing.T) {
 				screw, err = decad.Cut(t.Context(), screw, screwFlatTool(t, doc, 3, 10, tc.toolEnd))
 				require.NoError(t, err)
 			}
-			knob := axialKnob(t, doc, 12, -4.5, tc.hx1, 4.5, 0)
+			knob := axialKnob(t, doc, 12, -4.5, tc.hx1, 4.5, tc.round)
 			report, err := doc.Verify(t.Context())
 			require.NoError(t, err)
 			interferences, diagnostics := pairFindings(report, screw, knob)

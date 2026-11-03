@@ -39,6 +39,9 @@ func SectionWithin(ctx context.Context, budget *proofbound.WorkBudget, inner, ou
 // and it only ever falsified a verdict, so skipping it admits nothing the
 // verdicts do not.
 func SectionWithinUnion(ctx context.Context, budget *proofbound.WorkBudget, inner, outer []momentinput.Profile) (bool, error) {
+	if identicalCircles(inner, outer) {
+		return true, ctx.Err()
+	}
 	return sectionCells(ctx, budget, inner, outer, false, func(inA, inB bool) bool { return !inA || inB })
 }
 

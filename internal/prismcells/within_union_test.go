@@ -60,3 +60,25 @@ func TestSectionWithinUnion(t *testing.T) {
 		})
 	}
 }
+
+// TestSectionWithinUnionIdenticalCircle holds the shortcut for a disc and a region
+// bounded by the same circle, which Sketch is not asked to arrange: the disc lies
+// in the region, and a disc a hair wider does not lie in any region.
+func TestSectionWithinUnionIdenticalCircle(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		inner  float64
+		within bool
+	}{
+		"disc of the region's own circle": {4, true},
+		"disc 0.1 mm wider":               {4.1, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			within, err := SectionWithinUnion(t.Context(), proofbound.NewWorkBudget(t.Context()),
+				[]momentinput.Profile{unionCircle(tc.inner)}, []momentinput.Profile{unionCircle(4), unionRect(30, 30, 31, 31)})
+			require.NoError(t, err)
+			require.Equal(t, tc.within, within)
+		})
+	}
+}
