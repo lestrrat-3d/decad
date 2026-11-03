@@ -176,14 +176,25 @@ type PairContact struct {
 // crossing with no proven positive sine answers +Inf, which the caller
 // refuses.
 func RimBound(deltaA, deltaB float64, sin2 *SinSquare) float64 {
+	sin := 0.0
+	if sin2 != nil {
+		sin = SinLowerBound(sin2)
+	}
+	return rimBoundFromSin(deltaA, deltaB, sin, sin2 != nil)
+}
+
+// rimBoundFromSin is RimBound with the sine bound already in hand: sin is
+// SinLowerBound of the pair's square when hasSin, and ignored otherwise. A
+// caller that also needs the sine computes it once and passes it here.
+func rimBoundFromSin(deltaA, deltaB, sin float64, hasSin bool) float64 {
 	d := proofbound.AbsSumUpper(deltaA, deltaB)
 	if d <= 0 {
 		return 0
 	}
-	if sin2 == nil {
+	if !hasSin {
 		return math.Inf(1)
 	}
-	return proofbound.DivUpper(d, SinLowerBound(sin2))
+	return proofbound.DivUpper(d, sin)
 }
 
 // MeshBoolean runs the exact-predicate boolean over two prepared operand

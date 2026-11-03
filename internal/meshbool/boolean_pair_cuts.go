@@ -71,12 +71,12 @@ func pairCuts(ctx context.Context, ma, mb *BoolMesh, memo *ContactMemo, keyOf fu
 			pointFacets = append(pointFacets, [2]int{i, j})
 			return nil
 		}
-		rim := RimBound(ma.SlabBound[i], mb.SlabBound[j], c.Sin2)
-		maxRim = max(maxRim, rim)
 		sin := 0.0
 		if c.Sin2 != nil {
 			sin = SinLowerBound(c.Sin2)
 		}
+		rim := rimBoundFromSin(ma.SlabBound[i], mb.SlabBound[j], sin, c.Sin2 != nil)
+		maxRim = max(maxRim, rim)
 		minSin = min(minSin, sin)
 		if !math.IsInf(deepTerm, 1) {
 			contactSites = append(contactSites, ContactSite{I: i, J: j, Sin: sin, Box: segmentSite(c.P0, c.P1)})
