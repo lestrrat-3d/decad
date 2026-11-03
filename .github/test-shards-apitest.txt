@@ -2994,3 +2994,4 @@
 11	0.00	TestRefinePolygonCutChain
 11	0.00	TestCutChordsByTheCrossing
 11	0.00	TestVerifyHistoryFarOperand
+0	61.97	TestVerifyHistoryTurnedFarOperand
