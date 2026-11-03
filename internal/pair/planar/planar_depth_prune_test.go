@@ -10,15 +10,22 @@ import (
 )
 
 // planarDeepVertexUnboxed is PlanarDeepVertex as it ran before it filled the
-// float boxes: the same loop over the preps, with no pre-test in any cast.
+// float boxes: the same loop over the preps, with no pre-test in any cast and
+// the exact box test on every triangle.
 func planarDeepVertexUnboxed(a, b *PlanarSolid, margin proof.Dyadic, poll func() error) (bool, error) {
+	return planarDeepVertexExactScan(preparePlanar(a), preparePlanar(b), margin, poll)
+}
+
+// planarDeepVertexExactScan runs the deep-vertex loop over the given preps
+// with the exact box test on every triangle, whether or not the preps hold
+// float boxes.
+func planarDeepVertexExactScan(pa, pb *planarPrep, margin proof.Dyadic, poll func() error) (bool, error) {
 	marginSquared := proof.DyMul(margin, margin)
-	pa, pb := preparePlanar(a), preparePlanar(b)
 	k := &planarKernel{a: pa, b: pb, poll: poll}
 	for _, side := range [][2]*planarPrep{{pa, pb}, {pb, pa}} {
 		from, to := side[0], side[1]
 		for _, point := range from.s.Verts {
-			deep, err := k.deepInside(point, to, marginSquared)
+			deep, err := exactDeepInside(k, point, to, marginSquared)
 			if err != nil || deep {
 				return deep, err
 			}
@@ -27,9 +34,45 @@ func planarDeepVertexUnboxed(a, b *PlanarSolid, margin proof.Dyadic, poll func()
 	return false, nil
 }
 
+// exactDeepInside is deepInside as it ran before the float skip.
+func exactDeepInside(k *planarKernel, p proof.DyV3, solid *planarPrep, marginSquared proof.Dyadic) (bool, error) {
+	for t := range solid.s.Tris {
+		if err := k.poll(); err != nil {
+			return false, err
+		}
+		if proof.DyCmp(boxGapSquared(p, p, solid.triLo[t], solid.triHi[t]), marginSquared) > 0 {
+			continue
+		}
+		d := pointTriangle(solid, t, p)
+		if proof.DyCmp(d.num, proof.DyMul(marginSquared, d.den)) <= 0 {
+			return false, nil
+		}
+	}
+	result, err := k.cast(p, solid)
+	return result == castInside, err
+}
+
 var cubeTriangles = [][3]int{
 	{0, 4, 6}, {0, 6, 2}, {1, 3, 7}, {1, 7, 5}, {0, 1, 5}, {0, 5, 4},
 	{2, 6, 7}, {2, 7, 3}, {0, 2, 3}, {0, 3, 1}, {4, 5, 7}, {4, 7, 6},
+}
+
+// cubeSolid is the cube from lo to hi on every axis, each coordinate scaled
+// by 2^shift.
+func cubeSolid(lo, hi proof.Dyadic, shift int) PlanarSolid {
+	var s PlanarSolid
+	for index := range 8 {
+		var v proof.DyV3
+		for axis := range 3 {
+			v[axis] = proof.DyShift(lo, shift)
+			if index>>axis&1 == 1 {
+				v[axis] = proof.DyShift(hi, shift)
+			}
+		}
+		s.Verts = append(s.Verts, v)
+	}
+	s.Tris = append(s.Tris, cubeTriangles...)
+	return s
 }
 
 // depthShapes draws the two solids of one configuration. Corners lie on a
@@ -146,4 +189,156 @@ func TestPlanarDeepVertexFloatBoxesKeepAnswers(t *testing.T) {
 	}
 	require.Positive(t, deepCount, "premise: some configurations hold a deep vertex")
 	require.Positive(t, notDeepCount, "premise: some configurations hold none")
+}
+
+// nearMargins returns three margins: a vertex's box gap g to a triangle, and
+// g plus and minus g·2^-52. The pair is the first vertex and triangle whose
+// boxes are apart on exactly one axis, so g squared is the squared box gap.
+func nearMargins(a, b *PlanarSolid) []proof.Dyadic {
+	pb := preparePlanar(b)
+	for _, v := range a.Verts {
+		for t := range b.Tris {
+			var gaps []proof.Dyadic
+			for axis := range 3 {
+				switch {
+				case proof.DyCmp(v[axis], pb.triLo[t][axis]) < 0:
+					gaps = append(gaps, proof.DySubScalar(pb.triLo[t][axis], v[axis]))
+				case proof.DyCmp(pb.triHi[t][axis], v[axis]) < 0:
+					gaps = append(gaps, proof.DySubScalar(v[axis], pb.triHi[t][axis]))
+				}
+			}
+			if len(gaps) == 1 {
+				g := gaps[0]
+				ulp := proof.DyShift(g, -52)
+				return []proof.Dyadic{g, proof.DyAdd(g, ulp), proof.DySubScalar(g, ulp)}
+			}
+		}
+	}
+	return nil
+}
+
+// TestPlanarDeepVertexGapSkipKeepsAnswers holds the float skip of deepInside
+// to the exact box test on every triangle: the same answer, error and poll
+// count, including at the exact budget limit and one poll short, with margins
+// at, just above and just below a vertex's box gap.
+//
+// Legs shown to fail: a skip on a bound at or above the margin (>=), and the
+// lower float bound of the squared margin in place of the upper one, each
+// fail this test. A limit one ulp below the upper bound fails nothing, and is
+// sound: every rounding step of a positive bound is strictly downward, so the
+// bound lies strictly below the exact squared gap, hence strictly below a
+// squared margin the gap does not exceed.
+func TestPlanarDeepVertexGapSkipKeepsAnswers(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(3081, 4242))
+	stop := errors.New("budget")
+	var near, deepCount int
+	for config := range 600 {
+		a, b := depthShapes(rng)
+		margins := []proof.Dyadic{proof.DyZero(), proof.MustDyOf(0.25), proof.DyInt(1), proof.DyShift(proof.DyInt(1), -52)}
+		extra := nearMargins(&a, &b)
+		near += len(extra)
+		margins = append(margins, extra...)
+		for mi, margin := range margins {
+			var wantPolls, gotPolls int
+			want, wantErr := planarDeepVertexUnboxed(&a, &b, margin, countingPoll(&wantPolls))
+			got, gotErr := PlanarDeepVertex(&a, &b, margin, countingPoll(&gotPolls))
+			if want != got || wantErr != nil || gotErr != nil || wantPolls != gotPolls {
+				t.Fatalf("config %d margin %d: deep %v/%v, errors %v/%v, polls %v/%v (old/new)",
+					config, mi, want, got, wantErr, gotErr, wantPolls, gotPolls)
+			}
+			if want {
+				deepCount++
+			}
+			for _, limit := range []int{wantPolls, wantPolls - 1} {
+				if limit < 1 {
+					continue
+				}
+				var oldCount, newCount int
+				oldDeep, oldErr := planarDeepVertexUnboxed(&a, &b, margin, failAfter(limit, &oldCount, stop))
+				newDeep, newErr := PlanarDeepVertex(&a, &b, margin, failAfter(limit, &newCount, stop))
+				if oldDeep != newDeep || (oldErr == nil) != (newErr == nil) || oldCount != newCount {
+					t.Fatalf("config %d margin %d limit %d: deep %v/%v, error %v/%v, polls %d/%d (old/new)",
+						config, mi, limit, oldDeep, newDeep, oldErr != nil, newErr != nil, oldCount, newCount)
+				}
+			}
+		}
+	}
+	require.Positive(t, near, "premise: some configurations give near-margin cases")
+	require.Positive(t, deepCount, "premise: some configurations hold a deep vertex")
+}
+
+// TestPlanarDeepVertexGapSkipAtMargin holds the float skip of deepInside to
+// the exact box test where the two meet: a cube nested in another, each inner
+// vertex exactly one margin from three outer faces. At a margin equal to that
+// gap the exact test keeps the face triangles, the vertex is not deep, and the
+// float skip must keep them too; just below it the vertex is deep. A margin
+// whose square is no float and the float range's ends take the same cases.
+//
+// Legs shown to fail: a skip on a bound at or above the margin (>=), which
+// skips the touching triangles at margin 0, and the lower float bound of the
+// squared margin in place of the upper one, which skips every triangle once
+// the squared margin underflows, each fail this test.
+func TestPlanarDeepVertexGapSkipAtMargin(t *testing.T) {
+	t.Parallel()
+	one, three, four := proof.DyInt(1), proof.DyInt(3), proof.DyInt(4)
+	ulp := proof.DyShift(one, -52)
+	odd := proof.DyAdd(one, proof.DyShift(one, -30))
+	type nested struct {
+		inner  [2]proof.Dyadic
+		margin proof.Dyadic
+		deep   bool
+	}
+	cases := []nested{
+		{inner: [2]proof.Dyadic{one, three}, margin: one, deep: false},
+		{inner: [2]proof.Dyadic{one, three}, margin: proof.DySubScalar(one, ulp), deep: true},
+		{inner: [2]proof.Dyadic{one, three}, margin: proof.DyAdd(one, ulp), deep: false},
+		{inner: [2]proof.Dyadic{odd, proof.DySubScalar(four, odd)}, margin: odd, deep: false},
+		{inner: [2]proof.Dyadic{odd, proof.DySubScalar(four, odd)}, margin: proof.DySubScalar(odd, ulp), deep: true},
+		{inner: [2]proof.Dyadic{one, three}, margin: proof.DyZero(), deep: true},
+		{inner: [2]proof.Dyadic{proof.DyZero(), four}, margin: proof.DyZero(), deep: false},
+	}
+	stop := errors.New("budget")
+	for _, shift := range []int{0, -60, -1060, 1030} {
+		for ci, c := range cases {
+			outer := cubeSolid(proof.DyZero(), four, shift)
+			inner := cubeSolid(c.inner[0], c.inner[1], shift)
+			margin := proof.DyShift(c.margin, shift)
+			var wantPolls, gotPolls int
+			want, wantErr := planarDeepVertexUnboxed(&inner, &outer, margin, countingPoll(&wantPolls))
+			got, gotErr := PlanarDeepVertex(&inner, &outer, margin, countingPoll(&gotPolls))
+			require.NoError(t, wantErr)
+			require.NoError(t, gotErr)
+			require.Equal(t, c.deep, want, "shift %d case %d: exact scan", shift, ci)
+			require.Equal(t, c.deep, got, "shift %d case %d: float skip", shift, ci)
+			require.Equal(t, wantPolls, gotPolls, "shift %d case %d: polls", shift, ci)
+			for _, limit := range []int{wantPolls, wantPolls - 1} {
+				var oldCount, newCount int
+				oldDeep, oldErr := planarDeepVertexUnboxed(&inner, &outer, margin, failAfter(limit, &oldCount, stop))
+				newDeep, newErr := PlanarDeepVertex(&inner, &outer, margin, failAfter(limit, &newCount, stop))
+				require.Equal(t, oldDeep, newDeep, "shift %d case %d limit %d: deep", shift, ci, limit)
+				require.Equal(t, oldErr == nil, newErr == nil, "shift %d case %d limit %d: error", shift, ci, limit)
+				require.Equal(t, oldCount, newCount, "shift %d case %d limit %d: polls", shift, ci, limit)
+			}
+		}
+	}
+
+	// The predicate itself, for the inner corner (1, 1, 1) and an outer face
+	// triangle at x = 0: an exact squared gap of 1 equal to the squared margin
+	// is never skipped, and one above it by a wide step is.
+	outer := cubeSolid(proof.DyZero(), four, 0)
+	prep := preparePlanar(&outer)
+	prep.floatBoxes()
+	corner := proof.DyV3{one, one, one}
+	face := 0
+	require.Zero(t, proof.DyCmp(boxGapSquared(corner, corner, prep.triLo[face], prep.triHi[face]), one),
+		"premise: the corner's squared box gap to the face triangle is 1")
+	for _, c := range []struct {
+		margin proof.Dyadic
+		skip   bool
+	}{{one, false}, {proof.DyAdd(one, ulp), false}, {proof.DyShift(one, -1), true}} {
+		_, marginUp := proof.FloatBounds(proof.DyMul(c.margin, c.margin))
+		skip := gapSquaredBelowLimit(pointFloatBox(corner), prep.triBox[face], marginUp) > marginUp
+		require.Equal(t, c.skip, skip, "margin %v", c.margin)
+	}
 }
