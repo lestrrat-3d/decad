@@ -99,8 +99,15 @@ func LeafRecord(leaves ...Leaf) *Record {
 // and, for a facet near an earlier crossing site, the accumulated crossing
 // depth; a facet near a hole also reads that hole's bound.
 func (r *Record) Bulges(verts []r3.Vec, tris [][3]int, delta []float64) []float64 {
-	lam, _ := r.BulgeParts(verts, tris, delta)
+	lam, _, _ := r.bulgeParts(verts, tris, delta)
 	return lam
+}
+
+// BulgesPokes is Bulges together with each facet's least poke over the
+// leaves near it, the reading LocalBulgeAt takes in place of the facet.
+func (r *Record) BulgesPokes(verts []r3.Vec, tris [][3]int, delta []float64) ([]float64, []float64) {
+	lam, _, pokes := r.bulgeParts(verts, tris, delta)
+	return lam, pokes
 }
 
 // BulgeParts is Bulges together with each facet's own reach outside X: how
@@ -109,6 +116,12 @@ func (r *Record) Bulges(verts []r3.Vec, tris [][3]int, delta []float64) []float6
 // facet's own bound. An earlier crossing raises a facet's bulge but not its
 // reach: the crossing line lies on held facets.
 func (r *Record) BulgeParts(verts []r3.Vec, tris [][3]int, delta []float64) ([]float64, []float64) {
+	out, reach, _ := r.bulgeParts(verts, tris, delta)
+	return out, reach
+}
+
+// bulgeParts is Bulges, the reaches of BulgeParts and each facet's least poke.
+func (r *Record) bulgeParts(verts []r3.Vec, tris [][3]int, delta []float64) ([]float64, []float64, []float64) {
 	out := make([]float64, len(tris))
 	reach := make([]float64, len(tris))
 	pokes := r.meshPokes(verts, tris)
@@ -130,7 +143,7 @@ func (r *Record) BulgeParts(verts []r3.Vec, tris [][3]int, delta []float64) ([]f
 		}
 		out[t] = math.Min(delta[t], lam)
 	}
-	return out, reach
+	return out, reach, pokes
 }
 
 // meshPokes is, per facet, the least poke over the leaves near it, each leaf
@@ -196,6 +209,12 @@ func (r *Record) LocalBulge(tri [3]r3.Vec, delta float64, site [2]r3.Vec) float6
 			poke = math.Min(poke, l.shape.poke(tri))
 		}
 	}
+	return r.LocalBulgeAt(poke, delta, site)
+}
+
+// LocalBulgeAt is LocalBulge for a facet whose least poke over the leaves near
+// it is poke, as BulgesPokes reads it.
+func (r *Record) LocalBulgeAt(poke, delta float64, site [2]r3.Vec) float64 {
 	lam := poke
 	for _, l := range r.Holes {
 		if l.nearHoleWall(site[0], site[1], SiteReach) {
