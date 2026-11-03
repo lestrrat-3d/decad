@@ -115,7 +115,9 @@ func buildTiltedSlider(t testing.TB) (*decad.Document, *decad.Linkage, decad.Dri
 // Leg seen to fail when deleted: the fixed boxes — each of Common's pins is
 // then fixed at its float plane position, which E0 reports as its box and
 // which does not hold the pin's exact enclosure, so the zero-pose falsifier
-// refuses the loop.
+// refuses the loop. Also the reach guard's certified stretches (an interval
+// near the drive's end is then refused by its hull's own overshoot past the
+// reach, on a drive the decomposition certified whole).
 func TestVerifyLinkageLoopTilted(t *testing.T) {
 	t.Parallel()
 	t.Run("the bars are the tilted pins' exact distances", func(t *testing.T) {
@@ -138,6 +140,9 @@ func TestVerifyLinkageLoopTilted(t *testing.T) {
 		report := verifyLinkage(t, fb.doc, fb.linkage, drive(fb), decad.WithResolution(units.Scalar(1.0/256)))
 		s1, s2 := rockerWallHits()
 		require.Equal(t, decad.Interfering, report.Status)
+		for _, d := range report.Diagnostics {
+			require.NotContains(t, d.Message, `outside the certified drive's reach`, `the crank-rocker over [0°, 90°] is certified whole, so no interval's hull passes the reach guard`)
+		}
 		require.NotEmpty(t, report.Collisions)
 		first := report.Collisions[0]
 		require.Same(t, fb.foll, first.A)

@@ -677,10 +677,17 @@ func formatValues(values []units.Value) string {
 	return "(" + strings.Join(parts, ", ") + ")"
 }
 
-// formatCell renders a cell for a finding's message, one range per link.
+// formatCell renders a cell for a finding's message, one range per link. A
+// dependent whose hull was refused carries the zero units.Value at both ends
+// (agent-docs/linkage-check-design.md §16.4 step 8) and renders as claiming no
+// range, never as [0, 0].
 func formatCell(c vocab.JointCell) string {
 	parts := make([]string, len(c.Min))
 	for k := range c.Min {
+		if c.Min[k] == (units.Value{}) && c.Max[k] == (units.Value{}) {
+			parts[k] = "[no proven range]"
+			continue
+		}
 		parts[k] = fmt.Sprintf("[%s, %s]", c.Min[k], c.Max[k])
 	}
 	return strings.Join(parts, " × ")

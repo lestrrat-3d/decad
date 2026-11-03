@@ -483,7 +483,7 @@ type loopDrive[B comparable] struct {
 	// needs.
 	scenes [2]*loopchain.Scene
 	chain  *loopchain.Chain
-	reach  []*big.Rat // per dependent: a proven bound on |value| over the certified drive
+	reach  linkagebound.DependentReach // per dependent: a proven bound on |value| over the certified drive, and the stretches it covers
 	hulls  []proofbound.RatInterval
 	// certified lists the stretches [a, b] of the fraction the decomposition
 	// asked whole and sketch certified; a joint-box cell whose loop-axis range

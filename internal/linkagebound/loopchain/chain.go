@@ -120,7 +120,7 @@ func (c *Chain) StraddleAsks(ctx context.Context, sub linkagebound.DriverSubsegm
 
 // PointValues reads every dependent at s from its canonical chain. A value
 // beyond its certified reach is refused with the caller's loop-specific error.
-func (c *Chain) PointValues(ctx context.Context, s *big.Rat, dependents int, reach []*big.Rat,
+func (c *Chain) PointValues(ctx context.Context, s *big.Rat, dependents int, reach linkagebound.DependentReach,
 	refuse func(error) error) ([][2]motionbound.MotionParam, error) {
 	sub := c.subs.At(s)
 	if sub.Straddle {
@@ -136,7 +136,7 @@ func (c *Chain) PointValues(ctx context.Context, s *big.Rat, dependents int, rea
 	out := make([][2]motionbound.MotionParam, dependents)
 	for j := range dependents {
 		lo, hi := c.Value(ask, j)
-		if linkagebound.Magnitude(linkagebound.ValueInterval(lo, hi)).Cmp(reach[j]) > 0 {
+		if reach.PointPast(j, linkagebound.ValueInterval(lo, hi)) {
 			return nil, refuse(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))
 		}
 		out[j] = [2]motionbound.MotionParam{lo, hi}
@@ -146,7 +146,7 @@ func (c *Chain) PointValues(ctx context.Context, s *big.Rat, dependents int, rea
 
 // straddleValues reads each dependent's hull from the neighbouring chains.
 func (c *Chain) straddleValues(ctx context.Context, sub linkagebound.DriverSubsegment,
-	dependents int, reach []*big.Rat, refuse func(error) error) ([][2]motionbound.MotionParam, error) {
+	dependents int, reach linkagebound.DependentReach, refuse func(error) error) ([][2]motionbound.MotionParam, error) {
 	asks, err := c.StraddleAsks(ctx, sub)
 	if err != nil {
 		return nil, err
@@ -159,7 +159,7 @@ func (c *Chain) straddleValues(ctx context.Context, sub linkagebound.DriverSubse
 	out := make([][2]motionbound.MotionParam, dependents)
 	for j := range dependents {
 		h := c.Hull(asks, j)
-		if linkagebound.Magnitude(h).Cmp(reach[j]) > 0 {
+		if reach.PointPast(j, h) {
 			return nil, refuse(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))
 		}
 		out[j] = [2]motionbound.MotionParam{{Turn: new(big.Rat), Base: h.Lo}, {Turn: new(big.Rat), Base: h.Hi}}
@@ -200,11 +200,12 @@ func (c *Chain) ChainCell(ctx context.Context, sub linkagebound.DriverSubsegment
 	return c.Cell(ctx, sub, b, a)
 }
 
-// Decomposition is the certified parts of a drive and each dependent's reach.
+// Decomposition is the certified parts of a drive, in increasing order, and
+// each dependent's hull over them and reach.
 type Decomposition struct {
 	Certified [][2]*big.Rat
 	Hulls     []proofbound.RatInterval
-	Reach     []*big.Rat
+	Reach     linkagebound.DependentReach
 }
 
 // Decompose asks a drive as cells and bisects refused cells down to floor.
@@ -286,11 +287,11 @@ func (c *Chain) Decompose(ctx context.Context, dependents int, floor *big.Rat) (
 	if err := walk(new(big.Rat), new(big.Rat).SetInt64(1)); err != nil {
 		return Decomposition{}, err
 	}
-	result.Reach = make([]*big.Rat, dependents)
+	result.Reach = linkagebound.DependentReach{Bound: make([]*big.Rat, dependents), Certified: result.Certified}
 	for j := range dependents {
-		result.Reach[j] = new(big.Rat)
+		result.Reach.Bound[j] = new(big.Rat)
 		if j < len(result.Hulls) {
-			result.Reach[j] = linkagebound.Magnitude(result.Hulls[j])
+			result.Reach.Bound[j] = linkagebound.Magnitude(result.Hulls[j])
 		}
 	}
 	return result, nil
@@ -298,12 +299,14 @@ func (c *Chain) Decompose(ctx context.Context, dependents int, floor *big.Rat) (
 
 // IntervalSpans reads every dependent over [a, b] on each subsegment's chain.
 // refuse maps a certified ask's refusal into the caller's loop-specific error.
+// A piece's hull past its reach is refused unless the decomposition certified
+// the piece's whole stretch (linkagebound.DependentReach.StretchPast).
 func (c *Chain) IntervalSpans(ctx context.Context, a, b *big.Rat, dependents int,
-	reach []*big.Rat, refuse func(error) error) ([][]linkagebound.Span, error) {
+	reach linkagebound.DependentReach, refuse func(error) error) ([][]linkagebound.Span, error) {
 	var out [][]linkagebound.Span
 	for _, pc := range c.subs.Pieces(a, b) {
 		if pc.Sub.Straddle {
-			piece, err := c.straddleSpans(ctx, pc.Sub, dependents, reach, refuse)
+			piece, err := c.straddleSpans(ctx, pc, dependents, reach, refuse)
 			if err != nil {
 				return nil, err
 			}
@@ -332,7 +335,7 @@ func (c *Chain) IntervalSpans(ctx context.Context, a, b *big.Rat, dependents int
 			A, B, C := linkagebound.ValueInterval(c.Value(pa, j)), linkagebound.ValueInterval(c.Value(pb, j)),
 				linkagebound.ValueInterval(c.Value(cell, j))
 			H := linkagebound.Hull(A, B, C)
-			if linkagebound.Magnitude(H).Cmp(reach[j]) > 0 {
+			if reach.StretchPast(j, H, pc.Lo, pc.Hi) {
 				return nil, refuse(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))
 			}
 			piece[j] = linkagebound.Span{Start: A, End: B, Hull: H}
@@ -371,9 +374,9 @@ func (c *Chain) cachedSpans(a, b *big.Rat) ([][]linkagebound.Span, bool) {
 }
 
 // straddleSpans reads a whole straddle from its two neighbouring chains.
-func (c *Chain) straddleSpans(ctx context.Context, sub linkagebound.DriverSubsegment, dependents int,
-	reach []*big.Rat, refuse func(error) error) ([]linkagebound.Span, error) {
-	asks, err := c.StraddleAsks(ctx, sub)
+func (c *Chain) straddleSpans(ctx context.Context, pc linkagebound.DriverPiece, dependents int,
+	reach linkagebound.DependentReach, refuse func(error) error) ([]linkagebound.Span, error) {
+	asks, err := c.StraddleAsks(ctx, pc.Sub)
 	if err != nil {
 		return nil, err
 	}
@@ -385,7 +388,7 @@ func (c *Chain) straddleSpans(ctx context.Context, sub linkagebound.DriverSubseg
 	piece := make([]linkagebound.Span, dependents)
 	for j := range dependents {
 		h := c.Hull(asks, j)
-		if linkagebound.Magnitude(h).Cmp(reach[j]) > 0 {
+		if reach.StretchPast(j, h, pc.Lo, pc.Hi) {
 			return nil, refuse(fmt.Errorf(`%w: a dependent value lies outside the certified drive's reach`, sketch.ErrNotCertified))
 		}
 		piece[j] = linkagebound.Span{Start: linkagebound.ValueInterval(c.Value(asks[1], j)),
