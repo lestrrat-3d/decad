@@ -10,21 +10,46 @@ import (
 )
 
 // planarDeepVertexUnboxed is PlanarDeepVertex as it ran before it filled the
-// float boxes: the same loop over the preps, with no pre-test in any cast.
+// float boxes: the same loop over the preps, with no pre-test in any cast and
+// the exact box test on every triangle.
 func planarDeepVertexUnboxed(a, b *PlanarSolid, margin proof.Dyadic, poll func() error) (bool, error) {
+	return planarDeepVertexExactScan(preparePlanar(a), preparePlanar(b), margin, poll)
+}
+
+// planarDeepVertexExactScan runs the deep-vertex loop over the given preps
+// with the exact box test on every triangle, whether or not the preps hold
+// float boxes.
+func planarDeepVertexExactScan(pa, pb *planarPrep, margin proof.Dyadic, poll func() error) (bool, error) {
 	marginSquared := proof.DyMul(margin, margin)
-	pa, pb := preparePlanar(a), preparePlanar(b)
 	k := &planarKernel{a: pa, b: pb, poll: poll}
 	for _, side := range [][2]*planarPrep{{pa, pb}, {pb, pa}} {
 		from, to := side[0], side[1]
 		for _, point := range from.s.Verts {
-			deep, err := k.deepInside(point, to, marginSquared)
+			deep, err := exactDeepInside(k, point, to, marginSquared)
 			if err != nil || deep {
 				return deep, err
 			}
 		}
 	}
 	return false, nil
+}
+
+// exactDeepInside is deepInside as it ran before the float skip.
+func exactDeepInside(k *planarKernel, p proof.DyV3, solid *planarPrep, marginSquared proof.Dyadic) (bool, error) {
+	for t := range solid.s.Tris {
+		if err := k.poll(); err != nil {
+			return false, err
+		}
+		if proof.DyCmp(boxGapSquared(p, p, solid.triLo[t], solid.triHi[t]), marginSquared) > 0 {
+			continue
+		}
+		d := pointTriangle(solid, t, p)
+		if proof.DyCmp(d.num, proof.DyMul(marginSquared, d.den)) <= 0 {
+			return false, nil
+		}
+	}
+	result, err := k.cast(p, solid)
+	return result == castInside, err
 }
 
 var cubeTriangles = [][3]int{
@@ -146,4 +171,77 @@ func TestPlanarDeepVertexFloatBoxesKeepAnswers(t *testing.T) {
 	}
 	require.Positive(t, deepCount, "premise: some configurations hold a deep vertex")
 	require.Positive(t, notDeepCount, "premise: some configurations hold none")
+}
+
+// nearMargins returns margins that put a vertex's squared box gap to a
+// triangle at, one ulp above and one ulp below the squared margin, taken from
+// the first vertex and triangle pair whose boxes differ on exactly one axis.
+func nearMargins(a, b *PlanarSolid) []proof.Dyadic {
+	pb := preparePlanar(b)
+	for _, v := range a.Verts {
+		for t := range b.Tris {
+			var gaps []proof.Dyadic
+			for axis := range 3 {
+				switch {
+				case proof.DyCmp(v[axis], pb.triLo[t][axis]) < 0:
+					gaps = append(gaps, proof.DySubScalar(pb.triLo[t][axis], v[axis]))
+				case proof.DyCmp(pb.triHi[t][axis], v[axis]) < 0:
+					gaps = append(gaps, proof.DySubScalar(v[axis], pb.triHi[t][axis]))
+				}
+			}
+			if len(gaps) == 1 {
+				g := gaps[0]
+				ulp := proof.DyShift(g, -52)
+				return []proof.Dyadic{g, proof.DyAdd(g, ulp), proof.DySubScalar(g, ulp)}
+			}
+		}
+	}
+	return nil
+}
+
+// TestPlanarDeepVertexGapSkipKeepsAnswers holds the float skip of deepInside
+// to the exact box test on every triangle: the same answer, error and poll
+// count, including at the exact budget limit and one poll short, with margins
+// at, just above and just below a vertex's box gap.
+//
+// Legs shown to fail: a skip on a margin one ulp lower than the exact squared
+// margin, and a skip on a bound equal to the margin, each fail this test.
+func TestPlanarDeepVertexGapSkipKeepsAnswers(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(3081, 4242))
+	stop := errors.New("budget")
+	var near, deepCount int
+	for config := range 600 {
+		a, b := depthShapes(rng)
+		margins := []proof.Dyadic{proof.DyZero(), proof.MustDyOf(0.25), proof.DyInt(1), proof.DyShift(proof.DyInt(1), -52)}
+		extra := nearMargins(&a, &b)
+		near += len(extra)
+		margins = append(margins, extra...)
+		for mi, margin := range margins {
+			var wantPolls, gotPolls int
+			want, wantErr := planarDeepVertexUnboxed(&a, &b, margin, countingPoll(&wantPolls))
+			got, gotErr := PlanarDeepVertex(&a, &b, margin, countingPoll(&gotPolls))
+			if want != got || wantErr != nil || gotErr != nil || wantPolls != gotPolls {
+				t.Fatalf("config %d margin %d: deep %v/%v, errors %v/%v, polls %v/%v (old/new)",
+					config, mi, want, got, wantErr, gotErr, wantPolls, gotPolls)
+			}
+			if want {
+				deepCount++
+			}
+			for _, limit := range []int{wantPolls, wantPolls - 1} {
+				if limit < 1 {
+					continue
+				}
+				var oldCount, newCount int
+				oldDeep, oldErr := planarDeepVertexUnboxed(&a, &b, margin, failAfter(limit, &oldCount, stop))
+				newDeep, newErr := PlanarDeepVertex(&a, &b, margin, failAfter(limit, &newCount, stop))
+				if oldDeep != newDeep || (oldErr == nil) != (newErr == nil) || oldCount != newCount {
+					t.Fatalf("config %d margin %d limit %d: deep %v/%v, error %v/%v, polls %d/%d (old/new)",
+						config, mi, limit, oldDeep, newDeep, oldErr != nil, newErr != nil, oldCount, newCount)
+				}
+			}
+		}
+	}
+	require.Positive(t, near, "premise: some configurations give near-margin cases")
+	require.Positive(t, deepCount, "premise: some configurations hold a deep vertex")
 }

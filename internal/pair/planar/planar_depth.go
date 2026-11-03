@@ -19,11 +19,12 @@ func PlanarDeepVertex(a, b *PlanarSolid, margin proof.Dyadic, poll func() error)
 	// pre-test (planar_prune.go); neither changes an answer or a poll.
 	pa.floatBoxes()
 	pb.floatBoxes()
+	_, marginUp := proof.FloatBounds(marginSquared)
 	k := &planarKernel{a: pa, b: pb, poll: poll}
 	for _, side := range [][2]*planarPrep{{pa, pb}, {pb, pa}} {
 		from, to := side[0], side[1]
-		for _, point := range from.s.Verts {
-			deep, err := k.deepInside(point, to, marginSquared)
+		for v, point := range from.s.Verts {
+			deep, err := k.deepInside(point, from.vertBox[v], to, marginSquared, marginUp)
 			if err != nil || deep {
 				return deep, err
 			}
@@ -33,11 +34,19 @@ func PlanarDeepVertex(a, b *PlanarSolid, margin proof.Dyadic, poll func() error)
 }
 
 // deepInside reports whether p lies strictly inside solid with every
-// boundary triangle farther than sqrt(marginSquared) away.
-func (k *planarKernel) deepInside(p proof.DyV3, solid *planarPrep, marginSquared proof.Dyadic) (bool, error) {
+// boundary triangle farther than sqrt(marginSquared) away. pb is p's outward
+// float box and marginUp a float at or above marginSquared: a float lower
+// bound on the box gap above marginUp skips the triangle as the exact box test
+// would (planar_prune.go). Without the solid's float boxes every triangle
+// takes the exact test.
+func (k *planarKernel) deepInside(p proof.DyV3, pb floatBox, solid *planarPrep, marginSquared proof.Dyadic, marginUp float64) (bool, error) {
+	boxed := solid.triBox != nil
 	for t := range solid.s.Tris {
 		if err := k.poll(); err != nil {
 			return false, err
+		}
+		if boxed && gapSquaredBelowLimit(pb, solid.triBox[t], marginUp) > marginUp {
+			continue
 		}
 		if proof.DyCmp(boxGapSquared(p, p, solid.triLo[t], solid.triHi[t]), marginSquared) > 0 {
 			continue
