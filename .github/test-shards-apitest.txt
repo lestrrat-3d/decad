@@ -2983,3 +2983,4 @@
 11	0.00	TestVerifyCoaxialSeparator
 11	0.00	TestVerifyHistorySeparator
 11	0.00	TestVerifyHistoryFlushPrisms
+11	0.00	TestVerifyHistoryAnalyticCut

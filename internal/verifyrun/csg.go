@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/lestrrat-3d/decad/internal/boolchain"
+	"github.com/lestrrat-3d/decad/internal/facetedrecord"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/prismcells"
@@ -17,7 +18,9 @@ import (
 // result's interior misses its tool's interior, so it misses the interior of
 // any body the tool contains. A rail glued into the socket its own stock cut,
 // whose faces coincide with the socket's, is the case: no held mesh decides
-// the flush faces, but the history does. Containment is read from records:
+// the flush faces, but the history does. The walk reads a Boolean result's
+// operation and inputs when the result denotes it exactly, mesh or analytic
+// (historyWalk.expand). Containment is read from records:
 //
 //   - a Cut result lies in its target, an Intersect in either operand, a
 //     Union in the union of its operands;
@@ -56,9 +59,9 @@ func (w historyWalk) misses(a, b *topo.Body, depth int) (bool, error) {
 	if err := w.budget.Step(); err != nil {
 		return false, err
 	}
-	op, inputs, ok := expandable(w.history, a)
+	op, inputs, ok := w.expand(a)
 	if !ok {
-		if _, _, expands := expandable(w.history, b); expands {
+		if _, _, expands := w.expand(b); expands {
 			return w.misses(b, a, depth+1)
 		}
 		return w.leafApart(a, b)
@@ -94,7 +97,7 @@ func (w historyWalk) within(inner, outer *topo.Body, depth int) (bool, error) {
 	if in, err := w.leafWithin(inner, outer); err != nil || in {
 		return in, err
 	}
-	if op, inputs, ok := expandable(w.history, outer); ok {
+	if op, inputs, ok := w.expand(outer); ok {
 		switch op {
 		case meshbool.OpUnion:
 			for _, part := range inputs {
@@ -110,7 +113,7 @@ func (w historyWalk) within(inner, outer *topo.Body, depth int) (bool, error) {
 			return w.within(inner, inputs[1], depth+1)
 		}
 	}
-	op, inputs, ok := expandable(w.history, inner)
+	op, inputs, ok := w.expand(inner)
 	if !ok {
 		return false, nil
 	}
@@ -130,6 +133,29 @@ func (w historyWalk) within(inner, outer *topo.Body, depth int) (bool, error) {
 		return w.within(inputs[1], outer, depth+1)
 	}
 	return false, nil
+}
+
+// expand returns body's recorded Boolean producer and inputs when the body
+// denotes that operation exactly: a mesh Boolean result the chain admits
+// (boolchain.Expandable), or any other Boolean result with no operation
+// warning and no private shift. An analytic result's record may hold its
+// section within a displacement of the set, but the set it denotes is the
+// operation's exact result, which is all the walk reads.
+func (w historyWalk) expand(body *topo.Body) (meshbool.OperationKind, []*topo.Body, bool) {
+	if op, inputs, ok := expandable(w.history, body); ok {
+		return op, inputs, true
+	}
+	if w.history == nil || len(body.OperationWarnings) != 0 || body.PrivateShift != nil {
+		return 0, nil, false
+	}
+	if _, mesh := body.Payload.(facetedrecord.Payload); mesh {
+		return 0, nil, false
+	}
+	op, inputs, ok := w.history.BooleanProducer(body)
+	if !ok || len(inputs) != 2 {
+		return 0, nil, false
+	}
+	return op, inputs, true
 }
 
 // leafApart decides between two records directly whether their interiors are
