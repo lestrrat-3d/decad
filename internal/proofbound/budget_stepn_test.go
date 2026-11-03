@@ -29,8 +29,8 @@ func (c *countingContext) Err() error {
 	return nil
 }
 
-// TestStepNMatchesStepLoop compares StepN on a poll budget with n Step calls
-// on a second one: same count, same error, same Err calls, same next Step.
+// TestStepNMatchesStepLoop compares StepN on a NewWorkBudget budget with n
+// Step calls on a second one: same count, same error, same Err calls, same next Step.
 func TestStepNMatchesStepLoop(t *testing.T) {
 	for _, n := range []uint64{0, 1, 255, 256, 257, 1000, 100_000} {
 		for offset := range 301 {

@@ -258,12 +258,10 @@ func buildSectorAnnularCut(ctx context.Context, joined facetedrecord.Payload, ca
 	}
 	patches := revolvemesh.SectorBorePatchesOnto(mesh.Src, oldCount, n, false, caps.LowGroup, caps.HighGroup, -1,
 		wallIndex, bore.patchAxes())
-	// The audit reads ctx only through this budget: Step, StepN and Err. The
-	// poll budget counts steps as NewWorkBudget's does and calls ctx.Err at
-	// the same multiples of WorkPollInterval, so every call returns what
-	// NewWorkBudget's would and the audit's result and the step at which a
-	// cancel stops it are the same. Its StepN replays the audit's bulk steps
-	// in one move per poll instead of one call per step.
+	// The audit reads ctx only through this budget: Step, StepN and Err. It
+	// calls ctx.Err at each multiple of WorkPollInterval steps, and its StepN
+	// replays the audit's bulk steps in one move per poll instead of one call
+	// per step.
 	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewWorkBudget(ctx),
 		mesh.Verts, mesh.Tris, patches, SectorBoreMaxAuditTriangles,
 		SectorBoreMaxAuditScans); err != nil {
