@@ -132,6 +132,14 @@ func MeasuredInterference(ctx context.Context, alloc topo.Alloc, a, b *topo.Body
 	eval, err := evaluateBooleanMeshes(ctx, meshbool.OpIntersect, a, b, meshes, 1)
 	if err != nil {
 		if expected, ok := asExpectedBoolean(err); ok {
+			// An unshifted empty result passed the proximity gate: every
+			// facet pair within the summed displacements interpenetrates
+			// deeper than them, and none does here, so the held boundaries
+			// stand farther apart than both displacements and the true
+			// interiors are disjoint (agent-docs/interference-design.md §6).
+			if expected.Kind == meshbool.BooleanExpectedEmpty && expected.AppliedShift == nil {
+				return vocab.Measurement{}, boundaryaudit.InterferenceProvenDisjoint, nil
+			}
 			return vocab.Measurement{}, boundaryaudit.InterferenceOutcomeForExpected(expected), nil
 		}
 		return vocab.Measurement{}, boundaryaudit.InterferenceUndecided, err

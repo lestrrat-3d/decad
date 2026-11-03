@@ -266,6 +266,13 @@ func (r *Run) evaluatePair(mp *Pose, i, k int, a, b *Placed) error {
 	if err != nil {
 		return err
 	}
+	if outcome == boundaryaudit.InterferenceProvenDisjoint {
+		if !declared {
+			r.poseDiag(mp, mp.stamp(verifyrun.PairDiagNone(mover, partner, vocab.DiagUndecidedClearance,
+				"the pair is proven disjoint at this pose but its gap is unmeasured")))
+		}
+		return nil
+	}
 	if outcome != boundaryaudit.InterferenceMeasured && res.Verdict != boundaryaudit.PairOverlapping {
 		if declared {
 			return nil

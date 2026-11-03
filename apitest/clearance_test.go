@@ -684,8 +684,10 @@ func TestClearanceConeCoarseRow(t *testing.T) {
 func TestClearanceConeCoarseUndecided(t *testing.T) {
 	t.Parallel()
 	// The other half of the cone staging: with the face enclosures
-	// overlapping, the coarse lower bound cannot clear zero and the pair is
-	// undecided — Suspect unasked, and no fabricated row when asked.
+	// overlapping, the coarse lower bound cannot clear zero, so no gap is
+	// measured. The read-only intersection is empty after the proximity gate,
+	// which proves the pair disjoint (agent-docs/interference-design.md §6):
+	// Sound unasked, and Suspect with no fabricated row when a gap is asked.
 	doc := decad.New()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -705,7 +707,7 @@ func TestClearanceConeCoarseUndecided(t *testing.T) {
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Suspect, report.Status)
+	require.Equal(t, decad.Sound, report.Status)
 
 	report, err = doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)

@@ -232,6 +232,14 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 	if err != nil {
 		return verifyPairOutcome{}, err
 	}
+	if outcome == boundaryaudit.InterferenceProvenDisjoint {
+		if cfg.Clearances {
+			out.diagnostics = append(out.diagnostics, PairDiagNone(a, b, vocab.DiagUndecidedClearance,
+				"the pair's interiors are proven disjoint, but the requested clearance gap is unmeasured"))
+			out.undecided = true
+		}
+		return out, nil
+	}
 	if outcome != boundaryaudit.InterferenceMeasured {
 		out.diagnostics = append(out.diagnostics, UndecidedPairDiag(a, b, a, b, res.Verdict, outcome))
 		out.undecided = true

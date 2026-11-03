@@ -85,6 +85,10 @@ const (
 	InterferenceUnsupportedVolumeProofFirst
 	// InterferenceUnsupportedVolumeProofSecond — the same for the second operand.
 	InterferenceUnsupportedVolumeProofSecond
+	// InterferenceProvenDisjoint — the read-only intersection passed the
+	// proximity gate unshifted and kept no facet, which proves the interiors
+	// disjoint (agent-docs/interference-design.md §6): no overlap to measure.
+	InterferenceProvenDisjoint
 )
 
 // InterferenceOutcomeForExpected preserves the read-only boolean's private
