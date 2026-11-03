@@ -101,7 +101,7 @@ func PolygonLeaf(place Chain, pts [][2]float64, z0, z1, sectionDelta, dz0, dz1, 
 	pad := 2*widen*shape.stretch + relSlack*scale + 1e-9*scale
 	box = [2]r3.Vec{box[0].Sub(r3.Vec{X: pad, Y: pad, Z: pad}), box[1].Add(r3.Vec{X: pad, Y: pad, Z: pad})}
 	piece := &lazyPiece{box: box, build: func() (*Piece, error) {
-		return linesPrism(place, lines, lo, hi)
+		return linesPrism(place, lines, lo, hi, exactCornerCheck)
 	}}
 	l := newLeaf([][2]r3.Vec{box}, []*lazyPiece{piece}, delta, shape)
 	l.key = fmt.Sprintf("polygon %v %v %v %v %v %v %v %v", place, pts, z0, z1, sectionDelta, dz0, dz1, slack)
@@ -114,7 +114,7 @@ func PolygonLeaf(place Chain, pts [][2]float64, z0, z1, sectionDelta, dz0, dz1, 
 	ilo, ihi := z0+proofbound.AbsSumUpper(dz0, slack), z1-proofbound.AbsSumUpper(dz1, slack)
 	if ilo < ihi {
 		l.inner = &lazyPieces{build: func() ([]*Piece, error) {
-			p, err := linesPrism(place, inward, ilo, ihi)
+			p, err := linesPrism(place, inward, ilo, ihi, exactCornerCheck)
 			if errors.Is(err, decaderr.ErrUnsupported) {
 				return nil, nil
 			}
@@ -127,9 +127,16 @@ func PolygonLeaf(place Chain, pts [][2]float64, z0, z1, sectionDelta, dz0, dz1, 
 	return l, nil
 }
 
+type cornerCheckMode uint8
+
+const (
+	exactCornerCheck cornerCheckMode = iota
+	circleCornerPrefilter
+)
+
 // linesPrism is the exact convex piece of the half-planes lines (in order
 // around the section) between levels lo and hi, under place.
-func linesPrism(place Chain, lines []side, lo, hi float64) (*Piece, error) {
+func linesPrism(place Chain, lines []side, lo, hi float64, mode cornerCheckMode) (*Piece, error) {
 	n := len(lines)
 	corners := make([][2]*big.Rat, n)
 	for k := range corners {
@@ -142,8 +149,17 @@ func linesPrism(place Chain, lines []side, lo, hi float64) (*Piece, error) {
 		y := new(big.Rat).Sub(new(big.Rat).Mul(a.ux, b.c), new(big.Rat).Mul(a.c, b.ux))
 		corners[k] = [2]*big.Rat{x.Quo(x, det), y.Quo(y, det)}
 	}
+	useCirclePrefilter := mode == circleCornerPrefilter && circlePrefilterSafe(lines)
 	for k, p := range corners {
+		px, py := 0.0, 0.0
+		if useCirclePrefilter {
+			px, _ = p[0].Float64()
+			py, _ = p[1].Float64()
+		}
 		for j, l := range lines {
+			if useCirclePrefilter && cornerClearlyInside(l.fux, l.fuy, l.fc, px, py) {
+				continue
+			}
 			s := new(big.Rat).Mul(l.ux, p[0])
 			s.Add(s, new(big.Rat).Mul(l.uy, p[1]))
 			if s.Cmp(l.c) > 0 {
@@ -173,6 +189,20 @@ func linesPrism(place Chain, lines []side, lo, hi float64) (*Piece, error) {
 	}
 	p.finishFaces(n)
 	return p, nil
+}
+
+// circlePrefilterSafe permits the float-only corner shortcut only when every
+// half-plane exactly matches its finite float representation and its normal
+// components meet the shortcut's bounds.
+func circlePrefilterSafe(lines []side) bool {
+	for _, l := range lines {
+		if proofbound.IsNonFinite(l.fux) || proofbound.IsNonFinite(l.fuy) || proofbound.IsNonFinite(l.fc) ||
+			l.fux < -1 || l.fux > 1 || l.fuy < -1 || l.fuy > 1 ||
+			ratOf(l.fux).Cmp(l.ux) != 0 || ratOf(l.fuy).Cmp(l.uy) != 0 || ratOf(l.fc).Cmp(l.c) != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // polygonShape reads how far a held triangle pokes out of a placed convex

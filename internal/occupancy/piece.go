@@ -140,12 +140,8 @@ func CirclePrism(place Chain, r, z0, z1 float64, sides int) (*Piece, error) {
 	case math.IsNaN(z0) || math.IsNaN(z1) || math.IsInf(z0, 0) || math.IsInf(z1, 0) || !(z0 < z1):
 		return nil, fmt.Errorf("%w: levels %v, %v", ErrInvalid, z0, z1)
 	}
-	type line struct {
-		ux, uy, c    *big.Rat
-		fux, fuy, fc float64 // the same three values, which are floats
-	}
 	r2 := new(big.Rat).Mul(ratOf(r), ratOf(r))
-	lines := make([]line, sides)
+	lines := make([]side, sides)
 	for k := range lines {
 		th := 2 * math.Pi * float64(k) / float64(sides)
 		ux, uy := math.Cos(th), math.Sin(th)
@@ -164,65 +160,9 @@ func CirclePrism(place Chain, r, z0, z1 float64, sides int) (*Piece, error) {
 			}
 			c = math.Nextafter(c, math.Inf(1))
 		}
-		lines[k] = line{rx, ry, ratOf(c), ux, uy, c}
+		lines[k] = side{rx, ry, ratOf(c), ux, uy, c}
 	}
-	// Corner k is where line k meets line k+1, solved exactly by Cramer's rule.
-	corners := make([][2]*big.Rat, sides)
-	for k := range corners {
-		a, b := lines[k], lines[(k+1)%sides]
-		det := new(big.Rat).Sub(new(big.Rat).Mul(a.ux, b.uy), new(big.Rat).Mul(a.uy, b.ux))
-		if det.Sign() <= 0 {
-			return nil, fmt.Errorf("%w: sides %d and %d do not turn left", decaderr.ErrUnsupported, k, (k+1)%sides)
-		}
-		x := new(big.Rat).Sub(new(big.Rat).Mul(a.c, b.uy), new(big.Rat).Mul(a.uy, b.c))
-		y := new(big.Rat).Sub(new(big.Rat).Mul(a.ux, b.c), new(big.Rat).Mul(a.c, b.ux))
-		corners[k] = [2]*big.Rat{x.Quo(x, det), y.Quo(y, det)}
-	}
-	// Every corner must satisfy every half-plane: then the corners' hull is
-	// the half-plane intersection, which contains the circle.
-	for k, p := range corners {
-		px, _ := p[0].Float64()
-		py, _ := p[1].Float64()
-		for j, l := range lines {
-			if cornerClearlyInside(l.fux, l.fuy, l.fc, px, py) {
-				continue
-			}
-			s := new(big.Rat).Mul(l.ux, p[0])
-			s.Add(s, new(big.Rat).Mul(l.uy, p[1]))
-			if s.Cmp(l.c) > 0 {
-				return nil, fmt.Errorf("%w: corner %d violates side %d", decaderr.ErrUnsupported, k, j)
-			}
-		}
-	}
-	p := &Piece{z0: ratOf(z0), z1: ratOf(z1), fz0: z0, fz1: z1}
-	for _, l := range lines {
-		fux, _ := l.ux.Float64()
-		fuy, _ := l.uy.Float64()
-		fc, _ := l.c.Float64()
-		p.sides = append(p.sides, side{l.ux, l.uy, l.c, fux, fuy, fc})
-	}
-	for _, a := range slices.Backward(place) {
-		e, err := invert(a)
-		if err != nil {
-			return nil, err
-		}
-		p.inv = append(p.inv, e)
-		p.finv = append(p.finv, e.float())
-	}
-	for _, z := range []float64{z0, z1} {
-		rz := ratOf(z)
-		for _, c := range corners {
-			v := place.applyExact(xvec{c[0], c[1], rz})
-			p.verts = append(p.verts, v)
-			p.fverts = append(p.fverts, v.float())
-		}
-	}
-	n := sides
-	for k := range n {
-		p.edges = append(p.edges, [2]int{k, (k + 1) % n}, [2]int{n + k, n + (k+1)%n}, [2]int{k, n + k})
-	}
-	p.finishFaces(n)
-	return p, nil
+	return linesPrism(place, lines, z0, z1, circleCornerPrefilter)
 }
 
 // cornerClearlyInside reports true only when the exact corner P, held as
