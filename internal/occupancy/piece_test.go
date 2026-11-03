@@ -127,9 +127,9 @@ func TestCornerClearlyInsideNonFinite(t *testing.T) {
 	require.False(t, cornerClearlyInside(1, 0, 1, 1, 0))
 }
 
-// circlePrismRefusal is the exact-only check CirclePrism made before its float
-// prefilter: the same lines, corners, comparison order and error values.
-func circlePrismRefusal(r float64, sides int, nudge func(k int, c float64) float64) error {
+// circlePrismRefusal is CirclePrism's corner check with every pair compared
+// exactly: the same lines, corners, comparison order and error values.
+func circlePrismRefusal(r float64, sides int) error {
 	type line struct{ ux, uy, c *big.Rat }
 	r2 := new(big.Rat).Mul(ratOf(r), ratOf(r))
 	lines := make([]line, sides)
@@ -151,7 +151,7 @@ func circlePrismRefusal(r float64, sides int, nudge func(k int, c float64) float
 			}
 			c = math.Nextafter(c, math.Inf(1))
 		}
-		lines[k] = line{rx, ry, ratOf(nudge(k, c))}
+		lines[k] = line{rx, ry, ratOf(c)}
 	}
 	corners := make([][2]*big.Rat, sides)
 	for k := range corners {
@@ -184,7 +184,7 @@ func TestCirclePrismMatchesExactOnlyCheck(t *testing.T) {
 		if r > 1e300 || r < 1e-300 {
 			continue
 		}
-		want := circlePrismRefusal(r, sides, func(_ int, c float64) float64 { return c })
+		want := circlePrismRefusal(r, sides)
 		p, err := CirclePrism(nil, r, 0, 1, sides)
 		if want == nil {
 			require.NoError(t, err, "r=%v sides=%d", r, sides)

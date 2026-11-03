@@ -243,10 +243,10 @@ func CirclePrism(place Chain, r, z0, z1 float64, sides int) (*Piece, error) {
 //
 // With A = |ux·P.x| + |uy·P.y| this gives |t − (ux·P.x + uy·P.y)| ≤
 // 3.1u·A + 7η. The margin m = fl(fl(a·2^-50) + 2^-1000) uses a = fl(|q1| +
-// |q2|) ≥ A(1 − 3.1u) − 7η, and 2^-50 = 8u, so m ≥ 7.9u·A − 8η + 2^-1000 is
-// at least 2.5 times the bound, the η terms being dwarfed by 2^-1000. Rounding
-// is monotone and m is a float, so fl(c − t) > m implies c − t > m exactly,
-// whence c − (ux·P.x + uy·P.y) > m − 3.1u·A − 7η > 0.
+// |q2|) ≥ A(1 − 3.1u) − 7η, and 2^-50 = 8u, so m ≥ 7.9u·A − 8η +
+// (1 − u)·2^-1000 is at least 2.5 times the bound, the η terms being dwarfed
+// by 2^-1000. Rounding is monotone and m is a float, so fl(c − t) > m implies
+// c − t > m exactly, whence c − (ux·P.x + uy·P.y) > m − 3.1u·A − 7η > 0.
 //
 // Overflow and NaN. A corner beyond the float range converts to ±Inf, and a
 // product can overflow. Then q1, q2 or t is infinite or NaN. NaN fails every
