@@ -115,7 +115,7 @@ func (w historyWalk) misses(a, b *topo.Body, depth int) (bool, error) {
 		if apart, err := revolvePiecesApart(w.ctx, w.budget, w.history, a, b); err != nil || apart {
 			return apart, err
 		}
-		if apart, err := boxApart(w.ctx, w.budget, w.history, a, b); err != nil || apart {
+		if apart, err := boxApart(w.budget, w.history, a, b); err != nil || apart {
 			return apart, err
 		}
 		return w.misses(inputs[0], b, depth+1)
