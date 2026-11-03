@@ -688,7 +688,7 @@ func (c cylinderShape) poke(tri [3]r3.Vec) float64 {
 }
 
 // radii is r² and 2r, exactly, for cornerPoke.
-func (c cylinderShape) radii() (rr, twoR *big.Rat) {
+func (c cylinderShape) radii() (*big.Rat, *big.Rat) {
 	return new(big.Rat).Mul(ratOf(c.r), ratOf(c.r)), new(big.Rat).Mul(big.NewRat(2, 1), ratOf(c.r))
 }
 

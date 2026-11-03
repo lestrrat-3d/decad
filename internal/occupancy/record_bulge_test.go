@@ -2,15 +2,19 @@ package occupancy
 
 import (
 	"math"
+	"math/big"
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proofbound"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
 
 // oldMeshPokes is the per-facet algorithm meshPokes replaces: every facet reads
 // each near leaf's poke on its own, folding the leaves in order with math.Min.
+// A cylinder leaf reads oldCylinderPoke, so the comparison also covers the
+// split of cylinderShape.poke into cornerPoke and pokeOf.
 func oldMeshPokes(r *Record, verts []r3.Vec, tris [][3]int) []float64 {
 	out := make([]float64, len(tris))
 	for t, tri := range tris {
@@ -18,13 +22,55 @@ func oldMeshPokes(r *Record, verts []r3.Vec, tris [][3]int) []float64 {
 		lo, hi := triBox(tv)
 		poke := math.Inf(1)
 		for _, l := range r.Leaves {
-			if l.near(lo, hi, r.Cross+l.Delta) {
-				poke = math.Min(poke, l.shape.poke(tv))
+			if !l.near(lo, hi, r.Cross+l.Delta) {
+				continue
 			}
+			if c, ok := l.shape.(cylinderShape); ok {
+				poke = math.Min(poke, oldCylinderPoke(c, tv))
+				continue
+			}
+			poke = math.Min(poke, l.shape.poke(tv))
 		}
 		out[t] = poke
 	}
 	return out
+}
+
+// oldCylinderPoke is cylinderShape.poke as one loop that skips each corner
+// the float reading proves inside.
+func oldCylinderPoke(c cylinderShape, tri [3]r3.Vec) float64 {
+	rr := new(big.Rat).Mul(ratOf(c.r), ratOf(c.r))
+	twoR := new(big.Rat).Mul(big.NewRat(2, 1), ratOf(c.r))
+	worst := 0.0
+	for _, w := range tri {
+		f := w
+		for _, a := range c.finv {
+			f = a.applyFloat(f)
+		}
+		margin := 1e-6 * (c.r + math.Abs(c.z0) + math.Abs(c.z1) + w.Len())
+		if math.Hypot(f.X, f.Y) < c.r-margin && f.Z > c.z0+margin && f.Z < c.z1-margin {
+			continue
+		}
+		p := xvecOf(w)
+		for _, e := range c.inv {
+			p = e.apply(p)
+		}
+		q := new(big.Rat).Mul(p[0], p[0])
+		q.Add(q, new(big.Rat).Mul(p[1], p[1]))
+		radial := 0.0
+		if q.Cmp(rr) > 0 {
+			radial = ratUpper(new(big.Rat).Quo(q.Sub(q, rr), twoR))
+		}
+		axial := 0.0
+		if d := new(big.Rat).Sub(ratOf(c.z0), p[2]); d.Sign() > 0 {
+			axial = ratUpper(d)
+		}
+		if d := new(big.Rat).Sub(p[2], ratOf(c.z1)); d.Sign() > 0 {
+			axial = max(axial, ratUpper(d))
+		}
+		worst = max(worst, proofbound.AbsSumUpper(radial, axial))
+	}
+	return proofbound.AbsSumUpper(proofbound.UpRound(worst*c.stretch), c.displacement)
 }
 
 func randRotation(rng *rand.Rand) [3][3]float64 {
