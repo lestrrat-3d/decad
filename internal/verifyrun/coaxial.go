@@ -7,6 +7,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/boolchain"
 	"github.com/lestrrat-3d/decad/internal/meshbool"
 	"github.com/lestrrat-3d/decad/internal/prismrecord"
+	"github.com/lestrrat-3d/decad/internal/revolveplan"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 	"github.com/lestrrat-3d/decad/internal/topo"
 	"github.com/lestrrat-3d/r3"
@@ -29,6 +30,9 @@ import (
 //     whole circle; two such cylinders are the same set when exactly
 //     orthonormal lifts give them one axis and radius, or when one affine lift
 //     carries both;
+//   - a Revolve on the axis of an exactly orthonormal cylinder lies outside
+//     it when its least radius, scaled by its lift across the axis over its
+//     sweep, reaches the cylinder's radius (coaxial_reach.go);
 //   - a Cut result lies outside the cylinder of its tool, or of a Union
 //     operand of its tool, that is a prism over one whole circle, when its
 //     target lies within the tool's levels: the target's part inside the
@@ -149,6 +153,9 @@ func outsideCylinder(history boolchain.Source, body *topo.Body, c coaxialCylinde
 			}
 		}
 		return false
+	}
+	if rp, ok := body.Payload.(revolveplan.Payload); ok {
+		return revolveClearsCylinder(rp, c)
 	}
 	op, inputs, ok := expandRecorded(history, body)
 	if !ok {

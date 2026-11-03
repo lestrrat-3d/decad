@@ -191,7 +191,13 @@ non-overlapping. Each side is read from records alone, in exact rationals:
   tool's lift) is read exactly, as the end-cap separator reads support. Every
   point of the target inside the cylinder then lies in the closed tool, so the
   Cut's interior misses the cylinder's open interior. A plate bored through
-  by a tool on the shaft's own lift is decided this way.
+  by a tool on the shaft's own lift is decided this way;
+- a solid Revolve the meridian separator reads (below) lies outside a
+  cylinder on an exactly orthonormal lift when its lifted axis is the
+  cylinder's axis line and its least radius, scaled by its lift across the
+  axis over its sweep, reaches `r` (`internal/verifyrun/coaxial_reach.go`,
+  "The Revolve reach" below). A label bonded flush on a yarn pack, placed at
+  a rounded angle, is decided this way.
 
 The coaxial walk reads Boolean results as the history walk does, any number
 of operands included. Two cylinders match only with equal radii and either
@@ -208,6 +214,55 @@ rounded translation, denote sets whose boundaries may cross by rounding, and
 stay undecided.
 The certificate proves no gap, so under `WithClearances()` the pair keeps an
 unmeasured-clearance diagnostic, as a Cut result against its own tool does.
+
+**The Revolve reach.** A Revolve's denoted point at axial `z`, radius `ρ ≥ 0`
+and angle `φ` is `A + z·D + ρ·(cos φ·a₁ + sin φ·a₂)`: `A` the lifted axis
+anchor, `D` the lifted axis direction `L·W`, and `a₁ = L·E₀`,
+`a₂ = L·(W × E₀)` the lifted radial directions, each an exact rational of
+the record's floats, the leaves `revolvemesh.RevolveLift.ExactPointRound`
+reads. A region the meridian separator reads on the side `ρ < 0` is mirrored,
+which turns each direction to its opposite and leaves the reading below
+unchanged. When `D` is parallel to the cylinder's axis and `A` lies on that
+line, both exactly, the point's distance from the axis is
+`ρ·|cos φ·P a₁ + sin φ·P a₂|`, `P` the exact projection across the axis,
+because `P` removes `A`'s offset along the axis and `z·D`. Its square is
+`ρ²·Q(φ)`, with `Q` the quadratic form of `M = [[|Pa₁|², Pa₁·Pa₂],
+[Pa₁·Pa₂, |Pa₂|²]]` at `(cos φ, sin φ)`. Let `ρ_min > 0` be the region's
+least radius (a vertex's, or a disc's centre less its radius) and
+`κ = r²/ρ_min²`. Every point then lies at least `r` from the axis when
+`Q − κ` is non-negative at every swept direction:
+
+- a full turn sweeps every direction, so `M − κI` must be positive
+  semidefinite: both diagonal terms and the determinant non-negative;
+- a partial sweep `[φ₀, φ₁]`, whose width read from the two ends' angle
+  enclosures (`revolveangle.Angle.EnclosureFor`) lies in `[0, π)`, sweeps only
+  directions `w = α·e₀ + β·e₁` with `α, β ≥ 0`, `eᵢ` the end directions.
+  There the form is `α²·q₀ + β²·q₁ + 2αβ·b`, with `qᵢ` its value at `eᵢ` and
+  `b` its bilinear value at the pair. It is non-negative when `q₀, q₁ ≥ 0`
+  and either `b ≥ 0` or `b² ≤ q₀·q₁`, since it is then at least
+  `(α·√q₀ − β·√q₁)²`. The ends' sines and cosines are rational enclosures
+  (`revolveangle.Angle.SinCosFor`), `q₀`, `q₁` and `b` are evaluated in
+  interval arithmetic, and each test reads the bound that can only refuse
+  more.
+
+The Revolve then lies in the closed exterior of the cylinder, so its interior
+misses the open interior of the other body, which lies in the closed
+cylinder. Under an exactly orthonormal lift `Q` is 1 at every angle. Under a
+lift that is a rotation by rounding, `Q` differs from 1 by about `1e-16`, and
+unevenly with `φ`. A 0.13 rad label of inner radius 30.65 bonded on a pack of
+that radius, turned by a rounded angle, has `Q − 1 ≥ 4.2e-16` over its sweep
+and is decided. The same lift's least eigenvalue is `6.9e-17` below 1, so a
+whole ring on it dips about `1e-15` mm into the pack: its denoted set overlaps
+the pack's, and the reading refuses it.
+
+A tangent contact designed through rounded numbers can overlap the same way,
+and then no reading may call it apart. A brake cord of radius 0.6 swept half
+round a bobbin's V groove of slope 2, at the float radius `42 + 0.6·√5`,
+clears exact tangency by `6.5e-15` mm. Its arc's axis sits `7.1e-15` mm off
+the bobbin's axis and its plane `5.3e-15` mm off the groove's centre, so the
+cord's denoted set crosses a wall by about `2e-15` mm at one end of the arc
+and `8e-15` mm at the other. The pair stays undecided until the design opens
+a clearance.
 
 **The history certificate** (`internal/verifyrun/csg.go`) answers a pair the
 coaxial separator leaves open from the recorded Boolean history alone. A Cut
@@ -323,7 +378,15 @@ Refine moves no vertex and changes only the bound its mesh publishes, so the
 true solid it denotes is the source's (`refine.go`). The root names such a
 producer (`historyProducers.SameSetProducer`) only for a Refine whose one
 consumed input is the recorded source, and the walks follow it before any other
-reading, so a refined Union is opened as its Union.
+reading, so a refined Union is opened as its Union. A Transform whose motion
+is exactly the identity, unit axes and a zero translation bit for bit up to
+the sign of zero, is read the same way: the identity moves no point, so the
+placed body denotes its source's set whatever payload it holds. `Transform`
+records each such result as it commits it (`Document.identityPlacements`),
+since the operation record keeps no motion. A refined yarn chain that a
+part's head tilt places by the identity at its rest pose is opened through
+the placement, the Refine and the Union down to the span resting on the pack.
+Any other motion, however close to the identity, keeps the placed body a leaf.
 
 **The Cut-tool meridian** (`internal/verifyrun/cut_meridian.go`) reads a
 Cut by a prism over one whole circle, or by a Union with such an operand, as a

@@ -3006,3 +3006,5 @@
 11	0.00	TestVerifyPieceSeparatorStripReach
 11	0.00	TestVerifyBoxInRecess
 11	0.00	TestVerifyBoxAlgebra
+11	0.00	TestVerifyCoaxialRevolveReach
+11	0.00	TestVerifyIdentityPlacedChain
