@@ -509,7 +509,10 @@ apart from the chain, a slab by either of:
   world. The footprint is the rectangle the cylinder projects to along the sweep,
   its edges rounded outward to floats; a point of both interiors would project
   into both sections' interiors, which Sketch has ruled out
-  (`prismcells.SectionsApart`), for every exact prism part of the target. A head flush on a bracket's face, though its
+  (`prismcells.SectionsApart`), for every exact prism part of the target. Two
+  sections whose outline boxes share no interior along a section axis, touching
+  allowed, are apart without the arrangement; a circle tangent to the rectangle's
+  edge, which the arrangement cannot certify, is decided this way. A head flush on a bracket's face, though its
   revolution reaches a knuckle beside it, is decided this way, as is a cylinder
   whose reach along the sweep misses the target's levels.
 
