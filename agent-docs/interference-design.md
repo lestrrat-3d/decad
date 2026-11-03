@@ -183,7 +183,15 @@ non-overlapping. Each side is read from records alone, in exact rationals:
   any hole that is one whole circle;
 - a mesh Boolean result whose history denotes its operation exactly
   (`boolchain.Expandable`) inherits it: a Cut lies where its target lies, an
-  Intersect where either operand lies, a Union where both lie.
+  Intersect where either operand lies, a Union where both lie;
+- a Cut result also lies outside a cylinder that is its tool's, or a Union
+  tool operand's, when that operand is a prism over one whole circle with
+  exact levels and the target lies within those levels along the cylinder's
+  axis. The target's reach along the axial functional g (Lᵀg = e₃ for the
+  tool's lift) is read exactly, as the end-cap separator reads support. Every
+  point of the target inside the cylinder then lies in the closed tool, so the
+  Cut's interior misses the cylinder's open interior. A plate bored through
+  by a tool on the shaft's own lift is decided this way.
 
 The coaxial walk reads Boolean results as the history walk does, any number
 of operands included. Two cylinders match only with equal radii and either

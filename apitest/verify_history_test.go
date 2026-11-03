@@ -197,8 +197,9 @@ func TestVerifyHistoryAnalyticCut(t *testing.T) {
 // TestVerifyHistoryPinInItsBore drills a 10 mm cube with a Ø2 tool along z
 // from z = −1 to 11 and seats a Ø2 pin in the bore. The pin's circle is the
 // tool's circle, centre and radius alike, so the pin lies in the tool once its
-// levels do: a pin from z = 2 to 8 is decided; one that runs out to z = 11.5,
-// past the tool, or one 0.01 mm off the tool's centre, is not.
+// levels do: a pin from z = 2 to 8 is decided, and one that runs out to
+// z = 11.5, past the tool, is decided by the coaxial check instead; one
+// 0.01 mm off the tool's centre is not.
 //
 // Leg shown to fail: without the identical-circle reading the seated pin keeps
 // its pair diagnostic.
@@ -210,7 +211,9 @@ func TestVerifyHistoryPinInItsBore(t *testing.T) {
 		separated bool
 	}{
 		{"pin inside the tool", 5, 8, true},
-		{"pin past the tool", 5, 11.5, false},
+		// The history walk cannot place this pin in the tool, but the
+		// coaxial check reads the drilled cube outside the tool's cylinder.
+		{"pin past the tool", 5, 11.5, true},
 		{"pin off the tool's centre", 5.01, 8, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
