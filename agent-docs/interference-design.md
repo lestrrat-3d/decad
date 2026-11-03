@@ -196,6 +196,33 @@ stay undecided.
 The certificate proves no gap, so under `WithClearances()` the pair keeps an
 unmeasured-clearance diagnostic, as a Cut result against its own tool does.
 
+**The history certificate** (`internal/verifyrun/csg.go`) answers a pair the
+coaxial separator leaves open from the recorded Boolean history alone. A Cut
+result's interior misses its tool's interior, so it misses the interior of any
+body the tool contains: a rail glued into the socket its own longer stock cut,
+whose faces coincide with the socket's, is proven non-overlapping however
+many curved faces either body has. The walk reads only histories that denote
+their operation exactly (`boolchain.Expandable`):
+
+- a Cut result misses a body that lies in its tool, or that its target
+  misses; an Intersect misses what either operand misses; a Union misses what
+  both operands miss;
+- a Cut result lies in its target, an Intersect in either operand, a Union in
+  a body both operands lie in, and a body lies in a Union when it lies in
+  either operand or in an Intersect when it lies in both;
+- a prism lies in another prism with the same frame and placement, both
+  sections and levels held exactly, its levels within the other's, and a
+  section that a private Sketch scene proves inside the other's
+  (`prismcells.SectionWithin`, the arrangement of
+  `agent-docs/prism-boolean-design.md` §4.1-§4.2); any other leaf lies only in
+  an analytically equal body;
+- two such prisms miss each other when their levels share no interior or
+  Sketch proves their sections share none (`prismcells.SectionsApart`), so a
+  block glued flat on a rail is decided; a leaf against a Boolean result is
+  read through the result's history.
+
+Like the coaxial separator, it proves no gap.
+
 ### 3.3 Full containment
 
 A strict full-containment certificate proves both the relation and the overlap
