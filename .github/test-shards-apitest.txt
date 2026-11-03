@@ -2987,3 +2987,4 @@
 11	0.00	TestVerifyEmptyIntersectionProvesDisjoint
 11	0.00	TestVerifyCoaxialNaryUnion
 11	0.00	TestVerifyMeridianSeparator
+11	0.00	TestVerifyEndCapSeparator
