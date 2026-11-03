@@ -42,7 +42,10 @@ func TestVerifyCoilClearanceAgainstUnsupportedRevolveIsSuspect(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, report.Clearances)
 	require.Equal(t, decad.Suspect, report.Status)
-	diagnostic, ok := findDiagnostic(report.Diagnostics, decad.DiagUndecidedPair)
+	// The ring's read-only intersection with the coil is empty after the
+	// proximity gate, which proves the pair disjoint, but no gap is measured
+	// (agent-docs/interference-design.md §6).
+	diagnostic, ok := findDiagnostic(report.Diagnostics, decad.DiagUndecidedClearance)
 	require.True(t, ok)
 	require.Equal(t, decad.Suspect, diagnostic.Status)
 }

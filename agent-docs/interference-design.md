@@ -620,10 +620,23 @@ These outcomes do **not** emit a row:
 
 | Outcome | Why | Pair result |
 |---|---|---|
-| held intersection empty | an empty approximation plus a nonzero symmetric-difference allowance does not prove true emptiness | `Suspect` unless an earlier path proved disjoint/touching |
+| held intersection empty after a gap shift | the shift moved a held mesh off the true operand, so the empty result says nothing of the true pair | `Suspect` unless an earlier path proved disjoint/touching |
 | `V - E <= 0` | interval admits zero; held overlap is below this evaluator's proof reach | `Suspect` |
 | tangent/grazing/coplanar contact refused | topology classifier did not prove a positive-volume intersection | `Suspect` unless clearance certified touching |
 | operand/result unsupported | evaluator lacks a complete path | `Suspect` |
+
+An unshifted empty held intersection proves the interiors disjoint
+(`boundaryaudit.InterferenceProvenDisjoint`). The proximity gate ran first: every
+pair of facets that came within the summed displacements of their faces
+interpenetrates deeper than that sum, which would keep facets, so none comes
+that close. The held boundaries then stand farther apart than both
+displacements, and the held solids share no point. Every true solid lies
+within its displacement band of its held one, and no band reaches the other
+solid's held body or band without crossing a held boundary closer than the
+sum. The true interiors are therefore disjoint, and the pair takes no row and
+no diagnostic, or an unmeasured-clearance one under `WithClearances()`. A
+coplanar face-on-face arrangement never reaches this outcome: the mesh pass
+refuses it.
 
 Do not turn a mesh witness point, an intersection segment, a nesting witness,
 or a positive held volume alone into a row. Every row carries the bounded
@@ -874,7 +887,8 @@ Each row is a PR-sized stage. An unanswered verification question reads
   (§2): one layer of parallel workers, never two.
 - Require strict positive lower overlap volume except under a certified
   containment or equality set identity.
-- Treat empty, contact, unsupported, and coarse results as undecided; propagate
+- Treat an unshifted empty result as proven disjoint (§6); treat a shifted
+  empty, contact, unsupported, and coarse results as undecided; propagate
   internal failures.
 - Preserve document pair order.
 - Stage all multi-lump analytic containment; use read-only intersection and
