@@ -1,15 +1,15 @@
 name: Docs
 
 # Regenerates docs/reference once a day and commits any change straight to
-# the default branch. It does not run on pushes or pull requests, so the write
-# permission below is never held by a job a pull request can influence.
+# the default branch. It does not run on pushes or pull requests. The push uses
+# a GitHub App token, so the workflow's own token stays read-only.
 on:
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}
@@ -19,9 +19,22 @@ jobs:
   reference:
     name: regenerate reference
     runs-on: ubuntu-latest
+    # The environment holds the app key and only lets main read it, so a job on
+    # any other branch cannot push past the pull request rule.
+    environment: docs
     steps:
+      # The default GITHUB_TOKEN cannot bypass the pull request rule. The app can.
+      - name: Create app token
+        id: app
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ vars.DOCS_APP_ID }}
+          private-key: ${{ secrets.DOCS_APP_PRIVATE_KEY }}
+
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ steps.app.outputs.token }}
 
       # pkg.go.dev cannot host this module (non-OSS license), so the package
       # reference is generated into docs/reference and committed.
