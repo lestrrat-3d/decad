@@ -186,6 +186,22 @@ func RimBound(deltaA, deltaB float64, sin2 *SinSquare) float64 {
 	return proofbound.DivUpper(d, SinLowerBound(sin2))
 }
 
+// rimBoundFromSin is RimBound with the sine bound already in hand: sin is
+// SinLowerBound of the pair's square when hasSin, and ignored otherwise. A
+// caller that also needs the sine computes it once and passes it here.
+// RimBound reads the sine only when the slabs are nonzero, so a caller with
+// no other use for the sine calls RimBound instead.
+func rimBoundFromSin(deltaA, deltaB, sin float64, hasSin bool) float64 {
+	d := proofbound.AbsSumUpper(deltaA, deltaB)
+	if d <= 0 {
+		return 0
+	}
+	if !hasSin {
+		return math.Inf(1)
+	}
+	return proofbound.DivUpper(d, sin)
+}
+
 // MeshBoolean runs the exact-predicate boolean over two prepared operand
 // tessellations. It returns the kept, still-exact facets, each corner carrying
 // its pre-weld bound, and the largest RimBound any contact segment it used

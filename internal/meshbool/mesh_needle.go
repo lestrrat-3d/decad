@@ -40,6 +40,12 @@ func FlipNeedles(ctx context.Context, verts []proof.Xpt, tris [][3]int, src []in
 	for i, p := range verts {
 		held[i] = p.Vec()
 	}
+	return flipNeedlesHeld(ctx, verts, held, tris, src, bounds)
+}
+
+// flipNeedlesHeld is FlipNeedles with held[i] = verts[i].Vec() supplied by
+// the caller; it only reads held.
+func flipNeedlesHeld(ctx context.Context, verts []proof.Xpt, held []r3.Vec, tris [][3]int, src []int, bounds []float64) (int, error) {
 	edges := make(map[[2]int]int, 3*len(tris))
 	for t, tri := range tris {
 		for k := range 3 {

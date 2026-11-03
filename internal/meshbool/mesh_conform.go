@@ -22,6 +22,13 @@ import (
 // lies on that held facet, so it is raised to the facet's bound
 // (agent-docs/faceted-vertex-bounds-design.md §3.3).
 func ConformOnce(ctx context.Context, verts []proof.Xpt, tris *[][3]int, src *[]int, bounds *[]float64, xbeta []float64) (bool, error) {
+	return conformOnceApprox(ctx, verts, nil, tris, src, bounds, xbeta)
+}
+
+// conformOnceApprox is ConformOnce with approx, when non-nil, holding
+// verts[i].Vec() at index i, so a caller that runs several passes over the
+// same immutable vertices rounds them once. The pass only reads approx.
+func conformOnceApprox(ctx context.Context, verts []proof.Xpt, approx []r3.Vec, tris *[][3]int, src *[]int, bounds *[]float64, xbeta []float64) (bool, error) {
 	// One counter spans the facet walk, the grid-cell candidate scan nested
 	// under it, and the along-edge ordering: the candidate vertices a single
 	// facet edge sweeps are the candidate operations §7.2 counts, not the
@@ -30,7 +37,7 @@ func ConformOnce(ctx context.Context, verts []proof.Xpt, tris *[][3]int, src *[]
 	if err := budget.Err(); err != nil {
 		return false, err
 	}
-	scan, err := NewConformScan(budget, verts)
+	scan, err := newConformScanApprox(budget, verts, approx)
 	if err != nil {
 		return false, err
 	}
@@ -164,14 +171,28 @@ type ConformScan struct {
 }
 
 func NewConformScan(budget *proofbound.WorkBudget, verts []proof.Xpt) (*ConformScan, error) {
+	return newConformScanApprox(budget, verts, nil)
+}
+
+// newConformScanApprox is NewConformScan reusing approx, when non-nil, as the
+// rounded vertices (approx[i] = verts[i].Vec()); the scan only reads it.
+func newConformScanApprox(budget *proofbound.WorkBudget, verts []proof.Xpt, approx []r3.Vec) (*ConformScan, error) {
 	lo, hi := r3.Vec{}, r3.Vec{}
-	approx := make([]r3.Vec, len(verts))
+	shared := approx != nil
+	if !shared {
+		approx = make([]r3.Vec, len(verts))
+	}
 	for i, p := range verts {
 		if err := budget.Step(); err != nil {
 			return nil, err
 		}
-		v := p.Vec()
-		approx[i] = v
+		var v r3.Vec
+		if shared {
+			v = approx[i]
+		} else {
+			v = p.Vec()
+			approx[i] = v
+		}
 		if i == 0 {
 			lo, hi = v, v
 			continue

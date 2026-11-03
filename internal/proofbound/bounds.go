@@ -1688,31 +1688,35 @@ func CellTwistAreaProjectedAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	for i := range w {
 		w[i] = proofarith.DyAdd(proofarith.DyAdd(proofarith.DyShift(n0[i], 1), a[i]), b[i])
 	}
-	ww := proofarith.DvDot(w, w).Rat()
+	ww := proofarith.DvDot(w, w)
 	if ww.Sign() <= 0 {
 		return math.Inf(1)
 	}
-	wa := proofarith.DvDot(w, a).Rat()
-	wb := proofarith.DvDot(w, b).Rat()
-	perp := func(v proofarith.DyV3, wv *big.Rat) *big.Rat {
-		out := proofarith.DvDot(v, v).Rat()
-		return proofarith.SubRat(out, out, proofarith.QuoRat(new(big.Rat), proofarith.MulRat(new(big.Rat), wv, wv), ww))
+	wa := proofarith.DvDot(w, a)
+	wb := proofarith.DvDot(w, b)
+	// |A⊥|² + |B⊥|² = numW/|W|², numW = |A|²|W|² − (W·A)² + |B|²|W|² − (W·B)²,
+	// is formed exactly in dyadics; |W|² > 0, so numW carries its sign and the
+	// bound is numW·|W| / (|W|²·2c), the same rational as the quotient form.
+	perpW := func(v proofarith.DyV3, wv proofarith.Dyadic) proofarith.Dyadic {
+		return proofarith.DySubScalar(proofarith.DyMul(proofarith.DvDot(v, v), ww), proofarith.DyMul(wv, wv))
 	}
-	num := proofarith.AddRat(new(big.Rat), perp(a, wa), perp(b, wb))
-	if num.Sign() <= 0 {
+	numW := proofarith.DyAdd(perpW(a, wa), perpW(b, wb))
+	if numW.Sign() <= 0 {
 		return 0
 	}
-	c := proofarith.SubRat(new(big.Rat), ww, new(big.Rat).Abs(wa))
-	proofarith.SubRat(c, c, new(big.Rat).Abs(wb))
+	c := proofarith.DySubScalar(proofarith.DySubScalar(ww, proofarith.DyAbs(wa)), proofarith.DyAbs(wb))
 	if c.Sign() <= 0 {
 		return math.Inf(1)
 	}
-	wLen, ok := RatOf(RatSqrtUp(ww))
+	wwRat := ww.Rat()
+	wLen, ok := RatOf(RatSqrtUp(wwRat))
 	if !ok {
 		return math.Inf(1)
 	}
+	num := numW.Rat()
 	proofarith.MulRat(num, num, wLen)
-	return RatFloatUp(proofarith.QuoRat(num, num, proofarith.MulRat(c, c, big.NewRat(2, 1))))
+	den := proofarith.MulRat(wwRat, wwRat, proofarith.DyShift(c, 1).Rat())
+	return RatFloatUp(proofarith.QuoRat(num, num, den))
 }
 
 // CellTwistAreaQuadraticAllow is the cancellation-preserving arm. Write the

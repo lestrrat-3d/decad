@@ -134,6 +134,13 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 		facetBound = append(facetBound, max(f.Beta[0], f.Beta[1], f.Beta[2]))
 	}
 
+	// The conforming passes, the needle flip and the final rounding read the
+	// same exact vertices (a split inserts existing vertices into edges,
+	// never new ones), so they are rounded once here.
+	approx := make([]r3.Vec, len(xverts))
+	for i, p := range xverts {
+		approx[i] = p.Vec()
+	}
 	for round := 0; ; round++ {
 		if round > 6 {
 			return nil, fmt.Errorf(`%w: the conforming pass did not converge`, decaderr.ErrBooleanFailed)
@@ -141,7 +148,7 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		split, err := ConformOnce(ctx, xverts, &tris, &src, &facetBound, xbeta)
+		split, err := conformOnceApprox(ctx, xverts, approx, &tris, &src, &facetBound, xbeta)
 		if err != nil {
 			return nil, err
 		}
@@ -152,7 +159,7 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 	// A needle's apex can round across its longest edge, which no float-box
 	// move clears; flipping that edge where the exact surface allows it keeps
 	// the surface and leaves no such facet to round (mesh_needle.go).
-	if _, err := FlipNeedles(ctx, xverts, tris, src, facetBound); err != nil {
+	if _, err := flipNeedlesHeld(ctx, xverts, approx, tris, src, facetBound); err != nil {
 		return nil, err
 	}
 
@@ -190,13 +197,13 @@ func StitchFacetsContext(ctx context.Context, kept []KeptFacet) (*StitchedMesh, 
 	}
 	floatIdx := make(map[r3.Vec]int, len(xverts))
 	remap := make([]int, len(xverts))
-	for i, p := range xverts {
+	for i := range xverts {
 		if i%256 == 0 {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
 		}
-		v := p.Vec()
+		v := approx[i]
 		fi, ok := floatIdx[v]
 		if !ok {
 			fi = len(out.Verts)
