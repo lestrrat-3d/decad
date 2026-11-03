@@ -31,7 +31,9 @@ import (
 //     float step rounds toward a weaker claim. When the float lower bound on
 //     the boxes' squared gap still exceeds the minimum's upper bound, the exact
 //     gap exceeds the exact minimum, so the exact prune would also prune. In
-//     every other case the exact test decides, as before.
+//     every other case the exact test decides, as before. The deep-vertex
+//     scan (planarKernel.deepInside) skips a triangle the same way, against
+//     the float upper bound of the squared margin, and polls first.
 //   - A hinted bound on the minimum. The caller may name one candidate pair,
 //     usually the nearest pair of an earlier call (ClassifyPlanarHinted). Its
 //     exact squared distance, when it offers one, is a candidate, so it is at
@@ -68,7 +70,7 @@ type floatBox struct {
 
 // floatBoxes fills the outward float boxes of every vertex, triangle and edge
 // of p. ClassifyPlanar fills them before its crossing scan, and
-// PlanarDeepVertex before its casts.
+// PlanarDeepVertex before its deep-inside scans and casts.
 func (p *planarPrep) floatBoxes() {
 	if p.vertBox != nil {
 		return
