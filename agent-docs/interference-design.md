@@ -464,7 +464,9 @@ cover lies in the union of the outer regions: b's hole loops, each walked
 counter-clockwise as a region, and the cutters' sections. The outer regions may
 overlap, so membership is Sketch's containment verdicts against the declared
 loops alone, and the edge-direction reading, which takes each outer edge to
-bound the family, only falsifies the cover's side when it reads at all.
+bound the family, only falsifies the cover's side when it reads at all. A cover that is one whole circle equal, centre and radius bit
+for bit, to a hole-free outer region lies in it without the arrangement, which
+cannot hold two coincident circles.
 
 The step is sound because a point p of a's interior, at a level of b's open
 interval, lies in the target's cover, outside every cutter that holds the levels
