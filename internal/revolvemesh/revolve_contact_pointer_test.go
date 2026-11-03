@@ -179,7 +179,7 @@ func pointerEquivTris(t *testing.T, rng *rand.Rand) (a, b RevolveAuditTri, triA,
 	coarse := rng.IntN(2) == 0
 	verts := make([]r3.Vec, 5)
 	for i := range verts {
-		verts[i] = r3.Vec{coord(coarse), coord(coarse), coord(coarse)}
+		verts[i] = r3.Vec{X: coord(coarse), Y: coord(coarse), Z: coord(coarse)}
 	}
 	// Rotating a triangle's slots moves the shared corner to every slot.
 	rot := func(tri [3]int, k int) [3]int {
