@@ -93,9 +93,9 @@ func FreeformSection(ctx context.Context, outer sectionrecord.LoopRecord, holes 
 		return 0, false, nil
 	}
 
-	// The poll budget returns what NewWorkBudget's would at every step; its
-	// StepN charges the scan's skipped blocks in one move per poll.
-	d, ok, err := PointsWithBudget(proofbound.NewPollWorkBudget(ctx), pts)
+	// NewWorkBudget's StepN charges the scan's skipped blocks in one move per
+	// poll.
+	d, ok, err := PointsWithBudget(proofbound.NewWorkBudget(ctx), pts)
 	if err != nil {
 		return 0, false, err
 	}

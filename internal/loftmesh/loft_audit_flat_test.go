@@ -179,8 +179,8 @@ func TestParallelLoftPairsTalliesMatchReplay(t *testing.T) {
 		errCalls     int
 	}
 	budgets := map[string]func(ctx context.Context) *proofbound.WorkBudget{
-		"poll": proofbound.NewPollWorkBudget,
-		"fn":   proofbound.NewWorkBudget,
+		"poll": proofbound.NewWorkBudget,
+		"fn":   closureWorkBudget,
 	}
 	// A failing pair is named by value, so a repeated pair fails at each
 	// occurrence and the lowest index is the one that counts.
@@ -322,10 +322,26 @@ func TestLoftCrossingAuditPollBudgetMatchesNewWorkBudget(t *testing.T) {
 					r.errCalls = ctx.calls + ctx2.calls
 					return r
 				}
-				want, got := run(proofbound.NewWorkBudget), run(proofbound.NewPollWorkBudget)
+				want, got := run(closureWorkBudget), run(proofbound.NewWorkBudget)
 				require.Equal(t, want, got, "pierce %v ctx %d scans %d", pierce, failFrom, scans)
 			}
 		}
 		require.NotZero(t, refWork.Candidates)
+	}
+}
+
+// closureWorkBudget is a reference budget counting in a StepFn closure, the
+// path a budget with its own StepFn takes.
+func closureWorkBudget(ctx context.Context) *proofbound.WorkBudget {
+	work := 0
+	return &proofbound.WorkBudget{
+		StepFn: func() error {
+			work++
+			if work%proofbound.WorkPollInterval == 0 {
+				return ctx.Err()
+			}
+			return nil
+		},
+		ErrFn: ctx.Err,
 	}
 }

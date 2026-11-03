@@ -198,10 +198,9 @@ func BuildSectorBandCut(ctx context.Context, joined facetedrecord.Payload,
 	}
 	patches := revolvemesh.SectorBorePatchesOnto(mesh.Src, oldCount, n, true, caps.LowGroup, caps.HighGroup,
 		bandGroup, wallGroup, bore.patchAxes())
-	// The poll budget gives the audit the same Step, StepN and Err results
-	// as NewWorkBudget at every step, and replays its bulk steps in one move
-	// per poll; see buildSectorAnnularCut.
-	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewPollWorkBudget(ctx),
+	// NewWorkBudget's budget replays the audit's bulk steps in one move per
+	// poll; see buildSectorAnnularCut.
+	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewWorkBudget(ctx),
 		mesh.Verts, mesh.Tris, patches, SectorBoreMaxAuditTriangles,
 		SectorBoreMaxAuditScans); err != nil {
 		return facetedrecord.Payload{}, err

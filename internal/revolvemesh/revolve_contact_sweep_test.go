@@ -253,8 +253,8 @@ func TestRevolveAuditRowsParallelMatchesSerial(t *testing.T) {
 			run := func(parallel bool) (int, error) {
 				budget := proofbound.NewWorkBudget(t.Context())
 				steps := 0
-				inner := budget.StepFn
-				budget.StepFn = func() error { steps++; return inner() }
+				inner := *budget
+				budget.StepFn = func() error { steps++; return inner.Step() }
 				err := revolveAuditRows(budget, m.data, m.tris, rows, delta, margin, parallel)
 				return steps, err
 			}
@@ -284,8 +284,8 @@ func TestRevolveAuditRowsParallelCancelled(t *testing.T) {
 	cancel()
 	serialBudget := proofbound.NewWorkBudget(ctx)
 	wantSteps := 0
-	serialStep := serialBudget.StepFn
-	serialBudget.StepFn = func() error { wantSteps++; return serialStep() }
+	serialInner := *serialBudget
+	serialBudget.StepFn = func() error { wantSteps++; return serialInner.Step() }
 	want := revolveAuditRows(serialBudget, m.data, m.tris, rows, 0.25, margin, false)
 	got := revolveAuditRows(proofbound.NewWorkBudget(ctx), m.data, m.tris, rows, 0.25, margin, true)
 	require.Error(t, want)
@@ -299,8 +299,8 @@ func TestRevolveAuditRowsParallelCancelled(t *testing.T) {
 	poll <- time.Time{}
 	budget := proofbound.NewWorkBudget(ctx)
 	gotSteps := 0
-	parallelStep := budget.StepFn
-	budget.StepFn = func() error { gotSteps++; return parallelStep() }
+	parallelInner := *budget
+	budget.StepFn = func() error { gotSteps++; return parallelInner.Step() }
 	budget.ErrFn = func() error {
 		close(release)
 		return ctx.Err()

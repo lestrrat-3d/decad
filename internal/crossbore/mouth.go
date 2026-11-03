@@ -155,7 +155,7 @@ func MouthChamfer(ctx context.Context, env topo.Env, body *topo.Body,
 	// Each cap fan is proposed as a projected XY patch. A cap whose proof
 	// fails keeps all its pairs in the exact pairwise audit, and cap-to-cap,
 	// cap-to-wall and every other pair is always classified exactly.
-	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewPollWorkBudget(ctx),
+	if err := loftmesh.LoftCrossingAuditBoundedProjectedPatchesStreaming(proofbound.NewWorkBudget(ctx),
 		mesh.Verts, mesh.Tris, CapPatches(mesh.Src), loftmesh.MaxLoftAuditTriangles,
 		AuditScans); err != nil {
 		return nil, true, err

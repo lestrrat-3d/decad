@@ -29,9 +29,9 @@ func PointsContext(ctx context.Context, points []r3.Vec) (float64, bool, error) 
 	if len(points) >= 512 && runtime.GOMAXPROCS(0) > 1 && parallelScanSafe(points) {
 		return pointsContextParallel(ctx, points)
 	}
-	// The poll budget returns what NewWorkBudget's would at every step; its
-	// StepN charges the scan's skipped blocks in one move per poll.
-	return PointsWithBudget(proofbound.NewPollWorkBudget(ctx), points)
+	// NewWorkBudget's StepN charges the scan's skipped blocks in one move per
+	// poll.
+	return PointsWithBudget(proofbound.NewWorkBudget(ctx), points)
 }
 
 type pairMaximum struct {
@@ -287,8 +287,8 @@ func pointsScan(budget *proofbound.WorkBudget, points []r3.Vec) (float64, int, i
 					// StepN(n) is n Step calls stopping at the first error, and
 					// nothing reads a skipped pair, so one StepN call per block
 					// returns the same error after the same steps and context
-					// polls as one Step per pair. A poll budget replays it in
-					// one move per poll.
+					// polls as one Step per pair. A NewWorkBudget budget
+					// replays it in one move per poll.
 					if budget != nil {
 						if _, err := budget.StepN(uint64(end - j)); err != nil {
 							return 0, 0, 0, false, err
