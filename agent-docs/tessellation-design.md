@@ -1038,10 +1038,11 @@ input, NaN and infinite ends included. Its shortcuts are these:
 - A product with a zero-width interval, a stored corner coordinate, takes its
   two distinct end products. The other two are copies, and `math.Min(m, m)` is
   `m` for every `m`.
-- The outward step inlines `x ± x·(1 + 2^-52)·2^-53` for an `x` stepping away
-  from zero with `|x| ≥ 2^-969`. The product rounds to between half an ulp and
-  one and a half ulps of `x`, so the sum rounds to `x`'s neighbour, as `proof`'s
-  own step does. Every other `x` calls `proof`.
+- In the race build, the outward step inlines `x ± x·(1 + 2^-52)·2^-53` for an
+  `x` stepping away from zero with `|x| ≥ 2^-969`. The product rounds to between
+  half an ulp and one and a half ulps of `x`, so the sum rounds to `x`'s
+  neighbour, as `proof`'s own step does. Every other `x` calls `proof`. The
+  plain build calls `proof`'s bit step for every `x`, which inlines there.
 - A triangle's projection onto its own normal enclosure depends only on that
   triangle. `NewRevolveAuditTri` computes it once and stores it, and the
   separating-axis pre-test reads the stored ends for every pair.
