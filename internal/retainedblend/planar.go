@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/decaderr"
+	"github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // pt2 is a point in a face plane's (u, w) coordinates.
@@ -43,8 +44,8 @@ func bestPlanarEar(ears []planarEar) (planarEar, bool) {
 
 // orient is the sign of (b − a) × (c − a): +1 for a left turn, −1 for a right
 // turn, 0 for collinear points. A float evaluation decides it when its
-// rounding cannot flip the sign, and exact rational arithmetic decides it
-// otherwise.
+// rounding cannot flip the sign. An exact expansion decides admitted uncertain
+// cases; exact rational arithmetic decides the rest.
 func orient(a, b, c pt2) int {
 	left := (b.u - a.u) * (c.w - a.w)
 	right := (b.w - a.w) * (c.u - a.u)
@@ -53,6 +54,9 @@ func orient(a, b, c pt2) int {
 		return 1
 	} else if d < -bound {
 		return -1
+	}
+	if sign, certain := proof.Orient2SignExpansion(a.u, a.w, b.u, b.w, c.u, c.w); certain {
+		return sign
 	}
 	q := func(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
 	sub := func(x, y float64) *big.Rat { return new(big.Rat).Sub(q(x), q(y)) }

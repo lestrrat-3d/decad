@@ -3,11 +3,54 @@ package retainedblend
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"slices"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
+
+func TestOrientMatchesExactRationalOracle(t *testing.T) {
+	t.Parallel()
+	n := float64(1<<52 - 3)
+	tests := []struct {
+		name          string
+		a, b, c       pt2
+		wantSign      int
+		wantFloat     bool
+		wantExpansion bool
+	}{
+		{name: "float-positive", a: pt2{1, 2}, b: pt2{5, 2}, c: pt2{3, 7}, wantSign: 1, wantFloat: true},
+		{name: "expansion-positive-cancellation", a: pt2{0, 0}, b: pt2{n, n + 1}, c: pt2{n, n + 2}, wantSign: 1, wantExpansion: true},
+		{name: "expansion-negative-cancellation", a: pt2{0, 0}, b: pt2{n, n + 1}, c: pt2{n + 1, n + 2}, wantSign: -1, wantExpansion: true},
+		{name: "expansion-near-collinear", a: pt2{0, 0}, b: pt2{1, 1}, c: pt2{2, math.Nextafter(2, 3)}, wantSign: 1, wantExpansion: true},
+		{name: "expansion-zero", a: pt2{-3, -6}, b: pt2{0, 0}, c: pt2{4, 8}, wantExpansion: true},
+		{name: "fallback-rounded-difference", a: pt2{0x1p-100, 0}, b: pt2{1, 1}, c: pt2{2, 2}, wantSign: -1},
+		{name: "fallback-underflow", a: pt2{0, 0}, b: pt2{math.SmallestNonzeroFloat64, 0}, c: pt2{0, math.SmallestNonzeroFloat64}, wantSign: 1},
+		{name: "fallback-out-of-range", a: pt2{-math.MaxFloat64, 0}, b: pt2{math.MaxFloat64, 1}, c: pt2{0, 2}, wantSign: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			leftFloat := (tt.b.u - tt.a.u) * (tt.c.w - tt.a.w)
+			rightFloat := (tt.b.w - tt.a.w) * (tt.c.u - tt.a.u)
+			d := leftFloat - rightFloat
+			bound := 8 * 0x1p-53 * (math.Abs(leftFloat) + math.Abs(rightFloat))
+			floatCertain := d > bound || d < -bound
+			require.Equal(t, tt.wantFloat, floatCertain, "float filter route")
+			if !floatCertain {
+				_, expansionCertain := proof.Orient2SignExpansion(tt.a.u, tt.a.w, tt.b.u, tt.b.w, tt.c.u, tt.c.w)
+				require.Equal(t, tt.wantExpansion, expansionCertain, "expansion route")
+			}
+			rat := func(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
+			sub := func(x, y float64) *big.Rat { return new(big.Rat).Sub(rat(x), rat(y)) }
+			left := new(big.Rat).Mul(sub(tt.b.u, tt.a.u), sub(tt.c.w, tt.a.w))
+			right := new(big.Rat).Mul(sub(tt.b.w, tt.a.w), sub(tt.c.u, tt.a.u))
+			require.Equal(t, tt.wantSign, left.Cmp(right), "fixture's exact sign")
+			require.Equal(t, tt.wantSign, orient(tt.a, tt.b, tt.c))
+		})
+	}
+}
 
 func TestEarQualityMatchesLoopImplementation(t *testing.T) {
 	t.Parallel()
