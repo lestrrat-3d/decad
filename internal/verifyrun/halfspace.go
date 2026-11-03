@@ -126,7 +126,7 @@ func supportOf(body *topo.Body, m [3]*big.Rat, near *prismrecord.Payload) (suppo
 		return prismSupport(p, m)
 	case revolveplan.Payload:
 		r, ok := revolveMeridian(p)
-		if !ok {
+		if !ok || r.disc != nil {
 			return support{}, false
 		}
 		return revolveSupport(r, m, near), true

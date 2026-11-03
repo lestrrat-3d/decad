@@ -40,6 +40,9 @@ type meridian struct {
 	t           [3]*big.Rat
 	anchor, dir [3]*big.Rat
 	region      [][2]*big.Rat // polygon vertices (ρ, z), in order
+	// disc, when set, makes the region the closed disc of centre
+	// (disc[0], disc[1]) and radius disc[2] in place of a polygon.
+	disc *[3]*big.Rat
 }
 
 // meridiansOf lists the meridian regions body lies in.
@@ -68,13 +71,14 @@ func frameLift(f r3.Frame, xf r3.Transform) ([3][3]*big.Rat, [3]*big.Rat, bool) 
 	return [3][3]*big.Rat{apply(u), apply(v), apply(n)}, addVec(apply(o), ratVec(xf.Translation())), orthonormal(u, v, n)
 }
 
-// revolveMeridian reads a full, solid, undisplaced Revolve, with no snap onto
-// the axis and no material admitted across it, whose meridian is one chained
-// loop of whole lines on one side of an exactly unit axis. Its
-// holes only remove material, so the outer loop's region holds the body.
+// revolveMeridian reads a solid, undisplaced Revolve, with no snap onto the
+// axis and no material admitted across it, whose meridian is one chained loop
+// of whole lines, or one whole circle, on one side of an exactly unit axis.
+// Its holes only remove material, so the outer loop's region holds the body,
+// and a partial sweep lies in the full revolution of that region.
 func revolveMeridian(p revolveplan.Payload) (meridian, bool) {
 	ax := p.Ax
-	if p.SurfaceResult || !p.Full || p.SectionDelta != 0 || ax.AUBound != 0 || ax.AVBound != 0 || ax.DUBound != 0 || ax.DVBound != 0 ||
+	if p.SurfaceResult || p.SectionDelta != 0 || ax.AUBound != 0 || ax.AVBound != 0 || ax.DUBound != 0 || ax.DVBound != 0 ||
 		ax.RadialAdmitAllow != 0 || ax.Snap != (revolveaxis.SnapAllow{}) {
 		return meridian{}, false
 	}
@@ -87,6 +91,29 @@ func revolveMeridian(p revolveplan.Payload) (meridian, bool) {
 		return meridian{}, false
 	}
 	au, av := ratOf(ax.AU), ratOf(ax.AV)
+	zero := new(big.Rat)
+	toAxis := func(pt sectionrecord.Point2) (*big.Rat, *big.Rat) {
+		pu := new(big.Rat).Sub(ratOf(pt.U), au)
+		pv := new(big.Rat).Sub(ratOf(pt.V), av)
+		z := new(big.Rat).Add(new(big.Rat).Mul(pu, du), new(big.Rat).Mul(pv, dv))
+		rho := new(big.Rat).Sub(new(big.Rat).Mul(pv, du), new(big.Rat).Mul(pu, dv))
+		return rho, z
+	}
+	if c, ok := wholeCircle(p.Profile.Outer); ok {
+		r, err := c.Radius.In(units.Millimeter)
+		if err != nil || !(r > 0) {
+			return meridian{}, false
+		}
+		rho, z := toAxis(c.Center)
+		rr := ratOf(r)
+		// The disc lies on one side of the axis when |ρ| ≥ r.
+		if new(big.Rat).Abs(rho).Cmp(rr) < 0 {
+			return meridian{}, false
+		}
+		rho.Abs(rho)
+		return meridian{l: l, t: t, anchor: [3]*big.Rat{au, av, zero}, dir: [3]*big.Rat{du, dv, zero},
+			disc: &[3]*big.Rat{rho, z, rr}}, true
+	}
 	segs := p.Profile.Outer.Segments
 	var region [][2]*big.Rat
 	side := 0
@@ -98,10 +125,7 @@ func revolveMeridian(p revolveplan.Payload) (meridian, bool) {
 		if next, _, ok := wholeLine(segs[(i+1)%len(segs)]); !ok || next != end {
 			return meridian{}, false
 		}
-		pu := new(big.Rat).Sub(ratOf(start.U), au)
-		pv := new(big.Rat).Sub(ratOf(start.V), av)
-		z := new(big.Rat).Add(new(big.Rat).Mul(pu, du), new(big.Rat).Mul(pv, dv))
-		rho := new(big.Rat).Sub(new(big.Rat).Mul(pv, du), new(big.Rat).Mul(pu, dv))
+		rho, z := toAxis(start)
 		if s := rho.Sign(); s != 0 {
 			if side != 0 && s != side {
 				return meridian{}, false
@@ -118,7 +142,6 @@ func revolveMeridian(p revolveplan.Payload) (meridian, bool) {
 			q[0].Neg(q[0])
 		}
 	}
-	zero := new(big.Rat)
 	return meridian{l: l, t: t, anchor: [3]*big.Rat{au, av, zero}, dir: [3]*big.Rat{du, dv, zero}, region: region}, true
 }
 
@@ -207,21 +230,50 @@ func sharedMeridians(a, b meridian) (momentinput.Profile, momentinput.Profile, b
 	norm := dotVec(aDir, aDir)
 	shift := new(big.Rat).Quo(dotVec(subVec(bAnchor, aAnchor), aDir), norm)
 	sign := new(big.Rat).Quo(dotVec(aDir, bDir), norm)
-	moved := make([][2]*big.Rat, len(b.region))
+	moved := meridian{region: make([][2]*big.Rat, len(b.region))}
 	for i, q := range b.region {
-		moved[i] = [2]*big.Rat{q[0], new(big.Rat).Add(shift, new(big.Rat).Mul(sign, q[1]))}
+		moved.region[i] = [2]*big.Rat{q[0], new(big.Rat).Add(shift, new(big.Rat).Mul(sign, q[1]))}
+	}
+	if b.disc != nil {
+		moved.disc = &[3]*big.Rat{b.disc[0], new(big.Rat).Add(shift, new(big.Rat).Mul(sign, b.disc[1])), b.disc[2]}
 	}
 	far := big.NewRat(1, 1)
-	for _, r := range [][][2]*big.Rat{a.region, moved} {
-		for _, q := range r {
-			if q[0] != nil && q[0].Cmp(far) >= 0 {
-				far = new(big.Rat).Add(q[0], big.NewRat(1, 1))
+	for _, m := range []meridian{a, moved} {
+		reach := []*big.Rat{}
+		for _, q := range m.region {
+			reach = append(reach, q[0])
+		}
+		if m.disc != nil {
+			reach = append(reach, new(big.Rat).Add(m.disc[0], m.disc[2]))
+		}
+		for _, r := range reach {
+			if r != nil && r.Cmp(far) >= 0 {
+				far = new(big.Rat).Add(r, big.NewRat(1, 1))
 			}
 		}
 	}
-	pa, okA := regionProfile(a.region, far)
-	pb, okB := regionProfile(moved, far)
+	pa, okA := meridianProfile(a, far)
+	pb, okB := meridianProfile(moved, far)
 	return pa, pb, okA && okB
+}
+
+// meridianProfile is m's region as a profile: its disc as one whole circle,
+// else its polygon (regionProfile).
+func meridianProfile(m meridian, far *big.Rat) (momentinput.Profile, bool) {
+	if m.disc == nil {
+		return regionProfile(m.region, far)
+	}
+	var f [3]float64
+	for i, v := range m.disc {
+		x, _ := v.Float64()
+		if ratOf(x).Cmp(v) != 0 {
+			return momentinput.Profile{}, false
+		}
+		f[i] = x
+	}
+	circle := sectionrecord.CircleSeg{Center: sectionrecord.Point2{U: f[0], V: f[1]}, Radius: units.Millimeters(f[2]),
+		CCW: true, TStart: 0, TEnd: 1}
+	return momentinput.Profile{Outer: sectionrecord.LoopRecord{Segments: []sectionrecord.CurveSegment{circle}}}, true
 }
 
 // commonAxes places both axes in one exactly Euclidean coordinate system: a's

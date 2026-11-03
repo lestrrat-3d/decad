@@ -90,3 +90,60 @@ func TestVerifyMeridianSeparator(t *testing.T) {
 		})
 	}
 }
+
+// bandWrap revolves a Ø1 circle at (cu, 0) half a turn about the y axis: a
+// band wrapped round a pulley.
+func bandWrap(t *testing.T, doc *decad.Document, cu float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	c := s.CreatePoint(cu, 0)
+	s.Fix(c)
+	s.CreateCircle(c, 0.5)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
+		decad.SketchLine{End: decad.Point2{V: 1}}, decad.AngleExtent{A: units.Degrees(180), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
+// TestVerifyMeridianBandInGroove seats a half-turn band of Ø1 wire in the
+// flat-bottomed groove of a revolved pulley: the groove floor at ρ = 10, its
+// walls at y = ±1. The band's circle rests on the floor, so the two bodies
+// touch along a circle no held mesh decides; a band sunk 0.1 mm into the floor
+// is not separated.
+//
+// Leg shown to fail: reading only full revolutions of whole lines leaves the
+// resting band with a pair diagnostic.
+func TestVerifyMeridianBandInGroove(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		cu        float64
+		separated bool
+	}{
+		{"band resting on the floor", 10.5, true},
+		{"band sunk into the floor", 10.4, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			s, profile := polygonSketch(t, [][2]float64{{0, -3}, {12, -3}, {12, -1}, {10, -1}, {10, 1}, {12, 1}, {12, 3}, {0, 3}})
+			pulley, err := decad.Revolve(t.Context(), doc, s, profile,
+				decad.SketchLine{End: decad.Point2{V: 1}}, decad.FullRevolution{})
+			require.NoError(t, err)
+			band := bandWrap(t, doc, tc.cu)
+			report, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			interferences, diagnostics := pairFindings(report, pulley, band)
+			if tc.separated {
+				require.Zero(t, interferences)
+				require.Zero(t, diagnostics, "the meridian separator decides the band")
+				return
+			}
+			require.Positive(t, interferences+diagnostics)
+		})
+	}
+}
