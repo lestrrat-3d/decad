@@ -2,6 +2,7 @@ package facetproof_test
 
 import (
 	"context"
+	"fmt"
 	"math/rand/v2"
 	"testing"
 
@@ -9,8 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// oldComponentMembers is the per-component queue and list walk that
-// componentMembers replaced.
+// oldComponentMembers is the reference walk: a separate queue and member
+// list per component.
 func oldComponentMembers(adj [][]int, comp []int) [][]int {
 	var members [][]int
 	for i := range comp {
@@ -69,7 +70,7 @@ func componentGraphs() map[string][][]int {
 		for range rng.IntN(n + 1) {
 			link(adj, rng.IntN(n), rng.IntN(n))
 		}
-		graphs["random"+string(rune('A'+sample%26))+string(rune('a'+sample/26))] = adj
+		graphs[fmt.Sprintf("random%02d", sample)] = adj
 	}
 	return graphs
 }
@@ -120,4 +121,26 @@ func TestComponentMembersHonoursCancellation(t *testing.T) {
 	cancel()
 	_, err := facetproof.ComponentMembers(ctx, adj, unassigned(len(adj)))
 	require.ErrorIs(t, err, context.Canceled)
+}
+
+// TestComponentMembersPollsEvery256thFacet pins when the walk reads the
+// context: once per 256 dequeued facets, counted across components.
+func TestComponentMembersPollsEvery256thFacet(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	for _, n := range []int{255, 256} {
+		chain := make([][]int, n)
+		for i := 1; i < n; i++ {
+			link(chain, i-1, i)
+		}
+		for name, adj := range map[string][][]int{"chain": chain, "isolated": make([][]int, n)} {
+			_, err := facetproof.ComponentMembers(ctx, adj, unassigned(n))
+			if n < 256 {
+				require.NoError(t, err, "%s of %d", name, n)
+				continue
+			}
+			require.ErrorIs(t, err, context.Canceled, "%s of %d", name, n)
+		}
+	}
 }

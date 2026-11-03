@@ -258,8 +258,8 @@ type MeshAudit struct {
 	Members  [][]int
 	CompVol  []*big.Rat
 	Contains [][]bool
-	// Det is each facet's exact a·(b×c) over XVerts when every facet's term
-	// was a Dyadic; nil when any facet took the big.Rat fallback.
+	// Det is each facet's exact a·(b×c) over XVerts, indexed by facet. Both
+	// audits fill it; FirstMomentsFromAudit recomputes the terms when it is nil.
 	Det []proof.Dyadic
 }
 
