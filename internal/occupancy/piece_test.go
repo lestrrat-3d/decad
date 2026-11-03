@@ -210,3 +210,16 @@ func TestCirclePrismMatchesExactOnlyCheck(t *testing.T) {
 	}
 	require.Positive(t, refused)
 }
+
+func TestCirclePrefilterFallsBackForInexactLines(t *testing.T) {
+	lines := []side{
+		{ratOf(0), ratOf(-1), ratOf(0), 0, -1, 0},
+		{ratOf(1), ratOf(1), ratOf(-1), 1, 1, 0},
+		{ratOf(-1), ratOf(0), ratOf(0), -1, 0, 0},
+	}
+	require.False(t, circlePrefilterSafe(lines))
+	_, exactErr := linesPrism(nil, lines, 0, 1, exactCornerCheck)
+	_, prefilterErr := linesPrism(nil, lines, 0, 1, circleCornerPrefilter)
+	require.Error(t, exactErr)
+	require.EqualError(t, prefilterErr, exactErr.Error())
+}
