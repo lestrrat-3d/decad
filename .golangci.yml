@@ -6,7 +6,6 @@ linters:
     - copyloopvar
     - cyclop
     - depguard
-    - dupl
     - embeddedstructfieldcheck
     - err113
     - errorlint
