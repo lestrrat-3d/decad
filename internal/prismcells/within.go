@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/proofbound"
+	"github.com/lestrrat-3d/decad/internal/sectionrecord"
 )
 
 // SectionWithin reports whether every point of the inner regions lies in the
@@ -15,7 +16,17 @@ import (
 // reading only falsify them, as the section history's combine does
 // (agent-docs/prism-boolean-design.md §4.1-§4.2). Any arrangement it cannot
 // certify answers false, never true.
+//
+// An inner region whose outer loop is one whole circle exactly equal to the
+// outer loop of a hole-free outer region lies in it at once: the inner region
+// lies in the closed disc its outer loop bounds, and that disc is the outer
+// region. Closed containment is all a caller needs, since a body inside
+// another's closed set shares no interior point with whatever misses that
+// set's interior. Sketch is not asked to arrange two coincident circles.
 func SectionWithin(ctx context.Context, budget *proofbound.WorkBudget, inner, outer []momentinput.Profile) (bool, error) {
+	if identicalCircles(inner, outer) {
+		return true, ctx.Err()
+	}
 	return sectionCells(ctx, budget, inner, outer, func(inA, inB bool) bool { return !inA || inB })
 }
 
@@ -78,4 +89,43 @@ func sectionCells(ctx context.Context, budget *proofbound.WorkBudget, inner, out
 		}
 	}
 	return true, nil
+}
+
+// identicalCircles reports whether every inner region's outer loop is one
+// whole circle equal, centre and radius bit for bit, to the outer loop of a
+// hole-free outer region.
+func identicalCircles(inner, outer []momentinput.Profile) bool {
+	if len(inner) == 0 {
+		return false
+	}
+	for _, in := range inner {
+		c, ok := wholeCircleLoop(in.Outer)
+		if !ok {
+			return false
+		}
+		found := false
+		for _, out := range outer {
+			if len(out.Holes) != 0 {
+				continue
+			}
+			if o, ok := wholeCircleLoop(out.Outer); ok && o.Center == c.Center && o.Radius == c.Radius {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+// wholeCircleLoop returns loop's circle when the loop is one whole circle.
+func wholeCircleLoop(loop sectionrecord.LoopRecord) (sectionrecord.CircleSeg, bool) {
+	if len(loop.Segments) != 1 {
+		return sectionrecord.CircleSeg{}, false
+	}
+	c, ok := loop.Segments[0].(sectionrecord.CircleSeg)
+	whole := c.CCW && c.TStart == 0 && c.TEnd == 1 || !c.CCW && c.TStart == 1 && c.TEnd == 0
+	return c, ok && whole
 }

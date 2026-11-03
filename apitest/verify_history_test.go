@@ -193,3 +193,44 @@ func TestVerifyHistoryAnalyticCut(t *testing.T) {
 		})
 	}
 }
+
+// TestVerifyHistoryPinInItsBore drills a 10 mm cube with a Ø2 tool along z
+// from z = −1 to 11 and seats a Ø2 pin in the bore. The pin's circle is the
+// tool's circle, centre and radius alike, so the pin lies in the tool once its
+// levels do: a pin from z = 2 to 8 is decided; one that runs out to z = 11.5,
+// past the tool, or one 0.01 mm off the tool's centre, is not.
+//
+// Leg shown to fail: without the identical-circle reading the seated pin keeps
+// its pair diagnostic.
+func TestVerifyHistoryPinInItsBore(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		cx, z1    float64
+		separated bool
+	}{
+		{"pin inside the tool", 5, 8, true},
+		{"pin past the tool", 5, 11.5, false},
+		{"pin off the tool's centre", 5.01, 8, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			cube := slab(t, doc, 0, 0, 10, 10, 0, 10, r3.Identity())
+			tool := coaxialSection(t, doc, 5, 5, 12, 1)
+			tool = placedAlongZ(t, tool, -1)
+			drilled, err := decad.Cut(t.Context(), cube, tool)
+			require.NoError(t, err)
+			pin := placedAlongZ(t, coaxialSection(t, doc, tc.cx, 5, tc.z1-2, 1), 2)
+			report, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			interferences, diagnostics := pairFindings(report, drilled, pin)
+			if tc.separated {
+				require.Zero(t, interferences)
+				require.Zero(t, diagnostics, "the pin lies in the tool that drilled its bore")
+				return
+			}
+			require.Positive(t, interferences+diagnostics)
+		})
+	}
+}
