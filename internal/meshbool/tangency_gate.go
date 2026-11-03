@@ -277,8 +277,10 @@ type faceFacets struct {
 // staged capability: it returns ErrBooleanFailed rather than an ErrUnsupported
 // that Verify would hide as an undecided pair, and never a zero.
 func facesOfMesh(budget *proofbound.WorkBudget, m *topo.Mesh, boxes [][2]r3.Vec, surface map[*topo.Face]float64) ([]faceFacets, error) {
-	index := map[*topo.Face]int{}
-	var out []faceFacets
+	// Every grouped face must have a FaceBound entry or the loop returns an
+	// error, so len(m.FaceBound) bounds the group count. Capacity only.
+	index := make(map[*topo.Face]int, len(m.FaceBound))
+	out := make([]faceFacets, 0, len(m.FaceBound))
 	for i, f := range m.Source {
 		if err := budget.Step(); err != nil {
 			return nil, err
