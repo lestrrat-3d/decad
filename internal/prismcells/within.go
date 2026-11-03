@@ -27,20 +27,32 @@ func SectionWithin(ctx context.Context, budget *proofbound.WorkBudget, inner, ou
 	if identicalCircles(inner, outer) {
 		return true, ctx.Err()
 	}
-	return sectionCells(ctx, budget, inner, outer, func(inA, inB bool) bool { return !inA || inB })
+	return sectionCells(ctx, budget, inner, outer, true, func(inA, inB bool) bool { return !inA || inB })
+}
+
+// SectionWithinUnion is SectionWithin for outer regions that may overlap one
+// another, such as a hole and a cut tool's section whose union covers the
+// inner region. Membership in the outer family is the union of its regions,
+// read from Sketch's containment verdicts as SectionWithin reads it. The
+// edge-direction reading of the outer family is skipped: it takes each outer
+// edge to bound the family, which holds only where the regions are disjoint,
+// and it only ever falsified a verdict, so skipping it admits nothing the
+// verdicts do not.
+func SectionWithinUnion(ctx context.Context, budget *proofbound.WorkBudget, inner, outer []momentinput.Profile) (bool, error) {
+	return sectionCells(ctx, budget, inner, outer, false, func(inA, inB bool) bool { return !inA || inB })
 }
 
 // SectionsApart reports whether two exact sections in one plane's
 // coordinates share no interior point: no cell of their arrangement lies in
 // both. It certifies as SectionWithin does.
 func SectionsApart(ctx context.Context, budget *proofbound.WorkBudget, a, b []momentinput.Profile) (bool, error) {
-	return sectionCells(ctx, budget, a, b, func(inA, inB bool) bool { return !inA || !inB })
+	return sectionCells(ctx, budget, a, b, true, func(inA, inB bool) bool { return !inA || !inB })
 }
 
 // sectionCells arranges a and b in one scene and reports whether every cell's
 // membership pair satisfies keep.
 func sectionCells(ctx context.Context, budget *proofbound.WorkBudget, inner, outer []momentinput.Profile,
-	keep func(inA, inB bool) bool) (bool, error) {
+	readB bool, keep func(inA, inB bool) bool) (bool, error) {
 	if len(inner) == 0 || len(outer) == 0 {
 		return false, nil
 	}
@@ -75,11 +87,14 @@ func sectionCells(ctx context.Context, budget *proofbound.WorkBudget, inner, out
 		return false, err
 	}
 	reading, read, err := ClassifyNested(budget, tags, profiles)
-	if err != nil || !read {
+	if err != nil || !read && readB {
 		return false, err
 	}
 	for i := range profiles {
-		if reading.KnownA[i] && reading.A[i] != inA[i] || reading.KnownB[i] && reading.B[i] != inB[i] {
+		if !read {
+			break
+		}
+		if reading.KnownA[i] && reading.A[i] != inA[i] || readB && reading.KnownB[i] && reading.B[i] != inB[i] {
 			return false, nil
 		}
 	}

@@ -2999,3 +2999,6 @@
 11	0.00	TestVerifyMeridianCutTool
 11	0.00	TestVerifyHistoryRefinedOperand
 11	0.00	TestCutFlatOnPerpendicularShaft
+11	0.00	TestVerifyAxialSectionSeparator
+11	0.00	TestVerifyAxialSectionTurnedMate
+11	0.00	TestVerifyAxialSectionShoulderAtLevel
