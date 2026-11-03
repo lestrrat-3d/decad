@@ -65,16 +65,8 @@ func Misses(tri [3]r3.Vec, shift r3.Vec, p *Piece, budget *Budget) (bool, error)
 			return
 		}
 		a = a.Scale(1 / l)
-		tlo, thi := math.Inf(1), math.Inf(-1)
-		for _, v := range ft {
-			d := a.Dot(v)
-			tlo, thi = math.Min(tlo, d), math.Max(thi, d)
-		}
-		plo, phi := math.Inf(1), math.Inf(-1)
-		for _, v := range p.fverts {
-			d := a.Dot(v)
-			plo, phi = math.Min(plo, d), math.Max(phi, d)
-		}
+		tlo, thi := projRange(a, ft[:])
+		plo, phi := projRange(a, p.fverts)
 		if g := math.Max(plo-thi, tlo-phi); g > 0 {
 			cands = append(cands, cand{a, g})
 		}
@@ -114,6 +106,29 @@ func Misses(tri [3]r3.Vec, shift r3.Vec, p *Piece, budget *Budget) (bool, error)
 		}
 	}
 	return false, nil
+}
+
+// projRange returns the least and greatest float projection of vs onto a, as
+// a math.Min and math.Max fold from +Inf and -Inf computes them. The builtin
+// min and max agree with those functions on every input but NaN, and a NaN
+// or infinite projection leaves the range non-finite, so a finite range is
+// already the math fold's answer; any other range repeats the fold with the
+// math functions and their NaN and infinity precedence.
+func projRange(a r3.Vec, vs []r3.Vec) (float64, float64) {
+	lo, hi := math.Inf(1), math.Inf(-1)
+	for _, v := range vs {
+		d := a.Dot(v)
+		lo, hi = min(lo, d), max(hi, d)
+	}
+	if !math.IsInf(lo, 0) && !math.IsNaN(lo) && !math.IsInf(hi, 0) && !math.IsNaN(hi) {
+		return lo, hi
+	}
+	lo, hi = math.Inf(1), math.Inf(-1)
+	for _, v := range vs {
+		d := a.Dot(v)
+		lo, hi = math.Min(lo, d), math.Max(hi, d)
+	}
+	return lo, hi
 }
 
 // missesBySide tries the cheap certificate first: one of the piece's own
