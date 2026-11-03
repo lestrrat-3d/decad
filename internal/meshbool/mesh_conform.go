@@ -262,11 +262,7 @@ func (s *ConformScan) EdgeInteriorHits(budget *proofbound.WorkBudget, a, b int, 
 	// this float segment, by SegAdmissionRadius2. Querying that expanded segment
 	// box is therefore a complete superset, even when subtracting Lo to find a
 	// grid cell loses precision at large coordinate offsets.
-	tau := math.Nextafter(math.Sqrt(s.Tau2), math.Inf(1))
-	box := [2]r3.Vec{
-		{X: math.Nextafter(math.Min(pa.X, pb.X)-tau, math.Inf(-1)), Y: math.Nextafter(math.Min(pa.Y, pb.Y)-tau, math.Inf(-1)), Z: math.Nextafter(math.Min(pa.Z, pb.Z)-tau, math.Inf(-1))},
-		{X: math.Nextafter(math.Max(pa.X, pb.X)+tau, math.Inf(1)), Y: math.Nextafter(math.Max(pa.Y, pb.Y)+tau, math.Inf(1)), Z: math.Nextafter(math.Max(pa.Z, pb.Z)+tau, math.Inf(1))},
-	}
+	box := conformSegmentQueryBox(pa, pb, s.Tau2)
 	if err := s.points.visitOverlaps(box, budget.Step, func(i int) error {
 		if err := budget.Step(); err != nil {
 			return err
@@ -296,6 +292,14 @@ func (s *ConformScan) EdgeInteriorHits(budget *proofbound.WorkBudget, a, b int, 
 		return a < b
 	})
 	return hits, nil
+}
+
+func conformSegmentQueryBox(pa, pb r3.Vec, tau2 float64) [2]r3.Vec {
+	tau := math.Nextafter(math.Sqrt(tau2), math.Inf(1))
+	return [2]r3.Vec{
+		{X: math.Nextafter(math.Min(pa.X, pb.X)-tau, math.Inf(-1)), Y: math.Nextafter(math.Min(pa.Y, pb.Y)-tau, math.Inf(-1)), Z: math.Nextafter(math.Min(pa.Z, pb.Z)-tau, math.Inf(-1))},
+		{X: math.Nextafter(math.Max(pa.X, pb.X)+tau, math.Inf(1)), Y: math.Nextafter(math.Max(pa.Y, pb.Y)+tau, math.Inf(1)), Z: math.Nextafter(math.Max(pa.Z, pb.Z)+tau, math.Inf(1))},
+	}
 }
 
 // SortAlongEdge orders the inserted vertices by their exact parameter along

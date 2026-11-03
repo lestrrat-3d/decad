@@ -67,6 +67,38 @@ func TestBrakeConformSpatialIndexKeepsExactHits(t *testing.T) {
 	}
 }
 
+func TestBrakeConformSpatialIndexNonReplayKeepsExactHits(t *testing.T) {
+	ctx := t.Context()
+	verts := []proof.Xpt{
+		proof.XptOf(r3.Vec{}),
+		proof.XptOf(r3.Vec{X: 10}),
+		proof.XptOf(r3.Vec{Y: 10}),
+		proof.XptOf(r3.Vec{X: 7}),
+		proof.XptOf(r3.Vec{X: 2}),
+		proof.XptOf(r3.Vec{X: 5}),
+		proof.XptOf(r3.Vec{X: 4, Y: 0.1}),
+	}
+	budget := proofbound.NewWorkBudget(ctx)
+	if budget.Replay {
+		t.Fatal("new work budget unexpectedly enables replay")
+	}
+	scan, err := brakeNewConformScan(ctx, budget, verts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tri := [3]int{0, 1, 2}
+	hits, err := scan.EdgeInteriorHits(ctx, budget, 0, 1, tri)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := brakeSortAlongEdge(ctx, budget, verts, 0, 1, hits); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(hits, []int{4, 5, 3}) {
+		t.Fatalf("non-replay hits = %v, want [4 5 3]", hits)
+	}
+}
+
 func TestBrakeConformSpatialIndexResourceLimits(t *testing.T) {
 	ctx := t.Context()
 	verts := []proof.Xpt{proof.XptOf(r3.Vec{}), proof.XptOf(r3.Vec{X: 10, Y: 10, Z: 10}), proof.XptOf(r3.Vec{Y: 10}), proof.XptOf(r3.Vec{X: 5, Y: 5, Z: 5})}
