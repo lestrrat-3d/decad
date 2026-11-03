@@ -139,9 +139,9 @@ func placeSaddleTool(s saddle, d float64) (*saddleTool, error) {
 
 // proveSaddleTool proves the band of t, placed by placeSaddleTool, and sets
 // each band vertex's bound and each row's held area.
-func proveSaddleTool(ctx context.Context, t *saddleTool, s saddle, d float64) error {
+func proveSaddleTool(ctx context.Context, t *saddleTool, s saddle, bases crossbore.ToolBases) error {
 	const n = crossbore.ToolStations
-	proof, err := crossbore.ProveToolBand(ctx, s.key.R, s.key.r, d, s.key.pose, func(j, i int) r3.Vec {
+	proof, err := crossbore.ProveToolBandWith(ctx, bases, s.key.pose, func(j, i int) r3.Vec {
 		return t.verts[rowVertex(j, i)]
 	})
 	if err != nil {
@@ -376,6 +376,32 @@ func toolPayload(tools []*saddleTool, producer provenance.Producer) (facetedreco
 	return pp, nil
 }
 
+// sharedToolBases holds the base cells of the last saddle proved within one
+// cutSaddles call. The cells read only the radii and the setback, so
+// consecutive saddles of equal radii (the two mouths of one through bore)
+// share one proof of them. It is local to the call and its cells are never
+// written.
+type sharedToolBases struct {
+	bases   crossbore.ToolBases
+	R, r, d float64
+	proved  bool
+}
+
+// get returns the base cells for s's radii and the setback d, proving them
+// unless the previous call had the same radii and setback, compared by bits.
+func (b *sharedToolBases) get(ctx context.Context, s saddle, d float64) (crossbore.ToolBases, error) {
+	if b.proved && math.Float64bits(s.key.R) == math.Float64bits(b.R) &&
+		math.Float64bits(s.key.r) == math.Float64bits(b.r) && math.Float64bits(d) == math.Float64bits(b.d) {
+		return b.bases, nil
+	}
+	bases, err := crossbore.ProveToolBases(ctx, s.key.R, s.key.r, d)
+	if err != nil {
+		return crossbore.ToolBases{}, err
+	}
+	*b = sharedToolBases{bases: bases, R: s.key.R, r: s.key.r, d: d, proved: true}
+	return bases, nil
+}
+
 // cutSaddles chamfers the saddles: it builds and proves one ring per saddle,
 // refuses unless each ring clears everything but its wedge and the rings'
 // boxes are apart, and cuts the body by all of them at once. The tool takes
@@ -385,6 +411,7 @@ func cutSaddles(ctx context.Context, env topo.Env, mesher booleaneval.OperandMes
 	faceIndex map[*topo.Face]int) (*topo.Body, error) {
 	tools := make([]*saddleTool, len(saddles))
 	allow := chaintol.Of(ctx)
+	var shared sharedToolBases
 	for i, s := range saddles {
 		t, err := placeSaddleTool(s, d)
 		if err != nil {
@@ -395,7 +422,11 @@ func cutSaddles(ctx context.Context, env topo.Env, mesher booleaneval.OperandMes
 		if err := checkSaddleClear(fp, faceIndex, s, t); err != nil {
 			return nil, err
 		}
-		if err := proveSaddleTool(ctx, t, s, d); err != nil {
+		bases, err := shared.get(ctx, s, d)
+		if err != nil {
+			return nil, err
+		}
+		if err := proveSaddleTool(ctx, t, s, bases); err != nil {
 			return nil, err
 		}
 		if err := checkOutside(t, s); err != nil {

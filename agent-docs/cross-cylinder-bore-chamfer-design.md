@@ -124,7 +124,7 @@ numbers, with the bore axis at `z − c = 0`; `Feet` reads the record through
 (`agent-docs/retained-edge-blend-design.md` §4.9) maps a shaft and a
 perpendicular bore read from exact retained tags onto this pose and proves its
 tool's band with the same cell tests at its own station count
-(`crossbore.ProveToolBand`); its admission is that document's, not this one's.
+(`crossbore.ProveToolBases`, `crossbore.ProveToolBandWith`); its admission is that document's, not this one's.
 
 ## Public case
 
