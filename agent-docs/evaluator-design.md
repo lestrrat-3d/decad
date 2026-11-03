@@ -1318,6 +1318,16 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   a segment on a facet's own boundary cuts nothing off it) and its regions
   classify by exact parity, because the other operand's boundary there is a
   DIHEDRAL and one plane of a dihedral decides nothing.
+- **Contact curves that branch or cross on a facet are refused.** Two facets
+  of a non-self-intersecting operand meet a facet's plane in curves that touch
+  only at that operand's edges and vertices, where the chains share a vertex.
+  A chain vertex of degree three or more, or two contact edges that cross at a
+  point interior to both, means the other operand's held surface folds through
+  itself there, as two near-coincident facets can, and no region split along
+  both curves is consistent. The cutter refuses either before it splits
+  (`TriCutter.refuseCrossingEdges`, the crossing decided exactly over a float
+  box sweep) as `BooleanUnsupportedContact`, so Verify reports the pair as
+  undecided rather than failing the call.
 - **Exact parity tries oblique rays after the axis rays.** A parity query
   casts the six axis rays first (`internal/meshbool/parity_mesh.go`); a ray
   whose projection meets a facet's projected edge or vertex is ambiguous and
