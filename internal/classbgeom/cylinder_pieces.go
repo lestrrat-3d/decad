@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad/internal/boundarywalk"
+	"github.com/lestrrat-3d/decad/internal/brepgeom"
 	"github.com/lestrrat-3d/decad/internal/momentinput"
 	"github.com/lestrrat-3d/decad/internal/offset2d"
 	"github.com/lestrrat-3d/decad/internal/sectionrecord"
@@ -29,6 +30,10 @@ type CylinderPiece struct {
 	Z0, Z1 float64
 	Delta  float64
 	Source sectionrecord.CurveSegment
+	// Side0 and Side1 split the wall's start and end edges where another
+	// piece on the same frame meets that arc end at a level strictly inside
+	// this piece's interval, so the longer edge pairs piece by piece.
+	Side0, Side1 []brepgeom.Split
 }
 
 // CylinderPieces pairs the planar faces that bound each surviving cylinder
@@ -126,5 +131,52 @@ func CylinderPieces[C comparable](faces []CrossingPieceFace[C], frames [2]Crossi
 				Source: segments[op][index]})
 		}
 	}
-	return out, nil
+	return splitPieceSides(out)
+}
+
+// splitPieceSides records, on each piece's two side edges, the levels at which
+// another piece of the same frame meets the same arc end. A fragment that
+// survives whole beside a neighbour cut short by a planar face (a flat opened
+// in a shaft's wall) has one edge where the neighbour and the flat have
+// several.
+func splitPieceSides(pieces []CylinderPiece) ([]CylinderPiece, error) {
+	type end struct{ u, v float64 }
+	ends := make([][2]end, len(pieces))
+	for i, p := range pieces {
+		w, err := boundarywalk.WalkOf(p.Wall, nil)
+		if err != nil {
+			return nil, err
+		}
+		ends[i] = [2]end{{w.StartU, w.StartV}, {w.EndU, w.EndV}}
+	}
+	for i := range pieces {
+		for side := range 2 {
+			var levels []float64
+			for j := range pieces {
+				if i == j || pieces[i].Frame != pieces[j].Frame {
+					continue
+				}
+				if ends[j][0] != ends[i][side] && ends[j][1] != ends[i][side] {
+					continue
+				}
+				for _, z := range [2]float64{pieces[j].Z0, pieces[j].Z1} {
+					if z > pieces[i].Z0 && z < pieces[i].Z1 {
+						levels = append(levels, z)
+					}
+				}
+			}
+			slices.Sort(levels)
+			levels = slices.Compact(levels)
+			var splits []brepgeom.Split
+			for _, z := range levels {
+				splits = append(splits, brepgeom.Split{Z: z})
+			}
+			if side == 0 {
+				pieces[i].Side0 = splits
+			} else {
+				pieces[i].Side1 = splits
+			}
+		}
+	}
+	return pieces, nil
 }
