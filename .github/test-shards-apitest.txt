@@ -3008,3 +3008,4 @@
 11	0.00	TestVerifyBoxAlgebra
 11	0.00	TestVerifyCoaxialRevolveReach
 11	0.00	TestVerifyIdentityPlacedChain
+11	0.00	TestVerifyBoxAlgebraRotatedRail

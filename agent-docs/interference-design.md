@@ -521,23 +521,30 @@ circle.
 Cut chains A = A0 less the tools T1 and B = B0 less the tools T2, each target a
 prism or a Union's prism operands, each tool a prism. It runs at a Cut result.
 The chains miss each other when every pair of target parts (A0ᵢ, B0ⱼ) shares
-only a box that the tools cover. Each target part is bounded by the box of its
-section outline over its levels, its corners carried exactly into one reference
-prism's coordinates, both frames compared before one placement the two carry
-bit for bit or in the world when both lifts are exactly orthonormal. A tool
-counts only when it is exactly a box there: one axis-aligned rectangle of whole
-lines on a frame whose axes are the reference's, signed and permuted. The
-shared box is covered when it lies in the union of the tool boxes, decided
-cell by cell over the coordinates that cut it.
+only a region that the tools cover. Each target part is bounded by the box of
+its section outline over its levels in its own coordinates, and each tool must
+be exactly a box in its own: one axis-aligned rectangle of whole lines over its
+levels. A box is a convex solid in the world: its prism's lift is an exact
+rational map L, so the box is the intersection of the six half-spaces
+e_k·L⁻¹(x − t) ≤ hi_k and ≥ lo_k with L⁻¹ solved exactly, and L need not be
+orthonormal. A turned box and a square one are then both convex polytopes. The
+shared region A0ᵢ ∩ B0ⱼ is covered when it lies in the union of the tool
+polytopes, decided by splitting it with the first tool's planes into the part
+inside that tool and the pieces beyond each plane, each piece covered by the
+remaining tools; a piece with no volume (its vertices, three planes meeting in a
+point, lie in one plane) is covered, and the split is charged to the work
+budget.
 
 The step is sound because a point of both interiors lies in the interior of
 A0ᵢ and of B0ⱼ, so inside their bounding boxes' intersection, and outside the
 closed tools of both chains, a Cut result's interior missing its closed tool.
-It cannot lie in the union of the tool boxes. A tool that is no exact box, or a
-tool the chain holds as a mesh Union carrying a geometry-moving warning (a
+It cannot lie in the union of the tool polytopes. A tool that is no exact box,
+or a tool the chain holds as a mesh Union carrying a geometry-moving warning (a
 gap-shifted Union, whose set is not its operands' union), is left out, which
-only shrinks the cover. A rail and a plate half-lapped into each other, each cut where
-the other stays, are decided when each is cut by its lap boxes one at a time.
+only shrinks the cover. Two parts half-lapped into each other, each cut where
+the other stays, are decided when each is cut by its lap boxes one at a time,
+and when a turned part and its lap tool share one lift, so that their faces
+coincide exactly.
 
 Like the coaxial separator, they prove no gap.
 
