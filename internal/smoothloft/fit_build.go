@@ -164,14 +164,14 @@ func BuildThreeFits(ctx context.Context, profiles [3]momentinput.Profile,
 				delta = maxRat(delta, rf(proofbound.AbsSumUpper(cell.arcGap, cell.arcRound)))
 				continue
 			}
-			local := add(fitPatchUErr(cell.patch), fitPatchZErr(cell.patch, bands))
+			base := add(fitPatchUErr(cell.patch), fitPatchZErr(cell.patch, bands))
+			local := base
 			for i := range bands {
 				t0 := big.NewRat(int64(i), int64(bands))
 				t1 := big.NewRat(int64(i+1), int64(bands))
 				p00, p10 := fitCellPoint(cell, t0, 0), fitCellPoint(cell, t0, 3)
 				p01, p11 := fitCellPoint(cell, t1, 0), fitCellPoint(cell, t1, 3)
-				local = maxRat(local, add(add(fitPatchUErr(cell.patch), fitPatchZErr(cell.patch, bands)),
-					fitCellTwist(p00, p10, p01, p11)))
+				local = maxRat(local, add(base, fitCellTwist(p00, p10, p01, p11)))
 			}
 			delta = maxRat(delta, local)
 		}
@@ -259,13 +259,13 @@ func BuildThreeFits(ctx context.Context, profiles [3]momentinput.Profile,
 		heightSpeed := fitCellHeightSpeed(cell.patch)
 		radius = maxRat(radius, fitCellRadius(cell.patch))
 		trueArea = add(trueArea, mul(speed, add(h, heightSpeed)))
+		base := add(fitPatchUErr(cell.patch), fitPatchZErr(cell.patch, bands))
 		for i := range bands {
 			t0, t1 := big.NewRat(int64(i), int64(bands)), big.NewRat(int64(i+1), int64(bands))
 			p00, p10 := fitCellPoint(cell, t0, 0), fitCellPoint(cell, t0, 3)
 			p01, p11 := fitCellPoint(cell, t1, 0), fitCellPoint(cell, t1, 3)
 			chord := maxRat(fitPointL1(fitPointSub(p10, p00)), fitPointL1(fitPointSub(p11, p01)))
-			d := add(add(add(fitPatchUErr(cell.patch), fitPatchZErr(cell.patch, bands)),
-				fitCellTwist(p00, p10, p01, p11)), maxRound)
+			d := add(add(base, fitCellTwist(p00, p10, p01, p11)), maxRound)
 			heldSpeed := add(chord, mul(rint(2), maxRound))
 			volumeSection = add(volumeSection, div(mul(d, maxRat(speed, heldSpeed)), rint(int64(bands))))
 		}
