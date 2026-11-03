@@ -205,17 +205,23 @@ func proveVerifyPair(ctx context.Context, job verifyPairJob, cfg verifyConfig, g
 	}
 
 	if res.Verdict == boundaryaudit.PairUndecided {
-		// A circular cylinder that separates the interiors proves the pair
-		// non-overlapping where coincident cylinder faces leave every mesh
-		// undecided (coaxial.go).
+		// A circular cylinder that separates the interiors (coaxial.go), or a
+		// Cut whose tool holds the other body (csg.go), proves the pair
+		// non-overlapping where coincident faces leave every mesh undecided.
 		separated, err := coaxialSeparated(ctx, history, a, b)
 		if err != nil {
 			return verifyPairOutcome{}, err
 		}
+		if !separated && history != nil {
+			separated, err = historySeparated(ctx, history, a, b)
+			if err != nil {
+				return verifyPairOutcome{}, err
+			}
+		}
 		if separated {
 			if cfg.Clearances {
 				out.diagnostics = append(out.diagnostics, PairDiagNone(a, b, vocab.DiagUndecidedClearance,
-					"a circular cylinder separates the pair's interiors, but the requested clearance gap is unmeasured"))
+					"the pair's interiors are proven disjoint, but the requested clearance gap is unmeasured"))
 				out.undecided = true
 			}
 			return out, nil

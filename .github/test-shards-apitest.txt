@@ -2981,3 +2981,5 @@
 0	0.41	TestRefineDrilledBar
 0	8.73	TestRefineLetsAChainContinue
 11	0.00	TestVerifyCoaxialSeparator
+11	0.00	TestVerifyHistorySeparator
+11	0.00	TestVerifyHistoryFlushPrisms
