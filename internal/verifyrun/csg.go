@@ -73,15 +73,19 @@ func (w historyWalk) misses(a, b *topo.Body, depth int) (bool, error) {
 		}
 		return w.misses(inputs[0], b, depth+1)
 	case meshbool.OpIntersect:
-		if m, err := w.misses(inputs[0], b, depth+1); err != nil || m {
-			return m, err
+		for _, part := range inputs {
+			if m, err := w.misses(part, b, depth+1); err != nil || m {
+				return m, err
+			}
 		}
-		return w.misses(inputs[1], b, depth+1)
+		return false, nil
 	case meshbool.OpUnion:
-		if m, err := w.misses(inputs[0], b, depth+1); err != nil || !m {
-			return false, err
+		for _, part := range inputs {
+			if m, err := w.misses(part, b, depth+1); err != nil || !m {
+				return false, err
+			}
 		}
-		return w.misses(inputs[1], b, depth+1)
+		return true, nil
 	}
 	return false, nil
 }
@@ -106,11 +110,20 @@ func (w historyWalk) within(inner, outer *topo.Body, depth int) (bool, error) {
 				}
 			}
 		case meshbool.OpIntersect:
-			in, err := w.within(inner, inputs[0], depth+1)
-			if err != nil || !in {
-				return false, err
+			all := true
+			for _, part := range inputs {
+				in, err := w.within(inner, part, depth+1)
+				if err != nil {
+					return false, err
+				}
+				all = all && in
+				if !all {
+					break
+				}
 			}
-			return w.within(inner, inputs[1], depth+1)
+			if all {
+				return true, nil
+			}
 		}
 	}
 	op, inputs, ok := w.expand(inner)
@@ -121,16 +134,19 @@ func (w historyWalk) within(inner, outer *topo.Body, depth int) (bool, error) {
 	case meshbool.OpCut:
 		return w.within(inputs[0], outer, depth+1)
 	case meshbool.OpIntersect:
-		if in, err := w.within(inputs[0], outer, depth+1); err != nil || in {
-			return in, err
+		for _, part := range inputs {
+			if in, err := w.within(part, outer, depth+1); err != nil || in {
+				return in, err
+			}
 		}
-		return w.within(inputs[1], outer, depth+1)
+		return false, nil
 	case meshbool.OpUnion:
-		in, err := w.within(inputs[0], outer, depth+1)
-		if err != nil || !in {
-			return false, err
+		for _, part := range inputs {
+			if in, err := w.within(part, outer, depth+1); err != nil || !in {
+				return false, err
+			}
 		}
-		return w.within(inputs[1], outer, depth+1)
+		return true, nil
 	}
 	return false, nil
 }
@@ -142,17 +158,22 @@ func (w historyWalk) within(inner, outer *topo.Body, depth int) (bool, error) {
 // section within a displacement of the set, but the set it denotes is the
 // operation's exact result, which is all the walk reads.
 func (w historyWalk) expand(body *topo.Body) (meshbool.OperationKind, []*topo.Body, bool) {
-	if op, inputs, ok := expandable(w.history, body); ok {
+	return expandRecorded(w.history, body)
+}
+
+// expandRecorded is historyWalk.expand over a bare history; nil reads none.
+func expandRecorded(history boolchain.Source, body *topo.Body) (meshbool.OperationKind, []*topo.Body, bool) {
+	if op, inputs, ok := expandable(history, body); ok {
 		return op, inputs, true
 	}
-	if w.history == nil || len(body.OperationWarnings) != 0 || body.PrivateShift != nil {
+	if history == nil || len(body.OperationWarnings) != 0 || body.PrivateShift != nil {
 		return 0, nil, false
 	}
 	if _, mesh := body.Payload.(facetedrecord.Payload); mesh {
 		return 0, nil, false
 	}
-	op, inputs, ok := w.history.BooleanProducer(body)
-	if !ok || len(inputs) != 2 {
+	op, inputs, ok := history.BooleanProducer(body)
+	if !ok || !arityHolds(op, inputs) {
 		return 0, nil, false
 	}
 	return op, inputs, true

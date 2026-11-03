@@ -149,3 +149,44 @@ func TestVerifyCoaxialSeparator(t *testing.T) {
 		})
 	}
 }
+
+// TestVerifyCoaxialNaryUnion holds the walks to n-ary Unions: a shaft that is
+// one Union of three stacked Ø8 segments lies in their shared cylinder, so a
+// bearing whose bore has that radius is decided; a bearing bored smaller is
+// not.
+//
+// Leg shown to fail: reading only two-operand producers leaves the stacked
+// shaft a leaf, and the pair keeps a diagnostic.
+func TestVerifyCoaxialNaryUnion(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		bore      float64
+		separated bool
+	}{
+		{"bore of the shaft's radius", 4, true},
+		{"bore smaller than the shaft", 3.9, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			segments := []*decad.Body{
+				coaxialSection(t, doc, 0, 0, 10, 4),
+				placedAlongZ(t, coaxialSection(t, doc, 0, 0, 10, 4), 10),
+				placedAlongZ(t, coaxialSection(t, doc, 0, 0, 10, 4), 20),
+			}
+			shaft, err := decad.Union(t.Context(), segments[0], segments[1:]...)
+			require.NoError(t, err)
+			bearing := placedAlongZ(t, coaxialSection(t, doc, 0, 0, 8, 11, tc.bore), 6)
+			report, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			interferences, diagnostics := pairFindings(report, shaft, bearing)
+			if tc.separated {
+				require.Zero(t, interferences)
+				require.Zero(t, diagnostics, "the n-ary Union is read")
+				return
+			}
+			require.Positive(t, interferences+diagnostics)
+		})
+	}
+}

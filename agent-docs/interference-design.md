@@ -185,7 +185,9 @@ non-overlapping. Each side is read from records alone, in exact rationals:
   (`boolchain.Expandable`) inherits it: a Cut lies where its target lies, an
   Intersect where either operand lies, a Union where both lie.
 
-Two cylinders match only with equal radii and either the same axis line under
+The coaxial walk reads Boolean results as the history walk does, any number
+of operands included. Two cylinders match only with equal radii and either
+the same axis line under
 lifts that are exactly orthonormal, or one affine lift (frame times placement,
 exactly equal linear parts) that carries one section circle onto the other.
 A lift that is not exactly orthonormal makes the denoted set an affine image
@@ -209,11 +211,11 @@ section within a displacement of the set, but the set it denotes is the
 operation's exact result, and only that set enters the walk:
 
 - a Cut result misses a body that lies in its tool, or that its target
-  misses; an Intersect misses what either operand misses; a Union misses what
-  both operands miss;
-- a Cut result lies in its target, an Intersect in either operand, a Union in
-  a body both operands lie in, and a body lies in a Union when it lies in
-  either operand or in an Intersect when it lies in both;
+  misses; an Intersect misses what any operand misses; a Union, of any number
+  of operands, misses what every operand misses;
+- a Cut result lies in its target, an Intersect in any operand, a Union in a
+  body every operand lies in, and a body lies in a Union when it lies in any
+  operand or in an Intersect when it lies in every one;
 - a prism lies in another prism with the same frame and placement, both
   sections and levels held exactly, its levels within the other's, and a
   section that a private Sketch scene proves inside the other's

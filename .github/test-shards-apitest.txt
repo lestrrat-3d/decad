@@ -2985,3 +2985,4 @@
 11	0.00	TestVerifyHistoryFlushPrisms
 11	0.00	TestVerifyHistoryAnalyticCut
 11	0.00	TestVerifyEmptyIntersectionProvesDisjoint
+11	0.00	TestVerifyCoaxialNaryUnion
