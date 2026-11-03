@@ -79,7 +79,7 @@ func insideCylinders(history boolchain.Source, body *topo.Body, depth int) []coa
 		}
 		return nil
 	}
-	op, inputs, ok := expandable(history, body)
+	op, inputs, ok := expandRecorded(history, body)
 	if !ok {
 		return nil
 	}
@@ -87,11 +87,22 @@ func insideCylinders(history boolchain.Source, body *topo.Body, depth int) []coa
 	case meshbool.OpCut:
 		return insideCylinders(history, inputs[0], depth+1)
 	case meshbool.OpIntersect:
-		return append(insideCylinders(history, inputs[0], depth+1), insideCylinders(history, inputs[1], depth+1)...)
+		var out []coaxialCylinder
+		for _, part := range inputs {
+			out = append(out, insideCylinders(history, part, depth+1)...)
+		}
+		return out
 	case meshbool.OpUnion:
 		var out []coaxialCylinder
 		for _, c := range insideCylinders(history, inputs[0], depth+1) {
-			if insideCylinder(history, inputs[1], c, depth+1) {
+			all := true
+			for _, part := range inputs[1:] {
+				if !insideCylinder(history, part, c, depth+1) {
+					all = false
+					break
+				}
+			}
+			if all {
 				out = append(out, c)
 			}
 		}
@@ -127,7 +138,7 @@ func outsideCylinder(history boolchain.Source, body *topo.Body, c coaxialCylinde
 		}
 		return false
 	}
-	op, inputs, ok := expandable(history, body)
+	op, inputs, ok := expandRecorded(history, body)
 	if !ok {
 		return false
 	}
@@ -135,9 +146,19 @@ func outsideCylinder(history boolchain.Source, body *topo.Body, c coaxialCylinde
 	case meshbool.OpCut:
 		return outsideCylinder(history, inputs[0], c, depth+1)
 	case meshbool.OpIntersect:
-		return outsideCylinder(history, inputs[0], c, depth+1) || outsideCylinder(history, inputs[1], c, depth+1)
+		for _, part := range inputs {
+			if outsideCylinder(history, part, c, depth+1) {
+				return true
+			}
+		}
+		return false
 	case meshbool.OpUnion:
-		return outsideCylinder(history, inputs[0], c, depth+1) && outsideCylinder(history, inputs[1], c, depth+1)
+		for _, part := range inputs {
+			if !outsideCylinder(history, part, c, depth+1) {
+				return false
+			}
+		}
+		return true
 	}
 	return false
 }
@@ -147,10 +168,20 @@ func expandable(history boolchain.Source, body *topo.Body) (meshbool.OperationKi
 		return 0, nil, false
 	}
 	op, inputs, ok := boolchain.Expandable(history, body)
-	if !ok || len(inputs) != 2 {
+	if !ok || !arityHolds(op, inputs) {
 		return 0, nil, false
 	}
 	return op, inputs, true
+}
+
+// arityHolds reports whether a recorded producer's inputs are the ones the
+// walks read: a Cut's target and tool, or two or more operands of a Union or
+// an Intersect.
+func arityHolds(op meshbool.OperationKind, inputs []*topo.Body) bool {
+	if op == meshbool.OpCut {
+		return len(inputs) == 2
+	}
+	return len(inputs) >= 2
 }
 
 // wholeCircle returns loop's circle when the loop is one whole circle.
@@ -173,21 +204,28 @@ func prismCylinder(pp prismrecord.Payload, circle sectionrecord.CircleSeg) (coax
 	if err != nil || !(r > 0) {
 		return coaxialCylinder{}, false
 	}
+	l, t := prismLift(pp)
+	return coaxialCylinder{
+		l:      l,
+		t:      t,
+		cx:     ratOf(circle.Center.U),
+		cy:     ratOf(circle.Center.V),
+		radius: ratOf(r),
+		iso:    orthonormal(l[0], l[1], l[2]),
+	}, true
+}
+
+// prismLift is a prism's exact lift: the world point of section point (x, y)
+// at level z is t + L·(x, y, z), with L's columns the frame axes carried by
+// the placement basis, in rationals.
+func prismLift(pp prismrecord.Payload) ([3][3]*big.Rat, [3]*big.Rat) {
 	u, v, n, o := ratVec(pp.Frame.U()), ratVec(pp.Frame.V()), ratVec(pp.Frame.N()), ratVec(pp.Frame.Origin())
 	basis := pp.Xform.Basis()
 	ex, ey, ez := ratVec(basis.EX), ratVec(basis.EY), ratVec(basis.EZ)
 	apply := func(p [3]*big.Rat) [3]*big.Rat {
 		return addVec(addVec(scaleVec(ex, p[0]), scaleVec(ey, p[1])), scaleVec(ez, p[2]))
 	}
-	lu, lv, ln := apply(u), apply(v), apply(n)
-	return coaxialCylinder{
-		l:      [3][3]*big.Rat{lu, lv, ln},
-		t:      addVec(apply(o), ratVec(pp.Xform.Translation())),
-		cx:     ratOf(circle.Center.U),
-		cy:     ratOf(circle.Center.V),
-		radius: ratOf(r),
-		iso:    orthonormal(lu, lv, ln),
-	}, true
+	return [3][3]*big.Rat{apply(u), apply(v), apply(n)}, addVec(apply(o), ratVec(pp.Xform.Translation()))
 }
 
 // equal reports whether two cylinders are the same set. Two exactly
