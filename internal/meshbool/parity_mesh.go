@@ -287,7 +287,9 @@ func (pm *ParityMesh) VertexProjection(axis, u, v, vi int) Xp2 {
 // mesh restricted to the given facet subset: the crossing parity of an
 // axis-aligned ray. A ray the point's projection meets at a facet's projected
 // boundary is ambiguous and the next axis is tried; a p exactly ON a facet is
-// onBoundary. All six axes ambiguous is a genuine failure — never a guess.
+// onBoundary. All six axes ambiguous falls back to the oblique rays
+// (obliqueParity); all of those ambiguous too is a genuine failure — never a
+// guess.
 //
 // This is the raw-buffer entry point: it prepares a single-use projection cache
 // (singleUse) and answers one query through it. A caller holding an operand
@@ -377,6 +379,10 @@ func MeshParityPreparedContext(ctx context.Context, p proof.Xpt, prepared *Parit
 			continue
 		}
 		return crossings%2 == 1, false, nil
+	}
+	inside, onBoundary, decided, err := prepared.obliqueParity(ctx, p, len(subset), func(i int) int { return subset[i] })
+	if err != nil || decided {
+		return inside, onBoundary, err
 	}
 	return false, false, fmt.Errorf(`%w: every parity ray was ambiguous`, decaderr.ErrBooleanFailed)
 }
@@ -534,6 +540,10 @@ func MeshParityAllContext(ctx context.Context, p proof.Xpt, prepared *ParityMesh
 			}
 		}
 		return crossings%2 == 1, false, nil
+	}
+	inside, onBoundary, decided, err := prepared.obliqueParity(ctx, p, n, func(i int) int { return i })
+	if err != nil || decided {
+		return inside, onBoundary, err
 	}
 	return false, false, fmt.Errorf(`%w: every parity ray was ambiguous`, decaderr.ErrBooleanFailed)
 }

@@ -1328,6 +1328,19 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   (`TriCutter.refuseCrossingEdges`, the crossing decided exactly over a float
   box sweep) as `BooleanUnsupportedContact`, so Verify reports the pair as
   undecided rather than failing the call.
+- **Exact parity tries oblique rays after the axis rays.** A parity query
+  casts the six axis rays first (`internal/meshbool/parity_mesh.go`); a ray
+  whose projection meets a facet's projected edge or vertex is ambiguous and
+  the next is tried. A query on a mesh's symmetry lines, such as a torus's
+  equator plane and a meridian, is ambiguous along all six, so the scan then
+  casts five fixed integer directions off every coordinate plane
+  (`obliqueParity`). Along d the line through p crosses a facet's interior
+  when the three volumes ((a−p)×(b−p))·d share one nonzero sign, the crossing
+  lies on the ray when (a−p)·n and d·n share a sign, and p lies on the facet
+  when (a−p)·n is zero; every sign is exact. A float box test only skips
+  facets the ray provably misses, by a margin far past its rounding. A query
+  every ray meets at an edge or a vertex, such as a mesh vertex, is still
+  refused.
 - **A tangency the held facets cannot see is refused, never assumed away.** A
   chord polygon can miss a touch on its analytic patch, and an inherited
   faceted boundary certificate can place the true patch away from its held

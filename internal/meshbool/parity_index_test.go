@@ -748,8 +748,12 @@ func TestParityIndexRangeGuard(t *testing.T) {
 			q := pt(-0x1p1000, -sign*0x1p-76)
 			require.Equal(t, answerOf(MeshParityPreparedContext(t.Context(), q,
 				NewParityMesh(v, tr), parityAllFacets(len(tr)))), answerOf(MeshParityAllContext(t.Context(), q, pm)))
-			_, _, err := MeshParityAllContext(t.Context(), q, NewParityMesh(v, tr))
-			require.ErrorContains(t, err, `every parity ray was ambiguous`, `sign %g`, sign)
+			// Every axis ray is ambiguous here; the oblique rays place the far
+			// query outside.
+			inside, onBoundary, err := MeshParityAllContext(t.Context(), q, NewParityMesh(v, tr))
+			require.NoError(t, err, `sign %g`, sign)
+			require.False(t, inside, `sign %g`, sign)
+			require.False(t, onBoundary, `sign %g`, sign)
 		}
 	})
 	cyl, ctr := parityCylinder(24)
