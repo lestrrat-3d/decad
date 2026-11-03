@@ -694,12 +694,14 @@ type exactAffine struct {
 func (e exactAffine) apply(p xvec) xvec {
 	var out xvec
 	// prod is local to this call and never escapes into out. A zero factor
-	// adds exactly zero, so the term is skipped.
+	// adds exactly zero, so the term is skipped. Both signs are read before
+	// the skip, so a nil factor panics on the same term as the product would.
 	var prod big.Rat
 	for i := range 3 {
 		s := new(big.Rat).Set(e.t[i])
 		for j := range 3 {
-			if e.m[i][j].Sign() == 0 || p[j].Sign() == 0 {
+			mz, pz := e.m[i][j].Sign() == 0, p[j].Sign() == 0
+			if mz || pz {
 				continue
 			}
 			s.Add(s, prod.Mul(e.m[i][j], p[j]))

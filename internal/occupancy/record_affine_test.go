@@ -110,6 +110,25 @@ func TestExactAffineApplyMatchesReference(t *testing.T) {
 		}
 		check(t, e, xvec{big.NewRat(2, 3), big.NewRat(-5, 4), big.NewRat(7, 11)})
 	})
+	t.Run("nil factor panics", func(t *testing.T) {
+		t.Parallel()
+		// Column 1 is zero, so every product with p[1] has a zero factor.
+		zeroColumn := identity()
+		for i := range 3 {
+			zeroColumn.m[i][0].SetInt64(1)
+			zeroColumn.m[i][1].SetInt64(0)
+			zeroColumn.m[i][2].SetInt64(2)
+		}
+		nilPoint := xvec{big.NewRat(1, 2), nil, big.NewRat(3, 1)}
+		require.Panics(t, func() { oldApply(zeroColumn, nilPoint) }, "reference, nil p[1]")
+		require.Panics(t, func() { zeroColumn.apply(nilPoint) }, "apply, nil p[1]")
+
+		nilEntry := identity()
+		nilEntry.m[0][1] = nil
+		zeroPoint := xvec{big.NewRat(1, 2), new(big.Rat), big.NewRat(3, 1)}
+		require.Panics(t, func() { oldApply(nilEntry, zeroPoint) }, "reference, nil m[0][1]")
+		require.Panics(t, func() { nilEntry.apply(zeroPoint) }, "apply, nil m[0][1]")
+	})
 	t.Run("zero point", func(t *testing.T) {
 		t.Parallel()
 		e := identity()
