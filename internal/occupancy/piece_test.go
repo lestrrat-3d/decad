@@ -94,9 +94,11 @@ func TestCornerClearlyInsideNeverSkipsAFailingPair(t *testing.T) {
 		pc := genCase(rng)
 		if pc.prefilter() {
 			skipped++
+			px, _ := pc.x.Float64()
+			py, _ := pc.y.Float64()
 			require.True(t, pc.exactLess(),
-				"skipped a pair outside the half-plane: ux=%v uy=%v c=%v x=%v y=%v",
-				pc.ux, pc.uy, pc.c, pc.x.FloatString(30), pc.y.FloatString(30))
+				"skipped a pair outside the half-plane: ux=%v uy=%v c=%v x≈%v y≈%v",
+				pc.ux, pc.uy, pc.c, px, py)
 		}
 	}
 	// The generator reaches both outcomes, so the property is not vacuous.
@@ -177,6 +179,17 @@ func circlePrismRefusal(r float64, sides int) error {
 }
 
 func TestCirclePrismMatchesExactOnlyCheck(t *testing.T) {
+	check := func(r float64, sides int) bool {
+		want := circlePrismRefusal(r, sides)
+		p, err := CirclePrism(nil, r, 0, 1, sides)
+		if want == nil {
+			require.NoError(t, err, "r=%v sides=%d", r, sides)
+			require.NotNil(t, p)
+			return false
+		}
+		require.EqualError(t, err, want.Error(), "r=%v sides=%d", r, sides)
+		return true
+	}
 	rng := rand.New(rand.NewSource(7))
 	for range 40 {
 		sides := 3 + rng.Intn(62)
@@ -184,13 +197,16 @@ func TestCirclePrismMatchesExactOnlyCheck(t *testing.T) {
 		if r > 1e300 || r < 1e-300 {
 			continue
 		}
-		want := circlePrismRefusal(r, sides)
-		p, err := CirclePrism(nil, r, 0, 1, sides)
-		if want == nil {
-			require.NoError(t, err, "r=%v sides=%d", r, sides)
-			require.NotNil(t, p)
-		} else {
-			require.EqualError(t, err, want.Error(), "r=%v sides=%d", r, sides)
+		check(r, sides)
+	}
+	// At the smallest subnormal radius the float offsets and directions leave
+	// corners outside other sides, so the refusal path, its first (corner,
+	// side) pair and its error text are compared too.
+	refused := 0
+	for sides := MinSides; sides <= 40; sides++ {
+		if check(math.SmallestNonzeroFloat64, sides) {
+			refused++
 		}
 	}
+	require.Positive(t, refused)
 }
