@@ -2,6 +2,10 @@ package revolvemesh
 
 import "github.com/lestrrat-3d/decad/internal/proofbound"
 
+// RaceDetector exposes raceDetector so external differential sweeps can run a
+// smaller case set under the race detector.
+const RaceDetector = raceDetector
+
 // RevolveAngularHomotopyFactorUncached exposes the memo-free reading so the
 // external oracle test can compare the memoised answer against it.
 var RevolveAngularHomotopyFactorUncached = revolveAngularHomotopyFactorUncached
