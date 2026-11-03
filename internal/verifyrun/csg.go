@@ -390,7 +390,7 @@ func (w historyWalk) leafWithin(inner, outer *topo.Body) (bool, error) {
 func prismWithin(ctx context.Context, budget *proofbound.WorkBudget, inner, outer prismrecord.Payload) (bool, error) {
 	off, ok := liftOffset(outer, inner)
 	if !ok {
-		return false, nil
+		return boxWithin(inner, outer), nil
 	}
 	ilo, ihi := levels(inner, off.dz)
 	olo, ohi := levels(outer, nil)

@@ -326,9 +326,24 @@ type cutterBox struct {
 // lifts are exactly orthonormal. A flat milled across a turned shaft is such a
 // box beside the prism sweeping along the shaft.
 func boxCutter(pb, pt prismrecord.Payload) (cutterBox, bool) {
-	u0, v0, u1, v1, ok := axisRectangle(pt.Profile)
+	lo, hi, ok := boxExtent(pb, pt)
 	if !ok {
 		return cutterBox{}, false
+	}
+	region := [][2]*big.Rat{{lo[0], lo[1]}, {hi[0], lo[1]}, {hi[0], hi[1]}, {lo[0], hi[1]}}
+	profile, ok := regionProfile(region, nil)
+	if !ok {
+		return cutterBox{}, false
+	}
+	return cutterBox{profile: profile, h0: lo[2], h1: hi[2]}, true
+}
+
+// boxExtent is the box pt reads as in pb's coordinates: its extent along pb's
+// two section axes and its sweep, under the conditions boxCutter states.
+func boxExtent(pb, pt prismrecord.Payload) (lo, hi [3]*big.Rat, ok bool) {
+	u0, v0, u1, v1, ok := axisRectangle(pt.Profile)
+	if !ok {
+		return lo, hi, false
 	}
 	lb, tb := prismLift(pb)
 	lt, tt := prismLift(pt)
@@ -337,15 +352,14 @@ func boxCutter(pb, pt prismrecord.Payload) (cutterBox, bool) {
 		lb, tb, okB = frameLift(pb.Frame, r3.Identity())
 		lt, tt, okT = frameLift(pt.Frame, r3.Identity())
 		if !okB || !okT {
-			return cutterBox{}, false
+			return lo, hi, false
 		}
 	} else if !orthonormal(lb[0], lb[1], lb[2]) || !orthonormal(lt[0], lt[1], lt[2]) {
-		return cutterBox{}, false
+		return lo, hi, false
 	}
 	z0, z1 := levels(pt, nil)
 	own := [3][2]*big.Rat{{u0, u1}, {v0, v1}, {z0, z1}}
 	rel := subVec(tt, tb)
-	var lo, hi [3]*big.Rat
 	for k := range 3 {
 		axis := -1
 		var sign *big.Rat
@@ -355,27 +369,41 @@ func boxCutter(pb, pt prismrecord.Payload) (cutterBox, bool) {
 			case d.Sign() == 0:
 			case d.Cmp(big.NewRat(1, 1)) == 0 || d.Cmp(big.NewRat(-1, 1)) == 0:
 				if axis >= 0 {
-					return cutterBox{}, false
+					return lo, hi, false
 				}
 				axis, sign = c, d
 			default:
-				return cutterBox{}, false
+				return lo, hi, false
 			}
 		}
 		if axis < 0 || lo[axis] != nil {
-			return cutterBox{}, false
+			return lo, hi, false
 		}
 		base := dotVec(rel, lb[axis])
 		a := new(big.Rat).Add(base, new(big.Rat).Mul(sign, own[k][0]))
 		b := new(big.Rat).Add(base, new(big.Rat).Mul(sign, own[k][1]))
 		lo[axis], hi[axis] = minRat(a, b), maxRat(a, b)
 	}
-	region := [][2]*big.Rat{{lo[0], lo[1]}, {hi[0], lo[1]}, {hi[0], hi[1]}, {lo[0], hi[1]}}
-	profile, ok := regionProfile(region, nil)
-	if !ok {
-		return cutterBox{}, false
+	return lo, hi, true
+}
+
+// boxWithin reports whether prism inner, a box, lies in prism outer, a box
+// with the same frame axes up to sign and order (boxExtent).
+func boxWithin(inner, outer prismrecord.Payload) bool {
+	if !prismExact(inner) || !prismExact(outer) {
+		return false
 	}
-	return cutterBox{profile: profile, h0: lo[2], h1: hi[2]}, true
+	ou0, ov0, ou1, ov1, ok := axisRectangle(outer.Profile)
+	if !ok {
+		return false
+	}
+	lo, hi, ok := boxExtent(outer, inner)
+	if !ok {
+		return false
+	}
+	z0, z1 := levels(outer, nil)
+	return lo[0].Cmp(ou0) >= 0 && hi[0].Cmp(ou1) <= 0 && lo[1].Cmp(ov0) >= 0 && hi[1].Cmp(ov1) <= 0 &&
+		lo[2].Cmp(z0) >= 0 && hi[2].Cmp(z1) <= 0
 }
 
 // axisRectangle reads a hole-free section that is one rectangle of four whole
@@ -436,9 +464,15 @@ func revolvePiecesApart(ctx context.Context, budget *proofbound.WorkBudget, hist
 		return false, nil
 	}
 	target, cutters := cutChain(history, a)
-	pt, ok := target.Payload.(prismrecord.Payload)
-	if !ok || !prismExact(pt) {
-		return false, nil
+	// A Union denotes the union of its operands exactly, whatever displacement
+	// its own record holds, so its exact prism operands are the target's parts.
+	var parts []prismrecord.Payload
+	for _, part := range unionParts(history, target, 0) {
+		pp, ok := part.Payload.(prismrecord.Payload)
+		if !ok || !prismExact(pp) {
+			return false, nil
+		}
+		parts = append(parts, pp)
 	}
 	var levelsZ []*big.Rat
 	for _, q := range m.region {
@@ -459,7 +493,7 @@ func revolvePiecesApart(ctx context.Context, budget *proofbound.WorkBudget, hist
 		}
 		slab := m
 		slab.region = [][2]*big.Rat{{zero, z0}, {rho, z0}, {rho, z1}, {zero, z1}}
-		apart, err := slabApart(ctx, budget, history, target, pt, cutters, slab, rho, z0, z1)
+		apart, err := slabApart(ctx, budget, history, target, parts, cutters, slab, rho, z0, z1)
 		if err != nil || !apart {
 			return false, err
 		}
@@ -467,22 +501,35 @@ func revolvePiecesApart(ctx context.Context, budget *proofbound.WorkBudget, hist
 	return true, nil
 }
 
-// slabApart decides one slab of a Revolve against a Cut chain's target.
+// slabApart decides one slab of a Revolve against a Cut chain's target, whose
+// exact prism parts are given: the slab is apart when a tool of the chain holds
+// it, or when its footprint is apart from every part.
 func slabApart(ctx context.Context, budget *proofbound.WorkBudget, history boolchain.Source,
-	target *topo.Body, pt prismrecord.Payload, cutters []*topo.Body, slab meridian, rho, z0, z1 *big.Rat) (bool, error) {
+	target *topo.Body, parts []prismrecord.Payload, cutters []*topo.Body, slab meridian, rho, z0, z1 *big.Rat) (bool, error) {
+	for _, tool := range cutters {
+		if pc, ok := tool.Payload.(prismrecord.Payload); ok && toolHoldsSlab(slab, pc, parts, rho, z0, z1) {
+			return true, nil
+		}
+	}
 	for _, tool := range cutters {
 		if apart, err := cutCircleMeridianApartRegions(ctx, budget, history, target, tool, []meridian{slab}); err != nil || apart {
 			return apart, err
 		}
 	}
-	rect, apart, ok := footprint(slab, pt, rho, z0, z1)
-	if apart {
-		return true, nil
+	for _, pt := range parts {
+		rect, apart, ok := footprint(slab, pt, rho, z0, z1)
+		if apart {
+			continue
+		}
+		if !ok {
+			return false, nil
+		}
+		apart, err := prismcells.SectionsApart(ctx, budget, []momentinput.Profile{rect}, []momentinput.Profile{pt.Profile})
+		if err != nil || !apart {
+			return false, err
+		}
 	}
-	if !ok {
-		return false, nil
-	}
-	return prismcells.SectionsApart(ctx, budget, []momentinput.Profile{rect}, []momentinput.Profile{pt.Profile})
+	return true, nil
 }
 
 // footprint is the rectangle a slab's cylinder (ρ ≤ rho over meridian levels
@@ -491,17 +538,8 @@ func slabApart(ctx context.Context, budget *proofbound.WorkBudget, history boolc
 // the cylinder's reach along pt's sweep misses pt's levels.
 func footprint(slab meridian, pt prismrecord.Payload, rho, z0, z1 *big.Rat) (
 	rect momentinput.Profile, apart, ok bool) {
-	la, ta := slab.l, slab.t
-	lt, tt := prismLift(pt)
-	if slab.xform == pt.Xform && slab.fl[0][0] != nil {
-		la, ta = slab.fl, slab.ft
-		var iso bool
-		lt, tt, iso = frameLift(pt.Frame, r3.Identity())
-		if !iso {
-			return momentinput.Profile{}, false, false
-		}
-	}
-	if !orthonormal(la[0], la[1], la[2]) || !orthonormal(lt[0], lt[1], lt[2]) {
+	la, ta, lt, tt, ok := commonLifts(slab, pt)
+	if !ok {
 		return momentinput.Profile{}, false, false
 	}
 	at := func(p [3]*big.Rat) [3]*big.Rat {
@@ -557,4 +595,181 @@ func footprint(slab meridian, pt prismrecord.Payload, rho, z0, z1 *big.Rat) (
 		sectionrecord.LineSeg{Start: p(x1, y1), End: p(x0, y1), TEnd: 1},
 		sectionrecord.LineSeg{Start: p(x0, y1), End: p(x0, y0), TEnd: 1},
 	}}}, false, true
+}
+
+// commonLifts is the lift of a meridian's frame and the lift of a prism's frame
+// in one exactly Euclidean coordinate system: the coordinates before one
+// placement when the two carry it bit for bit, else the world when both lifts
+// are exactly orthonormal. ok is false where neither holds.
+func commonLifts(m meridian, p prismrecord.Payload) (la [3][3]*big.Rat, ta [3]*big.Rat,
+	lp [3][3]*big.Rat, tp [3]*big.Rat, ok bool) {
+	la, ta = m.l, m.t
+	lp, tp = prismLift(p)
+	if m.xform == p.Xform && m.fl[0][0] != nil {
+		la, ta = m.fl, m.ft
+		var iso bool
+		lp, tp, iso = frameLift(p.Frame, r3.Identity())
+		if !iso {
+			return la, ta, lp, tp, false
+		}
+	}
+	return la, ta, lp, tp, orthonormal(la[0], la[1], la[2]) && orthonormal(lp[0], lp[1], lp[2])
+}
+
+// sectionBox bounds a prism's outer loop: whole lines by their ends, a circle
+// or an arc by the box of its circle, an arc's ends at one exact distance from
+// its centre, each radius rounded up. ok is false for any other segment.
+func sectionBox(p momentinput.Profile) (uLo, uHi, vLo, vHi *big.Rat, ok bool) {
+	grow := func(u, v, r *big.Rat) {
+		a, b := new(big.Rat).Sub(u, r), new(big.Rat).Add(u, r)
+		c, d := new(big.Rat).Sub(v, r), new(big.Rat).Add(v, r)
+		if uLo == nil {
+			uLo, uHi, vLo, vHi = a, b, c, d
+			return
+		}
+		uLo, uHi, vLo, vHi = minRat(uLo, a), maxRat(uHi, b), minRat(vLo, c), maxRat(vHi, d)
+	}
+	zero := new(big.Rat)
+	for _, seg := range p.Outer.Segments {
+		switch g := seg.(type) {
+		case sectionrecord.CircleSeg:
+			r, err := g.Radius.In(units.Millimeter)
+			if err != nil || !(r > 0) {
+				return nil, nil, nil, nil, false
+			}
+			rr, ok := sqrtUpper(new(big.Rat).Mul(ratOf(r), ratOf(r)))
+			if !ok {
+				return nil, nil, nil, nil, false
+			}
+			grow(ratOf(g.Center.U), ratOf(g.Center.V), rr)
+		case sectionrecord.ArcSeg:
+			rs, re := distSquared(g.Center, g.Start), distSquared(g.Center, g.End)
+			if rs.Cmp(re) != 0 {
+				return nil, nil, nil, nil, false
+			}
+			rr, ok := sqrtUpper(rs)
+			if !ok {
+				return nil, nil, nil, nil, false
+			}
+			grow(ratOf(g.Center.U), ratOf(g.Center.V), rr)
+		default:
+			start, end, whole := wholeLine(seg)
+			if !whole {
+				return nil, nil, nil, nil, false
+			}
+			grow(ratOf(start.U), ratOf(start.V), zero)
+			grow(ratOf(end.U), ratOf(end.V), zero)
+		}
+	}
+	return uLo, uHi, vLo, vHi, uLo != nil
+}
+
+// toolHoldsSlab reports whether a whole-circle prism tool of the chain holds
+// every point of the slab's cylinder (ρ ≤ rho over meridian levels z0..z1)
+// that lies in the target's parts. The tool's axis must be the slab's exactly
+// and its radius at least rho; each part then contributes the slab-axis range of
+// its section's box over the slab's strip across the axis, and the tool's levels
+// must hold the union of those ranges within z0..z1. A point of the slab in a
+// part lies in the part's box, so it lies in the tool's closed solid, which the
+// Cut result's interior misses.
+func toolHoldsSlab(slab meridian, tool prismrecord.Payload, parts []prismrecord.Payload,
+	rho, z0, z1 *big.Rat) bool {
+	if len(tool.Profile.Holes) != 0 || !prismExact(tool) {
+		return false
+	}
+	circle, ok := wholeCircle(tool.Profile.Outer)
+	if !ok {
+		return false
+	}
+	r, err := circle.Radius.In(units.Millimeter)
+	if err != nil || !(r > 0) || ratOf(r).Cmp(rho) < 0 {
+		return false
+	}
+	la, ta, lc, tc, ok := commonLifts(slab, tool)
+	if !ok {
+		return false
+	}
+	at := func(l [3][3]*big.Rat, p [3]*big.Rat) [3]*big.Rat {
+		return addVec(addVec(scaleVec(l[0], p[0]), scaleVec(l[1], p[1])), scaleVec(l[2], p[2]))
+	}
+	dir := at(la, slab.dir)
+	origin := addVec(at(la, slab.anchor), ta)
+	centre := addVec(tc, addVec(scaleVec(lc[0], ratOf(circle.Center.U)), scaleVec(lc[1], ratOf(circle.Center.V))))
+	if !isZero(crossVec(lc[2], dir)) || !isZero(crossVec(subVec(centre, origin), dir)) {
+		return false
+	}
+	// The tool's levels in the slab's axial coordinate.
+	sign := dotVec(lc[2], dir)
+	base := dotVec(subVec(centre, origin), dir)
+	tz0, tz1 := levels(tool, nil)
+	a := new(big.Rat).Add(base, new(big.Rat).Mul(sign, tz0))
+	b := new(big.Rat).Add(base, new(big.Rat).Mul(sign, tz1))
+	toolLo, toolHi := minRat(a, b), maxRat(a, b)
+	var lo, hi *big.Rat
+	for _, part := range parts {
+		reachLo, reachHi, inStrip, ok := partReach(slab, part, rho)
+		if !ok {
+			return false
+		}
+		if !inStrip {
+			continue
+		}
+		reachLo, reachHi = maxRat(reachLo, z0), minRat(reachHi, z1)
+		if reachLo.Cmp(reachHi) > 0 {
+			continue
+		}
+		if lo == nil {
+			lo, hi = reachLo, reachHi
+		} else {
+			lo, hi = minRat(lo, reachLo), maxRat(hi, reachHi)
+		}
+	}
+	return lo == nil || toolLo.Cmp(lo) <= 0 && toolHi.Cmp(hi) >= 0
+}
+
+// partReach is the range of the slab's axial coordinate over the part's section
+// box inside the slab's strip across its axis, when the part sweeps across the
+// axis and the axis lies in its section plane along one of its axes. inStrip is
+// false when the part misses the strip or the cylinder's reach along the sweep.
+func partReach(slab meridian, part prismrecord.Payload, rho *big.Rat) (lo, hi *big.Rat, inStrip, ok bool) {
+	la, ta, lp, tp, ok := commonLifts(slab, part)
+	if !ok {
+		return nil, nil, false, false
+	}
+	at := func(p [3]*big.Rat) [3]*big.Rat {
+		return addVec(addVec(scaleVec(la[0], p[0]), scaleVec(la[1], p[1])), scaleVec(la[2], p[2]))
+	}
+	dir := at(slab.dir)
+	if dotVec(dir, lp[2]).Sign() != 0 {
+		return nil, nil, false, false
+	}
+	rel := subVec(addVec(at(slab.anchor), ta), tp)
+	u0, v0, h0 := dotVec(rel, lp[0]), dotVec(rel, lp[1]), dotVec(rel, lp[2])
+	plo, phi := levels(part, nil)
+	if new(big.Rat).Add(h0, rho).Cmp(plo) <= 0 || new(big.Rat).Sub(h0, rho).Cmp(phi) >= 0 {
+		return nil, nil, false, true
+	}
+	uLo, uHi, vLo, vHi, ok := sectionBox(part.Profile)
+	if !ok {
+		return nil, nil, false, false
+	}
+	du, dv := dotVec(dir, lp[0]), dotVec(dir, lp[1])
+	one := big.NewRat(1, 1)
+	var axial0, d, wLo, wHi, aLo, aHi, wMid *big.Rat
+	switch {
+	case new(big.Rat).Abs(du).Cmp(one) == 0 && dv.Sign() == 0:
+		axial0, d, wMid, aLo, aHi, wLo, wHi = u0, du, v0, uLo, uHi, vLo, vHi
+	case new(big.Rat).Abs(dv).Cmp(one) == 0 && du.Sign() == 0:
+		axial0, d, wMid, aLo, aHi, wLo, wHi = v0, dv, u0, vLo, vHi, uLo, uHi
+	default:
+		return nil, nil, false, false
+	}
+	// The box misses the strip, or only touches it, when its extent across the
+	// axis leaves the open strip.
+	if wHi.Cmp(new(big.Rat).Sub(wMid, rho)) <= 0 || wLo.Cmp(new(big.Rat).Add(wMid, rho)) >= 0 {
+		return nil, nil, false, true
+	}
+	a := new(big.Rat).Quo(new(big.Rat).Sub(aLo, axial0), d)
+	b := new(big.Rat).Quo(new(big.Rat).Sub(aHi, axial0), d)
+	return minRat(a, b), maxRat(a, b), true, true
 }
