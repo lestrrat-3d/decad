@@ -1,0 +1,31 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  reference:
+    name: generated reference is current
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # pkg.go.dev cannot host this module (non-OSS license), so the package
+      # reference is generated into docs/reference and committed. This step
+      # fails and lists the stale files when the committed copy has drifted.
+      - name: Check generated reference
+        uses: lestrrat/go-docgen-action@607dd420aea2f6c5332ba12b6afd3f261be79ce2 # main
+        with:
+          version: e1a899b8c7ec5a1494be07caf2338086fd99bcc9 # lestrrat-go/docgen main
+          out: docs/reference
+          check: "true"
