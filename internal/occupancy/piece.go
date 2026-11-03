@@ -140,7 +140,10 @@ func CirclePrism(place Chain, r, z0, z1 float64, sides int) (*Piece, error) {
 	case math.IsNaN(z0) || math.IsNaN(z1) || math.IsInf(z0, 0) || math.IsInf(z1, 0) || !(z0 < z1):
 		return nil, fmt.Errorf("%w: levels %v, %v", ErrInvalid, z0, z1)
 	}
-	type line struct{ ux, uy, c *big.Rat }
+	type line struct {
+		ux, uy, c    *big.Rat
+		fux, fuy, fc float64 // the same three values, which are floats
+	}
 	r2 := new(big.Rat).Mul(ratOf(r), ratOf(r))
 	lines := make([]line, sides)
 	for k := range lines {
@@ -161,7 +164,7 @@ func CirclePrism(place Chain, r, z0, z1 float64, sides int) (*Piece, error) {
 			}
 			c = math.Nextafter(c, math.Inf(1))
 		}
-		lines[k] = line{rx, ry, ratOf(c)}
+		lines[k] = line{rx, ry, ratOf(c), ux, uy, c}
 	}
 	// Corner k is where line k meets line k+1, solved exactly by Cramer's rule.
 	corners := make([][2]*big.Rat, sides)
@@ -178,7 +181,12 @@ func CirclePrism(place Chain, r, z0, z1 float64, sides int) (*Piece, error) {
 	// Every corner must satisfy every half-plane: then the corners' hull is
 	// the half-plane intersection, which contains the circle.
 	for k, p := range corners {
+		px, _ := p[0].Float64()
+		py, _ := p[1].Float64()
 		for j, l := range lines {
+			if cornerClearlyInside(l.fux, l.fuy, l.fc, px, py) {
+				continue
+			}
 			s := new(big.Rat).Mul(l.ux, p[0])
 			s.Add(s, new(big.Rat).Mul(l.uy, p[1]))
 			if s.Cmp(l.c) > 0 {
@@ -215,6 +223,43 @@ func CirclePrism(place Chain, r, z0, z1 float64, sides int) (*Piece, error) {
 	}
 	p.finishFaces(n)
 	return p, nil
+}
+
+// cornerClearlyInside reports true only when the exact corner P, held as
+// px = fl(P.x) and py = fl(P.y) (each the nearest float), satisfies the
+// half-plane ux·x + uy·y < c, for finite floats ux, uy in [−1, 1] and c. It
+// only lets CirclePrism skip an exact comparison that would pass; false
+// decides nothing, and the exact comparison runs.
+//
+// Bound. Write u = 2^-53 and η = 2^-1075, the absolute rounding error of a
+// result in the subnormal range, so every rounded operation errs by at most
+// u times its result plus η. ux, uy and c are exact floats (the lines hold the
+// very values their exact twins were made from), so the only errors are:
+//
+//   - px = P.x + dx with |dx| ≤ u|P.x| + η, and likewise py;
+//   - q1 = fl(ux·px), so |q1 − ux·P.x| ≤ 2.01u|ux·P.x| + 3η, and likewise q2;
+//   - t = fl(q1 + q2), whose sum adds at most u|q1 + q2| and no η, because a
+//     sum of floats that lands in the subnormal range is exact.
+//
+// With A = |ux·P.x| + |uy·P.y| this gives |t − (ux·P.x + uy·P.y)| ≤
+// 3.1u·A + 7η. The margin m = fl(fl(a·2^-50) + 2^-1000) uses a = fl(|q1| +
+// |q2|) ≥ A(1 − 3.1u) − 7η, and 2^-50 = 8u, so m ≥ 7.9u·A − 8η +
+// (1 − u)·2^-1000 is at least 2.5 times the bound, the η terms being dwarfed
+// by 2^-1000. Rounding is monotone and m is a float, so fl(c − t) > m implies
+// c − t > m exactly, whence c − (ux·P.x + uy·P.y) > m − 3.1u·A − 7η > 0.
+//
+// Overflow and NaN. A corner beyond the float range converts to ±Inf, and a
+// product can overflow. Then q1, q2 or t is infinite or NaN. NaN fails every
+// comparison. t = +Inf gives c − t = −Inf. t = −Inf gives c − t = +Inf, but
+// then a = +Inf, so m = +Inf and +Inf > +Inf is false. If only a overflows,
+// m = +Inf and the test is again false. So a non-finite reading never
+// skips. The float64() conversions keep every product rounded on its own, so
+// no platform fuses one into a sum or difference.
+func cornerClearlyInside(ux, uy, c, px, py float64) bool {
+	q1, q2 := float64(ux*px), float64(uy*py)
+	t := q1 + q2
+	a := math.Abs(q1) + math.Abs(q2)
+	return c-t > float64(a*0x1p-50)+0x1p-1000
 }
 
 // containsMoved reports whether every corner of tri moved by shift satisfies
