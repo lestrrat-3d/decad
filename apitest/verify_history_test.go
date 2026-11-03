@@ -237,3 +237,65 @@ func TestVerifyHistoryPinInItsBore(t *testing.T) {
 		})
 	}
 }
+
+// hookRing revolves a Ø1.6 circle three quarters of a turn about the z axis
+// line x = 10, y = 0, its centre 1.5 from the axis at height z.
+func hookRing(t *testing.T, doc *decad.Document, z float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XZ())
+	require.NoError(t, err)
+	c := s.CreatePoint(11.5, z)
+	s.Fix(c)
+	s.CreateCircle(c, 0.8)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	ring, err := decad.Revolve(t.Context(), doc, s, s.Profiles()[0],
+		decad.SketchLine{Start: decad.Point2{U: 10}, End: decad.Point2{U: 10, V: 1}},
+		decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
+	require.NoError(t, err)
+	return ring
+}
+
+// TestVerifyHistoryFarOperand seats the Ø2 stem of a hook in a bore of a
+// 20×10×10 block: the stem lies in the Ø2 tool that drilled the bore from
+// z = −1 to 16. The stem is unioned with a ring at its top whose box lies
+// above the block's. No separator reads the ring against the block, but the
+// Union misses the block when every operand does: the stem through the
+// drilling tool, the ring because its box is clear of the block's. A ring
+// sunk to z = 9 meets the block and is not decided.
+//
+// Leg shown to fail: without the box reading the far ring keeps the hook's
+// pair diagnostic.
+func TestVerifyHistoryFarOperand(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		ringZ     float64
+		separated bool
+	}{
+		{"ring above the block", 15.5, true},
+		{"ring sunk into the block", 9.5, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			block := slab(t, doc, 0, -5, 20, 5, 0, 10, r3.Identity())
+			tool := placedAlongZ(t, coaxialSection(t, doc, 10, 0, 17, 1), -1)
+			drilled, err := decad.Cut(t.Context(), block, tool)
+			require.NoError(t, err)
+			stem := placedAlongZ(t, coaxialSection(t, doc, 10, 0, 14, 1), 2)
+			hook, err := decad.Union(t.Context(), stem, hookRing(t, doc, tc.ringZ))
+			require.NoError(t, err)
+			report, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			interferences, diagnostics := pairFindings(report, drilled, hook)
+			if tc.separated {
+				require.Zero(t, interferences)
+				require.Zero(t, diagnostics, "every operand of the hook misses the block")
+				return
+			}
+			require.Positive(t, interferences+diagnostics)
+		})
+	}
+}
